@@ -1,7 +1,8 @@
-import { Bookmark, Heart, MessageCircle, MoreHorizontal } from 'lucide-react-native';
+import { Bookmark, HeartPlus, MessageCircle, MoreHorizontal } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { PostActionControl } from './PostActionControl';
 import { usePostBookmarkAction } from './PostBookmarkAction';
 import { PostDeletionAction } from './PostDeletionAction';
@@ -119,7 +120,7 @@ export function PostActionBar({
               hoverDisabled={execution.kind === 'resolution-required'}
               hoverForegroundColor={theme.actionReactionBase}
               hoverOpacity={0.3}
-              icon={Heart}
+              icon={HeartPlus}
               menuExpanded={expanded}
               onPress={onPress}
               popupRole="dialog"
@@ -129,32 +130,36 @@ export function PostActionBar({
           )}
         />
       ) : null}
-      {resolvedBookmark ? (
-        <PostActionControl
-          accessibilityLabel={resolvedBookmark.accessibilityLabel}
-          active={resolvedBookmark.hasBookmarked}
-          fillActive
-          hoverDisabled={execution.kind === 'resolution-required'}
-          icon={Bookmark}
-          onPress={resolvedBookmark.onPress}
-          processing={resolvedBookmark.processing}
-          testID="bookmark"
-        />
-      ) : null}
-      {more ? (
-        <PostActionControl
-          accessibilityLabel={more.accessibilityLabel}
-          alignToEnd
-          controlRef={more.controlRef}
-          icon={MoreHorizontal}
-          menuExpanded={more.menuExpanded}
-          onPress={more.onPress}
-          popupRole={more.popupRole}
-          stateful={Boolean(more.popupRole)}
-          testID="more"
-        />
-      ) : data?.deletion ? (
-        <PostDeletionAction items={moreItems} onDeleted={onDeleted} post={data.deletion} />
+      {resolvedBookmark || more || data?.deletion ? (
+        <View style={styles.trailing}>
+          {resolvedBookmark ? (
+            <PostActionControl
+              accessibilityLabel={resolvedBookmark.accessibilityLabel}
+              active={resolvedBookmark.hasBookmarked}
+              fillActive
+              hoverDisabled={execution.kind === 'resolution-required'}
+              icon={Bookmark}
+              onPress={resolvedBookmark.onPress}
+              processing={resolvedBookmark.processing}
+              testID="bookmark"
+            />
+          ) : null}
+          {more ? (
+            <PostActionControl
+              accessibilityLabel={more.accessibilityLabel}
+              alignToEnd
+              controlRef={more.controlRef}
+              icon={MoreHorizontal}
+              menuExpanded={more.menuExpanded}
+              onPress={more.onPress}
+              popupRole={more.popupRole}
+              stateful={Boolean(more.popupRole)}
+              testID="more"
+            />
+          ) : data?.deletion ? (
+            <PostDeletionAction items={moreItems} onDeleted={onDeleted} post={data.deletion} />
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
@@ -169,4 +174,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     width: '100%',
   } satisfies StyleProp<ViewStyle>,
+  trailing: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
 });

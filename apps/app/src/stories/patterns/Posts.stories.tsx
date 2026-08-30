@@ -3294,18 +3294,36 @@ export const ProductionRepostQuoteListIntegration: Story = {
         Number.parseFloat(getComputedStyle(quoteSourcePreview).borderBottomWidth) -
         quoteSourceBody.getBoundingClientRect().bottom,
     ).toBeCloseTo(4, 0);
-    for (const [card, actionBar] of [
-      [ordinaryCard, ordinaryActionBar],
-      [quoteCard, quoteActionBar],
-      [pureRepostRow!, pureRepostActionBar],
+    for (const { actionBar, card, geometry } of [
+      {
+        actionBar: ordinaryActionBar,
+        card: ordinaryCard,
+        geometry: { cardBottom: 4, cardTop: '12px', slotBottom: '0px', slotTop: '4px' },
+      },
+      {
+        actionBar: quoteActionBar,
+        card: quoteCard,
+        geometry: { cardBottom: 1, cardTop: '8px', slotBottom: '0px', slotTop: '0px' },
+      },
+      {
+        actionBar: pureRepostActionBar,
+        card: pureRepostRow!,
+        geometry: { cardBottom: 1, cardTop: '8px', slotBottom: '0px', slotTop: '0px' },
+      },
     ] as const) {
       const cardBounds = card.getBoundingClientRect();
       const actionBarBounds = actionBar.getBoundingClientRect();
       const borderBottomWidth = Number.parseFloat(getComputedStyle(card).borderBottomWidth);
+      const cardStyle = getComputedStyle(card);
       const actionBarSlotStyle = getComputedStyle(actionBar.parentElement!);
-      expect(actionBarSlotStyle.paddingTop).toBe('0px');
-      expect(actionBarSlotStyle.paddingBottom).toBe('4px');
-      expect(cardBounds.bottom - borderBottomWidth - actionBarBounds.bottom).toBeCloseTo(4, 0);
+      expect(cardStyle.paddingTop).toBe(geometry.cardTop);
+      expect(cardStyle.paddingBottom).toBe(`${geometry.cardBottom}px`);
+      expect(actionBarSlotStyle.paddingTop).toBe(geometry.slotTop);
+      expect(actionBarSlotStyle.paddingBottom).toBe(geometry.slotBottom);
+      expect(cardBounds.bottom - borderBottomWidth - actionBarBounds.bottom).toBeCloseTo(
+        geometry.cardBottom,
+        0,
+      );
       expect(getComputedStyle(card).borderBottomColor).toBe('rgb(236, 236, 240)');
     }
     for (const actionBar of [ordinaryActionBar, quoteActionBar, pureRepostActionBar]) {
@@ -4617,9 +4635,6 @@ export const ReplyThreadPresentation: Story = {
       'post-thread-item-thread-sibling',
       'post-thread-item-thread-reply-quote',
     ]);
-    const approvedDividerColumnLeft = canvas
-      .getByText('지금 보고 있는 Reply입니다.')
-      .getBoundingClientRect().left;
     expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(rows.length - 1);
     rows.forEach((row, index) => {
       const dividers = within(row).queryAllByTestId(/^post-thread-divider-/);
@@ -4635,7 +4650,6 @@ export const ReplyThreadPresentation: Story = {
       const rowBounds = row.getBoundingClientRect();
       expect(dividerBounds.height).toBeCloseTo(1, 0);
       expect(dividerBounds.left - rowBounds.left).toBeCloseTo(64, 0);
-      expect(dividerBounds.left).toBeCloseTo(approvedDividerColumnLeft, 0);
       expect(rowBounds.right - dividerBounds.right).toBeCloseTo(8, 0);
       for (const connector of within(row).queryAllByTestId(/^post-thread-connector-/)) {
         expect(connector.getBoundingClientRect().right).toBeLessThan(dividerBounds.left);
@@ -4693,11 +4707,11 @@ export const ReplyThreadPresentation: Story = {
       canvas.getByTestId('post-thread-connector-thread-parent-thread-current-before'),
     ).toBeVisible();
     expect(
-      canvas.getByTestId('post-thread-connector-thread-current-thread-child-after'),
-    ).toBeVisible();
+      canvas.queryByTestId('post-thread-connector-thread-current-thread-child-after'),
+    ).toBeNull();
     expect(
-      canvas.getByTestId('post-thread-connector-thread-current-thread-child-before'),
-    ).toBeVisible();
+      canvas.queryByTestId('post-thread-connector-thread-current-thread-child-before'),
+    ).toBeNull();
     expect(
       canvas.queryByTestId('post-thread-connector-thread-child-thread-sibling-after'),
     ).toBeNull();
@@ -4705,11 +4719,11 @@ export const ReplyThreadPresentation: Story = {
       canvas.queryByTestId('post-thread-connector-thread-child-thread-sibling-before'),
     ).toBeNull();
     expect(
-      canvas.getByTestId('post-thread-connector-thread-sibling-thread-reply-quote-after'),
-    ).toBeVisible();
+      canvas.queryByTestId('post-thread-connector-thread-sibling-thread-reply-quote-after'),
+    ).toBeNull();
     expect(
-      canvas.getByTestId('post-thread-connector-thread-sibling-thread-reply-quote-before'),
-    ).toBeVisible();
+      canvas.queryByTestId('post-thread-connector-thread-sibling-thread-reply-quote-before'),
+    ).toBeNull();
     expect(
       canvasElement.querySelector(
         '[data-testid^="post-thread-connector-thread-reply-quote-"][data-testid$="-after"]',
@@ -4820,9 +4834,13 @@ export const PostDetailThreadRoute: Story = {
     const currentDivider = canvas.getByTestId('post-thread-divider-route-current');
     const currentAvatar = currentRow.querySelector<HTMLElement>('[aria-label$="프로필 이미지"]');
     expect(currentAvatar).not.toBeNull();
-    expect(
-      currentAvatar!.getBoundingClientRect().top - currentRow.getBoundingClientRect().top,
-    ).toBeCloseTo(16, 0);
+    const currentAvatarBounds = currentAvatar!.getBoundingClientRect();
+    const currentBodyBounds = canvas.getByText('현재 Reply 본문').getBoundingClientRect();
+    expect(currentAvatarBounds.width).toBeCloseTo(48, 0);
+    expect(currentAvatarBounds.height).toBeCloseTo(48, 0);
+    expect(currentBodyBounds.left).toBeCloseTo(currentAvatarBounds.left, 0);
+    expect(currentActionBar.getBoundingClientRect().left).toBeCloseTo(currentAvatarBounds.left, 0);
+    expect(currentAvatarBounds.top - currentRow.getBoundingClientRect().top).toBeCloseTo(16, 0);
     expect(
       currentActionBar.getBoundingClientRect().top - reactionButton.getBoundingClientRect().bottom,
     ).toBeCloseTo(4, 0);
@@ -4869,21 +4887,28 @@ export const PostDetailThreadRoute: Story = {
         ),
       };
     };
-    expect({
-      current: connectorClearance(
-        'post-thread-current-route-current',
-        'post-thread-connector-route-parent-route-current-before',
-        'post-thread-connector-route-current-route-child-after',
-      ),
-      parent: connectorClearance(
+    const currentBefore = canvas.getByTestId(
+      'post-thread-connector-route-parent-route-current-before',
+    );
+    expect(Math.round(currentAvatarBounds.top - currentBefore.getBoundingClientRect().bottom)).toBe(
+      4,
+    );
+    expect(Number.parseFloat(window.getComputedStyle(currentBefore).borderRadius)).toBeGreaterThan(
+      0,
+    );
+    expect(
+      canvas.queryByTestId('post-thread-connector-route-current-route-child-after'),
+    ).toBeNull();
+    expect(
+      canvas.queryByTestId('post-thread-connector-route-current-route-child-before'),
+    ).toBeNull();
+    expect(
+      connectorClearance(
         'post-thread-item-route-parent',
         'post-thread-connector-route-root-route-parent-before',
         'post-thread-connector-route-parent-route-current-after',
       ),
-    }).toEqual({
-      current: { after: 4, before: 4, rounded: true },
-      parent: { after: 4, before: 4, rounded: true },
-    });
+    ).toEqual({ after: 4, before: 4, rounded: true });
     const descendantQuote = within(canvas.getByTestId('post-thread-item-route-reply-quote'));
     expect(descendantQuote.getAllByText('Source 본문')).toHaveLength(1);
     expect(descendantQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
@@ -4891,8 +4916,8 @@ export const PostDetailThreadRoute: Story = {
     expect(canvas.queryByTestId('post-thread-source-route-source-null')).not.toBeInTheDocument();
     expect(canvas.getByText('Source가 없어도 남는 Content')).toBeVisible();
     expect(
-      canvas.getByTestId('post-thread-connector-route-current-route-child-after'),
-    ).toBeVisible();
+      canvas.queryByTestId('post-thread-connector-route-current-route-child-after'),
+    ).toBeNull();
     expect(
       canvas.queryByTestId('post-thread-connector-route-child-route-sibling-after'),
     ).toBeNull();

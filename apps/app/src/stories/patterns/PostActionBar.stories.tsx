@@ -25,6 +25,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ViewStyle } from 'react-native';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 import type { PostActionBarProps } from '@/components/post/PostActionBar';
+import type { PostActionProcessingState } from '@/components/post/PostActionControl';
 import type { PostActionBarStoryQuery } from './__generated__/PostActionBarStoryQuery.graphql';
 
 const reply = fn();
@@ -32,6 +33,9 @@ const bookmark = fn();
 const more = fn();
 const deletionMutationRequest = fn();
 const reactionMutationRequest = fn();
+const playgroundBookmark = fn();
+const playgroundMore = fn();
+const playgroundReply = fn();
 const reactionLifecycleConsoleErrors: unknown[][] = [];
 const reactionActionColor = '#F97066';
 const repostActionColors = { dark: '#409667', light: '#16794A' } as const;
@@ -608,15 +612,167 @@ function ActionBarFixtures() {
   );
 }
 
+type PlaygroundProps = {
+  bookmarkProcessing: PostActionProcessingState;
+  bookmarkSelected: boolean;
+  onBookmark: () => void;
+  onMore: () => void;
+  onReply: () => void;
+  replyCount: number;
+  replyExpanded: boolean;
+  replyProcessing: PostActionProcessingState;
+  repostState: RepostFixtureState;
+  showMore: boolean;
+};
+
+function PostActionBarPlayground({
+  bookmarkProcessing,
+  bookmarkSelected,
+  onBookmark,
+  onMore,
+  onReply,
+  replyCount,
+  replyExpanded,
+  replyProcessing,
+  repostState,
+  showMore,
+}: PlaygroundProps) {
+  return (
+    <View style={styles.playground}>
+      <PostActionBarFixture
+        bookmark={{
+          accessibilityLabel: '북마크',
+          hasBookmarked: bookmarkSelected,
+          onPress: onBookmark,
+          processing: bookmarkProcessing,
+        }}
+        more={showMore ? { accessibilityLabel: '더보기', onPress: onMore } : undefined}
+        reply={{
+          accessibilityLabel: '답글',
+          count: replyCount,
+          expanded: replyExpanded,
+          onPress: onReply,
+          processing: replyProcessing,
+        }}
+        repostState={repostState}
+      />
+    </View>
+  );
+}
+
 const meta = {
-  component: CatalogStory,
+  args: {
+    bookmarkProcessing: 'default',
+    bookmarkSelected: false,
+    onBookmark: playgroundBookmark,
+    onMore: playgroundMore,
+    onReply: playgroundReply,
+    replyCount: 12_345,
+    replyExpanded: false,
+    replyProcessing: 'default',
+    repostState: 'unselected',
+    showMore: true,
+  },
+  argTypes: {
+    bookmarkProcessing: { control: 'select', options: ['default', 'pending', 'disabled'] },
+    replyCount: { control: { min: 0, step: 1, type: 'number' } },
+    replyProcessing: { control: 'select', options: ['default', 'pending', 'disabled'] },
+    repostState: { control: 'select', options: ['hidden', 'unselected', 'selected', 'pending'] },
+  },
+  component: PostActionBarPlayground,
+  parameters: { controls: { disable: true } },
   title: 'KOSMO/Patterns/Post/Action Bar',
-} satisfies Meta<typeof CatalogStory>;
+} satisfies Meta<typeof PostActionBarPlayground>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+export const Playground: Story = {
+  parameters: {
+    controls: {
+      disable: false,
+      include: [
+        'bookmarkProcessing',
+        'bookmarkSelected',
+        'replyCount',
+        'replyExpanded',
+        'replyProcessing',
+        'repostState',
+        'showMore',
+      ],
+    },
+  },
+  play: async ({ args, canvasElement, step }) => {
+    playgroundBookmark.mockClear();
+    playgroundMore.mockClear();
+    playgroundReply.mockClear();
+    const canvas = within(canvasElement);
+    const toolbar = await canvas.findByRole('toolbar', { name: '액션 바' });
+    const labels = within(toolbar)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label'));
+    const hasPostActions = args.repostState !== 'hidden';
+
+    await step('Controls에 따른 고정 순서와 trailing group 확인', async () => {
+      expect(labels).toEqual([
+        '답글',
+        ...(hasPostActions ? ['재게시', '반응'] : []),
+        '북마크',
+        ...(args.showMore ? ['더보기'] : []),
+      ]);
+      if (args.showMore) {
+        const bookmarkBounds = canvas
+          .getByRole('button', { name: args.bookmarkSelected ? '북마크 해제' : '북마크' })
+          .getBoundingClientRect();
+        const moreBounds = canvas.getByRole('button', { name: '더보기' }).getBoundingClientRect();
+        expect(moreBounds.left - bookmarkBounds.right).toBe(4);
+        expect(moreBounds.right - bookmarkBounds.left).toBe(82);
+      }
+    });
+
+    await step('Actions callback과 처리 상태 확인', async () => {
+      const replyButton = canvas.getByRole('button', { name: '답글' });
+      const bookmarkButton = canvas.getByRole('button', {
+        name: args.bookmarkSelected ? '북마크 해제' : '북마크',
+      });
+
+      if (args.replyProcessing === 'default') {
+        await userEvent.click(replyButton);
+        expect(playgroundReply).toHaveBeenCalledOnce();
+      } else {
+        replyButton.click();
+        expect(playgroundReply).not.toHaveBeenCalled();
+      }
+      if (args.bookmarkProcessing === 'default') {
+        await userEvent.click(bookmarkButton);
+        expect(playgroundBookmark).toHaveBeenCalledOnce();
+      } else {
+        bookmarkButton.click();
+        expect(playgroundBookmark).not.toHaveBeenCalled();
+      }
+      if (args.showMore) {
+        await userEvent.click(canvas.getByRole('button', { name: '더보기' }));
+        expect(playgroundMore).toHaveBeenCalledOnce();
+      }
+    });
+
+    if (args.repostState === 'unselected' || args.repostState === 'selected') {
+      await step('Repost menu open·dismiss와 focus 복귀 확인', async () => {
+        const repost = canvas.getByRole('button', {
+          name: args.repostState === 'selected' ? '재게시 취소' : '재게시',
+        });
+        await userEvent.click(repost);
+        expect(await screen.findByRole('menu', { name: '재게시 메뉴' })).toBeVisible();
+        await userEvent.keyboard('{Escape}');
+        expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
+        expect(repost).toHaveFocus();
+      });
+    }
+  },
+};
+
 export const ActionBarCatalog: Story = {
+  render: () => <CatalogStory />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const buttons = canvas.getAllByRole('button');
@@ -670,6 +826,7 @@ export const ActionBarCatalog: Story = {
 
     const toolbars = canvas.getAllByRole('toolbar', { name: '액션 바' });
     const defaultReply = defaultToolbarCanvas.getByRole('button', { name: '답글' });
+    const defaultBookmark = defaultToolbarCanvas.getByRole('button', { name: '북마크' });
     const defaultMore = defaultToolbarCanvas.getByRole('button', { name: '더보기' });
     const actionTargetSizes = [
       ['답글', 50],
@@ -684,6 +841,10 @@ export const ActionBarCatalog: Story = {
       expect(bounds.width).toBe(width);
       expect(bounds.height).toBe(28);
     }
+    const defaultBookmarkBounds = defaultBookmark.getBoundingClientRect();
+    const defaultMoreBounds = defaultMore.getBoundingClientRect();
+    expect(defaultMoreBounds.left - defaultBookmarkBounds.right).toBe(4);
+    expect(defaultMoreBounds.right - defaultBookmarkBounds.left).toBe(82);
     expect(defaultToolbar.getBoundingClientRect().height).toBe(28);
     expect(canvas.queryByTestId('post-action-reply-hover')).toBeNull();
 
@@ -773,6 +934,7 @@ export const ActionBarCatalog: Story = {
 
     const defaultReaction = defaultToolbarCanvas.getByRole('button', { name: '반응' });
     const defaultReactionIcon = defaultReaction.querySelector('svg');
+    expect(defaultReactionIcon?.querySelector('path[d="M18 12v6"]')).not.toBeNull();
     expect(defaultReactionIcon).toHaveAttribute('stroke', colors.light.textSecondary);
     expect(defaultReactionIcon).toHaveAttribute('fill', 'none');
     await userEvent.hover(defaultReaction);
@@ -815,6 +977,7 @@ export const ActionBarCatalog: Story = {
 
     const activeReaction = within(toolbars[2]!).getByRole('button', { name: '반응' });
     const activeReactionIcon = activeReaction.querySelector('svg');
+    expect(activeReactionIcon?.querySelector('path[d="M18 12v6"]')).not.toBeNull();
     expect(activeReactionIcon).toHaveAttribute('stroke', reactionActionColor);
     expect(activeReactionIcon).toHaveAttribute('fill', reactionActionColor);
     await userEvent.hover(activeReaction);
@@ -1566,7 +1729,7 @@ export const Compact900: Story = {
 };
 
 export const Full1400: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  globals: { theme: 'light', viewport: { isRotated: false, value: 'kosmoFull' } },
   parameters: { layout: 'fullscreen' },
   play: verifyFixtures(568, 524),
   render: () => <ActionBarFixtures />,
@@ -1596,6 +1759,7 @@ const styles = {
   } satisfies ViewStyle,
   listContent: { flex: 1, minWidth: 0 } satisfies ViewStyle,
   localeCopy: { fontFamily: 'SUIT', ...typography.sm },
+  playground: { maxWidth: 600, width: '100%' } satisfies ViewStyle,
   placementFixture: {
     height: 640,
     position: 'relative',

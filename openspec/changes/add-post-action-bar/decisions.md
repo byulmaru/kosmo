@@ -176,7 +176,7 @@
 - Decision Date: 2026-07-29
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-414`, 2026-07-29 KST 사용자 결정
-- Status: Active
+- Status: Superseded
 - Context / Problem: Quote Source preview의 공통 12px 하단 padding과 border 밖 4px 간격을 함께 사용하면 실제로 늘어난 공간이 border 내부에만 있는 것처럼 보이고, text-only Post보다 Action Bar 주변이 답답하게 느껴진다.
 - Decision Outcome: Quote와 순수 Repost 목록은 Action Bar 자체 28px과 목록 final slot의 상단 padding 0·하단 padding 4px을 유지한다. Quote 목록에서만 nested Source preview 내부 하단 padding을 `spacing.xs` 4px로 줄이고, Source preview border 밖에서 Action Bar까지 `spacing.sm` 8px 간격을 둔다. 순수 Repost와 상세의 Source preview spacing은 바꾸지 않는다. 카드 구분선 1px semantic `divider`, 순수 Repost attribution 20px line box·Source gap 0과 Native 출시 gate도 유지한다. 일반 Text·Media의 Figma target은 2026-08-27 후속 결정이 소유하며 production은 별도 migration 전까지 기존 spacing을 유지한다.
 - Alternatives Considered: Quote preview 내부 12px을 유지한 채 외부 간격만 8px로 늘리면 내부 공백이 더 강하게 보여 의도한 경계가 드러나지 않아 채택하지 않았다. 공용 Action Bar slot의 상단 간격을 늘리면 text-only Post와 순수 Repost까지 불필요하게 높아져 채택하지 않았다. Action Bar를 Post 카드 구분선 밖으로 이동하면 content grid의 final sibling 계약을 깨므로 채택하지 않았다.
@@ -188,12 +188,24 @@
 - Decision Date: 2026-08-27
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/post-action-bar.md`, `DSN-49`, 2026-08-27~28 KST 사용자 결정
-- Status: Active
+- Status: Superseded
 - Context / Problem: Full Web 중앙 shell에 좌우 1px border를 추가한 뒤 일반 Text·Media Post의 기존 카드 상단 8px, 본문 뒤 4px과 Action Bar 하단 4px만으로는 content와 divider가 지나치게 붙어 보였다. 기존 OpenSpec은 목록 세 variant를 모두 slot 상단 0·하단 4px으로 묶고 Figma source 수정을 제외했다. 승인된 시안은 Figma source에 반영하되, 사용자는 production 코드 적용을 Figma 정보를 구현에 반영하는 별도 Product lifecycle로 분리했다.
 - Decision Outcome: Center·Mobile Text·Media canonical Figma source는 카드 상단 `spacing.md` 12px·하단 `spacing.xs` 4px을 사용한다. content column의 기존 `spacing.xs` 4px gap 뒤 final Action Bar slot 상단에 `spacing.xs` 4px을 추가하고 slot 하단은 0으로 두어 마지막 presentation(본문·미디어 또는 Reaction Summary)에서 Action Bar까지 8px, Action Bar에서 divider까지 4px을 만든다. production `PostListItem`과 규범 spec은 이 변경에서 수정하지 않고 현재 카드 상단 8px과 slot 상단 0·하단 4px을 유지한다. 같은 target의 production 적용은 관련 Product 이슈를 확인하고 별도 OpenSpec spec·task와 runtime 검증을 연결한 뒤 진행한다. Quote와 순수 Repost는 기존 전용 구조와 slot 상단 0·하단 4px 계약을 유지한다.
 - Alternatives Considered: 모든 Post variant의 공용 Figma card·slot을 바꾸면 Quote의 preview 내부 4px·외부 8px과 순수 Repost attribution·Source gap 계약까지 불필요하게 변경되므로 채택하지 않았다. 기존 slot 하단 4px과 새 card 하단 4px을 함께 유지하면 divider 앞 간격이 8px로 중복되므로 채택하지 않았다. Full Web consumer instance만 override하면 Mobile source와 drift하므로 채택하지 않았다. production 코드까지 함께 변경하는 방식은 구현 lifecycle을 분리하려는 사용자 결정에 따라 이번 범위에서 제외했다.
 - Consequences: 기존에 slot 하단 padding이 없던 Figma canonical source는 12px 증가한다. production geometry와 공용 Action Bar 28px geometry, action 동작, Quote·순수 Repost·상세 thread는 이번 변경에서 바뀌지 않는다. 후속 Product migration이 같은 target을 적용하면 일반 Text·Media Post 높이는 현재 production보다 8px 증가한다. Figma source 변경은 Center·Mobile Text·Media instance consumer에 전파되므로 representative Light·Dark·responsive readback이 필요하다.
 - Confirmation / Follow-up: Figma canonical source에서 카드 12/4와 slot 4/0을 readback하고 representative Light·Dark·responsive consumer를 확인한다. 문서·OpenSpec validation만 이 PR의 완료 증거로 사용한다. focused Storybook, app 검증과 production runtime 관찰은 관련 Product 이슈와 별도 OpenSpec spec·task를 연결한 migration에서 수행한다.
+
+### PROD-866에서 canonical Post presentation 계약을 production에 적용한다
+
+- Decision Date: 2026-08-31
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-866`, `docs/design/post-action-bar.md`, `docs/design/post-thread.md`, Figma `PostActionControl` 3801:8494, `PostActionBar` 6604:48270, `PostLayout` 4686:12079, Center thread 4762:17631
+- Status: Active
+- Context / Problem: 2026-08-27 결정은 일반 Text·Media의 Figma 리듬만 고정하고 production 적용을 미뤘다. 최신 canonical source는 Action Bar의 icon·trailing group, PostListItem variant별 spacing, PostLayout의 full-width Body·Engagement와 thread connector 범위까지 함께 확정하므로 viewer 전용 보정이나 consumer override로는 공용 presentation drift를 해소할 수 없다.
+- Decision Outcome: `PROD-866`은 일반 Text·Media `PostListItem`에 카드 12/4와 Action Bar slot 4/0을 적용한다. Quote·순수 Repost는 카드 8/1과 direct Action Bar를 사용하며 Quote Source preview 내부 4px·외부 8px은 유지한다. `PostLayout`은 48px Avatar와 12px gap의 Header 뒤 Body·Engagement를 root full width로 배치한다. Center thread current row는 좌우 8/12, 상하 16/4 padding을 사용하며 connector는 조상 구간과 조상→현재까지만 표시하고 descendant 구간에는 표시하지 않는다. Action Bar는 Reply→Repost→Reaction→Bookmark→More 순서, Web trailing 82px과 HeartPlus를 사용한다.
+- Alternatives Considered: Wide viewer에만 geometry를 보정하면 production `PostMediaViewerThread → PostDetailThread → PostThreadLayout` 재사용 경로와 일반 상세가 갈라지므로 채택하지 않았다. 모든 PostListItem variant에 하나의 slot spacing을 적용하면 Quote·순수 Repost canonical 구조를 깨므로 채택하지 않았다. 새 presentation abstraction은 기존 공용 컴포넌트가 같은 소유권을 이미 가지므로 추가하지 않았다.
+- Consequences: 공용 Post surface와 이를 재사용하는 Wide viewer가 같은 geometry·connector·action 계약을 상속한다. Web Storybook과 build는 이 변경의 runtime 증거지만 Figma readback이나 Web QA를 Native 실기기 동작·접근성 완료 증거로 사용하지 않는다.
+- Confirmation / Follow-up: focused Storybook에서 HeartPlus·82px trailing group, variant spacing, PostLayout full-width geometry와 descendant connector 생략을 검증하고 representative Web surface를 수동 확인한다. Native release gate와 상위 Stack 재적층·공개는 별도 승인 경계를 유지한다.
 
 ### 공유 change와 부모 소유의 최종 archive
 

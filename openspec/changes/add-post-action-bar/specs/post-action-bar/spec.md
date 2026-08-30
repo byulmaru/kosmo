@@ -2,12 +2,13 @@
 
 ### Requirement: 고정된 액션 구성
 
-**Authority / Provenance:** `PROD-432`, `PROD-433`, `PROD-414` — Post Action Bar는 표시하도록 제공된 액션을 Reply → Repost → Reaction → Bookmark → More 순서의 단일 행으로 렌더해야 한다(MUST). 액션별 config 또는 구현된 child action fragment가 제공되지 않으면 해당 위치를 렌더하지 않아야 하며(MUST), 남은 액션의 상대 순서는 바꾸지 않아야 한다(MUST). 지원되는 production Post surface는 composite Post fragment와 나머지 action config로 다섯 액션을 모두 제공해야 하며(MUST), Content·Reply Parent·Repost Source 관계 조합, Post Visibility 또는 권한 때문에 실행할 수 없는 액션도 생략하지 않고 disabled 상태로 제공해야 한다(MUST). More는 icon-only 액션이어야 하며(MUST) count나 의미적 선택·처리 상태를 자체적으로 제공하지 않아야 한다(MUST).
+**Authority / Provenance:** `PROD-432`, `PROD-433`, `PROD-414`, `PROD-866` — Post Action Bar는 표시하도록 제공된 액션을 Reply → Repost → Reaction → Bookmark → More 순서의 단일 행으로 렌더해야 한다(MUST). 액션별 config 또는 구현된 child action fragment가 제공되지 않으면 해당 위치를 렌더하지 않아야 하며(MUST), 남은 액션의 상대 순서는 바꾸지 않아야 한다(MUST). 지원되는 production Post surface는 composite Post fragment와 나머지 action config로 다섯 액션을 모두 제공해야 하며(MUST), Content·Reply Parent·Repost Source 관계 조합, Post Visibility 또는 권한 때문에 실행할 수 없는 액션도 생략하지 않고 disabled 상태로 제공해야 한다(MUST). Web의 Bookmark와 More는 50px Bookmark, 4px 간격, 28px More로 이루어진 82px trailing group이어야 한다(MUST). More는 icon-only 액션이어야 하며(MUST) count나 의미적 선택·처리 상태를 자체적으로 제공하지 않아야 한다(MUST).
 
 #### Scenario: 모든 액션 표시
 
 - **WHEN** 다섯 액션의 config 또는 child fragment가 모두 제공된다
 - **THEN** Action Bar는 Reply, Repost, Reaction, Bookmark, More 순서로 렌더한다
+- **AND** Web의 Bookmark와 More는 4px 간격을 둔 82px trailing group으로 오른쪽 끝에 배치된다
 
 #### Scenario: 독립 컴포넌트의 선택적 액션 생략
 
@@ -27,19 +28,19 @@
 
 ### Requirement: 액션의 시각 상태
 
-**Authority / Provenance:** `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`, `PROD-598`, `PROD-866`, `PROD-882` — Reply·Reaction·Bookmark는 default·pending·disabled 처리 상태와 각각 controlled `expanded`, `hasReacted`, `hasBookmarked`를 받아야 하며(MUST), private Repost child action은 `viewerRepost`와 mutation 진행 상태에서 `hasReposted` 및 default·pending을 함께 파생해야 한다(MUST). Repost의 최종 disabled 행동은 유지하되 concrete policy input 또는 fragment shape를 PROD-414가 선결해서는 안 되며(MUST NOT), actual production caller와 함께 PROD-432가 설계해야 한다(MUST). 범용 `selected`를 공개 prop으로 제공하지 않아야 하며(MUST NOT), Reaction과 Bookmark는 count를 받지 않아야 한다(MUST NOT). Reply·Reaction·Bookmark의 default 상태는 보조 텍스트 색상의 outline icon과 Reply가 제공한 선택적 count를 표시해야 한다(MUST). 미선택 Repost의 glyph와 count는 보조 텍스트 색상을 사용해야 하며(MUST), Web hover에서는 glyph와 background만 semantic `actionRepostBase`를 사용하고 count는 보조 텍스트 색상을 유지해야 한다(MUST). selected Repost의 glyph와 count는 Light에서 `#16794A`, Dark에서 `#409667`인 `actionRepostBase`를 사용해야 하며(MUST), Reaction은 active·hover에서 semantic `actionReactionBase` (`#F97066`)를 사용해야 한다(MUST). `hasReacted` 또는 `hasBookmarked`가 true이면 pending spinner를 표시하는 동안을 제외하고 Reaction 또는 Bookmark icon 내부를 현재 처리 상태 색상으로 채워야 한다(MUST). 처리 상태의 시각 표현은 도메인 상태의 action semantic 또는 primary 표현보다 우선해야 한다(MUST). pending 상태는 icon 자리에 spinner를 표시하고(MUST), disabled 상태는 icon과 제공된 count를 비활성 표현으로 약화해야 한다(MUST). pending·disabled 중에도 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`의 의미와 접근성 상태를 잃지 않아야 한다(MUST). 독립 UI용 More config는 callback과 accessibility label을 받아야 하고(MUST) count·도메인 상태·pending·disabled 입력을 받지 않아야 하며(MUST), production private `PostDeletionAction`은 자기 mutation pending과 menu expanded 상태를 내부에서 관리해야 한다(MUST).
+**Authority / Provenance:** `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`, `PROD-598`, `PROD-866`, `PROD-882` — Reply·Reaction·Bookmark는 default·pending·disabled 처리 상태와 각각 controlled `expanded`, `hasReacted`, `hasBookmarked`를 받아야 하며(MUST), private Repost child action은 `viewerRepost`와 mutation 진행 상태에서 `hasReposted` 및 default·pending을 함께 파생해야 한다(MUST). Repost의 최종 disabled 행동은 유지하되 concrete policy input 또는 fragment shape를 PROD-414가 선결해서는 안 되며(MUST NOT), actual production caller와 함께 PROD-432가 설계해야 한다(MUST). 범용 `selected`를 공개 prop으로 제공하지 않아야 하며(MUST NOT), Reaction과 Bookmark는 count를 받지 않아야 한다(MUST NOT). Reply·Reaction·Bookmark의 default 상태는 보조 텍스트 색상의 outline icon과 Reply가 제공한 선택적 count를 표시해야 한다(MUST). 미선택 Repost의 glyph와 count는 보조 텍스트 색상을 사용해야 하며(MUST), Web hover에서는 glyph와 background만 semantic `actionRepostBase`를 사용하고 count는 보조 텍스트 색상을 유지해야 한다(MUST). selected Repost의 glyph와 count는 Light에서 `#16794A`, Dark에서 `#409667`인 `actionRepostBase`를 사용해야 하며(MUST), Reaction은 `HeartPlus` glyph를 사용하며 active·hover에서 semantic `actionReactionBase` (`#F97066`)를 사용해야 한다(MUST). `hasReacted` 또는 `hasBookmarked`가 true이면 pending spinner를 표시하는 동안을 제외하고 HeartPlus 또는 Bookmark icon 내부를 현재 처리 상태 색상으로 채워야 한다(MUST). 처리 상태의 시각 표현은 도메인 상태의 action semantic 또는 primary 표현보다 우선해야 한다(MUST). pending 상태는 icon 자리에 spinner를 표시하고(MUST), disabled 상태는 icon과 제공된 count를 비활성 표현으로 약화해야 한다(MUST). pending·disabled 중에도 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`의 의미와 접근성 상태를 잃지 않아야 한다(MUST). 독립 UI용 More config는 callback과 accessibility label을 받아야 하고(MUST) count·도메인 상태·pending·disabled 입력을 받지 않아야 하며(MUST), production private `PostDeletionAction`은 자기 mutation pending과 menu expanded 상태를 내부에서 관리해야 한다(MUST).
 
 #### Scenario: 활성인 도메인 상태
 
 - **WHEN** Repost의 `hasReposted`, Reaction의 `hasReacted` 또는 Bookmark의 `hasBookmarked`가 true이고 처리 상태가 default다
-- **THEN** Action Bar는 Repost icon과 count를 현재 mode의 `actionRepostBase`로 표시하고, Reaction icon은 `actionReactionBase`, Bookmark icon은 primary 색상으로 내부를 채우며 도메인 의미를 접근성 상태로 노출한다
+- **THEN** Action Bar는 Repost icon과 count를 현재 mode의 `actionRepostBase`로 표시하고, Reaction HeartPlus는 `actionReactionBase`, Bookmark icon은 primary 색상으로 내부를 채우며 도메인 의미를 접근성 상태로 노출한다
 
 #### Scenario: 미선택 Repost와 Reaction
 
 - **WHEN** Repost와 Reaction이 default 처리 상태이며 선택되지 않았다
 - **THEN** Repost glyph와 count는 보조 텍스트 색상으로 표시된다
 - **AND** Web hover에서는 Repost glyph와 원형 background만 현재 mode의 `actionRepostBase`로 바뀌고 count는 보조 텍스트 색상을 유지한다
-- **AND** Reaction glyph는 보조 텍스트 색상으로 표시되고 Web hover에서 `actionReactionBase`를 사용한다
+- **AND** Reaction HeartPlus는 보조 텍스트 색상으로 표시되고 Web hover에서 `actionReactionBase`를 사용한다
 
 #### Scenario: 활성인 도메인 상태의 처리 중 상태
 
@@ -131,7 +132,7 @@
 
 ### Requirement: 액션 접근성
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/post-action-bar.md`, `PROD-433`, `PROD-414`, `PROD-432` — Action Bar 컨테이너는 toolbar role과 고정된 한국어 접근성 이름 `액션 바`를 노출해야 하며(MUST), 내부 액션을 하나의 접근성 요소로 병합하지 않아야 한다(MUST NOT). 표시되는 각 액션은 button role과 액션별 label을 노출해야 하며(MUST) 시각 icon이나 count에만 의미를 의존하지 않아야 한다(MUST). Action Bar와 각 control의 높이는 Android·iOS·Web에서 28 logical unit이어야 한다(MUST). Reply·Repost·Reaction·Bookmark target 너비는 각각 50이고 More target 너비는 최소 28이어야 하며(MUST), Bar는 별도 좌우 inset 없이 Reply target의 왼쪽 경계와 More target의 오른쪽 경계를 PostBody content column의 양끝에 맞추고 나머지 action을 그 사이에 분배해야 한다(MUST). Reply·Repost·Reaction·Bookmark의 icon-count visual group은 각 target 왼쪽에 맞춰 glyph 왼쪽 경계가 target 왼쪽 경계와 일치해야 하며(MUST), More glyph는 target 가운데에 있어야 한다(MUST). 각 glyph visual box는 16×16이고 icon과 count 간격은 4여야 한다(MUST). Web target은 축 정렬된 24×24 CSS px 사각형을 포함하고 인접 target과 겹치지 않아야 한다(MUST). Native의 28pt·28dp target은 출시 전 임시 예외이며 iOS 출시 전 최소 44×44pt, Android 출시 전 최소 48×48dp로 복구하고 runtime 검증해야 한다(MUST). Reply의 `expanded`, Repost child가 `viewerRepost`에서 파생한 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`와 각 액션의 pending·disabled 상태는 플랫폼에서 지원하는 접근성 state로 노출해야 한다(MUST). Repost policy-disabled 접근성 state는 concrete seam과 actual caller를 설계하는 PROD-432 surface 통합에서 검증해야 한다(MUST). 이 접근성 매핑 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있지만 공개 제품 prop 이름을 바꾸지 않아야 한다(MUST). More는 button role과 label을 제공하되 도메인 상태 또는 처리 상태를 노출하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/post-action-bar.md`, `PROD-433`, `PROD-414`, `PROD-432`, `PROD-866` — Action Bar 컨테이너는 toolbar role과 고정된 한국어 접근성 이름 `액션 바`를 노출해야 하며(MUST), 내부 액션을 하나의 접근성 요소로 병합하지 않아야 한다(MUST NOT). 표시되는 각 액션은 button role과 액션별 label을 노출해야 하며(MUST) 시각 icon이나 count에만 의미를 의존하지 않아야 한다(MUST). Action Bar와 각 control의 높이는 Android·iOS·Web에서 28 logical unit이어야 한다(MUST). Reply·Repost·Reaction·Bookmark target 너비는 각각 50이고 More target 너비는 최소 28이어야 하며(MUST), Bar는 별도 좌우 inset 없이 Reply target의 왼쪽 경계와 More target의 오른쪽 경계를 PostBody content column의 양끝에 맞추고 나머지 action을 그 사이에 분배해야 한다(MUST). Web의 Bookmark와 More는 4px 간격을 둔 82px trailing group이어야 한다(MUST). Reply·Repost·Reaction·Bookmark의 icon-count visual group은 각 target 왼쪽에 맞춰 glyph 왼쪽 경계가 target 왼쪽 경계와 일치해야 하며(MUST), More glyph는 target 가운데에 있어야 한다(MUST). 각 glyph visual box는 16×16이고 icon과 count 간격은 4여야 한다(MUST). Web target은 축 정렬된 24×24 CSS px 사각형을 포함하고 인접 target과 겹치지 않아야 한다(MUST). Native의 28pt·28dp target은 출시 전 임시 예외이며 iOS 출시 전 최소 44×44pt, Android 출시 전 최소 48×48dp로 복구하고 runtime 검증해야 한다(MUST). Reply의 `expanded`, Repost child가 `viewerRepost`에서 파생한 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`와 각 액션의 pending·disabled 상태는 플랫폼에서 지원하는 접근성 state로 노출해야 한다(MUST). Repost policy-disabled 접근성 state는 concrete seam과 actual caller를 설계하는 PROD-432 surface 통합에서 검증해야 한다(MUST). 이 접근성 매핑 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있지만 공개 제품 prop 이름을 바꾸지 않아야 한다(MUST). More는 button role과 label을 제공하되 도메인 상태 또는 처리 상태를 노출하지 않아야 한다(MUST).
 
 #### Scenario: 이름이 있는 툴바 탐색
 
@@ -158,6 +159,7 @@
 - **WHEN** Action Bar가 지원하는 compact 폭에 렌더된다
 - **THEN** Bar와 각 control은 높이 28, social action 너비 50, More target 너비 최소 28, glyph 16×16, icon-count 간격 4를 유지한다
 - **AND** Reply target의 왼쪽 경계와 More target의 오른쪽 경계는 PostBody content column의 양끝에 맞고 나머지 action은 그 사이에 균등 분배된다
+- **AND** Web의 Bookmark와 More는 4px 간격을 둔 82px trailing group이다
 - **AND** Reply·Repost·Reaction·Bookmark glyph의 왼쪽 경계는 각 target의 왼쪽 경계와 일치하고 More glyph는 target 가운데에 있다
 - **AND** Web의 각 target은 24×24 CSS px 사각형을 포함하며 인접 target과 겹치지 않는다
 
@@ -207,7 +209,7 @@
 
 ### Requirement: Production Post surface 배치
 
-**Authority / Provenance:** `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/post-action-bar.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — 지원되는 Home Post List, Profile Post List 및 Post 상세 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). `PostLayout`은 Action Bar를, `PostListItem`은 Action Bar만 담은 목록 전용 slot을 Post content grid의 마지막 sibling으로 직접 렌더링해야 하고(MUST), 본문·작성자·생성 시각·Source navigation `Link`/`Pressable` 안에 중첩하지 않아야 한다(MUST NOT). 일반 Post와 Quote는 다섯 액션 모두 바깥 Post를 target으로 공급해야 한다(MUST). 순수 Repost는 Reply에 바깥 contentless Repost binding과 disabled 상태를 유지하고(MUST), Repost·Reaction·Bookmark·More에는 화면에 표시한 direct Source Post를 target으로 공급해야 한다(MUST). surface는 display Post와 action별 target을 구분하면서 canonical 관계 조합, Post Visibility·권한 계약과 각 action 계약에서 target 자체의 적격성과 현재 실행 주체·세션의 실행 권한을 분리해 판단해야 한다(MUST). Action Bar child는 전달받은 policy input을 표현하되 대상 정책, guest 인증 진입 또는 Profile 선택 진입을 자체 판단하지 않아야 한다(MUST NOT). target Post가 적격하지 않거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션은 config 또는 child action을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). target 자체가 적격하면(MUST) `guest`는 기존 플랫폼 인증 진입으로 위임하고, `valid`인데 selected Profile이 없으면 `ShellChromeContext.openProfileSwitcher()`로 기존 Profile 선택기를 열며, `valid`이고 selected Profile이 있으면 action을 실행하고, `error`에서는 disabled로 유지해야 한다(MUST). 인증·Profile 선택 resolution 전에는 child UI나 mutation을 시작하지 않아야 하며(MUST NOT), Profile 선택 뒤 원래 action을 자동 재실행하지 않아야 한다(MUST NOT). `PostList`, route와 외부 caller는 Action Bar subtree나 `actionBar?: ReactNode`를 주입하지 않아야 하며(MUST NOT), surface 배치는 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/post-action-bar.md`, `docs/design/post-thread.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`, `PROD-866` — 지원되는 Home Post List, Profile Post List 및 Post 상세 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). `PostLayout`은 Action Bar를 Post content grid의 마지막 sibling으로 직접 렌더링해야 하고(MUST), 일반 Text·Media `PostListItem`은 Action Bar만 담은 목록 전용 slot을 사용해야 하며(MUST), Quote와 순수 Repost `PostListItem`은 별도 slot 없이 Action Bar를 직접 배치해야 한다(MUST). Action Bar는 본문·작성자·생성 시각·Source navigation `Link`/`Pressable` 안에 중첩하지 않아야 한다(MUST NOT). 일반 Post와 Quote는 다섯 액션 모두 바깥 Post를 target으로 공급해야 한다(MUST). 순수 Repost는 Reply에 바깥 contentless Repost binding과 disabled 상태를 유지하고(MUST), Repost·Reaction·Bookmark·More에는 화면에 표시한 direct Source Post를 target으로 공급해야 한다(MUST). surface는 display Post와 action별 target을 구분하면서 canonical 관계 조합, Post Visibility·권한 계약과 각 action 계약에서 target 자체의 적격성과 현재 실행 주체·세션의 실행 권한을 분리해 판단해야 한다(MUST). Action Bar child는 전달받은 policy input을 표현하되 대상 정책, guest 인증 진입 또는 Profile 선택 진입을 자체 판단하지 않아야 한다(MUST NOT). target Post가 적격하지 않거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션은 config 또는 child action을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). target 자체가 적격하면(MUST) `guest`는 기존 플랫폼 인증 진입으로 위임하고, `valid`인데 selected Profile이 없으면 `ShellChromeContext.openProfileSwitcher()`로 기존 Profile 선택기를 열며, `valid`이고 selected Profile이 있으면 action을 실행하고, `error`에서는 disabled로 유지해야 한다(MUST). 인증·Profile 선택 resolution 전에는 child UI나 mutation을 시작하지 않아야 하며(MUST NOT), Profile 선택 뒤 원래 action을 자동 재실행하지 않아야 한다(MUST NOT). `PostList`, route와 외부 caller는 Action Bar subtree나 `actionBar?: ReactNode`를 주입하지 않아야 하며(MUST NOT), surface 배치는 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
 
 #### Scenario: 목록과 상세의 공통 계약
 
@@ -217,17 +219,25 @@
 #### Scenario: content grid 마지막 sibling
 
 - **WHEN** `PostListItem` 또는 `PostLayout`이 일반 Post, 순수 Repost 또는 Quote를 렌더한다
-- **THEN** `PostLayout`의 Action Bar와 `PostListItem`의 Action Bar slot은 각 구조의 마지막 presentation 뒤 content grid의 마지막 sibling으로 렌더된다
-- **AND** 목록 전용 slot은 Action Bar만 포함한다
+- **THEN** `PostLayout`의 Action Bar와 `PostListItem`의 Action Bar는 각 구조의 마지막 presentation 뒤 content grid의 마지막 sibling으로 렌더된다
+- **AND** 일반 Text·Media의 목록 전용 slot은 Action Bar만 포함하고 Quote·순수 Repost는 Action Bar를 직접 배치한다
 - **AND** 본문·작성자·생성 시각·Source navigation link의 descendant가 아니다
 
 #### Scenario: 목록 Post 카드의 compact spacing
 
-- **WHEN** `PostListItem`이 일반 Post, 순수 Repost 또는 Quote를 렌더한다
-- **THEN** 목록 전용 Action Bar slot은 상단 0px·하단 4px padding을 제공하고 content grid의 마지막 sibling으로 렌더된다
+- **WHEN** `PostListItem`이 일반 Text·Media, 순수 Repost 또는 Quote를 렌더한다
+- **THEN** 일반 Text·Media 카드는 상단 12px·하단 4px padding을 사용하고 목록 전용 Action Bar slot은 상단 4px·하단 0px padding을 제공한다
+- **AND** 순수 Repost와 Quote 카드는 상단 8px·하단 1px padding을 사용하고 별도 Action Bar slot을 만들지 않는다
 - **AND** 1px 카드 구분선은 입력·메뉴 외곽선용 `border`가 아니라 저강도 semantic `divider` color를 사용한다
 - **AND** 순수 Repost attribution은 20px line box를 사용하고 아래 Source 표준행과의 추가 gap을 두지 않는다
-- **AND** Quote는 Source preview 내부 하단 padding을 4px로 줄이고, 공용 slot 상단 padding을 늘리지 않은 채 Source preview border 밖에서 Action Bar까지 8px 간격을 제공한다
+- **AND** Quote는 Source preview 내부 하단 padding을 4px로 줄이고 Source preview border 밖에서 직접 배치한 Action Bar까지 8px 간격을 제공한다
+
+#### Scenario: 상세 PostLayout과 thread connector geometry
+
+- **WHEN** Post 상세 thread가 조상, 현재 Post와 하위 Reply를 함께 렌더한다
+- **THEN** 현재 `PostLayout`은 48px Avatar와 12px gap의 Header 뒤 8px 간격으로 Body를 full width에 배치하고 Engagement를 같은 왼쪽 경계와 너비에 배치한다
+- **AND** current row는 왼쪽 8px·오른쪽 12px·상단 16px·하단 4px padding을 사용한다
+- **AND** connector는 조상 구간과 마지막 조상→현재 경계에만 표시되고 현재→첫 하위 Reply와 하위 Reply 사이에는 표시되지 않는다
 
 #### Scenario: 상세 thread 현재 Post의 compact spacing
 
@@ -380,7 +390,7 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 
 ### Requirement: 상태 카탈로그와 통합 검증
 
-**Authority / Provenance:** `docs/design/post-action-bar.md`, `PROD-432`, `PROD-433`, `PROD-414`, `PROD-866`, `PROD-882` — 공통 UI 구현은 Reply `expanded`, Repost child가 fragment에서 파생한 `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`, config 기반 Reply·Reaction·Bookmark의 default·pending·disabled와 Repost child의 default·pending, active Reaction·Bookmark의 채워진 icon, canonical Repost·Reaction action colors, More callback-only, 선택적 액션, count 및 지원 폭을 독립적으로 검토할 수 있는 Storybook 상태 카탈로그를 제공해야 한다(MUST). 대표 Light·Dark Web 상태에서 Repost의 미선택 중립색·hover·selected와 Reaction active·hover semantic 색상을 직접 검증해야 한다(MUST). Repost Storybook은 actual Relay operation의 target fragment ref를 `PostActionBar` parent fragment에서 private Repost child fragment까지 전달하고(MUST), menu open·dismiss·항목 선택·pending·mutation·오류 callback을 검증해야 한다(MUST). PROD-414 integration은 일반 Post·순수 Repost·Quote 목록과 상세의 final sibling·link 비중첩, 순수 Repost Source target, Web anchored menu·Native bottom sheet, exact failure toast와 이전 상태 유지·재시도를 검증해야 한다(MUST). PROD-432의 계약 부모 통합 검증은 준비된 나머지 action, 최종 disabled·guest 정책, More 링크 복사와 전체 action 조합을 검증해야 한다(MUST).
+**Authority / Provenance:** `docs/design/post-action-bar.md`, `docs/design/post-thread.md`, `PROD-432`, `PROD-433`, `PROD-414`, `PROD-866`, `PROD-882` — 공통 UI 구현은 Reply `expanded`, Repost child가 fragment에서 파생한 `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`, config 기반 Reply·Reaction·Bookmark의 default·pending·disabled와 Repost child의 default·pending, active Reaction·Bookmark의 채워진 icon, canonical Repost·Reaction action colors, HeartPlus·Bookmark+More trailing group, 선택적 액션, count 및 지원 폭을 독립적으로 검토할 수 있는 Storybook 상태 카탈로그를 제공해야 한다(MUST). 대표 Light·Dark Web 상태에서 Repost의 미선택 중립색·hover·selected와 Reaction active·hover semantic 색상을 직접 검증해야 한다(MUST). Playground는 실제 Controls·Actions·Interactions와 representative Web 상태를 제공해야 하고(MUST), PostListItem variant spacing, PostLayout full-width geometry와 thread connector 생략을 production fixture에서 검증해야 한다(MUST). Repost Storybook은 actual Relay operation의 target fragment ref를 `PostActionBar` parent fragment에서 private Repost child fragment까지 전달하고(MUST), menu open·dismiss·항목 선택·pending·mutation·오류 callback을 검증해야 한다(MUST). PROD-414 integration은 일반 Post·순수 Repost·Quote 목록과 상세의 final sibling·link 비중첩, 순수 Repost Source target, Web anchored menu·Native bottom sheet, exact failure toast와 이전 상태 유지·재시도를 검증해야 한다(MUST). PROD-432의 계약 부모 통합 검증은 준비된 나머지 action, 최종 disabled·guest 정책, More 링크 복사와 전체 action 조합을 검증해야 한다(MUST).
 
 #### Scenario: UI 상태 독립 검토
 

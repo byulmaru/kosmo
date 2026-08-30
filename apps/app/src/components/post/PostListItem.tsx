@@ -17,6 +17,7 @@ import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
 import type { ReactNode } from 'react';
+import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
@@ -163,8 +164,15 @@ export function PostListItem({
     },
     [onDeleted, openViewer, post.id],
   );
-  const cardStyle = [
+  const standardCardStyle = [
     styles.card,
+    styles.standardCard,
+    showDivider && styles.cardDivider,
+    showDivider && { borderColor: theme.borderSubtle },
+  ];
+  const compactCardStyle = [
+    styles.card,
+    styles.compactCard,
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
   ];
@@ -204,9 +212,14 @@ export function PostListItem({
       return renderWithReplySurface(null);
     }
     return renderWithReplySurface(
-      <View role="article" style={cardStyle}>
+      <View role="article" style={standardCardStyle}>
         {replyAttribution}
-        <PostListRow onDeleted={onDeleted} post={post} reply={reply} />
+        <PostListRow
+          actionBarStyle={styles.actionBarSlot}
+          onDeleted={onDeleted}
+          post={post}
+          reply={reply}
+        />
       </View>,
     );
   }
@@ -219,7 +232,7 @@ export function PostListItem({
 
   if (!post.content) {
     return renderWithReplySurface(
-      <View role="article" style={cardStyle}>
+      <View role="article" style={compactCardStyle}>
         <PostAttributionRow
           icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
         >
@@ -244,7 +257,7 @@ export function PostListItem({
   }
 
   return renderWithReplySurface(
-    <View style={cardStyle}>
+    <View style={compactCardStyle}>
       {replyAttribution}
       <View style={styles.quoteRow}>
         <Link asChild href={profileHref}>
@@ -272,7 +285,6 @@ export function PostListItem({
             sourcePreviewStyle={styles.quoteSourcePreview}
           />
           <PostActionSurface
-            actionBarStyle={styles.actionBarSlot}
             onDeleted={onDeleted}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
@@ -294,11 +306,13 @@ function PostAttributionRow({ children, icon }: { children: ReactNode; icon: Rea
 }
 
 function PostListRow({
+  actionBarStyle,
   onDeleted,
   post: postKey,
   reply,
   surfacePostId,
 }: {
+  actionBarStyle?: StyleProp<ViewStyle>;
   onDeleted: () => void;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
@@ -362,7 +376,7 @@ function PostListRow({
           </View>
         ) : null}
         <PostActionSurface
-          actionBarStyle={styles.actionBarSlot}
+          actionBarStyle={actionBarStyle}
           onDeleted={onDeleted}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
@@ -376,8 +390,9 @@ function PostListRow({
 const styles = StyleSheet.create({
   card: {
     paddingHorizontal: spacing.sm,
-    paddingTop: spacing.sm,
   },
+  standardCard: { paddingBottom: spacing.xs, paddingTop: spacing.md },
+  compactCard: { paddingBottom: 1, paddingTop: spacing.sm },
   cardDivider: { borderBottomWidth: 1 },
   quoteRow: {
     alignItems: 'flex-start',
@@ -391,7 +406,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   avatar: { borderRadius: radii.full },
-  actionBarSlot: { paddingBottom: spacing.xs },
+  actionBarSlot: { paddingTop: spacing.xs },
   detailReplySurface: {
     marginLeft: spacing.xxl * 2,
     marginRight: spacing.sm,

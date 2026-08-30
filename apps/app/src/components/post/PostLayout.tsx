@@ -124,72 +124,74 @@ export function PostLayout({
     : undefined;
   return (
     <View style={styles.root}>
-      <Link asChild href={profileHref}>
-        <Pressable
-          aria-hidden
-          accessibilityElementsHidden
-          accessible={false}
-          focusable={false}
-          importantForAccessibility="no-hide-descendants"
-          style={styles.avatar}
-          tabIndex={-1}
-        >
-          <Avatar
-            imageUri={post.profile.avatar?.url}
-            label={post.profile.displayName || post.profile.handle}
-            size={40}
-          />
-        </Pressable>
-      </Link>
-      <View style={styles.content}>
-        <ProfileNameBlock href={profileHref} profile={post.profile} />
-        <View style={styles.body}>
-          <PostBody
-            contentWarningPresentation={contentWarningPresentation}
-            mediaPresentation={mediaPresentation}
-            onMediaOpen={mediaPresentation === 'hidden' ? undefined : handleMediaOpen}
-            post={post}
-            size="lg"
-          />
-          {source ? <PostSourcePreview source={source} style={styles.source} /> : null}
-          <Text style={[styles.meta, { color: theme.textSecondary }]}>
-            {formatPostDate(post.createdAt)} ·{' '}
-            {visibilityLabels[post.visibility] ?? post.visibility}
-          </Text>
-          <PostActionSurface
-            onDeleted={handleDeleted}
-            reactionSummaryStyle={styles.reactionSummary}
-            reply={reply}
-            socialActionTarget={socialActionTarget!}
-          />
-          {replyBinding?.expanded &&
-          replyAuthentication.execution.kind === 'enabled' &&
-          replyBinding?.profile &&
-          post.content &&
-          post.replySurface ? (
-            <View style={styles.replySurface}>
-              <ReplyComposerSurface
-                ref={replyBinding.surfaceRef}
-                onPostCreated={replyBinding.onPostCreated}
-                onRequestClose={replyBinding.onRequestClose}
-                open={replyBinding.expanded}
-                owner={replyBinding.owner}
-                parent={post.replySurface}
-                profile={replyBinding.profile}
-                triggerRef={replyTriggerRef}
-              />
-            </View>
-          ) : null}
+      <View style={styles.header}>
+        <Link asChild href={profileHref}>
+          <Pressable
+            aria-hidden
+            accessibilityElementsHidden
+            accessible={false}
+            focusable={false}
+            importantForAccessibility="no-hide-descendants"
+            style={styles.avatar}
+            tabIndex={-1}
+          >
+            <Avatar
+              imageUri={post.profile.avatar?.url}
+              label={post.profile.displayName || post.profile.handle}
+              size={48}
+            />
+          </Pressable>
+        </Link>
+        <View style={styles.headerContent}>
+          <ProfileNameBlock href={profileHref} profile={post.profile} />
         </View>
+      </View>
+      <View style={styles.body}>
+        <PostBody
+          contentWarningPresentation={contentWarningPresentation}
+          mediaPresentation={mediaPresentation}
+          onMediaOpen={mediaPresentation === 'hidden' ? undefined : handleMediaOpen}
+          post={post}
+          size="lg"
+        />
+        {source ? <PostSourcePreview source={source} style={styles.source} /> : null}
+        <Text style={[styles.meta, { color: theme.textSecondary }]}>
+          {formatPostDate(post.createdAt)} · {visibilityLabels[post.visibility] ?? post.visibility}
+        </Text>
+        <PostActionSurface
+          onDeleted={handleDeleted}
+          reactionSummaryStyle={styles.reactionSummary}
+          reply={reply}
+          socialActionTarget={socialActionTarget!}
+        />
+        {replyBinding?.expanded &&
+        replyAuthentication.execution.kind === 'enabled' &&
+        replyBinding?.profile &&
+        post.content &&
+        post.replySurface ? (
+          <View style={styles.replySurface}>
+            <ReplyComposerSurface
+              ref={replyBinding.surfaceRef}
+              onPostCreated={replyBinding.onPostCreated}
+              onRequestClose={replyBinding.onRequestClose}
+              open={replyBinding.expanded}
+              owner={replyBinding.owner}
+              parent={post.replySurface}
+              profile={replyBinding.profile}
+              triggerRef={replyTriggerRef}
+            />
+          </View>
+        ) : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
+  root: { gap: spacing.sm, minWidth: 0 },
+  header: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
   avatar: { borderRadius: radii.full },
-  content: { flex: 1, gap: spacing.xs, minWidth: 0 },
+  headerContent: { flex: 1, minWidth: 0 },
   body: { minWidth: 0 },
   meta: { fontFamily: 'SUIT', marginTop: 6, textAlign: 'right', ...typography.xsm },
   reactionSummary: { marginBottom: spacing.xs, marginTop: spacing.lg },
