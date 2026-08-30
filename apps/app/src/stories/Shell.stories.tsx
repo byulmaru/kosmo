@@ -1256,12 +1256,8 @@ export const ProfileSwitcherCreateServerPolicyErrorMapsSafely: Story = {
     relay: {
       mutationGraphQLErrors: [
         {
-          extensions: {
-            code: 'VALIDATION',
-            field: 'handle',
-            reason: 'PROFILE_HANDLE_POLICY',
-          },
-          message: 'internal policy detail: reserved expression',
+          extensions: { code: 'VALIDATION', field: 'handle' },
+          message: profileHandlePolicyErrorMessage,
         },
       ],
       mutationRequestObserver: profileCreationRequestObserver,
@@ -1282,7 +1278,6 @@ export const ProfileSwitcherCreateServerPolicyErrorMapsSafely: Story = {
     await expect(
       canvas.findByText(profileHandlePolicyErrorMessage, { exact: true }),
     ).resolves.toBeVisible();
-    expect(canvas.queryByText('internal policy detail: reserved expression')).toBeNull();
     expect(input).toHaveValue('new_policy_handle');
     expect(profileCreationRequestObserver).toHaveBeenCalledOnce();
     expect(trackAnalytics).not.toHaveBeenCalled();
@@ -1316,6 +1311,7 @@ export const ProfileSwitcherCreateServerNonPolicyValidationErrorStaysGeneric: St
 
     await expect(canvas.findByText('프로필을 생성하지 못했습니다.')).resolves.toBeVisible();
     expect(canvas.queryByText(profileHandlePolicyErrorMessage, { exact: true })).toBeNull();
+    expect(canvas.queryByText('핸들은 30자 이하로 입력해주세요.', { exact: true })).toBeNull();
     expect(input).toHaveValue('newer_client_handle');
     expect(profileCreationRequestObserver).toHaveBeenCalledOnce();
     expect(trackAnalytics).not.toHaveBeenCalled();

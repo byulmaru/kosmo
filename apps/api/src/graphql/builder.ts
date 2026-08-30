@@ -1,6 +1,5 @@
 import { PermissionDeniedError, ValidationError } from '@kosmo/core/error';
 import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
-import { profileHandlePolicyValidationReason } from '@kosmo/core/validation';
 import SchemaBuilder from '@pothos/core';
 import DataloaderPlugin from '@pothos/plugin-dataloader';
 import RelayPlugin from '@pothos/plugin-relay';
@@ -11,17 +10,6 @@ import WithInputPlugin from '@pothos/plugin-with-input';
 import * as R from 'remeda';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
-
-const profileHandlePolicyReasonFromIssue = (issue: unknown) =>
-  isRecord(issue) &&
-  issue.code === 'custom' &&
-  isRecord(issue.params) &&
-  issue.params.reason === profileHandlePolicyValidationReason
-    ? profileHandlePolicyValidationReason
-    : undefined;
 
 export const builder = new SchemaBuilder<{
   AuthContexts: {
@@ -64,9 +52,8 @@ export const builder = new SchemaBuilder<{
         ?.map((segment) => (typeof segment === 'object' ? segment.key : segment))
         .filter((segment) => segment !== 'input')
         .join('.');
-      const reason = profileHandlePolicyReasonFromIssue(issue);
 
-      return new ValidationError(issue?.message, { field: field || undefined, reason });
+      return new ValidationError(issue?.message, { field: field || undefined });
     },
   },
   relay: {

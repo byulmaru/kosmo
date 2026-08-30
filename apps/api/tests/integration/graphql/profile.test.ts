@@ -2760,12 +2760,10 @@ describe('GraphQL remote profile boundary', () => {
         JSON.stringify(result.errors),
       );
       assert.equal(result.errors?.[0]?.extensions?.field, 'handle', JSON.stringify(result.errors));
-      const extensions = result.errors?.[0]?.extensions;
-      assert.equal(
-        extensions && 'reason' in extensions ? extensions.reason : undefined,
-        'PROFILE_HANDLE_POLICY',
-        JSON.stringify(result.errors),
-      );
+      assert.deepEqual(result.errors?.[0]?.extensions, {
+        code: 'VALIDATION',
+        field: 'handle',
+      });
       assert.equal(result.errors?.[0]?.message, profileHandlePolicyErrorMessage, handle);
       assert.equal(result.errors?.[0]?.message.includes(handle.trim()), false, handle);
     }

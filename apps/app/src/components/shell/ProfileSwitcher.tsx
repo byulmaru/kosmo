@@ -1,8 +1,4 @@
-import {
-  localProfileHandleSchema,
-  profileHandlePolicyErrorMessage,
-  profileHandlePolicyValidationReason,
-} from '@kosmo/core/validation';
+import { localProfileHandleSchema, profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
 import { usePathname } from 'expo-router';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
@@ -160,7 +156,7 @@ const isProfileHandlePolicyError = (error: unknown) => {
   return (
     error.extensions.code === 'VALIDATION' &&
     error.extensions.field === 'handle' &&
-    error.extensions.reason === profileHandlePolicyValidationReason
+    error.message === profileHandlePolicyErrorMessage
   );
 };
 

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 export const profileHandlePolicyErrorMessage = '사용할 수 없는 단어가 포함된 핸들이에요.';
-export const profileHandlePolicyValidationReason = 'PROFILE_HANDLE_POLICY';
 
 export const systemReservedProfileHandleValues = [
   'abuse',
@@ -170,7 +169,6 @@ const localProfileHandlePolicySchema = z
       context.addIssue({
         code: 'custom',
         message: profileHandlePolicyErrorMessage,
-        params: { reason: profileHandlePolicyValidationReason },
       });
     }
   });

@@ -48,9 +48,6 @@ test('Local Profile handle schema prioritizes policy feedback for the short rese
 
   const firstIssue = result.error.issues[0];
   assert.equal(firstIssue?.message, profileHandlePolicyErrorMessage);
-  assert.deepEqual(firstIssue?.code === 'custom' ? firstIssue.params : undefined, {
-    reason: 'PROFILE_HANDLE_POLICY',
-  });
 });
 
 test('System Reserved values include every current static app route that is a valid handle', () => {

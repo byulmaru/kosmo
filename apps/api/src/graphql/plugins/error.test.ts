@@ -48,9 +48,8 @@ describe('GraphQL error collection', () => {
     }
   });
 
-  it('preserves a safe validation reason for clients without exposing internal detail', async () => {
-    const error = new ValidationError('Safe policy message', {
-      field: 'handle',
+  it('does not expose private validation properties in the public error shape', async () => {
+    const error = Object.assign(new ValidationError('Safe policy message', { field: 'handle' }), {
       reason: 'PROFILE_HANDLE_POLICY',
     });
     const transformed = await transform(await executeValue(() => Promise.reject(error)));
@@ -58,7 +57,6 @@ describe('GraphQL error collection', () => {
     assert.deepEqual(transformed.errors?.[0]?.extensions, {
       code: 'VALIDATION',
       field: 'handle',
-      reason: 'PROFILE_HANDLE_POLICY',
     });
   });
 });
