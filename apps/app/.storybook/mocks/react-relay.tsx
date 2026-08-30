@@ -168,7 +168,9 @@ async function executeStoryOperation(
     }
 
     return Promise.resolve({
-      data: (mock.mutationResponse ?? {}) as GraphQLResponse['data'],
+      data: (mock.mutationResponse === undefined
+        ? {}
+        : mock.mutationResponse) as GraphQLResponse['data'],
       errors: mock.mutationGraphQLErrors?.map((error) =>
         typeof error === 'string' ? { message: error } : error,
       ),

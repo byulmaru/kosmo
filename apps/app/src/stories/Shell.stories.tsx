@@ -1261,9 +1261,7 @@ export const ProfileSwitcherCreateServerPolicyErrorMapsSafely: Story = {
         },
       ],
       mutationRequestObserver: profileCreationRequestObserver,
-      mutationResponse: {
-        createProfile: { account: query.me, profile: secondProfile },
-      },
+      mutationResponse: null,
     },
   },
   play: async ({ canvasElement }) => {
@@ -1278,7 +1276,14 @@ export const ProfileSwitcherCreateServerPolicyErrorMapsSafely: Story = {
     await expect(
       canvas.findByText(profileHandlePolicyErrorMessage, { exact: true }),
     ).resolves.toBeVisible();
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    const errorId = input.getAttribute('aria-describedby');
+    expect(errorId).not.toBeNull();
+    expect(input.ownerDocument.getElementById(errorId!)).toHaveTextContent(
+      profileHandlePolicyErrorMessage,
+    );
     expect(input).toHaveValue('new_policy_handle');
+    expect(canvas.getByLabelText('프로필 전환')).toBeVisible();
     expect(profileCreationRequestObserver).toHaveBeenCalledOnce();
     expect(trackAnalytics).not.toHaveBeenCalled();
   },
@@ -1295,9 +1300,7 @@ export const ProfileSwitcherCreateServerNonPolicyValidationErrorStaysGeneric: St
         },
       ],
       mutationRequestObserver: profileCreationRequestObserver,
-      mutationResponse: {
-        createProfile: { account: query.me, profile: secondProfile },
-      },
+      mutationResponse: null,
     },
   },
   play: async ({ canvasElement }) => {

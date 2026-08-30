@@ -337,7 +337,20 @@ export function ProfileSwitcher({
         setCreating(false);
         commitProfileSelection(response.createProfile.profile.id, operationVersion);
       },
-      onError: () => setOperationError(operationVersion, '프로필을 생성하지 못했습니다.'),
+      onError: (cause) => {
+        const source = isRecord(cause) ? cause.source : undefined;
+        const error = profileCreationFieldError(
+          isRecord(source) && Array.isArray(source.errors) ? source.errors : undefined,
+        );
+        if (error) {
+          if (!redesignedWeb || operationVersion === dismissalVersionRef.current) {
+            setFieldError(error);
+          }
+          return;
+        }
+
+        setOperationError(operationVersion, '프로필을 생성하지 못했습니다.');
+      },
     });
   };
 
