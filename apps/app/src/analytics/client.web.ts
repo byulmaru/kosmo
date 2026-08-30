@@ -2,7 +2,6 @@ import posthogClient from 'posthog-js';
 import type { PostHog, PostHogConfig } from 'posthog-js';
 import type { AnalyticsEventArgs } from './events';
 
-const POSTHOG_E2E_HOST = 'https://posthog.e2e.invalid';
 const POSTHOG_USER_STATE = '$user_state';
 const POSTHOG_IDENTIFIED_STATE = 'identified';
 
@@ -22,15 +21,10 @@ export function initializeAnalytics(
   }
 
   try {
-    const config = {
+    client = posthogClient.init(apiKey, {
       api_host: apiHost,
       defaults: '2026-05-30',
-      ...(apiHost === POSTHOG_E2E_HOST &&
-      process.env.EXPO_PUBLIC_POSTHOG_E2E_CAPTURE_BOTS === 'true'
-        ? { opt_out_useragent_filter: true }
-        : {}),
-    } satisfies Partial<PostHogConfig>;
-    client = posthogClient.init(apiKey, config);
+    } satisfies Partial<PostHogConfig>);
   } catch {
     client = null;
   }

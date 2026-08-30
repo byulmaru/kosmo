@@ -88,7 +88,6 @@ before(async () => {
 });
 
 beforeEach(() => {
-  delete process.env.EXPO_PUBLIC_POSTHOG_E2E_CAPTURE_BOTS;
   analytics.resetAnalyticsForTests();
   instances.length = 0;
   initCalls.length = 0;
@@ -125,21 +124,15 @@ describe('PostHog Web client', () => {
     });
   });
 
-  it('E2E fake host와 명시적 flag에서만 PostHog user-agent filter를 해제한다', () => {
-    process.env.EXPO_PUBLIC_POSTHOG_E2E_CAPTURE_BOTS = 'true';
-
+  it('E2E fake endpoint도 production adapter 설정을 넓히지 않는다', () => {
     analytics.initializeAnalytics('project-key', 'https://posthog.e2e.invalid');
-    assert.equal(initCalls[0]?.config.opt_out_useragent_filter, true);
-
-    analytics.resetAnalyticsForTests();
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
-    assert.equal('opt_out_useragent_filter' in (initCalls[1]?.config ?? {}), false);
-  });
-
-  it('E2E fake host도 명시적 flag가 없으면 user-agent filter를 유지한다', () => {
-    analytics.initializeAnalytics('project-key', 'https://posthog.e2e.invalid');
-
-    assert.equal('opt_out_useragent_filter' in (initCalls[0]?.config ?? {}), false);
+    assert.deepEqual(initCalls[0], {
+      token: 'project-key',
+      config: {
+        api_host: 'https://posthog.e2e.invalid',
+        defaults: '2026-05-30',
+      },
+    });
   });
 
   it('event별 typed payload를 전송한다', () => {

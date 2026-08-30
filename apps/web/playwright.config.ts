@@ -30,6 +30,8 @@ const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
 const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
 const nativeOidcClientId = process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID ?? 'kosmo-e2e-native-client';
 const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL;
+const browserUserAgent =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 
 process.env.DATABASE_URL = databaseUrl;
 process.env.PUBLIC_API_ORIGIN = apiOrigin;
@@ -73,6 +75,7 @@ export default defineConfig({
     baseURL: webOrigin,
     ...(browserChannel ? { channel: browserChannel } : {}),
     screenshot: 'only-on-failure',
+    userAgent: browserUserAgent,
   },
   webServer: [
     {
@@ -140,7 +143,6 @@ export default defineConfig({
         EXPO_PUBLIC_API_ORIGIN: apiOrigin,
         EXPO_PUBLIC_OIDC_ISSUER: oidcOrigin,
         EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
-        EXPO_PUBLIC_POSTHOG_E2E_CAPTURE_BOTS: 'true',
         EXPO_PUBLIC_POSTHOG_HOST: 'https://posthog.e2e.invalid',
         EXPO_PUBLIC_POSTHOG_KEY: 'posthog-e2e-project-key',
         EXPO_PUBLIC_WEB_ORIGIN: configuredWebOrigin,
@@ -167,7 +169,6 @@ export default defineConfig({
         EXPO_PUBLIC_API_ORIGIN: apiOrigin,
         EXPO_PUBLIC_OIDC_ISSUER: oidcOrigin,
         EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
-        EXPO_PUBLIC_POSTHOG_E2E_CAPTURE_BOTS: 'false',
         EXPO_PUBLIC_POSTHOG_HOST: '',
         EXPO_PUBLIC_POSTHOG_KEY: '',
         EXPO_PUBLIC_WEB_ORIGIN: noAnalyticsWebOrigin,

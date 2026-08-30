@@ -89,6 +89,15 @@ test('Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote co
   });
 
   await page.goto('/?utm_source=newsletter#overview');
+  expect(
+    await page.evaluate(() => ({
+      automation: navigator.webdriver,
+      headlessBrand:
+        navigator.userAgentData?.brands.some(({ brand }) => /Headless|Playwright/u.test(brand)) ??
+        false,
+      headlessUserAgent: /Headless|Playwright/u.test(navigator.userAgent),
+    })),
+  ).toEqual({ automation: false, headlessBrand: false, headlessUserAgent: false });
   await expect.poll(() => payloads.some((payload) => payload.event === '$pageview')).toBe(true);
 
   await page.goto(`/${viewer.profile?.handle}?source=analytics-test#profile`);
