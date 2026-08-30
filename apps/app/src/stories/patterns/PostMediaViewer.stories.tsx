@@ -352,7 +352,7 @@ export const Playground: Story = {
         const currentPost = await canvas.findByTestId('post-thread-current-wide-rail-current');
         const actionBar = within(currentPost).getByRole('toolbar', { name: '액션 바' });
 
-        for (const name of ['답글', '재게시', '반응', '북마크', '더보기']) {
+        for (const name of ['답글', '재게시', '반응', '북마크', '더 보기']) {
           expect(within(actionBar).getByRole('button', { name })).toBeVisible();
         }
       });
