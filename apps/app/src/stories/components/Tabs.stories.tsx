@@ -54,6 +54,7 @@ const meta = {
     variant: { control: 'select', options: ['underline', 'pill'] },
   },
   component: TabsCatalog,
+  excludeStories: ['PillInteractionContract', 'UnderlineInteractionContract'],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Tabs',
 } satisfies Meta<typeof TabsCatalog>;
@@ -61,14 +62,21 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-
 export const Playground: Story = {
   parameters: {
     controls: {
       disable: false,
       include: ['popularLabel', 'latestLabel', 'mediaLabel', 'variant'],
     },
+  },
+};
+
+export const UnderlineInteractionContract: Story = {
+  args: {
+    latestLabel: '최신',
+    mediaLabel: '미디어',
+    popularLabel: '인기',
+    variant: 'underline',
   },
   play: async ({ args, canvasElement, step }) => {
     args.onValueChange?.mockClear();
@@ -155,6 +163,15 @@ export const Playground: Story = {
 
 export const PillVariant: Story = {
   args: { variant: 'pill' },
+};
+
+export const PillInteractionContract: Story = {
+  args: {
+    latestLabel: '최신',
+    mediaLabel: '미디어',
+    popularLabel: '인기',
+    variant: 'pill',
+  },
   play: async ({ args, canvasElement, step }) => {
     args.onValueChange?.mockClear();
     const canvas = within(canvasElement);

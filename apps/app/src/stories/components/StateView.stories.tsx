@@ -13,6 +13,7 @@ const meta = {
     title: '상태 안내',
   },
   component: StateView,
+  excludeStories: ['ActionInteraction'],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/State View',
 } satisfies Meta<typeof StateView>;
@@ -29,6 +30,16 @@ export const Playground: Story = {
       disable: false,
       include: ['actionLabel', 'alert', 'description', 'loading', 'title'],
     },
+  },
+};
+
+export const ActionInteraction: Story = {
+  args: {
+    actionLabel: '다시 시도',
+    alert: false,
+    description: '현재 상태를 확인해 주세요.',
+    loading: false,
+    title: '상태 안내',
   },
   play: async ({ args, canvasElement, step }) => {
     args.onAction?.mockClear();

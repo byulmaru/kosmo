@@ -19,6 +19,7 @@ const meta = {
     placeholder: '이름을 입력하세요',
   },
   component: TextField,
+  excludeStories: ['TypingAndFocus'],
   parameters: { controls: { disable: true } },
   render: ({ containerWidth, ...args }: TextFieldStoryArgs) => (
     <View style={[styles.playground, { width: containerWidth }]}>
@@ -50,6 +51,17 @@ export const Playground: Story = {
       disable: false,
       include: ['containerWidth', 'defaultValue', 'editable', 'error', 'label', 'placeholder'],
     },
+  },
+};
+
+export const TypingAndFocus: Story = {
+  args: {
+    containerWidth: 480,
+    defaultValue: '코스모',
+    editable: true,
+    error: '입력값을 확인해 주세요.',
+    label: '이름',
+    placeholder: '이름을 입력하세요',
   },
   play: async ({ args, canvasElement, step }) => {
     args.onBlur?.mockClear();

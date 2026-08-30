@@ -16,12 +16,16 @@ const meta = {
       </View>
     ),
   ],
+  excludeStories: ['LinkContract'],
+  parameters: { controls: { disable: true } },
 } satisfies Meta<typeof ByulmaruIdAccountSettingsEntry>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
+export const Default: Story = {};
+
+export const LinkContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const entry = canvas.getByRole('link', {

@@ -175,6 +175,7 @@ const meta = {
   },
   component: ToastPlayground,
   excludeStories: [
+    'InteractionContract',
     'ReplacementAndAutoDismiss',
     'RepeatedMessageRestartsAutoDismiss',
     'ScopedCleanupDoesNotDismissNewerToast',
@@ -189,11 +190,18 @@ type Story = StoryObj<typeof meta>;
 const repeatedToastMessage = '재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.';
 const toastDurationMs = 3000;
 
-export const Default: Story = {};
-
 export const Playground: Story = {
   parameters: {
     controls: { disable: false, include: ['action', 'actionLabel', 'message', 'tone'] },
+  },
+};
+
+export const InteractionContract: Story = {
+  args: {
+    action: true,
+    actionLabel: '다시 시도',
+    message: '요청을 완료하지 못했습니다.',
+    tone: 'danger',
   },
   play: async ({ args, canvasElement, step }) => {
     args.onAction.mockClear();

@@ -185,12 +185,21 @@ function ProfileDefaultPostVisibilityStoryContents({
 const meta = {
   args: { onMutationAttempt: fn() },
   component: ProfileDefaultPostVisibilityStory,
-  excludeStories: ['LateCompletionIgnoredAfterProfileEnvironmentTransition'],
+  excludeStories: [
+    'FailureAndRetry',
+    'LateCompletionIgnoredAfterProfileEnvironmentTransition',
+    'OwnerOptionsAndSuccess',
+  ],
+  parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Profile Default Post Visibility Control',
 } satisfies Meta<typeof ProfileDefaultPostVisibilityStory>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+export const OwnerOptions: Story = {
+  render: (args) => <ProfileDefaultPostVisibilityStory {...args} editable initial="UNLISTED" />,
+};
 
 export const OwnerOptionsAndSuccess: Story = {
   play: async ({ canvasElement }) => {

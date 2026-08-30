@@ -22,6 +22,7 @@ const meta = {
     tone: { control: 'select', options: ['primary', 'secondary', 'danger'] },
   },
   component: Button,
+  excludeStories: ['InteractionContract'],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Button',
 } satisfies Meta<typeof Button>;
@@ -29,14 +30,24 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-
 export const Playground: Story = {
   parameters: {
     controls: {
       disable: false,
       include: ['children', 'disabled', 'loading', 'loadingText', 'size', 'tone'],
     },
+  },
+  render: (args) => <Button {...args} style={{ alignSelf: 'flex-start' }} />,
+};
+
+export const InteractionContract: Story = {
+  args: {
+    children: '버튼',
+    disabled: false,
+    loading: false,
+    loadingText: '처리 중',
+    size: 'default',
+    tone: 'primary',
   },
   render: (args) => <Button {...args} style={{ alignSelf: 'flex-start' }} />,
   play: async ({ args, canvasElement, step }) => {

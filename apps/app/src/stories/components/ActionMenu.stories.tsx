@@ -163,7 +163,7 @@ const meta = {
     itemLabels: { control: 'object' },
   },
   component: ActionMenuFixture,
-  excludeStories: ['SurfaceAndDismissContract', 'ViewportCollision'],
+  excludeStories: ['InteractionContract', 'SurfaceAndDismissContract', 'ViewportCollision'],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Action Menu',
 } satisfies Meta<typeof ActionMenuFixture>;
@@ -171,14 +171,22 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-
 export const Playground: Story = {
   parameters: {
     controls: {
       disable: false,
       include: ['compactTrigger', 'disabled', 'itemCount', 'itemLabels', 'triggerLabel'],
     },
+  },
+};
+
+export const InteractionContract: Story = {
+  args: {
+    compactTrigger: false,
+    disabled: false,
+    itemCount: 2,
+    itemLabels: defaultItemLabels,
+    triggerLabel: '더 보기',
   },
   play: async ({ args, canvasElement, step }) => {
     args.onSelect?.mockClear();

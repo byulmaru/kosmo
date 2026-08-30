@@ -115,15 +115,24 @@ const meta = {
     optionLabels: { control: 'object' },
   },
   component: RadioGroupCatalog,
-  excludeStories: ['FallbackTabStop'],
+  excludeStories: ['FallbackTabStop', 'InteractionContract'],
   parameters: { controls: { disable: true } },
+  render: (args) => (
+    <RadioGroupCatalog
+      key={JSON.stringify([
+        args.initialItem,
+        args.optionCount,
+        args.optionDescriptions,
+        args.optionLabels,
+      ])}
+      {...args}
+    />
+  ),
   title: 'KOSMO/Components/Radio Group',
 } satisfies Meta<typeof RadioGroupCatalog>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
-
-export const Default: Story = {};
 
 export const Playground: Story = {
   parameters: {
@@ -139,17 +148,17 @@ export const Playground: Story = {
       ],
     },
   },
-  render: (args) => (
-    <RadioGroupCatalog
-      key={JSON.stringify([
-        args.initialItem,
-        args.optionCount,
-        args.optionDescriptions,
-        args.optionLabels,
-      ])}
-      {...args}
-    />
-  ),
+};
+
+export const InteractionContract: Story = {
+  args: {
+    accessibilityLabel: '알림 방식',
+    disabled: false,
+    initialItem: 1,
+    optionCount: 4,
+    optionDescriptions: defaultOptionDescriptions,
+    optionLabels: defaultOptionLabels,
+  },
   play: async ({ args, canvasElement, step }) => {
     args.onChange?.mockClear();
     const canvas = within(canvasElement);

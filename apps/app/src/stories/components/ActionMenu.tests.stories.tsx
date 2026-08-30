@@ -1,4 +1,5 @@
 import baseMeta, {
+  InteractionContract as interactionContract,
   SurfaceAndDismissContract as surfaceAndDismissContract,
   ViewportCollision as viewportCollision,
 } from './ActionMenu.stories';
@@ -15,3 +16,4 @@ type Story = StoryObj<typeof meta>;
 
 export const SurfaceAndDismissContract: Story = surfaceAndDismissContract;
 export const ViewportCollision: Story = viewportCollision;
+export const InteractionContract: Story = interactionContract;

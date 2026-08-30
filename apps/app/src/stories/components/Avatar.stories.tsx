@@ -14,8 +14,6 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-
 export const Playground: Story = {
   parameters: { controls: { disable: false, include: ['imageUri', 'label', 'size'] } },
 };
