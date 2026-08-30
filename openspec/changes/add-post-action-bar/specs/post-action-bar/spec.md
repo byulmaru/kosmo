@@ -27,12 +27,18 @@
 
 ### Requirement: 액션의 시각 상태
 
-**Authority / Provenance:** `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`, `PROD-598` — Reply·Reaction·Bookmark는 default·pending·disabled 처리 상태와 각각 controlled `expanded`, `hasReacted`, `hasBookmarked`를 받아야 하며(MUST), private Repost child action은 `viewerRepost`와 mutation 진행 상태에서 `hasReposted` 및 default·pending을 함께 파생해야 한다(MUST). Repost의 최종 disabled 행동은 유지하되 concrete policy input 또는 fragment shape를 PROD-414가 선결해서는 안 되며(MUST NOT), actual production caller와 함께 PROD-432가 설계해야 한다(MUST). 범용 `selected`를 공개 prop으로 제공하지 않아야 하며(MUST NOT), Reaction과 Bookmark는 count를 받지 않아야 한다(MUST NOT). default 상태는 보조 텍스트 색상의 outline icon과 Reply 또는 Repost child가 제공한 선택적 count를 표시해야 하고(MUST), 활성인 도메인 상태는 primary 색상의 icon으로 표현해야 한다(MUST). `hasReacted` 또는 `hasBookmarked`가 true이면 pending spinner를 표시하는 동안을 제외하고 Heart 또는 Bookmark icon 내부를 현재 처리 상태 색상으로 채워야 하며(MUST), default 처리 상태에서는 primary 색상으로 채워야 한다(MUST). 처리 상태의 시각 표현은 도메인 상태의 primary 표현보다 우선해야 한다(MUST). pending 상태는 icon 자리에 spinner를 표시하고(MUST), disabled 상태는 icon과 제공된 count를 비활성 표현으로 약화해야 한다(MUST). pending·disabled 중에도 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`의 의미와 접근성 상태를 잃지 않아야 한다(MUST). 독립 UI용 More config는 callback과 accessibility label을 받아야 하고(MUST) count·도메인 상태·pending·disabled 입력을 받지 않아야 하며(MUST), production private `PostDeletionAction`은 자기 mutation pending과 menu expanded 상태를 내부에서 관리해야 한다(MUST).
+**Authority / Provenance:** `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`, `PROD-598`, `PROD-866` — Reply·Reaction·Bookmark는 default·pending·disabled 처리 상태와 각각 controlled `expanded`, `hasReacted`, `hasBookmarked`를 받아야 하며(MUST), private Repost child action은 `viewerRepost`와 mutation 진행 상태에서 `hasReposted` 및 default·pending을 함께 파생해야 한다(MUST). Repost의 최종 disabled 행동은 유지하되 concrete policy input 또는 fragment shape를 PROD-414가 선결해서는 안 되며(MUST NOT), actual production caller와 함께 PROD-432가 설계해야 한다(MUST). 범용 `selected`를 공개 prop으로 제공하지 않아야 하며(MUST NOT), Reaction과 Bookmark는 count를 받지 않아야 한다(MUST NOT). Reply·Reaction·Bookmark의 default 상태는 보조 텍스트 색상의 outline icon과 Reply가 제공한 선택적 count를 표시해야 한다(MUST). Repost glyph와 count는 default·hover·selected에서 semantic `actionRepostBase`를 사용해 Light에서 `#16794A`, Dark에서 `#409667`을 표시해야 하고(MUST), Reaction은 active·hover에서 semantic `actionReactionBase` (`#F97066`)를 사용해야 한다(MUST). `hasReacted` 또는 `hasBookmarked`가 true이면 pending spinner를 표시하는 동안을 제외하고 Reaction 또는 Bookmark icon 내부를 현재 처리 상태 색상으로 채워야 한다(MUST). 처리 상태의 시각 표현은 도메인 상태의 action semantic 또는 primary 표현보다 우선해야 한다(MUST). pending 상태는 icon 자리에 spinner를 표시하고(MUST), disabled 상태는 icon과 제공된 count를 비활성 표현으로 약화해야 한다(MUST). pending·disabled 중에도 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`의 의미와 접근성 상태를 잃지 않아야 한다(MUST). 독립 UI용 More config는 callback과 accessibility label을 받아야 하고(MUST) count·도메인 상태·pending·disabled 입력을 받지 않아야 하며(MUST), production private `PostDeletionAction`은 자기 mutation pending과 menu expanded 상태를 내부에서 관리해야 한다(MUST).
 
 #### Scenario: 활성인 도메인 상태
 
 - **WHEN** Repost의 `hasReposted`, Reaction의 `hasReacted` 또는 Bookmark의 `hasBookmarked`가 true이고 처리 상태가 default다
-- **THEN** Action Bar는 Repost icon을 primary 색상으로 표시하고, Reaction Heart와 Bookmark icon은 primary 색상으로 내부를 채우며 도메인 의미를 접근성 상태로 노출한다
+- **THEN** Action Bar는 Repost icon과 count를 현재 mode의 `actionRepostBase`로 표시하고, Reaction icon은 `actionReactionBase`, Bookmark icon은 primary 색상으로 내부를 채우며 도메인 의미를 접근성 상태로 노출한다
+
+#### Scenario: 미선택 Repost와 Reaction
+
+- **WHEN** Repost와 Reaction이 default 처리 상태이며 선택되지 않았다
+- **THEN** Repost glyph와 count는 현재 mode의 `actionRepostBase`로 표시된다
+- **AND** Reaction glyph는 보조 텍스트 색상으로 표시되고 Web hover에서 `actionReactionBase`를 사용한다
 
 #### Scenario: 활성인 도메인 상태의 처리 중 상태
 
@@ -373,7 +379,7 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 
 ### Requirement: 상태 카탈로그와 통합 검증
 
-**Authority / Provenance:** `docs/design/post-action-bar.md`, `PROD-432`, `PROD-433`, `PROD-414` — 공통 UI 구현은 Reply `expanded`, Repost child가 fragment에서 파생한 `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`, config 기반 Reply·Reaction·Bookmark의 default·pending·disabled와 Repost child의 default·pending, active Reaction·Bookmark의 채워진 icon, More callback-only, 선택적 액션, count 및 지원 폭을 독립적으로 검토할 수 있는 Storybook 상태 카탈로그를 제공해야 한다(MUST). Repost Storybook은 actual Relay operation의 target fragment ref를 `PostActionBar` parent fragment에서 private Repost child fragment까지 전달하고(MUST), menu open·dismiss·항목 선택·pending·mutation·오류 callback을 검증해야 한다(MUST). PROD-414 integration은 일반 Post·순수 Repost·Quote 목록과 상세의 final sibling·link 비중첩, 순수 Repost Source target, Web anchored menu·Native bottom sheet, exact failure toast와 이전 상태 유지·재시도를 검증해야 한다(MUST). PROD-432의 계약 부모 통합 검증은 준비된 나머지 action, 최종 disabled·guest 정책, More 링크 복사와 전체 action 조합을 검증해야 한다(MUST).
+**Authority / Provenance:** `docs/design/post-action-bar.md`, `PROD-432`, `PROD-433`, `PROD-414`, `PROD-866` — 공통 UI 구현은 Reply `expanded`, Repost child가 fragment에서 파생한 `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`, config 기반 Reply·Reaction·Bookmark의 default·pending·disabled와 Repost child의 default·pending, active Reaction·Bookmark의 채워진 icon, canonical Repost·Reaction action colors, More callback-only, 선택적 액션, count 및 지원 폭을 독립적으로 검토할 수 있는 Storybook 상태 카탈로그를 제공해야 한다(MUST). 대표 Light·Dark Web 상태에서 Repost default·hover·selected와 Reaction active·hover semantic 색상을 직접 검증해야 한다(MUST). Repost Storybook은 actual Relay operation의 target fragment ref를 `PostActionBar` parent fragment에서 private Repost child fragment까지 전달하고(MUST), menu open·dismiss·항목 선택·pending·mutation·오류 callback을 검증해야 한다(MUST). PROD-414 integration은 일반 Post·순수 Repost·Quote 목록과 상세의 final sibling·link 비중첩, 순수 Repost Source target, Web anchored menu·Native bottom sheet, exact failure toast와 이전 상태 유지·재시도를 검증해야 한다(MUST). PROD-432의 계약 부모 통합 검증은 준비된 나머지 action, 최종 disabled·guest 정책, More 링크 복사와 전체 action 조합을 검증해야 한다(MUST).
 
 #### Scenario: UI 상태 독립 검토
 

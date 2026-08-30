@@ -33,6 +33,8 @@ const more = fn();
 const deletionMutationRequest = fn();
 const reactionMutationRequest = fn();
 const reactionLifecycleConsoleErrors: unknown[][] = [];
+const reactionActionColor = '#F97066';
+const repostActionColors = { dark: '#409667', light: '#16794A' } as const;
 
 const actionBarProps = {
   bookmark: {
@@ -743,28 +745,29 @@ export const ActionBarCatalog: Story = {
     expect(defaultMore.querySelector('svg')).toHaveAttribute('stroke', colors.light.textSecondary);
     expect(within(defaultMore).queryByTestId('post-action-more-hover')).toBeNull();
 
-    for (const [label, testID] of [
-      ['재게시', 'repost'],
-      ['북마크', 'bookmark'],
+    for (const [label, testID, actionColor, defaultColor] of [
+      ['재게시', 'repost', repostActionColors.light, repostActionColors.light],
+      ['북마크', 'bookmark', colors.light.primary, colors.light.textSecondary],
     ] as const) {
       const button = defaultToolbarCanvas.getByRole('button', { name: label });
       const icon = button.querySelector('svg');
+      expect(icon).toHaveAttribute('stroke', defaultColor);
       await userEvent.hover(button);
       const hover = within(button).getByTestId(`post-action-${testID}-hover`);
-      expect(hover).toHaveStyle({ backgroundColor: colors.light.primary });
+      expect(hover).toHaveStyle({ backgroundColor: actionColor });
       expect(getComputedStyle(hover).opacity).toBe('0.3');
       expect(getComputedStyle(hover).zIndex).toBe('0');
-      expect(icon).toHaveAttribute('stroke', colors.light.primary);
+      expect(icon).toHaveAttribute('stroke', actionColor);
       expect(
         getComputedStyle(within(button).getByTestId(`post-action-${testID}-glyph`)).zIndex,
       ).toBe('1');
       if (testID === 'repost') {
         expect(button.querySelector('[dir="auto"]')).toHaveStyle({
-          color: colors.light.textSecondary,
+          color: repostActionColors.light,
         });
       }
       await userEvent.unhover(button);
-      expect(icon).toHaveAttribute('stroke', colors.light.textSecondary);
+      expect(icon).toHaveAttribute('stroke', defaultColor);
       expect(within(button).queryByTestId(`post-action-${testID}-hover`)).toBeNull();
     }
 
@@ -773,14 +776,14 @@ export const ActionBarCatalog: Story = {
     expect(defaultReactionIcon).toHaveAttribute('stroke', colors.light.textSecondary);
     expect(defaultReactionIcon).toHaveAttribute('fill', 'none');
     await userEvent.hover(defaultReaction);
-    expect(defaultReaction).not.toHaveStyle({ backgroundColor: colors.light.like });
+    expect(defaultReaction).not.toHaveStyle({ backgroundColor: reactionActionColor });
     const reactionHover = within(defaultReaction).getByTestId('post-action-reaction-hover');
-    expect(reactionHover).toHaveStyle({ backgroundColor: colors.light.like });
+    expect(reactionHover).toHaveStyle({ backgroundColor: reactionActionColor });
     expect(getComputedStyle(reactionHover).opacity).toBe('0.3');
     expect(getComputedStyle(reactionHover).borderRadius).toBe('999px');
     expect(getComputedStyle(reactionHover).height).toBe('28px');
     expect(getComputedStyle(reactionHover).width).toBe('28px');
-    expect(defaultReactionIcon).toHaveAttribute('stroke', colors.light.like);
+    expect(defaultReactionIcon).toHaveAttribute('stroke', reactionActionColor);
     expect(defaultReactionIcon).toHaveAttribute('fill', 'none');
     await userEvent.unhover(defaultReaction);
     expect(defaultReactionIcon).toHaveAttribute('stroke', colors.light.textSecondary);
@@ -803,19 +806,26 @@ export const ActionBarCatalog: Story = {
     await userEvent.unhover(activeBookmark);
     expect(within(activeBookmark).queryByTestId('post-action-bookmark-hover')).toBeNull();
 
+    const activeRepost = within(toolbars[2]!).getByRole('button', { name: '재게시 취소' });
+    const activeRepostIcon = activeRepost.querySelector('svg');
+    expect(activeRepostIcon).toHaveAttribute('stroke', repostActionColors.light);
+    expect(activeRepost.querySelector('[dir="auto"]')).toHaveStyle({
+      color: repostActionColors.light,
+    });
+
     const activeReaction = within(toolbars[2]!).getByRole('button', { name: '반응' });
     const activeReactionIcon = activeReaction.querySelector('svg');
-    expect(activeReactionIcon).toHaveAttribute('stroke', colors.light.like);
-    expect(activeReactionIcon).toHaveAttribute('fill', colors.light.like);
+    expect(activeReactionIcon).toHaveAttribute('stroke', reactionActionColor);
+    expect(activeReactionIcon).toHaveAttribute('fill', reactionActionColor);
     await userEvent.hover(activeReaction);
-    expect(activeReactionIcon).toHaveAttribute('stroke', colors.light.like);
-    expect(activeReactionIcon).toHaveAttribute('fill', colors.light.like);
+    expect(activeReactionIcon).toHaveAttribute('stroke', reactionActionColor);
+    expect(activeReactionIcon).toHaveAttribute('fill', reactionActionColor);
     const activeReactionHover = within(activeReaction).getByTestId('post-action-reaction-hover');
-    expect(activeReactionHover).toHaveStyle({ backgroundColor: colors.light.like });
+    expect(activeReactionHover).toHaveStyle({ backgroundColor: reactionActionColor });
     expect(getComputedStyle(activeReactionHover).opacity).toBe('0.3');
     await userEvent.unhover(activeReaction);
-    expect(activeReactionIcon).toHaveAttribute('stroke', colors.light.like);
-    expect(activeReactionIcon).toHaveAttribute('fill', colors.light.like);
+    expect(activeReactionIcon).toHaveAttribute('stroke', reactionActionColor);
+    expect(activeReactionIcon).toHaveAttribute('fill', reactionActionColor);
     expect(within(activeReaction).queryByTestId('post-action-reaction-hover')).toBeNull();
 
     const blockedReply = within(toolbars[3]!).getByRole('button', { name: '답글' });
@@ -835,6 +845,48 @@ export const ActionBarCatalog: Story = {
       expect(within(button).queryByTestId(`post-action-${testID}-hover`)).toBeNull();
       await userEvent.unhover(button);
     }
+  },
+};
+
+export const ActionSemanticColorsDark: Story = {
+  globals: { backgrounds: { value: 'kosmoDark' }, theme: 'dark' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toolbars = canvas.getAllByRole('toolbar', { name: '액션 바' });
+    const defaultToolbar = within(toolbars[0]!);
+    const defaultRepost = defaultToolbar.getByRole('button', { name: '재게시' });
+    const defaultRepostIcon = defaultRepost.querySelector('svg');
+
+    expect(defaultRepostIcon).toHaveAttribute('stroke', repostActionColors.dark);
+    expect(defaultRepost.querySelector('[dir="auto"]')).toHaveStyle({
+      color: repostActionColors.dark,
+    });
+    await userEvent.hover(defaultRepost);
+    expect(defaultToolbar.getByTestId('post-action-repost-hover')).toHaveStyle({
+      backgroundColor: repostActionColors.dark,
+    });
+    expect(defaultRepostIcon).toHaveAttribute('stroke', repostActionColors.dark);
+    await userEvent.unhover(defaultRepost);
+    expect(defaultRepostIcon).toHaveAttribute('stroke', repostActionColors.dark);
+
+    const defaultReaction = defaultToolbar.getByRole('button', { name: '반응' });
+    const defaultReactionIcon = defaultReaction.querySelector('svg');
+    expect(defaultReactionIcon).toHaveAttribute('stroke', colors.dark.textSecondary);
+    await userEvent.hover(defaultReaction);
+    expect(defaultToolbar.getByTestId('post-action-reaction-hover')).toHaveStyle({
+      backgroundColor: reactionActionColor,
+    });
+    expect(defaultReactionIcon).toHaveAttribute('stroke', reactionActionColor);
+
+    const activeToolbar = within(toolbars[2]!);
+    const activeRepost = activeToolbar.getByRole('button', { name: '재게시 취소' });
+    expect(activeRepost.querySelector('svg')).toHaveAttribute('stroke', repostActionColors.dark);
+    expect(activeRepost.querySelector('[dir="auto"]')).toHaveStyle({
+      color: repostActionColors.dark,
+    });
+    const activeReaction = activeToolbar.getByRole('button', { name: '반응' });
+    expect(activeReaction.querySelector('svg')).toHaveAttribute('stroke', reactionActionColor);
+    expect(activeReaction.querySelector('svg')).toHaveAttribute('fill', reactionActionColor);
   },
 };
 
@@ -1404,6 +1456,16 @@ export const ProcessingAccessibility: Story = {
     const repostSpinnerVisual = repostSpinner.firstElementChild as HTMLElement;
     const repostSpinnerBounds = repostSpinnerVisual.getBoundingClientRect();
     const repostCountBounds = repostButton.querySelector('[dir="auto"]')!.getBoundingClientRect();
+    const repostSpinnerCircles = repostSpinner.querySelectorAll('circle');
+    expect(repostSpinnerCircles.length).toBeGreaterThan(0);
+    for (const circle of repostSpinnerCircles) {
+      expect(circle).toHaveStyle({ stroke: colors.light.textSecondary });
+    }
+    expect(repostButton.querySelector('[dir="auto"]')).toHaveStyle({
+      color: colors.light.textSecondary,
+    });
+    fireEvent.pointerEnter(repostButton);
+    expect(within(repostButton).queryByTestId('post-action-repost-hover')).toBeNull();
     expect(replySpinnerVisual.clientWidth).toBe(14);
     expect(replySpinnerVisual.clientHeight).toBe(14);
     expect(replySpinner.getBoundingClientRect().left).toBeCloseTo(

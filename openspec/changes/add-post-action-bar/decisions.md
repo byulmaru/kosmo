@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-432·PROD-433·PROD-434·PROD-632와 sibling PROD-598의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24·2026-07-31·2026-08-03·2026-08-27 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
+이 기록은 PROD-432·PROD-433·PROD-434·PROD-632·PROD-866과 sibling PROD-598의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24·2026-07-31·2026-08-03·2026-08-27·2026-08-31 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
 
 ## Decision Records
 
@@ -400,6 +400,18 @@
 - Consequences: Web과 Native가 서로 다른 deployment origin에서 실행되면 절대 URL의 origin은 달라질 수 있지만 canonical path와 direct Source 선택 규칙은 같다. Web에서는 configured origin이 현재 browser origin을 덮어쓰지 않으며, browser origin이 없는 Native는 configured Local Instance origin을 사용한다. 기존 configured-origin-only 문구를 가진 OpenSpec artifact는 이 결정을 기준으로 갱신한다.
 - Confirmation / Follow-up: PROD-632 5.1에서 확인된 production bundle의 `EXPO_PUBLIC_WEB_ORIGIN` literal `undefined` 주입으로 URL 생성이 clipboard 호출 전에 실패한 원인을 기록한다. 원인 재현은 5.1의 완료 근거로 삼되, 변경 후 Web runtime 성공과 지원 Native 실기기 증거가 없는 동안 5.4와 archive task 5.5는 완료하지 않는다.
 - Implementation Evidence (2026-08-27): production bundle에서 origin env가 literal `undefined`로 주입되어 URL 생성이 clipboard 호출보다 먼저 실패하는 경로를 재현했다. 변경 후 Playwright Web E2E는 앱 bundle의 `EXPO_PUBLIC_WEB_ORIGIN`을 실제 접속 origin과 다른 `https://configured-web-origin.invalid`로 주입하고 `/home?source=e2e#ignored`에서 `링크 복사`를 실행해, clipboard가 현재 browser origin과 canonical Post path만 포함한 URL을 받는지 실제 `navigator.clipboard`로 확인했다. 전체 Web E2E 120개가 통과했다. 이는 변경 후 Web runtime 성공 근거지만 production 배포나 지원 Native runtime 증거는 아니므로 5.4와 5.5는 미완료로 유지한다.
+
+### Post action 의미색을 feedback Success와 분리한다
+
+- Decision Date: 2026-08-31
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-866`, `docs/design/colors.md`, `docs/design/post-action-bar.md`, Figma `PostActionControl` 3801:8494, `PostActionBar` 6604:48270, 2026-08-31 KST 사용자 결정
+- Status: Active
+- Context / Problem: 최신 Figma source는 Reaction과 Repost에 제품 action 의미색을 지정한다. 기존 Repost `#16794A`는 Dark canvas에서 `3.87:1`, surface에서 `3.39:1` 대비로 일반 크기 count의 `4.5:1` 기준에 미달한다. 전역 Success 색을 함께 바꾸면 Toast 등 무관한 feedback consumer까지 영향을 받는다.
+- Decision Outcome: Reaction active·hover는 Light·Dark 모두 전용 `actionReactionBase #F97066`을 사용한다. Repost glyph와 count는 default·hover·selected에서 전용 `actionRepostBase`를 사용하며 Light는 `green/600 #16794A`, Dark는 `green/500 #409667`을 적용한다. pending·disabled의 중립 처리 표현은 이 의미색보다 우선하고 전역 `feedbackSuccessBase`는 변경하지 않는다.
+- Alternatives Considered: 전역 Success 변경은 무관한 feedback consumer를 바꾸므로 제외했다. `green/200`은 Dark에서 지나치게 밝고, `green/400`까지 밝히지 않아도 `green/500`이 canvas `5.78:1`, surface `5.07:1`을 충족하면서 기존 `green/600`에 더 가까워 `green/500`을 선택했다.
+- Consequences: 공용 control은 선택적인 base color seam만 추가하고, Repost child와 Reaction consumer가 기존 theme semantic을 전달한다. 새 dependency나 범용 action color abstraction은 추가하지 않는다.
+- Confirmation / Follow-up: 기존 Storybook Relay fixture에서 Repost default·hover·selected와 Reaction active·hover를 Light·Dark로 직접 검증한다. Storybook Web 검증을 Native runtime 완료 증거로 사용하지 않는다.
 
 ## Remaining Decisions
 

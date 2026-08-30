@@ -98,6 +98,17 @@ Secondary Button은 중립 surface 역할을 직접 소비하지 않고 아래 a
 
 Focus와 Disabled는 Secondary 전용 색상을 추가하지 않고 공용 `color/state/focus-ring`, `color/state/disabled-*`, `color/border/disabled`를 사용한다.
 
+### Post action
+
+| Token                        | Light               | Dark                | 용도                    |
+| ---------------------------- | ------------------- | ------------------- | ----------------------- |
+| `color/action/repost/base`   | `green/600 #16794A` | `green/500 #409667` | Repost glyph와 count    |
+| `color/action/reaction/base` | `#F97066`           | `#F97066`           | Reaction active와 hover |
+
+Repost는 제품 action 의미를 소유하므로 전역 `color/feedback/success/base`와 분리한다. Dark의
+`green/500 #409667`은 canvas `#000000`에서 `5.78:1`, surface `#141414`에서 `5.07:1` 대비를
+유지한다. 전역 Success는 Light·Dark 모두 기존 `green/600 #16794A`를 유지한다.
+
 ### Link Indigo
 
 | Token                       | Light     | Dark      |
@@ -161,6 +172,8 @@ Secondary action의 Dark hover/pressed처럼 Button fill을 교체하는 opaque 
 | Light Info Border / Subtle      |  `3.24:1` |
 | Light Warning Border / Subtle   |  `3.25:1` |
 | Light Warning Border / Surface  |  `3.42:1` |
+| Dark Repost / Canvas            |  `5.78:1` |
+| Dark Repost / Surface           |  `5.07:1` |
 
 ## Component usage mapping
 
@@ -200,7 +213,7 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 | `more` / `More`                      | `color/action/link/base`                                                 | 실제 클릭 가능한 본문 링크일 때만 이관                                 |
 | raw modal backdrop                   | `color/overlay/scrim`                                                    | fullscreen media는 예외 유지                                           |
 
-`like`, Repost, Bookmark, Medal과 profile gradient는 제품 의미가 승인될 때까지 기존 표현을 유지하고 component contract 후보로 기록한다.
+Repost는 `color/action/repost/base`, Reaction은 `color/action/reaction/base`로 승인되었다. Bookmark, Medal과 profile gradient는 제품 의미가 승인될 때까지 기존 표현을 유지하고 component contract 후보로 기록한다.
 
 ### 이관 소유권
 
@@ -232,7 +245,7 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 | `post/PostComposer.tsx`, `post/PostDeletionAction.tsx`, `feedback/FeedbackOverlay.tsx`, `post/ReplyComposerSurface.tsx`, `post/ReactionPopover.tsx`, `shell/ProfileSwitcher.tsx` | `elevation.floating` / `elevation.overlay`                                                                    | 완료 (PROD-750)      | Anchored Web menu·popover는 `elevation.floating`, modal·Native surface는 `elevation.overlay`                            | PROD-750                                    |
 | `ui/ToastProvider.tsx`                                                                                                                                                           | default는 inverse background/foreground, tone 지정 시 feedback subtle/on-subtle pair와 4px feedback base rail | API 완료·호출부 후속 | default는 accent rail 없이 inverse pair, Info/Success/Warning/Danger는 semantic feedback pair와 feedback base rail 사용 | DSN-19 API, DSN-21/Product 호출부           |
 | `shell/UnreadDot.tsx`, `notification/NotificationListItem.tsx`                                                                                                                   | `accent`, Primary와 Primary Subtle을 unread 의미로 재사용                                                     | 후속                 | unread 전용 semantic 역할 승인 전 legacy 표현 유지                                                                      | DSN-21; 제품 의미 결정 시 Product 이슈 연결 |
-| `post/PostActionBar.tsx`                                                                                                                                                         | `like` 등 제품 action 의미색                                                                                  | 예외                 | Like/Repost/Bookmark 의미 승인 전 유지, component token 후보                                                            | DSN-21 또는 연결된 Product 이슈             |
+| `post/PostActionBar.tsx`                                                                                                                                                         | Repost·Reaction 등 제품 action 의미색                                                                         | 부분 완료            | Repost는 `color/action/repost/base`, Reaction은 `color/action/reaction/base`; Bookmark 후속                             | PROD-866; Bookmark는 연결된 Product 이슈    |
 
 PROD-750 scrim migration 대상은 `theme.overlayScrim`을 공통 backdrop으로 사용한다. Named elevation migration 대상은 기존 raw·legacy shadow가 있던 `PostComposer`, `PostDeletionAction`, `FeedbackOverlay`, `ReplyComposerSurface`, `ReactionPopover`, `ProfileSwitcher`이며, anchored Web menu·popover는 `elevation.floating`, modal·Native surface는 `elevation.overlay`를 사용한다. `ProfileEditDiscardDialog`와 `ReactionProfilesModal`은 기존 raw shadow가 없어 scrim만 이관했다. `UniversalShell`의 drawer는 DSN-21에서 이미 `theme.overlayScrim`과 `elevation.overlay`를 사용한다. `shell/ProfileSwitcher.tsx`의 `avatarShadow`는 프로필 이미지의 깊이 표현이므로 유지하고, `post/PostMediaViewer.tsx`의 fixed black/white와 fullscreen overlay는 테마 종속 표준 scrim·elevation에서 제외되는 예외다.
 
@@ -254,7 +267,7 @@ Figma와 semantic contract는 Light/Dark를 모두 production 값으로 제공�
 
 - Fullscreen media의 fixed black/white는 허용한다.
 - Fullscreen media overlay `0.55–0.92`는 표준 scrim으로 강제 통일하지 않는다.
-- Like, Repost와 Bookmark 의미색은 제품 의미 승인 전 일괄 변경하지 않는다.
+- Repost와 Reaction은 승인된 action semantic을 사용한다. Bookmark 의미색은 제품 의미 승인 전 변경하지 않는다.
 - Medal과 profile gradient는 component token 후보이며 raw gradient의 일반 사용 근거가 아니다.
 - 신규 raw color, gradient와 backdrop 추가는 금지한다. semantic token이 없으면 계약을 먼저 갱신하거나 예외를 문서화한다.
 - `[Legacy] Color`에 새 binding을 추가하지 않는다.
