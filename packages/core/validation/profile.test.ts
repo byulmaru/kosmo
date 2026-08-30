@@ -38,6 +38,21 @@ test('Local Profile handle schema rejects every System Reserved value after trim
   }
 });
 
+test('Local Profile handle schema prioritizes policy feedback for the short reserved handle ap', () => {
+  const result = localProfileHandleSchema.safeParse('ap');
+
+  assert.equal(result.success, false);
+  if (result.success) {
+    return;
+  }
+
+  const firstIssue = result.error.issues[0];
+  assert.equal(firstIssue?.message, profileHandlePolicyErrorMessage);
+  assert.deepEqual(firstIssue?.code === 'custom' ? firstIssue.params : undefined, {
+    reason: 'PROFILE_HANDLE_POLICY',
+  });
+});
+
 test('System Reserved values include every current static app route that is a valid handle', () => {
   for (const handle of currentStaticAppRouteHandleValues) {
     assert.equal(systemReservedProfileHandleValues.includes(handle), true, handle);

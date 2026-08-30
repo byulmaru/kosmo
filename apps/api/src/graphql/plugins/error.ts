@@ -1,5 +1,5 @@
 import { dev } from '@kosmo/core';
-import { FieldError, KosmoError } from '@kosmo/core/error';
+import { FieldError, KosmoError, ValidationError } from '@kosmo/core/error';
 import { GraphQLError } from 'graphql';
 import { isAsyncIterable } from 'graphql-yoga';
 import { captureUnexpectedError } from '@/sentry';
@@ -22,6 +22,7 @@ const unwrapKosmoError = (error: unknown): KosmoError | null => {
 const getKosmoErrorExtensions = (error: KosmoError): GraphQLErrorExtensions => ({
   code: error.code,
   ...(error instanceof FieldError && error.field ? { field: error.field } : {}),
+  ...(error instanceof ValidationError && error.reason ? { reason: error.reason } : {}),
 });
 
 const createUnexpectedGraphQLError = (error: unknown, graphQLError?: GraphQLError) => {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { ValidationError } from '@kosmo/core/error';
 import { buildSchema, execute, GraphQLError, parse } from 'graphql';
 import { useError } from './error';
 import type { ExecutionResult } from 'graphql';
@@ -45,5 +46,19 @@ describe('GraphQL error collection', () => {
     for (const result of [thrown, nonNull]) {
       assert.equal(result.errors?.[0]?.extensions.code, 'INTERNAL_SERVER_ERROR');
     }
+  });
+
+  it('preserves a safe validation reason for clients without exposing internal detail', async () => {
+    const error = new ValidationError('Safe policy message', {
+      field: 'handle',
+      reason: 'PROFILE_HANDLE_POLICY',
+    });
+    const transformed = await transform(await executeValue(() => Promise.reject(error)));
+
+    assert.deepEqual(transformed.errors?.[0]?.extensions, {
+      code: 'VALIDATION',
+      field: 'handle',
+      reason: 'PROFILE_HANDLE_POLICY',
+    });
   });
 });

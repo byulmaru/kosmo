@@ -1,4 +1,8 @@
-import { localProfileHandleSchema, profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
+import {
+  localProfileHandleSchema,
+  profileHandlePolicyErrorMessage,
+  profileHandlePolicyValidationReason,
+} from '@kosmo/core/validation';
 import { usePathname } from 'expo-router';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
@@ -148,16 +152,20 @@ const avatarShadow = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
-const isProfileHandleValidationError = (error: unknown) => {
+const isProfileHandlePolicyError = (error: unknown) => {
   if (!isRecord(error) || !isRecord(error.extensions)) {
     return false;
   }
 
-  return error.extensions.code === 'VALIDATION' && error.extensions.field === 'handle';
+  return (
+    error.extensions.code === 'VALIDATION' &&
+    error.extensions.field === 'handle' &&
+    error.extensions.reason === profileHandlePolicyValidationReason
+  );
 };
 
 const profileCreationErrorMessage = (errors: ReadonlyArray<unknown> | null | undefined) =>
-  errors?.some(isProfileHandleValidationError)
+  errors?.some(isProfileHandlePolicyError)
     ? profileHandlePolicyErrorMessage
     : '프로필을 생성하지 못했습니다.';
 

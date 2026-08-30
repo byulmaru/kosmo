@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const profileHandlePolicyErrorMessage = '사용할 수 없는 단어가 포함된 핸들이에요.';
+export const profileHandlePolicyValidationReason = 'PROFILE_HANDLE_POLICY';
 
 export const systemReservedProfileHandleValues = [
   'abuse',
@@ -161,14 +162,20 @@ export const profileHandleSchema = z
   .max(30, '핸들은 30자 이하로 입력해주세요.')
   .regex(/^[a-zA-Z0-9_]+$/, '핸들은 영문, 숫자, 밑줄(_)만 사용할 수 있어요.');
 
-export const localProfileHandleSchema = profileHandleSchema.superRefine((handle, context) => {
-  if (profileHandlePolicyViolation(handle)) {
-    context.addIssue({
-      code: 'custom',
-      message: profileHandlePolicyErrorMessage,
-    });
-  }
-});
+const localProfileHandlePolicySchema = z
+  .string()
+  .trim()
+  .superRefine((handle, context) => {
+    if (profileHandlePolicyViolation(handle)) {
+      context.addIssue({
+        code: 'custom',
+        message: profileHandlePolicyErrorMessage,
+        params: { reason: profileHandlePolicyValidationReason },
+      });
+    }
+  });
+
+export const localProfileHandleSchema = localProfileHandlePolicySchema.pipe(profileHandleSchema);
 
 export const profileDisplayNameSchema = z.string().trim().min(1).max(80);
 

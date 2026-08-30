@@ -29,8 +29,14 @@ export class FieldError extends KosmoError {
 }
 
 export class ValidationError extends FieldError {
-  constructor(message = 'Invalid input', options: { field?: string } = {}) {
+  readonly reason?: 'PROFILE_HANDLE_POLICY';
+
+  constructor(
+    message = 'Invalid input',
+    options: { field?: string; reason?: 'PROFILE_HANDLE_POLICY' } = {},
+  ) {
     super({ code: 'VALIDATION', message, field: options.field });
+    this.reason = options.reason;
   }
 }
 

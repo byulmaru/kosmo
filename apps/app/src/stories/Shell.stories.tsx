@@ -1227,7 +1227,7 @@ export const ProfileSwitcherCreatePolicyPrevalidation: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
     const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
 
-    await userEvent.type(input, 'ADMIN');
+    await userEvent.type(input, 'ap');
     await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
     const firstError = await canvas.findByText(profileHandlePolicyErrorMessage, { exact: true });
     expect(firstError).toBeVisible();
@@ -1256,7 +1256,11 @@ export const ProfileSwitcherCreateServerPolicyErrorMapsSafely: Story = {
     relay: {
       mutationGraphQLErrors: [
         {
-          extensions: { code: 'VALIDATION', field: 'handle' },
+          extensions: {
+            code: 'VALIDATION',
+            field: 'handle',
+            reason: 'PROFILE_HANDLE_POLICY',
+          },
           message: 'internal policy detail: reserved expression',
         },
       ],
@@ -1280,6 +1284,39 @@ export const ProfileSwitcherCreateServerPolicyErrorMapsSafely: Story = {
     ).resolves.toBeVisible();
     expect(canvas.queryByText('internal policy detail: reserved expression')).toBeNull();
     expect(input).toHaveValue('new_policy_handle');
+    expect(profileCreationRequestObserver).toHaveBeenCalledOnce();
+    expect(trackAnalytics).not.toHaveBeenCalled();
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherCreateServerNonPolicyValidationErrorStaysGeneric: Story = {
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: [
+        {
+          extensions: { code: 'VALIDATION', field: 'handle' },
+          message: '핸들은 30자 이하로 입력해주세요.',
+        },
+      ],
+      mutationRequestObserver: profileCreationRequestObserver,
+      mutationResponse: {
+        createProfile: { account: query.me, profile: secondProfile },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
+    const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
+    await userEvent.type(input, 'newer_client_handle');
+    await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
+
+    await expect(canvas.findByText('프로필을 생성하지 못했습니다.')).resolves.toBeVisible();
+    expect(canvas.queryByText(profileHandlePolicyErrorMessage, { exact: true })).toBeNull();
+    expect(input).toHaveValue('newer_client_handle');
     expect(profileCreationRequestObserver).toHaveBeenCalledOnce();
     expect(trackAnalytics).not.toHaveBeenCalled();
   },

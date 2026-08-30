@@ -2742,7 +2742,7 @@ describe('GraphQL remote profile boundary', () => {
   test('rejects reserved and harmful handles at the API validation boundary before writing', async () => {
     const auth = await createAuthenticatedSession();
     const profileCountBefore = await countRows(Profiles);
-    const handles = [' Admin ', 'kosmo_admin', 'f_a_g_g_o_t', 'n1gg3r', 'tr4nny'];
+    const handles = ['ap', ' Admin ', 'kosmo_admin', 'f_a_g_g_o_t', 'n1gg3r', 'tr4nny'];
 
     for (const handle of handles) {
       const result = await requestGraphQL(
@@ -2760,6 +2760,12 @@ describe('GraphQL remote profile boundary', () => {
         JSON.stringify(result.errors),
       );
       assert.equal(result.errors?.[0]?.extensions?.field, 'handle', JSON.stringify(result.errors));
+      const extensions = result.errors?.[0]?.extensions;
+      assert.equal(
+        extensions && 'reason' in extensions ? extensions.reason : undefined,
+        'PROFILE_HANDLE_POLICY',
+        JSON.stringify(result.errors),
+      );
       assert.equal(result.errors?.[0]?.message, profileHandlePolicyErrorMessage, handle);
       assert.equal(result.errors?.[0]?.message.includes(handle.trim()), false, handle);
     }
