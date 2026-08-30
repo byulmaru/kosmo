@@ -203,7 +203,6 @@ describe('PostMediaViewerSurface', () => {
     });
     assert.deepEqual(flattenStyle(byTestId('post-media-viewer-media-viewport').props.style), {
       alignItems: 'center',
-      backgroundColor: '#000000',
       borderRadius: 8,
       bottom: 88,
       justifyContent: 'center',
@@ -235,7 +234,6 @@ describe('PostMediaViewerSurface', () => {
     assert.deepEqual(flattenStyle(byTestId('post-media-viewer-media-viewport').props.style), {
       alignItems: 'center',
       aspectRatio: 4 / 3,
-      backgroundColor: '#000000',
       borderRadius: 8,
       justifyContent: 'center',
       maxHeight: 420,
@@ -288,7 +286,7 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(queryByLabel('다시 시도'), null);
   });
 
-  it('overlay는 stage 바깥에만 적용하고 Media frame은 fixed black이다', async () => {
+  it('70% overlay는 stage가 소유하고 Media frame과 상태는 투명하게 그 위에 놓인다', async () => {
     await render();
 
     assert.equal(
@@ -301,8 +299,13 @@ describe('PostMediaViewerSurface', () => {
     );
     assert.equal(
       flattenStyle(byTestId('post-media-viewer-media-viewport').props.style).backgroundColor,
-      '#000000',
+      undefined,
     );
+
+    await render({ viewState: 'error' });
+    const status = byRole('status');
+    assert.equal(status.parent?.props.testID, 'post-media-viewer-media-pane');
+    assert.equal(flattenStyle(status.props.style).backgroundColor, undefined);
   });
 
   it('viewer control은 48 target·30/2.5 fixed-white icon과 interaction state를 사용한다', async () => {
@@ -421,6 +424,12 @@ function queryByTestId(testID: string): ReactTestInstance | null {
 
 function queryByType(type: string): ReactTestInstance | null {
   return renderer?.root.findAll((node) => node.type === type)[0] ?? null;
+}
+
+function byRole(role: string): ReactTestInstance {
+  const result = renderer?.root.findAll((node) => node.props.role === role)[0];
+  assert.ok(result, `element with role ${role} must exist`);
+  return result;
 }
 
 function rendered(type: string): ReactTestInstance[] {
