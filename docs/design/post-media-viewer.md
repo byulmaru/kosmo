@@ -13,7 +13,7 @@
 
 - Overlay: black 70% `color/overlay/media-viewer`
 - Compact: viewport 좌우 16px, 상단 80px, 하단 88px의 Media frame과 하단 16px·좌우 16px·높이 56px canonical Post Action Bar tray
-- Wide: 560×420 Media frame을 image stage 가운데 배치하고 오른쪽에 346px full-height context rail을 둔다. 이 고정값은 PROD-853 disconnected canonical Storybook 기준이며 Production responsive clamp는 PROD-849가 별도로 검증한다.
+- Wide: 560×420 Media frame을 image stage 가운데 배치하고 오른쪽에 346px full-height context rail을 둔다. 이 고정값은 DSN-63 Target의 disconnected Storybook 검증값이며 Production responsive clamp는 PROD-849가 별도로 검증한다.
 - Controls: 48×48 interaction target, 30px icon, 2.5 stroke, fixed white, dark halo, Hover·Pressed state layer, 2px inside FocusVisible ring과 Disabled opacity
 - Ready: Media, 다중 navigation·상단 counter와 presentation별 secondary surface
 - Sensitive: 상태 설명·`보기` action과 Ready의 navigation·counter·secondary surface
@@ -30,10 +30,9 @@
 
 ## 디자인 권위와 적용 범위
 
-- PROD-853 Storybook의 직접 시각 권위는 [`PostMediaViewer`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5724-2064) component set, [`PostMediaViewer Control`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5687-15412), [`Approved patterns`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5728-40994)이다. Compact/Wide × Ready/Loading/Error/Unavailable/Sensitive의 실제 렌더링을 Storybook 기준으로 사용한다.
-- Mobile [`compact lifecycle section`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6571-7605)의
+- Mobile 시각 기준은 [`compact lifecycle section`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6571-7605)의
   [`Open`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8103), Loading, Error,
-  Unavailable Target consumer와 Dark Open [`6851:12238`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6851-12238)은 source instance의 responsive readback이다.
+  Unavailable Target consumer와 Dark Open [`6851:12238`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6851-12238)이다.
   각 FRAME은 검은 image stage와 semantic canvas detail panel을 세로 Auto Layout으로 조립해 서로 겹치지 않는다.
   Figma metadata가 직접 증명하는 Android-baseline `390×844` 비키보드 canvas에서는 Media 비율과 관계없이
   `654px` stage와 `y=654` detail anchor를 사용한다. 현재 HUG detail panel은 `182px`라 두 surface의 합은
@@ -43,7 +42,9 @@
   child overlay consumer도 같은 Android-baseline anchor와 HUG detail panel을 사용한다. Dark lifecycle 상태를 중복
   생성하지 않고 panel은 화면의 Light/Dark mode를 상속한다. shared source 승격과 runtime 반영은 이 Figma evidence와
   별도로 검증한다.
-- Mobile 390 consumer와 [`Compact Web 1024`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25262)·1440 approved pattern을 함께 확인한다. 1024와 1440은 모두 Wide presentation이며, 390만 Compact canonical viewport로 검증한다. Full Web은 같은 Wide source가 확장 규칙을 소유하므로 별도 중복 screen FRAME을 만들지 않는다.
+- Compact Web 대표 consumer는 [`Compact Web 1024 · PostMediaViewer · Open · Target`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25262)이며,
+  기존 DSN-63 Wide source의 image surface와 Post thread rail을 그대로 상속한다. Full Web은 같은 Wide source가
+  확장 규칙을 소유하므로 별도 중복 screen FRAME을 만들지 않는다.
 - Figma의 어두운 fullscreen image surface, 상단 close affordance와 Web split structure를 시각 기준으로
   사용한다. compact 원문 접기·펼치기, Action Bar와 wide Post 상세 thread의 현재 동작은 PROD-650과 runtime
   검증이 소유한다. 이 Target의 공용 UI·component test·Storybook은 PROD-853에서 먼저 제공하고,
