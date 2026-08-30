@@ -98,26 +98,20 @@ export const UnderlineInteractionContract: Story = {
       expect(latest).toHaveAttribute('tabindex', '-1');
       expect(latest).toHaveStyle({ opacity: '0.45' });
       expect(media).toHaveAttribute('tabindex', '-1');
-      if (args.variant === 'pill') {
-        expect(popular).toHaveStyle({ borderRadius: '8px', height: '32px' });
-        expect(getComputedStyle(popular).backgroundColor).toBe('rgb(255, 255, 255)');
-        expect(getComputedStyle(popular).borderColor).toBe('rgb(252, 231, 154)');
-      } else {
-        expect(group).toHaveStyle({
-          borderBottomColor: 'rgb(236, 236, 240)',
-          borderBottomWidth: '1px',
-        });
-        expect(getComputedStyle(popular).backgroundColor).toBe('rgba(0, 0, 0, 0)');
-        expect(popularLabel).toHaveStyle({
-          fontFamily: 'SUIT',
-          fontSize: '14px',
-          fontWeight: '600',
-          lineHeight: '20px',
-        });
-        expect(indicator).not.toBeNull();
-        expect(getComputedStyle(indicator as Element).backgroundColor).toBe('rgb(255, 229, 151)');
-        expect(indicator).toHaveStyle({ height: '4px', width: '64px' });
-      }
+      expect(group).toHaveStyle({
+        borderBottomColor: 'rgb(236, 236, 240)',
+        borderBottomWidth: '1px',
+      });
+      expect(getComputedStyle(popular).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+      expect(popularLabel).toHaveStyle({
+        fontFamily: 'SUIT',
+        fontSize: '14px',
+        fontWeight: '600',
+        lineHeight: '20px',
+      });
+      expect(indicator).not.toBeNull();
+      expect(getComputedStyle(indicator as Element).backgroundColor).toBe('rgb(255, 229, 151)');
+      expect(indicator).toHaveStyle({ height: '4px', width: '64px' });
 
       await userEvent.tab();
       expect(popular).toHaveFocus();
