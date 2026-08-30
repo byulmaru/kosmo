@@ -1,3 +1,9 @@
+**Shared spec ownership**
+
+- `PROD-820` / PR #685가 이 승인된 shared spec 전체를 소유한다. `PROD-819` / PR #653는 그 계약을 소비하는 Web runtime 구현을 소유한다.
+- 승인 근거는 [Linear `PROD-819`](https://linear.app/byulmaru/issue/PROD-819)와 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-08-31 마스킹 정책 승인` 기록이다. 사용자 정혜주(HJSmiley)는 “URL·referrer의 검색어 `q`와 광고 click ID는 가리고, `utm_*`는 보존하는 현재 정책을 유지·승인하시겠어요?”에 “마스킹 정책 승인”으로 답했다. 이 승인은 GitHub reviewer signoff나 production acceptance가 아니며, `2026-08-30` 구현 기록은 독립 authority가 아니다.
+- `PROD-795`, `PROD-741`, `PROD-575`가 각각 개인정보·운영 통합, Replay acceptance, production acceptance와 archive를 소유한다. 이 change는 해당 결과를 대신 완료하거나 archive하지 않는다.
+
 ## 1. PROD-820 Cloud project와 privacy controls
 
 **Authority / Provenance**
@@ -14,19 +20,20 @@ PostHog Cloud US의 `Kosmo Production` project에 production 배포 전 Replay s
 
 - Default project를 변경하지 않고 timezone은 `Asia/Seoul`로 유지한다.
 - Session Replay는 production canonical origin에서만 10% sampling으로 수집하고 retention은 30일로 둔다.
-- Normal input masking과 canonical Post Content의 `ph-mask` marker를 함께 적용한다.
+- Normal input masking과 canonical Post Content의 `ph-mask ph-no-capture` marker를 함께 적용한다. 이 Replay 계약은 standard event payload privacy와 별도로 검증한다.
 - 공개 project key·host는 client artifact에 포함될 수 있지만 Personal API Key·Project Secret API Key 같은 조회·관리 credential은 repository·CI log·artifact에 기록하지 않는다.
 
 **Verification**
 
 - Cloud US region, project 이름, timezone과 Default project 불변을 확인한다.
 - Replay 10% sampling, canonical origin 조건, Normal input masking과 30일 retention의 실제 설정 증거를 확인한다.
-- canonical Post Content marker의 단위·browser 검증 가능 상태와 실제 값 비노출 운영 기록을 확인한다.
+- canonical Post Content marker의 단위·browser 검증 가능 상태와 실제 값 비노출 운영 기록을 확인한다. Replay masking과 autocapture 제외가 함께 적용되는지 확인한다.
 
 - [x] 1.1 PostHog Cloud US의 `Kosmo Production`과 `Asia/Seoul` timezone을 확인하고 Default project를 변경하지 않는 경계를 기록한다.
 - [x] 1.2 Session Replay sampling 10%, production canonical origin URL 조건, Normal input masking과 retention 30일을 production 배포 전에 적용한다.
 - [x] 1.3 canonical Post Content의 PostHog `ph-mask` marker를 runtime에 연결하고 Cloud input masking과 함께 단위·browser acceptance가 가능한 상태로 만든다.
-- [x] 1.4 공개 project key·host와 credential의 경계 및 실제 값 비노출 규칙을 연결 운영 가이드와 PROD-820 댓글에 기록한다.
+- [x] 1.4 공개 project key·host와 credential의 경계 및 실제 값 비노출 규칙을 연결 운영 가이드와 PROD-820 결정에 기록한다.
+- [x] 1.5 canonical Post Content root에 `ph-mask ph-no-capture`를 적용하고, Replay masking과 autocapture 제외가 함께 동작하는지 outbound browser 증거로 확인한다.
 
 ## 2. PROD-819 Web adapter와 provider 교체
 
@@ -64,7 +71,7 @@ Kosmo Web이 공개 PostHog key와 host가 모두 있을 때만 PostHog adapter�
 
 - `PROD-819`의 Web runtime·typed custom event 계약
 - `PROD-469`의 기존 app-owned event taxonomy
-- PR #653·#685 review에서 정렬한 PostHog 표준 SDK 동작 계약
+- `PROD-820`의 standard event payload privacy 설정 계약
 
 **Deliverable**
 
@@ -73,7 +80,7 @@ PostHog의 `defaults: '2026-05-30'` 표준 pageview·pageleave·autocapture·met
 **Guardrails**
 
 - app-owned route observer·normalizer·manual `$pageview`를 두지 않는다.
-- 표준 자동 기능 disable, memory persistence, property denylist, `before_send` sanitizer나 runtime event projection으로 SDK 동작을 차단하거나 재구현하지 않는다.
+- 표준 자동 기능 disable, memory persistence, property denylist, 범용 `before_send` sanitizer나 runtime event projection으로 SDK 동작을 차단하거나 재구현하지 않는다. Native masking이 놓치는 referrer URL의 `q`·기본 click ID와 파생 `ph_keyword` 계열만 공개 `before_send` hook으로 좁게 보완한다.
 - `$pageview`는 app event map에 포함하지 않는다.
 - E2E의 bot 판별 회피를 위해 production adapter에 test-only option이나 환경 변수 분기를 추가하지 않는다. Playwright fixture가 일반 browser user-agent·UA Client Hints brand와 비자동화 webdriver signal을 context에 제공한다.
 - 새 제품 event나 event별 지표를 추가하지 않는다.
@@ -84,11 +91,13 @@ PostHog의 `defaults: '2026-05-30'` 표준 pageview·pageleave·autocapture·met
 - custom event type error와 typed property passthrough를 type·unit test로 확인한다.
 - 일반 browser user-agent·UA Client Hints brand와 비자동화 webdriver signal을 설정한 E2E fixture·fake endpoint로 SDK pageview·pageleave·autocapture, 표준 metadata·remote config 요청과 설정 누락 no-op을 확인한다.
 
-- [x] 3.1 init config를 `api_host`, `defaults: '2026-05-30'` 중심으로 정리하고 자동 기능 disable, memory persistence, denylist와 sanitizer를 제거한다.
+- [x] 3.1 init config를 `api_host`, `defaults: '2026-05-30'` 중심으로 정리하고 자동 기능 disable, memory persistence, denylist와 범용 sanitizer를 제거한다. 승인된 좁은 referrer·`ph_keyword` `before_send` 보완은 유지한다.
 - [x] 3.2 앱 소유 route observer, route normalizer와 manual `$pageview`를 제거한다.
 - [x] 3.3 `$pageview`를 app event map에서 제거하고 기존 custom event의 event별 typed passthrough를 유지한다.
 - [x] 3.4 unit test에서 권장 defaults와 표준 metadata·remote config 비차단, custom event type contract를 검증한다.
 - [x] 3.5 production adapter에 test-only 설정을 추가하지 않고 Playwright fixture의 일반 browser user-agent·UA Client Hints brand와 비자동화 webdriver signal로 fake endpoint E2E를 실행해 SDK automatic pageview·pageleave·autocapture, 표준 metadata와 설정 누락 no-op을 검증한다.
+- [x] 3.6 `mask_personal_data_properties: true`와 `custom_personal_data_properties: ['q']`를 적용하고, SDK 기본 광고 click ID masking은 수용하되 `utm_*`는 유지하는 init config와 단위 검증을 추가한다.
+- [x] 3.7 standard `/e/` event payload의 current/referrer/session URL E2E에서 Search query `q`, current/referrer의 click ID marker와 검색엔진 referrer에서 파생된 `ph_keyword` 계열이 노출되지 않고 `utm_*`가 유지되는지 검증한다. Remote config 요청은 별도로 확인하고, native masking이 놓치는 정확한 referrer URL parameter와 파생 property만 좁은 공개 `before_send` hook으로 보완한다.
 
 ## 4. PROD-819 persisted identity와 fail-open
 
@@ -100,7 +109,7 @@ PostHog의 `defaults: '2026-05-30'` 표준 pageview·pageleave·autocapture·met
 
 **Deliverable**
 
-SDK persisted identity state를 기준으로 로그인·같은 Account 유지·Account 전환·guest 전환을 identify/reset 순서로 수렴시키고, analytics 초기화·전송 실패에도 렌더링·인증·navigation·mutation 결과를 유지한다.
+공개 `$user_id`와 `get_distinct_id()`를 기준으로 로그인·같은 Account 유지·Account 전환·guest 전환을 identify/reset 순서로 수렴시키고, analytics 초기화·전송 실패에도 렌더링·인증·navigation·mutation 결과를 유지한다.
 
 **Guardrails**
 
@@ -109,16 +118,17 @@ SDK persisted identity state를 기준으로 로그인·같은 Account 유지·A
 - Profile 선택은 Account identity 전환으로 취급하지 않는다.
 - analytics 결과를 await하거나 기존 사용자 오류 처리에 합치지 않는다.
 - module-local Account cache를 persisted identity의 authority로 사용하지 않는다.
+- `$user_state`, `identified` 같은 SDK 내부 persistence 값을 identity 판정의 authority로 사용하지 않는다.
 
 **Verification**
 
-- guest→A, persisted A→A, A→B, reload A→guest와 SDK failure sequence를 단위 검증한다.
-- browser Session 전환에서 identify/reset 순서, trait 부재와 endpoint 실패 시 사용자 흐름 지속을 확인한다.
+- guest→A, persisted A→A, A→B, reload A→guest와 SDK failure sequence를 공개 property 기반 단위 검증한다.
+- 실제 browser reload를 포함한 Session 전환에서 identify/reset 순서, trait 부재와 endpoint 실패 시 사용자 흐름 지속을 확인한다.
 - app check, 관련 unit·browser test, Web·Native export와 formatting 결과를 PROD-795 handoff에 기록한다.
 
-- [x] 4.1 module-local Account cache 대신 SDK persisted identity state를 기준으로 same Account, Account 전환과 guest reset을 구현한다.
-- [x] 4.2 guest→A, persisted A→A, A→B, reload A→guest와 SDK failure sequence를 단위 검증한다.
-- [x] 4.3 browser flow에서 identify/reset 순서, trait 부재와 endpoint 실패 시 인증·navigation 지속을 검증한다.
+- [x] 4.1 `$user_state`·`identified` 대신 공개 `$user_id`와 `get_distinct_id()`를 기준으로 same Account, Account 전환과 guest reset을 구현한다.
+- [x] 4.2 공개 property 기반 guest→A, persisted A→A, A→B, reload A→guest와 SDK failure sequence를 단위 검증한다.
+- [x] 4.3 실제 browser reload를 포함한 flow에서 identify/reset 순서, trait 부재와 endpoint 실패 시 인증·navigation 지속을 검증한다.
 - [x] 4.4 app check, 관련 unit·browser test, Web·Native export와 formatting을 실행하고 결과를 PROD-795 handoff에 기록한다.
 
 ## 5. PROD-820 build/deployment 공개 설정 주입
@@ -138,7 +148,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 - 공개 key·host는 일반 build args와 GitHub repository variables로 전달하고 cache key·build provenance에서 숨기지 않는다.
 - 조회·관리 credential은 repository·CI log·build provenance·image artifact에 포함하지 않는다.
 - key 또는 host가 부분적으로만 제공되면 PostHog adapter는 no-op이어야 한다.
-- PR #653 consumer가 반영되기 전에 OpenPanel production 주입을 제거하지 않는다. 제거는 PROD-839가 소유한다.
+- `PROD-819` consumer가 반영되기 전에 OpenPanel production 주입을 제거하지 않는다. 제거는 PROD-839가 소유한다.
 
 **Verification**
 
@@ -164,7 +174,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 
 **Guardrails**
 
-- 표준 automatic event, URL/referrer/session metadata, persistence, remote config와 Replay 보호를 실제 동작보다 좁게 문서화하지 않는다.
+- 표준 automatic event, URL/referrer/session metadata, persistence, remote config와 Replay 보호를 실제 동작보다 좁게 문서화하지 않는다. 다만 standard event payload의 `q`와 SDK 기본 click ID masking, `utm_*` 보존 경계를 명시한다.
 - OpenPanel 운영 계약 제거 시 consumer·provider 전환 순서를 확인한다.
 - PROD-839가 지원 release·rollback 경로의 OpenPanel 주입과 GitHub 외부 설정을 정리한 뒤 그 cleanup 증거를 입력으로 사용한다.
 - production-equivalent 검증을 실제 production acceptance나 OpenSpec archive로 일반화하지 않는다.
@@ -174,7 +184,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 
 - 개인정보 처리방침이 실제 수집 surface·masking·retention 경계와 일치하는지 확인한다.
 - Cloud 설정·배포·장애 대응·수집 확인 runbook을 검증한다.
-- 활성 Docker·workflow·GitHub 설정과 운영 문서에서 OpenPanel 계약이 제거되고 PostHog `ph-mask`는 유지되는지 확인한다.
+- 활성 Docker·workflow·GitHub 설정과 운영 문서에서 OpenPanel 계약이 제거되고 PostHog `ph-mask ph-no-capture`는 유지되는지 확인한다.
 - production-equivalent Web build에서 그룹 1~5의 설정·automatic event·identity·fail-open·Replay 보호를 함께 확인한다.
 
 - [ ] 6.1 표준 automatic event, URL/referrer/session metadata, persistence, remote config와 Replay 보호를 실제 개인정보 처리방침에 반영한다.
@@ -198,15 +208,15 @@ production canonical origin의 Post Media Viewer 표본 session에서 navigation
 
 - PROD-795 cross-slice gate가 끝나기 전에 acceptance를 시작하지 않는다.
 - 10% sampling 설정값과 선택한 표본 replay 재생을 구분하며 작은 표본의 관찰 비율로 설정값을 추정하지 않는다.
-- input·textarea와 canonical Post Content 원문이 recording에 포함되지 않아야 한다.
+- input·textarea와 canonical Post Content 원문이 recording에 포함되지 않아야 하며, canonical Post Content subtree는 autocapture에도 포함되지 않아야 한다.
 - production canonical origin 외 환경에서 Replay를 활성화하지 않는다.
-- 추가 custom selector 정책을 현재 완료 조건으로 넓히지 않는다.
+- 추가 custom selector 정책을 현재 완료 조건으로 넓히지 않는다. `ph-mask ph-no-capture`는 canonical marker 계약으로 유지한다.
 - PROD-540 opt-out이 배포된 경우 opt-out 사용자의 replay가 전송되지 않아야 한다.
 
 **Verification**
 
 - Post Media Viewer의 navigation·전환·닫기가 표본 replay에서 재생 가능한지 확인한다.
-- input·textarea와 canonical Post Content masking, 10% sampling, production origin과 30일 retention을 실제 설정·recording 증거로 확인한다.
+- input·textarea와 canonical Post Content masking, canonical Post Content autocapture 제외, 10% sampling, production origin과 30일 retention을 실제 설정·recording·outbound 증거로 확인한다.
 - Replay 초기화·업로드 실패에서도 Viewer와 사용자 흐름이 지속되는지 확인한다.
 - 개인정보 처리방침·운영 문서가 실제 Replay 보호를 설명하고, 증거에 Account ID·project key·사용자 콘텐츠가 없는지 확인한다.
 
