@@ -269,6 +269,8 @@ export const Playground: Story = {
 
     await step('Pressed visual과 고정 target 확인', async () => {
       const visual = within(notifications).getByTestId('sidebar-control-visual');
+      notifications.focus();
+      await waitFor(() => expect(getComputedStyle(notifications).outlineStyle).toBe('solid'));
       await userEvent.pointer({ keys: '[MouseLeft>]', target: notifications });
       await waitFor(() =>
         expect(getComputedStyle(visual).transform).toBe('matrix(0.98, 0, 0, 0.98, 0, 0)'),
