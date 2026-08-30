@@ -151,7 +151,9 @@ export const Playground: Story = {
 
       expect(notifications).toHaveAccessibleName(notificationName);
       if (unreadNotificationCount > 0) {
-        expect(within(notifications).getByTestId('bottom-tab-unread-indicator')).toBeVisible();
+        const unreadIndicator = within(notifications).getByTestId('bottom-tab-unread-indicator');
+        expect(unreadIndicator).toBeVisible();
+        expect(unreadIndicator).toHaveStyle({ right: '2px', top: '-1px' });
       } else {
         expect(
           within(notifications).queryByTestId('bottom-tab-unread-indicator'),
