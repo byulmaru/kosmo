@@ -27,5 +27,9 @@ export type BottomTabBarProps = {
   platform?: NavigationChromePlatform;
   profile?: NavigationProfile | null;
   safeAreaBottom?: number;
-  unread?: boolean;
+  unreadNotificationCount?: number | null;
 };
+
+export function getUnreadNotificationAccessibilityLabel(count: number | null | undefined): string {
+  return count && count > 0 ? `알림, 읽지 않은 알림 ${count}개` : '알림';
+}

@@ -227,7 +227,10 @@ export const Playground: Story = {
 
       await userEvent.click(clear);
       expect(args.onClear).toHaveBeenCalledOnce();
-      await waitFor(() => expect(input).toHaveValue(''));
+      await waitFor(() => {
+        expect(input).toHaveValue('');
+        expect(input).toHaveFocus();
+      });
       expect(within(canvasElement).queryByRole('button', { name: '검색 지우기' })).toBeNull();
     });
   },

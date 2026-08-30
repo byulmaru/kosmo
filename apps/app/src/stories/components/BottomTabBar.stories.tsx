@@ -34,7 +34,7 @@ function BottomTabBarCatalog({
   platform = 'web',
   profileAvailable,
   safeAreaBottom = 0,
-  unread = false,
+  unreadNotificationCount = null,
 }: CatalogProps) {
   const [destination, setDestination] = useState<BottomTabDestination | null>(currentDestination);
 
@@ -51,7 +51,7 @@ function BottomTabBarCatalog({
         platform={platform}
         profile={profileAvailable ? profile : null}
         safeAreaBottom={safeAreaBottom}
-        unread={unread}
+        unreadNotificationCount={unreadNotificationCount}
       />
     </View>
   );
@@ -64,7 +64,7 @@ const meta = {
     platform: 'web',
     profileAvailable: true,
     safeAreaBottom: 0,
-    unread: false,
+    unreadNotificationCount: null,
   },
   argTypes: {
     currentDestination: {
@@ -73,6 +73,7 @@ const meta = {
     },
     platform: { control: 'inline-radio', options: ['web', 'ios', 'android'] },
     safeAreaBottom: { control: { min: 0, step: 4, type: 'number' } },
+    unreadNotificationCount: { control: { min: 0, step: 1, type: 'number' } },
   },
   component: BottomTabBarCatalog,
   parameters: { controls: { disable: true }, layout: 'fullscreen' },
@@ -85,10 +86,17 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 
 export const Playground: Story = {
+  args: { currentDestination: 'notifications', unreadNotificationCount: 3 },
   parameters: {
     controls: {
       disable: false,
-      include: ['currentDestination', 'platform', 'profileAvailable', 'safeAreaBottom', 'unread'],
+      include: [
+        'currentDestination',
+        'platform',
+        'profileAvailable',
+        'safeAreaBottom',
+        'unreadNotificationCount',
+      ],
     },
   },
   play: async ({ args, canvasElement, step }) => {
@@ -98,7 +106,10 @@ export const Playground: Story = {
     const controls = within(navigation).getAllByRole('button');
     const home = within(navigation).getByRole('button', { name: '홈' });
     const search = within(navigation).getByRole('button', { name: '검색' });
-    const notifications = within(navigation).getByRole('button', { name: '알림' });
+    const unreadNotificationCount = args.unreadNotificationCount ?? 0;
+    const notificationName =
+      unreadNotificationCount > 0 ? `알림, 읽지 않은 알림 ${unreadNotificationCount}개` : '알림';
+    const notifications = within(navigation).getByRole('button', { name: notificationName });
     const profileControl = within(navigation).getByRole('button', { name: '프로필' });
     const selectedDestination =
       args.currentDestination === 'profile' && !args.profileAvailable
@@ -112,7 +123,10 @@ export const Playground: Story = {
       expect(navigation).toHaveAccessibleName('하단 탐색');
       if (selectedDestination) {
         const selected = within(navigation).getByRole('button', {
-          name: destinationLabels[selectedDestination],
+          name:
+            selectedDestination === 'notifications'
+              ? notificationName
+              : destinationLabels[selectedDestination],
         });
         expect(selected).toHaveAttribute('aria-current', 'page');
         expect(within(selected).getByText(destinationLabels[selectedDestination])).toBeVisible();
@@ -135,8 +149,13 @@ export const Playground: Story = {
         within(outlineControl).queryByTestId(`bottom-tab-${outlineDestination}-filled-icon`),
       ).not.toBeInTheDocument();
 
-      if (args.unread) {
+      expect(notifications).toHaveAccessibleName(notificationName);
+      if (unreadNotificationCount > 0) {
         expect(within(notifications).getByTestId('bottom-tab-unread-indicator')).toBeVisible();
+      } else {
+        expect(
+          within(notifications).queryByTestId('bottom-tab-unread-indicator'),
+        ).not.toBeInTheDocument();
       }
 
       if (!args.profileAvailable) {
