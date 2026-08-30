@@ -91,37 +91,37 @@ export function PostMediaViewerSurface({
                 testID="post-media-viewer-image"
               />
             ) : null}
-
-            {status ? (
-              <View
-                accessibilityLiveRegion={viewState === 'error' ? 'assertive' : 'polite'}
-                role="status"
-                style={styles.status}
-              >
-                {viewState === 'loading' ? (
-                  <ActivityIndicator
-                    accessibilityLabel="미디어를 불러오는 중"
-                    color="#ffffff"
-                    size={40}
-                    testID="post-media-viewer-loading-indicator"
-                  />
-                ) : null}
-                <Text accessibilityRole="header" style={styles.statusTitle}>
-                  {status.title}
-                </Text>
-                <Text style={styles.statusBody}>{status.body}</Text>
-                {viewState === 'sensitive' ? (
-                  <StatusAction
-                    accessibleName="민감한 이미지 표시"
-                    label="보기"
-                    onActivate={onRevealSensitive}
-                  />
-                ) : viewState === 'error' ? (
-                  <StatusAction accessibleName="다시 시도" label="다시 시도" onActivate={onRetry} />
-                ) : null}
-              </View>
-            ) : null}
           </View>
+
+          {status ? (
+            <View
+              accessibilityLiveRegion={viewState === 'error' ? 'assertive' : 'polite'}
+              role="status"
+              style={styles.status}
+            >
+              {viewState === 'loading' ? (
+                <ActivityIndicator
+                  accessibilityLabel="미디어를 불러오는 중"
+                  color="#ffffff"
+                  size={40}
+                  testID="post-media-viewer-loading-indicator"
+                />
+              ) : null}
+              <Text accessibilityRole="header" style={styles.statusTitle}>
+                {status.title}
+              </Text>
+              <Text style={styles.statusBody}>{status.body}</Text>
+              {viewState === 'sensitive' ? (
+                <StatusAction
+                  accessibleName="민감한 이미지 표시"
+                  label="보기"
+                  onActivate={onRevealSensitive}
+                />
+              ) : viewState === 'error' ? (
+                <StatusAction accessibleName="다시 시도" label="다시 시도" onActivate={onRetry} />
+              ) : null}
+            </View>
+          ) : null}
 
           <IconButton
             accessibilityLabel="이미지 뷰어 닫기"
@@ -299,7 +299,6 @@ const styles = StyleSheet.create({
   },
   mediaViewport: {
     alignItems: 'center',
-    backgroundColor: '#000000',
     borderRadius: radius[8],
     justifyContent: 'center',
     overflow: 'hidden',
@@ -357,7 +356,6 @@ const styles = StyleSheet.create({
   screenReaderOnly: { height: 1, opacity: 0, position: 'absolute', width: 1 },
   status: {
     alignItems: 'center',
-    backgroundColor: '#000000',
     bottom: 0,
     justifyContent: 'center',
     left: 0,

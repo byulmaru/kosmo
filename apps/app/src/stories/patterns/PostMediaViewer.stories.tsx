@@ -1,8 +1,10 @@
-import { Bookmark, Heart, MessageCircle, MoreHorizontal, Repeat2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
-import { expect, fn, userEvent, within } from 'storybook/test';
-import { PostActionControl } from '@/components/post/PostActionControl';
+import { useLazyLoadQuery } from 'react-relay';
+import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
+import PostMediaViewerHostQueryNode from '@/components/post/__generated__/PostMediaViewerHostQuery.graphql';
+import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
+import { PostActionSurface } from '@/components/post/PostActionSurface';
 import { PostMediaViewerSurface } from '@/components/post/PostMediaViewerSurface';
 import { PostMediaViewerThread } from '@/components/post/PostMediaViewerThread';
 import { SessionProvider } from '@/session/SessionProvider';
@@ -13,26 +15,21 @@ import maskableIconImage from '../../../public/icon-maskable-512.png?url';
 import ogImage from '../../../public/og-default.png?url';
 import { post, shellQuery } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { PostMediaViewerHostQuery } from '@/components/post/__generated__/PostMediaViewerHostQuery.graphql';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
 
 type StoryArgs = {
   currentIndex: number;
   mediaCount: number;
-  onBookmark: () => void;
   onClose: () => void;
-  onMore: () => void;
   onNext: () => void;
   onPrevious: () => void;
-  onReact: () => void;
   onReply: () => void;
-  onRepost: () => void;
   onRetry: () => void;
   onRevealSensitive: () => void;
   presentation: 'compact' | 'wide';
   viewState: 'ready' | 'sensitive' | 'loading' | 'error' | 'unavailable';
 };
-
-type PostActionArgs = Pick<StoryArgs, 'onBookmark' | 'onMore' | 'onReact' | 'onReply' | 'onRepost'>;
 
 const mediaUrls = [ogImage, iconImage, maskableIconImage, appleTouchImage] as const;
 
@@ -57,6 +54,7 @@ const wideRailCurrentPost = {
       id: wideRailAncestorPost.id,
       profile: wideRailAncestorPost.profile,
     },
+    repostCount: 3,
   }),
   viewerReactions: [],
 };
@@ -98,14 +96,10 @@ function mediaForCount(count: number): PostMediaItem[] {
 function PostMediaViewerCatalog({
   currentIndex,
   mediaCount,
-  onBookmark,
   onClose,
-  onMore,
   onNext,
   onPrevious,
-  onReact,
   onReply,
-  onRepost,
   onRetry,
   onRevealSensitive,
   presentation,
@@ -114,14 +108,13 @@ function PostMediaViewerCatalog({
   const { height } = useWindowDimensions();
   const media = mediaForCount(mediaCount);
   const clampedIndex = Math.max(0, Math.min(media.length - 1, Math.trunc(currentIndex)));
-  const postActions = { onBookmark, onMore, onReact, onReply, onRepost };
 
   return (
     <View style={{ height, width: '100%' }}>
       <PostMediaViewerSurface
         actionTray={
           <ThemeProvider mode="dark" reduceMotion>
-            <ViewerActionBarFixture {...postActions} />
+            <ViewerActionBarFixture onReply={onReply} />
           </ThemeProvider>
         }
         contextRail={<ContextRailFixture />}
@@ -139,54 +132,31 @@ function PostMediaViewerCatalog({
   );
 }
 
-function ViewerActionBarFixture({
-  onBookmark,
-  onMore,
-  onReact,
-  onReply,
-  onRepost,
-}: PostActionArgs) {
-  const theme = useTheme();
+function ViewerActionBarFixture({ onReply }: Pick<StoryArgs, 'onReply'>) {
+  const data = useLazyLoadQuery<PostMediaViewerHostQuery>(
+    PostMediaViewerHostQueryNode,
+    { surfacePostId: wideRailCurrentPost.id },
+    { fetchPolicy: 'store-or-network' },
+  );
+
+  if (data.surface?.__typename !== 'Post' || !data.surface.actionSurface) {
+    throw new globalThis.Error(
+      'Post Media Viewer action fixture에는 Post action surface가 필요합니다.',
+    );
+  }
 
   return (
-    <View accessibilityLabel="액션 바" accessibilityRole="toolbar" style={styles.actionBar}>
-      <PostActionControl
-        accessibilityLabel="답글 달기"
-        count={12}
-        icon={MessageCircle}
-        onPress={() => onReply()}
-        testID="viewer-reply"
-      />
-      <PostActionControl
-        accessibilityLabel="재게시하기"
-        active
-        activeColor={theme.primary}
-        count={3}
-        icon={Repeat2}
-        onPress={() => onRepost()}
-        testID="viewer-repost"
-      />
-      <PostActionControl
-        accessibilityLabel="반응"
-        icon={Heart}
-        onPress={() => onReact()}
-        testID="viewer-reaction"
-      />
-      <PostActionControl
-        accessibilityLabel="북마크"
-        icon={Bookmark}
-        onPress={() => onBookmark()}
-        testID="viewer-bookmark"
-      />
-      <PostActionControl
-        accessibilityLabel="더보기"
-        alignToEnd
-        icon={MoreHorizontal}
-        onPress={() => onMore()}
-        stateful={false}
-        testID="viewer-more"
-      />
-    </View>
+    <PostActionSurface
+      reactionSummaryStyle={styles.hiddenReactionSummary}
+      reply={{
+        accessibilityLabel: '답글',
+        count: 12,
+        expanded: false,
+        onPress: () => onReply(),
+        processing: 'default',
+      }}
+      socialActionTarget={data.surface.actionSurface}
+    />
   );
 }
 
@@ -195,14 +165,12 @@ function ContextRailFixture() {
 
   return (
     <View style={[styles.contextRail, { backgroundColor: theme.backgroundCanvas }]}>
-      <SessionProvider>
-        <PostMediaViewerThread
-          contentId={wideRailCurrentPost.content!.id}
-          mediaOwnerPostId={wideRailCurrentPost.id}
-          replyAvailable
-          replySurfacePostId={wideRailCurrentPost.id}
-        />
-      </SessionProvider>
+      <PostMediaViewerThread
+        contentId={wideRailCurrentPost.content!.id}
+        mediaOwnerPostId={wideRailCurrentPost.id}
+        replyAvailable
+        replySurfacePostId={wideRailCurrentPost.id}
+      />
     </View>
   );
 }
@@ -211,14 +179,10 @@ const meta = {
   args: {
     currentIndex: 0,
     mediaCount: 4,
-    onBookmark: fn(),
     onClose: fn(),
-    onMore: fn(),
     onNext: fn(),
     onPrevious: fn(),
-    onReact: fn(),
     onReply: fn(),
-    onRepost: fn(),
     onRetry: fn(),
     onRevealSensitive: fn(),
     presentation: 'compact',
@@ -227,14 +191,10 @@ const meta = {
   argTypes: {
     currentIndex: { control: { max: 3, min: 0, step: 1, type: 'number' } },
     mediaCount: { control: { max: 4, min: 1, step: 1, type: 'range' } },
-    onBookmark: { action: 'bookmark', control: false },
     onClose: { action: 'close', control: false },
-    onMore: { action: 'more', control: false },
     onNext: { action: 'next', control: false },
     onPrevious: { action: 'previous', control: false },
-    onReact: { action: 'react', control: false },
     onReply: { action: 'reply', control: false },
-    onRepost: { action: 'repost', control: false },
     onRetry: { action: 'retry', control: false },
     onRevealSensitive: { action: 'revealSensitive', control: false },
     presentation: { control: 'inline-radio', options: ['compact', 'wide'] },
@@ -244,8 +204,18 @@ const meta = {
     },
   },
   component: PostMediaViewerCatalog,
+  decorators: [
+    (Story) => (
+      <SessionProvider>
+        <PostActionAuthenticationProvider>
+          <Story />
+        </PostActionAuthenticationProvider>
+      </SessionProvider>
+    ),
+  ],
   excludeStories: [
     'BoundaryMovementContract',
+    'CompactProductionActionSurfaceContract',
     'ErrorRetryContract',
     'SensitiveRevealContract',
     'WideRailCompositionContract',
@@ -257,6 +227,7 @@ const meta = {
       data: {
         currentSession: wideRailSession.currentSession,
         me: wideRailSession.me,
+        surface: wideRailCurrentPost,
       },
       operationResponses: {
         PostMediaViewerThreadQuery: { data: wideRailThreadResponseData },
@@ -278,14 +249,10 @@ export const Playground: Story = {
   },
   play: async ({ args, canvasElement, step }) => {
     const callbacks = [
-      args.onBookmark,
       args.onClose,
-      args.onMore,
       args.onNext,
       args.onPrevious,
-      args.onReact,
       args.onReply,
-      args.onRepost,
       args.onRetry,
       args.onRevealSensitive,
     ];
@@ -294,7 +261,7 @@ export const Playground: Story = {
     const canvas = within(canvasElement);
 
     await step('close control과 no-args callback', async () => {
-      await userEvent.click(canvas.getByRole('button', { name: '이미지 뷰어 닫기' }));
+      await userEvent.click(await canvas.findByRole('button', { name: '이미지 뷰어 닫기' }));
       expect(args.onClose).toHaveBeenCalledWith();
       expect(args.onClose).toHaveBeenCalledTimes(1);
     });
@@ -366,20 +333,19 @@ export const Playground: Story = {
     }
 
     if (navigable && args.presentation === 'compact') {
-      await step('실제 Post action control callback', async () => {
-        const actions = [
-          ['답글 달기', args.onReply],
-          ['재게시하기', args.onRepost],
-          ['반응', args.onReact],
-          ['북마크', args.onBookmark],
-          ['더보기', args.onMore],
-        ] as const;
+      await step('실제 Post action surface와 Reply callback', async () => {
+        const actionBar = within(canvas.getByTestId('post-media-viewer-action-tray')).getByRole(
+          'toolbar',
+          { name: '액션 바' },
+        );
 
-        for (const [name, callback] of actions) {
-          await userEvent.click(canvas.getAllByRole('button', { name })[0]!);
-          expect(callback).toHaveBeenCalledWith();
-          expect(callback).toHaveBeenCalledTimes(1);
+        for (const name of ['답글', '재게시', '반응', '북마크', '더 보기']) {
+          expect(within(actionBar).getByRole('button', { name })).toBeVisible();
         }
+
+        await userEvent.click(within(actionBar).getByRole('button', { name: '답글' }));
+        expect(args.onReply).toHaveBeenCalledWith();
+        expect(args.onReply).toHaveBeenCalledTimes(1);
       });
     } else if (args.presentation === 'wide') {
       await step('실제 Post 상세 action bar', async () => {
@@ -391,6 +357,37 @@ export const Playground: Story = {
         }
       });
     }
+  },
+};
+
+export const CompactProductionActionSurfaceContract: Story = {
+  args: { currentIndex: 0, mediaCount: 4, presentation: 'compact', viewState: 'ready' },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ args, canvasElement, step }) => {
+    args.onReply.mockClear();
+    const canvas = within(canvasElement);
+    const actionBar = within(await canvas.findByTestId('post-media-viewer-action-tray')).getByRole(
+      'toolbar',
+      { name: '액션 바' },
+    );
+
+    await step('production action 순서와 Reply binding', async () => {
+      expect(
+        within(actionBar)
+          .getAllByRole('button')
+          .map((button) => button.getAttribute('aria-label')),
+      ).toEqual(['답글', '재게시', '반응', '북마크', '더 보기']);
+      await userEvent.click(within(actionBar).getByRole('button', { name: '답글' }));
+      expect(args.onReply).toHaveBeenCalledWith();
+      expect(args.onReply).toHaveBeenCalledTimes(1);
+    });
+
+    await step('production More menu open과 dismiss', async () => {
+      await userEvent.click(within(actionBar).getByRole('button', { name: '더 보기' }));
+      expect(await screen.findByRole('menu', { name: '더 보기 메뉴' })).toBeVisible();
+      await userEvent.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('menu', { name: '더 보기 메뉴' })).toBeNull());
+    });
   },
 };
 
@@ -425,7 +422,7 @@ export const BoundaryMovementContract: Story = {
     args.onPrevious.mockClear();
 
     const canvas = within(canvasElement);
-    const position = canvas.getByRole('status');
+    const position = await canvas.findByRole('status');
     const previous = canvas.getByRole('button', { name: '이전 이미지' });
     const next = canvas.getByRole('button', { name: '다음 이미지' });
 
@@ -495,7 +492,7 @@ export const SensitiveRevealContract: Story = {
 
     await step('Sensitive 상태의 hidden image와 보기 action', async () => {
       expect(canvas.queryByRole('img')).not.toBeInTheDocument();
-      expect(canvas.getByText('민감한 미디어')).toBeInTheDocument();
+      expect(await canvas.findByText('민감한 미디어')).toBeInTheDocument();
       expect(canvas.getByRole('button', { name: '민감한 이미지 표시' })).toBeInTheDocument();
     });
 
@@ -537,7 +534,7 @@ export const ErrorRetryContract: Story = {
     const canvas = within(canvasElement);
 
     await step('Error 설명·retry와 Wide rail', async () => {
-      expect(canvas.getByText('미디어를 불러오지 못했어요')).toBeInTheDocument();
+      expect(await canvas.findByText('미디어를 불러오지 못했어요')).toBeInTheDocument();
       expect(canvas.getByRole('button', { name: '다시 시도' })).toBeInTheDocument();
       expect(canvas.getByTestId('post-media-viewer-context-rail')).toBeInTheDocument();
       expect(canvas.queryByRole('button', { name: '이전 이미지' })).not.toBeInTheDocument();
@@ -560,7 +557,7 @@ export const WideRailCompositionContract: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMediaViewerWide' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const rail = canvas.getByTestId('post-media-viewer-context-rail');
+    const rail = await canvas.findByTestId('post-media-viewer-context-rail');
     const thread = await within(rail).findByTestId('post-thread');
     const rows = Array.from(thread.children) as HTMLElement[];
     const currentRow = within(thread).getByTestId('post-thread-current-wide-rail-current');
@@ -658,13 +655,6 @@ export const Dark: Story = {
 };
 
 const styles = StyleSheet.create({
-  actionBar: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'nowrap',
-    height: 28,
-    justifyContent: 'space-between',
-    width: '100%',
-  },
   contextRail: { flex: 1, minHeight: 0, overflow: 'hidden', width: '100%' },
+  hiddenReactionSummary: { display: 'none' },
 });
