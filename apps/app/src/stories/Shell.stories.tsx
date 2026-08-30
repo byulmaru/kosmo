@@ -1309,7 +1309,11 @@ export const ProfileSwitcherCreateServerNonPolicyValidationErrorStaysGeneric: St
     await userEvent.type(input, 'newer_client_handle');
     await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
 
-    await expect(canvas.findByText('프로필을 생성하지 못했습니다.')).resolves.toBeVisible();
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '프로필을 생성하지 못했습니다.',
+    );
+    expect(input).not.toHaveAttribute('aria-invalid', 'true');
+    expect(input).not.toHaveAttribute('aria-describedby');
     expect(canvas.queryByText(profileHandlePolicyErrorMessage, { exact: true })).toBeNull();
     expect(canvas.queryByText('핸들은 30자 이하로 입력해주세요.', { exact: true })).toBeNull();
     expect(input).toHaveValue('newer_client_handle');
@@ -1392,13 +1396,48 @@ export const ProfileSwitcherCreateGraphQLError: Story = {
     const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
     await userEvent.type(input, 'kept_handle');
     await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
-    await expect(canvas.findByText('프로필을 생성하지 못했습니다.')).resolves.toBeVisible();
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '프로필을 생성하지 못했습니다.',
+    );
+    expect(input).not.toHaveAttribute('aria-invalid', 'true');
+    expect(input).not.toHaveAttribute('aria-describedby');
     expect(input).toHaveValue('kept_handle');
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
     expect(canvas.queryByRole('alert')).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
     expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('');
+    expect(trackAnalytics).not.toHaveBeenCalled();
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherCreateNetworkErrorPreservesDraft: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        ProfileSwitcherCreateProfileMutation: {
+          error: 'profile creation network failure',
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
+    const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
+    await userEvent.type(input, 'kept_network_handle');
+    await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
+
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '프로필을 생성하지 못했습니다.',
+    );
+    expect(input).toHaveValue('kept_network_handle');
+    expect(input).not.toHaveAttribute('aria-invalid', 'true');
+    expect(input).not.toHaveAttribute('aria-describedby');
+    expect(canvas.queryByText('profile creation network failure', { exact: true })).toBeNull();
     expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <ProfileSwitcherStory />,

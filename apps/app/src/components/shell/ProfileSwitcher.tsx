@@ -160,10 +160,8 @@ const isProfileHandlePolicyError = (error: unknown) => {
   );
 };
 
-const profileCreationErrorMessage = (errors: ReadonlyArray<unknown> | null | undefined) =>
-  errors?.some(isProfileHandlePolicyError)
-    ? profileHandlePolicyErrorMessage
-    : '프로필을 생성하지 못했습니다.';
+const profileCreationFieldError = (errors: ReadonlyArray<unknown> | null | undefined) =>
+  errors?.some(isProfileHandlePolicyError) ? profileHandlePolicyErrorMessage : null;
 
 type Props = {
   onNavigate?: () => void;
@@ -189,7 +187,8 @@ export function ProfileSwitcher({
   const [internalOpen, setInternalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [handle, setHandle] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [operationError, setOperationErrorState] = useState<string | null>(null);
   const pickerRef = useRef<View>(null);
   const triggerRef = useRef<View>(null);
   const dismissalVersionRef = useRef(0);
@@ -220,20 +219,22 @@ export function ProfileSwitcher({
       dismissalVersionRef.current += 1;
       setCreating(false);
       setHandle('');
-      setError(null);
+      setFieldError(null);
+      setOperationErrorState(null);
     }
     setOpen(false);
   };
   const setOperationError = (version: number, message: string) => {
     if (!redesignedWeb || version === dismissalVersionRef.current) {
-      setError(message);
+      setOperationErrorState(message);
     }
   };
 
   useEffect(() => {
     if (!open) {
       setCreating(false);
-      setError(null);
+      setFieldError(null);
+      setOperationErrorState(null);
       if (redesignedWeb) {
         setHandle('');
       }
@@ -282,7 +283,8 @@ export function ProfileSwitcher({
   }, [open, surface]);
 
   const commitProfileSelection = (id: string, operationVersion = dismissalVersionRef.current) => {
-    setError(null);
+    setFieldError(null);
+    setOperationErrorState(null);
     commitSelect({
       variables: { id },
       onCompleted: (response, errors) => {
@@ -311,12 +313,20 @@ export function ProfileSwitcher({
   };
 
   const commitProfileCreation = (normalized: string, operationVersion: number) => {
-    setError(null);
+    setFieldError(null);
+    setOperationErrorState(null);
     commitCreate({
       variables: { handle: normalized },
       onCompleted: (response, errors) => {
         if (errors?.length) {
-          setOperationError(operationVersion, profileCreationErrorMessage(errors));
+          const error = profileCreationFieldError(errors);
+          if (error) {
+            if (!redesignedWeb || operationVersion === dismissalVersionRef.current) {
+              setFieldError(error);
+            }
+          } else {
+            setOperationError(operationVersion, '프로필을 생성하지 못했습니다.');
+          }
           return;
         }
 
@@ -332,16 +342,18 @@ export function ProfileSwitcher({
   };
 
   const createProfile = () => {
+    setFieldError(null);
+    setOperationErrorState(null);
     const normalized = handle.trim();
     if (!normalized) {
-      setError('프로필 핸들을 입력해주세요.');
+      setFieldError('프로필 핸들을 입력해주세요.');
       return;
     }
 
     const result = localProfileHandleSchema.safeParse(normalized);
 
     if (!result.success) {
-      setError(result.error.issues[0]?.message ?? '프로필 핸들 형식을 확인해주세요.');
+      setFieldError(result.error.issues[0]?.message ?? '프로필 핸들 형식을 확인해주세요.');
       return;
     }
 
@@ -444,7 +456,8 @@ export function ProfileSwitcher({
             disabled={busy}
             onPress={() => {
               setCreating(true);
-              setError(null);
+              setFieldError(null);
+              setOperationErrorState(null);
             }}
             role={Platform.OS === 'web' && !redesignedWeb ? 'menuitem' : undefined}
             style={({ pressed }) => [
@@ -477,7 +490,7 @@ export function ProfileSwitcher({
                   autoCapitalize="none"
                   autoCorrect={false}
                   editable={!busy}
-                  error={error ?? undefined}
+                  error={fieldError ?? undefined}
                   onChangeText={setHandle}
                   onSubmitEditing={createProfile}
                   placeholder="새 프로필 핸들"
@@ -499,9 +512,9 @@ export function ProfileSwitcher({
             </Text>
           </View>
         ) : null}
-        {!creating && error ? (
+        {operationError ? (
           <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-            {error}
+            {operationError}
           </Text>
         ) : null}
       </View>
