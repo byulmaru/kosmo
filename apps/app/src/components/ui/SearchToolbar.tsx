@@ -1,8 +1,8 @@
 import { ArrowLeft, Menu, Search, X } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
-import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, iconSizes, motion, radius, space, textStyles } from '@/theme/tokens';
 import { IconButton } from './IconButton';
 import type { PressableStateCallbackType, ViewStyle } from 'react-native';
 import type { NavigationChromePlatform } from './navigationChrome';
@@ -35,8 +35,10 @@ export function SearchToolbar({
   value,
 }: SearchToolbarProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const inputRef = useRef<TextInput>(null);
   const [inputFocused, setInputFocused] = useState(false);
+  const [focusVisibleControl, setFocusVisibleControl] = useState<'clear' | 'leading' | null>(null);
   const targetSize = platform === 'android' ? 48 : 44;
   const showMenu = leadingAction === 'menu' && platform === 'web';
   const showBack = leadingAction === 'back';
@@ -45,17 +47,35 @@ export function SearchToolbar({
     disabled || (showMenu && onMenuPress === undefined) || (showBack && onBackPress === undefined);
   const iconColor = disabled ? theme.stateDisabledForeground : theme.foregroundSecondary;
   const leadingIconColor = leadingDisabled ? theme.stateDisabledForeground : iconColor;
-  const controlStyle = (controlDisabled: boolean, state: PressableStateCallbackType) => {
-    const webState = state as PressableStateCallbackType & {
-      focused?: boolean;
-      hovered?: boolean;
-    };
-    const focused = platform === 'web' && Boolean(webState.focused);
-    const hovered = platform === 'web' && Boolean(webState.hovered);
-
+  const controlStyle = (control: 'clear' | 'leading') => {
     return [
       styles.control,
       { height: targetSize, width: targetSize },
+      platform === 'web'
+        ? ({
+            outlineColor: focusVisibleControl === control ? theme.stateFocusRing : undefined,
+            outlineOffset: -2,
+            outlineStyle: focusVisibleControl === control ? 'solid' : 'none',
+            outlineWidth: focusVisibleControl === control ? borderWidths[2] : borderWidths[0],
+          } as ViewStyle)
+        : undefined,
+    ];
+  };
+  const controlVisualStyle = (controlDisabled: boolean, state: PressableStateCallbackType) => {
+    const webState = state as PressableStateCallbackType & {
+      hovered?: boolean;
+    };
+    const hovered = platform === 'web' && Boolean(webState.hovered);
+
+    return [
+      styles.controlVisual,
+      platform === 'web'
+        ? ({
+            transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
+            transitionProperty: 'background-color, transform',
+            transitionTimingFunction: motion.easing.standard,
+          } as unknown as ViewStyle)
+        : undefined,
       {
         backgroundColor: controlDisabled
           ? 'transparent'
@@ -64,16 +84,8 @@ export function SearchToolbar({
             : hovered
               ? theme.stateHover
               : 'transparent',
+        transform: reducedMotion ? undefined : [{ scale: state.pressed ? 0.98 : 1 }],
       },
-      state.pressed ? styles.pressedControl : undefined,
-      focused
-        ? ({
-            outlineColor: theme.stateFocusRing,
-            outlineOffset: -2,
-            outlineStyle: 'solid',
-            outlineWidth: borderWidths[2],
-          } as ViewStyle)
-        : undefined,
     ];
   };
 
@@ -93,9 +105,20 @@ export function SearchToolbar({
         <IconButton
           accessibilityLabel="메뉴 열기"
           disabled={leadingDisabled}
+          onBlur={() => setFocusVisibleControl(null)}
+          onFocus={(event) => {
+            const target = event.currentTarget as unknown as {
+              matches?: (selector: string) => boolean;
+            };
+            setFocusVisibleControl(
+              platform === 'web' && target.matches?.(':focus-visible') ? 'leading' : null,
+            );
+          }}
           onPress={onMenuPress}
-          style={(state) => controlStyle(leadingDisabled, state)}
+          style={() => controlStyle('leading')}
           targetSize={targetSize}
+          visualSize={targetSize}
+          visualStyle={(state) => controlVisualStyle(leadingDisabled, state)}
         >
           <Menu color={leadingIconColor} size={iconSizes[24]} strokeWidth={2} />
         </IconButton>
@@ -104,9 +127,20 @@ export function SearchToolbar({
         <IconButton
           accessibilityLabel="뒤로"
           disabled={leadingDisabled}
+          onBlur={() => setFocusVisibleControl(null)}
+          onFocus={(event) => {
+            const target = event.currentTarget as unknown as {
+              matches?: (selector: string) => boolean;
+            };
+            setFocusVisibleControl(
+              platform === 'web' && target.matches?.(':focus-visible') ? 'leading' : null,
+            );
+          }}
           onPress={onBackPress}
-          style={(state) => controlStyle(leadingDisabled, state)}
+          style={() => controlStyle('leading')}
           targetSize={targetSize}
+          visualSize={targetSize}
+          visualStyle={(state) => controlVisualStyle(leadingDisabled, state)}
         >
           <ArrowLeft color={leadingIconColor} size={iconSizes[20]} strokeWidth={2} />
         </IconButton>
@@ -157,13 +191,24 @@ export function SearchToolbar({
           <IconButton
             accessibilityLabel="검색 지우기"
             disabled={disabled}
+            onBlur={() => setFocusVisibleControl(null)}
+            onFocus={(event) => {
+              const target = event.currentTarget as unknown as {
+                matches?: (selector: string) => boolean;
+              };
+              setFocusVisibleControl(
+                platform === 'web' && target.matches?.(':focus-visible') ? 'clear' : null,
+              );
+            }}
             onPress={() => {
               onClear();
               inputRef.current?.focus();
             }}
             onPressIn={() => inputRef.current?.focus()}
-            style={(state) => controlStyle(disabled, state)}
+            style={() => controlStyle('clear')}
             targetSize={targetSize}
+            visualSize={targetSize}
+            visualStyle={(state) => controlVisualStyle(disabled, state)}
           >
             <X color={iconColor} size={iconSizes[18]} strokeWidth={2} />
           </IconButton>
@@ -187,7 +232,11 @@ const styles = StyleSheet.create({
     borderRadius: radius[8],
     justifyContent: 'center',
   },
-  pressedControl: { transform: [{ scale: 0.98 }] },
+  controlVisual: {
+    alignItems: 'center',
+    borderRadius: radius[8],
+    justifyContent: 'center',
+  },
   inputShell: {
     alignItems: 'center',
     borderRadius: radius.full,

@@ -267,10 +267,26 @@ export const Playground: Story = {
       expect(notifications).toHaveAccessibleName(notificationName);
     });
 
+    await step('Pressed visual과 고정 target 확인', async () => {
+      const visual = within(notifications).getByTestId('sidebar-control-visual');
+      await userEvent.pointer({ keys: '[MouseLeft>]', target: notifications });
+      await waitFor(() =>
+        expect(getComputedStyle(visual).transform).toBe('matrix(0.98, 0, 0, 0.98, 0, 0)'),
+      );
+      expect(getComputedStyle(visual).transitionDuration).toBe('0.12s');
+      expectRect(
+        notifications,
+        presentation === 'compact' ? 44 : 272,
+        presentation === 'compact' ? 44 : 45,
+      );
+      await userEvent.pointer({ keys: '[/MouseLeft]', target: notifications });
+    });
+
     await step('Tab과 Enter로 destination callback 확인', async () => {
       home.focus();
       await userEvent.tab();
       expect(search).toHaveFocus();
+      await waitFor(() => expect(getComputedStyle(search).outlineStyle).toBe('solid'));
       await userEvent.keyboard('{Enter}');
       expect(args.onNavigate).toHaveBeenLastCalledWith('search');
       await waitFor(() => expect(search).toHaveAttribute('aria-current', 'page'));
@@ -285,6 +301,24 @@ export const Playground: Story = {
         await waitFor(() => expect(profileButton).toHaveAttribute('aria-current', 'page'));
       }
     });
+  },
+};
+
+export const ReducedMotion: Story = {
+  args: { unreadNotificationCount: 3 },
+  globals: { reduceMotion: true },
+  play: async ({ canvasElement }) => {
+    const navigation = getNavigation(canvasElement);
+    const notifications = within(navigation).getByRole('button', {
+      name: '알림, 읽지 않은 알림 3개',
+    });
+    const visual = within(notifications).getByTestId('sidebar-control-visual');
+
+    await userEvent.pointer({ keys: '[MouseLeft>]', target: notifications });
+    expect(getComputedStyle(visual).transform).toBe('none');
+    expect(getComputedStyle(visual).transitionDuration).toBe('0s');
+    expectRect(notifications, 272, 45);
+    await userEvent.pointer({ keys: '[/MouseLeft]', target: notifications });
   },
 };
 

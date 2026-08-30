@@ -13,8 +13,8 @@ import {
 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, iconSizes, motion, radius, space, textStyles } from '@/theme/tokens';
 import { ActionMenu } from './ActionMenu';
 import { Avatar } from './Avatar';
 import { getIconButtonHitSlop, getIconButtonTargetSize } from './IconButton';
@@ -79,6 +79,8 @@ function SidebarControl({
   unreadCount = null,
 }: SidebarControlProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const [focusVisible, setFocusVisible] = useState(false);
   const active = selected && !disabled;
   const unread = unreadCount !== null && unreadCount > 0;
   const color = disabled
@@ -99,14 +101,38 @@ function SidebarControl({
       accessibilityState={{ disabled, expanded, selected: active }}
       disabled={disabled}
       hitSlop={compact && compactHitSlop > 0 ? compactHitSlop : undefined}
+      onBlur={() => setFocusVisible(false)}
+      onFocus={(event) => {
+        if (Platform.OS !== 'web') {
+          return;
+        }
+        const target = event.currentTarget as unknown as {
+          matches?: (selector: string) => boolean;
+        };
+        setFocusVisible(Boolean(target.matches?.(':focus-visible')));
+      }}
       onPress={onPress}
       ref={controlRef}
-      style={(state) => {
+      style={() => {
+        return [
+          styles.control,
+          compact ? styles.compactControl : styles.wideControl,
+          tone === 'primary' ? styles.primaryControl : undefined,
+          Platform.OS === 'web'
+            ? ({
+                outlineColor: focusVisible ? theme.stateFocusRing : undefined,
+                outlineOffset: -2,
+                outlineStyle: focusVisible ? 'solid' : 'none',
+                outlineWidth: focusVisible ? borderWidths[2] : borderWidths[0],
+              } as ViewStyle)
+            : undefined,
+        ];
+      }}
+    >
+      {(state) => {
         const webState = state as PressableStateCallbackType & {
-          focused?: boolean;
           hovered?: boolean;
         };
-        const focused = Platform.OS === 'web' && Boolean(webState.focused);
         const hovered = Platform.OS === 'web' && Boolean(webState.hovered);
         const backgroundColor = disabled
           ? theme.stateDisabledSurface
@@ -124,62 +150,69 @@ function SidebarControl({
                   ? theme.stateSelectedSurface
                   : 'transparent';
 
-        return [
-          styles.control,
-          compact ? styles.compactControl : styles.wideControl,
-          tone === 'primary' ? styles.primaryControl : undefined,
-          { backgroundColor },
-          focused
-            ? ({
-                outlineColor: theme.stateFocusRing,
-                outlineOffset: -2,
-                outlineStyle: 'solid',
-                outlineWidth: borderWidths[2],
-              } as ViewStyle)
-            : undefined,
-        ];
-      }}
-    >
-      <View
-        accessible={false}
-        accessibilityElementsHidden
-        aria-hidden
-        importantForAccessibility="no-hide-descendants"
-        style={styles.iconFrame}
-      >
-        {profile ? (
-          <Avatar imageUri={profile.imageUri ?? null} label={profile.label} size={24} />
-        ) : (
-          <Icon color={color} size={iconSizes[20]} strokeWidth={2} />
-        )}
-        {unread && compact ? (
+        return (
           <View
-            style={[styles.unread, { backgroundColor: theme.accent }]}
-            testID="sidebar-unread-indicator"
-          />
-        ) : null}
-      </View>
-      {compact ? null : (
-        <>
-          <Text style={[active ? textStyles.uiLabelL : textStyles.uiCopyL, { color }]}>
-            {label}
-          </Text>
-          {unread ? (
+            style={[
+              styles.visual,
+              compact ? styles.compactVisual : styles.wideVisual,
+              tone === 'primary' ? styles.primaryControl : undefined,
+              Platform.OS === 'web'
+                ? ({
+                    transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
+                    transitionProperty: 'background-color, transform',
+                    transitionTimingFunction: motion.easing.standard,
+                  } as unknown as ViewStyle)
+                : undefined,
+              {
+                backgroundColor,
+                transform: reducedMotion ? undefined : [{ scale: state.pressed ? 0.98 : 1 }],
+              },
+            ]}
+            testID="sidebar-control-visual"
+          >
             <View
               accessible={false}
               accessibilityElementsHidden
               aria-hidden
               importantForAccessibility="no-hide-descendants"
-              style={[styles.unreadCount, { backgroundColor: theme.actionPrimaryBase }]}
-              testID="sidebar-unread-count"
+              style={styles.iconFrame}
             >
-              <Text style={[textStyles.uiLabelS, { color: theme.actionPrimaryOnBase }]}>
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </Text>
+              {profile ? (
+                <Avatar imageUri={profile.imageUri ?? null} label={profile.label} size={24} />
+              ) : (
+                <Icon color={color} size={iconSizes[20]} strokeWidth={2} />
+              )}
+              {unread && compact ? (
+                <View
+                  style={[styles.unread, { backgroundColor: theme.accent }]}
+                  testID="sidebar-unread-indicator"
+                />
+              ) : null}
             </View>
-          ) : null}
-        </>
-      )}
+            {compact ? null : (
+              <>
+                <Text style={[active ? textStyles.uiLabelL : textStyles.uiCopyL, { color }]}>
+                  {label}
+                </Text>
+                {unread ? (
+                  <View
+                    accessible={false}
+                    accessibilityElementsHidden
+                    aria-hidden
+                    importantForAccessibility="no-hide-descendants"
+                    style={[styles.unreadCount, { backgroundColor: theme.actionPrimaryBase }]}
+                    testID="sidebar-unread-count"
+                  >
+                    <Text style={[textStyles.uiLabelS, { color: theme.actionPrimaryOnBase }]}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </>
+            )}
+          </View>
+        );
+      }}
     </Pressable>
   );
 
@@ -360,13 +393,21 @@ const styles = StyleSheet.create({
   control: {
     alignItems: 'center',
     borderRadius: radius[8],
-    flexDirection: 'row',
-    gap: space[12],
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
   },
   compactControl: { height: 44, justifyContent: 'center', width: 44 },
   compactTarget: { alignItems: 'center', height: 48, justifyContent: 'center', width: 48 },
-  wideControl: { height: 45, paddingHorizontal: space[16], width: 272 },
+  wideControl: { height: 45, width: 272 },
+  visual: {
+    alignItems: 'center',
+    borderRadius: radius[8],
+    flexDirection: 'row',
+    gap: space[12],
+    height: '100%',
+    width: '100%',
+  },
+  compactVisual: { justifyContent: 'center' },
+  wideVisual: { justifyContent: 'flex-start', paddingHorizontal: space[16] },
   primaryControl: { borderRadius: radius.full },
   iconFrame: { position: 'relative' },
   unread: {

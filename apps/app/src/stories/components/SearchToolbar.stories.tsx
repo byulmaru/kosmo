@@ -102,6 +102,12 @@ function expectIcon(element: HTMLElement, size: number) {
   expect(icon).toHaveAttribute('height', `${size}`);
 }
 
+function getControlVisual(control: HTMLElement) {
+  const visual = control.firstElementChild;
+  expect(visual).toBeInstanceOf(HTMLElement);
+  return visual as HTMLElement;
+}
+
 function expectLeadingIcon(
   canvasElement: HTMLElement,
   leadingAction: Exclude<SearchToolbarLeadingAction, 'none'>,
@@ -189,6 +195,30 @@ export const Playground: Story = {
       return;
     }
 
+    await step('Pointer와 keyboard focus feedback 확인', async () => {
+      if (platform !== 'web' || leadingAction !== 'menu' || !leading) {
+        return;
+      }
+
+      await userEvent.hover(leading);
+      await userEvent.pointer({ keys: '[MouseLeft>]', target: leading });
+      const visual = getControlVisual(leading);
+      await waitFor(() =>
+        expect(getComputedStyle(visual).transform).toBe('matrix(0.98, 0, 0, 0.98, 0, 0)'),
+      );
+      expect(getComputedStyle(visual).transitionDuration).toBe('0.12s');
+      expect(getComputedStyle(leading).transform).toBe('none');
+      expectTarget(leading, 44);
+      expect(leading).toHaveFocus();
+      await userEvent.pointer({ keys: '[/MouseLeft]', target: leading });
+      leading.blur();
+      await userEvent.tab();
+      expect(leading).toHaveFocus();
+      await waitFor(() => expect(getComputedStyle(leading).outlineStyle).toBe('solid'));
+      await userEvent.tab();
+      expect(input).toHaveFocus();
+    });
+
     await step('입력·leading action·Clear callback 확인', async () => {
       await userEvent.clear(input);
       await userEvent.type(input, '코스모');
@@ -216,15 +246,6 @@ export const Playground: Story = {
       expectTarget(clear, targetSize);
       expectIcon(clear, 18);
 
-      if (platform === 'web' && leadingAction === 'menu' && leading) {
-        await userEvent.hover(leading);
-        await userEvent.pointer({ keys: '[MouseLeft>]', target: leading });
-        expect(leading).toHaveFocus();
-        await userEvent.pointer({ keys: '[/MouseLeft]', target: leading });
-        await userEvent.tab();
-        expect(input).toHaveFocus();
-      }
-
       await userEvent.click(clear);
       expect(args.onClear).toHaveBeenCalledOnce();
       await waitFor(() => {
@@ -233,6 +254,22 @@ export const Playground: Story = {
       });
       expect(within(canvasElement).queryByRole('button', { name: '검색 지우기' })).toBeNull();
     });
+  },
+};
+
+export const ReducedMotion: Story = {
+  args: { value: '코스모' },
+  globals: { reduceMotion: true },
+  play: async ({ canvasElement }) => {
+    const menu = getButton(canvasElement, '메뉴 열기');
+    const visual = getControlVisual(menu);
+
+    await userEvent.pointer({ keys: '[MouseLeft>]', target: menu });
+    expect(getComputedStyle(visual).transform).toBe('none');
+    expect(getComputedStyle(visual).transitionDuration).toBe('0s');
+    expect(getComputedStyle(menu).transform).toBe('none');
+    expectTarget(menu, 44);
+    await userEvent.pointer({ keys: '[/MouseLeft]', target: menu });
   },
 };
 
