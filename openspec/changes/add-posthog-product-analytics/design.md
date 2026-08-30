@@ -34,14 +34,14 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Clou
 
 ### Recommended Approach
 
-1. Web adapter는 `posthog.init(key, { api_host, defaults: '2026-05-30' })`를 중심으로 초기화한다. test automation의 user-agent 제한을 해제하는 fixture option 외에 표준 기능 disable, persistence override, property denylist와 sanitizer를 두지 않는다.
+1. Web adapter는 `posthog.init(key, { api_host, defaults: '2026-05-30' })`를 중심으로 초기화한다. test automation 전용 option이나 환경 변수 분기를 포함해 표준 기능 disable, persistence override, property denylist와 sanitizer를 두지 않는다.
 2. PostHog SDK가 browser history와 DOM에서 만드는 pageview·pageleave·autocapture 및 `$current_url`, `$pathname`, referrer/session-entry와 protocol metadata를 그대로 유지한다. `$pageview`는 app-owned typed event taxonomy에서 제거한다.
 3. 공용 custom event API는 event별 property 타입을 유지하고 typed properties를 `capture`에 그대로 전달한다. runtime projection, unknown-event registry나 generic property sanitizer를 추가하지 않는다.
 4. identity 전환은 SDK의 persisted state를 조회한다. 같은 identified Account는 reset하지 않고 SDK에 identify를 맡기고, 다른 identified Account는 reset 후 identify한다. guest 전환은 persisted identified state가 있을 때 reset한다.
 5. canonical Post Content root에는 Web recorder가 인식하는 `ph-mask` class를 제공한다. 이 marker는 replay 구현이 아니라 PostHog 표준 privacy control이다.
 6. PostHog Cloud는 Replay 10% sampling, production `kos.moe` origin 조건, Normal input masking과 30일 retention을 배포 전에 적용한다. 실제 project token이나 credential은 저장소·문서·로그에 복제하지 않는다.
 7. 초기화·capture·identify·reset의 synchronous failure와 endpoint failure는 제품 렌더링, 인증, navigation과 mutation에서 격리한다.
-8. unit test는 minimal config, typed passthrough, persisted identity transition과 Post Content marker를 검증한다. browser test는 표준 automatic event·metadata·remote config 요청, identity 순서, 설정 누락 no-op과 endpoint failure의 fail-open을 확인한다.
+8. unit test는 minimal config, typed passthrough, persisted identity transition과 Post Content marker를 검증한다. Playwright fixture는 PostHog bot filter를 우회하는 production option 대신 일반 browser user-agent·UA Client Hints brand와 비자동화 webdriver signal을 context에 설정한다. browser test는 표준 automatic event·metadata·remote config 요청, identity 순서, 설정 누락 no-op과 endpoint failure의 fail-open을 확인한다.
 
 공식 대조 표면은 PostHog JS [`PostHogConfig`](https://posthog.com/docs/libraries/js/config)와 [Session Replay privacy](https://posthog.com/docs/session-replay/privacy)다.
 
@@ -56,6 +56,7 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Clou
 - `before_send`, property denylist나 runtime allowlist로 표준 URL/referrer/session metadata를 제거하면 Web analytics와 reviewer 계약이 깨진다.
 - `advanced_disable_flags` 또는 external dependency loading 차단은 remote config와 Replay를 막는다.
 - `persistence: 'memory'`와 module-local identity cache는 reload 뒤 Account 연결과 reset 판정을 잃는다.
+- E2E를 위해 production adapter에 user-agent override나 test-only 환경 변수 분기를 추가하면 제품 초기화 계약이 테스트 사정에 종속된다.
 - 모든 text를 mask하면 replay 진단 가치가 급격히 낮아진다. input과 canonical Post Content를 PostHog 표준 경계로 선택한다.
 - PostHog와 OpenPanel을 dual-write하면 개인정보 고지와 장애 대응 계약이 두 개가 된다.
 
