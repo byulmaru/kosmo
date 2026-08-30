@@ -9,19 +9,13 @@ const initialValue: ColorPickerValue = { brightness: 76, hue: 210, saturation: 6
 
 function ColorPickerPanelCatalog(props: ColorPickerPanelProps) {
   const [value, setValue] = useState(props.value);
-  const [hexValue, setHexValue] = useState(props.hexValue);
 
   return (
     <ColorPickerPanel
       {...props}
-      hexValue={hexValue}
       onChange={(nextValue) => {
         setValue(nextValue);
         props.onChange(nextValue);
-      }}
-      onHexValueChange={(rawText) => {
-        setHexValue(rawText);
-        props.onHexValueChange(rawText);
       }}
       value={value}
     />
@@ -32,8 +26,6 @@ const renderControlled = (args: ColorPickerPanelProps) => (
   <ColorPickerPanelCatalog
     key={JSON.stringify([
       args.title,
-      args.color,
-      args.hexValue,
       args.value,
       args.contrastWarning,
       args.disabled,
@@ -50,35 +42,28 @@ function RepresentativeStatesStory() {
     onCancel: fn(),
     onChange: fn(),
     onCommit: fn(),
-    onHexValueChange: fn(),
   };
 
   return (
     <View style={{ gap: 16, width: 360 }}>
       <ColorPickerPanel
         {...callbacks}
-        color="#6750A4"
-        hexValue="#6750A4"
         surfaceAccessibilityLabel="경고 없는 채도 및 밝기"
         title="색상 선택"
         value={initialValue}
       />
       <ColorPickerPanel
         {...callbacks}
-        color="#F4B400"
         contrastWarning="이 색상은 일부 텍스트에서 대비가 낮을 수 있어요."
         disabled={false}
-        hexValue="#F4B400"
         title="대비 확인"
         value={{ brightness: 100, hue: 45, saturation: 100 }}
       />
       <ColorPickerPanel
         {...callbacks}
-        color="#8A8A8A"
         disabled
-        hexValue="#8A8A8A"
         title="비활성 상태"
-        value={{ brightness: 42, hue: 0, saturation: 0 }}
+        value={{ brightness: 54.12, hue: 0, saturation: 0 }}
       />
     </View>
   );
@@ -86,26 +71,21 @@ function RepresentativeStatesStory() {
 
 const meta = {
   args: {
-    color: '#6750A4',
     contrastWarning: undefined,
     disabled: false,
     hexAccessibilityLabel: 'HEX 색상',
-    hexValue: '#6750A4',
     hueAccessibilityLabel: '색상 색조',
     onCancel: fn(),
     onChange: fn(),
     onCommit: fn(),
-    onHexValueChange: fn(),
     surfaceAccessibilityLabel: '채도 및 밝기',
     title: '색상 선택',
     value: initialValue,
   },
   argTypes: {
-    color: { control: 'color' },
     contrastWarning: { control: 'text' },
     disabled: { control: 'boolean' },
     hexAccessibilityLabel: { control: 'text' },
-    hexValue: { control: 'text' },
     hueAccessibilityLabel: { control: 'text' },
     surfaceAccessibilityLabel: { control: 'text' },
     title: { control: 'text' },
@@ -129,7 +109,6 @@ type Story = StoryObj<typeof meta>;
 
 const colorPickerPlay: Story['play'] = async ({ args, canvasElement, step }) => {
   args.onChange.mockClear();
-  args.onHexValueChange.mockClear();
   args.onCancel.mockClear();
   args.onCommit.mockClear();
   const canvas = within(canvasElement);
@@ -137,6 +116,7 @@ const colorPickerPlay: Story['play'] = async ({ args, canvasElement, step }) => 
     name: args.surfaceAccessibilityLabel ?? '채도 및 밝기',
   });
   const hue = canvas.getByRole('slider', { name: args.hueAccessibilityLabel ?? '색상 색조' });
+  const input = canvas.getByRole('textbox', { name: args.hexAccessibilityLabel ?? 'HEX 색상' });
   const value = args.value ?? initialValue;
   let expectedControlledValue = { ...value };
 
@@ -152,6 +132,13 @@ const colorPickerPlay: Story['play'] = async ({ args, canvasElement, step }) => 
     await expect(hue).toHaveAttribute('aria-valuenow', String(value.hue));
     await expect(surface).toHaveAttribute('tabindex', args.disabled ? '-1' : '0');
     await expect(hue).toHaveAttribute('tabindex', args.disabled ? '-1' : '0');
+    if (
+      value.brightness === initialValue.brightness &&
+      value.hue === initialValue.hue &&
+      value.saturation === initialValue.saturation
+    ) {
+      await expect(input).toHaveValue('#4684C2');
+    }
   });
 
   if (args.disabled) {
@@ -196,16 +183,18 @@ const colorPickerPlay: Story['play'] = async ({ args, canvasElement, step }) => 
     if (pointerChanged) {
       await expect(args.onChange).toHaveBeenLastCalledWith(pointerValue);
       expectedControlledValue = pointerValue;
+      await expect(input).toHaveValue('#406080');
     } else {
       await expect(args.onChange).not.toHaveBeenCalled();
     }
   });
 
-  await step('HEX 원문과 취소/적용 Actions 확인', async () => {
-    const input = canvas.getByRole('textbox', { name: args.hexAccessibilityLabel ?? 'HEX 색상' });
+  await step('HEX 입력을 같은 controlled value와 Actions에 반영', async () => {
     await userEvent.clear(input);
     await userEvent.type(input, '#123456');
-    await expect(args.onHexValueChange).toHaveBeenLastCalledWith('#123456');
+    expectedControlledValue = { brightness: 33.73, hue: 210, saturation: 79.07 };
+    await expect(args.onChange).toHaveBeenLastCalledWith(expectedControlledValue);
+    await expect(input).toHaveValue('#123456');
 
     await userEvent.click(canvas.getByRole('button', { name: '취소' }));
     await expect(args.onCancel).toHaveBeenCalledOnce();
@@ -222,8 +211,6 @@ export const Playground: Story = {
       disable: false,
       include: [
         'title',
-        'color',
-        'hexValue',
         'value',
         'contrastWarning',
         'disabled',

@@ -270,7 +270,7 @@ export function Slider({
           styles.root,
           {
             backgroundColor: disabled
-              ? theme.stateDisabledSurface
+              ? undefined
               : state.pressed || dragging
                 ? theme.statePressed
                 : hovered

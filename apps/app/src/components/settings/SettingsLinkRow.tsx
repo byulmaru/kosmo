@@ -14,6 +14,7 @@ export type SettingsLinkRowProps = {
   external?: boolean;
   href: Href;
   label: string;
+  onNavigate?: () => void;
   primary?: boolean;
   selected?: boolean;
   testID?: string;
@@ -25,6 +26,7 @@ export function SettingsLinkRow({
   external = false,
   href,
   label,
+  onNavigate,
   primary = false,
   selected = false,
   testID,
@@ -48,6 +50,7 @@ export function SettingsLinkRow({
         };
         setFocusVisible(Boolean(target.matches?.(':focus-visible')));
       }}
+      onPress={external ? onNavigate : undefined}
       onPointerDown={() => setFocusVisible(false)}
       style={(state) => {
         const webState = state as { hovered?: boolean; pressed?: boolean };
@@ -94,7 +97,7 @@ export function SettingsLinkRow({
   }
 
   return (
-    <NavigationLink href={href} primary={primary}>
+    <NavigationLink href={href} onNavigate={onNavigate} primary={primary}>
       {row}
     </NavigationLink>
   );

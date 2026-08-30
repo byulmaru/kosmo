@@ -277,6 +277,10 @@ test('disabled Slider cannot be focused or changed', () => {
 
   assert.equal(slider.props['aria-disabled'], true);
   assert.equal(slider.props.tabIndex, -1);
+  assert.equal(
+    flattenStyle(slider.props.style({ hovered: true, pressed: true })).backgroundColor,
+    undefined,
+  );
   act(() => slider.props.onKeyDown(event.event));
   assert.equal(event.wasPrevented(), false);
   act(() => slider.props.onAccessibilityAction({ nativeEvent: { actionName: 'increment' } }));

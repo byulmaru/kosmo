@@ -10,9 +10,10 @@ import type {
 } from '@/components/ui/MultiSelectCombobox';
 
 const catalogOptions: MultiSelectOption[] = [
-  { label: '공개 이름', value: 'display-name' },
-  { disabled: true, label: '사용 중지된 설정', value: 'disabled' },
-  { label: '프로필 소개', value: 'bio' },
+  { label: '마스토돈', value: 'mastodon' },
+  { label: '블루스카이', value: 'bluesky' },
+  { label: '마이크로블로그', value: 'microblog' },
+  { label: '마이크로포스트', value: 'micropost' },
 ];
 
 type StoryArgs = MultiSelectComboboxProps;
@@ -52,16 +53,15 @@ function MultiSelectStory(args: StoryArgs) {
 
 const meta = {
   args: {
-    createOptionLabel: '새 항목 추가',
-    emptyMessage: '일치하는 항목이 없습니다.',
+    emptyMessage: '일치하는 태그가 없습니다.',
     onCreateOption: fn(),
     onQueryChange: fn(),
     onSelectedOptionsChange: fn(),
     options: catalogOptions,
-    placeholder: '설정을 검색하세요',
+    placeholder: '태그를 검색하세요',
     query: '',
-    searchLabel: '설정 검색',
-    selectedLabel: '선택된 설정',
+    searchLabel: '태그 검색',
+    selectedLabel: '선택된 태그',
     selectedOptions: [catalogOptions[0]],
   },
   component: MultiSelectCombobox,
@@ -81,21 +81,25 @@ export const Playground: Story = {
     query: '',
   },
   argTypes: {
-    createOptionLabel: { control: 'text' },
     disabled: { control: 'boolean' },
     emptyMessage: { control: 'text' },
-    options: { control: 'object' },
+    options: {
+      control: 'object',
+      description: '검색 결과에 표시할 전체 태그입니다.',
+    },
     placeholder: { control: 'text' },
-    query: { control: 'text' },
+    query: { control: 'text', description: '현재 검색어입니다.' },
     searchLabel: { control: 'text' },
     selectedLabel: { control: 'text' },
-    selectedOptions: { control: 'object' },
+    selectedOptions: {
+      control: 'object',
+      description: 'options의 value와 일치하면 선택 상태로 표시되는 태그입니다.',
+    },
   },
   parameters: {
     controls: {
       disable: false,
       include: [
-        'createOptionLabel',
         'disabled',
         'emptyMessage',
         'options',
@@ -131,33 +135,44 @@ export const Playground: Story = {
 
     await step('검색어 변경과 clear Action 확인', async () => {
       await userEvent.clear(input);
-      await userEvent.type(input, '공개');
-      expect(args.onQueryChange).toHaveBeenLastCalledWith('공개');
+      await userEvent.type(input, '블루');
+      expect(args.onQueryChange).toHaveBeenLastCalledWith('블루');
       await userEvent.click(canvas.getByRole('button', { name: '검색어 지우기' }));
       expect(args.onQueryChange).toHaveBeenLastCalledWith('');
     });
 
-    await step('비활성 옵션을 건너뛰고 Enter로 선택', async () => {
+    await step('Enter로 새 태그를 선택', async () => {
       await userEvent.click(input);
       await userEvent.keyboard('{ArrowDown}');
-      const option = canvas.getByRole('option', { name: '프로필 소개' });
+      const option = canvas.getByRole('option', { name: '블루스카이' });
       expect(option).toHaveAttribute('aria-selected', 'false');
       await userEvent.keyboard('{Enter}');
-      expect(args.onSelectedOptionsChange).toHaveBeenCalled();
+      expect(args.onSelectedOptionsChange).toHaveBeenLastCalledWith([
+        catalogOptions[0],
+        catalogOptions[1],
+      ]);
     });
 
-    await step('선택 chip 제거 Action 확인', async () => {
-      await userEvent.click(canvas.getByRole('button', { name: '공개 이름 제거' }));
-      expect(args.onSelectedOptionsChange).toHaveBeenCalled();
+    await step('방금 선택한 chip 제거 Action 확인', async () => {
+      await userEvent.click(canvas.getByRole('button', { name: '블루스카이 제거' }));
+      expect(args.onSelectedOptionsChange).toHaveBeenLastCalledWith([catalogOptions[0]]);
     });
 
     await step('현재 검색어 생성 Action 확인', async () => {
       await userEvent.click(canvas.getByText(args.selectedLabel));
       await userEvent.click(input);
       await userEvent.clear(input);
-      await userEvent.type(input, '새 항목');
-      await userEvent.click(canvas.getByRole('option', { name: '새 항목 추가' }));
-      expect(args.onCreateOption).toHaveBeenLastCalledWith('새 항목');
+      await userEvent.type(input, '새 태그');
+      await userEvent.click(canvas.getByRole('option', { name: '새 태그 추가' }));
+      expect(args.onCreateOption).toHaveBeenLastCalledWith('새 태그');
+      await userEvent.click(canvas.getByRole('button', { name: '검색어 지우기' }));
+      expect(args.onQueryChange).toHaveBeenLastCalledWith('');
+    });
+
+    await step('Playground를 초기 controlled 상태로 복구', async () => {
+      expect(input).toHaveValue('');
+      expect(canvas.getByRole('button', { name: '마스토돈 제거' })).toBeVisible();
+      expect(canvas.queryByRole('button', { name: '블루스카이 제거' })).not.toBeInTheDocument();
     });
   },
 };
@@ -169,14 +184,24 @@ export const RepresentativeStates: Story = {
         {...args}
         options={catalogOptions}
         query=""
-        selectedOptions={[catalogOptions[0], catalogOptions[2]]}
+        selectedOptions={[catalogOptions[0], catalogOptions[1]]}
       />
-      <MultiSelectStory {...args} options={[]} query="새 항목" selectedOptions={[]} />
+      <MultiSelectStory {...args} options={[]} query="새 태그" selectedOptions={[]} />
       <MultiSelectStory
         {...args}
-        options={[{ label: '이름이 아주 긴 설정 항목을 표시하는 예시', value: 'long' }]}
+        options={[
+          {
+            label: '분산형 소셜 네트워크에서 사용하는 이름이 아주 긴 태그 예시',
+            value: 'long',
+          },
+        ]}
         query=""
-        selectedOptions={[{ label: '이름이 아주 긴 설정 항목을 표시하는 예시', value: 'long' }]}
+        selectedOptions={[
+          {
+            label: '분산형 소셜 네트워크에서 사용하는 이름이 아주 긴 태그 예시',
+            value: 'long',
+          },
+        ]}
       />
       <MultiSelectStory {...args} disabled options={catalogOptions} query="" selectedOptions={[]} />
     </View>

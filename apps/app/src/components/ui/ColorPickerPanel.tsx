@@ -1,5 +1,5 @@
 import { TriangleAlert } from 'lucide-react-native';
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Defs, LinearGradient, Rect, Stop, Svg } from 'react-native-svg';
 import { Button } from '@/components/ui/Button';
@@ -27,16 +27,13 @@ export type ColorPickerValue = {
 };
 
 export type ColorPickerPanelProps = {
-  color: string;
   contrastWarning?: string;
   disabled?: boolean;
   hexAccessibilityLabel?: string;
-  hexValue: string;
   hueAccessibilityLabel?: string;
   onCancel: () => void;
   onChange: (value: ColorPickerValue) => void;
   onCommit: (value: ColorPickerValue) => void;
-  onHexValueChange: (rawText: string) => void;
   surfaceAccessibilityLabel?: string;
   title?: string;
   value: ColorPickerValue;
@@ -71,6 +68,67 @@ function normalizeValue(value: ColorPickerValue): ColorPickerValue {
     brightness: clamp(value.brightness, 0, 100),
     hue: clamp(value.hue, 0, 360),
     saturation: clamp(value.saturation, 0, 100),
+  };
+}
+
+function hsbToHex(value: ColorPickerValue): string {
+  const normalized = normalizeValue(value);
+  const hue = normalized.hue === 360 ? 0 : normalized.hue;
+  const saturation = normalized.saturation / 100;
+  const brightness = normalized.brightness / 100;
+  const chroma = brightness * saturation;
+  const sector = hue / 60;
+  const secondary = chroma * (1 - Math.abs((sector % 2) - 1));
+  const offset = brightness - chroma;
+  const [red, green, blue] =
+    sector < 1
+      ? [chroma, secondary, 0]
+      : sector < 2
+        ? [secondary, chroma, 0]
+        : sector < 3
+          ? [0, chroma, secondary]
+          : sector < 4
+            ? [0, secondary, chroma]
+            : sector < 5
+              ? [secondary, 0, chroma]
+              : [chroma, 0, secondary];
+  const channel = (component: number) =>
+    Math.round((component + offset) * 255)
+      .toString(16)
+      .padStart(2, '0')
+      .toUpperCase();
+  return `#${channel(red)}${channel(green)}${channel(blue)}`;
+}
+
+function hexToHsb(rawText: string): ColorPickerValue | null {
+  const match = /^#([0-9a-f]{6})$/i.exec(rawText);
+  if (!match) {
+    return null;
+  }
+
+  const hex = match[1];
+  if (!hex) {
+    return null;
+  }
+  const red = Number.parseInt(hex.slice(0, 2), 16) / 255;
+  const green = Number.parseInt(hex.slice(2, 4), 16) / 255;
+  const blue = Number.parseInt(hex.slice(4, 6), 16) / 255;
+  const maximum = Math.max(red, green, blue);
+  const minimum = Math.min(red, green, blue);
+  const delta = maximum - minimum;
+  const hue =
+    delta === 0
+      ? 0
+      : maximum === red
+        ? 60 * (((green - blue) / delta) % 6)
+        : maximum === green
+          ? 60 * ((blue - red) / delta + 2)
+          : 60 * ((red - green) / delta + 4);
+  const round = (number: number) => Number(number.toFixed(2));
+  return {
+    brightness: round(maximum * 100),
+    hue: round(hue < 0 ? hue + 360 : hue),
+    saturation: round(maximum === 0 ? 0 : (delta / maximum) * 100),
   };
 }
 
@@ -120,16 +178,13 @@ function eventCoordinate(event: GestureResponderEvent, axis: 'x' | 'y'): number 
 }
 
 export function ColorPickerPanel({
-  color,
   contrastWarning,
   disabled = false,
   hexAccessibilityLabel = 'HEX 색상',
-  hexValue,
   hueAccessibilityLabel = '색상 색조',
   onCancel,
   onChange,
   onCommit,
-  onHexValueChange,
   surfaceAccessibilityLabel,
   title = '색상 선택',
   value,
@@ -143,10 +198,19 @@ export function ColorPickerPanel({
   const [surfaceFocusVisible, setSurfaceFocusVisible] = useState(false);
   const [hueFocusVisible, setHueFocusVisible] = useState(false);
   const currentValue = normalizeValue(value);
+  const color = hsbToHex(currentValue);
+  const [hexDraft, setHexDraft] = useState(color);
+  const [hexFocused, setHexFocused] = useState(false);
   const surfaceLabel = surfaceAccessibilityLabel ?? '채도 및 밝기';
   const surfaceX = (currentValue.saturation / 100) * surfaceWidth;
   const surfaceY = ((100 - currentValue.brightness) / 100) * SURFACE_HEIGHT;
   const hueX = (currentValue.hue / 360) * hueWidth;
+
+  useEffect(() => {
+    if (!hexFocused) {
+      setHexDraft(color);
+    }
+  }, [color, hexFocused]);
 
   const emitValue = (nextValue: ColorPickerValue) => {
     if (!disabled) {
@@ -465,12 +529,21 @@ export function ColorPickerPanel({
             accessibilityLabel={hexAccessibilityLabel}
             editable={!disabled}
             label="HEX"
+            onBlur={() => {
+              setHexFocused(false);
+              setHexDraft(color);
+            }}
             onChangeText={(rawText) => {
               if (!disabled) {
-                onHexValueChange(rawText);
+                setHexDraft(rawText);
+                const nextValue = hexToHsb(rawText);
+                if (nextValue) {
+                  emitValue(nextValue);
+                }
               }
             }}
-            value={hexValue}
+            onFocus={() => setHexFocused(true)}
+            value={hexDraft}
           />
         </View>
       </View>
