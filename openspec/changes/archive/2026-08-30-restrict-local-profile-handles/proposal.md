@@ -13,9 +13,8 @@ Local Profile handle은 형식과 Local Instance 내 중복만 검증하므로 �
 - Local Profile 생성 API가 두 정책을 권위 있게 적용하고 정책 위반을 handle field 오류로 거부한다.
 - Profile 생성 UI가 같은 정책으로 사전 검증하고 mutation을 호출하지 않은 채 기존 TextField 오류 상태에
   `사용할 수 없는 단어가 포함된 핸들이에요.`를 표시한다.
-- 배포 대상의 기존 Local Profile handle 충돌을 읽기 전용으로 점검한다. PROD-816은 충돌 Profile을 자동
-  변경하는 일회성 script를 저장소에 추가하지 않고, 별도 cleanup 이슈와 승인된 forward data migration 또는
-  운영 절차로 다룬다.
+- 두 정책은 새 Local Profile 생성에만 적용한다. 기존 Profile은 충돌해도 변경하지 않으며 PROD-816의
+  배포·완료를 막지 않는다. 기존 충돌의 감사·영향 분석·유지 또는 정리 결정은 PROD-878로 분리한다.
 - 서버·클라이언트의 목록과 정규화가 달라지면 실패하는 단위·API 통합·UI 검증을 추가한다.
 
 ## Authority / Provenance
@@ -24,8 +23,11 @@ Local Profile handle은 형식과 Local Instance 내 중복만 검증하므로 �
 - Linear Contracts:
   - [PROD-816](https://linear.app/byulmaru/issue/PROD-816/local-profile-handle-예약어를-정의하고-생성-시-차단한다):
     System Reserved Handle과 Explicitly Harmful Handle Expression 하위 정책, 공용 서버·클라이언트 적용,
-    기존 데이터 감사, 통합 검증과 전체 change archive 범위
-- Linear Implementations: PROD-816 하나가 두 하위 정책의 구현·검증과 OpenSpec 생명주기 전체를 소유한다.
+    신규 생성 검증, 통합 검증과 전체 change archive 범위
+  - [PROD-878](https://linear.app/byulmaru/issue/PROD-878/기존-local-profile-예약어-충돌을-별도로-정리한다):
+    기존 충돌의 전체 감사, 영향 분석, 유지·정리 결정과 후속 cleanup 절차
+- Linear Implementations: PROD-816 하나가 현재 change의 구현·검증과 OpenSpec 생명주기 전체를 소유한다.
+  PROD-878은 독립된 후속 범위이며 현재 change의 완료를 막지 않는다.
 
 ## Capabilities
 
@@ -46,5 +48,5 @@ Local Profile handle은 형식과 Local Instance 내 중복만 검증하므로 �
 - Profile switcher의 생성 form, 공용 TextField 오류 연결과 관련 Storybook interaction test가 영향을 받는다.
 - GraphQL input·payload shape와 데이터베이스 schema는 변경하지 않는다.
 - Bluesky 공개 목록은 선별 근거로만 사용하며 runtime dependency나 원격 denylist로 추가하지 않는다.
-- 배포 전 기존 Local Profile handle을 새 정책으로 감사하고, 충돌 시 영향·변경 방식·rollback·재점검 조건을
-  소유하는 별도 cleanup 결정이 필요하다.
+- 데이터베이스 schema나 기존 Local Profile 데이터를 변경하지 않는다. 기존 충돌의 조사·정리 여부는 PROD-878의
+  독립된 결정이며 PROD-816 배포의 선행 조건이 아니다.

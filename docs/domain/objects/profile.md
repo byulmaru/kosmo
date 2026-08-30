@@ -110,12 +110,14 @@ Local handle은 형식과 Local Instance 안의 유일성 외에 시스템 예�
 Profile의 handle 재사용을 별도로 허용하더라도 예약 식별자와 명시적 유해표현은 새 Local Profile에 사용할 수
 없다.
 
-예약 목록이나 비교 규칙을 변경할 때는 배포 대상 데이터베이스의 기존 Local Profile을 실제 공용 판정 계약과
-같은 조건으로 읽기 전용 점검한다. 충돌이 없으면 별도 cleanup은 필요하지 않다. 충돌이 있더라도 PROD-816은
-Profile을 자동 rename·disable·delete하는 일회성 script를 저장소에 추가하지 않는다. 대신 영향받는 Profile,
-사용자·URL·연합 identity 영향, 정확한 변경 방식, rollback과 재점검 완료 조건을 소유하는 별도 cleanup 이슈와
-승인된 forward data migration 또는 운영 절차를 먼저 확정한다. 승인 전에는 기존 row를 변경하지 않으며, 실행
-결과는 민감한 일치 표현을 일반 log·analytics에 남기지 않고 대상 환경과 정책별 충돌 수로 기록한다.
+예약 식별자와 명시적 유해표현 정책은 새 Local Profile 생성 요청에만 적용한다. 정책 도입 전에 생성된 Local
+Profile은 현재 목록이나 비교 규칙과 충돌해도 기존 handle과 lifecycle을 그대로 유지한다. 기존 충돌은
+PROD-816의 배포·완료를 막지 않으며, 이 범위에서는 운영 데이터 전체를 감사하거나 Profile을 자동
+rename·disable·delete하지 않는다.
+
+기존 충돌의 전체 현황 점검, 사용자·URL·연합 identity 영향 분석, 유지·정리 결정과 후속 cleanup은 PROD-878이
+별도로 소유한다. 기존 데이터를 변경하기로 결정한다면 정확한 변경 방식, 사용자 안내, rollback과 재점검 완료
+조건을 먼저 확정하고 승인된 forward data migration 또는 통제된 운영 절차로 수행한다.
 
 ## 관계
 

@@ -128,39 +128,35 @@ Android·iOS·Web의 Local Profile 생성 form은 두 정책 위반을 mutation 
 - [x] 4.3 정책 거부·허용·서버 정책 차이·접근성·기존 picker 동작의 Storybook 상태와 interaction 검증을
       추가하고 통과시킨다.
 
-## 5. PROD-816 기존 데이터 감사와 통합 완료
+## 5. PROD-816 기존 데이터 범위 분리와 통합 완료
 
 **Authority / Provenance**
 
 - `docs/domain/objects/profile.md`
 - PROD-816
+- PROD-878
 
 **Deliverable**
 
-배포 전에 configured Local Instance의 기존 Local Profile과 두 정책의 충돌 여부를 안전하게 파악한다. 두
-하위 정책의 결과와 통합 증거를 PROD-816에서 함께 추적한다.
+두 하위 정책의 신규 생성 차단과 통합 증거를 PROD-816에서 완료한다. 기존 충돌의 전체 감사, 영향
+분석, 유지·정리 결정과 후속 cleanup은 PROD-878로 분리한다.
 
 **Guardrails**
 
-- 감사에는 실제 적용 정책과 같은 판정 조건을 사용한다.
-- 감사 대상은 배포 대상 Local Profile로 제한하며 Profile을 rename, disable, delete하거나 다른 쓰기를
-  수행하지 않는다.
-- 감사만을 위한 일회성 code나 package script를 저장소에 유지하지 않는다.
-- 결과와 log·analytics에 일치한 유해표현을 불필요하게 남기지 않는다.
-- 충돌이 발견되면 자동 조치하지 않고 영향·변경 방식·rollback·재점검 조건을 소유하는 별도 cleanup 이슈와
-  승인된 forward data migration 또는 운영 절차로 분리한다.
-- OpenSpec change는 두 하위 정책의 구현 범위와 감사·통합 검증이 모두 끝난 뒤에만 완료·archive한다.
+- 두 정책은 새 Local Profile 생성에만 적용한다.
+- 기존 Profile은 정책과 충돌해도 handle과 lifecycle을 유지하며 PROD-816의 배포·완료를 막지 않는다.
+- PROD-816에는 운영 DB 전체 감사, 기존 데이터 변경, 감사 전용 query나 일회성 script를 포함하지 않는다.
+- 기존 충돌의 처리 절차는 PROD-878이 독립적으로 소유한다.
+- OpenSpec change는 PROD-816의 두 하위 정책 구현과 통합 검증이 끝난 뒤 완료·archive한다.
 
 **Verification**
 
-- 배포 대상 감사 절차가 read-only이고 Remote Profile을 제외하는지 실행 계획과 결과로 입증한다.
-- 대상 환경에서 감사한 시점과 정책별 충돌 수를 민감한 일치값 없이 PROD-816에 기록한다.
+- canonical 문서, PROD-816, PROD-878과 OpenSpec이 신규 생성·기존 충돌 범위를 같은 방식으로 나누는지 대조한다.
+- 기존 Profile을 변경하는 migration·운영 쓰기 작업·감사 전용 저장소 script가 diff에 없는지 확인한다.
 - Core 단위, API 통합, Storybook interaction·접근성 및 workspace 필수 check 결과를 한 번에 확인한다.
 
-- [x] 5.1 기존 Local Profile 충돌의 read-only 점검, 별도 승인 cleanup과 재점검 정책을 문서화하고 감사만을
-      위한 일회성 code와 package script를 저장소에서 제거한다.
-- [ ] 5.2 확장된 route 예약 목록으로 배포 대상 Local Instance를 다시 감사하고 두 하위 정책의 결과를
-      PROD-816에 기록한다.
+- [x] 5.1 신규 생성 차단과 기존 Profile 유지 경계를 canonical 문서와 OpenSpec에 반영한다.
+- [x] 5.2 기존 충돌의 알려진 현황과 미확인 범위, 영향 분석과 cleanup 책임을 PROD-878로 인계한다.
 - [x] 5.3 Core·API·앱의 집중 검증과 workspace 필수 check를 실행해 두 정책의 통합 결과를 확인한다.
-- [ ] 5.4 각 task와 검증 증거를 PROD-816에 동기화하고 두 하위 정책 범위가 모두 완료된 경우에만 delta spec
+- [x] 5.4 각 task와 검증 증거를 PROD-816에 동기화하고 두 하위 정책 범위가 모두 완료된 경우에만 delta spec
       동기화와 OpenSpec archive를 수행한다.

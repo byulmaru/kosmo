@@ -2,7 +2,8 @@
 
 ### Requirement: Profile creation
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `PROD-816` — 이 요구사항을 MUST 준수한다.
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `PROD-816`, `PROD-878` — 이 요구사항을 MUST
+준수한다.
 로그인한 계정은 형식, configured Local Instance 안의 유일성, System Reserved Handle과 Explicitly Harmful
 Handle Expression 정책을 모두 통과한 handle로 자신이 소유한 configured local profile을 생성할 수 있어야
 한다(MUST). 시스템은 Local Profile 생성의 모든 진입점에서 두 정책을 서버 권위로 적용해야 하며(MUST),
@@ -43,7 +44,9 @@ Explicitly Harmful Handle Expression은 앞뒤 공백 제거와 소문자 변환
 
 시스템은 두 정책을 부분 문자열 검사로 확대해서는 안 되며(MUST NOT), Remote Profile의 원격 handle에 적용해서는
 안 된다(MUST NOT). Profile Lifecycle State와 handle 재사용 가능 여부는 두 정책에 우선해서는 안 된다(MUST
-NOT).
+NOT). 두 정책은 새 Local Profile 생성 요청에만 적용해야 한다(MUST). 정책 도입 전에 생성된 Local Profile은
+현재 정책과 충돌하더라도 그 충돌만을 이유로 자동 rename·disable·delete해서는 안 되며(MUST NOT), 기존 충돌의
+감사 또는 cleanup을 신규 생성 정책 배포의 선행 조건으로 삼아서는 안 된다(MUST NOT).
 
 #### Scenario: Create profile with valid handle
 
@@ -119,3 +122,9 @@ NOT).
 
 - **WHEN** 과거 Profile의 lifecycle 또는 삭제 처리로 같은 문자열의 재사용 가능 여부가 달라지더라도 새 handle이 두 정책 중 하나에 해당한다
 - **THEN** 시스템은 재사용 가능 여부와 관계없이 새 Local Profile 생성을 거부한다
+
+#### Scenario: Preserve an existing profile that now conflicts with the policy
+
+- **WHEN** 정책 도입 전에 생성된 Local Profile의 handle이 현재 두 정책 중 하나와 충돌한다
+- **THEN** 시스템은 그 충돌만을 이유로 기존 Profile을 rename·disable·delete하지 않는다
+- **AND** 기존 충돌의 감사 또는 cleanup 완료 여부와 관계없이 신규 생성 정책을 배포할 수 있다

@@ -116,7 +116,7 @@ atproto의 공개 자료를 참고했지만, 제품 동작의 권위는 Kosmo ca
 - Decision Date: 2026-08-28
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`, PROD-816
-- Status: Active
+- Status: Superseded
 - Context / Problem: 새 정책과 일치하는 기존 Local Profile이 있을 수 있지만 신규 생성 차단이 기존 Profile의
   lifecycle을 소급해 바꾸는 근거는 아니다.
 - Decision Outcome: 배포 대상의 기존 Local Profile을 실제 적용 정책과 같은 조건으로 읽기 전용 감사한다.
@@ -132,10 +132,33 @@ atproto의 공개 자료를 참고했지만, 제품 동작의 권위는 Kosmo ca
 - Confirmation / Follow-up: 감사가 배포 대상 Local Profile만 읽고 write를 만들지 않는지, 결과에 일치한
   유해표현을 불필요하게 남기지 않는지, 충돌 시 별도 cleanup owner가 지정되는지 확인한다.
 
+이 결정은 2026-08-30의 `기존 충돌은 그대로 유지하고 별도 cleanup 이슈로 분리한다` 결정으로 대체됐다.
+
+### 기존 충돌은 그대로 유지하고 별도 cleanup 이슈로 분리한다
+
+- Decision Date: 2026-08-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/profile.md`, PROD-816, PROD-878
+- Status: Active
+- Context / Problem: 예약어 정책 도입 전에 생성된 Local Profile이 현재 정책과 충돌할 수 있다. 신규 생성 차단과
+  기존 데이터의 감사·정리는 적용 시점, 위험과 승인 절차가 서로 다른 독립 범위다.
+- Decision Outcome: PROD-816은 두 정책을 새 Local Profile 생성에만 적용한다. 기존 Profile은 충돌해도 handle과
+  lifecycle을 유지하고 PROD-816의 배포·완료를 막지 않는다. 운영 DB 전체 감사, 영향 분석, 유지·정리 결정과
+  후속 cleanup은 PROD-878이 소유한다. PROD-816은 기존 Profile을 자동 rename·disable·delete하지 않으며 감사
+  전용 query, 일회성 code 또는 package script를 추가하지 않는다.
+- Alternatives Considered: 운영 DB 전체 감사를 PROD-816 완료 조건으로 유지하는 방안은 신규 생성 차단과
+  독립적인 기존 충돌 처리 절차를 결합하므로 선택하지 않았다. 기존 충돌을 정책 배포와 함께 자동 변경하는 방안은
+  사용자·URL·연합 identity 영향을 별도로 승인하지 못하므로 선택하지 않았다.
+- Consequences: PROD-816 완료 증거에는 운영 DB 감사 결과가 필요하지 않다. 기존 충돌은 유지되며 조사 또는
+  정리가 필요하면 PROD-878의 별도 결정과 승인된 절차를 따른다.
+- Confirmation / Follow-up: 신규 생성 경계에서 두 정책이 적용되는지, 기존 Profile을 변경하는 migration이나
+  운영 쓰기 작업이 포함되지 않았는지, 기존 충돌의 후속 범위가 PROD-878에 연결됐는지 확인한다.
+
 ## Remaining Decisions
 
 - 없음.
 
 ## Superseded Decisions
 
-- 없음.
+- `기존 충돌은 배포 대상에서 읽기 전용으로 감사하고 별도 승인된 cleanup으로 처리한다` — 2026-08-30에
+  `기존 충돌은 그대로 유지하고 별도 cleanup 이슈로 분리한다`로 대체했다.
