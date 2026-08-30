@@ -60,7 +60,7 @@ type SidebarControlProps = {
   profile?: NavigationProfile;
   selected?: boolean;
   tone?: 'default' | 'primary';
-  unread?: boolean;
+  unreadCount?: number | null;
 };
 
 function SidebarControl({
@@ -76,10 +76,11 @@ function SidebarControl({
   profile,
   selected = false,
   tone = 'default',
-  unread = false,
+  unreadCount = null,
 }: SidebarControlProps) {
   const theme = useTheme();
   const active = selected && !disabled;
+  const unread = unreadCount !== null && unreadCount > 0;
   const color = disabled
     ? theme.stateDisabledForeground
     : tone === 'primary'
@@ -151,7 +152,7 @@ function SidebarControl({
         ) : (
           <Icon color={color} size={iconSizes[20]} strokeWidth={2} />
         )}
-        {unread ? (
+        {unread && compact ? (
           <View
             style={[styles.unread, { backgroundColor: theme.accent }]}
             testID="sidebar-unread-indicator"
@@ -159,7 +160,25 @@ function SidebarControl({
         ) : null}
       </View>
       {compact ? null : (
-        <Text style={[active ? textStyles.uiLabelL : textStyles.uiCopyL, { color }]}>{label}</Text>
+        <>
+          <Text style={[active ? textStyles.uiLabelL : textStyles.uiCopyL, { color }]}>
+            {label}
+          </Text>
+          {unread ? (
+            <View
+              accessible={false}
+              accessibilityElementsHidden
+              aria-hidden
+              importantForAccessibility="no-hide-descendants"
+              style={[styles.unreadCount, { backgroundColor: theme.actionPrimaryBase }]}
+              testID="sidebar-unread-count"
+            >
+              <Text style={[textStyles.uiLabelS, { color: theme.actionPrimaryOnBase }]}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Text>
+            </View>
+          ) : null}
+        </>
       )}
     </Pressable>
   );
@@ -234,9 +253,7 @@ export function SidebarNavigation({
               onPress={() => onNavigate(destination)}
               profile={destination === 'profile' ? (profile ?? undefined) : undefined}
               selected={currentDestination === destination}
-              unread={Boolean(
-                notifications && unreadNotificationCount && unreadNotificationCount > 0,
-              )}
+              unreadCount={notifications ? unreadNotificationCount : null}
             />
           );
         })}
@@ -359,6 +376,14 @@ const styles = StyleSheet.create({
     right: -2,
     top: -2,
     width: 8,
+  },
+  unreadCount: {
+    alignItems: 'center',
+    borderRadius: radius.full,
+    height: 24,
+    justifyContent: 'center',
+    marginLeft: 'auto',
+    width: 24,
   },
   footer: {
     borderTopWidth: borderWidths[1],
