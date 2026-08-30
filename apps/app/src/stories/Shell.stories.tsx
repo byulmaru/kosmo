@@ -1217,6 +1217,7 @@ export const ProfileSwitcherCreateTracksAnalytics: Story = {
 export const ProfileSwitcherCreatePolicyPrevalidation: Story = {
   parameters: {
     relay: {
+      mutationLoading: true,
       mutationRequestObserver: profileCreationRequestObserver,
     },
   },
@@ -1240,13 +1241,12 @@ export const ProfileSwitcherCreatePolicyPrevalidation: Story = {
     expect(profileCreationRequestObserver).not.toHaveBeenCalled();
 
     await userEvent.clear(input);
-    await userEvent.type(input, 'n1gg3r');
+    await userEvent.type(input, 'porn');
     await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
-    await expect(
-      canvas.findByText(profileHandlePolicyErrorMessage, { exact: true }),
-    ).resolves.toBeVisible();
-    expect(input).toHaveValue('n1gg3r');
-    expect(profileCreationRequestObserver).not.toHaveBeenCalled();
+    await waitFor(() => expect(profileCreationRequestObserver).toHaveBeenCalledOnce());
+    expect(input).toHaveValue('porn');
+    expect(input).not.toHaveAttribute('aria-invalid', 'true');
+    expect(canvas.queryByText(profileHandlePolicyErrorMessage, { exact: true })).toBeNull();
   },
   render: () => <ProfileSwitcherStory />,
 };

@@ -77,47 +77,9 @@ export const systemReservedProfileHandleValues = [
   'kosmo_support',
 ] as const;
 
-export const explicitlyHarmfulProfileHandleValues = [
-  'fuck',
-  'slut',
-  'porn',
-  'p0rn',
-  'pr0n',
-  'xxx',
-  'chink',
-  'chinks',
-  'coon',
-  'coons',
-  'nigg',
-  'niggs',
-  'nigga',
-  'niggas',
-  'nigger',
-  'niggers',
-  'nigglet',
-  'nigglets',
-  'fag',
-  'fags',
-  'fagg',
-  'faggs',
-  'faggot',
-  'faggots',
-  'faggotry',
-  'faggotries',
-  'kike',
-  'kikes',
-  'kyke',
-  'kykes',
-  'tranny',
-  'trannys',
-  'trannie',
-  'trannies',
-] as const;
-
 const systemReservedProfileHandleSet = new Set<string>(systemReservedProfileHandleValues);
-const explicitlyHarmfulProfileHandleSet = new Set<string>(explicitlyHarmfulProfileHandleValues);
 
-export type ProfileHandlePolicyViolation = 'system-reserved' | 'explicitly-harmful';
+export type ProfileHandlePolicyViolation = 'system-reserved';
 
 export function profileHandlePolicyViolation(
   value: string,
@@ -126,29 +88,6 @@ export function profileHandlePolicyViolation(
 
   if (systemReservedProfileHandleSet.has(normalized)) {
     return 'system-reserved';
-  }
-
-  const compact = normalized.replaceAll('_', '');
-  const substituted = compact.replace(/[0134]/g, (character) => {
-    switch (character) {
-      case '0':
-        return 'o';
-      case '1':
-        return 'i';
-      case '3':
-        return 'e';
-      case '4':
-        return 'a';
-      default:
-        return character;
-    }
-  });
-
-  if (
-    explicitlyHarmfulProfileHandleSet.has(compact) ||
-    explicitlyHarmfulProfileHandleSet.has(substituted)
-  ) {
-    return 'explicitly-harmful';
   }
 
   return undefined;

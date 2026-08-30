@@ -2739,10 +2739,65 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(ownership.accountId, auth.account.id);
   });
 
-  test('rejects reserved and harmful handles at the API validation boundary before writing', async () => {
+  test('allows former expression handles with local profile ownership', async () => {
+    const auth = await createAuthenticatedSession();
+
+    for (const handle of ['porn', 'p_o_r_n', 'p0rn']) {
+      const result = await requestGraphQL<{
+        createProfile: {
+          profile: {
+            id: string;
+            instance: { kind: string };
+            private: { defaultPostVisibility: string } | null;
+          };
+        } | null;
+      }>(
+        `mutation CreateFormerExpressionProfile($handle: String!) {
+          createProfile(input: { handle: $handle }) {
+            profile { id instance { kind } private { defaultPostVisibility } }
+          }
+        }`,
+        { handle },
+        auth.token,
+      );
+
+      assertNoGraphQLErrors(result);
+      const profile = result.data?.createProfile?.profile;
+      assert.equal(profile?.instance.kind, 'LOCAL', handle);
+      assert.equal(profile?.private?.defaultPostVisibility, 'UNLISTED', handle);
+
+      const created = await db
+        .select({
+          id: Profiles.id,
+          instanceId: Profiles.instanceId,
+          normalizedHandle: Profiles.normalizedHandle,
+        })
+        .from(Profiles)
+        .where(
+          and(
+            eq(Profiles.instanceId, localInstanceId),
+            eq(Profiles.normalizedHandle, normalizeHandle(handle)),
+          ),
+        )
+        .limit(1)
+        .then(firstOrThrow);
+      assert.equal(created.instanceId, localInstanceId, handle);
+      assert.equal(created.normalizedHandle, normalizeHandle(handle), handle);
+
+      const ownership = await db
+        .select()
+        .from(AccountProfiles)
+        .where(eq(AccountProfiles.profileId, created.id))
+        .limit(1)
+        .then(firstOrThrow);
+      assert.equal(ownership.accountId, auth.account.id, handle);
+    }
+  });
+
+  test('rejects reserved handles at the API validation boundary before writing', async () => {
     const auth = await createAuthenticatedSession();
     const profileCountBefore = await countRows(Profiles);
-    const handles = ['ap', ' Admin ', 'kosmo_admin', 'f_a_g_g_o_t', 'n1gg3r', 'tr4nny'];
+    const handles = ['ap', ' Admin ', 'kosmo_admin'];
 
     for (const handle of handles) {
       const result = await requestGraphQL(
@@ -2771,7 +2826,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(await countRows(Profiles), profileCountBefore);
   });
 
-  test('allows valid handles that only contain reserved or harmful substrings', async () => {
+  test('allows valid handles that only contain reserved substrings', async () => {
     const auth = await createAuthenticatedSession();
 
     for (const handle of ['supporter', 'administrator_dev', 'class', 'analysis']) {
