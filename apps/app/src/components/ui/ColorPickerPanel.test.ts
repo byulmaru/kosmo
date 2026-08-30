@@ -1,0 +1,432 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { before, beforeEach, mock, test } from 'node:test';
+import { createElement, forwardRef } from 'react';
+import { act, create } from 'react-test-renderer';
+import type { ElementType, ReactNode } from 'react';
+import type { ReactTestRenderer } from 'react-test-renderer';
+import type * as ColorPickerPanelModule from './ColorPickerPanel';
+
+const require = createRequire(import.meta.url);
+
+const mockModule = (specifier: string | URL, exports: object) =>
+  mock.module(specifier, {
+    exports,
+  } as unknown as Parameters<typeof mock.module>[1]);
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+type HostProps = {
+  children?: ReactNode;
+  style?: unknown;
+};
+
+const PressableHost = forwardRef<unknown, HostProps>(function PressableMock(props, ref) {
+  return createElement('Pressable', { ...props, ref }, props.children);
+});
+const ButtonHost = forwardRef<unknown, HostProps>(function ButtonMock(props, ref) {
+  return createElement('Button', { ...props, ref }, props.children);
+});
+const TextFieldHost = forwardRef<unknown, HostProps>(function TextFieldMock(props, ref) {
+  return createElement('TextField', { ...props, ref }, props.children);
+});
+const DefsHost = 'Defs' as unknown as ElementType;
+const LinearGradientHost = 'LinearGradient' as unknown as ElementType;
+const RectHost = 'Rect' as unknown as ElementType;
+const StopHost = 'Stop' as unknown as ElementType;
+const SvgHost = 'Svg' as unknown as ElementType;
+const WarningIconHost = 'WarningIcon' as unknown as ElementType;
+const TextHost = 'Text' as unknown as ElementType;
+const TextInputHost = 'TextInput' as unknown as ElementType;
+const ViewHost = 'View' as unknown as ElementType;
+
+let platformOS: 'ios' | 'web' = 'web';
+
+mockModule('react-native', {
+  Platform: {
+    get OS() {
+      return platformOS;
+    },
+  },
+  Pressable: PressableHost,
+  StyleSheet: { create: <T>(styles: T) => styles },
+  Text: TextHost,
+  TextInput: TextInputHost,
+  View: ViewHost,
+});
+mockModule('react-native-svg', {
+  Defs: DefsHost,
+  LinearGradient: LinearGradientHost,
+  Rect: RectHost,
+  Stop: StopHost,
+  Svg: SvgHost,
+});
+mockModule(require.resolve('lucide-react-native'), { TriangleAlert: WarningIconHost });
+mockModule('@/components/ui/Button', { Button: ButtonHost });
+mockModule('@/components/ui/TextField', { TextField: TextFieldHost });
+mockModule('@/theme/ThemeProvider', {
+  useElevation: () => ({ floating: { boxShadow: 'shadow' } }),
+  useTheme: () => ({
+    backgroundCanvas: 'canvas',
+    backgroundElevated: 'elevated',
+    backgroundSurface: 'surface',
+    borderDefault: 'border',
+    borderDisabled: 'disabled-border',
+    feedbackWarningBorder: 'warning-border',
+    feedbackWarningOnSubtle: 'warning-text',
+    feedbackWarningSubtle: 'warning-surface',
+    fixedWhite: 'white',
+    foregroundPrimary: 'primary',
+    foregroundSecondary: 'secondary',
+    stateDisabledForeground: 'disabled-foreground',
+    stateDisabledSurface: 'disabled-surface',
+    stateFocusRing: 'focus-ring',
+    statePressed: 'pressed',
+  }),
+});
+mockModule('@/theme/tokens', {
+  borderWidths: { 0: 0, 1: 1, 2: 2 },
+  colors: {
+    dark: { backgroundSurface: 'dark-surface', foregroundPrimary: 'dark-foreground' },
+    light: { backgroundSurface: 'light-surface', foregroundPrimary: 'light-foreground' },
+  },
+  radius: { 4: 4, 8: 8, 12: 12, full: 999 },
+  space: { 4: 4, 8: 8, 12: 12, 16: 16, 24: 24, 48: 48 },
+  textStyles: {
+    uiCopyM: { fontSize: 14, lineHeight: 20 },
+    uiCopyS: { fontSize: 12, lineHeight: 16 },
+    uiHeadingS: { fontSize: 20, lineHeight: 26 },
+    uiLabelL: { fontSize: 16, lineHeight: 24 },
+    uiLabelM: { fontSize: 14, lineHeight: 20 },
+    uiLabelS: { fontSize: 12, lineHeight: 16 },
+  },
+});
+
+let colorPickerPanelModule: typeof ColorPickerPanelModule | undefined;
+
+before(async () => {
+  colorPickerPanelModule = await import('./ColorPickerPanel');
+});
+
+beforeEach(() => {
+  platformOS = 'web';
+});
+
+function renderPanel({
+  color = '#3366CC',
+  disabled = false,
+  hexValue = '#3366CC',
+  onCancel = () => undefined,
+  onChange = () => undefined,
+  onCommit = () => undefined,
+  onHexValueChange = () => undefined,
+  value = { brightness: 75, hue: 180, saturation: 25 },
+  contrastWarning,
+}: Partial<ColorPickerPanelModule.ColorPickerPanelProps> = {}) {
+  assert.ok(colorPickerPanelModule);
+  let renderer: ReactTestRenderer | undefined;
+  act(() => {
+    renderer = create(
+      createElement(colorPickerPanelModule!.ColorPickerPanel, {
+        color,
+        contrastWarning,
+        disabled,
+        hexValue,
+        onCancel,
+        onChange,
+        onCommit,
+        onHexValueChange,
+        value,
+      }),
+    );
+  });
+  assert.ok(renderer);
+  return renderer;
+}
+
+function flattenStyle(style: unknown): Record<string, unknown> {
+  return Object.assign(
+    {},
+    ...(Array.isArray(style) ? style.flat(Infinity).filter(Boolean) : [style]),
+  );
+}
+
+function nodeStyle(node: { props: { style?: unknown } }) {
+  const style = node.props.style;
+  return flattenStyle(
+    typeof style === 'function' ? style({ hovered: false, pressed: false }) : style,
+  );
+}
+
+function pressables(renderer: ReactTestRenderer) {
+  return renderer.root.findAllByType(PressableHost);
+}
+
+function findByTestID(renderer: ReactTestRenderer, testID: string) {
+  return renderer.root.findByProps({ testID });
+}
+
+test('ColorPickerPanel matches the controlled plane, handles, previews, warning, and actions', () => {
+  const renderer = renderPanel({ contrastWarning: '대비가 낮을 수 있어요.' });
+  const surface = findByTestID(renderer, 'color-picker-surface');
+  const hue = findByTestID(renderer, 'color-picker-hue');
+
+  assert.equal(nodeStyle(surface).height, 180);
+  assert.equal(nodeStyle(surface).width, '100%');
+  act(() => surface.props.onLayout({ nativeEvent: { layout: { width: 328 } } }));
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-surface-handle')).height, 48);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-surface-handle')).width, 48);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-surface-handle')).left, 82);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-surface-handle')).top, 45);
+  assert.equal(findByTestID(renderer, 'color-picker-surface-handle').props.pointerEvents, 'none');
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-surface-cursor')).height, 20);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-surface-cursor')).width, 20);
+  assert.equal(nodeStyle(hue).minHeight, 48);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-hue-track')).height, 12);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-hue-handle')).height, 48);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-hue-handle')).width, 48);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-hue-handle')).left, 164);
+  assert.equal(findByTestID(renderer, 'color-picker-hue-handle').props.pointerEvents, 'none');
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-hue-thumb')).height, 20);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-hue-thumb')).width, 20);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-hue-thumb')).borderColor, 'white');
+
+  const panel = findByTestID(renderer, 'color-picker-panel');
+  assert.equal(nodeStyle(panel).borderWidth, 1);
+  assert.equal(nodeStyle(panel).padding, 15);
+  assert.equal(nodeStyle(panel).boxShadow, 'shadow');
+  assert.equal(
+    renderer.root.findAllByType(TextHost).some((node) => node.props.children === '색상 선택'),
+    true,
+  );
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-current-swatch-target')).height, 48);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-current-swatch-target')).width, 48);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-current-swatch')).height, 32);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-current-swatch')).width, 32);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-hex-field')).flex, 1);
+  assert.equal(
+    nodeStyle(findByTestID(renderer, 'color-picker-preview-cards')).flexDirection,
+    'row',
+  );
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-preview-light')).flex, 1);
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-preview-dark')).flex, 1);
+  assert.equal(
+    nodeStyle(findByTestID(renderer, 'color-picker-preview-light-sample')).width,
+    '100%',
+  );
+  assert.equal(nodeStyle(findByTestID(renderer, 'color-picker-preview-dark-sample')).width, '100%');
+  assert.equal(
+    nodeStyle(findByTestID(renderer, 'color-picker-preview-light')).backgroundColor,
+    'light-surface',
+  );
+  assert.equal(
+    nodeStyle(findByTestID(renderer, 'color-picker-preview-dark')).backgroundColor,
+    'dark-surface',
+  );
+  const lightSample = findByTestID(renderer, 'color-picker-preview-light-sample');
+  const darkSample = findByTestID(renderer, 'color-picker-preview-dark-sample');
+  assert.equal(nodeStyle(lightSample).backgroundColor, 'light-surface');
+  assert.equal(nodeStyle(darkSample).backgroundColor, 'dark-surface');
+  const aaTexts = renderer.root
+    .findAllByType(TextHost)
+    .filter((node) => node.props.children === 'Aa');
+  assert.equal(aaTexts.length, 2);
+  assert.equal(nodeStyle(aaTexts[0]!).color, '#3366CC');
+  assert.equal(nodeStyle(aaTexts[1]!).color, '#3366CC');
+
+  const warning = findByTestID(renderer, 'color-picker-warning');
+  assert.equal(warning.props.accessibilityLiveRegion, 'polite');
+  assert.equal(nodeStyle(warning).borderWidth, 1);
+  assert.equal(
+    renderer.root.findAllByType(TextHost).some((node) => node.props.children === '!'),
+    false,
+  );
+  const warningIcon = findByTestID(renderer, 'color-picker-warning-icon');
+  assert.equal(warningIcon.props.accessibilityElementsHidden, true);
+  assert.equal(warningIcon.props.importantForAccessibility, 'no-hide-descendants');
+  assert.equal(warningIcon.props.accessible, false);
+  assert.equal(warningIcon.props['aria-hidden'], true);
+  assert.equal(renderer.root.findByType(WarningIconHost).props.color, 'warning-text');
+  const buttons = renderer.root.findAllByType(ButtonHost);
+  assert.equal(
+    buttons.every((button) => button.props.size === undefined),
+    true,
+  );
+  assert.equal(
+    buttons.every((button) => nodeStyle(button).flex === 1),
+    true,
+  );
+  assert.equal(
+    buttons.every((button) => nodeStyle(button).minHeight === 40),
+    true,
+  );
+});
+
+test('ColorPickerPanel maps dynamic pointer coordinates and keyboard/custom AT changes', () => {
+  const changes: ColorPickerPanelModule.ColorPickerValue[] = [];
+  const renderer = renderPanel({ onChange: (value) => changes.push(value) });
+  const [surface, hue] = pressables(renderer);
+  assert.ok(surface);
+  assert.ok(hue);
+
+  act(() => surface.props.onLayout({ nativeEvent: { layout: { width: 328 } } }));
+  act(() => surface.props.onPress({ nativeEvent: { locationX: 164, locationY: 90 } }));
+  assert.deepEqual(changes.at(-1), { brightness: 50, hue: 180, saturation: 50 });
+
+  const surfaceRects = renderer.root.findAllByType(RectHost);
+  assert.equal(surfaceRects[0]?.props.fill, 'hsl(180, 100%, 50%)');
+
+  const key = { key: 'ArrowRight', preventDefault: () => undefined };
+  act(() => surface.props.onKeyDown(key));
+  assert.deepEqual(changes.at(-1), { brightness: 75, hue: 180, saturation: 26 });
+  assert.deepEqual(surface.props.accessibilityValue, {
+    max: 100,
+    min: 0,
+    now: 25,
+    text: '채도 25, 밝기 75',
+  });
+  assert.deepEqual(hue.props.accessibilityValue, { max: 360, min: 0, now: 180 });
+  assert.equal(surface.props.role, 'slider');
+  assert.equal(hue.props.role, 'slider');
+  assert.deepEqual(surface.props.accessibilityActions, [
+    { name: 'increment' },
+    { name: 'decrement' },
+    { label: '밝기 높이기', name: 'increase-brightness' },
+    { label: '밝기 낮추기', name: 'decrease-brightness' },
+  ]);
+
+  act(() => hue.props.onLayout({ nativeEvent: { layout: { width: 328 } } }));
+  act(() => hue.props.onPress({ nativeEvent: { locationX: 246 } }));
+  assert.deepEqual(changes.at(-1), { brightness: 75, hue: 270, saturation: 25 });
+
+  platformOS = 'ios';
+  const nativeChanges: ColorPickerPanelModule.ColorPickerValue[] = [];
+  const nativeRenderer = renderPanel({ onChange: (value) => nativeChanges.push(value) });
+  const nativeSurface = pressables(nativeRenderer)[0];
+  assert.ok(nativeSurface);
+  act(() =>
+    nativeSurface.props.onAccessibilityAction({
+      nativeEvent: { actionName: 'increase-brightness' },
+    }),
+  );
+  assert.deepEqual(nativeChanges, [{ brightness: 76, hue: 180, saturation: 25 }]);
+});
+
+test('ColorPickerPanel does not emit at controlled boundaries or after a matching pointer value', () => {
+  const boundaryChanges: ColorPickerPanelModule.ColorPickerValue[] = [];
+  const boundaryRenderer = renderPanel({
+    onChange: (value) => boundaryChanges.push(value),
+    value: { brightness: 50, hue: 180, saturation: 100 },
+  });
+  const boundarySurface = pressables(boundaryRenderer)[0];
+  assert.ok(boundarySurface);
+  act(() =>
+    boundarySurface.props.onKeyDown({ key: 'ArrowRight', preventDefault: () => undefined }),
+  );
+  assert.deepEqual(boundaryChanges, []);
+
+  let controlledValue: ColorPickerPanelModule.ColorPickerValue = {
+    brightness: 50,
+    hue: 180,
+    saturation: 49,
+  };
+  const midpointChanges: ColorPickerPanelModule.ColorPickerValue[] = [];
+  const midpointRenderer = renderPanel({
+    onChange: (value) => {
+      midpointChanges.push(value);
+      controlledValue = value;
+    },
+    value: controlledValue,
+  });
+  const midpointSurface = pressables(midpointRenderer)[0];
+  assert.ok(midpointSurface);
+  act(() =>
+    midpointSurface.props.onKeyDown({ key: 'ArrowRight', preventDefault: () => undefined }),
+  );
+  assert.deepEqual(midpointChanges, [{ brightness: 50, hue: 180, saturation: 50 }]);
+  act(() =>
+    midpointRenderer.update(
+      createElement(colorPickerPanelModule!.ColorPickerPanel, {
+        color: '#3366CC',
+        hexValue: '#3366CC',
+        onCancel: () => undefined,
+        onChange: (value: ColorPickerPanelModule.ColorPickerValue) => {
+          midpointChanges.push(value);
+          controlledValue = value;
+        },
+        onCommit: () => undefined,
+        onHexValueChange: () => undefined,
+        value: controlledValue,
+      }),
+    ),
+  );
+  const updatedMidpointSurface = pressables(midpointRenderer)[0];
+  assert.ok(updatedMidpointSurface);
+  act(() =>
+    updatedMidpointSurface.props.onPress({ nativeEvent: { locationX: 164, locationY: 90 } }),
+  );
+  assert.deepEqual(midpointChanges, [{ brightness: 50, hue: 180, saturation: 50 }]);
+});
+
+test('ColorPickerPanel forwards raw HEX and Cancel/Apply values', () => {
+  const rawHex: string[] = [];
+  const commits: ColorPickerPanelModule.ColorPickerValue[] = [];
+  let cancels = 0;
+  const renderer = renderPanel({
+    onCancel: () => cancels++,
+    onCommit: (value) => commits.push(value),
+    onHexValueChange: (value) => rawHex.push(value),
+  });
+  const field = renderer.root.findByType(TextFieldHost);
+  const buttons = renderer.root.findAllByType(ButtonHost);
+
+  act(() => field.props.onChangeText('#abc'));
+  act(() => buttons.find((button) => button.props.children === '취소')!.props.onPress());
+  act(() => buttons.find((button) => button.props.children === '적용')!.props.onPress());
+
+  assert.deepEqual(rawHex, ['#abc']);
+  assert.equal(cancels, 1);
+  assert.deepEqual(commits, [{ brightness: 75, hue: 180, saturation: 25 }]);
+  assert.equal(field.props.accessibilityLabel, 'HEX 색상');
+});
+
+test('disabled ColorPickerPanel blocks geometry, HEX, cancel, and commit changes', () => {
+  let changed = false;
+  let cancelled = false;
+  let committed = false;
+  const renderer = renderPanel({
+    disabled: true,
+    onCancel: () => {
+      cancelled = true;
+    },
+    onChange: () => {
+      changed = true;
+    },
+    onCommit: () => {
+      committed = true;
+    },
+    onHexValueChange: () => {
+      changed = true;
+    },
+  });
+  const [surface, hue] = pressables(renderer);
+  const field = renderer.root.findByType(TextFieldHost);
+  const buttons = renderer.root.findAllByType(ButtonHost);
+
+  act(() => surface.props.onPress({ nativeEvent: { locationX: 180, locationY: 0 } }));
+  act(() => hue.props.onPress({ nativeEvent: { locationX: 180 } }));
+  act(() => field.props.onChangeText('#fff'));
+  act(() => buttons.find((button) => button.props.children === '취소')!.props.onPress());
+  act(() => buttons.find((button) => button.props.children === '적용')!.props.onPress());
+
+  assert.equal(changed, false);
+  assert.equal(cancelled, false);
+  assert.equal(committed, false);
+  assert.equal(field.props.editable, false);
+  assert.equal(
+    buttons.every((button) => button.props.disabled === true),
+    true,
+  );
+  assert.equal(surface.props['aria-disabled'], true);
+  assert.equal(hue.props['aria-disabled'], true);
+});

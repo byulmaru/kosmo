@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { expect, waitFor, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import {
   BYULMARU_ID_ACCOUNT_SETTINGS_URL,
   ByulmaruIdAccountSettingsEntry,
@@ -36,15 +36,18 @@ export const LinkContract: Story = {
     await expect(entry).toBeVisible();
     await expect(entry).toHaveAttribute('href', BYULMARU_ID_ACCOUNT_SETTINGS_URL);
     const domEntry = entry as HTMLElement;
-    expect(domEntry.style.minHeight).toBe('64px');
-    expect(domEntry.style.width).toBe('100%');
+    expect(getComputedStyle(domEntry).minHeight).toBe('64px');
+    expect(getComputedStyle(domEntry).width).toBe('600px');
 
-    entry.focus();
+    await userEvent.tab();
     await expect(entry).toHaveFocus();
     await waitFor(() => {
       const computedStyle = getComputedStyle(domEntry);
       expect(computedStyle.outlineStyle).toBe('solid');
       expect(computedStyle.outlineWidth).toBe('2px');
     });
+
+    await userEvent.click(entry);
+    expect(getComputedStyle(domEntry).outlineWidth).not.toBe('2px');
   },
 };
