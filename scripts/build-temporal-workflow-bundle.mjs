@@ -10,6 +10,8 @@ const workerRequire = createRequire(workerManifestPath);
 export const productionWorkflowExports = [
   'postCreateEffectsWorkflow',
   'postDeleteWorkflow',
+  'profileFollowPairWorkflow',
+  'profileFollowRemovalWorkflow',
   'profileUpdateEffectsWorkflow',
   'reactionCreateEffectsWorkflow',
   'reactionDeleteEffectsWorkflow',
