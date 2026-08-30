@@ -18,6 +18,7 @@ mock.module('expo-router', {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
   exports: {
+    Platform: { OS: 'web' },
     Pressable: 'Pressable',
     StyleSheet: {
       create: <T>(styles: T) => styles,
@@ -85,11 +86,8 @@ describe('SettingsNavigationList', () => {
     const internal = rendered('Pressable')[1];
     assert.equal(internal.props['aria-current'], 'page');
     assert.deepEqual(internal.props.accessibilityState, { selected: true });
-    const item = rendered('View').find(
-      (node) => node.props.testID === 'settings-default-post-visibility-item',
-    );
-    assert.ok(item);
-    assert.equal(item.props.style.backgroundColor, '#fff8dc');
+    const style = internal.props.style({ hovered: false, pressed: false });
+    assert.equal(style[1].backgroundColor, '#fff8dc');
   });
 });
 
