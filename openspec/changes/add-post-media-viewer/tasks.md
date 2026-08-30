@@ -197,9 +197,9 @@ Production consumer와 분리된 공용 PostMediaViewer surface, component test�
 
 **Verification**
 
-- 실제로 완료한 문서 정렬·strict validation·focused/full component/Storybook 검증만 해당 항목에 check한다. DSN-63 source component의 black 70% overlay, canonical Compact/Wide frame, 48×48 interaction target, 30px icon, 2.5 stroke, Compact 56px tray, Wide 346px rail, 상태별 visibility, Sensitive reveal·Error retry와 non-cyclic boundary를 PROD-853 disconnected evidence로 기록하고, PROD-849가 최종 consumer·runtime·canonical sync·archive evidence를 이어서 기록한다.
+- 실제로 완료한 문서 정렬·strict validation·focused/full component/Storybook 검증만 해당 항목에 check한다. DSN-63 Target의 black 70% overlay, canonical Compact/Wide frame, 48×48 interaction target, 30px icon, 2.5 stroke, Compact 56px tray, Wide 346px rail, 상태별 visibility, Sensitive reveal·Error retry와 non-cyclic boundary를 PROD-853 disconnected evidence로 기록하고, PROD-849가 최종 consumer·runtime·canonical sync·archive evidence를 이어서 기록한다.
 
-- [x] 6.1 OpenSpec과 Current/Target 문서 책임·Figma source authority 정렬
+- [x] 6.1 OpenSpec과 Current/Target 문서 책임 정렬
 - [x] 6.2 공용 surface의 canonical geometry·상태 matrix·callback component test
 - [x] 6.3 공용 PostMediaViewerSurface 구현
 - [x] 6.4 실제 Post action·thread fixture와 Controls/Actions/대표 상태 Storybook catalog
