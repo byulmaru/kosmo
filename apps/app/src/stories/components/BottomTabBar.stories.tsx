@@ -183,6 +183,9 @@ export const Playground: Story = {
       await waitFor(() =>
         expect(getComputedStyle(visual).transform).toBe('matrix(0.98, 0, 0, 0.98, 0, 0)'),
       );
+      expect(getComputedStyle(visual).transitionDuration).toBe(
+        args.platform === 'web' ? '0.12s' : '0s',
+      );
       expect(visual).toHaveStyle({ height: '64px', width: '64px' });
       expect(notifications).toHaveStyle({
         height: args.platform === 'web' ? '80px' : '56px',
@@ -194,6 +197,24 @@ export const Playground: Story = {
       expect(args.onNavigate).toHaveBeenLastCalledWith('notifications');
       await waitFor(() => expect(notifications).toHaveAttribute('aria-current', 'page'));
     });
+  },
+};
+
+export const ReducedMotion: Story = {
+  args: { unreadNotificationCount: 3 },
+  globals: { reduceMotion: true },
+  play: async ({ canvasElement }) => {
+    const navigation = within(canvasElement).getByRole('navigation', { name: '하단 탐색' });
+    const notifications = within(navigation).getByRole('button', {
+      name: '알림, 읽지 않은 알림 3개',
+    });
+    const visual = within(notifications).getByTestId('bottom-tab-notifications-visual');
+
+    await userEvent.pointer({ keys: '[MouseLeft>]', target: notifications });
+    expect(getComputedStyle(visual).transform).toBe('none');
+    expect(getComputedStyle(visual).transitionDuration).toBe('0s');
+    expect(notifications).toHaveStyle({ height: '80px' });
+    await userEvent.pointer({ keys: '[/MouseLeft]', target: notifications });
   },
 };
 

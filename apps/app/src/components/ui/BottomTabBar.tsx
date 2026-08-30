@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, motion, radius, space, textStyles } from '@/theme/tokens';
 import { Avatar } from './Avatar';
 import { BottomTabBarIcon } from './BottomTabBarIcon';
 import { getUnreadNotificationAccessibilityLabel } from './navigationChrome';
@@ -43,6 +43,7 @@ function BottomTabBarItem({
   unreadNotificationCount,
 }: BottomTabBarItemProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const [focusVisible, setFocusVisible] = useState(false);
   const disabled = destination === 'profile' && profile === null;
   const active = selected && !disabled;
@@ -63,7 +64,7 @@ function BottomTabBarItem({
       aria-current={active ? 'page' : undefined}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      accessibilityState={{ disabled }}
+      accessibilityState={{ disabled, selected: active }}
       disabled={disabled}
       onBlur={() => setFocusVisible(false)}
       onFocus={(event) => {
@@ -95,6 +96,13 @@ function BottomTabBarItem({
           <View
             style={[
               styles.visual,
+              web
+                ? ({
+                    transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
+                    transitionProperty: 'background-color, transform',
+                    transitionTimingFunction: motion.easing.standard,
+                  } as unknown as ViewStyle)
+                : undefined,
               {
                 backgroundColor: disabled
                   ? 'transparent'
@@ -103,7 +111,7 @@ function BottomTabBarItem({
                     : hovered
                       ? theme.stateHover
                       : 'transparent',
-                transform: [{ scale: state.pressed ? 0.98 : 1 }],
+                transform: reducedMotion ? undefined : [{ scale: state.pressed ? 0.98 : 1 }],
               },
             ]}
             testID={`bottom-tab-${destination}-visual`}
