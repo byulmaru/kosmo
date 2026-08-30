@@ -219,8 +219,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     height: 8,
     position: 'absolute',
-    right: -2,
-    top: -2,
+    right: 2,
+    top: -1,
     width: 8,
   },
 });
