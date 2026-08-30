@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { SettingsLinkRow } from '@/components/settings/SettingsLinkRow';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -30,6 +30,7 @@ const meta = {
     external: false,
     href: '/settings/default-post-visibility',
     label: '게시물 기본 공개 범위',
+    onNavigate: fn(),
     primary: true,
     selected: false,
   },
@@ -65,6 +66,7 @@ export const Playground: Story = {
     },
   },
   play: async ({ args, canvasElement }) => {
+    args.onNavigate?.mockClear();
     const canvas = within(canvasElement);
     const row = canvas.getByRole('link', { name: args.accessibilityLabel });
 
@@ -78,6 +80,8 @@ export const Playground: Story = {
     await userEvent.tab();
     await expect(row).toHaveFocus();
     await expect(row).toHaveStyle({ outlineWidth: '2px' });
+    await userEvent.click(row);
+    await expect(args.onNavigate).toHaveBeenCalledOnce();
   },
 };
 

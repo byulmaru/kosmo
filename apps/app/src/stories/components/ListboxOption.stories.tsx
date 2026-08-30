@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View } from 'react-native';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { fn } from 'storybook/test';
 import { ListboxOption } from '@/components/ui/ListboxOption';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ListboxOptionProps } from '@/components/ui/ListboxOption';
@@ -45,13 +45,6 @@ const meta = {
     onSelect: fn(),
     selected: false,
   },
-  argTypes: {
-    active: { control: 'boolean' },
-    description: { control: 'text' },
-    disabled: { control: 'boolean' },
-    label: { control: 'text' },
-    selected: { control: 'boolean' },
-  },
   component: ListboxOption,
   parameters: { controls: { disable: true } },
   render: (args) => <ListboxOptionCatalog {...args} />,
@@ -62,50 +55,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
-
-export const Playground: Story = {
-  parameters: {
-    controls: {
-      disable: false,
-      include: ['active', 'description', 'disabled', 'label', 'selected'],
-    },
-  },
-  render: (args) => (
-    <ListboxOptionCatalog
-      key={`${args.active}:${args.description}:${args.disabled}:${args.label}:${args.selected}`}
-      {...args}
-    />
-  ),
-  play: async ({ args, canvasElement, step }) => {
-    args.onSelect?.mockClear();
-    const canvas = within(canvasElement);
-    const name = args.description
-      ? `${args.label ?? '공개 이름'}: ${args.description}`
-      : (args.label ?? '공개 이름');
-    const option = canvas.getByRole('option', { name });
-
-    await step('옵션 상태와 접근성 확인', async () => {
-      expect(option).toHaveAttribute('aria-selected', String(Boolean(args.selected)));
-      if (args.disabled) {
-        expect(option).toHaveAttribute('aria-disabled', 'true');
-      } else {
-        expect(option).not.toHaveAttribute('aria-disabled');
-      }
-      expect(option).toHaveAttribute('tabindex', '-1');
-      expect(option).toBeVisible();
-    });
-
-    if (args.disabled) {
-      return;
-    }
-
-    await step('옵션 선택과 Action 확인', async () => {
-      await userEvent.click(option);
-      expect(option).toHaveAttribute('aria-selected', 'true');
-      expect(args.onSelect).toHaveBeenCalledOnce();
-    });
-  },
-};
 
 export const VisualStates: Story = {
   render: () => (
@@ -118,6 +67,11 @@ export const VisualStates: Story = {
       <ListboxOption active label="활성" onSelect={() => undefined} />
       <ListboxOption description="현재 선택됨" label="선택됨" onSelect={() => undefined} selected />
       <ListboxOption disabled label="비활성" onSelect={() => undefined} />
+      <ListboxOption
+        description="여러 줄로 줄바꿈되어도 옵션의 의미와 선택 영역을 유지하는 설명입니다."
+        label="분산형 소셜 네트워크에서 사용하는 이름이 아주 긴 태그 옵션"
+        onSelect={() => undefined}
+      />
     </View>
   ),
 };

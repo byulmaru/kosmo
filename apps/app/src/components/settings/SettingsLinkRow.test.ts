@@ -37,12 +37,19 @@ mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
     NavigationLink: ({
       children,
       href,
+      onNavigate,
       primary,
     }: {
       children: ReactElement<{ href?: string }>;
       href: string;
+      onNavigate?: () => void;
       primary?: boolean;
-    }) => createElement('NavigationLink', { href, primary }, cloneElement(children, { href })),
+    }) =>
+      createElement(
+        'NavigationLink',
+        { href, onNavigate, primary },
+        cloneElement(children, { href }),
+      ),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
@@ -65,6 +72,7 @@ type Props = {
   external?: boolean;
   href: string;
   label: string;
+  onNavigate?: () => void;
   primary?: boolean;
   selected?: boolean;
   testID?: string;
@@ -134,6 +142,38 @@ describe('SettingsLinkRow', () => {
     assert.equal(row.props['aria-current'], undefined);
     assert.deepEqual(row.props.accessibilityState, { selected: false });
     assert.deepEqual(texts(), ['계정 설정']);
+  });
+
+  it('내부 링크 활성화를 onNavigate callback으로 노출한다', async () => {
+    let navigations = 0;
+    await render({
+      accessibilityLabel: '설정 열기',
+      href: '/settings',
+      label: '설정',
+      onNavigate: () => navigations++,
+    });
+
+    const navigationLink = rendered('NavigationLink')[0];
+    assert.equal(typeof navigationLink.props.onNavigate, 'function');
+    navigationLink.props.onNavigate();
+    assert.equal(navigations, 1);
+  });
+
+  it('외부 링크 활성화를 onNavigate callback으로 노출한다', async () => {
+    let navigations = 0;
+    await render({
+      accessibilityLabel: '외부 설정 열기',
+      external: true,
+      href: 'https://id.byulmaru.co',
+      label: '외부 설정',
+      onNavigate: () => navigations++,
+      testID: 'external-action-row',
+    });
+
+    const row = byTestId('external-action-row');
+    assert.equal(typeof row.props.onPress, 'function');
+    row.props.onPress();
+    assert.equal(navigations, 1);
   });
 
   it('selected row feedback uses selected, hover, then pressed precedence', async () => {

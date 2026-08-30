@@ -113,13 +113,10 @@ beforeEach(() => {
 });
 
 function renderPanel({
-  color = '#3366CC',
   disabled = false,
-  hexValue = '#3366CC',
   onCancel = () => undefined,
   onChange = () => undefined,
   onCommit = () => undefined,
-  onHexValueChange = () => undefined,
   value = { brightness: 75, hue: 180, saturation: 25 },
   contrastWarning,
 }: Partial<ColorPickerPanelModule.ColorPickerPanelProps> = {}) {
@@ -128,14 +125,11 @@ function renderPanel({
   act(() => {
     renderer = create(
       createElement(colorPickerPanelModule!.ColorPickerPanel, {
-        color,
         contrastWarning,
         disabled,
-        hexValue,
         onCancel,
         onChange,
         onCommit,
-        onHexValueChange,
         value,
       }),
     );
@@ -231,8 +225,8 @@ test('ColorPickerPanel matches the controlled plane, handles, previews, warning,
     .findAllByType(TextHost)
     .filter((node) => node.props.children === 'Aa');
   assert.equal(aaTexts.length, 2);
-  assert.equal(nodeStyle(aaTexts[0]!).color, '#3366CC');
-  assert.equal(nodeStyle(aaTexts[1]!).color, '#3366CC');
+  assert.equal(nodeStyle(aaTexts[0]!).color, '#8FBFBF');
+  assert.equal(nodeStyle(aaTexts[1]!).color, '#8FBFBF');
 
   const warning = findByTestID(renderer, 'color-picker-warning');
   assert.equal(warning.props.accessibilityLiveRegion, 'polite');
@@ -312,6 +306,47 @@ test('ColorPickerPanel maps dynamic pointer coordinates and keyboard/custom AT c
   assert.deepEqual(nativeChanges, [{ brightness: 76, hue: 180, saturation: 25 }]);
 });
 
+test('ColorPickerPanel derives every color surface from value and converts valid HEX input', () => {
+  const changes: ColorPickerPanelModule.ColorPickerValue[] = [];
+  const renderer = renderPanel({
+    onChange: (value) => changes.push(value),
+    value: { brightness: 100, hue: 0, saturation: 100 },
+  });
+
+  assert.equal(
+    nodeStyle(findByTestID(renderer, 'color-picker-current-swatch')).backgroundColor,
+    '#FF0000',
+  );
+  const aaTexts = renderer.root
+    .findAllByType(TextHost)
+    .filter((node) => node.props.children === 'Aa');
+  assert.equal(nodeStyle(aaTexts[0]!).color, '#FF0000');
+  assert.equal(
+    nodeStyle(findByTestID(renderer, 'color-picker-hue-thumb')).backgroundColor,
+    '#FF0000',
+  );
+
+  const field = renderer.root.findByType(TextFieldHost);
+  assert.equal(field.props.value, '#FF0000');
+  act(() => field.props.onChangeText('#123456'));
+  assert.deepEqual(changes, [{ brightness: 33.73, hue: 210, saturation: 79.07 }]);
+});
+
+test('ColorPickerPanel keeps incomplete HEX as a draft and restores the controlled color on blur', () => {
+  const renderer = renderPanel({ value: { brightness: 100, hue: 0, saturation: 100 } });
+  let field = renderer.root.findByType(TextFieldHost);
+
+  assert.equal(typeof field.props.onFocus, 'function');
+  assert.equal(typeof field.props.onBlur, 'function');
+  act(() => field.props.onFocus({}));
+  act(() => field.props.onChangeText('#12'));
+  field = renderer.root.findByType(TextFieldHost);
+  assert.equal(field.props.value, '#12');
+
+  act(() => field.props.onBlur({}));
+  assert.equal(renderer.root.findByType(TextFieldHost).props.value, '#FF0000');
+});
+
 test('ColorPickerPanel does not emit at controlled boundaries or after a matching pointer value', () => {
   const boundaryChanges: ColorPickerPanelModule.ColorPickerValue[] = [];
   const boundaryRenderer = renderPanel({
@@ -347,15 +382,12 @@ test('ColorPickerPanel does not emit at controlled boundaries or after a matchin
   act(() =>
     midpointRenderer.update(
       createElement(colorPickerPanelModule!.ColorPickerPanel, {
-        color: '#3366CC',
-        hexValue: '#3366CC',
         onCancel: () => undefined,
         onChange: (value: ColorPickerPanelModule.ColorPickerValue) => {
           midpointChanges.push(value);
           controlledValue = value;
         },
         onCommit: () => undefined,
-        onHexValueChange: () => undefined,
         value: controlledValue,
       }),
     ),
@@ -368,23 +400,19 @@ test('ColorPickerPanel does not emit at controlled boundaries or after a matchin
   assert.deepEqual(midpointChanges, [{ brightness: 50, hue: 180, saturation: 50 }]);
 });
 
-test('ColorPickerPanel forwards raw HEX and Cancel/Apply values', () => {
-  const rawHex: string[] = [];
+test('ColorPickerPanel forwards Cancel and Apply with the controlled value', () => {
   const commits: ColorPickerPanelModule.ColorPickerValue[] = [];
   let cancels = 0;
   const renderer = renderPanel({
     onCancel: () => cancels++,
     onCommit: (value) => commits.push(value),
-    onHexValueChange: (value) => rawHex.push(value),
   });
   const field = renderer.root.findByType(TextFieldHost);
   const buttons = renderer.root.findAllByType(ButtonHost);
 
-  act(() => field.props.onChangeText('#abc'));
   act(() => buttons.find((button) => button.props.children === '취소')!.props.onPress());
   act(() => buttons.find((button) => button.props.children === '적용')!.props.onPress());
 
-  assert.deepEqual(rawHex, ['#abc']);
   assert.equal(cancels, 1);
   assert.deepEqual(commits, [{ brightness: 75, hue: 180, saturation: 25 }]);
   assert.equal(field.props.accessibilityLabel, 'HEX 색상');
@@ -405,9 +433,6 @@ test('disabled ColorPickerPanel blocks geometry, HEX, cancel, and commit changes
     onCommit: () => {
       committed = true;
     },
-    onHexValueChange: () => {
-      changed = true;
-    },
   });
   const [surface, hue] = pressables(renderer);
   const field = renderer.root.findByType(TextFieldHost);
@@ -415,7 +440,7 @@ test('disabled ColorPickerPanel blocks geometry, HEX, cancel, and commit changes
 
   act(() => surface.props.onPress({ nativeEvent: { locationX: 180, locationY: 0 } }));
   act(() => hue.props.onPress({ nativeEvent: { locationX: 180 } }));
-  act(() => field.props.onChangeText('#fff'));
+  act(() => field.props.onChangeText('#FFFFFF'));
   act(() => buttons.find((button) => button.props.children === '취소')!.props.onPress());
   act(() => buttons.find((button) => button.props.children === '적용')!.props.onPress());
 
