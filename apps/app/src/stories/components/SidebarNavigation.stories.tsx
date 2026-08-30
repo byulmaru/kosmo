@@ -194,9 +194,22 @@ async function expectNavigationBasics(
   }
 
   if (unreadNotificationCount && unreadNotificationCount > 0) {
-    expect(within(notifications).getByTestId('sidebar-unread-indicator')).toBeVisible();
+    if (presentation === 'compact') {
+      expect(within(notifications).getByTestId('sidebar-unread-indicator')).toBeVisible();
+      expect(within(notifications).queryByTestId('sidebar-unread-count')).not.toBeInTheDocument();
+    } else {
+      const count = within(notifications).getByTestId('sidebar-unread-count');
+      expect(count).toBeVisible();
+      expect(
+        within(count).getByText(unreadNotificationCount > 9 ? '9+' : `${unreadNotificationCount}`),
+      ).toBeVisible();
+      expect(
+        within(notifications).queryByTestId('sidebar-unread-indicator'),
+      ).not.toBeInTheDocument();
+    }
   } else {
     expect(within(notifications).queryByTestId('sidebar-unread-indicator')).not.toBeInTheDocument();
+    expect(within(notifications).queryByTestId('sidebar-unread-count')).not.toBeInTheDocument();
   }
 }
 
@@ -376,7 +389,7 @@ async function playInlineUtility({
 }
 
 export const Drawer: Story = {
-  args: { presentation: 'drawer', unreadNotificationCount: 3 },
+  args: { presentation: 'drawer', unreadNotificationCount: 10 },
   play: async ({ args, canvasElement }) => {
     await playInlineUtility({ args, canvasElement });
   },

@@ -173,12 +173,14 @@ check와 별개다.
 
 ## 알림 Unread badge
 
-모든 셸 단계는 selected Profile의 Unread 상태를 기존 알림 아이콘 우상단 badge로 표시한다. badge는 아이콘 wrapper 안에서 overlay되어 row, touch target과 label layout을 밀지 않는다.
+현재 프로덕션 셸은 selected Profile의 Unread 상태를 기존 알림 아이콘 우상단의 숫자 없는 8px dot으로 표시한다. 이 계약과 `web-app-shell` OpenSpec은 공용 navigation chrome의 프로덕션 교체를 맡는 PROD-796 전까지 유지한다.
 
-- `< compact` Web과 Android/iOS의 하단 탭 바와 모바일 drawer, `compact`~`full`의 icon-only 레일, `≥ full`의 풀 사이드바 모두 숫자 없는 8px dot을 같은 위치와 스타일로 표시한다.
-- `0`은 모든 표면에서 숨기고 양수 count는 Unread가 있다는 사실만 시각적으로 나타낸다.
-- dot은 semantic `accent` color token을 사용한다. 숫자나 아이콘이 없는 현재 dot을 위해 foreground 짝 토큰을 선제 정의하지 않는다.
-- 실제 count는 진입점의 accessible name에 합쳐 읽는다. 시각적 dot 자체는 별도 focus 대상으로 만들지 않는다.
+PROD-852의 공용 `SidebarNavigation` 목표 표면은 presentation에 따라 표시를 나눈다.
+
+- `full`과 `drawer`는 행 오른쪽 끝에 `24px` 숫자 badge를 표시한다. `1`~`9`는 실제 값을, `10` 이상은 `9+`를 표시하며 ProfileSwitcher의 `action/primary/base`와 `action/primary/on-base`, `ui/label/s` 조합을 재사용한다.
+- `compact` icon-only rail은 기존 알림 아이콘 우상단의 숫자 없는 8px dot과 semantic `accent` token을 유지한다. `BottomTabBar`를 포함한 다른 셸 표면도 이 변경 범위에서는 기존 dot 계약을 유지한다.
+- `0` 또는 count가 없으면 두 표시를 모두 숨긴다. 양수 count의 accessible name은 시각적으로 축약하지 않은 실제 값을 사용해 `알림, 읽지 않은 알림 N개`로 유지하고, badge와 dot 자체는 접근성 트리와 focus 순서에서 숨긴다.
+- 숫자 badge는 label과 같은 행에 배치하되 기존 row와 pointer·touch target 크기를 바꾸지 않는다. 실제 프로덕션 Sidebar와 drawer로의 교체는 PROD-796에서 별도로 검증한다.
 
 ## 스크롤 소유권
 
