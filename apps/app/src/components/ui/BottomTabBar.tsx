@@ -4,6 +4,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { Avatar } from './Avatar';
 import { BottomTabBarIcon } from './BottomTabBarIcon';
+import { getUnreadNotificationAccessibilityLabel } from './navigationChrome';
 import type { ViewStyle } from 'react-native';
 import type {
   BottomTabBarProps,
@@ -28,7 +29,7 @@ type BottomTabBarItemProps = {
   platform: NavigationChromePlatform;
   profile: NavigationProfile | null;
   selected: boolean;
-  unread: boolean;
+  unreadNotificationCount: number | null;
 };
 
 function BottomTabBarItem({
@@ -39,7 +40,7 @@ function BottomTabBarItem({
   platform,
   profile,
   selected,
-  unread,
+  unreadNotificationCount,
 }: BottomTabBarItemProps) {
   const theme = useTheme();
   const [focusVisible, setFocusVisible] = useState(false);
@@ -51,11 +52,16 @@ function BottomTabBarItem({
       ? theme.foregroundPrimary
       : theme.foregroundSecondary;
   const web = platform === 'web';
+  const accessibilityLabel =
+    destination === 'notifications'
+      ? getUnreadNotificationAccessibilityLabel(unreadNotificationCount)
+      : label;
+  const hasUnreadNotifications = Boolean(unreadNotificationCount && unreadNotificationCount > 0);
 
   return (
     <Pressable
       aria-current={active ? 'page' : undefined}
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
@@ -119,7 +125,7 @@ function BottomTabBarItem({
               ) : (
                 <BottomTabBarIcon color={color} destination={destination} selected={active} />
               )}
-              {destination === 'notifications' && unread ? (
+              {destination === 'notifications' && hasUnreadNotifications ? (
                 <View
                   accessible={false}
                   accessibilityElementsHidden
@@ -144,7 +150,7 @@ export function BottomTabBar({
   platform = 'web',
   profile = null,
   safeAreaBottom = 0,
-  unread = false,
+  unreadNotificationCount = null,
 }: BottomTabBarProps) {
   const theme = useTheme();
   const contentHeight = platform === 'web' ? 80 : 56;
@@ -173,7 +179,7 @@ export function BottomTabBar({
           platform={platform}
           profile={profile}
           selected={currentDestination === destination}
-          unread={unread}
+          unreadNotificationCount={unreadNotificationCount}
         />
       ))}
     </View>

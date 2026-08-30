@@ -18,6 +18,7 @@ import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/toke
 import { ActionMenu } from './ActionMenu';
 import { Avatar } from './Avatar';
 import { getIconButtonHitSlop, getIconButtonTargetSize } from './IconButton';
+import { getUnreadNotificationAccessibilityLabel } from './navigationChrome';
 import type { LucideIcon } from 'lucide-react-native';
 import type { Ref } from 'react';
 import type { PressableStateCallbackType, ViewStyle } from 'react-native';
@@ -32,6 +33,7 @@ export type SidebarNavigationProps = {
   onNavigate: (destination: NavigationDestination) => void;
   presentation?: SidebarPresentation;
   profile?: NavigationProfile | null;
+  unreadNotificationCount?: number | null;
 };
 
 const primaryItems = [
@@ -46,6 +48,7 @@ const primaryItems = [
 const compactHitSlop = getIconButtonHitSlop(44, getIconButtonTargetSize(Platform.OS));
 
 type SidebarControlProps = {
+  accessibilityLabel?: string;
   compact: boolean;
   controlRef?: Ref<View>;
   disabled?: boolean;
@@ -57,9 +60,11 @@ type SidebarControlProps = {
   profile?: NavigationProfile;
   selected?: boolean;
   tone?: 'default' | 'primary';
+  unread?: boolean;
 };
 
 function SidebarControl({
+  accessibilityLabel,
   compact,
   controlRef,
   disabled = false,
@@ -71,6 +76,7 @@ function SidebarControl({
   profile,
   selected = false,
   tone = 'default',
+  unread = false,
 }: SidebarControlProps) {
   const theme = useTheme();
   const active = selected && !disabled;
@@ -87,7 +93,7 @@ function SidebarControl({
       aria-current={active ? 'page' : undefined}
       aria-expanded={expanded}
       aria-haspopup={hasMenu ? 'menu' : undefined}
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityRole="button"
       accessibilityState={{ disabled, expanded, selected: active }}
       disabled={disabled}
@@ -138,12 +144,19 @@ function SidebarControl({
         accessibilityElementsHidden
         aria-hidden
         importantForAccessibility="no-hide-descendants"
+        style={styles.iconFrame}
       >
         {profile ? (
           <Avatar imageUri={profile.imageUri ?? null} label={profile.label} size={24} />
         ) : (
           <Icon color={color} size={iconSizes[20]} strokeWidth={2} />
         )}
+        {unread ? (
+          <View
+            style={[styles.unread, { backgroundColor: theme.accent }]}
+            testID="sidebar-unread-indicator"
+          />
+        ) : null}
       </View>
       {compact ? null : (
         <Text style={[active ? textStyles.uiLabelL : textStyles.uiCopyL, { color }]}>{label}</Text>
@@ -161,6 +174,7 @@ export function SidebarNavigation({
   onNavigate,
   presentation = 'full',
   profile = null,
+  unreadNotificationCount = null,
 }: SidebarNavigationProps) {
   const theme = useTheme();
   const compact = presentation === 'compact';
@@ -204,8 +218,14 @@ export function SidebarNavigation({
       <View style={[styles.group, compact ? styles.compactGroup : undefined]}>
         {primaryItems.map(([destination, label, Icon]) => {
           const disabled = destination === 'profile' && profile === null;
+          const notifications = destination === 'notifications';
           return (
             <SidebarControl
+              accessibilityLabel={
+                notifications
+                  ? getUnreadNotificationAccessibilityLabel(unreadNotificationCount)
+                  : undefined
+              }
               compact={compact}
               disabled={disabled}
               Icon={Icon}
@@ -214,6 +234,9 @@ export function SidebarNavigation({
               onPress={() => onNavigate(destination)}
               profile={destination === 'profile' ? (profile ?? undefined) : undefined}
               selected={currentDestination === destination}
+              unread={Boolean(
+                notifications && unreadNotificationCount && unreadNotificationCount > 0,
+              )}
             />
           );
         })}
@@ -328,6 +351,15 @@ const styles = StyleSheet.create({
   compactTarget: { alignItems: 'center', height: 48, justifyContent: 'center', width: 48 },
   wideControl: { height: 45, paddingHorizontal: space[16], width: 272 },
   primaryControl: { borderRadius: radius.full },
+  iconFrame: { position: 'relative' },
+  unread: {
+    borderRadius: radius.full,
+    height: 8,
+    position: 'absolute',
+    right: -2,
+    top: -2,
+    width: 8,
+  },
   footer: {
     borderTopWidth: borderWidths[1],
     gap: space[4],

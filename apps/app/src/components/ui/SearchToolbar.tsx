@@ -1,5 +1,5 @@
 import { ArrowLeft, Menu, Search, X } from 'lucide-react-native';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
@@ -35,6 +35,7 @@ export function SearchToolbar({
   value,
 }: SearchToolbarProps) {
   const theme = useTheme();
+  const inputRef = useRef<TextInput>(null);
   const [inputFocused, setInputFocused] = useState(false);
   const targetSize = platform === 'android' ? 48 : 44;
   const showMenu = leadingAction === 'menu' && platform === 'web';
@@ -130,6 +131,7 @@ export function SearchToolbar({
           autoCapitalize="none"
           autoCorrect={false}
           editable={!disabled}
+          ref={inputRef}
           onBlur={() => setInputFocused(false)}
           onChangeText={(nextValue) => {
             if (!disabled) {
@@ -155,7 +157,11 @@ export function SearchToolbar({
           <IconButton
             accessibilityLabel="검색 지우기"
             disabled={disabled}
-            onPress={onClear}
+            onPress={() => {
+              onClear();
+              inputRef.current?.focus();
+            }}
+            onPressIn={() => inputRef.current?.focus()}
             style={(state) => controlStyle(disabled, state)}
             targetSize={targetSize}
           >

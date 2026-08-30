@@ -49,6 +49,7 @@ function SidebarNavigationCatalog({
   onNavigate,
   presentation = 'full',
   profileAvailable,
+  unreadNotificationCount = null,
 }: CatalogProps) {
   const [destination, setDestination] = useState<NavigationDestination | null>(currentDestination);
 
@@ -71,6 +72,7 @@ function SidebarNavigationCatalog({
         }}
         presentation={presentation}
         profile={profileAvailable ? profile : null}
+        unreadNotificationCount={unreadNotificationCount}
       />
     </View>
   );
@@ -111,6 +113,7 @@ const meta = {
     onNavigate: fn(),
     presentation: 'full',
     profileAvailable: true,
+    unreadNotificationCount: null,
   },
   argTypes: {
     currentDestination: {
@@ -122,6 +125,7 @@ const meta = {
       options: ['full', 'compact', 'drawer'],
     },
     profileAvailable: { control: 'boolean' },
+    unreadNotificationCount: { control: { min: 0, step: 1, type: 'number' } },
   },
   component: SidebarNavigationCatalog,
   excludeStories: ['PresentationTransitionContract'],
@@ -137,7 +141,10 @@ function getNavigation(canvasElement: HTMLElement) {
 }
 
 function getButton(navigation: HTMLElement, destination: NavigationDestination) {
-  return within(navigation).getByRole('button', { name: labels[destination] });
+  return within(navigation).getByRole('button', {
+    name:
+      destination === 'notifications' ? /^알림(?:, 읽지 않은 알림 \d+개)?$/ : labels[destination],
+  });
 }
 
 function expectRect(element: HTMLElement, width: number, height: number) {
@@ -151,9 +158,15 @@ async function expectNavigationBasics(
   presentation: 'compact' | 'drawer' | 'full',
   currentDestination: NavigationDestination | null = 'home',
   profileAvailable = true,
+  unreadNotificationCount: number | null = null,
 ) {
   const navigation = getNavigation(canvasElement);
   const home = getButton(navigation, 'home');
+  const notificationName =
+    unreadNotificationCount && unreadNotificationCount > 0
+      ? `알림, 읽지 않은 알림 ${unreadNotificationCount}개`
+      : '알림';
+  const notifications = within(navigation).getByRole('button', { name: notificationName });
   const currentControls = navigation.querySelectorAll('[aria-current="page"]');
   const currentIsRendered =
     currentDestination !== null &&
@@ -177,6 +190,13 @@ async function expectNavigationBasics(
     expectRect(navigation, 80, 720);
   } else {
     expectRect(home, 272, 45);
+    expect(within(notifications).getByText('알림')).toBeVisible();
+  }
+
+  if (unreadNotificationCount && unreadNotificationCount > 0) {
+    expect(within(notifications).getByTestId('sidebar-unread-indicator')).toBeVisible();
+  } else {
+    expect(within(notifications).queryByTestId('sidebar-unread-indicator')).not.toBeInTheDocument();
   }
 }
 
@@ -187,10 +207,16 @@ export const Default: Story = {
 };
 
 export const Playground: Story = {
+  args: { unreadNotificationCount: 3 },
   parameters: {
     controls: {
       disable: false,
-      include: ['currentDestination', 'presentation', 'profileAvailable'],
+      include: [
+        'currentDestination',
+        'presentation',
+        'profileAvailable',
+        'unreadNotificationCount',
+      ],
     },
   },
   play: async ({ args, canvasElement, step }) => {
@@ -201,6 +227,10 @@ export const Playground: Story = {
     const presentation = args.presentation ?? 'full';
     const home = getButton(navigation, 'home');
     const search = getButton(navigation, 'search');
+    const unreadNotificationCount = args.unreadNotificationCount ?? 0;
+    const notificationName =
+      unreadNotificationCount > 0 ? `알림, 읽지 않은 알림 ${unreadNotificationCount}개` : '알림';
+    const notifications = within(navigation).getByRole('button', { name: notificationName });
     const profileButton = getButton(navigation, 'profile');
     const feedback = getButton(navigation, 'feedback');
 
@@ -210,6 +240,7 @@ export const Playground: Story = {
         presentation,
         args.currentDestination ?? null,
         args.profileAvailable,
+        unreadNotificationCount,
       );
       expectRect(
         search,
@@ -220,6 +251,7 @@ export const Playground: Story = {
       if (presentation === 'compact') {
         expectRect(profileButton, 44, 44);
       }
+      expect(notifications).toHaveAccessibleName(notificationName);
     });
 
     await step('Tab과 Enter로 destination callback 확인', async () => {
@@ -244,7 +276,7 @@ export const Playground: Story = {
 };
 
 export const Compact: Story = {
-  args: { presentation: 'compact' },
+  args: { presentation: 'compact', unreadNotificationCount: 3 },
   play: async ({ args, canvasElement, step }) => {
     args.onLogout.mockClear();
     const onMenuOpenChange = mocked(args.onMenuOpenChange!);
@@ -255,7 +287,13 @@ export const Compact: Story = {
     const utility = within(navigation).getByRole('button', { name: '설정 및 기타' });
 
     await step('80px rail과 compact control geometry 확인', async () => {
-      await expectNavigationBasics(canvasElement, 'compact');
+      await expectNavigationBasics(
+        canvasElement,
+        'compact',
+        args.currentDestination ?? null,
+        args.profileAvailable,
+        args.unreadNotificationCount,
+      );
       expectRect(feedback, 44, 44);
       expectRect(utility, 44, 44);
       for (const destination of [
@@ -306,6 +344,14 @@ async function playInlineUtility({
   const feedback = getButton(navigation, 'feedback');
   const home = getButton(navigation, 'home');
 
+  await expectNavigationBasics(
+    canvasElement,
+    'drawer',
+    args.currentDestination ?? null,
+    args.profileAvailable,
+    args.unreadNotificationCount,
+  );
+
   expectRect(navigation, 320, 720);
   expectRect(home, 272, 45);
   expectRect(utility, 272, 45);
@@ -330,7 +376,7 @@ async function playInlineUtility({
 }
 
 export const Drawer: Story = {
-  args: { presentation: 'drawer' },
+  args: { presentation: 'drawer', unreadNotificationCount: 3 },
   play: async ({ args, canvasElement }) => {
     await playInlineUtility({ args, canvasElement });
   },
