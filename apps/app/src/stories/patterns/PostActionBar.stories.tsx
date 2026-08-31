@@ -1054,6 +1054,7 @@ export const ActionSemanticColorsDark: Story = {
     expect(activeReaction.querySelector('svg')).toHaveAttribute('stroke', reactionActionColor);
     expect(activeReaction.querySelector('svg')).toHaveAttribute('fill', reactionActionColor);
   },
+  render: () => <CatalogStory />,
 };
 
 export const AuthorPostDeletion: Story = {
