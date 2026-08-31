@@ -35,6 +35,7 @@ const preview: Preview = {
                   mutationError={relay.mutationError}
                   mutationGraphQLErrors={relay.mutationGraphQLErrors}
                   mutationLoading={relay.mutationLoading}
+                  mutationRequestObserver={relay.mutationRequestObserver}
                   mutationResponse={relay.mutationResponse}
                   paginationError={relay.paginationError}
                   paginationLoading={relay.paginationLoading}

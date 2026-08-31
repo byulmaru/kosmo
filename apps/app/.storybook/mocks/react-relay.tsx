@@ -6,8 +6,9 @@ import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtim
 
 type RelayMockValue = {
   mutationError?: string;
-  mutationGraphQLErrors?: string[];
+  mutationGraphQLErrors?: Array<string | StoryGraphQLError>;
   mutationLoading?: boolean;
+  mutationRequestObserver?: (request: RequestParameters, variables: Variables) => void;
   mutationResponse?: unknown;
   paginationError?: string | boolean;
   paginationLoading?: boolean;
@@ -19,6 +20,11 @@ type RelayMockValue = {
     StoryOperationResponse | StoryOperationResponse[] | StoryOperationResponseSequence
   >;
   queryData?: unknown;
+};
+
+type StoryGraphQLError = {
+  extensions?: Record<string, unknown>;
+  message: string;
 };
 
 type StoryOperationResponse = {
@@ -36,6 +42,7 @@ export function RelayStoryProvider({
   mutationError,
   mutationGraphQLErrors,
   mutationLoading,
+  mutationRequestObserver,
   mutationResponse,
   paginationError,
   paginationLoading,
@@ -50,6 +57,7 @@ export function RelayStoryProvider({
       mutationError,
       mutationGraphQLErrors,
       mutationLoading,
+      mutationRequestObserver,
       mutationResponse,
       paginationError,
       paginationLoading,
@@ -63,6 +71,7 @@ export function RelayStoryProvider({
       mutationError,
       mutationGraphQLErrors,
       mutationLoading,
+      mutationRequestObserver,
       mutationResponse,
       paginationError,
       paginationLoading,
@@ -146,6 +155,7 @@ async function executeStoryOperation(
   };
 
   if (request.operationKind === 'mutation') {
+    mock.mutationRequestObserver?.(request, variables);
     const operationResponse = getOperationResponse();
     if (operationResponse) {
       return resolveOperationResponse(operationResponse);
@@ -158,8 +168,12 @@ async function executeStoryOperation(
     }
 
     return Promise.resolve({
-      data: (mock.mutationResponse ?? {}) as GraphQLResponse['data'],
-      errors: mock.mutationGraphQLErrors?.map((message) => ({ message })),
+      data: (mock.mutationResponse === undefined
+        ? {}
+        : mock.mutationResponse) as GraphQLResponse['data'],
+      errors: mock.mutationGraphQLErrors?.map((error) =>
+        typeof error === 'string' ? { message: error } : error,
+      ),
     });
   }
 

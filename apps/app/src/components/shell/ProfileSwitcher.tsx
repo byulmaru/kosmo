@@ -1,4 +1,4 @@
-import { profileHandleSchema } from '@kosmo/core/validation/profile';
+import { localProfileHandleSchema, profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
 import { usePathname } from 'expo-router';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
@@ -10,7 +10,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
@@ -18,6 +17,7 @@ import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { TextField } from '@/components/ui/TextField';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, space, spacing, textStyles, typography } from '@/theme/tokens';
@@ -145,6 +145,24 @@ const avatarShadow = {
   boxShadow: '1px 1px 2px rgba(0, 0, 0, 0.25)',
 } as ViewStyle;
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isProfileHandlePolicyError = (error: unknown) => {
+  if (!isRecord(error) || !isRecord(error.extensions)) {
+    return false;
+  }
+
+  return (
+    error.extensions.code === 'VALIDATION' &&
+    error.extensions.field === 'handle' &&
+    error.message === profileHandlePolicyErrorMessage
+  );
+};
+
+const profileCreationFieldError = (errors: ReadonlyArray<unknown> | null | undefined) =>
+  errors?.some(isProfileHandlePolicyError) ? profileHandlePolicyErrorMessage : null;
+
 type Props = {
   onNavigate?: () => void;
   onOpenChange?: (open: boolean) => void;
@@ -169,7 +187,8 @@ export function ProfileSwitcher({
   const [internalOpen, setInternalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [handle, setHandle] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [operationError, setOperationErrorState] = useState<string | null>(null);
   const pickerRef = useRef<View>(null);
   const triggerRef = useRef<View>(null);
   const dismissalVersionRef = useRef(0);
@@ -200,20 +219,22 @@ export function ProfileSwitcher({
       dismissalVersionRef.current += 1;
       setCreating(false);
       setHandle('');
-      setError(null);
+      setFieldError(null);
+      setOperationErrorState(null);
     }
     setOpen(false);
   };
   const setOperationError = (version: number, message: string) => {
     if (!redesignedWeb || version === dismissalVersionRef.current) {
-      setError(message);
+      setOperationErrorState(message);
     }
   };
 
   useEffect(() => {
     if (!open) {
       setCreating(false);
-      setError(null);
+      setFieldError(null);
+      setOperationErrorState(null);
       if (redesignedWeb) {
         setHandle('');
       }
@@ -262,7 +283,8 @@ export function ProfileSwitcher({
   }, [open, surface]);
 
   const commitProfileSelection = (id: string, operationVersion = dismissalVersionRef.current) => {
-    setError(null);
+    setFieldError(null);
+    setOperationErrorState(null);
     commitSelect({
       variables: { id },
       onCompleted: (response, errors) => {
@@ -291,12 +313,20 @@ export function ProfileSwitcher({
   };
 
   const commitProfileCreation = (normalized: string, operationVersion: number) => {
-    setError(null);
+    setFieldError(null);
+    setOperationErrorState(null);
     commitCreate({
       variables: { handle: normalized },
       onCompleted: (response, errors) => {
         if (errors?.length) {
-          setOperationError(operationVersion, '프로필을 생성하지 못했습니다.');
+          const error = profileCreationFieldError(errors);
+          if (error) {
+            if (!redesignedWeb || operationVersion === dismissalVersionRef.current) {
+              setFieldError(error);
+            }
+          } else {
+            setOperationError(operationVersion, '프로필을 생성하지 못했습니다.');
+          }
           return;
         }
 
@@ -307,22 +337,36 @@ export function ProfileSwitcher({
         setCreating(false);
         commitProfileSelection(response.createProfile.profile.id, operationVersion);
       },
-      onError: (cause) =>
-        setOperationError(operationVersion, cause.message || '프로필을 생성하지 못했습니다.'),
+      onError: (cause) => {
+        const source = isRecord(cause) ? cause.source : undefined;
+        const error = profileCreationFieldError(
+          isRecord(source) && Array.isArray(source.errors) ? source.errors : undefined,
+        );
+        if (error) {
+          if (!redesignedWeb || operationVersion === dismissalVersionRef.current) {
+            setFieldError(error);
+          }
+          return;
+        }
+
+        setOperationError(operationVersion, '프로필을 생성하지 못했습니다.');
+      },
     });
   };
 
   const createProfile = () => {
+    setFieldError(null);
+    setOperationErrorState(null);
     const normalized = handle.trim();
     if (!normalized) {
-      setError('프로필 핸들을 입력해주세요.');
+      setFieldError('프로필 핸들을 입력해주세요.');
       return;
     }
 
-    const result = profileHandleSchema.safeParse(normalized);
+    const result = localProfileHandleSchema.safeParse(normalized);
 
     if (!result.success) {
-      setError(result.error.issues[0]?.message ?? '프로필 핸들 형식을 확인해주세요.');
+      setFieldError(result.error.issues[0]?.message ?? '프로필 핸들 형식을 확인해주세요.');
       return;
     }
 
@@ -425,7 +469,8 @@ export function ProfileSwitcher({
             disabled={busy}
             onPress={() => {
               setCreating(true);
-              setError(null);
+              setFieldError(null);
+              setOperationErrorState(null);
             }}
             role={Platform.OS === 'web' && !redesignedWeb ? 'menuitem' : undefined}
             style={({ pressed }) => [
@@ -452,26 +497,20 @@ export function ProfileSwitcher({
             style={styles.createForm}
           >
             <View style={styles.createRow}>
-              <TextInput
-                aria-invalid={Boolean(error)}
-                accessibilityLabel="프로필 핸들"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!busy}
-                onChangeText={setHandle}
-                onSubmitEditing={createProfile}
-                placeholder="새 프로필 핸들"
-                placeholderTextColor={theme.textSecondary}
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.card,
-                    borderColor: error ? theme.danger : theme.border,
-                    color: theme.text,
-                  },
-                ]}
-                value={handle}
-              />
+              <View style={styles.inputField}>
+                <TextField
+                  accessibilityLabel="프로필 핸들"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!busy}
+                  error={fieldError ?? undefined}
+                  onChangeText={setHandle}
+                  onSubmitEditing={createProfile}
+                  placeholder="새 프로필 핸들"
+                  style={styles.input}
+                  value={handle}
+                />
+              </View>
               <Button
                 disabled={busy}
                 loading={busy}
@@ -484,16 +523,11 @@ export function ProfileSwitcher({
             <Text style={[styles.help, { color: theme.textSecondary }]}>
               영문, 숫자, 밑줄(_)만 사용할 수 있어요.
             </Text>
-            {error ? (
-              <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-                {error}
-              </Text>
-            ) : null}
           </View>
         ) : null}
-        {!creating && error ? (
+        {operationError ? (
           <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-            {error}
+            {operationError}
           </Text>
         ) : null}
       </View>
@@ -808,18 +842,9 @@ const styles = StyleSheet.create({
   profileLabel: { flex: 1, minWidth: 0 },
   divider: { height: 1, marginVertical: space[4], width: '100%' },
   createForm: { gap: spacing.xs, padding: spacing.xs },
-  createRow: { flexDirection: 'row', gap: spacing.sm },
-  input: {
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    flex: 1,
-    fontFamily: 'SUIT',
-    minHeight: 40,
-    minWidth: 0,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    ...typography.sm,
-  },
+  createRow: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.sm },
+  inputField: { flex: 1, minWidth: 0 },
+  input: { flex: 1, minWidth: 0 },
   createButton: { minHeight: 40, minWidth: 72, paddingHorizontal: spacing.md },
   help: { fontFamily: 'SUIT', paddingHorizontal: spacing.xs, ...typography.xsm },
   error: { fontFamily: 'SUIT', paddingHorizontal: spacing.xs, ...typography.xsm },
