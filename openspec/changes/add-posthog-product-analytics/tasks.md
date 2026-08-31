@@ -3,6 +3,7 @@
 - `PROD-820` / PR #685가 이 승인된 shared spec 전체를 소유한다. `PROD-819` / PR #653는 그 계약을 소비하는 Web runtime 구현을 소유한다.
 - 현재 metadata 수집 결정은 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정` 댓글(`59d34cd1-96b2-446f-8a8d-3a48277f285a`)을 근거로 한다. 사용자 정혜주(HJSmiley)가 2026-08-31 마스킹 승인을 대체했으며, 이 결정은 GitHub reviewer signoff나 production acceptance가 아니다.
 - `PROD-795`, `PROD-741`, `PROD-575`가 각각 개인정보·운영 통합, Replay acceptance, production acceptance와 archive를 소유한다. 이 change는 해당 결과를 대신 완료하거나 archive하지 않는다.
+- 그룹 6은 `PROD-795`의 `2026-08-31 명세 구체화 범위 확인`을 반영한 후속 상세 명세다. 선행 shared spec과 그룹 1~5, 후속 그룹 7~8의 소유권·완료 상태는 바꾸지 않는다.
 
 ## 1. PROD-820 Cloud project와 privacy controls
 
@@ -164,8 +165,9 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 
 **Authority / Provenance**
 
-- `PROD-795`의 개인정보 처리방침·runbook·cross-slice 검증 계약
-- 그룹 1~5의 Cloud·runtime·build handoff
+- [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 개인정보 처리방침·runbook·cross-slice 검증 계약과 `2026-08-31 명세 구체화 범위 확인`
+- `docs/design/breakpoints.md`의 공개 `/privacy`와 진입 위치, `docs/domain/objects/account.md`·`docs/domain/objects/session.md`의 기존 Account·Session 경계
+- `PROD-819`의 Web runtime과 `PROD-820`의 Cloud·build 계약. 그룹 1~5의 handoff는 구현·검증 증거로 대조하되 제품 authority를 대신하지 않는다.
 - `PROD-839`의 OpenPanel build/deployment·외부 설정 cleanup 계약
 
 **Deliverable**
@@ -179,6 +181,10 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 - PROD-839가 지원 release·rollback 경로의 OpenPanel 주입과 GitHub 외부 설정을 정리한 뒤 그 cleanup 증거를 입력으로 사용한다.
 - production-equivalent 검증을 실제 production acceptance나 OpenSpec archive로 일반화하지 않는다.
 - PROD-741 replay acceptance가 시작되기 전에 이 cross-slice gate를 완료한다.
+- `/e/`, `/flags`, Replay·performance·heatmap·console과 브라우저 저장소의 관측 범위를 구분한다. 미확인 payload까지 보호된다고 주장하거나 범용 sanitizer를 새로 구현하지 않는다.
+- Replay 30일 retention과 일반 이벤트 보존·삭제 조건을 구분한다. 일반 이벤트 설정 숫자만으로 자동 삭제를 단정하거나 미구현 삭제 자동화·opt-out UI를 고지하지 않는다.
+- 공개 고지의 시행일·보존·국외 처리 조건은 확인·확정한 내용만 반영한다. 현재 미확정 항목은 design의 Open Questions에 기록하며 새 수집·보존 정책을 임의로 선택하지 않는다.
+- SDK·Cloud/build·외부 설정 삭제를 이 그룹으로 가져오지 않는다. 실제 사용자 데이터·project key·credential을 검증 문서에 복제하지 않는다.
 
 **Verification**
 
@@ -186,10 +192,16 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 - Cloud 설정·배포·장애 대응·수집 확인 runbook을 검증한다.
 - 활성 Docker·workflow·GitHub 설정과 운영 문서에서 OpenPanel 계약이 제거되고 PostHog `ph-mask ph-no-capture`는 유지되는지 확인한다.
 - production-equivalent Web build에서 그룹 1~5의 설정·automatic event·identity·fail-open·Replay 보호를 함께 확인한다.
+- 공개 `/privacy`와 기존 진입 위치, provider·브라우저 저장·보존·삭제 설명을 확인한다. 기존 OpenPanel 문구와 provider에 맞지 않는 삭제·장애 대응 안내가 활성 문서에 남지 않는지 검사한다.
+- 각 기록에서 source commit 또는 build, 관측일·설정/요청 표면, 합성 데이터 사용 여부, 결과·미검증 범위를 구분한다. 과거 선행 PR의 테스트 숫자를 현재 결과로 재사용하지 않는다.
 
 - [ ] 6.1 표준 automatic event, URL/referrer/session metadata, persistence, remote config와 Replay 보호를 실제 개인정보 처리방침에 반영한다.
 - [ ] 6.2 Cloud 설정·배포·장애 대응·수집 확인 runbook을 작성하고 OpenPanel 운영 계약을 제거한다.
 - [ ] 6.3 PROD-819와 PROD-820 결과를 production-equivalent Web flow에서 cross-slice 검증한다.
+- [ ] 6.4 `/flags`를 포함한 원격 설정, persistence와 performance·heatmap·console·Replay의 실제 수집 상태 및 보호 범위를 표면별로 대조하고 검증 공백을 기록한다.
+- [ ] 6.5 공개 key·host의 완전·부분·누락 조건, typed custom event, reload·Account 전환·guest reset과 전송 실패에도 사용자 흐름이 유지되는지를 필요한 단위·브라우저 검증으로 확인한다.
+- [ ] 6.6 PROD-839 cleanup과 지원 release·rebuild·rollback 증거를 확인하고 활성 운영 문서·환경 변수 안내·replay marker에 남은 OpenPanel 흔적을 점검한다. PostHog `ph-mask ph-no-capture`는 유지한다.
+- [ ] 6.7 lint·typecheck·관련 테스트·build 결과와 통합 증거를 정리하고, PROD-741 Replay 품질 항목과 PROD-575 production 인수·archive 항목을 구분해 인계한다.
 
 ## 7. PROD-741 Session Replay acceptance
 

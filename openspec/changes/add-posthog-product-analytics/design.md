@@ -76,16 +76,62 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Clou
 - [Web dependency가 Native graph에 유입될 수 있음] → `.web` value import와 Native export/dependency scan을 required verification으로 둔다.
 - [설정/전송 실패를 숨기면 분석 누락을 즉시 알기 어려움] → 제품 흐름은 fail-open으로 유지하고 운영 관측과 production acceptance는 PROD-795·PROD-575가 소유한다.
 
+## PROD-795 개인정보·운영 통합 설계
+
+### 현재 기준과 관측값
+
+이 절에서는 [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 `2026-08-31 명세 구체화 범위 확인`을 구체적으로 다룬다. PR #685의 shared spec과 PR #653의 runtime을 바탕으로 하며 SDK·Cloud·build 계약은 새로 결정하지 않는다. 현재 원격 기준은 PROD-820 `0cdf6eb9`, PROD-819 `73f2dfc7`이다. 당시 두 PR은 아직 병합되지 않았다. 구현을 시작할 때 source와 상태를 다시 확인한다.
+
+- 현재 공개 개인정보 화면과 운영 문서는 OpenPanel을 설명한다. PostHog로 전환하면서 바꿀 내용은 제공자·처리 위치, 자동 수집·브라우저 저장, 보호 범위, 보존·권리 행사와 운영 절차다. UI 배치와 `/privacy` 진입은 바꾸지 않는다.
+- 2026-08-31 읽기 전용 Cloud 조회로 `Kosmo Production`, `Asia/Seoul`, Replay `session_recording_sample_rate=0.10`, `session_recording_retention_period=30d`와 canonical origin URL trigger를 확인했다. 이는 설정 조회 증거이며 실제 녹화 품질을 인수한 증거는 아니다.
+- 일반 이벤트는 `event_retention_months=12`, `events_retention_enforced=false`를 함께 반환했다. PostHog 모델 소스는 전자를 billing entitlement에서 동기화되는 값이라고 설명한다. 이를 이벤트의 물리적 삭제 시점이나 12개월 자동 삭제 보장으로 해석하지 않는다.
+- `session_recording_masking_config=null`과 `recording_domains=null`만으로 입력 masking이 없거나 모든 origin을 허용한다고 단정하지 않는다. URL trigger, 사용 중인 SDK 버전의 기본값·원격 응답과 실제 동작을 함께 대조한다. rrweb 자체 기본값을 PostHog SDK의 최종 설정으로 대신 삼지 않는다.
+- 같은 날 인증된 관리 화면에서 Replay privacy는 `Normal (mask inputs but not text/images)`로 표시됐고, network request 수집은 켜져 있었으며 header·body 수집은 꺼져 있었다. Privacy 화면의 `Discard client IP data`도 꺼져 있었다. 이 설정만으로 개별 요청·녹화의 실제 내용이나 IP 저장 결과를 확정하지 않는다.
+- 조직의 Legal documents 화면에는 생성된 문서가 없었다. 이는 관리 화면에서 확인한 범위에 한정된 결과이며, 별도로 체결한 계약이 없다는 뜻은 아니다. 계약을 생성하거나 서명하지 않았다.
+- 위 값은 특정 시점의 관측값이며 durable 수집 정책을 뜻하지 않는다. 실제 key·host 값과 사용자 식별자·콘텐츠, credential은 문서에 복제하지 않는다.
+
+### 권장 작업 순서
+
+1. 선행 runtime·build commit과 PROD-839 cleanup이 적용되는 release·rebuild·rollback 범위를 식별한다. 선행 PR이 아직 병합되지 않았어도 문서 작성과 검증 준비는 할 수 있지만 cleanup·통합 완료를 선언하지 않는다.
+2. 수집 표면별 관측 결과를 먼저 정리한 다음 개인정보 화면을 수정한다. 기존 `apps/app/src/app/privacy.tsx`의 분석·위탁·국외 이전·권리 행사 절을 대상으로 하며, 시행일과 일반 이벤트 보존·삭제 및 국외 처리 조건은 아래 미확정 항목을 해결한 뒤 공개 문구로 확정한다.
+3. 기존 `docs/operations/openpanel.md`의 provider 전용 안내와 `production-release.md` 링크를 PostHog 운영 안내로 전환한다. 실제 삭제·장애 대응 절차를 대조하고, PROD-839 gate 전에는 지원 중인 OpenPanel 경로 안내를 제거하지 않는다. 이전 안내는 Git 이력에서 추적할 수 있게 한다.
+4. 기존 unit·browser 검증은 같은 build와 source를 기준으로 재사용한다. 이미 PROD-819에서 확인한 helper 동작을 반복하기보다는 `/flags` 등 빠진 표면과 문서·운영 설정이 맞물리는 경계를 보완한다. 테스트 편의를 위해 production adapter를 바꾸지 않는다.
+5. PROD-795 자체 검증 결과를 모으고, 실제 Replay 품질은 PROD-741에, production 수집 인수와 archive는 PROD-575에 인계한다. source·artifact가 바뀌면 영향을 받는 검증을 다시 확인한다.
+
+### 수집 표면과 검증 증거
+
+| 표면                               | 확인할 내용                                                                                                                       | 증거의 한계                                                                                                                                      |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 표준 `/e/`와 custom event          | pageview·pageleave·autocapture, URL·referrer·session metadata, `q`·click ID·`ph_keyword` masking, `utm_*` 보존과 typed properties | 합성 marker를 사용한 browser outbound 결과로 확인 범위를 한정한다. 다른 endpoint가 보호된다는 증거는 아니다.                                     |
+| `/flags`·원격 설정                 | 실제 요청의 식별자·속성 범위, 응답 설정과 필요한 외부 모듈 로딩                                                                   | 요청 발생만 확인하는 테스트로는 body에 원문이 없음을 증명할 수 없다. 발견한 계약 문제는 PROD-819/820으로 돌려보내고 범용 필터를 추가하지 않는다. |
+| 브라우저 저장·identity             | cookie/localStorage, reload·같은 Account·다른 Account·guest 전환과 reset                                                          | 분석 식별자와 인증 Session credential을 구분한다. identity trait의 제한을 모든 DOM·metadata의 비식별 보장으로 확대하지 않는다.                   |
+| Replay·performance·heatmap·console | Cloud 설정과 실제 수집 상태, input·Post Content 보호, origin·sampling·retention                                                   | SDK 옵션, 원격 설정, outbound와 실제 recording을 구분한다. 최종 Viewer 녹화 품질은 PROD-741에 남긴다.                                            |
+| 설정·장애·배포                     | key/host 완전·부분·누락, 초기화·전송 실패 시 인증·탐색·게시, rebuild·rollback                                                     | fake endpoint나 로컬 no-op이 통과한 결과를 실제 production 수집 인수로 표시하지 않는다.                                                          |
+
+운영 기록에는 관측일, source commit/build artifact, 환경, 설정 또는 요청 표면, 합성 데이터 사용 여부, 결과, 미검증 범위와 후속 owner를 담으면 충분하다. 새 저장소나 범용 검증 프레임워크는 만들지 않는다. raw payload와 사용자 정보는 공유 문서에 첨부하지 않는다.
+
+### 보존·삭제·국외 처리 문구의 근거
+
+- PostHog [DPA](https://posthog.com/dpa)는 고객 end-user 데이터에 대해 Company와 PostHog의 역할을 각각 Controller와 Processor로 구분한다. PostHog 자체 계정·웹사이트의 [Privacy Policy](https://posthog.com/privacy)를 Kosmo 분석 데이터의 처리 근거로 그대로 옮기지 않는다. 공개 DPA 설명과 실제 조직 계약·선택 리전도 구분한다.
+- [Data storage](https://posthog.com/docs/privacy/data-storage)의 person·event 삭제와 [persons 문서](https://github.com/PostHog/posthog.com/blob/master/contents/docs/data/persons.mdx)에 있는 이벤트·녹화 삭제 옵션을 현재 제공자 절차와 대조한다. 비동기 삭제 요청 접수와 삭제 완료는 다르다. 이 Spec 단계에서 실제 사용자 데이터를 삭제하지 않는다.
+- [Replay retention](https://github.com/PostHog/posthog.com/blob/master/contents/docs/session-replay/recording-retention.mdx)은 새 보존 설정이 이후 수집분에 적용된다고 설명한다. 플랜 상한, 실제 프로젝트 설정, 과거 녹화에 적용되는 기간과 삭제 완료 시점을 구분한다.
+- [JS persistence](https://posthog.com/docs/libraries/js/persistence)는 기본 cookie·localStorage 저장을 설명한다. 실제 Kosmo SDK 설정과 대조해 고지하고, 브라우저 cookie 수명을 서버 분석 데이터 보존기간으로 쓰지 않는다.
+- 설정 필드의 의미는 [공식 Team model](https://github.com/PostHog/posthog/blob/master/posthog/models/team/team.py)을 참고하되, 조회 시점의 API·플랜·실제 처리 증거를 우선한다. 이 자료는 기술적 사실의 근거이며 한국 개인정보 처리·국외 이전의 법적 근거를 대신 결정하지 않는다.
+- 국외 이전 고지는 [개인정보보호위원회 안내](https://www.pipc.go.kr/np/default/page.do?mCode=D060040010)를 대조해 적용 가능한 근거와 필요한 고지·보호 조치를 확인한다. PostHog를 사용한다는 사실만으로 특정 예외에 해당한다고 판단하지 않는다.
+
 ## Migration Plan
 
 1. PROD-820에서 Cloud 보호 설정과 공개 build/deployment 주입을 production 배포 전에 준비한다.
 2. PROD-819에서 OpenPanel runtime, manual pageview·filter와 module identity cache를 제거하고 PostHog 표준 runtime으로 전환한다.
-3. PROD-795가 production-equivalent build에서 실제 수집 surface, 개인정보 처리방침과 runbook을 통합한다.
+3. PROD-839가 지원 release·rebuild·rollback의 OpenPanel 의존과 외부 설정을 정리한 증거를 확인하고, PROD-795가 production-equivalent build에서 실제 수집 surface, 개인정보 처리방침과 runbook을 통합한다. 그 전에는 문서·검증 준비와 완료 판정을 구분한다.
 4. PROD-741이 Post Media Viewer replay·masking·fail-open을 acceptance 한다.
 5. PROD-575가 production acceptance 후 old OpenPanel change를 `--skip-specs`로 archive하고 이 change를 정상 archive한다.
 
-긴급 비활성화는 production build의 공개 key 또는 host를 제거해 adapter를 no-op으로 만든다. OpenPanel과 PostHog를 동시에 활성화하지 않는다.
+긴급 비활성화는 production build의 공개 key 또는 host를 제거하고 rebuild·승인된 배포로 adapter를 no-op으로 만든다. 이미 배포한 정적 bundle은 변수 삭제만으로 바뀌지 않는다. OpenPanel과 PostHog를 동시에 활성화하지 않는다.
 
 ## Open Questions
 
-없음.
+- 공개 개인정보 처리방침의 개정 시행일과 사전 고지 일정은 미확정이다. 과거 시행일을 그대로 둔 채 새 PostHog 처리가 그때부터 적용된 것처럼 쓰지 않는다.
+- 일반 이벤트의 보존·삭제 운영 기준과 실제 제공자 적용 조건을 확인해야 한다. `event_retention_months=12`만으로 자동 삭제를 약속하지 않으며, 새로운 고정 보존기간을 이 명세에서 선택하지 않는다.
+- 미국 처리의 실제 계약·이전 항목·시점·방법·보유 조건과 적용할 법적 근거를 개인정보 고지 책임자와 확인해야 한다. 제공자 공개 문서만으로 국내법상 근거를 확정하지 않는다.
+- 위 공개 고지 조건은 PROD-795가 확인·결정 기록을 소유한다. 확정된 부분의 문서·검증 준비와 별개로, 미확정 조건을 사용한 공개 문구 확정 및 6.1 완료는 보류한다. PROD-795 Spec Gate 최종 승인도 미확정 항목과 처리 방침을 검토한 뒤 받는다.

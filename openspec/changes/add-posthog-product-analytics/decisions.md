@@ -148,9 +148,29 @@
 - Consequences: Native analytics는 계속 비활성이고 PROD-537가 별도로 소유한다.
 - Confirmation / Follow-up: Native export/dependency graph에서 PostHog runtime 부재를 확인한다.
 
+### PROD-795는 수집 표면별 증거로 개인정보·운영 문서를 정렬한다
+
+- Decision Date: 2026-08-31
+- Decision Class: Derived Contract
+- Authority / Provenance: [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 포함 범위·완료 조건과 `2026-08-31 명세 구체화 범위 확인`; `docs/design/breakpoints.md`의 공개 `/privacy` 진입 계약
+- Status: Active
+- Context / Problem: `/e/`의 masking 검증과 Replay 보호 설정만으로 모든 PostHog 수집·보존 조건을 설명하면 실제 동작보다 강한 공개 고지가 된다.
+- Decision Outcome: 개인정보 화면과 운영 문서는 표준 이벤트, `/flags` 등 원격 설정, persistence와 Replay 수집·보호를 구분하고 실제 확인한 내용만 설명한다. PROD-795는 해당 통합 검증과 고지·운영 안내를 소유하며 SDK·Cloud/build 변경, 실제 Replay 품질 인수와 production acceptance/archive는 기존 owner가 맡는다.
+- Alternatives Considered: 현재 `/e/` 테스트만으로 모든 요청을 보호한다고 설명하거나 범용 sanitizer를 추가하는 방식은 기존 PROD-795/819/820 계약을 벗어나므로 적용하지 않는다. 이 결정에 새로운 제품 선택을 추가하지 않는다.
+- Consequences: 미확인 표면과 고지 조건은 검증 공백으로 남고, 확인 없이 완료를 선언하지 않는다. 공개 route와 기존 Account·Session 계약은 유지한다.
+- Confirmation / Follow-up: 그룹 6의 고지·runbook·통합 증거와 PROD-741/575 handoff를 대조한다.
+
 ## Remaining Decisions
 
-- 없음.
+### PROD-795 공개 고지 조건의 미확정 항목
+
+이 항목은 새 수집·보존 정책을 승인하는 decision이 아니다. 다음 조건은 아직 선택하거나 확정하지 않았다.
+
+- 개정 시행일과 사전 고지 일정.
+- 일반 이벤트의 실제 보존·삭제 운영 기준. Replay 30일 또는 API의 `event_retention_months=12`를 전체 이벤트의 자동 삭제 보장으로 사용하지 않는다.
+- 미국 처리에 관한 실제 계약·이전 고지 조건과 적용할 법적 근거.
+
+소유자는 PROD-795다. 기존 수집·마스킹 계약과 사실 확인을 넘어 새 제품·보존 정책을 선택해야 한다면 canonical·Linear에 결정과 승인을 먼저 기록한 뒤 이 명세를 갱신한다. 그 전에는 후보 정책을 Active decision이나 구현 근거로 사용하지 않는다.
 
 ## Superseded Decisions
 

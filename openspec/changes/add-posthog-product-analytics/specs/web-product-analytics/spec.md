@@ -177,6 +177,75 @@
 - **WHEN** 공개 key와 host가 모두 제공되지 않는다
 - **THEN** PostHog client와 analytics network 전송은 생성되지 않는다
 
+### Requirement: 개인정보 고지와 실제 수집의 일치
+
+**Authority / Provenance:** [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 포함 범위·완료 조건과 `2026-08-31 명세 구체화 범위 확인`; `docs/design/breakpoints.md`의 개인정보 처리방침 진입 계약 — 공개 개인정보 처리방침은 실제 PostHog 제공자와 처리 위치, 표준 자동 이벤트, URL·referrer·session metadata, 브라우저 저장, 원격 설정과 Session Replay 보호를 설명해야 한다(MUST). 표준 이벤트의 `q`·SDK 기본 click ID masking과 `utm_*` 보존을 Replay masking과 구분해야 한다(MUST). 기존 공개 `/privacy` 접근과 canonical 진입 위치를 유지해야 한다(MUST).
+
+#### Scenario: 사용자가 개인정보 처리방침을 확인한다
+
+- **WHEN** 비로그인 또는 로그인 사용자가 공개 `/privacy`를 연다
+- **THEN** 현재 분석 제공자와 수집 목적·항목·방법, 브라우저 식별자 저장, 실제 확인한 처리·보존·권리 행사 조건을 확인할 수 있다
+- **AND** 공개 진입을 바꾸거나 새 설정 화면·수집 동의 기능이 있는 것처럼 안내하지 않는다
+
+#### Scenario: 수집 표면별 보호 범위를 고지한다
+
+- **WHEN** 표준 이벤트와 원격 설정·Replay 수집을 설명한다
+- **THEN** `/e/`에서 확인한 URL·referrer masking을 `/flags`나 모든 PostHog 요청이 보호된다는 내용으로 일반화하지 않는다
+- **AND** `ph-mask`의 Replay text masking과 `ph-no-capture`의 Post Content autocapture 제외를 구분한다
+- **AND** Account identity trait에 원문 이름·이메일·handle을 넣지 않는다는 사실을 모든 DOM·URL·표준 metadata에 해당 정보가 없다는 보장으로 확대하지 않는다
+
+#### Scenario: 보존기간 또는 처리 조건이 확인되지 않았다
+
+- **WHEN** 일반 이벤트의 실제 보존·삭제 조건, 국외 처리 고지 조건 또는 개정 시행일이 확정되지 않았다
+- **THEN** 확인되지 않은 조건을 공개 방침에 확정된 사실로 넣거나 개인정보 고지 작업을 완료로 처리하지 않는다
+- **AND** Replay의 30일 retention을 전체 분석 데이터의 보존기간으로 사용하지 않는다
+- **AND** 미구현 Account 분석 데이터 자동 삭제나 opt-out UI를 제공한다고 고지하지 않는다
+
+### Requirement: PostHog 운영 전환과 장애 대응 안내
+
+**Authority / Provenance:** [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 운영 문서·OpenPanel 계약 제거 범위, [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 cleanup 선행 조건, `PROD-820`의 공개 build-time 설정 계약 — 운영 문서는 실제 provider의 설정 확인, 수집 점검, 장애 대응과 권리 행사 절차를 안내해야 한다(MUST). PROD-839의 지원 release·rebuild·rollback 및 외부 설정 정리 증거를 대조한 뒤 OpenPanel 운영 계약 제거를 완료로 처리해야 한다(MUST). PROD-795가 Cloud나 배포·외부 설정 삭제를 대신 수행하지 않아야 한다(MUST NOT).
+
+#### Scenario: 운영자가 분석 수집과 보호 설정을 점검한다
+
+- **WHEN** 운영 문서에 따라 PostHog를 점검한다
+- **THEN** Cloud project·region·timezone, Replay 10% sampling·canonical origin·Normal input masking·30일 retention과 적용 시점을 확인하는 방법을 찾을 수 있다
+- **AND** 설정값 관측, SDK가 적용한 동작과 실제 recording 확인 결과를 구분할 수 있다
+- **AND** 실제 제공자 절차에 따라 삭제 요청 대상 식별, 이벤트·녹화 삭제 범위, 비동기 처리와 완료 확인 방법을 확인할 수 있다
+
+#### Scenario: OpenPanel 전환 정리가 아직 끝나지 않았다
+
+- **WHEN** PROD-839의 cleanup 또는 지원 release·rollback 확인 결과가 없다
+- **THEN** OpenPanel 운영 계약 제거와 통합 완료를 미완료로 유지한다
+- **AND** 기존 provider를 소비하는 지원 경로의 안내를 완료된 전환처럼 제거하지 않는다
+
+#### Scenario: 분석을 긴급 중단하거나 설정을 바꾼다
+
+- **WHEN** 운영자가 PostHog 공개 key 또는 host를 제거하거나 교체한다
+- **THEN** 이미 발행한 정적 Web bundle에는 변경이 소급되지 않으므로 rebuild·승인된 배포와 새 artifact 확인이 필요하다고 안내한다
+- **AND** OpenPanel과 PostHog를 동시에 활성화하는 fallback을 안내하지 않는다
+
+### Requirement: PROD-795 통합 증거와 후속 인계
+
+**Authority / Provenance:** [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 통합 검증·필수 검증·PROD-741/575 인계 완료 조건 — PROD-795는 PROD-819 runtime과 PROD-820 Cloud/build, PROD-839 cleanup을 결합해 production-equivalent 검증을 수행해야 한다(MUST). source commit·build 조건·관측 표면·결과·미검증 범위를 구분해 기록하고, 실제 사용자 콘텐츠·식별자·project key·credential을 공유 증거에 남기지 않아야 한다(MUST NOT). 실제 Replay 품질 인수는 PROD-741, production acceptance와 archive는 PROD-575에 유지해야 한다(MUST).
+
+#### Scenario: 선행 구현을 결합해 검증한다
+
+- **WHEN** 공개 설정을 포함한 production-equivalent Web build를 검증한다
+- **THEN** pageview·pageleave·autocapture, URL·referrer·session metadata와 typed custom event를 확인하고 reload를 포함한 identify/reset을 확인한다
+- **AND** `/flags` 등 원격 설정 요청, performance·heatmap·console과 Replay는 각 표면의 관측 결과와 보호 범위를 별도로 기록한다
+- **AND** fake endpoint 결과를 실제 Cloud 수집이나 recording acceptance 결과로 표현하지 않는다
+
+#### Scenario: 설정이 누락되거나 전송이 실패한다
+
+- **WHEN** 공개 key·host가 불완전하거나 analytics endpoint 전송이 실패한다
+- **THEN** 인증·탐색·게시 등 사용자 흐름이 analytics와 무관하게 완료되는지 production-equivalent 브라우저 조건에서 확인한다
+
+#### Scenario: 통합 결과를 후속 이슈에 인계한다
+
+- **WHEN** 필수 lint·typecheck·관련 테스트·build와 통합 검증 결과를 정리한다
+- **THEN** PROD-741의 실제 Post Media Viewer Replay 품질 확인과 PROD-575의 production 수집 인수·OpenSpec archive 항목을 구분한다
+- **AND** 미검증 필수 항목은 통과로 표시하지 않으며 PROD-795를 끝냈다는 이유만으로 change를 archive하지 않는다
+
 ### Requirement: Native no-op 경계
 
 **Authority / Provenance:** `docs/design/breakpoints.md`, `PROD-819`, `PROD-537` — Android·iOS는 공용 analytics interface를 계속 제공하되 이번 Web slice의 PostHog 호출을 명시적 no-op으로 처리해야 한다(MUST). Native build graph와 bundle은 `posthog-js` 또는 `posthog-react-native` runtime을 포함하지 않아야 하며(MUST), 이 결과를 Native 분석 지원 완료 또는 영구 비지원 결정으로 해석하지 않아야 한다(MUST).
