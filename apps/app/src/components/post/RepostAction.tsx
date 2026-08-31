@@ -2,6 +2,7 @@ import { Repeat2 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { ActionMenu } from '@/components/ui/ActionMenu';
+import { useTheme } from '@/theme/ThemeProvider';
 import { PostActionControl } from './PostActionControl';
 import type { RepostAction_post$key } from './__generated__/RepostAction_post.graphql';
 import type { RepostActionDeletePostMutation } from './__generated__/RepostActionDeletePostMutation.graphql';
@@ -70,6 +71,7 @@ export function RepostAction({
   onResolutionRequired,
   post,
 }: Props) {
+  const theme = useTheme();
   const data = useFragment(repostActionPostFragment, post);
   const environment = useRelayEnvironment();
   const [commitRepost, isReposting] =
@@ -164,9 +166,13 @@ export function RepostAction({
           <PostActionControl
             accessibilityLabel={data.viewerRepost ? '재게시 취소' : '재게시'}
             active={Boolean(data.viewerRepost)}
+            activeColor={theme.actionRepostBase}
+            baseColor={theme.actionRepostBase}
             controlRef={ref}
             count={data.repostCount}
+            hoverColor={theme.actionRepostBase}
             hoverDisabled={execution.kind === 'resolution-required'}
+            hoverForegroundColor={theme.actionRepostBase}
             icon={Repeat2}
             iconStrokeWidth={2.7}
             menuExpanded={execution.kind === 'enabled' ? menuExpanded : false}

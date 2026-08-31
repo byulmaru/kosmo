@@ -112,12 +112,12 @@ export function PostActionBar({
             <PostActionControl
               accessibilityLabel="반응"
               active={hasReacted}
-              activeColor={theme.like}
+              activeColor={theme.actionReactionBase}
               controlRef={ref}
               fillActive
-              hoverColor={theme.like}
+              hoverColor={theme.actionReactionBase}
               hoverDisabled={execution.kind === 'resolution-required'}
-              hoverForegroundColor={theme.like}
+              hoverForegroundColor={theme.actionReactionBase}
               hoverOpacity={0.3}
               icon={Heart}
               menuExpanded={expanded}

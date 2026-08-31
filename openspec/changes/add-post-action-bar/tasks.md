@@ -222,3 +222,32 @@ PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 �
 - [ ] 5.4 실제 변경 후 Web runtime 성공과 지원 Native runtime에서의 동작을 확인하고, 동일 환경의 변경 전 실패·변경 후 성공을 포함한 관련 앱 검증 및 archive 전 strict validation을 통과시킨다. canonical 문서·Linear·OpenSpec·구현의 최종 정합성을 확인하기 전에는 이 task를 체크하지 않는다.
   - 2026-08-27 부분 증거: configured origin을 실제 접속 origin과 다르게 주입한 Playwright Web E2E에서 현재 browser origin과 query·hash 없는 canonical Post path가 clipboard에 복사됐고 전체 Web E2E 120개가 통과했다. 지원 Native runtime과 production 배포 증거는 아직 없다.
 - [ ] 5.5 전체 계약 완료 승인을 받은 뒤 공유 change를 archive하고 archive 후 strict validation을 통과시킨다.
+
+## 6. PROD-866 Post action semantic 색상
+
+**Authority / Provenance**
+
+- `PROD-866`
+- `docs/design/colors.md`
+- `docs/design/post-action-bar.md`
+- Figma `PostActionControl` 3801:8494
+- Figma `PostActionBar` 6604:48270
+
+**Deliverable**
+
+Reaction과 Repost가 전역 feedback 의미와 분리된 presentation semantic을 사용하고, Repost는 Dark에서도 일반 크기 count에 충분한 대비를 제공한다.
+
+**Guardrails**
+
+- Reaction은 Light·Dark `#F97066`, Repost는 Light `#16794A`·Dark `#409667`을 사용한다.
+- 전역 `feedbackSuccessBase`, action geometry·glyph·순서, mutation·cache·권한 계약은 변경하지 않는다.
+- 새 dependency, 범용 action color abstraction과 PROD-853 전용 중복 fixture를 추가하지 않는다.
+
+**Verification**
+
+- 기존 Post Action Bar Storybook Relay fixture에서 Repost default·hover·selected와 Reaction active·hover를 Light·Dark로 직접 검증한다.
+- focused Storybook test, app check, lint·format, 전체 Storybook test·build와 OpenSpec strict validation을 통과시킨다.
+- Web 결과를 Native runtime 동작·접근성 완료 증거로 사용하지 않는다.
+
+- [x] 6.1 canonical 설계 문서와 OpenSpec에 승인된 Reaction·Repost semantic 색상 및 전역 Success 비변경 경계를 기록한다.
+- [x] 6.2 기존 공용 control·theme 경계로 semantic 색상을 구현하고 Light·Dark Storybook 회귀와 전체 검증을 통과시킨다.

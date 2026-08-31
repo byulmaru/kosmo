@@ -20,6 +20,7 @@ type Props = {
   activeColor?: string;
   active?: boolean;
   alignToEnd?: boolean;
+  baseColor?: string;
   count?: number;
   controlRef?: Ref<View>;
   expanded?: boolean;
@@ -43,6 +44,7 @@ export function PostActionControl({
   activeColor,
   active = false,
   alignToEnd = false,
+  baseColor,
   count,
   controlRef,
   expanded,
@@ -71,7 +73,7 @@ export function PostActionControl({
       ? (activeColor ?? theme.primary)
       : expanded
         ? theme.primary
-        : theme.textSecondary;
+        : (baseColor ?? theme.textSecondary);
   const iconColor =
     hovered && !blocked && !active && !hoverDisabled
       ? (hoverForegroundColor ?? theme.primary)
