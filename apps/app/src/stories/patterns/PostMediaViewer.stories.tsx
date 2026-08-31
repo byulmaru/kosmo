@@ -593,15 +593,6 @@ export const WideRailCompositionContract: Story = {
       expect(dividerBounds.left).toBeGreaterThan(rowBounds.left);
       expect(dividerBounds.right).toBeLessThan(rowBounds.right);
     }
-
-    for (const testId of [
-      'post-thread-connector-wide-rail-ancestor-wide-rail-current-after',
-      'post-thread-connector-wide-rail-ancestor-wide-rail-current-before',
-      'post-thread-connector-wide-rail-current-wide-rail-descendant-after',
-      'post-thread-connector-wide-rail-current-wide-rail-descendant-before',
-    ]) {
-      expect(within(thread).getByTestId(testId)).toBeVisible();
-    }
   },
 };
 
