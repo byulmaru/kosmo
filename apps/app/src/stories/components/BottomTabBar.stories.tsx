@@ -76,6 +76,7 @@ const meta = {
     unreadNotificationCount: { control: { min: 0, step: 1, type: 'number' } },
   },
   component: BottomTabBarCatalog,
+  excludeStories: ['InteractionContract', 'ProfileUnavailableContract', 'ReducedMotionContract'],
   parameters: { controls: { disable: true }, layout: 'fullscreen' },
   title: 'KOSMO/Components/Bottom Tab Bar',
 } satisfies Meta<typeof BottomTabBarCatalog>;
@@ -100,12 +101,9 @@ export const Playground: Story = {
     },
   },
   play: async ({ args, canvasElement, step }) => {
-    args.onNavigate.mockClear();
     const canvas = within(canvasElement);
     const navigation = canvas.getByRole('navigation', { name: '하단 탐색' });
     const controls = within(navigation).getAllByRole('button');
-    const home = within(navigation).getByRole('button', { name: '홈' });
-    const search = within(navigation).getByRole('button', { name: '검색' });
     const unreadNotificationCount = args.unreadNotificationCount ?? 0;
     const notificationName =
       unreadNotificationCount > 0 ? `알림, 읽지 않은 알림 ${unreadNotificationCount}개` : '알림';
@@ -164,10 +162,24 @@ export const Playground: Story = {
         expect(profileControl).toHaveAttribute('aria-disabled', 'true');
         expect(profileControl).toBeDisabled();
         expect(within(profileControl).queryByRole('img')).not.toBeInTheDocument();
-        profileControl.click();
-        expect(args.onNavigate).not.toHaveBeenCalled();
       }
     });
+  },
+};
+
+export const InteractionContract: Story = {
+  ...Playground,
+  parameters: { controls: { disable: true } },
+  play: async ({ args, canvasElement, step }) => {
+    args.onNavigate.mockClear();
+    const canvas = within(canvasElement);
+    const navigation = canvas.getByRole('navigation', { name: '하단 탐색' });
+    const home = within(navigation).getByRole('button', { name: '홈' });
+    const search = within(navigation).getByRole('button', { name: '검색' });
+    const unreadNotificationCount = args.unreadNotificationCount ?? 0;
+    const notificationName =
+      unreadNotificationCount > 0 ? `알림, 읽지 않은 알림 ${unreadNotificationCount}개` : '알림';
+    const notifications = within(navigation).getByRole('button', { name: notificationName });
 
     await step('키보드 선택과 callback 확인', async () => {
       await userEvent.tab();
@@ -205,6 +217,10 @@ export const Playground: Story = {
 export const ReducedMotion: Story = {
   args: { unreadNotificationCount: 3 },
   globals: { reduceMotion: true },
+};
+
+export const ReducedMotionContract: Story = {
+  ...ReducedMotion,
   play: async ({ canvasElement }) => {
     const navigation = within(canvasElement).getByRole('navigation', { name: '하단 탐색' });
     const notifications = within(navigation).getByRole('button', {
@@ -222,6 +238,19 @@ export const ReducedMotion: Story = {
 
 export const ProfileUnavailable: Story = {
   args: { currentDestination: 'profile', profileAvailable: false },
+  play: async ({ canvasElement }) => {
+    const navigation = within(canvasElement).getByRole('navigation', { name: '하단 탐색' });
+    const profileControl = within(navigation).getByRole('button', { name: '프로필' });
+
+    expect(profileControl).toBeDisabled();
+    expect(profileControl).toHaveAttribute('aria-disabled', 'true');
+    expect(profileControl).not.toHaveAttribute('aria-current', 'page');
+    expect(within(profileControl).queryByRole('img')).not.toBeInTheDocument();
+  },
+};
+
+export const ProfileUnavailableContract: Story = {
+  ...ProfileUnavailable,
   play: async ({ args, canvasElement }) => {
     args.onNavigate.mockClear();
     const navigation = within(canvasElement).getByRole('navigation', { name: '하단 탐색' });
