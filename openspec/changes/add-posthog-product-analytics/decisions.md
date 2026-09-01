@@ -92,12 +92,12 @@
 
 - Decision Date: 2026-08-31
 - Decision Class: Derived Contract
-- Authority / Provenance: [Linear `PROD-819`](https://linear.app/byulmaru/issue/PROD-819)와 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-08-31 마스킹 정책 승인` 기록
+- Authority / Provenance: [Linear `PROD-819`](https://linear.app/byulmaru/issue/PROD-819)와 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-08-31 마스킹 정책 승인` 기록; [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `## 2026-09-01 PR #685 리뷰 대응 — 마스킹 대안 비교와 선택 이유` 댓글(`71f20e76-e996-4cca-adfd-9b99a13c672c`)
 - Status: Active
 - Context / Problem: `2026-08-30` 구현 기록만으로는 masking 정책의 독립 authority나 사용자 승인을 증명하지 못한다.
 - Decision Outcome: 사용자 정혜주(HJSmiley)는 “URL·referrer의 검색어 `q`와 광고 click ID는 가리고, `utm_*`는 보존하는 현재 정책을 유지·승인하시겠어요?”라는 질문에 “마스킹 정책 승인”으로 답했다. 이 승인으로 현재 SDK native `q`·기본 광고 click ID masking, native masking이 놓치는 좁은 referrer `q`·기본 click ID·`ph_keyword` 계열의 공개 `before_send` 보완과 `utm_*` 보존을 유지한다.
-- Alternatives Considered: q-only masking으로 되돌리거나 URL·referrer·session metadata 전체를 필터링하는 방식은 승인된 현재 계약과 맞지 않아 제외한다.
-- Consequences: 기본 click ID 손실이라는 privacy trade-off는 현재 정책에 대해 사용자가 승인한 것이며, `2026-08-30` 구현을 소급 승인하거나 GitHub reviewer signoff 또는 production acceptance로 대체하지 않는다. `ph-mask ph-no-capture` Replay marker와 공개 `get_property('$user_id')`·`get_distinct_id()` identity API는 변경하지 않는다. 범용 sanitizer와 표준 metadata 전면 필터는 계속 금지한다.
+- Alternatives Considered: q-only masking은 `q`를 가리고 SDK 기본 광고 click ID와 click-level attribution을 보존하지만, 승인된 default click ID masking privacy trade-off와 충돌하므로 제외한다. standard metadata unfiltered는 표준·검색·click attribution을 극대화하지만 raw `q`와 광고 click ID가 남을 수 있어 승인된 privacy boundary를 벗어나므로 제외한다. 선택한 정책은 표준 lifecycle·metadata 필드를 보존하고 SDK native `q`·기본 click ID masking을 적용하며, native masking이 놓치는 referrer URL의 `q`·click ID와 파생 `ph_keyword` 계열만 좁은 공개 `before_send` hook으로 보완하고 `utm_*`를 보존한다. 이는 raw 검색·click identifier 최소화를 click-ID attribution보다 우선하면서 UTM campaign classification과 표준 Web analytics를 유지하고 broad app sanitizer를 피하기 위한 것으로, `gclid`, `fbclid`, `msclkid` 등 click-ID-level attribution을 수집 이벤트에서 사용할 수 없는 손실을 수용한다. blanket URL/referrer/session removal 또는 general sanitizer는 노출을 줄이지만 표준 Web·session·referrer analytics를 훼손하므로 제외한다.
+- Consequences: 기본 click ID 손실이라는 privacy trade-off는 현재 정책에 대해 사용자가 승인한 것이며, 선택한 정책은 raw 검색·click identifier를 최소화하는 대신 `gclid`, `fbclid`, `msclkid` 등 click-ID-level attribution을 수집 이벤트에서 사용할 수 없는 손실을 수용한다. 표준 lifecycle·metadata와 UTM campaign classification 및 표준 Web analytics는 유지한다. `2026-08-30` 구현을 소급 승인하거나 GitHub reviewer signoff 또는 production acceptance로 대체하지 않는다. `ph-mask ph-no-capture` Replay marker와 공개 `get_property('$user_id')`·`get_distinct_id()` identity API는 변경하지 않는다. 범용 sanitizer와 표준 metadata 전면 필터는 계속 금지한다.
 - Confirmation / Follow-up: protocol·standard event payload의 URL/referrer masking과 `utm_*` 보존은 Replay의 Cloud privacy·`ph-mask ph-no-capture` marker와 별도로 검증한다. PROD-795, PROD-741, PROD-575의 통합·acceptance·archive 책임은 그대로 유지한다.
 
 ### Session Replay 보호는 Cloud와 표준 masking marker가 소유한다
