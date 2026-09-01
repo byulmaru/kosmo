@@ -4,14 +4,13 @@ import {
   executeProfileFollowPairTransition,
   executeProfileFollowRemoval,
 } from '../temporal/follow-command';
-import { rehydrateProfileFollowFailure } from './profile-follow-command';
 import type { ProfileFollowRequests, Profiles } from '../db';
 
 type ProfileRow = typeof Profiles.$inferSelect;
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
 
-export type FollowProfileResult = {
+type FollowProfileResult = {
   readonly created: boolean;
   readonly followeeProfile: ProfileRow;
   readonly followerProfile: ProfileRow;
@@ -69,14 +68,10 @@ export const unfollowProfile = async ({
     return { profileFollowId: null };
   }
 
-  const result = await executeProfileFollowRemoval({
+  return executeProfileFollowRemoval({
     followerProfileId,
     followeeProfileId,
     expectedRowId: profileFollow.id,
     origin: 'LOCAL',
   });
-  if (!result.ok) {
-    throw rehydrateProfileFollowFailure(result.error);
-  }
-  return result;
 };

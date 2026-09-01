@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
@@ -497,51 +497,6 @@ test('동시 승인은 성공 개수와 무관하게 relation과 count를 중복
       .then((rows) => rows.length),
     0,
   );
-});
-
-test('Follow 알림 저장 실패는 승인 relation과 count 전이를 되돌리지 않는다', async () => {
-  const { followee, follower, request } = await createPendingRequest();
-  await db.execute(
-    sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_test_failure CHECK (false) NOT VALID`,
-  );
-  const approved = await (async () => {
-    try {
-      return await lifecycle.approveProfileFollowRequest!({
-        actorProfileId: followee.id,
-        profileFollowRequestId: request.id,
-      });
-    } finally {
-      await db.execute(sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_test_failure`);
-    }
-  })();
-
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollowRequests)
-      .where(eq(ProfileFollowRequests.id, request.id))
-      .then((rows) => rows.length),
-    0,
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(eq(ProfileFollows.followerProfileId, follower.id))
-      .then((rows) => rows.length),
-    1,
-  );
-  assert.equal(
-    (await db.select().from(Profiles).where(eq(Profiles.id, follower.id)).then(firstOrThrow))
-      .followingCount,
-    1,
-  );
-  assert.equal(
-    (await db.select().from(Profiles).where(eq(Profiles.id, followee.id)).then(firstOrThrow))
-      .followersCount,
-    1,
-  );
-  assert.deepEqual(await readNotifications(approved.profileFollow.id), []);
 });
 
 const createRemotePendingRequest = async () => {

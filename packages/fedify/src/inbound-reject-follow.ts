@@ -133,9 +133,6 @@ export const handleInboundRejectFollow = async ({
     expectedRowId: profileFollow!.id,
     origin: 'ACTIVITYPUB',
   });
-  if (!removed.ok) {
-    throw new Error(removed.error.message);
-  }
   if (!removed.changed) {
     observeInboundNoop({
       activityType: 'Reject',

@@ -380,9 +380,6 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
         expectedRowId: profileFollow.id,
         origin: 'ACTIVITYPUB',
       });
-      if (!result.ok) {
-        throw new Error(result.error.message);
-      }
       if (!result.changed) {
         observeInboundNoop({
           activityType: 'Undo',
