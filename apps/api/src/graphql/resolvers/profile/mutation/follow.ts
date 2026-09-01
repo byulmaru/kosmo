@@ -1,5 +1,5 @@
 import { ConflictError } from '@kosmo/core/error';
-import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
+import { followProfile } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Profile, ProfileFollow, ProfileFollowRequest } from '../ref';
 
@@ -30,15 +30,9 @@ builder.mutationField('followProfile', (t) =>
       id: t.input.globalID({ for: Profile }),
     },
     resolve: async (_, { input }, ctx) => {
-      const result = await executeProfileFollowPairTransition({
-        pair: {
-          followerProfileId: ctx.session.profileId,
-          followeeProfileId: input.id.id,
-        },
-        command: {
-          kind: 'FOLLOW',
-          origin: 'LOCAL',
-        },
+      const result = await followProfile({
+        followerProfileId: ctx.session.profileId,
+        followeeProfileId: input.id.id,
       }).catch((error: unknown) => {
         if (error instanceof ConflictError) {
           throw new ConflictError({ message: error.message, field: 'id' });
@@ -50,10 +44,10 @@ builder.mutationField('followProfile', (t) =>
         followeeProfile: result.followeeProfile,
         followerProfile: result.followerProfile,
         result:
-          result.result.commandKind === 'FOLLOW' && result.result.kind === 'ESTABLISHED'
-            ? { ...result.profileFollow!, __typename: 'ProfileFollow' as const }
+          result.result.kind === 'ESTABLISHED'
+            ? { ...result.result.profileFollow, __typename: 'ProfileFollow' as const }
             : {
-                ...result.profileFollowRequest!,
+                ...result.result.profileFollowRequest,
                 __typename: 'ProfileFollowRequest' as const,
               },
       };

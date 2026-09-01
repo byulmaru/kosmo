@@ -15,6 +15,7 @@ export {
 } from './notification';
 export { createPost, deletePost, repostPost } from './post';
 export { disableProfile } from './profile';
+export { followProfile, unfollowProfile } from './profile-follow';
 export type {
   HydratedProfileFollowPairTransition,
   ProfileFollowCreateEffectInput,
@@ -41,6 +42,11 @@ export {
   verifyProfileFollowRemoval,
 } from './profile-follow-command';
 export type { ProfileFollowPair } from './profile-follow-relation';
+export {
+  approveProfileFollowRequest,
+  cancelProfileFollowRequest,
+  rejectProfileFollowRequest,
+} from './profile-follow-request';
 export type { AcceptProfileFollowRequestResult } from './profile-follow-transaction';
 export { updateProfile } from './profile-update';
 export { addReaction, deleteReaction } from './reaction';
