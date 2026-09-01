@@ -67,17 +67,6 @@ export function PostActionControl({
   const isPending = processing === 'pending';
   const isDisabled = processing === 'disabled';
   const blocked = isPending || isDisabled;
-  const countColor = blocked
-    ? theme.textSecondary
-    : active
-      ? (activeColor ?? theme.primary)
-      : expanded
-        ? theme.primary
-        : (baseColor ?? theme.textSecondary);
-  const iconColor =
-    hovered && !blocked && !active && !hoverDisabled
-      ? (hoverForegroundColor ?? theme.primary)
-      : countColor;
   const accessibilityState: AccessibilityState = {
     busy: isPending,
     disabled: blocked,
@@ -90,88 +79,117 @@ export function PostActionControl({
   const formattedCount = formatPostActionCount(count);
 
   return (
-    <Pressable
-      aria-expanded={stateful ? (popupRole ? menuExpanded : expanded) : undefined}
-      aria-busy={stateful && isPending ? true : undefined}
-      aria-pressed={stateful && expanded === undefined ? active : undefined}
-      aria-haspopup={popupRole}
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      accessibilityState={stateful ? accessibilityState : undefined}
-      disabled={blocked}
-      onHoverIn={Platform.OS === 'web' ? () => setHovered(true) : undefined}
-      onHoverOut={Platform.OS === 'web' ? () => setHovered(false) : undefined}
-      onPress={onPress}
-      ref={controlRef}
-      testID={`post-action-${testID}`}
-      style={({ pressed }) => [
-        styles.action,
-        alignToEnd ? styles.alignToEnd : undefined,
-        blocked ? styles.blocked : pressed ? styles.pressed : undefined,
-      ]}
-    >
-      {isPending ? (
-        <ActivityIndicator
-          accessible={false}
-          aria-hidden
-          color={iconColor}
-          size={14}
-          style={styles.icon}
-          testID={`post-action-${testID}-spinner`}
-        />
-      ) : (
-        <View
-          accessible={false}
-          aria-hidden
-          style={styles.icon}
-          testID={`post-action-${testID}-icon`}
-        >
-          {hovered && !blocked && !hoverDisabled ? (
-            <View
-              aria-hidden
-              style={[
-                styles.hover,
-                { backgroundColor: hoverColor ?? theme.primary, opacity: hoverOpacity },
-              ]}
-              testID={`post-action-${testID}-hover`}
-            />
-          ) : null}
-          <View
-            accessible={false}
-            aria-hidden
-            style={styles.glyph}
-            testID={`post-action-${testID}-glyph`}
-          >
-            <Icon
-              color={iconColor}
-              fill={fillActive && active ? iconColor : 'none'}
-              size={16}
-              strokeWidth={iconStrokeWidth}
-            />
-          </View>
-        </View>
-      )}
-      {formattedCount ? (
-        <Text numberOfLines={1} style={[styles.count, { color: countColor }]}>
-          {formattedCount}
-        </Text>
-      ) : null}
-    </Pressable>
+    <View style={[styles.slot, alignToEnd ? styles.alignToEnd : undefined]}>
+      <Pressable
+        aria-expanded={stateful ? (popupRole ? menuExpanded : expanded) : undefined}
+        aria-busy={stateful && isPending ? true : undefined}
+        aria-pressed={stateful && expanded === undefined ? active : undefined}
+        aria-haspopup={popupRole}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
+        accessibilityState={stateful ? accessibilityState : undefined}
+        disabled={blocked}
+        onHoverIn={Platform.OS === 'web' ? () => setHovered(true) : undefined}
+        onHoverOut={Platform.OS === 'web' ? () => setHovered(false) : undefined}
+        onPress={onPress}
+        ref={controlRef}
+        testID={`post-action-${testID}`}
+        style={({ pressed }) => [
+          styles.action,
+          alignToEnd ? styles.alignToEndAction : undefined,
+          Platform.OS === 'web' ? styles.webAction : undefined,
+          blocked ? styles.blocked : pressed ? styles.pressed : undefined,
+        ]}
+      >
+        {({ pressed }) => {
+          const foregroundColor = blocked
+            ? theme.textSecondary
+            : active
+              ? (activeColor ?? theme.primary)
+              : expanded
+                ? theme.primary
+                : (hovered && !hoverDisabled) || pressed
+                  ? (hoverForegroundColor ?? theme.primary)
+                  : (baseColor ?? theme.textSecondary);
+
+          return (
+            <>
+              {isPending ? (
+                <ActivityIndicator
+                  accessible={false}
+                  aria-hidden
+                  color={foregroundColor}
+                  size={14}
+                  style={styles.icon}
+                  testID={`post-action-${testID}-spinner`}
+                />
+              ) : (
+                <View
+                  accessible={false}
+                  aria-hidden
+                  style={styles.icon}
+                  testID={`post-action-${testID}-icon`}
+                >
+                  {hovered && !blocked && !hoverDisabled ? (
+                    <View
+                      aria-hidden
+                      style={[
+                        styles.hover,
+                        { backgroundColor: hoverColor ?? theme.primary, opacity: hoverOpacity },
+                      ]}
+                      testID={`post-action-${testID}-hover`}
+                    />
+                  ) : null}
+                  <View
+                    accessible={false}
+                    aria-hidden
+                    style={styles.glyph}
+                    testID={`post-action-${testID}-glyph`}
+                  >
+                    <Icon
+                      color={foregroundColor}
+                      fill={fillActive && active ? foregroundColor : 'none'}
+                      size={16}
+                      strokeWidth={iconStrokeWidth}
+                    />
+                  </View>
+                </View>
+              )}
+              {formattedCount ? (
+                <Text numberOfLines={1} style={[styles.count, { color: foregroundColor }]}>
+                  {formattedCount}
+                </Text>
+              ) : null}
+            </>
+          );
+        }}
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  action: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.xs,
+  slot: {
     height: 28,
-    justifyContent: 'flex-start',
+    position: 'relative',
     width: 50,
   },
+  action: {
+    alignItems: 'center',
+    bottom: 0,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    justifyContent: 'flex-start',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
   alignToEnd: {
-    justifyContent: 'center',
     width: 28,
+  },
+  alignToEndAction: {
+    justifyContent: 'center',
   },
   blocked: { opacity: 0.45 },
   count: {
@@ -206,4 +224,8 @@ const styles = StyleSheet.create({
     width: 16,
   },
   pressed: { opacity: 0.72 },
+  webAction: {
+    bottom: -4,
+    top: -4,
+  },
 });

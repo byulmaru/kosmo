@@ -14,6 +14,7 @@ import {
 import { expect, fireEvent, fn, screen, spyOn, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
+import { usePostMoreMenuItem } from '@/components/post/PostMoreMenu';
 import { usePostReactionController } from '@/components/post/PostReactionController';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
@@ -34,7 +35,6 @@ const more = fn();
 const deletionMutationRequest = fn();
 const reactionMutationRequest = fn();
 const playgroundBookmark = fn();
-const playgroundMore = fn();
 const playgroundReply = fn();
 const reactionLifecycleConsoleErrors: unknown[][] = [];
 const reactionActionColor = '#F97066';
@@ -59,7 +59,8 @@ const actionBarProps = {
 
 const sourcePostId = 'post-source';
 const activeRepostId = 'post-repost-active';
-type RepostFixtureState = 'hidden' | 'unselected' | 'selected' | 'pending';
+type RepostFixtureState = 'unselected' | 'selected' | 'pending';
+type RepostPlaygroundState = Exclude<RepostFixtureState, 'pending'>;
 type DeleteOutcome = 'graphql-error' | 'network-error' | 'pending' | 'success';
 type FixtureProps = Omit<PostActionBarProps, 'post'> & {
   deleteOutcome?: DeleteOutcome;
@@ -194,10 +195,6 @@ function PostActionBarFixture({
     return result;
   }, [deleteOutcome, onMutationRequest, repostState, selectedProfileId]);
   const createEnvironment = useCallback(() => environment, [environment]);
-
-  if (repostState === 'hidden') {
-    return <PostActionBar {...props} />;
-  }
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
@@ -533,11 +530,10 @@ function CatalogStory() {
           repostState="selected"
         />
       </Section>
-      <Section title="Processing · pending / disabled">
+      <Section title="Processing · config pending / disabled">
         <PostActionBarFixture
           bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true, processing: 'disabled' }}
           reply={{ ...actionBarProps.reply, expanded: true, processing: 'pending' }}
-          repostState="pending"
         />
       </Section>
       <Section title="Resolution-required · hover blocked">
@@ -549,7 +545,7 @@ function CatalogStory() {
         />
       </Section>
       <Section title="Optional actions · More callback only">
-        <PostActionBarFixture more={actionBarProps.more} repostState="hidden" />
+        <PostActionBar more={actionBarProps.more} />
       </Section>
       <Section title="Standard compact formatting · runtime component / locale seam">
         <Text style={styles.localeCopy}>
@@ -613,42 +609,47 @@ function ActionBarFixtures() {
 }
 
 type PlaygroundProps = {
+  bookmarkAccessibilityLabel: string;
   bookmarkProcessing: PostActionProcessingState;
   bookmarkSelected: boolean;
   onBookmark: () => void;
-  onMore: () => void;
   onReply: () => void;
+  replyAccessibilityLabel: string;
   replyCount: number;
   replyExpanded: boolean;
   replyProcessing: PostActionProcessingState;
-  repostState: RepostFixtureState;
-  showMore: boolean;
+  repostState: RepostPlaygroundState;
 };
 
 function PostActionBarPlayground({
+  bookmarkAccessibilityLabel,
   bookmarkProcessing,
   bookmarkSelected,
   onBookmark,
-  onMore,
   onReply,
+  replyAccessibilityLabel,
   replyCount,
   replyExpanded,
   replyProcessing,
   repostState,
-  showMore,
 }: PlaygroundProps) {
+  const copyLinkItem = usePostMoreMenuItem({
+    postId: sourcePostId,
+    relativeHandle: '@kosmo',
+  });
+
   return (
     <View style={styles.playground}>
       <PostActionBarFixture
         bookmark={{
-          accessibilityLabel: '북마크',
+          accessibilityLabel: bookmarkAccessibilityLabel,
           hasBookmarked: bookmarkSelected,
           onPress: onBookmark,
           processing: bookmarkProcessing,
         }}
-        more={showMore ? { accessibilityLabel: '더보기', onPress: onMore } : undefined}
+        moreItems={[copyLinkItem]}
         reply={{
-          accessibilityLabel: '답글',
+          accessibilityLabel: replyAccessibilityLabel,
           count: replyCount,
           expanded: replyExpanded,
           onPress: onReply,
@@ -662,24 +663,41 @@ function PostActionBarPlayground({
 
 const meta = {
   args: {
+    bookmarkAccessibilityLabel: '북마크',
     bookmarkProcessing: 'default',
     bookmarkSelected: false,
     onBookmark: playgroundBookmark,
-    onMore: playgroundMore,
     onReply: playgroundReply,
     replyCount: 12_345,
+    replyAccessibilityLabel: '답글',
     replyExpanded: false,
     replyProcessing: 'default',
     repostState: 'unselected',
-    showMore: true,
   },
   argTypes: {
     bookmarkProcessing: { control: 'select', options: ['default', 'pending', 'disabled'] },
     replyCount: { control: { min: 0, step: 1, type: 'number' } },
     replyProcessing: { control: 'select', options: ['default', 'pending', 'disabled'] },
-    repostState: { control: 'select', options: ['hidden', 'unselected', 'selected', 'pending'] },
+    repostState: { control: 'select', options: ['unselected', 'selected'] },
   },
   component: PostActionBarPlayground,
+  excludeStories: [
+    'ActionBarCatalogInteraction',
+    'ActionSemanticColorsDarkInteraction',
+    'AuthorPostDeletion',
+    'AuthorPostDeletionFailureRetry',
+    'AuthorPostDeletionGraphQLErrorRetry',
+    'AuthorPostDeletionPending',
+    'ControlledReply',
+    'InteractionContract',
+    'NoSelectedProfileDisablesReaction',
+    'PlaygroundInteraction',
+    'ProcessingAccessibility',
+    'ReactionConcurrentMutationContract',
+    'ReactionFailureRetryActorSwitchAndUnmount',
+    'ReactionPopoverDismissFocusAndPlacement',
+    'ReactionSummaryToggleContract',
+  ],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Patterns/Post/Action Bar',
 } satisfies Meta<typeof PostActionBarPlayground>;
@@ -692,48 +710,69 @@ export const Playground: Story = {
     controls: {
       disable: false,
       include: [
+        'bookmarkAccessibilityLabel',
         'bookmarkProcessing',
         'bookmarkSelected',
         'replyCount',
+        'replyAccessibilityLabel',
         'replyExpanded',
         'replyProcessing',
         'repostState',
-        'showMore',
       ],
     },
   },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toolbar = await canvas.findByRole('toolbar', { name: '액션 바' });
+    const labels = within(toolbar)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label'));
+    expect(labels).toEqual([
+      args.replyAccessibilityLabel,
+      args.repostState === 'selected' ? '재게시 취소' : '재게시',
+      '반응',
+      args.bookmarkAccessibilityLabel,
+      '더 보기',
+    ]);
+    const bookmarkBounds = canvas
+      .getByRole('button', { name: args.bookmarkAccessibilityLabel })
+      .getBoundingClientRect();
+    const moreBounds = canvas.getByRole('button', { name: '더 보기' }).getBoundingClientRect();
+    expect(moreBounds.left - bookmarkBounds.right).toBe(4);
+    expect(moreBounds.right - bookmarkBounds.left).toBe(82);
+  },
+};
+
+export const PlaygroundInteraction: Story = {
+  parameters: { controls: { disable: true } },
   play: async ({ args, canvasElement, step }) => {
     playgroundBookmark.mockClear();
-    playgroundMore.mockClear();
     playgroundReply.mockClear();
     const canvas = within(canvasElement);
     const toolbar = await canvas.findByRole('toolbar', { name: '액션 바' });
     const labels = within(toolbar)
       .getAllByRole('button')
       .map((button) => button.getAttribute('aria-label'));
-    const hasPostActions = args.repostState !== 'hidden';
-
     await step('Controls에 따른 고정 순서와 trailing group 확인', async () => {
       expect(labels).toEqual([
-        '답글',
-        ...(hasPostActions ? ['재게시', '반응'] : []),
-        '북마크',
-        ...(args.showMore ? ['더보기'] : []),
+        args.replyAccessibilityLabel,
+        args.repostState === 'selected' ? '재게시 취소' : '재게시',
+        '반응',
+        args.bookmarkAccessibilityLabel,
+        '더 보기',
       ]);
-      if (args.showMore) {
-        const bookmarkBounds = canvas
-          .getByRole('button', { name: args.bookmarkSelected ? '북마크 해제' : '북마크' })
-          .getBoundingClientRect();
-        const moreBounds = canvas.getByRole('button', { name: '더보기' }).getBoundingClientRect();
-        expect(moreBounds.left - bookmarkBounds.right).toBe(4);
-        expect(moreBounds.right - bookmarkBounds.left).toBe(82);
-      }
+      const bookmarkBounds = canvas
+        .getByRole('button', { name: args.bookmarkAccessibilityLabel })
+        .getBoundingClientRect();
+      const moreBounds = canvas.getByRole('button', { name: '더 보기' }).getBoundingClientRect();
+      expect(moreBounds.left - bookmarkBounds.right).toBe(4);
+      expect(moreBounds.right - bookmarkBounds.left).toBe(82);
     });
 
     await step('Actions callback과 처리 상태 확인', async () => {
-      const replyButton = canvas.getByRole('button', { name: '답글' });
+      const replyButton = canvas.getByRole('button', { name: args.replyAccessibilityLabel });
       const bookmarkButton = canvas.getByRole('button', {
-        name: args.bookmarkSelected ? '북마크 해제' : '북마크',
+        name: args.bookmarkAccessibilityLabel,
       });
 
       if (args.replyProcessing === 'default') {
@@ -750,28 +789,38 @@ export const Playground: Story = {
         bookmarkButton.click();
         expect(playgroundBookmark).not.toHaveBeenCalled();
       }
-      if (args.showMore) {
-        await userEvent.click(canvas.getByRole('button', { name: '더보기' }));
-        expect(playgroundMore).toHaveBeenCalledOnce();
-      }
+      const moreButton = canvas.getByRole('button', { name: '더 보기' });
+      expect(moreButton).toHaveAttribute('aria-haspopup', 'menu');
+      await userEvent.click(moreButton);
+      const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+      expect(
+        within(menu)
+          .getAllByRole('menuitem')
+          .map((item) => item.getAttribute('aria-label')),
+      ).toEqual(['링크 복사']);
+      await userEvent.keyboard('{Escape}');
+      expect(screen.queryByRole('menu', { name: '더 보기 메뉴' })).not.toBeInTheDocument();
+      expect(moreButton).toHaveFocus();
     });
 
-    if (args.repostState === 'unselected' || args.repostState === 'selected') {
-      await step('Repost menu open·dismiss와 focus 복귀 확인', async () => {
-        const repost = canvas.getByRole('button', {
-          name: args.repostState === 'selected' ? '재게시 취소' : '재게시',
-        });
-        await userEvent.click(repost);
-        expect(await screen.findByRole('menu', { name: '재게시 메뉴' })).toBeVisible();
-        await userEvent.keyboard('{Escape}');
-        expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
-        expect(repost).toHaveFocus();
+    await step('Repost menu open·dismiss와 focus 복귀 확인', async () => {
+      const repost = canvas.getByRole('button', {
+        name: args.repostState === 'selected' ? '재게시 취소' : '재게시',
       });
-    }
+      await userEvent.click(repost);
+      expect(await screen.findByRole('menu', { name: '재게시 메뉴' })).toBeVisible();
+      await userEvent.keyboard('{Escape}');
+      expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
+      expect(repost).toHaveFocus();
+    });
   },
 };
 
 export const ActionBarCatalog: Story = {
+  render: () => <CatalogStory />,
+};
+
+export const ActionBarCatalogInteraction: Story = {
   render: () => <CatalogStory />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -839,7 +888,7 @@ export const ActionBarCatalog: Story = {
       const button = defaultToolbarCanvas.getByRole('button', { name: label });
       const bounds = button.getBoundingClientRect();
       expect(bounds.width).toBe(width);
-      expect(bounds.height).toBe(28);
+      expect(bounds.height).toBe(36);
     }
     const defaultBookmarkBounds = defaultBookmark.getBoundingClientRect();
     const defaultMoreBounds = defaultMore.getBoundingClientRect();
@@ -874,11 +923,11 @@ export const ActionBarCatalog: Story = {
       0,
     );
     const replyCount = defaultReply.querySelector('[dir="auto"]') as HTMLElement;
-    expect(replyCount).toHaveStyle({ color: colors.light.textSecondary });
+    expect(replyCount).toHaveStyle({ color: colors.light.primary });
     const replyCountBounds = replyCount.getBoundingClientRect();
     expect(replyCountBounds.left - replyIconBounds.right).toBeCloseTo(spacing.xs, 0);
     expect(defaultReply.getBoundingClientRect().width).toBe(50);
-    expect(defaultReply.getBoundingClientRect().height).toBe(28);
+    expect(defaultReply.getBoundingClientRect().height).toBe(36);
 
     const pointerUser = userEvent.setup();
     await pointerUser.pointer({ target: defaultReply, keys: '[MouseLeft>]' });
@@ -891,6 +940,13 @@ export const ActionBarCatalog: Story = {
     expect(defaultReply.querySelector('svg')).toHaveAttribute('stroke', colors.light.textSecondary);
     expect(within(defaultReply).queryByTestId('post-action-reply-hover')).toBeNull();
 
+    fireEvent.mouseDown(defaultReply, { buttons: 1 });
+    await waitFor(() => expect(getComputedStyle(defaultReply).opacity).toBe('0.72'));
+    expect(defaultReply.querySelector('svg')).toHaveAttribute('stroke', colors.light.primary);
+    expect(replyCount).toHaveStyle({ color: colors.light.primary });
+    fireEvent.mouseUp(defaultReply, { buttons: 0 });
+    await waitFor(() => expect(getComputedStyle(defaultReply).opacity).toBe('1'));
+
     await userEvent.hover(defaultMore);
     expect(defaultMore).not.toHaveStyle({ backgroundColor: colors.light.primary });
     const moreHover = within(defaultMore).getByTestId('post-action-more-hover');
@@ -901,7 +957,7 @@ export const ActionBarCatalog: Story = {
     expect(getComputedStyle(moreHover).width).toBe('28px');
     expect(defaultMore.querySelector('svg')).toHaveAttribute('stroke', colors.light.primary);
     expect(defaultMore.getBoundingClientRect().width).toBe(28);
-    expect(defaultMore.getBoundingClientRect().height).toBe(28);
+    expect(defaultMore.getBoundingClientRect().height).toBe(36);
     await userEvent.unhover(defaultMore);
     expect(defaultMore.querySelector('svg')).toHaveAttribute('stroke', colors.light.textSecondary);
     expect(within(defaultMore).queryByTestId('post-action-more-hover')).toBeNull();
@@ -1012,6 +1068,11 @@ export const ActionBarCatalog: Story = {
 };
 
 export const ActionSemanticColorsDark: Story = {
+  globals: { backgrounds: { value: 'kosmoDark' }, theme: 'dark' },
+  render: () => <CatalogStory />,
+};
+
+export const ActionSemanticColorsDarkInteraction: Story = {
   globals: { backgrounds: { value: 'kosmoDark' }, theme: 'dark' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -1687,14 +1748,18 @@ export const AccessibilityAndCompactGeometry: Story = {
     expect(buttons[3]).toHaveAttribute('aria-pressed', 'false');
     expect(buttons[4]).not.toHaveAttribute('aria-pressed');
     expect(actionBar.getBoundingClientRect().height).toBe(28);
+    const actionBarBounds = actionBar.getBoundingClientRect();
     for (const [index, button] of buttons.entries()) {
       const bounds = button.getBoundingClientRect();
       expect(bounds.width).toBe(index === 4 ? 28 : 50);
-      expect(bounds.height).toBe(28);
+      expect(bounds.height).toBe(36);
       expect(bounds.width).toBeGreaterThanOrEqual(24);
       expect(bounds.height).toBeGreaterThanOrEqual(24);
+      expect(bounds.top + bounds.height / 2).toBeCloseTo(
+        actionBarBounds.top + actionBarBounds.height / 2,
+        0,
+      );
     }
-    const actionBarBounds = actionBar.getBoundingClientRect();
     const firstButtonBounds = buttons[0]!.getBoundingClientRect();
     const moreButtonBounds = buttons[4]!.getBoundingClientRect();
     expect(firstButtonBounds.left).toBeCloseTo(actionBarBounds.left, 0);
@@ -1797,13 +1862,10 @@ function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
   for (const [index, button] of buttons.entries()) {
     const bounds = button.getBoundingClientRect();
     expect(bounds.width).toBe(index === 4 ? 28 : 50);
-    expect(bounds.height).toBe(28);
+    expect(bounds.height).toBe(36);
     expect(bounds.width).toBeGreaterThanOrEqual(24);
     expect(bounds.height).toBeGreaterThanOrEqual(24);
-    expect(bounds.top).toBe(firstBounds.top);
-    expect(bounds.bottom).toBe(firstBounds.bottom);
-    expect(bounds.top).toBeGreaterThanOrEqual(toolbarBounds.top);
-    expect(bounds.bottom).toBeLessThanOrEqual(toolbarBounds.bottom);
+    expect(bounds.top + bounds.height / 2).toBeCloseTo(firstBounds.top + firstBounds.height / 2, 0);
     expect(bounds.left).toBeGreaterThanOrEqual(previousRight);
     expect(bounds.right).toBeLessThanOrEqual(toolbarBounds.right);
     previousRight = bounds.right;

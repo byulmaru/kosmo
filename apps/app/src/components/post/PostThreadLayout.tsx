@@ -76,7 +76,7 @@ export function PostThreadLayout<TPost>({
             ) : (
               renderedPost
             )}
-            {index < rows.length - 1 ? (
+            {index < rows.length - 1 && role !== 'current' ? (
               <View
                 style={[styles.divider, { backgroundColor: theme.borderSubtle }]}
                 testID={`post-thread-divider-${item.id}`}

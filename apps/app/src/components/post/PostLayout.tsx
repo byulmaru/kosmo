@@ -158,12 +158,16 @@ export function PostLayout({
         <Text style={[styles.meta, { color: theme.textSecondary }]}>
           {formatPostDate(post.createdAt)} · {visibilityLabels[post.visibility] ?? post.visibility}
         </Text>
-        <PostActionSurface
-          onDeleted={handleDeleted}
-          reactionSummaryStyle={styles.reactionSummary}
-          reply={reply}
-          socialActionTarget={socialActionTarget!}
-        />
+        <View
+          style={[styles.engagement, { borderColor: theme.borderSubtle }]}
+          testID="post-layout-engagement"
+        >
+          <PostActionSurface
+            onDeleted={handleDeleted}
+            reply={reply}
+            socialActionTarget={socialActionTarget!}
+          />
+        </View>
         {replyBinding?.expanded &&
         replyAuthentication.execution.kind === 'enabled' &&
         replyBinding?.profile &&
@@ -193,8 +197,14 @@ const styles = StyleSheet.create({
   avatar: { borderRadius: radii.full },
   headerContent: { flex: 1, minWidth: 0 },
   body: { minWidth: 0 },
+  engagement: {
+    borderBottomWidth: 1,
+    borderTopWidth: 1,
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    width: '100%',
+  },
   meta: { fontFamily: 'SUIT', marginTop: 6, textAlign: 'right', ...typography.xsm },
-  reactionSummary: { marginBottom: spacing.xs, marginTop: spacing.lg },
   source: { marginTop: spacing.sm },
   replySurface: { marginTop: spacing.lg },
 });
