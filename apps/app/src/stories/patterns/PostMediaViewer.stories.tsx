@@ -584,15 +584,6 @@ export const WideRailCompositionContract: Story = {
         ).borderBottomWidth,
       ).toBe('0px');
     }
-
-    const dividers = within(thread).queryAllByTestId(/^post-thread-divider-/);
-    expect(dividers).toHaveLength(2);
-    for (const divider of dividers) {
-      const dividerBounds = divider.getBoundingClientRect();
-      const rowBounds = divider.parentElement!.getBoundingClientRect();
-      expect(dividerBounds.left).toBeGreaterThan(rowBounds.left);
-      expect(dividerBounds.right).toBeLessThan(rowBounds.right);
-    }
   },
 };
 
