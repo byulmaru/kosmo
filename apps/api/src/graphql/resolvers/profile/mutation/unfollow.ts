@@ -1,14 +1,7 @@
-import {
-  ActivityPubActors,
-  db,
-  firstOrThrowWith,
-  Instances,
-  ProfileFollows,
-  Profiles,
-} from '@kosmo/core/db';
+import { ActivityPubActors, db, firstOrThrowWith, Instances, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
-import { executeProfileFollowRemoval } from '@kosmo/core/temporal/follow-command';
+import { unfollowProfile } from '@kosmo/core/services';
 import { and, eq, exists, inArray, isNotNull, ne, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
@@ -36,18 +29,11 @@ builder.mutationField('unfollowProfile', (t) =>
       id: t.input.globalID({ for: Profile }),
     },
     resolve: async (_, { input }, ctx) => {
-      const { followId } = await db
-        .select({ followId: ProfileFollows.id })
+      await db
+        .select({ id: Profiles.id })
         .from(Profiles)
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-        .leftJoin(
-          ProfileFollows,
-          and(
-            eq(ProfileFollows.followerProfileId, ctx.session.profileId),
-            eq(ProfileFollows.followeeProfileId, Profiles.id),
-          ),
-        )
         .where(
           and(
             eq(Profiles.id, input.id.id),
@@ -76,14 +62,10 @@ builder.mutationField('unfollowProfile', (t) =>
         .limit(1)
         .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 
-      const result = followId
-        ? await executeProfileFollowRemoval({
-            followerProfileId: ctx.session.profileId,
-            followeeProfileId: input.id.id,
-            expectedRowId: followId,
-            origin: 'LOCAL',
-          })
-        : { profileFollowId: null };
+      const result = await unfollowProfile({
+        followerProfileId: ctx.session.profileId,
+        followeeProfileId: input.id.id,
+      });
       const profiles = await db
         .select()
         .from(Profiles)
