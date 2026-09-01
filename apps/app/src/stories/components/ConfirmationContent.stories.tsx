@@ -77,8 +77,6 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Base: Story = {};
-
 export const Playground: Story = {
   parameters: {
     controls: {
@@ -128,9 +126,11 @@ export const InteractionContract: Story = {
     await step('사용 가능한 action callback 확인', async () => {
       if (!args.confirmDisabled) {
         await userEvent.click(confirm);
+        expect(args.onConfirm).toHaveBeenCalledTimes(1);
         expect(args.onConfirm).toHaveBeenCalledWith();
       }
       await userEvent.click(cancel);
+      expect(args.onCancel).toHaveBeenCalledTimes(1);
       expect(args.onCancel).toHaveBeenCalledWith();
     });
   },
