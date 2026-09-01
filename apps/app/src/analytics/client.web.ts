@@ -143,15 +143,6 @@ export function trackAnalytics(...args: AnalyticsEventArgs): void {
   }
 }
 
-function resetPostHogIdentity(analyticsClient: PostHog): boolean {
-  try {
-    analyticsClient.reset();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function getPostHogAccountId(analyticsClient: PostHog): string | null {
   const userId = analyticsClient.get_property(POSTHOG_USER_ID);
   return typeof userId === 'string' && userId ? userId : null;
@@ -173,9 +164,7 @@ export function identifyAnalytics(accountId: string): void {
       currentAccountId &&
       (currentAccountId !== accountId || analyticsClient.get_distinct_id() !== accountId)
     ) {
-      if (!resetPostHogIdentity(analyticsClient)) {
-        return;
-      }
+      analyticsClient.reset();
     }
 
     analyticsClient.identify(accountId);
@@ -191,7 +180,7 @@ export function clearAnalytics(): void {
       return;
     }
 
-    resetPostHogIdentity(analyticsClient);
+    analyticsClient.reset();
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }
