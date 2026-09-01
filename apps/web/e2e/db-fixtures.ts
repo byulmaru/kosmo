@@ -44,14 +44,6 @@ const webOrigin = process.env.PUBLIC_ORIGIN ?? 'http://127.0.0.1:4173';
 let lastPostSeedTimestamp = 0;
 
 const profileFollowPairWorkflowType = 'profileFollowPairWorkflow';
-const profileFollowPairStatusQuery = 'profileFollowPairStatus';
-
-type ProfileFollowPairWorkflowStatus = {
-  readonly state: 'INITIAL' | 'PENDING' | 'ESTABLISHED' | 'REJECTED' | 'CANCELLED';
-  readonly inFlight: boolean;
-  readonly pendingEffectCount: number;
-  readonly effectFailureCount: number;
-};
 
 type WorkflowInfo = {
   readonly runId: string;
@@ -164,8 +156,9 @@ async function waitForE2EWorkflow({ runId, type, workflowId }: WorkflowInfo) {
   // The database is about to be truncated, so terminate that test-owned
   // lifecycle after its committed effects have drained. Terminal pairs should
   // close normally and retain their failure signal through result().
-  if (status.state === 'PENDING' || status.state === 'INITIAL') {
+  if (status.pending) {
     await handle.terminate('E2E database reset');
+    await handle.result().catch(() => undefined);
     return;
   }
 
@@ -175,46 +168,26 @@ async function waitForE2EWorkflow({ runId, type, workflowId }: WorkflowInfo) {
 async function waitForE2EProfileFollowPairEffects(
   handle: ReturnType<typeof temporalClient.workflow.getHandle>,
   workflowId: string,
-): Promise<ProfileFollowPairWorkflowStatus> {
+): Promise<{ readonly pending: boolean }> {
   const deadline = Date.now() + 30_000;
 
   while (Date.now() < deadline) {
-    const status = await handle.query<ProfileFollowPairWorkflowStatus>(
-      profileFollowPairStatusQuery,
-    );
+    const description = await handle.describe();
+    if (description.status.name !== 'RUNNING') {
+      return { pending: false };
+    }
 
-    if (!status.inFlight && status.pendingEffectCount === 0) {
-      if (status.effectFailureCount > 0) {
-        throw new Error(
-          `E2E Profile Follow pair ${workflowId} has ${status.effectFailureCount.toString()} failed effect(s).`,
-        );
-      }
-      return status;
+    if (
+      (description.raw.pendingActivities ?? []).length === 0 &&
+      description.raw.pendingWorkflowTask == null
+    ) {
+      return { pending: true };
     }
 
     await delay(25);
   }
 
   throw new Error(`Timed out waiting for E2E Profile Follow pair effects: ${workflowId}`);
-}
-
-/**
- * Wait until the effects for a seeded pair transition have drained.
- *
- * This intentionally does not await Workflow result for a pending request:
- * pending pair Workflows are the durable lifecycle owner and only terminate
- * after approval, rejection, cancellation, or an inbound terminal event.
- */
-export async function waitForE2EProfileFollowEffects(options: CreateE2EFollowOptions) {
-  const workflowId = `profile-follow-pair:${options.followerProfileId}:${options.followeeProfileId}`;
-  const handle = temporalClient.workflow.getHandle(workflowId);
-  const status = await waitForE2EProfileFollowPairEffects(handle, workflowId);
-
-  if (status.state !== 'PENDING' && status.state !== 'INITIAL') {
-    await handle.result();
-  }
-
-  return status;
 }
 
 export async function closeE2EDatabase() {
@@ -433,7 +406,9 @@ export const createE2EFollow = (options: CreateE2EFollowOptions) => {
       throw new Error('E2E follow fixture requires an established relationship');
     }
 
-    await waitForE2EProfileFollowEffects(options);
+    await temporalClient.workflow
+      .getHandle(`profile-follow-pair:${options.followerProfileId}:${options.followeeProfileId}`)
+      .result();
     return transition.profileFollow;
   });
 };
