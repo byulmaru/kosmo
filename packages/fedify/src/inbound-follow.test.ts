@@ -90,7 +90,6 @@ describe('inbound Follow and Undo', () => {
       : undefined;
 
     while (Date.now() < deadline) {
-      let waiting = false;
       let foundExpectedWorkflow = false;
       const idleHandles: Array<ReturnType<typeof temporalClient.workflow.getHandle>> = [];
 
@@ -158,17 +157,14 @@ describe('inbound Follow and Undo', () => {
             await handle.result().catch(() => undefined);
           }),
         );
-        idleHandles.length = 0;
       }
       if (pairWorkflowId && !foundExpectedWorkflow) {
-        waiting = true;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        continue;
       }
-      if (!waiting && idleHandles.length === 0) {
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      return;
     }
-    throw new Error('Timed out waiting for Follow Workflow effects');
+    throw new Error('Timed out waiting for Follow Workflows');
   }
 
   test('routes personal Follow, sends Accept, and removes by actor pair despite a different Follow id', async () => {

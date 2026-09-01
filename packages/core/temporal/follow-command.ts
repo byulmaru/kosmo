@@ -115,7 +115,7 @@ export const executeProfileFollowPairTransition = async (
  */
 export const executeProfileFollowRemoval = async (
   input: ProfileFollowRemovalInput,
-): Promise<ProfileFollowRemovalOutcome> => {
+): Promise<Extract<ProfileFollowRemovalOutcome, { readonly ok: true }>> => {
   const result = (await temporalClient.withDeadline(
     Date.now() + PROFILE_FOLLOW_COMMAND_RPC_TIMEOUT_MS,
     () =>
