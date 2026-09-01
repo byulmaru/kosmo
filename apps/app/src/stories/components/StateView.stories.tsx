@@ -21,10 +21,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-
 export const Playground: Story = {
-  args: { actionLabel: '다시 시도' },
   parameters: {
     controls: {
       disable: false,

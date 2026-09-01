@@ -4,7 +4,7 @@ import { space } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
-  args: { circular: false, height: 20, width: 160 },
+  args: { circular: false, height: 20 },
   argTypes: {
     height: { control: { max: 320, min: 1, step: 1, type: 'number' } },
     width: { control: { max: 640, min: 1, step: 1, type: 'number' } },
@@ -16,8 +16,6 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
-
-export const Default: Story = { args: { width: '100%' } };
 
 export const Playground: Story = {
   parameters: {

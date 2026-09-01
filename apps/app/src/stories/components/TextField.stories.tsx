@@ -32,14 +32,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-
 export const Playground: Story = {
-  args: {
-    containerWidth: 480,
-    defaultValue: '코스모',
-    error: '입력값을 확인해 주세요.',
-  },
+  args: { containerWidth: 480 },
   argTypes: {
     containerWidth: {
       control: { max: 720, min: 240, step: 40, type: 'range' },

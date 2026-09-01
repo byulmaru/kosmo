@@ -49,7 +49,7 @@ apps/app/src/stories/
 
 기존 `apps/app/src/stories/` 직하의 story 이동·분할과 title 정렬은 `PROD-865`에서 수행한다. DSN별 이관 이슈는 `PROD-865`가 확정한 구조를 재사용하며 별도 catalog root나 UI package를 만들지 않는다.
 
-새로 이관하는 서로 다른 Production component를 하나의 `Catalog` title 아래 모으지 않는다. 각 component는 독립 title 아래 실제 검토 목적이 있는 canonical 상태, Playground, 대표 상태와 자동 검증 표면만 제공하며, 의미가 같은 story를 형식적으로 모두 만들지 않는다. foundation token은 `KOSMO/Foundations/Tokens` 아래에서 종류별 story로 나눈다. 아직 DSN별 이관 전인 기존 pattern·screen 대형 story는 현재 `Catalog` title을 임시로 유지하고 대응 `PROD-851`~`PROD-864`, `PROD-866`에서 component 경계가 확정될 때 분리한다. Theme은 별도 Light·Dark story를 복제하지 않고 toolbar로 전환한다.
+새로 이관하는 서로 다른 Production component를 하나의 `Catalog` title 아래 모으지 않는다. 각 component는 독립 title 아래 실제 검토 목적이 있는 Playground, 대표 상태와 자동 검증 표면만 제공하며, 의미가 같은 story를 형식적으로 모두 만들지 않는다. foundation token은 `KOSMO/Foundations/Tokens` 아래에서 종류별 story로 나눈다. 아직 DSN별 이관 전인 기존 pattern·screen 대형 story는 현재 `Catalog` title을 임시로 유지하고 대응 `PROD-851`~`PROD-864`, `PROD-866`에서 component 경계가 확정될 때 분리한다. Theme은 별도 Light·Dark story를 복제하지 않고 toolbar로 전환한다.
 
 ## Production 컴포넌트와 fixture 경계
 
@@ -65,12 +65,11 @@ apps/app/src/stories/
 
 재사용 가능한 component와 pattern은 다음 표면을 제공한다.
 
-1. `Default` 또는 `Base`: Playground와 구분되는 안정적인 canonical Production 상태. 제품의 명확한 기본값이 있으면 `Default`, 필수 semantic 입력이 있어야 성립하면 `Base`를 사용하며 Controls나 상태를 바꾸는 `play`를 두지 않는다.
-2. `Playground`: args로 component-owned props와 controlled state를 사람이 조절하고 Actions에서 callback을 관찰하는 수동 검토 표면. 같은 state나 Actions 기록을 자동으로 바꾸는 `play`를 두지 않는다.
-3. 대표 상태 story: Playground 한 개로 비교하기 어려운 selected, disabled, loading, error, empty, long-content, responsive 상태를 정적으로 비교하는 표면.
-4. `Tests`: click, typing, keyboard, focus, timer와 callback을 자동 검증하는 표면. component main story의 fixture와 meta를 재사용하되 component의 `Tests` 하위 title에서 실행한다.
+1. `Playground`: canonical 초기 args로 기본 상태를 보여주면서 component-owned props와 controlled state를 Controls로 조절하고 Actions에서 callback을 관찰하는 공통 수동 검토 표면. 같은 state나 Actions 기록을 자동으로 바꾸는 `play`를 두지 않는다. 필요한 Control이 없는 component도 별도 `Default`나 `Base` 대신 이 이름을 사용한다.
+2. 대표 상태 story: Playground 한 개로 비교하기 어려운 selected, disabled, loading, error, empty, long-content, responsive 상태를 정적으로 비교하는 표면.
+3. `Tests`: click, typing, keyboard, focus, timer와 callback을 자동 검증하는 표면. component main story의 fixture와 meta를 재사용하되 component의 `Tests` 하위 title에서 실행한다.
 
-`Default`와 `Base`를 형식적으로 모두 만들거나 같은 상태 조합을 Playground와 개별 story에 중복하지 않는다.
+같은 기본 검토 표면을 `Default`, `Base`, `Playground`로 나누거나 같은 상태 조합을 Playground와 개별 story에 중복하지 않는다.
 
 모든 일반 story는 render 검토 표면이다. 자동화가 렌더 결과를 읽기만 하거나 수동 입력과 겹치지 않는 setup만 수행하면 같은 story에 둘 수 있지만, `userEvent`, `fireEvent`, 직접 click·focus, timer와 callback 실행처럼 상태나 Actions 기록을 바꾸는 검증은 component의 `Tests` 하위 title로 분리한다. Tests story는 결정적인 args와 비활성화된 Controls를 사용하고, main story에서는 `excludeStories`로 숨긴 뒤 얇은 `*.tests.stories.tsx` wrapper에서 한 번만 노출한다. viewport collision, fallback tab stop, timer·교체·cleanup, 환경 전환 뒤 늦은 완료 같은 전용 fixture나 lifecycle 검증도 같은 Tests 경계를 사용한다.
 
