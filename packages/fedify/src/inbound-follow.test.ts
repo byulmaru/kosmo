@@ -63,7 +63,7 @@ describe('inbound Follow and Undo', () => {
   });
 
   beforeEach(async () => {
-    await waitForProfileFollowEffects({ terminatePending: true });
+    await waitForProfileFollowWorkflows({ terminateIdlePairs: true });
     await db.delete(Profiles);
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
@@ -72,48 +72,27 @@ describe('inbound Follow and Undo', () => {
     await pg.end();
   });
 
-  async function waitForProfileFollowEffects({
+  async function waitForProfileFollowWorkflows({
     pair,
     startedAt,
-    terminatePending = false,
+    terminateIdlePairs = false,
   }: {
     readonly pair?: {
       readonly followerProfileId: string;
       readonly followeeProfileId: string;
     };
     readonly startedAt?: Date;
-    readonly terminatePending?: boolean;
+    readonly terminateIdlePairs?: boolean;
   } = {}) {
     const deadline = Date.now() + 30_000;
     const pairWorkflowId = pair
       ? `profile-follow-pair:${pair.followerProfileId}:${pair.followeeProfileId}`
       : undefined;
 
-    const waitForPairActivities = async (
-      handle: ReturnType<typeof temporalClient.workflow.getHandle>,
-    ): Promise<boolean> => {
-      while (Date.now() < deadline) {
-        const description = await handle.describe();
-        if (description.status.name !== 'RUNNING') {
-          return false;
-        }
-
-        if (
-          (description.raw.pendingActivities ?? []).length === 0 &&
-          description.raw.pendingWorkflowTask == null
-        ) {
-          return true;
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 25));
-      }
-      throw new Error('Timed out waiting for Follow Workflow effects');
-    };
-
     while (Date.now() < deadline) {
       let waiting = false;
       let foundExpectedWorkflow = false;
-      const pendingHandles: Array<ReturnType<typeof temporalClient.workflow.getHandle>> = [];
+      const idleHandles: Array<ReturnType<typeof temporalClient.workflow.getHandle>> = [];
 
       for await (const execution of temporalClient.workflow.list({
         query: pairWorkflowId
@@ -132,20 +111,32 @@ describe('inbound Follow and Undo', () => {
         }
         const handle = temporalClient.workflow.getHandle(execution.workflowId, execution.runId);
         if (execution.type === 'profileFollowPairWorkflow') {
-          if (await waitForPairActivities(handle)) {
-            if (terminatePending) {
-              pendingHandles.push(handle);
+          let description = await handle.describe();
+          while (
+            description.status.name === 'RUNNING' &&
+            ((description.raw.pendingActivities ?? []).length > 0 ||
+              description.raw.pendingWorkflowTask != null)
+          ) {
+            if (Date.now() >= deadline) {
+              throw new Error('Timed out waiting for Follow Workflow to become idle');
+            }
+            await new Promise((resolve) => setTimeout(resolve, 25));
+            description = await handle.describe();
+          }
+          if (description.status.name === 'RUNNING') {
+            if (terminateIdlePairs) {
+              idleHandles.push(handle);
             }
             continue;
           }
-        } else if (terminatePending) {
+        } else if (terminateIdlePairs) {
           const description = await handle.describe();
           if (
             description.status.name === 'RUNNING' &&
             (description.raw.pendingActivities ?? []).length === 0 &&
             description.raw.pendingWorkflowTask == null
           ) {
-            pendingHandles.push(handle);
+            idleHandles.push(handle);
             continue;
           }
         }
@@ -153,26 +144,26 @@ describe('inbound Follow and Undo', () => {
         try {
           await handle.result();
         } catch (error) {
-          if (!terminatePending) {
+          if (!terminateIdlePairs) {
             throw error;
           }
           // Fixture cleanup may terminate a workflow after recording a failure.
         }
       }
 
-      if (pendingHandles.length > 0) {
+      if (idleHandles.length > 0) {
         await Promise.all(
-          pendingHandles.map(async (handle) => {
+          idleHandles.map(async (handle) => {
             await handle.terminate('test fixture cleanup').catch(() => undefined);
             await handle.result().catch(() => undefined);
           }),
         );
-        pendingHandles.length = 0;
+        idleHandles.length = 0;
       }
       if (pairWorkflowId && !foundExpectedWorkflow) {
         waiting = true;
       }
-      if (!waiting && pendingHandles.length === 0) {
+      if (!waiting && idleHandles.length === 0) {
         return;
       }
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -192,7 +183,7 @@ describe('inbound Follow and Undo', () => {
     });
 
     await handleInboundFollow(context, follow);
-    await waitForProfileFollowEffects();
+    await waitForProfileFollowWorkflows();
 
     const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
     assert.equal(relation.followerProfileId, fixture.remoteProfile.id);
@@ -223,7 +214,7 @@ describe('inbound Follow and Undo', () => {
         published: Temporal.Instant.from('2026-07-15T00:00:01Z'),
       }),
     );
-    await waitForProfileFollowEffects();
+    await waitForProfileFollowWorkflows();
 
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.equal(
@@ -296,7 +287,7 @@ describe('inbound Follow and Undo', () => {
         contextData: undefined,
       });
       assert.equal(followResponse.status, 202, await followResponse.text());
-      await waitForProfileFollowEffects({
+      await waitForProfileFollowWorkflows({
         pair: {
           followerProfileId: fixture.remoteProfile.id,
           followeeProfileId: fixture.localProfile.id,
@@ -327,7 +318,7 @@ describe('inbound Follow and Undo', () => {
         { contextData: undefined },
       );
       assert.equal(undoResponse.status, 202, await undoResponse.text());
-      await waitForProfileFollowEffects();
+      await waitForProfileFollowWorkflows();
       assert.equal((await db.select().from(ProfileFollows)).length, 0);
       assert.equal(
         await db
@@ -426,7 +417,7 @@ describe('inbound Follow and Undo', () => {
       restoreReporter();
     }
 
-    await waitForProfileFollowEffects();
+    await waitForProfileFollowWorkflows();
     const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.equal(
@@ -472,7 +463,7 @@ describe('inbound Follow and Undo', () => {
       new Follow({ actor: remoteActorUri, object: localActorUri }),
     );
 
-    await waitForProfileFollowEffects();
+    await waitForProfileFollowWorkflows();
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 1);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.equal((await db.select().from(Notifications)).length, 1);
@@ -485,7 +476,7 @@ describe('inbound Follow and Undo', () => {
         object: new Follow({ actor: remoteActorUri, object: localActorUri }),
       }),
     );
-    await waitForProfileFollowEffects();
+    await waitForProfileFollowWorkflows();
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(Notifications)).length, 0);
   });
@@ -599,7 +590,7 @@ describe('inbound Follow and Undo', () => {
       new Follow({ actor: remoteActorUri, object: localActorUri }),
     );
 
-    await waitForProfileFollowEffects();
+    await waitForProfileFollowWorkflows();
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.equal((await db.select().from(Notifications)).length, 1);
     assert.equal(
@@ -628,7 +619,7 @@ describe('inbound Follow and Undo', () => {
     );
     restoreInboundReporter();
 
-    await waitForProfileFollowEffects();
+    await waitForProfileFollowWorkflows();
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 1);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.equal((await db.select().from(Notifications)).length, 1);
@@ -663,7 +654,7 @@ describe('inbound Follow and Undo', () => {
       }),
     );
 
-    await waitForProfileFollowEffects();
+    await waitForProfileFollowWorkflows();
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.equal(
       await db
@@ -691,7 +682,7 @@ describe('inbound Follow and Undo', () => {
       }),
     );
 
-    await waitForProfileFollowEffects();
+    await waitForProfileFollowWorkflows();
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(Notifications)).length, 0);
     assert.equal(

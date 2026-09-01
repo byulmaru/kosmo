@@ -150,44 +150,34 @@ async function waitForE2EWorkflow({ runId, type, workflowId }: WorkflowInfo) {
     return;
   }
 
-  const status = await waitForE2EProfileFollowPairEffects(handle, workflowId);
+  const deadline = Date.now() + 30_000;
+  let description = await handle.describe();
 
-  // A pair Workflow intentionally remains open while a request is pending.
-  // The database is about to be truncated, so terminate that test-owned
-  // lifecycle after its committed effects have drained. Terminal pairs should
-  // close normally and retain their failure signal through result().
-  if (status.pending) {
+  while (
+    description.status.name === 'RUNNING' &&
+    ((description.raw.pendingActivities ?? []).length > 0 ||
+      description.raw.pendingWorkflowTask != null)
+  ) {
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Timed out waiting for E2E Profile Follow pair to become idle: ${workflowId}`,
+      );
+    }
+    await delay(25);
+    description = await handle.describe();
+  }
+
+  if (description.status.name === 'RUNNING') {
+    // A pair Workflow intentionally remains open while a request is pending.
+    // The database is about to be truncated, so terminate that test-owned
+    // lifecycle after its committed effects have drained. Terminal pairs should
+    // close normally and retain their failure signal through result().
     await handle.terminate('E2E database reset');
     await handle.result().catch(() => undefined);
     return;
   }
 
   await handle.result();
-}
-
-async function waitForE2EProfileFollowPairEffects(
-  handle: ReturnType<typeof temporalClient.workflow.getHandle>,
-  workflowId: string,
-): Promise<{ readonly pending: boolean }> {
-  const deadline = Date.now() + 30_000;
-
-  while (Date.now() < deadline) {
-    const description = await handle.describe();
-    if (description.status.name !== 'RUNNING') {
-      return { pending: false };
-    }
-
-    if (
-      (description.raw.pendingActivities ?? []).length === 0 &&
-      description.raw.pendingWorkflowTask == null
-    ) {
-      return { pending: true };
-    }
-
-    await delay(25);
-  }
-
-  throw new Error(`Timed out waiting for E2E Profile Follow pair effects: ${workflowId}`);
 }
 
 export async function closeE2EDatabase() {
