@@ -18,7 +18,7 @@ Android·iOS·Web에서 공유하며 고정 순서, optional 액션, compact cou
 
 - 공개 UI API는 `PostActionBar` 하나와 actual Post fragment ref, `reply`·`reaction`·`bookmark`·`more`의 명시적 optional config, Repost error callback으로 제한한다. 구현된 Repost는 composite parent fragment 아래 private child action으로 조립한다. Repost의 concrete disabled host input 또는 fragment shape는 actual caller와 함께 PROD-432가 설계한다.
 - Reply의 controlled `expanded`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`를 처리 상태와 분리하고, Repost child는 `viewerRepost`에서 `hasReposted`를 파생한다. 범용 공개 `selected`를 만들지 않는다. 공개 처리 상태는 default·pending·disabled만 제공하고 pending·disabled만 입력을 차단한다. 일시적 요청 실패를 `error`·danger 상태로 표현하지 않는다.
-- Bar와 각 control은 모든 플랫폼에서 높이 28을 사용하고, 좌우 padding 8, social action 너비 50, More target 너비 최소 28, glyph 16×16, icon-count 간격 4를 제공한다. Web target은 24×24 CSS px 사각형을 포함하고 서로 겹치지 않아야 한다. Native 28pt·28dp는 출시 전 임시 예외이며 Native 접근성 완료 증거로 사용하지 않는다.
+- Bar와 각 control의 visual/layout slot은 모든 플랫폼에서 높이 28을 사용하고, social action 너비 50, More 너비 28, glyph 16×16, icon-count 간격 4를 제공한다. PROD-866 이후 Web interactive rectangle은 50×36px/28×36px이며 서로 겹치거나 action 사이 분배 여백을 덮지 않아야 한다. Native 공용 projection은 출시 전 임시 예외이며 Native 접근성 완료 증거로 사용하지 않는다.
 - Reaction과 Bookmark는 count를 받지 않는다. Reply config와 Repost child fragment는 선행 계약이 제공한 count만 실행 환경 기본 locale의 표준 compact formatting으로 표시하고 K/M 반올림·단위 승격·상한을 수동 구현하거나 count가 없을 때 `0`을 합성하지 않는다.
 - More는 callback과 접근성 label만 제공하고 count·도메인 상태·처리 상태, 팝업이나 링크 복사를 구현하지 않는다.
 - production surface, navigation, Content·Reply Parent·Repost Source 관계 조합 정책과 Figma 파일을 수정하지 않는다. 구현된 child action의 Relay fragment·mutation은 PROD-414가 소유하고 toolbar container가 mutation payload나 cache update 정책을 재구현하지 않는다.
@@ -73,7 +73,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 
 **Deliverable**
 
-`PostLayout`은 Action Bar를, `PostListItem`은 Action Bar를 담은 목록 전용 slot을 content grid의 마지막 sibling으로 직접 렌더링하고, 일반 Post·Quote는 자신을, 순수 Repost는 direct Source를 Repost target으로 사용한다. Repost trigger는 Web anchored menu와 Android·iOS bottom action sheet에서 `재게시하기` 또는 `재게시 취소`를 제공하며 실제 mutation과 action별 실패 toast까지 동작한다.
+완료 당시 `PostLayout`과 `PostListItem`의 final presentation에 Action Bar를 배치하고, 일반 Post·Quote는 자신을, 순수 Repost는 direct Source를 Repost target으로 사용했다. 후속 PROD-866 이후 `PostLayout`은 Reaction Summary와 Action Bar를 포함하는 Engagement를 마지막 sibling으로 렌더링한다. Repost trigger는 Web anchored menu와 Android·iOS bottom action sheet에서 `재게시하기` 또는 `재게시 취소`를 제공하며 실제 mutation과 action별 실패 toast까지 동작한다.
 
 **Guardrails**
 
@@ -87,7 +87,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 **Verification**
 
 - 일반 Post·순수 Repost·Quote의 목록 final slot·상세 final Action Bar, link 비중첩과 순수 Repost Source target을 검증한다.
-- production의 일반 Text·Media는 카드 상단 8px과 Action Bar slot 상단 0·하단 4px을 유지한다. 순수 Repost와 Quote는 slot 상단 0·하단 4px, 1px semantic divider color, 순수 Repost attribution line box 20과 Source 표준행까지 gap 0, Quote Source preview 내부 하단 padding 4px과 border 밖에서 Action Bar까지 8px을 유지한다.
+- PROD-866 production의 일반 Text·Media는 카드 상단 12px·하단 4px과 Action Bar slot 상단 4·하단 0을 사용한다. 순수 Repost와 Quote는 slot 상단 0·하단 4px, 1px semantic divider color, 순수 Repost attribution line box 20과 Source 표준행까지 gap 0, Quote Source preview 내부 하단 padding 4px과 border 밖에서 Action Bar까지 8px을 유지한다.
 - Web outside/Escape/focus return·keyboard navigation과 Native backdrop/back/dismiss/safe area·modal semantics를 검증한다.
 - menu label·item 선택 뒤 create/delete identity·pending, exact toast·latest-replace·동일 문구 반복 시 새 alert instance와 dismiss timer 재시작·자동 dismiss·alert semantics·light `#262626` accent·message 2px optical shift, 실패 뒤 상태 유지·menu 재시도를 검증한다.
 
@@ -123,7 +123,7 @@ canonical Figma Center·Mobile Text·Media `PostListItem` source는 카드 상�
 
 **Guardrails**
 
-- production `PostListItem`, Storybook과 규범 spec은 현재 카드 상단 8px, slot 상단 0·하단 4px 계약을 유지한다. 같은 target의 코드 적용은 관련 Product 이슈와 별도 OpenSpec spec delta·task·runtime 검증으로 분리한다.
+- 당시 production `PostListItem`, Storybook과 규범 spec은 카드 상단 8px, slot 상단 0·하단 4px 계약을 유지했다. 이 guardrail은 후속 PROD-866 production migration에서 superseded됐다.
 - Quote와 순수 Repost는 기존 전용 구조와 slot 상단 0·하단 4px을 유지한다. 공용 Action Bar 28px geometry와 action 동작은 변경하지 않는다.
 
 **Verification**
@@ -184,7 +184,7 @@ PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 �
 - [x] 4.2 목록·상세에서 Reaction·Bookmark의 callback과 default·pending·disabled 처리 상태를 PROD-414가 배치한 공통 Action Bar에 연결하고 각각 `hasReacted`·`hasBookmarked`를 공급한다. Reply는 PROD-425의 상위 Composer `expanded`와 optional count 경계를 유지한다.
 - [x] 4.3 선택 Profile cache 경계를 유지하면서 대상 적격성과 현재 실행 주체·세션의 실행 권한을 분리하고 관계 조합, Post Visibility·권한별 disabled, target이 적격한 guest의 인증 위임, target이 부적격한 guest의 disabled 유지와 action별 pending·실패 복구를 적용한다. display Post와 action target을 구분하고 순수 Repost는 Source target을 유지한다.
 - [x] 4.4 Surface가 guest도 사용할 수 있는 ADR 0015 Post Share Reference `링크 복사`를 `moreItems` 첫 항목으로 공급하고, private `PostDeletionAction`이 접근 가능한 팝업에서 완료된 PROD-598의 작성자 `삭제`를 자격 충족 시 마지막 항목으로 조합한다. 삭제 확인·mutation·cache·실패 계약은 재구현하지 않는다. Web menu는 trigger 오른쪽을 기준으로 왼쪽으로 펼치되 첫 item overlap·viewport 보정을 유지하고, Repost 시작 정렬과 Native bottom action sheet는 유지한다. Web은 현재 browser origin을 우선하고 Native 또는 browser origin 부재 시 configured Local Instance canonical origin을 fallback으로 사용하는 계약을 검증한다.
-- [x] 4.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·controlled Reply Composer·Profile별 도메인 상태, Bookmark 해제의 응답 처리 시점 loaded connection row 제거·GraphQL 오류 보존·actor 격리, PROD-414 Repost menu·toast 및 PROD-598 삭제 회귀, 대상 정책·guest 위임과 More 항목 순서 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다. 390·900·1400px에서 Reply·More target이 PostBody content column 양끝에 맞고 나머지 action이 그 사이에 균등 분배되며, non-More glyph는 각 target 왼쪽에 맞고 More glyph는 가운데를 유지하는 geometry를 검증한다. 상세 thread current Post는 상단 16px을 보존하고 Reaction Summary와 Action Bar 사이를 4px로 둔다. selected Profile이 있고 inline Reply Composer가 닫힌 상태에서도 빈 wrapper 없이 Action Bar와 다음 divider 사이가 4px인지 검증한다. Web More menu의 끝 정렬, 첫 `링크 복사` item overlap과 viewport clamp도 실제 Home 및 Storybook에서 확인한다.
+- [x] 4.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·controlled Reply Composer·Profile별 도메인 상태, Bookmark 해제의 응답 처리 시점 loaded connection row 제거·GraphQL 오류 보존·actor 격리, PROD-414 Repost menu·toast 및 PROD-598 삭제 회귀, 대상 정책·guest 위임과 More 항목 순서 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다. 390·900·1400px에서 Reply·More slot이 PostBody content column 양끝에 맞고 나머지 action이 그 사이에 균등 분배되며, non-More glyph는 각 slot 왼쪽에 맞고 More glyph는 가운데를 유지하는 geometry를 검증한다. 상세 thread current Post는 상단 16px을 보존하고 Reaction Summary와 Action Bar 사이를 4px로 둔다. Web More menu의 끝 정렬, 첫 `링크 복사` item overlap과 viewport clamp도 실제 Home 및 Storybook에서 확인한다.
 - [x] 4.6 canonical 문서·Linear·OpenSpec·구현과 모든 task의 정합성을 확인하고 archive 전 strict validation을 통과시킨다.
 
 ## 5. PROD-632 링크 복사 런타임 조사·복구와 최종 archive
@@ -252,7 +252,38 @@ Reaction과 Repost가 전역 feedback 의미와 분리된 presentation semantic�
 - [x] 6.1 canonical 설계 문서와 OpenSpec에 승인된 Reaction·Repost semantic 색상 및 전역 Success 비변경 경계를 기록한다.
 - [x] 6.2 기존 공용 control·theme 경계로 semantic 색상을 구현하고 Light·Dark Storybook 회귀와 전체 검증을 통과시킨다.
 
-## 7. PROD-882 미선택 Repost 상태 색상 복구
+## 7. PROD-866 공용 presentation interaction·geometry 보정
+
+**Authority / Provenance**
+
+- `PROD-866`
+- `docs/design/post-action-bar.md`
+- `docs/design/post-thread.md`
+- Figma `PostActionControl` 3801:8494, `PostActionBar` 6604:48270, `PostLayout` 4686:12079, Center thread 4762:17631
+- 2026-09-01 KST 사용자 결정
+
+**Deliverable**
+
+28px visual Action Bar를 유지하면서 Web의 bounded click rectangle, glyph·count interaction foreground, production More Playground와 PostLayout Engagement/thread boundary를 공용 계약으로 맞춘다.
+
+**Guardrails**
+
+- action 사이 분배 여백 전체를 target으로 만들지 않고 50×36px/28×36px rectangle만 사용한다. trailing 82px, 28×28 hover state layer와 28px visual row는 유지한다.
+- Repost는 production에서 숨기지 않고 Reaction 표시 여부와 독립적이어야 한다. Playground는 실제 production `링크 복사` More menu를 사용하되 visible story는 검토용 정적 상태만 제공하고 상태를 바꾸는 `play`는 Tests story로 분리한다.
+- PostLayout/PostListItem을 Relay fragment 없이 우회하는 새 Playground나 PROD-853 전용 중복 fixture를 추가하지 않는다.
+- Web·Figma 결과를 Native 44pt·48dp target이나 VoiceOver·TalkBack runtime 완료 증거로 사용하지 않는다.
+
+**Verification**
+
+- focused Storybook에서 target bounds·non-overlap, hover·pressed glyph/count foreground, 실제 More menu, Engagement border·padding·gap과 current divider 생략을 검증한다.
+- lint·format·typecheck, 전체 Storybook test·build, representative Light·Dark·thread Web Browser QA와 OpenSpec strict validation을 통과시킨다.
+
+- [x] 7.1 공용 `PostActionControl`, production More Playground와 분리된 Tests interactions, `PostLayout` Engagement와 `PostThreadLayout` current divider를 승인된 계약으로 구현한다.
+- [x] 7.2 canonical 디자인 문서·OpenSpec·Figma source와 representative consumer를 같은 geometry·state 계약으로 동기화하고 readback한다.
+- [x] 7.3 focused·전체 자동 검증과 Web 시각·상호작용 QA를 완료하고 Native runtime 미검증 경계를 기록한다.
+- [x] 7.4 Quote Source preview의 resting fill을 제거하고 interactive Web hover에만 `stateHover`를 적용한 뒤 focused Storybook, canonical 문서·OpenSpec과 Figma Light·Dark specimen을 동기화하고 readback한다.
+
+## 8. PROD-882 미선택 Repost 상태 색상 복구
 
 **Authority / Provenance**
 
@@ -275,5 +306,5 @@ Reaction과 Repost가 전역 feedback 의미와 분리된 presentation semantic�
 - 기존 Light·Dark Storybook Relay fixture에서 미선택 default glyph·count의 중립색, hover glyph·background의 Repost semantic과 중립 count 유지, selected glyph·count의 Repost semantic을 직접 검증한다.
 - app check, focused Storybook test와 OpenSpec strict validation을 통과시킨다.
 
-- [x] 7.1 Repost child의 미선택 base color override를 제거하고 기존 selected·hover semantic을 유지한다.
-- [x] 7.2 Light·Dark Storybook 회귀와 app·OpenSpec 검증을 통과시킨다.
+- [x] 8.1 Repost child의 미선택 base color override를 제거하고 기존 selected·hover semantic을 유지한다.
+- [x] 8.2 Light·Dark Storybook 회귀와 app·OpenSpec 검증을 통과시킨다.
