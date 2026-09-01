@@ -88,6 +88,28 @@ describe('inbound Follow and Undo', () => {
     const pairWorkflowId = pair
       ? `profile-follow-pair:${pair.followerProfileId}:${pair.followeeProfileId}`
       : undefined;
+
+    const waitForPairActivities = async (
+      handle: ReturnType<typeof temporalClient.workflow.getHandle>,
+    ): Promise<boolean> => {
+      while (Date.now() < deadline) {
+        const description = await handle.describe();
+        if (description.status.name !== 'RUNNING') {
+          return false;
+        }
+
+        if (
+          (description.raw.pendingActivities ?? []).length === 0 &&
+          description.raw.pendingWorkflowTask == null
+        ) {
+          return true;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error('Timed out waiting for Follow Workflow effects');
+    };
+
     while (Date.now() < deadline) {
       let waiting = false;
       let foundExpectedWorkflow = false;
@@ -110,31 +132,20 @@ describe('inbound Follow and Undo', () => {
         }
         const handle = temporalClient.workflow.getHandle(execution.workflowId, execution.runId);
         if (execution.type === 'profileFollowPairWorkflow') {
-          let status: {
-            readonly state: string;
-            readonly inFlight: boolean;
-            readonly pendingEffectCount: number;
-            readonly effectFailureCount: number;
-          };
-          try {
-            status = (await handle.query('profileFollowPairStatus')) as typeof status;
-          } catch {
-            waiting = true;
-            continue;
-          }
-          if (status.effectFailureCount > 0 && !terminatePending) {
-            throw new Error('Follow Workflow recorded a terminal effect failure');
-          }
-          if (status.state === 'INITIAL' && terminatePending) {
-            pendingHandles.push(handle);
-            continue;
-          }
-          if (status.state === 'PENDING') {
-            if (status.inFlight || status.pendingEffectCount > 0) {
-              waiting = true;
-            } else if (terminatePending) {
+          if (await waitForPairActivities(handle)) {
+            if (terminatePending) {
               pendingHandles.push(handle);
             }
+            continue;
+          }
+        } else if (terminatePending) {
+          const description = await handle.describe();
+          if (
+            description.status.name === 'RUNNING' &&
+            (description.raw.pendingActivities ?? []).length === 0 &&
+            description.raw.pendingWorkflowTask == null
+          ) {
+            pendingHandles.push(handle);
             continue;
           }
         }
@@ -151,10 +162,12 @@ describe('inbound Follow and Undo', () => {
 
       if (pendingHandles.length > 0) {
         await Promise.all(
-          pendingHandles.map((handle) =>
-            handle.terminate('test fixture cleanup').catch(() => undefined),
-          ),
+          pendingHandles.map(async (handle) => {
+            await handle.terminate('test fixture cleanup').catch(() => undefined);
+            await handle.result().catch(() => undefined);
+          }),
         );
+        pendingHandles.length = 0;
       }
       if (pairWorkflowId && !foundExpectedWorkflow) {
         waiting = true;

@@ -11,6 +11,7 @@ import {
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { profileFollowRemovalWorkflowId } from '@kosmo/core/temporal/follow-command';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
@@ -79,68 +80,72 @@ describe('inbound Accept and Reject', () => {
 
   async function waitForProfileFollowEffects({ terminatePending = false } = {}) {
     const deadline = Date.now() + 30_000;
-    while (Date.now() < deadline) {
-      let waiting = false;
-      const pendingHandles: Array<ReturnType<typeof temporalClient.workflow.getHandle>> = [];
 
-      for await (const execution of temporalClient.workflow.list({
-        query:
-          '(WorkflowType = "profileFollowPairWorkflow" OR WorkflowType = "profileFollowRemovalWorkflow") AND ExecutionStatus = "Running"',
-      })) {
-        const handle = temporalClient.workflow.getHandle(execution.workflowId, execution.runId);
-        if (execution.type === 'profileFollowPairWorkflow') {
-          let status: {
-            readonly state: string;
-            readonly inFlight: boolean;
-            readonly pendingEffectCount: number;
-            readonly effectFailureCount: number;
-          };
-          try {
-            status = (await handle.query('profileFollowPairStatus')) as typeof status;
-          } catch {
-            waiting = true;
-            continue;
-          }
-          if (status.effectFailureCount > 0 && !terminatePending) {
-            throw new Error('Follow Workflow recorded a terminal effect failure');
-          }
-          if (status.state === 'INITIAL' && terminatePending) {
+    const waitForPairActivities = async (
+      handle: ReturnType<typeof temporalClient.workflow.getHandle>,
+    ): Promise<boolean> => {
+      while (Date.now() < deadline) {
+        const description = await handle.describe();
+        if (description.status.name !== 'RUNNING') {
+          return false;
+        }
+
+        if (
+          (description.raw.pendingActivities ?? []).length === 0 &&
+          description.raw.pendingWorkflowTask == null
+        ) {
+          return true;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error('Timed out waiting for Follow Workflow effects');
+    };
+
+    const pendingHandles: Array<ReturnType<typeof temporalClient.workflow.getHandle>> = [];
+
+    for await (const execution of temporalClient.workflow.list({
+      query:
+        '(WorkflowType = "profileFollowPairWorkflow" OR WorkflowType = "profileFollowRemovalWorkflow") AND ExecutionStatus = "Running"',
+    })) {
+      const handle = temporalClient.workflow.getHandle(execution.workflowId, execution.runId);
+      if (execution.type === 'profileFollowPairWorkflow') {
+        if (await waitForPairActivities(handle)) {
+          if (terminatePending) {
             pendingHandles.push(handle);
-            continue;
           }
-          if (status.state === 'PENDING') {
-            if (status.inFlight || status.pendingEffectCount > 0) {
-              waiting = true;
-            } else if (terminatePending) {
-              pendingHandles.push(handle);
-            }
-            continue;
-          }
+          continue;
         }
-
-        try {
-          await handle.result();
-        } catch (error) {
-          if (!terminatePending) {
-            throw error;
-          }
-          // Fixture cleanup may terminate a workflow after recording a failure.
+      } else if (terminatePending) {
+        const description = await handle.describe();
+        if (
+          description.status.name === 'RUNNING' &&
+          (description.raw.pendingActivities ?? []).length === 0 &&
+          description.raw.pendingWorkflowTask == null
+        ) {
+          pendingHandles.push(handle);
+          continue;
         }
       }
 
-      if (pendingHandles.length > 0) {
-        await Promise.all(
-          pendingHandles.map((handle) =>
-            handle.terminate('test fixture cleanup').catch(() => undefined),
-          ),
-        );
+      try {
+        await handle.result();
+      } catch (error) {
+        if (!terminatePending) {
+          throw error;
+        }
+        // Fixture cleanup may terminate a workflow after recording a failure.
       }
-      if (!waiting && pendingHandles.length === 0) {
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    throw new Error('Timed out waiting for Follow Workflow effects');
+
+    if (pendingHandles.length > 0) {
+      await Promise.all(
+        pendingHandles.map(async (handle) => {
+          await handle.terminate('test fixture cleanup').catch(() => undefined);
+          await handle.result().catch(() => undefined);
+        }),
+      );
+    }
   }
 
   test('routes a Mastodon 4.1.18 Accept through the production Follow document boundary', async () => {
@@ -736,7 +741,15 @@ describe('inbound Accept and Reject', () => {
       }),
     );
 
-    await waitForProfileFollowEffects();
+    await temporalClient.workflow
+      .getHandle(
+        profileFollowRemovalWorkflowId({
+          expectedRowId: fixture.projection.id,
+          followeeProfileId: fixture.projection.followeeProfileId,
+          followerProfileId: fixture.projection.followerProfileId,
+        }),
+      )
+      .result();
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
     assert.equal(
