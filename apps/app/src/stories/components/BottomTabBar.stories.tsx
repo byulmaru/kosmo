@@ -84,8 +84,6 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-
 export const Playground: Story = {
   args: { currentDestination: 'notifications', unreadNotificationCount: 3 },
   parameters: {
@@ -278,12 +276,4 @@ export const IosSafeArea: Story = {
 export const AndroidSafeArea: Story = {
   args: { platform: 'android', safeAreaBottom: 40 },
   play: safeAreaPlay,
-};
-
-export const DarkSelected: Story = {
-  args: { currentDestination: 'notifications' },
-  globals: {
-    backgrounds: { value: 'kosmoDark' },
-    theme: 'dark',
-  },
 };

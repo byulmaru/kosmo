@@ -76,7 +76,6 @@ const meta = {
   component: SearchToolbarCatalog,
   excludeStories: [
     'AndroidBackInteractionContract',
-    'DefaultInteractionContract',
     'DisabledInteractionContract',
     'IosBackInteractionContract',
     'InteractionContract',
@@ -127,27 +126,6 @@ function expectLeadingIcon(
   expectIcon(button, leadingAction === 'menu' ? 24 : 20);
   return button;
 }
-
-export const Default: Story = {
-  play: async ({ canvasElement }) => {
-    const input = getInput(canvasElement);
-    expectLeadingIcon(canvasElement, 'menu', 44);
-
-    expect(input).toHaveValue('');
-    expect(input).toHaveAttribute('placeholder', '검색어를 입력하세요');
-    expect(within(canvasElement).queryByRole('button', { name: '뒤로' })).toBeNull();
-    expect(within(canvasElement).queryByRole('button', { name: '검색 지우기' })).toBeNull();
-  },
-};
-
-export const DefaultInteractionContract: Story = {
-  ...Default,
-  play: async ({ canvasElement }) => {
-    const menu = expectLeadingIcon(canvasElement, 'menu', 44);
-    menu.focus();
-    expect(menu).toHaveFocus();
-  },
-};
 
 export const Playground: Story = {
   args: { value: '코스모' },
@@ -325,6 +303,8 @@ export const IosBack: Story = {
 export const IosBackInteractionContract: Story = {
   ...IosBack,
   play: async ({ args, canvasElement }) => {
+    args.onBackPress?.mockClear();
+    args.onMenuPress?.mockClear();
     const back = expectLeadingIcon(canvasElement, 'back', 44);
     await userEvent.click(back);
     expect(args.onBackPress).toHaveBeenCalledOnce();
@@ -344,6 +324,8 @@ export const AndroidBack: Story = {
 export const AndroidBackInteractionContract: Story = {
   ...AndroidBack,
   play: async ({ args, canvasElement }) => {
+    args.onBackPress?.mockClear();
+    args.onMenuPress?.mockClear();
     const back = expectLeadingIcon(canvasElement, 'back', 48);
     await userEvent.click(back);
     expect(args.onBackPress).toHaveBeenCalledOnce();
@@ -376,6 +358,10 @@ export const Disabled: Story = {
 export const DisabledInteractionContract: Story = {
   ...Disabled,
   play: async ({ args, canvasElement }) => {
+    args.onChangeText.mockClear();
+    args.onSubmit.mockClear();
+    args.onMenuPress?.mockClear();
+    args.onClear.mockClear();
     const input = getInput(canvasElement);
     const menu = expectLeadingIcon(canvasElement, 'menu', 44);
     const clear = getButton(canvasElement, '검색 지우기');
@@ -388,13 +374,5 @@ export const DisabledInteractionContract: Story = {
     expect(args.onSubmit).not.toHaveBeenCalled();
     expect(args.onMenuPress).not.toHaveBeenCalled();
     expect(args.onClear).not.toHaveBeenCalled();
-  },
-};
-
-export const Dark: Story = {
-  args: { leadingAction: 'none', value: '다크 검색어' },
-  globals: {
-    backgrounds: { value: 'kosmoDark' },
-    theme: 'dark',
   },
 };

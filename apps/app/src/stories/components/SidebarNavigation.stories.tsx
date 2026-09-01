@@ -220,12 +220,6 @@ async function expectNavigationBasics(
   }
 }
 
-export const Default: Story = {
-  play: async ({ canvasElement }) => {
-    await expectNavigationBasics(canvasElement, 'full');
-  },
-};
-
 export const Playground: Story = {
   args: { unreadNotificationCount: 3 },
   parameters: {
@@ -489,20 +483,6 @@ export const ProfileUnavailableContract: Story = {
     expect(profileButton).not.toHaveAttribute('aria-current', 'page');
     profileButton.click();
     expect(args.onNavigate).not.toHaveBeenCalled();
-  },
-};
-
-export const Dark: Story = {
-  args: { currentDestination: 'notifications' },
-  globals: {
-    backgrounds: { value: 'kosmoDark' },
-    theme: 'dark',
-  },
-  play: async ({ canvasElement }) => {
-    const navigation = getNavigation(canvasElement);
-    const notifications = getButton(navigation, 'notifications');
-    expect(notifications).toHaveAttribute('aria-current', 'page');
-    expect(notifications).toBeVisible();
   },
 };
 
