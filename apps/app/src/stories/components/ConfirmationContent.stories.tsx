@@ -69,6 +69,7 @@ const meta = {
     tone: { control: 'inline-radio', options: ['primary', 'danger'] },
   },
   component: ConfirmationContentCatalog,
+  excludeStories: ['InteractionContract'],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Confirmation Content',
 } satisfies Meta<typeof ConfirmationContentCatalog>;
@@ -94,8 +95,6 @@ export const Playground: Story = {
     },
   },
   play: async ({ args, canvasElement, step }) => {
-    args.onCancel.mockClear();
-    args.onConfirm.mockClear();
     const canvas = within(canvasElement);
     const cancel = canvas.getByRole('button', { name: args.cancelLabel });
     const confirm = canvas.getByRole('button', { name: args.confirmLabel });
@@ -115,17 +114,25 @@ export const Playground: Story = {
         }
       }
     });
+  },
+};
 
-    if (args.state === 'idle') {
-      await step('사용 가능한 action callback 확인', async () => {
-        if (!args.confirmDisabled) {
-          await userEvent.click(confirm);
-          expect(args.onConfirm).toHaveBeenCalledWith();
-        }
-        await userEvent.click(cancel);
-        expect(args.onCancel).toHaveBeenCalledWith();
-      });
-    }
+export const InteractionContract: Story = {
+  play: async ({ args, canvasElement, step }) => {
+    args.onCancel.mockClear();
+    args.onConfirm.mockClear();
+    const canvas = within(canvasElement);
+    const cancel = canvas.getByRole('button', { name: args.cancelLabel });
+    const confirm = canvas.getByRole('button', { name: args.confirmLabel });
+
+    await step('사용 가능한 action callback 확인', async () => {
+      if (!args.confirmDisabled) {
+        await userEvent.click(confirm);
+        expect(args.onConfirm).toHaveBeenCalledWith();
+      }
+      await userEvent.click(cancel);
+      expect(args.onCancel).toHaveBeenCalledWith();
+    });
   },
 };
 
