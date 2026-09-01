@@ -69,7 +69,7 @@ describe('inbound Accept and Reject', () => {
   });
 
   beforeEach(async () => {
-    await waitForProfileFollowEffects({ terminatePending: true });
+    await waitForProfileFollowWorkflows({ terminateIdlePairs: true });
     await db.delete(Profiles);
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
@@ -78,31 +78,10 @@ describe('inbound Accept and Reject', () => {
     await pg.end();
   });
 
-  async function waitForProfileFollowEffects({ terminatePending = false } = {}) {
+  async function waitForProfileFollowWorkflows({ terminateIdlePairs = false } = {}) {
     const deadline = Date.now() + 30_000;
 
-    const waitForPairActivities = async (
-      handle: ReturnType<typeof temporalClient.workflow.getHandle>,
-    ): Promise<boolean> => {
-      while (Date.now() < deadline) {
-        const description = await handle.describe();
-        if (description.status.name !== 'RUNNING') {
-          return false;
-        }
-
-        if (
-          (description.raw.pendingActivities ?? []).length === 0 &&
-          description.raw.pendingWorkflowTask == null
-        ) {
-          return true;
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 25));
-      }
-      throw new Error('Timed out waiting for Follow Workflow effects');
-    };
-
-    const pendingHandles: Array<ReturnType<typeof temporalClient.workflow.getHandle>> = [];
+    const idleHandles: Array<ReturnType<typeof temporalClient.workflow.getHandle>> = [];
 
     for await (const execution of temporalClient.workflow.list({
       query:
@@ -110,20 +89,32 @@ describe('inbound Accept and Reject', () => {
     })) {
       const handle = temporalClient.workflow.getHandle(execution.workflowId, execution.runId);
       if (execution.type === 'profileFollowPairWorkflow') {
-        if (await waitForPairActivities(handle)) {
-          if (terminatePending) {
-            pendingHandles.push(handle);
+        let description = await handle.describe();
+        while (
+          description.status.name === 'RUNNING' &&
+          ((description.raw.pendingActivities ?? []).length > 0 ||
+            description.raw.pendingWorkflowTask != null)
+        ) {
+          if (Date.now() >= deadline) {
+            throw new Error('Timed out waiting for Follow Workflow to become idle');
+          }
+          await new Promise((resolve) => setTimeout(resolve, 25));
+          description = await handle.describe();
+        }
+        if (description.status.name === 'RUNNING') {
+          if (terminateIdlePairs) {
+            idleHandles.push(handle);
           }
           continue;
         }
-      } else if (terminatePending) {
+      } else if (terminateIdlePairs) {
         const description = await handle.describe();
         if (
           description.status.name === 'RUNNING' &&
           (description.raw.pendingActivities ?? []).length === 0 &&
           description.raw.pendingWorkflowTask == null
         ) {
-          pendingHandles.push(handle);
+          idleHandles.push(handle);
           continue;
         }
       }
@@ -131,16 +122,16 @@ describe('inbound Accept and Reject', () => {
       try {
         await handle.result();
       } catch (error) {
-        if (!terminatePending) {
+        if (!terminateIdlePairs) {
           throw error;
         }
         // Fixture cleanup may terminate a workflow after recording a failure.
       }
     }
 
-    if (pendingHandles.length > 0) {
+    if (idleHandles.length > 0) {
       await Promise.all(
-        pendingHandles.map(async (handle) => {
+        idleHandles.map(async (handle) => {
           await handle.terminate('test fixture cleanup').catch(() => undefined);
           await handle.result().catch(() => undefined);
         }),
