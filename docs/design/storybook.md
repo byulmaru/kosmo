@@ -95,7 +95,22 @@ Page·Screen에는 Controls를 억지로 추가하지 않는다. 활성·비활�
 - Playground의 `play`는 수동 Controls·Actions와 겹치지 않는 read-only assertion이나 setup에만 사용한다.
 - 접근 가능한 role, name과 state로 요소를 찾고 `userEvent`를 우선 사용한다.
 - 사용자가 관찰하는 결과와 callback을 검증한다. 내부 state, private 함수 호출 횟수나 DOM 구현 세부사항을 계약으로 고정하지 않는다.
+- `meta.args`나 module scope의 `fn()` spy를 여러 story와 재실행에서 공유하면 각 `play` 시작 시 관련 spy를 초기화하고, 과거 기록이 아니라 현재 실행의 호출 횟수와 인자를 검증한다.
 - route navigation, network, mutation, cache와 권한 정책의 전체 동작은 대응 Product 테스트가 소유한다. Storybook에서는 component 경계의 callback과 표시 상태까지만 확인한다.
+
+## 후속 Stack PR 적용 체크리스트
+
+`PROD-865` 위의 후속 Stack PR은 자신의 base에 있는 최신 Storybook 기준을 먼저 적용한다. 아래 목록은 앞 절의 기준을 대체하지 않는 적용 순서다. 2~7번은 재사용 component·pattern에만 적용하며, foundation은 해당 catalog 계약을, Page·Screen은 위의 `Page와 Screen` 절을 따라 불필요한 Controls나 Tests를 만들지 않는다.
+
+1. 실제 Production 책임에 따라 `foundations`, `components`, `patterns`, `screens` 중 하나를 선택하고 파일 경로와 CSF title을 맞춘다.
+2. 재사용 UI의 canonical 초기 상태는 `Playground` 하나로 제공한다. 같은 상태의 `Default`·`Base`·`Playground`를 함께 두지 않으며, Control이 없어도 공통 진입점 이름은 `Playground`를 사용한다.
+3. Production prop과 controlled state, 사용자가 보는 label·title·description·message·placeholder·action 문구를 Controls에 연결한다. 항목형 UI는 검토에 필요한 항목 수·각 항목의 label·description을 fixture args로 조절할 수 있게 하고, container width 같은 사용처 layout 값은 Production prop이 아닌 fixture arg로 둔다.
+4. callback prop은 `fn()` spy를 args에 연결해 Actions에서 관찰한다. Storybook만을 위해 test-only Production prop이나 내부 구현 Control을 추가하지 않는다.
+5. selected, disabled, loading, error, empty, long-content, responsive처럼 한 화면에서 비교해야 하는 상태만 대표 상태 story로 남기고 Playground와 같은 조합을 반복하지 않는다.
+6. `userEvent`, `fireEvent`, 직접 click·focus, timer 또는 callback 실행처럼 상태나 Actions 기록을 바꾸는 자동 검증은 main story에서 분리한다. main meta에서는 `excludeStories`로 숨기고 결정적인 args를 가진 얇은 `*.tests.stories.tsx` wrapper에서 `Tests` 하위에 한 번만 노출한다.
+7. Tests `play`는 매 실행이 독립적이어야 한다. 공유 spy를 먼저 초기화하고 현재 실행의 관찰 가능한 결과·호출 횟수·인자만 검증하며, Controls 변경이나 Interactions 재실행 뒤에도 과거 기록으로 통과하거나 실패하지 않게 한다.
+8. theme, viewport와 reduced motion은 toolbar·parameters를 재사용한다. 대상 디자인 문서에 motion 계약이 있을 때만 enter·exit·interruption·reduced-motion 대체를 대표 상태나 Tests에서 보존하고, state 이름만으로 새 animation을 만들지 않는다.
+9. Static build, Storybook browser test, 수동 시각 검토와 Production Web·iOS·Android runtime 검증 결과를 분리해 보고한다.
 
 ## 검증 표면
 

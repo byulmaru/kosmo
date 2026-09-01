@@ -197,7 +197,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const OwnerOptions: Story = {
+export const Playground: Story = {
   render: (args) => <ProfileDefaultPostVisibilityStory {...args} editable initial="UNLISTED" />,
 };
 
