@@ -128,7 +128,14 @@ const meta = {
     unreadNotificationCount: { control: { min: 0, step: 1, type: 'number' } },
   },
   component: SidebarNavigationCatalog,
-  excludeStories: ['PresentationTransitionContract'],
+  excludeStories: [
+    'CompactInteractionContract',
+    'DrawerInteractionContract',
+    'InteractionContract',
+    'PresentationTransitionContract',
+    'ProfileUnavailableContract',
+    'ReducedMotionContract',
+  ],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Sidebar Navigation',
 } satisfies Meta<typeof SidebarNavigationCatalog>;
@@ -233,12 +240,8 @@ export const Playground: Story = {
     },
   },
   play: async ({ args, canvasElement, step }) => {
-    args.onLogout.mockClear();
-    mocked(args.onMenuOpenChange!).mockClear();
-    args.onNavigate.mockClear();
     const navigation = getNavigation(canvasElement);
     const presentation = args.presentation ?? 'full';
-    const home = getButton(navigation, 'home');
     const search = getButton(navigation, 'search');
     const unreadNotificationCount = args.unreadNotificationCount ?? 0;
     const notificationName =
@@ -266,6 +269,20 @@ export const Playground: Story = {
       }
       expect(notifications).toHaveAccessibleName(notificationName);
     });
+  },
+};
+
+export const InteractionContract: Story = {
+  ...Playground,
+  parameters: { controls: { disable: true } },
+  play: async ({ args, canvasElement, step }) => {
+    args.onNavigate.mockClear();
+    const navigation = getNavigation(canvasElement);
+    const presentation = args.presentation ?? 'full';
+    const home = getButton(navigation, 'home');
+    const search = getButton(navigation, 'search');
+    const notifications = getButton(navigation, 'notifications');
+    const profileButton = getButton(navigation, 'profile');
 
     await step('Pressed visual과 고정 target 확인', async () => {
       const visual = within(notifications).getByTestId('sidebar-control-visual');
@@ -309,6 +326,10 @@ export const Playground: Story = {
 export const ReducedMotion: Story = {
   args: { unreadNotificationCount: 3 },
   globals: { reduceMotion: true },
+};
+
+export const ReducedMotionContract: Story = {
+  ...ReducedMotion,
   play: async ({ canvasElement }) => {
     const navigation = getNavigation(canvasElement);
     const notifications = within(navigation).getByRole('button', {
@@ -327,10 +348,6 @@ export const ReducedMotion: Story = {
 export const Compact: Story = {
   args: { presentation: 'compact', unreadNotificationCount: 3 },
   play: async ({ args, canvasElement, step }) => {
-    args.onLogout.mockClear();
-    const onMenuOpenChange = mocked(args.onMenuOpenChange!);
-    onMenuOpenChange.mockClear();
-    args.onNavigate.mockClear();
     const navigation = getNavigation(canvasElement);
     const feedback = getButton(navigation, 'feedback');
     const utility = within(navigation).getByRole('button', { name: '설정 및 기타' });
@@ -358,6 +375,19 @@ export const Compact: Story = {
       }
       expect(feedback.closest('[role="menu"]')).toBeNull();
     });
+  },
+};
+
+export const CompactInteractionContract: Story = {
+  ...Compact,
+  parameters: { controls: { disable: true } },
+  play: async ({ args, canvasElement, step }) => {
+    args.onLogout.mockClear();
+    const onMenuOpenChange = mocked(args.onMenuOpenChange!);
+    onMenuOpenChange.mockClear();
+    args.onNavigate.mockClear();
+    const navigation = getNavigation(canvasElement);
+    const utility = within(navigation).getByRole('button', { name: '설정 및 기타' });
 
     await step('ActionMenu 선택 callback 확인', async () => {
       await userEvent.click(utility);
@@ -426,6 +456,10 @@ async function playInlineUtility({
 
 export const Drawer: Story = {
   args: { presentation: 'drawer', unreadNotificationCount: 10 },
+};
+
+export const DrawerInteractionContract: Story = {
+  ...Drawer,
   play: async ({ args, canvasElement }) => {
     await playInlineUtility({ args, canvasElement });
   },
@@ -433,6 +467,18 @@ export const Drawer: Story = {
 
 export const ProfileUnavailable: Story = {
   args: { currentDestination: 'profile', profileAvailable: false },
+  play: async ({ canvasElement }) => {
+    const navigation = getNavigation(canvasElement);
+    const profileButton = getButton(navigation, 'profile');
+
+    expect(profileButton).toBeDisabled();
+    expect(profileButton).toHaveAttribute('aria-disabled', 'true');
+    expect(profileButton).not.toHaveAttribute('aria-current', 'page');
+  },
+};
+
+export const ProfileUnavailableContract: Story = {
+  ...ProfileUnavailable,
   play: async ({ args, canvasElement }) => {
     args.onNavigate.mockClear();
     const navigation = getNavigation(canvasElement);

@@ -74,6 +74,14 @@ const meta = {
     value: { control: 'text' },
   },
   component: SearchToolbarCatalog,
+  excludeStories: [
+    'AndroidBackInteractionContract',
+    'DefaultInteractionContract',
+    'DisabledInteractionContract',
+    'IosBackInteractionContract',
+    'InteractionContract',
+    'ReducedMotionContract',
+  ],
   parameters: { controls: { disable: true }, layout: 'fullscreen' },
   title: 'KOSMO/Components/Search Toolbar',
 } satisfies Meta<typeof SearchToolbarCatalog>;
@@ -123,12 +131,19 @@ function expectLeadingIcon(
 export const Default: Story = {
   play: async ({ canvasElement }) => {
     const input = getInput(canvasElement);
-    const menu = expectLeadingIcon(canvasElement, 'menu', 44);
+    expectLeadingIcon(canvasElement, 'menu', 44);
 
     expect(input).toHaveValue('');
     expect(input).toHaveAttribute('placeholder', '검색어를 입력하세요');
     expect(within(canvasElement).queryByRole('button', { name: '뒤로' })).toBeNull();
     expect(within(canvasElement).queryByRole('button', { name: '검색 지우기' })).toBeNull();
+  },
+};
+
+export const DefaultInteractionContract: Story = {
+  ...Default,
+  play: async ({ canvasElement }) => {
+    const menu = expectLeadingIcon(canvasElement, 'menu', 44);
     menu.focus();
     expect(menu).toHaveFocus();
   },
@@ -143,11 +158,6 @@ export const Playground: Story = {
     },
   },
   play: async ({ args, canvasElement, step }) => {
-    args.onBackPress?.mockClear();
-    args.onChangeText.mockClear();
-    args.onClear.mockClear();
-    args.onMenuPress?.mockClear();
-    args.onSubmit.mockClear();
     const input = getInput(canvasElement);
     const disabled = args.disabled ?? false;
     const leadingAction = args.leadingAction ?? 'menu';
@@ -190,6 +200,29 @@ export const Playground: Story = {
         }
       }
     });
+  },
+};
+
+export const InteractionContract: Story = {
+  ...Playground,
+  parameters: { controls: { disable: true } },
+  play: async ({ args, canvasElement, step }) => {
+    args.onBackPress?.mockClear();
+    args.onChangeText.mockClear();
+    args.onClear.mockClear();
+    args.onMenuPress?.mockClear();
+    args.onSubmit.mockClear();
+    const input = getInput(canvasElement);
+    const disabled = args.disabled ?? false;
+    const leadingAction = args.leadingAction ?? 'menu';
+    const platform = args.platform ?? 'web';
+    const targetSize = platform === 'android' ? 48 : 44;
+    const leading =
+      leadingAction === 'back'
+        ? expectLeadingIcon(canvasElement, 'back', targetSize)
+        : leadingAction === 'menu' && platform === 'web'
+          ? expectLeadingIcon(canvasElement, 'menu', targetSize)
+          : null;
 
     if (disabled) {
       return;
@@ -260,6 +293,10 @@ export const Playground: Story = {
 export const ReducedMotion: Story = {
   args: { value: '코스모' },
   globals: { reduceMotion: true },
+};
+
+export const ReducedMotionContract: Story = {
+  ...ReducedMotion,
   play: async ({ canvasElement }) => {
     const menu = getButton(canvasElement, '메뉴 열기');
     const visual = getControlVisual(menu);
@@ -275,13 +312,20 @@ export const ReducedMotion: Story = {
 
 export const IosBack: Story = {
   args: { leadingAction: 'back', platform: 'ios' },
-  play: async ({ args, canvasElement }) => {
-    const back = expectLeadingIcon(canvasElement, 'back', 44);
+  play: async ({ canvasElement }) => {
+    expectLeadingIcon(canvasElement, 'back', 44);
     const input = getInput(canvasElement);
 
     expect(input).toBeEnabled();
     expect(within(canvasElement).queryByRole('button', { name: '메뉴 열기' })).toBeNull();
     expect(within(canvasElement).queryByRole('button', { name: '검색 지우기' })).toBeNull();
+  },
+};
+
+export const IosBackInteractionContract: Story = {
+  ...IosBack,
+  play: async ({ args, canvasElement }) => {
+    const back = expectLeadingIcon(canvasElement, 'back', 44);
     await userEvent.click(back);
     expect(args.onBackPress).toHaveBeenCalledOnce();
     expect(args.onMenuPress).not.toHaveBeenCalled();
@@ -290,10 +334,17 @@ export const IosBack: Story = {
 
 export const AndroidBack: Story = {
   args: { leadingAction: 'back', platform: 'android' },
-  play: async ({ args, canvasElement }) => {
-    const back = expectLeadingIcon(canvasElement, 'back', 48);
+  play: async ({ canvasElement }) => {
+    expectLeadingIcon(canvasElement, 'back', 48);
 
     expect(within(canvasElement).queryByRole('button', { name: '메뉴 열기' })).toBeNull();
+  },
+};
+
+export const AndroidBackInteractionContract: Story = {
+  ...AndroidBack,
+  play: async ({ args, canvasElement }) => {
+    const back = expectLeadingIcon(canvasElement, 'back', 48);
     await userEvent.click(back);
     expect(args.onBackPress).toHaveBeenCalledOnce();
     expect(args.onMenuPress).not.toHaveBeenCalled();
@@ -310,7 +361,7 @@ export const LeadingActionUnavailable: Story = {
 
 export const Disabled: Story = {
   args: { disabled: true, value: '비활성 검색어' },
-  play: async ({ args, canvasElement }) => {
+  play: async ({ canvasElement }) => {
     const input = getInput(canvasElement);
     const menu = expectLeadingIcon(canvasElement, 'menu', 44);
     const clear = getButton(canvasElement, '검색 지우기');
@@ -319,6 +370,16 @@ export const Disabled: Story = {
     expect(input).toHaveAttribute('aria-disabled', 'true');
     expect(menu).toBeDisabled();
     expect(clear).toBeDisabled();
+  },
+};
+
+export const DisabledInteractionContract: Story = {
+  ...Disabled,
+  play: async ({ args, canvasElement }) => {
+    const input = getInput(canvasElement);
+    const menu = expectLeadingIcon(canvasElement, 'menu', 44);
+    const clear = getButton(canvasElement, '검색 지우기');
+
     await userEvent.type(input, '변경');
     await userEvent.keyboard('{Enter}');
     menu.click();
