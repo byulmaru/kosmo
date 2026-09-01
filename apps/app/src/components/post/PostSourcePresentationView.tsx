@@ -1,5 +1,6 @@
 import { Link, useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -204,7 +205,9 @@ export function PostSourcePreview({
   style?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
+  const [hovered, setHovered] = useState(false);
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
+  const webInteractive = interactive && Platform.OS === 'web';
   const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
   const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
   const content = (
@@ -260,10 +263,15 @@ export function PostSourcePreview({
 
   return (
     <View
+      onPointerEnter={webInteractive ? () => setHovered(true) : undefined}
+      onPointerLeave={webInteractive ? () => setHovered(false) : undefined}
       style={[
         styles.preview,
         style,
-        { backgroundColor: theme.backgroundSurface, borderColor: theme.borderDefault },
+        {
+          backgroundColor: webInteractive && hovered ? theme.stateHover : undefined,
+          borderColor: theme.borderDefault,
+        },
       ]}
       testID="source-post-preview"
     >
