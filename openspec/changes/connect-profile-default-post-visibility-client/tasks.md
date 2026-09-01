@@ -119,6 +119,6 @@ change와 별개인 Frontend change lifecycle을 완료할 수 있다.
 - 실제 실행한 Web·Android·iOS 범위와 미실행 범위를 분리해 기록한다.
 
 - [x] 4.1 Relay compiler, app typecheck와 focused unit/component test를 통과시킨다.
-- [ ] 4.2 Storybook interaction·static build·접근성과 지원 플랫폼 검증을 수행한다. 전체 interaction의 `Posts.stories.tsx > Body Time And Layout States`는 변경 전후 동일한 `naturalWidth=0` fixture 실패로 판정하고 비범위 회귀로 기록한다.
+- [ ] 4.2 Storybook interaction·static build·접근성과 지원 플랫폼 검증을 수행한다. 전체 interaction의 `apps/app/src/stories/patterns/Posts.stories.tsx > Body Time And Layout States`는 변경 전후 동일한 `naturalWidth=0` fixture 실패로 판정하고 비범위 회귀로 기록한다.
 - [ ] 4.3 actual diff와 task checkbox, 최신 canonical·Linear·OpenSpec 정합성을 확인한다.
 - [ ] 4.4 `openspec validate connect-profile-default-post-visibility-client --strict`를 통과시키고 PROD-684 archive handoff를 정리한다.

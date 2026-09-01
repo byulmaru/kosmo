@@ -23,7 +23,7 @@ export function usePostMoreMenuItem({ postId, relativeHandle }: Props): ActionMe
         throw new Error('Clipboard did not confirm the copy.');
       }
     } catch {
-      showToast(copyFailureMessage);
+      showToast(copyFailureMessage, { tone: 'danger' });
     }
   }, [postId, relativeHandle, showToast]);
 

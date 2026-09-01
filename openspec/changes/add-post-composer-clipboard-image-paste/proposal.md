@@ -32,6 +32,6 @@ Web Post Composer는 갤러리에서 고른 이미지를 기존 Media 업로드 
 
 - `apps/app/src/components/post/PostComposer.tsx`: Web 본문 입력의 paste event와 기본 텍스트 입력 경계
 - `apps/app/src/components/post/PostComposerMediaControls.tsx` 및 `postComposerMedia.ts`: picker·clipboard 공용 Media item 추가와 preview lifecycle
-- `apps/app/src/stories/Posts.stories.tsx`: clipboard item, 슬롯, 실패·재시도·제거와 텍스트 회귀 component 검증
+- `apps/app/src/stories/patterns/Posts.stories.tsx`: clipboard item, 슬롯, 실패·재시도·제거와 텍스트 회귀 component 검증
 - `apps/web/e2e/compose.e2e.ts`: 실제 Web paste event와 기존 create flow 회귀 검증
 - GraphQL schema, Media Storage Service 계약, dependency와 Native surface 변경 없음

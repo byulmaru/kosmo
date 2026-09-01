@@ -20,7 +20,7 @@ lifecycle을 추가하지 않는다.
 
 **Verification**
 
-- 테스트 코드 범위: `apps/app/src/stories/Shell.stories.tsx`의 가장 가까운 ProfileSwitcher interaction에서
+- 테스트 코드 범위: `apps/app/src/stories/patterns/Shell.stories.tsx`의 가장 가까운 ProfileSwitcher interaction에서
   기존 shell fragment fixture의 0·양수·큰 count가 올바른 boolean 표시로 이어지는지 검증한다.
 - Relay artifact와 app type check에서 기존 fragment consumer가 count를 제공하는지 확인한다.
 - 별도 request lifecycle unit test, fixture, helper와 retry/error 조합은 제외한다.
@@ -55,7 +55,7 @@ unit `accent` dot을 표시하며, screen reader는 기존 Profile 이름·handl
 
 **Verification**
 
-- 테스트 코드 범위: `apps/app/src/stories/Shell.stories.tsx`의 가장 가까운 ProfileSwitcher interaction에
+- 테스트 코드 범위: `apps/app/src/stories/patterns/Shell.stories.tsx`의 가장 가까운 ProfileSwitcher interaction에
   selected/non-selected, 0/양수/큰 count, 접근성 이름, dot 숨김과 layout 불변을 유지한다.
 - Web visual/interaction 자동 검증에 더해 Web·Android·iOS 수동 시각 QA에서 12-unit dot의 우상단 위치·크기,
   avatar clipping과 행 geometry 불변을 확인하고, Android TalkBack과 iOS VoiceOver에서 접근성 이름, selected

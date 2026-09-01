@@ -9,6 +9,7 @@ type ButtonProps = PropsWithChildren<
     controlRef?: Ref<View>;
     loading?: boolean;
     loadingText?: string;
+    size?: 'compact' | 'default';
     tone?: 'primary' | 'secondary' | 'danger';
   }
 >;
@@ -21,6 +22,7 @@ export function Button({
   disabled,
   loading = false,
   loadingText,
+  size = 'default',
   style,
   tone = 'primary',
   ...props
@@ -59,6 +61,7 @@ export function Button({
         const hovered = Platform.OS === 'web' && Boolean(webState.hovered);
         return [
           styles.root,
+          size === 'compact' ? styles.compact : styles.default,
           Platform.OS === 'web'
             ? ({
                 transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
@@ -115,9 +118,17 @@ const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
     borderRadius: radius[8],
+    justifyContent: 'center',
+  },
+  compact: {
+    minHeight: 32,
+    minWidth: 72,
+    paddingHorizontal: space[12],
+    paddingVertical: space[4],
+  },
+  default: {
     minHeight: 40,
     minWidth: 120,
-    justifyContent: 'center',
     paddingHorizontal: space[16],
     paddingVertical: space[8],
   },

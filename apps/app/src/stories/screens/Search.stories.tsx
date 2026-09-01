@@ -1,0 +1,243 @@
+import { expect, mocked, userEvent, waitFor, within } from 'storybook/test';
+import { trackAnalytics } from '@/analytics/client';
+import SearchScreen from '@/app/(tabs)/(protected)/search';
+import { StateView } from '@/components/ui/StateView';
+import { profile } from '../fixtures';
+import { Catalog, Section } from '../StoryFrame';
+import type { Meta, StoryObj } from '@storybook/react-vite';
+
+const result = profile({
+  bio: '코스모에서 만나는 첫 프로필',
+  displayName: '별마루',
+  handle: 'byulmaru',
+  id: 'profile-byulmaru',
+  relativeHandle: '@byulmaru',
+});
+const secondResult = profile({
+  displayName: '별마루 개발',
+  handle: 'byulmaru-dev',
+  id: 'profile-byulmaru-dev',
+  relativeHandle: '@byulmaru-dev',
+});
+const thirdResult = profile({
+  displayName: '별마루 운영',
+  handle: 'byulmaru-ops',
+  id: 'profile-byulmaru-ops',
+  relativeHandle: '@byulmaru-ops',
+});
+
+const searchConnection = (
+  profiles: ReadonlyArray<ReturnType<typeof profile>>,
+  hasNextPage = false,
+) => ({
+  edges: profiles.map((node) => ({ cursor: node.handle, node })),
+  pageInfo: {
+    endCursor: profiles.at(-1)?.handle ?? null,
+    hasNextPage,
+  },
+});
+
+const meta = {
+  beforeEach: () => {
+    mocked(trackAnalytics).mockClear();
+  },
+  component: SearchScreen,
+  title: 'KOSMO/Screens/Search',
+} satisfies Meta<typeof SearchScreen>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Idle: Story = {
+  parameters: { router: { params: {}, pathname: '/search' } },
+};
+
+export const Result: Story = {
+  parameters: {
+    relay: { data: { searchProfiles: searchConnection([result, secondResult]) } },
+    router: { params: { q: 'byulmaru', tab: 'people' }, pathname: '/search' },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() =>
+      expect(trackAnalytics).toHaveBeenCalledWith('search_results_loaded', {
+        has_results: true,
+        tab: 'people',
+      }),
+    );
+    await expect(canvas.getByRole('link', { name: /@byulmaru / })).toHaveAttribute(
+      'href',
+      '/@byulmaru',
+    );
+    await expect(canvas.getByRole('link', { name: /@byulmaru-dev / })).toHaveAttribute(
+      'href',
+      '/@byulmaru-dev',
+    );
+    globalThis.localStorage?.removeItem('kosmo:recent-searches');
+    await userEvent.click(canvas.getByRole('tab', { name: '사람' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(globalThis.localStorage?.getItem('kosmo:recent-searches')).toBeNull();
+    expect(trackAnalytics).not.toHaveBeenCalledWith('search_submitted', expect.anything());
+    await userEvent.click(canvas.getByRole('link', { name: /@byulmaru / }));
+    expect(trackAnalytics).toHaveBeenCalledWith('search_result_selected', { tab: 'people' });
+  },
+};
+
+export const KeyboardSubmissionTracksAnalytics: Story = {
+  parameters: { router: { params: {}, pathname: '/search' } },
+  play: async ({ canvasElement }) => {
+    const input = within(canvasElement).getByRole('textbox', { name: '검색어' });
+    expect(getComputedStyle(input).fontSize).toBe('16px');
+    await userEvent.type(input, '검색 원문{enter}');
+    expect(trackAnalytics).toHaveBeenCalledOnce();
+    expect(trackAnalytics).toHaveBeenCalledWith('search_submitted', {
+      source: 'keyboard',
+      tab: 'people',
+    });
+  },
+};
+
+export const FirstPageFailureDoesNotTrackAnalytics: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        SearchPeopleByHandlePageQuery: { error: '검색 결과를 불러오지 못했습니다.' },
+      },
+    },
+    router: { params: { q: 'byulmaru', tab: 'people' }, pathname: '/search' },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).findByRole('alert')).resolves.toBeVisible();
+    expect(trackAnalytics).not.toHaveBeenCalled();
+  },
+};
+
+export const EmptyResult: Story = {
+  parameters: {
+    relay: { data: { searchProfiles: searchConnection([]) } },
+    router: { params: { q: '없는핸들', tab: 'people' }, pathname: '/search' },
+  },
+};
+
+export const NextPageFailureRetrySucceeds: Story = {
+  parameters: {
+    relay: {
+      data: { searchProfiles: searchConnection([result, secondResult], true) },
+      paginationResponses: [
+        { error: '다음 검색 결과를 불러오지 못했습니다.' },
+        { data: { searchProfiles: searchConnection([thirdResult]) } },
+      ],
+    },
+    router: { params: { q: 'byulmaru', tab: 'people' }, pathname: '/search' },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '검색 결과 더 보기' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '다음 검색 결과를 불러오지 못했어요',
+    );
+    expect(canvas.queryByText('별마루 운영')).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: '다음 검색 결과 다시 불러오기' }));
+    await expect(canvas.findByText('별마루 운영')).resolves.toBeVisible();
+    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+  },
+};
+
+export const NextPageLoading: Story = {
+  parameters: {
+    relay: {
+      data: { searchProfiles: searchConnection([result, secondResult], true) },
+      paginationLoading: true,
+    },
+    router: { params: { q: 'byulmaru', tab: 'people' }, pathname: '/search' },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const button = canvas.getByRole('button', { name: '검색 결과 더 보기' });
+    await userEvent.click(button);
+    await expect(button).toBeDisabled();
+  },
+};
+
+export const PreparedNonPeopleTabs: Story = {
+  parameters: {
+    router: { params: { q: '별마루', tab: 'popular' }, pathname: '/search' },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const tablist = canvas.getByRole('tablist', { name: '검색 결과 유형' });
+    const popular = within(tablist).getByRole('tab', { name: '인기' });
+    const latest = within(tablist).getByRole('tab', { name: '최신' });
+    const media = within(tablist).getByRole('tab', { name: '미디어' });
+    const people = within(tablist).getByRole('tab', { name: '사람' });
+    expect(popular).toHaveAttribute('aria-selected', 'true');
+    expect(popular).toHaveAttribute('tabindex', '0');
+    [latest, media, people].forEach((tab) => {
+      expect(tab).toHaveAttribute('aria-selected', 'false');
+      expect(tab).toHaveAttribute('tabindex', '-1');
+    });
+  },
+};
+
+export const RecentSearchInteraction: Story = {
+  loaders: [
+    async () => {
+      globalThis.localStorage?.setItem(
+        'kosmo:recent-searches',
+        JSON.stringify(['별마루', '@remote@space.example']),
+      );
+      return {};
+    },
+  ],
+  parameters: { router: { params: {}, pathname: '/search' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole('textbox', { name: '검색어' });
+    await userEvent.click(input);
+    await userEvent.type(input, '검색');
+    const clear = canvas.getByRole('button', { name: '검색 지우기' });
+    expect(clear.getBoundingClientRect().width).toBe(44);
+    expect(clear.getBoundingClientRect().height).toBe(44);
+    await userEvent.click(clear);
+    await expect(input).toHaveValue('');
+    await expect(input).toHaveFocus();
+    await expect(canvas.findByText('별마루')).resolves.toBeVisible();
+    await userEvent.tab();
+    await expect(canvas.getByRole('link', { name: '별마루' })).toHaveFocus();
+    const recentLink = canvas.getByRole('link', { name: '별마루' });
+    const remove = canvas.getByRole('button', { name: "최근 검색 '별마루' 삭제" });
+    expect(remove.getBoundingClientRect().width).toBe(44);
+    expect(remove.getBoundingClientRect().height).toBe(44);
+    expect(recentLink.getBoundingClientRect().right).toBeLessThanOrEqual(
+      remove.getBoundingClientRect().left,
+    );
+    await userEvent.click(remove);
+    await expect(canvas.queryByText('별마루')).not.toBeInTheDocument();
+    await expect(canvas.findByText('@remote@space.example')).resolves.toBeVisible();
+    await expect(input).toHaveFocus();
+  },
+};
+
+export const LoadingAndErrorBoundaries: Story = {
+  render: () => (
+    <Catalog>
+      <Section title="Search loading">
+        <StateView loading title="검색 결과를 불러오는 중입니다." />
+      </Section>
+      <Section title="Search error">
+        <StateView
+          actionLabel="다시 시도"
+          description="잠시 후 다시 시도해 주세요."
+          onAction={() => undefined}
+          title="검색 결과를 불러오지 못했어요"
+        />
+      </Section>
+      <Section title="No query">
+        <StateView
+          description="handle을 입력하면 일치하는 프로필을 찾아드려요."
+          title="프로필을 검색해보세요"
+        />
+      </Section>
+    </Catalog>
+  ),
+};

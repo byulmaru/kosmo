@@ -70,7 +70,7 @@
 
 **Guardrails**
 
-- 테스트 코드 범위: 기존 `Posts.stories.tsx`, `Shell.stories.tsx`, `Profiles.stories.tsx`, `Reactions.stories.tsx`, `Notifications.stories.tsx`의 production fragment fixture·interaction 영역 또는 같은 동작을 더 가깝게 직접 검증하는 기존 component/unit test.
+- 테스트 코드 범위: 기존 `apps/app/src/stories/patterns/Posts.stories.tsx`, `apps/app/src/stories/patterns/Shell.stories.tsx`, `Profiles.stories.tsx`, `Reactions.stories.tsx`, `Notifications.stories.tsx`의 production fragment fixture·interaction 영역 또는 같은 동작을 더 가깝게 직접 검증하는 기존 component/unit test.
 - 테스트 필요성: 각 production consumer의 올바른 이미지 선택과 URL 부재 fallback, 기존 크기·Profile 이동·접근성 이름·Profile 전환 계약을 관찰 가능한 결과로 검증한다.
 - 테스트 제외 범위: 관련 없는 coverage 확대, 중복 조합, 새 test-only fixture·helper·harness, 광범위한 snapshot과 Avatar primitive 자체 테스트 변경.
 

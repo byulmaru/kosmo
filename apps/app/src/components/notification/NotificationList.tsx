@@ -121,6 +121,7 @@ export function NotificationList({ profile }: NotificationListProps) {
       setReadAllPending(false);
       showToast('알림을 모두 읽지 못했어요.', {
         action: { label: '다시 시도', onPress: invoke },
+        tone: 'danger',
       });
     };
     commitMarkAllRead({

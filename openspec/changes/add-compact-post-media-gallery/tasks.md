@@ -208,7 +208,7 @@ Sensitive 공개 전후와 이미지별 loading·ready·error·retry 상태가 �
 **테스트 코드 범위**
 
 - `apps/app/src/components/post/PostMediaImage.test.ts`
-- `apps/app/src/stories/Posts.stories.tsx`의 3장 오류 fixture와 기존 interaction
+- `apps/app/src/stories/patterns/Posts.stories.tsx`의 3장 오류 fixture와 기존 interaction
 
 **테스트 필요성**
 

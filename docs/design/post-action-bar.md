@@ -170,8 +170,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   기존 toast를 교체하고 dismiss timer를 다시 시작하며 queue, 닫기 control과 toast 내부 재시도 control은 두지 않는다.
 - 오류 toast는 보조 기술이 즉시 인식할 수 있는 alert semantics를 제공한다. 활성 toast와 같은 문구가 다시
   발생해도 새 alert instance로 교체해 보조 기술이 반복된 실패를 다시 인식할 수 있어야 한다.
-- Default Toast는 light·dark 모두 semantic `background/inverse` 배경과 `foreground/inverse` 전경의 pair를 사용한다.
-  message는 20px line box와 toast padding만으로 수직 중앙 정렬하며 별도 glyph transform을 두지 않는다.
+- Repost 실패 Toast는 Danger tone의 semantic `feedback/danger/subtle` 배경과 `feedback/danger/on-subtle` 전경,
+  `feedback/danger/base` 4px left rail을 사용한다. message는 20px line box와 toast padding만으로 수직 중앙 정렬하며 별도 glyph transform을 두지 않는다.
 - 실패 시 pending만 종료하고 이전 서버 확정 selected 상태, `repostCount`와 Relay cache를 유지한다. 사용자는
   메뉴를 다시 열고 같은 action을 선택해 재시도한다. 성공 toast는 표시하지 않는다.
 
@@ -275,8 +275,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   재실행하지 않는다.
 - 선택·미선택 상태의 메뉴 label, pending 중복 차단, 생성·취소 mutation identity와 actor 격리를 검증한다.
 - 실패 문구, latest-replace, 동일 문구 반복 시 새 alert instance와 dismiss timer 재시작, 자동 dismiss,
-  alert semantics, `background/inverse` 배경·`foreground/inverse` 전경 pair와 message 중앙 정렬, 별도 glyph
-  transform 없음, 실패 뒤 상태 유지·다음 입력 재시도를 검증한다.
+  alert semantics, Danger tone의 `feedback/danger/subtle` 배경·`feedback/danger/on-subtle` 전경·
+  `feedback/danger/base` 4px left rail, message 중앙 정렬, 별도 glyph transform 없음, 실패 뒤 상태 유지·다음 입력
+  재시도를 검증한다.
 - 작성자·selected Profile 일치, Active contentful target과 guest·다른 Profile·Tombstone·Content 없는 Repost의
   `삭제` 노출 여부, Source를 target으로 하는 순수 Repost surface, 링크 복사와 destructive item 순서를
   검증한다.

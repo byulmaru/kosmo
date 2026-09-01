@@ -178,7 +178,7 @@ const failureMessages: Record<BookmarkActionKind, string> = {
 export function useBookmarkFailureToast() {
   const { showToast } = useToast();
   return useCallback(
-    ({ action }: BookmarkActionFailure) => showToast(failureMessages[action]),
+    ({ action }: BookmarkActionFailure) => showToast(failureMessages[action], { tone: 'danger' }),
     [showToast],
   );
 }
