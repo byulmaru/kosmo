@@ -120,8 +120,8 @@ test('Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote co
     });
   });
 
-  const searchMarker = 'e2e-private-search-marker';
-  const referrerSearchMarker = 'e2e-private-referrer-search-marker';
+  const searchMarker = 'e2e-search-handle-marker';
+  const referrerSearchMarker = 'e2e-referrer-handle-marker';
   const referrerClickMarkers = {
     fbclid: 'e2e-referrer-fbclid',
     gclid: 'e2e-referrer-gclid',
@@ -224,23 +224,24 @@ test('Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote co
   const referrerUrl = new URL(String(rootPageview?.properties?.$referrer));
   const sessionEntryUrl = new URL(String(rootPageview?.properties?.$session_entry_url));
   expect(currentUrl.hash).toBe('#overview');
-  expect(currentUrl.searchParams.get('q')).toBe('<masked>');
-  expect(currentUrl.searchParams.get('gclid')).toBe('<masked>');
-  expect(currentUrl.searchParams.get('fbclid')).toBe('<masked>');
-  expect(currentUrl.searchParams.get('msclkid')).toBe('<masked>');
+  expect(currentUrl.searchParams.get('q')).toBe(searchMarker);
+  expect(currentUrl.searchParams.get('gclid')).toBe('e2e-current-gclid');
+  expect(currentUrl.searchParams.get('fbclid')).toBe('e2e-current-fbclid');
+  expect(currentUrl.searchParams.get('msclkid')).toBe('e2e-current-msclkid');
   expect(currentUrl.searchParams.get('utm_source')).toBe('newsletter');
-  expect(referrerUrl.searchParams.get('q')).toBe('<masked>');
-  expect(referrerUrl.searchParams.get('gclid')).toBe('<masked>');
-  expect(referrerUrl.searchParams.get('fbclid')).toBe('<masked>');
-  expect(referrerUrl.searchParams.get('msclkid')).toBe('<masked>');
+  expect(referrerUrl.searchParams.get('q')).toBe(referrerSearchMarker);
+  expect(referrerUrl.searchParams.get('gclid')).toBe(referrerClickMarkers.gclid);
+  expect(referrerUrl.searchParams.get('fbclid')).toBe(referrerClickMarkers.fbclid);
+  expect(referrerUrl.searchParams.get('msclkid')).toBe(referrerClickMarkers.msclkid);
   expect(referrerUrl.searchParams.get('utm_source')).toBe('search-engine');
-  expect(sessionEntryUrl.searchParams.get('q')).toBe('<masked>');
-  expect(rootPageview?.properties?.ph_keyword).toBe('<masked>');
+  expect(sessionEntryUrl.searchParams.get('q')).toBe(searchMarker);
+  expect(sessionEntryUrl.searchParams.get('gclid')).toBe('e2e-current-gclid');
+  expect(rootPageview?.properties?.ph_keyword).toBe(referrerSearchMarker);
   expect(rootPageview?.properties?.$session_entry_utm_source).toBe('newsletter');
-  expect(JSON.stringify(eventPayloads)).not.toContain(searchMarker);
-  expect(JSON.stringify(eventPayloads)).not.toContain(referrerSearchMarker);
+  expect(JSON.stringify(eventPayloads)).toContain(searchMarker);
+  expect(JSON.stringify(eventPayloads)).toContain(referrerSearchMarker);
   for (const marker of Object.values(referrerClickMarkers)) {
-    expect(JSON.stringify(eventPayloads)).not.toContain(marker);
+    expect(JSON.stringify(eventPayloads)).toContain(marker);
   }
   expect(
     JSON.stringify(eventPayloads.filter((payload) => payload.event === '$autocapture')),
