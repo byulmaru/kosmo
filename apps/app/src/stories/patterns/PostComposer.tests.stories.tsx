@@ -2,15 +2,20 @@ import { expect, userEvent, within } from 'storybook/test';
 import baseMeta, {
   InteractionContract as interactionContract,
   MobileCandidateContract as mobileCandidateContract,
+  MobileFlexLayoutContract as mobileFlexLayoutContract,
   MobileKeyboardContract as mobileKeyboardContract,
   MobileKeyboardMediaFooterGeometryContract as mobileKeyboardMediaFooterGeometryContract,
   MobileMediaFooterGeometryContract as mobileMediaFooterGeometryContract,
   MobilePlayground as mobilePlaygroundStory,
   MobilePlaygroundContract as mobilePlaygroundContract,
+  OverlayProgressRingContract as overlayProgressRingContract,
   PendingMediaContract as pendingMediaContract,
   Playground as playgroundContract,
+  ProgressRingToneContract as progressRingToneContract,
   RailMedia as railMediaStory,
+  RailProgressRingContract as railProgressRingContract,
   SubmitFailure as submitFailureStory,
+  SubmittingSpinnerContract as submittingSpinnerContract,
 } from './PostComposer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -30,7 +35,12 @@ export const MobileCandidateContract: Story = mobileCandidateContract;
 export const MobileKeyboardContract: Story = mobileKeyboardContract;
 export const MobileMediaFooterGeometryContract: Story = mobileMediaFooterGeometryContract;
 export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
+export const MobileFlexLayoutContract: Story = mobileFlexLayoutContract;
+export const OverlayProgressRingContract: Story = overlayProgressRingContract;
 export const PendingMediaContract: Story = pendingMediaContract;
+export const ProgressRingToneContract: Story = progressRingToneContract;
+export const RailProgressRingContract: Story = railProgressRingContract;
+export const SubmittingSpinnerContract: Story = submittingSpinnerContract;
 
 export const ControlsContract: Story = {
   play: async () => {

@@ -1,3 +1,4 @@
+import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import {
   ChartNoAxesColumnIncreasingIcon,
   ChevronDownIcon,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Circle, Svg } from 'react-native-svg';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { TextArea, TextField } from '@/components/ui/TextField';
@@ -299,14 +301,9 @@ export function PostComposerTarget({
             >
               {remaining.toLocaleString('ko-KR')}
             </Text>
+            {surface === 'overlay' ? <ProgressRing remaining={remaining} /> : null}
             {showSubmit ? (
-              <Button
-                disabled={disabled}
-                loading={submitting}
-                loadingText="게시 중"
-                onPress={onSubmit}
-                size="compact"
-              >
+              <Button disabled={disabled} loading={submitting} onPress={onSubmit} size="compact">
                 게시
               </Button>
             ) : null}
@@ -355,18 +352,6 @@ export function MobileFullscreenComposerShellCandidate({
     items.some((item) => item.state !== 'ready') ||
     (body.trim().length === 0 && items.length === 0) ||
     remaining < 0;
-  const textHeight = keyboard
-    ? items.length > 0
-      ? 100
-      : contentWarningExpanded
-        ? 216
-        : 264
-    : items.length > 0
-      ? 424
-      : contentWarningExpanded
-        ? 552
-        : 600;
-
   return (
     <View
       accessibilityLabel="모바일 글쓰기 Candidate"
@@ -425,6 +410,7 @@ export function MobileFullscreenComposerShellCandidate({
         </Pressable>
         {visibilityOpen ? (
           <VisibilityMenu
+            alignRight
             onChange={(value) => {
               onVisibilityChange(value);
               setVisibilityOpen(false);
@@ -434,7 +420,7 @@ export function MobileFullscreenComposerShellCandidate({
         ) : null}
       </View>
 
-      <View style={styles.mobileComposerBody}>
+      <View style={styles.mobileComposerBody} testID="mobile-composer-body">
         {author}
         {contentWarningExpanded ? (
           <TextField
@@ -446,21 +432,23 @@ export function MobileFullscreenComposerShellCandidate({
             value={contentWarning}
           />
         ) : null}
-        <TextArea
-          accessibilityLabel="게시물 내용"
-          editable={!submitting}
-          onChangeText={onBodyChange}
-          placeholder="무슨 일이 일어나고 있나요?"
-          style={[
-            styles.mobileBody,
-            {
-              backgroundColor: theme.backgroundCanvas,
-              color: theme.foregroundPrimary,
-              height: textHeight,
-            },
-          ]}
-          value={body}
-        />
+        <View style={styles.mobileEditor}>
+          <TextArea
+            accessibilityLabel="게시물 내용"
+            editable={!submitting}
+            onChangeText={onBodyChange}
+            placeholder="무슨 일이 일어나고 있나요?"
+            style={[
+              styles.mobileBody,
+              {
+                backgroundColor: theme.backgroundCanvas,
+                color: theme.foregroundPrimary,
+                flex: 1,
+              },
+            ]}
+            value={body}
+          />
+        </View>
         {error ? (
           <Text
             accessibilityRole="alert"
@@ -532,18 +520,68 @@ export function MobileFullscreenComposerShellCandidate({
             </ComposerTool>
           ) : null}
         </View>
-        <Text
-          accessibilityLabel={`남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`}
-          accessibilityLiveRegion="polite"
-          style={[
-            styles.remaining,
-            { color: remaining < 0 ? theme.feedbackDangerOnSubtle : theme.foregroundSecondary },
-          ]}
-        >
-          {remaining.toLocaleString('ko-KR')}
-        </Text>
+        <View style={styles.submit}>
+          <Text
+            accessibilityLabel={`남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`}
+            accessibilityLiveRegion="polite"
+            style={[
+              styles.remaining,
+              { color: remaining < 0 ? theme.feedbackDangerOnSubtle : theme.foregroundSecondary },
+            ]}
+          >
+            {remaining.toLocaleString('ko-KR')}
+          </Text>
+          <ProgressRing remaining={remaining} />
+        </View>
       </View>
       {keyboard ? <IllustrativeKeyboard /> : null}
+    </View>
+  );
+}
+
+function ProgressRing({ remaining }: { remaining: number }) {
+  const theme = useTheme();
+  const usedRatio = Math.min(1, Math.max(0, (postBodyMaxLength - remaining) / postBodyMaxLength));
+  const radius = 9;
+  const circumference = 2 * Math.PI * radius;
+  const color =
+    remaining <= 0
+      ? theme.feedbackDangerBorder
+      : remaining <= 100
+        ? theme.feedbackWarningBorder
+        : theme.stateSelectedBorder;
+
+  return (
+    <View
+      accessible={false}
+      accessibilityElementsHidden
+      aria-hidden
+      importantForAccessibility="no-hide-descendants"
+      style={styles.progressRing}
+      testID="post-composer-progress-ring"
+    >
+      <Svg height={20} viewBox="0 0 20 20" width={20}>
+        <Circle
+          cx={10}
+          cy={10}
+          fill="none"
+          r={radius}
+          stroke={theme.borderSubtle}
+          strokeWidth={2}
+        />
+        <Circle
+          cx={10}
+          cy={10}
+          fill="none"
+          r={radius}
+          stroke={color}
+          strokeDasharray={[circumference, circumference]}
+          strokeDashoffset={circumference * (1 - usedRatio)}
+          strokeLinecap="round"
+          strokeWidth={2}
+          transform="rotate(-90 10 10)"
+        />
+      </Svg>
     </View>
   );
 }
@@ -575,9 +613,11 @@ function IllustrativeKeyboard() {
 }
 
 function VisibilityMenu({
+  alignRight = false,
   onChange,
   value,
 }: {
+  alignRight?: boolean;
   onChange: (value: PostComposerTargetVisibility) => void;
   value: PostComposerTargetVisibility;
 }) {
@@ -589,6 +629,7 @@ function VisibilityMenu({
       accessibilityRole="radiogroup"
       style={[
         styles.visibilityMenu,
+        alignRight ? styles.visibilityMenuRight : styles.visibilityMenuLeft,
         elevation.floating,
         { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
@@ -690,13 +731,14 @@ const styles = StyleSheet.create({
   mobileBody: { borderWidth: borderWidths[0], minHeight: 0, padding: space[0] },
   mobileComposerBody: {
     flex: 1,
-    gap: space[4],
-    overflow: 'hidden',
+    gap: space[8],
+    overflow: 'visible',
     paddingBottom: space[8],
     paddingHorizontal: space[16],
     paddingTop: space[16],
   },
   mobileContentWarning: { borderRadius: radius[0], minHeight: 44 },
+  mobileEditor: { flex: 1, minHeight: 0 },
   mobileFooter: {
     alignItems: 'center',
     borderTopWidth: borderWidths[1],
@@ -739,6 +781,7 @@ const styles = StyleSheet.create({
   },
   keyboardRow: { borderRadius: radius[8], borderWidth: borderWidths[1], height: 44 },
   overlay: { maxWidth: 600, width: '100%' },
+  progressRing: { height: 20, width: 20 },
   rail: { width: 326 },
   remaining: { width: 40, ...textStyles.uiCopyS },
   root: { gap: space[16], padding: space[16] },
@@ -753,12 +796,13 @@ const styles = StyleSheet.create({
   visibilityMenu: {
     borderRadius: radius[12],
     borderWidth: borderWidths[1],
-    left: 0,
     overflow: 'hidden',
     position: 'absolute',
     top: 44,
     width: 240,
   },
+  visibilityMenuLeft: { left: 0 },
+  visibilityMenuRight: { right: 0 },
   visibilityOption: {
     alignItems: 'center',
     flexDirection: 'row',
