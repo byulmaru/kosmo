@@ -136,3 +136,4 @@ Post Composer와 Profile 편집이 동일한 분류·문구·재시도 정책을
 - 최신 `origin/main`에서 App check·352 unit tests·Storybook build·40 files/396 Storybook tests와 workspace Markdown formatting이 통과했다. Storybook test의 최초 실패는 sandbox localhost `listen EPERM`이었고 동일 검증을 허용된 환경에서 재실행해 통과했다.
 - 최신 `origin/main`의 Web Storybook runtime에서 `file-too-large` 원인별 문구·단일 alert·대상별 재시도 이름·다른 Ready 항목 보존과 `500` transfer transient 실패의 preview 보존·게시 차단·명시적 재시도 후 Ready 전환을 직접 확인했다. Android/iOS 실제 기기, VoiceOver/TalkBack과 실제 Media Storage Service runtime은 실행하지 않았으며 현재 Web 완료 증거로 일반화하지 않는다.
 - canonical 문서·완료된 PROD-657·구현 PR #513의 main 포함 여부와 delta 정합성을 재확인하고 두 active spec을 동기화했다. change strict validation과 archive 후 전체 strict validation 108건이 통과했다.
+- 사용자 결정에 따라 archive PR #724에 generic PUT rejection의 `transfer`/`transient` 정규화와 안전 message·raw detail 비노출을 고정하는 최소 회귀 테스트를 포함했고, focused unit test가 통과했다.
