@@ -3,6 +3,7 @@ import eslintReact from '@eslint-react/eslint-plugin';
 import prettier from 'eslint-config-prettier';
 import importPlugin from 'eslint-plugin-import';
 import simpleImportSortPlugin from 'eslint-plugin-simple-import-sort';
+import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import ts from 'typescript-eslint';
 
@@ -24,7 +25,6 @@ const config = ts.config(
       'simple-import-sort': simpleImportSortPlugin,
     },
     rules: {
-      '@eslint-react/no-class-component': 'error',
       curly: ['error', 'all'],
       '@typescript-eslint/consistent-type-imports': 'error',
       'import/consistent-type-specifier-style': ['error', 'prefer-top-level'],
@@ -61,6 +61,24 @@ const config = ts.config(
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
+    },
+  },
+  {
+    files: ['**/*.{jsx,tsx}'],
+    rules: {
+      '@eslint-react/no-class-component': 'error',
+    },
+  },
+  ...svelte.configs['flat/recommended'],
+  {
+    files: ['**/*.svelte'],
+    languageOptions: {
+      parserOptions: {
+        parser: ts.parser,
+      },
+    },
+    rules: {
+      '@typescript-eslint/consistent-type-imports': 'off',
     },
   },
   {

@@ -4,7 +4,7 @@ set -eu
 case "${1:-web}" in
   admin)
     cd /app/apps/admin
-    exec node --import tsx src/server/index.ts
+    exec node build
     ;;
   web)
     cd /app/apps/web
