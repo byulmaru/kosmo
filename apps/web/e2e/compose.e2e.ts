@@ -277,7 +277,13 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
 
   await input.evaluate((element) => {
     const clipboardData = new DataTransfer();
-    clipboardData.items.add(new File(['clipboard image'], 'clipboard.png', { type: 'image/png' }));
+    const pngBytes = Uint8Array.from(
+      atob(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      ),
+      (character) => character.charCodeAt(0),
+    );
+    clipboardData.items.add(new File([pngBytes], 'clipboard.png', { type: 'image/png' }));
     clipboardData.setData('text/plain', '이 텍스트는 본문에 들어가면 안 됩니다.');
     element.dispatchEvent(
       new ClipboardEvent('paste', {

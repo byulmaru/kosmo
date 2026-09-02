@@ -43,11 +43,10 @@ Post Composer와 Profile avatar/header가 선택한 이미지를 긴 변 최대 
 
 **Deliverable**
 
-지원 플랫폼에서 정규화된 WebP가 실제 업로드되고, 변경 전체의 완료 증거와 delta spec 정합성이 확인된 뒤 OpenSpec을 완료한다.
+Web에서 정규화된 WebP가 기준 초과·기준 이하·clipboard 입력에 실제 업로드되고, 자동 검증과 delta spec 정합성이 확인된 뒤 OpenSpec을 완료한다.
 
 **Guardrails**
 
-- Web 검증을 Android/iOS 실제 변환 결과로 대신하지 않는다.
 - 크기와 WebP 형식 이외의 이미지 정책을 이 변경에서 추가하지 않는다.
 - PROD-657의 오류 분류·안전한 안내·실패 보존 계약을 포함한 누적 `post-composer-media-upload` requirement를 보존한다.
 - 전체 scope와 검증이 완료되기 전 OpenSpec을 archive하지 않는다.
@@ -55,9 +54,8 @@ Post Composer와 Profile avatar/header가 선택한 이미지를 긴 변 최대 
 **Verification**
 
 - 앱 typecheck, unit test, Storybook build/browser test, formatting과 strict OpenSpec validation을 통과시킨다.
-- Web·Android·iOS에서 기준 초과 및 기준 이하 이미지를 각각 선택해 결과 dimension, WebP Content-Type과 성공 upload를 확인한다.
+- Web에서 기준 초과·기준 이하·clipboard 입력을 실제로 선택·붙여넣어 결과 dimension, WebP Content-Type과 성공 upload를 확인한다.
 
 - [x] 2.1 앱 typecheck, 전체 unit test, Storybook build/browser test, formatting과 strict OpenSpec validation을 실행한다.
-- [x] 2.2 Web에서 기준 초과·기준 이하 이미지의 실제 변환과 signed PUT 성공을 검증한다.
-- [ ] 2.3 Android와 iOS에서 기준 초과·기준 이하 이미지의 실제 변환과 signed PUT 성공을 각각 검증한다.
-- [ ] 2.4 `explain-image-upload-failures`의 PROD-657 delta가 active spec에 먼저 동기화됐는지 확인하고, 모든 구현·플랫폼 검증 증거를 PROD-881과 PR에 기록한 뒤 누적 delta spec 정합성을 확인한 담당자가 이 change를 archive한다.
+- [x] 2.2 Web에서 기준 초과·기준 이하·clipboard 입력의 실제 변환과 signed PUT 성공을 검증한다.
+- [ ] 2.3 `explain-image-upload-failures`의 PROD-657 delta가 active spec에 먼저 동기화됐는지 확인하고, Web·자동 검증 증거를 PROD-881과 PR에 기록한 뒤 누적 delta spec 정합성을 확인한 담당자가 이 change를 archive한다.

@@ -40,6 +40,18 @@
 - Consequences: GraphQL schema, Media persistence와 Storage Service API는 변경하지 않으며 클라이언트 upload adapter와 dependency만 변경된다.
 - Confirmation / Follow-up: 구현 diff에 API·서버·storage contract 변경이 없고 signed URL direct PUT이 유지되는지 확인한다.
 
+### 현재 완료 검증은 Web 범위로 한정하고 네이티브 수동 검증은 후속으로 분리한다
+
+- Decision Date: 2026-09-02
+- Decision Class: Derived Contract
+- Authority / Provenance: PROD-881 (updated Linear contract)
+- Status: Active
+- Context / Problem: 공통 구현은 Web·Android·iOS를 지원하지만 현재 완료 조건에서 모든 플랫폼의 수동 증거를 요구하면 Web·자동 검증과 네이티브 후속 검증의 lifecycle이 결합된다.
+- Decision Outcome: PROD-881의 현재 완료 gate는 Web에서 기준 초과·기준 이하·clipboard 입력을 실제로 변환·업로드하고 자동 검증하는 것이다. Android/iOS 기기·시뮬레이터 수동 검증은 별도 후속 범위이며 이 change의 완료 gate가 아니다.
+- Alternatives Considered: Android/iOS 수동 증거를 현재 완료 gate로 유지하는 방식은 갱신된 Linear 범위와 Web·네이티브 검증 lifecycle을 혼합하므로 제외한다.
+- Consequences: 이번 change는 Web·자동 검증 증거로 완료 여부를 판단하며, 네이티브 수동 검증 미실행을 지원 불가로 해석하지 않는다.
+- Confirmation / Follow-up: Web의 기준 초과·기준 이하·clipboard 실제 검증과 자동 테스트 결과를 기록하고, 네이티브 후속 검증의 담당자와 gate는 별도로 추적한다.
+
 ## Remaining Decisions
 
 - 없음.
