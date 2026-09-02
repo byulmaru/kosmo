@@ -67,6 +67,44 @@ base64 < kosmo-android-upload.jks | tr -d '\n'
 
 base64 결과와 password는 shell history, 저장소, GitHub 로그에 남기지 말고 위 Vault field에만 기록한다. `ANDROID_RELEASE_CERTIFICATE_SHA256`은 Play Console에 등록한 upload certificate와 일치해야 한다. upload key를 바꿀 때는 Vault field만 교체하지 말고 Play Console의 upload key reset 절차를 먼저 완료한다. 실제 Play Store 설치·업데이트·실기기 launch와 native login/GraphQL 검증은 PROD-287의 책임이며, 이 workflow는 API/OIDC 환경값이나 ADB/device smoke를 요구하지 않는다.
 
+## iOS TestFlight internal distribution
+
+`iOS TestFlight Internal Distribution`은 `main`에서 수동 실행하는 protected workflow다. 기존 `prod` GitHub Environment의 승인을 거쳐 clean Expo CNG iOS project를 만들고, App Store 배포용 profile과 Apple Distribution certificate로 서명한 archive를 검증·업로드한다. 이 경로는 기존 `native-test-distribution`, `ios-device-onboarding`, Firebase, fastlane Match 값을 재사용하지 않는다.
+
+### One-time administrator setup
+
+첫 실행 전에 브라우저에서 다음 순서로 Apple Developer와 App Store Connect를 준비한다.
+
+1. Apple Developer의 Certificates, Identifiers & Profiles에서 팀의 App ID/Bundle ID `moe.kos`를 확인하거나 만든다.
+2. App Store Connect의 Apps에서 `moe.kos` 앱 레코드를 확인하거나 만들고 Bundle ID를 `moe.kos`로 연결한다. 계약 동의나 세금·은행 정보가 미완료라면 Account Holder가 먼저 처리한다.
+3. Apple Developer에서 Apple Distribution certificate를 만들고, 관리자 장비에서 서명된 `.p12`와 password를 준비한다.
+4. 같은 App ID에 대한 App Store 배포용 provisioning profile을 만든 뒤 다운로드한다. Ad Hoc profile은 사용하지 않는다. workflow가 profile에서 Team ID를 추출하므로 `APPLE_DEVELOPER_TEAM_ID` GitHub variable은 추가하지 않는다.
+5. App Store Connect의 Users and Access → Integrations → App Store Connect API → Team Keys에서 App Manager 권한의 Team API key를 만든다. P8 파일은 생성 시 한 번만 다운로드할 수 있으므로 즉시 Vault에 넣고, 저장소·로그·artifact에는 남기지 않는다.
+6. 앱의 TestFlight → Internal Testing에서 정확히 `Internal Testers` group을 만들고 `Enable automatic distribution`을 끈 manual distribution group으로 설정한 뒤, 해당 그룹에 App Store Connect 사용자 tester를 추가한다. workflow가 build를 이 그룹에 명시적으로 할당하므로 자동 배포 group으로 설정하지 않는다. 외부 tester나 Firebase group은 이 workflow의 대상이 아니다.
+
+Kubernetes의 `kosmo-ios-testflight` role과 read-only policy가 적용된 뒤, Vault 관리자 UI/CLI에서 다음 six fields를 KV v2 logical path `secret/kosmo/prod/ios-signing`에 기록한다. workflow와 ACL이 사용하는 API path는 `secret/data/kosmo/prod/ios-signing`이며, `/data/`는 UI/CLI logical path에 쓰지 않는다.
+
+| Field                                       | 값                                |
+| ------------------------------------------- | --------------------------------- |
+| `IOS_DISTRIBUTION_CERTIFICATE_BASE64`       | password로 보호한 `.p12`의 base64 |
+| `IOS_DISTRIBUTION_CERTIFICATE_PASSWORD`     | 해당 `.p12` password              |
+| `IOS_APP_STORE_PROVISIONING_PROFILE_BASE64` | App Store profile의 base64        |
+| `APPLE_API_KEY_ID`                          | App Store Connect Team API key ID |
+| `APPLE_API_ISSUER_ID`                       | App Store Connect API issuer ID   |
+| `APPLE_API_KEY_P8_BASE64`                   | Team API key `.p8` 파일의 base64  |
+
+GitHub Actions에서는 새 environment를 만들지 않고 기존 `prod`를 사용한다. `VAULT_ADDR`와 `VAULT_GITHUB_ACTIONS_AUDIENCE`는 organization variable, `TAILSCALE_OAUTH_CLIENT_ID`와 `TAILSCALE_AUDIENCE`는 repository variable로 둔다. iOS signing 값과 API key는 GitHub variable/secret이 아니라 Vault에서 job 실행 중에만 읽는다.
+
+### First upload and verification
+
+`main`에서 workflow를 dispatch하고 `prod` deployment를 승인한다. workflow는 bundle ID, profile의 Team ID, certificate, version/build metadata를 확인한 뒤 signed IPA 하나만 App Store Connect에 업로드하고, Actions summary에 revision, version/build, processing 상태와 `Internal Testers` group 결과를 남긴다. App Store Connect에서 업로드한 build가 Processing을 끝내고 TestFlight 내부 그룹에 배포되는지 확인한다.
+
+현재 확인되지 않은 운영 게이트는 live Vault role/policy의 allow/deny, 위 six fields의 실제 존재, 첫 upload와 App Store Connect processing/group assignment 결과다. 이 문서와 코드만으로 해당 게이트가 완료됐다고 간주하지 않는다.
+
+### Rotation and revoke
+
+새 certificate/profile/API key를 준비한 뒤 해당 Vault field만 교체하고 TestFlight upload와 processing을 확인한 다음 이전 asset을 revoke한다. API key는 수정할 수 없으므로 새 App Manager Team key를 만들고 세 ID/P8 field를 함께 교체한다. 노출이 의심되면 확인을 기다리지 말고 이전 API key와 certificate를 Apple에서 revoke하고, 필요하면 `kosmo-ios-testflight` role/policy를 검토된 Terraform 변경으로 비활성화한다.
+
 ## iOS Ad Hoc Firebase distribution
 
 The two manual workflows build from a clean CNG project, not a committed `ios/` directory. `IOS_BUILD_NUMBER` is set to the GitHub Actions run ID, so each serialized run has a unique numeric build number. Before upload, Fastlane verifies the generated Xcode team and bundle ID, embedded Ad Hoc profile, distribution certificate, registered devices, IPA build number, and that the number is newer than the latest Firebase iOS release.
