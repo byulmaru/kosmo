@@ -69,7 +69,7 @@ Query cache hit·loading·error·retry, null Post·Content·Media와 현재 inde
 | Web `>=768px` | 선택 image surface 왼쪽, 기존 Post 상세 thread surface 오른쪽의 분할 layout |
 | iOS·Android   | viewport 폭과 관계없이 compact 세로 layout                                  |
 
-이미지는 배정된 image surface 안에서 원본 비율을 유지하고 가로·세로 중앙 정렬한 `contain` 방식으로 표시해 viewport 밖으로 밀어내지 않는다. Wide Web modal은 viewport 사방의 `24px` backdrop inset을 제외한 가용 폭을 사용한다. 오른쪽 Post 상세 thread rail은 `clamp(320px, 25vw, 350px)`로 제한하고 나머지 폭을 왼쪽 image surface에 배정한다. 320px 최소폭은 기존 Post 상세의 avatar·간격·padding을 제외하고도 228px Action Bar가 가로 overflow 없이 유지되는 폭이다. 따라서 `768px` 경계에서는 thread interaction에 필요한 최소 폭을 보존하고, 큰 viewport에서는 image가 전체 modal의 대부분을 차지한다.
+이미지는 배정된 image surface 안에서 원본 비율을 유지하고 가로·세로 중앙 정렬한 `contain` 방식으로 표시해 viewport 밖으로 밀어내지 않는다. Wide Web modal은 viewport 사방의 `24px` backdrop inset을 제외한 가용 폭을 사용한다. 오른쪽 Post 상세 thread rail은 `clamp(320px, 25vw, 350px)`로 제한하고 나머지 폭을 왼쪽 image surface에 배정한다. 320px 최소폭은 current row의 좌우 padding 24px을 제외하고도 274px bounded Action Bar footprint가 가로 overflow 없이 유지되는 폭이다. 따라서 `768px` 경계에서는 thread interaction에 필요한 최소 폭을 보존하고, 큰 viewport에서는 image가 전체 modal의 대부분을 차지한다.
 
 Compact Web과 Native의 detail panel에는 작성자, 원문 text와 기존 Post Action Bar를 이 순서로 둔다. Panel은 내용 높이를 따르되 `clamp(192px, viewport height의 32%, 240px)`를 최대 높이로 사용한다. Safe Area·keyboard·낮은 viewport로 가용 높이가 줄면 panel과 stage가 겹치지 않도록 detail panel을 확보한 뒤 image stage와 anchor를 줄인다. child overlay를 여는 것만으로 base stage·detail 위치를 바꾸지 않는다. 짧은 원문의 panel은 내용보다 크게 늘어나지 않고 작성자·원문과 Action Bar 사이의 남는 높이를 채우지 않으며, Action Bar는 원문 바로 아래의 고정 영역을 유지한다. 원문은 처음에 3줄로 제한한다. 넘치는 경우에만 `더 보기` control을 제공하고 펼친 뒤에는 `접기`로 바꾼다. 펼친 원문은 detail panel의 text 영역 안에서만 줄어들고 scroll하며 image surface와 고정 Action Bar를 밀어내거나 가리지 않는다. Control은 펼침 상태를 접근성 state로 전달한다.
 
