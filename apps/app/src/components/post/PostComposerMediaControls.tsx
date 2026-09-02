@@ -12,9 +12,9 @@ import {
   View,
 } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
+import { releaseImagePreview, uploadImage } from '@/components/media/imageUpload';
 import {
   asImageUploadError,
-  assertImageUploadResponse,
   formatImageUploadFailureMessage,
   formatImageUploadRetryLabel,
 } from '@/components/media/imageUploadErrors';
@@ -30,9 +30,7 @@ import {
   createClipboardMediaAsset,
   getClipboardImageFiles,
   postComposerMediaLimit,
-  releaseComposerMediaPreview,
   takeAvailableComposerMedia,
-  uploadComposerMedia,
 } from './postComposerMedia';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
@@ -130,7 +128,8 @@ export function PostComposerMediaControls({
     );
 
     try {
-      const mediaId = await uploadComposerMedia({
+      const mediaId = await uploadImage({
+        asset,
         complete: (id) =>
           new Promise<void>((resolve, reject) => {
             commitCompleteMediaUpload({
@@ -163,15 +162,6 @@ export function PostComposerMediaControls({
               onError: reject,
             });
           }),
-        put: async (uploadUrl) => {
-          const body = asset.file ?? (await (await fetch(asset.uri)).blob());
-          const uploaded = await fetch(uploadUrl, {
-            body,
-            headers: asset.mimeType ? { 'content-type': asset.mimeType } : undefined,
-            method: 'PUT',
-          });
-          await assertImageUploadResponse(uploaded);
-        },
       });
       if (mediaId === null) {
         return;
@@ -290,7 +280,7 @@ export function PostComposerMediaControls({
     removedMediaKeys.current.add(key);
     const removed = mediaRef.current.find((item) => item.key === key);
     if (Platform.OS === 'web' && removed) {
-      releaseComposerMediaPreview(removed.asset.uri);
+      releaseImagePreview(removed.asset.uri);
     }
     updateMedia((items) => items.filter((item) => item.key !== key));
     if (mediaRef.current.length === 0) {
@@ -318,7 +308,7 @@ export function PostComposerMediaControls({
       for (const item of mediaRef.current) {
         removedMediaKeys.current.add(item.key);
         if (Platform.OS === 'web') {
-          releaseComposerMediaPreview(item.asset.uri);
+          releaseImagePreview(item.asset.uri);
         }
       }
     };
