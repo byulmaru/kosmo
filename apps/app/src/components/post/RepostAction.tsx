@@ -181,7 +181,6 @@ export function RepostAction({
               processing ? 'pending' : execution.kind === 'disabled' ? 'disabled' : 'default'
             }
             testID="repost"
-            wideWebTarget
           />
         );
       }}

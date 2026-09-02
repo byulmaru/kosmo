@@ -736,8 +736,10 @@ export const Playground: Story = {
     ]);
     const bookmarkBounds = canvas
       .getByRole('button', { name: args.bookmarkAccessibilityLabel })
-      .getBoundingClientRect();
-    const moreBounds = canvas.getByRole('button', { name: '더 보기' }).getBoundingClientRect();
+      .parentElement!.getBoundingClientRect();
+    const moreBounds = canvas
+      .getByRole('button', { name: '더 보기' })
+      .parentElement!.getBoundingClientRect();
     expect(moreBounds.left - bookmarkBounds.right).toBe(4);
     expect(moreBounds.right - bookmarkBounds.left).toBe(82);
   },
@@ -763,8 +765,10 @@ export const PlaygroundInteraction: Story = {
       ]);
       const bookmarkBounds = canvas
         .getByRole('button', { name: args.bookmarkAccessibilityLabel })
-        .getBoundingClientRect();
-      const moreBounds = canvas.getByRole('button', { name: '더 보기' }).getBoundingClientRect();
+        .parentElement!.getBoundingClientRect();
+      const moreBounds = canvas
+        .getByRole('button', { name: '더 보기' })
+        .parentElement!.getBoundingClientRect();
       expect(moreBounds.left - bookmarkBounds.right).toBe(4);
       expect(moreBounds.right - bookmarkBounds.left).toBe(82);
     });
@@ -877,23 +881,11 @@ export const ActionBarCatalogInteraction: Story = {
     const defaultReply = defaultToolbarCanvas.getByRole('button', { name: '답글' });
     const defaultBookmark = defaultToolbarCanvas.getByRole('button', { name: '북마크' });
     const defaultMore = defaultToolbarCanvas.getByRole('button', { name: '더보기' });
-    const actionTargetSizes = [
-      ['답글', 64],
-      ['재게시', 64],
-      ['반응', 64],
-      ['북마크', 50],
-      ['더보기', 28],
-    ] as const;
-    for (const [label, width] of actionTargetSizes) {
-      const button = defaultToolbarCanvas.getByRole('button', { name: label });
-      const bounds = button.getBoundingClientRect();
-      expect(bounds.width).toBe(width);
-      expect(bounds.height).toBe(36);
-    }
-    const defaultBookmarkBounds = defaultBookmark.getBoundingClientRect();
-    const defaultMoreBounds = defaultMore.getBoundingClientRect();
-    expect(defaultMoreBounds.left - defaultBookmarkBounds.right).toBe(4);
-    expect(defaultMoreBounds.right - defaultBookmarkBounds.left).toBe(82);
+    verifyHuggedActionTargets(defaultToolbar);
+    const defaultBookmarkSlotBounds = defaultBookmark.parentElement!.getBoundingClientRect();
+    const defaultMoreSlotBounds = defaultMore.parentElement!.getBoundingClientRect();
+    expect(defaultMoreSlotBounds.left - defaultBookmarkSlotBounds.right).toBe(4);
+    expect(defaultMoreSlotBounds.right - defaultBookmarkSlotBounds.left).toBe(82);
     expect(defaultToolbar.getBoundingClientRect().height).toBe(28);
     expect(canvas.queryByTestId('post-action-reply-hover')).toBeNull();
 
@@ -926,7 +918,10 @@ export const ActionBarCatalogInteraction: Story = {
     expect(replyCount).toHaveStyle({ color: colors.light.primary });
     const replyCountBounds = replyCount.getBoundingClientRect();
     expect(replyCountBounds.left - replyIconBounds.right).toBeCloseTo(spacing.xs, 0);
-    expect(defaultReply.getBoundingClientRect().width).toBe(64);
+    expect(defaultReply.getBoundingClientRect().width).toBeCloseTo(
+      6 + replyIconBounds.width + spacing.xs + replyCountBounds.width + 6,
+      0,
+    );
     expect(defaultReply.getBoundingClientRect().height).toBe(36);
 
     const pointerUser = userEvent.setup();
@@ -940,12 +935,22 @@ export const ActionBarCatalogInteraction: Story = {
     expect(defaultReply.querySelector('svg')).toHaveAttribute('stroke', colors.light.textSecondary);
     expect(within(defaultReply).queryByTestId('post-action-reply-hover')).toBeNull();
 
-    fireEvent.mouseDown(defaultReply, { buttons: 1 });
+    fireEvent.focus(defaultReply);
+    fireEvent.keyDown(defaultReply, { code: 'Space', key: ' ' });
     await waitFor(() => expect(getComputedStyle(defaultReply).opacity).toBe('0.72'));
+    expect(within(defaultReply).getByTestId('post-action-reply-hover')).toBeVisible();
     expect(defaultReply.querySelector('svg')).toHaveAttribute('stroke', colors.light.primary);
     expect(replyCount).toHaveStyle({ color: colors.light.primary });
-    fireEvent.mouseUp(defaultReply, { buttons: 0 });
+    fireEvent.keyUp(defaultReply, { code: 'Space', key: ' ' });
     await waitFor(() => expect(getComputedStyle(defaultReply).opacity).toBe('1'));
+
+    const resolutionReply = within(toolbars[4]!).getByRole('button', { name: '답글' });
+    expect(within(resolutionReply).queryByTestId('post-action-reply-hover')).toBeNull();
+    fireEvent.mouseDown(resolutionReply, { buttons: 1 });
+    await waitFor(() => expect(getComputedStyle(resolutionReply).opacity).toBe('0.72'));
+    expect(within(resolutionReply).getByTestId('post-action-reply-hover')).toBeVisible();
+    fireEvent.mouseUp(resolutionReply, { buttons: 0 });
+    await waitFor(() => expect(getComputedStyle(resolutionReply).opacity).toBe('1'));
 
     await userEvent.hover(defaultMore);
     expect(defaultMore).not.toHaveStyle({ backgroundColor: colors.light.primary });
@@ -1709,11 +1714,11 @@ export const ProcessingAccessibility: Story = {
     expect(replySpinnerVisual.clientWidth).toBe(14);
     expect(replySpinnerVisual.clientHeight).toBe(14);
     expect(replySpinner.getBoundingClientRect().left).toBeCloseTo(
-      replyButton.getBoundingClientRect().left,
+      replyButton.getBoundingClientRect().left + 6,
       0,
     );
     expect(repostSpinner.getBoundingClientRect().left).toBeCloseTo(
-      repostButton.getBoundingClientRect().left,
+      repostButton.getBoundingClientRect().left + 6,
       0,
     );
     expect(replySpinnerBounds.top + replySpinnerBounds.height / 2).toBeCloseTo(
@@ -1760,33 +1765,9 @@ export const AccessibilityAndCompactGeometry: Story = {
     expect(buttons[3]).toHaveAttribute('aria-pressed', 'false');
     expect(buttons[4]).not.toHaveAttribute('aria-pressed');
     expect(actionBar.getBoundingClientRect().height).toBe(28);
-    const actionBarBounds = actionBar.getBoundingClientRect();
-    const actionTargetWidths = [64, 64, 64, 50, 28] as const;
-    for (const [index, button] of buttons.entries()) {
-      const bounds = button.getBoundingClientRect();
-      expect(bounds.width).toBe(actionTargetWidths[index]);
-      expect(bounds.height).toBe(36);
-      expect(bounds.width).toBeGreaterThanOrEqual(24);
-      expect(bounds.height).toBeGreaterThanOrEqual(24);
-      expect(bounds.top + bounds.height / 2).toBeCloseTo(
-        actionBarBounds.top + actionBarBounds.height / 2,
-        0,
-      );
-    }
-    const firstButtonBounds = buttons[0]!.getBoundingClientRect();
-    const moreButtonBounds = buttons[4]!.getBoundingClientRect();
-    expect(firstButtonBounds.left).toBeCloseTo(actionBarBounds.left, 0);
-    expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right, 0);
-    for (const [index, action] of ['reply', 'repost', 'reaction', 'bookmark'].entries()) {
-      const buttonBounds = buttons[index]!.getBoundingClientRect();
-      const iconBounds = canvas.getByTestId(`post-action-${action}-icon`).getBoundingClientRect();
-      expect(iconBounds.left).toBeCloseTo(buttonBounds.left, 0);
-    }
-    const moreIconBounds = canvas.getByTestId('post-action-more-icon').getBoundingClientRect();
-    expect(moreIconBounds.left + moreIconBounds.width / 2).toBeCloseTo(
-      moreButtonBounds.left + moreButtonBounds.width / 2,
-      0,
-    );
+    verifyHuggedActionTargets(actionBar);
+    expect(buttons[0]).toHaveTextContent('0');
+    expect(buttons[0]!.getBoundingClientRect().width).toBeGreaterThan(28);
   },
   render: () => (
     <PostActionBarFixture {...actionBarProps} reply={{ ...actionBarProps.reply, count: 0 }} />
@@ -1865,38 +1846,72 @@ function verifyFixtures(expectedDetailWidth: number, expectedListWidth: number) 
 
 function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
   const toolbarBounds = toolbar.getBoundingClientRect();
-  const buttons = within(toolbar).getAllByRole('button');
-  const toolbarCanvas = within(toolbar);
-  const firstBounds = buttons[0]!.getBoundingClientRect();
-  let previousRight = toolbarBounds.left;
 
   expect(toolbarBounds.width).toBeCloseTo(expectedContentWidth, 0);
   expect(toolbarBounds.height).toBe(28);
-  const actionTargetWidths = [64, 64, 64, 50, 28] as const;
-  for (const [index, button] of buttons.entries()) {
-    const bounds = button.getBoundingClientRect();
-    expect(bounds.width).toBe(actionTargetWidths[index]);
-    expect(bounds.height).toBe(36);
-    expect(bounds.width).toBeGreaterThanOrEqual(24);
-    expect(bounds.height).toBeGreaterThanOrEqual(24);
-    expect(bounds.top + bounds.height / 2).toBeCloseTo(firstBounds.top + firstBounds.height / 2, 0);
-    expect(bounds.left).toBeGreaterThanOrEqual(previousRight);
-    expect(bounds.right).toBeLessThanOrEqual(toolbarBounds.right);
-    previousRight = bounds.right;
-  }
-  expect(buttons[0]!.getBoundingClientRect().left).toBeCloseTo(toolbarBounds.left, 0);
-  expect(buttons[4]!.getBoundingClientRect().right).toBeCloseTo(toolbarBounds.right, 0);
-  for (const [index, action] of ['reply', 'repost', 'reaction', 'bookmark'].entries()) {
-    const buttonBounds = buttons[index]!.getBoundingClientRect();
+  verifyHuggedActionTargets(toolbar);
+}
+
+function verifyHuggedActionTargets(toolbar: HTMLElement) {
+  const toolbarBounds = toolbar.getBoundingClientRect();
+  const toolbarCanvas = within(toolbar);
+  const actions = [
+    ['답글', 'reply', 50],
+    ['재게시', 'repost', 50],
+    ['반응', 'reaction', 50],
+    ['북마크', 'bookmark', 50],
+    ['더보기', 'more', 28],
+  ] as const;
+  let previousRight = toolbarBounds.left;
+
+  for (const [label, testID, slotWidth] of actions) {
+    const button = toolbarCanvas.getByRole('button', { name: label });
+    const targetBounds = button.getBoundingClientRect();
+    const slotBounds = button.parentElement!.getBoundingClientRect();
     const iconBounds = toolbarCanvas
-      .getByTestId(`post-action-${action}-icon`)
+      .getByTestId(`post-action-${testID}-icon`)
       .getBoundingClientRect();
-    expect(iconBounds.left).toBeCloseTo(buttonBounds.left, 0);
+    const count = button.querySelector('[dir="auto"]') as HTMLElement | null;
+
+    expect(slotBounds.width).toBeCloseTo(Math.max(slotWidth, targetBounds.width), 0);
+    expect(slotBounds.height).toBe(28);
+    expect(targetBounds.height).toBe(36);
+    expect(targetBounds.width).toBeGreaterThanOrEqual(24);
+    expect(targetBounds.top + targetBounds.height / 2).toBeCloseTo(
+      toolbarBounds.top + toolbarBounds.height / 2,
+      0,
+    );
+    expect(targetBounds.left + targetBounds.width / 2).toBeCloseTo(
+      slotBounds.left + slotBounds.width / 2,
+      0,
+    );
+    expect(iconBounds.left - targetBounds.left).toBeCloseTo(6, 0);
+
+    if (count) {
+      const countBounds = count.getBoundingClientRect();
+      expect(countBounds.left - iconBounds.right).toBeCloseTo(spacing.xs, 0);
+      expect(targetBounds.right - countBounds.right).toBeCloseTo(6, 0);
+      expect(targetBounds.width).toBeCloseTo(
+        6 + iconBounds.width + spacing.xs + countBounds.width + 6,
+        0,
+      );
+    } else {
+      expect(targetBounds.width).toBe(28);
+      expect(targetBounds.right - iconBounds.right).toBeCloseTo(6, 0);
+    }
+
+    expect(targetBounds.left).toBeGreaterThanOrEqual(previousRight);
+    expect(targetBounds.right).toBeLessThanOrEqual(toolbarBounds.right);
+    previousRight = targetBounds.right;
   }
-  const moreBounds = buttons[4]!.getBoundingClientRect();
-  const moreIconBounds = toolbarCanvas.getByTestId('post-action-more-icon').getBoundingClientRect();
-  expect(moreIconBounds.left + moreIconBounds.width / 2).toBeCloseTo(
-    moreBounds.left + moreBounds.width / 2,
+
+  const buttons = toolbarCanvas.getAllByRole('button');
+  expect(buttons[0]!.parentElement!.getBoundingClientRect().left).toBeCloseTo(
+    toolbarBounds.left,
+    0,
+  );
+  expect(buttons[4]!.parentElement!.getBoundingClientRect().right).toBeCloseTo(
+    toolbarBounds.right,
     0,
   );
 }

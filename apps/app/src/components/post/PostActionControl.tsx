@@ -38,7 +38,6 @@ type Props = {
   hoverOpacity?: number;
   stateful?: boolean;
   testID: string;
-  wideWebTarget?: boolean;
 };
 
 export function PostActionControl({
@@ -64,7 +63,6 @@ export function PostActionControl({
   hoverOpacity = 0.3,
   stateful = true,
   testID,
-  wideWebTarget = false,
 }: Props) {
   const theme = useTheme();
   const [hovered, setHovered] = useState(false);
@@ -86,7 +84,7 @@ export function PostActionControl({
     <View
       style={[
         styles.slot,
-        Platform.OS === 'web' && wideWebTarget ? styles.wideWebSlot : undefined,
+        Platform.OS === 'web' ? undefined : styles.nativeSlot,
         alignToEnd ? styles.alignToEnd : undefined,
       ]}
     >
@@ -107,7 +105,7 @@ export function PostActionControl({
         style={({ pressed }) => [
           styles.action,
           alignToEnd ? styles.alignToEndAction : undefined,
-          Platform.OS === 'web' ? styles.webAction : undefined,
+          Platform.OS === 'web' ? styles.webAction : styles.nativeAction,
           blocked ? styles.blocked : pressed ? styles.pressed : undefined,
         ]}
       >
@@ -142,7 +140,7 @@ export function PostActionControl({
                   style={styles.icon}
                   testID={`post-action-${testID}-icon`}
                 >
-                  {hovered && !blocked && !hoverDisabled ? (
+                  {Platform.OS === 'web' && !blocked && ((hovered && !hoverDisabled) || pressed) ? (
                     <View
                       aria-hidden
                       style={[
@@ -188,22 +186,20 @@ export function PostActionControl({
 
 const styles = StyleSheet.create({
   slot: {
+    alignItems: 'center',
     height: 28,
-    position: 'relative',
-    width: 50,
+    justifyContent: 'center',
+    minWidth: 50,
   },
   action: {
     alignItems: 'center',
-    bottom: 0,
     flexDirection: 'row',
     gap: spacing.xs,
+    height: 28,
     justifyContent: 'flex-start',
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
   },
   alignToEnd: {
+    minWidth: 28,
     width: 28,
   },
   alignToEndAction: {
@@ -241,10 +237,21 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: 16,
   },
+  nativeAction: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  nativeSlot: {
+    position: 'relative',
+    width: 50,
+  },
   pressed: { opacity: 0.72 },
   webAction: {
-    bottom: -4,
-    top: -4,
+    height: 36,
+    minWidth: 28,
+    paddingHorizontal: 6,
   },
-  wideWebSlot: { width: 64 },
 });

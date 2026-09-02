@@ -95,7 +95,6 @@ export function PostActionBar({
           onPress={reply.onPress}
           processing={reply.processing}
           testID="reply"
-          wideWebTarget
         />
       ) : null}
       {data?.repost ? (
@@ -128,7 +127,6 @@ export function PostActionBar({
               popupRole="dialog"
               processing={disabled ? 'disabled' : 'default'}
               testID="reaction"
-              wideWebTarget
             />
           )}
         />
