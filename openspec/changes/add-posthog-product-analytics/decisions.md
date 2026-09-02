@@ -103,7 +103,7 @@
 ### 2026-09-02 검색·캠페인 metadata 비마스킹 결정
 
 - Decision Date: 2026-09-02
-- Decision Class: Product Approval
+- Decision Class: Derived Contract
 - Authority / Provenance: 사용자 정혜주(HJSmiley)가 `01a0547d-a937-75e2-b6b9-702e25181ddb`에서 기존 마스킹 정책을 철회한 결정; [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정` 댓글(`59d34cd1-96b2-446f-8a8d-3a48277f285a`)
 - Status: Active
 - Context / Problem: 현재 단계에서 `q`와 일부 click metadata만 마스킹하면 다른 표준 metadata와 정책이 일관되지 않고, Search `q`는 제품 개선에 유용한 분석 정보다. 현재 검색 결과는 공개 Profile handle로 한정돼 사용자가 민감한 정보를 검색할 가능성이 낮다고 판단한다.
