@@ -2,7 +2,7 @@
 
 이 기록은 이미 정해진 Profile Block 도메인 계약을 `PROD-821`·`PROD-822`·`PROD-823`·`PROD-813`의 순차 구현과
 하나의 최종 lifecycle로 연결한다. `PROD-821`이 저장·durable cleanup과 shared change를 열고, `PROD-822`가
-정책·GraphQL, `PROD-823`이 UI·Relay, `PROD-813`이 cross-slice E2E·canonical sync·archive를 소유한다. OpenSpec 파일
+정책·GraphQL, `PROD-823`이 UI·client 상태, `PROD-813`이 cross-slice E2E·canonical sync·archive를 소유한다. OpenSpec 파일
 작성만을 결과로 하는 별도 이슈는 만들지 않는다.
 
 ## Decision Records
@@ -33,16 +33,16 @@
 - Consequences: 같은 Owner/Target pair는 하나의 row로 식별되고 차단 적용의 양방향성은 저장 중복이 아니라 공통 policy에서 계산한다. Remote ingress·delivery의 구체 계약은 이 change가 결정하지 않는다.
 - Confirmation / Follow-up: `PROD-821`에서 Local·Remote pair, duplicate/self 및 Owner scope를 확인하고, `PROD-822`에서 selected Local GraphQL actor와 Owner-only connection을 검증한다.
 
-### Profile Block cleanup은 Follow effect contract를 재사용하는 durable orchestration이다
+### Profile Block cleanup은 required 결과를 보장하는 durable orchestration이다
 
 - Decision Date: 2026-09-02
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`
 - Status: Active
-- Context / Problem: Block row와 Follow·Notification 정리를 한 로컬 commit에만 묶으면 worker 재시작·retry에서 durable completion과 effect settlement를 보장할 수 없다.
-- Decision Outcome: Block policy/admission 뒤 Profile Block 생성은 durable Temporal orchestration으로 양방향 Follow Request·Follow Relationship removal transition/effect-plan, pending request cleanup과 직접 원인 Follow Notification cleanup을 수행한다. required cleanup 완료 전에는 Block action을 성공으로 확정하지 않는다. 기존 Follow removal transition/effect-plan과 deterministic drain을 재사용하며 같은 계약을 새 child Workflow type이나 Block 전용 removal query로 복제하지 않는다. 기존 Reaction·Repost·Bookmark와 비직접 원인 기존 Notification·Read State는 이번 action에서 변경하지 않는다.
-- Alternatives Considered: public service를 순서대로 각각 commit하면 부분 성공을 관찰할 수 있다. 새 child Workflow type이나 Block 전용 removal query는 기존 Follow removal 계약을 복제하고 완료 경계를 다시 합쳐야 한다. Repost·Bookmark나 기존 Reaction까지 변경하거나 Unblock 때 Follow 관계를 복구하면 현재 보존 계약을 위반한다.
-- Consequences: 821은 existing removal transaction/effect-plan과 deterministic drain helper를 재사용하고 restart·retry idempotency를 검증한다. 기존 Unfollow workflow는 public wrapper로 유지하며, Profile Block Workflow 안의 helper 배치는 구현 시 결정한다.
+- Context / Problem: Block row와 Follow·Notification 정리를 한 로컬 commit에만 묶으면 worker 재시작·retry에서 durable completion을 보장할 수 없다.
+- Decision Outcome: Block policy/admission 뒤 Profile Block 생성은 durable orchestration으로 양방향 Follow Request·Follow Relationship removal, pending request cleanup과 직접 원인 Follow Notification cleanup을 수행한다. required cleanup 완료 전에는 Block action을 성공으로 확정하지 않는다. 기존 Reaction·Repost·Bookmark와 비직접 원인 기존 Notification·Read State는 이번 action에서 변경하지 않는다.
+- Alternatives Considered: 로컬 commit만 성공으로 확정하면 cleanup이 남은 부분 성공을 관찰할 수 있다. 필요한 결과를 보장하는 다른 durable composition은 허용되며, 구체 Workflow·transaction·query·helper topology는 구현 중 선택한다. Repost·Bookmark나 기존 Reaction까지 변경하거나 Unblock 때 Follow 관계를 복구하면 현재 보존 계약을 위반한다.
+- Consequences: `PROD-821`은 required cleanup success gate, 양방향 pending/relationship, direct-cause Notification과 restart/retry idempotency를 검증한다. 기존 lifecycle과 어떻게 조합할지, 어떤 runtime 경계를 사용할지는 구현 PR의 선택으로 남긴다.
 - Confirmation / Follow-up: `PROD-821`에서 required cleanup success gate, 양방향 pending/relationship, direct-cause Notification과 restart/retry를 검증하고 Reaction을 변경하지 않는지 확인한다.
 
 ### 공통 Profile Block predicate는 저장 방향과 무관하게 양쪽에 적용한다
@@ -64,10 +64,10 @@
 - Authority / Provenance: `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/domain/objects/profile-block.md`, `PROD-822`, `PROD-823`
 - Status: Active
 - Context / Problem: GraphQL resolver가 입력 Profile ID를 actor로 신뢰하거나 resolver·loader마다 차단 조건을 복제하면 selected Profile 격리와 중앙 정책이 무너진다.
-- Decision Outcome: 현재 GraphQL ingress의 mutation·Owner connection·Node/connection loader는 검증된 Session의 selected Local Profile actor를 사용한다. resolver·loader는 공통 core/application policy를 호출하고, 요청별 DB actor GUC·operation 전용 database session·client 전용 filter를 권한 또는 visibility의 대체 수단으로 사용하지 않는다. concrete helper와 field/payload 이름은 기존 naming·generated schema에 맞춘 구현 선택으로 남긴다.
-- Alternatives Considered: 입력된 arbitrary Profile ID를 actor로 사용하면 다른 Owner의 관계를 변경할 수 있다. resolver-local predicate는 policy drift를 만든다. DB GUC/session 기반 격리는 현재 application policy와 runtime 경계를 확장한다.
+- Decision Outcome: 현재 GraphQL ingress의 mutation·Owner connection·Node/connection loader는 검증된 Session의 selected Local Profile actor를 사용한다. resolver·loader는 공통 core/application policy를 호출하고, 요청별 DB actor state(GUC 등)·client 전용 filter를 권한 또는 visibility의 대체 수단으로 사용하지 않는다. concrete helper와 field/payload 이름, resolver·loader 배치는 기존 naming·generated schema에 맞춘 구현 선택으로 남긴다.
+- Alternatives Considered: 입력된 arbitrary Profile ID를 actor로 사용하면 다른 Owner의 관계를 변경할 수 있다. resolver-local predicate나 client-only filter는 policy drift와 visibility 우회를 만든다. 요청별 DB actor state를 권한 경계로 사용하면 현재 application policy와 runtime 경계를 확장한다.
 - Consequences: selected Local Profile이 없는 GraphQL request는 기존 auth 경계에서 거부되고, Block 목록은 해당 actor가 Owner인 관계만 반환한다. remote ActivityPub ingress는 이 decision의 consumer가 아니다.
-- Confirmation / Follow-up: `PROD-822`에서 Owner A/B·guest·membership mismatch와 direct/list Node 경계를 검증하고, `PROD-823`에서 selected Profile별 actor Store 결과를 확인한다.
+- Confirmation / Follow-up: `PROD-822`에서 Owner A/B·guest·membership mismatch와 direct/list Node 경계를 검증하고, `PROD-823`에서 selected Profile별 client 상태 결과를 확인한다.
 
 ### 기존 Notification은 가시성으로 숨기고 source 생성 연결은 후속으로 둔다
 
@@ -93,17 +93,17 @@
 - Consequences: DSN-53 visual result와 861 implementation은 선행 증거이고, 823은 실제 mutation·management·접근성 runtime과 protected-data guard를 완성한다. 새 범용 safety component나 Settings shell을 추가하지 않는다.
 - Confirmation / Follow-up: `PROD-823`에서 confirmation·별도 list·accessibility·viewport와 selected actor UI를 검증하고, `PROD-813`에서 플랫폼별 실제 runtime evidence를 별도로 기록한다.
 
-### Relay cache는 selected actor 경계 안에서 서버 결과로 수렴한다
+### Client 상태는 selected actor 경계 안에서 서버 결과로 수렴한다
 
 - Decision Date: 2026-09-02
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-823`, `PROD-813`
 - Status: Active
-- Context / Problem: Block 성공 후 Profile·Post·Notification과 관리 connection을 그대로 두거나 Profile 전환 때 이전 Store·cursor를 재사용하면 stale visibility와 Owner 간 cache 누수가 생긴다.
-- Decision Outcome: Relay는 현재 selected Local Profile actor의 Environment/Store에서만 Block connection과 영향받는 node를 갱신한다. 성공 payload와 공통 server policy를 기준으로 현재 surface·Block list·이미 표시된 unavailable Profile/Post/Notification을 좁게 숨기거나 제거하고, 실패 시 optimistic Block을 확정하지 않는다. selected Profile/Session 전환은 이전 connection·cursor·optimistic 결과를 새 actor에 재사용하지 않으며, Unblock은 삭제된 Follow Request·Follow Relationship을 optimistic으로 복구하지 않는다.
-- Alternatives Considered: process 전역 Block store는 selected Profile 격리를 깨뜨린다. 모든 store를 무조건 reset하면 unrelated state까지 버리고 actor 경계를 과도하게 넓힌다. client-only hide는 서버 payload와 direct query 누수를 막지 못한다.
-- Consequences: 823은 좁은 cache 수렴과 actor switch 회귀를, 813은 cross-slice UI/API 결과를 검증한다. concrete payload ID와 updater/directive는 schema 구현 시 영향 범위에 맞춰 정한다.
-- Confirmation / Follow-up: `PROD-823` Relay test에서 success/failure·A/B actor·Unblock no-restore를 확인하고, `PROD-813`에서 Profile switch와 cross-slice cache isolation을 E2E로 확인한다.
+- Context / Problem: Block 성공 후 Profile·Post·Notification과 관리 목록을 그대로 두거나 Profile 전환 때 이전 actor의 상태를 재사용하면 stale visibility와 Owner 간 상태 누수가 생긴다.
+- Decision Outcome: Block·Unblock 성공 결과는 현재 selected Local Profile actor의 client 상태를 서버 확정 결과와 일치시켜야 한다. 차단으로 접근할 수 없게 된 Profile·Post·Notification은 보호된 데이터를 복구하지 않는 범위에서 수렴시키고, 실패 시 optimistic Block을 성공으로 확정하지 않는다. selected Profile/Session 전환은 이전 Owner의 Block 상태를 새 actor에 재사용하지 않으며, Unblock은 삭제된 Follow Request·Follow Relationship을 optimistic으로 복구하지 않는다.
+- Alternatives Considered: actor 간 상태를 공유하면 selected Profile 격리를 깨뜨린다. 모든 상태를 무조건 초기화하면 unrelated state까지 버리고 actor 경계를 과도하게 넓힐 수 있다. client-only hide는 서버 payload와 direct query 누수를 막지 못한다.
+- Consequences: `PROD-823`은 서버 결과 수렴과 actor switch 회귀를, `PROD-813`은 cross-slice UI/API 결과를 검증한다. client 상태를 갱신하는 구체 mechanism은 영향 범위에 맞춰 구현 시 정한다.
+- Confirmation / Follow-up: `PROD-823`에서 success/failure·A/B actor·Unblock no-restore 뒤 client 상태 수렴을 확인하고, `PROD-813`에서 Profile switch와 cross-slice actor 상태 격리를 E2E로 확인한다.
 
 ### 저장 schema는 additive 확장과 no-backfill rollout을 따른다
 
@@ -112,10 +112,10 @@
 - Authority / Provenance: `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `memory/database-migrations.md`, `PROD-821`
 - Status: Active
 - Context / Problem: 새 relation을 기존 Profile·Follow·Reaction·Notification 상태에 억지로 합치거나 과거 데이터에 backfill하면 구버전 workload와 migration·rollback 경계가 불필요하게 넓어진다.
-- Decision Outcome: Profile Block은 독립 table·foreign key·Owner/Target unique/check/index를 추가하는 additive migration으로 배포하고 기존 domain row와 과거 관계를 backfill하거나 변경하지 않는다. migration naming·history·rollback safety는 repository workflow와 `design.md` guardrail을 따르며, 새 migration runner나 API compatibility layer를 추가하지 않는다.
-- Alternatives Considered: 기존 Profile row에 Block state를 추가하면 관계 방향·다중 Target·Owner 관리가 손상된다. 기존 관계를 backfill하면 배포 시점과 사용자-visible cleanup을 섞는다. 별도 migration framework는 현재 Drizzle 경계를 확장한다.
-- Consequences: old/new app이 schema 확장 중 공존할 수 있고 Profile Block을 사용하지 않는 기존 데이터는 그대로 남는다. migration 실패·rollback 안전성은 821 test에서 확인한다.
-- Confirmation / Follow-up: `PROD-821`에서 additive migration, constraint, 기존 row 보존과 schema snapshot을 검증하고, 813 archive 전까지 migration/rollback evidence를 기록한다.
+- Decision Outcome: Profile Block은 기존 domain row를 변경하거나 과거 관계를 backfill하지 않는 additive migration으로 배포하며, Owner/Target 참조 무결성·uniqueness·self-block 거부를 보장한다. migration naming·history·rollback safety는 repository workflow와 `design.md` guardrail을 따르고, 구체 physical shape와 tooling은 구현 시 정한다.
+- Alternatives Considered: 기존 Profile row에 Block state를 추가하면 관계 방향·다중 Target·Owner 관리가 손상될 수 있다. 기존 관계를 backfill하면 배포 시점과 사용자-visible cleanup을 섞는다. 어떤 저장·migration 수단을 쓰든 현재 additive/no-backfill 결과를 벗어나면 채택하지 않는다.
+- Consequences: old/new app이 schema 확장 중 공존할 수 있고 Profile Block을 사용하지 않는 기존 데이터는 그대로 남는다. migration 실패·rollback 안전성과 관계 불변식은 `PROD-821`에서 확인한다.
+- Confirmation / Follow-up: `PROD-821`에서 additive migration, referential integrity, uniqueness, self-block 거부, 기존 row 보존과 rollback evidence를 검증하고, `PROD-813` archive 전까지 정합성을 확인한다.
 
 ## Remaining Decisions
 

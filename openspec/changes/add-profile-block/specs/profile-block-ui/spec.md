@@ -39,28 +39,28 @@
 - **THEN** 시스템은 해당 Profile Block 해제 mutation을 실행한다
 - **AND** 성공한 Target은 현재 Block 목록에서 제거되고 다른 목록 항목의 상태는 바꾸지 않는다
 
-### Requirement: Relay actor and cache isolation for Block
+### Requirement: Profile Block actor and client-state isolation
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block UI는 selected Profile별 Relay actor/store 경계를 유지해야 하며(MUST), `PROD-861` 결과를 prerequisite evidence로 참고하되 이후 승인된 presentation을 소비하고 보호된 Profile·Post·Media·Notification 데이터를 UI 상태로 복구해서는 안 된다(MUST NOT). Block·Unblock 성공 결과는 현재 화면, Block 목록과 이미 표시 중인 unavailable 표면의 cache에 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 이전 Owner의 Block 상태·connection·cursor·optimistic 결과를 새 actor에 재사용해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block UI는 selected Profile별 actor 상태 격리를 유지해야 하며(MUST), `PROD-861` 결과를 prerequisite evidence로 참고하되 이후 승인된 presentation을 소비하고 보호된 Profile·Post·Media·Notification 데이터를 UI 상태로 복구해서는 안 된다(MUST NOT). Block·Unblock 성공 결과는 현재 화면, Block 목록과 이미 표시 중인 unavailable 표면의 상태를 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 이전 Owner의 Block 상태를 새 actor에 재사용해서는 안 된다(MUST NOT).
 
 #### Scenario: Block 성공 뒤 표시 중인 결과가 정책에 수렴한다
 
 - **WHEN** selected Profile이 Target을 차단하는 mutation이 성공한다
 - **THEN** 시스템은 현재 Profile 화면과 Block 목록을 서버 확정 Block 상태로 갱신한다
-- **AND** 접근할 수 없게 된 Target의 Profile·Post·Notification을 현재 Relay store와 화면에서 제거하거나 숨긴다
+- **AND** 접근할 수 없게 된 Target의 Profile·Post·Notification을 화면과 client 상태에서 제거하거나 숨긴다
 - **AND** mutation 실패 시 이전 cache를 차단된 것으로 확정하지 않는다
 
 #### Scenario: selected Profile을 전환해도 Block 상태를 섞지 않는다
 
 - **WHEN** selected Profile A의 Block 목록을 본 뒤 selected Profile B로 전환한다
-- **THEN** 시스템은 A의 connection, edge, cursor와 Block 상태를 B의 결과로 재사용하지 않는다
-- **AND** B의 Block 목록은 B가 Owner인 관계만 새로 조회한다
+- **THEN** 시스템은 A의 Block 상태와 client 상태를 B의 결과로 재사용하지 않는다
+- **AND** B의 Block 목록은 B가 Owner인 관계만 표시한다
 
 #### Scenario: Unblock 뒤 제거된 관계를 UI가 복구하지 않는다
 
 - **WHEN** Owner가 Block 목록에서 Target의 차단을 해제한다
-- **THEN** 시스템은 최신 Block 상태를 다시 조회해 목록과 Profile surface를 갱신한다
-- **AND** 차단 생성 때 제거된 Follow 관계를 Relay optimistic update로 복구하지 않는다
+- **THEN** 시스템은 최신 Block 상태에 맞게 목록과 Profile surface를 갱신한다
+- **AND** 차단 생성 때 제거된 Follow 관계를 client optimistic 상태로 복구하지 않는다
 - **AND** 이후 새 요청에서만 서버가 허용한 상대 Profile·Post·상호작용이 다시 나타날 수 있다
 
 ### Requirement: Profile Block interaction accessibility

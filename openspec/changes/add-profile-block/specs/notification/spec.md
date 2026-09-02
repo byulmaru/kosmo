@@ -12,12 +12,12 @@
 
 ### Requirement: Follow-cause Notification cleanup follows durable Profile Block cleanup
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`. Profile Block의 durable cleanup orchestration이 제거하는 Follow Request 또는 Follow Relationship을 직접 원인으로 가진 Notification은 기존 Follow removal effect-plan 계약에 따라 required cleanup에서 제거해야 한다(MUST). 제거된 Follow 객체가 직접 원인이 아닌 다른 기존 Notification과 Repost·Reaction·Bookmark 관계의 Notification은 이 action에서 동기적으로 삭제하거나 Read State를 바꾸지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`. Profile Block의 durable cleanup orchestration이 제거하는 Follow Request 또는 Follow Relationship을 직접 원인으로 가진 Notification은 required cleanup에서 제거해야 한다(MUST). 제거된 Follow 객체가 직접 원인이 아닌 다른 기존 Notification과 Repost·Reaction·Bookmark 관계의 Notification은 이 action에서 동기적으로 삭제하거나 Read State를 바꾸지 않아야 한다(MUST NOT).
 
 #### Scenario: 제거된 Follow Request/Relationship 직접 원인 Notification을 durable하게 정리한다
 
 - **WHEN** Profile Block cleanup orchestration이 양방향 Follow Request 또는 Follow Relationship을 제거한다
-- **THEN** 시스템은 각 제거 객체를 직접 원인으로 하는 Notification을 해당 effect-plan으로 required cleanup에 포함한다
+- **THEN** 시스템은 각 제거 객체를 직접 원인으로 하는 Notification을 required cleanup에 포함한다
 - **AND** orchestration 재시작 뒤에도 미완료된 직접 원인 Notification 정리를 재개한다
 - **AND** 해당 Follow 객체와 직접 연결되지 않은 기존 Notification은 저장 상태와 Read State를 유지한다
 

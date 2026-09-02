@@ -25,7 +25,7 @@
 
 ### Requirement: Profile Block durable cleanup orchestration
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`. Block policy/admission을 통과한 Profile Block 생성은 내구성 있는 Temporal cleanup orchestration을 시작해야 하며(MUST), 이 orchestration은 양방향 Follow Request·Follow Relationship에 기존 removal transition/effect-plan 계약을 재사용하고 pending Follow Request와 제거된 Follow 객체의 직접 원인 Notification을 내구성 있게 정리해야 한다(MUST). 필수 cleanup이 완료되기 전에는 Block action을 성공으로 확정해서는 안 되며(MUST NOT), 기존 Reaction·Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification 및 Read State는 이번 action에서 변경하지 않아야 한다(MUST). Block 해제는 제거된 Follow Request·Follow Relationship을 복구해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`. Block policy/admission을 통과한 Profile Block 생성은 내구성 있는 cleanup orchestration을 시작해야 하며(MUST), 이 orchestration은 양방향 Follow Request·Follow Relationship을 제거하고 pending Follow Request와 제거된 Follow 객체의 직접 원인 Notification을 내구성 있게 정리해야 한다(MUST). 필수 cleanup이 완료되기 전에는 Block action을 성공으로 확정해서는 안 되며(MUST NOT), 기존 Reaction·Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification 및 Read State는 이번 action에서 변경하지 않아야 한다(MUST). Block 해제는 제거된 Follow Request·Follow Relationship을 복구해서는 안 된다(MUST NOT).
 
 #### Scenario: durable orchestration 완료 뒤에만 Block 성공을 확정한다
 
@@ -38,7 +38,7 @@
 #### Scenario: orchestration 재시작과 일시 오류가 부분 성공을 만들지 않는다
 
 - **WHEN** durable cleanup orchestration이 일시 오류나 worker 재시작으로 중단된다
-- **THEN** 시스템은 기존 removal transition/effect-plan 계약에 따라 정리되지 않은 항목을 deterministic하게 재개한다
+- **THEN** 시스템은 정리되지 않은 required 항목을 잃지 않고 재개한다
 - **AND** 이미 처리한 항목을 중복 적용해 보존 대상 Repost·Bookmark·Notification을 변경하지 않는다
 - **AND** required cleanup이 끝나기 전에는 Block action을 성공으로 확정하지 않는다
 
@@ -66,7 +66,7 @@
 
 ### Requirement: Profile Block GraphQL actor and policy boundary
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `PROD-822`, `PROD-823`. 현재 GraphQL ingress는 검증된 Session의 selected Local Profile을 actor로 사용해 Profile Block 생성·해제와 Owner 차단 목록 조회를 제공해야 한다(MUST). GraphQL resolver·loader·Node 조회·connection은 중앙 application policy를 재사용해야 하며(MUST), 요청별 DB actor GUC·operation 전용 database session·client 전용 차단 필터로 권한이나 가시성을 대체해서는 안 된다(MUST NOT). 차단 목록은 selected Local Profile이 Owner인 관계만 반환해야 하며(MUST), Target Profile의 일반 조회 가능성을 우회해 관계 관리에 필요한 최소 식별 정보만 제공해야 한다(MUST). 이 GraphQL ingress 계약을 remote ActivityPub ingress에 적용하는 것은 이 change의 범위가 아니다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `PROD-822`, `PROD-823`. 현재 GraphQL ingress는 검증된 Session의 selected Local Profile을 actor로 사용해 Profile Block 생성·해제와 Owner 차단 목록 조회를 제공해야 한다(MUST). GraphQL resolver·loader·Node 조회·connection은 중앙 application policy를 재사용해야 하며(MUST), 요청별 DB actor state(GUC 등)·client 전용 차단 필터로 권한이나 가시성을 대체해서는 안 된다(MUST NOT). 차단 목록은 selected Local Profile이 Owner인 관계만 반환해야 하며(MUST), Target Profile의 일반 조회 가능성을 우회해 관계 관리에 필요한 최소 식별 정보만 제공해야 한다(MUST). 이 GraphQL ingress 계약을 remote ActivityPub ingress에 적용하는 것은 이 change의 범위가 아니다(MUST NOT).
 
 #### Scenario: selected Local Profile 없이 GraphQL Block operation을 실행하지 않는다
 
