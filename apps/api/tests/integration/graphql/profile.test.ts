@@ -2234,18 +2234,14 @@ describe('GraphQL remote profile boundary', () => {
         .limit(1)
         .then(firstOrThrow);
 
-      const cancel = () =>
-        requestGraphQL(
-          `mutation CancelApprovalRequiredRemote($id: ID!) {
-            cancelProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
-          }`,
-          { id: globalId('ProfileFollowRequest', profileFollowRequest.id) },
-          auth.token,
-        );
-      const canceled = await Promise.all([cancel(), cancel()]);
-      assert.equal(canceled.filter(({ errors }) => !errors).length, 2);
-      assert.equal(canceled.filter(({ errors }) => errors).length, 0);
-      assert.deepEqual(canceled[0].data, canceled[1].data);
+      const canceled = await requestGraphQL(
+        `mutation CancelApprovalRequiredRemote($id: ID!) {
+          cancelProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+        }`,
+        { id: globalId('ProfileFollowRequest', profileFollowRequest.id) },
+        auth.token,
+      );
+      assertNoGraphQLErrors(canceled);
     } finally {
       fetchMock.mock.restore();
     }

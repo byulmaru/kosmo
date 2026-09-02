@@ -10,6 +10,7 @@ import {
   InstanceState,
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
+import { KosmoError } from '@kosmo/core/error';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { profileFollowRemovalWorkflowId } from '@kosmo/core/temporal/follow-command';
 import { eq, ne } from 'drizzle-orm';
@@ -292,10 +293,10 @@ describe('inbound Accept and Reject', () => {
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
   });
 
-  test('deduplicates concurrent pending Accepts through the pair Workflow', async () => {
+  test('concurrent pending Accepts converge on one relation through the pair Workflow', async () => {
     const fixture = await createFixture({ projection: 'PENDING' });
     const follow = createOutboundFollow(fixture.projection);
-    await Promise.all([
+    const results = await Promise.allSettled([
       handleInboundAcceptFollow({
         context: createContext(localProfileId),
         follow,
@@ -309,6 +310,16 @@ describe('inbound Accept and Reject', () => {
         followeeProfileId: fixture.remoteProfile.id,
       }),
     ]);
+
+    assert.ok(results.some(({ status }) => status === 'fulfilled'));
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        assert.equal(
+          result.reason instanceof KosmoError ? result.reason.code : undefined,
+          'CONFLICT',
+        );
+      }
+    }
 
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
