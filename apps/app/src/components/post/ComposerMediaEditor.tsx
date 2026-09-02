@@ -208,6 +208,24 @@ function EditorTabs({
   readonly showImageEditPreview: boolean;
   readonly tool: ComposerMediaEditorTool;
 }) {
+  const tabs = [
+    ...(showImageEditPreview
+      ? [
+          <Tab
+            key="image-edit"
+            option={{
+              accessibilityLabel: '이미지 편집 (준비 중)',
+              disabled: true,
+              label: '이미지 편집',
+              value: 'image-edit',
+            }}
+          />,
+        ]
+      : []),
+    <Tab key="alt" option={{ label: '대체 텍스트', value: 'alt' }} />,
+    <Tab key="sensitive" option={{ label: '민감도', value: 'sensitive' }} />,
+  ];
+
   return (
     <TabList
       accessibilityLabel="미디어 편집 도구"
@@ -215,18 +233,7 @@ function EditorTabs({
       value={tool}
       variant="underline"
     >
-      {showImageEditPreview ? (
-        <Tab
-          option={{
-            accessibilityLabel: '이미지 편집 (준비 중)',
-            disabled: true,
-            label: '이미지 편집',
-            value: 'image-edit',
-          }}
-        />
-      ) : null}
-      <Tab option={{ label: '대체 텍스트', value: 'alt' }} />
-      <Tab option={{ label: '민감도', value: 'sensitive' }} />
+      {tabs}
     </TabList>
   );
 }
