@@ -47,10 +47,10 @@
 - Authority / Provenance: Linear `PROD-819`, `PROD-820`; PostHog JS config documentation; 아래 `2026-09-02 검색·캠페인 metadata 비마스킹 결정`
 - Status: Active
 - Context / Problem: 자동 기능을 끄고 route pageview·metadata filter를 앱에서 다시 구현하면 SDK와 Cloud 계약이 중복되고 표준 metadata가 손실된다.
-- Decision Outcome: `defaults: '2026-05-30'`과 `mask_personal_data_properties: false`를 사용하며 pageview·pageleave·autocapture, standard URL/referrer/session metadata, persistence, performance·heatmap·console, feature flag와 Replay remote config를 유지한다. Search `q`, 기본 click ID, referrer 파생 `ph_keyword`와 `utm_*`도 표준 metadata로 보존하고 `custom_personal_data_properties`나 선택적 metadata `before_send` 보완은 두지 않는다. 앱 소유 manual pageview, route normalizer와 runtime event allowlist를 제거한다.
+- Decision Outcome: `defaults: '2026-05-30'`과 `mask_personal_data_properties: false`를 사용하며 pageview·pageleave·autocapture, standard URL/referrer/session metadata, persistence, performance·heatmap·console, feature flag와 Replay remote config를 유지한다. Search `q`, 기본 click ID, referrer·session에서 파생되는 검색·캠페인 metadata와 `utm_*`도 표준 metadata로 보존하고 `custom_personal_data_properties`나 선택적 metadata `before_send` 보완은 두지 않는다. 앱 소유 manual pageview, route normalizer와 runtime event allowlist를 제거한다.
 - Alternatives Considered: 모든 기능 비활성화 후 app-owned capture, manual route bridge, URL allowlist와 선택적 query·click metadata masking은 표준 동작 또는 2026-09-02 제품 결정과 맞지 않아 제외했다.
 - Consequences: 실제 수집 surface에 자유 형식 Search `q`와 click identifier가 포함될 수 있으므로 PROD-795 개인정보 고지와 PROD-575 production acceptance가 이를 검증해야 한다. Standard event metadata와 Session Replay privacy는 서로 다른 경계로 운영한다.
-- Confirmation / Follow-up: init config와 intercepted standard `/e/` event payload에서 표준 이벤트·metadata와 current/referrer/session URL의 `q`, 기본 click ID, referrer 파생 `ph_keyword`와 `utm_*`가 원문으로 유지되는지 확인한다. Remote config 요청은 별도 outbound 증거로 확인한다.
+- Confirmation / Follow-up: init config와 intercepted standard `/e/` event payload에서 표준 이벤트·metadata와 current/referrer/session URL의 `q`, 기본 click ID, referrer·session에서 파생되는 검색·캠페인 metadata와 `utm_*`가 원문으로 유지되는지 확인한다. SDK가 사용하는 개별 derived property 이름은 현재 dependency의 관측값으로만 기록하고 계약의 authority로 삼지 않는다. Remote config 요청은 별도 outbound 증거로 확인한다.
 
 ### 앱 소유 custom event는 compile-time typed contract로 제한한다
 
@@ -83,7 +83,7 @@
 - Authority / Provenance: `2026-08-30` 구현 기록(독립 authority 아님); technical provenance는 [PR #653 review comment](https://github.com/byulmaru/kosmo/pull/653#discussion_r3887264185)의 Post Content `ph-mask ph-no-capture`, [PR #653 review comment](https://github.com/byulmaru/kosmo/pull/653#discussion_r3887264188)의 `q` URL metadata 지적, [PR #653 review comment](https://github.com/byulmaru/kosmo/pull/653#discussion_r3887264190)의 Replay·standard event payload 경계 분리 지적이다. 제품 authority는 아래 2026-09-02 결정과 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 durable 댓글(`59d34cd1-96b2-446f-8a8d-3a48277f285a`)이다.
 - Status: Active
 - Context / Problem: standard event payload의 URL·referrer·session metadata와 Replay DOM에는 서로 다른 정보와 보호 수단이 적용된다.
-- Decision Outcome: standard event metadata는 2026-09-02 제품 결정에 따라 Search `q`, 기본 click ID, referrer 파생 `ph_keyword`와 `utm_*`를 보존한다. Session Replay는 Cloud privacy 설정과 canonical Post Content의 `ph-mask ph-no-capture` marker로 별도 보호한다.
+- Decision Outcome: standard event metadata는 2026-09-02 제품 결정에 따라 Search `q`, 기본 click ID, referrer·session에서 파생되는 검색·캠페인 metadata와 `utm_*`를 보존한다. Session Replay는 Cloud privacy 설정과 canonical Post Content의 `ph-mask ph-no-capture` marker로 별도 보호한다.
 - Alternatives Considered: 모든 URL/referrer/session metadata를 제거하는 전면 sanitizer와 모든 DOM/text를 mask하는 방식은 표준 분석 기능 또는 Replay 진단 가치를 훼손하므로 제외했다.
 - Consequences: 두 경계의 검증 증거를 별도로 남긴다. Post Content 보호를 metadata 비마스킹 결정으로 약화하지 않는다.
 - Confirmation / Follow-up: standard `/e/` event payload의 metadata 보존과 Post Content `$autocapture` 비노출을 각각 검증하고 Replay acceptance는 PROD-741이 소유한다.
@@ -107,10 +107,10 @@
 - Authority / Provenance: 사용자 정혜주(HJSmiley)가 `01a0547d-a937-75e2-b6b9-702e25181ddb`에서 기존 마스킹 정책을 철회한 결정; [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정` 댓글(`59d34cd1-96b2-446f-8a8d-3a48277f285a`)
 - Status: Active
 - Context / Problem: 현재 단계에서 `q`와 일부 click metadata만 마스킹하면 다른 표준 metadata와 정책이 일관되지 않고, Search `q`는 제품 개선에 유용한 분석 정보다. 현재 검색 결과는 공개 Profile handle로 한정돼 사용자가 민감한 정보를 검색할 가능성이 낮다고 판단한다.
-- Decision Outcome: `mask_personal_data_properties: false`를 명시하고 `custom_personal_data_properties: ['q']`와 선택적 referrer `q`·기본 click ID·파생 `ph_keyword` `before_send` 보완을 제거한다. 따라서 `q`, `gclid`·`fbclid`·`msclkid` 같은 기본 click ID, referrer 파생 `ph_keyword`와 `utm_*`를 PostHog 표준 metadata로 수집할 수 있다. 앱 소유 custom event에는 검색어 원문을 별도 property로 추가하지 않는다.
+- Decision Outcome: `mask_personal_data_properties: false`를 명시하고 `custom_personal_data_properties: ['q']`와 선택적 referrer `q`·기본 click ID·검색·캠페인 metadata `before_send` 보완을 제거한다. 따라서 `q`, `gclid`·`fbclid`·`msclkid` 같은 기본 click ID, referrer·session에서 파생되는 검색·캠페인 metadata와 `utm_*`를 PostHog 표준 metadata로 수집할 수 있다. 앱 소유 custom event에는 검색어 원문을 별도 property로 추가하지 않는다.
 - Alternatives Considered: 2026-08-31의 `q`·기본 click ID 마스킹, `q`만 마스킹하는 방식, URL·referrer·session metadata 전면 제거를 비교했다. 일부 field만 가리는 불일치와 검색·attribution 정보 손실 때문에 선택하지 않았다.
 - Consequences: 검색 입력 자체는 자유 형식이므로 예상과 달리 개인정보나 민감 정보가 입력돼 수집될 가능성이 남는다. PROD-795 개인정보 처리방침과 runbook은 실제 수집 surface를 설명해야 한다. 게시물·본문·전문 검색 또는 더 넓은 검색 의미를 도입하기 전에 이 결정을 재검토한다. Post Content·Post Media Viewer의 `ph-mask ph-no-capture`와 Cloud Replay 보호는 유지한다.
-- Confirmation / Follow-up: unit config에서 명시적 `false`와 masking hook 부재를 확인하고, `/e/` E2E에서 current/referrer/session URL의 `q`, 기본 click ID, referrer 파생 `ph_keyword`와 `utm_*` 원문 보존을 확인한다. Post Content autocapture 비노출은 별도로 계속 검증한다.
+- Confirmation / Follow-up: unit config에서 명시적 `false`와 masking hook 부재를 확인하고, `/e/` E2E에서 current/referrer/session URL의 `q`, 기본 click ID, referrer·session에서 파생되는 검색·캠페인 metadata와 `utm_*` 원문 보존을 확인한다. SDK가 사용하는 개별 derived property 이름은 현재 dependency의 관측값으로만 기록하고 계약의 authority로 삼지 않는다. Post Content autocapture 비노출은 별도로 계속 검증한다.
 
 ### Session Replay 보호는 Cloud와 표준 masking marker가 소유한다
 

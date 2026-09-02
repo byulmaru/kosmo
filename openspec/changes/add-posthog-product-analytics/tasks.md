@@ -97,7 +97,7 @@ PostHog의 `defaults: '2026-05-30'` 표준 pageview·pageleave·autocapture·met
 - [x] 3.4 unit test에서 권장 defaults와 표준 metadata·remote config 비차단, custom event type contract를 검증한다.
 - [x] 3.5 production adapter에 test-only 설정을 추가하지 않고 Playwright fixture의 일반 browser user-agent·UA Client Hints brand와 비자동화 webdriver signal로 fake endpoint E2E를 실행해 SDK automatic pageview·pageleave·autocapture, 표준 metadata와 설정 누락 no-op을 검증한다.
 - [x] 3.6 `mask_personal_data_properties: false`를 명시하고 `custom_personal_data_properties`와 query·click metadata `before_send` 보완을 제거하는 init config와 단위 검증을 추가한다.
-- [x] 3.7 standard `/e/` event payload의 current/referrer/session URL E2E에서 Search `q`, current/referrer의 기본 click ID, 검색엔진 referrer에서 파생된 `ph_keyword` 계열과 `utm_*`가 원문으로 유지되는지 검증한다. Remote config 요청과 Post Content `$autocapture` 비노출은 별도 경계로 계속 확인한다.
+- [x] 3.7 standard `/e/` event payload의 current/referrer/session URL E2E에서 Search `q`, current/referrer의 기본 click ID, 검색엔진 referrer에서 파생된 검색·캠페인 metadata와 `utm_*`가 원문으로 유지되는지 검증한다. 현재 lockfile `posthog-js@1.417.4`에서 E2E로 직접 확인한 `ph_keyword`와 SDK source prefix 로직으로 확인한 `$initial_ph_keyword`, `$session_entry_ph_keyword` 같은 개별 이름은 버전 종속적 검증 예시일 뿐 제품 계약이나 authority가 아니다. Remote config 요청과 Post Content `$autocapture` 비노출은 별도 경계로 계속 확인한다.
 
 ## 4. PROD-819 persisted identity와 fail-open
 
@@ -174,7 +174,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 
 **Guardrails**
 
-- 표준 automatic event, URL/referrer/session metadata, persistence, remote config와 Replay 보호를 실제 동작보다 좁게 문서화하지 않는다. Standard event payload의 `q`, 기본 click ID, referrer 파생 `ph_keyword`와 `utm_*`가 원문으로 수집될 수 있음을 명시한다.
+- 표준 automatic event, URL/referrer/session metadata, persistence, remote config와 Replay 보호를 실제 동작보다 좁게 문서화하지 않는다. Standard event payload의 `q`, 기본 click ID, referrer·session에서 파생되는 검색·캠페인 metadata와 `utm_*`가 원문으로 수집될 수 있음을 명시한다.
 - OpenPanel 운영 계약 제거 시 consumer·provider 전환 순서를 확인한다.
 - PROD-839가 지원 release·rollback 경로의 OpenPanel 주입과 GitHub 외부 설정을 정리한 뒤 그 cleanup 증거를 입력으로 사용한다.
 - production-equivalent 검증을 실제 production acceptance나 OpenSpec archive로 일반화하지 않는다.

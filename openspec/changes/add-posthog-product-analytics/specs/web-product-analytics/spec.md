@@ -48,7 +48,7 @@
 
 ### Requirement: standard event 검색·캠페인 metadata 수집
 
-**Authority / Provenance:** [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정` 댓글(`59d34cd1-96b2-446f-8a8d-3a48277f285a`) — 사용자 정혜주(HJSmiley)가 2026-08-31 마스킹 승인을 대체하고 표준 검색·캠페인 metadata 수집을 승인했다. Kosmo Web은 `mask_personal_data_properties: false`를 명시해야 하며(MUST), `custom_personal_data_properties`와 query·click metadata를 선택적으로 바꾸는 `before_send` hook을 두지 않아야 한다(MUST NOT). Search `q`, 기본 광고 click ID, referrer에서 파생된 `ph_keyword`·`$initial_ph_keyword`·`$session_entry_ph_keyword`와 `utm_*` attribution parameter는 PostHog standard event metadata에 원문으로 유지해야 한다(MUST). 앱 소유 custom event에는 검색어 원문을 새 property로 추가하지 않아야 한다(MUST NOT). 이 결정으로 `ph-mask ph-no-capture` Replay marker와 공개 `get_property('$user_id')`·`get_distinct_id()` identity API는 변경하지 않는다.
+**Authority / Provenance:** [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정` 댓글(`59d34cd1-96b2-446f-8a8d-3a48277f285a`) — 사용자 정혜주(HJSmiley)가 2026-08-31 마스킹 승인을 대체하고 표준 검색·캠페인 metadata 수집을 승인했다. Kosmo Web은 `mask_personal_data_properties: false`를 명시해야 하며(MUST), `custom_personal_data_properties`와 query·click metadata를 선택적으로 바꾸는 `before_send` hook을 두지 않아야 한다(MUST NOT). PostHog가 표준으로 생성하는 Search `q`, 기본 광고 click ID, referrer·session에서 파생되는 검색·캠페인 metadata와 `utm_*` attribution parameter를 앱 adapter가 변형·제거하지 않아야 한다(MUST). 앱 소유 custom event에는 검색어 원문을 새 property로 추가하지 않아야 한다(MUST NOT). 이 결정으로 `ph-mask ph-no-capture` Replay marker와 공개 `get_property('$user_id')`·`get_distinct_id()` identity API는 변경하지 않는다.
 
 #### Scenario: Search query와 click ID가 current와 session URL에 유지된다
 
@@ -61,7 +61,7 @@
 
 - **WHEN** 검색엔진 referrer URL에 `q=handle-marker`, 기본 click ID와 `utm_source=feed`가 포함되어 standard event metadata로 전달된다
 - **THEN** referrer URL의 `q`와 기본 click ID가 원문으로 유지된다
-- **AND** referrer 검색어에서 파생된 `ph_keyword` 계열도 원문으로 유지된다
+- **AND** referrer 검색어에서 PostHog가 파생한 검색·캠페인 metadata도 원문으로 유지된다
 - **AND** `utm_source=feed`는 유지한다
 - **AND** adapter는 해당 metadata를 바꾸는 `before_send` hook을 적용하지 않는다
 
