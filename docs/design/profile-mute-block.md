@@ -24,7 +24,12 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   disclosure 배치와 펼침 동작을 재사용하고, `VolumeOff`, `뮤트된 사용자의 게시물입니다`, content meta,
   `내용 보기`를 표시한다. 펼치면 `CW=MutedRevealed`와 `다시 가리기`를 사용한다. 이 문구는 작성자가 입력한
   content warning summary가 아니라 Mute 관계에서 정해지는 고정 안내다. Sensitive Media disclosure는 기존
-  계약대로 이 gate들과 독립적으로 유지한다.
+  계약대로 이 gate들과 독립적으로 유지한다. Content가 없는 순수 Repost는 새 `PostContent Kind=Repost`를
+  만들지 않는다. Repost Author attribution과 direct Source의 작성자·시간, 기존 순수 Repost `PostActionBar`를
+  유지한다. Action Bar의 Reply는 바깥 contentless Repost, Repost·Reaction·Bookmark·More는 direct Source를
+  대상으로 하는 기존 target routing을 그대로 따른다. Source의 본문·미디어 영역에는 같은 Mute disclosure를
+  바깥 gate로 적용한다. Source에 작성자 Content Warning 또는 Sensitive Media가 있으면 위 중첩 순서를 그대로
+  유지한다.
 - Profile 데이터 로딩 중에는 기존 `ProfileHero` loading·skeleton variant를 유지하고 Mute 상태·action 행은
   loading이 끝난 뒤에만 표시한다.
 - 현재 Mute는 영구 적용만 제공한다. 기간 선택 control과 만료 상태는 표시하지 않는다.
