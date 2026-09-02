@@ -7,6 +7,10 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  VAULT_ADDR: https://vault.tail1fdd55.ts.net
+  VAULT_GITHUB_ACTIONS_AUDIENCE: https://vault.tail1fdd55.ts.net
+
 concurrency:
   group: android-play-internal-distribution
   cancel-in-progress: false
@@ -29,6 +33,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Connect to Tailscale for Vault
+        uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
+        with:
+          oauth-client-id: ${{ vars.TAILSCALE_OAUTH_CLIENT_ID }}
+          audience: ${{ vars.TAILSCALE_AUDIENCE }}
+          tags: tag:github-actions
 
       - name: Set up mise
         uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
@@ -115,12 +126,27 @@ jobs:
             exit 1
           fi
 
+      - name: Load Android signing credentials from Vault
+        id: android_signing
+        uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
+        with:
+          url: ${{ env.VAULT_ADDR }}
+          path: github-actions
+          method: jwt
+          role: kosmo-android-play
+          jwtGithubAudience: ${{ env.VAULT_GITHUB_ACTIONS_AUDIENCE }}
+          exportEnv: false
+          secrets: |
+            secret/data/ci/kosmo/android-play ANDROID_RELEASE_KEYSTORE_BASE64 | ANDROID_RELEASE_KEYSTORE_BASE64
+            secret/data/ci/kosmo/android-play ANDROID_RELEASE_STORE_PASSWORD | ANDROID_RELEASE_STORE_PASSWORD
+            secret/data/ci/kosmo/android-play ANDROID_RELEASE_KEY_PASSWORD | ANDROID_RELEASE_KEY_PASSWORD
+
       - name: Restore Android upload key
         shell: bash
         env:
-          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
-          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
-          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ steps.android_signing.outputs.ANDROID_RELEASE_KEY_PASSWORD }}
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ steps.android_signing.outputs.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_STORE_PASSWORD: ${{ steps.android_signing.outputs.ANDROID_RELEASE_STORE_PASSWORD }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC2016
