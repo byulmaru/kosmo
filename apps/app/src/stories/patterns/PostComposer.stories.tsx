@@ -158,7 +158,12 @@ const meta = {
     'MobileKeyboardContract',
     'MobileMediaFooterGeometryContract',
     'MobilePlaygroundContract',
+    'MobileFlexLayoutContract',
+    'OverlayProgressRingContract',
     'PendingMediaContract',
+    'ProgressRingToneContract',
+    'RailProgressRingContract',
+    'SubmittingSpinnerContract',
     'composerMedia',
   ],
   parameters: { controls: { disable: true }, layout: 'centered' },
@@ -752,7 +757,21 @@ export const MobileCandidateContract: Story = {
     expect(canvas.getByRole('button', { name: '글쓰기 닫기' })).toBeVisible();
     expect(canvas.getAllByRole('button', { name: '게시' })).toHaveLength(1);
     expect(canvas.getByLabelText('남은 글자 수 500자')).toBeVisible();
+    expect(canvas.getByTestId('post-composer-progress-ring')).toBeVisible();
     expect(canvas.queryByRole('button', { name: 'Composer 확장' })).not.toBeInTheDocument();
+  },
+};
+
+export const MobileFlexLayoutContract: Story = {
+  ...MobileEmpty,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByTestId('mobile-composer-body');
+    const editor = canvas.getByRole('textbox', { name: '게시물 내용' });
+
+    expect(body).toHaveStyle({ gap: '8px' });
+    expect(getComputedStyle(body).overflow).toBe('visible');
+    expect(getComputedStyle(editor).flexGrow).toBe('1');
   },
 };
 
@@ -765,7 +784,9 @@ export const MobilePlaygroundContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
 
     const menu = canvas.getByRole('radiogroup', { name: '공개 범위 선택' });
+    const trigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
     expect(within(menu).getAllByRole('radio')).toHaveLength(3);
+    expect(menu.getBoundingClientRect().right).toBe(trigger.getBoundingClientRect().right);
 
     await userEvent.click(within(menu).getByRole('radio', { name: '공개' }));
     expect(args.onVisibilityChange).toHaveBeenLastCalledWith('PUBLIC');
@@ -779,6 +800,60 @@ export const MobilePlaygroundContract: Story = {
     expect(canvas.queryByTestId('mobile-composer-media-editor-keyboard')).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '완료' }));
     expect(canvas.getByRole('heading', { name: '글쓰기' })).toBeVisible();
+  },
+};
+
+export const RailProgressRingContract: Story = {
+  ...Playground,
+  args: { body: '레일 진행률', items: [], remaining: 250, surface: 'rail' },
+  play: async ({ canvasElement }) => {
+    expect(within(canvasElement).queryByTestId('post-composer-progress-ring')).toBeNull();
+  },
+};
+
+export const OverlayProgressRingContract: Story = {
+  ...Playground,
+  args: { body: '오버레이 진행률', items: [], remaining: 250, surface: 'overlay' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const ring = canvas.getByTestId('post-composer-progress-ring');
+    const submit = canvas.getByRole('button', { name: '게시' });
+
+    expect(ring).toBeVisible();
+    expect(ring).toHaveAttribute('aria-hidden', 'true');
+    expect(ring.querySelectorAll('circle')).toHaveLength(2);
+    expect(ring.querySelectorAll('circle')[1]).toHaveAttribute('stroke', '#AE8512');
+    expect(ring.parentElement?.lastElementChild).toBe(submit);
+  },
+};
+
+export const ProgressRingToneContract: Story = {
+  ...Playground,
+  render: (args) => (
+    <View style={{ gap: space[16] }}>
+      <PostComposerTarget {...args} body="일반" items={[]} remaining={250} surface="overlay" />
+      <PostComposerTarget {...args} body="경고" items={[]} remaining={100} surface="overlay" />
+      <PostComposerTarget {...args} body="위험" items={[]} remaining={0} surface="overlay" />
+    </View>
+  ),
+  play: async ({ canvasElement }) => {
+    const rings = within(canvasElement).getAllByTestId('post-composer-progress-ring');
+    expect(rings).toHaveLength(3);
+    expect(rings[0].querySelectorAll('circle')[1]).toHaveAttribute('stroke', '#AE8512');
+    expect(rings[1].querySelectorAll('circle')[1]).toHaveAttribute('stroke', '#CF6D2F');
+    expect(rings[2].querySelectorAll('circle')[1]).toHaveAttribute('stroke', '#B42318');
+  },
+};
+
+export const SubmittingSpinnerContract: Story = {
+  ...Submitting,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const submit = canvas.getByRole('button', { name: '게시' });
+
+    expect(submit).toBeDisabled();
+    expect(canvas.getByLabelText('게시 처리 중')).toBeVisible();
+    expect(canvas.queryByText('게시 중')).toBeNull();
   },
 };
 
