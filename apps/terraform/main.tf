@@ -187,7 +187,7 @@ resource "google_iam_workload_identity_pool_provider" "android_play" {
 
   workload_identity_pool_id          = google_iam_workload_identity_pool.github_actions.workload_identity_pool_id
   workload_identity_pool_provider_id = "kosmo-android-play"
-  display_name                       = "Kosmo Android Play internal testing"
+  display_name                       = "Kosmo Android Play"
   deletion_policy                    = "PREVENT"
 
   attribute_mapping = {
