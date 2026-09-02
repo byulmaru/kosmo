@@ -116,7 +116,6 @@ export function PostActionBar({
               active={hasReacted}
               activeColor={theme.actionReactionBase}
               controlRef={ref}
-              fillActive
               hoverColor={theme.actionReactionBase}
               hoverDisabled={execution.kind === 'resolution-required'}
               hoverForegroundColor={theme.actionReactionBase}

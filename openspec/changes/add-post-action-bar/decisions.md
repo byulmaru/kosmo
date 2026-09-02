@@ -485,6 +485,18 @@
 - Consequences: 공용 control의 `wideWebTarget` sizing seam을 제거하고 실제 content를 한 Pressable이 자연스럽게 감싼다. outer slot의 최소 너비만 layout 분배를 맡아 긴 compact count에서도 sibling target이 겹치지 않는다. 새 공개 API·dependency·token이나 별도 PostLayout/PostListItem Playground는 추가하지 않는다. Storybook·Figma Web 결과는 Native touch·VoiceOver·TalkBack runtime 증거가 아니다.
 - Confirmation / Follow-up: Playground와 390·900·1400 production surface에서 count 있음·없음·숫자 `0`의 target 공식, target 가운데 정렬, slot 확장, non-overlap, glyph 주위 28×28 state layer와 trailing 82px을 검증하고 Figma source의 HUG sizing·wrapper·description을 readback한다.
 
+### selected Reaction은 fill 없는 HeartPlus outline을 유지한다
+
+- Decision Date: 2026-09-03
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-866`, `docs/design/post-action-bar.md`, Figma `PostActionControl` 3801:8494, `Icon/Lucide/HeartPlus` 4424:19608, 2026-09-02 KST 사용자 결정
+- Status: Active
+- Context / Problem: active Reaction이 `actionReactionBase` stroke와 같은 색으로 HeartPlus 내부까지 채워져 plus와 heart outline의 구분이 약해졌다. Live Figma selected variant의 실제 SVG는 이미 `fill=none`과 `#F97066` stroke를 사용했지만 컴포넌트 설명과 production Storybook은 filled 상태를 유지해 source와 구현이 어긋났다.
+- Decision Outcome: Reaction은 default·hover·pressed·selected 모두 HeartPlus의 fill을 `none`으로 유지한다. active·hover의 outline과 plus stroke만 `actionReactionBase #F97066`을 사용하며 selected·pressed·hover state, 28×28 state layer, target geometry와 접근성 상태는 유지한다. Bookmark의 selected fill과 Repost 표현은 변경하지 않는다.
+- Alternatives Considered: selected fill 유지는 사용자가 요청한 line-only 표현과 live Figma SVG에 어긋나 제외했다. active일 때 HeartPlus를 다른 glyph로 교체하면 plus 의미와 canonical icon 계약이 바뀌므로 제외했다. 공용 `fillActive` API 제거는 Bookmark의 selected fill까지 바꾸므로 제외했다.
+- Consequences: Reaction consumer만 기존 `fillActive` opt-in을 제거하고 공용 control과 Bookmark consumer는 유지한다. 같은 shared renderer를 사용하는 Native projection에도 outline이 적용되지만 이를 Native runtime 검증 증거로 사용하지 않는다. 새 component·token·dependency·variant는 추가하지 않는다.
+- Confirmation / Follow-up: Light·Dark Storybook에서 active Reaction의 `stroke=#F97066`, `fill=none`, HeartPlus plus path와 hover·unhover 지속 상태를 직접 검증한다. Figma selected SVG와 component description을 readback하고 Web Browser에서 시각 결과를 확인한다.
+
 ## Remaining Decisions
 
 - 없음.

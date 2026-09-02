@@ -284,6 +284,8 @@ Reaction과 Repost가 전역 feedback 의미와 분리된 presentation semantic�
 - [x] 7.4 Quote Source preview의 resting fill을 제거하고 interactive Web hover에만 `stateHover`를 적용한 뒤 focused Storybook, canonical 문서·OpenSpec과 Figma Light·Dark specimen을 동기화하고 readback한다.
 - [x] 7.5 Reply·Repost·Reaction Web target을 64×36px로 넓히고 Bookmark 50×36px, More 28×36px과 trailing 82px을 유지한 뒤 Storybook·Figma를 동기화하고 readback한다.
 - [x] 7.6 Web action target을 count 기반 HUG로 교정하고, count 없음 28×36px, social slot 최소 50px·필요 시 확장, 숫자 `0`, non-overlap과 trailing 82px을 Storybook·Figma에서 검증하고 readback한다.
+- [x] 7.7 active Reaction HeartPlus를 fill 없는 의미색 outline으로 교정하고, Bookmark selected fill은 유지한 채 Light·Dark Storybook 회귀와 Figma source·description을 동기화하고 readback한다.
+- [x] 7.8 Reaction outline 변경 뒤 app check, lint·format, 전체 Storybook test·build와 OpenSpec strict validation 및 Web Browser QA를 통과시킨다.
 
 ## 8. PROD-882 미선택 Repost 상태 색상 복구
 

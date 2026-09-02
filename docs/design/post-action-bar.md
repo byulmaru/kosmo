@@ -62,8 +62,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   interactive rectangle은 count가 있으면 `6 + 16 + 4 + 렌더된 count 너비 + 6`을 HUG하고, count가 없으면
   28×36px이다. target은 28px visual row 위아래로 4px씩 확장되며 action 사이의 분배 여백을 차지하거나 인접
   target과 겹치지 않는다.
-- Reaction이 selected 상태이면 hover 여부와 관계없이 HeartPlus의 stroke와 fill에 `actionReactionBase`를 사용한다. 다른
-  action의 default·active 색과 selected fill은 유지하고, pressed에서는 각 상태의 foreground에 기존 72% opacity를 적용한다.
+- Reaction이 selected 상태이면 hover 여부와 관계없이 HeartPlus는 fill 없이 outline을 유지하고 stroke에만
+  `actionReactionBase`를 사용한다. 다른 action의 default·active 색과 Bookmark의 selected fill은 유지하고,
+  pressed에서는 각 상태의 foreground에 기존 72% opacity를 적용한다.
   hover가 끝나면 원형 background는 사라지고 미선택 Reaction의 foreground는 기존 default 색으로 돌아간다.
 - pending·disabled·resolution-required처럼 입력이 차단된 action은 hover background를 표시하지 않는다.
   Native와 Web touch 입력에는 hover 전용 background를 표시하지 않는다.
@@ -288,7 +289,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Web pointer hover에서는 glyph 중심 28×28 원형 background, count 기반 HUG 또는 count 없는 28×36 click target,
   일반 action의 30% `primary` background·불투명 `primary` foreground,
   Reply glyph·count의 동일 foreground, Repost의 미선택 glyph·count 중립색·hover glyph 의미색과 중립 count·selected
-  glyph·count의 mode별 `actionRepostBase`, Reaction의 30% `actionReactionBase` background·불투명 foreground·HeartPlus selected 표현과
+  glyph·count의 mode별 `actionRepostBase`, Reaction의 30% `actionReactionBase` background·불투명 foreground·HeartPlus selected outline과
   기존 pressed 상태 보존을 검증한다.
   blocked action, Web touch 입력과 Native에는 hover background가 나타나지 않는지 확인한다.
 - Web menu가 scroll container 밖에서 잘리지 않고 첫 item이 trigger pointer 지점을 덮는지, 같은 위치의

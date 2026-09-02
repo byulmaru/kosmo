@@ -874,7 +874,7 @@ export const ActionBarCatalogInteraction: Story = {
 
     expect(reactionButtons[0]?.querySelector('svg')).toHaveAttribute('fill', 'none');
     expect(bookmarkButtons[0]?.querySelector('svg')).toHaveAttribute('fill', 'none');
-    expect(reactionButtons[2]?.querySelector('svg')).not.toHaveAttribute('fill', 'none');
+    expect(reactionButtons[2]?.querySelector('svg')).toHaveAttribute('fill', 'none');
     expect(bookmarkButtons[2]?.querySelector('svg')).not.toHaveAttribute('fill', 'none');
 
     const toolbars = canvas.getAllByRole('toolbar', { name: '액션 바' });
@@ -1052,16 +1052,16 @@ export const ActionBarCatalogInteraction: Story = {
     const activeReactionIcon = activeReaction.querySelector('svg');
     expect(activeReactionIcon?.querySelector('path[d="M18 12v6"]')).not.toBeNull();
     expect(activeReactionIcon).toHaveAttribute('stroke', reactionActionColor);
-    expect(activeReactionIcon).toHaveAttribute('fill', reactionActionColor);
+    expect(activeReactionIcon).toHaveAttribute('fill', 'none');
     await userEvent.hover(activeReaction);
     expect(activeReactionIcon).toHaveAttribute('stroke', reactionActionColor);
-    expect(activeReactionIcon).toHaveAttribute('fill', reactionActionColor);
+    expect(activeReactionIcon).toHaveAttribute('fill', 'none');
     const activeReactionHover = within(activeReaction).getByTestId('post-action-reaction-hover');
     expect(activeReactionHover).toHaveStyle({ backgroundColor: reactionActionColor });
     expect(getComputedStyle(activeReactionHover).opacity).toBe('0.3');
     await userEvent.unhover(activeReaction);
     expect(activeReactionIcon).toHaveAttribute('stroke', reactionActionColor);
-    expect(activeReactionIcon).toHaveAttribute('fill', reactionActionColor);
+    expect(activeReactionIcon).toHaveAttribute('fill', 'none');
     expect(within(activeReaction).queryByTestId('post-action-reaction-hover')).toBeNull();
 
     const blockedReply = within(toolbars[3]!).getByRole('button', { name: '답글' });
@@ -1130,7 +1130,7 @@ export const ActionSemanticColorsDarkInteraction: Story = {
     });
     const activeReaction = activeToolbar.getByRole('button', { name: '반응' });
     expect(activeReaction.querySelector('svg')).toHaveAttribute('stroke', reactionActionColor);
-    expect(activeReaction.querySelector('svg')).toHaveAttribute('fill', reactionActionColor);
+    expect(activeReaction.querySelector('svg')).toHaveAttribute('fill', 'none');
   },
   render: () => <CatalogStory />,
 };
