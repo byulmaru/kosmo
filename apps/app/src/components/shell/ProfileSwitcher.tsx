@@ -331,7 +331,7 @@ export function ProfileSwitcher({
         }
 
         trackAnalytics('profile_created', {
-          selected_profile_id: active?.id ?? null,
+          selected_profile_id: response.createProfile.profile.id,
         });
         setHandle('');
         setCreating(false);

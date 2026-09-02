@@ -1,40 +1,30 @@
-import { OpenPanel } from '@openpanel/web';
-import type { TrackProperties } from '@openpanel/web';
+import posthogClient from 'posthog-js';
+import type { PostHog, PostHogConfig } from 'posthog-js';
+import type { AnalyticsEventArgs } from './events';
 
-const OPENPANEL_API_URL = 'https://openpanel.byulmaru.co/api';
+const POSTHOG_USER_ID = '$user_id';
 
-let client: OpenPanel | null | undefined;
-let identifiedAccountId: string | null = null;
-
-type OpenPanelConstructor = new (options: ConstructorParameters<typeof OpenPanel>[0]) => OpenPanel;
+let client: PostHog | null | undefined;
 
 export function initializeAnalytics(
-  clientId: string | undefined = process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID,
-  Client: OpenPanelConstructor = OpenPanel,
-): OpenPanel | null {
+  apiKey: string | undefined = process.env.EXPO_PUBLIC_POSTHOG_KEY,
+  apiHost: string | undefined = process.env.EXPO_PUBLIC_POSTHOG_HOST,
+): PostHog | null {
   if (client !== undefined) {
     return client;
   }
 
-  if (!clientId) {
+  if (!apiKey || !apiHost) {
     client = null;
     return client;
   }
 
   try {
-    client = new Client({
-      apiUrl: OPENPANEL_API_URL,
-      clientId,
-      sessionReplay: {
-        enabled: true,
-        maskAllInputs: true,
-        maskAllText: false,
-        sampleRate: 0.1,
-      },
-      trackAttributes: true,
-      trackOutgoingLinks: true,
-      trackScreenViews: true,
-    });
+    client = posthogClient.init(apiKey, {
+      api_host: apiHost,
+      defaults: '2026-05-30',
+      mask_personal_data_properties: false,
+    } satisfies Partial<PostHogConfig>);
   } catch {
     client = null;
   }
@@ -42,26 +32,25 @@ export function initializeAnalytics(
   return client;
 }
 
-export function getAnalyticsClient(): OpenPanel | null {
+export function getAnalyticsClient(): PostHog | null {
   return initializeAnalytics();
 }
 
-function ignoreAnalyticsFailure(result: unknown): void {
-  if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
-    void Promise.resolve(result).catch(() => undefined);
-  }
-}
-
-export function trackAnalytics(name: string, properties?: TrackProperties): void {
+export function trackAnalytics(...args: AnalyticsEventArgs): void {
   try {
-    ignoreAnalyticsFailure(getAnalyticsClient()?.track(name, properties));
+    getAnalyticsClient()?.capture(args[0], args[1] as Parameters<PostHog['capture']>[1]);
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }
 }
 
+function getPostHogAccountId(analyticsClient: PostHog): string | null {
+  const userId = analyticsClient.get_property(POSTHOG_USER_ID);
+  return typeof userId === 'string' && userId ? userId : null;
+}
+
 export function identifyAnalytics(accountId: string): void {
-  if (identifiedAccountId === accountId) {
+  if (!accountId) {
     return;
   }
 
@@ -71,8 +60,15 @@ export function identifyAnalytics(accountId: string): void {
       return;
     }
 
-    ignoreAnalyticsFailure(analyticsClient.identify({ profileId: accountId }));
-    identifiedAccountId = accountId;
+    const currentAccountId = getPostHogAccountId(analyticsClient);
+    if (
+      currentAccountId &&
+      (currentAccountId !== accountId || analyticsClient.get_distinct_id() !== accountId)
+    ) {
+      analyticsClient.reset();
+    }
+
+    analyticsClient.identify(accountId);
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }
@@ -80,15 +76,17 @@ export function identifyAnalytics(accountId: string): void {
 
 export function clearAnalytics(): void {
   try {
-    getAnalyticsClient()?.clear();
+    const analyticsClient = getAnalyticsClient();
+    if (!analyticsClient || !getPostHogAccountId(analyticsClient)) {
+      return;
+    }
+
+    analyticsClient.reset();
   } catch {
     // Analytics is best-effort and must not affect the product flow.
-  } finally {
-    identifiedAccountId = null;
   }
 }
 
 export function resetAnalyticsForTests(): void {
   client = undefined;
-  identifiedAccountId = null;
 }

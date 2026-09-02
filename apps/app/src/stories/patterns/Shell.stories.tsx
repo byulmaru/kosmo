@@ -72,6 +72,10 @@ const query = {
   ...shellQuery({ profiles: [selectedProfile, secondProfile], selectedProfile }),
   node: followedProfile,
 };
+const firstProfileQuery = {
+  ...query,
+  ...shellQuery({ profiles: [], selectedProfile: null }),
+};
 const ineligibleSelectedProfile = {
   ...selectedProfile,
   viewerState: { follow: null, followRequest: null, isSelf: true, membership: null },
@@ -232,6 +236,18 @@ function ProfileSwitcherStory() {
     <SessionProvider>
       <View style={{ maxWidth: 360 }}>
         <ProfileSwitcher query={data.query} surface="full" />
+      </View>
+    </SessionProvider>
+  );
+}
+
+function FirstProfileSwitcherStory() {
+  const data = useLazyLoadQuery<ShellStoriesQueryType>(ShellStoriesQuery, {});
+
+  return (
+    <SessionProvider>
+      <View style={{ maxWidth: 360 }}>
+        <ProfileSwitcher query={data} surface="full" />
       </View>
     </SessionProvider>
   );
@@ -1179,11 +1195,12 @@ export const ProfileSwitcherApprovedSelectGraphQLErrorPreservesPicker: Story = {
 export const ProfileSwitcherCreateTracksAnalytics: Story = {
   parameters: {
     relay: {
+      data: firstProfileQuery,
       operationResponses: {
         ProfileSwitcherCreateProfileMutation: {
           data: {
             createProfile: {
-              account: { ...query.me, profiles: [...query.me.profiles, secondProfile] },
+              account: { ...firstProfileQuery.me, profiles: [secondProfile] },
               profile: secondProfile,
             },
           },
@@ -1208,13 +1225,13 @@ export const ProfileSwitcherCreateTracksAnalytics: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
     await waitFor(() => expect(trackAnalytics).toHaveBeenCalledTimes(2));
     expect(trackAnalytics).toHaveBeenNthCalledWith(1, 'profile_created', {
-      selected_profile_id: selectedProfile.id,
+      selected_profile_id: secondProfile.id,
     });
     expect(trackAnalytics).toHaveBeenNthCalledWith(2, 'profile_selected', {
       selected_profile_id: secondProfile.id,
     });
   },
-  render: () => <ProfileSwitcherStory />,
+  render: () => <FirstProfileSwitcherStory />,
 };
 
 export const ProfileSwitcherCreatePolicyPrevalidation: Story = {

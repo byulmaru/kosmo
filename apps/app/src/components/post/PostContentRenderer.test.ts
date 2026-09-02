@@ -139,7 +139,6 @@ describe('PostContentRenderer', () => {
     });
 
     const contentRoot = byTestId('post-content-renderer');
-    assert.deepEqual(contentRoot.props.dataSet, { openpanelReplayBlock: '' });
     assert.equal(rendered('PostMediaGallery').length, 0);
     const toggle = rendered('Pressable').find(
       (node) => node.props.testID === 'post-content-warning-toggle',
@@ -201,7 +200,6 @@ describe('PostContentRenderer', () => {
     });
 
     const contentRoot = byTestId('post-content-renderer');
-    assert.deepEqual(contentRoot.props.dataSet, { openpanelReplayBlock: '' });
     assert.equal(
       contentRoot.findAll((node) => node.props.testID === 'post-content-warning').length,
       1,

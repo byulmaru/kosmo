@@ -1,52 +1,85 @@
 import assert from 'node:assert/strict';
-import { before, beforeEach, describe, it } from 'node:test';
-import type { OpenPanel as OpenPanelType, OpenPanelOptions } from '@openpanel/web';
+import { before, beforeEach, describe, it, mock } from 'node:test';
+import type { PostHogConfig } from 'posthog-js';
 import type * as AnalyticsModule from './client.web';
 
-type OpenPanelClass = typeof OpenPanelType;
+type Call = { event: string; properties?: Record<string, unknown> };
 
-type Call = { name: string; properties?: Record<string, unknown> };
-
-const instances: FakeOpenPanel[] = [];
-let constructorFails = false;
-let methodFails = false;
-
-class FakeOpenPanel {
+class FakePostHog {
   readonly calls: Call[] = [];
-  readonly options: OpenPanelOptions;
-  clears = 0;
-  identities: string[] = [];
+  readonly identities: string[] = [];
+  readonly actions: string[] = [];
+  captureAttempts = 0;
+  resets = 0;
+  captureFails = false;
+  identifyFails = false;
+  resetFails = false;
+  distinctId = 'anonymous-id';
+  userId: string | undefined;
 
-  constructor(options: OpenPanelOptions) {
-    if (constructorFails) {
-      throw new Error('constructor failure');
+  capture(event: string, properties?: Record<string, unknown>) {
+    this.captureAttempts += 1;
+    if (this.captureFails) {
+      throw new Error('capture failure');
     }
-    this.options = options;
-    instances.push(this);
+    this.actions.push(`capture:${event}`);
+    this.calls.push({ event, properties });
   }
 
-  track(name: string, properties?: Record<string, unknown>) {
-    if (methodFails) {
-      throw new Error('track failure');
-    }
-    this.calls.push({ name, properties });
-    return Promise.resolve();
-  }
-
-  identify({ profileId }: { profileId: string }) {
-    if (methodFails) {
+  identify(accountId: string) {
+    if (this.identifyFails) {
       throw new Error('identify failure');
     }
-    this.identities.push(profileId);
+    this.actions.push(`identify:${accountId}`);
+    this.identities.push(accountId);
+    this.distinctId = accountId;
+    this.userId = accountId;
   }
 
-  clear() {
-    if (methodFails) {
-      throw new Error('clear failure');
+  reset() {
+    this.actions.push('reset');
+    if (this.resetFails) {
+      throw new Error('reset failure');
     }
-    this.clears += 1;
+    this.resets += 1;
+    this.distinctId = `anonymous-${this.resets}`;
+    this.userId = undefined;
+  }
+
+  get_distinct_id() {
+    return this.distinctId;
+  }
+
+  get_property(name: string) {
+    return name === '$user_id' ? this.userId : undefined;
+  }
+
+  setPersistedIdentity(accountId: string) {
+    this.distinctId = accountId;
+    this.userId = accountId;
   }
 }
+
+const instances: FakePostHog[] = [];
+const initCalls: Array<{ token: string; config: Partial<PostHogConfig> }> = [];
+let constructorFails = false;
+
+mock.module('posthog-js', {
+  exports: {
+    default: {
+      init: (token: string, config: Partial<PostHogConfig>) => {
+        if (constructorFails) {
+          throw new Error('constructor failure');
+        }
+
+        initCalls.push({ token, config });
+        const instance = new FakePostHog();
+        instances.push(instance);
+        return instance;
+      },
+    },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 let analytics: typeof AnalyticsModule;
 
@@ -56,54 +89,55 @@ before(async () => {
 
 beforeEach(() => {
   analytics.resetAnalyticsForTests();
-  constructorFails = false;
-  methodFails = false;
   instances.length = 0;
-  delete process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID;
+  initCalls.length = 0;
+  constructorFails = false;
 });
 
-describe('OpenPanel Web client', () => {
-  it('Client ID가 없으면 client를 만들지 않는다', () => {
-    assert.equal(analytics.initializeAnalytics(undefined), null);
+describe('PostHog Web client', () => {
+  it('key와 host가 모두 없거나 불완전하면 client와 전송을 만들지 않는다', () => {
+    for (const [key, host] of [
+      [undefined, undefined],
+      ['project-key', undefined],
+      [undefined, 'https://us.i.posthog.com'],
+    ] as const) {
+      analytics.initializeAnalytics(key, host);
+      analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+    }
+
+    assert.equal(initCalls.length, 0);
     assert.equal(instances.length, 0);
   });
 
-  it('Web Client ID로 self-hosted 자동 수집과 10% replay를 설정한다', () => {
-    process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID = 'client-id';
+  it('완전한 공개 설정에서 권장 defaults로 한 번 초기화하고 표준 동작을 차단하지 않는다', () => {
+    const client = analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
 
-    analytics.initializeAnalytics('client-id', FakeOpenPanel as unknown as OpenPanelClass);
-
-    assert.equal(instances.length, 1);
-    assert.deepEqual(instances[0]?.options, {
-      apiUrl: 'https://openpanel.byulmaru.co/api',
-      clientId: 'client-id',
-      sessionReplay: {
-        enabled: true,
-        maskAllInputs: true,
-        maskAllText: false,
-        sampleRate: 0.1,
-      },
-      trackAttributes: true,
-      trackOutgoingLinks: true,
-      trackScreenViews: true,
+    assert.ok(client);
+    assert.equal(initCalls.length, 1);
+    assert.equal(initCalls[0]?.token, 'project-key');
+    assert.deepEqual(initCalls[0]?.config, {
+      api_host: 'https://us.i.posthog.com',
+      defaults: '2026-05-30',
+      mask_personal_data_properties: false,
     });
   });
 
-  it('Account ID만 identify하고 같은 identity를 중복 적용하지 않는다', () => {
-    process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID = 'client-id';
-
-    analytics.initializeAnalytics('client-id', FakeOpenPanel as unknown as OpenPanelClass);
-    analytics.identifyAnalytics('account-id');
-    analytics.identifyAnalytics('account-id');
-
-    assert.deepEqual(instances[0]?.identities, ['account-id']);
+  it('E2E fake endpoint도 production adapter 설정을 넓히지 않는다', () => {
+    analytics.initializeAnalytics('project-key', 'https://posthog.e2e.invalid');
+    assert.equal(initCalls[0]?.token, 'project-key');
+    assert.deepEqual(Object.keys(initCalls[0]?.config ?? {}).sort(), [
+      'api_host',
+      'defaults',
+      'mask_personal_data_properties',
+    ]);
   });
 
-  it('허용된 taxonomy와 속성으로 event를 보내고 clear한다', () => {
-    process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID = 'client-id';
+  it('event별 typed payload를 전송한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
 
-    analytics.initializeAnalytics('client-id', FakeOpenPanel as unknown as OpenPanelClass);
-    analytics.identifyAnalytics('account-id');
     analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
     analytics.trackAnalytics('profile_selected', { selected_profile_id: 'profile-id' });
     analytics.trackAnalytics('post_created', {
@@ -111,51 +145,202 @@ describe('OpenPanel Web client', () => {
       visibility: 'DIRECT',
     });
     analytics.trackAnalytics('follow_succeeded', {
-      result: 'request',
       selected_profile_id: 'profile-id',
+      result: 'request',
     });
-    analytics.trackAnalytics('search_submitted', { source: 'keyboard', tab: 'people' });
-    analytics.trackAnalytics('search_results_loaded', { has_results: true, tab: 'people' });
+    analytics.trackAnalytics('search_submitted', { tab: 'people', source: 'keyboard' });
+    analytics.trackAnalytics('search_results_loaded', { tab: 'people', has_results: true });
     analytics.trackAnalytics('search_result_selected', { tab: 'people' });
-    analytics.clearAnalytics();
 
-    assert.deepEqual(instances[0]?.calls, [
-      { name: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
-      { name: 'profile_selected', properties: { selected_profile_id: 'profile-id' } },
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+      { event: 'profile_selected', properties: { selected_profile_id: 'profile-id' } },
       {
-        name: 'post_created',
+        event: 'post_created',
         properties: { selected_profile_id: 'profile-id', visibility: 'DIRECT' },
       },
       {
-        name: 'follow_succeeded',
-        properties: { result: 'request', selected_profile_id: 'profile-id' },
+        event: 'follow_succeeded',
+        properties: { selected_profile_id: 'profile-id', result: 'request' },
       },
       {
-        name: 'search_submitted',
-        properties: { source: 'keyboard', tab: 'people' },
+        event: 'search_submitted',
+        properties: { tab: 'people', source: 'keyboard' },
       },
       {
-        name: 'search_results_loaded',
-        properties: { has_results: true, tab: 'people' },
+        event: 'search_results_loaded',
+        properties: { tab: 'people', has_results: true },
       },
-      { name: 'search_result_selected', properties: { tab: 'people' } },
+      { event: 'search_result_selected', properties: { tab: 'people' } },
     ]);
-    assert.equal(instances[0]?.clears, 1);
   });
 
-  it('초기화와 SDK method 실패를 제품 흐름으로 전파하지 않는다', () => {
-    process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID = 'client-id';
+  it('typed event properties를 변형하지 않고 PostHog에 전달한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    const properties = {
+      selected_profile_id: 'profile-id',
+      visibility: 'DIRECT' as const,
+    };
+    analytics.trackAnalytics('post_created', properties);
+
+    assert.equal(instance.calls[0]?.properties, properties);
+    assert.deepEqual(instance.calls, [{ event: 'post_created', properties }]);
+  });
+
+  it('Account identity는 같은 ID를 SDK에 위임하고 전환·guest에서 reset 후 분리한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    analytics.identifyAnalytics('account-a');
+    analytics.identifyAnalytics('account-a');
+    analytics.identifyAnalytics('account-b');
+    analytics.clearAnalytics();
+    analytics.clearAnalytics();
+
+    assert.deepEqual(instance.identities, ['account-a', 'account-a', 'account-b']);
+    assert.equal(instance.resets, 2);
+    assert.deepEqual(instance.actions, [
+      'identify:account-a',
+      'identify:account-a',
+      'reset',
+      'identify:account-b',
+      'reset',
+    ]);
+  });
+
+  it('reload 뒤 SDK에 남은 같은 Account는 reset하지 않는다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+    instance.setPersistedIdentity('account-a');
+
+    analytics.identifyAnalytics('account-a');
+
+    assert.deepEqual(instance.actions, ['identify:account-a']);
+    assert.equal(instance.resets, 0);
+  });
+
+  it('reload 뒤 SDK에 남은 Account를 다른 Account와 guest에서 분리한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+    instance.setPersistedIdentity('account-a');
+
+    analytics.identifyAnalytics('account-b');
+    analytics.clearAnalytics();
+    analytics.clearAnalytics();
+
+    assert.deepEqual(instance.actions, ['reset', 'identify:account-b', 'reset']);
+    assert.equal(instance.resets, 2);
+  });
+
+  it('A에서 B로 전환하는 reset 실패에도 직접 capture를 허용한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    analytics.identifyAnalytics('account-a');
+    instance.resetFails = true;
+    analytics.identifyAnalytics('account-b');
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+
+    assert.deepEqual(instance.identities, ['account-a']);
+    assert.deepEqual(instance.actions, ['identify:account-a', 'reset', 'capture:profile_created']);
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+    ]);
+  });
+
+  it('reset 성공 뒤 identify가 throw해도 다음 호출에서 새 Account를 직접 identify한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    analytics.identifyAnalytics('account-a');
+    instance.identifyFails = true;
+    analytics.identifyAnalytics('account-b');
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'before-recovery' });
+
+    instance.identifyFails = false;
+    analytics.identifyAnalytics('account-b');
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'after-recovery' });
+
+    assert.deepEqual(instance.identities, ['account-a', 'account-b']);
+    assert.deepEqual(instance.actions, [
+      'identify:account-a',
+      'reset',
+      'capture:profile_created',
+      'identify:account-b',
+      'capture:profile_created',
+    ]);
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'before-recovery' } },
+      { event: 'profile_created', properties: { selected_profile_id: 'after-recovery' } },
+    ]);
+  });
+
+  it('A에서 guest로 전환하는 reset 실패에도 직접 capture를 허용한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    analytics.identifyAnalytics('account-a');
+    instance.resetFails = true;
+    analytics.clearAnalytics();
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+
+    assert.deepEqual(instance.identities, ['account-a']);
+    assert.deepEqual(instance.actions, ['identify:account-a', 'reset', 'capture:profile_created']);
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+    ]);
+  });
+
+  it('identify 자체 throw에도 직접 capture를 허용한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    instance.identifyFails = true;
+    analytics.identifyAnalytics('account-a');
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+    ]);
+
+    instance.identifyFails = false;
+    analytics.identifyAnalytics('account-a');
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+    ]);
+  });
+
+  it('초기화·capture·identity 실패를 제품 흐름으로 전파하지 않는다', () => {
     constructorFails = true;
-    assert.doesNotThrow(() =>
-      analytics.initializeAnalytics('client-id', FakeOpenPanel as unknown as OpenPanelClass),
-    );
+    assert.doesNotThrow(() => analytics.initializeAnalytics('project-key', 'https://host.example'));
 
     analytics.resetAnalyticsForTests();
     constructorFails = false;
-    methodFails = true;
-    analytics.initializeAnalytics('client-id', FakeOpenPanel as unknown as OpenPanelClass);
+    analytics.initializeAnalytics('project-key', 'https://host.example');
+    const instance = instances[0];
+    assert.ok(instance);
+    instance.captureFails = true;
+    instance.identifyFails = true;
+    instance.resetFails = true;
+
+    assert.doesNotThrow(() =>
+      analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' }),
+    );
     assert.doesNotThrow(() => analytics.identifyAnalytics('account-id'));
-    assert.doesNotThrow(() => analytics.trackAnalytics('profile_created'));
     assert.doesNotThrow(() => analytics.clearAnalytics());
+    assert.equal(instance.captureAttempts, 1);
   });
 });

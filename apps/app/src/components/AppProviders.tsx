@@ -1,6 +1,5 @@
-import { Suspense, useEffect } from 'react';
+import { Suspense } from 'react';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
-import { initializeAnalytics } from '@/analytics/client';
 import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import {
   SessionErrorProvider,
@@ -40,10 +39,6 @@ function RelaySessionBoundary({ children }: PropsWithChildren) {
 }
 
 export function AppProviders({ children }: PropsWithChildren) {
-  useEffect(() => {
-    initializeAnalytics();
-  }, []);
-
   return (
     <ThemeProvider mode="light">
       <ToastProvider>
