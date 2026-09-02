@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, FlagIcon, SquarePenIcon, XIcon } from 'lucide-react-native';
+import { ArrowLeftIcon, FlagIcon, XIcon } from 'lucide-react-native';
 import {
   Image,
   Pressable,
@@ -28,6 +28,7 @@ export type ComposerMediaEditorProps = {
   readonly onBack: () => void;
   readonly onClose: () => void;
   readonly onDone: () => void;
+  readonly onPreviewPress?: () => void;
   readonly onSelectMedia: (key: string) => void;
   readonly onSensitiveMediaChange: (value: boolean) => void;
   readonly onToolChange: (tool: ComposerMediaEditorTool) => void;
@@ -82,6 +83,7 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
           />
           <MediaPreview
             mediaCount={props.media.length}
+            onPreviewPress={props.onPreviewPress}
             selected={selected}
             selectedIndex={selectedIndex}
           />
@@ -90,7 +92,9 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
             style={[styles.mobileActions, { borderColor: theme.borderSubtle }]}
           >
             <MobileToolButton
-              icon={<SquarePenIcon color={theme.foregroundPrimary} size={iconSizes[20]} />}
+              icon={
+                <Text style={[styles.altToolLabel, { color: theme.foregroundPrimary }]}>ALT</Text>
+              }
               label="대체 텍스트 편집"
               onPress={() => props.onToolChange('alt')}
               selected={mobileTool === 'alt'}
@@ -240,32 +244,47 @@ function EditorTabs({
 
 function MediaPreview({
   mediaCount,
+  onPreviewPress,
   selected,
   selectedIndex,
 }: {
   readonly mediaCount: number;
+  readonly onPreviewPress?: () => void;
   readonly selected: ComposerMediaItem | undefined;
   readonly selectedIndex: number;
 }) {
   const theme = useTheme();
+  const selectedPreview = selected ? (
+    <Image
+      accessibilityElementsHidden={Boolean(onPreviewPress)}
+      accessibilityIgnoresInvertColors
+      accessibilityLabel={`선택한 첨부 이미지 ${selectedIndex + 1} 미리보기`}
+      accessibilityRole="image"
+      resizeMode="cover"
+      source={{ uri: selected.asset.uri }}
+      style={styles.selectedPreview}
+    />
+  ) : (
+    <View style={[styles.selectedPreview, { backgroundColor: theme.backgroundElevated }]}>
+      <Text style={[styles.emptyCopy, { color: theme.foregroundSecondary }]}>
+        편집할 미디어가 없습니다.
+      </Text>
+    </View>
+  );
 
   return (
     <View style={[styles.previewSection, { backgroundColor: theme.backgroundSurface }]}>
-      {selected ? (
-        <Image
-          accessibilityIgnoresInvertColors
+      {selected && onPreviewPress ? (
+        <Pressable
           accessibilityLabel={`선택한 첨부 이미지 ${selectedIndex + 1} 미리보기`}
-          accessibilityRole="image"
-          resizeMode="cover"
-          source={{ uri: selected.asset.uri }}
-          style={styles.selectedPreview}
-        />
+          accessibilityRole="button"
+          onPress={onPreviewPress}
+          style={({ pressed }) => [styles.selectedPreview, pressed && styles.pressed]}
+        >
+          {selectedPreview}
+        </Pressable>
       ) : (
-        <View style={[styles.selectedPreview, { backgroundColor: theme.backgroundElevated }]}>
-          <Text style={[styles.emptyCopy, { color: theme.foregroundSecondary }]}>
-            편집할 미디어가 없습니다.
-          </Text>
-        </View>
+        selectedPreview
       )}
       <View style={styles.imageIndex}>
         <Text style={styles.imageIndexText}>
@@ -659,6 +678,7 @@ const styles = StyleSheet.create({
   },
   sensitiveCopy: { flex: 1, gap: space[4] },
   sensitiveLabel: textStyles.uiLabelM,
+  altToolLabel: textStyles.uiLabelS,
   footer: {
     alignItems: 'center',
     borderTopWidth: borderWidths[1],

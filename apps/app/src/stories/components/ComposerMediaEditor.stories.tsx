@@ -147,6 +147,13 @@ function InteractiveEditor(props: ComposerMediaEditorProps) {
         props.onSelectMedia(key);
         setSelectedKey(key);
       }}
+      onPreviewPress={
+        props.presentation === 'mobile' && mobileState === 'altKeyboard'
+          ? () => {
+              setMobileState('default');
+            }
+          : undefined
+      }
       onSensitiveMediaChange={(value) => {
         props.onSensitiveMediaChange(value);
         setSensitiveMedia(value);
@@ -155,7 +162,13 @@ function InteractiveEditor(props: ComposerMediaEditorProps) {
         props.onToolChange(value);
         setTool(value);
         if (props.presentation === 'mobile') {
-          setMobileState(value === 'alt' ? 'altKeyboard' : 'sensitive');
+          setMobileState((current) =>
+            value === 'alt' && current === 'altKeyboard'
+              ? 'default'
+              : value === 'alt'
+                ? 'altKeyboard'
+                : 'sensitive',
+          );
         }
       }}
       selectedKey={selectedKey}
@@ -270,11 +283,26 @@ export const MobileToolInteractionContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '대체 텍스트 편집' }));
 
     expect(args.onToolChange).toHaveBeenLastCalledWith('alt');
+    expect(canvas.getByRole('button', { name: '대체 텍스트 편집' })).toHaveTextContent('ALT');
     expect(canvas.getByTestId('mobile-composer-media-editor-tool-sheet')).toHaveStyle({
       height: '176px',
     });
     expect(canvas.getByTestId('mobile-composer-media-editor-keyboard')).toHaveStyle({
       height: '336px',
     });
+
+    const altText = canvas.getByRole('textbox', { name: '이미지 설명' });
+    await userEvent.clear(altText);
+    await userEvent.type(altText, '작성한 설명');
+    await userEvent.click(canvas.getByRole('button', { name: '선택한 첨부 이미지 1 미리보기' }));
+    expect(canvas.queryByTestId('mobile-composer-media-editor-keyboard')).toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '대체 텍스트 편집' }));
+    expect(canvas.getByTestId('mobile-composer-media-editor-keyboard')).toBeVisible();
+    expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toHaveValue('작성한 설명');
+    await userEvent.click(canvas.getByRole('button', { name: '대체 텍스트 편집' }));
+    expect(canvas.queryByTestId('mobile-composer-media-editor-keyboard')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '대체 텍스트 편집' }));
+    expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toHaveValue('작성한 설명');
   },
 };
