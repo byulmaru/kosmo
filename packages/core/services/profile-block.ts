@@ -1,5 +1,5 @@
-import { and, eq, exists, or } from 'drizzle-orm';
-import { db, first, getDatabaseConnection, Posts, ProfileBlocks, Profiles, Reactions } from '../db';
+import { and, eq, or } from 'drizzle-orm';
+import { db, first, getDatabaseConnection, ProfileBlocks, Profiles } from '../db';
 import { ConflictError, KosmoError, NotFoundError, ValidationError } from '../error';
 import { removeProfileFollowExactSourceWithEffect } from './profile-follow-command';
 import type { DatabaseHandle, Transaction } from '../db';
@@ -106,31 +106,11 @@ const loadProfileBlockParticipants = async (
   }
 };
 
-const removeOwnerPostReactions = async (
-  tx: Transaction,
-  {
-    ownerProfileId,
-    targetProfileId,
-  }: Pick<ProfileBlockTransitionInput, 'ownerProfileId' | 'targetProfileId'>,
-) =>
-  tx.delete(Reactions).where(
-    and(
-      eq(Reactions.profileId, targetProfileId),
-      exists(
-        tx
-          .select({ id: Posts.id })
-          .from(Posts)
-          .where(and(eq(Posts.id, Reactions.postId), eq(Posts.profileId, ownerProfileId))),
-      ),
-    ),
-  );
-
 /**
- * Applies the Profile Block relation and its DB-owned cleanup in one Activity
- * transaction. Follow effect plans are returned even when their exact source
- * row was already removed, allowing a retry to reconstruct post-commit effects
- * after lost Activity completion. Reaction cleanup intentionally has no effect
- * plan: Block does not own Reaction Notification or ActivityPub effects.
+ * Applies the Profile Block relation and its DB-owned Follow cleanup in one
+ * Activity transaction. Follow effect plans are returned even when their exact
+ * source row was already removed, allowing a retry to reconstruct post-commit
+ * effects after lost Activity completion.
  */
 export const executeProfileBlockTransitionInTransaction = async (
   input: ProfileBlockTransitionInput,
@@ -178,8 +158,6 @@ export const executeProfileBlockTransitionInTransaction = async (
     effectPlan.push(await removeProfileFollowExactSourceWithEffect(source, input.origin, tx));
   }
 
-  await removeOwnerPostReactions(tx, input);
-
   return {
     ok: true,
     result: {
@@ -206,7 +184,7 @@ export const executeProfileBlockTransition = async (
   }
 };
 
-/** Owner-scoped relation deletion. No previous Follow/Reaction is restored. */
+/** Owner-scoped relation deletion; removed Follow Request/Relationship rows are not restored. */
 export const deleteProfileBlock = async (
   {
     ownerProfileId,
