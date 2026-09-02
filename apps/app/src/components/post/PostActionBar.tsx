@@ -87,6 +87,7 @@ export function PostActionBar({
         <PostActionControl
           accessibilityLabel={reply.accessibilityLabel}
           count={reply.count}
+          countFollowsInteraction
           controlRef={reply.controlRef}
           expanded={reply.expanded}
           hoverDisabled={execution.kind === 'resolution-required'}

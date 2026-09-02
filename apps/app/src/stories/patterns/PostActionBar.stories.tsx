@@ -979,13 +979,25 @@ export const ActionBarCatalogInteraction: Story = {
         getComputedStyle(within(button).getByTestId(`post-action-${testID}-glyph`)).zIndex,
       ).toBe('1');
       if (testID === 'repost') {
-        expect(button.querySelector('[dir="auto"]')).toHaveStyle({
+        const count = button.querySelector('[dir="auto"]');
+        expect(count).toHaveStyle({
           color: defaultColor,
         });
       }
       await userEvent.unhover(button);
       expect(icon).toHaveAttribute('stroke', defaultColor);
       expect(within(button).queryByTestId(`post-action-${testID}-hover`)).toBeNull();
+      if (testID === 'repost') {
+        const count = button.querySelector('[dir="auto"]');
+        fireEvent.mouseDown(button, { buttons: 1 });
+        await waitFor(() => expect(getComputedStyle(button).opacity).toBe('0.72'));
+        expect(icon).toHaveAttribute('stroke', actionColor);
+        expect(count).toHaveStyle({ color: defaultColor });
+        fireEvent.mouseUp(button, { buttons: 0 });
+        await waitFor(() => expect(getComputedStyle(button).opacity).toBe('1'));
+        expect(icon).toHaveAttribute('stroke', defaultColor);
+        expect(count).toHaveStyle({ color: defaultColor });
+      }
     }
 
     const defaultReaction = defaultToolbarCanvas.getByRole('button', { name: '반응' });

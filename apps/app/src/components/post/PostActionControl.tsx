@@ -22,6 +22,7 @@ type Props = {
   alignToEnd?: boolean;
   baseColor?: string;
   count?: number;
+  countFollowsInteraction?: boolean;
   controlRef?: Ref<View>;
   expanded?: boolean;
   fillActive?: boolean;
@@ -47,6 +48,7 @@ export function PostActionControl({
   alignToEnd = false,
   baseColor,
   count,
+  countFollowsInteraction = false,
   controlRef,
   expanded,
   fillActive = false,
@@ -110,15 +112,17 @@ export function PostActionControl({
         ]}
       >
         {({ pressed }) => {
-          const foregroundColor = blocked
+          const countColor = blocked
             ? theme.textSecondary
             : active
               ? (activeColor ?? theme.primary)
               : expanded
                 ? theme.primary
-                : (hovered && !hoverDisabled) || pressed
-                  ? (hoverForegroundColor ?? theme.primary)
-                  : (baseColor ?? theme.textSecondary);
+                : (baseColor ?? theme.textSecondary);
+          const foregroundColor =
+            !blocked && !active && !expanded && ((hovered && !hoverDisabled) || pressed)
+              ? (hoverForegroundColor ?? theme.primary)
+              : countColor;
 
           return (
             <>
@@ -164,7 +168,13 @@ export function PostActionControl({
                 </View>
               )}
               {formattedCount ? (
-                <Text numberOfLines={1} style={[styles.count, { color: foregroundColor }]}>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.count,
+                    { color: countFollowsInteraction ? foregroundColor : countColor },
+                  ]}
+                >
                   {formattedCount}
                 </Text>
               ) : null}
