@@ -221,18 +221,19 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   않는다. Web-only Feedback bottom sheet는 `01 Mobile Web exceptions`로 이동했다.
 - [`Composer state consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6771-10454)는
   같은 Candidate source의 Full Media·Poll·CW와 Keyboard Empty·Media·Poll·CW Light 변형 7개를 실제
-  `390×844` Target consumer로 연결한다. 8개 source variant 모두 최소 1개 consumer를 가지며, source 내부
-  Auto Layout을 그대로 상속한다. Candidate source를 Current로 승격하거나 production keyboard avoidance·
-  Poll·CW 동작 완료로 세지 않는다.
-- [`/compose` Native route Target](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6847-52049)은
-  Product migration 전 호환 진입 근거로만 남고, 상태 표본은 canonical Mobile Composer overlay lifecycle로 분류한다.
-  [`Loading 6919:12624`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6919-12624)은
+  `390×844` Target consumer로 연결한다. [`Mobile composer and overlay consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-56043)의
+  [`Full Empty Light 6732:50502`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6732-50502)·
+  [`Dark 6732:50505`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6732-50505)가 남은 Full Empty를 소비하므로,
+  route 호환 FRAME 없이 8개 source variant 모두 최소 1개 Target consumer를 가진다. source 내부 Auto Layout을
+  그대로 상속하며, Candidate source를 Current로 승격하거나 production keyboard avoidance·Poll·CW 동작 완료로 세지 않는다.
+- canonical Mobile Composer overlay lifecycle의 [`Loading 6919:12624`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6919-12624)은
   visibility row, 40px Avatar·작성자·본문 editor와 64px 도구 영역을 공용 `Skeleton`으로 표현한다.
   [`Initial error exit 6921:52548`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6921-52548)은
   Composer를 제거하고 이전 Home surface 위에 기존 Danger Toast를 표시한다. [`Profile required 6922:12635`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6922-12635)는
   transient 오류가 아니므로 안내 상태와 Home action을 유지한다. 작성 중 게시·업로드 실패는 이 initial-load
-  이탈 계약을 상속하지 않고 draft를 보존한다. 이는 Candidate source의 Current 승격이나 실제 navigation·retry·
-  accessibility runtime 완료를 뜻하지 않는다.
+  이탈 계약을 상속하지 않고 draft를 보존한다. 세 상태는 standalone `/compose` route screen이 아니라 Target overlay
+  evidence다. Current runtime·OpenSpec의 `/compose` 호환 route는 유지하되 Figma Target 물리 인벤토리에는 포함하지 않는다.
+  이는 Candidate source의 Current 승격이나 실제 navigation·retry·accessibility runtime 완료를 뜻하지 않는다.
 - [`Mobile route and state consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9407)는
   `/settings/profile` default·Profile required, Post detail deleted, Search 9상태와 Mobile Composer overlay 3상태,
   총 15개를
@@ -284,8 +285,10 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   본문·미디어만 뮤트 전용 disclosure로 기본 접힘 처리하며 별도 `StateView`나 새 화면 컴포넌트는 추가하지
   않는다. Dark·runtime lifecycle은 후속 범위다.
 - [`Mobile Screen Inventory`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6653-25532)의
-  `Main route/state contracts · 38`은 `/compose` Empty·Loading·Error + Retry·Profile required를 각각 분리해 기록하고,
-  `Assembled Target consumers + contract review · 15`는 Composer 7-state consumer, Post content warning의 Mobile
+  `Main route/state contracts · 34`는 canonical route/state 물리 인벤토리만 기록하고 `/compose` 호환 route는 제외한다.
+  Full Empty Light/Dark, Composer 7-state consumer와 overlay lifecycle 3상태는 각각 `14 Mobile composer and overlay consumers`,
+  `17 Composer state consumers`, `15 Mobile route and state consumers`의 Target evidence로 유지한다.
+  `Assembled Target consumers + contract review · 15`는 Composer state consumer, Post content warning의 Mobile
   List/detail 4-state consumer와 moderation direct consumer를 기록한다. moderation 행은
   `blocking 7580:14180`·`blockedBy 6774:12067`·`muted 7541:14061`을 함께 참조하고, `Remaining Mobile contract review`는
   confirmation, retained-list pagination loading과 Native/direct `/feedback`의 Product/runtime 소유권만 남긴다.
@@ -349,9 +352,10 @@ Native/direct `/feedback` page는 누락 화면이 아니라 호환 runtime rout
 별도 Product 계약에서 제거 여부와 Native presentation을 결정한다. Inventory의 `Remaining Mobile contract review`
 행은 이 계약·runtime 후속을 Target screen coverage와 분리한다.
 
-runtime route tree와 main 38개를 family 단위로 대조하면 기존 주요 route의 광범위한 누락은 없다. `/compose`는
-현재 route의 Empty와 RouteBoundary Loading·Error, selected-profile guard를 standalone Target FRAME으로 분리하고,
-`/feedback`의 일반 진입 Target은 overlay로 유지하고 현재 Web direct URL·Native page는 별도 Product migration으로 분리한다.
+runtime route tree와 main 34개를 family 단위로 대조하면 기존 주요 route의 광범위한 누락은 없다. Current `/compose`는
+runtime·OpenSpec의 호환 route로 유지하지만 standalone Target FRAME으로 만들거나 main 물리 인벤토리에 세지 않는다.
+Figma Target은 Full·Compact·Mobile Composer overlay와 그 lifecycle evidence만 유지한다. `/feedback`의 일반 진입 Target은
+overlay로 유지하고 현재 Web direct URL·Native page는 별도 Product migration으로 분리한다.
 standalone default visibility와 Compact detail inline Reply는 Target migration,
 Loading·Empty·Error·Deleted·Pinned는 기존 route의 state coverage다. route 파일 수와 Figma FRAME 수를 같게
 맞추지 않는다.
@@ -492,9 +496,9 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
   `Show submit=false`를 유지한다. Poll·CW 표본은 배치와 reflow evidence이며 실제 작성 기능·keyboard avoidance·
   safe area·focus·제출 lifecycle 완료를 뜻하지 않는다.
 - `04 Screens - Mobile`의 [`Composer state consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6771-10454)는
-  Full Media·Poll·CW와 Keyboard Empty·Media·Poll·CW 7개를 연결한다. 기존 `/compose` Full Empty를 합치면
-  8개 variant가 모두 실제 consumer를 가지지만, Keyboard는 illustrative geometry라 Native IME·safe-area reflow는
-  별도 runtime QA가 필요하다.
+  Full Media·Poll·CW와 Keyboard Empty·Media·Poll·CW 7개를 연결한다. `14 Mobile composer and overlay consumers`의
+  Full Empty Light/Dark까지 합치면 route 호환 FRAME 없이 8개 variant가 모두 실제 Target consumer를 가진다.
+  Keyboard는 illustrative geometry라 Native IME·safe-area reflow는 별도 runtime QA가 필요하다.
 - [`Composer Dark coverage`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5884-14199)는
   Full Web Composer overlay, Full Web thread rail Reply, Compact Web ReplyComposer modal과 전역 Mobile Composer의
   [`Reply Parent upward-scroll reveal Dark representative 5884:14891`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5884-14891)를
