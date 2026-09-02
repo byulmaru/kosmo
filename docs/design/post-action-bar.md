@@ -36,9 +36,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Mobile 390 Text·Media의 content column은 Avatar·gap을 제외한 `298px`이며 Reaction Summary와 Action Bar slot이
   이 폭을 함께 채운다. Reaction Summary에 별도 314px 고정 폭을 두지 않으므로 왼쪽 치우침이나 우측 clipping 없이
   같은 column edge에 정렬되고, 표시 여부가 바뀌면 세로 Auto Layout이 하단 border를 자연스럽게 이동한다.
-- 이 값은 현재 Figma target이다. production `PostListItem`은 이 문서 변경에서 수정하지 않으며 카드 상단
-  8px, 좌우 `spacing.sm` 8px과 목록 전용 Action Bar slot 상단 0·하단 4px을 유지한다. Figma target의 production 적용은 관련
-  Product 이슈와 OpenSpec spec·task를 연결한 뒤 구현과 runtime 검증을 함께 진행한다.
+- Web production `PostListItem`은 `Size=Center`와 같은 카드 상단 12px·좌우 `spacing.sm` 8px·하단 4px,
+  목록 전용 Action Bar slot 상단 4px·하단 0을 사용한다. Mobile의 좌우 16px과 iOS 44pt·Android 48dp
+  touch-target wrapper는 현재 Figma target이며, Native production 적용은 관련 Product 이슈와 OpenSpec
+  spec·task를 연결한 뒤 구현과 runtime 검증을 함께 진행한다.
 
 ## Action semantic colors
 
