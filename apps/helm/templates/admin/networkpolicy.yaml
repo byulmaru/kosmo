@@ -29,5 +29,5 @@ spec:
 {{ toYaml .Values.admin.tailscale.proxyPodLabels | indent 14 }}
       ports:
         - protocol: TCP
-          port: {{ .Values.admin.health.port }}
+          port: 8080
 {{- end }}

@@ -118,6 +118,6 @@
 
 ## Superseded Decisions
 
-- 같은 Pod의 Tailscale Serve sidecar, `AcceptAppCaps`, localhost shell listener, 별도 probe listener, RFC 2047
-  capability decoder와 persistent node-state Secret을 사용한다는 초안 결정은 App Capability를 사용하지 않는
-  것으로 확정하면서 구현 전에 폐기했다.
+- 같은 Pod의 Tailscale Serve sidecar, `AcceptAppCaps`, localhost shell listener, 별도 probe listener와 persistent
+  node-state Secret을 사용한다는 초안 결정은 App Capability를 사용하지 않는 것으로 확정하면서 구현 전에
+  폐기했다.

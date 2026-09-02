@@ -11,8 +11,8 @@
 
 <main>
   <h1>Kosmo Admin Console</h1>
-  <p data-viewer>{data.viewer.label}</p>
+  <p>{data.viewer.label}</p>
   {#if data.viewer.login && data.viewer.login !== data.viewer.label}
-    <p data-login>{data.viewer.login}</p>
+    <p>{data.viewer.login}</p>
   {/if}
 </main>

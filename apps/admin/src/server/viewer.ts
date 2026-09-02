@@ -1,6 +1,6 @@
 import { normalizeIdentityHeader } from './identity';
 
-export const ANONYMOUS_VIEWER = '식별 정보 없는 Admin Console Viewer';
+const ANONYMOUS_VIEWER = '식별 정보 없는 Admin Console Viewer';
 
 export interface Viewer {
   label: string;

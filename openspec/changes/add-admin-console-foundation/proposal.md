@@ -14,7 +14,6 @@ Kosmo에는 공개 Web/API와 분리되고 Tailscale 접근 제어로만 진입�
 - public Gateway/HTTPRoute, Funnel, application LoadBalancer는 추가하지 않는다.
 - 선택적 Tailscale login과 display name은 표시 metadata로만 사용하고 애플리케이션 인가에는 사용하지 않는다.
 - 현재 PR에서는 shell만 제공하며, SvelteKit server loader를 통한 read query 호출과 REST/GraphQL endpoint는 후속 조회 PR에서 다룬다.
-- `apps/app`과 UI 컴포넌트·theme를 공유하지 않는다.
 - Admin-specific logging, audit, security event와 identity snapshot은 추가하지 않는다.
 
 ## Authority / Provenance

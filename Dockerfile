@@ -70,8 +70,6 @@ RUN find apps/app/dist -type f \( \
       -o -name '*.mjs' -o -name '*.svg' -o -name '*.ttf' -o -name '*.wasm' \
     \) -exec gzip -9 -n -k {} +
 
-FROM app-build AS admin-build
-
 RUN pnpm --filter @kosmo/admin build
 
 FROM workspace AS runtime-files
@@ -89,7 +87,7 @@ RUN groupadd --system --gid 10001 app \
   && chown app:app /app
 
 RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
-  pnpm install --filter @kosmo/admin... --filter @kosmo/api... --filter @kosmo/web... --filter @kosmo/worker... --filter @kosmo/fedify-consumer... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
+  pnpm install --filter @kosmo/admin --filter @kosmo/api... --filter @kosmo/web... --filter @kosmo/worker... --filter @kosmo/fedify-consumer... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
 
 COPY --chown=app:app tsconfig.json ./
 COPY --chown=app:app apps/api ./apps/api
@@ -99,7 +97,7 @@ COPY --chown=app:app drizzle ./drizzle
 COPY --chown=app:app packages/core ./packages/core
 COPY --chown=app:app packages/fedify ./packages/fedify
 COPY --chown=app:app apps/web/src/server ./apps/web/src/server
-COPY --chown=app:app --from=admin-build /app/apps/admin/build ./apps/admin/build
+COPY --chown=app:app --from=app-build /app/apps/admin/build ./apps/admin/build
 COPY --chown=app:app --from=app-build /app/apps/app/dist ./apps/app/dist
 COPY --chown=app:app docker-entrypoint.sh ./docker-entrypoint.sh
 

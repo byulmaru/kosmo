@@ -40,10 +40,6 @@ data query 없이 현재 Admin Console Viewer의 선택적 표시 metadata만 �
 shell에 전달한다. 이 server loader 경계는 후속 read projection에서 repository read query를 직접 호출할 수 있는
 자리지만, 이번 PR에서는 DB query를 호출하지 않고 REST/GraphQL endpoint도 만들지 않는다.
 
-Admin은 Web-only 독립 앱으로 유지하며 `apps/app`과 UI 컴포넌트·theme를 공유하지 않는다. SvelteKit/Vite의
-production build output과 adapter-node 실행 산출물은 기존 application image와 `HOST=0.0.0.0`, `PORT=8080`
-runtime 경계를 따른다.
-
 선택적 identity header가 제공되면 login과 display name만 정규화해 표시한다. identity 누락이나 정규화 실패는
 `식별 정보 없는 Admin Console Viewer`로 처리하며 admission 결과를 바꾸지 않는다. profile picture header나
 identity 값을 Kosmo Account에 매핑하지 않는다.

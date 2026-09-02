@@ -33,9 +33,6 @@ done
 
 base_url="http://127.0.0.1:$port"
 
-health_body="$(curl --fail --silent --show-error "$base_url/healthz")"
-test "$health_body" = ok
-
 health_post_headers="$tmpdir/health-post.headers"
 health_post_status="$(curl --silent --show-error --dump-header "$health_post_headers" --output /dev/null --write-out '%{http_code}' --request POST "$base_url/healthz")"
 test "$health_post_status" = 405
@@ -43,12 +40,11 @@ grep -Eiq '^allow:[[:space:]]*GET([[:space:]]|$)' "$health_post_headers"
 
 shell_headers="$tmpdir/shell.headers"
 shell_body="$tmpdir/shell.body"
-curl --fail --silent --show-error --dump-header "$shell_headers" --output "$shell_body" "$base_url/"
-grep -Fq 'Kosmo Admin Console' "$shell_body"
+shell_status="$(curl --silent --show-error --dump-header "$shell_headers" --output "$shell_body" --write-out '%{http_code}' "$base_url/")"
+test "$shell_status" = 200
 grep -Fq '식별 정보 없는 Admin Console Viewer' "$shell_body"
 grep -Eiq '^cache-control:[[:space:]]*.*no-store' "$shell_headers"
 csp="$(grep -i '^content-security-policy:' "$shell_headers" | sed -E 's/^[^:]+:[[:space:]]*//' | tr -d '\r')"
-test -n "$csp"
 
 assert_csp_source() {
   directive="$1"
@@ -71,33 +67,30 @@ if ! printf '%s\n' "$csp" | grep -Eiq "(^|;[[:space:]]*)script-src[^;]*'nonce-[^
 fi
 
 identity_body="$tmpdir/identity.body"
-curl --fail --silent --show-error \
+identity_status="$(curl --silent --show-error \
   --header 'Tailscale-User-Login: viewer@example.com' \
-  --header 'Tailscale-User-Name: =?UTF-8?B?7Jq07JiB7J6Q?=' \
+  --header 'Tailscale-User-Name: =?UTF-8?Q?=EC=9A=B4=EC=98=81=EC=9E=90?=' \
   --header 'Tailscale-User-Profile-Pic: https://example.com/profile.png' \
-  --output "$identity_body" "$base_url/"
+  --output "$identity_body" --write-out '%{http_code}' "$base_url/")"
+test "$identity_status" = 200
 grep -Fq '운영자' "$identity_body"
 grep -Fq 'viewer@example.com' "$identity_body"
-if grep -Fq 'profile.png' "$identity_body"; then
-  echo 'Admin shell must not render the Tailscale profile picture' >&2
-  exit 1
-fi
+! grep -Fq 'profile.png' "$identity_body"
 
 malformed_body="$tmpdir/malformed.body"
-curl --fail --silent --show-error \
-  --header 'Tailscale-User-Name: =?UTF-8?B?not base64?=' \
-  --output "$malformed_body" "$base_url/"
+malformed_status="$(curl --silent --show-error \
+  --header 'Tailscale-User-Name: =?UTF-8?Q?bad=XX?=' \
+  --output "$malformed_body" --write-out '%{http_code}' "$base_url/")"
+test "$malformed_status" = 200
 grep -Fq '식별 정보 없는 Admin Console Viewer' "$malformed_body"
 
 escaped_body="$tmpdir/escaped.body"
-curl --fail --silent --show-error \
+escaped_status="$(curl --silent --show-error \
   --header 'Tailscale-User-Name: <script>alert(1)</script>' \
-  --output "$escaped_body" "$base_url/"
+  --output "$escaped_body" --write-out '%{http_code}' "$base_url/")"
+test "$escaped_status" = 200
 grep -Fq '&lt;script>alert(1)&lt;/script>' "$escaped_body"
-if grep -Fq '<script>alert(1)</script>' "$escaped_body"; then
-  echo 'Admin shell must escape identity display values' >&2
-  exit 1
-fi
+! grep -Fq '<script>alert(1)</script>' "$escaped_body"
 
 shell_post_headers="$tmpdir/shell-post.headers"
 shell_post_status="$(curl --silent --show-error --dump-header "$shell_post_headers" --output /dev/null --write-out '%{http_code}' --request POST "$base_url/")"

@@ -1,15 +1,14 @@
 import { describe, expect, test } from 'vitest';
 import { handle } from './hooks.server';
 
-describe('Admin Console response policy', () => {
-  test('stores viewer metadata locally and disables caching for page responses', async () => {
-    const locals: App.Locals = { viewer: { label: 'unset' } };
+describe('Admin Console request policy', () => {
+  test('stores normalized viewer metadata locally and disables response caching', async () => {
+    const locals = {} as App.Locals;
     const response = await handle({
       event: {
         request: new Request('http://admin.test/', {
           headers: { 'Tailscale-User-Login': 'viewer@example.com' },
         }),
-        url: new URL('http://admin.test/'),
         locals,
       } as Parameters<typeof handle>[0]['event'],
       resolve: async () => new Response('shell'),

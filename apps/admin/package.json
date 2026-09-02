@@ -4,12 +4,10 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "svelte-kit sync && vite build",
+    "build": "vite build",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "dev": "vite dev --host 0.0.0.0 --port 8080",
-    "start": "node build",
-    "test": "pnpm check && pnpm test:unit",
-    "test:unit": "vitest run"
+    "test": "pnpm check && vitest run"
   },
   "dependencies": {
     "@sveltejs/kit": "^2.70.3",

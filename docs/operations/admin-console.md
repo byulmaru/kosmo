@@ -72,4 +72,4 @@ Kubernetes node 자체, kubelet, node 권한을 가진 운영 주체와 node로 
 
 application revision을 이전 검증 revision으로 되돌리거나 `admin.enabled=false`로 sync해 Admin Deployment,
 Service, Ingress와 NetworkPolicy를 함께 제거한다. tailnet 접근 정책 변경은 cluster rollback과 분리해 해당 운영
-절차로 되돌린다. merge, image build, Argo CD sync와 live 접근은 각각 별도 완료 증거로 취급한다.
+절차로 되돌린다.

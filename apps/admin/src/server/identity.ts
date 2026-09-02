@@ -1,4 +1,5 @@
-const encodedWordPattern = /=\?([^?]+)\?([bq])\?([^?]*)\?=/giu;
+// ponytail: Tailscale uses one UTF-8 B/Q encoded word; add multi-word decoding if that wire contract changes.
+const encodedWordPattern = /^=\?([^?]+)\?([bq])\?([^?]*)\?=$/iu;
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 const utf8Encoder = new TextEncoder();
 
@@ -42,39 +43,12 @@ function decodeQuotedPrintable(value: string): Uint8Array | undefined {
   return Uint8Array.from(bytes);
 }
 
-function decodeEncodedWord(charset: string, encoding: string, value: string): string | undefined {
-  if (charset.toLowerCase() !== 'utf-8') {
-    return undefined;
-  }
-
-  const bytes = encoding.toLowerCase() === 'b' ? decodeBase64(value) : decodeQuotedPrintable(value);
-  if (!bytes) {
-    return undefined;
-  }
-
-  try {
-    return utf8Decoder.decode(bytes);
-  } catch {
-    return undefined;
-  }
-}
-
 function isDisplayText(value: string): boolean {
-  if (!value) {
-    return false;
-  }
-  for (const character of value) {
-    const codePoint = character.codePointAt(0);
-    if (codePoint === undefined || codePoint <= 0x1f || codePoint === 0x7f) {
-      return false;
-    }
-  }
-
-  try {
-    return utf8Decoder.decode(utf8Encoder.encode(value)) === value;
-  } catch {
-    return false;
-  }
+  return (
+    Boolean(value) &&
+    !/\p{Cc}/u.test(value) &&
+    utf8Decoder.decode(utf8Encoder.encode(value)) === value
+  );
 }
 
 export function normalizeIdentityHeader(value: string | undefined): string | undefined {
@@ -83,42 +57,28 @@ export function normalizeIdentityHeader(value: string | undefined): string | und
     return undefined;
   }
 
-  if (!input.includes('=?')) {
-    return isDisplayText(input) ? input : undefined;
+  const match = encodedWordPattern.exec(input);
+  if (!match) {
+    return input.includes('=?') || !isDisplayText(input) ? undefined : input;
   }
 
-  let cursor = 0;
-  let decoded = '';
-  let matched = false;
-
-  for (const match of input.matchAll(encodedWordPattern)) {
-    const [encodedWord, charset, encoding, contents] = match;
-    const index = match.index;
-    if (index === undefined) {
-      return undefined;
-    }
-
-    const prefix = input.slice(cursor, index);
-    if (matched && /^\s+$/u.test(prefix)) {
-      decoded += '';
-    } else {
-      decoded += prefix;
-    }
-
-    const word = decodeEncodedWord(charset, encoding, contents);
-    if (word === undefined) {
-      return undefined;
-    }
-    decoded += word;
-    cursor = index + encodedWord.length;
-    matched = true;
-  }
-
-  decoded += input.slice(cursor);
-  const normalized = decoded.trim();
-  if (!matched || normalized.includes('=?') || !isDisplayText(normalized)) {
+  const [, charset, encoding, contents] = match;
+  if (charset?.toLowerCase() !== 'utf-8') {
     return undefined;
   }
 
-  return normalized;
+  const bytes =
+    encoding?.toLowerCase() === 'b'
+      ? decodeBase64(contents ?? '')
+      : decodeQuotedPrintable(contents ?? '');
+  if (!bytes) {
+    return undefined;
+  }
+
+  try {
+    const decoded = utf8Decoder.decode(bytes).trim();
+    return isDisplayText(decoded) ? decoded : undefined;
+  } catch {
+    return undefined;
+  }
 }

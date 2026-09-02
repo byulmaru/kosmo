@@ -7,8 +7,6 @@ admin:
   replicas:
     dev: 1
     prod: 2
-  health:
-    port: 8080
   resources:
     requests:
       cpu: 50m
