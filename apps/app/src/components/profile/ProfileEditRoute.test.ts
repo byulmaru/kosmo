@@ -92,9 +92,41 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+const normalizedImageUri = 'file:///cache/profile-normalized.webp';
+
 mockModule('expo-image-picker', {
   launchImageLibraryAsync: async () => pickerResult,
 });
+const mockImageManipulator = () =>
+  mockModule('expo-image-manipulator', {
+    ImageManipulator: {
+      manipulate: () => {
+        const image = {
+          height: 100,
+          release: () => undefined,
+          saveAsync: async () => ({
+            height: 100,
+            uri: normalizedImageUri,
+            width: 100,
+          }),
+          uri: 'file:///cache/profile-rendered.png',
+          width: 100,
+        };
+        const context: {
+          release: () => void;
+          renderAsync: () => Promise<typeof image>;
+          resize: () => typeof context;
+        } = {
+          release: () => undefined,
+          renderAsync: async () => image,
+          resize: () => context,
+        };
+        return context;
+      },
+    },
+    SaveFormat: { WEBP: 'webp' },
+  });
+mockImageManipulator();
 mockModule('expo-router', {
   useNavigation: () => ({
     dispatch: (action: NavigationAction) => navigationDispatches.push(action),
@@ -184,6 +216,7 @@ mockModule(new URL('../ui/ToastProvider.tsx', import.meta.url), {
 let ProfileEditRoute: typeof ProfileEditRouteExport;
 
 before(async () => {
+  await import('expo-image-manipulator');
   ({ ProfileEditRoute } = await import('./ProfileEditRoute'));
 });
 
@@ -213,6 +246,7 @@ afterEach(async () => {
   noOpReplace = false;
   throwOnReplace = false;
   mock.restoreAll();
+  mockImageManipulator();
 });
 
 const editableQueryData = () => ({
@@ -283,6 +317,17 @@ const flush = async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 };
+
+const mockSuccessfulUploadFetch = () =>
+  mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === normalizedImageUri) {
+      return new Response(new Blob(['normalized-webp'], { type: 'image/webp' }), { status: 200 });
+    }
+    assert.equal(init?.method, 'PUT');
+    assert.deepEqual(init?.headers, { 'content-type': 'image/webp' });
+    assert.equal((init?.body as Blob).type, 'image/webp');
+    return new Response(null, { status: 204 });
+  });
 
 const completeDeferredReplace = async () => {
   const completeReplace = pendingReplaceCompletion;
@@ -374,11 +419,7 @@ describe('ProfileEditRoute', () => {
       }
       config.onCompleted({ completeMediaUpload: { media: { state: 'READY' } } } as never);
     });
-    const fetchMock = mock.method(
-      globalThis,
-      'fetch',
-      async () => new Response(null, { status: 204 }),
-    );
+    const fetchMock = mockSuccessfulUploadFetch();
     await renderRoute();
 
     pickerResult = { canceled: false, assets: [asset('blob:https://kosmo.example/header')] };
@@ -395,14 +436,14 @@ describe('ProfileEditRoute', () => {
       stage: 'complete',
     });
     assert.equal(issued, 2);
-    assert.equal(fetchMock.mock.callCount(), 2);
+    assert.equal(fetchMock.mock.callCount(), 4);
 
     failAvatarCompletion = false;
     await act(async () => requireScreenProps().onAvatarRetry());
     await flush();
     assert.equal(requireScreenProps().value.avatar.uploadState, 'ready');
     assert.equal(issued, 3);
-    assert.equal(fetchMock.mock.callCount(), 3);
+    assert.equal(fetchMock.mock.callCount(), 6);
 
     const changed = {
       ...requireScreenProps().value,
@@ -456,11 +497,11 @@ describe('ProfileEditRoute', () => {
     assert.equal(requireScreenProps().submitState.kind, 'idle');
     assert.deepEqual(toastMessages, ['프로필을 저장하지 못했어요.', '프로필을 저장하지 못했어요.']);
     assert.equal(issued, 3);
-    assert.equal(fetchMock.mock.callCount(), 3);
+    assert.equal(fetchMock.mock.callCount(), 6);
 
     await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
     assert.equal(issued, 3);
-    assert.equal(fetchMock.mock.callCount(), 3);
+    assert.equal(fetchMock.mock.callCount(), 6);
     assert.deepEqual(routerReplacements, ['/@updated']);
     assert.deepEqual(requireScreenProps().value.tags, ['Fediverse', '새태그']);
     assert.deepEqual(requireScreenProps().initialValue.tags, ['Fediverse', '새태그']);
@@ -528,13 +569,20 @@ describe('ProfileEditRoute', () => {
     const fetchMock = mock.method(
       globalThis,
       'fetch',
-      async () =>
-        new Response(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) === normalizedImageUri) {
+          return new Response(new Blob(['normalized-webp'], { type: 'image/webp' }), {
+            status: 200,
+          });
+        }
+        assert.equal(init?.method, 'PUT');
+        return new Response(
           JSON.stringify({
             error: { code: 'size_limit_exceeded', message: 'storage secret' },
           }),
           { status: 413, headers: { 'content-type': 'application/json' } },
-        ),
+        );
+      },
     );
     await renderRoute();
 
@@ -543,7 +591,7 @@ describe('ProfileEditRoute', () => {
     await flush();
 
     assert.equal(issued, 1);
-    assert.equal(fetchMock.mock.callCount(), 1);
+    assert.equal(fetchMock.mock.callCount(), 2);
     assert.equal(completed, 0);
     assert.deepEqual(requireScreenProps().value.avatar.failure, {
       reason: 'file-too-large',
@@ -752,11 +800,7 @@ describe('ProfileEditRoute', () => {
     mutationHandlers.set('ProfileEditRouteCompleteMediaUploadMutation', (config) =>
       config.onCompleted({ completeMediaUpload: { media: { state: 'READY' } } } as never),
     );
-    const fetchMock = mock.method(
-      globalThis,
-      'fetch',
-      async () => new Response(null, { status: 204 }),
-    );
+    const fetchMock = mockSuccessfulUploadFetch();
     await renderRoute();
 
     pickerResult = { canceled: false, assets: [asset('blob:https://kosmo.example/header')] };
@@ -823,6 +867,6 @@ describe('ProfileEditRoute', () => {
       ],
     );
     assert.equal(issued, 2);
-    assert.equal(fetchMock.mock.callCount(), 2);
+    assert.equal(fetchMock.mock.callCount(), 4);
   });
 });

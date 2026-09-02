@@ -1,10 +1,4 @@
-# post-composer-media-upload Specification
-
-## Purpose
-
-유니버설 Post Composer에서 최대 4개 이미지를 선택·업로드하고 preview, Alt Text와 Sensitive Media 상태를 관리해 `createPost`에 제출하는 사용자 흐름을 정의한다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Composer Local Media 직접 업로드
 
@@ -34,29 +28,3 @@
 - **THEN** 앱은 그 항목을 현재 Post 작성 입력에서 제거한다
 - **AND** 늦게 완료된 비동기 결과가 제거한 항목을 Composer에 다시 추가하지 않는다
 - **AND** 앱은 upload 취소, Media 삭제 또는 외부 object 삭제를 요청하지 않는다
-
-### Requirement: Composer 이미지 선택과 항목 상태
-
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/design/accessibility.md`, `docs/design/media-upload-errors.md`, PROD-461, PROD-553, PROD-657 — 유니버설 앱은 Web/iOS/Android 갤러리 이미지 선택을 제공하고 현재 Composer에서 최대 4개의 항목을 선택 순서대로 관리해야 한다(MUST). 카메라 촬영을 추가하면 안 된다(MUST NOT).
-
-#### Scenario: 남은 슬롯만 선택
-
-- **WHEN** Composer에 0개에서 3개의 이미지가 있고 사용자가 갤러리를 연다
-- **THEN** 앱은 남은 슬롯을 넘지 않게 선택 결과를 제한한다
-- **AND** 선택 결과 순서대로 Composer 항목을 추가한다
-
-#### Scenario: 항목별 상태 표시
-
-- **WHEN** 선택된 이미지가 upload 중, Ready 또는 실패 상태다
-- **THEN** 앱은 local URI preview와 해당 상태를 표시한다
-- **AND** 실패 항목에는 공통 원인별 오류 문구, 재시도와 제거 action을 제공한다
-- **AND** Ready 항목에는 nullable Alt Text 입력과 제거 action을 제공한다
-- **AND** 상태, action과 오류는 색상만이 아니라 accessible name/state로도 구분된다
-- **AND** 새 실패를 해당 항목의 alert로 전달하되 단순 rerender마다 중복 announcement하지 않는다
-
-#### Scenario: 플랫폼 입력 접근성
-
-- **WHEN** 사용자가 Web keyboard, pointer 또는 Android/iOS touch와 보조 기술로 Composer를 조작한다
-- **THEN** 이미지 추가·재시도·제거와 Sensitive Media control을 같은 제품 결과로 실행할 수 있다
-- **AND** 재시도 accessible name은 선택 순서로 실패 대상을 구분한다
-- **AND** Web, iOS와 Android interactive target은 canonical platform 기준을 따른다

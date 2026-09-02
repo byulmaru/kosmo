@@ -1951,6 +1951,39 @@ const composerMediaAsset = {
   width: 96,
 };
 
+function createComposerMediaFile(fileName: string): File {
+  const encodedSvg = composerMediaAsset.uri.split(',', 2)[1];
+  if (!encodedSvg) {
+    throw new Error('Missing composer media fixture data.');
+  }
+
+  return new File([decodeURIComponent(encodedSvg)], fileName, { type: 'image/svg+xml' });
+}
+
+function createComposerPickerAsset(fileName: string) {
+  const file = createComposerMediaFile(fileName);
+  return {
+    ...composerMediaAsset,
+    file,
+    mimeType: file.type,
+    uri: URL.createObjectURL(file),
+  };
+}
+
+function isImageUploadPut(input: RequestInfo | URL, init?: RequestInit): boolean {
+  return init?.method === 'PUT' && String(input).startsWith('https://upload.example/');
+}
+
+function installImageUploadFetch(
+  handler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+) {
+  const originalFetch = globalThis.fetch;
+  const upload = fn(handler);
+  globalThis.fetch = async (input, init) =>
+    isImageUploadPut(input, init) ? upload(input, init) : originalFetch(input, init);
+  return { originalFetch, upload };
+}
+
 function ComposerMediaStatesStory() {
   const [media, setMedia] = useState<ComposerMediaItem[]>([
     { altText: '', asset: composerMediaAsset, key: 'uploading', state: 'uploading' },
@@ -5690,9 +5723,9 @@ export const ComposerMediaUploadInteraction: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const originalFetch = globalThis.fetch;
-    const upload = fn(async () => new Response(null, { status: 200 }));
-    globalThis.fetch = upload;
+    const { originalFetch } = installImageUploadFetch(
+      async () => new Response(null, { status: 200 }),
+    );
 
     let finishSelection!: (result: {
       assets: (typeof composerMediaAsset)[];
@@ -5713,20 +5746,14 @@ export const ComposerMediaUploadInteraction: Story = {
       expect(getImagePickerLaunchCount()).toBe(1);
 
       finishSelection({
-        assets: [1, 2, 3, 4, 5].map((index) => ({
-          ...composerMediaAsset,
-          file: new File([`image-${index}`], `image-${index}.png`, { type: 'image/png' }),
-          mimeType: 'image/png',
-          uri: `blob:https://kosmo.example/${index}`,
-        })),
+        assets: [1, 2, 3, 4, 5].map((index) => createComposerPickerAsset(`image-${index}.svg`)),
         canceled: false,
       });
 
       await waitFor(() => {
-        expect(canvas.getByLabelText('첨부 이미지 4, 업로드 완료')).toBeVisible();
+        expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(4);
       });
       expect(canvas.getByRole('button', { name: '이미지 추가, 0개 더 선택 가능' })).toBeDisabled();
-      expect(upload).toHaveBeenCalledTimes(4);
 
       await userEvent.type(
         canvas.getByRole('textbox', { name: '첨부 이미지 1 대체 텍스트' }),
@@ -5775,13 +5802,11 @@ export const ComposerClipboardPasteInteraction: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
-    const originalFetch = globalThis.fetch;
-    const upload = fn(async () => new Response(null, { status: 200 }));
-    globalThis.fetch = upload;
-    const clipboardImageOne = new File(['one'], 'one.png', { type: 'image/png' });
-    const clipboardImageTwo = new File(['two'], 'two.webp', { type: 'image/webp' });
-    const pickerFileOne = new File(['picker-one'], 'picker-one.png', { type: 'image/png' });
-    const pickerFileTwo = new File(['picker-two'], 'picker-two.webp', { type: 'image/webp' });
+    const { originalFetch, upload } = installImageUploadFetch(
+      async () => new Response(null, { status: 200 }),
+    );
+    const clipboardImageOne = createComposerMediaFile('one.svg');
+    const clipboardImageTwo = createComposerMediaFile('two.svg');
 
     try {
       await userEvent.type(body, '기존 본문');
@@ -5818,18 +5843,8 @@ export const ComposerClipboardPasteInteraction: Story = {
 
       setNextImagePickerResult({
         assets: [
-          {
-            ...composerMediaAsset,
-            file: pickerFileOne,
-            mimeType: 'image/png',
-            uri: 'blob:https://kosmo.example/picker-first',
-          },
-          {
-            ...composerMediaAsset,
-            file: pickerFileTwo,
-            mimeType: 'image/webp',
-            uri: 'blob:https://kosmo.example/picker-second',
-          },
+          createComposerPickerAsset('picker-first.svg'),
+          createComposerPickerAsset('picker-second.svg'),
         ],
         canceled: false,
       });
@@ -5844,7 +5859,7 @@ export const ComposerClipboardPasteInteraction: Story = {
       expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(4);
 
       const ignoredOverflowData = new DataTransfer();
-      ignoredOverflowData.items.add(new File(['overflow'], 'overflow.png', { type: 'image/png' }));
+      ignoredOverflowData.items.add(createComposerMediaFile('overflow.svg'));
       const ignoredOverflowPaste = new ClipboardEvent('paste', {
         bubbles: true,
         cancelable: true,
@@ -5922,14 +5937,14 @@ export const ComposerClipboardFailureAndScopeInteraction: Story = {
     const canvas = within(canvasElement);
     const primary = within(canvas.getByTestId('primary-composer'));
     const secondary = within(canvas.getByTestId('secondary-composer'));
-    const originalFetch = globalThis.fetch;
-    const upload = fn(async () => new Response(null, { status: 200 }));
-    globalThis.fetch = upload;
+    const { originalFetch, upload } = installImageUploadFetch(
+      async () => new Response(null, { status: 200 }),
+    );
 
     try {
       const primaryPasteData = new DataTransfer();
-      primaryPasteData.items.add(new File(['failed-one'], 'failed-one.png', { type: 'image/png' }));
-      primaryPasteData.items.add(new File(['failed-two'], 'failed-two.png', { type: 'image/png' }));
+      primaryPasteData.items.add(createComposerMediaFile('failed-one.svg'));
+      primaryPasteData.items.add(createComposerMediaFile('failed-two.svg'));
       const primaryPaste = new ClipboardEvent('paste', {
         bubbles: true,
         cancelable: true,
@@ -5954,7 +5969,7 @@ export const ComposerClipboardFailureAndScopeInteraction: Story = {
       });
 
       const secondaryPasteData = new DataTransfer();
-      secondaryPasteData.items.add(new File(['secondary'], 'secondary.png', { type: 'image/png' }));
+      secondaryPasteData.items.add(createComposerMediaFile('secondary.svg'));
       const secondaryPaste = new ClipboardEvent('paste', {
         bubbles: true,
         cancelable: true,
@@ -5972,7 +5987,7 @@ export const ComposerClipboardFailureAndScopeInteraction: Story = {
       document.body.append(outsideEditor);
       try {
         const outsidePasteData = new DataTransfer();
-        outsidePasteData.items.add(new File(['outside'], 'outside.png', { type: 'image/png' }));
+        outsidePasteData.items.add(createComposerMediaFile('outside.svg'));
         outsideEditor.dispatchEvent(
           new ClipboardEvent('paste', {
             bubbles: true,
@@ -6013,9 +6028,9 @@ export const ComposerPickerResultAfterUnmount: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const originalFetch = globalThis.fetch;
-    const upload = fn(async () => new Response(null, { status: 200 }));
-    globalThis.fetch = upload;
+    const { originalFetch, upload } = installImageUploadFetch(
+      async () => new Response(null, { status: 200 }),
+    );
 
     let finishSelection!: (result: {
       assets: (typeof composerMediaAsset)[];
@@ -6383,18 +6398,11 @@ export const ComposerReplyProfileDefaultVisibilitySeed: Story = {
 export const ComposerReplyMediaMutationContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const originalFetch = globalThis.fetch;
-    const upload = fn(async () => new Response(null, { status: 200 }));
-    globalThis.fetch = upload;
+    const { originalFetch, upload } = installImageUploadFetch(
+      async () => new Response(null, { status: 200 }),
+    );
     setNextImagePickerResult({
-      assets: [
-        {
-          ...composerMediaAsset,
-          file: new File(['reply-image'], 'reply-image.png', { type: 'image/png' }),
-          mimeType: 'image/png',
-          uri: 'blob:https://kosmo.example/reply',
-        },
-      ],
+      assets: [createComposerPickerAsset('reply-image.svg')],
       canceled: false,
     });
 
@@ -6434,27 +6442,19 @@ export const ComposerReplyMediaMutationContract: Story = {
 export const ComposerReplyMediaFailureLifecycle: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const originalFetch = globalThis.fetch;
     let finishFirstUpload!: (response: Response) => void;
     let uploadCount = 0;
-    globalThis.fetch = fn(() => {
+    const { originalFetch } = installImageUploadFetch(async () => {
       uploadCount += 1;
       if (uploadCount === 1) {
         return new Promise<Response>((resolve) => {
           finishFirstUpload = resolve;
         });
       }
-      return Promise.resolve(new Response(null, { status: 200 }));
+      return new Response(null, { status: 200 });
     });
     setNextImagePickerResult({
-      assets: [
-        {
-          ...composerMediaAsset,
-          file: new File(['reply-image'], 'reply-image.png', { type: 'image/png' }),
-          mimeType: 'image/png',
-          uri: 'blob:https://kosmo.example/reply-failure',
-        },
-      ],
+      assets: [createComposerPickerAsset('reply-image-failure.svg')],
       canceled: false,
     });
 
@@ -6465,6 +6465,7 @@ export const ComposerReplyMediaFailureLifecycle: Story = {
       });
       expect(canvas.getByRole('button', { name: '답글 게시' })).toBeDisabled();
 
+      await waitFor(() => expect(typeof finishFirstUpload).toBe('function'));
       finishFirstUpload(new Response(null, { status: 500 }));
       await waitFor(() => {
         expect(canvas.getByLabelText('첨부 이미지 1, 업로드 실패')).toBeVisible();
@@ -6475,7 +6476,9 @@ export const ComposerReplyMediaFailureLifecycle: Story = {
       await waitFor(() => {
         expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
       });
-      expect(canvas.getByRole('button', { name: '답글 게시' })).toBeEnabled();
+      await waitFor(() => {
+        expect(canvas.getByRole('button', { name: '답글 게시' })).toBeEnabled();
+      });
 
       await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
       expect(canvas.getByRole('button', { name: '답글 게시' })).toBeDisabled();
@@ -6489,24 +6492,15 @@ export const ComposerReplyMediaFailureLifecycle: Story = {
 export const ComposerReplyMediaContextIsolation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const originalFetch = globalThis.fetch;
     let finishUpload!: (response: Response) => void;
-    const upload = fn(
+    const { originalFetch, upload } = installImageUploadFetch(
       () =>
         new Promise<Response>((resolve) => {
           finishUpload = resolve;
         }),
     );
-    globalThis.fetch = upload;
     setNextImagePickerResult({
-      assets: [
-        {
-          ...composerMediaAsset,
-          file: new File(['reply-image'], 'reply-image.png', { type: 'image/png' }),
-          mimeType: 'image/png',
-          uri: 'blob:https://kosmo.example/reply-context',
-        },
-      ],
+      assets: [createComposerPickerAsset('reply-image-context.svg')],
       canceled: false,
     });
 
@@ -6585,24 +6579,15 @@ export const ComposerReplyEnvironmentIsolation: Story = {
 export const ComposerReplyEnvironmentMediaIsolation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const originalFetch = globalThis.fetch;
     let finishUpload!: (response: Response) => void;
-    const upload = fn(
+    const { originalFetch } = installImageUploadFetch(
       () =>
         new Promise<Response>((resolve) => {
           finishUpload = resolve;
         }),
     );
-    globalThis.fetch = upload;
     setNextImagePickerResult({
-      assets: [
-        {
-          ...composerMediaAsset,
-          file: new File(['reply-image'], 'reply-image.png', { type: 'image/png' }),
-          mimeType: 'image/png',
-          uri: 'blob:https://kosmo.example/reply-environment',
-        },
-      ],
+      assets: [createComposerPickerAsset('reply-image-environment.svg')],
       canceled: false,
     });
 
@@ -6657,23 +6642,15 @@ export const ReplyModalMediaUploadDirtyClose: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const originalFetch = globalThis.fetch;
     let finishUpload!: (response: Response) => void;
-    globalThis.fetch = fn(
+    const { originalFetch } = installImageUploadFetch(
       () =>
         new Promise<Response>((resolve) => {
           finishUpload = resolve;
         }),
     );
     setNextImagePickerResult({
-      assets: [
-        {
-          ...composerMediaAsset,
-          file: new File(['reply-image'], 'reply-image.png', { type: 'image/png' }),
-          mimeType: 'image/png',
-          uri: 'blob:https://kosmo.example/reply-dirty-close',
-        },
-      ],
+      assets: [createComposerPickerAsset('reply-image-dirty-close.svg')],
       canceled: false,
     });
 

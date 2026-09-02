@@ -237,7 +237,7 @@ async function selectReplacement(page: Page, triggerName: string, fileName: stri
   await page.getByRole('menuitem', { name: '이미지 변경', exact: true }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles({
-    buffer: Buffer.from('PROD-613 isolated E2E image'),
+    buffer: Buffer.from('UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAAAfQ//73v/+BiOh/AAA=', 'base64'),
     mimeType: 'image/webp',
     name: fileName,
   });
