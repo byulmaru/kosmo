@@ -276,8 +276,10 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   같은 identity-free presentation을 사용한다. 실제 `ProfileBlock.Owner` projection, 해제 mutation과 완료
   피드백은 Product/runtime 범위다.
 - 같은 section의 Mobile muted direct Profile Target [`7541:14061`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7541-14061)은
-  기존 Android baseline Profile shell을 복제하고 `ProfileHero`의 `Muted=true`만 적용해 전체 Profile·Post·BottomTabBar를
-  유지한다. 별도 `StateView`나 새 컴포넌트는 추가하지 않으며 Dark·runtime lifecycle은 후속 범위다.
+  기존 Android baseline Profile shell을 복제하고 `ProfileHero.Muted=true`와 Post의 중첩
+  `PostContent.CW=MutedCollapsed`를 적용해 전체 Profile·Post·BottomTabBar, 작성자·시간·`PostActionBar`를 유지한다.
+  본문·미디어만 뮤트 전용 disclosure로 기본 접힘 처리하며 별도 `StateView`나 새 화면 컴포넌트는 추가하지
+  않는다. Dark·runtime lifecycle은 후속 범위다.
 - [`Mobile Screen Inventory`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6653-25532)의
   `Main route/state contracts · 38`은 `/compose` Empty·Loading·Error + Retry·Profile required를 각각 분리해 기록하고,
   `Assembled Target consumers + contract review · 15`는 Composer 7-state consumer, Post content warning의 Mobile
@@ -319,6 +321,22 @@ route shell 안의 current row를 `PostLayout`으로 조립해 Collapsed
 중첩 `PostContent`의 `CW`만 교체하며 세로 Auto Layout이 `PostActionBar`와 후속 row를 다시 배치한다. 기존 canonical
 화면과 Dark consumer는 변경하지 않았고, disclosure interaction·공유 reveal state·VoiceOver·TalkBack·실제 hit area는
 runtime 검증 범위다.
+
+2026-09-03에는 공용 [`PostContentWarning`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5001-14786)에
+`Reason=ContentWarning|Muted`를 추가했다. 기존 `Reason=ContentWarning`의 `EyeOff`, 입력 가능한 summary와
+Collapsed·Revealed 시각은 유지한다. 새 `Reason=Muted`는 canonical `VolumeOff`, 고정 문구
+`뮤트된 사용자의 게시물입니다`, 기존 content meta를 사용하고 Collapsed의 `내용 보기`, Revealed의
+`다시 가리기`를 제공한다. 대응 source는
+[`Muted Collapsed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7644-1544)와
+[`Muted Revealed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7644-1550)다.
+
+같은 변경에서 [`PostContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4476-11690)의
+기존 `Size=Center|Mobile` × `Kind=Text|Media|Quote` 조합에 `CW=MutedCollapsed|MutedRevealed` 12개를 추가했다.
+기존 `CW=None|Collapsed|Revealed`는 그대로 유지하며, Muted source도 같은 8px reveal 배치와 부모 Auto Layout
+재계산을 재사용한다. Mobile muted direct Profile Target `7541:14061`의 Post는
+[`Mobile Text MutedCollapsed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7648-1590)을
+사용해 작성자·시간·Action Bar를 유지하고 본문만 기본 접힘 처리한다. Figma는 실제 `내용 보기` 입력,
+게시물별 reveal state·focus·보조 기술 announcement 또는 뮤트 해제 runtime 완료 증거가 아니다.
 
 Search Popular·Media, Profile edit, Profile Replies·Media처럼 `Candidate`·`Product not implemented`로 이미
 inventory에 등록된 항목은 누락 화면으로 다시 세지 않는다. canonical route family의 광범위한 공백은 찾지

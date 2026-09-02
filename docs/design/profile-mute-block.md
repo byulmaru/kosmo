@@ -15,6 +15,11 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   `VolumeOff`, `이 사용자의 게시글은 뮤트되어 있습니다.`, link-colored text action `뮤트 해제`를 한
   상태·action 행으로 표시한다. 상단 Action SLOT에는 현재 관계 상태에 맞는 기존 `FollowButton`의 `팔로우`
   또는 `팔로우 해제` action을 그대로 표시하며, Mute 상태를 경고 banner나 safety panel로 확장하지 않는다.
+- 같은 Profile의 각 Post는 작성자·시간·`PostActionBar`를 유지하되 본문·미디어를 기본 접힘으로 표시한다.
+  `PostContent.CW=MutedCollapsed`는 기존 content warning disclosure의 배치와 펼침 동작을 재사용하고,
+  `VolumeOff`, `뮤트된 사용자의 게시물입니다`, content meta, `내용 보기`를 표시한다. 펼치면
+  `CW=MutedRevealed`와 `다시 가리기`를 사용한다. 이 문구는 작성자가 입력한 content warning summary가 아니라
+  Mute 관계에서 정해지는 고정 안내다.
 - Profile 데이터 로딩 중에는 기존 `ProfileHero` loading·skeleton variant를 유지하고 Mute 상태·action 행은
   loading이 끝난 뒤에만 표시한다.
 - 현재 Mute는 영구 적용만 제공한다. 기간 선택 control과 만료 상태는 표시하지 않는다.
@@ -71,15 +76,24 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 
 - Mobile Light Target [`7541:14061`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7541-14061)은
   기존 Android baseline Profile shell과 전체 `ProfileHero`, Post, BottomTabBar를 유지하고 `ProfileHero`의
-  `Muted=true`만 적용한다.
+  `Muted=true`와 Post의 중첩 `PostContent.CW=MutedCollapsed`를 적용한다.
 - ProfileHero 안에 `이 사용자의 게시글은 뮤트되어 있습니다.`와 `뮤트 해제` action을 표시하며 별도
-  `StateView`나 새 컴포넌트는 추가하지 않는다. Dark consumer는 이번 범위에서 만들지 않았고 실제 게시물
-  필터링·뮤트 해제 동작은 runtime 완료 증거가 아니다.
+  `StateView`나 새 화면 컴포넌트는 추가하지 않는다. Post에서는 작성자·시간·`PostActionBar`를 유지하고
+  본문을 [`PostContent`의 Mobile Text MutedCollapsed variant](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7648-1590)로
+  가린다. 대응하는 [`MutedRevealed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7648-1607)는
+  같은 행 아래에 본문을 다시 표시하는 source state다.
+- 공용 [`PostContentWarning`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5001-14786)은
+  `Reason=ContentWarning|Muted`, `State=Collapsed|Revealed`를 제공한다. 기존 content warning은 `EyeOff`와
+  입력 가능한 summary를 유지하고, Mute variant
+  [`Collapsed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7644-1544)·[`Revealed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7644-1550)는
+  `VolumeOff`와 고정 summary를 사용한다. Dark consumer는 이번 범위에서 만들지 않았고 실제 게시물별
+  reveal state·뮤트 해제 동작은 runtime 완료 증거가 아니다.
 
 ## Source 재사용과 접근성
 
-- Button, ActionMenu, ModalSheet, Toast, SettingsItem, SettingsNavigationList, ProfileHero, StateView와 Profile
-  shell의 기존 production source를 재사용한다. 이 흐름만을 위한 새 Toast나 범용 safety component를 만들지 않는다.
+- Button, ActionMenu, ModalSheet, Toast, SettingsItem, SettingsNavigationList, ProfileHero, StateView,
+  PostContentWarning, PostContent와 Profile shell의 기존 production source를 재사용한다. 이 흐름만을 위한 새
+  Toast나 범용 safety component를 만들지 않는다.
 - Mobile Muted·Blocked 목록의 loaded action은 `64px` ProfileListItem 안에서 공용 Default Secondary button을
   `88×40px` visual로 유지하고 투명 `88×48dp` wrapper 가운데 배치한다. 공용 Button source와 Web compact
   geometry는 변경하지 않는다.
