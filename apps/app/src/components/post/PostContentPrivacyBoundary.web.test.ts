@@ -13,6 +13,7 @@ mock.module('react-native', {
 let PostContentPrivacyBoundary: ComponentType<{
   children?: ReactNode;
   style: Record<string, unknown>;
+  testID?: string;
 }>;
 
 before(async () => {
@@ -39,6 +40,25 @@ describe('PostContentPrivacyBoundary Web', () => {
     assert.deepEqual(boundary?.findByType('View' as unknown as ComponentType).props.style, {
       gap: 8,
     });
+
+    await act(async () => renderer?.unmount());
+  });
+
+  it('consumer별 test ID를 사용해도 같은 개인정보 경계를 유지한다', async () => {
+    let renderer: ReturnType<typeof create> | undefined;
+    await act(async () => {
+      renderer = create(
+        createElement(
+          PostContentPrivacyBoundary,
+          { style: {}, testID: 'viewer-private-content' },
+          createElement('Text', null, 'private content'),
+        ),
+      );
+    });
+
+    const boundary = renderer?.root.findByType('div');
+    assert.equal(boundary?.props.className, 'ph-mask ph-no-capture');
+    assert.equal(boundary?.props['data-testid'], 'viewer-private-content');
 
     await act(async () => renderer?.unmount());
   });

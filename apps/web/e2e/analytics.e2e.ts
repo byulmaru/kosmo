@@ -82,9 +82,30 @@ test('Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote co
     throw new Error('Analytics E2E requires a Profile');
   }
   const postContentMarker = 'E2E private Post Content marker';
-  await createE2EPost({ body: postContentMarker, profileId: viewer.profile.id });
+  const media = [
+    {
+      altText: 'E2E private first media',
+      url: 'https://media.e2e.invalid/private-first.png',
+    },
+    {
+      altText: 'E2E private second media',
+      url: 'https://media.e2e.invalid/private-second.png',
+    },
+  ] as const;
+  await createE2EPost({ body: postContentMarker, media, profileId: viewer.profile.id });
   const eventPayloads: PostHogPayload[] = [];
   const posthogRequests: string[] = [];
+  await page.setViewportSize({ height: 844, width: 390 });
+  await page.route('https://media.e2e.invalid/**', async (route) => {
+    await route.fulfill({
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        'base64',
+      ),
+      contentType: 'image/png',
+      status: 200,
+    });
+  });
   await page.route(`${posthogOrigin}/**`, async (route) => {
     const request = route.request();
     posthogRequests.push(request.url());
@@ -141,6 +162,40 @@ test('Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote co
   await expect(page.getByTestId('post-content-renderer').first()).toHaveClass(
     /(?:^|\s)ph-no-capture(?:\s|$)/u,
   );
+  await page.getByRole('button', { name: `${media[0].altText} 크게 보기` }).click();
+  const viewerDialog = page.getByRole('dialog');
+  await expect(viewerDialog).toBeVisible();
+  const viewerImage = viewerDialog.getByTestId('post-media-viewer-image');
+  const viewerBody = viewerDialog.getByTestId('post-media-viewer-body');
+  await expect(viewerDialog.getByTestId('post-media-viewer-image-privacy-boundary')).toHaveClass(
+    /(?:^|\s)ph-mask(?:\s|$)/u,
+  );
+  await expect(viewerDialog.getByTestId('post-media-viewer-body-privacy-boundary')).toHaveClass(
+    /(?:^|\s)ph-no-capture(?:\s|$)/u,
+  );
+  expect(
+    await viewerImage.evaluate((element) =>
+      element.closest('.ph-mask.ph-no-capture')?.getAttribute('data-testid'),
+    ),
+  ).toBe('post-media-viewer-image-privacy-boundary');
+  expect(
+    await viewerBody.evaluate((element) =>
+      element.closest('.ph-mask.ph-no-capture')?.getAttribute('data-testid'),
+    ),
+  ).toBe('post-media-viewer-body-privacy-boundary');
+  const nextImage = viewerDialog.getByRole('button', { name: '다음 이미지' });
+  expect(
+    await nextImage.evaluate((element) => element.closest('.ph-mask, .ph-no-capture')),
+  ).toBeNull();
+  const previousAutocaptureCount = eventPayloads.filter(
+    (payload) => payload.event === '$autocapture',
+  ).length;
+  await nextImage.click();
+  await expect
+    .poll(() => eventPayloads.filter((payload) => payload.event === '$autocapture').length)
+    .toBeGreaterThan(previousAutocaptureCount);
+  await viewerDialog.getByRole('button', { name: '이미지 뷰어 닫기' }).click();
+  await page.setViewportSize({ height: 720, width: 1280 });
   await page.getByTestId('post-list-row-body').filter({ hasText: postContentMarker }).click();
   await expect(page).toHaveURL(new RegExp(`/@${viewer.profile.handle}/[^/?#]+$`));
   await page.goBack();
@@ -190,6 +245,11 @@ test('Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote co
   expect(
     JSON.stringify(eventPayloads.filter((payload) => payload.event === '$autocapture')),
   ).not.toContain(postContentMarker);
+  for (const { altText } of media) {
+    expect(
+      JSON.stringify(eventPayloads.filter((payload) => payload.event === '$autocapture')),
+    ).not.toContain(altText);
+  }
   expect(posthogRequests.some((url) => new URL(url).pathname.startsWith('/flags'))).toBe(true);
 });
 

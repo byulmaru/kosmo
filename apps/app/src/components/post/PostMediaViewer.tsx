@@ -27,6 +27,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, iconSizes, radii, spacing, typography } from '@/theme/tokens';
+import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { focusPostMediaViewerTarget } from './postMediaViewerSession';
 import type { ReactNode, RefObject } from 'react';
 import type { LayoutChangeEvent, View as NativeView } from 'react-native';
@@ -464,18 +465,23 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
             ) : null}
           </View>
         ) : (
-          <Image
-            accessibilityLabel={imageName}
-            accessibilityState={{ busy: currentState?.status === 'loading' }}
-            key={`${currentMediaStateKey}:${currentState!.generation}`}
-            onError={handleImageError}
-            onLoad={handleImageLoad}
-            onLoadStart={handleImageLoadStart}
-            resizeMode="contain"
-            source={{ uri: currentMedia!.url! }}
-            style={styles.image}
-            testID="post-media-viewer-image"
-          />
+          <PostContentPrivacyBoundary
+            style={styles.imagePrivacyBoundary}
+            testID="post-media-viewer-image-privacy-boundary"
+          >
+            <Image
+              accessibilityLabel={imageName}
+              accessibilityState={{ busy: currentState?.status === 'loading' }}
+              key={`${currentMediaStateKey}:${currentState!.generation}`}
+              onError={handleImageError}
+              onLoad={handleImageLoad}
+              onLoadStart={handleImageLoadStart}
+              resizeMode="contain"
+              source={{ uri: currentMedia!.url! }}
+              style={styles.image}
+              testID="post-media-viewer-image"
+            />
+          </PostContentPrivacyBoundary>
         )}
 
         {multiple ? (
@@ -535,29 +541,34 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
           </View>
 
           <View style={styles.bodyRegion} testID="post-media-viewer-body-region">
-            <Text
-              accessible={false}
-              onLayout={handleBodyLayout}
-              style={[styles.bodyText, styles.bodyMeasure, { color: theme.text }]}
-              testID="post-media-viewer-body-measure"
+            <PostContentPrivacyBoundary
+              style={styles.bodyPrivacyBoundary}
+              testID="post-media-viewer-body-privacy-boundary"
             >
-              {bodyText}
-            </Text>
-            {expanded ? (
-              <ScrollView style={styles.bodyScroll} testID="post-media-viewer-body-scroll">
-                <Text style={[styles.bodyText, { color: theme.text }]}>{bodyText}</Text>
-              </ScrollView>
-            ) : (
-              <View style={styles.collapsedBody} testID="post-media-viewer-collapsed-body">
-                <Text
-                  numberOfLines={3}
-                  style={[styles.bodyText, { color: theme.text }]}
-                  testID="post-media-viewer-body"
-                >
-                  {bodyText}
-                </Text>
-              </View>
-            )}
+              <Text
+                accessible={false}
+                onLayout={handleBodyLayout}
+                style={[styles.bodyText, styles.bodyMeasure, { color: theme.text }]}
+                testID="post-media-viewer-body-measure"
+              >
+                {bodyText}
+              </Text>
+              {expanded ? (
+                <ScrollView style={styles.bodyScroll} testID="post-media-viewer-body-scroll">
+                  <Text style={[styles.bodyText, { color: theme.text }]}>{bodyText}</Text>
+                </ScrollView>
+              ) : (
+                <View style={styles.collapsedBody} testID="post-media-viewer-collapsed-body">
+                  <Text
+                    numberOfLines={3}
+                    style={[styles.bodyText, { color: theme.text }]}
+                    testID="post-media-viewer-body"
+                  >
+                    {bodyText}
+                  </Text>
+                </View>
+              )}
+            </PostContentPrivacyBoundary>
             {hasOverflow ? (
               <Pressable
                 accessibilityLabel={expanded ? '원문 접기' : '원문 더 보기'}
@@ -750,6 +761,7 @@ const styles = StyleSheet.create({
   },
   wideImagePane: { flex: 1 },
   image: { height: '100%', width: '100%' },
+  imagePrivacyBoundary: { height: '100%', width: '100%' },
   imageFallback: { alignItems: 'center', gap: spacing.md, justifyContent: 'center' },
   imageFallbackText: { color: '#ffffff', fontFamily: 'SUIT', ...typography.sm },
   retryButton: {
@@ -788,6 +800,7 @@ const styles = StyleSheet.create({
   wideDetail: { flex: 0, minHeight: 0 },
   author: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   bodyRegion: { flexShrink: 1, minHeight: 0, position: 'relative' },
+  bodyPrivacyBoundary: { flexShrink: 1, minHeight: 0, position: 'relative' },
   bodyMeasure: { left: 0, opacity: 0, position: 'absolute', right: 0, top: 0 },
   bodyText: { fontFamily: 'Pretendard', ...typography.md },
   collapsedBody: { flexShrink: 1, minHeight: 0, overflow: 'hidden' },

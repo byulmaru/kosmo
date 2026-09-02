@@ -243,6 +243,23 @@ describe('PostMediaViewer', () => {
     assert.equal(textContents().includes('@author'), true);
   });
 
+  it('사용자 Media와 Compact 본문만 개인정보 경계 안에 둔다', async () => {
+    await render();
+    await act(async () =>
+      byTestId('post-media-viewer-body-measure').props.onLayout({
+        nativeEvent: { layout: { height: 96 } },
+      }),
+    );
+
+    const imageBoundary = byTestId('post-media-viewer-image-privacy-boundary');
+    const bodyBoundary = byTestId('post-media-viewer-body-privacy-boundary');
+    assert.equal(isDescendant(currentImage(), imageBoundary), true);
+    assert.equal(isDescendant(byTestId('post-media-viewer-body'), bodyBoundary), true);
+    assert.equal(isDescendant(pressable('다음 이미지'), imageBoundary), false);
+    assert.equal(isDescendant(pressable('원문 더 보기'), bodyBoundary), false);
+    assert.equal(isDescendant(byTestId('post-media-viewer-action-bar'), bodyBoundary), false);
+  });
+
   it('선택 index에서 시작해 non-wrapping control과 다중 위치를 제공한다', async () => {
     await render({ selectedIndex: 1 });
 
@@ -755,4 +772,15 @@ function flattenStyle(style: unknown): Record<string, unknown> {
     );
   }
   return (style ?? {}) as Record<string, unknown>;
+}
+
+function isDescendant(node: ReactTestInstance, ancestor: ReactTestInstance): boolean {
+  let current = node.parent;
+  while (current) {
+    if (current === ancestor) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
 }

@@ -5,12 +5,14 @@ import type { StyleProp, ViewStyle } from 'react-native';
 export function PostContentPrivacyBoundary({
   children,
   style,
+  testID = 'post-content-renderer',
 }: {
   children?: ReactNode;
   style: StyleProp<ViewStyle>;
+  testID?: string;
 }) {
   return (
-    <View style={style} testID="post-content-renderer">
+    <View style={style} testID={testID}>
       {children}
     </View>
   );

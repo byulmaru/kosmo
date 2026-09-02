@@ -33,7 +33,10 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
-import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import {
+  postContentDocumentFromText,
+  postContentDocumentFromTextAndMedia,
+} from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
 import { eq } from 'drizzle-orm';
@@ -89,6 +92,7 @@ type CreateE2EPostOptions = {
   body?: string;
   content?: boolean;
   createdAt?: string;
+  media?: readonly Readonly<{ altText?: string; url: string }>[];
   profileId: string;
   replyParentId?: string;
   repostSourceId?: string;
@@ -405,7 +409,6 @@ export const createE2EFollow = (options: CreateE2EFollowOptions) => {
 
 export async function createE2EPost(options: CreateE2EPostOptions) {
   const bodyText = (options.body ?? '').trim();
-  const body = postContentDocumentFromText(bodyText);
   const createdAt = toInstant(options.createdAt);
 
   await waitForNextPostSeedTimestamp();
@@ -428,10 +431,31 @@ export async function createE2EPost(options: CreateE2EPostOptions) {
       return post;
     }
 
+    const media = options.media?.length
+      ? await tx
+          .insert(Media)
+          .values(
+            options.media.map(({ altText, url }) => ({
+              altText: altText ?? null,
+              mediaType: 'image/png',
+              profileId: options.profileId,
+              source: MediaSource.REMOTE,
+              state: MediaState.READY,
+              url,
+            })),
+          )
+          .returning()
+      : [];
+    const document = media.length
+      ? postContentDocumentFromTextAndMedia(
+          bodyText,
+          media.map(({ id }) => ({ mediaId: id })),
+        )
+      : postContentDocumentFromText(bodyText);
     const content = await tx
       .insert(PostContents)
       .values({
-        document: body,
+        document,
         postId: post.id,
         ...(createdAt ? { createdAt } : {}),
       })
