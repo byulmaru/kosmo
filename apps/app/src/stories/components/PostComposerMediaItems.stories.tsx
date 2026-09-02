@@ -80,7 +80,7 @@ export const Failed: Story = {
 function InteractiveMediaItems(props: PostComposerMediaItemsTargetProps) {
   const [media, setMedia] = useState(props.media);
   const [sensitiveMedia, setSensitiveMedia] = useState(props.sensitiveMedia);
-  const [editor, setEditor] = useState<{ key: string; tool: 'alt' | 'sensitive' } | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState(props.media[0]?.key ?? '');
   const [tool, setTool] = useState<'alt' | 'sensitive'>('alt');
 
@@ -94,7 +94,7 @@ function InteractiveMediaItems(props: PostComposerMediaItemsTargetProps) {
         media={media}
         onEdit={(key, nextTool) => {
           props.onEdit(key, nextTool);
-          setEditor({ key, tool: nextTool });
+          setEditorOpen(true);
           setSelectedKey(key);
           setTool(nextTool);
         }}
@@ -108,10 +108,10 @@ function InteractiveMediaItems(props: PostComposerMediaItemsTargetProps) {
       <ComposerOverlayFixture
         accessibilityLabel="미디어 편집"
         maxWidth={920}
-        onRequestClose={() => setEditor(null)}
-        visible={editor !== null}
+        onRequestClose={() => setEditorOpen(false)}
+        visible={editorOpen}
       >
-        {editor ? (
+        {editorOpen ? (
           <ComposerMediaEditor
             media={media.filter((item) => item.state === 'ready')}
             onAltTextChange={(key, altText) => {
@@ -119,9 +119,9 @@ function InteractiveMediaItems(props: PostComposerMediaItemsTargetProps) {
                 current.map((item) => (item.key === key ? { ...item, altText } : item)),
               );
             }}
-            onBack={() => setEditor(null)}
-            onClose={() => setEditor(null)}
-            onDone={() => setEditor(null)}
+            onBack={() => setEditorOpen(false)}
+            onClose={() => setEditorOpen(false)}
+            onDone={() => setEditorOpen(false)}
             onSelectMedia={(key) => setSelectedKey(key)}
             onSensitiveMediaChange={setSensitiveMedia}
             onToolChange={setTool}

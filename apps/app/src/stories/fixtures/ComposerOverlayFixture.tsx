@@ -33,6 +33,7 @@ export function ComposerOverlayFixture({
       <View style={[styles.backdrop, { backgroundColor: theme.overlayScrim }]}>
         <View
           accessibilityViewIsModal
+          key={maxWidth}
           style={[styles.surface, { backgroundColor: theme.backgroundSurface, maxWidth }]}
         >
           {children}
@@ -53,7 +54,7 @@ const styles = StyleSheet.create({
   surface: {
     borderRadius: radius[16],
     maxHeight: '85dvh' as never,
-    overflow: 'hidden',
+    overflow: 'auto' as never,
     width: '100%',
   },
 });
