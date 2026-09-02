@@ -12,7 +12,7 @@ import {
   XIcon,
 } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Circle, Svg } from 'react-native-svg';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
@@ -22,6 +22,7 @@ import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/toke
 import { PostComposerMediaItemsTarget } from './PostComposerMediaItemsTarget';
 import type { LucideIcon } from 'lucide-react-native';
 import type { ReactNode } from 'react';
+import type { TextStyle } from 'react-native';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
 
 export type PostComposerTargetVisibility = 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
@@ -344,6 +345,7 @@ export function MobileFullscreenComposerShellCandidate({
   visibility,
 }: MobileFullscreenComposerShellCandidateProps) {
   const theme = useTheme();
+  const [bodyFocused, setBodyFocused] = useState(false);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
@@ -432,18 +434,28 @@ export function MobileFullscreenComposerShellCandidate({
             value={contentWarning}
           />
         ) : null}
-        <TextArea
+        <TextInput
           accessibilityLabel="게시물 내용"
-          containerStyle={styles.mobileEditor}
           editable={!submitting}
+          multiline
+          onBlur={() => setBodyFocused(false)}
           onChangeText={onBodyChange}
+          onFocus={() => setBodyFocused(true)}
           placeholder="무슨 일이 일어나고 있나요?"
+          placeholderTextColor={submitting ? theme.stateDisabledForeground : theme.foregroundMuted}
           style={[
             styles.mobileBody,
             {
               backgroundColor: theme.backgroundCanvas,
               color: theme.foregroundPrimary,
-              flex: 1,
+              ...(bodyFocused
+                ? ({
+                    outlineColor: theme.stateFocusRing,
+                    outlineOffset: 2,
+                    outlineStyle: 'solid',
+                    outlineWidth: borderWidths[2],
+                  } as unknown as TextStyle)
+                : undefined),
             },
           ]}
           value={body}
@@ -727,7 +739,15 @@ const styles = StyleSheet.create({
   },
   mediaBody: { minHeight: 236 },
   mediaContent: { minHeight: 404 },
-  mobileBody: { borderWidth: borderWidths[0], minHeight: 0, padding: space[0] },
+  mobileBody: {
+    borderRadius: radius[12],
+    borderWidth: borderWidths[0],
+    flex: 1,
+    minHeight: 0,
+    padding: space[0],
+    textAlignVertical: 'top',
+    ...textStyles.contentM,
+  },
   mobileComposerBody: {
     flex: 1,
     gap: space[8],
@@ -737,7 +757,6 @@ const styles = StyleSheet.create({
     paddingTop: space[16],
   },
   mobileContentWarning: { borderRadius: radius[0], minHeight: 44 },
-  mobileEditor: { flex: 1, minHeight: 0 },
   mobileFooter: {
     alignItems: 'center',
     borderTopWidth: borderWidths[1],
