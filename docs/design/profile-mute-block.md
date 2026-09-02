@@ -46,25 +46,26 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 
 ## 차단 관계의 직접 Profile
 
-- 차단 관계의 Profile route는 전체 Profile을 제거하지 않고 기존 셸과 최소 identity를 유지한다. 현재 route
-  query가 이미 가진 cover·avatar·표시 이름·handle을 사용하며 차단 상태를 위해 Profile을 별도로 다시 조회하지 않는다.
-- `blocking`은 `차단한 프로필입니다` 안내와 `차단 해제` action을 제공한다.
-- `blockedBy`는 `이 프로필을 볼 수 없습니다` 안내만 제공하고 관계 action을 제공하지 않는다.
-- `blockedBy` Target은 별개 오류 화면을 만들지 않고 viewport별 기존 Profile route shell의 중앙 column에 최소
-  `ProfileHero`와 actionless `StateView`를 순서대로 배치한다. Mobile Dark [`6774:12067`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6774-12067),
-  Compact Web Light [`7371:19453`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7371-19453),
-  Full Web Light [`7380:20771`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-20771)이 exact evidence이며,
-  Mobile은 MenuOnly header와 BottomTabBar, Compact는 Sidebar, Full은 Sidebar와 RightRail을 유지한다. Web 중앙
-  column에는 별도 PageHeader를 두지 않는다.
-- `blocking`도 같은 최소 Profile shell을 사용하되 action이 있는 `StateView`로 `차단한 프로필입니다`와
+- 차단 관계의 direct Profile route에서는 [Profile Block 조회 정책](../domain/objects/profile-block.md#조회-정책)이
+  시각 presentation보다 우선한다. `blocking`·`blockedBy`가 확인되어도 Target의 cover·avatar·표시 이름·handle·bio·수치,
+  Post·Media와 Follow·Message action을 직접 조회하거나 표시하지 않는다. URL의 `profileHandle`은 route 식별에만
+  사용하며 Target identity를 화면에 다시 구성하는 근거가 아니다.
+- `blockedBy` Target은 별개 오류 화면을 만들지 않고 viewport별 기존 Profile route chrome 안의 중앙 column에
+  actionless `StateView`로 `이 프로필을 볼 수 없습니다`만 표시한다. Mobile Dark
+  [`6774:12067`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6774-12067), Compact Web Light
+  [`7371:19453`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7371-19453), Full Web Light
+  [`7380:20771`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-20771)이 exact evidence다.
+- `blocking`도 같은 identity-free route shell을 사용하되 action이 있는 `StateView`로 `차단한 프로필입니다`와
   Secondary `차단 해제`를 제공한다. Mobile Dark [`7580:14180`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7580-14180)과
   Full Web [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)이
-  Target evidence다. 실제 해제 mutation·pending·성공·실패 feedback과 Mute·Block confirmation sheet의 exact
-  placement는 Product/runtime 계약 전 임의로 조립하지 않는다.
-- 두 상태 모두 이미 로드된 cover·avatar·표시 이름·handle만 identity로 유지하고 bio·수치·known followers,
-  Post·Media와 Follow·Message action은 노출하지 않는다.
-- Block 목록처럼 Owner가 관계를 관리하는 surface의 최소 Target 식별 정보는 직접 Profile 조회 결과와
-  구분한다.
+  Target evidence다. 해제에 필요한 `ProfileBlock.Owner` projection과 mutation·pending·성공·실패 feedback은
+  Product/runtime 계약이며 Target Profile을 다시 hydrate하는 우회 경로로 사용하지 않는다.
+- Mobile은 MenuOnly header와 BottomTabBar, Compact는 Sidebar, Full은 Sidebar와 RightRail을 유지한다. Web 중앙
+  column에는 별도 PageHeader를 두지 않는다. Sidebar와 RightRail의 로그인 Owner 정보는 차단 Target identity가
+  아니다.
+- Block 관리 목록은 Owner에게 허용된 별도 `ProfileBlock.Owner` relation-management projection으로 최소 Target
+  식별 정보와 해제 action을 표시할 수 있다. 이 projection을 direct Profile route의 identity source로 재사용하지
+  않는다.
 
 ## 뮤트 관계의 직접 Profile
 
