@@ -530,6 +530,8 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 
 ### Requirement: Notification 단일 projection 저장
 
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-321` — 시스템은 Profile-scoped Notification을 단일 projection에 저장해야 한다(MUST).
+
 시스템은 Profile-scoped Notification의 identity, Recipient, kind, loose source reference, kind-specific data, 생성 시각과 최초 Read 시각을 하나의 `notification` table에 저장해야 한다(MUST).
 
 #### Scenario: Follow Notification row 저장
@@ -541,11 +543,18 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 - **AND** `data`는 PostgreSQL `jsonb NOT NULL DEFAULT '{}'::jsonb`이며 애플리케이션이 kind별 shape를 검증한다
 - **AND** 별도 Read State enum, type-specific extension table, 미래 source column이나 mutable `updated_at`을 저장하지 않는다
 
+#### Scenario: Follow Request Notification row 저장
+
+- **WHEN** 새 pending `ProfileFollowRequest`에 대한 Notification을 생성한다
+- **THEN** 시스템은 같은 `notification` table에 `kind = FOLLOW_REQUEST`, `source_id = ProfileFollowRequest.id`, `recipient_profile_id = Followee Profile.id`, `data = {}`, `created_at`과 nullable `read_at`을 저장한다
+- **AND** requester Profile ID·이름·handle snapshot을 `data`에 복제하지 않는다
+- **AND** 배포 전에 존재한 pending request에는 이 row를 소급 생성하지 않는다
+
 #### Scenario: Notification kind enum
 
-- **WHEN** migration이 Notification schema를 생성한다
-- **THEN** 시스템은 `notification_kind` enum에 현재 지원 값 `FOLLOW`, `REACTION`, `REPLY`, `REPOST`를 유지한다
-- **AND** API는 각 kind row를 `FollowNotification`, `ReactionNotification`, `ReplyNotification`, `RepostNotification` concrete object로 해석한다
+- **WHEN** migration이 Notification schema를 생성하거나 기존 enum을 확장한다
+- **THEN** 시스템은 `notification_kind` enum에 현재 지원 값 `FOLLOW`, `FOLLOW_REQUEST`, `REACTION`, `REPLY`, `REPOST`를 유지한다
+- **AND** API는 각 kind row를 `FollowNotification`, Follow Request 전용 concrete object, `ReactionNotification`, `ReplyNotification`, `RepostNotification`으로 해석한다
 - **AND** 아직 구현하지 않는 Notification kind 값을 선제 추가하지 않는다
 
 #### Scenario: 의도적인 loose source reference
@@ -553,7 +562,8 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 - **WHEN** `notification.source_id`를 정의한다
 - **THEN** 시스템은 이를 PostgreSQL `uuid NOT NULL`로 저장하되 source table foreign key를 만들지 않는다
 - **AND** `kind`가 source table과 `data` shape를 결정한다
-- **AND** FOLLOW의 `source_id`는 `profile_follow.id`를 의미하고 `data`에는 Recipient, Related Profile, 이름 또는 handle snapshot을 복제하지 않는다
+- **AND** FOLLOW의 `source_id`는 `profile_follow.id`, FOLLOW_REQUEST의 `source_id`는 `profile_follow_request.id`를 의미한다
+- **AND** 두 kind 모두 `data`에 Recipient, Related Profile, 이름 또는 handle snapshot을 복제하지 않는다
 
 #### Scenario: 동일 Recipient와 kind와 source 직접 중복 insert
 
@@ -581,13 +591,15 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 
 ### Requirement: Profile-scoped Notification kind 확장 경계
 
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-321` — Profile-scoped Notification kind는 같은 projection에 source mapping과 최소 data shape를 추가해야 한다(MUST).
+
 후속 Profile-scoped Notification kind는 같은 `notification` table에 자신의 source mapping과 최소 data shape를 추가해야 하며(MUST), 별도 extension framework를 선제 요구해서는 안 된다(MUST NOT).
 
-#### Scenario: 후속 Profile-scoped Notification kind 추가
+#### Scenario: FOLLOW_REQUEST kind 추가
 
-- **WHEN** 후속 change가 새 Profile-scoped Notification kind를 구현한다
-- **THEN** 그 change는 `notification_kind` 값, GraphQL concrete object, kind resolution, 해당 kind의 `source_id` 의미와 `data` validation을 함께 정의한다
-- **AND** 새 kind가 실제로 별도 durable table을 필요로 하지 않는 한 type-specific Notification extension table을 만들지 않는다
+- **WHEN** 이번 change가 Follow Request Notification을 구현한다
+- **THEN** `notification_kind`의 `FOLLOW_REQUEST` 값, GraphQL concrete object, kind resolution, `source_id = profile_follow_request.id` 의미와 `data = {}` shape를 함께 정의한다
+- **AND** 별도 type-specific Notification extension table을 만들지 않는다
 
 #### Scenario: Account-scoped Operational Notification
 

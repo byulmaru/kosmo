@@ -31,9 +31,8 @@ Follow와 Follow Request는 같은 방향의 팔로우 시도가 `즉시 관계 
 
 ### Modified Capabilities
 
-- `temporal-follow-effects`: Follow와 Follow Request의 transition을 pair lifecycle Workflow의 Update와 FIFO effects queue로 실행한다. Unfollow는 별도 short command다.
+- `temporal-follow-effects`: Follow와 Follow Request의 transition을 pair lifecycle Workflow의 Update와 FIFO effects queue로 실행하고, pair/exact-row retry reconstruction을 정의한다. Unfollow는 별도 short command다.
 - `activitypub-remote-follow`: verified ingress 이후 pair Workflow를 Update-with-Start하되 direct inbound Accept와 trust boundary를 보존한다.
-- `data-model`: operation receipt 대신 pair state와 exact row identity를 이용한 Activity retry reconstruction을 정의한다.
 - `notification`: pending과 terminal transition의 effects batch를 source identity로 순서 있게 drain하고, pending effect failure가 이후 terminal command를 막지 않도록 한다.
 - `temporal-worker-runtime-foundation`: pair Workflow, bootstrap ID Activity와 Unfollow short command를 등록한다. main에 포함된 적 없는 standalone Follow effects/operation Workflow는 등록하지 않는다.
 

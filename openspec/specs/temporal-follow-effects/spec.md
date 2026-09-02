@@ -1,21 +1,10 @@
-## REMOVED Requirements
+# temporal-follow-effects Specification
 
-### Requirement: Committed Follow transition별 Effects Workflow
+## Purpose
 
-**Reason:** Follow transition admission and effect ownership move to the directed pair lifecycle Workflow.
-**Migration:** Use `Directed pair Follow lifecycle Workflow`, `Ordered effects and lifecycle close`, and `Follow transition effects and retry`.
+방향성 있는 Profile pair의 Follow·Follow Request transaction admission, pending lifecycle, effect settlement와 exact-row removal 계약을 정의한다.
 
-### Requirement: ActivityPub inbound Follow transition과 no echo
-
-**Reason:** ActivityPub ingress and no-echo behavior are consolidated into the pair lifecycle requirements.
-**Migration:** Use the new pair lifecycle requirements and `activitypub-remote-follow`.
-
-### Requirement: Follow Effects retry와 sibling 독립성
-
-**Reason:** Retry, source identity, and sibling settlement behavior are consolidated into the pair lifecycle requirements.
-**Migration:** Use `Follow transition effects and retry`.
-
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Directed pair Follow lifecycle Workflow
 
@@ -57,14 +46,12 @@ INITIAL → PENDING → ESTABLISHED
 #### Scenario: Remote terminal removal becomes unavailable
 
 - **WHEN** a verified remote Reject or Undo reaches the transaction after participant availability changes and the exact request is not deleted
-- **THEN** the Workflow returns a no-op, keeps the request lifecycle `PENDING`, and does not treat the expected ID alone as evidence of deletion
-- **AND** a later delivery after participant recovery receives a fresh transport Update ID and can run the same exact-row transaction again
+- **THEN** the Workflow returns a no-op, keeps the request lifecycle `PENDING`, and does not use an earlier snapshot as evidence of deletion
 
 #### Scenario: Remote Accept becomes unavailable
 
 - **WHEN** a verified remote Accept reaches the transaction after participant availability changes and the request cannot be promoted
 - **THEN** the Workflow returns a no-op, keeps the request lifecycle `PENDING`, and does not expose the candidate Follow ID or enqueue a Follow create effect
-- **AND** a later delivery after participant recovery receives a fresh transport Update ID and can run the same exact-row transaction again
 
 #### Scenario: Reject an invalid Pending command
 
@@ -78,7 +65,7 @@ INITIAL → PENDING → ESTABLISHED
 
 ### Requirement: Ordered effects and lifecycle close
 
-The system MUST append each committed transition's effects to a FIFO queue owned by the pair Workflow. Effects from an earlier transition MUST be processed before effects from a later transition. Ordered phases inside one transition MUST also remain sequential, including request cleanup before relationship creation. Every phase MUST use the shared settlement helper regardless of Activity count, so all applicable Notification/protocol siblings are attempted. The pair Workflow MUST invoke the registered effect Activities directly with stable source IDs and directed pair identity; it MUST NOT create separate Follow create/delete effect Workflows.
+The system MUST append each committed transition's effects to a FIFO queue owned by the pair Workflow. Effects from an earlier transition MUST be processed before effects from a later transition. Ordered phases inside one transition MUST also remain sequential, including request cleanup before relationship creation. Every phase MUST use the shared settlement helper regardless of Activity count, so all applicable Notification/protocol siblings are attempted. The pair Workflow MUST invoke the registered effect Activities directly with stable create source IDs or exact deleted source IDs and directed pairs; it MUST NOT create separate Follow create/delete effect Workflows.
 
 #### Scenario: Pending create followed quickly by terminal transition
 
@@ -103,42 +90,64 @@ The system MUST append each committed transition's effects to a FIFO queue owned
 #### Scenario: Unfollow remains a separate short command
 
 - **WHEN** an established Follow is removed by local Unfollow or an established inbound Undo
-- **THEN** the system runs the existing short Unfollow/removal command with its exact Follow ID and directed pair and does not reopen or extend the completed pair lifecycle Workflow
+- **THEN** the system runs the existing short Unfollow/removal command with its exact deleted Follow source ID and directed pair and does not reopen or extend the completed pair lifecycle Workflow
 
 ### Requirement: Follow transition effects and retry
 
-The system MUST preserve existing source-correlated Notification and ActivityPub queue handoff semantics while moving the transaction admission and Pending lifecycle into the pair Workflow. The Update result is the committed domain result; effect completion is a separate Workflow concern.
+The system MUST preserve existing source-correlated Notification and ActivityPub queue handoff semantics while moving the transaction admission and Pending lifecycle into the pair Workflow. The Update result is the committed domain result; effect completion is a separate Workflow concern. Each transaction Activity attempt evaluates the current participant and remote Instance state and returns the resulting effect plan. Once returned, the Workflow executes that plan as-is; an effect Activity MUST NOT re-evaluate mutable state to add or cancel a delivery.
 
 #### Scenario: Duplicate or rolled-back transition
 
 - **WHEN** a Follow or Pending transition is a duplicate, no-op, known domain failure, or rollback
 - **THEN** the Update returns the existing domain outcome or failure and the Workflow appends no new source effect for a transition that did not commit
 
-#### Scenario: Activity retry after commit
+#### Scenario: Transaction retry re-evaluates delivery eligibility
 
-- **WHEN** a transaction or effect Activity is retried after a Worker failure
-- **THEN** the transition re-checks pair state and exact source identity, and the effect reuses that stable identity without creating a later lifecycle's Notification or protocol activity
+- **WHEN** a transaction Activity's completion is lost after commit and its retry observes changed participant or remote Instance state
+- **THEN** the retry re-checks pair state and exact source identity, and may include or omit the ActivityPub handoff in the returned effect plan according to the current state; for example, `ACTIVE → UNRESPONSIVE` may omit it and `UNRESPONSIVE → ACTIVE` may include it
+- **AND** the retry does not apply the transition twice or create effects for a later lifecycle
+
+#### Scenario: Effect retry preserves the returned delivery plan
+
+- **WHEN** an already-returned effect plan is retried after a Worker failure or mutable participant state changes
+- **THEN** the effect reuses the stable create source ID or exact deleted source ID and directed pair without re-evaluating delivery eligibility or creating a later lifecycle's Notification or protocol activity
+
+#### Scenario: Unresponsive remote target at transition time
+
+- **WHEN** a local Follow, Follow Request, Unfollow, or request Cancel commits while the remote target Instance is `UNRESPONSIVE`
+- **THEN** the transaction Activity keeps its applicable local graph and Notification effects and returns no ActivityPub delivery in that attempt's effect plan
+- **AND** if completion is lost and a retry observes a different remote Instance state, the retry returns an effect plan based on that current state
+
+#### Scenario: Target state changes after delivery was planned
+
+- **WHEN** a local transition records an ActivityPub delivery while the remote target is `ACTIVE` and Profile or Instance state changes before the effect Activity runs or retries
+- **THEN** the Workflow still attempts the returned delivery using the stable create source or exact deleted source ID and directed pair instead of re-evaluating transition eligibility
+
+#### Scenario: Delivery projection is incomplete
+
+- **WHEN** an already-planned ActivityPub delivery finds its actor or inbox projection missing at execution time
+- **THEN** the Activity fails observably and follows its retry policy; only a missing exact create source is a successful stale-source no-op
 
 #### Scenario: Promote an existing request after transaction completion loss
 
 - **WHEN** a new pair run captures an existing pending request, a `FOLLOW` promotes it under OPEN policy, and the transaction Activity retries after commit
-- **THEN** the Workflow reuses the request ID already recorded in history and still schedules request Notification cleanup before relation creation effects
+- **THEN** the Workflow reuses the pending request source ID already recorded in history and still schedules request Notification cleanup before relation creation effects
 
-#### Scenario: Keep Update payload domain-minimal
+#### Scenario: Rehydrate a committed result without row payloads
 
-- **WHEN** a successful Update commits a Follow or Request
-- **THEN** the Update result carries its domain row ID and directed pair rather than a full DB row, deleted-row payload, or `Temporal.Instant`
+- **WHEN** a successful Update commits a Follow or Request and returns its domain result
+- **THEN** the Update carries source and pair identities only, and the caller reads any surviving projection needed for its response without storing a full DB row or `Temporal.Instant` in Workflow history
 
 #### Scenario: Reconstruct an old removal after refollow
 
 - **WHEN** Follow F1 removal commits, Activity completion is lost, and Follow F2 exists when the removal Activity retries
-- **THEN** the retry preserves F2 and reconstructs only F1's delete effects from the expected F1 ID and directed pair
+- **THEN** the removal Workflow reuses the exact F1 source and directed pair verified by a read-only Activity and recorded in Workflow history before the mutation
+- **AND** the retry preserves F2 and reconstructs only F1's delete effects
 
-#### Scenario: Removal transaction retries are exhausted
+#### Scenario: Reject a mismatched removal source
 
-- **WHEN** the exact-row removal transaction Activity reaches its configured terminal failure
-- **THEN** the Update fails and the short removal Workflow also closes as failed instead of reporting a completed Workflow
-- **AND** no effect is scheduled without a successful transaction result
+- **WHEN** a removal command's expected Follow ID does not belong to its directed pair when the Workflow verifies it before mutation
+- **THEN** the command reports no change without running the removal transaction or scheduling delete effects
 
 #### Scenario: Bound caller admission latency
 

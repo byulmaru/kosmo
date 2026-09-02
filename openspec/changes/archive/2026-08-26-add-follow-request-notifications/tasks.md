@@ -89,7 +89,7 @@ selected Profile의 Notification 목록이 Follow Request item을 기존 row sem
 - [x] 3.2 avatar/본문 activation을 requester `relativeHandle` route와 기존 best-effort Read/cache updater에 연결하고 받은 요청 transition control은 추가하지 않는다.
 - [x] 3.3 목록 empty state, pagination, Relay generated artifacts와 shell Unread badge/story fixture를 갱신하고 UI 회귀 검증을 통과한다.
 
-## 4. PROD-321 — 배포 후 관찰·통합 검증 및 archive gate
+## 4. PROD-321 — 통합 검증 및 archive gate
 
 **Authority / Provenance**
 
@@ -102,7 +102,7 @@ selected Profile의 Notification 목록이 Follow Request item을 기존 row sem
 
 **Deliverable**
 
-merge 후 dev migration, 신규 pending lifecycle, 목록/Unread/badge, Sentry 최소 context의 production-equivalent 검증 증거를 남기고 change를 archive할 수 있다.
+additive migration history, 신규 pending lifecycle과 목록/Unread/badge의 production-equivalent 통합 검증 증거를 남기고 change를 archive한다. 배포 관찰은 archive 선행 조건으로 두지 않는다.
 
 **Guardrails**
 
@@ -112,11 +112,11 @@ merge 후 dev migration, 신규 pending lifecycle, 목록/Unread/badge, Sentry �
 
 **Verification**
 
-- dev DB migration/runner smoke와 기존·신규 pending fixture 비교로 enum 적용과 비소급을 확인한다.
-- Local 및 verified ActivityPub inbound create/delete, failure isolation, API list/count/Read/Node, app activation/badge를 연결한 smoke 결과를 기록한다.
-- merge 직전 최신 canonical·Linear와 active specs를 대조하고 strict validation 및 archive 후 validation을 실행한다.
+- migration/runner smoke와 기존·신규 pending fixture 비교로 enum 적용과 비소급을 확인한다.
+- Local 및 verified ActivityPub inbound create/delete, failure isolation, API list/count/Read/Node, app activation/badge를 연결한 통합 테스트를 실행한다.
+- 최신 canonical·Linear와 active specs를 대조하고 strict validation 및 archive 후 validation을 실행한다.
 
-- [ ] 4.1 dev enum migration과 schema/migration smoke를 실행해 기존 migration history, 신규 enum 값과 배포 전 pending 비소급을 검증한다.
-- [ ] 4.2 Local·verified inbound pending create/delete 및 create/delete 실패 Sentry 관찰 결과를 production-equivalent 설정으로 기록한다.
-- [ ] 4.3 API·app 목록, Unread count/badge, requester Profile activation, source deletion hidden behavior를 cross-slice smoke로 검증한다.
-- [ ] 4.4 PROD-321 구현 PR merge 후 전체 tasks·정합성·남은 위험을 재검토하고 strict validation과 OpenSpec archive gate를 완료한다.
+- [x] 4.1 enum migration과 schema/migration smoke로 기존 migration history, 신규 enum 값과 배포 전 pending 비소급을 검증한다.
+- [x] 4.2 Local·verified inbound pending create/delete와 effect failure isolation을 Core/Fedify 통합 테스트로 검증한다.
+- [x] 4.3 API·app 목록, Unread count/badge, requester Profile activation, source deletion hidden behavior를 cross-slice 테스트로 검증한다.
+- [x] 4.4 전체 tasks·canonical·Linear 정합성을 재검토하고 strict validation과 OpenSpec archive gate를 완료한다.

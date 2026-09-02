@@ -54,8 +54,10 @@ Follow pair Workflow는 한 번에 하나의 lifecycle command만 처리하며 i
 `ALLOW_DUPLICATE` reuse policy를 사용한다. 실행 중인 lifecycle에는 `USE_EXISTING`을 사용한다. Pair command에는
 random `operationId`나 operation receipt를 두지 않는다. 생성할 Follow/Request의 candidate domain row ID를
 transaction 전에 Workflow history에 배정하고 exact ID로 저장하며, Activity retry는 candidate/expected row와
-Workflow source identity로 결과를 재구성한다. Unfollow는 이 Workflow가 다음 command를 기다리지 않고 별도 짧은 Workflow에서
-처리한다.
+Workflow source identity로 결과를 재구성한다. Unfollow는 별도 짧은 Workflow가 mutation 전에 expected Follow ID와
+directed pair의 일치를 read-only Activity로 검증해 Workflow history에 기록한다. 검증되지 않은 source는 관계나 effect를
+변경하지 않으며, 검증된 F1 제거 transaction의 completion이 유실되면 retry가 그 history를 사용해 F2 refollow를 보존하고
+F1 effect만 재구성한다. Follow pair Workflow는 Unfollow를 기다리지 않는다.
 
 ActivityPub inbound Follow의 actor/object/recipient 검증과 직접 Accept delivery는 Fedify handler가 계속 소유한다.
 Follow effects는 ActivityPub-origin event를 outbound Follow로 echo하지 않는다.

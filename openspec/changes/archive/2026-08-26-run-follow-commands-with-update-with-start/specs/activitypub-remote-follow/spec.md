@@ -72,10 +72,21 @@ The system MUST preserve the Fedify ingress trust boundary. Protocol validation,
 - **WHEN** the local recipient requires approval for a verified inbound Follow
 - **THEN** the pair Workflow creates the Pending request and remains available for a verified Accept, Reject, or Undo transition without sending an outbound Follow echo
 
-#### Scenario: Inbound Accept or Reject uses exact projection identity
+#### Scenario: Inbound Accept or Reject requires a resolved Follow object
 
-- **WHEN** a verified Accept or Reject references a local projection
-- **THEN** ingress validates the actor/object/recipient and projection identity, the pair transaction rechecks the exact expected request or Follow row, and a mismatch becomes a no-op or domain conflict without changing another lifecycle
+- **WHEN** a verified Accept or Reject contains an object that Fedify cannot resolve as a typed `Follow`, including an unresolved IRI-only object
+- **THEN** ingress records the observation without changing the Follow graph or request and without admitting a pair Workflow transition
+
+#### Scenario: Inbound Accept or Reject matches the current Follow generation
+
+- **WHEN** Fedify resolves an Accept or Reject object to a typed `Follow`
+- **THEN** the Follow actor and object match the local follower and remote followee, and either its canonical Kosmo ID identifies the current request or relation, or it has no canonical Kosmo ID and its `published` equals the projection's immutable `createdAt`; the pair transaction rechecks the exact expected request or Follow row before changing state
+- **AND** an actor/object, generation, or exact-row mismatch becomes a no-op or domain conflict without changing another lifecycle
+
+#### Scenario: Verified inbound follow activity restores reachability
+
+- **WHEN** a verified Follow-protocol activity (Follow, Accept, Reject, or Undo(Follow)) references a stored remote actor whose instance is `UNRESPONSIVE`
+- **THEN** the system treats the activity as a reachability signal, changes that instance to `ACTIVE`, and continues the supported follow-protocol processing
 
 #### Scenario: Inbound Undo of an established relation
 

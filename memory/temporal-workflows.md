@@ -15,6 +15,10 @@
 - Workflow는 결정론적 orchestration만 수행한다. DB domain transition은 Activity에서 실행하고, pair Workflow의
   source identity와 effect queue는 JSON-serializable한 Workflow state로 보존한다.
 - Activity는 Notification projection이나 Fedify queue handoff처럼 retry 가능한 하나의 외부 효과 경계를 소유한다.
+- transition eligibility와 effect execution을 분리한다. transaction Activity는 각 시도에서 현재 Profile/Instance
+  상태를 평가해 effect plan을 반환한다. completion loss 뒤 retry가 다른 상태를 관찰하면 delivery를 포함하거나
+  생략할 수 있다. Workflow는 반환된 plan을 그대로 실행하고 effect Activity는 이후 mutable 상태를 다시 조회해
+  delivery를 추가하거나 취소하지 않는다.
 - Workflow start 실패가 이미 commit된 domain 결과를 바꾸지 않는 capability에서는 start 호출부가 deadline과 오류 격리를 명시한다.
 
 ## Workflow Source Structure
@@ -80,7 +84,9 @@
 - pair transaction/bootstrap Activity가 retry를 모두 소진하면 Update 실패를 기록하고 기존 effects를 drain한 뒤 run을
   typed failure로 닫는다. PENDING으로 무기한 대기시키지 않으며 known domain failure DTO는 lifecycle을 계속 유지한다.
 - Update 응답에는 full DB row나 `Temporal.Instant`를 넣지 않고 domain row ID와 pair identity만 보존한다.
-  exact F1 removal retry 시 현재 row가 F2여도 expected F1 ID로 F1 delete effect만 재구성하고 F2는 보존한다.
+  Unfollow/removal Workflow는 mutation 전에 expected F1 ID와 directed pair의 일치를 read-only Activity로 검증해
+  Workflow history에 남긴다. 검증 실패는 mutation/effect 없는 no-op이고, 검증된 F1 removal retry 시 현재 row가
+  F2여도 history의 F1 identity로 F1 delete effect만 재구성하고 F2는 보존한다.
 - 이 Follow 규칙이 다른 capability의 retry 계약을 제거하지는 않는다. 삭제 source identity나 effect plan을 DB 상태만으로
   복원할 수 없는 별도 Temporal capability는 최소 domain-specific receipt를 transition과 같은 transaction에 기록하고,
   해당 결과가 History에 기록된 뒤 정리할 수 있다. 이를 범용 command ledger나 lifecycle exactly-once 보장으로
@@ -102,6 +108,10 @@
 - durable source ID를 DB projection과 Workflow input으로 복원하고 retry/no-op을 판정하는 Activity 전용 adapter는
   `apps/worker`가 소유한다. `packages/core`와 `packages/fedify`에는 각각 domain policy와 protocol delivery primitive만
   남기며, Temporal input shape를 맞추기 위한 공개 함수를 추가하지 않는다.
+- protocol create Activity는 exact source가 이미 사라진 경우에만 stale-source no-op으로 끝낼 수 있다. commit된
+  delivery의 actor 또는 inbox projection이 불완전하면 성공으로 숨기지 않고 실패·retry로 관찰한다. 삭제 Activity는
+  현재 source row 대신 exact deleted source ID와 directed pair를 사용하며 실행 시점 participant state로 delivery
+  eligibility를 재판정하지 않는다.
 - 기존 core/fedify 함수의 input, return과 오류 의미가 Activity 계약과 같으면 `export { source as activityName }`로 직접 alias한다.
 - 단순히 같은 인자를 다음 함수에 전달하고 같은 Promise를 반환하는 Worker adapter 파일이나 async wrapper를 만들지 않는다.
 - adapter는 input 변환, dependency composition, retry 경계에 필요한 validation 또는 Activity 고유 관찰처럼 실제 책임이 있을 때만 둔다.

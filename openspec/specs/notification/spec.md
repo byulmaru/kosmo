@@ -6,145 +6,6 @@ Profile-scoped in-app Notification의 생성과 정리, GraphQL 조회와 Read, 
 
 ## Requirements
 
-### Requirement: Follow Notification source correlation
-
-시스템은 새 `ProfileFollow` 관계를 첫 Notification source로 사용하고 source·Recipient·Related Profile의 상관관계를 보존하는 Follow Notification을 생성해야 한다(MUST).
-
-#### Scenario: 새 Local Follow에서 알림 생성
-
-- **WHEN** Local Follower Profile이 Local Followee Profile과 새 established `ProfileFollow` 관계를 만든다
-- **THEN** 시스템은 `kind = FOLLOW`, `source_id = ProfileFollow.id`, `recipient_profile_id = Followee.id`, `data = {}`인 Notification 하나를 생성한다
-- **AND** Related Profile은 source의 Follower에서 파생한다
-- **AND** 새 item의 `readAt`은 `null`이다
-
-#### Scenario: Follow Request 승인에서 새 관계 생성
-
-- **WHEN** Follow Request 승인 action이 새 established `ProfileFollow` 관계를 생성하고 commit한다
-- **THEN** 시스템은 직접 Follow와 같은 source integration을 사용해 해당 `ProfileFollow.id`의 Follow Notification을 하나 생성한다
-- **AND** 공개 승인 action은 같은 request에서 Notification 저장을 await하고 오류를 catch한다
-- **AND** 승인 전에 이미 존재하던 관계를 재사용하면 Notification integration을 다시 호출하거나 과거 누락 item을 backfill하지 않는다
-
-#### Scenario: source-only 저장 입력
-
-- **WHEN** 저장 경계가 하나의 established `ProfileFollow` source를 입력으로 받는다
-- **THEN** 시스템은 source의 Followee를 Recipient, Follower를 Related Profile로 파생한다
-- **AND** 호출자는 별도 Recipient 또는 Related Profile ID를 전달하지 않는다
-
-#### Scenario: Remote Recipient source 거부
-
-- **WHEN** 저장 경계에 Followee가 Remote Profile인 `ProfileFollow` source를 전달한다
-- **THEN** 시스템은 Notification을 저장하지 않고 실패 결과를 반환한다
-- **AND** source integration은 이 실패로 source action 결과를 변경하지 않는다
-
-#### Scenario: 동일 source 재처리
-
-- **WHEN** 같은 `ProfileFollow.id` source를 Notification 저장 경계에 두 번 이상 전달한다
-- **THEN** 시스템은 기존 Notification을 나타내는 성공 결과 또는 동등한 idempotent no-op을 반환한다
-- **AND** `(FOLLOW, source_id, recipient_profile_id)`의 Notification은 하나만 존재한다
-
-#### Scenario: source integration 경계 재진입
-
-- **WHEN** 새 관계 생성 뒤 Notification integration 경계가 같은 `ProfileFollow.id` source로 재진입한다
-- **THEN** integration은 idempotent 저장 경계를 호출해 성공한 no-op으로 끝난다
-- **AND** 이 재진입은 이미 존재하던 관계에 대한 사용자 duplicate Follow와 구분된다
-
-#### Scenario: 기존 관계에 대한 duplicate Follow
-
-- **WHEN** 이미 존재하는 `ProfileFollow` 관계에 대해 사용자가 duplicate Follow를 요청한다
-- **THEN** Follow action은 성공한 no-op으로 끝난다
-- **AND** Follow action은 새 관계용 Notification integration을 다시 호출하지 않는다
-- **AND** 시스템은 새 Notification을 생성하거나 과거의 누락된 item을 복구하지 않는다
-
-#### Scenario: Unfollow 뒤 Re-follow
-
-- **WHEN** 기존 관계를 Unfollow한 뒤 같은 Follower와 Followee가 다시 Follow하여 새 `ProfileFollow.id`를 만든다
-- **THEN** 정상 cleanup이 성공한 이전 source의 Notification은 남지 않는다
-- **AND** 저장이 성공하면 시스템은 새 source에 대해 Follow Notification을 정확히 하나 생성한다
-
-#### Scenario: 이미 materialize된 Remote Follower source
-
-- **WHEN** 이미 materialize된 Remote Follower와 Local Followee 사이의 established `ProfileFollow`를 Notification 저장 경계에 전달한다
-- **THEN** 시스템은 Follower origin에 따른 별도 분기 없이 Local Follower와 같은 source·Recipient mapping을 사용한다
-- **AND** 이 검증은 ActivityPub ingress, actor materialization, Follow 또는 Undo transport를 수행하지 않는다
-
-#### Scenario: verified inbound Follow에서 새 established source 생성
-
-- **WHEN** verified ActivityPub inbound Follow가 Remote Follower와 Local OPEN Followee 사이에 새 established `ProfileFollow`를 생성하고 commit한다
-- **THEN** 공통 core public action은 Follower origin이나 relation 생성 진입점을 분기하지 않고 같은 Follow Notification create 경계를 await한다
-- **AND** 저장이 성공하면 Local Followee를 Recipient, Remote Follower를 Related Profile로 하는 Notification이 정확히 하나 존재한다
-- **AND** Fedify adapter는 relation mutation이나 Notification 호출을 중복 구현하지 않는다
-
-#### Scenario: inbound pending 또는 duplicate Follow
-
-- **WHEN** verified ActivityPub inbound Follow가 APPROVAL_REQUIRED Followee의 pending `ProfileFollowRequest`만 생성하거나, existing established relation 또는 duplicate/concurrent Follow를 no-op으로 재사용한다
-- **THEN** 시스템은 established Follow Notification create lifecycle을 실행하지 않는다
-- **AND** pending request나 duplicate Follow를 과거 누락 Notification의 backfill 계기로 사용하지 않는다
-
-#### Scenario: 배포 전 관계
-
-- **WHEN** Notification 기능 배포 전에 이미 존재하던 `ProfileFollow` 관계가 있다
-- **THEN** 시스템은 historical Follow Notification을 backfill하지 않는다
-
-### Requirement: Follow Notification 실패 격리
-
-시스템은 Notification-side 저장 실패가 `ProfileFollow` 결과를 rollback하거나 실패 응답으로 바꾸어서는 안 된다(MUST NOT).
-
-#### Scenario: Notification 저장 실패
-
-- **WHEN** Notification 저장이 실패한다
-- **THEN** 시스템은 새 `ProfileFollow` 관계와 Follow 성공 응답을 유지한다
-- **AND** 이번 capability는 누락된 Notification을 retry, outbox, message queue, duplicate Follow 또는 reconciliation으로 자동 복구하지 않는다
-
-#### Scenario: inbound Follow Notification 저장 실패
-
-- **WHEN** verified ActivityPub inbound Follow가 새 established relation을 commit한 뒤 Notification 저장이 실패한다
-- **THEN** 시스템은 relation과 저장 count 및 ActivityPub handler 성공을 유지한다
-- **AND** pending request나 relation transaction을 rollback하지 않는다
-
-#### Scenario: commit 이후 같은 request에서 처리
-
-- **WHEN** 새 `ProfileFollow` transaction이 commit된다
-- **THEN** source action은 같은 request에서 Notification 저장을 await하고 오류를 catch한다
-- **AND** Notification을 source transaction/savepoint에 포함하거나 fire-and-forget으로 실행하지 않는다
-
-### Requirement: Follow source 생명주기 정리
-
-시스템은 정상 `ProfileFollow` 삭제 action에서 같은 source의 Follow Notification을 idempotent하게 정리해야 한다(MUST).
-
-#### Scenario: Unfollow로 source 삭제
-
-- **WHEN** Unfollow가 `ProfileFollow` source transaction을 commit한다
-- **THEN** source action은 같은 request에서 `(FOLLOW, source_id)` delete 경계를 await한다
-- **AND** cleanup이 성공하면 대응하는 Notification은 목록, Unread count, Node와 Read에서 사라진다
-
-#### Scenario: 반복 cleanup
-
-- **WHEN** 이미 삭제된 `(FOLLOW, source_id)` item을 delete 경계에 다시 전달한다
-- **THEN** 저장 경계는 성공한 idempotent no-op을 반환한다
-
-#### Scenario: Notification cleanup 실패
-
-- **WHEN** source 삭제 뒤 Notification delete가 실패하거나 process가 종료된다
-- **THEN** `ProfileFollow` 삭제와 Unfollow 성공 응답은 유지된다
-- **AND** 남은 row는 source를 찾을 수 없으므로 모든 Notification API 표면에서 숨겨진다
-
-#### Scenario: verified inbound Undo로 source 삭제
-
-- **WHEN** verified ActivityPub inbound Undo(Follow)가 established `ProfileFollow`를 exact-row 조건으로 실제 삭제하고 commit한다
-- **THEN** 공통 core public action은 같은 source의 Follow Notification delete 경계를 await한다
-- **AND** cleanup 실패는 relation/count 삭제와 ActivityPub handler 성공을 rollback하지 않는다
-
-#### Scenario: inbound Undo의 pending 또는 no-op 삭제
-
-- **WHEN** verified ActivityPub inbound Undo(Follow)가 pending `ProfileFollowRequest`만 삭제하거나 established relation 삭제가 no-op이다
-- **THEN** 시스템은 established Follow Notification cleanup을 실행하지 않는다
-
-#### Scenario: action 밖에서 source row 삭제
-
-- **WHEN** raw SQL 또는 Notification integration을 호출하지 않는 lifecycle이 `ProfileFollow` source를 삭제한다
-- **THEN** loose `source_id`를 가진 Notification row가 남을 수 있다
-- **AND** API는 그 row를 숨기며 database trigger나 source foreign key가 정리를 대신하지 않는다
-
 ### Requirement: Membership 기반 Profile Notification GraphQL 계약
 
 **Authority / Provenance:** `docs/domain/objects/notification.md`, [PROD-703](https://linear.app/byulmaru/issue/PROD-703/%EA%B8%B0%EC%A1%B4-notification-read-mutation%EC%9D%B4-%EC%A7%80%EC%A0%95%ED%95%9C-%EC%95%8C%EB%A6%BC-%EC%97%AC%EB%9F%AC-%EA%B0%9C%EB%A5%BC-%EC%B2%98%EB%A6%AC%ED%95%98%EB%8F%84%EB%A1%9D-%ED%99%95%EC%9E%A5%ED%95%9C%EB%8B%A4) — PROD-703은 inactive Recipient 지정 ID Read의 조용한 제외 계약을 소유한다. API는 로그인 Account가 Account-Profile membership을 가진 Profile의 Notification connection과 Unread count를 Profile object에 제공해야 한다(MUST).
@@ -876,3 +737,140 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 - **THEN** Repost Tombstone과 성공 응답은 유지된다
 - **AND** 남은 Notification 행은 Source Repost가 Active가 아니므로 모든 API 표면에서 숨겨진다
 - **AND** Workflow Activity는 유한하게 재시도하되 cron, 별도 queue, backfill 또는 bulk cleanup을 추가하지 않는다
+
+### Requirement: Follow Request Notification API visibility
+
+**Authority / Provenance:** `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/objects/profile.md`, `PROD-321` — visible Follow Request Notification은 기존 Profile-scoped API 계약에 통합되어야 한다(MUST).
+
+API는 visible `FOLLOW_REQUEST` Notification을 기존 Profile-scoped Notification connection·Unread count·Node·Read 계약에 통합하되, request source와 Recipient/Related Profile 관계를 Recipient Profile 기준으로 검증해야 한다(MUST).
+
+#### Scenario: concrete Follow Request Notification
+
+- **WHEN** GraphQL이 `kind = FOLLOW_REQUEST` row를 resolve한다
+- **THEN** API는 Notification interface와 Node를 구현하는 Follow Request 전용 concrete object를 반환한다
+- **AND** object의 requester Profile field는 source request의 Follower Profile에서 파생한다
+- **AND** object의 `followRequest: ProfileFollowRequest!` field는 Recipient가 접근할 수 있는 같은 source request를 반환한다
+- **AND** raw kind, source ID, data snapshot 또는 받은 요청 처리 action을 공개하지 않는다
+
+#### Scenario: source와 recipient 일치 검증
+
+- **WHEN** Follow Request Notification을 connection, Unread count, Node 또는 Read에서 조회한다
+- **THEN** source request가 존재하고 source의 Followee가 저장된 Recipient Profile과 일치하며 requester Profile이 Recipient Profile을 기준으로 조회 가능할 때만 item을 visible로 취급한다
+- **AND** visible concrete object의 `followRequest`도 같은 source request를 사용하며 Recipient 기준 visibility를 우회하지 않는다
+- **AND** request row가 제거되었거나 관계가 불일치하면 item, count와 Read 결과를 존재하지 않는 것으로 처리한다
+
+#### Scenario: requester Profile 권한과 membership
+
+- **WHEN** 로그인 Account가 Recipient Profile membership을 가지고 Notification 목록 또는 item을 조회한다
+- **THEN** API는 selected Profile과 무관하게 해당 Recipient의 visible Follow Request Notification을 반환한다
+- **AND** requester Profile이 Recipient Profile의 조회 정책을 통과하지 않으면 item을 숨기고 generic fallback을 반환하지 않는다
+
+#### Scenario: visibility와 source field의 일관된 snapshot
+
+- **WHEN** connection 또는 Node가 pending Follow Request source를 visible로 확인한 뒤 concrete field를 resolve하기 전에 같은 request가 삭제된다
+- **THEN** API는 visibility row와 함께 읽은 source snapshot을 사용해 non-null `profile`·`followRequest` field를 일관되게 resolve하거나 부모 Notification을 존재하지 않는 것으로 처리한다
+- **AND** source를 별도 조회해 `Notification source not found` GraphQL 오류를 발생시키지 않는다
+
+#### Scenario: unread와 read 반영
+
+- **WHEN** visible Follow Request Notification을 읽음 처리한다
+- **THEN** 기존 idempotent Read mutation이 Notification의 최초 `readAt`과 Recipient Profile의 visible Unread count를 갱신한다
+- **AND** request가 승인·거절·취소·취소된 inbound Undo로 삭제되면 Notification은 목록과 count에서 사라진다
+
+### Requirement: Follow Request Notification 목록과 requester Profile 활성화
+
+**Authority / Provenance:** `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/objects/profile.md`, `docs/design/page-header.md`, `PROD-321` — 목록은 requester Profile을 표시하고 활성화해야 한다(MUST).
+
+클라이언트는 selected Profile의 visible `FOLLOW_REQUEST` Notification을 기존 단일 Notification 목록, Relay/cache scope와 서버 제공 Unread badge에 포함해야 하며(MUST), item 활성화는 요청자(Follower) Profile로 이동해야 한다(MUST).
+
+#### Scenario: 목록 item 표시
+
+- **WHEN** selected Profile이 수신한 visible Follow Request Notification이 목록 connection에 포함된다
+- **THEN** 기존 Notification row의 kind 표현·상대 시각·Unread 표시 구조 안에 requester Profile identity와 팔로우 요청 의미를 표시한다
+- **AND** requester Profile의 display/handle과 조회 가능한 avatar를 source에서 파생한다
+- **AND** 받은 요청 목록의 별도 row, 승인·거절·취소 action 또는 inline 맞팔로우 control을 추가하지 않는다
+
+#### Scenario: requester Profile로 활성화
+
+- **WHEN** 사용자가 Follow Request Notification의 avatar 또는 본문 link를 활성화한다
+- **THEN** 클라이언트는 requester Profile의 기존 `relativeHandle` Profile route로 이동한다
+- **AND** canonical received-request route로 이동하거나 해당 route를 새로 만들지 않는다
+- **AND** 기존 목록의 best-effort Read mutation과 Profile별 Relay cache 갱신을 적용한다
+
+#### Scenario: 목록과 Unread badge 통합
+
+- **WHEN** selected Profile에 Follow Request Notification이 Unread 상태로 존재한다
+- **THEN** 서버의 `unreadNotificationCount`가 기존 Notification 목록과 shell badge에 해당 item을 포함한다
+- **AND** 클라이언트는 목록 길이나 숨겨진 item을 이용해 count를 임의로 재계산하지 않는다
+- **AND** Profile 전환 시 다른 Profile의 item·count·badge가 노출되지 않는다
+
+#### Scenario: 빈 목록 copy 범위
+
+- **WHEN** 목록에 Follow Request Notification을 포함한 visible item이 하나도 없다
+- **THEN** 기존 Notification empty state는 요청·팔로우 알림을 포함한 Notification 의미를 설명할 수 있다
+- **AND** 받은 요청 관리 화면의 빈 상태나 승인 안내를 대신 표시하지 않는다
+
+### Requirement: Follow lifecycle Notification effects
+
+**Authority / Provenance:** `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, PROD-720 — The system MUST satisfy this requirement.
+
+The system MUST attach Follow and Follow Request Notification effects to the committed transition of the deterministic directed pair Workflow. A Notification effect MUST use the committed Follow or Follow Request row ID as its source identity and MUST be appended to the pair Workflow's FIFO effect queue only after the source transition commits.
+
+#### Scenario: Established Follow Notification
+
+- **WHEN** an open-policy Follow creates a new relation for a local recipient
+- **THEN** the Update returns the committed relation result first and the Workflow later creates the source-correlated Follow Notification
+
+#### Scenario: Pending Follow Request Notification
+
+- **WHEN** an approval-required Follow creates a new request for a local recipient
+- **THEN** the Workflow creates the source-correlated Follow Request Notification after commit and keeps the pair lifecycle Pending
+
+#### Scenario: Approval transition Notification order
+
+- **WHEN** an approval or verified Accept atomically removes the exact request and creates a Follow relation
+- **THEN** the FIFO effect queue removes the request Notification before creating the new relation Notification, using each source's own immutable identity
+
+#### Scenario: Rejection or cancellation cleanup
+
+- **WHEN** a Pending request is rejected, cancelled, or terminated by a verified inbound transition
+- **THEN** the Workflow enqueues only the exact request Notification cleanup and the pair lifecycle closes without creating a Follow Notification
+
+#### Scenario: Duplicate transition
+
+- **WHEN** a command observes an existing Follow or existing Pending request and commits no new source row
+- **THEN** the Workflow enqueues no new Notification and does not attempt to repair an unrelated missing historical Notification
+
+#### Scenario: Source isolation across refollow
+
+- **WHEN** an old Follow or Follow Request is removed and a later lifecycle creates a new source row for the same directed pair
+- **THEN** cleanup uses the old source ID and cannot remove the later lifecycle's Notification
+
+#### Scenario: Separate Unfollow cleanup
+
+- **WHEN** an established Follow is removed by the separate short Unfollow/removal command
+- **THEN** its source-correlated Follow Notification cleanup uses the exact deleted Follow source ID and does not reopen the completed pair lifecycle Workflow
+
+### Requirement: Notification failure isolation and continuation
+
+The system MUST keep Notification failures separate from the committed Follow lifecycle result. The pair Workflow MUST preserve Pending state when a Pending Notification effect fails and MUST close a terminal lifecycle without rolling back its domain transition.
+
+#### Scenario: Early commit result
+
+- **WHEN** the pair transaction commits before a Notification Activity completes
+- **THEN** the Update caller receives the domain result, while the Workflow retries or observes the Notification failure independently
+
+#### Scenario: Pending Notification failure
+
+- **WHEN** a Pending request Notification retry or terminal failure occurs
+- **THEN** the request row and Pending Workflow remain available for approve, accept, reject, cancel, or applicable inbound termination
+
+#### Scenario: Terminal Notification failure
+
+- **WHEN** a terminal transition's Notification cleanup or creation fails after the DB commit
+- **THEN** the committed state is preserved, all applicable FIFO sibling effects are attempted, and the failure is observable when the pair Workflow closes
+
+#### Scenario: Recipient and origin policy
+
+- **WHEN** the Followee is remote or the transition originates from ActivityPub
+- **THEN** the Notification effect follows the existing recipient/source policy, and no outbound protocol echo is inferred from creating or removing a Notification
