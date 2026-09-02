@@ -9,7 +9,6 @@ import baseMeta, {
   PendingMediaContract as pendingMediaContract,
   Playground as playgroundContract,
   RailMedia as railMediaStory,
-  StateContract as stateContract,
   SubmitFailure as submitFailureStory,
 } from './PostComposer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -31,11 +30,13 @@ export const MobileKeyboardContract: Story = mobileKeyboardContract;
 export const MobileMediaFooterGeometryContract: Story = mobileMediaFooterGeometryContract;
 export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
 export const PendingMediaContract: Story = pendingMediaContract;
-export const StateContract: Story = stateContract;
 
 export const ControlsContract: Story = {
   play: async () => {
     expect(baseMeta.parameters?.controls).toMatchObject({ disable: true });
+    const playgroundControls = playgroundContract.parameters?.controls;
+    expect(playgroundControls).toHaveProperty('include');
+    expect(playgroundControls?.include).not.toContain('error');
     expect(baseMeta.argTypes?.author?.control).toBe(false);
     expect(baseMeta.argTypes?.items?.control).toBe(false);
     expect(baseMeta.argTypes?.remaining?.control).toBe(false);
@@ -65,6 +66,14 @@ export const PollActionHiddenContract: Story = {
   },
 };
 
+export const PlaygroundPollOverrideContract: Story = {
+  ...playgroundContract,
+  args: { body: 'Playground Poll override', items: [], showPollAction: true, surface: 'rail' },
+  play: async ({ canvasElement }) => {
+    expect(within(canvasElement).queryByRole('button', { name: '투표 추가' })).toBeNull();
+  },
+};
+
 export const SubmitFailureToastContract: Story = {
   ...submitFailureStory,
   play: async ({ canvasElement }) => {
@@ -80,6 +89,18 @@ export const SubmitFailureToastContract: Story = {
 export const EmojiOutsideDismissContract: Story = {
   ...playgroundContract,
   args: { body: '이모지 위치를 확인할 본문', items: [], surface: 'rail' },
+  globals: { viewport: { isRotated: false, value: 'postComposerPicker' } },
+  parameters: {
+    viewport: {
+      options: {
+        postComposerPicker: {
+          name: 'Post Composer picker',
+          styles: { height: '1200px', width: '600px' },
+          type: 'tablet',
+        },
+      },
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '이모지 추가' }));
@@ -92,6 +113,9 @@ export const EmojiOutsideDismissContract: Story = {
     );
     expect(picker.getBoundingClientRect().right).toBeGreaterThanOrEqual(
       trigger.getBoundingClientRect().left,
+    );
+    expect(picker.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      trigger.getBoundingClientRect().bottom,
     );
 
     await userEvent.click(canvas.getByRole('button', { name: '반응 선택 닫기' }));
