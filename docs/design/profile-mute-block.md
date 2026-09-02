@@ -16,10 +16,15 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   상태·action 행으로 표시한다. 상단 Action SLOT에는 현재 관계 상태에 맞는 기존 `FollowButton`의 `팔로우`
   또는 `팔로우 해제` action을 그대로 표시하며, Mute 상태를 경고 banner나 safety panel로 확장하지 않는다.
 - 같은 Profile의 각 Post는 작성자·시간·`PostActionBar`를 유지하되 본문·미디어를 기본 접힘으로 표시한다.
-  `PostContent.CW=MutedCollapsed`는 기존 content warning disclosure의 배치와 펼침 동작을 재사용하고,
-  `VolumeOff`, `뮤트된 사용자의 게시물입니다`, content meta, `내용 보기`를 표시한다. 펼치면
-  `CW=MutedRevealed`와 `다시 가리기`를 사용한다. 이 문구는 작성자가 입력한 content warning summary가 아니라
-  Mute 관계에서 정해지는 고정 안내다.
+  Mute disclosure는 작성자 Content Warning을 대체하지 않는 바깥 gate다. 작성자 Content Warning도 있는
+  Post는 처음에 Mute와 작성자 Content Warning을 각각 `Collapsed`로 유지하며, Mute의 `내용 보기`를 눌러도
+  안쪽 작성자 summary와 gate는 계속 접힌 상태로 둔다. 적용 중인 Mute와 작성자 Content Warning gate를 모두
+  `Revealed`해야 본문을 표시하며, 미디어는 그 조건을 충족한 뒤에도 기존 Sensitive Media disclosure가
+  `Revealed`인 경우에만 표시한다. 작성자 Content Warning이 없는 Post는 `PostContent.CW=MutedCollapsed`의 기존 content warning
+  disclosure 배치와 펼침 동작을 재사용하고, `VolumeOff`, `뮤트된 사용자의 게시물입니다`, content meta,
+  `내용 보기`를 표시한다. 펼치면 `CW=MutedRevealed`와 `다시 가리기`를 사용한다. 이 문구는 작성자가 입력한
+  content warning summary가 아니라 Mute 관계에서 정해지는 고정 안내다. Sensitive Media disclosure는 기존
+  계약대로 이 gate들과 독립적으로 유지한다.
 - Profile 데이터 로딩 중에는 기존 `ProfileHero` loading·skeleton variant를 유지하고 Mute 상태·action 행은
   loading이 끝난 뒤에만 표시한다.
 - 현재 Mute는 영구 적용만 제공한다. 기간 선택 control과 만료 상태는 표시하지 않는다.
@@ -83,11 +88,15 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   가린다. 대응하는 [`MutedRevealed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7648-1607)는
   같은 행 아래에 본문을 다시 표시하는 source state다.
 - 공용 [`PostContentWarning`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5001-14786)은
-  `Reason=ContentWarning|Muted`, `State=Collapsed|Revealed`를 제공한다. 기존 content warning은 `EyeOff`와
-  입력 가능한 summary를 유지하고, Mute variant
+  각 disclosure의 visual state를 `Reason=ContentWarning|Muted`, `State=Collapsed|Revealed`로 구분해 제공한다.
+  여기서 `Reason`은 Figma source의 visual state 구분이며, Content Warning과 Mute를 하나의 배타적 gate로
+  선택한다는 뜻이 아니다. 실제 조합에서는 Mute variant가 바깥 disclosure가 되고 기존 content warning variant가
+  안쪽 독립 gate로 남는다. 기존 content warning은 `EyeOff`와 입력 가능한 summary를 유지하고, Mute variant
   [`Collapsed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7644-1544)·[`Revealed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7644-1550)는
-  `VolumeOff`와 고정 summary를 사용한다. Dark consumer는 이번 범위에서 만들지 않았고 실제 게시물별
-  reveal state·뮤트 해제 동작은 runtime 완료 증거가 아니다.
+  `VolumeOff`와 고정 summary를 사용한다. 두 gate가 동시에 적용된 경우 Mute만 펼쳐도 본문·미디어가 노출되지
+  않으며, 두 gate를 모두 펼친 뒤에도 Sensitive Media가 `Collapsed`이면 미디어는 계속 가린다. Sensitive Media
+  state도 별도 계약으로 유지한다. Dark consumer는 이번 범위에서 만들지 않았고 실제
+  게시물별 reveal state·뮤트 해제 동작은 runtime 완료 증거가 아니다.
 
 ## Source 재사용과 접근성
 
