@@ -921,13 +921,11 @@ export const MobileKeyboardContract: Story = {
 function expectMobileEditorFitsMediaShelf(canvasElement: HTMLElement) {
   const canvas = within(canvasElement);
   const editor = canvas.getByRole('textbox', { name: '게시물 내용' });
-  const editorOuter = editor.parentElement;
   const shelf = canvas.getByLabelText('첨부 이미지 갤러리, 1개').parentElement;
 
-  expect(editorOuter).not.toBeNull();
-  expect(getComputedStyle(editorOuter!).flexGrow).toBe('1');
+  expect(getComputedStyle(editor).flexGrow).toBe('1');
   expect(shelf).not.toBeNull();
-  expect(editorOuter!.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+  expect(editor.getBoundingClientRect().bottom).toBeLessThanOrEqual(
     shelf!.getBoundingClientRect().top,
   );
 }
