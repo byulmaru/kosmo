@@ -59,6 +59,8 @@ domain row ID는 transaction 전에 Workflow history에 배정하고 exact ID로
 현재 Request/Follow candidate/expected row와 serializable source identity로 이미 commit된
 결과를 재구성한다. Temporal Update ID는 RPC deduplication용이며 Follow Request의 domain identity가 아니다. 동일 pair의
 실행 중 lifecycle에는 `USE_EXISTING`, terminal lifecycle 뒤 새 요청에는 `ALLOW_DUPLICATE`를 사용한다.
+Initial `FOLLOW`는 실행 중인 run의 중복 admission을 합치지만, PENDING을 유지한 terminal no-op 뒤에는 participant
+복구 후 같은 exact-row command를 다시 실행할 수 있도록 별도 호출이 새 transport Update ID를 사용한다.
 
 ActivityPub inbound Follow의 actor/object/recipient 검증과 직접 Accept delivery는 Fedify handler에 남긴다. pair
 Workflow effects는 ActivityPub-origin event를 다시 outbound Follow로 echo하지 않는다.

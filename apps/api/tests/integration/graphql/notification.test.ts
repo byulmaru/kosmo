@@ -22,6 +22,7 @@ import {
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { waitForProfileFollowWorkflows } from './temporal-test-helpers';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
@@ -2093,6 +2094,7 @@ const createAuthenticatedSession = async () => {
 };
 
 const resetFixtures = async () => {
+  await waitForProfileFollowWorkflows();
   await db.delete(Notifications);
   await db.delete(Sessions);
   await db.delete(ProfileFollows);

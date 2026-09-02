@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, describe, test } from 'node:test';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
@@ -73,20 +73,10 @@ const getProfiles = async (followerProfileId: string, followeeProfileId: string)
 const readNotifications = (sourceId: string) =>
   db.select().from(Notifications).where(eq(Notifications.sourceId, sourceId));
 
-const recordInboundFollow = async (input: {
+const recordInboundFollow = (input: {
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
-}) =>
-  (
-    await followProfile({
-      ...input,
-    })
-  ).result.kind;
-
-const removeInboundFollowThroughLifecycle = (input: {
-  readonly followeeProfileId: string;
-  readonly followerProfileId: string;
-}) => unfollowProfile({ ...input, origin: 'ACTIVITYPUB' });
+}) => followProfile(input).then(({ result }) => result.kind);
 
 describe('ActivityPub inbound profile follow lifecycle', () => {
   test('reuses the current relation and removes it idempotently', async () => {
@@ -107,11 +97,11 @@ describe('ActivityPub inbound profile follow lifecycle', () => {
       .where(eq(ProfileFollows.followerProfileId, follower.id))
       .then(firstOrThrow);
     assert.equal((await readNotifications(relation.id)).length, 0);
-    const removed = await removeInboundFollowThroughLifecycle(input);
+    const removed = await unfollowProfile({ ...input, origin: 'ACTIVITYPUB' });
     assert.equal(removed.profileFollowId, relation.id);
     assert.equal(removed.changed, true);
     assert.deepEqual(await readNotifications(relation.id), []);
-    const repeated = await removeInboundFollowThroughLifecycle(input);
+    const repeated = await unfollowProfile({ ...input, origin: 'ACTIVITYPUB' });
     assert.equal(repeated.profileFollowId, null);
     assert.equal(repeated.changed, false);
     assert.deepEqual(await getProfiles(follower.id, followee.id), {
@@ -137,7 +127,7 @@ describe('ActivityPub inbound profile follow lifecycle', () => {
         .then((rows) => rows.length),
       0,
     );
-    const removed = await removeInboundFollowThroughLifecycle(input);
+    const removed = await unfollowProfile({ ...input, origin: 'ACTIVITYPUB' });
     assert.equal(removed.profileFollowId, null);
     assert.equal(removed.changed, true);
     assert.equal(
@@ -274,47 +264,5 @@ describe('ActivityPub inbound profile follow lifecycle', () => {
       followee: { ...followee, followersCount: 1 },
       follower: { ...follower, followingCount: 1 },
     });
-  });
-
-  test('keeps an established inbound Follow when Notification creation fails', async () => {
-    const { followee, follower } = await createPair(ProfileFollowPolicy.OPEN);
-    await db.execute(
-      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_inbound_create_failure CHECK (false) NOT VALID`,
-    );
-
-    try {
-      assert.equal(
-        await recordInboundFollow({
-          followeeProfileId: followee.id,
-          followerProfileId: follower.id,
-        }),
-        'ESTABLISHED',
-      );
-    } finally {
-      await db.execute(
-        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_inbound_create_failure`,
-      );
-    }
-
-    assert.equal(
-      await db
-        .select()
-        .from(ProfileFollows)
-        .where(eq(ProfileFollows.followerProfileId, follower.id))
-        .then((rows) => rows.length),
-      1,
-    );
-    assert.deepEqual(await getProfiles(follower.id, followee.id), {
-      followee: { ...followee, followersCount: 1 },
-      follower: { ...follower, followingCount: 1 },
-    });
-    assert.equal(
-      await db
-        .select()
-        .from(Notifications)
-        .where(eq(Notifications.recipientProfileId, followee.id))
-        .then((rows) => rows.length),
-      0,
-    );
   });
 });

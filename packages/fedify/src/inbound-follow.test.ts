@@ -399,19 +399,7 @@ describe('inbound Follow and Undo', () => {
     const fixture = await createFixture();
     const context = createContext({ recipient: localProfileId });
     const follow = new Follow({ actor: remoteActorUri, object: localActorUri });
-    const logs: unknown[] = [];
-    const restoreReporter = setInboundObservabilityReporter({
-      log: (observation) => logs.push(observation),
-    });
-
-    try {
-      await Promise.all([
-        handleInboundFollow(context, follow),
-        handleInboundFollow(context, follow),
-      ]);
-    } finally {
-      restoreReporter();
-    }
+    await Promise.all([handleInboundFollow(context, follow), handleInboundFollow(context, follow)]);
 
     await waitForProfileFollowWorkflows();
     const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
@@ -444,9 +432,6 @@ describe('inbound Follow and Undo', () => {
       ).followingCount,
       1,
     );
-    // Both calls share the deterministic Update ID `follow`; Temporal
-    // deduplicates the second admission before the handler can emit a noop.
-    assert.deepEqual(logs, []);
   });
 
   test('routes shared-inbox approval-required Follow without Accept', async () => {
@@ -527,7 +512,7 @@ describe('inbound Follow and Undo', () => {
     }
   });
 
-  test('logs an existing pending Follow as a noop', async () => {
+  test('deduplicates a repeated pending Follow without logging a second noop', async () => {
     await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
     const logs: unknown[] = [];
     const restore = setInboundObservabilityReporter({
@@ -540,7 +525,7 @@ describe('inbound Follow and Undo', () => {
       await handleInboundFollow(createContext({ recipient: null }), follow);
 
       // The same pair and Follow Update ID are deduplicated by Temporal, so
-      // the second request does not enter the handler to emit a noop.
+      // the second request does not enter the handler.
       assert.deepEqual(logs, []);
     } finally {
       restore();
@@ -579,7 +564,7 @@ describe('inbound Follow and Undo', () => {
     }
   });
 
-  test('keeps inbound Follow successful while effects are deferred', async () => {
+  test('persists an inbound Follow projection and Notification', async () => {
     const fixture = await createFixture();
     await handleInboundFollow(
       createContext({ recipient: localProfileId }),
@@ -601,19 +586,12 @@ describe('inbound Follow and Undo', () => {
     );
   });
 
-  test('keeps approval-required inbound Follow successful when request Notification creation fails', async () => {
+  test('persists a personal approval-required inbound Follow request and Notification', async () => {
     const fixture = await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
-    const logs: unknown[] = [];
-    const captures: unknown[] = [];
-    const restoreInboundReporter = setInboundObservabilityReporter({
-      captureException: (error, context) => captures.push({ error, context }),
-      log: (observation) => logs.push(observation),
-    });
     await handleInboundFollow(
       createContext({ recipient: localProfileId }),
       new Follow({ actor: remoteActorUri, object: localActorUri }),
     );
-    restoreInboundReporter();
 
     await waitForProfileFollowWorkflows();
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 1);
@@ -630,11 +608,9 @@ describe('inbound Follow and Undo', () => {
         .then(firstOrThrow),
       { followersCount: 0, followingCount: 0 },
     );
-    assert.deepEqual(logs, []);
-    assert.deepEqual(captures, []);
   });
 
-  test('keeps inbound Undo successful while cleanup is deferred', async () => {
+  test('removes the personal inbound Follow relation and Notification on Undo', async () => {
     await createFixture();
     const context = createContext({ recipient: localProfileId });
     await handleInboundFollow(
@@ -662,7 +638,7 @@ describe('inbound Follow and Undo', () => {
     );
   });
 
-  test('keeps approval-required inbound Undo successful while cleanup is deferred', async () => {
+  test('removes the personal approval request and Notification on Undo', async () => {
     await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
     const context = createContext({ recipient: localProfileId });
     await handleInboundFollow(

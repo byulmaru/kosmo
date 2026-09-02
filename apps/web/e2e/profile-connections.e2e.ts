@@ -213,10 +213,7 @@ test('SUSPENDED remote profile은 Web action surface에 노출되지 않는다',
   await expect(page.getByRole('button', { name: /팔로우/ })).toHaveCount(0);
 });
 
-test('post-commit delivery 실패에도 Web GraphQL payload와 DB 상태가 일치한다', async ({
-  context,
-  page,
-}) => {
+test('Web GraphQL payload와 DB 상태가 일치한다', async ({ context, page }) => {
   const viewer = await createE2ESession({ handle: 'e2e-delivery-viewer' });
   const openRemote = await createE2ERemoteProfile({ handle: 'e2e-delivery-open' });
   const approvalRemote = await createE2ERemoteProfile({

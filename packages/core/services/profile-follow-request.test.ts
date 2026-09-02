@@ -13,10 +13,15 @@ import {
 } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { NotFoundError } from '../error';
-import * as profileFollowTestHelpers from './profile-follow.test-helpers';
-import { followProfile, removeInboundFollow } from './profile-follow.test-helpers';
-
-const lifecycle = profileFollowTestHelpers;
+import {
+  acceptProfileFollowRequest,
+  approveProfileFollowRequest,
+  cancelProfileFollowRequest,
+  ensureProfileFollowRequest,
+  followProfile,
+  rejectProfileFollowRequest,
+  removeInboundFollow,
+} from './profile-follow.test-helpers';
 
 after(async () => pg.end());
 
@@ -73,8 +78,6 @@ const readNotifications = (sourceId: string) =>
   db.select().from(Notifications).where(eq(Notifications.sourceId, sourceId));
 
 test('pair 조회와 승인은 request를 relation으로 원자적으로 전환한다', async () => {
-  assert.equal(typeof lifecycle.approveProfileFollowRequest, 'function');
-
   const follower = await createLocalProfile();
   const followee = await createLocalProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
   const followed = await followProfile({
@@ -98,7 +101,7 @@ test('pair 조회와 승인은 request를 relation으로 원자적으로 전환�
     .then(firstOrThrow);
   assert.equal(found.id, followed.result.profileFollowRequest.id);
 
-  const approved = await lifecycle.approveProfileFollowRequest!({
+  const approved = await approveProfileFollowRequest({
     actorProfileId: followee.id,
     profileFollowRequestId: found.id,
   });
@@ -135,12 +138,12 @@ test('pair 조회와 승인은 request를 relation으로 원자적으로 전환�
 
 test('Local approve는 request와 relation을 transaction으로 전환하고 반복 approve는 거부한다', async () => {
   const { followee, follower, request } = await createPendingRequest();
-  const approved = await lifecycle.approveProfileFollowRequest!({
+  const approved = await approveProfileFollowRequest({
     actorProfileId: followee.id,
     profileFollowRequestId: request.id,
   });
   await assert.rejects(
-    lifecycle.approveProfileFollowRequest!({
+    approveProfileFollowRequest({
       actorProfileId: followee.id,
       profileFollowRequestId: request.id,
     }),
@@ -159,8 +162,8 @@ test('ActivityPub Accept는 request를 relation으로 전환하고 duplicate는 
     followeeProfileId: fixture.followee.id,
     followerProfileId: fixture.follower.id,
   };
-  const result = await lifecycle.acceptProfileFollowRequest(input);
-  const duplicate = await lifecycle.acceptProfileFollowRequest(input);
+  const result = await acceptProfileFollowRequest(input);
+  const duplicate = await acceptProfileFollowRequest(input);
 
   assert.deepEqual(result, { kind: 'ACCEPTED' });
   assert.deepEqual(duplicate, { kind: 'NOOP' });
@@ -175,10 +178,9 @@ test('ActivityPub Accept는 request를 relation으로 전환하고 duplicate는 
 });
 
 test('followee는 request를 거절하고 actor Profile과 삭제 ID를 받는다', async () => {
-  assert.equal(typeof lifecycle.rejectProfileFollowRequest, 'function');
   const { followee, follower, request } = await createPendingRequest();
 
-  const rejected = await lifecycle.rejectProfileFollowRequest!({
+  const rejected = await rejectProfileFollowRequest({
     actorProfileId: followee.id,
     profileFollowRequestId: request.id,
   });
@@ -201,7 +203,7 @@ test('followee는 request를 거절하고 actor Profile과 삭제 ID를 받는�
   );
   assert.deepEqual(await readNotifications(request.id), []);
   await assert.rejects(
-    lifecycle.rejectProfileFollowRequest!({
+    rejectProfileFollowRequest({
       actorProfileId: followee.id,
       profileFollowRequestId: request.id,
     }),
@@ -210,10 +212,9 @@ test('followee는 request를 거절하고 actor Profile과 삭제 ID를 받는�
 });
 
 test('follower는 request를 취소하고 actor Profile과 삭제 ID를 받는다', async () => {
-  assert.equal(typeof lifecycle.cancelProfileFollowRequest, 'function');
   const { followee, follower, request } = await createPendingRequest();
 
-  const canceled = await lifecycle.cancelProfileFollowRequest!({
+  const canceled = await cancelProfileFollowRequest({
     actorProfileId: follower.id,
     profileFollowRequestId: request.id,
   });
@@ -238,12 +239,11 @@ test('follower는 request를 취소하고 actor Profile과 삭제 ID를 받는�
 });
 
 test('participant가 아닌 actor는 request transition을 실행할 수 없다', async () => {
-  assert.equal(typeof lifecycle.rejectProfileFollowRequest, 'function');
   const { request } = await createPendingRequest();
   const stranger = await createLocalProfile();
 
   await assert.rejects(
-    lifecycle.rejectProfileFollowRequest!({
+    rejectProfileFollowRequest({
       actorProfileId: stranger.id,
       profileFollowRequestId: request.id,
     }),
@@ -260,7 +260,6 @@ test('participant가 아닌 actor는 request transition을 실행할 수 없다'
 });
 
 test('승인은 malformed self-pair request를 relation으로 만들지 않는다', async () => {
-  assert.equal(typeof lifecycle.approveProfileFollowRequest, 'function');
   const profile = await createLocalProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
   const request = await db
     .insert(ProfileFollowRequests)
@@ -269,7 +268,7 @@ test('승인은 malformed self-pair request를 relation으로 만들지 않는�
     .then(firstOrThrow);
 
   await assert.rejects(
-    lifecycle.approveProfileFollowRequest!({
+    approveProfileFollowRequest({
       actorProfileId: profile.id,
       profileFollowRequestId: request.id,
     }),
@@ -322,7 +321,7 @@ test('승인은 unavailable participant를 거부하고 request를 보존한다'
     .where(eq(Profiles.id, follower.id));
 
   await assert.rejects(
-    lifecycle.approveProfileFollowRequest!({
+    approveProfileFollowRequest({
       actorProfileId: followee.id,
       profileFollowRequestId: request.id,
     }),
@@ -344,7 +343,7 @@ test('거절과 취소는 unavailable counterpart가 있어도 pending row를 �
     .update(Profiles)
     .set({ state: ProfileState.DISABLED })
     .where(eq(Profiles.id, rejectedPair.follower.id));
-  const rejected = await lifecycle.rejectProfileFollowRequest!({
+  const rejected = await rejectProfileFollowRequest({
     actorProfileId: rejectedPair.followee.id,
     profileFollowRequestId: rejectedPair.request.id,
   });
@@ -355,7 +354,7 @@ test('거절과 취소는 unavailable counterpart가 있어도 pending row를 �
     .update(Instances)
     .set({ state: InstanceState.SUSPENDED })
     .where(eq(Instances.id, canceledPair.followee.instanceId));
-  const canceled = await lifecycle.cancelProfileFollowRequest!({
+  const canceled = await cancelProfileFollowRequest({
     actorProfileId: canceledPair.follower.id,
     profileFollowRequestId: canceledPair.request.id,
   });
@@ -365,7 +364,7 @@ test('거절과 취소는 unavailable counterpart가 있어도 pending row를 �
 test('SUSPENDED remote counterpart가 있어도 거절과 취소로 pending row를 정리한다', async () => {
   const remoteFollower = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const localFollowee = await createLocalProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
-  const rejectedRequest = await lifecycle.ensureProfileFollowRequest({
+  const rejectedRequest = await ensureProfileFollowRequest({
     followeeProfileId: localFollowee.id,
     followerProfileId: remoteFollower.id,
   });
@@ -377,7 +376,7 @@ test('SUSPENDED remote counterpart가 있어도 거절과 취소로 pending row�
     .update(Instances)
     .set({ state: InstanceState.SUSPENDED })
     .where(eq(Instances.id, remoteFollower.instanceId));
-  const rejected = await lifecycle.rejectProfileFollowRequest!({
+  const rejected = await rejectProfileFollowRequest({
     actorProfileId: localFollowee.id,
     profileFollowRequestId: rejectedRequest.profileFollowRequest.id,
   });
@@ -388,7 +387,7 @@ test('SUSPENDED remote counterpart가 있어도 거절과 취소로 pending row�
     followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
     instanceKind: InstanceKind.ACTIVITYPUB,
   });
-  const canceledRequest = await lifecycle.ensureProfileFollowRequest({
+  const canceledRequest = await ensureProfileFollowRequest({
     followeeProfileId: remoteFollowee.id,
     followerProfileId: localFollower.id,
   });
@@ -400,7 +399,7 @@ test('SUSPENDED remote counterpart가 있어도 거절과 취소로 pending row�
     .update(Instances)
     .set({ state: InstanceState.SUSPENDED })
     .where(eq(Instances.id, remoteFollowee.instanceId));
-  const canceled = await lifecycle.cancelProfileFollowRequest!({
+  const canceled = await cancelProfileFollowRequest({
     actorProfileId: localFollower.id,
     profileFollowRequestId: canceledRequest.profileFollowRequest.id,
   });
@@ -410,7 +409,7 @@ test('SUSPENDED remote counterpart가 있어도 거절과 취소로 pending row�
 test('승인은 SUSPENDED remote participant를 거부하고 request를 보존한다', async () => {
   const remoteFollower = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const localFollowee = await createLocalProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
-  const request = await lifecycle.ensureProfileFollowRequest({
+  const request = await ensureProfileFollowRequest({
     followeeProfileId: localFollowee.id,
     followerProfileId: remoteFollower.id,
   });
@@ -424,7 +423,7 @@ test('승인은 SUSPENDED remote participant를 거부하고 request를 보존�
     .where(eq(Instances.id, remoteFollower.instanceId));
 
   await assert.rejects(
-    lifecycle.approveProfileFollowRequest!({
+    approveProfileFollowRequest({
       actorProfileId: localFollowee.id,
       profileFollowRequestId: request.profileFollowRequest.id,
     }),
@@ -450,7 +449,7 @@ test('승인은 기존 relation을 재사용하고 count를 중복 증가시키�
   await db.update(Profiles).set({ followingCount: 1 }).where(eq(Profiles.id, follower.id));
   await db.update(Profiles).set({ followersCount: 1 }).where(eq(Profiles.id, followee.id));
 
-  const approved = await lifecycle.approveProfileFollowRequest!({
+  const approved = await approveProfileFollowRequest({
     actorProfileId: followee.id,
     profileFollowRequestId: request.id,
   });
@@ -463,11 +462,11 @@ test('승인은 기존 relation을 재사용하고 count를 중복 증가시키�
 test('동시 승인은 성공 개수와 무관하게 relation과 count를 중복하지 않는다', async () => {
   const { followee, follower, request } = await createPendingRequest();
   await Promise.allSettled([
-    lifecycle.approveProfileFollowRequest!({
+    approveProfileFollowRequest({
       actorProfileId: followee.id,
       profileFollowRequestId: request.id,
     }),
-    lifecycle.approveProfileFollowRequest!({
+    approveProfileFollowRequest({
       actorProfileId: followee.id,
       profileFollowRequestId: request.id,
     }),
@@ -505,7 +504,7 @@ const createRemotePendingRequest = async () => {
     followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
     instanceKind: InstanceKind.ACTIVITYPUB,
   });
-  const result = await lifecycle.ensureProfileFollowRequest({
+  const result = await ensureProfileFollowRequest({
     followeeProfileId: followee.id,
     followerProfileId: follower.id,
   });
@@ -561,7 +560,7 @@ test('원격 Accept는 비활성 local participant의 pending을 보존한다', 
     .where(eq(Profiles.id, fixture.follower.id));
 
   assert.deepEqual(
-    await lifecycle.acceptProfileFollowRequest({
+    await acceptProfileFollowRequest({
       expectedRowId: fixture.request.id,
       followeeProfileId: fixture.followee.id,
       followerProfileId: fixture.follower.id,
@@ -607,8 +606,8 @@ test('원격 Accept 동시 처리는 pending을 한 번만 relation으로 승격
     followerProfileId: fixture.follower.id,
   };
   const results = await Promise.all([
-    lifecycle.acceptProfileFollowRequest(input),
-    lifecycle.acceptProfileFollowRequest(input),
+    acceptProfileFollowRequest(input),
+    acceptProfileFollowRequest(input),
   ]);
 
   assert.deepEqual(results.map(({ kind }) => kind).sort(), ['ACCEPTED', 'ALREADY_ESTABLISHED']);
@@ -628,7 +627,7 @@ test('원격 Accept와 Reject 경쟁에서는 exact row 전이 하나만 성공�
     followerProfileId: fixture.follower.id,
   };
   const results = await Promise.all([
-    lifecycle.acceptProfileFollowRequest(input),
+    acceptProfileFollowRequest(input),
     removeInboundFollow(input),
   ]);
 
@@ -663,7 +662,7 @@ test('원격 Accept와 Reject는 교체된 pending에 이전 request id를 적�
     followerProfileId: fixture.follower.id,
   };
 
-  assert.deepEqual(await lifecycle.acceptProfileFollowRequest(staleInput), { kind: 'NOOP' });
+  assert.deepEqual(await acceptProfileFollowRequest(staleInput), { kind: 'NOOP' });
   assert.equal(await removeInboundFollow(staleInput), false);
   assert.deepEqual(
     await db

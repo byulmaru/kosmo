@@ -16,7 +16,6 @@ import { temporalClient } from './client';
 import { KOSMO_TASK_QUEUE } from './task-queue';
 import type {
   HydratedProfileFollowPairTransition,
-  ProfileFollowPairCommand,
   ProfileFollowPairTransitionInput,
   ProfileFollowPairTransitionOutcome,
   ProfileFollowRemovalInput,
@@ -55,14 +54,6 @@ export const profileFollowRemovalWorkflowId = (
   `${PROFILE_FOLLOW_REMOVAL_WORKFLOW_ID_PREFIX}${input.followerProfileId}:${input.followeeProfileId}:${input.expectedRowId}`;
 
 /**
- * Update IDs are transport-level deduplication metadata only. They are not
- * operation IDs and are not persisted in the domain. Reusing these IDs on a
- * later run is safe because Temporal scopes Update IDs to one Workflow run.
- */
-export const profileFollowPairUpdateId = (command: ProfileFollowPairCommand): string =>
-  command.kind === 'FOLLOW' ? 'follow' : `${command.kind}:${command.expectedRowId}`;
-
-/**
  * Start or join the lifecycle Workflow for one directed pair and execute one
  * state transition. The Update resolves after the transaction Activity has
  * committed; the pair Workflow may remain alive while the request is PENDING
@@ -78,7 +69,10 @@ export const executeProfileFollowPairTransition = async (
       () =>
         temporalClient.workflow.executeUpdateWithStart(PROFILE_FOLLOW_PAIR_UPDATE_NAME, {
           args: [input.command],
-          updateId: profileFollowPairUpdateId(input.command),
+          // Update IDs are transport-level deduplication metadata only. Keep
+          // the initial Follow admission deduplicated; let Temporal assign a
+          // fresh ID to terminal attempts so a prior PENDING no-op can retry.
+          updateId: input.command.kind === 'FOLLOW' ? 'follow' : undefined,
           startWorkflowOperation: new WithStartWorkflowOperation(
             PROFILE_FOLLOW_PAIR_WORKFLOW_TYPE,
             {

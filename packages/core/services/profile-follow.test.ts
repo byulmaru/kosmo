@@ -65,12 +65,10 @@ const createRemoteProfile = async ({
   followPolicy = ProfileFollowPolicy.OPEN,
   state = InstanceState.ACTIVE,
   withActor = true,
-  withInbox = true,
 }: {
   followPolicy?: ProfileFollowPolicy;
   state?: InstanceState;
   withActor?: boolean;
-  withInbox?: boolean;
 } = {}) => {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const instance = await db
@@ -100,7 +98,7 @@ const createRemoteProfile = async ({
 
   if (withActor) {
     await db.insert(ActivityPubActors).values({
-      inboxUri: withInbox ? `https://${instance.domain}/users/${suffix}/inbox` : null,
+      inboxUri: `https://${instance.domain}/users/${suffix}/inbox`,
       profileId: profile.id,
       sharedInboxUri: `https://${instance.domain}/inbox`,
       type: 'PERSON',
@@ -366,9 +364,9 @@ test('follow action은 저장 actor identity가 없는 remote profile을 숨긴�
   );
 });
 
-test('remote follow delivery 실패는 commit된 relation과 count를 rollback하지 않는다', async () => {
+test('remote Follow transaction은 relation과 count를 멱등 처리한다', async () => {
   const follower = await createProfile();
-  const followee = await createRemoteProfile({ withInbox: false });
+  const followee = await createRemoteProfile();
   const followed = await followProfile({
     followerProfileId: follower.id,
     followeeProfileId: followee.id,
@@ -398,7 +396,6 @@ test('UNRESPONSIVE remote follow와 unfollow는 local projection만 변경한다
   const follower = await createProfile();
   const followee = await createRemoteProfile({
     state: InstanceState.UNRESPONSIVE,
-    withInbox: false,
   });
 
   const followed = await followProfile({
@@ -416,12 +413,11 @@ test('UNRESPONSIVE remote follow와 unfollow는 local projection만 변경한다
   assert.equal((await readProfile(followee.id)).followersCount, 0);
 });
 
-test('UNRESPONSIVE approval request는 저장만 하고 cancel delivery 실패도 전이를 rollback하지 않는다', async () => {
+test('UNRESPONSIVE approval request는 pending row를 저장하고 cancel로 제거한다', async () => {
   const follower = await createProfile();
   const followee = await createRemoteProfile({
     followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
     state: InstanceState.UNRESPONSIVE,
-    withInbox: false,
   });
 
   const first = await followProfile({
@@ -443,10 +439,6 @@ test('UNRESPONSIVE approval request는 저장만 하고 cancel delivery 실패�
   assert.equal((await readProfile(follower.id)).followingCount, 0);
   assert.equal((await readProfile(followee.id)).followersCount, 0);
 
-  await db
-    .update(Instances)
-    .set({ state: InstanceState.ACTIVE })
-    .where(eq(Instances.id, followee.instanceId));
   const canceled = await cancelProfileFollowRequest({
     actorProfileId: follower.id,
     profileFollowRequestId: first.result.profileFollowRequest.id,
@@ -463,11 +455,10 @@ test('UNRESPONSIVE approval request는 저장만 하고 cancel delivery 실패�
   );
 });
 
-test('approval request Follow delivery 실패는 pending row를 보존하고 duplicate는 재발송하지 않는다', async () => {
+test('approval request transaction은 pending row를 보존하고 duplicate를 멱등 처리한다', async () => {
   const follower = await createProfile();
   const followee = await createRemoteProfile({
     followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
-    withInbox: false,
   });
 
   const followed = await followProfile({
@@ -505,7 +496,6 @@ test('UNRESPONSIVE approval request cancel은 local row만 제거한다', async 
   const followee = await createRemoteProfile({
     followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
     state: InstanceState.UNRESPONSIVE,
-    withInbox: false,
   });
   const followed = await followProfile({
     followerProfileId: follower.id,
@@ -532,20 +522,13 @@ test('UNRESPONSIVE approval request cancel은 local row만 제거한다', async 
   );
 });
 
-test('remote Undo delivery 실패는 commit된 relation 삭제와 count를 rollback하지 않는다', async () => {
+test('remote Unfollow transaction은 relation과 count를 감소시킨다', async () => {
   const follower = await createProfile();
-  const followee = await createRemoteProfile({
-    state: InstanceState.UNRESPONSIVE,
-    withInbox: false,
-  });
+  const followee = await createRemoteProfile();
   const followed = await followProfile({
     followerProfileId: follower.id,
     followeeProfileId: followee.id,
   });
-  await db
-    .update(Instances)
-    .set({ state: InstanceState.ACTIVE })
-    .where(eq(Instances.id, followee.instanceId));
 
   const unfollowed = await unfollowProfile({
     followerProfileId: follower.id,

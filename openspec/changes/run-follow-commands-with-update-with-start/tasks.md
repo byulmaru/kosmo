@@ -24,7 +24,7 @@
 - open-policy Follow와 approval-required Follow의 state transition
 - approve/accept/reject/cancel/undo의 exact expected-row 처리
 - Activity completion loss 뒤 DB state 및 deterministic candidate/expected ID 기반 retry reconstruction
-- stale old-generation command, duplicate/no-op, refollow와 rollback/concurrency test
+- stale old-generation command, duplicate/no-op 뒤 terminal 재시도, refollow와 rollback/concurrency test
 
 - [x] 1.1 pair key, lifecycle command/result DTO와 transaction-only domain executor를 구현한다.
 - [x] 1.2 candidate domain row ID 배정, expected row validation과 DB state retry reconstruction을 구현·검증한다.

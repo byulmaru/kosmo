@@ -12,7 +12,6 @@ const {
   executeProfileFollowRemoval,
   profileFollowPairWorkflowId,
   profileFollowRemovalWorkflowId,
-  profileFollowPairUpdateId,
 } = await import('./follow-command');
 
 const pair = {
@@ -75,7 +74,7 @@ test('pair transition caller uses deterministic UWS identity and active-run poli
   }
 });
 
-test('terminal pair transition derives Update ID from the exact row generation', async () => {
+test('terminal pair transition lets Temporal assign a fresh Update ID per attempt', async () => {
   const requestId = '00000000-0000-8000-8000-000000000003';
   const command = {
     kind: 'REJECT' as const,
@@ -94,8 +93,7 @@ test('terminal pair transition derives Update ID from the exact row generation',
     assert.ok(call);
     const options = call.arguments[1];
     assert.ok(options);
-    assert.equal(options.updateId, `REJECT:${requestId}`);
-    assert.equal(profileFollowPairUpdateId(command), `REJECT:${requestId}`);
+    assert.equal(options.updateId, undefined);
     assert.equal(
       options.startWorkflowOperation.options.workflowId,
       profileFollowPairWorkflowId(pair),

@@ -27,6 +27,7 @@ import { profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
 import { profileTagNormalizationParityCases } from '@kosmo/core/validation/profile-tag-parity-fixture';
 import { and, count, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { waitForProfileFollowWorkflows } from './temporal-test-helpers';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
@@ -4340,6 +4341,7 @@ const readProfileTags = async (profileId: string) =>
     .then((rows) => rows.map(({ name }) => name).sort());
 
 const resetFixtures = async () => {
+  await waitForProfileFollowWorkflows();
   await db.update(Posts).set({ currentContentId: null });
   await db.delete(Sessions);
   await db.delete(PostContents);
