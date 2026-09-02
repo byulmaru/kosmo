@@ -54,7 +54,10 @@ const meta = {
   },
   component: PostComposerMediaItemsTarget,
   excludeStories: ['InteractionContract', 'mixedMedia'],
-  parameters: { layout: 'padded' },
+  parameters: {
+    controls: { exclude: ['onEdit', 'onRemove', 'onRetry'] },
+    layout: 'padded',
+  },
   title: 'KOSMO/Components/Post Composer Media Items',
 } satisfies Meta<typeof PostComposerMediaItemsTarget>;
 
