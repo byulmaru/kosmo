@@ -432,23 +432,22 @@ export function MobileFullscreenComposerShellCandidate({
             value={contentWarning}
           />
         ) : null}
-        <View style={styles.mobileEditor}>
-          <TextArea
-            accessibilityLabel="게시물 내용"
-            editable={!submitting}
-            onChangeText={onBodyChange}
-            placeholder="무슨 일이 일어나고 있나요?"
-            style={[
-              styles.mobileBody,
-              {
-                backgroundColor: theme.backgroundCanvas,
-                color: theme.foregroundPrimary,
-                flex: 1,
-              },
-            ]}
-            value={body}
-          />
-        </View>
+        <TextArea
+          accessibilityLabel="게시물 내용"
+          containerStyle={styles.mobileEditor}
+          editable={!submitting}
+          onChangeText={onBodyChange}
+          placeholder="무슨 일이 일어나고 있나요?"
+          style={[
+            styles.mobileBody,
+            {
+              backgroundColor: theme.backgroundCanvas,
+              color: theme.foregroundPrimary,
+              flex: 1,
+            },
+          ]}
+          value={body}
+        />
         {error ? (
           <Text
             accessibilityRole="alert"

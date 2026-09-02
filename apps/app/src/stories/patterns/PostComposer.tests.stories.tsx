@@ -4,6 +4,8 @@ import baseMeta, {
   MobileCandidateContract as mobileCandidateContract,
   MobileFlexLayoutContract as mobileFlexLayoutContract,
   MobileKeyboardContract as mobileKeyboardContract,
+  MobileKeyboardCWEditorGeometryContract as mobileKeyboardCWEditorGeometryContract,
+  MobileKeyboardMediaEditorGeometryContract as mobileKeyboardMediaEditorGeometryContract,
   MobileKeyboardMediaFooterGeometryContract as mobileKeyboardMediaFooterGeometryContract,
   MobileMediaFooterGeometryContract as mobileMediaFooterGeometryContract,
   MobilePlayground as mobilePlaygroundStory,
@@ -33,6 +35,9 @@ export const MobileKeyboardMediaFooterGeometryContract: Story =
   mobileKeyboardMediaFooterGeometryContract;
 export const MobileCandidateContract: Story = mobileCandidateContract;
 export const MobileKeyboardContract: Story = mobileKeyboardContract;
+export const MobileKeyboardCWEditorGeometryContract: Story = mobileKeyboardCWEditorGeometryContract;
+export const MobileKeyboardMediaEditorGeometryContract: Story =
+  mobileKeyboardMediaEditorGeometryContract;
 export const MobileMediaFooterGeometryContract: Story = mobileMediaFooterGeometryContract;
 export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
 export const MobileFlexLayoutContract: Story = mobileFlexLayoutContract;
