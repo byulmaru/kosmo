@@ -84,7 +84,7 @@ repository 검증과 실제 dev tailnet 관찰이 Admin shell의 허용·거부,
   제외하고 source 경계를 기록한다.
 
 - [x] 3.1 접근 정책 prerequisite, deploy·검증·rollback 절차를 사용자 식별자나 credential 값 없이 문서화한다.
-- [ ] 3.2 workspace lint/test, SvelteKit production build, image와 Helm 검증, OpenSpec strict validation을 통과시킨다.
+- [x] 3.2 workspace lint/test, SvelteKit production build, image와 Helm 검증, OpenSpec strict validation을 통과시킨다.
 - [ ] 3.3 dev에서 workload readiness와 Operator Ingress 전달을 확인한다.
 - [ ] 3.4 dev tailnet의 허용·거부 접근과 일반 Pod·node 밖 VPC direct access·공개 인터넷 비노출을 확인하고,
       node-origin 예외를 구분해 기록한다.
