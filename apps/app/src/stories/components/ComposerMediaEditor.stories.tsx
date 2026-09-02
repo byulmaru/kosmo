@@ -170,6 +170,7 @@ function InteractiveEditor(props: ComposerMediaEditorProps) {
         props.presentation === 'mobile' && mobileState === 'altKeyboard'
           ? () => {
               setMobileState('default');
+              props.onPreviewPress?.();
             }
           : undefined
       }
@@ -304,6 +305,7 @@ export const MobileSensitiveGeometryContract: Story = {
 export const MobileToolInteractionContract: Story = {
   ...MobileDefault,
   play: async ({ args, canvasElement }) => {
+    args.onPreviewPress?.mockClear();
     args.onToolChange.mockClear();
     const canvas = within(canvasElement);
 
@@ -322,6 +324,7 @@ export const MobileToolInteractionContract: Story = {
     await userEvent.clear(altText);
     await userEvent.type(altText, '작성한 설명');
     await userEvent.click(canvas.getByRole('button', { name: '선택한 첨부 이미지 1 미리보기' }));
+    expect(args.onPreviewPress).toHaveBeenCalledOnce();
     expect(canvas.queryByTestId('mobile-composer-media-editor-keyboard')).toBeNull();
 
     await userEvent.click(canvas.getByRole('button', { name: '대체 텍스트 편집' }));
