@@ -48,7 +48,7 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 | `ANDROID_RELEASE_STORE_PASSWORD`  | upload keystore password           |
 | `ANDROID_RELEASE_KEY_PASSWORD`    | upload key password                |
 
-`Android Google Play Internal Distribution`은 기존 저장소 수준 `TAILSCALE_OAUTH_CLIENT_ID`와 `TAILSCALE_AUDIENCE`로 Vault tailnet에 접속한 뒤, GitHub OIDC JWT로 `kosmo-android-play` role을 인증하고 실행 중에만 이 값을 읽는다. Vault role과 policy는 `prod` Environment의 이 workflow만 해당 경로를 읽도록 제한해야 한다.
+`Android Google Play Internal Distribution`은 조직 수준 `VAULT_ADDR`와 `VAULT_GITHUB_ACTIONS_AUDIENCE`, 저장소 수준 `TAILSCALE_OAUTH_CLIENT_ID`와 `TAILSCALE_AUDIENCE`를 사용한다. Vault tailnet에 접속한 뒤 GitHub OIDC JWT로 `kosmo-android-play` role을 인증하고 실행 중에만 서명 값을 읽는다. Vault role과 policy는 `prod` Environment의 이 workflow만 해당 경로를 읽도록 제한해야 한다.
 
 upload key 예시는 다음과 같다. password는 명령행이나 저장소에 넣지 말고 `keytool` prompt에서 입력한다.
 
