@@ -49,7 +49,7 @@ export function PostComposerMediaItemsTarget({
       accessibilityLabel={`첨부 이미지 갤러리, ${media.length}개`}
       contentContainerStyle={styles.galleryContent}
       horizontal
-      showsHorizontalScrollIndicator={false}
+      showsHorizontalScrollIndicator={media.length > 2}
       style={styles.gallery}
     >
       {media.map((item, index) => {
