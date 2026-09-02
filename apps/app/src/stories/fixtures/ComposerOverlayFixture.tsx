@@ -34,9 +34,12 @@ export function ComposerOverlayFixture({
         <View
           accessibilityViewIsModal
           key={maxWidth}
+          testID="composer-overlay-surface"
           style={[styles.surface, { backgroundColor: theme.backgroundSurface, maxWidth }]}
         >
-          {children}
+          <View testID="composer-overlay-scroll" style={styles.scroll}>
+            {children}
+          </View>
         </View>
       </View>
     </Modal>
@@ -54,7 +57,8 @@ const styles = StyleSheet.create({
   surface: {
     borderRadius: radius[16],
     maxHeight: '85dvh' as never,
-    overflow: 'auto' as never,
+    overflow: 'hidden' as never,
     width: '100%',
   },
+  scroll: { maxHeight: '85dvh' as never, overflow: 'auto' as never, width: '100%' },
 });

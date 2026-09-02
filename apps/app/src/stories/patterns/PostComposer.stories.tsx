@@ -1,6 +1,8 @@
+import { normalizePostContentPlainText } from '@kosmo/core/post-content';
+import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { XIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { ComposerMediaEditor } from '@/components/post/ComposerMediaEditor';
 import {
@@ -10,6 +12,7 @@ import {
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, space, textStyles } from '@/theme/tokens';
 import ogImage from '../../../public/og-default.png?url';
@@ -111,7 +114,7 @@ const meta = {
     showCWAction: true,
     showEmojiAction: true,
     showMediaAction: true,
-    showPollAction: true,
+    showPollAction: false,
     showSubmit: true,
     submitting: false,
     surface: 'rail',
@@ -123,7 +126,7 @@ const meta = {
     contentWarning: { control: 'text' },
     contentWarningExpanded: { control: 'boolean' },
     error: { control: 'text' },
-    items: { control: 'object' },
+    items: { control: false },
     onBodyChange: { action: 'bodyChange', control: false },
     onContentWarningChange: { action: 'contentWarningChange', control: false },
     onContentWarningToggle: { action: 'contentWarningToggle', control: false },
@@ -136,12 +139,12 @@ const meta = {
     onPollAction: { action: 'pollAction', control: false },
     onSubmit: { action: 'submit', control: false },
     onVisibilityChange: { action: 'visibilityChange', control: false },
-    remaining: { control: { max: 500, min: -10, step: 1, type: 'range' } },
+    remaining: { control: false },
     sensitiveMedia: { control: 'boolean' },
     showCWAction: { control: 'boolean' },
     showEmojiAction: { control: 'boolean' },
     showMediaAction: { control: 'boolean' },
-    showPollAction: { control: 'boolean' },
+    showPollAction: { control: false },
     showSubmit: { control: 'boolean' },
     submitting: { control: 'boolean' },
     surface: { control: 'inline-radio', options: ['rail', 'overlay'] },
@@ -159,14 +162,35 @@ const meta = {
     'StateContract',
     'composerMedia',
   ],
-  parameters: { layout: 'centered' },
+  parameters: { controls: { disable: true }, layout: 'centered' },
   title: 'KOSMO/Patterns/Post Composer Target',
 } satisfies Meta<typeof PostComposerTarget>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Playground: Story = { render: (args) => <InteractiveComposer {...args} /> };
+export const Playground: Story = {
+  parameters: {
+    controls: {
+      disable: false,
+      include: [
+        'body',
+        'contentWarning',
+        'contentWarningExpanded',
+        'error',
+        'sensitiveMedia',
+        'showCWAction',
+        'showEmojiAction',
+        'showMediaAction',
+        'showSubmit',
+        'submitting',
+        'surface',
+        'visibility',
+      ],
+    },
+  },
+  render: (args) => <InteractiveComposer {...args} />,
+};
 
 export const RailEmptyPublic: Story = {
   args: { body: '', items: [], remaining: 500, surface: 'rail', visibility: 'PUBLIC' },
@@ -186,7 +210,23 @@ export const OverlayMediaFollowers: Story = {
 };
 
 export const Submitting: Story = { args: { items: [], submitting: true } };
-export const Error: Story = { args: { error: '게시글을 작성하지 못했습니다.', items: [] } };
+export const Error: Story = {
+  args: { body: '미디어 업로드 실패를 확인할 본문', error: undefined, items: [composerMedia[2]] },
+};
+
+export const SubmitFailure: Story = {
+  args: { body: '제출 실패를 확인할 본문', error: undefined, items: [], surface: 'rail' },
+  render: (args) => <SubmitFailureComposer {...args} />,
+};
+
+export const RailMedia: Story = {
+  args: { body: '세 장 미디어 접근성 확인', items: composerMedia, surface: 'rail' },
+  render: (args) => (
+    <View style={styles.railMediaFixture} testID="post-composer-rail-media-reachability">
+      <InteractiveComposer {...args} />
+    </View>
+  ),
+};
 
 export const CompactOverlay: Story = {
   args: { surface: 'overlay' },
@@ -199,6 +239,7 @@ export const CompactOverlay: Story = {
 
 const mobileGlobals = { viewport: { isRotated: false, value: 'kosmoMobile' } } as const;
 const mobileParameters = { layout: 'fullscreen' } as const;
+const submitFailureMessage = '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.';
 
 export const MobilePlayground: Story = {
   args: { items: readyComposerMedia, surface: 'overlay' },
@@ -245,6 +286,20 @@ export const MobileKeyboardCW: Story = {
   render: (args) => <InteractiveComposer {...args} keyboard mobile />,
 };
 
+function SubmitFailureComposer(props: PostComposerTargetProps) {
+  const { showToast } = useToast();
+
+  return (
+    <InteractiveComposer
+      {...props}
+      onSubmit={() => {
+        props.onSubmit();
+        showToast(submitFailureMessage, { tone: 'danger' });
+      }}
+    />
+  );
+}
+
 function InteractiveComposer({
   keyboard = false,
   mobile = false,
@@ -268,6 +323,14 @@ function InteractiveComposer({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('expressions');
+  const [pickerPosition, setPickerPosition] = useState({
+    left: space[8] as number,
+    top: space[8] as number,
+  });
+  const remaining =
+    postBodyMaxLength -
+    normalizePostContentPlainText(body).length -
+    normalizePostContentPlainText(contentWarning).length;
 
   useEffect(() => setBody(props.body), [props.body]);
   useEffect(() => setContentWarning(props.contentWarning), [props.contentWarning]);
@@ -278,6 +341,36 @@ function InteractiveComposer({
   useEffect(() => setItems(props.items), [props.items]);
   useEffect(() => setVisibility(props.visibility), [props.visibility]);
   useEffect(() => setSensitiveMedia(props.sensitiveMedia), [props.sensitiveMedia]);
+  useEffect(() => {
+    if (mobile || !pickerOpen || typeof document === 'undefined') {
+      return;
+    }
+
+    const triggers = Array.from(
+      document.querySelectorAll<HTMLElement>('[aria-label="이모지 추가"]'),
+    ).filter((element) => {
+      const bounds = element.getBoundingClientRect();
+      return bounds.width > 0 && bounds.height > 0;
+    });
+    const trigger = triggers[triggers.length - 1];
+    const storyWindow = trigger?.ownerDocument.defaultView;
+    if (!trigger || !storyWindow) {
+      return;
+    }
+
+    const bounds = trigger.getBoundingClientRect();
+    const panelWidth = 360;
+    const panelHeight = 624;
+    const gap = space[8];
+    const maxLeft = Math.max(gap, storyWindow.innerWidth - panelWidth - gap);
+    setPickerPosition({
+      left: Math.min(Math.max(gap, bounds.right - panelWidth), maxLeft),
+      top:
+        storyWindow.innerHeight - bounds.bottom >= panelHeight + gap
+          ? bounds.bottom + gap
+          : Math.max(gap, bounds.top - panelHeight - gap),
+    });
+  }, [mobile, pickerOpen]);
 
   const closeOverlay = () => {
     setEditor(null);
@@ -286,22 +379,41 @@ function InteractiveComposer({
   };
 
   const picker = pickerOpen ? (
-    <View style={mobile ? styles.mobilePicker : styles.picker}>
-      <FullReactionPicker
-        activeCategory={activeCategory}
-        onCategoryChange={setActiveCategory}
-        onQueryChange={setPickerQuery}
-        onSelect={(option) => {
-          const value = `${body}${option.emoji}`;
-          props.onBodyChange(value);
-          setBody(value);
-          setPickerOpen(false);
-        }}
-        options={reactionOptions}
-        presentation={mobile ? 'mobile' : 'web'}
-        query={pickerQuery}
-        selectedValues={[]}
-      />
+    <View pointerEvents="box-none" style={mobile ? styles.mobilePicker : styles.pickerLayer}>
+      {!mobile ? (
+        <Pressable
+          accessibilityLabel="반응 선택 닫기"
+          accessibilityRole="button"
+          onPress={() => setPickerOpen(false)}
+          style={styles.pickerDismiss}
+        />
+      ) : null}
+      <View
+        pointerEvents="box-none"
+        style={[
+          styles.pickerPanel,
+          mobile
+            ? styles.mobilePickerPanel
+            : { left: pickerPosition.left, top: pickerPosition.top },
+        ]}
+        testID="post-composer-emoji-picker"
+      >
+        <FullReactionPicker
+          activeCategory={activeCategory}
+          onCategoryChange={setActiveCategory}
+          onQueryChange={setPickerQuery}
+          onSelect={(option) => {
+            const value = `${body}${option.emoji}`;
+            props.onBodyChange(value);
+            setBody(value);
+            setPickerOpen(false);
+          }}
+          options={reactionOptions}
+          presentation={mobile ? 'mobile' : 'web'}
+          query={pickerQuery}
+          selectedValues={[]}
+        />
+      </View>
     </View>
   ) : null;
 
@@ -361,6 +473,7 @@ function InteractiveComposer({
           contentWarning={contentWarning}
           contentWarningExpanded={contentWarningExpanded}
           items={items}
+          remaining={remaining}
           keyboard={keyboard}
           onBodyChange={(value) => {
             props.onBodyChange(value);
@@ -406,6 +519,7 @@ function InteractiveComposer({
           contentWarning={contentWarning}
           contentWarningExpanded={contentWarningExpanded}
           items={items}
+          remaining={remaining}
           onBodyChange={(value) => {
             props.onBodyChange(value);
             setBody(value);
@@ -504,6 +618,7 @@ function InteractiveComposer({
                 contentWarning={contentWarning}
                 contentWarningExpanded={contentWarningExpanded}
                 items={items}
+                remaining={remaining}
                 onBodyChange={(value) => {
                   props.onBodyChange(value);
                   setBody(value);
@@ -731,7 +846,18 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   overlayClose: { position: 'absolute', right: space[16], top: space[12] },
-  picker: { position: 'absolute', right: 0, top: 72, zIndex: 20 },
+  pickerDismiss: { ...StyleSheet.absoluteFill, backgroundColor: 'transparent' },
+  pickerLayer: {
+    bottom: 0,
+    left: 0,
+    position: 'fixed' as never,
+    right: 0,
+    top: 0,
+    zIndex: 20,
+  },
+  pickerPanel: { position: 'absolute', zIndex: 1 },
+  mobilePickerPanel: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+  railMediaFixture: { maxWidth: 326, width: '100%' },
   overlayContent: { width: '100%' },
   overlayHeader: {
     alignItems: 'center',
