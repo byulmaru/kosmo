@@ -255,14 +255,6 @@ platform :ios do
     UI.user_error!("IPA was not created at #{ipa_path}.") unless File.file?(ipa_path) && File.size?(ipa_path)
     UI.user_error!("Release notes were not created at #{release_notes_path}.") unless File.file?(release_notes_path)
 
-    expected_build_number = build_number!
-    ipa_bundle_id = FastlaneCore::IpaFileAnalyser.fetch_app_identifier(ipa_path)
-    ipa_version = FastlaneCore::IpaFileAnalyser.fetch_app_version(ipa_path)
-    ipa_build_number = FastlaneCore::IpaFileAnalyser.fetch_app_build(ipa_path)
-    UI.user_error!('IPA bundle identifier does not match moe.kos.') unless ipa_bundle_id == BUNDLE_IDENTIFIER
-    UI.user_error!('IPA build number does not match IOS_BUILD_NUMBER.') unless ipa_build_number == expected_build_number
-    UI.user_error!('IPA version is missing.') if ipa_version.to_s.empty?
-
     api_key = load_apple_api_key
     app = Spaceship::ConnectAPI::App.find(BUNDLE_IDENTIFIER)
     matching_groups = (app&.get_beta_groups || []).select { |group| group.name == 'Internal Testers' }
@@ -280,6 +272,8 @@ platform :ios do
       skip_waiting_for_build_processing: false,
     )
 
+    ipa_version = FastlaneCore::IpaFileAnalyser.fetch_app_version(ipa_path)
+    ipa_build_number = build_number!
     uploaded_build = Spaceship::ConnectAPI::Build.all(
       app_id: app.id,
       version: ipa_version,

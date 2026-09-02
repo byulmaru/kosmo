@@ -15,7 +15,7 @@ jobs:
   distribute:
     name: Build and distribute iOS App Store IPA
     if: github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, macOS]
+    runs-on: macos-26
     timeout-minutes: 60
     environment: prod
     env:
@@ -120,8 +120,6 @@ jobs:
           mkdir -p "${signing_dir}" "${artifact_dir}"
           {
             echo "IOS_SIGNING_DIR=${signing_dir}"
-            echo "IOS_DISTRIBUTION_CERTIFICATE_PATH=${certificate_path}"
-            echo "IOS_APP_STORE_PROVISIONING_PROFILE_PATH=${profile_path}"
             echo "IOS_ARCHIVE_PATH=${archive_path}"
             echo "IOS_ARTIFACT_DIR=${artifact_dir}"
             echo "IOS_IPA_PATH=${ipa_path}"
@@ -202,44 +200,21 @@ jobs:
 
           keychain_password="$(openssl rand -hex 32)"
           echo "::add-mask::${keychain_password}"
+          certificate_path="${IOS_SIGNING_DIR}/distribution.p12"
+          profile_path="${IOS_SIGNING_DIR}/app-store.mobileprovision"
           keychain_path="${IOS_SIGNING_DIR}/build.keychain-db"
-          original_keychains_path="${IOS_SIGNING_DIR}/original-keychains.txt"
           profile_install_dir="${HOME}/Library/MobileDevice/Provisioning Profiles"
           profile_install_path="${profile_install_dir}/${IOS_APP_STORE_PROVISIONING_PROFILE_UUID}.mobileprovision"
-          profile_preexisted='false'
-          if [[ -e "${profile_install_path}" || -L "${profile_install_path}" ]]; then
-            profile_preexisted='true'
-          fi
           if [[ -z "${IOS_DISTRIBUTION_CERTIFICATE_PASSWORD}" ]]; then
             echo "::error::IOS_DISTRIBUTION_CERTIFICATE_PASSWORD is required."
             exit 1
           fi
 
-          if [[ "${profile_preexisted}" == 'true' ]] && ! cmp -s "${IOS_APP_STORE_PROVISIONING_PROFILE_PATH}" "${profile_install_path}"; then
-            echo "::error::The installed provisioning profile does not match the Vault profile; refusing to overwrite it."
-            exit 1
-          fi
-
-          security list-keychains -d user | sed -E 's/^[[:space:]]*"//; s/"$//' > "${original_keychains_path}"
-          original_keychains=()
-          while IFS= read -r original_keychain; do
-            [[ -n "${original_keychain}" ]] && original_keychains+=("${original_keychain}")
-          done < "${original_keychains_path}"
-          if ((${#original_keychains[@]} == 0)); then
-            echo "::error::The original keychain list contained no usable entries; refusing to change it."
-            exit 1
-          fi
-          {
-            echo "IOS_KEYCHAIN_PATH=${keychain_path}"
-            echo "IOS_ORIGINAL_KEYCHAINS_PATH=${original_keychains_path}"
-            echo "IOS_PROFILE_INSTALL_PATH=${profile_install_path}"
-          } >> "${GITHUB_ENV}"
           security create-keychain -p "${keychain_password}" "${keychain_path}"
           security set-keychain-settings -lut 3600 "${keychain_path}"
           security unlock-keychain -p "${keychain_password}" "${keychain_path}"
-          security list-keychains -d user -s "${keychain_path}" "${original_keychains[@]}"
-          : > "${IOS_SIGNING_DIR}/keychain-list-changed"
-          security import "${IOS_DISTRIBUTION_CERTIFICATE_PATH}" \
+          security list-keychains -d user -s "${keychain_path}"
+          security import "${certificate_path}" \
             -k "${keychain_path}" \
             -P "${IOS_DISTRIBUTION_CERTIFICATE_PASSWORD}" \
             -T /usr/bin/codesign \
@@ -254,17 +229,8 @@ jobs:
             exit 1
           fi
 
-          if [[ "${profile_preexisted}" == 'false' ]]; then
-            mkdir -p "${profile_install_dir}"
-            if [[ -e "${profile_install_path}" || -L "${profile_install_path}" ]]; then
-              echo "::error::A provisioning profile appeared during setup; refusing to overwrite it."
-              exit 1
-            fi
-            # Mark before copying so a partial copy is removed by cleanup.
-            : > "${IOS_SIGNING_DIR}/profile-installed"
-            chmod 600 "${IOS_SIGNING_DIR}/profile-installed"
-            cp "${IOS_APP_STORE_PROVISIONING_PROFILE_PATH}" "${profile_install_path}"
-          fi
+          mkdir -p "${profile_install_dir}"
+          cp "${profile_path}" "${profile_install_path}"
 
       - name: Build signed App Store IPA
         working-directory: apps/app
@@ -472,101 +438,51 @@ jobs:
 
           cleanup_failed=0
           signing_dir="${IOS_SIGNING_DIR:-${RUNNER_TEMP}/kosmo-ios-testflight-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}}"
-          profile_install_path="${IOS_PROFILE_INSTALL_PATH:-}"
-          if [[ -z "${profile_install_path}" && "${IOS_APP_STORE_PROVISIONING_PROFILE_UUID:-}" =~ ^[A-Fa-f0-9-]{36}$ ]]; then
+          profile_install_path=""
+          if [[ "${IOS_APP_STORE_PROVISIONING_PROFILE_UUID:-}" =~ ^[A-Fa-f0-9-]{36}$ ]]; then
             profile_install_path="${HOME}/Library/MobileDevice/Provisioning Profiles/${IOS_APP_STORE_PROVISIONING_PROFILE_UUID}.mobileprovision"
           fi
 
-          profile_installed_marker="${signing_dir}/profile-installed"
-          if [[ -f "${profile_installed_marker}" ]]; then
-            if [[ -n "${profile_install_path}" && ( -e "${profile_install_path}" || -L "${profile_install_path}" ) ]]; then
-              if ! rm -f -- "${profile_install_path}"; then
-                echo "::error::The temporary provisioning profile could not be removed."
-                cleanup_failed=1
-              elif [[ -e "${profile_install_path}" || -L "${profile_install_path}" ]]; then
-                echo "::error::The temporary provisioning profile is still present."
-                cleanup_failed=1
-              fi
+          if [[ -n "${profile_install_path}" && ( -e "${profile_install_path}" || -L "${profile_install_path}" ) ]]; then
+            if ! rm -f -- "${profile_install_path}"; then
+              echo "::error::The temporary provisioning profile could not be removed."
+              cleanup_failed=1
+            elif [[ -e "${profile_install_path}" || -L "${profile_install_path}" ]]; then
+              echo "::error::The temporary provisioning profile is still present."
+              cleanup_failed=1
             fi
           fi
 
-          keychain_path="${IOS_KEYCHAIN_PATH:-${signing_dir}/build.keychain-db}"
-          original_keychains_path="${IOS_ORIGINAL_KEYCHAINS_PATH:-${signing_dir}/original-keychains.txt}"
-          keychain_list_changed_path="${signing_dir}/keychain-list-changed"
-          keychain_cleanup_required=0
-          original_keychains=()
-
-          if [[ -f "${keychain_list_changed_path}" || -e "${keychain_path}" || -L "${keychain_path}" ]]; then
-            keychain_cleanup_required=1
-            if [[ -s "${original_keychains_path}" ]]; then
-              while IFS= read -r original_keychain; do
-                [[ -n "${original_keychain}" ]] && original_keychains+=("${original_keychain}")
-              done < "${original_keychains_path}"
-            fi
-            if ((${#original_keychains[@]} == 0)); then
-              echo "::error::The original keychain list was unavailable for exact restoration."
-              cleanup_failed=1
-            fi
-
-            if [[ -e "${keychain_path}" || -L "${keychain_path}" ]] && ! security delete-keychain "${keychain_path}"; then
+          keychain_path="${signing_dir}/build.keychain-db"
+          if [[ -e "${keychain_path}" || -L "${keychain_path}" ]]; then
+            if ! security delete-keychain "${keychain_path}"; then
               echo "::error::The temporary keychain could not be removed."
               cleanup_failed=1
             fi
           fi
-
-          keychain_restored_exactly=1
-          if ((keychain_cleanup_required != 0)); then
-            keychain_restored_exactly=0
-            if ((${#original_keychains[@]} > 0)) &&
-              security list-keychains -d user -s "${original_keychains[@]}" &&
-              security list-keychains -d user | sed -E 's/^[[:space:]]*"//; s/"$//' | cmp -s "${original_keychains_path}" -; then
-              keychain_restored_exactly=1
-            else
-              echo "::error::The original keychain list could not be restored and verified exactly."
+          if [[ -e "${keychain_path}" || -L "${keychain_path}" ]]; then
+            if ! rm -f -- "${keychain_path}"; then
+              echo "::error::The temporary keychain file could not be removed."
+              cleanup_failed=1
+            elif [[ -e "${keychain_path}" || -L "${keychain_path}" ]]; then
+              echo "::error::The temporary keychain file is still present."
               cleanup_failed=1
             fi
           fi
 
-          if ((keychain_restored_exactly != 0)); then
-            if ! rm -rf -- "${signing_dir}"; then
-              echo "::error::The temporary signing directory could not be removed."
-              cleanup_failed=1
-            elif [[ -e "${signing_dir}" || -L "${signing_dir}" ]]; then
-              echo "::error::The temporary signing directory is still present."
-              cleanup_failed=1
-            fi
-          else
-            echo "::error::The temporary keychain cleanup could not be confirmed; keychain and recovery metadata were preserved for manual recovery."
-            sensitive_paths=(
-              "${IOS_DISTRIBUTION_CERTIFICATE_PATH:-${signing_dir}/distribution.p12}"
-              "${IOS_APP_STORE_PROVISIONING_PROFILE_PATH:-${signing_dir}/app-store.mobileprovision}"
-              "${IOS_API_KEY_PATH:-${signing_dir}/app-store-connect.p8}"
-              "${IOS_IPA_PATH:-${signing_dir}/artifact/Kosmo.ipa}"
-              "${IOS_RELEASE_NOTES_PATH:-${signing_dir}/release-notes.txt}"
-              "${IOS_EXPORT_OPTIONS_PATH:-${signing_dir}/export-options.plist}"
-              "${IOS_ARCHIVE_PATH:-${signing_dir}/Kosmo.xcarchive}"
-              "${IOS_ARTIFACT_DIR:-${signing_dir}/artifact}"
-              "${signing_dir}/derived-data"
-              "${signing_dir}/app-store.mobileprovision.plist"
-            )
-            for sensitive_path in "${sensitive_paths[@]}"; do
-              if [[ -z "${sensitive_path}" || "${sensitive_path}" == "${keychain_path}" || "${sensitive_path}" == "${signing_dir}" ]]; then
-                continue
-              fi
-              if [[ -e "${sensitive_path}" || -L "${sensitive_path}" ]]; then
-                if ! rm -rf -- "${sensitive_path}"; then
-                  echo "::error::Sensitive temporary path could not be removed: ${sensitive_path}"
-                  cleanup_failed=1
-                elif [[ -e "${sensitive_path}" || -L "${sensitive_path}" ]]; then
-                  echo "::error::Sensitive temporary path is still present: ${sensitive_path}"
-                  cleanup_failed=1
-                fi
-              fi
-            done
+          if ! rm -rf -- "${signing_dir}"; then
+            echo "::error::The temporary signing directory could not be removed."
+            cleanup_failed=1
+          elif [[ -e "${signing_dir}" || -L "${signing_dir}" ]]; then
+            echo "::error::The temporary signing directory is still present."
+            cleanup_failed=1
           fi
 
           if ! rm -rf -- "${GITHUB_WORKSPACE}/apps/app/ios"; then
             echo "::error::The generated iOS project could not be removed."
+            cleanup_failed=1
+          elif [[ -e "${GITHUB_WORKSPACE}/apps/app/ios" || -L "${GITHUB_WORKSPACE}/apps/app/ios" ]]; then
+            echo "::error::The generated iOS project is still present."
             cleanup_failed=1
           fi
 
