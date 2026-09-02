@@ -1,6 +1,7 @@
 **Shared spec ownership**
 
 - `PROD-820` / PR #685가 이 승인된 shared spec 전체를 소유한다. `PROD-819` / PR #653는 그 계약을 소비하는 Web runtime 구현을 소유한다.
+- `PROD-839`는 선행 release 반영과 지원 build·rebuild·rollback 확인 뒤 OpenPanel build/deployment·외부 설정 cleanup과 그 증거를 소유한다.
 - 현재 metadata 수집 결정은 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정` 댓글(`59d34cd1-96b2-446f-8a8d-3a48277f285a`)을 근거로 한다. 사용자 정혜주(HJSmiley)가 2026-08-31 마스킹 승인을 대체했으며, 이 결정은 GitHub reviewer signoff나 production acceptance가 아니다.
 - `PROD-795`, `PROD-741`, `PROD-575`가 각각 개인정보·운영 통합, Replay acceptance, production acceptance와 archive를 소유한다. 이 change는 해당 결과를 대신 완료하거나 archive하지 않는다.
 
@@ -159,6 +160,40 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 - [x] 5.1 Docker build args와 Web build environment에 공개 PostHog key·host를 함께 전달한다.
 - [x] 5.2 GitHub production release workflow가 같은 repository variables를 Docker build에 주입하고 OpenPanel 전환 순서를 유지한다.
 - [x] 5.3 가짜 공개 설정 production-equivalent build와 image inspection으로 공개 설정·credential 경계를 검증한다.
+
+## 9. PROD-839 OpenPanel 운영 설정 정리
+
+**Authority / Provenance**
+
+- [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 설정 정리 범위·선행 관계·완료 조건
+- `PROD-819`의 Web runtime 전환과 `PROD-820`의 공개 build-time 설정·전환기 OpenPanel 주입 계약
+- `PROD-795`의 정리 결과 인계와 `PROD-575`의 최종 acceptance·archive 계약
+
+**Deliverable**
+
+지원되는 Web build·수동 SHA rebuild·rollback 경로가 OpenPanel 없이 동작하고, 저장소 build·deployment 경계와 외부 설정에 불필요한 OpenPanel 전용 항목이 남지 않는다. 제거 전후 목록과 검증 결과를 실제 값 없이 PROD-795에 인계한다.
+
+**Guardrails**
+
+- PROD-819·PROD-820이 같은 지원 release line에 병합되고 OpenPanel을 사용하는 지원 대상이 없음을 확인하기 전에는 설정을 제거하지 않는다. PR 순서·CI 통과만으로 이 조건을 대신하지 않는다.
+- GitHub repository와 현재 배포에 쓰는 environment, 활성 runtime configuration source·운영 설정 저장소를 확인한다. 조회하지 못한 범위를 설정 부재로 처리하지 않는다.
+- PostHog 공개 key·host의 build-time 주입, local·development 기본 비활성화, 설정 누락 no-op과 선행 승인된 runtime·privacy·Replay 계약을 유지한다.
+- runtime·패키지·테스트 제거는 PROD-819, Cloud 최초 구성은 PROD-820, 개인정보·runbook 통합은 PROD-795, Replay acceptance는 PROD-741, production acceptance·archive는 PROD-575가 소유한다.
+- 실제 설정값·credential·사용자 데이터는 OpenSpec, Linear, PR, 로그와 handoff에 남기지 않는다. 과거 image 삭제나 지원 정책 변경으로 정리 조건을 임의로 충족시키지 않는다.
+
+**Verification**
+
+- merge·release 반영 근거와 지원 build·수동 SHA rebuild·rollback 대상별 OpenPanel 비사용 근거를 식별자·결과로 확인한다.
+- Dockerfile·development·production workflow 및 활성 설정의 OpenPanel 주입 부재와 PostHog 공개 설정 보존을 확인한다.
+- GitHub repository·environment 및 활성 배포 설정별 이름·범위·존재 여부를 제거 전후에 비교한다. 접근 불가·미확인 항목이 남으면 정리 완료로 처리하지 않는다.
+- 가짜 PostHog 공개 설정만 사용한 production-equivalent Web build·image inspection과 지원 rebuild·rollback 경로 검증으로 OpenPanel 비의존을 확인한다. 설정 누락 no-op과 기존 analytics 회귀 검증 결과를 함께 확인한다.
+- PROD-795에 전달할 목록·환경·검증 결과·남은 production 확인 사항에 실제 값이나 사용자 데이터가 없는지 검토한다.
+
+- [ ] 9.1 선행 변경의 같은 지원 release line 병합과 지원 build·수동 SHA rebuild·rollback 대상별 OpenPanel 비사용 근거를 확인하고, 정리할 설정 범위와 미확인 항목을 목록화한다.
+- [ ] 9.2 정리 조건 충족 후 Dockerfile의 OpenPanel ARG·ENV, production build arg와 development empty no-op 주입을 제거하고 PostHog 공개 설정 경계가 유지되는지 확인한다.
+- [ ] 9.3 확인된 GitHub repository·environment의 OpenPanel 전용 variable을 제거하고 활성 배포 설정의 잔여 참조를 점검한다. 설정 이름·적용 범위·존재 여부만 전후 기록에 남긴다.
+- [ ] 9.4 PostHog-only production-equivalent build·image inspection, 지원 rebuild·rollback 경로와 관련 회귀 검증으로 OpenPanel 비의존을 입증한다.
+- [ ] 9.5 제거 전후 목록, 적용 환경, 검증 결과와 남은 production 확인 사항을 실제 값 없이 PROD-795에 인계한다.
 
 ## 6. PROD-795 개인정보·운영 통합
 
