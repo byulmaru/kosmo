@@ -118,7 +118,9 @@ selected glyph·count에서 제품 action 의미색을 사용한다. 전역 `col
 | `color/action/link/hover`   | `#4338CA` | `#C7D2FE` |
 | `color/action/link/pressed` | `#3730A3` | `#818CF8` |
 
-클릭 가능한 본문 텍스트만 Link token을 사용한다. Info Purple은 정보 상태를 나타내며 링크처럼 보이게 사용하지 않는다.
+클릭 가능한 본문 텍스트만 Link token을 사용한다. 공용 `PostContentRenderer`가 만드는 외부 링크도
+Light·Dark의 `color/action/link/base`를 사용하고 기존 밑줄과 Post navigation 입력 격리를 유지한다.
+Info Purple은 정보 상태를 나타내며 링크처럼 보이게 사용하지 않는다.
 
 ## Feedback tokens
 

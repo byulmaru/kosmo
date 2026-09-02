@@ -497,6 +497,18 @@
 - Consequences: Reaction consumer만 기존 `fillActive` opt-in을 제거하고 공용 control과 Bookmark consumer는 유지한다. 같은 shared renderer를 사용하는 Native projection에도 outline이 적용되지만 이를 Native runtime 검증 증거로 사용하지 않는다. 새 component·token·dependency·variant는 추가하지 않는다.
 - Confirmation / Follow-up: Light·Dark Storybook에서 active Reaction의 `stroke=#F97066`, `fill=none`, HeartPlus plus path와 hover·unhover 지속 상태를 직접 검증한다. Figma selected SVG와 component description을 readback하고 Web Browser에서 시각 결과를 확인한다.
 
+### Post 본문 링크와 상세 metadata 리듬을 canonical semantic에 맞춘다
+
+- Decision Date: 2026-09-03
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-866`, `docs/design/colors.md`, `docs/design/post-action-bar.md`, Figma `PostLayout` 4686:12079·4690:12163, 2026-09-03 KST 사용자 결정
+- Status: Active
+- Context / Problem: 공용 Post content의 외부 링크가 본문색을 상속해 링크 affordance가 약했고, production `PostLayout`은 metadata와 Engagement border가 붙어 있어 canonical Center·Mobile Figma의 8px 리듬과 어긋났다.
+- Decision Outcome: 공용 `PostContentRenderer`가 만드는 클릭 가능한 외부 링크는 Light·Dark `actionLinkBase`와 기존 밑줄을 사용하고 바깥 Post·Source navigation 입력 격리를 유지한다. 상세 `PostLayout`은 metadata 하단부터 Engagement 상단 border까지 `spacing.sm` 8px을 둔다. 기존 Figma source, `PostListItem`, thread connector/divider와 Engagement 내부 border·padding·gap은 변경하지 않는다.
+- Alternatives Considered: Info와 Secondary는 각각 feedback과 보조 전경 역할이라 링크 의미에 맞지 않아 제외했다. 4px 간격과 Figma 수정은 이미 canonical source가 Center·Mobile 모두 8px을 사용하므로 제외했다.
+- Consequences: 한 곳의 shared renderer 변경으로 바깥 Post 본문과 Quote Source 링크가 함께 정렬되고, 모든 상세 `PostLayout` consumer가 같은 8px을 사용한다. 새 token·dependency·Playground는 추가하지 않는다.
+- Confirmation / Follow-up: 기존 production Storybook에서 Light·Dark 링크색, 밑줄·navigation 격리와 metadata→Engagement exact 8px을 검증하고 올바른 상단 스택 Web preview에서 확인한다.
+
 ## Remaining Decisions
 
 - 없음.

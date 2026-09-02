@@ -86,6 +86,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   8px·하단 1px을 사용한다.
 - 상세 thread의 현재 Post는 Reaction Summary가 있으면 Summary와 Action Bar 사이에 4px을 둔다.
   `PostLayout` Engagement는 full-width 상·하 1px `borderSubtle`, 상하 8px padding과 내부 4px gap을 소유한다.
+  metadata 하단부터 Engagement 상단 border까지는 canonical Figma와 같은 8px을 둔다.
   이 border와 padding은 thread connector용 gutter가 아니다. Reply surface가 닫힌 기본 상태에서는 빈 Composer
   wrapper를 렌더링하지 않고 Engagement 아래부터 current row 끝까지 4px을 둔다. current row 뒤에는 별도
   thread divider를 렌더링하지 않으며 current row 상단의 16px은 유지한다. Action Bar의 28px visual geometry는 바꾸지 않는다.
@@ -100,7 +101,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - direct Quote Source preview는 기본 fill을 갖지 않고 주변 Post background와 같은 평면을 유지하며 semantic
   border로만 경계를 구분한다. Web에서 source navigation이 활성인 preview는 pointer hover 동안 root 전체에
   semantic `stateHover` overlay를 적용한다. `interactive=false`인 Composer preview와 Native에는 hover fill을
-  적용하지 않는다.
+  적용하지 않는다. 본문과 Source preview 안의 클릭 가능한 외부 링크는 mode별 semantic `actionLinkBase`와
+  기존 밑줄을 사용하며 Post·Source navigation과 입력을 분리한다.
 - 순수 Repost의 본문·생성 시각 affordance는 Repost 자체가 아니라 Source detail로 이동한다. Repost Author와
   Source Author affordance는 각각 해당 Profile로 이동한다.
 - 순수 Repost 아래 Action Bar의 Reply는 바깥 contentless Repost의 Reply 계약을 유지해 disabled로 표시한다.
@@ -277,8 +279,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   `PostListItem` stack 간격이 모두 0인지 확인한다.
 - Compact·Full과 Light·Dark의 Pinned attribution은 위쪽 4px을 포함한 24px 높이인지, Repost attribution은
   위쪽 여백 없이 20px인지 확인한다.
-- 상세 thread의 현재 Post에서 current row 상단부터 content까지 16px, Engagement의 full-width 상·하 1px border와
-  상하 8px padding, Reaction Summary 아래부터 Action Bar까지 4px인지 검증한다. selected Profile이 있고 Reply
+- 상세 thread의 현재 Post에서 current row 상단부터 content까지 16px, metadata 하단부터 Engagement 상단
+  border까지 8px, Engagement의 full-width 상·하 1px border와 상하 8px padding, Reaction Summary 아래부터
+  Action Bar까지 4px인지 검증한다. selected Profile이 있고 Reply
   surface가 닫힌 기본 상태에서도 빈 wrapper가 남지 않으며 Engagement 아래부터 current row 끝까지 4px이고
   current row 뒤 별도 thread divider가 없는지 exact geometry로 검증한다.
 - 모든 플랫폼 구현에서 Bar와 visual/layout slot 높이 28, Reply·More layout slot endpoint의 content column 양끝 정렬, social layout slot 최소 너비 50, More 너비
@@ -303,6 +306,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   공통 구현의 완료 증거로 보고하지 않는다.
 - 순수 Repost에서 Reply는 바깥 contentless Repost identity를 유지해 disabled이고,
   Repost·Reaction·Bookmark·More만 direct Source Post를 대상으로 사용하는지 검증한다.
+- Post 본문과 Quote Source의 클릭 가능한 외부 링크가 Light·Dark `actionLinkBase`를 사용하고 밑줄과
+  바깥 Post·Source navigation 입력 격리를 유지하는지 검증한다.
 - target 자체가 적격할 때 guest는 기존 인증 진입으로, valid 세션에서 selected Profile이 없으면 기존 Profile
   선택기로 위임하고 session error에서는 액션을 비활성화하는지 검증한다. Profile 선택 뒤 원래 액션을 자동으로
   재실행하지 않는다.

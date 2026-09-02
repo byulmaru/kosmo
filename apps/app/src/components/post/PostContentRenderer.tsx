@@ -24,6 +24,7 @@ type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
 interface RenderContext {
   readonly bodyStyle: StyleProp<TextStyle>;
   readonly interactive: boolean;
+  readonly linkColor: string;
 }
 
 export type PostContentWarningPresentation = 'default' | 'revealed';
@@ -69,7 +70,7 @@ export function PostContentRenderer({
   const body = !contentVisible ? null : !bodyText ? null : !document ? (
     <Text style={bodyStyle}>{bodyText}</Text>
   ) : (
-    renderNode(document, 'body', { bodyStyle, interactive })
+    renderNode(document, 'body', { bodyStyle, interactive, linkColor: theme.actionLinkBase })
   );
   const bodyContent =
     body && onBodyPress ? (
@@ -189,7 +190,7 @@ function renderMark(
           event.stopPropagation();
           void Linking.openURL(link.attrs.href);
         }}
-        style={styles.link}
+        style={[styles.link, { color: context.linkColor }]}
       >
         {content}
       </Text>

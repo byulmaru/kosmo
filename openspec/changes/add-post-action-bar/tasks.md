@@ -286,6 +286,8 @@ Reaction과 Repost가 전역 feedback 의미와 분리된 presentation semantic�
 - [x] 7.6 Web action target을 count 기반 HUG로 교정하고, count 없음 28×36px, social slot 최소 50px·필요 시 확장, 숫자 `0`, non-overlap과 trailing 82px을 Storybook·Figma에서 검증하고 readback한다.
 - [x] 7.7 active Reaction HeartPlus를 fill 없는 의미색 outline으로 교정하고, Bookmark selected fill은 유지한 채 Light·Dark Storybook 회귀와 Figma source·description을 동기화하고 readback한다.
 - [x] 7.8 Reaction outline 변경 뒤 app check, lint·format, 전체 Storybook test·build와 OpenSpec strict validation 및 Web Browser QA를 통과시킨다.
+- [x] 7.9 공용 Post 외부 링크에 mode별 `actionLinkBase`를 적용하고 상세 `PostLayout` metadata→Engagement를 기존 Figma 기준 8px으로 맞춘 뒤 문서·OpenSpec을 동기화한다. Figma와 `PostListItem`은 변경하지 않는다.
+- [x] 7.10 focused·전체 Storybook, app check, lint·format, build, OpenSpec strict validation과 올바른 상단 스택 Web preview에서 링크·8px·HUG·Reaction 결과를 검증한다.
 
 ## 8. PROD-882 미선택 Repost 상태 색상 복구
 

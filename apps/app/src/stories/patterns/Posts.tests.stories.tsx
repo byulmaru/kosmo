@@ -1,4 +1,5 @@
 import baseMeta, {
+  LinkedSourceQuote as linkedSourceQuote,
   LinkedSourceQuoteInteraction as linkedSourceQuoteInteraction,
 } from './Posts.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -13,3 +14,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const LinkedSourceQuoteInteraction: Story = linkedSourceQuoteInteraction;
+
+export const LinkedSourceQuoteDark: Story = {
+  ...linkedSourceQuote,
+  globals: { backgrounds: { value: 'kosmoDark' }, theme: 'dark' },
+};

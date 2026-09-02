@@ -201,6 +201,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderTopWidth: 1,
     gap: spacing.xs,
+    marginTop: spacing.sm,
     paddingVertical: spacing.sm,
     width: '100%',
   },

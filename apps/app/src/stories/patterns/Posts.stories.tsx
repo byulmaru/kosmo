@@ -4535,11 +4535,17 @@ export const InvalidContentlessReplySource: Story = {
 };
 
 export const LinkedSourceQuote: Story = {
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, globals }) => {
     const canvas = within(canvasElement);
     const sourcePreview = await canvas.findByTestId('source-post-preview');
+    const externalLinks = canvas.getAllByLabelText('안전한 외부 링크, https://example.com/path');
+    const expectedLinkColor =
+      globals.theme === 'dark' ? colors.dark.actionLinkBase : colors.light.actionLinkBase;
     expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
     expect(window.getComputedStyle(sourcePreview).borderTopWidth).toBe('1px');
+    for (const externalLink of externalLinks) {
+      expect(externalLink).toHaveStyle({ color: expectedLinkColor });
+    }
     expect(canvasElement.querySelector('[role="link"] [role="link"]')).toBeNull();
   },
   render: () => <RepostQuotePresentationStory postId="post-quote-linked-source" />,
@@ -4608,8 +4614,13 @@ export const PostLayoutOwnsReactionSummary: Story = {
     const reactionSummary = canvas.getByRole('button', { name: '❤️ 반응 2개' });
     const actionBar = canvas.getByRole('toolbar', { name: '액션 바' });
     const engagement = canvas.getByTestId('post-layout-engagement');
+    const metadata = engagement.previousElementSibling as HTMLElement;
 
     expect(reactionSummary).toBeVisible();
+    expect(metadata).toHaveTextContent('조용히 공개');
+    expect(
+      engagement.getBoundingClientRect().top - metadata.getBoundingClientRect().bottom,
+    ).toBeCloseTo(8, 0);
     expect(
       actionBar.getBoundingClientRect().top - reactionSummary.getBoundingClientRect().bottom,
     ).toBeCloseTo(4, 0);
