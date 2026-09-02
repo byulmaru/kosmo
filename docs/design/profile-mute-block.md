@@ -25,11 +25,9 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   `내용 보기`를 표시한다. 펼치면 `CW=MutedRevealed`와 `다시 가리기`를 사용한다. 이 문구는 작성자가 입력한
   content warning summary가 아니라 Mute 관계에서 정해지는 고정 안내다. Sensitive Media disclosure는 기존
   계약대로 이 gate들과 독립적으로 유지한다. Content가 없는 순수 Repost는 새 `PostContent Kind=Repost`를
-  만들지 않는다. Repost Author attribution과 direct Source의 작성자·시간, 기존 순수 Repost `PostActionBar`를
-  유지한다. Action Bar의 Reply는 바깥 contentless Repost, Repost·Reaction·Bookmark·More는 direct Source를
-  대상으로 하는 기존 target routing을 그대로 따른다. Source의 본문·미디어 영역에는 같은 Mute disclosure를
-  바깥 gate로 적용한다. Source에 작성자 Content Warning 또는 Sensitive Media가 있으면 위 중첩 순서를 그대로
-  유지한다.
+  만들지 않는다. Repost Author attribution, direct Source의 작성자·시간과 기존 순수 Repost `PostActionBar`
+  target routing을 유지하고, Source의 본문·미디어 영역에는 같은 Mute disclosure를 바깥 gate로 적용한다.
+  Source에 작성자 Content Warning 또는 Sensitive Media가 있으면 위 중첩 순서를 그대로 유지한다.
 - Profile 데이터 로딩 중에는 기존 `ProfileHero` loading·skeleton variant를 유지하고 Mute 상태·action 행은
   loading이 끝난 뒤에만 표시한다.
 - 현재 Mute는 영구 적용만 제공한다. 기간 선택 control과 만료 상태는 표시하지 않는다.
@@ -61,10 +59,9 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 
 ## 차단 관계의 직접 Profile
 
-- 차단 관계의 direct Profile route에서는 [Profile Block 조회 정책](../domain/objects/profile-block.md#조회-정책)이
-  시각 presentation보다 우선한다. `blocking`·`blockedBy`가 확인되어도 Target의 cover·avatar·표시 이름·handle·bio·수치,
-  Post·Media와 Follow·Message action을 직접 조회하거나 표시하지 않는다. URL의 `profileHandle`은 route 식별에만
-  사용하며 Target identity를 화면에 다시 구성하는 근거가 아니다.
+- 차단 관계의 direct Profile route는 [Profile Block 조회 정책](../domain/objects/profile-block.md#조회-정책)을 따르는
+  identity-free presentation이다. `blocking`·`blockedBy` 모두 Target의 identity·content·social action을 표시하지
+  않는다.
 - `blockedBy` Target은 별개 오류 화면을 만들지 않고 viewport별 기존 Profile route chrome 안의 중앙 column에
   actionless `StateView`로 `이 프로필을 볼 수 없습니다`만 표시한다. Mobile Dark
   [`6774:12067`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6774-12067), Compact Web Light
@@ -73,14 +70,12 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 - `blocking`도 같은 identity-free route shell을 사용하되 action이 있는 `StateView`로 `차단한 프로필입니다`와
   Secondary `차단 해제`를 제공한다. Mobile Dark [`7580:14180`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7580-14180)과
   Full Web [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)이
-  Target evidence다. 해제에 필요한 `ProfileBlock.Owner` projection과 mutation·pending·성공·실패 feedback은
-  Product/runtime 계약이며 Target Profile을 다시 hydrate하는 우회 경로로 사용하지 않는다.
+  Target evidence다. 차단 해제의 data와 lifecycle은 적용 Product/OpenSpec/runtime 범위다.
 - Mobile은 MenuOnly header와 BottomTabBar, Compact는 Sidebar, Full은 Sidebar와 RightRail을 유지한다. Web 중앙
   column에는 별도 PageHeader를 두지 않는다. Sidebar와 RightRail의 로그인 Owner 정보는 차단 Target identity가
   아니다.
-- Block 관리 목록은 Owner에게 허용된 별도 `ProfileBlock.Owner` relation-management projection으로 최소 Target
-  식별 정보와 해제 action을 표시할 수 있다. 이 projection을 direct Profile route의 identity source로 재사용하지
-  않는다.
+- Block 관리 목록에서 관계 관리를 위해 표시하는 최소 identity는 direct Profile route의 identity 노출 근거가
+  아니다.
 
 ## 뮤트 관계의 직접 Profile
 

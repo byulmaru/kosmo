@@ -41,10 +41,8 @@ Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` ca
 | 추가 오류 · Target     | 기존 목록을 유지하고 `더 불러오지 못했어요` toast와 `다시 시도` action                                                        |
 | Profile 없음           | Home과 같은 기존 Profile 생성·선택 흐름으로 이동하는 onboarding을 표시한다                                                    |
 
-세 오류 표현은 연결된 Figma `Target`이며 현재 runtime/OpenSpec 완료 계약이 아니다. 현재 계약은 최초 오류에서 기존
-`RouteBoundary`의 `로컬 타임라인을 불러오지 못했어요` / `잠시 후 다시 시도해주세요.` / `다시 시도`를 사용하고,
-추가 오류에서는 기존 목록과 `게시글을 더 불러오지 못했어요.` toast 및 재시도 action을 유지한다. Target을 Current로
-승격할 때 별도 Product/runtime 작업에서 OpenSpec, runtime과 Web/Native QA를 함께 갱신한다.
+세 오류 표현은 연결된 Figma `Target`이며 현재 runtime/OpenSpec 완료 계약이 아니다. Current 오류 표현은 기존
+RouteBoundary·목록·toast를 유지하고, Target 승격은 Product/runtime/OpenSpec/QA 후속 범위다.
 
 ## Figma 근거
 

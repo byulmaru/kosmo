@@ -253,8 +253,8 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   image stage와 semantic detail panel을 세로 Auto Layout으로 조립한다. Figma metadata가 직접 증명하는 Android-baseline
   `390×844` 비키보드 canvas는 `654px` stage와 `y=654` detail anchor를 사용하고 현재 HUG detail panel은 `182px`라
   아래에 `8px`이 남는다. FRAME에는 Native safe-area inset metadata가 없으므로 이 수치는 다른 inset·keyboard·viewport에
-  고정하는 runtime 계약이 아니다. Product Native 구현은 실제 가용 높이에서 detail panel을 먼저 확보하고 stage와 anchor를
-  줄인다. Light landscape 16:9와 Dark portrait 3:4 Media는 stage 안에서 비율을 보존해 가로·세로 중앙에 contain한다.
+  고정하는 runtime 계약이 아니다. Safe Area·keyboard·낮은 viewport의 실제 geometry는 Product 후속에서 검증한다.
+  Light landscape 16:9와 Dark portrait 3:4 Media는 stage 안에서 비율을 보존해 가로·세로 중앙에 contain한다.
   Media Error [`6665:55675`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-55675)는
   중앙 state 대신 기존 Danger Action Toast [`7380:55058`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-55058)를 사용한다. shared Compact source 승격과
   runtime lifecycle은 별도 후속 범위다.
@@ -262,8 +262,8 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   Quick reaction Light/Dark, Repost·Quote menu Light/Dark, More menu Light와 FullReactionPicker Browse Light/Dark를
   실제 PostMediaViewer Open 배경 위 child overlay로 조립한다. Quick Picker는 reaction trigger 위에 놓이며 배경
   Media·원문·Action Bar를 바꾸지 않는다. Android-baseline `390×844` 비키보드 Figma base stage/detail은 각각
-  `654px`/`y=654`이며 Quick selector는 `y=726`이다. Product runtime의 child overlay는 같은 가용 높이 입력으로 계산한
-  base anchor를 재사용한다. Repost·More·Full Picker도 같은 Viewer를 유지한다. Delete confirmation
+  `654px`/`y=654`이며 Quick selector는 `y=726`이다. child overlay는 base stage·detail 위치를 바꾸지 않는다.
+  Repost·More·Full Picker도 같은 Viewer를 유지한다. Delete confirmation
   Light/Dark는 기존 공용 confirmation evidence로 분리해 유지한다.
 - [`ProfileSwitcher overlay lifecycle`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6773-11566)는
   Drawer의 ProfileSwitcher OpenLong을 기존 host·scrim·drawer 안에서 교체한 Target이다. picker 목록과 새 프로필
@@ -277,8 +277,7 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
 - 같은 section의 Mobile [`blocking 7580:14180`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7580-14180)은
   기존 Android Dark Profile route chrome 안에서 Target identity를 제거하고, 중앙 정렬한 `StateView`에
   `차단한 프로필입니다`와 Secondary `차단 해제`만 제공한다. Full Web [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)도
-  같은 identity-free presentation을 사용한다. 실제 `ProfileBlock.Owner` projection, 해제 mutation과 완료
-  피드백은 Product/runtime 범위다.
+  같은 identity-free presentation을 사용한다. 차단 해제의 data와 lifecycle은 Product 후속 범위다.
 - 같은 section의 Mobile muted direct Profile Target [`7541:14061`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7541-14061)은
   기존 Android baseline Profile shell을 복제하고 `ProfileHero.Muted=true`와 Post의 중첩
   `PostContent.CW=MutedCollapsed`를 적용해 전체 Profile·Post·BottomTabBar, 작성자·시간·`PostActionBar`를 유지한다.
