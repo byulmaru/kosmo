@@ -901,6 +901,16 @@ export const ActionBarCatalogInteraction: Story = {
     const defaultBookmark = defaultToolbarCanvas.getByRole('button', { name: '북마크' });
     const defaultMore = defaultToolbarCanvas.getByRole('button', { name: '더보기' });
     verifyHuggedActionTargets(defaultToolbar);
+    const noCountReply = within(toolbars[1]!).getByRole('button', { name: '답글' });
+    const noCountReplyBounds = noCountReply.getBoundingClientRect();
+    const noCountReplySlotBounds = noCountReply.parentElement!.getBoundingClientRect();
+    expect(noCountReplyBounds.width).toBe(28);
+    expect(noCountReplyBounds.height).toBe(36);
+    expect(noCountReplyBounds.left).toBeCloseTo(noCountReplySlotBounds.left, 0);
+    expect(
+      within(noCountReply).getByTestId('post-action-reply-glyph').getBoundingClientRect().left -
+        noCountReplyBounds.left,
+    ).toBeCloseTo(6, 0);
     const defaultBookmarkSlotBounds = defaultBookmark.parentElement!.getBoundingClientRect();
     const defaultMoreSlotBounds = defaultMore.parentElement!.getBoundingClientRect();
     expect(defaultMoreSlotBounds.left - defaultBookmarkSlotBounds.right).toBe(4);
@@ -1901,10 +1911,14 @@ function verifyHuggedActionTargets(toolbar: HTMLElement) {
       toolbarBounds.top + toolbarBounds.height / 2,
       0,
     );
-    expect(targetBounds.left + targetBounds.width / 2).toBeCloseTo(
-      slotBounds.left + slotBounds.width / 2,
-      0,
-    );
+    if (label === '답글') {
+      expect(targetBounds.left).toBeCloseTo(slotBounds.left, 0);
+    } else {
+      expect(targetBounds.left + targetBounds.width / 2).toBeCloseTo(
+        slotBounds.left + slotBounds.width / 2,
+        0,
+      );
+    }
     expect(iconBounds.left - targetBounds.left).toBeCloseTo(6, 0);
 
     if (count) {

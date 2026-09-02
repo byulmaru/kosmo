@@ -430,7 +430,7 @@
 - Decision Date: 2026-09-01
 - Decision Class: Derived Contract
 - Authority / Provenance: `PROD-866`, `docs/design/post-action-bar.md`, `docs/design/post-thread.md`, Figma `PostActionControl` 3801:8494, `PostActionBar` 6604:48270, `PostLayout` 4686:12079, Center thread 4762:17631, 2026-09-01 KST 사용자 결정
-- Status: Partially Superseded by `Web action target을 rendered content에 맞춰 HUG한다`
+- Status: Partially Superseded by `Web action target을 rendered content에 맞춰 HUG한다` and `Reaction Summary를 Action Bar border 위로 분리한다`
 - Context / Problem: 28px visual row와 좁은 실제 Web click rectangle이 같은 값으로 결합되어 icon·count 주변 입력 영역이 작았고, 전체 action 분배 셀을 target으로 넓히면 의도하지 않은 whitespace까지 입력을 가로챈다. Playground의 `repostState=hidden`은 Repost가 아니라 전체 Post fragment를 제거해 Reaction까지 숨겼고 fake More callback은 production menu를 검증하지 못했다. 상세 current row에서는 PostLayout Engagement border와 generic thread divider의 소유권도 섞여 있었다.
 - Decision Outcome: Action Bar visual/layout slot, glyph·count, 50px/28px 너비와 trailing 82px은 유지한다. Web Pressable은 각 slot 안에서 세로로 위아래 4px씩 확장한 50×36px/28×36px bounded rectangle을 사용하며 분배 여백 전체를 덮지 않는다. hover state layer는 28×28px을 유지한다. Reply count는 hover·pressed에서 glyph와 같은 foreground를 사용하고, 미선택 Repost count는 hover에도 중립색을 유지한다. pressed opacity는 각 상태의 foreground에 72%를 적용한다. Playground는 invalid Repost hidden과 fake More callback을 제거하고 production `링크 복사` menu를 실제로 연다. `PostLayout` Engagement는 full-width 상·하 `borderSubtle` 1px, 상하 padding 8px과 내부 gap 4px을 소유한다. current row 뒤 generic divider는 생략하고 connector는 current 상단 Before segment까지만 유지한다.
 - Alternatives Considered: Reply·Repost·Reaction을 endpoint 사이의 full-width 3등분 target으로 만들면 빈 영역까지 클릭되어 사용자 의도와 맞지 않아 제외했다. 44px Web target은 Reaction Summary·row boundary와의 4px canonical 간격을 침범하므로 현재 visual rhythm 안에서는 제외했다. `hitSlop`만 추가하는 방식은 React Native Web에서 실제 DOM rectangle을 넓히지 못하므로 사용하지 않았다. Repost hidden을 별도 production 상태로 유지하는 방식은 production에서 숨길 계약이 없고 Reaction과 결합된 fixture 회귀를 보존하므로 제외했다.
@@ -478,12 +478,24 @@
 - Decision Date: 2026-09-02
 - Decision Class: Derived Contract
 - Authority / Provenance: `PROD-866`, `docs/design/accessibility.md`, `docs/design/post-action-bar.md`, Figma `PostActionControl` 3801:8494, `PostActionBar` 6604:48270, 2026-09-02 KST 사용자 결정
-- Status: Active
+- Status: Partially Superseded by `Web leading Reply HUG target과 Post Source timestamp의 content 기준선을 맞춘다`
 - Context / Problem: 고정 64px target은 짧은 count나 icon-only action에 불필요한 빈 입력 영역을 만들고, count 너비가 더 긴 locale에서는 오히려 실제 content를 다 덮지 못할 수 있다. 참고한 X의 pointer 표현은 glyph 주위 원형 state layer를 유지하면서 count가 있으면 count까지 같은 button target에 포함한다. 분배 영역 전체를 target으로 만드는 방식은 계속 의도하지 않은 whitespace를 가로챈다.
 - Decision Outcome: `PostActionControl`의 Standard visual은 16px glyph와 선택적 count를 4px gap으로 HUG한다. Web actual target은 36px 높이와 좌우 6px padding을 사용해 count가 있으면 숫자 `0`을 포함한 `6 + 16 + 4 + 렌더된 count 너비 + 6`을 HUG하고, count가 없으면 28×36px이다. Reply·Repost·Reaction·Bookmark의 layout slot은 최소 50px이고 target을 가운데 정렬하며, target이 50px보다 넓을 때만 slot도 같은 폭으로 확장한다. More slot과 target은 28px·28×36px이다. hover·pressed의 visible state layer는 count를 감싸지 않고 glyph 주위 28×28 원을 유지한다. Bar는 Reply slot 왼쪽과 More slot 오른쪽을 content column 양끝에 맞추고, Bookmark 50 + gap 4 + More 28의 trailing group은 exact 82px을 유지하며 target은 서로 겹치거나 분배 여백을 덮지 않는다. Native geometry는 변경하지 않는다.
 - Alternatives Considered: 64px 고정 target은 짧은 content에 과도하고 긴 localized count를 설명하지 못해 제외했다. social slot 전체를 target으로 사용하면 count가 없는 action의 빈 50px까지 클릭되어 제외했다. count가 있어도 glyph만 28px target으로 두는 방식은 표시된 count가 button 밖에 놓여 X와 같은 단일 action 인식 범위를 만들지 못하므로 제외했다.
 - Consequences: 공용 control의 `wideWebTarget` sizing seam을 제거하고 실제 content를 한 Pressable이 자연스럽게 감싼다. outer slot의 최소 너비만 layout 분배를 맡아 긴 compact count에서도 sibling target이 겹치지 않는다. 새 공개 API·dependency·token이나 별도 PostLayout/PostListItem Playground는 추가하지 않는다. Storybook·Figma Web 결과는 Native touch·VoiceOver·TalkBack runtime 증거가 아니다.
 - Confirmation / Follow-up: Playground와 390·900·1400 production surface에서 count 있음·없음·숫자 `0`의 target 공식, target 가운데 정렬, slot 확장, non-overlap, glyph 주위 28×28 state layer와 trailing 82px을 검증하고 Figma source의 HUG sizing·wrapper·description을 readback한다.
+
+### Web leading Reply HUG target과 Post Source timestamp의 content 기준선을 맞춘다
+
+- Decision Date: 2026-09-03
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-866`, `docs/design/post-action-bar.md`, `docs/design/accessibility.md`, Figma `PostActionBar` 6604:48270, 2026-09-03 KST 사용자 결정
+- Status: Active
+- Context / Problem: Web Action Bar의 count 없는 leading Reply는 최소 50px layout slot 안에서 가운데 정렬되면 target과 glyph가 slot 왼쪽에서 11px 밀려 보여 Post content 기준선과 어긋난다. 또한 공유 `PostSourcePresentationView`의 생성 시각 Link가 최소 target 안에서 label을 왼쪽에 두면 오른쪽 border까지 불필요한 빈 공간이 남는다.
+- Decision Outcome: Web leading Reply의 HUG target은 기존 최소 50px slot의 시작점에 맞춘다(target/state x=0, glyph x=6). Repost·Reaction·Bookmark는 기존처럼 각 최소 50px slot 가운데에 두고, More 28px·trailing 82px·HUG 산식·28×36px target·28×28px state layer·non-overlap은 유지한다. 공유 `PostSourcePresentationView`의 생성 시각 Link는 최소 44×44 target을 유지하면서 target 내부 label을 오른쪽 정렬한다. 이 timestamp 정렬은 outer Post와 nested Source preview에 적용하고 별도 `PostListItem` timestamp에는 적용하지 않는다.
+- Alternatives Considered: `ReactionSummary`에 왼쪽 padding을 추가하는 방식은 Action Bar 자체의 slot 기준선을 고치지 못하고 consumer별 보정값을 남기므로 제외했다. 모든 social control을 왼쪽으로 옮기거나 50px 분배를 바꾸는 방식은 Repost·Reaction·Bookmark의 중앙 정렬과 trailing 82px을 깨므로 제외했다. timestamp target을 줄이는 방식은 기존 최소 44×44 접근성 계약을 약화하므로 제외했다.
+- Consequences: Web leading Reply에만 기존 공용 control 내부의 시작 정렬을 적용하고 public API·새 token·dependency·ReactionSummary padding은 추가하지 않는다. Native geometry, PostListItem timestamp와 action 동작은 변경하지 않는다.
+- Confirmation / Follow-up: count 없는 Reply의 target/state/glyph 경계와 count 있는 HUG·slot 확장, 나머지 target의 중앙 정렬·trailing 82px을 focused/full Storybook에서 검증한다. outer Post와 nested Source preview의 timestamp Link에 computed `text-align: right`와 최소 44×44 bounds를 확인하고 Figma Action Bar source alignment을 readback한다.
 
 ### selected Reaction은 fill 없는 HeartPlus outline을 유지한다
 
@@ -502,12 +514,24 @@
 - Decision Date: 2026-09-03
 - Decision Class: Derived Contract
 - Authority / Provenance: `PROD-866`, `docs/design/colors.md`, `docs/design/post-action-bar.md`, Figma `PostLayout` 4686:12079·4690:12163, 2026-09-03 KST 사용자 결정
-- Status: Active
+- Status: Partially Superseded by `Reaction Summary를 Action Bar border 위로 분리한다`
 - Context / Problem: 공용 Post content의 외부 링크가 본문색을 상속해 링크 affordance가 약했고, production `PostLayout`은 metadata와 Engagement border가 붙어 있어 canonical Center·Mobile Figma의 8px 리듬과 어긋났다.
 - Decision Outcome: 공용 `PostContentRenderer`가 만드는 클릭 가능한 외부 링크는 Light·Dark `actionLinkBase`와 기존 밑줄을 사용하고 바깥 Post·Source navigation 입력 격리를 유지한다. 상세 `PostLayout`은 metadata 하단부터 Engagement 상단 border까지 `spacing.sm` 8px을 둔다. 기존 Figma source, `PostListItem`, thread connector/divider와 Engagement 내부 border·padding·gap은 변경하지 않는다.
 - Alternatives Considered: Info와 Secondary는 각각 feedback과 보조 전경 역할이라 링크 의미에 맞지 않아 제외했다. 4px 간격과 Figma 수정은 이미 canonical source가 Center·Mobile 모두 8px을 사용하므로 제외했다.
 - Consequences: 한 곳의 shared renderer 변경으로 바깥 Post 본문과 Quote Source 링크가 함께 정렬되고, 모든 상세 `PostLayout` consumer가 같은 8px을 사용한다. 새 token·dependency·Playground는 추가하지 않는다.
 - Confirmation / Follow-up: 기존 production Storybook에서 Light·Dark 링크색, 밑줄·navigation 격리와 metadata→Engagement exact 8px을 검증하고 올바른 상단 스택 Web preview에서 확인한다.
+
+### Reaction Summary를 Action Bar border 위로 분리한다
+
+- Decision Date: 2026-09-03
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-866`, `docs/design/post-action-bar.md`, `docs/design/post-thread.md`, Figma `PostLayout` 4686:12079·4690:12163, 2026-09-03 KST 사용자 결정
+- Status: Active
+- Context / Problem: 기존 `PostLayout` Engagement는 Reaction Summary와 Action Bar를 같은 상·하 border 및 padding 안에 넣어, border가 Action Bar의 구분선인지 두 presentation 전체의 외곽선인지 시각 소유권이 불명확했다. 사용자는 Reaction Summary를 metadata 쪽 정보로 읽히게 하고 border 사이에는 Action Bar만 남기길 요청했다.
+- Decision Outcome: `PostLayout`은 metadata 아래 `spacing.sm` 8px에 Reaction Summary를 배치하고, Summary가 있으면 그 아래 `spacing.xs` 4px부터 bordered Action Bar frame을 시작한다. Summary가 없으면 metadata 하단부터 frame 상단 border까지 8px을 유지한다. Reaction Summary는 border 밖에 두고 Action Bar만 full-width 상·하 1px `borderSubtle`과 상하 8px padding 사이에 둔다. 목록 `PostListItem`, thread connector와 current row 하단 4px은 변경하지 않는다.
+- Alternatives Considered: Reaction Summary와 Action Bar를 기존 border 안에 유지하면 사용자가 지적한 시각 그룹 문제가 남아 제외했다. Summary를 consumer padding으로만 옮기는 방식은 border 소유권을 바꾸지 못해 제외했다. Summary가 없을 때 12px 또는 4px으로 간격을 바꾸면 승인된 Figma 기준 8px을 깨므로 제외했다.
+- Consequences: 기존 `PostActionSurface`의 `actionBarStyle` seam을 재사용해 새 public API·component·dependency 없이 border와 padding만 Action Bar wrapper로 이동한다. Reaction Summary와 Action Bar의 데이터·동작·순서는 유지된다. Figma `PostLayout` 여섯 variant의 Engagement도 같은 outer group과 bordered Action Bar frame 구조로 동기화한다.
+- Confirmation / Follow-up: Storybook에서 metadata→Summary 8px, Summary→frame border 4px, frame 상·하 border·padding과 Summary 비포함을 검증한다. Summary가 없는 thread current에서도 metadata→border 8px과 row 하단 4px을 유지하고, Figma 여섯 variant를 readback한 뒤 올바른 상단 스택 Web preview에서 확인한다.
 
 ## Remaining Decisions
 
@@ -530,6 +554,8 @@
 - 2026-07-29 `Figma 기반 28px geometry로 Action Bar를 정규화한다`와 2026-07-31 `Action Bar endpoint를 PostBody content column 양끝에 정렬한다`의 Web interactive 높이 28 결과는 2026-09-01 `bounded Web target과 PostLayout Engagement 경계를 공용 presentation 계약으로 고정한다`의 36px bounded rectangle으로 대체했다. 28px visual slot, 50px/28px 너비, endpoint·glyph 정렬과 Native 출시 gate는 유지한다.
 - 2026-09-01 `bounded Web target과 PostLayout Engagement 경계를 공용 presentation 계약으로 고정한다`의 Reply·Repost·Reaction 50×36px 결과는 2026-09-02 `Reply·Repost·Reaction의 bounded Web target을 64px로 넓힌다`로 대체했다. Bookmark 50×36px, More 28×36px, trailing 82px, 28px visual row·state layer, endpoint·glyph 정렬과 나머지 presentation 결과는 유지한다.
 - 2026-09-02 `Reply·Repost·Reaction의 bounded Web target을 64px로 넓힌다`의 고정 64×36px 결과와 이전 Bookmark 50×36px target 결과는 같은 날 `Web action target을 rendered content에 맞춰 HUG한다`로 대체했다. 36px target 높이, social layout slot 최소 50px, More 28×36px, trailing 82px, glyph 주위 28×28 state layer, non-overlap과 Native 미변경 결과는 유지한다.
+- 2026-09-02 `Web action target을 rendered content에 맞춰 HUG한다`의 `target을 가운데 정렬` 절만 2026-09-03 `Web leading Reply HUG target과 Post Source timestamp의 content 기준선을 맞춘다`로 부분 대체했다. HUG 산식, social slot 최소 50px, Repost·Reaction·Bookmark 중앙 정렬, More 28×36px, trailing 82px, glyph 주위 28×28 state layer, non-overlap과 Native 미변경 결과는 유지한다.
+- 2026-09-01 `bounded Web target과 PostLayout Engagement 경계를 공용 presentation 계약으로 고정한다` 및 2026-09-03 `Post 본문 링크와 상세 metadata 리듬을 canonical semantic에 맞춘다`의 Engagement 내부 border·padding과 metadata→border 결과는 2026-09-03 `Reaction Summary를 Action Bar border 위로 분리한다`로 부분 대체했다. Action Bar full-width border·8px padding, Summary가 없을 때 metadata→border 8px, thread current row 하단 4px과 generic divider 생략은 유지한다.
 - 2026-07-29 `목록 Post 카드의 Action Bar 주변 spacing을 Figma에 맞춘다`는 같은 날 `Quote preview 내부·외부 spacing을 분리한다`로 Quote spacing이 대체됐다. Action Bar 하단 4px, 1px semantic divider와 순수 Repost spacing 결과는 유지한다.
 - 2026-07-21 `실행할 수 없는 액션은 숨기지 않고 disabled로 유지`는 2026-07-27 `production surface는 표시 Post와 action target을 구분한다`로 대체했다.
 - 2026-07-21 `공유 change와 부모 소유의 최종 archive`의 PROD-432 archive owner 결과는 2026-08-03 `PROD-632가 후속 링크 복사 복구와 change archive를 인계받는다`로 대체했다. 하나의 공유 change를 유지하고 부분 archive하지 않는 결과는 유지한다.

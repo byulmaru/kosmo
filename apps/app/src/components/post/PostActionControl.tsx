@@ -20,6 +20,7 @@ type Props = {
   activeColor?: string;
   active?: boolean;
   alignToEnd?: boolean;
+  alignToStart?: boolean;
   baseColor?: string;
   count?: number;
   countFollowsInteraction?: boolean;
@@ -45,6 +46,7 @@ export function PostActionControl({
   activeColor,
   active = false,
   alignToEnd = false,
+  alignToStart = false,
   baseColor,
   count,
   countFollowsInteraction = false,
@@ -85,6 +87,7 @@ export function PostActionControl({
       style={[
         styles.slot,
         Platform.OS === 'web' ? undefined : styles.nativeSlot,
+        Platform.OS === 'web' && alignToStart ? styles.alignToStart : undefined,
         alignToEnd ? styles.alignToEnd : undefined,
       ]}
     >
@@ -197,6 +200,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     height: 28,
     justifyContent: 'flex-start',
+  },
+  alignToStart: {
+    alignItems: 'flex-start',
   },
   alignToEnd: {
     minWidth: 28,

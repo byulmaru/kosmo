@@ -27,8 +27,9 @@ Post 상세 thread는 API가 제공한 조상·현재·하위 Post 순서와 직
 - 왼쪽 64px은 connector와 겹치지 않는 thread row boundary inset이다. 현재 `PostLayout`의 Body·Engagement는
   48px Avatar가 있는 Header와 달리 current row의 왼쪽 8px에서 full width로 시작하므로 divider와 본문 시작선을
   일치시키지 않는다.
-- `PostLayout` Engagement는 full-width 상·하 1px `borderSubtle`, 상하 8px padding과 내부 4px gap을 소유한다.
-  metadata 하단부터 Engagement 상단 border까지는 canonical `PostLayout`과 같은 8px을 둔다.
+- `PostLayout` Engagement는 metadata 아래 8px의 Reaction Summary와 그 아래 4px의 bordered Action Bar frame을
+  소유한다. Reaction Summary는 border 밖에 두고 Action Bar만 full-width 상·하 1px `borderSubtle`과 상하 8px
+  padding 사이에 둔다. Summary가 없으면 metadata 하단부터 Action Bar frame 상단 border까지 8px을 둔다.
   이 border는 current row의 presentation 경계이며 thread connector나 generic row divider를 위한 빈 gutter가 아니다.
 - thread 안의 `PostListItem`은 자체 row divider를 끄고 `PostThreadLayout`의 구분선만 사용한다. Home·Profile·Bookmark 등 thread 밖 목록의 기본 divider는 유지한다.
 - Home timeline과는 `border/subtle` token과 1px 시각 무게만 공유하며 geometry는 thread 관계 표현에 맞게 독립적으로 유지한다.
@@ -40,12 +41,14 @@ Post 상세 thread는 API가 제공한 조상·현재·하위 Post 순서와 직
 - current row는 좌우 8px/12px, 상하 16px/4px padding을 사용한다. 마지막 조상→현재 connector와 current
   Before connector는 48px Avatar 중심선 x=32에 맞추고 supplied visibility 경계에서 종료한다.
 - 가로 구분선은 connector 오른쪽에서 시작하며 connector와 교차하지 않는다. current row에는 이 generic 구분선을
-  추가하지 않고 Engagement의 자체 border와 row 하단 4px padding을 유지한다.
+  추가하지 않고 Action Bar frame의 자체 border와 row 하단 4px padding을 유지한다.
 
 ## 검증과 rollout
 
 - Storybook에서 current·마지막 row 뒤 구분선 생략, 나머지 1px `theme.borderSubtle` 구분선과 64px/8px inset, current row의
-  8px/12px 좌우 padding, 48px Avatar와 full-width Body·Engagement, metadata→Engagement 8px, Engagement 상·하 border·8px padding·4px gap, 조상→현재 connector, descendant connector
+  8px/12px 좌우 padding, 48px Avatar와 full-width Body·Engagement, metadata→Reaction Summary 8px,
+  Reaction Summary→Action Bar frame border 4px, Summary가 없을 때 metadata→border 8px, Action Bar만 감싸는
+  상·하 border·8px padding, 조상→현재 connector, descendant connector
   생략, connector 비중첩, thread 내부 중복 border 제거와 thread 밖 기본 divider 유지를 검증한다.
 - Reply 대상 attribution이 일반 목록에서는 유지되지만 상세 thread의 조상·현재·하위 모든 행에서는
   표시되지 않는지 검증한다.

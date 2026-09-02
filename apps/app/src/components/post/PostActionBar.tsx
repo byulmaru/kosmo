@@ -86,6 +86,7 @@ export function PostActionBar({
       {reply ? (
         <PostActionControl
           accessibilityLabel={reply.accessibilityLabel}
+          alignToStart
           count={reply.count}
           countFollowsInteraction
           controlRef={reply.controlRef}

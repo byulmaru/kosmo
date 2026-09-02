@@ -11,7 +11,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `Platform=Web`은 기존 source node [`2184:3966`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=2184-3966)를 보존하며 Bar와 visual/layout control 높이가 28px이다. Web runtime의 실제 interactive rectangle은 이 row를 세로로 위아래 4px씩 덮는 36px 높이를 사용한다. `05 Screens - Web`과 [`01 Mobile Web exceptions`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1938-880) consumer만 이 variant를 상속한다.
 - `Platform=iOS`는 44pt, `Platform=Android`는 48dp인 Native target variant다. glyph·count·state layer와 내부 visual control은 28px을 유지하고 투명 touch-target wrapper만 세로로 확장한다. 28px visual은 wrapper의 세로 중앙에 두어 iOS는 위·아래 8pt, Android는 위·아래 10dp를 남긴다. More wrapper는 각각 44×44pt, 48×48dp이며 28px visual을 세로 중앙·가로 오른쪽에 맞춰 content column 끝선을 보존한다. 나머지 action slot 너비는 50px을 유지한다. Android canonical Home [`4524:3985`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-3985)·Local [`4524:4139`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-4139), iOS Home [`6619:7918`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6619-7918)과 iOS post-detail [`1943:2837`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-2837)이 해당 source를 소비한다. 이 Figma consumer 연결은 runtime 적용 완료 증거가 아니다.
 - Bar는 가용 너비를 채우고 Reply control slot의 왼쪽 경계와 More control slot의 오른쪽 경계를 PostBody가 사용하는 content column의 양끝에 맞춘다. 나머지 action은 그 사이를 `space-between`으로 분배한다. Figma의 302px frame은 기준 viewport의 측정값이며 production 고정 너비가 아니다.
-- Web의 Reply, Repost, Reaction, Bookmark layout slot은 최소 50px이고 실제 target은 count가 있으면 숫자 `0`도 표시값으로 취급해 `왼쪽 6px + glyph 16px + gap 4px + 렌더된 count + 오른쪽 6px`을 HUG하며, count가 없으면 28×36px이다. leading Reply target은 content column의 왼쪽 경계에서 시작하고 glyph는 그보다 6px 안쪽에 둔다. Repost·Reaction·Bookmark target은 각 slot 가운데에 유지하며 target이 50px보다 넓을 때만 slot도 함께 늘린다. action 사이 분배 여백을 target으로 확장하거나 인접 target과 겹치게 하지 않는다.
+- Web의 Reply, Repost, Reaction, Bookmark layout slot은 최소 50px이고 More slot은 28px이다. 실제 target은 count가 있으면 숫자 `0`도 표시값으로 취급해 `왼쪽 6px + glyph 16px + gap 4px + 렌더된 count + 오른쪽 6px`을 HUG하고, count가 없으면 28×36px이다. leading Reply target은 slot 시작점에 맞춰 target·state layer가 content column의 왼쪽 경계에서 시작하고 glyph는 그보다 6px 안쪽에 둔다. Repost·Reaction·Bookmark target은 각 slot 가운데에 유지하며 target이 50px보다 넓을 때만 slot도 함께 늘린다. More glyph는 28px target 가운데에 둔다. action 사이의 분배 여백 전체를 interactive rectangle으로 확장하거나 인접 target과 겹치게 하지 않는다.
 - Native의 Reply, Repost, Reaction, Bookmark target 너비는 각각 50px이다. Bookmark target 안의 28px IconOnly visual과 More의 28px visual을 각각 오른쪽에 맞추고 두 target 사이 gap을 0으로 둔다. 따라서 iOS는 `50 + 44`, Android는 `50 + 48`인 인접 target을 만들며 hit area를 겹치지 않고 More target 오른쪽 경계를 content column 끝에 맞춘다.
 - 모든 glyph의 visual box는 16×16px, glyph와 count 사이는 4px다. count는 16px 한 줄이며 icon과 시각 중심을 맞춘다.
 - 순서는 `Reply → Repost → Reaction → Bookmark → More`로 고정한다. Reply와 Repost만 count를 표시하고 Reaction·Bookmark·More에는 count slot을 만들지 않는다.
@@ -78,15 +78,16 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 ## Surface 배치
 
-- `PostLayout`은 Reaction Summary와 Action Bar를 포함하는 `Engagement`를 Post content grid 안의 마지막
-  presentation 자식으로 렌더링한다. 일반 Text·Media `PostListItem`은 카드 상단 12px·하단 4px, 목록 전용
+- `PostLayout`은 metadata 뒤 `Engagement`에 Reaction Summary와 bordered Action Bar frame을 순서대로
+  렌더링한다. 일반 Text·Media `PostListItem`은 카드 상단 12px·하단 4px, 목록 전용
   Action Bar slot 상단 4px·하단 0을 사용한다.
   content column의 기존 4px gap과 합쳐 마지막 presentation(본문·미디어 또는 Reaction Summary)에서 Action
   Bar까지 8px을 만든다. Quote와 순수 Repost는 별도 slot 없이 Action Bar를 직접 배치하고 카드 상단
   8px·하단 1px을 사용한다.
-- 상세 thread의 현재 Post는 Reaction Summary가 있으면 Summary와 Action Bar 사이에 4px을 둔다.
-  `PostLayout` Engagement는 full-width 상·하 1px `borderSubtle`, 상하 8px padding과 내부 4px gap을 소유한다.
-  metadata 하단부터 Engagement 상단 border까지는 canonical Figma와 같은 8px을 둔다.
+- 상세 thread의 현재 Post는 metadata 아래 8px에 Reaction Summary를 두고, Summary가 있으면 그 아래 4px부터
+  Action Bar frame을 시작한다. Reaction Summary는 border 밖에 있고, Action Bar frame만 full-width 상·하 1px
+  `borderSubtle`과 상하 8px padding 사이에 둔다. Summary가 없으면 metadata 하단부터 Action Bar frame 상단
+  border까지 canonical Figma와 같은 8px을 둔다.
   이 border와 padding은 thread connector용 gutter가 아니다. Reply surface가 닫힌 기본 상태에서는 빈 Composer
   wrapper를 렌더링하지 않고 Engagement 아래부터 current row 끝까지 4px을 둔다. current row 뒤에는 별도
   thread divider를 렌더링하지 않으며 current row 상단의 16px은 유지한다. Action Bar의 28px visual geometry는 바꾸지 않는다.
@@ -109,6 +110,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   Repost·Reaction·Bookmark·More는 화면에 표시한 direct Source Post를 대상으로 동작한다. 따라서 Repost
   menu의 선택 상태, count와 생성·취소 identity도 Source fragment에서 파생한다.
 - Quote의 자체 본문 affordance는 Quote detail로 이동하고 Source preview만 Source detail로 이동한다.
+- `PostSourcePresentationView`의 바깥 Post와 nested Source 작성자 행은 생성 시각 Link의 최소 44×44px target을 유지하고, 시간 label을 그 target 안에서 오른쪽 정렬해 preview의 오른쪽 content inset에 맞춘다.
 - 순수 Repost의 `{displayName}님이 재게시함` attribution은 `typography.sm`의 14/20 line box에 맞추고 바로
   아래 Source 표준행과의 추가 간격을 두지 않는다. Web의 Profile text link는 inline target 예외를 사용하며,
   Native target과 인접 Source link 비중첩은 출시 전 runtime gate에서 다시 검증한다.
@@ -279,15 +281,17 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   `PostListItem` stack 간격이 모두 0인지 확인한다.
 - Compact·Full과 Light·Dark의 Pinned attribution은 위쪽 4px을 포함한 24px 높이인지, Repost attribution은
   위쪽 여백 없이 20px인지 확인한다.
-- 상세 thread의 현재 Post에서 current row 상단부터 content까지 16px, metadata 하단부터 Engagement 상단
-  border까지 8px, Engagement의 full-width 상·하 1px border와 상하 8px padding, Reaction Summary 아래부터
-  Action Bar까지 4px인지 검증한다. selected Profile이 있고 Reply
+- 상세 thread의 현재 Post에서 current row 상단부터 content까지 16px, metadata 하단부터 Reaction Summary까지
+  8px, Reaction Summary 아래부터 Action Bar frame 상단 border까지 4px인지 검증한다. Summary가 없으면
+  metadata 하단부터 border까지 8px이어야 하며, 위아래 1px border와 8px padding 사이에는 Action Bar만
+  있어야 한다. selected Profile이 있고 Reply
   surface가 닫힌 기본 상태에서도 빈 wrapper가 남지 않으며 Engagement 아래부터 current row 끝까지 4px이고
   current row 뒤 별도 thread divider가 없는지 exact geometry로 검증한다.
 - 모든 플랫폼 구현에서 Bar와 visual/layout slot 높이 28, Reply·More layout slot endpoint의 content column 양끝 정렬, social layout slot 최소 너비 50, More 너비
   28, glyph 16, icon-count gap 4와 고정 순서를 검증한다. Web에서는 count가 있으면 숫자 `0`을 포함해 target
   너비가 `6 + 16 + 4 + 렌더된 count 너비 + 6`, count가 없으면 28×36인지 확인한다. social slot은
-  `max(50, target 너비)`이고 target을 가운데 정렬하며, Bookmark 50 + gap 4 + More 28 trailing group이 exact
+  `max(50, target 너비)`이고 leading Reply target은 slot 시작에, 나머지 social target은 가운데에 정렬하며,
+  Bookmark 50 + gap 4 + More 28 trailing group이 exact
   82px이고 모든 interactive rectangle이 분배 여백을 덮거나 서로 겹치지 않아야 한다.
 - Web pointer hover에서는 glyph 중심 28×28 원형 background, count 기반 HUG 또는 count 없는 28×36 click target,
   일반 action의 30% `primary` background·불투명 `primary` foreground,

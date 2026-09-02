@@ -288,6 +288,10 @@ Reaction과 Repost가 전역 feedback 의미와 분리된 presentation semantic�
 - [x] 7.8 Reaction outline 변경 뒤 app check, lint·format, 전체 Storybook test·build와 OpenSpec strict validation 및 Web Browser QA를 통과시킨다.
 - [x] 7.9 공용 Post 외부 링크에 mode별 `actionLinkBase`를 적용하고 상세 `PostLayout` metadata→Engagement를 기존 Figma 기준 8px으로 맞춘 뒤 문서·OpenSpec을 동기화한다. Figma와 `PostListItem`은 변경하지 않는다.
 - [x] 7.10 focused·전체 Storybook, app check, lint·format, build, OpenSpec strict validation과 올바른 상단 스택 Web preview에서 링크·8px·HUG·Reaction 결과를 검증한다.
+- [x] 7.11 Web leading Reply HUG target을 최소 50px slot 시작에 맞추고 Repost·Reaction·Bookmark 중앙 정렬, HUG·28×36px·trailing 82px·non-overlap 계약을 유지한다. 공유 `PostSourcePresentationView`의 outer Post·nested Source preview timestamp Link는 최소 44×44 target 안에서 label을 오른쪽 정렬하고, 구현·문서·OpenSpec·Figma·Storybook을 동기화한다.
+- [ ] 7.12 count 없음·있음 Reply target과 각 social slot의 정렬·확장, outer/nested timestamp의 computed right alignment·44×44 bounds를 focused/full Storybook과 Web Browser에서 확인하고 app check·lint·format·build 및 OpenSpec strict validation, Figma source readback을 통과시킨다. 별도 `PostListItem` timestamp와 Native runtime은 변경·완료 증거로 사용하지 않는다.
+- [x] 7.13 상세 `PostLayout`의 Reaction Summary를 metadata 아래·Action Bar frame border 위로 옮기고, 위아래 border와 8px padding 사이에는 Action Bar만 두되 Summary가 없을 때 metadata→border 8px을 유지한다. Storybook·canonical 문서·OpenSpec·Figma 여섯 variant를 동기화한다.
+- [ ] 7.14 metadata→Summary 8px, Summary→Action Bar frame border 4px, frame border·padding·Summary 비포함과 Summary 없는 current row 리듬을 focused/full Storybook과 올바른 상단 스택 Web Browser에서 검증하고 app check·lint·format·build·OpenSpec strict·Figma readback을 통과시킨다.
 
 ## 8. PROD-882 미선택 Repost 상태 색상 복구
 
