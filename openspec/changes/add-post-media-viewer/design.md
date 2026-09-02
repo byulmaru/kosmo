@@ -60,7 +60,7 @@ Viewer presentation은 하나의 full-screen modal 안에서 다음 영역을 �
 4. Compact Web·Native에서 같은 Post fragment·binding을 소비하는 기존 `PostActionSurface`
 5. Wide Web에서 전체 원문·기존 Action Bar·Reply Composer·reply descendants를 가진 독립 scroll thread surface
 
-폭 분기는 Web에서만 768px을 기준으로 하고 Native는 항상 compact 세로 layout을 사용한다. Wide Web modal은 viewport 사방의 `24px` backdrop inset을 제외한 폭을 사용하고, 오른쪽 thread rail은 `clamp(320px, 25vw, 350px)`로 계산하며 왼쪽 image surface가 나머지 폭을 차지한다. 320px 최소폭은 기존 Post 상세의 내부 padding과 avatar column을 제외한 content 폭이 228px Action Bar를 수용하도록 보장한다. 기존 Post 상세의 표현·interaction을 재사용하되 route의 `600px` column 폭까지 복제하지 않는다.
+폭 분기는 Web에서만 768px을 기준으로 하고 Native는 항상 compact 세로 layout을 사용한다. Wide Web modal은 viewport 사방의 `24px` backdrop inset을 제외한 폭을 사용하고, 오른쪽 thread rail은 `clamp(320px, 25vw, 350px)`로 계산하며 왼쪽 image surface가 나머지 폭을 차지한다. 320px 최소폭은 current row의 좌우 padding 24px을 제외한 content 폭이 274px bounded Action Bar footprint를 수용하도록 보장한다. 기존 Post 상세의 표현·interaction을 재사용하되 route의 `600px` column 폭까지 복제하지 않는다.
 
 Compact 원문 overflow 여부는 실제 text layout에서 확인해 3줄을 넘을 때만 control을 표시한다. Detail panel은 내용 높이를 따르되 최대 높이를 `clamp(192px, viewport height의 32%, 240px)`로 계산한다. `192px`은 낮은 viewport에서 작성자·원문 control·Action Bar를 보존하기 위한 최대 높이 계산의 안전 하한이지 panel의 최소 높이가 아니다. Body 영역은 빈 높이를 채우지 않아 Action Bar가 짧은 원문 바로 아래에 놓이게 하고, 낮은 viewport에서 내용이 상한을 넘으면 body만 줄어들고 scroll한다. 다른 non-null Content revision이 도착하면 펼침·overflow·image load state를 초기화한다. 같은 Content에서 Media URL identity만 바뀌면 해당 Image instance와 load state만 교체한다. Wide Web은 원문을 접지 않고 오른쪽 thread surface 전체를 왼쪽 image와 독립적으로 scroll한다. Image load generation은 Media identity별로 격리해 현재 index 이동이나 retry가 다른 항목 상태를 초기화하지 않게 한다.
 
@@ -102,7 +102,7 @@ Post Action Bar와 thread child overlay는 기존 surface를 재사용하되 Vie
 - [Viewer 오른쪽 scroller와 기존 document pagination이 가까운 시점에 같은 connection을 load할 수 있음] → 각 surface가 synchronous burst 재진입을 local guard로 막고 loading·error·retry 상태를 분리한다. 두 surface에서 겹친 같은 Relay environment의 동일 operation·variables는 Relay 21의 in-flight dedupe와 connection merge에 맡긴다. Viewer completion 뒤 saved metrics 재평가는 유지하되 서로 다른 surface를 조정하는 앱 token이나 실제 network 횟수를 별도 앱 계약으로 고정하지 않는다.
 - [Viewer와 Reaction·Repost·More overlay의 native stacking이 불안정할 수 있음] → 구현 초기에 각 child action을 세 플랫폼에서 확인하고, 실패하면 action 의미를 바꾸지 않는 coordinator-level layer 전환으로 제한한다.
 - [긴 원문 scroll과 Native 수평 swipe가 gesture를 경쟁할 수 있음] → 수평 의도 threshold를 두고 vertical text scroll을 우선하며 이전·다음 button을 항상 대체 입력으로 유지한다.
-- [768px 부근에서 최소 rail이 image surface를 지나치게 줄일 수 있음] → rail은 기존 228px Action Bar가 잘리지 않는 320px 최소폭을 지키되 modal의 24px inset 안에서 image가 남는지 768px 경계를 직접 확인하고, 넓은 viewport에서는 350px 상한으로 image 비중을 회복한다.
+- [768px 부근에서 최소 rail이 image surface를 지나치게 줄일 수 있음] → rail은 현재 274px bounded Action Bar footprint가 잘리지 않는 320px 최소폭을 지키되 modal의 24px inset 안에서 image가 남는지 768px 경계를 직접 확인하고, 넓은 viewport에서는 350px 상한으로 image 비중을 회복한다.
 - [Compact panel의 내용 높이와 expanded scroll 제약이 Action Bar를 밀거나 낮은 viewport에서 고정 chrome을 가릴 수 있음] → `clamp(192px, 32vh, 240px)` 최대 높이와 body-only shrink 경계를 함께 두고 짧은 원문·3줄 초과 원문·expanded 상태를 일반 높이와 390px 높이에서 각각 실측한다.
 - [Post·revision 변경 뒤 이전 Media가 잠시 남을 수 있음] → Viewer가 소유 Post의 현재 Relay fragment projection만 읽고 이전 Media URL을 session이나 별도 state에 보존하지 않는다. 선택 Media가 사라지면 modal chrome과 close control을 유지한 unavailable 상태로 전환한다.
 - [기기 저장 부재가 Figma와 다르게 보일 수 있음] → 기존 Post Action Bar만 표시하고, 저장은 permission·delivery·failure UX를 가진 별도 후속 계약임을 canonical과 PR에 명시한다.
