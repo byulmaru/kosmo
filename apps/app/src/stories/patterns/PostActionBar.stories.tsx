@@ -65,6 +65,7 @@ type DeleteOutcome = 'graphql-error' | 'network-error' | 'pending' | 'success';
 type FixtureProps = Omit<PostActionBarProps, 'post'> & {
   deleteOutcome?: DeleteOutcome;
   onMutationRequest?: (requestName: string) => void;
+  reactionSelected?: boolean;
   repostState?: RepostFixtureState;
   selectedProfileId?: string | null;
   showReactionSummary?: boolean;
@@ -110,14 +111,21 @@ const selectedSource = {
 function PostActionBarFixture({
   deleteOutcome = 'success',
   onMutationRequest,
+  reactionSelected = false,
   repostState = 'unselected',
   selectedProfileId = 'profile-story',
   showReactionSummary = false,
   ...props
 }: FixtureProps) {
   const environment = useMemo(() => {
-    const source =
-      repostState === 'selected' || repostState === 'pending' ? selectedSource : unselectedSource;
+    const source = {
+      ...(repostState === 'selected' || repostState === 'pending'
+        ? selectedSource
+        : unselectedSource),
+      viewerReactions: reactionSelected
+        ? selectedSource.viewerReactions
+        : unselectedSource.viewerReactions,
+    };
     const result = new Environment({
       network: Network.create((request) => {
         if (request.operationKind === 'mutation') {
@@ -193,7 +201,7 @@ function PostActionBarFixture({
       { node: source },
     );
     return result;
-  }, [deleteOutcome, onMutationRequest, repostState, selectedProfileId]);
+  }, [deleteOutcome, onMutationRequest, reactionSelected, repostState, selectedProfileId]);
   const createEnvironment = useCallback(() => environment, [environment]);
 
   return (
@@ -526,6 +534,7 @@ function CatalogStory() {
       <Section title="Domain active · Reply / Repost / Reaction / Bookmark">
         <PostActionBarFixture
           bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true }}
+          reactionSelected
           reply={{ ...actionBarProps.reply, expanded: true }}
           repostState="selected"
         />
@@ -618,6 +627,7 @@ type PlaygroundProps = {
   replyCount: number;
   replyExpanded: boolean;
   replyProcessing: PostActionProcessingState;
+  reactionSelected: boolean;
   repostState: RepostPlaygroundState;
 };
 
@@ -631,6 +641,7 @@ function PostActionBarPlayground({
   replyCount,
   replyExpanded,
   replyProcessing,
+  reactionSelected,
   repostState,
 }: PlaygroundProps) {
   const copyLinkItem = usePostMoreMenuItem({
@@ -655,6 +666,7 @@ function PostActionBarPlayground({
           onPress: onReply,
           processing: replyProcessing,
         }}
+        reactionSelected={reactionSelected}
         repostState={repostState}
       />
     </View>
@@ -672,6 +684,7 @@ const meta = {
     replyAccessibilityLabel: '답글',
     replyExpanded: false,
     replyProcessing: 'default',
+    reactionSelected: false,
     repostState: 'unselected',
   },
   argTypes: {
@@ -717,6 +730,7 @@ export const Playground: Story = {
         'replyAccessibilityLabel',
         'replyExpanded',
         'replyProcessing',
+        'reactionSelected',
         'repostState',
       ],
     },
@@ -746,6 +760,7 @@ export const Playground: Story = {
 };
 
 export const PlaygroundInteraction: Story = {
+  args: { reactionSelected: false, repostState: 'selected' },
   parameters: { controls: { disable: true } },
   play: async ({ args, canvasElement, step }) => {
     playgroundBookmark.mockClear();
@@ -763,6 +778,10 @@ export const PlaygroundInteraction: Story = {
         args.bookmarkAccessibilityLabel,
         '더 보기',
       ]);
+      expect(canvas.getByRole('button', { name: '반응' })).toHaveAttribute(
+        'aria-pressed',
+        String(args.reactionSelected),
+      );
       const bookmarkBounds = canvas
         .getByRole('button', { name: args.bookmarkAccessibilityLabel })
         .parentElement!.getBoundingClientRect();
@@ -1737,6 +1756,7 @@ export const ProcessingAccessibility: Story = {
     <PostActionBarFixture
       bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true }}
       more={actionBarProps.more}
+      reactionSelected
       reply={{ ...actionBarProps.reply, expanded: true, processing: 'pending' }}
       repostState="pending"
     />
