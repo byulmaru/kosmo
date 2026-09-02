@@ -28,8 +28,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 ## Action semantic colors
 
 - Reaction은 active·Web hover에서 semantic `actionReactionBase` (`#F97066`)를 사용한다.
-- Repost glyph와 count는 default·Web hover·selected에서 semantic `actionRepostBase`를 사용한다. Light는
-  `green/600 #16794A`, Dark는 `green/500 #409667`이다.
+- Repost glyph와 count는 미선택 default에서 `textSecondary`를 사용한다. Web hover에서는 glyph와 원형
+  background만 semantic `actionRepostBase`를 사용하고 count는 `textSecondary`를 유지한다. selected에서는
+  glyph와 count 모두 `actionRepostBase`를 사용한다. Light는 `green/600 #16794A`, Dark는
+  `green/500 #409667`이다.
 - pending·disabled처럼 입력이 차단된 상태에서는 기존 중립 처리 표현이 action 의미색보다 우선한다.
 - `actionRepostBase`는 Repost 전용 제품 의미색이며 전역 `feedbackSuccessBase`를 바꾸거나 재사용하지 않는다.
 
@@ -39,7 +41,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   표시한다. Reply, Bookmark와 More는 현재 theme의 semantic `primary`를 30% opacity로 사용하고 hover
   foreground에는 불투명 `primary`를 사용한다. Reaction은 `actionReactionBase`, Repost는
   `actionRepostBase`를 같은 방식으로 사용한다. Reply count는 기존 색을 유지하고 Repost count는
-  `actionRepostBase`를 유지한다.
+  미선택 default·hover에서 `textSecondary`, selected에서 `actionRepostBase`를 사용한다.
 - 원형 hover background는 실제 interactive target의 크기·padding·간격을 바꾸지 않는다. Reply, Repost,
   Reaction과 Bookmark의 target은 계속 50×28px이고 More는 28×28px이며, background는 count를 감싸거나
   인접 action target과 겹치지 않는다.
@@ -256,7 +258,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   포함하고 서로 겹치지 않는지도 확인한다.
 - Web pointer hover에서는 glyph 중심 28×28 원형 background, social action의 50×28 click target과 More의
   28×28 click target 보존, 일반 action의 30% `primary` background·불투명 `primary` foreground,
-  Reply count 색 유지, Repost의 mode별 `actionRepostBase`, Reaction의 30% `actionReactionBase` background·불투명 foreground·selected 표현과
+  Reply count 색 유지, Repost의 미선택 중립색·hover glyph와 selected의 mode별 `actionRepostBase`, Reaction의 30% `actionReactionBase` background·불투명 foreground·selected 표현과
   기존 pressed 상태 보존을 검증한다.
   blocked action, Web touch 입력과 Native에는 hover background가 나타나지 않는지 확인한다.
 - Web menu가 scroll container 밖에서 잘리지 않고 첫 item이 trigger pointer 지점을 덮는지, 같은 위치의

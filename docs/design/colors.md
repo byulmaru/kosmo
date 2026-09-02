@@ -102,10 +102,11 @@ Focus와 Disabled는 Secondary 전용 색상을 추가하지 않고 공용 `colo
 
 | Token                        | Light               | Dark                | 용도                    |
 | ---------------------------- | ------------------- | ------------------- | ----------------------- |
-| `color/action/repost/base`   | `green/600 #16794A` | `green/500 #409667` | Repost glyph와 count    |
+| `color/action/repost/base`   | `green/600 #16794A` | `green/500 #409667` | Repost hover와 selected |
 | `color/action/reaction/base` | `#F97066`           | `#F97066`           | Reaction active와 hover |
 
-Repost는 제품 action 의미를 소유하므로 전역 `color/feedback/success/base`와 분리한다. Dark의
+Repost는 미선택 default에서 중립 `color/foreground/secondary`를 사용하고, hover glyph·background와
+selected glyph·count에서 제품 action 의미색을 사용한다. 전역 `color/feedback/success/base`와 분리하며 Dark의
 `green/500 #409667`은 canvas `#000000`에서 `5.78:1`, surface `#141414`에서 `5.07:1` 대비를
 유지한다. 전역 Success는 Light·Dark 모두 기존 `green/600 #16794A`를 유지한다.
 

@@ -251,3 +251,29 @@ Reaction과 Repost가 전역 feedback 의미와 분리된 presentation semantic�
 
 - [x] 6.1 canonical 설계 문서와 OpenSpec에 승인된 Reaction·Repost semantic 색상 및 전역 Success 비변경 경계를 기록한다.
 - [x] 6.2 기존 공용 control·theme 경계로 semantic 색상을 구현하고 Light·Dark Storybook 회귀와 전체 검증을 통과시킨다.
+
+## 7. PROD-882 미선택 Repost 상태 색상 복구
+
+**Authority / Provenance**
+
+- `docs/design/colors.md`
+- `docs/design/post-action-bar.md`
+- `PROD-882`
+
+**Deliverable**
+
+현재 selected Profile이 재게시하지 않은 Post의 Repost glyph와 count를 중립색으로 표시하고, hover와 selected 상태에서만 Repost action semantic을 사용한다.
+
+**Guardrails**
+
+- `viewerRepost`에서 파생하는 selected·접근성 상태, mutation·cache·menu·pending 계약을 변경하지 않는다.
+- 기존 `PostActionControl`의 중립 base fallback과 action별 active·hover 입력을 재사용하고 새 token·dependency·공개 API를 추가하지 않는다.
+- Reaction과 전역 Success semantic, action geometry·spacing을 변경하지 않는다.
+
+**Verification**
+
+- 기존 Light·Dark Storybook Relay fixture에서 미선택 default glyph·count의 중립색, hover glyph·background의 Repost semantic과 중립 count 유지, selected glyph·count의 Repost semantic을 직접 검증한다.
+- app check, focused Storybook test와 OpenSpec strict validation을 통과시킨다.
+
+- [x] 7.1 Repost child의 미선택 base color override를 제거하고 기존 selected·hover semantic을 유지한다.
+- [x] 7.2 Light·Dark Storybook 회귀와 app·OpenSpec 검증을 통과시킨다.

@@ -406,12 +406,24 @@
 - Decision Date: 2026-08-31
 - Decision Class: Derived Contract
 - Authority / Provenance: `PROD-866`, `docs/design/colors.md`, `docs/design/post-action-bar.md`, Figma `PostActionControl` 3801:8494, `PostActionBar` 6604:48270, 2026-08-31 KST 사용자 결정
-- Status: Active
+- Status: Superseded
 - Context / Problem: 최신 Figma source는 Reaction과 Repost에 제품 action 의미색을 지정한다. 기존 Repost `#16794A`는 Dark canvas에서 `3.87:1`, surface에서 `3.39:1` 대비로 일반 크기 count의 `4.5:1` 기준에 미달한다. 전역 Success 색을 함께 바꾸면 Toast 등 무관한 feedback consumer까지 영향을 받는다.
 - Decision Outcome: Reaction active·hover는 Light·Dark 모두 전용 `actionReactionBase #F97066`을 사용한다. Repost glyph와 count는 default·hover·selected에서 전용 `actionRepostBase`를 사용하며 Light는 `green/600 #16794A`, Dark는 `green/500 #409667`을 적용한다. pending·disabled의 중립 처리 표현은 이 의미색보다 우선하고 전역 `feedbackSuccessBase`는 변경하지 않는다.
 - Alternatives Considered: 전역 Success 변경은 무관한 feedback consumer를 바꾸므로 제외했다. `green/200`은 Dark에서 지나치게 밝고, `green/400`까지 밝히지 않아도 `green/500`이 canvas `5.78:1`, surface `5.07:1`을 충족하면서 기존 `green/600`에 더 가까워 `green/500`을 선택했다.
 - Consequences: 공용 control은 선택적인 base color seam만 추가하고, Repost child와 Reaction consumer가 기존 theme semantic을 전달한다. 새 dependency나 범용 action color abstraction은 추가하지 않는다.
 - Confirmation / Follow-up: 기존 Storybook Relay fixture에서 Repost default·hover·selected와 Reaction active·hover를 Light·Dark로 직접 검증한다. Storybook Web 검증을 Native runtime 완료 증거로 사용하지 않는다.
+
+### 미선택 Repost를 중립색으로 구분한다
+
+- Decision Date: 2026-09-02
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-882`, `docs/design/colors.md`, `docs/design/post-action-bar.md`, 2026-09-02 KST 사용자 결정
+- Status: Active
+- Context / Problem: Repost child는 `viewerRepost`에서 selected 상태를 정확히 파생하지만, Repost 전용 색을 base color에도 전달해 미선택 default의 glyph와 count가 selected와 같은 초록색으로 표시됐다. 결과적으로 사용자가 이미 재게시했는지 색상으로 구분할 수 없었다.
+- Decision Outcome: 미선택 Repost의 glyph와 count는 theme `textSecondary`를 사용한다. Web hover에서는 glyph와 원형 background만 mode별 `actionRepostBase`를 사용하고 count는 `textSecondary`를 유지한다. `viewerRepost`가 있는 selected 상태에서는 glyph와 count 모두 `actionRepostBase`를 사용한다. Reaction semantic과 전역 `feedbackSuccessBase`, action geometry·mutation·cache·접근성 상태는 변경하지 않는다.
+- Alternatives Considered: default에도 Repost 의미색을 유지하면 확인된 상태 구분 회귀가 남아 채택하지 않았다. 별도 unselected token이나 공용 control 분기를 추가하는 방식은 기존 `textSecondary` fallback과 `activeColor`·hover 입력으로 같은 결과를 낼 수 있어 채택하지 않았다.
+- Consequences: Repost child는 공용 control에 base color override를 전달하지 않고 기존 active·hover semantic만 유지한다. 공개 API나 새 token·dependency는 추가하지 않는다.
+- Confirmation / Follow-up: 기존 Light·Dark Storybook Relay fixture에서 미선택 default glyph·count의 `textSecondary`, hover glyph·background의 `actionRepostBase`와 중립 count 유지, selected glyph·count의 `actionRepostBase`를 직접 검증한다.
 
 ## Remaining Decisions
 
@@ -435,3 +447,4 @@
 - 2026-07-21 `실행할 수 없는 액션은 숨기지 않고 disabled로 유지`는 2026-07-27 `production surface는 표시 Post와 action target을 구분한다`로 대체했다.
 - 2026-07-21 `공유 change와 부모 소유의 최종 archive`의 PROD-432 archive owner 결과는 2026-08-03 `PROD-632가 후속 링크 복사 복구와 change archive를 인계받는다`로 대체했다. 하나의 공유 change를 유지하고 부분 archive하지 않는 결과는 유지한다.
 - 2026-07-21 `canonical 문서·Linear·OpenSpec·Figma의 source hierarchy`의 Figma 수정 제외 결과는 2026-08-27 `일반 Text·Media PostListItem의 Figma 리듬을 고정하고 production 적용을 분리한다`로 대체했다. canonical 문서·Linear·OpenSpec의 source hierarchy와 Figma에 없는 상태·동작을 코드 계약에서 유지하는 결과는 보존한다.
+- 2026-08-31 `Post action 의미색을 feedback Success와 분리한다`의 Repost default 의미색 결과는 2026-09-02 `미선택 Repost를 중립색으로 구분한다`로 대체했다. Repost hover·selected의 action semantic, Reaction semantic과 전역 Success 비변경 결과는 유지한다.
