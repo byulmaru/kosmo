@@ -167,7 +167,7 @@ Update wire result에는 full DB row나 `Temporal.Instant` 대신 생성/승격�
 2. 아직 배포되지 않은 operation receipt schema/migration과 operation-scoped caller/Workflow를 제거하고 pair Workflow/DTO/registry를 추가한다. 이미 외부 환경에 적용된 receipt table은 사용하지 않고 별도 cleanup migration으로 추적한다.
 3. Pair Workflow와 Unfollow short command를 production registry에 추가한다. `main`에 포함되지 않은 standalone Follow effects/operation Workflow는 등록하지 않는다.
 4. GraphQL/Fedify caller를 pair-derived UWS로 전환한다. 기존 pending request는 terminal Update-with-Start의 read-only bootstrap으로 점진 처리한다.
-5. Core/Worker/API/Fedify focused tests, retry/restart/queue failure tests와 real Temporal Web E2E를 통과시킨다.
+5. Core/Worker/API/Fedify focused tests, retry/queue failure tests와 real Temporal Web E2E를 통과시킨다.
 6. Pair run이 실제 배포된 뒤에는 해당 Workflow type과 history replay 계약을 제거하지 않는다.
 
 ## Open Questions

@@ -62,7 +62,7 @@
 - Decision Outcome: transition마다 effect batch를 FIFO queue에 넣고 batch 내부 sibling은 모두 settle한다. PENDING batch terminal failure는 state/history에 기록하고 다음 terminal Update를 계속 허용한다. terminal state에서는 새 Update를 막고 queue를 모두 drain한 뒤 성공 또는 실패로 close한다.
 - Alternatives Considered: 첫 effect failure에서 parent 종료, effects ABANDON 후 관찰 불가, 모든 batch 동시 실행. 각각 pending lifecycle을 막거나 순서/실패 관찰을 잃는다.
 - Consequences: PENDING Workflow가 effect failure를 기록한 채 살아 있을 수 있고, terminal close까지 누적 실패가 관찰된다. DB commit은 rollback하지 않는다.
-- Confirmation / Follow-up: pending effect failure → terminal update → queue drain/restart test로 확인한다.
+- Confirmation / Follow-up: pending effect failure → terminal update → queue drain/failure test로 확인한다.
 
 ### Transaction Activity terminal failure는 pair run을 닫는다
 

@@ -58,7 +58,7 @@
 - real Temporal UWS에서 initial Follow result가 effects보다 먼저 반환되는지 검증
 - delayed transaction 동안 duplicate/concurrent Update가 하나만 실행되는지 검증
 - pending effect failure 뒤 approve/reject/cancel/undo가 계속 처리되는지 검증
-- terminal queue sibling retry/failure, Worker restart/replay와 final complete/fail 검증
+- terminal queue sibling retry/failure와 final complete/fail 검증
 - exact-row removal transaction Activity retry 소진 시 Update와 Workflow가 함께 실패하는지 검증
 
 - [x] 2.1 pair lifecycle Workflow, state machine, one-in-flight handler와 orphan INITIAL guard를 구현한다.
