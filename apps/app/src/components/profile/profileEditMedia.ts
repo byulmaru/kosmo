@@ -1,4 +1,4 @@
-import { releaseComposerMediaPreview } from '@/components/post/postComposerMedia';
+import { releaseImagePreview } from '@/components/media/imageUpload';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import type { ImageUploadFailure } from '@/components/media/imageUploadErrors';
 import type { ProfileEditImageDraft } from './profileEditState';
@@ -118,6 +118,6 @@ export function releaseProfileEditImagePreview(
   revokeObjectUrl?: (url: string) => void,
 ) {
   if (image.presentation.kind === 'replacement' && image.asset) {
-    releaseComposerMediaPreview(image.asset.uri, revokeObjectUrl);
+    releaseImagePreview(image.asset.uri, revokeObjectUrl);
   }
 }

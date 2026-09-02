@@ -3,11 +3,8 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
-import {
-  asImageUploadError,
-  assertImageUploadResponse,
-} from '@/components/media/imageUploadErrors';
-import { uploadComposerMedia } from '@/components/post/postComposerMedia';
+import { uploadImage as uploadImageAsset } from '@/components/media/imageUpload';
+import { asImageUploadError } from '@/components/media/imageUploadErrors';
 import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { ProfileEditDiscardDialog } from './ProfileEditDiscardDialog';
@@ -248,7 +245,8 @@ function EditableProfileRoute({
       const fieldRef = field === 'avatar' ? avatarRef : headerRef;
 
       try {
-        const mediaId = await uploadComposerMedia({
+        const mediaId = await uploadImageAsset({
+          asset,
           complete: (id) =>
             new Promise<void>((resolve, reject) => {
               commitCompleteMediaUpload({
@@ -284,15 +282,6 @@ function EditableProfileRoute({
                 onError: reject,
               });
             }),
-          put: async (uploadUrl) => {
-            const body = asset.file ?? (await (await fetch(asset.uri)).blob());
-            const response = await fetch(uploadUrl, {
-              body,
-              headers: asset.mimeType ? { 'content-type': asset.mimeType } : undefined,
-              method: 'PUT',
-            });
-            await assertImageUploadResponse(response);
-          },
         });
         if (mediaId) {
           updateImage(field, (current) =>
