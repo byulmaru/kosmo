@@ -5,10 +5,14 @@ import type { StorybookConfig } from '@storybook/react-vite';
 
 const require = createRequire(import.meta.url);
 const sourceDirectory = fileURLToPath(new URL('../src/', import.meta.url));
+const storybookAllowedHost = process.env.STORYBOOK_ALLOWED_HOST;
 
 const config: StorybookConfig = {
   addons: ['@storybook/addon-a11y', '@storybook/addon-vitest'],
-  core: { disableTelemetry: true },
+  core: {
+    disableTelemetry: true,
+    ...(storybookAllowedHost ? { allowedHosts: [storybookAllowedHost] } : {}),
+  },
   framework: { name: '@storybook/react-vite', options: {} },
   stories: ['../src/**/*.stories.@(ts|tsx)'],
   viteFinal: (viteConfig) => ({
