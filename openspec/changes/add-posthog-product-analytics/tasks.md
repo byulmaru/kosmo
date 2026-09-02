@@ -96,8 +96,8 @@ PostHog의 `defaults: '2026-05-30'` 표준 pageview·pageleave·autocapture·met
 - [x] 3.3 `$pageview`를 app event map에서 제거하고 기존 custom event의 event별 typed passthrough를 유지한다.
 - [x] 3.4 unit test에서 권장 defaults와 표준 metadata·remote config 비차단, custom event type contract를 검증한다.
 - [x] 3.5 production adapter에 test-only 설정을 추가하지 않고 Playwright fixture의 일반 browser user-agent·UA Client Hints brand와 비자동화 webdriver signal로 fake endpoint E2E를 실행해 SDK automatic pageview·pageleave·autocapture, 표준 metadata와 설정 누락 no-op을 검증한다.
-- [ ] 3.6 `mask_personal_data_properties: false`를 명시하고 `custom_personal_data_properties`와 query·click metadata `before_send` 보완을 제거하는 init config와 단위 검증을 추가한다.
-- [ ] 3.7 standard `/e/` event payload의 current/referrer/session URL E2E에서 Search `q`, current/referrer의 기본 click ID, 검색엔진 referrer에서 파생된 `ph_keyword` 계열과 `utm_*`가 원문으로 유지되는지 검증한다. Remote config 요청과 Post Content `$autocapture` 비노출은 별도 경계로 계속 확인한다.
+- [x] 3.6 `mask_personal_data_properties: false`를 명시하고 `custom_personal_data_properties`와 query·click metadata `before_send` 보완을 제거하는 init config와 단위 검증을 추가한다.
+- [x] 3.7 standard `/e/` event payload의 current/referrer/session URL E2E에서 Search `q`, current/referrer의 기본 click ID, 검색엔진 referrer에서 파생된 `ph_keyword` 계열과 `utm_*`가 원문으로 유지되는지 검증한다. Remote config 요청과 Post Content `$autocapture` 비노출은 별도 경계로 계속 확인한다.
 
 ## 4. PROD-819 persisted identity와 fail-open
 
