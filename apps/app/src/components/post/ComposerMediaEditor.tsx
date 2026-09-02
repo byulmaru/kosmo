@@ -34,6 +34,7 @@ export type ComposerMediaEditorProps = {
   readonly presentation: 'mobile' | 'web';
   readonly selectedKey: string;
   readonly sensitiveMedia: boolean;
+  readonly showImageEditPreview?: boolean;
   readonly tool: ComposerMediaEditorTool;
 };
 
@@ -113,7 +114,11 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
         </>
       ) : (
         <>
-          <EditorTabs onToolChange={props.onToolChange} tool={props.tool} />
+          <EditorTabs
+            onToolChange={props.onToolChange}
+            showImageEditPreview={props.showImageEditPreview ?? false}
+            tool={props.tool}
+          />
           <View style={styles.webBody}>
             <View style={styles.webWorkspace}>
               <MediaPreview
@@ -196,9 +201,11 @@ function EditorHeader({
 
 function EditorTabs({
   onToolChange,
+  showImageEditPreview,
   tool,
 }: {
   readonly onToolChange: (tool: ComposerMediaEditorTool) => void;
+  readonly showImageEditPreview: boolean;
   readonly tool: ComposerMediaEditorTool;
 }) {
   return (
@@ -208,14 +215,16 @@ function EditorTabs({
       value={tool}
       variant="underline"
     >
-      <Tab
-        option={{
-          accessibilityLabel: '이미지 편집 (준비 중)',
-          disabled: true,
-          label: '이미지 편집',
-          value: 'image-edit',
-        }}
-      />
+      {showImageEditPreview ? (
+        <Tab
+          option={{
+            accessibilityLabel: '이미지 편집 (준비 중)',
+            disabled: true,
+            label: '이미지 편집',
+            value: 'image-edit',
+          }}
+        />
+      ) : null}
       <Tab option={{ label: '대체 텍스트', value: 'alt' }} />
       <Tab option={{ label: '민감도', value: 'sensitive' }} />
     </TabList>

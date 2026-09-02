@@ -38,6 +38,7 @@ const meta = {
     presentation: 'web',
     selectedKey: 'media-1',
     sensitiveMedia: false,
+    showImageEditPreview: false,
     tool: 'alt',
   },
   argTypes: {
@@ -56,11 +57,16 @@ const meta = {
     presentation: { control: 'inline-radio', options: ['web', 'mobile'] },
     selectedKey: { control: 'select', options: editorMedia.map(({ key }) => key) },
     sensitiveMedia: { control: 'boolean' },
+    showImageEditPreview: {
+      control: 'boolean',
+      name: '미래 이미지 편집 미리보기',
+    },
     tool: { control: 'inline-radio', options: ['alt', 'sensitive'] },
   },
   component: ComposerMediaEditor,
   excludeStories: [
     'InteractionContract',
+    'FutureImageEditPreviewContract',
     'MobileAltKeyboardGeometryContract',
     'MobileDefaultGeometryContract',
     'MobileSensitiveGeometryContract',
@@ -183,10 +189,7 @@ export const InteractionContract: Story = {
       '노을빛 밤하늘 아래 모인 사람들',
     );
     expect(canvas.getByText('1 / 2')).toBeVisible();
-    expect(canvas.getByRole('tab', { name: '이미지 편집 (준비 중)' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    expect(canvas.queryByRole('tab', { name: '이미지 편집 (준비 중)' })).toBeNull();
 
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 2 선택' }));
     expect(args.onSelectMedia).toHaveBeenLastCalledWith('media-2');
@@ -208,6 +211,17 @@ export const InteractionContract: Story = {
     expect(args.onClose).toHaveBeenCalledOnce();
   },
   render: (args) => <WebEditorStory {...args} />,
+};
+
+export const FutureImageEditPreviewContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('tab', { name: '이미지 편집 (준비 중)' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  },
+  render: (args) => <WebEditorStory {...args} showImageEditPreview />,
 };
 
 export const MobileDefaultGeometryContract: Story = {
