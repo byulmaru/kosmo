@@ -347,6 +347,7 @@ export function MobileFullscreenComposerShellCandidate({
   visibility,
 }: MobileFullscreenComposerShellCandidateProps) {
   const theme = useTheme();
+  const [visibilityOpen, setVisibilityOpen] = useState(false);
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const disabled =
@@ -354,10 +355,6 @@ export function MobileFullscreenComposerShellCandidate({
     items.some((item) => item.state !== 'ready') ||
     (body.trim().length === 0 && items.length === 0) ||
     remaining < 0;
-  const nextVisibility =
-    visibilityOptions[
-      (visibilityOptions.indexOf(selectedVisibility) + 1) % visibilityOptions.length
-    ].value;
   const textHeight = keyboard
     ? items.length > 0
       ? 100
@@ -401,29 +398,41 @@ export function MobileFullscreenComposerShellCandidate({
         </View>
       </View>
 
-      <Pressable
-        accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
-        accessibilityRole="button"
-        disabled={submitting}
-        onPress={() => onVisibilityChange(nextVisibility)}
-        style={({ pressed }) => [
-          styles.mobileVisibility,
-          {
-            backgroundColor: pressed ? theme.statePressed : theme.backgroundCanvas,
-            borderColor: theme.borderSubtle,
-          },
-        ]}
-      >
-        <Text style={[styles.mobileVisibilityCaption, { color: theme.foregroundSecondary }]}>
-          공개 범위
-        </Text>
-        <View style={styles.mobileVisibilityValue}>
-          <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
-            {selectedVisibility.label}
+      <View style={styles.mobileVisibilityControl}>
+        <Pressable
+          accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: visibilityOpen }}
+          disabled={submitting}
+          onPress={() => setVisibilityOpen((open) => !open)}
+          style={({ pressed }) => [
+            styles.mobileVisibility,
+            {
+              backgroundColor: pressed ? theme.statePressed : theme.backgroundCanvas,
+              borderColor: theme.borderSubtle,
+            },
+          ]}
+        >
+          <Text style={[styles.mobileVisibilityCaption, { color: theme.foregroundSecondary }]}>
+            공개 범위
           </Text>
-          <ChevronDownIcon color={theme.foregroundPrimary} size={iconSizes[16]} strokeWidth={2} />
-        </View>
-      </Pressable>
+          <View style={styles.mobileVisibilityValue}>
+            <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
+              {selectedVisibility.label}
+            </Text>
+            <ChevronDownIcon color={theme.foregroundPrimary} size={iconSizes[16]} strokeWidth={2} />
+          </View>
+        </Pressable>
+        {visibilityOpen ? (
+          <VisibilityMenu
+            onChange={(value) => {
+              onVisibilityChange(value);
+              setVisibilityOpen(false);
+            }}
+            value={visibility}
+          />
+        ) : null}
+      </View>
 
       <View style={styles.mobileComposerBody}>
         {author}
@@ -705,10 +714,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[16],
   },
   mobileLeadingSlot: { alignItems: 'flex-start', width: 72 },
-  mobileMediaShelf: { height: 156, paddingHorizontal: space[16] },
+  mobileMediaShelf: { height: 164, paddingBottom: space[8], paddingHorizontal: space[16] },
   mobileShell: { height: 844, overflow: 'hidden', width: 390 },
   mobileTitle: { flex: 1, textAlign: 'center', ...textStyles.uiHeadingS },
   mobileTrailingSlot: { alignItems: 'flex-end', width: 84 },
+  mobileVisibilityControl: { position: 'relative', zIndex: 12 },
   mobileVisibility: {
     alignItems: 'center',
     borderBottomWidth: borderWidths[1],

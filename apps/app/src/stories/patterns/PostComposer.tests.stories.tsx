@@ -3,6 +3,9 @@ import baseMeta, {
   InteractionContract as interactionContract,
   MobileCandidateContract as mobileCandidateContract,
   MobileKeyboardContract as mobileKeyboardContract,
+  MobileKeyboardMediaFooterGeometryContract as mobileKeyboardMediaFooterGeometryContract,
+  MobileMediaFooterGeometryContract as mobileMediaFooterGeometryContract,
+  MobilePlaygroundContract as mobilePlaygroundContract,
   PendingMediaContract as pendingMediaContract,
   StateContract as stateContract,
 } from './PostComposer.stories';
@@ -18,8 +21,12 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const InteractionContract: Story = interactionContract;
+export const MobileKeyboardMediaFooterGeometryContract: Story =
+  mobileKeyboardMediaFooterGeometryContract;
 export const MobileCandidateContract: Story = mobileCandidateContract;
 export const MobileKeyboardContract: Story = mobileKeyboardContract;
+export const MobileMediaFooterGeometryContract: Story = mobileMediaFooterGeometryContract;
+export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
 export const PendingMediaContract: Story = pendingMediaContract;
 export const StateContract: Story = stateContract;
 

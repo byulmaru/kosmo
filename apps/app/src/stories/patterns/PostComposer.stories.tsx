@@ -1,3 +1,4 @@
+import { XIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
@@ -8,11 +9,13 @@ import {
 } from '@/components/post/PostComposerTarget';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { Avatar } from '@/components/ui/Avatar';
+import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
-import { space, textStyles } from '@/theme/tokens';
+import { borderWidths, iconSizes, space, textStyles } from '@/theme/tokens';
 import ogImage from '../../../public/og-default.png?url';
 import { ComposerOverlayFixture } from '../fixtures/ComposerOverlayFixture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ComposerMediaEditorMobileState } from '@/components/post/ComposerMediaEditor';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type { PostComposerTargetProps } from '@/components/post/PostComposerTarget';
 
@@ -148,7 +151,10 @@ const meta = {
   excludeStories: [
     'InteractionContract',
     'MobileCandidateContract',
+    'MobileKeyboardMediaFooterGeometryContract',
     'MobileKeyboardContract',
+    'MobileMediaFooterGeometryContract',
+    'MobilePlaygroundContract',
     'PendingMediaContract',
     'StateContract',
     'composerMedia',
@@ -194,6 +200,13 @@ export const CompactOverlay: Story = {
 const mobileGlobals = { viewport: { isRotated: false, value: 'kosmoMobile' } } as const;
 const mobileParameters = { layout: 'fullscreen' } as const;
 
+export const MobilePlayground: Story = {
+  args: { items: readyComposerMedia, surface: 'overlay' },
+  globals: mobileGlobals,
+  parameters: mobileParameters,
+  render: (args) => <InteractiveComposer {...args} mobile />,
+};
+
 export const MobileEmpty: Story = {
   args: { body: '', items: [], remaining: 500, surface: 'overlay' },
   globals: mobileGlobals,
@@ -202,10 +215,7 @@ export const MobileEmpty: Story = {
 };
 
 export const MobileMedia: Story = {
-  args: { items: readyComposerMedia, surface: 'overlay' },
-  globals: mobileGlobals,
-  parameters: mobileParameters,
-  render: (args) => <InteractiveComposer {...args} mobile />,
+  ...MobilePlayground,
 };
 
 export const MobileCW: Story = {
@@ -240,6 +250,7 @@ function InteractiveComposer({
   mobile = false,
   ...props
 }: PostComposerTargetProps & { keyboard?: boolean; mobile?: boolean }) {
+  const theme = useTheme();
   const [body, setBody] = useState(props.body);
   const [contentWarning, setContentWarning] = useState(props.contentWarning);
   const [contentWarningExpanded, setContentWarningExpanded] = useState(
@@ -249,7 +260,11 @@ function InteractiveComposer({
   const [visibility, setVisibility] = useState(props.visibility);
   const [sensitiveMedia, setSensitiveMedia] = useState(props.sensitiveMedia);
   const [overlayOpen, setOverlayOpen] = useState(false);
-  const [editor, setEditor] = useState<{ key: string; tool: 'alt' | 'sensitive' } | null>(null);
+  const [editor, setEditor] = useState<{
+    key: string;
+    mobileState: ComposerMediaEditorMobileState;
+    tool: 'alt' | 'sensitive';
+  } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('expressions');
@@ -294,6 +309,7 @@ function InteractiveComposer({
     return (
       <ComposerMediaEditor
         media={items.filter((item) => item.state === 'ready')}
+        mobileState={editor.mobileState}
         onAltTextChange={(key, altText) => {
           setItems((current) =>
             current.map((item) => (item.key === key ? { ...item, altText } : item)),
@@ -302,9 +318,31 @@ function InteractiveComposer({
         onBack={() => setEditor(null)}
         onClose={() => setEditor(null)}
         onDone={() => setEditor(null)}
+        onPreviewPress={
+          editor.mobileState === 'altKeyboard'
+            ? () =>
+                setEditor((current) => (current ? { ...current, mobileState: 'default' } : current))
+            : undefined
+        }
         onSelectMedia={(key) => setEditor((current) => (current ? { ...current, key } : current))}
         onSensitiveMediaChange={setSensitiveMedia}
-        onToolChange={(tool) => setEditor((current) => (current ? { ...current, tool } : current))}
+        onToolChange={(tool) =>
+          setEditor((current) => {
+            if (!current) {
+              return current;
+            }
+            return {
+              ...current,
+              mobileState:
+                tool === 'sensitive'
+                  ? 'sensitive'
+                  : current.mobileState === 'altKeyboard'
+                    ? 'default'
+                    : 'altKeyboard',
+              tool,
+            };
+          })
+        }
         presentation={mobile ? 'mobile' : 'web'}
         selectedKey={editor.key}
         sensitiveMedia={sensitiveMedia}
@@ -342,7 +380,11 @@ function InteractiveComposer({
           }}
           onMediaEdit={(key, tool) => {
             props.onMediaEdit(key, tool);
-            setEditor({ key, tool });
+            setEditor({
+              key,
+              mobileState: tool === 'alt' ? 'altKeyboard' : 'sensitive',
+              tool,
+            });
           }}
           onMediaRemove={(key) => {
             props.onMediaRemove(key);
@@ -386,7 +428,11 @@ function InteractiveComposer({
           }}
           onMediaEdit={(key, tool) => {
             props.onMediaEdit(key, tool);
-            setEditor({ key, tool });
+            setEditor({
+              key,
+              mobileState: tool === 'alt' ? 'altKeyboard' : 'sensitive',
+              tool,
+            });
             setOverlayOpen(true);
           }}
           onMediaRemove={(key) => {
@@ -436,6 +482,22 @@ function InteractiveComposer({
             />
           ) : (
             <View style={styles.overlayContent}>
+              <View style={[styles.overlayHeader, { borderColor: theme.borderSubtle }]}>
+                <Text
+                  accessibilityRole="header"
+                  style={[styles.overlayTitle, { color: theme.foregroundPrimary }]}
+                >
+                  글쓰기
+                </Text>
+                <IconButton
+                  accessibilityLabel="글쓰기 닫기"
+                  onPress={closeOverlay}
+                  style={styles.overlayClose}
+                  targetSize={40}
+                >
+                  <XIcon color={theme.foregroundPrimary} size={iconSizes[20]} strokeWidth={2} />
+                </IconButton>
+              </View>
               <PostComposerTarget
                 {...props}
                 body={body}
@@ -460,7 +522,11 @@ function InteractiveComposer({
                 }}
                 onMediaEdit={(key, tool) => {
                   props.onMediaEdit(key, tool);
-                  setEditor({ key, tool });
+                  setEditor({
+                    key,
+                    mobileState: tool === 'alt' ? 'altKeyboard' : 'sensitive',
+                    tool,
+                  });
                 }}
                 onMediaRemove={(key) => {
                   props.onMediaRemove(key);
@@ -508,6 +574,8 @@ export const InteractionContract: Story = {
     const dialog = page.getByRole('dialog', { name: '글쓰기' });
     expect(dialog).toBeVisible();
     expect(page.getAllByRole('dialog')).toHaveLength(1);
+    expect(within(dialog).getByRole('heading', { name: '글쓰기' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: '글쓰기 닫기' })).toBeVisible();
     expect(within(dialog).queryByRole('button', { name: 'Composer 확장' })).toBeNull();
     const body = within(dialog).getByRole('textbox', { name: '게시물 내용' });
     expect(body).toHaveValue('오늘의 코스모 이야기를 나눠보세요.');
@@ -544,7 +612,7 @@ export const InteractionContract: Story = {
       '오늘의 코스모 이야기를 나눠보세요. 오버레이❤️',
     );
 
-    await userEvent.keyboard('{Escape}');
+    await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
     expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull();
     expect(railBody).toHaveValue('오늘의 코스모 이야기를 나눠보세요. 오버레이❤️');
   },
@@ -571,6 +639,62 @@ export const MobileCandidateContract: Story = {
     expect(canvas.getAllByRole('button', { name: '게시' })).toHaveLength(1);
     expect(canvas.getByLabelText('남은 글자 수 500자')).toBeVisible();
     expect(canvas.queryByRole('button', { name: 'Composer 확장' })).not.toBeInTheDocument();
+  },
+};
+
+export const MobilePlaygroundContract: Story = {
+  ...MobilePlayground,
+  play: async ({ args, canvasElement }) => {
+    args.onVisibilityChange.mockClear();
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
+
+    const menu = canvas.getByRole('radiogroup', { name: '공개 범위 선택' });
+    expect(within(menu).getAllByRole('radio')).toHaveLength(3);
+
+    await userEvent.click(within(menu).getByRole('radio', { name: '공개' }));
+    expect(args.onVisibilityChange).toHaveBeenLastCalledWith('PUBLIC');
+    expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
+    expect(canvas.queryByRole('radiogroup', { name: '공개 범위 선택' })).toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 편집' }));
+    expect(canvas.getByRole('heading', { name: '미디어 편집' })).toBeVisible();
+    expect(canvas.getByTestId('mobile-composer-media-editor-keyboard')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '선택한 첨부 이미지 1 미리보기' }));
+    expect(canvas.queryByTestId('mobile-composer-media-editor-keyboard')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '완료' }));
+    expect(canvas.getByRole('heading', { name: '글쓰기' })).toBeVisible();
+  },
+};
+
+export const MobileMediaFooterGeometryContract: Story = {
+  ...MobilePlayground,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
+    const shelf = gallery.parentElement;
+    const footer = shelf?.nextElementSibling;
+
+    expect(shelf).not.toBeNull();
+    expect(footer).not.toBeNull();
+    expect(shelf).toHaveStyle({ height: '164px', paddingBottom: '8px' });
+    expect(footer!.getBoundingClientRect().top - gallery.getBoundingClientRect().bottom).toBe(8);
+  },
+};
+
+export const MobileKeyboardMediaFooterGeometryContract: Story = {
+  ...MobileKeyboardMedia,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
+    const shelf = gallery.parentElement;
+    const footer = shelf?.nextElementSibling;
+
+    expect(shelf).not.toBeNull();
+    expect(footer).not.toBeNull();
+    expect(shelf).toHaveStyle({ height: '164px', paddingBottom: '8px' });
+    expect(footer!.getBoundingClientRect().top - gallery.getBoundingClientRect().bottom).toBe(8);
   },
 };
 
@@ -606,6 +730,15 @@ const styles = StyleSheet.create({
     top: 0,
     zIndex: 20,
   },
+  overlayClose: { position: 'absolute', right: space[16], top: space[12] },
   picker: { position: 'absolute', right: 0, top: 72, zIndex: 20 },
   overlayContent: { width: '100%' },
+  overlayHeader: {
+    alignItems: 'center',
+    borderBottomWidth: borderWidths[1],
+    height: 64,
+    justifyContent: 'center',
+    width: '100%',
+  },
+  overlayTitle: textStyles.uiHeadingS,
 });

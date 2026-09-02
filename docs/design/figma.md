@@ -530,6 +530,8 @@ documentation·state specimen을 두 번째 행에 둔다.
   Full Media·Poll·CW와 Keyboard Empty·Media·Poll·CW 7개를 연결한다. `14 Mobile composer and overlay consumers`의
   Full Empty Light/Dark까지 합치면 route 호환 FRAME 없이 8개 variant가 모두 실제 Target consumer를 가진다.
   Keyboard는 illustrative geometry라 Native IME·safe-area reflow는 별도 runtime QA가 필요하다.
+- Media 조합의 attachment shelf는 `164px` 높이와 `space/8` bottom padding을 사용해 마지막 media row와 footer 사이에
+  정확히 `8px`을 둔다. Empty·Poll·CW 조합과 Desktop Composer의 spacing은 이 규칙의 영향을 받지 않는다.
 - [`Composer Dark coverage`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5884-14199)는
   Full Web Composer overlay, Full Web thread rail Reply, Compact Web ReplyComposer modal과 전역 Mobile Composer의
   [`Reply Parent upward-scroll reveal Dark representative 5884:14891`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5884-14891)를
