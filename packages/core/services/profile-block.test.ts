@@ -179,7 +179,7 @@ test('Follow-owned source bootstrap captures both directions in stable order', a
   );
 });
 
-test('Block removes captured Follow generations and only Target reactions on Owner posts', async () => {
+test('Block removes captured Follow generations and preserves existing Reactions', async () => {
   const { profile: owner } = await createProfile();
   const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const ownerPost = await createPost(owner.id);
@@ -366,13 +366,39 @@ test('Block removes captured Follow generations and only Target reactions on Own
     Array.from({ length: 2 }, () => ({ followersCount: 0, followingCount: 0 })),
   );
 
-  assert.deepEqual(await db.select().from(Reactions).where(eq(Reactions.postId, ownerPost.id)), [
-    ownerOnOwnerReaction,
-  ]);
-  assert.deepEqual(
-    await db.select().from(Reactions).where(eq(Reactions.id, targetOnTargetReaction.id)),
-    [targetOnTargetReaction],
-  );
+  const assertReactionsAndNotificationPreserved = async () => {
+    const expectedReactions = [
+      targetOnOwnerReaction,
+      targetOnTargetReaction,
+      ownerOnOwnerReaction,
+    ].sort((left, right) => left.id.localeCompare(right.id));
+    const actualReactions = await db
+      .select()
+      .from(Reactions)
+      .where(
+        inArray(Reactions.id, [
+          targetOnOwnerReaction.id,
+          targetOnTargetReaction.id,
+          ownerOnOwnerReaction.id,
+        ]),
+      )
+      .then((rows) => rows.sort((left, right) => left.id.localeCompare(right.id)));
+    assert.deepEqual(actualReactions, expectedReactions);
+
+    const preservedNotification = await db
+      .select()
+      .from(Notifications)
+      .where(
+        and(
+          eq(Notifications.kind, NotificationKind.REACTION),
+          eq(Notifications.sourceId, targetOnOwnerReaction.id),
+        ),
+      )
+      .then(firstOrThrow);
+    assert.equal(preservedNotification.readAt?.toString(), readAt.toString());
+  };
+
+  await assertReactionsAndNotificationPreserved();
   assert.deepEqual(await db.select().from(Bookmarks).where(eq(Bookmarks.postId, ownerPost.id)), [
     bookmark,
   ]);
@@ -380,18 +406,6 @@ test('Block removes captured Follow generations and only Target reactions on Own
     await db.select().from(Posts).where(eq(Posts.id, repost.id)).then(firstOrThrow),
     repost,
   );
-  const preservedNotification = await db
-    .select()
-    .from(Notifications)
-    .where(
-      and(
-        eq(Notifications.kind, NotificationKind.REACTION),
-        eq(Notifications.sourceId, targetOnOwnerReaction.id),
-      ),
-    )
-    .then(firstOrThrow);
-  assert.equal(preservedNotification.readAt?.toString(), readAt.toString());
-
   // Replaying after Activity completion loss reconstructs the same effect
   // plan, while exact source IDs keep a newer Follow generation intact.
   const retry = await executeProfileBlockTransition(input);
@@ -402,6 +416,7 @@ test('Block removes captured Follow generations and only Target reactions on Own
   assert.equal(retry.result.created, false);
   assert.equal(retry.result.profileBlockId, candidateProfileBlockId);
   assert.deepEqual(retry.effectPlan, firstExecution.effectPlan);
+  await assertReactionsAndNotificationPreserved();
 
   await ensureProfileFollow(
     { followerProfileId: owner.id, followeeProfileId: target.id },
@@ -424,6 +439,7 @@ test('Block removes captured Follow generations and only Target reactions on Own
     .where(eq(Profiles.id, owner.id))
     .then(firstOrThrow);
   assert.equal(ownerAfterRetry.followingCount, 1);
+  await assertReactionsAndNotificationPreserved();
 
   assert.equal(
     (
@@ -454,6 +470,7 @@ test('Block removes captured Follow generations and only Target reactions on Own
       .then((rows) => rows.length),
     1,
   );
+  await assertReactionsAndNotificationPreserved();
 });
 
 test('Block rejects self-blocking in the service and the database check', async () => {
