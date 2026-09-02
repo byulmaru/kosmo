@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { expect, fn, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { PostComposerMediaItemsTarget } from '@/components/post/PostComposerMediaItemsTarget';
 import baseMeta, {
   InteractionContract as interactionContract,
@@ -44,9 +44,19 @@ export const HorizontalReachabilityContract: Story = {
   ),
   play: async ({ canvasElement }) => {
     const gallery = within(canvasElement).getByLabelText('첨부 이미지 갤러리, 4개');
+    const firstAction = within(gallery).getByRole('button', { name: '첨부 이미지 1 제거' });
+    const laterItemAction = within(gallery).getByRole('button', {
+      name: '첨부 이미지 4 편집',
+    });
 
+    expect(getComputedStyle(gallery).scrollbarWidth).toBe('auto');
     expect(gallery.scrollWidth).toBeGreaterThan(gallery.clientWidth);
-    gallery.scrollLeft = gallery.scrollWidth;
-    expect(gallery.scrollLeft).toBeGreaterThan(0);
+    await userEvent.click(firstAction);
+    const initialScrollLeft = gallery.scrollLeft;
+    for (let index = 0; index < 12 && document.activeElement !== laterItemAction; index += 1) {
+      await userEvent.tab();
+    }
+    expect(laterItemAction).toHaveFocus();
+    expect(gallery.scrollLeft).toBeGreaterThan(initialScrollLeft);
   },
 };
