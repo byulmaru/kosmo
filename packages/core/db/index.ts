@@ -1,3 +1,4 @@
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as enums from './enums';
@@ -36,3 +37,34 @@ export type DatabaseHandle = Database | Transaction;
 export const getDatabaseConnection = (handle?: DatabaseHandle) => {
   return handle ?? db;
 };
+
+export const findProfileMute = async (ownerProfileId: string, targetProfileId: string) => {
+  const [profileMute] = await db
+    .select()
+    .from(tables.ProfileMutes)
+    .where(
+      and(
+        eq(tables.ProfileMutes.ownerProfileId, ownerProfileId),
+        eq(tables.ProfileMutes.targetProfileId, targetProfileId),
+        isNull(tables.ProfileMutes.expiresAt),
+      ),
+    )
+    .limit(1);
+
+  return profileMute ?? null;
+};
+
+export const findProfileMutesByOwner = async (ownerProfileId: string) =>
+  db
+    .select()
+    .from(tables.ProfileMutes)
+    .where(
+      and(
+        eq(tables.ProfileMutes.ownerProfileId, ownerProfileId),
+        isNull(tables.ProfileMutes.expiresAt),
+      ),
+    )
+    .orderBy(desc(tables.ProfileMutes.id));
+
+export const isProfileMuted = async (ownerProfileId: string, targetProfileId: string) =>
+  (await findProfileMute(ownerProfileId, targetProfileId)) !== null;

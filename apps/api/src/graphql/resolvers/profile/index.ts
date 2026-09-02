@@ -8,4 +8,6 @@ export {
   ProfileConnection,
   ProfileFollow,
   ProfileFollowRequest,
+  ProfileMute,
+  ProfileMuteConnection,
 } from './ref';
