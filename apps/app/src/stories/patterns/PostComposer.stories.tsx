@@ -156,6 +156,8 @@ const meta = {
     'MobileCandidateContract',
     'MobileKeyboardMediaFooterGeometryContract',
     'MobileKeyboardContract',
+    'MobileKeyboardCWEditorGeometryContract',
+    'MobileKeyboardMediaEditorGeometryContract',
     'MobileMediaFooterGeometryContract',
     'MobilePlaygroundContract',
     'MobileFlexLayoutContract',
@@ -887,6 +889,26 @@ export const MobileKeyboardMediaFooterGeometryContract: Story = {
   },
 };
 
+export const MobileKeyboardMediaEditorGeometryContract: Story = {
+  ...MobileKeyboardMedia,
+  play: async ({ canvasElement }) => {
+    expectMobileEditorFitsMediaShelf(canvasElement);
+  },
+};
+
+export const MobileKeyboardCWEditorGeometryContract: Story = {
+  ...MobileKeyboardCW,
+  args: {
+    contentWarning: '스포일러가 포함되어 있어요.',
+    contentWarningExpanded: true,
+    items: readyComposerMedia,
+    surface: 'overlay',
+  },
+  play: async ({ canvasElement }) => {
+    expectMobileEditorFitsMediaShelf(canvasElement);
+  },
+};
+
 export const MobileKeyboardContract: Story = {
   ...MobileKeyboardMedia,
   play: async ({ canvasElement }) => {
@@ -895,6 +917,20 @@ export const MobileKeyboardContract: Story = {
     });
   },
 };
+
+function expectMobileEditorFitsMediaShelf(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement);
+  const editor = canvas.getByRole('textbox', { name: '게시물 내용' });
+  const editorOuter = editor.parentElement;
+  const shelf = canvas.getByLabelText('첨부 이미지 갤러리, 1개').parentElement;
+
+  expect(editorOuter).not.toBeNull();
+  expect(getComputedStyle(editorOuter!).flexGrow).toBe('1');
+  expect(shelf).not.toBeNull();
+  expect(editorOuter!.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+    shelf!.getBoundingClientRect().top,
+  );
+}
 
 const styles = StyleSheet.create({
   author: { alignItems: 'center', flexDirection: 'row', gap: space[12] },

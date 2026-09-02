@@ -2,9 +2,10 @@ import { forwardRef, useId, useState } from 'react';
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
-import type { TextInputProps, TextStyle } from 'react-native';
+import type { StyleProp, TextInputProps, TextStyle, ViewStyle } from 'react-native';
 
 type TextFieldProps = TextInputProps & {
+  containerStyle?: StyleProp<ViewStyle>;
   error?: string;
   label?: string;
 };
@@ -12,6 +13,7 @@ type TextFieldProps = TextInputProps & {
 export const TextField = forwardRef<TextInput, TextFieldProps>(function TextField(
   {
     accessibilityHint,
+    containerStyle,
     editable = true,
     error,
     label,
@@ -32,7 +34,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
       : {};
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, containerStyle]}>
       {label ? (
         <Text style={[styles.label, { color: theme.foregroundPrimary }]}>{label}</Text>
       ) : null}
