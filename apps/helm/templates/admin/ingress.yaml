@@ -1,0 +1,21 @@
+{{- $hostname := printf "%s-%s-admin" .Release.Name .Values.env | trunc 63 | trimSuffix "-" }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ printf "%s-admin" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: admin
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - {{ $hostname | quote }}
+  defaultBackend:
+    service:
+      name: {{ printf "%s-admin" .Release.Name | trunc 63 | trimSuffix "-" }}
+      port:
+        number: 80

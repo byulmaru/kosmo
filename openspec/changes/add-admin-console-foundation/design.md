@@ -15,11 +15,13 @@ cluster 또는 VPC 경로에서 직접 접근될 수 있으므로 Service type�
 - 공개 runtime과 분리된 Admin shell·probe runtime을 만든다.
 - Tailscale 접근 정책에서 허용된 Viewer에게 v1 읽기 전체의 공통 admission을 제공한다.
 - Operator Ingress 뒤의 ClusterIP Service와 NetworkPolicy로 일반 workload의 직접 Service·Pod 접근을 차단한다.
-- runtime, image, Helm render와 trust-boundary fixture를 자동 검증한다.
+- runtime, image, Helm render와 network-isolation contract를 자동 검증한다.
 
 **Non-Goals:**
 
 - Account, Profile, Membership data query와 GraphQL schema
+- `apps/app`과의 공용 UI package
+- 이번 PR의 REST/GraphQL endpoint와 DB read query 호출
 - Tailscale App Capability, `AcceptAppCaps`, `Tailscale-App-Capabilities`와 application-level action authorization
 - same-Pod Tailscale Serve sidecar, node state와 bootstrap credential
 - public Gateway/HTTPRoute, Funnel 또는 application LoadBalancer
@@ -30,9 +32,13 @@ cluster 또는 VPC 경로에서 직접 접근될 수 있으므로 Service type�
 
 ### Recommended Approach
 
-`apps/admin`은 Pod network에서 하나의 작은 Hono app을 실행한다. `GET /healthz`와 read-only shell route만
-제공하고 정의되지 않은 route는 기본 거부한다. shell은 외부 asset이나 data query 없이 현재 Admin Console
-Viewer의 선택적 표시 metadata만 보여준다.
+`apps/admin`은 `@sveltejs/adapter-node`로 빌드되는 독립 SvelteKit app을 Pod network에서 실행한다.
+`GET /healthz`와 read-only shell route만 제공하고 정의되지 않은 route는 기본 거부한다. shell은 외부 asset이나
+data query 없이 현재 Admin Console Viewer의 선택적 표시 metadata만 보여준다.
+
+`hooks.server.ts`는 선택적 identity header를 request-local data로 정규화하고, root server layout/loader는 이를
+shell에 전달한다. 이 server loader 경계는 후속 read projection에서 repository read query를 직접 호출할 수 있는
+자리지만, 이번 PR에서는 DB query를 호출하지 않고 REST/GraphQL endpoint도 만들지 않는다.
 
 선택적 identity header가 제공되면 login과 display name만 정규화해 표시한다. identity 누락이나 정규화 실패는
 `식별 정보 없는 Admin Console Viewer`로 처리하며 admission 결과를 바꾸지 않는다. profile picture header나
@@ -42,10 +48,14 @@ Helm은 Admin Deployment, ClusterIP Service와 `ingressClassName: tailscale` Ing
 Gateway/HTTPRoute와 application LoadBalancer는 만들지 않는다. Tailscale 접근 정책의 principal, hostname과
 grant 자체는 cluster 외부 운영 설정이므로 repository에 사용자 식별자나 credential 값을 저장하지 않는다.
 
-NetworkPolicy는 일반 workload에서 오는 Admin ingress를 기본 거부하고 Operator가 생성한 해당 Ingress
-proxy만 application port에 접근하도록 허용한다. Kubernetes node 자체와 kubelet probe를 포함한 node-origin
-연결은 차단 범위에서 제외한다. selector에 사용할 generated proxy label은 배포 대상 Operator 버전과 live
-cluster에서 확인한 뒤 고정한다. label을 확인하기 전 특정 값을 durable 계약으로 가정하지 않는다.
+NetworkPolicy는 일반 workload에서 오는 Admin ingress를 기본 거부하고 `tailscale` namespace의 Operator가
+생성한 해당 Ingress proxy만 application port에 접근하도록 허용한다. selector는 release name·namespace에서
+파생된 `parent-resource-type`, `parent-resource`, `parent-resource-ns` labels로 제한한다. Kubernetes node 자체와
+kubelet probe를 포함한 node-origin 연결은 차단 범위에서 제외한다. 실제 Operator proxy가 이 selector와
+일치하는지는 live 검증에서 확인한다.
+
+shell과 SvelteKit page-data 응답은 `Cache-Control: no-store`를 사용한다. 생성된 immutable asset만 장기 cache를
+허용하고, CSP는 self-origin script/style/connect만 허용하며 object와 frame embedding은 거부한다.
 
 ### Known Traps
 
@@ -58,8 +68,11 @@ cluster에서 확인한 뒤 고정한다. label을 확인하기 전 특정 값�
 
 ## Risks / Trade-offs
 
-- [Generated proxy label은 Operator 버전과 실제 resource에 의존함] → dev에서 생성된 proxy Pod label을 확인한
-  뒤 policy selector를 고정하고 Helm fixture와 live direct-access test를 함께 둔다.
+- [Generated proxy label은 Operator 버전과 실제 resource에 의존함] → template에서 release·namespace 기반
+  selector를 고정하고 dev에서 생성된 proxy Pod와 일치하는지, 일반 workload direct access가 차단되는지 함께
+  확인한다.
+- [독립 SvelteKit/Vite 생태계를 별도로 운영해야 함] → 공용 UI package를 이번 PR에 추가하지 않고, 현재 shell과
+  server loader 경계만 소유한다. 후속 화면의 공용화 필요성은 별도 결정으로 판단한다.
 - [NetworkPolicy selector가 Operator proxy를 차단할 수 있음] → generated proxy source를 확인하고 workload
   readiness와 tailnet 응답을 별도 증거로 수집한다.
 - [표준 NetworkPolicy는 node-origin traffic을 차단하지 않음] → node 자체, kubelet과 node 권한을 가진 운영
@@ -70,9 +83,10 @@ cluster에서 확인한 뒤 고정한다. label을 확인하기 전 특정 값�
 
 ## Migration Plan
 
-1. Admin package, image entrypoint와 Helm render를 배포 전 검증한다.
-2. dev Operator 버전, generated proxy label, hostname과 Tailscale 접근 정책 준비를 확인한다.
-3. dev에 Deployment, Service, Ingress와 NetworkPolicy를 sync하고 workload readiness를 확인한다.
+1. Admin SvelteKit package production build, image entrypoint와 Helm render를 배포 전 검증한다.
+2. dev의 Tailscale 접근 정책과 파생 hostname 준비를 확인한 뒤 변경을 merge한다.
+3. dev에 Deployment, Service, Ingress와 NetworkPolicy를 sync하고 workload readiness, Operator 버전과
+   generated proxy label을 확인한다.
 4. 허용된 Viewer와 허용되지 않은 tailnet 주체의 hostname 접근을 각각 검증한다.
 5. 일반 Pod와 node 밖 VPC 경로의 ClusterIP·Pod IP 접근 및 공개 인터넷 노출이 차단됨을 별도로 확인하고,
    node-origin 또는 node로 source NAT된 경로는 차단 증거에서 제외한다.

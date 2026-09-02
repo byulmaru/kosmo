@@ -1,0 +1,24 @@
+{
+  "name": "@kosmo/admin",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "dev": "vite dev --host 0.0.0.0 --port 8080",
+    "test": "pnpm check && vitest run"
+  },
+  "dependencies": {
+    "@sveltejs/kit": "^2.70.3",
+    "svelte": "^5.56.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-node": "^5.5.7",
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "svelte-check": "^4.7.6",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.10"
+  }
+}

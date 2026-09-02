@@ -27,9 +27,9 @@ Capabilities나 객체별 action을 추가로 계산하지 않는다.
   이번 위협 모델의 차단 대상에서 제외한다.
 - public Gateway, Funnel 또는 외부 LoadBalancer는 Admin Console entry로 사용하지 않는다.
 
-Admin ingress가 제공하는 identity wire header의 인코딩은 transport 구현에서 정규화한다. RFC 2047 decode와
-UTF-8 검증에 실패한 선택적 identity는 없는 것으로 취급하며 접근 결과를 바꾸지 않는다. 도메인 정책은
-transport header를 인가 입력으로 소비하지 않는다.
+Admin ingress가 제공하는 Tailscale identity wire header의 UTF-8 Q encoded-word는 transport 구현에서
+정규화한다. Q 인코딩 문법 또는 UTF-8 검증에 실패한 선택적 identity는 없는 것으로 취급하며 접근 결과를
+바꾸지 않는다. 도메인 정책은 transport header를 인가 입력으로 소비하지 않는다.
 
 ## 요청 처리 경계
 

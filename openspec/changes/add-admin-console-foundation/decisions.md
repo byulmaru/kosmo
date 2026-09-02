@@ -50,10 +50,11 @@
   범위에서 제외한다.
 - Alternatives Considered: ClusterIP type, tailnet ACL 추정 또는 caller header 검사는 직접 network path를
   닫지 못하므로 선택하지 않았다.
-- Consequences: generated proxy label을 Operator 버전 및 live cluster에서 확인해야 한다. node로 source NAT된
-  경로까지 차단했다고 주장하지 않는다.
-- Confirmation / Follow-up: Helm fixture와 dev의 일반 Pod·node 밖 VPC direct-access test로 차단을 확인하고
-  관찰된 source 경계를 함께 기록한다.
+- Consequences: NetworkPolicy는 release·namespace에서 파생된 generated proxy labels로 제한한다. 대상 Operator
+  proxy가 selector와 일치하는지는 live cluster에서 확인해야 하며, node로 source NAT된 경로까지 차단했다고
+  주장하지 않는다.
+- Confirmation / Follow-up: Helm render와 dev의 일반 Pod·node 밖 VPC direct-access test로 selector와 차단을
+  확인하고 관찰된 source 경계를 함께 기록한다.
 
 ### 선택적 identity는 표시 metadata로만 사용한다
 
@@ -70,6 +71,29 @@
   합쳐지므로 선택하지 않았다.
 - Consequences: profile picture header는 사용하지 않고 identity 처리 실패는 요청 실패가 아니다.
 - Confirmation / Follow-up: identity 있음·없음·정규화 실패 fixture에서 같은 shell 접근 결과를 검증한다.
+
+### 독립 SvelteKit adapter-node runtime을 선택한다
+
+- Decision Date: 2026-09-02
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-690`의 구현 방향 확정
+- Status: Active
+- Context / Problem: 기존 Hono inline HTML shell은 동작을 제공하지만, Admin UI와 후속 server loader를 하나의
+  Web runtime 경계에서 확장할 기반이 필요하다. 이번 PR에서는 별도 REST/GraphQL API나 공용 UI package를 만들지
+  않는다.
+- Decision Outcome: `apps/admin`은 SvelteKit과 `@sveltejs/adapter-node`를 사용하는 독립 Web-only 앱으로
+  구현한다. `hooks.server.ts`에서 선택적 Viewer metadata를 request-local data로 정규화하고 root server
+  layout/loader에서 현재 read-only shell에 전달한다. 후속 loader는 repository read query를 직접 호출할 수
+  있지만, 이번 PR에서는 DB query를 호출하지 않는다.
+- Alternatives Considered: Hono inline HTML은 현재 shell에는 작지만 UI 확장과 server loader 경계를 별도로
+  설계해야 하므로 선택하지 않았다. React SPA와 별도 API는 브라우저와 서버 사이의 REST/GraphQL 계약을 새로
+  만들게 되므로 선택하지 않았다. Expo Web은 공용 UI가 이번 PR의 목표가 아니며 Web-only Admin에 React Native
+  플랫폼 제약과 앱 공용화 비용을 추가하므로 선택하지 않았다.
+- Consequences: Svelte, SvelteKit, Vite와 adapter-node build/runtime dependency를 별도로 소유한다. UI
+  컴포넌트·theme는 `apps/app`과 공유하지 않으며, 현재 PR의 화면은 shell에 한정한다. 후속 조회 화면은 같은
+  server loader 경계에서 read query를 연결할 수 있지만 그 시점에 query·projection 계약을 별도로 검증한다.
+- Confirmation / Follow-up: SvelteKit package check와 production build, image boot smoke에서 기존 shell·probe·
+  no-store·CSP 동작을 확인한다.
 
 ### Admin-specific 관측 기능을 추가하지 않는다
 
@@ -90,11 +114,11 @@
 ## Remaining Decisions
 
 - dev tailnet hostname과 허용 principal은 live 배포 전에 확인한다.
-- NetworkPolicy selector에 사용할 Operator-generated proxy label은 대상 Operator 버전과 live resource에서
+- NetworkPolicy의 template-derived Operator proxy selector가 대상 Operator 버전의 live resource와 일치하는지
   확인한다.
 
 ## Superseded Decisions
 
-- 같은 Pod의 Tailscale Serve sidecar, `AcceptAppCaps`, localhost shell listener, 별도 probe listener, RFC 2047
-  capability decoder와 persistent node-state Secret을 사용한다는 초안 결정은 App Capability를 사용하지 않는
-  것으로 확정하면서 구현 전에 폐기했다.
+- 같은 Pod의 Tailscale Serve sidecar, `AcceptAppCaps`, localhost shell listener, 별도 probe listener와 persistent
+  node-state Secret을 사용한다는 초안 결정은 App Capability를 사용하지 않는 것으로 확정하면서 구현 전에
+  폐기했다.
