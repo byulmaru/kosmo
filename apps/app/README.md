@@ -40,7 +40,7 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 | `ANDROID_RELEASE_KEY_ALIAS`          | variable | upload key 생성 시 사용한 alias                                 |
 | `ANDROID_RELEASE_CERTIFICATE_SHA256` | variable | upload certificate의 SHA-256 fingerprint                        |
 
-6. upload keystore와 두 password는 GitHub에 저장하지 않고 Vault에 저장한다. Vault KV v2 경로 `secret/data/ci/kosmo/android-play`에 다음 field를 만들고, `kosmo-android-play` GitHub OIDC role이 이 경로를 읽도록 한다.
+6. upload keystore와 두 password는 GitHub에 저장하지 않고 Vault에 저장한다. Vault KV v2 경로 `secret/data/kosmo/prod/android-play`에 다음 field를 만들고, `kosmo-android-play` GitHub OIDC role이 이 경로를 읽도록 한다.
 
 | Field                             | 값                                 |
 | --------------------------------- | ---------------------------------- |
