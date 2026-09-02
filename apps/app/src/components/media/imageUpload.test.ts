@@ -257,3 +257,25 @@ test('preserves safe issue, transfer, and complete failure classification', asyn
       !error.message.includes('private complete detail'),
   );
 });
+
+test('normalizes a generic PUT rejection as a safe transient transfer failure', async (t) => {
+  const rawDetail = 'private network detail';
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error(rawDetail);
+  });
+
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset({ file: new File(['image'], 'image.jpg') }),
+      complete: async () => undefined,
+      isActive: () => true,
+      issue: async () => ({ mediaId: 'media-1', uploadUrl: 'https://upload.example/1' }),
+    }),
+    (error: unknown) =>
+      error instanceof ImageUploadError &&
+      error.failure.stage === 'transfer' &&
+      error.failure.reason === 'transient' &&
+      error.message === 'Image upload failed' &&
+      !String(error).includes(rawDetail),
+  );
+});
