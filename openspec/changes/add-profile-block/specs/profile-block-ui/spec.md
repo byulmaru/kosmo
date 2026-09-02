@@ -60,7 +60,7 @@
 
 - **WHEN** Owner가 Block 목록에서 Target의 차단을 해제한다
 - **THEN** 시스템은 최신 Block 상태를 다시 조회해 목록과 Profile surface를 갱신한다
-- **AND** 차단 생성 때 제거된 Follow·Reaction을 Relay optimistic update로 복구하지 않는다
+- **AND** 차단 생성 때 제거된 Follow 관계를 Relay optimistic update로 복구하지 않는다
 - **AND** 이후 새 요청에서만 서버가 허용한 상대 Profile·Post·상호작용이 다시 나타날 수 있다
 
 ### Requirement: Profile Block interaction accessibility

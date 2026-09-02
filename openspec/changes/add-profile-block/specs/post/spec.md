@@ -36,4 +36,3 @@
 
 - **WHEN** Profile Block을 생성하거나 해제한다
 - **THEN** 시스템은 기존 Repost Post와 Bookmark 관계를 삭제하지 않는다
-- **AND** Block 해제 뒤 차단 생성 중 제거된 Reaction이나 기존 interaction을 자동으로 복구하지 않는다

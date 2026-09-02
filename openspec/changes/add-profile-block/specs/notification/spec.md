@@ -10,12 +10,6 @@
 - **THEN** 시스템은 해당 item을 목록, Unread count, Node 조회와 읽음 처리 대상에서 제외한다
 - **AND** Notification 저장 row와 Read State가 남아 있어도 API 표면에 노출하지 않는다
 
-#### Scenario: 차단 해제 뒤 새 Notification 조회 정책을 사용한다
-
-- **WHEN** Owner가 Profile Block을 해제하고 Notification 목록 또는 Node를 새로 조회한다
-- **THEN** 시스템은 새 요청 시점의 Profile Block과 기존 Notification visibility policy를 평가한다
-- **AND** Block 동안 숨겨지거나 제거된 과거 Notification을 읽음 상태나 저장 row의 변경만으로 자동 복구하지 않는다
-
 ### Requirement: Follow-cause Notification cleanup follows durable Profile Block cleanup
 
 **Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`. Profile Block의 durable cleanup orchestration이 제거하는 Follow Request 또는 Follow Relationship을 직접 원인으로 가진 Notification은 기존 Follow removal effect-plan 계약에 따라 required cleanup에서 제거해야 한다(MUST). 제거된 Follow 객체가 직접 원인이 아닌 다른 기존 Notification과 Repost·Reaction·Bookmark 관계의 Notification은 이 action에서 동기적으로 삭제하거나 Read State를 바꾸지 않아야 한다(MUST NOT).

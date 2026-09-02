@@ -25,15 +25,15 @@
 
 ### Requirement: Profile Block durable cleanup orchestration
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`. Block policy/admission을 통과한 Profile Block 생성은 내구성 있는 Temporal cleanup orchestration을 시작해야 하며(MUST), 이 orchestration은 양방향 Follow Request·Follow Relationship에 기존 removal transition/effect-plan 계약을 재사용하고 pending Follow Request와 Target이 Owner의 Post에 남긴 Reaction 및 제거된 Follow 객체의 직접 원인 Notification을 내구성 있게 정리해야 한다(MUST). 필수 cleanup이 완료되기 전에는 Block action을 성공으로 확정해서는 안 되며(MUST NOT), Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification 및 Read State는 보존해야 하고(MUST), Block 해제는 제거된 관계·Reaction을 복구해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`. Block policy/admission을 통과한 Profile Block 생성은 내구성 있는 Temporal cleanup orchestration을 시작해야 하며(MUST), 이 orchestration은 양방향 Follow Request·Follow Relationship에 기존 removal transition/effect-plan 계약을 재사용하고 pending Follow Request와 제거된 Follow 객체의 직접 원인 Notification을 내구성 있게 정리해야 한다(MUST). 필수 cleanup이 완료되기 전에는 Block action을 성공으로 확정해서는 안 되며(MUST NOT), 기존 Reaction·Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification 및 Read State는 이번 action에서 변경하지 않아야 한다(MUST). Block 해제는 제거된 Follow Request·Follow Relationship을 복구해서는 안 된다(MUST NOT).
 
 #### Scenario: durable orchestration 완료 뒤에만 Block 성공을 확정한다
 
-- **WHEN** Owner가 Block을 확정하고 양방향 Follow Request·Follow Relationship, Target Reaction 또는 직접 원인 Notification 정리가 필요하다
+- **WHEN** Owner가 Block을 확정하고 양방향 Follow Request·Follow Relationship 또는 직접 원인 Notification 정리가 필요하다
 - **THEN** 시스템은 Block policy/admission을 적용한 뒤 durable orchestration으로 필요한 정리를 실행한다
-- **AND** 두 방향 Follow 관계·요청, Target이 Owner Post에 남긴 Reaction과 직접 원인 Notification이 required cleanup 완료 상태가 된다
+- **AND** 두 방향 Follow 관계·요청과 직접 원인 Notification이 required cleanup 완료 상태가 된다
 - **AND** required cleanup 완료 전에는 Block action 성공 응답이나 성공 상태를 확정하지 않는다
-- **AND** Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification 및 Read State는 유지한다
+- **AND** 기존 Reaction·Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification 및 Read State는 이번 action에서 유지한다
 
 #### Scenario: orchestration 재시작과 일시 오류가 부분 성공을 만들지 않는다
 
@@ -46,11 +46,11 @@
 
 - **WHEN** Owner가 적용 중인 Profile Block을 해제한다
 - **THEN** 시스템은 Profile Block 관계만 제거한다
-- **AND** 차단 생성 때 제거된 Follow Request, Follow Relationship과 Reaction을 자동으로 재생성하지 않는다
+- **AND** 차단 생성 때 제거된 Follow Request와 Follow Relationship을 자동으로 재생성하지 않는다
 
 ### Requirement: Profile Block symmetric policy invariant
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `PROD-822`. 시스템은 저장된 Owner → Target Profile Block을 임의의 viewer·target pair 양쪽에 적용되는 공통 blocked predicate로 정규화해야 한다(MUST). 이 predicate가 true인 동안 모든 policy consumer는 차단 상태를 유지해야 하며(MUST), Profile Block 관계가 사라져도 차단 생성 중 제거된 관계·Reaction과 이미 생성된 로컬 상호작용을 자동으로 복구해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `PROD-822`. 시스템은 저장된 Owner → Target Profile Block을 임의의 viewer·target pair 양쪽에 적용되는 공통 blocked predicate로 정규화해야 한다(MUST). 이 predicate가 true인 동안 모든 policy consumer는 차단 상태를 유지해야 하며(MUST), Profile Block 관계가 사라져도 차단 생성 중 제거된 Follow Request·Follow Relationship을 자동으로 복구해서는 안 된다(MUST NOT).
 
 #### Scenario: Block 방향과 무관하게 공통 predicate를 적용한다
 
@@ -62,7 +62,7 @@
 
 - **WHEN** Owner가 Profile Block을 해제한 뒤 양쪽 Profile이 새 요청을 실행한다
 - **THEN** 시스템은 새 요청 시점의 현재 Block predicate와 다른 정책을 평가한다
-- **AND** 차단 생성 때 제거된 Follow·Reaction이나 기존 상호작용을 자동으로 재생성하지 않는다
+- **AND** 차단 생성 때 제거된 Follow Request와 Follow Relationship을 자동으로 재생성하지 않는다
 
 ### Requirement: Profile Block GraphQL actor and policy boundary
 

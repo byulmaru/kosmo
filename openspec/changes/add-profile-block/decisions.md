@@ -39,11 +39,11 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`
 - Status: Active
-- Context / Problem: Block row와 Follow·Reaction·Notification 정리를 한 로컬 commit에만 묶으면 worker 재시작·retry에서 durable completion과 effect settlement를 보장할 수 없다.
-- Decision Outcome: Block policy/admission 뒤 Profile Block 생성은 durable Temporal orchestration으로 양방향 Follow Request·Follow Relationship removal transition/effect-plan, pending request cleanup, Target Reaction cleanup과 직접 원인 Follow Notification cleanup을 수행한다. required cleanup 완료 전에는 Block action을 성공으로 확정하지 않는다. 기존 Follow removal transition/effect-plan과 deterministic drain을 재사용하며 같은 계약을 새 child Workflow type이나 Block 전용 removal query로 복제하지 않는다. Repost·Bookmark와 비직접 원인 기존 Notification·Read State는 보존하고 Unblock은 제거된 관계·Reaction을 복구하지 않는다.
-- Alternatives Considered: public service를 순서대로 각각 commit하면 부분 성공을 관찰할 수 있다. 새 child Workflow type이나 Block 전용 removal query는 기존 Follow removal 계약을 복제하고 완료 경계를 다시 합쳐야 한다. Repost·Bookmark까지 삭제하거나 Unblock 때 관계를 복구하면 canonical 보존·비복구 계약을 위반한다.
+- Context / Problem: Block row와 Follow·Notification 정리를 한 로컬 commit에만 묶으면 worker 재시작·retry에서 durable completion과 effect settlement를 보장할 수 없다.
+- Decision Outcome: Block policy/admission 뒤 Profile Block 생성은 durable Temporal orchestration으로 양방향 Follow Request·Follow Relationship removal transition/effect-plan, pending request cleanup과 직접 원인 Follow Notification cleanup을 수행한다. required cleanup 완료 전에는 Block action을 성공으로 확정하지 않는다. 기존 Follow removal transition/effect-plan과 deterministic drain을 재사용하며 같은 계약을 새 child Workflow type이나 Block 전용 removal query로 복제하지 않는다. 기존 Reaction·Repost·Bookmark와 비직접 원인 기존 Notification·Read State는 이번 action에서 변경하지 않는다.
+- Alternatives Considered: public service를 순서대로 각각 commit하면 부분 성공을 관찰할 수 있다. 새 child Workflow type이나 Block 전용 removal query는 기존 Follow removal 계약을 복제하고 완료 경계를 다시 합쳐야 한다. Repost·Bookmark나 기존 Reaction까지 변경하거나 Unblock 때 Follow 관계를 복구하면 현재 보존 계약을 위반한다.
 - Consequences: 821은 existing removal transaction/effect-plan과 deterministic drain helper를 재사용하고 restart·retry idempotency를 검증한다. 기존 Unfollow workflow는 public wrapper로 유지하며, Profile Block Workflow 안의 helper 배치는 구현 시 결정한다.
-- Confirmation / Follow-up: `PROD-821`에서 required cleanup success gate, 양방향 pending/relationship, Reaction, direct-cause Notification과 restart/retry를 검증한다.
+- Confirmation / Follow-up: `PROD-821`에서 required cleanup success gate, 양방향 pending/relationship, direct-cause Notification과 restart/retry를 검증하고 Reaction을 변경하지 않는지 확인한다.
 
 ### 공통 Profile Block predicate는 저장 방향과 무관하게 양쪽에 적용한다
 
@@ -87,8 +87,8 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: 정본 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/design/accessibility.md`, `DSN-53`; 책임 이슈 `PROD-823`; 선행 presentation 구현 증거 `PROD-861` (정본 아님)
 - Status: Active
-- Context / Problem: 공용 presentation 이관 결과를 Block runtime 계약으로 오인하거나 Mute와 Block을 하나의 목록으로 합치면 DSN-53 IA와 Profile Block 책임이 바뀐다.
-- Decision Outcome: `PROD-823`은 `PROD-861` 결과를 prerequisite evidence로 참고하되 승인된 presentation contract를 소비하고 그 이관 자체를 소유하지 않는다. Block confirmation은 Mute와 분리된 Danger·pending·실패·retry 상태를 사용하고, Settings에는 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 둔다. UI는 차단된 Profile·Post·Media·Notification을 재조회하거나 optimistic 상태로 복구하지 않는다.
+- Context / Problem: 공용 presentation 이관 결과를 Block runtime 계약으로 오인하거나 Mute와 Block을 하나의 목록으로 합치면 Profile Block 책임이 바뀐다.
+- Decision Outcome: `PROD-823`은 `PROD-861` 결과를 prerequisite evidence로 참고하되 승인된 presentation contract를 소비하고 그 이관 자체를 소유하지 않는다. Block confirmation은 Mute와 분리된 Danger·pending·실패·retry 상태를 사용하고, Settings에는 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 둔다. Route 유지 여부·shell·handle·상태 문구·unblock 위치는 후속 승인된 presentation authority가 정하며, UI는 차단된 Profile·Post·Media·Notification을 재조회하거나 optimistic 상태로 복구하지 않는다.
 - Alternatives Considered: `PROD-861`을 이 change에 다시 포함하면 presentation·runtime lifecycle이 결합된다. Mute/Block 혼합 목록은 별도 관리 계약과 destination 상태를 잃는다. blocked 대상의 최신 detail을 다시 요청하면 visibility policy를 우회한다.
 - Consequences: DSN-53 visual result와 861 implementation은 선행 증거이고, 823은 실제 mutation·management·접근성 runtime과 protected-data guard를 완성한다. 새 범용 safety component나 Settings shell을 추가하지 않는다.
 - Confirmation / Follow-up: `PROD-823`에서 confirmation·별도 list·accessibility·viewport와 selected actor UI를 검증하고, `PROD-813`에서 플랫폼별 실제 runtime evidence를 별도로 기록한다.
@@ -100,7 +100,7 @@
 - Authority / Provenance: `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-823`, `PROD-813`
 - Status: Active
 - Context / Problem: Block 성공 후 Profile·Post·Notification과 관리 connection을 그대로 두거나 Profile 전환 때 이전 Store·cursor를 재사용하면 stale visibility와 Owner 간 cache 누수가 생긴다.
-- Decision Outcome: Relay는 현재 selected Local Profile actor의 Environment/Store에서만 Block connection과 영향받는 node를 갱신한다. 성공 payload와 공통 server policy를 기준으로 현재 surface·Block list·이미 표시된 unavailable Profile/Post/Notification을 좁게 숨기거나 제거하고, 실패 시 optimistic Block을 확정하지 않는다. selected Profile/Session 전환은 이전 connection·cursor·optimistic 결과를 새 actor에 재사용하지 않으며, Unblock은 삭제된 Follow·Reaction을 optimistic으로 복구하지 않는다.
+- Decision Outcome: Relay는 현재 selected Local Profile actor의 Environment/Store에서만 Block connection과 영향받는 node를 갱신한다. 성공 payload와 공통 server policy를 기준으로 현재 surface·Block list·이미 표시된 unavailable Profile/Post/Notification을 좁게 숨기거나 제거하고, 실패 시 optimistic Block을 확정하지 않는다. selected Profile/Session 전환은 이전 connection·cursor·optimistic 결과를 새 actor에 재사용하지 않으며, Unblock은 삭제된 Follow Request·Follow Relationship을 optimistic으로 복구하지 않는다.
 - Alternatives Considered: process 전역 Block store는 selected Profile 격리를 깨뜨린다. 모든 store를 무조건 reset하면 unrelated state까지 버리고 actor 경계를 과도하게 넓힌다. client-only hide는 서버 payload와 direct query 누수를 막지 못한다.
 - Consequences: 823은 좁은 cache 수렴과 actor switch 회귀를, 813은 cross-slice UI/API 결과를 검증한다. concrete payload ID와 updater/directive는 schema 구현 시 영향 범위에 맞춰 정한다.
 - Confirmation / Follow-up: `PROD-823` Relay test에서 success/failure·A/B actor·Unblock no-restore를 확인하고, `PROD-813`에서 Profile switch와 cross-slice cache isolation을 E2E로 확인한다.

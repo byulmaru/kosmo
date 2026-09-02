@@ -21,9 +21,3 @@
 - **WHEN** Block 관계의 한쪽 Profile이 상대 Profile을 새로 Follow하려고 한다
 - **THEN** 시스템은 공통 Profile Block policy에 따라 입력을 거부한다
 - **AND** 새 Follow Request나 Follow Relationship을 저장하지 않는다
-
-#### Scenario: Owner의 관리 목록은 relation-scoped identity만 사용한다
-
-- **WHEN** Owner가 자신이 만든 Profile Block 관리 목록을 조회한다
-- **THEN** 시스템은 Owner가 소유한 Block relation과 관리에 필요한 Target 식별 정보를 반환한다
-- **AND** Target의 일반 Profile 공개 조회 정책을 우회하는 최신 상세·Post·Media·관계 데이터를 반환하지 않는다

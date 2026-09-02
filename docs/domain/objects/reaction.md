@@ -132,7 +132,6 @@ Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile�
   표시한다. 같은 가장 이른 생성 시각에는 제품상 Type 우선순위를 뜻하지 않는 결정적 최종 순서를 적용한다.
   한 Type의 현재 Reaction이 모두 제거됐다가 다시 생성되면 새로 존재하는 Reaction의 가장 이른 생성
   시각으로 순서를 정한다.
-- Profile Block 생성 결과로 제거되는 Reaction 범위는 [Profile Block](./profile-block.md)이 정의한다.
 
 ## 확정 용어
 

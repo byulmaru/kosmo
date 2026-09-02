@@ -27,10 +27,11 @@ transition/effect-plan을 양방향에 재사용하며, 필수 cleanup 완료 �
 - 도메인 capability에 특정 Account·Membership·Local 상태를 일반 Owner 조건으로 추가하지 않는다. GraphQL selected Local actor admission은
   `PROD-822`의 ingress 경계다.
 - Block policy/admission 뒤 durable orchestration을 실행하고 기존 Follow removal transition/effect-plan을 양방향에 재사용한다. pending
-  Follow Request·Follow Relationship, Target의 Owner Post Reaction과 직접 원인 Follow Notification cleanup을 deterministic하게 재개할 수
-  있어야 한다. 같은 removal 계약을 새 child Workflow type이나 Block 전용 query로 복제하지 않는다.
+  Follow Request·Follow Relationship과 직접 원인 Follow Notification cleanup을 deterministic하게 재개할 수 있어야 한다. 기존 Reaction은 이번
+  action에서 변경하지 않으며, 같은 removal 계약을 새 child Workflow type이나 Block 전용 query로 복제하지 않는다.
 - required cleanup 완료 전 성공 응답을 반환하지 않으며, 일시 오류·worker 재시작 시 이미 처리한 effect를 중복 적용하지 않는다.
-- Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification·Read State는 보존하고, Unblock은 제거된 Follow·Reaction을 복구하지 않는다.
+- 기존 Reaction·Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification·Read State는 보존하고, Unblock은 제거된 Follow Request·Follow
+  Relationship을 복구하지 않는다.
 - 이 그룹은 공통 visibility/interaction policy·GraphQL(`PROD-822`), UI/Relay(`PROD-823`), 전체 E2E·archive(`PROD-813`)를 구현하지 않는다.
 - 현재 Notification source 신규 생성 suppression(`PROD-327`), ActivityPub Block/Undo(`PROD-818`), 비동기 물리 cleanup(`PROD-328`)을 추가하지 않는다.
 
@@ -38,15 +39,15 @@ transition/effect-plan을 양방향에 재사용하며, 필수 cleanup 완료 �
 
 - 기존 Profile·Follow·Reaction·Notification·Post row를 보존하는 additive migration과 unique·foreign-key·self-block 제약 및 schema 검증을 수행한다.
 - Local/Remote Owner·Target pair, duplicate/self와 Owner scope를 Core 또는 DB-backed test로 검증하고 ingress별 admission을 도메인 계약과 분리한다.
-- durable orchestration이 양방향 Follow Request·Follow Relationship removal transition/effect-plan, pending request, Target Reaction과 직접 원인 Follow
-  Notification을 처리하고 Repost·Bookmark·비직접 Notification을 보존하는지 확인한다.
+- durable orchestration이 양방향 Follow Request·Follow Relationship removal transition/effect-plan, pending request와 직접 원인 Follow
+  Notification을 처리하고 기존 Reaction·Repost·Bookmark·비직접 Notification을 보존하는지 확인한다.
 - worker restart·일시 오류·retry 뒤 required cleanup success gate가 유지되는지, Block insert/cleanup 실패가 성공으로 확정되지 않는지와 Unblock
   no-restore를 DB/Core regression으로 확인한다.
 
 - [ ] 1.1 OpenSpec Gate 승인 후 Profile Block의 additive 저장 관계와 Owner/Target·createdAt·unique·foreign-key·self-block 불변식을 구현한다.
 - [ ] 1.2 Block policy/admission 뒤 durable Temporal orchestration을 시작하고 양방향 Follow removal transition/effect-plan과 deterministic drain 경계를 연결한다.
-- [ ] 1.3 pending Follow Request·Follow Relationship, Target의 Owner Post Reaction과 직접 원인 Follow Notification을 durable하게 정리하고 required
-      cleanup 완료 전 성공 확정을 막으며 보존·Unblock no-restore 규칙을 적용한다.
+- [ ] 1.3 pending Follow Request·Follow Relationship과 직접 원인 Follow Notification을 durable하게 정리하고 required cleanup 완료 전 성공 확정을
+      막으며 기존 Reaction 보존·Unblock no-restore 규칙을 적용한다.
 - [ ] 1.4 migration·constraint·restart/retry·성공 gate·보존·Owner scope를 검증하는 Core/DB-backed test와 schema check를 추가한다.
 
 ## 2. PROD-822 — Profile Block 정책과 GraphQL 경계
@@ -104,8 +105,8 @@ interaction이 같은 정책을 소비하게 한다.
 - `docs/design/settings.md`
 - `docs/design/accessibility.md`
 - `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`
-- `DSN-53`
 - `PROD-823`
+- `DSN-53`
 - presentation prerequisite evidence `PROD-861` (정본 아님)
 
 **Deliverable**
@@ -123,7 +124,7 @@ Profile·Post·Media·Notification 데이터를 UI가 복구하지 않는다.
 - 기존 Button·ActionMenu·ModalSheet·Toast·SettingsItem과 canonical 접근성·viewport 계약을 재사용하고 새 범용 safety component·Settings shell을
   만들지 않는다.
 - 성공은 서버 확정 결과로 cache를 수렴하고 실패 시 optimistic Block을 확정하지 않는다. selected Profile/Session 전환 때 다른 Owner의
-  Store·connection·cursor를 재사용하지 않으며 Unblock 때 Follow·Reaction을 optimistic 복구하지 않는다.
+  Store·connection·cursor를 재사용하지 않으며 Unblock 때 제거된 Follow Request·Follow Relationship을 optimistic 복구하지 않는다.
 - 저장·정책(`PROD-821`·`PROD-822`)과 전체 E2E/archive(`PROD-813`)의 책임을 이 그룹으로 옮기지 않는다.
 
 **Verification**
@@ -162,8 +163,8 @@ E2E를 완료하고, 최신 canonical·Linear·OpenSpec을 동기화한 뒤 모�
 
 **Guardrails**
 
-- Local·Remote Target, 양쪽 직접 조회·list/search·새 interaction, Follow/Reaction/직접 원인 Notification cleanup, Repost/Bookmark 보존·Unblock 비복구와
-  Profile 전환 isolation을 한 완료 흐름으로 검증한다.
+- Local·Remote Target, 양쪽 직접 조회·list/search·새 interaction, Follow/직접 원인 Notification cleanup, 기존 Reaction·Repost/Bookmark 보존,
+  Follow 관계 Unblock 비복구와 Profile 전환 isolation을 한 완료 흐름으로 검증한다.
 - `PROD-327`의 현재 Notification source 신규 생성 suppression, `PROD-818`의 ActivityPub Block/Undo, `PROD-328`의 async physical cleanup은 이 change의
   구현·완료 증거가 아니다.
 - `PROD-861` Storybook/presentation 결과를 API·cache·Native runtime 완료 증거로 일반화하지 않는다. 환경별 실제 증거와 미검증 범위를 분리 기록한다.
