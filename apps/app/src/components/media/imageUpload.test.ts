@@ -242,61 +242,42 @@ test('uses decoded dimensions for clipboard assets whose metadata is 0x0', async
   assert.equal(manipulator.renderCount(), 2);
 });
 
-test('keeps decoded landscape ratio when resizing to the maximum dimension', async (t) => {
-  const manipulator = installManipulator({ height: 2000, width: 3000 });
-  mockSuccessfulFetch(t);
+for (const testCase of [
+  {
+    dimensions: { height: 2000, width: 3000 },
+    expectedResizeCalls: [{ height: 1365, width: 2048 }],
+    name: 'keeps decoded landscape ratio when resizing to the maximum dimension',
+  },
+  {
+    dimensions: { height: 3000, width: 2000 },
+    expectedResizeCalls: [{ height: 2048, width: 1365 }],
+    name: 'keeps decoded portrait ratio when resizing to the maximum dimension',
+  },
+  {
+    dimensions: { height: 4096, width: 4096 },
+    expectedResizeCalls: [{ height: 2048, width: 2048 }],
+    name: 'resizes an oversized square without changing its ratio',
+  },
+  {
+    dimensions: { height: 1024, width: 2048 },
+    expectedResizeCalls: [],
+    name: 'does not resize an image at the exact maximum dimension',
+  },
+] as const) {
+  test(testCase.name, async (t) => {
+    const manipulator = installManipulator(testCase.dimensions);
+    mockSuccessfulFetch(t);
 
-  await uploadImage({
-    asset: createAsset({ height: 2000, width: 3000 }),
-    complete: async () => undefined,
-    isActive: () => true,
-    issue: async () => ({ mediaId: 'media-landscape', uploadUrl: 'https://upload.example/1' }),
+    await uploadImage({
+      asset: createAsset(testCase.dimensions),
+      complete: async () => undefined,
+      isActive: () => true,
+      issue: async () => ({ mediaId: 'media-test', uploadUrl: 'https://upload.example/1' }),
+    });
+
+    assert.deepEqual(manipulator.resizeCalls, testCase.expectedResizeCalls);
   });
-
-  assert.deepEqual(manipulator.resizeCalls, [{ height: 1365, width: 2048 }]);
-});
-
-test('keeps decoded portrait ratio when resizing to the maximum dimension', async (t) => {
-  const manipulator = installManipulator({ height: 3000, width: 2000 });
-  mockSuccessfulFetch(t);
-
-  await uploadImage({
-    asset: createAsset({ height: 3000, width: 2000 }),
-    complete: async () => undefined,
-    isActive: () => true,
-    issue: async () => ({ mediaId: 'media-portrait', uploadUrl: 'https://upload.example/1' }),
-  });
-
-  assert.deepEqual(manipulator.resizeCalls, [{ height: 2048, width: 1365 }]);
-});
-
-test('resizes an oversized square without changing its ratio', async (t) => {
-  const manipulator = installManipulator({ height: 4096, width: 4096 });
-  mockSuccessfulFetch(t);
-
-  await uploadImage({
-    asset: createAsset({ height: 4096, width: 4096 }),
-    complete: async () => undefined,
-    isActive: () => true,
-    issue: async () => ({ mediaId: 'media-square', uploadUrl: 'https://upload.example/1' }),
-  });
-
-  assert.deepEqual(manipulator.resizeCalls, [{ height: 2048, width: 2048 }]);
-});
-
-test('does not resize an image at the exact maximum dimension', async (t) => {
-  const manipulator = installManipulator({ height: 1024, width: 2048 });
-  mockSuccessfulFetch(t);
-
-  await uploadImage({
-    asset: createAsset({ height: 1024, width: 2048 }),
-    complete: async () => undefined,
-    isActive: () => true,
-    issue: async () => ({ mediaId: 'media-boundary', uploadUrl: 'https://upload.example/1' }),
-  });
-
-  assert.deepEqual(manipulator.resizeCalls, []);
-});
+}
 
 test('releases a WebP object URL after reading its upload Blob', async (t) => {
   const normalizedUri = 'blob:https://kosmo.example/normalized';
@@ -467,7 +448,7 @@ test('discards a late completion result when the upload becomes inactive', async
 test('every retry issues a fresh Media and upload URL', async (t) => {
   let issued = 0;
   const requestedUrls: string[] = [];
-  const fetchMock = t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
     const url = String(input);
     requestedUrls.push(url);
     if (url === 'file:///cache/normalized.webp') {
@@ -494,7 +475,6 @@ test('every retry issues a fresh Media and upload URL', async (t) => {
   });
 
   assert.equal(result, 'media-2');
-  assert.equal(fetchMock.mock.callCount(), 4);
   assert.deepEqual(requestedUrls, [
     'file:///cache/normalized.webp',
     'https://upload.example/1',
