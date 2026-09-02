@@ -1,5 +1,6 @@
 export { postCreateEffectsWorkflow } from './create';
 export { postDeleteWorkflow } from './delete';
+export { profileBlockWorkflow } from './profile-block';
 export { profileFollowPairWorkflow } from './profile-follow-pair';
 export { profileFollowRemovalWorkflow } from './profile-follow-removal';
 export { profileUpdateEffectsWorkflow } from './profile-update';

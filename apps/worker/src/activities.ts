@@ -8,8 +8,10 @@ export {
   executeProfileFollowPairTransition as executeProfileFollowPairTransitionActivity,
   executeProfileFollowRemoval as executeProfileFollowRemovalActivity,
   loadPendingFollowRequestId as loadPendingFollowRequestIdActivity,
+  loadProfileFollowRemovalSourcesBetweenProfiles as loadProfileFollowRemovalSourcesBetweenProfilesActivity,
   verifyProfileFollowRemoval as verifyProfileFollowRemovalActivity,
 } from '@kosmo/core/services';
+export { executeProfileBlockTransition as executeProfileBlockTransitionActivity } from '@kosmo/core/services';
 export {
   createFollowNotification as createFollowNotificationActivity,
   createFollowRequestNotification as createFollowRequestNotificationActivity,

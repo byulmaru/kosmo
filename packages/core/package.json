@@ -20,6 +20,7 @@
     "./services": "./services/index.ts",
     "./temporal/client": "./temporal/client.ts",
     "./temporal/follow-command": "./temporal/follow-command.ts",
+    "./temporal/profile-block": "./temporal/profile-block.ts",
     "./temporal/task-queue": "./temporal/task-queue.ts",
     "./utils": "./utils.ts",
     "./validation": "./validation/index.ts",
