@@ -11,6 +11,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { space, textStyles } from '@/theme/tokens';
 import ogImage from '../../../public/og-default.png?url';
+import { ComposerOverlayFixture } from '../fixtures/ComposerOverlayFixture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type { PostComposerTargetProps } from '@/components/post/PostComposerTarget';
@@ -245,9 +246,9 @@ function InteractiveComposer({
     props.contentWarningExpanded,
   );
   const [items, setItems] = useState(props.items);
-  const [surface, setSurface] = useState(props.surface);
   const [visibility, setVisibility] = useState(props.visibility);
   const [sensitiveMedia, setSensitiveMedia] = useState(props.sensitiveMedia);
+  const [overlayOpen, setOverlayOpen] = useState(false);
   const [editor, setEditor] = useState<{ key: string; tool: 'alt' | 'sensitive' } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState('');
@@ -260,11 +261,36 @@ function InteractiveComposer({
     [props.contentWarningExpanded],
   );
   useEffect(() => setItems(props.items), [props.items]);
-  useEffect(() => setSurface(props.surface), [props.surface]);
   useEffect(() => setVisibility(props.visibility), [props.visibility]);
   useEffect(() => setSensitiveMedia(props.sensitiveMedia), [props.sensitiveMedia]);
 
-  if (editor) {
+  const closeOverlay = () => {
+    setEditor(null);
+    setOverlayOpen(false);
+    setPickerOpen(false);
+  };
+
+  const picker = pickerOpen ? (
+    <View style={mobile ? styles.mobilePicker : styles.picker}>
+      <FullReactionPicker
+        activeCategory={activeCategory}
+        onCategoryChange={setActiveCategory}
+        onQueryChange={setPickerQuery}
+        onSelect={(option) => {
+          const value = `${body}${option.emoji}`;
+          props.onBodyChange(value);
+          setBody(value);
+          setPickerOpen(false);
+        }}
+        options={reactionOptions}
+        presentation={mobile ? 'mobile' : 'web'}
+        query={pickerQuery}
+        selectedValues={[]}
+      />
+    </View>
+  ) : null;
+
+  if (mobile && editor) {
     return (
       <ComposerMediaEditor
         media={items.filter((item) => item.state === 'ready')}
@@ -282,6 +308,7 @@ function InteractiveComposer({
         presentation={mobile ? 'mobile' : 'web'}
         selectedKey={editor.key}
         sensitiveMedia={sensitiveMedia}
+        showImageEditPreview={false}
         tool={editor.tool}
       />
     );
@@ -355,11 +382,12 @@ function InteractiveComposer({
           }}
           onExpand={() => {
             props.onExpand();
-            setSurface('overlay');
+            setOverlayOpen(true);
           }}
           onMediaEdit={(key, tool) => {
             props.onMediaEdit(key, tool);
             setEditor({ key, tool });
+            setOverlayOpen(true);
           }}
           onMediaRemove={(key) => {
             props.onMediaRemove(key);
@@ -371,35 +399,96 @@ function InteractiveComposer({
             setVisibility(value);
           }}
           sensitiveMedia={sensitiveMedia}
-          surface={surface}
+          surface={props.surface}
           visibility={visibility}
         />
       )}
-      {pickerOpen ? (
-        <View style={mobile ? styles.mobilePicker : styles.picker}>
-          <FullReactionPicker
-            activeCategory={activeCategory}
-            onCategoryChange={setActiveCategory}
-            onQueryChange={setPickerQuery}
-            onSelect={(option) => {
-              const value = `${body}${option.emoji}`;
-              props.onBodyChange(value);
-              setBody(value);
-              setPickerOpen(false);
-            }}
-            options={reactionOptions}
-            presentation={mobile ? 'mobile' : 'web'}
-            query={pickerQuery}
-            selectedValues={[]}
-          />
-        </View>
-      ) : null}
+      {!mobile && overlayOpen ? (
+        <ComposerOverlayFixture
+          accessibilityLabel="글쓰기"
+          maxWidth={editor ? 920 : 600}
+          onRequestClose={closeOverlay}
+          visible
+        >
+          {editor ? (
+            <ComposerMediaEditor
+              media={items.filter((item) => item.state === 'ready')}
+              onAltTextChange={(key, altText) => {
+                setItems((current) =>
+                  current.map((item) => (item.key === key ? { ...item, altText } : item)),
+                );
+              }}
+              onBack={() => setEditor(null)}
+              onClose={closeOverlay}
+              onDone={() => setEditor(null)}
+              onSelectMedia={(key) =>
+                setEditor((current) => (current ? { ...current, key } : current))
+              }
+              onSensitiveMediaChange={setSensitiveMedia}
+              onToolChange={(tool) =>
+                setEditor((current) => (current ? { ...current, tool } : current))
+              }
+              presentation="web"
+              selectedKey={editor.key}
+              sensitiveMedia={sensitiveMedia}
+              showImageEditPreview={false}
+              tool={editor.tool}
+            />
+          ) : (
+            <View style={styles.overlayContent}>
+              <PostComposerTarget
+                {...props}
+                body={body}
+                contentWarning={contentWarning}
+                contentWarningExpanded={contentWarningExpanded}
+                items={items}
+                onBodyChange={(value) => {
+                  props.onBodyChange(value);
+                  setBody(value);
+                }}
+                onContentWarningChange={(value) => {
+                  props.onContentWarningChange(value);
+                  setContentWarning(value);
+                }}
+                onContentWarningToggle={() => {
+                  props.onContentWarningToggle();
+                  setContentWarningExpanded((expanded) => !expanded);
+                }}
+                onEmojiAction={() => {
+                  props.onEmojiAction();
+                  setPickerOpen(true);
+                }}
+                onMediaEdit={(key, tool) => {
+                  props.onMediaEdit(key, tool);
+                  setEditor({ key, tool });
+                }}
+                onMediaRemove={(key) => {
+                  props.onMediaRemove(key);
+                  setItems((current) => current.filter((item) => item.key !== key));
+                }}
+                onMediaRetry={(key) => props.onMediaRetry(key)}
+                onVisibilityChange={(value) => {
+                  props.onVisibilityChange(value);
+                  setVisibility(value);
+                }}
+                sensitiveMedia={sensitiveMedia}
+                surface="overlay"
+                visibility={visibility}
+              />
+              {picker}
+            </View>
+          )}
+        </ComposerOverlayFixture>
+      ) : (
+        picker
+      )}
     </View>
   );
 }
 
 export const InteractionContract: Story = {
   play: async ({ args, canvasElement }) => {
+    args.onBodyChange.mockClear();
     args.onContentWarningChange.mockClear();
     args.onContentWarningToggle.mockClear();
     args.onEmojiAction.mockClear();
@@ -408,35 +497,56 @@ export const InteractionContract: Story = {
     args.onMediaRemove.mockClear();
     args.onMediaRetry.mockClear();
     const canvas = within(canvasElement);
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const page = within(canvasElement.ownerDocument.body);
+    const railBody = canvas.getByRole('textbox', { name: '게시물 내용' });
 
     await userEvent.click(canvas.getByRole('button', { name: 'Composer 확장' }));
     expect(args.onExpand).toHaveBeenCalledOnce();
-    expect(canvas.queryByRole('button', { name: 'Composer 확장' })).not.toBeInTheDocument();
-    expect(body).toHaveValue('오늘의 코스모 이야기를 나눠보세요.');
+    expect(railBody).toBeInTheDocument();
+    expect(canvas.getByRole('button', { name: 'Composer 확장' })).toBeInTheDocument();
 
-    await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 켜기' }));
+    const dialog = page.getByRole('dialog', { name: '글쓰기' });
+    expect(dialog).toBeVisible();
+    expect(page.getAllByRole('dialog')).toHaveLength(1);
+    expect(within(dialog).queryByRole('button', { name: 'Composer 확장' })).toBeNull();
+    const body = within(dialog).getByRole('textbox', { name: '게시물 내용' });
+    expect(body).toHaveValue('오늘의 코스모 이야기를 나눠보세요.');
+    await userEvent.type(body, ' 오버레이');
+    expect(args.onBodyChange).toHaveBeenLastCalledWith(
+      '오늘의 코스모 이야기를 나눠보세요. 오버레이',
+    );
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '콘텐츠 경고 켜기' }));
     expect(args.onContentWarningToggle).toHaveBeenCalledOnce();
-    await userEvent.type(canvas.getByRole('textbox', { name: '콘텐츠 경고' }), '스포일러');
+    await userEvent.type(within(dialog).getByRole('textbox', { name: '콘텐츠 경고' }), '스포일러');
     expect(args.onContentWarningChange).toHaveBeenLastCalledWith('스포일러');
 
-    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 2 편집' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 2 편집' }));
     expect(args.onMediaEdit).toHaveBeenLastCalledWith('ready', 'alt');
-    expect(canvas.getByRole('heading', { name: '미디어 편집' })).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '완료' }));
+    expect(within(dialog).getByRole('heading', { name: '미디어 편집' })).toBeVisible();
+    await userEvent.click(within(dialog).getByRole('button', { name: '완료' }));
+    expect(within(dialog).getByRole('textbox', { name: '게시물 내용' })).toHaveValue(
+      '오늘의 코스모 이야기를 나눠보세요. 오버레이',
+    );
 
-    await userEvent.click(canvas.getByRole('button', { name: '3번째 이미지 업로드 다시 시도' }));
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: '3번째 이미지 업로드 다시 시도' }),
+    );
     expect(args.onMediaRetry).toHaveBeenLastCalledWith('failed');
-    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 제거' }));
     expect(args.onMediaRemove).toHaveBeenLastCalledWith('uploading');
 
-    await userEvent.click(canvas.getByRole('button', { name: '이모지 추가' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: '이모지 추가' }));
     expect(args.onEmojiAction).toHaveBeenCalledOnce();
-    expect(canvas.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
-    await userEvent.click(canvas.getAllByRole('button', { name: '빨간 하트 ❤️' })[0]);
-    expect(canvas.getByRole('textbox', { name: '게시물 내용' })).toHaveValue(
-      '오늘의 코스모 이야기를 나눠보세요.❤️',
+    expect(page.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
+    await userEvent.click(page.getAllByRole('button', { name: '빨간 하트 ❤️' })[0]);
+    expect(within(dialog).getByRole('textbox', { name: '게시물 내용' })).toHaveValue(
+      '오늘의 코스모 이야기를 나눠보세요. 오버레이❤️',
     );
+
+    await userEvent.keyboard('{Escape}');
+    expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull();
+    expect(railBody).toHaveValue('오늘의 코스모 이야기를 나눠보세요. 오버레이❤️');
   },
   render: (args) => <InteractiveComposer {...args} />,
 };
@@ -497,4 +607,5 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   picker: { position: 'absolute', right: 0, top: 72, zIndex: 20 },
+  overlayContent: { width: '100%' },
 });
