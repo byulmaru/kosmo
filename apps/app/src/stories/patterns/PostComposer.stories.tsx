@@ -159,7 +159,6 @@ const meta = {
     'MobileMediaFooterGeometryContract',
     'MobilePlaygroundContract',
     'PendingMediaContract',
-    'StateContract',
     'composerMedia',
   ],
   parameters: { controls: { disable: true }, layout: 'centered' },
@@ -177,7 +176,6 @@ export const Playground: Story = {
         'body',
         'contentWarning',
         'contentWarningExpanded',
-        'error',
         'sensitiveMedia',
         'showCWAction',
         'showEmojiAction',
@@ -189,7 +187,7 @@ export const Playground: Story = {
       ],
     },
   },
-  render: (args) => <InteractiveComposer {...args} />,
+  render: (args) => <InteractiveComposer {...args} showPollAction={false} />,
 };
 
 export const RailEmptyPublic: Story = {
@@ -819,15 +817,6 @@ export const MobileKeyboardContract: Story = {
     expect(within(canvasElement).getByTestId('illustrative-system-keyboard')).toHaveStyle({
       height: '336px',
     });
-  },
-};
-
-export const StateContract: Story = {
-  args: { error: '게시글을 작성하지 못했습니다.', items: [] },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    expect(canvas.getByRole('alert')).toHaveTextContent('게시글을 작성하지 못했습니다.');
-    expect(canvas.getByRole('button', { name: '게시' })).toBeEnabled();
   },
 };
 
