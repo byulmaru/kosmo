@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { asImageUploadError, assertImageUploadResponse } from './imageUploadErrors';
 import type { ImageRef } from 'expo-image-manipulator';
 import type { ImagePickerAsset } from 'expo-image-picker';
@@ -9,23 +10,14 @@ type IssuedImageUpload = {
 
 const imageUploadMaxDimension = 2048;
 const imageUploadWebpQuality = 0.8;
-
-function hasImageDimensions(image: Pick<ImageRef, 'height' | 'width'>): boolean {
-  return (
-    Number.isFinite(image.width) &&
-    Number.isFinite(image.height) &&
-    image.width > 0 &&
-    image.height > 0
-  );
-}
+const imageDimensionsSchema = z.object({
+  height: z.number().finite().positive(),
+  width: z.number().finite().positive(),
+});
 
 function getImageResizeDimensions(
   image: Pick<ImageRef, 'height' | 'width'>,
 ): { readonly height: number; readonly width: number } | null {
-  if (!hasImageDimensions(image)) {
-    throw new Error('Image dimensions are unavailable');
-  }
-
   const longestDimension = Math.max(image.width, image.height);
   if (longestDimension <= imageUploadMaxDimension) {
     return null;
@@ -46,8 +38,9 @@ async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob>
   let normalizedImageUri: string | undefined;
 
   try {
-    const resizeDimensions = hasImageDimensions(asset)
-      ? getImageResizeDimensions(asset)
+    const assetDimensions = imageDimensionsSchema.safeParse(asset);
+    const resizeDimensions = assetDimensions.success
+      ? getImageResizeDimensions(assetDimensions.data)
       : undefined;
     if (resizeDimensions) {
       context.resize(resizeDimensions);
@@ -57,7 +50,8 @@ async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob>
       normalizedImage = await context.renderAsync();
     } else {
       sourceImage = await context.renderAsync();
-      const decodedResizeDimensions = getImageResizeDimensions(sourceImage);
+      const decodedDimensions = imageDimensionsSchema.parse(sourceImage);
+      const decodedResizeDimensions = getImageResizeDimensions(decodedDimensions);
       if (decodedResizeDimensions) {
         context.resize(decodedResizeDimensions);
         normalizedImage = await context.renderAsync();

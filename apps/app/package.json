@@ -58,7 +58,8 @@
     "react-relay": "^21.0.1",
     "relay-runtime": "^21.0.1",
     "temporal-polyfill": "^0.3.2",
-    "ts-pattern": "^5.9.0"
+    "ts-pattern": "^5.9.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
