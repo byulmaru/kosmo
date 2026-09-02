@@ -80,7 +80,7 @@
 
 - Decision Date: 2026-08-30
 - Decision Class: Derived Contract
-- Authority / Provenance: `2026-08-30` 구현 기록(독립 authority 아님); [Linear `PROD-819`](https://linear.app/byulmaru/issue/PROD-819)와 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-08-31 마스킹 정책 승인`
+- Authority / Provenance: `2026-08-30` 구현 기록(독립 authority 아님); technical provenance는 [PR #653 review comment](https://github.com/byulmaru/kosmo/pull/653#discussion_r3887264185)의 Post Content `ph-mask ph-no-capture`, [PR #653 review comment](https://github.com/byulmaru/kosmo/pull/653#discussion_r3887264188)의 `q` URL metadata native masking 직접 지적, [PR #653 review comment](https://github.com/byulmaru/kosmo/pull/653#discussion_r3887264190)의 Replay·standard event payload 경계 분리 지적이다. 현재 구현 설계·검증 기록은 `01a051f9-db82-7de0-af98-6cadb87c78aa`이며, 제품 authority인 사용자 승인과 그 전파 기록은 아래 `2026-08-31 마스킹 정책 승인`에 연결한다. [Linear `PROD-819`](https://linear.app/byulmaru/issue/PROD-819)와 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-08-31 마스킹 정책 승인`
 - Status: Active
 - Context / Problem: Replay DOM masking만으로는 standard event payload의 URL·referrer·session metadata에 포함될 수 있는 Search query를 보호할 수 없고, event payload masking만으로는 Replay DOM 수집을 통제할 수 없다.
 - Decision Outcome: standard event payload는 PostHog native personal-data masking으로 `q`와 기본 personal campaign click ID를 마스킹하고 `utm_*`는 유지한다. Native masking이 놓치는 referrer URL의 `q`·기본 click ID와 파생 `ph_keyword` 계열만 공개 `before_send` hook으로 보완한다. Session Replay는 Cloud privacy 설정과 canonical Post Content의 `ph-mask ph-no-capture` marker로 별도 보호한다.
@@ -92,7 +92,7 @@
 
 - Decision Date: 2026-08-31
 - Decision Class: Derived Contract
-- Authority / Provenance: [Linear `PROD-819`](https://linear.app/byulmaru/issue/PROD-819)와 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-08-31 마스킹 정책 승인` 기록; [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `## 2026-09-01 PR #685 리뷰 대응 — 마스킹 대안 비교와 선택 이유` 댓글(`71f20e76-e996-4cca-adfd-9b99a13c672c`)
+- Authority / Provenance: 제품 authority는 사용자 정혜주(HJSmiley)가 `01a0547d-a937-75e2-b6b9-702e25181ddb`에서 `q`·referrer·기본 광고 click ID masking과 `utm_*` 보존을 명시 승인한 기록이며, `01a054d2-ecf2-75f0-8083-88b24ac38674`는 그 승인을 #685/shared spec에 전파한 기록이다. 현재 구현을 리뷰 대응에서 설계·검증한 `01a051f9-db82-7de0-af98-6cadb87c78aa`와 PR #653의 기술적 지적은 technical provenance이지 제품 authority가 아니다. 검토한 PR 리뷰, Linear `PROD-819`·`PROD-820`, 현재 OpenSpec과 위 작업 이력 범위에서는 이 선택 이전의 별도 법무 요구, 개인정보 사고, 독립 canonical 제품 요구를 확인하지 못했다. 현재 정책은 리뷰에서 발견된 기술적 위험을 바탕으로 분석 책임자인 사용자가 선택·승인한 제품 정책이다. [Linear `PROD-819`](https://linear.app/byulmaru/issue/PROD-819)와 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-08-31 마스킹 정책 승인` 기록; [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `## 2026-09-01 PR #685 리뷰 대응 — 마스킹 대안 비교와 선택 이유` 댓글(`71f20e76-e996-4cca-adfd-9b99a13c672c`)
 - Status: Active
 - Context / Problem: `2026-08-30` 구현 기록만으로는 masking 정책의 독립 authority나 사용자 승인을 증명하지 못한다.
 - Decision Outcome: 사용자 정혜주(HJSmiley)는 “URL·referrer의 검색어 `q`와 광고 click ID는 가리고, `utm_*`는 보존하는 현재 정책을 유지·승인하시겠어요?”라는 질문에 “마스킹 정책 승인”으로 답했다. 이 승인으로 현재 SDK native `q`·기본 광고 click ID masking, native masking이 놓치는 좁은 referrer `q`·기본 click ID·`ph_keyword` 계열의 공개 `before_send` 보완과 `utm_*` 보존을 유지한다.
