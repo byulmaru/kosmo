@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "packageManager": "pnpm@11.22.0+sha512.1ff870c4c6133dfd88fb2afc46dd13d47f09c9794b438c6fdb47ca98caf3bc16381ee0be93a091b8e3824cf01f889f46d7d9e20910fb0be1ab0fb5baa80dd621",
   "scripts": {
+    "build:server-artifacts": "node scripts/build-server-artifacts.mjs",
     "build:sentry-artifacts": "node scripts/build-sentry-artifacts.mjs",
     "db:test:down": "node scripts/test-db.mjs down",
     "db:test:drop": "node scripts/test-db.mjs drop",
@@ -32,6 +33,7 @@
     "@optique/run": "^1.1.1",
     "@sentry/cli": "^3.6.0",
     "@types/node": "^25.6.2",
+    "esbuild": "^0.28.1",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",

@@ -6,6 +6,7 @@ import { closeFedifyQueue } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
 import * as activities from './activities';
 import { healthStatus, validateWorkerEnvironment } from './worker';
+import { getWorkflowRegistration } from './workflow-bundle';
 
 if (import.meta.main) {
   try {
@@ -18,9 +19,24 @@ if (import.meta.main) {
     server.listen(port, host);
     await once(server, 'listening');
 
+    let terminatingDuringStartup = false;
     const terminateDuringStartup = () => {
+      if (terminatingDuringStartup) {
+        return;
+      }
+      terminatingDuringStartup = true;
       process.off('SIGTERM', terminateDuringStartup);
-      queueMicrotask(() => process.kill(process.pid, 'SIGTERM'));
+      void (async () => {
+        try {
+          await closeFedifyQueue();
+          await pg.end({ timeout: 5 });
+          await server[Symbol.asyncDispose]();
+        } finally {
+          // PID 1 does not apply Node's default SIGTERM exit after a listener
+          // handles it, so finish the startup-only shutdown explicitly.
+          process.exit(0);
+        }
+      })();
     };
     process.once('SIGTERM', terminateDuringStartup);
 
@@ -32,23 +48,25 @@ if (import.meta.main) {
         connection,
         namespace,
         taskQueue: KOSMO_TASK_QUEUE,
-        workflowsPath: new URL('./workflows/index.ts', import.meta.url).pathname,
+        ...getWorkflowRegistration(),
       });
       const running = worker.run();
       process.off('SIGTERM', terminateDuringStartup);
       await running;
     } finally {
       process.off('SIGTERM', terminateDuringStartup);
-      try {
-        await connection?.close();
-      } finally {
+      if (!terminatingDuringStartup) {
         try {
-          await closeFedifyQueue();
+          await connection?.close();
         } finally {
           try {
-            await pg.end({ timeout: 5 });
+            await closeFedifyQueue();
           } finally {
-            await server[Symbol.asyncDispose]();
+            try {
+              await pg.end({ timeout: 5 });
+            } finally {
+              await server[Symbol.asyncDispose]();
+            }
           }
         }
       }

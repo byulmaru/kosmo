@@ -74,6 +74,6 @@ test('Temporal connect 중 SIGTERM을 process 종료로 전달한다', { timeout
   child.kill('SIGTERM');
   const [code, signal] = await once(child, 'exit');
 
-  assert.equal(code, null);
-  assert.equal(signal, 'SIGTERM');
+  assert.equal(code, 0);
+  assert.equal(signal, null);
 });

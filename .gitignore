@@ -1,6 +1,8 @@
 node_modules
 .pnpm-store
 dist
+/server-dist/
+/.server-dist-staging/
 .turbo
 .pnpm-store/
 .DS_Store

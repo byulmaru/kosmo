@@ -36,12 +36,11 @@
     "postgres": "^3.4.9",
     "prosemirror-model": "^1.25.10",
     "temporal-polyfill": "^0.3.2",
-    "tsx": "^4.22.4",
     "uuid": "^14.0.1",
     "zod": "^4.4.3"
   },
   "scripts": {
-    "db:migrate": "node --import tsx db/migrate.ts",
+    "db:migrate": "node --import tsx db/migrate-entry.ts",
     "drizzle:generate": "node ../../scripts/vault-run.mjs -- drizzle-kit generate",
     "drizzle:push": "node ../../scripts/vault-run.mjs -- drizzle-kit push",
     "drizzle:studio": "node ../../scripts/vault-run.mjs -- drizzle-kit studio",
@@ -55,6 +54,7 @@
   },
   "devDependencies": {
     "@types/jsdom": "^28.0.3",
-    "drizzle-kit": "1.0.0-beta.22"
+    "drizzle-kit": "1.0.0-beta.22",
+    "tsx": "^4.22.4"
   }
 }

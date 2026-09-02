@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@kosmo/core": "workspace:*",
-    "@kosmo/fedify": "workspace:*",
+    "@kosmo/fedify": "workspace:*"
+  },
+  "devDependencies": {
     "tsx": "^4.22.4"
   }
 }

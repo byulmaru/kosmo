@@ -32,11 +32,11 @@
     "hono": "^4.12.34",
     "openid-client": "6.8.4",
     "remeda": "^2.34.1",
-    "tsx": "^4.22.4",
     "uuid": "^14.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@fedify/vocab": "2.3.0"
+    "@fedify/vocab": "2.3.0",
+    "tsx": "^4.22.4"
   }
 }
