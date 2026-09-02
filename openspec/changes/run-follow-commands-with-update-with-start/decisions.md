@@ -75,6 +75,18 @@
 - Consequences: caller는 같은 pair ID의 새 run에서 재시도할 수 있다. receipt가 없으므로 terminal commit 뒤 모든 Activity completion이 유실된 극단 경계에서 generic exactly-once 결과 복구는 주장하지 않는다.
 - Confirmation / Follow-up: non-retryable failure와 maximum-attempt exhaustion real Temporal test로 확인한다.
 
+### PENDING을 유지하는 terminal no-op은 새 Update ID로 재시도한다
+
+- Decision Date: 2026-09-02
+- Decision Class: Failure Semantics
+- Authority / Provenance: PROD-720, 2026-09-02 사용자 결정
+- Status: Active
+- Context / Problem: participant availability 변화로 terminal command가 no-op하고 PENDING을 유지한 경우, exact row에서 결정한 고정 Update ID는 Temporal에 완료 결과로 저장되어 복구 뒤 같은 command가 handler에 다시 들어가지 못한다.
+- Decision Outcome: initial `FOLLOW`는 실행 중인 run의 중복 admission을 합치도록 고정 `follow` Update ID를 사용한다. `APPROVE`, `ACCEPT`, `REJECT`, `CANCEL`은 명시적 Update ID를 생략해 Temporal client가 호출별 transport ID를 배정한다. 같은 client 호출의 RPC retry는 하나의 ID로 deduplicate되고, 이후 별도 시도는 transaction을 다시 실행하며 exact-row DML이 멱등성을 보장한다.
+- Alternatives Considered: terminal command를 exact row에서 결정한 고정 Update ID로 유지하거나, no-op에서 Workflow를 닫거나, operation receipt를 추가하는 방안을 검토했다. 각각 복구 뒤 재시도를 막거나 PENDING lifecycle을 끊거나 불필요한 domain identity를 추가하므로 선택하지 않았다.
+- Consequences: 같은 terminal delivery가 별도 호출로 반복되면 handler가 다시 실행될 수 있지만 stale/current generation은 expected row 조건으로 분리되고 이미 terminal commit된 run은 닫힌다. 호출별 transport ID는 domain `operationId`나 public exactly-once 계약이 아니다.
+- Confirmation / Follow-up: real Temporal에서 첫 terminal no-op 뒤 같은 exact-row command가 다시 실행되어 terminal commit되는지 확인한다.
+
 ### Existing pending request는 read-only identity로 bootstrap한다
 
 - Decision Date: 2026-08-25

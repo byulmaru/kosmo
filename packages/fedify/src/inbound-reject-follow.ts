@@ -1,16 +1,15 @@
 import '@kosmo/core/polyfill';
 
 import { db, first, ProfileFollowRequests, ProfileFollows } from '@kosmo/core/db';
-import { removeInboundFollow } from '@kosmo/core/services';
+import {
+  executeProfileFollowPairTransition,
+  executeProfileFollowRemoval,
+} from '@kosmo/core/temporal/follow-command';
 import { and, eq } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import { isCompatibleOutboundFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
-import {
-  observeInbound,
-  observeInboundNoop,
-  observeInboundRejected,
-} from './inbound-observability';
+import { observeInbound } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
 
@@ -32,7 +31,8 @@ export const handleInboundRejectFollow = async ({
     !isHttpUri(objectUri) ||
     objectUri.href !== followeeActorUri.href
   ) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Reject',
       actorOrigin: followerActorUri?.origin,
       handler: 'reject',
@@ -45,7 +45,8 @@ export const handleInboundRejectFollow = async ({
 
   const followerProfile = await resolveInboundLocalRecipient(context, followerActorUri);
   if (!followerProfile) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Reject',
       actorOrigin: followerActorUri.origin,
       handler: 'reject',
@@ -56,6 +57,17 @@ export const handleInboundRejectFollow = async ({
     return;
   }
 
+  const pendingRequest = await db
+    .select({ createdAt: ProfileFollowRequests.createdAt, id: ProfileFollowRequests.id })
+    .from(ProfileFollowRequests)
+    .where(
+      and(
+        eq(ProfileFollowRequests.followerProfileId, followerProfile.id),
+        eq(ProfileFollowRequests.followeeProfileId, followeeProfileId),
+      ),
+    )
+    .limit(1)
+    .then(first);
   const profileFollow = await db
     .select({ createdAt: ProfileFollows.createdAt, id: ProfileFollows.id })
     .from(ProfileFollows)
@@ -67,19 +79,7 @@ export const handleInboundRejectFollow = async ({
     )
     .limit(1)
     .then(first);
-  const projection =
-    profileFollow ??
-    (await db
-      .select({ createdAt: ProfileFollowRequests.createdAt, id: ProfileFollowRequests.id })
-      .from(ProfileFollowRequests)
-      .where(
-        and(
-          eq(ProfileFollowRequests.followerProfileId, followerProfile.id),
-          eq(ProfileFollowRequests.followeeProfileId, followeeProfileId),
-        ),
-      )
-      .limit(1)
-      .then(first));
+  const projection = pendingRequest ?? profileFollow;
 
   if (
     !projection ||
@@ -90,7 +90,8 @@ export const handleInboundRejectFollow = async ({
       projection,
     )
   ) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Reject',
       actorOrigin: followerActorUri.origin,
       handler: 'reject',
@@ -101,25 +102,44 @@ export const handleInboundRejectFollow = async ({
     return;
   }
 
-  const removed = await removeInboundFollow({
-    expectedRowId: projection.id,
+  const pair = {
     followeeProfileId,
     followerProfileId: followerProfile.id,
-    onPostCommitError: (error) =>
+  };
+  if (pendingRequest) {
+    const result = await executeProfileFollowPairTransition({
+      pair,
+      command: {
+        kind: 'REJECT',
+        expectedRowId: pendingRequest.id,
+        origin: 'ACTIVITYPUB',
+      },
+    });
+    if (result.result.commandKind !== 'REJECT') {
+      throw new Error('Unexpected inbound Reject transition result');
+    }
+    if (!result.result.changed) {
       observeInbound({
+        outcome: 'noop',
         activityType: 'Reject',
         actorOrigin: followerActorUri.origin,
-        error,
         handler: 'reject',
         objectOrigin: objectUri.origin,
-        outcome: 'internal_failure',
-        phase: 'effect',
-        reasonCode: 'follow_notification_effect_failed',
-      }),
-  });
+        phase: 'projection',
+        reasonCode: 'reject_follow_state_changed_noop',
+      });
+    }
+    return;
+  }
 
-  if (!removed) {
-    observeInboundNoop({
+  const removed = await executeProfileFollowRemoval({
+    ...pair,
+    expectedRowId: profileFollow!.id,
+    origin: 'ACTIVITYPUB',
+  });
+  if (!removed.changed) {
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Reject',
       actorOrigin: followerActorUri.origin,
       handler: 'reject',

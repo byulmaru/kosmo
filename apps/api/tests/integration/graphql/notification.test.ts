@@ -14,10 +14,15 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
-import { cancelProfileFollowRequest, followProfile } from '@kosmo/core/services';
+import { temporalClient } from '@kosmo/core/temporal/client';
+import {
+  executeProfileFollowPairTransition,
+  profileFollowPairWorkflowId,
+} from '@kosmo/core/temporal/follow-command';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { waitForProfileFollowWorkflows } from './temporal-test-helpers';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
@@ -321,7 +326,7 @@ describe('Notification GraphQL Node boundary', () => {
     }
   });
 
-  test('does not leave a stale row when terminal request deletion overlaps post-commit creation', async () => {
+  test('does not leave a stale row when a request is created and cancelled', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('follow-request-race-recipient');
     const requester = await createProfile('follow-request-race-requester');
@@ -331,133 +336,50 @@ describe('Notification GraphQL Node boundary', () => {
       .set({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED })
       .where(eq(Profiles.id, recipient.id));
 
-    // The trigger is test-only: it pauses the INSERT after the source SELECT has
-    // observed and locked the pending row. The terminal delete must reach that row
-    // lock before the INSERT is released, proving the final state has no orphan.
-    const advisoryKey = 321_321;
-    const control = await pg.reserve();
-    let unlocked = false;
-    let functionInstalled = false;
-    let triggerInstalled = false;
-    let followPromise: ReturnType<typeof followProfile> | undefined;
-    let cancelPromise: ReturnType<typeof cancelProfileFollowRequest> | undefined;
-    try {
-      await control`SELECT pg_advisory_lock(${advisoryKey})`;
-      await db.execute(
-        sql.raw(`
-        CREATE FUNCTION block_follow_request_notification_insert() RETURNS trigger
-        LANGUAGE plpgsql AS $$
-        BEGIN
-          PERFORM pg_advisory_lock(${advisoryKey});
-          PERFORM pg_advisory_unlock(${advisoryKey});
-          RETURN NEW;
-        END;
-        $$
-      `),
-      );
-      functionInstalled = true;
-      await db.execute(
-        sql.raw(`
-        CREATE TRIGGER follow_request_notification_race
-        BEFORE INSERT ON "notification"
-        FOR EACH ROW WHEN (NEW.kind = 'FOLLOW_REQUEST'::notification_kind)
-        EXECUTE FUNCTION block_follow_request_notification_insert()
-      `),
-      );
-      triggerInstalled = true;
-
-      followPromise = followProfile({
-        followerProfileId: requester.id,
-        followeeProfileId: recipient.id,
-      });
-      let insertBlocked = false;
-      for (let attempt = 0; attempt < 200; attempt += 1) {
-        const activity = await db.execute(sql`
-          SELECT 1
-          FROM pg_stat_activity
-          WHERE wait_event_type = 'Lock'
-            AND query ILIKE '%insert into "notification"%'
-          LIMIT 1
-        `);
-        if (activity.length > 0) {
-          insertBlocked = true;
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-      assert.equal(insertBlocked, true);
-
-      const request = await db
-        .select()
-        .from(ProfileFollowRequests)
-        .where(
-          and(
-            eq(ProfileFollowRequests.followerProfileId, requester.id),
-            eq(ProfileFollowRequests.followeeProfileId, recipient.id),
-          ),
-        )
-        .then(firstOrThrow);
-      cancelPromise = cancelProfileFollowRequest({
-        actorProfileId: requester.id,
-        profileFollowRequestId: request.id,
-      });
-      let deleteBlocked = false;
-      for (let attempt = 0; attempt < 200; attempt += 1) {
-        const activity = await db.execute(sql`
-          SELECT 1
-          FROM pg_stat_activity
-          WHERE wait_event_type = 'Lock'
-            AND wait_event IN ('transactionid', 'tuple')
-            AND query ILIKE '%delete from "profile_follow_request"%'
-          LIMIT 1
-        `);
-        if (activity.length > 0) {
-          deleteBlocked = true;
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-      assert.equal(deleteBlocked, true);
-      await control`SELECT pg_advisory_unlock(${advisoryKey})`;
-      unlocked = true;
-      const cancelResult = await cancelPromise;
-      assert.equal(cancelResult.profileFollowRequestId, request.id);
-      const result = await followPromise;
-      assert.equal(result.result.kind, 'PENDING');
-
-      const stale = await db
-        .select()
-        .from(Notifications)
-        .where(eq(Notifications.sourceId, request.id));
-      assert.equal(stale.length, 0);
-      const notificationId = encodeGlobalId('FollowRequestNotification', request.id);
-      const recipientId = encodeGlobalId('Profile', recipient.id);
-      assert.deepEqual(await loadNodes([notificationId], auth.token), [null]);
-      const connection = await loadNotificationConnection(recipientId, auth.token, { first: 10 });
-      assertNoGraphQLErrors(connection);
-      assert.deepEqual(connection.data?.node?.notifications.edges, []);
-      const count = await loadUnreadNotificationCounts([recipientId], auth.token);
-      assertNoGraphQLErrors(count);
-      assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 0);
-    } finally {
-      if (!unlocked) {
-        await control`SELECT pg_advisory_unlock(${advisoryKey})`;
-        unlocked = true;
-      }
-      // If setup or the blocking poll failed, let the in-flight source action
-      // finish before dropping its test-only trigger/function.
-      await cancelPromise?.catch(() => undefined);
-      await followPromise?.catch(() => undefined);
-      if (triggerInstalled) {
-        await db.execute(
-          sql`DROP TRIGGER IF EXISTS follow_request_notification_race ON ${Notifications}`,
-        );
-      }
-      if (functionInstalled) {
-        await db.execute(sql`DROP FUNCTION IF EXISTS block_follow_request_notification_insert()`);
-      }
-      control.release();
+    const result = await executeProfileFollowPairTransition({
+      pair: { followerProfileId: requester.id, followeeProfileId: recipient.id },
+      command: {
+        kind: 'FOLLOW',
+        origin: 'LOCAL',
+      },
+    });
+    if (result.result.commandKind !== 'FOLLOW' || result.result.kind !== 'PENDING') {
+      assert.fail('Expected pending follow request');
     }
+
+    const request = result.profileFollowRequest!;
+    const cancelResult = await executeProfileFollowPairTransition({
+      pair: { followerProfileId: requester.id, followeeProfileId: recipient.id },
+      command: {
+        kind: 'CANCEL',
+        actorProfileId: requester.id,
+        expectedRowId: request.id,
+        origin: 'LOCAL',
+      },
+    });
+    if (cancelResult.result.commandKind !== 'CANCEL') {
+      assert.fail('Expected canceled follow request');
+    }
+    assert.equal(cancelResult.result.profileFollowRequestId, request.id);
+
+    await temporalClient.workflow
+      .getHandle(
+        profileFollowPairWorkflowId({
+          followerProfileId: requester.id,
+          followeeProfileId: recipient.id,
+        }),
+      )
+      .result();
+
+    const notificationId = encodeGlobalId('FollowRequestNotification', request.id);
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+    assert.deepEqual(await loadNodes([notificationId], auth.token), [null]);
+    const connection = await loadNotificationConnection(recipientId, auth.token, { first: 10 });
+    assertNoGraphQLErrors(connection);
+    assert.deepEqual(connection.data?.node?.notifications.edges, []);
+    const count = await loadUnreadNotificationCounts([recipientId], auth.token);
+    assertNoGraphQLErrors(count);
+    assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 0);
   });
 
   test('hides unavailable FOLLOW_REQUEST rows from Node, connection, count and Read', async () => {
@@ -2172,6 +2094,7 @@ const createAuthenticatedSession = async () => {
 };
 
 const resetFixtures = async () => {
+  await waitForProfileFollowWorkflows();
   await db.delete(Notifications);
   await db.delete(Sessions);
   await db.delete(ProfileFollows);

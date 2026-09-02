@@ -12,9 +12,6 @@ export {
   isExternalInboundError,
   markInboundErrorObserved,
   observeInbound,
-  observeInboundExternalFailure,
-  observeInboundNoop,
-  observeInboundRejected,
   setInboundObservabilityReporter,
   withInboundObservability,
 } from './src/inbound-observability';

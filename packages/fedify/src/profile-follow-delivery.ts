@@ -22,10 +22,11 @@ type ProfileFollowRecipient = Recipient & {
   inboxId: URL;
 };
 
-const createFederationContext = async (): Promise<Context<void>> => {
-  const localInstance = await resolveConfiguredLocalInstance();
-  return federation.createContext(new URL(localInstance.canonicalOrigin), undefined);
-};
+const createFederationContext = async (): Promise<Context<void>> =>
+  federation.createContext(
+    new URL((await resolveConfiguredLocalInstance()).canonicalOrigin),
+    undefined,
+  );
 
 const toProfileFollowRecipient = (actor: RemoteProfileFollowActor): ProfileFollowRecipient => {
   if (!actor.inboxUri) {
@@ -47,17 +48,18 @@ export const sendProfileFollow = async ({
   const recipientActor = toProfileFollowRecipient(actor);
   const context = await createFederationContext();
   const actorUri = context.getActorUri(senderProfileId);
-  const activity = new Follow({
-    actor: actorUri,
-    id: getFollowActivityUri(context.canonicalOrigin, outboundFollow.id),
-    object: recipientActor.id,
-    published: outboundFollow.createdAt,
-    tos: [recipientActor.id],
-  });
-
-  await context.sendActivity({ identifier: senderProfileId }, recipientActor, activity, {
-    orderingKey: getFollowOrderingKey(actorUri, recipientActor.id),
-  });
+  await context.sendActivity(
+    { identifier: senderProfileId },
+    recipientActor,
+    new Follow({
+      actor: actorUri,
+      id: getFollowActivityUri(context.canonicalOrigin, outboundFollow.id),
+      object: recipientActor.id,
+      published: outboundFollow.createdAt,
+      tos: [recipientActor.id],
+    }),
+    { orderingKey: getFollowOrderingKey(actorUri, recipientActor.id) },
+  );
 };
 
 export const sendProfileUnfollow = async ({
@@ -68,18 +70,18 @@ export const sendProfileUnfollow = async ({
   const recipientActor = toProfileFollowRecipient(actor);
   const context = await createFederationContext();
   const actorUri = context.getActorUri(senderProfileId);
-  const originalFollow = new Follow({
-    actor: actorUri,
-    id: getFollowActivityUri(context.canonicalOrigin, outboundFollow.id),
-    object: recipientActor.id,
-  });
-  const activity = new Undo({
-    actor: actorUri,
-    object: originalFollow,
-    tos: [recipientActor.id],
-  });
-
-  await context.sendActivity({ identifier: senderProfileId }, recipientActor, activity, {
-    orderingKey: getFollowOrderingKey(actorUri, recipientActor.id),
-  });
+  await context.sendActivity(
+    { identifier: senderProfileId },
+    recipientActor,
+    new Undo({
+      actor: actorUri,
+      object: new Follow({
+        actor: actorUri,
+        id: getFollowActivityUri(context.canonicalOrigin, outboundFollow.id),
+        object: recipientActor.id,
+      }),
+      tos: [recipientActor.id],
+    }),
+    { orderingKey: getFollowOrderingKey(actorUri, recipientActor.id) },
+  );
 };

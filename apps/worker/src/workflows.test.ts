@@ -338,7 +338,7 @@ test(
 );
 
 test(
-  'Pending pair는 effect failure를 기록한 뒤 terminal Update를 받고 FIFO로 종료한다',
+  'Pending pair는 effect failure와 terminal NOOP 뒤 같은 명령을 재실행한다',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -384,6 +384,20 @@ test(
                   },
                 },
               ],
+            };
+          }
+          if (transactionCalls === 2) {
+            return {
+              ok: true as const,
+              nextState: 'PENDING' as const,
+              result: {
+                commandKind: 'REJECT' as const,
+                changed: false,
+                ...pair,
+                profileFollowRequestId: requestId,
+              },
+              effectPlan: [],
+              pendingRequestId: requestId,
             };
           }
           return {
@@ -449,15 +463,28 @@ test(
       assert.equal(first.ok, true);
       const handle = await handlePromise;
       await effectFailed;
-      const terminal = (await handle.executeUpdate('profileFollowPairUpdate', {
-        args: [
-          {
-            kind: 'REJECT' as const,
-            expectedRowId: requestId,
-            origin: 'LOCAL' as const,
-            actorProfileId: pair.followeeProfileId,
+      const terminalCommand = {
+        kind: 'REJECT' as const,
+        expectedRowId: requestId,
+        origin: 'LOCAL' as const,
+        actorProfileId: pair.followeeProfileId,
+      };
+      assert.deepEqual(
+        await handle.executeUpdate('profileFollowPairUpdate', {
+          args: [terminalCommand],
+        }),
+        {
+          ok: true,
+          result: {
+            commandKind: 'REJECT',
+            changed: false,
+            ...pair,
+            profileFollowRequestId: requestId,
           },
-        ],
+        },
+      );
+      const terminal = (await handle.executeUpdate('profileFollowPairUpdate', {
+        args: [terminalCommand],
       })) as ProfileFollowPairTransitionOutcome;
       assert.equal(terminal.ok, true);
       assert.equal(terminal.result.commandKind, 'REJECT');
@@ -548,7 +575,6 @@ test(
               actorProfileId: pair.followeeProfileId,
             },
           ],
-          updateId: 'REJECT:' + requestId,
         }),
       );
       await assert.rejects(handle.result());
@@ -640,7 +666,6 @@ test(
               actorProfileId: pair.followeeProfileId,
             },
           ],
-          updateId: 'REJECT:' + requestId,
         }),
       );
       await assert.rejects(handle.result());

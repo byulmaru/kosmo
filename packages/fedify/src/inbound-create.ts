@@ -4,11 +4,7 @@ import { Note } from '@fedify/vocab';
 import { InstanceState } from '@kosmo/core/enums';
 import { uniqueHref } from './activitypub-uri';
 import { handleInboundCreateNote } from './inbound-create-note';
-import {
-  observeInboundExternalFailure,
-  observeInboundNoop,
-  observeInboundRejected,
-} from './inbound-observability';
+import { observeInbound } from './inbound-observability';
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Create } from '@fedify/vocab';
@@ -22,7 +18,8 @@ export const handleInboundCreate = async (
   const objectUri = uniqueHref(create.objectIds);
 
   if (!actorUri || !objectUri) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Create',
       handler: 'create',
       phase: 'validation',
@@ -37,7 +34,8 @@ export const handleInboundCreate = async (
     (storedActor.instance.state !== InstanceState.ACTIVE &&
       storedActor.instance.state !== InstanceState.UNRESPONSIVE)
   ) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Create',
       actorOrigin: actorUri,
       handler: 'create',
@@ -51,7 +49,8 @@ export const handleInboundCreate = async (
   try {
     object = await create.getObject({ documentLoader: context.documentLoader });
   } catch {
-    observeInboundExternalFailure({
+    observeInbound({
+      outcome: 'external_failure',
       activityType: 'Create',
       actorOrigin: actorUri,
       handler: 'create',
@@ -74,7 +73,8 @@ export const handleInboundCreate = async (
     return;
   }
 
-  observeInboundExternalFailure({
+  observeInbound({
+    outcome: 'external_failure',
     activityType: 'Create',
     actorOrigin: actorUri,
     handler: 'create',

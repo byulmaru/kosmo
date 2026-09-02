@@ -15,17 +15,14 @@ import type {
 
 const {
   authorizationCodeGrant,
-  captureNotificationEffectError,
   captureUnexpectedError,
   createSession,
   discovery,
   federationFetch,
   revokeSession,
   setInboundObservabilityReporter,
-  setNotificationEffectErrorReporter,
 } = vi.hoisted(() => ({
   authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
-  captureNotificationEffectError: vi.fn(),
   captureUnexpectedError: vi.fn<(cause: unknown) => void>(),
   createSession:
     vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
@@ -36,7 +33,6 @@ const {
       (input: { token?: string }) => Promise<{ status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED' }>
     >(),
   setInboundObservabilityReporter: vi.fn(),
-  setNotificationEffectErrorReporter: vi.fn(),
 }));
 
 vi.mock('openid-client', async (importOriginal) => ({
@@ -48,7 +44,6 @@ vi.mock('openid-client', async (importOriginal) => ({
 vi.mock('@kosmo/core/services', () => ({
   createOidcSession: createSession,
   revokeCurrentSession: revokeSession,
-  setNotificationEffectErrorReporter,
 }));
 
 vi.mock('@kosmo/fedify', () => ({
@@ -56,7 +51,7 @@ vi.mock('@kosmo/fedify', () => ({
   setInboundObservabilityReporter,
 }));
 
-vi.mock('./sentry', () => ({ captureNotificationEffectError, captureUnexpectedError }));
+vi.mock('./sentry', () => ({ captureUnexpectedError }));
 
 let staticRoot: string;
 let app: Hono;
@@ -76,7 +71,6 @@ beforeAll(async () => {
   expect(setInboundObservabilityReporter).toHaveBeenCalledWith({
     captureException: captureUnexpectedError,
   });
-  expect(setNotificationEffectErrorReporter).toHaveBeenCalledWith(captureNotificationEffectError);
 });
 
 beforeEach(() => {

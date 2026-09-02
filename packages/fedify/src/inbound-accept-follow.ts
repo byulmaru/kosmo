@@ -1,10 +1,10 @@
 import { db, first, ProfileFollowRequests, ProfileFollows } from '@kosmo/core/db';
-import { acceptProfileFollowRequest } from '@kosmo/core/services';
+import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
 import { and, eq } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import { isCompatibleOutboundFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
-import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
+import { observeInbound } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
 
@@ -13,9 +13,7 @@ export const handleInboundAcceptFollow = async ({
   follow,
   followeeActorUri,
   followeeProfileId,
-  acceptProfileFollowRequest: acceptFollowRequest = acceptProfileFollowRequest,
 }: {
-  readonly acceptProfileFollowRequest?: typeof acceptProfileFollowRequest;
   context: InboxContext<void>;
   follow: Follow;
   followeeActorUri: URL;
@@ -28,7 +26,8 @@ export const handleInboundAcceptFollow = async ({
     !isHttpUri(objectUri) ||
     objectUri.href !== followeeActorUri.href
   ) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Accept',
       actorOrigin: followerActorUri?.origin,
       handler: 'accept',
@@ -41,7 +40,8 @@ export const handleInboundAcceptFollow = async ({
 
   const followerProfile = await resolveInboundLocalRecipient(context, followerActorUri);
   if (!followerProfile) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Accept',
       actorOrigin: followerActorUri.origin,
       handler: 'accept',
@@ -86,7 +86,8 @@ export const handleInboundAcceptFollow = async ({
       projection,
     )
   ) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Accept',
       actorOrigin: followerActorUri.origin,
       handler: 'accept',
@@ -97,13 +98,12 @@ export const handleInboundAcceptFollow = async ({
     return;
   }
 
-  const result = await acceptFollowRequest({
-    expectedRowId: projection.id,
-    followeeProfileId,
-    followerProfileId: followerProfile.id,
-  });
-  if (result.kind === 'ALREADY_ESTABLISHED') {
-    observeInboundNoop({
+  // An established projection has no Pending lifecycle to bootstrap. The
+  // generation check above remains authoritative; once it matches, a
+  // repeated Accept is an idempotent protocol noop.
+  if (profileFollow) {
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Accept',
       actorOrigin: followerActorUri.origin,
       handler: 'accept',
@@ -111,8 +111,36 @@ export const handleInboundAcceptFollow = async ({
       phase: 'projection',
       reasonCode: 'duplicate_accept_noop',
     });
-  } else if (result.kind === 'NOOP') {
-    observeInboundNoop({
+    return;
+  }
+
+  const transition = await executeProfileFollowPairTransition({
+    pair: {
+      followeeProfileId,
+      followerProfileId: followerProfile.id,
+    },
+    command: {
+      kind: 'ACCEPT',
+      expectedRowId: projection.id,
+      origin: 'ACTIVITYPUB',
+    },
+  });
+  if (transition.result.commandKind !== 'ACCEPT') {
+    throw new Error('Unexpected inbound Accept transition result');
+  }
+  if (transition.result.kind === 'ALREADY_ESTABLISHED') {
+    observeInbound({
+      outcome: 'noop',
+      activityType: 'Accept',
+      actorOrigin: followerActorUri.origin,
+      handler: 'accept',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'duplicate_accept_noop',
+    });
+  } else if (transition.result.kind === 'NOOP') {
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Accept',
       actorOrigin: followerActorUri.origin,
       handler: 'accept',

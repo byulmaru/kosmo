@@ -1,4 +1,3 @@
-import { db } from '@kosmo/core/db';
 import {
   approveProfileFollowRequest,
   cancelProfileFollowRequest,
@@ -26,13 +25,10 @@ builder.mutationField('approveProfileFollowRequest', (t) =>
       id: t.input.globalID({ for: ProfileFollowRequest }),
     },
     resolve: (_, { input }, ctx) =>
-      approveProfileFollowRequest(
-        {
-          actorProfileId: ctx.session.profileId,
-          profileFollowRequestId: input.id.id,
-        },
-        db,
-      ),
+      approveProfileFollowRequest({
+        actorProfileId: ctx.session.profileId,
+        profileFollowRequestId: input.id.id,
+      }),
   }),
 );
 
@@ -53,13 +49,10 @@ builder.mutationField('rejectProfileFollowRequest', (t) =>
       id: t.input.globalID({ for: ProfileFollowRequest }),
     },
     resolve: (_, { input }, ctx) =>
-      rejectProfileFollowRequest(
-        {
-          actorProfileId: ctx.session.profileId,
-          profileFollowRequestId: input.id.id,
-        },
-        db,
-      ),
+      rejectProfileFollowRequest({
+        actorProfileId: ctx.session.profileId,
+        profileFollowRequestId: input.id.id,
+      }),
   }),
 );
 
@@ -80,12 +73,9 @@ builder.mutationField('cancelProfileFollowRequest', (t) =>
       id: t.input.globalID({ for: ProfileFollowRequest }),
     },
     resolve: (_, { input }, ctx) =>
-      cancelProfileFollowRequest(
-        {
-          actorProfileId: ctx.session.profileId,
-          profileFollowRequestId: input.id.id,
-        },
-        db,
-      ),
+      cancelProfileFollowRequest({
+        actorProfileId: ctx.session.profileId,
+        profileFollowRequestId: input.id.id,
+      }),
   }),
 );

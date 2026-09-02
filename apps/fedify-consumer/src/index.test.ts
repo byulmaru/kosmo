@@ -13,6 +13,8 @@ test('starts and stops the standalone consumer', { skip: !databaseUrl }, async (
     env: {
       ...process.env,
       FEDIFY_QUEUE_DATABASE_URL: databaseUrl,
+      TEMPORAL_ADDRESS: process.env.TEMPORAL_ADDRESS ?? '127.0.0.1:7233',
+      TEMPORAL_NAMESPACE: process.env.TEMPORAL_NAMESPACE ?? 'test',
       HOST: '127.0.0.1',
       PORT: String(port),
     },

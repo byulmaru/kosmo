@@ -68,7 +68,7 @@ workflowIdReusePolicy    = ALLOW_DUPLICATE
 update name              = profileFollowPairUpdate
 ```
 
-Temporal Update ID는 transport-level admission deduplication metadata일 뿐 domain `operationId`나 DB identity가 아니다. initial Follow는 `follow`, exact source를 처리하는 terminal command는 `{commandKind}:{expectedRowId}`에서 Update ID를 결정적으로 파생한다. 이 값은 receipt table이나 public idempotency contract로 저장하지 않는다.
+Temporal Update ID는 transport-level admission deduplication metadata일 뿐 domain `operationId`나 DB identity가 아니다. initial Follow는 실행 중인 같은 pair run의 중복 admission을 합치도록 `follow`를 사용한다. terminal command는 participant availability 변화로 no-op한 뒤 같은 exact row를 다시 처리할 수 있어야 하므로 명시적 Update ID를 생략하고 Temporal client가 호출별 ID를 배정한다. 같은 client 호출의 RPC retry는 하나의 ID로 수렴하고, 이후 별도 호출은 새 ID로 handler를 다시 실행한다. 이 값은 receipt table이나 public idempotency contract로 저장하지 않는다.
 
 `FOLLOW`는 `INITIAL` run의 첫 Update다. 이미 PENDING run이 있으면 duplicate/Conflict 결과로 수렴한다. `APPROVE`, `ACCEPT`, `REJECT`, `CANCEL`, `REMOTE_REJECT`, `INBOUND_UNDO`가 실행 중인 PENDING run에 도착하면 같은 Update handler가 처리한다. 이전 migration 전에 이미 DB에 남은 pending request는 실행 중인 Workflow가 없을 수 있으므로, terminal command의 Update-with-Start가 새 run을 만든다.
 
@@ -119,12 +119,12 @@ ID가 없거나 exact request ID가 다르면 Workflow는 stale/no-op 또는 dom
 - initial Follow에서 새 row가 필요한 경우 Activity retry는 현재 Follow 또는 Pending Request ID가 history의 candidate row ID와 같으면 이번 transition의 commit으로 복구하고, 다른 ID면 기존 duplicate/stale 결과로 처리한다.
 - approve/accept retry는 request가 이미 없고 현재 Follow가 history에 배정한 candidate Follow ID와 같으면 승인 commit으로 복구한다. Workflow가 보존한 expected request ID로 request cleanup effect를 계속 만든다.
 - reject/cancel/undo retry는 expected request가 이미 없고 새로운 pair row가 없으면 terminal deletion이 이미 commit된 것으로 복구한다.
-- remote accept/reject/undo가 participant availability guard 때문에 expected request를 실제로 승격/삭제하지 못하면 candidate ID나 expected ID만으로 commit을 주장하지 않고 `PENDING`/no-op과 빈 effect plan을 반환한다.
+- remote accept/reject/undo가 participant availability guard 때문에 expected request를 실제로 승격/삭제하지 못하면 candidate ID나 expected ID만으로 commit을 주장하지 않고 `PENDING`/no-op과 빈 effect plan을 반환한다. 이후 별도 delivery는 새 transport Update ID로 같은 exact-row transaction을 다시 시도할 수 있다.
 - current row가 expected ID와 다르면 stale command로 취급하고 새 generation에 적용하지 않는다.
 
 이 재구성은 DB 상태와 exact row token을 기반으로 하며, generic exactly-once를 주장하지 않는다. 특히 오래된 run의 command가 같은 pair의 새 run으로 라우팅되는 위험은 현재 범위에서 감당 가능한 운영 trade-off로 기록한다. remote terminal command의 expected row 검증과 기존 ActivityPub ingress validation이 그 위험을 제한한다. command에 exact row token이 없는 local duplicate Follow는 domain unique/no-op 규칙으로 수렴한다.
 
-Update-with-Start RPC 자체는 pair Workflow의 장수명과 별개로 5초 client deadline을 가진다. deadline은 Workflow run을 종료하지 않으며, Temporal/Worker가 응답하지 않을 때 GraphQL/Fedify caller가 무기한 대기하지 않게 하는 admission 경계다. 동일 Update ID 재시도는 같은 run에서 Temporal deduplication으로 수렴한다.
+Update-with-Start RPC 자체는 pair Workflow의 장수명과 별개로 5초 client deadline을 가진다. deadline은 Workflow run을 종료하지 않으며, Temporal/Worker가 응답하지 않을 때 GraphQL/Fedify caller가 무기한 대기하지 않게 하는 admission 경계다. 한 client 호출 안의 RPC 재시도는 동일 Update ID로 수렴하지만, PENDING no-op 뒤의 별도 terminal 시도는 새 Update ID를 사용한다.
 
 ## Unfollow boundary
 

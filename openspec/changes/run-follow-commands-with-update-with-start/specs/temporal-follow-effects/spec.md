@@ -58,11 +58,13 @@ INITIAL → PENDING → ESTABLISHED
 
 - **WHEN** a verified remote Reject or Undo reaches the transaction after participant availability changes and the exact request is not deleted
 - **THEN** the Workflow returns a no-op, keeps the request lifecycle `PENDING`, and does not treat the expected ID alone as evidence of deletion
+- **AND** a later delivery after participant recovery receives a fresh transport Update ID and can run the same exact-row transaction again
 
 #### Scenario: Remote Accept becomes unavailable
 
 - **WHEN** a verified remote Accept reaches the transaction after participant availability changes and the request cannot be promoted
 - **THEN** the Workflow returns a no-op, keeps the request lifecycle `PENDING`, and does not expose the candidate Follow ID or enqueue a Follow create effect
+- **AND** a later delivery after participant recovery receives a fresh transport Update ID and can run the same exact-row transaction again
 
 #### Scenario: Reject an invalid Pending command
 

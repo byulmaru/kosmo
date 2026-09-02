@@ -1,25 +1,26 @@
 import '@kosmo/core/polyfill';
 
 import { EmojiReact, Follow, Like } from '@fedify/vocab';
-import { ActivityPubPosts, db, first, Posts } from '@kosmo/core/db';
+import {
+  ActivityPubPosts,
+  db,
+  first,
+  Posts,
+  ProfileFollowRequests,
+  ProfileFollows,
+} from '@kosmo/core/db';
 import { InstanceState, PostState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
+import { deletePost, undoInboundReaction } from '@kosmo/core/services';
 import {
-  deletePost,
-  followProfile,
-  undoInboundReaction,
-  unfollowProfile,
-} from '@kosmo/core/services';
-import { eq } from 'drizzle-orm';
+  executeProfileFollowPairTransition,
+  executeProfileFollowRemoval,
+} from '@kosmo/core/temporal/follow-command';
+import { and, eq } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
-import {
-  observeInbound,
-  observeInboundExternalFailure,
-  observeInboundNoop,
-  observeInboundRejected,
-} from './inbound-observability';
+import { observeInbound } from './inbound-observability';
 import {
   findOrMaterializeRemoteProfileActorByUri,
   findStoredRemoteProfileActorByUri,
@@ -27,38 +28,24 @@ import {
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
-import type { Recipient, Undo } from '@fedify/vocab';
-import type { ActivityPubActors } from '@kosmo/core/db';
-
-const getNow = () => Temporal.Now.instant();
+import type { Undo } from '@fedify/vocab';
 
 const isExpectedRemoteActorRejection = (error: unknown) =>
   error instanceof RemoteActorMaterializationError ||
   error instanceof NotFoundError ||
   error instanceof ConflictError;
 
-const toRecipient = (actor: typeof ActivityPubActors.$inferSelect): Recipient | undefined => {
-  if (!actor.inboxUri) {
-    return undefined;
-  }
-
-  return {
-    endpoints: actor.sharedInboxUri ? { sharedInbox: new URL(actor.sharedInboxUri) } : null,
-    id: new URL(actor.uri),
-    inboxId: new URL(actor.inboxUri),
-  };
-};
-
 export const handleInboundFollow = async (
   context: InboxContext<void>,
   follow: Follow,
-  now: Temporal.Instant = getNow(),
+  now: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {
   const actorUri = follow.actorId;
   const objectUri = follow.objectId;
 
   if (!isHttpUri(actorUri) || !isHttpUri(objectUri)) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Follow',
       handler: 'follow',
       phase: 'validation',
@@ -70,7 +57,8 @@ export const handleInboundFollow = async (
   // Local validation intentionally precedes every remote lookup.
   const localRecipient = await resolveInboundLocalRecipient(context, objectUri);
   if (!localRecipient) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Follow',
       actorOrigin: actorUri.origin,
       handler: 'follow',
@@ -87,7 +75,8 @@ export const handleInboundFollow = async (
     remoteActor = await findOrMaterializeRemoteProfileActorByUri({ actorUri, context, now });
   } catch (error) {
     if (isExpectedRemoteActorRejection(error)) {
-      observeInboundExternalFailure({
+      observeInbound({
+        outcome: 'external_failure',
         activityType: 'Follow',
         actorOrigin: actorUri.origin,
         handler: 'follow',
@@ -101,25 +90,25 @@ export const handleInboundFollow = async (
     throw error;
   }
 
-  const result = await followProfile({
+  const pair = {
     followeeProfileId: localRecipient.id,
     followerProfileId: remoteActor.profile.id,
-    onPostCommitError: (error) =>
-      observeInbound({
-        activityType: 'Follow',
-        actorOrigin: actorUri.origin,
-        error,
-        handler: 'follow',
-        objectOrigin: objectUri.origin,
-        outcome: 'internal_failure',
-        phase: 'effect',
-        reasonCode: 'follow_notification_effect_failed',
-      }),
+  };
+  const result = await executeProfileFollowPairTransition({
+    pair,
+    command: {
+      kind: 'FOLLOW',
+      origin: 'ACTIVITYPUB',
+    },
   });
+  if (result.result.commandKind !== 'FOLLOW') {
+    throw new Error('Unexpected inbound Follow transition result');
+  }
 
   if (result.result.kind !== 'ESTABLISHED') {
-    if (!result.created) {
-      observeInboundNoop({
+    if (!result.result.created) {
+      observeInbound({
+        outcome: 'noop',
         activityType: 'Follow',
         actorOrigin: actorUri.origin,
         handler: 'follow',
@@ -131,8 +120,9 @@ export const handleInboundFollow = async (
     return;
   }
 
-  if (!result.created) {
-    observeInboundNoop({
+  if (!result.result.created) {
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Follow',
       actorOrigin: actorUri.origin,
       handler: 'follow',
@@ -142,9 +132,9 @@ export const handleInboundFollow = async (
     });
   }
 
-  const recipientActor = toRecipient(remoteActor.actor);
-  if (!recipientActor) {
-    observeInboundNoop({
+  if (!remoteActor.actor.inboxUri) {
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Follow',
       actorOrigin: actorUri.origin,
       handler: 'follow',
@@ -154,17 +144,23 @@ export const handleInboundFollow = async (
     });
     return;
   }
-
   try {
     await sendAcceptFollowActivity({
       context,
       receivedFollow: follow,
-      recipientActor,
+      recipientActor: {
+        endpoints: remoteActor.actor.sharedInboxUri
+          ? { sharedInbox: new URL(remoteActor.actor.sharedInboxUri) }
+          : null,
+        id: new URL(remoteActor.actor.uri),
+        inboxId: new URL(remoteActor.actor.inboxUri),
+      },
       senderProfileId: localRecipient.id,
     });
   } catch {
     // The projection is authoritative; delivery retries belong to a separate slice.
-    observeInboundExternalFailure({
+    observeInbound({
+      outcome: 'external_failure',
       activityType: 'Follow',
       actorOrigin: actorUri.origin,
       handler: 'follow',
@@ -173,10 +169,6 @@ export const handleInboundFollow = async (
       reasonCode: 'accept_delivery_failed',
     });
   }
-};
-
-const noNetworkDocumentLoader = async (url: string) => {
-  throw new Error(`Network lookup is disabled for inbound Undo: ${url}`);
 };
 
 type UndoAnnounceResult = 'deleted' | 'ignored' | null;
@@ -241,7 +233,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   const actorHref = uniqueHref(undo.actorIds);
   const actorUri = actorHref ? new URL(actorHref) : null;
   if (!isHttpUri(actorUri)) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Undo',
       handler: 'undo',
       phase: 'validation',
@@ -252,7 +245,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
 
   const objectHref = uniqueHref(undo.objectIds);
   if (undo.objectIds.length > 0 && !objectHref) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       handler: 'undo',
@@ -263,7 +257,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   }
   const objectUri = objectHref ? new URL(objectHref) : null;
   if (objectUri && !isHttpUri(objectUri)) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       handler: 'undo',
@@ -279,7 +274,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       return;
     }
     if (announceResult === 'ignored') {
-      observeInboundNoop({
+      observeInbound({
+        outcome: 'noop',
         activityType: 'Undo',
         actorOrigin: actorUri.origin,
         handler: 'undo',
@@ -298,7 +294,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri);
   } catch (error) {
     if (isExpectedRemoteActorRejection(error)) {
-      observeInboundExternalFailure({
+      observeInbound({
+        outcome: 'external_failure',
         activityType: 'Undo',
         actorOrigin: actorUri.origin,
         handler: 'undo',
@@ -313,7 +310,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   }
 
   if (!remoteActor || remoteActor.instance.state !== InstanceState.ACTIVE) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       handler: 'undo',
@@ -325,11 +323,14 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   }
 
   const embedded = await undo.getObject({
-    documentLoader: noNetworkDocumentLoader,
+    documentLoader: async (url) => {
+      throw new Error(`Network lookup is disabled for inbound Undo: ${url}`);
+    },
     suppressError: true,
   });
   if (embedded === null && !undo.objectId) {
-    observeInboundExternalFailure({
+    observeInbound({
+      outcome: 'external_failure',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       handler: 'undo',
@@ -342,7 +343,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   if (embedded instanceof Follow) {
     const objectUri = embedded.objectId;
     if (!isHttpUri(objectUri) || uniqueHref(embedded.actorIds) !== actorUri.href) {
-      observeInboundRejected({
+      observeInbound({
+        outcome: 'rejected',
         activityType: 'Undo',
         actorOrigin: actorUri.origin,
         objectOrigin: objectUri?.origin,
@@ -355,7 +357,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
 
     const localRecipient = await resolveInboundLocalRecipient(context, objectUri);
     if (!localRecipient) {
-      observeInboundRejected({
+      observeInbound({
+        outcome: 'rejected',
         activityType: 'Undo',
         actorOrigin: actorUri.origin,
         objectOrigin: objectUri.origin,
@@ -366,23 +369,81 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       return;
     }
 
-    const result = await unfollowProfile({
+    const pair = {
       followeeProfileId: localRecipient.id,
       followerProfileId: remoteActor.profile.id,
-      onPostCommitError: (error) =>
+    };
+    const profileFollow = await db
+      .select({ id: ProfileFollows.id })
+      .from(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, pair.followerProfileId),
+          eq(ProfileFollows.followeeProfileId, pair.followeeProfileId),
+        ),
+      )
+      .limit(1)
+      .then(first);
+
+    if (profileFollow) {
+      const result = await executeProfileFollowRemoval({
+        ...pair,
+        expectedRowId: profileFollow.id,
+        origin: 'ACTIVITYPUB',
+      });
+      if (!result.changed) {
         observeInbound({
+          outcome: 'noop',
           activityType: 'Undo',
           actorOrigin: actorUri.origin,
-          error,
           handler: 'undo',
           objectOrigin: objectUri.origin,
-          outcome: 'internal_failure',
-          phase: 'effect',
-          reasonCode: 'follow_undo_notification_effect_failed',
-        }),
+          phase: 'projection',
+          reasonCode: 'follow_undo_missing_or_repeated',
+        });
+      }
+      return;
+    }
+
+    const pendingRequest = await db
+      .select({ id: ProfileFollowRequests.id })
+      .from(ProfileFollowRequests)
+      .where(
+        and(
+          eq(ProfileFollowRequests.followerProfileId, pair.followerProfileId),
+          eq(ProfileFollowRequests.followeeProfileId, pair.followeeProfileId),
+        ),
+      )
+      .limit(1)
+      .then(first);
+
+    if (!pendingRequest) {
+      observeInbound({
+        outcome: 'noop',
+        activityType: 'Undo',
+        actorOrigin: actorUri.origin,
+        handler: 'undo',
+        objectOrigin: objectUri.origin,
+        phase: 'projection',
+        reasonCode: 'follow_undo_missing_or_repeated',
+      });
+      return;
+    }
+
+    const result = await executeProfileFollowPairTransition({
+      pair,
+      command: {
+        kind: 'CANCEL',
+        expectedRowId: pendingRequest.id,
+        origin: 'ACTIVITYPUB',
+      },
     });
-    if (!result.changed) {
-      observeInboundNoop({
+    if (result.result.commandKind !== 'CANCEL') {
+      throw new Error('Unexpected inbound Undo transition result');
+    }
+    if (!result.result.changed) {
+      observeInbound({
+        outcome: 'noop',
         activityType: 'Undo',
         actorOrigin: actorUri.origin,
         handler: 'undo',
@@ -395,7 +456,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   }
 
   if (embedded !== null && !(embedded instanceof Like) && !(embedded instanceof EmojiReact)) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       objectOrigin: objectUri?.origin,
@@ -412,7 +474,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     ((embedded instanceof Like || embedded instanceof EmojiReact) &&
       uniqueHref(embedded.actorIds) !== actorUri.href)
   ) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       objectOrigin: activityUri?.origin,
@@ -439,7 +502,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       }),
   });
   if (result.reactionId === null) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       objectOrigin: activityUri.origin,

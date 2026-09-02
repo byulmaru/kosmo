@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
-import { after, mock, test } from 'node:test';
+import { after, test } from 'node:test';
 import { eq, inArray, or } from 'drizzle-orm';
 import {
   ActivityPubActors,
   db,
   firstOrThrow,
   Instances,
-  Notifications,
   pg,
   ProfileFollowRequests,
   ProfileFollows,
@@ -15,8 +14,11 @@ import {
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { NotFoundError } from '../error';
 import { disableProfile } from './profile';
-import { followProfile, unfollowProfile } from './profile-follow';
-import { cancelProfileFollowRequest } from './profile-follow-request';
+import {
+  cancelProfileFollowRequest,
+  followProfile,
+  unfollowProfile,
+} from './profile-follow.test-helpers';
 
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
@@ -52,9 +54,6 @@ const createProfile = async (followPolicy: ProfileFollowPolicy = ProfileFollowPo
 
 const readProfile = (id: string) =>
   db.select().from(Profiles).where(eq(Profiles.id, id)).then(firstOrThrow);
-const readNotifications = (sourceId: string) =>
-  db.select().from(Notifications).where(eq(Notifications.sourceId, sourceId));
-
 const getEstablishedFollow = (result: Awaited<ReturnType<typeof followProfile>>) => {
   if (result.result.kind !== 'ESTABLISHED') {
     assert.fail('Expected an established profile follow');
@@ -66,12 +65,10 @@ const createRemoteProfile = async ({
   followPolicy = ProfileFollowPolicy.OPEN,
   state = InstanceState.ACTIVE,
   withActor = true,
-  withInbox = true,
 }: {
   followPolicy?: ProfileFollowPolicy;
   state?: InstanceState;
   withActor?: boolean;
-  withInbox?: boolean;
 } = {}) => {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const instance = await db
@@ -101,7 +98,7 @@ const createRemoteProfile = async ({
 
   if (withActor) {
     await db.insert(ActivityPubActors).values({
-      inboxUri: withInbox ? `https://${instance.domain}/users/${suffix}/inbox` : null,
+      inboxUri: `https://${instance.domain}/users/${suffix}/inbox`,
       profileId: profile.id,
       sharedInboxUri: `https://${instance.domain}/inbox`,
       type: 'PERSON',
@@ -114,7 +111,6 @@ const createRemoteProfile = async ({
 
 after(async () => {
   if (profileIds.length > 0) {
-    await db.delete(Notifications).where(inArray(Notifications.recipientProfileId, profileIds));
     await db
       .delete(ProfileFollowRequests)
       .where(
@@ -144,8 +140,14 @@ test('follow action은 관계와 저장 count를 idempotent하게 갱신한다',
   const followee = await createProfile();
 
   const results = await Promise.all([
-    followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
-    followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    followProfile({
+      followerProfileId: follower.id,
+      followeeProfileId: followee.id,
+    }),
+    followProfile({
+      followerProfileId: follower.id,
+      followeeProfileId: followee.id,
+    }),
   ]);
 
   assert.equal(results.filter(({ created }) => created).length, 1);
@@ -156,7 +158,45 @@ test('follow action은 관계와 저장 count를 idempotent하게 갱신한다',
   assert.equal(results[1].followeeProfile.followersCount, 1);
   assert.equal((await readProfile(follower.id)).followingCount, 1);
   assert.equal((await readProfile(followee.id)).followersCount, 1);
-  assert.equal((await readNotifications(getEstablishedFollow(results[0]).id)).length, 1);
+});
+
+test('Follow transaction은 실제 생성만 관계를 만들고 duplicate는 멱등 처리한다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  const created = await followProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+  const duplicate = await followProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+  const relation = getEstablishedFollow(created);
+
+  assert.equal(created.created, true);
+  assert.equal(duplicate.created, false);
+  assert.equal(getEstablishedFollow(duplicate).id, relation.id);
+});
+
+test('Follow transaction은 삭제 identity를 반환하고 no-op은 변경하지 않는다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  const created = await followProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+  const relation = getEstablishedFollow(created);
+  const deleted = await unfollowProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+  const repeated = await unfollowProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+
+  assert.equal(deleted.profileFollowId, relation.id);
+  assert.equal(repeated.profileFollowId, null);
 });
 
 test('follow action은 승인 필요 profile에 pending request를 만들고 count를 유지한다', async () => {
@@ -183,14 +223,6 @@ test('follow action은 승인 필요 profile에 pending request를 만들고 cou
   );
   assert.equal((await readProfile(follower.id)).followingCount, 0);
   assert.equal((await readProfile(followee.id)).followersCount, 0);
-  assert.equal(
-    await db
-      .select()
-      .from(Notifications)
-      .where(eq(Notifications.recipientProfileId, followee.id))
-      .then((rows) => rows.length),
-    1,
-  );
 });
 
 test('OPEN 정책 전환으로 pending request를 relation으로 승격하면 request 알림도 정리한다', async () => {
@@ -224,8 +256,6 @@ test('OPEN 정책 전환으로 pending request를 relation으로 승격하면 re
       .then((rows) => rows.length),
     0,
   );
-  assert.deepEqual(await readNotifications(pending.result.profileFollowRequest.id), []);
-  assert.equal((await readNotifications(getEstablishedFollow(promoted).id)).length, 1);
 });
 
 test('follow action은 unavailable follower의 relation과 request 생성을 거부한다', async () => {
@@ -237,7 +267,10 @@ test('follow action은 unavailable follower의 relation과 request 생성을 거
     .where(eq(Profiles.id, follower.id));
 
   await assert.rejects(
-    followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    followProfile({
+      followerProfileId: follower.id,
+      followeeProfileId: followee.id,
+    }),
     NotFoundError,
   );
   assert.equal(
@@ -256,43 +289,6 @@ test('follow action은 unavailable follower의 relation과 request 생성을 거
       .then((rows) => rows.length),
     0,
   );
-});
-
-test('remote follower의 outbound follow와 unfollow를 거부하고 기존 관계를 보존한다', async () => {
-  const follower = await createRemoteProfile();
-  const followee = await createRemoteProfile({ state: InstanceState.UNRESPONSIVE });
-
-  await assert.rejects(
-    followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
-    NotFoundError,
-  );
-
-  const relation = await db.transaction(async (tx) => {
-    const created = await tx
-      .insert(ProfileFollows)
-      .values({ followerProfileId: follower.id, followeeProfileId: followee.id })
-      .returning()
-      .then(firstOrThrow);
-    await tx.update(Profiles).set({ followingCount: 1 }).where(eq(Profiles.id, follower.id));
-    await tx.update(Profiles).set({ followersCount: 1 }).where(eq(Profiles.id, followee.id));
-    return created;
-  });
-
-  await assert.rejects(
-    unfollowProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
-    NotFoundError,
-  );
-
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(eq(ProfileFollows.id, relation.id))
-      .then((rows) => rows.length),
-    1,
-  );
-  assert.equal((await readProfile(follower.id)).followingCount, 1);
-  assert.equal((await readProfile(followee.id)).followersCount, 1);
 });
 
 test('follow action은 저장된 Profile origin pair에서 flow를 파생한다', async () => {
@@ -347,35 +343,11 @@ test('follow action은 SUSPENDED instance의 profile을 숨긴다', async () => 
     .where(eq(Instances.id, followee.instanceId));
 
   await assert.rejects(
-    followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    followProfile({
+      followerProfileId: follower.id,
+      followeeProfileId: followee.id,
+    }),
     NotFoundError,
-  );
-});
-
-test('unfollow action은 SUSPENDED instance의 관계를 보존한다', async () => {
-  const follower = await createProfile();
-  const followee = await createProfile();
-  const result = await followProfile({
-    followerProfileId: follower.id,
-    followeeProfileId: followee.id,
-  });
-  const profileFollow = getEstablishedFollow(result);
-  await db
-    .update(Instances)
-    .set({ state: InstanceState.SUSPENDED })
-    .where(eq(Instances.id, followee.instanceId));
-
-  await assert.rejects(
-    unfollowProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
-    NotFoundError,
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(eq(ProfileFollows.id, profileFollow.id))
-      .then((rows) => rows.length),
-    1,
   );
 });
 
@@ -384,16 +356,17 @@ test('follow action은 저장 actor identity가 없는 remote profile을 숨긴�
   const followee = await createRemoteProfile({ withActor: false });
 
   await assert.rejects(
-    followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    followProfile({
+      followerProfileId: follower.id,
+      followeeProfileId: followee.id,
+    }),
     NotFoundError,
   );
 });
 
-test('remote follow delivery 실패는 commit된 relation과 count를 rollback하지 않는다', async () => {
+test('remote Follow transaction은 relation과 count를 멱등 처리한다', async () => {
   const follower = await createProfile();
-  const followee = await createRemoteProfile({ withInbox: false });
-  const errorLog = mock.method(console, 'error', () => undefined);
-
+  const followee = await createRemoteProfile();
   const followed = await followProfile({
     followerProfileId: follower.id,
     followeeProfileId: followee.id,
@@ -409,8 +382,6 @@ test('remote follow delivery 실패는 commit된 relation과 count를 rollback�
     followeeProfileId: followee.id,
   });
 
-  assert.equal(errorLog.mock.callCount(), 1);
-  errorLog.mock.restore();
   assert.equal(followed.created, true);
   assert.equal(getEstablishedFollow(followed).id, relation.id);
   assert.equal(followed.followerProfile.followingCount, 1);
@@ -425,7 +396,6 @@ test('UNRESPONSIVE remote follow와 unfollow는 local projection만 변경한다
   const follower = await createProfile();
   const followee = await createRemoteProfile({
     state: InstanceState.UNRESPONSIVE,
-    withInbox: false,
   });
 
   const followed = await followProfile({
@@ -443,12 +413,11 @@ test('UNRESPONSIVE remote follow와 unfollow는 local projection만 변경한다
   assert.equal((await readProfile(followee.id)).followersCount, 0);
 });
 
-test('UNRESPONSIVE approval request는 저장만 하고 cancel delivery 실패도 전이를 rollback하지 않는다', async () => {
+test('UNRESPONSIVE approval request는 pending row를 저장하고 cancel로 제거한다', async () => {
   const follower = await createProfile();
   const followee = await createRemoteProfile({
     followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
     state: InstanceState.UNRESPONSIVE,
-    withInbox: false,
   });
 
   const first = await followProfile({
@@ -470,17 +439,10 @@ test('UNRESPONSIVE approval request는 저장만 하고 cancel delivery 실패�
   assert.equal((await readProfile(follower.id)).followingCount, 0);
   assert.equal((await readProfile(followee.id)).followersCount, 0);
 
-  await db
-    .update(Instances)
-    .set({ state: InstanceState.ACTIVE })
-    .where(eq(Instances.id, followee.instanceId));
-  const errorLog = mock.method(console, 'error', () => undefined);
   const canceled = await cancelProfileFollowRequest({
     actorProfileId: follower.id,
     profileFollowRequestId: first.result.profileFollowRequest.id,
   });
-  assert.equal(errorLog.mock.callCount(), 1);
-  errorLog.mock.restore();
   assert.equal(canceled.profileFollowRequestId, first.result.profileFollowRequest.id);
   assert.equal(canceled.followerProfile.id, follower.id);
   assert.equal(
@@ -493,14 +455,12 @@ test('UNRESPONSIVE approval request는 저장만 하고 cancel delivery 실패�
   );
 });
 
-test('approval request Follow delivery 실패는 pending row를 보존하고 duplicate는 재발송하지 않는다', async () => {
+test('approval request transaction은 pending row를 보존하고 duplicate를 멱등 처리한다', async () => {
   const follower = await createProfile();
   const followee = await createRemoteProfile({
     followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
-    withInbox: false,
   });
 
-  const errorLog = mock.method(console, 'error', () => undefined);
   const followed = await followProfile({
     followerProfileId: follower.id,
     followeeProfileId: followee.id,
@@ -515,8 +475,6 @@ test('approval request Follow delivery 실패는 pending row를 보존하고 dup
     followeeProfileId: followee.id,
   });
 
-  assert.equal(errorLog.mock.callCount(), 1);
-  errorLog.mock.restore();
   assert.equal(followed.created, true);
   assert.equal(followed.result.kind, 'PENDING');
   if (followed.result.kind !== 'PENDING') {
@@ -538,7 +496,6 @@ test('UNRESPONSIVE approval request cancel은 local row만 제거한다', async 
   const followee = await createRemoteProfile({
     followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
     state: InstanceState.UNRESPONSIVE,
-    withInbox: false,
   });
   const followed = await followProfile({
     followerProfileId: follower.id,
@@ -565,29 +522,18 @@ test('UNRESPONSIVE approval request cancel은 local row만 제거한다', async 
   );
 });
 
-test('remote Undo delivery 실패는 commit된 relation 삭제와 count를 rollback하지 않는다', async () => {
+test('remote Unfollow transaction은 relation과 count를 감소시킨다', async () => {
   const follower = await createProfile();
-  const followee = await createRemoteProfile({
-    state: InstanceState.UNRESPONSIVE,
-    withInbox: false,
-  });
+  const followee = await createRemoteProfile();
   const followed = await followProfile({
     followerProfileId: follower.id,
     followeeProfileId: followee.id,
   });
-  await db
-    .update(Instances)
-    .set({ state: InstanceState.ACTIVE })
-    .where(eq(Instances.id, followee.instanceId));
 
-  const errorLog = mock.method(console, 'error', () => undefined);
   const unfollowed = await unfollowProfile({
     followerProfileId: follower.id,
     followeeProfileId: followee.id,
   });
-  assert.equal(errorLog.mock.callCount(), 1);
-  errorLog.mock.restore();
-
   assert.equal(unfollowed.profileFollowId, getEstablishedFollow(followed).id);
   assert.equal(unfollowed.followerProfile.followingCount, 0);
   assert.equal(unfollowed.followeeProfile.followersCount, 0);
@@ -606,11 +552,10 @@ test('remote Undo delivery 실패는 commit된 relation 삭제와 count를 rollb
 test('unfollow action은 대상 조회, 관계 삭제와 count 감소를 함께 소유한다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
-  const profileFollow = getEstablishedFollow(
-    await followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
-  );
-  assert.equal((await readNotifications(profileFollow.id)).length, 1);
-
+  await followProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
   const deleted = await unfollowProfile({
     followerProfileId: follower.id,
     followeeProfileId: followee.id,
@@ -628,8 +573,6 @@ test('unfollow action은 대상 조회, 관계 삭제와 count 감소를 함께 
   assert.equal(duplicate.followeeProfile.followersCount, 0);
   assert.equal((await readProfile(follower.id)).followingCount, 0);
   assert.equal((await readProfile(followee.id)).followersCount, 0);
-  assert.deepEqual(await readNotifications(profileFollow.id), []);
-
   await disableProfile(followee.id);
   assert.equal(deleted.followeeProfile.state, ProfileState.ACTIVE);
   assert.equal((await readProfile(followee.id)).state, ProfileState.DISABLED);

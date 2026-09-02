@@ -27,6 +27,7 @@ import { profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
 import { profileTagNormalizationParityCases } from '@kosmo/core/validation/profile-tag-parity-fixture';
 import { and, count, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { waitForProfileFollowWorkflows } from './temporal-test-helpers';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
@@ -1999,15 +2000,24 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(await countRows(ProfileFollows), 1);
   });
 
-  test('returns committed GraphQL payloads when post-commit Follow and Undo delivery fails', async () => {
+  test('preserves committed GraphQL payloads and DB state for Follow commands', async () => {
     const auth = await createAuthenticatedSession();
     const openInstance = await createRemoteInstance({ domain: 'delivery-open.remote.example' });
     const openRemote = await createProfile({
       handle: 'delivery-open',
       instanceId: openInstance.id,
     });
-    await createRemoteActor(openRemote.id, openInstance.domain, { withInbox: false });
-    const errorLog = mock.method(console, 'error', () => undefined);
+    await createRemoteActor(openRemote.id, openInstance.domain);
+    const requests: Request[] = [];
+    const fetchMock = mock.method(
+      globalThis,
+      'fetch',
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const request = input instanceof Request ? input : new Request(input, init);
+        requests.push(request.clone());
+        return new Response(null, { status: 202 });
+      },
+    );
 
     try {
       const followed = await requestGraphQL<{
@@ -2032,7 +2042,6 @@ describe('GraphQL remote profile boundary', () => {
       assert.equal(followed.data?.followProfile.followerProfile.followingCount, 1);
       assert.equal(followed.data?.followProfile.followeeProfile.followersCount, 1);
       assert.equal(await countRows(ProfileFollows), 1);
-
       const unfollowed = await requestGraphQL<{
         unfollowProfile: {
           followeeProfile: { followersCount: number };
@@ -2055,7 +2064,6 @@ describe('GraphQL remote profile boundary', () => {
       assert.equal(unfollowed.data?.unfollowProfile.followerProfile.followingCount, 0);
       assert.equal(unfollowed.data?.unfollowProfile.followeeProfile.followersCount, 0);
       assert.equal(await countRows(ProfileFollows), 0);
-
       const approvalInstance = await createRemoteInstance({
         domain: 'delivery-approval.remote.example',
       });
@@ -2064,7 +2072,7 @@ describe('GraphQL remote profile boundary', () => {
         handle: 'delivery-approval',
         instanceId: approvalInstance.id,
       });
-      await createRemoteActor(approvalRemote.id, approvalInstance.domain, { withInbox: false });
+      await createRemoteActor(approvalRemote.id, approvalInstance.domain);
 
       const requested = await requestGraphQL<{
         followProfile: {
@@ -2114,19 +2122,17 @@ describe('GraphQL remote profile boundary', () => {
         profileFollowRequestId: requestId,
       });
       assert.equal(await countRows(ProfileFollowRequests), 0);
-      assert.equal(errorLog.mock.callCount(), 4);
+      assert.equal(requests.length, 0);
     } finally {
-      errorLog.mock.restore();
+      fetchMock.mock.restore();
     }
   });
 
-  test('delivers signed Follow and Undo activities for an active remote profile', async () => {
+  test('commits Follow and Undo mutations without direct Fedify delivery', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
     const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
     await createRemoteActor(remote.id, remoteInstance.domain);
-    const remoteActorUri = `https://${remoteInstance.domain}/users/remote`;
-    const remoteInboxUri = `https://${remoteInstance.domain}/users/remote/inbox`;
     const requests: Request[] = [];
     const fetchMock = mock.method(
       globalThis,
@@ -2138,7 +2144,6 @@ describe('GraphQL remote profile boundary', () => {
       },
     );
 
-    let profileFollow: typeof ProfileFollows.$inferSelect;
     try {
       const followed = await requestGraphQL(
         `mutation FollowActiveRemote($id: ID!) {
@@ -2151,17 +2156,7 @@ describe('GraphQL remote profile boundary', () => {
       );
       assertNoGraphQLErrors(followed);
 
-      profileFollow = await db
-        .select()
-        .from(ProfileFollows)
-        .where(
-          and(
-            eq(ProfileFollows.followerProfileId, auth.profile.id),
-            eq(ProfileFollows.followeeProfileId, remote.id),
-          ),
-        )
-        .limit(1)
-        .then(firstOrThrow);
+      assert.equal(await countRows(ProfileFollows), 1);
 
       const unfollowed = await requestGraphQL(
         `mutation UnfollowActiveRemote($id: ID!) {
@@ -2171,43 +2166,15 @@ describe('GraphQL remote profile boundary', () => {
         auth.token,
       );
       assertNoGraphQLErrors(unfollowed);
+      assert.equal(await countRows(ProfileFollows), 0);
     } finally {
       fetchMock.mock.restore();
     }
 
-    assert.equal(requests.length, 2);
-    for (const request of requests) {
-      assert.equal(request.url, remoteInboxUri);
-      assert.equal(request.method, 'POST');
-      assert.equal(request.headers.get('content-type'), 'application/activity+json');
-      assert.ok(request.headers.has('signature'));
-      assert.ok(request.headers.has('signature-input'));
-    }
-
-    const [follow, undo] = await Promise.all(
-      requests.map(async (request) => (await request.json()) as Record<string, unknown>),
-    );
-    const actorUri = `${publicOrigin}/ap/actor/${auth.profile.id}`;
-    const followUri = `${publicOrigin}/ap/follow/${profileFollow.id}`;
-
-    assert.equal(follow?.type, 'Follow');
-    assert.equal(follow?.id, followUri);
-    assert.equal(follow?.actor, actorUri);
-    assert.equal(follow?.object, remoteActorUri);
-    assert.equal(follow?.published, profileFollow.createdAt.toString());
-
-    assert.equal(undo?.type, 'Undo');
-    assert.equal(undo?.actor, actorUri);
-    assert.ok(typeof undo?.id === 'string');
-    assert.deepEqual(undo?.object, {
-      actor: actorUri,
-      id: followUri,
-      object: remoteActorUri,
-      type: 'Follow',
-    });
+    assert.equal(requests.length, 0);
   });
 
-  test('creates and cancels an approval-required remote request with one Follow and Undo', async () => {
+  test('commits Follow Request mutations without direct Fedify delivery', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
     const remote = await createProfile({
@@ -2267,45 +2234,21 @@ describe('GraphQL remote profile boundary', () => {
         .limit(1)
         .then(firstOrThrow);
 
-      const cancel = () =>
-        requestGraphQL(
-          `mutation CancelApprovalRequiredRemote($id: ID!) {
-            cancelProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
-          }`,
-          { id: globalId('ProfileFollowRequest', profileFollowRequest.id) },
-          auth.token,
-        );
-      const canceled = await Promise.all([cancel(), cancel()]);
-      assert.equal(canceled.filter(({ errors }) => !errors).length, 1);
-      assert.equal(canceled.filter(({ errors }) => errors).length, 1);
+      const canceled = await requestGraphQL(
+        `mutation CancelApprovalRequiredRemote($id: ID!) {
+          cancelProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+        }`,
+        { id: globalId('ProfileFollowRequest', profileFollowRequest.id) },
+        auth.token,
+      );
+      assertNoGraphQLErrors(canceled);
     } finally {
       fetchMock.mock.restore();
     }
 
     assert.equal(await countRows(ProfileFollows), 0);
     assert.equal(await countRows(ProfileFollowRequests), 0);
-    assert.equal(requests.length, 2);
-
-    const [follow, undo] = await Promise.all(
-      requests.map(async (request) => (await request.json()) as Record<string, unknown>),
-    );
-    const actorUri = `${publicOrigin}/ap/actor/${auth.profile.id}`;
-    const remoteActorUri = `https://${remoteInstance.domain}/users/remote`;
-    const followUri = `${publicOrigin}/ap/follow/${profileFollowRequest.id}`;
-    assert.equal(follow?.type, 'Follow');
-    assert.equal(follow?.actor, actorUri);
-    assert.equal(follow?.id, followUri);
-    assert.equal(follow?.object, remoteActorUri);
-    assert.equal(follow?.published, profileFollowRequest.createdAt.toString());
-    assert.equal(follow?.to, remoteActorUri);
-    assert.equal(undo?.type, 'Undo');
-    assert.equal(undo?.actor, actorUri);
-    assert.deepEqual(undo?.object, {
-      actor: actorUri,
-      id: followUri,
-      object: remoteActorUri,
-      type: 'Follow',
-    });
+    assert.equal(requests.length, 0);
   });
 
   test('rejects following a suspended remote profile without creating a relation', async () => {
@@ -2430,7 +2373,7 @@ describe('GraphQL remote profile boundary', () => {
       { id: requestId },
       followerAuth.token,
     );
-    assertGraphQLErrorCode(unauthorizedApproval, 'PERMISSION_DENIED');
+    assertGraphQLErrorCode(unauthorizedApproval, 'NOT_FOUND');
 
     const approved = await requestGraphQL<{
       approveProfileFollowRequest: {
@@ -2482,7 +2425,7 @@ describe('GraphQL remote profile boundary', () => {
       { id: rejectedRequestId },
       followerAuth.token,
     );
-    assertGraphQLErrorCode(unauthorizedRejection, 'PERMISSION_DENIED');
+    assertGraphQLErrorCode(unauthorizedRejection, 'NOT_FOUND');
     await db
       .update(Profiles)
       .set({ state: ProfileState.DISABLED })
@@ -2517,6 +2460,13 @@ describe('GraphQL remote profile boundary', () => {
     );
     assertGraphQLErrorCode(rejectedAgain, 'NOT_FOUND');
 
+    // The terminal Update returns before its effects finish.  This test starts
+    // a distinct request generation for the same pair, so wait for the prior
+    // pair run to close instead of exercising the documented retry window.
+    await temporalClient.workflow
+      .getHandle(`profile-follow-pair:${followerAuth.profile.id}:${followeeAuth.profile.id}`)
+      .result();
+
     await db
       .update(Profiles)
       .set({ state: ProfileState.ACTIVE })
@@ -2531,6 +2481,16 @@ describe('GraphQL remote profile boundary', () => {
       .returning()
       .then(firstOrThrow);
     const cancelledRequestId = globalId('ProfileFollowRequest', cancelledRequest.id);
+    const unauthorizedCancellation = await requestGraphQL(
+      `mutation UnauthorizedCancelFollowRequest($id: ID!) {
+        cancelProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+      }`,
+      { id: cancelledRequestId },
+      followeeAuth.token,
+    );
+    assertGraphQLErrorCode(unauthorizedCancellation, 'NOT_FOUND');
+    assert.equal(await countRows(ProfileFollowRequests), 1);
+
     await db
       .update(Profiles)
       .set({ state: ProfileState.DISABLED })
@@ -4377,6 +4337,7 @@ const readProfileTags = async (profileId: string) =>
     .then((rows) => rows.map(({ name }) => name).sort());
 
 const resetFixtures = async () => {
+  await waitForProfileFollowWorkflows();
   await db.update(Posts).set({ currentContentId: null });
   await db.delete(Sessions);
   await db.delete(PostContents);

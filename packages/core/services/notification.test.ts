@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { after, mock, test } from 'node:test';
-import { eq, inArray, or, sql } from 'drizzle-orm';
+import { after, test } from 'node:test';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
@@ -26,15 +26,13 @@ import { postContentDocumentFromText } from '../post-content/server';
 import {
   createFollowNotification,
   createFollowRequestNotification,
-  createFollowRequestNotificationPostCommit,
   createReactionNotification,
   createRepostNotification,
-  deleteFollowRequestNotificationPostCommit,
+  deleteFollowRequestNotification,
   deleteNotificationBySource,
-  setNotificationEffectErrorReporter,
 } from './notification';
 import { createPost, repostPost } from './post';
-import { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow';
+import { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow.test-helpers';
 
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
@@ -133,29 +131,7 @@ const waitForNotificationInsertBlock = async (): Promise<void> =>
     'Notification insert did not reach the advisory lock barrier',
   );
 
-type NotificationSourceTable = 'profile_follow' | 'profile_follow_request';
-
-const waitForSourceDeleteBlock = async (table: NotificationSourceTable): Promise<void> => {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const [activity] = await pg<{ waiting: number }[]>`
-      SELECT count(*)::integer AS waiting
-      FROM pg_stat_activity
-      WHERE pid <> pg_backend_pid()
-        AND wait_event_type = 'Lock'
-        AND wait_event IN ('transactionid', 'tuple')
-        AND query ILIKE ${`%delete from "${table}"%`}
-    `;
-    if ((activity?.waiting ?? 0) > 0) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-
-  assert.fail(`Source delete did not reach the ${table} row lock barrier`);
-};
-
 const runNotificationDeleteRace = async (
-  sourceTable: NotificationSourceTable,
   createNotification: () => Promise<void>,
   deleteSource: () => Promise<unknown>,
 ): Promise<void> => {
@@ -185,7 +161,18 @@ const runNotificationDeleteRace = async (
     notification = createNotification();
     await waitForNotificationInsertBlock();
     deletion = deleteSource();
-    await waitForSourceDeleteBlock(sourceTable);
+    const deletionCompleted = await Promise.race([
+      deletion.then(
+        () => true,
+        () => false,
+      ),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1_000)),
+    ]);
+    assert.equal(
+      deletionCompleted,
+      true,
+      'Source delete unexpectedly waited for Notification insert',
+    );
     await lockSession`SELECT pg_advisory_unlock(${notificationInsertLock.classId}, ${notificationInsertLock.objectId})`;
     lockHeld = false;
     await Promise.all([notification, deletion]);
@@ -300,6 +287,7 @@ test('Follow 알림은 source에서 Local Recipient와 Related Profile을 파생
       followeeProfileId: followee.id,
     }),
   );
+  await createFollowNotification(profileFollow.id);
 
   const [notification] = await readNotifications(profileFollow.id);
   assert.ok(notification);
@@ -320,6 +308,7 @@ test('Follow 알림은 materialize된 Remote Follower도 같은 mapping으로 �
       followeeProfileId: followee.id,
     }),
   );
+  await createFollowNotification(profileFollow.id);
 
   const [notification] = await readNotifications(profileFollow.id);
   assert.equal(notification?.recipientProfileId, followee.id);
@@ -352,7 +341,10 @@ test('Follow 알림은 존재하지 않거나 삭제된 source를 post-commit no
       followeeProfileId: followee.id,
     }),
   );
-  await unfollowProfile({ followerProfileId: follower.id, followeeProfileId: followee.id });
+  await unfollowProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
 
   await assert.doesNotReject(createFollowNotification(profileFollow.id));
   assert.deepEqual(await readNotifications(profileFollow.id), []);
@@ -421,7 +413,7 @@ test('Follow Request 알림은 Remote Recipient에 투영하지 않는다', asyn
   assert.deepEqual(await readNotifications(request.id), []);
 });
 
-test('Follow Notification source lock prevents orphan rows across terminal source deletion', async () => {
+test('Follow Notification create/delete race does not lock the source row', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
   const profileFollow = getEstablishedFollow(
@@ -433,11 +425,26 @@ test('Follow Notification source lock prevents orphan rows across terminal sourc
   await deleteNotificationBySource(NotificationKind.FOLLOW, profileFollow.id);
 
   await runNotificationDeleteRace(
-    'profile_follow',
     () => createFollowNotification(profileFollow.id),
-    () => unfollowProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    () =>
+      unfollowProfile({
+        followerProfileId: follower.id,
+        followeeProfileId: followee.id,
+      }),
   );
-  assert.deepEqual(await readNotifications(profileFollow.id), []);
+  assert.deepEqual(
+    await db
+      .select({ id: Notifications.id })
+      .from(Notifications)
+      .innerJoin(ProfileFollows, eq(ProfileFollows.id, Notifications.sourceId))
+      .where(
+        and(
+          eq(Notifications.kind, NotificationKind.FOLLOW),
+          eq(Notifications.sourceId, profileFollow.id),
+        ),
+      ),
+    [],
+  );
 
   const request = await db
     .insert(ProfileFollowRequests)
@@ -445,7 +452,6 @@ test('Follow Notification source lock prevents orphan rows across terminal sourc
     .returning()
     .then(firstOrThrow);
   await runNotificationDeleteRace(
-    'profile_follow_request',
     () => createFollowRequestNotification(request.id),
     () =>
       removeInboundFollow({
@@ -454,7 +460,19 @@ test('Follow Notification source lock prevents orphan rows across terminal sourc
         followerProfileId: follower.id,
       }),
   );
-  assert.deepEqual(await readNotifications(request.id), []);
+  assert.deepEqual(
+    await db
+      .select({ id: Notifications.id })
+      .from(Notifications)
+      .innerJoin(ProfileFollowRequests, eq(ProfileFollowRequests.id, Notifications.sourceId))
+      .where(
+        and(
+          eq(Notifications.kind, NotificationKind.FOLLOW_REQUEST),
+          eq(Notifications.sourceId, request.id),
+        ),
+      ),
+    [],
+  );
 });
 
 test('Reaction Notification source row lock 없이 source 삭제와 경합한다', async () => {
@@ -474,7 +492,7 @@ test('Reaction Notification source row lock 없이 source 삭제와 경합한다
   );
 });
 
-test('Follow Request 알림 create 실패는 source lifecycle과 최소 context 보고를 분리한다', async () => {
+test('Follow Request 알림 create 실패는 Activity retry를 위해 호출자에게 전파된다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
   const request = await db
@@ -482,19 +500,15 @@ test('Follow Request 알림 create 실패는 source lifecycle과 최소 context 
     .values({ followerProfileId: follower.id, followeeProfileId: followee.id })
     .returning()
     .then(firstOrThrow);
-  const reporter = mock.fn();
-  const restoreReporter = setNotificationEffectErrorReporter(reporter);
-
   await db.execute(
     sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_follow_request_create_failure CHECK (false) NOT VALID`,
   );
   try {
-    await createFollowRequestNotificationPostCommit(request.id);
+    await assert.rejects(createFollowRequestNotification(request.id));
   } finally {
     await db.execute(
       sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_follow_request_create_failure`,
     );
-    restoreReporter();
   }
 
   assert.equal(
@@ -502,15 +516,9 @@ test('Follow Request 알림 create 실패는 source lifecycle과 최소 context 
       .length,
     1,
   );
-  assert.equal(reporter.mock.calls.length, 1);
-  assert.deepEqual(reporter.mock.calls[0]?.arguments[1], {
-    notificationKind: NotificationKind.FOLLOW_REQUEST,
-    operation: 'create',
-    sourceId: request.id,
-  });
 });
 
-test('Follow Request 알림 delete 실패는 source lifecycle과 최소 context 보고를 분리한다', async () => {
+test('Follow Request 알림 delete 실패는 Activity retry를 위해 호출자에게 전파된다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
   const request = await db
@@ -524,9 +532,6 @@ test('Follow Request 알림 delete 실패는 source lifecycle과 최소 context 
     recipientProfileId: followee.id,
     sourceId: request.id,
   });
-  const reporter = mock.fn();
-  const restoreReporter = setNotificationEffectErrorReporter(reporter);
-
   await db.execute(sql`
     CREATE FUNCTION fail_follow_request_notification_delete() RETURNS trigger
     LANGUAGE plpgsql AS $$
@@ -541,22 +546,15 @@ test('Follow Request 알림 delete 실패는 source lifecycle과 최소 context 
     FOR EACH ROW EXECUTE FUNCTION fail_follow_request_notification_delete()
   `);
   try {
-    await deleteFollowRequestNotificationPostCommit(request.id);
+    await assert.rejects(deleteFollowRequestNotification(request.id));
   } finally {
     await db.execute(
       sql`DROP TRIGGER notification_follow_request_delete_failure ON ${Notifications}`,
     );
     await db.execute(sql`DROP FUNCTION fail_follow_request_notification_delete()`);
-    restoreReporter();
   }
 
   assert.equal((await readNotifications(request.id)).length, 1);
-  assert.equal(reporter.mock.calls.length, 1);
-  assert.deepEqual(reporter.mock.calls[0]?.arguments[1], {
-    notificationKind: NotificationKind.FOLLOW_REQUEST,
-    operation: 'delete',
-    sourceId: request.id,
-  });
 });
 
 test('Unfollow 뒤 Re-follow는 새 source ID로 새 알림을 저장한다', async () => {
@@ -580,6 +578,7 @@ test('Unfollow 뒤 Re-follow는 새 source ID로 새 알림을 저장한다', as
       followeeProfileId: followee.id,
     }),
   );
+  await createFollowNotification(secondFollow.id);
   assert.notEqual(secondFollow.id, firstFollow.id);
   assert.deepEqual(await readNotifications(firstFollow.id), []);
   assert.equal((await readNotifications(secondFollow.id)).length, 1);

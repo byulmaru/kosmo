@@ -1,4 +1,3 @@
-import { db } from '@kosmo/core/db';
 import { ConflictError } from '@kosmo/core/error';
 import { followProfile } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
@@ -31,13 +30,10 @@ builder.mutationField('followProfile', (t) =>
       id: t.input.globalID({ for: Profile }),
     },
     resolve: async (_, { input }, ctx) => {
-      const result = await followProfile(
-        {
-          followerProfileId: ctx.session.profileId,
-          followeeProfileId: input.id.id,
-        },
-        db,
-      ).catch((error: unknown) => {
+      const result = await followProfile({
+        followerProfileId: ctx.session.profileId,
+        followeeProfileId: input.id.id,
+      }).catch((error: unknown) => {
         if (error instanceof ConflictError) {
           throw new ConflictError({ message: error.message, field: 'id' });
         }

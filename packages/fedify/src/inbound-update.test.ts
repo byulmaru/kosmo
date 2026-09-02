@@ -10,12 +10,12 @@ import {
   ProfileFollowPolicy,
   ProfileMediaKind,
 } from '@kosmo/core/enums';
+import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
 import { and, eq, inArray } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type * as CoreServices from '@kosmo/core/services';
 import type { handleInboundAccept as HandleInboundAccept } from './inbound-accept';
 import type { handleInboundUpdate as HandleInboundUpdate } from './inbound-update';
 
@@ -36,7 +36,6 @@ let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
-let followProfile: typeof CoreServices.followProfile;
 let handleInboundAccept: typeof HandleInboundAccept;
 let handleInboundUpdate: typeof HandleInboundUpdate;
 let localInstanceId: string;
@@ -59,7 +58,6 @@ describe('inbound actor Update', () => {
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
-    ({ followProfile } = await import('@kosmo/core/services'));
     ({ handleInboundAccept } = await import('./inbound-accept'));
     ({ handleInboundUpdate } = await import('./inbound-update'));
     const { localInstance } = await seedDatabase({ publicOrigin });
@@ -276,10 +274,17 @@ describe('inbound actor Update', () => {
     });
 
     mock.method(console, 'error', () => undefined);
-    const followed = await followProfile({
-      followerProfileId: pendingLocal.id,
-      followeeProfileId: remote.profile.id,
+    const followed = await executeProfileFollowPairTransition({
+      pair: { followerProfileId: pendingLocal.id, followeeProfileId: remote.profile.id },
+      command: {
+        kind: 'FOLLOW',
+        origin: 'LOCAL',
+      },
     });
+    assert.equal(followed.result.commandKind, 'FOLLOW');
+    if (followed.result.commandKind !== 'FOLLOW') {
+      assert.fail('Expected Follow transition');
+    }
     assert.equal(followed.result.kind, 'PENDING');
     assert.equal(await countPair(ProfileFollows, pendingLocal.id, remote.profile.id), 0);
     assert.equal(await countPair(ProfileFollowRequests, pendingLocal.id, remote.profile.id), 1);
@@ -291,7 +296,7 @@ describe('inbound actor Update', () => {
     if (followed.result.kind !== 'PENDING') {
       assert.fail('Expected pending follow request');
     }
-    const request = followed.result.profileFollowRequest;
+    const request = followed.profileFollowRequest!;
     const follow = new Follow({
       actor: new URL(`/ap/actor/${pendingLocal.id}`, publicOrigin),
       id: new URL(`/ap/follow/${request.id}`, publicOrigin),
@@ -325,11 +330,18 @@ describe('inbound actor Update', () => {
     );
 
     mock.method(console, 'error', () => undefined);
-    const followed = await followProfile({
-      followerProfileId: local.id,
-      followeeProfileId: remote.profile.id,
+    const followed = await executeProfileFollowPairTransition({
+      pair: { followerProfileId: local.id, followeeProfileId: remote.profile.id },
+      command: {
+        kind: 'FOLLOW',
+        origin: 'LOCAL',
+      },
     });
 
+    assert.equal(followed.result.commandKind, 'FOLLOW');
+    if (followed.result.commandKind !== 'FOLLOW') {
+      assert.fail('Expected Follow transition');
+    }
     assert.equal(followed.result.kind, 'ESTABLISHED');
     assert.equal(await countPair(ProfileFollowRequests, local.id, remote.profile.id), 0);
     assert.equal(await countPair(ProfileFollows, local.id, remote.profile.id), 1);

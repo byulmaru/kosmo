@@ -20,7 +20,7 @@ import {
   SessionState,
 } from '../enums';
 import { disableProfile } from './profile';
-import { followProfile } from './profile-follow';
+import { followProfile } from './profile-follow.test-helpers';
 
 after(async () => pg.end());
 

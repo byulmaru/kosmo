@@ -39,6 +39,9 @@ Pending 상태를 저장하며, 그 pair의 lifecycle orchestration은 하나의
 생성하고, 이전 pair Workflow가 terminal이 된 뒤 같은 결정적 Workflow ID로 새 Run을 시작한다. 원격 요청의 승인과
 거절은 같은 저장 생명주기를 적용한 뒤 ActivityPub Follow 경계에 delivery를 위임한다.
 
+승인·거절·취소의 행동 주체가 해당 역할의 Profile이 아니면 Follow Request가 존재하지 않는 경우와 구분하지 않고
+not found로 처리한다. 이 transition은 비참여자나 반대 역할의 Profile에게 Request 존재 여부를 노출하지 않는다.
+
 Follow Request 생성은 caller 검증 뒤 `profile-follow-pair:{followerProfileId}:{followeeProfileId}` Workflow에
 `FOLLOW` Update-with-Start로 admission한다. transaction Activity가 Approval Required policy와 원자적 저장을
 적용하며, Update handler는 Request commit 결과를 effects보다 먼저 반환한다. Request Notification과 적용 가능한
@@ -56,6 +59,8 @@ domain row ID는 transaction 전에 Workflow history에 배정하고 exact ID로
 현재 Request/Follow candidate/expected row와 serializable source identity로 이미 commit된
 결과를 재구성한다. Temporal Update ID는 RPC deduplication용이며 Follow Request의 domain identity가 아니다. 동일 pair의
 실행 중 lifecycle에는 `USE_EXISTING`, terminal lifecycle 뒤 새 요청에는 `ALLOW_DUPLICATE`를 사용한다.
+Initial `FOLLOW`는 실행 중인 run의 중복 admission을 합치지만, PENDING을 유지한 terminal no-op 뒤에는 participant
+복구 후 같은 exact-row command를 다시 실행할 수 있도록 별도 호출이 새 transport Update ID를 사용한다.
 
 ActivityPub inbound Follow의 actor/object/recipient 검증과 직접 Accept delivery는 Fedify handler에 남긴다. pair
 Workflow effects는 ActivityPub-origin event를 다시 outbound Follow로 echo하지 않는다.

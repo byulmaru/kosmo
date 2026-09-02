@@ -1,6 +1,6 @@
 import { db, Profiles } from '@kosmo/core/db';
 import { ProfileFollowPolicy } from '@kosmo/core/enums';
-import { followProfile } from '@kosmo/core/services';
+import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
 import { eq } from 'drizzle-orm';
 import {
   createE2EAccountProfile,
@@ -480,16 +480,28 @@ test('팔로워 요청 route는 navigation 진입 뒤 selected Profile별 승인
     .set({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED })
     .where(eq(Profiles.id, recipient.profile!.id));
 
-  const requestA = await followProfile({
-    followeeProfileId: recipient.profile!.id,
-    followerProfileId: followerA.profile!.id,
-    ...({ origin: 'LOCAL' } as const),
+  const requestA = await executeProfileFollowPairTransition({
+    pair: {
+      followeeProfileId: recipient.profile!.id,
+      followerProfileId: followerA.profile!.id,
+    },
+    command: {
+      kind: 'FOLLOW',
+      origin: 'LOCAL',
+    },
   });
-  const requestB = await followProfile({
-    followeeProfileId: recipientB.id,
-    followerProfileId: followerB.profile!.id,
-    ...({ origin: 'LOCAL' } as const),
+  const requestB = await executeProfileFollowPairTransition({
+    pair: { followeeProfileId: recipientB.id, followerProfileId: followerB.profile!.id },
+    command: {
+      kind: 'FOLLOW',
+      origin: 'LOCAL',
+    },
   });
+  expect(requestA.result.commandKind).toBe('FOLLOW');
+  expect(requestB.result.commandKind).toBe('FOLLOW');
+  if (requestA.result.commandKind !== 'FOLLOW' || requestB.result.commandKind !== 'FOLLOW') {
+    throw new Error('Expected Follow transitions');
+  }
   expect(requestA.result.kind).toBe('PENDING');
   expect(requestB.result.kind).toBe('PENDING');
 
