@@ -21,7 +21,7 @@
 
 ### Requirement: PostHog 표준 Web SDK 동작
 
-**Authority / Provenance:** `PROD-819`, `PROD-820` — `PROD-820` / PR #685가 승인된 shared spec을 소유하고 `PROD-819` / PR #653가 Web runtime consumer로 동작하는 경계를 따른다. Kosmo Web은 `defaults: '2026-05-30'`을 사용하고 PostHog 표준 pageview·pageleave·autocapture, URL/referrer/session metadata, persistence와 remote config를 유지해야 한다(MUST). 앱 코드가 manual pageview, route normalizer, runtime event allowlist, property denylist 또는 범용 `before_send` sanitizer로 이 동작을 대체하거나 차단하지 않아야 한다(MUST NOT). Native masking이 놓치는 referrer URL의 `q`·기본 click ID와 파생 `ph_keyword` 계열만 좁은 공개 `before_send` 보완 대상으로 허용한다.
+**Authority / Provenance:** `PROD-819`, `PROD-820` — `PROD-820` / PR #685가 승인된 shared spec을 소유하고 `PROD-819` / PR #653가 Web runtime consumer로 동작하는 경계를 따른다. Kosmo Web은 `defaults: '2026-05-30'`을 사용하고 PostHog 표준 pageview·pageleave·autocapture, URL/referrer/session metadata, persistence와 remote config를 유지해야 한다(MUST). 앱 코드가 manual pageview, route normalizer, runtime event allowlist, property denylist 또는 `before_send` sanitizer로 이 동작을 대체하거나 차단하지 않아야 한다(MUST NOT).
 
 #### Scenario: Web client가 초기화된다
 
@@ -39,36 +39,36 @@
 
 - **WHEN** PostHog SDK가 `$current_url`, `$pathname`, referrer, session-entry 또는 protocol metadata를 event에 추가한다
 - **THEN** adapter는 해당 metadata를 runtime filter로 제거하거나 projection하지 않는다
-- **AND** URL·referrer·session metadata 필드 자체는 유지하되 Search query와 개인 식별에 쓰일 수 있는 기본 campaign click ID의 masking은 별도 standard event payload privacy 계약을 따른다
+- **AND** Search `q`, 기본 campaign click ID와 referrer 파생 검색어를 포함한 URL·referrer·session metadata를 현재 수집 계약에 따라 원문으로 유지한다
 
 #### Scenario: Cloud remote config가 필요하다
 
 - **WHEN** feature flag, autocapture, performance, heatmap, console 또는 Session Replay 설정을 조회한다
 - **THEN** SDK의 remote config와 필요한 external dependency loading이 차단되지 않는다
 
-### Requirement: standard event payload privacy
+### Requirement: standard event 검색·캠페인 metadata 수집
 
-**Authority / Provenance:** [Linear `PROD-819`](https://linear.app/byulmaru/issue/PROD-819)와 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-08-31 마스킹 정책 승인` — 사용자 정혜주(HJSmiley)가 “URL·referrer의 검색어 `q`와 광고 click ID는 가리고, `utm_*`는 보존하는 현재 정책을 유지·승인하시겠어요?”에 “마스킹 정책 승인”으로 답했다. `2026-08-30` 구현 기록은 독립 authority가 아니다. Kosmo Web은 PostHog standard event payload의 URL·session metadata를 유지하되 Search query `q`를 SDK native personal-data masking으로 마스킹해야 한다(MUST). `mask_personal_data_properties: true`와 `custom_personal_data_properties: ['q']`를 사용해야 하며(MUST), SDK가 기본으로 마스킹하는 광고 click ID 손실은 수용한다(MUST). `utm_*` attribution parameter는 유지해야 한다(MUST). Native masking이 놓치는 referrer URL의 `q`·기본 click ID와 파생 `ph_keyword`·`$initial_ph_keyword`·`$session_entry_ph_keyword`만 공개 `before_send` hook으로 좁게 보완할 수 있으며, 범용 sanitizer 또는 표준 metadata 전면 필터는 금지한다(MUST NOT). 이 승인으로 `ph-mask ph-no-capture` Replay marker와 공개 `get_property('$user_id')`·`get_distinct_id()` identity API는 변경하지 않는다.
+**Authority / Provenance:** [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정` 댓글(`59d34cd1-96b2-446f-8a8d-3a48277f285a`) — 사용자 정혜주(HJSmiley)가 2026-08-31 마스킹 승인을 대체하고 표준 검색·캠페인 metadata 수집을 승인했다. Kosmo Web은 `mask_personal_data_properties: false`를 명시해야 하며(MUST), `custom_personal_data_properties`와 query·click metadata를 선택적으로 바꾸는 `before_send` hook을 두지 않아야 한다(MUST NOT). Search `q`, 기본 광고 click ID, referrer에서 파생된 `ph_keyword`·`$initial_ph_keyword`·`$session_entry_ph_keyword`와 `utm_*` attribution parameter는 PostHog standard event metadata에 원문으로 유지해야 한다(MUST). 앱 소유 custom event에는 검색어 원문을 새 property로 추가하지 않아야 한다(MUST NOT). 이 결정으로 `ph-mask ph-no-capture` Replay marker와 공개 `get_property('$user_id')`·`get_distinct_id()` identity API는 변경하지 않는다.
 
-#### Scenario: Search query가 current와 session URL에서 마스킹된다
+#### Scenario: Search query와 click ID가 current와 session URL에 유지된다
 
-- **WHEN** 사용자가 `?q=private-marker&utm_source=feed&gclid=click-marker` URL로 진입하거나 history navigation을 수행한다
-- **THEN** PostHog standard event payload의 current/session URL에서 `q=private-marker`가 노출되지 않는다
-- **AND** SDK 기본 masking 대상인 `gclid` 같은 광고 click ID도 노출되지 않는다
+- **WHEN** 사용자가 `?q=handle-marker&utm_source=feed&gclid=click-marker` URL로 진입하거나 history navigation을 수행한다
+- **THEN** PostHog standard event payload의 current/session URL에 `q=handle-marker`가 유지된다
+- **AND** `gclid=click-marker` 같은 기본 광고 click ID도 유지된다
 - **AND** `utm_source=feed` 같은 `utm_*` attribution parameter는 유지된다
 
-#### Scenario: referrer의 개인정보 query와 파생 검색어만 좁게 보완된다
+#### Scenario: referrer query와 파생 검색어가 유지된다
 
-- **WHEN** 검색엔진 referrer URL에 `q=private-marker`, 기본 click ID와 `utm_source=feed`가 포함되어 standard event metadata로 전달된다
-- **THEN** 공개 `before_send` hook은 referrer URL의 `q`와 기본 click ID를 마스킹한다
-- **AND** referrer 검색어에서 파생된 `ph_keyword` 계열도 마스킹한다
+- **WHEN** 검색엔진 referrer URL에 `q=handle-marker`, 기본 click ID와 `utm_source=feed`가 포함되어 standard event metadata로 전달된다
+- **THEN** referrer URL의 `q`와 기본 click ID가 원문으로 유지된다
+- **AND** referrer 검색어에서 파생된 `ph_keyword` 계열도 원문으로 유지된다
 - **AND** `utm_source=feed`는 유지한다
-- **AND** event를 버리거나 URL·referrer·session metadata 필드 전체를 제거하지 않는다
+- **AND** adapter는 해당 metadata를 바꾸는 `before_send` hook을 적용하지 않는다
 
 #### Scenario: standard payload와 Replay privacy를 구분한다
 
 - **WHEN** standard event payload와 Session Replay가 같은 화면에서 수집된다
-- **THEN** event payload는 native URL parameter masking 계약을 적용한다
+- **THEN** event payload는 검색·캠페인 metadata 원문 수집 계약을 적용한다
 - **AND** Replay는 Cloud privacy 설정과 DOM marker 계약을 별도로 적용한다
 
 ### Requirement: app-owned custom event 계약
@@ -129,7 +129,7 @@
 
 ### Requirement: Session Replay Cloud privacy controls
 
-**Authority / Provenance:** `PROD-820`, `PROD-741`, `PROD-795`, `PROD-575` — production Web SDK 배포 전에 `Kosmo Production`은 Session Replay 10% sampling, production canonical origin 제한, input·textarea와 canonical Post Content masking, 30일 retention을 적용해야 한다(MUST). Standard event payload privacy는 이 Replay 계약과 별도로 적용한다(MUST). PROD-741은 이 설정을 처음 활성화하지 않고 실제 replay 품질·masking·fail-open을 acceptance 해야 한다(MUST).
+**Authority / Provenance:** `PROD-820`, `PROD-741`, `PROD-795`, `PROD-575` — production Web SDK 배포 전에 `Kosmo Production`은 Session Replay 10% sampling, production canonical origin 제한, input·textarea와 canonical Post Content masking, 30일 retention을 적용해야 한다(MUST). Standard event metadata 수집은 이 Replay 계약과 별도로 적용한다(MUST). PROD-741은 이 설정을 처음 활성화하지 않고 실제 replay 품질·masking·fail-open을 acceptance 해야 한다(MUST).
 
 #### Scenario: production Session Replay 설정을 조회한다
 

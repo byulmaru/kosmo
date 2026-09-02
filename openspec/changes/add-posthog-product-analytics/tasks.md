@@ -1,7 +1,7 @@
 **Shared spec ownership**
 
 - `PROD-820` / PR #685가 이 승인된 shared spec 전체를 소유한다. `PROD-819` / PR #653는 그 계약을 소비하는 Web runtime 구현을 소유한다.
-- 승인 근거는 [Linear `PROD-819`](https://linear.app/byulmaru/issue/PROD-819)와 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-08-31 마스킹 정책 승인` 기록이다. 사용자 정혜주(HJSmiley)는 “URL·referrer의 검색어 `q`와 광고 click ID는 가리고, `utm_*`는 보존하는 현재 정책을 유지·승인하시겠어요?”에 “마스킹 정책 승인”으로 답했다. 이 승인은 GitHub reviewer signoff나 production acceptance가 아니며, `2026-08-30` 구현 기록은 독립 authority가 아니다.
+- 현재 metadata 수집 결정은 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정` 댓글(`59d34cd1-96b2-446f-8a8d-3a48277f285a`)을 근거로 한다. 사용자 정혜주(HJSmiley)가 2026-08-31 마스킹 승인을 대체했으며, 이 결정은 GitHub reviewer signoff나 production acceptance가 아니다.
 - `PROD-795`, `PROD-741`, `PROD-575`가 각각 개인정보·운영 통합, Replay acceptance, production acceptance와 archive를 소유한다. 이 change는 해당 결과를 대신 완료하거나 archive하지 않는다.
 
 ## 1. PROD-820 Cloud project와 privacy controls
@@ -20,7 +20,7 @@ PostHog Cloud US의 `Kosmo Production` project에 production 배포 전 Replay s
 
 - Default project를 변경하지 않고 timezone은 `Asia/Seoul`로 유지한다.
 - Session Replay는 production canonical origin에서만 10% sampling으로 수집하고 retention은 30일로 둔다.
-- Normal input masking과 canonical Post Content의 `ph-mask ph-no-capture` marker를 함께 적용한다. 이 Replay 계약은 standard event payload privacy와 별도로 검증한다.
+- Normal input masking과 canonical Post Content의 `ph-mask ph-no-capture` marker를 함께 적용한다. 이 Replay 계약은 standard event metadata 수집과 별도로 검증한다.
 - 공개 project key·host는 client artifact에 포함될 수 있지만 Personal API Key·Project Secret API Key 같은 조회·관리 credential은 repository·CI log·artifact에 기록하지 않는다.
 
 **Verification**
@@ -71,7 +71,7 @@ Kosmo Web이 공개 PostHog key와 host가 모두 있을 때만 PostHog adapter�
 
 - `PROD-819`의 Web runtime·typed custom event 계약
 - `PROD-469`의 기존 app-owned event taxonomy
-- `PROD-820`의 standard event payload privacy 설정 계약
+- `PROD-820`의 standard event 검색·캠페인 metadata 수집 계약
 
 **Deliverable**
 
@@ -80,24 +80,24 @@ PostHog의 `defaults: '2026-05-30'` 표준 pageview·pageleave·autocapture·met
 **Guardrails**
 
 - app-owned route observer·normalizer·manual `$pageview`를 두지 않는다.
-- 표준 자동 기능 disable, memory persistence, property denylist, 범용 `before_send` sanitizer나 runtime event projection으로 SDK 동작을 차단하거나 재구현하지 않는다. Native masking이 놓치는 referrer URL의 `q`·기본 click ID와 파생 `ph_keyword` 계열만 공개 `before_send` hook으로 좁게 보완한다.
+- 표준 자동 기능 disable, memory persistence, property denylist, `before_send` sanitizer나 runtime event projection으로 SDK 동작을 차단하거나 재구현하지 않는다. `mask_personal_data_properties: false`를 명시하고 `custom_personal_data_properties`를 두지 않는다.
 - `$pageview`는 app event map에 포함하지 않는다.
 - E2E의 bot 판별 회피를 위해 production adapter에 test-only option이나 환경 변수 분기를 추가하지 않는다. Playwright fixture가 일반 browser user-agent·UA Client Hints brand와 비자동화 webdriver signal을 context에 제공한다.
 - 새 제품 event나 event별 지표를 추가하지 않는다.
 
 **Verification**
 
-- init config가 `api_host`와 `defaults: '2026-05-30'` 중심이며 test-only production option이 없음을 단위 검증한다.
+- init config가 `api_host`, `defaults: '2026-05-30'`, `mask_personal_data_properties: false`로 제한되고 test-only production option, `custom_personal_data_properties`와 `before_send`가 없음을 단위 검증한다.
 - custom event type error와 typed property passthrough를 type·unit test로 확인한다.
 - 일반 browser user-agent·UA Client Hints brand와 비자동화 webdriver signal을 설정한 E2E fixture·fake endpoint로 SDK pageview·pageleave·autocapture, 표준 metadata·remote config 요청과 설정 누락 no-op을 확인한다.
 
-- [x] 3.1 init config를 `api_host`, `defaults: '2026-05-30'` 중심으로 정리하고 자동 기능 disable, memory persistence, denylist와 범용 sanitizer를 제거한다. 승인된 좁은 referrer·`ph_keyword` `before_send` 보완은 유지한다.
+- [x] 3.1 init config를 `api_host`, `defaults: '2026-05-30'` 중심으로 정리하고 자동 기능 disable, memory persistence, denylist와 sanitizer를 제거한다.
 - [x] 3.2 앱 소유 route observer, route normalizer와 manual `$pageview`를 제거한다.
 - [x] 3.3 `$pageview`를 app event map에서 제거하고 기존 custom event의 event별 typed passthrough를 유지한다.
 - [x] 3.4 unit test에서 권장 defaults와 표준 metadata·remote config 비차단, custom event type contract를 검증한다.
 - [x] 3.5 production adapter에 test-only 설정을 추가하지 않고 Playwright fixture의 일반 browser user-agent·UA Client Hints brand와 비자동화 webdriver signal로 fake endpoint E2E를 실행해 SDK automatic pageview·pageleave·autocapture, 표준 metadata와 설정 누락 no-op을 검증한다.
-- [x] 3.6 `mask_personal_data_properties: true`와 `custom_personal_data_properties: ['q']`를 적용하고, SDK 기본 광고 click ID masking은 수용하되 `utm_*`는 유지하는 init config와 단위 검증을 추가한다.
-- [x] 3.7 standard `/e/` event payload의 current/referrer/session URL E2E에서 Search query `q`, current/referrer의 click ID marker와 검색엔진 referrer에서 파생된 `ph_keyword` 계열이 노출되지 않고 `utm_*`가 유지되는지 검증한다. Remote config 요청은 별도로 확인하고, native masking이 놓치는 정확한 referrer URL parameter와 파생 property만 좁은 공개 `before_send` hook으로 보완한다.
+- [ ] 3.6 `mask_personal_data_properties: false`를 명시하고 `custom_personal_data_properties`와 query·click metadata `before_send` 보완을 제거하는 init config와 단위 검증을 추가한다.
+- [ ] 3.7 standard `/e/` event payload의 current/referrer/session URL E2E에서 Search `q`, current/referrer의 기본 click ID, 검색엔진 referrer에서 파생된 `ph_keyword` 계열과 `utm_*`가 원문으로 유지되는지 검증한다. Remote config 요청과 Post Content `$autocapture` 비노출은 별도 경계로 계속 확인한다.
 
 ## 4. PROD-819 persisted identity와 fail-open
 
@@ -174,7 +174,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 
 **Guardrails**
 
-- 표준 automatic event, URL/referrer/session metadata, persistence, remote config와 Replay 보호를 실제 동작보다 좁게 문서화하지 않는다. 다만 standard event payload의 `q`와 SDK 기본 click ID masking, `utm_*` 보존 경계를 명시한다.
+- 표준 automatic event, URL/referrer/session metadata, persistence, remote config와 Replay 보호를 실제 동작보다 좁게 문서화하지 않는다. Standard event payload의 `q`, 기본 click ID, referrer 파생 `ph_keyword`와 `utm_*`가 원문으로 수집될 수 있음을 명시한다.
 - OpenPanel 운영 계약 제거 시 consumer·provider 전환 순서를 확인한다.
 - PROD-839가 지원 release·rollback 경로의 OpenPanel 주입과 GitHub 외부 설정을 정리한 뒤 그 cleanup 증거를 입력으로 사용한다.
 - production-equivalent 검증을 실제 production acceptance나 OpenSpec archive로 일반화하지 않는다.
@@ -182,7 +182,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 
 **Verification**
 
-- 개인정보 처리방침이 실제 수집 surface·masking·retention 경계와 일치하는지 확인한다.
+- 개인정보 처리방침이 실제 `q`·click metadata 수집 surface와 Replay masking·retention 경계에 일치하는지 확인한다.
 - Cloud 설정·배포·장애 대응·수집 확인 runbook을 검증한다.
 - 활성 Docker·workflow·GitHub 설정과 운영 문서에서 OpenPanel 계약이 제거되고 PostHog `ph-mask ph-no-capture`는 유지되는지 확인한다.
 - production-equivalent Web build에서 그룹 1~5의 설정·automatic event·identity·fail-open·Replay 보호를 함께 확인한다.
