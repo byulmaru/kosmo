@@ -27,9 +27,9 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 
 첫 배포 전에는 Play Console에서 다음 절차를 수동으로 완료해야 한다. CI가 Play Console의 최초 app/signing bootstrap을 대신하지 않는다.
 
-1. package name `moe.kos`로 app을 만들고 Google Play App Signing을 설정한다.
+1. package name `moe.kos`로 app을 만든다.
 2. upload key를 관리자 장비에서 생성한다. 첫 AAB와 이후 CI AAB는 같은 upload key로 서명해야 하며, Google이 관리하는 app signing key와는 별개다.
-3. Play Console에서 첫 signed AAB 업로드와 internal testing track 생성을 완료하고 tester 목록과 opt-in 링크를 설정한다.
+3. Play Console에서 internal testing track의 첫 release를 준비하고, 해당 release에서 Google 관리 Play App Signing을 설정한 뒤 upload key로 서명한 첫 signed AAB를 수동 업로드한다. tester 목록과 opt-in 링크도 설정한다.
 4. [Terraform outputs](../terraform/README.md)의 `android_play_service_account` service account를 Play Console Users and permissions에 추가하고 `Release apps to testing tracks` 권한만 부여한다.
 5. 기존 승인형 `prod` GitHub Environment에 다음 non-secret variable만 넣는다. 새 Environment는 만들지 않는다.
 
@@ -40,7 +40,7 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 | `ANDROID_RELEASE_KEY_ALIAS`          | variable | upload key 생성 시 사용한 alias                                 |
 | `ANDROID_RELEASE_CERTIFICATE_SHA256` | variable | upload certificate의 SHA-256 fingerprint                        |
 
-6. upload keystore와 두 password는 GitHub에 저장하지 않고 Vault에 저장한다. Vault KV v2 경로 `secret/data/kosmo/prod/android-play`에 다음 field를 만들고, `kosmo-android-play` GitHub OIDC role이 이 경로를 읽도록 한다.
+6. upload keystore와 두 password는 GitHub에 저장하지 않고 Vault에 저장한다. 운영자가 Vault CLI/UI에서 사용하는 KV v2 logical path는 `secret/kosmo/prod/android-play`다. Workflow와 Vault ACL policy에서 사용하는 KV v2 API path는 `secret/data/kosmo/prod/android-play`이며, `/data/`는 CLI/UI logical path에 포함하지 않는다. 다음 field를 만들고, `kosmo-android-play` GitHub OIDC role이 이 API path를 읽도록 한다.
 
 | Field                             | 값                                 |
 | --------------------------------- | ---------------------------------- |
