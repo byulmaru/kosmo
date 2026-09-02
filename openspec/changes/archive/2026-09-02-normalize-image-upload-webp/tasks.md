@@ -58,4 +58,4 @@ Web에서 정규화된 WebP가 기준 초과·기준 이하·clipboard 입력에
 
 - [x] 2.1 앱 typecheck, 전체 unit test, Storybook build/browser test, formatting과 strict OpenSpec validation을 실행한다.
 - [x] 2.2 Web에서 기준 초과·기준 이하·clipboard 입력의 실제 변환과 signed PUT 성공을 검증한다.
-- [ ] 2.3 `explain-image-upload-failures`의 PROD-657 delta가 active spec에 먼저 동기화됐는지 확인하고, Web·자동 검증 증거를 PROD-881과 PR에 기록한 뒤 누적 delta spec 정합성을 확인한 담당자가 이 change를 archive한다.
+- [x] 2.3 `explain-image-upload-failures`의 PROD-657 delta가 active spec에 먼저 동기화됐는지 확인하고, Web·자동 검증 증거를 PROD-881과 PR에 기록한 뒤 누적 delta spec 정합성을 확인한 담당자가 이 change를 archive한다. (#724의 PROD-657 active spec 동기화·archive 선행, PROD-881 Web·자동 검증 및 PR #722 기록, 누적 delta 동기화 후 archive 완료, 전체 strict validation 109/109·Prettier·diff check 통과.)
