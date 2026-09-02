@@ -443,6 +443,7 @@ type ProfileMute implements Node {
   createdAt: DateTime!
   id: ID!
   targetProfile: Profile
+  targetProfileId: ID!
 }
 
 type ProfileMuteConnection {

@@ -11,10 +11,10 @@
 - Authority / Provenance: `docs/domain/objects/profile-mute.md`, `docs/design/profile-mute-block.md`, `PROD-814`, `PROD-824`
 - Status: Active
 - Context / Problem: 기준 객체에는 nullable 만료 시각이 있지만 `PROD-824`의 제품 범위는 영구 Mute뿐이다. 컬럼을 뒤로 미루면 기간 지정 Mute를 도입할 때 저장 구조를 다시 확장해야 한다. 기간 동작을 지금 함께 열면 후속 계약을 앞질러 구현하게 된다.
-- Decision Outcome: 저장 모델에는 nullable `expires_at`을 추가한다. `PROD-824`의 Core와 GraphQL 생성 경로는 값으로 `null`만 쓰고, 기간 입력·변경·자동 만료·non-null row 처리 기능은 제공하지 않는다. 공개 GraphQL schema에도 만료 입력이나 필드를 노출하지 않는다.
+- Decision Outcome: 저장 모델에는 nullable `expires_at`을 추가한다. `PROD-824`의 Core와 GraphQL 생성 경로는 값으로 `null`만 쓰고, 기간 입력·변경·자동 만료 기능은 제공하지 않는다. 같은 Owner·Target의 기존 non-null `expires_at` row는 같은 ID를 유지한 채 `null`로 갱신해 영구 관계로 활성화하고 반환한다. 공개 GraphQL schema에도 만료 입력이나 필드를 노출하지 않는다.
 - Alternatives Considered: `expires_at` 자체를 `PROD-826`까지 미루는 안은 가까운 시일 안에 migration을 하나 더 만들고 기준 객체 형태와도 어긋나므로 선택하지 않았다. 기간 입력과 만료 판정을 함께 구현하는 안은 현재 이슈의 승인 범위를 넘으므로 제외했다.
-- Consequences: 현재 적용 여부는 이 변경이 만든 `expires_at IS NULL` 관계만 다룬다. non-null 값을 생성·변경하거나 해석하는 제품 동작은 `PROD-826`에서 정한다.
-- Confirmation / Follow-up: DB·Core·GraphQL 테스트에서 모든 생성 결과의 `expires_at`이 `null`인지 확인하고, 공개 schema에 기간·만료 입력과 필드가 없는지 검사한다. `PROD-826`은 기간 preset, 미래 시각 검증, 만료 판정과 재-Mute 처리 방식을 별도로 확정한다.
+- Consequences: 현재 적용 여부는 이 변경이 만든 `expires_at IS NULL` 관계만 다룬다. 기존 non-null row의 재-Mute는 앞선 Decision Outcome대로 `null`로 수렴하며, 기간 지정 입력으로 non-null 값을 생성하거나 그 만료를 해석·정리하는 제품 동작은 `PROD-826`에서 정한다.
+- Confirmation / Follow-up: DB·Core·GraphQL 테스트에서 모든 생성 결과의 `expires_at`이 `null`인지 확인하고, 공개 schema에 기간·만료 입력과 필드가 없는지 검사한다. `PROD-826`은 기간 지정 Mute 생성, 만료 판정·정리와 필요 시 이 v1 계약을 명시적으로 대체할지를 별도로 확정한다.
 
 ### Owner와 Target 조합은 하나의 현재 관계 row를 공유한다
 
@@ -23,7 +23,7 @@
 - Authority / Provenance: `docs/domain/objects/profile-mute.md`, `PROD-814`, `PROD-824`
 - Status: Active
 - Context / Problem: 중복 요청과 동시 생성이 별도 관계를 만들지 않도록 데이터베이스 수준의 식별 경계가 필요하다. 이 관계는 감사 이력 객체가 아니라 현재 Mute 상태를 나타낸다.
-- Decision Outcome: `profile_mutes`는 UUIDv7 ID, Owner·Target foreign key, 생성 시각과 nullable `expires_at`을 가진다. `(owner_profile_id, target_profile_id)` 전체에 unique constraint를 두고, 같은 조합은 하나의 현재 row로 표현한다. 두 Profile이 물리적으로 삭제되면 관계도 cascade로 삭제한다.
+- Decision Outcome: `profile_mute`는 UUIDv7 ID, Owner·Target foreign key, 생성 시각과 nullable `expires_at`을 가진다. `(owner_profile_id, target_profile_id)` 전체에 unique constraint를 두고, 같은 조합은 하나의 현재 row로 표현한다. 두 Profile이 물리적으로 삭제되면 관계도 cascade로 삭제한다.
 - Alternatives Considered: 애플리케이션 선조회만으로 중복을 막는 방식은 동시 요청에 취약해 제외했다. 부분 unique index로 적용 중 row만 제한하는 방식과 여러 이력 row를 저장하는 방식도 선택하지 않았다. 이번 범위에는 이력 요구가 없고 기간 처리 방식도 아직 정해지지 않았기 때문이다.
 - Consequences: 동시성의 최종 판정은 데이터베이스가 맡는다. `PROD-826`이 여러 기간 이력을 필요로 한다면 constraint 변경과 데이터 전환을 별도 migration으로 다뤄야 한다.
 - Confirmation / Follow-up: schema·migration 검사와 순차·동시 중복 생성 테스트로 row가 하나만 남는지 확인한다.
@@ -47,9 +47,9 @@
 - Authority / Provenance: `docs/architecture/core-services.md`, `docs/domain/objects/profile-mute.md`, `PROD-824`
 - Status: Active
 - Context / Problem: GraphQL과 후행 호출자가 저마다 검증·transaction·중복 처리를 구성하면 transport마다 결과가 달라진다. 중복 insert 충돌에서 `DO NOTHING RETURNING`만 쓰면 기존 row를 돌려줄 수 없다.
-- Decision Outcome: 생성과 해제는 transport-neutral Core action으로 구현하며 각 action이 자신의 transaction을 연다. 생성은 unique conflict를 정상적인 멱등 경로로 처리하고 같은 transaction에서 기존 관계를 조회해 반환한다. 해제는 Owner·Target을 함께 조건으로 삭제하며, 관계가 이미 없으면 정보 노출 없이 빈 결과로 수렴한다. Profile이나 관계 row에 비관적 lock을 추가하지 않는다.
+- Decision Outcome: 생성과 해제는 transport-neutral Core action으로 구현하며 각 action이 자신의 transaction을 연다. 생성은 unique conflict를 `onConflictDoUpdate`로 처리해 기존 row의 `expires_at`을 `null`로 갱신하고 같은 ID를 반환한다. 해제는 Owner·Target을 함께 조건으로 삭제하며, 관계가 이미 없으면 정보 노출 없이 빈 결과로 수렴한다. Profile이나 관계 row에 비관적 lock을 추가하지 않는다.
 - Alternatives Considered: resolver가 transaction을 열거나 insert 전에 row를 잠그는 방식은 Core 서비스 경계와 기존 관계 action 패턴에 맞지 않아 제외했다. unique violation을 오류로 반환하는 방식은 승인된 중복 수렴 결과를 만족하지 못한다.
-- Consequences: GraphQL 외의 호출자도 같은 권한·동시성 의미를 재사용할 수 있다. 충돌 후 조회가 필요하므로 생성 구현은 단순 insert보다 query가 하나 더 들 수 있다.
+- Consequences: GraphQL 외의 호출자도 같은 권한·동시성 의미를 재사용할 수 있다. 충돌한 기존 row도 upsert와 `returning()`으로 같은 ID와 영구 관계 의미에 수렴한다.
 - Confirmation / Follow-up: Core 테스트에서 첫 생성, 반복 생성, 동시 생성, 반복 해제와 다른 Owner 해제를 검증한다.
 
 ### GraphQL은 Owner 전용 ProfileMute Node와 Profile 중심 진입점을 제공한다
@@ -59,7 +59,7 @@
 - Authority / Provenance: `docs/domain/objects/profile-mute.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/design/profile-mute-block.md`, `PROD-814`, `PROD-824`
 - Status: Active
 - Context / Problem: 후행 UI는 현재 Profile의 관리 목록, Target Profile 화면의 viewer-relative 상태와 생성·해제 결과를 Relay identity로 연결해야 한다. Target이나 제삼자가 Node 경로로 관계를 발견해서도 안 된다.
-- Decision Outcome: 공개 schema에 `ProfileMute implements Node`를 추가하고 `targetProfile`, `createdAt`을 제공한다. 현재 Profile에는 Owner 전용 `profileMutes` connection을, `ProfileViewerState`에는 `profileMute`를 추가한다. `muteProfile(input: { id: Profile global ID })`는 `MuteProfilePayload.profileMute`를 반환한다. `unmuteProfile(input: { id: Profile global ID })`는 nullable `UnmuteProfilePayload.profileMuteId`를 반환한다. `ProfileMute` ID 조회와 connection은 현재 selected Profile이 Owner일 때만 관계를 돌려준다.
+- Decision Outcome: 공개 schema에 `ProfileMute implements Node`를 추가하고 `targetProfile`, `targetProfileId: ID!`, `createdAt`을 제공한다. 현재 Profile에는 Owner 전용 `profileMutes` connection을, `ProfileViewerState`에는 `profileMute`를 추가한다. Target이 비가시화되어 nullable `targetProfile`이 `null`이어도 `targetProfileId`의 Profile global ID를 기존 `unmuteProfile` Profile ID 입력에 그대로 재사용할 수 있다. `muteProfile(input: { id: Profile global ID })`는 `MuteProfilePayload.profileMute`를 반환한다. `unmuteProfile(input: { id: Profile global ID })`는 nullable `UnmuteProfilePayload.profileMuteId`를 반환한다. `ProfileMute` ID 조회와 connection은 현재 selected Profile이 Owner일 때만 관계를 돌려준다.
 - Alternatives Considered: Target Profile 목록만 반환하면 관계 identity를 보존하고 삭제 결과를 cache에 정확히 반영하기 어렵다. top-level 전용 query는 기존 Profile 중심 GraphQL 구조에 진입점만 늘린다. 해제 입력으로 ProfileMute ID를 받으면 직접 Profile 화면에서 Target ID만 가진 호출자가 관계 ID를 먼저 조회해야 한다. 이 세 가지 방식은 사용하지 않는다.
 - Consequences: schema 이름과 payload는 후행 Relay 코드가 의존하는 공개 계약이 된다. `Profile.profileMutes` resolver는 상위 Profile ID가 selected Profile과 같은지 별도로 확인해야 하며, Node loader도 Owner 조건을 적용해야 한다.
 - Confirmation / Follow-up: schema 생성 결과, Node 직접 조회, 양방향 pagination, viewer-relative 상태와 mutation payload를 GraphQL 통합 테스트로 확인한다.
@@ -90,7 +90,7 @@
 
 ## Remaining Decisions
 
-- `PROD-826`: 기간 preset, 만료 시각 검증, non-null `expires_at` 판정, 만료된 관계의 재-Mute·정리 방식. 이 항목은 `PROD-824` 구현을 막지 않는다.
+- `PROD-826`: 기간 지정 Mute 생성, 만료 시각 검증과 non-null `expires_at`의 만료 판정·정리. 동일 pair의 기존 non-null row를 v1 재-Mute에서 같은 ID의 `null` row로 수렴시키는 계약은 이 change에서 확정하며, `PROD-826`이 필요하면 이를 명시적으로 대체할 수 있다. 이 항목은 `PROD-824` 구현을 막지 않는다.
 
 ## Superseded Decisions
 

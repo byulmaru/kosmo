@@ -469,7 +469,7 @@ export const ProfileMedia = pgTable(
 );
 
 export const ProfileMutes = pgTable(
-  'profile_mutes',
+  'profile_mute',
   {
     id: id(),
     ownerProfileId: uuid('owner_profile_id')

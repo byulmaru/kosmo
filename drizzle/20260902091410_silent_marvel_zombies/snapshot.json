@@ -240,7 +240,7 @@
     },
     {
       "isRlsEnabled": false,
-      "name": "profile_mutes",
+      "name": "profile_mute",
       "entityType": "tables",
       "schema": "public"
     },
@@ -2106,7 +2106,7 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "profile_mutes"
+      "table": "profile_mute"
     },
     {
       "type": "uuid",
@@ -2119,7 +2119,7 @@
       "name": "owner_profile_id",
       "entityType": "columns",
       "schema": "public",
-      "table": "profile_mutes"
+      "table": "profile_mute"
     },
     {
       "type": "uuid",
@@ -2132,7 +2132,7 @@
       "name": "target_profile_id",
       "entityType": "columns",
       "schema": "public",
-      "table": "profile_mutes"
+      "table": "profile_mute"
     },
     {
       "type": "timestamp with time zone",
@@ -2145,7 +2145,7 @@
       "name": "created_at",
       "entityType": "columns",
       "schema": "public",
-      "table": "profile_mutes"
+      "table": "profile_mute"
     },
     {
       "type": "timestamp with time zone",
@@ -2158,7 +2158,7 @@
       "name": "expires_at",
       "entityType": "columns",
       "schema": "public",
-      "table": "profile_mutes"
+      "table": "profile_mute"
     },
     {
       "type": "uuid",
@@ -3109,10 +3109,10 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "profile_mutes_owner_profile_id_id_index",
+      "name": "profile_mute_owner_profile_id_id_index",
       "entityType": "indexes",
       "schema": "public",
-      "table": "profile_mutes"
+      "table": "profile_mute"
     },
     {
       "nameExplicit": false,
@@ -3130,10 +3130,10 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "profile_mutes_target_profile_id_index",
+      "name": "profile_mute_target_profile_id_index",
       "entityType": "indexes",
       "schema": "public",
-      "table": "profile_mutes"
+      "table": "profile_mute"
     },
     {
       "nameExplicit": false,
@@ -3669,10 +3669,10 @@
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "name": "profile_mutes_owner_profile_id_profile_id_fkey",
+      "name": "profile_mute_owner_profile_id_profile_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "profile_mutes"
+      "table": "profile_mute"
     },
     {
       "nameExplicit": false,
@@ -3682,10 +3682,10 @@
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "name": "profile_mutes_target_profile_id_profile_id_fkey",
+      "name": "profile_mute_target_profile_id_profile_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "profile_mutes"
+      "table": "profile_mute"
     },
     {
       "nameExplicit": false,
@@ -3936,9 +3936,9 @@
     {
       "columns": ["id"],
       "nameExplicit": false,
-      "name": "profile_mutes_pkey",
+      "name": "profile_mute_pkey",
       "schema": "public",
-      "table": "profile_mutes",
+      "table": "profile_mute",
       "entityType": "pks"
     },
     {
@@ -4095,10 +4095,10 @@
       "nameExplicit": false,
       "columns": ["owner_profile_id", "target_profile_id"],
       "nullsNotDistinct": false,
-      "name": "profile_mutes_owner_profile_id_target_profile_id_unique",
+      "name": "profile_mute_owner_profile_id_target_profile_id_unique",
       "entityType": "uniques",
       "schema": "public",
-      "table": "profile_mutes"
+      "table": "profile_mute"
     },
     {
       "nameExplicit": false,

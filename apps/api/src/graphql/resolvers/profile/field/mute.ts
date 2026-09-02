@@ -7,6 +7,9 @@ import { Profile, ProfileMute, ProfileMuteConnection } from '../ref';
 import type { ProfileMuteRow } from '../ref';
 
 builder.objectFields(ProfileMute, (t) => ({
+  targetProfileId: t.globalID({
+    resolve: (profileMute) => ({ id: profileMute.targetProfileId, type: Profile }),
+  }),
   targetProfile: t.field({
     nullable: true,
     type: Profile,

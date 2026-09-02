@@ -52,31 +52,18 @@ export const muteProfile = async ({ ownerProfileId, targetProfileId }: ProfileMu
     await ensureOwner(tx, ownerProfileId);
     await ensureTarget(tx, targetProfileId);
 
-    const inserted = await tx
+    const profileMute = await tx
       .insert(ProfileMutes)
       .values({ ownerProfileId, targetProfileId, expiresAt: null })
-      .onConflictDoNothing({
+      .onConflictDoUpdate({
         target: [ProfileMutes.ownerProfileId, ProfileMutes.targetProfileId],
+        set: { expiresAt: null },
       })
       .returning()
       .then(first);
 
-    const profileMute =
-      inserted ??
-      (await tx
-        .select()
-        .from(ProfileMutes)
-        .where(
-          and(
-            eq(ProfileMutes.ownerProfileId, ownerProfileId),
-            eq(ProfileMutes.targetProfileId, targetProfileId),
-          ),
-        )
-        .limit(1)
-        .then(first));
-
     if (!profileMute) {
-      throw new Error('Profile Mute not found after insert conflict');
+      throw new Error('Profile Mute not found after upsert');
     }
 
     return profileMute;

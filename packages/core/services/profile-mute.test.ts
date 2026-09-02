@@ -70,88 +70,40 @@ const cleanupProfiles = async (profileIds: readonly string[], instanceIds: reado
 };
 
 test('Profile Mute는 Owner·Target과 nullable expiresAt을 저장한다', async () => {
-  const suffix = crypto.randomUUID();
-  const instance = await db
-    .insert(Instances)
-    .values({ domain: `${suffix}.example`, kind: InstanceKind.LOCAL })
-    .returning()
-    .then(firstOrThrow);
-  const profiles = await db
-    .insert(Profiles)
-    .values([
-      {
-        displayName: `${suffix}-owner`,
-        followPolicy: ProfileFollowPolicy.OPEN,
-        handle: `${suffix}-owner`,
-        instanceId: instance.id,
-        normalizedHandle: `${suffix}-owner`,
-        state: ProfileState.ACTIVE,
-      },
-      {
-        displayName: `${suffix}-target`,
-        followPolicy: ProfileFollowPolicy.OPEN,
-        handle: `${suffix}-target`,
-        instanceId: instance.id,
-        normalizedHandle: `${suffix}-target`,
-        state: ProfileState.ACTIVE,
-      },
-    ])
-    .returning();
-  const owner = profiles[0]!;
-  const target = profiles[1]!;
+  const owner = await createProfile();
+  const target = await createProfile();
 
   try {
     const mute = await db
       .insert(ProfileMutes)
-      .values({ ownerProfileId: owner.id, targetProfileId: target.id })
+      .values({ ownerProfileId: owner.profile.id, targetProfileId: target.profile.id })
       .returning()
       .then(firstOrThrow);
 
-    assert.equal(mute.ownerProfileId, owner.id);
-    assert.equal(mute.targetProfileId, target.id);
+    assert.equal(mute.ownerProfileId, owner.profile.id);
+    assert.equal(mute.targetProfileId, target.profile.id);
     assert.equal(mute.expiresAt, null);
   } finally {
-    await db.delete(Profiles).where(inArray(Profiles.id, [owner.id, target.id]));
-    await db.delete(Instances).where(inArray(Instances.id, [instance.id]));
+    await cleanupProfiles(
+      [owner.profile.id, target.profile.id],
+      [owner.instance.id, target.instance.id],
+    );
   }
 });
 
 test('같은 Owner·Target Profile Mute는 하나의 관계로 제한된다', async () => {
-  const suffix = crypto.randomUUID();
-  const instance = await db
-    .insert(Instances)
-    .values({ domain: `${suffix}.example`, kind: InstanceKind.LOCAL })
-    .returning()
-    .then(firstOrThrow);
-  const profiles = await db
-    .insert(Profiles)
-    .values([
-      {
-        displayName: `${suffix}-owner`,
-        followPolicy: ProfileFollowPolicy.OPEN,
-        handle: `${suffix}-owner`,
-        instanceId: instance.id,
-        normalizedHandle: `${suffix}-owner`,
-        state: ProfileState.ACTIVE,
-      },
-      {
-        displayName: `${suffix}-target`,
-        followPolicy: ProfileFollowPolicy.OPEN,
-        handle: `${suffix}-target`,
-        instanceId: instance.id,
-        normalizedHandle: `${suffix}-target`,
-        state: ProfileState.ACTIVE,
-      },
-    ])
-    .returning();
-  const owner = profiles[0]!;
-  const target = profiles[1]!;
+  const owner = await createProfile();
+  const target = await createProfile();
 
   try {
-    await db.insert(ProfileMutes).values({ ownerProfileId: owner.id, targetProfileId: target.id });
+    await db
+      .insert(ProfileMutes)
+      .values({ ownerProfileId: owner.profile.id, targetProfileId: target.profile.id });
 
     await assert.rejects(
-      db.insert(ProfileMutes).values({ ownerProfileId: owner.id, targetProfileId: target.id }),
+      db
+        .insert(ProfileMutes)
+        .values({ ownerProfileId: owner.profile.id, targetProfileId: target.profile.id }),
       isUniqueViolation,
     );
     assert.equal(
@@ -160,58 +112,40 @@ test('같은 Owner·Target Profile Mute는 하나의 관계로 제한된다', as
         .from(ProfileMutes)
         .where(
           and(
-            eq(ProfileMutes.ownerProfileId, owner.id),
-            eq(ProfileMutes.targetProfileId, target.id),
+            eq(ProfileMutes.ownerProfileId, owner.profile.id),
+            eq(ProfileMutes.targetProfileId, target.profile.id),
           ),
         )
         .then((rows) => rows.length),
       1,
     );
   } finally {
-    await db.delete(Profiles).where(inArray(Profiles.id, [owner.id, target.id]));
-    await db.delete(Instances).where(inArray(Instances.id, [instance.id]));
+    await cleanupProfiles(
+      [owner.profile.id, target.profile.id],
+      [owner.instance.id, target.instance.id],
+    );
   }
 });
 
 test('Owner 또는 Target Profile 삭제 시 Profile Mute 관계가 cascade 정리된다', async () => {
-  const suffix = crypto.randomUUID();
-  const instance = await db
-    .insert(Instances)
-    .values({ domain: `${suffix}.example`, kind: InstanceKind.LOCAL })
-    .returning()
-    .then(firstOrThrow);
-  const profiles = await db
-    .insert(Profiles)
-    .values([
-      {
-        displayName: `${suffix}-owner`,
-        followPolicy: ProfileFollowPolicy.OPEN,
-        handle: `${suffix}-owner`,
-        instanceId: instance.id,
-        normalizedHandle: `${suffix}-owner`,
-        state: ProfileState.ACTIVE,
-      },
-      {
-        displayName: `${suffix}-target`,
-        followPolicy: ProfileFollowPolicy.OPEN,
-        handle: `${suffix}-target`,
-        instanceId: instance.id,
-        normalizedHandle: `${suffix}-target`,
-        state: ProfileState.ACTIVE,
-      },
-    ])
-    .returning();
-  const owner = profiles[0]!;
-  const target = profiles[1]!;
+  const owner = await createProfile();
+  const target = await createProfile();
 
   try {
-    await db.insert(ProfileMutes).values({ ownerProfileId: owner.id, targetProfileId: target.id });
-    await db.delete(Profiles).where(eq(Profiles.id, owner.id));
+    await db
+      .insert(ProfileMutes)
+      .values({ ownerProfileId: owner.profile.id, targetProfileId: target.profile.id });
+    await db.delete(Profiles).where(eq(Profiles.id, owner.profile.id));
 
-    assert.equal(await db.$count(ProfileMutes, eq(ProfileMutes.targetProfileId, target.id)), 0);
+    assert.equal(
+      await db.$count(ProfileMutes, eq(ProfileMutes.targetProfileId, target.profile.id)),
+      0,
+    );
   } finally {
-    await db.delete(Profiles).where(inArray(Profiles.id, [owner.id, target.id]));
-    await db.delete(Instances).where(inArray(Instances.id, [instance.id]));
+    await cleanupProfiles(
+      [owner.profile.id, target.profile.id],
+      [owner.instance.id, target.instance.id],
+    );
   }
 });
 
@@ -357,20 +291,38 @@ test('unmuteProfile은 Owner·Target 쌍만 제거하고 다른 Owner에는 null
   }
 });
 
-test('적용 여부와 Owner별 목록은 영구 관계만 반환한다', async () => {
+test('기존 미래 만료 Mute를 다시 생성하면 같은 row가 영구 관계로 수렴한다', async () => {
   const owner = await createProfile();
   const target = await createProfile();
 
   try {
-    await db.insert(ProfileMutes).values({
-      ownerProfileId: owner.profile.id,
-      targetProfileId: target.profile.id,
-      expiresAt: Temporal.Instant.from('2099-01-01T00:00:00Z'),
-    });
+    const existing = await db
+      .insert(ProfileMutes)
+      .values({
+        ownerProfileId: owner.profile.id,
+        targetProfileId: target.profile.id,
+        expiresAt: Temporal.Instant.from('2099-01-01T00:00:00Z'),
+      })
+      .returning()
+      .then(firstOrThrow);
 
     assert.equal(await findProfileMute(owner.profile.id, target.profile.id), null);
     assert.equal(await isProfileMuted(owner.profile.id, target.profile.id), false);
     assert.deepEqual(await findProfileMutesByOwner(owner.profile.id), []);
+
+    const remuted = await muteProfile({
+      ownerProfileId: owner.profile.id,
+      targetProfileId: target.profile.id,
+    });
+
+    assert.equal(remuted.id, existing.id);
+    assert.equal(remuted.expiresAt, null);
+    assert.equal((await findProfileMute(owner.profile.id, target.profile.id))?.id, existing.id);
+    assert.equal(await isProfileMuted(owner.profile.id, target.profile.id), true);
+    assert.deepEqual(
+      (await findProfileMutesByOwner(owner.profile.id)).map(({ id }) => id),
+      [existing.id],
+    );
   } finally {
     await cleanupProfiles(
       [owner.profile.id, target.profile.id],

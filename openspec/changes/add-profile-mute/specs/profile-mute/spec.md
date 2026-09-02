@@ -2,7 +2,7 @@
 
 ### Requirement: 영구 Profile Mute 관계를 저장한다
 
-**Authority / Provenance:** `docs/domain/objects/profile-mute.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-814`, `PROD-824` — 시스템은 Profile Mute를 Owner Profile에서 Target Profile로 향하는 별도 관계로 저장해야 한다(MUST). 각 관계는 Owner와 Target을 하나씩 정확히 참조하며, 같은 Owner·Target 조합에는 하나만 존재해야 한다(MUST). 저장 모델에는 nullable `expires_at`을 포함하되, 이 변경에서 제공하는 모든 생성 경로는 영구 Mute를 뜻하는 `null`만 기록해야 한다(MUST). 기간이나 만료 시각을 받거나 만료 시각을 바꾸는 입력은 공개해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-mute.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-814`, `PROD-824` — 시스템은 Profile Mute를 Owner Profile에서 Target Profile로 향하는 별도 관계로 저장해야 한다(MUST). 각 관계는 Owner와 Target을 하나씩 정확히 참조하며, 같은 Owner·Target 조합에는 하나만 존재해야 한다(MUST). 저장 모델에는 nullable `expires_at`을 포함하되, 이 변경에서 제공하는 모든 생성 경로는 영구 Mute를 뜻하는 `null`만 기록해야 한다(MUST). 같은 조합의 기존 non-null `expires_at` row를 다시 Mute하면 같은 ID를 유지한 채 `null`로 갱신해 반환해야 한다(MUST). 기간이나 만료 시각을 받거나 만료 시각을 바꾸는 입력은 공개해서는 안 된다(MUST NOT).
 
 #### Scenario: 영구 Mute를 저장한다
 
@@ -13,6 +13,11 @@
 
 - **WHEN** 클라이언트가 이 변경에서 추가한 Core 또는 GraphQL 생성 계약을 확인한다
 - **THEN** 기간이나 만료 시각을 전달하거나 기존 관계의 만료 시각을 바꾸는 입력은 존재하지 않는다
+
+#### Scenario: 기존 기간 row를 영구 Mute로 수렴한다
+
+- **WHEN** 같은 Owner·Target 조합에 non-null `expires_at` row가 있고 Owner가 다시 Mute한다
+- **THEN** 시스템은 기존 row의 ID를 유지하고 `expires_at`을 `null`로 갱신해 영구 관계로 반환한다
 
 ### Requirement: 행동 자격과 Target 경계를 검증한다
 
@@ -87,7 +92,7 @@
 
 ### Requirement: Owner 전용 GraphQL 조회 계약을 제공한다
 
-**Authority / Provenance:** `docs/domain/objects/profile-mute.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/design/profile-mute-block.md`, `PROD-814`, `PROD-824` — GraphQL은 Profile Mute를 Node로 식별할 수 있게 하고, 현재 selected Profile이 소유한 관계를 Relay connection으로 조회할 수 있어야 한다(MUST). 각 항목에서는 Target Profile을 조회할 수 있어야 한다(MUST). Target Profile에는 현재 selected Profile이 해당 Target을 Mute했는지 확인하는 viewer-relative 상태를 제공해야 한다(MUST). 관계와 목록, viewer-relative 상태는 Owner에게만 보여야 하며(MUST), 기간 또는 만료 시각 필드는 이 변경의 공개 schema에 포함해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-mute.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/design/profile-mute-block.md`, `PROD-814`, `PROD-824` — GraphQL은 Profile Mute를 Node로 식별할 수 있게 하고, 현재 selected Profile이 소유한 관계를 Relay connection으로 조회할 수 있어야 한다(MUST). 각 항목에서는 Target Profile과 concrete `targetProfileId: ID!`를 조회할 수 있어야 한다(MUST). Target Profile에는 현재 selected Profile이 해당 Target을 Mute했는지 확인하는 viewer-relative 상태를 제공해야 한다(MUST). 관계와 목록, viewer-relative 상태는 Owner에게만 보여야 하며(MUST), 기간 또는 만료 시각 필드는 이 변경의 공개 schema에 포함해서는 안 된다(MUST NOT).
 
 #### Scenario: 현재 Profile의 Mute 목록을 조회한다
 
@@ -108,6 +113,11 @@
 
 - **WHEN** Target Profile을 선택한 요청이 자신을 Target으로 삼은 Mute를 조회하려 한다
 - **THEN** 시스템은 해당 Profile Mute의 존재를 공개하지 않는다
+
+#### Scenario: 비가시화된 Target을 Profile ID로 해제한다
+
+- **WHEN** Owner가 조회한 Profile Mute의 Target이 비가시화되어 `targetProfile`은 `null`이지만 `targetProfileId`를 요청하고, 그 opaque ID를 `unmuteProfile` input에 전달한다
+- **THEN** 시스템은 `targetProfileId`를 Profile global ID로 반환하고 해당 Owner·Target 관계를 제거한다
 
 ### Requirement: GraphQL 생성·해제는 selected Profile에 귀속한다
 
