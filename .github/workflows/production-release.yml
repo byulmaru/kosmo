@@ -14,8 +14,6 @@ permissions:
 
 env:
   ENVIRONMENT: prod
-  VAULT_ADDR: https://vault.tail1fdd55.ts.net
-  VAULT_GITHUB_ACTIONS_AUDIENCE: https://vault.tail1fdd55.ts.net
 
 jobs:
   production_deploy:
@@ -77,11 +75,11 @@ jobs:
         id: sentry
         uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
         with:
-          url: ${{ env.VAULT_ADDR }}
+          url: ${{ vars.VAULT_ADDR }}
           path: github-actions
           method: jwt
           role: kosmo-build-prod
-          jwtGithubAudience: ${{ env.VAULT_GITHUB_ACTIONS_AUDIENCE }}
+          jwtGithubAudience: ${{ vars.VAULT_GITHUB_ACTIONS_AUDIENCE }}
           exportEnv: false
           secrets: |
             secret/data/kubernetes/kosmo/prod EXPO_PUBLIC_SENTRY_DSN | EXPO_PUBLIC_SENTRY_DSN
