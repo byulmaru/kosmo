@@ -18,7 +18,7 @@ Android·iOS·Web에서 공유하며 고정 순서, optional 액션, compact cou
 
 - 공개 UI API는 `PostActionBar` 하나와 actual Post fragment ref, `reply`·`reaction`·`bookmark`·`more`의 명시적 optional config, Repost error callback으로 제한한다. 구현된 Repost는 composite parent fragment 아래 private child action으로 조립한다. Repost의 concrete disabled host input 또는 fragment shape는 actual caller와 함께 PROD-432가 설계한다.
 - Reply의 controlled `expanded`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`를 처리 상태와 분리하고, Repost child는 `viewerRepost`에서 `hasReposted`를 파생한다. 범용 공개 `selected`를 만들지 않는다. 공개 처리 상태는 default·pending·disabled만 제공하고 pending·disabled만 입력을 차단한다. 일시적 요청 실패를 `error`·danger 상태로 표현하지 않는다.
-- Bar와 각 control의 visual/layout slot은 모든 플랫폼에서 높이 28을 사용하고, social visual slot 너비 50, More 너비 28, glyph 16×16, icon-count 간격 4를 제공한다. PROD-866 이후 Web interactive rectangle은 Reply·Repost·Reaction 64×36px, Bookmark 50×36px, More 28×36px이며 서로 겹치거나 action 사이 분배 여백을 덮지 않아야 한다. Native 공용 projection은 출시 전 임시 예외이며 Native 접근성 완료 증거로 사용하지 않는다.
+- Bar와 각 control의 visual/layout row는 모든 플랫폼에서 높이 28을 사용하고, social layout slot 최소 너비 50, More 너비 28, glyph 16×16, icon-count 간격 4를 제공한다. PROD-866 이후 Web actual target은 count가 있으면 숫자 `0`을 포함해 `6 + 16 + 4 + 렌더된 count 너비 + 6`을 HUG하고 count가 없으면 28×36px이다. social slot은 target이 50px보다 넓을 때만 함께 확장하며 target끼리 겹치거나 action 사이 분배 여백을 덮지 않아야 한다. Native 공용 projection은 출시 전 임시 예외이며 Native 접근성 완료 증거로 사용하지 않는다.
 - Reaction과 Bookmark는 count를 받지 않는다. Reply config와 Repost child fragment는 선행 계약이 제공한 count만 실행 환경 기본 locale의 표준 compact formatting으로 표시하고 K/M 반올림·단위 승격·상한을 수동 구현하거나 count가 없을 때 `0`을 합성하지 않는다.
 - More는 callback과 접근성 label만 제공하고 count·도메인 상태·처리 상태, 팝업이나 링크 복사를 구현하지 않는다.
 - production surface, navigation, Content·Reply Parent·Repost Source 관계 조합 정책과 Figma 파일을 수정하지 않는다. 구현된 child action의 Relay fragment·mutation은 PROD-414가 소유하고 toolbar container가 mutation payload나 cache update 정책을 재구현하지 않는다.
@@ -264,11 +264,11 @@ Reaction과 Repost가 전역 feedback 의미와 분리된 presentation semantic�
 
 **Deliverable**
 
-28px visual Action Bar를 유지하면서 Web의 bounded click rectangle, glyph·count interaction foreground, production More Playground와 PostLayout Engagement/thread boundary를 공용 계약으로 맞춘다.
+28px visual Action Bar를 유지하면서 Web의 count 기반 HUG click target, glyph·count interaction foreground, production More Playground와 PostLayout Engagement/thread boundary를 공용 계약으로 맞춘다.
 
 **Guardrails**
 
-- action 사이 분배 여백 전체를 target으로 만들지 않고 Reply·Repost·Reaction 64×36px, Bookmark 50×36px, More 28×36px rectangle만 사용한다. trailing 82px, 28×28 hover state layer와 28px visual row는 유지한다.
+- action 사이 분배 여백 전체를 target으로 만들지 않는다. count가 있으면 숫자 `0`을 포함해 `6 + 16 + 4 + 렌더된 count 너비 + 6`을 HUG하고 count가 없으면 28×36px target을 사용한다. social layout slot은 최소 50px이고 target이 더 넓을 때만 확장한다. trailing 82px, glyph 주위 28×28 hover·pressed state layer와 28px visual row는 유지한다.
 - Repost는 production에서 숨기지 않고 Reaction 표시 여부와 독립적이어야 한다. Playground는 실제 production `링크 복사` More menu를 사용하되 visible story는 검토용 정적 상태만 제공하고 상태를 바꾸는 `play`는 Tests story로 분리한다.
 - PostLayout/PostListItem을 Relay fragment 없이 우회하는 새 Playground나 PROD-853 전용 중복 fixture를 추가하지 않는다.
 - Web·Figma 결과를 Native 44pt·48dp target이나 VoiceOver·TalkBack runtime 완료 증거로 사용하지 않는다.
@@ -283,6 +283,7 @@ Reaction과 Repost가 전역 feedback 의미와 분리된 presentation semantic�
 - [x] 7.3 focused·전체 자동 검증과 Web 시각·상호작용 QA를 완료하고 Native runtime 미검증 경계를 기록한다.
 - [x] 7.4 Quote Source preview의 resting fill을 제거하고 interactive Web hover에만 `stateHover`를 적용한 뒤 focused Storybook, canonical 문서·OpenSpec과 Figma Light·Dark specimen을 동기화하고 readback한다.
 - [x] 7.5 Reply·Repost·Reaction Web target을 64×36px로 넓히고 Bookmark 50×36px, More 28×36px과 trailing 82px을 유지한 뒤 Storybook·Figma를 동기화하고 readback한다.
+- [x] 7.6 Web action target을 count 기반 HUG로 교정하고, count 없음 28×36px, social slot 최소 50px·필요 시 확장, 숫자 `0`, non-overlap과 trailing 82px을 Storybook·Figma에서 검증하고 readback한다.
 
 ## 8. PROD-882 미선택 Repost 상태 색상 복구
 

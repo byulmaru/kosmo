@@ -132,7 +132,7 @@
 
 ### Requirement: 액션 접근성
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/post-action-bar.md`, `PROD-433`, `PROD-414`, `PROD-432`, `PROD-866` — Action Bar 컨테이너는 toolbar role과 고정된 한국어 접근성 이름 `액션 바`를 노출해야 하며(MUST), 내부 액션을 하나의 접근성 요소로 병합하지 않아야 한다(MUST NOT). 표시되는 각 액션은 button role과 액션별 label을 노출해야 하며(MUST) 시각 icon이나 count에만 의미를 의존하지 않아야 한다(MUST). Action Bar와 각 control의 visual/layout slot 높이는 Android·iOS·Web에서 28 logical unit이어야 한다(MUST). Reply·Repost·Reaction·Bookmark visual slot 너비는 각각 50이고 More 너비는 28이어야 하며(MUST), Bar는 별도 좌우 inset 없이 Reply target의 왼쪽 경계와 More target의 오른쪽 경계를 PostBody content column의 양끝에 맞추고 나머지 action을 그 사이에 분배해야 한다(MUST). Web의 Bookmark와 More는 4px 간격을 둔 82px trailing group이어야 한다(MUST). Reply·Repost·Reaction·Bookmark의 icon-count visual group은 각 target 안의 50px visual 영역 왼쪽에 맞춰 glyph 왼쪽 경계가 target 왼쪽 경계와 일치해야 하며(MUST), More glyph는 target 가운데에 있어야 한다(MUST). 각 glyph visual box는 16×16이고 icon과 count 간격은 4여야 한다(MUST). Web interactive rectangle은 Reply·Repost·Reaction 64×36px, Bookmark 50×36px, More 28×36px이고 action 사이 분배 여백과 인접 target을 덮지 않아야 한다(MUST). Native의 공용 projection은 출시 전 임시 예외이며 iOS 출시 전 최소 44×44pt, Android 출시 전 최소 48×48dp로 복구하고 runtime 검증해야 한다(MUST). Reply의 `expanded`, Repost child가 `viewerRepost`에서 파생한 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`와 각 액션의 pending·disabled 상태는 플랫폼에서 지원하는 접근성 state로 노출해야 한다(MUST). Repost policy-disabled 접근성 state는 concrete seam과 actual caller를 설계하는 PROD-432 surface 통합에서 검증해야 한다(MUST). 이 접근성 매핑 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있지만 공개 제품 prop 이름을 바꾸지 않아야 한다(MUST). More는 button role과 label을 제공하되 도메인 상태 또는 처리 상태를 노출하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/post-action-bar.md`, `PROD-433`, `PROD-414`, `PROD-432`, `PROD-866` — Action Bar 컨테이너는 toolbar role과 고정된 한국어 접근성 이름 `액션 바`를 노출해야 하며(MUST), 내부 액션을 하나의 접근성 요소로 병합하지 않아야 한다(MUST NOT). 표시되는 각 액션은 button role과 액션별 label을 노출해야 하며(MUST) 시각 icon이나 count에만 의미를 의존하지 않아야 한다(MUST). Action Bar와 각 control의 visual/layout row 높이는 Android·iOS·Web에서 28 logical unit이어야 한다(MUST). Reply·Repost·Reaction·Bookmark layout slot은 최소 너비 50이고 More slot 너비는 28이어야 하며(MUST), Bar는 별도 좌우 inset 없이 Reply slot의 왼쪽 경계와 More slot의 오른쪽 경계를 PostBody content column의 양끝에 맞추고 나머지 action을 그 사이에 분배해야 한다(MUST). Web의 Bookmark와 More는 4px 간격을 둔 82px trailing group이어야 한다(MUST). 각 glyph visual box는 16×16이고 icon과 count 간격은 4여야 한다(MUST). 실제 Web target은 slot 가운데에 있어야 하며(MUST), count가 있으면 숫자 `0`을 포함해 `왼쪽 6px + glyph 16px + gap 4px + 렌더된 count + 오른쪽 6px`을 HUG하고 count가 없으면 28×36px이어야 한다(MUST). social target이 50px보다 넓을 때만 해당 slot도 target 너비로 확장해야 하며(MUST), glyph 왼쪽 경계는 target 왼쪽보다 6px 안쪽이어야 한다(MUST). hover·pressed의 visible state layer는 count를 감싸지 않고 glyph 주위 28×28px 원을 유지해야 하며(MUST), 모든 target은 action 사이 분배 여백이나 인접 target을 덮지 않아야 한다(MUST). Native의 공용 projection은 출시 전 임시 예외이며 iOS 출시 전 최소 44×44pt, Android 출시 전 최소 48×48dp로 복구하고 runtime 검증해야 한다(MUST). Reply의 `expanded`, Repost child가 `viewerRepost`에서 파생한 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`와 각 액션의 pending·disabled 상태는 플랫폼에서 지원하는 접근성 state로 노출해야 한다(MUST). Repost policy-disabled 접근성 state는 concrete seam과 actual caller를 설계하는 PROD-432 surface 통합에서 검증해야 한다(MUST). 이 접근성 매핑 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있지만 공개 제품 prop 이름을 바꾸지 않아야 한다(MUST). More는 button role과 label을 제공하되 도메인 상태 또는 처리 상태를 노출하지 않아야 한다(MUST).
 
 #### Scenario: 이름이 있는 툴바 탐색
 
@@ -157,11 +157,11 @@
 #### Scenario: Figma 기반 compact geometry
 
 - **WHEN** Action Bar가 지원하는 compact 폭에 렌더된다
-- **THEN** Bar와 각 control의 visual/layout slot은 높이 28, social visual slot 너비 50, More 너비 28, glyph 16×16, icon-count 간격 4를 유지한다
-- **AND** Reply target의 왼쪽 경계와 More target의 오른쪽 경계는 PostBody content column의 양끝에 맞고 나머지 action은 그 사이에 균등 분배된다
+- **THEN** Bar와 각 control의 visual/layout row는 높이 28, social layout slot 최소 너비 50, More slot 너비 28, glyph 16×16, icon-count 간격 4를 유지한다
+- **AND** Reply slot의 왼쪽 경계와 More slot의 오른쪽 경계는 PostBody content column의 양끝에 맞고 나머지 action은 그 사이에 균등 분배된다
 - **AND** Web의 Bookmark와 More는 4px 간격을 둔 82px trailing group이다
-- **AND** Reply·Repost·Reaction·Bookmark glyph의 왼쪽 경계는 각 target의 왼쪽 경계와 일치하고 More glyph는 target 가운데에 있다
-- **AND** Web interactive rectangle은 Reply·Repost·Reaction 64×36px, Bookmark 50×36px, More 28×36px이고 action 사이 분배 여백이나 인접 target을 덮지 않는다
+- **AND** Web actual target은 slot 가운데에 있고 count가 있으면 숫자 `0`을 포함해 `6 + 16 + 4 + 렌더된 count 너비 + 6`을 HUG하며 count가 없으면 28×36px이다
+- **AND** social slot은 `max(50, target 너비)`이고 glyph는 target 왼쪽보다 6px 안쪽에 있으며, 28×28 state layer는 glyph만 감싸고 action 사이 분배 여백이나 인접 target을 덮지 않는다
 
 #### Scenario: Native 출시 전 임시 target
 
