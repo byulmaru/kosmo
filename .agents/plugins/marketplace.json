@@ -1,0 +1,21 @@
+{
+  "name": "kosmo",
+  "interface": {
+    "displayName": "Kosmo"
+  },
+  "plugins": [
+    {
+      "name": "ponytail",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/DietrichGebert/ponytail.git",
+        "sha": "2ed6c52c9d7e5e56942508591085fd45dea277d3"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
