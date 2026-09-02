@@ -1,124 +1,125 @@
 ## Context
 
-Profile Block의 제품 계약은 `docs/domain/objects/profile-block.md`에 이미 정의되어 있다. 관계는 Owner → Target
-방향을 가지지만 조회·상호작용 제한은 양쪽에 적용되고, 생성 시 Follow Request·Follow Relationship·Target Reaction과
-그 Follow 객체를 직접 원인으로 하는 Notification을 정리한다. `PROD-821`은 저장과 transaction을, `PROD-822`는 공통
-조회·상호작용 policy와 GraphQL을, `PROD-823`은 UI·Relay를, `PROD-813`은 완료된 `PROD-649` Local Timeline을 포함한
-cross-slice E2E·canonical sync·archive를 소유한다.
+Profile Block은 Owner → Target 방향으로 저장하지만 조회·상호작용 정책은 양쪽에 적용되는 관계다. 생성 시 양방향
+Follow Request·Follow Relationship, Target이 Owner Post에 남긴 Reaction과 제거된 Follow 객체의 직접 원인 Notification을
+정리해야 하며, Repost·Bookmark와 비직접 원인 Notification은 보존한다.
 
-현재 저장 schema는 `packages/core/db/tables.ts`의 Profile·Follow·Reaction·Notification·Bookmark·Post 관계를 사용하고,
-core transaction은 `packages/core/services`에 있다. Profile/Post/Notification 가시성은 `packages/core/visibility`의
-공통 query helper와 GraphQL resolver/loader가 함께 계산한다. 앱은 `apps/app/src/relay/RelayActorProvider.tsx`와
-`RelayEnvironmentBoundary.tsx`에서 selected Profile·Session별 Relay Environment를 교체하며, Settings와 Profile surface는
-기존 공용 component를 사용한다.
+`PROD-821`은 additive 저장 관계와 durable cleanup orchestration을, `PROD-822`는 공통 policy·GraphQL을, `PROD-823`은
+승인된 presentation을 소비하는 UI·Relay를, `PROD-813`은 네 slice의 cross-slice E2E·canonical sync·archive를 소유한다.
+
+현재 Follow removal 경계는 removal transition과 effect plan을 DB transaction 결과로 반환하고, 효과를 FIFO로 drain하는
+계약을 가진다. Unfollow workflow는 이 public wrapper로 남는다. Profile Block은 그 계약을 양방향 Follow 정리에 재사용하고,
+pending request와 Target Reaction을 durable orchestration에서 함께 처리해야 한다.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- additive Profile Block 저장 관계와 단일 생성 transaction을 도입한다.
-- 직접 조회, Profile/Post/Media/Follow 후보, Home·Local·Profile·Hashtag 목록, 검색과 새 로컬 상호작용에 같은 Block
-  policy를 적용한다.
-- GraphQL actor/owner 경계와 Profile Block 관리 connection을 제공한다.
-- DSN-53 presentation을 소비하는 Block 확인·목록·최소 Profile 셸과 selected Profile별 Relay/cache 수렴을 제공한다.
-- 완료된 `PROD-649`의 Local Timeline 후보·cursor·actor 격리를 유지하면서 Block Author/Source Author 회귀를 검증한다.
+- 기존 Profile row를 바꾸지 않는 additive Profile Block 저장 관계와 Owner/Target unique·foreign-key·self 불변식을 도입한다.
+- Block policy/admission 이후 기존 Follow removal transition/effect-plan을 양방향에 재사용하는 durable Temporal cleanup orchestration을
+  제공하고, required cleanup 완료 전에는 Block action을 성공으로 확정하지 않는다.
+- Profile·Post·Media·Follow 후보와 Home·Local·Profile·Hashtag Post List·검색 및 새 로컬 상호작용에 같은 Profile Block policy를 적용한다.
+- selected Local Profile을 actor로 사용하는 현재 GraphQL ingress와 Owner-only management connection을 제공한다.
+- `PROD-861` 결과를 prerequisite evidence로 참고하고 이후 승인된 presentation을 소비하는 confirmation·management list·Relay/cache
+  흐름을 제공한다. UI는 보호된 데이터를 복구하지 않는다.
+- `PROD-813`에서 Local·Remote pair와 주요 surface의 cross-slice 결과를 검증하고 canonical·Linear·OpenSpec sync 뒤 archive한다.
 
 **Non-Goals:**
 
 - `PROD-861`이 소유하는 공용 presentation·Storybook 이관 자체.
-- 현재 Follow·Follow Request·Reply·Reaction·Repost Notification source에 새 생성 억제 policy를 연결하는 `PROD-327` 작업.
-- ActivityPub Block/Undo 발신·수신(`PROD-818`)과 remote delivery.
+- 모든 Follow·Follow Request·Reply·Reaction·Repost Notification source에 신규 생성 suppression을 연결하는 `PROD-327` 작업.
+- ActivityPub Block/Undo 발신·수신과 remote delivery(`PROD-818`). 현재 remote ingress의 구현은 이 change에 포함하지 않는다.
 - 조회 불가 Notification의 schedule/event/queue/worker/scan 물리 cleanup(`PROD-328`).
-- Profile Mute, Profile Domain Block, 신고·커뮤니티 관리와 새 Settings shell.
+- Profile Mute, Profile Domain Block, 신고·커뮤니티 관리와 차단된 Profile의 구체 route presentation.
 
 ## Implementation Guidance
 
 ### Current Constraints
 
-- `packages/core/db/tables.ts`에는 Profile Block 관계가 없으므로 Profile row의 기존 상태를 복제하지 않는 별도 additive
-  relation이 필요하다. Profile Block 생성은 Follow Request·Follow Relationship·Reaction·Notification을 함께 변경하므로
-  여러 public action을 순서대로 호출해 부분 commit을 만들면 안 된다.
-- 현재 Profile/Post/Notification helper는 기본 상태·visibility를 계산하지만 Profile Block 양방향 조건을 모두 소비하지
-  않는다. Profile object ref, Post connection, Media loader, Follow candidate, search와 Notification availability가 각각
-  다른 조건을 조합하면 정책 우회가 생긴다.
-- GraphQL의 `withAuth({ usingProfile: true })`는 Session·Active Account·selected Profile membership 경계를 소유하고,
-  core service는 검증된 actor와 domain input을 소유한다. resolver마다 Account 권한이나 Block predicate를 재구현하면
-  actor 격리와 오류 경계가 달라진다.
-- 앱의 selected Profile 전환은 Relay Environment와 Store의 교체 경계다. Block 목록이나 optimistic 결과를 process 전역
-  store 또는 route-local scalar 상태로 유지하면 다른 Owner로 누수될 수 있다.
-- `PROD-861`의 Storybook 결과는 presentation 선행 증거이지 route·GraphQL·cache·runtime 완료 증거가 아니다. 현재 Notification
-  source 생성 억제와 ActivityPub·비동기 cleanup도 이 change의 로컬 완료 조건이 아니다.
+- 현재 저장 schema에는 Profile Block 관계가 없으므로 독립 additive relation과 조합 제약이 필요하다. 기존 Profile·Follow·Reaction·
+  Notification·Post row를 backfill하거나 기존 상태 column으로 대체하지 않는다.
+- Profile Block action은 여러 관계를 건드리고 worker 재시작·일시 오류를 견뎌야 한다. 로컬 DB transaction 하나를 전체 lifecycle의 성공
+  조건으로 삼으면 durable retry와 effect settlement를 보장할 수 없다.
+- Follow removal transition/effect plan은 source row와 effect를 deterministic하게 계산하고 terminal effect를 drain하는 기존 경계다.
+  양방향 정리에서 이 계약을 우회해 ad hoc delete를 추가하면 재시도·중복·Notification 원인 추적이 달라진다.
+- Profile/Post/Notification helper, GraphQL resolver/loader와 Post List consumer가 각자 Block 조건을 조합하면 direct Node와 connection,
+  search와 interaction 사이에 정책 누락이 생긴다.
+- GraphQL ingress는 selected Local Profile actor 경계를 사용하지만 Profile Block 도메인 자체를 특정 Account/Membership 상태에 종속하지
+  않는다. remote ActivityPub ingress는 `PROD-818`의 별도 경계다.
+- selected Profile 전환은 Relay Environment와 Store의 교체 경계다. Block connection·cursor·optimistic state를 process 전역에 두지 않는다.
 
 ### Recommended Approach
 
-1. Profile Block relation을 Profile foreign key 두 개, immutable 생성 시각과 Owner/Target 조합 unique 경계를 가진 additive
-   table로 추가한다. 기존 migration 순서와 runtime role을 유지하고, migration과 schema snapshot을 기존 Drizzle workflow에
-   맞춰 검증한다.
-2. Core Block action이 한 transaction에서 owner/target 검증, Block insert, 양방향 Follow Request·Follow Relationship
-   삭제, Target의 Owner Post Reaction 삭제와 직접 원인 Follow Notification 삭제를 수행하게 한다. Repost·Bookmark·다른
-   Notification은 건드리지 않으며, 해제는 relation만 삭제하고 새 후속 요청에서 최신 policy를 평가한다.
-3. Profile Block의 방향을 `(viewer, target)` policy 입력으로 정규화해 양방향 차단 조건을 만든다. Profile/Post/Media 직접
-   조회, Follow 후보, 네 종류 Post List·검색, Follow·Reply·Reaction·Repost 입력 검증과 Notification 기존 item 가시성이
-   같은 core/application helper를 소비하게 한다. 후보를 page limit로 자른 뒤 client에서 제거하지 않는다.
-4. GraphQL은 selected Profile을 actor로 하는 Block 생성·해제와 Owner 전용 Block connection을 노출하고, Profile·Post·Media·
-   Notification ref/loader가 같은 policy를 사용하게 한다. mutation 응답은 Relay가 정확한 relation/affected node를 갱신할
-   수 있는 식별자를 포함하며, 구체 field·payload 이름은 기존 GraphQL naming과 구현 시 generated schema에 맞춘다.
-5. UI는 `PROD-861`의 공용 ConfirmationContent·Button·ModalSheet·Toast·Settings/Profile shell을 재사용한다. Block과
-   Mute 목록은 별도 destination으로 유지하고, `blocking`/`blockedBy` route는 이미 알려진 handle과 최소 상태만 표시한다.
-   Relay connection은 현재 actor Store에서만 좁게 갱신하고, selected Profile·Session 전환 시 Environment reset으로 이전
-   connection·cursor·optimistic state를 폐기한다.
-6. `PROD-813`에서 Local·Remote Target, 양방향 relation, 기존 Follow/Reaction/Notification, Repost/Bookmark 보존·비복구,
-   직접 조회·목록·검색·새 interaction, Profile 전환과 Local Timeline Author/Source Author 제외를 하나의 Web/API E2E 흐름으로
-   연결한다. Storybook·Web·Native 결과와 실제 runtime 경계를 분리해 기록한다.
+1. Profile Block relation을 Owner Profile·Target Profile foreign key, immutable 생성 시각, Owner/Target unique와 self-block check/index를
+   가진 additive table로 추가한다. migration 안전성·schema snapshot·구버전 공존은 기존 Drizzle workflow와 821 guardrail로 검증한다.
+2. Block action admission에서 공통 Block policy와 ingress admission을 확인한 뒤 durable Temporal orchestration을 시작한다. orchestration은
+   양방향 Follow Request·Follow Relationship에 기존 removal transaction/transition과 effect-plan contract를 재사용하고, deterministic drain
+   helper로 pending request·Target Reaction·직접 원인 Follow Notification cleanup을 재개 가능하게 처리한다. 기존 Unfollow workflow는 public
+   wrapper로 유지하고 같은 removal 계약을 새 child Workflow type이나 Block 전용 query로 복제하지 않는다.
+3. orchestration이 required cleanup 완료를 확인하기 전에는 Block action 성공을 반환하지 않는다. Repost·Bookmark와 직접 원인이 아닌 기존
+   Notification·Read State는 건드리지 않고, Unblock은 Block relation만 제거하며 정리된 Follow·Reaction을 복구하지 않는다.
+4. 저장 방향을 `(viewer, target)` 입력으로 정규화하는 공통 blocked predicate를 만들고 Profile/Post/Media direct query, Follow 후보, Home·
+   Local·Profile·Hashtag Post List, search와 interaction consumer가 후보 반환·payload 생성·write validation 전에 사용하게 한다.
+5. GraphQL은 selected Local Profile actor 기반 Block 생성·해제와 Owner-only connection을 제공한다. resolver·loader·Node·connection은 중앙
+   application policy를 호출하고 client-only filter나 request-specific DB actor GUC를 권한/visibility 대체로 사용하지 않는다.
+6. UI는 `PROD-861`을 prerequisite evidence로만 참고하고 이후 승인된 DSN-53 presentation의 공용 confirmation·Settings destination·accessibility
+   contract를 소비한다. Block과 Mute destination은 분리하며, UI는 보호된 Profile/Post/Media/Notification을 optimistic 상태로 복구하지 않는다.
+   Relay는 selected Profile actor Store 안에서만 좁게 cache를 수렴한다.
+7. `PROD-813`은 Local·Remote Target, 양방향 relation, cleanup/no-restore, direct/list/search/interaction, Profile switch와 platform evidence를
+   하나의 cross-slice 흐름으로 검증한다.
 
 ### Allowed Alternatives
 
-- Core action은 기존 service primitive를 조합하거나 Block 전용 transaction query를 사용할 수 있다. 어느 방식이든 모든
-  변경이 동일한 commit/rollback 경계에 있고 Profile Block specs의 보존·비복구 규칙을 만족해야 한다.
-- 공통 Block predicate는 기존 visibility module 확장 또는 동등한 core policy adapter로 둘 수 있다. resolver·loader·client가
-  각자 predicate를 복제하거나 DB session actor GUC로 요청 정책을 계산하는 방식은 허용하지 않는다.
-- GraphQL connection membership 갱신은 Relay connection directive 또는 영향 범위가 확인된 좁은 updater를 사용할 수 있다.
-  광범위한 store reset은 actor 경계를 보존해야 할 때만 사용한다.
-- UI route는 기존 Expo Router Settings/Profile route convention을 따르는 한 destination layout을 재사용하거나 새 leaf
-  route를 추가할 수 있다. 새 navigation shell·범용 safety component·UI package를 만들지 않는다.
+- Durable orchestration은 기존 Follow removal transition/effect-plan과 deterministic drain을 재사용해야 한다. 이를 Profile Block Workflow 안에서
+  조합하는 helper 배치와 orchestration topology는 구현 세부사항이지만, 새 child Workflow type이나 Block 전용 removal query로 같은 계약을
+  복제해서는 안 된다.
+- 공통 predicate는 기존 visibility module 확장 또는 동등한 core policy adapter로 둘 수 있다. resolver·loader·client가 predicate를 복제하거나
+  page limit 뒤 client filter로 보안을 구현하는 방식은 허용하지 않는다.
+- GraphQL connection membership 갱신은 Relay connection directive 또는 영향 범위가 확인된 좁은 updater를 사용할 수 있다. 광범위한 store reset은
+  actor 경계를 보존할 때만 사용한다.
+- UI는 기존 Expo Router Settings/Profile convention과 승인된 presentation을 따르는 destination layout을 재사용할 수 있다. 이 change를 위한
+  새 navigation shell·범용 safety component·별도 UI package를 만들지 않는다.
 
 ### Known Traps
 
-- Block row를 먼저 commit한 뒤 cleanup을 비동기로 실행하거나 Follow·Reaction deletion service를 별도 transaction으로 호출해
-  부분 차단을 남기지 않는다.
+- Block row를 먼저 성공으로 확정하고 cleanup을 비동기로 남기거나, required cleanup 전에 성공 응답을 반환하지 않는다.
+- 기존 Follow removal transition/effect-plan을 우회해 양방향 request·relationship·Notification을 별도 delete path로 중복 구현하지 않는다.
+- 일시 오류나 worker 재시작에서 이미 처리한 effect를 중복 적용하지 않고, 미완료 effect는 deterministic하게 재개한다.
 - Owner → Target 한 방향만 검사해 Target이 Owner의 Profile·Post·Media·Follow 후보를 계속 보게 하지 않는다.
-- Profile route/GraphQL에서 차단된 대상의 최신 상세를 재조회하거나, 목록에서 숨긴 뒤 client filter로만 보안을 구현하지 않는다.
-- Block 해제 시 기존 Follow·Reaction을 자동 복구하거나 Repost·Bookmark를 생성 시 삭제하지 않는다.
-- `PROD-327`의 현재 source 신규 Notification 억제, `PROD-818`의 federation, `PROD-328`의 async cleanup을 이 change의 task나
-  완료 증거로 끌어오지 않는다.
+- Profile route/GraphQL에서 차단된 대상의 최신 상세를 재조회하거나 client filter만으로 보안을 구현하지 않는다. UI는 보호된 데이터를 복구하지 않는다.
+- Block 해제 시 기존 Follow·Reaction을 자동 복구하거나 Repost·Bookmark·비직접 원인 Notification을 삭제하지 않는다.
+- `PROD-327` source 신규 Notification suppression, `PROD-818` federation, `PROD-328` async physical cleanup을 task나 완료 증거로 끌어오지 않는다.
 - `PROD-861` Storybook static 결과를 production API/cache/native runtime 증거로 일반화하지 않는다.
-- Local Timeline에서 별도 client filter를 만들거나 block 대상을 page limit 이후에 제거해 cursor pagination을 깨뜨리지 않는다.
+- 특정 Post List에 별도 Block predicate나 client filter를 만들지 않는다. 공통 Post List policy가 cursor/page limit 전에 적용되어야 한다.
 
 ## Risks / Trade-offs
 
-- [한 transaction에서 여러 관계를 정리하면 lock 범위와 latency가 커질 수 있다] → pair/index 조건을 사용한 bounded delete와
-  transaction integration test를 적용하고, Notification source generation·async cleanup을 기다리지 않는다.
-- [다수 GraphQL surface가 policy를 빠뜨릴 수 있다] → core predicate를 직접 조회·connection·search·interaction별 테스트에서
-  공통 fixture로 검증하고 client 후처리를 허용하지 않는다.
-- [mutation 뒤 Relay connection과 이미 표시된 Post/Notification이 stale할 수 있다] → 성공 payload의 정확한 ID와 좁은
-  connection updater를 사용하고, 실패 시 optimistic 상태를 확정하지 않으며 actor 전환 시 Environment를 교체한다.
-- [구버전 workload와 additive schema가 함께 실행될 수 있다] → 독립 table/index만 먼저 확장하고, rollback 시 table을 삭제하지
-  않고 구버전 read/write를 보존한다.
-- [Web/Storybook 증거가 Native 또는 federation 완료로 오인될 수 있다] → 각 task의 실행 환경과 미검증 범위를 별도 기록한다.
+- [여러 관계 정리를 durable orchestration으로 묶으면 retry와 lock 범위가 늘어날 수 있다] → pair/index 조건으로 bounded work를 계산하고
+  existing removal effect-plan·deterministic drain과 idempotency를 검증한다.
+- [orchestration이 cleanup 완료 전에 성공하거나 중단될 수 있다] → required cleanup completion을 명시적인 success gate로 두고 restart·retry
+  fixture에서 Block action 상태를 확인한다.
+- [여러 GraphQL surface가 policy를 빠뜨릴 수 있다] → direct·connection·search·interaction consumer가 공통 fixture와 predicate를 사용하는지
+  822 integration test에서 검증하고 client 후처리를 허용하지 않는다.
+- [mutation 뒤 Relay cache가 stale하거나 actor가 섞일 수 있다] → 성공 payload의 정확한 ID와 좁은 updater를 사용하고, failure는 optimistic 상태를
+  확정하지 않으며 actor 전환 시 Environment를 교체한다.
+- [구버전 workload와 additive schema가 공존할 수 있다] → 독립 table/index만 먼저 확장하고 migration/rollback safety와 기존 row 보존을 821에서
+  확인한다. 실제 rollback command는 repository workflow에 따른다.
+- [Web/Storybook 증거가 Native·federation 완료로 오인될 수 있다] → 813에서 환경별 실제 evidence와 미검증 범위를 분리 기록한다.
 
 ## Migration Plan
 
-1. Profile Block table·foreign key·unique/index를 additive Drizzle migration으로 배포하고 기존 Profile·Follow·Reaction·
-   Notification·Bookmark·Post row를 변경하지 않는다.
-2. `PROD-821` Core transaction과 `PROD-822` policy/GraphQL을 배포해 저장·조회 경계를 연결한다. 기존 client는 새 Block field를
-   요청하지 않아도 기존 API contract를 사용할 수 있어야 한다.
-3. `PROD-861` presentation 선행 증거가 준비된 뒤 `PROD-823` route·UI·Relay/cache를 배포한다. mutation 실패와 actor 전환 시
-   기존 서버 확정 상태를 유지한다.
-4. `PROD-813`에서 Local Timeline을 포함한 cross-slice E2E, canonical·Linear·OpenSpec 정합성과 지원 플랫폼별 실제 증거를
-   확인한다. 이후에만 전체 change를 archive한다.
-5. rollback은 app/API 배포를 되돌려 새 relation을 읽지 않게 하는 방식으로 수행하며, 이미 저장된 Profile Block row를 임의로
-   삭제하거나 차단 전 관계를 복구하지 않는다. `PROD-327`, `PROD-818`, `PROD-328`은 각각 독립된 후속 rollout/rollback 경계를
-   가진다.
+1. Profile Block table·foreign key·unique/check/index를 additive Drizzle migration으로 배포하고 기존 Profile·Follow·Reaction·Notification·
+   Bookmark·Post row를 변경하거나 backfill하지 않는다.
+2. `PROD-821`에서 Block admission과 durable cleanup orchestration, existing removal effect-plan 재사용과 success gate를 연결하고 migration·
+   restart/retry·보존/no-restore 검증을 수행한다.
+3. `PROD-822`에서 common policy·GraphQL을 연결한다. Profile/Post/Media/Follow candidate와 Home·Local·Profile·Hashtag list/search 및 새
+   interaction은 같은 predicate를 사용한다.
+4. `PROD-861` presentation prerequisite evidence가 준비된 뒤 `PROD-823`에서 승인된 presentation, Settings Block destination과 Relay/cache
+   actor isolation을 연결한다.
+5. `PROD-813`에서 Local·Remote pair와 direct/list/search/interaction 및 cross-slice E2E, canonical·Linear·OpenSpec 정합성, 플랫폼별 실제
+   evidence를 확인한다. 모든 declared task와 required validation 뒤에만 `add-profile-block`을 archive한다.
+6. rollback은 app/API 배포를 되돌려 새 relation을 읽지 않게 하는 기존 workflow로 수행하며, 저장된 Profile Block row를 임의 삭제하거나 차단 전
+   관계를 복구하지 않는다. `PROD-327`, `PROD-818`, `PROD-328`은 각각 독립된 후속 rollout/rollback 경계를 가진다.
 
 ## Open Questions
 

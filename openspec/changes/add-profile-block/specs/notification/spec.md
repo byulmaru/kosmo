@@ -2,7 +2,7 @@
 
 ### Requirement: Profile Block hides unavailable existing Notifications
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0002-pr-review-domain-adjustments.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, `docs/domain/decisions/0007-spec-boundary-and-state-clarifications.md`, `PROD-813`, `PROD-822`. Profile Block 생성으로 Recipient가 Related Profile 또는 Related Post를 조회할 수 없게 된 기존 Notification은 Notification connection, Unread count, Node 조회와 읽음 처리에서 없는 것처럼 취급해야 한다(MUST). 저장 row와 Read State는 후속 cleanup 전까지 남을 수 있다(MAY).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0002-pr-review-domain-adjustments.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, `docs/domain/decisions/0007-spec-boundary-and-state-clarifications.md`, `PROD-822`, `PROD-813`. Profile Block 생성으로 Recipient가 Related Profile 또는 Related Post를 조회할 수 없게 된 기존 Notification은 Notification connection, Unread count, Node 조회와 읽음 처리에서 없는 것처럼 취급해야 한다(MUST). 저장 row와 Read State는 후속 cleanup 전까지 남을 수 있다(MAY).
 
 #### Scenario: 차단으로 조회 불가가 된 기존 Notification을 숨긴다
 
@@ -16,14 +16,15 @@
 - **THEN** 시스템은 새 요청 시점의 Profile Block과 기존 Notification visibility policy를 평가한다
 - **AND** Block 동안 숨겨지거나 제거된 과거 Notification을 읽음 상태나 저장 row의 변경만으로 자동 복구하지 않는다
 
-### Requirement: Follow-cause Notification cleanup stays with Profile Block transaction
+### Requirement: Follow-cause Notification cleanup follows durable Profile Block cleanup
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`. Profile Block 생성으로 제거되는 Follow Request 또는 Follow Relationship을 직접 원인으로 가진 Notification은 같은 로컬 transaction에서 제거해야 한다(MUST). 제거된 Follow 객체가 직접 원인이 아닌 다른 기존 Notification과 Repost·Reaction·Bookmark 관계의 Notification은 이 action에서 동기적으로 삭제하거나 Read State를 바꾸지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`. Profile Block의 durable cleanup orchestration이 제거하는 Follow Request 또는 Follow Relationship을 직접 원인으로 가진 Notification은 기존 Follow removal effect-plan 계약에 따라 required cleanup에서 제거해야 한다(MUST). 제거된 Follow 객체가 직접 원인이 아닌 다른 기존 Notification과 Repost·Reaction·Bookmark 관계의 Notification은 이 action에서 동기적으로 삭제하거나 Read State를 바꾸지 않아야 한다(MUST NOT).
 
-#### Scenario: 제거된 Follow Request/Relationship 직접 원인 Notification만 즉시 정리한다
+#### Scenario: 제거된 Follow Request/Relationship 직접 원인 Notification을 durable하게 정리한다
 
-- **WHEN** Profile Block 생성 transaction이 양방향 Follow Request 또는 Follow Relationship을 제거한다
-- **THEN** 시스템은 각 제거 객체를 직접 원인으로 하는 Notification을 같은 transaction에서 제거한다
+- **WHEN** Profile Block cleanup orchestration이 양방향 Follow Request 또는 Follow Relationship을 제거한다
+- **THEN** 시스템은 각 제거 객체를 직접 원인으로 하는 Notification을 해당 effect-plan으로 required cleanup에 포함한다
+- **AND** orchestration 재시작 뒤에도 미완료된 직접 원인 Notification 정리를 재개한다
 - **AND** 해당 Follow 객체와 직접 연결되지 않은 기존 Notification은 저장 상태와 Read State를 유지한다
 
 ## Deferred scope

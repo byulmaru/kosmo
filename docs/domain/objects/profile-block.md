@@ -25,10 +25,14 @@ Profile Block은 Owner Profile과 Target Profile 사이의 조회와 상호작�
 
 ## 행동
 
-| 행동               | 행동 주체 Profile | 대상 객체     | 입력값         | 권한                                   | 조건                                                                             | 결과                                                                                                                                                                                                                                                                 |
-| ------------------ | ----------------- | ------------- | -------------- | -------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Profile Block 생성 | Owner Profile     | Profile Block | Target Profile | `Account.Active`, `Profile.Member`     | Owner는 Active/Normal Local Profile이고 Target과 다르며 같은 조합의 Block이 없다 | Block이 생성되고 두 Profile 사이의 Follow Request와 Follow Relationship, Target이 Owner의 Post에 남긴 Reaction이 제거된다. 제거된 Follow 객체를 원인으로 가진 Notification도 제거되며 Repost Post, Bookmark, 다른 기존 Notification은 action에서 동기적으로 유지된다 |
-| Profile Block 제거 | Owner Profile     | Profile Block | 없음           | `Account.Active`, `ProfileBlock.Owner` | Profile Block이 존재한다                                                         | Profile Block이 제거된다                                                                                                                                                                                                                                             |
+| 행동               | 행동 주체 Profile | 대상 객체     | 입력값         | 권한                 | 조건                                             | 결과                                                                                                                                                                                                                                                                                                                                          |
+| ------------------ | ----------------- | ------------- | -------------- | -------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Profile Block 생성 | Owner Profile     | Profile Block | Target Profile | 없음                 | Owner와 Target이 다르고 같은 조합의 Block이 없다 | Block이 생성된다. 필요한 Follow Request·Follow Relationship 제거, Target이 Owner Post에 남긴 Reaction 정리와 제거된 Follow 객체의 직접 원인 Notification 정리는 내구성 있는 cleanup orchestration으로 수행하며, 필수 정리가 완료되기 전에는 Block action을 성공으로 확정하지 않는다. Repost Post·Bookmark와 다른 기존 Notification은 유지한다 |
+| Profile Block 제거 | Owner Profile     | Profile Block | 없음           | `ProfileBlock.Owner` | Profile Block이 존재한다                         | Profile Block이 제거된다                                                                                                                                                                                                                                                                                                                      |
+
+Profile Block의 도메인 계약은 Owner Profile이 Local인지 Remote인지 또는 Account·Membership 상태를 일반 조건으로
+요구하지 않는다. 각 ingress는 자체 인증·admission 경계를 검증한다. 현재 GraphQL ingress는 검증된 Session의 selected
+Local Profile만 actor로 사용하며, remote ActivityPub ingress와 Block/Undo 전달은 `PROD-818`의 후속 범위다.
 
 ## 권한
 
@@ -40,11 +44,14 @@ Profile Block은 Owner Profile과 Target Profile 사이의 조회와 상호작�
 
 - Owner와 Target은 서로의 Profile, Post, Media와 Follow 후보를 직접 조회할 수 없다.
 - 모든 Post List와 검색 결과에서 상대 Profile의 콘텐츠를 Exclude한다.
-- Block 뒤 상대 Profile에서 발생한 새 Notification은 생성하지 않는다.
-- 제거된 Follow Request/Relationship을 원인으로 가진 Notification은 함께 제거한다. 다른 기존 Notification
-  Item은 Block action에서 동기적으로 바꾸지 않지만, 상대 Profile을 조회할 수 없어지면 Notification 조회에서 없는
-  것으로 취급하고 후속 비동기 cleanup 전까지 저장 상태가 남을 수 있다.
-- Block은 기존 Repost Post를 제거하지 않는다.
+- 제거된 Follow Request/Relationship을 원인으로 가진 Notification은 필수 cleanup orchestration에서 함께 제거한다.
+  다른 기존 Notification Item은 Block action에서 동기적으로 바꾸지 않지만, 상대 Profile을 조회할 수 없어지면
+  Notification 조회에서 없는 것으로 취급하고 후속 비동기 cleanup 전까지 저장 상태가 남을 수 있다.
+- Block은 기존 Repost Post와 Bookmark를 제거하지 않는다.
+- Block 해제는 차단 생성 시 제거된 Follow Request·Follow Relationship·Reaction을 복구하지 않는다.
+
+차단 뒤 모든 Notification source에 신규 생성 억제 정책을 연결하는 일은 `PROD-327`의 후속 범위다. 이 객체의 현재
+cleanup·조회 계약은 해당 source 연결을 전제로 하지 않는다.
 
 ## 확정 용어
 

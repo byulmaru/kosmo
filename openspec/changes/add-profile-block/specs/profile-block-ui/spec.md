@@ -39,27 +39,9 @@
 - **THEN** 시스템은 해당 Profile Block 해제 mutation을 실행한다
 - **AND** 성공한 Target은 현재 Block 목록에서 제거되고 다른 목록 항목의 상태는 바꾸지 않는다
 
-### Requirement: Blocked Profile route minimum shells
-
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/profile-hero.md`, `DSN-53`; 책임 이슈는 `PROD-823`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Profile Block 관계의 route는 전체 Profile을 제거하지 않고 route identity로 확인된 handle과 상태 안내만 가진 최소 셸을 유지해야 한다(MUST). `blocking` 상태는 `차단한 프로필입니다` 안내와 `차단 해제` action을 제공해야 하며(MUST), `blockedBy` 상태는 `이 프로필을 볼 수 없습니다` 안내만 제공하고 관계 action을 제공해서는 안 된다(MUST NOT). 두 상태는 최신 avatar·표시 이름, bio·수치·known followers·Post·Media와 Follow·Message action을 다시 조회하거나 노출해서는 안 된다(MUST NOT).
-
-#### Scenario: Owner가 차단한 Profile을 최소 셸로 본다
-
-- **WHEN** Owner가 자신이 차단한 Target Profile route를 연다
-- **THEN** 시스템은 route에서 이미 식별된 handle과 `차단한 프로필입니다` 안내를 표시한다
-- **AND** `차단 해제` action을 제공한다
-- **AND** 최신 Profile 상세·Post·Media·Follow·Message action을 조회하거나 표시하지 않는다
-
-#### Scenario: Target이 자신을 차단한 Profile route를 본다
-
-- **WHEN** Target이 자신을 차단한 Owner의 Profile route를 연다
-- **THEN** 시스템은 route에서 이미 식별된 handle과 `이 프로필을 볼 수 없습니다` 안내만 표시한다
-- **AND** 차단 해제·Follow·Message action을 제공하지 않는다
-- **AND** Owner의 최신 Profile 상세·Post·Media와 수치를 조회하거나 표시하지 않는다
-
 ### Requirement: Relay actor and cache isolation for Block
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block UI는 selected Profile별 Relay actor/store 경계를 유지해야 하며(MUST), Block·Unblock 성공 결과를 현재 화면, Block 목록과 이미 표시 중인 Profile·Post·Notification 표면의 cache에 서버 정책과 일치하도록 수렴시켜야 한다(MUST). selected Profile 또는 Session 전환 시 이전 Owner의 Block 상태·connection·cursor·optimistic 결과를 새 actor에 재사용해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block UI는 selected Profile별 Relay actor/store 경계를 유지해야 하며(MUST), `PROD-861` 결과를 prerequisite evidence로 참고하되 이후 승인된 presentation을 소비하고 보호된 Profile·Post·Media·Notification 데이터를 UI 상태로 복구해서는 안 된다(MUST NOT). Block·Unblock 성공 결과는 현재 화면, Block 목록과 이미 표시 중인 unavailable 표면의 cache에 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 이전 Owner의 Block 상태·connection·cursor·optimistic 결과를 새 actor에 재사용해서는 안 된다(MUST NOT).
 
 #### Scenario: Block 성공 뒤 표시 중인 결과가 정책에 수렴한다
 
@@ -83,16 +65,16 @@
 
 ### Requirement: Profile Block interaction accessibility
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/accessibility.md`, `DSN-53`; 책임 이슈는 `PROD-823`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block confirmation, management list와 minimum shell은 실제 동작에 맞는 role·accessible name·current·disabled·busy 상태와 안전한 초기 focus, modal 의미, Web `Escape`·Native back 및 focus 복원을 제공해야 한다(MUST). 공용 Button, ActionMenu, ModalSheet, Toast, SettingsItem과 Profile shell을 재사용해야 하며(MUST), 이 흐름만을 위한 새 Toast·범용 safety component·별도 UI package를 추가해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/accessibility.md`, `DSN-53`; 책임 이슈는 `PROD-823`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block confirmation과 management list는 실제 동작에 맞는 role·accessible name·current·disabled·busy 상태와 안전한 초기 focus, modal 의미, Web `Escape`·Native back 및 focus 복원을 제공해야 한다(MUST). 공용 Button, ActionMenu, ModalSheet, Toast와 SettingsItem을 재사용해야 하며(MUST), 이 흐름만을 위한 새 Toast·범용 safety component·별도 UI package를 추가해서는 안 된다(MUST NOT).
 
 #### Scenario: 확인 UI와 해제 action이 접근 가능한 이름과 상태를 제공한다
 
-- **WHEN** keyboard 또는 보조 기술 사용자가 Block confirmation을 열거나 Block 목록·Profile shell의 해제 action으로 이동한다
+- **WHEN** keyboard 또는 보조 기술 사용자가 Block confirmation을 열거나 Block 목록의 해제 action으로 이동한다
 - **THEN** 시스템은 확인 제목·설명·`취소`·확정 action과 각 action의 정확한 accessible name을 제공한다
 - **AND** pending action은 disabled·busy 상태로 전달되고 확인 UI가 닫힌 뒤 유효한 이전 focus를 복원한다
 
 #### Scenario: 지원 viewport와 긴 identity에서 layout을 유지한다
 
-- **WHEN** Block confirmation, 목록과 minimum shell을 Web 1024·1440, Mobile 390의 Light/Dark 상태에서 긴 handle·표시 이름과 함께 렌더링한다
-- **THEN** 기존 Settings/Profile shell의 reflow와 focus 순서를 유지한다
+- **WHEN** Block confirmation과 목록을 Web 1024·1440, Mobile 390의 Light/Dark 상태에서 긴 handle·표시 이름과 함께 렌더링한다
+- **THEN** 기존 Settings/Profile presentation의 reflow와 focus 순서를 유지한다
 - **AND** Web 시각 target과 Native 입력 target이 canonical 접근성 계약을 만족하면서 인접 action과 겹치지 않는다
