@@ -107,17 +107,23 @@ The system MUST append each committed transition's effects to a FIFO queue owned
 
 ### Requirement: Follow transition effects and retry
 
-The system MUST preserve existing source-correlated Notification and ActivityPub queue handoff semantics while moving the transaction admission and Pending lifecycle into the pair Workflow. The Update result is the committed domain result; effect completion is a separate Workflow concern.
+The system MUST preserve existing source-correlated Notification and ActivityPub queue handoff semantics while moving the transaction admission and Pending lifecycle into the pair Workflow. The Update result is the committed domain result; effect completion is a separate Workflow concern. Each transaction Activity attempt evaluates the current participant and remote Instance state and returns the resulting effect plan. Once returned, the Workflow executes that plan as-is; an effect Activity MUST NOT re-evaluate mutable state to add or cancel a delivery.
 
 #### Scenario: Duplicate or rolled-back transition
 
 - **WHEN** a Follow or Pending transition is a duplicate, no-op, known domain failure, or rollback
 - **THEN** the Update returns the existing domain outcome or failure and the Workflow appends no new source effect for a transition that did not commit
 
-#### Scenario: Activity retry after commit
+#### Scenario: Transaction retry re-evaluates delivery eligibility
 
-- **WHEN** a transaction or effect Activity is retried after a Worker failure
-- **THEN** the transition re-checks pair state and exact source identity, and the effect reuses that stable identity without creating a later lifecycle's Notification or protocol activity
+- **WHEN** a transaction Activity's completion is lost after commit and its retry observes changed participant or remote Instance state
+- **THEN** the retry re-checks pair state and exact source identity, and may include or omit the ActivityPub handoff in the returned effect plan according to the current state
+- **AND** the retry does not apply the transition twice or create effects for a later lifecycle
+
+#### Scenario: Effect retry preserves the returned delivery plan
+
+- **WHEN** an already-returned effect plan is retried after a Worker failure or mutable participant state changes
+- **THEN** the effect reuses that stable identity without re-evaluating delivery eligibility or creating a later lifecycle's Notification or protocol activity
 
 #### Scenario: Promote an existing request after transaction completion loss
 

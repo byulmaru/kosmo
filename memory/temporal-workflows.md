@@ -15,9 +15,10 @@
 - Workflow는 결정론적 orchestration만 수행한다. DB domain transition은 Activity에서 실행하고, pair Workflow의
   source identity와 effect queue는 JSON-serializable한 Workflow state로 보존한다.
 - Activity는 Notification projection이나 Fedify queue handoff처럼 retry 가능한 하나의 외부 효과 경계를 소유한다.
-- transition eligibility와 effect execution을 분리한다. capability가 현재 Profile/Instance 상태로 protocol delivery를
-  생략할 수 있으면 transaction Activity가 그 시점의 결정을 effect input에 기록한다. effect Activity는 이후 mutable
-  상태를 다시 조회해 commit된 delivery를 취소하지 않는다.
+- transition eligibility와 effect execution을 분리한다. transaction Activity는 각 시도에서 현재 Profile/Instance
+  상태를 평가해 effect plan을 반환한다. completion loss 뒤 retry가 다른 상태를 관찰하면 delivery를 포함하거나
+  생략할 수 있다. Workflow는 반환된 plan을 그대로 실행하고 effect Activity는 이후 mutable 상태를 다시 조회해
+  delivery를 추가하거나 취소하지 않는다.
 - Workflow start 실패가 이미 commit된 domain 결과를 바꾸지 않는 capability에서는 start 호출부가 deadline과 오류 격리를 명시한다.
 
 ## Workflow Source Structure

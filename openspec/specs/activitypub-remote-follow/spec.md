@@ -45,12 +45,13 @@ The system MUST route verified local-to-remote Follow and pending-request transi
 #### Scenario: Unresponsive remote instance
 
 - **WHEN** a local Follow, Follow Request, Unfollow, or request Cancel commits while the remote Instance is `UNRESPONSIVE`
-- **THEN** the local transition and Notification effects remain applicable, but the transaction records no outbound Follow or Undo and recovery does not replay that omitted delivery
+- **THEN** the transaction keeps the applicable local transition and Notification effects and returns no outbound Follow or Undo in that attempt's effect plan
+- **AND** if transaction completion is lost and a retry observes a different remote Instance state, the retry may return a different delivery plan based on that current state
 
 #### Scenario: Committed delivery outlives mutable availability
 
 - **WHEN** the transaction records an outbound Follow or Undo while the remote Instance is `ACTIVE` and participant state changes before Worker execution
-- **THEN** the Worker attempts the committed delivery without using the later mutable state to cancel it
+- **THEN** the Workflow attempts the returned delivery using its stable source identity without using the later mutable state to cancel or add it
 
 ### Requirement: Verified inbound Follow boundary and no echo
 

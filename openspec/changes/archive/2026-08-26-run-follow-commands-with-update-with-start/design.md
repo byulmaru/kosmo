@@ -148,7 +148,9 @@ Update wire result에는 full DB row나 `Temporal.Instant` 대신 생성/승격�
 - ActivityPub signature, actor/object/recipient, local target binding과 delivery validation은 Fedify ingress에 남긴다.
 - inbound Follow의 direct `Accept(Follow)` send handoff는 `handleInboundFollow`에 남긴다.
 - Activity가 처리하는 ActivityPub-origin transition은 Notification/cleanup만 실행하고 outbound Follow/Undo echo를 생성하지 않는다.
-- Activity는 commit 시점에 mutable Profile state, block, role, exact row를 다시 판정한다.
+- 각 transaction Activity 시도는 현재 mutable Profile state, block, role, exact row를 다시 판정하고 성공 시
+  effect plan에 반영한다. Effect Activity는 Workflow가 반환한 plan의 stable identity를 실행하고 mutable state를
+  다시 판정하지 않는다.
 
 ## Risks / Trade-offs
 

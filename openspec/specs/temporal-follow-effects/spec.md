@@ -94,29 +94,34 @@ The system MUST append each committed transition's effects to a FIFO queue owned
 
 ### Requirement: Follow transition effects and retry
 
-The system MUST preserve existing source-correlated Notification and ActivityPub queue handoff semantics while moving the transaction admission and Pending lifecycle into the pair Workflow. The Update result is the committed domain result; effect completion is a separate Workflow concern.
-
-ActivityPub delivery eligibility MUST be decided by the transition transaction and recorded in the committed effect input. An effect Activity MUST NOT cancel an already-planned delivery by rechecking mutable Profile or Instance state at execution time.
+The system MUST preserve existing source-correlated Notification and ActivityPub queue handoff semantics while moving the transaction admission and Pending lifecycle into the pair Workflow. The Update result is the committed domain result; effect completion is a separate Workflow concern. Each transaction Activity attempt evaluates the current participant and remote Instance state and returns the resulting effect plan. Once returned, the Workflow executes that plan as-is; an effect Activity MUST NOT re-evaluate mutable state to add or cancel a delivery.
 
 #### Scenario: Duplicate or rolled-back transition
 
 - **WHEN** a Follow or Pending transition is a duplicate, no-op, known domain failure, or rollback
 - **THEN** the Update returns the existing domain outcome or failure and the Workflow appends no new source effect for a transition that did not commit
 
-#### Scenario: Activity retry after commit
+#### Scenario: Transaction retry re-evaluates delivery eligibility
 
-- **WHEN** a transaction or effect Activity is retried after a Worker failure
-- **THEN** the transition re-checks pair state and exact source identity, and the effect reuses the stable create source ID or exact deleted source ID and directed pair without creating a later lifecycle's Notification or protocol activity
+- **WHEN** a transaction Activity's completion is lost after commit and its retry observes changed participant or remote Instance state
+- **THEN** the retry re-checks pair state and exact source identity, and may include or omit the ActivityPub handoff in the returned effect plan according to the current state; for example, `ACTIVE → UNRESPONSIVE` may omit it and `UNRESPONSIVE → ACTIVE` may include it
+- **AND** the retry does not apply the transition twice or create effects for a later lifecycle
+
+#### Scenario: Effect retry preserves the returned delivery plan
+
+- **WHEN** an already-returned effect plan is retried after a Worker failure or mutable participant state changes
+- **THEN** the effect reuses the stable create source ID or exact deleted source ID and directed pair without re-evaluating delivery eligibility or creating a later lifecycle's Notification or protocol activity
 
 #### Scenario: Unresponsive remote target at transition time
 
 - **WHEN** a local Follow, Follow Request, Unfollow, or request Cancel commits while the remote target Instance is `UNRESPONSIVE`
-- **THEN** the transition keeps its applicable local graph and Notification effects, records no ActivityPub delivery for that transition, and does not create a durable redelivery when the Instance later becomes `ACTIVE`
+- **THEN** the transaction Activity keeps its applicable local graph and Notification effects and returns no ActivityPub delivery in that attempt's effect plan
+- **AND** if completion is lost and a retry observes a different remote Instance state, the retry returns an effect plan based on that current state
 
 #### Scenario: Target state changes after delivery was planned
 
 - **WHEN** a local transition records an ActivityPub delivery while the remote target is `ACTIVE` and Profile or Instance state changes before the effect Activity runs or retries
-- **THEN** the Activity still attempts the recorded delivery using the stable create source or exact deleted source ID and directed pair instead of re-evaluating transition eligibility
+- **THEN** the Workflow still attempts the returned delivery using the stable create source or exact deleted source ID and directed pair instead of re-evaluating transition eligibility
 
 #### Scenario: Delivery projection is incomplete
 

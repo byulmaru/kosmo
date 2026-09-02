@@ -32,7 +32,7 @@
 
 - Decision Date: 2026-08-25
 - Decision Class: Implementation Choice
-- Authority / Provenance: PROD-720, `docs/architecture/core-services.md`, delta `data-model` spec
+- Authority / Provenance: PROD-720, `docs/architecture/core-services.md`, delta `temporal-follow-effects` spec
 - Status: Active
 - Context / Problem: pair Workflow가 lifecycle identity를 소유하므로 command마다 random operation identity와 transient receipt를 둘 필요가 없다.
 - Decision Outcome: domain identity는 pair key와 현재 request/follow row ID가 소유한다. Temporal Update ID는 transport deduplication metadata로만 사용하고 DB에 영속화하지 않는다. Activity retry는 current DB state, deterministic candidate ID와 expected row ID로 재구성한다.
