@@ -54,8 +54,8 @@ tailnet 요청이 Admin workload에 도달한다.
 
 - [x] 2.1 adapter-node build output을 포함해 application image와 entrypoint에서 Admin runtime을 실행한다.
 - [x] 2.2 Admin Deployment, ClusterIP Service와 Tailscale Operator Ingress를 Helm에 추가한다.
-- [ ] 2.3 template-derived proxy selector가 대상 Operator의 live resource와 일치하는지 확인하고 일반 workload
-      source를 제한하는 NetworkPolicy를 검증한다.
+- [x] 2.3 release·namespace에서 파생한 Operator proxy selector로 일반 workload source를 제한하는
+      NetworkPolicy를 추가하고 Helm render를 검증한다.
 - [x] 2.4 Admin image boot와 SvelteKit production build, dev/prod Helm render 검증을 추가하고 통과시킨다.
 
 ## 3. PROD-690 통합 검증과 운영 handoff
@@ -70,6 +70,8 @@ tailnet 요청이 Admin workload에 도달한다.
 
 repository 검증과 실제 dev tailnet 관찰이 Admin shell의 허용·거부, 직접 접근 차단과 배포 readiness를 구분해
 증명한다.
+
+3.3–3.5의 live 항목은 merge 후 운영 handoff에서 수행하며 repository CI와 PR readiness와는 별도로 관리한다.
 
 **Guardrails**
 
@@ -86,7 +88,8 @@ repository 검증과 실제 dev tailnet 관찰이 Admin shell의 허용·거부,
 
 - [x] 3.1 접근 정책 prerequisite, deploy·검증·rollback 절차를 사용자 식별자나 credential 값 없이 문서화한다.
 - [x] 3.2 workspace lint/test, SvelteKit production build, image와 Helm 검증, OpenSpec strict validation을 통과시킨다.
-- [ ] 3.3 dev에서 workload readiness와 Operator Ingress 전달을 확인한다.
+- [ ] 3.3 merge 후 dev에서 workload readiness, Operator Ingress 전달과 생성된 proxy label이 NetworkPolicy
+      selector와 일치하는지 확인한다.
 - [ ] 3.4 dev tailnet의 허용·거부 접근과 일반 Pod·node 밖 VPC direct access·공개 인터넷 비노출을 확인하고,
       node-origin 예외를 구분해 기록한다.
 - [ ] 3.5 모든 repository와 live 검증이 끝난 뒤 change archive 담당과 완료 여부를 확정한다.

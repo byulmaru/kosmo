@@ -1,4 +1,3 @@
-{{- if .Values.admin.enabled }}
 {{- $hostname := printf "%s-%s-admin" .Release.Name .Values.env | trunc 63 | trimSuffix "-" }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -20,4 +19,3 @@ spec:
       name: {{ printf "%s-admin" .Release.Name | trunc 63 | trimSuffix "-" }}
       port:
         number: 80
-{{- end }}

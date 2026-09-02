@@ -84,8 +84,9 @@ shell과 SvelteKit page-data 응답은 `Cache-Control: no-store`를 사용한다
 ## Migration Plan
 
 1. Admin SvelteKit package production build, image entrypoint와 Helm render를 배포 전 검증한다.
-2. dev Operator 버전, generated proxy label, 파생 hostname과 Tailscale 접근 정책 준비를 확인한다.
-3. dev에 Deployment, Service, Ingress와 NetworkPolicy를 sync하고 workload readiness를 확인한다.
+2. dev의 Tailscale 접근 정책과 파생 hostname 준비를 확인한 뒤 변경을 merge한다.
+3. dev에 Deployment, Service, Ingress와 NetworkPolicy를 sync하고 workload readiness, Operator 버전과
+   generated proxy label을 확인한다.
 4. 허용된 Viewer와 허용되지 않은 tailnet 주체의 hostname 접근을 각각 검증한다.
 5. 일반 Pod와 node 밖 VPC 경로의 ClusterIP·Pod IP 접근 및 공개 인터넷 노출이 차단됨을 별도로 확인하고,
    node-origin 또는 node로 source NAT된 경로는 차단 증거에서 제외한다.

@@ -1,4 +1,3 @@
-{{- if .Values.admin.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12,7 +11,7 @@ metadata:
     app.kubernetes.io/version: {{ .Values.version | quote }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-  replicas: {{ get .Values.admin.replicas .Values.env }}
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: admin
@@ -58,6 +57,3 @@ spec:
               port: http
             initialDelaySeconds: 3
             periodSeconds: 5
-          resources:
-{{ toYaml .Values.admin.resources | indent 12 }}
-{{- end }}

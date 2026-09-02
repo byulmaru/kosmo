@@ -1,8 +1,7 @@
 # Admin Console 배포와 검증
 
-Admin Console은 Tailscale 접근 정책과 Operator Ingress를 유일한 진입 경계로 사용한다. repository의 Helm
-기본값은 `admin.enabled=false`이며, 실제 Operator와 tailnet 정책을 확인하기 전에는 workload를 활성화하지
-않는다.
+Admin Console은 Tailscale 접근 정책과 Operator Ingress를 유일한 진입 경계로 사용한다. Helm chart는 Admin
+workload를 별도 opt-in 값 없이 생성하며, hostname은 release name과 환경에서 파생한다.
 
 ## 사전 조건
 
@@ -10,8 +9,8 @@ Admin Console은 Tailscale 접근 정책과 Operator Ingress를 유일한 진입
 - tailnet 접근 정책에서 Admin Console hostname에 접근할 Viewer와 거부할 검증 주체를 준비한다.
 - 사용자 식별자, auth key, client secret과 identity header 값은 repository values나 검증 기록에 저장하지 않는다.
 
-배포 후 생성된 Tailscale Ingress proxy가 release·namespace에서 파생된 NetworkPolicy selector와 일치하는지
-live 환경에서 확인한다.
+merge 후 dev에 배포하면 생성된 Tailscale Ingress proxy가 release·namespace에서 파생된 NetworkPolicy selector와
+일치하는지 확인한다. 이 live 확인은 repository CI와 별도의 운영 검증이다.
 
 ```sh
 kubectl -n tailscale get pods \
@@ -23,7 +22,7 @@ kubectl -n tailscale get pods \
 
 ```sh
 pnpm --filter @kosmo/admin test
-mise exec -- helm lint apps/helm --set env=dev --set admin.enabled=true
+mise exec -- helm lint apps/helm --set env=dev
 docker build --target runtime --tag kosmo-admin-smoke .
 pnpm exec openspec validate add-admin-console-foundation --strict
 ```
@@ -33,16 +32,9 @@ hostname은 release name과 환경에서 파생되며 tailnet 운영 설정은 r
 
 ## 배포
 
-환경별 Argo CD Helm values에 다음 값만 설정한다.
-
-```yaml
-admin:
-  enabled: true
-```
-
-Ingress hostname은 release name과 환경에서 자동으로 파생된다. Tailscale 접근 정책의 principal이나 credential
-값은 Helm values에 넣지 않는다. sync 뒤 Deployment, Service, Ingress, NetworkPolicy와 EndpointSlice를 확인하고
-workload가 Ready가 되기 전에 tailnet 접근 성공을 주장하지 않는다.
+별도 Admin Helm values는 설정하지 않는다. Tailscale 접근 정책의 principal이나 credential 값은 Helm values에
+넣지 않는다. sync 뒤 Deployment, Service, Ingress, NetworkPolicy와 EndpointSlice를 확인하고 workload가 Ready가
+되기 전에 tailnet 접근 성공을 주장하지 않는다.
 
 ## Live 검증
 
@@ -60,6 +52,5 @@ Kubernetes node 자체, kubelet, node 권한을 가진 운영 주체와 node로 
 
 ## Rollback
 
-application revision을 이전 검증 revision으로 되돌리거나 `admin.enabled=false`로 sync해 Admin Deployment,
-Service, Ingress와 NetworkPolicy를 함께 제거한다. tailnet 접근 정책 변경은 cluster rollback과 분리해 해당 운영
-절차로 되돌린다.
+application revision을 이전 검증 revision으로 되돌린다. tailnet 접근 정책 변경은 cluster rollback과 분리해 해당
+운영 절차로 되돌린다.

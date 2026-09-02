@@ -24,8 +24,8 @@ jobs:
           - name: Admin Helm
             command: |
               set -euo pipefail
-              helm lint apps/helm --set env=dev --set admin.enabled=true
-              rendered="$(helm template kosmo apps/helm --namespace kosmo-dev --set env=dev --set admin.enabled=true)"
+              helm lint apps/helm --set env=dev
+              rendered="$(helm template kosmo apps/helm --namespace kosmo-dev --set env=dev)"
               grep -Eq '^kind: Deployment$' <<<"$rendered"
               grep -Eq '^kind: Service$' <<<"$rendered"
               grep -Eq '^kind: Ingress$' <<<"$rendered"
@@ -37,8 +37,8 @@ jobs:
               grep -Fq 'tailscale.com/parent-resource: "kosmo-admin"' <<<"$rendered"
               grep -Fq 'tailscale.com/parent-resource-ns: "kosmo-dev"' <<<"$rendered"
               if grep -Eq '^kind: HTTPRoute$' <<<"$rendered"; then exit 1; fi
-              helm lint apps/helm --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --set admin.enabled=true
-              helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --set admin.enabled=true >/dev/null
+              helm lint apps/helm --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+              helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >/dev/null
           - name: Admin Image
             command: |
               set -euo pipefail

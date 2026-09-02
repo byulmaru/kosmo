@@ -2,18 +2,6 @@ env:
 image: ghcr.io/byulmaru/kosmo
 imageDigest: ''
 version: main
-admin:
-  enabled: false
-  replicas:
-    dev: 1
-    prod: 2
-  resources:
-    requests:
-      cpu: 50m
-      memory: 64Mi
-    limits:
-      cpu: 250m
-      memory: 256Mi
 worker:
   replicas:
     dev: 1
