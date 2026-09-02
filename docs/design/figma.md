@@ -89,9 +89,10 @@ Compact·Mobile에서도 route screen으로 중복 생성하지 않고 독립된
 
 #### Inventory-only canonical overlays
 
-Composer와 Feedback은 route screen이 아니라 어떤 route에서든 열리는 canonical overlay다. Full·Compact·Mobile
-인벤토리에서 소유 overlay 계약은 유지하되, `/compose`나 `/feedback` 전체 화면을 복제해 route 세트에
-추가하지 않는다.
+Composer와 Feedback의 Target은 route screen이 아니라 어떤 route에서든 열리는 canonical overlay다.
+Full·Compact·Mobile 인벤토리에서 소유 overlay 계약은 유지하되, 현재 runtime의 `/compose`·`/feedback`
+호환 route를 별도 canonical screen으로 복제하지 않는다. 호환 route의 제거 여부와 runtime migration은
+해당 Product 계약에서 별도로 추적한다.
 
 | Overlay  | Canonical node                                                                                                                             | Inventory contract                                                                                         |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
@@ -121,8 +122,8 @@ Composer와 Feedback은 route screen이 아니라 어떤 route에서든 열리�
 - 39개 FRAME은 모두 `1024×900`, explicit Light/Dark mode, current main-component 상속을 유지하며 missing
   `mainComponent`가 없다. 이 수량은 inventory에 등록된 DSN-50 범위의 내부 정합성만 증명하며 제품 surface
   전체가 누락 없이 Screens에 승격됐다는 뜻은 아니다.
-- 같은 inventory 하단의 `Cross-viewport canonical additions · 18 FRAME + 1 lifecycle` ledger는 이 Compact
-  baseline과 별도로 집계한다. Post Activity 6개, Reaction People 3개, Mute·Block category·관리 목록 7개의
+- 같은 inventory 하단의 `Cross-viewport canonical additions · 19 FRAME + 1 lifecycle` ledger는 이 Compact
+  baseline과 별도로 집계한다. Post Activity 6개, Reaction People 3개, Mute·Block category·관리 목록 8개의
   Target FRAME과 PostMediaViewer 대표 FRAME 2개를 추가했고, Full Profile target selector source·consumer
   1개를 lifecycle family로 기록했다. 따라서 기존 Compact 39개 수량은 바뀌지 않는다.
 - `Current`, `Target`, `Candidate`, `Legacy`, `Product not implemented`를 그대로 보존한다. Target·Candidate
@@ -133,13 +134,163 @@ Composer와 Feedback은 route screen이 아니라 어떤 route에서든 열리�
 | 영역                  | 확정한 Compact/공통 계약                                                                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Profile required      | `PageHeader`는 상단에 유지하고 상태 본문만 남은 영역에서 중앙 정렬한다.                                                                                                   |
-| Recoverable error     | cache가 있으면 마지막 성공 content와 persistent retry Toast를 유지하고, cache가 없으면 neutral body와 Toast를 사용한다. spinner는 실제 retry 중에만 표시한다.             |
+| Recoverable error     | cache가 있으면 마지막 성공 content와 persistent retry Toast를 유지하고, cache가 없으면 skeleton과 Toast를 사용한다. spinner는 실제 retry 중에만 표시한다.                 |
 | Followers / Following | Profile detail에 붙이지 않고 `~님의 팔로워`·`~님의 팔로잉` PageHeader와 `팔로워`·`팔로잉` tab을 가진 독립 route로 표시한다. Compact와 Full의 기존 URL frame을 재사용한다. |
 | Post thread           | row는 vertical Auto Layout/Hug으로 쌓고 인접한 N개 row 사이 N-1 divider만 실제 row 경계에 둔다.                                                                           |
 | Reply                 | Compact Post 상세의 기본 frame은 closed thread다. Reply action은 기존 600×720 modal pattern을 사용하며 inline Composer나 별도 Reply route frame을 만들지 않는다.          |
 | Settings              | Target root는 `계정 설정 → 프로필 설정 → 뮤트 및 차단 → 테마` 순서다. `게시물 기본 공개 범위`는 `/settings/profile` 내부 field이며 별도 Target frame을 두지 않는다.       |
 | Pinned attribution    | Center/Pinned source에만 `paddingTop=4px`을 적용한다. Repost source는 `paddingTop=0`, 높이 20px을 유지한다.                                                               |
 | Bookmarks             | Compact와 Full 모두 Bookmark action을 data-derived `Selected`로 표시하고 같은 `itemSpacing=0` PostListItem stack을 사용한다.                                              |
+
+### DSN-51 Mobile 390 Local error targets (2026-08-30)
+
+[`08 Local timeline states · DSN-56`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4657-13349)는
+기존 Loading·Empty와 오류 Target 3개를 분리한다.
+
+- [`Initial error`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4665-4855)는 저장 목록이 없는
+  2행 skeleton과 persistent retry Toast를 사용한다.
+- [`Refresh error`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6576-8485)는 마지막 성공 목록을,
+  [`Pagination error`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6576-8495)는 기존 목록을 유지한 채
+  같은 [`Toast · Danger · Action`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1890-1020)을 재사용한다.
+- Toast는 Mobile root의 `x=15`, `y=696`, `360×52` absolute overlay이며 `BottomTabBar` 위 16px을 유지한다.
+  Initial은 기존 blocking `StateView`를 Target으로 이관한 것이고 Refresh·Pagination은 확정 누락 Target이다.
+  세 FRAME 모두 runtime data 보존·retry·accessibility 동작의 완료 증거는 아니다.
+
+### Mobile spacing과 Native action target source (2026-08-30)
+
+- [`/follow-requests` Initial error Target](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-3410)은
+  중앙 `StateView`를 제거하고 skeleton 위에 [`Toast instance 6598:1438`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6598-1438)을
+  `x=15`, `y=696`, `360×52`로 배치한다. 문구는 `팔로워 요청을 불러오지 못했어요`, action은 `다시 시도`다.
+  pagination과 승인·거절 row 실패는 이번 Figma Target 범위에서 변경하지 않는다.
+- [`PostListItem`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1924-1992)의
+  `Size=Mobile` 4종은 좌우 padding 16px, `Size=Center` 4종은 기존 8px을 사용한다. Mobile Text·Media의
+  Reaction Summary slot은 실제 content column `298px`을 채우며 Action Bar와 같은 좌우 edge에 정렬된다. Home [`4524:3985`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-3985)과 Local [`4524:4139`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-4139) 실제 consumer에서 Mobile 상속을 확인했다.
+- [`PostActionBar`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6604-48270)는
+  `Platform=Web|iOS|Android` source variant를 제공한다. Web [`2184:3966`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=2184-3966)은
+  28px, iOS [`6604:1431`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6604-1431)은 44pt,
+  Android [`6604:1468`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6604-1468)은 48dp target이며 내부 visual은 모두 28px이다. Native visual은 target의 세로 중앙에 두어 iOS는 위·아래 8pt, Android는 위·아래 10dp를 유지한다. Bookmark의 28px IconOnly visual과 More visual은 세로 중앙·가로 오른쪽에 맞추며 두 target 사이 gap은 0이다.
+- `04 Screens - Mobile`의 canonical 조립은 Android baseline이다. 2026-08-30 readback 기준 직접 SECTION 하위
+  `390×844` FRAME 85개와 screen INSTANCE 17개(overlay 4개, Profile lifecycle 13개)가 Android source 또는
+  platform-neutral source를 사용한다.
+  Home [`4524:3985`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-3985)·Local
+  [`4524:4139`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-4139)은 Android
+  `TabList` 48dp, `PostActionBar` 48dp, `BottomTabBar` 96dp를 연결한다. 별도 Android preview 두 장은 이 canonical
+  consumer와 중복되어 제거했다.
+- Android [`TabList 4515:11869`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4515-11869)는
+  48dp touch 영역을 유지하고 visual boundary를 `y=44`에 둔다. 선택 Underline의 하단과 boundary가 맞닿으며,
+  Android/iOS `TabList` 안의 nested `Tab`은 같은 platform variant만 사용한다.
+- [`01 Mobile Web exceptions`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1938-880)은
+  public routes 4개, route-owned Search results, Feedback Idle·Error 7개만 격리하고 Web 28px source를 유지한다.
+- [`05 iOS representative deltas`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-2488)는
+  Notifications, Search, Home [`6619:7918`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6619-7918),
+  Post detail, Settings 5개만 유지한다. iOS Home은 47pt shell top safe area, iOS `TabList`, 44pt `PostActionBar`,
+  108pt `BottomTabBar`를 사용한다. platform-neutral `__MobileFullscreenComposerShell`은 동일 화면을 중복 생성하지 않는다.
+- iOS post-detail Target [`1943:2837`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-2837)은
+  screen-owned [`PostListItem assembly 6783:1507`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6783-1507) 안에서
+  [`PostActionBar 6783:1515`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6783-1515)를 iOS 44pt source에 연결한다.
+  shared `PostListItem`의 nested swap이 기존 28px bounds를 보존하므로 이 Native Target frame만 화면 수준 assembly를 사용한다.
+  이 분리는 runtime Native 적용 완료를 뜻하지 않는다.
+- 위 Target/source consumer는 Figma evidence다. production padding, Native hit area, Toast retry·persistent lifecycle과
+  VoiceOver·TalkBack focus boundary는 아직 구현·runtime 완료로 세지 않는다.
+
+DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검증을 분리한다.
+
+| 플랫폼     | Figma에서 확인한 범위                                                                                                                                                                                                   | 미확인·Product 후속                                                                                                                                                                |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Android    | `390×844` canonical baseline, Android `TabList`·`PostActionBar`·`BottomTabBar`, Light/Dark 대표 consumer와 route/state·overlay 조립                                                                                     | 실제 48dp 입력 영역, Safe Area·IME reflow, TalkBack name·state·focus order와 production source 적용, 현재 Native `/feedback` page를 overlay/sheet Target으로 이관하는 Product 계약 |
+| iOS        | [`05 iOS representative deltas`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-2488)의 Notifications·Search·Home·Post detail·Settings, iOS `TabList`·44pt `PostActionBar`·108pt `BottomTabBar` | 대표 5개 밖의 parity, 실제 44pt 입력 영역, Safe Area·keyboard·VoiceOver·font scaling, 현재 Native `/feedback` page를 overlay/sheet Target으로 이관하는 Product 계약                |
+| Mobile Web | [`01 Mobile Web exceptions`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1938-880)의 public route·Search·Feedback Target과 Web 28px source                                                        | 실제 viewport·keyboard·zoom/reflow·focus lifecycle, 현재 Web direct `/feedback` fallback을 overlay-only Target으로 이관하는 Product 계약                                           |
+
+`확인`은 위 Figma node의 geometry·source/instance·mode readback만 뜻한다. 실제 runtime 증거가 없는 항목은
+`미확인`으로 유지하고 DSN-51 완료를 제품 구현 완료로 일반화하지 않는다.
+
+### DSN-51 Mobile assembled consumer coverage (2026-08-30, 2026-09-03 correction)
+
+- [`Composer and overlay consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-56043)는
+  Composer Light [`6732:50502`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6732-50502)·Dark
+  [`6732:50505`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6732-50505)에 `03 Patterns`의 private
+  DSN-61 [`__MobileFullscreenComposerShell`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5284-38074)
+  `Viewport=Full, Content=Empty` variant [`5235:9474`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5235-9474)를
+  각각 하나씩 연결한다. 두 Target consumer는 `390×844`와 Light/Dark mode를 소유하고 candidate source의 Current
+  승격을 뜻하지 않는다. 기존 Mobile ReplyComposer Light/Dark 조립은 제거하고 같은 section의
+  [`Focused · Keyboard 6665:56053`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-56053)와
+  [`Context · Initial anchor 6665:56250`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-56250)이
+  전역 Mobile Composer를 재사용한다. Focused는 `@kosmo님에게 답글` 최소 맥락만 표시하고, Initial anchor에서는
+  Parent를 기본 viewport 위에 숨긴다. [`Parent revealed on upward scroll 7392:27994`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7392-27994)는
+  Action Bar 없는 `PostListItem` Parent와 공개 범위 위 border까지 연결된 thread line을 보여준다. Drawer/ProfileSwitcher도 route가 아니므로 별도 route FRAME을 만들지
+  않는다. Web-only Feedback bottom sheet는 `01 Mobile Web exceptions`로 이동했다.
+- [`Composer state consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6771-10454)는
+  같은 Candidate source의 Full Media·Poll·CW와 Keyboard Empty·Media·Poll·CW Light 변형 7개를 실제
+  `390×844` Target consumer로 연결한다. [`Mobile composer and overlay consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-56043)의
+  [`Full Empty Light 6732:50502`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6732-50502)·
+  [`Dark 6732:50505`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6732-50505)가 남은 Full Empty를 소비하므로,
+  route 호환 FRAME 없이 8개 source variant 모두 최소 1개 Target consumer를 가진다. source 내부 Auto Layout을
+  그대로 상속하며, Candidate source를 Current로 승격하거나 production keyboard avoidance·Poll·CW 동작 완료로 세지 않는다.
+- canonical Mobile Composer overlay lifecycle의 [`Loading 6919:12624`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6919-12624)은
+  visibility row, 40px Avatar·작성자·본문 editor와 64px 도구 영역을 공용 `Skeleton`으로 표현한다.
+  [`Initial error exit 6921:52548`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6921-52548)은
+  Composer를 제거하고 이전 Home surface 위에 기존 Danger Toast를 표시한다. [`Profile required 6922:12635`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6922-12635)는
+  transient 오류가 아니므로 안내 상태와 Home action을 유지한다. 작성 중 게시·업로드 실패는 이 initial-load
+  이탈 계약을 상속하지 않고 draft를 보존한다. 세 상태는 standalone `/compose` route screen이 아니라 Target overlay
+  evidence다. Current runtime·OpenSpec의 `/compose` 호환 route는 유지하되 Figma Target 물리 인벤토리에는 포함하지 않는다.
+  이는 Candidate source의 Current 승격이나 실제 navigation·retry·accessibility runtime 완료를 뜻하지 않는다.
+- [`Mobile route and state consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9407)는
+  `/settings/profile` default·Profile required, Post detail deleted, Search 9상태와 Mobile Composer overlay 3상태,
+  총 15개를
+  Android baseline FRAME으로 묶는다. Profile required·Post deleted·Search no results의 360px StateView는 route
+  content 중앙에 정렬하고, `/settings/profile` content는 좌우 15px과 360px form row를 사용한다. 공용 source와 screen-owned safe area 경계를 유지한다.
+- Mobile 검색의 Initial은 탭 없이 유지한다. Loading·No results·Initial error·Cached error·People success와
+  Popular·Latest·Media 미구현 상태는 실제 Android `TabList`의 `인기 / 최신 / 미디어 / 사람` 4탭을 사용한다.
+  People 상태는 `사람`을 선택하고 `ProfileListItem`·64px Profile skeleton만 표시하며, 나머지 세 탭은 임의 결과 대신
+  `Product not implemented`를 유지한다. iOS 결과 consumer도 같은 4탭의 iOS `TabList`를 사용한다.
+- Mobile [`followers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-1852)·[`following`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-1998)은
+  ProfileHero 없이 `~님의 팔로워`·`~님의 팔로잉` PageHeader와 Android `팔로워 / 팔로잉` TabList를 가진 독립 route다.
+- [`Profile content tabs consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6713-10042)는
+  Default와 Pinned Light/Dark에 `게시물 / 답글 / 미디어` TabList를 추가한 Target 복제본이다. 기존 Pinned
+  Light [`4843:4813`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4843-4813)·Dark
+  [`4843:4898`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4843-4898) consumer도 같은 TabList를 사용하며 답글·미디어의 Product 구현 완료를 뜻하지 않는다.
+- [`PostMediaViewer compact lifecycle`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6571-7605)는
+  image stage와 semantic detail panel을 세로 Auto Layout으로 조립한다. Figma metadata가 직접 증명하는 Android-baseline
+  `390×844` 비키보드 canvas는 `654px` stage와 `y=654` detail anchor를 사용하고 현재 HUG detail panel은 `182px`라
+  아래에 `8px`이 남는다. FRAME에는 Native safe-area inset metadata가 없으므로 이 수치는 다른 inset·keyboard·viewport에
+  고정하는 runtime 계약이 아니다. Safe Area·keyboard·낮은 viewport의 실제 geometry는 Product 후속에서 검증한다.
+  Light landscape 16:9와 Dark portrait 3:4 Media는 stage 안에서 비율을 보존해 가로·세로 중앙에 contain한다.
+  Media Error [`6665:55675`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-55675)는
+  중앙 state 대신 기존 Danger Action Toast [`7380:55058`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-55058)를 사용한다. shared Compact source 승격과
+  runtime lifecycle은 별도 후속 범위다.
+- [`Post action overlays and picker`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6772-10989)는
+  Quick reaction Light/Dark, Repost·Quote menu Light/Dark, More menu Light와 FullReactionPicker Browse Light/Dark를
+  실제 PostMediaViewer Open 배경 위 child overlay로 조립한다. Quick Picker는 reaction trigger 위에 놓이며 배경
+  Media·원문·Action Bar를 바꾸지 않는다. Android-baseline `390×844` 비키보드 Figma base stage/detail은 각각
+  `654px`/`y=654`이며 Quick selector는 `y=726`이다. child overlay는 base stage·detail 위치를 바꾸지 않는다.
+  Repost·More·Full Picker도 같은 Viewer를 유지한다. Delete confirmation
+  Light/Dark는 기존 공용 confirmation evidence로 분리해 유지한다.
+- [`ProfileSwitcher overlay lifecycle`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6773-11566)는
+  Drawer의 ProfileSwitcher OpenLong을 기존 host·scrim·drawer 안에서 교체한 Target이다. picker 목록과 새 프로필
+  추가 행은 scroll/fixed 영역을 나누고, Drawer의 primary navigation만 남은 높이를 채워 스크롤하며 divider 아래
+  footer는 바닥에 고정한다. Feedback Error는 Web exception section으로 이동했다. `blockedBy`는 별도 오류 화면이
+  아니라 기존 Profile route chrome 안에서 Target identity 없이 중앙 정렬한 actionless StateView로 통일한다.
+  Mobile [`6774:12067`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6774-12067),
+  Compact [`7371:19453`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7371-19453),
+  Full [`7380:20771`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-20771) Target을 두며,
+  Target의 cover·avatar·표시 이름·handle·bio·수치·게시물·관계 action은 표시하지 않는다.
+- 같은 section의 Mobile [`blocking 7580:14180`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7580-14180)은
+  기존 Android Dark Profile route chrome 안에서 Target identity를 제거하고, 중앙 정렬한 `StateView`에
+  `차단한 프로필입니다`와 Secondary `차단 해제`만 제공한다. Full Web [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)도
+  같은 identity-free presentation을 사용한다. 차단 해제의 data와 lifecycle은 Product 후속 범위다.
+- 같은 section의 Mobile muted direct Profile Target [`7541:14061`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7541-14061)은
+  기존 Android baseline Profile shell을 복제하고 `ProfileHero.Muted=true`와 Post의 중첩
+  `PostContent.CW=MutedCollapsed`를 적용해 전체 Profile·Post·BottomTabBar, 작성자·시간·`PostActionBar`를 유지한다.
+  본문·미디어만 뮤트 전용 disclosure로 기본 접힘 처리하며 별도 `StateView`나 새 화면 컴포넌트는 추가하지
+  않는다. Dark·runtime lifecycle은 후속 범위다.
+- [`Mobile Screen Inventory`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6653-25532)의
+  `Main route/state contracts · 34`는 canonical route/state 물리 인벤토리만 기록하고 `/compose` 호환 route는 제외한다.
+  Full Empty Light/Dark, Composer 7-state consumer와 overlay lifecycle 3상태는 각각 `14 Mobile composer and overlay consumers`,
+  `17 Composer state consumers`, `15 Mobile route and state consumers`의 Target evidence로 유지한다.
+  `Assembled Target consumers + contract review · 15`는 Composer state consumer, Post content warning의 Mobile
+  List/detail 4-state consumer와 moderation direct consumer를 기록한다. moderation 행은
+  `blocking 7580:14180`·`blockedBy 6774:12067`·`muted 7541:14061`을 함께 참조하고, `Remaining Mobile contract review`는
+  confirmation, retained-list pagination loading과 Native/direct `/feedback`의 Product/runtime 소유권만 남긴다.
 
 #### Screens 승격 결과와 남은 검증 공백
 
@@ -148,23 +299,63 @@ Components·Patterns의 source/specimen은 재사용·배치 근거이지 canoni
 `06 Prototypes / Flows`와 `07 Archive`는 canonical screen을 대신하지 않으며, Prototypes의 Reaction motion demo도
 Reaction People route로 세지 않는다.
 
-| surface                 | 2026-08-28 canonical evidence                                                                                                                                                                                                                                                                                                                                                                                                                                        | 판정과 남은 경계                                                                                                                                                                                                  |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Post Activity           | [`05 Screens - Web` Target section](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-16233)과 [`04 Screens - Mobile` Target section](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-21917)에 Reposts·Quotes 6개 FRAME이 있다.                                                                                                                                                                                          | Full·Compact·Mobile의 canonical Screen gap은 닫혔다. URL·Back fallback, data·empty·error·pagination·scroll restoration은 Product/runtime 범위다.                                                                  |
-| Reaction People         | 같은 Web·Mobile Target section에 Full·Compact·Mobile `Default selected` 3개 FRAME이 있고 DSN-60의 collapsed filter source를 재사용한다.                                                                                                                                                                                                                                                                                                                              | canonical Screen gap은 닫혔다. expanded/collapsed interaction, URL·focus·loading·error·pagination은 Product/runtime에서 검증한다.                                                                                 |
-| Mute·Block 설정         | 같은 Web·Mobile Target section에 `뮤트한 프로필`·`차단한 프로필` loaded list가 Full·Compact·Mobile 각 1개씩 총 6개 FRAME으로 있다. Full 두 화면의 Settings master는 두 destination의 하위 목록을 직접 제공하고, Compact category FRAME [`6338:1641`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6338-1641)이 같은 순서를 제공한다.                                                                                                            | Full·Compact의 category→destination Screen gap은 닫혔다. Mobile은 loaded destination만 있어 `뮤트 및 차단` category 화면 1개가 남는다. loading·empty·error·pagination과 해제 mutation은 runtime state coverage다. |
-| PostMediaViewer         | [`Compact Web open`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25262)과 [`Mobile fullscreen open`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8103) 대표 FRAME이 DSN-63 source를 상속한다.                                                                                                                                                                                                                  | route로 세지 않는 overlay 대표 coverage다. Full은 기존 Wide source가 구조를 확정하므로 별도 중복 FRAME을 만들지 않았다. 실제 modal lifecycle은 runtime 범위다.                                                    |
-| ReplyComposer           | `03 Patterns`의 Web modal과 Mobile fullscreen이 있고 DSN-50 inventory가 Web pattern을 reference한다.                                                                                                                                                                                                                                                                                                                                                                 | 독립 route FRAME을 추가하지 않는 것이 의도다. Product에서 open/dismiss/focus runtime을 검증한다.                                                                                                                  |
-| Profile target selector | `ProfileLifecycleScreen` source가 [`Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4867-13083), [`Compact`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4868-38112), [`Full`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-45172) `TargetSelectorOpen`을 제공하고 Full consumer [`6316:48437`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-48437)가 연결된다. | viewport별 lifecycle source gap은 닫혔다. selector의 실제 선택·저장·focus·dismiss 동작은 runtime 완료 증거가 아니다.                                                                                              |
+| surface                 | 2026-08-28 canonical evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 판정과 남은 경계                                                                                                                                 |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Post Activity           | [`05 Screens - Web` Target section](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-16233)과 [`04 Screens - Mobile` Social activity section](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-21917)에 Reposts·Quotes 6개 FRAME이 있다.                                                                                                                                                                                                                                                                                                                | Full·Compact·Mobile의 canonical Screen gap은 닫혔다. URL·Back fallback, data·empty·error·pagination·scroll restoration은 Product/runtime 범위다. |
+| Reaction People         | 같은 Web Target section과 Mobile Social activity section에 Full·Compact·Mobile `Default selected` 3개 FRAME이 있고 DSN-60의 collapsed filter source를 재사용한다.                                                                                                                                                                                                                                                                                                                                                                                                                                   | canonical Screen gap은 닫혔다. expanded/collapsed interaction, URL·focus·loading·error·pagination은 Product/runtime에서 검증한다.                |
+| Mute·Block 설정         | Web Target section과 [`04 Screens - Mobile` Moderation settings section](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6571-7604)에 `뮤트한 프로필`·`차단한 프로필` loaded list가 Full·Compact·Mobile 각 1개씩 총 6개 FRAME으로 있다. Full 두 화면의 Settings master는 두 destination의 하위 목록을 직접 제공하고, Compact category FRAME [`6338:1641`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6338-1641)과 Mobile category FRAME [`6393:8193`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6393-8193)이 같은 순서를 제공한다. | Full·Compact·Mobile의 category→destination Screen gap은 닫혔다. loading·empty·error·pagination과 해제 mutation은 runtime state coverage다.       |
+| PostMediaViewer         | [`Compact Web open`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25262)과 [`Mobile compact lifecycle`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6571-7605)의 Open Light/Dark·Loading·Error·Unavailable consumer가 image stage와 `PostLayout` detail panel을 세로 Auto Layout으로 조립한다. Android-baseline `390×844` 비키보드 Figma consumer는 stage/detail `654px` anchor와 `182px` HUG panel을 공유하고 Media Error는 공용 Danger Action Toast를 사용한다.                                                                                   | route로 세지 않는 overlay coverage다. safe-area를 반영한 geometry와 실제 modal lifecycle은 후속 범위다.                                          |
+| ReplyComposer           | `03 Patterns`의 Web modal은 기존 source를 유지하고, [`Mobile composer and overlay consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-56043)는 전역 Mobile Composer의 Focused/Keyboard·Initial anchor와 Parent upward-scroll reveal consumer를 사용한다. 기존 Mobile ReplyComposer fullscreen 조립은 제거했다.                                                                                                                                                                                                                                                       | 독립 route FRAME이나 Mobile 전용 Composer source를 추가하지 않는다. 실제 upward-scroll·keyboard·dismiss·focus runtime은 Product에서 검증한다.    |
+| Profile target selector | `ProfileLifecycleScreen` source가 [`Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4867-13083), [`Compact`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4868-38112), [`Full`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-45172) `TargetSelectorOpen`을 제공하고 Full consumer [`6316:48437`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-48437)가 연결된다.                                                                                                                                | viewport별 lifecycle source gap은 닫혔다. selector의 실제 선택·저장·focus·dismiss 동작은 runtime 완료 증거가 아니다.                             |
 
-Search Popular·Media, Profile edit, Settings Theme, Profile Replies·Media처럼 `Candidate`·`Product not implemented`로
-이미 inventory에 등록된 항목은 누락 화면으로 다시 세지 않는다. 이번 승격 후 감사한 Components·Patterns·Mobile
-Screens·Web Screens·Prototypes·Archive 범위에서는 Mobile `뮤트 및 차단` category 화면 1개 외에 추가로 확정할
-canonical route/screen family 누락을 찾지 못했다. 이는 현재 문서화된 family 범위의 결론이며 runtime state와
-승인되지 않은 신규 Product 기능까지 누락 없음으로 보증하지 않는다.
+2026-08-31에는 공용 [`PostContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4476-11690)에
+`CW=None|Collapsed|Revealed`를 추가하고, [`PostListItem`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1924-1992)과
+[`PostLayout`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4690-28152)이 중첩 `PostContent` 속성을
+노출하도록 연결했다. [`Post content warning placement`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5028-7437)의
+실제 consumer proof는 Collapsed에서 warning만, Revealed에서 warning 다음 8px 아래에 content가 이어지며 두 부모가
+Auto Layout으로 높이를 다시 계산하는 것을 확인한다. 이는 source·placement 조립 근거이며 canonical Screen이나 runtime
+reveal state·접근성 동작 완료 증거는 아니다.
 
-runtime route tree와 main 34개를 family 단위로 대조하면 기존 주요 route의 광범위한 누락은 없다. `/compose`와
-`/feedback`은 의도된 overlay, standalone default visibility와 Compact detail inline Reply는 Target migration,
+같은 날 [`21 Post content warning consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6961-12634)에
+Android baseline Light `390×844` Target 4개를 추가했다. 목록은 기존 `/home` shell과 `PostListItem`을 재사용해
+Collapsed [`6961:12641`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6961-12641)·Revealed
+[`6961:12651`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6961-12651)를, 상세는 기존 게시글
+route shell 안의 current row를 `PostLayout`으로 조립해 Collapsed
+[`6961:12661`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6961-12661)·Revealed
+[`6961:12668`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6961-12668)를 비교한다. 네 화면은
+중첩 `PostContent`의 `CW`만 교체하며 세로 Auto Layout이 `PostActionBar`와 후속 row를 다시 배치한다. 기존 canonical
+화면과 Dark consumer는 변경하지 않았고, disclosure interaction·공유 reveal state·VoiceOver·TalkBack·실제 hit area는
+runtime 검증 범위다.
+
+2026-09-03에는 공용 [`PostContentWarning`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5001-14786)에
+`Reason=ContentWarning|Muted`를 추가했다. 기존 `Reason=ContentWarning`의 `EyeOff`, 입력 가능한 summary와
+Collapsed·Revealed 시각은 유지한다. 새 `Reason=Muted`는 canonical `VolumeOff`, 고정 문구
+`뮤트된 사용자의 게시물입니다`, 기존 content meta를 사용하고 Collapsed의 `내용 보기`, Revealed의
+`다시 가리기`를 제공한다. 대응 source는
+[`Muted Collapsed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7644-1544)와
+[`Muted Revealed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7644-1550)다.
+
+같은 변경에서 [`PostContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4476-11690)의
+기존 `Size=Center|Mobile` × `Kind=Text|Media|Quote` 조합에 `CW=MutedCollapsed|MutedRevealed` 12개를 추가했다.
+기존 `CW=None|Collapsed|Revealed`는 그대로 유지하며, Muted source도 같은 8px reveal 배치와 부모 Auto Layout
+재계산을 재사용한다. Mobile muted direct Profile Target `7541:14061`의 Post는
+[`Mobile Text MutedCollapsed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7648-1590)을
+사용해 작성자·시간·Action Bar를 유지하고 본문만 기본 접힘 처리한다. Figma는 실제 `내용 보기` 입력,
+게시물별 reveal state·focus·보조 기술 announcement 또는 뮤트 해제 runtime 완료 증거가 아니다.
+
+Search Popular·Media, Profile edit, Profile Replies·Media처럼 `Candidate`·`Product not implemented`로 이미
+inventory에 등록된 항목은 누락 화면으로 다시 세지 않는다. canonical route family의 광범위한 공백은 찾지
+않았다. Mobile `blocking`·`blockedBy` identity-free state와 `muted` direct consumer는 Target으로 조립됐고, Mute·Block confirmation
+sheet 배치와 retained-list pagination loading은 Product/runtime 계약 전 임의 geometry를 만들지 않는다. 현재
+Native/direct `/feedback` page는 누락 화면이 아니라 호환 runtime route이며, overlay-only Target으로 이관하는
+별도 Product 계약에서 제거 여부와 Native presentation을 결정한다. Inventory의 `Remaining Mobile contract review`
+행은 이 계약·runtime 후속을 Target screen coverage와 분리한다.
+
+runtime route tree와 main 34개를 family 단위로 대조하면 기존 주요 route의 광범위한 누락은 없다. Current `/compose`는
+runtime·OpenSpec의 호환 route로 유지하지만 standalone Target FRAME으로 만들거나 main 물리 인벤토리에 세지 않는다.
+Figma Target은 Full·Compact·Mobile Composer overlay와 그 lifecycle evidence만 유지한다. `/feedback`의 일반 진입 Target은
+overlay로 유지하고 현재 Web direct URL·Native page는 별도 Product migration으로 분리한다.
+standalone default visibility와 Compact detail inline Reply는 Target migration,
 Loading·Empty·Error·Deleted·Pinned는 기존 route의 state coverage다. route 파일 수와 Figma FRAME 수를 같게
 맞추지 않는다.
 
@@ -296,14 +487,22 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
   [`Poll`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5627-12996)·
   [`CW`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5627-13083)는 Keyboard 변형과 같은
   canonical editor를 소비하고 illustrative keyboard만 제외한다. 본문 `layoutGrow`가 남은 높이를 채우며 footer는
-  화면 하단에 유지된다.
+  화면 하단에 유지된다. 8개 variant의 header `글쓰기` fill은 기존 semantic
+  `color/foreground/primary` (`VariableID:1660:318`)에 bind해 consumer의 Light/Dark mode를 상속한다.
+- 8개 variant의 `Composer body`는 40px `Author row`에 Avatar와 posting identity만 두고, CW·본문·Media·Poll
+  editor는 그 아래 358px 전체 폭을 사용한다. Avatar gutter를 편집영역 전체 높이까지 유지하지 않는다.
 - 모바일 fullscreen header가 제출 action을 소유하므로 8개 조합 모두 공용 `__ComposerFooter`의
   `Show submit=false`를 유지한다. Poll·CW 표본은 배치와 reflow evidence이며 실제 작성 기능·keyboard avoidance·
   safe area·focus·제출 lifecycle 완료를 뜻하지 않는다.
+- `04 Screens - Mobile`의 [`Composer state consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6771-10454)는
+  Full Media·Poll·CW와 Keyboard Empty·Media·Poll·CW 7개를 연결한다. `14 Mobile composer and overlay consumers`의
+  Full Empty Light/Dark까지 합치면 route 호환 FRAME 없이 8개 variant가 모두 실제 Target consumer를 가진다.
+  Keyboard는 illustrative geometry라 Native IME·safe-area reflow는 별도 runtime QA가 필요하다.
 - [`Composer Dark coverage`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5884-14199)는
-  Full Web Composer overlay, Full Web thread rail Reply, Compact Web ReplyComposer modal, Mobile ReplyComposer
-  fullscreen의 Dark representative를 제공한다. 새 source를 만들지 않고 기존 Light pattern의 instance main-component를
-  그대로 유지하며 nested Light mode override를 제거한 표본이다.
+  Full Web Composer overlay, Full Web thread rail Reply, Compact Web ReplyComposer modal과 전역 Mobile Composer의
+  [`Reply Parent upward-scroll reveal Dark representative 5884:14891`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5884-14891)를
+  제공한다. 기존 Parent-below preview는 숨기고 새 source를 만들지 않은 채 Light reveal 조립과 기존 instance
+  main-component를 그대로 유지하며 nested Light mode override를 제거한 표본이다.
 - [`ConfirmationContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5103-15173)는
   `Tone=Primary|Danger × State=Idle|Pending`의 공용 단순 확인 content다. `Message`, 선택형 native
   `Supporting content` Slot, 중첩 `Cancel`·`Confirm action` Button을 instance property로 노출한다.

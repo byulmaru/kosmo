@@ -17,6 +17,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   Byulmaru ID Account 설정을 위한 Kosmo 내부 route나 form은 만들지 않는다.
 - Target의 Profile detail canonical route는 `/settings/profile`이다. 현재 runtime에 남은
   `/settings/default-post-visibility`는 이 Target으로 이관할 구현 경로이지 별도 Target destination이 아니다.
+- Mobile Target evidence는 [`Default`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9409)와
+  [`Profile required`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9415) `390×844`
+  consumer다. 이 조립 화면은 Product migration이나 실제 선택·저장 동작의 완료 증거가 아니다.
 - 테마 detail의 canonical 내부 route는 `/settings/theme`다. 홈이나 다른 주요 route에 임시 테마 toggle을
   중복 배치하지 않는다.
 - full Web sidebar와 compact Web icon rail에는 `설정` 진입점을 주요 navigation 항목으로 표시한다.
@@ -43,7 +46,10 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   [`차단한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25582)은 Settings
   master에 이 하위 목록을 표시하고, Compact는 category 화면
   [`6338:1641`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6338-1641)에서 같은 순서로
-  destination을 제공한다. Mobile category 화면은 아직 Figma coverage 공백이다.
+  destination을 제공한다. Mobile category 화면
+  [`6393:8193`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6393-8193)도 기존 loaded
+  destination [`6316:8075`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8075)와
+  [`6316:8089`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8089)을 같은 순서로 제공한다.
 - full Web의 Target `/settings`는 `프로필 설정`을 기본 선택해 detail에 표시한다. compact Web, mobile Web,
   Android와 iOS의 `/settings`는 root 목록부터 표시하고, 내부 진입점을 선택하면 한 화면짜리 category 또는
   detail destination으로 이동한다.
@@ -92,6 +98,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - detail 본문은 `테마 설정` section label로 시작하고, 그 아래 기존 `RadioOption` 문법으로 `시스템`,
   `라이트`, `다크` 세 항목을 제공한다. `시스템`은 기기 색상 모드 변경을 따르고, `라이트`와 `다크`는 기기
   설정과 무관하게 해당 모드를 사용한다.
+- Mobile assembled evidence는 기존 System Light consumer와
+  [`Dark Target`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6770-10380)이다. Dark Target은
+  `ThemePreferenceControl · Dark` source와 explicit Dark mode를 상속하며 persistence 구현 완료 증거는 아니다.
 - preference 초기값은 `시스템`이다. 저장값이 없거나 `시스템`·`라이트`·`다크` 외의 값으로 유효하지 않으면
   `시스템`으로 정규화한다. `/settings` root의 현재값과 detail radio 선택 상태는 정규화된 preference를
   동일하게 표시한다.

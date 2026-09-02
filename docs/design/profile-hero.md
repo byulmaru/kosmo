@@ -16,9 +16,22 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - avatar overlap과 follow 등 profile action은 header 이미지 영역 밖의 hero layout이 소유한다. 이 요소의
   배치나 높이는 header 이미지의 `3:1` 계산에 포함하지 않는다.
 
+## Mobile Follow action geometry
+
+- Current runtime의 `FollowButton`은 공용 `Button`의 기본 최소 너비 `120`과 자체 최소 높이 `32`를 사용해
+  visual이 최소 `120×32`다. 이 PR은 해당 runtime source를 변경하지 않는다.
+- Figma Target의 `390px` Mobile Profile Hero 관계 action은 `FollowButton`의 `Size=Medium` `96×40`을 사용한다.
+  `Size=Compact` `72×32`는 Mobile consumer에 사용하지 않는다.
+- Figma Target의 Action slot은 `96×40`, `right: 16`에 두고 기존 Compact action의 중심축을 유지하도록 `top: 142`에
+  배치한다. Loading·Tags를 포함한 모든 Mobile `ProfileHero` variant가 같은 slot geometry를 사용한다.
+- Target을 Product runtime으로 이관할 때 iOS와 Android의 실제 입력 target은 이 `40` 높이의 visual box와
+  분리해 각각 최소 `44pt`, `48dp`를
+  충족한다. target 확장 영역은 avatar, Connections와 인접 action을 침범하지 않는다.
+
 ## 출시와 검증 범위
 
-- 공용 React Native 구현은 Web·Android·iOS에 위 geometry 계약을 적용한다.
+- 공용 React Native 구현은 Web·Android·iOS에 Header 이미지 geometry를 적용한다. Mobile Follow action의
+  `96×40`은 Figma Target이며 현재 구현 완료로 세지 않는다.
 - 현재 PR readiness의 실제 runtime QA 범위는 Web이다. iOS·Android 실제 기기·simulator runtime QA는 이번
   검증 범위에서 제외하고 Native 출시 gate에서 별도로 수행한다.
 - Web 자동화나 공용 source·단위 테스트 결과를 Native runtime 완료 증거로 사용하지 않는다. Native 출시
