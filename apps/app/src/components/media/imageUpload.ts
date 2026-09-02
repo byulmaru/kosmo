@@ -38,25 +38,12 @@ function getImageResizeDimensions(
   };
 }
 
-function getImageRefUri(image: ImageRef): string | undefined {
-  return 'uri' in image && typeof image.uri === 'string' ? image.uri : undefined;
-}
-
-function releaseImageUri(uri: string, releasedUris: Set<string>): void {
-  if (releasedUris.has(uri)) {
-    return;
-  }
-  releasedUris.add(uri);
-  releaseImagePreview(uri);
-}
-
 async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob> {
   const { ImageManipulator, SaveFormat } = await import('expo-image-manipulator');
   const context = ImageManipulator.manipulate(asset.uri);
   let sourceImage: ImageRef | undefined;
   let normalizedImage: ImageRef | undefined;
   let normalizedImageUri: string | undefined;
-  const releasedUris = new Set<string>();
 
   try {
     const resizeDimensions = hasImageDimensions(asset)
@@ -95,15 +82,14 @@ async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob>
     }
     return await response.blob();
   } finally {
-    if (normalizedImageUri) {
-      releaseImageUri(normalizedImageUri, releasedUris);
-    }
-    for (const image of [sourceImage, normalizedImage]) {
-      if (image) {
-        const imageUri = getImageRefUri(image);
-        if (imageUri) {
-          releaseImageUri(imageUri, releasedUris);
-        }
+    for (const imageUri of new Set([
+      normalizedImageUri,
+      ...[sourceImage, normalizedImage].map((image) =>
+        image && 'uri' in image && typeof image.uri === 'string' ? image.uri : undefined,
+      ),
+    ])) {
+      if (imageUri) {
+        releaseImagePreview(imageUri);
       }
     }
     if (normalizedImage && normalizedImage !== sourceImage) {
@@ -112,16 +98,6 @@ async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob>
     sourceImage?.release();
     context.release();
   }
-}
-
-async function putImagePickerAsset(uploadUrl: string, asset: ImagePickerAsset): Promise<void> {
-  const body = await createNormalizedImageBlob(asset);
-  const response = await fetch(uploadUrl, {
-    body,
-    headers: { 'content-type': 'image/webp' },
-    method: 'PUT',
-  });
-  await assertImageUploadResponse(response);
 }
 
 export function releaseImagePreview(
@@ -159,7 +135,13 @@ export async function uploadImage({
   }
 
   try {
-    await putImagePickerAsset(issued.uploadUrl, asset);
+    const body = await createNormalizedImageBlob(asset);
+    const response = await fetch(issued.uploadUrl, {
+      body,
+      headers: { 'content-type': 'image/webp' },
+      method: 'PUT',
+    });
+    await assertImageUploadResponse(response);
   } catch (error) {
     throw asImageUploadError(error, 'transfer');
   }
