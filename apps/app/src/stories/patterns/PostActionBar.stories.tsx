@@ -746,7 +746,7 @@ export const ActionBarCatalog: Story = {
     expect(within(defaultMore).queryByTestId('post-action-more-hover')).toBeNull();
 
     for (const [label, testID, actionColor, defaultColor] of [
-      ['재게시', 'repost', repostActionColors.light, repostActionColors.light],
+      ['재게시', 'repost', repostActionColors.light, colors.light.textSecondary],
       ['북마크', 'bookmark', colors.light.primary, colors.light.textSecondary],
     ] as const) {
       const button = defaultToolbarCanvas.getByRole('button', { name: label });
@@ -763,7 +763,7 @@ export const ActionBarCatalog: Story = {
       ).toBe('1');
       if (testID === 'repost') {
         expect(button.querySelector('[dir="auto"]')).toHaveStyle({
-          color: repostActionColors.light,
+          color: defaultColor,
         });
       }
       await userEvent.unhover(button);
@@ -857,17 +857,20 @@ export const ActionSemanticColorsDark: Story = {
     const defaultRepost = defaultToolbar.getByRole('button', { name: '재게시' });
     const defaultRepostIcon = defaultRepost.querySelector('svg');
 
-    expect(defaultRepostIcon).toHaveAttribute('stroke', repostActionColors.dark);
+    expect(defaultRepostIcon).toHaveAttribute('stroke', colors.dark.textSecondary);
     expect(defaultRepost.querySelector('[dir="auto"]')).toHaveStyle({
-      color: repostActionColors.dark,
+      color: colors.dark.textSecondary,
     });
     await userEvent.hover(defaultRepost);
     expect(defaultToolbar.getByTestId('post-action-repost-hover')).toHaveStyle({
       backgroundColor: repostActionColors.dark,
     });
     expect(defaultRepostIcon).toHaveAttribute('stroke', repostActionColors.dark);
+    expect(defaultRepost.querySelector('[dir="auto"]')).toHaveStyle({
+      color: colors.dark.textSecondary,
+    });
     await userEvent.unhover(defaultRepost);
-    expect(defaultRepostIcon).toHaveAttribute('stroke', repostActionColors.dark);
+    expect(defaultRepostIcon).toHaveAttribute('stroke', colors.dark.textSecondary);
 
     const defaultReaction = defaultToolbar.getByRole('button', { name: '반응' });
     const defaultReactionIcon = defaultReaction.querySelector('svg');

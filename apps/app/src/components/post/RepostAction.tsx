@@ -167,7 +167,6 @@ export function RepostAction({
             accessibilityLabel={data.viewerRepost ? '재게시 취소' : '재게시'}
             active={Boolean(data.viewerRepost)}
             activeColor={theme.actionRepostBase}
-            baseColor={theme.actionRepostBase}
             controlRef={ref}
             count={data.repostCount}
             hoverColor={theme.actionRepostBase}

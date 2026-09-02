@@ -8,7 +8,7 @@ Reply·Repost·Reaction·Bookmark를 실제 게시글 화면에 일관되게 연
 - Reply·Reaction·Bookmark는 명시적 config로 지속 처리 상태(default·pending·disabled), 선택적 count, callback과 접근성 metadata를 받는다. 구현된 Repost는 `PostActionBar`의 composite Post fragment 아래 private child fragment·mutation·pending을 소유하고 `viewerRepost`에서 도메인 상태와 정확한 mutation identity를 함께 파생한다. 범용 `selected` prop을 노출하지 않는다. More는 독립 UI에서 callback-only config를 지원하고, production에서는 composite Post fragment 아래 private `PostDeletionAction`이 surface가 공급한 menu item과 PROD-598 삭제 action을 하나의 menu로 조립한다.
 - action 요청 실패는 Action Bar의 지속 `error` 상태로 표시하지 않는다. child action은 요청 직전의 확정된 도메인 상태와 count를 유지하고 surface error callback으로 실패를 전달한다. PROD-414는 Repost의 정확한 action별 한국어 transient toast를 최초 production surface에 연결하고, 나머지 action의 실패 안내와 최종 공통 검증은 PROD-432가 소유한다. 별도의 retry 상태나 toast 버튼 없이 같은 액션을 다시 활성화하면 재시도한다.
 - Reaction과 Bookmark에는 count를 표시하지 않는다. Reply와 Repost는 선행 계약이 제공한 count만 실행 환경 locale의 표준 compact notation으로 표시하고, 수동 K/M 반올림·단위 승격·상한 알고리즘을 만들지 않는다.
-- PROD-866은 Post action presentation semantic을 추가한다. Reaction active·hover는 `#F97066`, Repost glyph·count의 default·hover·selected는 Light `#16794A`, Dark `#409667`을 사용하고 전역 Success semantic은 변경하지 않는다.
+- PROD-866은 Post action presentation semantic을 추가한다. Reaction active·hover는 `#F97066`, Repost hover·selected는 Light `#16794A`, Dark `#409667`을 사용하고 전역 Success semantic은 변경하지 않는다. PROD-882는 미선택 Repost의 glyph·count를 중립색으로 복구해 활성 상태와 구분한다.
 - production Post surface는 composite Post fragment와 나머지 action config로 다섯 액션을 유지하고 대상 Post 자체의 액션 적격성과 현재 실행 주체·세션의 실행 권한을 분리한다. PROD-414는 `PostLayout`에는 Action Bar를, `PostListItem`에는 Action Bar를 담은 목록 전용 slot을 content grid의 마지막 sibling으로 처음 배치하고 Repost menu·toast를 연결한다. 순수 Repost의 Reply는 바깥 contentless Repost binding을 유지해 disabled로 표시하고, Repost·Reaction·Bookmark·More는 direct Source를 대상으로 동작한다. 대상 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못한 액션은 disabled로 표시한다. target 자체가 적격할 때 guest는 기존 인증 진입으로 위임하고, valid 세션에서 selected Profile이 없으면 기존 Profile 선택기를 열며, session error에서는 비활성화한다. resolution 전에 child UI나 mutation을 시작하지 않고 Profile 선택 뒤 원래 action을 자동 재실행하지 않는다.
 - More의 공개 API는 독립 UI용 callback config와 production용 menu item·삭제 완료 callback 입력을 구분한다. production의 private `PostDeletionAction`은 PROD-432가 소유한 ADR 0015 `링크 복사`와 완료된 PROD-598의 작성자 `삭제` action을 하나의 팝업에 조합한다. `링크 복사`는 항상 첫 항목이고 삭제 자격이 있는 경우에만 destructive `삭제`를 마지막에 추가한다. Content 없는 Repost에서는 독립 상세 참조를 노출하지 않고 조회 가능한 direct Repost Source의 공유 참조와 삭제 자격을 사용한다. 삭제 확인·mutation·cache·실패 계약은 PROD-598 소유권을 유지한다.
 - 공통 컴포넌트는 PROD-433, 최초 production 배치와 Repost menu·toast는 PROD-414, 준비된 나머지 action 연결과 최종 통합 검증은 각 action 이슈와 PROD-432가 소유하도록 공유 구현 순서를 정의한다. 취소된 PROD-434의 독립 surface task는 실행하지 않는다.
@@ -19,9 +19,9 @@ Reply·Repost·Reaction·Bookmark를 실제 게시글 화면에 일관되게 연
 ## Authority / Provenance
 
 - Canonical: `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/breakpoints.md`, `docs/design/post-action-bar.md`
-- Linear Contract: `PROD-432`; presentation semantic implementation: `PROD-866`; Figma consumer sync: `DSN-49`
+- Linear Contract: `PROD-432`; presentation semantic implementation: `PROD-866`; Repost unselected state correction: `PROD-882`; Figma consumer sync: `DSN-49`
 - Excluded lifecycle: production spacing migration은 현재 PR과 규범 spec·task에서 제외한다. 관련 Product 이슈를 확인한 뒤 적용 OpenSpec에 별도 spec delta와 구현·runtime 검증 task를 추가한다.
-- Linear Implementations: `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`, presentation semantic `PROD-866`, 후속 복구·archive owner `PROD-632`; sibling More action owner: `PROD-598`; canceled ownership record: `PROD-434`
+- Linear Implementations: `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`, presentation semantic `PROD-866`, Repost unselected state correction `PROD-882`, 후속 복구·archive owner `PROD-632`; sibling More action owner: `PROD-598`; canceled ownership record: `PROD-434`
 
 ## Capabilities
 
