@@ -1,4 +1,5 @@
 import { asImageUploadError, assertImageUploadResponse } from './imageUploadErrors';
+import type { ImageRef } from 'expo-image-manipulator';
 import type { ImagePickerAsset } from 'expo-image-picker';
 
 type IssuedImageUpload = {
@@ -6,11 +7,118 @@ type IssuedImageUpload = {
   readonly uploadUrl: string;
 };
 
+const imageUploadMaxDimension = 2048;
+const imageUploadWebpQuality = 0.8;
+
+function hasImageDimensions(image: Pick<ImageRef, 'height' | 'width'>): boolean {
+  return (
+    Number.isFinite(image.width) &&
+    Number.isFinite(image.height) &&
+    image.width > 0 &&
+    image.height > 0
+  );
+}
+
+function getImageResizeDimensions(
+  image: Pick<ImageRef, 'height' | 'width'>,
+): { readonly height: number; readonly width: number } | null {
+  if (!hasImageDimensions(image)) {
+    throw new Error('Image dimensions are unavailable');
+  }
+
+  const longestDimension = Math.max(image.width, image.height);
+  if (longestDimension <= imageUploadMaxDimension) {
+    return null;
+  }
+
+  const scale = imageUploadMaxDimension / longestDimension;
+  return {
+    height: Math.max(1, Math.min(imageUploadMaxDimension, Math.round(image.height * scale))),
+    width: Math.max(1, Math.min(imageUploadMaxDimension, Math.round(image.width * scale))),
+  };
+}
+
+function getImageRefUri(image: ImageRef): string | undefined {
+  return 'uri' in image && typeof image.uri === 'string' ? image.uri : undefined;
+}
+
+function releaseImageUri(uri: string, releasedUris: Set<string>): void {
+  if (releasedUris.has(uri)) {
+    return;
+  }
+  releasedUris.add(uri);
+  releaseImagePreview(uri);
+}
+
+async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob> {
+  const { ImageManipulator, SaveFormat } = await import('expo-image-manipulator');
+  const context = ImageManipulator.manipulate(asset.uri);
+  let sourceImage: ImageRef | undefined;
+  let normalizedImage: ImageRef | undefined;
+  let normalizedImageUri: string | undefined;
+  const releasedUris = new Set<string>();
+
+  try {
+    const resizeDimensions = hasImageDimensions(asset)
+      ? getImageResizeDimensions(asset)
+      : undefined;
+    if (resizeDimensions) {
+      context.resize(resizeDimensions);
+    }
+
+    if (resizeDimensions !== undefined) {
+      normalizedImage = await context.renderAsync();
+    } else {
+      sourceImage = await context.renderAsync();
+      const decodedResizeDimensions = getImageResizeDimensions(sourceImage);
+      if (decodedResizeDimensions) {
+        context.resize(decodedResizeDimensions);
+        normalizedImage = await context.renderAsync();
+      } else {
+        normalizedImage = sourceImage;
+      }
+    }
+
+    if (!normalizedImage) {
+      throw new Error('Unable to render normalized image');
+    }
+
+    const result = await normalizedImage.saveAsync({
+      compress: imageUploadWebpQuality,
+      format: SaveFormat.WEBP,
+    });
+    normalizedImageUri = result.uri;
+
+    const response = await fetch(normalizedImageUri);
+    if (!response.ok) {
+      throw new Error('Unable to read normalized image');
+    }
+    return await response.blob();
+  } finally {
+    if (normalizedImageUri) {
+      releaseImageUri(normalizedImageUri, releasedUris);
+    }
+    for (const image of [sourceImage, normalizedImage]) {
+      if (image) {
+        const imageUri = getImageRefUri(image);
+        if (imageUri) {
+          releaseImageUri(imageUri, releasedUris);
+        }
+      }
+    }
+    if (normalizedImage && normalizedImage !== sourceImage) {
+      normalizedImage.release();
+    }
+    sourceImage?.release();
+    context.release();
+  }
+}
+
 async function putImagePickerAsset(uploadUrl: string, asset: ImagePickerAsset): Promise<void> {
-  const body = asset.file ?? (await (await fetch(asset.uri)).blob());
+  const body = await createNormalizedImageBlob(asset);
   const response = await fetch(uploadUrl, {
     body,
-    headers: asset.mimeType ? { 'content-type': asset.mimeType } : undefined,
+    headers: { 'content-type': 'image/webp' },
     method: 'PUT',
   });
   await assertImageUploadResponse(response);

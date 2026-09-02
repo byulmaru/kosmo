@@ -1,14 +1,138 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
-import { releaseImagePreview, uploadImage } from './imageUpload';
+import test, { before, beforeEach, mock } from 'node:test';
 import { ImageUploadError } from './imageUploadErrors';
+import type { TestContext } from 'node:test';
 import type { ImagePickerAsset } from 'expo-image-picker';
+import type {
+  releaseImagePreview as ReleaseImagePreview,
+  uploadImage as UploadImage,
+} from './imageUpload';
+
+type FakeImage = {
+  readonly height: number;
+  readonly release: () => void;
+  readonly saveAsync: (options: unknown) => Promise<{
+    readonly height: number;
+    readonly uri: string;
+    readonly width: number;
+  }>;
+  readonly uri?: string;
+  readonly width: number;
+};
+type FakeContext = {
+  readonly release: () => void;
+  readonly renderAsync: () => Promise<FakeImage>;
+  readonly resize: (size: { readonly height: number; readonly width: number }) => FakeContext;
+};
+
+const manipulationUris: string[] = [];
+let createManipulatorContext: (uri: string) => FakeContext;
+
+mock.module('expo-image-manipulator', {
+  exports: {
+    ImageManipulator: {
+      manipulate: (uri: string) => {
+        manipulationUris.push(uri);
+        return createManipulatorContext(uri);
+      },
+    },
+    SaveFormat: { WEBP: 'webp' },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+let releaseImagePreview: typeof ReleaseImagePreview;
+let uploadImage: typeof UploadImage;
 
 const createAsset = (overrides: Partial<ImagePickerAsset> = {}): ImagePickerAsset => ({
   height: 100,
   uri: 'file:///local/image.jpg',
   width: 100,
   ...overrides,
+});
+
+function installManipulator({
+  height,
+  imageUris,
+  resultUri = 'file:///cache/normalized.webp',
+  width,
+}: {
+  readonly height: number;
+  readonly imageUris?: readonly (string | undefined)[];
+  readonly resultUri?: string;
+  readonly width: number;
+}) {
+  const resizeCalls: Array<{ readonly height: number; readonly width: number }> = [];
+  const saveOptions: unknown[] = [];
+  let contextReleased = false;
+  let renderCount = 0;
+  let renderedWidth = width;
+  let renderedHeight = height;
+
+  const context: FakeContext = {
+    release: () => {
+      contextReleased = true;
+    },
+    renderAsync: async () => {
+      renderCount += 1;
+      const image: FakeImage = {
+        height: renderedHeight,
+        release: () => undefined,
+        saveAsync: async (options) => {
+          saveOptions.push(options);
+          return {
+            height: renderedHeight,
+            uri: resultUri,
+            width: renderedWidth,
+          };
+        },
+        uri: imageUris?.[renderCount - 1],
+        width: renderedWidth,
+      };
+      return image;
+    },
+    resize: (size) => {
+      resizeCalls.push(size);
+      renderedWidth = size.width;
+      renderedHeight = size.height;
+      return context;
+    },
+  };
+
+  createManipulatorContext = () => context;
+  return {
+    context,
+    contextReleased: () => contextReleased,
+    renderCount: () => renderCount,
+    resizeCalls,
+    saveOptions,
+  };
+}
+
+function mockSuccessfulFetch(
+  t: TestContext,
+  body = new Blob(['webp'], { type: 'image/webp' }),
+  normalizedUri = 'file:///cache/normalized.webp',
+) {
+  return t.mock.method(
+    globalThis,
+    'fetch',
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === normalizedUri) {
+        return new Response(body, { status: 200 });
+      }
+      assert.equal(init?.method, 'PUT');
+      return new Response(null, { status: 204 });
+    },
+  );
+}
+
+before(async () => {
+  ({ releaseImagePreview, uploadImage } = await import('./imageUpload'));
+});
+
+beforeEach(() => {
+  manipulationUris.length = 0;
+  createManipulatorContext = () => installManipulator({ height: 100, width: 100 }).context;
 });
 
 test('releases only Web object URL previews', () => {
@@ -21,22 +145,32 @@ test('releases only Web object URL previews', () => {
   assert.deepEqual(released, ['blob:https://kosmo.example/preview']);
 });
 
-test('issues, uploads the File with its content type, and completes in order', async (t) => {
+test('issues, uploads normalized WebP bytes, and completes in order', async (t) => {
   const calls: string[] = [];
-  const file = new File(['image'], 'image.jpg', { type: 'image/jpeg' });
+  const normalizedBlob = new Blob(['normalized-webp'], { type: 'image/webp' });
+  const manipulator = installManipulator({ height: 2000, width: 4000 });
   const put = t.mock.method(
     globalThis,
     'fetch',
     async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === 'file:///cache/normalized.webp') {
+        calls.push('read-normalized');
+        return new Response(normalizedBlob, { status: 200 });
+      }
       calls.push(`${init?.method}:${String(input)}`);
-      assert.equal(init?.body, file);
-      assert.deepEqual(init?.headers, { 'content-type': 'image/jpeg' });
+      assert.equal(await (init?.body as Blob).text(), 'normalized-webp');
+      assert.deepEqual(init?.headers, { 'content-type': 'image/webp' });
       return new Response(null, { status: 204 });
     },
   );
 
   const mediaId = await uploadImage({
-    asset: createAsset({ file, mimeType: 'image/jpeg' }),
+    asset: createAsset({
+      file: new File(['original'], 'image.jpg', { type: 'image/jpeg' }),
+      height: 2000,
+      mimeType: 'image/jpeg',
+      width: 4000,
+    }),
     complete: async (id) => {
       calls.push(`complete:${id}`);
     },
@@ -48,36 +182,200 @@ test('issues, uploads the File with its content type, and completes in order', a
   });
 
   assert.equal(mediaId, 'media-1');
-  assert.deepEqual(calls, ['issue', 'PUT:https://upload.example/1', 'complete:media-1']);
-  assert.equal(put.mock.callCount(), 1);
+  assert.deepEqual(calls, [
+    'issue',
+    'read-normalized',
+    'PUT:https://upload.example/1',
+    'complete:media-1',
+  ]);
+  assert.deepEqual(manipulator.resizeCalls, [{ height: 1024, width: 2048 }]);
+  assert.equal(manipulator.renderCount(), 1);
+  assert.deepEqual(manipulator.saveOptions, [{ compress: 0.8, format: 'webp' }]);
+  assert.equal(put.mock.callCount(), 2);
 });
 
-test('fetches the asset URI as a Blob and omits an absent content type', async (t) => {
-  const fallbackBlob = new Blob(['fallback'], { type: 'image/png' });
+test('reads the normalized Blob and uses WebP content type for small images', async (t) => {
+  const normalizedBlob = new Blob(['normalized-webp'], { type: 'image/webp' });
+  const manipulator = installManipulator({ height: 800, width: 1200 });
   const calls: Array<{ readonly body?: BodyInit | null; readonly headers?: HeadersInit }> = [];
   const fetchMock = t.mock.method(
     globalThis,
     'fetch',
     async (input: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ body: init?.body, headers: init?.headers });
-      return String(input) === 'file:///local/image.jpg'
-        ? new Response(fallbackBlob, { status: 200 })
+      return String(input) === 'file:///cache/normalized.webp'
+        ? new Response(normalizedBlob, { status: 200 })
         : new Response(null, { status: 204 });
     },
   );
 
   await uploadImage({
-    asset: createAsset(),
+    asset: createAsset({ height: 800, width: 1200 }),
     complete: async () => undefined,
     isActive: () => true,
     issue: async () => ({ mediaId: 'media-1', uploadUrl: 'https://upload.example/1' }),
   });
 
   assert.equal(fetchMock.mock.callCount(), 2);
-  assert.deepEqual(calls, [
-    { body: undefined, headers: undefined },
-    { body: fallbackBlob, headers: undefined },
-  ]);
+  assert.equal(manipulator.resizeCalls.length, 0);
+  assert.equal(manipulator.renderCount(), 1);
+  assert.deepEqual(manipulator.saveOptions, [{ compress: 0.8, format: 'webp' }]);
+  assert.deepEqual(calls[0], { body: undefined, headers: undefined });
+  assert.equal(await (calls[1]?.body as Blob).text(), 'normalized-webp');
+  assert.equal((calls[1]?.body as Blob).type, 'image/webp');
+  assert.deepEqual(calls[1]?.headers, { 'content-type': 'image/webp' });
+});
+
+test('uses decoded dimensions for clipboard assets whose metadata is 0x0', async (t) => {
+  const manipulator = installManipulator({ height: 3000, width: 6000 });
+  mockSuccessfulFetch(t);
+
+  await uploadImage({
+    asset: createAsset({ height: 0, uri: 'blob:https://kosmo.example/clipboard', width: 0 }),
+    complete: async () => undefined,
+    isActive: () => true,
+    issue: async () => ({ mediaId: 'media-clipboard', uploadUrl: 'https://upload.example/1' }),
+  });
+
+  assert.deepEqual(manipulationUris, ['blob:https://kosmo.example/clipboard']);
+  assert.deepEqual(manipulator.resizeCalls, [{ height: 1024, width: 2048 }]);
+  assert.equal(manipulator.renderCount(), 2);
+});
+
+test('keeps decoded landscape ratio when resizing to the maximum dimension', async (t) => {
+  const manipulator = installManipulator({ height: 2000, width: 3000 });
+  mockSuccessfulFetch(t);
+
+  await uploadImage({
+    asset: createAsset({ height: 2000, width: 3000 }),
+    complete: async () => undefined,
+    isActive: () => true,
+    issue: async () => ({ mediaId: 'media-landscape', uploadUrl: 'https://upload.example/1' }),
+  });
+
+  assert.deepEqual(manipulator.resizeCalls, [{ height: 1365, width: 2048 }]);
+});
+
+test('keeps decoded portrait ratio when resizing to the maximum dimension', async (t) => {
+  const manipulator = installManipulator({ height: 3000, width: 2000 });
+  mockSuccessfulFetch(t);
+
+  await uploadImage({
+    asset: createAsset({ height: 3000, width: 2000 }),
+    complete: async () => undefined,
+    isActive: () => true,
+    issue: async () => ({ mediaId: 'media-portrait', uploadUrl: 'https://upload.example/1' }),
+  });
+
+  assert.deepEqual(manipulator.resizeCalls, [{ height: 2048, width: 1365 }]);
+});
+
+test('resizes an oversized square without changing its ratio', async (t) => {
+  const manipulator = installManipulator({ height: 4096, width: 4096 });
+  mockSuccessfulFetch(t);
+
+  await uploadImage({
+    asset: createAsset({ height: 4096, width: 4096 }),
+    complete: async () => undefined,
+    isActive: () => true,
+    issue: async () => ({ mediaId: 'media-square', uploadUrl: 'https://upload.example/1' }),
+  });
+
+  assert.deepEqual(manipulator.resizeCalls, [{ height: 2048, width: 2048 }]);
+});
+
+test('does not resize an image at the exact maximum dimension', async (t) => {
+  const manipulator = installManipulator({ height: 1024, width: 2048 });
+  mockSuccessfulFetch(t);
+
+  await uploadImage({
+    asset: createAsset({ height: 1024, width: 2048 }),
+    complete: async () => undefined,
+    isActive: () => true,
+    issue: async () => ({ mediaId: 'media-boundary', uploadUrl: 'https://upload.example/1' }),
+  });
+
+  assert.deepEqual(manipulator.resizeCalls, []);
+});
+
+test('releases a WebP object URL after reading its upload Blob', async (t) => {
+  const normalizedUri = 'blob:https://kosmo.example/normalized';
+  const manipulator = installManipulator({
+    height: 800,
+    imageUris: [normalizedUri],
+    resultUri: normalizedUri,
+    width: 1200,
+  });
+  const revokeObjectUrl = t.mock.method(URL, 'revokeObjectURL', () => undefined);
+  const normalizedBlob = new Blob(['webp'], { type: 'image/webp' });
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === normalizedUri) {
+      return new Response(normalizedBlob, { status: 200 });
+    }
+    assert.equal(init?.method, 'PUT');
+    return new Response(null, { status: 204 });
+  });
+
+  await uploadImage({
+    asset: createAsset(),
+    complete: async () => undefined,
+    isActive: () => true,
+    issue: async () => ({ mediaId: 'media-web', uploadUrl: 'https://upload.example/1' }),
+  });
+
+  assert.equal(revokeObjectUrl.mock.callCount(), 1);
+  assert.equal(revokeObjectUrl.mock.calls[0]?.arguments[0], normalizedUri);
+  assert.equal(manipulator.contextReleased(), true);
+});
+
+test('releases decoded Web image URLs without revoking the saved URL twice', async (t) => {
+  const sourceUri = 'blob:https://kosmo.example/source';
+  const normalizedUri = 'blob:https://kosmo.example/normalized';
+  const manipulator = installManipulator({
+    height: 3000,
+    imageUris: [sourceUri, normalizedUri],
+    resultUri: normalizedUri,
+    width: 6000,
+  });
+  const revokeObjectUrl = t.mock.method(URL, 'revokeObjectURL', () => undefined);
+  mockSuccessfulFetch(t, undefined, normalizedUri);
+
+  await uploadImage({
+    asset: createAsset({ height: 0, uri: sourceUri, width: 0 }),
+    complete: async () => undefined,
+    isActive: () => true,
+    issue: async () => ({ mediaId: 'media-web-decoded', uploadUrl: 'https://upload.example/1' }),
+  });
+
+  assert.deepEqual(
+    revokeObjectUrl.mock.calls.map((call) => call.arguments[0]),
+    [normalizedUri, sourceUri],
+  );
+  assert.equal(manipulator.contextReleased(), true);
+});
+
+test('turns image conversion failures into transfer failures', async (t) => {
+  createManipulatorContext = () => {
+    throw new Error('private conversion detail');
+  };
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('fetch must not run');
+  });
+
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset(),
+      complete: async () => undefined,
+      isActive: () => true,
+      issue: async () => ({ mediaId: 'media-invalid', uploadUrl: 'https://upload.example/1' }),
+    }),
+    (error: unknown) =>
+      error instanceof ImageUploadError &&
+      error.failure.stage === 'transfer' &&
+      error.failure.reason === 'transient' &&
+      !error.message.includes('private conversion detail'),
+  );
+  assert.equal(fetchMock.mock.callCount(), 0);
 });
 
 test('does not issue an upload when inactive before starting', async (t) => {
@@ -170,8 +468,12 @@ test('every retry issues a fresh Media and upload URL', async (t) => {
   let issued = 0;
   const requestedUrls: string[] = [];
   const fetchMock = t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
-    requestedUrls.push(String(input));
-    return requestedUrls.length === 1
+    const url = String(input);
+    requestedUrls.push(url);
+    if (url === 'file:///cache/normalized.webp') {
+      return new Response(new Blob(['webp']), { status: 200 });
+    }
+    return url.endsWith('/1')
       ? new Response(null, { status: 503 })
       : new Response(null, { status: 204 });
   });
@@ -192,16 +494,22 @@ test('every retry issues a fresh Media and upload URL', async (t) => {
   });
 
   assert.equal(result, 'media-2');
-  assert.equal(fetchMock.mock.callCount(), 2);
-  assert.deepEqual(requestedUrls, ['https://upload.example/1', 'https://upload.example/2']);
+  assert.equal(fetchMock.mock.callCount(), 4);
+  assert.deepEqual(requestedUrls, [
+    'file:///cache/normalized.webp',
+    'https://upload.example/1',
+    'file:///cache/normalized.webp',
+    'https://upload.example/2',
+  ]);
 });
 
 test('preserves safe issue, transfer, and complete failure classification', async (t) => {
   const asset = createAsset({ file: new File(['image'], 'image.jpg') });
-  const fetchMock = t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response(null, { status: 204 }),
+  const normalizedBlob = new Blob(['webp'], { type: 'image/webp' });
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) =>
+    String(input) === 'file:///cache/normalized.webp'
+      ? new Response(normalizedBlob, { status: 200 })
+      : new Response(null, { status: 204 }),
   );
 
   await assert.rejects(
@@ -220,12 +528,13 @@ test('preserves safe issue, transfer, and complete failure classification', asyn
       !error.message.includes('private issue detail'),
   );
 
-  fetchMock.mock.mockImplementationOnce(
-    async () =>
-      new Response(
-        JSON.stringify({ error: { code: 'size_limit_exceeded', message: 'storage secret' } }),
-        { status: 413, headers: { 'content-type': 'application/json' } },
-      ),
+  fetchMock.mock.mockImplementation(async (input: RequestInfo | URL) =>
+    String(input) === 'file:///cache/normalized.webp'
+      ? new Response(normalizedBlob, { status: 200 })
+      : new Response(
+          JSON.stringify({ error: { code: 'size_limit_exceeded', message: 'storage secret' } }),
+          { status: 413, headers: { 'content-type': 'application/json' } },
+        ),
   );
   await assert.rejects(
     uploadImage({
@@ -240,6 +549,8 @@ test('preserves safe issue, transfer, and complete failure classification', asyn
       error.failure.reason === 'file-too-large' &&
       !error.message.includes('storage secret'),
   );
+
+  fetchMock.mock.mockImplementation(async () => new Response(normalizedBlob, { status: 200 }));
 
   await assert.rejects(
     uploadImage({
