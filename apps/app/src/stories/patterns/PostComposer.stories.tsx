@@ -304,6 +304,7 @@ function InteractiveComposer({
   ...props
 }: PostComposerTargetProps & { keyboard?: boolean; mobile?: boolean }) {
   const theme = useTheme();
+  const composerProps = { ...props, showPollAction: false };
   const [body, setBody] = useState(props.body);
   const [contentWarning, setContentWarning] = useState(props.contentWarning);
   const [contentWarningExpanded, setContentWarningExpanded] = useState(
@@ -466,7 +467,7 @@ function InteractiveComposer({
     <View style={styles.composition}>
       {mobile ? (
         <MobileFullscreenComposerShellCandidate
-          {...props}
+          {...composerProps}
           body={body}
           contentWarning={contentWarning}
           contentWarningExpanded={contentWarningExpanded}
@@ -512,7 +513,7 @@ function InteractiveComposer({
         />
       ) : (
         <PostComposerTarget
-          {...props}
+          {...composerProps}
           body={body}
           contentWarning={contentWarning}
           contentWarningExpanded={contentWarningExpanded}
@@ -611,7 +612,7 @@ function InteractiveComposer({
                 </IconButton>
               </View>
               <PostComposerTarget
-                {...props}
+                {...composerProps}
                 body={body}
                 contentWarning={contentWarning}
                 contentWarningExpanded={contentWarningExpanded}

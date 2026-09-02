@@ -5,6 +5,7 @@ import baseMeta, {
   MobileKeyboardContract as mobileKeyboardContract,
   MobileKeyboardMediaFooterGeometryContract as mobileKeyboardMediaFooterGeometryContract,
   MobileMediaFooterGeometryContract as mobileMediaFooterGeometryContract,
+  MobilePlayground as mobilePlaygroundStory,
   MobilePlaygroundContract as mobilePlaygroundContract,
   PendingMediaContract as pendingMediaContract,
   Playground as playgroundContract,
@@ -69,6 +70,14 @@ export const PollActionHiddenContract: Story = {
 export const PlaygroundPollOverrideContract: Story = {
   ...playgroundContract,
   args: { body: 'Playground Poll override', items: [], showPollAction: true, surface: 'rail' },
+  play: async ({ canvasElement }) => {
+    expect(within(canvasElement).queryByRole('button', { name: '투표 추가' })).toBeNull();
+  },
+};
+
+export const MobilePlaygroundPollOverrideContract: Story = {
+  ...mobilePlaygroundStory,
+  args: { items: [], showPollAction: true, surface: 'overlay' },
   play: async ({ canvasElement }) => {
     expect(within(canvasElement).queryByRole('button', { name: '투표 추가' })).toBeNull();
   },
