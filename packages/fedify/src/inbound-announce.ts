@@ -6,7 +6,7 @@ import { NotFoundError, PermissionDeniedError, ValidationError } from '@kosmo/co
 import { repostPost } from '@kosmo/core/services';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
-import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
+import { observeInbound } from './inbound-observability';
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Announce } from '@fedify/vocab';
@@ -27,7 +27,8 @@ export const handleInboundAnnounce = async (
   const objectHref = uniqueHref(announce.objectIds);
 
   if (!isHttpUri(activityUri) || !actorHref || !objectHref) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Announce',
       handler: 'announce',
       phase: 'validation',
@@ -39,7 +40,8 @@ export const handleInboundAnnounce = async (
   const actorUri = new URL(actorHref);
   const objectUri = new URL(objectHref);
   if (!isHttpUri(actorUri) || !isHttpUri(objectUri) || activityUri.origin !== actorUri.origin) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Announce',
       actorOrigin: actorUri.origin,
       handler: 'announce',
@@ -56,7 +58,8 @@ export const handleInboundAnnounce = async (
     (storedActor.instance.state !== InstanceState.ACTIVE &&
       storedActor.instance.state !== InstanceState.UNRESPONSIVE)
   ) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Announce',
       actorOrigin: actorUri.origin,
       handler: 'announce',
@@ -69,7 +72,8 @@ export const handleInboundAnnounce = async (
 
   const sourcePostId = await findPostByActivityPubUri(context, objectUri);
   if (!sourcePostId) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Announce',
       actorOrigin: actorUri.origin,
       handler: 'announce',
@@ -91,7 +95,8 @@ export const handleInboundAnnounce = async (
     });
   } catch (error) {
     if (isExpectedRepostRejection(error)) {
-      observeInboundRejected({
+      observeInbound({
+        outcome: 'rejected',
         activityType: 'Announce',
         actorOrigin: actorUri.origin,
         handler: 'announce',

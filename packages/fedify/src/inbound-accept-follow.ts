@@ -4,7 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import { isCompatibleOutboundFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
-import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
+import { observeInbound } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
 
@@ -26,7 +26,8 @@ export const handleInboundAcceptFollow = async ({
     !isHttpUri(objectUri) ||
     objectUri.href !== followeeActorUri.href
   ) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Accept',
       actorOrigin: followerActorUri?.origin,
       handler: 'accept',
@@ -39,7 +40,8 @@ export const handleInboundAcceptFollow = async ({
 
   const followerProfile = await resolveInboundLocalRecipient(context, followerActorUri);
   if (!followerProfile) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Accept',
       actorOrigin: followerActorUri.origin,
       handler: 'accept',
@@ -84,7 +86,8 @@ export const handleInboundAcceptFollow = async ({
       projection,
     )
   ) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Accept',
       actorOrigin: followerActorUri.origin,
       handler: 'accept',
@@ -99,7 +102,8 @@ export const handleInboundAcceptFollow = async ({
   // generation check above remains authoritative; once it matches, a
   // repeated Accept is an idempotent protocol noop.
   if (profileFollow) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Accept',
       actorOrigin: followerActorUri.origin,
       handler: 'accept',
@@ -125,7 +129,8 @@ export const handleInboundAcceptFollow = async ({
     throw new Error('Unexpected inbound Accept transition result');
   }
   if (transition.result.kind === 'ALREADY_ESTABLISHED') {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Accept',
       actorOrigin: followerActorUri.origin,
       handler: 'accept',
@@ -134,7 +139,8 @@ export const handleInboundAcceptFollow = async ({
       reasonCode: 'duplicate_accept_noop',
     });
   } else if (transition.result.kind === 'NOOP') {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Accept',
       actorOrigin: followerActorUri.origin,
       handler: 'accept',

@@ -10,7 +10,7 @@ import { createPost } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
-import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
+import { observeInbound } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
 import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
@@ -140,7 +140,8 @@ export const handleInboundCreateNote = async ({
   receivedAt: Temporal.Instant;
 }): Promise<void> => {
   if (note.id?.href !== objectUri) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Create',
       actorOrigin: actorUri,
       handler: 'create',
@@ -153,7 +154,8 @@ export const handleInboundCreateNote = async ({
 
   const attributionUri = uniqueHref(note.attributionIds);
   if (attributionUri !== actorUri) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Create',
       actorOrigin: actorUri,
       handler: 'create',
@@ -173,7 +175,8 @@ export const handleInboundCreateNote = async ({
         ? PostVisibility.FOLLOWERS
         : undefined;
   if (!visibility) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Create',
       actorOrigin: actorUri,
       handler: 'create',
@@ -191,7 +194,8 @@ export const handleInboundCreateNote = async ({
       followeeProfileId: storedActor.profile.id,
     }))
   ) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Create',
       actorOrigin: actorUri,
       handler: 'create',
@@ -215,7 +219,8 @@ export const handleInboundCreateNote = async ({
     media = await projectRemoteNoteMedia(note);
   } catch (error) {
     if (error instanceof TypeError) {
-      observeInboundRejected({
+      observeInbound({
+        outcome: 'rejected',
         activityType: 'Create',
         actorOrigin: actorUri,
         handler: 'create',
@@ -240,7 +245,8 @@ export const handleInboundCreateNote = async ({
   } satisfies Parameters<typeof createPost>[0];
 
   const observeDuplicateCreate = () =>
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Create',
       actorOrigin: actorUri,
       handler: 'create',
@@ -257,7 +263,8 @@ export const handleInboundCreateNote = async ({
     }
   } catch (error) {
     if (error instanceof ValidationError && error.field === 'media') {
-      observeInboundRejected({
+      observeInbound({
+        outcome: 'rejected',
         activityType: 'Create',
         actorOrigin: actorUri,
         handler: 'create',
@@ -277,7 +284,8 @@ export const handleInboundCreateNote = async ({
       throw error;
     }
 
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Create',
       actorOrigin: actorUri,
       handler: 'create',

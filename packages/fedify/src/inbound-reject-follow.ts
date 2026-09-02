@@ -9,7 +9,7 @@ import { and, eq } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import { isCompatibleOutboundFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
-import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
+import { observeInbound } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
 
@@ -31,7 +31,8 @@ export const handleInboundRejectFollow = async ({
     !isHttpUri(objectUri) ||
     objectUri.href !== followeeActorUri.href
   ) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Reject',
       actorOrigin: followerActorUri?.origin,
       handler: 'reject',
@@ -44,7 +45,8 @@ export const handleInboundRejectFollow = async ({
 
   const followerProfile = await resolveInboundLocalRecipient(context, followerActorUri);
   if (!followerProfile) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Reject',
       actorOrigin: followerActorUri.origin,
       handler: 'reject',
@@ -88,7 +90,8 @@ export const handleInboundRejectFollow = async ({
       projection,
     )
   ) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Reject',
       actorOrigin: followerActorUri.origin,
       handler: 'reject',
@@ -116,7 +119,8 @@ export const handleInboundRejectFollow = async ({
       throw new Error('Unexpected inbound Reject transition result');
     }
     if (!result.result.changed) {
-      observeInboundNoop({
+      observeInbound({
+        outcome: 'noop',
         activityType: 'Reject',
         actorOrigin: followerActorUri.origin,
         handler: 'reject',
@@ -134,7 +138,8 @@ export const handleInboundRejectFollow = async ({
     origin: 'ACTIVITYPUB',
   });
   if (!removed.changed) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Reject',
       actorOrigin: followerActorUri.origin,
       handler: 'reject',

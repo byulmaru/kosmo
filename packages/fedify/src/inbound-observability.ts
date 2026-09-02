@@ -250,12 +250,3 @@ export const withInboundObservability =
       throw normalizedError;
     }
   };
-
-export const observeInboundNoop = (observation: Omit<InboundObservation, 'outcome'>) =>
-  observeInbound({ ...observation, outcome: 'noop' });
-
-export const observeInboundRejected = (observation: Omit<InboundObservation, 'outcome'>) =>
-  observeInbound({ ...observation, outcome: 'rejected' });
-
-export const observeInboundExternalFailure = (observation: Omit<InboundObservation, 'outcome'>) =>
-  observeInbound({ ...observation, outcome: 'external_failure' });

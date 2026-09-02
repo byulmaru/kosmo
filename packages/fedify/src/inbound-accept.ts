@@ -2,11 +2,7 @@ import { Follow } from '@fedify/vocab';
 import { NotFoundError } from '@kosmo/core/error';
 import { isHttpUri } from './activitypub-uri';
 import { handleInboundAcceptFollow } from './inbound-accept-follow';
-import {
-  observeInboundExternalFailure,
-  observeInboundNoop,
-  observeInboundRejected,
-} from './inbound-observability';
+import { observeInbound } from './inbound-observability';
 import { findUsableStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Accept } from '@fedify/vocab';
@@ -17,7 +13,8 @@ export const handleInboundAccept = async (
 ): Promise<void> => {
   const actorUri = accept.actorId;
   if (!isHttpUri(actorUri)) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Accept',
       handler: 'accept',
       phase: 'validation',
@@ -31,7 +28,8 @@ export const handleInboundAccept = async (
     remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri);
   } catch (error) {
     if (error instanceof NotFoundError) {
-      observeInboundNoop({
+      observeInbound({
+        outcome: 'noop',
         activityType: 'Accept',
         actorOrigin: actorUri.origin,
         error,
@@ -44,7 +42,8 @@ export const handleInboundAccept = async (
     throw error;
   }
   if (!remoteActor) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Accept',
       actorOrigin: actorUri.origin,
       handler: 'accept',
@@ -59,7 +58,8 @@ export const handleInboundAccept = async (
     suppressError: true,
   });
   if (object === null) {
-    observeInboundExternalFailure({
+    observeInbound({
+      outcome: 'external_failure',
       activityType: 'Accept',
       actorOrigin: actorUri.origin,
       handler: 'accept',
@@ -76,7 +76,8 @@ export const handleInboundAccept = async (
       followeeProfileId: remoteActor.profile.id,
     });
   } else {
-    observeInboundExternalFailure({
+    observeInbound({
+      outcome: 'external_failure',
       activityType: 'Accept',
       actorOrigin: actorUri.origin,
       handler: 'accept',
