@@ -260,7 +260,7 @@ function MediaPreview({
       accessibilityIgnoresInvertColors
       accessibilityLabel={`선택한 첨부 이미지 ${selectedIndex + 1} 미리보기`}
       accessibilityRole="image"
-      resizeMode="cover"
+      resizeMode="contain"
       source={{ uri: selected.asset.uri }}
       style={styles.selectedPreview}
     />

@@ -32,6 +32,7 @@ const meta = {
     onBack: fn(),
     onClose: fn(),
     onDone: fn(),
+    onPreviewPress: fn(),
     onSelectMedia: fn(),
     onSensitiveMediaChange: fn(),
     onToolChange: fn(),
@@ -51,6 +52,7 @@ const meta = {
     onBack: { action: 'back', control: false },
     onClose: { action: 'close', control: false },
     onDone: { action: 'done', control: false },
+    onPreviewPress: { action: 'previewPress', control: false },
     onSelectMedia: { action: 'selectMedia', control: false },
     onSensitiveMediaChange: { action: 'sensitiveMediaChange', control: false },
     onToolChange: { action: 'toolChange', control: false },
@@ -71,16 +73,33 @@ const meta = {
     'MobileDefaultGeometryContract',
     'MobileSensitiveGeometryContract',
     'MobileToolInteractionContract',
+    'ControlsContract',
     'editorMedia',
   ],
-  parameters: { layout: 'centered' },
+  parameters: {
+    controls: {
+      include: [
+        'media',
+        'mobileState',
+        'selectedKey',
+        'sensitiveMedia',
+        'showImageEditPreview',
+        'tool',
+      ],
+    },
+    layout: 'centered',
+  },
   title: 'KOSMO/Components/Composer Media Editor',
 } satisfies Meta<typeof ComposerMediaEditor>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Playground: Story = { render: (args) => <WebEditorStory {...args} /> };
+export const Playground: Story = {
+  render: (args, context) => (
+    <ViewportAwareEditor {...args} mobile={context.globals.viewport?.value === 'kosmoMobile'} />
+  ),
+};
 
 export const Sensitive: Story = {
   args: { sensitiveMedia: true, tool: 'sensitive' },
@@ -183,6 +202,14 @@ function WebEditorStory(props: ComposerMediaEditorProps) {
     <View style={{ width: 920 }}>
       <InteractiveEditor {...props} />
     </View>
+  );
+}
+
+function ViewportAwareEditor({ mobile, ...props }: ComposerMediaEditorProps & { mobile: boolean }) {
+  return mobile ? (
+    <InteractiveEditor {...props} presentation="mobile" />
+  ) : (
+    <WebEditorStory {...props} presentation="web" />
   );
 }
 
@@ -305,4 +332,42 @@ export const MobileToolInteractionContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '대체 텍스트 편집' }));
     expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toHaveValue('작성한 설명');
   },
+};
+
+export const WideImagePreviewContract: Story = {
+  ...Playground,
+  args: { mobileState: 'default', presentation: 'web' },
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: { layout: 'centered' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const preview = canvas.getAllByRole('img', { name: '선택한 첨부 이미지 1 미리보기' })[0];
+    expect(preview.firstElementChild).toHaveStyle({ backgroundSize: 'contain' });
+  },
+};
+
+export const PlaygroundMobileViewportContract: Story = {
+  ...Playground,
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { layout: 'fullscreen' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByTestId('mobile-composer-media-editor')).toBeVisible();
+    expect(canvas.queryByTestId('web-composer-media-editor')).toBeNull();
+  },
+};
+
+export const ControlsContract: Story = {
+  play: async () => {
+    expect(meta.parameters?.controls?.include).toEqual([
+      'media',
+      'mobileState',
+      'selectedKey',
+      'sensitiveMedia',
+      'showImageEditPreview',
+      'tool',
+    ]);
+    expect(meta.parameters?.controls?.include).not.toContain('presentation');
+  },
+  render: (args) => <WebEditorStory {...args} />,
 };

@@ -1,10 +1,13 @@
 import baseMeta, {
+  ControlsContract as controlsContract,
   FutureImageEditPreviewContract as futureImageEditPreviewContract,
   InteractionContract as interactionContract,
   MobileAltKeyboardGeometryContract as mobileAltKeyboardGeometryContract,
   MobileDefaultGeometryContract as mobileDefaultGeometryContract,
   MobileSensitiveGeometryContract as mobileSensitiveGeometryContract,
   MobileToolInteractionContract as mobileToolInteractionContract,
+  PlaygroundMobileViewportContract as playgroundMobileViewportContract,
+  WideImagePreviewContract as wideImagePreviewContract,
 } from './ComposerMediaEditor.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -23,3 +26,6 @@ export const MobileAltKeyboardGeometryContract: Story = mobileAltKeyboardGeometr
 export const MobileDefaultGeometryContract: Story = mobileDefaultGeometryContract;
 export const MobileSensitiveGeometryContract: Story = mobileSensitiveGeometryContract;
 export const MobileToolInteractionContract: Story = mobileToolInteractionContract;
+export const ControlsContract: Story = controlsContract;
+export const PlaygroundMobileViewportContract: Story = playgroundMobileViewportContract;
+export const WideImagePreviewContract: Story = wideImagePreviewContract;
