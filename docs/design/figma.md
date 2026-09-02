@@ -448,6 +448,10 @@ documentation·state specimen을 두 번째 행에 둔다.
   specimen은 다섯 action을 모두 기본 `true`로 두며, Product는 아직 구현하지 않은 action을 같은
   property·capability flag로 숨긴다. 모바일 fullscreen처럼 header가 제출 action을 소유하는 consumer는
   `Show submit=false`로 footer의 Button만 숨기고 남은 글자 수 counter는 유지한다.
+- `Show progress ring`은 기본 `false`인 별도 Boolean property다. `20×20` ring은 남은 글자 수 다음, footer 제출
+  Button 앞에 놓이며 사용량의 절반을 보여 주는 source specimen만 제공한다. 실제 비율은 Product가 500자 제한에서
+  파생하고 normal·100자 이하 warning·0자 이하 danger semantic state를 적용한다. Full Overlay와 모바일 fullscreen만
+  이를 켜고, 폭이 제한된 Rail은 계속 끈다.
 - `CW active`·`Poll active`는 action 노출 여부와 별개인 modifier state다. `03 Patterns` specimen이
   Poll·Emoji action을 켜두어도 Product 기능이 준비됐다는 의미가 아니며, runtime capability·feature flag·interaction
   lifecycle은 Product가 소유한다.
@@ -478,15 +482,17 @@ documentation·state specimen을 두 번째 행에 둔다.
   geometry·event propagation·focus·navigation은 Product에서 검증한다.
 - Web footer는 Media → Poll → CW → Emoji 순서로 공용 `IconButton`의 `32×32` target과 `20×20` icon,
   action 사이 `4px` 간격을 사용한다. 글자 수 counter는 `32px`, 제출은 기존 `Button/Compact` `72×32`를 사용해
-  `Rail`의 실제 footer 폭 `270px` 안에서 한 줄로 배치한다. 이 규칙은 Web 전용이며 iOS `44pt`·Android `48dp`
-  target 계약은 유지한다.
+  `Rail`의 실제 footer 폭 `270px` 안에서 한 줄로 배치한다. Rail은 ring을 추가하지 않는다. Overlay는 도구를 왼쪽,
+  남은 글자 수 → ring → 제출을 오른쪽 그룹으로 정렬한다. 이 규칙은 Web 전용이며 iOS `44pt`·Android `48dp` target
+  계약은 유지한다.
 - Overlay 전용 attachment 편집은
   [`ComposerMediaEditor`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5455-38985)
   component set이 `05 Post & Composer`에서 소유한다. Web source master는 `920×678`이고 같은 source의
   instance를 `720–920px`에서 resize한다. 우측 tool panel은 `280px`로 고정하고 왼쪽 preview만 남은 폭을 채우며,
   parent Overlay surface는 `min(920px, 100vw - 48px)`를 소유한다. 일반 `PostComposer Surface=Overlay` 자체의
   `600px` 폭은 유지하고, editor 진입 시 같은 parent surface 안의 내용을 교체하면서 editor 폭으로 확장한다.
-  별도 `ModalSheet`·scrim을 중첩하거나 `PostComposer`의 `State`·`Rail` variant로 추가하지 않는다.
+  별도 `ModalSheet`·scrim을 중첩하거나 `PostComposer`의 `State`·`Rail` variant로 추가하지 않는다. Overlay surface는
+  바깥 radius를 clip하고 높이가 제한될 때 content 내부만 scroll해 우측 상단 radius를 보존한다.
 - `ComposerMediaEditor`는 `Tool=Alt|Sensitive|Image Edit`를 제공한다. `Alt`가 기존 consumer를 보존하는 기본값이고,
   `Sensitive`는 어느 attachment에서 진입해도 Post Content의 공유 `sensitiveMedia`를 편집하며, 토글 결과를 모든
   attachment status pill이 함께 mirror한다. 선택한 이미지는 ALT·향후 이미지 편집을 위한 navigation context이지
@@ -499,7 +505,8 @@ documentation·state specimen을 두 번째 행에 둔다.
   attachment만 제거한다. 하단 `완료`는 현재 tool의 변경을 draft에 반영하고 Composer로 돌아가며, ALT·향후 이미지
   편집은 선택 attachment에, Sensitive는 Post 전체에 적용한다. Rail에서 편집을 시작해도 같은 Overlay의 editor
   view로 직접 전환한다.
-- `< compact` Web과 Android/iOS는 별도 fullscreen editor를 사용한다. scrim, focus trap·restore, Escape,
+- `< compact` Web과 Android/iOS는 별도 fullscreen editor를 사용한다. 모바일의 가로로 긴 preview는 잘라내지 않고
+  가용 폭 안에 `contain`한다. scrim, focus trap·restore, Escape,
   discard confirmation, viewport max-height·body scroll, safe area와 mobile keyboard avoidance lifecycle은
   Product의 상위 Overlay 구현이 소유한다.
 - `12 Exploration`에 남긴 기존 `600×624`·`SquarePen` PC editor는 `Superseded` decision history다. 새 consumer는
@@ -524,8 +531,11 @@ documentation·state specimen을 두 번째 행에 둔다.
 - 8개 variant의 `Composer body`는 40px `Author row`에 Avatar와 posting identity만 두고, CW·본문·Media·Poll
   editor는 그 아래 358px 전체 폭을 사용한다. Avatar gutter를 편집영역 전체 높이까지 유지하지 않는다.
 - 모바일 fullscreen header가 제출 action을 소유하므로 8개 조합 모두 공용 `__ComposerFooter`의
-  `Show submit=false`를 유지한다. Poll·CW 표본은 배치와 reflow evidence이며 실제 작성 기능·keyboard avoidance·
-  safe area·focus·제출 lifecycle 완료를 뜻하지 않는다.
+  `Show submit=false`, `Show progress ring=true`를 유지한다. footer는 도구를 왼쪽, 남은 글자 수 → ring을 오른쪽
+  그룹으로 정렬한다. 공개 범위 menu는 trigger의 chevron 쪽 우측 edge에 맞춘다. Poll·CW 표본은 배치와 reflow
+  evidence이며 실제 작성 기능·keyboard avoidance·safe area·focus·제출 lifecycle 완료를 뜻하지 않는다.
+- author 또는 CW block과 본문 editor 사이에는 `8px` 간격을 유지한다. editor가 남은 content 높이를 채우고 media
+  shelf는 별도 sibling으로 이어져 focus ring이 shelf 경계에서 잘리지 않는다.
 - `04 Screens - Mobile`의 [`Composer state consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6771-10454)는
   Full Media·Poll·CW와 Keyboard Empty·Media·Poll·CW 7개를 연결한다. `14 Mobile composer and overlay consumers`의
   Full Empty Light/Dark까지 합치면 route 호환 FRAME 없이 8개 variant가 모두 실제 Target consumer를 가진다.
