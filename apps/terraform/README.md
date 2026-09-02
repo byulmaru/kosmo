@@ -4,9 +4,9 @@
 
 ## 관리 범위
 
-- Firebase 활성화와 Android/iOS 앱 등록 (`moe.kos`)
-- Firebase App Distribution 서비스 계정과 최소 IAM 권한
-- `main`에 저장된 지정 workflow와 `prod` Environment 승인 뒤의 exact `repo:byulmaru/kosmo:environment:prod` release만 허용하는 GitHub Actions Workload Identity Federation
+- 기존 Firebase 활성화와 Android/iOS 앱 등록 (`moe.kos`), 그리고 과도기 App Distribution 리소스
+- Google Play Developer API 활성화, Android Publisher 전용 service account와 최소 WIF 권한
+- 각 store workflow에 필요한 GitHub Actions Workload Identity Federation. Android Play는 `main`의 정확한 workflow와 기존 `prod` Environment만 허용한다.
 - Terraform plan/apply가 공유하는 GitHub Actions WIF 서비스 계정
 - GitHub에서 직접 관리하는 Actions environment와 변수 (`native-test-distribution`, 승인형 `ios-device-onboarding`, `terraform-apply`, 승인형 `prod` release)
 - Firebase provider가 지원하지 않는 `native-testers` group의 멱등 REST bootstrap
@@ -34,7 +34,7 @@ Terraform 실행 시에는 장기 credential 파일 대신 현재 `gcloud` 계�
 ./scripts/ensure-ci-aws-role.sh
 ```
 
-GCP 리소스를 적용한 뒤 native/onboarding Environment와 변수는 [앱의 iOS Ad Hoc 관리자 설정](../app/README.md#one-time-administrator-setup)에 따라 GitHub에서 직접 관리한다. `terraform-apply` Environment는 `main`만 허용한다. Terraform workflow의 repository 변수 `GCP_TERRAFORM_PROVIDER`, `GCP_TERRAFORM_SERVICE_ACCOUNT`는 각 Terraform output을 기준으로 설정하고, `AWS_TERRAFORM_ROLE_ARN`은 `ensure-ci-aws-role.sh`의 마지막 출력값으로 설정한다. Production GitHub 설정은 [Production release 운영](../../docs/operations/production-release.md)의 첫 전환 절차에서 적용하고 live API로 검증한다.
+GCP 리소스를 적용한 뒤 store/native Environment와 변수는 각 workflow의 bootstrap 절차에 따라 GitHub에서 직접 관리한다. `terraform-apply` Environment는 `main`만 허용한다. Terraform workflow의 repository 변수 `GCP_TERRAFORM_PROVIDER`, `GCP_TERRAFORM_SERVICE_ACCOUNT`는 각 Terraform output을 기준으로 설정하고, `AWS_TERRAFORM_ROLE_ARN`은 `ensure-ci-aws-role.sh`의 마지막 출력값으로 설정한다. Production GitHub 설정은 [Production release 운영](../../docs/operations/production-release.md)의 첫 전환 절차에서 적용하고 live API로 검증한다.
 
 `main`을 push하면 Docker Build는 dev image를 build하고 기존 `Deploy Dev` 경로로 자동 배포한다. Production release는 이 push로 시작하지 않으며, Main에 저장된 release workflow를 `main` ref에서 `workflow_dispatch`로 실행할 때만 요청된다. `target_sha`를 입력하면 해당 full SHA를 사용하고, 비워 두면 preflight가 실행 시점의 최신 `main` commit을 immutable target으로 확정한다. `prod` Environment required reviewer의 한 번의 승인 전에는 production source checkout, prod Vault/Sentry credential 접근과 prod image build를 수행하지 않는다. 승인 뒤 gated job이 resolved target SHA에서 prod 설정 image를 별도로 build해 GHCR에 push하고, 그 immutable digest를 production migration과 모든 활성화 workload에 사용한다. `target_sha`를 생략해 최신 `main`을 target으로 선택한 경우에는 dev image와 prod image가 같은 source SHA를 사용할 수 있지만, 명시적 target SHA dispatch에서는 서로 다른 source를 사용할 수 있다. 두 image는 환경별 Web 설정을 포함하므로 동일 digest일 필요가 없다.
 
@@ -42,7 +42,18 @@ Main에 저장된 release workflow를 `main` ref에서 `workflow_dispatch`로 �
 
 Production PostgreSQL backup은 `s3://byulmaru-kosmo-prod-postgresql-backups-822638974464/kosmo-prod/`에 저장한다. Bucket 객체는 S3의 기본 SSE-S3 암호화를 사용하며 별도 default encryption resource를 관리하지 않는다. Bucket은 public access 차단, TLS-only policy, versioning과 lifecycle을 사용하며 Terraform destroy로 제거되지 않는다. `byulmaru-kosmo-prod-postgres-backup` role은 EKS Pod Identity 전용이며 Barman의 bucket 확인을 위한 bucket-level list 권한과 `kosmo-prod/` prefix의 backup/WAL 객체 관리 권한만 가진다. Bucket과 role ARN은 각각 `postgres_backup_bucket_arn`, `postgres_backup_role_arn` Terraform output으로 확인한다.
 
-`ios-device-onboarding`은 `robin-maki`의 승인을 요구한다. Firebase WIF 입력, `MATCH_GIT_URL`, Apple signing secret과 공개 native test 설정은 `apps/app/README.md`의 iOS Ad Hoc 배포 절차에 따라 각 environment에 직접 넣는다.
+`ios-device-onboarding`은 `robin-maki`의 승인을 요구한다. Firebase WIF 입력, `MATCH_GIT_URL`, Apple signing secret과 공개 native test 설정은 [앱의 현재 iOS 배포 절차](../app/README.md)에 따라 각 environment에 직접 넣는다.
+
+## Google Play 내부 테스트 bootstrap
+
+Android store 배포는 [Google Play Developer API](https://developers.google.com/android-publisher/getting_started)와 Google Play Console을 사용한다. Terraform은 API 활성화, 전용 service account, `main`의 정확한 workflow와 기존 `prod` Environment만 신뢰하는 WIF provider, 그리고 해당 service account의 `roles/iam.workloadIdentityUser` binding만 관리한다. Play Console app·첫 AAB·app signing·upload key·tester·track·권한과 `supply` 선행 조건은 [앱의 Android Google Play 배포 절차](../app/README.md)에서 수동으로 관리한다. 정적 service account JSON key는 만들거나 저장하지 않는다.
+
+Terraform 적용 후 다음 값을 확인한다.
+
+```sh
+terraform output -raw android_play_service_account
+terraform output -raw android_play_workload_identity_provider
+```
 
 그 뒤 `apps/terraform/**` 또는 Terraform workflow가 바뀐 PR에서는 GCP/Firebase/IAM/WIF plan을 실행해 PR comment와 artifact로 남긴다. Plan artifact는 저장소의 Actions 보존 기간만큼 유지하며 apply는 병합된 PR head와 일치하는 미만료 artifact만 선택한다.
 
@@ -81,6 +92,6 @@ bucket은 `byulmaru-terraform-state`, state key는 `kosmo/terraform.tfstate`이�
 
 ## Rotation과 revocation
 
-정적 Google credential은 없으므로 정기 key rotation은 필요하지 않다. repository, workflow, branch 또는 environment가 바뀌면 WIF provider의 숫자 ID 기반 trust condition을 먼저 수정하고 저장한 plan을 적용한다. 현재 distribution provider는 `main`의 `ios-ad-hoc-distribution.yml`과 승인형 `ios-device-onboarding.yml`만 허용한다.
+정적 Google credential은 없으므로 정기 key rotation은 필요하지 않다. repository, workflow, branch 또는 environment가 바뀌면 WIF provider의 숫자 ID 기반 trust condition을 먼저 수정하고 저장한 plan을 적용한다. Android Play provider는 `main`의 `.github/workflows/android-play-internal-distribution.yml`과 기존 `prod` Environment만 허용한다. Firebase provider는 기존 iOS 과도기 workflow만 허용하며 Android Play 경로에서 재사용하지 않는다.
 
 긴급 차단은 WIF provider에 `disabled = true`를 추가해 적용한다. 영구 폐기는 service account의 `roles/iam.workloadIdentityUser` binding을 제거한 plan을 먼저 적용한 뒤, 별도 검토로 보호된 provider와 service account의 deletion policy를 해제한다.

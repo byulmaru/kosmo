@@ -246,3 +246,26 @@ platform :ios do
     end
   end
 end
+
+platform :android do
+  desc 'Upload the signed Android Release AAB to the Play internal track'
+  lane :upload_internal do
+    require_environment!('GOOGLE_APPLICATION_CREDENTIALS', 'KOSMO_ANDROID_AAB_PATH')
+    aab_path = File.expand_path(ENV.fetch('KOSMO_ANDROID_AAB_PATH'))
+    credentials_path = File.expand_path(ENV.fetch('GOOGLE_APPLICATION_CREDENTIALS'))
+    UI.user_error!("AAB was not created at #{aab_path}.") unless File.file?(aab_path) && File.size?(aab_path)
+    UI.user_error!("Google credentials were not created at #{credentials_path}.") unless File.file?(credentials_path) && File.size?(credentials_path)
+
+    upload_to_play_store(
+      aab: aab_path,
+      package_name: BUNDLE_IDENTIFIER,
+      json_key: credentials_path,
+      release_status: 'completed',
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_metadata: true,
+      skip_upload_screenshots: true,
+      track: 'internal',
+    )
+  end
+end
