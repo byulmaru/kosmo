@@ -37,6 +37,7 @@ type Props = {
   hoverOpacity?: number;
   stateful?: boolean;
   testID: string;
+  wideWebTarget?: boolean;
 };
 
 export function PostActionControl({
@@ -61,6 +62,7 @@ export function PostActionControl({
   hoverOpacity = 0.3,
   stateful = true,
   testID,
+  wideWebTarget = false,
 }: Props) {
   const theme = useTheme();
   const [hovered, setHovered] = useState(false);
@@ -79,7 +81,13 @@ export function PostActionControl({
   const formattedCount = formatPostActionCount(count);
 
   return (
-    <View style={[styles.slot, alignToEnd ? styles.alignToEnd : undefined]}>
+    <View
+      style={[
+        styles.slot,
+        Platform.OS === 'web' && wideWebTarget ? styles.wideWebSlot : undefined,
+        alignToEnd ? styles.alignToEnd : undefined,
+      ]}
+    >
       <Pressable
         aria-expanded={stateful ? (popupRole ? menuExpanded : expanded) : undefined}
         aria-busy={stateful && isPending ? true : undefined}
@@ -228,4 +236,5 @@ const styles = StyleSheet.create({
     bottom: -4,
     top: -4,
   },
+  wideWebSlot: { width: 64 },
 });

@@ -59,7 +59,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   사용한다. Reply count는 hover·pressed 동안 glyph와 같은 action foreground를 사용한다. Repost count는
   미선택 default·hover에서 `textSecondary`, selected에서 `actionRepostBase`를 사용한다.
 - 원형 hover background는 28×28px visual state layer를 유지한다. Web interactive rectangle은 Reply, Repost,
-  Reaction과 Bookmark가 50×36px, More가 28×36px이며 visual slot 위아래로 4px씩 확장된다. background는 count를
+  Reaction이 64×36px, Bookmark가 50×36px, More가 28×36px이며 visual slot 위아래로 4px씩 확장된다. background는 count를
   감싸지 않고, interactive rectangle은 action 사이의 분배 여백을 차지하거나 인접 target과 겹치지 않는다.
 - Reaction이 selected 상태이면 hover 여부와 관계없이 HeartPlus의 stroke와 fill에 `actionReactionBase`를 사용한다. 다른
   action의 default·active 색과 selected fill은 유지하고, pressed에서는 각 상태의 foreground에 기존 72% opacity를 적용한다.
@@ -279,10 +279,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   상하 8px padding, Reaction Summary 아래부터 Action Bar까지 4px인지 검증한다. selected Profile이 있고 Reply
   surface가 닫힌 기본 상태에서도 빈 wrapper가 남지 않으며 Engagement 아래부터 current row 끝까지 4px이고
   current row 뒤 별도 thread divider가 없는지 exact geometry로 검증한다.
-- 모든 플랫폼 구현에서 Bar와 visual/layout slot 높이 28, Reply·More endpoint의 content column 양끝 정렬, social action 너비 50, More 너비
+- 모든 플랫폼 구현에서 Bar와 visual/layout slot 높이 28, Reply·More endpoint의 content column 양끝 정렬, social visual slot 너비 50, More 너비
   28, glyph 16, icon-count gap 4와 고정 순서를 검증한다. Web에서는 Bookmark+4px+More trailing group이
-  82px이고 bounded interactive rectangle이 50×36px/28×36px이며 분배 여백을 덮거나 서로 겹치지 않는지도 확인한다.
-- Web pointer hover에서는 glyph 중심 28×28 원형 background, social action의 50×36 click target과 More의
+  82px이고 Reply·Repost·Reaction 64×36px, Bookmark 50×36px, More 28×36px bounded interactive rectangle이 분배 여백을 덮거나 서로 겹치지 않는지도 확인한다.
+- Web pointer hover에서는 glyph 중심 28×28 원형 background, Reply·Repost·Reaction의 64×36 click target, Bookmark의 50×36 click target과 More의
   28×36 click target, 일반 action의 30% `primary` background·불투명 `primary` foreground,
   Reply glyph·count의 동일 foreground, Repost의 미선택 glyph·count 중립색·hover glyph 의미색과 중립 count·selected
   glyph·count의 mode별 `actionRepostBase`, Reaction의 30% `actionReactionBase` background·불투명 foreground·HeartPlus selected 표현과

@@ -878,9 +878,9 @@ export const ActionBarCatalogInteraction: Story = {
     const defaultBookmark = defaultToolbarCanvas.getByRole('button', { name: '북마크' });
     const defaultMore = defaultToolbarCanvas.getByRole('button', { name: '더보기' });
     const actionTargetSizes = [
-      ['답글', 50],
-      ['재게시', 50],
-      ['반응', 50],
+      ['답글', 64],
+      ['재게시', 64],
+      ['반응', 64],
       ['북마크', 50],
       ['더보기', 28],
     ] as const;
@@ -926,7 +926,7 @@ export const ActionBarCatalogInteraction: Story = {
     expect(replyCount).toHaveStyle({ color: colors.light.primary });
     const replyCountBounds = replyCount.getBoundingClientRect();
     expect(replyCountBounds.left - replyIconBounds.right).toBeCloseTo(spacing.xs, 0);
-    expect(defaultReply.getBoundingClientRect().width).toBe(50);
+    expect(defaultReply.getBoundingClientRect().width).toBe(64);
     expect(defaultReply.getBoundingClientRect().height).toBe(36);
 
     const pointerUser = userEvent.setup();
@@ -1749,9 +1749,10 @@ export const AccessibilityAndCompactGeometry: Story = {
     expect(buttons[4]).not.toHaveAttribute('aria-pressed');
     expect(actionBar.getBoundingClientRect().height).toBe(28);
     const actionBarBounds = actionBar.getBoundingClientRect();
+    const actionTargetWidths = [64, 64, 64, 50, 28] as const;
     for (const [index, button] of buttons.entries()) {
       const bounds = button.getBoundingClientRect();
-      expect(bounds.width).toBe(index === 4 ? 28 : 50);
+      expect(bounds.width).toBe(actionTargetWidths[index]);
       expect(bounds.height).toBe(36);
       expect(bounds.width).toBeGreaterThanOrEqual(24);
       expect(bounds.height).toBeGreaterThanOrEqual(24);
@@ -1859,9 +1860,10 @@ function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
 
   expect(toolbarBounds.width).toBeCloseTo(expectedContentWidth, 0);
   expect(toolbarBounds.height).toBe(28);
+  const actionTargetWidths = [64, 64, 64, 50, 28] as const;
   for (const [index, button] of buttons.entries()) {
     const bounds = button.getBoundingClientRect();
-    expect(bounds.width).toBe(index === 4 ? 28 : 50);
+    expect(bounds.width).toBe(actionTargetWidths[index]);
     expect(bounds.height).toBe(36);
     expect(bounds.width).toBeGreaterThanOrEqual(24);
     expect(bounds.height).toBeGreaterThanOrEqual(24);
