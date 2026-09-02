@@ -179,7 +179,7 @@
 
 ### Requirement: 개인정보 고지와 실제 수집의 일치
 
-**Authority / Provenance:** [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 포함 범위·완료 조건과 `2026-08-31 명세 구체화 범위 확인`; `docs/design/breakpoints.md`의 개인정보 처리방침 진입 계약 — 공개 개인정보 처리방침은 실제 PostHog 제공자와 처리 위치, 표준 자동 이벤트, URL·referrer·session metadata, 브라우저 저장, 원격 설정과 Session Replay 보호를 설명해야 한다(MUST). 표준 이벤트의 `q`·SDK 기본 click ID masking과 `utm_*` 보존을 Replay masking과 구분해야 한다(MUST). 기존 공개 `/privacy` 접근과 canonical 진입 위치를 유지해야 한다(MUST).
+**Authority / Provenance:** [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 포함 범위·완료 조건과 `2026-08-31 명세 구체화 범위 확인`; [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정`; `docs/design/breakpoints.md`의 개인정보 처리방침 진입 계약 — 공개 개인정보 처리방침은 실제 PostHog 제공자와 처리 위치, 표준 자동 이벤트, URL·referrer·session metadata, 브라우저 저장, 원격 설정과 Session Replay 보호를 설명해야 한다(MUST). 표준 이벤트의 `q`·SDK 기본 click ID·referrer 파생 `ph_keyword`와 `utm_*` 원문 수집을 Replay masking과 구분해야 한다(MUST). 검색 입력은 자유 형식이므로 예상하지 못한 개인정보 입력 가능성과 현재 공개 Profile handle 검색이라는 판단 근거를 함께 다뤄야 하며(MUST), 게시물·본문·전문 검색 또는 더 넓은 검색 의미를 도입하기 전에 이 수집 결정을 재검토해야 한다(MUST). 기존 공개 `/privacy` 접근과 canonical 진입 위치를 유지해야 한다(MUST).
 
 #### Scenario: 사용자가 개인정보 처리방침을 확인한다
 
@@ -190,7 +190,7 @@
 #### Scenario: 수집 표면별 보호 범위를 고지한다
 
 - **WHEN** 표준 이벤트와 원격 설정·Replay 수집을 설명한다
-- **THEN** `/e/`에서 확인한 URL·referrer masking을 `/flags`나 모든 PostHog 요청이 보호된다는 내용으로 일반화하지 않는다
+- **THEN** `/e/`에서 확인한 URL·referrer·session metadata 원문 수집을 `/flags`나 모든 PostHog 요청이 같은 필드를 수집한다는 내용으로 일반화하지 않는다
 - **AND** `ph-mask`의 Replay text masking과 `ph-no-capture`의 Post Content autocapture 제외를 구분한다
 - **AND** Account identity trait에 원문 이름·이메일·handle을 넣지 않는다는 사실을 모든 DOM·URL·표준 metadata에 해당 정보가 없다는 보장으로 확대하지 않는다
 

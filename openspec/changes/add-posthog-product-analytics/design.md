@@ -80,7 +80,7 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Clou
 
 ### 현재 기준과 관측값
 
-이 절에서는 [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 `2026-08-31 명세 구체화 범위 확인`을 구체적으로 다룬다. PR #685의 shared spec과 PR #653의 runtime을 바탕으로 하며 SDK·Cloud·build 계약은 새로 결정하지 않는다. 현재 원격 기준은 PROD-820 `0cdf6eb9`, PROD-819 `73f2dfc7`이다. 당시 두 PR은 아직 병합되지 않았다. 구현을 시작할 때 source와 상태를 다시 확인한다.
+이 절에서는 [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 `2026-08-31 명세 구체화 범위 확인`을 구체적으로 다룬다. PR #685의 shared spec과 PR #653의 runtime을 바탕으로 하며 SDK·Cloud·build 계약은 새로 결정하지 않는다. 명세 작성 당시 원격 기준은 PROD-820 `0cdf6eb9`, PROD-819 `73f2dfc7`이었고 두 PR은 아직 병합되지 않았다. 구현을 시작할 때 source와 상태를 다시 확인한다.
 
 - 현재 공개 개인정보 화면과 운영 문서는 OpenPanel을 설명한다. PostHog로 전환하면서 바꿀 내용은 제공자·처리 위치, 자동 수집·브라우저 저장, 보호 범위, 보존·권리 행사와 운영 절차다. UI 배치와 `/privacy` 진입은 바꾸지 않는다.
 - 2026-08-31 읽기 전용 Cloud 조회로 `Kosmo Production`, `Asia/Seoul`, Replay `session_recording_sample_rate=0.10`, `session_recording_retention_period=30d`와 canonical origin URL trigger를 확인했다. 이는 설정 조회 증거이며 실제 녹화 품질을 인수한 증거는 아니다.
@@ -100,13 +100,13 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Clou
 
 ### 수집 표면과 검증 증거
 
-| 표면                               | 확인할 내용                                                                                                                       | 증거의 한계                                                                                                                                      |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 표준 `/e/`와 custom event          | pageview·pageleave·autocapture, URL·referrer·session metadata, `q`·click ID·`ph_keyword` masking, `utm_*` 보존과 typed properties | 합성 marker를 사용한 browser outbound 결과로 확인 범위를 한정한다. 다른 endpoint가 보호된다는 증거는 아니다.                                     |
-| `/flags`·원격 설정                 | 실제 요청의 식별자·속성 범위, 응답 설정과 필요한 외부 모듈 로딩                                                                   | 요청 발생만 확인하는 테스트로는 body에 원문이 없음을 증명할 수 없다. 발견한 계약 문제는 PROD-819/820으로 돌려보내고 범용 필터를 추가하지 않는다. |
-| 브라우저 저장·identity             | cookie/localStorage, reload·같은 Account·다른 Account·guest 전환과 reset                                                          | 분석 식별자와 인증 Session credential을 구분한다. identity trait의 제한을 모든 DOM·metadata의 비식별 보장으로 확대하지 않는다.                   |
-| Replay·performance·heatmap·console | Cloud 설정과 실제 수집 상태, input·Post Content 보호, origin·sampling·retention                                                   | SDK 옵션, 원격 설정, outbound와 실제 recording을 구분한다. 최종 Viewer 녹화 품질은 PROD-741에 남긴다.                                            |
-| 설정·장애·배포                     | key/host 완전·부분·누락, 초기화·전송 실패 시 인증·탐색·게시, rebuild·rollback                                                     | fake endpoint나 로컬 no-op이 통과한 결과를 실제 production 수집 인수로 표시하지 않는다.                                                          |
+| 표면                               | 확인할 내용                                                                                                                   | 증거의 한계                                                                                                                                         |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 표준 `/e/`와 custom event          | pageview·pageleave·autocapture, URL·referrer·session metadata, `q`·click ID·`ph_keyword`·`utm_*` 원문 수집과 typed properties | 합성 marker를 사용한 browser outbound 결과로 확인 범위를 한정한다. 다른 endpoint가 같은 metadata를 수집한다는 증거는 아니다.                        |
+| `/flags`·원격 설정                 | 실제 요청의 식별자·속성 범위, 응답 설정과 필요한 외부 모듈 로딩                                                               | 요청 발생만 확인하는 테스트로는 body의 원문 포함 여부를 증명할 수 없다. 발견한 계약 문제는 PROD-819/820으로 돌려보내고 범용 필터를 추가하지 않는다. |
+| 브라우저 저장·identity             | cookie/localStorage, reload·같은 Account·다른 Account·guest 전환과 reset                                                      | 분석 식별자와 인증 Session credential을 구분한다. identity trait의 제한을 모든 DOM·metadata의 비식별 보장으로 확대하지 않는다.                      |
+| Replay·performance·heatmap·console | Cloud 설정과 실제 수집 상태, input·Post Content 보호, origin·sampling·retention                                               | SDK 옵션, 원격 설정, outbound와 실제 recording을 구분한다. 최종 Viewer 녹화 품질은 PROD-741에 남긴다.                                               |
+| 설정·장애·배포                     | key/host 완전·부분·누락, 초기화·전송 실패 시 인증·탐색·게시, rebuild·rollback                                                 | fake endpoint나 로컬 no-op이 통과한 결과를 실제 production 수집 인수로 표시하지 않는다.                                                             |
 
 운영 기록에는 관측일, source commit/build artifact, 환경, 설정 또는 요청 표면, 합성 데이터 사용 여부, 결과, 미검증 범위와 후속 owner를 담으면 충분하다. 새 저장소나 범용 검증 프레임워크는 만들지 않는다. raw payload와 사용자 정보는 공유 문서에 첨부하지 않는다.
 
