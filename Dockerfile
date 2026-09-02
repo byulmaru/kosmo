@@ -40,6 +40,8 @@ FROM deps AS app-build
 
 ARG EXPO_PUBLIC_ENVIRONMENT
 ARG EXPO_PUBLIC_OPENPANEL_CLIENT_ID
+ARG EXPO_PUBLIC_POSTHOG_KEY
+ARG EXPO_PUBLIC_POSTHOG_HOST
 ARG EXPO_PUBLIC_RELEASE_TAG
 ARG EXPO_PUBLIC_SENTRY_DSN
 ARG SENTRY_ORG
@@ -59,6 +61,7 @@ COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts
 
+# Public PostHog settings are intentionally inlined into the Web asset; build args also invalidate this step when they change.
 RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN,required=false \
   pnpm build:sentry-artifacts
 RUN find apps/app/dist -type f \( \
