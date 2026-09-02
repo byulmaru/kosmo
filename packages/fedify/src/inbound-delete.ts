@@ -14,11 +14,7 @@ import { InstanceKind } from '@kosmo/core/enums';
 import { deletePost } from '@kosmo/core/services';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
-import {
-  observeInboundExternalFailure,
-  observeInboundNoop,
-  observeInboundRejected,
-} from './inbound-observability';
+import { observeInbound } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Delete } from '@fedify/vocab';
 
@@ -36,7 +32,8 @@ export const handleInboundDelete = async (
   const objectUri = objectHref ? new URL(objectHref) : null;
 
   if (!isHttpUri(actorUri) || !isHttpUri(objectUri)) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Delete',
       handler: 'delete',
       phase: 'validation',
@@ -51,7 +48,8 @@ export const handleInboundDelete = async (
     suppressError: true,
   });
   if (embedded === null && !activity.objectId) {
-    observeInboundExternalFailure({
+    observeInbound({
+      outcome: 'external_failure',
       activityType: 'Delete',
       actorOrigin: actorUri.origin,
       handler: 'delete',
@@ -66,7 +64,8 @@ export const handleInboundDelete = async (
     embedded !== null &&
     (!(embedded instanceof Tombstone) || embedded.id?.href !== objectUri.href)
   ) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Delete',
       actorOrigin: actorUri.origin,
       handler: 'delete',
@@ -96,7 +95,8 @@ export const handleInboundDelete = async (
     .then(first);
 
   if (!row) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Delete',
       actorOrigin: actorUri.origin,
       handler: 'delete',

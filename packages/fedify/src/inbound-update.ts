@@ -3,11 +3,7 @@ import '@kosmo/core/polyfill';
 import { isActor } from '@fedify/vocab';
 import { ConflictError } from '@kosmo/core/error';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
-import {
-  observeInboundExternalFailure,
-  observeInboundNoop,
-  observeInboundRejected,
-} from './inbound-observability';
+import { observeInbound } from './inbound-observability';
 import {
   findStoredRemoteProfileActorByUri,
   materializeRemoteProfileActor,
@@ -31,7 +27,8 @@ export const handleInboundUpdate = async (
   const objectUri = objectHref ? new URL(objectHref) : null;
 
   if (!isHttpUri(actorUri) || !isHttpUri(objectUri) || actorUri.href !== objectUri.href) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Update',
       actorOrigin: actorUri?.origin,
       handler: 'update',
@@ -48,7 +45,8 @@ export const handleInboundUpdate = async (
     suppressError: true,
   });
   if (object === null) {
-    observeInboundExternalFailure({
+    observeInbound({
+      outcome: 'external_failure',
       activityType: 'Update',
       actorOrigin: actorUri?.origin,
       handler: 'update',
@@ -60,7 +58,8 @@ export const handleInboundUpdate = async (
   }
 
   if (!isActor(object) || object.id?.href !== actorUri.href) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Update',
       actorOrigin: actorUri.origin,
       handler: 'update',
@@ -73,7 +72,8 @@ export const handleInboundUpdate = async (
 
   const stored = await findStoredRemoteProfileActorByUri(actorUri);
   if (!stored) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Update',
       actorOrigin: actorUri.origin,
       handler: 'update',
@@ -95,7 +95,8 @@ export const handleInboundUpdate = async (
     });
   } catch (error) {
     if (error instanceof ConflictError || error instanceof RemoteActorMaterializationError) {
-      observeInboundExternalFailure({
+      observeInbound({
+        outcome: 'external_failure',
         activityType: 'Update',
         actorOrigin: actorUri.origin,
         handler: 'update',

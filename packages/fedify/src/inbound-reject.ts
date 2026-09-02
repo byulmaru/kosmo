@@ -3,11 +3,7 @@ import '@kosmo/core/polyfill';
 import { Follow } from '@fedify/vocab';
 import { NotFoundError } from '@kosmo/core/error';
 import { isHttpUri } from './activitypub-uri';
-import {
-  observeInboundExternalFailure,
-  observeInboundNoop,
-  observeInboundRejected,
-} from './inbound-observability';
+import { observeInbound } from './inbound-observability';
 import { handleInboundRejectFollow } from './inbound-reject-follow';
 import { findUsableStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
@@ -19,7 +15,8 @@ export const handleInboundReject = async (
 ): Promise<void> => {
   const actorUri = reject.actorId;
   if (!isHttpUri(actorUri)) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Reject',
       handler: 'reject',
       phase: 'validation',
@@ -33,7 +30,8 @@ export const handleInboundReject = async (
     remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri);
   } catch (error) {
     if (error instanceof NotFoundError) {
-      observeInboundNoop({
+      observeInbound({
+        outcome: 'noop',
         activityType: 'Reject',
         actorOrigin: actorUri.origin,
         error,
@@ -46,7 +44,8 @@ export const handleInboundReject = async (
     throw error;
   }
   if (!remoteActor) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Reject',
       actorOrigin: actorUri.origin,
       handler: 'reject',
@@ -61,7 +60,8 @@ export const handleInboundReject = async (
     suppressError: true,
   });
   if (object === null) {
-    observeInboundExternalFailure({
+    observeInbound({
+      outcome: 'external_failure',
       activityType: 'Reject',
       actorOrigin: actorUri.origin,
       handler: 'reject',
@@ -78,7 +78,8 @@ export const handleInboundReject = async (
       followeeProfileId: remoteActor.profile.id,
     });
   } else {
-    observeInboundExternalFailure({
+    observeInbound({
+      outcome: 'external_failure',
       activityType: 'Reject',
       actorOrigin: actorUri.origin,
       handler: 'reject',

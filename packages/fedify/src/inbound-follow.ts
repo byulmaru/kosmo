@@ -20,12 +20,7 @@ import { and, eq } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
-import {
-  observeInbound,
-  observeInboundExternalFailure,
-  observeInboundNoop,
-  observeInboundRejected,
-} from './inbound-observability';
+import { observeInbound } from './inbound-observability';
 import {
   findOrMaterializeRemoteProfileActorByUri,
   findStoredRemoteProfileActorByUri,
@@ -49,7 +44,8 @@ export const handleInboundFollow = async (
   const objectUri = follow.objectId;
 
   if (!isHttpUri(actorUri) || !isHttpUri(objectUri)) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Follow',
       handler: 'follow',
       phase: 'validation',
@@ -61,7 +57,8 @@ export const handleInboundFollow = async (
   // Local validation intentionally precedes every remote lookup.
   const localRecipient = await resolveInboundLocalRecipient(context, objectUri);
   if (!localRecipient) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Follow',
       actorOrigin: actorUri.origin,
       handler: 'follow',
@@ -78,7 +75,8 @@ export const handleInboundFollow = async (
     remoteActor = await findOrMaterializeRemoteProfileActorByUri({ actorUri, context, now });
   } catch (error) {
     if (isExpectedRemoteActorRejection(error)) {
-      observeInboundExternalFailure({
+      observeInbound({
+        outcome: 'external_failure',
         activityType: 'Follow',
         actorOrigin: actorUri.origin,
         handler: 'follow',
@@ -109,7 +107,8 @@ export const handleInboundFollow = async (
 
   if (result.result.kind !== 'ESTABLISHED') {
     if (!result.result.created) {
-      observeInboundNoop({
+      observeInbound({
+        outcome: 'noop',
         activityType: 'Follow',
         actorOrigin: actorUri.origin,
         handler: 'follow',
@@ -122,7 +121,8 @@ export const handleInboundFollow = async (
   }
 
   if (!result.result.created) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Follow',
       actorOrigin: actorUri.origin,
       handler: 'follow',
@@ -133,7 +133,8 @@ export const handleInboundFollow = async (
   }
 
   if (!remoteActor.actor.inboxUri) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Follow',
       actorOrigin: actorUri.origin,
       handler: 'follow',
@@ -158,7 +159,8 @@ export const handleInboundFollow = async (
     });
   } catch {
     // The projection is authoritative; delivery retries belong to a separate slice.
-    observeInboundExternalFailure({
+    observeInbound({
+      outcome: 'external_failure',
       activityType: 'Follow',
       actorOrigin: actorUri.origin,
       handler: 'follow',
@@ -231,7 +233,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   const actorHref = uniqueHref(undo.actorIds);
   const actorUri = actorHref ? new URL(actorHref) : null;
   if (!isHttpUri(actorUri)) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Undo',
       handler: 'undo',
       phase: 'validation',
@@ -242,7 +245,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
 
   const objectHref = uniqueHref(undo.objectIds);
   if (undo.objectIds.length > 0 && !objectHref) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       handler: 'undo',
@@ -253,7 +257,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   }
   const objectUri = objectHref ? new URL(objectHref) : null;
   if (objectUri && !isHttpUri(objectUri)) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       handler: 'undo',
@@ -269,7 +274,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       return;
     }
     if (announceResult === 'ignored') {
-      observeInboundNoop({
+      observeInbound({
+        outcome: 'noop',
         activityType: 'Undo',
         actorOrigin: actorUri.origin,
         handler: 'undo',
@@ -288,7 +294,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri);
   } catch (error) {
     if (isExpectedRemoteActorRejection(error)) {
-      observeInboundExternalFailure({
+      observeInbound({
+        outcome: 'external_failure',
         activityType: 'Undo',
         actorOrigin: actorUri.origin,
         handler: 'undo',
@@ -303,7 +310,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   }
 
   if (!remoteActor || remoteActor.instance.state !== InstanceState.ACTIVE) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       handler: 'undo',
@@ -321,7 +329,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     suppressError: true,
   });
   if (embedded === null && !undo.objectId) {
-    observeInboundExternalFailure({
+    observeInbound({
+      outcome: 'external_failure',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       handler: 'undo',
@@ -334,7 +343,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   if (embedded instanceof Follow) {
     const objectUri = embedded.objectId;
     if (!isHttpUri(objectUri) || uniqueHref(embedded.actorIds) !== actorUri.href) {
-      observeInboundRejected({
+      observeInbound({
+        outcome: 'rejected',
         activityType: 'Undo',
         actorOrigin: actorUri.origin,
         objectOrigin: objectUri?.origin,
@@ -347,7 +357,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
 
     const localRecipient = await resolveInboundLocalRecipient(context, objectUri);
     if (!localRecipient) {
-      observeInboundRejected({
+      observeInbound({
+        outcome: 'rejected',
         activityType: 'Undo',
         actorOrigin: actorUri.origin,
         objectOrigin: objectUri.origin,
@@ -381,7 +392,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
         origin: 'ACTIVITYPUB',
       });
       if (!result.changed) {
-        observeInboundNoop({
+        observeInbound({
+          outcome: 'noop',
           activityType: 'Undo',
           actorOrigin: actorUri.origin,
           handler: 'undo',
@@ -406,7 +418,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       .then(first);
 
     if (!pendingRequest) {
-      observeInboundNoop({
+      observeInbound({
+        outcome: 'noop',
         activityType: 'Undo',
         actorOrigin: actorUri.origin,
         handler: 'undo',
@@ -429,7 +442,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       throw new Error('Unexpected inbound Undo transition result');
     }
     if (!result.result.changed) {
-      observeInboundNoop({
+      observeInbound({
+        outcome: 'noop',
         activityType: 'Undo',
         actorOrigin: actorUri.origin,
         handler: 'undo',
@@ -442,7 +456,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   }
 
   if (embedded !== null && !(embedded instanceof Like) && !(embedded instanceof EmojiReact)) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       objectOrigin: objectUri?.origin,
@@ -459,7 +474,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     ((embedded instanceof Like || embedded instanceof EmojiReact) &&
       uniqueHref(embedded.actorIds) !== actorUri.href)
   ) {
-    observeInboundRejected({
+    observeInbound({
+      outcome: 'rejected',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       objectOrigin: activityUri?.origin,
@@ -486,7 +502,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       }),
   });
   if (result.reactionId === null) {
-    observeInboundNoop({
+    observeInbound({
+      outcome: 'noop',
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
       objectOrigin: activityUri.origin,
