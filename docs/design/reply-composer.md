@@ -30,9 +30,12 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   Composer-open을 별도 frame으로 중복 만들지 않는다.
 - Full Web Post 상세는 기존 thread rail Reply surface를 유지한다. Compact modal과 Full rail은 direct Parent와
   공용 Composer 계약을 공유하지만 서로의 배치를 억지로 재사용하지 않는다.
-- Web `< compact`와 Android/iOS에서는 같은 Reply 맥락을 전체 화면 작성기로 연다.
-- Focused/Keyboard는 입력과 keyboard를 우선하고 `@kosmo님에게 답글` 같은 최소 맥락만 표시한다.
-- 비키보드 Initial anchor에서도 direct Parent는 작성 영역 아래로 내려오지 않으며 기본 viewport에 표시하지 않는다.
+- Current runtime과 OpenSpec은 Web `< compact`와 Android/iOS의 목록 surface에서 같은 Reply 맥락을 전체 화면
+  작성기로 연다. Current는 surface가 열리는 즉시 작성자·시각·전체 본문과 Quote Source를 포함한 direct Parent를
+  editor 앞에 표시한다.
+- Figma Target의 Focused/Keyboard는 입력과 keyboard를 우선하고 `@kosmo님에게 답글` 같은 최소 맥락만 표시한다.
+- Figma Target의 비키보드 Initial anchor에서도 direct Parent는 작성 영역 아래로 내려오지 않으며 기본
+  viewport에 표시하지 않는다.
   사용자가 위로 스크롤했을 때만 공개 범위 행 위에 기존 `PostListItem` 기반의 비대화형 Parent가 나타난다.
   Parent Action Bar와 Post menu는 숨기고, Avatar 아래 thread line을 공개 범위 행의 위 border까지 연결해 답글
   대상임을 표시한다. Figma reveal consumer의 Parent와 line은 각각 [`7392:28076`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7392-28076),

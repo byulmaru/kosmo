@@ -83,8 +83,11 @@ Viewer는 [기존 Post Action Bar](./post-action-bar.md)가 현재 제공하는 
 - Viewer는 원래 Post surface에서 Content Warning을 공개한 뒤에만 열 수 있다. 열린 Viewer의 현재 Post는 원문을 공개 상태로 유지하고 Content Warning 안내와 다시 가리기 control을 표시하지 않는다. 이 Viewer 전용 표현은 다른 Post surface의 reveal 저장 상태를 변경하지 않는다.
 - Viewer가 열린 뒤 background Gallery의 Sensitive 표시 상태가 바뀌어도 Viewer session을 자동 종료하지 않는다. 현재 Host query projection에서 선택 Media가 사라지거나 표시할 수 없게 되면 이전 이미지 byte·URL을 유지하지 않고 modal 안에 안전한 unavailable 상태를 표시한다.
 - Host Post query가 cache hit·loading·error·retry이거나 null Post·Content·Media를 반환해도 modal shell과 close control은 유지한다. Host query 자체가 실패한 fallback은 안전한 한국어 상태와 retry만 제공하고 raw 오류·authorization 세부 정보를 노출하지 않는다.
-- 현재 이미지의 load·decode가 실패하면 중앙 blocking state를 만들지 않고 기존 공용 Danger Action Toast를 stage
-  하단에 지속 표시한다. Figma Mobile Error consumer [`6665:55675`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-55675)는
+- Current OpenSpec은 현재 이미지의 load가 실패하면 같은 image surface에 안전한 오류와 재시도 control을
+  표시한다. Current runtime은 이를 stage 중앙의 inline fallback과 `다시 시도`로 구현하며 modal chrome, 현재
+  index와 Post detail surface를 유지한다.
+- Figma Target은 중앙 blocking state 대신 기존 공용 Danger Action Toast를 stage 하단에 지속 표시한다.
+  Mobile Error consumer [`6665:55675`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-55675)는
   [`Toast 7380:55058`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-55058)의
   `미디어를 불러오지 못했어요`와 `다시 시도`를 사용하며 modal chrome, 현재 index와 Post detail surface를 유지한다.
 - 실패한 Media는 같은 index에서 다시 시도할 수 있고, retry는 다른 Media의 상태를 초기화하지 않는다.
