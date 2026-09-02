@@ -16,6 +16,15 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - avatar overlap과 follow 등 profile action은 header 이미지 영역 밖의 hero layout이 소유한다. 이 요소의
   배치나 높이는 header 이미지의 `3:1` 계산에 포함하지 않는다.
 
+## Mobile Follow action geometry
+
+- `390px` Mobile Profile Hero의 관계 action은 기존 `FollowButton`의 `Size=Medium` `96×40`을 사용한다.
+  `Size=Compact` `72×32`는 Mobile consumer에 사용하지 않는다.
+- Action slot은 `96×40`, `right: 16`에 두고 기존 Compact action의 중심축을 유지하도록 `top: 142`에
+  배치한다. Loading·Tags를 포함한 모든 Mobile `ProfileHero` variant가 같은 slot geometry를 사용한다.
+- iOS와 Android의 실제 입력 target은 이 `40` 높이의 visual box와 분리해 각각 최소 `44pt`, `48dp`를
+  충족한다. target 확장 영역은 avatar, Connections와 인접 action을 침범하지 않는다.
+
 ## 출시와 검증 범위
 
 - 공용 React Native 구현은 Web·Android·iOS에 위 geometry 계약을 적용한다.

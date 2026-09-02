@@ -237,8 +237,9 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
 
 ## Figma 대응
 
-- `04 Screens - Mobile`의 기존 Profile Edit 원본은 `07 Archive`에 보관하고 `390px` Mobile 대표 프레임을
-  현재 범위로 유지한다.
+- `04 Screens - Mobile`의 기존 Profile Edit 원본은 `07 Archive`에 보관하고 `390px` Mobile 대표 프레임은
+  `Candidate/reference · Product 미구현`으로 유지한다. canonical Mobile Target이나 production 구현 완료로
+  세지 않는다.
 - `05 Screens - Web`의 Profile 영역에는 `1440px` Full과 `1024px` Compact 대표 프레임을 유지한다.
 - Mobile/Web 모두 상단 navigation header의 safe area 제외 높이를 `64px`로 고정하고 뒤로가기 action에
   `44×44` target과 `24px` `ArrowLeft`를 사용한다.

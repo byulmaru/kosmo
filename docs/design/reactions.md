@@ -49,6 +49,11 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
 - Figma source는 `Presentation=Web | Mobile`과 `State=Browse | SearchResults | Empty | Loading`을 조합한 8 variants다. `Browse`는 검색, 빠른 반응, 최근 사용, category와 전체 emoji grid를 표시하고, `SearchResults`는 검색 결과만, `Empty`는 검색 결과 없음만, `Loading`은 spinner만 표시한다. Picker 전체 `Error` variant는 만들지 않는다.
 - Web은 trigger에 붙는 non-modal dialog를 사용한다. 열릴 때 검색 field로 focus를 옮기고 같은 trigger, `Escape`, 바깥 클릭으로 닫은 뒤 focus를 trigger에 복원한다.
 - Mobile은 modal bottom sheet를 사용한다. `Browse`의 initial height는 480, `SearchResults`·`Empty`·`Loading`의 expanded height는 720이다. `Scrolled`는 expanded sheet의 runtime scroll 위치 표본이지 별도 source variant가 아니다.
+- Mobile Screens의 [`Post action overlays and picker`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6772-10989)는
+  Quick Picker Light/Dark와 Full Picker Browse Light/Dark를 실제 PostMediaViewer Open 위 child overlay로 조립한
+  Target evidence다. Quick은 Viewer를 유지한 채 reaction trigger 위에 열리고, Full Picker는 Quick을 닫은 뒤 같은
+  Viewer 위 Mobile sheet로 전환한다. 다른 Full Picker source state를 늘리거나 runtime focus·dismiss·keyboard
+  동작 완료를 뜻하지 않는다.
 - Mobile은 열릴 때 software keyboard를 자동으로 띄우지 않고 sheet title부터 탐색한다. backdrop tap, drag dismiss, Android back으로 닫고 focus를 원래 trigger로 복원한다.
 - dialog의 접근성 이름은 `반응 선택`이다. 검색 field, category와 Reaction button은 식별 가능한 이름과 selected 상태를 제공한다. 결과 영역은 Loading에서 busy 상태와 시각적으로 숨긴 `반응을 불러오는 중` 문구를 함께 노출한다.
 - spinner는 `motion/duration/loading-cycle` 800ms마다 linear하게 회전한다. reduced motion에서는 회전을 제거하고 정적인 `···`로 대체한다.
@@ -58,6 +63,8 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
 
 - 실제 Post Action Bar의 Reaction action은 현재 여섯 Type을 zero-count 여부와 무관하게 client catalog에서 공급하고, selected Profile의 `viewerReactions`를 선택 상태로 사용한다.
 - Reaction trigger는 Web·iOS·Android 모두에서 trigger에 붙은 작은 floating popover를 열며 같은 trigger를 다시 누르면 닫힌다. 화면 공간에 따라 위·아래로 전환하고 viewport와 safe area 안으로 수평 위치를 제한한다. option row의 고유 너비가 가용 너비보다 크면 target 크기를 줄이지 않고 feature-local `ScrollView` shell 안에서 수평 scroll을 허용한다.
+- PostMediaViewer의 390×844 Mobile Target은 reaction trigger 위 공간이 충분하므로 같은 adaptive 규칙이 위쪽 배치를
+  선택한다. Viewer 전용 `alwaysAbove` 예외를 만들지 않는다.
 - popover는 외부 클릭·터치, Web `Escape`, Android back, 대상 Post unmount 또는 selected Profile 전환으로 닫힌다. Web에서는 열릴 때 첫 option으로 focus를 옮기고 닫힐 때 trigger로 focus를 복원한다.
 - 한 Type을 선택하거나 해제한 뒤에도 popover를 유지해 여러 Type을 연속으로 조작할 수 있다.
 - Action Bar 부모 surface는 target 자체가 적격한 Reaction trigger를 세션 상태와 분리해 해석한다. guest는 기존 인증 진입으로 위임하고, valid 세션에서 selected Profile이 없으면 `ShellChromeContext.openProfileSwitcher()`로 기존 Profile 선택기를 연다. session error에서는 trigger를 disabled로 유지한다. 어떤 resolution에서도 popover나 mutation을 먼저 시작하지 않으며, Profile 선택 성공 뒤 원래 Reaction을 자동으로 재실행하지 않는다.
@@ -130,7 +137,7 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
 - Storybook interaction에서 Web option의 exact 32×32px, 20px emoji, 16×16px spinner와 2px stroke, 70% selected 배경, 오류 재시도와 disabled 시 미렌더링을 검증한다.
 - Full Picker는 8 source variants, Web dialog와 Mobile 480·720 sheet geometry, 검색 결과 없음과 spinner-only Loading, reduced-motion 정적 대체를 검증한다. 실제 focus·dismiss·safe area·keyboard·screen reader 동작은 Figma 완료와 분리해 runtime에서 검증한다.
 - Reaction 요약은 Web 32px·iOS 44pt·Android 48dp item geometry, standalone 제목 제거, Quick Picker와 공유하는 selected·pending·error 상태를 검증한다.
-- 타임라인 `PostListItem`의 실제 content column인 Mobile 314px과 Center Web 524px에서 모든 Type과 `Ellipsis`가 들어가면 전체 token과 `Ellipsis`를 표시하는지, 그렇지 않으면 `+N` 폭을 먼저 예약한 뒤 완전히 들어가는 token만 Product 순서로 표시하는지 검증한다. `N`이 숨겨진 Type 수인지, wrap·horizontal scroll·부분 clipping이 없는지도 함께 확인한다. detail `PostLayout`의 390px·600px full-width row는 별도 consumer로 확인한다. viewer-selected 저빈도 Type 표본은 후보 표시일 뿐 정렬 규칙이나 표시 상한으로 해석하지 않는다.
+- 타임라인 `PostListItem`의 실제 content column인 Mobile 298px과 Center Web 524px에서 모든 Type과 `Ellipsis`가 들어가면 전체 token과 `Ellipsis`를 표시하는지, 그렇지 않으면 `+N` 폭을 먼저 예약한 뒤 완전히 들어가는 token만 Product 순서로 표시하는지 검증한다. `N`이 숨겨진 Type 수인지, wrap·horizontal scroll·부분 clipping이 없는지도 함께 확인한다. detail `PostLayout`의 390px·600px full-width row는 별도 consumer로 확인한다. viewer-selected 저빈도 Type 표본은 후보 표시일 뿐 정렬 규칙이나 표시 상한으로 해석하지 않는다.
 - mutation 성공 전 상태 불변, 성공 payload Post의 authoritative 선택·count·순서 정규화, 실패 시 기존 상태 보존, Type별 동시성·재시도, selected Profile별 Environment 격리를 검증한다.
 - 일반·Quote는 own Post ID, 순수 Repost는 source Post ID를 목록과 상세 각각에서 사용하는지 검증한다.
 - Action Bar trigger는 target이 적격할 때 guest에서 기존 인증 진입, valid 세션의 selected Profile 부재에서 기존 Profile 선택기 진입, session error에서 disabled인지 검증한다. resolution 전에는 popover·mutation이 없고 Profile 선택 뒤 원래 Reaction을 자동 재실행하지 않는다. 요약 token toggle은 selected Profile이 없으면 계속 disabled이며 trailing People control과 Profile 목록 조회는 가능해야 한다.

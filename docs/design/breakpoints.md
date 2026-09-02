@@ -134,7 +134,8 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   geometry는 바꾸지 않으며, chevron 자체는 별도 focus target이 아니다.
 - trigger는 열린 상태를 accessibility `expanded` 상태로 노출한다.
 - 프로필이 많을 때는 프로필 목록 영역만 제한된 높이 안에서 스크롤한다. 새 프로필 추가 액션과 생성 폼은
-  목록 아래의 고정 영역에 두며, 생성 폼이 열리면 목록이 남은 높이에 맞게 줄어든다. full·compact Web picker의
+  목록 아래의 고정 영역에 두며, 생성 폼이 열리면 목록이 남은 높이에 맞게 줄어든다. mobile drawer 안에서도
+  picker 목록과 새 프로필 추가 행은 각각 scroll/fixed 영역을 유지하며 drawer navigation을 함께 밀어내지 않는다. full·compact Web picker의
   시각적 wrapper는 기존 viewport 여백 계산을 유지하면서 `430px`를 최대 높이로 사용해 기본 상태에서 약 7개
   프로필 행이 보이게 한다. 실제 가시 행 수보다 고정 footer 접근성과 목록 내부 스크롤을 우선한다.
 - full·compact Web picker를 열어도 focus를 강제로 이동하지 않는다. 브라우저의 기본 `Tab` 순서는 trigger,
@@ -184,7 +185,11 @@ check와 별개다.
 React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owner로 둔다. 중앙 피드만 별도 internal scroller가 되는 앱형 shell은 이 기준의 목표가 아니다. 사용자가 피드 바깥의 비스크롤 sidebar, 우측 rail, 빈 레이아웃 영역에서 wheel/trackpad를 사용해도 브라우저 기본 document scroll 흐름으로 페이지가 움직여야 한다. Android/iOS 화면은 platform의 `ScrollView`를 사용하되 이 web scroll 계약을 바꾸지 않는다.
 
 - `< compact`에서는 64px 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
-- `< compact`에서 mobile drawer가 열리면 drawer 안의 navigation content가 세로 internal scroll owner가 된다. drawer 안에서 profile picker를 연 경우에는 프로필 목록만 그 picker 안에서 다시 스크롤하며, drawer 바깥의 document/body scroll은 잠근다.
+- `< compact`에서 mobile drawer가 열리면 profile summary 아래의 primary navigation만 남은 높이를 채우는 세로
+  internal scroll owner가 된다. 하단 divider와 `피드백 보내기`·`설정 및 기타` footer는 drawer 아래에 고정하고,
+  메뉴가 늘어나거나 `설정 및 기타`가 열리면 primary navigation의 가시 영역만 줄여 footer 위쪽으로 펼친다.
+  drawer 안에서 profile picker를 연 경우에는 프로필 목록만 picker 안에서 다시 스크롤하며 새 프로필 추가 행과
+  drawer footer는 고정한다. drawer 바깥의 document/body scroll은 잠근다.
 - `compact`~`full`에서는 아이콘 레일이 layout flow 안에서 sticky viewport column으로 고정된다. 레일 자체가 스크롤 가능한 콘텐츠를 갖지 않는 한 wheel 입력은 document scroll로 이어진다.
 - `compact`~`full` profile picker가 열렸을 때는 overlay drawer 안의 프로필 목록만 internal scroll owner가 된다.
   drawer 밖의 wheel 입력은 기존 document scroll 흐름을 유지한다.

@@ -117,6 +117,10 @@ Post Action Bar는 현재 Web 우선 출시 범위의 Figma geometry를 먼저 �
 
 ### 기존 컴포넌트 계약
 
+- `390px` Mobile의 `FollowButton`은 기존 `Size=Medium` `96×40` visual을 사용하며 `Size=Compact`
+  `72×32`를 사용하지 않는다. Profile Hero와 Profile 목록·Post Activity·Reaction People의 Mobile
+  consumer에 같은 규칙을 적용한다. iOS·Android의 실제 target은 visual 높이 `40`과 별개로 각각 최소
+  `44pt`, `48dp`를 충족하고 인접 action과 겹치지 않아야 한다.
 - Reaction Quick Picker와 Reaction 요약 token은 [reactions.md](./reactions.md)의 Web 32×32 CSS px geometry를 사용한다. 이 값은 SC 2.5.8의 24×24 CSS px minimum을 자체 크기로 충족하며, `apps/app/src/stories/patterns/Reactions.stories.tsx`의 Web exact-size assertion도 32×32로 맞춘다.
 - Reaction selector와 icon+count summary token은 Native에서 기존 44 logical unit을 유지하므로 Android 48×48dp baseline을 충족하지 않는다. 공통 `IconButton` 대상인 More만 visual 44를 유지한 채 Android 부족분을 공용 `hitSlop` mapping으로 보충한다. Native 출시 전 selector·summary token과 Profile tab을 포함한 모든 target을 실제 iOS 44pt·Android 48dp touch/focus boundary와 assistive technology에서 검증한다. Web 검증은 이 출시 gate를 대체하지 않는다.
 - 순수 Repost의 `{displayName}님이 재게시함` Profile link는 독립 icon button이 아니라 attribution 문장 전체에 적용된 text link다. Web에서는 SC 2.5.8의 inline target 예외를 사용해 14/20 line box를 유지하며 role, accessible name, keyboard focus와 navigation을 보존한다. Native 출시 전에는 이 링크의 44pt·48dp target, focus boundary와 바로 아래 Source Author link 비중첩을 runtime에서 다시 검증한다.

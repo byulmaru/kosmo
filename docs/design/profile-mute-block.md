@@ -40,24 +40,48 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   Full·Compact loaded destination 4개, Full Settings master의 두 destination 하위 목록, Compact category
   [`6338:1641`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6338-1641)과
   [`04 Screens - Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-21917)의
-  Mobile loaded destination 2개다. Mobile은 category 화면이 아직 없으므로 IA coverage 공백으로 유지한다.
+  Mobile category [`6393:8193`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6393-8193) 및
+  loaded destination 2개다. 모든 viewport에서 category와 destination의 IA coverage가 연결된다.
   loading·empty·error·pagination은 이 loaded representative와 별도의 runtime state coverage다.
 
 ## 차단 관계의 직접 Profile
 
-- 차단 관계의 Profile route는 전체 Profile을 제거하지 않고 최소 셸을 유지한다. route에서 이미 식별되는
-  handle과 상태 안내만 사용하며 최신 Profile 상세를 다시 조회해 채우지 않는다.
+- 차단 관계의 Profile route는 전체 Profile을 제거하지 않고 기존 셸과 최소 identity를 유지한다. 현재 route
+  query가 이미 가진 cover·avatar·표시 이름·handle을 사용하며 차단 상태를 위해 Profile을 별도로 다시 조회하지 않는다.
 - `blocking`은 `차단한 프로필입니다` 안내와 `차단 해제` action을 제공한다.
 - `blockedBy`는 `이 프로필을 볼 수 없습니다` 안내만 제공하고 관계 action을 제공하지 않는다.
-- 두 상태 모두 최신 avatar·표시 이름, bio, 수치, known followers, Post·Media와 Follow·Message action을
-  노출하지 않는다.
+- `blockedBy` Target은 별개 오류 화면을 만들지 않고 viewport별 기존 Profile route shell의 중앙 column에 최소
+  `ProfileHero`와 actionless `StateView`를 순서대로 배치한다. Mobile Dark [`6774:12067`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6774-12067),
+  Compact Web Light [`7371:19453`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7371-19453),
+  Full Web Light [`7380:20771`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-20771)이 exact evidence이며,
+  Mobile은 MenuOnly header와 BottomTabBar, Compact는 Sidebar, Full은 Sidebar와 RightRail을 유지한다. Web 중앙
+  column에는 별도 PageHeader를 두지 않는다.
+- `blocking`도 같은 최소 Profile shell을 사용하되 action이 있는 `StateView`로 `차단한 프로필입니다`와
+  Secondary `차단 해제`를 제공한다. Mobile Dark [`7580:14180`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7580-14180)과
+  Full Web [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)이
+  Target evidence다. 실제 해제 mutation·pending·성공·실패 feedback과 Mute·Block confirmation sheet의 exact
+  placement는 Product/runtime 계약 전 임의로 조립하지 않는다.
+- 두 상태 모두 이미 로드된 cover·avatar·표시 이름·handle만 identity로 유지하고 bio·수치·known followers,
+  Post·Media와 Follow·Message action은 노출하지 않는다.
 - Block 목록처럼 Owner가 관계를 관리하는 surface의 최소 Target 식별 정보는 직접 Profile 조회 결과와
   구분한다.
 
+## 뮤트 관계의 직접 Profile
+
+- Mobile Light Target [`7541:14061`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7541-14061)은
+  기존 Android baseline Profile shell과 전체 `ProfileHero`, Post, BottomTabBar를 유지하고 `ProfileHero`의
+  `Muted=true`만 적용한다.
+- ProfileHero 안에 `이 사용자의 게시글은 뮤트되어 있습니다.`와 `뮤트 해제` action을 표시하며 별도
+  `StateView`나 새 컴포넌트는 추가하지 않는다. Dark consumer는 이번 범위에서 만들지 않았고 실제 게시물
+  필터링·뮤트 해제 동작은 runtime 완료 증거가 아니다.
+
 ## Source 재사용과 접근성
 
-- Button, ActionMenu, ModalSheet, Toast, SettingsItem, SettingsNavigationList와 Profile shell의 기존 production
-  source를 재사용한다. 이 흐름만을 위한 새 Toast나 범용 safety component를 만들지 않는다.
+- Button, ActionMenu, ModalSheet, Toast, SettingsItem, SettingsNavigationList, ProfileHero, StateView와 Profile
+  shell의 기존 production source를 재사용한다. 이 흐름만을 위한 새 Toast나 범용 safety component를 만들지 않는다.
+- Mobile Muted·Blocked 목록의 loaded action은 `64px` ProfileListItem 안에서 공용 Default Secondary button을
+  `88×40px` visual로 유지하고 투명 `88×48dp` wrapper 가운데 배치한다. 공용 Button source와 Web compact
+  geometry는 변경하지 않는다.
 - 확인은 공용 [`ConfirmationContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5103-15173)를
   사용한다. Mute는 `Tone=Primary`, Block은 `Tone=Danger`이며 둘 다 `Idle|Pending`에서 같은 제목·설명·action
   label을 유지한다.

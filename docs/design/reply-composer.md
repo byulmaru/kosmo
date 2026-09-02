@@ -7,10 +7,12 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 
 - Web modal의 시각적 출발점은 Figma `KOSMO` 파일의
   [`ComposeModal (ComposeWidget 600w)` node 993:4057](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=993-4057)다.
-- 좁은 화면의 Reply 맥락은
-  [`Edit / Reply` node 277:73](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=277-73),
-  상세 진입점은
-  [`ReplyComposer` node 693:518](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=693-518)을 기준으로 한다.
+- 좁은 화면은 별도 Mobile ReplyComposer를 조립하지 않고
+  [`__MobileFullscreenComposerShell` node 5284:38074](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5284-38074)을
+  재사용한다. Figma Target은 [`Focused · Keyboard 6665:56053`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-56053),
+  [`Context · Initial anchor 6665:56250`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-56250)와
+  [`Parent revealed on upward scroll 7392:27994`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7392-27994)이다.
+  Dark inheritance는 같은 reveal 조립을 재사용한 [`5884:14891`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5884-14891)로 확인한다.
 - 일반 Post Composer가 지원하는 Plain Text 본문, Content Warning, Visibility, 글자 수, Media
   선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media, validation, pending과 오류 상태를 그대로
   재사용한다.
@@ -29,6 +31,15 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - Full Web Post 상세는 기존 thread rail Reply surface를 유지한다. Compact modal과 Full rail은 direct Parent와
   공용 Composer 계약을 공유하지만 서로의 배치를 억지로 재사용하지 않는다.
 - Web `< compact`와 Android/iOS에서는 같은 Reply 맥락을 전체 화면 작성기로 연다.
+- Focused/Keyboard는 입력과 keyboard를 우선하고 `@kosmo님에게 답글` 같은 최소 맥락만 표시한다.
+- 비키보드 Initial anchor에서도 direct Parent는 작성 영역 아래로 내려오지 않으며 기본 viewport에 표시하지 않는다.
+  사용자가 위로 스크롤했을 때만 공개 범위 행 위에 기존 `PostListItem` 기반의 비대화형 Parent가 나타난다.
+  Parent Action Bar와 Post menu는 숨기고, Avatar 아래 thread line을 공개 범위 행의 위 border까지 연결해 답글
+  대상임을 표시한다. Figma reveal consumer의 Parent와 line은 각각 [`7392:28076`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7392-28076),
+  [`7392:28091`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7392-28091)이다.
+  Parent의 목록용 하단 divider는 끄고, 공개 범위 행의 위 border만 Parent와 Composer의 경계로 유지한다.
+  실제 upward-scroll origin·threshold, keyboard 전환, safe area와 focus 이동은 Product runtime 계약이며 Figma
+  정적 consumer만으로 완료를 주장하지 않는다.
 - 어느 surface에서도 Reply 전용 mutation, 별도 입력 상태 또는 Post kind를 만들지 않는다.
 
 ## Web Reply modal
