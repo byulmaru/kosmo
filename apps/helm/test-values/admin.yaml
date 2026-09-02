@@ -1,9 +1,0 @@
-admin:
-  enabled: true
-  tailscale:
-    hostname: kosmo-dev-admin
-    fqdn: kosmo-dev-admin.example.ts.net
-    proxyPodLabels:
-      tailscale.com/parent-resource-type: ingress
-      tailscale.com/parent-resource: kosmo-admin
-      tailscale.com/parent-resource-ns: kosmo-dev

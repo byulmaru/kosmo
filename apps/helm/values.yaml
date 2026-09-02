@@ -14,11 +14,6 @@ admin:
     limits:
       cpu: 250m
       memory: 256Mi
-  tailscale:
-    hostname: ''
-    fqdn: ''
-    namespace: tailscale
-    proxyPodLabels: {}
 worker:
   replicas:
     dev: 1

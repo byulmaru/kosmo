@@ -1,18 +1,17 @@
 # Admin Console 배포와 검증
 
 Admin Console은 Tailscale 접근 정책과 Operator Ingress를 유일한 진입 경계로 사용한다. repository의 Helm
-기본값은 `admin.enabled=false`이며, 실제 tailnet hostname과 proxy label을 확인하기 전에는 workload를
-활성화하지 않는다.
+기본값은 `admin.enabled=false`이며, 실제 Operator와 tailnet 정책을 확인하기 전에는 workload를 활성화하지
+않는다.
 
 ## 사전 조건
 
 - 대상 cluster의 Tailscale Operator 버전과 `ingressClassName: tailscale` 동작을 확인한다.
 - tailnet 접근 정책에서 Admin Console hostname에 접근할 Viewer와 거부할 검증 주체를 준비한다.
-- 기존 Tailscale Ingress proxy Pod에서 대상 Operator 버전이 생성하는 parent-resource label key를 확인한다.
-- 실제 Admin Ingress 이름·namespace에 대응하는 proxy Pod label value를 확인할 절차를 준비한다.
 - 사용자 식별자, auth key, client secret과 identity header 값은 repository values나 검증 기록에 저장하지 않는다.
 
-기존 Ingress proxy의 label shape는 다음처럼 확인할 수 있다.
+배포 후 생성된 Tailscale Ingress proxy가 release·namespace에서 파생된 NetworkPolicy selector와 일치하는지
+live 환경에서 확인한다.
 
 ```sh
 kubectl -n tailscale get pods \
@@ -20,20 +19,17 @@ kubectl -n tailscale get pods \
   --show-labels
 ```
 
-관찰한 label을 그대로 복사하지 말고 대상 Admin Ingress의 resource name과 namespace에 대응하는지 확인한다.
-NetworkPolicy는 `admin.tailscale.namespace`와 `admin.tailscale.proxyPodLabels`가 모두 실제 proxy와 일치할 때만
-활성화한다.
-
 ## Repository 검증
 
 ```sh
 pnpm --filter @kosmo/admin test
-mise exec -- ./scripts/test-admin-helm.sh
-./scripts/test-admin-image.sh
-openspec validate add-admin-console-foundation --strict
+mise exec -- helm lint apps/helm --set env=dev --set admin.enabled=true
+docker build --target runtime --tag kosmo-admin-smoke .
+pnpm exec openspec validate add-admin-console-foundation --strict
 ```
 
-Helm fixture의 `example.ts.net`과 proxy label 값은 render 검증용이며 실제 tailnet 설정이 아니다.
+CI test workflow는 위 검증과 함께 Admin image boot 및 dev/prod Helm render와 HTTP smoke를 실행한다. Helm
+hostname은 release name과 환경에서 파생되며 tailnet 운영 설정은 repository 밖에서 관리한다.
 
 ## 배포
 
@@ -42,17 +38,11 @@ Helm fixture의 `example.ts.net`과 proxy label 값은 render 검증용이며 �
 ```yaml
 admin:
   enabled: true
-  tailscale:
-    hostname: <tailnet short hostname>
-    fqdn: <tailnet FQDN>
-    namespace: tailscale
-    proxyPodLabels:
-      <live-verified label key>: <live-verified label value>
 ```
 
-Tailscale 접근 정책의 principal이나 credential 값은 Helm values에 넣지 않는다. sync 뒤 Deployment, Service,
-Ingress, NetworkPolicy와 EndpointSlice를 확인하고 workload가 Ready가 되기 전에 tailnet 접근 성공을 주장하지
-않는다.
+Ingress hostname은 release name과 환경에서 자동으로 파생된다. Tailscale 접근 정책의 principal이나 credential
+값은 Helm values에 넣지 않는다. sync 뒤 Deployment, Service, Ingress, NetworkPolicy와 EndpointSlice를 확인하고
+workload가 Ready가 되기 전에 tailnet 접근 성공을 주장하지 않는다.
 
 ## Live 검증
 

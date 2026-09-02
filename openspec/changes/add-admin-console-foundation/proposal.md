@@ -42,4 +42,4 @@ Kosmo에는 공개 Web/API와 분리되고 Tailscale 접근 제어로만 진입�
 - `apps/admin`: 신규 독립 Node/SvelteKit runtime, adapter-node build output, read-only shell과 테스트
 - `Dockerfile`, `docker-entrypoint.sh`, workspace lockfile: Admin runtime build·실행 포함
 - `apps/helm`: Admin Deployment, ClusterIP Service, Tailscale Operator Ingress와 NetworkPolicy
-- CI/검증: package typecheck·unit test·production build, image boot, Helm render와 trust-boundary fixture
+- CI/검증: package typecheck·unit test·production build, image boot, Helm render와 network-isolation smoke

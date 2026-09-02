@@ -50,10 +50,11 @@
   범위에서 제외한다.
 - Alternatives Considered: ClusterIP type, tailnet ACL 추정 또는 caller header 검사는 직접 network path를
   닫지 못하므로 선택하지 않았다.
-- Consequences: generated proxy label을 Operator 버전 및 live cluster에서 확인해야 한다. node로 source NAT된
-  경로까지 차단했다고 주장하지 않는다.
-- Confirmation / Follow-up: Helm fixture와 dev의 일반 Pod·node 밖 VPC direct-access test로 차단을 확인하고
-  관찰된 source 경계를 함께 기록한다.
+- Consequences: NetworkPolicy는 release·namespace에서 파생된 generated proxy labels로 제한한다. 대상 Operator
+  proxy가 selector와 일치하는지는 live cluster에서 확인해야 하며, node로 source NAT된 경로까지 차단했다고
+  주장하지 않는다.
+- Confirmation / Follow-up: Helm render와 dev의 일반 Pod·node 밖 VPC direct-access test로 selector와 차단을
+  확인하고 관찰된 source 경계를 함께 기록한다.
 
 ### 선택적 identity는 표시 metadata로만 사용한다
 
@@ -113,7 +114,7 @@
 ## Remaining Decisions
 
 - dev tailnet hostname과 허용 principal은 live 배포 전에 확인한다.
-- NetworkPolicy selector에 사용할 Operator-generated proxy label은 대상 Operator 버전과 live resource에서
+- NetworkPolicy의 template-derived Operator proxy selector가 대상 Operator 버전의 live resource와 일치하는지
   확인한다.
 
 ## Superseded Decisions

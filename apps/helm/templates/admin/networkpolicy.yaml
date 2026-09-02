@@ -1,7 +1,4 @@
 {{- if .Values.admin.enabled }}
-{{- if empty .Values.admin.tailscale.proxyPodLabels }}
-{{- fail "admin.tailscale.proxyPodLabels must contain live-verified Operator proxy labels when admin.enabled=true" }}
-{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -23,10 +20,12 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: {{ .Values.admin.tailscale.namespace | quote }}
+              kubernetes.io/metadata.name: tailscale
           podSelector:
             matchLabels:
-{{ toYaml .Values.admin.tailscale.proxyPodLabels | indent 14 }}
+              tailscale.com/parent-resource-type: ingress
+              tailscale.com/parent-resource: {{ printf "%s-admin" .Release.Name | trunc 63 | trimSuffix "-" | quote }}
+              tailscale.com/parent-resource-ns: {{ .Release.Namespace | quote }}
       ports:
         - protocol: TCP
           port: 8080

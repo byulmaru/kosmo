@@ -22,9 +22,47 @@ jobs:
           - name: Admin
             command: pnpm --filter @kosmo/admin test
           - name: Admin Helm
-            command: mise exec -- ./scripts/test-admin-helm.sh
+            command: |
+              set -euo pipefail
+              helm lint apps/helm --set env=dev --set admin.enabled=true
+              rendered="$(helm template kosmo apps/helm --namespace kosmo-dev --set env=dev --set admin.enabled=true)"
+              grep -Eq '^kind: Deployment$' <<<"$rendered"
+              grep -Eq '^kind: Service$' <<<"$rendered"
+              grep -Eq '^kind: Ingress$' <<<"$rendered"
+              grep -Eq '^kind: NetworkPolicy$' <<<"$rendered"
+              grep -Eq 'ingressClassName: tailscale' <<<"$rendered"
+              grep -Fq 'path: /healthz' <<<"$rendered"
+              grep -Fq 'kubernetes.io/metadata.name: tailscale' <<<"$rendered"
+              grep -Fq 'tailscale.com/parent-resource-type: ingress' <<<"$rendered"
+              grep -Fq 'tailscale.com/parent-resource: "kosmo-admin"' <<<"$rendered"
+              grep -Fq 'tailscale.com/parent-resource-ns: "kosmo-dev"' <<<"$rendered"
+              if grep -Eq '^kind: HTTPRoute$' <<<"$rendered"; then exit 1; fi
+              helm lint apps/helm --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --set admin.enabled=true
+              helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --set admin.enabled=true >/dev/null
           - name: Admin Image
-            command: ./scripts/test-admin-image.sh
+            command: |
+              set -euo pipefail
+              docker build --target runtime --tag kosmo-admin-smoke .
+              container="$(docker run --detach --rm --publish 127.0.0.1:18080:8080 kosmo-admin-smoke admin)"
+              trap 'docker stop "$container" >/dev/null 2>&1 || true' EXIT
+              timeout 30 sh -c 'until test "$(curl --silent --output /dev/null --write-out "%{http_code}" http://127.0.0.1:18080/healthz)" = 200; do sleep 1; done'
+              health_post="$(curl --silent --show-error --dump-header - --output /dev/null --request POST http://127.0.0.1:18080/healthz)"
+              grep -Eq '^HTTP/[0-9.]+ 405 ' <<<"$health_post"
+              grep -Eiq '^allow:[[:space:]]*GET([[:space:]]|$)' <<<"$health_post"
+              shell="$(curl --silent --show-error --dump-header - http://127.0.0.1:18080/)"
+              grep -Eq '^HTTP/[0-9.]+ 200 ' <<<"$shell"
+              grep -Eiq '^cache-control:[[:space:]]*.*no-store' <<<"$shell"
+              csp="$(grep -i '^content-security-policy:' <<<"$shell")"
+              for source in "script-src 'self'" "style-src 'self'" "connect-src 'self'" "object-src 'none'" "frame-ancestors 'none'"; do grep -Fq "$source" <<<"$csp"; done
+              grep -Eiq "script-src[^;]*'nonce-[^']+'|script-src[^;]*'sha256-[^']+'" <<<"$csp"
+              escaped="$(curl --silent --show-error --dump-header - --header 'Tailscale-User-Name: <script>alert(1)</script>' http://127.0.0.1:18080/)"
+              grep -Eq '^HTTP/[0-9.]+ 200 ' <<<"$escaped"
+              grep -Fq '&lt;script>alert(1)&lt;/script>' <<<"$escaped"
+              if grep -Fq '<script>alert(1)</script>' <<<"$escaped"; then exit 1; fi
+              shell_post="$(curl --silent --show-error --dump-header - --output /dev/null --request POST http://127.0.0.1:18080/)"
+              grep -Eq '^HTTP/[0-9.]+ 405 ' <<<"$shell_post"
+              grep -Eiq '^allow:[[:space:]]*GET([[:space:]]|$)' <<<"$shell_post"
+              test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/graphql)" = 404
           - name: Core
             command: pnpm --filter @kosmo/core test
             database: true

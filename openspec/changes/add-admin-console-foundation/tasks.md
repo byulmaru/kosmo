@@ -54,7 +54,8 @@ tailnet 요청이 Admin workload에 도달한다.
 
 - [x] 2.1 adapter-node build output을 포함해 application image와 entrypoint에서 Admin runtime을 실행한다.
 - [x] 2.2 Admin Deployment, ClusterIP Service와 Tailscale Operator Ingress를 Helm에 추가한다.
-- [ ] 2.3 generated proxy label을 확인하고 일반 workload source를 제한하는 최소 NetworkPolicy를 추가한다.
+- [ ] 2.3 template-derived proxy selector가 대상 Operator의 live resource와 일치하는지 확인하고 일반 workload
+      source를 제한하는 NetworkPolicy를 검증한다.
 - [x] 2.4 Admin image boot와 SvelteKit production build, dev/prod Helm render 검증을 추가하고 통과시킨다.
 
 ## 3. PROD-690 통합 검증과 운영 handoff
