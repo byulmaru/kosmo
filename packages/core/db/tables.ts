@@ -399,6 +399,28 @@ export const Profiles = pgTable(
   (table) => [unique().on(table.instanceId, table.normalizedHandle)],
 );
 
+export const ProfileBlocks = pgTable(
+  'profile_block',
+  {
+    id: id(),
+    ownerProfileId: uuid('owner_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    targetProfileId: uuid('target_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    unique().on(table.ownerProfileId, table.targetProfileId),
+    check(
+      'profile_block_owner_not_target',
+      sql`${table.ownerProfileId} <> ${table.targetProfileId}`,
+    ),
+    index().on(table.targetProfileId),
+  ],
+);
+
 export const ProfileFollows = pgTable(
   'profile_follow',
   {
