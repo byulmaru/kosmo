@@ -255,7 +255,12 @@ for (const testCase of [
     mimeType: 'IMAGE/HEIF',
     name: 'asset MIME type case-insensitively',
   },
-  { fileName: 'image.HEIF', fileType: '', mimeType: '', name: 'file extension' },
+  {
+    fileName: 'image.HEIF',
+    fileType: 'image/jpeg',
+    mimeType: 'image/jpeg',
+    name: 'file extension',
+  },
 ] as const) {
   test(`rejects Web ${testCase.name} before issuing an upload`, async (t) => {
     let issueCalled = false;
