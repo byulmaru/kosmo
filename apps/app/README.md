@@ -21,17 +21,15 @@ After a successful callback, native login sends only the authorization code, PKC
 
 Native projects are generated with `expo prebuild --clean`; they are not source-of-truth files.
 
-## Android Google Play internal testing
+## Android Google Play closed testing (Alpha)
 
-`Android Google Play Internal Distribution`은 `main`에서만 수동 실행하는 protected workflow다. 매 실행마다 clean CNG Android project를 만들고, Fastlane이 upload key로 서명한 Release AAB를 빌드해 Google Play internal track에 업로드한다. Play가 package name, versionCode, upload certificate를 검증한다. versionCode는 workflow 시작 시 UTC Unix seconds에서 `2020-01-01`을 뺀 값으로 계산하며, 첫 수동 release의 versionCode `1`보다 크고 Android signed 32-bit 범위 안에 있다. Play API를 미리 조회하거나 장기 credential을 저장하지 않는다.
+`Android Google Play Alpha Distribution`은 `main`에서만 수동 실행하는 protected workflow다. 매 실행마다 clean CNG Android project를 만들고, Fastlane이 upload key로 서명한 Release AAB를 빌드해 Google Play closed testing의 Alpha track에 업로드한다. Play가 package name, versionCode, upload certificate를 검증한다. versionCode는 workflow 시작 시 UTC Unix seconds에서 `2020-01-01`을 뺀 값으로 계산하며, 첫 수동 release의 versionCode `1`보다 크고 Android signed 32-bit 범위 안에 있다. Play API를 미리 조회하거나 장기 credential을 저장하지 않는다. 기존 internal testing release는 Play Console에 남아 있으며 이 workflow가 변경하지 않는다.
 
-첫 배포 전에는 Play Console에서 다음 절차를 수동으로 완료해야 한다. CI가 Play Console의 최초 app/signing bootstrap을 대신하지 않는다.
+이 앱의 Play app, Google 관리 Play App Signing, upload key는 이미 설정되어 있다. Alpha track의 첫 signed AAB는 이 workflow가 업로드한다. Play Console에서 다음 Alpha 설정과 CI 자산을 확인한다.
 
-1. package name `moe.kos`로 app을 만든다.
-2. upload key를 관리자 장비에서 생성한다. 첫 AAB와 이후 CI AAB는 같은 upload key로 서명해야 하며, Google이 관리하는 app signing key와는 별개다.
-3. Play Console에서 internal testing track의 첫 release를 준비하고, 해당 release에서 Google 관리 Play App Signing을 설정한 뒤 upload key로 서명한 첫 signed AAB를 수동 업로드한다. tester 목록과 opt-in 링크도 설정한다.
-4. [Terraform outputs](../terraform/README.md)의 `android_play_service_account` service account를 Play Console Users and permissions에 추가하고 `Release apps to testing tracks` 권한만 부여한다.
-5. 기존 승인형 `prod` GitHub Environment에 다음 non-secret variable만 넣는다. 새 Environment는 만들지 않는다.
+1. closed testing의 Alpha track에 Doply tester 목록을 연결하고 출시 국가/지역에 대한민국을 포함한다.
+2. [Terraform outputs](../terraform/README.md)의 `android_play_service_account` service account를 Play Console Users and permissions에 추가하고 `Release apps to testing tracks` 권한만 부여한다.
+3. 기존 승인형 `prod` GitHub Environment에 다음 non-secret variable만 넣는다. 새 Environment는 만들지 않는다.
 
 | 이름                             | 종류     | 값                                                              |
 | -------------------------------- | -------- | --------------------------------------------------------------- |
@@ -39,7 +37,7 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | variable | `terraform output -raw android_play_workload_identity_provider` |
 | `ANDROID_RELEASE_KEY_ALIAS`      | variable | upload key 생성 시 사용한 alias                                 |
 
-6. upload keystore와 두 password는 GitHub에 저장하지 않고 Vault에 저장한다. 운영자가 Vault CLI/UI에서 사용하는 KV v2 logical path는 `secret/kosmo/prod/android-play`다. Workflow와 Vault ACL policy에서 사용하는 KV v2 API path는 `secret/data/kosmo/prod/android-play`이며, `/data/`는 CLI/UI logical path에 포함하지 않는다. 다음 field를 만들고, `kosmo-android-play` GitHub OIDC role이 이 API path를 읽도록 한다.
+4. upload keystore와 두 password는 GitHub에 저장하지 않고 Vault에 저장한다. 운영자가 Vault CLI/UI에서 사용하는 KV v2 logical path는 `secret/kosmo/prod/android-play`다. Workflow와 Vault ACL policy에서 사용하는 KV v2 API path는 `secret/data/kosmo/prod/android-play`이며, `/data/`는 CLI/UI logical path에 포함하지 않는다. 다음 field를 만들고, `kosmo-android-play` GitHub OIDC role이 이 API path를 읽도록 한다.
 
 | Field                             | 값                                 |
 | --------------------------------- | ---------------------------------- |
@@ -47,7 +45,7 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 | `ANDROID_RELEASE_STORE_PASSWORD`  | upload keystore password           |
 | `ANDROID_RELEASE_KEY_PASSWORD`    | upload key password                |
 
-`Android Google Play Internal Distribution`은 조직 수준 `VAULT_ADDR`와 `VAULT_GITHUB_ACTIONS_AUDIENCE`, 저장소 수준 `TAILSCALE_OAUTH_CLIENT_ID`와 `TAILSCALE_AUDIENCE`를 사용한다. Vault tailnet에 접속한 뒤 GitHub OIDC JWT로 `kosmo-android-play` role을 인증하고 실행 중에만 서명 값을 읽는다. Vault role과 policy는 `prod` Environment의 이 workflow만 해당 경로를 읽도록 제한해야 한다.
+`Android Google Play Alpha Distribution`은 조직 수준 `VAULT_ADDR`와 `VAULT_GITHUB_ACTIONS_AUDIENCE`, 저장소 수준 `TAILSCALE_OAUTH_CLIENT_ID`와 `TAILSCALE_AUDIENCE`를 사용한다. Vault tailnet에 접속한 뒤 GitHub OIDC JWT로 `kosmo-android-play` role을 인증하고 실행 중에만 서명 값을 읽는다. Vault role과 policy는 `prod` Environment의 이 workflow만 해당 경로를 읽도록 제한해야 한다.
 
 upload key 예시는 다음과 같다. password는 명령행이나 저장소에 넣지 말고 `keytool` prompt에서 입력한다.
 

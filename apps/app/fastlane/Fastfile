@@ -547,8 +547,8 @@ platform :ios do
 end
 
 platform :android do
-  desc 'Build and upload the Android Release AAB to the Play internal track'
-  lane :distribute_internal do
+  desc 'Build and upload the Android Release AAB to the Play Alpha track'
+  lane :distribute_alpha do
     require_environment!('GOOGLE_APPLICATION_CREDENTIALS', 'KOSMO_ANDROID_AAB_PATH')
     aab_path = File.expand_path(ENV.fetch('KOSMO_ANDROID_AAB_PATH'))
     credentials_path = File.expand_path(ENV.fetch('GOOGLE_APPLICATION_CREDENTIALS'))
@@ -572,7 +572,7 @@ platform :android do
       skip_upload_images: true,
       skip_upload_metadata: true,
       skip_upload_screenshots: true,
-      track: 'internal',
+      track: 'alpha',
     )
   end
 end

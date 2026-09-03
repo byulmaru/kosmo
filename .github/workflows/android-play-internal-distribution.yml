@@ -1,4 +1,4 @@
-name: Android Google Play Internal Distribution
+name: Android Google Play Alpha Distribution
 
 on:
   workflow_dispatch:
@@ -8,12 +8,12 @@ permissions:
   id-token: write
 
 concurrency:
-  group: android-play-internal-distribution
+  group: android-play-alpha-distribution
   cancel-in-progress: false
 
 jobs:
   distribute:
-    name: Build and upload Android Release AAB
+    name: Build and upload Android Alpha AAB
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -210,9 +210,9 @@ jobs:
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
 
-      - name: Build and upload signed Release AAB with Fastlane
+      - name: Build and upload signed Alpha AAB with Fastlane
         working-directory: apps/app
-        run: bundle exec fastlane android distribute_internal
+        run: bundle exec fastlane android distribute_alpha
 
       - name: Write Actions summary
         if: success()
@@ -225,7 +225,7 @@ jobs:
           artifact_sha256="${artifact_sha256%% *}"
           artifact_size_bytes="$(wc -c < "${aab_path}" | tr -d '[:space:]')"
           {
-            echo '## Android Google Play internal testing'
+            echo '## Android Google Play closed testing (Alpha)'
             echo
             echo '- Package: moe.kos'
             echo "- Version code: \`${KOSMO_ANDROID_VERSION_CODE}\`"
