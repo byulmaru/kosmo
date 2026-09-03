@@ -48,6 +48,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Install bundletool
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundletool_path="${RUNNER_TEMP}/bundletool-all-1.18.3.jar"
+          curl --fail --silent --show-error --location \
+            --output "${bundletool_path}" \
+            "https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar"
+          echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  ${bundletool_path}" \
+            | sha256sum --check --strict
+          echo "ANDROID_BUNDLETOOL_JAR=${bundletool_path}" >> "${GITHUB_ENV}"
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
 
@@ -64,11 +76,8 @@ jobs:
             "cmake;3.22.1"
 
           export PATH="${sdk_root}/cmdline-tools/latest/bin:${sdk_root}/build-tools/36.0.0:${PATH}"
-          apkanalyzer_path="$(command -v apkanalyzer)"
-          test -x "${apkanalyzer_path}"
           test -x "${sdk_root}/build-tools/36.0.0/aapt2"
           {
-            echo "ANDROID_APKANALYZER=${apkanalyzer_path}"
             echo "ANDROID_SDK_ROOT=${sdk_root}"
           } >> "${GITHUB_ENV}"
 
@@ -231,12 +240,18 @@ jobs:
 
           aab_path="${KOSMO_ANDROID_AAB_PATH}"
           test -s "${aab_path}"
-          test -x "${ANDROID_APKANALYZER}"
           unzip -Z1 "${aab_path}" | grep -Fxq 'base/manifest/AndroidManifest.xml'
 
-          package_name="$("${ANDROID_APKANALYZER}" manifest application-id "${aab_path}" | tr -d '\r\n')"
-          version_code="$("${ANDROID_APKANALYZER}" manifest version-code "${aab_path}" | tr -d '\r\n')"
-          version_name="$("${ANDROID_APKANALYZER}" manifest version-name "${aab_path}" | tr -d '\r\n')"
+          read_manifest_value() {
+            java -jar "${ANDROID_BUNDLETOOL_JAR}" dump manifest \
+              --bundle="${aab_path}" \
+              --module=base \
+              --xpath="$1" \
+              | tr -d '\r\n'
+          }
+          package_name="$(read_manifest_value '/manifest/@package')"
+          version_code="$(read_manifest_value '/manifest/@android:versionCode')"
+          version_name="$(read_manifest_value '/manifest/@android:versionName')"
           [[ "${package_name}" == 'moe.kos' ]] || { echo "::error::AAB package is ${package_name}."; exit 1; }
           [[ "${version_code}" == "${KOSMO_ANDROID_VERSION_CODE}" ]] || { echo "::error::AAB versionCode is ${version_code}."; exit 1; }
           [[ -n "${version_name}" ]] || { echo "::error::AAB versionName is empty."; exit 1; }
