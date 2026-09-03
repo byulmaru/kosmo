@@ -6,6 +6,7 @@ import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { PostMediaItem } from './PostMediaImage';
+import type { PostMediaViewerSurfaceProps } from './PostMediaViewerSurface';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -80,6 +81,28 @@ afterEach(async () => {
 });
 
 describe('PostMediaViewerSurface', () => {
+  it('public props는 presentation별 필수 secondary surface를 요구한다', () => {
+    const commonProps = {
+      currentIndex: 0,
+      media: [] as const,
+      onClose: () => undefined,
+      onNext: () => undefined,
+      onPrevious: () => undefined,
+      onRetry: () => undefined,
+      onRevealSensitive: () => undefined,
+    };
+    const accept = (props: PostMediaViewerSurfaceProps) => props;
+
+    // @ts-expect-error Wide는 모든 상태에서 context rail이 필요하다.
+    accept({ ...commonProps, presentation: 'wide', viewState: 'loading' });
+    // @ts-expect-error Compact Ready는 action tray가 필요하다.
+    accept({ ...commonProps, presentation: 'compact', viewState: 'ready' });
+    // @ts-expect-error 필수 Wide context rail은 비어 있을 수 없다.
+    accept({ ...commonProps, contextRail: null, presentation: 'wide', viewState: 'loading' });
+    // @ts-expect-error 필수 Compact action tray는 비어 있을 수 없다.
+    accept({ ...commonProps, actionTray: undefined, presentation: 'compact', viewState: 'ready' });
+  });
+
   it('Ready와 Sensitive는 close, 상단 위치 status, 다중 navigation을 제공한다', async () => {
     for (const viewState of ['ready', 'sensitive'] as const) {
       await render({ viewState, currentIndex: 1 });

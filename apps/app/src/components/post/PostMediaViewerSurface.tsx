@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { IconButton } from '@/components/ui/IconButton';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import type { PressableStateCallbackType, ViewStyle } from 'react-native';
 import type { PostMediaItem } from './PostMediaImage';
 
@@ -19,8 +19,6 @@ export type PostMediaViewerPresentation = 'compact' | 'wide';
 export type PostMediaViewerViewState = 'ready' | 'sensitive' | 'loading' | 'error' | 'unavailable';
 
 export type PostMediaViewerSurfaceProps = Readonly<{
-  actionTray?: ReactNode;
-  contextRail?: ReactNode;
   currentIndex: number;
   media: readonly PostMediaItem[];
   onClose: () => void;
@@ -28,9 +26,27 @@ export type PostMediaViewerSurfaceProps = Readonly<{
   onPrevious: () => void;
   onRetry: () => void;
   onRevealSensitive: () => void;
-  presentation: PostMediaViewerPresentation;
-  viewState: PostMediaViewerViewState;
-}>;
+}> &
+  (
+    | Readonly<{
+        actionTray?: ReactNode;
+        contextRail: ReactElement;
+        presentation: 'wide';
+        viewState: PostMediaViewerViewState;
+      }>
+    | Readonly<{
+        actionTray: ReactElement;
+        contextRail?: ReactNode;
+        presentation: 'compact';
+        viewState: 'ready' | 'sensitive';
+      }>
+    | Readonly<{
+        actionTray?: ReactNode;
+        contextRail?: ReactNode;
+        presentation: 'compact';
+        viewState: 'loading' | 'error' | 'unavailable';
+      }>
+  );
 
 const statusCopy = {
   error: {
