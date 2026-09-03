@@ -1,5 +1,8 @@
+require 'base64'
+require 'digest'
 require 'fileutils'
 require 'plist'
+require 'securerandom'
 require 'set'
 require 'shellwords'
 require 'tmpdir'
@@ -21,6 +24,49 @@ def build_number!
   UI.user_error!('IOS_BUILD_NUMBER must be a positive integer.') unless build_number.match?(/\A[1-9]\d*\z/)
 
   build_number
+end
+
+def write_base64_secret!(name, path)
+  value = ENV.fetch(name)
+  UI.user_error!("#{name} must be a non-empty single-line base64 value.") if value.empty? || value.match?(/[\r\n]/)
+
+  decoded = Base64.strict_decode64(value)
+  UI.user_error!("#{name} decoded to an empty file.") if decoded.empty?
+
+  File.open(path, File::WRONLY | File::CREAT | File::TRUNC, 0o600) { |file| file.write(decoded) }
+rescue ArgumentError
+  UI.user_error!("#{name} is not valid base64.")
+end
+
+def temporary_path_present?(path)
+  path && (File.exist?(path) || File.symlink?(path))
+end
+
+def remove_temporary_path!(path, description, recursive: false)
+  return [] unless temporary_path_present?(path)
+
+  errors = []
+  begin
+    recursive ? FileUtils.rm_rf(path) : FileUtils.rm_f(path)
+  rescue StandardError => error
+    errors << "#{description} could not be removed: #{error.message}"
+  end
+  errors << "#{description} is still present: #{path}" if temporary_path_present?(path)
+  errors
+end
+
+def remove_temporary_keychain!(path)
+  return [] unless temporary_path_present?(path)
+
+  errors = []
+  begin
+    delete_keychain(keychain_path: path)
+  rescue StandardError => error
+    errors << "Temporary keychain could not be deleted: #{error.message}"
+  end
+
+  errors.concat(remove_temporary_path!(path, 'Temporary keychain')) if temporary_path_present?(path)
+  errors
 end
 
 platform :ios do
@@ -179,6 +225,92 @@ platform :ios do
     end
   end
 
+  private_lane :verify_app_store_ipa do |options|
+    raw_ipa_path = options.fetch(:ipa_path)
+    UI.user_error!('Fastlane did not produce a signed IPA.') if raw_ipa_path.to_s.empty?
+
+    ipa_path = File.expand_path(raw_ipa_path)
+    expected_team_id = options.fetch(:team_id)
+    expected_profile_uuid = options.fetch(:profile_uuid)
+    expected_build_number = build_number!
+    UI.user_error!("IPA was not created at #{ipa_path}.") unless File.file?(ipa_path) && File.size?(ipa_path)
+
+    Dir.mktmpdir('kosmo-ipa-') do |directory|
+      sh("unzip -qq #{Shellwords.escape(ipa_path)} -d #{Shellwords.escape(directory)}")
+      app_bundles = Dir[File.join(directory, 'Payload', '*.app')]
+      UI.user_error!('IPA must contain exactly one app bundle.') unless app_bundles.one?
+
+      app_bundle = app_bundles.first
+      info = Plist.parse_xml(File.join(app_bundle, 'Info.plist'))
+      UI.user_error!('IPA Info.plist is missing.') unless info
+
+      bundle_id = info['CFBundleIdentifier'].to_s
+      version_name = info['CFBundleShortVersionString'].to_s
+      build_number = info['CFBundleVersion'].to_s
+      UI.user_error!('IPA bundle identifier does not match moe.kos.') unless bundle_id == BUNDLE_IDENTIFIER
+      UI.user_error!('IPA build number does not match IOS_BUILD_NUMBER.') unless build_number == expected_build_number
+      UI.user_error!('IPA version is empty.') if version_name.empty?
+
+      embedded_profile_path = File.join(app_bundle, 'embedded.mobileprovision')
+      UI.user_error!('IPA does not embed a provisioning profile.') unless File.file?(embedded_profile_path)
+
+      embedded_profile_plist_path = File.join(directory, 'embedded.mobileprovision.plist')
+      sh(
+        "security cms -D -i #{Shellwords.escape(embedded_profile_path)} " \
+        "> #{Shellwords.escape(embedded_profile_plist_path)}",
+      )
+      profile = Plist.parse_xml(embedded_profile_plist_path)
+      UI.user_error!('Embedded provisioning profile is invalid.') unless profile
+
+      profile_uuid = profile['UUID'].to_s
+      profile_team_id = Array(profile['TeamIdentifier']).first.to_s
+      application_identifier = profile.dig('Entitlements', 'application-identifier').to_s
+      UI.user_error!('IPA provisioning profile UUID mismatch.') unless profile_uuid == expected_profile_uuid
+      UI.user_error!('IPA provisioning profile team mismatch.') unless profile_team_id == expected_team_id
+      UI.user_error!('IPA provisioning profile app identifier mismatch.') unless application_identifier == "#{expected_team_id}.#{BUNDLE_IDENTIFIER}"
+      UI.user_error!('IPA contains an Ad Hoc provisioning profile.') if profile.key?('ProvisionedDevices')
+      UI.user_error!('IPA contains a universal provisioning profile.') if profile['ProvisionsAllDevices'] == true
+      UI.user_error!('IPA contains a development provisioning profile.') if profile.dig('Entitlements', 'get-task-allow') == true
+
+      signing_output = sh("codesign --display --verbose=4 #{Shellwords.escape(app_bundle)} 2>&1")
+      sh("codesign --verify --deep --strict --verbose=2 #{Shellwords.escape(app_bundle)}")
+      UI.user_error!('IPA is not signed with an Apple Distribution certificate.') unless signing_output.match?(/^Authority=(?:Apple|iPhone) Distribution/m)
+      UI.user_error!('IPA signing team does not match the provisioning profile.') unless signing_output.match?(/TeamIdentifier=#{Regexp.escape(expected_team_id)}(?:\s|$)/)
+
+      {
+        bundle_identifier: bundle_id,
+        version_name: version_name,
+        build_number: build_number,
+        team_id: profile_team_id,
+        profile_uuid: profile_uuid,
+        artifact_sha256: Digest::SHA256.file(ipa_path).hexdigest,
+        artifact_size_bytes: File.size(ipa_path),
+      }
+    end
+  end
+
+  private_lane :write_testflight_summary do |options|
+    summary_path = ENV['GITHUB_STEP_SUMMARY']
+    return unless summary_path && !summary_path.empty?
+
+    File.open(summary_path, 'a') do |file|
+      file.puts('## iOS TestFlight internal testing')
+      file.puts
+      file.puts("- Bundle: `#{options.fetch(:bundle_identifier)}`")
+      file.puts("- Version: `#{options.fetch(:version_name)} (#{options.fetch(:build_number)})`")
+      file.puts("- Team: `#{options.fetch(:team_id)}`")
+      file.puts("- App Store provisioning profile: `#{options.fetch(:profile_uuid)}`")
+      file.puts("- IPA SHA-256: `#{options.fetch(:artifact_sha256)}`")
+      file.puts("- IPA size: `#{options.fetch(:artifact_size_bytes)} bytes`")
+      file.puts('- Processing: completed')
+      file.puts('- TestFlight group: `Internal Testers`')
+      file.puts("- Source: `#{ENV.fetch('GITHUB_SHA', 'local')}`")
+      if ENV['GITHUB_SERVER_URL'] && ENV['GITHUB_REPOSITORY'] && ENV['GITHUB_RUN_ID']
+        file.puts("- Workflow: #{ENV.fetch('GITHUB_SERVER_URL')}/#{ENV.fetch('GITHUB_REPOSITORY')}/actions/runs/#{ENV.fetch('GITHUB_RUN_ID')}")
+      end
+    end
+  end
+
   private_lane :verify_newer_than_firebase_release do
     latest_release = firebase_app_distribution_get_latest_release(app: ENV.fetch('FIREBASE_IOS_APP_ID'))
     return unless latest_release
@@ -246,46 +378,171 @@ platform :ios do
     end
   end
 
-  desc 'Upload the signed App Store IPA to the TestFlight internal group'
-  lane :upload_testflight_internal do
-    require_environment!('IOS_IPA_PATH')
-
-    ipa_path = File.expand_path(ENV.fetch('IOS_IPA_PATH'))
-    UI.user_error!("IPA was not created at #{ipa_path}.") unless File.file?(ipa_path) && File.size?(ipa_path)
-
-    api_key = load_apple_api_key
-    app = Spaceship::ConnectAPI::App.find(BUNDLE_IDENTIFIER)
-    matching_groups = (app&.get_beta_groups || []).select { |group| group.name == 'Internal Testers' }
-    internal_group = matching_groups.first
-    UI.user_error!('TestFlight group "Internal Testers" must exist exactly once as an internal group.') unless matching_groups.one? && internal_group.is_internal_group == true
-
-    upload_to_testflight(
-      api_key: api_key,
-      app_identifier: BUNDLE_IDENTIFIER,
-      distribute_external: false,
-      groups: ['Internal Testers'],
-      ipa: ipa_path,
-      submit_beta_review: false,
-      skip_waiting_for_build_processing: false,
+  desc 'Build and upload the App Store IPA to the TestFlight internal group'
+  lane :distribute_testflight_internal do
+    require_environment!(
+      'APPLE_API_ISSUER_ID',
+      'APPLE_API_KEY_ID',
+      'APPLE_API_KEY_P8_BASE64',
+      'IOS_APP_STORE_PROVISIONING_PROFILE_BASE64',
+      'IOS_BUILD_NUMBER',
+      'IOS_DISTRIBUTION_CERTIFICATE_BASE64',
+      'IOS_DISTRIBUTION_CERTIFICATE_PASSWORD',
+      'RUNNER_TEMP',
+      'GITHUB_RUN_ID',
+      'GITHUB_RUN_ATTEMPT',
     )
 
-    ipa_version = FastlaneCore::IpaFileAnalyser.fetch_app_version(ipa_path)
-    ipa_build_number = build_number!
-    uploaded_build = Spaceship::ConnectAPI::Build.all(
-      app_id: app.id,
-      version: ipa_version,
-      build_number: ipa_build_number,
-      platform: Spaceship::ConnectAPI::Platform::IOS,
-      processing_states: Spaceship::ConnectAPI::Build::ProcessingState::VALID,
-    ).find do |build|
-      build.processing_state == Spaceship::ConnectAPI::Build::ProcessingState::VALID &&
-        build.bundle_id == BUNDLE_IDENTIFIER &&
-        build.app_version == ipa_version &&
-        build.version == ipa_build_number
+    build_number = build_number!
+    run_id = ENV.fetch('GITHUB_RUN_ID')
+    run_attempt = ENV.fetch('GITHUB_RUN_ATTEMPT')
+    UI.user_error!('GitHub run identifiers must be positive integers.') unless run_id.match?(/\A[1-9]\d*\z/) && run_attempt.match?(/\A[1-9]\d*\z/)
+
+    generated_ios_path = File.expand_path('ios')
+    signing_dir = File.join(ENV.fetch('RUNNER_TEMP'), "kosmo-ios-testflight-#{run_id}-#{run_attempt}")
+    keychain_path = File.join(signing_dir, 'build.keychain-db')
+    certificate_path = File.join(signing_dir, 'distribution.p12')
+    profile_path = File.join(signing_dir, 'app-store.mobileprovision')
+    api_key_path = File.join(signing_dir, 'app-store-connect.p8')
+    artifact_dir = File.join(signing_dir, 'artifact')
+    keychain_password = SecureRandom.hex(32)
+    profile_install_paths = []
+    primary_error = nil
+
+    begin
+      FileUtils.mkdir_p(artifact_dir, mode: 0o700)
+      FileUtils.chmod(0o700, signing_dir)
+      write_base64_secret!('IOS_DISTRIBUTION_CERTIFICATE_BASE64', certificate_path)
+      write_base64_secret!('IOS_APP_STORE_PROVISIONING_PROFILE_BASE64', profile_path)
+      write_base64_secret!('APPLE_API_KEY_P8_BASE64', api_key_path)
+
+      profile_plist_path = File.join(signing_dir, 'app-store.mobileprovision.plist')
+      sh(
+        "security cms -D -i #{Shellwords.escape(profile_path)} " \
+        "> #{Shellwords.escape(profile_plist_path)}",
+      )
+      profile = Plist.parse_xml(profile_plist_path)
+      UI.user_error!('The App Store provisioning profile is invalid.') unless profile
+
+      team_id = Array(profile.fetch('TeamIdentifier')).first.to_s
+      profile_uuid = profile.fetch('UUID').to_s
+      UI.user_error!('The provisioning profile has an invalid Team ID.') unless team_id.match?(/\A[A-Za-z0-9]{10}\z/)
+      UI.user_error!('The provisioning profile has an invalid UUID.') unless profile_uuid.match?(/\A[A-Fa-f0-9-]{36}\z/)
+      UI.user_error!('The provisioning profile does not target moe.kos.') unless profile.dig('Entitlements', 'application-identifier') == "#{team_id}.#{BUNDLE_IDENTIFIER}"
+      UI.user_error!('An Ad Hoc provisioning profile was supplied; an App Store profile is required.') if profile.key?('ProvisionedDevices')
+      UI.user_error!('A universal provisioning profile is not valid for App Store distribution.') if profile['ProvisionsAllDevices'] == true
+      UI.user_error!('A development provisioning profile is not valid for App Store distribution.') if profile.dig('Entitlements', 'get-task-allow') == true
+
+      profile_install_paths = [
+        File.join(FastlaneCore::ProvisioningProfile.profiles_path, "#{profile_uuid}.mobileprovision"),
+      ]
+
+      ENV['APPLE_DEVELOPER_TEAM_ID'] = team_id
+      sh('pnpm relay')
+      sh('pnpm exec expo prebuild --clean --platform ios')
+
+      create_keychain(
+        path: keychain_path,
+        password: keychain_password,
+        default_keychain: false,
+        unlock: true,
+        timeout: 3600,
+        lock_after_timeout: true,
+        add_to_search_list: true,
+        require_create: true,
+      )
+      import_certificate(
+        certificate_path: certificate_path,
+        certificate_password: ENV.fetch('IOS_DISTRIBUTION_CERTIFICATE_PASSWORD'),
+        keychain_path: keychain_path,
+        keychain_password: keychain_password,
+      )
+      identity_output = sh("security find-identity -v -p codesigning #{Shellwords.escape(keychain_path)}")
+      UI.user_error!('The temporary keychain does not contain an Apple Distribution identity.') unless identity_output.match?(/"Apple Distribution:/)
+      installed_profile_path = install_provisioning_profile(path: profile_path)
+      profile_install_paths << File.expand_path(installed_profile_path.to_s) unless installed_profile_path.to_s.empty?
+
+      ENV['APPLE_API_KEY_PATH'] = api_key_path
+      UI.user_error!('The App Store Connect API key is not a private key.') unless File.read(api_key_path).include?('-----BEGIN PRIVATE KEY-----')
+      api_key = load_apple_api_key
+      app = Spaceship::ConnectAPI::App.find(BUNDLE_IDENTIFIER)
+      matching_groups = (app&.get_beta_groups || []).select { |group| group.name == 'Internal Testers' }
+      internal_group = matching_groups.first
+      UI.user_error!('TestFlight group "Internal Testers" must exist exactly once as an internal group.') unless matching_groups.one? && internal_group.is_internal_group == true
+
+      ipa_path = build_app(
+        clean: true,
+        configuration: 'Release',
+        export_method: 'app-store',
+        export_team_id: team_id,
+        export_options: {
+          method: 'app-store',
+          provisioningProfiles: { BUNDLE_IDENTIFIER => profile_uuid },
+          signingStyle: 'manual',
+          teamID: team_id,
+        },
+        output_directory: artifact_dir,
+        output_name: 'Kosmo.ipa',
+        scheme: SCHEME,
+        sdk: 'iphoneos',
+        destination: 'generic/platform=iOS',
+        codesigning_identity: 'Apple Distribution',
+        workspace: WORKSPACE_PATH,
+        archive_path: File.join(signing_dir, 'Kosmo.xcarchive'),
+        derived_data_path: File.join(signing_dir, 'derived-data'),
+        xcargs: "DEVELOPMENT_TEAM=#{team_id} PRODUCT_BUNDLE_IDENTIFIER=#{BUNDLE_IDENTIFIER} CURRENT_PROJECT_VERSION=#{build_number} CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER=#{profile_uuid}",
+      )
+      metadata = verify_app_store_ipa(
+        ipa_path: ipa_path,
+        team_id: team_id,
+        profile_uuid: profile_uuid,
+      )
+
+      upload_to_testflight(
+        api_key: api_key,
+        app_identifier: BUNDLE_IDENTIFIER,
+        distribute_external: false,
+        groups: ['Internal Testers'],
+        ipa: ipa_path,
+        submit_beta_review: false,
+        skip_waiting_for_build_processing: false,
+      )
+
+      uploaded_build = Spaceship::ConnectAPI::Build.all(
+        app_id: app.id,
+        version: metadata.fetch(:version_name),
+        build_number: metadata.fetch(:build_number),
+        platform: Spaceship::ConnectAPI::Platform::IOS,
+        processing_states: Spaceship::ConnectAPI::Build::ProcessingState::VALID,
+      ).find do |build|
+        build.processing_state == Spaceship::ConnectAPI::Build::ProcessingState::VALID &&
+          build.bundle_id == BUNDLE_IDENTIFIER &&
+          build.app_version == metadata.fetch(:version_name) &&
+          build.version == metadata.fetch(:build_number)
+      end
+      UI.user_error!('Uploaded IPA was not found as a valid App Store Connect build.') unless uploaded_build
+      UI.user_error!('Uploaded App Store Connect build is not ready for internal testing.') unless uploaded_build.ready_for_internal_testing?
+      UI.user_error!('Uploaded App Store Connect build was not assigned to Internal Testers.') unless internal_group.fetch_builds.any? { |build| build.id == uploaded_build.id }
+
+      write_testflight_summary(metadata)
+    rescue StandardError => error
+      primary_error = error
+    ensure
+      cleanup_errors = []
+      cleanup_errors.concat(remove_temporary_keychain!(keychain_path))
+      profile_install_paths.uniq.each do |path|
+        cleanup_errors.concat(remove_temporary_path!(path, 'Temporary provisioning profile'))
+      end
+      cleanup_errors.concat(remove_temporary_path!(signing_dir, 'Temporary signing directory', recursive: true))
+      cleanup_errors.concat(remove_temporary_path!(generated_ios_path, 'Generated iOS project', recursive: true))
+
+      unless cleanup_errors.empty?
+        cleanup_message = "Cleanup failed: #{cleanup_errors.join('; ')}"
+        UI.error("#{cleanup_message} Original error: #{primary_error.message}") if primary_error
+        UI.user_error!(cleanup_message) unless primary_error
+      end
+      raise primary_error if primary_error
     end
-    UI.user_error!('Uploaded IPA was not found as a valid App Store Connect build.') unless uploaded_build
-    UI.user_error!('Uploaded App Store Connect build is not ready for internal testing.') unless uploaded_build.ready_for_internal_testing?
-    UI.user_error!('Uploaded App Store Connect build was not assigned to Internal Testers.') unless internal_group.fetch_builds.any? { |build| build.id == uploaded_build.id }
   end
 end
 
