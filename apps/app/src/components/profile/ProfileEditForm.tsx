@@ -157,9 +157,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
     paddingTop: spacing.xl,
   },
-  field: {
-    gap: spacing.xs,
-  },
+  field: { ...layoutRecipes.labelSupportStack },
   followPolicyRow: {
     alignItems: 'center',
     flexDirection: 'row',

@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/IconButton';
 import { TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
-import { colors, radii, spacing, typography } from '@/theme/tokens';
+import { colors, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import {
   createClipboardMediaAsset,
   getClipboardImageFiles,
@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     justifyContent: 'space-between',
   },
-  sensitiveMediaCopy: { flex: 1, gap: spacing.xs },
+  sensitiveMediaCopy: { ...layoutRecipes.labelSupportStack, flex: 1 },
   sensitiveMediaLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   sensitiveMediaDescription: { fontFamily: 'SUIT', ...typography.xsm },
 });
