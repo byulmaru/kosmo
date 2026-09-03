@@ -7,6 +7,7 @@ import { PostActionAuthenticationProvider } from '@/components/post/PostActionAu
 import { PostActionSurface } from '@/components/post/PostActionSurface';
 import { PostMediaViewerSurface } from '@/components/post/PostMediaViewerSurface';
 import { PostMediaViewerThread } from '@/components/post/PostMediaViewerThread';
+import { ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
 import { SessionProvider } from '@/session/SessionProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import appleTouchImage from '../../../public/apple-touch-icon.png?url';
@@ -14,7 +15,7 @@ import iconImage from '../../../public/icon-512.png?url';
 import maskableIconImage from '../../../public/icon-maskable-512.png?url';
 import ogImage from '../../../public/og-default.png?url';
 import { post, shellQuery } from '../fixtures';
-import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { Decorator, Meta, StoryObj } from '@storybook/react-vite';
 import type { PostMediaViewerHostQuery } from '@/components/post/__generated__/PostMediaViewerHostQuery.graphql';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
 
@@ -175,6 +176,18 @@ function ContextRailFixture() {
   );
 }
 
+const withViewerProviders: Decorator = (Story, context) => (
+  <ActionMenuPresentationProvider
+    presentation={context.globals.viewport?.value === 'kosmoMobile' ? 'sheet' : 'platform'}
+  >
+    <SessionProvider>
+      <PostActionAuthenticationProvider>
+        <Story />
+      </PostActionAuthenticationProvider>
+    </SessionProvider>
+  </ActionMenuPresentationProvider>
+);
+
 const meta = {
   args: {
     currentIndex: 0,
@@ -204,15 +217,7 @@ const meta = {
     },
   },
   component: PostMediaViewerCatalog,
-  decorators: [
-    (Story) => (
-      <SessionProvider>
-        <PostActionAuthenticationProvider>
-          <Story />
-        </PostActionAuthenticationProvider>
-      </SessionProvider>
-    ),
-  ],
+  decorators: [withViewerProviders],
   excludeStories: [
     'BoundaryMovementContract',
     'CompactProductionActionSurfaceContract',
@@ -370,6 +375,7 @@ export const CompactProductionActionSurfaceContract: Story = {
       'toolbar',
       { name: '액션 바' },
     );
+    const image = canvas.getByTestId('post-media-viewer-image');
 
     await step('production action 순서와 Reply binding', async () => {
       expect(
@@ -382,11 +388,24 @@ export const CompactProductionActionSurfaceContract: Story = {
       expect(args.onReply).toHaveBeenCalledTimes(1);
     });
 
-    await step('production More menu open과 dismiss', async () => {
+    await step('production More bottom sheet open과 backdrop dismiss', async () => {
       await userEvent.click(within(actionBar).getByRole('button', { name: '더 보기' }));
       expect(await screen.findByRole('menu', { name: '더 보기 메뉴' })).toBeVisible();
-      await userEvent.keyboard('{Escape}');
+      const backdrop = await screen.findByTestId('action-menu-backdrop');
+      expect(backdrop).toBeVisible();
+      expect(image).toBeVisible();
+      await userEvent.click(backdrop);
       await waitFor(() => expect(screen.queryByRole('menu', { name: '더 보기 메뉴' })).toBeNull());
+    });
+
+    await step('production Repost bottom sheet open과 backdrop dismiss', async () => {
+      await userEvent.click(within(actionBar).getByRole('button', { name: '재게시' }));
+      expect(await screen.findByRole('menu', { name: '재게시 메뉴' })).toBeVisible();
+      const backdrop = await screen.findByTestId('action-menu-backdrop');
+      expect(backdrop).toBeVisible();
+      expect(image).toBeVisible();
+      await userEvent.click(backdrop);
+      await waitFor(() => expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull());
     });
   },
 };

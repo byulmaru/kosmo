@@ -163,6 +163,39 @@ test('Native ActionMenu uses inset subtle dividers without changing 44px menu ro
   await act(async () => renderer?.unmount());
 });
 
+test('ActionMenu sheet presentation renders the Native sheet on Web and dismisses from its backdrop', async () => {
+  assert.ok(actionMenuModule);
+  platformOS = 'web';
+  const props = {
+    accessibilityLabel: '재게시 메뉴',
+    items: [{ key: 'repost', label: '재게시하기', onSelect: () => undefined }],
+    renderTrigger: ({ onPress }: { onPress: () => void }) =>
+      createElement(PressableHost, { onPress, testID: 'trigger' }),
+  };
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(
+      createElement(actionMenuModule!.ActionMenuPresentationProvider, {
+        children: createElement(actionMenuModule!.ActionMenu, props),
+        presentation: 'sheet',
+      }),
+    );
+  });
+
+  await act(async () => renderer?.root.findByProps({ testID: 'trigger' }).props.onPress());
+  assert.equal(renderer?.root.findByType('Modal' as unknown as ElementType).props.visible, true);
+  assert.equal(
+    renderer?.root.findByProps({ accessibilityRole: 'menu' }).props.accessibilityLabel,
+    '재게시 메뉴',
+  );
+
+  await act(async () =>
+    renderer?.root.findByProps({ testID: 'action-menu-backdrop' }).props.onPress(),
+  );
+  assert.equal(renderer?.root.findByType('Modal' as unknown as ElementType).props.visible, false);
+  await act(async () => renderer?.unmount());
+});
+
 test('Web ActionMenu stays mounted through exit motion before unmounting', async () => {
   assert.ok(actionMenuModule);
   platformOS = 'web';
