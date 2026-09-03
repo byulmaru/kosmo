@@ -25,13 +25,13 @@
 
 ### Requirement: Profile Block durable cleanup orchestration
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`. Block policy/admission을 통과한 Profile Block 생성은 내구성 있는 cleanup orchestration을 시작해야 하며(MUST), 이 orchestration은 양방향 Follow Request·Follow Relationship을 제거하고 pending Follow Request와 제거된 Follow 객체의 직접 원인 Notification을 내구성 있게 정리해야 한다(MUST). 필수 cleanup이 완료되기 전에는 Block action을 성공으로 확정해서는 안 되며(MUST NOT), 기존 Reaction·Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification 및 Read State는 이번 action에서 변경하지 않아야 한다(MUST). Block 해제는 제거된 Follow Request·Follow Relationship을 복구해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`. Block policy/admission을 통과한 Profile Block 생성은 내구성 있는 cleanup orchestration을 시작해야 하며(MUST), 이 orchestration은 이번 실행이 포착한 양방향 Follow Request·Follow Relationship을 제거하고 pending Follow Request와 제거된 Follow 객체의 직접 원인 Notification을 내구성 있게 정리해야 한다(MUST). 필수 cleanup이 완료되기 전에는 Block action을 성공으로 확정해서는 안 되며(MUST NOT), 이미 진입한 Follow transition이 cleanup 뒤 Follow/Request 또는 그 직접 원인 Notification을 남겨도 Active Block 동안 공통 정책에서 inactive/invisible로 취급해야 한다(MUST). 기존 Reaction·Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification 및 Read State는 이번 action에서 변경하지 않아야 한다(MUST). Block 해제는 현재 남아 있는 양방향 Follow Request·Follow Relationship과 그 직접 원인 Notification을 정리한 뒤 Profile Block을 제거해야 하며(MUST), 차단 생성 때 제거된 Follow Request·Follow Relationship을 복구해서는 안 된다(MUST NOT).
 
 #### Scenario: durable orchestration 완료 뒤에만 Block 성공을 확정한다
 
 - **WHEN** Owner가 Block을 확정하고 양방향 Follow Request·Follow Relationship 또는 직접 원인 Notification 정리가 필요하다
 - **THEN** 시스템은 Block policy/admission을 적용한 뒤 durable orchestration으로 필요한 정리를 실행한다
-- **AND** 두 방향 Follow 관계·요청과 직접 원인 Notification이 required cleanup 완료 상태가 된다
+- **AND** 이번 실행이 포착한 두 방향 Follow 관계·요청과 직접 원인 Notification이 required cleanup 완료 상태가 된다
 - **AND** required cleanup 완료 전에는 Block action 성공 응답이나 성공 상태를 확정하지 않는다
 - **AND** 기존 Reaction·Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification 및 Read State는 이번 action에서 유지한다
 
@@ -42,10 +42,16 @@
 - **AND** 이미 처리한 항목을 중복 적용해 보존 대상 Repost·Bookmark·Notification을 변경하지 않는다
 - **AND** required cleanup이 끝나기 전에는 Block action을 성공으로 확정하지 않는다
 
+#### Scenario: 이미 진입한 Follow transition이 cleanup 뒤 완료된다
+
+- **WHEN** Block cleanup과 겹쳐 이미 진입한 Follow transition이 cleanup 뒤 Follow/Request 또는 그 직접 원인 Notification을 남긴다
+- **THEN** Block action은 이번 실행이 포착한 required cleanup을 완료한 상태로 유지된다
+- **AND** Active Block 동안 공통 정책은 남은 관계와 Notification을 inactive/invisible로 취급한다
+
 #### Scenario: 차단 해제는 정리된 관계를 복구하지 않는다
 
 - **WHEN** Owner가 적용 중인 Profile Block을 해제한다
-- **THEN** 시스템은 Profile Block 관계만 제거한다
+- **THEN** 시스템은 현재 남아 있는 양방향 Follow Request·Follow Relationship과 그 직접 원인 Notification을 정리한 뒤 Profile Block 관계를 제거한다
 - **AND** 차단 생성 때 제거된 Follow Request와 Follow Relationship을 자동으로 재생성하지 않는다
 
 ### Requirement: Profile Block symmetric policy invariant

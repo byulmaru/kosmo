@@ -1,6 +1,6 @@
 ## Context
 
-Profile Block은 Owner → Target 방향으로 저장하지만 조회·상호작용 정책은 양쪽에 적용되는 관계다. 생성 시 양방향
+Profile Block은 Owner → Target 방향으로 저장하지만 조회·상호작용 정책은 양쪽에 적용되는 관계다. Block 실행이 포착한 양방향
 Follow Request·Follow Relationship과 제거된 Follow 객체의 직접 원인 Notification을 정리해야 하며, 기존 Reaction·Repost·
 Bookmark와 비직접 원인 Notification은 이번 action에서 변경하지 않는다.
 
@@ -14,8 +14,10 @@ canonical `profile-block.md`는 이 결과와 durable 경계만 정하며, 각 �
 **Goals:**
 
 - 기존 Profile row를 바꾸지 않는 additive Profile Block 저장 관계와 Owner/Target uniqueness·referential integrity·self-block 불변식을 도입한다.
-- Block policy/admission 이후 durable cleanup orchestration을 제공하고, 양방향 Follow Request·Follow Relationship과 직접 원인 Follow Notification을
-  required cleanup으로 정리하며, required cleanup 완료 전에는 Block action을 성공으로 확정하지 않는다.
+- Block policy/admission 이후 durable cleanup orchestration을 제공하고, Block 실행이 포착한 양방향 Follow Request·Follow Relationship과 직접 원인 Follow Notification을
+  required cleanup으로 정리하며, required cleanup 완료 전에는 Block action을 성공으로 확정하지 않는다. 이미 진입한 Follow transition이 cleanup 뒤
+  Follow/Request 또는 그 직접 원인 Notification을 남길 수 있지만 Active Block 동안 공통 정책에서 inactive/invisible로 취급하며, Unblock은
+  현재 남아 있는 양방향 Follow/Request와 그 직접 원인 Notification을 정리한 뒤 Block을 제거하고 삭제된 관계를 복구하지 않는다.
 - Profile·Post·Media·Follow 후보와 Home·Local·Profile·Hashtag Post List·검색 및 새 로컬 상호작용에 같은 Profile Block policy를 적용한다.
 - selected Local Profile을 actor로 사용하는 현재 GraphQL ingress와 Owner-only management connection을 제공한다.
 - Confirmation·관리 목록·접근성 등 기존 presentation contract와 최신 canonical이 승인한 identity-free `blocking`·`blockedBy` route presentation을 소비하는
@@ -59,11 +61,12 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
 
 ### Known Traps
 
-- Block row나 action 성공을 먼저 확정해 required cleanup이 남는 부분 성공을 만들지 않는다.
+- Block 실행이 포착한 required cleanup이 남은 상태에서 action 성공을 확정해 부분 성공을 만들지 않는다.
 - 일시 오류·재시작에서 이미 처리한 cleanup이 중복되어 Repost·Bookmark·기존 Reaction·비직접 원인 Notification 또는 Read State를 바꾸지 않게 한다.
 - Owner → Target 한 방향만 검사해 Target이 Owner의 Profile·Post·Media·Follow 후보를 계속 보게 하지 않는다.
 - Profile route·GraphQL·list/search에서 차단된 대상의 최신 상세를 재조회하거나 client 후처리로 보호된 데이터를 복원하지 않는다.
-- Block 해제 시 제거된 Follow Request·Follow Relationship을 자동 복구하지 않는다. 기존 Reaction cleanup은 현재 action에서 정하지 않는다.
+- Block 해제 시 현재 남아 있는 양방향 Follow Request·Follow Relationship과 그 직접 원인 Notification을 먼저 정리한 뒤 Block을 제거하며, 차단 생성 때 제거된
+  Follow Request·Follow Relationship을 자동 복구하지 않는다. 기존 Reaction cleanup은 현재 action에서 정하지 않는다.
 - `PROD-327` source 신규 Notification suppression, `PROD-818` federation, `PROD-328` async physical cleanup을 현재 task나 완료 증거로 끌어오지 않는다.
 - DSN-51·DSN-53/`PROD-861` presentation 결과를 API·cache·Native runtime 완료 증거로 일반화하지 않는다.
 

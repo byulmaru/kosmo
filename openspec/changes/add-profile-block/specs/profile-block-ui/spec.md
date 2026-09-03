@@ -41,7 +41,7 @@
 
 ### Requirement: Profile Block actor and client-state isolation
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block UI는 selected Profile별 actor 상태 격리를 유지해야 하며(MUST), `PROD-861` 결과를 prerequisite evidence로 참고하되 이후 승인된 presentation을 소비하고 보호된 Profile·Post·Media·Notification 데이터를 UI 상태로 복구해서는 안 된다(MUST NOT). Block·Unblock 성공 결과는 현재 화면, Block 목록과 이미 표시 중인 unavailable 표면의 상태를 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 이전 Owner의 Block 상태를 새 actor에 재사용해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-51`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block UI는 selected Profile별 actor 상태 격리를 유지해야 하며(MUST), 최신 canonical이 승인한 identity-free `blocking`·`blockedBy` route presentation을 소비하고 Target identity·이미 알고 있는 handle·content·social action을 UI 상태로 복구해서는 안 된다(MUST NOT). Block·Unblock 성공 결과는 현재 화면, Block 목록과 이미 표시 중인 unavailable 표면의 상태를 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 이전 Owner의 Block 상태를 새 actor에 재사용해서는 안 된다(MUST NOT).
 
 #### Scenario: Block 성공 뒤 표시 중인 결과가 정책에 수렴한다
 
