@@ -90,6 +90,12 @@ jobs:
             secret/data/kosmo/prod/ios-signing APPLE_API_ISSUER_ID | APPLE_API_ISSUER_ID ;
             secret/data/kosmo/prod/ios-signing APPLE_API_KEY_P8_BASE64 | APPLE_API_KEY_P8_BASE64
 
+      - name: Disconnect Tailscale after loading Vault secrets
+        run: |
+          sudo -E tailscale logout
+          networksetup -setdnsservers Ethernet Empty
+          networksetup -setsearchdomains Ethernet Empty
+
       - name: Build and distribute iOS App Store IPA
         working-directory: apps/app
         env:
