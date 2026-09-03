@@ -17,7 +17,7 @@ Android·iOS·Web에서 공유하며 고정 순서, optional 액션, compact cou
 **Guardrails**
 
 - 공개 UI API는 `PostActionBar` 하나와 actual Post fragment ref, `reply`·`reaction`·`bookmark`·`more`의 명시적 optional config, Repost error callback으로 제한한다. 구현된 Repost는 composite parent fragment 아래 private child action으로 조립한다. Repost의 concrete disabled host input 또는 fragment shape는 actual caller와 함께 PROD-432가 설계한다.
-- Reply의 controlled `expanded`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`를 처리 상태와 분리하고, Repost child는 `viewerRepost`에서 `hasReposted`를 파생한다. 범용 공개 `selected`를 만들지 않는다. 공개 처리 상태는 default·pending·disabled만 제공하고 pending·disabled만 입력을 차단한다. 일시적 요청 실패를 `error`·danger 상태로 표현하지 않는다.
+- Reply의 controlled `expanded`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`를 처리 상태와 분리하고, Repost child는 `viewerRepost`에서 `hasReposted`를 파생한다. 범용 공개 `selected`를 만들지 않는다. Action Bar Reply는 default·disabled만 표현하고 제출 pending은 Composer의 `답글 게시` 버튼이 소유한다. Reaction·Bookmark는 default·pending·disabled를 제공하며 pending·disabled에서 입력을 차단한다. 일시적 요청 실패를 `error`·danger 상태로 표현하지 않는다.
 - Bar와 각 control의 visual/layout row는 모든 플랫폼에서 높이 28을 사용하고, social layout slot 최소 너비 50, More 너비 28, glyph 16×16, icon-count 간격 4를 제공한다. PROD-866 이후 Web actual target은 count가 있으면 숫자 `0`을 포함해 `6 + 16 + 4 + 렌더된 count 너비 + 6`을 HUG하고 count가 없으면 28×36px이다. social slot은 target이 50px보다 넓을 때만 함께 확장하며 target끼리 겹치거나 action 사이 분배 여백을 덮지 않아야 한다. Native 공용 projection은 출시 전 임시 예외이며 Native 접근성 완료 증거로 사용하지 않는다.
 - Reaction과 Bookmark는 count를 받지 않는다. Reply config와 Repost child fragment는 선행 계약이 제공한 count만 실행 환경 기본 locale의 표준 compact formatting으로 표시하고 K/M 반올림·단위 승격·상한을 수동 구현하거나 count가 없을 때 `0`을 합성하지 않는다.
 - More는 callback과 접근성 label만 제공하고 count·도메인 상태·처리 상태, 팝업이나 링크 복사를 구현하지 않는다.
@@ -26,15 +26,15 @@ Android·iOS·Web에서 공유하며 고정 순서, optional 액션, compact cou
 **Verification**
 
 - 고정 순서, optional 표시, Reaction·Bookmark count 제외, Reply·Repost count 유무와 한국어·영어 locale의 표준 compact 결과를 렌더링 검증한다.
-- Reply `expanded`, actual Relay fragment에서 파생한 Repost `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`, config 기반 Reply·Reaction·Bookmark의 default·pending·disabled와 Repost child의 default·mutation pending에 대한 시각 표현, active Reaction·Bookmark의 채워진 icon, default callback 또는 child mutation 호출과 각 소유 경계의 입력 차단을 검증한다. Repost policy-disabled는 PROD-432 actual surface 통합에서 검증한다.
+- Reply collapsed·expanded·disabled, actual Relay fragment에서 파생한 Repost `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`, config 기반 Reaction·Bookmark의 default·pending·disabled와 Repost child의 default·mutation pending에 대한 시각 표현, active Reaction의 fill 없는 의미색 outline과 selected Bookmark의 채워진 icon, default callback 또는 child mutation 호출과 각 소유 경계의 입력 차단을 검증한다. Reply 제출 pending은 Composer의 `답글 게시` 버튼에서 검증한다. Repost policy-disabled는 PROD-432 actual surface 통합에서 검증한다.
 - 390px mobile·900px compact·1400px full Storybook에서 실제 surface 콘텐츠 폭 기준 한 행과 exact 28px geometry를 검토한다.
 - keyboard/touch activation과 role·label·expanded·pressed·selected·busy·disabled metadata를 공개 도메인 상태에 맞게 검증한다.
 - React Native type/Relay check, Storybook build와 관련 component test를 통과시킨다.
 
-- [x] 1.1 고정 공개 API와 optional 액션으로 Post Action Bar의 표시·입력 계약을 구현하고 공개 처리 상태를 default·pending·disabled로 제한한다.
-- [x] 1.2 theme token과 기존 icon dependency를 사용해 active Reaction·Bookmark의 채워진 icon, default·pending·disabled 처리 상태 표현, locale-aware compact count, 한 행 반응형 배치, 최소 interactive target 및 접근성 metadata를 구현한다.
-- [x] 1.3 Reply `expanded`, Reaction `hasReacted`, Bookmark `hasBookmarked`와 config 기반 default·pending·disabled, actual Relay fragment에서 파생한 Repost `hasReposted`·default·mutation pending, Reaction·Bookmark count 제외·한국어와 영어 compact count·count 없음·optional 액션·More callback-only 및 390px·900px·1400px 폭의 Storybook 상태 카탈로그를 추가한다. Repost policy-disabled fixture와 실제 surface 검증은 PROD-432에 남긴다.
-- [x] 1.4 default callback 호출, pending·disabled 입력 차단, active Reaction·Bookmark의 채워진 icon·도메인 상태 유지·locale compact count·More 상태 제외·접근성 계약의 component test를 추가하고 관련 검증 명령을 통과시킨다.
+- [x] 1.1 고정 공개 API와 optional 액션으로 Post Action Bar의 표시·입력 계약을 구현한다. Action Bar Reply는 default·disabled, Reaction·Bookmark는 default·pending·disabled만 사용한다.
+- [x] 1.2 theme token과 기존 icon dependency를 사용해 active Reaction의 fill 없는 의미색 outline과 selected Bookmark의 채워진 icon, 지원하는 처리 상태 표현, locale-aware compact count, 한 행 반응형 배치, 최소 interactive target 및 접근성 metadata를 구현한다.
+- [x] 1.3 Reply collapsed·expanded·disabled, Reaction `hasReacted`, Bookmark `hasBookmarked`와 config 기반 default·pending·disabled, actual Relay fragment에서 파생한 Repost `hasReposted`·default·mutation pending, Reaction·Bookmark count 제외·한국어와 영어 compact count·count 없음·optional 액션·More callback-only 및 390px·900px·1400px 폭의 Storybook 상태 카탈로그를 추가한다. Reply 제출 pending은 Composer의 `답글 게시` 버튼이 소유하며 Action Bar fixture로 만들지 않는다. Repost policy-disabled fixture와 실제 surface 검증은 PROD-432에 남긴다.
+- [x] 1.4 Reply default callback·disabled 차단, pending을 소유하는 config action의 default callback·pending·disabled 입력 차단, active Reaction의 fill 없는 의미색 outline·selected Bookmark의 채워진 icon·도메인 상태 유지·locale compact count·More 상태 제외·접근성 계약의 component test를 추가하고 관련 검증 명령을 통과시킨다.
 
 ## 2. PROD-434 canceled surface ownership 정리
 
@@ -174,7 +174,7 @@ PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 �
 **Verification**
 
 - 선택 Profile 전환 시 제공된 Reply count와 child fragment의 Repost count 공유, `hasReposted`·`hasReacted`·`hasBookmarked` 격리, 상위 Composer가 제어하는 Reply `expanded`를 검증한다.
-- Reply·Repost·Reaction·Bookmark 각각의 성공, action별 pending 중복 차단, 실패 시 이전 확정 상태 유지와 각 action 계약의 접근 가능한 안내·다음 입력 재시도를 검증한다. Bookmark 해제는 현재 actor의 `viewerBookmark`·Bookmark record·로드된 connection edge 제거와 다른 actor 격리를 함께 검증하고, Repost는 PROD-414의 menu·exact toast 결과를 재사용한다.
+- Reply Composer 제출 성공·pending 중복 차단·실패 복구는 Composer의 `답글 게시` 버튼에서 검증하고, Action Bar Reply는 default·disabled와 controlled `expanded`만 검증한다. Repost·Reaction·Bookmark는 각 action의 성공, action별 pending 중복 차단, 실패 시 이전 확정 상태 유지와 접근 가능한 안내·다음 입력 재시도를 검증한다. Bookmark 해제는 현재 actor의 `viewerBookmark`·Bookmark record·로드된 connection edge 제거와 다른 actor 격리를 함께 검증하고, Repost는 PROD-414의 menu·exact toast 결과를 재사용한다.
 - Content·Reply Parent·Repost Source 관계 조합, Post Visibility 등 대상 자체가 부적격한 액션과 인증된 실행 주체의 권한이 부족한 액션의 disabled 표시, 대상이 적격한 guest의 인증 위임, 대상이 부적격한 guest의 disabled 유지와 Home·Profile 목록·상세의 동일 계약을 검증한다.
 - More 팝업에서 `링크 복사`가 항상 첫 항목이고 PROD-598 작성자 삭제 자격을 충족할 때만 `삭제`가 마지막 항목인지 검증한다. Web은 현재 browser origin을 우선하고 Android·iOS 또는 browser origin 부재 환경은 configured Local Instance의 `canonical_origin`을 fallback으로 사용하는 ADR 0015 Post Share Reference의 clipboard 복사, Content 없는 Repost에서 direct Source 공유 참조·삭제 자격 선택, query·hash 제외, guest 사용과 Visibility 우회 방지를 함께 검증한다.
 - 모든 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425 완료, OpenSpec task 정합성과 canonical 문서·Linear·OpenSpec·코드 일치를 확인한다.

@@ -539,10 +539,10 @@ function CatalogStory() {
           repostState="selected"
         />
       </Section>
-      <Section title="Processing · config pending / disabled">
+      <Section title="Processing · config disabled">
         <PostActionBarFixture
           bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true, processing: 'disabled' }}
-          reply={{ ...actionBarProps.reply, expanded: true, processing: 'pending' }}
+          reply={{ ...actionBarProps.reply, processing: 'disabled' }}
         />
       </Section>
       <Section title="Resolution-required · hover blocked">
@@ -625,8 +625,7 @@ type PlaygroundProps = {
   onReply: () => void;
   replyAccessibilityLabel: string;
   replyCount: number;
-  replyExpanded: boolean;
-  replyProcessing: PostActionProcessingState;
+  replyState: 'collapsed' | 'expanded' | 'disabled';
   reactionSelected: boolean;
   repostState: RepostPlaygroundState;
 };
@@ -639,8 +638,7 @@ function PostActionBarPlayground({
   onReply,
   replyAccessibilityLabel,
   replyCount,
-  replyExpanded,
-  replyProcessing,
+  replyState,
   reactionSelected,
   repostState,
 }: PlaygroundProps) {
@@ -662,9 +660,9 @@ function PostActionBarPlayground({
         reply={{
           accessibilityLabel: replyAccessibilityLabel,
           count: replyCount,
-          expanded: replyExpanded,
+          expanded: replyState === 'expanded',
           onPress: onReply,
-          processing: replyProcessing,
+          processing: replyState === 'disabled' ? 'disabled' : 'default',
         }}
         reactionSelected={reactionSelected}
         repostState={repostState}
@@ -682,15 +680,14 @@ const meta = {
     onReply: playgroundReply,
     replyCount: 12_345,
     replyAccessibilityLabel: '답글',
-    replyExpanded: false,
-    replyProcessing: 'default',
+    replyState: 'collapsed',
     reactionSelected: false,
     repostState: 'unselected',
   },
   argTypes: {
     bookmarkProcessing: { control: 'select', options: ['default', 'pending', 'disabled'] },
     replyCount: { control: { min: 0, step: 1, type: 'number' } },
-    replyProcessing: { control: 'select', options: ['default', 'pending', 'disabled'] },
+    replyState: { control: 'select', options: ['collapsed', 'expanded', 'disabled'] },
     repostState: { control: 'select', options: ['unselected', 'selected'] },
   },
   component: PostActionBarPlayground,
@@ -728,8 +725,7 @@ export const Playground: Story = {
         'bookmarkSelected',
         'replyCount',
         'replyAccessibilityLabel',
-        'replyExpanded',
-        'replyProcessing',
+        'replyState',
         'reactionSelected',
         'repostState',
       ],
@@ -767,6 +763,7 @@ export const PlaygroundInteraction: Story = {
     playgroundReply.mockClear();
     const canvas = within(canvasElement);
     const toolbar = await canvas.findByRole('toolbar', { name: '액션 바' });
+    expect(args.replyState).toBe('collapsed');
     const labels = within(toolbar)
       .getAllByRole('button')
       .map((button) => button.getAttribute('aria-label'));
@@ -798,12 +795,18 @@ export const PlaygroundInteraction: Story = {
         name: args.bookmarkAccessibilityLabel,
       });
 
-      if (args.replyProcessing === 'default') {
-        await userEvent.click(replyButton);
-        expect(playgroundReply).toHaveBeenCalledOnce();
+      expect(replyButton).toHaveAttribute('aria-expanded', String(args.replyState === 'expanded'));
+      if (args.replyState === 'disabled') {
+        expect(replyButton).toHaveAttribute('aria-disabled', 'true');
       } else {
+        expect(replyButton).not.toHaveAttribute('aria-disabled');
+      }
+      if (args.replyState === 'disabled') {
         replyButton.click();
         expect(playgroundReply).not.toHaveBeenCalled();
+      } else {
+        await userEvent.click(replyButton);
+        expect(playgroundReply).toHaveBeenCalledOnce();
       }
       if (args.bookmarkProcessing === 'default') {
         await userEvent.click(bookmarkButton);
@@ -1704,8 +1707,8 @@ export const ProcessingAccessibility: Story = {
     const moreButton = canvas.getByRole('button', { name: '더보기' });
 
     expect(replyButton).toHaveAttribute('aria-expanded', 'true');
-    expect(replyButton).toHaveAttribute('aria-busy', 'true');
-    expect(replyButton).toHaveAttribute('aria-disabled', 'true');
+    expect(replyButton).not.toHaveAttribute('aria-busy');
+    expect(replyButton).not.toHaveAttribute('aria-disabled');
     expect(repostButton).toHaveAttribute('aria-pressed', 'true');
     expect(repostButton).toHaveAttribute('aria-busy', 'true');
     expect(repostButton).toHaveAttribute('aria-disabled', 'true');
@@ -1719,13 +1722,9 @@ export const ProcessingAccessibility: Story = {
     expect(moreButton).not.toHaveAttribute('aria-expanded');
     expect(moreButton).not.toHaveAttribute('aria-busy');
     expect(moreButton).not.toHaveAttribute('aria-disabled');
-    expect(canvas.getByTestId('post-action-reply-spinner')).toBeVisible();
+    expect(canvas.queryByTestId('post-action-reply-spinner')).toBeNull();
     expect(canvas.getByTestId('post-action-repost-spinner')).toBeVisible();
     expect(canvas.queryByTestId('post-action-bookmark-spinner')).toBeNull();
-    const replySpinner = canvas.getByTestId('post-action-reply-spinner');
-    const replySpinnerVisual = replySpinner.firstElementChild as HTMLElement;
-    const replySpinnerBounds = replySpinnerVisual.getBoundingClientRect();
-    const replyCountBounds = replyButton.querySelector('[dir="auto"]')!.getBoundingClientRect();
     const repostSpinner = canvas.getByTestId('post-action-repost-spinner');
     const repostSpinnerVisual = repostSpinner.firstElementChild as HTMLElement;
     const repostSpinnerBounds = repostSpinnerVisual.getBoundingClientRect();
@@ -1740,18 +1739,8 @@ export const ProcessingAccessibility: Story = {
     });
     fireEvent.pointerEnter(repostButton);
     expect(within(repostButton).queryByTestId('post-action-repost-hover')).toBeNull();
-    expect(replySpinnerVisual.clientWidth).toBe(14);
-    expect(replySpinnerVisual.clientHeight).toBe(14);
-    expect(replySpinner.getBoundingClientRect().left).toBeCloseTo(
-      replyButton.getBoundingClientRect().left + 6,
-      0,
-    );
     expect(repostSpinner.getBoundingClientRect().left).toBeCloseTo(
       repostButton.getBoundingClientRect().left + 6,
-      0,
-    );
-    expect(replySpinnerBounds.top + replySpinnerBounds.height / 2).toBeCloseTo(
-      replyCountBounds.top + replyCountBounds.height / 2,
       0,
     );
     expect(repostSpinnerBounds.top + repostSpinnerBounds.height / 2).toBeCloseTo(
@@ -1767,7 +1756,7 @@ export const ProcessingAccessibility: Story = {
       bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true }}
       more={actionBarProps.more}
       reactionSelected
-      reply={{ ...actionBarProps.reply, expanded: true, processing: 'pending' }}
+      reply={{ ...actionBarProps.reply, expanded: true }}
       repostState="pending"
     />
   ),

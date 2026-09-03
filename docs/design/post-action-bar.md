@@ -18,6 +18,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Web의 trailing group은 Bookmark 50px, 간격 4px, More 28px을 묶은 exact 82px이며 Bar의 오른쪽 끝에 맞춘다.
 - Reaction은 `HeartPlus` glyph를 사용한다.
 - pending spinner, selected·pressed·disabled visual은 같은 28px slot 안에서 layout을 바꾸지 않는다. focus indicator와 accessible name·state는 확장된 Web interactive rectangle에서도 유지한다.
+- Action Bar의 Reply는 외부 Composer가 공급하는 controlled `expanded`와 default·disabled만 표현한다. Reply 제출 중 spinner·입력 차단은 Composer의 `답글 게시` 버튼이 소유하며 Action Bar에 별도 pending 상태로 중복 표현하지 않는다.
 - `/bookmarks` 목록의 Bookmark action은 저장된 상태에서 파생한 `Selected`를 사용한다. Compact와 Full 모두
   같은 `PostListItem` source와 `itemSpacing=0` stack rhythm을 유지하며 선택 상태 때문에 목록 간격을 바꾸지 않는다.
 - Figma Action은 내부 상하 padding 4px을 포함한다. canonical

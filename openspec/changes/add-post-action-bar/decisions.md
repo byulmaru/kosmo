@@ -533,6 +533,18 @@
 - Consequences: 기존 `PostActionSurface`의 `actionBarStyle` seam을 재사용해 새 public API·component·dependency 없이 border와 padding만 Action Bar wrapper로 이동한다. Reaction Summary와 Action Bar의 데이터·동작·순서는 유지된다. Figma `PostLayout` 여섯 variant의 Engagement도 같은 outer group과 bordered Action Bar frame 구조로 동기화한다.
 - Confirmation / Follow-up: Storybook에서 metadata→Summary 8px, Summary→frame border 4px, frame 상·하 border·padding과 Summary 비포함을 검증한다. Summary가 없는 thread current에서도 metadata→border 8px과 row 하단 4px을 유지하고, Figma 여섯 variant를 readback한 뒤 올바른 상단 스택 Web preview에서 확인한다.
 
+### Reply 제출 pending은 Composer 게시 버튼이 소유한다
+
+- Decision Date: 2026-09-04
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-866`, `docs/design/post-action-bar.md`, `docs/design/reply-composer.md`, 2026-09-04 KST 사용자 결정
+- Status: Active
+- Context / Problem: production Reply adapter의 처리 상태는 default·disabled만 도달하고, 제출 중 spinner·중복 제출 차단은 이미 Composer의 `답글 게시` 버튼이 소유한다. Action Bar Storybook에 Reply pending fixture를 별도로 두면 도달하지 않는 상태를 제품 계약처럼 노출하고 동일한 제출 pending을 두 control에 중복 표현한다.
+- Decision Outcome: Action Bar Reply는 collapsed(default)·expanded(default)·disabled만 표현한다. Reply 제출 pending·spinner·중복 제출 차단은 Composer의 `답글 게시` 버튼에서만 표현하고 검증한다. Repost·Reaction·Bookmark의 기존 pending 계약은 유지한다.
+- Alternatives Considered: Action Bar Reply pending fixture와 busy·spinner 검증을 유지하는 방식은 production에서 도달하지 않고 Composer 소유권과 중복되므로 제외했다. 이번 리뷰에서 공개 `PostActionBarProps` 처리 상태 타입까지 축소하는 방식은 기존 소비자 호환 범위를 넓히므로 제외했다.
+- Consequences: Playground는 하나의 `replyState` control로 collapsed·expanded·disabled만 제공하고 Catalog와 interaction story에서 Reply pending fixture·assertion을 제거한다. canonical 문서와 OpenSpec은 Reply default·disabled를 Reaction·Bookmark default·pending·disabled와 구분한다. 공개 타입은 이번 리뷰 수정에서 변경하지 않는다.
+- Confirmation / Follow-up: focused Storybook에서 Reply 세 상태와 Repost pending을 함께 검증하고, 저장소의 Action Bar Storybook·OpenSpec에 Reply pending fixture나 규범 문구가 남지 않았는지 검색한다.
+
 ## Remaining Decisions
 
 - 없음.
