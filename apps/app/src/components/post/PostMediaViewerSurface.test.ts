@@ -11,11 +11,13 @@ import type { PostMediaItem } from './PostMediaImage';
 
 const require = createRequire(import.meta.url);
 
+const mockPlatform: { OS: string } = { OS: 'web' };
+
 mock.module('react-native', {
   exports: {
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
-    Platform: { OS: 'web' },
+    Platform: mockPlatform,
     Pressable: 'Pressable',
     StyleSheet: {
       absoluteFillObject: {
@@ -193,6 +195,34 @@ describe('PostMediaViewerSurface', () => {
     assert.ok(byTestId('post-media-viewer-action-tray'));
     findByLabel('민감한 이미지 표시').props.onPress({ type: 'press' });
     assert.equal(revealCount, 1);
+  });
+
+  it('상태 action은 visual 104x40을 유지하고 플랫폼별 최소 hitSlop을 제공한다', async () => {
+    try {
+      for (const [platform, expectedHitSlop] of [
+        ['web', undefined],
+        ['ios', { bottom: 2, left: 0, right: 0, top: 2 }],
+        ['android', { bottom: 4, left: 0, right: 0, top: 4 }],
+      ] as const) {
+        mockPlatform.OS = platform;
+
+        for (const [viewState, label] of [
+          ['sensitive', '민감한 이미지 표시'],
+          ['error', '다시 시도'],
+        ] as const) {
+          await render({ viewState });
+          const action = findByLabel(label);
+
+          assert.deepEqual(action.props.hitSlop, expectedHitSlop);
+          assert.deepEqual(pick(resolveStyle(action.props.style), ['height', 'width']), {
+            height: 40,
+            width: 104,
+          });
+        }
+      }
+    } finally {
+      mockPlatform.OS = 'web';
+    }
   });
 
   it('390 Compact와 1024·1440 Wide의 canonical frame·secondary geometry를 사용한다', async () => {
