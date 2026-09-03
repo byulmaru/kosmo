@@ -8,7 +8,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: ios-ad-hoc-distribution
+  group: ios-testflight-distribution
   cancel-in-progress: false
 
 jobs:

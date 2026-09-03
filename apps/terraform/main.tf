@@ -8,12 +8,7 @@ locals {
   github_owner_id      = "29172280"
 
   app_identifier        = "moe.kos"
-  distribution_group    = "native-testers"
   android_play_workflow = ".github/workflows/android-play-internal-distribution.yml"
-  native_distribution_workflows = {
-    "ios-device-onboarding"    = ".github/workflows/ios-device-onboarding.yml"
-    "native-test-distribution" = ".github/workflows/ios-ad-hoc-distribution.yml"
-  }
 
   terraform_apply_environment = "terraform-apply"
   terraform_roles = toset([
@@ -63,6 +58,7 @@ resource "google_project_service" "required" {
     "cloudresourcemanager.googleapis.com",
     "androidpublisher.googleapis.com",
     "firebase.googleapis.com",
+    # Required only by the deprecated Firebase App Distribution resources below.
     "firebaseappdistribution.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
@@ -99,6 +95,7 @@ resource "google_firebase_apple_app" "kosmo" {
   deletion_policy = "PREVENT"
 }
 
+# Deprecated: no repository workflow consumes Firebase App Distribution. Remove with a reviewed two-phase state retirement.
 resource "google_service_account" "app_distribution" {
   provider = google-beta
   project  = local.firebase_project_id
@@ -108,13 +105,6 @@ resource "google_service_account" "app_distribution" {
   deletion_policy = "PREVENT"
 
   depends_on = [google_project_service.required]
-}
-
-resource "google_project_iam_member" "app_distribution" {
-  provider = google-beta
-  project  = local.firebase_project_id
-  role     = "roles/firebaseappdistro.admin"
-  member   = "serviceAccount:${google_service_account.app_distribution.email}"
 }
 
 resource "google_iam_workload_identity_pool" "github_actions" {
@@ -128,6 +118,7 @@ resource "google_iam_workload_identity_pool" "github_actions" {
   depends_on = [google_project_service.required]
 }
 
+# Deprecated: this WIF trust is retained only until the external Firebase App Distribution identity is retired.
 resource "google_iam_workload_identity_pool_provider" "kosmo" {
   provider = google-beta
   project  = local.firebase_project_id
@@ -135,39 +126,17 @@ resource "google_iam_workload_identity_pool_provider" "kosmo" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.github_actions.workload_identity_pool_id
   workload_identity_pool_provider_id = "kosmo-native-distribution"
   display_name                       = "Kosmo native distribution"
+  disabled                           = true
   deletion_policy                    = "PREVENT"
 
   attribute_mapping = {
-    "attribute.credential"          = "'native-distribution'"
-    "google.subject"                = "assertion.sub"
-    "attribute.environment"         = "assertion.environment"
-    "attribute.ref"                 = "assertion.ref"
-    "attribute.repository_id"       = "assertion.repository_id"
-    "attribute.repository_owner_id" = "assertion.repository_owner_id"
-    "attribute.workflow_ref"        = "assertion.workflow_ref"
+    "google.subject" = "assertion.sub"
   }
-  attribute_condition = join(" && ", [
-    "assertion.repository_id == '${local.github_repository_id}'",
-    "assertion.repository_owner_id == '${local.github_owner_id}'",
-    "assertion.ref == 'refs/heads/main'",
-    "(${join(" || ", [
-      for environment, workflow in local.native_distribution_workflows :
-      "(assertion.environment == '${environment}' && assertion.workflow_ref == '${local.github_owner}/${local.github_repository}/${workflow}@refs/heads/main')"
-    ])})",
-  ])
+  attribute_condition = "false"
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
   }
-}
-
-resource "google_service_account_iam_member" "github_actions" {
-  provider           = google-beta
-  service_account_id = google_service_account.app_distribution.name
-  role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/attribute.credential/native-distribution"
-
-  depends_on = [google_iam_workload_identity_pool_provider.kosmo]
 }
 
 resource "google_service_account" "android_play_publisher" {
