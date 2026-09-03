@@ -218,6 +218,7 @@ const meta = {
     'BoundaryMovementContract',
     'CompactProductionActionSurfaceContract',
     'ErrorRetryContract',
+    'PlaygroundInteractionContract',
     'SensitiveRevealContract',
     'WideRailCompositionContract',
   ],
@@ -248,6 +249,10 @@ export const Playground: Story = {
       include: ['presentation', 'mediaCount', 'currentIndex', 'viewState'],
     },
   },
+};
+
+export const PlaygroundInteractionContract: Story = {
+  ...Playground,
   play: async ({ args, canvasElement, step }) => {
     const callbacks = [
       args.onClose,

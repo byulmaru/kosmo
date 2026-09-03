@@ -2,7 +2,7 @@ import baseMeta, {
   BoundaryMovementContract as boundaryMovementContract,
   CompactProductionActionSurfaceContract as compactProductionActionSurfaceContract,
   ErrorRetryContract as errorRetryContract,
-  Playground as playground,
+  PlaygroundInteractionContract as playgroundInteractionContract,
   SensitiveRevealContract as sensitiveRevealContract,
   WideRailCompositionContract as wideRailCompositionContract,
 } from './PostMediaViewer.stories';
@@ -18,7 +18,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const BoundaryMovementContract: Story = boundaryMovementContract;
-export const Playground: Story = playground;
+export const PlaygroundInteractionContract: Story = playgroundInteractionContract;
 export const CompactProductionActionSurfaceContract: Story = compactProductionActionSurfaceContract;
 export const SensitiveRevealContract: Story = sensitiveRevealContract;
 export const ErrorRetryContract: Story = errorRetryContract;
