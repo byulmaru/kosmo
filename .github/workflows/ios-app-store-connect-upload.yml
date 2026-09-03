@@ -1,4 +1,4 @@
-name: iOS TestFlight Internal Distribution
+name: iOS App Store Connect Upload
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: ios-ad-hoc-distribution
+  group: ios-app-store-connect-upload
   cancel-in-progress: false
 
 jobs:
@@ -39,7 +39,7 @@ jobs:
         uses: ruby/setup-ruby@d45b1a4e94b71acab930e56e79c6aa188764e7f9 # v1
         with:
           bundler-cache: true
-          ruby: '3.4'
+          ruby-version: '3.4'
           working-directory: apps/app
 
       - name: Install workspace dependencies
@@ -99,4 +99,4 @@ jobs:
           IOS_APP_STORE_PROVISIONING_PROFILE_BASE64: ${{ steps.ios_signing.outputs.IOS_APP_STORE_PROVISIONING_PROFILE_BASE64 }}
           IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ steps.ios_signing.outputs.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
           IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ steps.ios_signing.outputs.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
-        run: bundle exec fastlane ios distribute_testflight_internal
+        run: bundle exec fastlane ios build_and_upload_ios
