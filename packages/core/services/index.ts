@@ -23,8 +23,15 @@ export type {
   ProfileBlockTransitionFailure,
   ProfileBlockTransitionInput,
   ProfileBlockTransitionResult,
+  ProfileUnblockTransitionExecution,
+  ProfileUnblockTransitionInput,
+  ProfileUnblockTransitionResult,
 } from './profile-block';
-export { deleteProfileBlock, executeProfileBlockTransition } from './profile-block';
+export {
+  deleteProfileBlock,
+  executeProfileBlockTransition,
+  executeProfileUnblockTransition,
+} from './profile-block';
 export { followProfile, unfollowProfile } from './profile-follow';
 export type {
   HydratedProfileFollowPairTransition,
