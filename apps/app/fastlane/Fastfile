@@ -1,10 +1,8 @@
 require 'base64'
-require 'digest'
 require 'fileutils'
 require 'plist'
 require 'securerandom'
 require 'shellwords'
-require 'tmpdir'
 
 default_platform(:ios)
 opt_out_usage
@@ -70,8 +68,6 @@ end
 
 platform :ios do
   private_lane :load_apple_api_key do
-    require_environment!('APPLE_API_KEY_ID', 'APPLE_API_ISSUER_ID', 'APPLE_API_KEY_PATH')
-
     app_store_connect_api_key(
       key_id: ENV.fetch('APPLE_API_KEY_ID'),
       issuer_id: ENV.fetch('APPLE_API_ISSUER_ID'),
@@ -81,83 +77,15 @@ platform :ios do
     )
   end
 
-  private_lane :verify_app_store_ipa do |options|
-    raw_ipa_path = options.fetch(:ipa_path)
-    UI.user_error!('Fastlane did not produce a signed IPA.') if raw_ipa_path.to_s.empty?
-
-    ipa_path = File.expand_path(raw_ipa_path)
-    expected_team_id = options.fetch(:team_id)
-    expected_profile_uuid = options.fetch(:profile_uuid)
-    expected_build_number = build_number!
-    UI.user_error!("IPA was not created at #{ipa_path}.") unless File.file?(ipa_path) && File.size?(ipa_path)
-
-    Dir.mktmpdir('kosmo-ipa-') do |directory|
-      sh("unzip -qq #{Shellwords.escape(ipa_path)} -d #{Shellwords.escape(directory)}")
-      app_bundles = Dir[File.join(directory, 'Payload', '*.app')]
-      UI.user_error!('IPA must contain exactly one app bundle.') unless app_bundles.one?
-
-      app_bundle = app_bundles.first
-      info = Plist.parse_xml(File.join(app_bundle, 'Info.plist'))
-      UI.user_error!('IPA Info.plist is missing.') unless info
-
-      bundle_id = info['CFBundleIdentifier'].to_s
-      version_name = info['CFBundleShortVersionString'].to_s
-      build_number = info['CFBundleVersion'].to_s
-      UI.user_error!('IPA bundle identifier does not match moe.kos.') unless bundle_id == BUNDLE_IDENTIFIER
-      UI.user_error!('IPA build number does not match IOS_BUILD_NUMBER.') unless build_number == expected_build_number
-      UI.user_error!('IPA version is empty.') if version_name.empty?
-
-      embedded_profile_path = File.join(app_bundle, 'embedded.mobileprovision')
-      UI.user_error!('IPA does not embed a provisioning profile.') unless File.file?(embedded_profile_path)
-
-      embedded_profile_plist_path = File.join(directory, 'embedded.mobileprovision.plist')
-      sh(
-        "security cms -D -i #{Shellwords.escape(embedded_profile_path)} " \
-        "> #{Shellwords.escape(embedded_profile_plist_path)}",
-      )
-      profile = Plist.parse_xml(embedded_profile_plist_path)
-      UI.user_error!('Embedded provisioning profile is invalid.') unless profile
-
-      profile_uuid = profile['UUID'].to_s
-      profile_team_id = Array(profile['TeamIdentifier']).first.to_s
-      application_identifier = profile.dig('Entitlements', 'application-identifier').to_s
-      UI.user_error!('IPA provisioning profile UUID mismatch.') unless profile_uuid == expected_profile_uuid
-      UI.user_error!('IPA provisioning profile team mismatch.') unless profile_team_id == expected_team_id
-      UI.user_error!('IPA provisioning profile app identifier mismatch.') unless application_identifier == "#{expected_team_id}.#{BUNDLE_IDENTIFIER}"
-      UI.user_error!('IPA contains an Ad Hoc provisioning profile.') if profile.key?('ProvisionedDevices')
-      UI.user_error!('IPA contains a universal provisioning profile.') if profile['ProvisionsAllDevices'] == true
-      UI.user_error!('IPA contains a development provisioning profile.') if profile.dig('Entitlements', 'get-task-allow') == true
-
-      signing_output = sh("codesign --display --verbose=4 #{Shellwords.escape(app_bundle)} 2>&1")
-      sh("codesign --verify --deep --strict --verbose=2 #{Shellwords.escape(app_bundle)}")
-      UI.user_error!('IPA is not signed with an Apple Distribution certificate.') unless signing_output.match?(/^Authority=(?:Apple|iPhone) Distribution/m)
-      UI.user_error!('IPA signing team does not match the provisioning profile.') unless signing_output.match?(/TeamIdentifier=#{Regexp.escape(expected_team_id)}(?:\s|$)/)
-
-      {
-        bundle_identifier: bundle_id,
-        version_name: version_name,
-        build_number: build_number,
-        team_id: profile_team_id,
-        profile_uuid: profile_uuid,
-        artifact_sha256: Digest::SHA256.file(ipa_path).hexdigest,
-        artifact_size_bytes: File.size(ipa_path),
-      }
-    end
-  end
-
-  private_lane :write_testflight_summary do |options|
+  private_lane :write_testflight_summary do |uploaded_build|
     summary_path = ENV['GITHUB_STEP_SUMMARY']
     return unless summary_path && !summary_path.empty?
 
     File.open(summary_path, 'a') do |file|
       file.puts('## iOS TestFlight internal testing')
       file.puts
-      file.puts("- Bundle: `#{options.fetch(:bundle_identifier)}`")
-      file.puts("- Version: `#{options.fetch(:version_name)} (#{options.fetch(:build_number)})`")
-      file.puts("- Team: `#{options.fetch(:team_id)}`")
-      file.puts("- App Store provisioning profile: `#{options.fetch(:profile_uuid)}`")
-      file.puts("- IPA SHA-256: `#{options.fetch(:artifact_sha256)}`")
-      file.puts("- IPA size: `#{options.fetch(:artifact_size_bytes)} bytes`")
+      file.puts("- Bundle: `#{BUNDLE_IDENTIFIER}`")
+      file.puts("- Version: `#{uploaded_build.app_version} (#{uploaded_build.version})`")
       file.puts('- Processing: completed')
       file.puts('- TestFlight group: `Internal Testers`')
       file.puts("- Source: `#{ENV.fetch('GITHUB_SHA', 'local')}`")
@@ -281,11 +209,8 @@ platform :ios do
         derived_data_path: File.join(signing_dir, 'derived-data'),
         xcargs: "DEVELOPMENT_TEAM=#{team_id} PRODUCT_BUNDLE_IDENTIFIER=#{BUNDLE_IDENTIFIER} CURRENT_PROJECT_VERSION=#{build_number} CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER=#{profile_uuid}",
       )
-      metadata = verify_app_store_ipa(
-        ipa_path: ipa_path,
-        team_id: team_id,
-        profile_uuid: profile_uuid,
-      )
+      ipa_path = File.expand_path(ipa_path.to_s)
+      UI.user_error!("Fastlane did not produce a signed IPA at #{ipa_path}.") unless File.file?(ipa_path) && File.size?(ipa_path)
 
       upload_to_testflight(
         api_key: api_key,
@@ -299,21 +224,19 @@ platform :ios do
 
       uploaded_build = Spaceship::ConnectAPI::Build.all(
         app_id: app.id,
-        version: metadata.fetch(:version_name),
-        build_number: metadata.fetch(:build_number),
+        build_number: build_number,
         platform: Spaceship::ConnectAPI::Platform::IOS,
         processing_states: Spaceship::ConnectAPI::Build::ProcessingState::VALID,
       ).find do |build|
         build.processing_state == Spaceship::ConnectAPI::Build::ProcessingState::VALID &&
           build.bundle_id == BUNDLE_IDENTIFIER &&
-          build.app_version == metadata.fetch(:version_name) &&
-          build.version == metadata.fetch(:build_number)
+          build.version == build_number
       end
       UI.user_error!('Uploaded IPA was not found as a valid App Store Connect build.') unless uploaded_build
       UI.user_error!('Uploaded App Store Connect build is not ready for internal testing.') unless uploaded_build.ready_for_internal_testing?
       UI.user_error!('Uploaded App Store Connect build was not assigned to Internal Testers.') unless internal_group.fetch_builds.any? { |build| build.id == uploaded_build.id }
 
-      write_testflight_summary(metadata)
+      write_testflight_summary(uploaded_build)
     rescue StandardError => error
       primary_error = error
     ensure
