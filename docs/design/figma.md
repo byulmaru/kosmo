@@ -369,7 +369,7 @@ Loading·Empty·Error·Deleted·Pinned는 기존 route의 state coverage다. rou
 - [`04 Motion · Production`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1772-890) — duration, easing, interaction·overlay·loading과 OS reduced-motion 계약. 상세 규칙은 [motion.md](./motion.md)를 따른다.
 - [`05 Icon Library · Production`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3110-880) — canonical icon source와 semantic action mapping. 상세 규칙은 [icons.md](./icons.md)를 따른다.
 - [`09 Implementation Sync Matrix · DSN-13`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1694-880) — Foundations와 implementation의 이관 상태를 추적하는 matrix
-- [`10 Component Source Usage Mapping · Partial`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1849-883) — source와 실제 consumer의 사용 관계를 추적하는 부분 mapping. `08`의 color 적용표와 다른 계약이며, 최종 coverage 확인은 DSN-37이 소유한다.
+- [`10 Component Source Usage Mapping`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1849-883) — 131개 source owner를 7개 primary family에 한 번씩 배치하고 현재 Figma의 direct·nested instance coverage를 추적한다. runtime/code adoption과 분리하며 `08`의 color 적용표와 합치지 않는다.
 
 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1684-254)은
 top-level이 아니라 `01 Color System · Production` 내부에서 실제 화면과 공용 컴포넌트의 Legacy → Production
@@ -398,6 +398,10 @@ section이 아니라 각 source의 lifecycle 표기로 유지한다.
 - [`05 Post & Composer`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7789-17224) — 36개. Post presentation, action, Composer와 내부 editor helper
 - [`06 Reaction & Media`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7789-17225) — 12개. Reaction, media gallery/viewer와 Search media Candidate
 - [`07 Public & Route State`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7789-17226) — 14개. Public content, standalone route state와 notification helper
+
+`ProfileListItem`의 `Bio=True` source는 bio가 여러 줄로 늘어나도 Avatar와 Follow action을 행 상단에 유지하고,
+divider는 늘어난 source root의 하단 stroke로 유지한다. Figma 임시 3줄 instance로 이 상속만 확인했으며 실제 bio
+다중행 표시·line clamp·접근성 동작은 runtime 후속 범위다.
 
 public source 뒤에 해당 source가 소비하는 private `__` helper를 둔다. 기존 component ID와 instance 연결을
 보존하며 clone·detach·재생성하지 않는다. 7개 section은 `KOSMO Typography`의 `MCP Preview` mode를 사용해
