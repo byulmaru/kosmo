@@ -46,16 +46,14 @@ Kubernetes node 자체와 kubelet을 포함한 node-origin 연결은 이미 node
 
 Admin Console Viewer의 Account 조회 결과는 다음 필드만 사용한다.
 
-### 목록과 기본 검색
+### 목록
 
 - Account ID
 - Account 표시 이름
 - Account State
 - 생성 시각
 
-OIDC subject는 목록 결과에 포함하지 않는다. OIDC subject를 사용한 검색은 전체 값의 exact match만 허용하며,
-부분 문자열·prefix·contains 검색은 제공하지 않는다. exact match 결과도 목록 조회 결과를 사용하고 OIDC
-subject 자체는 상세 조회에서만 반환한다.
+OIDC subject는 목록 결과에 포함하지 않는다.
 
 ### 상세
 
@@ -130,10 +128,10 @@ Membership 결과는 다음을 제공한다.
 
 - credential, Session token, OIDC session key, private key와 같은 값은 마스킹해 반환하지 않고 조회 결과에서
   제외한다.
-- Admin Console v1은 성공 조회, 검색, 상세, 관계 조회를 영속 감사하지 않는다.
+- Admin Console v1은 성공 조회, 상세, 관계 조회를 영속 감사하지 않는다.
 - 접근 거부, trusted proxy 우회 또는 위조 identity header와 같은 Admin-specific security event도 이 정책에서
   기록·보존하지 않는다.
-- identity header, 검색값, 대상·결과와 보존 기간을 별도 계약으로 만들지 않는다.
+- identity header, 대상·결과와 보존 기간을 별도 계약으로 만들지 않는다.
 - 기존 공통 runtime 오류·접근 로그의 생명주기는 이 정책에서 변경하지 않는다.
 
 ## 제외/보류

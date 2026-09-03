@@ -59,11 +59,11 @@ pass-through service를 만들지 않는다. 구현은 [Core 서비스 경계](.
 
 세 projection은 같은 Admin Console Viewer에게 열리지만 응답 책임은 분리한다.
 
-| projection                 | 책임                                        |
-| -------------------------- | ------------------------------------------- |
-| Account                    | Account 목록·상세와 OIDC subject exact 검색 |
-| Profile                    | Profile 목록·상세                           |
-| Account-Profile Membership | 두 객체 사이의 관계와 양방향 탐색           |
+| projection                 | 책임                              |
+| -------------------------- | --------------------------------- |
+| Account                    | Account 목록·상세                 |
+| Profile                    | Profile 목록·상세                 |
+| Account-Profile Membership | 두 객체 사이의 관계와 양방향 탐색 |
 
 Account와 Profile projection은 상대 객체의 존재, Membership, 관계 count를 포함하지 않는다. 관계 정보는 별도
 Membership projection으로만 받는다. selected Profile은 Membership이 아니라 Session 상태이므로 세

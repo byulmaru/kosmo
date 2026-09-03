@@ -23,7 +23,7 @@ Account가 아니라 Profile이다.
 | 표시 이름    | 문자열, 필수     | 신뢰한 OIDC 인증 결과에서 제공된 표시 값을 보존한다                    | 항상      | 대상 Account의 내부 조회 | `Account.Self` 또는 `Account.Operator` |
 | 생성 시각    | 시각, 필수       | 생성 결과로 기록하며 변경 불가                                         | 항상      | 대상 Account의 내부 조회 | `Account.Self` 또는 `Account.Operator` |
 
-Admin Console의 Account 목록·상세와 OIDC subject exact 검색은 일반 Account 조회 권한을 확장하지 않고
+Admin Console의 Account 목록·상세는 일반 Account 조회 권한을 확장하지 않고
 [Admin Console Read Policy](../policies/admin-console-read.md)의 Admin Console Viewer projection으로만 제공한다.
 
 ## 관계
@@ -62,5 +62,3 @@ Account 대상 Operational Notification 읽음 처리는 요청할 수 있다.
 
 - OIDC 인증 수단 자체와 Session credential은 Account 속성이 아니며 [Session](./session.md)과 인증 경계가
   소유한다.
-- Admin Console에서 OIDC subject를 목록이나 부분 검색에 노출하는 것은 제외한다. 전체 subject 상세와 exact
-  검색은 [Admin Console Read Policy](../policies/admin-console-read.md)가 정한 조건을 따른다.
