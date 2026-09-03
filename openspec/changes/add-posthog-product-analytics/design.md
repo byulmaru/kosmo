@@ -2,9 +2,9 @@
 
 Kosmo의 공용 analytics API는 platform file로 Web 구현과 Native no-op을 나눈다. `AppProviders`가 Web client를 초기화하고 `AnalyticsSessionBridge`가 Session의 Account ID를 identify하거나 guest 상태에서 reset한다. 기존 제품 caller는 공용 `trackAnalytics`를 사용한다. Standard event metadata 수집과 Session Replay privacy는 각각의 수집 경계에서 관리한다.
 
-PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Cloud와 build/deployment 공개 설정을 제공한다. PROD-795는 실제 수집 surface와 개인정보 처리방침·runbook을 통합하고, PROD-741은 선행 적용된 Replay의 실제 품질을, PROD-575는 production acceptance와 archive를 소유한다.
+PROD-819는 이 경계를 PostHog Web SDK로 옮겼고, PROD-820은 PostHog Cloud와 build/deployment 공개 설정을 제공했다. 두 결과는 각각 PR #653의 merge commit `2176b7e38`과 PR #685의 merge commit `47fb36f52`로 `main`에 반영됐다. PROD-795는 실제 수집 surface와 개인정보 처리방침·runbook을 통합하고, PROD-741은 선행 적용된 Replay의 실제 품질을, PROD-575는 production acceptance와 archive를 소유한다.
 
-승인된 shared spec 전체는 `PROD-820` / PR #685가 소유하고, `PROD-819` / PR #653는 그 계약을 소비하는 Web runtime 구현을 담당한다. PROD-795·PROD-741·PROD-575가 소유한 개인정보·운영 통합, Replay acceptance, production acceptance와 archive는 이 change가 대신 완료하거나 archive하지 않는다.
+승인된 shared spec 전체는 `PROD-820` / PR #685가 소유했고, `PROD-819` / PR #653은 그 계약을 소비하는 Web runtime 구현을 담당했다. 두 이슈와 PR이 완료·병합됐더라도 PROD-795·PROD-741·PROD-575가 소유한 개인정보·운영 통합, Replay acceptance, production acceptance와 archive까지 완료된 것은 아니다.
 
 현재 metadata 수집 결정의 근거는 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정` 댓글(`59d34cd1-96b2-446f-8a8d-3a48277f285a`)이다. 사용자 정혜주(HJSmiley)는 기존 마스킹 정책을 철회하고 Search `q`, 기본 click ID와 referrer·session에서 파생되는 검색·캠페인 metadata를 표준 metadata로 수집하기로 결정했다. 2026-08-31 마스킹 승인은 Superseded 상태로 이력을 보존하며, 새 결정도 GitHub reviewer signoff나 production acceptance를 대신하지 않는다.
 
@@ -80,7 +80,7 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Clou
 
 ### 현재 기준과 관측값
 
-이 절에서는 [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 `2026-08-31 명세 구체화 범위 확인`을 구체적으로 다룬다. PR #685의 shared spec과 PR #653의 runtime을 바탕으로 하며 SDK·Cloud·build 계약은 새로 결정하지 않는다. 명세 작성 당시 원격 기준은 PROD-820 `0cdf6eb9`, PROD-819 `73f2dfc7`이었고 두 PR은 아직 병합되지 않았다. 구현을 시작할 때 source와 상태를 다시 확인한다.
+이 절에서는 [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 `2026-08-31 명세 구체화 범위 확인`을 구체적으로 다룬다. PR #685의 shared spec과 PR #653의 runtime을 바탕으로 하며 SDK·Cloud·build 계약은 새로 결정하지 않는다. 2026-09-03 KST 기준으로 PROD-820과 PROD-819는 모두 Done이다. PR #685의 merge commit `47fb36f52`와 그 뒤에 병합된 PR #653의 merge commit `2176b7e38`은 `main`과 현재 PROD-795 브랜치의 ancestor다. 구현과 통합 검증에서는 두 merge commit을 모두 포함한 실제 source와 build artifact를 기록한다.
 
 - 현재 공개 개인정보 화면과 운영 문서는 OpenPanel을 설명한다. PostHog로 전환하면서 바꿀 내용은 제공자·처리 위치, 자동 수집·브라우저 저장, 보호 범위, 보존·권리 행사와 운영 절차다. UI 배치와 `/privacy` 진입은 바꾸지 않는다.
 - 2026-08-31 읽기 전용 Cloud 조회로 `Kosmo Production`, `Asia/Seoul`, Replay `session_recording_sample_rate=0.10`, `session_recording_retention_period=30d`와 canonical origin URL trigger를 확인했다. 이는 설정 조회 증거이며 실제 녹화 품질을 인수한 증거는 아니다.
@@ -92,7 +92,7 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Clou
 
 ### 권장 작업 순서
 
-1. 선행 runtime·build commit과 PROD-839 cleanup이 적용되는 release·rebuild·rollback 범위를 식별한다. 선행 PR이 아직 병합되지 않았어도 문서 작성과 검증 준비는 할 수 있지만 cleanup·통합 완료를 선언하지 않는다.
+1. 병합된 runtime·build commit `2176b7e38`·`47fb36f52`와 PROD-839 cleanup이 함께 적용되는 release·rebuild·rollback 범위를 식별한다. 두 선행 PR의 병합만으로 cleanup·통합 완료를 선언하지 않는다.
 2. 수집 표면별 관측 결과를 먼저 정리한 다음 개인정보 화면을 수정한다. 기존 `apps/app/src/app/privacy.tsx`의 분석·위탁·국외 이전·권리 행사 절을 대상으로 하며, 시행일과 일반 이벤트 보존·삭제 및 국외 처리 조건은 아래 미확정 항목을 해결한 뒤 공개 문구로 확정한다.
 3. 기존 `docs/operations/openpanel.md`의 provider 전용 안내와 `production-release.md` 링크를 PostHog 운영 안내로 전환한다. 실제 삭제·장애 대응 절차를 대조하고, PROD-839 gate 전에는 지원 중인 OpenPanel 경로 안내를 제거하지 않는다. 이전 안내는 Git 이력에서 추적할 수 있게 한다.
 4. 기존 unit·browser 검증은 같은 build와 source를 기준으로 재사용한다. 이미 PROD-819에서 확인한 helper 동작을 반복하기보다는 `/flags` 등 빠진 표면과 문서·운영 설정이 맞물리는 경계를 보완한다. 테스트 편의를 위해 production adapter를 바꾸지 않는다.
@@ -121,8 +121,8 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Clou
 
 ## Migration Plan
 
-1. PROD-820에서 Cloud 보호 설정과 공개 build/deployment 주입을 production 배포 전에 준비한다.
-2. PROD-819에서 OpenPanel runtime, manual pageview·filter와 module identity cache를 제거하고 PostHog 표준 runtime으로 전환한다.
+1. 완료 — PROD-820에서 Cloud 보호 설정과 공개 build/deployment 주입을 준비하고 PR #685의 merge commit `47fb36f52`로 `main`에 반영했다.
+2. 완료 — PROD-819에서 OpenPanel runtime, manual pageview·filter와 module identity cache를 제거하고 PostHog 표준 runtime으로 전환해 PR #653의 merge commit `2176b7e38`로 `main`에 반영했다.
 3. PROD-839가 지원 release·rebuild·rollback의 OpenPanel 의존과 외부 설정을 정리한 증거를 확인하고, PROD-795가 production-equivalent build에서 실제 수집 surface, 개인정보 처리방침과 runbook을 통합한다. 그 전에는 문서·검증 준비와 완료 판정을 구분한다.
 4. PROD-741이 Post Media Viewer replay·masking·fail-open을 acceptance 한다.
 5. PROD-575가 production acceptance 후 old OpenPanel change를 `--skip-specs`로 archive하고 이 change를 정상 archive한다.
