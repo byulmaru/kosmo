@@ -19,7 +19,6 @@ jobs:
     timeout-minutes: 60
     environment: prod
     env:
-      ANDROID_RELEASE_CERTIFICATE_SHA256: ${{ vars.ANDROID_RELEASE_CERTIFICATE_SHA256 }}
       ANDROID_RELEASE_KEY_ALIAS: ${{ vars.ANDROID_RELEASE_KEY_ALIAS }}
       EXPO_NO_GIT_STATUS: '1'
       GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
@@ -48,18 +47,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install bundletool
-        shell: bash
-        run: |
-          set -euo pipefail
-          bundletool_path="${RUNNER_TEMP}/bundletool-all-1.18.3.jar"
-          curl --fail --silent --show-error --location \
-            --output "${bundletool_path}" \
-            "https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar"
-          echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  ${bundletool_path}" \
-            | sha256sum --check --strict
-          echo "ANDROID_BUNDLETOOL_JAR=${bundletool_path}" >> "${GITHUB_ENV}"
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
 
@@ -68,18 +55,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:?Android SDK root is required}}"
           sdkmanager --install \
             "platforms;android-36" \
             "build-tools;36.0.0" \
             "ndk;27.1.12297006" \
             "cmake;3.22.1"
-
-          export PATH="${sdk_root}/cmdline-tools/latest/bin:${sdk_root}/build-tools/36.0.0:${PATH}"
-          test -x "${sdk_root}/build-tools/36.0.0/aapt2"
-          {
-            echo "ANDROID_SDK_ROOT=${sdk_root}"
-          } >> "${GITHUB_ENV}"
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -110,7 +90,6 @@ jobs:
           set -euo pipefail
 
           for name in \
-            ANDROID_RELEASE_CERTIFICATE_SHA256 \
             ANDROID_RELEASE_KEY_ALIAS \
             GCP_SERVICE_ACCOUNT \
             GCP_WORKLOAD_IDENTITY_PROVIDER; do
@@ -122,12 +101,6 @@ jobs:
 
           if [[ "${ANDROID_RELEASE_KEY_ALIAS}" == *$'\n'* || "${ANDROID_RELEASE_KEY_ALIAS}" == *$'\r'* ]]; then
             echo "::error::ANDROID_RELEASE_KEY_ALIAS must not contain line breaks."
-            exit 1
-          fi
-
-          certificate="${ANDROID_RELEASE_CERTIFICATE_SHA256//:/}"
-          if [[ ! "${certificate}" =~ ^[0-9A-Fa-f]{64}$ ]]; then
-            echo "::error::ANDROID_RELEASE_CERTIFICATE_SHA256 must be a SHA-256 fingerprint."
             exit 1
           fi
 
@@ -228,57 +201,6 @@ jobs:
           pnpm relay
           pnpm exec expo prebuild --clean --platform android --no-install
 
-      - name: Build signed Release AAB
-        working-directory: apps/app/android
-        run: ./gradlew :app:bundleRelease --no-daemon
-
-      - name: Verify Release AAB
-        id: verify
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          aab_path="${KOSMO_ANDROID_AAB_PATH}"
-          test -s "${aab_path}"
-          unzip -Z1 "${aab_path}" | grep -Fxq 'base/manifest/AndroidManifest.xml'
-
-          read_manifest_value() {
-            java -jar "${ANDROID_BUNDLETOOL_JAR}" dump manifest \
-              --bundle="${aab_path}" \
-              --module=base \
-              --xpath="$1" \
-              | tr -d '\r\n'
-          }
-          package_name="$(read_manifest_value '/manifest/@package')"
-          version_code="$(read_manifest_value '/manifest/@android:versionCode')"
-          version_name="$(read_manifest_value '/manifest/@android:versionName')"
-          [[ "${package_name}" == 'moe.kos' ]] || { echo "::error::AAB package is ${package_name}."; exit 1; }
-          [[ "${version_code}" == "${KOSMO_ANDROID_VERSION_CODE}" ]] || { echo "::error::AAB versionCode is ${version_code}."; exit 1; }
-          [[ -n "${version_name}" ]] || { echo "::error::AAB versionName is empty."; exit 1; }
-
-          jarsigner_output="$(LC_ALL=C jarsigner -verify "${aab_path}" 2>&1)"
-          if ! grep -Fq 'jar verified.' <<< "${jarsigner_output}"; then
-            echo "::error::AAB signature verification did not report a verified JAR."
-            printf '%s\n' "${jarsigner_output}"
-            exit 1
-          fi
-          actual_certificate="$(LC_ALL=C keytool -printcert -jarfile "${aab_path}" | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1 | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
-          expected_certificate="${ANDROID_RELEASE_CERTIFICATE_SHA256//:/}"
-          expected_certificate="${expected_certificate^^}"
-          [[ "${actual_certificate}" =~ ^[0-9A-F]{64}$ ]] || { echo "::error::AAB signing certificate was not found."; exit 1; }
-          [[ "${actual_certificate}" == "${expected_certificate}" ]] || { echo "::error::AAB signing certificate fingerprint mismatch."; exit 1; }
-
-          artifact_sha256="$(shasum -a 256 "${aab_path}" | awk '{print $1}')"
-          artifact_size_bytes="$(wc -c < "${aab_path}" | tr -d '[:space:]')"
-          {
-            echo "package_name=${package_name}"
-            echo "version_code=${version_code}"
-            echo "version_name=${version_name}"
-            echo "certificate_sha256=${actual_certificate}"
-            echo "artifact_sha256=${artifact_sha256}"
-            echo "artifact_size_bytes=${artifact_size_bytes}"
-          } >> "${GITHUB_OUTPUT}"
-
       - name: Authenticate to Google Cloud for Play upload
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
@@ -288,30 +210,27 @@ jobs:
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
 
-      - name: Upload AAB to Play internal testing
+      - name: Build and upload signed Release AAB with Fastlane
         working-directory: apps/app
-        run: bundle exec fastlane android upload_internal
+        run: bundle exec fastlane android distribute_internal
 
       - name: Write Actions summary
         if: success()
-        env:
-          ARTIFACT_SHA256: ${{ steps.verify.outputs.artifact_sha256 }}
-          ARTIFACT_SIZE_BYTES: ${{ steps.verify.outputs.artifact_size_bytes }}
-          CERTIFICATE_SHA256: ${{ steps.verify.outputs.certificate_sha256 }}
-          PACKAGE_NAME: ${{ steps.verify.outputs.package_name }}
-          VERSION_CODE: ${{ steps.verify.outputs.version_code }}
-          VERSION_NAME: ${{ steps.verify.outputs.version_name }}
         shell: bash
         run: |
           set -euo pipefail
+          aab_path="${KOSMO_ANDROID_AAB_PATH}"
+          test -s "${aab_path}"
+          artifact_sha256="$(shasum -a 256 "${aab_path}")"
+          artifact_sha256="${artifact_sha256%% *}"
+          artifact_size_bytes="$(wc -c < "${aab_path}" | tr -d '[:space:]')"
           {
             echo '## Android Google Play internal testing'
             echo
-            echo "- Package: \`${PACKAGE_NAME}\`"
-            echo "- Version: \`${VERSION_NAME} (${VERSION_CODE})\`"
-            echo "- Upload certificate SHA-256: \`${CERTIFICATE_SHA256}\`"
-            echo "- AAB SHA-256: \`${ARTIFACT_SHA256}\`"
-            echo "- AAB size: \`${ARTIFACT_SIZE_BYTES} bytes\`"
+            echo '- Package: moe.kos'
+            echo "- Version code: \`${KOSMO_ANDROID_VERSION_CODE}\`"
+            echo "- AAB SHA-256: \`${artifact_sha256}\`"
+            echo "- AAB size: \`${artifact_size_bytes} bytes\`"
             echo "- Source: \`${GITHUB_SHA}\`"
             echo "- Workflow: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           } >> "${GITHUB_STEP_SUMMARY}"
