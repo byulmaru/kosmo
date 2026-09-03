@@ -237,7 +237,7 @@ export const PendingSelectionContract: Story = {
     await waitFor(() => expect(args.onSelectProfile).toHaveBeenCalledOnce());
     expect(args.onSelectProfile).toHaveBeenLastCalledWith('profile-remote');
     await waitFor(() => expect(trigger).not.toBeDisabled());
-    expect(trigger).toHaveFocus();
+    await waitFor(() => expect(trigger).toHaveFocus());
   },
 };
 
@@ -270,7 +270,7 @@ export const FailureAndCancelContract: Story = {
 
     await userEvent.keyboard('{Escape}');
     expect(canvas.queryByLabelText('프로필 전환')).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
+    await waitFor(() => expect(trigger).toHaveFocus());
     expect(body).toHaveValue('프로필을 바꿔도 유지되는 본문');
     expect(canvas.getByLabelText('전역 활성 프로필')).toHaveTextContent('코스모 작가 @kosmo');
   },
