@@ -69,7 +69,7 @@ base64 결과와 password는 shell history, 저장소, GitHub 로그에 남기�
 
 ## iOS TestFlight internal distribution
 
-`iOS TestFlight Internal Distribution`은 `main`에서 수동 실행하는 protected workflow다. 기존 `prod` GitHub Environment의 승인을 거쳐 clean Expo CNG iOS project를 만들고, App Store 배포용 profile과 Apple Distribution certificate로 서명한 archive를 검증·업로드한다. 이 경로는 기존 `native-test-distribution`, `ios-device-onboarding`, Firebase, fastlane Match 값을 재사용하지 않는다.
+`iOS TestFlight Internal Distribution`은 `main`에서 수동 실행하는 protected workflow다. 기존 `prod` GitHub Environment의 승인을 거쳐 clean Expo CNG iOS project를 만들고, App Store 배포용 profile과 Apple Distribution certificate로 서명한 archive를 검증·업로드한다. 이 경로는 기존 `native-test-distribution`, `ios-device-onboarding`, Firebase, fastlane Match 값을 재사용하지 않는다. 앱은 `expo-secure-store`의 Keychain 저장소를 사용하지만 현재 비면제 암호화를 사용하지 않으므로 `ios.config.usesNonExemptEncryption`을 `false`로 설정한다. 이후 별도 암호화 기능이나 암호화 라이브러리를 추가하면 이 판단과 App Store Connect 수출 규정 응답을 다시 검토해야 한다.
 
 ### One-time administrator setup
 
@@ -97,9 +97,9 @@ GitHub Actions에서는 새 environment를 만들지 않고 기존 `prod`를 사
 
 ### First upload and verification
 
-`main`에서 workflow를 dispatch하고 `prod` deployment를 승인한다. workflow는 bundle ID, profile의 Team ID, certificate, version/build metadata를 확인한 뒤 signed IPA 하나만 App Store Connect에 업로드하고, Actions summary에 revision, version/build, processing 상태와 `Internal Testers` group 결과를 남긴다. App Store Connect에서 업로드한 build가 Processing을 끝내고 TestFlight 내부 그룹에 배포되는지 확인한다.
+`main`에서 workflow를 dispatch하고 `prod` deployment를 승인한다. 첫 실행 전에 위의 Apple 계약·앱 레코드·서명 자산·App Manager API key·`Internal Testers` group과 Vault six fields가 준비되어 있어야 한다. 수출 규정 응답은 현재 설정(`ios.config.usesNonExemptEncryption: false`)에 맞춰 비면제 암호화를 사용하지 않는 것으로 확인한다. workflow는 bundle ID, profile의 Team ID, certificate, version/build metadata를 확인한 뒤 signed IPA 하나만 App Store Connect에 업로드하고, Actions summary에 revision, version/build, processing 상태와 `Internal Testers` group 결과를 남긴다. App Store Connect에서 업로드한 build가 Processing을 끝내고 TestFlight 내부 그룹에 배포되는지 확인한다.
 
-현재 확인되지 않은 운영 게이트는 live Vault role/policy의 allow/deny, 위 six fields의 실제 존재, 첫 upload와 App Store Connect processing/group assignment 결과다. 이 문서와 코드만으로 해당 게이트가 완료됐다고 간주하지 않는다.
+현재 확인되지 않은 운영 게이트는 live workflow JWT에 대한 Vault role/policy의 allow/deny와 첫 upload, App Store Connect processing/group assignment 결과다. 이 문서와 코드만으로 해당 게이트가 완료됐다고 간주하지 않는다.
 
 ### Rotation and revoke
 
