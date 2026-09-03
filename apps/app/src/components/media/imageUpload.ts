@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { asImageUploadError, assertImageUploadResponse } from './imageUploadErrors';
+import {
+  asImageUploadError,
+  assertImageUploadResponse,
+  ImageUploadError,
+} from './imageUploadErrors';
 import type { ImageRef } from 'expo-image-manipulator';
 import type { ImagePickerAsset } from 'expo-image-picker';
 
@@ -116,6 +120,16 @@ export async function uploadImage({
 }): Promise<string | null> {
   if (!isActive()) {
     return null;
+  }
+
+  if (
+    asset.file &&
+    ([asset.mimeType, asset.file.type].some((mimeType) =>
+      ['image/heic', 'image/heif'].includes(mimeType?.toLowerCase() ?? ''),
+    ) ||
+      /\.(heic|heif)$/i.test(asset.file.name))
+  ) {
+    throw new ImageUploadError({ reason: 'unsupported-format', stage: 'transfer' });
   }
 
   let issued: IssuedImageUpload;

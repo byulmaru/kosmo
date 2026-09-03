@@ -244,6 +244,53 @@ test('uses decoded dimensions for clipboard assets whose metadata is 0x0', async
 
 for (const testCase of [
   {
+    fileName: 'image.heic',
+    fileType: 'image/heic',
+    mimeType: 'image/jpeg',
+    name: 'file MIME type',
+  },
+  {
+    fileName: 'image.heic',
+    fileType: 'image/jpeg',
+    mimeType: 'IMAGE/HEIF',
+    name: 'asset MIME type case-insensitively',
+  },
+  { fileName: 'image.HEIF', fileType: '', mimeType: '', name: 'file extension' },
+] as const) {
+  test(`rejects Web ${testCase.name} before issuing an upload`, async (t) => {
+    let issueCalled = false;
+    const fetchMock = t.mock.method(globalThis, 'fetch', async () => {
+      throw new Error('fetch must not run');
+    });
+    createManipulatorContext = () => {
+      throw new Error('normalization must not run');
+    };
+
+    await assert.rejects(
+      uploadImage({
+        asset: createAsset({
+          file: new File(['image'], testCase.fileName, { type: testCase.fileType }),
+          mimeType: testCase.mimeType,
+        }),
+        complete: async () => undefined,
+        isActive: () => true,
+        issue: async () => {
+          issueCalled = true;
+          return { mediaId: 'media-unsupported', uploadUrl: 'https://upload.example/unsupported' };
+        },
+      }),
+      (error: unknown) =>
+        error instanceof ImageUploadError &&
+        error.failure.stage === 'transfer' &&
+        error.failure.reason === 'unsupported-format',
+    );
+    assert.equal(issueCalled, false);
+    assert.equal(fetchMock.mock.callCount(), 0);
+  });
+}
+
+for (const testCase of [
+  {
     dimensions: { height: 2000, width: 3000 },
     expectedResizeCalls: [{ height: 1365, width: 2048 }],
     name: 'keeps decoded landscape ratio when resizing to the maximum dimension',
