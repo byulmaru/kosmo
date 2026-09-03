@@ -23,7 +23,7 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 
 ## Android Google Play internal testing
 
-`Android Google Play Internal Distribution`은 `main`에서만 수동 실행하는 protected workflow다. 매 실행마다 clean CNG Android project를 만들고, upload key로 서명한 Release AAB 하나를 빌드·검증한 뒤 Google Play internal track에 업로드한다. versionCode는 workflow 시작 시 UTC Unix seconds에서 `2020-01-01`을 뺀 값으로 계산하며, 첫 수동 release의 versionCode `1`보다 크고 Android signed 32-bit 범위 안에 있다. Play API를 미리 조회하거나 장기 credential을 저장하지 않는다.
+`Android Google Play Internal Distribution`은 `main`에서만 수동 실행하는 protected workflow다. 매 실행마다 clean CNG Android project를 만들고, Fastlane이 upload key로 서명한 Release AAB를 빌드해 Google Play internal track에 업로드한다. Play가 package name, versionCode, upload certificate를 검증한다. versionCode는 workflow 시작 시 UTC Unix seconds에서 `2020-01-01`을 뺀 값으로 계산하며, 첫 수동 release의 versionCode `1`보다 크고 Android signed 32-bit 범위 안에 있다. Play API를 미리 조회하거나 장기 credential을 저장하지 않는다.
 
 첫 배포 전에는 Play Console에서 다음 절차를 수동으로 완료해야 한다. CI가 Play Console의 최초 app/signing bootstrap을 대신하지 않는다.
 
@@ -33,12 +33,11 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 4. [Terraform outputs](../terraform/README.md)의 `android_play_service_account` service account를 Play Console Users and permissions에 추가하고 `Release apps to testing tracks` 권한만 부여한다.
 5. 기존 승인형 `prod` GitHub Environment에 다음 non-secret variable만 넣는다. 새 Environment는 만들지 않는다.
 
-| 이름                                 | 종류     | 값                                                              |
-| ------------------------------------ | -------- | --------------------------------------------------------------- |
-| `GCP_SERVICE_ACCOUNT`                | variable | `terraform output -raw android_play_service_account`            |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER`     | variable | `terraform output -raw android_play_workload_identity_provider` |
-| `ANDROID_RELEASE_KEY_ALIAS`          | variable | upload key 생성 시 사용한 alias                                 |
-| `ANDROID_RELEASE_CERTIFICATE_SHA256` | variable | upload certificate의 SHA-256 fingerprint                        |
+| 이름                             | 종류     | 값                                                              |
+| -------------------------------- | -------- | --------------------------------------------------------------- |
+| `GCP_SERVICE_ACCOUNT`            | variable | `terraform output -raw android_play_service_account`            |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | variable | `terraform output -raw android_play_workload_identity_provider` |
+| `ANDROID_RELEASE_KEY_ALIAS`      | variable | upload key 생성 시 사용한 alias                                 |
 
 6. upload keystore와 두 password는 GitHub에 저장하지 않고 Vault에 저장한다. 운영자가 Vault CLI/UI에서 사용하는 KV v2 logical path는 `secret/kosmo/prod/android-play`다. Workflow와 Vault ACL policy에서 사용하는 KV v2 API path는 `secret/data/kosmo/prod/android-play`이며, `/data/`는 CLI/UI logical path에 포함하지 않는다. 다음 field를 만들고, `kosmo-android-play` GitHub OIDC role이 이 API path를 읽도록 한다.
 
@@ -65,7 +64,7 @@ keytool -list -v -keystore kosmo-android-upload.jks
 base64 < kosmo-android-upload.jks | tr -d '\n'
 ```
 
-base64 결과와 password는 shell history, 저장소, GitHub 로그에 남기지 말고 위 Vault field에만 기록한다. `ANDROID_RELEASE_CERTIFICATE_SHA256`은 Play Console에 등록한 upload certificate와 일치해야 한다. upload key를 바꿀 때는 Vault field만 교체하지 말고 Play Console의 upload key reset 절차를 먼저 완료한다. 실제 Play Store 설치·업데이트·실기기 launch와 native login/GraphQL 검증은 PROD-287의 책임이며, 이 workflow는 API/OIDC 환경값이나 ADB/device smoke를 요구하지 않는다.
+base64 결과와 password는 shell history, 저장소, GitHub 로그에 남기지 말고 위 Vault field에만 기록한다. upload key를 바꿀 때는 Vault field만 교체하지 말고 Play Console의 upload key reset 절차를 먼저 완료한다. 실제 Play Store 설치·업데이트·실기기 launch와 native login/GraphQL 검증은 PROD-287의 책임이며, 이 workflow는 API/OIDC 환경값이나 ADB/device smoke를 요구하지 않는다.
 
 ## iOS Ad Hoc Firebase distribution
 
