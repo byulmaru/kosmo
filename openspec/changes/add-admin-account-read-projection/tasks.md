@@ -73,5 +73,5 @@ Account read projection이 기존 Admin runtime과 repository 검증 경계에�
 - PR head의 GitHub CI 결과를 확인한다.
 
 - [x] 3.1 canonical 문서와 dependency·build 구성을 구현과 일치시킨다.
-- [ ] 3.2 로컬 repository 검증을 통과시킨다.
-- [ ] 3.3 GitHub Stack PR을 게시하고 새 head의 CI를 통과시킨다.
+- [x] 3.2 로컬 repository 검증을 통과시킨다.
+- [x] 3.3 GitHub Stack PR을 게시하고 새 head의 CI를 통과시킨다.
