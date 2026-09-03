@@ -79,6 +79,12 @@ const config = ts.config(
     },
   },
   {
+    files: ['**/*.svelte.{js,ts}'],
+    languageOptions: {
+      parser: ts.parser,
+    },
+  },
+  {
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
