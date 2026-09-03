@@ -6,7 +6,7 @@ import {
   PublicPolicyDocument,
 } from '@/components/public-policy/PublicPolicyDocument';
 
-const EFFECTIVE_DATE = '2026년 9월 9일';
+const EFFECTIVE_DATE = '별도 공지';
 const POLICY_TITLE = 'Kosmo 개인정보 처리방침';
 
 export default function PrivacyScreen() {
@@ -66,17 +66,16 @@ export default function PrivacyScreen() {
             목적: 기능 이용 현황 파악, 사용자 흐름 개선, 품질 문제 확인과 제품 우선순위 결정
           </PolicyBullet>
           <PolicyBullet>
-            항목: 아래 9절의 OpenPanel 자동 수집 정보, Account·Profile ID, 행동 이벤트와 session
-            replay
+            항목: 아래 9절의 PostHog 자동 수집 정보와 원격 설정 요청 정보, opaque Account ID,
+            이벤트별 선택 Profile ID, 행동 이벤트와 Session Replay
           </PolicyBullet>
           <PolicyBullet>
-            법적 근거: 개인정보 보호법 제15조 제1항 제6호(서비스 개선을 위한 정당한 이익). 별마루는
-            원문 입력과 게시글 본문을 replay에서 가리고 10%만 표본 수집하는 등 이용자 권리 침해를
-            줄입니다.
+            별마루는 원문 입력과 게시글 본문을 Replay에서 보호하고 10%만 표본 수집하는 등 이용자
+            권리 침해를 줄입니다.
           </PolicyBullet>
           <PolicyBullet>
-            보유: 분석 목적 달성, OpenPanel project 삭제, 계정 삭제 또는 이용자의 삭제 요청 중 먼저
-            도달한 때까지. Session replay는 수집일부터 30일입니다.
+            보유: 일반 이벤트의 보유·삭제 조건은 확인된 PostHog 정책과 적용 법령에 따릅니다. Session
+            Replay는 수집일부터 30일입니다.
           </PolicyBullet>
         </PolicyCard>
         <PolicyCard title="문의와 권리 행사 처리">
@@ -95,7 +94,7 @@ export default function PrivacyScreen() {
         <PolicyParagraph>
           별마루 ID 로그인과 Kosmo 이용 과정에서 이용자가 직접 입력하거나 서비스 동작으로 생성되는
           정보를 수집합니다. 문의를 보내는 경우 이메일을 통해 정보를 수집합니다. Web 분석 정보는
-          브라우저의 OpenPanel SDK가 자동으로 수집합니다.
+          브라우저의 PostHog Web SDK가 자동으로 수집합니다.
         </PolicyParagraph>
       </PolicySection>
 
@@ -118,9 +117,9 @@ export default function PrivacyScreen() {
         <PolicyBullet>Amazon Web Services, Inc.: 서비스 인프라 운영과 데이터 보관</PolicyBullet>
         <PolicyBullet>Oracle Corporation: 서비스 인프라 운영과 데이터 보관</PolicyBullet>
         <PolicyBullet>Cloudflare, Inc.: 네트워크 전송, 보안과 콘텐츠 제공</PolicyBullet>
+        <PolicyBullet>PostHog, Inc.: 제품 이용 분석과 Session Replay 서비스</PolicyBullet>
         <PolicyParagraph>
-          OpenPanel은 별마루가 직접 운영하는 분석 서비스이며 별도 분석 사업자에게 정보를 제공하지
-          않습니다.
+          PostHog Cloud에서 수집되는 제품 분석 및 Session Replay 정보는 9절에 설명합니다.
         </PolicyParagraph>
       </PolicySection>
 
@@ -131,6 +130,11 @@ export default function PrivacyScreen() {
           보안을 위해 서비스 이용 시 암호화된 네트워크로 전송됩니다. 개인정보 보호법 제28조의8 제1항
           제3호 가목에 따른 계약 이행 목적의 처리위탁으로서, 위탁계약 종료 또는 처리 목적 달성
           시까지 보유됩니다.
+        </PolicyParagraph>
+        <PolicyParagraph>
+          PostHog Cloud 이용 과정에서 9절의 제품 분석 정보가 미국의 PostHog, Inc.
+          (privacy@posthog.com)로 서비스 이용 시 암호화된 네트워크를 통해 지속적으로 이전되어 제품
+          이용 분석과 Session Replay 제공을 위해 처리됩니다.
         </PolicyParagraph>
         <PolicyParagraph>
           이용자는 hello@byulmaru.co로 국외 이전 거부를 요청할 수 있습니다. 이전을 거부하면 Kosmo의
@@ -161,7 +165,7 @@ export default function PrivacyScreen() {
           사유를 안내합니다.
         </PolicyParagraph>
         <PolicyParagraph>
-          OpenPanel 분석 데이터의 열람·삭제·처리정지도 같은 연락처로 요청할 수 있습니다. 별도 설정
+          PostHog 분석 데이터의 열람·삭제·처리정지도 같은 연락처로 요청할 수 있습니다. 별도 설정
           화면을 제공하기 전에는 브라우저의 추적 차단 기능으로 전송을 제한할 수도 있으며, 이 경우
           Kosmo의 핵심 기능은 계속 이용할 수 있습니다.
         </PolicyParagraph>
@@ -176,24 +180,41 @@ export default function PrivacyScreen() {
       </PolicySection>
 
       <PolicySection title="9. 자동 수집 정보와 행태정보">
-        <PolicyCard title="OpenPanel 제품 분석">
-          <PolicyBullet>운영 주체: 별마루가 직접 운영하는 OpenPanel</PolicyBullet>
+        <PolicyCard title="PostHog 제품 분석">
+          <PolicyBullet>운영 주체: PostHog, Inc.가 제공하는 PostHog Cloud</PolicyBullet>
           <PolicyBullet>
-            수집 항목: 전체 URL과 query, 페이지 title, referrer, 외부 링크 URL과 표시 텍스트,
-            기기·OS·브라우저 정보, 접속 일시, 익명 device/session ID
+            수집 항목: pageview·pageleave·autocapture 등 표준 event, 페이지 URL·query·referrer·session
+            metadata, 기기·OS·브라우저 정보, 접속 일시, 익명 device/session ID
+          </PolicyBullet>
+          <PolicyBullet>
+            표준 metadata에는 query의 q, 기본 click ID, referrer·session에서 파생된 검색·캠페인
+            metadata와 utm_*가 포함될 수 있습니다. 앱의 명시적 검색 이벤트에는 검색 원문과 선택한
+            Profile ID를 넣지 않습니다.
           </PolicyBullet>
           <PolicyBullet>
             로그인 후 연결 정보: opaque Account ID와 이벤트 발생 시 선택 Profile ID. 이메일, 이름과
             handle은 identity trait로 보내지 않습니다.
           </PolicyBullet>
           <PolicyBullet>
-            행동 이벤트: Profile 생성·선택, 게시, 팔로우, 검색 제출·결과 load·결과 선택. 명시적 검색
-            이벤트에는 검색 원문과 선택한 Profile ID를 넣지 않습니다.
+            행동 이벤트: Profile 생성·선택, 게시, 팔로우, 검색 제출·결과 load·결과 선택 등 타입이
+            지정된 이벤트를 수집합니다. 앱이 보내는 검색 이벤트의 별도 속성에는 검색 원문을 추가하지
+            않습니다.
           </PolicyBullet>
           <PolicyBullet>
-            Session replay: 세션의 10%에서 화면 전환, 클릭, 스크롤과 렌더링 상태를 기록합니다. 모든
-            input·textarea 값은 마스킹하고 게시글 본문 영역은 기록에서 제외하지만 표시명, handle과
-            그 밖의 화면 텍스트는 보일 수 있습니다.
+            검색 입력 위험: q는 자유 형식이어서 예상하지 못한 개인정보가 입력될 수 있습니다. 현재
+            검색 결과는 공개 Profile handle로 한정하며, 게시물·본문·전문 검색 등으로 범위를 넓히기
+            전에 수집 결정을 다시 검토합니다.
+          </PolicyBullet>
+          <PolicyBullet>원격 설정: feature flag와 remote config 요청이 발생할 수 있습니다.</PolicyBullet>
+          <PolicyBullet>
+            Session Replay: 세션의 10%를 표본 수집하고 30일 보관합니다. Cloud Normal input masking으로
+            input·textarea 값을 가립니다. 화면의 모든 텍스트·이미지가 자동으로 masking된다는 의미는
+            아닙니다.
+          </PolicyBullet>
+          <PolicyBullet>
+            보호 경계: 게시물 본문 보호 영역의 ph-mask는 Replay에서 해당 영역의 텍스트를 masking하고,
+            ph-no-capture는 해당 DOM subtree를 autocapture에서 제외합니다. 두 marker는 화면 전체, URL
+            metadata 또는 네트워크 요청 전체를 가리지 않습니다.
           </PolicyBullet>
           <PolicyBullet>
             방법과 통제: Web SDK로 자동 수집하며 맞춤형 광고나 제3자 광고 제공에 사용하지 않습니다.
@@ -201,8 +222,10 @@ export default function PrivacyScreen() {
           </PolicyBullet>
         </PolicyCard>
         <PolicyParagraph>
-          로그인 유지와 보안을 위해 cookie 또는 브라우저 저장소를 사용할 수 있습니다. 이를
-          차단하거나 삭제하면 로그인 유지 등 일부 기능이 제한될 수 있습니다.
+          로그인 유지와 보안을 위한 저장 정보와 PostHog 분석용 cookie·localStorage 정보는 서로 다른
+          목적입니다. 분석용 저장을 차단하거나 삭제하면 분석의 연속성이 제한될 수 있지만 Kosmo의
+          핵심 기능은 계속 이용할 수 있습니다. 로그인용 저장까지 차단하거나 삭제하면 로그인 유지 등
+          일부 기능이 제한될 수 있습니다.
         </PolicyParagraph>
       </PolicySection>
 
