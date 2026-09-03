@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 기존 Linear `PROD-819`, `PROD-820`, `PROD-795`, `PROD-741`, `PROD-575` 결정과 2026-09-02 `PROD-819`·`PROD-820`의 검색·캠페인 metadata 비마스킹 결정을 반영하며, `docs/design/breakpoints.md`의 Web/Native 경계를 따른다. 2026-08-31 마스킹 승인은 Superseded 상태로 보존한다. 제품 동작의 authority는 Linear 결정이며, 리뷰 의견은 구현 보완의 계기일 뿐 제품 계약의 근거가 아니다.
+이 기록은 기존 Linear `PROD-819`, `PROD-820`, `PROD-795`, `PROD-741`, `PROD-575` 결정과 2026-09-02 `PROD-819`·`PROD-820`의 검색·캠페인 metadata 비마스킹 결정을 반영하며, `docs/design/breakpoints.md`의 Web/Native 경계를 따른다. PROD-820/PR #685와 PROD-819/PR #653는 각각 merge commit `47fb36f52`와 `2176b7e38`로 `main`에 반영됐다. 2026-08-31 마스킹 승인은 Superseded 상태로 보존한다. 제품 동작의 authority는 Linear 결정이며, PR과 리뷰 의견은 구현·병합 증거와 구현 보완의 계기일 뿐 제품 계약의 근거가 아니다.
 
 ## Decision Records
 
@@ -14,7 +14,7 @@
 - Decision Outcome: `PROD-820` / PR #685가 이 승인된 shared spec 전체와 Cloud·build/deployment slice를 소유한다. `PROD-819` / PR #653는 shared spec을 소비하는 Web runtime slice를 소유한다. PROD-795는 개인정보·운영 통합, PROD-741은 replay acceptance, PROD-575는 production acceptance와 archive를 소유한다. 이 change는 이 세 downstream 결과를 대신 완료하거나 archive하지 않는다.
 - Alternatives Considered: 부모 이슈나 마지막 PR에 모든 책임을 결합하는 방식은 독립 배포·검증 경계와 맞지 않아 제외했다.
 - Consequences: 각 PR은 자체 범위를 Ready로 만들 수 있지만 개별 완료를 shared change archive로 해석하지 않는다.
-- Confirmation / Follow-up: tasks와 PR 본문이 각 owner와 남은 gate를 명시한다.
+- Confirmation / Follow-up: PROD-820/PR #685와 PROD-819/PR #653는 각각 merge commit `47fb36f52`와 `2176b7e38`로 `main`에 반영됐다. tasks와 PR 본문은 PROD-795·741·575의 남은 gate와 owner를 계속 구분한다.
 
 ### OpenPanel dual-write 없이 PostHog로 교체한다
 

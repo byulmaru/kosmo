@@ -1,9 +1,9 @@
 **Shared spec ownership**
 
-- `PROD-820` / PR #685가 이 승인된 shared spec 전체를 소유한다. `PROD-819` / PR #653는 그 계약을 소비하는 Web runtime 구현을 소유한다.
+- `PROD-820` / PR #685가 이 승인된 shared spec 전체를 소유했고 merge commit `47fb36f52`로 `main`에 반영됐다. `PROD-819` / PR #653은 그 계약을 소비하는 Web runtime 구현을 소유했고 merge commit `2176b7e38`로 `main`에 반영됐다. 두 Linear 이슈는 Done이다.
 - 현재 metadata 수집 결정은 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정` 댓글(`59d34cd1-96b2-446f-8a8d-3a48277f285a`)을 근거로 한다. 사용자 정혜주(HJSmiley)가 2026-08-31 마스킹 승인을 대체했으며, 이 결정은 GitHub reviewer signoff나 production acceptance가 아니다.
 - `PROD-795`, `PROD-741`, `PROD-575`가 각각 개인정보·운영 통합, Replay acceptance, production acceptance와 archive를 소유한다. 이 change는 해당 결과를 대신 완료하거나 archive하지 않는다.
-- 그룹 6은 `PROD-795`의 `2026-08-31 명세 구체화 범위 확인`을 반영한 후속 상세 명세다. 선행 shared spec과 그룹 1~5, 후속 그룹 7~8의 소유권·완료 상태는 바꾸지 않는다.
+- 그룹 6은 `PROD-795`의 `2026-08-31 명세 구체화 범위 확인`을 반영한 후속 상세 명세다. 완료·병합된 그룹 1~5의 결과를 입력으로 사용하며, 후속 그룹 7~8의 소유권·완료 상태는 바꾸지 않는다.
 
 ## 1. PROD-820 Cloud project와 privacy controls
 
@@ -142,14 +142,14 @@ PostHog의 `defaults: '2026-05-30'` 표준 pageview·pageleave·autocapture·met
 
 **Deliverable**
 
-Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web build에 함께 주입하고, 기존 consumer가 main에 남은 전환 기간에는 OpenPanel production 주입도 유지한다.
+Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web build에 함께 주입한다. PROD-819 consumer가 병합되기 전까지는 OpenPanel production 주입을 유지했고, 병합 뒤 지원 release·rebuild·rollback과 외부 설정의 cleanup은 PROD-839에 남긴다.
 
 **Guardrails**
 
 - 공개 key·host는 일반 build args와 GitHub repository variables로 전달하고 cache key·build provenance에서 숨기지 않는다.
 - 조회·관리 credential은 repository·CI log·build provenance·image artifact에 포함하지 않는다.
 - key 또는 host가 부분적으로만 제공되면 PostHog adapter는 no-op이어야 한다.
-- `PROD-819` consumer가 반영되기 전에 OpenPanel production 주입을 제거하지 않는다. 제거는 PROD-839가 소유한다.
+- `PROD-819` consumer는 merge commit `2176b7e38`로 `main`에 반영됐다. OpenPanel production 주입과 외부 설정 제거는 PROD-839가 지원 release·rebuild·rollback 증거와 함께 소유한다.
 
 **Verification**
 
@@ -191,13 +191,13 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 - 개인정보 처리방침이 실제 `q`·click metadata 수집 surface와 Replay masking·retention 경계에 일치하는지 확인한다.
 - Cloud 설정·배포·장애 대응·수집 확인 runbook을 검증한다.
 - 활성 Docker·workflow·GitHub 설정과 운영 문서에서 OpenPanel 계약이 제거되고 PostHog `ph-mask ph-no-capture`는 유지되는지 확인한다.
-- production-equivalent Web build에서 그룹 1~5의 설정·automatic event·identity·fail-open·Replay 보호를 함께 확인한다.
+- PR #685의 merge commit `47fb36f52`와 PR #653의 merge commit `2176b7e38`을 모두 포함한 production-equivalent Web build에서 그룹 1~5의 설정·automatic event·identity·fail-open·Replay 보호를 함께 확인한다.
 - 공개 `/privacy`와 기존 진입 위치, provider·브라우저 저장·보존·삭제 설명을 확인한다. 기존 OpenPanel 문구와 provider에 맞지 않는 삭제·장애 대응 안내가 활성 문서에 남지 않는지 검사한다.
-- 각 기록에서 source commit 또는 build, 관측일·설정/요청 표면, 합성 데이터 사용 여부, 결과·미검증 범위를 구분한다. 과거 선행 PR의 테스트 숫자를 현재 결과로 재사용하지 않는다.
+- 각 기록에서 source commit 또는 build, 관측일·설정/요청 표면, 합성 데이터 사용 여부, 결과·미검증 범위를 구분한다. 병합된 선행 PR의 테스트 숫자를 현재 결과로 재사용하지 않는다.
 
 - [ ] 6.1 표준 automatic event, URL/referrer/session metadata, persistence, remote config와 Replay 보호를 실제 개인정보 처리방침에 반영한다.
 - [ ] 6.2 Cloud 설정·배포·장애 대응·수집 확인 runbook을 작성하고 OpenPanel 운영 계약을 제거한다.
-- [ ] 6.3 PROD-819와 PROD-820 결과를 production-equivalent Web flow에서 cross-slice 검증한다.
+- [ ] 6.3 PR #685의 merge commit `47fb36f52`와 PR #653의 merge commit `2176b7e38`을 모두 포함한 production-equivalent Web flow에서 PROD-819와 PROD-820 결과를 cross-slice 검증한다.
 - [ ] 6.4 `/flags`를 포함한 원격 설정, persistence와 performance·heatmap·console·Replay의 실제 수집 상태 및 보호 범위를 표면별로 대조하고 검증 공백을 기록한다.
 - [ ] 6.5 공개 key·host의 완전·부분·누락 조건, typed custom event, reload·Account 전환·guest reset과 전송 실패에도 사용자 흐름이 유지되는지를 필요한 단위·브라우저 검증으로 확인한다.
 - [ ] 6.6 PROD-839 cleanup과 지원 release·rebuild·rollback 증거를 확인하고 활성 운영 문서·환경 변수 안내·replay marker에 남은 OpenPanel 흔적을 점검한다. PostHog `ph-mask ph-no-capture`는 유지한다.
