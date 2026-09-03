@@ -2,11 +2,17 @@ import { and, eq, ne } from 'drizzle-orm';
 import { db, first, Instances, ProfileMutes, Profiles } from '../db';
 import { InstanceKind, InstanceState, ProfileState } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
+import { visibleProfileWhere } from '../visibility';
 import type { Transaction } from '../db';
 
 type ProfileMuteInput = {
   readonly ownerProfileId: string;
   readonly targetProfileId: string;
+};
+
+type ProfileUnmuteInput = {
+  readonly ownerProfileId: string;
+  readonly profileMuteId: string;
 };
 
 const ensureOwner = async (tx: Transaction, id: string) => {
@@ -34,7 +40,10 @@ const ensureTarget = async (tx: Transaction, id: string) => {
   const target = await tx
     .select({ id: Profiles.id })
     .from(Profiles)
-    .where(eq(Profiles.id, id))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(eq(Profiles.id, id), visibleProfileWhere({ profile: Profiles, instance: Instances })),
+    )
     .limit(1)
     .then(first);
 
@@ -70,17 +79,14 @@ export const muteProfile = async ({ ownerProfileId, targetProfileId }: ProfileMu
   });
 };
 
-export const unmuteProfile = async ({ ownerProfileId, targetProfileId }: ProfileMuteInput) =>
+export const unmuteProfile = async ({ ownerProfileId, profileMuteId }: ProfileUnmuteInput) =>
   db.transaction(async (tx) => {
     await ensureOwner(tx, ownerProfileId);
 
     return tx
       .delete(ProfileMutes)
       .where(
-        and(
-          eq(ProfileMutes.ownerProfileId, ownerProfileId),
-          eq(ProfileMutes.targetProfileId, targetProfileId),
-        ),
+        and(eq(ProfileMutes.ownerProfileId, ownerProfileId), eq(ProfileMutes.id, profileMuteId)),
       )
       .returning()
       .then(first)

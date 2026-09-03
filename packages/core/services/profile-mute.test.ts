@@ -232,6 +232,35 @@ test('Mute action은 self-target·존재하지 않는 Target·자격 없는 Owne
   }
 });
 
+test('Mute action은 비가시화된 Target을 거부하고 관계를 만들지 않는다', async () => {
+  const owner = await createProfile();
+  const disabledTarget = await createProfile({ profileState: ProfileState.DISABLED });
+  const suspendedTarget = await createProfile({ instanceState: InstanceState.SUSPENDED });
+
+  try {
+    await assert.rejects(
+      muteProfile({
+        ownerProfileId: owner.profile.id,
+        targetProfileId: disabledTarget.profile.id,
+      }),
+      NotFoundError,
+    );
+    await assert.rejects(
+      muteProfile({
+        ownerProfileId: owner.profile.id,
+        targetProfileId: suspendedTarget.profile.id,
+      }),
+      NotFoundError,
+    );
+    assert.equal(await db.$count(ProfileMutes), 0);
+  } finally {
+    await cleanupProfiles(
+      [owner.profile.id, disabledTarget.profile.id, suspendedTarget.profile.id],
+      [owner.instance.id, disabledTarget.instance.id, suspendedTarget.instance.id],
+    );
+  }
+});
+
 test('Mute action의 순차·동시 중복 생성은 하나의 nullable 관계로 수렴한다', async () => {
   const owner = await createProfile();
   const target = await createProfile({ kind: InstanceKind.ACTIVITYPUB });
@@ -263,7 +292,7 @@ test('Mute action의 순차·동시 중복 생성은 하나의 nullable 관계�
   }
 });
 
-test('unmuteProfile은 Owner·Target 쌍만 제거하고 다른 Owner에는 null을 반환한다', async () => {
+test('unmuteProfile은 Owner·관계 ID만 제거하고 다른 Owner에는 null을 반환한다', async () => {
   const owner = await createProfile();
   const otherOwner = await createProfile();
   const target = await createProfile({ kind: InstanceKind.ACTIVITYPUB });
@@ -273,16 +302,22 @@ test('unmuteProfile은 Owner·Target 쌍만 제거하고 다른 Owner에는 null
     const created = await muteProfile(input);
     const wrongOwnerResult = await unmuteProfile({
       ownerProfileId: otherOwner.profile.id,
-      targetProfileId: target.profile.id,
+      profileMuteId: created.id,
     });
     assert.equal(wrongOwnerResult, null);
     assert.equal(await isProfileMuted(input.ownerProfileId, input.targetProfileId), true);
 
-    const removed = await unmuteProfile(input);
+    const removed = await unmuteProfile({
+      ownerProfileId: owner.profile.id,
+      profileMuteId: created.id,
+    });
     assert.equal(removed?.id, created.id);
     assert.equal(await findProfileMute(input.ownerProfileId, input.targetProfileId), null);
     assert.equal(await isProfileMuted(input.ownerProfileId, input.targetProfileId), false);
-    assert.equal(await unmuteProfile(input), null);
+    assert.equal(
+      await unmuteProfile({ ownerProfileId: owner.profile.id, profileMuteId: created.id }),
+      null,
+    );
   } finally {
     await cleanupProfiles(
       [owner.profile.id, otherOwner.profile.id, target.profile.id],
@@ -437,8 +472,11 @@ test('Mute 생성·해제는 기존 관계·상호작용·Notification 상태를
 
   try {
     const before = await snapshot();
-    await muteProfile({ ownerProfileId: owner.profile.id, targetProfileId: target.profile.id });
-    await unmuteProfile({ ownerProfileId: owner.profile.id, targetProfileId: target.profile.id });
+    const created = await muteProfile({
+      ownerProfileId: owner.profile.id,
+      targetProfileId: target.profile.id,
+    });
+    await unmuteProfile({ ownerProfileId: owner.profile.id, profileMuteId: created.id });
     assert.deepEqual(await snapshot(), before);
   } finally {
     await db.delete(Notifications).where(eq(Notifications.id, notification.id));

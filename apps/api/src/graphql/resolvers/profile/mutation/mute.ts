@@ -35,12 +35,12 @@ builder.mutationField('unmuteProfile', (t) =>
       }),
     }),
     input: {
-      id: t.input.globalID({ for: Profile }),
+      id: t.input.globalID({ for: ProfileMute }),
     },
     resolve: async (_, { input }, ctx) => {
       const profileMute = await unmuteProfile({
         ownerProfileId: ctx.session.profileId,
-        targetProfileId: input.id.id,
+        profileMuteId: input.id.id,
       });
 
       return { profileMuteId: profileMute?.id ?? null };

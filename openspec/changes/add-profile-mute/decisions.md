@@ -47,7 +47,7 @@
 - Authority / Provenance: `docs/architecture/core-services.md`, `docs/domain/objects/profile-mute.md`, `PROD-824`
 - Status: Active
 - Context / Problem: GraphQL과 후행 호출자가 저마다 검증·transaction·중복 처리를 구성하면 transport마다 결과가 달라진다. 중복 insert 충돌에서 `DO NOTHING RETURNING`만 쓰면 기존 row를 돌려줄 수 없다.
-- Decision Outcome: 생성과 해제는 transport-neutral Core action으로 구현하며 각 action이 자신의 transaction을 연다. 생성은 unique conflict를 `onConflictDoUpdate`로 처리해 기존 row의 `expires_at`을 `null`로 갱신하고 같은 ID를 반환한다. 해제는 Owner·Target을 함께 조건으로 삭제하며, 관계가 이미 없으면 정보 노출 없이 빈 결과로 수렴한다. Profile이나 관계 row에 비관적 lock을 추가하지 않는다.
+- Decision Outcome: 생성과 해제는 transport-neutral Core action으로 구현하며 각 action이 자신의 transaction을 연다. 생성은 unique conflict를 `onConflictDoUpdate`로 처리해 기존 row의 `expires_at`을 `null`로 갱신하고 같은 ID를 반환한다. 해제는 Owner와 Profile Mute 관계 ID를 함께 조건으로 삭제하며, 관계가 이미 없으면 정보 노출 없이 빈 결과로 수렴한다. Profile이나 관계 row에 비관적 lock을 추가하지 않는다.
 - Alternatives Considered: resolver가 transaction을 열거나 insert 전에 row를 잠그는 방식은 Core 서비스 경계와 기존 관계 action 패턴에 맞지 않아 제외했다. unique violation을 오류로 반환하는 방식은 승인된 중복 수렴 결과를 만족하지 못한다.
 - Consequences: GraphQL 외의 호출자도 같은 권한·동시성 의미를 재사용할 수 있다. 충돌한 기존 row도 upsert와 `returning()`으로 같은 ID와 영구 관계 의미에 수렴한다.
 - Confirmation / Follow-up: Core 테스트에서 첫 생성, 반복 생성, 동시 생성, 반복 해제와 다른 Owner 해제를 검증한다.
@@ -57,12 +57,26 @@
 - Decision Date: 2026-09-02
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/profile-mute.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/design/profile-mute-block.md`, `PROD-814`, `PROD-824`
-- Status: Active
+- Status: Superseded
+- Superseded Date: 2026-09-03
+- Superseded by: `ProfileMute는 Target visibility를 따르고 해제는 관계 identity를 사용한다`
 - Context / Problem: 후행 UI는 현재 Profile의 관리 목록, Target Profile 화면의 viewer-relative 상태와 생성·해제 결과를 Relay identity로 연결해야 한다. Target이나 제삼자가 Node 경로로 관계를 발견해서도 안 된다.
 - Decision Outcome: 공개 schema에 `ProfileMute implements Node`를 추가하고 `targetProfile`, `targetProfileId: ID!`, `createdAt`을 제공한다. 현재 Profile에는 Owner 전용 `profileMutes` connection을, `ProfileViewerState`에는 `profileMute`를 추가한다. Target이 비가시화되어 nullable `targetProfile`이 `null`이어도 `targetProfileId`의 Profile global ID를 기존 `unmuteProfile` Profile ID 입력에 그대로 재사용할 수 있다. `muteProfile(input: { id: Profile global ID })`는 `MuteProfilePayload.profileMute`를 반환한다. `unmuteProfile(input: { id: Profile global ID })`는 nullable `UnmuteProfilePayload.profileMuteId`를 반환한다. `ProfileMute` ID 조회와 connection은 현재 selected Profile이 Owner일 때만 관계를 돌려준다.
 - Alternatives Considered: Target Profile 목록만 반환하면 관계 identity를 보존하고 삭제 결과를 cache에 정확히 반영하기 어렵다. top-level 전용 query는 기존 Profile 중심 GraphQL 구조에 진입점만 늘린다. 해제 입력으로 ProfileMute ID를 받으면 직접 Profile 화면에서 Target ID만 가진 호출자가 관계 ID를 먼저 조회해야 한다. 이 세 가지 방식은 사용하지 않는다.
 - Consequences: schema 이름과 payload는 후행 Relay 코드가 의존하는 공개 계약이 된다. `Profile.profileMutes` resolver는 상위 Profile ID가 selected Profile과 같은지 별도로 확인해야 하며, Node loader도 Owner 조건을 적용해야 한다.
 - Confirmation / Follow-up: schema 생성 결과, Node 직접 조회, 양방향 pagination, viewer-relative 상태와 mutation payload를 GraphQL 통합 테스트로 확인한다.
+
+### ProfileMute는 Target visibility를 따르고 해제는 관계 identity를 사용한다
+
+- Decision Date: 2026-09-03
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/profile-mute.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/design/profile-mute-block.md`, `PROD-814`, `PROD-824`
+- Status: Active
+- Context / Problem: 이전 결정은 비가시화된 Target을 nullable `targetProfile`과 별도 `targetProfileId`로 노출하고 Profile global ID로 해제하도록 기록했다. 이는 Target 관계를 Owner에게만 조회한다는 canonical visibility 경계와 관계 자체를 식별하는 Relay identity를 분리하지 못한다.
+- Decision Outcome: `ProfileMute`의 공개 `targetProfile`은 `Profile!`이며 Target Profile과 Instance가 `visibleProfileWhere`를 통과하지 못하면 `ProfileMute` Node와 Owner connection에서 관계 전체를 반환하지 않는다. 생성 action의 `ensureTarget`도 같은 Core transaction에서 이 predicate를 적용해 DISABLED Profile과 SUSPENDED Instance Target의 관계 저장을 거부한다. `targetProfileId` 공개 필드는 제공하지 않는다. `unmuteProfile(input: { id: ProfileMute global ID })`는 관계 identity와 selected Owner를 Core에 전달하고, nullable `profileMuteId` payload로 삭제된 관계 ID를 반환한다. `muteProfile(input: { id: Profile global ID })`의 Target 입력과 기존 Owner·Target unique upsert 및 같은 ID로 수렴하는 생성 semantics는 유지한다.
+- Alternatives Considered: 비가시 Target을 nullable Target과 Profile ID로 계속 반환하는 방식은 관계의 공개 visibility와 Node identity를 분리해 hidden relation을 발견하게 하므로 제외했다. Target ID를 먼저 조회한 뒤 해제하는 방식은 hidden Target의 공개 경계를 우회하고 추가 조회를 요구하므로 선택하지 않는다.
+- Consequences: Owner는 hidden Target의 관계를 목록이나 Node에서 볼 수 없지만 보관한 관계 global ID로 정확히 해제할 수 있다. 후속 UI는 nullable Target fallback이나 `targetProfileId` field에 의존하지 않고 관계 ID를 cache identity로 사용해야 한다.
+- Confirmation / Follow-up: disabled/suspended Target의 Node·Owner connection 제외, non-null Local·Remote Target field, 다른 Owner와 selected Profile 격리, ProfileMute global ID 해제를 GraphQL 통합 테스트로 확인한다.
 
 ### 저장 변경은 backfill 없는 additive migration으로 배포한다
 
@@ -94,4 +108,4 @@
 
 ## Superseded Decisions
 
-- 없음.
+- 2026-09-02의 `GraphQL은 Owner 전용 ProfileMute Node와 Profile 중심 진입점을 제공한다` 결정 중 `targetProfileId`, nullable `targetProfile`과 Profile global ID 해제 계약은 2026-09-03의 `ProfileMute는 Target visibility를 따르고 해제는 관계 identity를 사용한다` 결정으로 대체되었다. Owner 전용 Node·connection, `muteProfile` 생성 입력, 중복 생성 수렴과 nullable payload ID는 유효한 계약으로 보존한다.

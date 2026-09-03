@@ -1,21 +1,18 @@
-import { db, ProfileMutes } from '@kosmo/core/db';
+import { db, Instances, ProfileMutes, Profiles } from '@kosmo/core/db';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, isNull, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { Profile, ProfileMute, ProfileMuteConnection } from '../ref';
 import type { ProfileMuteRow } from '../ref';
 
-builder.objectFields(ProfileMute, (t) => ({
-  targetProfileId: t.globalID({
-    resolve: (profileMute) => ({ id: profileMute.targetProfileId, type: Profile }),
-  }),
-  targetProfile: t.field({
-    nullable: true,
+builder.objectField(ProfileMute, 'targetProfile', (t) =>
+  t.field({
     type: Profile,
     resolve: (profileMute) => profileMute.targetProfileId,
   }),
-}));
+);
 
 builder.objectField(Profile, 'profileMutes', (t) =>
   t.withAuth({ usingProfile: true }).connection(
@@ -35,10 +32,13 @@ builder.objectField(Profile, 'profileMutes', (t) =>
             db
               .select(getColumns(ProfileMutes))
               .from(ProfileMutes)
+              .innerJoin(Profiles, eq(Profiles.id, ProfileMutes.targetProfileId))
+              .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
               .where(
                 and(
                   eq(ProfileMutes.ownerProfileId, profile.id),
                   isNull(ProfileMutes.expiresAt),
+                  visibleProfileWhere({ profile: Profiles, instance: Instances }),
                   before ? gt(ProfileMutes.id, before) : undefined,
                   after ? lt(ProfileMutes.id, after) : undefined,
                 ),

@@ -47,7 +47,7 @@ Owner와 Target을 잇는 영구 Profile Mute를 중복 없이 저장하고, 기
 - 생성과 해제 action이 검증, transaction과 중복 수렴을 소유한다.
 - 같은 Owner·Target의 반복·동시 생성은 하나의 관계와 같은 성공 의미로 수렴한다.
 - 같은 Owner·Target의 기존 non-null `expires_at` row를 다시 생성하면 같은 ID를 유지하고 `expires_at`을 `null`로 바꿔 영구 관계로 활성화한다.
-- 해제는 Owner와 Target을 함께 확인하며 다른 Owner의 관계를 바꾸거나 존재를 드러내지 않는다.
+- 해제는 Owner와 Profile Mute 관계 ID를 함께 확인하며 다른 Owner의 관계를 바꾸거나 존재를 드러내지 않는다.
 - Profile이나 관계 row에 비관적 lock을 추가하지 않는다.
 
 **Verification**
@@ -74,14 +74,14 @@ Owner와 Target을 잇는 영구 Profile Mute를 중복 없이 저장하고, 기
 
 **Deliverable**
 
-인증된 사용자는 현재 selected Profile의 Mute 목록과 Target별 상태를 조회하고, Profile Target을 지정해 Mute를 만들거나 해제할 수 있다.
+인증된 사용자는 현재 selected Profile의 Mute 목록과 Target별 상태를 조회하고, Profile Target을 지정해 Mute를 만들며 Profile Mute relation global ID를 지정해 해제할 수 있다.
 
 **Guardrails**
 
-- `ProfileMute` Node는 `targetProfile`과 `createdAt`을 제공하며 Owner가 아닌 요청에는 노출하지 않는다.
-- Owner 전용 `ProfileMute` Node는 concrete Profile global ID인 `targetProfileId: ID!`를 제공하며, 비가시화된 Target에서도 이를 `unmuteProfile` 입력에 재사용할 수 있다.
+- `ProfileMute` Node는 non-null `targetProfile: Profile!`과 `createdAt`을 제공하며 Owner가 아닌 요청과 비가시화된 Target 관계에는 노출하지 않는다.
 - 현재 Profile에는 Owner 전용 `profileMutes` Relay connection을, `ProfileViewerState`에는 nullable `profileMute`를 제공한다.
-- `muteProfile`과 `unmuteProfile`은 concrete `Profile` global ID만 입력으로 받고 Owner는 session의 selected Profile에서 정한다.
+- `muteProfile`은 concrete `Profile` global ID를, `unmuteProfile`은 concrete `ProfileMute` global ID를 입력으로 받고 Owner는 session의 selected Profile에서 정한다.
+- `muteProfile`은 DISABLED Profile 또는 SUSPENDED Instance의 Target을 거부하고 관계를 만들지 않는다.
 - 생성 payload는 `profileMute`, 해제 payload는 nullable `profileMuteId`를 반환한다.
 - 공개 schema에 기간·만료 입력이나 `expires_at`에 대응하는 필드를 추가하지 않는다.
 - 같은 Account의 다른 selected Profile도 별도 Owner로 취급한다.
@@ -91,7 +91,7 @@ Owner와 Target을 잇는 영구 Profile Mute를 중복 없이 저장하고, 기
 - schema 단위 검사에서 Node, connection, viewer-relative field, mutation 입력과 payload 형태를 확인한다.
 - Node 직접 조회, 목록 양방향 pagination, Target 상태와 Local·Remote Target mutation을 GraphQL 통합 테스트로 검증한다.
 - 다른 Account, 같은 Account의 다른 selected Profile, Target과 비-Local Owner가 관계를 조회하거나 변경하지 못하는지 확인한다.
-- Target을 DISABLED로 바꾼 뒤 `targetProfile` null, `targetProfileId` 유지와 opaque ID 기반 해제를 확인한다.
+- Target을 DISABLED로 바꾼 뒤 `ProfileMute` Node와 Owner connection에서 관계를 제외하고 retained `ProfileMute` global ID 기반 해제를 확인한다.
 
 - [x] 3.1 Owner 조건을 포함한 `ProfileMute` Node 조회와 Target 관계를 GraphQL schema에 추가한다.
 - [x] 3.2 현재 Profile의 `profileMutes` connection과 `ProfileViewerState.profileMute`를 추가하고 요청 단위 묶음 조회를 적용한다.

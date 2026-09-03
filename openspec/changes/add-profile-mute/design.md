@@ -29,7 +29,7 @@ Profile Mute의 제품 의미와 UI 계약은 기준 문서와 `PROD-814`에 이
 ### Current Constraints
 
 - 관계 테이블은 `packages/core`의 Drizzle schema와 생성된 migration history에 함께 반영해야 한다. 기존 history는 수정하지 않고 새 migration만 추가한다.
-- `usingProfile`은 Active Account, Membership과 selected Profile의 조회 가능 상태까지만 보장한다. Profile Mute 고유 조건인 Active·Normal Local Owner, self-target 금지와 Target 존재 여부는 Core action이 검증해야 한다.
+- `usingProfile`은 Active Account, Membership과 selected Profile의 조회 가능 상태까지만 보장한다. Profile Mute 고유 조건인 Active·Normal Local Owner, self-target 금지와 `visibleProfileWhere`를 통과하는 Target 존재 여부는 Core action이 같은 transaction에서 검증해야 한다.
 - Core의 상태 변경 action은 자신의 transaction을 소유한다. GraphQL resolver에서 transaction handle이나 데이터베이스별 중복 처리 절차를 조립하면 기존 서비스 경계가 무너진다.
 - `Profile.viewerState` loader는 요청의 selected Profile에 묶여 있다. Mute loader도 같은 경계를 지키지 않으면 Target ID가 같을 때 다른 Owner의 관계를 잘못 재사용할 수 있다.
 - `Profile` 객체에 Owner 전용 connection을 추가할 때 `usingProfile`만 적용하면 충분하지 않다. field의 Profile ID와 `ctx.session.profileId`가 같은지도 확인해야 한다.
@@ -39,10 +39,10 @@ Profile Mute의 제품 의미와 UI 계약은 기준 문서와 `PROD-814`에 이
 
 1. Core DB schema에 `profile_mute` 관계 테이블을 추가한다. 기존 관계 객체처럼 UUIDv7 식별자와 생성 시각을 사용하고, Owner·Target은 `profiles.id`를 참조한다. Profile이 물리적으로 삭제되면 관계도 정리되도록 두 foreign key에 cascade를 적용한다. `expires_at`은 timezone을 보존하는 nullable timestamp로 선언한다.
 2. `(owner_profile_id, target_profile_id)` unique constraint로 중복을 막는다. Owner 목록을 안정적으로 읽을 수 있는 Owner·ID index와 Target foreign key 정리 비용을 위한 Target index를 둔다. 목록은 기존 UUIDv7 관계와 같은 ID 내림차순 cursor를 기본으로 삼는다.
-3. 생성 action은 Owner와 Target을 검증한 뒤 insert를 시도한다. unique 충돌은 `onConflictDoUpdate`로 기존 row의 `expires_at`을 `null`로 바꾸고 같은 ID를 `returning()`으로 반환하는 정상적인 멱등 경로로 다룬다. Profile row나 관계 row에는 비관적 lock을 걸지 않는다.
-4. 해제 action은 Owner ID와 Target ID를 함께 조건으로 사용해 정확한 관계만 삭제한다. 반복 해제는 관계가 없다는 결과로 수렴시키되, 다른 Owner의 관계가 있었는지는 드러내지 않는다.
-5. 적용 여부와 목록은 읽기 전용 query 경계로 구현한다. GraphQL의 viewer-relative 조회는 요청 단위 loader에 selected Profile을 고정하고 Target ID를 batch key로 삼는다. `ProfileMute` Node 자체를 ID로 불러올 때도 Owner 조건을 포함해 Target이나 제삼자에게 관계가 보이지 않게 한다.
-6. GraphQL에는 `ProfileMute` Node, Owner 전용 `targetProfileId: ID!`와 nullable `targetProfile`, `ProfileViewerState`의 nullable Mute 관계, 현재 Profile의 Owner 전용 connection과 생성·해제 mutation을 추가한다. 비가시화된 Target에서도 `targetProfileId`를 기존 `unmuteProfile` Profile global ID 입력에 재사용할 수 있게 한다. mutation 입력은 concrete `Profile` global ID인 Target만 받고 Owner는 session에서 정한다. 공개 schema를 다시 생성해 source와 함께 검증한다.
+3. 생성 action은 Owner와 `visibleProfileWhere`를 통과하는 Target을 검증한 뒤 insert를 시도한다. Target 검증은 Core가 소유한 같은 transaction에서 수행해 DISABLED Profile과 SUSPENDED Instance Target을 관계 저장 전에 거부한다. unique 충돌은 `onConflictDoUpdate`로 기존 row의 `expires_at`을 `null`로 바꾸고 같은 ID를 `returning()`으로 반환하는 정상적인 멱등 경로로 다룬다. Profile row나 관계 row에는 비관적 lock을 걸지 않는다.
+4. 해제 action은 Owner ID와 Profile Mute 관계 ID를 함께 조건으로 사용해 정확한 관계만 삭제한다. 반복 해제는 관계가 없다는 결과로 수렴시키되, 다른 Owner의 관계가 있었는지는 드러내지 않는다.
+5. 적용 여부와 목록은 읽기 전용 query 경계로 구현한다. GraphQL의 viewer-relative 조회는 요청 단위 loader에 selected Profile을 고정하고 Target ID를 batch key로 삼는다. `ProfileMute` Node 자체를 ID로 불러올 때도 Owner 조건과 `visibleProfileWhere`를 포함해 비가시 Target, Target 및 제삼자에게 관계가 보이지 않게 한다. Owner connection도 같은 Target visibility predicate를 사용한다.
+6. GraphQL에는 `ProfileMute` Node, Owner 전용 non-null `targetProfile: Profile!`, `ProfileViewerState`의 nullable Mute 관계, 현재 Profile의 Owner 전용 connection과 생성·해제 mutation을 추가한다. 비가시화된 Target의 관계는 Node와 Owner connection에서 제외하되, Owner가 보관한 `ProfileMute` global ID를 `unmuteProfile` 입력에 재사용할 수 있게 한다. 생성 mutation 입력은 concrete `Profile` global ID인 Target만 받고 해제 mutation 입력은 concrete `ProfileMute` global ID인 관계만 받으며 Owner는 session에서 정한다. 공개 schema를 다시 생성해 source와 함께 검증한다.
 7. DB schema·migration, Core action과 GraphQL integration을 각각 테스트한다. 특히 Remote Target, 중복·동시 생성, self-target, 비-Local Owner, 다른 Account와 같은 Account의 다른 selected Profile, 다른 Owner 해제 시도를 포함한다. 기존 관계·상호작용·Notification이 그대로인지도 회귀 테스트로 고정한다.
 
 ### Allowed Alternatives
@@ -53,10 +53,11 @@ Profile Mute의 제품 의미와 UI 계약은 기준 문서와 `PROD-814`에 이
 ### Known Traps
 
 - mutation 입력으로 Owner ID를 받거나 resolver의 상위 `Profile`만 믿으면 selected Profile 격리가 뚫린다.
-- 해제 query를 Target ID만으로 실행하면 다른 Owner의 관계까지 삭제할 수 있다.
+- 해제 query를 관계 ID와 Owner 조건 없이 실행하면 다른 Owner의 관계를 잘못 삭제하거나 관계 존재를 드러낼 수 있다.
 - `ProfileMute` ID loader에 Owner 조건을 빼면 Relay Node 조회가 Target에게 관계 존재를 노출한다.
 - `expires_at`을 받거나 non-null 값을 쓰는 임시 API를 추가하면 `PROD-826`의 기간 지정 계약을 앞질러 고정하게 된다.
 - Mute 생성 시 Follow나 Notification을 정리하거나 목록 필터를 함께 바꾸면 `PROD-824`의 구현 경계를 넘는다.
+- 생성 action에서 Target 존재만 확인하고 `visibleProfileWhere`를 빠뜨리면 비가시 Target 관계가 저장될 수 있으므로, Core transaction 안에서 Profile·Instance visibility predicate를 함께 적용한다.
 - Drizzle schema만 바꾸고 migration snapshot 또는 공개 GraphQL schema를 갱신하지 않으면 CI와 실제 배포 계약이 어긋난다.
 
 ## Risks / Trade-offs

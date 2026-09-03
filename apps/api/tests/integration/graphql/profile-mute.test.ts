@@ -223,14 +223,13 @@ describe('GraphQL Profile Mute', () => {
     const muteNode = await requestGraphQL<{
       node: {
         id: string;
-        targetProfile: { id: string } | null;
-        targetProfileId: string;
+        targetProfile: { id: string };
         createdAt: string;
       } | null;
     }>(
       `query ProfileMuteNode($id: ID!) {
         node(id: $id) {
-          ... on ProfileMute { id targetProfile { id } targetProfileId createdAt }
+          ... on ProfileMute { id targetProfile { id } createdAt }
         }
       }`,
       { id: localMute.id },
@@ -246,43 +245,122 @@ describe('GraphQL Profile Mute', () => {
       .where(eq(Profiles.id, localTarget.id));
 
     const disabledTargetMuteNode = await requestGraphQL<{
-      node: {
-        targetProfile: { id: string } | null;
-        targetProfileId: string;
-      } | null;
+      node: { id: string; targetProfile: { id: string } } | null;
     }>(
       `query DisabledTargetProfileMute($id: ID!) {
         node(id: $id) {
-          ... on ProfileMute { targetProfile { id } targetProfileId }
+          ... on ProfileMute { id targetProfile { id } }
         }
       }`,
       { id: localMute.id },
       auth.token,
     );
     assertNoGraphQLErrors(disabledTargetMuteNode);
-    assert.equal(disabledTargetMuteNode.data?.node?.targetProfile, null);
-    assert.equal(
-      disabledTargetMuteNode.data?.node?.targetProfileId,
-      globalId('Profile', localTarget.id),
-    );
-    const disabledTargetProfileId = disabledTargetMuteNode.data?.node?.targetProfileId;
-    assert.ok(disabledTargetProfileId);
+    assert.equal(disabledTargetMuteNode.data?.node, null);
 
-    const unmuteUsingTargetProfileId = await requestGraphQL<{
+    const disabledTargetMuteConnection = await requestGraphQL<{
+      node: { profileMutes: { edges: Array<{ node: { id: string } }> } } | null;
+    }>(
+      `query DisabledTargetProfileMutes($id: ID!) {
+        node(id: $id) {
+          ... on Profile { profileMutes(first: 10) { edges { node { id } } } }
+        }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(disabledTargetMuteConnection);
+    assert.equal(
+      disabledTargetMuteConnection.data?.node?.profileMutes.edges.some(
+        ({ node }) => node.id === localMute.id,
+      ),
+      false,
+    );
+
+    const unmuteUsingProfileMuteId = await requestGraphQL<{
       unmuteProfile: { profileMuteId: string | null };
     }>(
       `mutation UnmuteDisabledTarget($input: UnmuteProfileInput!) {
         unmuteProfile(input: $input) { profileMuteId }
       }`,
-      { input: { id: disabledTargetProfileId } },
+      { input: { id: localMute.id } },
       auth.token,
     );
-    assertNoGraphQLErrors(unmuteUsingTargetProfileId);
-    assert.equal(unmuteUsingTargetProfileId.data?.unmuteProfile.profileMuteId, localMute.id);
+    assertNoGraphQLErrors(unmuteUsingProfileMuteId);
+    assert.equal(unmuteUsingProfileMuteId.data?.unmuteProfile.profileMuteId, localMute.id);
     assert.equal(
       await db.$count(ProfileMutes, eq(ProfileMutes.id, decodeGlobalId(localMute.id).id)),
       0,
     );
+  });
+
+  test('숨겨진 선두 Profile Mute 관계를 건너뛰고 다음 visible 관계로 페이지를 채운다', async () => {
+    const auth = await createAuthenticatedSession();
+    const localTarget = await createProfile({
+      handle: 'hidden-page-local-target',
+      instanceId: localInstanceId,
+    });
+    const remoteInstance = await createRemoteInstance({ domain: 'hidden-page-remote.example' });
+    const remoteTarget = await createProfile({
+      handle: 'hidden-page-remote-target',
+      instanceId: remoteInstance.id,
+    });
+
+    const localMutation = await muteProfile(localTarget.id, auth.token);
+    const remoteMutation = await muteProfile(remoteTarget.id, auth.token);
+    assertNoGraphQLErrors(localMutation);
+    assertNoGraphQLErrors(remoteMutation);
+    const localMute = localMutation.data?.muteProfile.profileMute;
+    const remoteMute = remoteMutation.data?.muteProfile.profileMute;
+    assert.ok(localMute);
+    assert.ok(remoteMute);
+
+    const orderedMutes = [localMute, remoteMute].sort((first, second) =>
+      decodeGlobalId(second.id).id.localeCompare(decodeGlobalId(first.id).id),
+    );
+    const hiddenMute = orderedMutes[0]!;
+    const visibleMute = orderedMutes[1]!;
+    const hiddenTargetId = hiddenMute.id === localMute.id ? localTarget.id : remoteTarget.id;
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, hiddenTargetId));
+
+    const hiddenNode = await requestGraphQL<{ node: { id: string } | null }>(
+      `query HiddenLeadingProfileMute($id: ID!) {
+        node(id: $id) { ... on ProfileMute { id } }
+      }`,
+      { id: hiddenMute.id },
+      auth.token,
+    );
+    assertNoGraphQLErrors(hiddenNode);
+    assert.equal(hiddenNode.data?.node, null);
+
+    const visiblePage = await requestGraphQL<{
+      node: {
+        profileMutes: {
+          edges: Array<{ node: { id: string } }>;
+          pageInfo: { hasNextPage: boolean };
+        };
+      } | null;
+    }>(
+      `query VisibleAfterHiddenProfileMute($id: ID!) {
+        node(id: $id) {
+          ... on Profile {
+            profileMutes(first: 1) { edges { node { id } } pageInfo { hasNextPage } }
+          }
+        }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(visiblePage);
+    assert.deepEqual(
+      visiblePage.data?.node?.profileMutes.edges.map(({ node }) => node.id),
+      [visibleMute.id],
+    );
+    assert.equal(visiblePage.data?.node?.profileMutes.pageInfo.hasNextPage, false);
   });
 
   test('Profile Mute 관계·목록·viewer 상태와 해제는 Owner와 selected Profile별로 격리된다', async () => {
@@ -306,6 +384,18 @@ describe('GraphQL Profile Mute', () => {
     assertNoGraphQLErrors(created);
     const muteId = created.data?.muteProfile.profileMute.id;
     assert.ok(muteId);
+
+    const wrongTypeUnmute = await requestGraphQL<{
+      unmuteProfile: { profileMuteId: string | null };
+    }>(
+      `mutation UnmuteProfileWithProfileId($input: UnmuteProfileInput!) {
+        unmuteProfile(input: $input) { profileMuteId }
+      }`,
+      { input: { id: globalId('Profile', target.id) } },
+      auth.token,
+    );
+    assert.match(wrongTypeUnmute.errors?.[0]?.message ?? '', /not of type: ProfileMute/);
+    assert.equal(await db.$count(ProfileMutes), 1);
 
     const outsiderState = await requestGraphQL<{
       node: { viewerState: { profileMute: unknown | null } } | null;
@@ -355,7 +445,7 @@ describe('GraphQL Profile Mute', () => {
     );
     assert.equal(switchedList.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
 
-    const switchedUnmute = await unmuteProfile(target.id, auth.token);
+    const switchedUnmute = await unmuteProfile(muteId, auth.token);
     assertNoGraphQLErrors(switchedUnmute);
     assert.equal(switchedUnmute.data?.unmuteProfile.profileMuteId, null);
     assert.equal(await db.$count(ProfileMutes, eq(ProfileMutes.id, decodeGlobalId(muteId).id)), 1);
@@ -365,10 +455,33 @@ describe('GraphQL Profile Mute', () => {
       .set({ activeProfileId: auth.profile.id })
       .where(eq(Sessions.id, auth.session.id));
 
-    const removed = await unmuteProfile(target.id, auth.token);
+    const removed = await unmuteProfile(muteId, auth.token);
     assertNoGraphQLErrors(removed);
     assert.equal(removed.data?.unmuteProfile.profileMuteId, muteId);
     assert.equal(await db.$count(ProfileMutes, eq(ProfileMutes.id, decodeGlobalId(muteId).id)), 0);
+  });
+
+  test('DISABLED Profile과 SUSPENDED Instance의 Target은 Mute 생성에서 거부되고 관계를 만들지 않는다', async () => {
+    const auth = await createAuthenticatedSession();
+    const disabledTarget = await createProfile({
+      handle: 'disabled-mute-target',
+      instanceId: localInstanceId,
+      state: ProfileState.DISABLED,
+    });
+    const suspendedInstance = await createRemoteInstance({
+      domain: 'suspended-mute-target.example',
+      state: InstanceState.SUSPENDED,
+    });
+    const suspendedTarget = await createProfile({
+      handle: 'suspended-mute-target',
+      instanceId: suspendedInstance.id,
+    });
+
+    const disabledResult = await muteProfile(disabledTarget.id, auth.token);
+    const suspendedResult = await muteProfile(suspendedTarget.id, auth.token);
+    assert.equal(disabledResult.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+    assert.equal(suspendedResult.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+    assert.equal(await db.$count(ProfileMutes), 0);
   });
 
   test('Remote selected Profile은 Profile Mute Owner로 사용할 수 없다', async () => {
@@ -392,27 +505,26 @@ const muteProfile = (targetProfileId: string, token: string) =>
         id: string;
         createdAt: string;
         targetProfile: { id: string };
-        targetProfileId: string;
       };
     };
   }>(
     `mutation MuteProfile($input: MuteProfileInput!) {
       muteProfile(input: $input) {
-        profileMute { id createdAt targetProfile { id } targetProfileId }
+        profileMute { id createdAt targetProfile { id } }
       }
     }`,
     { input: { id: globalId('Profile', targetProfileId) } },
     token,
   );
 
-const unmuteProfile = (targetProfileId: string, token: string) =>
+const unmuteProfile = (profileMuteId: string, token: string) =>
   requestGraphQL<{
     unmuteProfile: { profileMuteId: string | null };
   }>(
     `mutation UnmuteProfile($input: UnmuteProfileInput!) {
       unmuteProfile(input: $input) { profileMuteId }
     }`,
-    { input: { id: globalId('Profile', targetProfileId) } },
+    { input: { id: profileMuteId } },
     token,
   );
 

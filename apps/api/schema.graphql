@@ -442,8 +442,7 @@ type ProfileInstance {
 type ProfileMute implements Node {
   createdAt: DateTime!
   id: ID!
-  targetProfile: Profile
-  targetProfileId: ID!
+  targetProfile: Profile!
 }
 
 type ProfileMuteConnection {
