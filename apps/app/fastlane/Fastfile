@@ -248,12 +248,10 @@ platform :ios do
 
   desc 'Upload the signed App Store IPA to the TestFlight internal group'
   lane :upload_testflight_internal do
-    require_environment!('IOS_IPA_PATH', 'IOS_RELEASE_NOTES_PATH')
+    require_environment!('IOS_IPA_PATH')
 
     ipa_path = File.expand_path(ENV.fetch('IOS_IPA_PATH'))
-    release_notes_path = File.expand_path(ENV.fetch('IOS_RELEASE_NOTES_PATH'))
     UI.user_error!("IPA was not created at #{ipa_path}.") unless File.file?(ipa_path) && File.size?(ipa_path)
-    UI.user_error!("Release notes were not created at #{release_notes_path}.") unless File.file?(release_notes_path)
 
     api_key = load_apple_api_key
     app = Spaceship::ConnectAPI::App.find(BUNDLE_IDENTIFIER)
@@ -264,7 +262,6 @@ platform :ios do
     upload_to_testflight(
       api_key: api_key,
       app_identifier: BUNDLE_IDENTIFIER,
-      changelog: File.read(release_notes_path),
       distribute_external: false,
       groups: ['Internal Testers'],
       ipa: ipa_path,

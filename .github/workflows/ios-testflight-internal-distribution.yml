@@ -42,13 +42,6 @@ jobs:
           ruby: '3.4'
           working-directory: apps/app
 
-      - name: Verify native build tools
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcodebuild -version
-          pod --version
-
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
@@ -109,20 +102,14 @@ jobs:
           certificate_path="${signing_dir}/distribution.p12"
           profile_path="${signing_dir}/app-store.mobileprovision"
           profile_plist_path="${signing_dir}/app-store.mobileprovision.plist"
-          archive_path="${signing_dir}/Kosmo.xcarchive"
           artifact_dir="${signing_dir}/artifact"
           ipa_path="${artifact_dir}/Kosmo.ipa"
-          export_options_path="${signing_dir}/export-options.plist"
-          release_notes_path="${signing_dir}/release-notes.txt"
 
           mkdir -p "${signing_dir}" "${artifact_dir}"
           {
             echo "IOS_SIGNING_DIR=${signing_dir}"
-            echo "IOS_ARCHIVE_PATH=${archive_path}"
             echo "IOS_ARTIFACT_DIR=${artifact_dir}"
             echo "IOS_IPA_PATH=${ipa_path}"
-            echo "IOS_EXPORT_OPTIONS_PATH=${export_options_path}"
-            echo "IOS_RELEASE_NOTES_PATH=${release_notes_path}"
           } >> "${GITHUB_ENV}"
           chmod 700 "${signing_dir}" "${artifact_dir}"
 
@@ -236,7 +223,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          cat > "${IOS_EXPORT_OPTIONS_PATH}" <<EOF
+          archive_path="${IOS_SIGNING_DIR}/Kosmo.xcarchive"
+          export_options_path="${IOS_SIGNING_DIR}/export-options.plist"
+          cat > "${export_options_path}" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -255,7 +244,7 @@ jobs:
           </dict>
           </plist>
           EOF
-          chmod 600 "${IOS_EXPORT_OPTIONS_PATH}"
+          chmod 600 "${export_options_path}"
 
           xcodebuild \
             -workspace ios/Kosmo.xcworkspace \
@@ -263,7 +252,7 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            -archivePath "${IOS_ARCHIVE_PATH}" \
+            -archivePath "${archive_path}" \
             -derivedDataPath "${IOS_SIGNING_DIR}/derived-data" \
             DEVELOPMENT_TEAM="${APPLE_DEVELOPER_TEAM_ID}" \
             PRODUCT_BUNDLE_IDENTIFIER=moe.kos \
@@ -275,11 +264,9 @@ jobs:
 
           xcodebuild \
             -exportArchive \
-            -archivePath "${IOS_ARCHIVE_PATH}" \
-            -exportOptionsPlist "${IOS_EXPORT_OPTIONS_PATH}" \
+            -archivePath "${archive_path}" \
+            -exportOptionsPlist "${export_options_path}" \
             -exportPath "${IOS_ARTIFACT_DIR}"
-
-          test -s "${IOS_IPA_PATH}"
 
       - name: Verify App Store IPA
         id: verify
@@ -350,17 +337,6 @@ jobs:
             echo "artifact_size_bytes=${artifact_size_bytes}"
           } >> "${GITHUB_OUTPUT}"
 
-      - name: Write TestFlight release notes
-        shell: bash
-        run: |
-          set -euo pipefail
-          {
-            echo "Commit: ${GITHUB_SHA}"
-            echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo "Build: ${IOS_BUILD_NUMBER}"
-          } > "${IOS_RELEASE_NOTES_PATH}"
-          chmod 600 "${IOS_RELEASE_NOTES_PATH}"
-
       - name: Restore App Store Connect API key
         shell: bash
         env:
@@ -401,7 +377,6 @@ jobs:
         run: bundle exec fastlane ios upload_testflight_internal
 
       - name: Write Actions summary
-        if: success()
         env:
           ARTIFACT_SHA256: ${{ steps.verify.outputs.artifact_sha256 }}
           ARTIFACT_SIZE_BYTES: ${{ steps.verify.outputs.artifact_size_bytes }}
