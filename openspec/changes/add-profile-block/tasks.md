@@ -105,19 +105,20 @@ interaction이 같은 정책을 소비하게 한다.
 - `docs/design/accessibility.md`
 - `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`
 - `PROD-823`
+- `DSN-51`
 - `DSN-53`
 - presentation prerequisite evidence `PROD-861` (정본 아님)
 
 **Deliverable**
 
-`PROD-822`의 서버 확정 상태와 승인된 DSN-53 presentation을 소비해 Profile Block confirmation·pending·실패·retry, Mute와
-분리된 관리 목록과 selected Profile별 client 상태 수렴을 제공한다. 구체 route presentation을 선결하지 않으며 보호된
-Profile·Post·Media·Notification 데이터를 UI가 복구하지 않는다.
+`PROD-822`의 서버 확정 상태와 최신 canonical이 승인한 identity-free `blocking`·`blockedBy` route presentation을 소비해 Profile Block
+confirmation·pending·실패·retry, Mute와 분리된 관리 목록과 selected Profile별 client 상태 수렴을 제공한다. presentation 결정·이관 자체는 이
+change가 소유하지 않으며 보호된 Profile·Post·Media·Notification 데이터를 UI가 복구하지 않는다.
 
 **Guardrails**
 
-- `PROD-861`은 공용 presentation 선행 구현 증거로만 참고하며 그 이관 자체를 이 그룹에서 구현하거나 완료 조건으로 다시 소유하지 않는다. 이후 승인된
-  presentation contract를 소비한다.
+- 최신 canonical이 승인한 identity-free `blocking`·`blockedBy` route presentation을 소비한다. `PROD-861`은 공용 presentation 선행 구현 증거로만
+  참고하며 presentation 결정·이관 자체를 이 그룹에서 구현하거나 완료 조건으로 다시 소유하지 않는다.
 - Block과 Mute는 별도 Settings destination으로 유지하고, Block 목록의 loading/error·retry/empty/pagination·unblock 상태를 소유한다. 차단된 상세
   데이터를 재조회하지 않는다.
 - 기존 Button·ActionMenu·ModalSheet·Toast·SettingsItem과 canonical 접근성·viewport 계약을 재사용하고 새 범용 safety component·Settings shell을

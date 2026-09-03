@@ -18,8 +18,8 @@ canonical `profile-block.md`는 이 결과와 durable 경계만 정하며, 각 �
   required cleanup으로 정리하며, required cleanup 완료 전에는 Block action을 성공으로 확정하지 않는다.
 - Profile·Post·Media·Follow 후보와 Home·Local·Profile·Hashtag Post List·검색 및 새 로컬 상호작용에 같은 Profile Block policy를 적용한다.
 - selected Local Profile을 actor로 사용하는 현재 GraphQL ingress와 Owner-only management connection을 제공한다.
-- Confirmation·관리 목록·접근성 등 기존 presentation contract를 소비하는 흐름을 제공한다. route 유지 여부·shell·handle·상태 문구·
-  unblock 위치는 후속 승인된 presentation authority에서 정한다. UI는 보호된 데이터를 복구하지 않는다.
+- Confirmation·관리 목록·접근성 등 기존 presentation contract와 최신 canonical이 승인한 identity-free `blocking`·`blockedBy` route presentation을 소비하는
+  흐름을 제공한다. presentation 결정·이관 자체는 이 change가 소유하지 않으며, UI는 보호된 데이터를 복구하지 않는다.
 - `PROD-813`에서 Local·Remote pair와 주요 surface의 cross-slice 결과를 검증하고 canonical·Linear·OpenSpec sync 뒤 archive한다.
 
 **Non-Goals:**
@@ -29,7 +29,7 @@ canonical `profile-block.md`는 이 결과와 durable 경계만 정하며, 각 �
 - ActivityPub Block/Undo 발신·수신과 remote delivery(`PROD-818`). 현재 remote ingress의 구현은 이 change에 포함하지 않는다.
 - 조회 불가 Notification의 schedule/event/queue/worker/scan 물리 cleanup(`PROD-328`).
 - Block 생성 시 기존 Reaction cleanup. 이 범위는 현재 action에서 정하지 않으며, 필요하면 별도 후속 계약에서 결정한다.
-- Profile Mute, Profile Domain Block, 신고·커뮤니티 관리와 차단된 Profile의 구체 route presentation.
+- Profile Mute, Profile Domain Block, 신고·커뮤니티 관리와 차단된 Profile presentation의 결정·이관 자체.
 
 ## Implementation Guidance
 
@@ -48,8 +48,9 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
   policy를 대신할 수 없다.
 - GraphQL은 selected Local Profile actor와 Owner scope를 사용하고 중앙 application policy를 호출해야 한다. ADR 0024의 경계에 따라 request-specific DB actor
   state(GUC 등)나 client-only filter로 권한·가시성을 대체하지 않는다.
-- UI는 canonical design의 기존 Button·ActionMenu·ModalSheet·Toast·SettingsItem과 기존 Profile/Settings 흐름을 재사용하고, 이 기능만을 위한 새 범용 safety
-  component나 Settings shell을 추가하지 않는다. route shell·handle·상태 문구·unblock 위치는 후속 presentation authority에 남긴다.
+- UI는 canonical design의 기존 Button·ActionMenu·ModalSheet·Toast·SettingsItem과 기존 Profile/Settings 흐름을 재사용하고, 최신 canonical이 승인한 identity-free
+  `blocking`·`blockedBy` route presentation을 소비한다. 이 기능만을 위한 새 범용 safety component나 Settings shell을 추가하지 않으며, presentation 결정·이관 자체는
+  이 change가 소유하지 않는다.
 
 ### Implementation ownership (non-normative)
 
@@ -64,7 +65,7 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
 - Profile route·GraphQL·list/search에서 차단된 대상의 최신 상세를 재조회하거나 client 후처리로 보호된 데이터를 복원하지 않는다.
 - Block 해제 시 제거된 Follow Request·Follow Relationship을 자동 복구하지 않는다. 기존 Reaction cleanup은 현재 action에서 정하지 않는다.
 - `PROD-327` source 신규 Notification suppression, `PROD-818` federation, `PROD-328` async physical cleanup을 현재 task나 완료 증거로 끌어오지 않는다.
-- DSN-53/`PROD-861` presentation 결과를 API·cache·Native runtime 완료 증거로 일반화하지 않는다.
+- DSN-51·DSN-53/`PROD-861` presentation 결과를 API·cache·Native runtime 완료 증거로 일반화하지 않는다.
 
 ## Risks / Trade-offs
 
@@ -84,7 +85,8 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
 2. `PROD-821`에서 Block admission, durable cleanup orchestration과 required cleanup success gate를 연결하고 restart/retry·보존·no-restore 결과를 검증한다.
 3. `PROD-822`에서 common policy·GraphQL을 연결한다. Profile/Post/Media/Follow candidate와 Home·Local·Profile·Hashtag list/search 및 새 interaction은 같은
    양방향 policy 결과를 사용한다.
-4. 후속 presentation authority의 승인과 evidence가 준비된 뒤 `PROD-823`에서 승인된 presentation, Settings Block destination과 selected actor 상태 수렴을 연결한다.
+4. `PROD-823`에서 최신 canonical이 승인한 identity-free `blocking`·`blockedBy` route presentation과 Settings Block destination, selected actor 상태 수렴을 연결한다.
+   `DSN-51`·DSN-53은 presentation 근거이고 `PROD-861`은 선행 구현 증거이며, 해당 presentation의 결정·이관 자체는 이 change가 소유하지 않는다.
 5. `PROD-813`에서 Local·Remote pair와 direct/list/search/interaction 및 cross-slice E2E, canonical·Linear·OpenSpec 정합성, 플랫폼별 실제 evidence를 확인한다.
    모든 declared task와 required validation 뒤에만 `add-profile-block`을 archive한다.
 6. rollback은 repository의 기존 workflow로 새 relation을 읽지 않게 처리하며, 저장된 Profile Block row를 임의 삭제하거나 차단 전 관계를 복구하지 않는다. `PROD-327`,
