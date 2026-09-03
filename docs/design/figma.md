@@ -438,12 +438,6 @@ documentation·state specimen을 두 번째 행에 둔다.
 제품 화면에 채택됐다는 evidence가 아니다. 어느 항목도 Foundation, component source, `docs/design`과 연결된 Product
 이슈의 계약을 대체하지 않는다.
 
-### `06 Prototypes / Flows` 구성 (2026-09-03 기준)
-
-top-level 11개는 `KOSMO Motion Playground · Production`과 Profile editing prototype 10개다. Profile prototype은
-Center/Mobile 2행과 Add/Edit/Reorder/Avatar/Header 5열로 정렬한다. prototype은 interaction·배치 검토용이며
-component source, canonical screen 또는 Product runtime 완료 evidence로 사용하지 않는다.
-
 #### DSN-43 PostComposer source 계약
 
 - `Rail`·`Overlay`의 모든 public `PostComposer` variant는 하나의 공용
@@ -585,6 +579,12 @@ component source, canonical screen 또는 Product runtime 완료 evidence로 사
 
 SearchField, Switch와 Tabs는 기존 공용 source를 재사용한다. 이 계약은 설정용 control의 조합 가능성까지만 다루며
 설정 IA, route, 저장 방식, frontend lifecycle은 포함하지 않는다.
+
+### `06 Prototypes / Flows` 구성 (2026-09-03 기준)
+
+top-level 11개는 `KOSMO Motion Playground · Production`과 Profile editing prototype 10개다. Profile prototype은
+Center/Mobile 2행과 Add/Edit/Reorder/Avatar/Header 5열로 정렬한다. prototype은 interaction·배치 검토용이며
+component source, canonical screen 또는 Product runtime 완료 evidence로 사용하지 않는다.
 
 ## 디자인 원칙
 
