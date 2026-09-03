@@ -200,7 +200,7 @@ test('개인정보 처리방침은 로그인 없이 공개되고 landing으로 �
   await page.goto('/privacy');
 
   await expect(page.getByRole('heading', { name: 'Kosmo 개인정보 처리방침' })).toBeVisible();
-  await expect(page.getByText('시행일: 2026년 7월 29일')).toBeVisible();
+  await expect(page.getByText('시행일: 별도 공지')).toBeVisible();
   await expect(page.getByText('9. 자동 수집 정보와 행태정보')).toBeVisible();
   await expect(page.getByText(/Session replay: 세션의 10%/)).toBeVisible();
   await expect(page.getByRole('link', { name: 'KOSMO로 돌아가기' })).toHaveAttribute('href', '/');
