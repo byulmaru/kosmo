@@ -513,7 +513,12 @@ const styles = StyleSheet.create({
     paddingVertical: space[8],
   },
   nativeDivider: { borderTopWidth: borderWidths[1], marginHorizontal: space[8] },
-  nativeItem: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
+  nativeItem: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space[8],
+    justifyContent: 'flex-start',
+  },
   label: textStyles.uiLabelL,
   sheet: {
     borderTopLeftRadius: radius[16],

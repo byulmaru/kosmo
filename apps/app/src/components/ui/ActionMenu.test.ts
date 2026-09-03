@@ -130,7 +130,7 @@ test('Native ActionMenu runs a selected action after its exit finishes', async (
   await act(async () => renderer?.unmount());
 });
 
-test('Native ActionMenu uses inset subtle dividers without changing 44px menu rows', async () => {
+test('Native ActionMenu uses left-aligned inset rows with subtle dividers', async () => {
   assert.ok(actionMenuModule);
   const props = {
     accessibilityLabel: '메뉴',
@@ -151,7 +151,11 @@ test('Native ActionMenu uses inset subtle dividers without changing 44px menu ro
     .findAllByType(PressableHost)
     .filter((node) => node.props.accessibilityRole === 'menuitem');
   assert.equal(rows?.length, 2);
-  rows?.forEach((row) => assert.equal(flattenStyle(row.props.style).minHeight, 44));
+  rows?.forEach((row) => {
+    const rowStyle = flattenStyle(row.props.style);
+    assert.equal(rowStyle.justifyContent, 'flex-start');
+    assert.equal(rowStyle.minHeight, 44);
+  });
 
   const divider = renderer?.root
     .findAllByType(ViewHost)
