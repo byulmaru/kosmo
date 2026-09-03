@@ -9,7 +9,7 @@ import { PostMediaViewerSurface } from '@/components/post/PostMediaViewerSurface
 import { PostMediaViewerThread } from '@/components/post/PostMediaViewerThread';
 import { ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
 import { SessionProvider } from '@/session/SessionProvider';
-import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
+import { useTheme } from '@/theme/ThemeProvider';
 import appleTouchImage from '../../../public/apple-touch-icon.png?url';
 import iconImage from '../../../public/icon-512.png?url';
 import maskableIconImage from '../../../public/icon-maskable-512.png?url';
@@ -113,11 +113,7 @@ function PostMediaViewerCatalog({
   return (
     <View style={{ height, width: '100%' }}>
       <PostMediaViewerSurface
-        actionTray={
-          <ThemeProvider mode="dark" reduceMotion>
-            <ViewerActionBarFixture onReply={onReply} />
-          </ThemeProvider>
-        }
+        actionTray={<ViewerActionBarFixture onReply={onReply} />}
         contextRail={<ContextRailFixture />}
         currentIndex={clampedIndex}
         media={media}
@@ -367,7 +363,7 @@ export const Playground: Story = {
 
 export const CompactProductionActionSurfaceContract: Story = {
   args: { currentIndex: 0, mediaCount: 4, presentation: 'compact', viewState: 'ready' },
-  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  globals: { theme: 'light', viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ args, canvasElement, step }) => {
     args.onReply.mockClear();
     const canvas = within(canvasElement);
@@ -390,7 +386,9 @@ export const CompactProductionActionSurfaceContract: Story = {
 
     await step('production More bottom sheet open과 backdrop dismiss', async () => {
       await userEvent.click(within(actionBar).getByRole('button', { name: '더 보기' }));
-      expect(await screen.findByRole('menu', { name: '더 보기 메뉴' })).toBeVisible();
+      const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+      expect(menu).toBeVisible();
+      expect(window.getComputedStyle(menu).backgroundColor).toBe('rgb(255, 255, 255)');
       const backdrop = await screen.findByTestId('action-menu-backdrop');
       expect(backdrop).toBeVisible();
       expect(image).toBeVisible();
