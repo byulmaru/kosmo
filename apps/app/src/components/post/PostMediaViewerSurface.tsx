@@ -220,10 +220,18 @@ function StatusAction({
   label,
   onActivate,
 }: Readonly<{ accessibleName: string; label: string; onActivate: () => void }>) {
+  const hitSlop =
+    Platform.OS === 'ios'
+      ? { bottom: 2, left: 0, right: 0, top: 2 }
+      : Platform.OS === 'android'
+        ? { bottom: 4, left: 0, right: 0, top: 4 }
+        : undefined;
+
   return (
     <Pressable
       accessibilityLabel={accessibleName}
       accessibilityRole="button"
+      hitSlop={hitSlop}
       onPress={() => onActivate()}
       style={(state) => {
         const webState = state as PressableStateCallbackType & {
