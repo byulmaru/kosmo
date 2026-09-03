@@ -64,7 +64,6 @@ const ProfileSwitcherFragment = graphql`
           id
           url
         }
-        ...ProfileNameBlock_profile
       }
     }
   }
@@ -363,74 +362,74 @@ export function ProfileSwitcher({
       busy={busy}
       footer={
         <>
-          {!creating ? (
-            <Pressable
-              accessibilityLabel="새 프로필 추가"
-              accessibilityRole={redesignedWeb || Platform.OS !== 'web' ? 'button' : undefined}
-              disabled={busy}
-              onPress={() => {
-                setCreating(true);
-                setFieldError(null);
-                setOperationErrorState(null);
-              }}
-              role={Platform.OS === 'web' && !redesignedWeb ? 'menuitem' : undefined}
-              style={({ pressed }) => [
-                styles.addProfile,
-                {
-                  backgroundColor: pressed ? theme.surface : 'transparent',
-                  opacity: busy ? 0.5 : 1,
-                },
-              ]}
+          {creating ? (
+            <View
+              accessibilityLabel="새 프로필 만들기"
+              role={Platform.OS === 'web' ? 'form' : undefined}
+              style={styles.createForm}
             >
-              <View style={styles.addIcon}>
-                <PlusIcon color={theme.text} size={18} strokeWidth={2.25} />
-              </View>
-              <Text style={[styles.addLabel, { color: theme.text }]}>새 프로필 추가</Text>
-            </Pressable>
-          ) : null}
-          <View style={styles.pickerFooter}>
-            {creating ? (
-              <View
-                accessibilityLabel="새 프로필 만들기"
-                role={Platform.OS === 'web' ? 'form' : undefined}
-                style={styles.createForm}
-              >
-                <View style={styles.createRow}>
-                  <View style={styles.inputField}>
-                    <TextField
-                      accessibilityLabel="프로필 핸들"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      editable={!busy}
-                      error={fieldError ?? undefined}
-                      onChangeText={setHandle}
-                      onSubmitEditing={createProfile}
-                      placeholder="새 프로필 핸들"
-                      style={styles.input}
-                      value={handle}
-                    />
-                  </View>
-                  <Button
-                    disabled={busy}
-                    loading={busy}
-                    onPress={createProfile}
-                    style={styles.createButton}
-                  >
-                    만들기
-                  </Button>
+              <View style={styles.createRow}>
+                <View style={styles.inputField}>
+                  <TextField
+                    accessibilityLabel="프로필 핸들"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!busy}
+                    error={fieldError ?? undefined}
+                    onChangeText={setHandle}
+                    onSubmitEditing={createProfile}
+                    placeholder="새 프로필 핸들"
+                    style={styles.input}
+                    value={handle}
+                  />
                 </View>
-                <Text style={[styles.help, { color: theme.textSecondary }]}>
-                  영문, 숫자, 밑줄(_)만 사용할 수 있어요.
-                </Text>
+                <Button
+                  disabled={busy}
+                  loading={busy}
+                  onPress={createProfile}
+                  style={styles.createButton}
+                >
+                  만들기
+                </Button>
               </View>
-            ) : null}
-            {operationError ? (
-              <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-                {operationError}
+              <Text style={[styles.help, { color: theme.textSecondary }]}>
+                영문, 숫자, 밑줄(_)만 사용할 수 있어요.
               </Text>
-            ) : null}
-          </View>
+            </View>
+          ) : null}
+          {operationError ? (
+            <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+              {operationError}
+            </Text>
+          ) : null}
         </>
+      }
+      menuFooter={
+        !creating ? (
+          <Pressable
+            accessibilityLabel="새 프로필 추가"
+            accessibilityRole={redesignedWeb || Platform.OS !== 'web' ? 'button' : undefined}
+            disabled={busy}
+            onPress={() => {
+              setCreating(true);
+              setFieldError(null);
+              setOperationErrorState(null);
+            }}
+            role={Platform.OS === 'web' && !redesignedWeb ? 'menuitem' : undefined}
+            style={({ pressed }) => [
+              styles.addProfile,
+              {
+                backgroundColor: pressed ? theme.surface : 'transparent',
+                opacity: busy ? 0.5 : 1,
+              },
+            ]}
+          >
+            <View style={styles.addIcon}>
+              <PlusIcon color={theme.text} size={18} strokeWidth={2.25} />
+            </View>
+            <Text style={[styles.addLabel, { color: theme.text }]}>새 프로필 추가</Text>
+          </Pressable>
+        ) : null
       }
       onSelect={selectProfile}
       pickerRef={pickerRef}
@@ -709,7 +708,6 @@ const styles = StyleSheet.create({
   countLink: { flexDirection: 'row', gap: spacing.sm },
   count: { fontFamily: 'SUIT', ...typography.sm },
   countLabel: { fontFamily: 'SUIT', ...typography.sm },
-  pickerFooter: { flexShrink: 0 },
   backdrop: {
     alignItems: 'center',
     flex: 1,

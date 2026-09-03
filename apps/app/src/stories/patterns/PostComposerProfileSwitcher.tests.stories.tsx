@@ -1,4 +1,5 @@
 import baseMeta, {
+  CancelSelectionContract as cancelSelectionContract,
   FailureAndCancelContract as failureAndCancelContract,
   InteractionContract as interactionContract,
   PendingSelectionContract as pendingSelectionContract,
@@ -17,3 +18,4 @@ type Story = StoryObj<typeof meta>;
 export const InteractionContract: Story = interactionContract;
 export const PendingSelectionContract: Story = pendingSelectionContract;
 export const FailureAndCancelContract: Story = failureAndCancelContract;
+export const CancelSelectionContract: Story = cancelSelectionContract;
