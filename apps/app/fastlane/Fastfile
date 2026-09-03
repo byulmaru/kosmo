@@ -97,7 +97,13 @@ platform :ios do
       UI.user_error!('IPA must contain exactly one app bundle.') unless app_bundles.one?
 
       app_bundle = app_bundles.first
-      info = Plist.parse_xml(File.join(app_bundle, 'Info.plist'))
+      info_plist_path = File.join(app_bundle, 'Info.plist')
+      info_xml_path = File.join(directory, 'Info.plist.xml')
+      sh(
+        "plutil -convert xml1 -o #{Shellwords.escape(info_xml_path)} " \
+        "#{Shellwords.escape(info_plist_path)}",
+      )
+      info = Plist.parse_xml(info_xml_path)
       UI.user_error!('IPA Info.plist is missing.') unless info
 
       bundle_id = info['CFBundleIdentifier'].to_s
