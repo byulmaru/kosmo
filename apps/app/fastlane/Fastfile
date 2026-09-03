@@ -68,8 +68,6 @@ end
 
 platform :ios do
   private_lane :load_apple_api_key do
-    require_environment!('APPLE_API_KEY_ID', 'APPLE_API_ISSUER_ID', 'APPLE_API_KEY_PATH')
-
     app_store_connect_api_key(
       key_id: ENV.fetch('APPLE_API_KEY_ID'),
       issuer_id: ENV.fetch('APPLE_API_ISSUER_ID'),
