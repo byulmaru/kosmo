@@ -102,8 +102,8 @@ Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조
 - Lifecycle State가 Active여야 한다.
 - Author Profile의 Lifecycle State가 Active이고 Suspension State가 Normal이어야 한다.
 - 현재 Post Content가 참조하는 Media가 Media 조회 정책을 통과해야 한다.
-- viewer가 Author Profile을 차단했거나 Author Profile의 Instance를 Profile Domain Block한 경우 없는 것처럼
-  취급한다.
+- viewer Profile과 Author Profile 사이에 어느 방향으로든 Profile Block이 존재하거나, viewer가 Author Profile의
+  Instance를 Profile Domain Block한 경우 없는 것처럼 취급한다.
 - Author Profile의 Instance Safety State가 Domain Block이면 없는 것처럼 취급한다.
 - Content 없는 Repost는 Repost Source가 Tombstone이거나 조회 정책을 통과하지 못하면 후보가 아니다.
 - Quote와 Reply이면서 Quote인 Post는 Repost Source가 Tombstone이거나 조회 정책을 통과하지 못해도 자체
