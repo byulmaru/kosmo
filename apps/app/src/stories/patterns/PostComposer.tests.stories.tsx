@@ -1,4 +1,4 @@
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import baseMeta, {
   InteractionContract as interactionContract,
   MobileCandidateContract as mobileCandidateContract,
@@ -17,6 +17,7 @@ import baseMeta, {
   RailMedia as railMediaStory,
   RailProgressRingContract as railProgressRingContract,
   SubmitFailure as submitFailureStory,
+  SubmittingPickerContract as submittingPickerContract,
   SubmittingSpinnerContract as submittingSpinnerContract,
 } from './PostComposer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -45,6 +46,7 @@ export const OverlayProgressRingContract: Story = overlayProgressRingContract;
 export const PendingMediaContract: Story = pendingMediaContract;
 export const ProgressRingToneContract: Story = progressRingToneContract;
 export const RailProgressRingContract: Story = railProgressRingContract;
+export const SubmittingPickerContract: Story = submittingPickerContract;
 export const SubmittingSpinnerContract: Story = submittingSpinnerContract;
 
 export const ControlsContract: Story = {
@@ -110,7 +112,7 @@ export const SubmitFailureToastContract: Story = {
   },
 };
 
-export const EmojiOutsideDismissContract: Story = {
+export const EmojiPickerLifecycleContract: Story = {
   ...playgroundContract,
   args: { body: '이모지 위치를 확인할 본문', items: [], surface: 'rail' },
   globals: { viewport: { isRotated: false, value: 'postComposerPicker' } },
@@ -127,11 +129,12 @@ export const EmojiOutsideDismissContract: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '이모지 추가' }));
+    const trigger = canvas.getByRole('button', { name: '이모지 추가' });
+    await userEvent.click(trigger);
 
     const picker = await canvas.findByTestId('post-composer-emoji-picker');
-    const trigger = canvas.getByRole('button', { name: '이모지 추가' });
     expect(picker).toBeVisible();
+    await waitFor(() => expect(canvas.getByRole('searchbox', { name: '반응 검색' })).toHaveFocus());
     expect(picker.getBoundingClientRect().right).toBeLessThanOrEqual(
       canvasElement.ownerDocument.defaultView!.innerWidth,
     );
@@ -142,8 +145,22 @@ export const EmojiOutsideDismissContract: Story = {
       trigger.getBoundingClientRect().bottom,
     );
 
+    const [reaction] = canvas.getAllByRole('button', { name: '감동 🥹' });
+    reaction.focus();
+    expect(reaction).toHaveFocus();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(canvas.queryByTestId('post-composer-emoji-picker')).toBeNull());
+    expect(trigger).toHaveFocus();
+
+    await userEvent.click(trigger);
+    await userEvent.click(trigger);
+    await waitFor(() => expect(canvas.queryByTestId('post-composer-emoji-picker')).toBeNull());
+    expect(trigger).toHaveFocus();
+
+    await userEvent.click(trigger);
     await userEvent.click(canvas.getByRole('button', { name: '반응 선택 닫기' }));
     expect(canvas.queryByTestId('post-composer-emoji-picker')).toBeNull();
+    expect(trigger).toHaveFocus();
   },
 };
 

@@ -1,9 +1,9 @@
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { XIcon } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ComposerMediaEditor } from '@/components/post/ComposerMediaEditor';
 import {
   MobileFullscreenComposerShellCandidate,
@@ -166,6 +166,7 @@ const meta = {
     'ProgressRingToneContract',
     'RailProgressRingContract',
     'SubmittingSpinnerContract',
+    'SubmittingPickerContract',
     'composerMedia',
   ],
   parameters: { controls: { disable: true }, layout: 'centered' },
@@ -328,6 +329,7 @@ function InteractiveComposer({
   } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState('');
+  const pickerTriggerRef = useRef<HTMLElement | null>(null);
   const [pickerPosition, setPickerPosition] = useState({
     height: 624,
     left: space[8] as number,
@@ -337,6 +339,18 @@ function InteractiveComposer({
     postBodyMaxLength -
     normalizePostContentPlainText(body).length -
     normalizePostContentPlainText(contentWarning).length;
+  const closePicker = useCallback(() => {
+    setPickerOpen(false);
+    pickerTriggerRef.current?.focus();
+  }, []);
+  const togglePicker = () => {
+    props.onEmojiAction();
+    if (pickerOpen) {
+      closePicker();
+    } else {
+      setPickerOpen(true);
+    }
+  };
 
   useEffect(() => setBody(props.body), [props.body]);
   useEffect(() => setContentWarning(props.contentWarning), [props.contentWarning]);
@@ -347,6 +361,11 @@ function InteractiveComposer({
   useEffect(() => setItems(props.items), [props.items]);
   useEffect(() => setVisibility(props.visibility), [props.visibility]);
   useEffect(() => setSensitiveMedia(props.sensitiveMedia), [props.sensitiveMedia]);
+  useEffect(() => {
+    if (props.submitting) {
+      setPickerOpen(false);
+    }
+  }, [props.submitting]);
   useEffect(() => {
     if (mobile || !pickerOpen || typeof document === 'undefined') {
       return;
@@ -363,6 +382,7 @@ function InteractiveComposer({
     if (!trigger || !storyWindow) {
       return;
     }
+    pickerTriggerRef.current = trigger;
 
     const bounds = trigger.getBoundingClientRect();
     const panelWidth = 360;
@@ -385,20 +405,20 @@ function InteractiveComposer({
       ),
     });
   }, [mobile, pickerOpen]);
-
   const closeOverlay = () => {
     setEditor(null);
     setOverlayOpen(false);
     setPickerOpen(false);
   };
 
-  const picker = pickerOpen ? (
+  const shouldShowPicker = pickerOpen && !props.submitting;
+  const picker = shouldShowPicker ? (
     <View pointerEvents="box-none" style={mobile ? styles.mobilePicker : styles.pickerLayer}>
       {!mobile ? (
         <Pressable
           accessibilityLabel="반응 선택 닫기"
           accessibilityRole="button"
-          onPress={() => setPickerOpen(false)}
+          onPress={closePicker}
           style={styles.pickerDismiss}
         />
       ) : null}
@@ -417,12 +437,16 @@ function InteractiveComposer({
         testID="post-composer-emoji-picker"
       >
         <FullReactionPicker
+          onClose={closePicker}
           onQueryChange={setPickerQuery}
           onSelect={(option) => {
+            if (props.submitting) {
+              return;
+            }
             const value = `${body}${option.emoji}`;
             props.onBodyChange(value);
             setBody(value);
-            setPickerOpen(false);
+            closePicker();
           }}
           options={reactionOptions}
           presentation={mobile ? 'mobile' : 'web'}
@@ -503,10 +527,7 @@ function InteractiveComposer({
             props.onContentWarningToggle();
             setContentWarningExpanded((expanded) => !expanded);
           }}
-          onEmojiAction={() => {
-            props.onEmojiAction();
-            setPickerOpen(true);
-          }}
+          onEmojiAction={togglePicker}
           onMediaEdit={(key, tool) => {
             props.onMediaEdit(key, tool);
             setEditor({
@@ -548,10 +569,7 @@ function InteractiveComposer({
             props.onContentWarningToggle();
             setContentWarningExpanded((expanded) => !expanded);
           }}
-          onEmojiAction={() => {
-            props.onEmojiAction();
-            setPickerOpen(true);
-          }}
+          onEmojiAction={togglePicker}
           onExpand={() => {
             props.onExpand();
             setOverlayOpen(true);
@@ -647,10 +665,7 @@ function InteractiveComposer({
                   props.onContentWarningToggle();
                   setContentWarningExpanded((expanded) => !expanded);
                 }}
-                onEmojiAction={() => {
-                  props.onEmojiAction();
-                  setPickerOpen(true);
-                }}
+                onEmojiAction={togglePicker}
                 onMediaEdit={(key, tool) => {
                   props.onMediaEdit(key, tool);
                   setEditor({
@@ -680,6 +695,21 @@ function InteractiveComposer({
         picker
       )}
     </View>
+  );
+}
+
+function SubmittingPickerComposer(props: PostComposerTargetProps) {
+  const [submitting, setSubmitting] = useState(false);
+
+  return (
+    <InteractiveComposer
+      {...props}
+      onSubmit={() => {
+        props.onSubmit();
+        setSubmitting(true);
+      }}
+      submitting={submitting}
+    />
   );
 }
 
@@ -738,6 +768,13 @@ export const InteractionContract: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: '이모지 추가' }));
     expect(args.onEmojiAction).toHaveBeenCalledOnce();
     expect(page.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
+    page.getAllByRole('button', { name: '감동 🥹' })[0].focus();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(page.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
+    expect(page.getByRole('dialog', { name: '글쓰기' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: '이모지 추가' })).toHaveFocus();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '이모지 추가' }));
     await userEvent.click(page.getAllByRole('button', { name: '빨간 하트 ❤️' })[0]);
     expect(within(dialog).getByRole('textbox', { name: '게시물 내용' })).toHaveValue(
       '오늘의 코스모 이야기를 나눠보세요. 오버레이❤️',
@@ -871,6 +908,29 @@ export const SubmittingSpinnerContract: Story = {
     expect(submit).toBeDisabled();
     expect(canvas.getByLabelText('게시 처리 중')).toBeVisible();
     expect(canvas.queryByText('게시 중')).toBeNull();
+  },
+};
+
+export const SubmittingPickerContract: Story = {
+  ...Playground,
+  args: { body: '제출 전 이모지 선택', items: [], surface: 'rail' },
+  render: (args) => <SubmittingPickerComposer {...args} />,
+  play: async ({ args, canvasElement }) => {
+    args.onBodyChange.mockClear();
+    args.onSubmit.mockClear();
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+
+    await userEvent.click(canvas.getByRole('button', { name: '이모지 추가' }));
+    expect(await canvas.findByTestId('post-composer-emoji-picker')).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: '게시' }));
+    await waitFor(() => expect(canvas.queryByTestId('post-composer-emoji-picker')).toBeNull());
+
+    expect(canvas.getByRole('button', { name: '게시' })).toBeDisabled();
+    expect(body).toHaveValue('제출 전 이모지 선택');
+    expect(args.onBodyChange).not.toHaveBeenCalled();
+    expect(args.onSubmit).toHaveBeenCalledOnce();
   },
 };
 

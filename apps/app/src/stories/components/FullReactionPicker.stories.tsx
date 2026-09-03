@@ -261,6 +261,7 @@ export const recentLimitOptions: readonly FullReactionPickerOption[] = Array.fro
 
 const meta = {
   args: {
+    onClose: fn(),
     onQueryChange: fn(),
     onSelect: fn(),
     options: reactionOptions,
@@ -270,6 +271,7 @@ const meta = {
     loading: false,
   },
   argTypes: {
+    onClose: { action: 'close', control: false },
     onQueryChange: { action: 'queryChange', control: false },
     onSelect: { action: 'select', control: false },
     options: { control: 'object' },

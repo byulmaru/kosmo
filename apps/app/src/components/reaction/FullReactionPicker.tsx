@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react-native';
+import { useEffect, useRef } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
@@ -17,6 +18,7 @@ export type FullReactionPickerOption = Readonly<{
 }>;
 
 export type FullReactionPickerProps = {
+  onClose: () => void;
   onQueryChange: (query: string) => void;
   onSelect: (option: FullReactionPickerOption) => void;
   options: ReadonlyArray<FullReactionPickerOption>;
@@ -27,6 +29,7 @@ export type FullReactionPickerProps = {
 };
 
 export function FullReactionPicker({
+  onClose,
   onQueryChange,
   onSelect,
   options,
@@ -38,6 +41,7 @@ export function FullReactionPicker({
   const theme = useTheme();
   const elevation = useElevation();
   const mobile = presentation === 'mobile';
+  const pickerRef = useRef<View>(null);
   const categories = Array.from(
     new Map(options.map((option) => [option.category, option.categoryLabel])).entries(),
     ([id, label]) => ({ id, label }),
@@ -56,10 +60,32 @@ export function FullReactionPicker({
       : searchResults.length > 0
         ? 'searchResults'
         : 'empty';
+  useEffect(() => {
+    if (mobile) {
+      return;
+    }
+
+    const ownerDocument = (pickerRef.current as unknown as HTMLElement | null)?.ownerDocument;
+    if (!ownerDocument) {
+      return;
+    }
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    ownerDocument.addEventListener('keyup', onKeyUp, true);
+    return () => ownerDocument.removeEventListener('keyup', onKeyUp, true);
+  }, [mobile, onClose]);
   const picker = (
     <View
       accessibilityLabel="반응 선택"
       accessibilityViewIsModal
+      onAccessibilityEscape={onClose}
+      ref={pickerRef}
       role={Platform.OS === 'web' ? 'dialog' : undefined}
       style={[
         mobile ? styles.mobileSheet : styles.webDialog,
@@ -177,6 +203,7 @@ function SearchField({ onChange, value }: { onChange: (value: string) => void; v
         accessibilityLabel="반응 검색"
         autoCapitalize="none"
         autoCorrect={false}
+        autoFocus={Platform.OS === 'web'}
         onChangeText={onChange}
         placeholder="반응 검색"
         placeholderTextColor={theme.foregroundMuted}
