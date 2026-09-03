@@ -46,27 +46,25 @@ async function startRuntime(): Promise<void> {
     TEMPORAL_ADDRESS: address,
     TEMPORAL_NAMESPACE: namespace,
   };
-  const server = spawn(
-    'pnpm',
-    ['--dir', workerDirectory, 'exec', 'node', '--import', 'tsx', 'src/temporal-test-server.ts'],
-    {
-      cwd: rootDirectory,
-      env: {
-        ...workerEnvironment,
-        PORT: String(healthPort),
-        TEMPORAL_PORT: String(temporalPort),
-      },
-      stdio: 'ignore',
+  const server = spawn(process.execPath, ['--import', 'tsx', 'src/temporal-test-server.ts'], {
+    cwd: workerDirectory,
+    env: {
+      ...workerEnvironment,
+      PORT: String(healthPort),
+      TEMPORAL_PORT: String(temporalPort),
     },
-  );
+    // Keep startup failures visible in CI and avoid keeping the parent alive
+    // with a long-lived stderr pipe after the children are unref'ed.
+    stdio: ['ignore', 'ignore', 'inherit'],
+  });
   let worker: ChildProcess | undefined;
 
   try {
     await waitForChildHealth(`http://${host}:${healthPort}/health`, server, startupTimeoutMs);
-    worker = spawn('pnpm', ['--dir', workerDirectory, 'start'], {
-      cwd: rootDirectory,
+    worker = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
+      cwd: workerDirectory,
       env: workerEnvironment,
-      stdio: 'ignore',
+      stdio: ['ignore', 'ignore', 'inherit'],
     });
     await waitForChildHealth(`http://${host}:${workerPort}/ready`, worker, startupTimeoutMs);
   } catch (error) {
@@ -120,7 +118,9 @@ async function waitForHealth(url: string, child: ChildProcess, timeoutMs: number
 
   while (Date.now() < deadline) {
     if (child.exitCode !== null || child.signalCode !== null) {
-      throw new Error(`Temporal test process exited before becoming ready: ${url}`);
+      throw new Error(
+        `Temporal test process exited before becoming ready: ${url} (${formatChildExit(child)})`,
+      );
     }
 
     try {
@@ -139,7 +139,7 @@ async function waitForHealth(url: string, child: ChildProcess, timeoutMs: number
   throw new Error(
     `Timed out waiting for Temporal test process at ${url}: ${
       lastError instanceof Error ? lastError.message : String(lastError)
-    }`,
+    } (${formatChildExit(child)})`,
   );
 }
 
@@ -151,9 +151,22 @@ async function waitForChildHealth(
   await Promise.race([
     waitForHealth(url, child, timeoutMs),
     new Promise<never>((_, reject) => {
-      child.once('error', reject);
+      child.once('error', (error) => {
+        reject(
+          new Error(
+            `Unable to start Temporal test process at ${url}: ${
+              error instanceof Error ? error.message : String(error)
+            } (${formatChildExit(child)})`,
+            { cause: error },
+          ),
+        );
+      });
     }),
   ]);
+}
+
+function formatChildExit(child: ChildProcess): string {
+  return `exitCode=${child.exitCode ?? 'null'}, signal=${child.signalCode ?? 'null'}`;
 }
 
 function terminate(child: ChildProcess): void {
