@@ -8,12 +8,12 @@ KOSMO 디자인 작업은 Figma의 `KOSMO` 파일에서 한다.
 
 | 페이지                                         | 용도                                                                                                                    |
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `01 Foundations`                               | 프로덕션 Foundations — Color System, Typography, Brand & Logo, Motion과 Component Usage Mapping                         |
-| `02 Components`                                | 컴포넌트 라이브러리. 도메인별 섹션으로 구성 (아래 참고)                                                                 |
-| `03 Patterns`                                  | 여러 Production component를 조합한 비교·검토용 snapshot. source와 제품 동작의 정본은 아니다                             |
+| `01 Foundations`                               | 프로덕션 Foundations — Color System, Typography, Brand & Logo, Motion과 color/source usage mapping                      |
+| `02 Components`                                | 컴포넌트 라이브러리. 용도와 주 소비처 기준의 7개 source family로 구성 (아래 참고)                                       |
+| `03 Patterns`                                  | Production component의 문서·state specimen·조합 snapshot. source와 제품 동작의 정본은 아니다                            |
 | `04 Screens - Mobile`                          | 모바일 화면 디자인. Screen Inventory 프레임에서 화면별 상태(완료 / 마이그레이션 필요 / 신규 필요)를 추적한다            |
 | `05 Screens - Web`                             | 웹 화면 디자인. 화면마다 1440 / 1024 두 breakpoint 프레임으로 구성하고, Web Screen Inventory 프레임에서 상태를 추적한다 |
-| `06 Prototypes / Flows`                        | 승인된 interaction·motion의 재생 가능한 대표 timeline과 제품 flow                                                       |
+| `06 Prototypes / Flows`                        | 승인된 interaction·motion의 재생 가능한 대표 timeline과 Profile editing prototype                                       |
 | `07 Archive`                                   | 구 와이어프레임 보관. 새 디자인의 마이그레이션 원본으로만 참조한다                                                      |
 | `99 Archive — Foundations Legacy · 2026-08-10` | 기존 Foundation 프레임과 variable 원본. 새 작업에 사용하지 않고 이관 근거로만 보존한다                                  |
 
@@ -361,11 +361,19 @@ Loading·Empty·Error·Deleted·Pinned는 기존 route의 state coverage다. rou
 
 ### `01 Foundations` 프로덕션 구조
 
+2026-09-03 readback 기준 top-level은 아래 7개다.
+
 - [`01 Color System · Production`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1661-254) — primitive, semantic Light/Dark, feedback, state, contrast와 migration 계약
 - [`02 Typography & Layout · Production`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1659-255) — typography, font mode, spacing, radius, border, elevation, icon과 density/rhythm 계약. 상세 사용 규칙은 [foundations.md](./foundations.md)를 따른다.
-- `03 Brand & Logo · Production` — 로고 규칙, 플랫폼 자산과 Default Avatar
+- [`03 Brand & Logo · Production`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1659-390) — 로고 규칙, 플랫폼 자산과 Default Avatar
 - [`04 Motion · Production`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1772-890) — duration, easing, interaction·overlay·loading과 OS reduced-motion 계약. 상세 규칙은 [motion.md](./motion.md)를 따른다.
-- [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1684-254) — 실제 화면과 공용 컴포넌트의 Legacy → Production color 적용표
+- [`05 Icon Library · Production`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3110-880) — canonical icon source와 semantic action mapping. 상세 규칙은 [icons.md](./icons.md)를 따른다.
+- [`09 Implementation Sync Matrix · DSN-13`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1694-880) — Foundations와 implementation의 이관 상태를 추적하는 matrix
+- [`10 Component Source Usage Mapping · Partial`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1849-883) — source와 실제 consumer의 사용 관계를 추적하는 부분 mapping. `08`의 color 적용표와 다른 계약이며, 최종 coverage 확인은 DSN-37이 소유한다.
+
+[`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1684-254)은
+top-level이 아니라 `01 Color System · Production` 내부에서 실제 화면과 공용 컴포넌트의 Legacy → Production
+color 적용을 추적한다. `10 Component Source Usage Mapping`으로 대체하거나 합치지 않는다.
 
 Active color variable collection은 다음 두 개다.
 
@@ -376,35 +384,61 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
 
 `[Legacy] Color`, `[Legacy] Foundation`, `[Legacy] Brand`, `[Legacy] 컬렉션 1`은 기존 binding 보존용이다. 새 binding을 추가하지 않으며 DSN-13에서 Components/Screens를 active collection으로 이관한다. 자세한 색상 값과 역할은 [colors.md](./colors.md)를 따른다.
 
-### `02 Components` 섹션 구성 (2026-08 기준)
+### `02 Components` 섹션 구성 (2026-09-03 기준)
 
-- `00 Page Guide` — 페이지 목적과 Production 상태를 설명하는 guide frame
-- `01 Primitives · Current production` — Button, input, selection, feedback처럼 여러 도메인이 소비하는 독립 source
-- `02 Shared domain · Production` — profile, navigation, composer처럼 제품 문맥을 가진 공용 source
-- `03 Component Usage Mapping` — source와 실제 consumer의 사용 관계
-- `04 Settings · Production` — SettingsItem, SettingsNavigationList와 설정 전용 field composition source
+`02 Components`의 top-level은 `00 Page Guide`와 아래 7개 source section, 총 8개다. component owner
+131개를 용도와 주 소비처 기준의 primary family 하나에 각각 배치하며, Current·Target·Candidate·Deprecated는
+section이 아니라 각 source의 lifecycle 표기로 유지한다.
 
-개별 DSN 작업의 검토용 section이 페이지에 함께 있을 수 있지만 위 번호 체계의 정본 source section으로 간주하지
-않는다. 독립 source는 `02 Components`에 두고, 여러 source를 조합하지만 navigation·상태·저장 lifecycle을 소유하지
-않는 예시는 `03 Patterns`에 둔다.
+- `00 Page Guide` — 페이지 목적과 Production·Preview 경계를 설명하는 guide frame
+- [`01 Controls & Input`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7789-17220) — 19개. Button, input, selection, menu trigger와 내부 helper
+- [`02 Navigation & Chrome`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7789-17221) — 17개. PageHeader, Tabs, Mobile/Web navigation과 toolbar helper
+- [`03 Overlay & Feedback`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7789-17222) — 10개. ModalSheet, menu, Toast, StateView와 ColorPickerPanel
+- [`04 Profile & Settings`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7789-17223) — 23개. Profile, relationship, lifecycle, edit와 Settings source
+- [`05 Post & Composer`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7789-17224) — 36개. Post presentation, action, Composer와 내부 editor helper
+- [`06 Reaction & Media`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7789-17225) — 12개. Reaction, media gallery/viewer와 Search media Candidate
+- [`07 Public & Route State`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7789-17226) — 14개. Public content, standalone route state와 notification helper
 
-### `03 Patterns` 섹션 구성
+public source 뒤에 해당 source가 소비하는 private `__` helper를 둔다. 기존 component ID와 instance 연결을
+보존하며 clone·detach·재생성하지 않는다. 7개 section은 `KOSMO Typography`의 `MCP Preview` mode를 사용해
+Figma MCP에서 UI `IBM Plex Sans KR`, 본문 `Noto Sans KR`로 표시한다. 이는 Production의 SUIT·Pretendard
+계약이나 text property·variable binding을 바꾸지 않는다. 상세 대응은 [typography.md](./typography.md)를 따른다.
 
-- `01 Overlay ownership snapshot`
-- `02 Mobile overlay patterns`
-- `03 Web overlay patterns`
-- `04 Composer presentation patterns · DSN-43`
-- `05 Settings control patterns · DSN-44`
+독립 source는 `02 Components`에 두고, 문서·state specimen과 여러 source를 조합한 검토 예시는 `03 Patterns`,
+interaction flow는 `06 Prototypes / Flows`, source-consumer mapping은 `01 Foundations`에 둔다.
+
+### `03 Patterns` 섹션 구성 (2026-09-03 기준)
+
+`03 Patterns`의 top-level은 `00 Page Guide`와 `01`–`28` section, 총 29개다. `01`–`19`는 기존
+pattern·exploration·representative state를 첫 번째 행에, `20`–`28`은 Components에서 옮긴 source
+documentation·state specimen을 두 번째 행에 둔다.
+
+- `01`–`05` — Overlay ownership, Mobile/Web overlay, Composer와 Settings 조합 snapshot
 - `06 Exploration · Settings detail grouping · DSN-44` — 기존 SettingsItem 조합만 검토하는 비제품 탐색 예시
 - `12 Exploration · Mobile composer fullscreen · DSN-61` — 모바일 전체 화면 Composer의 반응형 상태와 편집기 후보
 - `17 Post deletion confirmation placement · DSN-61` — 기존 More·ActionMenu·ModalSheet 정본을 조합한 삭제 확인 배치 표본
-- `19 DSN-61 · Composer Dark coverage · representative` — 기존 Light pattern을 복제해 정본 `PostComposer` 상속과
-  Dark mode만 검증하는 대표 표본
+- `19 DSN-61 · Composer Dark coverage · representative` — 기존 Light pattern을 복제해 정본 `PostComposer` 상속과 Dark mode만 검증하는 대표 표본
+- [`20 Component primitives · Documentation`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1849-880)
+- [`21 Shared domain · Documentation`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1849-882)
+- [`22 PostComposer · State specimens · DSN-43`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3645-7812)
+- [`23 Settings · Documentation`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3972-9038)
+- [`24 PostLayout · State specimens · DSN-42`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4686-12078)
+- [`25 Profile lifecycle · Design handoff · DSN-52`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4852-13041)
+- [`26 PostContentWarning · Documentation + State specimens · DSN-42`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4998-14784)
+- [`27 Media Viewer · Documentation · DSN-63`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5682-40698)
+- [`28 Search media results · Candidate · Product not implemented`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5847-16371)
 
-`01`–`05`는 승인된 component 조합을 비교·검토하는 snapshot이며 해당 제품 화면에 채택됐다는 evidence는 아니다.
-`06`과 `12`는 제품 IA·route·저장 계약을 승인하지 않는 exploration이고, `17`은 정본 source의 배치·상태 조합,
-`19`는 Dark mode·반응형 배치·source 상속만 검증한다. 어느 쪽도 Foundation, component source, `docs/design`과
-연결된 Product 이슈의 계약을 대체하지 않는다.
+`12`에는 illustrative IME 1개, Candidate 3개, Deprecated 2개 등 DSN-61 exploration source owner 6개를
+의도적으로 유지한다. 이들은 canonical source로 승격되지 않았으며 lifecycle 판단 전까지 `02 Components`로 옮기거나
+`07 Archive`로 보내지 않는다. 그 밖의 Patterns 항목은 승인된 component 조합을 비교·검토하는 snapshot이며 해당
+제품 화면에 채택됐다는 evidence가 아니다. 어느 항목도 Foundation, component source, `docs/design`과 연결된 Product
+이슈의 계약을 대체하지 않는다.
+
+### `06 Prototypes / Flows` 구성 (2026-09-03 기준)
+
+top-level 11개는 `KOSMO Motion Playground · Production`과 Profile editing prototype 10개다. Profile prototype은
+Center/Mobile 2행과 Add/Edit/Reorder/Avatar/Header 5열로 정렬한다. prototype은 interaction·배치 검토용이며
+component source, canonical screen 또는 Product runtime 완료 evidence로 사용하지 않는다.
 
 #### DSN-43 PostComposer source 계약
 
@@ -450,7 +484,7 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
   target 계약은 유지한다.
 - Overlay 전용 attachment 편집은
   [`ComposerMediaEditor`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5455-38985)
-  component set이 `02 Shared domain · Production`에서 소유한다. Web source master는 `920×678`이고 같은 source의
+  component set이 `05 Post & Composer`에서 소유한다. Web source master는 `920×678`이고 같은 source의
   instance를 `720–920px`에서 resize한다. 우측 tool panel은 `280px`로 고정하고 왼쪽 preview만 남은 폭을 채우며,
   parent Overlay surface는 `min(920px, 100vw - 48px)`를 소유한다. 일반 `PostComposer Surface=Overlay` 자체의
   `600px` 폭은 유지하고, editor 진입 시 같은 parent surface 안의 내용을 교체하면서 editor 폭으로 확장한다.
