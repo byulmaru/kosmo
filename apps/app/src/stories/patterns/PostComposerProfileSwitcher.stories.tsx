@@ -140,7 +140,12 @@ const meta = {
     surface: { control: 'inline-radio', options: ['rail', 'overlay'] },
   },
   component: ComposerProfileFixture,
-  excludeStories: ['InteractionContract', 'PendingSelectionContract', 'FailureAndCancelContract'],
+  excludeStories: [
+    'CancelSelectionContract',
+    'FailureAndCancelContract',
+    'InteractionContract',
+    'PendingSelectionContract',
+  ],
   parameters: { layout: 'centered' },
   title: 'KOSMO/Patterns/Post Composer Profile Switcher',
 } satisfies Meta<typeof ComposerProfileFixture>;
@@ -174,7 +179,7 @@ export const InteractionContract: Story = {
     const body = canvas.getByRole('textbox', { name: '게시물 내용' });
     const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
 
-    expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+    expect(trigger).not.toHaveAttribute('aria-haspopup');
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(body).toHaveValue('프로필을 바꿔도 유지되는 본문');
     expect(contentWarning).toHaveValue('콘텐츠 경고');
@@ -268,6 +273,64 @@ export const FailureAndCancelContract: Story = {
     expect(trigger).toHaveFocus();
     expect(body).toHaveValue('프로필을 바꿔도 유지되는 본문');
     expect(canvas.getByLabelText('전역 활성 프로필')).toHaveTextContent('코스모 작가 @kosmo');
+  },
+};
+
+export const CancelSelectionContract: Story = {
+  args: { onSelectProfile: fn(), surface: 'overlay' },
+  render: (args) => (
+    <DeferredSelectionFixture onSelectProfile={args.onSelectProfile!} surface={args.surface!} />
+  ),
+  play: async ({ args, canvasElement }) => {
+    args.onSelectProfile?.mockClear();
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '작성 프로필' });
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
+
+    await userEvent.click(trigger);
+    const picker = await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(
+      within(picker).getByRole('button', { name: '먼 우주의 사용자, @remote' }),
+    );
+    expect(trigger).toBeDisabled();
+    expect(args.onSelectProfile).not.toHaveBeenCalled();
+
+    await userEvent.keyboard('{Escape}');
+    expect(canvas.queryByLabelText('프로필 전환')).not.toBeInTheDocument();
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(trigger).toHaveTextContent('코스모 작가');
+    expect(body).toHaveValue('프로필을 바꿔도 유지되는 본문');
+    expect(contentWarning).toHaveValue('콘텐츠 경고');
+    expect(canvas.getByLabelText('첨부 이미지 갤러리, 1개')).toBeVisible();
+    expect(canvas.getByRole('button', { name: '첨부 이미지 1 ALT 편집' })).toBeVisible();
+    expect(
+      canvas.getByRole('button', { name: '첨부 이미지 1 민감한 이미지 설정 편집' }),
+    ).toBeVisible();
+    expect(canvas.getByLabelText('전역 활성 프로필')).toHaveTextContent('코스모 작가 @kosmo');
+
+    await userEvent.click(canvas.getByRole('button', { name: '지연된 프로필 전환 완료' }));
+    await waitFor(() => expect(args.onSelectProfile).toHaveBeenCalledOnce());
+    expect(args.onSelectProfile).toHaveBeenLastCalledWith('profile-remote');
+    expect(trigger).toHaveTextContent('코스모 작가');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(body).toHaveValue('프로필을 바꿔도 유지되는 본문');
+    expect(contentWarning).toHaveValue('콘텐츠 경고');
+    expect(canvas.getByLabelText('첨부 이미지 갤러리, 1개')).toBeVisible();
+    expect(canvas.getByRole('button', { name: '첨부 이미지 1 ALT 편집' })).toBeVisible();
+    expect(
+      canvas.getByRole('button', { name: '첨부 이미지 1 민감한 이미지 설정 편집' }),
+    ).toBeVisible();
+    expect(canvas.getByLabelText('전역 활성 프로필')).toHaveTextContent('코스모 작가 @kosmo');
+
+    await userEvent.click(trigger);
+    const pickerAfterLateResolve = await canvas.findByLabelText('프로필 전환');
+    expect(
+      within(pickerAfterLateResolve).getByRole('button', { name: '코스모 작가, @kosmo' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      within(pickerAfterLateResolve).getByRole('button', { name: '먼 우주의 사용자, @remote' }),
+    ).toHaveAttribute('aria-pressed', 'false');
   },
 };
 

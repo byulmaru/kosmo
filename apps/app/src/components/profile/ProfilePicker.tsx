@@ -20,6 +20,7 @@ export type ProfilePickerProfile = Readonly<{
 type Props = Readonly<{
   busy?: boolean;
   footer?: ReactNode;
+  menuFooter?: ReactNode;
   onSelect: (id: string) => void;
   pickerRef?: Ref<View>;
   profiles: readonly ProfilePickerProfile[];
@@ -41,6 +42,7 @@ const webDrawerPickerBounds = {
 export function ProfilePicker({
   busy = false,
   footer,
+  menuFooter,
   onSelect,
   pickerRef,
   profiles,
@@ -137,9 +139,16 @@ export function ProfilePicker({
         ) : (
           profileOptions
         )}
-        {showDivider ? <View style={[styles.divider, { backgroundColor: theme.border }]} /> : null}
-        {footer}
+        {showDivider ? (
+          <View
+            accessibilityRole={Platform.OS === 'web' ? undefined : 'none'}
+            role={Platform.OS === 'web' ? 'separator' : undefined}
+            style={[styles.divider, { backgroundColor: theme.border }]}
+          />
+        ) : null}
+        {menuFooter}
       </View>
+      {footer ? <View style={styles.pickerFooter}>{footer}</View> : null}
     </View>
   );
 }
@@ -154,6 +163,7 @@ const styles = StyleSheet.create({
   redesignedMenu: { overflow: 'hidden' },
   menuItems: { gap: space[0] },
   redesignedMenuRegion: { flexShrink: 1, minHeight: 0 },
+  pickerFooter: { flexShrink: 0 },
   profileList: { flexShrink: 1, minHeight: 0 },
   profileListContent: { gap: space[0] },
   profile: {

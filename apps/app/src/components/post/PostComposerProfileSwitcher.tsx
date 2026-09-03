@@ -130,7 +130,6 @@ export function PostComposerProfileSwitcher({
         accessibilityState={{ busy: pending, disabled: pending, expanded: open }}
         aria-busy={pending}
         aria-expanded={open}
-        aria-haspopup="menu"
         disabled={pending}
         onPress={() => {
           setError(null);
