@@ -39,7 +39,7 @@ jobs:
         uses: ruby/setup-ruby@d45b1a4e94b71acab930e56e79c6aa188764e7f9 # v1
         with:
           bundler-cache: true
-          ruby: '3.4'
+          ruby-version: '3.4'
           working-directory: apps/app
 
       - name: Install workspace dependencies
