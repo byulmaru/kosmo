@@ -7,17 +7,24 @@
     "build": "vite build",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "dev": "vite dev --host 0.0.0.0 --port 8080",
-    "test": "pnpm check && vitest run"
+    "test": "pnpm check && vitest run --exclude '**/*.database.test.ts' && pnpm test:database",
+    "test:database": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/admin test:database:isolated",
+    "test:database:isolated": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/admin exec vitest run src/lib/server/accounts.database.test.ts"
   },
   "dependencies": {
+    "@kosmo/core": "workspace:*",
     "@sveltejs/kit": "^2.70.3",
+    "drizzle-orm": "1.0.0-beta.22",
     "svelte": "^5.56.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "^5.5.7",
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@tailwindcss/vite": "^4.3.3",
     "svelte-check": "^4.7.6",
+    "tailwind-variants": "^3.3.1",
+    "tailwindcss": "^4.3.3",
     "vite": "^8.0.16",
     "vitest": "^4.1.10"
   }

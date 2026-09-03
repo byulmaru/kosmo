@@ -38,7 +38,7 @@ projection만 허용하는 애플리케이션 capability 계층은 두지 않는
 - Admin Console v1은 읽기 전용이다. 이 경계는 기존 Account 인증, Profile Owner/Member 사실,
   `Account.Operator` 기반 운영자 Mutation 권한을 변경하지 않는다.
 - Admin-specific 성공·실패 조회 감사, identity snapshot, 접근 실패·proxy 우회·위조 header security event
-  logging, 검색값 및 보존 기간은 v1에서 모두 제외한다. 기존 공통 runtime 오류·접근 로그의 동작은 이 결정의
+  logging 및 보존 기간은 v1에서 모두 제외한다. 기존 공통 runtime 오류·접근 로그의 동작은 이 결정의
   범위가 아니다.
 
 ## 이유
