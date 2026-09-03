@@ -26,6 +26,8 @@ jobs:
               set -euo pipefail
               helm lint apps/helm --set env=dev
               rendered="$(helm template kosmo apps/helm --namespace kosmo-dev --set env=dev)"
+              admin="$(helm template kosmo apps/helm --namespace kosmo-dev --set env=dev --show-only templates/admin/deployment.yaml)"
+              for env in PGPASSWORD PGHOST PGPORT PGUSER PGDATABASE; do grep -Fq -- "- name: $env" <<<"$admin"; done
               grep -Eq '^kind: Deployment$' <<<"$rendered"
               grep -Eq '^kind: Service$' <<<"$rendered"
               grep -Eq '^kind: Ingress$' <<<"$rendered"
