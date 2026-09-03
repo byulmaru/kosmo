@@ -122,7 +122,7 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
 ## 컴포넌트 경계
 
 - `ReactionSelector`는 Quick Picker의 플랫폼별 presentation만 소유한다.
-- `FullReactionPicker`는 Unicode-first 검색·category 탐색과 Web dialog·Mobile sheet presentation을 소유한다. custom reaction의 asset·data·API와 runtime fetch·cache는 소유하지 않는다.
+- `FullReactionPicker`는 Unicode-first 검색·category 탐색과 Web dialog·Mobile sheet presentation을 소유한다. Web에서 이를 여는 composition은 trigger와 open state를 소유하고 같은 trigger·`Escape`·바깥 클릭 dismiss 및 trigger focus 복원을 연결한다. custom reaction의 asset·data·API와 runtime fetch·cache는 소유하지 않는다.
 - private `ReactionAction`과 `ReactionPopover`는 Action Bar trigger와 anchored popover를 소유한다.
 - private `PostReactionController`는 한 Post의 toggle 상태와 mutation/cache 동작을 소유한다.
 - private `__ReactionSummaryItem`은 Web 32px·iOS 44pt·Android 48dp의 reaction, selected, `+N` item presentation을 소유한다.
