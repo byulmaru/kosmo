@@ -47,6 +47,9 @@ const config: ExpoConfig = {
     appleTeamId: process.env.APPLE_DEVELOPER_TEAM_ID,
     buildNumber: iosBuildNumber,
     bundleIdentifier: 'moe.kos',
+    config: {
+      usesNonExemptEncryption: false,
+    },
     icon: './assets/brand/app-icon-ios-light.png',
     supportsTablet: true,
     infoPlist: {
