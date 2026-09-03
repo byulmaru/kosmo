@@ -550,6 +550,8 @@ platform :android do
   desc 'Build and upload the Android Release AAB to the Play Alpha track'
   lane :distribute_alpha do
     require_environment!('GOOGLE_APPLICATION_CREDENTIALS', 'KOSMO_ANDROID_AAB_PATH')
+    release_status = ENV.fetch('ANDROID_PLAY_RELEASE_STATUS', 'completed')
+    UI.user_error!('ANDROID_PLAY_RELEASE_STATUS must be draft or completed.') unless %w[draft completed].include?(release_status)
     aab_path = File.expand_path(ENV.fetch('KOSMO_ANDROID_AAB_PATH'))
     credentials_path = File.expand_path(ENV.fetch('GOOGLE_APPLICATION_CREDENTIALS'))
     UI.user_error!("Google credentials were not created at #{credentials_path}.") unless File.file?(credentials_path) && File.size?(credentials_path)
@@ -567,7 +569,7 @@ platform :android do
       aab: aab_path,
       package_name: BUNDLE_IDENTIFIER,
       json_key: credentials_path,
-      release_status: 'completed',
+      release_status: release_status,
       skip_upload_changelogs: true,
       skip_upload_images: true,
       skip_upload_metadata: true,

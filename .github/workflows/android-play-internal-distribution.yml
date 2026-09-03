@@ -2,6 +2,15 @@ name: Android Google Play Alpha Distribution
 
 on:
   workflow_dispatch:
+    inputs:
+      release_status:
+        description: Play release status for the Alpha release
+        required: true
+        type: choice
+        options:
+          - draft
+          - completed
+        default: completed
 
 permissions:
   contents: read
@@ -20,6 +29,7 @@ jobs:
     environment: prod
     env:
       ANDROID_RELEASE_KEY_ALIAS: ${{ vars.ANDROID_RELEASE_KEY_ALIAS }}
+      ANDROID_PLAY_RELEASE_STATUS: ${{ inputs.release_status }}
       EXPO_NO_GIT_STATUS: '1'
       GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -228,6 +238,7 @@ jobs:
             echo '## Android Google Play closed testing (Alpha)'
             echo
             echo '- Package: moe.kos'
+            echo "- Release status: \`${ANDROID_PLAY_RELEASE_STATUS}\`"
             echo "- Version code: \`${KOSMO_ANDROID_VERSION_CODE}\`"
             echo "- AAB SHA-256: \`${artifact_sha256}\`"
             echo "- AAB size: \`${artifact_size_bytes} bytes\`"

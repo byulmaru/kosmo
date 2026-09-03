@@ -25,7 +25,7 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 
 `Android Google Play Alpha Distribution`은 `main`에서만 수동 실행하는 protected workflow다. 매 실행마다 clean CNG Android project를 만들고, Fastlane이 upload key로 서명한 Release AAB를 빌드해 Google Play closed testing의 Alpha track에 업로드한다. Play가 package name, versionCode, upload certificate를 검증한다. versionCode는 workflow 시작 시 UTC Unix seconds에서 `2020-01-01`을 뺀 값으로 계산하며, 첫 수동 release의 versionCode `1`보다 크고 Android signed 32-bit 범위 안에 있다. Play API를 미리 조회하거나 장기 credential을 저장하지 않는다. 기존 internal testing release는 Play Console에 남아 있으며 이 workflow가 변경하지 않는다.
 
-이 앱의 Play app, Google 관리 Play App Signing, upload key는 이미 설정되어 있다. Alpha track의 첫 signed AAB는 이 workflow가 업로드한다. Play Console에서 다음 Alpha 설정과 CI 자산을 확인한다.
+이 앱의 Play app, Google 관리 Play App Signing, upload key는 이미 설정되어 있다. Alpha track의 첫 signed AAB는 이 workflow가 업로드한다. 앱이 아직 draft 상태인 최초 실행에서는 workflow dispatch의 `release_status`를 `draft`로 선택하고, 업로드 후 Play Console에서 Alpha release를 검토 제출한다. 앱 검토가 끝나 draft 상태를 벗어난 뒤의 실행은 기본값인 `completed`를 사용한다. Play Console에서 다음 Alpha 설정과 CI 자산을 확인한다.
 
 1. closed testing의 Alpha track에 Doply tester 목록을 연결하고 출시 국가/지역에 대한민국을 포함한다.
 2. [Terraform outputs](../terraform/README.md)의 `android_play_service_account` service account를 Play Console Users and permissions에 추가하고 `Release apps to testing tracks` 권한만 부여한다.
