@@ -467,6 +467,8 @@ documentation·state specimen을 두 번째 행에 둔다.
   `ComposerMediaEditor Tool=Sensitive`로 진입해도 같은 값을 편집하며 모든 Ready attachment가 결과를 함께 표시한다.
   `__SensitiveMediaRow` source는 탐색용 candidate를 위해 보존하지만 production `PostComposerMediaItems` consumer에서는
   사용하지 않는다. attachment별 민감도는 별도 domain/API 계약이 추가될 때 도입한다.
+- gallery card는 `156×156`을 유지하고 scrollbar는 시각적으로 숨긴다. Web에서 attachment가 3개 이상이고 실제
+  overflow가 생기면 이전·다음 control로 card 단위 이동을 제공하며, Native는 기존 horizontal swipe를 사용한다.
 - Ready attachment의 우측 상단 편집 action은 canonical `Pen`을 `20×20`으로 사용하고 `Show edit action`으로
   노출을 제어한다. Rail·Overlay gallery에서는 editor 진입점을 표시하고 `ComposerMediaEditor` 내부 preview에서는
   `false`로 숨긴다. `Expand`는 Composer Rail을 Overlay로 확장하는 별도 semantic action으로 유지한다.
@@ -500,6 +502,8 @@ documentation·state specimen을 두 번째 행에 둔다.
   Product 저장·편집 기능을 의미하지 않는다. canonical `TabList`·`Tab/Underline`을 사용하고, 편집할 이미지의
   `48×48` selector는 preview 하단 중앙에서 tool tabs와 분리한다. 이 selector는 Composer 본문의
   `PostComposerMediaItems` gallery를 대체하는 컴포넌트가 아니라 editor 안의 현재 이미지 navigation이다.
+- Web editor의 preview와 thumbnail selector, content와 footer 사이에는 가로 border를 두지 않는다. header·tool tab의
+  구분선과 preview·우측 tool panel 사이 세로 border, Mobile editor의 기존 구분선은 유지한다.
 - editor header는 `44×44` hit target 안에 기존 Web `IconButton` `32×32`와 canonical `ArrowLeft`·`X`를 사용한다. Back은 draft와
   media를 유지한 채 Composer로 돌아가고, Close는 Composer Overlay 전체를 닫는다. preview 안의 X는 해당
   attachment만 제거한다. 하단 `완료`는 현재 tool의 변경을 draft에 반영하고 Composer로 돌아가며, ALT·향후 이미지
@@ -534,6 +538,9 @@ documentation·state specimen을 두 번째 행에 둔다.
   `Show submit=false`, `Show progress ring=true`를 유지한다. footer는 도구를 왼쪽, 남은 글자 수 → ring을 오른쪽
   그룹으로 정렬한다. 공개 범위 menu는 trigger의 chevron 쪽 우측 edge에 맞춘다. Poll·CW 표본은 배치와 reflow
   evidence이며 실제 작성 기능·keyboard avoidance·safe area·focus·제출 lifecycle 완료를 뜻하지 않는다.
+- header의 게시 action은 공용 `Button/Default` 높이 `40px`을 유지하고 폭만 `72px`로 제한한다. Candidate의 Web
+  rendering은 이 visual geometry를 검증하며, iOS `44pt`·Android `48dp` 실제 입력 영역은 Native runtime에서 별도로
+  검증한다.
 - author 또는 CW block과 본문 editor 사이에는 `8px` 간격을 유지한다. editor가 남은 content 높이를 채우고 media
   shelf는 별도 sibling으로 이어져 focus ring이 shelf 경계에서 잘리지 않는다.
 - `04 Screens - Mobile`의 [`Composer state consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6771-10454)는

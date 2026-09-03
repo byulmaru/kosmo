@@ -138,7 +138,10 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
             </View>
             <WebToolPanel {...props} selected={selected} selectedIndex={selectedIndex} />
           </View>
-          <View style={[styles.footer, { borderColor: theme.borderSubtle }]}>
+          <View
+            style={[styles.footer, { borderColor: theme.borderSubtle }]}
+            testID="composer-media-editor-footer"
+          >
             <Text style={[styles.footerCopy, { color: theme.foregroundSecondary }]}>
               {props.tool === 'sensitive'
                 ? '게시물 전체의 민감도 변경 사항을 Composer 초안에 반영합니다.'
@@ -319,6 +322,7 @@ function MediaGallery({
         mobile && styles.mobileMediaGallery,
         { borderColor: theme.borderSubtle },
       ]}
+      testID="composer-media-editor-gallery"
     >
       {media.map((item, index) => {
         const selected = item.key === selectedKey;
@@ -630,7 +634,6 @@ const styles = StyleSheet.create({
   },
   imageIndexText: { color: '#ffffff', ...textStyles.uiLabelS },
   mediaGallery: {
-    borderTopWidth: borderWidths[1],
     flexGrow: 0,
     height: 68,
     width: '100%',
@@ -652,7 +655,7 @@ const styles = StyleSheet.create({
     width: 48,
   },
   thumbnail: { borderRadius: radius[4], height: 44, width: 44 },
-  mobileMediaGallery: { height: 76 },
+  mobileMediaGallery: { borderTopWidth: borderWidths[1], height: 76 },
   mobileGalleryContent: { paddingVertical: 11 },
   mobileThumbnailTarget: { height: 54, width: 54 },
   mobileThumbnail: { height: 50, width: 50 },
@@ -681,7 +684,6 @@ const styles = StyleSheet.create({
   altToolLabel: textStyles.uiLabelS,
   footer: {
     alignItems: 'center',
-    borderTopWidth: borderWidths[1],
     flexDirection: 'row',
     height: 64,
     paddingLeft: space[24],

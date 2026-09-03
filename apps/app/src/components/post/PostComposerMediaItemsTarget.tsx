@@ -1,4 +1,12 @@
-import { FlagIcon, PenIcon, RefreshCwIcon, XIcon } from 'lucide-react-native';
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  FlagIcon,
+  PenIcon,
+  RefreshCwIcon,
+  XIcon,
+} from 'lucide-react-native';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -39,167 +47,222 @@ export function PostComposerMediaItemsTarget({
   sensitiveMedia,
 }: PostComposerMediaItemsTargetProps) {
   const theme = useTheme();
+  const galleryRef = useRef<ScrollView>(null);
+  const [galleryWidth, setGalleryWidth] = useState(0);
+  const [scrollOffset, setScrollOffset] = useState(0);
 
   if (media.length === 0) {
     return null;
   }
 
-  return (
-    <ScrollView
-      accessibilityLabel={`첨부 이미지 갤러리, ${media.length}개`}
-      contentContainerStyle={styles.galleryContent}
-      horizontal
-      showsHorizontalScrollIndicator={media.length > 2}
-      style={styles.gallery}
-    >
-      {media.map((item, index) => {
-        const itemNumber = index + 1;
-        const ready = item.state === 'ready';
-        const failed = item.state === 'failed';
+  const contentWidth = media.length * itemSize + Math.max(0, media.length - 1) * space[8];
+  const maxScrollOffset = Math.max(0, contentWidth - galleryWidth);
+  const showNavigation =
+    Platform.OS === 'web' && media.length > 2 && (galleryWidth === 0 || maxScrollOffset > 0);
+  const scrollGallery = (direction: -1 | 1) => {
+    const step = itemSize + space[8];
+    const nextOffset = Math.max(0, Math.min(maxScrollOffset, scrollOffset + direction * step));
 
-        return (
-          <View
-            accessibilityLabel={`첨부 이미지 ${itemNumber}, ${
-              item.state === 'uploading' ? '업로드 중' : ready ? '업로드 완료' : '업로드 실패'
-            }`}
-            key={item.key}
-            style={[
-              styles.item,
-              {
-                backgroundColor: failed ? theme.feedbackDangerSubtle : theme.backgroundElevated,
-                borderColor: failed ? theme.feedbackDangerBorder : theme.borderSubtle,
-              },
-            ]}
-          >
-            {ready ? (
-              <Pressable
-                accessibilityLabel={`첨부 이미지 ${itemNumber} 대체 텍스트 편집`}
-                accessibilityRole="button"
-                accessibilityState={{ disabled }}
-                disabled={disabled}
-                onPress={() => onEdit(item.key, 'alt')}
-                style={({ pressed }) => [styles.previewTarget, pressed && styles.pressed]}
-              >
+    galleryRef.current?.scrollTo({ animated: false, x: nextOffset });
+    setScrollOffset(nextOffset);
+  };
+
+  return (
+    <View style={styles.galleryShell}>
+      <ScrollView
+        accessibilityLabel={`첨부 이미지 갤러리, ${media.length}개`}
+        contentContainerStyle={styles.galleryContent}
+        horizontal
+        onLayout={({ nativeEvent }) => setGalleryWidth(nativeEvent.layout.width)}
+        onScroll={({ nativeEvent }) => setScrollOffset(nativeEvent.contentOffset.x)}
+        ref={galleryRef}
+        scrollEventThrottle={16}
+        showsHorizontalScrollIndicator={false}
+        style={styles.gallery}
+      >
+        {media.map((item, index) => {
+          const itemNumber = index + 1;
+          const ready = item.state === 'ready';
+          const failed = item.state === 'failed';
+
+          return (
+            <View
+              accessibilityLabel={`첨부 이미지 ${itemNumber}, ${
+                item.state === 'uploading' ? '업로드 중' : ready ? '업로드 완료' : '업로드 실패'
+              }`}
+              key={item.key}
+              style={[
+                styles.item,
+                {
+                  backgroundColor: failed ? theme.feedbackDangerSubtle : theme.backgroundElevated,
+                  borderColor: failed ? theme.feedbackDangerBorder : theme.borderSubtle,
+                },
+              ]}
+            >
+              {ready ? (
+                <Pressable
+                  accessibilityLabel={`첨부 이미지 ${itemNumber} 대체 텍스트 편집`}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled }}
+                  disabled={disabled}
+                  onPress={() => onEdit(item.key, 'alt')}
+                  style={({ pressed }) => [styles.previewTarget, pressed && styles.pressed]}
+                >
+                  <Image
+                    accessibilityIgnoresInvertColors
+                    accessibilityLabel={`첨부 이미지 ${itemNumber} 미리보기`}
+                    accessibilityRole="image"
+                    source={{ uri: item.asset.uri }}
+                    style={styles.preview}
+                  />
+                </Pressable>
+              ) : (
                 <Image
                   accessibilityIgnoresInvertColors
                   accessibilityLabel={`첨부 이미지 ${itemNumber} 미리보기`}
                   accessibilityRole="image"
                   source={{ uri: item.asset.uri }}
-                  style={styles.preview}
+                  style={[styles.preview, styles.pendingPreview]}
                 />
-              </Pressable>
-            ) : (
-              <Image
-                accessibilityIgnoresInvertColors
-                accessibilityLabel={`첨부 이미지 ${itemNumber} 미리보기`}
-                accessibilityRole="image"
-                source={{ uri: item.asset.uri }}
-                style={[styles.preview, styles.pendingPreview]}
-              />
-            )}
+              )}
 
-            <IconButton
-              accessibilityLabel={`첨부 이미지 ${itemNumber} 제거`}
-              disabled={disabled}
-              feedback="opacity"
-              onPress={() => onRemove(item.key)}
-              style={styles.removeAction}
-              visualSize={actionVisualSize}
-              visualStyle={[
-                styles.actionVisual,
-                { backgroundColor: theme.backgroundSurface, borderColor: theme.borderSubtle },
-              ]}
-            >
-              <XIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
-            </IconButton>
-
-            {ready ? (
               <IconButton
-                accessibilityLabel={`첨부 이미지 ${itemNumber} 편집`}
+                accessibilityLabel={`첨부 이미지 ${itemNumber} 제거`}
                 disabled={disabled}
                 feedback="opacity"
-                onPress={() => onEdit(item.key, 'alt')}
-                style={styles.editAction}
+                onPress={() => onRemove(item.key)}
+                style={styles.removeAction}
                 visualSize={actionVisualSize}
                 visualStyle={[
                   styles.actionVisual,
                   { backgroundColor: theme.backgroundSurface, borderColor: theme.borderSubtle },
                 ]}
               >
-                <PenIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
+                <XIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
               </IconButton>
-            ) : item.state === 'uploading' ? (
-              <View
-                style={[styles.uploadingIndicator, { backgroundColor: theme.backgroundSurface }]}
-              >
-                <ActivityIndicator
-                  accessibilityLabel={`첨부 이미지 ${itemNumber} 업로드 중`}
-                  color={theme.foregroundPrimary}
-                />
-              </View>
-            ) : (
-              <IconButton
-                accessibilityLabel={`${itemNumber}번째 이미지 업로드 다시 시도`}
-                disabled={disabled}
-                feedback="opacity"
-                onPress={() => onRetry(item)}
-                style={styles.retryAction}
-                visualSize={actionVisualSize}
-                visualStyle={[
-                  styles.actionVisual,
-                  { backgroundColor: theme.backgroundSurface, borderColor: theme.borderSubtle },
-                ]}
-              >
-                <RefreshCwIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
-              </IconButton>
-            )}
 
-            {ready && (item.altText.trim() || sensitiveMedia) ? (
-              <View style={styles.statuses}>
-                {item.altText.trim() ? (
-                  <StatusButton
-                    accessibilityLabel={`첨부 이미지 ${itemNumber} ALT 편집`}
-                    disabled={disabled}
-                    onPress={() => onEdit(item.key, 'alt')}
-                  >
-                    <Text style={[styles.statusText, { color: theme.foregroundPrimary }]}>ALT</Text>
-                  </StatusButton>
-                ) : null}
-                {sensitiveMedia ? (
-                  <StatusButton
-                    accessibilityLabel={`첨부 이미지 ${itemNumber} 민감한 이미지 설정 편집`}
-                    disabled={disabled}
-                    onPress={() => onEdit(item.key, 'sensitive')}
-                  >
-                    <FlagIcon color={theme.foregroundPrimary} size={iconSizes[16]} />
-                    <Text style={[styles.statusText, { color: theme.foregroundPrimary }]}>
-                      민감
-                    </Text>
-                  </StatusButton>
-                ) : null}
-              </View>
-            ) : null}
+              {ready ? (
+                <IconButton
+                  accessibilityLabel={`첨부 이미지 ${itemNumber} 편집`}
+                  disabled={disabled}
+                  feedback="opacity"
+                  onPress={() => onEdit(item.key, 'alt')}
+                  style={styles.editAction}
+                  visualSize={actionVisualSize}
+                  visualStyle={[
+                    styles.actionVisual,
+                    { backgroundColor: theme.backgroundSurface, borderColor: theme.borderSubtle },
+                  ]}
+                >
+                  <PenIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
+                </IconButton>
+              ) : item.state === 'uploading' ? (
+                <View
+                  style={[styles.uploadingIndicator, { backgroundColor: theme.backgroundSurface }]}
+                >
+                  <ActivityIndicator
+                    accessibilityLabel={`첨부 이미지 ${itemNumber} 업로드 중`}
+                    color={theme.foregroundPrimary}
+                  />
+                </View>
+              ) : (
+                <IconButton
+                  accessibilityLabel={`${itemNumber}번째 이미지 업로드 다시 시도`}
+                  disabled={disabled}
+                  feedback="opacity"
+                  onPress={() => onRetry(item)}
+                  style={styles.retryAction}
+                  visualSize={actionVisualSize}
+                  visualStyle={[
+                    styles.actionVisual,
+                    { backgroundColor: theme.backgroundSurface, borderColor: theme.borderSubtle },
+                  ]}
+                >
+                  <RefreshCwIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
+                </IconButton>
+              )}
 
-            {failed ? (
-              <View
-                accessibilityRole="alert"
-                style={[
-                  styles.failureBadge,
-                  {
-                    backgroundColor: theme.feedbackDangerSubtle,
-                    borderColor: theme.feedbackDangerBorder,
-                  },
-                ]}
-              >
-                <Text style={[styles.statusText, { color: theme.feedbackDangerOnSubtle }]}>
-                  업로드 실패
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        );
-      })}
-    </ScrollView>
+              {ready && (item.altText.trim() || sensitiveMedia) ? (
+                <View style={styles.statuses}>
+                  {item.altText.trim() ? (
+                    <StatusButton
+                      accessibilityLabel={`첨부 이미지 ${itemNumber} ALT 편집`}
+                      disabled={disabled}
+                      onPress={() => onEdit(item.key, 'alt')}
+                    >
+                      <Text style={[styles.statusText, { color: theme.foregroundPrimary }]}>
+                        ALT
+                      </Text>
+                    </StatusButton>
+                  ) : null}
+                  {sensitiveMedia ? (
+                    <StatusButton
+                      accessibilityLabel={`첨부 이미지 ${itemNumber} 민감한 이미지 설정 편집`}
+                      disabled={disabled}
+                      onPress={() => onEdit(item.key, 'sensitive')}
+                    >
+                      <FlagIcon color={theme.foregroundPrimary} size={iconSizes[16]} />
+                      <Text style={[styles.statusText, { color: theme.foregroundPrimary }]}>
+                        민감
+                      </Text>
+                    </StatusButton>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {failed ? (
+                <View
+                  accessibilityRole="alert"
+                  style={[
+                    styles.failureBadge,
+                    {
+                      backgroundColor: theme.feedbackDangerSubtle,
+                      borderColor: theme.feedbackDangerBorder,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.statusText, { color: theme.feedbackDangerOnSubtle }]}>
+                    업로드 실패
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
+      </ScrollView>
+      {showNavigation ? (
+        <>
+          <IconButton
+            accessibilityLabel="첨부 이미지 갤러리 이전"
+            disabled={disabled || scrollOffset <= 0}
+            feedback="opacity"
+            onPress={() => scrollGallery(-1)}
+            style={styles.previousAction}
+            visualSize={actionVisualSize}
+            visualStyle={[
+              styles.navigationVisual,
+              { backgroundColor: theme.backgroundSurface, borderColor: theme.borderSubtle },
+            ]}
+          >
+            <ChevronLeftIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
+          </IconButton>
+          <IconButton
+            accessibilityLabel="첨부 이미지 갤러리 다음"
+            disabled={disabled || (galleryWidth > 0 && scrollOffset >= maxScrollOffset)}
+            feedback="opacity"
+            onPress={() => scrollGallery(1)}
+            style={styles.nextAction}
+            visualSize={actionVisualSize}
+            visualStyle={[
+              styles.navigationVisual,
+              { backgroundColor: theme.backgroundSurface, borderColor: theme.borderSubtle },
+            ]}
+          >
+            <ChevronRightIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
+          </IconButton>
+        </>
+      ) : null}
+    </View>
   );
 }
 
@@ -241,6 +304,7 @@ function StatusButton({
 }
 
 const styles = StyleSheet.create({
+  galleryShell: { height: itemSize, position: 'relative', width: '100%' },
   gallery: { height: itemSize, width: '100%' },
   galleryContent: { gap: space[8] },
   item: {
@@ -259,8 +323,26 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderWidth: borderWidths[1],
   },
+  navigationVisual: {
+    borderRadius: radius.full,
+    borderWidth: borderWidths[1],
+  },
   removeAction: { left: space[4], position: 'absolute', top: space[4], zIndex: 2 },
   editAction: { position: 'absolute', right: space[4], top: space[4], zIndex: 2 },
+  previousAction: {
+    left: space[4],
+    marginTop: -actionVisualSize / 2,
+    position: 'absolute',
+    top: '50%',
+    zIndex: 3,
+  },
+  nextAction: {
+    marginTop: -actionVisualSize / 2,
+    position: 'absolute',
+    right: space[4],
+    top: '50%',
+    zIndex: 3,
+  },
   uploadingIndicator: {
     alignItems: 'center',
     borderRadius: radius.full,

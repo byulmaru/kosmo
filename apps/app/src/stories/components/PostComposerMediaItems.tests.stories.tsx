@@ -48,9 +48,25 @@ export const HorizontalReachabilityContract: Story = {
     const laterItemAction = within(gallery).getByRole('button', {
       name: '첨부 이미지 4 편집',
     });
+    const previousButton = within(canvasElement).getByRole('button', {
+      name: '첨부 이미지 갤러리 이전',
+    });
+    const nextButton = within(canvasElement).getByRole('button', {
+      name: '첨부 이미지 갤러리 다음',
+    });
 
-    expect(getComputedStyle(gallery).scrollbarWidth).toBe('auto');
+    expect(getComputedStyle(gallery).scrollbarWidth).toBe('none');
     expect(gallery.scrollWidth).toBeGreaterThan(gallery.clientWidth);
+    expect(previousButton).toBeDisabled();
+    expect(nextButton).not.toBeDisabled();
+    const initialArrowScrollLeft = gallery.scrollLeft;
+    await userEvent.click(nextButton);
+    expect(gallery.scrollLeft).toBeGreaterThan(initialArrowScrollLeft);
+    expect(previousButton).not.toBeDisabled();
+    for (let index = 0; index < 8 && !nextButton.hasAttribute('disabled'); index += 1) {
+      await userEvent.click(nextButton);
+    }
+    expect(nextButton).toBeDisabled();
     await userEvent.click(firstAction);
     const initialScrollLeft = gallery.scrollLeft;
     for (let index = 0; index < 12 && document.activeElement !== laterItemAction; index += 1) {
