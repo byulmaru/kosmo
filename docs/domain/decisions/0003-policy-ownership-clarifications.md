@@ -36,9 +36,9 @@ Post Content revision의 Media·Alt Text·Sensitive Media 소유권과 편집에
 - File은 Original/Derived 표현을 소유하고 저장소 위치와 공개 URL은 소유하지 않는다. 이 항목은 ADR 0018로
   대체됐다.
 - Post/Reply/Quote 작성은 Attached Media 관계를 원자적으로 생성하며 게시 뒤 연결을 바꾸지 않는다.
-- Profile Block 생성은 두 Profile 사이의 Follow Request와 Follow Relationship, Target이 Owner의 Post에 남긴
-  Reaction을 제거한다. 제거된 Follow 객체를 직접 원인으로 가진 Notification도 제거하며 Repost Post,
-  Bookmark, 다른 기존 Notification은 유지한다.
+- Profile Block 생성은 두 Profile 사이의 Follow Request와 Follow Relationship을 제거한다. 제거된 Follow 객체를
+  직접 원인으로 가진 Notification도 제거하며 기존 Reaction, Repost Post, Bookmark, 다른 기존 Notification은
+  유지한다. Reaction cleanup이 필요하면 별도 후속 계약에서 결정한다.
 - Account 삭제는 Membership을 모두 정리하고 Local Profile의 마지막 Owner를 제거하지 않을 때만 가능하다.
 - Account 요청에서 Profile 또는 Account가 주체인 행동은 관계 권한과 별도로 `Account.Active`를 요구한다.
   Account 삭제와 Account 대상 Operational Notification 읽음은 명시적 예외다. Profile Origin은 Account 요청

@@ -351,9 +351,10 @@ OpenSpec이 필요한 작업은 다음 조건을 모두 만족한 뒤 구현을 
 - tasks가 구현 소유권과 의존 순서에 대응한다.
 - `openspec validate <change> --strict`가 통과한다.
 
-OpenSpec만을 만들기 위한 Linear 이슈는 두지 않는다. 여러 PR이 공유하는 change에서 구현 전 OpenSpec
-검토·merge가 필요하더라도 별도 spec-only 이슈를 만들지 않고 실제 구현·검증 결과를 소유한 이슈들에 책임을
-배정한다. 특정 부모가 존재한다는 이유만으로 change 전체를 그 부모의 소유로 간주하지 않는다.
+여러 PR이 공유하는 change에서 구현 전 OpenSpec 검토·merge가 필요하면, 새 계약이 필요한 가장 이른 실제 구현·검증
+이슈가 change를 열고 자신의 구현·검증 결과와 함께 초기 artifact와 OpenSpec Gate 책임을 소유한다. 후속 이슈는 같은
+change의 해당 task와 검증 책임을 갱신하며, change 전체의 통합 검증·정합성 확인·최종 archive 담당자는 실제 완료
+증거를 기준으로 명시한다.
 
 OpenSpec Gate artifacts가 준비된 뒤 승인 요청을 작성하기 전에 primary agent는 가능하면 경량 모델의 subagent로 Luna Max를 활용해
 `proposal.md`, `specs/**/spec.md`의 requirements·scenarios, `design.md`, `decisions.md`,
