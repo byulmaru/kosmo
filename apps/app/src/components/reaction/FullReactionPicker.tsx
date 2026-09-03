@@ -17,8 +17,6 @@ export type FullReactionPickerOption = Readonly<{
 }>;
 
 export type FullReactionPickerProps = {
-  activeCategory: string;
-  onCategoryChange: (category: string) => void;
   onQueryChange: (query: string) => void;
   onSelect: (option: FullReactionPickerOption) => void;
   options: ReadonlyArray<FullReactionPickerOption>;
@@ -28,17 +26,7 @@ export type FullReactionPickerProps = {
   loading?: boolean;
 };
 
-const categoryIcons: Readonly<Record<string, string>> = {
-  activities: '🎉',
-  expressions: '😀',
-  gestures: '👋',
-  nature: '🌿',
-  symbols: '♡',
-};
-
 export function FullReactionPicker({
-  activeCategory,
-  onCategoryChange,
   onQueryChange,
   onSelect,
   options,
@@ -145,37 +133,11 @@ export function FullReactionPicker({
               <ReactionSection
                 mobile={mobile}
                 onSelect={onSelect}
-                options={options.filter((option) => option.recent)}
+                options={options.filter((option) => option.recent).slice(0, mobile ? 14 : 16)}
                 selectedValues={selectedValues}
+                testID="full-reaction-section-recent"
                 title="최근 사용"
               />
-              <View style={styles.categories}>
-                {categories.map((category) => {
-                  const selected = category.id === activeCategory;
-                  return (
-                    <Pressable
-                      accessibilityLabel={`${category.label} category 보기`}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      key={category.id}
-                      onPress={() => onCategoryChange(category.id)}
-                      style={({ pressed }) => [
-                        styles.category,
-                        {
-                          backgroundColor: selected
-                            ? theme.stateSelectedSurface
-                            : pressed
-                              ? theme.statePressed
-                              : 'transparent',
-                          borderColor: selected ? theme.stateSelectedBorder : 'transparent',
-                        },
-                      ]}
-                    >
-                      <Text style={styles.categoryIcon}>{categoryIcons[category.id] ?? '•'}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
               {categories.map((category) => (
                 <ReactionSection
                   key={category.id}
@@ -183,6 +145,7 @@ export function FullReactionPicker({
                   onSelect={onSelect}
                   options={options.filter((option) => option.category === category.id)}
                   selectedValues={selectedValues}
+                  testID={`full-reaction-section-${category.id}`}
                   title={category.label}
                 />
               ))}
@@ -230,72 +193,84 @@ function ReactionSection({
   onSelect,
   options,
   selectedValues,
+  testID,
   title,
 }: {
   mobile: boolean;
   onSelect: (option: FullReactionPickerOption) => void;
   options: ReadonlyArray<FullReactionPickerOption>;
   selectedValues: ReadonlyArray<string>;
+  testID?: string;
   title: string;
 }) {
   const theme = useTheme();
+  const columns = mobile ? 7 : 8;
+  const rows = Array.from({ length: Math.ceil(options.length / columns) }, (_, index) =>
+    options.slice(index * columns, (index + 1) * columns),
+  );
   return (
-    <View style={styles.section}>
+    <View style={styles.section} testID={testID}>
       <Text style={[styles.sectionTitle, { color: theme.foregroundPrimary }]}>{title}</Text>
       <View style={[styles.grid, mobile ? styles.mobileGrid : styles.webGrid]}>
-        {options.map((option) => {
-          const selected = selectedValues.includes(option.id);
-          return (
-            <Pressable
-              accessibilityLabel={`${option.label} ${option.emoji}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              aria-pressed={selected}
-              key={option.id}
-              onPress={() => onSelect(option)}
-              style={mobile ? styles.mobileReactionTarget : styles.webReactionTarget}
-            >
-              {({ pressed }) => (
-                <View
-                  style={[
-                    styles.reaction,
-                    mobile ? styles.mobileReaction : styles.webReaction,
-                    {
-                      backgroundColor: selected
-                        ? theme.stateSelectedSurface
-                        : pressed
-                          ? theme.statePressed
-                          : 'transparent',
-                      borderColor: selected ? theme.stateSelectedBorder : 'transparent',
-                    },
-                  ]}
+        {rows.map((row, rowIndex) => (
+          <View
+            key={rowIndex}
+            style={[
+              styles.gridRow,
+              mobile ? styles.mobileGrid : styles.webGrid,
+              row.length === columns ? styles.fullGridRow : styles.partialGridRow,
+            ]}
+            testID={testID ? `${testID}-row-${rowIndex}` : undefined}
+          >
+            {row.map((option) => {
+              const selected = selectedValues.includes(option.id);
+              return (
+                <Pressable
+                  accessibilityLabel={`${option.label} ${option.emoji}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  aria-pressed={selected}
+                  key={option.id}
+                  onPress={() => onSelect(option)}
+                  style={mobile ? styles.mobileReactionTarget : styles.webReactionTarget}
                 >
-                  <Text style={mobile ? styles.mobileEmoji : styles.webEmoji}>{option.emoji}</Text>
-                </View>
-              )}
-            </Pressable>
-          );
-        })}
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.reaction,
+                        mobile ? styles.mobileReaction : styles.webReaction,
+                        {
+                          backgroundColor: selected
+                            ? theme.stateSelectedSurface
+                            : pressed
+                              ? theme.statePressed
+                              : 'transparent',
+                          borderColor: selected ? theme.stateSelectedBorder : 'transparent',
+                        },
+                      ]}
+                    >
+                      <Text style={mobile ? styles.mobileEmoji : styles.webEmoji}>
+                        {option.emoji}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  categories: { flexDirection: 'row', justifyContent: 'space-between' },
-  category: {
-    alignItems: 'center',
-    borderRadius: radius[8],
-    borderWidth: borderWidths[1],
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
-  },
-  categoryIcon: { fontSize: 20, lineHeight: 24 },
   dragHandle: { alignSelf: 'center', borderRadius: radius.full, height: 4, width: 32 },
   emptyDescription: textStyles.uiCopyM,
   emptyTitle: textStyles.uiLabelL,
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  fullGridRow: { justifyContent: 'space-between' },
+  grid: { flexDirection: 'column' },
+  gridRow: { flexDirection: 'row' },
   mobileEmoji: { fontSize: 24, lineHeight: 32 },
   mobileGrid: { gap: 0 },
   mobileReaction: { height: 44, width: 44 },
@@ -314,6 +289,7 @@ const styles = StyleSheet.create({
   },
   mobileSpinner: { transform: [{ scale: 1.5 }] },
   mobileTitle: { textAlign: 'left', ...textStyles.uiLabelL },
+  partialGridRow: { justifyContent: 'flex-start' },
   reaction: {
     alignItems: 'center',
     borderRadius: radius[12],
@@ -340,6 +316,7 @@ const styles = StyleSheet.create({
     borderWidth: borderWidths[1],
     gap: space[16],
     height: 624,
+    maxHeight: '100%',
     padding: space[16],
     width: 360,
   },

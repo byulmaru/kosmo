@@ -247,10 +247,20 @@ export const reactionOptions: readonly FullReactionPickerOption[] = [
   },
 ];
 
+export const recentLimitOptions: readonly FullReactionPickerOption[] = Array.from(
+  { length: 18 },
+  (_, index) => ({
+    category: 'symbols',
+    categoryLabel: '기호',
+    emoji: '😀',
+    id: `recent-${index + 1}`,
+    label: `최근 ${index + 1}`,
+    recent: true,
+  }),
+);
+
 const meta = {
   args: {
-    activeCategory: 'expressions',
-    onCategoryChange: fn(),
     onQueryChange: fn(),
     onSelect: fn(),
     options: reactionOptions,
@@ -260,11 +270,6 @@ const meta = {
     loading: false,
   },
   argTypes: {
-    activeCategory: {
-      control: 'select',
-      options: ['expressions', 'gestures', 'nature', 'activities', 'symbols'],
-    },
-    onCategoryChange: { action: 'categoryChange', control: false },
     onQueryChange: { action: 'queryChange', control: false },
     onSelect: { action: 'select', control: false },
     options: { control: 'object' },
@@ -277,9 +282,14 @@ const meta = {
   excludeStories: [
     'InteractionContract',
     'LoadingContract',
+    'MobileGridGeometryContract',
+    'MobileRecentGridContract',
     'MobileBrowseGeometryContract',
     'MobileExpandedGeometryContract',
+    'RecentGridContract',
+    'WebGridGeometryContract',
     'reactionOptions',
+    'recentLimitOptions',
   ],
   parameters: { layout: 'centered' },
   title: 'KOSMO/Components/Full Reaction Picker',
@@ -330,23 +340,55 @@ export const MobileLoading: Story = {
   parameters: mobileParameters,
 };
 
+export const RecentGridContract: Story = {
+  args: { options: recentLimitOptions },
+  play: async ({ canvasElement }) => {
+    const section = within(canvasElement).getByTestId('full-reaction-section-recent');
+    expect(within(section).getAllByRole('button')).toHaveLength(16);
+  },
+};
+
+export const MobileRecentGridContract: Story = {
+  ...MobileBrowse,
+  args: { options: recentLimitOptions, presentation: 'mobile' },
+  play: async ({ canvasElement }) => {
+    const section = within(canvasElement).getByTestId('full-reaction-section-recent');
+    expect(within(section).getAllByRole('button')).toHaveLength(14);
+  },
+};
+
+export const MobileGridGeometryContract: Story = {
+  ...MobileBrowse,
+  play: async ({ canvasElement }) => {
+    const section = within(canvasElement).getByTestId('full-reaction-section-symbols');
+    const rows = within(section).getAllByTestId(/^full-reaction-section-symbols-row-/);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(getComputedStyle(row).justifyContent).toBe('space-between');
+    }
+  },
+};
+
+export const WebGridGeometryContract: Story = {
+  play: async ({ canvasElement }) => {
+    const section = within(canvasElement).getByTestId('full-reaction-section-symbols');
+    const rows = within(section).getAllByTestId(/^full-reaction-section-symbols-row-/);
+    expect(rows).toHaveLength(2);
+    expect(getComputedStyle(rows[0]).justifyContent).toBe('space-between');
+    expect(getComputedStyle(rows[1]).justifyContent).toBe('flex-start');
+  },
+};
+
 function InteractivePicker(props: FullReactionPickerProps) {
-  const [activeCategory, setActiveCategory] = useState(props.activeCategory);
   const [query, setQuery] = useState(props.query);
   const [selectedValues, setSelectedValues] = useState(props.selectedValues ?? []);
 
-  useEffect(() => setActiveCategory(props.activeCategory), [props.activeCategory]);
   useEffect(() => setQuery(props.query), [props.query]);
   useEffect(() => setSelectedValues(props.selectedValues ?? []), [props.selectedValues]);
 
   return (
     <FullReactionPicker
       {...props}
-      activeCategory={activeCategory}
-      onCategoryChange={(category) => {
-        props.onCategoryChange(category);
-        setActiveCategory(category);
-      }}
       onQueryChange={(value) => {
         props.onQueryChange(value);
         setQuery(value);
@@ -367,7 +409,6 @@ function InteractivePicker(props: FullReactionPickerProps) {
 
 export const InteractionContract: Story = {
   play: async ({ args, canvasElement }) => {
-    args.onCategoryChange.mockClear();
     args.onQueryChange.mockClear();
     args.onSelect.mockClear();
     const canvas = within(canvasElement);
@@ -379,9 +420,7 @@ export const InteractionContract: Story = {
     });
     expect(canvas.getByText('빠른 반응')).toBeVisible();
     expect(canvas.getByText('최근 사용')).toBeVisible();
-
-    await userEvent.click(canvas.getByRole('button', { name: '사람과 몸짓 category 보기' }));
-    expect(args.onCategoryChange).toHaveBeenLastCalledWith('gestures');
+    expect(canvas.queryByRole('button', { name: /category 보기/ })).not.toBeInTheDocument();
 
     await userEvent.click(canvas.getAllByRole('button', { name: '빨간 하트 ❤️' })[0]);
     expect(args.onSelect).toHaveBeenLastCalledWith(

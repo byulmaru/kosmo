@@ -231,6 +231,12 @@ export const InteractionContract: Story = {
     );
     expect(canvas.getByText('1 / 2')).toBeVisible();
     expect(canvas.queryByRole('tab', { name: '이미지 편집 (준비 중)' })).toBeNull();
+    expect(
+      getComputedStyle(canvas.getByTestId('composer-media-editor-gallery')).borderTopWidth,
+    ).toBe('0px');
+    expect(
+      getComputedStyle(canvas.getByTestId('composer-media-editor-footer')).borderTopWidth,
+    ).toBe('0px');
 
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 2 선택' }));
     expect(args.onSelectMedia).toHaveBeenLastCalledWith('media-2');

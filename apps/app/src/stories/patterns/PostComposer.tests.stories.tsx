@@ -191,6 +191,18 @@ export const ShortViewportContract: Story = {
     scroll.scrollTop = scroll.scrollHeight;
     expect(scroll.scrollTop).toBeGreaterThan(0);
 
+    await userEvent.click(within(dialog).getByRole('button', { name: '이모지 추가' }));
+    const picker = page.getByTestId('post-composer-emoji-picker');
+    const pickerGap = 8;
+    expect(picker).toHaveStyle({
+      height: `${canvasElement.ownerDocument.defaultView!.innerHeight - pickerGap * 2}px`,
+    });
+    expect(picker.getBoundingClientRect().top).toBeGreaterThanOrEqual(pickerGap);
+    expect(picker.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      canvasElement.ownerDocument.defaultView!.innerHeight - pickerGap,
+    );
+    await userEvent.click(page.getByRole('button', { name: '반응 선택 닫기' }));
+
     await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 2 편집' }));
     expect(within(dialog).getByRole('heading', { name: '미디어 편집' })).toBeVisible();
     expect(within(dialog).getByTestId('composer-overlay-scroll').scrollTop).toBe(0);

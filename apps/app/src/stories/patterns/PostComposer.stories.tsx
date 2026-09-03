@@ -328,8 +328,8 @@ function InteractiveComposer({
   } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState('expressions');
   const [pickerPosition, setPickerPosition] = useState({
+    height: 624,
     left: space[8] as number,
     top: space[8] as number,
   });
@@ -366,15 +366,23 @@ function InteractiveComposer({
 
     const bounds = trigger.getBoundingClientRect();
     const panelWidth = 360;
-    const panelHeight = 624;
+    const preferredPanelHeight = 624;
     const gap = space[8];
+    const panelHeight = Math.min(
+      preferredPanelHeight,
+      Math.max(0, storyWindow.innerHeight - gap * 2),
+    );
     const maxLeft = Math.max(gap, storyWindow.innerWidth - panelWidth - gap);
+    const maxTop = Math.max(gap, storyWindow.innerHeight - panelHeight - gap);
     setPickerPosition({
+      height: panelHeight,
       left: Math.min(Math.max(gap, bounds.right - panelWidth), maxLeft),
-      top:
+      top: Math.min(
         storyWindow.innerHeight - bounds.bottom >= panelHeight + gap
           ? bounds.bottom + gap
           : Math.max(gap, bounds.top - panelHeight - gap),
+        maxTop,
+      ),
     });
   }, [mobile, pickerOpen]);
 
@@ -400,13 +408,15 @@ function InteractiveComposer({
           styles.pickerPanel,
           mobile
             ? styles.mobilePickerPanel
-            : { left: pickerPosition.left, top: pickerPosition.top },
+            : {
+                height: pickerPosition.height,
+                left: pickerPosition.left,
+                top: pickerPosition.top,
+              },
         ]}
         testID="post-composer-emoji-picker"
       >
         <FullReactionPicker
-          activeCategory={activeCategory}
-          onCategoryChange={setActiveCategory}
           onQueryChange={setPickerQuery}
           onSelect={(option) => {
             const value = `${body}${option.emoji}`;
@@ -757,7 +767,10 @@ export const MobileCandidateContract: Story = {
     });
     expect(canvas.getByRole('heading', { name: '글쓰기' })).toBeVisible();
     expect(canvas.getByRole('button', { name: '글쓰기 닫기' })).toBeVisible();
+    const submit = canvas.getByRole('button', { name: '게시' });
     expect(canvas.getAllByRole('button', { name: '게시' })).toHaveLength(1);
+    expect(submit.getBoundingClientRect().height).toBe(40);
+    expect(submit.getBoundingClientRect().width).toBe(72);
     expect(canvas.getByLabelText('남은 글자 수 500자')).toBeVisible();
     expect(canvas.getByTestId('post-composer-progress-ring')).toBeVisible();
     expect(canvas.queryByRole('button', { name: 'Composer 확장' })).not.toBeInTheDocument();
@@ -818,9 +831,11 @@ export const OverlayProgressRingContract: Story = {
   args: { body: '오버레이 진행률', items: [], remaining: 250, surface: 'overlay' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const remaining = canvas.getByLabelText(/남은 글자 수 \d+자/);
     const ring = canvas.getByTestId('post-composer-progress-ring');
     const submit = canvas.getByRole('button', { name: '게시' });
 
+    expect(getComputedStyle(remaining).textAlign).toBe('right');
     expect(ring).toBeVisible();
     expect(ring).toHaveAttribute('aria-hidden', 'true');
     expect(ring.querySelectorAll('circle')).toHaveLength(2);
@@ -864,13 +879,11 @@ export const MobileMediaFooterGeometryContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
-    const shelf = gallery.parentElement;
-    const footer = shelf?.nextElementSibling;
+    const shelf = canvas.getByTestId('mobile-composer-media-shelf');
+    const footer = canvas.getByTestId('mobile-composer-footer');
 
-    expect(shelf).not.toBeNull();
-    expect(footer).not.toBeNull();
     expect(shelf).toHaveStyle({ height: '164px', paddingBottom: '8px' });
-    expect(footer!.getBoundingClientRect().top - gallery.getBoundingClientRect().bottom).toBe(8);
+    expect(footer.getBoundingClientRect().top - gallery.getBoundingClientRect().bottom).toBe(8);
   },
 };
 
@@ -879,13 +892,11 @@ export const MobileKeyboardMediaFooterGeometryContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
-    const shelf = gallery.parentElement;
-    const footer = shelf?.nextElementSibling;
+    const shelf = canvas.getByTestId('mobile-composer-media-shelf');
+    const footer = canvas.getByTestId('mobile-composer-footer');
 
-    expect(shelf).not.toBeNull();
-    expect(footer).not.toBeNull();
     expect(shelf).toHaveStyle({ height: '164px', paddingBottom: '8px' });
-    expect(footer!.getBoundingClientRect().top - gallery.getBoundingClientRect().bottom).toBe(8);
+    expect(footer.getBoundingClientRect().top - gallery.getBoundingClientRect().bottom).toBe(8);
   },
 };
 

@@ -379,7 +379,12 @@ export function MobileFullscreenComposerShellCandidate({
           글쓰기
         </Text>
         <View style={styles.mobileTrailingSlot}>
-          <Button disabled={disabled} loading={submitting} onPress={onSubmit} size="compact">
+          <Button
+            disabled={disabled}
+            loading={submitting}
+            onPress={onSubmit}
+            style={styles.mobileSubmitButton}
+          >
             게시
           </Button>
         </View>
@@ -471,7 +476,7 @@ export function MobileFullscreenComposerShellCandidate({
       </View>
 
       {items.length > 0 ? (
-        <View style={styles.mobileMediaShelf}>
+        <View style={styles.mobileMediaShelf} testID="mobile-composer-media-shelf">
           <PostComposerMediaItemsTarget
             disabled={submitting}
             media={items}
@@ -483,7 +488,10 @@ export function MobileFullscreenComposerShellCandidate({
         </View>
       ) : null}
 
-      <View style={[styles.mobileFooter, { borderTopColor: theme.borderSubtle }]}>
+      <View
+        style={[styles.mobileFooter, { borderTopColor: theme.borderSubtle }]}
+        testID="mobile-composer-footer"
+      >
         <View style={styles.tools}>
           {showMediaAction ? (
             <ComposerTool
@@ -776,6 +784,7 @@ const styles = StyleSheet.create({
   mobileLeadingSlot: { alignItems: 'flex-start', width: 72 },
   mobileMediaShelf: { height: 164, paddingBottom: space[8], paddingHorizontal: space[16] },
   mobileShell: { height: 844, overflow: 'hidden', width: 390 },
+  mobileSubmitButton: { minWidth: 72, width: 72 },
   mobileTitle: { flex: 1, textAlign: 'center', ...textStyles.uiHeadingS },
   mobileTrailingSlot: { alignItems: 'flex-end', width: 84 },
   mobileVisibilityControl: { position: 'relative', zIndex: 12 },
@@ -801,7 +810,7 @@ const styles = StyleSheet.create({
   overlay: { maxWidth: 600, width: '100%' },
   progressRing: { height: 20, width: 20 },
   rail: { width: 326 },
-  remaining: { width: 40, ...textStyles.uiCopyS },
+  remaining: { width: 40, ...textStyles.uiCopyS, textAlign: 'right' },
   root: { gap: space[16], padding: space[16] },
   submit: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
   textBody: { minHeight: 184 },
