@@ -64,9 +64,9 @@ base64 < kosmo-android-upload.jks | tr -d '\n'
 
 base64 결과와 password는 shell history, 저장소, GitHub 로그에 남기지 말고 위 Vault field에만 기록한다. upload key를 바꿀 때는 Vault field만 교체하지 말고 Play Console의 upload key reset 절차를 먼저 완료한다. 실제 Play Store 설치·업데이트·실기기 launch와 native login/GraphQL 검증은 PROD-287의 책임이며, 이 workflow는 API/OIDC 환경값이나 ADB/device smoke를 요구하지 않는다.
 
-## iOS TestFlight internal distribution
+## iOS App Store Connect upload
 
-`iOS TestFlight Internal Distribution`은 iOS의 유일한 native 배포 채널로, `main`에서 수동 실행하는 protected workflow다. 기존 `prod` GitHub Environment의 승인을 거쳐 clean Expo CNG iOS project를 만들고, App Store 배포용 profile과 Apple Distribution certificate로 서명한 archive를 검증·업로드한다. 네이티브 모듈 변경이 없는 업데이트는 OTA로 배포한다. 앱은 `expo-secure-store`의 Keychain 저장소를 사용하지만 현재 비면제 암호화를 사용하지 않으므로 `ios.config.usesNonExemptEncryption`을 `false`로 설정한다. 이후 별도 암호화 기능이나 암호화 라이브러리를 추가하면 이 판단과 App Store Connect 수출 규정 응답을 다시 검토해야 한다.
+`iOS App Store Connect Upload`는 iOS의 유일한 native 배포 채널로, `main`에서 수동 실행하는 protected workflow다. 기존 `prod` GitHub Environment의 승인을 거쳐 clean Expo CNG iOS project를 만들고, App Store 배포용 profile과 Apple Distribution certificate로 서명한 archive를 검증·업로드한다. 네이티브 모듈 변경이 없는 업데이트는 OTA로 배포한다. 앱은 `expo-secure-store`의 Keychain 저장소를 사용하지만 현재 비면제 암호화를 사용하지 않으므로 `ios.config.usesNonExemptEncryption`을 `false`로 설정한다. 이후 별도 암호화 기능이나 암호화 라이브러리를 추가하면 이 판단과 App Store Connect 수출 규정 응답을 다시 검토해야 한다.
 
 ### One-time administrator setup
 

@@ -1,4 +1,4 @@
-name: iOS TestFlight Internal Distribution
+name: iOS App Store Connect Upload
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: ios-testflight-distribution
+  group: ios-app-store-connect-upload
   cancel-in-progress: false
 
 jobs:
@@ -99,4 +99,4 @@ jobs:
           IOS_APP_STORE_PROVISIONING_PROFILE_BASE64: ${{ steps.ios_signing.outputs.IOS_APP_STORE_PROVISIONING_PROFILE_BASE64 }}
           IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ steps.ios_signing.outputs.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
           IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ steps.ios_signing.outputs.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
-        run: bundle exec fastlane ios distribute_testflight_internal
+        run: bundle exec fastlane ios build_and_upload_ios

@@ -167,8 +167,8 @@ platform :ios do
     end
   end
 
-  desc 'Build and upload the App Store IPA to the TestFlight internal group'
-  lane :distribute_testflight_internal do
+  desc 'Build and upload the App Store IPA to the App Store Connect TestFlight internal group'
+  lane :build_and_upload_ios do
     require_environment!(
       'APPLE_API_ISSUER_ID',
       'APPLE_API_KEY_ID',
