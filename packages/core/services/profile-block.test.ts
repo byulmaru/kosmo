@@ -24,7 +24,11 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
-import { deleteProfileBlock, executeProfileBlockTransition } from './profile-block';
+import {
+  deleteProfileBlock,
+  executeProfileBlockTransition,
+  executeProfileUnblockTransition,
+} from './profile-block';
 import { ensureProfileFollow } from './profile-follow-relation';
 import { loadProfileFollowRemovalSourcesBetweenProfiles } from './profile-follow-transaction';
 
@@ -92,6 +96,19 @@ const pairRows = (firstProfileId: string, secondProfileId: string) =>
       eq(ProfileFollows.followeeProfileId, firstProfileId),
     ),
   );
+
+const currentProfileBlockId = async (ownerProfileId: string, targetProfileId: string) =>
+  db
+    .select({ id: ProfileBlocks.id })
+    .from(ProfileBlocks)
+    .where(
+      and(
+        eq(ProfileBlocks.ownerProfileId, ownerProfileId),
+        eq(ProfileBlocks.targetProfileId, targetProfileId),
+      ),
+    )
+    .limit(1)
+    .then((rows) => rows[0]?.id ?? null);
 
 afterEach(async () => {
   // Reposts point at their source without ON DELETE CASCADE, so remove posts
@@ -446,12 +463,17 @@ test('Block removes captured Follow generations and preserves existing Reactions
       await deleteProfileBlock({
         ownerProfileId: owner.id,
         targetProfileId: target.id,
+        profileBlockId: candidateProfileBlockId,
       })
     )?.id,
     candidateProfileBlockId,
   );
   assert.equal(
-    await deleteProfileBlock({ ownerProfileId: target.id, targetProfileId: owner.id }),
+    await deleteProfileBlock({
+      ownerProfileId: target.id,
+      targetProfileId: owner.id,
+      profileBlockId: candidateProfileBlockId,
+    }),
     null,
   );
   assert.equal(
@@ -471,6 +493,242 @@ test('Block removes captured Follow generations and preserves existing Reactions
     1,
   );
   await assertReactionsAndNotificationPreserved();
+});
+
+test('Unblock cleans current Follow generations before removing the exact Block', async () => {
+  const { profile: owner } = await createProfile();
+  const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const profileBlockId = '00000000-0000-4000-8000-000000000801';
+  const followOwnerToTargetId = '00000000-0000-4000-8000-000000000802';
+  const followTargetToOwnerId = '00000000-0000-4000-8000-000000000803';
+  const requestOwnerToTargetId = '00000000-0000-4000-8000-000000000804';
+  const requestTargetToOwnerId = '00000000-0000-4000-8000-000000000805';
+  const lateFollowId = '00000000-0000-4000-8000-000000000806';
+  const replacementProfileBlockId = '00000000-0000-4000-8000-000000000807';
+
+  await db.insert(ProfileBlocks).values({
+    id: profileBlockId,
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+  });
+  await ensureProfileFollow(
+    { followerProfileId: owner.id, followeeProfileId: target.id },
+    undefined,
+    { id: followOwnerToTargetId },
+  );
+  await ensureProfileFollow(
+    { followerProfileId: target.id, followeeProfileId: owner.id },
+    undefined,
+    { id: followTargetToOwnerId },
+  );
+  await db.insert(ProfileFollowRequests).values([
+    {
+      id: requestOwnerToTargetId,
+      followerProfileId: owner.id,
+      followeeProfileId: target.id,
+    },
+    {
+      id: requestTargetToOwnerId,
+      followerProfileId: target.id,
+      followeeProfileId: owner.id,
+    },
+  ]);
+  await db.insert(Notifications).values([
+    {
+      kind: NotificationKind.FOLLOW,
+      recipientProfileId: target.id,
+      sourceId: followOwnerToTargetId,
+    },
+    {
+      kind: NotificationKind.FOLLOW,
+      recipientProfileId: owner.id,
+      sourceId: followTargetToOwnerId,
+    },
+    {
+      kind: NotificationKind.FOLLOW_REQUEST,
+      recipientProfileId: target.id,
+      sourceId: requestOwnerToTargetId,
+    },
+    {
+      kind: NotificationKind.FOLLOW_REQUEST,
+      recipientProfileId: owner.id,
+      sourceId: requestTargetToOwnerId,
+    },
+  ]);
+
+  const cleanupSources = await loadProfileFollowRemovalSourcesBetweenProfiles({
+    firstProfileId: owner.id,
+    secondProfileId: target.id,
+  });
+  const input = {
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    origin: 'LOCAL' as const,
+    expectedProfileBlockId: profileBlockId,
+    cleanupSources,
+  };
+  const firstExecution = await executeProfileUnblockTransition(input);
+  assert.equal(firstExecution.ok, true);
+  if (!firstExecution.ok) {
+    return;
+  }
+  assert.deepEqual(firstExecution.result, {
+    removed: true,
+    profileBlockId,
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+  });
+  assert.deepEqual(
+    firstExecution.effectPlan.map(({ input: effectInput }) => ({
+      sourceId: effectInput.sourceId,
+      sourceKind: effectInput.sourceKind,
+    })),
+    cleanupSources.map(({ sourceId, sourceKind }) => ({ sourceId, sourceKind })),
+  );
+  assert.equal(await currentProfileBlockId(owner.id, target.id), profileBlockId);
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollows)
+      .where(pairRows(owner.id, target.id))
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollowRequests)
+      .where(
+        or(
+          and(
+            eq(ProfileFollowRequests.followerProfileId, owner.id),
+            eq(ProfileFollowRequests.followeeProfileId, target.id),
+          ),
+          and(
+            eq(ProfileFollowRequests.followerProfileId, target.id),
+            eq(ProfileFollowRequests.followeeProfileId, owner.id),
+          ),
+        ),
+      )
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(Notifications)
+      .where(
+        inArray(Notifications.sourceId, [
+          followOwnerToTargetId,
+          followTargetToOwnerId,
+          requestOwnerToTargetId,
+          requestTargetToOwnerId,
+        ]),
+      )
+      .then((rows) => rows.length),
+    4,
+  );
+
+  // A completion-loss retry receives the same history-captured sources and
+  // rebuilds the required effects even though their rows are already gone.
+  const retry = await executeProfileUnblockTransition(input);
+  assert.equal(retry.ok, true);
+  if (!retry.ok) {
+    return;
+  }
+  assert.deepEqual(retry.result, firstExecution.result);
+  assert.deepEqual(retry.effectPlan, firstExecution.effectPlan);
+  assert.equal(await currentProfileBlockId(owner.id, target.id), profileBlockId);
+
+  // A later Unblock run captures and removes a Follow generation created while
+  // the original Block is still active.
+  await ensureProfileFollow(
+    { followerProfileId: owner.id, followeeProfileId: target.id },
+    undefined,
+    { id: lateFollowId },
+  );
+  await db.insert(Notifications).values({
+    kind: NotificationKind.FOLLOW,
+    recipientProfileId: target.id,
+    sourceId: lateFollowId,
+  });
+  const lateCleanupSources = await loadProfileFollowRemovalSourcesBetweenProfiles({
+    firstProfileId: owner.id,
+    secondProfileId: target.id,
+  });
+  const lateExecution = await executeProfileUnblockTransition({
+    ...input,
+    cleanupSources: lateCleanupSources,
+  });
+  assert.equal(lateExecution.ok, true);
+  if (!lateExecution.ok) {
+    return;
+  }
+  assert.deepEqual(lateExecution.result, firstExecution.result);
+  assert.deepEqual(
+    lateExecution.effectPlan.map(({ input: effectInput }) => effectInput.sourceId),
+    [lateFollowId],
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollows)
+      .where(eq(ProfileFollows.id, lateFollowId))
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.equal(await currentProfileBlockId(owner.id, target.id), profileBlockId);
+
+  assert.equal(
+    (
+      await deleteProfileBlock({
+        ownerProfileId: owner.id,
+        targetProfileId: target.id,
+        profileBlockId,
+      })
+    )?.id,
+    profileBlockId,
+  );
+  await db.insert(ProfileBlocks).values({
+    id: replacementProfileBlockId,
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+  });
+  assert.equal(
+    await deleteProfileBlock({
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+      profileBlockId,
+    }),
+    null,
+  );
+  assert.equal(await currentProfileBlockId(owner.id, target.id), replacementProfileBlockId);
+
+  const staleUnblock = await executeProfileUnblockTransition({
+    ...input,
+    cleanupSources: [],
+  });
+  assert.deepEqual(staleUnblock, {
+    ok: true,
+    result: {
+      removed: false,
+      profileBlockId: null,
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+    },
+    effectPlan: [],
+  });
+  assert.equal(
+    (
+      await deleteProfileBlock({
+        ownerProfileId: owner.id,
+        targetProfileId: target.id,
+        profileBlockId: replacementProfileBlockId,
+      })
+    )?.id,
+    replacementProfileBlockId,
+  );
+  assert.equal(await currentProfileBlockId(owner.id, target.id), null);
 });
 
 test('Block rejects self-blocking in the service and the database check', async () => {
