@@ -228,7 +228,7 @@ platform :ios do
 
       ENV['APPLE_DEVELOPER_TEAM_ID'] = team_id
       sh('pnpm relay')
-      sh('pnpm exec expo prebuild --clean --platform ios')
+      sh('pnpm --dir .. exec expo prebuild --clean --platform ios')
 
       create_keychain(
         path: keychain_path,
