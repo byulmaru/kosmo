@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { PixelRatio, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -89,13 +89,24 @@ export function PostLayout({
   const post = useFragment(PostLayoutFragment, postKey);
   const [bodyExpanded, setBodyExpanded] = useState(false);
   const [bodyHasOverflow, setBodyHasOverflow] = useState(false);
+  const lastContentRevision = useRef<string | null>(post.content?.id ?? null);
   const compact = presentation === 'compact';
   const compactBodyToggleTargetSize =
     Platform.OS === 'android' ? 48 : Platform.OS === 'ios' ? 44 : undefined;
   const bodyVisible = contentWarningPresentation === 'revealed' || !post.content?.contentWarning;
   useEffect(() => {
-    setBodyExpanded(false);
-    setBodyHasOverflow(false);
+    const contentRevision = post.content?.id;
+    if (
+      contentRevision &&
+      lastContentRevision.current &&
+      contentRevision !== lastContentRevision.current
+    ) {
+      setBodyExpanded(false);
+      setBodyHasOverflow(false);
+    }
+    if (contentRevision) {
+      lastContentRevision.current = contentRevision;
+    }
   }, [post.content?.id]);
   const openViewer = usePostMediaViewerHost();
   const replyBinding = usePostReplyBinding(replySurfacePostId ?? post.id);
@@ -119,7 +130,10 @@ export function PostLayout({
     [handleDeleted, openViewer, post.id],
   );
   const handleBodyLayout = useCallback((event: LayoutChangeEvent) => {
-    setBodyHasOverflow(event.nativeEvent.layout.height > typography.md.lineHeight * 3 + 0.5);
+    setBodyHasOverflow(
+      event.nativeEvent.layout.height >
+        typography.md.lineHeight * PixelRatio.getFontScale() * 3 + 0.5,
+    );
   }, []);
   const reply: PostActionBarProps['reply'] = replyBinding
     ? {

@@ -19,6 +19,7 @@ let queryPosts = new Map<string, ReturnType<typeof hostPost>>();
 let replyPostIds: string[] = [];
 let renderer: ReactTestRenderer | null = null;
 const platform = { OS: 'web' };
+let fontScale = 1;
 let viewportWidth = 767;
 
 Object.assign(globalThis, {
@@ -41,6 +42,7 @@ mock.module('react-native', {
     Image: 'Image',
     Modal: 'Modal',
     PanResponder: { create: () => ({ panHandlers: {} }) },
+    PixelRatio: { getFontScale: () => fontScale },
     Platform: platform,
     Pressable: 'Pressable',
     ScrollView: 'ScrollView',
@@ -224,6 +226,7 @@ afterEach(async () => {
   queriedSurfacePostId = null;
   queryPosts = new Map();
   replyPostIds = [];
+  fontScale = 1;
   platform.OS = 'web';
   viewportWidth = 767;
 });
@@ -350,6 +353,29 @@ describe('Post Media Viewer Host production wiring', () => {
     assert.ok(byTestId('post-action-surface'));
     assert.deepEqual(pressable('원문 접기').props.accessibilityState, { expanded: true });
 
+    await updateHost(
+      createElement(PostLayout, {
+        post: asLayoutKey({ ...post, content: null }),
+        presentation: 'compact',
+      }),
+    );
+    await updateHost(
+      createElement(PostLayout, {
+        post: asLayoutKey(post),
+        presentation: 'compact',
+      }),
+    );
+
+    assert.ok(byTestId('post-layout-body-scroll'));
+    assert.deepEqual(pressable('원문 접기').props.accessibilityState, { expanded: true });
+
+    await updateHost(
+      createElement(PostLayout, {
+        post: asLayoutKey({ ...post, content: null }),
+        presentation: 'compact',
+      }),
+    );
+
     const nextRevision = storyPost('compact-detail', 'compact-detail-content-next');
     nextRevision.content!.bodyText = '새 revision의 짧은 원문';
     await updateHost(
@@ -365,6 +391,43 @@ describe('Post Media Viewer Host production wiring', () => {
       renderer?.root.findAll((node) => node.props.accessibilityLabel === '원문 접기').length,
       0,
     );
+    assert.equal(
+      renderer?.root.findAll((node) => node.props.accessibilityLabel === '원문 더 보기').length,
+      0,
+    );
+  });
+
+  it('Compact 원문 토글은 font scaling된 3-line 높이를 초과할 때만 표시한다', async () => {
+    fontScale = 1.5;
+    const post = storyPost('compact-toggle-font-scale', 'compact-toggle-font-scale-content');
+    post.content!.bodyText = Array.from({ length: 4 }, (_, index) => `${index + 1}번째 줄`).join(
+      '\n',
+    );
+
+    await renderHost(
+      createElement(PostLayout, {
+        post: asLayoutKey(post),
+        presentation: 'compact',
+      }),
+    );
+
+    await act(async () =>
+      byTestId('post-layout-body-measure').props.onLayout({
+        nativeEvent: { layout: { height: 108 } },
+      }),
+    );
+    assert.equal(findByTestId('post-layout-body-scroll').length, 0);
+    assert.equal(
+      renderer?.root.findAll((node) => node.props.accessibilityLabel === '원문 더 보기').length,
+      0,
+    );
+
+    await act(async () =>
+      byTestId('post-layout-body-measure').props.onLayout({
+        nativeEvent: { layout: { height: 144 } },
+      }),
+    );
+    assert.deepEqual(pressable('원문 더 보기').props.accessibilityState, { expanded: false });
   });
 
   it('Compact 원문 토글은 Native 플랫폼 최소 target을 유지한다', async () => {
