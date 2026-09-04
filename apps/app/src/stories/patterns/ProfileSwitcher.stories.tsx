@@ -208,11 +208,15 @@ export const WideClosedUnreadContract: Story = {
   args: { initialOpen: false, surface: 'full' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
     const indicator = canvas.getByTestId('profile-switcher-closed-unread');
+    const triggerBounds = trigger.getBoundingClientRect();
     const bounds = indicator.getBoundingClientRect();
 
     expect(bounds.width).toBe(8);
     expect(bounds.height).toBe(8);
+    expect(bounds.left).toBe(triggerBounds.right + 1);
+    expect(bounds.top).toBe(triggerBounds.top + 2);
     expect(indicator).toHaveAttribute('aria-hidden', 'true');
   },
 };

@@ -101,7 +101,11 @@ export function ProfileSwitcherTarget({
                 accessibilityElementsHidden
                 aria-hidden
                 importantForAccessibility="no-hide-descendants"
-                style={[styles.closedUnread, { backgroundColor: theme.actionPrimaryBase }]}
+                style={[
+                  styles.closedUnread,
+                  styles.wideUnread,
+                  { backgroundColor: theme.actionPrimaryBase },
+                ]}
                 testID="profile-switcher-closed-unread"
               />
             ) : null}
@@ -222,7 +226,7 @@ const styles = StyleSheet.create({
   wideRoot: { width: 240 },
   trigger: { alignItems: 'center', flexDirection: 'row' },
   compactTrigger: { justifyContent: 'center', width: '100%' },
-  wideTrigger: { gap: space[8], width: 240 },
+  wideTrigger: { gap: space[8], position: 'relative', width: 240 },
   compactAvatar: { position: 'relative' },
   triggerName: { flex: 1, minWidth: 0, ...textStyles.uiLabelL },
   closedUnread: { borderRadius: radius.full, height: 8, width: 8 },
@@ -234,6 +238,7 @@ const styles = StyleSheet.create({
     top: -2,
     width: 12,
   },
+  wideUnread: { position: 'absolute', right: -9, top: 2 },
   menu: {
     borderRadius: radius[16],
     borderWidth: borderWidths[1],
