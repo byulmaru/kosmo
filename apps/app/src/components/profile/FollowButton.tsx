@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { breakpoints, space, textStyles } from '@/theme/tokens';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { RecordProxy, RecordSourceSelectorProxy } from 'relay-runtime';
 import type { FollowButton_profile$key } from './__generated__/FollowButton_profile.graphql';
@@ -15,6 +15,7 @@ import type { FollowButtonUnfollowProfileMutation } from './__generated__/Follow
 
 type FollowButtonProps = {
   profile: FollowButton_profile$key;
+  size?: 'compact' | 'medium';
   style?: StyleProp<ViewStyle>;
 };
 
@@ -98,8 +99,9 @@ const updateProfileCount = (
 const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
-export function FollowButton({ profile, style }: FollowButtonProps) {
+export function FollowButton({ profile, size, style }: FollowButtonProps) {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const { selectedProfileId } = useSession();
   const data = useFragment(followButtonProfileFragment, profile);
   const [commitFollow, following] =
@@ -114,6 +116,8 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
   const isFollowing = Boolean(viewerState?.follow);
   const isPending = Boolean(viewerState?.followRequest);
   const loading = following || cancelling || unfollowing;
+  const resolvedSize =
+    size ?? (Platform.OS === 'web' && width >= breakpoints.compact ? 'medium' : 'compact');
 
   if (!viewerState || viewerState.isSelf) {
     return null;
@@ -242,15 +246,19 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
           selected: isFollowing || isPending,
         }}
         disabled={loading}
-        hitSlop={6}
+        hitSlop={resolvedSize === 'compact' ? Platform.select({ android: 8, default: 6 }) : 0}
         onPress={toggleFollow}
-        style={styles.button}
+        size={resolvedSize === 'compact' ? 'compact' : 'default'}
+        style={resolvedSize === 'compact' ? styles.compactButton : styles.mediumButton}
         tone={isFollowing || isPending ? 'secondary' : 'primary'}
       >
         {isFollowing ? '팔로잉' : isPending ? '요청됨' : '팔로우'}
       </Button>
       {error ? (
-        <Text accessibilityRole="alert" style={[styles.error, { color: theme.textSecondary }]}>
+        <Text
+          accessibilityRole="alert"
+          style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
+        >
           팔로우 상태를 변경하지 못했습니다.
         </Text>
       ) : null}
@@ -259,7 +267,8 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
 }
 
 const styles = StyleSheet.create({
-  root: { alignItems: 'flex-end', gap: spacing.xs },
-  button: { minHeight: 32, paddingVertical: 0 },
-  error: { fontFamily: 'SUIT', maxWidth: 224, textAlign: 'right', ...typography.xsm },
+  root: { alignItems: 'flex-end', gap: space[4] },
+  compactButton: { height: 32, width: 72 },
+  mediumButton: { height: 40, minWidth: 96, width: 96 },
+  error: { maxWidth: 224, textAlign: 'right', width: 224, ...textStyles.uiCopyS },
 });
