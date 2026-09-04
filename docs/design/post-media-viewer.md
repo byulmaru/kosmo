@@ -16,7 +16,7 @@
 - Wide: 560×420 Media frame을 image stage 가운데 배치하고 오른쪽에 346px full-height context rail을 둔다. 이 고정값은 DSN-63 Target의 disconnected Storybook 검증값이며 Production responsive clamp는 PROD-849가 별도로 검증한다.
 - Controls: 48×48 interaction target, 30px icon, 2.5 stroke, fixed white, dark halo, Hover·Pressed state layer, 2px inside FocusVisible ring과 Disabled opacity
 - Ready: Media, 다중 navigation·상단 counter와 presentation별 secondary surface
-- Loading: spinner·상태 설명을 표시하고 navigation·counter를 숨긴다. Compact detail과 Wide rail은 유지한다.
+- Loading: 상태 설명과 일반 motion의 spinner 또는 reduced-motion의 정적 `···`를 표시하고 navigation·counter를 숨긴다. Compact detail과 Wide rail은 유지한다.
 - Error: 상태 설명·`다시 시도` action을 표시하고 navigation·counter를 숨긴다. Compact detail과 Wide rail은 유지한다.
 - Unavailable: 상태 설명만 표시하고 navigation·counter를 숨긴다. Compact detail과 Wide rail은 유지한다.
 - Navigation: 첫·마지막 경계에서 비활성화하고 끝에서 반대편으로 순환하지 않는다.
@@ -110,7 +110,7 @@ Viewer는 [기존 Post Action Bar](./post-action-bar.md)가 현재 제공하는 
 - Viewer는 원래 Post surface에서 Content Warning을 공개한 뒤에만 열 수 있다. 열린 Viewer의 현재 Post는 원문을 공개 상태로 유지하고 Content Warning 안내와 다시 가리기 control을 표시하지 않는다. 이 Viewer 전용 표현은 다른 Post surface의 reveal 저장 상태를 변경하지 않는다.
 - Viewer가 열린 뒤 background Gallery의 Sensitive 표시 상태가 바뀌어도 Viewer session을 자동 종료하지 않는다. 현재 Host query projection에서 선택 Media가 사라지거나 표시할 수 없게 되면 이전 이미지 byte·URL을 유지하지 않고 modal 안에 안전한 unavailable 상태를 표시한다.
 - PROD-650 Current Host Post query가 cache hit·loading·error·retry이거나 null Post·Content·Media를 반환해도 modal shell과 close control은 유지한다. Host query fallback은 안전한 한국어 상태와 retry만 제공하고 raw 오류·authorization 세부 정보를 노출하지 않는다.
-- Target의 `Loading`·`Error`·`Unavailable`은 각각 canonical 상태 설명을 사용한다. `Error`만 `다시 시도` action을 제공하며, 세 상태 모두 navigation·counter는 렌더링하지 않는다. Compact presentation은 현재 Post detail panel을, Wide presentation은 346px context rail을 세 상태에서도 유지한다. Loading spinner는 시각 요소로만 노출하고 상태 제목을 한 번만 보조 기술에 전달한다.
+- Target의 `Loading`·`Error`·`Unavailable`은 Host query 또는 선택 Media projection의 차단 상태에 각각 canonical 상태 설명을 사용한다. `Error`만 Host/query `다시 시도` action을 제공하며, 세 상태 모두 navigation·counter는 렌더링하지 않는다. Compact presentation은 현재 Post detail panel을, Wide presentation은 346px context rail을 세 상태에서도 유지한다. 일반 motion의 Loading spinner와 reduced-motion의 정적 `···`는 접근성 트리에서 숨기고 상태 제목을 한 번만 보조 기술에 전달한다.
 - DSN-51 Mobile Figma에서 `Ready` surface 안의 개별 Media load 실패는 top-level `Error`가 아니다. 중앙 blocking state 대신 기존 공용 Danger Action Toast를 stage 하단에 지속 표시한다. Mobile Error consumer [`6665:55675`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-55675)는 [`Toast 7380:55058`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-55058)의 `미디어를 불러오지 못했어요`와 `다시 시도`를 사용하며 modal chrome, 현재 index와 Post detail surface를 유지한다.
 - PROD-650 Current runtime은 개별 Media load 실패를 stage 중앙의 inline fallback과 `다시 시도`로 표시하며 modal chrome, 현재 index와 현재 breakpoint의 Post detail surface를 유지한다.
 - 실패한 Media는 같은 위치에서 다시 시도할 수 있고, retry는 현재 index를 바꾸거나 다른 Media의 상태를 초기화하지 않는다.
@@ -131,7 +131,7 @@ Compact Post detail, Wide 346px full-height rail, 상태별 visibility와 비순
 Production Host/Relay/route 연결이나 runtime 완료를 증명하지 않는다.
 DSN-50·DSN-51의 Figma·문서 완료도 Production runtime이나 component 반영 증거로 사용하지 않는다.
 
-- Component test는 Compact·Wide와 Ready·Loading·Error·Unavailable 상태, canonical frame·control geometry, 상태별 navigation·counter·detail·rail visibility, Loading 단일 announcement·Error retry, 1장·다중 위치와 비순환 경계를 확인한다.
+- Component test는 Compact·Wide와 Ready·Loading·Error·Unavailable 상태, canonical frame·control geometry, 상태별 navigation·counter·detail·rail visibility, Loading 단일 announcement·reduced-motion 정적 표시·Error retry, 1장·다중 위치와 비순환 경계를 확인한다.
 - Storybook은 실제 `PostLayout` detail과 thread 맥락 fixture, Controls/Actions, 390 Compact·1024/1440 Wide와 theme 상태, 1장·다중 이미지, 첫·중간·마지막 위치와 Error retry callback을 확인한다. Sensitive 공개는 Gallery 진입 경계가 소유하며 Viewer state·callback·story로 복제하지 않는다. Media 저장·공유처럼 계약에 없는 action은 넣지 않는다.
 
 ## PROD-849 Production 후속 검증 경계

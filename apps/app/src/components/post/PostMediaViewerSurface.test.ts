@@ -13,6 +13,7 @@ import type { PostMediaViewerSurfaceProps } from './PostMediaViewerSurface';
 const require = createRequire(import.meta.url);
 
 const mockPlatform: { OS: string } = { OS: 'web' };
+let mockReducedMotion = false;
 
 mock.module('react-native', {
   exports: {
@@ -48,6 +49,13 @@ mock.module('@/components/ui/IconButton', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module('@/theme/ThemeProvider', {
+  exports: {
+    useReducedMotion: () => mockReducedMotion,
+    useTheme: () => ({ backgroundCanvas: '#ffffff' }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 const icon = (type: string) => (props: Record<string, unknown>) => createElement(type, props);
 
 mock.module(require.resolve('lucide-react-native'), {
@@ -80,6 +88,8 @@ before(async () => {
 });
 
 afterEach(async () => {
+  mockPlatform.OS = 'web';
+  mockReducedMotion = false;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -343,6 +353,21 @@ describe('PostMediaViewerSurface', () => {
 
     await render({ viewState: 'unavailable' });
     assert.equal(queryByLabel('다시 시도'), null);
+  });
+
+  it('reduced-motion Loading은 회전 indicator 대신 숨긴 정적 표시를 사용한다', async () => {
+    mockReducedMotion = true;
+
+    for (const platform of ['web', 'ios', 'android'] as const) {
+      mockPlatform.OS = platform;
+      await render({ viewState: 'loading' });
+
+      assert.equal(queryByTestId('post-media-viewer-loading-indicator'), null);
+      const fallback = byTestId('post-media-viewer-loading-fallback');
+      assert.equal(fallback.props.accessible, false);
+      assert.equal(fallback.props['aria-hidden'], true);
+      assert.equal(fallback.children.join(''), '···');
+    }
   });
 
   it('70% overlay는 stage가 소유하고 Media frame과 상태는 투명하게 그 위에 놓인다', async () => {
