@@ -39,7 +39,7 @@ Owner와 Target을 잇는 영구 Profile Mute를 중복 없이 저장하고, 기
 
 **Deliverable**
 
-검증된 Owner가 Local 또는 Remote Target을 영구 Mute하고 해제할 수 있으며, 호출자는 두 Profile 사이의 현재 적용 여부를 transport와 무관하게 조회할 수 있다.
+검증된 Owner가 Local 또는 Remote Target을 영구 Mute하고 해제할 수 있으며, 각 소비자가 Owner·Target·`expires_at` 조건을 직접 조합해 현재 적용 여부와 Owner별 목록을 조회할 수 있다.
 
 **Guardrails**
 
@@ -59,7 +59,7 @@ Owner와 Target을 잇는 영구 Profile Mute를 중복 없이 저장하고, 기
 
 - [x] 2.1 영구 Profile Mute 생성 action과 도메인 오류 경계를 구현한다.
 - [x] 2.2 Owner 범위를 지키는 해제 action을 구현한다.
-- [x] 2.3 단건 적용 여부와 Owner별 묶음 조회에 재사용할 수 있는 읽기 경계를 제공한다.
+- [x] 2.3 소비자별 관계 query에서 Owner·Target·`expires_at` 조건을 직접 조합해 단건 적용 여부와 Owner별 묶음 조회를 수행한다.
 - [x] 2.4 자격·Local/Remote Target·중복·동시성·해제·적용 판정 서비스 테스트를 추가해 Core 데이터베이스 테스트를 통과시킨다.
 
 ## 3. PROD-824 Owner 전용 GraphQL 계약

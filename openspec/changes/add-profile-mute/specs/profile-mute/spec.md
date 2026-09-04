@@ -76,9 +76,9 @@
 - **WHEN** 선택한 Profile이 다른 Owner의 Profile Mute를 제거하려 한다
 - **THEN** 시스템은 기존 관계를 유지하며 그 관계의 존재를 요청자에게 드러내지 않는다
 
-### Requirement: Profile Mute 적용 여부를 조회한다
+### Requirement: Profile Mute 적용 상태를 판정한다
 
-**Authority / Provenance:** `docs/domain/objects/profile-mute.md`, `docs/domain/policies/post-list.md`, `PROD-814`, `PROD-824` — 시스템은 주어진 Owner·Target 조합에 이 변경의 영구 Profile Mute 관계가 존재하는지 transport와 무관하게 판정할 수 있어야 한다(MUST). 후행 콘텐츠·Notification 정책은 이 공통 조회 경계를 사용할 수 있어야 한다(MUST). 이 변경 자체가 Post 목록을 제외·접거나 Notification 생성을 억제해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-mute.md`, `docs/domain/policies/post-list.md`, `PROD-814`, `PROD-824` — `expires_at`이 `null`인 Owner·Target 관계는 활성 Profile Mute이고, 해당 활성 관계가 없으면 비활성으로 판정해야 한다(MUST). 후행 콘텐츠·Notification 정책은 각자의 query에 Owner·Target·`expires_at IS NULL` 활성 관계 조건을 직접 조합해야 한다(MUST). 이 변경 자체가 Post 목록을 제외·접거나 Notification 생성을 억제해서는 안 된다(MUST NOT).
 
 #### Scenario: 관계가 있으면 적용 중이다
 
@@ -87,7 +87,7 @@
 
 #### Scenario: 관계가 없으면 적용 중이 아니다
 
-- **WHEN** Owner·Target 조합에 Profile Mute가 존재하지 않는다
+- **WHEN** Owner·Target 조합에 `expires_at`이 `null`인 Profile Mute 관계가 존재하지 않는다
 - **THEN** 적용 여부 조회는 Mute가 적용 중이 아니라고 반환한다
 
 #### Scenario: 후행 노출 정책은 실행하지 않는다

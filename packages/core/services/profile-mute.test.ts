@@ -1,14 +1,11 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import {
   Bookmarks,
   db,
-  findProfileMute,
-  findProfileMutesByOwner,
   firstOrThrow,
   Instances,
-  isProfileMuted,
   isUniqueViolation,
   Notifications,
   pg,
@@ -165,13 +162,19 @@ test('유효한 Local Owner는 Local·Remote Target을 영구 Mute한다', async
     assert.equal(localMute.expiresAt, null);
     assert.equal(remoteMute.ownerProfileId, owner.profile.id);
     assert.equal(remoteMute.targetProfileId, remoteTarget.profile.id);
-    assert.equal(await isProfileMuted(owner.profile.id, localTarget.profile.id), true);
-    assert.equal(await isProfileMuted(owner.profile.id, remoteTarget.profile.id), true);
     assert.deepEqual(
       new Set(
-        (await findProfileMutesByOwner(owner.profile.id)).map(
-          ({ targetProfileId }) => targetProfileId,
-        ),
+        (
+          await db
+            .select({ targetProfileId: ProfileMutes.targetProfileId })
+            .from(ProfileMutes)
+            .where(
+              and(
+                eq(ProfileMutes.ownerProfileId, owner.profile.id),
+                isNull(ProfileMutes.expiresAt),
+              ),
+            )
+        ).map(({ targetProfileId }) => targetProfileId),
       ),
       new Set([localTarget.profile.id, remoteTarget.profile.id]),
     );
@@ -305,15 +308,36 @@ test('unmuteProfile은 Owner·관계 ID만 제거하고 다른 Owner에는 null�
       profileMuteId: created.id,
     });
     assert.equal(wrongOwnerResult, null);
-    assert.equal(await isProfileMuted(input.ownerProfileId, input.targetProfileId), true);
+    assert.equal(
+      await db.$count(
+        ProfileMutes,
+        and(
+          eq(ProfileMutes.ownerProfileId, input.ownerProfileId),
+          eq(ProfileMutes.targetProfileId, input.targetProfileId),
+          isNull(ProfileMutes.expiresAt),
+        ),
+      ),
+      1,
+    );
 
     const removed = await unmuteProfile({
       ownerProfileId: owner.profile.id,
       profileMuteId: created.id,
     });
     assert.equal(removed?.id, created.id);
-    assert.equal(await findProfileMute(input.ownerProfileId, input.targetProfileId), null);
-    assert.equal(await isProfileMuted(input.ownerProfileId, input.targetProfileId), false);
+    assert.deepEqual(
+      await db
+        .select()
+        .from(ProfileMutes)
+        .where(
+          and(
+            eq(ProfileMutes.ownerProfileId, input.ownerProfileId),
+            eq(ProfileMutes.targetProfileId, input.targetProfileId),
+            isNull(ProfileMutes.expiresAt),
+          ),
+        ),
+      [],
+    );
     assert.equal(
       await unmuteProfile({ ownerProfileId: owner.profile.id, profileMuteId: created.id }),
       null,
@@ -341,10 +365,19 @@ test('기존 미래 만료 Mute를 다시 생성하면 같은 row가 영구 관�
       .returning()
       .then(firstOrThrow);
 
-    assert.equal(await findProfileMute(owner.profile.id, target.profile.id), null);
-    assert.equal(await isProfileMuted(owner.profile.id, target.profile.id), false);
-    assert.deepEqual(await findProfileMutesByOwner(owner.profile.id), []);
-
+    assert.deepEqual(
+      await db
+        .select()
+        .from(ProfileMutes)
+        .where(
+          and(
+            eq(ProfileMutes.ownerProfileId, owner.profile.id),
+            eq(ProfileMutes.targetProfileId, target.profile.id),
+            isNull(ProfileMutes.expiresAt),
+          ),
+        ),
+      [],
+    );
     const remuted = await muteProfile({
       ownerProfileId: owner.profile.id,
       targetProfileId: target.profile.id,
@@ -352,11 +385,18 @@ test('기존 미래 만료 Mute를 다시 생성하면 같은 row가 영구 관�
 
     assert.equal(remuted.id, existing.id);
     assert.equal(remuted.expiresAt, null);
-    assert.equal((await findProfileMute(owner.profile.id, target.profile.id))?.id, existing.id);
-    assert.equal(await isProfileMuted(owner.profile.id, target.profile.id), true);
     assert.deepEqual(
-      (await findProfileMutesByOwner(owner.profile.id)).map(({ id }) => id),
-      [existing.id],
+      await db
+        .select({ id: ProfileMutes.id, expiresAt: ProfileMutes.expiresAt })
+        .from(ProfileMutes)
+        .where(
+          and(
+            eq(ProfileMutes.ownerProfileId, owner.profile.id),
+            eq(ProfileMutes.targetProfileId, target.profile.id),
+            isNull(ProfileMutes.expiresAt),
+          ),
+        ),
+      [{ id: existing.id, expiresAt: null }],
     );
   } finally {
     await cleanupProfiles(

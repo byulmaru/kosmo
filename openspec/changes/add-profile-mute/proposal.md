@@ -11,7 +11,7 @@
 - nullable `expires_at`을 저장 모델에 포함하되, v1 생성 경로는 항상 `null`을 기록하고 기간 입력·변경·만료
   동작을 공개하지 않는다.
 - 검증된 Owner Profile이 Local 또는 Remote Target Profile을 영구 Mute하고 해제할 수 있도록 transport-neutral
-  Core action과 현재 적용 여부 조회 기능을 추가한다.
+  Core action을 추가한다.
 - 현재 selected Profile이 소유한 Mute 관계 목록과 Target 기준 상태를 조회하고 생성·해제할 수 있는 GraphQL
   계약을 추가한다.
 - GraphQL 인증, Owner 권한과 selected Profile 격리를 적용하고 다른 Account나 같은 Account의 다른 selected
@@ -45,7 +45,7 @@
 
 - Database: Profile Mute 관계 테이블, Owner·Target foreign key와 unique constraint, nullable `expires_at`, 조회와
   pagination에 필요한 index, additive migration.
-- Core: transport-neutral 생성·해제 action과 적용 여부 판정, 관계 조회 query 경계, domain error와 동시성 수렴.
+- Core: transport-neutral 생성·해제 action, domain error와 동시성 수렴.
 - GraphQL: Profile Mute Node·viewer-relative 상태·Owner 전용 connection, 생성·해제 mutation과 공개 schema.
 - Tests: migration/schema, Core service, GraphQL integration과 Local·Remote Target·selected Profile 격리 회귀.
 - Dependencies: 새 workspace 또는 runtime dependency는 추가하지 않는다.
