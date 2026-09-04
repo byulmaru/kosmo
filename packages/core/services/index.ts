@@ -19,6 +19,7 @@ export type {
   ProfileBlockCleanupSource,
   ProfileBlockCleanupSources,
   ProfileBlockEffectOrigin,
+  ProfileBlockTransitionBootstrap,
   ProfileBlockTransitionExecution,
   ProfileBlockTransitionFailure,
   ProfileBlockTransitionInput,
@@ -31,6 +32,7 @@ export {
   deleteProfileBlock,
   executeProfileBlockTransition,
   executeProfileUnblockTransition,
+  loadProfileBlockTransitionBootstrap,
 } from './profile-block';
 export { followProfile, unfollowProfile } from './profile-follow';
 export type {

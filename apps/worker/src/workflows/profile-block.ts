@@ -1,4 +1,4 @@
-import { ApplicationFailure, proxyActivities, uuid4 } from '@temporalio/workflow';
+import { ApplicationFailure, proxyActivities } from '@temporalio/workflow';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
@@ -30,7 +30,7 @@ const {
   deleteFollowNotificationActivity,
   deleteFollowRequestNotificationActivity,
   executeProfileBlockTransitionActivity,
-  loadProfileFollowRemovalSourcesBetweenProfilesActivity,
+  loadProfileBlockTransitionBootstrapActivity,
   sendProfileUnfollowActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
@@ -52,22 +52,21 @@ const profileBlockFailure = (
 
 /**
  * Applies one Profile Block generation and drains every Follow effect before
- * resolving. The source bootstrap and candidate ID are deliberate Workflow
- * commands: both values therefore survive Activity completion loss and replay.
+ * resolving. The bootstrap Activity result places both the source IDs and the
+ * UUIDv7 candidate in Workflow History before the transition is scheduled.
  */
 export async function profileBlockWorkflow(
   input: ProfileBlockWorkflowInput,
 ): Promise<ProfileBlockTransitionResult> {
   const parsedInput = parseProfileBlockInput(input);
-  const cleanupSources = await loadProfileFollowRemovalSourcesBetweenProfilesActivity({
+  const bootstrap = await loadProfileBlockTransitionBootstrapActivity({
     firstProfileId: parsedInput.ownerProfileId,
     secondProfileId: parsedInput.targetProfileId,
   });
-  const candidateProfileBlockId = uuid4();
   const execution = await executeProfileBlockTransitionActivity({
     ...parsedInput,
-    candidateProfileBlockId,
-    cleanupSources,
+    candidateProfileBlockId: bootstrap.candidateProfileBlockId,
+    cleanupSources: bootstrap.cleanupSources,
   });
 
   if (!execution.ok) {

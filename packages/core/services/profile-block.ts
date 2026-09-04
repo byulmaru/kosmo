@@ -1,13 +1,19 @@
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 import { db, first, getDatabaseConnection, ProfileBlocks, Profiles } from '../db';
 import { ConflictError, KosmoError, NotFoundError, ValidationError } from '../error';
 import { removeProfileFollowExactSourceWithEffect } from './profile-follow-command';
+import { loadProfileFollowRemovalSourcesBetweenProfiles } from './profile-follow-transaction';
 import type { DatabaseHandle, Transaction } from '../db';
 import type { ProfileFollowPairEffect } from './profile-follow-command';
 import type { ProfileFollowRemovalSource } from './profile-follow-transaction';
 
 export type ProfileBlockCleanupSource = ProfileFollowRemovalSource;
 export type ProfileBlockCleanupSources = readonly ProfileBlockCleanupSource[];
+
+export type ProfileBlockTransitionBootstrap = {
+  readonly candidateProfileBlockId: string;
+  readonly cleanupSources: ProfileBlockCleanupSources;
+};
 
 export type ProfileBlockEffectOrigin = 'LOCAL' | 'ACTIVITYPUB';
 
@@ -18,7 +24,7 @@ export type ProfileBlockTransitionInput = {
   readonly origin: ProfileBlockEffectOrigin;
   /** Exact source IDs captured before this transaction is scheduled. */
   readonly cleanupSources: ProfileBlockCleanupSources;
-  /** Stable candidate ID allocated by a durable Workflow when creating the relation. */
+  /** Stable candidate ID allocated by the bootstrap Activity for this relation. */
   readonly candidateProfileBlockId?: string;
 };
 
@@ -71,6 +77,32 @@ export type ProfileUnblockTransitionExecution =
       readonly effectPlan: ProfileBlockEffectPlan;
     }
   | { readonly ok: false; readonly error: ProfileBlockTransitionFailure };
+
+/**
+ * Captures the Follow sources and allocates the Profile Block ID for one
+ * Activity result. The candidate is returned in Activity history before the
+ * transition inserts it, so a completion-loss retry reuses the same ID.
+ */
+export const loadProfileBlockTransitionBootstrap = async ({
+  firstProfileId,
+  secondProfileId,
+}: {
+  readonly firstProfileId: string;
+  readonly secondProfileId: string;
+}): Promise<ProfileBlockTransitionBootstrap> => {
+  const [cleanupSources, candidateRows] = await Promise.all([
+    loadProfileFollowRemovalSourcesBetweenProfiles({ firstProfileId, secondProfileId }),
+    db.execute<{ candidateProfileBlockId: string }>(
+      sql`SELECT uuidv7() AS "candidateProfileBlockId"`,
+    ),
+  ]);
+  const candidateProfileBlockId = candidateRows[0]?.candidateProfileBlockId;
+  if (candidateProfileBlockId === undefined) {
+    throw new Error('Profile Block bootstrap did not allocate a candidate ID');
+  }
+
+  return { candidateProfileBlockId, cleanupSources };
+};
 
 const serializeFailure = (error: KosmoError): ProfileBlockTransitionFailure => {
   const field = 'field' in error && typeof error.field === 'string' ? error.field : undefined;

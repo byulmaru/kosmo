@@ -1453,11 +1453,12 @@ test(
         followeeProfileId: input.targetProfileId,
       },
     ];
+    const candidateProfileBlockId = '00000000-0000-7000-8000-000000000704';
     const execution = {
       ok: true as const,
       result: {
         created: true,
-        profileBlockId: '00000000-0000-8000-8000-000000000704',
+        profileBlockId: candidateProfileBlockId,
         ownerProfileId: input.ownerProfileId,
         targetProfileId: input.targetProfileId,
       },
@@ -1468,6 +1469,7 @@ test(
         },
       ],
     };
+    const bootstrap = { candidateProfileBlockId, cleanupSources };
     const calls: string[] = [];
     let releaseEffects!: () => void;
     const effectsReleased = new Promise<void>((resolve) => {
@@ -1484,13 +1486,13 @@ test(
 
     const worker = await Worker.create({
       activities: {
-        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => cleanupSources,
+        loadProfileBlockTransitionBootstrapActivity: async () => bootstrap,
         executeProfileBlockTransitionActivity: async (value: unknown) => {
           const transition = value as {
-            candidateProfileBlockId?: string;
+            candidateProfileBlockId: string;
             cleanupSources: typeof cleanupSources;
           };
-          assert.match(transition.candidateProfileBlockId ?? '', /^[0-9a-f-]{36}$/);
+          assert.equal(transition.candidateProfileBlockId, candidateProfileBlockId);
           assert.deepEqual(transition.cleanupSources, cleanupSources);
           return execution;
         },
@@ -1571,7 +1573,7 @@ test(
       ok: true as const,
       result: {
         created: true,
-        profileBlockId: '00000000-0000-8000-8000-000000000714',
+        profileBlockId: '00000000-0000-7000-8000-000000000714',
         ownerProfileId: input.ownerProfileId,
         targetProfileId: input.targetProfileId,
       },
@@ -1582,13 +1584,27 @@ test(
         },
       ],
     };
+    const bootstrap = {
+      candidateProfileBlockId: execution.result.profileBlockId,
+      cleanupSources,
+    };
     const transitionInputs: unknown[] = [];
+    let bootstrapCalls = 0;
     let transitionAttempts = 0;
     let deleteCalls = 0;
 
     const worker = await Worker.create({
       activities: {
-        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => cleanupSources,
+        loadProfileBlockTransitionBootstrapActivity: async () => {
+          bootstrapCalls += 1;
+          return {
+            candidateProfileBlockId:
+              bootstrapCalls === 1
+                ? bootstrap.candidateProfileBlockId
+                : '00000000-0000-7000-8000-000000000715',
+            cleanupSources,
+          };
+        },
         executeProfileBlockTransitionActivity: async (value: unknown) => {
           transitionAttempts += 1;
           transitionInputs.push(value);
@@ -1619,14 +1635,15 @@ test(
       });
 
       assert.deepEqual(result, execution.result);
+      assert.equal(bootstrapCalls, 1);
       assert.equal(transitionAttempts, 2);
       assert.equal(deleteCalls, 1);
       const firstInput = transitionInputs[0] as {
-        candidateProfileBlockId?: string;
+        candidateProfileBlockId: string;
         cleanupSources: typeof cleanupSources;
       };
       const secondInput = transitionInputs[1] as typeof firstInput;
-      assert.match(firstInput.candidateProfileBlockId ?? '', /^[0-9a-f-]{36}$/);
+      assert.equal(firstInput.candidateProfileBlockId, bootstrap.candidateProfileBlockId);
       assert.equal(secondInput.candidateProfileBlockId, firstInput.candidateProfileBlockId);
       assert.deepEqual(firstInput.cleanupSources, cleanupSources);
       assert.deepEqual(secondInput.cleanupSources, cleanupSources);
@@ -1670,12 +1687,15 @@ test(
 
     const worker = await Worker.create({
       activities: {
-        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => cleanupSources,
+        loadProfileBlockTransitionBootstrapActivity: async () => ({
+          candidateProfileBlockId: '00000000-0000-7000-8000-000000000724',
+          cleanupSources,
+        }),
         executeProfileBlockTransitionActivity: async () => ({
           ok: true as const,
           result: {
             created: true,
-            profileBlockId: '00000000-0000-8000-8000-000000000724',
+            profileBlockId: '00000000-0000-7000-8000-000000000724',
             ownerProfileId: input.ownerProfileId,
             targetProfileId: input.targetProfileId,
           },
