@@ -8,7 +8,7 @@
 
 ### Requirement: Directed pair Follow lifecycle Workflow
 
-**Authority / Provenance:** `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/architecture/core-services.md`, PROD-720 — The system MUST satisfy this requirement.
+**Authority / Provenance:** `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/architecture/core-services.md`, PROD-720, PROD-892 — The system MUST satisfy this requirement.
 
 The system MUST coordinate one directed follower/followee pair through a deterministic pair Workflow while that Follow lifecycle is active. The Workflow ID MUST be `profile-follow-pair:{followerProfileId}:{followeeProfileId}` (with the repository's canonical escaping/encoding for Profile IDs). The Workflow MUST be admitted with Update-with-Start using the pair identity, `USE_EXISTING` for an active execution, and `ALLOW_DUPLICATE` for a completed execution. It MUST NOT use a random operation identity, a command receipt, or remain open after the lifecycle reaches a terminal state.
 
@@ -51,7 +51,7 @@ INITIAL → PENDING → ESTABLISHED
 #### Scenario: Remote Accept becomes unavailable
 
 - **WHEN** a verified remote Accept reaches the transaction after participant availability changes and the request cannot be promoted
-- **THEN** the Workflow returns a no-op, keeps the request lifecycle `PENDING`, and does not expose the candidate Follow ID or enqueue a Follow create effect
+- **THEN** the Workflow returns a no-op, keeps the request lifecycle `PENDING`, and does not enqueue a Follow create effect
 
 #### Scenario: Reject an invalid Pending command
 
@@ -94,67 +94,83 @@ The system MUST append each committed transition's effects to a FIFO queue owned
 
 ### Requirement: Follow transition effects and retry
 
-The system MUST preserve existing source-correlated Notification and ActivityPub queue handoff semantics while moving the transaction admission and Pending lifecycle into the pair Workflow. The Update result is the committed domain result; effect completion is a separate Workflow concern. Each transaction Activity attempt evaluates the current participant and remote Instance state and returns the resulting effect plan. Once returned, the Workflow executes that plan as-is; an effect Activity MUST NOT re-evaluate mutable state to add or cancel a delivery.
+**Authority / Provenance:** `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/architecture/core-services.md`, PROD-892 — The system MUST satisfy this requirement.
+
+시스템은 transaction admission과 Pending lifecycle을 pair Workflow에서 처리하면서 기존 source-correlated Notification과 ActivityPub queue handoff 의미를 유지해야 한다(MUST). 신규 ProfileFollow와 ProfileFollowRequest insert는 ID를 지정하지 않고 PostgreSQL `uuidv7()` column default를 사용해야 하며(MUST), 정상 transaction Activity 완료 시 데이터베이스가 반환한 row ID를 Update 결과와 create effect source로 사용해야 한다(MUST). Update 결과는 committed domain 결과이고 effect 완료는 별도 Workflow concern이다. 각 transaction Activity 시도는 현재 participant와 remote Instance 상태를 평가하고 해당 시도에서 실제 commit한 transition의 effect plan을 반환해야 한다(MUST). 반환된 plan은 Workflow가 그대로 실행하며, effect Activity는 mutable state를 다시 평가해 delivery를 추가하거나 취소해서는 안 된다(MUST NOT).
+
+Transaction Activity가 commit된 뒤 completion 응답이 유실되어 retry가 이미 존재하는 Follow 또는 Follow Request를 관찰하면, 시스템은 row를 중복 생성해서는 안 되고(MUST NOT) candidate identity 없이 해당 row를 이번 시도의 commit이라고 추론해 create effect를 재구성해서도 안 된다(MUST NOT). 이 경계에서는 committed 관계 상태를 유지하되 해당 transition의 Notification 또는 ActivityPub create effect가 누락될 수 있다. 시스템은 이를 보정하기 위한 candidate UUID Activity, operation receipt, outbox, sweeper 또는 reconciliation을 이 capability에 추가해서는 안 된다(MUST NOT).
 
 #### Scenario: Duplicate or rolled-back transition
 
-- **WHEN** a Follow or Pending transition is a duplicate, no-op, known domain failure, or rollback
-- **THEN** the Update returns the existing domain outcome or failure and the Workflow appends no new source effect for a transition that did not commit
+- **WHEN** Follow 또는 Pending transition이 duplicate, no-op, known domain failure 또는 rollback이다
+- **THEN** Update는 기존 domain outcome 또는 failure를 반환하고 실제 commit하지 않은 transition의 새 source effect를 Workflow에 추가하지 않는다
 
-#### Scenario: Transaction retry re-evaluates delivery eligibility
+#### Scenario: Normal create uses the database-generated identity
 
-- **WHEN** a transaction Activity's completion is lost after commit and its retry observes changed participant or remote Instance state
-- **THEN** the retry re-checks pair state and exact source identity, and may include or omit the ActivityPub handoff in the returned effect plan according to the current state; for example, `ACTIVE → UNRESPONSIVE` may omit it and `UNRESPONSIVE → ACTIVE` may include it
-- **AND** the retry does not apply the transition twice or create effects for a later lifecycle
+- **WHEN** Follow, Follow Request 또는 Request 승인 transition이 새 row를 commit하고 transaction Activity 완료가 기록된다
+- **THEN** PostgreSQL `uuidv7()` default가 row ID를 생성하고 Update 결과와 모든 create effect는 데이터베이스가 반환한 같은 source ID를 사용한다
+
+#### Scenario: Transaction completion loss does not reconstruct create effects
+
+- **WHEN** transaction Activity가 Follow 또는 Follow Request를 commit한 뒤 completion 응답이 유실되고 retry가 해당 pair의 기존 row를 관찰한다
+- **THEN** retry는 row를 중복 생성하지 않고 기존 관계 상태로 수렴한다
+- **AND** candidate identity 없이 기존 row를 이번 transition의 commit으로 단정하거나 Notification 또는 ActivityPub create effect를 재구성하지 않는다
+
+#### Scenario: Approval completion loss closes the pair lifecycle
+
+- **WHEN** approve 또는 verified remote Accept transaction이 exact Pending Request를 제거하고 Follow를 commit한 뒤 completion 응답이 유실된다
+- **THEN** retry는 Workflow history의 expected Request ID와 pending source identity 및 현재 Follow 존재를 사용해 pair lifecycle을 `ESTABLISHED`로 종료한다
+- **AND** 삭제되기 전 Request와 새 Follow의 create/delete effects를 다시 만들지 않는다
 
 #### Scenario: Effect retry preserves the returned delivery plan
 
-- **WHEN** an already-returned effect plan is retried after a Worker failure or mutable participant state changes
-- **THEN** the effect reuses the stable create source ID or exact deleted source ID and directed pair without re-evaluating delivery eligibility or creating a later lifecycle's Notification or protocol activity
+- **WHEN** 이미 반환된 effect plan이 Worker failure 또는 mutable participant state 변경 뒤 재시도된다
+- **THEN** effect는 stable create source ID 또는 exact deleted source ID와 directed pair를 재사용하고 delivery eligibility를 다시 평가하거나 이후 lifecycle의 Notification 또는 protocol activity를 만들지 않는다
 
 #### Scenario: Unresponsive remote target at transition time
 
-- **WHEN** a local Follow, Follow Request, Unfollow, or request Cancel commits while the remote target Instance is `UNRESPONSIVE`
-- **THEN** the transaction Activity keeps its applicable local graph and Notification effects and returns no ActivityPub delivery in that attempt's effect plan
-- **AND** if completion is lost and a retry observes a different remote Instance state, the retry returns an effect plan based on that current state
+- **WHEN** local Follow, Follow Request, Unfollow 또는 request Cancel이 remote target Instance가 `UNRESPONSIVE`인 시도에서 commit된다
+- **THEN** transaction Activity는 적용 가능한 local graph와 Notification effects를 유지하고 해당 시도의 effect plan에는 ActivityPub delivery를 포함하지 않는다
+- **AND** commit 전에 실패한 retry가 다른 remote Instance state에서 transition을 실제 commit하면 그 시도의 현재 state를 사용하지만, 이전 시도의 commit completion이 유실된 retry는 create effect를 재구성하지 않는다
 
 #### Scenario: Target state changes after delivery was planned
 
-- **WHEN** a local transition records an ActivityPub delivery while the remote target is `ACTIVE` and Profile or Instance state changes before the effect Activity runs or retries
-- **THEN** the Workflow still attempts the returned delivery using the stable create source or exact deleted source ID and directed pair instead of re-evaluating transition eligibility
+- **WHEN** local transition이 remote target `ACTIVE` 상태에서 ActivityPub delivery를 기록하고 effect Activity 실행 또는 retry 전에 Profile이나 Instance 상태가 바뀐다
+- **THEN** Workflow는 transition eligibility를 다시 평가하지 않고 반환된 stable create source 또는 exact deleted source ID와 directed pair로 delivery를 계속 시도한다
 
 #### Scenario: Delivery projection is incomplete
 
-- **WHEN** an already-planned ActivityPub delivery finds its actor or inbox projection missing at execution time
-- **THEN** the Activity fails observably and follows its retry policy; only a missing exact create source is a successful stale-source no-op
+- **WHEN** 이미 계획된 ActivityPub delivery가 실행 시점에 actor 또는 inbox projection 결손을 발견한다
+- **THEN** Activity는 관찰 가능한 실패로 끝나고 retry policy를 따르며, exact create source가 사라진 경우만 successful stale-source no-op으로 처리한다
 
 #### Scenario: Promote an existing request after transaction completion loss
 
-- **WHEN** a new pair run captures an existing pending request, a `FOLLOW` promotes it under OPEN policy, and the transaction Activity retries after commit
-- **THEN** the Workflow reuses the pending request source ID already recorded in history and still schedules request Notification cleanup before relation creation effects
+- **WHEN** 새 pair run이 existing pending request를 기록하고 `FOLLOW`가 OPEN policy에서 이를 승격한 뒤 transaction Activity가 commit completion loss로 재시도된다
+- **THEN** Workflow는 history에 이미 기록한 pending request source ID를 사용해 request Notification cleanup을 계속 schedule한다
+- **AND** candidate Follow identity가 없으므로 relation create effect는 재구성하지 않는다
 
 #### Scenario: Rehydrate a committed result without row payloads
 
-- **WHEN** a successful Update commits a Follow or Request and returns its domain result
-- **THEN** the Update carries source and pair identities only, and the caller reads any surviving projection needed for its response without storing a full DB row or `Temporal.Instant` in Workflow history
+- **WHEN** 성공한 Update가 Follow 또는 Request를 commit하고 domain result를 반환한다
+- **THEN** Update는 source와 pair identity만 운반하고 caller는 full DB row나 `Temporal.Instant`를 Workflow history에 저장하지 않은 채 필요한 surviving projection을 읽는다
 
 #### Scenario: Reconstruct an old removal after refollow
 
-- **WHEN** Follow F1 removal commits, Activity completion is lost, and Follow F2 exists when the removal Activity retries
-- **THEN** the removal Workflow reuses the exact F1 source and directed pair verified by a read-only Activity and recorded in Workflow history before the mutation
-- **AND** the retry preserves F2 and reconstructs only F1's delete effects
+- **WHEN** Follow F1 removal이 commit되고 Activity completion이 유실된 뒤 removal Activity retry 시점에 Follow F2가 존재한다
+- **THEN** removal Workflow는 mutation 전에 read-only Activity로 검증해 Workflow history에 기록한 exact F1 source와 directed pair를 재사용한다
+- **AND** retry는 F2를 보존하고 F1의 delete effects만 재구성한다
 
 #### Scenario: Reject a mismatched removal source
 
-- **WHEN** a removal command's expected Follow ID does not belong to its directed pair when the Workflow verifies it before mutation
-- **THEN** the command reports no change without running the removal transaction or scheduling delete effects
+- **WHEN** removal command의 expected Follow ID가 Workflow가 mutation 전에 검증한 directed pair에 속하지 않는다
+- **THEN** command는 removal transaction이나 delete effect 없이 변경 없음으로 보고한다
 
 #### Scenario: Bound caller admission latency
 
-- **WHEN** the Temporal server or Worker does not complete Update-with-Start admission
-- **THEN** the pair and removal callers stop waiting at the bounded client RPC deadline without applying a Workflow run timeout to a legitimate Pending lifecycle
+- **WHEN** Temporal server 또는 Worker가 Update-with-Start admission을 완료하지 않는다
+- **THEN** pair와 removal caller는 legitimate Pending lifecycle에 Workflow run timeout을 적용하지 않은 채 bounded client RPC deadline에서 대기를 끝낸다
 
 #### Scenario: Sibling effects remain independently attempted
 
-- **WHEN** a committed transition has independent Notification and local protocol handoff effects
-- **THEN** the Workflow attempts every applicable sibling in the transition's FIFO slot, reports terminal failure after settlement, and keeps the committed DB result
+- **WHEN** committed transition에 독립적인 Notification과 local protocol handoff effects가 있다
+- **THEN** Workflow는 transition FIFO slot의 모든 적용 가능한 sibling을 시도하고 settlement 뒤 terminal failure를 보고하며 committed DB 결과를 유지한다
