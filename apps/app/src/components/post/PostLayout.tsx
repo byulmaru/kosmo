@@ -90,6 +90,8 @@ export function PostLayout({
   const [bodyExpanded, setBodyExpanded] = useState(false);
   const [bodyHasOverflow, setBodyHasOverflow] = useState(false);
   const compact = presentation === 'compact';
+  const compactBodyToggleTargetSize =
+    Platform.OS === 'android' ? 48 : Platform.OS === 'ios' ? 44 : undefined;
   const bodyVisible = contentWarningPresentation === 'revealed' || !post.content?.contentWarning;
   useEffect(() => {
     setBodyExpanded(false);
@@ -221,7 +223,15 @@ export function PostLayout({
                 accessibilityState={{ expanded: bodyExpanded }}
                 aria-expanded={bodyExpanded}
                 onPress={() => setBodyExpanded((value) => !value)}
-                style={styles.moreButton}
+                style={[
+                  styles.moreButton,
+                  compactBodyToggleTargetSize
+                    ? {
+                        minHeight: compactBodyToggleTargetSize,
+                        minWidth: compactBodyToggleTargetSize,
+                      }
+                    : null,
+                ]}
               >
                 <Text style={[styles.moreText, { color: theme.textSecondary }]}>
                   {bodyExpanded ? '접기' : '더 보기'}
