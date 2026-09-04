@@ -10,8 +10,6 @@ const { cleanupUnavailableNotificationsActivity } = proxyActivities<typeof activ
  * Run one bounded cleanup batch. Temporal retries the Activity according to
  * its default policy; a retry may therefore remove a different batch.
  */
-export async function cleanupUnavailableNotificationsWorkflow(): Promise<void> {
+export async function notificationCleanupWorkflow(): Promise<void> {
   await cleanupUnavailableNotificationsActivity();
 }
-
-export const notificationCleanupWorkflow = cleanupUnavailableNotificationsWorkflow;
