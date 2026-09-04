@@ -15,12 +15,13 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type QueryName = 'SessionProviderQuery' | 'ShellRecoveryQuery';
+type QueryName = 'SessionProviderQuery' | 'ShellRecoveryQuery' | 'UniversalShellQuery';
 type QueryMode = 'error' | 'pending' | 'success';
 
 const queryModes: Record<QueryName, QueryMode> = {
   SessionProviderQuery: 'success',
   ShellRecoveryQuery: 'success',
+  UniversalShellQuery: 'success',
 };
 const queryHistory: Array<{ fetchKey: unknown; query: QueryName }> = [];
 const pendingSessionQueries: Array<() => void> = [];
@@ -35,6 +36,7 @@ let relayActorUnmounts = 0;
 let rootShouldThrow = false;
 let rootShouldSuspend = false;
 let AppProviders: ComponentType<PropsWithChildren>;
+let UniversalShell: ComponentType;
 let RouteBoundary: ComponentType<{
   children: ReactNode;
   error?: (retry: () => void) => ReactNode;
@@ -122,15 +124,53 @@ function useMockRelayActorLifecycleKey(): string {
   return useMockRelayActor().actorLifecycleKey;
 }
 
+function MockRelayActorBoundary({ children }: PropsWithChildren) {
+  const { actorLifecycleKey } = useMockRelayActor();
+
+  return createElement(
+    MockRelayActorBoundaryContent,
+    { actorLifecycleKey, key: actorLifecycleKey },
+    children,
+  );
+}
+
+function MockRelayActorBoundaryContent({
+  actorLifecycleKey,
+  children,
+}: PropsWithChildren<{ actorLifecycleKey: string }>) {
+  return createElement('RelayActorBoundary', { actorLifecycleKey }, children);
+}
+
+function MockSlot() {
+  return createElement('Slot', null, createElement(ShellRecoveryRoute), createElement(BadgeValue));
+}
+
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
-mockModule('react-native', { Platform: { OS: 'web' } });
+mockModule('react-native', {
+  Modal: 'Modal',
+  PanResponder: { create: () => ({ panHandlers: {} }) },
+  Platform: { OS: 'web' },
+  Pressable: 'Pressable',
+  StyleSheet: { create: <T>(styles: T) => styles },
+  useWindowDimensions: () => ({ height: 900, width: 1024 }),
+  View: 'View',
+});
 mockModule('expo-router', {
-  Slot: () => null,
+  Slot: MockSlot,
+  usePathname: () => '/home',
   useRouter: () => ({ replace: () => undefined }),
+  useSegments: () => [],
+});
+mockModule(require.resolve('lucide-react-native'), {
+  ChevronLeftIcon: () => null,
+  Menu: () => null,
+});
+mockModule('react-native-safe-area-context', {
+  useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }),
 });
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
@@ -187,6 +227,25 @@ mockModule(new URL('../analytics/AnalyticsSessionBridge.tsx', import.meta.url), 
 mockModule(new URL('../components/post/PostContentWarningRevealContext.tsx', import.meta.url), {
   PostContentWarningRevealProvider: ({ children }: PropsWithChildren) => children,
 });
+mockModule('@/components/feedback/FeedbackOverlay', {
+  FeedbackOverlay: () => null,
+});
+mockModule('@/components/notification/NotificationReadAllContext', {
+  NotificationReadAllAction: () => null,
+  NotificationReadAllProvider: ({ children }: PropsWithChildren) => children,
+});
+mockModule('@/components/PageHeader', {
+  PageHeader: () => null,
+});
+mockModule('@/components/post/PostMediaViewerHost', {
+  PostMediaViewerScreenFallbackProvider: ({ children }: PropsWithChildren) => children,
+});
+mockModule('@/components/ui/IconButton', {
+  IconButton: () => null,
+});
+mockModule('@/components/ui/useSafeAreaPadding', {
+  useSafeAreaPadding: () => ({}),
+});
 mockModule(new URL('../components/Splash.tsx', import.meta.url), {
   Splash: ({ label }: { label?: string }) => createElement('Splash', { label }),
 });
@@ -195,12 +254,53 @@ mockModule(new URL('../components/ui/StateView.tsx', import.meta.url), {
     createElement('StateView', { onAction, title }),
 });
 mockModule(new URL('../theme/ThemeProvider.tsx', import.meta.url), {
+  useElevation: () => ({ overlay: {} }),
+  useTheme: () => ({
+    backgroundCanvas: '#fff',
+    backgroundElevated: '#fff',
+    borderSubtle: '#ddd',
+    foregroundPrimary: '#111',
+    overlayScrim: '#0008',
+  }),
   ThemeProvider: ({ children }: PropsWithChildren) => children,
 });
 mockModule(new URL('../components/ui/ToastProvider.tsx', import.meta.url), {
   ToastProvider: ({ children }: PropsWithChildren) => children,
 });
+mockModule(new URL('./shell/BottomTabBar.tsx', import.meta.url), {
+  BottomTabBar: () => null,
+});
+mockModule(new URL('./shell/NavigationGuardContext.tsx', import.meta.url), {
+  NavigationGuardProvider: ({ children }: PropsWithChildren) => children,
+});
+mockModule(new URL('./shell/PrimaryNavigationScrollContext.tsx', import.meta.url), {
+  PrimaryNavigationScrollProvider: ({ children }: PropsWithChildren) => children,
+  PrimaryNavigationScrollReset: () => null,
+});
+mockModule(new URL('./shell/RightRail.tsx', import.meta.url), {
+  RightRail: () => null,
+  RightRailFooter: () => null,
+});
+mockModule(new URL('./shell/SidebarNavigation.tsx', import.meta.url), {
+  SidebarNavigation: () => null,
+});
+mockModule(new URL('./shell/ShellChromeContext.tsx', import.meta.url), {
+  ShellChromeProvider: ({ children }: PropsWithChildren) => children,
+});
+mockModule(new URL('./shell/shellLayout.ts', import.meta.url), {
+  getShellRoutePresentation: () => ({
+    layout: 'full',
+    settingsWorkspace: false,
+    showRightRail: false,
+  }),
+  getWebMobileShellHeader: () => null,
+  isSettingsRoute: () => false,
+  isTimelineRoute: () => true,
+  isWebMobileRouteOwnedHeader: () => false,
+  webMobileShellHeaderHeight: 0,
+});
 mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
+  RelayActorBoundary: MockRelayActorBoundary,
   RelayActorProvider: MockRelayActorProvider,
   useRelayActor: useMockRelayActor,
   useRelayActorLifecycleKey: useMockRelayActorLifecycleKey,
@@ -208,6 +308,7 @@ mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
 
 before(async () => {
   ({ AppProviders } = await import('./AppProviders'));
+  ({ UniversalShell } = await import('./shell/UniversalShell'));
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
   ({ useSession } = await import('../session/SessionProvider'));
   ({ useRelayActor } = await import('../relay/RelayActorProvider'));
@@ -218,6 +319,7 @@ before(async () => {
 beforeEach(() => {
   queryModes.SessionProviderQuery = 'success';
   queryModes.ShellRecoveryQuery = 'success';
+  queryModes.UniversalShellQuery = 'success';
   queryHistory.length = 0;
   pendingSessionQueries.length = 0;
   unreadFetches.length = 0;
@@ -307,15 +409,6 @@ function RootRuntimeProbe() {
   return createElement('RootRuntimeProbe');
 }
 
-function ShellUnreadFixture() {
-  return createElement(
-    UnreadNotificationBadgeController,
-    null,
-    createElement(ShellRecoveryRoute),
-    createElement(BadgeValue),
-  );
-}
-
 function BadgeValue() {
   const { selectedProfileId } = useSession();
   return createElement('BadgeValue', {
@@ -329,6 +422,11 @@ function findTag(tag: string) {
   const node = renderer.root.findAll((candidate) => String(candidate.type) === tag)[0];
   assert.ok(node);
   return node;
+}
+
+function findByTestId(testID: string) {
+  assert.ok(renderer);
+  return renderer.root.findByProps({ testID });
 }
 
 describe('AppProviders runtime composition', () => {
@@ -443,10 +541,14 @@ describe('AppProviders runtime composition', () => {
     unreadFailure = true;
 
     await act(async () => {
-      renderer = create(createElement(AppProviders, null, createElement(ShellUnreadFixture)));
+      renderer = create(createElement(AppProviders, null, createElement(UniversalShell)));
     });
 
     assert.equal(renderer?.root.findAll((node) => String(node.type) === 'Ready').length, 0);
+    const actorBoundary = findTag('RelayActorBoundary');
+    assert.ok(actorBoundary.findAll((node) => String(node.type) === 'Slot').length > 0);
+    assert.ok(queryHistory.some(({ query }) => query === 'UniversalShellQuery'));
+    const shellRoot = findByTestId('universal-shell-root');
     assert.deepEqual(unreadFetches, ['profile-a']);
     assert.deepEqual(findTag('BadgeValue').props, {
       count: null,
@@ -454,6 +556,9 @@ describe('AppProviders runtime composition', () => {
     });
     const sessionQueryCountBeforeRetry = queryHistory.filter(
       ({ query }) => query === 'SessionProviderQuery',
+    ).length;
+    const shellQueryCountBeforeRetry = queryHistory.filter(
+      ({ query }) => query === 'UniversalShellQuery',
     ).length;
 
     queryModes.SessionProviderQuery = 'success';
@@ -469,6 +574,11 @@ describe('AppProviders runtime composition', () => {
       queryHistory.filter(({ query }) => query === 'SessionProviderQuery').length,
       sessionQueryCountBeforeRetry,
     );
+    assert.equal(
+      queryHistory.filter(({ query }) => query === 'UniversalShellQuery').length,
+      shellQueryCountBeforeRetry,
+    );
+    assert.strictEqual(findByTestId('universal-shell-root'), shellRoot);
     assert.ok(queryHistory.filter(({ query }) => query === 'ShellRecoveryQuery').length > 1);
     assert.deepEqual(unreadFetches, ['profile-a']);
     assert.deepEqual(findTag('BadgeValue').props, {

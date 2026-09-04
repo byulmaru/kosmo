@@ -65,6 +65,7 @@ export const Result: Story = {
         tab: 'people',
       }),
     );
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
     await expect(canvas.getByRole('link', { name: /@byulmaru / })).toHaveAttribute(
       'href',
       '/@byulmaru',
@@ -109,6 +110,35 @@ export const FirstPageFailureDoesNotTrackAnalytics: Story = {
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).findByRole('alert')).resolves.toBeVisible();
     expect(trackAnalytics).not.toHaveBeenCalled();
+  },
+};
+
+export const FirstPageFailureRetrySucceeds: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        SearchPeopleByHandlePageQuery: {
+          sequence: [
+            { error: '검색 결과를 불러오지 못했습니다.' },
+            { data: { searchProfiles: searchConnection([result]) } },
+          ],
+        },
+      },
+    },
+    router: { params: { q: 'byulmaru', tab: 'people' }, pathname: '/search' },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByRole('alert')).resolves.toBeVisible();
+    expect(trackAnalytics).not.toHaveBeenCalled();
+
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await expect(canvas.findByRole('link', { name: /@byulmaru / })).resolves.toBeVisible();
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
+    expect(trackAnalytics).toHaveBeenCalledWith('search_results_loaded', {
+      has_results: true,
+      tab: 'people',
+    });
   },
 };
 

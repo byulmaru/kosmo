@@ -67,7 +67,7 @@ mock.module('@/components/RouteBoundary', {
       return createElement(
         RouteBoundaryContext.Provider,
         { value },
-        createElement('RouteBoundary', { onRetry: undefined, refetch }, children),
+        createElement('RouteBoundary', { refetch }, children),
       );
     },
     useRouteBoundary: () => useContext(RouteBoundaryContext),
@@ -138,7 +138,6 @@ describe('ReactionProfilesModal RouteBoundary lifecycle', () => {
     });
 
     const boundary = requireRendered('RouteBoundary');
-    assert.equal(boundary.props.onRetry, undefined);
 
     await act(async () => boundary.props.refetch());
 

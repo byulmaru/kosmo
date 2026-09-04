@@ -144,6 +144,9 @@ function UniversalShellContent() {
   );
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
+  // Web keeps the shell root out of the tab order. Native View#focus() requires an explicit
+  // focusable host target; tabIndex={-1} maps to focusable=false on Native.
+  const screenFallbackFocusProps = web ? { tabIndex: -1 as const } : { focusable: true };
   const { layout, settingsWorkspace, showRightRail } = getShellRoutePresentation(
     web,
     width,
@@ -287,7 +290,7 @@ function UniversalShellContent() {
           feedbackOverlayVisible ? styles.backgroundBlocked : null,
           { backgroundColor: theme.backgroundCanvas },
         ]}
-        tabIndex={-1}
+        {...screenFallbackFocusProps}
         testID="universal-shell-root"
       >
         {!mobile ? (
