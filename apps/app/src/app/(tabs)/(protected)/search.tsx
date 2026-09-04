@@ -12,7 +12,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { graphql, usePaginationFragment, usePreloadedQuery, useQueryLoader } from 'react-relay';
+import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -28,8 +28,6 @@ import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
-import type { PreloadedQuery } from 'react-relay';
-import type { GraphQLResponse } from 'relay-runtime';
 import type { SearchPeopleByHandlePageQuery } from './__generated__/SearchPeopleByHandlePageQuery.graphql';
 import type { SearchPeopleResults_query$key } from './__generated__/SearchPeopleResults_query.graphql';
 import type { SearchPeopleResultsNextPageQuery } from './__generated__/SearchPeopleResultsNextPageQuery.graphql';
@@ -81,84 +79,21 @@ function PeopleResults({ handle }: { handle: string }) {
 
 function PeopleResultsContent({ handle }: { handle: string }) {
   const { fetchKey } = useRouteBoundary();
-  const [queryReference, loadQuery] =
-    useQueryLoader<SearchPeopleByHandlePageQuery>(SearchPeopleQuery);
+  const data = useLazyLoadQuery<SearchPeopleByHandlePageQuery>(
+    SearchPeopleQuery,
+    { query: handle },
+    { fetchKey, fetchPolicy: 'store-and-network' },
+  );
 
-  useEffect(() => {
-    loadQuery(
-      { query: handle },
-      { fetchPolicy: 'store-and-network', networkCacheConfig: { metadata: { fetchKey } } },
-    );
-  }, [fetchKey, handle, loadQuery]);
-
-  if (!queryReference) {
-    return <StateView loading title="검색 결과를 불러오는 중입니다." />;
-  }
-
-  return <LoadedPeopleResults handle={handle} queryReference={queryReference} />;
-}
-
-function LoadedPeopleResults({
-  handle,
-  queryReference,
-}: {
-  handle: string;
-  queryReference: PreloadedQuery<SearchPeopleByHandlePageQuery>;
-}) {
-  const data = usePreloadedQuery<SearchPeopleByHandlePageQuery>(SearchPeopleQuery, queryReference);
-
-  useEffect(() => {
-    let hasResults: boolean | null = null;
-    let failed = false;
-    const subscription = queryReference.source?.subscribe({
-      complete: () => {
-        if (!failed && hasResults !== null) {
-          trackAnalytics('search_results_loaded', {
-            has_results: hasResults,
-            tab: 'people',
-          });
-        }
-      },
-      error: () => {
-        failed = true;
-      },
-      next: (response) => {
-        if ('errors' in response && response.errors?.length) {
-          failed = true;
-          return;
-        }
-
-        const edges = searchResultEdges(response);
-        if (edges) {
-          hasResults = edges.length > 0;
-        }
-      },
-    });
-
-    return () => {
-      subscription?.unsubscribe();
-    };
-  }, [queryReference]);
-
-  return <SearchPeopleResults handle={handle} query={data} />;
-}
-
-function searchResultEdges(response: GraphQLResponse): readonly unknown[] | null {
-  if (!('data' in response)) {
-    return null;
-  }
-
-  const data = response.data as
-    | { searchProfiles?: { edges?: readonly unknown[] | null } | null }
-    | null
-    | undefined;
-  return data?.searchProfiles?.edges ?? null;
+  return <SearchPeopleResults fetchKey={fetchKey} handle={handle} query={data} />;
 }
 
 function SearchPeopleResults({
+  fetchKey,
   handle,
   query,
 }: {
+  fetchKey: number;
   handle: string;
   query: SearchPeopleResults_query$key;
 }) {
@@ -168,7 +103,18 @@ function SearchPeopleResults({
     SearchPeopleResults_query$key
   >(SearchPeopleResultsFragment, query);
   const [loadError, setLoadError] = useState(false);
+  const trackedFetchKeyRef = useRef<number | null>(null);
   const edges = pagination.data.searchProfiles.edges;
+  const hasResults = edges.length > 0;
+
+  useEffect(() => {
+    if (trackedFetchKeyRef.current === fetchKey) {
+      return;
+    }
+
+    trackedFetchKeyRef.current = fetchKey;
+    trackAnalytics('search_results_loaded', { has_results: hasResults, tab: 'people' });
+  }, [fetchKey, hasResults]);
 
   if (!edges.length) {
     return (
