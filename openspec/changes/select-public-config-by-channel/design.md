@@ -32,7 +32,7 @@
 ### Recommended Approach
 
 - 한 client config module에 공용값과 완성된 `dev`/`prod` 객체를 선언하고 `satisfies Record<Channel, PublicConfig>`로 두 설정의 완전성을 검사한다. 깊은 병합은 사용하지 않는다.
-- Web rollout의 기존 `ENVIRONMENT`를 BFF가 `/channel.js`에서 `dev`/`prod` allowlist로 검증한 뒤 `globalThis`에 기록하는 one-line script를 `no-store`로 응답한다.
+- Web rollout의 기존 `ENVIRONMENT`를 BFF가 `/channel.js`에서 `dev`/`prod` allowlist로 검증한 뒤 `globalThis`에 기록하는 one-line script를 응답한다. 유효한 응답은 `Cache-Control: public, max-age=300`으로 5분 캐시하고, invalid/missing `ENVIRONMENT` 응답은 500과 `Cache-Control: no-store`로 처리한다.
 - public HTML이 `/channel.js`를 Expo bundle보다 먼저 동기적으로 로드한다. static HTML이나 fingerprinted/gzip asset을 요청마다 치환하지 않는다.
 - client config module은 Web에서 주입된 global channel을 검증하고 Native에서 development mode면 `dev`, release면 `prod`를 선택한다.
 - origin, Native OIDC, browser Sentry/PostHog 소비자는 완성된 설정을 읽는다. PostHog는 `dev`에서 no-op하고 `prod`에서만 활성화하며, Sentry release는 기존 build metadata를 유지한다.

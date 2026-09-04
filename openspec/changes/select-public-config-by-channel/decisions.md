@@ -23,7 +23,7 @@
 - Authority / Provenance: [PROD-891](https://linear.app/byulmaru/issue/PROD-891/webnative-공개-설정을-배포-채널로-선택한다)
 - Status: Active
 - Context / Problem: Web은 runtime 배포 채널을 알아야 하지만 공개 설정 전체를 주입하면 다시 별도 config API와 검증 계층이 생긴다. Native release는 설치 후 환경을 전환하지 않는다.
-- Decision Outcome: BFF는 allowlist로 검증한 `dev` 또는 `prod` one-line script만 `no-store`로 제공한다. Web은 bundle 전에 이를 읽고 invalid/missing 값에 fail closed하며, Native는 local development에서 `dev`, release에서 `prod`를 선택한다.
+- Decision Outcome: BFF는 allowlist로 검증한 `dev` 또는 `prod` one-line script를 제공하고, 성공 응답은 `Cache-Control: public, max-age=300`으로 5분 캐시한다. `ENVIRONMENT`가 invalid/missing이면 500과 `Cache-Control: no-store`를 반환한다. Web은 bundle 전에 이를 읽고 invalid/missing 값에 fail closed하며, Native는 local development에서 `dev`, release에서 `prod`를 선택한다.
 - Alternatives Considered: 전체 runtime JSON, HTML/압축 JS 치환, Native runtime config, preview/OTA 채널. 현재 범위보다 복잡하거나 정적 asset 일관성을 해치므로 선택하지 않았다.
 - Consequences: Web image는 공개 설정 주입 없이 채널로 동작하고 Native endpoint 변경은 새 release binary가 필요하다.
 - Confirmation / Follow-up: BFF route와 channel validation을 자동화하고 실제 Web·Native 배포 증거는 각 release gate에서 확인한다.

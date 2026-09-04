@@ -24,19 +24,25 @@
 
 ### Requirement: 플랫폼 경계에서 배포 채널만 선택한다
 
-**Authority / Provenance:** [PROD-891](https://linear.app/byulmaru/issue/PROD-891/webnative-공개-설정을-배포-채널로-선택한다) Web BFF는 `dev` 또는 `prod` 중 하나인 배포 채널만 same-origin script로 제공해야 하며(MUST), 응답을 cache해서는 안 된다(MUST NOT). Web client는 Expo bundle 실행 전에 이 채널을 읽어야 하고(MUST), 누락되거나 알 수 없는 값에 다른 채널을 기본 적용해서는 안 된다(MUST NOT). Native local development는 `dev`, Native release binary는 `prod`를 선택해야 한다(MUST).
+**Authority / Provenance:** [PROD-891](https://linear.app/byulmaru/issue/PROD-891/webnative-공개-설정을-배포-채널로-선택한다) Web BFF는 `dev` 또는 `prod` 중 하나인 배포 채널만 same-origin script로 제공해야 하며(MUST), 유효한 응답에는 `Cache-Control: public, max-age=300`을 설정해야 한다(MUST). `ENVIRONMENT`가 누락되거나 알 수 없으면 BFF는 HTTP 500과 `Cache-Control: no-store`를 반환해야 한다(MUST). Web client는 Expo bundle 실행 전에 이 채널을 읽어야 하고(MUST), 누락되거나 알 수 없는 값에 다른 채널을 기본 적용해서는 안 된다(MUST NOT). Native local development는 `dev`, Native release binary는 `prod`를 선택해야 한다(MUST).
 
 #### Scenario: Web BFF가 유효한 채널을 제공한다
 
 - **WHEN** 브라우저가 Web BFF의 channel script를 요청한다
 - **THEN** BFF는 현재 배포의 `dev` 또는 `prod` 채널을 제공한다
-- **AND** 응답에 `no-store` cache 정책을 적용한다
+- **AND** 응답에 `public, max-age=300` cache 정책을 적용한다
 
 #### Scenario: Web channel이 유효하지 않다
 
 - **WHEN** Web bundle 시작 시 주입된 channel이 없거나 `dev`와 `prod`가 아니다
 - **THEN** 클라이언트는 공개 설정 선택을 실패한다
 - **AND** 다른 채널로 fallback하지 않는다
+
+#### Scenario: Web BFF 환경이 유효하지 않다
+
+- **WHEN** `/channel.js` 요청 시 `ENVIRONMENT`가 없거나 `dev`와 `prod`가 아니다
+- **THEN** BFF는 HTTP 500을 반환한다
+- **AND** 응답에 `no-store` cache 정책을 적용한다
 
 #### Scenario: Native가 build mode에 맞는 채널을 선택한다
 

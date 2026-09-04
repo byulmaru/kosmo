@@ -25,7 +25,7 @@ Vault Secrets Operator는 환경별 Vault 객체 전체를 기존 `env` Kubernet
 공개 client 설정은 다음 순서로 전환하며, 실제 배포 증거 없이 production 완료로 기록하지 않는다.
 
 1. 코드 공개 설정표에 공용값과 완전한 `dev`·`prod` 채널 설정을 반영하고, 공개값·credential·release metadata의 경계를 review한다.
-2. Helm dev/prod render와 Web rollout에서 `ENVIRONMENT`가 올바른 채널로 전달되고, `/channel.js`가 유효한 채널만 `no-store`로 응답하는지 확인한다.
+2. Helm dev/prod render와 Web rollout에서 `ENVIRONMENT`가 올바른 채널로 전달되고, `/channel.js`가 유효한 채널에는 `public, max-age=300`, invalid/missing 환경에는 500과 `no-store`로 응답하는지 확인한다.
 3. `main`의 `workflow_dispatch`를 target SHA로 실행하고 `prod` Environment 승인 뒤 Web image를 build·배포한다. Web build에는 client 공개 설정을 주입하지 않고 Sentry metadata와 upload credential만 사용한다.
 4. Production browser에서 `/channel.js`, 채널별 origin·OIDC·Sentry 동작을 확인하고, Android/iOS release binary가 `prod` 설정과 native login을 사용하는지 확인한다.
 5. 위 증거가 모두 있은 뒤 별도 검토된 cleanup에서 더 이상 사용하지 않는 GitHub `EXPO_PUBLIC_*` variables를 제거한다. API/Web BFF server runtime이 사용하는 기존 `env` Secret의 Sentry DSN은 이 client 설정 정리의 대상이 아니다.

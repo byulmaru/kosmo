@@ -31,7 +31,7 @@ Web·Android·iOS client가 공용값과 `dev`/`prod`별 값으로 완성된 공
 
 **Deliverable**
 
-Web BFF가 현재 배포의 유효한 channel 하나를 cache 없이 Expo bundle보다 먼저 전달한다.
+Web BFF가 현재 배포의 유효한 channel 하나를 Expo bundle보다 먼저 전달하며, 성공 응답은 5분 public cache를 사용하고 invalid/missing 환경 응답은 cache하지 않는다.
 
 **Guardrails**
 
@@ -40,11 +40,11 @@ Web BFF가 현재 배포의 유효한 channel 하나를 cache 없이 Expo bundle
 
 **Verification**
 
-- dev/prod/invalid channel 응답, content type과 cache 정책을 Web server test에서 확인한다.
+- dev/prod/invalid channel 응답, content type과 성공 5분 public cache·오류 `no-store` 정책을 Web server test에서 확인한다.
 - Expo Web export와 Web test를 통과시킨다.
 
 - [x] 2.1 배포 환경에서 Web BFF에 channel을 명시적으로 전달한다.
-- [x] 2.2 BFF가 검증된 same-origin channel script를 `no-store`로 제공하고 public HTML이 이를 먼저 로드하게 한다.
+- [x] 2.2 BFF가 검증된 same-origin channel script를 성공 시 5분 cache하고 오류 시 `no-store`로 제공하며 public HTML이 이를 먼저 로드하게 한다.
 - [x] 2.3 Web server test로 유효·잘못된 channel 경계를 검증한다.
 
 ## 3. PROD-891 기존 공개 설정 전달 제거와 문서 정렬

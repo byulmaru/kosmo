@@ -137,7 +137,7 @@ describe('Web channel bootstrap', () => {
     const response = await app.request('/channel.js');
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('cache-control')).toBe('public, max-age=300');
     expect(response.headers.get('content-type')).toBe('application/javascript; charset=UTF-8');
     expect(await response.text()).toBe(`globalThis.__KOSMO_CHANNEL__ = "${channel}";\n`);
   });

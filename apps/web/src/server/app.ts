@@ -69,7 +69,7 @@ app.get('/channel.js', (c) => {
   }
 
   return c.body(`globalThis.__KOSMO_CHANNEL__ = ${JSON.stringify(channel)};\n`, 200, {
-    'Cache-Control': 'no-store',
+    'Cache-Control': 'public, max-age=300',
     'Content-Type': 'application/javascript; charset=UTF-8',
   });
 });

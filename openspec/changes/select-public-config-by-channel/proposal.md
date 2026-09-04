@@ -5,7 +5,7 @@
 ## What Changes
 
 - 공용 공개 설정과 `dev`/`prod`별 설정을 합성한 완전한 타입 설정표를 추가한다.
-- Web BFF가 cache하지 않는 same-origin script로 검증된 채널 하나만 제공하고 Web client가 bundle 시작 전에 이를 선택한다.
+- Web BFF가 성공 시 5분 cache하고 오류 시 cache하지 않는 same-origin script로 검증된 채널 하나만 제공하고 Web client가 bundle 시작 전에 이를 선택한다.
 - Native local development는 `dev`, release binary는 `prod` 설정을 선택한다.
 - Web과 Native는 하나의 Kosmo confidential OIDC application client ID를 사용한다. Native는 PKCE authorization/callback만 수행하고, API가 server-held client secret으로 code를 교환한다.
 - client 공개 설정을 읽기 위한 `EXPO_PUBLIC_*` 환경변수와 전용 Vault/VSO/ACL 전달 경로를 제거한다.
