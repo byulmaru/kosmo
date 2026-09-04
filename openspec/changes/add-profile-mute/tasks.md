@@ -39,7 +39,8 @@ Owner와 Target을 잇는 영구 Profile Mute를 중복 없이 저장하고, 기
 
 **Deliverable**
 
-검증된 Owner가 Local 또는 Remote Target을 영구 Mute하고 해제할 수 있으며, 각 소비자가 Owner·Target·`expires_at` 조건을 직접 조합해 현재 적용 여부와 Owner별 목록을 조회할 수 있다.
+검증된 Owner가 Local 또는 Remote Target을 영구 Mute하고 해제할 수 있으며, Owner·Target·`expires_at` 조건으로
+현재 적용 여부와 Owner별 목록을 조회할 수 있다.
 
 **Guardrails**
 
@@ -59,7 +60,7 @@ Owner와 Target을 잇는 영구 Profile Mute를 중복 없이 저장하고, 기
 
 - [x] 2.1 영구 Profile Mute 생성 action과 도메인 오류 경계를 구현한다.
 - [x] 2.2 Owner 범위를 지키는 해제 action을 구현한다.
-- [x] 2.3 소비자별 관계 query에서 Owner·Target·`expires_at` 조건을 직접 조합해 단건 적용 여부와 Owner별 묶음 조회를 수행한다.
+- [x] 2.3 PROD-824의 Owner 목록·Node·viewer-relative query에서 Owner·Target·`expires_at` 조건으로 단건 적용 여부와 Owner별 묶음 조회를 수행한다.
 - [x] 2.4 자격·Local/Remote Target·중복·동시성·해제·적용 판정 서비스 테스트를 추가해 Core 데이터베이스 테스트를 통과시킨다.
 
 ## 3. PROD-824 Owner 전용 GraphQL 계약
@@ -117,7 +118,8 @@ Profile Mute 기반이 기존 관계와 상호작용 상태를 건드리지 않�
 
 - Mute 생성·해제는 Follow Relationship, Follow Request, Reaction, Repost Post와 Bookmark를 바꾸지 않는다.
 - 기존 Notification과 Read State를 바꾸지 않고, Target에게 새 Notification이나 ActivityPub activity를 만들지 않는다.
-- Post 목록 Exclude·Collapse, 새 Notification 생성 억제, UI·Relay·E2E와 archive를 이번 변경에 포함하지 않는다.
+- Post 목록의 Profile Mute 적용, 새 Notification 생성 억제, UI·Relay·E2E와 archive를 이번 변경에 포함하지
+  않는다.
 
 **Verification**
 
@@ -134,6 +136,7 @@ Profile Mute 기반이 기존 관계와 상호작용 상태를 건드리지 않�
 
 **Authority / Provenance**
 
+- `docs/architecture/core-services.md`
 - `docs/domain/objects/profile-mute.md`
 - `docs/domain/objects/post.md`
 - `docs/domain/policies/post-list.md`
@@ -144,16 +147,19 @@ Profile Mute 기반이 기존 관계와 상호작용 상태를 건드리지 않�
 
 **Deliverable**
 
+Home·Local·Hashtag가 같은 활성 Profile Mute 의미를 사용할 수 있도록 공통 Core 읽기 정책 경계를 제공하고,
 현재 selected Profile이 Mute한 Author와 direct Source Author의 Post를 Home에서 page limit 전에 제외한다.
-Target Profile을 직접 방문한 Post List는 Profile Mute 때문에 접거나 제외하지 않고 기존 표시 결과를
-그대로 유지한다.
+Target Profile을 직접 방문한 Post List는 Profile Mute 때문에 접거나 제외하지 않고 기존 표시 결과를 그대로
+유지한다.
 
 **Guardrails**
 
 - Profile Mute 판정의 Owner는 요청의 현재 selected Profile이며 같은 Account의 다른 Profile 관계를 섞지
   않는다.
-- Home 후보 query는 Owner·Target·`expires_at IS NULL` 조건을 직접 조합하며, 공통 Core DB query helper나
-  transport-neutral 읽기 경계를 새로 만들지 않는다.
+- Home 후보 query는 selected Profile Owner와 후보 Author를 공통 Core 읽기 정책 경계에 전달해
+  Owner·Target·`expires_at IS NULL` 활성 관계를 판정한다.
+- 공통 Core 읽기 정책 경계는 소비자 query에 합성할 수 있어야 하며 후보별 DB 호출이나 pagination 이후
+  application-memory filter를 만들지 않는다.
 - Home에서 Profile Mute에 따른 모든 제외는 page limit과 cursor 계산 전에 끝낸다.
 - Repost Source가 있는 Home 후보는 바깥 Author와 direct Source Author를 모두 판정하고 Source chain을
   재귀적으로 평탄화하지 않는다.
@@ -173,13 +179,81 @@ Target Profile을 직접 방문한 Post List는 Profile Mute 때문에 접거나
 - Mute한 Target의 `Profile.posts`와 Mute한 Source Author를 가진 Repost·Quote가 기존
   Visibility·Eligibility 결과와 schema shape를 유지하는지 확인한다.
 - 같은 Account의 두 selected Profile 결과와 Mute 해제 뒤 새 Home 조회를 검증한다.
+- 공통 Core 읽기 정책 경계가 Owner·Target·`expires_at IS NULL` 의미를 제공하고 Home이 이 경계를 사용하는지
+  Core·API 테스트로 확인한다.
 
-- [ ] 5.1 Home 후보 query에서 selected Profile을 Owner로 삼고 Owner·Target·`expires_at IS NULL` 활성 관계
-      조건을 직접 조합한다.
-- [ ] 5.2 Home 후보의 Author Profile Mute를 page limit 전에 적용한다.
-- [ ] 5.3 Repost Source가 있는 Home 후보의 바깥 Author와 direct Source Author Mute를 모두 적용한다.
-- [ ] 5.4 Target Profile의 직접 Post List가 Target·Source Author의 Profile Mute와 무관하게 기존 결과와
+- [x] 5.1 selected Profile Owner와 후보 Author의 활성 Profile Mute를 소비자 query에 합성할 수 있는 공통 Core
+      읽기 정책 경계를 추가한다.
+- [x] 5.2 Home 후보 query가 공통 Core 읽기 정책 경계를 사용해 Author Profile Mute를 page limit 전에 적용한다.
+- [x] 5.3 Repost Source가 있는 Home 후보의 바깥 Author와 direct Source Author에 같은 공통 Core 읽기 정책
+      경계를 적용한다.
+- [x] 5.4 Target Profile의 직접 Post List가 Target·Source Author의 Profile Mute와 무관하게 기존 결과와
       공개 schema를 유지하는지 검증한다.
-- [ ] 5.5 일반 Post·Reply, Author별 Mute 조합의 Repost·Quote, pagination, selected Profile 격리와 Mute
-      해제 후 새 조회 회귀 테스트를 추가한다.
-- [ ] 5.6 PROD-825 관련 Core·API 검증과 strict OpenSpec validation을 통과시키고 범위·결과를 PR에 기록한다.
+- [x] 5.5 공통 Core 읽기 정책과 일반 Post·Reply, Author별 Mute 조합의 Repost·Quote, pagination, selected
+      Profile 격리와 Mute 해제 후 새 조회 회귀 테스트를 추가한다.
+- [x] 5.6 PROD-825 관련 Core·API 검증과 strict OpenSpec validation을 통과시키고 범위·결과를 PR에 기록한다.
+
+## 6. PROD-814 Local·UI 통합과 공유 change 완료
+
+**Authority / Provenance**
+
+- `docs/architecture/core-services.md`
+- `docs/domain/objects/profile-mute.md`
+- `docs/domain/policies/post-list.md`
+- `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`
+- `docs/design/profile-mute-block.md`
+- `PROD-814`
+- `PROD-825`
+- `PROD-823`
+- presentation prerequisite evidence `PROD-858` (정본 아님)
+
+**Deliverable**
+
+Local Timeline이 `PROD-825`의 공통 Core Profile Mute 읽기 정책 경계를 재사용해 Mute Target의 후보를 page
+limit 전에 제외한다. Profile action·관리 목록·Relay 상태를 연결하고 Home·Local·Profile·Repost 흐름을
+종단 간 검증한 뒤 공유 OpenSpec을 완료한다.
+
+**Guardrails**
+
+- Local의 Profile Mute Owner는 현재 selected Profile이며, 바깥 Author와 direct Source Author를 같은 공통
+  경계로 판정한다.
+- Local 고유 후보·정렬·Visibility·Eligibility는 Local query가 소유하고, Profile Mute 제외는 page limit과
+  cursor 계산 전에 끝낸다.
+- Profile surface에는 viewer-relative Mute 상태와 해제 action을 표시하지만 직접 `Profile.posts`에는 Mute
+  전용 Collapse·reveal을 적용하지 않는다.
+- Relay store와 connection 갱신은 selected Profile별 관계 identity를 섞지 않고, Mute 해제 뒤 새 조회가
+  제거된 관계를 사용하지 않게 한다.
+- `PROD-858`의 재사용 가능한 Production 공용 UI와 Storybook 검증 증거를 소비한다. 공용 presentation을
+  다시 구현하거나 Storybook 증거를 Web·Native runtime 완료 증거로 일반화하지 않는다.
+- `뮤트 및 차단` 공통 Settings 진입점과 destination 순서는 `PROD-814`와 `PROD-823` 중 실제 구현에 먼저
+  착수한 이슈가 최초 구현·통합 검증을 소유하고 이 책임을 해당 이슈와 PR에 기록한다. 나중에 착수한 이슈는
+  선행 구현의 repository 상태와 PR 증거를 재사용하고 같은 Settings shell·navigation을 다시 만들지 않는다.
+- Hashtag Post List API·projection·runtime은 `PROD-827`의 별도 계약으로 남기며 이 change의 archive를 막지
+  않는다.
+- `PROD-824`·`PROD-825`·`PROD-814`가 맡은 task와 검증을 모두 마치기 전에는 이 change를 archive하지 않는다.
+
+**Verification**
+
+- Local에서 바깥 Author만 Mute한 후보, direct Source Author만 Mute한 Quote와 둘 다 Mute하지 않은 후보를
+  page limit 전 판정하고, Content 없는 Repost는 기존 후보 정책으로 먼저 제외하는지 확인한다.
+- 제외 후보 뒤의 eligible Post로 Local 페이지가 채워지고 cursor와 `hasNextPage`가 유지되는지 확인한다.
+- 같은 Account의 selected Profile 전환과 Mute 해제 뒤 Home·Local·Profile·관리 목록의 새 조회 결과를
+  검증한다.
+- Local·Remote Target의 Web·iOS·Android 흐름과 접근성, 기존 관계·상호작용·Notification·Read State 불변성을
+  통합 검증한다.
+- 공통 Settings IA의 최초 owner와 선행 구현의 repository 상태·PR 증거를 기록하고, 후행 이슈가 같은
+  shell·navigation을 중복 구현하지 않았는지 확인한다.
+- canonical·Linear·OpenSpec을 최종 대조하고 archive 전후 strict validation을 통과시킨다.
+
+- [ ] 6.1 Local 후보 query가 공통 Core 읽기 정책 경계를 바깥 Author와 direct Source Author에 적용하고 모든
+      Mute 제외를 page limit 전에 끝내도록 구현한다.
+- [ ] 6.2 Local의 일반 Post·Quote, Content 없는 Repost의 선행 제외, pagination, selected Profile 격리와
+      Mute 해제 후 새 조회 회귀 테스트를 추가한다.
+- [ ] 6.3 `PROD-858`의 공용 UI 결과를 Profile action·관리 목록·완료 피드백에 재사용하고 Relay
+      store·connection 갱신을 기존 GraphQL 관계에 연결한다. 공통 Settings IA는 먼저 착수한 runtime 이슈의
+      결과를 사용한다.
+- [ ] 6.4 직접 Target Profile의 정상 Post 표시와 Mute 상태·해제 action을 Web·iOS·Android 및 접근성 경계에서
+      검증한다.
+- [ ] 6.5 Home·Local·Profile·Repost와 기존 관계·상호작용 상태를 연결하는 cross-slice E2E를 통과시킨다.
+- [ ] 6.6 모든 적용 이슈와 artifact를 최종 대조하고 delta spec을 동기화한 뒤 OpenSpec을 archive해 archive 후
+      strict validation을 통과시킨다.

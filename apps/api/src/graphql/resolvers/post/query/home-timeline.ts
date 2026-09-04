@@ -1,6 +1,7 @@
 import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { profileMuteWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, desc, eq, exists, getColumns, gt, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, getColumns, gt, isNull, lt, not, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
 import { postAccessWhere } from '../access';
@@ -9,6 +10,7 @@ import { Post, PostConnection } from '../ref';
 type PostRow = typeof Posts.$inferSelect;
 
 const ReplyParents = alias(Posts, 'home_timeline_reply_parent');
+const DirectRepostSources = alias(Posts, 'home_timeline_direct_repost_source');
 
 builder.queryField('homeTimeline', (t) =>
   t.withAuth({ usingProfile: true }).connection(
@@ -57,6 +59,27 @@ builder.queryField('homeTimeline', (t) =>
           replyParentIsViewerPost,
           and(followeeWhere, replyParentAuthorIsFollowee),
         );
+        const mutedOuterAuthorWhere = profileMuteWhere({
+          db,
+          ownerProfileId: ctx.session.profileId,
+          targetProfileId: Posts.profileId,
+        });
+        const mutedSourceAuthorWhere = exists(
+          db
+            .select({ id: DirectRepostSources.id })
+            .from(DirectRepostSources)
+            .where(
+              and(
+                eq(DirectRepostSources.id, Posts.repostSourceId),
+                profileMuteWhere({
+                  db,
+                  ownerProfileId: ctx.session.profileId,
+                  targetProfileId: DirectRepostSources.profileId,
+                }),
+              ),
+            ),
+        );
+        const homeProfileMuteWhere = and(not(mutedOuterAuthorWhere), not(mutedSourceAuthorWhere));
 
         return resolveCursorConnection<Promise<PostRow[]>>(
           {
@@ -73,6 +96,7 @@ builder.queryField('homeTimeline', (t) =>
                 and(
                   homeCandidateWhere,
                   postAccessWhere({ ctx }),
+                  homeProfileMuteWhere,
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),
