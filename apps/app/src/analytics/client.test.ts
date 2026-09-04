@@ -66,6 +66,18 @@ let constructorFails = false;
 const globals = globalThis as typeof globalThis & { __KOSMO_CHANNEL__?: unknown };
 const originalChannel = globals.__KOSMO_CHANNEL__;
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+const mockPostHogConfig = {
+  posthogHost: 'https://posthog.example.test',
+  posthogKey: 'phc_test',
+} as const;
+
+mock.module(new URL('../config/public.ts', import.meta.url), {
+  exports: {
+    getPublicConfig: (key: keyof typeof mockPostHogConfig) =>
+      globals.__KOSMO_CHANNEL__ === 'dev' ? undefined : mockPostHogConfig[key],
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 Object.defineProperty(globalThis, 'document', {
   configurable: true,
   value: {},
@@ -131,9 +143,9 @@ describe('PostHog Web client', () => {
 
     assert.ok(instances[0]);
     assert.equal(initCalls.length, 1);
-    assert.equal(initCalls[0]?.token, 'phc_vYTsfHrgz8wE6wQv5kfpQM5XPBnKKjvNQgaHabb6zdsS');
+    assert.equal(initCalls[0]?.token, mockPostHogConfig.posthogKey);
     assert.deepEqual(initCalls[0]?.config, {
-      api_host: 'https://us.i.posthog.com',
+      api_host: mockPostHogConfig.posthogHost,
       defaults: '2026-05-30',
       mask_personal_data_properties: false,
     });
