@@ -83,7 +83,7 @@ mock.module(require.resolve('lucide-react-native'), {
 mock.module('@/components/RouteBoundary', {
   exports: {
     RouteBoundary: ({ children }: { children?: unknown }) => children,
-    useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined, retry: () => undefined }),
+    useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 

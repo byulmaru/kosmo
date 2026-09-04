@@ -35,7 +35,7 @@ mock.module('@/components/RouteBoundary', {
     useRouteBoundary: () => {
       const [fetchKey, setFetchKey] = useState(0);
       const refetch = () => setFetchKey((key) => key + 1);
-      return { fetchKey, refetch, retry: refetch };
+      return { fetchKey, refetch };
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);

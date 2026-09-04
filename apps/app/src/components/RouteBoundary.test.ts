@@ -32,7 +32,7 @@ type RouteBoundaryProps = {
 let RouteBoundary: ForwardRefExoticComponent<
   RouteBoundaryProps & RefAttributes<RouteBoundaryHandle>
 >;
-let useRouteBoundary: () => { fetchKey: number; refetch: () => void; retry: () => void };
+let useRouteBoundary: () => { fetchKey: number; refetch: () => void };
 let mountCount = 0;
 let unmountCount = 0;
 let queryShouldThrow = false;
@@ -56,7 +56,7 @@ afterEach(async () => {
 });
 
 function QueryProbe() {
-  const { fetchKey, refetch, retry } = useRouteBoundary();
+  const { fetchKey } = useRouteBoundary();
   useEffect(() => {
     mountCount += 1;
     return () => {
@@ -68,11 +68,7 @@ function QueryProbe() {
     throw new Error('actor query failed');
   }
 
-  return createElement('QueryProbe', {
-    fetchKey,
-    onRefetch: refetch,
-    onRetry: retry,
-  });
+  return createElement('QueryProbe', { fetchKey });
 }
 
 function renderBoundary(
@@ -104,7 +100,7 @@ function queryProbe() {
 }
 
 describe('RouteBoundary actor lifecycle', () => {
-  it('owns the fetch key and only remounts actor-dependent query leaves', async () => {
+  it('owns the fetch key and remounts actor-dependent query leaves', async () => {
     const handleRef: { current: RouteBoundaryHandle | null } = { current: null };
 
     await act(async () => {
@@ -124,12 +120,6 @@ describe('RouteBoundary actor lifecycle', () => {
     assert.equal(mountCount, 1);
     assert.equal(unmountCount, 0);
 
-    await act(async () => handleRef.current?.retry());
-
-    assert.equal(queryProbe().props.fetchKey, 2);
-    assert.equal(mountCount, 1);
-    assert.equal(unmountCount, 0);
-
     await act(async () => {
       renderer?.update(
         renderBoundary('actor-b', true, undefined, createElement(QueryProbe), handleRef),
@@ -138,11 +128,10 @@ describe('RouteBoundary actor lifecycle', () => {
 
     assert.equal(mountCount, 2);
     assert.equal(unmountCount, 1);
-    assert.equal(queryProbe().props.fetchKey, 2);
+    assert.equal(queryProbe().props.fetchKey, 1);
   });
 
-  it('resets an error boundary and advances the fetch key without remounting a healthy query leaf', async () => {
-    const handleRef: { current: RouteBoundaryHandle | null } = { current: null };
+  it('resets an error boundary and advances the fetch key through the fallback action', async () => {
     let recoveryCount = 0;
     const originalConsoleError = console.error;
     console.error = () => undefined;
@@ -150,23 +139,18 @@ describe('RouteBoundary actor lifecycle', () => {
       queryShouldThrow = true;
       await act(async () => {
         renderer = create(
-          renderBoundary(
-            'actor-a',
-            true,
-            () => recoveryCount++,
-            createElement(QueryProbe),
-            handleRef,
-          ),
+          renderBoundary('actor-a', true, () => recoveryCount++, createElement(QueryProbe)),
         );
       });
 
       assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 1);
       assert.equal(mountCount, 0);
       assert.equal(unmountCount, 0);
-      assert.ok(handleRef.current);
+      const fallback = renderer?.root.findAll((node) => String(node.type) === 'StateView')[0];
+      assert.ok(fallback);
 
       queryShouldThrow = false;
-      await act(async () => handleRef.current?.retry());
+      await act(async () => fallback.props.onAction());
 
       assert.equal(queryProbe().props.fetchKey, 1);
       assert.equal(mountCount, 1);

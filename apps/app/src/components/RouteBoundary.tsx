@@ -6,7 +6,6 @@ import {
   useCallback,
   useContext,
   useImperativeHandle,
-  useRef,
   useState,
 } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -18,8 +17,6 @@ import type { ReactNode } from 'react';
 export type RouteBoundaryHandle = {
   /** Re-run the visible route query while retaining the mounted route subtree. */
   refetch: () => void;
-  /** Reset a failed route and re-run its query. */
-  retry: () => void;
 };
 
 type RouteBoundaryResetDetails =
@@ -29,7 +26,7 @@ type RouteBoundaryResetDetails =
 type RouteBoundaryProps = {
   children: ReactNode;
   description?: string;
-  error?: (retry: () => void) => ReactNode;
+  error?: (resetErrorBoundary: () => void) => ReactNode;
   loading: ReactNode;
   onRetry?: () => void;
   remountOnActorChange?: boolean;
@@ -45,9 +42,8 @@ const RouteBoundaryContext = createContext<RouteBoundaryContextValue | null>(nul
 /**
  * Returns the query lifecycle owned by the nearest RouteBoundary.
  *
- * Route components should not maintain their own retry counters or compose actor and retry
- * lifecycle state. `refetch` changes only the visible query fetch key, while `retry` also resets
- * the failed error boundary and invokes the optional recovery callback.
+ * Route components should not maintain their own actor or query lifecycle state. `refetch` changes
+ * only the visible query fetch key.
  */
 export function useRouteBoundary(): RouteBoundaryContextValue {
   const value = useContext(RouteBoundaryContext);
@@ -75,24 +71,10 @@ export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>
     const reportUnexpectedError = useUnexpectedErrorReporter();
     const actorLifecycleKey = useRelayActorLifecycleKey();
     const [fetchKey, setFetchKey] = useState(0);
-    const resetErrorBoundaryRef = useRef<(() => void) | null>(null);
-    const hasErrorRef = useRef(false);
 
     const refetch = useCallback(() => setFetchKey((key) => key + 1), []);
-    const retry = useCallback(() => {
-      if (hasErrorRef.current) {
-        // ErrorBoundary invokes `onReset` synchronously after this callback. The reset handler owns
-        // the fetch key and session recovery callback, avoiding a duplicate increment.
-        resetErrorBoundaryRef.current?.();
-        return;
-      }
-
-      refetch();
-      onRetry?.();
-    }, [onRetry, refetch]);
     const reset = useCallback(
       (details: RouteBoundaryResetDetails) => {
-        hasErrorRef.current = false;
         if (details.reason === 'keys') {
           return;
         }
@@ -103,17 +85,14 @@ export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>
       [onRetry, refetch],
     );
 
-    useImperativeHandle(ref, () => ({ refetch, retry }), [refetch, retry]);
+    useImperativeHandle(ref, () => ({ refetch }), [refetch]);
 
-    const contextValue = { fetchKey, refetch, retry };
+    const contextValue = { fetchKey, refetch };
 
     return (
       <RouteBoundaryContext.Provider value={contextValue}>
         <ErrorBoundary
           fallbackRender={({ resetErrorBoundary }) => {
-            resetErrorBoundaryRef.current = resetErrorBoundary;
-            hasErrorRef.current = true;
-
             return renderError ? (
               renderError(resetErrorBoundary)
             ) : (
