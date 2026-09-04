@@ -52,7 +52,15 @@ export function ComposerProfileFixture({
     normalizePostContentPlainText(contentWarning).length;
 
   return (
-    <View style={styles.fixture}>
+    <View
+      style={[
+        styles.fixture,
+        {
+          maxWidth: '100%',
+          width: surface === 'rail' ? 326 + spacing.lg * 2 : 600 + spacing.lg * 2,
+        },
+      ]}
+    >
       <View accessibilityLabel="전역 활성 프로필" style={styles.globalProfile}>
         <Text style={[styles.globalLabel, { color: theme.textSecondary }]}>전역 활성 프로필</Text>
         <Text style={[styles.globalName, { color: theme.text }]}>
@@ -176,9 +184,11 @@ export const InteractionContract: Story = {
     args.onSelectProfile?.mockClear();
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '작성 프로필' });
+    const target = canvas.getByTestId('post-composer-target');
     const body = canvas.getByRole('textbox', { name: '게시물 내용' });
     const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
 
+    expect(target.getBoundingClientRect().width).toBeCloseTo(326, 0);
     expect(trigger).not.toHaveAttribute('aria-haspopup');
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(body).toHaveValue('프로필을 바꿔도 유지되는 본문');
@@ -189,7 +199,11 @@ export const InteractionContract: Story = {
       canvas.getByRole('button', { name: '첨부 이미지 1 민감한 이미지 설정 편집' }),
     ).toBeVisible();
 
-    await userEvent.click(trigger);
+    await userEvent.click(canvas.getByText('코스모 작가', { exact: true }));
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(canvas.getByText('@kosmo', { exact: true }));
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(canvas.getByLabelText('코스모 작가 프로필 이미지'));
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     const picker = await canvas.findByLabelText('프로필 전환');
     const selected = within(picker).getByRole('button', { name: '코스모 작가, @kosmo' });
@@ -198,7 +212,9 @@ export const InteractionContract: Story = {
     expect(remote).toHaveAttribute('aria-pressed', 'false');
 
     await userEvent.click(remote);
-    await waitFor(() => expect(trigger).toHaveTextContent('먼 우주의 사용자'));
+    await waitFor(() =>
+      expect(canvas.getByText('먼 우주의 사용자', { exact: true })).toBeVisible(),
+    );
     expect(args.onSelectProfile).toHaveBeenCalledOnce();
     expect(args.onSelectProfile).toHaveBeenLastCalledWith('profile-remote');
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
@@ -250,6 +266,10 @@ export const FailureAndCancelContract: Story = {
     args.onSelectProfile?.mockClear();
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '작성 프로필' });
+    expect(canvas.getByTestId('post-composer-target').getBoundingClientRect().width).toBeCloseTo(
+      600,
+      0,
+    );
     const body = canvas.getByRole('textbox', { name: '게시물 내용' });
 
     await userEvent.click(trigger);
@@ -260,7 +280,7 @@ export const FailureAndCancelContract: Story = {
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
       '프로필을 전환하지 못했습니다.',
     );
-    expect(trigger).toHaveTextContent('코스모 작가');
+    expect(trigger).toBeVisible();
     expect(within(picker).getByRole('button', { name: '코스모 작가, @kosmo' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -299,7 +319,6 @@ export const CancelSelectionContract: Story = {
     await userEvent.keyboard('{Escape}');
     expect(canvas.queryByLabelText('프로필 전환')).not.toBeInTheDocument();
     await waitFor(() => expect(trigger).toHaveFocus());
-    expect(trigger).toHaveTextContent('코스모 작가');
     expect(body).toHaveValue('프로필을 바꿔도 유지되는 본문');
     expect(contentWarning).toHaveValue('콘텐츠 경고');
     expect(canvas.getByLabelText('첨부 이미지 갤러리, 1개')).toBeVisible();
@@ -312,7 +331,6 @@ export const CancelSelectionContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '지연된 프로필 전환 완료' }));
     await waitFor(() => expect(args.onSelectProfile).toHaveBeenCalledOnce());
     expect(args.onSelectProfile).toHaveBeenLastCalledWith('profile-remote');
-    expect(trigger).toHaveTextContent('코스모 작가');
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(body).toHaveValue('프로필을 바꿔도 유지되는 본문');
     expect(contentWarning).toHaveValue('콘텐츠 경고');

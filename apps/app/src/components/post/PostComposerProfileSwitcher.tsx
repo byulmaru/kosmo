@@ -1,4 +1,3 @@
-import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
@@ -124,28 +123,34 @@ export function PostComposerProfileSwitcher({
 
   return (
     <View ref={rootRef} style={styles.root}>
-      <Pressable
-        accessibilityLabel="작성 프로필"
-        accessibilityRole="button"
-        accessibilityState={{ busy: pending, disabled: pending, expanded: open }}
-        aria-busy={pending}
-        aria-expanded={open}
-        disabled={pending}
-        onPress={() => {
-          setError(null);
-          setOpen((value) => !value);
-        }}
-        ref={triggerRef}
-        style={({ pressed }) => [
-          styles.trigger,
-          { backgroundColor: pressed ? theme.surface : 'transparent', opacity: pending ? 0.5 : 1 },
-        ]}
-      >
-        <Avatar
-          imageUri={selectedProfile?.avatar?.url}
-          label={selectedProfile?.displayName ?? '프로필'}
-          size={40}
-        />
+      <View style={styles.trigger}>
+        <Pressable
+          accessibilityLabel="작성 프로필"
+          accessibilityRole="button"
+          accessibilityState={{ busy: pending, disabled: pending, expanded: open }}
+          aria-busy={pending}
+          aria-expanded={open}
+          disabled={pending}
+          hitSlop={4}
+          onPress={() => {
+            setError(null);
+            setOpen((value) => !value);
+          }}
+          ref={triggerRef}
+          style={({ pressed }) => [
+            styles.avatarTrigger,
+            {
+              backgroundColor: pressed ? theme.surface : 'transparent',
+              opacity: pending ? 0.5 : 1,
+            },
+          ]}
+        >
+          <Avatar
+            imageUri={selectedProfile?.avatar?.url}
+            label={selectedProfile?.displayName ?? '프로필'}
+            size={40}
+          />
+        </Pressable>
         <View style={styles.triggerCopy}>
           <Text numberOfLines={1} style={[styles.triggerName, { color: theme.text }]}>
             {selectedProfile?.displayName ?? '프로필 선택'}
@@ -156,12 +161,7 @@ export function PostComposerProfileSwitcher({
             </Text>
           ) : null}
         </View>
-        {open ? (
-          <ChevronUpIcon color={theme.textSecondary} size={16} />
-        ) : (
-          <ChevronDownIcon color={theme.textSecondary} size={16} />
-        )}
-      </Pressable>
+      </View>
       {open ? (
         <View style={styles.pickerLayer}>
           <ProfilePicker
@@ -190,12 +190,11 @@ const styles = StyleSheet.create({
   root: { position: 'relative', zIndex: 20 },
   trigger: {
     alignItems: 'center',
-    borderRadius: 10,
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
     maxWidth: '100%',
-    padding: spacing.xs,
   },
+  avatarTrigger: { borderRadius: 999 },
   triggerCopy: { flex: 1, minWidth: 0 },
   triggerName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
   triggerHandle: { fontFamily: 'SUIT', ...typography.sm },
