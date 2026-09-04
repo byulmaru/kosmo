@@ -396,6 +396,19 @@ export const CompactProductionActionSurfaceContract: Story = {
       ).toEqual(['답글', '재게시', '반응', '북마크', '더 보기']);
     });
 
+    await step('viewer Media privacy boundary', async () => {
+      const privacyBoundary = image.closest(
+        '[data-testid="post-media-viewer-image-privacy-boundary"]',
+      );
+      expect(privacyBoundary).not.toBeNull();
+      expect(privacyBoundary).toHaveClass('ph-mask', 'ph-no-capture');
+      expect(
+        canvas
+          .getByRole('button', { name: '다음 이미지' })
+          .closest('[data-testid="post-media-viewer-image-privacy-boundary"]'),
+      ).toBeNull();
+    });
+
     await step('production More bottom sheet open과 backdrop dismiss', async () => {
       await userEvent.click(within(actionBar).getByRole('button', { name: '더 보기' }));
       const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
