@@ -19,7 +19,14 @@ mock.module('react-native', {
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Platform: mockPlatform,
-    Pressable: 'Pressable',
+    Pressable: (props: Record<string, unknown>) => {
+      const children = props.children;
+      return createElement(
+        'Pressable',
+        props,
+        typeof children === 'function' ? children({ pressed: false }) : (children as ReactNode),
+      );
+    },
     StyleSheet: {
       absoluteFillObject: {
         bottom: 0,
@@ -220,12 +227,12 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(revealCount, 1);
   });
 
-  it('상태 action은 visual 104x40을 유지하고 플랫폼별 최소 hitSlop을 제공한다', async () => {
+  it('상태 action은 104x40 visual을 플랫폼별 accessible target 안에 둔다', async () => {
     try {
-      for (const [platform, expectedHitSlop] of [
-        ['web', undefined],
-        ['ios', { bottom: 2, left: 0, right: 0, top: 2 }],
-        ['android', { bottom: 4, left: 0, right: 0, top: 4 }],
+      for (const [platform, targetHeight] of [
+        ['web', 40],
+        ['ios', 44],
+        ['android', 48],
       ] as const) {
         mockPlatform.OS = platform;
 
@@ -236,11 +243,18 @@ describe('PostMediaViewerSurface', () => {
           await render({ viewState });
           const action = findByLabel(label);
 
-          assert.deepEqual(action.props.hitSlop, expectedHitSlop);
+          assert.equal(action.props.hitSlop, undefined);
           assert.deepEqual(pick(resolveStyle(action.props.style), ['height', 'width']), {
-            height: 40,
+            height: targetHeight,
             width: 104,
           });
+          assert.deepEqual(
+            pick(
+              flattenStyle(action.find((node) => (node.type as unknown) === 'View').props.style),
+              ['height', 'width'],
+            ),
+            { height: 40, width: 104 },
+          );
         }
       }
     } finally {
