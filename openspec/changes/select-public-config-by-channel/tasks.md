@@ -72,3 +72,29 @@ client build와 runtime이 Expo 공개 설정 전용 GitHub/Vault/VSO 전달 경
 - [x] 3.3 app/운영 문서를 channel 설정, server secret과 실제 배포 gate에 맞게 갱신한다.
 - [x] 3.4 관련 정적 검증과 전체 CI를 통과시키고 Draft PR 상태를 갱신한다.
 - [x] 3.5 Kubernetes PR #96을 Apply하지 않고 닫아 불필요한 ACL 변경을 폐기한다.
+
+## 4. PROD-891 shared confidential OIDC application migration
+
+**Authority / Provenance**
+
+- [PROD-891](https://linear.app/byulmaru/issue/PROD-891/webnative-공개-설정을-배포-채널로-선택한다)
+
+**Deliverable**
+
+Web과 Native가 하나의 Kosmo confidential OIDC application을 사용하고, Native는 PKCE authorize/callback만 수행하며 API가 server-held secret으로 code를 교환한다.
+
+**Guardrails**
+
+- Web redirect URI는 현재 origin의 `/login/callback`, Native redirect URI는 `kosmo://login/callback`으로 유지한다.
+- Native bundle과 Native request에는 client secret을 포함하지 않는다.
+- Native 전용 OIDC application은 migration/rollback 검증 전까지 병행 유지하며 이 change에서 삭제하지 않는다.
+
+**Verification**
+
+- Web browser login/callback과 Native authorize/callback/API exchange가 같은 client ID와 server-held secret을 사용하는지 확인한다.
+- shared client audience, PKCE, exact redirect URI, SecureStore session binding과 secret 비노출을 Web/API/native 테스트 및 실제 배포 gate에서 검증한다.
+
+- [x] 4.1 Web BFF와 API의 OIDC server-side configuration을 shared confidential application client ID/secret으로 정렬하고 Native bundle에서 secret이 제외되는지 검증한다.
+- [x] 4.2 Native AuthSession을 shared client ID와 PKCE authorize/callback으로 정렬하고 exact `kosmo://login/callback`을 유지한다.
+- [x] 4.3 API `exchangeNativeOidcSession`을 shared client ID와 server-held client secret을 사용하는 code exchange로 정렬하고 audience·signature·claims 검증을 유지한다.
+- [ ] 4.4 Web·Native 로그인, rollback 경계, SecureStore binding과 이전 Native 전용 application 병행 유지 조건을 실제 배포 gate에서 검증한다.

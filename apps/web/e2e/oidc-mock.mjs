@@ -4,13 +4,9 @@ import { createServer } from 'node:http';
 const port = Number(process.env.OIDC_MOCK_PORT ?? 4300);
 const host = process.env.OIDC_MOCK_HOST ?? '127.0.0.1';
 const issuer = process.env.PUBLIC_OIDC_ISSUER ?? `http://${host}:${port}`;
-const webClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
-const webClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
-const nativeClientId = process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID ?? 'kosmo-e2e-native-client';
-const clients = new Map([
-  [webClientId, { secret: webClientSecret, type: 'confidential' }],
-  [nativeClientId, { type: 'public' }],
-]);
+const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
+const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
+const clients = new Map([[oidcClientId, { secret: oidcClientSecret }]]);
 const keyId = 'kosmo-e2e-signing-key';
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const publicJwk = {
@@ -88,7 +84,7 @@ const server = createServer(async (request, response) => {
       scopes_supported: ['openid', 'profile'],
       subject_types_supported: ['public'],
       token_endpoint: `${issuer}/oauth/token`,
-      token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
+      token_endpoint_auth_methods_supported: ['client_secret_post'],
     });
     return;
   }
@@ -157,9 +153,7 @@ const server = createServer(async (request, response) => {
     const codeData = code ? codes.get(code) : undefined;
     const client = codeData ? clients.get(codeData.clientId) : undefined;
     const hasValidClientAuthentication =
-      client?.type === 'confidential'
-        ? body.get('client_secret') === client.secret
-        : client?.type === 'public' && body.get('client_secret') === null;
+      client !== undefined && body.get('client_secret') === client.secret;
 
     if (
       body.get('grant_type') !== 'authorization_code' ||

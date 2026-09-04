@@ -3,7 +3,7 @@ export type DeploymentChannel = 'dev' | 'prod';
 export type PublicConfig = {
   apiOrigin: string;
   channel: DeploymentChannel;
-  nativeOidcClientId: string;
+  oidcClientId: string;
   oidcIssuer: string;
   posthogHost: string | undefined;
   posthogKey: string | undefined;
@@ -12,7 +12,7 @@ export type PublicConfig = {
 };
 
 const commonPublicConfig = {
-  nativeOidcClientId: '01KXCS695QV8DQM8KJJNWFQ94Z',
+  oidcClientId: '01KQM0S7HGTVJNZA6TTTK8T5NM',
   oidcIssuer: 'https://id.byulmaru.co',
   sentryDsn:
     'https://07f92d1f243d540b91a3edb9e22eafa2@o4507210007117824.ingest.us.sentry.io/4507210010329088',

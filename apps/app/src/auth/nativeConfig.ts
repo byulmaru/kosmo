@@ -5,7 +5,7 @@ import type { NativeSessionConfiguration } from './sessionToken';
 export function getNativeSessionConfiguration(): NativeSessionConfiguration {
   return {
     apiOrigin: getApiOrigin(),
-    clientId: getPublicConfig('nativeOidcClientId'),
+    clientId: getPublicConfig('oidcClientId'),
     issuer: getPublicConfig('oidcIssuer'),
   };
 }

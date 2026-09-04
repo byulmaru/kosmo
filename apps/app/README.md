@@ -11,11 +11,11 @@ pnpm --filter @kosmo/app android
 pnpm --filter @kosmo/app web
 ```
 
-공개 client 설정은 [`src/config/public.ts`](src/config/public.ts)의 공용 설정과 `dev`·`prod` 채널별 값으로 관리한다. OIDC issuer·native client ID·browser Sentry DSN은 공용값으로, API·Web origin은 채널별 값으로 둔다. PostHog는 `prod` 채널에서만 활성화한다. Native는 local development에서 `dev`, release binary에서 `prod` 채널을 선택하고, Web은 same-origin BFF가 제공하는 채널을 선택한다. Browser builds keep same-origin `/login` and `/graphql` through `@kosmo/web`.
+공개 client 설정은 [`src/config/public.ts`](src/config/public.ts)의 공용 설정과 `dev`·`prod` 채널별 값으로 관리한다. OIDC issuer·shared OIDC client ID·browser Sentry DSN은 공용값으로, API·Web origin은 채널별 값으로 둔다. PostHog는 `prod` 채널에서만 활성화한다. Native는 local development에서 `dev`, release binary에서 `prod` 채널을 선택하고, Web은 same-origin BFF가 제공하는 채널을 선택한다. Browser builds keep same-origin `/login` and `/graphql` through `@kosmo/web`.
 
 로컬에서 `pnpm --filter @kosmo/app web`을 직접 실행할 때는 `public/channel.js`가 `dev` 채널을 제공합니다.
 
-Native 공개 설정은 선택된 채널의 API origin, OIDC issuer와 native client ID를 사용한다. SecureStore sessions are bound to those values and are discarded instead of being sent after a configuration change.
+Native 공개 설정은 선택된 채널의 API origin, OIDC issuer와 shared OIDC client ID를 사용한다. API는 server-held OIDC client secret으로 Native authorization code를 교환하며, secret은 Native bundle이나 request에 포함하지 않는다. SecureStore sessions are bound to those values and are discarded instead of being sent after a configuration change.
 
 Native OIDC uses Expo AuthSession with the `kosmo://login/callback` redirect. Register that exact URI with the provider and test login in a development or standalone build; Expo Go cannot use the custom callback scheme for this flow.
 

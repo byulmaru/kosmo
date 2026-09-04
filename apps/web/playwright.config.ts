@@ -26,15 +26,15 @@ const noAnalyticsWebOrigin = `http://${host}:${noAnalyticsWebPort}`;
 const oidcOrigin = `http://${host}:${oidcPort}`;
 const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
 const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
-const nativeOidcClientId = process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID ?? 'kosmo-e2e-native-client';
 const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL;
 const browserUserAgent =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 
 process.env.DATABASE_URL = databaseUrl;
 process.env.PUBLIC_API_ORIGIN = apiOrigin;
+process.env.PUBLIC_OIDC_CLIENT_ID = oidcClientId;
 process.env.PUBLIC_OIDC_ISSUER = oidcOrigin;
-process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID = nativeOidcClientId;
+process.env.OIDC_CLIENT_SECRET = oidcClientSecret;
 process.env.PUBLIC_ORIGIN = webOrigin;
 process.env.TEMPORAL_ADDRESS = `${host}:${temporalPort}`;
 process.env.TEMPORAL_NAMESPACE = 'test';
@@ -83,7 +83,6 @@ export default defineConfig({
         OIDC_MOCK_PORT: String(oidcPort),
         PUBLIC_OIDC_CLIENT_ID: oidcClientId,
         PUBLIC_OIDC_ISSUER: oidcOrigin,
-        PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
       },
       reuseExistingServer: false,
       timeout: 30_000,
@@ -124,8 +123,9 @@ export default defineConfig({
         DATABASE_URL: databaseUrl,
         NODE_ENV: 'production',
         PORT: String(apiPort),
+        OIDC_CLIENT_SECRET: oidcClientSecret,
+        PUBLIC_OIDC_CLIENT_ID: oidcClientId,
         PUBLIC_OIDC_ISSUER: oidcOrigin,
-        PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
         PUBLIC_ORIGIN: webOrigin,
         TEMPORAL_ADDRESS: `${host}:${temporalPort}`,
         TEMPORAL_NAMESPACE: 'test',
@@ -146,7 +146,6 @@ export default defineConfig({
         PUBLIC_ORIGIN: webOrigin,
         PUBLIC_OIDC_CLIENT_ID: oidcClientId,
         PUBLIC_OIDC_ISSUER: oidcOrigin,
-        PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
         TEMPORAL_ADDRESS: `${host}:${temporalPort}`,
         TEMPORAL_NAMESPACE: 'test',
       },
@@ -166,7 +165,6 @@ export default defineConfig({
         PUBLIC_ORIGIN: noAnalyticsWebOrigin,
         PUBLIC_OIDC_CLIENT_ID: oidcClientId,
         PUBLIC_OIDC_ISSUER: oidcOrigin,
-        PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
         TEMPORAL_ADDRESS: `${host}:${temporalPort}`,
         TEMPORAL_NAMESPACE: 'test',
       },

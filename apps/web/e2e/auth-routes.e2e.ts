@@ -11,7 +11,6 @@ const loginCodeVerifierCookie = 'kosmo_oidc_code_verifier';
 const loginStateCookie = 'kosmo_oidc_state';
 const apiOrigin = process.env.PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3001';
 const oidcOrigin = process.env.PUBLIC_OIDC_ISSUER ?? 'http://127.0.0.1:4300';
-const nativeOidcClientId = process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID ?? 'kosmo-e2e-native-client';
 const nativeSessionEndpoint = new URL('/graphql', apiOrigin).toString();
 const nativeSessionOperationName = 'E2ENativeOidcSessionExchange';
 const nativeSessionMutation = `
@@ -89,12 +88,12 @@ async function getOIDCTokenRequestCount(request: APIRequestContext) {
 async function authorizeNativeCode(
   request: APIRequestContext,
   codeVerifier: string,
-  { clientId = nativeOidcClientId, loginHint }: { clientId?: string; loginHint?: string } = {},
+  { loginHint }: { loginHint?: string } = {},
 ) {
   const state = randomUUID();
   const authorizeUrl = new URL('/oauth/authorize', oidcOrigin);
   authorizeUrl.search = new URLSearchParams({
-    client_id: clientId,
+    client_id: process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client',
     code_challenge: createHash('sha256').update(codeVerifier).digest('base64url'),
     code_challenge_method: 'S256',
     redirect_uri: 'kosmo://login/callback',
@@ -305,7 +304,9 @@ test('Deleted Account의 Web OIDC callback은 Session 없이 일반 오류로 �
   expect(await page.textContent('body')).not.toContain('oidc-mock-e2e-user');
 });
 
-test('API는 public native PKCE code를 cookie 없이 Kosmo 세션으로 교환한다', async ({ request }) => {
+test('API는 shared confidential PKCE code를 cookie 없이 Kosmo 세션으로 교환한다', async ({
+  request,
+}) => {
   const codeVerifier = 'v'.repeat(43);
   const callbackUrl = await authorizeNativeCode(request, codeVerifier);
   const response = await exchangeNativeOidcSession(request, {
@@ -366,7 +367,7 @@ test('Suspended Account의 Native exchange는 Session 없이 일반 권한 오�
   expect(response.headers()['set-cookie']).toBeUndefined();
 });
 
-test('API는 서명이 잘못된 public native ID token을 Kosmo 세션으로 교환하지 않는다', async ({
+test('API는 서명이 잘못된 shared-client ID token을 Kosmo 세션으로 교환하지 않는다', async ({
   request,
 }) => {
   const codeVerifier = 'v'.repeat(43);

@@ -40,6 +40,18 @@
 - Consequences: workflow에는 설정값이 아닌 build metadata와 secret 전달만 남는다.
 - Confirmation / Follow-up: client 설정표와 build arguments에 credential이 포함되지 않는지 검토한다.
 
+### Web과 Native는 하나의 confidential OIDC application을 공유한다
+
+- Decision Date: 2026-09-04
+- Decision Class: Derived Contract
+- Authority / Provenance: [PROD-891](https://linear.app/byulmaru/issue/PROD-891/webnative-공개-설정을-배포-채널로-선택한다)
+- Status: Active
+- Context / Problem: 기존 Web confidential application과 Native public application 분리는 동일한 사용자 인증 결과를 서로 다른 client audience와 token exchange 정책으로 운영하게 만들고, Native code exchange에서 server-side confidential 경계를 약화시켰다.
+- Decision Outcome: Web과 Native는 하나의 Kosmo confidential OIDC application client ID를 사용한다. Native는 system browser에서 PKCE authorization과 `kosmo://login/callback` callback만 수행하고 client secret을 보유하거나 전송하지 않는다. API는 server-held client secret과 같은 client ID로 Native authorization code, PKCE verifier와 exact redirect URI를 OIDC token endpoint에 제출한다. Web은 같은 client ID와 server-held secret으로 현재 origin의 `/login/callback`을 유지한다.
+- Alternatives Considered: Web과 Native의 별도 OIDC application 유지, Native public client 방식의 secret 없는 token exchange, Native 요청을 Web BFF에서 교환. 각각 shared audience 계약을 만들지 못하거나 confidential secret 경계를 약화시키거나 Native transport 경계를 침해하므로 선택하지 않았다.
+- Consequences: Web BFF와 API의 OIDC configuration은 같은 application ID와 secret을 가리켜야 하고 Web·Native redirect URI와 PKCE 검증을 함께 배포·검증해야 한다. Native bundle에는 client ID만 공개되며 secret은 server-side configuration에 남는다.
+- Confirmation / Follow-up: Web login/callback, Native authorize/callback/API exchange, audience·signature 검증, SecureStore session binding과 secret 비노출을 실제 배포 경계에서 확인한다. Native 전용 application은 migration과 rollback 증거가 확보될 때까지 병행 유지하고, 이전 release binary와 이전 client 사용이 더 이상 필요 없다는 별도 cleanup gate 이후에만 제거한다.
+
 ## Remaining Decisions
 
 - 없음.

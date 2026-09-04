@@ -70,7 +70,7 @@ describe('공개 client 설정', () => {
         getPublicConfig('posthogKey'),
         'phc_vYTsfHrgz8wE6wQv5kfpQM5XPBnKKjvNQgaHabb6zdsS',
       );
-      assert.equal(getPublicConfig('nativeOidcClientId'), '01KXCS695QV8DQM8KJJNWFQ94Z');
+      assert.equal(getPublicConfig('oidcClientId'), '01KQM0S7HGTVJNZA6TTTK8T5NM');
       assert.equal(
         getPublicConfig('sentryDsn'),
         'https://07f92d1f243d540b91a3edb9e22eafa2@o4507210007117824.ingest.us.sentry.io/4507210010329088',
