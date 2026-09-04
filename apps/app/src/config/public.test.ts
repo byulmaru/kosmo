@@ -65,11 +65,8 @@ describe('공개 client 설정', () => {
       assert.equal(getPublicConfig('channel'), 'prod');
       assert.equal(getPublicConfig('apiOrigin'), 'https://api.kos.moe');
       assert.equal(getPublicConfig('webOrigin'), 'https://kos.moe');
-      assert.equal(getPublicConfig('posthogHost'), 'https://us.i.posthog.com');
-      assert.equal(
-        getPublicConfig('posthogKey'),
-        'phc_vYTsfHrgz8wE6wQv5kfpQM5XPBnKKjvNQgaHabb6zdsS',
-      );
+      assert.equal(getPublicConfig('posthogHost'), undefined);
+      assert.equal(getPublicConfig('posthogKey'), undefined);
       assert.equal(getPublicConfig('oidcClientId'), '01KQM0S7HGTVJNZA6TTTK8T5NM');
       assert.equal(
         getPublicConfig('sentryDsn'),

@@ -71,7 +71,24 @@ test('dev channel Web runtime은 analytics 요청 없이 정상 렌더링된다'
   expect(analyticsRequests).toEqual([]);
 });
 
-test('Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote config를 유지한다', async ({
+test('prod channel Web runtime은 PostHog 설정이 비활성화되어 analytics 요청 없이 정상 렌더링된다', async ({
+  page,
+}) => {
+  const analyticsRequests: string[] = [];
+  page.on('request', (request) => {
+    if (posthogRoute.test(request.url())) {
+      analyticsRequests.push(request.url());
+    }
+  });
+
+  await page.goto('/');
+
+  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+  await page.waitForTimeout(200);
+  expect(analyticsRequests).toEqual([]);
+});
+
+test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog 활성화 검증을 보류한다', async ({
   page,
 }) => {
   const viewer = await createE2ESession({
@@ -254,7 +271,7 @@ test('Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote co
   expect(posthogRequests.some((url) => new URL(url).pathname.startsWith('/flags'))).toBe(true);
 });
 
-test('Account identity는 A→guest→B에서 분리되고 endpoint 실패에도 인증 흐름을 유지한다', async ({
+test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog identity 검증을 보류한다', async ({
   context,
   page,
 }) => {
