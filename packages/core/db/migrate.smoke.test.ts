@@ -110,13 +110,14 @@ try {
       'public.post',
       'public.media',
       'public.profile_media',
+      'public.profile_mute',
       'public.hashtag',
     ])}::text[]) AS object_name
   `;
 
   assert.deepEqual(
     objects.map(({ objectName }) => objectName),
-    ['account', 'profile', 'post', 'media', 'profile_media', 'hashtag'],
+    ['account', 'profile', 'post', 'media', 'profile_media', 'profile_mute', 'hashtag'],
     'Representative final schema tables must exist.',
   );
 
@@ -144,6 +145,10 @@ try {
             table_name = 'media'
             AND column_name IN ('source', 'state', 'storage_reference', 'media_type', 'url', 'ready_at', 'alt_text')
           )
+          OR (
+            table_name = 'profile_mute'
+            AND column_name IN ('created_at', 'expires_at', 'owner_profile_id', 'target_profile_id')
+          )
         )
       ORDER BY table_name, column_name
     `,
@@ -161,6 +166,10 @@ try {
       { tableName: 'media', columnName: 'url' },
       { tableName: 'post', columnName: 'reply_parent_id' },
       { tableName: 'post', columnName: 'repost_source_id' },
+      { tableName: 'profile_mute', columnName: 'created_at' },
+      { tableName: 'profile_mute', columnName: 'expires_at' },
+      { tableName: 'profile_mute', columnName: 'owner_profile_id' },
+      { tableName: 'profile_mute', columnName: 'target_profile_id' },
     ],
     'Representative final schema columns must exist.',
   );

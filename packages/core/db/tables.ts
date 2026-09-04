@@ -490,6 +490,26 @@ export const ProfileMedia = pgTable(
   (table) => [unique().on(table.profileId, table.kind), index().on(table.mediaId)],
 );
 
+export const ProfileMutes = pgTable(
+  'profile_mute',
+  {
+    id: id(),
+    ownerProfileId: uuid('owner_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    targetProfileId: uuid('target_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+    expiresAt: datetime('expires_at'),
+  },
+  (table) => [
+    unique().on(table.ownerProfileId, table.targetProfileId),
+    index().on(table.ownerProfileId, table.id.desc()),
+    index().on(table.targetProfileId),
+  ],
+);
+
 export const Reactions = pgTable(
   'reaction',
   {

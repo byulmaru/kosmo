@@ -48,6 +48,7 @@ export {
   rejectProfileFollowRequest,
 } from './profile-follow-request';
 export type { AcceptProfileFollowRequestResult } from './profile-follow-transaction';
+export { muteProfile, unmuteProfile } from './profile-mute';
 export { updateProfile } from './profile-update';
 export { addReaction, deleteReaction } from './reaction';
 export type { RevokeCurrentSessionResult } from './session';

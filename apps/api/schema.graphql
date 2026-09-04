@@ -248,13 +248,23 @@ type Mutation {
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
   issueMediaUploadUrl: IssueMediaUploadUrlPayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
+  muteProfile(input: MuteProfileInput!): MuteProfilePayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
   repostPost(input: RepostPostInput!): RepostPostPayload!
   revokeCurrentSession: RevokeCurrentSessionPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   submitFeedback(input: SubmitFeedbackInput!): SubmitFeedbackPayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
+  unmuteProfile(input: UnmuteProfileInput!): UnmuteProfilePayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
+}
+
+input MuteProfileInput {
+  id: ID!
+}
+
+type MuteProfilePayload {
+  profileMute: ProfileMute!
 }
 
 interface Node {
@@ -357,6 +367,7 @@ type Profile implements Node {
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   private: ProfilePrivate
+  profileMutes(after: String, before: String, first: Int, last: Int): ProfileMuteConnection!
   relativeHandle: String!
   tags: [Hashtag!]!
   unreadNotificationCount: Int!
@@ -428,6 +439,22 @@ type ProfileInstance {
   kind: InstanceKind!
 }
 
+type ProfileMute implements Node {
+  createdAt: DateTime!
+  id: ID!
+  targetProfile: Profile!
+}
+
+type ProfileMuteConnection {
+  edges: [ProfileMuteConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProfileMuteConnectionEdge {
+  cursor: String!
+  node: ProfileMute!
+}
+
 type ProfileOutgoingProfileFollowRequestsConnection {
   edges: [ProfileOutgoingProfileFollowRequestsConnectionEdge!]!
   pageInfo: PageInfo!
@@ -453,6 +480,7 @@ type ProfileViewerState {
   followRequest: ProfileFollowRequest
   isSelf: Boolean!
   membership: AccountProfile
+  profileMute: ProfileMute
 }
 
 type Query {
@@ -555,6 +583,14 @@ type UnfollowProfilePayload {
   followeeProfile: Profile
   followerProfile: Profile!
   profileFollowId: ID
+}
+
+input UnmuteProfileInput {
+  id: ID!
+}
+
+type UnmuteProfilePayload {
+  profileMuteId: ID
 }
 
 input UpdateProfileInput {

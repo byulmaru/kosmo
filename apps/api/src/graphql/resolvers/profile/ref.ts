@@ -17,6 +17,8 @@ import { profileFollowByIdLoader } from './loader/follow';
 import { profileFollowRequestByIdLoader } from './loader/follow-request';
 import { profileInstanceByIdLoader } from './loader/instance';
 import { profileMediaLoader } from './loader/media';
+import { profileMuteByIdLoader } from './loader/mute';
+import type { ProfileMutes } from '@kosmo/core/db';
 
 const ViewerOwnerAccountProfiles = alias(AccountProfiles, 'viewer_owner_account_profile');
 const ViewerOwnerProfiles = alias(Profiles, 'viewer_owner_profile');
@@ -162,3 +164,27 @@ ProfileFollowRequest.implement({
     }),
   }),
 });
+
+export type ProfileMuteRow = typeof ProfileMutes.$inferSelect;
+
+export const ProfileMute = createObjectRef<ProfileMuteRow>('ProfileMute', (ids, ctx) =>
+  profileMuteByIdLoader(ctx).loadMany(ids),
+);
+
+ProfileMute.implement({
+  fields: (t) => ({
+    createdAt: t.expose('createdAt', {
+      type: 'DateTime',
+    }),
+  }),
+});
+
+export const ProfileMuteConnection = builder.connectionObject(
+  {
+    type: ProfileMute,
+    name: 'ProfileMuteConnection',
+  },
+  {
+    name: 'ProfileMuteConnectionEdge',
+  },
+);

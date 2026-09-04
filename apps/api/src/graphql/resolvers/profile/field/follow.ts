@@ -7,7 +7,8 @@ import { profileFollowAccessWhere } from '../access/follow';
 import { viewerFollowLoader } from '../loader/follow';
 import { viewerFollowRequestLoader } from '../loader/follow-request';
 import { viewerAccountProfileLoader } from '../loader/membership';
-import { AccountProfile, Profile, ProfileFollow, ProfileFollowRequest } from '../ref';
+import { viewerProfileMuteLoader } from '../loader/mute';
+import { AccountProfile, Profile, ProfileFollow, ProfileFollowRequest, ProfileMute } from '../ref';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 
@@ -21,6 +22,7 @@ const ProfileViewerState = builder.simpleObject('ProfileViewerState', {
     follow: field.field({ type: ProfileFollow, nullable: true }),
     followRequest: field.field({ type: ProfileFollowRequest, nullable: true }),
     membership: field.field({ type: AccountProfile, nullable: true }),
+    profileMute: field.field({ type: ProfileMute, nullable: true }),
   }),
 });
 
@@ -118,10 +120,11 @@ builder.objectFields(Profile, (t) => ({
     unauthorizedResolver: () => null,
     resolve: async (profile, _, ctx) => {
       const viewerProfileId = ctx.session.profileId;
-      const [follow, followRequest, membership] = await Promise.all([
+      const [follow, followRequest, membership, profileMute] = await Promise.all([
         viewerFollowLoader(ctx).load(profile.id),
         viewerFollowRequestLoader(ctx).load(profile.id),
         viewerAccountProfileLoader(ctx).load(profile.id),
+        viewerProfileMuteLoader(ctx).load(profile.id),
       ]);
 
       return {
@@ -129,6 +132,7 @@ builder.objectFields(Profile, (t) => ({
         follow,
         followRequest: follow ? null : followRequest,
         membership,
+        profileMute,
       };
     },
   }),
