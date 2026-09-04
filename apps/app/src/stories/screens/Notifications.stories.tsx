@@ -745,6 +745,7 @@ export const SelectedProfileSwitch: Story = {
 export const ActorResetClearsPaginationError: Story = {
   parameters: {
     relay: {
+      actorBoundary: true,
       data: {
         currentSession: { id: 'notification-session', selectedProfile: paginationProfile },
       },
