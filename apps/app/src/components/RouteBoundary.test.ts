@@ -104,7 +104,7 @@ function queryProbe() {
 }
 
 describe('RouteBoundary actor lifecycle', () => {
-  it('owns refetch and retry keys and remounts actor-dependent query leaves', async () => {
+  it('owns the fetch key and only remounts actor-dependent query leaves', async () => {
     const handleRef: { current: RouteBoundaryHandle | null } = { current: null };
 
     await act(async () => {
@@ -127,8 +127,8 @@ describe('RouteBoundary actor lifecycle', () => {
     await act(async () => handleRef.current?.retry());
 
     assert.equal(queryProbe().props.fetchKey, 2);
-    assert.equal(mountCount, 2);
-    assert.equal(unmountCount, 1);
+    assert.equal(mountCount, 1);
+    assert.equal(unmountCount, 0);
 
     await act(async () => {
       renderer?.update(
@@ -136,9 +136,45 @@ describe('RouteBoundary actor lifecycle', () => {
       );
     });
 
-    assert.equal(mountCount, 3);
-    assert.equal(unmountCount, 2);
+    assert.equal(mountCount, 2);
+    assert.equal(unmountCount, 1);
     assert.equal(queryProbe().props.fetchKey, 2);
+  });
+
+  it('resets an error boundary and advances the fetch key without remounting a healthy query leaf', async () => {
+    const handleRef: { current: RouteBoundaryHandle | null } = { current: null };
+    let recoveryCount = 0;
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+    try {
+      queryShouldThrow = true;
+      await act(async () => {
+        renderer = create(
+          renderBoundary(
+            'actor-a',
+            true,
+            () => recoveryCount++,
+            createElement(QueryProbe),
+            handleRef,
+          ),
+        );
+      });
+
+      assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 1);
+      assert.equal(mountCount, 0);
+      assert.equal(unmountCount, 0);
+      assert.ok(handleRef.current);
+
+      queryShouldThrow = false;
+      await act(async () => handleRef.current?.retry());
+
+      assert.equal(queryProbe().props.fetchKey, 1);
+      assert.equal(mountCount, 1);
+      assert.equal(unmountCount, 0);
+      assert.equal(recoveryCount, 1);
+    } finally {
+      console.error = originalConsoleError;
+    }
   });
 
   it('keeps the shell query subtree mounted when actor lifecycle changes opt out', async () => {
