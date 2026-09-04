@@ -1,5 +1,6 @@
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import baseMeta, {
+  ActionSemanticsContract as actionSemanticsContract,
   InteractionContract as interactionContract,
   MobileCandidateContract as mobileCandidateContract,
   MobileFlexLayoutContract as mobileFlexLayoutContract,
@@ -19,6 +20,7 @@ import baseMeta, {
   SubmitFailure as submitFailureStory,
   SubmittingPickerContract as submittingPickerContract,
   SubmittingSpinnerContract as submittingSpinnerContract,
+  SubmittingVisibilityContract as submittingVisibilityContract,
 } from './PostComposer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -31,6 +33,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+export const ActionSemanticsContract: Story = actionSemanticsContract;
 export const InteractionContract: Story = interactionContract;
 export const MobileKeyboardMediaFooterGeometryContract: Story =
   mobileKeyboardMediaFooterGeometryContract;
@@ -48,6 +51,7 @@ export const ProgressRingToneContract: Story = progressRingToneContract;
 export const RailProgressRingContract: Story = railProgressRingContract;
 export const SubmittingPickerContract: Story = submittingPickerContract;
 export const SubmittingSpinnerContract: Story = submittingSpinnerContract;
+export const SubmittingVisibilityContract: Story = submittingVisibilityContract;
 
 export const ControlsContract: Story = {
   play: async () => {

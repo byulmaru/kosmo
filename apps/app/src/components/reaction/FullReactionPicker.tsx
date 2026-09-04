@@ -237,7 +237,12 @@ function ReactionSection({
   );
   return (
     <View style={styles.section} testID={testID}>
-      <Text style={[styles.sectionTitle, { color: theme.foregroundPrimary }]}>{title}</Text>
+      <Text
+        accessibilityRole="header"
+        style={[styles.sectionTitle, { color: theme.foregroundPrimary }]}
+      >
+        {title}
+      </Text>
       <View style={[styles.grid, mobile ? styles.mobileGrid : styles.webGrid]}>
         {rows.map((row, rowIndex) => (
           <View
