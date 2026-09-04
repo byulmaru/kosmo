@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -56,14 +64,46 @@ type ViewerSession = Readonly<{
 type OpenViewer = (session: ViewerSession) => void;
 
 const PostMediaViewerHostContext = createContext<OpenViewer | null>(null);
+const PostMediaViewerScreenFallbackContext = createContext<RefObject<NativeView | null> | null>(
+  null,
+);
+
+export function PostMediaViewerScreenFallbackProvider({
+  children,
+  fallbackFocus,
+}: PropsWithChildren<{ fallbackFocus: RefObject<NativeView | null> }>) {
+  return (
+    <PostMediaViewerScreenFallbackContext.Provider value={fallbackFocus}>
+      {children}
+    </PostMediaViewerScreenFallbackContext.Provider>
+  );
+}
 
 export function PostMediaViewerHostProvider({ children }: PropsWithChildren) {
   const actorLifecycleKey = useRelayActorLifecycleKey();
   const previousActorLifecycleKey = useRef(actorLifecycleKey);
   const fallbackFocus = useRef<NativeView>(null);
+  const screenFallback = useContext(PostMediaViewerScreenFallbackContext);
   const [session, setSession] = useState<ViewerSession | null>(null);
+  const sessionRef = useRef<ViewerSession | null>(null);
+  sessionRef.current = session;
   const openViewer = useCallback<OpenViewer>((nextSession) => setSession(nextSession), []);
   const closeViewer = useCallback(() => setSession(null), []);
+  const lifecycleFallbackFocus = screenFallback ?? fallbackFocus;
+
+  useLayoutEffect(() => {
+    return () => {
+      const activeSession = sessionRef.current;
+      if (activeSession) {
+        // A keyed actor/route boundary can delete this provider before the actor key effect runs.
+        // Layout cleanup is the last point at which the origin or a stable screen target can still
+        // be captured. Focus after the deletion commit so the stable target is the active screen.
+        requestAnimationFrame(() =>
+          focusPostMediaViewerTarget(activeSession.originControl, lifecycleFallbackFocus),
+        );
+      }
+    };
+  }, [lifecycleFallbackFocus]);
 
   useEffect(() => {
     if (previousActorLifecycleKey.current === actorLifecycleKey) {
@@ -72,9 +112,9 @@ export function PostMediaViewerHostProvider({ children }: PropsWithChildren) {
     previousActorLifecycleKey.current = actorLifecycleKey;
     if (session) {
       setSession(null);
-      requestAnimationFrame(() => focusPostMediaViewerTarget(fallbackFocus));
+      requestAnimationFrame(() => focusPostMediaViewerTarget(lifecycleFallbackFocus));
     }
-  }, [actorLifecycleKey, session]);
+  }, [actorLifecycleKey, lifecycleFallbackFocus, session]);
 
   const handleDeleted = useCallback(() => {
     session?.onDeleted?.();

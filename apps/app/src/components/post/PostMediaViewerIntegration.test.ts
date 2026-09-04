@@ -2,18 +2,24 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ReactElement } from 'react';
+import type { PropsWithChildren, ReactElement, RefObject } from 'react';
+import type { View as NativeView } from 'react-native';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostLayout as PostLayoutComponent } from './PostLayout';
 import type { PostListItem as PostListItemComponent } from './PostListItem';
-import type { PostMediaViewerHostProvider as HostProviderComponent } from './PostMediaViewerHost';
+import type {
+  PostMediaViewerHostProvider as HostProviderComponent,
+  PostMediaViewerScreenFallbackProvider as ScreenFallbackProviderComponent,
+} from './PostMediaViewerHost';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let actorRevision = 0;
 let animationFrames: FrameRequestCallback[] = [];
+let focusCalls: Array<{ fallback?: unknown; primary: unknown }> = [];
+let activeElement: unknown = null;
 let queriedSurfacePostId: string | null = null;
 let queryPosts = new Map<string, ReturnType<typeof hostPost>>();
 let replyPostIds: string[] = [];
@@ -139,6 +145,19 @@ mock.module('./PostActionAuthentication', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module('./postMediaViewerSession', {
+  exports: {
+    focusPostMediaViewerTarget: (
+      primary: { current?: { focus?: () => void } | null },
+      fallback?: { current?: { focus?: () => void } | null },
+    ) => {
+      focusCalls.push({ fallback, primary });
+      const target = primary.current ?? fallback?.current;
+      target?.focus?.();
+    },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('./PostActionSurface', {
   exports: {
     PostActionSurface: (props: Record<string, unknown>) =>
@@ -206,11 +225,15 @@ mock.module('./replySurface', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let HostProvider: typeof HostProviderComponent;
+let ScreenFallbackProvider: typeof ScreenFallbackProviderComponent;
 let PostLayout: typeof PostLayoutComponent;
 let PostListItem: typeof PostListItemComponent;
 
 before(async () => {
-  ({ PostMediaViewerHostProvider: HostProvider } = await import('./PostMediaViewerHost'));
+  ({
+    PostMediaViewerHostProvider: HostProvider,
+    PostMediaViewerScreenFallbackProvider: ScreenFallbackProvider,
+  } = await import('./PostMediaViewerHost'));
   ({ PostLayout } = await import('./PostLayout'));
   ({ PostListItem } = await import('./PostListItem'));
 });
@@ -222,6 +245,8 @@ afterEach(async () => {
   }
   actorRevision = 0;
   animationFrames = [];
+  focusCalls = [];
+  activeElement = null;
   queriedSurfacePostId = null;
   queryPosts = new Map();
   replyPostIds = [];
@@ -276,10 +301,59 @@ describe('Post Media Viewer Host production wiring', () => {
     await renderHost(createElement(PostLayout, { post: asLayoutKey(post) }));
     await openFromBody({ current: { focus: () => undefined } });
     assert.ok(byTestId('post-media-viewer-dialog'));
+    await flushAnimationFrames();
+    const focusCallCountBeforeActorChange = focusCalls.length;
 
     actorRevision = 1;
     await updateHost(createElement(PostLayout, { post: asLayoutKey(post) }));
+    await flushAnimationFrames();
     assert.equal(findByTestId('post-media-viewer-dialog').length, 0);
+    assert.equal(focusCalls.length, focusCallCountBeforeActorChange + 1);
+    assert.ok(focusCalls.at(-1)?.primary);
+  });
+
+  it('actor-scoped route remount에서도 Viewer focus fallback을 복구한다', async () => {
+    const post = storyPost('actor-scoped-post', 'actor-scoped-content');
+    queryPosts.set(post.id, hostPost(post));
+    const originControl: { current: { focus: () => void } | null } = {
+      current: { focus: () => undefined },
+    };
+    const screenFallback = {
+      current: {
+        focus: () => {
+          activeElement = screenFallback.current;
+        },
+        isConnected: true,
+      },
+    };
+    const screenFallbackRef = screenFallback as unknown as RefObject<NativeView | null>;
+
+    await act(async () => {
+      renderer = create(
+        createElement(
+          ScreenFallbackProvider,
+          { fallbackFocus: screenFallbackRef },
+          actorScopedHostTree(createElement(PostLayout, { post: asLayoutKey(post) })),
+        ),
+      );
+    });
+    await openFromBody(originControl);
+    assert.ok(byTestId('post-media-viewer-dialog'));
+    await flushAnimationFrames();
+    const focusCallCountBeforeActorChange = focusCalls.length;
+
+    originControl.current = null;
+    actorRevision = 1;
+    await act(async () => {
+      renderer?.update(actorScopedHostTree(createElement(PostLayout, { post: asLayoutKey(post) })));
+    });
+    await flushAnimationFrames();
+
+    assert.equal(findByTestId('post-media-viewer-dialog').length, 0);
+    assert.equal(focusCalls.length, focusCallCountBeforeActorChange + 1);
+    assert.ok(focusCalls.at(-1)?.primary);
+    assert.strictEqual(activeElement, screenFallback.current);
+    assert.notEqual(screenFallback.current.isConnected, false);
   });
 
   it('같은 Content unavailable 복구는 state를 유지하고 다른 revision은 original index로 reset한다', async () => {
@@ -313,17 +387,39 @@ async function renderHost(child: ReactElement) {
   });
 }
 
+function actorScopedHostTree(child: ReactElement) {
+  return createElement(ActorScopedBoundary, null, createElement(HostProvider, null, child));
+}
+
+function ActorScopedBoundary({ children }: PropsWithChildren) {
+  return createElement(ActorScopedBoundaryContent, { key: String(actorRevision) }, children);
+}
+
+function ActorScopedBoundaryContent({ children }: PropsWithChildren) {
+  return children;
+}
+
 async function updateHost(child: ReactElement) {
   assert.ok(renderer);
   await act(async () => renderer?.update(createElement(HostProvider, null, child)));
 }
 
-async function openFromBody(originControl: { current: { focus: () => void } }, selectedIndex = 0) {
+async function openFromBody(
+  originControl: { current: { focus: () => void } | null },
+  selectedIndex = 0,
+) {
   await act(async () => byTestId('post-body').props.onMediaOpen(selectedIndex, originControl));
 }
 
 async function closeViewer() {
   await act(async () => pressable('이미지 뷰어 닫기').props.onPress());
+}
+
+async function flushAnimationFrames() {
+  const frames = animationFrames.splice(0);
+  await act(async () => {
+    frames.forEach((frame) => frame(0));
+  });
 }
 
 function byTestId(testID: string) {
