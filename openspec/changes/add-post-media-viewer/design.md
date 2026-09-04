@@ -14,7 +14,7 @@ React Native `Modal`, `useWindowDimensions`, focus ref와 Native `PanResponder`�
 - 같은 Content의 일시 unavailable·복구 상태는 보존하고 다른 revision은 원래 선택 index에서 초기화하며, actor/environment 전환은 Viewer를 닫고 query를 폐기한다.
 - Compact Web·Native의 image/detail layout과 Wide Web의 image/Post 상세 thread 분할을 하나의 공용 Viewer 경계에서 제공한다.
 - Wide Web에서 원문 전체·기존 Action Bar·Reply Composer·reply descendants와 pagination을 기존 Post 상세 계약으로 제공한다.
-- Sensitive·loading·error·retry, modal close·focus 복귀와 Web·Native 탐색 입력을 분리 검증할 수 있게 한다.
+- Gallery의 Sensitive 진입 경계와 Viewer의 loading·error·retry, modal close·focus 복귀와 Web·Native 탐색 입력을 분리 검증할 수 있게 한다.
 - Viewer open·Media navigation·close 중 route와 browser history를 바꾸지 않는다.
 
 **Non-Goals:**
