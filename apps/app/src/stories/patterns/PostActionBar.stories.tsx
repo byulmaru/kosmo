@@ -515,10 +515,15 @@ function readReactionRequests(canvas: ReturnType<typeof within>): ReactionReques
 }
 
 type BookmarkProcessingState = NonNullable<PostActionBarProps['bookmark']>['processing'];
+type ReplyProcessingState = NonNullable<PostActionBarProps['reply']>['processing'];
 
 // @ts-expect-error Public processing states must not retain an error state.
 const rejectedErrorProcessingState: BookmarkProcessingState = 'error';
 void rejectedErrorProcessingState;
+
+// @ts-expect-error Reply submission pending belongs to the Composer submit button.
+const rejectedReplyPendingState: ReplyProcessingState = 'pending';
+void rejectedReplyPendingState;
 
 function CatalogStory() {
   return (

@@ -22,7 +22,7 @@ type SocialActionConfig = {
   accessibilityLabel: string;
   count?: number;
   onPress: () => void;
-  processing: PostActionProcessingState;
+  processing: Exclude<PostActionProcessingState, 'pending'>;
 };
 
 type ReplyActionConfig = SocialActionConfig & { controlRef?: Ref<View>; expanded: boolean };
