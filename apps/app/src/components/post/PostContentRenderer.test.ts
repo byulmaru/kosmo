@@ -47,6 +47,7 @@ type RendererProps = {
   document: unknown;
   media: ReadonlyArray<PostMediaItem> | null;
   mediaPresentation?: 'default' | 'hidden';
+  numberOfLines?: number;
   onMediaOpen?: PostMediaOpenHandler;
   postId: string;
 };
@@ -188,6 +189,44 @@ describe('PostContentRenderer', () => {
       true,
     );
     assert.equal(rendered('PostMediaGallery').length, 0);
+  });
+
+  it('요청한 원문 줄 수를 plain text와 document root에 적용한다', async () => {
+    await render({
+      bodyText: '세 줄까지만 표시할 원문',
+      contentWarning: null,
+      document: null,
+      media: [],
+      numberOfLines: 3,
+      postId: 'post-line-limit',
+    });
+
+    assert.equal(
+      rendered('Text').find((node) => node.props.children === '세 줄까지만 표시할 원문')?.props
+        .numberOfLines,
+      3,
+    );
+
+    await render({
+      bodyText: '문서 원문',
+      contentWarning: null,
+      document: {
+        body: {
+          attrs: { sensitiveMedia: false },
+          content: [{ content: [{ text: '문서 원문', type: 'text' }], type: 'paragraph' }],
+          type: 'doc',
+        },
+        version: 1,
+      },
+      media: [],
+      numberOfLines: 3,
+      postId: 'post-document-line-limit',
+    });
+
+    assert.equal(
+      rendered('Text').find((node) => node.props.numberOfLines === 3)?.props.numberOfLines,
+      3,
+    );
   });
 
   it('keeps the canonical content root around warning and revealed body content', async () => {

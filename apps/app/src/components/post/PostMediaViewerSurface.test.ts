@@ -13,6 +13,7 @@ import type { PostMediaViewerSurfaceProps } from './PostMediaViewerSurface';
 const require = createRequire(import.meta.url);
 
 const mockPlatform: { OS: string } = { OS: 'web' };
+let mockWindowHeight = 844;
 let mockReducedMotion = false;
 
 mock.module('react-native', {
@@ -40,6 +41,7 @@ mock.module('react-native', {
     },
     Text: 'Text',
     View: 'View',
+    useWindowDimensions: () => ({ height: mockWindowHeight, width: 390 }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -89,6 +91,7 @@ before(async () => {
 
 afterEach(async () => {
   mockPlatform.OS = 'web';
+  mockWindowHeight = 844;
   mockReducedMotion = false;
   if (renderer) {
     await act(async () => renderer?.unmount());
@@ -293,6 +296,22 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(flattenStyle(byTestId('post-media-viewer-context-rail').props.style).width, 346);
     assert.equal(flattenStyle(findByLabel('이미지 뷰어 닫기').props.style).left, 16);
     assert.equal(queryByTestId('post-media-viewer-compact-detail'), null);
+  });
+
+  it('Compact detail max-height는 viewport 높이의 32%를 192~240px로 제한한다', async () => {
+    mockWindowHeight = 844;
+    await render({ presentation: 'compact' });
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-compact-detail').props.style).maxHeight,
+      240,
+    );
+
+    mockWindowHeight = 390;
+    await render({ presentation: 'compact' });
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-compact-detail').props.style).maxHeight,
+      192,
+    );
   });
 
   it('Compact detail은 Ready·Loading·Error·Unavailable에서 같은 위치를 유지한다', async () => {

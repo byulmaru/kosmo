@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
-import { useCallback, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -10,11 +10,13 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
+import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
+import type { LayoutChangeEvent } from 'react-native';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostContentWarningPresentation } from './PostContentRenderer';
@@ -71,6 +73,7 @@ export function PostLayout({
   mediaPresentation = 'default',
   onDeleted,
   post: postKey,
+  presentation = 'default',
   replyAvailable,
   replySurfacePostId,
 }: {
@@ -78,11 +81,20 @@ export function PostLayout({
   mediaPresentation?: 'default' | 'hidden';
   onDeleted?: () => void;
   post: PostLayout_post$key;
+  presentation?: 'compact' | 'default';
   replyAvailable?: boolean;
   replySurfacePostId?: string;
 }) {
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
+  const [bodyExpanded, setBodyExpanded] = useState(false);
+  const [bodyHasOverflow, setBodyHasOverflow] = useState(false);
+  const compact = presentation === 'compact';
+  const bodyVisible = contentWarningPresentation === 'revealed' || !post.content?.contentWarning;
+  useEffect(() => {
+    setBodyExpanded(false);
+    setBodyHasOverflow(false);
+  }, [post.content?.id]);
   const openViewer = usePostMediaViewerHost();
   const replyBinding = usePostReplyBinding(replySurfacePostId ?? post.id);
   const replyAuthentication = usePostActionAuthentication(replyAvailable ?? Boolean(post.content));
@@ -104,6 +116,9 @@ export function PostLayout({
     },
     [handleDeleted, openViewer, post.id],
   );
+  const handleBodyLayout = useCallback((event: LayoutChangeEvent) => {
+    setBodyHasOverflow(event.nativeEvent.layout.height > typography.md.lineHeight * 3 + 0.5);
+  }, []);
   const reply: PostActionBarProps['reply'] = replyBinding
     ? {
         accessibilityLabel: '답글',
@@ -122,9 +137,19 @@ export function PostLayout({
         ),
       }
     : undefined;
+  const body = (
+    <PostBody
+      contentWarningPresentation={contentWarningPresentation}
+      mediaPresentation={mediaPresentation}
+      numberOfLines={compact && !bodyExpanded ? 3 : undefined}
+      onMediaOpen={mediaPresentation === 'hidden' ? undefined : handleMediaOpen}
+      post={post}
+      size={compact ? 'md' : 'lg'}
+    />
+  );
   return (
-    <View style={styles.root}>
-      <View style={styles.header}>
+    <View style={[styles.root, compact ? styles.compactRoot : null]}>
+      <View style={[styles.header, compact ? styles.compactHeader : null]}>
         <Link asChild href={profileHref}>
           <Pressable
             aria-hidden
@@ -138,7 +163,7 @@ export function PostLayout({
             <Avatar
               imageUri={post.profile.avatar?.url}
               label={post.profile.displayName || post.profile.handle}
-              size={48}
+              size={compact ? 40 : 48}
             />
           </Pressable>
         </Link>
@@ -146,27 +171,85 @@ export function PostLayout({
           <ProfileNameBlock href={profileHref} profile={post.profile} />
         </View>
       </View>
-      <View style={styles.body}>
-        <PostBody
-          contentWarningPresentation={contentWarningPresentation}
-          mediaPresentation={mediaPresentation}
-          onMediaOpen={mediaPresentation === 'hidden' ? undefined : handleMediaOpen}
-          post={post}
-          size="lg"
-        />
-        {source ? <PostSourcePreview source={source} style={styles.source} /> : null}
-        <Text style={[styles.meta, { color: theme.textSecondary }]}>
-          {formatPostDate(post.createdAt)} · {visibilityLabels[post.visibility] ?? post.visibility}
-        </Text>
+      <View style={[styles.body, compact ? styles.compactBody : null]}>
+        {compact ? (
+          <View style={styles.compactBodyRegion} testID="post-layout-body-region">
+            {post.content?.bodyText && bodyVisible ? (
+              <View
+                {...(Platform.OS === 'web'
+                  ? { 'aria-hidden': true }
+                  : {
+                      accessibilityElementsHidden: true,
+                      importantForAccessibility: 'no-hide-descendants' as const,
+                    })}
+                style={styles.bodyMeasureBoundary}
+                testID="post-layout-body-measure-container"
+              >
+                <PostContentPrivacyBoundary
+                  style={styles.bodyMeasurePrivacyBoundary}
+                  testID="post-layout-body-measure-privacy-boundary"
+                >
+                  <Text
+                    accessible={false}
+                    onLayout={handleBodyLayout}
+                    style={[styles.bodyMeasure, { color: theme.text }]}
+                    testID="post-layout-body-measure"
+                  >
+                    {post.content.bodyText}
+                  </Text>
+                </PostContentPrivacyBoundary>
+              </View>
+            ) : null}
+            {bodyExpanded ? (
+              <ScrollView
+                accessibilityLabel="펼친 원문"
+                style={styles.bodyScroll}
+                tabIndex={0}
+                testID="post-layout-body-scroll"
+              >
+                {body}
+              </ScrollView>
+            ) : (
+              <View style={styles.collapsedBody} testID="post-layout-collapsed-body">
+                {body}
+              </View>
+            )}
+            {bodyHasOverflow && bodyVisible && post.content?.bodyText ? (
+              <Pressable
+                accessibilityLabel={bodyExpanded ? '원문 접기' : '원문 더 보기'}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: bodyExpanded }}
+                aria-expanded={bodyExpanded}
+                onPress={() => setBodyExpanded((value) => !value)}
+                style={styles.moreButton}
+              >
+                <Text style={[styles.moreText, { color: theme.textSecondary }]}>
+                  {bodyExpanded ? '접기' : '더 보기'}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : (
+          body
+        )}
+        {!compact && source ? <PostSourcePreview source={source} style={styles.source} /> : null}
+        {!compact ? (
+          <Text style={[styles.meta, { color: theme.textSecondary }]}>
+            {formatPostDate(post.createdAt)} ·{' '}
+            {visibilityLabels[post.visibility] ?? post.visibility}
+          </Text>
+        ) : null}
         <View style={styles.engagement} testID="post-layout-engagement">
           <PostActionSurface
             actionBarStyle={[styles.actionBarFrame, { borderColor: theme.borderSubtle }]}
             onDeleted={handleDeleted}
+            reactionSummaryStyle={compact ? styles.compactReactionSummary : undefined}
             reply={reply}
             socialActionTarget={socialActionTarget!}
           />
         </View>
-        {replyBinding?.expanded &&
+        {!compact &&
+        replyBinding?.expanded &&
         replyAuthentication.execution.kind === 'enabled' &&
         replyBinding?.profile &&
         post.content &&
@@ -191,10 +274,30 @@ export function PostLayout({
 
 const styles = StyleSheet.create({
   root: { gap: spacing.sm, minWidth: 0 },
+  compactRoot: { flexShrink: 1, gap: spacing.xs, minHeight: 0 },
   header: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
+  compactHeader: { alignItems: 'center', gap: spacing.sm },
   avatar: { borderRadius: radii.full },
   headerContent: { flex: 1, minWidth: 0 },
   body: { minWidth: 0 },
+  compactBody: { flexShrink: 1, minHeight: 0 },
+  compactBodyRegion: { flexShrink: 1, minHeight: 0, position: 'relative' },
+  bodyMeasureBoundary: {
+    height: 0,
+    left: 0,
+    overflow: 'hidden',
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  bodyMeasurePrivacyBoundary: { minWidth: 0 },
+  bodyMeasure: {
+    fontFamily: 'Pretendard',
+    opacity: 0,
+    ...typography.md,
+  },
+  collapsedBody: { flexShrink: 1, minHeight: 0, overflow: 'hidden' },
+  bodyScroll: { flexShrink: 1, minHeight: 0 },
   actionBarFrame: {
     borderBottomWidth: 1,
     borderTopWidth: 1,
@@ -202,6 +305,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   engagement: { gap: spacing.xs, marginTop: spacing.sm, width: '100%' },
+  compactReactionSummary: { display: 'none' },
+  moreButton: {
+    alignSelf: 'flex-start',
+    flexShrink: 0,
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  moreText: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   meta: { fontFamily: 'SUIT', marginTop: 6, textAlign: 'right', ...typography.xsm },
   source: { marginTop: spacing.sm },
   replySurface: { marginTop: spacing.lg },

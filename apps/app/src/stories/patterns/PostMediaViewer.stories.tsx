@@ -58,6 +58,17 @@ const wideRailCurrentPost = {
   }),
   viewerReactions: [],
 };
+const compactLongBodyPost = {
+  ...post({
+    bodyText: Array.from(
+      { length: 12 },
+      (_, index) => `${index + 1}번째 줄까지 이어지는 Compact Viewer 원문입니다.`,
+    ).join('\n'),
+    id: 'compact-detail-long',
+    repostCount: 3,
+  }),
+  viewerReactions: [],
+};
 const wideRailDescendantPost = {
   ...post({
     bodyText: '같은 하늘을 보고 있던 답글도 이어서 확인할 수 있어요.',
@@ -111,6 +122,7 @@ function mediaForCount(count: number): PostMediaItem[] {
 }
 
 function PostMediaViewerCatalog({
+  compactSurfacePostId = wideRailCurrentPost.id,
   currentIndex,
   mediaCount,
   onClose,
@@ -119,7 +131,7 @@ function PostMediaViewerCatalog({
   onRetry,
   presentation,
   viewState,
-}: StoryArgs) {
+}: StoryArgs & { compactSurfacePostId?: string }) {
   const { height } = useWindowDimensions();
   const media = mediaForCount(mediaCount);
   const clampedIndex = Math.max(0, Math.min(media.length - 1, Math.trunc(currentIndex)));
@@ -138,7 +150,7 @@ function PostMediaViewerCatalog({
       {presentation === 'compact' ? (
         <PostMediaViewerSurface
           {...surfaceProps}
-          compactDetail={<ViewerCompactDetailFixture />}
+          compactDetail={<ViewerCompactDetailFixture surfacePostId={compactSurfacePostId} />}
           presentation="compact"
         />
       ) : (
@@ -152,14 +164,14 @@ function PostMediaViewerCatalog({
   );
 }
 
-function ViewerCompactDetailFixture() {
+function ViewerCompactDetailFixture({ surfacePostId }: { surfacePostId: string }) {
   const viewerProfileId = wideRailSession.currentSession.selectedProfile?.id;
   if (!viewerProfileId) {
     throw new globalThis.Error('Post Media Viewer detail fixture에는 선택 Profile이 필요합니다.');
   }
   const data = useLazyLoadQuery<PostMediaViewerStoryQuery>(
     PostMediaViewerStoryOperation,
-    { surfacePostId: wideRailCurrentPost.id, viewerProfileId },
+    { surfacePostId, viewerProfileId },
     { fetchPolicy: 'store-or-network' },
   );
 
@@ -179,6 +191,7 @@ function ViewerCompactDetailFixture() {
           contentWarningPresentation="revealed"
           mediaPresentation="hidden"
           post={data.surface.layout}
+          presentation="compact"
           replyAvailable
         />
       </PostReplyCoordinatorProvider>
@@ -242,6 +255,7 @@ const meta = {
   excludeStories: [
     'BoundaryMovementContract',
     'CompactProductionActionSurfaceContract',
+    'CompactLongBodyContract',
     'ErrorRetryContract',
     'PlaygroundInteractionContract',
     'WideRailCompositionContract',
@@ -352,7 +366,9 @@ export const PlaygroundInteractionContract: Story = {
         const detail = canvas.getByTestId('post-media-viewer-compact-detail');
         expect(within(detail).getByText('코스모 작가')).toBeVisible();
         expect(
-          within(detail).getByText('코스모에서 함께 나누고 싶은 오늘의 이야기입니다.'),
+          within(detail)
+            .getAllByText('코스모에서 함께 나누고 싶은 오늘의 이야기입니다.')
+            .find((element) => element.dataset.testid !== 'post-layout-body-measure'),
         ).toBeVisible();
         const actionBar = within(detail).getByRole('toolbar', { name: '액션 바' });
 
@@ -385,9 +401,12 @@ export const CompactProductionActionSurfaceContract: Story = {
     await step('production detail과 action 순서', async () => {
       expect(within(detail).getByText('코스모 작가')).toBeVisible();
       expect(
-        within(detail).getByText('코스모에서 함께 나누고 싶은 오늘의 이야기입니다.'),
+        within(detail)
+          .getAllByText('코스모에서 함께 나누고 싶은 오늘의 이야기입니다.')
+          .find((element) => element.dataset.testid !== 'post-layout-body-measure'),
       ).toBeVisible();
-      expect(within(detail).getByText(/조용히 공개/)).toBeVisible();
+      expect(within(detail).queryByText(/조용히 공개/)).toBeNull();
+      expect(within(detail).queryByRole('button', { name: /원문 (더 보기|접기)/ })).toBeNull();
       expect(within(detail).queryByRole('img', { name: '스토리 첨부 이미지 1' })).toBeNull();
       expect(
         within(actionBar)
@@ -429,6 +448,65 @@ export const CompactProductionActionSurfaceContract: Story = {
       expect(image).toBeVisible();
       await userEvent.click(backdrop);
       await waitFor(() => expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull());
+    });
+  },
+};
+
+export const CompactLongBodyContract: Story = {
+  args: { currentIndex: 0, mediaCount: 4, presentation: 'compact', viewState: 'ready' },
+  globals: { theme: 'light', viewport: { isRotated: false, value: 'compactViewerShort' } },
+  parameters: {
+    relay: {
+      data: {
+        currentSession: wideRailSession.currentSession,
+        me: wideRailSession.me,
+        surface: compactLongBodyPost,
+        viewerProfile: wideRailSession.currentSession.selectedProfile,
+      },
+    },
+    viewport: {
+      options: {
+        compactViewerShort: {
+          name: 'Compact Viewer short',
+          styles: { height: '390px', width: '390px' },
+          type: 'mobile',
+        },
+      },
+    },
+  },
+  render: (args) => (
+    <PostMediaViewerCatalog {...args} compactSurfacePostId={compactLongBodyPost.id} />
+  ),
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const detail = await canvas.findByTestId('post-media-viewer-compact-detail');
+    const mediaPane = canvas.getByTestId('post-media-viewer-media-pane');
+    const actionBar = within(detail).getByRole('toolbar', { name: '액션 바' });
+
+    await step('낮은 viewport에서도 Compact detail 상한과 고정 영역을 보존한다', async () => {
+      await waitFor(() => expect(window.getComputedStyle(detail).maxHeight).toBe('192px'));
+      expect(detail.getBoundingClientRect().height).toBeLessThanOrEqual(192);
+      expect(mediaPane.getBoundingClientRect().height).toBeGreaterThan(0);
+      expect(actionBar).toBeVisible();
+      expect(await within(detail).findByRole('button', { name: '원문 더 보기' })).toBeVisible();
+      const measureBoundary = canvas.getByTestId('post-layout-body-measure-container');
+      expect(measureBoundary).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    await step('펼친 원문만 scroll하고 Action Bar는 밖에 고정한다', async () => {
+      await userEvent.click(within(detail).getByRole('button', { name: '원문 더 보기' }));
+      const bodyScroll = await within(detail).findByTestId('post-layout-body-scroll');
+      expect(bodyScroll.contains(actionBar)).toBe(false);
+      expect(actionBar).toBeVisible();
+      expect(within(detail).getByRole('button', { name: '원문 접기' })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+      await waitFor(() => expect(bodyScroll.clientHeight).toBeGreaterThanOrEqual(24));
+      expect(bodyScroll.scrollHeight).toBeGreaterThan(bodyScroll.clientHeight);
+      const surface = canvas.getByTestId('post-media-viewer-surface');
+      expect(surface.scrollHeight).toBe(surface.clientHeight);
+      expect(detail.scrollHeight).toBe(detail.clientHeight);
     });
   },
 };
