@@ -1,4 +1,5 @@
 import posthogClient from 'posthog-js';
+import { getPublicConfig } from '@/config/public';
 import type { PostHog, PostHogConfig } from 'posthog-js';
 import type { AnalyticsEventArgs } from './events';
 
@@ -6,22 +7,27 @@ const POSTHOG_USER_ID = '$user_id';
 
 let client: PostHog | null | undefined;
 
-export function initializeAnalytics(
-  apiKey: string | undefined = process.env.EXPO_PUBLIC_POSTHOG_KEY,
-  apiHost: string | undefined = process.env.EXPO_PUBLIC_POSTHOG_HOST,
-): PostHog | null {
+function initializeAnalytics(): PostHog | null {
   if (client !== undefined) {
     return client;
   }
 
-  if (!apiKey || !apiHost) {
+  if (getPublicConfig('channel') !== 'prod') {
+    client = null;
+    return client;
+  }
+
+  const configuredApiKey = getPublicConfig('posthogKey');
+  const configuredApiHost = getPublicConfig('posthogHost');
+
+  if (!configuredApiKey || !configuredApiHost) {
     client = null;
     return client;
   }
 
   try {
-    client = posthogClient.init(apiKey, {
-      api_host: apiHost,
+    client = posthogClient.init(configuredApiKey, {
+      api_host: configuredApiHost,
       defaults: '2026-05-30',
       mask_personal_data_properties: false,
     } satisfies Partial<PostHogConfig>);
@@ -32,7 +38,7 @@ export function initializeAnalytics(
   return client;
 }
 
-export function getAnalyticsClient(): PostHog | null {
+function getAnalyticsClient(): PostHog | null {
   return initializeAnalytics();
 }
 
@@ -85,8 +91,4 @@ export function clearAnalytics(): void {
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }
-}
-
-export function resetAnalyticsForTests(): void {
-  client = undefined;
 }

@@ -8,7 +8,7 @@ import {
 import { expect, test } from './fixtures';
 import { toGlobalId } from './graphql';
 
-const posthogOrigin = 'https://posthog.e2e.invalid';
+const posthogRoute = /https:\/\/(?:us|us-assets)\.i\.posthog\.com\/.*/u;
 const noAnalyticsOrigin = `http://127.0.0.1:${4174 + Number(process.env.KOSMO_TEST_PORT_OFFSET ?? 0)}`;
 
 type PostHogPayload = {
@@ -56,7 +56,7 @@ test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
-test('PostHog 설정이 없는 Web build는 analytics 요청 없이 정상 렌더링된다', async ({ page }) => {
+test('dev channel Web runtime은 analytics 요청 없이 정상 렌더링된다', async ({ page }) => {
   const analyticsRequests: string[] = [];
   page.on('request', (request) => {
     if (/posthog|openpanel/u.test(request.url())) {
@@ -106,7 +106,7 @@ test('Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote co
       status: 200,
     });
   });
-  await page.route(`${posthogOrigin}/**`, async (route) => {
+  await page.route(posthogRoute, async (route) => {
     const request = route.request();
     posthogRequests.push(request.url());
     if (request.method() === 'POST' && new URL(request.url()).pathname === '/e/') {
@@ -268,7 +268,7 @@ test('Account identity는 A→guest→B에서 분리되고 endpoint 실패에도
   });
   const payloads: PostHogPayload[] = [];
 
-  await page.route(`${posthogOrigin}/**`, async (route) => {
+  await page.route(posthogRoute, async (route) => {
     if (route.request().method() === 'POST') {
       payloads.push(...readPostHogPayloads(route.request().postDataBuffer()));
     }
@@ -307,8 +307,8 @@ test('Account identity는 A→guest→B에서 분리되고 endpoint 실패에도
     )
     .not.toBeUndefined();
 
-  await page.unroute(`${posthogOrigin}/**`);
-  await page.route(`${posthogOrigin}/**`, async (route) => {
+  await page.unroute(posthogRoute);
+  await page.route(posthogRoute, async (route) => {
     if (route.request().method() === 'POST') {
       payloads.push(...readPostHogPayloads(route.request().postDataBuffer()));
     }

@@ -22,8 +22,6 @@ const databaseUrl =
   defaultDatabaseUrl;
 const apiOrigin = `http://${host}:${apiPort}`;
 const webOrigin = `http://${host}:${webPort}`;
-const configuredWebOrigin =
-  process.env.KOSMO_TEST_CONFIGURED_WEB_ORIGIN ?? 'https://configured-web-origin.invalid';
 const noAnalyticsWebOrigin = `http://${host}:${noAnalyticsWebPort}`;
 const oidcOrigin = `http://${host}:${oidcPort}`;
 const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
@@ -140,12 +138,7 @@ export default defineConfig({
       command: 'pnpm --dir ../app build && node --import tsx src/server/index.ts',
       env: {
         DATABASE_URL: databaseUrl,
-        EXPO_PUBLIC_API_ORIGIN: apiOrigin,
-        EXPO_PUBLIC_OIDC_ISSUER: oidcOrigin,
-        EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
-        EXPO_PUBLIC_POSTHOG_HOST: 'https://posthog.e2e.invalid',
-        EXPO_PUBLIC_POSTHOG_KEY: 'posthog-e2e-project-key',
-        EXPO_PUBLIC_WEB_ORIGIN: configuredWebOrigin,
+        ENVIRONMENT: 'prod',
         EXPO_WEB_ROOT: '../app/dist',
         OIDC_CLIENT_SECRET: oidcClientSecret,
         PORT: String(webPort),
@@ -162,17 +155,11 @@ export default defineConfig({
       url: `${webOrigin}/health`,
     },
     {
-      command:
-        'pnpm --dir ../app relay && pnpm --dir ../app exec expo export --clear --platform web --output-dir dist/no-analytics && node --import tsx src/server/index.ts',
+      command: 'node --import tsx src/server/index.ts',
       env: {
         DATABASE_URL: databaseUrl,
-        EXPO_PUBLIC_API_ORIGIN: apiOrigin,
-        EXPO_PUBLIC_OIDC_ISSUER: oidcOrigin,
-        EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
-        EXPO_PUBLIC_POSTHOG_HOST: '',
-        EXPO_PUBLIC_POSTHOG_KEY: '',
-        EXPO_PUBLIC_WEB_ORIGIN: noAnalyticsWebOrigin,
-        EXPO_WEB_ROOT: '../app/dist/no-analytics',
+        ENVIRONMENT: 'dev',
+        EXPO_WEB_ROOT: '../app/dist',
         OIDC_CLIENT_SECRET: oidcClientSecret,
         PORT: String(noAnalyticsWebPort),
         PUBLIC_API_ORIGIN: apiOrigin,
@@ -184,7 +171,7 @@ export default defineConfig({
         TEMPORAL_NAMESPACE: 'test',
       },
       reuseExistingServer: false,
-      timeout: 120_000,
+      timeout: 60_000,
       url: `${noAnalyticsWebOrigin}/health`,
     },
   ],

@@ -60,6 +60,21 @@ app.onError((cause, c) => {
 app.get('/health', (c) => c.text('ok'));
 app.all('/health', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
 
+app.get('/channel.js', (c) => {
+  const channel = process.env.ENVIRONMENT;
+  if (channel !== 'dev' && channel !== 'prod') {
+    return c.text('ENVIRONMENT must be dev or prod', 500, {
+      'Cache-Control': 'no-store',
+    });
+  }
+
+  return c.body(`globalThis.__KOSMO_CHANNEL__ = ${JSON.stringify(channel)};\n`, 200, {
+    'Cache-Control': 'no-store',
+    'Content-Type': 'application/javascript; charset=UTF-8',
+  });
+});
+app.all('/channel.js', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
+
 app.route('/', loginRoutes);
 app.route('/', logoutRoutes);
 app.route('/', graphqlRoutes);

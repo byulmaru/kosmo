@@ -12,9 +12,6 @@ on:
 permissions:
   contents: read
 
-env:
-  ENVIRONMENT: prod
-
 jobs:
   production_deploy:
     name: >-
@@ -71,19 +68,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Load production Sentry DSN from Vault
-        id: sentry
-        uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
-        with:
-          url: ${{ vars.VAULT_ADDR }}
-          path: github-actions
-          method: jwt
-          role: kosmo-build-prod
-          jwtGithubAudience: ${{ vars.VAULT_GITHUB_ACTIONS_AUDIENCE }}
-          exportEnv: false
-          secrets: |
-            secret/data/kubernetes/kosmo/prod EXPO_PUBLIC_SENTRY_DSN | EXPO_PUBLIC_SENTRY_DSN
-
       - name: Extract production release metadata
         id: meta
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
@@ -109,16 +93,11 @@ jobs:
             app-build
             runtime
           build-args: |
-            EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
-            EXPO_PUBLIC_OPENPANEL_CLIENT_ID=${{ vars.EXPO_PUBLIC_OPENPANEL_CLIENT_ID }}
-            EXPO_PUBLIC_POSTHOG_KEY=${{ vars.EXPO_PUBLIC_POSTHOG_KEY }}
-            EXPO_PUBLIC_POSTHOG_HOST=${{ vars.EXPO_PUBLIC_POSTHOG_HOST }}
-            EXPO_PUBLIC_SENTRY_DSN=${{ steps.sentry.outputs.EXPO_PUBLIC_SENTRY_DSN }}
             SENTRY_ORG=${{ vars.SENTRY_ORG }}
             SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
             SENTRY_RELEASE=kosmo@${{ env.TARGET_SHA }}
             SENTRY_UPLOAD_REQUIRED=1
-          # Public client settings are intentionally inlined into the Web bundle; build args make changes part of the cache key.
+          # Public client settings come from the channel configuration in the Web bundle.
           secret-envs: |
             sentry_auth_token=SENTRY_AUTH_TOKEN
 

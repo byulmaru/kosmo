@@ -14,11 +14,6 @@ const config: StorybookConfig = {
   viteFinal: (viteConfig) => ({
     ...viteConfig,
     publicDir: false,
-    define: {
-      ...viteConfig.define,
-      'process.env.EXPO_PUBLIC_ALLOW_INSECURE_ORIGIN': JSON.stringify('0'),
-      'process.env.EXPO_PUBLIC_WEB_ORIGIN': JSON.stringify('https://canonical.story.kosmo.test'),
-    },
     plugins: [relayVitePlugin(), ...(viteConfig.plugins ?? [])],
     resolve: {
       ...viteConfig.resolve,

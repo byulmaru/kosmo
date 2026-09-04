@@ -2,9 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { executeGraphQLRequest, formatGraphQLError } from './network';
 
-process.env.EXPO_PUBLIC_API_ORIGIN = 'http://127.0.0.1:4200';
-process.env.EXPO_PUBLIC_WEB_ORIGIN = 'http://127.0.0.1:5173';
-
 const request = {
   cacheID: 'test',
   id: null,
@@ -35,7 +32,7 @@ describe('Relay 네트워크', () => {
       restoreNavigator();
     }
 
-    assert.equal(capturedUrl, 'http://127.0.0.1:4200/graphql');
+    assert.equal(capturedUrl, 'https://api.kos.moe/graphql');
     assert.equal(captured?.credentials, 'omit');
     assert.equal(
       (captured?.headers as Record<string, string>).authorization,
@@ -57,11 +54,25 @@ describe('Relay 네트워크', () => {
       return new Response(JSON.stringify({ data: {} }), { status: 200 });
     };
 
-    await executeGraphQLRequest(request, {}, 'must-not-leave-web', fakeFetch);
+    const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { location: { origin: 'https://kos.moe' } },
+    });
 
-    assert.equal(capturedUrl, 'http://127.0.0.1:5173/graphql');
-    assert.equal(captured?.credentials, 'include');
-    assert.equal((captured?.headers as Record<string, string>).authorization, undefined);
+    try {
+      await executeGraphQLRequest(request, {}, 'must-not-leave-web', fakeFetch);
+
+      assert.equal(capturedUrl, 'https://kos.moe/graphql');
+      assert.equal(captured?.credentials, 'include');
+      assert.equal((captured?.headers as Record<string, string>).authorization, undefined);
+    } finally {
+      if (windowDescriptor) {
+        Object.defineProperty(globalThis, 'window', windowDescriptor);
+      } else {
+        Reflect.deleteProperty(globalThis, 'window');
+      }
+    }
   });
 
   it('Error와 알 수 없는 실패를 공통 boundary 형식으로 변환한다', () => {

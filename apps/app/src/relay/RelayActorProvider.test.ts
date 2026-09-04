@@ -58,9 +58,6 @@ let useRelayActor: () => RelayActorBoundary;
 let useRelayEnvironment: () => Environment;
 
 before(async () => {
-  process.env.EXPO_PUBLIC_API_ORIGIN = 'http://127.0.0.1:4000';
-  process.env.EXPO_PUBLIC_OIDC_ISSUER = 'https://oidc.example.com';
-  process.env.EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID = 'kosmo-native';
   ({ RelayActorProvider, useRelayActor } = await import('./RelayActorProvider'));
   ({ useRelayEnvironment } = await import('react-relay'));
 });

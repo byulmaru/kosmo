@@ -5,7 +5,6 @@ on:
     branches: [main]
 
 env:
-  ENVIRONMENT: dev
   SENTRY_RELEASE: kosmo@${{ github.sha }}
 
 concurrency:
@@ -19,7 +18,6 @@ jobs:
     permissions:
       actions: read
       contents: read
-      id-token: write
       packages: write
     outputs:
       image_digest: ${{ steps.build.outputs.digest }}
@@ -29,13 +27,6 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ github.sha }}
-
-      - name: Connect to Tailscale
-        uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
-        with:
-          oauth-client-id: ${{ vars.TAILSCALE_OAUTH_CLIENT_ID }}
-          audience: ${{ vars.TAILSCALE_AUDIENCE }}
-          tags: tag:github-actions
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
@@ -48,19 +39,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Load Sentry DSN from Vault
-        id: sentry
-        uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
-        with:
-          url: ${{ vars.VAULT_ADDR }}
-          path: github-actions
-          method: jwt
-          role: kosmo-build-dev
-          jwtGithubAudience: ${{ vars.VAULT_GITHUB_ACTIONS_AUDIENCE }}
-          exportEnv: false
-          secrets: |
-            secret/data/kubernetes/kosmo/${{ env.ENVIRONMENT }} EXPO_PUBLIC_SENTRY_DSN | EXPO_PUBLIC_SENTRY_DSN
 
       - name: Extract Docker metadata
         id: meta
@@ -89,9 +67,6 @@ jobs:
             app-build
             runtime
           build-args: |
-            EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
-            EXPO_PUBLIC_OPENPANEL_CLIENT_ID=
-            EXPO_PUBLIC_SENTRY_DSN=${{ steps.sentry.outputs.EXPO_PUBLIC_SENTRY_DSN }}
             SENTRY_ORG=${{ vars.SENTRY_ORG }}
             SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}

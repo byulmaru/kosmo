@@ -1,8 +1,23 @@
 import assert from 'node:assert/strict';
-import { afterEach, describe, it, mock } from 'node:test';
+import { after, afterEach, before, describe, it, mock } from 'node:test';
 import { requestWebLogout } from './logout';
 
-process.env.EXPO_PUBLIC_WEB_ORIGIN = 'http://127.0.0.1:5173';
+const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+
+before(() => {
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { location: { origin: 'https://kos.moe' } },
+  });
+});
+
+after(() => {
+  if (originalWindow) {
+    Object.defineProperty(globalThis, 'window', originalWindow);
+  } else {
+    Reflect.deleteProperty(globalThis, 'window');
+  }
+});
 
 afterEach(() => mock.restoreAll());
 
@@ -18,7 +33,7 @@ describe('Web 로그아웃 요청', () => {
 
     assert.equal(fetchMock.mock.callCount(), 1);
     const [capturedUrl, capturedInit] = fetchMock.mock.calls[0].arguments;
-    assert.equal(capturedUrl, 'http://127.0.0.1:5173/logout');
+    assert.equal(capturedUrl, 'https://kos.moe/logout');
     assert.deepEqual(capturedInit, {
       cache: 'no-store',
       credentials: 'include',

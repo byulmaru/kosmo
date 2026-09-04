@@ -39,22 +39,13 @@ RUN test -e apps/app/node_modules/.bin/relay-compiler \
 
 FROM deps AS app-build
 
-ARG EXPO_PUBLIC_ENVIRONMENT
-ARG EXPO_PUBLIC_OPENPANEL_CLIENT_ID
-ARG EXPO_PUBLIC_POSTHOG_KEY
-ARG EXPO_PUBLIC_POSTHOG_HOST
-ARG EXPO_PUBLIC_RELEASE_TAG
-ARG EXPO_PUBLIC_SENTRY_DSN
 ARG SENTRY_ORG
 ARG SENTRY_PROJECT
 ARG SENTRY_RELEASE
 ARG SENTRY_UPLOAD_REQUIRED=0
 
-ENV EXPO_PUBLIC_ENVIRONMENT=$EXPO_PUBLIC_ENVIRONMENT
-ENV EXPO_PUBLIC_OPENPANEL_CLIENT_ID=$EXPO_PUBLIC_OPENPANEL_CLIENT_ID
-ENV EXPO_PUBLIC_RELEASE_TAG=$EXPO_PUBLIC_RELEASE_TAG
-ENV EXPO_PUBLIC_SENTRY_RELEASE=$SENTRY_RELEASE
 ENV SENTRY_RELEASE=$SENTRY_RELEASE
+ENV EXPO_PUBLIC_SENTRY_RELEASE=$SENTRY_RELEASE
 ENV SENTRY_UPLOAD_REQUIRED=$SENTRY_UPLOAD_REQUIRED
 
 COPY tsconfig.json ./
@@ -62,7 +53,7 @@ COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts
 
-# Public PostHog settings are intentionally inlined into the Web asset; build args also invalidate this step when they change.
+# Public client settings are selected from the channel configuration in the Web bundle.
 RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN,required=false \
   pnpm build:sentry-artifacts
 RUN find apps/app/dist -type f \( \

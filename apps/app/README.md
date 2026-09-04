@@ -11,9 +11,11 @@ pnpm --filter @kosmo/app android
 pnpm --filter @kosmo/app web
 ```
 
-Set `EXPO_PUBLIC_API_ORIGIN`, `EXPO_PUBLIC_OIDC_ISSUER`, and `EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID` for native authentication. When Expo evaluates `app.config.ts`, `PUBLIC_API_ORIGIN`, `PUBLIC_OIDC_ISSUER`, and `PUBLIC_OIDC_NATIVE_CLIENT_ID` are mapped to those names unless an `EXPO_PUBLIC_*` override is already set. Browser builds keep same-origin `/login` and `/graphql` through `@kosmo/web`.
+공개 client 설정은 [`src/config/public.ts`](src/config/public.ts)의 공용 설정과 `dev`·`prod` 채널별 값으로 관리한다. OIDC issuer·native client ID·browser Sentry DSN은 공용값으로, API·Web origin은 채널별 값으로 둔다. PostHog는 `prod` 채널에서만 활성화한다. Native는 local development에서 `dev`, release binary에서 `prod` 채널을 선택하고, Web은 same-origin BFF가 제공하는 채널을 선택한다. Browser builds keep same-origin `/login` and `/graphql` through `@kosmo/web`.
 
-Native `EXPO_PUBLIC_API_ORIGIN` must be an HTTPS origin. Loopback HTTP is accepted for local development; a non-loopback HTTP origin requires the explicit development-only `EXPO_PUBLIC_ALLOW_INSECURE_ORIGIN=1` override. SecureStore sessions are bound to the normalized API origin, issuer, and native client ID, and are discarded instead of being sent after a configuration change.
+로컬에서 `pnpm --filter @kosmo/app web`을 직접 실행할 때는 `public/channel.js`가 `dev` 채널을 제공합니다.
+
+Native 공개 설정은 선택된 채널의 API origin, OIDC issuer와 native client ID를 사용한다. SecureStore sessions are bound to those values and are discarded instead of being sent after a configuration change.
 
 Native OIDC uses Expo AuthSession with the `kosmo://login/callback` redirect. Register that exact URI with the provider and test login in a development or standalone build; Expo Go cannot use the custom callback scheme for this flow.
 
@@ -62,7 +64,7 @@ keytool -list -v -keystore kosmo-android-upload.jks
 base64 < kosmo-android-upload.jks | tr -d '\n'
 ```
 
-base64 결과와 password는 shell history, 저장소, GitHub 로그에 남기지 말고 위 Vault field에만 기록한다. upload key를 바꿀 때는 Vault field만 교체하지 말고 Play Console의 upload key reset 절차를 먼저 완료한다. 실제 Play Store 설치·업데이트·실기기 launch와 native login/GraphQL 검증은 PROD-287의 책임이며, 이 workflow는 API/OIDC 환경값이나 ADB/device smoke를 요구하지 않는다.
+base64 결과와 password는 shell history, 저장소, GitHub 로그에 남기지 말고 위 Vault field에만 기록한다. upload key를 바꿀 때는 Vault field만 교체하지 말고 Play Console의 upload key reset 절차를 먼저 완료한다. 실제 Play Store 설치·업데이트·실기기 launch와 native login/GraphQL 검증은 PROD-287의 책임이며, 이 workflow는 공개 client 설정을 주입하지 않는다.
 
 ## iOS App Store Connect upload
 

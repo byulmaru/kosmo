@@ -1,9 +1,5 @@
 import type { AnalyticsEventArgs } from './events';
 
-export function initializeAnalytics(): null {
-  return null;
-}
-
 export function trackAnalytics(...args: AnalyticsEventArgs): void {
   void args;
 }

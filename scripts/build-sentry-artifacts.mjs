@@ -59,14 +59,12 @@ for (const mapFile of mapFiles) {
 }
 
 const authToken = process.env.SENTRY_AUTH_TOKEN;
-const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 const organization = process.env.SENTRY_ORG;
 const project = process.env.SENTRY_PROJECT;
 const release = process.env.SENTRY_RELEASE;
 const uploadRequired = process.env.SENTRY_UPLOAD_REQUIRED === '1';
 const missingUploadConfiguration = [
   !authToken && 'SENTRY_AUTH_TOKEN',
-  !dsn && 'EXPO_PUBLIC_SENTRY_DSN',
   !organization && 'SENTRY_ORG',
   !project && 'SENTRY_PROJECT',
   !release && 'SENTRY_RELEASE',

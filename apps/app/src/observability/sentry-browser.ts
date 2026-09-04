@@ -1,8 +1,10 @@
 import * as Sentry from '@sentry/react';
+import { getPublicConfig } from '@/config/public';
 import type { ErrorInfo } from 'react';
 
-const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
-const environment = process.env.EXPO_PUBLIC_ENVIRONMENT;
+const channel = getPublicConfig('channel');
+const dsn = getPublicConfig('sentryDsn');
+const environment = channel;
 const release = process.env.EXPO_PUBLIC_SENTRY_RELEASE;
 const enabled = Boolean(dsn && environment && release);
 
