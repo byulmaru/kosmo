@@ -20,6 +20,11 @@ jobs:
     environment: prod
     env:
       EXPO_NO_GIT_STATUS: '1'
+      SENTRY_ENVIRONMENT: prod
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+      SENTRY_RELEASE: ${{ github.sha }}
+      EXPO_PUBLIC_SENTRY_RELEASE: ${{ github.sha }}
 
     steps:
       - name: Checkout repository
@@ -105,4 +110,5 @@ jobs:
           IOS_APP_STORE_PROVISIONING_PROFILE_BASE64: ${{ steps.ios_signing.outputs.IOS_APP_STORE_PROVISIONING_PROFILE_BASE64 }}
           IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ steps.ios_signing.outputs.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
           IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ steps.ios_signing.outputs.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: bundle exec fastlane ios build_and_upload_ios
