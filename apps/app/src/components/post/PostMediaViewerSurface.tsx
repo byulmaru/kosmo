@@ -11,6 +11,7 @@ import {
 import { IconButton } from '@/components/ui/IconButton';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
+import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import type { ReactElement } from 'react';
 import type { PressableStateCallbackType, ViewStyle } from 'react-native';
 import type { PostMediaItem } from './PostMediaImage';
@@ -88,15 +89,20 @@ export function PostMediaViewerSurface({
             testID="post-media-viewer-media-viewport"
           >
             {viewState === 'ready' && currentMedia?.url ? (
-              <Image
-                accessibilityLabel={imageName}
-                accessibilityRole="image"
-                accessibilityState={{ busy: false }}
-                resizeMode="contain"
-                source={{ uri: currentMedia.url }}
-                style={styles.image}
-                testID="post-media-viewer-image"
-              />
+              <PostContentPrivacyBoundary
+                style={styles.imagePrivacyBoundary}
+                testID="post-media-viewer-image-privacy-boundary"
+              >
+                <Image
+                  accessibilityLabel={imageName}
+                  accessibilityRole="image"
+                  accessibilityState={{ busy: false }}
+                  resizeMode="contain"
+                  source={{ uri: currentMedia.url }}
+                  style={styles.image}
+                  testID="post-media-viewer-image"
+                />
+              </PostContentPrivacyBoundary>
             ) : null}
           </View>
 
@@ -358,6 +364,7 @@ const styles = StyleSheet.create({
     top: 0,
     width: '100%',
   },
+  imagePrivacyBoundary: { height: '100%', width: '100%' },
   closeButton: { position: 'absolute', top: space[16], zIndex: 2 },
   compactCloseButton: { right: space[16] },
   wideCloseButton: { left: space[16] },
