@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { before, beforeEach, describe, it, mock } from 'node:test';
+import { after, beforeEach, describe, it, mock } from 'node:test';
 import type { PostHogConfig } from 'posthog-js';
 import type * as AnalyticsModule from './client.web';
 
@@ -63,6 +63,14 @@ class FakePostHog {
 const instances: FakePostHog[] = [];
 const initCalls: Array<{ token: string; config: Partial<PostHogConfig> }> = [];
 let constructorFails = false;
+const globals = globalThis as typeof globalThis & { __KOSMO_CHANNEL__?: unknown };
+const originalChannel = globals.__KOSMO_CHANNEL__;
+const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+Object.defineProperty(globalThis, 'document', {
+  configurable: true,
+  value: {},
+});
+globals.__KOSMO_CHANNEL__ = 'prod';
 
 mock.module('posthog-js', {
   exports: {
@@ -82,40 +90,48 @@ mock.module('posthog-js', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let analytics: typeof AnalyticsModule;
+let moduleInstance = 0;
 
-before(async () => {
-  analytics = await import('./client.web');
-});
-
-beforeEach(() => {
-  analytics.resetAnalyticsForTests();
+beforeEach(async () => {
+  globals.__KOSMO_CHANNEL__ = 'prod';
+  analytics = await import(
+    new URL(`./client.web.ts?test=${++moduleInstance}`, import.meta.url).href
+  );
   instances.length = 0;
   initCalls.length = 0;
   constructorFails = false;
 });
 
+after(() => {
+  if (originalDocument) {
+    Object.defineProperty(globalThis, 'document', originalDocument);
+  } else {
+    Reflect.deleteProperty(globalThis, 'document');
+  }
+  if (originalChannel === undefined) {
+    delete globals.__KOSMO_CHANNEL__;
+  } else {
+    globals.__KOSMO_CHANNEL__ = originalChannel;
+  }
+});
+
 describe('PostHog Web client', () => {
-  it('key와 host가 모두 없거나 불완전하면 client와 전송을 만들지 않는다', () => {
-    for (const [key, host] of [
-      [undefined, undefined],
-      ['project-key', undefined],
-      [undefined, 'https://us.i.posthog.com'],
-    ] as const) {
-      analytics.initializeAnalytics(key, host);
-      analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
-    }
+  it('dev 채널에서는 PostHog를 초기화하지 않는다', () => {
+    globals.__KOSMO_CHANNEL__ = 'dev';
+
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
 
     assert.equal(initCalls.length, 0);
     assert.equal(instances.length, 0);
   });
 
-  it('완전한 공개 설정에서 권장 defaults로 한 번 초기화하고 표준 동작을 차단하지 않는다', () => {
-    const client = analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+  it('prod 채널에서는 채널 설정으로 한 번 초기화하고 표준 동작을 차단하지 않는다', () => {
+    analytics.clearAnalytics();
+    analytics.clearAnalytics();
 
-    assert.ok(client);
+    assert.ok(instances[0]);
     assert.equal(initCalls.length, 1);
-    assert.equal(initCalls[0]?.token, 'project-key');
+    assert.equal(initCalls[0]?.token, 'phc_vYTsfHrgz8wE6wQv5kfpQM5XPBnKKjvNQgaHabb6zdsS');
     assert.deepEqual(initCalls[0]?.config, {
       api_host: 'https://us.i.posthog.com',
       defaults: '2026-05-30',
@@ -123,18 +139,8 @@ describe('PostHog Web client', () => {
     });
   });
 
-  it('E2E fake endpoint도 production adapter 설정을 넓히지 않는다', () => {
-    analytics.initializeAnalytics('project-key', 'https://posthog.e2e.invalid');
-    assert.equal(initCalls[0]?.token, 'project-key');
-    assert.deepEqual(Object.keys(initCalls[0]?.config ?? {}).sort(), [
-      'api_host',
-      'defaults',
-      'mask_personal_data_properties',
-    ]);
-  });
-
   it('event별 typed payload를 전송한다', () => {
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
 
@@ -176,7 +182,7 @@ describe('PostHog Web client', () => {
   });
 
   it('typed event properties를 변형하지 않고 PostHog에 전달한다', () => {
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
 
@@ -191,7 +197,7 @@ describe('PostHog Web client', () => {
   });
 
   it('Account identity는 같은 ID를 SDK에 위임하고 전환·guest에서 reset 후 분리한다', () => {
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
 
@@ -213,7 +219,7 @@ describe('PostHog Web client', () => {
   });
 
   it('reload 뒤 SDK에 남은 같은 Account는 reset하지 않는다', () => {
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
     instance.setPersistedIdentity('account-a');
@@ -225,7 +231,7 @@ describe('PostHog Web client', () => {
   });
 
   it('reload 뒤 SDK에 남은 Account를 다른 Account와 guest에서 분리한다', () => {
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
     instance.setPersistedIdentity('account-a');
@@ -239,7 +245,7 @@ describe('PostHog Web client', () => {
   });
 
   it('A에서 B로 전환하는 reset 실패에도 직접 capture를 허용한다', () => {
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
 
@@ -256,7 +262,7 @@ describe('PostHog Web client', () => {
   });
 
   it('reset 성공 뒤 identify가 throw해도 다음 호출에서 새 Account를 직접 identify한다', () => {
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
 
@@ -284,7 +290,7 @@ describe('PostHog Web client', () => {
   });
 
   it('A에서 guest로 전환하는 reset 실패에도 직접 capture를 허용한다', () => {
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
 
@@ -301,7 +307,7 @@ describe('PostHog Web client', () => {
   });
 
   it('identify 자체 throw에도 직접 capture를 허용한다', () => {
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
 
@@ -323,13 +329,15 @@ describe('PostHog Web client', () => {
     ]);
   });
 
-  it('초기화·capture·identity 실패를 제품 흐름으로 전파하지 않는다', () => {
+  it('초기화·capture·identity 실패를 제품 흐름으로 전파하지 않는다', async () => {
     constructorFails = true;
-    assert.doesNotThrow(() => analytics.initializeAnalytics('project-key', 'https://host.example'));
+    assert.doesNotThrow(() => analytics.clearAnalytics());
 
-    analytics.resetAnalyticsForTests();
     constructorFails = false;
-    analytics.initializeAnalytics('project-key', 'https://host.example');
+    analytics = await import(
+      new URL(`./client.web.ts?test=${++moduleInstance}`, import.meta.url).href
+    );
+    analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
     instance.captureFails = true;

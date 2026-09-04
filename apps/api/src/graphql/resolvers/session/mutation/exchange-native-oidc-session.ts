@@ -8,7 +8,6 @@ import {
   ClientError,
   discovery,
   enableNonRepudiationChecks,
-  None,
   ResponseBodyError,
   WWWAuthenticateChallengeError,
 } from 'openid-client';
@@ -32,10 +31,11 @@ const getOidcConfiguration = () => {
     return oidcConfiguration;
   }
 
-  const clientId = process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID;
+  const clientId = process.env.PUBLIC_OIDC_CLIENT_ID;
+  const clientSecret = process.env.OIDC_CLIENT_SECRET;
   const issuer = process.env.PUBLIC_OIDC_ISSUER;
-  if (!clientId || !issuer) {
-    throw new Error('Native OIDC client configuration is required');
+  if (!clientId || !clientSecret || !issuer) {
+    throw new Error('Native OIDC confidential client configuration is required');
   }
 
   const issuerUrl = new URL(issuer);
@@ -47,7 +47,7 @@ const getOidcConfiguration = () => {
     execute.push(allowInsecureRequests);
   }
 
-  oidcConfiguration = discovery(issuerUrl, clientId, undefined, None(), { execute }).catch(
+  oidcConfiguration = discovery(issuerUrl, clientId, clientSecret, undefined, { execute }).catch(
     (cause: unknown) => {
       oidcConfiguration = undefined;
       throw cause;

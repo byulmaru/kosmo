@@ -18,17 +18,6 @@ function androidVersionCode(): number {
   return versionCode;
 }
 
-const publicEnvironmentAliases = {
-  EXPO_PUBLIC_API_ORIGIN: 'PUBLIC_API_ORIGIN',
-  EXPO_PUBLIC_OIDC_ISSUER: 'PUBLIC_OIDC_ISSUER',
-  EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID: 'PUBLIC_OIDC_NATIVE_CLIENT_ID',
-  EXPO_PUBLIC_WEB_ORIGIN: 'PUBLIC_ORIGIN',
-} as const;
-
-for (const [expoName, existingName] of Object.entries(publicEnvironmentAliases)) {
-  process.env[expoName] ??= process.env[existingName];
-}
-
 const iosBuildNumber = process.env.IOS_BUILD_NUMBER ?? '1';
 
 if (!/^[1-9]\d*$/.test(iosBuildNumber)) {

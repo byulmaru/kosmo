@@ -66,6 +66,7 @@ beforeAll(async () => {
   await writeFile(join(staticRoot, 'asset.js'), ASSET_BODY);
   await writeFile(join(staticRoot, 'asset.js.gz'), gzipSync(ASSET_BODY));
   await writeFile(join(staticRoot, HASHED_ASSET_NAME), ASSET_BODY);
+  await writeFile(join(staticRoot, 'channel.js'), 'static fallback');
   vi.stubEnv('EXPO_WEB_ROOT', staticRoot);
   ({ default: app } = await import('./app'));
   expect(setInboundObservabilityReporter).toHaveBeenCalledWith({
@@ -80,6 +81,7 @@ beforeEach(() => {
   vi.stubEnv('OIDC_CLIENT_SECRET', 'kosmo-secret');
   vi.stubEnv('PUBLIC_API_ORIGIN', 'https://api.example');
   vi.stubEnv('PUBLIC_ORIGIN', undefined);
+  vi.stubEnv('ENVIRONMENT', undefined);
   discovery.mockImplementation(
     async (_issuer, clientId, metadata) =>
       new Configuration(
@@ -126,6 +128,34 @@ afterAll(async () => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   await rm(staticRoot, { force: true, recursive: true });
+});
+
+describe('Web channel bootstrap', () => {
+  test.each(['dev', 'prod'] as const)('serves the %s channel script', async (channel) => {
+    vi.stubEnv('ENVIRONMENT', channel);
+
+    const response = await app.request('/channel.js');
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('public, max-age=300');
+    expect(response.headers.get('content-type')).toBe('application/javascript; charset=UTF-8');
+    expect(await response.text()).toBe(`globalThis.__KOSMO_CHANNEL__ = "${channel}";\n`);
+  });
+
+  test.each([
+    { channel: undefined, name: 'missing' },
+    { channel: '', name: 'empty' },
+    { channel: 'preview', name: 'unknown' },
+  ])('rejects a $name channel', async ({ channel }) => {
+    vi.stubEnv('ENVIRONMENT', channel);
+
+    const response = await app.request('/channel.js');
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('content-type')).toContain('text/plain');
+    expect(await response.text()).toBe('ENVIRONMENT must be dev or prod');
+  });
 });
 
 describe('browser login', () => {

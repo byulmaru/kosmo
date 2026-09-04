@@ -4,13 +4,8 @@ import { createServer } from 'node:http';
 const port = Number(process.env.OIDC_MOCK_PORT ?? 4300);
 const host = process.env.OIDC_MOCK_HOST ?? '127.0.0.1';
 const issuer = process.env.PUBLIC_OIDC_ISSUER ?? `http://${host}:${port}`;
-const webClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
-const webClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
-const nativeClientId = process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID ?? 'kosmo-e2e-native-client';
-const clients = new Map([
-  [webClientId, { secret: webClientSecret, type: 'confidential' }],
-  [nativeClientId, { type: 'public' }],
-]);
+const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
+const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
 const keyId = 'kosmo-e2e-signing-key';
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const publicJwk = {
@@ -88,7 +83,7 @@ const server = createServer(async (request, response) => {
       scopes_supported: ['openid', 'profile'],
       subject_types_supported: ['public'],
       token_endpoint: `${issuer}/oauth/token`,
-      token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
+      token_endpoint_auth_methods_supported: ['client_secret_post'],
     });
     return;
   }
@@ -108,11 +103,10 @@ const server = createServer(async (request, response) => {
     const invalidSignature = loginHint === 'invalid-signature';
     const tokenServerError = loginHint === 'token-server-error';
     const state = url.searchParams.get('state');
-    const client = clients.get(requestClientId);
 
     if (
       responseType !== 'code' ||
-      !client ||
+      requestClientId !== oidcClientId ||
       !redirectUri ||
       !codeChallenge ||
       codeChallengeMethod !== 'S256' ||
@@ -155,18 +149,12 @@ const server = createServer(async (request, response) => {
     const body = await readFormBody(request);
     const code = body.get('code');
     const codeData = code ? codes.get(code) : undefined;
-    const client = codeData ? clients.get(codeData.clientId) : undefined;
-    const hasValidClientAuthentication =
-      client?.type === 'confidential'
-        ? body.get('client_secret') === client.secret
-        : client?.type === 'public' && body.get('client_secret') === null;
 
     if (
       body.get('grant_type') !== 'authorization_code' ||
-      !client ||
-      body.get('client_id') !== codeData?.clientId ||
-      !hasValidClientAuthentication ||
       !codeData ||
+      body.get('client_id') !== oidcClientId ||
+      body.get('client_secret') !== oidcClientSecret ||
       body.get('redirect_uri') !== codeData.redirectUri ||
       createCodeChallenge(body.get('code_verifier') ?? '') !== codeData.codeChallenge
     ) {

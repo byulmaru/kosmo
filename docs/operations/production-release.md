@@ -2,7 +2,7 @@
 
 이 문서는 `main`에 저장된 production release workflow의 운영 절차를 정의한다. `main`에 merge된 각 commit은 dev image를 먼저 준비하고 dev에 자동 배포한다. Production release는 merge·push event에서 시작하지 않고 `main` ref의 `workflow_dispatch`로만 요청한다. `prod` GitHub Environment의 required reviewer가 한 번 승인한 뒤에 production source checkout·credential 접근·prod image build·production 상태 변경을 수행한다. `target_sha`를 생략해 최신 `main`을 target으로 선택한 경우에는 dev와 prod image가 같은 source SHA를 사용할 수 있지만, 명시적 target SHA dispatch에서는 서로 다른 source를 사용할 수 있다. 환경별 build 설정이 다르므로 두 image가 같은 digest일 필요는 없다.
 
-Production build는 Environment 승인 뒤에만 시작한다. 승인 전에는 production source를 checkout하지 않고 prod Vault/Sentry credential에 접근하거나 prod image를 build하지 않는다. 승인 뒤 gated job이 release full SHA를 checkout하고 prod 설정을 읽어 GHCR image를 build한 뒤, build output digest와 같은 full SHA를 migration과 모든 production workload에 전달한다.
+Production build는 Environment 승인 뒤에만 시작한다. 승인 전에는 production source를 checkout하지 않고 prod credential에 접근하거나 prod image를 build하지 않는다. 승인 뒤 gated job이 release full SHA를 checkout하고 prod 설정을 읽어 GHCR image를 build한 뒤, build output digest와 같은 full SHA를 migration과 모든 production workload에 전달한다.
 
 별도 production branch나 Git tag는 production source, approval, rollback selector가 아니다. Main에 저장된 production release workflow를 `main` ref에서 `workflow_dispatch`로 실행하면 `target_sha`를 선택적으로 입력할 수 있다. 입력하면 repository에 존재하는 정확한 40자리 commit SHA를 사용하고, 비워 두면 preflight가 실행 시점의 최신 `main` commit을 조회해 immutable target SHA로 고정한다. Dispatch 경로는 승인 전에 target의 존재와 identity만 검증하고, `prod` 승인 뒤에 target을 checkout하고 prod image를 build·배포한다. Workflow definition ref(`main`)와 release target SHA를 항상 구분해 기록한다.
 
@@ -22,7 +22,8 @@ Production build는 Environment 승인 뒤에만 시작한다. 승인 전에는 
 ## Release 계약
 
 - `main` push의 immutable full SHA는 dev 자동 build·배포의 source다. Production release는 `main` ref의 `workflow_dispatch`로만 요청하며, `target_sha`를 생략하면 preflight가 실행 시점의 최신 `main` commit을 target으로 고정한다.
-- Production workflow_dispatch는 승인 전에는 production source checkout, prod Vault/Sentry credential 접근과 prod image build를 하지 않는다. 승인 뒤 gated job이 preflight에서 확정한 target SHA를 checkout하고 GHCR에 prod image를 build한 digest를 migration·workload에 직접 전달한다. 승인 시점에 mutable tag나 다른 최신 `main`을 다시 해석하지 않는다.
+- Production workflow_dispatch는 승인 전에는 production source checkout, prod credential 접근과 prod image build를 하지 않는다. 승인 뒤 gated job이 preflight에서 확정한 target SHA를 checkout하고 GHCR에 prod image를 build한 digest를 migration·workload에 직접 전달한다. 승인 시점에 mutable tag나 다른 최신 `main`을 다시 해석하지 않는다.
+- Production Web build는 공개 client 설정을 Vault나 GitHub Variables에서 주입하지 않고 코드의 채널 설정표를 번들에 포함한다. Workflow에는 Sentry organization·project, resolved target SHA 기반 release metadata와 upload credential만 전달한다. Web runtime의 `ENVIRONMENT`는 Helm의 `dev`/`prod` 값에서 제공되고 BFF의 same-origin `/channel.js`가 이를 검증해 bundle보다 먼저 전달한다.
 - Dispatch release는 `main`에 저장된 workflow를 `main` ref에서 실행해야 한다. `target_sha`를 입력하면 repository에 존재하는 정확한 40자리 SHA를 사용하고, 비워 두면 최신 `main`의 full SHA를 사용한다. 승인 전에는 target code checkout·실행, prod secret/credential 접근과 build를 하지 않으며 `prod` 승인 뒤에만 target SHA checkout, prod build와 배포를 수행한다.
 - Production migration Job과 모든 활성화 workload는 해당 release의 하나의 immutable prod digest를 사용하고, Argo CD Helm source는 같은 release target full SHA를 사용한다. Dev digest는 prod digest와 달라도 된다.
 - Dev와 production image는 모두 GHCR에만 push한다. Production release는 build output의 immutable GHCR digest를 Argo CD에 직접 전달한다.
@@ -35,7 +36,7 @@ Production build는 Environment 승인 뒤에만 시작한다. 승인 전에는 
 ## Main dev build and workflow_dispatch production release
 
 1. `main` merge 후 Docker workflow가 full SHA의 dev image를 build해 GHCR에 push하고 기존 `Deploy Dev` 경로로 전달한다. 이 경로는 production approval이나 production 배포를 시작하지 않는다. Production release는 `main`에 저장된 release workflow를 `main` ref에서 `workflow_dispatch`로 실행할 때만 시작한다.
-2. Dev 배포의 tag·digest·환경별 build arg가 올바른지 확인한다. Production dispatch를 실행하기 전에도 production source checkout, prod Vault/Sentry credential 접근과 prod image build가 없어야 한다.
+2. Dev 배포의 tag·digest·release metadata가 올바른지 확인한다. Production dispatch를 실행하기 전에도 production source checkout, prod credential 접근과 prod image build가 없어야 한다.
 3. `target_sha`를 입력하면 preflight가 정확한 40자리 repository commit인지 확인한다. 입력을 비워 두면 preflight가 실행 시점의 최신 `main` commit을 조회한다. 두 경우 모두 target full SHA와 commit URL을 approval summary와 Environment 화면에 표시하고, dispatch의 `github.sha`나 mutable image tag를 source selector로 사용하지 않는다.
 4. Reviewer는 workflow summary와 Environment 화면에서 workflow definition ref, preflight가 확정한 release full SHA·chart diff·migration compatibility를 확인한 뒤 한 번 승인한다. 승인 전 preflight failure이면 target build·deploy를 시작하지 않는다.
 5. 승인 job은 preflight가 확정한 target SHA를 checkout하고 prod credential·source map secret으로 prod image를 build해 GHCR에 push한다. Build digest와 SHA를 audit summary에 기록하며 승인 시점의 최신 `main`이나 mutable tag를 다시 해석하지 않는다.
