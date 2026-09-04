@@ -305,6 +305,9 @@ function controlVisualStyle(disabled: boolean) {
           : webState.hovered
             ? 'rgba(255, 255, 255, 0.16)'
             : 'transparent',
+        ...(Platform.OS === 'web'
+          ? ({ filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' } as unknown as ViewStyle)
+          : { boxShadow: '0 1px 2px rgba(0, 0, 0, 0.9)' }),
         opacity: disabled ? 0.35 : 1,
         ...(Platform.OS === 'web' && webState.focused
           ? ({
@@ -373,7 +376,6 @@ const styles = StyleSheet.create({
   nextButton: { right: space[8] },
   controlVisual: {
     borderRadius: radius.full,
-    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.9)',
   },
   counterPosition: {
     alignItems: 'center',
