@@ -34,7 +34,6 @@ process.env.DATABASE_URL = databaseUrl;
 process.env.PUBLIC_API_ORIGIN = apiOrigin;
 process.env.PUBLIC_OIDC_CLIENT_ID = oidcClientId;
 process.env.PUBLIC_OIDC_ISSUER = oidcOrigin;
-process.env.OIDC_CLIENT_SECRET = oidcClientSecret;
 process.env.PUBLIC_ORIGIN = webOrigin;
 process.env.TEMPORAL_ADDRESS = `${host}:${temporalPort}`;
 process.env.TEMPORAL_NAMESPACE = 'test';

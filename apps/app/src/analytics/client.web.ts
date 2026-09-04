@@ -38,13 +38,9 @@ function initializeAnalytics(): PostHog | null {
   return client;
 }
 
-function getAnalyticsClient(): PostHog | null {
-  return initializeAnalytics();
-}
-
 export function trackAnalytics(...args: AnalyticsEventArgs): void {
   try {
-    getAnalyticsClient()?.capture(args[0], args[1] as Parameters<PostHog['capture']>[1]);
+    initializeAnalytics()?.capture(args[0], args[1] as Parameters<PostHog['capture']>[1]);
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }
@@ -61,7 +57,7 @@ export function identifyAnalytics(accountId: string): void {
   }
 
   try {
-    const analyticsClient = getAnalyticsClient();
+    const analyticsClient = initializeAnalytics();
     if (!analyticsClient) {
       return;
     }
@@ -82,7 +78,7 @@ export function identifyAnalytics(accountId: string): void {
 
 export function clearAnalytics(): void {
   try {
-    const analyticsClient = getAnalyticsClient();
+    const analyticsClient = initializeAnalytics();
     if (!analyticsClient || !getPostHogAccountId(analyticsClient)) {
       return;
     }

@@ -6,7 +6,6 @@ const host = process.env.OIDC_MOCK_HOST ?? '127.0.0.1';
 const issuer = process.env.PUBLIC_OIDC_ISSUER ?? `http://${host}:${port}`;
 const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
 const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
-const clients = new Map([[oidcClientId, { secret: oidcClientSecret }]]);
 const keyId = 'kosmo-e2e-signing-key';
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const publicJwk = {
@@ -104,11 +103,10 @@ const server = createServer(async (request, response) => {
     const invalidSignature = loginHint === 'invalid-signature';
     const tokenServerError = loginHint === 'token-server-error';
     const state = url.searchParams.get('state');
-    const client = clients.get(requestClientId);
 
     if (
       responseType !== 'code' ||
-      !client ||
+      requestClientId !== oidcClientId ||
       !redirectUri ||
       !codeChallenge ||
       codeChallengeMethod !== 'S256' ||
@@ -151,16 +149,12 @@ const server = createServer(async (request, response) => {
     const body = await readFormBody(request);
     const code = body.get('code');
     const codeData = code ? codes.get(code) : undefined;
-    const client = codeData ? clients.get(codeData.clientId) : undefined;
-    const hasValidClientAuthentication =
-      client !== undefined && body.get('client_secret') === client.secret;
 
     if (
       body.get('grant_type') !== 'authorization_code' ||
-      !client ||
-      body.get('client_id') !== codeData?.clientId ||
-      !hasValidClientAuthentication ||
       !codeData ||
+      body.get('client_id') !== oidcClientId ||
+      body.get('client_secret') !== oidcClientSecret ||
       body.get('redirect_uri') !== codeData.redirectUri ||
       createCodeChallenge(body.get('code_verifier') ?? '') !== codeData.codeChallenge
     ) {
