@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { IconButton } from '@/components/ui/IconButton';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import type { ReactElement } from 'react';
 import type { PressableStateCallbackType, ViewStyle } from 'react-native';
@@ -67,6 +67,7 @@ export function PostMediaViewerSurface({
   viewState,
 }: PostMediaViewerSurfaceProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const navigable = viewState === 'ready';
   const multiple = navigable && media.length > 1;
   const currentMedia = media[currentIndex];
@@ -106,13 +107,24 @@ export function PostMediaViewerSurface({
               style={styles.status}
             >
               {viewState === 'loading' ? (
-                <ActivityIndicator
-                  accessible={false}
-                  aria-hidden
-                  color="#ffffff"
-                  size={40}
-                  testID="post-media-viewer-loading-indicator"
-                />
+                reducedMotion ? (
+                  <Text
+                    accessible={false}
+                    aria-hidden
+                    style={styles.loadingFallback}
+                    testID="post-media-viewer-loading-fallback"
+                  >
+                    ···
+                  </Text>
+                ) : (
+                  <ActivityIndicator
+                    accessible={false}
+                    aria-hidden
+                    color="#ffffff"
+                    size={40}
+                    testID="post-media-viewer-loading-indicator"
+                  />
+                )
               ) : null}
               <Text accessibilityRole="header" style={styles.statusTitle}>
                 {status.title}
@@ -375,6 +387,7 @@ const styles = StyleSheet.create({
     ...textStyles.uiLabelM,
   },
   screenReaderOnly: { height: 1, opacity: 0, position: 'absolute', width: 1 },
+  loadingFallback: { color: '#ffffff', ...textStyles.uiLabelL },
   status: {
     alignItems: 'center',
     bottom: 0,

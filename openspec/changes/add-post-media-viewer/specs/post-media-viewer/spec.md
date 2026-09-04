@@ -6,10 +6,10 @@ Host·query·runtime 구현은 historical evidence로 보존한다. PROD-853은 
 연결·교체와 Web/iOS/Android runtime을 수행한다. PROD-853 Storybook fixture는 Gallery·permission·Production
 연결 완료의 증거가 아니며, PROD-853 PR 완료만으로 이 change를 archive하지 않는다.
 
-- Canonical Target transition은 최종 계약이다. PROD-849는 top-level Host query·Media 상태를 shared surface의
+- Canonical Target transition은 최종 계약이다. PROD-849는 top-level Host query 또는 선택 Media projection의 차단 상태를 shared surface의
   `Loading`·`Error`·`Unavailable` `viewState`로 MUST 매핑한다. 세 상태는 close와 canonical 상태 설명을
   MUST 유지하고 navigation·counter를 MUST NOT 렌더링한다. Compact detail과 Wide context rail은 세 상태에서도
-  MUST 유지한다. `Loading`은 접근성 트리에서 숨긴 시각 spinner와 단일 상태 announcement를,
+  MUST 유지한다. `Loading`은 접근성 트리에서 숨긴 일반 motion spinner 또는 reduced-motion 정적 `···`와 단일 상태 announcement를,
   `Error`는 `다시 시도` action을 제공하고 `Unavailable`은 설명만 제공한다.
 
 ## Current/Target state hierarchy and transition
@@ -273,23 +273,31 @@ Host·query·runtime 구현은 historical evidence로 보존한다. PROD-853은 
 
 ### Requirement: Canonical Target 공용 Viewer surface의 상태와 전달 owner
 
-**Authority / Provenance:** `docs/design/post-media-viewer.md`, DSN-63, PROD-853, PROD-849 — canonical Target shared Viewer surface는 Compact·Wide presentation과 Ready·Loading·Error·Unavailable `viewState`를 SHALL 구분해야 한다. black 70% overlay와 radius 8 Media frame, 48×48 interaction target, 30px icon, 2.5 stroke를 사용해야 한다. Compact 390은 상단 654px image stage 안에 Media frame을 좌우 16px·상단 80px·하단 16px으로 배치하고, 그 아래 semantic canvas의 작성자·원문·기존 Post Action Bar detail을 사용해야 한다. Wide 1024·1440은 560×420 Media frame을 image stage 가운데 배치하고 오른쪽 346px full-height rail을 사용해야 한다. Ready는 비순환 navigation·상단 counter와 presentation별 secondary surface를 제공한다. Loading은 접근성 트리에서 숨긴 시각 spinner와 단일 상태 announcement, Error는 설명·`다시 시도`, Unavailable은 설명을 제공하며 navigation·counter를 렌더링하지 않는다. Compact detail과 Wide rail은 모든 상태에서 유지한다. Sensitive 공개는 Gallery에서 완료된 뒤에만 Viewer 진입을 제공한다. PROD-849는 Gallery→shared surface consumer replacement·permission·retry mapping·Production 연결과 Web/iOS/Android runtime·archive evidence를 소유한다. PROD-853은 disconnected 공용 UI·component test·Storybook을 소유한다.
+**Authority / Provenance:** `docs/design/post-media-viewer.md`, DSN-63, PROD-853, PROD-849 — canonical Target shared Viewer surface는 Compact·Wide presentation과 Ready·Loading·Error·Unavailable `viewState`를 SHALL 구분해야 한다. black 70% overlay와 radius 8 Media frame, 48×48 interaction target, 30px icon, 2.5 stroke를 사용해야 한다. Compact 390은 상단 654px image stage 안에 Media frame을 좌우 16px·상단 80px·하단 16px으로 배치하고, 그 아래 semantic canvas의 작성자·원문·기존 Post Action Bar detail을 사용해야 한다. Wide 1024·1440은 560×420 Media frame을 image stage 가운데 배치하고 오른쪽 346px full-height rail을 사용해야 한다. Ready는 비순환 navigation·상단 counter와 presentation별 secondary surface를 제공한다. Loading은 접근성 트리에서 숨긴 일반 motion spinner 또는 reduced-motion 정적 `···`와 단일 상태 announcement, Error는 설명·`다시 시도`, Unavailable은 설명을 제공하며 navigation·counter를 렌더링하지 않는다. Compact detail과 Wide rail은 모든 상태에서 유지한다. Sensitive 공개는 Gallery에서 완료된 뒤에만 Viewer 진입을 제공한다. PROD-849는 Gallery→shared surface consumer replacement·permission·retry mapping·Production 연결과 Web/iOS/Android runtime·archive evidence를 소유한다. PROD-853은 disconnected 공용 UI·component test·Storybook을 소유한다.
 
 #### Scenario: 상태별 공용 surface
 
 - **WHEN** 공용 Viewer surface가 Compact 또는 Wide presentation과 Ready·Loading·Error·Unavailable 중 하나를 받는다
 - **THEN** Ready에서는 해당 presentation의 secondary surface와 비순환 이전·다음 navigation·상단 counter를 표시한다
 - **AND** Loading·Error·Unavailable에서는 navigation·counter를 표시하지 않는다
-- **AND** Loading은 spinner·설명, Error는 설명·`다시 시도`, Unavailable은 설명을 표시한다
+- **AND** Loading은 일반 motion spinner 또는 reduced-motion 정적 `···`와 설명, Error는 설명·`다시 시도`, Unavailable은 설명을 표시한다
 - **AND** Compact detail과 Wide context rail은 모든 상태에서 표시한다
 - **AND** 모든 view state에서 사용자가 close를 실행할 수 있다
 
-#### Scenario: Host query 또는 Media 오류의 Target viewState 매핑
+#### Scenario: Host query 또는 선택 Media projection 차단 상태의 Target viewState 매핑
 
-- **WHEN** PROD-849가 연결된 Host query 또는 current Media의 loading·error·unavailable projection을 canonical Target shared surface에 전달한다
+- **WHEN** PROD-849가 연결된 Host query의 loading·error 또는 선택 Media projection의 unavailable 상태를 canonical Target shared surface에 전달한다
 - **THEN** top-level shared surface `viewState`를 `Loading`·`Error`·`Unavailable` 중 하나로 MUST 매핑한다
-- **AND** Error의 `다시 시도`는 `onRetry`를 호출하고 현재 index를 바꾸지 않는다
+- **AND** Error의 `다시 시도`는 Host/query `onRetry`를 호출하고 현재 index를 바꾸지 않는다
 - **AND** navigation·counter는 MUST NOT 렌더링하며 Compact detail과 Wide context rail은 MUST 유지한다
+
+#### Scenario: Ready surface의 개별 Media resource load 오류
+
+- **WHEN** Ready surface의 current Media resource load가 실패한다
+- **THEN** top-level shared surface `viewState`는 `Ready`로 MUST 유지한다
+- **AND** 실패한 Media 위치에 공용 Danger Action Toast와 `다시 시도`를 표시한다
+- **AND** modal chrome·현재 index·navigation·counter·Compact detail·Wide context rail을 MUST 유지한다
+- **AND** retry는 실패한 Media만 다시 loading으로 전환하고 현재 index와 다른 Media 상태를 MUST NOT 변경한다
 
 #### Scenario: PROD-853 Storybook-first delivery
 
