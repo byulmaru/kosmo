@@ -447,6 +447,19 @@ describe('PostMediaViewerSurface', () => {
     );
     assert.equal(resolveStyle(findByLabel('이전 이미지').props.visualStyle).opacity, 0.35);
   });
+
+  it('viewer control halo는 Web·iOS·Android에서 같은 RN shadow를 사용한다', async () => {
+    for (const platform of ['web', 'ios', 'android'] as const) {
+      mockPlatform.OS = platform;
+      await render({ currentIndex: 0 });
+
+      for (const label of ['이미지 뷰어 닫기', '이전 이미지', '다음 이미지']) {
+        const visualStyle = resolveStyle(findByLabel(label).props.visualStyle);
+        assert.equal(visualStyle.boxShadow, '0 1px 2px rgba(0, 0, 0, 0.9)');
+        assert.equal(visualStyle.filter, undefined);
+      }
+    }
+  });
 });
 
 function baseProps(overrides: Partial<SurfaceProps> = {}): SurfaceProps {
