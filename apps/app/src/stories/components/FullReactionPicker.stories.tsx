@@ -420,8 +420,9 @@ export const InteractionContract: Story = {
       height: '624px',
       width: '360px',
     });
-    expect(canvas.getByText('빠른 반응')).toBeVisible();
-    expect(canvas.getByText('최근 사용')).toBeVisible();
+    expect(canvas.getByRole('heading', { name: '빠른 반응' })).toBeVisible();
+    expect(canvas.getByRole('heading', { name: '최근 사용' })).toBeVisible();
+    expect(canvas.getByRole('heading', { name: '표정과 감정' })).toBeVisible();
     expect(canvas.queryByRole('button', { name: /category 보기/ })).not.toBeInTheDocument();
 
     await userEvent.click(canvas.getAllByRole('button', { name: '빨간 하트 ❤️' })[0]);

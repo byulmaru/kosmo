@@ -11,7 +11,7 @@ import {
   TriangleAlertIcon,
   XIcon,
 } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Circle, Svg } from 'react-native-svg';
 import { Button } from '@/components/ui/Button';
@@ -112,6 +112,11 @@ export function PostComposerTarget({
 }: PostComposerTargetProps) {
   const theme = useTheme();
   const [visibilityOpen, setVisibilityOpen] = useState(false);
+  useEffect(() => {
+    if (submitting) {
+      setVisibilityOpen(false);
+    }
+  }, [submitting]);
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
@@ -146,7 +151,7 @@ export function PostComposerTarget({
             <Pressable
               accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
               accessibilityRole="button"
-              accessibilityState={{ expanded: visibilityOpen }}
+              accessibilityState={{ expanded: visibilityOpen && !submitting }}
               disabled={submitting}
               onPress={() => setVisibilityOpen((open) => !open)}
               style={({ pressed }) => [
@@ -169,7 +174,7 @@ export function PostComposerTarget({
                 {selectedVisibility.label}
               </Text>
             </Pressable>
-            {visibilityOpen ? (
+            {visibilityOpen && !submitting ? (
               <VisibilityMenu
                 onChange={(value) => {
                   onVisibilityChange(value);
@@ -347,6 +352,11 @@ export function MobileFullscreenComposerShellCandidate({
   const theme = useTheme();
   const [bodyFocused, setBodyFocused] = useState(false);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
+  useEffect(() => {
+    if (submitting) {
+      setVisibilityOpen(false);
+    }
+  }, [submitting]);
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const disabled =
@@ -394,7 +404,7 @@ export function MobileFullscreenComposerShellCandidate({
         <Pressable
           accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
           accessibilityRole="button"
-          accessibilityState={{ expanded: visibilityOpen }}
+          accessibilityState={{ expanded: visibilityOpen && !submitting }}
           disabled={submitting}
           onPress={() => setVisibilityOpen((open) => !open)}
           style={({ pressed }) => [
@@ -415,7 +425,7 @@ export function MobileFullscreenComposerShellCandidate({
             <ChevronDownIcon color={theme.foregroundPrimary} size={iconSizes[16]} strokeWidth={2} />
           </View>
         </Pressable>
-        {visibilityOpen ? (
+        {visibilityOpen && !submitting ? (
           <VisibilityMenu
             alignRight
             onChange={(value) => {
@@ -695,7 +705,7 @@ function ComposerTool({
   children,
   disabled,
   onPress,
-  selected = false,
+  selected,
 }: {
   accessibilityLabel: string;
   children: ReactNode;
@@ -707,7 +717,7 @@ function ComposerTool({
   return (
     <IconButton
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ selected }}
+      accessibilityState={selected === undefined ? undefined : { selected }}
       aria-pressed={selected}
       disabled={disabled}
       feedback="opacity"

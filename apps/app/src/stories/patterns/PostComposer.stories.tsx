@@ -152,6 +152,7 @@ const meta = {
   },
   component: PostComposerTarget,
   excludeStories: [
+    'ActionSemanticsContract',
     'InteractionContract',
     'MobileCandidateContract',
     'MobileKeyboardMediaFooterGeometryContract',
@@ -167,6 +168,7 @@ const meta = {
     'RailProgressRingContract',
     'SubmittingSpinnerContract',
     'SubmittingPickerContract',
+    'SubmittingVisibilityContract',
     'composerMedia',
   ],
   parameters: { controls: { disable: true }, layout: 'centered' },
@@ -794,6 +796,21 @@ export const PendingMediaContract: Story = {
   },
 };
 
+export const ActionSemanticsContract: Story = {
+  args: { body: 'Composer 동작 의미 검증', items: [], showPollAction: true, surface: 'rail' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    for (const name of ['이미지 추가', '투표 추가', '이모지 추가']) {
+      expect(canvas.getByRole('button', { name })).not.toHaveAttribute('aria-pressed');
+    }
+    expect(canvas.getByRole('button', { name: '콘텐츠 경고 켜기' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  },
+};
+
 export const MobileCandidateContract: Story = {
   ...MobileEmpty,
   play: async ({ canvasElement }) => {
@@ -930,6 +947,29 @@ export const SubmittingPickerContract: Story = {
     expect(canvas.getByRole('button', { name: '게시' })).toBeDisabled();
     expect(body).toHaveValue('제출 전 이모지 선택');
     expect(args.onBodyChange).not.toHaveBeenCalled();
+    expect(args.onSubmit).toHaveBeenCalledOnce();
+  },
+};
+
+export const SubmittingVisibilityContract: Story = {
+  ...Playground,
+  args: { body: '제출 전 공개 범위', items: [], surface: 'rail' },
+  render: (args) => <SubmittingPickerComposer {...args} />,
+  play: async ({ args, canvasElement }) => {
+    args.onSubmit.mockClear();
+    args.onVisibilityChange.mockClear();
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
+    expect(canvas.getByRole('radiogroup', { name: '공개 범위 선택' })).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: '게시' }));
+    await waitFor(() =>
+      expect(canvas.queryByRole('radiogroup', { name: '공개 범위 선택' })).toBeNull(),
+    );
+
+    expect(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeDisabled();
+    expect(args.onVisibilityChange).not.toHaveBeenCalled();
     expect(args.onSubmit).toHaveBeenCalledOnce();
   },
 };
