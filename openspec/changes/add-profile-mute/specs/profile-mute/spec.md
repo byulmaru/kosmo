@@ -78,7 +78,7 @@
 
 ### Requirement: Profile Mute 적용 상태를 판정한다
 
-**Authority / Provenance:** `docs/domain/objects/profile-mute.md`, `docs/domain/policies/post-list.md`, `PROD-814`, `PROD-824` — `expires_at`이 `null`인 Owner·Target 관계는 활성 Profile Mute이고, 해당 활성 관계가 없으면 비활성으로 판정해야 한다(MUST). 후행 콘텐츠·Notification 정책은 각자의 query에 Owner·Target·`expires_at IS NULL` 활성 관계 조건을 직접 조합해야 한다(MUST). 이 변경 자체가 Post 목록을 제외·접거나 Notification 생성을 억제해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-mute.md`, `docs/domain/policies/post-list.md`, `PROD-814`, `PROD-824`, `PROD-825` — `expires_at`이 `null`인 Owner·Target 관계는 활성 Profile Mute이고, 해당 활성 관계가 없으면 비활성으로 판정해야 한다(MUST). 콘텐츠·Notification 정책은 각자의 query에 Owner·Target·`expires_at IS NULL` 활성 관계 조건을 직접 조합해야 한다(MUST). Profile Mute 관계의 생성·해제·적용 여부 조회는 Post·Notification 객체나 Read State를 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: 관계가 있으면 적용 중이다
 
@@ -90,10 +90,11 @@
 - **WHEN** Owner·Target 조합에 `expires_at`이 `null`인 Profile Mute 관계가 존재하지 않는다
 - **THEN** 적용 여부 조회는 Mute가 적용 중이 아니라고 반환한다
 
-#### Scenario: 후행 노출 정책은 실행하지 않는다
+#### Scenario: 관계 action은 노출 객체를 직접 변경하지 않는다
 
-- **WHEN** Profile Mute를 만들거나 조회한다
-- **THEN** 이 변경은 Home·Hashtag·Target Profile Post List의 결과나 Notification 생성 여부를 직접 바꾸지 않는다
+- **WHEN** Profile Mute를 만들거나 해제하거나 적용 여부를 조회한다
+- **THEN** 시스템은 Post·Notification 객체와 Read State를 변경하지 않는다
+- **AND** 새 Home 조회의 후보 제외는 `post` capability에 정의된 목록 정책으로 계산한다
 
 ### Requirement: Owner 전용 GraphQL 조회 계약을 제공한다
 

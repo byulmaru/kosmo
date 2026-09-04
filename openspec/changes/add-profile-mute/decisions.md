@@ -1,6 +1,10 @@
 ## Context
 
-이 기록은 `PROD-824`의 영구 Profile Mute 기반을 다룬 proposal, 기능 명세와 구현 설계를 반영한다. 제품 행동은 Profile Mute 기준 문서와 `PROD-814`·`PROD-824`에서 가져왔다. 구현 방식은 그 범위 안에서 현재 Core·GraphQL·migration 구조에 맞춰 골랐다. 사용자는 2026-09-02에 `expires_at`을 nullable 컬럼으로 먼저 두되 이번 생성 경로에서는 항상 `null`을 저장하는 범위를 확인했다.
+이 기록은 `PROD-824`의 영구 Profile Mute 기반과 `PROD-825`의 현재 Post List 정책을 다룬 proposal, 기능
+명세와 구현 설계를 반영한다. 제품 행동은 Profile Mute 기준 문서와 `PROD-814`·`PROD-824`·`PROD-825`에서
+가져왔다. 사용자는 2026-09-02에 `expires_at`을 nullable 컬럼으로 먼저 두되 이번 생성 경로에서는 항상
+`null`을 저장하는 범위를 확인했고, 2026-09-03에 Target Profile 정상 표시와 Hashtag·Local 책임 분리를
+확인했다.
 
 ## Decision Records
 
@@ -90,21 +94,110 @@
 - Consequences: 이전 애플리케이션과 새 schema가 함께 존재하는 구간이 안전하다. 코드 rollback 뒤에는 사용하지 않는 테이블이 남을 수 있지만 데이터는 보존된다.
 - Confirmation / Follow-up: 빈 DB와 누적 migration DB에서 migration을 검증한다. 이전 애플리케이션이 새 테이블이 있는 schema에서도 정상 동작하는지 살펴 additive 변경임을 확인한다.
 
-### 콘텐츠·Notification·ActivityPub 효과는 후행 구현과 분리한다
+### PROD-824 기반은 콘텐츠·Notification·ActivityPub 효과와 분리한다
 
 - Decision Date: 2026-09-02
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/profile-mute.md`, `docs/domain/policies/post-list.md`, `docs/design/profile-mute-block.md`, `PROD-814`, `PROD-824`
+- Authority / Provenance: `docs/domain/objects/profile-mute.md`, `docs/domain/policies/post-list.md`, `docs/design/profile-mute-block.md`, `PROD-814`, `PROD-824`, `PROD-825`
 - Status: Active
 - Context / Problem: 기준 객체는 Mute가 콘텐츠와 새 Notification 노출에 미치는 결과까지 정의한다. `PROD-824`는 해당 정책들이 사용할 관계 기반만 전달한다.
-- Decision Outcome: 이 변경은 Profile Mute의 생성·해제·관리 조회와 적용 여부 조회까지만 구현한다. Post 목록 Exclude·Collapse, 새 Notification 생성 억제, UI·Relay와 ActivityPub 효과는 추가하지 않는다. Mute 생성·해제는 기존 Follow Relationship, Follow Request, Reaction, Repost Post, Bookmark, Notification과 Read State를 바꾸지 않는다.
+- Decision Outcome: `PROD-824` 구현 slice는 Profile Mute의 생성·해제·관리 조회와 적용 여부 조회까지만
+  구현한다. `PROD-825`가 현재 Home·Profile·Repost 정책을 후행 slice로 적용한다. 새 Notification 생성
+  억제, UI·Relay와 ActivityPub 효과는 두 slice의 범위에 추가하지 않는다. Mute 생성·해제와 목록 판정은 기존
+  Follow Relationship, Follow Request, Reaction, Repost Post, Bookmark, Notification과 Read State를
+  바꾸지 않는다.
 - Alternatives Considered: 관계 생성과 콘텐츠·Notification 정책을 한 배포에 묶는 방식은 이슈 의존성과 검증 책임을 흐리므로 제외했다.
-- Consequences: `PROD-824`가 끝나도 사용자 노출 정책 전체가 완성되지는 않는다. `PROD-825`와 `PROD-814`가 이 관계를 사용하고 여러 구현 단위에 걸친 검증을 마칠 때까지 OpenSpec을 archive하지 않는다.
-- Confirmation / Follow-up: 이번 테스트는 기존 객체가 변하지 않는지만 확인한다. 콘텐츠 정책은 `PROD-825`, UI·Relay·전체 E2E와 archive는 `PROD-814`가 맡는다.
+- Consequences: `PROD-824`가 끝나도 사용자 노출 정책 전체가 완성되지는 않는다. `PROD-825`와
+  `PROD-814`가 이 관계를 사용하고 여러 구현 단위에 걸친 검증을 마칠 때까지 OpenSpec을 archive하지
+  않는다. Hashtag Post List runtime은 이 lifecycle과 별개로 `PROD-827`이 맡는다.
+- Confirmation / Follow-up: `PROD-824` 테스트는 기존 객체가 변하지 않는지 확인한다. 현재 Home·Profile·Repost
+  정책은 `PROD-825`, UI·Relay·Local Timeline·전체 E2E와 archive는 `PROD-814`, Hashtag runtime은
+  `PROD-827`이 맡는다.
+
+### Profile Mute는 탐색 목록을 억제하고 Target Profile의 직접 목록에는 적용하지 않는다
+
+- Decision Date: 2026-09-03
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/profile-mute.md`, `docs/domain/policies/post-list.md`,
+  `docs/design/profile-mute-block.md`, `PROD-814`, `PROD-825`
+- Status: Active
+- Context / Problem: 기존 canonical 문서와 Linear 이슈는 Target Profile Post List를 Collapse하는 방향과
+  직접 Profile에서 기존 Post를 유지하는 방향을 함께 담고 있어 직접 방문 시 행동이 일관되지 않았다.
+- Decision Outcome: Profile Mute는 Home·Local·Hashtag 같은 탐색 목록의 개인 노출을 억제한다. 사용자가
+  Target Profile을 직접 방문하면 `Profile.posts`에 Profile Mute를 적용하지 않고 기존 Post Visibility,
+  Post Eligibility와 구조 정책을 통과한 Post를 정상적으로 표시한다. Mute 상태와 해제 action은 Profile
+  surface에 남기되 Post를 Collapse하거나 별도 reveal을 요구하지 않는다.
+- Alternatives Considered: Target Profile Post를 Collapse하고 reveal control을 제공하는 안은 직접 방문에서도
+  Mute를 콘텐츠 접근 제한처럼 동작시키고 별도 서버·클라이언트 계약을 요구하므로 선택하지 않았다.
+- Consequences: Profile Mute 여부와 관계없이 직접 Profile의 Post connection shape와 후보 정책은 유지된다.
+  Profile UI는 관계 상태를 보여 주지만 Post presentation을 접지 않는다.
+- Confirmation / Follow-up: Mute한 Target의 `Profile.posts`가 기존 eligible Post를 접거나 제외하지 않는지
+  검증한다.
+
+### Target Profile은 기존 PostConnection을 유지하고 Mute 전용 결과를 추가하지 않는다
+
+- Decision Date: 2026-09-03
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/profile-mute.md`, `docs/domain/policies/post-list.md`,
+  `docs/design/profile-mute-block.md`, `PROD-814`, `PROD-825`
+- Status: Active
+- Context / Problem: Target Profile의 Post를 정상적으로 표시하는 데 Mute 전용 GraphQL 결과는 필요하지 않다.
+  이를 일반 `Post` field에 넣으면 같은 Post의 값이 목록 문맥에 따라 달라지고, connection edge나 별도
+  wrapper를 추가하면 소비하지 않는 공개 계약이 생긴다.
+- Decision Outcome: `Profile.posts`는 기존 `PostConnection`을 유지한다. Mute 전용 Post field,
+  connection edge field, enum 또는 wrapper를 추가하지 않는다.
+- Alternatives Considered: `PostConnectionEdge.controlDecision`과 별도 Mute-aware wrapper는 Target Profile
+  Post를 Collapse하지 않는 제품 계약에서 사용할 결과가 없어 선택하지 않았다. 일반 `Post` field는 문맥
+  의존 값을 Node에 넣게 되므로 제외했다.
+- Consequences: `PROD-825`는 GraphQL schema shape를 바꾸지 않고 Home 후보 정책과 회귀 테스트에 집중한다.
+  Profile surface의 Mute 상태는 기존 `ProfileViewerState.profileMute`를 소비한다.
+- Confirmation / Follow-up: schema diff에 Mute 전용 Post·edge field가 없고 `Profile.posts`가 기존
+  `PostConnection`을 반환하는지 확인한다.
+
+### Repost Source가 있는 Home 후보는 바깥 Author와 Source Author를 모두 판정한다
+
+- Decision Date: 2026-09-03
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/profile-mute.md`, `docs/domain/objects/post.md`,
+  `docs/domain/policies/post-list.md`, `PROD-814`, `PROD-825`
+- Status: Active
+- Context / Problem: 바깥 Post의 Author만 확인하면 Mute Target의 Source가 Repost나 Quote를 통해 Home에
+  남고, Source Author만 확인하면 Mute Target이 만든 바깥 Post가 남는다.
+- Decision Outcome: Home 후보가 direct Repost Source를 가지면 바깥 Post의 Author와 Source Post Author에
+  대한 Profile Mute를 각각 판정한다. 둘 중 하나라도 현재 selected Profile의 Mute Target이면 Content 없는
+  Repost와 Content가 있는 Quote를 모두 page limit 전에 제외한다. Source의 Source로 판정을 재귀 확장하지
+  않는다.
+- Alternatives Considered: 바깥 Author만 판정하거나 Source Author만 판정하는 안은 승인된 양쪽 작성자 판정
+  경계를 충족하지 못해 제외했다. Source chain을 평탄화하는 안은 Post가 direct Source만 참조하는 canonical
+  구조를 바꾸므로 선택하지 않았다.
+- Consequences: Home 후보 query는 바깥 Author와 direct Source Author를 같은 Owner 범위에서 판정해야 한다.
+  Target Profile 직접 목록에는 이 Profile Mute 판정을 적용하지 않는다.
+- Confirmation / Follow-up: 바깥 Author만 Mute한 경우, Source Author만 Mute한 경우, 둘 다 Mute하지 않은
+  Repost·Quote와 pagination을 통합 테스트로 검증한다.
+
+### 목록의 Profile Mute Owner는 요청의 selected Profile이며 해제는 새 조회부터 반영한다
+
+- Decision Date: 2026-09-03
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/profile-mute.md`,
+  `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/policies/post-list.md`,
+  `PROD-814`, `PROD-825`
+- Status: Active
+- Context / Problem: Account 단위나 Target 단위로 Mute 판정을 공유하면 같은 Account의 다른 selected Profile
+  결과가 섞이고, 해제한 관계가 후속 조회에도 남을 수 있다.
+- Decision Outcome: 목록 판정의 Owner는 각 요청의 현재 selected Profile이다. 같은 Account의 다른 Profile
+  관계를 재사용하지 않으며, Mute 해제 뒤 시작한 새 조회는 제거된 관계 없이 정책을 다시 계산한다.
+- Alternatives Considered: Account 단위 Mute와 요청 간 전역 cache는 Profile 단위 관계와 해제 후 최신
+  조회 계약에 어긋나므로 제외했다.
+- Consequences: Home 후보 query는 매 요청의 selected Profile ID를 Owner 조건으로 사용하며 Account나 Target
+  단위의 전역 cache를 재사용하지 않는다. 기존 클라이언트 connection의 즉시 갱신 방식은 `PROD-814`가
+  소유한다.
+- Confirmation / Follow-up: 같은 Account의 두 selected Profile과 Mute 해제 전후 새 Home 조회를 통합
+  테스트로 확인한다.
 
 ## Remaining Decisions
 
-- `PROD-826`: 기간 지정 Mute 생성, 만료 시각 검증과 non-null `expires_at`의 만료 판정·정리. 동일 pair의 기존 non-null row를 v1 재-Mute에서 같은 ID의 `null` row로 수렴시키는 계약은 이 change에서 확정하며, `PROD-826`이 필요하면 이를 명시적으로 대체할 수 있다. 이 항목은 `PROD-824` 구현을 막지 않는다.
+- `PROD-826`: 기간 지정 Mute 생성, 만료 시각 검증과 non-null `expires_at`의 만료 판정·정리. 동일 pair의 기존 non-null row를 v1 재-Mute에서 같은 ID의 `null` row로 수렴시키는 계약은 이 change에서 확정하며, `PROD-826`이 필요하면 이를 명시적으로 대체할 수 있다. 이 후속 결정은 현재 `PROD-825` 구현을 막지 않는다.
 
 ## Superseded Decisions
 

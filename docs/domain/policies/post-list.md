@@ -61,7 +61,7 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 | Control              | Home                           | Local                      | Profile                    | Hashtag                    |
 | -------------------- | ------------------------------ | -------------------------- | -------------------------- | -------------------------- |
 | Profile Block        | Exclude                        | Exclude                    | Exclude                    | Exclude                    |
-| Profile Mute         | Exclude                        | Exclude                    | Collapse                   | Exclude                    |
+| Profile Mute         | Exclude                        | Exclude                    | Include                    | Exclude                    |
 | Word Mute Rule       | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 |
 | Hashtag Mute Rule    | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 |
 | Profile Domain Block | Exclude                        | Exclude                    | Exclude                    | Exclude                    |
@@ -75,7 +75,10 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 - Followers Only 후보는 Author/Mentioned Profile이 아닌 viewer에게 viewer Profile과 Author Profile 사이의
   현재 established Follow Relationship을 추가로 요구하며, pending·rejected Follow Request 또는 unfollow로
   removed된 관계와 guest에는 접근 범위를 넓히지 않는다.
-- Repost에는 Repost Author와 Source Post Author에 대한 Profile Block/Profile Mute를 모두 적용한다.
+- Repost에는 Repost Author와 Source Post Author에 대한 Profile Block을 모두 적용한다.
+- Home·Local·Hashtag Post List에서 Repost Source가 있는 후보에는 바깥 Post Author와 Source Post Author에
+  대한 Profile Mute를 모두 적용하고, 둘 중 하나라도 Target Profile이면 Exclude한다. Profile Post List에는
+  Profile Mute를 적용하지 않는다.
 - Post List 제어는 Post Visibility가 허용하지 않은 viewer에게 접근 범위를 넓히지 않는다.
 
 ## 제외/보류

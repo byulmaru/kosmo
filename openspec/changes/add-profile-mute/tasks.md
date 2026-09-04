@@ -129,3 +129,57 @@ Profile Mute 기반이 기존 관계와 상호작용 상태를 건드리지 않�
 - [x] 4.2 `pnpm --filter @kosmo/core test:migrate`, `test:migrate:smoke`, `test:services:database`를 통과시킨다.
 - [x] 4.3 `pnpm --filter @kosmo/api lint:schema`, `lint:tsc`, `test:unit`, `test:integration`을 통과시킨다.
 - [x] 4.4 저장소 ESLint·Prettier와 strict OpenSpec validation을 통과시키고, 결과와 제외 범위를 PR에 기록한다.
+
+## 5. PROD-825 현재 Post List의 Profile Mute 정책
+
+**Authority / Provenance**
+
+- `docs/domain/objects/profile-mute.md`
+- `docs/domain/objects/post.md`
+- `docs/domain/policies/post-list.md`
+- `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`
+- `docs/design/profile-mute-block.md`
+- `PROD-814`
+- `PROD-825`
+
+**Deliverable**
+
+현재 selected Profile이 Mute한 Author와 direct Source Author의 Post를 Home에서 page limit 전에 제외한다.
+Target Profile을 직접 방문한 Post List는 Profile Mute 때문에 접거나 제외하지 않고 기존 표시 결과를
+그대로 유지한다.
+
+**Guardrails**
+
+- Profile Mute 판정의 Owner는 요청의 현재 selected Profile이며 같은 Account의 다른 Profile 관계를 섞지
+  않는다.
+- Home 후보 query는 Owner·Target·`expires_at IS NULL` 조건을 직접 조합하며, 공통 Core DB query helper나
+  transport-neutral 읽기 경계를 새로 만들지 않는다.
+- Home에서 Profile Mute에 따른 모든 제외는 page limit과 cursor 계산 전에 끝낸다.
+- Repost Source가 있는 Home 후보는 바깥 Author와 direct Source Author를 모두 판정하고 Source chain을
+  재귀적으로 평탄화하지 않는다.
+- Target Profile의 직접 Post List에는 Profile Mute를 적용하지 않고 기존 `PostConnection`을 유지한다.
+- Mute 전용 Post field, connection edge field와 GraphQL enum을 추가하지 않는다.
+- 새 DB migration을 만들지 않고 PROD-824의 관계와 index를 재사용한다.
+- Hashtag Post List runtime은 PROD-827, Local Timeline과 UI·Relay·cross-slice E2E·archive는 PROD-814의
+  범위로 둔다.
+- Mute 판정과 해제는 기존 관계·상호작용·Notification과 Read State를 변경하지 않는다.
+
+**Verification**
+
+- 일반 Content Post와 Reply를 Mute한 Author를 기준으로 page limit 전에 제외하는지 확인한다.
+- 바깥 Author만 Mute한 경우, direct Source Author만 Mute한 경우와 두 Author 모두 Mute하지 않은 경우의
+  Repost·Quote를 검증한다.
+- 제외 후보 뒤의 eligible Post로 페이지가 채워지고 cursor와 `hasNextPage`가 맞는지 확인한다.
+- Mute한 Target의 `Profile.posts`와 Mute한 Source Author를 가진 Repost·Quote가 기존
+  Visibility·Eligibility 결과와 schema shape를 유지하는지 확인한다.
+- 같은 Account의 두 selected Profile 결과와 Mute 해제 뒤 새 Home 조회를 검증한다.
+
+- [ ] 5.1 Home 후보 query에서 selected Profile을 Owner로 삼고 Owner·Target·`expires_at IS NULL` 활성 관계
+      조건을 직접 조합한다.
+- [ ] 5.2 Home 후보의 Author Profile Mute를 page limit 전에 적용한다.
+- [ ] 5.3 Repost Source가 있는 Home 후보의 바깥 Author와 direct Source Author Mute를 모두 적용한다.
+- [ ] 5.4 Target Profile의 직접 Post List가 Target·Source Author의 Profile Mute와 무관하게 기존 결과와
+      공개 schema를 유지하는지 검증한다.
+- [ ] 5.5 일반 Post·Reply, Author별 Mute 조합의 Repost·Quote, pagination, selected Profile 격리와 Mute
+      해제 후 새 조회 회귀 테스트를 추가한다.
+- [ ] 5.6 PROD-825 관련 Core·API 검증과 strict OpenSpec validation을 통과시키고 범위·결과를 PR에 기록한다.

@@ -2,8 +2,9 @@
 
 ## 정의
 
-Profile Mute는 Owner Profile이 Target Profile의 콘텐츠와 새 Notification 노출을 개인적으로 억제한 관계다.
-대상 Profile에는 알리지 않으며 기존 관계와 상호작용 객체를 제거하지 않는다.
+Profile Mute는 Owner Profile이 Target Profile의 콘텐츠가 탐색 목록과 새 Notification에 노출되는 것을
+개인적으로 억제한 관계다. Target Profile의 직접 Post List 접근은 제한하지 않는다. 대상 Profile에는 알리지
+않으며 기존 관계와 상호작용 객체를 제거하지 않는다.
 
 ## 상태
 
@@ -40,8 +41,11 @@ Profile Mute는 Owner Profile이 Target Profile의 콘텐츠와 새 Notification
 
 ## 조회 정책
 
-- Home/Hashtag Post List에서는 Target Profile의 Post를 Exclude한다.
-- Target Profile Post List에서는 Target Profile의 Post를 Collapse한다.
+- Home/Local/Hashtag Post List에서는 Target Profile의 Post를 Exclude한다.
+- Target Profile Post List에서는 Profile Mute를 적용하지 않고 기존 Post Visibility와 Post Eligibility를
+  통과한 Post를 정상적으로 표시한다.
+- Profile Mute를 적용하는 Post List에서 Repost Source가 있는 후보는 바깥 Post Author와 Source Post Author를
+  모두 판정하며, 둘 중 하나라도 Target Profile이면 Exclude한다.
 - Target Profile에서 발생한 새 Notification은 생성하지 않는다.
 - 기존 Notification의 존재와 Read State는 바꾸지 않는다.
 - 만료 시각이 지난 Profile Mute는 조회 정책에 적용하지 않는다.
