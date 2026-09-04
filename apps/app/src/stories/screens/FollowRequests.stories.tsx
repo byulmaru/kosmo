@@ -262,8 +262,10 @@ export const StatesAndRequesterRows: Story = {
       '/@starlight',
     );
     expect(canvas.getByText('@starlight')).toBeVisible();
-    expect(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인' })).toBeEnabled();
-    expect(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 거절' })).toBeEnabled();
+    const approveButton = canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인' });
+    const rejectButton = canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 거절' });
+    expect(approveButton).toBeEnabled();
+    expect(rejectButton).toBeEnabled();
     expect(canvas.getByText('확인할 수 없는 프로필')).toBeVisible();
     expect(
       canvas.queryByRole('button', { name: '확인할 수 없는 프로필 팔로우 요청 승인' }),
