@@ -10,13 +10,11 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 type RouteBoundaryValue = {
   fetchKey: number;
   refetch: () => void;
-  retry: () => void;
 };
 
 const RouteBoundaryContext = createContext<RouteBoundaryValue>({
   fetchKey: 0,
   refetch: () => undefined,
-  retry: () => undefined,
 });
 const queryHistory: Array<{
   fetchKey: number;
@@ -63,13 +61,13 @@ mock.module('@/components/RouteBoundary', {
   exports: {
     RouteBoundary: ({ children }: PropsWithChildren) => {
       const [fetchKey, setFetchKey] = useState(0);
-      const retry = () => setFetchKey((key) => key + 1);
-      const value = { fetchKey, refetch: retry, retry };
+      const refetch = () => setFetchKey((key) => key + 1);
+      const value = { fetchKey, refetch };
 
       return createElement(
         RouteBoundaryContext.Provider,
         { value },
-        createElement('RouteBoundary', { onRetry: undefined, retry }, children),
+        createElement('RouteBoundary', { onRetry: undefined, refetch }, children),
       );
     },
     useRouteBoundary: () => useContext(RouteBoundaryContext),
@@ -131,7 +129,7 @@ afterEach(async () => {
 });
 
 describe('ReactionProfilesModal RouteBoundary lifecycle', () => {
-  it('가까운 RouteBoundary가 소유한 fetchKey로 query를 재시도한다', async () => {
+  it('가까운 RouteBoundary가 소유한 fetchKey로 query를 재조회한다', async () => {
     await renderModal();
 
     assert.deepEqual(queryHistory.at(-1), {
@@ -142,7 +140,7 @@ describe('ReactionProfilesModal RouteBoundary lifecycle', () => {
     const boundary = requireRendered('RouteBoundary');
     assert.equal(boundary.props.onRetry, undefined);
 
-    await act(async () => boundary.props.retry());
+    await act(async () => boundary.props.refetch());
 
     assert.equal(queryHistory.at(-1)?.fetchKey, 1);
     assert.equal(queryHistory.at(-1)?.variables.postId, 'post-1');
