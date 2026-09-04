@@ -19,8 +19,6 @@ jobs:
       actions: read
       contents: read
       packages: write
-    outputs:
-      image_digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout
@@ -74,15 +72,25 @@ jobs:
           secret-envs: |
             sentry_auth_token=SENTRY_AUTH_TOKEN
 
-      - name: Save Docker image reference for Trivy
-        if: github.ref == 'refs/heads/main'
+      - name: Create canonical release manifest
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         shell: bash
-        run: echo "ghcr.io/${GITHUB_REPOSITORY}@${{ steps.build.outputs.digest }}" > docker-image-ref.txt
+        run: |
+          set -euo pipefail
 
-      - name: Upload Docker image reference for Trivy
-        if: github.ref == 'refs/heads/main'
+          if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Docker Build did not produce a valid image digest."
+            exit 1
+          fi
+
+          jq -n --arg image_digest "${IMAGE_DIGEST}" \
+            '{imageDigest: $image_digest}' > release-manifest.json
+
+      - name: Upload canonical release manifest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: docker-image-ref
-          path: docker-image-ref.txt
-          retention-days: 7
+          name: canonical-release-manifest
+          path: release-manifest.json
+          if-no-files-found: error
+          retention-days: 90
