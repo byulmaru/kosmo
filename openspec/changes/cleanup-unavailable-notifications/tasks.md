@@ -75,11 +75,11 @@ namespace가 준비된 뒤 환경별 deterministic ID로 활성 Schedule을 crea
 
 - PreSync Job의 Schedule create/already-exists 경계, active 상태·Workflow 연결과 기존 Schedule 보존을 확인한다.
 
-- [ ] 3.1 missing Schedule을 24시간 기본 interval과 `SKIP` overlap으로 활성 생성한다.
-- [ ] 3.2 existing Schedule은 아무것도 변경하지 않는다.
-- [ ] 3.3 namespace 뒤 실행되는 bounded PreSync Job과 환경별 deterministic ID를 유지한다.
-- [ ] 3.4 pause/enabled reconciliation, Worker metrics endpoint와 Helm metrics metadata를 제거한다.
-- [ ] 3.5 create와 already-exists 경계만 의미 있는 test로 검증한다.
+- [x] 3.1 missing Schedule을 24시간 기본 interval과 `SKIP` overlap으로 활성 생성한다.
+- [x] 3.2 existing Schedule은 아무것도 변경하지 않는다.
+- [x] 3.3 namespace 뒤 실행되는 bounded PreSync Job과 환경별 deterministic ID를 유지한다.
+- [x] 3.4 pause/enabled reconciliation, Worker metrics endpoint와 Helm metrics metadata를 제거한다.
+- [x] 3.5 create와 already-exists 경계만 의미 있는 test로 검증한다.
 
 ## 4. PROD-328 통합 검증과 OpenSpec archive — PR [#666](https://github.com/byulmaru/kosmo/pull/666)
 
