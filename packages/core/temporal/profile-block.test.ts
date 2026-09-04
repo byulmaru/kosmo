@@ -63,7 +63,18 @@ test('Profile Block caller waits for the one-shot Workflow result', async () => 
     assert.ok(options);
     assert.deepEqual(options.args, [input]);
     assert.equal(options.taskQueue, 'kosmo');
-    assert.equal(options.workflowId, profileBlockWorkflowId(input));
+    assert.equal(
+      options.workflowId,
+      'profile-block:00000000-0000-8000-8000-000000000001:00000000-0000-8000-8000-000000000002',
+    );
+    assert.notEqual(
+      options.workflowId,
+      profileBlockWorkflowId({
+        ...input,
+        ownerProfileId: input.targetProfileId,
+        targetProfileId: input.ownerProfileId,
+      }),
+    );
     assert.equal(options.workflowIdConflictPolicy, 'USE_EXISTING');
     assert.equal(options.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
     assert.equal(deadline.mock.calls.length, 1);
@@ -71,21 +82,6 @@ test('Profile Block caller waits for the one-shot Workflow result', async () => 
     deadline.mock.restore();
     execute.mock.restore();
   }
-});
-
-test('Profile Block caller keeps direction in the deterministic Workflow ID', () => {
-  assert.equal(
-    profileBlockWorkflowId(input),
-    'profile-block:00000000-0000-8000-8000-000000000001:00000000-0000-8000-8000-000000000002',
-  );
-  assert.notEqual(
-    profileBlockWorkflowId(input),
-    profileBlockWorkflowId({
-      ...input,
-      ownerProfileId: input.targetProfileId,
-      targetProfileId: input.ownerProfileId,
-    }),
-  );
 });
 
 test('Profile Unblock caller waits for the one-shot Workflow result', async () => {
@@ -127,7 +123,25 @@ test('Profile Unblock caller waits for the one-shot Workflow result', async () =
     assert.ok(options);
     assert.deepEqual(options.args, [unblockInput]);
     assert.equal(options.taskQueue, 'kosmo');
-    assert.equal(options.workflowId, profileUnblockWorkflowId(unblockInput));
+    assert.equal(
+      options.workflowId,
+      'profile-unblock:00000000-0000-8000-8000-000000000001:00000000-0000-8000-8000-000000000002:00000000-0000-8000-8000-000000000004',
+    );
+    assert.notEqual(
+      options.workflowId,
+      profileUnblockWorkflowId({
+        ...unblockInput,
+        ownerProfileId: input.targetProfileId,
+        targetProfileId: input.ownerProfileId,
+      }),
+    );
+    assert.notEqual(
+      options.workflowId,
+      profileUnblockWorkflowId({
+        ...unblockInput,
+        profileBlockId: '00000000-0000-8000-8000-000000000005',
+      }),
+    );
     assert.equal(options.workflowIdConflictPolicy, 'USE_EXISTING');
     assert.equal(options.workflowIdReusePolicy, 'REJECT_DUPLICATE');
     assert.equal(deadline.mock.calls.length, 1);
@@ -135,28 +149,6 @@ test('Profile Unblock caller waits for the one-shot Workflow result', async () =
     deadline.mock.restore();
     execute.mock.restore();
   }
-});
-
-test('Profile Unblock caller keeps direction in the deterministic Workflow ID', () => {
-  assert.equal(
-    profileUnblockWorkflowId(unblockInput),
-    'profile-unblock:00000000-0000-8000-8000-000000000001:00000000-0000-8000-8000-000000000002:00000000-0000-8000-8000-000000000004',
-  );
-  assert.notEqual(
-    profileUnblockWorkflowId(unblockInput),
-    profileUnblockWorkflowId({
-      ...unblockInput,
-      ownerProfileId: input.targetProfileId,
-      targetProfileId: input.ownerProfileId,
-    }),
-  );
-  assert.notEqual(
-    profileUnblockWorkflowId(unblockInput),
-    profileUnblockWorkflowId({
-      ...unblockInput,
-      profileBlockId: '00000000-0000-8000-8000-000000000005',
-    }),
-  );
 });
 
 test('Profile Unblock caller observes the existing completed generation after a retry', async () => {

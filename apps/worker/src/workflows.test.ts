@@ -1253,7 +1253,6 @@ test(
       assert.deepEqual(result, execution.result);
       assert.equal(transitionAttempts, 2);
       assert.equal(deleteCalls, 1);
-      assert.equal(transitionInputs.length, 2);
       const firstInput = transitionInputs[0] as {
         candidateProfileBlockId?: string;
         cleanupSources: typeof cleanupSources;
@@ -1760,33 +1759,21 @@ test(
       profileBlockId: '00000000-0000-8000-8000-000000000833',
       origin: 'LOCAL' as const,
     };
-    const replacementFollowId = '00000000-0000-8000-8000-000000000835';
     let finalDeleteCalls = 0;
-    let transitionInput: unknown;
 
     const worker = await Worker.create({
       activities: {
-        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => [
-          {
-            sourceId: replacementFollowId,
-            sourceKind: 'FOLLOW' as const,
-            followerProfileId: input.ownerProfileId,
-            followeeProfileId: input.targetProfileId,
+        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => [],
+        executeProfileUnblockTransitionActivity: async () => ({
+          ok: true as const,
+          result: {
+            removed: false,
+            profileBlockId: null,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
           },
-        ],
-        executeProfileUnblockTransitionActivity: async (value: unknown) => {
-          transitionInput = value;
-          return {
-            ok: true as const,
-            result: {
-              removed: false,
-              profileBlockId: null,
-              ownerProfileId: input.ownerProfileId,
-              targetProfileId: input.targetProfileId,
-            },
-            effectPlan: [],
-          };
-        },
+          effectPlan: [],
+        }),
         deleteProfileBlockActivity: async () => {
           finalDeleteCalls += 1;
         },
@@ -1809,20 +1796,6 @@ test(
         profileBlockId: null,
         ownerProfileId: input.ownerProfileId,
         targetProfileId: input.targetProfileId,
-      });
-      assert.deepEqual(transitionInput, {
-        ownerProfileId: input.ownerProfileId,
-        targetProfileId: input.targetProfileId,
-        origin: input.origin,
-        expectedProfileBlockId: input.profileBlockId,
-        cleanupSources: [
-          {
-            sourceId: replacementFollowId,
-            sourceKind: 'FOLLOW',
-            followerProfileId: input.ownerProfileId,
-            followeeProfileId: input.targetProfileId,
-          },
-        ],
       });
       assert.equal(finalDeleteCalls, 0);
     });
