@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react';
+import { Fragment, Suspense, useCallback, useState } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
+import { Splash } from '@/components/Splash';
 import { StateView } from '@/components/ui/StateView';
 import {
   UnexpectedErrorContext,
@@ -17,9 +18,9 @@ export type GraphQLErrorBoundaryProps = PropsWithChildren<{
 export function GraphQLErrorBoundary({ children, onError, onRetry }: GraphQLErrorBoundaryProps) {
   const inheritedErrorReporter = useUnexpectedErrorReporter();
   const reportError = onError ?? inheritedErrorReporter;
-  const [retryKey, setRetryKey] = useState(0);
+  const [runtimeKey, setRuntimeKey] = useState(0);
   const reset = useCallback(() => {
-    setRetryKey((key) => key + 1);
+    setRuntimeKey((key) => key + 1);
     onRetry?.();
   }, [onRetry]);
 
@@ -28,11 +29,11 @@ export function GraphQLErrorBoundary({ children, onError, onRetry }: GraphQLErro
       <ErrorBoundary
         fallbackRender={({ error, resetErrorBoundary }) => (
           <StateView
-            actionLabel="다시 시도"
+            actionLabel="앱 다시 불러오기"
             alert
             description={formatGraphQLError(error)}
             onAction={resetErrorBoundary}
-            title="화면을 불러오지 못했어요"
+            title="앱을 불러오지 못했어요"
           />
         )}
         onError={(error, info) => {
@@ -41,12 +42,10 @@ export function GraphQLErrorBoundary({ children, onError, onRetry }: GraphQLErro
         }}
         onReset={reset}
       >
-        <GraphQLErrorSubtree key={retryKey}>{children}</GraphQLErrorSubtree>
+        <Suspense fallback={<Splash label="앱을 불러오는 중입니다." />}>
+          <Fragment key={runtimeKey}>{children}</Fragment>
+        </Suspense>
       </ErrorBoundary>
     </UnexpectedErrorContext.Provider>
   );
-}
-
-function GraphQLErrorSubtree({ children }: PropsWithChildren) {
-  return children;
 }

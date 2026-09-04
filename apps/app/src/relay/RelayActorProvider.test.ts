@@ -3,11 +3,6 @@ import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
 import { commitLocalUpdate, Environment, Network, RecordSource, Store } from 'relay-runtime';
-import {
-  SessionRecoveryProvider,
-  useSessionRecovery,
-  useSessionRecoveryGeneration,
-} from '../session/SessionRecoveryCoordinator';
 import type { ComponentType, PropsWithChildren } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
@@ -18,20 +13,15 @@ type RelayActorSnapshot = {
   clearNativeSession: () => Promise<void>;
   environment: Environment;
   nativeToken: string | null;
-  recoverSession: () => void;
   resetActor: (profileId?: string | null) => void;
   setNativeSession: (token: string) => Promise<void>;
 };
 
-type RelayActorSnapshotValue = Omit<
-  RelayActorSnapshot,
-  'actorLifecycleKey' | 'environment' | 'recoverSession'
->;
+type RelayActorSnapshotValue = Omit<RelayActorSnapshot, 'actorLifecycleKey' | 'environment'>;
 
 let deleteFailure = false;
 let deleteItemCallCount = 0;
 let actorSubtreeMountCount = 0;
-let observedRecoveryGeneration = 0;
 let stableSubtreeMountCount = 0;
 let renderer: ReactTestRenderer | null = null;
 let snapshot: RelayActorSnapshot | null = null;
@@ -86,7 +76,6 @@ beforeEach(() => {
   deleteFailure = false;
   deleteItemCallCount = 0;
   actorSubtreeMountCount = 0;
-  observedRecoveryGeneration = 0;
   stableSubtreeMountCount = 0;
   snapshot = null;
   storedToken = null;
@@ -109,11 +98,6 @@ function createEnvironment(token: string | null): Environment {
 function Probe() {
   const actor = useRelayActor();
   const actorLifecycleKey = useRelayActorLifecycleKey();
-  const recoverSession = useSessionRecovery();
-  const generation = useSessionRecoveryGeneration();
-  useEffect(() => {
-    observedRecoveryGeneration = generation;
-  }, [generation]);
   useEffect(() => {
     actorSubtreeMountCount += 1;
   }, []);
@@ -122,7 +106,6 @@ function Probe() {
     clearNativeSession: actor.clearNativeSession,
     environment: useRelayEnvironment(),
     nativeToken: actor.nativeToken,
-    recoverSession,
     resetActor: actor.resetActor,
     setNativeSession: actor.setNativeSession,
   };
@@ -140,44 +123,13 @@ function StableProbe() {
 async function renderProvider() {
   await act(async () => {
     renderer = create(
-      createElement(
-        RelayActorProvider,
-        { createEnvironment },
-        createElement(SessionRecoveryProvider, null, createElement(StableProbe)),
-      ),
+      createElement(RelayActorProvider, { createEnvironment }, createElement(StableProbe)),
     );
   });
   assert.ok(snapshot);
 }
 
 describe('RelayActorProvider session cleanup', () => {
-  it('same-actor session recovery는 Environment와 Store 및 actor subtree를 유지한다', async () => {
-    await renderProvider();
-
-    assert.ok(snapshot);
-    const previousEnvironment = snapshot.environment;
-    const previousStore = previousEnvironment.getStore();
-    const previousActorLifecycleKey = snapshot.actorLifecycleKey;
-    const previousActorMountCount = actorSubtreeMountCount;
-    commitLocalUpdate(previousEnvironment, (store) => {
-      store.create('warm-viewer', 'Profile').setValue('warm cache', 'displayName');
-    });
-
-    await act(async () => snapshot?.recoverSession());
-
-    assert.ok(snapshot);
-    assert.equal(observedRecoveryGeneration, 1);
-    assert.equal(snapshot.environment, previousEnvironment);
-    assert.equal(snapshot.environment.getStore(), previousStore);
-    assert.equal(snapshot.actorLifecycleKey, previousActorLifecycleKey);
-    assert.equal(
-      snapshot.environment.getStore().getSource().get('warm-viewer')?.displayName,
-      'warm cache',
-    );
-    assert.equal(actorSubtreeMountCount, previousActorMountCount);
-    assert.equal(stableSubtreeMountCount, 1);
-  });
-
   it('actor reset은 같은 app lifecycle에서 이전 Store를 새 Store로 교체한다', async () => {
     await renderProvider();
 

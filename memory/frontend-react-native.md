@@ -32,7 +32,7 @@
 - mutation 응답은 영향받는 Node의 `id`와 변경된 필드를 선택해 Relay normalized store가 갱신되게 한다. connection membership 변경이 필요할 때만 Relay connection directive 또는 좁은 updater를 사용한다.
 - 새 게시글의 현재 actor Home 목록은 producer별로 별도 갱신한다. 현재 actor가 호출한 `createPost` 성공 결과의 normalized `post`만 요청 actor Store의 이미 로드된 Home managed connection에 Relay `@prependNode` directive로 최신순·중복 없이 반영하고, Post List 후보·정책 필드·cursor를 클라이언트에서 합성하거나 광범위하게 refetch하지 않는다. 로드되지 않은 Home connection은 Relay가 만들지 않는다. 다른 producer의 membership 전달은 이 흐름의 계약이 아니다. actor Environment가 전환된 뒤 늦게 완료된 이전 요청은 이전 Store에만 적용하고 새 actor UI를 변경하지 않는다.
 - profile 선택 mutation은 payload UI 갱신과 actor environment reset을 모두 수행한다. 이전 actor Store를 새 profile에 재사용하지 않는다.
-- GraphQL/network 오류는 공용 error boundary와 한국어 fallback을 사용한다. backend `message` 원문 노출 정책이 확정되지 않은 흐름에서는 컴포넌트마다 ad hoc 분기를 만들지 않는다.
+- Route와 독립 surface의 GraphQL/network 오류는 가장 가까운 error boundary가 소유하고, 해당 query만 새 `fetchKey` 또는 query reference로 재시도한다. 루트까지 전파된 오류는 특정 query를 추측해 재시도하지 않고 Relay·Session provider runtime 전체를 다시 생성한다. backend `message` 원문 노출 정책이 확정되지 않은 흐름에서는 컴포넌트마다 ad hoc 분기를 만들지 않는다.
 
 ## Relay Connections
 

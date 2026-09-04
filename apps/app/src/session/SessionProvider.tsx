@@ -14,7 +14,6 @@ import { graphql, useLazyLoadQuery } from 'react-relay';
 import { Splash } from '@/components/Splash';
 import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
 import { useRelayActor, useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
-import { useSessionRecoveryGeneration } from './SessionRecoveryCoordinator';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { SessionProviderQuery as SessionProviderQueryType } from './__generated__/SessionProviderQuery.graphql';
 
@@ -104,11 +103,10 @@ function SessionQuery({
   onSessionChange: (lifecycleKey: string, value: SessionValue) => void;
 }) {
   const { clearNativeSession, nativeToken } = useRelayActor();
-  const recoveryGeneration = useSessionRecoveryGeneration();
   const data = useLazyLoadQuery<SessionProviderQueryType>(
     SessionProviderQuery,
     {},
-    { fetchKey: recoveryGeneration, fetchPolicy: 'store-and-network' },
+    { fetchPolicy: 'store-and-network' },
   );
   const sessionId = data.currentSession?.id ?? null;
   const session = useMemo(
@@ -162,13 +160,12 @@ export function SessionFailOpenBoundary({
 }: PropsWithChildren<{ fallback: ReactNode; resetKey?: number }>) {
   const reportUnexpectedError = useUnexpectedErrorReporter();
   const actorLifecycleKey = useRelayActorLifecycleKey();
-  const recoveryGeneration = useSessionRecoveryGeneration();
 
   return (
     <ErrorBoundary
       fallback={fallback}
       onError={reportUnexpectedError}
-      resetKeys={[actorLifecycleKey, recoveryGeneration, resetKey]}
+      resetKeys={[actorLifecycleKey, resetKey]}
     >
       {children}
     </ErrorBoundary>

@@ -24,17 +24,21 @@ const queryModes: Record<QueryName, QueryMode> = {
 };
 const queryHistory: Array<{ fetchKey: unknown; query: QueryName }> = [];
 const pendingSessionQueries: Array<() => void> = [];
+const pendingRootRenders: Array<() => void> = [];
 const unreadFetches: string[] = [];
 let currentEnvironment: FakeEnvironment;
 let unreadFailure = false;
 let navigationMounts = 0;
 let navigationUnmounts = 0;
+let relayActorMounts = 0;
+let relayActorUnmounts = 0;
+let rootShouldThrow = false;
+let rootShouldSuspend = false;
 let AppProviders: ComponentType<PropsWithChildren>;
 let RouteBoundary: ComponentType<{
   children: ReactNode;
   error?: (retry: () => void) => ReactNode;
   loading: ReactNode;
-  onRetry?: () => void;
   title: string;
 }>;
 let useRouteBoundary: () => { fetchKey: number };
@@ -44,7 +48,6 @@ let useSession: () => {
   sessionId: string | null;
   status: string;
 };
-let useSessionRecovery: () => () => void;
 let useUnreadNotificationCount: () => number | null;
 let UnreadNotificationBadgeController: ComponentType<PropsWithChildren>;
 let renderer: ReactTestRenderer | null = null;
@@ -72,6 +75,13 @@ type FakeEnvironment = {
 };
 
 function MockRelayActorProvider({ children }: PropsWithChildren) {
+  useEffect(() => {
+    relayActorMounts += 1;
+    return () => {
+      relayActorUnmounts += 1;
+    };
+  }, []);
+
   const [nativeToken, setNativeToken] = useState<string | null>(null);
   const [actorLifecycleKey, setActorLifecycleKey] = useState('actor-session');
   const setNativeSession = useCallback(async (token: string) => {
@@ -177,10 +187,9 @@ mockModule(new URL('../analytics/AnalyticsSessionBridge.tsx', import.meta.url), 
 mockModule(new URL('../components/post/PostContentWarningRevealContext.tsx', import.meta.url), {
   PostContentWarningRevealProvider: ({ children }: PropsWithChildren) => children,
 });
-mockModule(new URL('../components/GraphQLErrorBoundary.tsx', import.meta.url), {
-  GraphQLErrorBoundary: ({ children }: PropsWithChildren) => children,
+mockModule(new URL('../components/Splash.tsx', import.meta.url), {
+  Splash: ({ label }: { label?: string }) => createElement('Splash', { label }),
 });
-mockModule(new URL('../components/Splash.tsx', import.meta.url), { Splash: () => null });
 mockModule(new URL('../components/ui/StateView.tsx', import.meta.url), {
   StateView: ({ onAction, title }: { onAction?: () => void; title: string }) =>
     createElement('StateView', { onAction, title }),
@@ -200,7 +209,6 @@ mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
 before(async () => {
   ({ AppProviders } = await import('./AppProviders'));
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
-  ({ useSessionRecovery } = await import('../session/SessionRecoveryCoordinator'));
   ({ useSession } = await import('../session/SessionProvider'));
   ({ useRelayActor } = await import('../relay/RelayActorProvider'));
   ({ UnreadNotificationBadgeController, useUnreadNotificationCount } =
@@ -216,6 +224,11 @@ beforeEach(() => {
   unreadFailure = false;
   navigationMounts = 0;
   navigationUnmounts = 0;
+  relayActorMounts = 0;
+  relayActorUnmounts = 0;
+  rootShouldThrow = false;
+  rootShouldSuspend = false;
+  pendingRootRenders.length = 0;
   currentEnvironment = createEnvironment({ id: 'profile-a', unreadNotificationCount: 7 });
 });
 
@@ -256,12 +269,10 @@ function lazyLoadQuery(
 }
 
 function ShellRecoveryRoute() {
-  const recoverSession = useSessionRecovery();
   return createElement(RouteBoundary, {
     children: createElement(ShellRecoveryContent),
     error: (retry) => createElement('Retry', { onPress: retry }),
     loading: createElement('Loading'),
-    onRetry: recoverSession,
     title: 'Shell failed',
   });
 }
@@ -283,6 +294,17 @@ function NativeSessionFixture() {
     sessionId: session.sessionId,
     status: session.status,
   });
+}
+
+function RootRuntimeProbe() {
+  if (rootShouldThrow) {
+    throw new Error('root runtime failed');
+  }
+  if (rootShouldSuspend) {
+    throw new Promise<void>((resolve) => pendingRootRenders.push(resolve));
+  }
+
+  return createElement('RootRuntimeProbe');
 }
 
 function ShellUnreadFixture() {
@@ -309,7 +331,60 @@ function findTag(tag: string) {
   return node;
 }
 
-describe('AppProviders Session recovery composition', () => {
+describe('AppProviders runtime composition', () => {
+  it('root fallback remounts the complete app runtime after its action', async () => {
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+    try {
+      await act(async () => {
+        renderer = create(createElement(AppProviders, null, createElement(RootRuntimeProbe)));
+      });
+
+      assert.equal(relayActorMounts, 1);
+      assert.equal(relayActorUnmounts, 0);
+
+      rootShouldThrow = true;
+      await act(async () => {
+        renderer?.update(createElement(AppProviders, null, createElement(RootRuntimeProbe)));
+      });
+
+      assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 1);
+      assert.equal(relayActorMounts, 1);
+      assert.equal(relayActorUnmounts, 1);
+
+      rootShouldThrow = false;
+      const fallback = renderer?.root.findAll((node) => String(node.type) === 'StateView')[0];
+      assert.ok(fallback);
+      await act(async () => fallback.props.onAction());
+
+      assert.equal(relayActorMounts, 2);
+      assert.equal(relayActorUnmounts, 1);
+      assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 0);
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
+
+  it('root suspense uses the app loading splash for a pending runtime', async () => {
+    rootShouldSuspend = true;
+    await act(async () => {
+      renderer = create(createElement(AppProviders, null, createElement(RootRuntimeProbe)));
+    });
+
+    assert.equal(findTag('Splash').props.label, '앱을 불러오는 중입니다.');
+
+    rootShouldSuspend = false;
+    await act(async () => {
+      pendingRootRenders.splice(0).forEach((resolve) => resolve());
+    });
+
+    assert.equal(renderer?.root.findAll((node) => String(node.type) === 'Splash').length, 0);
+    assert.equal(
+      renderer?.root.findAll((node) => String(node.type) === 'RootRuntimeProbe').length,
+      1,
+    );
+  });
+
   it('does not expose the previous profile while a new actor Session query is pending', async () => {
     await act(async () => {
       renderer = create(createElement(AppProviders, null, createElement(NativeSessionFixture)));
@@ -361,7 +436,7 @@ describe('AppProviders Session recovery composition', () => {
     assert.equal(navigationUnmounts, 0);
   });
 
-  it('one route retry increments session recovery and reruns shell and unread queries', async () => {
+  it('one route retry reruns only the failed route query', async () => {
     queryModes.SessionProviderQuery = 'success';
     queryModes.ShellRecoveryQuery = 'error';
     currentEnvironment = createEnvironment(null);
@@ -377,6 +452,9 @@ describe('AppProviders Session recovery composition', () => {
       count: null,
       selectedProfileId: 'profile-a',
     });
+    const sessionQueryCountBeforeRetry = queryHistory.filter(
+      ({ query }) => query === 'SessionProviderQuery',
+    ).length;
 
     queryModes.SessionProviderQuery = 'success';
     queryModes.ShellRecoveryQuery = 'success';
@@ -388,13 +466,13 @@ describe('AppProviders Session recovery composition', () => {
 
     assert.deepEqual(findTag('Ready').props, { action: 'ready', status: 'valid' });
     assert.equal(
-      queryHistory.filter(({ query }) => query === 'SessionProviderQuery').at(-1)?.fetchKey,
-      1,
+      queryHistory.filter(({ query }) => query === 'SessionProviderQuery').length,
+      sessionQueryCountBeforeRetry,
     );
     assert.ok(queryHistory.filter(({ query }) => query === 'ShellRecoveryQuery').length > 1);
-    assert.deepEqual(unreadFetches, ['profile-a', 'profile-a']);
+    assert.deepEqual(unreadFetches, ['profile-a']);
     assert.deepEqual(findTag('BadgeValue').props, {
-      count: 7,
+      count: null,
       selectedProfileId: 'profile-a',
     });
   });
