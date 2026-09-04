@@ -18,6 +18,7 @@ import {
   NotificationReadAllProvider,
 } from '@/components/notification/NotificationReadAllContext';
 import { PageHeader } from '@/components/PageHeader';
+import { PostMediaViewerScreenFallbackProvider } from '@/components/post/PostMediaViewerHost';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
 import { IconButton } from '@/components/ui/IconButton';
@@ -131,6 +132,7 @@ function UniversalShellContent() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const menuButtonRef = useRef<NativeView>(null);
+  const screenFallbackRef = useRef<NativeView>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
   const pendingDrawerHomeReselectionRef = useRef(false);
   const { fetchKey } = useRouteBoundary();
@@ -286,6 +288,7 @@ function UniversalShellContent() {
     >
       <PrimaryNavigationScrollReset pathname={pathname} />
       <View
+        ref={screenFallbackRef}
         {...swipeToOpenDrawer.panHandlers}
         accessibilityElementsHidden={feedbackOverlayVisible}
         aria-hidden={feedbackOverlayVisible || undefined}
@@ -297,6 +300,7 @@ function UniversalShellContent() {
           feedbackOverlayVisible ? styles.backgroundBlocked : null,
           { backgroundColor: theme.backgroundCanvas },
         ]}
+        tabIndex={-1}
         testID="universal-shell-root"
       >
         {!mobile ? (
@@ -380,9 +384,11 @@ function UniversalShellContent() {
                 : null,
             ]}
           >
-            <RelayActorBoundary>
-              <Slot />
-            </RelayActorBoundary>
+            <PostMediaViewerScreenFallbackProvider fallbackFocus={screenFallbackRef}>
+              <RelayActorBoundary>
+                <Slot />
+              </RelayActorBoundary>
+            </PostMediaViewerScreenFallbackProvider>
           </View>
           {mobile ? (
             <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
