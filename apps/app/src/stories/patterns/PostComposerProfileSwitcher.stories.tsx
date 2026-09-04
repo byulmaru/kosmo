@@ -121,6 +121,10 @@ function DeferredSelectionFixture({
       <Pressable
         accessibilityLabel="지연된 프로필 전환 완료"
         accessibilityRole="button"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
         onPress={() => resolveRef.current?.()}
       >
         <Text>지연된 프로필 전환 완료</Text>
@@ -211,7 +215,17 @@ export const InteractionContract: Story = {
     expect(selected).toHaveAttribute('aria-pressed', 'true');
     expect(remote).toHaveAttribute('aria-pressed', 'false');
 
-    await userEvent.click(remote);
+    await userEvent.click(body);
+    expect(canvas.queryByLabelText('프로필 전환')).not.toBeInTheDocument();
+    await waitFor(() => expect(body).toHaveFocus());
+
+    await userEvent.click(trigger);
+    const reopenedPicker = await canvas.findByLabelText('프로필 전환');
+    const reopenedRemote = within(reopenedPicker).getByRole('button', {
+      name: '먼 우주의 사용자, @remote',
+    });
+
+    await userEvent.click(reopenedRemote);
     await waitFor(() =>
       expect(canvas.getByText('먼 우주의 사용자', { exact: true })).toBeVisible(),
     );
@@ -319,6 +333,15 @@ export const CancelSelectionContract: Story = {
     await userEvent.keyboard('{Escape}');
     expect(canvas.queryByLabelText('프로필 전환')).not.toBeInTheDocument();
     await waitFor(() => expect(trigger).toHaveFocus());
+    expect(trigger).not.toBeDisabled();
+    expect(trigger).toHaveAttribute('aria-busy', 'true');
+
+    trigger.click();
+    expect(canvas.queryByLabelText('프로필 전환')).not.toBeInTheDocument();
+
+    await userEvent.click(body);
+    await waitFor(() => expect(body).toHaveFocus());
+
     expect(body).toHaveValue('프로필을 바꿔도 유지되는 본문');
     expect(contentWarning).toHaveValue('콘텐츠 경고');
     expect(canvas.getByLabelText('첨부 이미지 갤러리, 1개')).toBeVisible();
@@ -331,6 +354,8 @@ export const CancelSelectionContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '지연된 프로필 전환 완료' }));
     await waitFor(() => expect(args.onSelectProfile).toHaveBeenCalledOnce());
     expect(args.onSelectProfile).toHaveBeenLastCalledWith('profile-remote');
+    await waitFor(() => expect(trigger).not.toBeDisabled());
+    await waitFor(() => expect(body).toHaveFocus());
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(body).toHaveValue('프로필을 바꿔도 유지되는 본문');
     expect(contentWarning).toHaveValue('콘텐츠 경고');
