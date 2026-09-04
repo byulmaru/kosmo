@@ -177,6 +177,48 @@
 - **WHEN** 공개 key와 host가 모두 제공되지 않는다
 - **THEN** PostHog client와 analytics network 전송은 생성되지 않는다
 
+### Requirement: 전환 완료 후 OpenPanel 운영 설정 정리
+
+**Authority / Provenance:** [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 정리 범위·완료 조건, `PROD-819`의 Web runtime 전환 계약, `PROD-820`의 전환기 build 주입 계약, `PROD-795`의 정리 결과 인계 계약 — Kosmo는 PROD-819와 PROD-820이 같은 지원 release line에 병합되고, OpenPanel을 사용하는 지원 build·수동 SHA rebuild·rollback 대상이 없음을 확인한 뒤에만 저장소 build·deployment 경계와 GitHub repository·environment variables에서 OpenPanel 전용 설정을 제거해야 한다(MUST). 이 조건을 충족하지 못했거나 근거가 불충분하면 전환기 주입과 외부 설정을 제거하지 않아야 한다(MUST NOT). 활성 배포 workflow, runtime configuration source와 운영 설정 저장소의 잔여 참조를 확인해야 하며(MUST), 정리 근거에는 실제 설정값·credential·사용자 데이터를 기록하지 않아야 한다(MUST NOT). 정리 후 production-equivalent Web build와 지원 rebuild·rollback 경로는 OpenPanel 설정 없이 동작해야 한다(MUST). PostHog 공개 key·host의 build-time 주입과 PROD-819·PROD-820의 승인된 runtime·privacy·Replay 계약은 유지해야 한다(MUST). 정리 결과와 남은 production 확인 사항은 PROD-795에 인계해야 한다(MUST).
+
+#### Scenario: 정리 조건이나 근거가 부족하다
+
+- **WHEN** PROD-819·PROD-820 중 하나가 같은 지원 release line에 병합되지 않았거나, OpenPanel을 사용하는 지원 대상이 남아 있거나, 지원 대상·외부 설정의 확인 근거가 부족하다
+- **THEN** OpenPanel build·deployment 주입과 외부 설정을 제거하지 않는다
+- **AND** PR의 Stack 순서, CI 통과 또는 일부 설정 범위의 조회 결과만으로 정리 조건이 충족됐다고 판단하지 않는다
+
+#### Scenario: 정리 조건을 모두 충족했다
+
+- **WHEN** PROD-819와 PROD-820이 같은 지원 release line에 병합되고 지원 build·수동 SHA rebuild·rollback 대상이 OpenPanel을 사용하지 않음을 확인했다
+- **THEN** Dockerfile의 OpenPanel ARG·ENV와 production workflow의 OpenPanel build arg, development workflow의 명시적 empty no-op 주입이 제거된다
+- **AND** GitHub repository·environment 범위에 실제로 존재하는 OpenPanel 전용 variable이 제거된다
+
+#### Scenario: 활성 배포 설정과 외부 variable을 점검한다
+
+- **WHEN** GitHub repository·environment variables, 활성 배포 workflow, runtime configuration source와 운영 설정 저장소의 OpenPanel 참조를 확인한다
+- **THEN** 대상 식별자, 설정 이름, 적용 환경·범위, 존재 여부와 확인 결과를 제거 전후로 기록한다
+- **AND** 확인하지 못한 범위를 설정이 없는 것으로 기록하지 않는다
+- **AND** 실제 설정값, credential과 사용자 데이터는 OpenSpec, Linear, PR, 로그 또는 handoff에 남지 않는다
+
+#### Scenario: PostHog 공개 설정만으로 Web image를 다시 build한다
+
+- **WHEN** OpenPanel 설정 정리 후 공개 PostHog key와 host만 제공해 production-equivalent Web image를 build한다
+- **THEN** Web asset과 배포 경로가 OpenPanel 설정 없이 PostHog client를 사용한다
+- **AND** 승인된 standard metadata, `ph-mask ph-no-capture`와 공개 identity API 계약을 유지한다
+- **AND** local·development 기본 비활성화와 key 또는 host 누락 시 no-op 동작을 바꾸지 않는다
+
+#### Scenario: 지원 rebuild와 rollback 경로를 검증한다
+
+- **WHEN** 정리 시점의 지원 release·수동 SHA rebuild·rollback 대상을 검증한다
+- **THEN** 어떤 지원 대상도 제거한 OpenPanel variable을 요구하거나 활성 OpenPanel runtime을 사용하지 않는다
+- **AND** 외부 variable 삭제를 이미 build된 과거 image의 변경이나 OpenPanel 비활성화 증거로 대체하지 않는다
+
+#### Scenario: 정리 결과를 통합 검증에 인계한다
+
+- **WHEN** 설정 제거와 PostHog-only build·지원 rebuild·rollback 검증을 마쳤다
+- **THEN** 제거 전후 목록, 적용 환경, 검증 결과와 남은 production 확인 사항을 실제 값 없이 PROD-795에 인계한다
+- **AND** 이 결과만으로 PROD-741의 Replay acceptance나 PROD-575의 production acceptance·archive를 완료 처리하지 않는다
+
 ### Requirement: Native no-op 경계
 
 **Authority / Provenance:** `docs/design/breakpoints.md`, `PROD-819`, `PROD-537` — Android·iOS는 공용 analytics interface를 계속 제공하되 이번 Web slice의 PostHog 호출을 명시적 no-op으로 처리해야 한다(MUST). Native build graph와 bundle은 `posthog-js` 또는 `posthog-react-native` runtime을 포함하지 않아야 하며(MUST), 이 결과를 Native 분석 지원 완료 또는 영구 비지원 결정으로 해석하지 않아야 한다(MUST).
