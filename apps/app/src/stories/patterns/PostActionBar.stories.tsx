@@ -19,7 +19,6 @@ import { usePostReactionController } from '@/components/post/PostReactionControl
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { RelayActorBoundary, RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
-import { SessionRecoveryProvider } from '@/session/SessionRecoveryCoordinator';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { Catalog, Section } from '../StoryFrame';
 import PostActionBarStoryQueryNode from './__generated__/PostActionBarStoryQuery.graphql';
@@ -207,15 +206,13 @@ function PostActionBarFixture({
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
-      <SessionRecoveryProvider>
-        <RelayActorBoundary>
-          <Suspense fallback={<View />}>
-            <SessionProvider>
-              <PostActionBarFixtureContents {...props} showReactionSummary={showReactionSummary} />
-            </SessionProvider>
-          </Suspense>
-        </RelayActorBoundary>
-      </SessionRecoveryProvider>
+      <RelayActorBoundary>
+        <Suspense fallback={<View />}>
+          <SessionProvider>
+            <PostActionBarFixtureContents {...props} showReactionSummary={showReactionSummary} />
+          </SessionProvider>
+        </Suspense>
+      </RelayActorBoundary>
     </RelayActorProvider>
   );
 }
@@ -445,16 +442,14 @@ function ReactionContractHarness() {
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
-      <SessionRecoveryProvider>
-        <RelayActorBoundary>
-          <ReactionContractControls
-            mounted={mounted}
-            onMountedChange={setMounted}
-            onSettleRequest={settleRequest}
-            requests={requests}
-          />
-        </RelayActorBoundary>
-      </SessionRecoveryProvider>
+      <RelayActorBoundary>
+        <ReactionContractControls
+          mounted={mounted}
+          onMountedChange={setMounted}
+          onSettleRequest={settleRequest}
+          requests={requests}
+        />
+      </RelayActorBoundary>
     </RelayActorProvider>
   );
 }

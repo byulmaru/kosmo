@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { Environment, Network, RecordSource, Store } from 'relay-runtime';
 import { RelayActorBoundary, RelayActorProvider } from '@/relay/RelayActorProvider';
-import { SessionRecoveryProvider } from '@/session/SessionRecoveryCoordinator';
 import type { PropsWithChildren } from 'react';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 
@@ -97,9 +96,7 @@ export function RelayStoryProvider({
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
-      <SessionRecoveryProvider>
-        {actorBoundary ? <RelayActorBoundary>{children}</RelayActorBoundary> : children}
-      </SessionRecoveryProvider>
+      {actorBoundary ? <RelayActorBoundary>{children}</RelayActorBoundary> : children}
     </RelayActorProvider>
   );
 }

@@ -1,7 +1,6 @@
 import {
   createContext,
   forwardRef,
-  Fragment,
   Suspense,
   useCallback,
   useContext,
@@ -11,7 +10,6 @@ import {
 import { ErrorBoundary } from 'react-error-boundary';
 import { StateView } from '@/components/ui/StateView';
 import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
-import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
 import type { ReactNode } from 'react';
 
 export type RouteBoundaryHandle = {
@@ -19,17 +17,11 @@ export type RouteBoundaryHandle = {
   refetch: () => void;
 };
 
-type RouteBoundaryResetDetails =
-  | { reason: 'imperative-api'; args: unknown[] }
-  | { reason: 'keys'; prev: unknown[] | undefined; next: unknown[] | undefined };
-
 type RouteBoundaryProps = {
   children: ReactNode;
   description?: string;
   error?: (resetErrorBoundary: () => void) => ReactNode;
   loading: ReactNode;
-  onRetry?: () => void;
-  remountOnActorChange?: boolean;
   title: string;
 };
 
@@ -42,8 +34,8 @@ const RouteBoundaryContext = createContext<RouteBoundaryContextValue | null>(nul
 /**
  * Returns the query lifecycle owned by the nearest RouteBoundary.
  *
- * Route components should not maintain their own actor or query lifecycle state. `refetch` changes
- * only the visible query fetch key.
+ * Route components should not maintain their own retry counters. `refetch` changes only the visible
+ * query fetch key.
  */
 export function useRouteBoundary(): RouteBoundaryContextValue {
   const value = useContext(RouteBoundaryContext);
@@ -56,34 +48,12 @@ export function useRouteBoundary(): RouteBoundaryContextValue {
 }
 
 export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>(
-  function RouteBoundary(
-    {
-      children,
-      description,
-      error: renderError,
-      loading,
-      onRetry,
-      remountOnActorChange = true,
-      title,
-    },
-    ref,
-  ) {
+  function RouteBoundary({ children, description, error: renderError, loading, title }, ref) {
     const reportUnexpectedError = useUnexpectedErrorReporter();
-    const actorLifecycleKey = useRelayActorLifecycleKey();
     const [fetchKey, setFetchKey] = useState(0);
 
     const refetch = useCallback(() => setFetchKey((key) => key + 1), []);
-    const reset = useCallback(
-      (details: RouteBoundaryResetDetails) => {
-        if (details.reason === 'keys') {
-          return;
-        }
-
-        refetch();
-        onRetry?.();
-      },
-      [onRetry, refetch],
-    );
+    const reset = useCallback(() => refetch(), [refetch]);
 
     useImperativeHandle(ref, () => ({ refetch }), [refetch]);
 
@@ -110,13 +80,8 @@ export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>
             console.error('Route error', error, info.componentStack);
           }}
           onReset={reset}
-          resetKeys={[actorLifecycleKey]}
         >
-          <Suspense fallback={loading}>
-            <Fragment key={remountOnActorChange ? actorLifecycleKey : undefined}>
-              {children}
-            </Fragment>
-          </Suspense>
+          <Suspense fallback={loading}>{children}</Suspense>
         </ErrorBoundary>
       </RouteBoundaryContext.Provider>
     );

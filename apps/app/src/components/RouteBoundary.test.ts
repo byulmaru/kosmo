@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
-import { createContext, createElement, useContext, useEffect } from 'react';
+import { afterEach, before, describe, it, mock } from 'node:test';
+import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ForwardRefExoticComponent, ReactNode, RefAttributes } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -8,15 +8,11 @@ import type { RouteBoundaryHandle } from './RouteBoundary';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const ActorLifecycleContext = createContext('actor-a');
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
-mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
-  useRelayActorLifecycleKey: () => useContext(ActorLifecycleContext),
-});
 mockModule(new URL('./ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
 });
@@ -24,8 +20,6 @@ mockModule(new URL('./ui/StateView.tsx', import.meta.url), {
 type RouteBoundaryProps = {
   children: ReactNode;
   loading: ReactNode;
-  onRetry?: () => void;
-  remountOnActorChange?: boolean;
   title: string;
 };
 
@@ -33,19 +27,11 @@ let RouteBoundary: ForwardRefExoticComponent<
   RouteBoundaryProps & RefAttributes<RouteBoundaryHandle>
 >;
 let useRouteBoundary: () => { fetchKey: number; refetch: () => void };
-let mountCount = 0;
-let unmountCount = 0;
 let queryShouldThrow = false;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
-});
-
-beforeEach(() => {
-  mountCount = 0;
-  unmountCount = 0;
-  queryShouldThrow = false;
 });
 
 afterEach(async () => {
@@ -57,39 +43,23 @@ afterEach(async () => {
 
 function QueryProbe() {
   const { fetchKey } = useRouteBoundary();
-  useEffect(() => {
-    mountCount += 1;
-    return () => {
-      unmountCount += 1;
-    };
-  }, []);
-
   if (queryShouldThrow) {
-    throw new Error('actor query failed');
+    throw new Error('route query failed');
   }
 
   return createElement('QueryProbe', { fetchKey });
 }
 
 function renderBoundary(
-  actorLifecycleKey: string,
-  remountOnActorChange?: boolean,
-  onRetry?: () => void,
   children: ReactNode = createElement(QueryProbe),
   ref?: RefAttributes<RouteBoundaryHandle>['ref'],
 ) {
-  return createElement(
-    ActorLifecycleContext.Provider,
-    { value: actorLifecycleKey },
-    createElement(RouteBoundary, {
-      children,
-      loading: null,
-      onRetry,
-      ref,
-      remountOnActorChange,
-      title: 'query failed',
-    }),
-  );
+  return createElement(RouteBoundary, {
+    children,
+    loading: null,
+    ref,
+    title: 'query failed',
+  });
 }
 
 function queryProbe() {
@@ -99,53 +69,17 @@ function queryProbe() {
   return probe;
 }
 
-describe('RouteBoundary actor lifecycle', () => {
-  it('owns the fetch key and remounts actor-dependent query leaves', async () => {
-    const handleRef: { current: RouteBoundaryHandle | null } = { current: null };
-
-    await act(async () => {
-      renderer = create(
-        renderBoundary('actor-a', true, undefined, createElement(QueryProbe), handleRef),
-      );
-    });
-
-    assert.equal(mountCount, 1);
-    assert.equal(unmountCount, 0);
-    assert.equal(queryProbe().props.fetchKey, 0);
-    assert.ok(handleRef.current);
-
-    await act(async () => handleRef.current?.refetch());
-
-    assert.equal(queryProbe().props.fetchKey, 1);
-    assert.equal(mountCount, 1);
-    assert.equal(unmountCount, 0);
-
-    await act(async () => {
-      renderer?.update(
-        renderBoundary('actor-b', true, undefined, createElement(QueryProbe), handleRef),
-      );
-    });
-
-    assert.equal(mountCount, 2);
-    assert.equal(unmountCount, 1);
-    assert.equal(queryProbe().props.fetchKey, 1);
-  });
-
+describe('RouteBoundary local query lifecycle', () => {
   it('resets an error boundary and advances the fetch key through the fallback action', async () => {
-    let recoveryCount = 0;
     const originalConsoleError = console.error;
     console.error = () => undefined;
     try {
       queryShouldThrow = true;
       await act(async () => {
-        renderer = create(
-          renderBoundary('actor-a', true, () => recoveryCount++, createElement(QueryProbe)),
-        );
+        renderer = create(renderBoundary());
       });
 
       assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 1);
-      assert.equal(mountCount, 0);
-      assert.equal(unmountCount, 0);
       const fallback = renderer?.root.findAll((node) => String(node.type) === 'StateView')[0];
       assert.ok(fallback);
 
@@ -153,48 +87,6 @@ describe('RouteBoundary actor lifecycle', () => {
       await act(async () => fallback.props.onAction());
 
       assert.equal(queryProbe().props.fetchKey, 1);
-      assert.equal(mountCount, 1);
-      assert.equal(unmountCount, 0);
-      assert.equal(recoveryCount, 1);
-    } finally {
-      console.error = originalConsoleError;
-    }
-  });
-
-  it('keeps the shell query subtree mounted when actor lifecycle changes opt out', async () => {
-    await act(async () => {
-      renderer = create(renderBoundary('actor-a', false));
-    });
-
-    await act(async () => {
-      renderer?.update(renderBoundary('actor-b', false));
-    });
-
-    assert.equal(mountCount, 1);
-    assert.equal(unmountCount, 0);
-    assert.equal(queryProbe().props.fetchKey, 0);
-  });
-
-  it('resets an opted-out shell error fallback without remounting healthy shell state', async () => {
-    let recoveryCount = 0;
-    const originalConsoleError = console.error;
-    console.error = () => undefined;
-    try {
-      queryShouldThrow = true;
-      await act(async () => {
-        renderer = create(renderBoundary('actor-a', false, () => recoveryCount++));
-      });
-
-      queryShouldThrow = false;
-      await act(async () => {
-        renderer?.update(renderBoundary('actor-b', false, () => recoveryCount++));
-      });
-
-      assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 0);
-      assert.equal(mountCount, 1);
-      assert.equal(unmountCount, 0);
-      assert.equal(queryProbe().props.fetchKey, 0);
-      assert.equal(recoveryCount, 0);
     } finally {
       console.error = originalConsoleError;
     }

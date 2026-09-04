@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { GraphQLErrorBoundary } from '@/components/GraphQLErrorBoundary';
 import { RouteBoundary } from '@/components/RouteBoundary';
+import { StateView } from '@/components/ui/StateView';
 import { SessionFailOpenBoundary } from '@/session/SessionProvider';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -35,13 +36,21 @@ function RouteBoundaryHarness({ onRetry }: { onRetry: () => void }) {
   const [failed, setFailed] = useState(true);
 
   return (
-    <GraphQLErrorBoundary onRetry={() => undefined}>
+    <GraphQLErrorBoundary>
       <RouteBoundary
+        error={(resetErrorBoundary) => (
+          <StateView
+            actionLabel="다시 시도"
+            alert
+            onAction={() => {
+              setFailed(false);
+              resetErrorBoundary();
+              onRetry();
+            }}
+            title="경로를 불러오지 못했어요"
+          />
+        )}
         loading={<Text>route loading</Text>}
-        onRetry={() => {
-          setFailed(false);
-          onRetry();
-        }}
         title="경로를 불러오지 못했어요"
       >
         <ThrowOnRender active={failed} />
@@ -55,7 +64,7 @@ function SessionBoundaryHarness() {
   const [resetKey, setResetKey] = useState(0);
 
   return (
-    <GraphQLErrorBoundary onRetry={() => undefined}>
+    <GraphQLErrorBoundary>
       <View>
         <Pressable
           accessibilityLabel="세션 갱신"
@@ -88,8 +97,8 @@ export const GraphQLFallbackAndRetry: Story = {
   render: () => <GraphQLBoundaryHarness onRetry={graphQLRetry} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('화면을 불러오지 못했어요');
-    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('앱을 불러오지 못했어요');
+    await userEvent.click(canvas.getByRole('button', { name: '앱 다시 불러오기' }));
 
     await expect(canvas.findByText('콘텐츠가 복구됐습니다.')).resolves.toBeVisible();
     expect(graphQLRetry).toHaveBeenCalledTimes(1);
