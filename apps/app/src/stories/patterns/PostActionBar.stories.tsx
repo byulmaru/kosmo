@@ -1781,6 +1781,7 @@ export const AccessibilityAndCompactGeometry: Story = {
       '북마크',
       '더보기',
     ]);
+    expect(buttons[0]).toHaveAttribute('aria-disabled', 'true');
     expect(buttons[0]).toHaveAttribute('aria-expanded', 'false');
     expect(buttons[1]).toHaveAttribute('aria-pressed', 'false');
     expect(buttons[1]).toHaveAttribute('aria-haspopup', 'menu');
@@ -1794,7 +1795,10 @@ export const AccessibilityAndCompactGeometry: Story = {
     expect(buttons[0]!.getBoundingClientRect().width).toBeGreaterThan(28);
   },
   render: () => (
-    <PostActionBarFixture {...actionBarProps} reply={{ ...actionBarProps.reply, count: 0 }} />
+    <PostActionBarFixture
+      {...actionBarProps}
+      reply={{ ...actionBarProps.reply, count: 0, expanded: true, processing: 'disabled' }}
+    />
   ),
 };
 

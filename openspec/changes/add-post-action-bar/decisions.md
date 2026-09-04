@@ -540,10 +540,10 @@
 - Authority / Provenance: `PROD-866`, `docs/design/post-action-bar.md`, `docs/design/reply-composer.md`, 2026-09-04 KST 사용자 결정
 - Status: Active
 - Context / Problem: production Reply adapter의 처리 상태는 default·disabled만 도달하고, 제출 중 spinner·중복 제출 차단은 이미 Composer의 `답글 게시` 버튼이 소유한다. Action Bar Storybook에 Reply pending fixture를 별도로 두면 도달하지 않는 상태를 제품 계약처럼 노출하고 동일한 제출 pending을 두 control에 중복 표현한다.
-- Decision Outcome: Action Bar Reply는 collapsed(default)·expanded(default)·disabled만 표현한다. Reply 제출 pending·spinner·중복 제출 차단은 Composer의 `답글 게시` 버튼에서만 표현하고 검증한다. Repost·Reaction·Bookmark의 기존 pending 계약은 유지한다.
-- Alternatives Considered: Action Bar Reply pending fixture와 busy·spinner 검증을 유지하는 방식은 production에서 도달하지 않고 Composer 소유권과 중복되므로 제외했다. 공개 Reply 처리 상태에 `pending`을 남기는 방식은 현재 저장소 소비자가 없고 정본 계약을 우회할 수 있으므로 제외했다.
+- Decision Outcome: Action Bar Reply는 collapsed(default)·expanded(default)·disabled만 표현한다. `PostActionBar` 공용 경계는 `processing='disabled'`인 Reply의 `expanded`를 `false`로 정규화한다. Reply 제출 pending·spinner·중복 제출 차단은 Composer의 `답글 게시` 버튼에서만 표현하고 검증한다. Repost·Reaction·Bookmark의 기존 pending 계약은 유지한다.
+- Alternatives Considered: Action Bar Reply pending fixture와 busy·spinner 검증을 유지하는 방식은 production에서 도달하지 않고 Composer 소유권과 중복되므로 제외했다. 공개 Reply 처리 상태에 `pending`을 남기는 방식은 현재 저장소 소비자가 없고 정본 계약을 우회할 수 있으므로 제외했다. Reply config를 판별 유니온으로 바꾸는 방식은 같은 불변식을 타입으로 강제하지만 기존 public consumer의 타입 변경 범위가 커, 현재 호환 가능한 공용 경계 정규화를 선택했다.
 - Consequences: Playground는 하나의 `replyState` control로 collapsed·expanded·disabled만 제공하고 Catalog와 interaction story에서 Reply pending fixture·assertion을 제거한다. canonical 문서와 OpenSpec은 Reply default·disabled를 Reaction·Bookmark default·pending·disabled와 구분한다. 공개 Reply 처리 상태와 production helper 반환 타입도 default·disabled로 제한한다.
-- Confirmation / Follow-up: focused Storybook에서 Reply 세 상태와 Repost pending을 함께 검증하고, 저장소의 Action Bar Storybook·OpenSpec에 Reply pending fixture나 규범 문구가 남지 않았으며 공개 Reply 타입이 `pending`을 거부하는지 확인한다.
+- Confirmation / Follow-up: focused Storybook에서 Reply 세 상태와 Repost pending을 함께 검증하고, disabled이면서 `expanded=true`인 consumer 입력도 `aria-disabled=true`·`aria-expanded=false`로 정규화되는지 확인한다. 저장소의 Action Bar Storybook·OpenSpec에 Reply pending fixture나 규범 문구가 남지 않았으며 공개 Reply 타입이 `pending`을 거부하는지도 확인한다.
 
 ## Remaining Decisions
 

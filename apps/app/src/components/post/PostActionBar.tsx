@@ -90,7 +90,7 @@ export function PostActionBar({
           count={reply.count}
           countFollowsInteraction
           controlRef={reply.controlRef}
-          expanded={reply.expanded}
+          expanded={reply.processing === 'default' && reply.expanded}
           hoverDisabled={execution.kind === 'resolution-required'}
           icon={MessageCircle}
           onPress={reply.onPress}
