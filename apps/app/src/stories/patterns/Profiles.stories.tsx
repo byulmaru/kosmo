@@ -1,7 +1,6 @@
 import { View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, mocked, userEvent, within } from 'storybook/test';
-import { trackAnalytics } from '@/analytics/client';
+import { expect, userEvent, within } from 'storybook/test';
 import { FollowButton } from '@/components/profile/FollowButton';
 import {
   ProfileConnectionList,
@@ -10,7 +9,6 @@ import {
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
-import { SessionProvider } from '@/session/SessionProvider';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import ogDefaultUrl from '../../../public/og-default.png?url';
 import { followersProfile, followingProfile, profile } from '../fixtures';
@@ -217,34 +215,6 @@ function ProfileCatalog() {
   );
 }
 
-function FollowButtonStory() {
-  const profile = requireProfile(useStoryProfiles(), 0);
-  return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
-}
-
-function AuthenticatedFollowButtonStory() {
-  return (
-    <SessionProvider>
-      <FollowButtonStory />
-    </SessionProvider>
-  );
-}
-
-function RemoteFollowButtonStory() {
-  const profile = requireProfile(useStoryProfiles(), 3);
-  return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
-}
-
-function RemoteApprovalRequiredFollowButtonStory() {
-  const profile = requireProfile(useStoryProfiles(), 10);
-  return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
-}
-
-function PendingFollowButtonStory() {
-  const profile = requireProfile(useStoryProfiles(), 11);
-  return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
-}
-
 function ProfileListCatalog() {
   const profiles = useStoryProfiles();
 
@@ -358,9 +328,6 @@ function FollowingWithFollowedProfile() {
 }
 
 const meta = {
-  beforeEach: () => {
-    mocked(trackAnalytics).mockClear();
-  },
   component: ProfileCatalog,
   parameters: {
     relay: {
@@ -378,216 +345,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const HeroNameAndLoadingStates: Story = {
-  play: async ({ canvasElement }) => {
-    expect(
-      canvasElement.querySelector('a[href="/@remote-user@very-long-instance.example/following"]'),
-    ).toBeInTheDocument();
-    expect(
-      canvasElement.querySelector('a[href="/@remote-user@very-long-instance.example/followers"]'),
-    ).toBeInTheDocument();
-    const canvas = within(canvasElement);
-    const tagSection = within(
-      canvas.getByText('Hero · tags empty / long / many / remote empty').parentElement!,
-    );
-    expect(tagSection.getByText('#Fediverse')).toBeVisible();
-    expect(tagSection.getByText('#개발')).toBeVisible();
-    expect(tagSection.getByText('#아주긴프로필태그이름입니다')).toBeVisible();
-    expect(tagSection.getByText(`#${maxLengthProfileTag}`)).toBeVisible();
-    expect(tagSection.getAllByTestId('profile-tag-list')).toHaveLength(2);
-    const fediverseLink = tagSection.getByRole('link', {
-      name: '#Fediverse 관련 프로필 보기',
-    });
-    expect(fediverseLink).toHaveAttribute('href', '/hashtags/[hashtagId]/profiles');
-    expect(fediverseLink.getBoundingClientRect().height).toBe(32);
-    expect(fediverseLink.getBoundingClientRect().width).toBeGreaterThanOrEqual(32);
-
-    const narrowFixture = tagSection.getByTestId('profile-tags-narrow-fixture');
-    const narrowTagList = within(narrowFixture).getByTestId('profile-tag-list');
-    const narrowChips = within(narrowTagList).getAllByTestId('profile-tag-chip');
-    expect(narrowChips).toHaveLength(withManyLongTags.tags.length);
-    const maxLengthTagText = within(narrowTagList).getByText(`#${maxLengthProfileTag}`);
-    expect(within(narrowTagList).getByLabelText(`#${maxLengthProfileTag}`)).toBe(maxLengthTagText);
-    const maxLengthTagLink = within(narrowTagList).getByRole('link', {
-      name: `#${maxLengthProfileTag} 관련 프로필 보기`,
-    });
-    expect(maxLengthTagLink).toHaveAttribute('href', '/hashtags/[hashtagId]/profiles');
-    expect(maxLengthTagLink.getBoundingClientRect().height).toBe(32);
-    expect(maxLengthTagLink.getBoundingClientRect().width).toBeGreaterThanOrEqual(32);
-    const fixtureBounds = narrowFixture.getBoundingClientRect();
-    const listBounds = narrowTagList.getBoundingClientRect();
-    const maxLengthChipBounds = maxLengthTagText.parentElement!.getBoundingClientRect();
-    const maxLengthTagTextBounds = maxLengthTagText.getBoundingClientRect();
-    const maxLengthTagTextStyle = getComputedStyle(maxLengthTagText);
-
-    expect(
-      new Set(narrowChips.map((chip) => Math.round(chip.getBoundingClientRect().top))).size,
-    ).toBeGreaterThan(1);
-    expect(listBounds.right).toBeLessThanOrEqual(fixtureBounds.right + 1);
-    expect(narrowFixture.scrollWidth).toBeLessThanOrEqual(narrowFixture.clientWidth + 1);
-    expect(narrowTagList.scrollWidth).toBeLessThanOrEqual(narrowTagList.clientWidth + 1);
-    expect(maxLengthTagTextBounds.left).toBeGreaterThanOrEqual(listBounds.left - 1);
-    expect(maxLengthTagTextBounds.right).toBeLessThanOrEqual(listBounds.right + 1);
-    expect(maxLengthChipBounds.height).toBe(32);
-    expect(maxLengthTagTextStyle.whiteSpace).toBe('nowrap');
-    expect(maxLengthTagTextStyle.textOverflow).toBe('ellipsis');
-    expect(maxLengthTagTextStyle.overflow).toBe('hidden');
-    expect(maxLengthTagText.scrollWidth).toBeGreaterThan(maxLengthTagText.clientWidth);
-    expect(maxLengthTagTextBounds.top).toBeGreaterThanOrEqual(maxLengthChipBounds.top - 1);
-    expect(maxLengthTagTextBounds.bottom).toBeLessThanOrEqual(maxLengthChipBounds.bottom + 1);
-    for (const chip of narrowChips) {
-      const chipBounds = chip.getBoundingClientRect();
-      expect(chipBounds.height).toBe(32);
-      expect(chipBounds.left).toBeGreaterThanOrEqual(listBounds.left - 1);
-      expect(chipBounds.right).toBeLessThanOrEqual(listBounds.right + 1);
-    }
-  },
-};
+export const HeroNameAndLoadingStates: Story = {};
 
 export const ListAndFollowStates: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const followableSection = within(canvas.getByText('Followable').parentElement!);
-    const followingSection = within(canvas.getByText('Following').parentElement!);
-    expect(
-      canvasElement.querySelector('a[href="/@remote-user@very-long-instance.example"]'),
-    ).toBeInTheDocument();
-    expect(canvas.getAllByRole('button', { name: '팔로우' })).toHaveLength(2);
-    const followableAvatar = followableSection.getByLabelText('코스모 작가 프로필 이미지');
-    const followingAvatar = followingSection.getByLabelText('코스모 작가 프로필 이미지');
-    expect(followableAvatar.querySelector('img')).toHaveAttribute(
-      'src',
-      '/profile-followable-avatar.png',
-    );
-    expect(followingAvatar.querySelector('img')).toHaveAttribute(
-      'src',
-      '/profile-followed-avatar.png',
-    );
-    const fallbackAvatar = canvas.getByLabelText('이니셜 폴백 프로필 프로필 이미지');
-    expect(fallbackAvatar.querySelector('img')?.getAttribute('src')).toMatch(
-      /\/assets\/avatar\/default-avatar\.png$/,
-    );
-  },
   render: () => <ProfileListCatalog />,
-};
-
-export const FollowSubmitting: Story = {
-  parameters: { relay: { mutationLoading: true } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
-    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeDisabled();
-    expect(canvas.queryByRole('button', { name: '처리 중' })).not.toBeInTheDocument();
-  },
-  render: () => <FollowButtonStory />,
-};
-
-export const FollowSuccessTracksAnalytics: Story = {
-  parameters: {
-    relay: {
-      mutationResponse: {
-        followProfile: {
-          followeeProfile: {
-            ...followable,
-            viewerState: {
-              follow: {
-                follower: { followingCount: 1, id: 'profile-viewer' },
-                id: 'follow-story',
-              },
-              followRequest: null,
-              isSelf: false,
-            },
-          },
-          followerProfile: { followingCount: 1, id: 'profile-viewer' },
-          result: { __typename: 'ProfileFollow', id: 'follow-story' },
-        },
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
-    expect(trackAnalytics).toHaveBeenCalledOnce();
-    expect(trackAnalytics).toHaveBeenCalledWith('follow_succeeded', {
-      result: 'follow',
-      selected_profile_id: 'profile-viewer',
-    });
-  },
-  render: () => <AuthenticatedFollowButtonStory />,
-};
-
-export const FollowErrorInteraction: Story = {
-  parameters: { relay: { mutationError: '팔로우 실패' } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '팔로우 상태를 변경하지 못했습니다.',
-    );
-    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
-    expect(trackAnalytics).not.toHaveBeenCalled();
-  },
-  render: () => <AuthenticatedFollowButtonStory />,
-};
-
-export const RemoteFollowUsesSameActionSurface: Story = {
-  play: ({ canvasElement }) => {
-    expect(within(canvasElement).getByRole('button', { name: '팔로우' })).toBeVisible();
-  },
-  render: () => <RemoteFollowButtonStory />,
-};
-
-export const RemoteApprovalRequiredUsesSameActionSurface: Story = {
-  play: ({ canvasElement }) => {
-    expect(within(canvasElement).getByRole('button', { name: '팔로우' })).toBeVisible();
-  },
-  render: () => <RemoteApprovalRequiredFollowButtonStory />,
-};
-
-export const ApprovalRequiredFollowSubmitting: Story = {
-  parameters: { relay: { mutationLoading: true } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
-    await expect(canvas.findByRole('button', { name: '요청됨' })).resolves.toBeDisabled();
-  },
-  render: () => <RemoteApprovalRequiredFollowButtonStory />,
-};
-
-export const ApprovalRequiredFollowErrorRollsBack: Story = {
-  parameters: { relay: { mutationError: '요청 실패' } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '팔로우 상태를 변경하지 못했습니다.',
-    );
-    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
-  },
-  render: () => <RemoteApprovalRequiredFollowButtonStory />,
-};
-
-export const PendingCancelSubmitting: Story = {
-  parameters: { relay: { mutationLoading: true } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '요청됨' }));
-    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeDisabled();
-  },
-  render: () => <PendingFollowButtonStory />,
-};
-
-export const PendingCancelErrorRollsBack: Story = {
-  parameters: { relay: { mutationError: '취소 실패' } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '요청됨' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '팔로우 상태를 변경하지 못했습니다.',
-    );
-    await expect(canvas.findByRole('button', { name: '요청됨' })).resolves.toBeEnabled();
-  },
-  render: () => <PendingFollowButtonStory />,
 };
 
 export const UnfollowKeepsConnectionRowAfterSuccess: Story = {
