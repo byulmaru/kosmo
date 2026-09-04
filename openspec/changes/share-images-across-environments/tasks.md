@@ -66,6 +66,6 @@ Dev와 Production이 각자 재build하거나 moving tag를 사용하지 않고 
 - OpenSpec strict validation, Prettier, 관련 테스트와 diff review를 통과시킨다.
 
 - [x] 3.1 Production release·migration·Sentry 문서를 canonical digest 승격에 맞춘다.
-- [ ] 3.2 Risk-proportional validation을 통과시키고 최신 main 기반 one-layer Stack의 한국어 Ready PR을 제출한다.
+- [x] 3.2 Risk-proportional validation을 통과시키고 최신 main 기반 one-layer Stack의 한국어 Ready PR을 제출한다.
 - [ ] 3.3 별도 운영 승인 뒤 dev/prod build run·SHA·digest·migration·health를 확인한다.
 - [ ] 3.4 Live evidence가 확보된 뒤 delta spec sync와 archive를 완료한다.
