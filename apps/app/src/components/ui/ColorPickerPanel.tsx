@@ -1,11 +1,11 @@
 import { TriangleAlert } from 'lucide-react-native';
-import { useEffect, useId, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Defs, LinearGradient, Rect, Stop, Svg } from 'react-native-svg';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
-import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, colors, radius, space, textStyles } from '@/theme/tokens';
+import { useElevation, useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, colors, motion, radius, space, textStyles } from '@/theme/tokens';
 import type { GestureResponderEvent, LayoutChangeEvent, ViewStyle } from 'react-native';
 
 const SURFACE_HEIGHT = 180;
@@ -44,6 +44,22 @@ type KeyEvent = {
   preventDefault: () => void;
 };
 
+type WebPointerEvent = {
+  currentTarget?: {
+    getBoundingClientRect?: () => { left: number; top: number };
+    setPointerCapture?: (pointerId: number) => void;
+  };
+  nativeEvent: {
+    button?: number;
+    clientX?: number;
+    clientY?: number;
+    isPrimary?: boolean;
+    locationX?: number;
+    locationY?: number;
+    pointerId?: number;
+  };
+};
+
 type WebSliderProps = {
   'aria-disabled': boolean;
   'aria-valuemax': number;
@@ -51,7 +67,11 @@ type WebSliderProps = {
   'aria-valuenow': number;
   'aria-valuetext'?: string;
   onKeyDown: (event: KeyEvent) => void;
-  onPointerDown: () => void;
+  onLostPointerCapture: (event: WebPointerEvent) => void;
+  onPointerCancel: (event: WebPointerEvent) => void;
+  onPointerDown: (event: WebPointerEvent) => void;
+  onPointerMove: (event: WebPointerEvent) => void;
+  onPointerUp: (event: WebPointerEvent) => void;
   role: 'slider';
   tabIndex: -1 | 0;
 };
@@ -146,7 +166,10 @@ function stopKey(
   onChange(normalizeValue(nextValue));
 }
 
-function eventCoordinate(event: GestureResponderEvent, axis: 'x' | 'y'): number | undefined {
+function eventCoordinate(
+  event: { currentTarget?: unknown; nativeEvent: unknown },
+  axis: 'x' | 'y',
+): number | undefined {
   const nativeEvent = event.nativeEvent as unknown as {
     clientX?: number;
     clientY?: number;
@@ -190,6 +213,7 @@ export function ColorPickerPanel({
   value,
 }: ColorPickerPanelProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const elevation = useElevation();
   const web = Platform.OS === 'web';
   const gradientId = useId().replace(/:/g, '');
@@ -205,6 +229,21 @@ export function ColorPickerPanel({
   const surfaceX = (currentValue.saturation / 100) * surfaceWidth;
   const surfaceY = ((100 - currentValue.brightness) / 100) * SURFACE_HEIGHT;
   const hueX = (currentValue.hue / 360) * hueWidth;
+  const currentValueRef = useRef(currentValue);
+  const disabledRef = useRef(disabled);
+  const onChangeRef = useRef(onChange);
+  const surfaceWidthRef = useRef(surfaceWidth);
+  const hueWidthRef = useRef(hueWidth);
+  const surfaceGestureActiveRef = useRef(false);
+  const hueGestureActiveRef = useRef(false);
+  const surfacePointerIdRef = useRef<number | null>(null);
+  const huePointerIdRef = useRef<number | null>(null);
+
+  currentValueRef.current = currentValue;
+  disabledRef.current = disabled;
+  onChangeRef.current = onChange;
+  surfaceWidthRef.current = surfaceWidth;
+  hueWidthRef.current = hueWidth;
 
   useEffect(() => {
     if (!hexFocused) {
@@ -213,17 +252,43 @@ export function ColorPickerPanel({
   }, [color, hexFocused]);
 
   const emitValue = (nextValue: ColorPickerValue) => {
-    if (!disabled) {
-      const next = normalizeValue(nextValue);
-      if (
-        next.brightness === currentValue.brightness &&
-        next.hue === currentValue.hue &&
-        next.saturation === currentValue.saturation
-      ) {
-        return;
-      }
-      onChange(next);
+    if (disabledRef.current) {
+      return;
     }
+    const next = normalizeValue(nextValue);
+    const previous = currentValueRef.current;
+    if (
+      next.brightness === previous.brightness &&
+      next.hue === previous.hue &&
+      next.saturation === previous.saturation
+    ) {
+      return;
+    }
+    currentValueRef.current = next;
+    onChangeRef.current(next);
+  };
+
+  const emitSurfaceGesture = (locationX: number | undefined, locationY: number | undefined) => {
+    if (locationX === undefined || locationY === undefined) {
+      return;
+    }
+    const width = surfaceWidthRef.current;
+    emitValue({
+      ...currentValueRef.current,
+      brightness: 100 - (clamp(locationY, 0, SURFACE_HEIGHT) / SURFACE_HEIGHT) * 100,
+      saturation: (clamp(locationX, 0, width) / width) * 100,
+    });
+  };
+
+  const emitHueGesture = (locationX: number | undefined) => {
+    if (locationX === undefined) {
+      return;
+    }
+    const width = hueWidthRef.current;
+    emitValue({
+      ...currentValueRef.current,
+      hue: (clamp(locationX, 0, width) / width) * 360,
+    });
   };
 
   const onSurfacePress = (event: GestureResponderEvent) => {
@@ -248,6 +313,14 @@ export function ColorPickerPanel({
       ...currentValue,
       hue: (clamp(locationX, 0, hueWidth) / hueWidth) * 360,
     });
+  };
+
+  const onSurfaceGesture = (event: GestureResponderEvent) => {
+    emitSurfaceGesture(eventCoordinate(event, 'x'), eventCoordinate(event, 'y'));
+  };
+
+  const onHueGesture = (event: GestureResponderEvent) => {
+    emitHueGesture(eventCoordinate(event, 'x'));
   };
 
   const onSurfaceKeyDown = (event: KeyEvent) => {
@@ -317,6 +390,58 @@ export function ColorPickerPanel({
     setHueWidth(Math.max(1, event.nativeEvent.layout.width));
   };
 
+  const surfacePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: () => !disabledRef.current,
+        onPanResponderGrant: (event) => {
+          if (!disabledRef.current) {
+            surfaceGestureActiveRef.current = true;
+            onSurfaceGesture(event);
+          }
+        },
+        onPanResponderMove: (event) => {
+          if (surfaceGestureActiveRef.current) {
+            onSurfaceGesture(event);
+          }
+        },
+        onPanResponderRelease: () => {
+          surfaceGestureActiveRef.current = false;
+        },
+        onPanResponderTerminate: () => {
+          surfaceGestureActiveRef.current = false;
+        },
+        onStartShouldSetPanResponder: () => !disabledRef.current,
+      }),
+    [],
+  );
+
+  const huePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: () => !disabledRef.current,
+        onPanResponderGrant: (event) => {
+          if (!disabledRef.current) {
+            hueGestureActiveRef.current = true;
+            onHueGesture(event);
+          }
+        },
+        onPanResponderMove: (event) => {
+          if (hueGestureActiveRef.current) {
+            onHueGesture(event);
+          }
+        },
+        onPanResponderRelease: () => {
+          hueGestureActiveRef.current = false;
+        },
+        onPanResponderTerminate: () => {
+          hueGestureActiveRef.current = false;
+        },
+        onStartShouldSetPanResponder: () => !disabledRef.current,
+      }),
+    [],
+  );
+
   return (
     <View
       accessibilityLabel={title}
@@ -360,14 +485,24 @@ export function ColorPickerPanel({
           onPress={onSurfacePress}
           style={(state) => {
             const webState = state as { hovered?: boolean; pressed?: boolean };
+            const hovered = web && Boolean(webState.hovered);
             return [
               styles.surfaceTarget,
+              web
+                ? ({
+                    transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
+                    transitionProperty: 'background-color',
+                    transitionTimingFunction: motion.easing.standard,
+                  } as unknown as ViewStyle)
+                : undefined,
               {
                 backgroundColor: disabled
                   ? theme.stateDisabledSurface
                   : webState.pressed
                     ? theme.statePressed
-                    : undefined,
+                    : hovered
+                      ? theme.stateHover
+                      : undefined,
                 ...(web && surfaceFocusVisible
                   ? ({
                       outlineColor: theme.stateFocusRing,
@@ -380,6 +515,7 @@ export function ColorPickerPanel({
             ];
           }}
           testID="color-picker-surface"
+          {...(!web ? surfacePanResponder.panHandlers : undefined)}
           {...(web
             ? ({
                 'aria-disabled': disabled,
@@ -388,7 +524,42 @@ export function ColorPickerPanel({
                 'aria-valuenow': currentValue.saturation,
                 'aria-valuetext': `채도 ${currentValue.saturation}, 밝기 ${currentValue.brightness}`,
                 onKeyDown: onSurfaceKeyDown,
-                onPointerDown: () => setSurfaceFocusVisible(false),
+                onLostPointerCapture: (event) => {
+                  if (surfacePointerIdRef.current === event.nativeEvent.pointerId) {
+                    surfacePointerIdRef.current = null;
+                  }
+                },
+                onPointerCancel: (event) => {
+                  if (surfacePointerIdRef.current === event.nativeEvent.pointerId) {
+                    surfacePointerIdRef.current = null;
+                  }
+                },
+                onPointerDown: (event) => {
+                  const { button, isPrimary, pointerId } = event.nativeEvent;
+                  if (
+                    disabledRef.current ||
+                    button !== 0 ||
+                    isPrimary !== true ||
+                    typeof pointerId !== 'number' ||
+                    surfacePointerIdRef.current !== null
+                  ) {
+                    return;
+                  }
+                  setSurfaceFocusVisible(false);
+                  surfacePointerIdRef.current = pointerId;
+                  event.currentTarget?.setPointerCapture?.(pointerId);
+                  onSurfaceGesture(event as unknown as GestureResponderEvent);
+                },
+                onPointerMove: (event) => {
+                  if (surfacePointerIdRef.current === event.nativeEvent.pointerId) {
+                    onSurfaceGesture(event as unknown as GestureResponderEvent);
+                  }
+                },
+                onPointerUp: (event) => {
+                  if (surfacePointerIdRef.current === event.nativeEvent.pointerId) {
+                    surfacePointerIdRef.current = null;
+                  }
+                },
                 role: 'slider',
                 tabIndex: disabled ? -1 : 0,
               } as WebSliderProps)
@@ -443,15 +614,25 @@ export function ColorPickerPanel({
           onLayout={onHueLayout}
           onPress={onHuePress}
           style={(state) => {
-            const webState = state as { pressed?: boolean };
+            const webState = state as { hovered?: boolean; pressed?: boolean };
+            const hovered = web && Boolean(webState.hovered);
             return [
               styles.hueTarget,
+              web
+                ? ({
+                    transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
+                    transitionProperty: 'background-color',
+                    transitionTimingFunction: motion.easing.standard,
+                  } as unknown as ViewStyle)
+                : undefined,
               {
                 backgroundColor: disabled
                   ? theme.stateDisabledSurface
                   : webState.pressed
                     ? theme.statePressed
-                    : undefined,
+                    : hovered
+                      ? theme.stateHover
+                      : undefined,
                 ...(web && hueFocusVisible
                   ? ({
                       outlineColor: theme.stateFocusRing,
@@ -464,6 +645,7 @@ export function ColorPickerPanel({
             ];
           }}
           testID="color-picker-hue"
+          {...(!web ? huePanResponder.panHandlers : undefined)}
           {...(web
             ? ({
                 'aria-disabled': disabled,
@@ -471,7 +653,42 @@ export function ColorPickerPanel({
                 'aria-valuemin': 0,
                 'aria-valuenow': currentValue.hue,
                 onKeyDown: onHueKeyDown,
-                onPointerDown: () => setHueFocusVisible(false),
+                onLostPointerCapture: (event) => {
+                  if (huePointerIdRef.current === event.nativeEvent.pointerId) {
+                    huePointerIdRef.current = null;
+                  }
+                },
+                onPointerCancel: (event) => {
+                  if (huePointerIdRef.current === event.nativeEvent.pointerId) {
+                    huePointerIdRef.current = null;
+                  }
+                },
+                onPointerDown: (event) => {
+                  const { button, isPrimary, pointerId } = event.nativeEvent;
+                  if (
+                    disabledRef.current ||
+                    button !== 0 ||
+                    isPrimary !== true ||
+                    typeof pointerId !== 'number' ||
+                    huePointerIdRef.current !== null
+                  ) {
+                    return;
+                  }
+                  setHueFocusVisible(false);
+                  huePointerIdRef.current = pointerId;
+                  event.currentTarget?.setPointerCapture?.(pointerId);
+                  onHueGesture(event as unknown as GestureResponderEvent);
+                },
+                onPointerMove: (event) => {
+                  if (huePointerIdRef.current === event.nativeEvent.pointerId) {
+                    onHueGesture(event as unknown as GestureResponderEvent);
+                  }
+                },
+                onPointerUp: (event) => {
+                  if (huePointerIdRef.current === event.nativeEvent.pointerId) {
+                    huePointerIdRef.current = null;
+                  }
+                },
                 role: 'slider',
                 tabIndex: disabled ? -1 : 0,
               } as WebSliderProps)

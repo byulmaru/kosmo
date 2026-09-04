@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { PanResponder, Platform, Pressable, StyleSheet, View } from 'react-native';
-import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, radius, space } from '@/theme/tokens';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, motion, radius, space } from '@/theme/tokens';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 export type SliderProps = {
@@ -59,6 +59,7 @@ export function Slider({
   value,
 }: SliderProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const [focusVisible, setFocusVisible] = useState(false);
   const [dragging, setDragging] = useState(false);
   const web = Platform.OS === 'web';
@@ -268,6 +269,13 @@ export function Slider({
         const hovered = web && Boolean(webState.hovered);
         return [
           styles.root,
+          web
+            ? ({
+                transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
+                transitionProperty: 'background-color',
+                transitionTimingFunction: motion.easing.standard,
+              } as unknown as ViewStyle)
+            : undefined,
           {
             backgroundColor: disabled
               ? undefined

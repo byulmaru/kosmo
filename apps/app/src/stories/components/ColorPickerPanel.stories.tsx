@@ -99,7 +99,12 @@ const meta = {
       </View>
     ),
   ],
-  excludeStories: ['SaturationBoundary', 'MidpointPointerNoOp'],
+  excludeStories: [
+    'InteractionContract',
+    'MidpointPointerNoOp',
+    'ReducedMotionContract',
+    'SaturationBoundary',
+  ],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Color Picker Panel',
 } satisfies Meta<typeof ColorPickerPanel>;
@@ -162,31 +167,70 @@ const colorPickerPlay: Story['play'] = async ({ args, canvasElement, step }) => 
     }
   });
 
-  await step('포인터로 채도와 밝기를 변경', async () => {
+  await step('포인터 drag로 채도와 밝기를 변경', async () => {
     args.onChange.mockClear();
+    args.onCommit.mockClear();
     const surfaceRect = surface.getBoundingClientRect();
     await expect(surfaceRect.width).toBeCloseTo(328, 0);
     await expect(surfaceRect.height).toBeCloseTo(180, 0);
-    await fireEvent.click(surface, {
-      clientX: surfaceRect.left + surfaceRect.width / 2,
-      clientY: surfaceRect.top + surfaceRect.height / 2,
+    const pointAt = (saturationRatio: number, brightnessRatio: number) => ({
+      x: surfaceRect.left + surfaceRect.width * saturationRatio,
+      y: surfaceRect.top + surfaceRect.height * (1 - brightnessRatio),
     });
-    const pointerValue = {
-      brightness: 50,
+    const pointerStartValue = {
+      brightness: 25,
       hue: expectedControlledValue.hue,
-      saturation: 50,
+      saturation: 25,
     };
-    const pointerChanged =
-      pointerValue.brightness !== expectedControlledValue.brightness ||
-      pointerValue.hue !== expectedControlledValue.hue ||
-      pointerValue.saturation !== expectedControlledValue.saturation;
-    if (pointerChanged) {
-      await expect(args.onChange).toHaveBeenLastCalledWith(pointerValue);
-      expectedControlledValue = pointerValue;
-      await expect(input).toHaveValue('#406080');
-    } else {
-      await expect(args.onChange).not.toHaveBeenCalled();
-    }
+    const pointerEndValue = {
+      brightness: 75,
+      hue: expectedControlledValue.hue,
+      saturation: 75,
+    };
+
+    await userEvent.pointer({
+      coords: pointAt(0.25, 0.25),
+      keys: '[MouseLeft>]',
+      target: surface,
+    });
+    await expect(args.onChange).toHaveBeenLastCalledWith(pointerStartValue);
+    await expect(args.onCommit).not.toHaveBeenCalled();
+
+    await userEvent.pointer({ coords: pointAt(0.75, 0.75), target: surface });
+    fireEvent.pointerUp(surface);
+    await expect(args.onChange).toHaveBeenLastCalledWith(pointerEndValue);
+    await expect(surface).toHaveAttribute('aria-valuenow', String(pointerEndValue.saturation));
+    await expect(surface).toHaveAttribute(
+      'aria-valuetext',
+      `채도 ${pointerEndValue.saturation}, 밝기 ${pointerEndValue.brightness}`,
+    );
+    await expect(args.onCommit).not.toHaveBeenCalled();
+    expectedControlledValue = pointerEndValue;
+  });
+
+  await step('포인터 drag로 색조를 변경', async () => {
+    args.onChange.mockClear();
+    args.onCommit.mockClear();
+    const hueRect = hue.getBoundingClientRect();
+    const pointAt = (ratio: number) => ({
+      x: hueRect.left + hueRect.width * ratio,
+      y: hueRect.top + hueRect.height / 2,
+    });
+    const pointerStartValue = { ...expectedControlledValue, hue: 90 };
+    const pointerEndValue = { ...expectedControlledValue, hue: 270 };
+
+    await userEvent.pointer({
+      coords: pointAt(0.25),
+      keys: '[MouseLeft>]',
+      target: hue,
+    });
+    await expect(args.onChange).toHaveBeenLastCalledWith(pointerStartValue);
+    await userEvent.pointer({ coords: pointAt(0.75), target: hue });
+    fireEvent.pointerUp(hue);
+    await expect(args.onChange).toHaveBeenLastCalledWith(pointerEndValue);
+    await expect(hue).toHaveAttribute('aria-valuenow', String(pointerEndValue.hue));
+    await expect(args.onCommit).not.toHaveBeenCalled();
+    expectedControlledValue = pointerEndValue;
   });
 
   await step('HEX 입력을 같은 controlled value와 Actions에 반영', async () => {
@@ -202,8 +246,6 @@ const colorPickerPlay: Story['play'] = async ({ args, canvasElement, step }) => 
     await expect(args.onCommit).toHaveBeenLastCalledWith(expectedControlledValue);
   });
 };
-
-export const Default: Story = {};
 
 export const Playground: Story = {
   parameters: {
@@ -221,6 +263,11 @@ export const Playground: Story = {
     },
   },
   render: renderControlled,
+};
+
+export const InteractionContract: Story = {
+  ...Playground,
+  parameters: { controls: { disable: true } },
   play: colorPickerPlay,
 };
 
@@ -238,6 +285,20 @@ export const MidpointPointerNoOp: Story = {
   },
   render: renderControlled,
   play: colorPickerPlay,
+};
+
+export const ReducedMotionContract: Story = {
+  ...Playground,
+  globals: { reduceMotion: true },
+  parameters: { controls: { disable: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = canvas.getByTestId('color-picker-surface');
+    const hue = canvas.getByTestId('color-picker-hue');
+
+    expect(getComputedStyle(surface).transitionDuration).toBe('0s');
+    expect(getComputedStyle(hue).transitionDuration).toBe('0s');
+  },
 };
 
 export const RepresentativeStates: Story = {

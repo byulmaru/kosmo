@@ -1,21 +1,18 @@
 import baseMeta, {
   InteractionContract as interactionContract,
-  MidpointPointerNoOp as midpointPointerNoOp,
   ReducedMotionContract as reducedMotionContract,
-  SaturationBoundary as saturationBoundary,
-} from './ColorPickerPanel.stories';
+} from './Slider.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { SliderProps } from '@/components/ui/Slider';
 
 const meta = {
   ...baseMeta,
   excludeStories: [],
-  title: 'KOSMO/Components/Color Picker Panel/Tests',
-} satisfies Meta;
+  title: 'KOSMO/Components/Slider/Tests',
+} satisfies Meta<SliderProps>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const SaturationBoundary: Story = saturationBoundary;
-export const MidpointPointerNoOp: Story = midpointPointerNoOp;
 export const InteractionContract: Story = interactionContract;
 export const ReducedMotionContract: Story = reducedMotionContract;

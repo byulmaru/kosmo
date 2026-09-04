@@ -3,7 +3,8 @@ import { ChevronRightIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { NavigationLink } from '@/components/shell/NavigationLink';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, motion } from '@/theme/tokens';
 import { SettingsItem } from './SettingsItem';
 import type { Href } from 'expo-router';
 import type { ViewStyle } from 'react-native';
@@ -32,7 +33,9 @@ export function SettingsLinkRow({
   testID,
 }: SettingsLinkRowProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const [focusVisible, setFocusVisible] = useState(false);
+  const web = Platform.OS === 'web';
 
   const row = (
     <Pressable
@@ -42,7 +45,7 @@ export function SettingsLinkRow({
       aria-current={selected ? 'page' : undefined}
       onBlur={() => setFocusVisible(false)}
       onFocus={(event) => {
-        if (Platform.OS !== 'web') {
+        if (!web) {
           return;
         }
         const target = event.currentTarget as unknown as {
@@ -54,11 +57,24 @@ export function SettingsLinkRow({
       onPointerDown={() => setFocusVisible(false)}
       style={(state) => {
         const webState = state as { hovered?: boolean; pressed?: boolean };
-        const hovered = Platform.OS === 'web' && Boolean(webState.hovered);
+        const hovered = web && Boolean(webState.hovered);
         const pressed = Boolean(webState.pressed);
+        const transitionDuration =
+          pressed || hovered
+            ? motion.duration.fast
+            : selected
+              ? motion.duration.standard
+              : motion.duration.fast;
 
         return [
           styles.entry,
+          web
+            ? ({
+                transitionDuration: `${reducedMotion ? motion.duration.instant : transitionDuration}ms`,
+                transitionProperty: 'background-color, border-color',
+                transitionTimingFunction: motion.easing.standard,
+              } as unknown as ViewStyle)
+            : undefined,
           {
             backgroundColor: pressed
               ? theme.statePressed
@@ -67,6 +83,8 @@ export function SettingsLinkRow({
                 : selected
                   ? theme.selectedSurface
                   : 'transparent',
+            borderColor: selected ? theme.selectedBorder : 'transparent',
+            borderWidth: borderWidths[1],
             outlineColor: focusVisible ? theme.focus : undefined,
             outlineOffset: 2,
             outlineStyle: focusVisible ? 'solid' : 'none',

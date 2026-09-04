@@ -53,6 +53,7 @@ function MultiSelectStory(args: StoryArgs) {
 
 const meta = {
   args: {
+    createOptionLabel: '새 태그 추가',
     emptyMessage: '일치하는 태그가 없습니다.',
     onCreateOption: fn(),
     onQueryChange: fn(),
@@ -65,6 +66,7 @@ const meta = {
     selectedOptions: [catalogOptions[0]],
   },
   component: MultiSelectCombobox,
+  excludeStories: ['InteractionContract'],
   parameters: { controls: { disable: true } },
   render: (args) => <MultiSelectStory {...args} />,
   title: 'KOSMO/Components/Multi Select Combobox',
@@ -73,14 +75,13 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-
 export const Playground: Story = {
   args: {
     disabled: false,
     query: '',
   },
   argTypes: {
+    createOptionLabel: { control: 'text' },
     disabled: { control: 'boolean' },
     emptyMessage: { control: 'text' },
     options: {
@@ -100,6 +101,7 @@ export const Playground: Story = {
     controls: {
       disable: false,
       include: [
+        'createOptionLabel',
         'disabled',
         'emptyMessage',
         'options',
@@ -111,6 +113,11 @@ export const Playground: Story = {
       ],
     },
   },
+};
+
+export const InteractionContract: Story = {
+  ...Playground,
+  parameters: { controls: { disable: true } },
   play: async ({ args, canvasElement, step }) => {
     args.onCreateOption?.mockClear();
     args.onQueryChange.mockClear();

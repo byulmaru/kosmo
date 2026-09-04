@@ -48,9 +48,14 @@ mock.module(require.resolve('lucide-react-native'), {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
+    useReducedMotion: () => false,
     useTheme: () => ({
       divider: '#eeeeee',
       focus: '#005fcc',
+      selectedBorder: '#9a7800',
+      selectedSurface: '#fff8dc',
+      stateHover: '#f4f4f4',
+      statePressed: '#e8e8e8',
       text: '#111111',
       textSecondary: '#666666',
     }),
@@ -87,6 +92,8 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     const entryStyle = flattenStyle(entry.props.style({ hovered: false, pressed: false }));
     assert.equal(entryStyle.minHeight, 64);
     assert.equal(entryStyle.width, '100%');
+    assert.equal(entryStyle.borderWidth, 1);
+    assert.equal(entryStyle.borderColor, 'transparent');
   });
 
   it('focus-visible style과 link target geometry를 유지한다', async () => {
@@ -96,6 +103,8 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     let entryStyle = flattenStyle(entry.props.style({ hovered: false, pressed: false }));
     assert.equal(entryStyle.minHeight, 64);
     assert.equal(entryStyle.width, '100%');
+    assert.equal(entryStyle.borderWidth, 1);
+    assert.equal(entryStyle.borderColor, 'transparent');
     assert.equal(entryStyle.outlineWidth, 0);
 
     await act(async () =>

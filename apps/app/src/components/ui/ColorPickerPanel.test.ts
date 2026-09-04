@@ -41,8 +41,25 @@ const TextInputHost = 'TextInput' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
 
 let platformOS: 'ios' | 'web' = 'web';
+let reducedMotion = false;
+
+type PanResponderConfig = {
+  onPanResponderGrant?: (event: unknown) => void;
+  onPanResponderMove?: (event: unknown) => void;
+  onPanResponderRelease?: (event: unknown) => void;
+  onStartShouldSetPanResponder?: () => boolean;
+};
 
 mockModule('react-native', {
+  PanResponder: {
+    create: (config: PanResponderConfig) => ({
+      panHandlers: {
+        onResponderGrant: config.onPanResponderGrant,
+        onResponderMove: config.onPanResponderMove,
+        onResponderRelease: config.onPanResponderRelease,
+      },
+    }),
+  },
   Platform: {
     get OS() {
       return platformOS;
@@ -65,6 +82,7 @@ mockModule(require.resolve('lucide-react-native'), { TriangleAlert: WarningIconH
 mockModule('@/components/ui/Button', { Button: ButtonHost });
 mockModule('@/components/ui/TextField', { TextField: TextFieldHost });
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => reducedMotion,
   useElevation: () => ({ floating: { boxShadow: 'shadow' } }),
   useTheme: () => ({
     backgroundCanvas: 'canvas',
@@ -81,6 +99,7 @@ mockModule('@/theme/ThemeProvider', {
     stateDisabledForeground: 'disabled-foreground',
     stateDisabledSurface: 'disabled-surface',
     stateFocusRing: 'focus-ring',
+    stateHover: 'hover',
     statePressed: 'pressed',
   }),
 });
@@ -89,6 +108,10 @@ mockModule('@/theme/tokens', {
   colors: {
     dark: { backgroundSurface: 'dark-surface', foregroundPrimary: 'dark-foreground' },
     light: { backgroundSurface: 'light-surface', foregroundPrimary: 'light-foreground' },
+  },
+  motion: {
+    duration: { fast: 120, instant: 0 },
+    easing: { standard: 'standard-easing' },
   },
   radius: { 4: 4, 8: 8, 12: 12, full: 999 },
   space: { 4: 4, 8: 8, 12: 12, 16: 16, 24: 24, 48: 48 },
@@ -110,6 +133,7 @@ before(async () => {
 
 beforeEach(() => {
   platformOS = 'web';
+  reducedMotion = false;
 });
 
 function renderPanel({
@@ -256,6 +280,76 @@ test('ColorPickerPanel matches the controlled plane, handles, previews, warning,
   );
 });
 
+test('ColorPickerPanel transitions Web target feedback without animating value geometry', () => {
+  const renderer = renderPanel();
+  const surface = findByTestID(renderer, 'color-picker-surface');
+  const hue = findByTestID(renderer, 'color-picker-hue');
+  const surfaceStyle = flattenStyle(surface.props.style({ hovered: true, pressed: false }));
+  const hueStyle = flattenStyle(hue.props.style({ hovered: true, pressed: false }));
+
+  assert.equal(surfaceStyle.transitionDuration, '120ms');
+  assert.equal(surfaceStyle.transitionProperty, 'background-color');
+  assert.equal(surfaceStyle.transitionTimingFunction, 'standard-easing');
+  assert.equal(surfaceStyle.backgroundColor, 'hover');
+  assert.equal(hueStyle.transitionDuration, '120ms');
+  assert.equal(hueStyle.transitionProperty, 'background-color');
+  assert.equal(hueStyle.backgroundColor, 'hover');
+
+  const pressedSurfaceStyle = flattenStyle(surface.props.style({ hovered: true, pressed: true }));
+  const pressedHueStyle = flattenStyle(hue.props.style({ hovered: true, pressed: true }));
+  assert.equal(pressedSurfaceStyle.backgroundColor, 'pressed');
+  assert.equal(pressedHueStyle.backgroundColor, 'pressed');
+
+  const surfaceHandleStyle = nodeStyle(findByTestID(renderer, 'color-picker-surface-handle'));
+  const hueHandleStyle = nodeStyle(findByTestID(renderer, 'color-picker-hue-handle'));
+  const surfaceCursorStyle = nodeStyle(findByTestID(renderer, 'color-picker-surface-cursor'));
+  const hueThumbStyle = nodeStyle(findByTestID(renderer, 'color-picker-hue-thumb'));
+  assert.equal(surfaceHandleStyle.left, 82);
+  assert.equal(surfaceHandleStyle.top, 45);
+  assert.equal(hueHandleStyle.left, 164);
+  assert.equal(surfaceHandleStyle.transitionProperty, undefined);
+  assert.equal(hueHandleStyle.transitionProperty, undefined);
+  assert.equal(surfaceCursorStyle.transitionProperty, undefined);
+  assert.equal(hueThumbStyle.transitionProperty, undefined);
+
+  reducedMotion = true;
+  const reducedRenderer = renderPanel();
+  const reducedSurfaceStyle = flattenStyle(
+    findByTestID(reducedRenderer, 'color-picker-surface').props.style({
+      hovered: false,
+      pressed: true,
+    }),
+  );
+  assert.equal(reducedSurfaceStyle.transitionDuration, '0ms');
+
+  platformOS = 'ios';
+  const nativeRenderer = renderPanel();
+  const nativeSurfaceStyle = flattenStyle(
+    findByTestID(nativeRenderer, 'color-picker-surface').props.style({
+      hovered: false,
+      pressed: true,
+    }),
+  );
+  assert.equal(nativeSurfaceStyle.transitionDuration, undefined);
+  assert.equal(nativeSurfaceStyle.transitionProperty, undefined);
+
+  const disabledRenderer = renderPanel({ disabled: true });
+  const disabledSurfaceStyle = flattenStyle(
+    findByTestID(disabledRenderer, 'color-picker-surface').props.style({
+      hovered: true,
+      pressed: true,
+    }),
+  );
+  const disabledHueStyle = flattenStyle(
+    findByTestID(disabledRenderer, 'color-picker-hue').props.style({
+      hovered: true,
+      pressed: true,
+    }),
+  );
+  assert.equal(disabledSurfaceStyle.backgroundColor, 'disabled-surface');
+  assert.equal(disabledHueStyle.backgroundColor, 'disabled-surface');
+});
+
 test('ColorPickerPanel maps dynamic pointer coordinates and keyboard/custom AT changes', () => {
   const changes: ColorPickerPanelModule.ColorPickerValue[] = [];
   const renderer = renderPanel({ onChange: (value) => changes.push(value) });
@@ -304,6 +398,219 @@ test('ColorPickerPanel maps dynamic pointer coordinates and keyboard/custom AT c
     }),
   );
   assert.deepEqual(nativeChanges, [{ brightness: 76, hue: 180, saturation: 25 }]);
+});
+
+test('ColorPickerPanel emits continuous native drag changes for surface and hue', () => {
+  platformOS = 'ios';
+  const surfaceChanges: ColorPickerPanelModule.ColorPickerValue[] = [];
+  const surfaceRenderer = renderPanel({ onChange: (value) => surfaceChanges.push(value) });
+  const surface = pressables(surfaceRenderer)[0];
+  assert.ok(surface);
+  act(() => surface.props.onLayout({ nativeEvent: { layout: { width: 328 } } }));
+
+  act(() => surface.props.onResponderGrant?.({ nativeEvent: { locationX: 82, locationY: 135 } }));
+  assert.deepEqual(surfaceChanges, [{ brightness: 25, hue: 180, saturation: 25 }]);
+  act(() => surface.props.onResponderMove?.({ nativeEvent: { locationX: 246, locationY: 45 } }));
+  assert.deepEqual(surfaceChanges, [
+    { brightness: 25, hue: 180, saturation: 25 },
+    { brightness: 75, hue: 180, saturation: 75 },
+  ]);
+
+  const hueChanges: ColorPickerPanelModule.ColorPickerValue[] = [];
+  const hueRenderer = renderPanel({ onChange: (value) => hueChanges.push(value) });
+  const hue = pressables(hueRenderer)[1];
+  assert.ok(hue);
+  act(() => hue.props.onLayout({ nativeEvent: { layout: { width: 328 } } }));
+
+  act(() => hue.props.onResponderGrant?.({ nativeEvent: { locationX: 82 } }));
+  assert.deepEqual(hueChanges, [{ brightness: 75, hue: 90, saturation: 25 }]);
+  act(() => hue.props.onResponderMove?.({ nativeEvent: { locationX: 246 } }));
+  assert.deepEqual(hueChanges, [
+    { brightness: 75, hue: 90, saturation: 25 },
+    { brightness: 75, hue: 270, saturation: 25 },
+  ]);
+});
+
+test('ColorPickerPanel gates surface Web drags by pointer identity and cleanup events', () => {
+  const changes: ColorPickerPanelModule.ColorPickerValue[] = [];
+  const renderer = renderPanel({ onChange: (value) => changes.push(value) });
+  let surface = findByTestID(renderer, 'color-picker-surface');
+  const capturedPointerIds: number[] = [];
+  const currentTarget = {
+    setPointerCapture: (pointerId: number) => capturedPointerIds.push(pointerId),
+  };
+
+  act(() =>
+    surface.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 0, isPrimary: false, locationX: 246, locationY: 45, pointerId: 2 },
+    }),
+  );
+  assert.deepEqual(changes, []);
+  assert.deepEqual(capturedPointerIds, []);
+  act(() =>
+    surface.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 2, isPrimary: true, locationX: 246, locationY: 45, pointerId: 3 },
+    }),
+  );
+  assert.deepEqual(changes, []);
+  assert.deepEqual(capturedPointerIds, []);
+
+  act(() =>
+    surface.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 0, isPrimary: true, locationX: 82, locationY: 135, pointerId: 11 },
+    }),
+  );
+  assert.deepEqual(changes, [{ brightness: 25, hue: 180, saturation: 25 }]);
+  assert.deepEqual(capturedPointerIds, [11]);
+  act(() =>
+    surface.props.onPointerMove?.({
+      nativeEvent: { locationX: 246, locationY: 45, pointerId: 12 },
+    }),
+  );
+  assert.equal(changes.length, 1);
+  act(() => surface.props.onPointerUp?.({ nativeEvent: { pointerId: 12 } }));
+  act(() =>
+    surface.props.onPointerMove?.({
+      nativeEvent: { locationX: 246, locationY: 45, pointerId: 11 },
+    }),
+  );
+  assert.deepEqual(changes.at(-1), { brightness: 75, hue: 180, saturation: 75 });
+  act(() => surface.props.onPointerUp?.({ nativeEvent: { pointerId: 11 } }));
+  act(() =>
+    surface.props.onPointerMove?.({
+      nativeEvent: { locationX: 82, locationY: 135, pointerId: 11 },
+    }),
+  );
+  assert.equal(changes.length, 2);
+
+  surface = findByTestID(renderer, 'color-picker-surface');
+  act(() =>
+    surface.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 0, isPrimary: true, locationX: 82, locationY: 135, pointerId: 13 },
+    }),
+  );
+  act(() => surface.props.onPointerCancel?.({ nativeEvent: { pointerId: 12 } }));
+  act(() =>
+    surface.props.onPointerMove?.({
+      nativeEvent: { locationX: 246, locationY: 45, pointerId: 13 },
+    }),
+  );
+  assert.deepEqual(changes.at(-1), { brightness: 75, hue: 180, saturation: 75 });
+  act(() => surface.props.onPointerCancel?.({ nativeEvent: { pointerId: 13 } }));
+  act(() =>
+    surface.props.onPointerMove?.({
+      nativeEvent: { locationX: 246, locationY: 45, pointerId: 13 },
+    }),
+  );
+  assert.equal(changes.length, 4);
+
+  act(() =>
+    surface.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 0, isPrimary: true, locationX: 82, locationY: 135, pointerId: 14 },
+    }),
+  );
+  act(() => surface.props.onLostPointerCapture?.({ nativeEvent: { pointerId: 14 } }));
+  act(() =>
+    surface.props.onPointerMove?.({
+      nativeEvent: { locationX: 246, locationY: 45, pointerId: 14 },
+    }),
+  );
+  assert.equal(changes.length, 5);
+
+  const disabledCapturedPointerIds: number[] = [];
+  const disabledRenderer = renderPanel({
+    disabled: true,
+    onChange: () => assert.fail('disabled surface started a pointer drag'),
+  });
+  const disabledSurface = findByTestID(disabledRenderer, 'color-picker-surface');
+  act(() =>
+    disabledSurface.props.onPointerDown?.({
+      currentTarget: {
+        setPointerCapture: (pointerId: number) => disabledCapturedPointerIds.push(pointerId),
+      },
+      nativeEvent: { button: 0, isPrimary: true, locationX: 246, locationY: 45, pointerId: 15 },
+    }),
+  );
+  assert.deepEqual(disabledCapturedPointerIds, []);
+});
+
+test('ColorPickerPanel gates hue Web drags by pointer identity', () => {
+  const changes: ColorPickerPanelModule.ColorPickerValue[] = [];
+  const renderer = renderPanel({ onChange: (value) => changes.push(value) });
+  const hue = findByTestID(renderer, 'color-picker-hue');
+  const capturedPointerIds: number[] = [];
+  const currentTarget = {
+    setPointerCapture: (pointerId: number) => capturedPointerIds.push(pointerId),
+  };
+
+  act(() =>
+    hue.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 2, isPrimary: true, locationX: 82, pointerId: 21 },
+    }),
+  );
+  assert.deepEqual(changes, []);
+  assert.deepEqual(capturedPointerIds, []);
+  act(() =>
+    hue.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 0, isPrimary: true, locationX: 82, pointerId: 22 },
+    }),
+  );
+  assert.deepEqual(changes, [{ brightness: 75, hue: 90, saturation: 25 }]);
+  act(() => hue.props.onPointerMove?.({ nativeEvent: { locationX: 246, pointerId: 21 } }));
+  assert.equal(changes.length, 1);
+  act(() => hue.props.onPointerMove?.({ nativeEvent: { locationX: 246, pointerId: 22 } }));
+  assert.deepEqual(changes.at(-1), { brightness: 75, hue: 270, saturation: 25 });
+  act(() => hue.props.onPointerUp?.({ nativeEvent: { pointerId: 21 } }));
+  act(() => hue.props.onPointerUp?.({ nativeEvent: { pointerId: 22 } }));
+  act(() => hue.props.onPointerMove?.({ nativeEvent: { locationX: 82, pointerId: 22 } }));
+  assert.equal(changes.length, 2);
+});
+
+test('ColorPickerPanel keeps externally controlled channels during a Web surface drag', () => {
+  const changes: ColorPickerPanelModule.ColorPickerValue[] = [];
+  const onChange = (value: ColorPickerPanelModule.ColorPickerValue) => changes.push(value);
+  let controlledValue: ColorPickerPanelModule.ColorPickerValue = {
+    brightness: 40,
+    hue: 120,
+    saturation: 20,
+  };
+  const renderer = renderPanel({ onChange, value: controlledValue });
+  let surface = findByTestID(renderer, 'color-picker-surface');
+  const currentTarget = { setPointerCapture: () => undefined };
+
+  act(() =>
+    surface.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 0, isPrimary: true, locationX: 82, locationY: 90, pointerId: 31 },
+    }),
+  );
+  assert.deepEqual(changes.at(-1), { brightness: 50, hue: 120, saturation: 25 });
+
+  controlledValue = { brightness: 50, hue: 300, saturation: 25 };
+  act(() =>
+    renderer.update(
+      createElement(colorPickerPanelModule!.ColorPickerPanel, {
+        onCancel: () => undefined,
+        onChange,
+        onCommit: () => undefined,
+        value: controlledValue,
+      }),
+    ),
+  );
+  surface = findByTestID(renderer, 'color-picker-surface');
+  act(() =>
+    surface.props.onPointerMove?.({
+      nativeEvent: { locationX: 246, locationY: 45, pointerId: 31 },
+    }),
+  );
+  assert.deepEqual(changes.at(-1), { brightness: 75, hue: 300, saturation: 75 });
 });
 
 test('ColorPickerPanel derives every color surface from value and converts valid HEX input', () => {

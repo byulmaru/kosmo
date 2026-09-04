@@ -26,6 +26,7 @@ const TextHost = 'Text' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
 
 let platformOS: 'ios' | 'web' = 'web';
+let reducedMotion = false;
 
 mockModule('react-native', {
   Platform: {
@@ -39,6 +40,7 @@ mockModule('react-native', {
   View: ViewHost,
 });
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => reducedMotion,
   useTheme: () => ({
     foregroundPrimary: 'primary',
     foregroundSecondary: 'secondary',
@@ -53,6 +55,10 @@ mockModule('@/theme/ThemeProvider', {
 });
 mockModule('@/theme/tokens', {
   borderWidths: { 0: 0, 1: 1, 2: 2 },
+  motion: {
+    duration: { fast: 120, instant: 0, standard: 200 },
+    easing: { standard: 'standard-easing' },
+  },
   radius: { 12: 12 },
   space: { 4: 4, 12: 12, 48: 48 },
   textStyles: {
@@ -69,6 +75,7 @@ before(async () => {
 
 beforeEach(() => {
   platformOS = 'web';
+  reducedMotion = false;
 });
 
 function renderOption({
@@ -134,6 +141,40 @@ test('ListboxOption exposes selected option semantics and selects on press', () 
 
   act(() => option.props.onPress());
   assert.equal(selected, 1);
+});
+
+test('ListboxOption transitions Web feedback by state without affecting native styles', () => {
+  const hoverRenderer = renderOption({ selected: false });
+  const hoverStyle = flattenStyle(
+    optionNode(hoverRenderer).props.style({ hovered: true, pressed: false }),
+  );
+  assert.equal(hoverStyle.transitionDuration, '120ms');
+  assert.equal(hoverStyle.transitionProperty, 'background-color, border-color');
+  assert.equal(hoverStyle.transitionTimingFunction, 'standard-easing');
+
+  const pressedStyle = flattenStyle(
+    optionNode(hoverRenderer).props.style({ hovered: false, pressed: true }),
+  );
+  assert.equal(pressedStyle.transitionDuration, '120ms');
+
+  const selectedRenderer = renderOption({ selected: true });
+  const selectedStyle = flattenStyle(
+    optionNode(selectedRenderer).props.style({ hovered: false, pressed: false }),
+  );
+  assert.equal(selectedStyle.transitionDuration, '200ms');
+
+  reducedMotion = true;
+  const reducedStyle = flattenStyle(
+    optionNode(renderOption({ selected: true })).props.style({ hovered: false, pressed: false }),
+  );
+  assert.equal(reducedStyle.transitionDuration, '0ms');
+
+  platformOS = 'ios';
+  const nativeStyle = flattenStyle(
+    optionNode(renderOption({ selected: true })).props.style({ hovered: false, pressed: false }),
+  );
+  assert.equal(nativeStyle.transitionDuration, undefined);
+  assert.equal(nativeStyle.transitionProperty, undefined);
 });
 
 test('disabled ListboxOption exposes disabled semantics and ignores selection', () => {

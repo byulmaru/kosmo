@@ -50,13 +50,12 @@ const meta = {
       </View>
     ),
   ],
+  excludeStories: ['InteractionContract', 'ReducedMotionContract'],
   title: 'KOSMO/Components/Settings Link Row',
 } satisfies Meta<typeof SettingsLinkRow>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
-
-export const Default: Story = {};
 
 export const Playground: Story = {
   parameters: {
@@ -65,6 +64,11 @@ export const Playground: Story = {
       include: ['label', 'description', 'accessibilityLabel', 'href', 'external', 'selected'],
     },
   },
+};
+
+export const InteractionContract: Story = {
+  ...Playground,
+  parameters: { controls: { disable: true } },
   play: async ({ args, canvasElement }) => {
     args.onNavigate?.mockClear();
     const canvas = within(canvasElement);
@@ -82,6 +86,16 @@ export const Playground: Story = {
     await expect(row).toHaveStyle({ outlineWidth: '2px' });
     await userEvent.click(row);
     await expect(args.onNavigate).toHaveBeenCalledOnce();
+  },
+};
+
+export const ReducedMotionContract: Story = {
+  ...Playground,
+  globals: { reduceMotion: true },
+  parameters: { controls: { disable: true } },
+  play: async ({ args, canvasElement }) => {
+    const row = within(canvasElement).getByRole('link', { name: args.accessibilityLabel });
+    expect(getComputedStyle(row).transitionDuration).toBe('0s');
   },
 };
 

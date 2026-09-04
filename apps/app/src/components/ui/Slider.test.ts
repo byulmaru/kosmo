@@ -28,6 +28,7 @@ const PressableHost = forwardRef<unknown, PressableProps>(function PressableMock
 const ViewHost = 'View' as unknown as ElementType;
 
 let platformOS: 'ios' | 'web' = 'web';
+let reducedMotion = false;
 let panResponderConfig: {
   onPanResponderGrant?: (event: unknown) => void;
   onPanResponderMove?: (event: unknown) => void;
@@ -60,6 +61,7 @@ mockModule('react-native', {
   View: ViewHost,
 });
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => reducedMotion,
   useTheme: () => ({
     borderDefault: 'border',
     borderDisabled: 'disabled-border',
@@ -75,6 +77,10 @@ mockModule('@/theme/ThemeProvider', {
 });
 mockModule('@/theme/tokens', {
   borderWidths: { 0: 0, 1: 1, 2: 2 },
+  motion: {
+    duration: { fast: 120, instant: 0 },
+    easing: { standard: 'standard-easing' },
+  },
   radius: { 4: 4, 8: 8, full: 999 },
   space: { 4: 4, 8: 8, 12: 12, 16: 16, 48: 48 },
   textStyles: {
@@ -91,6 +97,7 @@ before(async () => {
 
 beforeEach(() => {
   platformOS = 'web';
+  reducedMotion = false;
   panResponderConfig = null;
 });
 
@@ -184,6 +191,40 @@ test('Slider clamps and steps keyboard values while exposing the slider contract
   act(() => slider.props.onKeyDown(ignored.event));
   assert.equal(ignored.wasPrevented(), false);
   assert.deepEqual(values, [50, 0, 100]);
+});
+
+test('Slider transitions Web feedback without animating value geometry', () => {
+  const renderer = renderSlider();
+  const slider = sliderNode(renderer);
+  const style = flattenStyle(slider.props.style({ hovered: true, pressed: false }));
+
+  assert.equal(style.transitionDuration, '120ms');
+  assert.equal(style.transitionProperty, 'background-color');
+  assert.equal(style.transitionTimingFunction, 'standard-easing');
+
+  const valueGeometry = renderer.root.findAllByType(ViewHost).filter((node) => {
+    const viewStyle = flattenStyle(node.props.style);
+    return viewStyle.width === '40%' || viewStyle.left === '40%';
+  });
+  assert.equal(valueGeometry.length, 2);
+  assert.equal(
+    valueGeometry.every((node) => flattenStyle(node.props.style).transitionProperty === undefined),
+    true,
+  );
+
+  reducedMotion = true;
+  const reducedRenderer = renderSlider();
+  const reducedStyle = flattenStyle(
+    sliderNode(reducedRenderer).props.style({ hovered: true, pressed: false }),
+  );
+  assert.equal(reducedStyle.transitionDuration, '0ms');
+
+  platformOS = 'ios';
+  const nativeStyle = flattenStyle(
+    sliderNode(renderSlider()).props.style({ hovered: true, pressed: true }),
+  );
+  assert.equal(nativeStyle.transitionDuration, undefined);
+  assert.equal(nativeStyle.transitionProperty, undefined);
 });
 
 test('Slider maps responder coordinates inside its horizontal inset to stepped values', () => {

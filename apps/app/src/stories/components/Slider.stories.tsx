@@ -6,7 +6,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { SliderProps } from '@/components/ui/Slider';
 
 function SliderCatalog({
-  accessibilityLabel = '볼륨',
+  accessibilityLabel = '글씨 크기',
   disabled = false,
   max = 100,
   min = 0,
@@ -46,7 +46,7 @@ function snapSliderValue(value: number, min: number, max: number, step: number) 
 
 const meta = {
   args: {
-    accessibilityLabel: '볼륨',
+    accessibilityLabel: '글씨 크기',
     disabled: false,
     max: 100,
     min: 0,
@@ -64,6 +64,7 @@ const meta = {
     value: { control: { max: 100, min: 0, step: 1, type: 'number' } },
   },
   component: Slider,
+  excludeStories: ['InteractionContract', 'ReducedMotionContract'],
   parameters: { controls: { disable: true } },
   render: (args) => <SliderCatalog {...args} />,
   title: 'KOSMO/Components/Slider',
@@ -71,8 +72,6 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
-
-export const Default: Story = {};
 
 export const Playground: Story = {
   parameters: {
@@ -87,11 +86,16 @@ export const Playground: Story = {
       {...args}
     />
   ),
+};
+
+export const InteractionContract: Story = {
+  ...Playground,
+  parameters: { controls: { disable: true } },
   play: async ({ args, canvasElement, step }) => {
     args.onValueChange?.mockClear();
     args.onValueCommit?.mockClear();
     const canvas = within(canvasElement);
-    const slider = canvas.getByRole('slider', { name: args.accessibilityLabel ?? '볼륨' });
+    const slider = canvas.getByRole('slider', { name: args.accessibilityLabel ?? '글씨 크기' });
     const min = args.min ?? 0;
     const safeMax = Math.max(min, args.max ?? 100);
     const positiveStep = args.step && args.step > 0 ? args.step : 1;
@@ -202,6 +206,18 @@ export const Playground: Story = {
       }
       expectedControlledValue = safeMax;
     });
+  },
+};
+
+export const ReducedMotionContract: Story = {
+  ...Playground,
+  globals: { reduceMotion: true },
+  parameters: { controls: { disable: true } },
+  play: async ({ args, canvasElement }) => {
+    const slider = within(canvasElement).getByRole('slider', {
+      name: args.accessibilityLabel ?? '글씨 크기',
+    });
+    expect(getComputedStyle(slider).transitionDuration).toBe('0s');
   },
 };
 
