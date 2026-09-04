@@ -34,6 +34,11 @@ jobs:
       GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       KOSMO_ANDROID_AAB_PATH: ${{ github.workspace }}/apps/app/android/app/build/outputs/bundle/release/app-release.aab
+      SENTRY_ENVIRONMENT: prod
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+      SENTRY_RELEASE: ${{ github.sha }}
+      EXPO_PUBLIC_SENTRY_RELEASE: ${{ github.sha }}
 
     steps:
       - name: Checkout repository
@@ -222,6 +227,8 @@ jobs:
 
       - name: Build and upload signed Alpha AAB with Fastlane
         working-directory: apps/app
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: bundle exec fastlane android distribute_alpha
 
       - name: Write Actions summary
