@@ -45,14 +45,17 @@ export function PostComposerProfileSwitcher({
     triggerRef.current?.focus();
   }, []);
 
-  const dismiss = useCallback(() => {
-    operationVersionRef.current += 1;
-    pendingRef.current = false;
-    setPending(false);
-    setError(null);
-    setOpen(false);
-    focusTrigger();
-  }, [focusTrigger]);
+  const dismiss = useCallback(
+    (restoreFocus: boolean) => {
+      operationVersionRef.current += 1;
+      setError(null);
+      setOpen(false);
+      if (restoreFocus) {
+        focusTrigger();
+      }
+    },
+    [focusTrigger],
+  );
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !open) {
@@ -67,7 +70,7 @@ export function PostComposerProfileSwitcher({
 
     const onPointerDown = (event: PointerEvent) => {
       if (!root.contains(event.target as Node)) {
-        dismiss();
+        dismiss(false);
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
@@ -75,7 +78,7 @@ export function PostComposerProfileSwitcher({
         return;
       }
       event.preventDefault();
-      dismiss();
+      dismiss(true);
     };
 
     ownerDocument.addEventListener('pointerdown', onPointerDown);
@@ -85,6 +88,11 @@ export function PostComposerProfileSwitcher({
       ownerDocument.removeEventListener('keydown', onKeyDown);
     };
   }, [dismiss, open]);
+
+  const releaseDismissedSelection = () => {
+    pendingRef.current = false;
+    setPending(false);
+  };
 
   const selectProfile = (id: string) => {
     if (pendingRef.current) {
@@ -101,6 +109,7 @@ export function PostComposerProfileSwitcher({
       .then(
         () => {
           if (operationVersion !== operationVersionRef.current) {
+            releaseDismissedSelection();
             return;
           }
           setSelectedProfileId(id);
@@ -112,6 +121,7 @@ export function PostComposerProfileSwitcher({
         },
         () => {
           if (operationVersion !== operationVersionRef.current) {
+            releaseDismissedSelection();
             return;
           }
           setError('프로필을 전환하지 못했습니다.');
@@ -130,9 +140,12 @@ export function PostComposerProfileSwitcher({
           accessibilityState={{ busy: pending, disabled: pending, expanded: open }}
           aria-busy={pending}
           aria-expanded={open}
-          disabled={pending}
+          disabled={pending && open}
           hitSlop={4}
           onPress={() => {
+            if (pendingRef.current) {
+              return;
+            }
             setError(null);
             setOpen((value) => !value);
           }}
