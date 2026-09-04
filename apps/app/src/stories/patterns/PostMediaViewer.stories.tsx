@@ -252,7 +252,6 @@ export const Playground: Story = {
 };
 
 export const PlaygroundInteractionContract: Story = {
-  ...Playground,
   play: async ({ args, canvasElement, step }) => {
     const callbacks = [
       args.onClose,

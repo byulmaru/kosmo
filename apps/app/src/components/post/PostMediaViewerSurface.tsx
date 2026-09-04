@@ -236,41 +236,50 @@ function StatusAction({
   label,
   onActivate,
 }: Readonly<{ accessibleName: string; label: string; onActivate: () => void }>) {
-  const hitSlop =
-    Platform.OS === 'ios'
-      ? { bottom: 2, left: 0, right: 0, top: 2 }
-      : Platform.OS === 'android'
-        ? { bottom: 4, left: 0, right: 0, top: 4 }
-        : undefined;
+  const targetHeight = Platform.OS === 'ios' ? 44 : Platform.OS === 'android' ? 48 : 40;
 
   return (
     <Pressable
       accessibilityLabel={accessibleName}
       accessibilityRole="button"
-      hitSlop={hitSlop}
       onPress={() => onActivate()}
       style={(state) => {
         const webState = state as PressableStateCallbackType & {
           focused?: boolean;
-          hovered?: boolean;
         };
         return [
-          styles.statusAction,
-          {
-            backgroundColor: state.pressed ? '#e4e4e7' : webState.hovered ? '#f4f4f5' : '#ffffff',
-            ...(Platform.OS === 'web' && webState.focused
-              ? ({
-                  outlineColor: '#000000',
-                  outlineOffset: -2,
-                  outlineStyle: 'solid',
-                  outlineWidth: borderWidths[2],
-                } as unknown as ViewStyle)
-              : undefined),
-          },
+          styles.statusActionTarget,
+          { height: targetHeight },
+          Platform.OS === 'web' && webState.focused
+            ? ({
+                outlineColor: '#000000',
+                outlineOffset: -2,
+                outlineStyle: 'solid',
+                outlineWidth: borderWidths[2],
+              } as unknown as ViewStyle)
+            : undefined,
         ];
       }}
     >
-      <Text style={styles.statusActionLabel}>{label}</Text>
+      {(state) => {
+        const webState = state as PressableStateCallbackType & { hovered?: boolean };
+        return (
+          <View
+            style={[
+              styles.statusActionVisual,
+              {
+                backgroundColor: state.pressed
+                  ? '#e4e4e7'
+                  : webState.hovered
+                    ? '#f4f4f5'
+                    : '#ffffff',
+              },
+            ]}
+          >
+            <Text style={styles.statusActionLabel}>{label}</Text>
+          </View>
+        );
+      }}
     </Pressable>
   );
 }
@@ -400,12 +409,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     ...textStyles.uiCopyM,
   },
-  statusAction: {
+  statusActionTarget: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: space[16],
+    width: 104,
+  },
+  statusActionVisual: {
     alignItems: 'center',
     borderRadius: radius[12],
     height: 40,
     justifyContent: 'center',
-    marginTop: space[16],
     width: 104,
   },
   statusActionLabel: { color: '#000000', ...textStyles.uiLabelM },
