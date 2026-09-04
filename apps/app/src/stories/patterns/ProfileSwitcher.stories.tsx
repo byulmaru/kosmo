@@ -182,18 +182,18 @@ export const InteractionContract: Story = {
     expect(args.onOpenChange).toHaveBeenLastCalledWith(true);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
 
-    const group = canvas.getByRole('radiogroup', { name: '프로필 전환' });
-    const selected = within(group).getByRole('radio', {
+    const group = canvas.getByRole('group', { name: '프로필 전환' });
+    const selected = within(group).getByRole('button', {
       name: '코스모 작가, @kosmo, 읽지 않은 알림 있음',
     });
-    const remote = within(group).getByRole('radio', {
+    const remote = within(group).getByRole('button', {
       name: '먼 우주의 사용자, @remote, 읽지 않은 알림 있음',
     });
-    expect(selected).toHaveAttribute('aria-checked', 'true');
+    expect(selected).toHaveAttribute('aria-pressed', 'true');
 
     await userEvent.tab();
     expect(selected).toHaveFocus();
-    await userEvent.keyboard('{ArrowDown}');
+    await userEvent.tab();
     expect(remote).toHaveFocus();
     expect(args.onSelectProfile).not.toHaveBeenCalled();
 
@@ -234,11 +234,11 @@ export const OpenUnreadContract: Story = {
   args: { initialOpen: true, otherUnreadCount: 10, profileCount: 2 },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const group = canvas.getByRole('radiogroup', { name: '프로필 전환' });
-    const selected = within(group).getByRole('radio', {
+    const group = canvas.getByRole('group', { name: '프로필 전환' });
+    const selected = within(group).getByRole('button', {
       name: '코스모 작가, @kosmo, 읽지 않은 알림 있음',
     });
-    const remote = within(group).getByRole('radio', {
+    const remote = within(group).getByRole('button', {
       name: '먼 우주의 사용자, @remote, 읽지 않은 알림 있음',
     });
     const badge = within(remote).getByTestId('profile-switcher-unread-count');
