@@ -16,9 +16,10 @@
   source identity와 effect queue는 JSON-serializable한 Workflow state로 보존한다.
 - Activity는 Notification projection이나 Fedify queue handoff처럼 retry 가능한 하나의 외부 효과 경계를 소유한다.
 - transition eligibility와 effect execution을 분리한다. transaction Activity는 각 시도에서 현재 Profile/Instance
-  상태를 평가해 effect plan을 반환한다. completion loss 뒤 retry가 다른 상태를 관찰하면 delivery를 포함하거나
-  생략할 수 있다. Workflow는 반환된 plan을 그대로 실행하고 effect Activity는 이후 mutable 상태를 다시 조회해
-  delivery를 추가하거나 취소하지 않는다.
+  상태를 평가해 effect plan을 반환한다. commit 전에 실패한 시도의 retry가 다른 상태를 관찰하면 delivery를
+  포함하거나 생략할 수 있다. commit 뒤 completion 응답이 유실되어 retry가 기존 create row를 관찰하면 이번
+  transition의 commit이라고 추론해 create effect를 재구성하지 않는다. Workflow는 반환된 plan을 그대로 실행하고
+  effect Activity는 이후 mutable 상태를 다시 조회해 delivery를 추가하거나 취소하지 않는다.
 - Workflow start 실패가 이미 commit된 domain 결과를 바꾸지 않는 capability에서는 start 호출부가 deadline과 오류 격리를 명시한다.
 
 ## Workflow Source Structure
@@ -74,9 +75,13 @@
   이 창에서 같은 pair의 새 Follow attempt가 들어오면 active terminal run이 이를 재시도 가능한 충돌로 거부할 수
   있다. 새 generation을 미리 queue하거나 별도 lease/operation identity를 두지 않으며, caller가 기존 run 종료 뒤
   재시도하는 위험을 의도적으로 수용한다.
-- Follow pair command에는 server-generated random `operationId`나 operation receipt를 추가하지 않는다. Activity
-  retry는 exact expected row와 Workflow history에 미리 배정한 candidate domain row ID로 commit 결과를
-  재구성한다. candidate ID는 실제 Follow/Request row에만 쓰며 command identity가 아니다.
+- Follow pair command에는 server-generated random `operationId`나 operation receipt를 추가하지 않는다. 신규
+  Follow/Request insert는 ID를 지정하지 않고 PostgreSQL `uuidv7()` column default를 사용하며, 정상 Activity 완료 시
+  DB가 반환한 row ID를 결과와 create effect source로 사용한다. transaction Activity commit 뒤 completion 응답이
+  유실되면 retry는 기존 row를 중복 생성하지 않지만 이번 transition의 commit이라고 추론해 create effect를
+  재구성하지도 않는다. Approve/Accept retry는 Workflow history의 exact pending Request ID가 command expected ID와
+  일치하고 현재 exact-pair Request가 없으며 Follow가 존재할 때 관계 상태를 `ESTABLISHED`로 수렴시키되 누락된
+  effects는 다시 만들지 않는다.
   Temporal Update ID는 RPC deduplication용 메타데이터일 뿐 domain identity나 durable receipt가 아니다.
 - 새 pair run의 첫 `FOLLOW`도 mutation 전에 기존 pending request ID만 read-only Activity로 history에 남긴다.
   그래야 OPEN 정책 승격 transaction이 commit된 직후 Activity completion이 유실되어도 request cleanup effect를

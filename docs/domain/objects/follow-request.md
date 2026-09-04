@@ -54,10 +54,12 @@ Workflow가 종료된다. Pending 중 Request effect가 terminal failure가 되�
 나중의 terminal command를 계속 처리한다. terminal effects를 모두 drain한 뒤에야 Workflow 성공/실패를 확정하며,
 commit된 Request/Relationship을 effect failure로 되돌리지 않는다.
 
-Pair command에는 random `operationId`나 별도 operation receipt를 두지 않는다. 생성할 Follow/Request의 candidate
-domain row ID는 transaction 전에 Workflow history에 배정하고 exact ID로 저장한다. Activity retry는 mutation 전
-현재 Request/Follow candidate/expected row와 serializable source identity로 이미 commit된
-결과를 재구성한다. Temporal Update ID는 RPC deduplication용이며 Follow Request의 domain identity가 아니다. 동일 pair의
+Pair command에는 random `operationId`나 별도 operation receipt를 두지 않는다. 신규 Follow/Request insert는 ID를
+지정하지 않고 PostgreSQL `uuidv7()` column default를 사용하며, 정상 Activity 완료 시 데이터베이스가 반환한 row ID로
+결과와 create effect를 연결한다. transaction Activity가 commit된 뒤 completion 응답이 유실되면 retry는 기존 row를
+중복 생성하지 않지만 이번 transition의 commit이라고 추론해 create effect를 재구성하지도 않는다. Approve/Accept
+retry는 Workflow history의 exact pending Request ID가 command expected ID와 일치하고 현재 exact-pair Request가
+없으며 Follow가 존재할 때 관계 상태를 `ESTABLISHED`로 수렴시키되 누락된 effects는 다시 만들지 않는다. Temporal Update ID는 RPC deduplication용이며 Follow Request의 domain identity가 아니다. 동일 pair의
 실행 중 lifecycle에는 `USE_EXISTING`, terminal lifecycle 뒤 새 요청에는 `ALLOW_DUPLICATE`를 사용한다.
 Initial `FOLLOW`는 실행 중인 run의 중복 admission을 합치지만, PENDING을 유지한 terminal no-op 뒤에는 participant
 복구 후 같은 exact-row command를 다시 실행할 수 있도록 별도 호출이 새 transport Update ID를 사용한다.

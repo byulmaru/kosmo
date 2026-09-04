@@ -26,7 +26,6 @@ export type FollowProfileResult =
 type ProfileFollowInput = {
   followerProfileId: string;
   followeeProfileId: string;
-  candidateRowId?: string;
 };
 
 const loadProfileFollowParticipants = async (
@@ -83,7 +82,7 @@ const loadProfileFollowParticipants = async (
 };
 
 export const followProfileInTransaction = async (
-  { followerProfileId, followeeProfileId, candidateRowId }: ProfileFollowInput,
+  { followerProfileId, followeeProfileId }: ProfileFollowInput,
   tx: Transaction,
 ): Promise<{
   readonly sendActivityPub: boolean;
@@ -105,7 +104,6 @@ export const followProfileInTransaction = async (
     const ensured = await ensureProfileFollowRequest(
       { followeeProfileId: target.id, followerProfileId },
       tx,
-      { id: candidateRowId },
     );
     created = ensured.created;
     followResult =
@@ -116,7 +114,6 @@ export const followProfileInTransaction = async (
     const ensured = await ensureProfileFollow(
       { followeeProfileId: target.id, followerProfileId },
       tx,
-      { id: candidateRowId },
     );
     created = ensured.created;
     followResult = { kind: 'ESTABLISHED', profileFollow: ensured.profileFollow };
@@ -235,7 +232,6 @@ export type AcceptProfileFollowRequestResult =
 export const ensureProfileFollowRequest = async (
   pair: ProfileFollowPair,
   tx?: Transaction,
-  options?: { readonly id?: string },
 ): Promise<
   | {
       readonly created: false;
@@ -265,7 +261,7 @@ export const ensureProfileFollowRequest = async (
 
     const inserted = await tx
       .insert(ProfileFollowRequests)
-      .values(options?.id === undefined ? pair : { ...pair, id: options.id })
+      .values(pair)
       .onConflictDoNothing({
         target: [ProfileFollowRequests.followerProfileId, ProfileFollowRequests.followeeProfileId],
       })
@@ -287,7 +283,6 @@ export const ensureProfileFollowRequest = async (
 
 export type AcceptProfileFollowRequestInput = ProfileFollowPair & {
   readonly expectedRowId: string;
-  readonly candidateProfileFollowId?: string;
 };
 
 export type AcceptProfileFollowRequestTransactionResult = {
@@ -297,12 +292,7 @@ export type AcceptProfileFollowRequestTransactionResult = {
 };
 
 export const acceptProfileFollowRequestInTransaction = async (
-  {
-    expectedRowId,
-    followeeProfileId,
-    followerProfileId,
-    candidateProfileFollowId,
-  }: AcceptProfileFollowRequestInput,
+  { expectedRowId, followeeProfileId, followerProfileId }: AcceptProfileFollowRequestInput,
   tx: Transaction,
 ): Promise<AcceptProfileFollowRequestTransactionResult> => {
   const pair = { followeeProfileId, followerProfileId };
@@ -376,9 +366,7 @@ export const acceptProfileFollowRequestInTransaction = async (
     };
   }
 
-  const ensured = await ensureProfileFollow(pair, tx, {
-    id: candidateProfileFollowId,
-  });
+  const ensured = await ensureProfileFollow(pair, tx);
   return {
     createdFollowId: ensured.created ? ensured.profileFollow.id : undefined,
     deletedRequestId: deleted.id,
@@ -398,12 +386,10 @@ export const approveProfileFollowRequestInTransaction = async (
   {
     actorProfileId,
     profileFollowRequestId,
-    candidateProfileFollowId,
     unauthorizedError,
   }: {
     readonly actorProfileId: string;
     readonly profileFollowRequestId: string;
-    readonly candidateProfileFollowId?: string;
     readonly unauthorizedError?: 'NOT_FOUND' | 'PERMISSION_DENIED';
   },
   tx: Transaction,
@@ -444,7 +430,6 @@ export const approveProfileFollowRequestInTransaction = async (
       followerProfileId: request.followerProfileId,
     },
     tx,
-    { id: candidateProfileFollowId },
   );
   const updatedProfiles = await tx
     .select()

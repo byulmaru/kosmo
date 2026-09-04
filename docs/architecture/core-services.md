@@ -113,15 +113,20 @@ Temporal Workflow/Activity와 worker의 기능·policy는 이 GraphQL authorizat
   commit되면 queued effects를 선언된 FIFO 순서로 drain하고, drain 뒤 terminal failure를 기록한 상태로 Workflow를
   complete/fail한다. 이미 commit된 domain 결과는 side effect failure로 rollback하지 않는다.
 - Follow의 outbound protocol eligibility는 transaction Activity가 각 시도에서 현재 participant와 remote target
-  Instance 상태를 관찰해 반환할 effect plan에 기록한다. completion loss 뒤 retry가 `ACTIVE → UNRESPONSIVE`를
-  관찰하면 delivery를 생략할 수 있고, `UNRESPONSIVE → ACTIVE`를 관찰하면 포함할 수 있다. Workflow는 반환된
-  plan을 그대로 실행하며 effect Activity가 실행 시점의 mutable state로 delivery를 추가하거나 취소하지 않는다.
+  Instance 상태를 관찰해 반환할 effect plan에 기록한다. commit 전에 실패한 시도의 retry가
+  `ACTIVE → UNRESPONSIVE`를 관찰하면 delivery를 생략할 수 있고, `UNRESPONSIVE → ACTIVE`를 관찰하면 포함할 수
+  있다. commit 뒤 completion 응답이 유실되어 retry가 기존 create row를 관찰하면 create effect를 재구성하지
+  않는다. Workflow는 반환된 plan을 그대로 실행하며 effect Activity가 실행 시점의 mutable state로 delivery를
+  추가하거나 취소하지 않는다.
   Worker Activity는 stable create source 또는 exact deleted source ID와 directed pair를 실행하며 actor/inbox
   결손을 성공한 no-op으로 숨기지 않는다.
-- Pair command에는 random `operationId`나 operation receipt를 두지 않는다. create transition은 Activity 전에
-  candidate Follow/Request domain row ID를 Workflow history에 배정하고 그 exact ID를 insert한다. transaction Activity
-  retry는 candidate/expected row와 Workflow가 보존한 source identity로 이미 commit된 결과를 재구성한다.
-  candidate ID는 실제 domain entity identity이며 command identity가 아니다.
+- Pair command에는 random `operationId`나 operation receipt를 두지 않는다. create transition은 ID를 지정하지 않고
+  PostgreSQL `uuidv7()` column default로 Follow/Request를 insert하며 정상 Activity 완료 시 DB가 반환한 row ID를
+  결과와 create effect source로 사용한다. transaction Activity commit 뒤 completion 응답이 유실되면 retry는 기존
+  row를 중복 생성하지 않지만 이번 transition의 commit이라고 추론해 create effect를 재구성하지도 않는다.
+  Approve/Accept retry는 Workflow history의 exact pending Request ID가 command expected ID와 일치하고 현재
+  exact-pair Request가 없으며 Follow가 존재할 때 관계 상태를 `ESTABLISHED`로 수렴시키되 누락된 effects는 다시
+  만들지 않는다.
   Temporal Update ID는 RPC deduplication metadata이며 domain ledger가 아니다. 실행 중인 pair에는 `USE_EXISTING`을,
   완료된 lifecycle의 새 Follow에는 `ALLOW_DUPLICATE` reuse policy를 사용한다.
 - 이 예외가 다른 capability의 retry 계약을 없애지는 않는다. 삭제 source identity나 effect plan을 DB 상태만으로

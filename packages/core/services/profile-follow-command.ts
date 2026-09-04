@@ -65,10 +65,6 @@ export type ProfileFollowPairLifecycleState =
 export type ProfileFollowPairTransitionInput = {
   readonly pair: ProfileFollowPair;
   readonly command: ProfileFollowPairCommand;
-  /** Deterministic candidate ID allocated by the Workflow for a new Follow. */
-  readonly candidateRowId?: string;
-  /** Deterministic candidate Follow ID allocated for approval/accept. */
-  readonly followCandidateId?: string;
   /** Only the pending request identity is retained across Activity retries. */
   readonly pendingRequestId?: string;
 };
@@ -306,23 +302,13 @@ const executeFollow = async (
         .limit(1)
         .then(first)
     )?.id ?? input.pendingRequestId;
-  const followed = await followProfileInTransaction(
-    {
-      ...input.pair,
-      candidateRowId: input.candidateRowId,
-    },
-    tx,
-  );
+  const followed = await followProfileInTransaction(input.pair, tx);
   const followResult = followed.result;
   const profileFollowId =
     followResult.kind === 'ESTABLISHED' ? followResult.profileFollow.id : undefined;
   const profileFollowRequestId =
     followResult.kind === 'PENDING' ? followResult.profileFollowRequest.id : undefined;
-  const created =
-    followed.created ||
-    (input.candidateRowId !== undefined &&
-      (profileFollowId === input.candidateRowId ||
-        profileFollowRequestId === input.candidateRowId));
+  const created = followed.created;
   const effectPlan: ProfileFollowPairEffect[] = [];
 
   if (followResult.kind === 'ESTABLISHED' && requestToDeleteId !== undefined) {
@@ -388,10 +374,9 @@ const executeApproveOrAccept = async (
     .then(first);
   const currentRequest = pendingRequest?.id === expectedRowId ? pendingRequest : undefined;
   const pendingRequestId = pendingRequest?.id ?? input.pendingRequestId;
-  const followId = input.followCandidateId;
 
   if (!currentRequest && existingFollow) {
-    if (followId !== existingFollow.id) {
+    if (pendingRequestId !== expectedRowId) {
       return {
         ok: true,
         result: {
@@ -406,20 +391,6 @@ const executeApproveOrAccept = async (
       };
     }
 
-    const effectPlan: ProfileFollowPairEffect[] = [];
-    if (pendingRequestId === expectedRowId) {
-      effectPlan.push(
-        deleteEffect({
-          sourceId: expectedRowId,
-          pair: input.pair,
-          sourceKind: 'FOLLOW_REQUEST',
-        }),
-      );
-    }
-    effectPlan.push({
-      kind: 'CREATE',
-      input: { sourceId: existingFollow.id, sourceKind: 'FOLLOW' },
-    });
     return {
       ok: true,
       result: {
@@ -431,7 +402,7 @@ const executeApproveOrAccept = async (
         profileFollowRequestId: expectedRowId,
       },
       nextState: 'ESTABLISHED',
-      effectPlan,
+      effectPlan: [],
     };
   }
 
@@ -459,7 +430,6 @@ const executeApproveOrAccept = async (
       {
         actorProfileId: command.actorProfileId,
         profileFollowRequestId: expectedRowId,
-        candidateProfileFollowId: followId,
       },
       tx,
     );
@@ -473,7 +443,7 @@ const executeApproveOrAccept = async (
         sourceKind: 'FOLLOW_REQUEST',
       }),
     );
-    if (approved.created || committedFollowId === followId) {
+    if (approved.created) {
       effectPlan.push({
         kind: 'CREATE',
         input: { sourceId: committedFollowId, sourceKind: 'FOLLOW' },
@@ -484,7 +454,6 @@ const executeApproveOrAccept = async (
       {
         ...input.pair,
         expectedRowId,
-        candidateProfileFollowId: followId,
       },
       tx,
     );

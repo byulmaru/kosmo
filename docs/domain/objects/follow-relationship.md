@@ -52,9 +52,12 @@ Follow pair Workflow는 한 번에 하나의 lifecycle command만 처리하며 i
 
 거절·취소 뒤 새 Follow를 시도하면 이전 pair Workflow가 terminal이 된 뒤 같은 결정적 Workflow ID로 새 Run을 시작하며
 `ALLOW_DUPLICATE` reuse policy를 사용한다. 실행 중인 lifecycle에는 `USE_EXISTING`을 사용한다. Pair command에는
-random `operationId`나 operation receipt를 두지 않는다. 생성할 Follow/Request의 candidate domain row ID를
-transaction 전에 Workflow history에 배정하고 exact ID로 저장하며, Activity retry는 candidate/expected row와
-Workflow source identity로 결과를 재구성한다. Unfollow는 별도 짧은 Workflow가 mutation 전에 expected Follow ID와
+random `operationId`나 operation receipt를 두지 않는다. 신규 Follow/Request insert는 ID를 지정하지 않고 PostgreSQL
+`uuidv7()` column default를 사용하며, 정상 Activity 완료 시 데이터베이스가 반환한 row ID로 결과와 create effect를
+연결한다. transaction Activity가 commit된 뒤 completion 응답이 유실되면 retry는 기존 row를 중복 생성하지 않지만,
+이번 transition의 commit이라고 추론해 create effect를 재구성하지도 않는다. Approve/Accept retry는 Workflow history의
+exact pending Request ID가 command expected ID와 일치하고 현재 exact-pair Request가 없으며 Follow가 존재할 때 관계
+상태를 `ESTABLISHED`로 수렴시키되 누락된 effects는 다시 만들지 않는다. Unfollow는 별도 짧은 Workflow가 mutation 전에 expected Follow ID와
 directed pair의 일치를 read-only Activity로 검증해 Workflow history에 기록한다. 검증되지 않은 source는 관계나 effect를
 변경하지 않으며, 검증된 F1 제거 transaction의 completion이 유실되면 retry가 그 history를 사용해 F2 refollow를 보존하고
 F1 effect만 재구성한다. Follow pair Workflow는 Unfollow를 기다리지 않는다.
