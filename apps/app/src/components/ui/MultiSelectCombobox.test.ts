@@ -297,6 +297,36 @@ test('reconciles the active row when controlled results are replaced or shortene
   act(() => inputNode(rendered).props.onKeyPress({ nativeEvent: { key: 'ArrowDown' } }));
   assert.equal(optionNodes(rendered)[1].props.active, true);
 
+  const sameLengthReplacement = [
+    { label: '새 결과 1', value: 'new-1' },
+    { label: '새 결과 2', value: 'new-2' },
+  ];
+  act(() => {
+    rendered.update(
+      createElement(multiSelectComboboxModule!.MultiSelectCombobox, {
+        ...baseProps,
+        options: sameLengthReplacement,
+        query: '새',
+      }),
+    );
+  });
+  assert.equal(optionNodes(rendered)[0].props.active, true);
+  assert.equal(optionNodes(rendered)[1].props.active, false);
+  assert.match(inputNode(rendered).props['aria-activedescendant'], /option-0$/);
+
+  act(() => inputNode(rendered).props.onKeyPress({ nativeEvent: { key: 'ArrowDown' } }));
+  act(() => {
+    rendered.update(
+      createElement(multiSelectComboboxModule!.MultiSelectCombobox, {
+        ...baseProps,
+        options: sameLengthReplacement,
+        query: '새 결과',
+      }),
+    );
+  });
+  assert.equal(optionNodes(rendered)[0].props.active, true);
+  assert.equal(optionNodes(rendered)[1].props.active, false);
+
   const replacement = [{ label: '새 결과', value: 'new' }];
   act(() => {
     rendered.update(
@@ -322,6 +352,32 @@ test('reconciles the active row when controlled results are replaced or shortene
   });
   assert.equal(optionNodes(rendered)[0].props.active, false);
   assert.equal(inputNode(rendered).props['aria-activedescendant'], undefined);
+});
+
+test('reopens on the last enabled row after Escape and ArrowUp', () => {
+  let selectedOptions: readonly Option[] | undefined;
+  const renderer = renderCombobox({
+    onSelectedOptionsChange: (next) => {
+      selectedOptions = next;
+    },
+  });
+  const input = inputNode(renderer);
+
+  act(() => input.props.onFocus({}));
+  act(() => inputNode(renderer).props.onKeyPress({ nativeEvent: { key: 'Escape' } }));
+  assert.equal(inputNode(renderer).props['aria-expanded'], false);
+  assert.equal(inputNode(renderer).props['aria-activedescendant'], undefined);
+
+  act(() => inputNode(renderer).props.onKeyPress({ nativeEvent: { key: 'ArrowUp' } }));
+  assert.equal(inputNode(renderer).props['aria-expanded'], true);
+  assert.equal(optionNodes(renderer)[0].props.active, false);
+  assert.equal(optionNodes(renderer)[1].props.active, false);
+  assert.equal(optionNodes(renderer)[2].props.active, true);
+  assert.match(inputNode(renderer).props['aria-activedescendant'], /option-2$/);
+
+  act(() => inputNode(renderer).props.onKeyPress({ nativeEvent: { key: 'Enter' } }));
+  assert.deepEqual(selectedOptions, [options[0], options[2]]);
+  assert.equal(inputNode(renderer).props['aria-expanded'], false);
 });
 
 test('does not activate an option while the Enter key is composing', () => {

@@ -161,7 +161,7 @@ export const InteractionContract: Story = {
       }
       expect(args.onValueCommit).not.toHaveBeenCalled();
 
-      fireEvent.pointerUp(slider);
+      fireEvent.pointerUp(slider, { pointerId: 1 });
       if (expectedEnd !== initialValue) {
         expect(args.onValueCommit).toHaveBeenCalledOnce();
         expect(args.onValueCommit).toHaveBeenLastCalledWith(expectedEnd);

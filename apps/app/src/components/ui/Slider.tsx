@@ -22,6 +22,8 @@ type WebSliderProps = {
   'aria-valuemin': number;
   'aria-valuenow': number;
   onKeyDown: (event: { key: string; preventDefault: () => void }) => void;
+  onLostPointerCapture: (event: WebPointerEvent) => void;
+  onPointerCancel: (event: WebPointerEvent) => void;
   onPointerDown: (event: WebPointerEvent) => void;
   onPointerMove: (event: WebPointerEvent) => void;
   onPointerUp: (event: WebPointerEvent) => void;
@@ -35,7 +37,9 @@ type WebPointerEvent = {
     setPointerCapture?: (pointerId: number) => void;
   };
   nativeEvent: {
+    button?: number;
     clientX?: number;
+    isPrimary?: boolean;
     locationX?: number;
     pointerId?: number;
   };
@@ -81,6 +85,7 @@ export function Slider({
   const gestureValueRef = useRef<number | null>(null);
   const gestureChangedRef = useRef(false);
   const gestureActiveRef = useRef(false);
+  const pointerIdRef = useRef<number | null>(null);
 
   currentValueRef.current = currentValue;
   disabledRef.current = disabled;
@@ -201,6 +206,13 @@ export function Slider({
     }
   };
 
+  const cancelGesture = () => {
+    gestureActiveRef.current = false;
+    setDragging(false);
+    gestureValueRef.current = null;
+    gestureChangedRef.current = false;
+  };
+
   const pointerLocationX = (event: WebPointerEvent) => {
     const { clientX, locationX } = event.nativeEvent;
     if (typeof locationX === 'number' && Number.isFinite(locationX)) {
@@ -232,10 +244,7 @@ export function Slider({
           finishGesture();
         },
         onPanResponderTerminate: () => {
-          gestureActiveRef.current = false;
-          setDragging(false);
-          gestureValueRef.current = null;
-          gestureChangedRef.current = false;
+          cancelGesture();
         },
         onStartShouldSetPanResponder: () => !disabledRef.current,
       }),
@@ -296,7 +305,6 @@ export function Slider({
           style,
         ];
       }}
-      {...(web ? undefined : panResponder.panHandlers)}
       {...(web
         ? ({
             'aria-disabled': disabled,
@@ -304,21 +312,51 @@ export function Slider({
             'aria-valuemin': min,
             'aria-valuenow': currentValue,
             onKeyDown,
-            onPointerDown: (event) => {
-              setFocusVisible(false);
-              const pointerId = event.nativeEvent.pointerId;
-              if (typeof pointerId === 'number') {
-                event.currentTarget?.setPointerCapture?.(pointerId);
+            onLostPointerCapture: (event) => {
+              if (pointerIdRef.current === event.nativeEvent.pointerId) {
+                pointerIdRef.current = null;
+                cancelGesture();
               }
+            },
+            onPointerCancel: (event) => {
+              if (pointerIdRef.current === event.nativeEvent.pointerId) {
+                pointerIdRef.current = null;
+                cancelGesture();
+              }
+            },
+            onPointerDown: (event) => {
+              const { button, isPrimary, pointerId } = event.nativeEvent;
+              if (
+                disabledRef.current ||
+                button !== 0 ||
+                isPrimary !== true ||
+                typeof pointerId !== 'number' ||
+                pointerIdRef.current !== null
+              ) {
+                return;
+              }
+              setFocusVisible(false);
+              pointerIdRef.current = pointerId;
+              event.currentTarget?.setPointerCapture?.(pointerId);
               beginGesture(pointerLocationX(event));
             },
-            onPointerMove: (event) => moveGesture(pointerLocationX(event)),
-            onPointerUp: () => finishGesture(),
+            onPointerMove: (event) => {
+              if (pointerIdRef.current === event.nativeEvent.pointerId) {
+                moveGesture(pointerLocationX(event));
+              }
+            },
+            onPointerUp: (event) => {
+              if (pointerIdRef.current === event.nativeEvent.pointerId) {
+                pointerIdRef.current = null;
+                finishGesture();
+              }
+            },
             role: 'slider',
             tabIndex: disabled ? -1 : 0,
           } as WebSliderProps)
         : undefined)}
     >
+      {!web ? <View {...panResponder.panHandlers} style={styles.nativeResponder} /> : null}
       <View pointerEvents="none" style={styles.track}>
         <View
           style={[
@@ -354,6 +392,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 48,
     paddingHorizontal: space[12],
+  },
+  nativeResponder: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
   },
   thumb: {
     borderRadius: radius.full,

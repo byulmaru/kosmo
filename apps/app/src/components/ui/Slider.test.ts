@@ -19,11 +19,19 @@ type PressableProps = {
   onResponderGrant?: (event: unknown) => void;
   onResponderMove?: (event: unknown) => void;
   onResponderRelease?: (event: unknown) => void;
+  onResponderTerminate?: (event: unknown) => void;
+  onStartShouldSetResponder?: () => boolean;
   style?: unknown;
 };
 
 const PressableHost = forwardRef<unknown, PressableProps>(function PressableMock(props, ref) {
-  return createElement('Pressable', { ...props, ref }, props.children);
+  const pressableProps = { ...props };
+  delete pressableProps.onResponderGrant;
+  delete pressableProps.onResponderMove;
+  delete pressableProps.onResponderRelease;
+  delete pressableProps.onResponderTerminate;
+  delete pressableProps.onStartShouldSetResponder;
+  return createElement('Pressable', { ...pressableProps, ref }, props.children);
 });
 const ViewHost = 'View' as unknown as ElementType;
 
@@ -134,6 +142,14 @@ function sliderNode(renderer: ReactTestRenderer) {
   return renderer.root.findByType(PressableHost);
 }
 
+function nativeResponderNode(renderer: ReactTestRenderer) {
+  const responder = renderer.root
+    .findAllByType(ViewHost)
+    .find((node) => typeof node.props.onResponderGrant === 'function');
+  assert.ok(responder);
+  return responder;
+}
+
 function keyEvent(key: string) {
   let prevented = false;
   return {
@@ -236,11 +252,12 @@ test('Slider maps responder coordinates inside its horizontal inset to stepped v
     onValueCommit: (value) => commits.push(value),
   });
   const slider = sliderNode(renderer);
+  const responder = nativeResponderNode(renderer);
 
   act(() => slider.props.onLayout({ nativeEvent: { layout: { width: 124 } } }));
   for (const locationX of [12, 112, 62]) {
-    act(() => slider.props.onResponderGrant({ nativeEvent: { locationX } }));
-    act(() => slider.props.onResponderRelease({ nativeEvent: { locationX } }));
+    act(() => responder.props.onResponderGrant({ nativeEvent: { locationX } }));
+    act(() => responder.props.onResponderRelease({ nativeEvent: { locationX } }));
   }
 
   assert.deepEqual(values, [0, 100, 50]);
@@ -256,19 +273,105 @@ test('Slider emits changes during a drag and commits the final value only on rel
     onValueCommit: (value) => commits.push(value),
   });
   const slider = sliderNode(renderer);
+  const responder = nativeResponderNode(renderer);
 
   act(() => slider.props.onLayout({ nativeEvent: { layout: { width: 124 } } }));
+  assert.equal(slider.props.onResponderGrant, undefined);
   assert.equal(panResponderConfig?.onStartShouldSetPanResponder?.(), true);
-  act(() => slider.props.onResponderGrant({ nativeEvent: { locationX: 32 } }));
+  act(() => responder.props.onResponderGrant({ nativeEvent: { locationX: 32 } }));
   assert.deepEqual(values, [20]);
   assert.deepEqual(commits, []);
 
-  act(() => slider.props.onResponderMove({ nativeEvent: { locationX: 87 } }));
+  act(() => responder.props.onResponderMove({ nativeEvent: { locationX: 87 } }));
   assert.deepEqual(values, [20, 80]);
   assert.deepEqual(commits, []);
 
-  act(() => slider.props.onResponderRelease({ nativeEvent: { locationX: 87 } }));
+  act(() => responder.props.onResponderRelease({ nativeEvent: { locationX: 87 } }));
   assert.deepEqual(values, [20, 80]);
+  assert.deepEqual(commits, [80]);
+});
+
+test('Slider accepts only the active primary pointer and cancels without committing', () => {
+  const values: number[] = [];
+  const commits: number[] = [];
+  const renderer = renderSlider({
+    onValueChange: (value) => values.push(value),
+    onValueCommit: (value) => commits.push(value),
+  });
+  const slider = sliderNode(renderer);
+  const capturedPointerIds: number[] = [];
+  const currentTarget = {
+    setPointerCapture: (pointerId: number) => capturedPointerIds.push(pointerId),
+  };
+
+  act(() => slider.props.onLayout({ nativeEvent: { layout: { width: 124 } } }));
+  act(() =>
+    slider.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 2, isPrimary: true, locationX: 32, pointerId: 1 },
+    }),
+  );
+  act(() =>
+    slider.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 0, isPrimary: false, locationX: 32, pointerId: 2 },
+    }),
+  );
+  act(() =>
+    slider.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 0, isPrimary: true, locationX: 32 },
+    }),
+  );
+  assert.deepEqual(values, []);
+  assert.deepEqual(capturedPointerIds, []);
+
+  act(() =>
+    slider.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 0, isPrimary: true, locationX: 32, pointerId: 11 },
+    }),
+  );
+  assert.deepEqual(values, [20]);
+  assert.deepEqual(capturedPointerIds, [11]);
+  assert.equal(flattenStyle(slider.props.style({ pressed: false })).backgroundColor, 'pressed');
+
+  act(() =>
+    slider.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 0, isPrimary: true, locationX: 87, pointerId: 12 },
+    }),
+  );
+  act(() => slider.props.onPointerUp?.({ nativeEvent: { pointerId: 12 } }));
+  act(() => slider.props.onPointerMove?.({ nativeEvent: { locationX: 87, pointerId: 11 } }));
+  assert.deepEqual(values, [20, 80]);
+
+  act(() => slider.props.onPointerCancel?.({ nativeEvent: { pointerId: 11 } }));
+  act(() => slider.props.onPointerMove?.({ nativeEvent: { locationX: 32, pointerId: 11 } }));
+  assert.deepEqual(values, [20, 80]);
+  assert.deepEqual(commits, []);
+  assert.equal(flattenStyle(slider.props.style({ pressed: false })).backgroundColor, undefined);
+
+  act(() =>
+    slider.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 0, isPrimary: true, locationX: 32, pointerId: 13 },
+    }),
+  );
+  act(() => slider.props.onPointerMove?.({ nativeEvent: { locationX: 87, pointerId: 13 } }));
+  act(() => slider.props.onLostPointerCapture?.({ nativeEvent: { pointerId: 13 } }));
+  act(() => slider.props.onPointerMove?.({ nativeEvent: { locationX: 32, pointerId: 13 } }));
+  assert.deepEqual(values, [20, 80, 20, 80]);
+  assert.deepEqual(commits, []);
+
+  act(() =>
+    slider.props.onPointerDown?.({
+      currentTarget,
+      nativeEvent: { button: 0, isPrimary: true, locationX: 32, pointerId: 14 },
+    }),
+  );
+  act(() => slider.props.onPointerMove?.({ nativeEvent: { locationX: 87, pointerId: 14 } }));
+  act(() => slider.props.onPointerUp?.({ nativeEvent: { pointerId: 14 } }));
   assert.deepEqual(commits, [80]);
 });
 
@@ -281,12 +384,12 @@ test('disabled Slider blocks responder drag callbacks', () => {
     onValueChange: (value) => values.push(value),
     onValueCommit: (value) => commits.push(value),
   });
-  const slider = sliderNode(renderer);
+  const responder = nativeResponderNode(renderer);
 
   assert.equal(panResponderConfig?.onStartShouldSetPanResponder?.(), false);
-  act(() => slider.props.onResponderGrant({ nativeEvent: { locationX: 32 } }));
-  act(() => slider.props.onResponderMove({ nativeEvent: { locationX: 87 } }));
-  act(() => slider.props.onResponderRelease({ nativeEvent: { locationX: 87 } }));
+  act(() => responder.props.onResponderGrant({ nativeEvent: { locationX: 32 } }));
+  act(() => responder.props.onResponderMove({ nativeEvent: { locationX: 87 } }));
+  act(() => responder.props.onResponderRelease({ nativeEvent: { locationX: 87 } }));
   assert.deepEqual(values, []);
   assert.deepEqual(commits, []);
 });

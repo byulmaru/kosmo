@@ -221,6 +221,8 @@ export function ColorPickerPanel({
   const [hueWidth, setHueWidth] = useState(SURFACE_WIDTH_FALLBACK);
   const [surfaceFocusVisible, setSurfaceFocusVisible] = useState(false);
   const [hueFocusVisible, setHueFocusVisible] = useState(false);
+  const [surfaceDragging, setSurfaceDragging] = useState(false);
+  const [hueDragging, setHueDragging] = useState(false);
   const currentValue = normalizeValue(value);
   const color = hsbToHex(currentValue);
   const [hexDraft, setHexDraft] = useState(color);
@@ -397,6 +399,7 @@ export function ColorPickerPanel({
         onPanResponderGrant: (event) => {
           if (!disabledRef.current) {
             surfaceGestureActiveRef.current = true;
+            setSurfaceDragging(true);
             onSurfaceGesture(event);
           }
         },
@@ -407,9 +410,11 @@ export function ColorPickerPanel({
         },
         onPanResponderRelease: () => {
           surfaceGestureActiveRef.current = false;
+          setSurfaceDragging(false);
         },
         onPanResponderTerminate: () => {
           surfaceGestureActiveRef.current = false;
+          setSurfaceDragging(false);
         },
         onStartShouldSetPanResponder: () => !disabledRef.current,
       }),
@@ -423,6 +428,7 @@ export function ColorPickerPanel({
         onPanResponderGrant: (event) => {
           if (!disabledRef.current) {
             hueGestureActiveRef.current = true;
+            setHueDragging(true);
             onHueGesture(event);
           }
         },
@@ -433,9 +439,11 @@ export function ColorPickerPanel({
         },
         onPanResponderRelease: () => {
           hueGestureActiveRef.current = false;
+          setHueDragging(false);
         },
         onPanResponderTerminate: () => {
           hueGestureActiveRef.current = false;
+          setHueDragging(false);
         },
         onStartShouldSetPanResponder: () => !disabledRef.current,
       }),
@@ -498,7 +506,7 @@ export function ColorPickerPanel({
               {
                 backgroundColor: disabled
                   ? theme.stateDisabledSurface
-                  : webState.pressed
+                  : webState.pressed || surfaceDragging
                     ? theme.statePressed
                     : hovered
                       ? theme.stateHover
@@ -515,7 +523,6 @@ export function ColorPickerPanel({
             ];
           }}
           testID="color-picker-surface"
-          {...(!web ? surfacePanResponder.panHandlers : undefined)}
           {...(web
             ? ({
                 'aria-disabled': disabled,
@@ -565,6 +572,9 @@ export function ColorPickerPanel({
               } as WebSliderProps)
             : undefined)}
         >
+          {!web ? (
+            <View {...surfacePanResponder.panHandlers} style={styles.nativeResponder} />
+          ) : null}
           <View pointerEvents="none" style={styles.surfaceCanvas}>
             <Svg height={SURFACE_HEIGHT} width="100%">
               <Defs>
@@ -628,7 +638,7 @@ export function ColorPickerPanel({
               {
                 backgroundColor: disabled
                   ? theme.stateDisabledSurface
-                  : webState.pressed
+                  : webState.pressed || hueDragging
                     ? theme.statePressed
                     : hovered
                       ? theme.stateHover
@@ -645,7 +655,6 @@ export function ColorPickerPanel({
             ];
           }}
           testID="color-picker-hue"
-          {...(!web ? huePanResponder.panHandlers : undefined)}
           {...(web
             ? ({
                 'aria-disabled': disabled,
@@ -694,6 +703,7 @@ export function ColorPickerPanel({
               } as WebSliderProps)
             : undefined)}
         >
+          {!web ? <View {...huePanResponder.panHandlers} style={styles.nativeResponder} /> : null}
           <View pointerEvents="none" style={styles.hueTrack} testID="color-picker-hue-track">
             <Svg height={HUE_TRACK_HEIGHT} width="100%">
               <Defs>
@@ -891,6 +901,13 @@ const styles = StyleSheet.create({
     minHeight: INTERACTION_SIZE,
     position: 'relative',
     width: '100%',
+  },
+  nativeResponder: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
   },
   hueThumb: {
     borderRadius: radius.full,
