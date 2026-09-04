@@ -4,7 +4,7 @@ import { before, beforeEach, mock, test } from 'node:test';
 import { createElement, forwardRef } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ElementType, ReactNode } from 'react';
-import type { ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type * as ColorPickerPanelModule from './ColorPickerPanel';
 
 const require = createRequire(import.meta.url);
@@ -18,11 +18,28 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 type HostProps = {
   children?: ReactNode;
+  onMoveShouldSetResponder?: (event: unknown) => void;
+  onResponderGrant?: (event: unknown) => void;
+  onResponderMove?: (event: unknown) => void;
+  onResponderRelease?: (event: unknown) => void;
+  onResponderTerminate?: (event: unknown) => void;
+  onResponderTerminationRequest?: (event: unknown) => void;
+  onShouldBlockNativeResponder?: (event: unknown) => void;
+  onStartShouldSetResponder?: (event: unknown) => void;
   style?: unknown;
 };
 
 const PressableHost = forwardRef<unknown, HostProps>(function PressableMock(props, ref) {
-  return createElement('Pressable', { ...props, ref }, props.children);
+  const pressableProps = { ...props };
+  delete pressableProps.onMoveShouldSetResponder;
+  delete pressableProps.onResponderGrant;
+  delete pressableProps.onResponderMove;
+  delete pressableProps.onResponderRelease;
+  delete pressableProps.onResponderTerminate;
+  delete pressableProps.onResponderTerminationRequest;
+  delete pressableProps.onShouldBlockNativeResponder;
+  delete pressableProps.onStartShouldSetResponder;
+  return createElement('Pressable', { ...pressableProps, ref }, props.children);
 });
 const ButtonHost = forwardRef<unknown, HostProps>(function ButtonMock(props, ref) {
   return createElement('Button', { ...props, ref }, props.children);
@@ -178,6 +195,14 @@ function nodeStyle(node: { props: { style?: unknown } }) {
 
 function pressables(renderer: ReactTestRenderer) {
   return renderer.root.findAllByType(PressableHost);
+}
+
+function nativeResponder(node: ReactTestInstance) {
+  const responder = node
+    .findAllByType(ViewHost)
+    .find((candidate) => typeof candidate.props.onResponderGrant === 'function');
+  assert.ok(responder);
+  return responder;
 }
 
 function findByTestID(renderer: ReactTestRenderer, testID: string) {
@@ -404,31 +429,41 @@ test('ColorPickerPanel emits continuous native drag changes for surface and hue'
   platformOS = 'ios';
   const surfaceChanges: ColorPickerPanelModule.ColorPickerValue[] = [];
   const surfaceRenderer = renderPanel({ onChange: (value) => surfaceChanges.push(value) });
-  const surface = pressables(surfaceRenderer)[0];
-  assert.ok(surface);
-  act(() => surface.props.onLayout({ nativeEvent: { layout: { width: 328 } } }));
+  const surfacePressable = pressables(surfaceRenderer)[0];
+  assert.ok(surfacePressable);
+  const surface = nativeResponder(surfacePressable);
+  assert.equal(surfacePressable.props.onResponderGrant, undefined);
+  act(() => surfacePressable.props.onLayout({ nativeEvent: { layout: { width: 328 } } }));
 
   act(() => surface.props.onResponderGrant?.({ nativeEvent: { locationX: 82, locationY: 135 } }));
   assert.deepEqual(surfaceChanges, [{ brightness: 25, hue: 180, saturation: 25 }]);
+  assert.equal(nodeStyle(surfacePressable).backgroundColor, 'pressed');
   act(() => surface.props.onResponderMove?.({ nativeEvent: { locationX: 246, locationY: 45 } }));
   assert.deepEqual(surfaceChanges, [
     { brightness: 25, hue: 180, saturation: 25 },
     { brightness: 75, hue: 180, saturation: 75 },
   ]);
+  act(() => surface.props.onResponderRelease?.({ nativeEvent: {} }));
+  assert.equal(nodeStyle(surfacePressable).backgroundColor, undefined);
 
   const hueChanges: ColorPickerPanelModule.ColorPickerValue[] = [];
   const hueRenderer = renderPanel({ onChange: (value) => hueChanges.push(value) });
-  const hue = pressables(hueRenderer)[1];
-  assert.ok(hue);
-  act(() => hue.props.onLayout({ nativeEvent: { layout: { width: 328 } } }));
+  const huePressable = pressables(hueRenderer)[1];
+  assert.ok(huePressable);
+  const hue = nativeResponder(huePressable);
+  assert.equal(huePressable.props.onResponderGrant, undefined);
+  act(() => huePressable.props.onLayout({ nativeEvent: { layout: { width: 328 } } }));
 
   act(() => hue.props.onResponderGrant?.({ nativeEvent: { locationX: 82 } }));
   assert.deepEqual(hueChanges, [{ brightness: 75, hue: 90, saturation: 25 }]);
+  assert.equal(nodeStyle(huePressable).backgroundColor, 'pressed');
   act(() => hue.props.onResponderMove?.({ nativeEvent: { locationX: 246 } }));
   assert.deepEqual(hueChanges, [
     { brightness: 75, hue: 90, saturation: 25 },
     { brightness: 75, hue: 270, saturation: 25 },
   ]);
+  act(() => hue.props.onResponderRelease?.({ nativeEvent: {} }));
+  assert.equal(nodeStyle(huePressable).backgroundColor, undefined);
 });
 
 test('ColorPickerPanel gates surface Web drags by pointer identity and cleanup events', () => {

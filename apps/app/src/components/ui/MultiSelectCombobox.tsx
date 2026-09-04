@@ -90,6 +90,8 @@ export function MultiSelectCombobox({
     () => (canCreate ? [...options, { label: currentCreateLabel, value: '__create__' }] : options),
     [canCreate, currentCreateLabel, options],
   );
+  const previousQueryRef = useRef(query);
+  const previousRowsRef = useRef(rows);
   const activeOption = activeIndex >= 0 ? rows[activeIndex] : undefined;
   const activeDescendant =
     open && activeOption && !activeOption.disabled
@@ -105,7 +107,18 @@ export function MultiSelectCombobox({
   }, []);
 
   useEffect(() => {
-    setActiveIndex(open ? firstEnabledIndex(rows) : -1);
+    const resultsChanged = previousQueryRef.current !== query || previousRowsRef.current !== rows;
+    previousQueryRef.current = query;
+    previousRowsRef.current = rows;
+    setActiveIndex((current) => {
+      if (!open) {
+        return -1;
+      }
+      if (!resultsChanged && current >= 0 && current < rows.length && !rows[current]?.disabled) {
+        return current;
+      }
+      return firstEnabledIndex(rows);
+    });
   }, [canCreate, open, options, query, rows]);
 
   const close = () => {
