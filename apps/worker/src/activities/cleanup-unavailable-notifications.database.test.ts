@@ -12,14 +12,10 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
-import { ApplicationFailure } from '@temporalio/client';
 import { MockActivityEnvironment } from '@temporalio/testing';
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
-import type {
-  cleanupUnavailableNotificationPageActivity as CleanupUnavailableNotificationPageActivity,
-  getNotificationCleanupUpperBoundActivity as GetNotificationCleanupUpperBoundActivity,
-} from './cleanup-unavailable-notifications';
+import type { cleanupUnavailableNotificationsActivity as CleanupUnavailableNotificationsActivity } from './cleanup-unavailable-notifications';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
@@ -34,9 +30,7 @@ let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let Reactions: typeof CoreDb.Reactions;
-let cleanupUnavailableNotificationPageActivity: typeof CleanupUnavailableNotificationPageActivity;
-let getNotificationCleanupUpperBoundActivity: typeof GetNotificationCleanupUpperBoundActivity;
-type CleanupPageResult = Awaited<ReturnType<typeof cleanupUnavailableNotificationPageActivity>>;
+let cleanupUnavailableNotificationsActivity: typeof CleanupUnavailableNotificationsActivity;
 
 before(async () => {
   ({
@@ -52,7 +46,7 @@ before(async () => {
     Profiles,
     Reactions,
   } = await import('@kosmo/core/db'));
-  ({ cleanupUnavailableNotificationPageActivity, getNotificationCleanupUpperBoundActivity } =
+  ({ cleanupUnavailableNotificationsActivity } =
     await import('./cleanup-unavailable-notifications'));
 });
 
@@ -70,73 +64,10 @@ beforeEach(async () => {
 
 after(async () => pg.end());
 
-const runPage = (
-  input: Parameters<typeof cleanupUnavailableNotificationPageActivity>[0],
-  attempt = 1,
-): Promise<CleanupPageResult> =>
-  new MockActivityEnvironment({ attempt }).run(
-    cleanupUnavailableNotificationPageActivity,
-    input,
-  ) as Promise<CleanupPageResult>;
+const runCleanup = (): Promise<void> =>
+  new MockActivityEnvironment().run(cleanupUnavailableNotificationsActivity) as Promise<void>;
 
-test('Notification cleanup Activity는 bounded 결과와 시작·완료 heartbeat를 남긴다', async () => {
-  const recipient = await createProfile();
-  await createNotification({ recipientProfileId: recipient.id });
-  const upperBound = await captureUpperBound();
-  const environment = new MockActivityEnvironment({ attempt: 2 });
-  const heartbeats: unknown[] = [];
-  environment.on('heartbeat', (details) => heartbeats.push(details));
-
-  const result = (await environment.run(cleanupUnavailableNotificationPageActivity, {
-    cursor: null,
-    upperBound,
-    pageSize: 10,
-  })) as CleanupPageResult;
-
-  assert.equal(result.done, true);
-  assert.equal(result.scanned, 1);
-  assert.equal(result.deleted, 1);
-  assert.equal(result.skipped, 0);
-  assert.deepEqual(
-    heartbeats.map((details) => (details as { phase: string }).phase),
-    ['started', 'completed'],
-  );
-  assert.equal((heartbeats[0] as { attempt: number }).attempt, 2);
-  assert.equal((heartbeats[1] as { upperBound: string }).upperBound, upperBound);
-});
-
-test('Notification cleanup upper-bound Activity는 null bound와 heartbeat를 반환한다', async () => {
-  const environment = new MockActivityEnvironment({ attempt: 2 });
-  const heartbeats: unknown[] = [];
-  environment.on('heartbeat', (details) => heartbeats.push(details));
-
-  const result = await environment.run(getNotificationCleanupUpperBoundActivity);
-
-  assert.equal(result, null);
-  assert.deepEqual(
-    heartbeats.map((details) => (details as { phase: string }).phase),
-    ['started', 'completed'],
-  );
-  assert.equal((heartbeats[0] as { attempt: number }).attempt, 2);
-  assert.equal((heartbeats[1] as { upperBound: string | null }).upperBound, null);
-});
-
-test('empty cleanup captures a null upper bound separately and an explicit bound page completes', async () => {
-  const boundEnvironment = new MockActivityEnvironment({ attempt: 1 });
-  assert.equal(await boundEnvironment.run(getNotificationCleanupUpperBoundActivity), null);
-
-  const upperBound = crypto.randomUUID();
-  const result = await runPage({ cursor: null, upperBound, pageSize: 10 });
-
-  assert.equal(result.done, true);
-  assert.equal(result.nextCursor, null);
-  assert.deepEqual(
-    { scanned: result.scanned, deleted: result.deleted, skipped: result.skipped },
-    { scanned: 0, deleted: 0, skipped: 0 },
-  );
-});
-
-test('cleanup deletes missing, mismatched, and hidden sources but preserves available and inactive recipients', async () => {
+test('cleanup deletes unavailable sources but preserves available and recipient-only inactive rows', async () => {
   const follower = await createProfile();
   const recipient = await createProfile();
   const mismatchRecipient = await createProfile();
@@ -170,12 +101,8 @@ test('cleanup deletes missing, mismatched, and hidden sources but preserves avai
     sourceId: hiddenFollow.id,
   });
 
-  const upperBound = await captureUpperBound();
-  const result = await runPage({ cursor: null, upperBound, pageSize: 20 });
+  await runCleanup();
 
-  assert.equal(result.done, true);
-  assert.equal(result.deleted, 3);
-  assert.equal(result.skipped, 3);
   const remaining = await db
     .select({ id: Notifications.id })
     .from(Notifications)
@@ -248,12 +175,8 @@ test('cleanup evaluates every source kind while preserving valid source projecti
     ].map((kind) => createNotification({ kind, recipientProfileId: recipient.id })),
   );
 
-  const upperBound = await captureUpperBound();
-  const result = await runPage({ cursor: null, upperBound, pageSize: 20 });
+  await runCleanup();
 
-  assert.equal(result.done, true);
-  assert.equal(result.deleted, unavailable.length);
-  assert.equal(result.skipped, available.length);
   const remaining = await db
     .select({ id: Notifications.id })
     .from(Notifications)
@@ -266,49 +189,20 @@ test('cleanup evaluates every source kind while preserving valid source projecti
   assert.deepEqual(remaining.map(({ id }) => id).sort(), available.map(({ id }) => id).sort());
 });
 
-test('exclusive cursor and fixed upper bound leave later rows for the next sweep', async () => {
+test('cleanup processes only a bounded batch per Activity invocation', async () => {
   const recipient = await createProfile();
-  const first = await createNotification({
-    id: '00000000-0000-7000-8000-000000000001',
-    recipientProfileId: recipient.id,
-  });
-  const second = await createNotification({
-    id: '00000000-0000-7000-8000-000000000002',
-    recipientProfileId: recipient.id,
-  });
-  const third = await createNotification({
-    id: '00000000-0000-7000-8000-000000000003',
-    recipientProfileId: recipient.id,
-  });
-  const upperBound = await captureUpperBound();
-
-  const firstPage = await runPage({ cursor: null, upperBound, pageSize: 2 });
-  assert.equal(firstPage.scanned, 2);
-  assert.equal(firstPage.deleted, 2);
-  assert.equal(firstPage.done, false);
-  assert.equal(firstPage.nextCursor, second.id);
-
-  const later = await createNotification({
-    id: '00000000-0000-7000-8000-000000000010',
-    recipientProfileId: recipient.id,
-  });
-  const secondPage = await runPage({
-    cursor: firstPage.nextCursor,
-    upperBound,
-    pageSize: 2,
-  });
-  assert.equal(secondPage.deleted, 1);
-  assert.equal(secondPage.done, true);
-  assert.equal(secondPage.nextCursor, null);
-
-  assert.equal(
-    await db.$count(Notifications, and(inArray(Notifications.id, [first.id, second.id, third.id]))),
-    0,
+  await Promise.all(
+    Array.from({ length: 101 }, () => createNotification({ recipientProfileId: recipient.id })),
   );
-  assert.equal(await db.$count(Notifications, eq(Notifications.id, later.id)), 1);
+
+  await runCleanup();
+
+  assert.ok(
+    (await db.$count(Notifications, eq(Notifications.recipientProfileId, recipient.id))) > 0,
+  );
 });
 
-test('cleanup re-evaluates source availability after scanning a notification page', async () => {
+test('cleanup re-evaluates source availability before deleting selected rows', async () => {
   const follower = await createProfile();
   const recipient = await createProfile();
   const sourceId = crypto.randomUUID();
@@ -316,22 +210,17 @@ test('cleanup re-evaluates source availability after scanning a notification pag
     recipientProfileId: recipient.id,
     sourceId,
   });
-  const upperBound = await captureUpperBound();
   assert.equal(await db.$count(ProfileFollows, eq(ProfileFollows.id, sourceId)), 0);
   const lockSession = await pg.reserve();
   let lockHeld = false;
-  let cleanup: Promise<CleanupPageResult> | undefined;
+  let cleanup: Promise<void> | undefined;
 
   try {
     await lockSession`BEGIN`;
     await lockSession`LOCK TABLE "notification" IN SHARE MODE`;
     lockHeld = true;
 
-    // The page scan only reads Notification IDs, so the source is still
-    // absent when this transaction selects the row. The table lock lets the
-    // source be recreated after that scan but before the conditional DELETE
-    // starts its own statement snapshot.
-    cleanup = runPage({ cursor: null, upperBound, pageSize: 10 });
+    cleanup = runCleanup();
     await waitForNotificationDeleteTableLock();
 
     await db
@@ -340,15 +229,7 @@ test('cleanup re-evaluates source availability after scanning a notification pag
     await lockSession`COMMIT`;
     lockHeld = false;
 
-    const result = await cleanup;
-    assert.deepEqual(
-      {
-        scanned: result.scanned,
-        deleted: result.deleted,
-        skipped: result.skipped,
-      },
-      { scanned: 1, deleted: 0, skipped: 1 },
-    );
+    await cleanup;
     assert.equal(await db.$count(Notifications, eq(Notifications.id, notification.id)), 1);
   } finally {
     if (lockHeld) {
@@ -360,87 +241,6 @@ test('cleanup re-evaluates source availability after scanning a notification pag
     lockSession.release();
   }
 });
-
-test('concurrent independent page retries converge to one delete', async () => {
-  const recipient = await createProfile();
-  const notification = await createNotification({ recipientProfileId: recipient.id });
-  const upperBound = await captureUpperBound();
-
-  const results = await Promise.all([
-    runPage({ cursor: null, upperBound, pageSize: 10 }),
-    runPage({ cursor: null, upperBound, pageSize: 10 }),
-  ]);
-
-  assert.equal(results[0]!.deleted + results[1]!.deleted, 1);
-  assert.equal(await db.$count(Notifications, eq(Notifications.id, notification.id)), 0);
-  const retry = await runPage({ cursor: null, upperBound, pageSize: 10 });
-  assert.equal(retry.deleted, 0);
-  assert.equal(retry.done, true);
-});
-
-test('null/undefined cleanup input is rejected as non-retryable Activity failure', async () => {
-  for (const input of [null, undefined]) {
-    await assert.rejects(
-      runPage(input as never),
-      (error: unknown) =>
-        error instanceof ApplicationFailure &&
-        error.type === 'CleanupInvalidInputError' &&
-        error.nonRetryable === true,
-    );
-  }
-});
-
-test('invalid cleanup input is rejected as non-retryable Activity failure', async () => {
-  await assert.rejects(
-    runPage({ cursor: null, upperBound: null, pageSize: 10 } as never),
-    (error: unknown) =>
-      error instanceof ApplicationFailure &&
-      error.type === 'CleanupInvalidInputError' &&
-      error.nonRetryable === true &&
-      /upperBound is required/.test(error.message),
-  );
-  await assert.rejects(
-    runPage({ cursor: null, upperBound: crypto.randomUUID(), pageSize: 0 }),
-    (error: unknown) =>
-      error instanceof ApplicationFailure &&
-      error.type === 'CleanupInvalidInputError' &&
-      error.nonRetryable === true &&
-      /pageSize must be an integer/.test(error.message),
-  );
-  await assert.rejects(
-    runPage({ cursor: null, upperBound: crypto.randomUUID(), pageSize: 1_001 }),
-    (error: unknown) =>
-      error instanceof ApplicationFailure &&
-      error.type === 'CleanupInvalidInputError' &&
-      error.nonRetryable === true &&
-      /pageSize must be an integer between 1 and 1000/.test(error.message),
-  );
-  await assert.rejects(
-    runPage({ cursor: 'not-a-uuid', upperBound: crypto.randomUUID(), pageSize: 10 }),
-    (error: unknown) =>
-      error instanceof ApplicationFailure &&
-      error.type === 'CleanupInvalidInputError' &&
-      error.nonRetryable === true &&
-      /cursor must be a UUID/.test(error.message),
-  );
-  await assert.rejects(
-    runPage({ cursor: null, upperBound: 'not-a-uuid', pageSize: 10 }),
-    (error: unknown) =>
-      error instanceof ApplicationFailure &&
-      error.type === 'CleanupInvalidInputError' &&
-      error.nonRetryable === true &&
-      /upperBound must be a UUID/.test(error.message),
-  );
-});
-
-const captureUpperBound = async () => {
-  const environment = new MockActivityEnvironment({ attempt: 1 });
-  const upperBound = (await environment.run(getNotificationCleanupUpperBoundActivity)) as
-    | string
-    | null;
-  assert.ok(upperBound);
-  return upperBound;
-};
 
 const waitForNotificationDeleteTableLock = async (): Promise<void> => {
   for (let attempt = 0; attempt < 100; attempt += 1) {

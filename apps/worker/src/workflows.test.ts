@@ -1,14 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import {
-  ApplicationFailure,
-  WithStartWorkflowOperation,
-  WorkflowFailedError,
-} from '@temporalio/client';
+import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
-import { cleanupUnavailableNotificationsWorkflow } from './workflows/cleanup-unavailable-notifications';
 import type {
   ProfileFollowPairCommand,
   ProfileFollowPairTransitionExecution,
@@ -1401,7 +1396,7 @@ test(
 );
 
 test(
-  'Schedule-facing Notification Cleanup Workflow는 no-arg 실행과 stable sweep result를 제공한다',
+  'Notification Cleanup Workflow는 cleanup Activity를 한 번만 호출한다',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -1409,22 +1404,11 @@ test(
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-notification-cleanup-test-${process.pid}`;
-    const calls: Array<{ type: 'bound' | 'page'; input?: unknown }> = [];
+    let activityCalls = 0;
     const worker = await Worker.create({
       activities: {
-        getNotificationCleanupUpperBoundActivity: async () => {
-          calls.push({ type: 'bound' });
-          return '00000000-0000-8000-8000-000000000010';
-        },
-        cleanupUnavailableNotificationPageActivity: async (input: unknown) => {
-          calls.push({ type: 'page', input });
-          return {
-            nextCursor: null,
-            done: true,
-            scanned: 0,
-            deleted: 0,
-            skipped: 0,
-          };
+        cleanupUnavailableNotificationsActivity: async () => {
+          activityCalls += 1;
         },
       },
       connection: environment.nativeConnection,
@@ -1434,369 +1418,13 @@ test(
     });
 
     await worker.runUntil(async () => {
-      const result = await environment.client.workflow.execute('notificationCleanupWorkflow', {
+      await environment.client.workflow.execute('notificationCleanupWorkflow', {
         args: [],
         taskQueue,
-        workflowId: `notification-cleanup-no-arg:${process.pid}`,
+        workflowId: `notification-cleanup-boundary:${process.pid}`,
       });
-
-      assert.equal(result.done, true);
-      assert.equal(result.pages, 1);
-      assert.equal(result.scanned, 0);
-      assert.equal(result.deleted, 0);
-      assert.equal(result.skipped, 0);
-      assert.equal(result.upperBound, '00000000-0000-8000-8000-000000000010');
-      assert.deepEqual(calls, [
-        { type: 'bound' },
-        {
-          type: 'page',
-          input: {
-            cursor: null,
-            upperBound: '00000000-0000-8000-8000-000000000010',
-            pageSize: 100,
-          },
-        },
-      ]);
-    });
-  },
-);
-
-test(
-  'Notification Cleanup Workflow는 null upper bound에서 page Activity 없이 empty sweep으로 완료한다',
-  { timeout: 120_000 },
-  async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
-    });
-    t.after(() => environment.teardown());
-    const taskQueue = `${KOSMO_TASK_QUEUE}-notification-cleanup-empty-test-${process.pid}`;
-    let boundCalls = 0;
-    let pageCalls = 0;
-    const worker = await Worker.create({
-      activities: {
-        getNotificationCleanupUpperBoundActivity: async () => {
-          boundCalls += 1;
-          return null;
-        },
-        cleanupUnavailableNotificationPageActivity: async () => {
-          pageCalls += 1;
-          throw new Error('page Activity must not run for a null upper bound');
-        },
-      },
-      connection: environment.nativeConnection,
-      namespace: environment.namespace,
-      taskQueue,
-      workflowsPath,
     });
 
-    await worker.runUntil(async () => {
-      const result = await environment.client.workflow.execute('notificationCleanupWorkflow', {
-        args: [],
-        taskQueue,
-        workflowId: `notification-cleanup-empty:${process.pid}`,
-      });
-
-      assert.deepEqual(
-        { ...result, sweepId: undefined },
-        {
-          sweepId: undefined,
-          cursor: null,
-          upperBound: null,
-          done: true,
-          pages: 0,
-          scanned: 0,
-          deleted: 0,
-          skipped: 0,
-        },
-      );
-      assert.equal(boundCalls, 1);
-      assert.equal(pageCalls, 0);
-    });
-  },
-);
-
-test(
-  'Notification Cleanup Workflow는 Activity retry 뒤에도 cursor를 Continue-As-New으로 전달한다',
-  { timeout: 120_000 },
-  async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
-    });
-    t.after(() => environment.teardown());
-    const taskQueue = `${KOSMO_TASK_QUEUE}-notification-cleanup-retry-test-${process.pid}`;
-    const calls: Array<{
-      cursor: string | null;
-      upperBound: string;
-      pageSize: number;
-    }> = [];
-    let attempts = 0;
-    let boundCalls = 0;
-    const worker = await Worker.create({
-      activities: {
-        getNotificationCleanupUpperBoundActivity: async () => {
-          boundCalls += 1;
-          return '00000000-0000-8000-8000-000000000020';
-        },
-        cleanupUnavailableNotificationPageActivity: async (input: {
-          cursor: string | null;
-          upperBound: string;
-          pageSize: number;
-        }) => {
-          attempts += 1;
-          calls.push(input);
-          if (attempts === 1) {
-            throw ApplicationFailure.retryable('temporary database outage');
-          }
-          if (input.cursor === null) {
-            return {
-              nextCursor: '00000000-0000-8000-8000-000000000010',
-              done: false,
-              scanned: 2,
-              deleted: 1,
-              skipped: 1,
-            };
-          }
-          return {
-            nextCursor: null,
-            done: true,
-            scanned: 1,
-            deleted: 0,
-            skipped: 1,
-          };
-        },
-      },
-      connection: environment.nativeConnection,
-      namespace: environment.namespace,
-      taskQueue,
-      workflowsPath,
-    });
-
-    await worker.runUntil(async () => {
-      const result = await environment.client.workflow.execute(
-        'cleanupUnavailableNotificationsWorkflow',
-        {
-          args: [
-            {
-              sweepId: 'notification-cleanup-retry-sweep',
-              pageSize: 2,
-              rateLimitMs: 0,
-              maxPagesPerRun: 1,
-            },
-          ],
-          taskQueue,
-          workflowId: `notification-cleanup-retry:${process.pid}`,
-        },
-      );
-
-      assert.deepEqual(result, {
-        sweepId: 'notification-cleanup-retry-sweep',
-        cursor: null,
-        upperBound: '00000000-0000-8000-8000-000000000020',
-        done: true,
-        pages: 2,
-        scanned: 3,
-        deleted: 1,
-        skipped: 2,
-      });
-      assert.equal(attempts, 3);
-      assert.equal(boundCalls, 1);
-      assert.deepEqual(calls, [
-        {
-          cursor: null,
-          upperBound: '00000000-0000-8000-8000-000000000020',
-          pageSize: 2,
-        },
-        {
-          cursor: null,
-          upperBound: '00000000-0000-8000-8000-000000000020',
-          pageSize: 2,
-        },
-        {
-          cursor: '00000000-0000-8000-8000-000000000010',
-          upperBound: '00000000-0000-8000-8000-000000000020',
-          pageSize: 2,
-        },
-      ]);
-    });
-  },
-);
-
-test('Notification Cleanup Workflow는 Zod 설정 검증과 기존 CleanupConfigurationError를 유지한다', async () => {
-  await assert.rejects(
-    cleanupUnavailableNotificationsWorkflow({ sweepId: '   ' }),
-    /CleanupConfigurationError: sweepId is required/,
-  );
-  await assert.rejects(
-    cleanupUnavailableNotificationsWorkflow({ sweepId: 'invalid-page-size', pageSize: 0 }),
-    /CleanupConfigurationError: pageSize must be between 1 and 1000/,
-  );
-  await assert.rejects(
-    cleanupUnavailableNotificationsWorkflow({
-      sweepId: 'null-page-size',
-      pageSize: null as never,
-    }),
-    /CleanupConfigurationError: pageSize must be between 1 and 1000/,
-  );
-  await assert.rejects(
-    cleanupUnavailableNotificationsWorkflow({
-      sweepId: 'invalid-rate-limit',
-      rateLimitMs: 60_001,
-    }),
-    /CleanupConfigurationError: rateLimitMs must be between 0 and 60000/,
-  );
-  await assert.rejects(
-    cleanupUnavailableNotificationsWorkflow({
-      sweepId: 'invalid-max-pages',
-      maxPagesPerRun: 10_001,
-    }),
-    /CleanupConfigurationError: maxPagesPerRun must be between 1 and 10000/,
-  );
-  await assert.rejects(
-    cleanupUnavailableNotificationsWorkflow({ sweepId: 'invalid-counters', pages: -1 }),
-    /CleanupConfigurationError: cumulative counters must be non-negative integers/,
-  );
-  await assert.rejects(
-    cleanupUnavailableNotificationsWorkflow({
-      sweepId: 'invalid-resume',
-      cursor: '00000000-0000-7000-8000-000000000001',
-    }),
-    /CleanupConfigurationError: resumed cleanup state requires upperBound/,
-  );
-});
-
-test(
-  'Notification Cleanup Workflow는 Continue-As-New 전에 nonzero rate-limit timer를 생성한다',
-  { timeout: 120_000 },
-  async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
-    });
-    t.after(() => environment.teardown());
-    const taskQueue = `${KOSMO_TASK_QUEUE}-notification-cleanup-rate-limit-test-${process.pid}`;
-    const workflowId = `notification-cleanup-rate-limit:${process.pid}`;
-    const firstPageCursor = '00000000-0000-8000-8000-000000000010';
-    const upperBound = '00000000-0000-8000-8000-000000000020';
-    let pageCalls = 0;
-    let resolveSecondPageStarted: (() => void) | undefined;
-    const secondPageStarted = new Promise<void>((resolve) => {
-      resolveSecondPageStarted = resolve;
-    });
-    const worker = await Worker.create({
-      activities: {
-        getNotificationCleanupUpperBoundActivity: async () => upperBound,
-        cleanupUnavailableNotificationPageActivity: async () => {
-          pageCalls += 1;
-          if (pageCalls === 1) {
-            return {
-              nextCursor: firstPageCursor,
-              done: false,
-              scanned: 1,
-              deleted: 1,
-              skipped: 0,
-            };
-          }
-
-          resolveSecondPageStarted?.();
-          return {
-            nextCursor: null,
-            done: true,
-            scanned: 1,
-            deleted: 1,
-            skipped: 0,
-          };
-        },
-      },
-      connection: environment.nativeConnection,
-      namespace: environment.namespace,
-      taskQueue,
-      workflowsPath,
-    });
-
-    await worker.runUntil(async () => {
-      const handle = await environment.client.workflow.start(
-        'cleanupUnavailableNotificationsWorkflow',
-        {
-          args: [
-            {
-              sweepId: 'notification-cleanup-rate-limit-sweep',
-              rateLimitMs: 100,
-              maxPagesPerRun: 1,
-            },
-          ],
-          taskQueue,
-          workflowId,
-        },
-      );
-
-      const result = handle.result();
-      await Promise.race([
-        secondPageStarted,
-        result.then(() => {
-          throw new Error('Notification cleanup workflow completed before the second page started');
-        }),
-      ]);
-      const firstRun = environment.client.workflow.getHandle(
-        workflowId,
-        handle.firstExecutionRunId,
-      );
-      const history = await firstRun.fetchHistory();
-      const timers = (history.events ?? []).filter(
-        ({ timerStartedEventAttributes }) => timerStartedEventAttributes !== undefined,
-      );
-      assert.ok(
-        timers.some(
-          ({ timerStartedEventAttributes }) =>
-            timerStartedEventAttributes?.startToFireTimeout?.nanos === 100_000_000,
-        ),
-        JSON.stringify(timers),
-      );
-      assert.ok(
-        history.events?.some(
-          ({ workflowExecutionContinuedAsNewEventAttributes }) =>
-            workflowExecutionContinuedAsNewEventAttributes != null,
-        ),
-        `expected the first run to Continue-As-New: ${JSON.stringify(history.events)}`,
-      );
-      await result;
-    });
-
-    assert.equal(pageCalls, 2);
-  },
-);
-test(
-  'Notification Cleanup Workflow는 잘못된 설정을 non-retryable Workflow 실패로 종료한다',
-  { timeout: 120_000 },
-  async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
-    });
-    t.after(() => environment.teardown());
-    const taskQueue = `${KOSMO_TASK_QUEUE}-notification-cleanup-invalid-input-test-${process.pid}`;
-    const worker = await Worker.create({
-      connection: environment.nativeConnection,
-      namespace: environment.namespace,
-      taskQueue,
-      workflowsPath,
-    });
-
-    await worker.runUntil(async () => {
-      const handle = await environment.client.workflow.start(
-        'cleanupUnavailableNotificationsWorkflow',
-        {
-          args: [{ sweepId: '   ' }],
-          taskQueue,
-          workflowId: `notification-cleanup-invalid-input:${process.pid}`,
-        },
-      );
-
-      await assert.rejects(handle.result(), (error: unknown) => {
-        assert.ok(error instanceof WorkflowFailedError);
-        assert.ok(error.cause instanceof ApplicationFailure);
-        assert.equal(error.cause.type, 'CleanupConfigurationError');
-        assert.equal(error.cause.nonRetryable, true);
-        return true;
-      });
-      assert.equal((await handle.describe()).status.name, 'FAILED');
-    });
+    assert.equal(activityCalls, 1);
   },
 );
