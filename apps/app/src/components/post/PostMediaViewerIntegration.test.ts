@@ -18,6 +18,7 @@ let queriedSurfacePostId: string | null = null;
 let queryPosts = new Map<string, ReturnType<typeof hostPost>>();
 let replyPostIds: string[] = [];
 let renderer: ReactTestRenderer | null = null;
+const platform = { OS: 'web' };
 let viewportWidth = 767;
 
 Object.assign(globalThis, {
@@ -40,7 +41,7 @@ mock.module('react-native', {
     Image: 'Image',
     Modal: 'Modal',
     PanResponder: { create: () => ({ panHandlers: {} }) },
-    Platform: { OS: 'web' },
+    Platform: platform,
     Pressable: 'Pressable',
     ScrollView: 'ScrollView',
     StyleSheet: { create: <T>(styles: T) => styles },
@@ -223,6 +224,7 @@ afterEach(async () => {
   queriedSurfacePostId = null;
   queryPosts = new Map();
   replyPostIds = [];
+  platform.OS = 'web';
   viewportWidth = 767;
 });
 
@@ -363,6 +365,45 @@ describe('Post Media Viewer Host production wiring', () => {
       renderer?.root.findAll((node) => node.props.accessibilityLabel === '원문 접기').length,
       0,
     );
+  });
+
+  it('Compact 원문 토글은 Native 플랫폼 최소 target을 유지한다', async () => {
+    const post = storyPost('compact-toggle-target', 'compact-toggle-target-content');
+    post.content!.bodyText = Array.from({ length: 4 }, (_, index) => `${index + 1}번째 줄`).join(
+      '\n',
+    );
+
+    for (const [os, targetSize] of [
+      ['ios', 44],
+      ['android', 48],
+    ] as const) {
+      platform.OS = os;
+      await renderHost(
+        createElement(PostLayout, {
+          post: asLayoutKey(post),
+          presentation: 'compact',
+        }),
+      );
+      await act(async () =>
+        byTestId('post-layout-body-measure').props.onLayout({
+          nativeEvent: { layout: { height: 96 } },
+        }),
+      );
+
+      for (const label of ['원문 더 보기', '원문 접기']) {
+        const toggle = pressable(label);
+        const style = Object.assign(
+          {},
+          ...(Array.isArray(toggle.props.style) ? toggle.props.style : [toggle.props.style]),
+        );
+        assert.equal(style.minHeight, targetSize);
+        assert.equal(style.minWidth, targetSize);
+        await act(async () => toggle.props.onPress());
+      }
+
+      await act(async () => renderer?.unmount());
+      renderer = null;
+    }
   });
 });
 
