@@ -12,11 +12,6 @@ function initializeAnalytics(): PostHog | null {
     return client;
   }
 
-  if (getPublicConfig('channel') !== 'prod') {
-    client = null;
-    return client;
-  }
-
   const configuredApiKey = getPublicConfig('posthogKey');
   const configuredApiHost = getPublicConfig('posthogHost');
 

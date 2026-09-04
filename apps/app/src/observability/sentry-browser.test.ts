@@ -2,8 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import * as Sentry from '@sentry/react';
 
-const metadataKeys = ['EXPO_PUBLIC_SENTRY_RELEASE'] as const;
-const originalMetadata = Object.fromEntries(metadataKeys.map((key) => [key, process.env[key]]));
+const originalRelease = process.env.EXPO_PUBLIC_SENTRY_RELEASE;
 const globals = globalThis as typeof globalThis & { __KOSMO_CHANNEL__?: unknown };
 const originalChannel = globals.__KOSMO_CHANNEL__;
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
@@ -18,21 +17,14 @@ Object.defineProperty(globalThis, 'document', {
 });
 globals.__KOSMO_CHANNEL__ = 'prod';
 
-const setMetadata = (metadata: Partial<Record<(typeof metadataKeys)[number], string>>) => {
-  for (const key of metadataKeys) {
-    const value = metadata[key];
-    if (value) {
-      process.env[key] = value;
-    } else {
-      delete process.env[key];
-    }
-  }
-};
-
 describe('Web app Sentry configuration', () => {
-  it('initializes only with complete public deployment metadata', async (context) => {
+  it('initializes only with a release', async (context) => {
     context.after(() => {
-      setMetadata(originalMetadata);
+      if (originalRelease === undefined) {
+        delete process.env.EXPO_PUBLIC_SENTRY_RELEASE;
+      } else {
+        process.env.EXPO_PUBLIC_SENTRY_RELEASE = originalRelease;
+      }
       if (originalDocument) {
         Object.defineProperty(globalThis, 'document', originalDocument);
       } else {
@@ -44,13 +36,11 @@ describe('Web app Sentry configuration', () => {
         globals.__KOSMO_CHANNEL__ = originalChannel;
       }
     });
-    setMetadata({});
+    delete process.env.EXPO_PUBLIC_SENTRY_RELEASE;
     await import(`${sentryModule}?disabled`);
     assert.equal(Sentry.getClient(), undefined);
 
-    setMetadata({
-      EXPO_PUBLIC_SENTRY_RELEASE: 'kosmo@abc123',
-    });
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
     await import(`${sentryModule}?enabled`);
 
     const options = Sentry.getClient()?.getOptions();
