@@ -1,5 +1,4 @@
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react-native';
-import { useRef } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '@/components/ui/Avatar';
 import { getIconButtonTargetSize } from '@/components/ui/IconButton';
@@ -20,13 +19,6 @@ export type ProfileSwitcherTargetProps = Readonly<{
   surface: ProfilePickerSurface;
 }>;
 
-type WebOptionProps = {
-  'aria-checked': boolean;
-  onKeyDown: (event: { key: string; preventDefault: () => void }) => void;
-  role: 'radio';
-  tabIndex: -1 | 0;
-};
-
 export function ProfileSwitcherTarget({
   disabled = false,
   onOpenChange,
@@ -38,14 +30,12 @@ export function ProfileSwitcherTarget({
 }: ProfileSwitcherTargetProps) {
   const theme = useTheme();
   const elevation = useElevation();
-  const optionRefs = useRef(new Map<string, View>());
   const compact = surface === 'compact';
   const triggerTargetSize = compact
     ? Math.max(44, getIconButtonTargetSize(Platform.OS))
     : getIconButtonTargetSize(Platform.OS);
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);
   const selectedHasUnread = (selectedProfile?.unreadNotificationCount ?? 0) > 0;
-  const tabStopId = selectedProfile?.id ?? profiles[0]?.id;
 
   return (
     <View
@@ -133,11 +123,7 @@ export function ProfileSwitcherTarget({
             { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
           ]}
         >
-          <View
-            accessibilityLabel="프로필 전환"
-            accessibilityRole="radiogroup"
-            role={Platform.OS === 'web' ? 'radiogroup' : undefined}
-          >
+          <View accessibilityLabel="프로필 전환" role={Platform.OS === 'web' ? 'group' : undefined}>
             {profiles.length === 0 ? (
               <Text style={[styles.empty, { color: theme.foregroundSecondary }]}>
                 프로필이 없습니다.
@@ -146,44 +132,20 @@ export function ProfileSwitcherTarget({
               profiles.map((profile) => {
                 const selected = profile.id === selectedProfileId;
                 const hasUnread = (profile.unreadNotificationCount ?? 0) > 0;
-                const onKeyDown = (event: { key: string; preventDefault: () => void }) => {
-                  const direction =
-                    event.key === 'ArrowDown' || event.key === 'ArrowRight'
-                      ? 1
-                      : event.key === 'ArrowUp' || event.key === 'ArrowLeft'
-                        ? -1
-                        : 0;
-                  if (direction === 0 || disabled) {
-                    return;
-                  }
-
-                  event.preventDefault();
-                  const currentIndex = profiles.findIndex(
-                    (candidate) => candidate.id === profile.id,
-                  );
-                  const target =
-                    profiles[(currentIndex + direction + profiles.length) % profiles.length];
-                  const targetRef = target ? optionRefs.current.get(target.id) : undefined;
-                  (targetRef as unknown as { focus?: () => void } | undefined)?.focus?.();
-                };
 
                 return (
                   <Pressable
+                    aria-pressed={selected}
                     accessibilityLabel={`${profile.displayName}, ${profile.relativeHandle}${hasUnread ? ', 읽지 않은 알림 있음' : ''}`}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected, disabled }}
+                    accessibilityRole="button"
+                    accessibilityState={
+                      Platform.OS === 'web' ? { disabled } : { disabled, selected }
+                    }
                     disabled={disabled}
                     key={profile.id}
                     onPress={() => {
                       onSelectProfile(profile.id);
                       onOpenChange(false);
-                    }}
-                    ref={(node) => {
-                      if (node) {
-                        optionRefs.current.set(profile.id, node);
-                      } else {
-                        optionRefs.current.delete(profile.id);
-                      }
                     }}
                     style={({ pressed }) => [
                       styles.option,
@@ -196,14 +158,6 @@ export function ProfileSwitcherTarget({
                         opacity: disabled ? 0.5 : 1,
                       },
                     ]}
-                    {...(Platform.OS === 'web'
-                      ? ({
-                          'aria-checked': selected,
-                          onKeyDown,
-                          role: 'radio',
-                          tabIndex: disabled || profile.id !== tabStopId ? -1 : 0,
-                        } as WebOptionProps)
-                      : undefined)}
                   >
                     <View
                       accessible={false}
