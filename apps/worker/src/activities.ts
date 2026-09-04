@@ -15,6 +15,7 @@ export {
   deleteProfileBlock as deleteProfileBlockActivity,
   executeProfileBlockTransition as executeProfileBlockTransitionActivity,
   executeProfileUnblockTransition as executeProfileUnblockTransitionActivity,
+  loadProfileBlockTransitionBootstrap as loadProfileBlockTransitionBootstrapActivity,
 } from '@kosmo/core/services';
 export {
   createFollowNotification as createFollowNotificationActivity,

@@ -28,6 +28,7 @@ import {
   deleteProfileBlock,
   executeProfileBlockTransition,
   executeProfileUnblockTransition,
+  loadProfileBlockTransitionBootstrap,
 } from './profile-block';
 import { ensureProfileFollow } from './profile-follow-relation';
 import { loadProfileFollowRemovalSourcesBetweenProfiles } from './profile-follow-transaction';
@@ -140,7 +141,6 @@ test('Block removes captured Follow generations and preserves existing Reactions
   const followTargetToOwnerId = '00000000-0000-4000-8000-000000000302';
   const requestOwnerToTargetId = '00000000-0000-4000-8000-000000000401';
   const requestTargetToOwnerId = '00000000-0000-4000-8000-000000000402';
-  const candidateProfileBlockId = '00000000-0000-4000-8000-000000000501';
   const newFollowId = '00000000-0000-4000-8000-000000000601';
 
   await ensureProfileFollow(
@@ -217,10 +217,14 @@ test('Block removes captured Follow generations and preserves existing Reactions
     .then(firstOrThrow);
   postIds.push(repost.id);
 
-  const cleanupSources = await loadProfileFollowRemovalSourcesBetweenProfiles({
+  const { candidateProfileBlockId, cleanupSources } = await loadProfileBlockTransitionBootstrap({
     firstProfileId: owner.id,
     secondProfileId: target.id,
   });
+  assert.match(
+    candidateProfileBlockId,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  );
   const input = {
     ownerProfileId: owner.id,
     targetProfileId: target.id,
