@@ -8,13 +8,14 @@ Profile Mute는 Owner Profile이 Target Profile의 콘텐츠가 탐색 목록과
 
 ## 상태
 
-이 객체는 별도 상태 차원을 가지지 않는다. 만료 시각을 지나지 않은 객체의 존재가 적용 중인 Mute를 뜻한다.
+이 객체는 별도 상태 차원을 가지지 않는다. 현재 v1에서는 `expires_at`이 `null`인 관계의 존재가 적용 중인
+Mute를 뜻한다. non-null 값의 기간·만료 의미는 `PROD-826`에서 결정한다.
 
 ## 속성
 
-| 속성      | 타입/nullability | 검증 정책                           | 존재 조건 | 조회 조건    | 조회 권한           |
-| --------- | ---------------- | ----------------------------------- | --------- | ------------ | ------------------- |
-| 만료 시각 | 시각, nullable   | 생성/변경 시 미래 시각이거나 영구다 | 항상      | Owner만 조회 | `ProfileMute.Owner` |
+| 속성      | 타입/nullability | 검증 정책                                                | 존재 조건 | 조회 조건    | 조회 권한           |
+| --------- | ---------------- | -------------------------------------------------------- | --------- | ------------ | ------------------- |
+| 만료 시각 | 시각, nullable   | 현재 v1 생성 경로는 영구 Mute를 뜻하는 `null`만 저장한다 | 항상      | Owner만 조회 | `ProfileMute.Owner` |
 
 ## 관계
 
@@ -23,15 +24,15 @@ Profile Mute는 Owner Profile이 Target Profile의 콘텐츠가 탐색 목록과
 | Owner Profile  | [Profile](./profile.md) | Profile Mute -> Profile | 1 -> 1      | 항상      | Owner만 조회 | `ProfileMute.Owner` |
 | Target Profile | [Profile](./profile.md) | Profile Mute -> Profile | 1 -> 1      | 항상      | Owner만 조회 | `ProfileMute.Owner` |
 
-같은 Owner/Target 조합에는 적용 중인 Profile Mute가 하나만 존재한다.
+같은 Owner/Target 조합에는 Profile Mute가 하나만 존재하며, 현재 v1에서는 `expires_at`이 `null`인 관계만
+적용 중으로 판정한다.
 
 ## 행동
 
-| 행동              | 행동 주체 Profile | 대상 객체    | 입력값                    | 권한                                  | 조건                                                                                      | 결과                                     |
-| ----------------- | ----------------- | ------------ | ------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Profile Mute 생성 | Owner Profile     | Profile Mute | Target Profile, 만료 시각 | `Account.Active`, `Profile.Member`    | Owner는 Active/Normal Local Profile이고 Target과 다르며 같은 조합의 적용 중인 Mute가 없다 | Owner/Target 관계를 가진 Mute가 생성된다 |
-| Profile Mute 변경 | Owner Profile     | Profile Mute | 만료 시각                 | `Account.Active`, `ProfileMute.Owner` | 입력이 미래 시각이거나 영구다                                                             | 만료 시각이 바뀐다                       |
-| Profile Mute 제거 | Owner Profile     | Profile Mute | 없음                      | `Account.Active`, `ProfileMute.Owner` | Profile Mute가 존재한다                                                                   | Profile Mute가 제거된다                  |
+| 행동              | 행동 주체 Profile | 대상 객체    | 입력값         | 권한                                  | 조건                                                    | 결과                                                 |
+| ----------------- | ----------------- | ------------ | -------------- | ------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------- |
+| Profile Mute 생성 | Owner Profile     | Profile Mute | Target Profile | `Account.Active`, `Profile.Member`    | Owner는 Active/Normal Local Profile이고 Target과 다르다 | `expires_at`이 `null`인 Owner/Target 관계가 생성된다 |
+| Profile Mute 제거 | Owner Profile     | Profile Mute | 없음           | `Account.Active`, `ProfileMute.Owner` | Profile Mute가 존재한다                                 | Profile Mute가 제거된다                              |
 
 ## 권한
 
@@ -48,7 +49,7 @@ Profile Mute는 Owner Profile이 Target Profile의 콘텐츠가 탐색 목록과
   모두 판정하며, 둘 중 하나라도 Target Profile이면 Exclude한다.
 - Target Profile에서 발생한 새 Notification은 생성하지 않는다.
 - 기존 Notification의 존재와 Read State는 바꾸지 않는다.
-- 만료 시각이 지난 Profile Mute는 조회 정책에 적용하지 않는다.
+- 현재 v1 Post List 적용 여부는 `expires_at IS NULL` 관계로만 판정한다.
 
 ## 확정 용어
 
@@ -59,3 +60,5 @@ Profile Mute는 Owner Profile이 Target Profile의 콘텐츠가 탐색 목록과
 ## 제외/보류
 
 - Profile Mute는 Follow Relationship, Follow Request, Reaction, Repost Post, Bookmark를 제거하지 않는다.
+- non-null `expires_at`의 기간 지정, 만료 판정·정리와 만료 시각 생성·변경 의미 및 action은 `PROD-826`에서
+  결정하며 현재 범위에서 제공하지 않는다.

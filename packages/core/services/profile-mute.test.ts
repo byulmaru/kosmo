@@ -26,6 +26,7 @@ import {
   ProfileState,
 } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
+import { profileMuteWhere } from '../visibility';
 import { muteProfile, unmuteProfile } from './profile-mute';
 
 after(async () => pg.end());
@@ -84,6 +85,55 @@ test('Profile Mute는 Owner·Target과 nullable expiresAt을 저장한다', asyn
     await cleanupProfiles(
       [owner.profile.id, target.profile.id],
       [owner.instance.id, target.instance.id],
+    );
+  }
+});
+
+test('profileMuteWhere는 Owner·Target을 격리하고 expiresAt null 관계만 활성으로 판정한다', async () => {
+  const owner = await createProfile();
+  const otherOwner = await createProfile();
+  const target = await createProfile();
+  const otherTarget = await createProfile();
+
+  try {
+    await db.insert(ProfileMutes).values([
+      {
+        ownerProfileId: owner.profile.id,
+        targetProfileId: target.profile.id,
+      },
+      {
+        ownerProfileId: owner.profile.id,
+        targetProfileId: otherTarget.profile.id,
+        expiresAt: Temporal.Instant.from('2099-01-01T00:00:00Z'),
+      },
+      {
+        ownerProfileId: otherOwner.profile.id,
+        targetProfileId: otherTarget.profile.id,
+      },
+    ]);
+
+    const readTargets = (ownerProfileId: string) =>
+      db
+        .select({ id: Profiles.id })
+        .from(Profiles)
+        .where(
+          and(
+            inArray(Profiles.id, [target.profile.id, otherTarget.profile.id]),
+            profileMuteWhere({
+              db,
+              ownerProfileId,
+              targetProfileId: Profiles.id,
+            }),
+          ),
+        )
+        .then((rows) => rows.map(({ id }) => id));
+
+    assert.deepEqual(await readTargets(owner.profile.id), [target.profile.id]);
+    assert.deepEqual(await readTargets(otherOwner.profile.id), [otherTarget.profile.id]);
+  } finally {
+    await cleanupProfiles(
+      [owner.profile.id, otherOwner.profile.id, target.profile.id, otherTarget.profile.id],
+      [owner.instance.id, otherOwner.instance.id, target.instance.id, otherTarget.instance.id],
     );
   }
 });

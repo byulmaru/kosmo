@@ -3885,6 +3885,10 @@ describe('GraphQL remote profile boundary', () => {
       domain: 'muted-source-author.example',
       handle: 'muted-source-author',
     });
+    const outerSourceAuthor = await createStoredActivityPubAuthor({
+      domain: 'outer-source-author.example',
+      handle: 'outer-source-author',
+    });
     const homeAuthor = await createStoredActivityPubAuthor({
       domain: 'mute-home-author.example',
       handle: 'mute-home-author',
@@ -3897,9 +3901,32 @@ describe('GraphQL remote profile boundary', () => {
       id: '019f8ed1-0000-7000-8000-000000000101',
       profileId: sourceAuthor.profile.id,
     });
+    const outerSource = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000102',
+      profileId: outerSourceAuthor.profile.id,
+    });
+    const outerQuoteSource = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000103',
+      profileId: outerSourceAuthor.profile.id,
+    });
     const mutedOuterPost = await createContentfulPost({
       id: '019f8ed1-0000-7000-8000-000000000500',
       profileId: mutedOuterAuthor.profile.id,
+    });
+    const mutedOuterReply = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000600',
+      profileId: mutedOuterAuthor.profile.id,
+      replyParentId: mutedOuterPost.id,
+    });
+    const mutedOuterRepost = await createRepost({
+      id: '019f8ed1-0000-7000-8000-000000000650',
+      profileId: mutedOuterAuthor.profile.id,
+      repostSourceId: outerSource.id,
+    });
+    const mutedOuterQuote = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000700',
+      profileId: mutedOuterAuthor.profile.id,
+      repostSourceId: outerQuoteSource.id,
     });
     const sourceMutedQuote = await createContentfulPost({
       id: '019f8ed1-0000-7000-8000-000000000400',
@@ -3972,7 +3999,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(firstPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
     assert.ok(firstPage.data?.homeTimeline?.pageInfo.endCursor);
     assert.deepEqual(connectionIds(firstPage.data?.profile?.posts), [
-      globalId('Post', mutedOuterPost.id),
+      globalId('Post', mutedOuterQuote.id),
     ]);
 
     const sourceMutedProfile = await requestRemotePostRead({
@@ -4053,6 +4080,11 @@ describe('GraphQL remote profile boundary', () => {
       globalId('Post', inactivePost.id),
       globalId('Post', olderPost.id),
     ]);
+    assert.deepEqual(connectionIds(switchedProfile.data?.profile?.posts), [
+      globalId('Post', mutedOuterQuote.id),
+      globalId('Post', mutedOuterRepost.id),
+      globalId('Post', mutedOuterPost.id),
+    ]);
 
     await db
       .update(Sessions)
@@ -4071,7 +4103,7 @@ describe('GraphQL remote profile boundary', () => {
     await db.delete(ProfileMutes).where(eq(ProfileMutes.id, outerMute.id));
 
     const afterUnmute = await requestRemotePostRead({
-      first: 1,
+      first: 10,
       nodeIds: [],
       profileId: globalId('Profile', mutedOuterAuthor.profile.id),
       token: auth.token,
@@ -4079,7 +4111,13 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(afterUnmute);
     assert.deepEqual(connectionIds(afterUnmute.data?.homeTimeline), [
+      globalId('Post', mutedOuterQuote.id),
+      globalId('Post', mutedOuterRepost.id),
+      globalId('Post', mutedOuterReply.id),
       globalId('Post', mutedOuterPost.id),
+      globalId('Post', visiblePost.id),
+      globalId('Post', inactivePost.id),
+      globalId('Post', olderPost.id),
     ]);
   });
 });

@@ -195,6 +195,28 @@
 - Confirmation / Follow-up: 같은 Account의 두 selected Profile과 Mute 해제 전후 새 Home 조회를 통합
   테스트로 확인한다.
 
+### 목록 판정은 query에 합성 가능한 공통 Core 읽기 정책 경계를 재사용한다
+
+- Decision Date: 2026-09-04
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/architecture/core-services.md`, `docs/domain/policies/post-list.md`,
+  `PROD-814`, `PROD-825`, `PROD-827`
+- Status: Active
+- Context / Problem: Home·Local·Hashtag가 Profile Mute의 Owner·Target·활성 관계 의미를 각자 다시 조합하면
+  같은 정책이 목록마다 달라지거나 후보별 DB 호출로 pagination 경계가 흐려질 수 있다.
+- Decision Outcome: `PROD-825`는 selected Profile Owner와 후보 Target을 받아 `expires_at IS NULL`까지 포함한
+  Profile Mute 판정을 소비자 query에 합성할 수 있는 공통 Core 읽기 정책 경계를 제공하고 Home에 적용한다.
+  `PROD-814`와 `PROD-827`은 각각 Local·Hashtag 목록의 후보·Visibility·Eligibility·pagination 책임을
+  유지하면서 이 경계를 후속 재사용한다. 직접 방문하는 `Profile.posts`에는 이 목록 경계를 적용하지 않는다.
+- Alternatives Considered: 각 소비자가 Owner·Target·`expires_at IS NULL` 조건을 복제하는 방식은 정책
+  drift를 만들 수 있어 제외했다. 후보를 읽은 뒤 행별 Core 조회나 application-memory filter로 제거하는 방식은
+  page limit과 cursor를 왜곡하므로 선택하지 않는다.
+- Consequences: 공통 경계는 transport-neutral query predicate/query fragment로 유지되고 소비자 query의
+  page limit 전에 합성된다. Home은 바깥 Author와 direct Source Author에 같은 경계를 적용하며, 후속 목록은
+  각자의 후보 정책과 정렬을 소유한다.
+- Confirmation / Follow-up: Core 테스트에서 Owner·Target 격리와 `expires_at IS NULL` 의미를 실제 DB query로
+  확인하고, API 테스트에서 Home이 바깥 Author·Source Author를 page limit 전에 제외하는지 검증한다.
+
 ## Remaining Decisions
 
 - `PROD-826`: 기간 지정 Mute 생성, 만료 시각 검증과 non-null `expires_at`의 만료 판정·정리. 동일 pair의 기존 non-null row를 v1 재-Mute에서 같은 ID의 `null` row로 수렴시키는 계약은 이 change에서 확정하며, `PROD-826`이 필요하면 이를 명시적으로 대체할 수 있다. 이 후속 결정은 현재 `PROD-825` 구현을 막지 않는다.
