@@ -151,25 +151,18 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
 
 ### Profile별 Unread 표시
 
-Profile picker는 Account가 접근할 수 있는 각 Profile에 visible Unread 알림이 있는지를 Web·Android·iOS의
-같은 Profile option에서 표시한다. selected Profile도 같은 표시 대상이며, 이 상태는 오른쪽의 기존 선택
-check와 별개다.
-
-- Unread가 있는 Profile은 아바타 우상단에 숫자 없는 `12` logical unit(Web CSS px·iOS pt·Android dp) dot을
-  겹쳐 표시한다. dot은 semantic `accent` color token을 사용하며 Profile option의 행 폭, label,
-  pointer·touch target과 기존 selected check를 밀지 않는다.
-- dot 자체는 접근성 트리와 focus 순서에서 숨긴다. Profile option의 accessible name은 기존 표시 이름과
-  handle을 유지하고 Unread가 있을 때만 `읽지 않은 알림 있음`을 덧붙인다. 정확한 count는 시각적 UI나
-  accessible name에 포함하지 않는다.
-- 각 Profile option의 서버 제공 `unreadNotificationCount`가 양수일 때만 dot을 표시한다. count가 `0`이거나
-  Profile option을 표시할 수 없으면 잘못된 dot을 표시하지 않는다.
-- Profile 전환 성공 뒤 알림 목록과 셸 badge는 기존 actor 전환과 서버 재조회 계약에 따라 새 selected Profile
-  상태로 수렴한다.
-- 다른 Profile의 알림 내용이나 정확한 count를 현재 화면에 노출하거나, Profile을 자동 전환하거나, 알림을
-  자동으로 읽음 처리하지 않는다. Push, OS app icon badge와 realtime delivery도 이 표시가 변경하지 않는다.
-- 이 `12` logical unit Profile avatar dot은 아래의 알림 navigation icon용 `8px` dot과 서로 다른 컴포넌트
-  계약이다. 기존 셸 badge의 geometry, 실제 count accessible name과 selected Profile 격리 계약은 변경하지
-  않는다.
+- **Current:** Production Profile picker는 Web·Android·iOS의 각 Profile option 아바타 우상단에
+  `unreadNotificationCount > 0`이면 숫자 없는 `12` logical unit semantic `accent` dot을 표시한다. dot 자체는
+  접근성 트리에서 숨기고 option의 accessible name에만 `읽지 않은 알림 있음`을 덧붙이며, 정확한 count와
+  알림 내용은 노출하지 않는다. Profile 전환 뒤의 actor·서버 재조회, 셸 badge, Push·OS badge와 realtime
+  lifecycle은 기존 runtime 계약을 유지한다.
+- **Target:** DSN-40 Figma와 PROD-855의 `ProfileSwitcherTarget`은 닫힌 `full`·`drawer` trigger에 `8px`
+  `action/primary/base` dot, 닫힌 `compact` avatar에 canvas `1px` halo를 둔 `12px` dot을 표시한다. 열리면 닫힌
+  indicator를 숨기고 non-selected Profile row 오른쪽에 `24px` 숫자 badge를 표시해 `1`~`9`는 실제 값,
+  `10` 이상은 `9+`로 축약한다. selected row는 count badge 대신 기존 check를 표시해 두 요소가 겹치지 않게
+  한다. indicator와 badge는 접근성 트리에서 숨기고 Profile option의 accessible name은 정확한 count 대신
+  `읽지 않은 알림 있음`만 유지한다. 이 Target은 Storybook 검토 표면이며 Production runtime 연결과 unread
+  data·Relay·badge lifecycle 이관은 PROD-786이 소유한다.
 
 ## 알림 Unread badge
 
