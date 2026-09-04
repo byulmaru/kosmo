@@ -5,6 +5,8 @@ import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/clie
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import type {
+  ProfileFollowPairCommand,
+  ProfileFollowPairTransitionExecution,
   ProfileFollowPairTransitionInput,
   ProfileFollowPairTransitionOutcome,
 } from '@kosmo/core/services';
@@ -24,6 +26,10 @@ type ReactionDeleteEffectsInput = {
 };
 
 const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
+const legacyProfileFollowWorkflowPath = new URL(
+  './test-fixtures/legacy-profile-follow-pair.ts',
+  import.meta.url,
+).pathname;
 
 type ActivityName =
   | 'createReactionNotificationActivity'
@@ -34,6 +40,23 @@ type ActivityName =
 type ActivityCall = {
   readonly name: ActivityName;
   readonly argument: unknown;
+};
+
+type LegacyProfileFollowPairTransitionInput = ProfileFollowPairTransitionInput & {
+  readonly candidateRowId?: string;
+  readonly followCandidateId?: string;
+};
+
+type ReplayScenario = {
+  readonly name: string;
+  readonly pair: {
+    readonly followerProfileId: string;
+    readonly followeeProfileId: string;
+  };
+  readonly updates: readonly {
+    readonly command: ProfileFollowPairCommand;
+    readonly execution: Extract<ProfileFollowPairTransitionExecution, { readonly ok: true }>;
+  }[];
 };
 
 const reactionDeleteInput = (id: string, origin: ReactionDeleteEffectsInput['origin']) => ({
@@ -271,6 +294,8 @@ test(
           input: ProfileFollowPairTransitionInput,
         ) => {
           assert.equal(input.pendingRequestId, requestId);
+          assert.equal('candidateRowId' in input, false);
+          assert.equal('followCandidateId' in input, false);
           return execution;
         },
         loadPendingFollowRequestIdActivity: async () => requestId,
@@ -332,6 +357,315 @@ test(
         );
       } finally {
         releaseEffect();
+      }
+    });
+  },
+);
+
+test(
+  'Pair Follow transaction Activity retry는 effects를 중복하지 않고 ESTABLISHED로 수렴한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-completion-loss-' + process.pid;
+    const pair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000671',
+      followeeProfileId: '00000000-0000-8000-8000-000000000672',
+    };
+    const requestId = '00000000-0000-8000-8000-000000000673';
+    const followId = '00000000-0000-8000-8000-000000000674';
+    let effectCallCount = 0;
+    let transitionCalls = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        executeProfileFollowPairTransitionActivity: async (
+          input: ProfileFollowPairTransitionInput,
+        ) => {
+          transitionCalls += 1;
+          assert.equal(input.pendingRequestId, requestId);
+          assert.equal('candidateRowId' in input, false);
+          assert.equal('followCandidateId' in input, false);
+          if (transitionCalls === 1) {
+            throw ApplicationFailure.retryable('transition Activity response was lost');
+          }
+          return {
+            ok: true as const,
+            nextState: 'ESTABLISHED' as const,
+            result: {
+              commandKind: 'ACCEPT' as const,
+              kind: 'ACCEPTED' as const,
+              ...pair,
+              profileFollowId: followId,
+            },
+            effectPlan: [],
+          };
+        },
+        loadPendingFollowRequestIdActivity: async () => requestId,
+        createFollowNotificationActivity: async () => {
+          effectCallCount += 1;
+        },
+        sendProfileFollowActivity: async () => {
+          effectCallCount += 1;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const startWorkflowOperation = new WithStartWorkflowOperation('profileFollowPairWorkflow', {
+        args: [pair],
+        taskQueue,
+        workflowId: 'profile-follow-pair:' + pair.followerProfileId + ':' + pair.followeeProfileId,
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      });
+      const result = (await environment.client.workflow.executeUpdateWithStart(
+        'profileFollowPairUpdate',
+        {
+          args: [
+            {
+              kind: 'ACCEPT' as const,
+              expectedRowId: requestId,
+              origin: 'ACTIVITYPUB' as const,
+            },
+          ],
+          updateId: 'accept-completion-loss',
+          startWorkflowOperation,
+        },
+      )) as ProfileFollowPairTransitionOutcome;
+
+      assert.deepEqual(result, {
+        ok: true,
+        result: {
+          commandKind: 'ACCEPT',
+          kind: 'ACCEPTED',
+          ...pair,
+          profileFollowId: followId,
+        },
+      });
+      assert.equal(transitionCalls, 2);
+      assert.equal(effectCallCount, 0);
+      const handle = await startWorkflowOperation.workflowHandle();
+      await handle.result();
+    });
+  },
+);
+
+test(
+  'Open/Pending/Approve 이전 Profile Follow history를 현재 Workflow bundle로 replay한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-replay-' + process.pid;
+    const openPair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000681',
+      followeeProfileId: '00000000-0000-8000-8000-000000000682',
+    };
+    const openFollowId = '00000000-0000-8000-8000-000000000683';
+    const pendingPair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000685',
+      followeeProfileId: '00000000-0000-8000-8000-000000000686',
+    };
+    const pendingRequestId = '00000000-0000-8000-8000-000000000687';
+    const approvePair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000689',
+      followeeProfileId: '00000000-0000-8000-8000-000000000690',
+    };
+    const approveRequestId = '00000000-0000-8000-8000-000000000691';
+    const approveFollowId = '00000000-0000-8000-8000-000000000692';
+    const replayScenarios: ReplayScenario[] = [
+      {
+        name: 'open',
+        pair: openPair,
+        updates: [
+          {
+            command: { kind: 'FOLLOW', origin: 'LOCAL' },
+            execution: {
+              ok: true,
+              nextState: 'ESTABLISHED',
+              result: {
+                commandKind: 'FOLLOW',
+                created: true,
+                kind: 'ESTABLISHED',
+                ...openPair,
+                profileFollowId: openFollowId,
+              },
+              effectPlan: [],
+            },
+          },
+        ],
+      },
+      {
+        name: 'pending',
+        pair: pendingPair,
+        updates: [
+          {
+            command: { kind: 'FOLLOW', origin: 'LOCAL' },
+            execution: {
+              ok: true,
+              nextState: 'PENDING',
+              result: {
+                commandKind: 'FOLLOW',
+                created: true,
+                kind: 'PENDING',
+                ...pendingPair,
+                profileFollowRequestId: pendingRequestId,
+              },
+              effectPlan: [],
+              pendingRequestId,
+            },
+          },
+          {
+            command: {
+              kind: 'REJECT',
+              actorProfileId: pendingPair.followeeProfileId,
+              expectedRowId: pendingRequestId,
+              origin: 'LOCAL',
+            },
+            execution: {
+              ok: true,
+              nextState: 'REJECTED',
+              result: {
+                commandKind: 'REJECT',
+                changed: true,
+                ...pendingPair,
+                profileFollowRequestId: pendingRequestId,
+              },
+              effectPlan: [],
+            },
+          },
+        ],
+      },
+      {
+        name: 'approve',
+        pair: approvePair,
+        updates: [
+          {
+            command: { kind: 'FOLLOW', origin: 'LOCAL' },
+            execution: {
+              ok: true,
+              nextState: 'PENDING',
+              result: {
+                commandKind: 'FOLLOW',
+                created: true,
+                kind: 'PENDING',
+                ...approvePair,
+                profileFollowRequestId: approveRequestId,
+              },
+              effectPlan: [],
+              pendingRequestId: approveRequestId,
+            },
+          },
+          {
+            command: {
+              kind: 'APPROVE',
+              actorProfileId: approvePair.followeeProfileId,
+              expectedRowId: approveRequestId,
+              origin: 'LOCAL',
+            },
+            execution: {
+              ok: true,
+              nextState: 'ESTABLISHED',
+              result: {
+                commandKind: 'APPROVE',
+                kind: 'ACCEPTED',
+                ...approvePair,
+                profileFollowId: approveFollowId,
+                profileFollowRequestId: approveRequestId,
+              },
+              effectPlan: [],
+            },
+          },
+        ],
+      },
+    ];
+    const scenarioByFollower = new Map(
+      replayScenarios.map((scenario) => [scenario.pair.followerProfileId, scenario]),
+    );
+    const transitionCallCounts = new Map<string, number>();
+
+    const worker = await Worker.create({
+      activities: {
+        loadPendingFollowRequestIdActivity: async (input: {
+          readonly pair: { readonly followerProfileId: string; readonly followeeProfileId: string };
+          readonly expectedRowId?: string;
+        }) => input.expectedRowId,
+        executeProfileFollowPairTransitionActivity: async (
+          input: ProfileFollowPairTransitionInput,
+        ) => {
+          const scenario = scenarioByFollower.get(input.pair.followerProfileId);
+          assert.ok(scenario);
+          const callIndex = transitionCallCounts.get(input.pair.followerProfileId) ?? 0;
+          const update = scenario.updates[callIndex];
+          assert.ok(update);
+          assert.deepEqual(input.command, update.command);
+          const legacyInput = input as LegacyProfileFollowPairTransitionInput;
+          assert.equal(legacyInput.candidateRowId !== undefined, input.command.kind === 'FOLLOW');
+          assert.equal(
+            legacyInput.followCandidateId !== undefined,
+            input.command.kind === 'APPROVE' || input.command.kind === 'ACCEPT',
+          );
+          transitionCallCounts.set(input.pair.followerProfileId, callIndex + 1);
+          return update.execution;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath: legacyProfileFollowWorkflowPath,
+    });
+
+    await worker.runUntil(async () => {
+      for (const [scenarioIndex, scenario] of replayScenarios.entries()) {
+        const startWorkflowOperation = new WithStartWorkflowOperation('profileFollowPairWorkflow', {
+          args: [scenario.pair],
+          taskQueue,
+          workflowId: 'profile-follow-pair:legacy-replay:' + scenario.name + ':' + process.pid,
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+        });
+        const [firstUpdate, ...remainingUpdates] = scenario.updates;
+        assert.ok(firstUpdate);
+        const firstResult = await environment.client.workflow.executeUpdateWithStart(
+          'profileFollowPairUpdate',
+          {
+            args: [firstUpdate.command],
+            updateId: `legacy-replay-${scenario.name}-${scenarioIndex}-0`,
+            startWorkflowOperation,
+          },
+        );
+        assert.deepEqual(firstResult, { ok: true, result: firstUpdate.execution.result });
+
+        const handle = await startWorkflowOperation.workflowHandle();
+        for (const [updateIndex, update] of remainingUpdates.entries()) {
+          const result = await handle.executeUpdate('profileFollowPairUpdate', {
+            args: [update.command],
+            updateId: `legacy-replay-${scenario.name}-${scenarioIndex}-${updateIndex + 1}`,
+          });
+          assert.deepEqual(result, { ok: true, result: update.execution.result });
+        }
+        await handle.result();
+        const history = await handle.fetchHistory();
+        await Worker.runReplayHistory({ workflowsPath }, history, handle.workflowId);
+      }
+
+      for (const scenario of replayScenarios) {
+        assert.equal(
+          transitionCallCounts.get(scenario.pair.followerProfileId),
+          scenario.updates.length,
+        );
       }
     });
   },

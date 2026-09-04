@@ -5,7 +5,6 @@ import {
   defineUpdate,
   proxyActivities,
   setHandler,
-  uuid4,
 } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
@@ -202,11 +201,6 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
           const execution = await executeProfileFollowPairTransitionActivity({
             pair,
             command: parsedCommand,
-            candidateRowId: parsedCommand.kind === 'FOLLOW' ? uuid4() : undefined,
-            followCandidateId:
-              parsedCommand.kind === 'APPROVE' || parsedCommand.kind === 'ACCEPT'
-                ? uuid4()
-                : undefined,
             pendingRequestId,
           });
 

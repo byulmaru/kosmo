@@ -1,10 +1,4 @@
-# temporal-follow-effects Specification
-
-## Purpose
-
-방향성 있는 Profile pair의 Follow·Follow Request transaction admission, pending lifecycle, effect settlement와 exact-row removal 계약을 정의한다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Directed pair Follow lifecycle Workflow
 
@@ -62,35 +56,6 @@ INITIAL → PENDING → ESTABLISHED
 
 - **WHEN** a new Follow arrives after the prior pair Workflow closed
 - **THEN** Update-with-Start admits a new Workflow run under the same deterministic directed pair identity and does not reuse the prior run's state or effects
-
-### Requirement: Ordered effects and lifecycle close
-
-The system MUST append each committed transition's effects to a FIFO queue owned by the pair Workflow. Effects from an earlier transition MUST be processed before effects from a later transition. Ordered phases inside one transition MUST also remain sequential, including request cleanup before relationship creation. Every phase MUST use the shared settlement helper regardless of Activity count, so all applicable Notification/protocol siblings are attempted. The pair Workflow MUST invoke the registered effect Activities directly with stable create source IDs or exact deleted source IDs and directed pairs; it MUST NOT create separate Follow create/delete effect Workflows.
-
-#### Scenario: Pending create followed quickly by terminal transition
-
-- **WHEN** a Pending Follow Request is committed and approval, rejection, cancellation, or inbound termination arrives before the first effects finish
-- **THEN** the Workflow preserves transition order in its FIFO effect queue, does not apply a later cleanup to an unrelated source, and returns each Update after its own DB commit rather than waiting for the entire queue
-
-#### Scenario: Pending effect failure does not end the lifecycle
-
-- **WHEN** a Notification or protocol effect for a Pending transition retries or reaches terminal failure
-- **THEN** the Workflow records/observes the effect failure, keeps the pair in `PENDING`, and continues accepting a valid terminal Update; effect failure never rolls back the committed request
-
-#### Scenario: Terminal transition closes the Workflow
-
-- **WHEN** a pair transition commits `ESTABLISHED`, `REJECTED`, or `CANCELLED`
-- **THEN** the Workflow stops accepting further lifecycle Updates, drains the already-enqueued effects in FIFO order, observes any terminal effect failure, and closes without reopening the pair
-
-#### Scenario: Terminal transaction retries are exhausted
-
-- **WHEN** a transaction or bootstrap Activity reaches its configured terminal failure while the pair is Pending
-- **THEN** the Update fails, the Workflow drains already-enqueued effects, and the run closes with a typed failure instead of waiting indefinitely
-
-#### Scenario: Unfollow remains a separate short command
-
-- **WHEN** an established Follow is removed by local Unfollow or an established inbound Undo
-- **THEN** the system runs the existing short Unfollow/removal command with its exact deleted Follow source ID and directed pair and does not reopen or extend the completed pair lifecycle Workflow
 
 ### Requirement: Follow transition effects and retry
 
