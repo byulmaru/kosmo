@@ -9,14 +9,15 @@ import {
   View,
 } from 'react-native';
 import { IconButton } from '@/components/ui/IconButton';
+import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import type { PressableStateCallbackType, ViewStyle } from 'react-native';
 import type { PostMediaItem } from './PostMediaImage';
 
 export type PostMediaViewerPresentation = 'compact' | 'wide';
 
-export type PostMediaViewerViewState = 'ready' | 'sensitive' | 'loading' | 'error' | 'unavailable';
+export type PostMediaViewerViewState = 'ready' | 'loading' | 'error' | 'unavailable';
 
 export type PostMediaViewerSurfaceProps = Readonly<{
   currentIndex: number;
@@ -25,26 +26,19 @@ export type PostMediaViewerSurfaceProps = Readonly<{
   onNext: () => void;
   onPrevious: () => void;
   onRetry: () => void;
-  onRevealSensitive: () => void;
 }> &
   (
     | Readonly<{
-        actionTray?: ReactNode;
+        compactDetail?: never;
         contextRail: ReactElement;
         presentation: 'wide';
         viewState: PostMediaViewerViewState;
       }>
     | Readonly<{
-        actionTray: ReactElement;
-        contextRail?: ReactNode;
+        compactDetail: ReactElement;
+        contextRail?: never;
         presentation: 'compact';
-        viewState: 'ready' | 'sensitive';
-      }>
-    | Readonly<{
-        actionTray?: ReactNode;
-        contextRail?: ReactNode;
-        presentation: 'compact';
-        viewState: 'loading' | 'error' | 'unavailable';
+        viewState: PostMediaViewerViewState;
       }>
   );
 
@@ -54,10 +48,6 @@ const statusCopy = {
     title: '미디어를 불러오지 못했어요',
   },
   loading: { body: '잠시만 기다려 주세요.', title: '미디어를 불러오는 중' },
-  sensitive: {
-    body: '표시하기 전에 내용을 확인해 주세요.',
-    title: '민감한 미디어',
-  },
   unavailable: {
     body: '삭제되었거나 접근할 수 없는 미디어입니다.',
     title: '이 미디어를 볼 수 없어요',
@@ -65,7 +55,7 @@ const statusCopy = {
 } as const;
 
 export function PostMediaViewerSurface({
-  actionTray,
+  compactDetail,
   contextRail,
   currentIndex,
   media,
@@ -73,11 +63,11 @@ export function PostMediaViewerSurface({
   onNext,
   onPrevious,
   onRetry,
-  onRevealSensitive,
   presentation,
   viewState,
 }: PostMediaViewerSurfaceProps) {
-  const navigable = viewState === 'ready' || viewState === 'sensitive';
+  const theme = useTheme();
+  const navigable = viewState === 'ready';
   const multiple = navigable && media.length > 1;
   const currentMedia = media[currentIndex];
   const imageName = currentMedia?.altText?.trim() || `${currentIndex + 1}번째 첨부 이미지`;
@@ -117,7 +107,8 @@ export function PostMediaViewerSurface({
             >
               {viewState === 'loading' ? (
                 <ActivityIndicator
-                  accessibilityLabel="미디어를 불러오는 중"
+                  accessible={false}
+                  aria-hidden
                   color="#ffffff"
                   size={40}
                   testID="post-media-viewer-loading-indicator"
@@ -127,13 +118,7 @@ export function PostMediaViewerSurface({
                 {status.title}
               </Text>
               <Text style={styles.statusBody}>{status.body}</Text>
-              {viewState === 'sensitive' ? (
-                <StatusAction
-                  accessibleName="민감한 이미지 표시"
-                  label="보기"
-                  onActivate={onRevealSensitive}
-                />
-              ) : viewState === 'error' ? (
+              {viewState === 'error' ? (
                 <StatusAction accessibleName="다시 시도" label="다시 시도" onActivate={onRetry} />
               ) : null}
             </View>
@@ -222,9 +207,12 @@ export function PostMediaViewerSurface({
         ) : null}
       </View>
 
-      {navigable && presentation === 'compact' && actionTray != null ? (
-        <View style={styles.actionTray} testID="post-media-viewer-action-tray">
-          {actionTray}
+      {presentation === 'compact' ? (
+        <View
+          style={[styles.compactDetail, { backgroundColor: theme.backgroundCanvas }]}
+          testID="post-media-viewer-compact-detail"
+        >
+          {compactDetail}
         </View>
       ) : null}
     </View>
@@ -337,7 +325,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   compactMediaViewport: {
-    bottom: 88,
+    bottom: space[16],
     left: space[16],
     position: 'absolute',
     right: space[16],
@@ -423,16 +411,12 @@ const styles = StyleSheet.create({
     width: 104,
   },
   statusActionLabel: { color: '#000000', ...textStyles.uiLabelM },
-  actionTray: {
-    backgroundColor: '#000000',
-    borderRadius: radius[16],
-    bottom: space[16],
-    height: 56,
-    justifyContent: 'center',
-    left: space[16],
-    paddingHorizontal: 22,
-    position: 'absolute',
-    right: space[16],
+  compactDetail: {
+    flexShrink: 0,
+    minWidth: 0,
+    paddingBottom: space[8],
+    paddingHorizontal: space[16],
+    paddingTop: space[12],
   },
   contextRail: { alignSelf: 'stretch', minHeight: 0, minWidth: 0, width: 346 },
 });

@@ -6,21 +6,21 @@ Host·query·runtime 구현은 historical evidence로 보존한다. PROD-853은 
 연결·교체와 Web/iOS/Android runtime을 수행한다. PROD-853 Storybook fixture는 Gallery·permission·Production
 연결 완료의 증거가 아니며, PROD-853 PR 완료만으로 이 change를 archive하지 않는다.
 
-- DSN-63 Target transition은 최종 계약이다. PROD-849는 top-level Host query·Media 상태를 shared surface의
+- Canonical Target transition은 최종 계약이다. PROD-849는 top-level Host query·Media 상태를 shared surface의
   `Loading`·`Error`·`Unavailable` `viewState`로 MUST 매핑한다. 세 상태는 close와 canonical 상태 설명을
-  MUST 유지하고 navigation·counter와 Compact tray를 MUST NOT 렌더링한다. `Loading`은 spinner,
-  `Error`는 `다시 시도` action을 제공하고 `Unavailable`은 설명만 제공한다. Wide presentation의 context rail은
-  세 상태에서도 MUST 유지한다.
+  MUST 유지하고 navigation·counter를 MUST NOT 렌더링한다. Compact detail과 Wide context rail은 세 상태에서도
+  MUST 유지한다. `Loading`은 접근성 트리에서 숨긴 시각 spinner와 단일 상태 announcement를,
+  `Error`는 `다시 시도` action을 제공하고 `Unavailable`은 설명만 제공한다.
 
 ## Current/Target state hierarchy and transition
 
 - `PROD-650 Current historical`로 표시한 기존 Host·Gallery·query·Media retry requirement는 현재 연결된 Production 동작과 완료 이력을 보존하는 non-normative evidence다.
-- DSN-63 Target의 `viewState`는 PROD-853이 Production consumer와 분리된 shared surface에서 제어하는 최종 presentation contract다. `Ready`·`Sensitive`는 presentation별 secondary surface와 navigation을 사용한다. `Loading`·`Error`·`Unavailable`은 navigation·counter와 Compact tray를 숨기되 Wide context rail은 유지하며, `Error`만 retry action을 제공한다.
-- PROD-849는 Gallery를 이 shared surface consumer로 교체·연결하면서 `onRevealSensitive`와 `onRetry` callback을 기존 permission/reveal·retry 경계에 매핑한다.
+- Canonical Target의 `viewState`는 PROD-853이 Production consumer와 분리된 shared surface에서 제어하는 최종 presentation contract다. `Ready`는 presentation별 secondary surface와 navigation을 사용한다. `Loading`·`Error`·`Unavailable`은 navigation·counter를 숨기되 Compact detail과 Wide context rail을 유지하며, `Error`만 retry action을 제공한다.
+- Sensitive 공개는 Gallery 진입 경계가 소유한다. PROD-849는 공개된 정상 tile을 이 shared surface consumer로 교체·연결하고 `onRetry` callback을 기존 retry 경계에 매핑한다.
 
 ## PROD-650 Current historical retry evidence (non-normative)
 
-> 다음 항목은 PROD-650의 연결된 Host/query/Media retry 동작을 historical evidence로만 보존한다. DSN-63 Target의 active `viewState` 최종 계약을 대체하지 않으며, 이 절에는 active MUST 규범이 없다.
+> 다음 항목은 PROD-650의 연결된 Host/query/Media retry 동작을 historical evidence로만 보존한다. canonical Target의 active `viewState` 최종 계약을 대체하지 않으며, 이 절에는 active MUST 규범이 없다.
 
 - Host Post query의 cache hit·loading·error·retry·null Post·Content·Media에서는 modal shell과 close control이 유지되고, content 영역에는 안전한 loading·error·retry 표현이 사용됐다. raw 오류와 authorization 세부 정보, 이전 Media byte·URL은 노출하지 않았다.
 - 현재 Media가 loading이거나 표시 URL load에 실패해도 현재 index와 당시 breakpoint의 Post detail surface가 유지됐고, 같은 image surface에서 안전한 오류와 해당 Media retry를 제공했다.
@@ -271,33 +271,25 @@ Host·query·runtime 구현은 historical evidence로 보존한다. PROD-853은 
 - **WHEN** Viewer를 연 tile이 더 이상 존재하지 않는 상태에서 Viewer가 닫힌다
 - **THEN** focus는 제거된 node가 아니라 남아 있는 Post surface의 안전한 focus target으로 이동한다
 
-### Requirement: DSN-63 Target 공용 Viewer surface의 상태와 전달 owner
+### Requirement: Canonical Target 공용 Viewer surface의 상태와 전달 owner
 
-**Authority / Provenance:** `docs/design/post-media-viewer.md`, DSN-63, PROD-853, PROD-849 — DSN-63 Target shared Viewer surface는 Compact·Wide presentation과 Ready·Sensitive·Loading·Error·Unavailable `viewState`를 SHALL 구분해야 한다. black 70% overlay와 radius 8 Media frame, 48×48 interaction target, 30px icon, 2.5 stroke를 사용해야 한다. Compact 390은 Media frame을 좌우 16px·상단 80px·하단 88px에 배치하고 하단 좌우 16px·높이 56px tray를 사용해야 한다. Wide 1024·1440은 560×420 Media frame을 image stage 가운데 배치하고 오른쪽 346px full-height rail을 사용해야 한다. Ready·Sensitive는 비순환 navigation·상단 counter와 presentation별 secondary surface를 제공한다. Sensitive는 상태 설명과 `보기` action을 제공한다. Loading은 spinner·설명, Error는 설명·`다시 시도`, Unavailable은 설명을 제공하며 navigation·counter와 Compact tray를 렌더링하지 않는다. Wide rail은 모든 상태에서 유지한다. PROD-849는 Gallery→shared surface consumer replacement·permission·retry mapping·Production 연결과 Web/iOS/Android runtime·archive evidence를 소유한다. PROD-853은 disconnected 공용 UI·component test·Storybook을 소유한다.
+**Authority / Provenance:** `docs/design/post-media-viewer.md`, DSN-63, PROD-853, PROD-849 — canonical Target shared Viewer surface는 Compact·Wide presentation과 Ready·Loading·Error·Unavailable `viewState`를 SHALL 구분해야 한다. black 70% overlay와 radius 8 Media frame, 48×48 interaction target, 30px icon, 2.5 stroke를 사용해야 한다. Compact 390은 상단 654px image stage 안에 Media frame을 좌우 16px·상단 80px·하단 16px으로 배치하고, 그 아래 semantic canvas의 작성자·원문·기존 Post Action Bar detail을 사용해야 한다. Wide 1024·1440은 560×420 Media frame을 image stage 가운데 배치하고 오른쪽 346px full-height rail을 사용해야 한다. Ready는 비순환 navigation·상단 counter와 presentation별 secondary surface를 제공한다. Loading은 접근성 트리에서 숨긴 시각 spinner와 단일 상태 announcement, Error는 설명·`다시 시도`, Unavailable은 설명을 제공하며 navigation·counter를 렌더링하지 않는다. Compact detail과 Wide rail은 모든 상태에서 유지한다. Sensitive 공개는 Gallery에서 완료된 뒤에만 Viewer 진입을 제공한다. PROD-849는 Gallery→shared surface consumer replacement·permission·retry mapping·Production 연결과 Web/iOS/Android runtime·archive evidence를 소유한다. PROD-853은 disconnected 공용 UI·component test·Storybook을 소유한다.
 
 #### Scenario: 상태별 공용 surface
 
-- **WHEN** 공용 Viewer surface가 Compact 또는 Wide presentation과 Ready·Sensitive·Loading·Error·Unavailable 중 하나를 받는다
-- **THEN** Ready·Sensitive에서는 해당 presentation의 secondary surface와 비순환 이전·다음 navigation·상단 counter를 표시한다
-- **AND** Sensitive에서는 상태 설명과 `보기` action을 표시한다
-- **AND** Loading·Error·Unavailable에서는 navigation·counter와 Compact tray를 표시하지 않는다
+- **WHEN** 공용 Viewer surface가 Compact 또는 Wide presentation과 Ready·Loading·Error·Unavailable 중 하나를 받는다
+- **THEN** Ready에서는 해당 presentation의 secondary surface와 비순환 이전·다음 navigation·상단 counter를 표시한다
+- **AND** Loading·Error·Unavailable에서는 navigation·counter를 표시하지 않는다
 - **AND** Loading은 spinner·설명, Error는 설명·`다시 시도`, Unavailable은 설명을 표시한다
-- **AND** Wide context rail은 모든 상태에서 표시한다
+- **AND** Compact detail과 Wide context rail은 모든 상태에서 표시한다
 - **AND** 모든 view state에서 사용자가 close를 실행할 수 있다
 
 #### Scenario: Host query 또는 Media 오류의 Target viewState 매핑
 
-- **WHEN** PROD-849가 연결된 Host query 또는 current Media의 loading·error·unavailable projection을 DSN-63 Target shared surface에 전달한다
+- **WHEN** PROD-849가 연결된 Host query 또는 current Media의 loading·error·unavailable projection을 canonical Target shared surface에 전달한다
 - **THEN** top-level shared surface `viewState`를 `Loading`·`Error`·`Unavailable` 중 하나로 MUST 매핑한다
 - **AND** Error의 `다시 시도`는 `onRetry`를 호출하고 현재 index를 바꾸지 않는다
-- **AND** navigation·counter와 Compact tray는 MUST NOT 렌더링하며 Wide context rail은 MUST 유지한다
-
-#### Scenario: Sensitive reveal callback과 consumer permission 경계
-
-- **WHEN** PROD-853 disconnected shared surface가 Gallery 공개 전에 `Sensitive` state를 받고 사용자가 Sensitive reveal control을 실행한다
-- **THEN** Gallery 공개 전에 새로운 Viewer trigger를 만들지 않고 `onRevealSensitive` callback을 호출한다
-- **AND** PROD-849가 이 callback을 기존 Gallery permission/reveal mapping과 Production consumer에 연결·검증한다
-- **AND** PROD-853 Storybook fixture는 permission, Gallery 연결 또는 Production route 완료를 표현하지 않는다
+- **AND** navigation·counter는 MUST NOT 렌더링하며 Compact detail과 Wide context rail은 MUST 유지한다
 
 #### Scenario: PROD-853 Storybook-first delivery
 

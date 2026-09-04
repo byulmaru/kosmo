@@ -59,7 +59,7 @@ mock.module(require.resolve('lucide-react-native'), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 type SurfaceProps = Readonly<{
-  actionTray?: ReactNode;
+  compactDetail?: ReactNode;
   contextRail?: ReactNode;
   currentIndex: number;
   media: readonly PostMediaItem[];
@@ -67,9 +67,8 @@ type SurfaceProps = Readonly<{
   onNext: () => void;
   onPrevious: () => void;
   onRetry: () => void;
-  onRevealSensitive: () => void;
   presentation: 'compact' | 'wide';
-  viewState: 'ready' | 'sensitive' | 'loading' | 'error' | 'unavailable';
+  viewState: 'ready' | 'loading' | 'error' | 'unavailable';
 }>;
 
 let PostMediaViewerSurface: ComponentType<SurfaceProps> | undefined;
@@ -96,50 +95,59 @@ describe('PostMediaViewerSurface', () => {
       onNext: () => undefined,
       onPrevious: () => undefined,
       onRetry: () => undefined,
-      onRevealSensitive: () => undefined,
     };
     const accept = (props: PostMediaViewerSurfaceProps) => props;
 
     // @ts-expect-error Wide는 모든 상태에서 context rail이 필요하다.
     accept({ ...commonProps, presentation: 'wide', viewState: 'loading' });
-    // @ts-expect-error Compact Ready는 action tray가 필요하다.
+    // @ts-expect-error Compact는 모든 상태에서 detail surface가 필요하다.
     accept({ ...commonProps, presentation: 'compact', viewState: 'ready' });
     // @ts-expect-error 필수 Wide context rail은 비어 있을 수 없다.
     accept({ ...commonProps, contextRail: null, presentation: 'wide', viewState: 'loading' });
-    // @ts-expect-error 필수 Compact action tray는 비어 있을 수 없다.
-    accept({ ...commonProps, actionTray: undefined, presentation: 'compact', viewState: 'ready' });
+    // @ts-expect-error 필수 Compact detail은 비어 있을 수 없다.
+    accept({
+      ...commonProps,
+      compactDetail: undefined,
+      presentation: 'compact',
+      viewState: 'loading',
+    });
+    accept({
+      ...commonProps,
+      compactDetail: createElement('CompactDetail'),
+      presentation: 'compact',
+      // @ts-expect-error Sensitive 공개는 Gallery가 소유하며 Viewer 상태가 아니다.
+      viewState: 'sensitive',
+    });
   });
 
-  it('Ready와 Sensitive는 close, 상단 위치 status, 다중 navigation을 제공한다', async () => {
-    for (const viewState of ['ready', 'sensitive'] as const) {
-      await render({ viewState, currentIndex: 1 });
+  it('Ready는 close, 상단 위치 status, 다중 navigation을 제공한다', async () => {
+    await render({ currentIndex: 1 });
 
-      assert.ok(findByLabel('이미지 뷰어 닫기'));
-      assert.ok(findByLabel('이전 이미지'));
-      assert.ok(findByLabel('다음 이미지'));
-      assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
-      assert.deepEqual(flattenStyle(byTestId('post-media-viewer-counter-position').props.style), {
-        alignItems: 'center',
-        left: 0,
-        position: 'absolute',
-        right: 0,
-        top: 16,
-      });
-      assert.deepEqual(flattenStyle(byTestId('post-media-viewer-counter').props.style), {
-        backgroundColor: '#000000',
-        borderRadius: 16,
-        color: '#ffffff',
-        fontFamily: 'SUIT',
-        fontSize: 14,
-        fontWeight: '600',
-        height: 30,
-        lineHeight: 20,
-        minWidth: 54,
-        paddingHorizontal: 12,
-        paddingVertical: 5,
-        textAlign: 'center',
-      });
-    }
+    assert.ok(findByLabel('이미지 뷰어 닫기'));
+    assert.ok(findByLabel('이전 이미지'));
+    assert.ok(findByLabel('다음 이미지'));
+    assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
+    assert.deepEqual(flattenStyle(byTestId('post-media-viewer-counter-position').props.style), {
+      alignItems: 'center',
+      left: 0,
+      position: 'absolute',
+      right: 0,
+      top: 16,
+    });
+    assert.deepEqual(flattenStyle(byTestId('post-media-viewer-counter').props.style), {
+      backgroundColor: '#000000',
+      borderRadius: 16,
+      color: '#ffffff',
+      fontFamily: 'SUIT',
+      fontSize: 14,
+      fontWeight: '600',
+      height: 30,
+      lineHeight: 20,
+      minWidth: 54,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      textAlign: 'center',
+    });
   });
 
   it('단일 Media에서는 visual navigation과 counter를 숨긴다', async () => {
@@ -185,17 +193,14 @@ describe('PostMediaViewerSurface', () => {
       onClose: (...values: unknown[]) => args.push(values),
       onNext: (...values: unknown[]) => args.push(values),
       onPrevious: (...values: unknown[]) => args.push(values),
-      onRevealSensitive: (...values: unknown[]) => args.push(values),
-      viewState: 'sensitive',
     });
 
     findByLabel('이미지 뷰어 닫기').props.onPress({ type: 'press' });
     findByLabel('이전 이미지').props.onPress({ type: 'press' });
     findByLabel('다음 이미지').props.onPress({ type: 'press' });
-    findByLabel('민감한 이미지 표시').props.onPress({ type: 'press' });
 
-    assert.deepEqual(args, [[], [], [], []]);
-    assert.equal(queryByType('Image'), null);
+    assert.deepEqual(args, [[], [], []]);
+    assert.ok(queryByType('Image'));
     assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
   });
 
@@ -209,24 +214,6 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(image().props.accessibilityLabel, '3번째 첨부 이미지');
   });
 
-  it('Sensitive는 image를 숨기고 설명·보기 action과 navigation·tray를 유지한다', async () => {
-    let revealCount = 0;
-    await render({
-      actionTray: createElement('ActionTrayContent'),
-      onRevealSensitive: () => revealCount++,
-      viewState: 'sensitive',
-    });
-
-    assert.equal(queryByType('Image'), null);
-    assert.equal(textContents().includes('민감한 미디어'), true);
-    assert.equal(textContents().includes('표시하기 전에 내용을 확인해 주세요.'), true);
-    assert.ok(findByLabel('이전 이미지'));
-    assert.ok(findByLabel('다음 이미지'));
-    assert.ok(byTestId('post-media-viewer-action-tray'));
-    findByLabel('민감한 이미지 표시').props.onPress({ type: 'press' });
-    assert.equal(revealCount, 1);
-  });
-
   it('상태 action은 104x40 visual을 플랫폼별 accessible target 안에 둔다', async () => {
     try {
       for (const [platform, targetHeight] of [
@@ -236,26 +223,21 @@ describe('PostMediaViewerSurface', () => {
       ] as const) {
         mockPlatform.OS = platform;
 
-        for (const [viewState, label] of [
-          ['sensitive', '민감한 이미지 표시'],
-          ['error', '다시 시도'],
-        ] as const) {
-          await render({ viewState });
-          const action = findByLabel(label);
+        await render({ viewState: 'error' });
+        const action = findByLabel('다시 시도');
 
-          assert.equal(action.props.hitSlop, undefined);
-          assert.deepEqual(pick(resolveStyle(action.props.style), ['height', 'width']), {
-            height: targetHeight,
-            width: 104,
-          });
-          assert.deepEqual(
-            pick(
-              flattenStyle(action.find((node) => (node.type as unknown) === 'View').props.style),
-              ['height', 'width'],
-            ),
-            { height: 40, width: 104 },
-          );
-        }
+        assert.equal(action.props.hitSlop, undefined);
+        assert.deepEqual(pick(resolveStyle(action.props.style), ['height', 'width']), {
+          height: targetHeight,
+          width: 104,
+        });
+        assert.deepEqual(
+          pick(flattenStyle(action.find((node) => (node.type as unknown) === 'View').props.style), [
+            'height',
+            'width',
+          ]),
+          { height: 40, width: 104 },
+        );
       }
     } finally {
       mockPlatform.OS = 'web';
@@ -264,14 +246,14 @@ describe('PostMediaViewerSurface', () => {
 
   it('390 Compact와 1024·1440 Wide의 canonical frame·secondary geometry를 사용한다', async () => {
     await render({
-      actionTray: createElement('ActionTrayContent'),
+      compactDetail: createElement('CompactDetailContent'),
       contextRail: createElement('ContextRailContent'),
       presentation: 'compact',
     });
     assert.deepEqual(flattenStyle(byTestId('post-media-viewer-media-viewport').props.style), {
       alignItems: 'center',
       borderRadius: 8,
-      bottom: 88,
+      bottom: 16,
       justifyContent: 'center',
       left: 16,
       overflow: 'hidden',
@@ -279,22 +261,12 @@ describe('PostMediaViewerSurface', () => {
       right: 16,
       top: 80,
     });
-    assert.deepEqual(flattenStyle(byTestId('post-media-viewer-action-tray').props.style), {
-      backgroundColor: '#000000',
-      borderRadius: 16,
-      bottom: 16,
-      height: 56,
-      justifyContent: 'center',
-      left: 16,
-      paddingHorizontal: 22,
-      position: 'absolute',
-      right: 16,
-    });
+    assert.ok(byTestId('post-media-viewer-compact-detail'));
     assert.equal(flattenStyle(findByLabel('이미지 뷰어 닫기').props.style).right, 16);
     assert.equal(queryByTestId('post-media-viewer-context-rail'), null);
 
     await render({
-      actionTray: createElement('ActionTrayContent'),
+      compactDetail: createElement('CompactDetailContent'),
       contextRail: createElement('ContextRailContent'),
       presentation: 'wide',
     });
@@ -310,7 +282,24 @@ describe('PostMediaViewerSurface', () => {
     });
     assert.equal(flattenStyle(byTestId('post-media-viewer-context-rail').props.style).width, 346);
     assert.equal(flattenStyle(findByLabel('이미지 뷰어 닫기').props.style).left, 16);
-    assert.equal(queryByTestId('post-media-viewer-action-tray'), null);
+    assert.equal(queryByTestId('post-media-viewer-compact-detail'), null);
+  });
+
+  it('Compact detail은 Ready·Loading·Error·Unavailable에서 같은 위치를 유지한다', async () => {
+    for (const viewState of ['ready', 'loading', 'error', 'unavailable'] as const) {
+      await render({
+        compactDetail: createElement('CompactDetailContent', { state: viewState }),
+        presentation: 'compact',
+        viewState,
+      });
+
+      const detail = byTestId('post-media-viewer-compact-detail');
+      assert.equal(
+        detail.find((node) => (node.type as unknown) === 'CompactDetailContent').props.state,
+        viewState,
+      );
+      assert.equal(detail.parent?.props.testID, 'post-media-viewer-surface');
+    }
   });
 
   it('Loading·Error·Unavailable은 canonical 상태를 보이고 Wide rail을 유지한다', async () => {
@@ -324,7 +313,7 @@ describe('PostMediaViewerSurface', () => {
       [keyof typeof states, readonly [string, string]]
     >) {
       await render({
-        actionTray: createElement('ActionTrayContent'),
+        compactDetail: createElement('CompactDetailContent'),
         contextRail: createElement('ContextRailContent'),
         presentation: 'wide',
         viewState,
@@ -336,12 +325,15 @@ describe('PostMediaViewerSurface', () => {
       assert.equal(queryByLabel('이전 이미지'), null);
       assert.equal(queryByLabel('다음 이미지'), null);
       assert.equal(queryByTestId('post-media-viewer-counter'), null);
-      assert.equal(queryByTestId('post-media-viewer-action-tray'), null);
+      assert.equal(queryByTestId('post-media-viewer-compact-detail'), null);
       assert.ok(queryByTestId('post-media-viewer-context-rail'));
     }
 
     await render({ viewState: 'loading' });
-    assert.ok(byTestId('post-media-viewer-loading-indicator'));
+    const indicator = byTestId('post-media-viewer-loading-indicator');
+    assert.equal(indicator.props.accessible, false);
+    assert.equal(indicator.props['aria-hidden'], true);
+    assert.equal(indicator.props.accessibilityLabel, undefined);
     assert.equal(queryByLabel('다시 시도'), null);
 
     let retryCount = 0;
@@ -440,7 +432,7 @@ function baseProps(overrides: Partial<SurfaceProps> = {}): SurfaceProps {
     onNext: () => undefined,
     onPrevious: () => undefined,
     onRetry: () => undefined,
-    onRevealSensitive: () => undefined,
+    compactDetail: createElement('CompactDetailContent'),
     presentation: 'compact',
     viewState: 'ready',
     ...overrides,

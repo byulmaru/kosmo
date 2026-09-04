@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
-import { useLazyLoadQuery } from 'react-relay';
+import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
-import PostMediaViewerHostQueryNode from '@/components/post/__generated__/PostMediaViewerHostQuery.graphql';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
-import { PostActionSurface } from '@/components/post/PostActionSurface';
+import { PostLayout } from '@/components/post/PostLayout';
+import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { PostMediaViewerSurface } from '@/components/post/PostMediaViewerSurface';
 import { PostMediaViewerThread } from '@/components/post/PostMediaViewerThread';
+import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
 import { SessionProvider } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -16,8 +17,8 @@ import maskableIconImage from '../../../public/icon-maskable-512.png?url';
 import ogImage from '../../../public/og-default.png?url';
 import { post, shellQuery } from '../fixtures';
 import type { Decorator, Meta, StoryObj } from '@storybook/react-vite';
-import type { PostMediaViewerHostQuery } from '@/components/post/__generated__/PostMediaViewerHostQuery.graphql';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
+import type { PostMediaViewerStoryQuery } from './__generated__/PostMediaViewerStoryQuery.graphql';
 
 type StoryArgs = {
   currentIndex: number;
@@ -25,11 +26,9 @@ type StoryArgs = {
   onClose: () => void;
   onNext: () => void;
   onPrevious: () => void;
-  onReply: () => void;
   onRetry: () => void;
-  onRevealSensitive: () => void;
   presentation: 'compact' | 'wide';
-  viewState: 'ready' | 'sensitive' | 'loading' | 'error' | 'unavailable';
+  viewState: 'ready' | 'loading' | 'error' | 'unavailable';
 };
 
 const mediaUrls = [ogImage, iconImage, maskableIconImage, appleTouchImage] as const;
@@ -84,6 +83,23 @@ const wideRailThreadResponseData = {
   },
 };
 
+const PostMediaViewerStoryOperation = graphql`
+  query PostMediaViewerStoryQuery($surfacePostId: ID!, $viewerProfileId: ID!) {
+    surface: node(id: $surfacePostId) {
+      __typename
+      ... on Post {
+        ...PostLayout_post @alias(as: "layout")
+      }
+    }
+    viewerProfile: node(id: $viewerProfileId) {
+      __typename
+      ... on Profile {
+        ...ReplyComposerSurface_profile @alias(as: "replySurface")
+      }
+    }
+  }
+`;
+
 function mediaForCount(count: number): PostMediaItem[] {
   const normalizedCount = Math.max(1, Math.min(mediaUrls.length, Math.trunc(count)));
 
@@ -100,60 +116,73 @@ function PostMediaViewerCatalog({
   onClose,
   onNext,
   onPrevious,
-  onReply,
   onRetry,
-  onRevealSensitive,
   presentation,
   viewState,
 }: StoryArgs) {
   const { height } = useWindowDimensions();
   const media = mediaForCount(mediaCount);
   const clampedIndex = Math.max(0, Math.min(media.length - 1, Math.trunc(currentIndex)));
+  const surfaceProps = {
+    currentIndex: clampedIndex,
+    media,
+    onClose,
+    onNext,
+    onPrevious,
+    onRetry,
+    viewState,
+  } as const;
 
   return (
     <View style={{ height, width: '100%' }}>
-      <PostMediaViewerSurface
-        actionTray={<ViewerActionBarFixture onReply={onReply} />}
-        contextRail={<ContextRailFixture />}
-        currentIndex={clampedIndex}
-        media={media}
-        onClose={onClose}
-        onNext={onNext}
-        onPrevious={onPrevious}
-        onRetry={onRetry}
-        onRevealSensitive={onRevealSensitive}
-        presentation={presentation}
-        viewState={viewState}
-      />
+      {presentation === 'compact' ? (
+        <PostMediaViewerSurface
+          {...surfaceProps}
+          compactDetail={<ViewerCompactDetailFixture />}
+          presentation="compact"
+        />
+      ) : (
+        <PostMediaViewerSurface
+          {...surfaceProps}
+          contextRail={<ContextRailFixture />}
+          presentation="wide"
+        />
+      )}
     </View>
   );
 }
 
-function ViewerActionBarFixture({ onReply }: Pick<StoryArgs, 'onReply'>) {
-  const data = useLazyLoadQuery<PostMediaViewerHostQuery>(
-    PostMediaViewerHostQueryNode,
-    { surfacePostId: wideRailCurrentPost.id },
+function ViewerCompactDetailFixture() {
+  const viewerProfileId = wideRailSession.currentSession.selectedProfile?.id;
+  if (!viewerProfileId) {
+    throw new globalThis.Error('Post Media Viewer detail fixture에는 선택 Profile이 필요합니다.');
+  }
+  const data = useLazyLoadQuery<PostMediaViewerStoryQuery>(
+    PostMediaViewerStoryOperation,
+    { surfacePostId: wideRailCurrentPost.id, viewerProfileId },
     { fetchPolicy: 'store-or-network' },
   );
 
-  if (data.surface?.__typename !== 'Post' || !data.surface.actionSurface) {
-    throw new globalThis.Error(
-      'Post Media Viewer action fixture에는 Post action surface가 필요합니다.',
-    );
+  if (
+    data.surface?.__typename !== 'Post' ||
+    !data.surface.layout ||
+    data.viewerProfile?.__typename !== 'Profile' ||
+    !data.viewerProfile.replySurface
+  ) {
+    throw new globalThis.Error('Post Media Viewer detail fixture에는 Post detail이 필요합니다.');
   }
 
   return (
-    <PostActionSurface
-      reactionSummaryStyle={styles.hiddenReactionSummary}
-      reply={{
-        accessibilityLabel: '답글',
-        count: 12,
-        expanded: false,
-        onPress: () => onReply(),
-        processing: 'default',
-      }}
-      socialActionTarget={data.surface.actionSurface}
-    />
+    <PostMediaViewerHostProvider>
+      <PostReplyCoordinatorProvider owner="detail" profile={data.viewerProfile.replySurface}>
+        <PostLayout
+          contentWarningPresentation="revealed"
+          mediaPresentation="hidden"
+          post={data.surface.layout}
+          replyAvailable
+        />
+      </PostReplyCoordinatorProvider>
+    </PostMediaViewerHostProvider>
   );
 }
 
@@ -191,9 +220,7 @@ const meta = {
     onClose: fn(),
     onNext: fn(),
     onPrevious: fn(),
-    onReply: fn(),
     onRetry: fn(),
-    onRevealSensitive: fn(),
     presentation: 'compact',
     viewState: 'ready',
   },
@@ -203,13 +230,11 @@ const meta = {
     onClose: { action: 'close', control: false },
     onNext: { action: 'next', control: false },
     onPrevious: { action: 'previous', control: false },
-    onReply: { action: 'reply', control: false },
     onRetry: { action: 'retry', control: false },
-    onRevealSensitive: { action: 'revealSensitive', control: false },
     presentation: { control: 'inline-radio', options: ['compact', 'wide'] },
     viewState: {
       control: 'select',
-      options: ['ready', 'sensitive', 'loading', 'error', 'unavailable'],
+      options: ['ready', 'loading', 'error', 'unavailable'],
     },
   },
   component: PostMediaViewerCatalog,
@@ -219,7 +244,6 @@ const meta = {
     'CompactProductionActionSurfaceContract',
     'ErrorRetryContract',
     'PlaygroundInteractionContract',
-    'SensitiveRevealContract',
     'WideRailCompositionContract',
   ],
   parameters: {
@@ -230,6 +254,7 @@ const meta = {
         currentSession: wideRailSession.currentSession,
         me: wideRailSession.me,
         surface: wideRailCurrentPost,
+        viewerProfile: wideRailSession.currentSession.selectedProfile,
       },
       operationResponses: {
         PostMediaViewerThreadQuery: { data: wideRailThreadResponseData },
@@ -253,14 +278,7 @@ export const Playground: Story = {
 
 export const PlaygroundInteractionContract: Story = {
   play: async ({ args, canvasElement, step }) => {
-    const callbacks = [
-      args.onClose,
-      args.onNext,
-      args.onPrevious,
-      args.onReply,
-      args.onRetry,
-      args.onRevealSensitive,
-    ];
+    const callbacks = [args.onClose, args.onNext, args.onPrevious, args.onRetry];
     callbacks.forEach((callback) => callback.mockClear());
 
     const canvas = within(canvasElement);
@@ -271,7 +289,7 @@ export const PlaygroundInteractionContract: Story = {
       expect(args.onClose).toHaveBeenCalledTimes(1);
     });
 
-    const navigable = args.viewState === 'ready' || args.viewState === 'sensitive';
+    const navigable = args.viewState === 'ready';
     const mediaCount = Math.max(1, Math.min(mediaUrls.length, Math.trunc(args.mediaCount)));
     const currentIndex = Math.max(0, Math.min(mediaCount - 1, Math.trunc(args.currentIndex)));
 
@@ -308,21 +326,13 @@ export const PlaygroundInteractionContract: Story = {
           expect(args.onPrevious).toHaveBeenCalledTimes(1);
         }
       });
-
-      if (args.viewState === 'sensitive') {
-        await step('Sensitive 보기 callback', async () => {
-          await userEvent.click(canvas.getByRole('button', { name: '민감한 이미지 표시' }));
-          expect(args.onRevealSensitive).toHaveBeenCalledWith();
-          expect(args.onRevealSensitive).toHaveBeenCalledTimes(1);
-        });
-      }
     } else {
-      await step('non-ready 상태의 navigation·counter·Compact tray visibility', async () => {
+      await step('non-ready 상태의 navigation·counter·secondary surface visibility', async () => {
         expect(canvas.queryByRole('button', { name: '이전 이미지' })).not.toBeInTheDocument();
         expect(canvas.queryByRole('button', { name: '다음 이미지' })).not.toBeInTheDocument();
         expect(canvas.queryByTestId('post-media-viewer-counter')).not.toBeInTheDocument();
         if (args.presentation === 'compact') {
-          expect(canvas.queryByTestId('post-media-viewer-action-tray')).not.toBeInTheDocument();
+          expect(canvas.getByTestId('post-media-viewer-compact-detail')).toBeInTheDocument();
         } else {
           expect(canvas.getByTestId('post-media-viewer-context-rail')).toBeInTheDocument();
         }
@@ -337,20 +347,18 @@ export const PlaygroundInteractionContract: Story = {
       }
     }
 
-    if (navigable && args.presentation === 'compact') {
-      await step('실제 Post action surface와 Reply callback', async () => {
-        const actionBar = within(canvas.getByTestId('post-media-viewer-action-tray')).getByRole(
-          'toolbar',
-          { name: '액션 바' },
-        );
+    if (args.presentation === 'compact') {
+      await step('실제 Post detail과 action surface', async () => {
+        const detail = canvas.getByTestId('post-media-viewer-compact-detail');
+        expect(within(detail).getByText('코스모 작가')).toBeVisible();
+        expect(
+          within(detail).getByText('코스모에서 함께 나누고 싶은 오늘의 이야기입니다.'),
+        ).toBeVisible();
+        const actionBar = within(detail).getByRole('toolbar', { name: '액션 바' });
 
         for (const name of ['답글', '재게시', '반응', '북마크', '더 보기']) {
           expect(within(actionBar).getByRole('button', { name })).toBeVisible();
         }
-
-        await userEvent.click(within(actionBar).getByRole('button', { name: '답글' }));
-        expect(args.onReply).toHaveBeenCalledWith();
-        expect(args.onReply).toHaveBeenCalledTimes(1);
       });
     } else if (args.presentation === 'wide') {
       await step('실제 Post 상세 action bar', async () => {
@@ -368,24 +376,24 @@ export const PlaygroundInteractionContract: Story = {
 export const CompactProductionActionSurfaceContract: Story = {
   args: { currentIndex: 0, mediaCount: 4, presentation: 'compact', viewState: 'ready' },
   globals: { theme: 'light', viewport: { isRotated: false, value: 'kosmoMobile' } },
-  play: async ({ args, canvasElement, step }) => {
-    args.onReply.mockClear();
+  play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
-    const actionBar = within(await canvas.findByTestId('post-media-viewer-action-tray')).getByRole(
-      'toolbar',
-      { name: '액션 바' },
-    );
+    const detail = await canvas.findByTestId('post-media-viewer-compact-detail');
+    const actionBar = within(detail).getByRole('toolbar', { name: '액션 바' });
     const image = canvas.getByTestId('post-media-viewer-image');
 
-    await step('production action 순서와 Reply binding', async () => {
+    await step('production detail과 action 순서', async () => {
+      expect(within(detail).getByText('코스모 작가')).toBeVisible();
+      expect(
+        within(detail).getByText('코스모에서 함께 나누고 싶은 오늘의 이야기입니다.'),
+      ).toBeVisible();
+      expect(within(detail).getByText(/조용히 공개/)).toBeVisible();
+      expect(within(detail).queryByRole('img', { name: '스토리 첨부 이미지 1' })).toBeNull();
       expect(
         within(actionBar)
           .getAllByRole('button')
           .map((button) => button.getAttribute('aria-label')),
       ).toEqual(['답글', '재게시', '반응', '북마크', '더 보기']);
-      await userEvent.click(within(actionBar).getByRole('button', { name: '답글' }));
-      expect(args.onReply).toHaveBeenCalledWith();
-      expect(args.onReply).toHaveBeenCalledTimes(1);
     });
 
     await step('production More bottom sheet open과 backdrop dismiss', async () => {
@@ -481,50 +489,6 @@ export const BoundaryMovementContract: Story = {
       expect(args.onPrevious).toHaveBeenCalledTimes(3);
       expect(position).toHaveTextContent('1 / 4');
       expect(previous).toHaveAttribute('aria-disabled', 'true');
-    });
-  },
-};
-
-function SensitiveRevealContractSurface(args: StoryArgs) {
-  const [viewState, setViewState] = useState<'ready' | 'sensitive'>('sensitive');
-
-  return (
-    <PostMediaViewerCatalog
-      {...args}
-      currentIndex={0}
-      mediaCount={1}
-      onRevealSensitive={() => {
-        args.onRevealSensitive();
-        setViewState('ready');
-      }}
-      presentation="compact"
-      viewState={viewState}
-    />
-  );
-}
-
-export const SensitiveRevealContract: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
-  render: (args) => <SensitiveRevealContractSurface {...args} />,
-  play: async ({ args, canvasElement, step }) => {
-    args.onRevealSensitive.mockClear();
-
-    const canvas = within(canvasElement);
-
-    await step('Sensitive 상태의 hidden image와 보기 action', async () => {
-      expect(canvas.queryByRole('img')).not.toBeInTheDocument();
-      expect(await canvas.findByText('민감한 미디어')).toBeInTheDocument();
-      expect(canvas.getByRole('button', { name: '민감한 이미지 표시' })).toBeInTheDocument();
-    });
-
-    await step('보기 후 Ready image와 close 유지', async () => {
-      await userEvent.click(canvas.getByRole('button', { name: '민감한 이미지 표시' }));
-      expect(args.onRevealSensitive).toHaveBeenCalledWith();
-      expect(args.onRevealSensitive).toHaveBeenCalledTimes(1);
-      expect(canvas.getByTestId('post-media-viewer-image')).toHaveAccessibleName(
-        '스토리 첨부 이미지 1',
-      );
-      expect(canvas.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeInTheDocument();
     });
   },
 };
@@ -628,11 +592,6 @@ export const LastOfFour: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoProfileFull' } },
 };
 
-export const Sensitive: Story = {
-  args: { currentIndex: 1, mediaCount: 4, presentation: 'compact', viewState: 'sensitive' },
-  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
-};
-
 export const Loading: Story = {
   args: { currentIndex: 0, mediaCount: 4, presentation: 'compact', viewState: 'loading' },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
@@ -659,5 +618,4 @@ export const Dark: Story = {
 
 const styles = StyleSheet.create({
   contextRail: { flex: 1, minHeight: 0, overflow: 'hidden', width: '100%' },
-  hiddenReactionSummary: { display: 'none' },
 });

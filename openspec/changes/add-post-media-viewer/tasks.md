@@ -192,16 +192,16 @@ Production consumer와 분리된 공용 PostMediaViewer surface, component test�
 **Guardrails**
 
 - PROD-853은 Host·Relay·route consumer 교체, Gallery·permission 연결과 Web/iOS/Android runtime을 소유하지 않는다.
-- DSN-63의 Compact/Wide 및 Ready/Sensitive/Loading/Error/Unavailable 상태·경계를 공용 UI 계약으로 기록하되 Storybook fixture를 Production 연결 완료로 표현하지 않는다.
+- canonical Compact/Wide 및 Ready/Loading/Error/Unavailable 상태·경계를 공용 UI 계약으로 기록하되 Storybook fixture를 Production 연결 완료로 표현하지 않는다. Sensitive 공개는 Gallery 진입 경계가 소유하며 Viewer 상태로 복제하지 않는다.
 - 기존 OpenSpec과 PROD-650 historical completion을 보존하고 새 Viewer abstraction·feature flag·dependency를 추가하지 않는다.
 
 **Verification**
 
-- 실제로 완료한 문서 정렬·strict validation·focused/full component/Storybook 검증만 해당 항목에 check한다. DSN-63 Target의 black 70% overlay, canonical Compact/Wide frame, 48×48 interaction target, 30px icon, 2.5 stroke, Compact 56px tray, Wide 346px rail, 상태별 visibility, Sensitive reveal·Error retry와 non-cyclic boundary를 PROD-853 disconnected evidence로 기록하고, PROD-849가 최종 consumer·runtime·canonical sync·archive evidence를 이어서 기록한다.
+- 실제로 완료한 문서 정렬·strict validation·focused/full component/Storybook 검증만 해당 항목에 check한다. canonical Target의 black 70% overlay, canonical Compact/Wide frame, 48×48 interaction target, 30px icon, 2.5 stroke, Compact `PostLayout` detail, Wide 346px rail, 상태별 visibility, Loading 단일 announcement·Error retry와 non-cyclic boundary를 PROD-853 disconnected evidence로 기록하고, PROD-849가 최종 consumer·runtime·canonical sync·archive evidence를 이어서 기록한다.
 
 - [x] 6.1 OpenSpec과 Current/Target 문서 책임 정렬
 - [x] 6.2 공용 surface의 canonical geometry·상태 matrix·callback component test
 - [x] 6.3 공용 PostMediaViewerSurface 구현
-- [x] 6.4 실제 Post action·thread fixture와 Controls/Actions/대표 상태 Storybook catalog
-- [x] 6.5 boundary movement·sensitive reveal·error retry interaction contract
+- [x] 6.4 실제 `PostLayout` detail·thread fixture와 Controls/Actions/대표 상태 Storybook catalog
+- [x] 6.5 boundary movement·error retry·Loading 단일 announcement interaction contract
 - [x] 6.6 focused/full 자동화, 390/1024/1440 Web Storybook readback, 독립 review

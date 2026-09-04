@@ -3,7 +3,6 @@ import baseMeta, {
   CompactProductionActionSurfaceContract as compactProductionActionSurfaceContract,
   ErrorRetryContract as errorRetryContract,
   PlaygroundInteractionContract as playgroundInteractionContract,
-  SensitiveRevealContract as sensitiveRevealContract,
   WideRailCompositionContract as wideRailCompositionContract,
 } from './PostMediaViewer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -20,6 +19,5 @@ type Story = StoryObj<typeof meta>;
 export const BoundaryMovementContract: Story = boundaryMovementContract;
 export const PlaygroundInteractionContract: Story = playgroundInteractionContract;
 export const CompactProductionActionSurfaceContract: Story = compactProductionActionSurfaceContract;
-export const SensitiveRevealContract: Story = sensitiveRevealContract;
 export const ErrorRetryContract: Story = errorRetryContract;
 export const WideRailCompositionContract: Story = wideRailCompositionContract;
