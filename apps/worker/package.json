@@ -8,7 +8,7 @@
     "start": "node --import tsx src/index.ts",
     "test": "pnpm test:unit && pnpm test:workflow && pnpm test:database",
     "test:database": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/worker test:database:isolated",
-    "test:database:isolated": "cd ../.. && pnpm db:test:push && KOSMO_TEST_TEMPORAL_RUNTIME=0 pnpm --filter @kosmo/worker exec node --import tsx --import ../../packages/core/temporal/test-client.ts --test --test-concurrency=1 src/activities.database.test.ts src/profile-follow-activities.database.test.ts",
+    "test:database:isolated": "cd ../.. && pnpm db:test:push && KOSMO_TEST_TEMPORAL_RUNTIME=0 pnpm --filter @kosmo/worker exec node --import tsx --import ../../packages/core/temporal/test-client.ts --test --test-concurrency=1 src/activities.database.test.ts src/activities/cleanup-unavailable-notifications.database.test.ts src/profile-follow-activities.database.test.ts",
     "test:unit": "pnpm build && node --import tsx --test src/worker.test.ts",
     "test:workflow": "node --import tsx --test src/workflows.test.ts"
   },
@@ -21,7 +21,6 @@
     "drizzle-orm": "1.0.0-beta.22",
     "ts-pattern": "^5.9.0",
     "tsx": "^4.22.4",
-    "uuid": "^14.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
