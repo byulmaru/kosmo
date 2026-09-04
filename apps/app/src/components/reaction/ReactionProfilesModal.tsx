@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { RouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
 import { Tab, TabList } from '@/components/ui/Tabs';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -30,14 +30,13 @@ type ReactionProfilesModalProps = {
 };
 
 function ReactionProfilesContent({
-  fetchKey,
   postId,
   reactionType,
 }: {
-  fetchKey: number;
   postId: string;
   reactionType: string;
 }) {
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<ReactionProfilesModalQuery>(
     reactionProfilesModalQuery,
     { postId, reactionType },
@@ -59,7 +58,6 @@ export function ReactionProfilesModal({
   postId,
   reactionCounts,
 }: ReactionProfilesModalProps) {
-  const [fetchKey, setFetchKey] = useState(0);
   const [reactionType, setReactionType] = useState(reactionCounts[0]?.type ?? '');
   const theme = useTheme();
   const title = '반응한 프로필';
@@ -92,7 +90,6 @@ export function ReactionProfilesModal({
           <TabList
             accessibilityLabel="반응 유형"
             onValueChange={(type) => {
-              setFetchKey(0);
               setReactionType(type);
             }}
             value={reactionType}
@@ -113,14 +110,9 @@ export function ReactionProfilesModal({
             <RouteBoundary
               key={reactionType}
               loading={<ReactionProfileList loading reactionType={reactionType} />}
-              onRetry={() => setFetchKey((key) => key + 1)}
               title="반응한 프로필을 불러오지 못했어요"
             >
-              <ReactionProfilesContent
-                fetchKey={fetchKey}
-                postId={postId}
-                reactionType={reactionType}
-              />
+              <ReactionProfilesContent postId={postId} reactionType={reactionType} />
             </RouteBoundary>
           </ScrollView>
         </Pressable>
