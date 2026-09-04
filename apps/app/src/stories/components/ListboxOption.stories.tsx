@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View } from 'react-native';
-import { fn } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
 import { ListboxOption } from '@/components/ui/ListboxOption';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ListboxOptionProps } from '@/components/ui/ListboxOption';
@@ -46,6 +46,11 @@ const meta = {
     selected: false,
   },
   component: ListboxOption,
+  excludeStories: [
+    'DisabledSelectionContract',
+    'EnabledSelectionContract',
+    'ReducedMotionContract',
+  ],
   parameters: { controls: { disable: true } },
   render: (args) => <ListboxOptionCatalog {...args} />,
   title: 'KOSMO/Components/Listbox Option',
@@ -54,7 +59,74 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
+export const Playground: Story = {
+  argTypes: {
+    active: { control: 'boolean' },
+    description: { control: 'text' },
+    disabled: { control: 'boolean' },
+    label: { control: 'text' },
+    onSelect: { control: false },
+    selected: { control: 'boolean' },
+  },
+  parameters: {
+    controls: {
+      disable: false,
+      include: ['active', 'description', 'disabled', 'label', 'selected'],
+    },
+  },
+  render: (args) => (
+    <ListboxOptionCatalog
+      key={`${args.active}:${args.description}:${args.disabled}:${args.label}:${args.selected}`}
+      {...args}
+    />
+  ),
+};
+
+export const EnabledSelectionContract: Story = {
+  ...Playground,
+  parameters: { controls: { disable: true } },
+  play: async ({ args, canvasElement }) => {
+    args.onSelect.mockClear();
+    const option = within(canvasElement).getByRole('option', {
+      name: `${args.label}: ${args.description}`,
+    });
+
+    expect(option).toHaveAttribute('aria-selected', 'false');
+    await userEvent.click(option);
+    expect(option).toHaveAttribute('aria-selected', 'true');
+    expect(args.onSelect).toHaveBeenCalledOnce();
+  },
+};
+
+export const DisabledSelectionContract: Story = {
+  ...Playground,
+  args: { disabled: true },
+  parameters: { controls: { disable: true } },
+  play: async ({ args, canvasElement }) => {
+    args.onSelect.mockClear();
+    const option = within(canvasElement).getByRole('option', {
+      name: `${args.label}: ${args.description}`,
+    });
+
+    expect(option).toHaveAttribute('aria-disabled', 'true');
+    expect(option).toHaveAttribute('aria-selected', 'false');
+    await fireEvent.click(option);
+    expect(option).toHaveAttribute('aria-selected', 'false');
+    expect(args.onSelect).not.toHaveBeenCalled();
+  },
+};
+
+export const ReducedMotionContract: Story = {
+  ...Playground,
+  globals: { reduceMotion: true },
+  parameters: { controls: { disable: true } },
+  play: async ({ args, canvasElement }) => {
+    const option = within(canvasElement).getByRole('option', {
+      name: `${args.label}: ${args.description}`,
+    });
+    expect(getComputedStyle(option).transitionDuration).toBe('0s');
+  },
+};
 
 export const VisualStates: Story = {
   render: () => (

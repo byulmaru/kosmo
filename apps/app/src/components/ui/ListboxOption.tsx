@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
-import type { PressableProps } from 'react-native';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, motion, radius, space, textStyles } from '@/theme/tokens';
+import type { PressableProps, ViewStyle } from 'react-native';
 
 export type ListboxOptionProps = {
   active?: boolean;
@@ -34,6 +34,7 @@ export function ListboxOption({
   style,
 }: ListboxOptionProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const [focusVisible, setFocusVisible] = useState(false);
   const web = Platform.OS === 'web';
   const accessibilityLabel = description ? `${label}: ${description}` : label;
@@ -68,8 +69,21 @@ export function ListboxOption({
           : selected || disabled
             ? borderWidths[1]
             : borderWidths[0];
+        const transitionDuration =
+          state.pressed || hovered
+            ? motion.duration.fast
+            : selected
+              ? motion.duration.standard
+              : motion.duration.fast;
         return [
           styles.root,
+          web
+            ? ({
+                transitionDuration: `${reducedMotion ? motion.duration.instant : transitionDuration}ms`,
+                transitionProperty: 'background-color, border-color',
+                transitionTimingFunction: motion.easing.standard,
+              } as unknown as ViewStyle)
+            : undefined,
           {
             backgroundColor: disabled
               ? theme.stateDisabledSurface

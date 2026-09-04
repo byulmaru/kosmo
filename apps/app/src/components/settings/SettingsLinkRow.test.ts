@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { afterEach, before, describe, it, mock } from 'node:test';
+import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { cloneElement, createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactElement } from 'react';
@@ -9,6 +9,8 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const require = createRequire(import.meta.url);
+let platformOS: 'ios' | 'web' = 'web';
+let reducedMotion = false;
 
 mock.module('expo-router', {
   exports: {
@@ -18,7 +20,11 @@ mock.module('expo-router', {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
   exports: {
-    Platform: { OS: 'web' },
+    Platform: {
+      get OS() {
+        return platformOS;
+      },
+    },
     Pressable: 'Pressable',
     StyleSheet: {
       create: <T>(styles: T) => styles,
@@ -54,15 +60,31 @@ mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
+    useReducedMotion: () => reducedMotion,
     useTheme: () => ({
       divider: '#eeeeee',
       focus: '#005fcc',
       selectedSurface: '#fff8dc',
+      selectedBorder: '#9a7800',
       stateHover: '#f4f4f4',
       statePressed: '#e8e8e8',
       text: '#111111',
       textSecondary: '#666666',
     }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/theme/tokens', {
+  exports: {
+    borderWidths: { 0: 0, 1: 1 },
+    motion: {
+      duration: { fast: 120, instant: 0, standard: 200 },
+      easing: { standard: 'standard-easing' },
+    },
+    spacing: { lg: 16, md: 12, xs: 4 },
+    typography: {
+      md: { fontSize: 14, lineHeight: 20 },
+      sm: { fontSize: 12, lineHeight: 16 },
+    },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -83,6 +105,11 @@ let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
   ({ SettingsLinkRow } = await import('./SettingsLinkRow'));
+});
+
+beforeEach(() => {
+  platformOS = 'web';
+  reducedMotion = false;
 });
 
 afterEach(async () => {
@@ -114,6 +141,8 @@ describe('SettingsLinkRow', () => {
     assert.deepEqual(row.props.accessibilityState, { selected: true });
     const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
     assert.equal(rowStyle.backgroundColor, '#fff8dc');
+    assert.equal(rowStyle.borderColor, '#9a7800');
+    assert.equal(rowStyle.borderWidth, 1);
     assert.equal(rowStyle.minHeight, 64);
     assert.equal(rowStyle.width, '100%');
     const chevronWrapper = rendered('View').find(
@@ -195,9 +224,91 @@ describe('SettingsLinkRow', () => {
       '#f4f4f4',
     );
     assert.equal(
+      flattenStyle(row.props.style({ hovered: true, pressed: false })).borderColor,
+      '#9a7800',
+    );
+    assert.equal(
       flattenStyle(row.props.style({ hovered: true, pressed: true })).backgroundColor,
       '#e8e8e8',
     );
+    assert.equal(
+      flattenStyle(row.props.style({ hovered: true, pressed: true })).borderColor,
+      '#9a7800',
+    );
+    assert.equal(flattenStyle(row.props.style({ hovered: true, pressed: true })).borderWidth, 1);
+  });
+
+  it('Web row feedback uses fast or selected timing and native omits CSS transitions', async () => {
+    await render({
+      accessibilityLabel: '설정 링크',
+      href: '/settings',
+      label: '설정',
+      selected: false,
+      testID: 'motion-settings-row',
+    });
+
+    const row = byTestId('motion-settings-row');
+    let style = flattenStyle(row.props.style({ hovered: true, pressed: false }));
+    assert.equal(style.transitionDuration, '120ms');
+    assert.equal(style.transitionProperty, 'background-color, border-color');
+    assert.equal(style.transitionTimingFunction, 'standard-easing');
+    assert.equal(style.backgroundColor, '#f4f4f4');
+    assert.equal(style.borderColor, 'transparent');
+    assert.equal(style.borderWidth, 1);
+    style = flattenStyle(row.props.style({ hovered: false, pressed: true }));
+    assert.equal(style.transitionDuration, '120ms');
+    assert.equal(style.backgroundColor, '#e8e8e8');
+    assert.equal(style.borderColor, 'transparent');
+    assert.equal(style.borderWidth, 1);
+
+    await act(async () =>
+      renderer?.update(
+        createElement(SettingsLinkRow, {
+          accessibilityLabel: '설정 링크',
+          href: '/settings',
+          label: '설정',
+          selected: true,
+          testID: 'motion-settings-row',
+        }),
+      ),
+    );
+    style = flattenStyle(
+      byTestId('motion-settings-row').props.style({ hovered: false, pressed: false }),
+    );
+    assert.equal(style.transitionDuration, '200ms');
+
+    reducedMotion = true;
+    await act(async () =>
+      renderer?.update(
+        createElement(SettingsLinkRow, {
+          accessibilityLabel: '설정 링크',
+          href: '/settings',
+          label: '설정',
+          selected: true,
+          testID: 'motion-settings-row',
+        }),
+      ),
+    );
+    style = flattenStyle(
+      byTestId('motion-settings-row').props.style({ hovered: false, pressed: false }),
+    );
+    assert.equal(style.transitionDuration, '0ms');
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    platformOS = 'ios';
+    await render({
+      accessibilityLabel: '설정 링크',
+      href: '/settings',
+      label: '설정',
+      selected: true,
+      testID: 'motion-settings-row',
+    });
+    style = flattenStyle(
+      byTestId('motion-settings-row').props.style({ hovered: false, pressed: false }),
+    );
+    assert.equal(style.transitionDuration, undefined);
+    assert.equal(style.transitionProperty, undefined);
   });
 
   it('Web focus ring은 focus-visible일 때만 표시하고 pointer focus에서는 숨긴다', async () => {

@@ -40,10 +40,14 @@ mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
+    useReducedMotion: () => false,
     useTheme: () => ({
       divider: '#eeeeee',
       focus: '#005fcc',
+      selectedBorder: '#9a7800',
       selectedSurface: '#fff8dc',
+      stateHover: '#f4f4f4',
+      statePressed: '#e8e8e8',
       text: '#111111',
       textSecondary: '#666666',
     }),
@@ -86,8 +90,12 @@ describe('SettingsNavigationList', () => {
     const internal = rendered('Pressable')[1];
     assert.equal(internal.props['aria-current'], 'page');
     assert.deepEqual(internal.props.accessibilityState, { selected: true });
-    const style = internal.props.style({ hovered: false, pressed: false });
-    assert.equal(style[1].backgroundColor, '#fff8dc');
+    const style = flattenStyle(internal.props.style({ hovered: false, pressed: false }));
+    assert.equal(style.backgroundColor, '#fff8dc');
+    assert.equal(style.borderColor, '#9a7800');
+    assert.equal(style.borderWidth, 1);
+    assert.equal(style.minHeight, 64);
+    assert.equal(style.width, '100%');
   });
 });
 
@@ -107,4 +115,10 @@ function texts(): string[] {
   return rendered('Text').flatMap((node) =>
     typeof node.props.children === 'string' ? [node.props.children] : [],
   );
+}
+
+function flattenStyle(style: unknown): Record<string, unknown> {
+  return Array.isArray(style)
+    ? Object.assign({}, ...style.filter(Boolean))
+    : (style as Record<string, unknown>);
 }
