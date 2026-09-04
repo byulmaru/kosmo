@@ -25,6 +25,7 @@ interface RenderContext {
   readonly bodyStyle: StyleProp<TextStyle>;
   readonly interactive: boolean;
   readonly linkColor: string;
+  readonly numberOfLines?: number;
 }
 
 export type PostContentWarningPresentation = 'default' | 'revealed';
@@ -37,6 +38,7 @@ export function PostContentRenderer({
   interactive = true,
   media,
   mediaPresentation = 'default',
+  numberOfLines,
   onBodyPress,
   onMediaOpen,
   postId,
@@ -49,6 +51,7 @@ export function PostContentRenderer({
   interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
   mediaPresentation?: 'default' | 'hidden';
+  numberOfLines?: number;
   onBodyPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
   postId: string;
@@ -68,9 +71,16 @@ export function PostContentRenderer({
   ];
 
   const body = !contentVisible ? null : !bodyText ? null : !document ? (
-    <Text style={bodyStyle}>{bodyText}</Text>
+    <Text numberOfLines={numberOfLines} style={bodyStyle}>
+      {bodyText}
+    </Text>
   ) : (
-    renderNode(document, 'body', { bodyStyle, interactive, linkColor: theme.actionLinkBase })
+    renderNode(document, 'body', {
+      bodyStyle,
+      interactive,
+      linkColor: theme.actionLinkBase,
+      numberOfLines,
+    })
   );
   const bodyContent =
     body && onBodyPress ? (
@@ -138,7 +148,7 @@ type PostContentNode = PostContentBodyDocumentV1 | PostContentBlockNode | PostCo
 function renderNode(node: PostContentNode, key: Key, context: RenderContext): ReactNode {
   return match(node)
     .with({ type: 'doc' }, (document) => (
-      <Text key={key} style={context.bodyStyle}>
+      <Text key={key} numberOfLines={context.numberOfLines} style={context.bodyStyle}>
         {document.content
           .filter((child) => child.type === 'paragraph')
           .map((child, index) => (

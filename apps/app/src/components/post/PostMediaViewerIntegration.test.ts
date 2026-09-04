@@ -121,6 +121,7 @@ mock.module('@/theme/tokens', {
     radii: { full: 999, lg: 16, md: 12, sm: 8 },
     spacing: { lg: 24, md: 16, sm: 12, xl: 32, xs: 8, xxl: 40, xxs: 4 },
     typography: {
+      lg: { fontSize: 18, lineHeight: 28 },
       md: { fontSize: 16, lineHeight: 24 },
       sm: { fontSize: 14, lineHeight: 20 },
     },
@@ -301,6 +302,67 @@ describe('Post Media Viewer Host production wiring', () => {
     await updateHost(createElement(PostLayout, { post: asLayoutKey(nextRevision) }));
     assert.equal(currentImage().props.source.uri, 'https://media.example/content-2-1.webp');
     assert.equal(findByTestId('post-media-viewer-error-media-content-1-2').length, 0);
+  });
+
+  it('Compact PostLayout은 긴 원문만 펼치고 Action Bar 밖의 본문만 scroll한다', async () => {
+    const post = storyPost('compact-detail', 'compact-detail-content');
+    post.content!.bodyText = Array.from({ length: 12 }, (_, index) => `${index + 1}번째 줄`).join(
+      '\n',
+    );
+
+    await renderHost(
+      createElement(PostLayout, {
+        post: asLayoutKey(post),
+        presentation: 'compact',
+      }),
+    );
+
+    assert.equal(byTestId('post-body').props.numberOfLines, 3);
+    assert.equal(byTestId('post-body').props.size, 'md');
+    assert.equal(byTestId('avatar').props.size, 40);
+    assert.equal(
+      renderer?.root.findAll((node) =>
+        node.children.some((child) => typeof child === 'string' && child.includes('조용히 공개')),
+      ).length,
+      0,
+    );
+    assert.equal(byTestId('post-layout-body-measure-container').props['aria-hidden'], true);
+    assert.equal(findByTestId('post-layout-body-scroll').length, 0);
+    assert.equal(
+      renderer?.root.findAll((node) => node.props.accessibilityLabel === '원문 더 보기').length,
+      0,
+    );
+
+    await act(async () =>
+      byTestId('post-layout-body-measure').props.onLayout({
+        nativeEvent: { layout: { height: 73 } },
+      }),
+    );
+    const more = pressable('원문 더 보기');
+    assert.deepEqual(more.props.accessibilityState, { expanded: false });
+
+    await act(async () => more.props.onPress());
+    const bodyScroll = byTestId('post-layout-body-scroll');
+    assert.equal(bodyScroll.findByProps({ testID: 'post-body' }).props.numberOfLines, undefined);
+    assert.equal(bodyScroll.findAllByProps({ testID: 'post-action-surface' }).length, 0);
+    assert.ok(byTestId('post-action-surface'));
+    assert.deepEqual(pressable('원문 접기').props.accessibilityState, { expanded: true });
+
+    const nextRevision = storyPost('compact-detail', 'compact-detail-content-next');
+    nextRevision.content!.bodyText = '새 revision의 짧은 원문';
+    await updateHost(
+      createElement(PostLayout, {
+        post: asLayoutKey(nextRevision),
+        presentation: 'compact',
+      }),
+    );
+
+    assert.equal(findByTestId('post-layout-body-scroll').length, 0);
+    assert.equal(byTestId('post-body').props.numberOfLines, 3);
+    assert.equal(
+      renderer?.root.findAll((node) => node.props.accessibilityLabel === '원문 접기').length,
+      0,
+    );
   });
 });
 

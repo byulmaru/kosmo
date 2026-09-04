@@ -1,5 +1,6 @@
 import baseMeta, {
   BoundaryMovementContract as boundaryMovementContract,
+  CompactLongBodyContract as compactLongBodyContract,
   CompactProductionActionSurfaceContract as compactProductionActionSurfaceContract,
   ErrorRetryContract as errorRetryContract,
   PlaygroundInteractionContract as playgroundInteractionContract,
@@ -19,5 +20,6 @@ type Story = StoryObj<typeof meta>;
 export const BoundaryMovementContract: Story = boundaryMovementContract;
 export const PlaygroundInteractionContract: Story = playgroundInteractionContract;
 export const CompactProductionActionSurfaceContract: Story = compactProductionActionSurfaceContract;
+export const CompactLongBodyContract: Story = compactLongBodyContract;
 export const ErrorRetryContract: Story = errorRetryContract;
 export const WideRailCompositionContract: Story = wideRailCompositionContract;

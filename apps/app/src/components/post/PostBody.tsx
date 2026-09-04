@@ -25,6 +25,7 @@ export function PostBody({
   contentWarningPresentation = 'default',
   interactive = true,
   mediaPresentation = 'default',
+  numberOfLines,
   post: postKey,
   onBodyPress,
   onMediaOpen,
@@ -33,6 +34,7 @@ export function PostBody({
   contentWarningPresentation?: PostContentWarningPresentation;
   interactive?: boolean;
   mediaPresentation?: 'default' | 'hidden';
+  numberOfLines?: number;
   post: PostBody_post$key;
   onBodyPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
@@ -62,6 +64,7 @@ export function PostBody({
             })) ?? null)
       }
       mediaPresentation={mediaPresentation}
+      numberOfLines={numberOfLines}
       onBodyPress={onBodyPress}
       onMediaOpen={mediaPresentation === 'hidden' ? undefined : onMediaOpen}
       postId={post.id}

@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { IconButton } from '@/components/ui/IconButton';
@@ -69,6 +70,7 @@ export function PostMediaViewerSurface({
 }: PostMediaViewerSurfaceProps) {
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
+  const { height: viewportHeight } = useWindowDimensions();
   const navigable = viewState === 'ready';
   const multiple = navigable && media.length > 1;
   const currentMedia = media[currentIndex];
@@ -227,7 +229,13 @@ export function PostMediaViewerSurface({
 
       {presentation === 'compact' ? (
         <View
-          style={[styles.compactDetail, { backgroundColor: theme.backgroundCanvas }]}
+          style={[
+            styles.compactDetail,
+            {
+              backgroundColor: theme.backgroundCanvas,
+              maxHeight: Math.min(240, Math.max(192, viewportHeight * 0.32)),
+            },
+          ]}
           testID="post-media-viewer-compact-detail"
         >
           {compactDetail}
