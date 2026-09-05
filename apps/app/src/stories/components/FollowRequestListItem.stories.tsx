@@ -129,7 +129,7 @@ const meta = {
     'RejectPending',
   ],
   parameters: {
-    layout: 'centered',
+    layout: 'padded',
     relay: { data: { nodes: storyRequests } },
   },
   title: 'KOSMO/Components/FollowRequestListItem',

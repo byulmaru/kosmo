@@ -138,7 +138,7 @@ const meta = {
   component: ProfileListItemFixture,
   excludeStories: ['LayoutContract'],
   parameters: {
-    layout: 'centered',
+    layout: 'padded',
     relay: {
       data: {
         currentSession: {
