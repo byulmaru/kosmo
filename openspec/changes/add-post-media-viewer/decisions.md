@@ -59,7 +59,7 @@
 - Authority / Provenance: `docs/design/post-media-viewer.md`, `docs/design/breakpoints.md`, `docs/design/figma.md`, PROD-650
 - Status: Active
 - Context / Problem: Figma는 Mobile fullscreen 기준만 제공한다. 넓은 Web에서 작은 축약 panel만 두면 기존 Post 상세의 원문·Composer·reply interaction을 이어가지 못하고, Native는 Web shell breakpoint를 사용하지 않는다.
-- Decision Outcome: Web `<768px`와 iOS·Android는 image 위·compact detail panel 아래의 세로 layout을 사용한다. Web `>=768px`는 viewport의 `24px` inset 안에서 image 왼쪽·기존 Post 상세 thread surface 오른쪽의 분할 layout을 사용해 원문 전체·기존 Action Bar·Reply Composer·reply descendants를 제공한다. 오른쪽 rail은 `clamp(320px, 25vw, 350px)`로 제한하고 나머지 폭을 image에 배정한다. 320px 최소폭은 기존 Post 상세의 228px Action Bar가 내부 padding·avatar column 뒤에도 가로 overflow 없이 보존되는 최소 안전폭이다. 이미지는 두 layout 모두 `contain`으로 표시한다.
+- Decision Outcome: Web `<768px`와 iOS·Android는 image 위·compact detail panel 아래의 세로 layout을 사용한다. Web `>=768px`는 viewport의 `24px` inset 안에서 image 왼쪽·기존 Post 상세 thread surface 오른쪽의 분할 layout을 사용해 원문 전체·기존 Action Bar·Reply Composer·reply descendants를 제공한다. 오른쪽 rail은 `clamp(320px, 25vw, 350px)`로 제한하고 나머지 폭을 image에 배정한다. 320px 최소폭은 current row의 좌우 padding 24px 뒤에도 274px bounded Action Bar footprint가 가로 overflow 없이 보존되는 최소 안전폭이다. 이미지는 두 layout 모두 `contain`으로 표시한다.
 - Alternatives Considered: 모든 플랫폼 fullscreen image-only, 모든 폭 세로 layout, Wide Web의 축약 PostListItem 또는 작성자·원문·Action Bar만 있는 panel, Post 상세 route의 600px 폭 재사용, 고정 3:1·4:1 비율, Web compact/full shell의 1280px 추가 분기. 각각 승인된 Post 맥락을 제거하거나 넓은 Web을 낭비하고, Composer·thread interaction을 누락하거나 viewport에 따라 rail이 너무 크거나 작아지며 Viewer에 필요 없는 세 번째 layout을 만든다.
 - Consequences: Web은 767px와 768px 경계, 25vw가 최소·최대 clamp에 걸리는 viewport를 직접 확인하고 Native는 화면 폭과 관계없이 compact 세로 layout을 유지한다. Wide 오른쪽은 기존 Post 상세와 같은 표현·interaction·pagination을 제공하지만 같은 600px 폭은 사용하지 않고, 원본 Post Media는 왼쪽에만 표시한다.
 - Confirmation / Follow-up: Storybook과 Web runtime에서 `<768px`·`>=768px`, Wide 오른쪽 독립 scroll·Composer·reply pagination을 확인하고 iOS·Android runtime에서 compact 세로 layout을 구분해 확인한다.
@@ -135,6 +135,30 @@
 - Alternatives Considered: 과거 PROD-626 head 위 stack을 계속 유지, Gallery를 복제, 두 Linear 이슈와 변경을 합치기. 각각 현재 Git 상태와 어긋나거나 중복 구현·소유권 혼합을 만든다.
 - Consequences: push 전 exact `main` parent와 range diff를 확인한다. PROD-650 OpenSpec archive는 자체 task·runtime·CI 및 필요한 canonical spec sync가 완료된 뒤 별도로 판단한다.
 - Confirmation / Follow-up: exact parent SHA, branch-only diff, PROD-626와 PROD-650의 남은 책임을 PR에 구분해 기록한다.
+
+### PROD-853은 공용 UI를 먼저 전달하고 PROD-849가 Production을 통합한다
+
+- Decision Date: 2026-08-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/post-media-viewer.md`, PROD-853, PROD-849, DSN-63
+- Status: Active
+- Context / Problem: PROD-650의 완료된 Host·query·runtime 이력과 DSN-63 Target의 공용 UI를 같은 구현 완료로 취급하면 Storybook fixture가 Production consumer·permission·runtime 증거로 오해되고 archive 시점도 앞당겨진다.
+- Decision Outcome: 새 OpenSpec change를 만들지 않고 `add-post-media-viewer`를 재사용한다. PROD-650 완료 이력은 historical evidence로 보존한다. PROD-853은 Production에 연결하지 않은 공용 Viewer UI와 component test·Storybook을 소유하고, PROD-849는 Production Host·Relay·route 연결·교체와 Web/iOS/Android runtime을 소유한다. PROD-853 PR이 끝나도 change를 archive하지 않는다. 새 Viewer abstraction·feature flag·dependency는 추가하지 않는다.
+- Alternatives Considered: 새 change를 만들기, PROD-853에서 Production consumer까지 교체하기, Storybook fixture를 연결 완료로 기록하기. 각각 최종 행동 계약을 분리하거나 승인된 Production·runtime 범위를 앞당긴다.
+- Consequences: 문서와 delta spec은 Current PROD-650, PROD-853 shared target UI, PROD-849 Production integration/runtime/archive를 구분해 읽을 수 있어야 한다. Storybook은 Gallery·permission·Production wiring 완료의 증거가 아니며, archive는 PROD-849의 integration·runtime·canonical sync 이후에만 판단한다.
+- Confirmation / Follow-up: PROD-853의 disconnected surface와 component/Storybook 증거, PROD-849의 consumer·runtime·archive evidence를 별도로 확인한다.
+
+### DSN-63 Target Reply breakpoint는 PROD-650 Current inline 동작을 명확히 구분한다
+
+- Decision Date: 2026-08-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/post-media-viewer.md`, `docs/design/figma.md`, DSN-63, PROD-650, PROD-853, PROD-849
+- Status: Active
+- Context / Problem: 기존 `Web >=768px` inline Composer 기록은 PROD-650의 Current runtime evidence와 DSN-63 Target을 같은 동작으로 읽게 만들며, 768–1279px에서 Reply modal을 열어야 하는 Target contract를 가린다.
+- Decision Outcome: 기존 `>=768px` inline Composer는 PROD-650 Current historical behavior로 보존한다. DSN-63 Target에서는 Web `768–1279px` Reply action이 Viewer를 먼저 닫고 다음 frame에 배경 Post surface의 공용 `600×720` Reply modal을 열며, `>=1280px`에서만 thread rail 안에 inline Composer를 펼친다. PROD-853은 이 breakpoint를 포함한 disconnected shared UI·component test·Storybook을, PROD-849는 Gallery·permission·Production consumer replacement와 connected Web/iOS/Android runtime을 소유한다.
+- Alternatives Considered: 모든 `>=768px`를 inline으로 유지하기, 모든 폭에서 Reply modal로 열기, PROD-853에서 Production consumer를 함께 교체하기. 각각 DSN-63의 좁은 Web presentation contract를 잃거나 승인된 lifecycle ownership을 앞당긴다.
+- Consequences: 기존 `Web 768px` decision의 Status와 historical evidence는 유지하되 DSN-63 Target의 Reply transition은 이 record가 Target 관점에서 기존 inline 규칙을 supersede/clarify한다. tasks·spec·canonical verification은 Current PROD-650, disconnected PROD-853와 connected PROD-849 evidence를 별도로 기록한다.
+- Confirmation / Follow-up: 768–1279px의 Viewer close→공용 Reply modal→focus 복귀와 `>=1280px` inline Composer를 PROD-849 connected runtime에서 확인하고, PROD-853 Storybook은 해당 fixture를 Production 연결 완료로 표현하지 않는다.
 
 ## Remaining Decisions
 

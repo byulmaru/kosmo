@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Animated,
   Modal,
@@ -47,6 +56,21 @@ type Props = {
   webHorizontalPlacement?: 'start' | 'end';
 };
 
+type ActionMenuPresentation = 'platform' | 'sheet';
+
+const ActionMenuPresentationContext = createContext<ActionMenuPresentation>('platform');
+
+export function ActionMenuPresentationProvider({
+  children,
+  presentation,
+}: Readonly<{ children: ReactNode; presentation: ActionMenuPresentation }>): ReactNode {
+  return (
+    <ActionMenuPresentationContext.Provider value={presentation}>
+      {children}
+    </ActionMenuPresentationContext.Provider>
+  );
+}
+
 const webMenuInset = space[4] + borderWidths[1];
 const webMenuItemHeight = 36;
 const webMenuMinWidth = 128;
@@ -68,7 +92,8 @@ export function ActionMenu({
   const [hoveredWebItemKey, setHoveredWebItemKey] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [webPosition, setWebPosition] = useState({ left: 0, top: 0 });
-  const web = Platform.OS === 'web';
+  const presentation = useContext(ActionMenuPresentationContext);
+  const web = Platform.OS === 'web' && presentation === 'platform';
   const overlayMotion = useOverlayMotion(open);
 
   const positionWebMenu = useCallback(() => {
@@ -410,6 +435,7 @@ export function ActionMenu({
             importantForAccessibility="no"
             onPress={() => dismiss()}
             style={StyleSheet.absoluteFill}
+            testID="action-menu-backdrop"
           />
           <Animated.View
             accessibilityLabel={accessibilityLabel}
@@ -487,7 +513,12 @@ const styles = StyleSheet.create({
     paddingVertical: space[8],
   },
   nativeDivider: { borderTopWidth: borderWidths[1], marginHorizontal: space[8] },
-  nativeItem: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
+  nativeItem: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space[8],
+    justifyContent: 'flex-start',
+  },
   label: textStyles.uiLabelL,
   sheet: {
     borderTopLeftRadius: radius[16],

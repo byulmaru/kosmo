@@ -130,7 +130,7 @@ test('Native ActionMenu runs a selected action after its exit finishes', async (
   await act(async () => renderer?.unmount());
 });
 
-test('Native ActionMenu uses inset subtle dividers without changing 44px menu rows', async () => {
+test('Native ActionMenu uses left-aligned inset rows with subtle dividers', async () => {
   assert.ok(actionMenuModule);
   const props = {
     accessibilityLabel: '메뉴',
@@ -151,7 +151,11 @@ test('Native ActionMenu uses inset subtle dividers without changing 44px menu ro
     .findAllByType(PressableHost)
     .filter((node) => node.props.accessibilityRole === 'menuitem');
   assert.equal(rows?.length, 2);
-  rows?.forEach((row) => assert.equal(flattenStyle(row.props.style).minHeight, 44));
+  rows?.forEach((row) => {
+    const rowStyle = flattenStyle(row.props.style);
+    assert.equal(rowStyle.justifyContent, 'flex-start');
+    assert.equal(rowStyle.minHeight, 44);
+  });
 
   const divider = renderer?.root
     .findAllByType(ViewHost)
@@ -160,6 +164,39 @@ test('Native ActionMenu uses inset subtle dividers without changing 44px menu ro
   const dividerStyle = flattenStyle(divider.props.style);
   assert.equal(dividerStyle.borderTopColor, 'subtle');
   assert.equal(dividerStyle.marginHorizontal, 8);
+  await act(async () => renderer?.unmount());
+});
+
+test('ActionMenu sheet presentation renders the Native sheet on Web and dismisses from its backdrop', async () => {
+  assert.ok(actionMenuModule);
+  platformOS = 'web';
+  const props = {
+    accessibilityLabel: '재게시 메뉴',
+    items: [{ key: 'repost', label: '재게시하기', onSelect: () => undefined }],
+    renderTrigger: ({ onPress }: { onPress: () => void }) =>
+      createElement(PressableHost, { onPress, testID: 'trigger' }),
+  };
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(
+      createElement(actionMenuModule!.ActionMenuPresentationProvider, {
+        children: createElement(actionMenuModule!.ActionMenu, props),
+        presentation: 'sheet',
+      }),
+    );
+  });
+
+  await act(async () => renderer?.root.findByProps({ testID: 'trigger' }).props.onPress());
+  assert.equal(renderer?.root.findByType('Modal' as unknown as ElementType).props.visible, true);
+  assert.equal(
+    renderer?.root.findByProps({ accessibilityRole: 'menu' }).props.accessibilityLabel,
+    '재게시 메뉴',
+  );
+
+  await act(async () =>
+    renderer?.root.findByProps({ testID: 'action-menu-backdrop' }).props.onPress(),
+  );
+  assert.equal(renderer?.root.findByType('Modal' as unknown as ElementType).props.visible, false);
   await act(async () => renderer?.unmount());
 });
 

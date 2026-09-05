@@ -18,6 +18,8 @@ let queriedSurfacePostId: string | null = null;
 let queryPosts = new Map<string, ReturnType<typeof hostPost>>();
 let replyPostIds: string[] = [];
 let renderer: ReactTestRenderer | null = null;
+const platform = { OS: 'web' };
+let fontScale = 1;
 let viewportWidth = 767;
 
 Object.assign(globalThis, {
@@ -40,7 +42,8 @@ mock.module('react-native', {
     Image: 'Image',
     Modal: 'Modal',
     PanResponder: { create: () => ({ panHandlers: {} }) },
-    Platform: { OS: 'web' },
+    PixelRatio: { getFontScale: () => fontScale },
+    Platform: platform,
     Pressable: 'Pressable',
     ScrollView: 'ScrollView',
     StyleSheet: { create: <T>(styles: T) => styles },
@@ -121,6 +124,7 @@ mock.module('@/theme/tokens', {
     radii: { full: 999, lg: 16, md: 12, sm: 8 },
     spacing: { lg: 24, md: 16, sm: 12, xl: 32, xs: 8, xxl: 40, xxs: 4 },
     typography: {
+      lg: { fontSize: 18, lineHeight: 28 },
       md: { fontSize: 16, lineHeight: 24 },
       sm: { fontSize: 14, lineHeight: 20 },
     },
@@ -222,6 +226,8 @@ afterEach(async () => {
   queriedSurfacePostId = null;
   queryPosts = new Map();
   replyPostIds = [];
+  fontScale = 1;
+  platform.OS = 'web';
   viewportWidth = 767;
 });
 
@@ -301,6 +307,186 @@ describe('Post Media Viewer Host production wiring', () => {
     await updateHost(createElement(PostLayout, { post: asLayoutKey(nextRevision) }));
     assert.equal(currentImage().props.source.uri, 'https://media.example/content-2-1.webp');
     assert.equal(findByTestId('post-media-viewer-error-media-content-1-2').length, 0);
+  });
+
+  it('Compact PostLayout은 긴 원문만 펼치고 Action Bar 밖의 본문만 scroll한다', async () => {
+    const post = storyPost('compact-detail', 'compact-detail-content');
+    post.content!.bodyText = Array.from({ length: 12 }, (_, index) => `${index + 1}번째 줄`).join(
+      '\n',
+    );
+
+    await renderHost(
+      createElement(PostLayout, {
+        post: asLayoutKey(post),
+        presentation: 'compact',
+      }),
+    );
+
+    assert.equal(byTestId('post-body').props.numberOfLines, 3);
+    assert.equal(byTestId('post-body').props.size, 'md');
+    assert.equal(byTestId('avatar').props.size, 40);
+    assert.equal(
+      renderer?.root.findAll((node) =>
+        node.children.some((child) => typeof child === 'string' && child.includes('조용히 공개')),
+      ).length,
+      0,
+    );
+    assert.equal(byTestId('post-layout-body-measure-container').props['aria-hidden'], true);
+    assert.equal(findByTestId('post-layout-body-scroll').length, 0);
+    assert.equal(
+      renderer?.root.findAll((node) => node.props.accessibilityLabel === '원문 더 보기').length,
+      0,
+    );
+
+    await act(async () =>
+      byTestId('post-layout-body-measure').props.onLayout({
+        nativeEvent: { layout: { height: 73 } },
+      }),
+    );
+    const more = pressable('원문 더 보기');
+    assert.deepEqual(more.props.accessibilityState, { expanded: false });
+
+    await act(async () => more.props.onPress());
+    const bodyScroll = byTestId('post-layout-body-scroll');
+    assert.equal(bodyScroll.findByProps({ testID: 'post-body' }).props.numberOfLines, undefined);
+    assert.equal(bodyScroll.findAllByProps({ testID: 'post-action-surface' }).length, 0);
+    assert.ok(byTestId('post-action-surface'));
+    assert.deepEqual(pressable('원문 접기').props.accessibilityState, { expanded: true });
+
+    await updateHost(
+      createElement(PostLayout, {
+        post: asLayoutKey({ ...post, content: null }),
+        presentation: 'compact',
+      }),
+    );
+    await updateHost(
+      createElement(PostLayout, {
+        post: asLayoutKey(post),
+        presentation: 'compact',
+      }),
+    );
+
+    assert.ok(byTestId('post-layout-body-scroll'));
+    assert.deepEqual(pressable('원문 접기').props.accessibilityState, { expanded: true });
+
+    await updateHost(
+      createElement(PostLayout, {
+        post: asLayoutKey({ ...post, content: null }),
+        presentation: 'compact',
+      }),
+    );
+
+    const nextRevision = storyPost('compact-detail', 'compact-detail-content-next');
+    nextRevision.content!.bodyText = '새 revision의 짧은 원문';
+    await updateHost(
+      createElement(PostLayout, {
+        post: asLayoutKey(nextRevision),
+        presentation: 'compact',
+      }),
+    );
+
+    assert.equal(findByTestId('post-layout-body-scroll').length, 0);
+    assert.equal(byTestId('post-body').props.numberOfLines, 3);
+    assert.equal(
+      renderer?.root.findAll((node) => node.props.accessibilityLabel === '원문 접기').length,
+      0,
+    );
+    assert.equal(
+      renderer?.root.findAll((node) => node.props.accessibilityLabel === '원문 더 보기').length,
+      0,
+    );
+  });
+
+  it('동일 높이의 긴 revision으로 교체해도 측정 노드를 remount하고 더 보기를 제공한다', async () => {
+    const post = storyPost('same-height', 'revision-a');
+    post.content!.bodyText = '긴 원문\n두 번째\n세 번째\n네 번째';
+    await renderHost(
+      createElement(PostLayout, { post: asLayoutKey(post), presentation: 'compact' }),
+    );
+    const firstMeasure = byTestId('post-layout-body-measure');
+    await act(async () => firstMeasure.props.onLayout({ nativeEvent: { layout: { height: 96 } } }));
+    await act(async () => pressable('원문 더 보기').props.onPress());
+    const next = { ...post, content: { ...post.content!, id: 'revision-b' } };
+    await updateHost(
+      createElement(PostLayout, { post: asLayoutKey(next), presentation: 'compact' }),
+    );
+    const nextMeasure = byTestId('post-layout-body-measure');
+    assert.notEqual(nextMeasure, firstMeasure);
+    assert.equal(byTestId('post-body').props.numberOfLines, 3);
+    await act(async () => nextMeasure.props.onLayout({ nativeEvent: { layout: { height: 96 } } }));
+    assert.deepEqual(pressable('원문 더 보기').props.accessibilityState, { expanded: false });
+  });
+
+  it('Compact 원문 토글은 font scaling된 3-line 높이를 초과할 때만 표시한다', async () => {
+    fontScale = 1.5;
+    const post = storyPost('compact-toggle-font-scale', 'compact-toggle-font-scale-content');
+    post.content!.bodyText = Array.from({ length: 4 }, (_, index) => `${index + 1}번째 줄`).join(
+      '\n',
+    );
+
+    await renderHost(
+      createElement(PostLayout, {
+        post: asLayoutKey(post),
+        presentation: 'compact',
+      }),
+    );
+
+    await act(async () =>
+      byTestId('post-layout-body-measure').props.onLayout({
+        nativeEvent: { layout: { height: 108 } },
+      }),
+    );
+    assert.equal(findByTestId('post-layout-body-scroll').length, 0);
+    assert.equal(
+      renderer?.root.findAll((node) => node.props.accessibilityLabel === '원문 더 보기').length,
+      0,
+    );
+
+    await act(async () =>
+      byTestId('post-layout-body-measure').props.onLayout({
+        nativeEvent: { layout: { height: 144 } },
+      }),
+    );
+    assert.deepEqual(pressable('원문 더 보기').props.accessibilityState, { expanded: false });
+  });
+
+  it('Compact 원문 토글은 Native 플랫폼 최소 target을 유지한다', async () => {
+    const post = storyPost('compact-toggle-target', 'compact-toggle-target-content');
+    post.content!.bodyText = Array.from({ length: 4 }, (_, index) => `${index + 1}번째 줄`).join(
+      '\n',
+    );
+
+    for (const [os, targetSize] of [
+      ['ios', 44],
+      ['android', 48],
+    ] as const) {
+      platform.OS = os;
+      await renderHost(
+        createElement(PostLayout, {
+          post: asLayoutKey(post),
+          presentation: 'compact',
+        }),
+      );
+      await act(async () =>
+        byTestId('post-layout-body-measure').props.onLayout({
+          nativeEvent: { layout: { height: 96 } },
+        }),
+      );
+
+      for (const label of ['원문 더 보기', '원문 접기']) {
+        const toggle = pressable(label);
+        const style = Object.assign(
+          {},
+          ...(Array.isArray(toggle.props.style) ? toggle.props.style : [toggle.props.style]),
+        );
+        assert.equal(style.minHeight, targetSize);
+        assert.equal(style.minWidth, targetSize);
+        await act(async () => toggle.props.onPress());
+      }
+
+      await act(async () => renderer?.unmount());
+      renderer = null;
+    }
   });
 });
 
