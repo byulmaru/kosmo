@@ -40,7 +40,7 @@ function RepostActionStory({ storeOnly = false }: { storeOnly?: boolean }) {
     storeOnly ? { fetchPolicy: 'store-only' } : undefined,
   );
   return (
-    <View>
+    <View style={{ paddingVertical: 4 }}>
       <PostActionBar
         onRepostError={(failure) => {
           setErrorCount((count) => count + 1);
@@ -195,7 +195,7 @@ function CapturedRepostActionControls() {
     { fetchPolicy: 'store-only' },
   );
   return (
-    <View>
+    <View style={{ paddingVertical: 4 }}>
       <PostActionBar
         onRepostError={(failure) => {
           setErrorCount((count) => count + 1);

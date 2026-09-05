@@ -20,8 +20,10 @@ type Props = {
   activeColor?: string;
   active?: boolean;
   alignToEnd?: boolean;
+  alignToStart?: boolean;
   baseColor?: string;
   count?: number;
+  countFollowsInteraction?: boolean;
   controlRef?: Ref<View>;
   expanded?: boolean;
   fillActive?: boolean;
@@ -44,8 +46,10 @@ export function PostActionControl({
   activeColor,
   active = false,
   alignToEnd = false,
+  alignToStart = false,
   baseColor,
   count,
+  countFollowsInteraction = false,
   controlRef,
   expanded,
   fillActive = false,
@@ -67,17 +71,6 @@ export function PostActionControl({
   const isPending = processing === 'pending';
   const isDisabled = processing === 'disabled';
   const blocked = isPending || isDisabled;
-  const countColor = blocked
-    ? theme.textSecondary
-    : active
-      ? (activeColor ?? theme.primary)
-      : expanded
-        ? theme.primary
-        : (baseColor ?? theme.textSecondary);
-  const iconColor =
-    hovered && !blocked && !active && !hoverDisabled
-      ? (hoverForegroundColor ?? theme.primary)
-      : countColor;
   const accessibilityState: AccessibilityState = {
     busy: isPending,
     disabled: blocked,
@@ -90,88 +83,133 @@ export function PostActionControl({
   const formattedCount = formatPostActionCount(count);
 
   return (
-    <Pressable
-      aria-expanded={stateful ? (popupRole ? menuExpanded : expanded) : undefined}
-      aria-busy={stateful && isPending ? true : undefined}
-      aria-pressed={stateful && expanded === undefined ? active : undefined}
-      aria-haspopup={popupRole}
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      accessibilityState={stateful ? accessibilityState : undefined}
-      disabled={blocked}
-      onHoverIn={Platform.OS === 'web' ? () => setHovered(true) : undefined}
-      onHoverOut={Platform.OS === 'web' ? () => setHovered(false) : undefined}
-      onPress={onPress}
-      ref={controlRef}
-      testID={`post-action-${testID}`}
-      style={({ pressed }) => [
-        styles.action,
+    <View
+      style={[
+        styles.slot,
+        Platform.OS === 'web' ? undefined : styles.nativeSlot,
+        Platform.OS === 'web' && alignToStart ? styles.alignToStart : undefined,
         alignToEnd ? styles.alignToEnd : undefined,
-        blocked ? styles.blocked : pressed ? styles.pressed : undefined,
       ]}
     >
-      {isPending ? (
-        <ActivityIndicator
-          accessible={false}
-          aria-hidden
-          color={iconColor}
-          size={14}
-          style={styles.icon}
-          testID={`post-action-${testID}-spinner`}
-        />
-      ) : (
-        <View
-          accessible={false}
-          aria-hidden
-          style={styles.icon}
-          testID={`post-action-${testID}-icon`}
-        >
-          {hovered && !blocked && !hoverDisabled ? (
-            <View
-              aria-hidden
-              style={[
-                styles.hover,
-                { backgroundColor: hoverColor ?? theme.primary, opacity: hoverOpacity },
-              ]}
-              testID={`post-action-${testID}-hover`}
-            />
-          ) : null}
-          <View
-            accessible={false}
-            aria-hidden
-            style={styles.glyph}
-            testID={`post-action-${testID}-glyph`}
-          >
-            <Icon
-              color={iconColor}
-              fill={fillActive && active ? iconColor : 'none'}
-              size={16}
-              strokeWidth={iconStrokeWidth}
-            />
-          </View>
-        </View>
-      )}
-      {formattedCount ? (
-        <Text numberOfLines={1} style={[styles.count, { color: countColor }]}>
-          {formattedCount}
-        </Text>
-      ) : null}
-    </Pressable>
+      <Pressable
+        aria-expanded={stateful ? (popupRole ? menuExpanded : expanded) : undefined}
+        aria-busy={stateful && isPending ? true : undefined}
+        aria-pressed={stateful && expanded === undefined ? active : undefined}
+        aria-haspopup={popupRole}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
+        accessibilityState={stateful ? accessibilityState : undefined}
+        disabled={blocked}
+        onHoverIn={Platform.OS === 'web' ? () => setHovered(true) : undefined}
+        onHoverOut={Platform.OS === 'web' ? () => setHovered(false) : undefined}
+        onPress={onPress}
+        ref={controlRef}
+        testID={`post-action-${testID}`}
+        style={({ pressed }) => [
+          styles.action,
+          alignToEnd ? styles.alignToEndAction : undefined,
+          Platform.OS === 'web' ? styles.webAction : styles.nativeAction,
+          blocked ? styles.blocked : pressed ? styles.pressed : undefined,
+        ]}
+      >
+        {({ pressed }) => {
+          const countColor = blocked
+            ? theme.textSecondary
+            : active
+              ? (activeColor ?? theme.primary)
+              : expanded
+                ? theme.primary
+                : (baseColor ?? theme.textSecondary);
+          const foregroundColor =
+            !blocked && !active && !expanded && ((hovered && !hoverDisabled) || pressed)
+              ? (hoverForegroundColor ?? theme.primary)
+              : countColor;
+
+          return (
+            <>
+              {isPending ? (
+                <ActivityIndicator
+                  accessible={false}
+                  aria-hidden
+                  color={foregroundColor}
+                  size={14}
+                  style={styles.icon}
+                  testID={`post-action-${testID}-spinner`}
+                />
+              ) : (
+                <View
+                  accessible={false}
+                  aria-hidden
+                  style={styles.icon}
+                  testID={`post-action-${testID}-icon`}
+                >
+                  {Platform.OS === 'web' && !blocked && ((hovered && !hoverDisabled) || pressed) ? (
+                    <View
+                      aria-hidden
+                      style={[
+                        styles.hover,
+                        { backgroundColor: hoverColor ?? theme.primary, opacity: hoverOpacity },
+                      ]}
+                      testID={`post-action-${testID}-hover`}
+                    />
+                  ) : null}
+                  <View
+                    accessible={false}
+                    aria-hidden
+                    style={styles.glyph}
+                    testID={`post-action-${testID}-glyph`}
+                  >
+                    <Icon
+                      color={foregroundColor}
+                      fill={fillActive && active ? foregroundColor : 'none'}
+                      size={16}
+                      strokeWidth={iconStrokeWidth}
+                    />
+                  </View>
+                </View>
+              )}
+              {formattedCount ? (
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.count,
+                    { color: countFollowsInteraction ? foregroundColor : countColor },
+                  ]}
+                >
+                  {formattedCount}
+                </Text>
+              ) : null}
+            </>
+          );
+        }}
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  slot: {
+    alignItems: 'center',
+    height: 28,
+    justifyContent: 'center',
+    minWidth: 50,
+  },
   action: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.xs,
     height: 28,
     justifyContent: 'flex-start',
-    width: 50,
+  },
+  alignToStart: {
+    alignItems: 'flex-start',
   },
   alignToEnd: {
-    justifyContent: 'center',
+    minWidth: 28,
     width: 28,
+  },
+  alignToEndAction: {
+    justifyContent: 'center',
   },
   blocked: { opacity: 0.45 },
   count: {
@@ -205,5 +243,21 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: 16,
   },
+  nativeAction: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  nativeSlot: {
+    position: 'relative',
+    width: 50,
+  },
   pressed: { opacity: 0.72 },
+  webAction: {
+    height: 36,
+    minWidth: 28,
+    paddingHorizontal: 6,
+  },
 });

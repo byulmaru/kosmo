@@ -20,7 +20,7 @@ export function getReplySurfacePresentation(
 export function getReplyProcessingState(
   execution: PostActionExecution,
   hasComposerProfile: boolean,
-): PostActionProcessingState {
+): Exclude<PostActionProcessingState, 'pending'> {
   if (execution.kind === 'resolution-required') {
     return 'default';
   }

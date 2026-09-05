@@ -109,9 +109,9 @@ library에 종속하지 않고 icon, glyph, 짧은 기호 문자 또는 loading 
 
 ### Post Action Bar의 출시 전 임시 예외
 
-Post Action Bar는 현재 Web 우선 출시 범위의 Figma geometry를 먼저 맞추기 위해 모든 플랫폼 구현에서 control 높이와 실제 interactive target 높이를 28 logical unit(CSS px·pt·dp)로 통일한다. 이 예외는 [post-action-bar.md](./post-action-bar.md)가 소유하며 다른 toolbar나 icon button의 선례로 일반화하지 않는다.
+Post Action Bar는 모든 플랫폼에서 28 logical unit visual row를 공유한다. Web actual target은 visual row를 위아래 4px씩 확장하고, Native actual target은 아직 28pt·28dp를 사용하는 출시 전 임시 예외다. 이 예외는 [post-action-bar.md](./post-action-bar.md)가 소유하며 다른 toolbar나 icon button의 선례로 일반화하지 않는다.
 
-- Web의 28px target은 24×24 CSS px 자체를 포함하고 인접 action과 겹치지 않아야 한다.
+- Web은 count가 있으면 숫자 `0`을 포함해 `왼쪽 6px + glyph 16px + gap 4px + 렌더된 count + 오른쪽 6px`을 HUG하고, count가 없으면 28×36px target을 사용한다. Reply·Repost·Reaction·Bookmark의 layout slot은 최소 50px이며 target이 더 넓을 때만 함께 확장하고, More slot은 28px이다. 각 target은 24×24 CSS px 자체를 포함하고 인접 action이나 action 사이 분배 여백을 덮지 않아야 한다.
 - iOS·Android의 28pt·28dp target은 위 Native baseline을 충족하지 않는다. Native binary가 아직 출시 범위가 아니기 때문에 구현 일관성을 위한 임시 값으로만 허용하며, Native 접근성 준수나 runtime 검증 완료 증거로 사용하지 않는다.
 - iOS 출시 전에는 실제 hit target을 최소 44×44pt, Android 출시 전에는 최소 48×48dp로 복구하고, 28px visual geometry를 유지할지 포함해 각 플랫폼 assistive technology와 touch runtime에서 다시 검증한다.
 

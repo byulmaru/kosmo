@@ -42,8 +42,9 @@ export function PostThreadLayout<TPost>({
       {rows.map(({ item, role }, index) => {
         const previous = rows[index - 1];
         const next = rows[index + 1];
-        const connectsFromPrevious = item.connectedToPrevious && previous !== undefined;
-        const connectsToNext = next?.item.connectedToPrevious === true;
+        const connectsFromPrevious =
+          role !== 'descendant' && item.connectedToPrevious && previous !== undefined;
+        const connectsToNext = role === 'ancestor' && next?.item.connectedToPrevious === true;
         const renderedPost = renderPost({ item, role });
 
         return (
@@ -66,9 +67,7 @@ export function PostThreadLayout<TPost>({
             ) : null}
             {connectsToNext ? (
               <PostThreadConnector
-                style={
-                  role === 'current' ? styles.currentConnectorAfter : styles.listConnectorAfter
-                }
+                style={styles.listConnectorAfter}
                 testID={`post-thread-connector-${item.id}-${next.item.id}-after`}
               />
             ) : null}
@@ -77,7 +76,7 @@ export function PostThreadLayout<TPost>({
             ) : (
               renderedPost
             )}
-            {index < rows.length - 1 ? (
+            {index < rows.length - 1 && role !== 'current' ? (
               <View
                 style={[styles.divider, { backgroundColor: theme.borderSubtle }]}
                 testID={`post-thread-divider-${item.id}`}
@@ -94,7 +93,8 @@ const styles = StyleSheet.create({
   row: { position: 'relative' },
   currentContent: {
     paddingBottom: spacing.xs,
-    paddingHorizontal: spacing.md,
+    paddingLeft: spacing.sm,
+    paddingRight: spacing.md,
     paddingTop: spacing.lg,
   },
   divider: {
@@ -112,10 +112,5 @@ const styles = StyleSheet.create({
     height: spacing.lg - spacing.xs,
     left: spacing.xxl,
     top: 0,
-  },
-  currentConnectorAfter: {
-    bottom: 0,
-    left: spacing.xxl,
-    top: spacing.lg + spacing.xxl + spacing.sm + spacing.xs,
   },
 });

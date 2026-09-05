@@ -2776,6 +2776,7 @@ const meta = {
     resetImagePickerMock();
   },
   component: PostCatalog,
+  excludeStories: ['LinkedSourceQuoteInteraction'],
   decorators: [
     (Story) => (
       <SessionProvider>
@@ -3294,18 +3295,36 @@ export const ProductionRepostQuoteListIntegration: Story = {
         Number.parseFloat(getComputedStyle(quoteSourcePreview).borderBottomWidth) -
         quoteSourceBody.getBoundingClientRect().bottom,
     ).toBeCloseTo(4, 0);
-    for (const [card, actionBar] of [
-      [ordinaryCard, ordinaryActionBar],
-      [quoteCard, quoteActionBar],
-      [pureRepostRow!, pureRepostActionBar],
+    for (const { actionBar, card, geometry } of [
+      {
+        actionBar: ordinaryActionBar,
+        card: ordinaryCard,
+        geometry: { cardBottom: 4, cardTop: '12px', slotBottom: '0px', slotTop: '4px' },
+      },
+      {
+        actionBar: quoteActionBar,
+        card: quoteCard,
+        geometry: { cardBottom: 1, cardTop: '8px', slotBottom: '0px', slotTop: '0px' },
+      },
+      {
+        actionBar: pureRepostActionBar,
+        card: pureRepostRow!,
+        geometry: { cardBottom: 1, cardTop: '8px', slotBottom: '0px', slotTop: '0px' },
+      },
     ] as const) {
       const cardBounds = card.getBoundingClientRect();
       const actionBarBounds = actionBar.getBoundingClientRect();
       const borderBottomWidth = Number.parseFloat(getComputedStyle(card).borderBottomWidth);
+      const cardStyle = getComputedStyle(card);
       const actionBarSlotStyle = getComputedStyle(actionBar.parentElement!);
-      expect(actionBarSlotStyle.paddingTop).toBe('0px');
-      expect(actionBarSlotStyle.paddingBottom).toBe('4px');
-      expect(cardBounds.bottom - borderBottomWidth - actionBarBounds.bottom).toBeCloseTo(4, 0);
+      expect(cardStyle.paddingTop).toBe(geometry.cardTop);
+      expect(cardStyle.paddingBottom).toBe(`${geometry.cardBottom}px`);
+      expect(actionBarSlotStyle.paddingTop).toBe(geometry.slotTop);
+      expect(actionBarSlotStyle.paddingBottom).toBe(geometry.slotBottom);
+      expect(cardBounds.bottom - borderBottomWidth - actionBarBounds.bottom).toBeCloseTo(
+        geometry.cardBottom,
+        0,
+      );
       expect(getComputedStyle(card).borderBottomColor).toBe('rgb(236, 236, 240)');
     }
     for (const actionBar of [ordinaryActionBar, quoteActionBar, pureRepostActionBar]) {
@@ -4017,10 +4036,22 @@ export const Quote: Story = {
     const canvas = within(root);
     const outerAvatar = canvas.getByLabelText(`${repostAuthor.displayName} 프로필 이미지`);
     expect(canvas.getByText('이 원문에 덧붙이는 인용자의 본문입니다.')).toBeVisible();
-    expect(canvas.getByTestId('post-timestamp')).toHaveTextContent(
-      formatTimelineTimestamp(quotePost.createdAt),
-    );
+    const outerTimestamp = canvas.getByTestId('post-timestamp');
+    const outerTimestampLink = outerTimestamp.closest('[role="link"]');
+    expect(outerTimestamp).toHaveTextContent(formatTimelineTimestamp(quotePost.createdAt));
+    expect(window.getComputedStyle(outerTimestamp).textAlign).toBe('right');
+    expect(outerTimestampLink).not.toBeNull();
+    expect(outerTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    expect(outerTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     const preview = canvas.getByTestId('source-post-preview');
+    const sourceTimestamp = within(preview).getByText(
+      formatTimelineTimestamp(sourcePost.createdAt),
+    );
+    const sourceTimestampLink = sourceTimestamp.closest('[role="link"]');
+    expect(window.getComputedStyle(sourceTimestamp).textAlign).toBe('right');
+    expect(sourceTimestampLink).not.toBeNull();
+    expect(sourceTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    expect(sourceTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     const sourceAvatar = within(preview).getByLabelText(
       `${sourceAuthor.displayName} 프로필 이미지`,
     );
@@ -4516,18 +4547,38 @@ export const InvalidContentlessReplySource: Story = {
 };
 
 export const LinkedSourceQuote: Story = {
+  play: async ({ canvasElement, globals }) => {
+    const canvas = within(canvasElement);
+    const sourcePreview = await canvas.findByTestId('source-post-preview');
+    const externalLinks = canvas.getAllByLabelText('안전한 외부 링크, https://example.com/path');
+    const expectedLinkColor =
+      globals.theme === 'dark' ? colors.dark.actionLinkBase : colors.light.actionLinkBase;
+    expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(window.getComputedStyle(sourcePreview).borderTopWidth).toBe('1px');
+    for (const externalLink of externalLinks) {
+      expect(externalLink).toHaveStyle({ color: expectedLinkColor });
+    }
+    expect(canvasElement.querySelector('[role="link"] [role="link"]')).toBeNull();
+  },
+  render: () => <RepostQuotePresentationStory postId="post-quote-linked-source" />,
+};
+
+export const LinkedSourceQuoteInteraction: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const postBody = canvas.getByTestId('post-body');
-    const sourcePreview = canvas.getByTestId('source-post-preview');
+    const postBody = await canvas.findByTestId('post-body');
+    const sourcePreview = await canvas.findByTestId('source-post-preview');
     const openURL = fn(async () => undefined);
     const originalOpenURL = Linking.openURL;
     Linking.openURL = openURL;
 
     try {
-      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgb(250, 250, 251)');
-      expect(window.getComputedStyle(sourcePreview).borderColor).toBe('rgb(223, 223, 229)');
-      expect(canvasElement.querySelector('[role="link"] [role="link"]')).toBeNull();
+      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+      await userEvent.hover(sourcePreview);
+      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
+      await userEvent.unhover(sourcePreview);
+      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+
       await userEvent.click(
         within(postBody).getByLabelText('안전한 외부 링크, https://example.com/path'),
       );
@@ -4571,7 +4622,26 @@ export const ProductionPureRepostLongAuthorMobile: Story = {
 
 export const PostLayoutOwnsReactionSummary: Story = {
   play: async ({ canvasElement }) => {
-    expect(within(canvasElement).getByRole('button', { name: '❤️ 반응 2개' })).toBeVisible();
+    const canvas = within(canvasElement);
+    const reactionSummary = canvas.getByRole('button', { name: '❤️ 반응 2개' });
+    const actionBar = canvas.getByRole('toolbar', { name: '액션 바' });
+    const engagement = canvas.getByTestId('post-layout-engagement');
+    const actionBarFrame = actionBar.parentElement!;
+    const metadata = engagement.previousElementSibling as HTMLElement;
+
+    expect(reactionSummary).toBeVisible();
+    expect(metadata).toHaveTextContent('조용히 공개');
+    expect(
+      reactionSummary.getBoundingClientRect().top - metadata.getBoundingClientRect().bottom,
+    ).toBeCloseTo(8, 0);
+    expect(
+      actionBarFrame.getBoundingClientRect().top - reactionSummary.getBoundingClientRect().bottom,
+    ).toBeCloseTo(4, 0);
+    expect(actionBarFrame.contains(reactionSummary)).toBe(false);
+    expect(getComputedStyle(actionBarFrame).borderTopWidth).toBe('1px');
+    expect(getComputedStyle(actionBarFrame).borderBottomWidth).toBe('1px');
+    expect(getComputedStyle(actionBarFrame).paddingTop).toBe('8px');
+    expect(getComputedStyle(actionBarFrame).paddingBottom).toBe('8px');
   },
   render: () => <PostLayoutReactionSummaryStory />,
 };
@@ -4606,7 +4676,7 @@ export const LinkedBodyKeepsDetailNavigationIsolated: Story = {
 export const ReplyThreadPresentation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const thread = canvas.getByTestId('post-thread');
+    const thread = await canvas.findByTestId('post-thread');
     const rows = Array.from(thread.children) as HTMLElement[];
 
     expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
@@ -4617,14 +4687,11 @@ export const ReplyThreadPresentation: Story = {
       'post-thread-item-thread-sibling',
       'post-thread-item-thread-reply-quote',
     ]);
-    const approvedDividerColumnLeft = canvas
-      .getByText('지금 보고 있는 Reply입니다.')
-      .getBoundingClientRect().left;
-    expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(rows.length - 1);
+    expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(rows.length - 2);
     rows.forEach((row, index) => {
       const dividers = within(row).queryAllByTestId(/^post-thread-divider-/);
 
-      if (index === rows.length - 1) {
+      if (index === rows.length - 1 || row.getAttribute('aria-current') === 'true') {
         expect(dividers).toHaveLength(0);
         return;
       }
@@ -4635,7 +4702,6 @@ export const ReplyThreadPresentation: Story = {
       const rowBounds = row.getBoundingClientRect();
       expect(dividerBounds.height).toBeCloseTo(1, 0);
       expect(dividerBounds.left - rowBounds.left).toBeCloseTo(64, 0);
-      expect(dividerBounds.left).toBeCloseTo(approvedDividerColumnLeft, 0);
       expect(rowBounds.right - dividerBounds.right).toBeCloseTo(8, 0);
       for (const connector of within(row).queryAllByTestId(/^post-thread-connector-/)) {
         expect(connector.getBoundingClientRect().right).toBeLessThan(dividerBounds.left);
@@ -4643,9 +4709,21 @@ export const ReplyThreadPresentation: Story = {
       expect(window.getComputedStyle(divider).backgroundColor).toBe('rgb(236, 236, 240)');
     });
     const currentRow = canvas.getByTestId('post-thread-current-thread-current');
+    const currentEngagement = within(currentRow).getByTestId('post-layout-engagement');
+    const currentActionBarFrame = within(currentRow).getByRole('toolbar', {
+      name: '액션 바',
+    }).parentElement!;
+    const currentMetadata = currentEngagement.previousElementSibling as HTMLElement;
     expect(window.getComputedStyle(currentRow).backgroundColor).toBe('rgba(0, 0, 0, 0)');
     expect(window.getComputedStyle(currentRow).borderTopWidth).toBe('0px');
     expect(window.getComputedStyle(currentRow).borderBottomWidth).toBe('0px');
+    expect(within(currentRow).queryByRole('button', { name: /반응 \d+개/ })).toBeNull();
+    expect(
+      currentActionBarFrame.getBoundingClientRect().top -
+        currentMetadata.getBoundingClientRect().bottom,
+    ).toBeCloseTo(8, 0);
+    expect(window.getComputedStyle(currentActionBarFrame).borderTopWidth).toBe('1px');
+    expect(window.getComputedStyle(currentActionBarFrame).borderBottomWidth).toBe('1px');
     for (const rowId of [
       'post-thread-item-thread-root',
       'post-thread-item-thread-child',
@@ -4693,11 +4771,11 @@ export const ReplyThreadPresentation: Story = {
       canvas.getByTestId('post-thread-connector-thread-parent-thread-current-before'),
     ).toBeVisible();
     expect(
-      canvas.getByTestId('post-thread-connector-thread-current-thread-child-after'),
-    ).toBeVisible();
+      canvas.queryByTestId('post-thread-connector-thread-current-thread-child-after'),
+    ).toBeNull();
     expect(
-      canvas.getByTestId('post-thread-connector-thread-current-thread-child-before'),
-    ).toBeVisible();
+      canvas.queryByTestId('post-thread-connector-thread-current-thread-child-before'),
+    ).toBeNull();
     expect(
       canvas.queryByTestId('post-thread-connector-thread-child-thread-sibling-after'),
     ).toBeNull();
@@ -4705,11 +4783,11 @@ export const ReplyThreadPresentation: Story = {
       canvas.queryByTestId('post-thread-connector-thread-child-thread-sibling-before'),
     ).toBeNull();
     expect(
-      canvas.getByTestId('post-thread-connector-thread-sibling-thread-reply-quote-after'),
-    ).toBeVisible();
+      canvas.queryByTestId('post-thread-connector-thread-sibling-thread-reply-quote-after'),
+    ).toBeNull();
     expect(
-      canvas.getByTestId('post-thread-connector-thread-sibling-thread-reply-quote-before'),
-    ).toBeVisible();
+      canvas.queryByTestId('post-thread-connector-thread-sibling-thread-reply-quote-before'),
+    ).toBeNull();
     expect(
       canvasElement.querySelector(
         '[data-testid^="post-thread-connector-thread-reply-quote-"][data-testid$="-after"]',
@@ -4793,7 +4871,7 @@ export const PostDetailThreadRoute: Story = {
       'post-thread-item-route-source-null',
     ]);
     expect(canvas.queryByText(/님에게 답글$/)).not.toBeInTheDocument();
-    expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(rows.length - 1);
+    expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(rows.length - 2);
     expect(
       window.getComputedStyle(
         within(canvas.getByTestId('post-thread-item-route-root')).getByRole('article'),
@@ -4817,17 +4895,29 @@ export const PostDetailThreadRoute: Story = {
       ),
     );
     expect(currentMore).toHaveAttribute('aria-expanded', 'false');
-    const currentDivider = canvas.getByTestId('post-thread-divider-route-current');
+    expect(canvas.queryByTestId('post-thread-divider-route-current')).toBeNull();
+    const currentEngagement = within(currentRow).getByTestId('post-layout-engagement');
     const currentAvatar = currentRow.querySelector<HTMLElement>('[aria-label$="프로필 이미지"]');
     expect(currentAvatar).not.toBeNull();
+    const currentAvatarBounds = currentAvatar!.getBoundingClientRect();
+    const currentBodyBounds = canvas.getByText('현재 Reply 본문').getBoundingClientRect();
+    expect(currentAvatarBounds.width).toBeCloseTo(48, 0);
+    expect(currentAvatarBounds.height).toBeCloseTo(48, 0);
+    expect(currentBodyBounds.left).toBeCloseTo(currentAvatarBounds.left, 0);
+    expect(currentActionBar.getBoundingClientRect().left).toBeCloseTo(currentAvatarBounds.left, 0);
+    expect(currentActionBar.getBoundingClientRect().right).toBeCloseTo(currentBodyBounds.right, 0);
+    expect(currentEngagement.getBoundingClientRect().left).toBeCloseTo(currentBodyBounds.left, 0);
+    expect(currentEngagement.getBoundingClientRect().right).toBeCloseTo(currentBodyBounds.right, 0);
+    const currentActionBarFrame = currentActionBar.parentElement!;
+    expect(window.getComputedStyle(currentActionBarFrame).borderTopWidth).toBe('1px');
+    expect(window.getComputedStyle(currentActionBarFrame).borderBottomWidth).toBe('1px');
+    expect(currentAvatarBounds.top - currentRow.getBoundingClientRect().top).toBeCloseTo(16, 0);
     expect(
-      currentAvatar!.getBoundingClientRect().top - currentRow.getBoundingClientRect().top,
-    ).toBeCloseTo(16, 0);
-    expect(
-      currentActionBar.getBoundingClientRect().top - reactionButton.getBoundingClientRect().bottom,
+      currentActionBarFrame.getBoundingClientRect().top -
+        reactionButton.getBoundingClientRect().bottom,
     ).toBeCloseTo(4, 0);
     expect(
-      currentDivider.getBoundingClientRect().top - currentActionBar.getBoundingClientRect().bottom,
+      currentRow.getBoundingClientRect().bottom - currentEngagement.getBoundingClientRect().bottom,
     ).toBeCloseTo(4, 0);
     const ancestorQuote = within(canvas.getByTestId('post-thread-item-route-parent'));
     expect(ancestorQuote.getAllByText('Source 본문')).toHaveLength(1);
@@ -4869,21 +4959,28 @@ export const PostDetailThreadRoute: Story = {
         ),
       };
     };
-    expect({
-      current: connectorClearance(
-        'post-thread-current-route-current',
-        'post-thread-connector-route-parent-route-current-before',
-        'post-thread-connector-route-current-route-child-after',
-      ),
-      parent: connectorClearance(
+    const currentBefore = canvas.getByTestId(
+      'post-thread-connector-route-parent-route-current-before',
+    );
+    expect(Math.round(currentAvatarBounds.top - currentBefore.getBoundingClientRect().bottom)).toBe(
+      4,
+    );
+    expect(Number.parseFloat(window.getComputedStyle(currentBefore).borderRadius)).toBeGreaterThan(
+      0,
+    );
+    expect(
+      canvas.queryByTestId('post-thread-connector-route-current-route-child-after'),
+    ).toBeNull();
+    expect(
+      canvas.queryByTestId('post-thread-connector-route-current-route-child-before'),
+    ).toBeNull();
+    expect(
+      connectorClearance(
         'post-thread-item-route-parent',
         'post-thread-connector-route-root-route-parent-before',
         'post-thread-connector-route-parent-route-current-after',
       ),
-    }).toEqual({
-      current: { after: 4, before: 4, rounded: true },
-      parent: { after: 4, before: 4, rounded: true },
-    });
+    ).toEqual({ after: 4, before: 4, rounded: true });
     const descendantQuote = within(canvas.getByTestId('post-thread-item-route-reply-quote'));
     expect(descendantQuote.getAllByText('Source 본문')).toHaveLength(1);
     expect(descendantQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
@@ -4891,8 +4988,8 @@ export const PostDetailThreadRoute: Story = {
     expect(canvas.queryByTestId('post-thread-source-route-source-null')).not.toBeInTheDocument();
     expect(canvas.getByText('Source가 없어도 남는 Content')).toBeVisible();
     expect(
-      canvas.getByTestId('post-thread-connector-route-current-route-child-after'),
-    ).toBeVisible();
+      canvas.queryByTestId('post-thread-connector-route-current-route-child-after'),
+    ).toBeNull();
     expect(
       canvas.queryByTestId('post-thread-connector-route-child-route-sibling-after'),
     ).toBeNull();
@@ -5496,11 +5593,20 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
     const replyButtons = canvas.getAllByRole('button', { name: '답글' });
     expect(replyButtons).toHaveLength(3);
     const currentRow = canvas.getByTestId('post-thread-current-route-current');
-    const currentActionBar = within(currentRow).getByRole('toolbar', { name: '액션 바' });
-    const currentDivider = canvas.getByTestId('post-thread-divider-route-current');
+    const currentEngagement = within(currentRow).getByTestId('post-layout-engagement');
+    const currentActionBarFrame = within(currentRow).getByRole('toolbar', {
+      name: '액션 바',
+    }).parentElement!;
+    const currentMetadata = currentEngagement.previousElementSibling as HTMLElement;
+    expect(canvas.queryByTestId('post-thread-divider-route-current')).toBeNull();
     expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+    expect(within(currentRow).queryByRole('button', { name: /반응 \d+개/ })).toBeNull();
     expect(
-      currentDivider.getBoundingClientRect().top - currentActionBar.getBoundingClientRect().bottom,
+      currentActionBarFrame.getBoundingClientRect().top -
+        currentMetadata.getBoundingClientRect().bottom,
+    ).toBeCloseTo(8, 0);
+    expect(
+      currentRow.getBoundingClientRect().bottom - currentEngagement.getBoundingClientRect().bottom,
     ).toBeCloseTo(4, 0);
 
     await userEvent.click(replyButtons[0]!);
