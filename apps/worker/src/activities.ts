@@ -1,5 +1,6 @@
 import '@kosmo/core/polyfill';
 
+export { cleanupUnavailableNotificationsActivity } from './activities/cleanup-unavailable-notifications';
 export {
   sendProfileFollowActivity,
   sendProfileUnfollowActivity,

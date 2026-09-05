@@ -1,3 +1,4 @@
+export { notificationCleanupWorkflow } from './cleanup-unavailable-notifications';
 export { postCreateEffectsWorkflow } from './create';
 export { postDeleteWorkflow } from './delete';
 export { profileFollowPairWorkflow } from './profile-follow-pair';
