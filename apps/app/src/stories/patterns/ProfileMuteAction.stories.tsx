@@ -110,6 +110,7 @@ export const FailureContract: Story = {
       expect(args.onFeedback).toHaveBeenCalledWith({ muted: true, status: 'error' }),
     );
     expect(await body.findByText('뮤트하지 못했어요. 다시 시도해 주세요.')).toBeVisible();
+    await waitFor(() => expect(body.getByRole('button', { name: '취소' })).toHaveFocus());
     const retry = body.getByRole('button', { name: '뮤트' });
     await userEvent.click(retry);
     await waitFor(() => expect(args.onMute).toHaveBeenCalledTimes(2));
@@ -146,6 +147,9 @@ export const UnmuteContract: Story = {
       expect(args.onFeedback).toHaveBeenCalledWith({ muted: false, status: 'success' }),
     );
     expect(args.onUnmute).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(within(canvasElement).getByRole('button', { name: '프로필 뮤트 메뉴' })).toHaveFocus(),
+    );
     expect(body.queryByText('이 프로필을 뮤트할까요?')).not.toBeInTheDocument();
   },
 };
