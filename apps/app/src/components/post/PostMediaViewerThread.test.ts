@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement, Suspense } from 'react';
+import { createElement, Suspense, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -8,7 +8,6 @@ import type { PostMediaViewerThread as PostMediaViewerThreadComponent } from './
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-let actorRevision = 3;
 let queryData = validQueryData();
 let queryFetchKey: string | number | undefined;
 let queryVariables: Record<string, unknown> | undefined;
@@ -33,6 +32,11 @@ mock.module('@/components/RouteBoundary', {
   exports: {
     RouteBoundary: ({ children, loading }: PropsWithChildren<{ loading: ReactNode }>) =>
       createElement(Suspense, { fallback: loading }, children),
+    useRouteBoundary: () => {
+      const [fetchKey, setFetchKey] = useState(0);
+      const refetch = () => setFetchKey((key) => key + 1);
+      return { fetchKey, refetch };
+    },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -40,10 +44,6 @@ mock.module('@/components/ui/StateView', {
   exports: {
     StateView: (props: Record<string, unknown>) => createElement('StateView', props),
   },
-} as unknown as Parameters<typeof mock.module>[1]);
-
-mock.module('@/relay/RelayActorProvider', {
-  exports: { useRelayActor: () => ({ revision: actorRevision }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('./PostDetailThread', {
@@ -64,7 +64,6 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
-  actorRevision = 3;
   queryData = validQueryData();
   queryFetchKey = undefined;
   queryVariables = undefined;
@@ -80,7 +79,7 @@ describe('PostMediaViewerThread', () => {
     assert.equal(thread.props.replyProfile, queryData.currentSession.selectedProfile);
     assert.equal(thread.props.currentPostReplyAvailable, false);
     assert.equal(thread.props.currentPostReplySurfaceId, 'surface-post');
-    assert.equal(queryFetchKey, '3:post-1:content-1:0');
+    assert.equal(queryFetchKey, 'post-1:content-1:0');
     assert.deepEqual(queryVariables, { mediaOwnerPostId: 'post-1' });
   });
 
@@ -90,7 +89,7 @@ describe('PostMediaViewerThread', () => {
 
     await act(async () => thread.props.onReplyCreated());
 
-    assert.equal(queryFetchKey, '3:post-1:content-1:1');
+    assert.equal(queryFetchKey, 'post-1:content-1:1');
   });
 
   it('조회된 Post·Content identity가 현재 projection과 다르면 thread만 숨긴다', async () => {

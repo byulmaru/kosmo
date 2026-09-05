@@ -1,8 +1,7 @@
-import { lazy, useState } from 'react';
+import { lazy } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { RouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import type { PostMediaViewerThreadQuery } from './__generated__/PostMediaViewerThreadQuery.graphql';
 
 const PostDetailThread = lazy(async () => {
@@ -40,42 +39,30 @@ type Props = Readonly<{
 }>;
 
 export function PostMediaViewerThread(props: Props) {
-  const { revision: actorRevision } = useRelayActor();
-  const [fetchRevision, setFetchRevision] = useState(0);
-  const fetchKey = `${actorRevision}:${props.mediaOwnerPostId}:${props.contentId}:${fetchRevision}`;
-
   return (
     <RouteBoundary
       error={(retry) => <ThreadState onRetry={retry} />}
       loading={<ThreadState loading />}
-      onRetry={() => setFetchRevision((revision) => revision + 1)}
       title="답글을 불러오지 못했어요"
     >
-      <PostMediaViewerThreadContent
-        {...props}
-        fetchKey={fetchKey}
-        onReplyCreated={() => setFetchRevision((revision) => revision + 1)}
-      />
+      <PostMediaViewerThreadContent {...props} />
     </RouteBoundary>
   );
 }
 
 function PostMediaViewerThreadContent({
   contentId,
-  fetchKey,
   mediaOwnerPostId,
   onPostDeleted,
-  onReplyCreated,
   replyAvailable,
   replySurfacePostId,
-}: Props & {
-  fetchKey: string;
-  onReplyCreated: () => void;
-}) {
+}: Props) {
+  const { fetchKey, refetch } = useRouteBoundary();
+  const queryIdentity = `${mediaOwnerPostId}:${contentId}:${fetchKey}`;
   const data = useLazyLoadQuery<PostMediaViewerThreadQuery>(
     PostMediaViewerThreadOperation,
     { mediaOwnerPostId },
-    { fetchKey, fetchPolicy: 'store-and-network' },
+    { fetchKey: queryIdentity, fetchPolicy: 'store-and-network' },
   );
   const post = data.node?.__typename === 'Post' ? data.node : null;
   const thread =
@@ -84,11 +71,11 @@ function PostMediaViewerThreadContent({
   return thread ? (
     <PostDetailThread
       header={null}
-      identity={fetchKey}
+      identity={queryIdentity}
       currentPostReplyAvailable={replyAvailable}
       currentPostReplySurfaceId={replySurfacePostId}
       onPostDeleted={onPostDeleted}
-      onReplyCreated={onReplyCreated}
+      onReplyCreated={refetch}
       post={thread}
       presentation="viewer"
       replyProfile={data.currentSession?.selectedProfile ?? null}

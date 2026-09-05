@@ -10,10 +10,9 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 type QueryMode = 'error' | 'loading' | 'success';
 
 const pending = new Promise<never>(() => undefined);
-const queryHistory: Array<{ fetchKey: string }> = [];
+const queryHistory: Array<{ fetchKey: number }> = [];
 let queryMode: QueryMode = 'success';
 let renderer: ReactTestRenderer | null = null;
-let revision = 4;
 let selectedProfileId: string | null = 'profile-a';
 
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -29,7 +28,7 @@ mockModule('react-relay', {
   useLazyLoadQuery: (
     query: string,
     variables: Record<string, never>,
-    options: { fetchKey: string },
+    options: { fetchKey: number },
   ) => {
     assert.equal(query, 'FollowRequestsPageQuery');
     assert.deepEqual(variables, {});
@@ -60,7 +59,7 @@ mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.
   useUnexpectedErrorReporter: () => undefined,
 });
 mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  useRelayActor: () => ({ revision }),
+  useRelayActorLifecycleKey: () => 'actor-a',
 });
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
@@ -80,7 +79,6 @@ afterEach(async () => {
   }
   queryHistory.length = 0;
   queryMode = 'success';
-  revision = 4;
   selectedProfileId = 'profile-a';
 });
 
@@ -117,7 +115,7 @@ describe('follow requests route actor lifecycle', () => {
       rendered('FollowRequestList').map((node) => node.props.identity),
       ['profile-a'],
     );
-    assert.equal(queryHistory.at(-1)?.fetchKey, '4:0');
+    assert.equal(queryHistory.at(-1)?.fetchKey, 0);
   });
 
   it('selected Profile이 없으면 profile-required 상태를 표시한다', async () => {
@@ -144,13 +142,13 @@ describe('follow requests route actor lifecycle', () => {
         rendered('FollowRequestList').map((node) => node.props.identity),
         ['profile-a'],
       );
-      assert.equal(queryHistory.at(-1)?.fetchKey, '4:1');
+      assert.equal(queryHistory.at(-1)?.fetchKey, 1);
     } finally {
       console.error = originalConsoleError;
     }
   });
 
-  it('actor revision이 바뀌면 route retry state와 이전 Profile 표시를 재사용하지 않는다', async () => {
+  it('route boundary를 새로 만들면 retry key와 이전 Profile 표시를 재사용하지 않는다', async () => {
     const originalConsoleError = console.error;
     console.error = () => undefined;
     try {
@@ -158,17 +156,18 @@ describe('follow requests route actor lifecycle', () => {
       await renderScreen();
       queryMode = 'success';
       await act(async () => requireRendered('FollowRequestListState').props.onRetry());
-      assert.equal(queryHistory.at(-1)?.fetchKey, '4:1');
+      assert.equal(queryHistory.at(-1)?.fetchKey, 1);
 
-      revision = 5;
       selectedProfileId = 'profile-b';
+      await act(async () => renderer?.unmount());
+      renderer = null;
       await renderScreen();
 
       assert.deepEqual(
         rendered('FollowRequestList').map((node) => node.props.identity),
         ['profile-b'],
       );
-      assert.equal(queryHistory.at(-1)?.fetchKey, '5:0');
+      assert.equal(queryHistory.at(-1)?.fetchKey, 0);
     } finally {
       console.error = originalConsoleError;
     }

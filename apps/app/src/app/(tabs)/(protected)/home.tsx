@@ -1,5 +1,5 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
@@ -7,17 +7,17 @@ import { createOperationDescriptor, getRequest } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { PostList } from '@/components/post/PostList';
-import { RouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import type { MutableRefObject, PropsWithChildren } from 'react';
+import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { HomePageQuery, HomePageQuery$data } from './__generated__/HomePageQuery.graphql';
 
 const HomeQuery = graphql`
@@ -41,18 +41,15 @@ const HomeQuery = graphql`
 `;
 
 export default function HomeScreen() {
-  const { revision } = useRelayActor();
   const environment = useRelayEnvironment();
   const shellChrome = useShellChrome();
   const registerHomeReselection = shellChrome?.registerHomeReselection;
-  const [fetchKey, setFetchKey] = useState(0);
-  const lastSuccessfulHomeRef = useRef<HomeLastSuccessful | null>(null);
-  const retryHome = useCallback(() => setFetchKey((key) => key + 1), []);
+  const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
   const handleHomeReselection = useCallback(() => {
     if (Platform.OS === 'web') {
       window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
     }
-    setFetchKey((key) => key + 1);
+    routeBoundaryRef.current?.refetch();
   }, []);
 
   useEffect(() => {
@@ -71,22 +68,13 @@ export default function HomeScreen() {
   }, [environment]);
 
   return (
-    <HomeFrame
-      onBrandCurrentNavigate={shellChrome?.reselectHome}
-      paginationOwnerKey={`home:${revision}`}
-    >
+    <HomeFrame onBrandCurrentNavigate={shellChrome?.reselectHome} paginationOwnerKey="home">
       <RouteBoundary
         loading={<StateView loading title="홈을 불러오는 중입니다." />}
-        onRetry={retryHome}
+        ref={routeBoundaryRef}
         title="홈을 불러오지 못했어요"
       >
-        <HomeContentBoundary
-          fetchKey={`${revision}:${fetchKey}`}
-          key={revision}
-          lastSuccessfulHomeRef={lastSuccessfulHomeRef}
-          onRetry={retryHome}
-          revision={revision}
-        />
+        <HomeRouteContent />
       </RouteBoundary>
     </HomeFrame>
   );
@@ -125,19 +113,29 @@ function HomeFrame({
 
 type HomeLastSuccessful = {
   data: HomePageQuery$data;
-  revision: number;
 };
+
+function HomeRouteContent() {
+  const { fetchKey, refetch } = useRouteBoundary();
+  const lastSuccessfulHomeRef = useRef<HomeLastSuccessful | null>(null);
+
+  return (
+    <HomeContentBoundary
+      fetchKey={fetchKey}
+      lastSuccessfulHomeRef={lastSuccessfulHomeRef}
+      onRetry={refetch}
+    />
+  );
+}
 
 function HomeContentBoundary({
   fetchKey,
   lastSuccessfulHomeRef,
   onRetry,
-  revision,
 }: {
-  fetchKey: string;
+  fetchKey: number;
   lastSuccessfulHomeRef: MutableRefObject<HomeLastSuccessful | null>;
   onRetry: () => void;
-  revision: number;
 }) {
   const reportUnexpectedError = useUnexpectedErrorReporter();
 
@@ -145,7 +143,7 @@ function HomeContentBoundary({
     <ErrorBoundary
       fallbackRender={({ resetErrorBoundary }) => {
         const lastSuccessful = lastSuccessfulHomeRef.current;
-        if (!lastSuccessful || lastSuccessful.revision !== revision) {
+        if (!lastSuccessful) {
           return (
             <StateView
               actionLabel="다시 시도"
@@ -160,7 +158,7 @@ function HomeContentBoundary({
       }}
       onError={(error, info) => {
         const lastSuccessful = lastSuccessfulHomeRef.current;
-        if (!lastSuccessful || lastSuccessful.revision !== revision) {
+        if (!lastSuccessful) {
           reportUnexpectedError?.(error, info);
           console.error('Route error', error, info.componentStack);
         }
@@ -172,11 +170,7 @@ function HomeContentBoundary({
       }}
       resetKeys={[fetchKey]}
     >
-      <HomeContent
-        fetchKey={fetchKey}
-        lastSuccessfulHomeRef={lastSuccessfulHomeRef}
-        revision={revision}
-      />
+      <HomeContent fetchKey={fetchKey} lastSuccessfulHomeRef={lastSuccessfulHomeRef} />
     </ErrorBoundary>
   );
 }
@@ -184,18 +178,16 @@ function HomeContentBoundary({
 function HomeContent({
   fetchKey,
   lastSuccessfulHomeRef,
-  revision,
 }: {
-  fetchKey: string;
+  fetchKey: number;
   lastSuccessfulHomeRef: MutableRefObject<HomeLastSuccessful | null>;
-  revision: number;
 }) {
   const data = useLazyLoadQuery<HomePageQuery>(
     HomeQuery,
     {},
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
-  lastSuccessfulHomeRef.current = { data, revision };
+  lastSuccessfulHomeRef.current = { data };
 
   return <HomeContentView data={data} />;
 }

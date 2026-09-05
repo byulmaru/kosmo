@@ -1,9 +1,7 @@
-import { useState } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { BookmarkConnectionList } from '@/components/bookmark/BookmarkConnectionList';
 import { BookmarkList } from '@/components/bookmark/BookmarkList';
-import { RouteBoundary } from '@/components/RouteBoundary';
-import { useRelayActor } from '@/relay/RelayActorProvider';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useSession } from '@/session/SessionProvider';
 import type { BookmarksPageQuery } from './__generated__/BookmarksPageQuery.graphql';
 
@@ -20,9 +18,7 @@ const BookmarksQuery = graphql`
 `;
 
 export default function BookmarksScreen() {
-  const { revision } = useRelayActor();
   const { selectedProfileId, status } = useSession();
-  const [fetchKey, setFetchKey] = useState(0);
 
   if (status !== 'error' && !selectedProfileId) {
     return <BookmarkList profileRequired />;
@@ -31,17 +27,17 @@ export default function BookmarksScreen() {
   return (
     <RouteBoundary
       error={(retry) => <BookmarkList error onRetry={retry} />}
-      key={`${revision}:${selectedProfileId}`}
+      key={selectedProfileId ?? 'profile-required'}
       loading={<BookmarkList loading />}
-      onRetry={() => setFetchKey((key) => key + 1)}
       title="북마크 목록을 불러오지 못했어요"
     >
-      <BookmarksContent fetchKey={`${revision}:${selectedProfileId}:${fetchKey}`} />
+      <BookmarksContent />
     </RouteBoundary>
   );
 }
 
-function BookmarksContent({ fetchKey }: { fetchKey: string }) {
+function BookmarksContent() {
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<BookmarksPageQuery>(
     BookmarksQuery,
     {},
