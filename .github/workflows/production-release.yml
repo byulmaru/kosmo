@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       target_sha:
-        description: Optional full 40-character commit SHA with a canonical Docker Build artifact (defaults to the latest main commit)
+        description: Optional full 40-character commit SHA with a successful main Docker Build run and SHA tag (defaults to the latest main commit)
         required: false
         default: ''
         type: string
@@ -140,23 +140,25 @@ jobs:
             echo "- Migration/workload digest: ${IMAGE_DIGEST}"
             echo "- Argo source revision: ${TARGET_SHA}"
             echo "- Approval boundary: prod Environment"
-            echo "- Production image build: not executed (canonical artifact promotion)"
+            echo "- SHA tag: ghcr.io/${GITHUB_REPOSITORY}:sha-${TARGET_SHA}"
+            echo "- Production image build: not executed (SHA tag digest promotion)"
             echo "- Result: ${RESULT}"
             echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"
           } >> "${GITHUB_STEP_SUMMARY}"
 
   canonical_preflight:
-    name: Validate Canonical Release Artifact
+    name: Validate SHA Tag Release
     runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
+      packages: read
     outputs:
       target_sha: ${{ steps.resolve.outputs.target_sha }}
       target_url: ${{ steps.resolve.outputs.target_url }}
       build_run_id: ${{ steps.resolve.outputs.build_run_id }}
       build_run_url: ${{ steps.resolve.outputs.build_run_url }}
-      image_digest: ${{ steps.manifest.outputs.image_digest }}
+      image_digest: ${{ steps.image.outputs.image_digest }}
 
     steps:
       - name: Resolve trusted canonical Docker Build
@@ -209,61 +211,48 @@ jobs:
                 run.head_branch === "main" &&
                 run.conclusion === "success",
             );
-            if (canonicalRuns.length !== 1) {
+            if (canonicalRuns.length === 0) {
               throw new Error(
-                `Expected exactly one successful main Docker Build run for ${targetSha}, found ${canonicalRuns.length}.`,
+                `No successful main Docker Build run exists for ${targetSha}.`,
               );
             }
 
             const buildRun = canonicalRuns[0];
-            const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: buildRun.id,
-              per_page: 100,
-            });
-            const manifestArtifacts = artifacts.artifacts.filter(
-              (artifact) => artifact.name === "canonical-release-manifest",
-            );
-            if (manifestArtifacts.length !== 1 || manifestArtifacts[0].expired) {
-              throw new Error(
-                `Canonical release manifest is missing, expired, or ambiguous for Docker Build run ${buildRun.id}.`,
-              );
-            }
-
             core.setOutput("target_sha", targetSha);
             core.setOutput("target_url", commit.html_url);
             core.setOutput("build_run_id", String(buildRun.id));
             core.setOutput("build_run_url", buildRun.html_url);
 
-      - name: Download canonical release manifest
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
         with:
-          name: canonical-release-manifest
-          path: canonical-release-manifest
-          github-token: ${{ github.token }}
-          run-id: ${{ steps.resolve.outputs.build_run_id }}
+          name: kosmo-production
 
-      - name: Validate canonical release manifest
-        id: manifest
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve and validate production image digest
+        id: image
+        env:
+          TARGET_SHA: ${{ steps.resolve.outputs.target_sha }}
+          IMAGE_REFERENCE: ghcr.io/${{ github.repository }}:sha-${{ steps.resolve.outputs.target_sha }}
         shell: bash
         run: |
           set -euo pipefail
 
-          manifest_path="canonical-release-manifest/release-manifest.json"
-          image_digest="$(jq -er '
-            if type != "object" then
-              error("manifest must be an object")
-            elif (keys | sort) != ["imageDigest"] then
-              error("manifest must contain only imageDigest")
-            elif (.imageDigest | type) != "string" then
-              error("imageDigest must be a string")
-            elif (.imageDigest | test("^sha256:[0-9a-f]{64}$") | not) then
-              error("imageDigest must be a valid sha256 digest")
-            else
-              .imageDigest
-            end
-          ' "${manifest_path}")"
+          if [[ ! "${TARGET_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Production preflight did not resolve a valid full commit SHA."
+            exit 1
+          fi
+
+          image_digest="$(
+            docker buildx imagetools inspect "${IMAGE_REFERENCE}" --format '{{json .Manifest}}' \
+              | jq -er '.digest | strings | select(test("^sha256:[0-9a-f]{64}$"))'
+          )"
           echo "image_digest=${image_digest}" >> "${GITHUB_OUTPUT}"
 
       - name: Record preflight identity
@@ -272,7 +261,7 @@ jobs:
           TARGET_SHA: ${{ steps.resolve.outputs.target_sha || inputs.target_sha || 'unresolved' }}
           BUILD_RUN_ID: ${{ steps.resolve.outputs.build_run_id || 'unresolved' }}
           BUILD_RUN_URL: ${{ steps.resolve.outputs.build_run_url || 'unresolved' }}
-          IMAGE_DIGEST: ${{ steps.manifest.outputs.image_digest || 'unresolved' }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.image_digest || 'unresolved' }}
           RESULT: ${{ job.status }}
         shell: bash
         run: |
@@ -284,6 +273,7 @@ jobs:
             echo "- Workflow definition ref: ${GITHUB_REF}"
             echo "- Target SHA: ${TARGET_SHA}"
             echo "- Canonical Docker Build run: [${BUILD_RUN_ID}](${BUILD_RUN_URL})"
+            echo "- SHA tag: ghcr.io/${GITHUB_REPOSITORY}:sha-${TARGET_SHA}"
             echo "- Runtime image: ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"
             echo "- Result: ${RESULT}"
           } >> "${GITHUB_STEP_SUMMARY}"
