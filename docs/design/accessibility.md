@@ -117,9 +117,9 @@ Post Action Bar는 모든 플랫폼에서 28 logical unit visual row를 공유�
 
 ### 기존 컴포넌트 계약
 
-- `FollowButton`의 Current·Target geometry는 [profile-hero.md](./profile-hero.md)가 소유한다. Current runtime
-  source는 최소 `120×32` visual을 사용한다. Figma Target의 `390px` Mobile은 `Size=Medium` `96×40`을
-  사용하고 `Size=Compact` `72×32`는 사용하지 않는다. Target을 Profile Hero와 Profile 목록·Post
+- `FollowButton`의 소비처별 geometry와 이관 상태는 [profile-hero.md](./profile-hero.md)가 소유한다.
+  Web 목록은 Compact `72×32`, Web Profile Hero 및 Mobile 소비처는 Medium `96×40`을 사용한다.
+  Mobile은 `Size=Compact` `72×32`를 사용하지 않는다. 이 기준을 Profile Hero와 Profile 목록·Post
   Activity·Reaction People의 Mobile consumer에 이관할 때 iOS·Android의 실제 target은 visual 높이 `40`과
   별개로 각각 최소 `44pt`, `48dp`를 충족하고 인접 action과 겹치지 않아야 한다.
 - Reaction Quick Picker와 Reaction 요약 token은 [reactions.md](./reactions.md)의 Web 32×32 CSS px geometry를 사용한다. 이 값은 SC 2.5.8의 24×24 CSS px minimum을 자체 크기로 충족하며, `apps/app/src/stories/patterns/Reactions.stories.tsx`의 Web exact-size assertion도 32×32로 맞춘다.

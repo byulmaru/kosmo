@@ -3,7 +3,7 @@ import { graphql, useFragment } from 'react-relay';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { borderWidths, space, textStyles } from '@/theme/tokens';
 import { FollowButton } from './FollowButton';
 import type { Href } from 'expo-router';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -38,14 +38,14 @@ export function ProfileListItem({ linked = false, onPress, profile, style }: Pro
     <>
       <Avatar imageUri={data.avatar?.url} label={data.displayName || data.handle} size={40} />
       <View style={styles.copy}>
-        <Text numberOfLines={1} style={[styles.name, { color: theme.text }]}>
+        <Text numberOfLines={1} style={[styles.name, { color: theme.foregroundPrimary }]}>
           {data.displayName}
         </Text>
-        <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
+        <Text numberOfLines={1} style={[styles.handle, { color: theme.foregroundSecondary }]}>
           {data.relativeHandle}
         </Text>
         {data.bio ? (
-          <Text numberOfLines={1} style={[styles.bio, { color: theme.text }]}>
+          <Text numberOfLines={3} style={[styles.bio, { color: theme.foregroundPrimary }]}>
             {data.bio}
           </Text>
         ) : null}
@@ -54,17 +54,30 @@ export function ProfileListItem({ linked = false, onPress, profile, style }: Pro
   );
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }, style]}>
+    <View
+      style={[
+        styles.root,
+        data.bio ? styles.withBio : undefined,
+        { borderColor: theme.borderDefault },
+        style,
+      ]}
+    >
       {linked ? (
         <NavigationLink href={profileHref}>
-          <Pressable accessibilityRole="link" onPress={onPress} style={styles.profile}>
+          <Pressable
+            accessibilityRole="link"
+            onPress={onPress}
+            style={[styles.profile, data.bio ? styles.profileWithBio : undefined]}
+          >
             {content}
           </Pressable>
         </NavigationLink>
       ) : (
-        <View style={styles.profile}>{content}</View>
+        <View style={[styles.profile, data.bio ? styles.profileWithBio : undefined]}>
+          {content}
+        </View>
       )}
-      <FollowButton profile={data} style={styles.follow} />
+      <FollowButton profile={data} size="compact" style={styles.follow} />
     </View>
   );
 }
@@ -72,16 +85,18 @@ export function ProfileListItem({ linked = false, onPress, profile, style }: Pro
 const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
-    borderBottomWidth: 1,
+    borderBottomWidth: borderWidths[1],
     flexDirection: 'row',
-    gap: spacing.md,
-    minHeight: 64,
-    paddingHorizontal: spacing.lg,
+    gap: space[12],
+    paddingHorizontal: space[16],
+    paddingVertical: space[12],
   },
-  profile: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.md, minWidth: 0 },
+  withBio: { alignItems: 'flex-start' },
+  profile: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: space[12], minWidth: 0 },
+  profileWithBio: { alignItems: 'flex-start' },
   copy: { flex: 1, minWidth: 0 },
-  name: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  handle: { fontFamily: 'SUIT', ...typography.xsm },
-  bio: { fontFamily: 'SUIT', marginTop: spacing.xs, ...typography.xsm },
+  name: textStyles.uiLabelM,
+  handle: textStyles.uiCopyS,
+  bio: textStyles.uiCopyS,
   follow: { flexShrink: 0 },
 });

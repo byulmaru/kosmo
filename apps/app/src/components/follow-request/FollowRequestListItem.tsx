@@ -1,12 +1,13 @@
+import { CheckIcon, XIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
-import { Button } from '@/components/ui/Button';
+import { getIconButtonTargetSize, IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { borderWidths, iconSizes, space, textStyles } from '@/theme/tokens';
 import { removeFollowRequestFromConnection } from './followRequestStore';
 import type { Href } from 'expo-router';
 import type { RecordSourceSelectorProxy } from 'relay-runtime';
@@ -142,7 +143,7 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }]}>
+    <View style={[styles.root, { borderColor: theme.borderDefault }]}>
       <View style={styles.row}>
         {follower ? (
           <NavigationLink href={`/${follower.relativeHandle}` as Href}>
@@ -158,7 +159,10 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
         ) : (
           <View style={styles.profile}>
             <Avatar label={name} size={40} />
-            <Text numberOfLines={1} style={[styles.name, styles.copy, { color: theme.text }]}>
+            <Text
+              numberOfLines={1}
+              style={[styles.name, styles.copy, { color: theme.foregroundPrimary }]}
+            >
               {name}
             </Text>
           </View>
@@ -185,7 +189,10 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
         </View>
       </View>
       {failedAction ? (
-        <Text accessibilityRole="alert" style={[styles.error, { color: theme.textSecondary }]}>
+        <Text
+          accessibilityRole="alert"
+          style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
+        >
           팔로우 요청을 {failedAction === 'approve' ? '승인' : '거절'}하지 못했어요. 다시
           시도해주세요.
         </Text>
@@ -209,51 +216,58 @@ function FollowRequestActionButton({
   onPress: () => void;
   pending: boolean;
 }) {
+  const theme = useTheme();
   const label = action === 'approve' ? '승인' : '거절';
   const visibleLabel = failed ? `${label} 다시 시도` : label;
+  const iconColor = busy ? theme.stateDisabledForeground : theme.foregroundPrimary;
+  const targetSize = getIconButtonTargetSize(Platform.OS);
 
   return (
-    <Button
+    <IconButton
       accessibilityLabel={`${name} 팔로우 요청 ${visibleLabel}`}
       accessibilityState={{ busy: pending, disabled: busy }}
       disabled={busy}
-      loading={pending}
-      loadingText="처리 중"
+      feedback="none"
       onPress={onPress}
-      style={styles.action}
-      tone={action === 'approve' ? 'primary' : 'secondary'}
+      targetSize={targetSize}
     >
-      {visibleLabel}
-    </Button>
+      {pending ? (
+        <ActivityIndicator
+          accessibilityLabel={`${name} 팔로우 요청 ${label} 처리 중`}
+          color={theme.foregroundPrimary}
+          size="small"
+          style={styles.spinner}
+        />
+      ) : action === 'approve' ? (
+        <CheckIcon color={iconColor} size={iconSizes[20]} />
+      ) : (
+        <XIcon color={iconColor} size={iconSizes[20]} />
+      )}
+    </IconButton>
   );
 }
 
-const actionMinHeight = Platform.select({ android: 48, ios: 44, default: 40 });
+const rowMinHeight = Platform.select({ android: 48, default: 40, ios: 44 });
 
 const styles = StyleSheet.create({
   root: {
-    borderBottomWidth: 1,
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    borderBottomWidth: borderWidths[1],
+    gap: space[8],
+    paddingHorizontal: space[16],
+    paddingVertical: space[12],
   },
-  row: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
+  row: { alignItems: 'center', flexDirection: 'row', gap: space[12] },
   profile: {
     alignItems: 'center',
     flex: 1,
     flexDirection: 'row',
-    gap: spacing.md,
-    minHeight: actionMinHeight,
+    gap: space[12],
+    minHeight: rowMinHeight,
     minWidth: 0,
   },
   copy: { flex: 1, minWidth: 0 },
-  name: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  actions: { flexDirection: 'row', flexShrink: 0, gap: spacing.sm },
-  action: {
-    minHeight: actionMinHeight,
-    minWidth: 64,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 0,
-  },
-  error: { fontFamily: 'SUIT', textAlign: 'right', ...typography.xsm },
+  name: textStyles.uiLabelM,
+  actions: { flexDirection: 'row', flexShrink: 0, gap: space[8] },
+  spinner: { height: iconSizes[16], width: iconSizes[16] },
+  error: { textAlign: 'right', ...textStyles.uiCopyS },
 });

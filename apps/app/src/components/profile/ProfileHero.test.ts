@@ -23,6 +23,7 @@ type ProfileData = {
 let fragmentData: ProfileData;
 const platformSelections: Array<Record<string, number>> = [];
 let renderer: ReactTestRenderer | null = null;
+let windowWidth = 1280;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -54,6 +55,7 @@ mockModule('react-native', {
     flatten: (styles: ReadonlyArray<Record<string, unknown>>) => Object.assign({}, ...styles),
   },
   Text: 'Text',
+  useWindowDimensions: () => ({ height: 800, width: windowWidth }),
   View: 'View',
 });
 mockModule('react-relay', {
@@ -94,6 +96,7 @@ afterEach(async () => {
     renderer = null;
   }
   platformSelections.length = 0;
+  windowWidth = 1280;
 });
 
 const renderProfile = async (data: ProfileData) => {
@@ -160,6 +163,49 @@ describe('ProfileHero cover geometry', () => {
 
     assert.equal(cover.props.style[1].backgroundColor, '#semantic-surface');
     assert.equal(avatar.props.style[1].borderColor, '#semantic-canvas');
+  });
+
+  it('center와 mobile에서 Figma Avatar 크기를 사용한다', async () => {
+    await renderProfile(baseProfile);
+
+    const centerAvatar = renderer!.root.findByProps({
+      accessibilityLabel: '코스모 프로필 이미지',
+    });
+    assert.equal(centerAvatar.props.style[1].width, 120);
+
+    windowWidth = 390;
+    await act(async () => {
+      renderer!.update(createElement(ProfileHero, { profile: {} as never }));
+    });
+
+    const mobileAvatar = renderer!.root.findByProps({
+      accessibilityLabel: '코스모 프로필 이미지',
+    });
+    assert.equal(mobileAvatar.props.style[1].width, 88);
+  });
+
+  it('loading Avatar도 center와 mobile 외곽 크기를 유지한다', async () => {
+    await act(async () => {
+      renderer = create(createElement(ProfileHero, { loading: true }));
+    });
+    assert.ok(renderer);
+    assert.equal(
+      renderer.root.find(
+        (node) => (node.type as unknown) === 'Skeleton' && node.props.circular === true,
+      ).props.width,
+      128,
+    );
+
+    windowWidth = 390;
+    await act(async () => {
+      renderer!.update(createElement(ProfileHero, { loading: true }));
+    });
+    assert.equal(
+      renderer.root.find(
+        (node) => (node.type as unknown) === 'Skeleton' && node.props.circular === true,
+      ).props.width,
+      96,
+    );
   });
 });
 

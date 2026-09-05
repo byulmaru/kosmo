@@ -1,10 +1,18 @@
-import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
 import { ProfileTagChip } from './ProfileTagChip';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -46,25 +54,40 @@ const countFormatter = new Intl.NumberFormat('en', {
 
 export function ProfileHero({ action, loading = false, profile = null }: ProfileHeroProps) {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const data = useFragment(profileHeroFragment, profile);
+  const compact = Platform.OS !== 'web' || width < breakpoints.compact;
+  const avatarSize = compact ? 88 : 120;
+  const avatarFrameSize = compact ? 96 : 128;
+  const avatarOverlap = avatarFrameSize / 2;
+  const avatarRowHeight = compact ? 64 : 80;
+  const actionMarginTop = compact ? space[12] : space[16] + space[4];
 
   if (loading) {
     return (
-      <View>
+      <View style={styles.root}>
         <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <View style={[styles.cover, { backgroundColor: theme.backgroundSurface }]} />
-          <View style={styles.body}>
+          <View
+            style={[styles.avatarRow, { height: avatarRowHeight, paddingHorizontal: space[16] }]}
+          >
             <Skeleton
               circular
-              height={80}
-              style={[styles.avatarSkeleton, { borderColor: theme.backgroundCanvas }]}
-              width={80}
+              height={avatarFrameSize}
+              style={[
+                styles.avatarSkeleton,
+                { borderColor: theme.backgroundCanvas, marginTop: -avatarOverlap },
+              ]}
+              width={avatarFrameSize}
             />
-            <View style={styles.skeletonCopy}>
-              <Skeleton height={20} width="50%" />
-              <Skeleton height={16} width="30%" />
-              <Skeleton height={16} width="70%" />
-            </View>
+            {action ? (
+              <View style={[styles.action, { marginTop: actionMarginTop }]}>{action}</View>
+            ) : null}
+          </View>
+          <View style={styles.skeletonCopy}>
+            <Skeleton height={20} width="50%" />
+            <Skeleton height={16} width="30%" />
+            <Skeleton height={16} width="70%" />
           </View>
         </View>
         <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
@@ -83,7 +106,7 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
 
   return (
     <View style={styles.root}>
-      <View style={[styles.cover, { backgroundColor: theme.primary }]}>
+      <View style={[styles.cover, { backgroundColor: theme.actionPrimaryBase }]}>
         {data.header?.url ? (
           <Image
             accessible={false}
@@ -93,18 +116,36 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
           />
         ) : null}
       </View>
-      <View style={styles.body}>
-        <View style={styles.avatarRow}>
-          <View style={[styles.avatarBorder, { backgroundColor: theme.background }]}>
-            <Avatar imageUri={data.avatar?.url} label={data.displayName || data.handle} size={72} />
-          </View>
-          {action ? <View style={styles.action}>{action}</View> : null}
+      <View style={[styles.avatarRow, { height: avatarRowHeight, paddingHorizontal: space[16] }]}>
+        <View
+          style={[
+            styles.avatarBorder,
+            { backgroundColor: theme.backgroundCanvas, marginTop: -avatarOverlap },
+          ]}
+        >
+          <Avatar
+            imageUri={data.avatar?.url}
+            label={data.displayName || data.handle}
+            size={avatarSize}
+          />
         </View>
-        <Text accessibilityRole="header" style={[styles.displayName, { color: theme.text }]}>
+        {action ? (
+          <View style={[styles.action, { marginTop: actionMarginTop }]}>{action}</View>
+        ) : null}
+      </View>
+      <View style={styles.body}>
+        <Text
+          accessibilityRole="header"
+          style={[styles.displayName, { color: theme.foregroundPrimary }]}
+        >
           {data.displayName}
         </Text>
-        <Text style={[styles.handle, { color: theme.textSecondary }]}>{data.relativeHandle}</Text>
-        {data.bio ? <Text style={[styles.bio, { color: theme.text }]}>{data.bio}</Text> : null}
+        <Text style={[styles.handle, { color: theme.foregroundSecondary }]}>
+          {data.relativeHandle}
+        </Text>
+        {data.bio ? (
+          <Text style={[styles.bio, { color: theme.foregroundPrimary }]}>{data.bio}</Text>
+        ) : null}
         {data.tags.length ? (
           <View style={styles.tags} testID="profile-tag-list">
             {data.tags.map((tag) => (
@@ -115,18 +156,18 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
         <View style={styles.counts}>
           <NavigationLink href={followingHref}>
             <Pressable accessibilityRole="link" style={styles.countLink}>
-              <Text style={[styles.count, { color: theme.text }]}>
+              <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
                 {countFormatter.format(data.followingCount).toLowerCase()}
               </Text>
-              <Text style={[styles.countLabel, { color: theme.textSecondary }]}>팔로잉</Text>
+              <Text style={[styles.countLabel, { color: theme.foregroundSecondary }]}>팔로잉</Text>
             </Pressable>
           </NavigationLink>
           <NavigationLink href={followersHref}>
             <Pressable accessibilityRole="link" style={styles.countLink}>
-              <Text style={[styles.count, { color: theme.text }]}>
+              <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
                 {countFormatter.format(data.followersCount).toLowerCase()}
               </Text>
-              <Text style={[styles.countLabel, { color: theme.textSecondary }]}>팔로워</Text>
+              <Text style={[styles.countLabel, { color: theme.foregroundSecondary }]}>팔로워</Text>
             </Pressable>
           </NavigationLink>
         </View>
@@ -159,31 +200,30 @@ function ProfileTagLink({ id, name }: { id: string; name: string }) {
 }
 
 const styles = StyleSheet.create({
-  root: { marginBottom: spacing.xl },
+  root: { marginBottom: space[24] },
   cover: { aspectRatio: 3, width: '100%' },
   coverImage: { height: '100%', width: '100%' },
-  body: { paddingHorizontal: spacing.lg },
+  body: { paddingBottom: space[4], paddingHorizontal: space[16] },
   avatarRow: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
-  avatarBorder: { borderRadius: radii.full, marginTop: -40, padding: spacing.xs },
+  avatarBorder: { borderRadius: radius.full, overflow: 'hidden', padding: space[4] },
   avatarSkeleton: {
-    borderWidth: spacing.xs,
-    marginTop: -40,
+    borderWidth: space[4],
   },
-  action: { marginTop: spacing.md },
-  displayName: { fontFamily: 'SUIT', fontWeight: '700', marginTop: spacing.md, ...typography.xl },
-  handle: { fontFamily: 'SUIT', ...typography.sm },
-  bio: { fontFamily: 'SUIT', marginTop: spacing.md, ...typography.md },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  action: { alignItems: 'flex-end', height: 40, width: 96 },
+  displayName: textStyles.uiHeadingM,
+  handle: textStyles.uiCopyM,
+  bio: { marginTop: space[12], ...textStyles.uiCopyL },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space[8], marginTop: space[12] },
   tagTarget: {
     alignItems: 'center',
     justifyContent: 'center',
     maxWidth: '100%',
   },
-  counts: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.md },
-  countLink: { flexDirection: 'row', gap: spacing.xs },
-  count: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  countLabel: { fontFamily: 'SUIT', ...typography.sm },
-  skeletonCopy: { gap: spacing.sm, marginTop: spacing.lg },
+  counts: { flexDirection: 'row', gap: space[16], marginTop: space[12] },
+  countLink: { flexDirection: 'row', gap: space[4] },
+  count: textStyles.uiLabelM,
+  countLabel: textStyles.uiCopyM,
+  skeletonCopy: { gap: space[8], paddingHorizontal: space[16], paddingTop: space[8] },
   srOnly: {
     height: 1,
     left: 0,
