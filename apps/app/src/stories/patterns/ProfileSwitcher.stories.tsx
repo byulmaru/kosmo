@@ -27,6 +27,12 @@ const profiles: readonly ProfilePickerProfile[] = [
     id: 'profile-long',
     relativeHandle: '@a-very-long-profile-handle',
   },
+  ...Array.from({ length: 5 }, (_, index) => ({
+    avatar: null,
+    displayName: `추가 프로필 ${index + 4}`,
+    id: `profile-${index + 4}`,
+    relativeHandle: `@profile-${index + 4}`,
+  })),
 ];
 
 type ProfileSwitcherFixtureProps = Readonly<{
@@ -36,6 +42,7 @@ type ProfileSwitcherFixtureProps = Readonly<{
   onSelectProfile: (id: string) => void;
   otherUnreadCount: number;
   profileCount: number;
+  selectionOutcome: 'failure' | 'success';
   selectedProfileId: string;
   selectedUnreadCount: number;
   surface: ProfilePickerSurface;
@@ -48,6 +55,7 @@ export function ProfileSwitcherFixture({
   onSelectProfile,
   otherUnreadCount,
   profileCount,
+  selectionOutcome,
   selectedProfileId: initialSelectedProfileId,
   selectedUnreadCount,
   surface,
@@ -89,8 +97,12 @@ export function ProfileSwitcherFixture({
           onOpenChange(nextOpen);
         }}
         onSelectProfile={(id) => {
-          setSelectedProfileId(id);
           onSelectProfile(id);
+          if (selectionOutcome === 'success') {
+            setSelectedProfileId(id);
+            setOpen(false);
+            onOpenChange(false);
+          }
         }}
         open={open}
         profiles={visibleProfiles}
@@ -109,6 +121,7 @@ const meta = {
     onSelectProfile: fn(),
     otherUnreadCount: 10,
     profileCount: 3,
+    selectionOutcome: 'success',
     selectedProfileId: 'profile-kosmo',
     selectedUnreadCount: 1,
     surface: 'full',
@@ -119,7 +132,8 @@ const meta = {
     onOpenChange: { action: 'open', control: false },
     onSelectProfile: { action: 'selectProfile', control: false },
     otherUnreadCount: { control: 'select', options: [0, 1, 9, 10] },
-    profileCount: { control: { max: 3, min: 0, step: 1, type: 'range' } },
+    profileCount: { control: { max: profiles.length, min: 0, step: 1, type: 'range' } },
+    selectionOutcome: { control: false },
     selectedProfileId: {
       control: 'select',
       options: profiles.map((profile) => profile.id),
@@ -132,8 +146,12 @@ const meta = {
     'CompactClosedUnreadContract',
     'InteractionContract',
     'OpenUnreadContract',
+    'OutsideDismissContract',
     'ProfileSwitcherFixture',
+    'SelectionFailureContract',
     'WideClosedUnreadContract',
+    'EscapeDismissContract',
+    'LongListContract',
   ],
   parameters: { layout: 'centered' },
   title: 'KOSMO/Patterns/Profile Switcher',
@@ -167,6 +185,7 @@ export const Empty: Story = {
 export const LongContent: Story = {
   args: { initialOpen: true, selectedProfileId: 'profile-long' },
 };
+export const LongList: Story = { args: { initialOpen: true, profileCount: profiles.length } };
 export const Disabled: Story = { args: { disabled: true } };
 
 export const InteractionContract: Story = {
@@ -175,7 +194,9 @@ export const InteractionContract: Story = {
     args.onOpenChange.mockClear();
     args.onSelectProfile.mockClear();
     const canvas = within(canvasElement);
-    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+    const trigger = canvas.getByRole('button', {
+      name: '프로필 목록, 읽지 않은 알림 있음',
+    });
 
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(trigger);
@@ -204,11 +225,84 @@ export const InteractionContract: Story = {
   },
 };
 
+export const SelectionFailureContract: Story = {
+  args: { initialOpen: true, profileCount: 2, selectionOutcome: 'failure' },
+  play: async ({ args, canvasElement }) => {
+    args.onOpenChange.mockClear();
+    args.onSelectProfile.mockClear();
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+    const group = canvas.getByRole('group', { name: '프로필 전환' });
+    const remote = within(group).getByRole('button', {
+      name: '먼 우주의 사용자, @remote, 읽지 않은 알림 있음',
+    });
+
+    await userEvent.click(remote);
+
+    expect(args.onSelectProfile).toHaveBeenCalledWith('profile-remote');
+    expect(args.onOpenChange).not.toHaveBeenCalled();
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(group).toBeInTheDocument();
+  },
+};
+
+export const EscapeDismissContract: Story = {
+  args: { initialOpen: true },
+  play: async ({ args, canvasElement }) => {
+    args.onOpenChange.mockClear();
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(args.onOpenChange).toHaveBeenCalledWith(false);
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).toHaveFocus();
+  },
+};
+
+export const OutsideDismissContract: Story = {
+  args: { initialOpen: true },
+  play: async ({ args, canvasElement }) => {
+    args.onOpenChange.mockClear();
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+
+    await userEvent.click(canvasElement);
+
+    expect(args.onOpenChange).toHaveBeenCalledWith(false);
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  },
+};
+
+export const LongListContract: Story = {
+  args: { initialOpen: true, profileCount: profiles.length },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const group = canvas.getByRole('group', { name: '프로필 전환' });
+    const lastProfile = within(group).getByRole('button', {
+      name: '추가 프로필 8, @profile-8, 읽지 않은 알림 있음',
+    });
+
+    expect(group.scrollHeight).toBeGreaterThan(group.clientHeight);
+    expect(group.clientHeight).toBeLessThanOrEqual(430);
+
+    lastProfile.focus();
+
+    const groupBounds = group.getBoundingClientRect();
+    const lastProfileBounds = lastProfile.getBoundingClientRect();
+    expect(lastProfile).toHaveFocus();
+    expect(lastProfileBounds.bottom).toBeLessThanOrEqual(groupBounds.bottom);
+  },
+};
+
 export const WideClosedUnreadContract: Story = {
   args: { initialOpen: false, surface: 'full' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+    const trigger = canvas.getByRole('button', {
+      name: '프로필 목록, 읽지 않은 알림 있음',
+    });
     const indicator = canvas.getByTestId('profile-switcher-closed-unread');
     const triggerBounds = trigger.getBoundingClientRect();
     const bounds = indicator.getBoundingClientRect();

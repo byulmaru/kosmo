@@ -1,9 +1,11 @@
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react-native';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '@/components/ui/Avatar';
 import { getIconButtonTargetSize } from '@/components/ui/IconButton';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import type { ViewStyle } from 'react-native';
 import type {
   ProfilePickerProfile,
   ProfilePickerSurface,
@@ -30,12 +32,51 @@ export function ProfileSwitcherTarget({
 }: ProfileSwitcherTargetProps) {
   const theme = useTheme();
   const elevation = useElevation();
+  const menuRef = useRef<View>(null);
+  const triggerRef = useRef<View>(null);
   const compact = surface === 'compact';
   const triggerTargetSize = compact
     ? Math.max(44, getIconButtonTargetSize(Platform.OS))
     : getIconButtonTargetSize(Platform.OS);
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);
   const selectedHasUnread = (selectedProfile?.unreadNotificationCount ?? 0) > 0;
+  const triggerLabel =
+    !open && selectedHasUnread ? '프로필 목록, 읽지 않은 알림 있음' : '프로필 목록';
+  const webMenuBounds =
+    Platform.OS === 'web'
+      ? ({
+          maxHeight: `min(430px, calc(100vh - ${compact ? 32 : surface === 'drawer' ? 206 : 276}px))`,
+        } as unknown as ViewStyle)
+      : undefined;
+  const ProfileList = Platform.OS === 'web' ? ScrollView : View;
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !open || surface === 'drawer') {
+      return;
+    }
+
+    const menu = menuRef.current as unknown as HTMLElement | null;
+    const trigger = triggerRef.current as unknown as HTMLElement | null;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!menu?.contains(event.target as Node) && !trigger?.contains(event.target as Node)) {
+        onOpenChange(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onOpenChange(false);
+        trigger?.focus();
+      }
+    };
+
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [onOpenChange, open, surface]);
 
   return (
     <View
@@ -46,8 +87,9 @@ export function ProfileSwitcherTarget({
       ]}
     >
       <Pressable
+        ref={triggerRef}
         aria-expanded={open}
-        accessibilityLabel="프로필 목록"
+        accessibilityLabel={triggerLabel}
         accessibilityRole="button"
         accessibilityState={{ disabled, expanded: open }}
         disabled={disabled}
@@ -120,14 +162,21 @@ export function ProfileSwitcherTarget({
 
       {open ? (
         <View
+          ref={menuRef}
           style={[
             styles.menu,
             compact ? styles.compactMenu : styles.wideMenu,
+            Platform.OS === 'web' ? styles.webMenu : undefined,
+            webMenuBounds,
             elevation.floating,
             { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
           ]}
         >
-          <View accessibilityLabel="프로필 전환" role={Platform.OS === 'web' ? 'group' : undefined}>
+          <ProfileList
+            accessibilityLabel="프로필 전환"
+            role={Platform.OS === 'web' ? 'group' : undefined}
+            style={Platform.OS === 'web' ? styles.profileList : undefined}
+          >
             {profiles.length === 0 ? (
               <Text style={[styles.empty, { color: theme.foregroundSecondary }]}>
                 프로필이 없습니다.
@@ -147,10 +196,7 @@ export function ProfileSwitcherTarget({
                     }
                     disabled={disabled}
                     key={profile.id}
-                    onPress={() => {
-                      onSelectProfile(profile.id);
-                      onOpenChange(false);
-                    }}
+                    onPress={() => onSelectProfile(profile.id)}
                     style={({ pressed }) => [
                       styles.option,
                       {
@@ -213,7 +259,7 @@ export function ProfileSwitcherTarget({
                 );
               })
             )}
-          </View>
+          </ProfileList>
         </View>
       ) : null}
     </View>
@@ -247,6 +293,8 @@ const styles = StyleSheet.create({
     width: 280,
     zIndex: 30,
   },
+  webMenu: { overflow: 'hidden' },
+  profileList: { flexShrink: 1, minHeight: 0 },
   compactMenu: { left: 56, top: 0 },
   wideMenu: { left: 0, top: 40 },
   option: {
