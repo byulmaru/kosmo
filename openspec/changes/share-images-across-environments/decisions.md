@@ -14,7 +14,7 @@
 - Decision Outcome: Main push의 성공한 `Docker Build` run이 현재 단일 Kosmo image를 한 번 build·push하고 `sha-<full 40-character Git SHA>` tag를 게시한다. Sentry release/source map도 이 canonical build에서 한 번 생성·업로드한다.
 - Alternatives Considered: Release manifest/artifact retention, mutable `:main`/`stable` tag, 승인 뒤 production rebuild. 현재 SHA tag 조회 계약에 필요하지 않거나 production 재생성을 유발하므로 선택하지 않았다.
 - Consequences: SHA tag는 재빌드로 덮어쓸 수 있으며, tag 조회 시점에 따라 Dev와 Production의 digest가 달라질 수 있다. Docker Build run 성공 자체는 최종 digest를 증명하지 않는다.
-- Confirmation / Follow-up: 정적 workflow test와 별도 live 배포 evidence에서 run ID·SHA·GHCR tag 조회·digest를 구분해 확인한다.
+- Confirmation / Follow-up: Actionlint로 문법을 확인하고 외부 응답을 대체해 preflight 선택과 digest 검증의 성공·실패를 실행 확인한다. 실제 run ID·SHA·GHCR tag·digest는 별도 live 배포 evidence로 확인한다.
 
 ### Dev와 Production은 GHCR SHA tag digest를 조회한다
 
@@ -26,7 +26,7 @@
 - Decision Outcome: Dev는 triggering Docker Build의 `head_sha`로 `sha-<head_sha>` tag digest를 조회·검증한다. Production preflight는 target SHA의 성공한 main push Docker Build run을 확인한 뒤 같은 SHA tag digest를 조회·검증하고 승인 전에 outputs로 고정한다.
 - Alternatives Considered: JSON manifest upload/download, run output digest를 cross-environment identity로 강제, mutable `:main` tag. 새 artifact retention 의존성이나 현재 권위가 요구하지 않는 동일 run 보장을 추가하므로 선택하지 않았다.
 - Consequences: Dev와 Production이 같은 SHA tag를 다른 시점에 조회하면 digest가 달라질 수 있다. 이는 허용된 운영 경계이며 Production approval 이후에는 preflight digest를 다시 조회하지 않는다.
-- Confirmation / Follow-up: Static test가 SHA tag 구성, GHCR digest validation과 두 Argo `imageDigest` 전달 경로를 확인한다.
+- Confirmation / Follow-up: 외부 응답을 대체한 실행으로 digest 검증의 성공·실패를 확인하고, workflow diff에서 SHA tag 구성과 두 Argo `imageDigest` 전달 경로를 검토한다.
 
 ### Production 승인은 고정된 digest의 mutation만 gate한다
 
@@ -50,7 +50,7 @@
 - Decision Outcome: Web 공개 설정은 `/channel.js`의 `dev`/`prod` 선택을 유지하고, `ENVIRONMENT`와 server Secret은 Helm runtime 주입을 유지한다. 이 변경은 client/runtime config code를 수정하지 않는다.
 - Alternatives Considered: 과거 `/runtime-config.json` 재도입, packaged asset 치환, environment build args 복구. 현재 계약과 최소 범위를 해치므로 선택하지 않았다.
 - Consequences: 공개 설정 변경은 PROD-891의 코드 설정표와 client release 경계를 따르며 image promotion workflow와 분리된다.
-- Confirmation / Follow-up: Diff와 workflow test에서 config code/build args가 추가되지 않았는지 확인한다.
+- Confirmation / Follow-up: Diff에서 config code/build args가 추가되지 않았는지 확인하고 actionlint로 workflow syntax를 검증한다.
 
 ### Sentry release/source map은 canonical build에서 한 번 생성한다
 

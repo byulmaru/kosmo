@@ -32,7 +32,7 @@
 ## Impact
 
 - `.github/workflows/docker-build.yml`, `.github/workflows/deploy-dev.yml`, `.github/workflows/production-release.yml`, `.github/workflows/trivy-scan.yml`
-- `scripts`의 workflow 정적 검증과 root test entrypoint
+- Workflow actionlint와 digest 조회 단계의 실제 입력·출력·실패 실행 검증
 - `docs/operations/production-release.md`, `docs/operations/production-migrations.md`, `docs/operations/sentry.md`
 - `apps/terraform/README.md`
 - 기존 `imageDigest` Helm contract를 소비하는 Web, API, Admin, Worker, Fedify Consumer와 migration
