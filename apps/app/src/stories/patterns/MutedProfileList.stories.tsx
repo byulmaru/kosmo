@@ -170,6 +170,9 @@ export const FailureContract: Story = {
       }),
     );
     expect(canvas.getByText(args.displayName)).toBeVisible();
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: `${args.displayName} 뮤트 해제` })).toHaveFocus(),
+    );
     await userEvent.click(canvas.getByRole('button', { name: `${args.displayName} 뮤트 해제` }));
     await waitFor(() => expect(args.onUnmute).toHaveBeenCalledTimes(2));
   },
