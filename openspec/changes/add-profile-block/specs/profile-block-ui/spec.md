@@ -35,9 +35,21 @@
 
 #### Scenario: Block 목록에서 Target을 해제한다
 
-- **WHEN** Owner가 `차단한 프로필` 목록의 한 Target에 대해 `차단 해제` action을 확정한다
+- **WHEN** Owner가 `차단한 프로필` 목록의 한 Target에 대해 `차단 해제` action을 선택한다
+- **THEN** 시스템은 canonical 공용 확인창에 차단 해제 제목·설명과 `취소`·`차단 해제` action을 표시한다
+- **AND** 확인창에서 해제를 확정하기 전에는 해제 mutation을 실행하지 않는다
+- **WHEN** Owner가 확인창의 `차단 해제`를 확정한다
 - **THEN** 시스템은 해당 Profile Block 해제 mutation을 실행한다
 - **AND** 성공한 Target은 현재 Block 목록에서 제거되고 다른 목록 항목의 상태는 바꾸지 않는다
+
+#### Scenario: 차단 해제 확인을 취소하거나 요청에 실패한다
+
+- **WHEN** Owner가 차단 해제 확인을 취소하거나 dismiss한다
+- **THEN** 시스템은 차단 상태와 목록을 유지하고 trigger로 focus를 복원한다
+- **AND** 해제 mutation과 성공 feedback을 실행하지 않는다
+- **WHEN** 확정한 차단 해제 요청이 pending이거나 실패한다
+- **THEN** pending에는 중복 입력과 dismiss를 차단하고 busy를 전달한다
+- **AND** 실패하면 기존 차단 상태와 확인창을 유지하며 오류 feedback과 재시도 경로를 제공한다
 
 ### Requirement: Profile Block actor and client-state isolation
 
