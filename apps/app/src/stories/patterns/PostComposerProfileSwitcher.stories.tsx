@@ -257,7 +257,6 @@ export const Playground: Story = {
   },
 };
 
-export const Rail: Story = { args: { surface: 'rail' } };
 export const Overlay: Story = { args: { surface: 'overlay' } };
 export const Mobile390: Story = {
   args: { surface: 'overlay' },
