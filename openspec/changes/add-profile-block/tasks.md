@@ -147,7 +147,7 @@ frontend 콘텐츠 경고 뒤 허용된 콘텐츠와 `차단 해제` action을 �
 - Web 1024/1440·Mobile 390 Light/Dark, keyboard/보조 기술, Web Escape·Native back·focus 복원과 실제 Web/iOS/Android presentation evidence를
   실행 환경별로 기록한다.
 
-- [ ] 3.1 기존 공용 confirmation을 Profile mutation 상태에 연결해 취소·pending·실패·retry와 direct Profile route의 경고·콘텐츠 상태를 구현한다.
+- [ ] 3.1 기존 차단·차단 해제 공용 confirmation을 Profile mutation 상태에 연결해 확인 전 요청 차단·취소·pending·실패·retry와 direct Profile route의 경고·콘텐츠 상태를 구현한다.
 - [ ] 3.2 Settings에 Mute와 분리된 Block 관리 destination·목록 상태·pagination·unblock action을 연결한다.
 - [ ] 3.3 selected Local Profile actor 경계 안에서 Block/Unblock 성공·실패 결과에 따라 관리 목록과 표시 중 기본 Profile 정보·viewer 방향
       콘텐츠 상태·Home/Local/Hashtag timeline·Profile Post List·Notification client 상태를 각 surface 서버 정책에 맞게 수렴시킨다.
