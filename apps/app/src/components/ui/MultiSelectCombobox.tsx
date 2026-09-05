@@ -8,7 +8,7 @@ import { ICON_BUTTON_TARGET_SIZE, IconButton } from './IconButton';
 import { ListboxOption } from './ListboxOption';
 import { TextField } from './TextField';
 import type { ReactNode } from 'react';
-import type { TextInput, TextInputKeyPressEvent, TextInputProps } from 'react-native';
+import type { TextInput, TextInputKeyPressEvent, TextInputProps, ViewProps } from 'react-native';
 
 export type MultiSelectOption = {
   disabled?: boolean;
@@ -327,10 +327,15 @@ export function MultiSelectCombobox({
           ) : null}
           <View
             accessibilityLabel={`${searchLabel} 결과`}
-            accessibilityRole={'listbox' as never}
             nativeID={listboxId}
             style={styles.listbox}
-            {...({ role: 'listbox' } as unknown as { role?: never })}
+            {...(Platform.OS === 'web'
+              ? {
+                  'aria-multiselectable': true,
+                  // React Native's Role type omits this Web-only role.
+                  role: 'listbox' as ViewProps['role'],
+                }
+              : undefined)}
           >
             {options.map((option, index) => (
               <ListboxOption

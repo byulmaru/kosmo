@@ -160,6 +160,26 @@ export const InteractionContract: Story = {
       ]);
     });
 
+    await step('복수 선택 listbox와 각 option의 선택 상태 확인', async () => {
+      await userEvent.keyboard('{ArrowDown}');
+      const listbox = canvas.getByRole('listbox', { name: `${args.searchLabel} 결과` });
+      expect(listbox).toHaveAttribute('aria-multiselectable', 'true');
+      const results = within(listbox);
+      expect(results.getAllByRole('option', { selected: true })).toHaveLength(2);
+      expect(results.getByRole('option', { name: '마스토돈' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(results.getByRole('option', { name: '블루스카이' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(results.getByRole('option', { name: '마이크로블로그' })).toHaveAttribute(
+        'aria-selected',
+        'false',
+      );
+    });
+
     await step('방금 선택한 chip 제거 Action 확인', async () => {
       await userEvent.click(canvas.getByRole('button', { name: '블루스카이 제거' }));
       expect(args.onSelectedOptionsChange).toHaveBeenLastCalledWith([catalogOptions[0]]);

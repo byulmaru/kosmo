@@ -25,7 +25,7 @@ const PressableHost = forwardRef<unknown, PressableProps>(function PressableMock
 const TextHost = 'Text' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
 
-let platformOS: 'ios' | 'web' = 'web';
+let platformOS: 'android' | 'ios' | 'web' = 'web';
 let reducedMotion = false;
 
 mockModule('react-native', {
@@ -122,7 +122,7 @@ test('ListboxOption exposes selected option semantics and selects on press', () 
   const renderer = renderOption({ onSelect: () => selected++ });
   const option = optionNode(renderer);
 
-  assert.equal(option.props.accessibilityRole, 'option');
+  assert.equal(option.props.accessibilityRole, undefined);
   assert.deepEqual(option.props.accessibilityState, { disabled: false, selected: true });
   assert.equal(option.props.role, 'option');
   assert.equal(option.props['aria-selected'], true);
@@ -141,6 +141,26 @@ test('ListboxOption exposes selected option semantics and selects on press', () 
 
   act(() => option.props.onPress());
   assert.equal(selected, 1);
+});
+
+test('ListboxOption uses supported native button semantics without Web option props', () => {
+  for (const platform of ['android', 'ios'] as const) {
+    platformOS = platform;
+    for (const disabled of [false, true]) {
+      let selected = 0;
+      const renderer = renderOption({ disabled, onSelect: () => selected++ });
+      const option = optionNode(renderer);
+
+      assert.equal(option.props.accessibilityRole, 'button');
+      assert.deepEqual(option.props.accessibilityState, { disabled, selected: true });
+      assert.equal(option.props.role, undefined);
+      assert.equal(option.props['aria-selected'], undefined);
+      assert.equal(option.props.tabIndex, undefined);
+      act(() => option.props.onPress());
+      assert.equal(selected, disabled ? 0 : 1);
+      act(() => renderer.unmount());
+    }
+  }
 });
 
 test('ListboxOption transitions Web feedback by state without affecting native styles', () => {

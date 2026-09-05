@@ -42,7 +42,7 @@ export function ListboxOption({
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
-      accessibilityRole={'option' as never}
+      accessibilityRole={web ? undefined : 'button'}
       accessibilityState={{ disabled, selected }}
       disabled={disabled}
       nativeID={nativeID}

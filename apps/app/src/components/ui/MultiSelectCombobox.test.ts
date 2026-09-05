@@ -30,7 +30,7 @@ const TextHost = 'Text' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
 const TextInputHost = 'TextInput' as unknown as ElementType;
 
-let platformOS: 'ios' | 'web' = 'web';
+let platformOS: 'android' | 'ios' | 'web' = 'web';
 
 mockModule('react-native', {
   Platform: {
@@ -175,6 +175,30 @@ test('opens its controlled listbox on focus and selects the next enabled option'
   act(() => inputNode(renderer).props.onKeyPress({ nativeEvent: { key: 'Enter' } }));
   assert.deepEqual(selectedOptions, [options[0], options[2]]);
   assert.equal(inputNode(renderer).props['aria-expanded'], false);
+});
+
+test('opens native results without unsupported listbox roles and preserves selection', () => {
+  for (const platform of ['android', 'ios'] as const) {
+    platformOS = platform;
+    let selectedOptions: readonly Option[] | undefined;
+    const renderer = renderCombobox({
+      onSelectedOptionsChange: (next) => {
+        selectedOptions = next;
+      },
+    });
+    act(() => inputNode(renderer).props.onFocus({}));
+    const results = renderer.root.findByProps({ accessibilityLabel: '항목 검색 결과' });
+
+    assert.equal(results.props.accessibilityRole, undefined);
+    assert.equal(results.props.role, undefined);
+    assert.equal(results.props['aria-multiselectable'], undefined);
+    assert.equal(optionNodes(renderer)[0].props.selected, true);
+    assert.equal(optionNodes(renderer)[1].props.disabled, true);
+    assert.equal(optionNodes(renderer)[2].props.selected, false);
+    act(() => optionNodes(renderer)[2].props.onSelect());
+    assert.deepEqual(selectedOptions, [options[0], options[2]]);
+    act(() => renderer.unmount());
+  }
 });
 
 test('clears the query, removes a selected chip, and ignores editing while disabled', () => {
