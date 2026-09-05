@@ -113,6 +113,17 @@ test('toast dwell timer starts after its enter motion finishes', async () => {
       renderer?.update(createElement(ToastProvider, null, createElement(Harness))),
     );
     assert.deepEqual(delays, [3000]);
+    let dismiss: (() => void) | undefined;
+    await act(async () => {
+      dismiss = api?.showToast('이미지를 불러오지 못했어요.', {
+        tone: 'danger',
+        persistent: true,
+        action: { label: '다시 시도', onPress: () => undefined },
+      });
+    });
+    assert.deepEqual(delays, [3000], 'persistent Action Toast에는 자동 닫힘 timer가 없어야 한다');
+    await act(async () => dismiss?.());
+    assert.equal(renderer?.root.findAllByType('AnimatedView' as ElementType).length, 0);
   } finally {
     await act(async () => renderer?.unmount());
     globalThis.setTimeout = originalSetTimeout;

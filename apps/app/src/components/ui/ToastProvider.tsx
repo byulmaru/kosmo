@@ -24,6 +24,7 @@ type ToastContextValue = Readonly<{
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 type ToastOptions = Readonly<{
+  persistent?: boolean;
   action?: Readonly<{
     label: string;
     onPress: () => void;
@@ -32,6 +33,7 @@ type ToastOptions = Readonly<{
 }>;
 
 type Toast = Readonly<{
+  persistent?: boolean;
   action?: ToastOptions['action'];
   id: number;
   message: string;
@@ -72,7 +74,13 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
       }
       const id = nextToastId.current++;
       activeToastId.current = id;
-      setToast({ action: options.action, id, message: nextMessage, tone: options.tone });
+      setToast({
+        action: options.action,
+        id,
+        message: nextMessage,
+        persistent: options.persistent,
+        tone: options.tone,
+      });
       setToastVisible(true);
       return () => dismissToast(id);
     },
@@ -80,7 +88,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   );
 
   useEffect(() => {
-    if (!toast || !toastVisible || !toastMotion.entered) {
+    if (!toast || toast.persistent || !toastVisible || !toastMotion.entered) {
       return;
     }
 

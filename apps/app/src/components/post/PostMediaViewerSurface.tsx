@@ -1,4 +1,5 @@
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -10,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { IconButton } from '@/components/ui/IconButton';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
@@ -95,14 +97,10 @@ export function PostMediaViewerSurface({
                 style={styles.imagePrivacyBoundary}
                 testID="post-media-viewer-image-privacy-boundary"
               >
-                <Image
+                <ViewerImage
+                  key={JSON.stringify([currentMedia.id, currentMedia.url])}
                   accessibilityLabel={imageName}
-                  accessibilityRole="image"
-                  accessibilityState={{ busy: false }}
-                  resizeMode="contain"
-                  source={{ uri: currentMedia.url }}
-                  style={styles.image}
-                  testID="post-media-viewer-image"
+                  url={currentMedia.url}
                 />
               </PostContentPrivacyBoundary>
             ) : null}
@@ -242,6 +240,75 @@ export function PostMediaViewerSurface({
         </View>
       ) : null}
     </View>
+  );
+}
+
+function ViewerImage({
+  accessibilityLabel,
+  url,
+}: Readonly<{
+  accessibilityLabel: string;
+  url: string;
+}>) {
+  const { showToast } = useToast();
+  const [generation, setGeneration] = useState(0);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const request = useRef({ active: true, generation: 0 });
+
+  useEffect(() => {
+    request.current.active = true;
+    return () => {
+      request.current.active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (status !== 'error') {
+      return;
+    }
+    return showToast('미디어를 불러오지 못했어요', {
+      tone: 'danger',
+      persistent: true,
+      action: {
+        label: '다시 시도',
+        onPress: () => {
+          if (!request.current.active) {
+            return;
+          }
+          request.current.generation += 1;
+          setGeneration(request.current.generation);
+          setStatus('loading');
+        },
+      },
+    });
+  }, [showToast, status]);
+
+  const settle = useCallback(
+    (next: 'loading' | 'ready' | 'error') => {
+      if (request.current.active && request.current.generation === generation) {
+        setStatus(next);
+      }
+    },
+    [generation],
+  );
+  const handleError = useCallback(() => settle('error'), [settle]);
+  const handleLoad = useCallback(() => settle('ready'), [settle]);
+  const handleLoadStart = useCallback(() => settle('loading'), [settle]);
+
+  return (
+    <Image
+      key={generation}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="image"
+      accessibilityState={{ busy: status === 'loading' }}
+      onError={handleError}
+      onLoad={handleLoad}
+      onLoadStart={handleLoadStart}
+      resizeMode="contain"
+      source={{ uri: url }}
+      style={styles.image}
+      testID="post-media-viewer-image"
+    />
   );
 }
 

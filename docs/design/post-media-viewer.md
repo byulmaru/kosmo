@@ -114,6 +114,8 @@ Viewer는 [기존 Post Action Bar](./post-action-bar.md)가 현재 제공하는 
 - DSN-51 Mobile Figma에서 `Ready` surface 안의 개별 Media load 실패는 top-level `Error`가 아니다. 중앙 blocking state 대신 기존 공용 Danger Action Toast를 stage 하단에 지속 표시한다. Mobile Error consumer [`6665:55675`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-55675)는 [`Toast 7380:55058`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-55058)의 `미디어를 불러오지 못했어요`와 `다시 시도`를 사용하며 modal chrome, 현재 index와 Post detail surface를 유지한다.
 - PROD-650 Current runtime은 개별 Media load 실패를 stage 중앙의 inline fallback과 `다시 시도`로 표시하며 modal chrome, 현재 index와 현재 breakpoint의 Post detail surface를 유지한다.
 - 실패한 Media는 같은 위치에서 다시 시도할 수 있고, retry는 현재 index를 바꾸거나 다른 Media의 상태를 초기화하지 않는다.
+- PROD-853 공용 Surface는 Media ID·URL별 이미지 요청과 재시도 generation을 격리한다. 실패 토스트는 `persistent` Action Toast를 사용하며 재시도·선택 Media 변경·차단 상태 전환·Surface unmount 때 해제한다. 이전 요청의 늦은 완료·실패 callback은 현재 이미지를 변경하지 않는다. Host/query `onRetry`와 이미지 재시도는 별개다.
+- Compact 원문 overflow 측정은 content revision·본문별로 새 측정 노드를 사용한다. 같은 높이의 긴 revision으로 교체해도 다시 측정하며, 이전 revision의 측정 callback과 초기화 effect가 새 측정 결과를 덮지 않는다.
 - Wide Web의 reply query가 loading 또는 실패해도 왼쪽의 선택 이미지와 modal chrome을 제거하지 않는다. 오른쪽 thread surface에서 기존 loading·error·retry 표현을 사용한다.
 - 사용자에게 raw storage URL, 내부 오류 또는 authorization 세부 정보를 노출하지 않는다.
 
