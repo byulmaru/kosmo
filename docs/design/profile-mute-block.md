@@ -129,6 +129,8 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 `ProfileMuteAction`은 기존 ActionMenu·ModalSheet·ConfirmationContent·ToastProvider를 재사용한다.
 확인과 pending/dismiss, 오류 피드백은 공용 UI 경계에서 제공하며 실제 요청은 callback으로 전달한다.
 관리 목록은 `MutedProfileList`, 행 표시는 기존 Relay `ProfileListItem`과 공유하는 `ProfileListItemContent`를 사용한다.
+Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목록은 이름·핸들 기본 표시를 사용한다.
+행의 action은 `children`으로 합성하며, FollowButton의 Web·Native 크기 선택은 Relay wrapper가 유지한다.
 `ProfileHero.mute`는 서버 확정 뮤트 상태에서만 제공하고, loading에서는 내부 상태행을 표시하지 않는다.
 
 - 요청 callback은 성공할 때 resolve하고 실패할 때 reject한다. 성공 feedback이 전달되기 전에는 낙관적으로

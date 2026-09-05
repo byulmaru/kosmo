@@ -42,18 +42,21 @@ function ProfileMuteActionContent({
   const inFlight = useRef(false);
   const mounted = useRef(false);
   const cancelRef = useRef<View>(null);
+  const actionRef = useRef<View>(null);
   const focusTrigger = useRef<() => void>(() => {});
   const restoreFocus = useRef<'cancel' | 'trigger' | null>(null);
   useEffect(() => {
     if (!pending && restoreFocus.current) {
       if (restoreFocus.current === 'cancel') {
         cancelRef.current?.focus();
-      } else {
+      } else if (surface === 'menu') {
         focusTrigger.current();
+      } else {
+        actionRef.current?.focus();
       }
       restoreFocus.current = null;
     }
-  }, [pending]);
+  }, [pending, surface]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -82,13 +85,7 @@ function ProfileMuteActionContent({
       return;
     }
     inFlight.current = false;
-    restoreFocus.current = nextMuted
-      ? succeeded
-        ? null
-        : 'cancel'
-      : surface === 'menu'
-        ? 'trigger'
-        : null;
+    restoreFocus.current = nextMuted ? (succeeded ? null : 'cancel') : 'trigger';
     setPending(false);
     if (succeeded) {
       setOpen(false);
@@ -143,6 +140,7 @@ function ProfileMuteActionContent({
         />
       ) : surface === 'text' ? (
         <Pressable
+          ref={actionRef}
           accessibilityLabel={label}
           accessibilityRole="button"
           accessibilityState={{ busy: pending, disabled: pending }}
@@ -185,6 +183,7 @@ function ProfileMuteActionContent({
       ) : (
         <View style={[styles.buttonTarget, { minHeight: targetHeight, width: buttonWidth }]}>
           <Button
+            controlRef={actionRef}
             accessibilityLabel={`${displayName} ${label}`}
             aria-busy={pending || undefined}
             hitSlop={
