@@ -65,6 +65,7 @@
 - [x] 2.2 이전·다음 control, 비순환 index 전이, nullable Alt Text·fallback과 단일·다중 counter·Screen Reader 위치 정보를 구현한다.
 - [x] 2.3 Web arrow key와 vertical scroll을 침범하지 않는 Native 수평 swipe를 같은 탐색 결과에 연결한다.
 - [x] 2.4 탐색·상태·오류 격리의 focused component test를 추가하고 통과시킨다.
+- [x] 2.5 PROD-853 shared Surface의 실제 이미지 실패를 persistent Danger Action Toast·이미지 재시도에 연결하고 이전 요청 callback 격리를 검증한다.
 
 ## 3. PROD-650 반응형 Post detail·thread와 기존 interaction
 

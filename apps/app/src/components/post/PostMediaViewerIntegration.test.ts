@@ -397,6 +397,26 @@ describe('Post Media Viewer Host production wiring', () => {
     );
   });
 
+  it('동일 높이의 긴 revision으로 교체해도 측정 노드를 remount하고 더 보기를 제공한다', async () => {
+    const post = storyPost('same-height', 'revision-a');
+    post.content!.bodyText = '긴 원문\n두 번째\n세 번째\n네 번째';
+    await renderHost(
+      createElement(PostLayout, { post: asLayoutKey(post), presentation: 'compact' }),
+    );
+    const firstMeasure = byTestId('post-layout-body-measure');
+    await act(async () => firstMeasure.props.onLayout({ nativeEvent: { layout: { height: 96 } } }));
+    await act(async () => pressable('원문 더 보기').props.onPress());
+    const next = { ...post, content: { ...post.content!, id: 'revision-b' } };
+    await updateHost(
+      createElement(PostLayout, { post: asLayoutKey(next), presentation: 'compact' }),
+    );
+    const nextMeasure = byTestId('post-layout-body-measure');
+    assert.notEqual(nextMeasure, firstMeasure);
+    assert.equal(byTestId('post-body').props.numberOfLines, 3);
+    await act(async () => nextMeasure.props.onLayout({ nativeEvent: { layout: { height: 96 } } }));
+    assert.deepEqual(pressable('원문 더 보기').props.accessibilityState, { expanded: false });
+  });
+
   it('Compact 원문 토글은 font scaling된 3-line 높이를 초과할 때만 표시한다', async () => {
     fontScale = 1.5;
     const post = storyPost('compact-toggle-font-scale', 'compact-toggle-font-scale-content');

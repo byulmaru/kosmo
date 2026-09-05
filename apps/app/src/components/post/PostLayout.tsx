@@ -88,7 +88,11 @@ export function PostLayout({
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
   const [bodyExpanded, setBodyExpanded] = useState(false);
-  const [bodyHasOverflow, setBodyHasOverflow] = useState(false);
+  const bodyMeasurementKey = JSON.stringify([post.content?.id, post.content?.bodyText]);
+  const currentBodyMeasurementKey = useRef(bodyMeasurementKey);
+  currentBodyMeasurementKey.current = bodyMeasurementKey;
+  const [bodyMeasurement, setBodyMeasurement] = useState({ key: '', overflow: false });
+  const bodyHasOverflow = bodyMeasurement.key === bodyMeasurementKey && bodyMeasurement.overflow;
   const lastContentRevision = useRef<string | null>(post.content?.id ?? null);
   const compact = presentation === 'compact';
   const compactBodyToggleTargetSize =
@@ -102,7 +106,6 @@ export function PostLayout({
       contentRevision !== lastContentRevision.current
     ) {
       setBodyExpanded(false);
-      setBodyHasOverflow(false);
     }
     if (contentRevision) {
       lastContentRevision.current = contentRevision;
@@ -129,12 +132,20 @@ export function PostLayout({
     },
     [handleDeleted, openViewer, post.id],
   );
-  const handleBodyLayout = useCallback((event: LayoutChangeEvent) => {
-    setBodyHasOverflow(
-      event.nativeEvent.layout.height >
-        typography.md.lineHeight * PixelRatio.getFontScale() * 3 + 0.5,
-    );
-  }, []);
+  const handleBodyLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      if (currentBodyMeasurementKey.current !== bodyMeasurementKey) {
+        return;
+      }
+      setBodyMeasurement({
+        key: bodyMeasurementKey,
+        overflow:
+          event.nativeEvent.layout.height >
+          typography.md.lineHeight * PixelRatio.getFontScale() * 3 + 0.5,
+      });
+    },
+    [bodyMeasurementKey],
+  );
   const reply: PostActionBarProps['reply'] = replyBinding
     ? {
         accessibilityLabel: '답글',
@@ -206,6 +217,7 @@ export function PostLayout({
                   testID="post-layout-body-measure-privacy-boundary"
                 >
                   <Text
+                    key={bodyMeasurementKey}
                     accessible={false}
                     onLayout={handleBodyLayout}
                     style={[styles.bodyMeasure, { color: theme.text }]}

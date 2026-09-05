@@ -15,6 +15,20 @@ const require = createRequire(import.meta.url);
 const mockPlatform: { OS: string } = { OS: 'web' };
 let mockWindowHeight = 844;
 let mockReducedMotion = false;
+let activeToast: { action: { onPress: () => void }; persistent: boolean; tone: string } | null =
+  null;
+const getToastRetry = () => activeToast?.action.onPress;
+const showToast = (_message: string, options: NonNullable<typeof activeToast>) => {
+  activeToast = options;
+  return () => {
+    if (activeToast === options) {
+      activeToast = null;
+    }
+  };
+};
+mock.module('@/components/ui/ToastProvider', {
+  exports: { useToast: () => ({ showToast }) },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('react-native', {
   exports: {
@@ -100,6 +114,50 @@ afterEach(async () => {
 });
 
 describe('PostMediaViewerSurface', () => {
+  it('Ready 이미지 실패는 persistent Danger Toast로 재시도하고 오래된 요청을 무시한다', async () => {
+    await render({ currentIndex: 0 });
+    const first = image();
+    const oldFailure = first.props.onError;
+    const oldLoad = first.props.onLoad;
+    const oldLoadStart = first.props.onLoadStart;
+    await act(async () => oldFailure());
+    assert.equal(image().props.onError, oldFailure);
+    assert.equal(image().props.onLoad, oldLoad);
+    assert.equal(image().props.onLoadStart, oldLoadStart);
+    assert.equal(activeToast?.tone, 'danger');
+    assert.equal(activeToast?.persistent, true);
+    assert.ok(byTestId('post-media-viewer-compact-detail'));
+    assert.ok(findByLabel('다음 이미지'));
+    assert.equal(byTestId('post-media-viewer-position').children.join(''), '1 / 4');
+
+    await act(async () => activeToast?.action.onPress());
+    assert.notEqual(image(), first);
+    assert.equal(activeToast, null);
+    assert.equal(image().props.accessibilityState.busy, true);
+    await act(async () => oldFailure());
+    assert.equal(activeToast, null);
+    await act(async () => image().props.onLoad());
+    assert.equal(image().props.accessibilityState.busy, false);
+
+    const retriedFailure = image().props.onError;
+    await act(async () => retriedFailure());
+    const staleRetry = getToastRetry();
+    await render({ currentIndex: 1 });
+    const second = image();
+    assert.equal(activeToast, null);
+    await act(async () => {
+      retriedFailure();
+      staleRetry?.();
+    });
+    assert.equal(activeToast, null);
+    assert.equal(image(), second);
+    assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
+    await act(async () => image().props.onError());
+    await render({ viewState: 'unavailable' });
+    assert.equal(activeToast, null);
+    assert.equal(queryByTestId('post-media-viewer-image'), null);
+  });
+
   it('public props는 presentation별 필수 secondary surface를 요구한다', () => {
     const commonProps = {
       currentIndex: 0,
