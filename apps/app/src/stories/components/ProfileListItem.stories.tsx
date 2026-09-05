@@ -132,7 +132,7 @@ const meta = {
   args: { linked: true, onPress: fn(), profileId: withBio.id },
   argTypes: {
     linked: { control: 'boolean' },
-    onPress: { action: 'profilePress', control: false },
+    onPress: { action: 'profilePress', control: false, table: { disable: true } },
     profileId: { control: 'select', options: storyProfileIds },
   },
   component: ProfileListItemFixture,
@@ -163,6 +163,7 @@ export const Playground: Story = {
 };
 
 export const RepresentativeStates: Story = {
+  parameters: { controls: { disable: true } },
   render: () => (
     <SessionProvider>
       <ProfileListItemCatalog />
