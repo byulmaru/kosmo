@@ -38,7 +38,7 @@ Main Docker Build는 source full SHA의 Sentry release와 source map을 포함�
 - Triggering Docker Build를 검사하는 Trivy도 별도 release artifact 없이 triggering `sha-<head SHA>` tag를 사용한다. 수동·정기 scan의 기존 `:main` 선택은 배포 identity가 아니므로 유지한다.
 - Production preflight는 main `Docker Build` workflow의 성공한 run 중 `head_sha == target SHA`, `event == push`, `head_branch == main`인 run을 확인한 뒤 GHCR의 `sha-<target SHA>` tag digest를 조회·검증한다. Run ID, target SHA와 조회 digest를 job outputs로 고정한다. Run 자체가 digest를 증명한다고 간주하지 않는다.
 - 승인된 production job은 checkout, Docker setup/login/build/push, Sentry build secret과 tag/digest 재조회를 갖지 않고 preflight outputs로 기존 migration-gated Argo sync를 실행한다.
-- Root의 작은 Node 정적 test가 SHA tag producer와 두 consumer의 tag 형식, run identity, GHCR digest validation, Argo parameter 전달 및 production build 부재를 함께 검사한다.
+- Workflow 검증은 actionlint와 digest 조회 단계의 실제 입력·출력·실패 실행으로 수행한다.
 
 ### Allowed Alternatives
 
@@ -59,13 +59,13 @@ Main Docker Build는 source full SHA의 Sentry release와 source map을 포함�
 - GHCR SHA tag가 없거나 digest 조회가 실패하면 해당 SHA는 배포할 수 없다. `:main`이나 다른 tag, production rebuild로 우회하지 않고 preflight 실패를 남긴다.
 - SHA tag 재빌드로 digest가 바뀔 수 있으므로 Dev와 Production의 실제 digest가 다를 수 있다. Production approval 전 고정된 digest는 tag가 바뀌어도 유지한다.
 - Canonical build의 Sentry upload가 실패하면 dev/prod 모두 해당 SHA를 배포할 수 없다. Sentry release/source map은 canonical build에서만 생성한다.
-- 실제 GHCR SHA tag 조회와 Argo mutation은 PR에서 live 실행하지 않으므로 정적·문법 검증과 실제 배포 증거를 분리한다.
+- Actionlint는 문법만 검증한다. Preflight와 digest 조회 코드의 실행 검증은 GitHub·Docker 응답을 대체한 검사이며, 실제 GHCR SHA tag 조회와 Argo mutation을 실행한 증거가 아니다.
 
 ## Migration Plan
 
 1. Canonical Docker Build에 `sha-<full SHA>` tag 게시와 Sentry source map upload를 유지한다.
 2. Dev는 triggering SHA tag를, Production은 preflight가 검증·고정한 SHA tag digest를 사용하도록 전환한다.
-3. Workflow 정적 test, actionlint, Helm dev/prod render와 Docker build check를 통과시킨다.
+3. Workflow actionlint, digest 조회 단계의 실제 입력·출력·실패 실행 검증, Helm dev/prod render와 Docker build check를 통과시킨다.
 4. 별도 운영 승인 뒤 dev와 production에서 build run·SHA·digest·health를 확인한다.
 
 ### Rollback

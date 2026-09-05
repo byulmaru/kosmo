@@ -16,10 +16,10 @@ Main Docker Build가 현재 단일 Kosmo image를 한 번 생성하고 `sha-<ful
 
 **Verification**
 
-- Workflow static test, actionlint와 Docker build check로 build 1회, SHA tag 형식과 Trivy 소비를 확인한다.
+- Workflow syntax는 actionlint로, Docker build는 Docker build check로, digest 조회는 실제 입력·출력·실패 실행으로 확인하고 PR/CI 결과는 live 배포 evidence로 간주하지 않는다.
 
 - [x] 1.1 Docker Build가 `sha-<full SHA>` single-image tag를 게시하고 manifest/artifact를 추가하지 않는다.
-- [x] 1.2 Canonical build만 Sentry release/source map을 생성하는지 정적 검증한다.
+- [x] 1.2 Canonical build에만 Sentry release/source map input이 남아 있는지 diff review로 확인한다.
 
 ## 2. PROD-833 SHA tag digest consumers
 
@@ -39,13 +39,13 @@ Dev와 Production이 각자 재build하거나 moving `:main` tag를 사용하지
 
 **Verification**
 
-- Static test가 SHA tag·run ID·SHA·digest 조회와 두 Argo `imageDigest` 전달 경로를 함께 확인한다.
+- Actionlint는 workflow 문법을 검사한다. 외부 응답을 대체한 실행으로 preflight 선택과 digest 검증의 성공·실패를 확인하고, workflow diff에서 SHA tag와 두 Argo `imageDigest` 전달 경로를 검토한다.
 - Dev/prod Helm lint·template에서 exact digest image reference를 확인한다.
 
 - [x] 2.1 Dev가 triggering `head_sha`의 GHCR SHA tag digest를 검증·고정하고 Argo dev에 전달한다.
 - [x] 2.2 Production preflight가 target SHA의 성공한 main push run과 GHCR SHA tag digest를 승인 전에 검증·고정한다.
 - [x] 2.3 승인된 Production job에서 build/push/Sentry upload와 SHA tag/digest 재조회를 제거하고 고정된 SHA/digest로 migration-gated sync한다.
-- [x] 2.4 SHA tag producer→dev/prod 경로와 Dev/Production digest 차이 허용 경계를 workflow static test로 증명한다.
+- [x] 2.4 Workflow diff에서 SHA tag와 Argo 전달 경로를 검토하고, 외부 응답을 대체해 preflight 선택과 digest 검증의 성공·실패를 실행 확인한다.
 
 ## 3. 문서와 전달
 
@@ -64,7 +64,7 @@ Dev와 Production이 각자 재build하거나 moving `:main` tag를 사용하지
 
 **Verification**
 
-- OpenSpec strict validation, Prettier, 관련 테스트와 diff review를 통과시킨다.
+- OpenSpec strict validation, Prettier, 관련 실행 검증과 diff review를 통과시킨다.
 
 - [x] 3.1 Production release·migration·Sentry 문서를 SHA tag digest 조회·승격에 맞춘다.
 - [x] 3.2 새 구현의 risk-proportional validation을 통과시키고 기존 Stack의 한국어 Ready PR을 갱신한다.
