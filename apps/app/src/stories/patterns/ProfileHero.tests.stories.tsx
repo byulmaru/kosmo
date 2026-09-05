@@ -4,6 +4,8 @@ import baseMeta, {
   ImageAndTagsContract as imageAndTagsContract,
   LoadingGeometryContract as loadingGeometryContract,
   MobileGeometryContract as mobileGeometryContract,
+  MuteContract as muteContract,
+  MutedLoadingContract as mutedLoadingContract,
 } from './ProfileHero.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -21,6 +23,8 @@ export const CenterGeometryContract: Story = centerGeometryContract;
 export const MobileGeometryContract: Story = mobileGeometryContract;
 export const LoadingGeometryContract: Story = loadingGeometryContract;
 export const ImageAndTagsContract: Story = imageAndTagsContract;
+export const MuteContract: Story = muteContract;
+export const MutedLoadingContract: Story = mutedLoadingContract;
 
 export const MobileFollowError: Story = {
   args: { containerWidth: 390 },
