@@ -14,11 +14,13 @@ import {
   deleteProfileFollowRequestAsActorInTransaction,
   followProfileInTransaction,
   profileFollowPairCondition as pairCondition,
+  removeProfileFollowExactSourceInTransaction,
   removeProfileFollowProjection,
 } from './profile-follow-transaction';
 import type { Transaction } from '../db';
 import type { ErrorCode } from '../error';
 import type { ProfileFollowPair } from './profile-follow-relation';
+import type { ProfileFollowRemovalSource } from './profile-follow-transaction';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
@@ -247,6 +249,22 @@ const shouldSendActivityPub = async (tx: Transaction, pair: ProfileFollowPair) =
     followee?.kind === InstanceKind.ACTIVITYPUB &&
     followee.state === InstanceState.ACTIVE
   );
+};
+
+/** Removes one exact Follow source and rebuilds the existing DELETE effect contract. */
+export const removeProfileFollowExactSourceWithEffect = async (
+  source: ProfileFollowRemovalSource,
+  origin: ProfileFollowEffectOrigin,
+  tx: Transaction,
+): Promise<Extract<ProfileFollowPairEffect, { readonly kind: 'DELETE' }>> => {
+  await removeProfileFollowExactSourceInTransaction(source, tx);
+  const sendActivityPub = origin === 'LOCAL' ? await shouldSendActivityPub(tx, source) : undefined;
+  return deleteEffect({
+    sourceId: source.sourceId,
+    pair: source,
+    sourceKind: source.sourceKind,
+    ...(sendActivityPub === undefined ? {} : { sendActivityPub }),
+  });
 };
 
 /** Read only the pending request identity before a mutating Update. */

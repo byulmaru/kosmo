@@ -1394,3 +1394,764 @@ test(
     });
   },
 );
+
+test(
+  'Profile Block Workflow는 source bootstrap과 transaction 뒤 모든 Follow effect가 끝날 때 반환한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-profile-block-success-' + process.pid;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000701',
+      targetProfileId: '00000000-0000-8000-8000-000000000702',
+      origin: 'LOCAL' as const,
+    };
+    const followId = '00000000-0000-8000-8000-000000000703';
+    const cleanupSources = [
+      {
+        sourceId: followId,
+        sourceKind: 'FOLLOW' as const,
+        followerProfileId: input.ownerProfileId,
+        followeeProfileId: input.targetProfileId,
+      },
+    ];
+    const candidateProfileBlockId = '00000000-0000-7000-8000-000000000704';
+    const execution = {
+      ok: true as const,
+      result: {
+        created: true,
+        profileBlockId: candidateProfileBlockId,
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+      },
+      effectPlan: [
+        {
+          kind: 'DELETE' as const,
+          input: { ...cleanupSources[0], sendActivityPub: true },
+        },
+      ],
+    };
+    const bootstrap = { candidateProfileBlockId, cleanupSources };
+    const calls: string[] = [];
+    let releaseEffects!: () => void;
+    const effectsReleased = new Promise<void>((resolve) => {
+      releaseEffects = resolve;
+    });
+    let notificationStarted!: () => void;
+    const notificationStartedPromise = new Promise<void>((resolve) => {
+      notificationStarted = resolve;
+    });
+    let undoStarted!: () => void;
+    const undoStartedPromise = new Promise<void>((resolve) => {
+      undoStarted = resolve;
+    });
+
+    const worker = await Worker.create({
+      activities: {
+        loadProfileBlockTransitionBootstrapActivity: async () => bootstrap,
+        executeProfileBlockTransitionActivity: async (value: unknown) => {
+          const transition = value as {
+            candidateProfileBlockId: string;
+            cleanupSources: typeof cleanupSources;
+          };
+          assert.equal(transition.candidateProfileBlockId, candidateProfileBlockId);
+          assert.deepEqual(transition.cleanupSources, cleanupSources);
+          return execution;
+        },
+        deleteFollowNotificationActivity: async (sourceId: string) => {
+          calls.push('delete:' + sourceId);
+          notificationStarted();
+          await effectsReleased;
+        },
+        sendProfileUnfollowActivity: async (value: unknown) => {
+          calls.push('undo:' + JSON.stringify(value));
+          undoStarted();
+          await effectsReleased;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      try {
+        let settled = false;
+        const resultPromise = environment.client.workflow
+          .execute('profileBlockWorkflow', {
+            args: [input],
+            taskQueue,
+            workflowId: 'profile-block-test:' + process.pid + ':success',
+          })
+          .then((result) => {
+            settled = true;
+            return result;
+          });
+
+        await Promise.all([notificationStartedPromise, undoStartedPromise]);
+        assert.equal(settled, false);
+        releaseEffects();
+        assert.deepEqual(await resultPromise, execution.result);
+        assert.deepEqual(
+          [...calls].sort(),
+          [
+            'delete:' + followId,
+            'undo:' + JSON.stringify({ ...cleanupSources[0], sendActivityPub: true }),
+          ].sort(),
+        );
+      } finally {
+        releaseEffects();
+      }
+    });
+  },
+);
+
+test(
+  'Profile Block Workflow는 transaction Activity completion loss 뒤 같은 candidate와 source로 재시도한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-profile-block-retry-' + process.pid;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000711',
+      targetProfileId: '00000000-0000-8000-8000-000000000712',
+      origin: 'LOCAL' as const,
+    };
+    const followRequestId = '00000000-0000-8000-8000-000000000713';
+    const cleanupSources = [
+      {
+        sourceId: followRequestId,
+        sourceKind: 'FOLLOW_REQUEST' as const,
+        followerProfileId: input.targetProfileId,
+        followeeProfileId: input.ownerProfileId,
+      },
+    ];
+    const execution = {
+      ok: true as const,
+      result: {
+        created: true,
+        profileBlockId: '00000000-0000-7000-8000-000000000714',
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+      },
+      effectPlan: [
+        {
+          kind: 'DELETE' as const,
+          input: cleanupSources[0],
+        },
+      ],
+    };
+    const bootstrap = {
+      candidateProfileBlockId: execution.result.profileBlockId,
+      cleanupSources,
+    };
+    const transitionInputs: unknown[] = [];
+    let bootstrapCalls = 0;
+    let transitionAttempts = 0;
+    let deleteCalls = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        loadProfileBlockTransitionBootstrapActivity: async () => {
+          bootstrapCalls += 1;
+          return {
+            candidateProfileBlockId:
+              bootstrapCalls === 1
+                ? bootstrap.candidateProfileBlockId
+                : '00000000-0000-7000-8000-000000000715',
+            cleanupSources,
+          };
+        },
+        executeProfileBlockTransitionActivity: async (value: unknown) => {
+          transitionAttempts += 1;
+          transitionInputs.push(value);
+          if (transitionAttempts === 1) {
+            throw ApplicationFailure.create({
+              message: 'transaction completion lost',
+              nextRetryDelay: '1ms',
+            });
+          }
+          return execution;
+        },
+        deleteFollowRequestNotificationActivity: async (sourceId: string) => {
+          assert.equal(sourceId, followRequestId);
+          deleteCalls += 1;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const result = await environment.client.workflow.execute('profileBlockWorkflow', {
+        args: [input],
+        taskQueue,
+        workflowId: 'profile-block-test:' + process.pid + ':retry',
+      });
+
+      assert.deepEqual(result, execution.result);
+      assert.equal(bootstrapCalls, 1);
+      assert.equal(transitionAttempts, 2);
+      assert.equal(deleteCalls, 1);
+      const firstInput = transitionInputs[0] as {
+        candidateProfileBlockId: string;
+        cleanupSources: typeof cleanupSources;
+      };
+      const secondInput = transitionInputs[1] as typeof firstInput;
+      assert.equal(firstInput.candidateProfileBlockId, bootstrap.candidateProfileBlockId);
+      assert.equal(secondInput.candidateProfileBlockId, firstInput.candidateProfileBlockId);
+      assert.deepEqual(firstInput.cleanupSources, cleanupSources);
+      assert.deepEqual(secondInput.cleanupSources, cleanupSources);
+    });
+  },
+);
+
+test(
+  'Profile Block Workflow는 required Follow effect 실패 뒤에도 sibling을 settle하고 성공을 반환하지 않는다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-profile-block-effect-failure-' + process.pid;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000721',
+      targetProfileId: '00000000-0000-8000-8000-000000000722',
+      origin: 'LOCAL' as const,
+    };
+    const followId = '00000000-0000-8000-8000-000000000723';
+    const cleanupSources = [
+      {
+        sourceId: followId,
+        sourceKind: 'FOLLOW' as const,
+        followerProfileId: input.ownerProfileId,
+        followeeProfileId: input.targetProfileId,
+      },
+    ];
+    const calls: string[] = [];
+    let releaseSibling!: () => void;
+    const siblingReleased = new Promise<void>((resolve) => {
+      releaseSibling = resolve;
+    });
+    let siblingStarted!: () => void;
+    const siblingStartedPromise = new Promise<void>((resolve) => {
+      siblingStarted = resolve;
+    });
+
+    const worker = await Worker.create({
+      activities: {
+        loadProfileBlockTransitionBootstrapActivity: async () => ({
+          candidateProfileBlockId: '00000000-0000-7000-8000-000000000724',
+          cleanupSources,
+        }),
+        executeProfileBlockTransitionActivity: async () => ({
+          ok: true as const,
+          result: {
+            created: true,
+            profileBlockId: '00000000-0000-7000-8000-000000000724',
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+          },
+          effectPlan: [
+            {
+              kind: 'DELETE' as const,
+              input: { ...cleanupSources[0], sendActivityPub: true },
+            },
+          ],
+        }),
+        deleteFollowNotificationActivity: async (sourceId: string) => {
+          calls.push('delete:' + sourceId);
+          throw ApplicationFailure.nonRetryable('notification cleanup failed');
+        },
+        sendProfileUnfollowActivity: async (value: unknown) => {
+          calls.push('undo:' + JSON.stringify(value));
+          siblingStarted();
+          await siblingReleased;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      try {
+        let settled = false;
+        const resultPromise = environment.client.workflow
+          .execute('profileBlockWorkflow', {
+            args: [input],
+            taskQueue,
+            workflowId: 'profile-block-test:' + process.pid + ':effect-failure',
+          })
+          .then(
+            () => {
+              settled = true;
+            },
+            (error) => {
+              settled = true;
+              throw error;
+            },
+          );
+
+        await siblingStartedPromise;
+        assert.equal(settled, false);
+        releaseSibling();
+        await assert.rejects(resultPromise);
+        assert.deepEqual(
+          [...calls].sort(),
+          [
+            'delete:' + followId,
+            'undo:' + JSON.stringify({ ...cleanupSources[0], sendActivityPub: true }),
+          ].sort(),
+        );
+      } finally {
+        releaseSibling();
+      }
+    });
+  },
+);
+
+test(
+  'Profile Unblock Workflow는 모든 Follow effect 뒤 exact Block generation만 삭제한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-profile-unblock-success-' + process.pid;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000801',
+      targetProfileId: '00000000-0000-8000-8000-000000000802',
+      profileBlockId: '00000000-0000-8000-8000-000000000803',
+      origin: 'LOCAL' as const,
+    };
+    const followId = '00000000-0000-8000-8000-000000000804';
+    const requestId = '00000000-0000-8000-8000-000000000805';
+    const cleanupSources = [
+      {
+        sourceId: followId,
+        sourceKind: 'FOLLOW' as const,
+        followerProfileId: input.ownerProfileId,
+        followeeProfileId: input.targetProfileId,
+      },
+      {
+        sourceId: requestId,
+        sourceKind: 'FOLLOW_REQUEST' as const,
+        followerProfileId: input.targetProfileId,
+        followeeProfileId: input.ownerProfileId,
+      },
+    ];
+    const execution = {
+      ok: true as const,
+      result: {
+        removed: true,
+        profileBlockId: input.profileBlockId,
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+      },
+      effectPlan: [
+        {
+          kind: 'DELETE' as const,
+          input: { ...cleanupSources[0], sendActivityPub: true },
+        },
+        {
+          kind: 'DELETE' as const,
+          input: cleanupSources[1],
+        },
+      ],
+    };
+    const calls: string[] = [];
+    let releaseEffects!: () => void;
+    const effectsReleased = new Promise<void>((resolve) => {
+      releaseEffects = resolve;
+    });
+    let effectsStarted!: () => void;
+    const effectsStartedPromise = new Promise<void>((resolve) => {
+      effectsStarted = resolve;
+    });
+    let startedEffects = 0;
+    let finalDeleteInput: unknown;
+
+    const worker = await Worker.create({
+      activities: {
+        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => cleanupSources,
+        executeProfileUnblockTransitionActivity: async (value: unknown) => {
+          const transition = value as {
+            expectedProfileBlockId: string;
+            cleanupSources: typeof cleanupSources;
+          };
+          assert.equal(transition.expectedProfileBlockId, input.profileBlockId);
+          assert.deepEqual(transition.cleanupSources, cleanupSources);
+          return execution;
+        },
+        deleteFollowNotificationActivity: async (sourceId: string) => {
+          calls.push('delete:' + sourceId);
+          startedEffects += 1;
+          if (startedEffects === 2) {
+            effectsStarted();
+          }
+          await effectsReleased;
+        },
+        deleteFollowRequestNotificationActivity: async (sourceId: string) => {
+          calls.push('request-delete:' + sourceId);
+        },
+        sendProfileUnfollowActivity: async (value: unknown) => {
+          calls.push('undo:' + JSON.stringify(value));
+          startedEffects += 1;
+          if (startedEffects === 2) {
+            effectsStarted();
+          }
+          await effectsReleased;
+        },
+        deleteProfileBlockActivity: async (value: unknown) => {
+          finalDeleteInput = value;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      try {
+        let settled = false;
+        const resultPromise = environment.client.workflow
+          .execute('profileUnblockWorkflow', {
+            args: [input],
+            taskQueue,
+            workflowId: 'profile-unblock-test:' + process.pid + ':success',
+          })
+          .then((result) => {
+            settled = true;
+            return result;
+          });
+
+        await effectsStartedPromise;
+        assert.equal(startedEffects, 2);
+        assert.equal(settled, false);
+        assert.equal(finalDeleteInput, undefined);
+        releaseEffects();
+        assert.deepEqual(await resultPromise, execution.result);
+        assert.deepEqual(
+          [...calls].sort(),
+          [
+            'delete:' + followId,
+            'request-delete:' + requestId,
+            'undo:' + JSON.stringify({ ...cleanupSources[0], sendActivityPub: true }),
+          ].sort(),
+        );
+        assert.deepEqual(finalDeleteInput, {
+          ownerProfileId: input.ownerProfileId,
+          targetProfileId: input.targetProfileId,
+          profileBlockId: input.profileBlockId,
+        });
+      } finally {
+        releaseEffects();
+      }
+    });
+  },
+);
+
+test(
+  'Profile Unblock Workflow는 required effect 실패 시 Block 삭제를 실행하지 않는다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-profile-unblock-effect-failure-' + process.pid;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000811',
+      targetProfileId: '00000000-0000-8000-8000-000000000812',
+      profileBlockId: '00000000-0000-8000-8000-000000000813',
+      origin: 'LOCAL' as const,
+    };
+    const followId = '00000000-0000-8000-8000-000000000814';
+    const cleanupSources = [
+      {
+        sourceId: followId,
+        sourceKind: 'FOLLOW' as const,
+        followerProfileId: input.ownerProfileId,
+        followeeProfileId: input.targetProfileId,
+      },
+    ];
+    const calls: string[] = [];
+    let releaseSibling!: () => void;
+    const siblingReleased = new Promise<void>((resolve) => {
+      releaseSibling = resolve;
+    });
+    let siblingStarted!: () => void;
+    const siblingStartedPromise = new Promise<void>((resolve) => {
+      siblingStarted = resolve;
+    });
+    let finalDeleteCalls = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => cleanupSources,
+        executeProfileUnblockTransitionActivity: async () => ({
+          ok: true as const,
+          result: {
+            removed: true,
+            profileBlockId: input.profileBlockId,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+          },
+          effectPlan: [
+            {
+              kind: 'DELETE' as const,
+              input: { ...cleanupSources[0], sendActivityPub: true },
+            },
+          ],
+        }),
+        deleteFollowNotificationActivity: async (sourceId: string) => {
+          calls.push('delete:' + sourceId);
+          throw ApplicationFailure.nonRetryable('notification cleanup failed');
+        },
+        sendProfileUnfollowActivity: async (value: unknown) => {
+          calls.push('undo:' + JSON.stringify(value));
+          siblingStarted();
+          await siblingReleased;
+        },
+        deleteProfileBlockActivity: async () => {
+          finalDeleteCalls += 1;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      try {
+        let settled = false;
+        const resultPromise = environment.client.workflow
+          .execute('profileUnblockWorkflow', {
+            args: [input],
+            taskQueue,
+            workflowId: 'profile-unblock-test:' + process.pid + ':effect-failure',
+          })
+          .then(
+            () => {
+              settled = true;
+            },
+            (error) => {
+              settled = true;
+              throw error;
+            },
+          );
+
+        await siblingStartedPromise;
+        assert.equal(settled, false);
+        assert.equal(finalDeleteCalls, 0);
+        releaseSibling();
+        await assert.rejects(resultPromise);
+        assert.equal(finalDeleteCalls, 0);
+        assert.deepEqual(
+          [...calls].sort(),
+          [
+            'delete:' + followId,
+            'undo:' + JSON.stringify({ ...cleanupSources[0], sendActivityPub: true }),
+          ].sort(),
+        );
+      } finally {
+        releaseSibling();
+      }
+    });
+  },
+);
+
+test(
+  'Profile Unblock Workflow는 completion loss retry에서 같은 Block ID로 최종 삭제한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-profile-unblock-retry-' + process.pid;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000821',
+      targetProfileId: '00000000-0000-8000-8000-000000000822',
+      profileBlockId: '00000000-0000-8000-8000-000000000823',
+      origin: 'LOCAL' as const,
+    };
+    const requestId = '00000000-0000-8000-8000-000000000824';
+    const cleanupSources = [
+      {
+        sourceId: requestId,
+        sourceKind: 'FOLLOW_REQUEST' as const,
+        followerProfileId: input.targetProfileId,
+        followeeProfileId: input.ownerProfileId,
+      },
+    ];
+    const execution = {
+      ok: true as const,
+      result: {
+        removed: true,
+        profileBlockId: input.profileBlockId,
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+      },
+      effectPlan: [
+        {
+          kind: 'DELETE' as const,
+          input: cleanupSources[0],
+        },
+      ],
+    };
+    const transitionInputs: unknown[] = [];
+    let transitionAttempts = 0;
+    let notificationCalls = 0;
+    const finalDeleteInputs: unknown[] = [];
+    let finalDeleteAttempts = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => cleanupSources,
+        executeProfileUnblockTransitionActivity: async (value: unknown) => {
+          transitionAttempts += 1;
+          transitionInputs.push(value);
+          if (transitionAttempts === 1) {
+            throw ApplicationFailure.create({
+              message: 'unblock transaction completion lost',
+              nextRetryDelay: '1ms',
+            });
+          }
+          return execution;
+        },
+        deleteFollowRequestNotificationActivity: async (sourceId: string) => {
+          assert.equal(sourceId, requestId);
+          notificationCalls += 1;
+        },
+        deleteProfileBlockActivity: async (value: unknown) => {
+          finalDeleteAttempts += 1;
+          finalDeleteInputs.push(value);
+          if (finalDeleteAttempts === 1) {
+            throw ApplicationFailure.create({
+              message: 'final Block delete completion lost',
+              nextRetryDelay: '1ms',
+            });
+          }
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const result = await environment.client.workflow.execute('profileUnblockWorkflow', {
+        args: [input],
+        taskQueue,
+        workflowId: 'profile-unblock-test:' + process.pid + ':retry',
+      });
+
+      assert.deepEqual(result, execution.result);
+      assert.equal(transitionAttempts, 2);
+      assert.equal(notificationCalls, 1);
+      assert.equal(finalDeleteAttempts, 2);
+      assert.deepEqual(finalDeleteInputs, [
+        {
+          ownerProfileId: input.ownerProfileId,
+          targetProfileId: input.targetProfileId,
+          profileBlockId: input.profileBlockId,
+        },
+        {
+          ownerProfileId: input.ownerProfileId,
+          targetProfileId: input.targetProfileId,
+          profileBlockId: input.profileBlockId,
+        },
+      ]);
+      assert.deepEqual(transitionInputs[0], transitionInputs[1]);
+      assert.deepEqual(transitionInputs[0], {
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+        origin: input.origin,
+        expectedProfileBlockId: input.profileBlockId,
+        cleanupSources,
+      });
+    });
+  },
+);
+
+test(
+  'Profile Unblock Workflow는 stale generation으로 replacement Block을 삭제하지 않는다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-profile-unblock-stale-' + process.pid;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000831',
+      targetProfileId: '00000000-0000-8000-8000-000000000832',
+      profileBlockId: '00000000-0000-8000-8000-000000000833',
+      origin: 'LOCAL' as const,
+    };
+    let finalDeleteCalls = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => [],
+        executeProfileUnblockTransitionActivity: async () => ({
+          ok: true as const,
+          result: {
+            removed: false,
+            profileBlockId: null,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+          },
+          effectPlan: [],
+        }),
+        deleteProfileBlockActivity: async () => {
+          finalDeleteCalls += 1;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const result = await environment.client.workflow.execute('profileUnblockWorkflow', {
+        args: [input],
+        taskQueue,
+        workflowId: 'profile-unblock-test:' + process.pid + ':stale',
+      });
+
+      assert.deepEqual(result, {
+        removed: false,
+        profileBlockId: null,
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+      });
+      assert.equal(finalDeleteCalls, 0);
+    });
+  },
+);
