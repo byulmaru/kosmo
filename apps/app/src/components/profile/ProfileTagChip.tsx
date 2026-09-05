@@ -9,20 +9,23 @@ export const PROFILE_TAG_CHIP_VISUAL_SIZE = 32;
 export type ProfileTagChipProps =
   | {
       disabled?: never;
+      label?: never;
       name: string;
       onRemove?: never;
       removable: false;
     }
   | {
       disabled?: boolean;
+      label?: string;
       name: string;
       onRemove: () => void;
       removable: true;
     };
 
 export function ProfileTagChip(props: ProfileTagChipProps) {
-  const { name, removable } = props;
+  const { label, name, removable } = props;
   const theme = useTheme();
+  const displayLabel = label ?? `#${name}`;
   const chip = (
     <View
       style={[
@@ -33,12 +36,12 @@ export function ProfileTagChip(props: ProfileTagChipProps) {
       testID="profile-tag-chip"
     >
       <Text
-        accessibilityLabel={`#${name}`}
+        accessibilityLabel={displayLabel}
         ellipsizeMode="tail"
         numberOfLines={1}
         style={[styles.text, { color: theme.text }]}
       >
-        #{name}
+        {displayLabel}
       </Text>
     </View>
   );
@@ -59,7 +62,7 @@ export function ProfileTagChip(props: ProfileTagChipProps) {
     >
       {chip}
       <IconButton
-        accessibilityLabel={`#${name} 제거`}
+        accessibilityLabel={`${displayLabel} 제거`}
         disabled={disabled}
         feedback="opacity"
         onPress={onRemove}

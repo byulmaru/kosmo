@@ -22,17 +22,17 @@ mock.module('expo-router', {
       href: string;
     }) => {
       childOnPressBeforeLink = children.props.onPress;
-      const mergedStyle = { ...(children.props.style as object) };
       return createElement(
         'Link',
         { href },
-        cloneElement(children, { href, onPress: linkOnPress, style: mergedStyle }),
+        cloneElement(children, { href, onPress: linkOnPress }),
       );
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
   exports: {
+    Platform: { OS: 'web' },
     Pressable: 'Pressable',
     StyleSheet: {
       create: <T>(styles: T) => styles,
@@ -48,9 +48,14 @@ mock.module(require.resolve('lucide-react-native'), {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
+    useReducedMotion: () => false,
     useTheme: () => ({
       divider: '#eeeeee',
       focus: '#005fcc',
+      selectedBorder: '#9a7800',
+      selectedSurface: '#fff8dc',
+      stateHover: '#f4f4f4',
+      statePressed: '#e8e8e8',
       text: '#111111',
       textSecondary: '#666666',
     }),
@@ -84,31 +89,52 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     assert.equal(rendered('Link')[0].props.href, 'https://id.byulmaru.co');
     assert.equal(rendered('ChevronRightIcon').length, 1);
     assert.equal(childOnPressBeforeLink, undefined);
-    const item = rendered('View').find(
-      (node) => node.props.testID === 'byulmaru-id-account-settings-item',
-    );
-    assert.ok(item);
-    assert.equal(item.props.style.minHeight, 64);
-    assert.equal(item.props.style.width, '100%');
+    const entryStyle = flattenStyle(entry.props.style({ hovered: false, pressed: false }));
+    assert.equal(entryStyle.minHeight, 64);
+    assert.equal(entryStyle.width, '100%');
+    assert.equal(entryStyle.borderWidth, 1);
+    assert.equal(entryStyle.borderColor, 'transparent');
   });
 
   it('focus-visible style과 link target geometry를 유지한다', async () => {
     await render();
 
     const entry = byTestId('byulmaru-id-account-settings-entry');
-    assert.equal(entry.props.style.minHeight, 64);
-    assert.equal(entry.props.style.width, '100%');
-    assert.equal(entry.props.style.outlineWidth, undefined);
+    let entryStyle = flattenStyle(entry.props.style({ hovered: false, pressed: false }));
+    assert.equal(entryStyle.minHeight, 64);
+    assert.equal(entryStyle.width, '100%');
+    assert.equal(entryStyle.borderWidth, 1);
+    assert.equal(entryStyle.borderColor, 'transparent');
+    assert.equal(entryStyle.outlineWidth, 0);
 
-    await act(async () => entry.props.onFocus());
+    await act(async () =>
+      entry.props.onFocus({
+        currentTarget: { matches: (selector: string) => selector === ':focus-visible' },
+      }),
+    );
     const focusedEntry = byTestId('byulmaru-id-account-settings-entry');
-    assert.equal(focusedEntry.props.style.outlineWidth, 2);
-    assert.equal(focusedEntry.props.style.outlineColor, '#005fcc');
+    entryStyle = flattenStyle(focusedEntry.props.style({ hovered: false, pressed: false }));
+    assert.equal(entryStyle.outlineWidth, 2);
+    assert.equal(entryStyle.outlineColor, '#005fcc');
 
-    await act(async () => focusedEntry.props.onBlur());
+    await act(async () => focusedEntry.props.onPointerDown());
+    entryStyle = flattenStyle(
+      byTestId('byulmaru-id-account-settings-entry').props.style({
+        hovered: false,
+        pressed: false,
+      }),
+    );
+    assert.equal(entryStyle.outlineWidth, 0);
+
+    await act(async () => byTestId('byulmaru-id-account-settings-entry').props.onBlur());
     assert.equal(
-      byTestId('byulmaru-id-account-settings-entry').props.style.outlineWidth,
-      undefined,
+      flattenStyle(
+        byTestId('byulmaru-id-account-settings-entry').props.style({
+          hovered: false,
+          pressed: false,
+        }),
+      ).outlineWidth,
+      0,
     );
   });
 });
@@ -127,11 +153,19 @@ function rendered(type: string): ReactTestInstance[] {
 
 function byTestId(testID: string): ReactTestInstance {
   assert.ok(renderer);
-  return renderer.root.findByProps({ testID });
+  return renderer.root.find(
+    (node) => (node.type as unknown) === 'Pressable' && node.props.testID === testID,
+  );
 }
 
 function texts(): string[] {
   return rendered('Text').flatMap((node) =>
     typeof node.props.children === 'string' ? [node.props.children] : [],
   );
+}
+
+function flattenStyle(style: unknown): Record<string, unknown> {
+  return Array.isArray(style)
+    ? Object.assign({}, ...style.filter(Boolean))
+    : (style as Record<string, unknown>);
 }
