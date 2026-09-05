@@ -9,6 +9,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 const meta = {
   ...baseMeta,
   excludeStories: [],
+  parameters: { ...baseMeta.parameters, controls: { disable: true } },
   title: 'KOSMO/Patterns/Post Composer Profile Switcher/Tests',
 } satisfies Meta;
 
