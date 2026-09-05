@@ -1,3 +1,4 @@
+import { expect, userEvent, within } from 'storybook/test';
 import baseMeta, {
   CancelError as cancelError,
   CancelPending as cancelPending,
@@ -5,6 +6,7 @@ import baseMeta, {
   FollowError as followError,
   FollowPending as followPending,
   FollowSuccess as followSuccess,
+  Playground,
   RequestError as requestError,
   RequestPending as requestPending,
   RequestSuccess as requestSuccess,
@@ -35,3 +37,21 @@ export const UnfollowError: Story = unfollowError;
 export const CancelSuccess: Story = cancelSuccess;
 export const CancelPending: Story = cancelPending;
 export const CancelError: Story = cancelError;
+
+const playgroundCycle = (profileId: string, activeLabel: string): Story => ({
+  ...Playground,
+  args: { profileId, size: 'medium' },
+  play: async ({ canvasElement, parameters }) => {
+    const canvas = within(canvasElement);
+    for (let cycle = 0; cycle < 2; cycle++) {
+      await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
+      await expect(canvas.findByRole('button', { name: activeLabel })).resolves.toBeEnabled();
+      await userEvent.click(canvas.getByRole('button', { name: activeLabel }));
+      await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
+    }
+    expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledTimes(4);
+  },
+});
+
+export const PlaygroundFollowCycle = playgroundCycle('follow-button-followable', '팔로잉');
+export const PlaygroundRequestCycle = playgroundCycle('follow-button-approval-required', '요청됨');
