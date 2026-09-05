@@ -187,6 +187,15 @@ jobs:
               throw new Error("target_sha must be an exact 40-character hexadecimal commit SHA.");
             }
 
+            const { data: commit } = await github.rest.repos.getCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: targetSha,
+            });
+            if (commit.sha.toLowerCase() !== targetSha) {
+              throw new Error(`GitHub resolved target ${commit.sha}, expected ${targetSha}.`);
+            }
+
             const { data: workflowRuns } = await github.rest.actions.listWorkflowRuns({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -209,10 +218,7 @@ jobs:
             }
 
             core.setOutput("target_sha", targetSha);
-            core.setOutput(
-              "target_url",
-              `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${targetSha}`,
-            );
+            core.setOutput("target_url", commit.html_url);
             core.setOutput("build_run_id", String(buildRun.id));
             core.setOutput("build_run_url", buildRun.html_url);
 
