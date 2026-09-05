@@ -45,11 +45,10 @@ jobs:
           images: |
             ghcr.io/${{ github.repository }}
           tags: |
-            type=sha
+            type=sha,format=long
             type=raw,value=main
 
       - name: Build and push Docker image
-        id: build
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -71,26 +70,3 @@ jobs:
             SENTRY_UPLOAD_REQUIRED=1
           secret-envs: |
             sentry_auth_token=SENTRY_AUTH_TOKEN
-
-      - name: Create canonical release manifest
-        env:
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-            echo "::error::Docker Build did not produce a valid image digest."
-            exit 1
-          fi
-
-          jq -n --arg image_digest "${IMAGE_DIGEST}" \
-            '{imageDigest: $image_digest}' > release-manifest.json
-
-      - name: Upload canonical release manifest
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: canonical-release-manifest
-          path: release-manifest.json
-          if-no-files-found: error
-          retention-days: 90

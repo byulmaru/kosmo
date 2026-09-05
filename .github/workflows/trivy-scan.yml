@@ -11,7 +11,6 @@ on:
     - cron: '0 18 * * *'
 
 permissions:
-  actions: read
   contents: read
   packages: read
 
@@ -28,36 +27,20 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     steps:
-      - name: Download canonical release manifest
-        if: github.event_name == 'workflow_run'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: canonical-release-manifest
-          path: canonical-release-manifest
-          github-token: ${{ github.token }}
-          run-id: ${{ github.event.workflow_run.id }}
-
-      - name: Validate canonical release manifest
-        if: github.event_name == 'workflow_run'
-        id: manifest
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          manifest_path="canonical-release-manifest/release-manifest.json"
-          image_digest="$(jq -er '.imageDigest | strings | select(test("^sha256:[0-9a-f]{64}$"))' "${manifest_path}")"
-          echo "image_digest=${image_digest}" >> "${GITHUB_OUTPUT}"
-
       - name: Select Docker image reference
         id: image
         env:
-          IMAGE_DIGEST: ${{ steps.manifest.outputs.image_digest }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
         shell: bash
         run: |
           set -euo pipefail
 
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
-            image_ref="ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"
+            if [[ ! "${TARGET_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::Docker Build did not provide a valid full commit SHA."
+              exit 1
+            fi
+            image_ref="ghcr.io/${GITHUB_REPOSITORY}:sha-${TARGET_SHA}"
           else
             image_ref="ghcr.io/${GITHUB_REPOSITORY}:main"
           fi
