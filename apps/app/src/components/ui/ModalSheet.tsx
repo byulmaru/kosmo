@@ -8,11 +8,22 @@ import type { PropsWithChildren } from 'react';
 
 type Props = PropsWithChildren<{
   onClose: () => void;
+  dismissDisabled?: boolean;
+  onShow?: () => void;
+  onDismiss?: () => void;
   title: string;
   visible: boolean;
 }>;
 
-export function ModalSheet({ children, onClose, title, visible }: Props) {
+export function ModalSheet({
+  children,
+  dismissDisabled = false,
+  onClose,
+  onShow,
+  onDismiss,
+  title,
+  visible,
+}: Props) {
   const theme = useTheme();
   const elevation = useElevation();
   const overlayMotion = useOverlayMotion(visible);
@@ -21,7 +32,13 @@ export function ModalSheet({ children, onClose, title, visible }: Props) {
     <Modal
       accessibilityLabel={title}
       animationType="none"
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        if (!dismissDisabled) {
+          onClose();
+        }
+      }}
+      onShow={onShow}
+      onDismiss={onDismiss}
       role="dialog"
       transparent
       visible={overlayMotion.mounted}
@@ -36,6 +53,8 @@ export function ModalSheet({ children, onClose, title, visible }: Props) {
         />
         <Pressable
           accessibilityLabel={`${title} 닫기`}
+          accessibilityRole="button"
+          disabled={dismissDisabled}
           onPress={onClose}
           style={StyleSheet.absoluteFill}
         />
@@ -81,6 +100,7 @@ export function ModalSheet({ children, onClose, title, visible }: Props) {
               </Text>
               <IconButton
                 accessibilityLabel="닫기"
+                disabled={dismissDisabled}
                 onPress={onClose}
                 style={styles.close}
                 targetSize={44}

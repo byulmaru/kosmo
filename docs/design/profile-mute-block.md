@@ -52,7 +52,7 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 - Target screen evidence는 [`05 Screens - Web`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-16233)의
   Full·Compact loaded destination 4개, Full Settings master의 두 destination 하위 목록, Compact category
   [`6338:1641`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6338-1641)과
-  [`04 Screens - Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-21917)의
+  [`04 Screens - Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8075)의
   Mobile category [`6393:8193`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6393-8193) 및
   loaded destination 2개다. 모든 viewport에서 category와 destination의 IA coverage가 연결된다.
   loading·empty·error·pagination은 이 loaded representative와 별도의 runtime state coverage다.
@@ -138,3 +138,24 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 - DB·GraphQL·Relay·federation 구현과 콘텐츠·Notification 정책 자체
 - Mute와 Block을 합친 단일 관리 목록 또는 새 Settings shell
 - Figma 결과를 production runtime 완료 증거로 사용하는 것
+
+## Storybook 이관 · PROD-858
+
+`ProfileMuteAction`은 기존 ActionMenu·ModalSheet·ConfirmationContent·ToastProvider를 재사용한다.
+확인과 pending/dismiss, 오류 피드백은 공용 UI 경계에서 제공하며 실제 요청은 callback으로 전달한다.
+관리 목록은 `MutedProfileList`, 행 표시는 기존 Relay `ProfileListItem`과 공유하는 `ProfileListItemContent`를 사용한다.
+`ProfileHero.mute`는 서버 확정 뮤트 상태에서만 제공하고, loading에서는 내부 상태행을 표시하지 않는다.
+
+- 요청 callback은 성공할 때 resolve하고 실패할 때 reject한다. 성공 feedback이 전달되기 전에는 낙관적으로
+  상태를 전환하거나 목록 항목을 제거하지 않는다. `onFeedback`은 요청의 성공/실패를 관찰하며 성공 이후의
+  확정 표시 갱신에도 사용할 수 있다. pending target 교체 시 이전 completion의 UI feedback은 폐기한다.
+- 목록은 loading/error/loaded와 pagination의 more/loading/error/end를 구분한다. 초기/추가 요청과
+  실제 Relay connection·cursor·cache 연결은 PROD-814 소유다.
+- 직접 확인하는 loaded 화면은 [Mobile](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8075),
+  [Compact](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-24942),
+  [Full](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25436)이다.
+- `KOSMO/Patterns/Profile/Mute Action`과 `Muted Profiles`의 Playground는 수동 Controls·Actions,
+  각 Tests 하위는 자동 interaction을 소유한다. ProfileHero의 muted 상태도 기존 component title에서 검증한다.
+- Current: 위 공용 컴포넌트와 Storybook 검증 표면. Target: 실제 Profile/Settings route에서의 사용.
+  Product not implemented: 뮤트 storage·GraphQL·content policy·Relay 연동 및 Web/iOS/Android 종단 간 검증.
+  PROD-824·825·814의 완료나 `add-profile-mute` OpenSpec 전체 완료를 뜻하지 않는다.

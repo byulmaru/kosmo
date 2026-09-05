@@ -1,3 +1,4 @@
+import { VolumeOff } from 'lucide-react-native';
 import {
   Image,
   Platform,
@@ -13,19 +14,23 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
+import { ProfileMuteAction } from './ProfileMuteAction';
 import { ProfileTagChip } from './ProfileTagChip';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
+import type { ProfileMuteFeedback } from './ProfileMuteAction';
 
 type ProfileHeroProps = {
   action?: ReactNode;
+  mute?: { onUnmute: () => Promise<void>; onFeedback?: (feedback: ProfileMuteFeedback) => void };
   loading?: boolean;
   profile?: ProfileHero_profile$key | null;
 };
 
 const profileHeroFragment = graphql`
   fragment ProfileHero_profile on Profile {
+    id
     handle
     relativeHandle
     displayName
@@ -52,7 +57,7 @@ const countFormatter = new Intl.NumberFormat('en', {
   notation: 'compact',
 });
 
-export function ProfileHero({ action, loading = false, profile = null }: ProfileHeroProps) {
+export function ProfileHero({ action, mute, loading = false, profile = null }: ProfileHeroProps) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const data = useFragment(profileHeroFragment, profile);
@@ -171,6 +176,28 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
             </Pressable>
           </NavigationLink>
         </View>
+        {mute ? (
+          <View style={[styles.muteRow, compact ? styles.mobileMuteRow : undefined]}>
+            <VolumeOff accessible={false} aria-hidden color={theme.foregroundSecondary} size={16} />
+            <Text
+              style={[
+                styles.muteMessage,
+                compact ? styles.mobileMuteMessage : undefined,
+                { color: theme.foregroundSecondary },
+              ]}
+            >
+              이 사용자의 게시글은 뮤트되어 있습니다.
+            </Text>
+            <ProfileMuteAction
+              displayName={data.displayName}
+              muted
+              onChangeMuted={mute.onUnmute}
+              onFeedback={mute.onFeedback}
+              profileId={data.id}
+              surface="text"
+            />
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -200,6 +227,10 @@ function ProfileTagLink({ id, name }: { id: string; name: string }) {
 }
 
 const styles = StyleSheet.create({
+  muteRow: { alignItems: 'center', flexDirection: 'row', gap: space[8], marginTop: space[8] },
+  mobileMuteRow: { width: '100%' },
+  muteMessage: { ...textStyles.uiCopyS, flexShrink: 1 },
+  mobileMuteMessage: { flex: 1 },
   root: { marginBottom: space[24] },
   cover: { aspectRatio: 3, width: '100%' },
   coverImage: { height: '100%', width: '100%' },
