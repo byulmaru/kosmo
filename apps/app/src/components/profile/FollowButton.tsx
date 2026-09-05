@@ -5,7 +5,7 @@ import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { layoutRecipes, typography } from '@/theme/tokens';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { RecordProxy, RecordSourceSelectorProxy } from 'relay-runtime';
 import type { FollowButton_profile$key } from './__generated__/FollowButton_profile.graphql';
@@ -259,7 +259,7 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
 }
 
 const styles = StyleSheet.create({
-  root: { alignItems: 'flex-end', gap: spacing.xs },
+  root: { ...layoutRecipes.labelSupportStack, alignItems: 'flex-end' },
   button: { minHeight: 32, paddingVertical: 0 },
   error: { fontFamily: 'SUIT', maxWidth: 224, textAlign: 'right', ...typography.xsm },
 });

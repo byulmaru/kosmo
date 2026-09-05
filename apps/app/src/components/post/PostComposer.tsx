@@ -13,7 +13,7 @@ import { Form } from '@/components/ui/Form';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
@@ -737,7 +737,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
   },
-  visibilityCopy: { flex: 1, gap: spacing.xs },
+  visibilityCopy: { ...layoutRecipes.labelSupportStack, flex: 1 },
   visibilityLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   visibilityDescription: { fontFamily: 'SUIT', ...typography.xsm },
 });

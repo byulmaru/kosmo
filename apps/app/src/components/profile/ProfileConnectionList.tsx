@@ -4,7 +4,7 @@ import { graphql, usePaginationFragment } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { layoutRecipes, spacing, typography } from '@/theme/tokens';
 import { ProfileListItem } from './ProfileListItem';
 import type { ProfileConnectionList_followersProfile$key } from './__generated__/ProfileConnectionList_followersProfile.graphql';
 import type { ProfileConnectionList_followingProfile$key } from './__generated__/ProfileConnectionList_followingProfile.graphql';
@@ -275,12 +275,8 @@ const styles = StyleSheet.create({
   pagination: { alignItems: 'center', borderTopWidth: 1, padding: spacing.lg },
   paginationAction: { marginTop: spacing.md },
   skeletonItem: {
-    alignItems: 'center',
+    ...layoutRecipes.listRow,
     borderBottomWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
   },
   avatarSkeleton: { borderWidth: 1 },
   skeletonCopy: { flex: 1, gap: spacing.sm, minWidth: 0 },

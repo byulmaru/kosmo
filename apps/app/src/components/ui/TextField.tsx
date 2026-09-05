@@ -1,7 +1,7 @@
 import { forwardRef, useId, useState } from 'react';
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
+import { borderWidths, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import type { TextInputProps, TextStyle } from 'react-native';
 
 type TextFieldProps = TextInputProps & {
@@ -93,7 +93,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
 });
 
 const styles = StyleSheet.create({
-  wrapper: { gap: space[4] },
+  wrapper: { ...layoutRecipes.labelSupportStack },
   label: textStyles.uiLabelM,
   input: {
     borderRadius: radius[12],

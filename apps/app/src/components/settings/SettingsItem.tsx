@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { layoutRecipes, typography } from '@/theme/tokens';
 import type { ReactNode } from 'react';
 
 export type SettingsItemProps = {
@@ -47,18 +47,13 @@ export function SettingsItem({
 
 const styles = StyleSheet.create({
   root: {
-    alignItems: 'center',
+    ...layoutRecipes.listRow,
     borderBottomWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    minHeight: 64,
     minWidth: 0,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
     width: '100%',
   },
   leading: { flexShrink: 0 },
-  copy: { flex: 1, gap: spacing.xs, minWidth: 0 },
+  copy: { ...layoutRecipes.labelSupportStack, flex: 1, minWidth: 0 },
   label: {
     flexShrink: 1,
     fontFamily: 'SUIT',

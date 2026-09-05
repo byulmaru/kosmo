@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import type { FeedbackKind } from '@kosmo/core/enums';
 import type { FeedbackFormSubmitFeedbackMutation } from './__generated__/FeedbackFormSubmitFeedbackMutation.graphql';
 
@@ -182,7 +182,7 @@ export function FeedbackForm({ onStateChange }: Props) {
 
 const styles = StyleSheet.create({
   root: {
-    gap: spacing.lg,
+    ...layoutRecipes.formStack,
     width: '100%',
   },
   nativeRoot: {

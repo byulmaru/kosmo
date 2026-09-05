@@ -8,6 +8,11 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 const mockPlatform: { OS: string } = { OS: 'web' };
+const mockDialogActions = {
+  flexDirection: 'row-reverse',
+  gap: 99,
+  justifyContent: 'space-around',
+} as const;
 
 mockModule('react-native', {
   Platform: mockPlatform,
@@ -20,6 +25,9 @@ mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({ foregroundSecondary: 'foreground-secondary' }),
 });
 mockModule('@/theme/tokens', {
+  layoutRecipes: {
+    dialogActions: mockDialogActions,
+  },
   space: { 8: 8, 12: 12 },
   textStyles: { uiCopyM: { fontSize: 14, lineHeight: 20 } },
 });
@@ -185,10 +193,18 @@ test('actions keep 120x40 visual bounds inside each platform target height', () 
   ] as const) {
     const tree = render(platform);
     const actionRow = findElements(tree, 'View').find(
-      ({ props }) => flattenStyle(props.style).flexDirection === 'row',
+      ({ props }) => flattenStyle(props.style).minHeight === targetHeight,
     );
     assert.ok(actionRow);
-    assert.equal(flattenStyle(actionRow.props.style).minHeight, targetHeight);
+    const actionRowStyle = flattenStyle(actionRow.props.style);
+    assert.deepEqual(
+      {
+        flexDirection: actionRowStyle.flexDirection,
+        gap: actionRowStyle.gap,
+        justifyContent: actionRowStyle.justifyContent,
+      },
+      mockDialogActions,
+    );
 
     const buttons = findElements(tree, 'Button');
     for (const button of buttons) {

@@ -1,7 +1,7 @@
 import { Children, createContext, useContext, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import type { PropsWithChildren, ReactElement, RefObject } from 'react';
 import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
 
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     width: iconSizes[20],
   },
   dot: { borderRadius: radius.full, height: 10, width: 10 },
-  content: { flex: 1, gap: space[4] },
+  content: { ...layoutRecipes.labelSupportStack, flex: 1 },
   label: textStyles.uiLabelL,
   description: textStyles.uiCopyM,
 });

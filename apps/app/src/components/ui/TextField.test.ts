@@ -42,6 +42,7 @@ mockModule('@/theme/ThemeProvider', {
 });
 mockModule('@/theme/tokens', {
   borderWidths: { 1: 1, 2: 2 },
+  layoutRecipes: { labelSupportStack: { flexDirection: 'column', gap: 4 } },
   radius: { 12: 12 },
   space: { 4: 4, 8: 8, 12: 12 },
   textStyles: {

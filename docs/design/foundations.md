@@ -49,6 +49,30 @@ Density는 별도 runtime mode나 새 token collection이 아니라 `space/*`를
 - PostLayout의 avatar와 body처럼 의도된 도메인 geometry는 해당 component가 계속 소유한다.
 - 기존 화면에 Standard를 소급 적용하거나 Components/Screens binding을 자동 변경하지 않는다.
 
+### 실행 가능한 시맨틱 레이아웃 recipe
+
+프로덕션 코드는 위 density 조합과 반복되는 부모 geometry를 `tokens.ts`의 plain style object로 소비한다. 별도 React wrapper나 Figma `Box`·`Stack`·`Inline` component를 만들지 않는다.
+
+| Recipe              | 소유 geometry                                                                   | 현재 소비 경계                                                                                                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `formStack`         | vertical flow, gap `16`                                                         | `FeedbackForm`, `ProfileEditForm`                                                                                                                                                             |
+| `formPageInset`     | horizontal padding `16`                                                         | Web `FeedbackPage`, Profile Edit field 영역                                                                                                                                                   |
+| `listStack`         | vertical flow, gap `0`, padding `0`                                             | `SettingsNavigationList` 부모                                                                                                                                                                 |
+| `listRow`           | horizontal flow, center, gap `12`, padding `12 16`, min-height `64`, radius `0` | `SettingsItem`, `ProfileListItem`, `ProfileConnectionList` skeleton                                                                                                                           |
+| `actionMenuSurface` | vertical flow, gap `0`, padding `4`, radius `12`                                | Web `ActionMenu` 외곽 surface                                                                                                                                                                 |
+| `dialogActions`     | horizontal flow, gap `8`, end-aligned                                           | `FeedbackOverlay`, `PostDeletionAction`, `ReplyComposerSurface`, `ProfileEditDiscardDialog`, `ConfirmationContent`                                                                            |
+| `labelSupportStack` | vertical flow, gap `4`                                                          | `TextField`, `RadioGroup`, `SettingsItem`, `ProfileEditForm`, `PostComposer` visibility copy, `PostComposerMediaControls` sensitive-media copy, `FollowButton`, `ProfileSwitcher` create form |
+
+- `listStack`은 행 내부 padding, 높이, divider, 상태, content growth를 소유하지 않는다.
+- `listRow`는 divider, 색상, selected·interaction 상태와 Bio의 줄 수를 소유하지 않는다. `min-height`만 보장하고 긴 content에 따라 늘어난다.
+- `formStack`은 field 사이의 흐름과 gap만 소유한다. `formPageInset`은 page form의 좌우 inset만 소유하며 section별 top·bottom spacing은 consumer가 유지한다.
+- page, card와 overlay의 padding·radius는 presentation 역할이 다르므로 각 surface가 계속 소유한다.
+- `actionMenuSurface`는 범용 menu나 Native bottom sheet 계약이 아니다. border, elevation, positioning, portal, focus와 lifecycle은 `ActionMenu`가 계속 소유한다.
+- `dialogActions`는 actions row의 방향·간격·정렬만 소유한다. Button 크기와 child별 flex, 외부 margin, dialog surface의 padding·radius·border·typography는 consumer 또는 Button이 계속 소유한다.
+- `labelSupportStack`은 label과 control·description·error 사이의 내부 vertical rhythm만 소유한다. typography, padding, radius, input geometry와 flex·min-width는 consumer가 계속 소유한다.
+- `PostContentRenderer` warning은 action까지 포함한 surface이므로 `labelSupportStack`과 분리된 component-owned spacing을 유지한다.
+- `FollowRequestList` skeleton은 loaded row의 compound row·error geometry와 대응하므로 `listRow`와 분리된 component-owned spacing을 유지한다.
+
 ## Elevation과 shadow
 
 Shadow pigment는 고정 `#000000`을 사용한다. geometry는 mode와 무관하며 opacity만 Light 10%, Dark 40%로 바뀐다.
@@ -81,7 +105,7 @@ Fullscreen media와 제품 고유 shadow는 일괄 치환하지 않고 아래 In
 | `FeedbackForm`                  | 전용 유지 | `Button`, `TextArea`, `RadioGroup`·`RadioOption`은 재사용하고 canonical option presentation·state visuals는 공용 primitive, group placement·dirty/submitting·mutation lifecycle은 form이 소유 | domain migration은 DSN-21/Product                   |
 | Modal·sheet·menu overlay        | 분리      | 공용 scrim·elevation·focus primitive는 공유하고 close/restore/scroll lifecycle은 각 surface가 소유                                                                                            | primitive는 DSN-19, call-site는 DSN-21/Product      |
 | Fullscreen media                | 예외 유지 | 고정 black/white, 강한 overlay, media control geometry는 제품 전용 evidence를 유지                                                                                                            | DSN-21/Product                                      |
-| Route loading·empty·error·retry | 분리      | `StateView`, `Skeleton`, `Button` vocabulary는 공유하고 list skeleton·pagination geometry는 route가 소유                                                                                      | DSN-21, 최종 Figma evidence는 DSN-13                |
+| Route loading·empty·error·retry | 분리      | `StateView`, `Skeleton`, `Button` vocabulary와 확인된 공용 row geometry는 공유하고 placeholder·pagination·복합 row geometry는 route가 소유                                                    | DSN-21, 최종 Figma evidence는 DSN-13                |
 | Shell·viewport·scroll           | 분리      | `UniversalShell`과 768/1280 단계는 공유하고 picker·drawer·route overlay의 focus/scroll은 해당 surface가 소유                                                                                  | DSN-21, 최종 Figma evidence는 DSN-13                |
 
 같은 역할의 소비자가 추가로 확인되기 전에는 새 공용 primitive를 선행 생성하지 않는다. 역할이 다른 UI를 형태가 비슷하다는 이유만으로 합치지 않는다.

@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { radii, space, spacing, textStyles, typography } from '@/theme/tokens';
+import { layoutRecipes, radii, space, spacing, textStyles, typography } from '@/theme/tokens';
 import { useNavigationGuard } from './NavigationGuardContext';
 import { NavigationLink } from './NavigationLink';
 import {
@@ -841,7 +841,7 @@ const styles = StyleSheet.create({
   },
   profileLabel: { flex: 1, minWidth: 0 },
   divider: { height: 1, marginVertical: space[4], width: '100%' },
-  createForm: { gap: spacing.xs, padding: spacing.xs },
+  createForm: { ...layoutRecipes.labelSupportStack, padding: spacing.xs },
   createRow: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.sm },
   inputField: { flex: 1, minWidth: 0 },
   input: { flex: 1, minWidth: 0 },

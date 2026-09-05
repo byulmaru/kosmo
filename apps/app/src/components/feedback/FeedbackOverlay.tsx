@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, radii, spacing, typography } from '@/theme/tokens';
+import { breakpoints, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import { FeedbackForm } from './FeedbackForm';
 import type { RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
@@ -356,5 +356,5 @@ const styles = StyleSheet.create({
   },
   confirmTitle: { fontFamily: 'SUIT', fontWeight: '800', ...typography.lg },
   confirmDescription: { fontFamily: 'SUIT', ...typography.sm },
-  confirmActions: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'flex-end' },
+  confirmActions: { ...layoutRecipes.dialogActions },
 });

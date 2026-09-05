@@ -1,6 +1,6 @@
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { space, textStyles } from '@/theme/tokens';
+import { layoutRecipes, space, textStyles } from '@/theme/tokens';
 import { Button } from './Button';
 import type { ReactNode } from 'react';
 
@@ -68,10 +68,8 @@ const styles = StyleSheet.create({
   root: { gap: space[12] },
   message: textStyles.uiCopyM,
   actions: {
+    ...layoutRecipes.dialogActions,
     alignItems: 'center',
-    flexDirection: 'row',
-    gap: space[8],
-    justifyContent: 'flex-end',
   },
   action: { height: 40, width: 120 },
 });
