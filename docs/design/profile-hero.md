@@ -46,16 +46,17 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - 2026-09-05 Figma 재점검에서 `04 Screens - Mobile`의 Follow action 44개는 모두 Medium `96×40`이었다.
   대표 근거는 [Mobile Profile Hero](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1943-1708)와
   [Mobile 검색 결과](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1938-1511)다.
-- 같은 점검에서 `03 Patterns`의
+- `03 Patterns`의
   [Reaction People · Mobile Light](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=5314-45430)(11개),
   [Reaction People · Android Dark](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=5314-45768)(10개),
   [Post Activity · Mobile Reposts](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=5314-46151)(11개)는
-  Compact `72×32`가 남아 있었다. 이 32개 인스턴스는 Mobile Screens 및 위 기준과 미정렬 상태다.
-- [FollowButton Source](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1901-1050)의
-  “Compact is used in rows and Mobile” 설명도 미정렬 상태다. Source 설명이나 Pattern의 잔존 Compact를
-  Mobile 크기 선택의 근거로 재사용하지 않는다.
-- 위 잔여 Figma 항목은 읽기 전용으로 점검했으며 이번 문서 변경에서 수정하지 않았다. PROD-851에서 코드의
-  소비처별 선택과 Storybook 검증을 정렬하고, Figma 설명·인스턴스 정렬 여부를 별도로 확인한다.
+  총 32개 인스턴스도 같은 날 Medium `96×40`으로 정렬했다. Follow·Following·Requested 및 Busy·Error
+  속성을 보존했으며, 행 높이 `64`와 간격 `12`를 유지하고 Light·Dark 배치를 시각 확인했다.
+- [FollowButton Source](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1901-1050) 설명도
+  Web 목록은 Compact, Web Profile Hero와 Mobile 소비처는 Medium으로 정렬했다.
+  Native 입력 target은 시각 영역과 별개임을 명시했다.
+- 위 Mobile Screens·Patterns와 Source 설명의 Figma 정렬은 완료했다. 코드의 소비처별 크기 선택,
+  Storybook 검증 및 Native touch 검증은 별도로 남아 있다.
 
 ## 출시와 검증 범위
 
