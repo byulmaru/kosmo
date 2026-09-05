@@ -200,6 +200,7 @@ export const Playground: Story = {
 };
 
 export const RepresentativeStates: Story = {
+  parameters: { layout: 'padded' },
   render: () => (
     <SessionProvider>
       <ProfileHeroCatalog />
