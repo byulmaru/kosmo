@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import { Environment, Network, RecordSource, Store } from 'relay-runtime';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import type { PropsWithChildren } from 'react';
-import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
+import type { GraphQLResponse, PayloadData, RequestParameters, Variables } from 'relay-runtime';
 
 type RelayMockValue = {
   mutationError?: string;
@@ -151,7 +151,7 @@ async function executeStoryOperation(
       return Promise.reject(new Error(operationResponse.error));
     }
 
-    return { data: (operationResponse.data ?? {}) as GraphQLResponse['data'] };
+    return { data: (operationResponse.data ?? {}) as PayloadData };
   };
 
   if (request.operationKind === 'mutation') {
@@ -168,9 +168,7 @@ async function executeStoryOperation(
     }
 
     return Promise.resolve({
-      data: (mock.mutationResponse === undefined
-        ? {}
-        : mock.mutationResponse) as GraphQLResponse['data'],
+      data: (mock.mutationResponse === undefined ? {} : mock.mutationResponse) as PayloadData,
       errors: mock.mutationGraphQLErrors?.map((error) =>
         typeof error === 'string' ? { message: error } : error,
       ),
@@ -187,7 +185,7 @@ async function executeStoryOperation(
       return Promise.reject(new Error(configuredResponse.error));
     }
     if (configuredResponse) {
-      return Promise.resolve({ data: (configuredResponse.data ?? {}) as GraphQLResponse['data'] });
+      return Promise.resolve({ data: (configuredResponse.data ?? {}) as PayloadData });
     }
     if (mock.paginationError) {
       return Promise.reject(
@@ -202,7 +200,7 @@ async function executeStoryOperation(
       return new Promise(() => undefined);
     }
 
-    return Promise.resolve({ data: (mock.paginationResponse ?? {}) as GraphQLResponse['data'] });
+    return Promise.resolve({ data: (mock.paginationResponse ?? {}) as PayloadData });
   }
 
   const operationResponse = getOperationResponse();
@@ -210,5 +208,5 @@ async function executeStoryOperation(
     return resolveOperationResponse(operationResponse);
   }
 
-  return Promise.resolve({ data: (mock.queryData ?? {}) as GraphQLResponse['data'] });
+  return Promise.resolve({ data: (mock.queryData ?? {}) as PayloadData });
 }
