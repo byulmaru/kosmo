@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { SessionProvider } from '@/session/SessionProvider';
@@ -102,13 +103,19 @@ function ProfileHeroFixture({
   loading = false,
   profileId = defaultProfile.id,
   showAction = true,
+  muted = false,
+  onUnmute,
 }: {
   actionSize?: 'compact' | 'medium';
   containerWidth?: number;
   loading?: boolean;
   profileId?: string;
   showAction?: boolean;
+  muted?: boolean;
+  onUnmute?: () => Promise<void>;
 }) {
+  const [isMuted, setMuted] = useState(muted);
+  useEffect(() => setMuted(muted), [muted]);
   const profiles = useStoryProfiles();
   const target = requireProfile(profiles, profileId);
 
@@ -122,6 +129,18 @@ function ProfileHeroFixture({
             ) : undefined
           }
           loading={loading}
+          mute={
+            isMuted && onUnmute
+              ? {
+                  onUnmute,
+                  onFeedback: (feedback) => {
+                    if (feedback.status === 'success') {
+                      setMuted(false);
+                    }
+                  },
+                }
+              : undefined
+          }
           profile={target.hero}
         />
       </View>
@@ -156,6 +175,8 @@ const meta = {
     actionSize: undefined,
     containerWidth: 600,
     loading: false,
+    muted: false,
+    onUnmute: fn<() => Promise<void>>().mockResolvedValue(undefined),
     profileId: defaultProfile.id,
     showAction: true,
   },
@@ -163,11 +184,14 @@ const meta = {
     actionSize: { control: 'inline-radio', options: ['compact', 'medium'] },
     containerWidth: { control: 'inline-radio', options: [390, 600] },
     loading: { control: 'boolean' },
+    muted: { control: 'boolean' },
     profileId: { control: 'select', options: storyProfileIds },
     showAction: { control: 'boolean' },
   },
   component: ProfileHeroFixture,
   excludeStories: [
+    'MuteContract',
+    'MutedLoadingContract',
     'CenterGeometryContract',
     'ImageAndTagsContract',
     'LoadingGeometryContract',
@@ -194,7 +218,7 @@ export const Playground: Story = {
   parameters: {
     controls: {
       disable: false,
-      include: ['profileId', 'loading', 'showAction', 'actionSize', 'containerWidth'],
+      include: ['profileId', 'muted', 'loading', 'showAction', 'actionSize', 'containerWidth'],
     },
   },
 };
@@ -313,5 +337,33 @@ export const ImageAndTagsContract: Story = {
       'href',
       '/hashtags/[hashtagId]/profiles',
     );
+  },
+};
+
+export const Muted: Story = {
+  args: { muted: true },
+  globals: { viewport: { value: 'kosmoProfileFull', isRotated: false } },
+};
+export const MuteContract: Story = {
+  args: { muted: true },
+  play: async ({ args, canvasElement }) => {
+    args.onUnmute?.mockClear();
+    const canvas = within(canvasElement);
+    expect(canvas.getByText('이 사용자의 게시글은 뮤트되어 있습니다.')).toBeVisible();
+    expect(canvas.getByRole('button', { name: '팔로우' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '뮤트 해제' }));
+    await waitFor(() => expect(args.onUnmute).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(canvas.queryByText('이 사용자의 게시글은 뮤트되어 있습니다.')).not.toBeInTheDocument(),
+    );
+    expect(canvas.getByRole('button', { name: '팔로우' })).toBeVisible();
+  },
+};
+export const MutedLoadingContract: Story = {
+  args: { muted: true, loading: true },
+  play: ({ canvasElement }) => {
+    expect(
+      within(canvasElement).queryByRole('button', { name: '뮤트 해제' }),
+    ).not.toBeInTheDocument();
   },
 };
