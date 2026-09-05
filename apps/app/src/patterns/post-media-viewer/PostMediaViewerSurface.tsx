@@ -10,14 +10,14 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { PostContentPrivacyBoundary } from '@/components/post/PostContentPrivacyBoundary';
 import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
-import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import type { ReactElement } from 'react';
 import type { PressableStateCallbackType, ViewStyle } from 'react-native';
-import type { PostMediaItem } from './PostMediaImage';
+import type { PostMediaItem } from '@/components/post/PostMediaImage';
 
 export type PostMediaViewerPresentation = 'compact' | 'wide';
 

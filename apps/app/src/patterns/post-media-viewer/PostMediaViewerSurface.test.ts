@@ -5,7 +5,7 @@ import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
-import type { PostMediaItem } from './PostMediaImage';
+import type { PostMediaItem } from '@/components/post/PostMediaImage';
 import type { PostMediaViewerSurfaceProps } from './PostMediaViewerSurface';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
