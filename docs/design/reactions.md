@@ -46,7 +46,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 
 Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 검색하거나 category별로 탐색해 더 많은 Reaction을 선택하는 확장 surface다. custom reaction의 데이터·asset 계약이 정해지기 전에는 별도 custom section이나 실패 화면을 추측해 추가하지 않는다.
 
-- Figma source는 `Presentation=Web | Mobile`과 `State=Browse | SearchResults | Empty | Loading`을 조합한 8 variants다. `Browse`는 검색, 빠른 반응, 최근 사용, category와 전체 emoji grid를 표시하고, `SearchResults`는 검색 결과만, `Empty`는 검색 결과 없음만, `Loading`은 spinner만 표시한다. Picker 전체 `Error` variant는 만들지 않는다.
+- Figma source는 `Presentation=Web | Mobile`과 `State=Browse | SearchResults | Empty | Loading`을 조합한 8 variants다. `Browse`는 검색, 빠른 반응, 최근 사용, category heading과 전체 emoji grid를 표시하고, `SearchResults`는 검색 결과만, `Empty`는 검색 결과 없음만, `Loading`은 spinner만 표시한다. Browse에는 category shortcut control을 두지 않으며, 최근 사용은 Web 최대 16개·Mobile 최대 14개를 아래 category grid와 같은 방식으로 표시한다. Web은 한 행에 8개, Mobile은 7개를 배치하고, 가득 찬 행은 좌우 가장자리를 맞추며 마지막 덜 찬 행은 기존 간격으로 왼쪽 정렬한다. Picker 전체 `Error` variant는 만들지 않는다.
 - Web은 trigger에 붙는 non-modal dialog를 사용한다. 열릴 때 검색 field로 focus를 옮기고 같은 trigger, `Escape`, 바깥 클릭으로 닫은 뒤 focus를 trigger에 복원한다.
 - Mobile은 modal bottom sheet를 사용한다. `Browse`의 initial height는 480, `SearchResults`·`Empty`·`Loading`의 expanded height는 720이다. `Scrolled`는 expanded sheet의 runtime scroll 위치 표본이지 별도 source variant가 아니다.
 - Mobile Screens의 [`Post action overlays and picker`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6772-10989)는
@@ -55,7 +55,7 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
   Viewer 위 Mobile sheet로 전환한다. 다른 Full Picker source state를 늘리거나 runtime focus·dismiss·keyboard
   동작 완료를 뜻하지 않는다.
 - Mobile은 열릴 때 software keyboard를 자동으로 띄우지 않고 sheet title부터 탐색한다. backdrop tap, drag dismiss, Android back으로 닫고 focus를 원래 trigger로 복원한다.
-- dialog의 접근성 이름은 `반응 선택`이다. 검색 field, category와 Reaction button은 식별 가능한 이름과 selected 상태를 제공한다. 결과 영역은 Loading에서 busy 상태와 시각적으로 숨긴 `반응을 불러오는 중` 문구를 함께 노출한다.
+- dialog의 접근성 이름은 `반응 선택`이다. 검색 field, category heading과 Reaction button은 식별 가능한 이름을 제공하고, Reaction button은 selected 상태를 제공한다. 결과 영역은 Loading에서 busy 상태와 시각적으로 숨긴 `반응을 불러오는 중` 문구를 함께 노출한다.
 - spinner는 `motion/duration/loading-cycle` 800ms마다 linear하게 회전한다. reduced motion에서는 회전을 제거하고 정적인 `···`로 대체한다.
 - sticky header·category, grid scroll, safe area, software keyboard, Web keyboard, VoiceOver·TalkBack의 실제 focus·dismiss·reflow는 Production runtime QA에서 검증한다.
 
@@ -122,7 +122,7 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
 ## 컴포넌트 경계
 
 - `ReactionSelector`는 Quick Picker의 플랫폼별 presentation만 소유한다.
-- `FullReactionPicker`는 Unicode-first 검색·category 탐색과 Web dialog·Mobile sheet presentation을 소유한다. custom reaction의 asset·data·API와 runtime fetch·cache는 소유하지 않는다.
+- `FullReactionPicker`는 Unicode-first 검색·category 탐색과 Web dialog·Mobile sheet presentation을 소유한다. Web에서 이를 여는 composition은 trigger와 open state를 소유하고 같은 trigger·`Escape`·바깥 클릭 dismiss 및 trigger focus 복원을 연결한다. custom reaction의 asset·data·API와 runtime fetch·cache는 소유하지 않는다.
 - private `ReactionAction`과 `ReactionPopover`는 Action Bar trigger와 anchored popover를 소유한다.
 - private `PostReactionController`는 한 Post의 toggle 상태와 mutation/cache 동작을 소유한다.
 - private `__ReactionSummaryItem`은 Web 32px·iOS 44pt·Android 48dp의 reaction, selected, `+N` item presentation을 소유한다.
