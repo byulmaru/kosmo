@@ -9,8 +9,10 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const readWorkflow = (name) => readFile(resolve(repositoryRoot, '.github/workflows', name), 'utf8');
 
 test('release workflows preserve SHA-tag digest promotion', async () => {
-  const [dockerBuild, dev, production] = await Promise.all(
-    ['docker-build.yml', 'deploy-dev.yml', 'production-release.yml'].map(readWorkflow),
+  const [dockerBuild, dev, trivy, production] = await Promise.all(
+    ['docker-build.yml', 'deploy-dev.yml', 'trivy-scan.yml', 'production-release.yml'].map(
+      readWorkflow,
+    ),
   );
 
   assert.match(dockerBuild, /docker\/build-push-action/);
@@ -18,22 +20,37 @@ test('release workflows preserve SHA-tag digest promotion', async () => {
 
   assert.match(dev, /workflow_run\.head_sha/);
   assert.match(dev, /:sha-\$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
+  assert.match(dev, /docker\/login-action/);
   assert.match(dev, /imagetools inspect/);
+  assert.match(dev, /\.digest/);
   assert.match(dev, /sha256:\[0-9a-f\]\{64\}/);
   assert.match(dev, /image_digest=.*GITHUB_OUTPUT/);
   assert.match(dev, /-p "version=\$\{TARGET_SHA\}"/);
   assert.match(dev, /-p "imageDigest=\$\{IMAGE_DIGEST\}"/);
+
+  assert.match(trivy, /TARGET_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
+  assert.match(trivy, /image_ref="ghcr\.io\/\$\{GITHUB_REPOSITORY\}:sha-\$\{TARGET_SHA\}"/);
+  assert.match(trivy, /image-ref: \$\{\{ steps\.image\.outputs\.image-ref \}\}/);
 
   assert.match(production, /workflow_id: "docker-build\.yml"/);
   assert.match(production, /event: "push"/);
   assert.match(production, /head_sha: targetSha/);
   assert.match(production, /run\.head_branch === "main"/);
   assert.match(production, /run\.conclusion === "success"/);
+  assert.match(production, /workflowRuns\.workflow_runs\.find\(/);
+  assert.match(production, /if \(!buildRun\)/);
   assert.match(production, /No successful main Docker Build run exists for/);
   assert.match(production, /:sha-\$\{\{ steps\.resolve\.outputs\.target_sha \}\}/);
+  assert.match(production, /docker\/login-action/);
   assert.match(production, /imagetools inspect/);
+  assert.match(production, /\.digest/);
   assert.match(production, /sha256:\[0-9a-f\]\{64\}/);
   assert.match(production, /image_digest: \$\{\{ steps\.image\.outputs\.image_digest \}\}/);
+
+  assert.doesNotMatch(
+    [dockerBuild, dev, trivy, production].join('\n'),
+    /release-manifest|download-artifact/,
+  );
 
   const deployStart = production.indexOf('\n  production_deploy:');
   const preflightStart = production.indexOf('\n  canonical_preflight:');
@@ -49,6 +66,6 @@ test('release workflows preserve SHA-tag digest promotion', async () => {
   assert.match(approved, /-p "imageDigest=\$\{IMAGE_DIGEST\}"/);
   assert.doesNotMatch(
     approved,
-    /actions\/checkout|docker\/(?:setup-buildx-action|login-action|metadata-action|build-push-action)|docker build(?:x )?build|imagetools inspect|SENTRY_(?:AUTH_TOKEN|UPLOAD_REQUIRED)|secret-envs|download-artifact|release-manifest/,
+    /actions\/checkout|docker\/(?:setup-buildx-action|login-action|metadata-action|build-push-action)|docker build(?:x )?build|imagetools inspect|SENTRY_(?:AUTH_TOKEN|UPLOAD_REQUIRED)|secret-envs/,
   );
 });
