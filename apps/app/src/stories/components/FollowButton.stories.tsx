@@ -1,8 +1,10 @@
+import { Suspense, useMemo } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, mocked, userEvent, within } from 'storybook/test';
+import { expect, fn, mocked, userEvent, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { SessionProvider } from '@/session/SessionProvider';
+import { RelayStoryProvider } from '../../../.storybook/mocks/react-relay';
 import { profile } from '../fixtures';
 import { Catalog, Row, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -45,6 +47,64 @@ const self = profile({
 
 const storyProfiles = [followable, following, requested, approvalRequired, self];
 const storyProfileIds = storyProfiles.map(({ id }) => id);
+const mutationRequestObserver = fn().mockName('FollowButton mutation');
+
+function FollowButtonPlayground(args: Parameters<typeof FollowButtonFixture>[0]) {
+  const operationResponses = useMemo(() => {
+    const target = storyProfiles.find(({ id }) => id === args.profileId) ?? followable;
+    const requiresApproval = target.followPolicy === 'APPROVAL_REQUIRED';
+    const requestId = target.viewerState?.followRequest?.id ?? `request:${target.id}`;
+    const follower = { id: 'profile-viewer', followingCount: 43 };
+    const follow = { id: `follow:${target.id}`, follower };
+    const followRequest = { id: requestId };
+    return {
+      FollowButtonFollowProfileMutation: {
+        data: {
+          followProfile: {
+            followeeProfile: {
+              ...target,
+              viewerState: {
+                isSelf: false,
+                follow: requiresApproval ? null : follow,
+                followRequest: requiresApproval ? followRequest : null,
+              },
+            },
+            followerProfile: follower,
+            result: requiresApproval
+              ? { __typename: 'ProfileFollowRequest', id: requestId }
+              : { __typename: 'ProfileFollow', id: follow.id },
+          },
+        },
+      },
+      FollowButtonUnfollowProfileMutation: {
+        data: {
+          unfollowProfile: {
+            followeeProfile: {
+              ...target,
+              viewerState: { isSelf: false, follow: null, followRequest: null },
+            },
+            followerProfile: { ...follower, followingCount: 42 },
+          },
+        },
+      },
+      FollowButtonCancelProfileFollowRequestMutation: {
+        data: { cancelProfileFollowRequest: { profileFollowRequestId: requestId } },
+      },
+    };
+  }, [args.profileId]);
+
+  return (
+    <RelayStoryProvider
+      mutationRequestObserver={mutationRequestObserver}
+      operationResponses={operationResponses}
+      queryData={meta.parameters.relay.data}
+    >
+      <Suspense fallback={null}>
+        <FollowButtonFixture {...args} />
+      </Suspense>
+    </RelayStoryProvider>
+  );
+}
 
 const FollowButtonStoriesQuery = graphql`
   query FollowButtonStoriesQuery($ids: [ID!]!) {
@@ -177,6 +237,7 @@ const cancelSuccessResponse = {
 const meta = {
   beforeEach: () => {
     mocked(trackAnalytics).mockClear();
+    mutationRequestObserver.mockClear();
   },
   component: FollowButtonFixture,
   excludeStories: [
@@ -210,12 +271,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
+  render: (args) => <FollowButtonPlayground {...args} />,
   args: { profileId: followable.id, size: 'medium' },
   argTypes: {
     profileId: { control: 'select', options: storyProfileIds },
     size: { control: 'inline-radio', options: ['compact', 'medium'] },
   },
   parameters: {
+    relay: { mutationRequestObserver },
     controls: { disable: false, include: ['profileId', 'size'] },
   },
 };
