@@ -26,7 +26,9 @@ export const reactionCountLoader = (ctx: UserContext) =>
         .innerJoin(Posts, eq(Posts.id, Reactions.postId))
         .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-        .where(and(inArray(Reactions.postId, postIds), postAccessWhere({ ctx })))
+        .where(
+          and(inArray(Reactions.postId, postIds), postAccessWhere({ ctx, profileMute: 'ignore' })),
+        )
         .groupBy(Reactions.postId, Reactions.type)
         .orderBy(asc(min(Reactions.createdAt)), asc(Reactions.type));
     },

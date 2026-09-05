@@ -147,53 +147,37 @@ Profile Mute 기반이 기존 관계와 상호작용 상태를 건드리지 않�
 
 **Deliverable**
 
-Home·Local·Hashtag가 같은 활성 Profile Mute 의미를 사용할 수 있도록 공통 Core 읽기 정책 경계를 제공하고,
-현재 selected Profile이 Mute한 Author와 direct Source Author의 Post를 Home에서 page limit 전에 제외한다.
-Target Profile을 직접 방문한 Post List는 Profile Mute 때문에 접거나 제외하지 않고 기존 표시 결과를 그대로
-유지한다.
+기존 Post 조회 경계에 Mute 정책을 통합한다. Home·Local은 전체 적용하고 Profile.posts는 방문한 Profile ID만
+예외로 허용하며 Bookmark·직접 조회·상호작용은 전체 무시를 명시한다. 다른 muted Source Author의
+Repost·Quote는 Profile에서도 cursor·limit 전에 제외한다.
 
 **Guardrails**
 
-- Profile Mute 판정의 Owner는 요청의 현재 selected Profile이며 같은 Account의 다른 Profile 관계를 섞지
-  않는다.
-- Home 후보 query는 selected Profile Owner와 후보 Author를 공통 Core 읽기 정책 경계에 전달해
-  Owner·Target·`expires_at IS NULL` 활성 관계를 판정한다.
-- 공통 Core 읽기 정책 경계는 소비자 query에 합성할 수 있어야 하며 후보별 DB 호출이나 pagination 이후
-  application-memory filter를 만들지 않는다.
-- Home에서 Profile Mute에 따른 모든 제외는 page limit과 cursor 계산 전에 끝낸다.
-- Repost Source가 있는 Home 후보는 바깥 Author와 direct Source Author를 모두 판정하고 Source chain을
-  재귀적으로 평탄화하지 않는다.
-- Target Profile의 직접 Post List에는 Profile Mute를 적용하지 않고 기존 `PostConnection`을 유지한다.
-- Mute 전용 Post field, connection edge field와 GraphQL enum을 추가하지 않는다.
-- 새 DB migration을 만들지 않고 PROD-824의 관계와 index를 재사용한다.
-- Hashtag Post List runtime은 PROD-827, Local Timeline과 UI·Relay·cross-slice E2E·archive는 PROD-814의
-  범위로 둔다.
-- Mute 판정과 해제는 기존 관계·상호작용·Notification과 Read State를 변경하지 않는다.
+- 현재 selected Profile의 Owner·Target·`expires_at IS NULL` 조건을 기존 `postAccessWhere` 안에서 합성한다.
+- 별도 public `profileMuteWhere`나 Home 전용 Mute 조립, 후보별 DB 호출과 조회 후 필터를 만들지 않는다.
+- 적용 정책을 모든 호출부의 필수 인수로 명시하고 Content가 있는 Quote도 direct Source Author를 판정한다.
+- 방문한 Profile ID 예외는 해당 ID에만 적용하며 기존 Visibility·Eligibility와 목록별 후보 정책을 넓히지 않는다.
+- Source chain을 재귀 확장하지 않고 모든 Mute 제외를 cursor·limit 전에 끝낸다.
+- PostConnection과 공개 schema, 관계 데이터·index를 유지하며 migration이나 Mute 전용 field를 추가하지 않는다.
+- Hashtag runtime은 PROD-827, UI·Relay·cross-slice E2E·공유 change archive는 PROD-814가 소유한다.
 
 **Verification**
 
-- 일반 Content Post와 Reply를 Mute한 Author를 기준으로 page limit 전에 제외하는지 확인한다.
-- 바깥 Author만 Mute한 경우, direct Source Author만 Mute한 경우와 두 Author 모두 Mute하지 않은 경우의
-  Repost·Quote를 검증한다.
-- 제외 후보 뒤의 eligible Post로 페이지가 채워지고 cursor와 `hasNextPage`가 맞는지 확인한다.
-- Mute한 Target의 `Profile.posts`와 Mute한 Source Author를 가진 Repost·Quote가 기존
-  Visibility·Eligibility 결과와 schema shape를 유지하는지 확인한다.
-- 같은 Account의 두 selected Profile 결과와 Mute 해제 뒤 새 Home 조회를 검증한다.
-- 공통 Core 읽기 정책 경계가 Owner·Target·`expires_at IS NULL` 의미를 제공하고 Home이 이 경계를 사용하는지
-  Core·API 테스트로 확인한다.
+- Home·Local·Profile·Bookmark의 실제 GraphQL 호출 경로에서 정책별 결과를 검증한다.
+- outer Author만 Mute, direct Source Author만 Mute, 둘 다 Mute와 방문한 Profile ID 예외를 검증한다.
+- 일반 Post·Reply·Content 없는 Repost·Quote와 Local 고유 후보 조건을 검증한다.
+- 제외 후보 사이의 eligible Post로 페이지가 채워지고 양방향 cursor·pageInfo가 유지되는지 확인한다.
+- selected Profile 전환·해제 뒤 새 조회·비로그인 Profile 조회와 non-null expiresAt 비적용을 검증한다.
+- Bookmark 생성·목록, Post Node 직접 조회와 기존 Visibility·Eligibility·권한을 유지하는지 확인한다.
 
-- [x] 5.1 selected Profile Owner와 후보 Author의 활성 Profile Mute를 소비자 query에 합성할 수 있는 공통 Core
-      읽기 정책 경계를 추가한다.
-- [x] 5.2 Home 후보 query가 공통 Core 읽기 정책 경계를 사용해 Author Profile Mute를 page limit 전에 적용한다.
-- [x] 5.3 Repost Source가 있는 Home 후보의 바깥 Author와 direct Source Author에 같은 공통 Core 읽기 정책
-      경계를 적용한다.
-- [x] 5.4 Target Profile의 직접 Post List가 Target·Source Author의 Profile Mute와 무관하게 기존 결과와
-      공개 schema를 유지하는지 검증한다.
-- [x] 5.5 공통 Core 읽기 정책과 일반 Post·Reply, Author별 Mute 조합의 Repost·Quote, pagination, selected
-      Profile 격리와 Mute 해제 후 새 조회 회귀 테스트를 추가한다.
-- [x] 5.6 PROD-825 관련 Core·API 검증과 strict OpenSpec validation을 통과시키고 범위·결과를 PR에 기록한다.
+- [x] 5.1 `postAccessWhere`에 Mute 조건과 필수 적용 정책을 통합하고 별도 public helper를 제거한다.
+- [x] 5.2 Home·Local에 전체 Mute를 적용하고 모든 제외를 cursor·limit 전에 끝낸다.
+- [x] 5.3 outer Author와 direct Source Author를 함께 판정하고 Content 없는 Repost·Quote를 검증한다.
+- [x] 5.4 Profile의 방문한 Profile ID 예외와 Bookmark·직접 조회·상호작용 전체 무시를 명시한다.
+- [x] 5.5 실제 GraphQL 경로, 양방향 pagination, selected Profile 격리·해제·접근 정책 회귀 테스트를 추가한다.
+- [x] 5.6 Core·API 검증과 strict OpenSpec validation을 통과시키고 범위·결과를 PR에 기록한다.
 
-## 6. PROD-814 Local·UI 통합과 공유 change 완료
+## 6. PROD-814 UI·Relay 통합과 공유 change 완료
 
 **Authority / Provenance**
 
@@ -209,14 +193,14 @@ Target Profile을 직접 방문한 Post List는 Profile Mute 때문에 접거나
 
 **Deliverable**
 
-Local Timeline이 `PROD-825`의 공통 Core Profile Mute 읽기 정책 경계를 재사용해 Mute Target의 후보를 page
-limit 전에 제외한다. Profile action·관리 목록·Relay 상태를 연결하고 Home·Local·Profile·Repost 흐름을
+`PROD-825`가 검증한 Home·Local·Profile 조회 정책과 Bookmark 비적용 결과를 UI·Relay에서 소비한다.
+Profile action·관리 목록·Relay 상태를 연결하고 Home·Local·Profile·Repost 흐름을
 종단 간 검증한 뒤 공유 OpenSpec을 완료한다.
 
 **Guardrails**
 
-- Local의 Profile Mute Owner는 현재 selected Profile이며, 바깥 Author와 direct Source Author를 같은 공통
-  경계로 판정한다.
+- Local의 서버 후보 정책과 API 회귀 검증은 PROD-825가 소유한다. 이 이슈는 해당 결과를 소비해
+  UI·Relay와 실제 runtime에서 selected Profile·outer Author·direct Source Author 정책을 검증한다.
 - Local 고유 후보·정렬·Visibility·Eligibility는 Local query가 소유하고, Profile Mute 제외는 page limit과
   cursor 계산 전에 끝낸다.
 - Profile surface에는 viewer-relative Mute 상태와 해제 action을 표시하지만 직접 `Profile.posts`에는 Mute
@@ -245,10 +229,9 @@ limit 전에 제외한다. Profile action·관리 목록·Relay 상태를 연결
   shell·navigation을 중복 구현하지 않았는지 확인한다.
 - canonical·Linear·OpenSpec을 최종 대조하고 archive 전후 strict validation을 통과시킨다.
 
-- [ ] 6.1 Local 후보 query가 공통 Core 읽기 정책 경계를 바깥 Author와 direct Source Author에 적용하고 모든
-      Mute 제외를 page limit 전에 끝내도록 구현한다.
-- [ ] 6.2 Local의 일반 Post·Quote, Content 없는 Repost의 선행 제외, pagination, selected Profile 격리와
-      Mute 해제 후 새 조회 회귀 테스트를 추가한다.
+- [ ] 6.1 PROD-825의 Local 서버 후보 정책 구현·API 검증 증거를 확인하고 기존 Local UI에 연결한다.
+- [ ] 6.2 PROD-825의 Local API 회귀 증거를 재사용하고 selected Profile 전환·Mute 해제 뒤 Local 화면과
+      Relay connection이 최신 서버 결과에 맞춰 갱신되는지 runtime에서 검증한다.
 - [ ] 6.3 `PROD-858`의 공용 UI 결과를 Profile action·관리 목록·완료 피드백에 재사용하고 Relay
       store·connection 갱신을 기존 GraphQL 관계에 연결한다. 공통 Settings IA는 먼저 착수한 runtime 이슈의
       결과를 사용한다.

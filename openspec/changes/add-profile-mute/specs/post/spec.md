@@ -49,27 +49,70 @@ Eligibility 결과를 유지해야 한다(MUST).
 - **WHEN** Repost Author와 direct Source Post Author가 모두 현재 selected Profile의 Mute Target이 아니다
 - **THEN** 시스템은 기존 Home Repost·Quote Visibility와 Eligibility 결과를 그대로 적용한다
 
-### Requirement: Target Profile Post List에는 Profile Mute를 적용하지 않는다
+### Requirement: Profile Post List는 방문한 Profile만 Mute 예외로 허용한다
 
 **Authority / Provenance**: `docs/domain/objects/profile-mute.md`, `docs/domain/policies/post-list.md`, `docs/design/profile-mute-block.md`, `PROD-814`, `PROD-825`
 
-사용자가 Target Profile을 직접 방문해 `Profile.posts`를 조회하면 시스템은 현재 selected Profile의 Profile Mute에 따른 Control Decision을 적용해서는 안 된다(MUST NOT).
-Target Profile이나 Repost Source Author가 Mute Target이어도 기존 Post Visibility, Post
-Eligibility, Reply와 Repost Source 후보 정책만 적용해야 한다(MUST). `Profile.posts`는 기존
-`PostConnection` 계약을 유지해야 하며(MUST), Mute 전용 Collapse·reveal 또는 control decision field를
-추가해서는 안 된다(MUST NOT).
+`Profile.posts`는 방문한 Profile ID만 현재 selected Profile의 Mute 예외로 허용해야 한다(MUST).
+다른 Mute Target이 direct Source Author인 Repost·Quote는 cursor·limit 전에 제외해야 한다(MUST).
+기존 Post Visibility·Eligibility와 `PostConnection`을 유지해야 하며(MUST), Mute 전용 Collapse·reveal이나
+control decision field를 추가해서는 안 된다(MUST NOT).
 
-#### Scenario: Mute한 Target Profile의 Post를 정상적으로 조회한다
+#### Scenario: 방문한 muted Profile의 Post를 표시한다
 
-- **WHEN** 현재 selected Profile이 Mute한 Target Profile의 `posts` connection을 직접 조회한다
-- **THEN** 시스템은 Profile Mute 때문에 Post를 접거나 제외하지 않는다
-- **AND** 기존 Post Visibility와 Post Eligibility를 통과한 Post를 기존 connection 형태로 반환한다
+- **WHEN** 현재 selected Profile이 Mute한 Profile A의 `posts` connection을 직접 조회한다
+- **THEN** A가 작성한 Post는 A의 Mute 때문에 제외하지 않는다
+- **AND** direct Source Author도 A이면 같은 예외를 적용한다
+- **AND** 기존 Post Visibility·Eligibility를 통과해야 표시한다
 
-#### Scenario: Profile Post List의 Repost Source에도 Mute를 적용하지 않는다
+#### Scenario: 다른 muted Source Author의 Repost·Quote를 제외한다
 
-- **WHEN** Target Profile의 Post가 현재 selected Profile이 Mute한 Source Author의 Repost 또는 Quote이다
-- **THEN** 시스템은 Profile Mute 때문에 해당 Post를 접거나 제외하지 않는다
-- **AND** 기존 Repost Source 조회 가능성과 Post Eligibility만 적용한다
+- **WHEN** Profile A의 Post가 다른 Mute Target B의 Post를 direct Source로 가진 Repost 또는 Quote이다
+- **THEN** A 자체의 Mute 여부와 관계없이 해당 후보를 cursor·limit 전에 제외한다
+- **AND** 제외한 후보 뒤의 eligible Post로 페이지를 채운다
+
+#### Scenario: 비로그인 Profile 조회는 기존 접근 정책을 유지한다
+
+- **WHEN** selected Profile이 없는 요청이 Profile의 `posts` connection을 조회한다
+- **THEN** 다른 사용자의 Mute 관계를 적용하지 않고 기존 Visibility·Eligibility 결과를 반환한다
+
+### Requirement: Local Post List는 전체 Mute를 기존 후보 정책과 함께 적용한다
+
+**Authority / Provenance**: `docs/domain/objects/profile-mute.md`, `docs/domain/policies/post-list.md`, `PROD-825`
+
+Local Post List는 현재 selected Profile의 Mute Target이 outer Author 또는 direct Source Author인 후보를 cursor·limit 전에 제외해야 한다(MUST).
+Content가 있는 Quote도 Source Author를 판정해야 한다(MUST).
+configured Local Instance, Public, Content 있음, Reply Parent 없음과 기존 Visibility·Eligibility 조건을
+유지해야 하며(MUST), Content 없는 Repost를 새 후보로 허용해서는 안 된다(MUST NOT).
+
+#### Scenario: muted Author의 일반 Post와 Quote를 제외한다
+
+- **WHEN** Local 후보의 outer Author 또는 Quote의 direct Source Author가 Mute Target이다
+- **THEN** 해당 후보를 cursor·limit 전에 제외한다
+- **AND** 다음 eligible Post로 페이지를 채우고 양방향 cursor와 pageInfo를 계산한다
+
+#### Scenario: Mute 예외가 Local 고유 후보 정책을 넓히지 않는다
+
+- **WHEN** Content 없는 Repost나 Reply가 두 Author 모두 Mute하지 않은 Post이다
+- **THEN** 기존 Local 후보 정책에 따라 계속 제외한다
+
+### Requirement: Bookmark와 Post 직접 조회·상호작용은 Mute를 무시한다
+
+**Authority / Provenance**: `docs/domain/objects/profile-mute.md`, `docs/domain/policies/post-list.md`, `PROD-825`
+
+Bookmark 목록과 생성, Post Node 직접 조회와 상호작용은 Mute 전체 무시를 명시해야 한다(MUST).
+Mute가 Visibility·Eligibility 검사나 Bookmark Owner 권한을 대신해서는 안 된다(MUST NOT).
+
+#### Scenario: muted Author와 Source를 가진 Bookmark를 유지한다
+
+- **WHEN** 현재 selected Profile의 Bookmark가 muted Author 또는 muted direct Source Author의 Post를 참조한다
+- **THEN** Mute 때문에 Bookmark나 그 Post를 제외하지 않는다
+- **AND** 기존 Visibility·Eligibility와 Bookmark Owner 조건은 계속 적용한다
+
+#### Scenario: Mute한 Post를 직접 조회하거나 Bookmark한다
+
+- **WHEN** 현재 selected Profile이 Mute한 Author 또는 Source의 Post를 Node로 조회하거나 Bookmark한다
+- **THEN** Mute와 무관하게 기존 접근 가능한 Post를 조회하거나 Bookmark할 수 있다
 
 ### Requirement: Post List의 Profile Mute 판정은 selected Profile과 새 조회 시점을 따른다
 
@@ -82,15 +125,15 @@ Owner별 Mute 판정 결과를 섞거나 오래된 관계를 재사용해서는 
 
 #### Scenario: 같은 Account의 selected Profile별 결과를 격리한다
 
-- **WHEN** 같은 Account의 Profile A는 Target을 Mute했고 Profile B는 Mute하지 않은 상태에서 각각 Home을 조회한다
-- **THEN** Profile A의 Home은 Target 후보를 제외하고 Profile B의 Home은 기존 후보 정책 결과를 유지한다
+- **WHEN** 같은 Account의 Profile A는 Target을 Mute했고 Profile B는 Mute하지 않은 상태에서 각각 Home·Local·Profile을 조회한다
+- **THEN** 각 요청은 자신의 Mute 관계만 적용하고 Profile 목록은 방문 ID 예외를 함께 적용한다
 
-#### Scenario: Mute 해제 후 새 Home 조회에 반영한다
+#### Scenario: Mute 해제 후 새 목록 조회에 반영한다
 
-- **WHEN** 현재 selected Profile이 Target의 Profile Mute를 해제한 뒤 새 Home 조회를 시작한다
-- **THEN** 시스템은 제거된 관계를 적용하지 않고 기존 Home 후보 정책을 다시 계산한다
+- **WHEN** 현재 selected Profile이 Target의 Profile Mute를 해제한 뒤 새 Home·Local·Profile 조회를 시작한다
+- **THEN** 시스템은 제거된 관계를 적용하지 않고 각 목록의 후보 정책을 다시 계산한다
 
-#### Scenario: Profile 직접 목록은 selected Profile이 바뀌어도 Mute 영향을 받지 않는다
+#### Scenario: Profile 방문 예외가 다른 Target의 Mute를 무시하지 않는다
 
-- **WHEN** Target을 Mute한 Profile과 Mute하지 않은 Profile이 각각 Target의 `posts` connection을 조회한다
-- **THEN** 두 요청 모두 Profile Mute와 무관하게 각 요청의 기존 Post Visibility와 Post Eligibility 결과를 반환한다
+- **WHEN** 같은 Account의 두 selected Profile이 서로 다른 Source Author를 Mute한 채 같은 Profile을 방문한다
+- **THEN** 방문한 Profile의 Mute만 예외로 허용하고 Source Author 판정은 각 selected Profile의 관계를 따른다

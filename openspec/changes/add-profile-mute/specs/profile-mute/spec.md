@@ -78,7 +78,7 @@
 
 ### Requirement: Profile Mute 적용 상태를 판정한다
 
-**Authority / Provenance:** `docs/domain/objects/profile-mute.md`, `docs/domain/policies/post-list.md`, `PROD-814`, `PROD-824`, `PROD-825` — `expires_at`이 `null`인 Owner·Target 관계는 활성 Profile Mute이고, 해당 활성 관계가 없으면 비활성으로 판정해야 한다(MUST). 콘텐츠·Notification 정책은 공통 Core 읽기 정책 경계가 제공하는 Owner·Target·`expires_at IS NULL` 활성 관계 의미를 각 소비자 query에 합성해야 한다(MUST). Profile Mute 관계의 생성·해제·적용 여부 조회는 Post·Notification 객체나 Read State를 변경해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-mute.md`, `docs/domain/policies/post-list.md`, `PROD-814`, `PROD-824`, `PROD-825` — `expires_at`이 `null`인 Owner·Target 관계는 활성 Profile Mute이고, 해당 활성 관계가 없으면 비활성으로 판정해야 한다(MUST). 콘텐츠 정책은 기존 Post 조회 조건에 Owner·Target·`expires_at IS NULL` 활성 관계 의미를 합성하고 목록별 적용·예외·비적용을 명시해야 한다(MUST). Profile Mute 관계의 생성·해제·적용 여부 조회는 Post·Notification 객체나 Read State를 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: 관계가 있으면 적용 중이다
 
@@ -92,9 +92,9 @@
 
 #### Scenario: 목록 정책이 공통 판정 경계를 재사용한다
 
-- **WHEN** Home·Local·Hashtag Post List가 Owner와 후보 Target의 Profile Mute 적용 여부를 판정한다
-- **THEN** 각 목록 query는 공통 Core 읽기 정책 경계가 제공하는 Owner·Target·`expires_at IS NULL` 의미를
-  합성해 사용한다
+- **WHEN** 제공되는 Post List가 Owner와 후보 Target의 Profile Mute 적용 여부를 판정한다
+- **THEN** 각 목록 query는 공통 Post 조회 정책 경계에 전체 적용·방문한 Profile만 예외·전체 무시를 명시한다
+- **AND** Mute 적용 시 Owner·Target·`expires_at IS NULL` 의미를 함께 합성한다
 - **AND** 후보별 별도 DB 조회나 pagination 이후 application-memory filter를 사용하지 않는다
 
 #### Scenario: 관계 action은 노출 객체를 직접 변경하지 않는다

@@ -282,7 +282,9 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   기존 Android baseline Profile shell과 `ProfileHero.Muted=true` 상태·해제 action의 배치 근거로만 사용한다.
   이 Target에 남아 있는 `PostContent.CW=MutedCollapsed`와 Mute disclosure는 [Profile Mute 조회 정책](../domain/objects/profile-mute.md#조회-정책)과
   [Profile Mute·Block 디자인 계약](profile-mute-block.md#뮤트-관계의-직접-profile)이 정한 직접 Profile 정상 표시로
-  대체됐다. 직접 Profile의 현재 Target이나 runtime 근거로 세지 않는다.
+  대체됐다. 2026-09-05에 확정한 조회 정책은 방문한 Profile ID만 Mute 예외로 허용하고 다른 muted
+  Source Author의 Repost·Quote를 목록에서 제외한다. 과거 Mute disclosure를 직접 Profile의 현재 Target이나
+  runtime 근거로 세지 않는다.
 - [`Mobile Screen Inventory`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6653-25532)의
   `Main route/state contracts · 34`는 canonical route/state 물리 인벤토리만 기록하고 `/compose` 호환 route는 제외한다.
   Full Empty Light/Dark, Composer 7-state consumer와 overlay lifecycle 3상태는 각각 `14 Mobile composer and overlay consumers`,

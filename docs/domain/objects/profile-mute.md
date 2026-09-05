@@ -43,10 +43,13 @@ Mute를 뜻한다. non-null 값의 기간·만료 의미는 `PROD-826`에서 결
 ## 조회 정책
 
 - Home/Local/Hashtag Post List에서는 Target Profile의 Post를 Exclude한다.
-- Target Profile Post List에서는 Profile Mute를 적용하지 않고 기존 Post Visibility와 Post Eligibility를
-  통과한 Post를 정상적으로 표시한다.
+- Profile Post List에서는 직접 방문한 Profile만 Profile Mute의 예외로 허용한다. 방문한 Profile의 Post는
+  기존 Post Visibility와 Post Eligibility를 통과하면 표시하지만, 다른 Mute Target을 direct Source Author로
+  가진 Repost·Quote는 Exclude한다.
 - Profile Mute를 적용하는 Post List에서 Repost Source가 있는 후보는 바깥 Post Author와 Source Post Author를
-  모두 판정하며, 둘 중 하나라도 Target Profile이면 Exclude한다.
+  모두 판정하며, 예외로 허용한 Profile을 제외한 둘 중 하나라도 Mute Target이면 Exclude한다.
+- Bookmark 목록과 Post 직접 조회·상호작용에는 Profile Mute를 적용하지 않는다. 기존 Visibility와
+  Eligibility는 계속 적용한다.
 - Target Profile에서 발생한 새 Notification은 생성하지 않는다.
 - 기존 Notification의 존재와 Read State는 바꾸지 않는다.
 - 현재 v1 Post List 적용 여부는 `expires_at IS NULL` 관계로만 판정한다.

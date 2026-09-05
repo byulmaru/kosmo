@@ -61,7 +61,7 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 | Control              | Home                           | Local                      | Profile                    | Hashtag                    |
 | -------------------- | ------------------------------ | -------------------------- | -------------------------- | -------------------------- |
 | Profile Block        | Exclude                        | Exclude                    | Exclude                    | Exclude                    |
-| Profile Mute         | Exclude                        | Exclude                    | Include                    | Exclude                    |
+| Profile Mute         | Exclude                        | Exclude                    | 방문한 Profile만 예외      | Exclude                    |
 | Word Mute Rule       | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 |
 | Hashtag Mute Rule    | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 |
 | Profile Domain Block | Exclude                        | Exclude                    | Exclude                    | Exclude                    |
@@ -76,9 +76,13 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
   현재 established Follow Relationship을 추가로 요구하며, pending·rejected Follow Request 또는 unfollow로
   removed된 관계와 guest에는 접근 범위를 넓히지 않는다.
 - Repost에는 Repost Author와 Source Post Author에 대한 Profile Block을 모두 적용한다.
-- Home·Local·Hashtag Post List에서 Repost Source가 있는 후보에는 바깥 Post Author와 Source Post Author에
-  대한 Profile Mute를 모두 적용하고, 둘 중 하나라도 Target Profile이면 Exclude한다. Profile Post List에는
-  Profile Mute를 적용하지 않는다.
+- Home·Local·Hashtag Post List에서 Repost Source가 있는 후보에는 바깥 Post Author와 direct Source Post
+  Author의 Profile Mute를 모두 적용하고, 둘 중 하나라도 Mute Target이면 Exclude한다. Content가 있는
+  Quote도 direct Source Author를 판정한다.
+- Profile Post List에서는 방문한 Profile ID만 Mute 예외로 허용한다. 해당 Profile의 Post는 표시하지만,
+  다른 Mute Target이 direct Source Author인 Repost·Quote는 Exclude한다.
+- Profile Mute에 따른 제외는 cursor와 page limit 전에 끝낸다. Bookmark 목록과 Post 직접
+  조회·상호작용에는 Mute를 적용하지 않으며 기존 Visibility·Eligibility를 유지한다.
 - Post List 제어는 Post Visibility가 허용하지 않은 viewer에게 접근 범위를 넓히지 않는다.
 
 ## 제외/보류

@@ -15,7 +15,8 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   `VolumeOff`, `이 사용자의 게시글은 뮤트되어 있습니다.`, link-colored text action `뮤트 해제`를 한
   상태·action 행으로 표시한다. 상단 Action SLOT에는 현재 관계 상태에 맞는 기존 `FollowButton`의 `팔로우`
   또는 `팔로우 해제` action을 그대로 표시하며, Mute 상태를 경고 banner나 safety panel로 확장하지 않는다.
-- 같은 Profile의 각 Post는 Profile Mute와 무관하게 기존 Post presentation을 유지한다. 본문·미디어를 Mute
+- 직접 방문한 Profile ID만 Mute 예외로 허용하고, 다른 Mute Target의 Post를 direct Source로 가진
+  Repost·Quote는 목록에서 제외한다. 표시되는 Post는 기존 Post presentation을 유지한다. 본문·미디어를 Mute
   전용 disclosure로 접거나 별도 reveal을 요구하지 않는다. 작성자가 설정한 Content Warning과 Sensitive
   Media disclosure는 Profile Mute와 독립된 기존 계약대로 적용한다. Content가 없는 Repost와 Quote도 기존
   Repost Author attribution, direct Source, `PostActionBar` target routing과 Post presentation을 유지한다.
@@ -75,7 +76,8 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   `Muted=true`는 Mute 상태·해제 action을 표시하는 근거로만 사용한다.
 - ProfileHero 안에 `이 사용자의 게시글은 뮤트되어 있습니다.`와 `뮤트 해제` action을 표시하며 별도
   `StateView`나 새 화면 컴포넌트는 추가하지 않는다. Post에는 `PostContent.CW=MutedCollapsed` 또는
-  `MutedRevealed`를 적용하지 않으며, 기존 Post Visibility·Eligibility를 통과한 결과를 평소와 같이 표시한다.
+  `MutedRevealed`를 적용하지 않는다. 방문한 Profile만 Mute 예외로 허용하며, 다른 muted Source Author를
+  제외하고 기존 Post Visibility·Eligibility를 통과한 결과를 평소와 같이 표시한다.
 - Figma의 [`Mobile Text MutedCollapsed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7648-1590),
   [`MutedRevealed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7648-1607)와 공용
   `PostContentWarning`의 `Reason=Muted` source는 이전 검토 흔적으로만 남아 있다. 직접 Profile의 현재 제품
