@@ -1,26 +1,30 @@
 ## Why
 
-기준 문서에서 Profile Mute는 Owner Profile이 Target Profile의 노출을 줄이는 관계다. 현재 구현에는 이 관계를
-저장하고 판정하거나 관리할 DB·Core·GraphQL 기능이 없다. `PROD-825`의 콘텐츠 정책과 `PROD-814`의 UI·Relay
-통합에 앞서 `PROD-824`가 영구 Mute 관계와 권한 경계를 먼저 제공해야 한다.
+`PROD-824`가 영구 Profile Mute 관계와 권한 경계를 제공했지만, 현재 Post List는 이 관계를 노출 정책에
+활용하지 않는다. `PROD-825`는 Mute를 접근 제한이 아닌 탐색 목록의 개인 노출 억제로 적용하고, 현재 제공
+중인 목록에 Repost의 두 작성자 경계와 selected Profile 격리를 연결한다.
 
 ## What Changes
 
-- Owner Profile에서 Target Profile로 향하는 Profile Mute 관계를 저장하고 같은 Owner·Target 조합의 중복을
-  막는다.
-- nullable `expires_at`을 저장 모델에 포함하되, v1 생성 경로는 항상 `null`을 기록하고 기간 입력·변경·만료
-  동작을 공개하지 않는다.
-- 검증된 Owner Profile이 Local 또는 Remote Target Profile을 영구 Mute하고 해제할 수 있도록 transport-neutral
-  Core action을 추가한다.
-- 현재 selected Profile이 소유한 Mute 관계 목록과 Target 기준 상태를 조회하고 생성·해제할 수 있는 GraphQL
-  계약을 추가한다.
-- GraphQL 인증, Owner 권한과 selected Profile 격리를 적용하고 다른 Account나 같은 Account의 다른 selected
-  Profile 관계를 노출하거나 변경하지 않는다.
-- 저장·Core·GraphQL 테스트로 Local·Remote Target, 중복 생성, 해제, 권한과 selected Profile 격리를 검증한다.
-- Profile Mute를 만들거나 해제해도 기존 Follow Relationship, Follow Request, Reaction, Repost, Bookmark,
+- Owner Profile에서 Target Profile로 향하는 영구 Profile Mute 관계, Owner·Target 조합의 고유성, nullable
+  `expires_at`, 생성·해제 Core action과 Owner 전용 GraphQL 관리 계약을 제공한다.
+- 기간 지정 입력과 만료 동작은 공개하지 않으며, v1 생성 경로는 `expires_at`에 항상 `null`을 기록한다.
+- 현재 selected Profile이 Mute한 Target이 작성한 Home·Local 후보를 page limit 전에 제외한다.
+- Repost Source가 있는 Home·Local 후보는 바깥 Post의 Author와 Source Post Author를 모두 판정하고, 둘 중 하나라도
+  Mute Target이면 제외한다.
+- Profile Post List에서는 방문한 Profile ID만 Mute 예외로 허용한다. 다른 muted Source Author의
+  Repost·Quote는 제외하고 기존 Post Visibility·Eligibility와 PostConnection을 유지한다.
+- Mute 해제 결과는 새 조회부터 목록 정책에 반영하며, 같은 Account의 다른 selected Profile이 가진 Mute 관계를
+  섞지 않는다.
+- Mute 생성·해제와 목록 판정은 기존 Follow Relationship, Follow Request, Reaction, Repost, Bookmark,
   Notification과 Read State를 변경하지 않는다.
-- 콘텐츠 목록의 Exclude·Collapse 정책 구현, UI·Relay 관리 흐름, Notification 생성 억제, ActivityPub 전달,
-  기간 지정 Mute와 전체 E2E·archive는 이번 구현 slice에 포함하지 않는다.
+- 기존 `postAccessWhere`에 Mute 조건을 통합하고 호출부가 전체 적용·방문한 Profile만 예외·전체 무시를
+  명시한다. `PROD-825`가 Home·Local·Profile 적용과 Bookmark·직접 조회·상호작용 비적용을 소유한다.
+  `PROD-827`은 Hashtag runtime에서 같은 경계를 재사용한다.
+- Hashtag Post List API·projection과 해당 목록의 Profile Mute 통합은 `PROD-827`,
+  UI·Relay·cross-slice E2E·archive는 `PROD-814`가 담당한다.
+- 새 Notification 생성 억제, ActivityPub 전달과 기간 지정 Mute는 이번 change의 현재 구현 범위에 포함하지
+  않는다.
 
 ## Authority / Provenance
 
@@ -28,8 +32,9 @@
   `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`,
   `docs/design/profile-mute-block.md`
 - Linear Contract: `PROD-814`
-- Linear Implementations: `PROD-824`; 후행 콘텐츠 정책은 `PROD-825`, UI·Relay·통합 E2E와 archive는
-  `PROD-814`, 기간 지정 Mute 결정은 `PROD-826`
+- Linear Implementations: 저장·권한·GraphQL 기반은 `PROD-824`, Post 조회 정책 통합과 Home·Local·Profile·Bookmark API 검증은 `PROD-825`,
+  UI·Relay·통합 E2E와 archive는 `PROD-814`; Hashtag Post List runtime은 별도 `PROD-827`,
+  기간 지정 Mute 결정은 `PROD-826`
 
 ## Capabilities
 
@@ -39,13 +44,18 @@
 
 ### Modified Capabilities
 
-- 없음.
+- `post`: Home·Local의 Profile Mute Exclude, Repost Author·Source Author 판정, Profile 직접 목록의 방문 ID 예외와
+  Bookmark 비적용과 selected Profile별 새 조회 반영을 정의한다.
 
 ## Impact
 
-- Database: Profile Mute 관계 테이블, Owner·Target foreign key와 unique constraint, nullable `expires_at`, 조회와
-  pagination에 필요한 index, additive migration.
-- Core: transport-neutral 생성·해제 action, domain error와 동시성 수렴.
-- GraphQL: Profile Mute Node·viewer-relative 상태·Owner 전용 connection, 생성·해제 mutation과 공개 schema.
-- Tests: migration/schema, Core service, GraphQL integration과 Local·Remote Target·selected Profile 격리 회귀.
+- Database: `PROD-824`가 추가한 Profile Mute 관계 테이블과 index를 재사용하며 `PROD-825`에서 새 migration을
+  만들지 않는다.
+- API query: 기존 `postAccessWhere`가 현재 selected Profile의 Mute 조건과 Visibility·Eligibility를
+  합성한다. Home·Local은 전체 적용, Profile은 방문한 Profile만 예외, Bookmark·직접 조회·상호작용은
+  전체 무시를 명시한다. `PROD-827`은 Hashtag runtime에서 같은 경계를 재사용한다.
+- GraphQL: Home·Local·Profile Post List 결과와 Bookmark 비적용. Mute 결과를 위한 새 Post field나 connection edge
+  field는 추가하지 않는다.
+- Tests: Home·Local·Profile·Bookmark GraphQL integration, pagination 전 제외, selected Profile 격리와
+  해제 후 새 조회 회귀.
 - Dependencies: 새 workspace 또는 runtime dependency는 추가하지 않는다.

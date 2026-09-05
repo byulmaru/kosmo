@@ -10,7 +10,7 @@ export const Reaction = createObjectRef('Reaction', (ids, ctx) =>
     .innerJoin(Posts, eq(Posts.id, Reactions.postId))
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(inArray(Reactions.id, ids), postAccessWhere({ ctx }))),
+    .where(and(inArray(Reactions.id, ids), postAccessWhere({ ctx, profileMute: 'ignore' }))),
 );
 
 Reaction.implement({

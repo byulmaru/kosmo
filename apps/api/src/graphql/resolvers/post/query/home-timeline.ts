@@ -57,7 +57,6 @@ builder.queryField('homeTimeline', (t) =>
           replyParentIsViewerPost,
           and(followeeWhere, replyParentAuthorIsFollowee),
         );
-
         return resolveCursorConnection<Promise<PostRow[]>>(
           {
             args,
@@ -72,7 +71,7 @@ builder.queryField('homeTimeline', (t) =>
               .where(
                 and(
                   homeCandidateWhere,
-                  postAccessWhere({ ctx }),
+                  postAccessWhere({ ctx, profileMute: 'exclude' }),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),

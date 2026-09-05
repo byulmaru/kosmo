@@ -279,18 +279,21 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   `차단한 프로필입니다`와 Secondary `차단 해제`만 제공한다. Full Web [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)도
   같은 identity-free presentation을 사용한다. 차단 해제의 data와 lifecycle은 Product 후속 범위다.
 - 같은 section의 Mobile muted direct Profile Target [`7541:14061`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7541-14061)은
-  기존 Android baseline Profile shell을 복제하고 `ProfileHero.Muted=true`와 Post의 중첩
-  `PostContent.CW=MutedCollapsed`를 적용해 전체 Profile·Post·BottomTabBar, 작성자·시간·`PostActionBar`를 유지한다.
-  본문·미디어만 뮤트 전용 disclosure로 기본 접힘 처리하며 별도 `StateView`나 새 화면 컴포넌트는 추가하지
-  않는다. Dark·runtime lifecycle은 후속 범위다.
+  기존 Android baseline Profile shell과 `ProfileHero.Muted=true` 상태·해제 action의 배치 근거로만 사용한다.
+  이 Target에 남아 있는 `PostContent.CW=MutedCollapsed`와 Mute disclosure는 [Profile Mute 조회 정책](../domain/objects/profile-mute.md#조회-정책)과
+  [Profile Mute·Block 디자인 계약](profile-mute-block.md#뮤트-관계의-직접-profile)이 정한 직접 Profile 정상 표시로
+  대체됐다. 2026-09-05에 확정한 조회 정책은 방문한 Profile ID만 Mute 예외로 허용하고 다른 muted
+  Source Author의 Repost·Quote를 목록에서 제외한다. 과거 Mute disclosure를 직접 Profile의 현재 Target이나
+  runtime 근거로 세지 않는다.
 - [`Mobile Screen Inventory`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6653-25532)의
   `Main route/state contracts · 34`는 canonical route/state 물리 인벤토리만 기록하고 `/compose` 호환 route는 제외한다.
   Full Empty Light/Dark, Composer 7-state consumer와 overlay lifecycle 3상태는 각각 `14 Mobile composer and overlay consumers`,
   `17 Composer state consumers`, `15 Mobile route and state consumers`의 Target evidence로 유지한다.
   `Assembled Target consumers + contract review · 15`는 Composer state consumer, Post content warning의 Mobile
-  List/detail 4-state consumer와 moderation direct consumer를 기록한다. moderation 행은
-  `blocking 7580:14180`·`blockedBy 6774:12067`·`muted 7541:14061`을 함께 참조하고, `Remaining Mobile contract review`는
-  confirmation, retained-list pagination loading과 Native/direct `/feedback`의 Product/runtime 소유권만 남긴다.
+  List/detail 4-state consumer와 moderation direct consumer의 물리 인벤토리를 기록한다. moderation 행의
+  `blocking 7580:14180`·`blockedBy 6774:12067`은 현재 Target이고, `muted 7541:14061`의 Post collapse는 대체된
+  이력이다. `Remaining Mobile contract review`는 confirmation, retained-list pagination loading과 Native/direct
+  `/feedback`의 Product/runtime 소유권만 남긴다.
 
 #### Screens 승격 결과와 남은 검증 공백
 
@@ -334,19 +337,21 @@ Collapsed·Revealed 시각은 유지한다. 새 `Reason=Muted`는 canonical `Vol
 `다시 가리기`를 제공한다. 대응 source는
 [`Muted Collapsed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7644-1544)와
 [`Muted Revealed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7644-1550)다.
+이 `Reason=Muted` source는 이전 검토 이력이며 현재 Profile Mute 제품 계약의 consumer가 아니다.
 
 같은 변경에서 [`PostContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4476-11690)의
 기존 `Size=Center|Mobile` × `Kind=Text|Media|Quote` 조합에 `CW=MutedCollapsed|MutedRevealed` 12개를 추가했다.
 기존 `CW=None|Collapsed|Revealed`는 그대로 유지하며, Muted source도 같은 8px reveal 배치와 부모 Auto Layout
 재계산을 재사용한다. Mobile muted direct Profile Target `7541:14061`의 Post는
 [`Mobile Text MutedCollapsed`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7648-1590)을
-사용해 작성자·시간·Action Bar를 유지하고 본문만 기본 접힘 처리한다. Figma는 실제 `내용 보기` 입력,
-게시물별 reveal state·focus·보조 기술 announcement 또는 뮤트 해제 runtime 완료 증거가 아니다.
+사용해 작성자·시간·Action Bar를 유지하고 본문만 기본 접힘 처리하도록 조립돼 있다. 이 조립은 2026-09-04의
+직접 Profile 정상 표시 결정으로 대체됐으며 현재 Target이나 runtime 구현 근거로 사용하지 않는다.
 
 Search Popular·Media, Profile edit, Profile Replies·Media처럼 `Candidate`·`Product not implemented`로 이미
 inventory에 등록된 항목은 누락 화면으로 다시 세지 않는다. canonical route family의 광범위한 공백은 찾지
-않았다. Mobile `blocking`·`blockedBy` identity-free state와 `muted` direct consumer는 Target으로 조립됐고, Mute·Block confirmation
-sheet 배치와 retained-list pagination loading은 Product/runtime 계약 전 임의 geometry를 만들지 않는다. 현재
+않았다. Mobile `blocking`·`blockedBy` identity-free state는 Target으로 조립됐고, `muted` direct consumer의
+Post collapse는 대체된 이력으로만 남는다. Mute·Block confirmation sheet 배치와 retained-list pagination
+loading은 Product/runtime 계약 전 임의 geometry를 만들지 않는다. 현재
 Native/direct `/feedback` page는 누락 화면이 아니라 호환 runtime route이며, overlay-only Target으로 이관하는
 별도 Product 계약에서 제거 여부와 Native presentation을 결정한다. Inventory의 `Remaining Mobile contract review`
 행은 이 계약·runtime 후속을 Target screen coverage와 분리한다.

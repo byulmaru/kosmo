@@ -32,7 +32,7 @@ builder.objectField(Profile, 'bookmarks', (t) =>
               .where(
                 and(
                   eq(Bookmarks.profileId, profile.id),
-                  postAccessWhere({ ctx }),
+                  postAccessWhere({ ctx, profileMute: 'ignore' }),
                   before ? gt(Bookmarks.id, before) : undefined,
                   after ? lt(Bookmarks.id, after) : undefined,
                 ),
