@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       target_sha:
-        description: Optional full 40-character commit SHA to build and deploy after approval (defaults to the latest main commit)
+        description: Optional full 40-character commit SHA with a successful main Docker Build run and SHA tag (defaults to the latest main commit)
         required: false
         default: ''
         type: string
@@ -15,33 +15,29 @@ permissions:
 jobs:
   production_deploy:
     name: >-
-      Approve, Build and Deploy Production
-      (manual ${{ needs.manual_preflight.outputs.target_sha }})
-    needs: manual_preflight
-    if: needs.manual_preflight.result == 'success'
+      Approve and Deploy Production
+      (manual ${{ needs.canonical_preflight.outputs.target_sha }})
+    needs: canonical_preflight
+    if: needs.canonical_preflight.result == 'success'
     runs-on: ubuntu-24.04-arm
     environment:
       name: prod
-      url: ${{ needs.manual_preflight.outputs.target_url }}
+      url: ${{ needs.canonical_preflight.outputs.target_url }}
     concurrency:
       group: production-release
       cancel-in-progress: false
     permissions:
-      actions: read
       contents: read
       id-token: write
-      packages: write
     env:
       ARGOCD_CLI_VERSION: 3.4.2
       ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
-      TARGET_SHA: ${{ needs.manual_preflight.outputs.target_sha }}
+      TARGET_SHA: ${{ needs.canonical_preflight.outputs.target_sha }}
+      CANONICAL_BUILD_RUN_ID: ${{ needs.canonical_preflight.outputs.build_run_id }}
+      CANONICAL_BUILD_RUN_URL: ${{ needs.canonical_preflight.outputs.build_run_url }}
+      IMAGE_DIGEST: ${{ needs.canonical_preflight.outputs.image_digest }}
 
     steps:
-      - name: Checkout target commit after approval
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          ref: ${{ env.TARGET_SHA }}
-
       - name: Install Argo CD CLI
         uses: clowdhaus/argo-cd-action@946f488cf2607049c2e6ca86902ac50783927ec1 # v4.2.0
         env:
@@ -55,62 +51,6 @@ jobs:
           oauth-client-id: ${{ vars.TAILSCALE_OAUTH_CLIENT_ID }}
           audience: ${{ vars.TAILSCALE_AUDIENCE }}
           tags: tag:github-actions
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
-        with:
-          name: kosmo-production
-
-      - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract production release metadata
-        id: meta
-        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=raw,value=prod-sha-${{ env.TARGET_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
-
-      - name: Build and push production image
-        id: build
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=production-release
-          cache-to: type=gha,mode=max,scope=production-release,ignore-error=true
-          no-cache-filters: |
-            app-build
-            runtime
-          build-args: |
-            SENTRY_ORG=${{ vars.SENTRY_ORG }}
-            SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
-            SENTRY_RELEASE=kosmo@${{ env.TARGET_SHA }}
-            SENTRY_UPLOAD_REQUIRED=1
-          # Public client settings come from the channel configuration in the Web bundle.
-          secret-envs: |
-            sentry_auth_token=SENTRY_AUTH_TOKEN
-
-      - name: Validate production image digest
-        env:
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-            echo "::error::Production build did not produce a valid image digest."
-            exit 1
-          fi
 
       - name: Get Argo CD token
         id: argocd-token
@@ -150,7 +90,6 @@ jobs:
       - name: Sync migration and production workloads
         env:
           ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         shell: bash
         run: |
           set -euo pipefail
@@ -186,7 +125,6 @@ jobs:
       - name: Record production release
         if: always()
         env:
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
           RESULT: ${{ job.status }}
         shell: bash
         run: |
@@ -197,24 +135,33 @@ jobs:
             echo "- Requester: ${GITHUB_ACTOR}"
             echo "- Workflow definition ref: ${GITHUB_REF}"
             echo "- Target SHA: ${TARGET_SHA}"
-            echo "- Image identity: ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"
+            echo "- Canonical Docker Build run: [${CANONICAL_BUILD_RUN_ID}](${CANONICAL_BUILD_RUN_URL})"
+            echo "- Runtime image: ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"
+            echo "- Migration/workload digest: ${IMAGE_DIGEST}"
             echo "- Argo source revision: ${TARGET_SHA}"
             echo "- Approval boundary: prod Environment"
+            echo "- SHA tag: ghcr.io/${GITHUB_REPOSITORY}:sha-${TARGET_SHA}"
+            echo "- Production image build: not executed (SHA tag digest promotion)"
             echo "- Result: ${RESULT}"
             echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-  manual_preflight:
-    name: Validate Manual Production Target
+  canonical_preflight:
+    name: Validate SHA Tag Release
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
+      packages: read
     outputs:
       target_sha: ${{ steps.resolve.outputs.target_sha }}
       target_url: ${{ steps.resolve.outputs.target_url }}
+      build_run_id: ${{ steps.resolve.outputs.build_run_id }}
+      build_run_url: ${{ steps.resolve.outputs.build_run_url }}
+      image_digest: ${{ steps.image.outputs.image_digest }}
 
     steps:
-      - name: Validate main workflow ref and resolve target commit
+      - name: Resolve trusted canonical Docker Build
         id: resolve
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
@@ -224,63 +171,100 @@ jobs:
             const requestedSha = process.env.TARGET_SHA_INPUT.trim().toLowerCase();
 
             if (context.ref !== "refs/heads/main") {
-              throw new Error(`Manual production release must run from main, got ${context.ref}.`);
+              throw new Error(`Production release must run from main, got ${context.ref}.`);
             }
 
             let targetSha = requestedSha;
-            if (targetSha) {
-              if (!/^[0-9a-f]{40}$/.test(requestedSha)) {
-                throw new Error("target_sha must be an exact 40-character hexadecimal commit SHA.");
-              }
-            } else {
-              let branch;
-              try {
-                ({ data: branch } = await github.rest.repos.getBranch({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  branch: "main",
-                }));
-              } catch (error) {
-                throw new Error("Could not resolve the latest main commit in this repository.");
-              }
-
-              targetSha = branch.commit.sha.toLowerCase();
-              if (!/^[0-9a-f]{40}$/.test(targetSha)) {
-                throw new Error(`GitHub returned an invalid latest main commit SHA: ${targetSha}.`);
-              }
-            }
-
-            let commit;
-            try {
-              ({ data: commit } = await github.rest.repos.getCommit({
+            if (!targetSha) {
+              const { data: branch } = await github.rest.repos.getBranch({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                ref: targetSha,
-              }));
-            } catch (error) {
-              throw new Error(`Target commit ${targetSha} does not exist in this repository.`);
+                branch: "main",
+              });
+              targetSha = branch.commit.sha.toLowerCase();
+            }
+            if (!/^[0-9a-f]{40}$/.test(targetSha)) {
+              throw new Error("target_sha must be an exact 40-character hexadecimal commit SHA.");
             }
 
+            const { data: commit } = await github.rest.repos.getCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: targetSha,
+            });
             if (commit.sha.toLowerCase() !== targetSha) {
               throw new Error(`GitHub resolved target ${commit.sha}, expected ${targetSha}.`);
             }
 
+            const { data: workflowRuns } = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "docker-build.yml",
+              event: "push",
+              status: "completed",
+              head_sha: targetSha,
+              per_page: 100,
+            });
+            const buildRun = workflowRuns.workflow_runs.find(
+              (run) =>
+                run.event === "push" &&
+                run.head_branch === "main" &&
+                run.conclusion === "success",
+            );
+            if (!buildRun) {
+              throw new Error(
+                `No successful main Docker Build run exists for ${targetSha}.`,
+              );
+            }
+
             core.setOutput("target_sha", targetSha);
             core.setOutput("target_url", commit.html_url);
+            core.setOutput("build_run_id", String(buildRun.id));
+            core.setOutput("build_run_url", buildRun.html_url);
 
-      - name: Record manual preflight
-        if: success()
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve and validate production image digest
+        id: image
         env:
-          TARGET_SHA: ${{ steps.resolve.outputs.target_sha }}
-          TARGET_URL: ${{ steps.resolve.outputs.target_url }}
+          IMAGE_REFERENCE: ghcr.io/${{ github.repository }}:sha-${{ steps.resolve.outputs.target_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image_digest="$(
+            docker buildx imagetools inspect "${IMAGE_REFERENCE}" --format '{{json .Manifest}}' \
+              | jq -er '.digest | strings | select(test("^sha256:[0-9a-f]{64}$"))'
+          )"
+          echo "image_digest=${image_digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Record preflight identity
+        if: always()
+        env:
+          TARGET_SHA: ${{ steps.resolve.outputs.target_sha || inputs.target_sha || 'unresolved' }}
+          BUILD_RUN_ID: ${{ steps.resolve.outputs.build_run_id || 'unresolved' }}
+          BUILD_RUN_URL: ${{ steps.resolve.outputs.build_run_url || 'unresolved' }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.image_digest || 'unresolved' }}
+          RESULT: ${{ job.status }}
         shell: bash
         run: |
           {
-            echo "### Manual production release preflight"
+            echo "### Canonical production preflight"
             echo
-            echo "- Trigger: workflow_dispatch"
+            echo "- Trigger: ${GITHUB_EVENT_NAME}"
+            echo "- Requester: ${GITHUB_ACTOR}"
             echo "- Workflow definition ref: ${GITHUB_REF}"
-            echo "- Target commit: [${TARGET_SHA}](${TARGET_URL})"
-            echo "- Target code checkout/build: deferred until prod Environment approval"
-            echo "- Production credentials: not requested during preflight"
+            echo "- Target SHA: ${TARGET_SHA}"
+            echo "- Canonical Docker Build run: [${BUILD_RUN_ID}](${BUILD_RUN_URL})"
+            echo "- SHA tag: ghcr.io/${GITHUB_REPOSITORY}:sha-${TARGET_SHA}"
+            echo "- Runtime image: ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"
+            echo "- Result: ${RESULT}"
           } >> "${GITHUB_STEP_SUMMARY}"

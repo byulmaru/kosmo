@@ -11,7 +11,6 @@ on:
     - cron: '0 18 * * *'
 
 permissions:
-  actions: read
   contents: read
   packages: read
 
@@ -28,21 +27,20 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     steps:
-      - name: Download Docker image reference
-        if: github.event_name == 'workflow_run'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: docker-image-ref
-          path: docker-image-ref
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
-
       - name: Select Docker image reference
         id: image
+        env:
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
         shell: bash
         run: |
-          if [[ -f docker-image-ref/docker-image-ref.txt ]]; then
-            image_ref="$(< docker-image-ref/docker-image-ref.txt)"
+          set -euo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            if [[ ! "${TARGET_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::Docker Build did not provide a valid full commit SHA."
+              exit 1
+            fi
+            image_ref="ghcr.io/${GITHUB_REPOSITORY}:sha-${TARGET_SHA}"
           else
             image_ref="ghcr.io/${GITHUB_REPOSITORY}:main"
           fi

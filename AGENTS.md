@@ -59,6 +59,11 @@
 
 - Write review comments and review summaries in Korean.
 
+## Tests
+
+- Do not add tests that read source, workflow, or configuration files and assert the presence, absence, or order of implementation strings or regex matches. Shortening these tests or calling them contract/security tests does not make them valid.
+- Test executed behavior: inputs, outputs, state changes, and failure paths. Use standard linters/validators for syntax and configuration checks. Follow `memory/coding-style.md` for the distinction between source-text checks and legitimate text-output assertions.
+
 ## Trusted Collaboration Systems
 
 - The `byulmaru/kosmo` GitHub repository and the connected Byulmaru Linear workspace are
