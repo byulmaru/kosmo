@@ -2,6 +2,7 @@ import { ChevronLeftIcon, ChevronRightIcon, XIcon } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Image,
   Platform,
   Pressable,
@@ -12,9 +13,10 @@ import {
 } from 'react-native';
 import { PostContentPrivacyBoundary } from '@/components/post/PostContentPrivacyBoundary';
 import { IconButton } from '@/components/ui/IconButton';
-import { useToast } from '@/components/ui/ToastProvider';
+import { Toast } from '@/components/ui/Toast';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
+import { useToastMotion } from '@/theme/useOverlayMotion';
 import type { ReactElement } from 'react';
 import type { PressableStateCallbackType, ViewStyle } from 'react-native';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
@@ -45,6 +47,9 @@ export type PostMediaViewerSurfaceProps = Readonly<{
         viewState: PostMediaViewerViewState;
       }>
   );
+
+type ImageRequest = Readonly<{ generation: number; status: 'loading' | 'ready' | 'error' }>;
+const initialRequest: ImageRequest = { generation: 0, status: 'loading' };
 
 const statusCopy = {
   error: {
@@ -80,6 +85,45 @@ export function PostMediaViewerSurface({
   const previousDisabled = currentIndex <= 0;
   const nextDisabled = currentIndex >= media.length - 1;
   const status = viewState === 'ready' ? null : statusCopy[viewState];
+  const [requests, setRequests] = useState<Record<string, ImageRequest>>({});
+  const identity =
+    navigable && currentMedia?.url ? JSON.stringify([currentMedia.id, currentMedia.url]) : null;
+  const activeIdentity = useRef<string | null>(null);
+  const request = identity ? (requests[identity] ?? initialRequest) : initialRequest;
+  const generation = request.generation;
+
+  useEffect(() => {
+    activeIdentity.current = identity;
+    return () => {
+      activeIdentity.current = null;
+    };
+  }, [identity]);
+
+  const settle = useCallback(
+    (nextStatus: ImageRequest['status']) => {
+      if (!identity || activeIdentity.current !== identity) {return;}
+      setRequests((previous) => {
+        const current = previous[identity] ?? initialRequest;
+        if (
+          current.generation !== generation ||
+          current.status === 'error' ||
+          current.status === nextStatus
+        )
+          {return previous;}
+        return { ...previous, [identity]: { ...current, status: nextStatus } };
+      });
+    },
+    [generation, identity],
+  );
+
+  const retryImage = () => {
+    if (!identity || activeIdentity.current !== identity) {return;}
+    setRequests((previous) => {
+      const current = previous[identity] ?? initialRequest;
+      if (current.generation !== generation || current.status !== 'error') {return previous;}
+      return { ...previous, [identity]: { generation: generation + 1, status: 'loading' } };
+    });
+  };
 
   return (
     <View style={styles.surface} testID="post-media-viewer-surface">
@@ -98,8 +142,10 @@ export function PostMediaViewerSurface({
                 testID="post-media-viewer-image-privacy-boundary"
               >
                 <ViewerImage
-                  key={JSON.stringify([currentMedia.id, currentMedia.url])}
+                  key={JSON.stringify([identity, generation])}
                   accessibilityLabel={imageName}
+                  onStatus={settle}
+                  status={request.status}
                   url={currentMedia.url}
                 />
               </PostContentPrivacyBoundary>
@@ -216,6 +262,13 @@ export function PostMediaViewerSurface({
               ) : null}
             </>
           ) : null}
+          {identity ? (
+            <ViewerErrorToast
+              key={identity}
+              visible={request.status === 'error'}
+              onRetry={retryImage}
+            />
+          ) : null}
         </View>
 
         {presentation === 'wide' && contextRail != null ? (
@@ -245,59 +298,33 @@ export function PostMediaViewerSurface({
 
 function ViewerImage({
   accessibilityLabel,
+  onStatus,
+  status,
   url,
 }: Readonly<{
   accessibilityLabel: string;
+  onStatus: (status: ImageRequest['status']) => void;
+  status: ImageRequest['status'];
   url: string;
 }>) {
-  const { showToast } = useToast();
-  const [generation, setGeneration] = useState(0);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const request = useRef({ active: true, generation: 0 });
-
+  const active = useRef(true);
   useEffect(() => {
-    request.current.active = true;
+    active.current = true;
     return () => {
-      request.current.active = false;
+      active.current = false;
     };
   }, []);
-
-  useEffect(() => {
-    if (status !== 'error') {
-      return;
-    }
-    return showToast('미디어를 불러오지 못했어요', {
-      tone: 'danger',
-      persistent: true,
-      action: {
-        label: '다시 시도',
-        onPress: () => {
-          if (!request.current.active) {
-            return;
-          }
-          request.current.generation += 1;
-          setGeneration(request.current.generation);
-          setStatus('loading');
-        },
-      },
-    });
-  }, [showToast, status]);
-
   const settle = useCallback(
-    (next: 'loading' | 'ready' | 'error') => {
-      if (request.current.active && request.current.generation === generation) {
-        setStatus(next);
-      }
+    (next: ImageRequest['status']) => {
+      if (active.current) {onStatus(next);}
     },
-    [generation],
+    [onStatus],
   );
   const handleError = useCallback(() => settle('error'), [settle]);
   const handleLoad = useCallback(() => settle('ready'), [settle]);
   const handleLoadStart = useCallback(() => settle('loading'), [settle]);
-
   return (
     <Image
-      key={generation}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="image"
       accessibilityState={{ busy: status === 'loading' }}
@@ -305,10 +332,47 @@ function ViewerImage({
       onLoad={handleLoad}
       onLoadStart={handleLoadStart}
       resizeMode="contain"
-      source={{ uri: url }}
+      source={status === 'error' ? undefined : { uri: url }}
       style={styles.image}
       testID="post-media-viewer-image"
     />
+  );
+}
+
+function ViewerErrorToast({
+  onRetry,
+  visible,
+}: Readonly<{ onRetry: () => void; visible: boolean }>) {
+  const motion = useToastMotion(visible);
+  if (!motion.mounted) {return null;}
+  return (
+    <Animated.View
+      accessibilityLiveRegion="assertive"
+      accessibilityRole="alert"
+      aria-hidden={!visible}
+      testID="post-media-viewer-error-toast"
+      style={[
+        styles.errorToast,
+        {
+          opacity: motion.progress,
+          pointerEvents: visible ? 'box-none' : 'none',
+          transform: [
+            {
+              translateY: motion.progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [space[8], 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      <Toast
+        message="미디어를 불러오지 못했어요"
+        tone="danger"
+        action={{ label: '다시 시도', onPress: onRetry }}
+      />
+    </Animated.View>
   );
 }
 
@@ -398,6 +462,14 @@ function controlVisualStyle(disabled: boolean) {
 }
 
 const styles = StyleSheet.create({
+  errorToast: {
+    alignItems: 'center',
+    bottom: space[8],
+    left: space[16],
+    right: space[16],
+    position: 'absolute',
+    zIndex: 3,
+  },
   surface: {
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     flex: 1,

@@ -15,24 +15,23 @@ const require = createRequire(import.meta.url);
 const mockPlatform: { OS: string } = { OS: 'web' };
 let mockWindowHeight = 844;
 let mockReducedMotion = false;
-let activeToast: { action: { onPress: () => void }; persistent: boolean; tone: string } | null =
-  null;
-const getToastRetry = () => activeToast?.action.onPress;
-const showToast = (_message: string, options: NonNullable<typeof activeToast>) => {
-  activeToast = options;
-  return () => {
-    if (activeToast === options) {
-      activeToast = null;
-    }
-  };
-};
-mock.module('@/components/ui/ToastProvider', {
-  exports: { useToast: () => ({ showToast }) },
+const getToast = () =>
+  renderer?.root.findAll((node) => typeof node.type === 'function' && node.type.name === 'Toast')[0]
+    ?.props ?? null;
+const getToastRetry = () => getToast()?.action.onPress;
+mock.module('@/theme/useOverlayMotion', {
+  exports: {
+    useToastMotion: (visible: boolean) => ({
+      mounted: visible,
+      progress: { interpolate: () => 0 },
+    }),
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('react-native', {
   exports: {
     ActivityIndicator: 'ActivityIndicator',
+    Animated: { View: 'AnimatedView' },
     Image: 'Image',
     Platform: mockPlatform,
     Pressable: (props: Record<string, unknown>) => {
@@ -67,6 +66,7 @@ mock.module('@/components/ui/IconButton', {
 
 mock.module('@/theme/ThemeProvider', {
   exports: {
+    useElevation: () => ({ floating: {} }),
     useReducedMotion: () => mockReducedMotion,
     useTheme: () => ({ backgroundCanvas: '#ffffff' }),
   },
@@ -124,18 +124,21 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(image().props.onError, oldFailure);
     assert.equal(image().props.onLoad, oldLoad);
     assert.equal(image().props.onLoadStart, oldLoadStart);
-    assert.equal(activeToast?.tone, 'danger');
-    assert.equal(activeToast?.persistent, true);
+    assert.equal(getToast()?.tone, 'danger');
+    assert.equal(
+      byTestId('post-media-viewer-error-toast').parent?.parent?.props.testID,
+      'post-media-viewer-media-pane',
+    );
     assert.ok(byTestId('post-media-viewer-compact-detail'));
     assert.ok(findByLabel('다음 이미지'));
     assert.equal(byTestId('post-media-viewer-position').children.join(''), '1 / 4');
 
-    await act(async () => activeToast?.action.onPress());
+    await act(async () => getToast()?.action.onPress());
     assert.notEqual(image(), first);
-    assert.equal(activeToast, null);
+    assert.equal(getToast(), null);
     assert.equal(image().props.accessibilityState.busy, true);
     await act(async () => oldFailure());
-    assert.equal(activeToast, null);
+    assert.equal(getToast(), null);
     await act(async () => image().props.onLoad());
     assert.equal(image().props.accessibilityState.busy, false);
 
@@ -144,17 +147,30 @@ describe('PostMediaViewerSurface', () => {
     const staleRetry = getToastRetry();
     await render({ currentIndex: 1 });
     const second = image();
-    assert.equal(activeToast, null);
+    assert.equal(getToast(), null);
     await act(async () => {
       retriedFailure();
       staleRetry?.();
     });
-    assert.equal(activeToast, null);
+    assert.equal(getToast(), null);
     assert.equal(image(), second);
     assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
     await act(async () => image().props.onError());
+    await render({ currentIndex: 0 });
+    assert.ok(getToast(), 'A로 돌아오면 실패 상태와 retry를 보존한다');
+    assert.equal(image().props.source, undefined, '명시적인 retry 전에는 A를 자동 요청하지 않는다');
+    await act(async () => {
+      oldLoad();
+      oldLoadStart();
+    });
+    assert.ok(getToast(), '이전 mount callback은 보존된 실패를 지우지 않는다');
+    await act(async () => getToastRetry()?.());
+    assert.equal(getToast(), null);
+    assert.ok(image().props.source?.uri);
+    await render({ currentIndex: 1 });
+    assert.ok(getToast(), 'A retry는 B의 실패를 초기화하지 않는다');
     await render({ viewState: 'unavailable' });
-    assert.equal(activeToast, null);
+    assert.equal(getToast(), null);
     assert.equal(queryByTestId('post-media-viewer-image'), null);
   });
 

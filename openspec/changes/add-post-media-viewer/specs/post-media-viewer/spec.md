@@ -295,10 +295,11 @@ Host·query·runtime 구현은 historical evidence로 보존한다. PROD-853은 
 
 - **WHEN** Ready surface의 current Media resource load가 실패한다
 - **THEN** top-level shared surface `viewState`는 `Ready`로 MUST 유지한다
-- **AND** 실패한 Media 위치에 공용 Danger Action Toast와 `다시 시도`를 표시한다
+- **AND** image stage 하단에 공용 Danger Action Toast와 `다시 시도`를 표시하며 다른 액션의 전역 Toast가 이를 덮어쓰지 않는다
 - **AND** modal chrome·현재 index·navigation·counter·Compact detail·Wide context rail을 MUST 유지한다
 - **AND** retry는 실패한 Media만 다시 loading으로 전환하고 현재 index와 다른 Media 상태를 MUST NOT 변경한다
 - **AND** 오류 토스트는 자동 만료하지 않으며 재시도·선택 Media 변경·차단 상태 전환·unmount 시 해제한다
+- **AND** 실패 Media로 돌아오면 보존된 오류와 retry를 다시 표시하고 명시적 재시도 전 자동 요청하지 않는다
 - **AND** 이전 Media 또는 이전 retry generation의 늦은 callback은 현재 요청 상태를 MUST NOT 변경한다
 
 #### Scenario: PROD-853 Storybook-first delivery
