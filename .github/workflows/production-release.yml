@@ -187,15 +187,6 @@ jobs:
               throw new Error("target_sha must be an exact 40-character hexadecimal commit SHA.");
             }
 
-            const { data: commit } = await github.rest.repos.getCommit({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: targetSha,
-            });
-            if (commit.sha.toLowerCase() !== targetSha) {
-              throw new Error(`GitHub resolved target ${commit.sha}, expected ${targetSha}.`);
-            }
-
             const { data: workflowRuns } = await github.rest.actions.listWorkflowRuns({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -205,28 +196,28 @@ jobs:
               head_sha: targetSha,
               per_page: 100,
             });
-            const canonicalRuns = workflowRuns.workflow_runs.filter(
+            const buildRun = workflowRuns.workflow_runs.find(
               (run) =>
                 run.event === "push" &&
                 run.head_branch === "main" &&
                 run.conclusion === "success",
             );
-            if (canonicalRuns.length === 0) {
+            if (!buildRun) {
               throw new Error(
                 `No successful main Docker Build run exists for ${targetSha}.`,
               );
             }
 
-            const buildRun = canonicalRuns[0];
             core.setOutput("target_sha", targetSha);
-            core.setOutput("target_url", commit.html_url);
+            core.setOutput(
+              "target_url",
+              `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${targetSha}`,
+            );
             core.setOutput("build_run_id", String(buildRun.id));
             core.setOutput("build_run_url", buildRun.html_url);
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
-        with:
-          name: kosmo-production
 
       - name: Log in to GHCR
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
@@ -238,16 +229,10 @@ jobs:
       - name: Resolve and validate production image digest
         id: image
         env:
-          TARGET_SHA: ${{ steps.resolve.outputs.target_sha }}
           IMAGE_REFERENCE: ghcr.io/${{ github.repository }}:sha-${{ steps.resolve.outputs.target_sha }}
         shell: bash
         run: |
           set -euo pipefail
-
-          if [[ ! "${TARGET_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::Production preflight did not resolve a valid full commit SHA."
-            exit 1
-          fi
 
           image_digest="$(
             docker buildx imagetools inspect "${IMAGE_REFERENCE}" --format '{{json .Manifest}}' \
