@@ -1,26 +1,17 @@
 import { localProfileHandleSchema, profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
 import { usePathname } from 'expo-router';
-import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
+import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import {
-  Image,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
-import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { radii, space, spacing, textStyles, typography } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { radii, spacing, textStyles, typography } from '@/theme/tokens';
 import { useNavigationGuard } from './NavigationGuardContext';
 import { NavigationLink } from './NavigationLink';
 import {
@@ -28,7 +19,6 @@ import {
   getProfileEditActionTargetMetrics,
   profileEditActionLabelColor,
 } from './shellLayout';
-import { UnreadDot } from './UnreadDot';
 import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
@@ -74,7 +64,6 @@ const ProfileSwitcherFragment = graphql`
           id
           url
         }
-        ...ProfileNameBlock_profile
       }
     }
   }
@@ -123,15 +112,6 @@ const CreateProfileMutation = graphql`
 
 export type ProfileSwitcherSurface = 'compact' | 'drawer' | 'full';
 
-const webCompactPickerBounds = {
-  maxHeight: 'min(430px, calc(100vh - 32px))',
-} as unknown as ViewStyle;
-const webFullPickerBounds = {
-  maxHeight: 'min(430px, calc(100vh - 276px))',
-} as unknown as ViewStyle;
-const webDrawerPickerBounds = {
-  maxHeight: 'min(430px, calc(100vh - 206px))',
-} as unknown as ViewStyle;
 const countFormatter = new Intl.NumberFormat('en', {
   maximumFractionDigits: 1,
   notation: 'compact',
@@ -179,7 +159,6 @@ export function ProfileSwitcher({
   surface,
 }: Props) {
   const theme = useTheme();
-  const elevation = useElevation();
   const pathname = usePathname();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
@@ -205,7 +184,6 @@ export function ProfileSwitcher({
   const fullWeb = Platform.OS === 'web' && surface === 'full';
   const mobileWebDrawer = Platform.OS === 'web' && surface === 'drawer';
   const redesignedWeb = Platform.OS === 'web' && surface !== 'drawer';
-  const scrollableWebPicker = Platform.OS === 'web';
   const open = controlledOpen ?? internalOpen;
   const webExpandedChevron = Platform.OS === 'web' && open;
   const setOpen = (nextOpen: boolean) => {
@@ -379,90 +357,55 @@ export function ProfileSwitcher({
     action();
   };
 
-  const surfaceBounds = !scrollableWebPicker
-    ? undefined
-    : surface === 'compact'
-      ? webCompactPickerBounds
-      : surface === 'drawer'
-        ? webDrawerPickerBounds
-        : webFullPickerBounds;
-  const profileOptions = profiles.map((profile) => {
-    const selected = active?.id === profile.id;
-    const hasUnread = profile.unreadNotificationCount > 0;
-    return (
-      <Pressable
-        aria-checked={Platform.OS === 'web' && !redesignedWeb ? selected : undefined}
-        aria-pressed={redesignedWeb ? selected : undefined}
-        accessibilityLabel={`${profile.displayName}, ${profile.relativeHandle}${hasUnread ? ', 읽지 않은 알림 있음' : ''}`}
-        accessibilityRole={redesignedWeb ? 'button' : Platform.OS === 'web' ? undefined : 'radio'}
-        accessibilityState={
-          redesignedWeb ? { disabled: busy } : { checked: selected, disabled: busy }
-        }
-        disabled={busy}
-        key={profile.id}
-        onPress={() => selectProfile(profile.id)}
-        role={Platform.OS === 'web' && !redesignedWeb ? ('menuitemradio' as 'radio') : undefined}
-        style={({ pressed }) => [
-          styles.profile,
-          !selected ? styles.unselectedProfile : undefined,
-          {
-            backgroundColor: selected || pressed ? theme.surface : 'transparent',
-            opacity: busy ? 0.5 : 1,
-          },
-        ]}
-      >
-        <View style={styles.profileAvatar}>
-          <Avatar
-            imageUri={profile.avatar?.url}
-            label={profile.displayName}
-            size={selected ? 48 : 32}
-          />
-          {hasUnread ? (
-            <UnreadDot style={styles.profileUnreadDot} testID="profile-switcher-unread-dot" />
-          ) : null}
-        </View>
-        <ProfileNameBlock profile={profile} style={styles.profileLabel} />
-        {selected ? <CheckIcon color={theme.text} size={16} /> : null}
-      </Pressable>
-    );
-  });
   const pickerContent = (
-    <View
-      ref={pickerRef}
-      style={[
-        styles.menu,
-        scrollableWebPicker ? styles.redesignedMenu : undefined,
-        surfaceBounds,
-        Platform.OS === 'web' ? elevation.floating : elevation.overlay,
-        { backgroundColor: theme.card, borderColor: theme.border },
-      ]}
-    >
-      <View
-        accessibilityLabel="프로필 전환"
-        accessibilityRole={Platform.OS === 'web' ? undefined : 'menu'}
-        role={Platform.OS === 'web' && !redesignedWeb ? 'menu' : undefined}
-        style={scrollableWebPicker ? styles.redesignedMenuRegion : styles.menuItems}
-      >
-        {scrollableWebPicker ? (
-          <ScrollView
-            accessibilityLabel="전환할 프로필 목록"
-            contentContainerStyle={styles.profileListContent}
-            role="group"
-            style={styles.profileList}
-          >
-            {profileOptions}
-          </ScrollView>
-        ) : (
-          profileOptions
-        )}
-
-        <View
-          accessibilityRole={Platform.OS === 'web' ? undefined : 'none'}
-          role={Platform.OS === 'web' ? 'separator' : undefined}
-          style={[styles.divider, { backgroundColor: theme.border }]}
-        />
-
-        {!creating ? (
+    <ProfilePicker
+      busy={busy}
+      footer={
+        <>
+          {creating ? (
+            <View
+              accessibilityLabel="새 프로필 만들기"
+              role={Platform.OS === 'web' ? 'form' : undefined}
+              style={styles.createForm}
+            >
+              <View style={styles.createRow}>
+                <View style={styles.inputField}>
+                  <TextField
+                    accessibilityLabel="프로필 핸들"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!busy}
+                    error={fieldError ?? undefined}
+                    onChangeText={setHandle}
+                    onSubmitEditing={createProfile}
+                    placeholder="새 프로필 핸들"
+                    style={styles.input}
+                    value={handle}
+                  />
+                </View>
+                <Button
+                  disabled={busy}
+                  loading={busy}
+                  onPress={createProfile}
+                  style={styles.createButton}
+                >
+                  만들기
+                </Button>
+              </View>
+              <Text style={[styles.help, { color: theme.textSecondary }]}>
+                영문, 숫자, 밑줄(_)만 사용할 수 있어요.
+              </Text>
+            </View>
+          ) : null}
+          {operationError ? (
+            <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+              {operationError}
+            </Text>
+          ) : null}
+        </>
+      }
+      menuFooter={
+        !creating ? (
           <Pressable
             accessibilityLabel="새 프로필 추가"
             accessibilityRole={redesignedWeb || Platform.OS !== 'web' ? 'button' : undefined}
@@ -486,52 +429,14 @@ export function ProfileSwitcher({
             </View>
             <Text style={[styles.addLabel, { color: theme.text }]}>새 프로필 추가</Text>
           </Pressable>
-        ) : null}
-      </View>
-
-      <View style={styles.pickerFooter}>
-        {creating ? (
-          <View
-            accessibilityLabel="새 프로필 만들기"
-            role={Platform.OS === 'web' ? 'form' : undefined}
-            style={styles.createForm}
-          >
-            <View style={styles.createRow}>
-              <View style={styles.inputField}>
-                <TextField
-                  accessibilityLabel="프로필 핸들"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!busy}
-                  error={fieldError ?? undefined}
-                  onChangeText={setHandle}
-                  onSubmitEditing={createProfile}
-                  placeholder="새 프로필 핸들"
-                  style={styles.input}
-                  value={handle}
-                />
-              </View>
-              <Button
-                disabled={busy}
-                loading={busy}
-                onPress={createProfile}
-                style={styles.createButton}
-              >
-                만들기
-              </Button>
-            </View>
-            <Text style={[styles.help, { color: theme.textSecondary }]}>
-              영문, 숫자, 밑줄(_)만 사용할 수 있어요.
-            </Text>
-          </View>
-        ) : null}
-        {operationError ? (
-          <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-            {operationError}
-          </Text>
-        ) : null}
-      </View>
-    </View>
+        ) : null
+      }
+      onSelect={selectProfile}
+      pickerRef={pickerRef}
+      profiles={profiles}
+      selectedProfileId={active?.id}
+      surface={surface}
+    />
   );
 
   const triggerCopy = !compact ? (
@@ -803,18 +708,6 @@ const styles = StyleSheet.create({
   countLink: { flexDirection: 'row', gap: spacing.sm },
   count: { fontFamily: 'SUIT', ...typography.sm },
   countLabel: { fontFamily: 'SUIT', ...typography.sm },
-  menu: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 6,
-    width: 280,
-  },
-  redesignedMenu: { overflow: 'hidden' },
-  menuItems: { gap: space[0] },
-  redesignedMenuRegion: { flexShrink: 1, minHeight: 0 },
-  profileList: { flexShrink: 1, minHeight: 0 },
-  profileListContent: { gap: space[0] },
-  pickerFooter: { flexShrink: 0 },
   backdrop: {
     alignItems: 'center',
     flex: 1,
@@ -822,25 +715,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   nativeMenu: { width: 280 },
-  profile: {
-    alignItems: 'center',
-    borderRadius: 10,
-    flexDirection: 'row',
-    gap: 10,
-    padding: spacing.sm,
-  },
-  unselectedProfile: { paddingVertical: space[8] },
-  profileAvatar: { position: 'relative' },
-  profileUnreadDot: {
-    height: 12,
-    position: 'absolute',
-    right: -2,
-    top: -2,
-    width: 12,
-    zIndex: 1,
-  },
-  profileLabel: { flex: 1, minWidth: 0 },
-  divider: { height: 1, marginVertical: space[4], width: '100%' },
   createForm: { gap: spacing.xs, padding: spacing.xs },
   createRow: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.sm },
   inputField: { flex: 1, minWidth: 0 },
