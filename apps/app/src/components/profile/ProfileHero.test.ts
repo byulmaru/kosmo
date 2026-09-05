@@ -82,7 +82,11 @@ const require = createRequire(import.meta.url);
 require.extensions['.png'] = (module, filename) => {
   module.exports = filename;
 };
-mockModule(require.resolve('lucide-react-native'), { XIcon: 'XIcon' });
+mockModule('lucide-react-native', { XIcon: 'XIcon', VolumeOff: 'VolumeOff' });
+mockModule(require.resolve('lucide-react-native'), { XIcon: 'XIcon', VolumeOff: 'VolumeOff' });
+mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
+  ProfileMuteAction: 'ProfileMuteAction',
+});
 
 let ProfileHero: typeof ProfileHeroExport;
 

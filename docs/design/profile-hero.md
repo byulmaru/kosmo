@@ -21,11 +21,11 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - `FollowButton`은 기존 공용 `Button`의 시각·상태 스타일을 재사용한다. 크기는 아래 소비처 기준으로 선택하며,
   `Compact`를 Mobile의 동의어로 사용하지 않는다. 별도 Mobile 시각 variant나 `72×40` 크기는 추가하지 않는다.
 
-| 소비처 | FollowButton 크기 | 시각 영역 |
-| --- | --- | --- |
-| Web 프로필 목록: 검색, 해시태그, 팔로워·팔로잉, Post Activity·Reaction People | Compact | `72×32` |
-| Web Profile Hero 상단 관계 action | Medium | `96×40` |
-| Mobile Web·iOS·Android의 Profile Hero와 위 프로필 목록 | Medium | `96×40` |
+| 소비처                                                                        | FollowButton 크기 | 시각 영역 |
+| ----------------------------------------------------------------------------- | ----------------- | --------- |
+| Web 프로필 목록: 검색, 해시태그, 팔로워·팔로잉, Post Activity·Reaction People | Compact           | `72×32`   |
+| Web Profile Hero 상단 관계 action                                             | Medium            | `96×40`   |
+| Mobile Web·iOS·Android의 Profile Hero와 위 프로필 목록                        | Medium            | `96×40`   |
 
 - 위 Web 목록 기준은 Compact Web 1024와 Full Web 1440에 모두 적용한다. 화면 이름의 Compact와
   Button variant의 Compact는 별개다. Mobile에서 높이만 32로 줄이거나 웹 목록을 일괄 Medium으로 키우지 않는다.

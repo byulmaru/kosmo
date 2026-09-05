@@ -43,6 +43,17 @@ function ProfileMuteActionContent({
   const mounted = useRef(false);
   const cancelRef = useRef<View>(null);
   const focusTrigger = useRef<() => void>(() => {});
+  const restoreFocus = useRef<'cancel' | 'trigger' | null>(null);
+  useEffect(() => {
+    if (!pending && restoreFocus.current) {
+      if (restoreFocus.current === 'cancel') {
+        cancelRef.current?.focus();
+      } else {
+        focusTrigger.current();
+      }
+      restoreFocus.current = null;
+    }
+  }, [pending]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -71,6 +82,13 @@ function ProfileMuteActionContent({
       return;
     }
     inFlight.current = false;
+    restoreFocus.current = nextMuted
+      ? succeeded
+        ? null
+        : 'cancel'
+      : surface === 'menu'
+        ? 'trigger'
+        : null;
     setPending(false);
     if (succeeded) {
       setOpen(false);
