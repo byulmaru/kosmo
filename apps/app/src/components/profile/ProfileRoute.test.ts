@@ -66,6 +66,12 @@ const routerHistory: string[] = [];
 let routerBackCount = 0;
 let routerCanGoBack = true;
 let sessionId: string | null = null;
+let selectedProfileId: string | null = null;
+let profileBlockStatus: { blockedBy: boolean; blocking: boolean; profileBlockId: string | null } = {
+  blockedBy: false,
+  blocking: false,
+  profileBlockId: null,
+};
 let profileViewerState: {
   isSelf: boolean;
   membership: { role: 'MEMBER' | 'OWNER' } | null;
@@ -157,6 +163,10 @@ mockModule('react-relay', {
     }
 
     return {
+      currentSession: selectedProfileId
+        ? { selectedProfile: { id: selectedProfileId } }
+        : { selectedProfile: null },
+      profileBlockStatus,
       profileByHandle: profileAvailable
         ? {
             displayName: profileDisplayName ?? `Display ${variables.handle}`,
@@ -261,7 +271,7 @@ mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
   useRelayActorLifecycleKey: () => 'actor-a',
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
-  useSession: () => ({ selectedProfileId: null, sessionId }),
+  useSession: () => ({ selectedProfileId, sessionId }),
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({ foregroundPrimary: '#111111' }),
@@ -304,6 +314,8 @@ afterEach(async () => {
   profileAvailable = true;
   profileDisplayName = null;
   profileInstanceKind = 'LOCAL';
+  selectedProfileId = null;
+  profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
   profileViewerState = null;
   SlotContent = ProfilePostListPage;
   sessionId = null;
@@ -709,5 +721,43 @@ describe('profile route parameter lifecycle', () => {
     } finally {
       console.error = originalConsoleError;
     }
+  });
+
+  it('자신의 차단 상태는 target identity 없이 해제 action을 제공한다', async () => {
+    selectedProfileId = 'owner';
+    profileAvailable = false;
+    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+
+    await renderRoute('@blocked');
+
+    assert.equal(requireRendered('StateView').props.title, '차단한 프로필입니다');
+    assert.equal(rendered('ProfileHero').length, 0);
+    const action = requireRendered('StateView').props.action;
+    assert.ok(action);
+    assert.equal(action.props.profileId, 'block-1');
+    assert.equal(action.props.displayName, undefined);
+  });
+
+  it('상대에게 차단된 Profile은 actionless StateView만 표시한다', async () => {
+    selectedProfileId = 'owner';
+    profileAvailable = false;
+    profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
+
+    await renderRoute('@blocked');
+
+    assert.equal(requireRendered('StateView').props.title, '이 프로필을 볼 수 없습니다');
+    assert.equal(rendered('ProfileBlockAction').length, 0);
+    assert.equal(rendered('ProfileHero').length, 0);
+  });
+
+  it('selected Profile 자기 자신에게는 차단 action을 표시하지 않는다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
+    await renderRoute('@local');
+    assert.equal(rendered('ProfileBlockAction').length, 0);
+
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    await renderRoute('@target');
+    assert.equal(rendered('ProfileBlockAction').length, 1);
   });
 });
