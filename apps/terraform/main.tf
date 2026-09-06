@@ -132,7 +132,7 @@ resource "google_iam_workload_identity_pool_provider" "kosmo" {
   attribute_mapping = {
     "google.subject" = "assertion.sub"
   }
-  attribute_condition = "false"
+  attribute_condition = "assertion.sub == '__retired__' && false"
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
