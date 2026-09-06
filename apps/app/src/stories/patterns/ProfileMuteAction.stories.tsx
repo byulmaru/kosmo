@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -11,6 +11,8 @@ type Props = {
   onMute: () => Promise<void>;
   onUnmute: () => Promise<void>;
   onFeedback: (feedback: { muted: boolean; status: 'success' | 'error' }) => void;
+  changeProfileOnRequest?: boolean;
+  profileId?: string;
   removeOnSuccess?: boolean;
 };
 
@@ -19,12 +21,17 @@ function Fixture({
   outcome,
   onMute,
   onUnmute,
+  changeProfileOnRequest = false,
+  profileId: initialProfileId = 'profile-kosmo',
   removeOnSuccess = false,
   ...props
 }: Props) {
   const [muted, setMuted] = useState(initialMuted);
+  const [profileId, setProfileId] = useState(initialProfileId);
+  const [requestComplete, setRequestComplete] = useState(false);
   const [visible, setVisible] = useState(true);
   useEffect(() => setMuted(initialMuted), [initialMuted]);
+  useEffect(() => setProfileId(initialProfileId), [initialProfileId]);
   return visible ? (
     <View style={{ padding: 24 }}>
       <ProfileMuteAction
@@ -36,16 +43,29 @@ function Fixture({
             await new Promise<void>(() => {});
           }
           if (outcome === 'error') {
+            if (changeProfileOnRequest) {
+              setProfileId('profile-next');
+              await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            }
+            setRequestComplete(true);
             throw new Error('요청 실패');
+          }
+          if (changeProfileOnRequest) {
+            setProfileId('profile-next');
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
           }
           if (removeOnSuccess) {
             setVisible(false);
           } else {
             setMuted(nextMuted);
           }
+          setRequestComplete(true);
         }}
-        profileId="profile-kosmo"
+        profileId={profileId}
       />
+      {changeProfileOnRequest && requestComplete ? (
+        <Text testID="profile-mute-request-complete">요청 완료</Text>
+      ) : null}
     </View>
   ) : null;
 }
@@ -55,6 +75,8 @@ const meta = {
     displayName: '코스모 작가',
     muted: false,
     outcome: 'success',
+    changeProfileOnRequest: false,
+    profileId: 'profile-kosmo',
     removeOnSuccess: false,
     onMute: fn<() => Promise<void>>().mockResolvedValue(undefined),
     onUnmute: fn<() => Promise<void>>().mockResolvedValue(undefined),
@@ -74,6 +96,8 @@ const meta = {
     'MuteContract',
     'FailureContract',
     'PendingContract',
+    'DiscardErrorOnTargetChangeContract',
+    'DiscardSuccessOnTargetChangeContract',
     'UnmountOnSuccessContract',
     'UnmuteContract',
   ],
@@ -192,5 +216,47 @@ export const UnmountOnSuccessContract: Story = {
       expect(args.onFeedback).toHaveBeenCalledWith({ muted: false, status: 'success' }),
     );
     expect(await body.findByText(`${args.displayName} 님이 뮤트 해제되었어요`)).toBeVisible();
+  },
+};
+
+export const DiscardSuccessOnTargetChangeContract: Story = {
+  args: { changeProfileOnRequest: true },
+  play: async ({ args, canvasElement }) => {
+    args.onMute.mockClear();
+    args.onFeedback.mockClear();
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(within(canvasElement).getByRole('button', { name: '프로필 뮤트 메뉴' }));
+    await userEvent.click(await body.findByRole('menuitem', { name: '뮤트' }));
+    await userEvent.click(await body.findByRole('button', { name: '뮤트' }));
+    await waitFor(() => expect(args.onMute).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(within(canvasElement).getByTestId('profile-mute-request-complete')).toBeVisible(),
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await waitFor(() =>
+      expect(body.queryByText(`${args.displayName} 님이 뮤트되었어요`)).not.toBeInTheDocument(),
+    );
+    expect(args.onFeedback).not.toHaveBeenCalled();
+  },
+};
+
+export const DiscardErrorOnTargetChangeContract: Story = {
+  args: { changeProfileOnRequest: true, outcome: 'error' },
+  play: async ({ args, canvasElement }) => {
+    args.onMute.mockClear();
+    args.onFeedback.mockClear();
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(within(canvasElement).getByRole('button', { name: '프로필 뮤트 메뉴' }));
+    await userEvent.click(await body.findByRole('menuitem', { name: '뮤트' }));
+    await userEvent.click(await body.findByRole('button', { name: '뮤트' }));
+    await waitFor(() => expect(args.onMute).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(within(canvasElement).getByTestId('profile-mute-request-complete')).toBeVisible(),
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await waitFor(() =>
+      expect(body.queryByText('뮤트하지 못했어요. 다시 시도해 주세요.')).not.toBeInTheDocument(),
+    );
+    expect(args.onFeedback).not.toHaveBeenCalled();
   },
 };
