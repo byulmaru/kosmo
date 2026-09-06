@@ -161,7 +161,8 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   indicator를 숨기고 non-selected Profile row 오른쪽에 `24px` 숫자 badge를 표시해 `1`~`9`는 실제 값,
   `10` 이상은 `9+`로 축약한다. selected row는 count badge 대신 기존 check를 표시해 두 요소가 겹치지 않게
   한다. indicator와 badge는 접근성 트리에서 숨기고 Profile option의 accessible name은 정확한 count 대신
-  `읽지 않은 알림 있음`만 유지한다. 이 Target은 Storybook 검토 표면이며 Production runtime 연결과 unread
+  `읽지 않은 알림 있음`만 유지한다. full·drawer chevron은 기존 20px를 유지하고 dot은 chevron 우상단 기준 `right: -9px`, `top: -4px`,
+  compact dot은 40px avatar 기준 `right: 0`, `top: 0`으로 배치한다. 이 Target은 Storybook 검토 표면이며 Production runtime 연결과 unread
   data·Relay·badge lifecycle 이관은 PROD-786이 소유한다.
 
 ## 알림 Unread badge

@@ -128,12 +128,12 @@ const meta = {
   },
   argTypes: {
     disabled: { control: 'boolean' },
-    initialOpen: { control: false },
-    onOpenChange: { action: 'open', control: false },
-    onSelectProfile: { action: 'selectProfile', control: false },
+    initialOpen: { control: false, table: { disable: true } },
+    onOpenChange: { action: 'open', control: false, table: { disable: true } },
+    onSelectProfile: { action: 'selectProfile', control: false, table: { disable: true } },
     otherUnreadCount: { control: 'select', options: [0, 1, 9, 10] },
     profileCount: { control: { max: profiles.length, min: 0, step: 1, type: 'range' } },
-    selectionOutcome: { control: false },
+    selectionOutcome: { control: false, table: { disable: true } },
     selectedProfileId: {
       control: 'select',
       options: profiles.map((profile) => profile.id),
@@ -144,6 +144,7 @@ const meta = {
   component: ProfileSwitcherFixture,
   excludeStories: [
     'CompactClosedUnreadContract',
+    'DrawerClosedUnreadContract',
     'InteractionContract',
     'OpenUnreadContract',
     'OutsideDismissContract',
@@ -304,26 +305,41 @@ export const WideClosedUnreadContract: Story = {
       name: '프로필 목록, 읽지 않은 알림 있음',
     });
     const indicator = canvas.getByTestId('profile-switcher-closed-unread');
+    const chevron = trigger.querySelector('svg');
+    expect(chevron).not.toBeNull();
     const triggerBounds = trigger.getBoundingClientRect();
+    const chevronBounds = chevron!.getBoundingClientRect();
     const bounds = indicator.getBoundingClientRect();
 
     expect(bounds.width).toBe(8);
     expect(bounds.height).toBe(8);
-    expect(bounds.left).toBe(triggerBounds.right + 1);
-    expect(bounds.top).toBe(triggerBounds.top + 2);
+    expect(chevronBounds.width).toBe(20);
+    expect(chevronBounds.height).toBe(20);
+    expect(bounds.left).toBe(chevronBounds.right + 1);
+    expect(bounds.top).toBe(chevronBounds.top - 4);
+    expect(bounds.left).toBeGreaterThan(triggerBounds.right);
     expect(indicator).toHaveAttribute('aria-hidden', 'true');
   },
+};
+
+export const DrawerClosedUnreadContract: Story = {
+  args: { initialOpen: false, surface: 'drawer' },
+  play: WideClosedUnreadContract.play,
 };
 
 export const CompactClosedUnreadContract: Story = {
   args: { initialOpen: false, surface: 'compact' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const avatar = canvas.getByLabelText('코스모 작가 프로필 이미지');
     const indicator = canvas.getByTestId('profile-switcher-closed-unread');
+    const avatarBounds = avatar.getBoundingClientRect();
     const bounds = indicator.getBoundingClientRect();
 
     expect(bounds.width).toBe(12);
     expect(bounds.height).toBe(12);
+    expect(bounds.left).toBe(avatarBounds.left + 28);
+    expect(bounds.top).toBe(avatarBounds.top);
     expect(getComputedStyle(indicator).borderTopWidth).toBe('1px');
   },
 };

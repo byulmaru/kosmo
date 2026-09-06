@@ -137,25 +137,27 @@ export function ProfileSwitcherTarget({
             >
               {selectedProfile?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
             </Text>
-            {!open && selectedHasUnread ? (
-              <View
-                accessible={false}
-                accessibilityElementsHidden
-                aria-hidden
-                importantForAccessibility="no-hide-descendants"
-                style={[
-                  styles.closedUnread,
-                  styles.wideUnread,
-                  { backgroundColor: theme.actionPrimaryBase },
-                ]}
-                testID="profile-switcher-closed-unread"
-              />
-            ) : null}
-            {open ? (
-              <ChevronUpIcon color={theme.foregroundSecondary} size={iconSizes[20]} />
-            ) : (
-              <ChevronDownIcon color={theme.foregroundSecondary} size={iconSizes[20]} />
-            )}
+            <View style={styles.chevron}>
+              {!open && selectedHasUnread ? (
+                <View
+                  accessible={false}
+                  accessibilityElementsHidden
+                  aria-hidden
+                  importantForAccessibility="no-hide-descendants"
+                  style={[
+                    styles.closedUnread,
+                    styles.wideUnread,
+                    { backgroundColor: theme.actionPrimaryBase },
+                  ]}
+                  testID="profile-switcher-closed-unread"
+                />
+              ) : null}
+              {open ? (
+                <ChevronUpIcon color={theme.foregroundSecondary} size={iconSizes[20]} />
+              ) : (
+                <ChevronDownIcon color={theme.foregroundSecondary} size={iconSizes[20]} />
+              )}
+            </View>
           </>
         )}
       </Pressable>
@@ -280,11 +282,12 @@ const styles = StyleSheet.create({
     borderWidth: borderWidths[1],
     height: 12,
     position: 'absolute',
-    right: -2,
-    top: -2,
+    right: 0,
+    top: 0,
     width: 12,
   },
-  wideUnread: { position: 'absolute', right: -9, top: 2 },
+  chevron: { position: 'relative', height: iconSizes[20], width: iconSizes[20] },
+  wideUnread: { position: 'absolute', right: -9, top: -4 },
   menu: {
     borderRadius: radius[16],
     borderWidth: borderWidths[1],

@@ -1,5 +1,6 @@
 import baseMeta, {
   CompactClosedUnreadContract as compactClosedUnreadContract,
+  DrawerClosedUnreadContract as drawerClosedUnreadContract,
   EscapeDismissContract as escapeDismissContract,
   InteractionContract as interactionContract,
   LongListContract as longListContract,
@@ -26,5 +27,6 @@ export const EscapeDismissContract: Story = escapeDismissContract;
 export const OutsideDismissContract: Story = outsideDismissContract;
 export const LongListContract: Story = longListContract;
 export const WideClosedUnreadContract: Story = wideClosedUnreadContract;
+export const DrawerClosedUnreadContract: Story = drawerClosedUnreadContract;
 export const CompactClosedUnreadContract: Story = compactClosedUnreadContract;
 export const OpenUnreadContract: Story = openUnreadContract;
