@@ -9,7 +9,7 @@ Git tag, `production` 브랜치와 일반 branch push는 canonical build를 시�
 #### Scenario: Main push canonical build와 dev deploy
 
 - **WHEN** commit이 `main`에 push되고 Docker Build가 성공한다
-- **THEN** 시스템은 `sha-<full SHA>` image tag와 Sentry release/source map을 한 번 생성하고, Dev는 triggering run의 `head_sha` tag에서 조회·검증한 digest를 Argo revision, version과 imageDigest로 설정한 뒤 자동 sync가 같은 SHA와 digest를 반영했는지 확인한다
+- **THEN** 시스템은 `sha-<full SHA>` image tag와 Sentry release/source map을 한 번 생성하고, Dev는 triggering run의 `head_sha` tag에서 조회·검증한 digest를 Argo revision, version과 imageDigest로 설정한 뒤 후속 자동 sync에 맡긴다. Workflow 성공은 rollout 완료 증거가 아니다
 
 #### Scenario: Canonical build 실패
 

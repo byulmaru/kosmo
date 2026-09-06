@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  restart_dev:
-    name: Restart Dev Workloads
+  update_dev:
+    name: Update Dev Application
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04-arm
     env:
@@ -103,7 +103,7 @@ jobs:
             core.setSecret(dexToken);
             core.setOutput("token", dexToken);
 
-      - name: Sync dev application
+      - name: Update Dev Application
         env:
           ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
           IMAGE_DIGEST: ${{ steps.image.outputs.image_digest }}
@@ -116,52 +116,3 @@ jobs:
             -p "version=${TARGET_SHA}" \
             -p "imageDigest=${IMAGE_DIGEST}" \
             --validate
-
-          for attempt in $(seq 1 120); do
-            if app_json="$(
-              argocd --server "${ARGOCD_SERVER}" --grpc-web app get kosmo-dev --output json
-            )" && jq -e \
-              --arg target_sha "${TARGET_SHA}" \
-              --arg image_digest "${IMAGE_DIGEST}" \
-              '
-                .spec.source.targetRevision == $target_sha
-                and any(.spec.source.helm.parameters[]?; .name == "version" and .value == $target_sha)
-                and any(.spec.source.helm.parameters[]?; .name == "imageDigest" and .value == $image_digest)
-                and .status.sync.revision == $target_sha
-                and .status.sync.status == "Synced"
-                and .status.operationState.phase == "Succeeded"
-                and .status.operationState.syncResult.revision == $target_sha
-                and .status.operationState.syncResult.source.targetRevision == $target_sha
-                and any(.status.operationState.syncResult.source.helm.parameters[]?; .name == "version" and .value == $target_sha)
-                and any(.status.operationState.syncResult.source.helm.parameters[]?; .name == "imageDigest" and .value == $image_digest)
-              ' <<<"${app_json}" >/dev/null; then
-              exit 0
-            fi
-
-            if (( attempt == 120 )); then
-              echo "::error::Argo CD did not complete a successful ${TARGET_SHA} sync with imageDigest ${IMAGE_DIGEST} after 120 bounded verification attempts."
-              exit 1
-            fi
-            sleep 5
-          done
-
-      - name: Restart dev workloads
-        env:
-          ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          for rollout in kosmo-web kosmo-api; do
-            argocd --server "${ARGOCD_SERVER}" --grpc-web app actions run kosmo-dev restart \
-              --group argoproj.io \
-              --kind Rollout \
-              --namespace kosmo-dev \
-              --resource-name "${rollout}"
-          done
-
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app actions run kosmo-dev restart \
-            --group apps \
-            --kind Deployment \
-            --namespace kosmo-dev \
-            --all
