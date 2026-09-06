@@ -39,7 +39,7 @@ contract. Server deployments and tests override these defaults with `PORT`.
 ### Local Temporal
 
 Keep Docker running before `pnpm dev`. It starts the official Temporal development
-server through `docker-compose.temporal.yml`, waits for it to become healthy, then
+server through `docker-compose.temporal.local.yml`, waits for it to become healthy, then
 runs the apps and Temporal worker. Local scripts set `TEMPORAL_ADDRESS=127.0.0.1:7233`
 and `TEMPORAL_NAMESPACE=default` after loading Vault. The worker health endpoint
 uses `127.0.0.1:8081` to avoid the admin app's port `8080`.
