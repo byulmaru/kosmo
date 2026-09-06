@@ -28,19 +28,19 @@
 - **WHEN** 앱 실행에 배포 DSN, 환경 또는 release 중 하나라도 없다
 - **THEN** Native Sentry SDK는 외부 event 전송을 활성화하지 않는다
 
-### Requirement: Native release의 원본 오류 위치를 확인한다
+### Requirement: Native release에 원본 오류 위치를 연결한다
 
 **Authority / Provenance:** PROD-483. 시스템은 Android·iOS production build의 JavaScript source map과 native debug symbol을 해당 Sentry release에 업로드해야 하며(MUST), 업로드 자격 증명을 앱 bundle·repository·build artifact에 포함해서는 안 된다(MUST NOT).
 
-#### Scenario: Android production 검증 오류
+#### Scenario: Android production release symbolication
 
-- **WHEN** 업로드 자격 증명이 있는 Android production build에서 검증 오류를 발생시킨다
-- **THEN** Sentry에서 build release와 JavaScript 또는 native 원본 위치를 확인할 수 있다
+- **WHEN** Android production build가 업로드 자격 증명을 사용해 JavaScript source map과 native debug symbol을 build release에 업로드한다
+- **THEN** 해당 release의 Sentry event stack이 JavaScript 또는 native 원본 위치로 symbolicate된다
 
-#### Scenario: iOS production 검증 오류
+#### Scenario: iOS production release symbolication
 
-- **WHEN** 업로드 자격 증명이 있는 iOS production build에서 검증 오류를 발생시킨다
-- **THEN** Sentry에서 build release와 JavaScript 또는 native 원본 위치를 확인할 수 있다
+- **WHEN** iOS production build가 업로드 자격 증명을 사용해 JavaScript source map과 native debug symbol을 build release에 업로드한다
+- **THEN** 해당 release의 Sentry event stack이 JavaScript 또는 native 원본 위치로 symbolicate된다
 
 #### Scenario: 업로드 자격 증명 보호
 

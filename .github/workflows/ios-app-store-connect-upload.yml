@@ -20,7 +20,6 @@ jobs:
     environment: prod
     env:
       EXPO_NO_GIT_STATUS: '1'
-      SENTRY_ENVIRONMENT: prod
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
       SENTRY_RELEASE: ${{ github.sha }}

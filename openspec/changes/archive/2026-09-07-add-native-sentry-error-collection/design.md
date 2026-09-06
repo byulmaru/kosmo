@@ -2,7 +2,7 @@
 
 `apps/app`은 Expo SDK 56의 Continuous Native Generation을 사용하며 Android workflow와 iOS Fastlane lane이 각각 `expo prebuild --clean`으로 일회성 native project를 만든 뒤 production artifact를 빌드한다. Web은 `@sentry/react`를 별도 entry에서 초기화하지만 Native entry는 아직 Expo Router만 시작한다. 공개 DSN과 배포 channel은 공용 설정에 있고 commit release는 배포 build에서만 주입한다.
 
-PROD-483은 Android·iOS의 React 및 native runtime 오류, 개인정보 최소화, source map/debug symbol과 실제 production build 검증을 함께 소유한다. API·Web BFF·Web 관측은 기존 `add-production-sentry-error-collection` change의 책임이며 이번 변경은 그 동작을 바꾸지 않는다.
+PROD-483은 Android·iOS의 React 및 native runtime 오류, 개인정보 최소화, source map/debug symbol과 production build 설정을 함께 소유한다. API·Web BFF·Web 관측은 기존 `add-production-sentry-error-collection` change의 책임이며 이번 변경은 그 동작을 바꾸지 않는다.
 
 ## Goals / Non-Goals
 
@@ -36,7 +36,7 @@ PROD-483은 Android·iOS의 React 및 native runtime 오류, 개인정보 최소
 - Native entry에서 router보다 먼저 SDK를 초기화하고 기존 `UnexpectedErrorContext`에 Native reporter를 제공한다. SDK initialization은 공개 DSN, channel과 build-time commit release가 완전한 경우에만 활성화한다.
 - `sendDefaultPii: false`, breadcrumb 차단과 tracing/replay 미설정으로 수집 범위를 오류 진단에 한정하며 앱의 account/profile/session 값을 scope에 넣지 않는다.
 - Android·iOS production workflow는 `EXPO_PUBLIC_SENTRY_RELEASE=${GITHUB_SHA}`와 GitHub Actions가 prod job에 제공하는 Sentry organization/project/upload token을 실제 build step에 전달한다. token은 환경 변수로만 소비하고 generated project 및 artifact cleanup 경계를 유지한다.
-- unit test로 활성화 조건·metadata·privacy 옵션·React capture를 확인하고 Expo config/Metro config 정적 평가 및 clean prebuild로 CNG hook을 검증한다. 실제 symbolication은 배포 artifact에서 별도 release gate로 확인한다.
+- unit test로 활성화 조건·metadata·privacy 옵션·React capture를 확인하고 Expo config/Metro config 정적 평가 및 clean prebuild로 CNG hook을 검증한다. 실제 production build와 symbolication은 이 change에서 실행하지 않으며, 배포 후 기존 운영 절차에서 확인할 수 있다.
 
 ### Allowed Alternatives
 
@@ -52,15 +52,15 @@ PROD-483은 Android·iOS의 React 및 native runtime 오류, 개인정보 최소
 
 ## Risks / Trade-offs
 
-- [SDK가 device·OS·stack context를 자동 수집한다] → 기본 PII와 breadcrumb를 끄고 사용자 식별·콘텐츠·인증 값을 앱 scope에 추가하지 않으며 실제 검증 event를 점검한다.
-- [업로드 token이나 organization/project 설정이 누락되면 artifact는 빌드돼도 symbolication이 실패할 수 있다] → production workflow 입력을 명시하고 실제 Android·iOS event에서 release와 원본 위치를 완료 gate로 확인한다.
+- [SDK가 device·OS·stack context를 자동 수집한다] → 기본 PII와 breadcrumb를 끄고 사용자 식별·콘텐츠·인증 값을 앱 scope에 추가하지 않으며, 배포 후 기존 운영 절차에서 필요 시 검증 event를 점검한다.
+- [업로드 token이나 organization/project 설정이 누락되면 artifact는 빌드돼도 symbolication이 실패할 수 있다] → production workflow 입력과 upload failure propagation을 정적으로 검증하며 실제 Android·iOS event는 이 change에서 검증하지 않는다.
 - [Native SDK 추가는 binary runtime을 바꾼다] → 새 Android·iOS production binary로만 배포하며 기존 binary에 OTA로 적용하지 않는다.
 
 ## Migration Plan
 
 1. SDK, Expo/Metro 설정, Native entry와 단위 테스트를 추가한다.
 2. Android·iOS production workflow에 commit release와 업로드 자격 증명을 전달하고 clean prebuild/build 구성을 검증한다.
-3. 새 production binary를 내부 배포한 뒤 플랫폼별 검증 오류에서 release와 원본 JavaScript/native 위치, event 개인정보 범위를 확인한다.
+3. 실제 production binary 배포와 event 검증은 이 change의 완료 조건에 포함하지 않는다. 배포 후에는 기존 운영 절차에 따라 필요 시 release와 원본 JavaScript/native 위치, event 개인정보 범위를 확인한다.
 4. 문제가 있으면 Sentry metadata 주입을 제거한 이전 commit으로 binary를 다시 빌드·배포한다. 기존 앱 사용자 데이터 migration은 없다.
 
 ## Open Questions

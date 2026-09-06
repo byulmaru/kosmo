@@ -8,7 +8,7 @@
 - production build의 environment와 commit release를 event에 연결하고 JavaScript source map 및 native debug symbol을 업로드한다.
 - 사용자 식별·사용자 콘텐츠·민감정보를 애플리케이션 context로 추가하지 않고, SDK의 기본 PII·breadcrumb·세션 추적을 비활성화한다.
 - DSN과 업로드 token의 노출 경계를 분리하고 local/test에서는 배포 metadata가 없으면 외부 전송하지 않는다.
-- 실제 Android·iOS production build에서 검증 event의 release와 원본 위치를 확인하는 운영 절차를 추가한다.
+- Android·iOS production build의 release·source map·debug symbol 업로드 설정과 credential 경계를 문서화하고, 실제 배포 후 검증은 기존 운영 절차에 따른다.
 - API·Web BFF·Web 오류 수집과 사용자 오류 화면은 변경하지 않는다.
 
 ## Authority / Provenance
@@ -21,7 +21,7 @@
 
 ### New Capabilities
 
-- `native-error-observability`: Android·iOS 처리되지 않은 오류 수집, 개인정보 최소화, release·source map·debug symbol 연결과 배포 검증 계약
+- `native-error-observability`: Android·iOS 처리되지 않은 오류 수집, 개인정보 최소화, release·source map·debug symbol 연결 계약
 
 ### Modified Capabilities
 

@@ -113,7 +113,7 @@ actionlint .github/workflows/android-play-internal-distribution.yml .github/work
 6. event JSON에서 SDK가 만든 exception, request와 context가 누락 없이 유지되고 breadcrumb는 없는지 확인한다.
 7. Sentry project의 새 issue 알림이 운영 채널로 전달되는지 확인한다.
 
-실제 event와 알림 증거가 없으면 PROD-477의 통합 검증과 OpenSpec archive를 완료하지 않는다.
+실제 event와 알림 증거가 없으면 PROD-477의 통합 검증은 완료하지 않는다. 이 증거는 이 Native change의 OpenSpec archive 조건이 아니다.
 
 ## Triage
 
