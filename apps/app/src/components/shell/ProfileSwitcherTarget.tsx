@@ -57,13 +57,26 @@ export function ProfileSwitcherTarget({
 
     const menu = menuRef.current as unknown as HTMLElement | null;
     const trigger = triggerRef.current as unknown as HTMLElement | null;
+    const eventComesFromModal = (event: Event) =>
+      event
+        .composedPath()
+        .some(
+          (target) => target instanceof Element && target.getAttribute('aria-modal') === 'true',
+        );
+    const modalIsPresent = () => document.querySelector('[aria-modal="true"]') !== null;
     const onPointerDown = (event: PointerEvent) => {
+      if (eventComesFromModal(event)) {
+        return;
+      }
       if (!menu?.contains(event.target as Node) && !trigger?.contains(event.target as Node)) {
         onOpenChange(false);
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (modalIsPresent()) {
+          return;
+        }
         event.preventDefault();
         onOpenChange(false);
         trigger?.focus();
