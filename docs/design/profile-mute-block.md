@@ -253,3 +253,11 @@ Web 최소 폭 160px과 키보드·focus 처리를 재사용하고, 목록은 �
   Profile·Settings 신규 UI 조립과 교체 회귀는 PROD-917이 소유한다.
 - 저장·cleanup·GraphQL·Relay/cache·actor 전환·실제 Web/iOS/Android 종단 간 검증은 완료하지 않았다.
   `add-profile-block` task 3.x와 전체 검증·archive는 각각 PROD-823·PROD-813 소유다.
+
+## 검증 시점 분리 · PROD-814 · 2026-09-06
+
+위 Storybook 이관 시점의 상태와 별개로 PROD-814는 shared UI·Relay와 Web 종단 간·접근성 검증을
+완료했다. 사용자 결정에 따라 현재 OpenSpec의 완료 범위는 이 검증까지로 확정한다.
+네이티브 앱 자체가 별도 이슈/PR에서 아직 작업 중이므로 iOS·Android runtime·접근성 검증은
+앱 작업 완료 후 수행한다. 이는 미실행 후속 검증이며 Native 제품 계약이나 지원 대상의 삭제가 아니다.
+PROD-814 담당자가 후속 검증 추적을 소유한다. OpenSpec archive는 Native 검증 통과나 PR 머지를 뜻하지 않는다.

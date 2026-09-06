@@ -218,7 +218,9 @@ Profile action·관리 목록·Relay 상태를 연결하고 Home·Local·Profile
   선행 구현의 repository 상태와 PR 증거를 재사용하고 같은 Settings shell·navigation을 다시 만들지 않는다.
 - Hashtag Post List API·projection·runtime은 `PROD-827`의 별도 계약으로 남기며 이 change의 archive를 막지
   않는다.
-- `PROD-824`·`PROD-825`·`PROD-814`가 맡은 task와 검증을 모두 마치기 전에는 이 change를 archive하지 않는다.
+- `PROD-824`·`PROD-825`·`PROD-814`의 현재 합의된 범위가 완료되면 archive한다. 2026-09-06 사용자 결정과
+  PROD-814 계약에 따라 Native runtime·접근성은 네이티브 앱 작업 완료 후의 미실행 후속 검증으로 분리한다.
+  부모 충돌·Stack 정리는 선행 PR #763 머지 후 수행한다. 두 후속 작업의 추적 owner는 PROD-814 담당자다.
 
 **Verification**
 
@@ -227,8 +229,8 @@ Profile action·관리 목록·Relay 상태를 연결하고 Home·Local·Profile
 - 제외 후보 뒤의 eligible Post로 Local 페이지가 채워지고 cursor와 `hasNextPage`가 유지되는지 확인한다.
 - 같은 Account의 selected Profile 전환과 Mute 해제 뒤 Home·Local·Profile·관리 목록의 새 조회 결과를
   검증한다.
-- Local·Remote Target의 Web·iOS·Android 흐름과 접근성, 기존 관계·상호작용·Notification·Read State 불변성을
-  통합 검증한다.
+- Local·Remote Target의 Web 흐름과 접근성, 기존 관계·상호작용·Notification·Read State 불변성을
+  통합 검증한다. Native 제품 계약은 유지하되 runtime·접근성 검증은 위 후속 작업으로 남긴다.
 - 공통 Settings IA의 최초 owner와 선행 구현의 repository 상태·PR 증거를 기록하고, 후행 이슈가 같은
   shell·navigation을 중복 구현하지 않았는지 확인한다.
 - canonical·Linear·OpenSpec을 최종 대조하고 archive 전후 strict validation을 통과시킨다.
@@ -239,9 +241,10 @@ Profile action·관리 목록·Relay 상태를 연결하고 Home·Local·Profile
 - [x] 6.3 `PROD-858`의 공용 UI 결과를 Profile action·관리 목록·완료 피드백에 재사용하고 Relay
       store·connection 갱신을 기존 GraphQL 관계에 연결한다. 공통 Settings IA는 먼저 착수한 runtime 이슈의
       결과를 사용한다.
-- [ ] 6.4 직접 Target Profile의 정상 Post 표시와 Mute 상태·해제 action을 Web·iOS·Android 및 접근성 경계에서
-      검증한다. — [Web 부분 검증 및 Native 미완료](./verification.md#64-target-profile-web-native와-접근성)
+- [x] 6.4 직접 Target Profile의 정상 Post 표시와 Mute 상태·해제 action을 Web·접근성 경계에서 검증하고,
+      Native 미실행 검증의 owner와 앱 작업 완료 후 실행 조건을 이관한다. 원래의 Native 검증 통과를 뜻하지 않는다.
+      — [검증 및 후속 범위](./verification.md#64-target-profile-web-native와-접근성)
 - [x] 6.5 Home·Local·Profile·Repost와 기존 관계·상호작용 상태를 연결하는 cross-slice E2E를 통과시킨다.
       — [최종 E2E 8/8](./verification.md#65-cross-slice-e2e와-불변성)
-- [ ] 6.6 모든 적용 이슈와 artifact를 최종 대조하고 delta spec을 동기화한 뒤 OpenSpec을 archive해 archive 후
-      strict validation을 통과시킨다. — 미완료이며 archive하지 않는다.
+- [x] 6.6 모든 적용 이슈와 artifact를 최종 대조하고 delta spec을 동기화한 뒤 OpenSpec을 archive해 archive 후
+      strict validation을 통과시킨다.
