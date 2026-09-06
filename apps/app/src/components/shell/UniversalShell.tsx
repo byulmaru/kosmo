@@ -44,7 +44,7 @@ import {
 import { SidebarNavigation } from './SidebarNavigation';
 import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
-import type { HomeReselectionHandler } from './ShellChromeContext';
+import type { HomeReselectionHandler, TimelineRefreshHandler } from './ShellChromeContext';
 
 const ShellQuery = graphql`
   query UniversalShellQuery {
@@ -118,8 +118,24 @@ function UniversalShellContent() {
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const menuButtonRef = useRef<NativeView>(null);
   const screenFallbackRef = useRef<NativeView>(null);
+  const homeRefreshHandlerRef = useRef<TimelineRefreshHandler | null>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
+  const localRefreshHandlerRef = useRef<TimelineRefreshHandler | null>(null);
+  const pendingHomeRefreshRef = useRef(false);
   const pendingDrawerHomeReselectionRef = useRef(false);
+  const pendingLocalRefreshRef = useRef(false);
+  const registerHomeRefresh = useCallback((handler: TimelineRefreshHandler) => {
+    homeRefreshHandlerRef.current = handler;
+    if (pendingHomeRefreshRef.current) {
+      pendingHomeRefreshRef.current = false;
+      handler();
+    }
+    return () => {
+      if (homeRefreshHandlerRef.current === handler) {
+        homeRefreshHandlerRef.current = null;
+      }
+    };
+  }, []);
   const registerHomeReselection = useCallback((handler: HomeReselectionHandler) => {
     homeReselectionHandlerRef.current = handler;
     return () => {
@@ -130,6 +146,30 @@ function UniversalShellContent() {
   }, []);
   const reselectHome = useCallback(() => {
     homeReselectionHandlerRef.current?.();
+  }, []);
+  const registerLocalRefresh = useCallback((handler: TimelineRefreshHandler) => {
+    localRefreshHandlerRef.current = handler;
+    if (pendingLocalRefreshRef.current) {
+      pendingLocalRefreshRef.current = false;
+      handler();
+    }
+    return () => {
+      if (localRefreshHandlerRef.current === handler) {
+        localRefreshHandlerRef.current = null;
+      }
+    };
+  }, []);
+  const refreshProfileMuteTimelines = useCallback(() => {
+    if (homeRefreshHandlerRef.current) {
+      homeRefreshHandlerRef.current();
+    } else {
+      pendingHomeRefreshRef.current = true;
+    }
+    if (localRefreshHandlerRef.current) {
+      localRefreshHandlerRef.current();
+    } else {
+      pendingLocalRefreshRef.current = true;
+    }
   }, []);
   const queueDrawerHomeReselection = useCallback(() => {
     pendingDrawerHomeReselectionRef.current = true;
@@ -272,7 +312,10 @@ function UniversalShellContent() {
       navigationDrawerTriggerRef={menuButtonRef}
       openNavigationDrawer={openNavigationDrawer}
       openProfileSwitcher={openProfileSwitcher}
+      registerHomeRefresh={registerHomeRefresh}
       registerHomeReselection={registerHomeReselection}
+      registerLocalRefresh={registerLocalRefresh}
+      refreshProfileMuteTimelines={refreshProfileMuteTimelines}
       reselectHome={reselectHome}
     >
       <PrimaryNavigationScrollReset pathname={pathname} />

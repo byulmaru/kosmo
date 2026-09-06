@@ -236,7 +236,7 @@ Profile action·관리 목록·Relay 상태를 연결하고 Home·Local·Profile
 - [ ] 6.1 PROD-825의 Local 서버 후보 정책 구현·API 검증 증거를 확인하고 기존 Local UI에 연결한다.
 - [ ] 6.2 PROD-825의 Local API 회귀 증거를 재사용하고 selected Profile 전환·Mute 해제 뒤 Local 화면과
       Relay connection이 최신 서버 결과에 맞춰 갱신되는지 runtime에서 검증한다.
-- [ ] 6.3 `PROD-858`의 공용 UI 결과를 Profile action·관리 목록·완료 피드백에 재사용하고 Relay
+- [x] 6.3 `PROD-858`의 공용 UI 결과를 Profile action·관리 목록·완료 피드백에 재사용하고 Relay
       store·connection 갱신을 기존 GraphQL 관계에 연결한다. 공통 Settings IA는 먼저 착수한 runtime 이슈의
       결과를 사용한다.
 - [ ] 6.4 직접 Target Profile의 정상 Post 표시와 Mute 상태·해제 action을 Web·iOS·Android 및 접근성 경계에서
