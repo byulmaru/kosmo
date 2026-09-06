@@ -232,7 +232,7 @@ const meta = {
     'InteractionContract',
     'PendingSelectionContract',
   ],
-  parameters: { layout: 'centered' },
+  parameters: { controls: { disable: true }, layout: 'centered' },
   title: 'KOSMO/Patterns/Post Composer Profile Switcher',
 } satisfies Meta<typeof ComposerProfileFixture>;
 
