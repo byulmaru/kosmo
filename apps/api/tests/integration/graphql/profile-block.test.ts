@@ -402,7 +402,7 @@ describe('GraphQL Profile Block', () => {
       await db
         .select()
         .from(ProfileBlocks)
-        .where(eq(ProfileBlocks.id, decodeProfileBlockId(blockId)))
+        .where(eq(ProfileBlocks.id, decodeGlobalId(blockId).id))
         .then((rows) => rows.length),
       1,
     );
@@ -461,16 +461,19 @@ describe('GraphQL Profile Block', () => {
 
   test('filters blocked Profile search candidates before applying cursor pagination', async () => {
     const owner = await createAuthenticatedSession();
-    const blocked = await createProfileWithId(
+    const blocked = await createProfile(
       'search-blocked-candidate',
+      localInstanceId,
       '00000000-0000-8000-8000-000000000100',
     );
-    const firstVisible = await createProfileWithId(
+    const firstVisible = await createProfile(
       'search-visible-first',
+      localInstanceId,
       '00000000-0000-8000-8000-000000000101',
     );
-    const secondVisible = await createProfileWithId(
+    const secondVisible = await createProfile(
       'search-visible-second',
+      localInstanceId,
       '00000000-0000-8000-8000-000000000102',
     );
 
@@ -978,24 +981,10 @@ const createRemoteInstance = async (domain = 'remote.example') =>
     .returning()
     .then(firstOrThrow);
 
-const createProfile = async (handle: string, instanceId = localInstanceId): Promise<ProfileRow> =>
-  db
-    .insert(Profiles)
-    .values({
-      displayName: handle,
-      followPolicy: ProfileFollowPolicy.OPEN,
-      handle,
-      instanceId,
-      normalizedHandle: normalizeHandle(handle),
-      state: ProfileState.ACTIVE,
-    })
-    .returning()
-    .then(firstOrThrow);
-
-const createProfileWithId = async (
+const createProfile = async (
   handle: string,
-  id: string,
   instanceId = localInstanceId,
+  id?: string,
 ): Promise<ProfileRow> =>
   db
     .insert(Profiles)
@@ -1003,7 +992,7 @@ const createProfileWithId = async (
       displayName: handle,
       followPolicy: ProfileFollowPolicy.OPEN,
       handle,
-      id,
+      ...(id === undefined ? {} : { id }),
       instanceId,
       normalizedHandle: normalizeHandle(handle),
       state: ProfileState.ACTIVE,
@@ -1070,10 +1059,6 @@ const createAuthenticatedSession = async (profile?: ProfileRow) => {
     .then(firstOrThrow);
 
   return { account, profile: selectedProfile, session, token: session.token };
-};
-
-const decodeProfileBlockId = (id: string) => {
-  return decodeGlobalId(id).id;
 };
 
 const resetFixtures = async () => {
