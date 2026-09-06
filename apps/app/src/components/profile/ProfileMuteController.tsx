@@ -14,11 +14,6 @@ const muteProfileMutation = graphql`
         id
         targetProfile {
           id
-          viewerState {
-            profileMute {
-              id
-            }
-          }
         }
       }
     }
@@ -136,11 +131,22 @@ export function useProfileMuteMutations() {
                   return;
                 }
                 const error = responseError(errors);
-                const profileMute = response.muteProfile?.profileMute;
+                const profileMute = response?.muteProfile?.profileMute;
                 if (error || !profileMute) {
                   finish(error ?? new Error('Profile mute response did not confirm the relation.'));
                   return;
                 }
+                requestEnvironment.commitUpdate((store) => {
+                  const normalizedProfileMute = store.get(profileMute.id);
+                  if (normalizedProfileMute) {
+                    addProfileMuteToStore(
+                      store,
+                      change.ownerProfileId,
+                      normalizedProfileMute.getDataID(),
+                      change.targetProfileId,
+                    );
+                  }
+                });
                 shellChrome?.refreshProfileMuteTimelines?.();
                 finish();
               },
@@ -150,22 +156,6 @@ export function useProfileMuteMutations() {
                   return;
                 }
                 finish(error instanceof Error ? error : new Error(String(error)));
-              },
-              updater: (store) => {
-                if (!isCurrent()) {
-                  return;
-                }
-                const profileMute = store
-                  .getRootField('muteProfile')
-                  ?.getLinkedRecord('profileMute');
-                if (profileMute) {
-                  addProfileMuteToStore(
-                    store,
-                    change.ownerProfileId,
-                    profileMute.getDataID(),
-                    change.targetProfileId,
-                  );
-                }
               },
               variables: { id: change.targetProfileId },
             });
@@ -178,7 +168,7 @@ export function useProfileMuteMutations() {
                   return;
                 }
                 const error = responseError(errors);
-                const responseProfileMuteId = response.unmuteProfile?.profileMuteId;
+                const responseProfileMuteId = response?.unmuteProfile?.profileMuteId;
                 if (
                   error ||
                   (responseProfileMuteId !== null && responseProfileMuteId !== profileMuteId)
