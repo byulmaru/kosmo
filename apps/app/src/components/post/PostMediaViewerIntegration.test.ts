@@ -327,7 +327,7 @@ describe('Post Media Viewer Host production wiring', () => {
     assert.equal(byTestId('avatar').props.size, 40);
     assert.equal(
       renderer?.root.findAll((node) =>
-        node.children.some((child) => typeof child === 'string' && child.includes('조용히 공개')),
+        node.children.some((child) => typeof child === 'string' && child.includes('전체 공개')),
       ).length,
       0,
     );

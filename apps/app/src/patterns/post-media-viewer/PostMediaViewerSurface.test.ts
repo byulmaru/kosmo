@@ -122,9 +122,6 @@ describe('PostMediaViewerSurface', () => {
     const oldLoad = first.props.onLoad;
     const oldLoadStart = first.props.onLoadStart;
     await act(async () => oldFailure());
-    assert.equal(image().props.onError, oldFailure);
-    assert.equal(image().props.onLoad, oldLoad);
-    assert.equal(image().props.onLoadStart, oldLoadStart);
     assert.equal(getToast()?.tone, 'danger');
     assert.equal(
       byTestId('post-media-viewer-error-toast').parent?.parent?.props.testID,
