@@ -173,3 +173,11 @@ Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목
 - Current: 위 공용 컴포넌트와 Storybook 검증 표면. Target: 실제 Profile/Settings route에서의 사용.
   Product not implemented: 뮤트 storage·GraphQL·content policy·Relay 연동 및 Web/iOS/Android 종단 간 검증.
   PROD-824·825·814의 완료나 `add-profile-mute` OpenSpec 전체 완료를 뜻하지 않는다.
+
+## 검증 시점 분리 · PROD-814 · 2026-09-06
+
+위 Storybook 이관 시점의 상태와 별개로 PROD-814는 shared UI·Relay와 Web 종단 간·접근성 검증을
+완료했다. 사용자 결정에 따라 현재 OpenSpec의 완료 범위는 이 검증까지로 확정한다.
+네이티브 앱 자체가 별도 이슈/PR에서 아직 작업 중이므로 iOS·Android runtime·접근성 검증은
+앱 작업 완료 후 수행한다. 이는 미실행 후속 검증이며 Native 제품 계약이나 지원 대상의 삭제가 아니다.
+PROD-814 담당자가 후속 검증 추적을 소유한다. OpenSpec archive는 Native 검증 통과나 PR 머지를 뜻하지 않는다.
