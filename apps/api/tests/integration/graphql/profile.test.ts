@@ -56,6 +56,7 @@ let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileHashtags: typeof CoreDb.ProfileHashtags;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
+let ProfileMutes: typeof CoreDb.ProfileMutes;
 let Profiles: typeof CoreDb.Profiles;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -91,6 +92,7 @@ describe('GraphQL remote profile boundary', () => {
       ProfileFollowRequests,
       ProfileHashtags,
       ProfileMedia,
+      ProfileMutes,
       Profiles,
       PostContents,
       Posts,
@@ -564,7 +566,7 @@ describe('GraphQL remote profile boundary', () => {
     const firstPage = await requestGraphQL<{
       searchProfiles: {
         edges: Array<{ cursor: string; node: { id: string; relativeHandle: string } }>;
-        pageInfo: { endCursor: string | null; hasNextPage: boolean };
+        pageInfo: { endCursor: string | null; hasNextPage: boolean; hasPreviousPage: boolean };
       };
     }>(
       `query SearchProfilePage($after: String) {
@@ -3872,6 +3874,518 @@ describe('GraphQL remote profile boundary', () => {
     );
     assert.equal(disabledSourceProfile.data?.homeTimeline, null);
   });
+
+  test('applies selected Profile Mute before pagination with only the visited Profile exempt', async () => {
+    const auth = await createAuthenticatedSession();
+    const mutedOuterAuthor = await createStoredActivityPubAuthor({
+      domain: 'muted-outer-author.example',
+      handle: 'muted-outer-author',
+    });
+    const sourceAuthor = await createStoredActivityPubAuthor({
+      domain: 'muted-source-author.example',
+      handle: 'muted-source-author',
+    });
+    const outerSourceAuthor = await createStoredActivityPubAuthor({
+      domain: 'outer-source-author.example',
+      handle: 'outer-source-author',
+    });
+    const homeAuthor = await createStoredActivityPubAuthor({
+      domain: 'mute-home-author.example',
+      handle: 'mute-home-author',
+    });
+    const source = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000100',
+      profileId: sourceAuthor.profile.id,
+    });
+    const quoteSource = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000101',
+      profileId: sourceAuthor.profile.id,
+    });
+    const outerSource = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000102',
+      profileId: outerSourceAuthor.profile.id,
+    });
+    const outerQuoteSource = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000103',
+      profileId: outerSourceAuthor.profile.id,
+    });
+    const mutedOuterPost = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000500',
+      profileId: mutedOuterAuthor.profile.id,
+    });
+    const mutedOuterReply = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000600',
+      profileId: mutedOuterAuthor.profile.id,
+      replyParentId: mutedOuterPost.id,
+    });
+    const mutedOuterRepost = await createRepost({
+      id: '019f8ed1-0000-7000-8000-000000000650',
+      profileId: mutedOuterAuthor.profile.id,
+      repostSourceId: outerSource.id,
+    });
+    const mutedOuterQuote = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000700',
+      profileId: mutedOuterAuthor.profile.id,
+      repostSourceId: outerQuoteSource.id,
+    });
+    const bothMutedRepost = await createRepost({
+      id: '019f8ed1-0000-7000-8000-000000000750',
+      profileId: mutedOuterAuthor.profile.id,
+      repostSourceId: source.id,
+    });
+    const bothMutedQuote = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000800',
+      profileId: mutedOuterAuthor.profile.id,
+      repostSourceId: quoteSource.id,
+    });
+    const selfQuote = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000680',
+      profileId: mutedOuterAuthor.profile.id,
+      repostSourceId: mutedOuterPost.id,
+    });
+    const sourceMutedQuote = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000400',
+      profileId: homeAuthor.profile.id,
+      repostSourceId: quoteSource.id,
+    });
+    const sourceMutedRepost = await createRepost({
+      id: '019f8ed1-0000-7000-8000-000000000300',
+      profileId: homeAuthor.profile.id,
+      repostSourceId: source.id,
+    });
+    const visiblePost = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000200',
+      profileId: homeAuthor.profile.id,
+    });
+    const olderPost = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000150',
+      profileId: homeAuthor.profile.id,
+    });
+    const inactiveMute = await createStoredActivityPubAuthor({
+      domain: 'inactive-mute-author.example',
+      handle: 'inactive-mute-author',
+    });
+    const inactivePost = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000180',
+      profileId: inactiveMute.profile.id,
+    });
+
+    await db.insert(ProfileFollows).values([
+      {
+        followerProfileId: auth.profile.id,
+        followeeProfileId: mutedOuterAuthor.profile.id,
+      },
+      {
+        followerProfileId: auth.profile.id,
+        followeeProfileId: homeAuthor.profile.id,
+      },
+      {
+        followerProfileId: auth.profile.id,
+        followeeProfileId: inactiveMute.profile.id,
+      },
+    ]);
+    await db.insert(ProfileMutes).values([
+      {
+        ownerProfileId: auth.profile.id,
+        targetProfileId: mutedOuterAuthor.profile.id,
+      },
+      {
+        ownerProfileId: auth.profile.id,
+        targetProfileId: sourceAuthor.profile.id,
+      },
+      {
+        ownerProfileId: auth.profile.id,
+        targetProfileId: inactiveMute.profile.id,
+        expiresAt: Temporal.Instant.from('2099-01-01T00:00:00Z'),
+      },
+    ]);
+
+    const firstPage = await requestRemotePostRead({
+      first: 1,
+      nodeIds: [],
+      profileId: globalId('Profile', mutedOuterAuthor.profile.id),
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(connectionIds(firstPage.data?.homeTimeline), [
+      globalId('Post', visiblePost.id),
+    ]);
+    assert.equal(firstPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
+    assert.ok(firstPage.data?.homeTimeline?.pageInfo.endCursor);
+    assert.deepEqual(connectionIds(firstPage.data?.profile?.posts), [
+      globalId('Post', mutedOuterQuote.id),
+    ]);
+
+    const sourceMutedProfile = await requestRemotePostRead({
+      first: 1,
+      nodeIds: [globalId('Post', sourceMutedQuote.id), globalId('Post', sourceMutedRepost.id)],
+      profileId: globalId('Profile', homeAuthor.profile.id),
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(sourceMutedProfile);
+    assert.deepEqual(connectionIds(sourceMutedProfile.data?.profile?.posts), [
+      globalId('Post', visiblePost.id),
+    ]);
+
+    assert.equal(sourceMutedProfile.data?.profile?.posts.pageInfo.hasNextPage, true);
+    assert.deepEqual(
+      sourceMutedProfile.data?.nodes.map((node) => node?.id),
+      [globalId('Post', sourceMutedQuote.id), globalId('Post', sourceMutedRepost.id)],
+    );
+    const profileTail = await requestRemotePostRead({
+      after: sourceMutedProfile.data?.profile?.posts.pageInfo.endCursor,
+      first: 1,
+      nodeIds: [],
+      profileId: globalId('Profile', homeAuthor.profile.id),
+      token: auth.token,
+    });
+    assertNoGraphQLErrors(profileTail);
+    assert.deepEqual(connectionIds(profileTail.data?.profile?.posts), [
+      globalId('Post', olderPost.id),
+    ]);
+    assert.equal(profileTail.data?.profile?.posts.pageInfo.hasNextPage, false);
+    const profileBackward = await requestRemotePostRead({
+      before: profileTail.data?.profile?.posts.pageInfo.endCursor,
+      last: 1,
+      nodeIds: [],
+      profileId: globalId('Profile', homeAuthor.profile.id),
+      token: auth.token,
+    });
+    assertNoGraphQLErrors(profileBackward);
+    assert.deepEqual(connectionIds(profileBackward.data?.profile?.posts), [
+      globalId('Post', visiblePost.id),
+    ]);
+    assert.equal(profileBackward.data?.profile?.posts.pageInfo.hasPreviousPage, false);
+    const visitedMutedProfile = await requestRemotePostRead({
+      first: 10,
+      nodeIds: [],
+      profileId: globalId('Profile', mutedOuterAuthor.profile.id),
+      token: auth.token,
+    });
+    assertNoGraphQLErrors(visitedMutedProfile);
+    assert.deepEqual(connectionIds(visitedMutedProfile.data?.profile?.posts), [
+      globalId('Post', mutedOuterQuote.id),
+      globalId('Post', selfQuote.id),
+      globalId('Post', mutedOuterRepost.id),
+      globalId('Post', mutedOuterPost.id),
+    ]);
+    const guestProfile = await requestRemotePostRead({
+      first: 10,
+      nodeIds: [],
+      profileId: globalId('Profile', mutedOuterAuthor.profile.id),
+    });
+    assertNoGraphQLErrors(guestProfile);
+    assert.deepEqual(connectionIds(guestProfile.data?.profile?.posts), [
+      globalId('Post', bothMutedQuote.id),
+      globalId('Post', bothMutedRepost.id),
+      globalId('Post', mutedOuterQuote.id),
+      globalId('Post', selfQuote.id),
+      globalId('Post', mutedOuterRepost.id),
+      globalId('Post', mutedOuterPost.id),
+    ]);
+
+    const secondPage = await requestRemotePostRead({
+      after: firstPage.data?.homeTimeline?.pageInfo.endCursor,
+      first: 1,
+      nodeIds: [],
+      profileId: globalId('Profile', mutedOuterAuthor.profile.id),
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(secondPage);
+    assert.deepEqual(connectionIds(secondPage.data?.homeTimeline), [
+      globalId('Post', inactivePost.id),
+    ]);
+    assert.equal(secondPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
+
+    const thirdPage = await requestRemotePostRead({
+      after: secondPage.data?.homeTimeline?.pageInfo.endCursor,
+      first: 1,
+      nodeIds: [],
+      profileId: globalId('Profile', mutedOuterAuthor.profile.id),
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(thirdPage);
+    assert.deepEqual(connectionIds(thirdPage.data?.homeTimeline), [globalId('Post', olderPost.id)]);
+    assert.equal(thirdPage.data?.homeTimeline?.pageInfo.hasNextPage, false);
+
+    const homeBackward = await requestRemotePostRead({
+      before: thirdPage.data?.homeTimeline?.pageInfo.endCursor,
+      last: 2,
+      nodeIds: [],
+      profileId: globalId('Profile', mutedOuterAuthor.profile.id),
+      token: auth.token,
+    });
+    assertNoGraphQLErrors(homeBackward);
+    assert.deepEqual(connectionIds(homeBackward.data?.homeTimeline), [
+      globalId('Post', visiblePost.id),
+      globalId('Post', inactivePost.id),
+    ]);
+    assert.equal(homeBackward.data?.homeTimeline?.pageInfo.hasPreviousPage, false);
+
+    const secondProfile = await createProfile({
+      handle: 'mute-selected-profile-isolation',
+      instanceId: localInstanceId,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: secondProfile.id,
+      role: AccountProfileRole.OWNER,
+    });
+    await db.insert(ProfileFollows).values({
+      followerProfileId: secondProfile.id,
+      followeeProfileId: homeAuthor.profile.id,
+    });
+    await db.insert(ProfileFollows).values({
+      followerProfileId: secondProfile.id,
+      followeeProfileId: inactiveMute.profile.id,
+    });
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: secondProfile.id })
+      .where(eq(Sessions.id, auth.session.id));
+
+    const switchedProfile = await requestRemotePostRead({
+      first: 10,
+      nodeIds: [],
+      profileId: globalId('Profile', mutedOuterAuthor.profile.id),
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(switchedProfile);
+    assert.deepEqual(connectionIds(switchedProfile.data?.homeTimeline), [
+      globalId('Post', sourceMutedQuote.id),
+      globalId('Post', sourceMutedRepost.id),
+      globalId('Post', visiblePost.id),
+      globalId('Post', inactivePost.id),
+      globalId('Post', olderPost.id),
+    ]);
+    assert.deepEqual(connectionIds(switchedProfile.data?.profile?.posts), [
+      globalId('Post', bothMutedQuote.id),
+      globalId('Post', bothMutedRepost.id),
+      globalId('Post', mutedOuterQuote.id),
+      globalId('Post', selfQuote.id),
+      globalId('Post', mutedOuterRepost.id),
+      globalId('Post', mutedOuterPost.id),
+    ]);
+
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: auth.profile.id })
+      .where(eq(Sessions.id, auth.session.id));
+    const outerMute = await db
+      .select({ id: ProfileMutes.id })
+      .from(ProfileMutes)
+      .where(
+        and(
+          eq(ProfileMutes.ownerProfileId, auth.profile.id),
+          eq(ProfileMutes.targetProfileId, mutedOuterAuthor.profile.id),
+        ),
+      )
+      .then(firstOrThrow);
+    await db.delete(ProfileMutes).where(eq(ProfileMutes.id, outerMute.id));
+
+    const afterUnmute = await requestRemotePostRead({
+      first: 10,
+      nodeIds: [],
+      profileId: globalId('Profile', mutedOuterAuthor.profile.id),
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(afterUnmute);
+    assert.deepEqual(connectionIds(afterUnmute.data?.homeTimeline), [
+      globalId('Post', mutedOuterQuote.id),
+      globalId('Post', selfQuote.id),
+      globalId('Post', mutedOuterRepost.id),
+      globalId('Post', mutedOuterReply.id),
+      globalId('Post', mutedOuterPost.id),
+      globalId('Post', visiblePost.id),
+      globalId('Post', inactivePost.id),
+      globalId('Post', olderPost.id),
+    ]);
+  });
+  test('applies Profile Mute to Local before forward and backward pagination', async () => {
+    const auth = await createAuthenticatedSession();
+    const author = await createProfile({
+      handle: 'mute-local-author',
+      instanceId: localInstanceId,
+    });
+    const mutedAuthor = await createProfile({
+      handle: 'mute-local-hidden',
+      instanceId: localInstanceId,
+    });
+    const sourceAuthor = await createStoredActivityPubAuthor({
+      domain: 'local-muted-source.example',
+      handle: 'source',
+    });
+    const source = await createContentfulPost({ profileId: sourceAuthor.profile.id });
+    const older = await createContentfulPost({
+      id: '019f8ed2-0000-7000-8000-000000000100',
+      profileId: author.id,
+    });
+    const visible = await createContentfulPost({
+      id: '019f8ed2-0000-7000-8000-000000000200',
+      profileId: author.id,
+    });
+    const quote = await createContentfulPost({
+      id: '019f8ed2-0000-7000-8000-000000000300',
+      profileId: author.id,
+      repostSourceId: source.id,
+    });
+    const hidden = await createContentfulPost({
+      id: '019f8ed2-0000-7000-8000-000000000400',
+      profileId: mutedAuthor.id,
+    });
+    await createRepost({
+      id: '019f8ed2-0000-7000-8000-000000000500',
+      profileId: author.id,
+      repostSourceId: visible.id,
+    });
+    await createContentfulPost({
+      id: '019f8ed2-0000-7000-8000-000000000600',
+      profileId: author.id,
+      replyParentId: older.id,
+    });
+    await createContentfulPost({
+      id: '019f8ed2-0000-7000-8000-000000000700',
+      profileId: author.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    await db.insert(ProfileMutes).values([
+      { ownerProfileId: auth.profile.id, targetProfileId: mutedAuthor.id },
+      { ownerProfileId: auth.profile.id, targetProfileId: sourceAuthor.profile.id },
+    ]);
+    const read = (variables: {
+      first?: number;
+      after?: string | null;
+      last?: number;
+      before?: string | null;
+    }) =>
+      requestGraphQL<{ localTimeline: RemotePostConnection }>(
+        `query MutedLocal($first: Int, $after: String, $last: Int, $before: String) {
+          localTimeline(first: $first, after: $after, last: $last, before: $before) {
+            edges { cursor node { id } }
+            pageInfo { endCursor hasNextPage hasPreviousPage }
+          }
+        }`,
+        variables,
+        auth.token,
+      );
+    const first = await read({ first: 1 });
+    assertNoGraphQLErrors(first);
+    assert.deepEqual(connectionIds(first.data?.localTimeline), [globalId('Post', visible.id)]);
+    assert.equal(first.data?.localTimeline.pageInfo.hasNextPage, true);
+    const second = await read({ first: 1, after: first.data?.localTimeline.pageInfo.endCursor });
+    assertNoGraphQLErrors(second);
+    assert.deepEqual(connectionIds(second.data?.localTimeline), [globalId('Post', older.id)]);
+    assert.equal(second.data?.localTimeline.pageInfo.hasNextPage, false);
+    const backward = await read({ last: 1, before: second.data?.localTimeline.pageInfo.endCursor });
+    assertNoGraphQLErrors(backward);
+    assert.deepEqual(connectionIds(backward.data?.localTimeline), [globalId('Post', visible.id)]);
+    assert.equal(backward.data?.localTimeline.pageInfo.hasPreviousPage, false);
+
+    const otherViewer = await createProfile({
+      handle: 'mute-local-other-viewer',
+      instanceId: localInstanceId,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: otherViewer.id,
+      role: AccountProfileRole.OWNER,
+    });
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: otherViewer.id })
+      .where(eq(Sessions.id, auth.session.id));
+    const switched = await read({ first: 10 });
+    assertNoGraphQLErrors(switched);
+    assert.deepEqual(
+      connectionIds(switched.data?.localTimeline),
+      [hidden, quote, visible, older].map(({ id }) => globalId('Post', id)),
+    );
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: auth.profile.id })
+      .where(eq(Sessions.id, auth.session.id));
+    await db
+      .delete(ProfileMutes)
+      .where(
+        and(
+          eq(ProfileMutes.ownerProfileId, auth.profile.id),
+          eq(ProfileMutes.targetProfileId, sourceAuthor.profile.id),
+        ),
+      );
+    const unmuted = await read({ first: 10 });
+    assertNoGraphQLErrors(unmuted);
+    assert.deepEqual(
+      connectionIds(unmuted.data?.localTimeline),
+      [quote, visible, older].map(({ id }) => globalId('Post', id)),
+    );
+  });
+
+  test('keeps muted Authors and Sources accessible to Bookmark creation and listing', async () => {
+    const auth = await createAuthenticatedSession();
+    const author = await createProfile({
+      handle: 'bookmark-muted-author',
+      instanceId: localInstanceId,
+    });
+    const sourceAuthor = await createStoredActivityPubAuthor({
+      domain: 'bookmark-muted-source.example',
+      handle: 'source',
+    });
+    const source = await createContentfulPost({ profileId: sourceAuthor.profile.id });
+    const quoteSource = await createContentfulPost({ profileId: sourceAuthor.profile.id });
+    const repost = await createRepost({ profileId: author.id, repostSourceId: source.id });
+    const quote = await createContentfulPost({
+      profileId: author.id,
+      repostSourceId: quoteSource.id,
+    });
+    await db.insert(ProfileMutes).values([
+      { ownerProfileId: auth.profile.id, targetProfileId: author.id },
+      { ownerProfileId: auth.profile.id, targetProfileId: sourceAuthor.profile.id },
+    ]);
+    for (const post of [source, repost, quote]) {
+      const result = await requestGraphQL<{
+        createBookmark: { bookmark: { post: { id: string } } };
+      }>(
+        `mutation BookmarkMutedPost($input: CreateBookmarkInput!) {
+          createBookmark(input: $input) { bookmark { post { id } } }
+        }`,
+        { input: { postId: globalId('Post', post.id) } },
+        auth.token,
+      );
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.createBookmark.bookmark.post.id, globalId('Post', post.id));
+    }
+    const read = () =>
+      requestGraphQL<{ node: { bookmarks: { edges: Array<{ node: { post: { id: string } } }> } } }>(
+        `query MutedBookmarks($id: ID!) {
+        node(id: $id) { ... on Profile { bookmarks(first: 10) { edges { node { post { id } } } } } }
+      }`,
+        { id: globalId('Profile', auth.profile.id) },
+        auth.token,
+      );
+    const bookmarks = await read();
+    assertNoGraphQLErrors(bookmarks);
+    assert.deepEqual(
+      bookmarks.data?.node.bookmarks.edges.map(({ node }) => node.post.id),
+      [quote, repost, source].map(({ id }) => globalId('Post', id)),
+    );
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, sourceAuthor.profile.id));
+    const hiddenSource = await read();
+    assertNoGraphQLErrors(hiddenSource);
+    assert.deepEqual(
+      hiddenSource.data?.node.bookmarks.edges.map(({ node }) => node.post.id),
+      [globalId('Post', quote.id)],
+    );
+  });
 });
 
 type GraphQLErrorResult = {
@@ -3910,7 +4424,7 @@ type RemotePostNode =
 
 type RemotePostConnection = {
   edges: Array<{ cursor: string; node: { id: string } }>;
-  pageInfo: { endCursor: string | null; hasNextPage: boolean };
+  pageInfo: { endCursor: string | null; hasNextPage: boolean; hasPreviousPage: boolean };
 };
 
 type RemotePostReadData = {
@@ -3941,13 +4455,17 @@ const requestGraphQL = async <TData = Record<string, unknown>>(
 
 const requestRemotePostRead = ({
   after,
+  before,
   first,
+  last,
   nodeIds,
   profileId,
   token,
 }: {
   after?: string | null;
-  first: number;
+  before?: string | null;
+  first?: number;
+  last?: number;
   nodeIds: string[];
   profileId: string;
   token?: string;
@@ -3955,7 +4473,9 @@ const requestRemotePostRead = ({
   requestGraphQL<RemotePostReadData>(
     `query MaterializedRemotePostRead(
       $after: String
-      $first: Int!
+      $before: String
+      $first: Int
+      $last: Int
       $nodeIds: [ID!]!
       $profileId: ID!
     ) {
@@ -3983,18 +4503,18 @@ const requestRemotePostRead = ({
       }
       profile: node(id: $profileId) {
         ... on Profile {
-          posts(first: $first, after: $after) {
+          posts(first: $first, after: $after, last: $last, before: $before) {
             edges { cursor node { id } }
-            pageInfo { endCursor hasNextPage }
+            pageInfo { endCursor hasNextPage hasPreviousPage }
           }
         }
       }
-      homeTimeline(first: $first, after: $after) {
+      homeTimeline(first: $first, after: $after, last: $last, before: $before) {
         edges { cursor node { id } }
-        pageInfo { endCursor hasNextPage }
+        pageInfo { endCursor hasNextPage hasPreviousPage }
       }
     }`,
-    { after: after ?? null, first, nodeIds, profileId },
+    { after: after ?? null, before: before ?? null, first, last, nodeIds, profileId },
     token,
   );
 
@@ -4338,7 +4858,7 @@ const readProfileTags = async (profileId: string) =>
 
 const resetFixtures = async () => {
   await waitForProfileFollowWorkflows();
-  await db.update(Posts).set({ currentContentId: null });
+  await db.update(Posts).set({ currentContentId: null, repostSourceId: null });
   await db.delete(Sessions);
   await db.delete(PostContents);
   await db.delete(Posts);

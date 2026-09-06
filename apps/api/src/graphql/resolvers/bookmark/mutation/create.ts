@@ -24,7 +24,9 @@ builder.mutationField('createBookmark', (t) =>
           .from(Posts)
           .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
           .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-          .where(and(eq(Posts.id, input.postId.id), postAccessWhere({ ctx })))
+          .where(
+            and(eq(Posts.id, input.postId.id), postAccessWhere({ ctx, profileMute: 'ignore' })),
+          )
           .limit(1)
           .then(first);
         if (!post) {

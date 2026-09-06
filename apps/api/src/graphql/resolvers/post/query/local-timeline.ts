@@ -37,7 +37,7 @@ builder.queryField('localTimeline', (t) =>
                   eq(Posts.visibility, PostVisibility.PUBLIC),
                   isNotNull(Posts.currentContentId),
                   isNull(Posts.replyParentId),
-                  postAccessWhere({ ctx }),
+                  postAccessWhere({ ctx, profileMute: 'exclude' }),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),

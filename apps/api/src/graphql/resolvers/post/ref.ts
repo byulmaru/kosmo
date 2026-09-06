@@ -16,7 +16,7 @@ export const Post = createObjectRef('Post', (ids, ctx) =>
     .from(Posts)
     .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(inArray(Posts.id, ids), postAccessWhere({ ctx }))),
+    .where(and(inArray(Posts.id, ids), postAccessWhere({ ctx, profileMute: 'ignore' }))),
 );
 
 Post.implement({
