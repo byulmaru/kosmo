@@ -3,57 +3,17 @@
 ## Workspace Rules
 
 - Use `pnpm` for workspace and dependency management.
-- Use CLI commands for `package.json` dependency changes. Non-dependency fields, such as `scripts`, may be edited directly.
+- Use `pnpm add`, `pnpm remove`, `pnpm add --save-dev`, or other `pnpm` CLI commands for `package.json` dependency changes. Non-dependency fields, such as `scripts`, may be edited directly.
 - Use the Question tool when asking the user to decide between implementation options or unresolved requirements.
 - Do not add a `Co-authored-by` trailer for the agent in commits or PR descriptions. The author of record is the human running the agent; agent attribution belongs in the PR body or Linear, not in the git trailer.
 
 ## GitHub Stacked Pull Requests
 
-- Create every new pull request, including a standalone pull request, as a GitHub Stack with the
-  official `github/gh-stack` GitHub CLI extension. A standalone pull request is a one-layer Stack.
-- Before branch or pull request work, verify the extension with `gh extension list` and
-  `gh stack --version`. If it is missing, install it for the current user with
-  `gh extension install github/gh-stack`; it is a local CLI extension, not a repository dependency.
-- Start the first layer from the latest trunk with `gh stack init --base main <branch>`.
-  Add each later layer only from the current top with `gh stack add <branch>`.
-- Feature and contract branches use their Linear issue ID. A behavior-preserving simple refactor may use a descriptive branch without creating a Linear issue solely for the pull request.
-- Push tracked layers with `gh stack push` and create or update pull requests with `gh stack submit`.
-  For two or more pull requests, submit must also create or update the remote GitHub Stack object.
-  A one-layer Stack remains locally tracked and its standalone pull request has a null REST `stack`
-  field until another layer is submitted. If `gh stack` is unavailable or fails, do not fall back
-  to `gh pr create` or an ordinary unstacked pull request; report the blocker and observed
-  local/remote state, including partial branch, pull request, Stack, auto-merge, or Draft changes.
-- Do not use `gh stack submit --auto` by default. Use the interactive editor, or a narrower explicit
-  command whose title, body, Draft/Ready transitions, and affected existing pull requests have been
-  reviewed.
-- After submission, verify local Stack state with `gh stack view --json` and GitHub pull request
-  head/base/stack state with the pull request REST API. For multi-layer Stacks, a base retarget or a
-  successful branch push alone does not prove that the remote GitHub Stack object exists.
-- GitHub Stack merge is distinct from pull request auto-merge and merge queue registration. Stacked
-  pull requests currently cannot retain ordinary auto-merge; report any auto-merge removal or queue
-  state change instead of hiding it. A queued Stack may land in separate groups and is not merged
-  until GitHub reports the pull requests as merged.
+Before branch or PR work, read [GitHub Stack workflow](.codex/instructions/github-stack.md). Every new PR, including a standalone PR, uses official `github/gh-stack`. Preserve its approval, failure-stop, and local/remote verification gates.
 
 ## CodeGraph In Linked Worktrees
 
-- For this repository, consider CodeGraph initialized only when the current worktree contains
-  `.codegraph/codegraph.db`. A `.codegraph/` directory containing only `.gitignore` is not an
-  initialized index. This rule overrides broader instructions that check only for the directory.
-- Do not run `codegraph init` in a linked worktree without user approval.
-- When the current worktree has no local index, use `git worktree list --porcelain` to find the
-  `main` checkout. If that checkout has `.codegraph/codegraph.db`, pass its absolute path as
-  CodeGraph's `projectPath` and use its graph only as a read-only structural baseline. Do not
-  hard-code a machine-specific checkout path in repository files.
-- Before using the shared baseline, run `codegraph status <main-checkout-path>` to verify that the
-  index is up to date. If freshness cannot be verified or CodeGraph reports a pending or stale
-  state, treat the entire baseline as stale and use current-worktree reads and targeted searches.
-- Before relying on the baseline graph, collect paths that differ between the baseline checkout
-  and the current worktree, plus staged, unstaged, and untracked paths in both checkouts. Treat
-  CodeGraph results for those paths, and relationships that cross them, as hints only; verify the
-  current worktree with direct reads and targeted searches.
-- If graph-shaping configuration differs or the task makes broad structural changes, state that
-  the shared baseline is not branch-exact and ask whether to initialize CodeGraph in the current
-  worktree. Otherwise, do not create a worktree-local index by default.
+Before CodeGraph use or initialization in a linked worktree, read [CodeGraph worktree rules](.codex/instructions/codegraph-worktrees.md). A local `.codegraph/codegraph.db` is required for an initialized index; worktree-local initialization requires user approval.
 
 ## Review Guidelines
 
@@ -123,8 +83,3 @@
 
 - Before working on UI/product design tasks (design implementation, Figma work, style changes), check `docs/design/*.md`.
 - When a change alters a documented design decision, update the relevant `docs/design` document in the same change.
-
-## `package.json` Changes
-
-- Use `pnpm add`, `pnpm remove`, `pnpm add --save-dev`, or other `pnpm`-based CLI commands for dependency updates.
-- Non-dependency manifest fields, including `scripts`, may be edited directly.

@@ -1,6 +1,6 @@
 ---
 name: gh-review-coach
-description: Review implementation work before publication or inspect another author’s GitHub pull request as the human decision-maker’s evidence-gathering partner. Distinguish implementation self-review from external PR review using user intent, thread provenance, PR authorship, and Linear ownership; delegate bounded correctness and optional ponytail passes while the main agent maps responsibilities, execution flow, public contracts, production callers, and test-only seams. Use for implementation self-review, PR review, 재리뷰, 구조 또는 책임 분리 검토, review comment drafting, request-changes decisions, scope-splitting feedback, or review-thread cleanup.
+description: 'Review implementation before publication or another author’s GitHub PR; distinguish self-review from external feedback, gather evidence, and draft or resolve review comments.'
 ---
 
 # GitHub Review Coach
@@ -166,59 +166,11 @@ Propose concrete slices rather than saying only “this PR is too large.” Stat
 
 ### 7. Record implementation self-review decisions
 
-After classifying self-review findings, distinguish a defect fix from a newly chosen important alternative. A choice is important when it changes observable behavior, public contracts, data, security, compatibility, rollout, reversibility, ownership, scope, dependencies, or the direction later implementations must follow.
+For self-review findings, read [decision recording](references/self-review-decisions.md) before fixing or recording important choices.
 
-- Update Linear first when scope, ownership, deliverables, blockers, or issue relationships change.
-- Update OpenSpec `decisions.md` before code when a durable choice or public contract shared by implementation slices changes. Record superseded decisions instead of silently overwriting them.
-- Record important implementation choices within independently verified upstream contracts in the PR body with decision-maker, choice, alternatives, reason, consequences, and links.
-- Update applicable `memory/*.md` only for reusable repository conventions, and `docs/design/*.md` for documented product or UI design decisions.
-- Do not invent a decision, rationale, or decision-maker. Ask the user when a material choice remains open. Do not create ceremonial records when the implementation merely follows an independently verified OpenSpec decision.
+### 8–10. External feedback
 
-Return a decision ledger with new decisions and their recorded locations, independently verified decisions applied unchanged, and unresolved decisions. After self-review fixes, apply the snapshot-change rule above before declaring publication readiness.
-
-### 8. Draft junior-friendly external review comments
-
-Write in Korean when the repository or user prefers Korean. Use the following order:
-
-1. **Priority and short title**
-2. **What the current code does**
-3. **Why that causes a problem**
-4. **A concrete example or execution order**
-5. **What to change**
-6. **Whether it blocks this PR or may move to a follow-up**
-
-Explain unfamiliar terms in plain language. Use `transaction`, `loader`, `fixture`, or `idempotency` only when useful, and immediately connect the term to the observable behavior.
-
-Anchor comments to the tightest changed line. Avoid preference-only feedback. Combine comments that share one root cause, but keep independently actionable fixes separate.
-
-Use repository priority rules when available. Otherwise:
-
-- `P1`: merge-blocking behavior, security, data, or API contract defect. This includes a public API that makes the PR’s mandatory invariant optional or bypassable, or a test-only input that can disable a required lifecycle in production.
-- `P2`: structural or correctness risk that should be fixed now but may be split with explicit ownership;
-- `P3`: lower-risk design or maintainability improvement;
-- `P5`: trivial cleanup.
-
-### 9. Get explicit approval before publishing external feedback
-
-Before a GitHub write:
-
-1. Show the proposed findings and open questions.
-2. Incorporate the user’s policy decisions.
-3. Re-fetch the PR head.
-4. If the head changed, stop and re-check the affected lines before publishing.
-5. State the exact PR and intended action.
-
-Decide the review body before submission. A submitted empty review body may not be editable later.
-
-- Use an empty body when inline comments are sufficient and repository rules prefer it.
-- Include a detailed body in the initial submission when requesting a PR split or explaining an overarching blocker.
-
-### 10. Clean up external review threads accurately
-
-- Resolve only feedback whose requested behavior is actually reflected in the current code or conclusively answered.
-- Do not resolve a thread merely because the author replied or moved code.
-- Keep new and unaddressed findings unresolved.
-- After publishing, verify the review state, inline comment count, body, resolved/unresolved thread state, and clean local workspace.
+For external comment drafting, publication, or thread cleanup, first read [external feedback workflow](references/external-feedback.md). GitHub writes require explicit approval; re-fetch head and stop for re-review if it changed.
 
 ## Output For Implementation Self-Review
 

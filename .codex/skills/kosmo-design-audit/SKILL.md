@@ -1,6 +1,6 @@
 ---
 name: kosmo-design-audit
-description: Use when reviewing or auditing KOSMO Figma components, screens, foundations, tokens, variants, states, accessibility, Light/Dark behavior, responsive layouts, or design-system drift before a Figma edit, redesign, handoff, or source-component cleanup; not for implementing or reviewing production UI code.
+description: 'Audit KOSMO Figma source components, screens, foundations, and design-system drift before edits or handoff; not production UI implementation or code review.'
 ---
 
 # KOSMO Design Audit

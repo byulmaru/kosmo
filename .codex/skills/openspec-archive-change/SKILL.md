@@ -1,6 +1,6 @@
 ---
 name: openspec-archive-change
-description: Archive a completed change in the experimental workflow. Use when the user wants to finalize and archive a change after implementation is complete.
+description: 'Archive a completed OpenSpec change after checking its completion and spec synchronization.'
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
@@ -112,16 +112,7 @@ Archive a completed change in the experimental workflow.
 
 **Output On Success**
 
-```
-## Archive Complete
-
-**Change:** <change-name>
-**Schema:** <schema-name>
-**Archived to:** openspec/changes/archive/YYYY-MM-DD-<name>/
-**Specs:** ✓ Synced to main specs (or "No delta specs" or "Sync skipped")
-
-All artifacts complete. All tasks complete.
-```
+When reporting successful archival, use [completion example](references/output-example.md) with actual change, schema, archive location, synchronization status, and warnings.
 
 **Guardrails**
 
