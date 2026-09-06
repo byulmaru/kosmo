@@ -78,6 +78,14 @@ describe('getShellLayout', () => {
       leading: 'back',
       title: '게시물 기본 공개 범위',
     });
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/mute-and-block', []), {
+      leading: 'back',
+      title: '뮤트 및 차단',
+    });
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/muted-profiles', []), {
+      leading: 'back',
+      title: '뮤트한 프로필',
+    });
     assert.equal(getWebMobileShellHeader(true, 390, '/bookmarks', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/search', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/@writer/followers', []), null);

@@ -8,7 +8,12 @@ import { ProfileListItemContent } from './ProfileListItemContent';
 import { ProfileMuteAction } from './ProfileMuteAction';
 import type { ProfileMuteFeedback } from './ProfileMuteAction';
 
-export type MutedProfile = { id: string; displayName: string; avatarUri?: string | null };
+export type MutedProfile = {
+  id: string;
+  displayName: string;
+  avatarUri?: string | null;
+  relativeHandle?: string | null;
+};
 type Pagination =
   | { status: 'end' }
   | { status: 'loading' }
@@ -21,10 +26,18 @@ export type MutedProfileListState =
 type Props = {
   onFeedback?: (feedback: ProfileMuteFeedback & { profileId: string }) => void;
   onUnmute: (profileId: string) => Promise<void>;
+  showHeading?: boolean;
+  scrollable?: boolean;
   state: MutedProfileListState;
 };
 
-export function MutedProfileList({ onFeedback, onUnmute, state }: Props) {
+export function MutedProfileList({
+  onFeedback,
+  onUnmute,
+  scrollable = true,
+  showHeading = true,
+  state,
+}: Props) {
   const theme = useTheme();
   const headingRef = useRef<View>(null);
   const focusAfterUnmute = useRef(false);
@@ -34,18 +47,20 @@ export function MutedProfileList({ onFeedback, onUnmute, state }: Props) {
       focusAfterUnmute.current = false;
     }
   }, [state]);
-  return (
-    <ScrollView contentContainerStyle={styles.root}>
-      <View accessibilityRole="header" ref={headingRef} tabIndex={-1}>
-        <Text
-          style={[
-            styles.heading,
-            { color: theme.foregroundPrimary, borderColor: theme.borderDefault },
-          ]}
-        >
-          뮤트한 프로필
-        </Text>
-      </View>
+  const content = (
+    <>
+      {showHeading ? (
+        <View accessibilityRole="header" ref={headingRef} tabIndex={-1}>
+          <Text
+            style={[
+              styles.heading,
+              { color: theme.foregroundPrimary, borderColor: theme.borderDefault },
+            ]}
+          >
+            뮤트한 프로필
+          </Text>
+        </View>
+      ) : null}
       {state.status === 'loading' ? (
         <StateView loading title="뮤트한 프로필을 불러오는 중입니다." />
       ) : state.status === 'error' ? (
@@ -65,6 +80,7 @@ export function MutedProfileList({ onFeedback, onUnmute, state }: Props) {
               avatarLabel={profile.displayName}
               avatarUri={profile.avatarUri}
               displayName={profile.displayName}
+              relativeHandle={profile.relativeHandle ?? undefined}
               style={styles.row}
             >
               <ProfileMuteAction
@@ -98,7 +114,12 @@ export function MutedProfileList({ onFeedback, onUnmute, state }: Props) {
           ) : null}
         </>
       )}
-    </ScrollView>
+    </>
+  );
+  return scrollable ? (
+    <ScrollView contentContainerStyle={styles.root}>{content}</ScrollView>
+  ) : (
+    <View style={styles.root}>{content}</View>
   );
 }
 const styles = StyleSheet.create({

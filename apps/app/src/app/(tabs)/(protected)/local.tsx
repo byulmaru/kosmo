@@ -1,5 +1,5 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
@@ -38,8 +38,18 @@ const LocalQuery = graphql`
 
 export default function LocalScreen() {
   const { revision } = useRelayActor();
+  const shellChrome = useShellChrome();
+  const registerLocalRefresh = shellChrome?.registerLocalRefresh;
   const [fetchKey, setFetchKey] = useState(0);
-  const refresh = () => setFetchKey((key) => key + 1);
+  const refresh = useCallback(() => setFetchKey((key) => key + 1), []);
+
+  useEffect(() => {
+    if (!registerLocalRefresh) {
+      return;
+    }
+
+    return registerLocalRefresh(refresh);
+  }, [registerLocalRefresh, refresh]);
 
   return (
     <LocalFrame onReselect={refresh} paginationOwnerKey={`local:${revision}`}>

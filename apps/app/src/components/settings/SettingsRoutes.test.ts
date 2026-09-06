@@ -71,6 +71,17 @@ mock.module(new URL('./SettingsProfileDetail.tsx', import.meta.url), {
     SettingsProfileDetail: () => createElement('SettingsProfileDetail'),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('./SettingsMuteAndBlockNavigation.tsx', import.meta.url), {
+  exports: {
+    SettingsMuteAndBlockNavigation: (props: Record<string, unknown>) =>
+      createElement('SettingsMuteAndBlockNavigation', props),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('./SettingsMutedProfiles.tsx', import.meta.url), {
+  exports: {
+    SettingsMutedProfiles: () => createElement('SettingsMutedProfiles'),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: { useTheme: () => ({ border: '#333333', text: '#111111' }) },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -84,6 +95,8 @@ mock.module(new URL('../../session/SessionProvider.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let SettingsDefaultPostVisibilityRoute: ComponentType;
+let SettingsMuteAndBlockRoute: ComponentType;
+let SettingsMutedProfilesRoute: ComponentType;
 let SettingsLayout: ComponentType;
 let SettingsRoute: ComponentType;
 let ProtectedLayout: ComponentType;
@@ -97,6 +110,10 @@ before(async () => {
   ({ default: SettingsRoute } = await import('../../app/(tabs)/(protected)/settings/index'));
   ({ default: SettingsDefaultPostVisibilityRoute } =
     await import('../../app/(tabs)/(protected)/settings/default-post-visibility'));
+  ({ default: SettingsMuteAndBlockRoute } =
+    await import('../../app/(tabs)/(protected)/settings/mute-and-block'));
+  ({ default: SettingsMutedProfilesRoute } =
+    await import('../../app/(tabs)/(protected)/settings/muted-profiles'));
   ({ default: ProtectedLayout } = await import('../../app/(tabs)/(protected)/_layout'));
 });
 
@@ -151,6 +168,28 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'default-post-visibility');
     assert.equal(rendered('Pressable').length, 0);
     assert.equal(rendered('SettingsProfileDetail').length, 1);
+  });
+
+  it('full Web mute category는 완료된 관리 entry와 공통 master를 연결한다', async () => {
+    await renderRoute('/settings/mute-and-block', SettingsMuteAndBlockRoute);
+
+    assert.deepEqual(
+      rendered('PageHeader').map((node) => node.props.title),
+      ['설정', '뮤트 및 차단'],
+    );
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
+    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
+  });
+
+  it('full Web muted profile detail은 공통 master의 mute category를 선택한다', async () => {
+    await renderRoute('/settings/muted-profiles', SettingsMutedProfilesRoute);
+
+    assert.deepEqual(
+      rendered('PageHeader').map((node) => node.props.title),
+      ['설정', '뮤트한 프로필'],
+    );
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
+    assert.equal(rendered('SettingsMutedProfiles').length, 1);
   });
 
   it('compact Web root는 선택 없는 root 목록부터 표시한다', async () => {

@@ -44,16 +44,28 @@ export default function HomeScreen() {
   const { revision } = useRelayActor();
   const environment = useRelayEnvironment();
   const shellChrome = useShellChrome();
+  const registerHomeRefresh = shellChrome?.registerHomeRefresh;
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const [fetchKey, setFetchKey] = useState(0);
   const lastSuccessfulHomeRef = useRef<HomeLastSuccessful | null>(null);
   const retryHome = useCallback(() => setFetchKey((key) => key + 1), []);
+  const handleHomeRefresh = useCallback(() => {
+    setFetchKey((key) => key + 1);
+  }, []);
   const handleHomeReselection = useCallback(() => {
     if (Platform.OS === 'web') {
       window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
     }
-    setFetchKey((key) => key + 1);
-  }, []);
+    handleHomeRefresh();
+  }, [handleHomeRefresh]);
+
+  useEffect(() => {
+    if (!registerHomeRefresh) {
+      return;
+    }
+
+    return registerHomeRefresh(handleHomeRefresh);
+  }, [handleHomeRefresh, registerHomeRefresh]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !registerHomeReselection) {
