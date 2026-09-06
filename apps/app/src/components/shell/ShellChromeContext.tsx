@@ -10,9 +10,8 @@ type ShellChromeActions = {
   navigationDrawerTriggerRef?: RefObject<NativeView | null>;
   openNavigationDrawer: () => void;
   openProfileSwitcher: () => void;
-  registerHomeRefresh?: (handler: TimelineRefreshHandler) => () => void;
   registerHomeReselection: (handler: HomeReselectionHandler) => () => void;
-  registerLocalRefresh?: (handler: TimelineRefreshHandler) => () => void;
+  profileMuteTimelineRevision?: number;
   refreshProfileMuteTimelines?: TimelineRefreshHandler;
   reselectHome: HomeReselectionHandler;
 };
@@ -27,9 +26,8 @@ export function ShellChromeProvider({
   navigationDrawerTriggerRef,
   openNavigationDrawer,
   openProfileSwitcher,
-  registerHomeRefresh,
   registerHomeReselection,
-  registerLocalRefresh,
+  profileMuteTimelineRevision,
   refreshProfileMuteTimelines,
   reselectHome,
 }: ShellChromeProviderProps) {
@@ -40,9 +38,8 @@ export function ShellChromeProvider({
         navigationDrawerTriggerRef,
         openNavigationDrawer,
         openProfileSwitcher,
-        registerHomeRefresh,
         registerHomeReselection,
-        registerLocalRefresh,
+        profileMuteTimelineRevision,
         refreshProfileMuteTimelines,
         reselectHome,
       }}

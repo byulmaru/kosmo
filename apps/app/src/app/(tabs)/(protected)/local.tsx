@@ -1,5 +1,5 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
@@ -42,16 +42,8 @@ const LocalQuery = graphql`
 export default function LocalScreen() {
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
   const shellChrome = useShellChrome();
-  const registerLocalRefresh = shellChrome?.registerLocalRefresh;
+  const profileMuteTimelineRevision = shellChrome?.profileMuteTimelineRevision ?? 0;
   const refresh = useCallback(() => routeBoundaryRef.current?.refetch(), []);
-
-  useEffect(() => {
-    if (!registerLocalRefresh) {
-      return;
-    }
-
-    return registerLocalRefresh(refresh);
-  }, [registerLocalRefresh, refresh]);
 
   return (
     <LocalFrame onReselect={refresh}>
@@ -60,7 +52,7 @@ export default function LocalScreen() {
         ref={routeBoundaryRef}
         title="로컬 타임라인을 불러오지 못했어요"
       >
-        <LocalContent />
+        <LocalContent key={profileMuteTimelineRevision} />
       </RouteBoundary>
     </LocalFrame>
   );

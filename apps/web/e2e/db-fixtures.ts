@@ -14,6 +14,7 @@ import {
   Posts,
   ProfileHashtags,
   ProfileMedia,
+  ProfileMutes,
   Profiles,
   Sessions,
 } from '@kosmo/core/db';
@@ -346,6 +347,20 @@ export async function createE2EAccountProfile(options: CreateE2EAccountProfileOp
   });
 
   return profile;
+}
+
+export async function createE2EProfileMute({
+  ownerProfileId,
+  targetProfileId,
+}: {
+  ownerProfileId: string;
+  targetProfileId: string;
+}) {
+  return db
+    .insert(ProfileMutes)
+    .values({ ownerProfileId, targetProfileId })
+    .returning()
+    .then(firstOrThrow);
 }
 
 export async function createE2ERemoteProfile(options: CreateE2ERemoteProfileOptions = {}) {

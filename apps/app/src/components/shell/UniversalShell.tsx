@@ -44,7 +44,7 @@ import {
 import { SidebarNavigation } from './SidebarNavigation';
 import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
-import type { HomeReselectionHandler, TimelineRefreshHandler } from './ShellChromeContext';
+import type { HomeReselectionHandler } from './ShellChromeContext';
 
 const ShellQuery = graphql`
   query UniversalShellQuery {
@@ -116,20 +116,11 @@ function UniversalShellContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [profileMuteTimelineRevision, setProfileMuteTimelineRevision] = useState(0);
   const menuButtonRef = useRef<NativeView>(null);
   const screenFallbackRef = useRef<NativeView>(null);
-  const homeRefreshHandlerRef = useRef<TimelineRefreshHandler | null>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
-  const localRefreshHandlerRef = useRef<TimelineRefreshHandler | null>(null);
   const pendingDrawerHomeReselectionRef = useRef(false);
-  const registerHomeRefresh = useCallback((handler: TimelineRefreshHandler) => {
-    homeRefreshHandlerRef.current = handler;
-    return () => {
-      if (homeRefreshHandlerRef.current === handler) {
-        homeRefreshHandlerRef.current = null;
-      }
-    };
-  }, []);
   const registerHomeReselection = useCallback((handler: HomeReselectionHandler) => {
     homeReselectionHandlerRef.current = handler;
     return () => {
@@ -141,17 +132,8 @@ function UniversalShellContent() {
   const reselectHome = useCallback(() => {
     homeReselectionHandlerRef.current?.();
   }, []);
-  const registerLocalRefresh = useCallback((handler: TimelineRefreshHandler) => {
-    localRefreshHandlerRef.current = handler;
-    return () => {
-      if (localRefreshHandlerRef.current === handler) {
-        localRefreshHandlerRef.current = null;
-      }
-    };
-  }, []);
   const refreshProfileMuteTimelines = useCallback(() => {
-    homeRefreshHandlerRef.current?.();
-    localRefreshHandlerRef.current?.();
+    setProfileMuteTimelineRevision((revision) => revision + 1);
   }, []);
   const queueDrawerHomeReselection = useCallback(() => {
     pendingDrawerHomeReselectionRef.current = true;
@@ -294,9 +276,8 @@ function UniversalShellContent() {
       navigationDrawerTriggerRef={menuButtonRef}
       openNavigationDrawer={openNavigationDrawer}
       openProfileSwitcher={openProfileSwitcher}
-      registerHomeRefresh={registerHomeRefresh}
       registerHomeReselection={registerHomeReselection}
-      registerLocalRefresh={registerLocalRefresh}
+      profileMuteTimelineRevision={profileMuteTimelineRevision}
       refreshProfileMuteTimelines={refreshProfileMuteTimelines}
       reselectHome={reselectHome}
     >

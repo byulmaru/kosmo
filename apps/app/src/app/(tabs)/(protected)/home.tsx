@@ -45,7 +45,6 @@ const HomeQuery = graphql`
 export default function HomeScreen() {
   const environment = useRelayEnvironment();
   const shellChrome = useShellChrome();
-  const registerHomeRefresh = shellChrome?.registerHomeRefresh;
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
   const [revalidateCachedHome] = useState(
