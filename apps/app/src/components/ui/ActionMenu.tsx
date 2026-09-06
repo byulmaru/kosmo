@@ -53,6 +53,7 @@ type Props = {
   disabled?: boolean;
   items: readonly ActionMenuItem[];
   webMinWidth?: number;
+  sheetIconSize?: 20 | 24;
   onOpenChange?: (open: boolean) => void;
   renderTrigger: (props: ActionMenuTriggerRenderProps) => ReactNode;
 } & (
@@ -90,6 +91,7 @@ export function ActionMenu({
   onOpenChange,
   renderTrigger,
   webMinWidth = defaultWebMenuMinWidth,
+  sheetIconSize = 20,
   webPlacement,
   webHorizontalPlacement = 'start',
   webVerticalPlacement = 'start',
@@ -97,7 +99,6 @@ export function ActionMenu({
   const theme = useTheme();
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
-  const controlRef = useRef<View>(null);
   const menuRef = useRef<View>(null);
   const pendingSelectionRef = useRef<(() => void) | null>(null);
   const triggerRef = useRef<View>(null);
@@ -290,13 +291,13 @@ export function ActionMenu({
       (nextElement ?? trigger).focus();
     };
     const onPointerDown = (event: PointerEvent) => {
-      const control = controlRef.current as unknown as HTMLElement | null;
+      const control = triggerRef.current as unknown as HTMLElement | null;
       if (!control?.contains(event.target as Node) && !menu?.contains(event.target as Node)) {
         dismiss(false);
       }
     };
     const onFocusIn = (event: FocusEvent) => {
-      const control = controlRef.current as unknown as HTMLElement | null;
+      const control = triggerRef.current as unknown as HTMLElement | null;
       if (!control?.contains(event.target as Node) && !menu?.contains(event.target as Node)) {
         dismiss(false);
       }
@@ -348,7 +349,7 @@ export function ActionMenu({
 
   if (web) {
     return (
-      <View ref={controlRef} style={styles.control}>
+      <View style={styles.control}>
         {renderTrigger({
           disabled,
           expanded: open,
@@ -513,7 +514,7 @@ export function ActionMenu({
                     onPress={() => select(item)}
                     style={[styles.item, styles.nativeItem]}
                   >
-                    {Icon ? <Icon color={itemColor} size={iconSizes[20]} strokeWidth={2} /> : null}
+                    {Icon ? <Icon color={itemColor} size={sheetIconSize} strokeWidth={2} /> : null}
                     <Text
                       style={[
                         styles.label,

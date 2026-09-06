@@ -1,5 +1,5 @@
 import { Link, useRouter } from 'expo-router';
-import { MessageCircle } from 'lucide-react-native';
+import { MessageCircle, Pin } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
@@ -92,10 +92,14 @@ const PostListItemFragment = graphql`
 `;
 
 export function PostListItem({
+  more,
+  pinned = false,
   post: postKey,
   showDivider = true,
   showReplyAttribution = true,
 }: {
+  more?: PostActionBarProps['more'];
+  pinned?: boolean;
   post: PostListItem_post$key;
   showDivider?: boolean;
   showReplyAttribution?: boolean;
@@ -137,6 +141,24 @@ export function PostListItem({
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
   ];
+  const pinnedAttribution = pinned ? (
+    <View style={styles.pinnedAttribution}>
+      <PostAttributionRow
+        icon={
+          <View
+            aria-hidden
+            accessibilityElementsHidden
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+          >
+            <Pin color={theme.textSecondary} size={16} />
+          </View>
+        }
+      >
+        <Text style={[styles.attributionLabel, { color: theme.textSecondary }]}>고정됨</Text>
+      </PostAttributionRow>
+    </View>
+  ) : null;
   const replyAttribution =
     showReplyAttribution && post.replyParent ? (
       <PostAttributionRow
@@ -174,9 +196,11 @@ export function PostListItem({
     }
     return renderWithReplySurface(
       <View role="article" style={standardCardStyle}>
+        {pinnedAttribution}
         {replyAttribution}
         <PostListRow
           actionBarStyle={styles.actionBarSlot}
+          more={more}
           onDeleted={onDeleted}
           post={post}
           reply={reply}
@@ -194,6 +218,7 @@ export function PostListItem({
   if (!post.content) {
     return renderWithReplySurface(
       <View role="article" style={compactCardStyle}>
+        {pinnedAttribution}
         <PostAttributionRow
           icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
         >
@@ -212,13 +237,20 @@ export function PostListItem({
             </Pressable>
           </Link>
         </PostAttributionRow>
-        <PostListRow onDeleted={onDeleted} post={source} reply={reply} surfacePostId={post.id} />
+        <PostListRow
+          more={more}
+          onDeleted={onDeleted}
+          post={source}
+          reply={reply}
+          surfacePostId={post.id}
+        />
       </View>,
     );
   }
 
   return renderWithReplySurface(
     <View style={compactCardStyle}>
+      {pinnedAttribution}
       {replyAttribution}
       <View style={styles.quoteRow}>
         <Link asChild href={profileHref}>
@@ -246,6 +278,7 @@ export function PostListItem({
             sourcePreviewStyle={styles.quoteSourcePreview}
           />
           <PostActionSurface
+            more={more}
             onDeleted={onDeleted}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
@@ -268,12 +301,14 @@ function PostAttributionRow({ children, icon }: { children: ReactNode; icon: Rea
 
 function PostListRow({
   actionBarStyle,
+  more,
   onDeleted,
   post: postKey,
   reply,
   surfacePostId,
 }: {
   actionBarStyle?: StyleProp<ViewStyle>;
+  more?: PostActionBarProps['more'];
   onDeleted: () => void;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
@@ -338,6 +373,7 @@ function PostListRow({
         ) : null}
         <PostActionSurface
           actionBarStyle={actionBarStyle}
+          more={more}
           onDeleted={onDeleted}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
@@ -392,6 +428,7 @@ const styles = StyleSheet.create({
   },
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
   sourcePresentation: { flex: 1, minWidth: 0 },
+  pinnedAttribution: { paddingTop: spacing.xs },
   attributionRow: {
     alignItems: 'center',
     flexDirection: 'row',

@@ -32,6 +32,7 @@ export type MoreActionConfig = {
   menuExpanded?: boolean;
   onPress: () => void;
   popupRole?: 'menu';
+  processing?: PostActionProcessingState;
 };
 
 export type PostActionBarProps = {
@@ -154,6 +155,7 @@ export function PostActionBar({
               menuExpanded={more.menuExpanded}
               onPress={more.onPress}
               popupRole={more.popupRole}
+              processing={more.processing}
               stateful={Boolean(more.popupRole)}
               testID="more"
             />

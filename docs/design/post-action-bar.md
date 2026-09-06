@@ -228,6 +228,25 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - empty·removed·unavailable는 representative UI일 뿐이다. 최대 수·대상 자격·권한·lifecycle·pagination·
   persistence/API·ActivityPub과 교체 mutation·동시성·실패 처리 정책은 PROD-809가 소유한다.
 
+### Storybook 이관 · PROD-863
+
+- 시각·상태 근거는 [DSN-55 handoff](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4827-6858)와
+  `PostAttributionRow`의 [Center Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12984)·
+  [Mobile Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12988) source다.
+- `PostListItem`의 `pinned`는 표시만 소유한다. 정렬·자격을 계산하거나 Home에 고정을 적용하지 않는다.
+  `more`는 `ProfilePinAction`이 만든 기존 액션 바의 More 연결이며 별도 버튼을 덧붙이지 않는다.
+- `ProfilePinAction`은 호출자가 확정한 owner/visitor와 pin/unpin/replace 입력을 표시한다. visitor에는
+  링크 복사만 제공하며 owner의 삭제 항목은 호출자가 callback을 제공할 때만 표시한다.
+- 이 메뉴의 sheet 아이콘은 DSN-55 source에 맞춰 24px을 사용한다. 공용 `ActionMenu`의 다른 소비자는
+  기존 20px을 유지한다. Web 메뉴는 기존 18px을 유지한다.
+- 요청 중 중복 실행을 막고 교체 확인은 닫히지 않는다. 교체 실패는 확인창을 유지하고 취소로 focus를
+  돌리며, 직접 고정·해제 완료와 확인창 dismiss는 More trigger로 복귀한다. 오류 원문은 표시하지 않는다.
+- `KOSMO/Patterns/Profile/Pin Action`의 Playground는 수동 Controls·Actions용이며 자동 조작은 `Tests`에 둔다.
+  empty·removed·unavailable는 공용 `StateView`의 대표 예시다. Figma의 정책·구현 책임 설명은 제품 문구로
+  노출하지 않는다. loading/error 예시는 공용 상태 표현을 재사용하며 노출·재시도 정책을 정의하지 않는다.
+- 이 이관은 기존 DSN-55 계약을 적용하므로 새 OpenSpec을 만들지 않는다. PROD-809의 API·mutation·cache·
+  pagination·권한과 실제 Profile 연결, Native touch·focus·screen reader QA는 미완료 runtime 범위로 남긴다.
+
 ## Repost 실패 toast
 
 - 앱은 하나의 공용 transient toast host를 provider에서 제공하고 실제 `PostListItem`·`PostLayout` surface가
