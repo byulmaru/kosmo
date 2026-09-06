@@ -37,9 +37,6 @@ const SettingsBlockedProfilesFragment = graphql`
           targetProfile {
             id
             displayName
-            handle
-            domain
-            instanceKind
           }
         }
       }
