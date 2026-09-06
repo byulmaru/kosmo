@@ -119,7 +119,7 @@ Prefer the smallest relevant check that can disprove or confirm a concern. Do no
 
 #### Audit assertion targets
 
-For tests in the review scope, always trace each assertion's input and observed target; do not judge it by `.toBe` or `.toEqual` syntax alone. Flag tests that only inspect source-file strings, compare an imported config or meta object with hard-coded expected values, or pin internal DOM structure or SVG node counts without exercising the behavior. The existence of config acceptance does not make equality against the config object a user-behavior test.
+For tests in the review scope, always trace each assertion's input and observed target; do not judge it by `.toBe` or `.toEqual` syntax alone. Check for tests that only inspect source-file strings, compare an imported config or meta object with hard-coded expected values, or pin internal DOM structure or SVG node counts without exercising the behavior. The existence of config acceptance does not make equality against the config object a user-behavior test.
 
 Preserve tests that exercise real behavior with meaningful inputs and observe outputs, state transitions, callback wiring, accessibility behavior, or rendered geometry, including user interaction where applicable. For a weak test, recommend the smallest suitable remedy: delete it if it adds no meaningful behavioral coverage, or replace it with the smallest behavior check needed for the contract. Ground that choice in the test's location, affected behavior, and coverage remaining after deletion. Do not add tests that merely mirror this guidance.
 
