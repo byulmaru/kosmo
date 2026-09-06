@@ -14,7 +14,7 @@ const ProfileBlockTarget = builder.objectRef<ProfileBlockTargetRow>('ProfileBloc
 ProfileBlockTarget.implement({
   fields: (t) => ({
     id: t.globalID({
-      resolve: (target) => ({ id: target.id, type: Profile }),
+      resolve: (target) => ({ id: target.id, type: 'ProfileBlockTarget' }),
     }),
     handle: t.exposeString('handle'),
     displayName: t.exposeString('displayName'),

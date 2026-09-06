@@ -1,5 +1,5 @@
 import { db, first, Instances, Profiles } from '@kosmo/core/db';
-import { InstanceKind, ProfileState } from '@kosmo/core/enums';
+import { InstanceKind } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
@@ -88,7 +88,6 @@ builder.queryField('profileByHandle', (t) =>
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .where(
           and(
-            eq(Profiles.state, ProfileState.ACTIVE),
             eq(Profiles.instanceId, localInstance.id),
             eq(Profiles.normalizedHandle, parsed.normalizedHandle),
             visibleProfileWhere({
@@ -210,7 +209,6 @@ builder.queryField('searchProfiles', (t) =>
               .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
               .where(
                 and(
-                  eq(Profiles.state, ProfileState.ACTIVE),
                   eq(Profiles.instanceId, localInstance.id),
                   normalizedHandleLike,
                   cursorWhere,

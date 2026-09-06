@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, afterEach, test } from 'node:test';
 import { and, eq, inArray, or } from 'drizzle-orm';
 import {
+  ActivityPubActors,
   Bookmarks,
   db,
   firstOrThrow,
@@ -17,6 +18,7 @@ import {
   Reactions,
 } from '../db';
 import {
+  ActivityPubActorType,
   InstanceKind,
   InstanceState,
   NotificationKind,
@@ -150,22 +152,19 @@ test('Block removes captured Follow generations and preserves existing Reactions
   const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const ownerPost = await createPost(owner.id);
   const targetPost = await createPost(target.id);
-  const followOwnerToTargetId = '00000000-0000-4000-8000-000000000301';
-  const followTargetToOwnerId = '00000000-0000-4000-8000-000000000302';
   const requestOwnerToTargetId = '00000000-0000-4000-8000-000000000401';
   const requestTargetToOwnerId = '00000000-0000-4000-8000-000000000402';
-  const newFollowId = '00000000-0000-4000-8000-000000000601';
 
-  await ensureProfileFollow(
-    { followerProfileId: owner.id, followeeProfileId: target.id },
-    undefined,
-    { id: followOwnerToTargetId },
-  );
-  await ensureProfileFollow(
-    { followerProfileId: target.id, followeeProfileId: owner.id },
-    undefined,
-    { id: followTargetToOwnerId },
-  );
+  const followOwnerToTarget = await ensureProfileFollow({
+    followerProfileId: owner.id,
+    followeeProfileId: target.id,
+  });
+  const followTargetToOwner = await ensureProfileFollow({
+    followerProfileId: target.id,
+    followeeProfileId: owner.id,
+  });
+  const followOwnerToTargetId = followOwnerToTarget.profileFollow.id;
+  const followTargetToOwnerId = followTargetToOwner.profileFollow.id;
   await db.insert(ProfileFollowRequests).values([
     {
       id: requestOwnerToTargetId,
@@ -387,11 +386,11 @@ test('Block removes captured Follow generations and preserves existing Reactions
   assert.deepEqual(retry.effectPlan, firstExecution.effectPlan);
   await assertReactionsAndNotificationPreserved();
 
-  await ensureProfileFollow(
-    { followerProfileId: owner.id, followeeProfileId: target.id },
-    undefined,
-    { id: newFollowId },
-  );
+  const newFollow = await ensureProfileFollow({
+    followerProfileId: owner.id,
+    followeeProfileId: target.id,
+  });
+  const newFollowId = newFollow.profileFollow.id;
   const retryWithNewGeneration = await executeProfileBlockTransition(input);
   assert.equal(retryWithNewGeneration.ok, true);
   assert.equal(
@@ -451,11 +450,8 @@ test('Unblock cleans current Follow generations before removing the exact Block'
   const { profile: owner } = await createProfile();
   const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const profileBlockId = '00000000-0000-4000-8000-000000000801';
-  const followOwnerToTargetId = '00000000-0000-4000-8000-000000000802';
-  const followTargetToOwnerId = '00000000-0000-4000-8000-000000000803';
   const requestOwnerToTargetId = '00000000-0000-4000-8000-000000000804';
   const requestTargetToOwnerId = '00000000-0000-4000-8000-000000000805';
-  const lateFollowId = '00000000-0000-4000-8000-000000000806';
   const replacementProfileBlockId = '00000000-0000-4000-8000-000000000807';
 
   await db.insert(ProfileBlocks).values({
@@ -463,16 +459,16 @@ test('Unblock cleans current Follow generations before removing the exact Block'
     ownerProfileId: owner.id,
     targetProfileId: target.id,
   });
-  await ensureProfileFollow(
-    { followerProfileId: owner.id, followeeProfileId: target.id },
-    undefined,
-    { id: followOwnerToTargetId },
-  );
-  await ensureProfileFollow(
-    { followerProfileId: target.id, followeeProfileId: owner.id },
-    undefined,
-    { id: followTargetToOwnerId },
-  );
+  const followOwnerToTarget = await ensureProfileFollow({
+    followerProfileId: owner.id,
+    followeeProfileId: target.id,
+  });
+  const followTargetToOwner = await ensureProfileFollow({
+    followerProfileId: target.id,
+    followeeProfileId: owner.id,
+  });
+  const followOwnerToTargetId = followOwnerToTarget.profileFollow.id;
+  const followTargetToOwnerId = followTargetToOwner.profileFollow.id;
   await db.insert(ProfileFollowRequests).values([
     {
       id: requestOwnerToTargetId,
@@ -594,11 +590,11 @@ test('Unblock cleans current Follow generations before removing the exact Block'
 
   // A later Unblock run captures and removes a Follow generation created while
   // the original Block is still active.
-  await ensureProfileFollow(
-    { followerProfileId: owner.id, followeeProfileId: target.id },
-    undefined,
-    { id: lateFollowId },
-  );
+  const lateFollow = await ensureProfileFollow({
+    followerProfileId: owner.id,
+    followeeProfileId: target.id,
+  });
+  const lateFollowId = lateFollow.profileFollow.id;
   await db.insert(Notifications).values({
     kind: NotificationKind.FOLLOW,
     recipientProfileId: target.id,
@@ -711,6 +707,11 @@ test('Block rejects self-blocking in the service and the database check', async 
 test('Active Block rejects new Follow and approval in either direction', async () => {
   const { profile: owner } = await createProfile();
   const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  await db.insert(ActivityPubActors).values({
+    profileId: target.id,
+    type: ActivityPubActorType.PERSON,
+    uri: `https://${target.handle}.example/users/${target.handle}`,
+  });
 
   await db.insert(ProfileBlocks).values({
     ownerProfileId: owner.id,
@@ -728,6 +729,29 @@ test('Active Block rejects new Follow and approval in either direction', async (
       followProfileInTransaction({ followerProfileId: target.id, followeeProfileId: owner.id }, tx),
     ),
     (error: unknown) => error instanceof NotFoundError,
+  );
+
+  const activityPubFollow = await executeProfileFollowPairTransition({
+    pair: { followerProfileId: target.id, followeeProfileId: owner.id },
+    candidateRowId: crypto.randomUUID(),
+    command: { kind: 'FOLLOW', origin: 'ACTIVITYPUB' },
+  });
+  assert.deepEqual(activityPubFollow, {
+    ok: false,
+    error: { code: 'NOT_FOUND', message: 'Profile not found' },
+  });
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, target.id),
+          eq(ProfileFollows.followeeProfileId, owner.id),
+        ),
+      )
+      .then((rows) => rows.length),
+    0,
   );
 
   const existingFollow = await db
@@ -767,6 +791,47 @@ test('Active Block rejects new Follow and approval in either direction', async (
       .select()
       .from(ProfileFollowRequests)
       .where(eq(ProfileFollowRequests.id, pendingRequest.id))
+      .then((rows) => rows.length),
+    1,
+  );
+
+  const activityPubPendingRequest = await db
+    .insert(ProfileFollowRequests)
+    .values({ followerProfileId: target.id, followeeProfileId: owner.id })
+    .returning()
+    .then(firstOrThrow);
+  const activityPubAccept = await executeProfileFollowPairTransition({
+    pair: { followerProfileId: target.id, followeeProfileId: owner.id },
+    pendingRequestId: activityPubPendingRequest.id,
+    followCandidateId: crypto.randomUUID(),
+    command: {
+      expectedRowId: activityPubPendingRequest.id,
+      kind: 'ACCEPT',
+      origin: 'ACTIVITYPUB',
+    },
+  });
+  assert.deepEqual(activityPubAccept, {
+    ok: false,
+    error: { code: 'NOT_FOUND', message: 'Profile not found' },
+  });
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, target.id),
+          eq(ProfileFollows.followeeProfileId, owner.id),
+        ),
+      )
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollowRequests)
+      .where(eq(ProfileFollowRequests.id, activityPubPendingRequest.id))
       .then((rows) => rows.length),
     1,
   );

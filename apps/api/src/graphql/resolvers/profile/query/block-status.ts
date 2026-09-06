@@ -2,7 +2,8 @@ import { db, first, Instances, ProfileBlocks, Profiles } from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
-import { and, eq, or } from 'drizzle-orm';
+import { profileBlockPairWhere } from '@kosmo/core/visibility';
+import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { requireSelectedLocalProfile } from '../access/block';
 import { ProfileBlock } from '../ref';
@@ -76,18 +77,7 @@ builder.queryField('profileBlockStatus', (t) =>
           ownerProfileId: ProfileBlocks.ownerProfileId,
         })
         .from(ProfileBlocks)
-        .where(
-          or(
-            and(
-              eq(ProfileBlocks.ownerProfileId, selected.id),
-              eq(ProfileBlocks.targetProfileId, target.id),
-            ),
-            and(
-              eq(ProfileBlocks.ownerProfileId, target.id),
-              eq(ProfileBlocks.targetProfileId, selected.id),
-            ),
-          ),
-        );
+        .where(profileBlockPairWhere(selected.id, target.id));
       const ownBlock = relations.find(({ ownerProfileId }) => ownerProfileId === selected.id);
       const otherBlock = relations.find(({ ownerProfileId }) => ownerProfileId === target.id);
 

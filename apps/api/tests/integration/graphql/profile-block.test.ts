@@ -7,13 +7,22 @@ import {
   AccountState,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
+  NotificationKind,
+  PostState,
+  PostVisibility,
   ProfileFollowPolicy,
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
 import { decodeGlobalId, encodeGlobalId as globalId } from '@kosmo/core/global-id';
+import {
+  postContentDocumentFromText,
+  postContentDocumentFromTextAndMedia,
+} from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -26,12 +35,20 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
+let Bookmarks: typeof CoreDb.Bookmarks;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
+let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
+let PostContents: typeof CoreDb.PostContents;
+let Posts: typeof CoreDb.Posts;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
+let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
+let Reactions: typeof CoreDb.Reactions;
 let Sessions: typeof CoreDb.Sessions;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let deriveContext: typeof DeriveContext;
@@ -60,12 +77,20 @@ describe('GraphQL Profile Block', () => {
     ({
       AccountProfiles,
       Accounts,
+      Bookmarks,
       db,
       firstOrThrow,
       Instances,
+      Media,
+      Notifications,
       pg,
+      PostContents,
+      Posts,
       ProfileBlocks,
+      ProfileFollowRequests,
+      ProfileFollows,
       Profiles,
+      Reactions,
       Sessions,
     } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
@@ -111,12 +136,16 @@ describe('GraphQL Profile Block', () => {
     const localBlockId = localBlock.data?.blockProfile.profileBlock.id;
     assert.ok(localBlockId);
     assert.deepEqual(localBlock.data?.blockProfile.profileBlock.targetProfile, {
-      id: globalId('Profile', localTarget.id),
+      id: globalId('ProfileBlockTarget', localTarget.id),
       handle: localTarget.handle,
       displayName: localTarget.displayName,
       domain: localDomain,
       instanceKind: 'LOCAL',
     });
+    assert.deepEqual(
+      decodeGlobalId(localBlock.data?.blockProfile.profileBlock.targetProfile.id ?? ''),
+      { id: localTarget.id, typename: 'ProfileBlockTarget' },
+    );
 
     const repeated = await blockProfile(localTarget.id, owner.token);
     assertNoGraphQLErrors(repeated);
@@ -204,7 +233,10 @@ describe('GraphQL Profile Block', () => {
     );
     assert.deepEqual(
       managed.data?.node?.profileBlocks.edges.map(({ node }) => node.targetProfile.id).sort(),
-      [globalId('Profile', localTarget.id), globalId('Profile', remoteTarget.id)].sort(),
+      [
+        globalId('ProfileBlockTarget', localTarget.id),
+        globalId('ProfileBlockTarget', remoteTarget.id),
+      ].sort(),
     );
 
     const localStatus = await profileBlockStatus(localTarget.handle, owner.token);
@@ -426,6 +458,412 @@ describe('GraphQL Profile Block', () => {
     ]);
     assert.equal(result.data?.node, null);
   });
+
+  test('filters blocked Profile search candidates before applying cursor pagination', async () => {
+    const owner = await createAuthenticatedSession();
+    const blocked = await createProfileWithId(
+      'search-blocked-candidate',
+      '00000000-0000-8000-8000-000000000100',
+    );
+    const firstVisible = await createProfileWithId(
+      'search-visible-first',
+      '00000000-0000-8000-8000-000000000101',
+    );
+    const secondVisible = await createProfileWithId(
+      'search-visible-second',
+      '00000000-0000-8000-8000-000000000102',
+    );
+
+    const blockedResult = await blockProfile(blocked.id, owner.token);
+    assertNoGraphQLErrors(blockedResult);
+
+    const firstPage = await requestGraphQL<{
+      searchProfiles: {
+        edges: Array<{ node: { handle: string } }>;
+        pageInfo: { endCursor: string | null; hasNextPage: boolean };
+      };
+    }>(
+      `query SearchBlockedProfiles($after: String) {
+        searchProfiles(query: "search-", first: 1, after: $after) {
+          edges { node { handle } }
+          pageInfo { endCursor hasNextPage }
+        }
+      }`,
+      { after: null },
+      owner.token,
+    );
+
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(
+      firstPage.data?.searchProfiles.edges.map(({ node }) => node.handle),
+      [firstVisible.handle],
+    );
+    assert.equal(firstPage.data?.searchProfiles.pageInfo.hasNextPage, true);
+
+    const secondPage = await requestGraphQL<typeof firstPage.data>(
+      `query SearchBlockedProfiles($after: String) {
+        searchProfiles(query: "search-", first: 1, after: $after) {
+          edges { node { handle } }
+          pageInfo { endCursor hasNextPage }
+        }
+      }`,
+      { after: firstPage.data?.searchProfiles.pageInfo.endCursor },
+      owner.token,
+    );
+
+    assertNoGraphQLErrors(secondPage);
+    assert.deepEqual(
+      secondPage.data?.searchProfiles.edges.map(({ node }) => node.handle),
+      [secondVisible.handle],
+    );
+    assert.equal(secondPage.data?.searchProfiles.pageInfo.hasNextPage, false);
+  });
+
+  test('does not let residual Follow or Follow Request rows expose a blocked pair', async () => {
+    const owner = await createAuthenticatedSession();
+    const observer = await createAuthenticatedSession();
+    const blocked = await createProfile('residual-follow-blocked');
+    const control = await createProfile('residual-follow-control');
+    const blockedPost = await createContentPost(blocked.id, undefined, PostVisibility.FOLLOWERS);
+    const controlPost = await createContentPost(control.id, undefined, PostVisibility.FOLLOWERS);
+
+    const blockedResult = await blockProfile(blocked.id, owner.token);
+    assertNoGraphQLErrors(blockedResult);
+
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: owner.profile.id, followeeProfileId: blocked.id },
+      { followerProfileId: blocked.id, followeeProfileId: owner.profile.id },
+      { followerProfileId: owner.profile.id, followeeProfileId: control.id },
+    ]);
+    await db
+      .insert(ProfileFollowRequests)
+      .values([{ followerProfileId: owner.profile.id, followeeProfileId: blocked.id }]);
+
+    const result = await requestGraphQL<{
+      profileByHandle: {
+        followers: { edges: Array<{ node: { id: string } }> };
+        following: { edges: Array<{ node: { id: string } }> };
+        viewerState: {
+          isSelf: boolean;
+          follow: { id: string } | null;
+          followRequest: { id: string } | null;
+        } | null;
+      } | null;
+      homeTimeline: { edges: Array<{ node: { id: string } }> } | null;
+    }>(
+      `query ResidualBlockedRelations($handle: String!) {
+        profileByHandle(handle: $handle) {
+          followers(first: 10) { edges { node { id } } }
+          following(first: 10) { edges { node { id } } }
+          viewerState { isSelf follow { id } followRequest { id } }
+        }
+        homeTimeline(first: 10) { edges { node { id } } }
+      }`,
+      { handle: blocked.handle },
+      observer.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.profileByHandle?.followers.edges, []);
+    assert.deepEqual(result.data?.profileByHandle?.following.edges, []);
+    assert.deepEqual(result.data?.profileByHandle?.viewerState, {
+      isSelf: false,
+      follow: null,
+      followRequest: null,
+    });
+    assert.deepEqual(result.data?.homeTimeline?.edges, []);
+
+    const ownerHome = await requestGraphQL<{
+      homeTimeline: { edges: Array<{ node: { id: string } }> } | null;
+    }>(
+      `query ResidualBlockedHome {
+        homeTimeline(first: 10) { edges { node { id } } }
+      }`,
+      {},
+      owner.token,
+    );
+    assertNoGraphQLErrors(ownerHome);
+    assert.deepEqual(
+      ownerHome.data?.homeTimeline?.edges.map(({ node }) => node.id),
+      [globalId('Post', controlPost.post.id)],
+    );
+    assert.equal(
+      ownerHome.data?.homeTimeline?.edges.some(
+        ({ node }) => node.id === globalId('Post', blockedPost.post.id),
+      ),
+      false,
+    );
+  });
+
+  test('hides blocked Reposts, their PostContent and Media from posts and relation lists', async () => {
+    const viewer = await createAuthenticatedSession();
+    const repostAuthor = await createProfile('blocked-repost-author');
+    const sourceAuthor = await createProfile('blocked-repost-source');
+    const visibleAuthor = await createProfile('visible-repost-author');
+    const media = await db
+      .insert(Media)
+      .values({
+        mediaType: 'image/png',
+        profileId: sourceAuthor.id,
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: 'https://remote.example/blocked-repost.png',
+      })
+      .returning()
+      .then(firstOrThrow);
+    const source = await createContentPost(sourceAuthor.id, media.id);
+    const repost = await db
+      .insert(Posts)
+      .values({
+        profileId: repostAuthor.id,
+        repostSourceId: source.post.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const visible = await createContentPost(visibleAuthor.id);
+
+    await db.insert(Bookmarks).values([
+      { postId: repost.id, profileId: viewer.profile.id },
+      { postId: visible.post.id, profileId: viewer.profile.id },
+    ]);
+    await db.insert(Reactions).values([
+      { postId: visible.post.id, profileId: sourceAuthor.id, type: '❤️' },
+      { postId: visible.post.id, profileId: visibleAuthor.id, type: '❤️' },
+    ]);
+
+    for (const profile of [repostAuthor, sourceAuthor]) {
+      const blockedResult = await blockProfile(profile.id, viewer.token);
+      assertNoGraphQLErrors(blockedResult);
+    }
+
+    const result = await requestGraphQL<{
+      nodes: Array<
+        | { __typename: 'Post'; id: string }
+        | { __typename: 'PostContent'; id: string }
+        | { __typename: 'Media'; id: string }
+        | null
+      >;
+      viewer: {
+        bookmarks: { edges: Array<{ node: { post: { id: string } } }> };
+      } | null;
+      reactionProfiles: {
+        reactionProfiles: { edges: Array<{ node: { id: string } }> };
+      } | null;
+    }>(
+      `query BlockedRepostRelations(
+        $ids: [ID!]!
+        $viewerId: ID!
+        $postId: ID!
+      ) {
+        nodes(ids: $ids) { __typename id }
+        viewer: node(id: $viewerId) {
+          ... on Profile {
+            bookmarks(first: 10) { edges { node { post { id } } } }
+          }
+        }
+        reactionProfiles: node(id: $postId) {
+          ... on Post {
+            reactionProfiles(type: "❤️", first: 10) { edges { node { id } } }
+          }
+        }
+      }`,
+      {
+        ids: [
+          globalId('Post', repost.id),
+          globalId('Post', source.post.id),
+          globalId('PostContent', source.content.id),
+          globalId('Media', media.id),
+        ],
+        postId: globalId('Post', visible.post.id),
+        viewerId: globalId('Profile', viewer.profile.id),
+      },
+      viewer.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.nodes, [null, null, null, null]);
+    assert.deepEqual(
+      result.data?.viewer?.bookmarks.edges.map(({ node }) => node.post.id),
+      [globalId('Post', visible.post.id)],
+    );
+    assert.deepEqual(
+      result.data?.reactionProfiles?.reactionProfiles.edges.map(({ node }) => node.id),
+      [globalId('Profile', visibleAuthor.id)],
+    );
+  });
+
+  test('hides blocked Notification sources across mixed Node, connection, unread and Read paths', async () => {
+    const auth = await createAuthenticatedSession();
+    const secondRecipient = await createProfile('block-notification-second-recipient');
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: secondRecipient.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const blockedSource = await createProfile('blocked-notification-source');
+    const visibleSource = await createProfile('visible-notification-source');
+    const recipientPost = await createContentPost(auth.profile.id);
+
+    const blockedResult = await blockProfile(blockedSource.id, auth.token);
+    assertNoGraphQLErrors(blockedResult);
+
+    const [hiddenFollow, visibleFollow, secondRecipientFollow] = await Promise.all([
+      createFollowNotification(auth.profile.id, blockedSource.id),
+      createFollowNotification(auth.profile.id, visibleSource.id),
+      createFollowNotification(secondRecipient.id, blockedSource.id),
+    ]);
+    const hiddenFollowRequest = await db
+      .insert(ProfileFollowRequests)
+      .values({ followerProfileId: blockedSource.id, followeeProfileId: auth.profile.id })
+      .returning()
+      .then(firstOrThrow);
+    const hiddenReaction = await db
+      .insert(Reactions)
+      .values({ postId: recipientPost.post.id, profileId: blockedSource.id, type: '❤️' })
+      .returning()
+      .then(firstOrThrow);
+    const hiddenRepost = await db
+      .insert(Posts)
+      .values({
+        profileId: blockedSource.id,
+        repostSourceId: recipientPost.post.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const hiddenReply = await db
+      .insert(Posts)
+      .values({
+        profileId: blockedSource.id,
+        replyParentId: recipientPost.post.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const createHiddenNotification = (kind: NotificationKind, sourceId: string) =>
+      db
+        .insert(Notifications)
+        .values({ kind, recipientProfileId: auth.profile.id, sourceId })
+        .returning()
+        .then(firstOrThrow);
+    const [
+      hiddenFollowRequestNotification,
+      hiddenReactionNotification,
+      hiddenRepostNotification,
+      hiddenReplyNotification,
+    ] = await Promise.all([
+      createHiddenNotification(NotificationKind.FOLLOW_REQUEST, hiddenFollowRequest.id),
+      createHiddenNotification(NotificationKind.REACTION, hiddenReaction.id),
+      createHiddenNotification(NotificationKind.REPOST, hiddenRepost.id),
+      createHiddenNotification(NotificationKind.REPLY, hiddenReply.id),
+    ]);
+    const hiddenIds = [
+      globalId('FollowNotification', hiddenFollow.id),
+      globalId('FollowRequestNotification', hiddenFollowRequestNotification.id),
+      globalId('ReactionNotification', hiddenReactionNotification.id),
+      globalId('RepostNotification', hiddenRepostNotification.id),
+      globalId('ReplyNotification', hiddenReplyNotification.id),
+    ];
+    const visibleId = globalId('FollowNotification', visibleFollow.id);
+    const secondRecipientId = globalId('FollowNotification', secondRecipientFollow.id);
+    const recipientId = globalId('Profile', auth.profile.id);
+    const secondRecipientProfileId = globalId('Profile', secondRecipient.id);
+
+    const result = await requestGraphQL<{
+      nodes: Array<{ __typename: string; id: string } | null>;
+      recipient: {
+        notifications: { edges: Array<{ node: { id: string } }> };
+      } | null;
+      unread: Array<{ id: string; unreadNotificationCount: number } | null>;
+    }>(
+      `query BlockedNotifications($ids: [ID!]!, $recipientId: ID!, $unreadIds: [ID!]!) {
+        nodes(ids: $ids) { __typename id }
+        recipient: node(id: $recipientId) {
+          ... on Profile { notifications(first: 10) { edges { node { id } } } }
+        }
+        unread: nodes(ids: $unreadIds) {
+          ... on Profile { id unreadNotificationCount }
+        }
+      }`,
+      {
+        ids: [...hiddenIds, visibleId, secondRecipientId, secondRecipientProfileId],
+        recipientId,
+        unreadIds: [recipientId, secondRecipientProfileId],
+      },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.nodes, [
+      null,
+      null,
+      null,
+      null,
+      null,
+      { __typename: 'FollowNotification', id: visibleId },
+      { __typename: 'FollowNotification', id: secondRecipientId },
+      { __typename: 'Profile', id: secondRecipientProfileId },
+    ]);
+    assert.deepEqual(
+      result.data?.recipient?.notifications.edges.map(({ node }) => node.id),
+      [visibleId],
+    );
+    assert.deepEqual(result.data?.unread, [
+      { id: recipientId, unreadNotificationCount: 1 },
+      { id: secondRecipientProfileId, unreadNotificationCount: 1 },
+    ]);
+
+    const marked = await markNotificationRead(
+      [...hiddenIds, visibleId, secondRecipientId, secondRecipientProfileId],
+      auth.token,
+    );
+    assertNoGraphQLErrors(marked);
+    assert.deepEqual(
+      marked.data?.markNotificationRead.notifications.map(({ id }) => id).toSorted(),
+      [visibleId, secondRecipientId].toSorted(),
+    );
+    assert.deepEqual(
+      marked.data?.markNotificationRead.recipientProfiles
+        .map(({ id, unreadNotificationCount }) => [id, unreadNotificationCount])
+        .toSorted(),
+      [
+        [recipientId, 0],
+        [secondRecipientProfileId, 0],
+      ].toSorted(),
+    );
+
+    const persistedReads = await db
+      .select({ id: Notifications.id, readAt: Notifications.readAt })
+      .from(Notifications)
+      .where(
+        inArray(Notifications.id, [
+          hiddenFollow.id,
+          hiddenFollowRequestNotification.id,
+          hiddenReactionNotification.id,
+          hiddenRepostNotification.id,
+          hiddenReplyNotification.id,
+          visibleFollow.id,
+          secondRecipientFollow.id,
+        ]),
+      );
+    const readAtById = new Map(persistedReads.map(({ id, readAt }) => [id, readAt]));
+    assert.deepEqual(
+      [
+        hiddenFollow.id,
+        hiddenFollowRequestNotification.id,
+        hiddenReactionNotification.id,
+        hiddenRepostNotification.id,
+        hiddenReplyNotification.id,
+      ].map((id) => readAtById.get(id)),
+      [null, null, null, null, null],
+    );
+    assert.ok(readAtById.get(visibleFollow.id));
+    assert.ok(readAtById.get(secondRecipientFollow.id));
+  });
 });
 
 const blockProfile = (profileId: string, token?: string) =>
@@ -494,6 +932,40 @@ const assertGraphQLErrorCode = (result: GraphQLResult<unknown>, code: string) =>
   assert.equal(result.errors?.[0]?.extensions?.code, code, JSON.stringify(result.errors));
 };
 
+const createFollowNotification = async (recipientProfileId: string, relatedProfileId: string) => {
+  const follow = await db
+    .insert(ProfileFollows)
+    .values({ followerProfileId: relatedProfileId, followeeProfileId: recipientProfileId })
+    .returning()
+    .then(firstOrThrow);
+  return db
+    .insert(Notifications)
+    .values({
+      kind: NotificationKind.FOLLOW,
+      recipientProfileId,
+      sourceId: follow.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+};
+
+const markNotificationRead = (ids: string[], token?: string) =>
+  requestGraphQL<{
+    markNotificationRead: {
+      notifications: Array<{ id: string; readAt: string | null }>;
+      recipientProfiles: Array<{ id: string; unreadNotificationCount: number }>;
+    };
+  }>(
+    `mutation MarkBlockedNotificationRead($ids: [ID!]!) {
+      markNotificationRead(input: { ids: $ids }) {
+        notifications { id readAt }
+        recipientProfiles { id unreadNotificationCount }
+      }
+    }`,
+    { ids },
+    token,
+  );
+
 const createRemoteInstance = async (domain = 'remote.example') =>
   db
     .insert(Instances)
@@ -519,6 +991,55 @@ const createProfile = async (handle: string, instanceId = localInstanceId): Prom
     })
     .returning()
     .then(firstOrThrow);
+
+const createProfileWithId = async (
+  handle: string,
+  id: string,
+  instanceId = localInstanceId,
+): Promise<ProfileRow> =>
+  db
+    .insert(Profiles)
+    .values({
+      displayName: handle,
+      followPolicy: ProfileFollowPolicy.OPEN,
+      handle,
+      id,
+      instanceId,
+      normalizedHandle: normalizeHandle(handle),
+      state: ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+const createContentPost = async (
+  profileId: string,
+  mediaId?: string,
+  visibility: PostVisibility = PostVisibility.PUBLIC,
+) => {
+  const post = await db
+    .insert(Posts)
+    .values({ profileId, state: PostState.ACTIVE, visibility })
+    .returning()
+    .then(firstOrThrow);
+  const content = await db
+    .insert(PostContents)
+    .values({
+      document: mediaId
+        ? postContentDocumentFromTextAndMedia('', [{ mediaId }])
+        : postContentDocumentFromText(post.id),
+      postId: post.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const updatedPost = await db
+    .update(Posts)
+    .set({ currentContentId: content.id })
+    .where(eq(Posts.id, post.id))
+    .returning()
+    .then(firstOrThrow);
+
+  return { content, post: updatedPost };
+};
 
 const createAuthenticatedSession = async (profile?: ProfileRow) => {
   const selectedProfile =
@@ -556,6 +1077,15 @@ const decodeProfileBlockId = (id: string) => {
 };
 
 const resetFixtures = async () => {
+  await db.delete(Bookmarks);
+  await db.delete(Reactions);
+  await db.delete(Notifications);
+  await db.delete(ProfileFollowRequests);
+  await db.delete(ProfileFollows);
+  await db.update(Posts).set({ currentContentId: null, replyParentId: null, repostSourceId: null });
+  await db.delete(PostContents);
+  await db.delete(Posts);
+  await db.delete(Media);
   await db.delete(ProfileBlocks);
   await db.delete(Sessions);
   await db.delete(AccountProfiles);
