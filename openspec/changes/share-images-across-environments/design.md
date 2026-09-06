@@ -34,7 +34,7 @@ Main Docker Build는 source full SHA의 Sentry release와 source map을 포함�
 ### Recommended Approach
 
 - Docker Build는 `sha-<full SHA>` tag를 게시하고 별도 release manifest나 digest artifact를 생성하지 않는다.
-- Dev는 triggering `head_sha`로 SHA tag를 구성해 GHCR digest를 조회·검증한 뒤 `argocd app set kosmo-dev --revision <head SHA> -p version=<head SHA> -p imageDigest=<digest>`를 실행한 다음 sync한다.
+- Dev는 triggering `head_sha`로 SHA tag를 구성해 GHCR digest를 조회·검증한 뒤 `argocd app set kosmo-dev --revision <head SHA> -p version=<head SHA> -p imageDigest=<digest>`를 실행한다. `kosmo-dev` ApplicationSet은 이 release-time source revision과 Helm parameter 차이를 무시하고 automated sync를 수행하며, workflow 성공은 설정 갱신까지만 의미하고 후속 sync나 rollout 완료의 증거로 간주하지 않는다.
 - Triggering Docker Build를 검사하는 Trivy도 별도 release artifact 없이 triggering `sha-<head SHA>` tag를 사용한다. 수동·정기 scan의 기존 `:main` 선택은 배포 identity가 아니므로 유지한다.
 - Production preflight는 main `Docker Build` workflow의 성공한 run 중 `head_sha == target SHA`, `event == push`, `head_branch == main`인 run을 확인한 뒤 GHCR의 `sha-<target SHA>` tag digest를 조회·검증한다. Run ID, target SHA와 조회 digest를 job outputs로 고정한다. Run 자체가 digest를 증명한다고 간주하지 않는다.
 - 승인된 production job은 checkout, Docker setup/login/build/push, Sentry build secret과 tag/digest 재조회를 갖지 않고 preflight outputs로 기존 migration-gated Argo sync를 실행한다.
@@ -51,7 +51,7 @@ Main Docker Build는 source full SHA의 Sentry release와 source map을 포함�
 - 승인 뒤 SHA tag를 다시 조회하거나 target SHA를 재해석하면 승인 정보와 실제 deploy identity가 달라질 수 있다.
 - SHA tag는 재빌드로 덮어쓸 수 있으므로 Dev와 Production이 다른 시점에 조회한 digest가 달라질 수 있다. 이는 허용된 경계이며, production은 preflight digest를 유지한다.
 - 단일 image인데 runtime 이름→digest map이나 manifest를 만들면 현재 요구되지 않는 multi-runtime 계약을 미리 고정한다.
-- Dev가 `argocd app sync`만 실행하면 기존 `:main` parameter가 남아 exact digest를 소비하지 않는다.
+- `argocd app set` 직후 명시적 `argocd app sync`를 호출하면 ApplicationSet의 automated sync와 operation이 충돌할 수 있다. Dev workflow는 release-time source revision과 Helm parameter 차이를 ApplicationSet에서 무시하고 후속 sync를 automated sync에 맡긴다. Workflow 성공은 rollout 완료 증거가 아니다.
 - Trivy용 image reference artifact를 게시하면 배포 identity가 별도 파일로 분산된다.
 
 ## Risks / Trade-offs

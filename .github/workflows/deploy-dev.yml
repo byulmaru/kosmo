@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  restart_dev:
-    name: Restart Dev Workloads
+  update_dev:
+    name: Update Dev Application
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04-arm
     env:
@@ -103,7 +103,7 @@ jobs:
             core.setSecret(dexToken);
             core.setOutput("token", dexToken);
 
-      - name: Sync dev application
+      - name: Update Dev Application
         env:
           ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
           IMAGE_DIGEST: ${{ steps.image.outputs.image_digest }}
@@ -116,26 +116,3 @@ jobs:
             -p "version=${TARGET_SHA}" \
             -p "imageDigest=${IMAGE_DIGEST}" \
             --validate
-
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-dev --timeout 600
-
-      - name: Restart dev workloads
-        env:
-          ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          for rollout in kosmo-web kosmo-api; do
-            argocd --server "${ARGOCD_SERVER}" --grpc-web app actions run kosmo-dev restart \
-              --group argoproj.io \
-              --kind Rollout \
-              --namespace kosmo-dev \
-              --resource-name "${rollout}"
-          done
-
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app actions run kosmo-dev restart \
-            --group apps \
-            --kind Deployment \
-            --namespace kosmo-dev \
-            --all
