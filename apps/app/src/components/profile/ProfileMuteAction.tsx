@@ -92,7 +92,14 @@ function ProfileMuteActionContent({
     } catch {
       // The public boundary presents a safe message, never a backend error string.
     }
+    if (!mounted.current && !succeeded) {
+      return;
+    }
     if (!mounted.current) {
+      showToast(`${displayName} 님이 ${nextMuted ? '뮤트되었어요' : '뮤트 해제되었어요'}`, {
+        tone: 'success',
+      });
+      onFeedback?.({ muted: nextMuted, status: 'success' });
       return;
     }
     completed.current = { muted: nextMuted, status: succeeded ? 'success' : 'error' };
@@ -203,8 +210,8 @@ function ProfileMuteActionContent({
           confirmLabel={label}
           message={
             muted
-              ? `${displayName} 님의 게시물이 타임라인에 다시 표시되고 새 알림을 받을 수 있어요. 팔로우 관계는 유지돼요.`
-              : '홈과 해시태그에서 이 프로필의 게시물이 숨겨지고 새 알림을 받지 않아요. 팔로우 관계는 유지돼요.'
+              ? `${displayName} 님의 게시물이 홈과 로컬 타임라인에 다시 표시돼요. 팔로우 관계는 유지돼요.`
+              : '홈과 로컬 타임라인에서 이 프로필의 게시물이 숨겨지고 팔로우 관계는 유지돼요.'
           }
           onCancel={close}
           onConfirm={() => void request(!muted)}

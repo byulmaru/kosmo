@@ -121,15 +121,9 @@ function UniversalShellContent() {
   const homeRefreshHandlerRef = useRef<TimelineRefreshHandler | null>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
   const localRefreshHandlerRef = useRef<TimelineRefreshHandler | null>(null);
-  const pendingHomeRefreshRef = useRef(false);
   const pendingDrawerHomeReselectionRef = useRef(false);
-  const pendingLocalRefreshRef = useRef(false);
   const registerHomeRefresh = useCallback((handler: TimelineRefreshHandler) => {
     homeRefreshHandlerRef.current = handler;
-    if (pendingHomeRefreshRef.current) {
-      pendingHomeRefreshRef.current = false;
-      handler();
-    }
     return () => {
       if (homeRefreshHandlerRef.current === handler) {
         homeRefreshHandlerRef.current = null;
@@ -149,10 +143,6 @@ function UniversalShellContent() {
   }, []);
   const registerLocalRefresh = useCallback((handler: TimelineRefreshHandler) => {
     localRefreshHandlerRef.current = handler;
-    if (pendingLocalRefreshRef.current) {
-      pendingLocalRefreshRef.current = false;
-      handler();
-    }
     return () => {
       if (localRefreshHandlerRef.current === handler) {
         localRefreshHandlerRef.current = null;
@@ -160,16 +150,8 @@ function UniversalShellContent() {
     };
   }, []);
   const refreshProfileMuteTimelines = useCallback(() => {
-    if (homeRefreshHandlerRef.current) {
-      homeRefreshHandlerRef.current();
-    } else {
-      pendingHomeRefreshRef.current = true;
-    }
-    if (localRefreshHandlerRef.current) {
-      localRefreshHandlerRef.current();
-    } else {
-      pendingLocalRefreshRef.current = true;
-    }
+    homeRefreshHandlerRef.current?.();
+    localRefreshHandlerRef.current?.();
   }, []);
   const queueDrawerHomeReselection = useCallback(() => {
     pendingDrawerHomeReselectionRef.current = true;

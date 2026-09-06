@@ -113,6 +113,21 @@ describe('ProfileMuteController', () => {
     await assert.rejects(request, /inactive Profile/);
     assert.equal(refreshCalls, 0);
   });
+
+  it('controller가 route와 함께 unmount된 응답은 성공으로 분류하지 않는다', async () => {
+    const controller = await renderController();
+    const request = controller.changeMuted(
+      { ownerProfileId: 'profile:owner', targetProfileId: 'profile:target' },
+      true,
+    );
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    commits[0].onCompleted({ muteProfile: { profileMute: { id: 'profile-mute:stale' } } }, []);
+
+    await assert.rejects(request, /inactive Profile/);
+    assert.equal(refreshCalls, 0);
+  });
 });
 
 afterEach(async () => {
