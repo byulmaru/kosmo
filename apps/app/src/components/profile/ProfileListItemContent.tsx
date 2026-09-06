@@ -72,7 +72,7 @@ export function ProfileListItemContent({
           <Pressable
             accessibilityRole="link"
             onPress={onPress}
-            style={[styles.profile, bio ? styles.profileWithBio : undefined]}
+            style={StyleSheet.flatten([styles.profile, bio ? styles.profileWithBio : undefined])}
           >
             {content}
           </Pressable>
