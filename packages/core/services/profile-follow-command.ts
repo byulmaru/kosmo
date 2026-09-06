@@ -11,6 +11,7 @@ import {
 import {
   acceptProfileFollowRequestInTransaction,
   approveProfileFollowRequestInTransaction,
+  assertProfilePairIsNotBlocked,
   deleteProfileFollowRequestAsActorInTransaction,
   followProfileInTransaction,
   profileFollowPairCondition as pairCondition,
@@ -376,6 +377,8 @@ const executeApproveOrAccept = async (
   if (command.kind !== 'APPROVE' && command.kind !== 'ACCEPT') {
     throw new Error('Invalid approval command');
   }
+
+  await assertProfilePairIsNotBlocked(tx, input.pair);
 
   const expectedRowId = command.expectedRowId;
   const existingFollow = await tx

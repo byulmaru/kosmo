@@ -13,18 +13,20 @@ import { createObjectRef } from '@/graphql/utils';
 import { formatRelativeHandle } from '@/profile/identity';
 import { visibleProfileWhere } from '@/profile/visibility';
 import { Media } from '../media/ref';
+import { profileBlockByIdLoader } from './loader/block';
 import { profileFollowByIdLoader } from './loader/follow';
 import { profileFollowRequestByIdLoader } from './loader/follow-request';
 import { profileInstanceByIdLoader } from './loader/instance';
 import { profileMediaLoader } from './loader/media';
 import { profileMuteByIdLoader } from './loader/mute';
 import type { ProfileMutes } from '@kosmo/core/db';
+import type { ProfileBlockRow } from './loader/block';
 
 const ViewerOwnerAccountProfiles = alias(AccountProfiles, 'viewer_owner_account_profile');
 const ViewerOwnerProfiles = alias(Profiles, 'viewer_owner_profile');
 const ViewerOwnerInstances = alias(Instances, 'viewer_owner_instance');
 
-export const Profile = createObjectRef('Profile', (ids) =>
+export const Profile = createObjectRef('Profile', (ids, ctx) =>
   db
     .select(getColumns(Profiles))
     .from(Profiles)
@@ -32,7 +34,12 @@ export const Profile = createObjectRef('Profile', (ids) =>
     .where(
       and(
         inArray(Profiles.id, ids),
-        visibleProfileWhere({ profile: Profiles, instance: Instances }),
+        visibleProfileWhere({
+          profile: Profiles,
+          instance: Instances,
+          database: db,
+          viewerProfileId: ctx.session?.profileId,
+        }),
       ),
     ),
 );
@@ -186,5 +193,27 @@ export const ProfileMuteConnection = builder.connectionObject(
   },
   {
     name: 'ProfileMuteConnectionEdge',
+  },
+);
+
+export const ProfileBlock = createObjectRef<ProfileBlockRow>('ProfileBlock', (ids, ctx) =>
+  profileBlockByIdLoader(ctx).loadMany(ids),
+);
+
+ProfileBlock.implement({
+  fields: (t) => ({
+    createdAt: t.expose('createdAt', {
+      type: 'DateTime',
+    }),
+  }),
+});
+
+export const ProfileBlockConnection = builder.connectionObject(
+  {
+    type: ProfileBlock,
+    name: 'ProfileBlockConnection',
+  },
+  {
+    name: 'ProfileBlockConnectionEdge',
   },
 );

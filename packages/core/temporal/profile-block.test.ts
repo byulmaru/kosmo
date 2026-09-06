@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
-import { WorkflowExecutionAlreadyStartedError } from '@temporalio/client';
+import {
+  ApplicationFailure,
+  WorkflowExecutionAlreadyStartedError,
+  WorkflowFailedError,
+} from '@temporalio/client';
+import { NotFoundError } from '../error';
 
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
@@ -78,6 +83,33 @@ test('Profile Block caller waits for the one-shot Workflow result', async () => 
     assert.equal(options.workflowIdConflictPolicy, 'USE_EXISTING');
     assert.equal(options.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
     assert.equal(deadline.mock.calls.length, 1);
+  } finally {
+    deadline.mock.restore();
+    execute.mock.restore();
+  }
+});
+
+test('Profile Block caller rehydrates durable domain failures', async () => {
+  const execute = mock.method(temporalClient.workflow, 'execute', async () =>
+    Promise.reject(
+      new WorkflowFailedError(
+        'Workflow execution failed',
+        ApplicationFailure.nonRetryable('Profile not found', 'NOT_FOUND'),
+        undefined as never,
+      ),
+    ),
+  );
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  try {
+    await assert.rejects(
+      executeProfileBlock(input),
+      (error: unknown) => error instanceof NotFoundError && error.message === 'Profile not found',
+    );
   } finally {
     deadline.mock.restore();
     execute.mock.restore();

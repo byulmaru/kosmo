@@ -1,4 +1,5 @@
 import './account';
+import './block';
 import './follow';
 import './follow-request';
 import './instance';

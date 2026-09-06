@@ -87,7 +87,7 @@ builder.objectFields(Post, (t) => ({
       args: {
         type: t.arg.string({ required: true, validate: reactionTypeSchema }),
       },
-      resolve: (post, args) =>
+      resolve: (post, args, ctx) =>
         resolveCursorConnection<Promise<ReactionProfileRow[]>>(
           {
             args,
@@ -107,7 +107,12 @@ builder.objectFields(Post, (t) => ({
                 and(
                   eq(Reactions.postId, post.id),
                   eq(Reactions.type, args.type),
-                  visibleProfileWhere({ profile: Profiles, instance: Instances }),
+                  visibleProfileWhere({
+                    profile: Profiles,
+                    instance: Instances,
+                    database: db,
+                    viewerProfileId: ctx.session?.profileId,
+                  }),
                   reactionProfileCursorWhere(after, 'after'),
                   reactionProfileCursorWhere(before, 'before'),
                 ),

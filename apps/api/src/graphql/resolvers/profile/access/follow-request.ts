@@ -1,5 +1,6 @@
-import { ProfileFollowRequests } from '@kosmo/core/db';
-import { eq, or } from 'drizzle-orm';
+import { db, ProfileFollowRequests } from '@kosmo/core/db';
+import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
+import { and, eq, or } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
 export const profileFollowRequestAccessWhere = (ctx: UserContext) => {
@@ -9,8 +10,15 @@ export const profileFollowRequestAccessWhere = (ctx: UserContext) => {
     return undefined;
   }
 
-  return or(
-    eq(ProfileFollowRequests.followerProfileId, viewerProfileId),
-    eq(ProfileFollowRequests.followeeProfileId, viewerProfileId),
+  return and(
+    or(
+      eq(ProfileFollowRequests.followerProfileId, viewerProfileId),
+      eq(ProfileFollowRequests.followeeProfileId, viewerProfileId),
+    ),
+    profileBlockVisibilityWhere({
+      database: db,
+      firstProfileId: ProfileFollowRequests.followerProfileId,
+      secondProfileId: ProfileFollowRequests.followeeProfileId,
+    }),
   );
 };

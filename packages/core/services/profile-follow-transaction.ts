@@ -6,12 +6,14 @@ import {
   firstOrThrowWith,
   getDatabaseConnection,
   Instances,
+  ProfileBlocks,
   ProfileFollowRequests,
   ProfileFollows,
   Profiles,
 } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { ConflictError, NotFoundError, PermissionDeniedError } from '../error';
+import { profileBlockPairWhere } from '../visibility/profile-block';
 import { ensureProfileFollow } from './profile-follow-relation';
 import type { Transaction } from '../db';
 import type { ProfileFollowPair } from './profile-follow-relation';
@@ -34,6 +36,22 @@ export type FollowProfileResult =
 type ProfileFollowInput = {
   followerProfileId: string;
   followeeProfileId: string;
+};
+
+export const assertProfilePairIsNotBlocked = async (
+  tx: Transaction,
+  { followerProfileId, followeeProfileId }: ProfileFollowPair,
+) => {
+  const block = await tx
+    .select({ id: ProfileBlocks.id })
+    .from(ProfileBlocks)
+    .where(profileBlockPairWhere(followerProfileId, followeeProfileId))
+    .limit(1)
+    .then(first);
+
+  if (block) {
+    throw new NotFoundError('Profile not found');
+  }
 };
 
 const loadProfileFollowParticipants = async (
@@ -105,6 +123,7 @@ export const followProfileInTransaction = async (
     followerProfileId,
     followeeProfileId,
   });
+  await assertProfilePairIsNotBlocked(tx, { followerProfileId, followeeProfileId });
 
   let created: boolean;
   let followResult: FollowProfileResult;
@@ -422,6 +441,7 @@ export const acceptProfileFollowRequestInTransaction = async (
   tx: Transaction,
 ): Promise<AcceptProfileFollowRequestTransactionResult> => {
   const pair = { followeeProfileId, followerProfileId };
+  await assertProfilePairIsNotBlocked(tx, pair);
   const established = await tx
     .select({ id: ProfileFollows.id })
     .from(ProfileFollows)
@@ -549,6 +569,10 @@ export const approveProfileFollowRequestInTransaction = async (
   if (participants.length !== 2) {
     throw new NotFoundError('Profile not found');
   }
+  await assertProfilePairIsNotBlocked(tx, {
+    followerProfileId: request.followerProfileId,
+    followeeProfileId: request.followeeProfileId,
+  });
 
   const { created, profileFollow } = await ensureProfileFollow(
     {

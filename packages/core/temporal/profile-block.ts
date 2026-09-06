@@ -1,10 +1,13 @@
 import '../polyfill';
 
 import {
+  ApplicationFailure,
   WorkflowExecutionAlreadyStartedError,
+  WorkflowFailedError,
   WorkflowIdConflictPolicy,
   WorkflowIdReusePolicy,
 } from '@temporalio/client';
+import { ConflictError, NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { temporalClient } from './client';
 import { KOSMO_TASK_QUEUE } from './task-queue';
 import type {
@@ -18,6 +21,25 @@ export const PROFILE_BLOCK_WORKFLOW_ID_PREFIX = 'profile-block:';
 export const PROFILE_UNBLOCK_WORKFLOW_TYPE = 'profileUnblockWorkflow';
 export const PROFILE_UNBLOCK_WORKFLOW_ID_PREFIX = 'profile-unblock:';
 export const PROFILE_BLOCK_COMMAND_RPC_TIMEOUT_MS = 5_000;
+
+const rehydrateProfileBlockWorkflowFailure = (error: unknown): unknown => {
+  if (!(error instanceof WorkflowFailedError) || !(error.cause instanceof ApplicationFailure)) {
+    return error;
+  }
+
+  switch (error.cause.type) {
+    case 'CONFLICT':
+      return new ConflictError({ message: error.cause.message });
+    case 'NOT_FOUND':
+      return new NotFoundError(error.cause.message);
+    case 'PERMISSION_DENIED':
+      return new PermissionDeniedError(error.cause.message);
+    case 'VALIDATION':
+      return new ValidationError(error.cause.message);
+    default:
+      return error;
+  }
+};
 
 export type ProfileBlockInput = {
   readonly ownerProfileId: string;
@@ -51,16 +73,23 @@ export const profileUnblockWorkflowId = (
  */
 export const executeProfileBlock = async (
   input: ProfileBlockInput,
-): Promise<ProfileBlockTransitionResult> =>
-  temporalClient.withDeadline(Date.now() + PROFILE_BLOCK_COMMAND_RPC_TIMEOUT_MS, () =>
-    temporalClient.workflow.execute(PROFILE_BLOCK_WORKFLOW_TYPE, {
-      args: [input],
-      taskQueue: KOSMO_TASK_QUEUE,
-      workflowId: profileBlockWorkflowId(input),
-      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-      workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
-    }),
-  );
+): Promise<ProfileBlockTransitionResult> => {
+  try {
+    return await temporalClient.withDeadline(
+      Date.now() + PROFILE_BLOCK_COMMAND_RPC_TIMEOUT_MS,
+      () =>
+        temporalClient.workflow.execute(PROFILE_BLOCK_WORKFLOW_TYPE, {
+          args: [input],
+          taskQueue: KOSMO_TASK_QUEUE,
+          workflowId: profileBlockWorkflowId(input),
+          workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+          workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+        }),
+    );
+  } catch (error) {
+    throw rehydrateProfileBlockWorkflowFailure(error);
+  }
+};
 
 /**
  * Starts one durable Profile Unblock generation and waits for its full
@@ -71,23 +100,27 @@ export const executeProfileUnblock = async (
   input: ProfileUnblockInput,
 ): Promise<ProfileUnblockTransitionResult> => {
   const workflowId = profileUnblockWorkflowId(input);
-  return temporalClient.withDeadline(
-    Date.now() + PROFILE_BLOCK_COMMAND_RPC_TIMEOUT_MS,
-    async () => {
-      try {
-        return await temporalClient.workflow.execute(PROFILE_UNBLOCK_WORKFLOW_TYPE, {
-          args: [input],
-          taskQueue: KOSMO_TASK_QUEUE,
-          workflowId,
-          workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-          workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
-        });
-      } catch (error) {
-        if (!(error instanceof WorkflowExecutionAlreadyStartedError)) {
-          throw error;
+  try {
+    return await temporalClient.withDeadline(
+      Date.now() + PROFILE_BLOCK_COMMAND_RPC_TIMEOUT_MS,
+      async () => {
+        try {
+          return await temporalClient.workflow.execute(PROFILE_UNBLOCK_WORKFLOW_TYPE, {
+            args: [input],
+            taskQueue: KOSMO_TASK_QUEUE,
+            workflowId,
+            workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+            workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+          });
+        } catch (error) {
+          if (!(error instanceof WorkflowExecutionAlreadyStartedError)) {
+            throw error;
+          }
+          return temporalClient.workflow.getHandle(workflowId).result();
         }
-        return temporalClient.workflow.getHandle(workflowId).result();
-      }
-    },
-  );
+      },
+    );
+  } catch (error) {
+    throw rehydrateProfileBlockWorkflowFailure(error);
+  }
 };

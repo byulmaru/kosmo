@@ -35,7 +35,7 @@ builder.objectField(Hashtag, 'relatedProfiles', (t) =>
       first: t.arg.int({ required: false }),
       after: t.arg.string({ required: false }),
     },
-    resolve: (hashtag, args) =>
+    resolve: (hashtag, args, ctx) =>
       resolveCursorConnection<Promise<ProfileRow[]>>(
         {
           args,
@@ -52,7 +52,12 @@ builder.objectField(Hashtag, 'relatedProfiles', (t) =>
             .where(
               and(
                 eq(ProfileHashtags.hashtagId, hashtag.id),
-                visibleProfileWhere({ profile: Profiles, instance: Instances }),
+                visibleProfileWhere({
+                  profile: Profiles,
+                  instance: Instances,
+                  database: db,
+                  viewerProfileId: ctx.session?.profileId,
+                }),
                 after !== null && after !== undefined
                   ? gt(Profiles.id, decodeRelatedProfileCursor(after))
                   : undefined,

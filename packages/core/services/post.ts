@@ -29,6 +29,7 @@ import {
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
+import { profileBlockVisibilityWhere } from '../visibility/profile-block';
 import { validatePostStructure } from './post-structure';
 import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
@@ -112,7 +113,11 @@ const isActivityPubPostUriConflict = (error: unknown): boolean => {
 
 const findVisiblePost = async (
   tx: Transaction,
-  { actorProfileId, postId }: { actorProfileId: string; postId: string },
+  {
+    actorProfileId,
+    includeProfileBlock = true,
+    postId,
+  }: { actorProfileId: string; includeProfileBlock?: boolean; postId: string },
 ) =>
   tx
     .select({
@@ -134,6 +139,13 @@ const findVisiblePost = async (
     .where(
       and(
         eq(Posts.id, postId),
+        includeProfileBlock
+          ? profileBlockVisibilityWhere({
+              database: tx,
+              firstProfileId: actorProfileId,
+              secondProfileId: Posts.profileId,
+            })
+          : undefined,
         postVisibilityCondition({
           columns: {
             authorProfileId: Posts.profileId,
@@ -175,13 +187,19 @@ const createOrFindRepost = async (
   tx: Transaction,
   {
     actorProfileId,
+    includeProfileBlock,
     sourcePostId,
   }: {
     readonly actorProfileId: string;
+    readonly includeProfileBlock: boolean;
     readonly sourcePostId: string;
   },
 ) => {
-  const source = await findVisiblePost(tx, { actorProfileId, postId: sourcePostId });
+  const source = await findVisiblePost(tx, {
+    actorProfileId,
+    includeProfileBlock,
+    postId: sourcePostId,
+  });
   if (!source) {
     throw new NotFoundError('Post not found');
   }
@@ -419,6 +437,7 @@ export async function repostPost(input: RepostInput): Promise<RepostResult> {
   const result = await db.transaction(async (tx) => {
     let materialized = await createOrFindRepost(tx, {
       actorProfileId: input.actorProfileId,
+      includeProfileBlock: input.origin === 'LOCAL',
       sourcePostId: input.sourcePostId,
     });
 
@@ -436,6 +455,7 @@ export async function repostPost(input: RepostInput): Promise<RepostResult> {
       if (!(await save(materialized.repost.id))) {
         materialized = await createOrFindRepost(tx, {
           actorProfileId: input.actorProfileId,
+          includeProfileBlock: false,
           sourcePostId: input.sourcePostId,
         });
         if (!(await save(materialized.repost.id))) {

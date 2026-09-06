@@ -39,7 +39,12 @@ builder.objectField(Profile, 'profileMutes', (t) =>
                 and(
                   eq(ProfileMutes.ownerProfileId, profile.id),
                   isNull(ProfileMutes.expiresAt),
-                  visibleProfileWhere({ profile: Profiles, instance: Instances }),
+                  visibleProfileWhere({
+                    profile: Profiles,
+                    instance: Instances,
+                    database: db,
+                    viewerProfileId: ctx.session?.profileId,
+                  }),
                   before ? gt(ProfileMutes.id, before) : undefined,
                   after ? lt(ProfileMutes.id, after) : undefined,
                 ),

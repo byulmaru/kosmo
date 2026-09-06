@@ -1,5 +1,6 @@
-import { ProfileFollows } from '@kosmo/core/db';
+import { db, ProfileFollows } from '@kosmo/core/db';
 import { InstanceState, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
 import { and, eq, ne, or } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { UserContext } from '@/context';
@@ -43,6 +44,11 @@ export const profileFollowAccessWhere = ({
     eq(followeeProfile.state, ProfileState.ACTIVE),
     ne(followerInstance.state, InstanceState.SUSPENDED),
     ne(followeeInstance.state, InstanceState.SUSPENDED),
+    profileBlockVisibilityWhere({
+      database: db,
+      firstProfileId: ProfileFollows.followerProfileId,
+      secondProfileId: ProfileFollows.followeeProfileId,
+    }),
     visibleWhere,
   )!;
 };

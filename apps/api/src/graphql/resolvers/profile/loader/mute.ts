@@ -23,7 +23,12 @@ export const viewerProfileMuteLoader = (ctx: UserContext) =>
             eq(ProfileMutes.ownerProfileId, ctx.session.profile.id),
             inArray(ProfileMutes.targetProfileId, targetProfileIds),
             isNull(ProfileMutes.expiresAt),
-            visibleProfileWhere({ profile: Profiles, instance: Instances }),
+            visibleProfileWhere({
+              profile: Profiles,
+              instance: Instances,
+              database: db,
+              viewerProfileId: ctx.session?.profileId,
+            }),
           ),
         );
     },
@@ -49,7 +54,12 @@ export const profileMuteByIdLoader = (ctx: UserContext) =>
             inArray(ProfileMutes.id, ids),
             eq(ProfileMutes.ownerProfileId, ctx.session.profile.id),
             isNull(ProfileMutes.expiresAt),
-            visibleProfileWhere({ profile: Profiles, instance: Instances }),
+            visibleProfileWhere({
+              profile: Profiles,
+              instance: Instances,
+              database: db,
+              viewerProfileId: ctx.session?.profileId,
+            }),
           ),
         );
     },

@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../error';
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { reactionTypeSchema } from '../validation';
+import { profileBlockVisibilityWhere } from '../visibility/profile-block';
 
 type AddReactionInput = {
   readonly actorProfileId: string;
@@ -39,9 +40,21 @@ export const addReaction = async ({
 
   const result = await db.transaction(async (tx) => {
     const post = await tx
-      .select({ id: Posts.id })
+      .select({ id: Posts.id, profileId: Posts.profileId })
       .from(Posts)
-      .where(and(eq(Posts.id, postId), eq(Posts.state, PostState.ACTIVE)))
+      .where(
+        and(
+          eq(Posts.id, postId),
+          eq(Posts.state, PostState.ACTIVE),
+          origin === 'LOCAL'
+            ? profileBlockVisibilityWhere({
+                database: tx,
+                firstProfileId: actorProfileId,
+                secondProfileId: Posts.profileId,
+              })
+            : undefined,
+        ),
+      )
       .limit(1)
       .then(first);
     if (!post) {

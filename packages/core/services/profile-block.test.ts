@@ -8,6 +8,7 @@ import {
   Instances,
   Notifications,
   pg,
+  PostContents,
   Posts,
   ProfileBlocks,
   ProfileFollowRequests,
@@ -24,14 +25,22 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
+import { NotFoundError } from '../error';
+import { postContentDocumentFromText } from '../post-content/server';
+import { createPost as createPostAction, repostPost } from './post';
 import {
   deleteProfileBlock,
   executeProfileBlockTransition,
   executeProfileUnblockTransition,
   loadProfileBlockTransitionBootstrap,
 } from './profile-block';
+import { executeProfileFollowPairTransition } from './profile-follow-command';
 import { ensureProfileFollow } from './profile-follow-relation';
-import { loadProfileFollowRemovalSourcesBetweenProfiles } from './profile-follow-transaction';
+import {
+  followProfileInTransaction,
+  loadProfileFollowRemovalSourcesBetweenProfiles,
+} from './profile-follow-transaction';
+import { addReaction } from './reaction';
 
 const profileIds = new Set<string>();
 const instanceIds = new Set<string>();
@@ -114,6 +123,10 @@ const currentProfileBlockId = async (ownerProfileId: string, targetProfileId: st
 afterEach(async () => {
   // Reposts point at their source without ON DELETE CASCADE, so remove posts
   // in reverse creation order before their owning Profiles.
+  if (postIds.length > 0) {
+    await db.update(Posts).set({ currentContentId: null }).where(inArray(Posts.id, postIds));
+    await db.delete(PostContents).where(inArray(PostContents.postId, postIds));
+  }
   for (const postId of [...postIds].reverse()) {
     await db.delete(Posts).where(eq(Posts.id, postId));
   }
@@ -692,5 +705,138 @@ test('Block rejects self-blocking in the service and the database check', async 
       ownerProfileId: profile.id,
       targetProfileId: profile.id,
     }),
+  );
+});
+
+test('Active Block rejects new Follow and approval in either direction', async () => {
+  const { profile: owner } = await createProfile();
+  const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+  });
+
+  await assert.rejects(
+    db.transaction((tx) =>
+      followProfileInTransaction({ followerProfileId: owner.id, followeeProfileId: target.id }, tx),
+    ),
+    (error: unknown) => error instanceof NotFoundError,
+  );
+  await assert.rejects(
+    db.transaction((tx) =>
+      followProfileInTransaction({ followerProfileId: target.id, followeeProfileId: owner.id }, tx),
+    ),
+    (error: unknown) => error instanceof NotFoundError,
+  );
+
+  const existingFollow = await db
+    .insert(ProfileFollows)
+    .values({ followerProfileId: owner.id, followeeProfileId: target.id })
+    .returning()
+    .then(firstOrThrow);
+  const pendingRequest = await db
+    .insert(ProfileFollowRequests)
+    .values({ followerProfileId: owner.id, followeeProfileId: target.id })
+    .returning()
+    .then(firstOrThrow);
+  const approval = await executeProfileFollowPairTransition({
+    pair: { followerProfileId: owner.id, followeeProfileId: target.id },
+    command: {
+      actorProfileId: target.id,
+      expectedRowId: pendingRequest.id,
+      kind: 'APPROVE',
+      origin: 'LOCAL',
+    },
+  });
+
+  assert.deepEqual(approval, {
+    ok: false,
+    error: { code: 'NOT_FOUND', message: 'Profile not found' },
+  });
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollows)
+      .where(eq(ProfileFollows.id, existingFollow.id))
+      .then((rows) => rows.length),
+    1,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollowRequests)
+      .where(eq(ProfileFollowRequests.id, pendingRequest.id))
+      .then((rows) => rows.length),
+    1,
+  );
+});
+
+test('Active Block rejects new local Reply, Reaction, and Repost in either direction', async () => {
+  const { profile: owner } = await createProfile();
+  const { profile: target } = await createProfile();
+  const ownerPost = await createPostAction({
+    document: postContentDocumentFromText('owner post'),
+    origin: 'LOCAL',
+    profileId: owner.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const targetPost = await createPostAction({
+    document: postContentDocumentFromText('target post'),
+    origin: 'LOCAL',
+    profileId: target.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  postIds.push(ownerPost.post.id, targetPost.post.id);
+
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+  });
+
+  const assertBlocked = async (actorProfileId: string, sourcePostId: string) => {
+    await assert.rejects(
+      createPostAction({
+        document: postContentDocumentFromText('blocked reply'),
+        origin: 'LOCAL',
+        profileId: actorProfileId,
+        replyParentId: sourcePostId,
+        visibility: PostVisibility.PUBLIC,
+      }),
+      (error: unknown) => error instanceof NotFoundError && error.message === 'Post not found',
+    );
+    await assert.rejects(
+      addReaction({
+        actorProfileId,
+        origin: 'LOCAL',
+        postId: sourcePostId,
+        type: '🎉',
+      }),
+      (error: unknown) => error instanceof NotFoundError && error.message === 'Post not found',
+    );
+    await assert.rejects(
+      repostPost({ actorProfileId, origin: 'LOCAL', sourcePostId }),
+      (error: unknown) => error instanceof NotFoundError && error.message === 'Post not found',
+    );
+  };
+
+  await assertBlocked(target.id, ownerPost.post.id);
+  await assertBlocked(owner.id, targetPost.post.id);
+  const postIdsForTest = [ownerPost.post.id, targetPost.post.id];
+  assert.equal(
+    await db
+      .select()
+      .from(Posts)
+      .where(inArray(Posts.id, postIdsForTest))
+      .then((rows) => rows.length),
+    2,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(Reactions)
+      .where(inArray(Reactions.postId, postIdsForTest))
+      .then((rows) => rows.length),
+    0,
   );
 });
