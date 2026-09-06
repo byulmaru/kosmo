@@ -38,6 +38,14 @@
 
 ## Capabilities
 
+### 완료 범위와 후속 검증 · 2026-09-06
+
+사용자 승인과 PROD-814의 동명 결정에 따라 이번 완료 범위는 shared UI·Relay, Web runtime·접근성 및
+cross-slice 검증까지다. 네이티브 앱 자체가 아직 별도 작업 중이므로 iOS·Android runtime·접근성은
+앱 작업 완료 후 수행할 미실행 후속 검증으로 분리한다. Native 제품 계약은 유지한다.
+PROD-814 담당자가 이 검증과 선행 PR #763 머지 후 PR #767의 부모 충돌·Stack 정리를 추적한다.
+두 후속 작업은 이번 archive의 선행 조건이 아니며 archive가 PR 머지나 Native 검증 통과를 뜻하지 않는다.
+
 ### New Capabilities
 
 - `profile-mute`: 영구 Profile Mute의 저장·권한·적용 판정과 Owner 전용 GraphQL 관리 계약을 정의한다.
