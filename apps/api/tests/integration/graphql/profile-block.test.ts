@@ -394,6 +394,38 @@ describe('GraphQL Profile Block', () => {
     assertNoGraphQLErrors(unblocked);
     assert.deepEqual(unblocked.data?.unblockProfile, { profileBlockId: blockId });
   });
+
+  test('keeps blocked account profiles available for actor switching', async () => {
+    const ownerA = await createAuthenticatedSession();
+    const ownerB = await createProfile('owner-b');
+    await db.insert(AccountProfiles).values({
+      accountId: ownerA.account.id,
+      profileId: ownerB.id,
+      role: AccountProfileRole.OWNER,
+    });
+
+    const blocked = await blockProfile(ownerB.id, ownerA.token);
+    assertNoGraphQLErrors(blocked);
+
+    const result = await requestGraphQL<{
+      me: { profiles: Array<{ id: string }> } | null;
+      node: { id: string } | null;
+    }>(
+      `query AccountProfileSwitcher($id: ID!) {
+        me { profiles { id } }
+        node(id: $id) { ... on Profile { id } }
+      }`,
+      { id: globalId('Profile', ownerB.id) },
+      ownerA.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.me?.profiles, [
+      { id: globalId('Profile', ownerA.profile.id) },
+      { id: globalId('Profile', ownerB.id) },
+    ]);
+    assert.equal(result.data?.node, null);
+  });
 });
 
 const blockProfile = (profileId: string, token?: string) =>

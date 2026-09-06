@@ -8,7 +8,7 @@ import { Profile } from '../ref';
 builder.objectField(Account, 'profiles', (t) =>
   t.field({
     type: [Profile],
-    resolve: async (account, _, ctx) => {
+    resolve: async (account) => {
       return db
         .select(getColumns(Profiles))
         .from(Profiles)
@@ -20,14 +20,7 @@ builder.objectField(Account, 'profiles', (t) =>
           ),
         )
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-        .where(
-          visibleProfileWhere({
-            profile: Profiles,
-            instance: Instances,
-            database: db,
-            viewerProfileId: ctx.session?.profileId,
-          }),
-        )
+        .where(visibleProfileWhere({ profile: Profiles, instance: Instances }))
         .orderBy(asc(Profiles.createdAt));
     },
   }),
