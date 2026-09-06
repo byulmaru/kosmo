@@ -9,6 +9,15 @@ resource "argocd_application_set" "kosmo" {
   }
 
   spec {
+    ignore_application_differences {
+      name = "kosmo-dev"
+
+      json_pointers = [
+        "/spec/source/targetRevision",
+        "/spec/source/helm/parameters",
+      ]
+    }
+
     generator {
       list {
         elements = [

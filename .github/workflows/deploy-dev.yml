@@ -117,7 +117,33 @@ jobs:
             -p "imageDigest=${IMAGE_DIGEST}" \
             --validate
 
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-dev --timeout 600
+          for attempt in $(seq 1 120); do
+            if app_json="$(
+              argocd --server "${ARGOCD_SERVER}" --grpc-web app get kosmo-dev --output json
+            )" && jq -e \
+              --arg target_sha "${TARGET_SHA}" \
+              --arg image_digest "${IMAGE_DIGEST}" \
+              '
+                .spec.source.targetRevision == $target_sha
+                and any(.spec.source.helm.parameters[]?; .name == "version" and .value == $target_sha)
+                and any(.spec.source.helm.parameters[]?; .name == "imageDigest" and .value == $image_digest)
+                and .status.sync.revision == $target_sha
+                and .status.sync.status == "Synced"
+                and .status.operationState.phase == "Succeeded"
+                and .status.operationState.syncResult.revision == $target_sha
+                and .status.operationState.syncResult.source.targetRevision == $target_sha
+                and any(.status.operationState.syncResult.source.helm.parameters[]?; .name == "version" and .value == $target_sha)
+                and any(.status.operationState.syncResult.source.helm.parameters[]?; .name == "imageDigest" and .value == $image_digest)
+              ' <<<"${app_json}" >/dev/null; then
+              exit 0
+            fi
+
+            if (( attempt == 120 )); then
+              echo "::error::Argo CD did not complete a successful ${TARGET_SHA} sync with imageDigest ${IMAGE_DIGEST} after 120 bounded verification attempts."
+              exit 1
+            fi
+            sleep 5
+          done
 
       - name: Restart dev workloads
         env:

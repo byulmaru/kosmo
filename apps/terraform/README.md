@@ -12,6 +12,8 @@
 - `byulmaru-kosmo-prod-postgresql-backups-822638974464` PostgreSQL backup bucket과 `byulmaru-kosmo-prod-postgres-backup` EKS Pod Identity role
 - Argo CD `kosmo` ApplicationSet이 생성하는 `kosmo-dev` Application과 별도 `kosmo-prod` Application의 선언
 
+`kosmo-dev`의 ApplicationSet은 기본 source와 values를 소유하고, `Deploy Dev`는 release-time `targetRevision`과 Helm `parameters`를 설정한다. ApplicationSet은 이 두 release-time 경로의 차이를 무시해 자동 sync가 배포 대상을 되돌리지 않도록 한다.
+
 Firebase를 Google Cloud 프로젝트에 추가하는 작업은 되돌릴 수 없다. 앱 리소스에는 `PREVENT` 삭제 정책을 적용한다.
 
 iOS native 배포는 App Store Connect TestFlight 하나만 사용하며, native module 변경이 없는 업데이트는 OTA로 배포한다. 저장소의 Firebase App Distribution workflow와 Fastlane 경로는 제거했다. 해당 service account의 IAM 권한과 WIF provider는 이 설정에서 비활성화·제거했지만, App Distribution API와 `PREVENT` 리소스 선언은 Terraform state의 두 단계 정리를 위해 남아 있으며 외부 리소스 정리는 별도 reviewed plan으로 진행해야 한다.
