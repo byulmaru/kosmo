@@ -87,3 +87,19 @@ revision/fetch key 수정 후 해소됐다.
 기본 spec에 동기화하고 이 디렉터리로 archive했다. 이어서
 `pnpm exec openspec validate --all --strict`가 115 passed, 0 failed로 통과했다.
 Native 미실행 검증과 선행 PR 머지 후 Stack 정리는 위 후속 기록 및 PROD-814에서 계속 추적한다.
+
+## 2026-09-07 부모 브랜치 갱신 후 재검증
+
+PR #767의 고유 커밋 9개를 최신 `prod-858` (`a38bcffc`) 위로 다시 쌓았다.
+부모의 더보기 메뉴와 뮤트 해제 확인창을 유지하고 Relay 연결을 정렬했다.
+행이 제거될 때의 완료 피드백과 확인창 종료 후 포커스 복원을 보완했다.
+
+- App check 및 단위 테스트 486/486 통과.
+- ProfileMuteAction, ProfileHero, MutedProfileList, PostMute Storybook 25/25 통과.
+- 실제 API·DB를 사용하는 Profile Mute Web E2E 8/8 통과. Profile 및 Settings 해제 후 포커스 검증 포함.
+- 변경 범위 ESLint, Prettier, `git diff --check` 통과.
+- OpenSpec 전체 strict validation 116/116 통과.
+
+위 API integration 237건과 전체 Web E2E 130건은 9월 6일의 검증 기록이며 이번에 재실행하지 않았다.
+부모 PR #763은 아직 미병합 상태이므로 머지 후 main 기준 동기화는 PROD-814 담당자의 후속 작업으로 남는다.
+Native 검증과 기존 리뷰의 미해결 사항도 유지하며, 이번 재검증만으로 PR Ready나 머지를 판정하지 않는다.

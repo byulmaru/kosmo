@@ -38,7 +38,6 @@ type ActiveRequest = Readonly<{
   environment: ReturnType<typeof useRelayEnvironment>;
   generation: number | undefined;
   ownerProfileId: string;
-  targetProfileId: string;
   token: number;
 }>;
 
@@ -84,7 +83,6 @@ export function useProfileMuteMutations() {
         environment: requestEnvironment,
         generation: requestGeneration,
         ownerProfileId: change.ownerProfileId,
-        targetProfileId: change.targetProfileId,
         token: nextTokenRef.current + 1,
       };
       nextTokenRef.current = request.token;
