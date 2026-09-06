@@ -191,6 +191,22 @@
 - Consequences: `PROD-823`은 기존 UI에서 위 상태 전이를 구현·검증하고 `PROD-813`에 통합 증거를 인계한다. 완료된 `PROD-861`은 재개하지 않으며, `PROD-917`은 이 동작을 재결정하지 않고 신규 UI 교체 후 회귀를 검증한다.
 - Confirmation / Follow-up: component 또는 E2E에서 최초 경고·action, 명시적 action 전 비노출과 action 후 허용 콘텐츠 표시, 임의 시간 경과 후 비노출 유지, Profile handle·selected actor lifecycle 전환 후 경고 재적용을 검증한다.
 
+### 차단 해제는 확인창에서 확정한 뒤 요청한다
+
+- Decision Date: 2026-09-06
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/profile-mute-block.md`의 Profile action과 완료 피드백, `PROD-823`의 차단 해제 확인 방식
+  (2026-09-06 사용자 결정: “Block은 확인창 방식”).
+- Status: Active
+- Context / Problem: 기존 공용 UI는 해제 확인을 제공하지만 canonical에 확인 여부가 명시되지 않아 runtime 연결 기준을 확인했다.
+- Decision Outcome: Profile 메뉴, identity-free `blocking` 상태와 차단 관리 목록의 해제는 확인창을 거친다. `취소`는 요청하지 않고,
+  Primary `차단 해제` 확정 뒤에만 요청한다. 확인창은 이전 팔로우 관계가 복구되지 않음을 알리며 identity-free 상태에서는 Target identity를 표시하지 않는다.
+- Alternatives Considered: 확인 없이 즉시 요청하는 방식도 검토했지만 사용자가 기존 Block UI의 확인창 방식을 선택했다.
+- Consequences: 해제 확인의 취소·pending 중복 입력 및 dismiss 차단·실패 후 재시도를 runtime 검증에 포함한다. 기존 서버 확정 상태와
+  actor 격리, Unblock no-restore는 유지한다.
+- Confirmation / Follow-up: 사용자 선택을 canonical·Linear에 반영했다. PROD-861의 공용 presentation을 소비하며 전체 Spec 승인과
+  PROD-822·PROD-861의 선행 완료는 별도로 확인한다.
+
 ## Remaining Decisions
 
 없음. direct `blocking` route 경고의 최소 행동 계약, 미구현 endpoint 완료 경계, #726 위 Stack 책임 분리와 #770 → `PROD-822-graphql` → `PROD-822-policy` 소유 경계는 사용자 결정으로 확정했다.

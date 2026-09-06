@@ -189,6 +189,42 @@ ESLint·Prettier를 실행한다. 기존 Mute·Follow·Post visibility·Notifica
 변경했으면 해당 Worker·Fedify 회귀도 확인한다. 명령은 `pnpm --filter @kosmo/core ...`, `pnpm --filter @kosmo/api ...` 등
 현재 workspace script를 사용한다. 이 Spec 세션의 문서 validation을 runtime 검증 결과로 기록하지 않는다.
 
+### PROD-823 Current Constraints
+
+- 2026-09-06 조사 시점에 `PROD-822`는 Todo이고 `PROD-861`의 PR #764는 Draft다. `DSN-51`·`DSN-53`의 디자인 완료와
+  서버·공용 UI의 구현 완료를 구분한다. 구현 착수 전 최신 선행 결과, 공개 GraphQL 계약과 shared change 정정을 다시 확인한다.
+- `PROD-814`는 PR #767에서 작업 중이며 `origin/prod-814`의 `62147a7e`에는 Settings의 `mute-and-block.tsx`와
+  `muted-profiles.tsx` route가 있다. 이 공통 Settings source를 선행 구현으로 소비하되, 구현 착수 시 최신 통합 상태를 다시 확인한다.
+  route가 있다는 사실을 Block destination의 data·action 완료 증거로 사용하지 않는다.
+- `memory/frontend-react-native.md`는 selected Profile 전환 시 새 Relay Environment·Store와 현재 route 재실행을 요구한다.
+  이 경계를 유지하며 Block 전용 actor cache나 별도 route tree를 만들지 않는다.
+- 직접 Profile의 제한 상태는 일반 Target Profile 조회와 분리된 현재 Owner의 서버 결과를 필요로 한다. 여기서는 미완료 서버 API의
+  필드명·payload shape를 새 공개 계약처럼 고정하지 않는다. `PROD-822`의 결과가 자신의 Block 관계 ID와 identity-free 판별을 제공하는지
+  구현 착수 전에 확인하고, 부족하면 서버 소유 이슈에서 먼저 정정한다.
+
+### PROD-823 Recommended Approach
+
+1. `PROD-822`와 `PROD-861`의 완료 증거를 대조한 뒤 현재 Profile route의 query와 colocated fragment에 서버 계약을 연결한다.
+   직접 링크·새로고침·actor 전환에서도 서버 결과에 따라 일반 Profile 또는 공용 identity-free 상태를 표시한다.
+2. Profile action과 Block 목록은 생성·해제 모두 확인창에서 확정한 뒤 요청하고, 공용 presentation에 실제 mutation pending·성공·오류 상태를 전달한다. identity-free 해제 확인창에는 Target identity를 전달하지 않는다. 관계 생성·제거 응답의
+   Node ID와 변경 필드를 선택하고, 삭제된 관계 ID로 해당 Owner 목록의 membership을 갱신한다.
+3. 기존 actor Environment 경계 안에서 이미 표시 중인 Profile·Post·Notification이 서버 정책으로 수렴하게 한다. normalized field 갱신만으로
+   목록 membership이 바뀐다고 가정하지 않는다. 현재 연결 구조를 확인해 필요한 connection 갱신과 서버 재조회를 조합한다.
+4. 요청을 시작한 actor의 결과가 새 actor의 목록·route·오류·완료 피드백을 바꾸지 않게 한다. Unblock 뒤에는 현재 서버 결과를 다시
+   확인하며, 양방향 Block에서 상대의 관계가 남아 있으면 `blockedBy`를 유지한다. 이전 Profile cache나 Follow 관계를 복원하지 않는다.
+5. Block destination의 목록·action·검증이 완료되면 기존 Settings source에 연결한다. 공용 presentation의 Storybook 결과와 실제
+   route·data/cache integration, Web·iOS·Android 접근성 결과를 각각 기록한다.
+
+### PROD-823 Allowed Alternatives and Verification
+
+위 접근은 구현을 위한 비규범적 안내다. connection directive, 좁은 updater 또는 필요한 query 재조회 중 실제 서버 payload와 현재 소비자 구조에
+맞는 방식을 구현 시 선택할 수 있다. actor 격리, 서버 결과 수렴과 identity-free 계약은 어느 방식에서도 유지한다. client에서 전체
+서버 가시성 정책을 복제하거나 보호된 데이터를 cache로 복구하는 방식은 허용 대안이 아니다.
+
+테스트 코드 범위는 Profile action·제한 route·Block 관리 목록과 actor 전환을 실행하는 component 및 data/cache integration 회귀다.
+승인 근거는 `PROD-823`의 접근성·component·data/cache integration 완료 조건이다. 입력, mutation 결과, 늦은 응답과 표시 상태를
+검증하며 소스 문자열 검사는 추가하지 않는다. 서버 정책·durable cleanup 테스트와 전체 cross-slice E2E·archive는 각 소유 이슈에 남긴다.
+
 ## Risks / Trade-offs
 
 - [여러 관계 정리를 durable orchestration으로 묶으면 retry와 작업 범위가 늘어날 수 있다] → 구현 수단과 무관하게 pair 범위의 required cleanup과 재시작·일시 오류
