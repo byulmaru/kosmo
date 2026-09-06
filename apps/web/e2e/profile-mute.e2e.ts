@@ -28,7 +28,7 @@ test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
-test('Local·Remote Profile을 UI에서 Mute하고 Profile·Settings에서 즉시 해제한다', async ({
+test('Local·Remote Profile을 UI에서 Mute하고 Profile·Settings에서 확인 후 해제한다', async ({
   context,
   page,
 }) => {
@@ -79,11 +79,13 @@ test('Local·Remote Profile을 UI에서 Mute하고 Profile·Settings에서 즉�
 
   const directUnmuteResponse = waitForGraphQLOperation(page, 'ProfileMuteControllerUnmuteMutation');
   await page.getByRole('button', { name: '뮤트 해제', exact: true }).click();
+  await confirmUnmute(page);
   await directUnmuteResponse;
   await expect(page.getByRole('alert')).toContainText(
     'E2E Local Mute Target 님이 뮤트 해제되었어요',
   );
   await expect(page.getByText('이 사용자의 게시글은 뮤트되어 있습니다.')).toHaveCount(0);
+  await expect(page.locator(`a[href="/@${localTarget.handle}/following"]`)).toBeFocused();
   expect(
     await db.$count(
       ProfileMutes,
@@ -97,8 +99,8 @@ test('Local·Remote Profile을 UI에서 Mute하고 Profile·Settings에서 즉�
   await page.setViewportSize({ height: 844, width: 1024 });
   await page.goto(`/@${remoteTarget.handle}@${remoteDomain}`);
   await muteFromProfile(page, remoteTarget.displayName);
-  await expect(page.getByRole('button', { name: '프로필 뮤트 메뉴' })).toBeVisible();
-  await page.getByRole('button', { name: '프로필 뮤트 메뉴' }).click();
+  await expect(page.getByRole('button', { name: '더보기' })).toBeVisible();
+  await page.getByRole('button', { name: '더보기' }).click();
   await expect(page.getByRole('menuitem', { name: '뮤트 해제' })).toBeVisible();
 
   await page.setViewportSize({ height: 900, width: 1440 });
@@ -114,6 +116,7 @@ test('Local·Remote Profile을 UI에서 Mute하고 Profile·Settings에서 즉�
     'ProfileMuteControllerUnmuteMutation',
   );
   await page.getByRole('button', { name: 'E2E Remote Mute Target 뮤트 해제' }).click();
+  await confirmUnmute(page);
   await settingsUnmuteResponse;
   await expect(page.getByRole('alert')).toContainText(
     'E2E Remote Mute Target 님이 뮤트 해제되었어요',
@@ -121,6 +124,7 @@ test('Local·Remote Profile을 UI에서 Mute하고 Profile·Settings에서 즉�
   await expect(page.getByRole('button', { name: 'E2E Remote Mute Target 뮤트 해제' })).toHaveCount(
     0,
   );
+  await expect(page.getByTestId('muted-profile-list')).toBeFocused();
   expect(
     await db.$count(
       ProfileMutes,
@@ -406,6 +410,7 @@ test('같은 Account의 selected Profile별 Mute를 분리하고 실제 switcher
   ).toBeVisible();
   const unmuteResponse = waitForGraphQLOperation(page, 'ProfileMuteControllerUnmuteMutation');
   await page.getByRole('button', { name: 'E2E Selected Profile Target 뮤트 해제' }).click();
+  await confirmUnmute(page);
   await unmuteResponse;
   await expect(
     page.getByRole('button', { name: 'E2E Selected Profile Target 뮤트 해제' }),
@@ -598,17 +603,21 @@ test('Mute·unmute 전후 Follow·Reaction·Bookmark·Repost와 Notification rea
   await muteFromProfile(page, target.displayName);
   const unmuteResponse = waitForGraphQLOperation(page, 'ProfileMuteControllerUnmuteMutation');
   await page.getByRole('button', { name: '뮤트 해제', exact: true }).click();
+  await confirmUnmute(page);
   await unmuteResponse;
   await expect(page.getByText('이 사용자의 게시글은 뮤트되어 있습니다.')).toHaveCount(0);
   expect(await snapshot()).toEqual(before);
 });
 
+async function confirmUnmute(page: Page) {
+  const dialog = page.getByRole('dialog', { name: '이 프로필을 뮤트 해제할까요?' }).last();
+  await expect(dialog.getByRole('button', { name: '취소', exact: true })).toBeFocused();
+  await dialog.getByRole('button', { name: '뮤트 해제', exact: true }).click();
+}
+
 async function openMuteConfirmation(page: Page) {
-  await page.getByRole('button', { name: '프로필 뮤트 메뉴' }).click();
-  await page
-    .getByRole('menu', { name: '프로필 뮤트 메뉴' })
-    .getByRole('menuitem', { name: '뮤트' })
-    .click();
+  await page.getByRole('button', { name: '더보기' }).click();
+  await page.getByRole('menu', { name: '더보기' }).getByRole('menuitem', { name: '뮤트' }).click();
   await expect(page.getByRole('dialog', { name: '이 프로필을 뮤트할까요?' }).last()).toBeVisible();
 }
 

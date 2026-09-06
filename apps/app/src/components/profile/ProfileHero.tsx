@@ -1,5 +1,5 @@
 import { Link2, VolumeOff } from 'lucide-react-native';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Image,
   Platform,
@@ -65,13 +65,12 @@ const countFormatter = new Intl.NumberFormat('en', {
 
 export function ProfileHero({ action, mute, loading = false, profile = null }: ProfileHeroProps) {
   const followingRef = useRef<View>(null);
-  const focusAfterUnmute = useRef(false);
+  const [unmuteFocusRevision, setUnmuteFocusRevision] = useState(0);
   useEffect(() => {
-    if (!mute?.muted && focusAfterUnmute.current) {
+    if (unmuteFocusRevision > 0) {
       followingRef.current?.focus();
-      focusAfterUnmute.current = false;
     }
-  }, [mute]);
+  }, [unmuteFocusRevision]);
   const theme = useTheme();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
@@ -249,7 +248,9 @@ export function ProfileHero({ action, mute, loading = false, profile = null }: P
               muted
               onChangeMuted={mute.onChangeMuted}
               onFeedback={(feedback) => {
-                focusAfterUnmute.current = feedback.status === 'success';
+                if (feedback.status === 'success') {
+                  setUnmuteFocusRevision((revision) => revision + 1);
+                }
                 mute.onFeedback?.(feedback);
               }}
               profileId={data.id}

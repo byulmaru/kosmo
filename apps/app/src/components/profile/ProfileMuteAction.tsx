@@ -86,7 +86,7 @@ function ProfileMuteActionContent({
   const actionRef = useRef<View>(null);
   const focusTrigger = useRef<() => void>(() => {});
   const restoreFocus = useRef(false);
-  const completed = useRef<ProfileMuteFeedback | null>(null);
+  const completed = useRef<(() => void) | null>(null);
   const restoreTriggerFocus = () => {
     if (surface === 'menu') {
       focusTrigger.current();
@@ -114,8 +114,16 @@ function ProfileMuteActionContent({
     mounted.current = true;
     return () => {
       mounted.current = false;
+      const notify = completed.current;
+      completed.current = null;
+      if (
+        committedTargetRef.current.profileId === profileId &&
+        committedTargetRef.current.revision === claimedRevisionRef.current
+      ) {
+        notify?.();
+      }
     };
-  }, []);
+  }, [committedTargetRef, profileId]);
   const close = () => {
     if (!inFlight.current) {
       setOpen(false);
@@ -161,7 +169,12 @@ function ProfileMuteActionContent({
       setOpen(false);
     }
     if (succeeded) {
-      completed.current = { muted: nextMuted, status: 'success' };
+      completed.current = () => {
+        showToast(`${displayName} 님이 ${nextMuted ? '뮤트되었어요' : '뮤트 해제되었어요'}`, {
+          tone: 'success',
+        });
+        onFeedback?.({ muted: nextMuted, status: 'success' });
+      };
     } else {
       setError(`${nextMuted ? '뮤트하지' : '뮤트를 해제하지'} 못했어요. 다시 시도해 주세요.`);
       onFeedback?.({ muted: nextMuted, status: 'error' });
@@ -293,15 +306,9 @@ function ProfileMuteActionContent({
           }
           inFlight.current = false;
           restoreTriggerFocus();
-          const feedback = completed.current;
+          const notify = completed.current;
           completed.current = null;
-          if (feedback) {
-            showToast(
-              `${displayName} 님이 ${feedback.muted ? '뮤트되었어요' : '뮤트 해제되었어요'}`,
-              { tone: 'success' },
-            );
-            onFeedback?.(feedback);
-          }
+          notify?.();
         }}
         onShow={() => cancelRef.current?.focus()}
         title={muted ? '이 프로필을 뮤트 해제할까요?' : '이 프로필을 뮤트할까요?'}

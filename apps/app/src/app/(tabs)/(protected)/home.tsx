@@ -49,15 +49,12 @@ export default function HomeScreen() {
   const [fetchKey, setFetchKey] = useState(0);
   const lastSuccessfulHomeRef = useRef<HomeLastSuccessful | null>(null);
   const retryHome = useCallback(() => setFetchKey((key) => key + 1), []);
-  const handleHomeRefresh = useCallback(() => {
-    setFetchKey((key) => key + 1);
-  }, []);
   const handleHomeReselection = useCallback(() => {
     if (Platform.OS === 'web') {
       window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
     }
-    handleHomeRefresh();
-  }, [handleHomeRefresh]);
+    setFetchKey((key) => key + 1);
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !registerHomeReselection) {

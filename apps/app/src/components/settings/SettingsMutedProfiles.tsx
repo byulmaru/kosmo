@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { MutedProfileList } from '@/components/profile/MutedProfileList';
 import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
@@ -99,10 +99,6 @@ function SettingsMutedProfilesContent({ fetchKey }: { fetchKey: string }) {
   >(SettingsMutedProfilesFragment, profile ?? null);
   const edges = pagination.data?.profileMutes.edges ?? [];
   const [loadError, setLoadError] = useState(false);
-  const relationsByTarget = useMemo(
-    () => new Map(edges.map((edge) => [edge.node.targetProfile.id, edge.node.id])),
-    [edges],
-  );
   const loadMore = useCallback(() => {
     if (!pagination.hasNext || pagination.isLoadingNext) {
       return;
@@ -112,7 +108,8 @@ function SettingsMutedProfilesContent({ fetchKey }: { fetchKey: string }) {
   }, [pagination.hasNext, pagination.isLoadingNext, pagination.loadNext]);
   const onUnmute = useCallback(
     (targetProfileId: string) => {
-      const profileMuteId = relationsByTarget.get(targetProfileId);
+      const profileMuteId = edges.find((edge) => edge.node.targetProfile.id === targetProfileId)
+        ?.node.id;
       if (!profileMuteId || !profile?.id) {
         return Promise.reject(new Error('Profile mute relation is no longer available.'));
       }
@@ -125,7 +122,7 @@ function SettingsMutedProfilesContent({ fetchKey }: { fetchKey: string }) {
         false,
       );
     },
-    [changeMuted, profile?.id, relationsByTarget],
+    [changeMuted, edges, profile?.id],
   );
 
   if (!profile || profile.instance.kind !== 'LOCAL') {

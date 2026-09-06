@@ -5,7 +5,6 @@ import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
-import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary } from '@/components/RouteBoundary';
@@ -14,7 +13,6 @@ import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
-import { space } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileLayoutQuery as ProfileLayoutQueryType } from './__generated__/ProfileLayoutQuery.graphql';
@@ -113,13 +111,10 @@ function ProfileLayoutContent({
   ) : (
     <FollowButton profile={profile} />
   );
-  const action = canMute ? (
-    <View style={styles.profileActions}>
-      {relationshipAction}
-      <ProfileMuteAction
-        displayName={profile.displayName}
-        muted={Boolean(profile.viewerState?.profileMute)}
-        onChangeMuted={(muted) =>
+  const mute = canMute
+    ? {
+        muted: Boolean(profile.viewerState?.profileMute),
+        onChangeMuted: (muted: boolean) =>
           changeMuted(
             {
               ownerProfileId: selectedProfileId as string,
@@ -127,33 +122,18 @@ function ProfileLayoutContent({
               targetProfileId: profile.id,
             },
             muted,
-          )
-        }
-        profileId={profile.id}
-        surface="menu"
-      />
-    </View>
-  ) : (
-    relationshipAction
-  );
-  const mute =
-    canMute && profile.viewerState?.profileMute
-      ? {
-          onUnmute: () =>
-            changeMuted(
-              {
-                ownerProfileId: selectedProfileId as string,
-                profileMuteId: profile.viewerState?.profileMute?.id,
-                targetProfileId: profile.id,
-              },
-              false,
-            ),
-        }
-      : undefined;
+          ),
+      }
+    : undefined;
 
   return (
     <ProfileRouteContainer paginationOwnerKey={paginationOwnerKey}>
-      <ProfileHero action={action} mute={mute} profile={profile} />
+      <ProfileHero
+        key={selectedProfileId}
+        action={relationshipAction}
+        mute={mute}
+        profile={profile}
+      />
       <Slot />
     </ProfileRouteContainer>
   );
@@ -176,12 +156,6 @@ function ProfileRouteContainer({
 }
 
 const styles = StyleSheet.create({
-  profileActions: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: space[8],
-    justifyContent: 'flex-end',
-  },
   nativeRoot: { flex: 1 },
   webRoot: { width: '100%' },
 });
