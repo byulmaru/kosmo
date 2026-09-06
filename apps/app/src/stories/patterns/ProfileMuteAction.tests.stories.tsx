@@ -1,4 +1,6 @@
 import baseMeta, {
+  DiscardErrorOnTargetChangeContract as discardError,
+  DiscardSuccessOnTargetChangeContract as discardSuccess,
   FailureContract as failure,
   MuteContract as mute,
   PendingContract as pending,
@@ -20,3 +22,5 @@ export const FailureContract: Story = failure;
 export const PendingContract: Story = pending;
 export const UnmuteContract: Story = unmute;
 export const UnmountOnSuccessContract: Story = unmountOnSuccess;
+export const DiscardSuccessOnTargetChangeContract: Story = discardSuccess;
+export const DiscardErrorOnTargetChangeContract: Story = discardError;
