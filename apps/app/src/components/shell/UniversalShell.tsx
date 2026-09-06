@@ -25,7 +25,7 @@ import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
-import { returnToSettingsRoot } from '../settings/settingsNavigation';
+import { returnToSettingsParent } from '../settings/settingsNavigation';
 import { BottomTabBar } from './BottomTabBar';
 import { NavigationGuardProvider } from './NavigationGuardContext';
 import {
@@ -132,15 +132,9 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const homeRefreshHandlerRef = useRef<TimelineRefreshHandler | null>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
   const localRefreshHandlerRef = useRef<TimelineRefreshHandler | null>(null);
-  const pendingHomeRefreshRef = useRef(false);
   const pendingDrawerHomeReselectionRef = useRef(false);
-  const pendingLocalRefreshRef = useRef(false);
   const registerHomeRefresh = useCallback((handler: TimelineRefreshHandler) => {
     homeRefreshHandlerRef.current = handler;
-    if (pendingHomeRefreshRef.current) {
-      pendingHomeRefreshRef.current = false;
-      handler();
-    }
     return () => {
       if (homeRefreshHandlerRef.current === handler) {
         homeRefreshHandlerRef.current = null;
@@ -160,10 +154,6 @@ function UniversalShellContent({ revision }: { revision: number }) {
   }, []);
   const registerLocalRefresh = useCallback((handler: TimelineRefreshHandler) => {
     localRefreshHandlerRef.current = handler;
-    if (pendingLocalRefreshRef.current) {
-      pendingLocalRefreshRef.current = false;
-      handler();
-    }
     return () => {
       if (localRefreshHandlerRef.current === handler) {
         localRefreshHandlerRef.current = null;
@@ -171,16 +161,8 @@ function UniversalShellContent({ revision }: { revision: number }) {
     };
   }, []);
   const refreshProfileMuteTimelines = useCallback(() => {
-    if (homeRefreshHandlerRef.current) {
-      homeRefreshHandlerRef.current();
-    } else {
-      pendingHomeRefreshRef.current = true;
-    }
-    if (localRefreshHandlerRef.current) {
-      localRefreshHandlerRef.current();
-    } else {
-      pendingLocalRefreshRef.current = true;
-    }
+    homeRefreshHandlerRef.current?.();
+    localRefreshHandlerRef.current?.();
   }, []);
   const queueDrawerHomeReselection = useCallback(() => {
     pendingDrawerHomeReselectionRef.current = true;
@@ -303,7 +285,9 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const backButton = (
     <IconButton
       accessibilityLabel="뒤로 가기"
-      onPress={() => (isSettingsRoute(pathname) ? returnToSettingsRoot(router) : router.back())}
+      onPress={() =>
+        isSettingsRoute(pathname) ? returnToSettingsParent(pathname, router) : router.back()
+      }
       style={styles.menuButton}
       targetSize={44}
       visualSize={44}
