@@ -83,6 +83,7 @@ mock.module(require.resolve('lucide-react-native'), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 type SurfaceProps = Readonly<{
+  contentRevisionId: string | null;
   compactDetail?: ReactNode;
   contextRail?: ReactNode;
   currentIndex: number;
@@ -174,8 +175,32 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(queryByTestId('post-media-viewer-image'), null);
   });
 
+  it('Content revision 변경만 Media 오류를 초기화하고 close를 유지한다', async () => {
+    await render();
+    const close = findByLabel('이미지 뷰어 닫기');
+    const oldError = image().props.onError;
+    await act(async () => oldError());
+    assert.equal(image().props.source, undefined);
+
+    await render({ contentRevisionId: null, viewState: 'unavailable' });
+    await render();
+    assert.equal(image().props.source, undefined, '같은 revision 복구는 실패 상태를 보존한다');
+
+    await render({ contentRevisionId: 'content-b' });
+    assert.ok(image().props.source?.uri, '같은 Media를 재사용하는 새 revision은 다시 로드한다');
+    assert.equal(queryByTestId('post-media-viewer-error-toast'), null);
+    assert.equal(findByLabel('이미지 뷰어 닫기'), close);
+    assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
+    await act(async () => oldError());
+    assert.ok(image().props.source?.uri);
+    await render();
+    await act(async () => oldError());
+    assert.ok(image().props.source?.uri, 'A로 다시 전환해도 최초 A callback은 무시한다');
+  });
+
   it('public props는 presentation별 필수 secondary surface를 요구한다', () => {
     const commonProps = {
+      contentRevisionId: 'content-a',
       currentIndex: 0,
       media: [] as const,
       onClose: () => undefined,
@@ -563,6 +588,7 @@ describe('PostMediaViewerSurface', () => {
 
 function baseProps(overrides: Partial<SurfaceProps> = {}): SurfaceProps {
   return {
+    contentRevisionId: 'content-a',
     currentIndex: 1,
     media: [media(1, '첫 번째 이미지'), media(2, '두 번째 이미지'), media(3, null), media(4, null)],
     onClose: () => undefined,

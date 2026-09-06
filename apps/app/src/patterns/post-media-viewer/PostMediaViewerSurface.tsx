@@ -26,6 +26,7 @@ export type PostMediaViewerPresentation = 'compact' | 'wide';
 export type PostMediaViewerViewState = 'ready' | 'loading' | 'error' | 'unavailable';
 
 export type PostMediaViewerSurfaceProps = Readonly<{
+  contentRevisionId: string | null;
   currentIndex: number;
   media: readonly PostMediaItem[];
   onClose: () => void;
@@ -65,6 +66,7 @@ const statusCopy = {
 
 export function PostMediaViewerSurface({
   compactDetail,
+  contentRevisionId,
   contextRail,
   currentIndex,
   media,
@@ -85,11 +87,20 @@ export function PostMediaViewerSurface({
   const previousDisabled = currentIndex <= 0;
   const nextDisabled = currentIndex >= media.length - 1;
   const status = viewState === 'ready' ? null : statusCopy[viewState];
-  const [requests, setRequests] = useState<Record<string, ImageRequest>>({});
+  const [imageState, setImageState] = useState({
+    revisionId: contentRevisionId,
+    epoch: 0,
+    requests: {} as Record<string, ImageRequest>,
+  });
+  if (contentRevisionId !== null && contentRevisionId !== imageState.revisionId) {
+    setImageState({ revisionId: contentRevisionId, epoch: imageState.epoch + 1, requests: {} });
+  }
   const identity =
-    navigable && currentMedia?.url ? JSON.stringify([currentMedia.id, currentMedia.url]) : null;
+    navigable && currentMedia?.url
+      ? JSON.stringify([imageState.epoch, currentMedia.id, currentMedia.url])
+      : null;
   const activeIdentity = useRef<string | null>(null);
-  const request = identity ? (requests[identity] ?? initialRequest) : initialRequest;
+  const request = identity ? (imageState.requests[identity] ?? initialRequest) : initialRequest;
   const generation = request.generation;
 
   useEffect(() => {
@@ -104,8 +115,8 @@ export function PostMediaViewerSurface({
       if (!identity || activeIdentity.current !== identity) {
         return;
       }
-      setRequests((previous) => {
-        const current = previous[identity] ?? initialRequest;
+      setImageState((previous) => {
+        const current = previous.requests[identity] ?? initialRequest;
         if (
           current.generation !== generation ||
           current.status === 'error' ||
@@ -113,7 +124,10 @@ export function PostMediaViewerSurface({
         ) {
           return previous;
         }
-        return { ...previous, [identity]: { ...current, status: nextStatus } };
+        return {
+          ...previous,
+          requests: { ...previous.requests, [identity]: { ...current, status: nextStatus } },
+        };
       });
     },
     [generation, identity],
@@ -123,12 +137,18 @@ export function PostMediaViewerSurface({
     if (!identity || activeIdentity.current !== identity) {
       return;
     }
-    setRequests((previous) => {
-      const current = previous[identity] ?? initialRequest;
+    setImageState((previous) => {
+      const current = previous.requests[identity] ?? initialRequest;
       if (current.generation !== generation || current.status !== 'error') {
         return previous;
       }
-      return { ...previous, [identity]: { generation: generation + 1, status: 'loading' } };
+      return {
+        ...previous,
+        requests: {
+          ...previous.requests,
+          [identity]: { generation: generation + 1, status: 'loading' },
+        },
+      };
     });
   };
 

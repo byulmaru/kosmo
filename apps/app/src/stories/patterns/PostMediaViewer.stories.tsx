@@ -111,6 +111,7 @@ function mediaForCount(count: number): PostMediaItem[] {
 
 export function PostMediaViewerCatalog({
   compactSurfacePostId = wideRailCurrentPost.id,
+  contentRevisionId = wideRailCurrentPost.content?.id ?? null,
   mediaItems,
   currentIndex,
   mediaCount,
@@ -120,11 +121,16 @@ export function PostMediaViewerCatalog({
   onRetry,
   presentation,
   viewState,
-}: StoryArgs & { compactSurfacePostId?: string; mediaItems?: PostMediaItem[] }) {
+}: StoryArgs & {
+  compactSurfacePostId?: string;
+  contentRevisionId?: string | null;
+  mediaItems?: PostMediaItem[];
+}) {
   const { height } = useWindowDimensions();
   const media = mediaItems ?? mediaForCount(mediaCount);
   const clampedIndex = Math.max(0, Math.min(media.length - 1, Math.trunc(currentIndex)));
   const surfaceProps = {
+    contentRevisionId,
     currentIndex: clampedIndex,
     media,
     onClose,

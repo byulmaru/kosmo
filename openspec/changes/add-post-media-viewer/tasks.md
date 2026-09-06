@@ -68,6 +68,7 @@
 - [x] 2.5 PROD-853 shared Surface의 실제 이미지 실패를 persistent Danger Action Toast·이미지 재시도에 연결하고 이전 요청 callback 격리를 검증한다.
 - [x] 2.6 Viewer Surface와 전용 테스트를 `src/patterns/post-media-viewer`에 배치하고 기존 Post component와 Production Host·Thread 연결 경계를 유지한다.
 - [x] 2.7 PROD-853 Media별 오류 보존·전역 알림과 retry 격리·Compact stage Toast geometry를 검증하고, 자동 interaction 구현은 Tests story 파일이 소유한다.
+- [x] 2.8 PROD-853 Surface에 필수 Content revision identity를 전달하고 같은 revision의 null 복구 보존·새 revision의 동일 Media 초기화·stale callback 격리·close focus 유지를 검증한다.
 
 ## 3. PROD-650 반응형 Post detail·thread와 기존 interaction
 

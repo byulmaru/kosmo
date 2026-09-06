@@ -29,6 +29,31 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+function RevisionSurface(args: StoryArgs) {
+  const [revision, setRevision] = useState('content-a');
+  return (
+    <PostMediaViewerCatalog
+      {...args}
+      contentRevisionId={revision}
+      onClose={() => setRevision('content-b')}
+    />
+  );
+}
+
+export const RevisionFocusContract: Story = {
+  args: { presentation: 'compact', viewState: 'ready' },
+  render: (args) => <RevisionSurface {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const close = canvas.getByRole('button', { name: '이미지 뷰어 닫기' });
+    const image = canvas.getByTestId('post-media-viewer-image');
+    await userEvent.click(close);
+    await waitFor(() => expect(canvas.getByTestId('post-media-viewer-image')).not.toBe(image));
+    expect(canvas.getByRole('button', { name: '이미지 뷰어 닫기' })).toBe(close);
+    expect(close).toHaveFocus();
+  },
+};
+
 function ResourceFailureSurface(args: StoryArgs) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const { showToast } = useToast();

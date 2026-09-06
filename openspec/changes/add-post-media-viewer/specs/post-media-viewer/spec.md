@@ -63,6 +63,8 @@ Host·query·runtime 구현은 historical evidence로 보존한다. PROD-853은 
 - **WHEN** 열린 Viewer의 Post query가 다른 non-null Content ID를 반환한다
 - **THEN** Viewer는 expanded·overflow·Media loading/error/retry state를 초기화하고 session을 연 document index를 다시 사용한다
 - **AND** 새 revision에 그 index가 없으면 다른 Media로 이동하지 않고 unavailable을 표시한다
+- **AND** Surface consumer는 immutable Content ID를 필수 `contentRevisionId`로 전달하며 일시적인 null은 마지막 non-null revision을 유지한다
+- **AND** 다른 non-null revision은 동일 Media ID·URL을 재사용해도 이미지 요청 상태를 초기화하고 이전 callback을 무시하며, Surface의 close control과 focus를 재마운트하지 않는다
 
 #### Scenario: selected Profile 또는 Relay actor 변경
 
