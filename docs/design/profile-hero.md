@@ -42,6 +42,8 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
   Avatar `40`과 기본 행 높이 `64`를 유지한다. `hitSlop`만 늘리고 부모 bounds에 잘리게 두지 않는다.
 - 관계 action에 오류 문구가 표시되면 Hero의 avatar/action 행은 기본 최소 높이에서 늘어나며,
   오류 문구와 이름·핸들이 겹치지 않게 한다. 목록 행 높이는 하단 divider까지 포함해 `64`로 맞춘다.
+- 로딩 중 전달된 실제 action도 같은 slot에 표시하고 접근성 트리에 유지한다. 접근성 제외는 장식용
+  cover·avatar·본문 skeleton에만 적용하며 로딩 안내는 별도로 전달한다.
 
 ## PROD-851 이관 상태와 Figma 정렬
 

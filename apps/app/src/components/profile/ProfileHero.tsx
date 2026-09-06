@@ -72,11 +72,15 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
   if (loading) {
     return (
       <View style={styles.root}>
-        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <View style={[styles.cover, { backgroundColor: theme.backgroundSurface }]} />
-          <View
-            style={[styles.avatarRow, { minHeight: avatarRowHeight, paddingHorizontal: space[16] }]}
-          >
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={[styles.cover, { backgroundColor: theme.backgroundSurface }]}
+        />
+        <View
+          style={[styles.avatarRow, { minHeight: avatarRowHeight, paddingHorizontal: space[16] }]}
+        >
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             <Skeleton
               circular
               height={avatarFrameSize}
@@ -86,13 +90,17 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
               ]}
               width={avatarFrameSize}
             />
-            {action ? <View style={[styles.action, actionGeometry]}>{action}</View> : null}
           </View>
-          <View style={styles.skeletonCopy}>
-            <Skeleton height={20} width="50%" />
-            <Skeleton height={16} width="30%" />
-            <Skeleton height={16} width="70%" />
-          </View>
+          {action ? <View style={[styles.action, actionGeometry]}>{action}</View> : null}
+        </View>
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={styles.skeletonCopy}
+        >
+          <Skeleton height={20} width="50%" />
+          <Skeleton height={16} width="30%" />
+          <Skeleton height={16} width="70%" />
         </View>
         <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
           프로필을 불러오는 중입니다.

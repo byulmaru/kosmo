@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { ProfileHero as ProfileHeroExport } from './ProfileHero';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -161,6 +161,45 @@ for (const [os, targetHeight, inset] of [
       assert.equal(actionStyle.justifyContent, 'center');
       assert.ok(actionStyle.marginTop >= 0);
       assert.ok(actionStyle.marginTop + targetHeight <= 64);
+
+      if (loading) {
+        const action = renderer.root.find((node) => (node.type as unknown) === 'Action');
+        for (let ancestor = action.parent; ancestor; ancestor = ancestor.parent) {
+          assert.notEqual(ancestor.props.accessibilityElementsHidden, true);
+          assert.notEqual(ancestor.props.importantForAccessibility, 'no-hide-descendants');
+          assert.notEqual(ancestor.props['aria-hidden'], true);
+          assert.notEqual(ancestor.props['aria-hidden'], 'true');
+        }
+
+        const cover = renderer.root.find(
+          (node) =>
+            (node.type as unknown) === 'View' &&
+            Array.isArray(node.props.style) &&
+            node.props.style[0]?.width === '100%',
+        );
+        assert.equal(cover.props.accessibilityElementsHidden, true);
+        assert.equal(cover.props.importantForAccessibility, 'no-hide-descendants');
+
+        const skeletons = renderer.root.findAll((node) => (node.type as unknown) === 'Skeleton');
+        assert.equal(skeletons.length, 4);
+        for (const skeleton of skeletons) {
+          let hidden = false;
+          for (
+            let ancestor: ReactTestInstance | null = skeleton;
+            ancestor;
+            ancestor = ancestor.parent
+          ) {
+            if (
+              ancestor.props.accessibilityElementsHidden === true &&
+              ancestor.props.importantForAccessibility === 'no-hide-descendants'
+            ) {
+              hidden = true;
+              break;
+            }
+          }
+          assert.equal(hidden, true);
+        }
+      }
     }
   });
 }
