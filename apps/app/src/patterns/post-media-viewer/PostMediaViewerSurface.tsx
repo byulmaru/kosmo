@@ -101,15 +101,18 @@ export function PostMediaViewerSurface({
 
   const settle = useCallback(
     (nextStatus: ImageRequest['status']) => {
-      if (!identity || activeIdentity.current !== identity) {return;}
+      if (!identity || activeIdentity.current !== identity) {
+        return;
+      }
       setRequests((previous) => {
         const current = previous[identity] ?? initialRequest;
         if (
           current.generation !== generation ||
           current.status === 'error' ||
           current.status === nextStatus
-        )
-          {return previous;}
+        ) {
+          return previous;
+        }
         return { ...previous, [identity]: { ...current, status: nextStatus } };
       });
     },
@@ -117,10 +120,14 @@ export function PostMediaViewerSurface({
   );
 
   const retryImage = () => {
-    if (!identity || activeIdentity.current !== identity) {return;}
+    if (!identity || activeIdentity.current !== identity) {
+      return;
+    }
     setRequests((previous) => {
       const current = previous[identity] ?? initialRequest;
-      if (current.generation !== generation || current.status !== 'error') {return previous;}
+      if (current.generation !== generation || current.status !== 'error') {
+        return previous;
+      }
       return { ...previous, [identity]: { generation: generation + 1, status: 'loading' } };
     });
   };
@@ -316,7 +323,9 @@ function ViewerImage({
   }, []);
   const settle = useCallback(
     (next: ImageRequest['status']) => {
-      if (active.current) {onStatus(next);}
+      if (active.current) {
+        onStatus(next);
+      }
     },
     [onStatus],
   );
@@ -344,7 +353,9 @@ function ViewerErrorToast({
   visible,
 }: Readonly<{ onRetry: () => void; visible: boolean }>) {
   const motion = useToastMotion(visible);
-  if (!motion.mounted) {return null;}
+  if (!motion.mounted) {
+    return null;
+  }
   return (
     <Animated.View
       accessibilityLiveRegion="assertive"
