@@ -26,14 +26,9 @@ export const startTestTemporalRuntime = async (): Promise<void> => {
 async function startRuntime(): Promise<void> {
   const host = '127.0.0.1';
   const namespace = process.env.TEMPORAL_NAMESPACE?.trim() || 'test';
-  const [temporalPort, healthPort, workerPort] = await Promise.all([
-    findFreePort(host),
-    findFreePort(host),
-    findFreePort(host),
-  ]);
-  const address = `${host}:${temporalPort}`;
+  const [healthPort, workerPort] = await Promise.all([findFreePort(host), findFreePort(host)]);
   const databaseUrl = process.env.DATABASE_URL ?? defaultDatabaseUrl;
-  const workerEnvironment = {
+  const workerEnvironment: NodeJS.ProcessEnv = {
     ...process.env,
     DATABASE_URL: databaseUrl,
     // Keep the Worker and Core Activities on the disposable test database even
@@ -43,7 +38,6 @@ async function startRuntime(): Promise<void> {
     NODE_ENV: process.env.NODE_ENV ?? 'test',
     PORT: String(workerPort),
     PUBLIC_ORIGIN: process.env.PUBLIC_ORIGIN ?? 'http://127.0.0.1:4173',
-    TEMPORAL_ADDRESS: address,
     TEMPORAL_NAMESPACE: namespace,
   };
   const server = spawn(process.execPath, ['--import', 'tsx', 'src/temporal-test-server.ts'], {
@@ -51,7 +45,7 @@ async function startRuntime(): Promise<void> {
     env: {
       ...workerEnvironment,
       PORT: String(healthPort),
-      TEMPORAL_PORT: String(temporalPort),
+      TEMPORAL_PORT: undefined,
     },
     // Keep startup failures visible in CI and avoid keeping the parent alive
     // with a long-lived stderr pipe after the children are unref'ed.
@@ -60,7 +54,11 @@ async function startRuntime(): Promise<void> {
   let worker: ChildProcess | undefined;
 
   try {
-    await waitForChildHealth(`http://${host}:${healthPort}/health`, server, startupTimeoutMs);
+    workerEnvironment.TEMPORAL_ADDRESS = await waitForChildHealth(
+      `http://${host}:${healthPort}/health`,
+      server,
+      startupTimeoutMs,
+    );
     worker = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
       cwd: workerDirectory,
       env: workerEnvironment,
@@ -75,7 +73,7 @@ async function startRuntime(): Promise<void> {
     throw error;
   }
 
-  process.env.TEMPORAL_ADDRESS = address;
+  process.env.TEMPORAL_ADDRESS = workerEnvironment.TEMPORAL_ADDRESS;
   process.env.TEMPORAL_NAMESPACE = namespace;
 
   // Keep the test process from being held open by child handles. The exit
@@ -112,7 +110,7 @@ async function findFreePort(host: string): Promise<number> {
   return port;
 }
 
-async function waitForHealth(url: string, child: ChildProcess, timeoutMs: number): Promise<void> {
+async function waitForHealth(url: string, child: ChildProcess, timeoutMs: number): Promise<string> {
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown;
 
@@ -126,7 +124,7 @@ async function waitForHealth(url: string, child: ChildProcess, timeoutMs: number
     try {
       const response = await fetch(url);
       if (response.ok) {
-        return;
+        return (await response.text()).trim();
       }
       lastError = new Error(`HTTP ${response.status}`);
     } catch (error) {
@@ -147,8 +145,8 @@ async function waitForChildHealth(
   url: string,
   child: ChildProcess,
   timeoutMs: number,
-): Promise<void> {
-  await Promise.race([
+): Promise<string> {
+  return Promise.race([
     waitForHealth(url, child, timeoutMs),
     new Promise<never>((_, reject) => {
       child.once('error', (error) => {
