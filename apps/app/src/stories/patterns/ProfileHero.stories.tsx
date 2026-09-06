@@ -114,7 +114,7 @@ function ProfileHeroFixture({
 
   return (
     <SessionProvider>
-      <View style={{ width: containerWidth }}>
+      <View style={{ width: containerWidth }} testID="profile-hero-surface">
         <ProfileHero
           action={
             showAction ? (
@@ -183,7 +183,7 @@ const meta = {
       },
     },
   },
-  title: 'KOSMO/Components/ProfileHero',
+  title: 'KOSMO/Patterns/ProfileHero',
 } satisfies Meta<typeof ProfileHeroFixture>;
 
 export default meta;
@@ -200,7 +200,7 @@ export const Playground: Story = {
 };
 
 export const RepresentativeStates: Story = {
-  parameters: { layout: 'padded' },
+  parameters: { controls: { disable: true }, layout: 'padded' },
   render: () => (
     <SessionProvider>
       <ProfileHeroCatalog />
@@ -252,13 +252,14 @@ export const CenterGeometryContract: Story = {
 };
 
 export const MobileGeometryContract: Story = {
-  args: { actionSize: 'compact' },
+  args: { containerWidth: 390 },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const followButton = canvas.getByRole('button', { name: '팔로우' });
-    expect(followButton.getBoundingClientRect().height).toBe(32);
-    expect(followButton.getBoundingClientRect().width).toBe(72);
+    expect(followButton.getBoundingClientRect().height).toBe(40);
+    expect(followButton.getBoundingClientRect().width).toBe(96);
+    expect(canvas.getByTestId('profile-hero-surface').getBoundingClientRect().width).toBe(390);
     expect(canvas.getByLabelText('프로필 히어로 프로필 이미지')).toBeVisible();
   },
 };

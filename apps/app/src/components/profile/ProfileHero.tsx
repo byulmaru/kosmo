@@ -13,6 +13,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
+import { ProfileNameBlock } from './ProfileNameBlock';
 import { ProfileTagChip } from './ProfileTagChip';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -44,6 +45,7 @@ const profileHeroFragment = graphql`
     }
     followersCount
     followingCount
+    ...ProfileNameBlock_profile
   }
 `;
 
@@ -61,7 +63,11 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
   const avatarFrameSize = compact ? 96 : 128;
   const avatarOverlap = avatarFrameSize / 2;
   const avatarRowHeight = compact ? 64 : 80;
-  const actionMarginTop = compact ? space[12] : space[16] + space[4];
+  const actionTargetInset = Platform.OS === 'android' ? 4 : Platform.OS === 'ios' ? 2 : 0;
+  const actionGeometry = {
+    minHeight: 40 + actionTargetInset * 2,
+    marginTop: (compact ? space[12] : space[16] + space[4]) - actionTargetInset,
+  };
 
   if (loading) {
     return (
@@ -69,7 +75,7 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
         <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <View style={[styles.cover, { backgroundColor: theme.backgroundSurface }]} />
           <View
-            style={[styles.avatarRow, { height: avatarRowHeight, paddingHorizontal: space[16] }]}
+            style={[styles.avatarRow, { minHeight: avatarRowHeight, paddingHorizontal: space[16] }]}
           >
             <Skeleton
               circular
@@ -80,9 +86,7 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
               ]}
               width={avatarFrameSize}
             />
-            {action ? (
-              <View style={[styles.action, { marginTop: actionMarginTop }]}>{action}</View>
-            ) : null}
+            {action ? <View style={[styles.action, actionGeometry]}>{action}</View> : null}
           </View>
           <View style={styles.skeletonCopy}>
             <Skeleton height={20} width="50%" />
@@ -116,7 +120,9 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
           />
         ) : null}
       </View>
-      <View style={[styles.avatarRow, { height: avatarRowHeight, paddingHorizontal: space[16] }]}>
+      <View
+        style={[styles.avatarRow, { minHeight: avatarRowHeight, paddingHorizontal: space[16] }]}
+      >
         <View
           style={[
             styles.avatarBorder,
@@ -129,20 +135,10 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
             size={avatarSize}
           />
         </View>
-        {action ? (
-          <View style={[styles.action, { marginTop: actionMarginTop }]}>{action}</View>
-        ) : null}
+        {action ? <View style={[styles.action, actionGeometry]}>{action}</View> : null}
       </View>
       <View style={styles.body}>
-        <Text
-          accessibilityRole="header"
-          style={[styles.displayName, { color: theme.foregroundPrimary }]}
-        >
-          {data.displayName}
-        </Text>
-        <Text style={[styles.handle, { color: theme.foregroundSecondary }]}>
-          {data.relativeHandle}
-        </Text>
+        <ProfileNameBlock profile={data} style={styles.identity} variant="hero" />
         {data.bio ? (
           <Text style={[styles.bio, { color: theme.foregroundPrimary }]}>{data.bio}</Text>
         ) : null}
@@ -209,9 +205,8 @@ const styles = StyleSheet.create({
   avatarSkeleton: {
     borderWidth: space[4],
   },
-  action: { alignItems: 'flex-end', height: 40, width: 96 },
-  displayName: textStyles.uiHeadingM,
-  handle: textStyles.uiCopyM,
+  action: { alignItems: 'flex-end', justifyContent: 'center', width: 96 },
+  identity: { flex: 0 },
   bio: { marginTop: space[12], ...textStyles.uiCopyL },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space[8], marginTop: space[12] },
   tagTarget: {

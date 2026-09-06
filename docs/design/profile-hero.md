@@ -21,11 +21,11 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - `FollowButton`은 기존 공용 `Button`의 시각·상태 스타일을 재사용한다. 크기는 아래 소비처 기준으로 선택하며,
   `Compact`를 Mobile의 동의어로 사용하지 않는다. 별도 Mobile 시각 variant나 `72×40` 크기는 추가하지 않는다.
 
-| 소비처 | FollowButton 크기 | 시각 영역 |
-| --- | --- | --- |
-| Web 프로필 목록: 검색, 해시태그, 팔로워·팔로잉, Post Activity·Reaction People | Compact | `72×32` |
-| Web Profile Hero 상단 관계 action | Medium | `96×40` |
-| Mobile Web·iOS·Android의 Profile Hero와 위 프로필 목록 | Medium | `96×40` |
+| 소비처                                                                        | FollowButton 크기 | 시각 영역 |
+| ----------------------------------------------------------------------------- | ----------------- | --------- |
+| Web 프로필 목록: 검색, 해시태그, 팔로워·팔로잉, Post Activity·Reaction People | Compact           | `72×32`   |
+| Web Profile Hero 상단 관계 action                                             | Medium            | `96×40`   |
+| Mobile Web·iOS·Android의 Profile Hero와 위 프로필 목록                        | Medium            | `96×40`   |
 
 - 위 Web 목록 기준은 Compact Web 1024와 Full Web 1440에 모두 적용한다. 화면 이름의 Compact와
   Button variant의 Compact는 별개다. Mobile에서 높이만 32로 줄이거나 웹 목록을 일괄 Medium으로 키우지 않는다.
@@ -37,12 +37,17 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - Target을 Product runtime으로 이관할 때 iOS와 Android의 실제 입력 target은 이 `40` 높이의 visual box와
   분리해 각각 최소 `44pt`, `48dp`를
   충족한다. target 확장 영역은 avatar, Connections와 인접 action을 침범하지 않는다.
+- 공용 source는 Native 버튼의 위·아래에 iOS `2`, Android `4`의 입력 여백을 확보한다. Hero의 action 부모도
+  `44`·`48` 높이를 수용하고 중심축을 유지한다. 목록에서는 이 입력 여백을 기존 행의 여백 안에 배치해
+  Avatar `40`과 기본 행 높이 `64`를 유지한다. `hitSlop`만 늘리고 부모 bounds에 잘리게 두지 않는다.
+- 관계 action에 오류 문구가 표시되면 Hero의 avatar/action 행은 기본 최소 높이에서 늘어나며,
+  오류 문구와 이름·핸들이 겹치지 않게 한다. 목록 행 높이는 하단 divider까지 포함해 `64`로 맞춘다.
 
 ## PROD-851 이관 상태와 Figma 정렬
 
-- PROD-851의 공용 source는 Compact `72×32`와 Medium `96×40`을 구현했지만, 현재 자동 선택은 좁은 Web·Native에서
-  Compact를 선택하고 `ProfileListItem`도 Compact를 명시한다. 따라서 위 소비처 기준의 Mobile 이관은 아직
-  완료되지 않았다. 이 문서 정렬만으로 코드·Storybook·Native touch 검증이 완료된 것으로 세지 않는다.
+- PROD-851의 공용 source는 Medium `96×40`을 기본으로 사용한다. `ProfileListItem`은 Web의
+  `breakpoints.compact` 이상에서만 Compact `72×32`를 선택하고, 좁은 Web·Native에서는 Medium을 사용한다.
+  소비처별 크기와 Native 입력 여백·부모 공간은 공용 source와 자동 테스트에서 검증한다.
 - 2026-09-05 Figma 재점검에서 `04 Screens - Mobile`의 Follow action 44개는 모두 Medium `96×40`이었다.
   대표 근거는 [Mobile Profile Hero](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1943-1708)와
   [Mobile 검색 결과](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1938-1511)다.
@@ -55,13 +60,13 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - [FollowButton Source](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1901-1050) 설명도
   Web 목록은 Compact, Web Profile Hero와 Mobile 소비처는 Medium으로 정렬했다.
   Native 입력 target은 시각 영역과 별개임을 명시했다.
-- 위 Mobile Screens·Patterns와 Source 설명의 Figma 정렬은 완료했다. 코드의 소비처별 크기 선택,
-  Storybook 검증 및 Native touch 검증은 별도로 남아 있다.
+- 위 Mobile Screens·Patterns와 Source 설명의 Figma 정렬 및 공용 코드의 소비처별 크기 선택을 반영했다.
+  Native 실제 touch·focus 검증은 별도 출시 gate로 남아 있다.
 
 ## 출시와 검증 범위
 
-- 공용 React Native 구현은 Web·Android·iOS에 Header 이미지 geometry를 적용한다. Mobile Follow action의
-  `96×40` 소비 기준은 위 이관 상태가 해소되기 전까지 구현 완료로 세지 않는다.
+- 공용 React Native 구현은 Web·Android·iOS에 Header 이미지 geometry와 Mobile Follow action의
+  `96×40` 소비 기준을 적용한다. source 계산·Storybook 통과는 실제 Native 입력 target 검증을 대체하지 않는다.
 - 현재 PR readiness의 실제 runtime QA 범위는 Web이다. iOS·Android 실제 기기·simulator runtime QA는 이번
   검증 범위에서 제외하고 Native 출시 gate에서 별도로 수행한다.
 - Web 자동화나 공용 source·단위 테스트 결과를 Native runtime 완료 증거로 사용하지 않는다. Native 출시

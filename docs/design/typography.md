@@ -10,6 +10,27 @@
 - `KOSMO Typography` 컬렉션의 `Production` mode는 SUIT/Pretendard, `MCP Preview` mode는 IBM Plex Sans KR/Noto Sans KR 대응을 사용한다.
 - 역할별 size, weight, line-height와 12px 사용 경계는 [foundations.md](./foundations.md)를 따른다.
 
+## Profile identity
+
+`ProfileNameBlock`은 이름과 `relativeHandle`만 소유하고, 소비처는 아래 규격을 명시적으로 선택한다.
+화면 폭에 따라 typography를 자동 축소하지 않는다.
+
+| variant   | 이름                         | 핸들                      | 소비처                                        |
+| --------- | ---------------------------- | ------------------------- | --------------------------------------------- |
+| `default` | `UI/Label/L` — 16/24/600     | `UI/Copy/M` — 14/20/400   | 게시물·작성기·원문 출처·프로필 공개 범위 설정 |
+| `compact` | `UI/Label/M` — 14/20/600     | `UI/Copy/S` — 12/15.6/400 | `ProfileListItem`, `FollowRequestListItem`    |
+| `hero`    | `UI/Heading/M` — 24/27.6/700 | `UI/Copy/M` — 14/20/400   | `ProfileHero`                                 |
+
+- `default`와 `compact`는 이름·핸들을 각각 한 줄로 말줄임하며, 필요한 경우 `href`로 identity 전체를 링크로 만든다.
+- `hero`는 이름을 접근성 제목으로 노출하고 이름·핸들의 줄바꿈을 허용한다. identity 자체의 `href`는 받지 않는다.
+- 모든 규격은 이름에 `foregroundPrimary`, 핸들에 `foregroundSecondary`를 사용한다. 게시물·작성기 등
+  `default` 소비처와 FollowRequest도 legacy text 색상에서 semantic 색상으로 함께 전환한다.
+- Avatar, bio, Follow action, 목록 전체의 링크 영역과 배치는 소비처가 계속 소유한다. 부모는 자식의 Relay fragment를
+  spread하고 fragment ref를 그대로 전달한다.
+- 이 세 규격의 코드 공용화는 소비처별 Figma typography를 유지하기 위한 계약이다. Figma의 NameBlock source는
+  `default`에 대응하며, ListItem·FollowRequest·Hero의 identity는 별도 프레임·텍스트다. Figma에 세 variant가
+  구성되었거나 해당 소비처가 NameBlock 인스턴스로 교체되었다는 뜻은 아니다.
+
 ## Figma MCP 작업 환경에서의 폰트 대치
 
 **SUIT**(UI)와 **Pretendard Variable**(본문)은 현재 MCP 자동 편집 환경에서 직접 로드할 수 없다. MCP로 텍스트를 생성·수정하거나 스크린샷을 확인할 때는 한글 글리프와 폭을 우선해 다음 Preview 폰트로 대치한다.

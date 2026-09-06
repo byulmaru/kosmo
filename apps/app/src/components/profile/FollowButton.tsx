@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, layoutRecipes, textStyles } from '@/theme/tokens';
+import { layoutRecipes, textStyles } from '@/theme/tokens';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { RecordProxy, RecordSourceSelectorProxy } from 'relay-runtime';
 import type { FollowButton_profile$key } from './__generated__/FollowButton_profile.graphql';
@@ -99,9 +99,8 @@ const updateProfileCount = (
 const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
-export function FollowButton({ profile, size, style }: FollowButtonProps) {
+export function FollowButton({ profile, size = 'medium', style }: FollowButtonProps) {
   const theme = useTheme();
-  const { width } = useWindowDimensions();
   const { selectedProfileId } = useSession();
   const data = useFragment(followButtonProfileFragment, profile);
   const [commitFollow, following] =
@@ -116,8 +115,8 @@ export function FollowButton({ profile, size, style }: FollowButtonProps) {
   const isFollowing = Boolean(viewerState?.follow);
   const isPending = Boolean(viewerState?.followRequest);
   const loading = following || cancelling || unfollowing;
-  const resolvedSize =
-    size ?? (Platform.OS === 'web' && width >= breakpoints.compact ? 'medium' : 'compact');
+  const targetHeight = Platform.OS === 'android' ? 48 : Platform.OS === 'ios' ? 44 : 0;
+  const hitSlop = Math.max(0, (targetHeight - (size === 'compact' ? 32 : 40)) / 2);
 
   if (!viewerState || viewerState.isSelf) {
     return null;
@@ -237,7 +236,7 @@ export function FollowButton({ profile, size, style }: FollowButtonProps) {
   };
 
   return (
-    <View style={[styles.root, style]}>
+    <View style={[styles.root, { paddingVertical: hitSlop }, style]}>
       <Button
         aria-pressed={isFollowing || isPending}
         accessibilityState={{
@@ -246,10 +245,10 @@ export function FollowButton({ profile, size, style }: FollowButtonProps) {
           selected: isFollowing || isPending,
         }}
         disabled={loading}
-        hitSlop={resolvedSize === 'compact' ? Platform.select({ android: 8, default: 6 }) : 0}
+        hitSlop={hitSlop}
         onPress={toggleFollow}
-        size={resolvedSize === 'compact' ? 'compact' : 'default'}
-        style={resolvedSize === 'compact' ? styles.compactButton : styles.mediumButton}
+        size={size === 'compact' ? 'compact' : 'default'}
+        style={size === 'compact' ? styles.compactButton : styles.mediumButton}
         tone={isFollowing || isPending ? 'secondary' : 'primary'}
       >
         {isFollowing ? '팔로잉' : isPending ? '요청됨' : '팔로우'}

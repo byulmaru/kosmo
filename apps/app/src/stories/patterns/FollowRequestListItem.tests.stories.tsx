@@ -10,7 +10,8 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 const meta = {
   ...baseMeta,
   excludeStories: [],
-  title: 'KOSMO/Components/FollowRequestListItem/Tests',
+  parameters: { ...baseMeta.parameters, controls: { disable: true } },
+  title: 'KOSMO/Patterns/FollowRequestListItem/Tests',
 } satisfies Meta;
 
 export default meta;

@@ -24,6 +24,13 @@ let fragmentData: ProfileData;
 const platformSelections: Array<Record<string, number>> = [];
 let renderer: ReactTestRenderer | null = null;
 let windowWidth = 1280;
+const platform = {
+  OS: 'web',
+  select: (options: Record<string, number>) => {
+    platformSelections.push(options);
+    return options[platform.OS] ?? options.default;
+  },
+};
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -41,13 +48,7 @@ mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
 });
 mockModule('react-native', {
   Image: 'Image',
-  Platform: {
-    OS: 'web',
-    select: (options: Record<string, number>) => {
-      platformSelections.push(options);
-      return options.web;
-    },
-  },
+  Platform: platform,
   Pressable: 'Pressable',
   StyleSheet: {
     absoluteFillObject: {},
@@ -97,6 +98,7 @@ afterEach(async () => {
   }
   platformSelections.length = 0;
   windowWidth = 1280;
+  platform.OS = 'web';
 });
 
 const renderProfile = async (data: ProfileData) => {
@@ -128,6 +130,40 @@ const findCoverStyle = () => {
   );
   return cover.props.style[0];
 };
+
+for (const [os, targetHeight, inset] of [
+  ['ios', 44, 2],
+  ['android', 48, 4],
+] as const) {
+  it(`${os} action parent contains the Native target and preserves the visual center`, async () => {
+    platform.OS = os;
+    fragmentData = baseProfile;
+    for (const loading of [false, true]) {
+      await act(async () => {
+        const element = createElement(ProfileHero, {
+          action: createElement('Action'),
+          loading,
+          profile: {} as never,
+        });
+        if (renderer) {
+          renderer.update(element);
+        } else {
+          renderer = create(element);
+        }
+      });
+      assert.ok(renderer);
+      const actionStyle = Object.assign(
+        {},
+        ...renderer.root.find((node) => (node.type as unknown) === 'Action').parent!.props.style,
+      );
+      assert.equal(actionStyle.minHeight, targetHeight);
+      assert.equal(actionStyle.marginTop + inset, 12);
+      assert.equal(actionStyle.justifyContent, 'center');
+      assert.ok(actionStyle.marginTop >= 0);
+      assert.ok(actionStyle.marginTop + targetHeight <= 64);
+    }
+  });
+}
 
 describe('ProfileHero cover geometry', () => {
   it('data/no-header branch uses the shared 3:1 cover geometry', async () => {

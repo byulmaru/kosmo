@@ -136,7 +136,7 @@ const meta = {
     profileId: { control: 'select', options: storyProfileIds },
   },
   component: ProfileListItemFixture,
-  excludeStories: ['LayoutContract'],
+  excludeStories: ['LayoutContract', 'ListMobileGeometryContract'],
   parameters: {
     layout: 'padded',
     relay: {
@@ -150,7 +150,7 @@ const meta = {
       },
     },
   },
-  title: 'KOSMO/Components/ProfileListItem',
+  title: 'KOSMO/Patterns/ProfileListItem',
 } satisfies Meta<typeof ProfileListItemFixture>;
 
 export default meta;
@@ -172,6 +172,7 @@ export const RepresentativeStates: Story = {
 };
 
 export const LayoutContract: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   render: () => (
     <SessionProvider>
       <ProfileListItemCatalog />
@@ -191,5 +192,23 @@ export const LayoutContract: Story = {
     expect(fallbackAvatar.querySelector('img')?.getAttribute('src')).toMatch(
       /\/assets\/avatar\/default-avatar\.png$/,
     );
+  },
+};
+
+export const ListMobileGeometryContract: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  render: () => (
+    <SessionProvider>
+      <ProfileListItemCatalog />
+    </SessionProvider>
+  ),
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const followButton = canvas.getAllByRole('button', { name: '팔로우' })[0]!;
+    expect(followButton.getBoundingClientRect().height).toBe(40);
+    expect(followButton.getBoundingClientRect().width).toBe(96);
+    const noBioAvatar = canvas.getByLabelText('소개 없는 프로필 프로필 이미지');
+    const noBioRow = noBioAvatar.parentElement?.parentElement;
+    expect(noBioRow?.getBoundingClientRect().height).toBe(64);
   },
 };

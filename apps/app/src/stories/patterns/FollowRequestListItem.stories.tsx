@@ -132,7 +132,7 @@ const meta = {
     layout: 'padded',
     relay: { data: { nodes: storyRequests } },
   },
-  title: 'KOSMO/Components/FollowRequestListItem',
+  title: 'KOSMO/Patterns/FollowRequestListItem',
 } satisfies Meta<typeof FollowRequestListItemFixture>;
 
 export default meta;

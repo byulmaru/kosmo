@@ -153,7 +153,7 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
               style={styles.profile}
             >
               <Avatar imageUri={follower.avatar?.url} label={name} size={40} />
-              <ProfileNameBlock profile={follower} style={styles.copy} />
+              <ProfileNameBlock profile={follower} style={styles.copy} variant="compact" />
             </Pressable>
           </NavigationLink>
         ) : (

@@ -8,7 +8,6 @@ import {
 } from '@/components/profile/ProfileConnectionList';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
-import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import ogDefaultUrl from '../../../public/og-default.png?url';
 import { followersProfile, followingProfile, profile } from '../fixtures';
@@ -133,7 +132,6 @@ const ProfilesStoriesQuery = graphql`
         ...ProfileConnectionList_followingProfile @alias(as: "followingList")
         ...ProfileHero_profile @alias(as: "hero")
         ...ProfileListItem_profile @alias(as: "listItem")
-        ...ProfileNameBlock_profile @alias(as: "nameBlock")
       }
     }
   }
@@ -183,11 +181,6 @@ function ProfileCatalog() {
 
   return (
     <Catalog>
-      <Section title="Name blocks · local / remote">
-        <ProfileNameBlock profile={requireFragment(followableRef.nameBlock, 'name block')} />
-        <ProfileNameBlock profile={requireFragment(remoteRef.nameBlock, 'remote name block')} />
-      </Section>
-
       <Section title="Hero · default / images / no bio / remote / loading">
         <ProfileHero
           action={

@@ -19,6 +19,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 const meta = {
   ...baseMeta,
   excludeStories: [],
+  parameters: { ...baseMeta.parameters, controls: { disable: true } },
   title: 'KOSMO/Components/FollowButton/Tests',
 } satisfies Meta;
 
@@ -40,6 +41,7 @@ export const CancelError: Story = cancelError;
 
 const playgroundCycle = (profileId: string, activeLabel: string): Story => ({
   ...Playground,
+  parameters: { ...Playground.parameters, controls: { disable: true } },
   args: { profileId, size: 'medium' },
   play: async ({ canvasElement, parameters }) => {
     const canvas = within(canvasElement);
