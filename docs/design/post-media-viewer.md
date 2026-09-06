@@ -11,6 +11,7 @@
 
 ### DSN-63 Target
 
+- 2026-09-06 사용자 확정: Compact는 작성자·원문·기존 Post Action Bar를 유지하고, Sensitive는 Gallery에서 공개한 뒤 Viewer에 진입하는 경계로 둔다. 2026-08-27 DSN-63의 Compact action-tray-only·Viewer 내부 Sensitive 방향은 이 결정으로 대체한다. 아래 Mobile Target과 같은 계약이며, 기존 구현을 근거로 승인 여부를 추론하지 않는다.
 - Overlay: black 70% `color/overlay/media-viewer`
 - Compact: `390×844` 대표 canvas에서 상단 `654px` image stage와 그 아래 semantic canvas Post detail panel을 세로로 배치한다. Media frame은 stage 안의 좌우 16px·상단 80px·하단 16px을 사용하고 detail은 작성자·원문·기존 Post Action Bar를 조합한다.
 - Wide: 560×420 Media frame을 image stage 가운데 배치하고 오른쪽에 346px full-height context rail을 둔다. 이 고정값은 DSN-63 Target의 disconnected Storybook 검증값이며 Production responsive clamp는 PROD-849가 별도로 검증한다.

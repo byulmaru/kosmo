@@ -160,6 +160,18 @@
 - Consequences: 기존 `Web 768px` decision의 Status와 historical evidence는 유지하되 DSN-63 Target의 Reply transition은 이 record가 Target 관점에서 기존 inline 규칙을 supersede/clarify한다. tasks·spec·canonical verification은 Current PROD-650, disconnected PROD-853와 connected PROD-849 evidence를 별도로 기록한다.
 - Confirmation / Follow-up: 768–1279px의 Viewer close→공용 Reply modal→focus 복귀와 `>=1280px` inline Composer를 PROD-849 connected runtime에서 확인하고, PROD-853 Storybook은 해당 fixture를 Production 연결 완료로 표현하지 않는다.
 
+### 2026-09-06: Compact Post 맥락과 Sensitive 진입 경계를 최종 계약으로 정렬한다
+
+- Decision Date: 2026-09-06
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/post-media-viewer.md`의 DSN-63 Target, 2026-09-06 사용자 확정으로 갱신한 DSN-63·PROD-853·PROD-849, Figma Mobile Target `6316:8103`와 pre-entry reference `6701:9407`
+- Status: Active
+- Context / Problem: 2026-08-27 DSN-63 이슈·Figma 공용 source의 Compact action-tray-only·Viewer 내부 Sensitive 방향과 이후 Mobile Target·디자인 문서·OpenSpec이 충돌했다. PR #708의 리뷰는 특정 구현으로의 복귀가 아니라 승인 정본 확인과 정렬을 요구했다.
+- Decision Outcome: Compact는 image stage 아래 작성자·원문·기존 Post Action Bar를 유지한다. Sensitive는 Gallery에서 공개한 뒤 정상 tile로 Viewer에 진입하는 경계이며 Viewer 내부 state·reveal callback·story로 복제하지 않는다. Loading·Error·Unavailable에서도 Close와 Compact detail / Wide rail을 유지하며 navigation·counter만 숨긴다.
+- Alternatives Considered: Compact를 Action Bar만 있는 tray로 축소하고 Viewer 안에 Sensitive 상태를 두는 기존 DSN-63 방향. 사용자는 작성자·본문으로 Post 맥락을 유지하고 공개 후 진입하는 방향을 명시적으로 선택했다.
+- Consequences: 이전 DSN-63의 tray-only·Viewer Sensitive 방향은 superseded이며 비규범적 과거 참고로만 보존한다. 기존 Compact detail·Gallery 공개 계약과 현재 공용 UI는 유지한다. 이 결정은 Content revision·권한·query·focus lifecycle, Wide Reply breakpoint나 구현 소유권을 변경하지 않는다.
+- Confirmation / Follow-up: DSN-63·PROD-853·PROD-849 본문, Figma source·설명과 Mobile Target, 디자인 문서·spec을 같은 계약으로 대조한다. PROD-853의 disconnected UI·Storybook 증거와 PROD-849의 Production 통합·Web/iOS/Android runtime·change 전체 완료 후 archive 책임을 구분한다.
+
 ## Remaining Decisions
 
 - 없음.
