@@ -510,8 +510,10 @@ documentation·state specimen을 두 번째 행에 둔다.
 - Web editor의 preview와 thumbnail selector, content와 footer 사이에는 가로 border를 두지 않는다. header·tool tab의
   구분선과 preview·우측 tool panel 사이 세로 border, Mobile editor의 기존 구분선은 유지한다.
 - editor header는 `44×44` hit target 안에 기존 Web `IconButton` `32×32`와 canonical `ArrowLeft`·`X`를 사용한다. Back은 draft와
-  media를 유지한 채 Composer로 돌아가고, Close는 Composer Overlay 전체를 닫는다. preview 안의 X는 해당
-  attachment만 제거한다. 하단 `완료`는 현재 tool의 변경을 draft에 반영하고 Composer로 돌아가며, ALT·향후 이미지
+  media를 유지한 채 Composer로 돌아가고, Close는 Composer Overlay 전체를 닫는다. 첨부 제거는 Composer 본문의
+  `PostComposerMediaItems` gallery에서 각 미디어 카드의 X 버튼으로 수행하며, 해당 attachment만 제거한다.
+  `ComposerMediaEditor` 내부의 선택 이미지 preview에는 첨부 제거 버튼을 제공하지 않는다.
+  하단 `완료`는 현재 tool의 변경을 draft에 반영하고 Composer로 돌아가며, ALT·향후 이미지
   편집은 선택 attachment에, Sensitive는 Post 전체에 적용한다. Rail에서 편집을 시작해도 같은 Overlay의 editor
   view로 직접 전환한다.
 - `< compact` Web과 Android/iOS는 별도 fullscreen editor를 사용한다. 모바일의 가로로 긴 preview는 잘라내지 않고
