@@ -44,9 +44,8 @@ runs the apps and Temporal worker. Local scripts set `TEMPORAL_ADDRESS=127.0.0.1
 and `TEMPORAL_NAMESPACE=default` after loading Vault. The worker health endpoint
 uses `127.0.0.1:8081` to avoid the admin app's port `8080`.
 
-Open the Temporal UI at `http://localhost:8233`. Workflow data persists in a Docker
-volume across restarts. `pnpm temporal:down` stops the server and preserves that
-data; `pnpm temporal:up` starts it separately. `pnpm dev:worker` runs only the worker
+Open the Temporal UI at `http://localhost:8233`. `pnpm temporal:down` stops the server,
+and `pnpm temporal:up` starts it separately. `pnpm dev:worker` runs only the worker
 against this local server, so do not run it alongside `pnpm dev`.
 
 ## Test Postgres
