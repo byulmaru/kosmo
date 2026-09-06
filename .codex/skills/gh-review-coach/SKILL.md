@@ -1,6 +1,6 @@
 ---
 name: gh-review-coach
-description: Review implementation work before publication or inspect another author’s GitHub pull request as the human decision-maker’s evidence-gathering partner. Distinguish implementation self-review from external PR review using user intent, thread provenance, PR authorship, and Linear ownership; delegate bounded correctness and optional ponytail passes while the main agent maps responsibilities, execution flow, public contracts, production callers, and test-only seams. Use for implementation self-review, PR review, 재리뷰, 구조 또는 책임 분리 검토, review comment drafting, request-changes decisions, scope-splitting feedback, or review-thread cleanup.
+description: Review implementation work before publication or inspect another author’s GitHub pull request as the human decision-maker’s evidence-gathering partner. Distinguish implementation self-review from external PR review using user intent, thread provenance, PR authorship, and Linear ownership; delegate bounded correctness and test-evidence passes plus an optional ponytail pass while the main agent maps responsibilities, execution flow, public contracts, production callers, and test-only seams. Use for implementation self-review, PR review, 재리뷰, 구조 또는 책임 분리 검토, review comment drafting, request-changes decisions, scope-splitting feedback, or review-thread cleanup.
 ---
 
 # GitHub Review Coach
@@ -61,14 +61,23 @@ Use thread-aware GitHub reads when resolution or inline context matters. Do not 
 
 ### 3. Start delegated evidence review
 
-After fixing the review mode, exact snapshot, ownership evidence, and repository guidance, spawn one review subagent before drawing conclusions.
+After fixing the review mode, exact snapshot, ownership evidence, and repository guidance, spawn one correctness subagent before drawing conclusions; when the review includes changed tests or changed runtime behavior, also spawn a dedicated test-evidence subagent in parallel.
 
-- Assign one subagent a bounded correctness surface such as contracts, authorization, transactions, persistence, concurrency, fixtures, tests, or unresolved-thread regressions.
-- When the `ponytail:ponytail-review` skill is available, spawn a second subagent in parallel and assign it to find only deletable code, speculative abstractions without a current caller, avoidable dependencies, duplicated native behavior, and scope that belongs with a later caller.
-- When the ponytail skill is unavailable, continue with the single correctness subagent.
+- Assign the correctness subagent a bounded non-test surface such as contracts, authorization, transactions, persistence, concurrency, or unresolved-thread regressions; the correctness pass does not own test-evidence review.
+- When applicable, assign the dedicated test-evidence subagent to inspect changed tests and tests covering changed behavior. When neither changed tests nor changed runtime behavior is in scope, explicitly report test evidence not applicable; when runtime behavior changed but relevant tests are absent, report the contract-specific coverage gap instead of treating it as not applicable, and do not invent work.
+- The test-evidence subagent assesses test evidence for the reviewed behavior using these criteria:
+  - Would the test fail if the changed behavior were broken? Check for vacuous or skipped conditional assertions, async assertions or completion that are neither awaited nor returned, and swallowed errors; do not flag valid returned promises.
+  - Do mocks and stubs leave the system under test's policy and state transformation in the test? A mock may replace an external boundary, but must not replace the policy or transformation being claimed.
+  - Does the test cover relevant failure or boundary states and verify the resulting post-state and required side effects?
+  - Are ordering, shared state, time, randomness, and completion controlled deterministically rather than by arbitrary sleeps or timing assumptions?
+  - Are fixtures realistic, and are expected values derived independently rather than computed by the same system under test?
+- Apply `Audit assertion targets` as part of this pass.
+- The test-evidence pass does not require mutation testing, mandate broad suites or 100% coverage, or add tests solely to satisfy this checklist; use the narrowest meaningful check.
+- When the `ponytail:ponytail-review` skill is available, spawn an additional subagent in parallel and assign it to find only deletable code, speculative abstractions without a current caller, avoidable dependencies, duplicated native behavior, and scope that belongs with a later caller.
 - When multiple subagents run, divide work by independent responsibility or execution-flow slices. Do not assign overlapping whole-PR rereads merely to increase agent count.
 - Give every subagent the same repository, review mode, exact snapshot, applicable guidance, and a bounded question. For external review include PR number, base SHA, and head SHA. For self-review provide raw artifacts rather than implementation rationale or the expected conclusion.
 - Require exact file/line evidence, the path or invariant checked, confirmed findings separated from suspicions, the smallest relevant validation and its result, and an explicit no-finding result when the assigned surface is sound.
+- Require the test-evidence report to name each concrete missed regression or failure mode and state the smallest fix and the meaningful coverage that remains.
 - Forbid subagents from GitHub writes, code edits, product-policy decisions, severity decisions, and final review recommendations.
 
 While they run, the main agent must independently trace and share a compact responsibility map and execution-flow summary. Do not wait idle and do not delegate this synthesis. The main agent owns freshness checks, final verification, deduplication, severity, drafting, and every GitHub write.
