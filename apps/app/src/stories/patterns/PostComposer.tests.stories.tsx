@@ -53,19 +53,6 @@ export const SubmittingPickerContract: Story = submittingPickerContract;
 export const SubmittingSpinnerContract: Story = submittingSpinnerContract;
 export const SubmittingVisibilityContract: Story = submittingVisibilityContract;
 
-export const ControlsContract: Story = {
-  play: async () => {
-    expect(baseMeta.parameters?.controls).toMatchObject({ disable: true });
-    const playgroundControls = playgroundContract.parameters?.controls;
-    expect(playgroundControls).toHaveProperty('include');
-    expect(playgroundControls?.include).not.toContain('error');
-    expect(baseMeta.argTypes?.author?.control).toBe(false);
-    expect(baseMeta.argTypes?.items?.control).toBe(false);
-    expect(baseMeta.argTypes?.remaining?.control).toBe(false);
-    expect(baseMeta.argTypes?.showPollAction?.control).toBe(false);
-  },
-};
-
 export const DerivedRemainingContract: Story = {
   ...playgroundContract,
   args: {

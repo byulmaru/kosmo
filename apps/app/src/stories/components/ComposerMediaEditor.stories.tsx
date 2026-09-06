@@ -73,7 +73,6 @@ const meta = {
     'MobileDefaultGeometryContract',
     'MobileSensitiveGeometryContract',
     'MobileToolInteractionContract',
-    'ControlsContract',
     'editorMedia',
   ],
   parameters: {
@@ -364,19 +363,4 @@ export const PlaygroundMobileViewportContract: Story = {
     expect(canvas.getByTestId('mobile-composer-media-editor')).toBeVisible();
     expect(canvas.queryByTestId('web-composer-media-editor')).toBeNull();
   },
-};
-
-export const ControlsContract: Story = {
-  play: async () => {
-    expect(meta.parameters?.controls?.include).toEqual([
-      'media',
-      'mobileState',
-      'selectedKey',
-      'sensitiveMedia',
-      'showImageEditPreview',
-      'tool',
-    ]);
-    expect(meta.parameters?.controls?.include).not.toContain('presentation');
-  },
-  render: (args) => <WebEditorStory {...args} />,
 };

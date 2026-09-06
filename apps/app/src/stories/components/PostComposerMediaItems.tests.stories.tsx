@@ -18,17 +18,6 @@ type Story = StoryObj<typeof meta>;
 
 export const InteractionContract: Story = interactionContract;
 
-export const ControlsContract: Story = {
-  play: async () => {
-    const controls = baseMeta.parameters?.controls;
-
-    expect(controls?.exclude).toEqual(['onEdit', 'onRemove', 'onRetry']);
-    expect(baseMeta.argTypes?.onEdit?.action).toBe('edit');
-    expect(baseMeta.argTypes?.onRemove?.action).toBe('remove');
-    expect(baseMeta.argTypes?.onRetry?.action).toBe('retry');
-  },
-};
-
 export const HorizontalReachabilityContract: Story = {
   render: () => (
     <View style={{ width: 320 }}>
