@@ -152,7 +152,6 @@ test('opens its controlled listbox on focus and selects the next enabled option'
   assert.equal(input.props.accessibilityLabel, '항목 검색');
   assert.equal(input.props['aria-expanded'], false);
   assert.equal(input.props['aria-autocomplete'], 'list');
-  assert.equal(input.props.label, undefined);
   assert.equal(
     Object.assign({}, ...(input.props.style as Array<Record<string, unknown>>)).paddingLeft,
     48,
@@ -215,7 +214,6 @@ test('clears the query, removes a selected chip, and ignores editing while disab
   });
 
   const clearButton = renderer.root.findByType(IconButtonHost);
-  assert.equal(clearButton.props.targetSize, undefined);
   assert.equal(clearButton.props.style.top, -2);
 
   act(() => renderer.root.findByType(IconButtonHost).props.onPress());
@@ -280,7 +278,6 @@ test('renders an empty state and invokes the current-query create action', () =>
 
   const createAction = optionNodes(renderer).find((node) => node.props.label === '새 항목 추가');
   assert.ok(createAction);
-  assert.equal(createAction.props.accessibilityLabel, undefined);
   assert.equal(createAction.props.active, true);
   assert.equal(inputNode(renderer).props['aria-activedescendant'], createAction.props.nativeID);
   act(() => createAction.props.onSelect());

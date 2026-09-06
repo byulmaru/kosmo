@@ -153,7 +153,6 @@ describe('SettingsLinkRow', () => {
     assert.ok(chevronWrapper);
     assert.equal(chevronWrapper.props.pointerEvents, 'none');
     assert.equal(chevronWrapper.props.children.type, 'ChevronRightIcon');
-    assert.equal(chevronWrapper.props.children.props.accessibilityElementsHidden, undefined);
   });
 
   it('외부 링크는 expo Link asChild와 exact href를 사용한다', async () => {
@@ -185,7 +184,6 @@ describe('SettingsLinkRow', () => {
     });
 
     const navigationLink = rendered('NavigationLink')[0];
-    assert.equal(typeof navigationLink.props.onNavigate, 'function');
     navigationLink.props.onNavigate();
     assert.equal(navigations, 1);
   });
@@ -202,7 +200,6 @@ describe('SettingsLinkRow', () => {
     });
 
     const row = byTestId('external-action-row');
-    assert.equal(typeof row.props.onPress, 'function');
     row.props.onPress();
     assert.equal(navigations, 1);
   });

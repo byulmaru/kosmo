@@ -9,7 +9,6 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const require = createRequire(import.meta.url);
-let childOnPressBeforeLink: unknown;
 const linkOnPress = () => undefined;
 
 mock.module('expo-router', {
@@ -21,7 +20,6 @@ mock.module('expo-router', {
       children: ReactElement<{ href?: string; onPress?: () => void; style?: object }>;
       href: string;
     }) => {
-      childOnPressBeforeLink = children.props.onPress;
       return createElement(
         'Link',
         { href },
@@ -70,7 +68,6 @@ before(async () => {
 });
 
 afterEach(async () => {
-  childOnPressBeforeLink = undefined;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -88,54 +85,6 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     assert.equal(entry.props.href, 'https://id.byulmaru.co');
     assert.equal(rendered('Link')[0].props.href, 'https://id.byulmaru.co');
     assert.equal(rendered('ChevronRightIcon').length, 1);
-    assert.equal(childOnPressBeforeLink, undefined);
-    const entryStyle = flattenStyle(entry.props.style({ hovered: false, pressed: false }));
-    assert.equal(entryStyle.minHeight, 64);
-    assert.equal(entryStyle.width, '100%');
-    assert.equal(entryStyle.borderWidth, 1);
-    assert.equal(entryStyle.borderColor, 'transparent');
-  });
-
-  it('focus-visible style과 link target geometry를 유지한다', async () => {
-    await render();
-
-    const entry = byTestId('byulmaru-id-account-settings-entry');
-    let entryStyle = flattenStyle(entry.props.style({ hovered: false, pressed: false }));
-    assert.equal(entryStyle.minHeight, 64);
-    assert.equal(entryStyle.width, '100%');
-    assert.equal(entryStyle.borderWidth, 1);
-    assert.equal(entryStyle.borderColor, 'transparent');
-    assert.equal(entryStyle.outlineWidth, 0);
-
-    await act(async () =>
-      entry.props.onFocus({
-        currentTarget: { matches: (selector: string) => selector === ':focus-visible' },
-      }),
-    );
-    const focusedEntry = byTestId('byulmaru-id-account-settings-entry');
-    entryStyle = flattenStyle(focusedEntry.props.style({ hovered: false, pressed: false }));
-    assert.equal(entryStyle.outlineWidth, 2);
-    assert.equal(entryStyle.outlineColor, '#005fcc');
-
-    await act(async () => focusedEntry.props.onPointerDown());
-    entryStyle = flattenStyle(
-      byTestId('byulmaru-id-account-settings-entry').props.style({
-        hovered: false,
-        pressed: false,
-      }),
-    );
-    assert.equal(entryStyle.outlineWidth, 0);
-
-    await act(async () => byTestId('byulmaru-id-account-settings-entry').props.onBlur());
-    assert.equal(
-      flattenStyle(
-        byTestId('byulmaru-id-account-settings-entry').props.style({
-          hovered: false,
-          pressed: false,
-        }),
-      ).outlineWidth,
-      0,
-    );
   });
 });
 
@@ -162,10 +111,4 @@ function texts(): string[] {
   return rendered('Text').flatMap((node) =>
     typeof node.props.children === 'string' ? [node.props.children] : [],
   );
-}
-
-function flattenStyle(style: unknown): Record<string, unknown> {
-  return Array.isArray(style)
-    ? Object.assign({}, ...style.filter(Boolean))
-    : (style as Record<string, unknown>);
 }

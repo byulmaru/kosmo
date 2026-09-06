@@ -38,12 +38,6 @@ function SliderCatalog({
   );
 }
 
-function snapSliderValue(value: number, min: number, max: number, step: number) {
-  const bounded = Math.min(max, Math.max(min, value));
-  const snapped = min + Math.round((bounded - min) / step) * step;
-  return Number(Math.min(max, Math.max(min, snapped)).toFixed(10));
-}
-
 const meta = {
   args: {
     accessibilityLabel: '글씨 크기',
@@ -90,121 +84,70 @@ export const Playground: Story = {
 
 export const InteractionContract: Story = {
   ...Playground,
+  args: { disabled: false, min: 0, max: 100, step: 10, value: 40 },
   parameters: { controls: { disable: true } },
   play: async ({ args, canvasElement, step }) => {
     args.onValueChange?.mockClear();
     args.onValueCommit?.mockClear();
-    const canvas = within(canvasElement);
-    const slider = canvas.getByRole('slider', { name: args.accessibilityLabel ?? '글씨 크기' });
-    const min = args.min ?? 0;
-    const safeMax = Math.max(min, args.max ?? 100);
-    const positiveStep = args.step && args.step > 0 ? args.step : 1;
-    let expectedControlledValue = snapSliderValue(args.value ?? 40, min, safeMax, positiveStep);
+    const slider = within(canvasElement).getByRole('slider', {
+      name: args.accessibilityLabel ?? '글씨 크기',
+    });
 
     await step('슬라이더 의미와 초기 값 확인', async () => {
-      expect(slider).toHaveAttribute('aria-valuemin', String(min));
-      expect(slider).toHaveAttribute('aria-valuemax', String(safeMax));
-      expect(Number(slider.getAttribute('aria-valuenow'))).toBe(expectedControlledValue);
-      expect(expectedControlledValue).toBeGreaterThanOrEqual(min);
-      expect(expectedControlledValue).toBeLessThanOrEqual(safeMax);
-      expect(slider).toHaveAttribute('tabindex', args.disabled ? '-1' : '0');
-      if (args.disabled) {
-        expect(slider).toHaveAttribute('aria-disabled', 'true');
-        return;
-      }
+      expect(slider).toHaveAttribute('aria-valuemin', '0');
+      expect(slider).toHaveAttribute('aria-valuemax', '100');
+      expect(slider).toHaveAttribute('aria-valuenow', '40');
+      expect(slider).toHaveAttribute('tabindex', '0');
       expect(slider).not.toHaveAttribute('aria-disabled');
       await userEvent.tab();
       expect(slider).toHaveFocus();
       expect(getComputedStyle(slider).outlineWidth).toBe('2px');
     });
 
-    if (args.disabled) {
-      return;
-    }
-
     await step('포인터 drag 중 change, release 후 commit 확인', async () => {
-      args.onValueChange?.mockClear();
-      args.onValueCommit?.mockClear();
       const rect = slider.getBoundingClientRect();
-      const usableWidth = Math.max(0, rect.width - 24);
       const pointAt = (ratio: number) => ({
-        x: rect.left + 12 + usableWidth * ratio,
+        x: rect.left + 12 + (rect.width - 24) * ratio,
         y: rect.top + rect.height / 2,
       });
-      const expectedStart = snapSliderValue(
-        min + (safeMax - min) * 0.2,
-        min,
-        safeMax,
-        positiveStep,
-      );
-      const expectedEnd = snapSliderValue(min + (safeMax - min) * 0.8, min, safeMax, positiveStep);
-      const initialValue = expectedControlledValue;
-      const expectedChangeCount =
-        Number(expectedStart !== initialValue) + Number(expectedEnd !== expectedStart);
 
       await userEvent.pointer({
         coords: pointAt(0.2),
         keys: '[MouseLeft>]',
         target: slider,
       });
-      if (expectedStart !== initialValue) {
-        expect(args.onValueChange).toHaveBeenLastCalledWith(expectedStart);
-      } else {
-        expect(args.onValueChange).not.toHaveBeenCalled();
-      }
+      expect(slider).toHaveAttribute('aria-valuenow', '20');
+      expect(args.onValueChange).toHaveBeenLastCalledWith(20);
       expect(args.onValueCommit).not.toHaveBeenCalled();
-      expectedControlledValue = expectedStart;
 
       await userEvent.pointer({ coords: pointAt(0.8), target: slider });
-      if (expectedEnd !== expectedStart) {
-        expect(args.onValueChange).toHaveBeenLastCalledWith(expectedEnd);
-      }
+      expect(slider).toHaveAttribute('aria-valuenow', '80');
+      expect(args.onValueChange).toHaveBeenLastCalledWith(80);
       expect(args.onValueCommit).not.toHaveBeenCalled();
 
       fireEvent.pointerUp(slider, { pointerId: 1 });
-      if (expectedEnd !== initialValue) {
-        expect(args.onValueCommit).toHaveBeenCalledOnce();
-        expect(args.onValueCommit).toHaveBeenLastCalledWith(expectedEnd);
-      } else {
-        expect(args.onValueCommit).not.toHaveBeenCalled();
-      }
-      expect(args.onValueChange).toHaveBeenCalledTimes(expectedChangeCount);
-      expectedControlledValue = expectedEnd;
+      expect(args.onValueCommit).toHaveBeenCalledOnce();
+      expect(args.onValueCommit).toHaveBeenLastCalledWith(80);
+      expect(args.onValueChange).toHaveBeenCalledTimes(2);
     });
 
     await step('키보드 값 변경과 change/commit Actions 확인', async () => {
       args.onValueChange?.mockClear();
       args.onValueCommit?.mockClear();
       await userEvent.keyboard('{ArrowRight}');
-      const expectedNext = snapSliderValue(
-        expectedControlledValue + positiveStep,
-        min,
-        safeMax,
-        positiveStep,
-      );
-      expect(slider).toHaveAttribute('aria-valuenow', String(expectedNext));
-      if (expectedNext !== expectedControlledValue) {
-        expect(args.onValueChange).toHaveBeenLastCalledWith(expectedNext);
-        expect(args.onValueCommit).toHaveBeenLastCalledWith(expectedNext);
-      }
-      expectedControlledValue = expectedNext;
+      expect(slider).toHaveAttribute('aria-valuenow', '90');
+      expect(args.onValueChange).toHaveBeenLastCalledWith(90);
+      expect(args.onValueCommit).toHaveBeenLastCalledWith(90);
 
-      const beforeHome = Number(slider.getAttribute('aria-valuenow'));
       await userEvent.keyboard('{Home}');
-      expect(slider).toHaveAttribute('aria-valuenow', String(min));
-      if (beforeHome !== min) {
-        expect(args.onValueChange).toHaveBeenLastCalledWith(min);
-        expect(args.onValueCommit).toHaveBeenLastCalledWith(min);
-      }
-      expectedControlledValue = min;
-      const beforeEnd = Number(slider.getAttribute('aria-valuenow'));
+      expect(slider).toHaveAttribute('aria-valuenow', '0');
+      expect(args.onValueChange).toHaveBeenLastCalledWith(0);
+      expect(args.onValueCommit).toHaveBeenLastCalledWith(0);
+
       await userEvent.keyboard('{End}');
-      expect(slider).toHaveAttribute('aria-valuenow', String(safeMax));
-      if (beforeEnd !== safeMax) {
-        expect(args.onValueChange).toHaveBeenLastCalledWith(safeMax);
-        expect(args.onValueCommit).toHaveBeenLastCalledWith(safeMax);
-      }
-      expectedControlledValue = safeMax;
+      expect(slider).toHaveAttribute('aria-valuenow', '100');
+      expect(args.onValueChange).toHaveBeenLastCalledWith(100);
+      expect(args.onValueCommit).toHaveBeenLastCalledWith(100);
     });
   },
 };

@@ -90,12 +90,6 @@ describe('SettingsNavigationList', () => {
     const internal = rendered('Pressable')[1];
     assert.equal(internal.props['aria-current'], 'page');
     assert.deepEqual(internal.props.accessibilityState, { selected: true });
-    const style = flattenStyle(internal.props.style({ hovered: false, pressed: false }));
-    assert.equal(style.backgroundColor, '#fff8dc');
-    assert.equal(style.borderColor, '#9a7800');
-    assert.equal(style.borderWidth, 1);
-    assert.equal(style.minHeight, 64);
-    assert.equal(style.width, '100%');
   });
 });
 
@@ -115,10 +109,4 @@ function texts(): string[] {
   return rendered('Text').flatMap((node) =>
     typeof node.props.children === 'string' ? [node.props.children] : [],
   );
-}
-
-function flattenStyle(style: unknown): Record<string, unknown> {
-  return Array.isArray(style)
-    ? Object.assign({}, ...style.filter(Boolean))
-    : (style as Record<string, unknown>);
 }

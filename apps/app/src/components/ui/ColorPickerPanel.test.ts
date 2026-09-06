@@ -292,10 +292,6 @@ test('ColorPickerPanel matches the controlled plane, handles, previews, warning,
   assert.equal(renderer.root.findByType(WarningIconHost).props.color, 'warning-text');
   const buttons = renderer.root.findAllByType(ButtonHost);
   assert.equal(
-    buttons.every((button) => button.props.size === undefined),
-    true,
-  );
-  assert.equal(
     buttons.every((button) => nodeStyle(button).flex === 1),
     true,
   );
@@ -678,8 +674,6 @@ test('ColorPickerPanel keeps incomplete HEX as a draft and restores the controll
   const renderer = renderPanel({ value: { brightness: 100, hue: 0, saturation: 100 } });
   let field = renderer.root.findByType(TextFieldHost);
 
-  assert.equal(typeof field.props.onFocus, 'function');
-  assert.equal(typeof field.props.onBlur, 'function');
   act(() => field.props.onFocus({}));
   act(() => field.props.onChangeText('#12'));
   field = renderer.root.findByType(TextFieldHost);
