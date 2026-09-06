@@ -71,6 +71,19 @@
 - **THEN** 시스템은 새 요청 시점의 현재 Profile Block 관계와 각 surface의 기존 조회·상호작용 정책을 함께 평가한다
 - **AND** 차단 생성 때 제거된 Follow Request와 Follow Relationship은 cleanup·no-restore 계약에 따라 자동 복구하지 않는다
 
+#### Scenario: Local·Remote 조합과 무관하게 남은 Follow보다 Block이 우선한다
+
+- **WHEN** Local 또는 Remote Owner·Target 사이에 Active Block과 잔존 Follow Request 또는 Follow Relationship이 함께 존재한다
+- **THEN** 공통 정책은 어느 요청 방향에서도 잔존 관계를 비활성·비노출로 판정한다
+- **AND** 잔존 Follow를 `FOLLOWERS` Post 접근이나 Home 후보 자격을 얻는 근거로 사용하지 않는다
+- **AND** GraphQL의 selected Local actor 조건을 이 pair 정책의 도메인 입력 조건으로 추가하지 않는다
+
+#### Scenario: 한쪽 Block만 해제해도 반대 방향 Block이 남으면 제한한다
+
+- **WHEN** A → B와 B → A Block이 함께 있고 A가 자신의 A → B 관계만 해제한다
+- **THEN** 공통 정책은 B → A가 남아 있으므로 양쪽 요청을 계속 blocked로 판정한다
+- **AND** A의 해제로 B가 소유한 관계를 변경하지 않는다
+
 ### Requirement: Profile Block GraphQL actor and policy boundary
 
 **Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `PROD-822`, `PROD-823`. 현재 GraphQL ingress는 검증된 Session의 selected Local Profile을 actor로 사용해 Profile Block 생성·해제와 Owner 차단 목록 조회를 제공해야 한다(MUST). GraphQL resolver·loader·Node 조회·connection은 중앙 application policy를 재사용해야 하며(MUST), 차단 목록은 selected Local Profile이 Owner인 관계만 반환해야 한다(MUST). Target Profile의 기본 정보는 기존 Profile 조회 정책으로 제공하고, Post·Media와 각 목록·상호작용·Notification은 해당 surface의 Profile Block 정책을 적용해야 한다(MUST). 이 GraphQL ingress 계약을 remote ActivityPub ingress에 적용하는 것은 이 change의 범위가 아니다(MUST NOT).
@@ -92,3 +105,48 @@
 - **WHEN** GraphQL client가 Profile Node, Post connection, Media relation, Follow 후보 또는 Profile Block 목록을 같은 Block 관계에 대해 요청한다
 - **THEN** Profile Node는 기존 Profile 조회 정책을, Post·Media는 viewer 방향의 콘텐츠 정책을, Follow 후보는 양방향 보호 정책을 적용한다
 - **AND** Profile Block 목록은 selected Local Profile이 Owner인 관계만 반환한다
+- **AND** client가 숨겨진 결과를 후처리해 상대 Profile 또는 Post를 복원할 수 있는 payload를 반환하지 않는다
+
+#### Scenario: 관리 조회가 일반 Profile 조회의 우회 경로가 되지 않는다
+
+- **WHEN** selected Local Owner가 자신의 Profile Block Node 또는 관리 connection을 조회한다
+- **THEN** 시스템은 관계 관리에 필요한 최소 Target 식별 정보와 Owner 소유 관계만 제공한다
+- **AND** 이 관리 정보로 Target의 일반 Profile·Post·Media·Follow 관계를 추가 조회할 수 있는 권한을 부여하지 않는다
+- **AND** 같은 Block ID를 Target 또는 다른 selected Profile이 조회하면 관계와 Target 식별 정보를 반환하지 않는다
+
+#### Scenario: 같은 operation에서 selected Profile이 바뀌면 이전 actor 권한을 재사용하지 않는다
+
+- **WHEN** 하나의 GraphQL Mutation에서 selected Profile이 A에서 B로 바뀐 뒤 후속 직렬 top-level field가 Block 관계를 조회하거나 변경한다
+- **THEN** 후속 field는 B의 현재 actor context와 Owner scope를 기준으로 판정한다
+- **AND** A에서 채운 loader cache나 scope grant로 A의 Block 관계 또는 보호된 Target을 반환하지 않는다
+
+#### Scenario: 직접 route 진입에서도 Owner의 차단과 해제 대상을 확인한다
+
+- **WHEN** selected Local Owner가 이전 Profile·Block client cache 없이 route handle로 이미 차단한 Target의 Profile에 직접 진입하거나 새로고침한다
+- **THEN** API는 일반 Target Profile을 반환하지 않고도 현재 Owner의 차단 여부와 해제할 Profile Block ID를 확인할 수 있는 관리 결과를 제공한다
+- **AND** 일반 Profile 조회 성공이나 기존 Block 목록의 client cache가 있어야 이 결과를 제공할 수 있다는 조건을 두지 않는다
+- **AND** route용 결과는 보호된 Target identity·content·social field를 노출하거나 일반 Profile·Post·Media 조회 권한을 부여하지 않는다
+- **AND** 구체 field·payload 이름과 관리 조회의 배치는 구현 PR이 기존 GraphQL 계약 안에서 정한다
+
+#### Scenario: 자신의 Block이 없는 unavailable route에 다른 Owner의 관계를 반환하지 않는다
+
+- **WHEN** selected Local Profile이 route handle의 Target을 직접 조회할 수 없고 자신이 Owner인 Block도 없다
+- **THEN** API는 자신의 차단 관리 결과에 해제할 관계가 없음을 나타낸다
+- **AND** 상대가 Owner인 Block ID나 보호된 Target Profile을 대신 반환하지 않는다
+
+### Requirement: Profile Block GraphQL durable result
+
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/architecture/core-services.md`, `memory/coding-style.md`, `PROD-821`, `PROD-822`. GraphQL 생성·해제 mutation은 검증된 selected Local Profile을 Owner actor로 전달하고 부모 layer가 제공하는 durable action의 완료 결과를 응답해야 한다(MUST). 필수 cleanup 완료 전에 성공 payload를 반환하거나 GraphQL에서 Block row를 직접 삭제해 성공 gate를 우회해서는 안 된다(MUST NOT). 성공한 해제는 client가 제거할 정확한 관계 ID를 반환해야 한다(MUST). 구체 field·payload 이름은 기존 GraphQL 규칙과 실제 generated schema에 맞춰 구현 PR에서 정한다.
+
+#### Scenario: 필수 cleanup 완료를 기다린 뒤 mutation 결과를 반환한다
+
+- **WHEN** selected Local Owner의 Block 또는 Unblock 요청에서 required cleanup이 진행 중이다
+- **THEN** GraphQL은 durable action의 완료를 기다린다
+- **AND** timeout이나 실패를 성공 payload로 바꾸지 않는다
+- **AND** 실패 응답만을 근거로 남아 있는 Block을 제거하거나 삭제된 Follow를 복구하지 않는다
+
+#### Scenario: 해제 성공은 삭제한 Owner 관계의 식별자를 반환한다
+
+- **WHEN** selected Local Owner의 Unblock이 required cleanup과 관계 제거를 완료한다
+- **THEN** mutation은 실제 제거한 Profile Block의 식별자를 반환한다
+- **AND** 다른 Owner의 관계나 이후 생성된 별도 Block을 삭제 결과로 반환하지 않는다

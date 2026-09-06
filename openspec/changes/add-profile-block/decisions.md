@@ -7,7 +7,7 @@
 
 ## Decision Records
 
-현재 결정 기록은 9개이며 모두 `Active`다. 각 기록의 authority와 follow-up owner는 아래에 명시한다.
+현재 결정 기록은 14개이며 모두 `Active`다. 아래에 각 기록의 authority와 follow-up owner를 명시한다.
 
 ### 하나의 shared change가 공통 invariant와 최종 lifecycle을 소유한다
 
@@ -64,9 +64,9 @@
 - Authority / Provenance: `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/domain/objects/profile-block.md`, `PROD-822`, `PROD-823`
 - Status: Active
 - Context / Problem: GraphQL resolver가 입력 Profile ID를 actor로 신뢰하거나 resolver·loader마다 차단 조건을 복제하면 selected Profile 격리와 중앙 정책이 무너진다.
-- Decision Outcome: 현재 GraphQL ingress의 mutation·Owner connection·Node/connection loader는 검증된 Session의 selected Local Profile actor를 사용한다. resolver·loader는 공통 core/application policy를 호출하고, 요청별 DB actor state(GUC 등)·client 전용 filter를 권한 또는 visibility의 대체 수단으로 사용하지 않는다. concrete helper와 field/payload 이름, resolver·loader 배치는 기존 naming·generated schema에 맞춘 구현 선택으로 남긴다.
+- Decision Outcome: 현재 GraphQL Block 생성·해제 mutation과 Owner 관리 조회의 connection·관계 Node/loader는 검증된 Session의 selected Local Profile actor를 사용한다. resolver·loader는 공통 core/application policy를 호출하고, 요청별 DB actor state(GUC 등)·client 전용 filter를 권한 또는 visibility의 대체 수단으로 사용하지 않는다. concrete helper와 field/payload 이름, resolver·loader 배치는 기존 naming·generated schema에 맞춘 구현 선택으로 남긴다.
 - Alternatives Considered: 입력된 arbitrary Profile ID를 actor로 사용하면 다른 Owner의 관계를 변경할 수 있다. resolver-local predicate나 client-only filter는 policy drift와 visibility 우회를 만든다. 요청별 DB actor state를 권한 경계로 사용하면 현재 application policy와 runtime 경계를 확장한다.
-- Consequences: selected Local Profile이 없는 GraphQL request는 기존 auth 경계에서 거부되고, Block 목록은 해당 actor가 Owner인 관계만 반환한다. remote ActivityPub ingress는 이 decision의 consumer가 아니다.
+- Consequences: selected Local Profile이 없는 Block 생성·해제·Owner 관리 operation은 기존 auth 경계에서 거부되고, Block 목록은 해당 actor가 Owner인 관계만 반환한다. 일반 GraphQL 조회와 Notification의 Account membership 권한을 이 제한으로 바꾸지 않는다. remote ActivityPub ingress는 이 decision의 consumer가 아니다.
 - Confirmation / Follow-up: `PROD-822`에서 Owner A/B·guest·membership mismatch와 direct/list Node 경계를 검증하고, `PROD-823`에서 selected Profile별 client 상태 결과를 확인한다.
 
 ### 기존 Notification은 가시성으로 숨기고 source 생성 연결은 후속으로 둔다
@@ -75,8 +75,8 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile-block.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0002-pr-review-domain-adjustments.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, `docs/domain/decisions/0007-spec-boundary-and-state-clarifications.md`, `PROD-821`, `PROD-822`, `PROD-813`
 - Status: Active
-- Context / Problem: Profile Block pair가 있는 기존 Notification을 직접 Post 조회 방향만으로 반환하면 Notification 보호 정책을 우회하지만, 모든 source를 이번 local capability에 연결하면 별도 책임과 lifecycle을 흡수한다.
-- Decision Outcome: Profile Block pair에 연결된 기존 Notification은 connection·Unread count·Node·read 처리에서 숨긴다. 이 Notification visibility는 Recipient가 Related Post를 직접 조회할 수 있는 방향의 Post·Media policy와 독립적으로 적용한다. Block 생성으로 제거되는 Follow Request/Relationship을 직접 원인으로 하는 Notification만 821 durable cleanup에서 삭제하며, 다른 기존 Notification과 Read State는 보존한다. 모든 source의 신규 생성 suppression과 숨겨진 row의 async physical cleanup은 이 change의 task·완료 증거가 아니다.
+- Context / Problem: Profile Block pair가 있는 기존 Notification을 그대로 반환하면 차단된 Related Profile/Post에 대한 접근 정책을 우회하지만, 모든 source를 이번 local capability에 연결하면 별도 책임과 lifecycle을 흡수한다.
+- Decision Outcome: Profile Block pair와 Recipient·Related Profile/Post 정책에 따라 unavailable 기존 Notification은 connection·Unread count·Node·read 처리에서 숨긴다. 이 Notification visibility는 Recipient가 Related Post를 직접 조회할 수 있는 방향의 Post·Media policy와 독립적으로 적용한다. Block 생성으로 제거되는 Follow Request/Relationship을 직접 원인으로 하는 Notification만 `PROD-821`의 durable cleanup에서 삭제하며, 다른 기존 Notification과 Read State는 보존한다. 모든 source의 신규 생성 suppression과 숨겨진 row의 async physical cleanup은 이 change의 task·완료 증거가 아니다.
 - Alternatives Considered: 모든 source 생성 경로를 여기서 수정하면 후속 공용 정책과 책임이 중복된다. 기존 unavailable row를 전부 삭제하면 비직접 원인 보존 계약을 위반한다. queue/worker/scan을 추가하면 별도 lifecycle이 합쳐진다.
 - Consequences: API surface는 Profile Block pair와 Recipient·Related Profile/Post 정책을 매 요청 평가하며 hidden row가 남아도 사용자에게 노출하지 않는다. source suppression은 `PROD-327`, async physical cleanup은 `PROD-328`, remote ActivityPub는 `PROD-818`의 후속 boundary로 남는다.
 - Confirmation / Follow-up: `PROD-822`에서 list/count/Node/read visibility를, `PROD-821`에서 direct-cause deletion을, `PROD-813`에서 두 후속 이슈가 완료 조건이 아님을 확인한다.
@@ -117,9 +117,69 @@
 - Consequences: old/new app이 schema 확장 중 공존할 수 있고 Profile Block을 사용하지 않는 기존 데이터는 그대로 남는다. migration 실패·rollback 안전성과 관계 불변식은 `PROD-821`에서 확인한다.
 - Confirmation / Follow-up: `PROD-821`에서 additive migration, referential integrity, uniqueness, self-block 거부, 기존 row 보존과 rollback evidence를 검증하고, `PROD-813` archive 전까지 정합성을 확인한다.
 
+### 새 로컬 Follow admission과 이미 진행 중인 transition의 잔존 결과를 구분한다
+
+- Decision Date: 2026-09-05
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/follow-relationship.md`, `memory/database-design.md`, `PROD-822`; `PROD-821` concurrency 정정 댓글 `5ceda55c-f3b6-4109-987c-27c12c413ce2`.
+- Status: Active
+- Context / Problem: Block 뒤 새 Follow를 거부한다는 결과를 모든 in-flight transition의 commit 금지로 해석하면 이미 승인된 overlap 허용과 충돌한다. 반대로 잔존 row를 허용한다는 이유로 새 Follow나 승인을 허용하면 Active Block이 무력해진다.
+- Decision Outcome: Block이 이미 적용된 상태에서 시작한 로컬 Follow·Follow Request 승인은 새 관계를 만들기 전에 공통 pair 정책으로 거부한다. cleanup과 겹쳐 이미 진행 중이던 transition이 남긴 row는 허용하되 Active Block 동안 관계 조회·viewer 상태·Home 후보·`FOLLOWERS` 접근의 유효한 근거로 사용하지 않는다.
+- Alternatives Considered: Profile pair 전체 직렬화와 모든 물리 row 부재 보장은 기존 승인 범위를 강화하므로 채택하지 않는다. GraphQL 앞단만 검사하거나 잔존 관계를 유효한 Follow로 반환하는 방식은 공통 admission·visibility 결과를 만족하지 못한다.
+- Consequences: 새 admission 거부와 잔존 row 비활성·비노출은 각각 자동화 검증한다. `PROD-821`은 captured cleanup·Unblock 정리를, `PROD-822`는 정책·admission을, `PROD-813`은 cross-slice 검증을 계속 소유한다.
+- Confirmation / Follow-up: Block 뒤 시작한 FOLLOW·로컬 APPROVE의 저장 거부, 잔존 Follow/Request fixture의 Node·목록·권한 비활성, 해제 뒤 반대 Block과 다른 정책 재평가를 검증한다. 기존 cleanup decision을 대체하지 않고 그 소비 경계를 구체화한다.
+
+### Owner 관리 정보는 일반 Profile 조회 권한을 열지 않는다
+
+- Decision Date: 2026-09-05
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/profile-block.md`, `docs/design/profile-mute-block.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `memory/coding-style.md`, `PROD-822`, `PROD-823`.
+- Status: Active
+- Context / Problem: Block Target은 일반 Profile 조회가 불가능하지만 Owner는 자신의 관계를 식별하고 해제할 수 있어야 한다. 관리를 편하게 하려고 일반 Profile ref 전체를 반환하면 nested field와 loader가 직접 조회 제한을 우회할 수 있다.
+- Decision Outcome: selected Local Owner만 관계 Node·관리 목록과 관리에 필요한 최소 Target 정보를 조회한다. 직접 route 진입·새로고침에서도 일반 Target Profile이나 이전 client cache 없이 자신의 차단 여부와 해제 관계 ID를 확인할 수 있어야 한다. 자신의 Block이 없으면 다른 Owner의 Block ID를 반환하지 않는다. 이 정보는 일반 Profile·Post·Media·Follow 조회 권한을 부여하지 않는다. mutation은 required cleanup 완료 결과를 사용하고 성공한 해제는 실제 삭제한 관계 ID를 반환한다. selected actor가 바뀌면 후속 field는 현재 actor의 권한을 사용한다.
+- Alternatives Considered: 관리 목록도 일반 Target visibility로 제거하면 Owner의 해제 경로가 사라진다. 일반 Profile에 예외 scope를 주거나 client에서 field를 숨기는 방식은 서버 조회 경계를 약화한다. 구체 projection·field·loader 구성은 같은 결과를 만족하는 구현 선택으로 남긴다.
+- Consequences: Owner 관리 성공과 타인 관계·일반 Target 조회의 거부를 같은 fixture로 검증한다. mutation 결과를 만들기 위해 보호된 Target 상세를 다시 로드하지 않는다.
+- Confirmation / Follow-up: Owner A/B, Remote selected actor·guest·membership mismatch, Target·제삼자의 Block ID 조회, 같은 operation의 actor 전환, cleanup 실패와 정확한 해제 ID를 검증한다. 2026-09-06 HITL 정정에 따라 직접 route 진입·새로고침의 Owner 상태와 해제 ID, 자신의 Block이 없는 unavailable 결과를 API·UI에서 검증한다.
+
+### 기존 Notification의 차단은 각 Recipient 기준으로 판정한다
+
+- Decision Date: 2026-09-05
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/notification.md`, `docs/domain/objects/profile-block.md`, `PROD-822`; `PROD-821` 범위 정정 댓글 `dd0372f2-4356-46de-86f4-f8c4b503417c`.
+- Status: Active
+- Context / Problem: Notification은 Account가 Recipient Profile membership으로 조회·읽음 처리한다. 이를 selected Profile 하나의 Block 관계로 평가하면 같은 Account의 다른 Recipient 결과가 잘못 바뀐다.
+- Decision Outcome: 각 Notification의 Recipient와 Related Profile·Post를 기준으로 현재 availability를 평가한다. connection·Unread·Node·mark-read는 조회 불가 item을 같은 방식으로 제외하고 비직접 원인 row·Read State를 유지한다. Unblock 뒤에는 현재 정책을 다시 평가하며 별도의 과거 Notification 복구 결과를 약속하지 않는다.
+- Alternatives Considered: selected Profile로 Recipient를 대체하면 기존 Account membership 계약과 맞지 않는다. 조회 단계에서 row를 물리 삭제하거나 source 전체에 suppression을 추가하면 현재 slice의 책임을 바꾼다.
+- Consequences: 읽음 처리의 중복 ID·없는 ID·숨겨진 ID는 기존 no-op·멱등성 계약을 유지한다. `PROD-327` source suppression과 `PROD-328` 물리 cleanup은 이 검증 결과에 포함하지 않는다.
+- Confirmation / Follow-up: Recipient A/B와 같은 Account, 현재 source별 unavailable item, 혼합 ID 읽음 처리와 보존 row·Read State를 함께 검증한다.
+
+### 미구현 Post List·검색은 공통 후보 정책 검증으로 완료한다
+
+- Decision Date: 2026-09-06
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-822`·`PROD-813` 본문 `미구현 Post List·검색의 완료 기준 (2026-09-06 사용자 결정)`, `docs/domain/policies/post-list.md`, `memory/issue-openspec-workflow.md`.
+- Status: Active
+- Context / Problem: Hashtag Post List·Post 검색 endpoint가 없는데 실제 endpoint E2E를 전체 change의 archive 조건으로 요구하면 독립 기능의 구현까지 기다려야 한다.
+- Decision Outcome: 아직 없는 두 endpoint는 공통 Block 후보 정책 검증까지만 이 shared change의 완료 기준으로 삼는다. 신규 endpoint 구현·실제 E2E를 archive 조건으로 두지 않고, 공통 정책 검증과 실제 API 검증의 미실행을 구분해 기록한다. 현재 consumer와 검증 시점에 이미 제공되는 endpoint는 실제 공개 결과로 검증한다.
+- Alternatives Considered: endpoint 구현·E2E까지 완료해야 archive하는 대안과 공통 정책 검증으로 완료하는 대안을 제시했고, 사용자가 후자를 선택했다. 모든 Post List·검색에 적용되는 canonical Exclude 정책은 두 대안 모두 유지한다.
+- Consequences: `PROD-822`의 공통 후보 정책 검증과 `PROD-813`의 완료·archive 조건을 같은 범위로 맞춘다. archive 이후 추가되는 endpoint의 연결·검증은 해당 기능 이슈가 소유하며 이 change를 미완료로 유지하거나 다시 열지 않는다.
+- Confirmation / Follow-up: 2.10에서 정책 실행 결과와 실제 endpoint 미실행을 구분하고, 4.1·4.2·4.3에서 이 경계에 맞는 통합 증거와 archive 조건을 확인한다.
+
+### PROD-822는 cleanup PR 위에 독립 책임의 Stack layer로 구현한다
+
+- Decision Date: 2026-09-06
+- Decision Class: Implementation Choice
+- Authority / Provenance: 2026-09-06 사용자 결정, `PROD-821`, `PROD-822`, `PROD-813`, `docs/domain/objects/profile-block.md`, `memory/issue-openspec-workflow.md`
+- Status: Active
+- Context / Problem: 현재 `main`에는 additive Profile Block 저장 관계만 있고 cleanup PR #726은 Open·Draft다. cleanup과 정책·GraphQL의 책임을 분리하면서 자식 구현이 부모 PR merge까지 불필요하게 멈추지 않도록 Stack 순서를 명확히 해야 한다.
+- Decision Outcome: `PROD-822`는 #726을 부모 layer로 삼아 Stack을 쌓고 그 durable action·success gate를 소비한다. #726의 저장·cleanup 구현과 검증은 `PROD-821` 책임으로 유지하며, `PROD-822`는 정책·GraphQL 책임만 독립적으로 구현한다. 부모 PR이 Draft여도 자식 layer 구현을 시작할 수 있다.
+- Alternatives Considered: #726이 merge될 때까지 기다린 뒤 `main`에서 시작하는 방안, cleanup을 `PROD-822`에 복제하는 방안, #726 위에 자식 layer를 쌓는 방안을 비교했다. 사용자는 책임을 분리한 Stack을 선택했다.
+- Consequences: task 1.2~1.4는 `PROD-821`과 #726에 남고, `PROD-822` task는 policy·GraphQL consumer와 부모 action 연동만 소유한다. PR diff와 리뷰 책임은 분리되지만 자식 PR의 검증 base는 #726 결과를 포함한다.
+- Confirmation / Follow-up: `PROD-822` 브랜치의 Git ancestry와 GitHub PR base가 #726 head를 부모로 가리키는지 확인한다. #726 구현을 자식 diff에 복제하지 않고 각 layer의 검증 결과를 별도로 기록한다.
+
 ## Remaining Decisions
 
-없음.
+없음. 미구현 endpoint 완료 경계와 #726 위 Stack 책임 분리는 2026-09-06 사용자 결정으로 확정했다.
 
 ## Superseded Decisions
 

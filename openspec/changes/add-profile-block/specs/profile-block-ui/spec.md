@@ -74,11 +74,25 @@
 - **AND** 이미 표시 중인 Home·Local·Hashtag timeline·Profile Post List와 Notification은 각 surface의 서버 Profile Block 정책에 맞춰 숨기거나 갱신한다
 - **AND** mutation 실패 시 이전 cache를 차단된 것으로 확정하지 않는다
 
+#### Scenario: 새로고침과 직접 링크 진입에서도 차단 화면과 해제를 제공한다
+
+- **WHEN** selected Local Owner가 이미 차단한 Target의 Profile route에 이전 client cache 없이 직접 진입하거나 새로고침한다
+- **THEN** 시스템은 API의 현재 Owner 차단 결과로 identity-free `blocking` 화면과 해당 Profile Block ID의 `차단 해제` action을 제공한다
+- **AND** 일반 Target Profile 조회 성공이나 차단 목록을 먼저 열어 본 상태를 요구하지 않는다
+- **AND** loading부터 차단 화면이 확정될 때까지 Target identity·이미 알고 있는 handle·content·social action을 표시하지 않는다
+
+#### Scenario: 상대에게만 차단된 직접 route는 해제 action을 제공하지 않는다
+
+- **WHEN** 현재 selected Profile은 Target을 차단하지 않았지만 Target의 Block 때문에 직접 Profile을 조회할 수 없다
+- **THEN** 시스템은 identity-free `blockedBy` 화면을 actionless로 표시한다
+- **AND** 다른 Owner의 Block을 해제할 action이나 보호된 Target 정보를 표시하지 않는다
+
 #### Scenario: selected Profile을 전환해도 Block 상태를 섞지 않는다
 
 - **WHEN** selected Profile A의 Block 목록을 본 뒤 selected Profile B로 전환한다
 - **THEN** 시스템은 A의 Block 상태와 client 상태를 B의 결과로 재사용하지 않는다
 - **AND** B의 Block 목록은 B가 Owner인 관계만 표시한다
+- **AND** 같은 Target의 직접 route도 B의 현재 서버 결과로 다시 판정하며 A의 차단 상태·해제 ID를 사용하지 않는다
 
 #### Scenario: Unblock 뒤 제거된 관계를 UI가 복구하지 않는다
 
