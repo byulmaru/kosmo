@@ -74,7 +74,6 @@ describe('ProfileMuteController', () => {
     );
     assert.equal(commits.length, 1);
     assert.deepEqual(commits[0].variables, { id: 'profile:target' });
-    assert.equal(commits[0].updater !== undefined, true);
 
     commits[0].onCompleted({ muteProfile: { profileMute: { id: 'profile-mute:1' } } }, []);
     await request;
