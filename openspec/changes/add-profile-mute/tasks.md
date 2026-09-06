@@ -231,14 +231,15 @@ Profile action·관리 목록·Relay 상태를 연결하고 Home·Local·Profile
   shell·navigation을 중복 구현하지 않았는지 확인한다.
 - canonical·Linear·OpenSpec을 최종 대조하고 archive 전후 strict validation을 통과시킨다.
 
-- [ ] 6.1 PROD-825의 Local 서버 후보 정책 구현·API 검증 증거를 확인하고 기존 Local UI에 연결한다.
-- [ ] 6.2 PROD-825의 Local API 회귀 증거를 재사용하고 selected Profile 전환·Mute 해제 뒤 Local 화면과
-      Relay connection이 최신 서버 결과에 맞춰 갱신되는지 runtime에서 검증한다.
+- [x] 6.1 PROD-825의 Local 서버 후보 정책 구현·API 검증 증거를 확인하고 기존 Local UI에 연결한다. — [검증 기록](./verification.md#61-local-ui-연결)
+- [x] 6.2 PROD-825의 Local API 회귀 증거를 재사용하고 selected Profile 전환·Mute 해제 뒤 Local 화면과
+      Relay connection이 최신 서버 결과에 맞춰 갱신되는지 runtime에서 검증한다. — [검증 기록](./verification.md#62-selected-profile-전환과-해제-후-relay-갱신)
 - [x] 6.3 `PROD-858`의 공용 UI 결과를 Profile action·관리 목록·완료 피드백에 재사용하고 Relay
       store·connection 갱신을 기존 GraphQL 관계에 연결한다. 공통 Settings IA는 먼저 착수한 runtime 이슈의
       결과를 사용한다.
 - [ ] 6.4 직접 Target Profile의 정상 Post 표시와 Mute 상태·해제 action을 Web·iOS·Android 및 접근성 경계에서
-      검증한다.
-- [ ] 6.5 Home·Local·Profile·Repost와 기존 관계·상호작용 상태를 연결하는 cross-slice E2E를 통과시킨다.
+      검증한다. — [Web 부분 검증 및 Native 미완료](./verification.md#64-target-profile-web-native와-접근성)
+- [x] 6.5 Home·Local·Profile·Repost와 기존 관계·상호작용 상태를 연결하는 cross-slice E2E를 통과시킨다.
+      — [최종 E2E 8/8](./verification.md#65-cross-slice-e2e와-불변성)
 - [ ] 6.6 모든 적용 이슈와 artifact를 최종 대조하고 delta spec을 동기화한 뒤 OpenSpec을 archive해 archive 후
-      strict validation을 통과시킨다.
+      strict validation을 통과시킨다. — 미완료이며 archive하지 않는다.
