@@ -1,5 +1,5 @@
 import { MoreHorizontal, Volume2, VolumeOff } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
@@ -34,20 +34,42 @@ type Props = {
   | { surface: 'button' | 'text'; muted: true; items?: never; renderTrigger?: never }
 );
 
+type CommittedProfileTarget = Readonly<{
+  profileId: string;
+  revision: number;
+}>;
+
+type CommittedProfileTargetRef = {
+  current: CommittedProfileTarget;
+};
+
 export function ProfileMuteAction(props: Props) {
+  const committedTargetRef = useRef<CommittedProfileTarget>({
+    profileId: props.profileId,
+    revision: 0,
+  });
+
   // A changed target owns a fresh request lifecycle; old completions cannot update its feedback.
-  return <ProfileMuteActionContent key={props.profileId} {...props} />;
+  return (
+    <ProfileMuteActionContent
+      key={props.profileId}
+      {...props}
+      committedTargetRef={committedTargetRef}
+    />
+  );
 }
 
 function ProfileMuteActionContent({
   displayName,
+  committedTargetRef,
   muted,
   onChangeMuted,
   onFeedback,
+  profileId,
   surface = 'menu',
   items = [],
   renderTrigger,
-}: Props) {
+}: Props & { committedTargetRef: CommittedProfileTargetRef }) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const mobile = Platform.OS !== 'web' || width < breakpoints.compact;
@@ -59,6 +81,7 @@ function ProfileMuteActionContent({
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
   const mounted = useRef(false);
+  const claimedRevisionRef = useRef<number | null>(null);
   const cancelRef = useRef<View>(null);
   const actionRef = useRef<View>(null);
   const focusTrigger = useRef<() => void>(() => {});
@@ -71,6 +94,16 @@ function ProfileMuteActionContent({
       actionRef.current?.focus();
     }
   };
+  useLayoutEffect(() => {
+    const committedTarget = committedTargetRef.current;
+    if (committedTarget.profileId !== profileId) {
+      committedTargetRef.current = {
+        profileId,
+        revision: committedTarget.revision + 1,
+      };
+    }
+    claimedRevisionRef.current = committedTargetRef.current.revision;
+  }, [committedTargetRef, profileId]);
   useEffect(() => {
     if (!pending && restoreFocus.current) {
       cancelRef.current?.focus();
@@ -101,6 +134,13 @@ function ProfileMuteActionContent({
       succeeded = true;
     } catch {
       // The public boundary presents a safe message, never a backend error string.
+    }
+    if (
+      claimedRevisionRef.current === null ||
+      committedTargetRef.current.profileId !== profileId ||
+      committedTargetRef.current.revision !== claimedRevisionRef.current
+    ) {
+      return;
     }
     if (!mounted.current && !succeeded) {
       return;
