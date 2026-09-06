@@ -44,8 +44,8 @@ export default function HomeScreen() {
   const { revision } = useRelayActor();
   const environment = useRelayEnvironment();
   const shellChrome = useShellChrome();
-  const registerHomeRefresh = shellChrome?.registerHomeRefresh;
   const registerHomeReselection = shellChrome?.registerHomeReselection;
+  const profileMuteTimelineRevision = shellChrome?.profileMuteTimelineRevision ?? 0;
   const [fetchKey, setFetchKey] = useState(0);
   const lastSuccessfulHomeRef = useRef<HomeLastSuccessful | null>(null);
   const retryHome = useCallback(() => setFetchKey((key) => key + 1), []);
@@ -58,14 +58,6 @@ export default function HomeScreen() {
     }
     handleHomeRefresh();
   }, [handleHomeRefresh]);
-
-  useEffect(() => {
-    if (!registerHomeRefresh) {
-      return;
-    }
-
-    return registerHomeRefresh(handleHomeRefresh);
-  }, [handleHomeRefresh, registerHomeRefresh]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !registerHomeReselection) {
@@ -93,7 +85,7 @@ export default function HomeScreen() {
         title="홈을 불러오지 못했어요"
       >
         <HomeContentBoundary
-          fetchKey={`${revision}:${fetchKey}`}
+          fetchKey={`${revision}:${profileMuteTimelineRevision}:${fetchKey}`}
           key={revision}
           lastSuccessfulHomeRef={lastSuccessfulHomeRef}
           onRetry={retryHome}

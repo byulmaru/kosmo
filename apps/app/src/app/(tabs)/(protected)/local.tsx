@@ -1,5 +1,5 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
@@ -39,17 +39,9 @@ const LocalQuery = graphql`
 export default function LocalScreen() {
   const { revision } = useRelayActor();
   const shellChrome = useShellChrome();
-  const registerLocalRefresh = shellChrome?.registerLocalRefresh;
+  const profileMuteTimelineRevision = shellChrome?.profileMuteTimelineRevision ?? 0;
   const [fetchKey, setFetchKey] = useState(0);
   const refresh = useCallback(() => setFetchKey((key) => key + 1), []);
-
-  useEffect(() => {
-    if (!registerLocalRefresh) {
-      return;
-    }
-
-    return registerLocalRefresh(refresh);
-  }, [registerLocalRefresh, refresh]);
 
   return (
     <LocalFrame onReselect={refresh} paginationOwnerKey={`local:${revision}`}>
@@ -58,7 +50,10 @@ export default function LocalScreen() {
         onRetry={refresh}
         title="로컬 타임라인을 불러오지 못했어요"
       >
-        <LocalContent fetchKey={`${revision}:${fetchKey}`} key={revision} />
+        <LocalContent
+          fetchKey={`${revision}:${profileMuteTimelineRevision}:${fetchKey}`}
+          key={revision}
+        />
       </RouteBoundary>
     </LocalFrame>
   );
