@@ -1,5 +1,5 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
@@ -41,7 +41,17 @@ const LocalQuery = graphql`
 
 export default function LocalScreen() {
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const refresh = () => routeBoundaryRef.current?.refetch();
+  const shellChrome = useShellChrome();
+  const registerLocalRefresh = shellChrome?.registerLocalRefresh;
+  const refresh = useCallback(() => routeBoundaryRef.current?.refetch(), []);
+
+  useEffect(() => {
+    if (!registerLocalRefresh) {
+      return;
+    }
+
+    return registerLocalRefresh(refresh);
+  }, [registerLocalRefresh, refresh]);
 
   return (
     <LocalFrame onReselect={refresh}>

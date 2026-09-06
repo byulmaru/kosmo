@@ -46,14 +46,24 @@ const HomeQuery = graphql`
 export default function HomeScreen() {
   const environment = useRelayEnvironment();
   const shellChrome = useShellChrome();
+  const registerHomeRefresh = shellChrome?.registerHomeRefresh;
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
+  const handleHomeRefresh = useCallback(() => routeBoundaryRef.current?.refetch(), []);
   const handleHomeReselection = useCallback(() => {
     if (Platform.OS === 'web') {
       window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
     }
-    routeBoundaryRef.current?.refetch();
-  }, []);
+    handleHomeRefresh();
+  }, [handleHomeRefresh]);
+
+  useEffect(() => {
+    if (!registerHomeRefresh) {
+      return;
+    }
+
+    return registerHomeRefresh(handleHomeRefresh);
+  }, [handleHomeRefresh, registerHomeRefresh]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !registerHomeReselection) {
