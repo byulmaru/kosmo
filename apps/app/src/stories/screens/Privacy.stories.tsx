@@ -19,19 +19,15 @@ export const Policy: Story = {
     await expect(canvas.getByText('9. 자동 수집 정보와 행태정보')).toBeVisible();
     await expect(canvas.getByText('PostHog 제품 분석')).toBeVisible();
     await expect(canvas.getByText(/pageview·pageleave·autocapture/)).toBeVisible();
-    await expect(canvas.getByText(/기본 click ID.*utm_\*/)).toBeVisible();
+    await expect(canvas.getByText(/feature flag와 remote config 요청/)).toBeVisible();
+    await expect(canvas.getByText(/Session Replay: 세션의 10%/)).toBeVisible();
     await expect(
-      canvas.getByText(/일반 분석 이벤트.*구체적인 기준은 확정 후 별도로 공지/),
+      canvas.getByText(/ph-mask는 Replay에서 해당 영역의 텍스트를 masking/),
     ).toBeVisible();
-    await expect(canvas.queryByText(/12개월.*자동 삭제/)).not.toBeInTheDocument();
     await expect(
-      canvas.getByText(/구체적인 이전 항목.*실제 계약과 적용 법적 근거는 확인 중/),
+      canvas.getByText(/ph-no-capture는 해당 DOM subtree를 autocapture에서 제외/),
     ).toBeVisible();
-    await expect(canvas.getByText(/Session replay: 세션의 10%/)).toBeVisible();
-    await expect(
-      canvas.getByText(/ph-mask.*Replay text.*ph-no-capture.*autocapture/),
-    ).toBeVisible();
-    await expect(canvas.queryByText(/OpenPanel/)).not.toBeInTheDocument();
+    await expect(canvas.getByText(/cookie 또는 localStorage/)).toBeVisible();
     await expect(canvas.getByRole('link', { name: 'KOSMO로 돌아가기' })).toHaveAttribute(
       'href',
       '/',

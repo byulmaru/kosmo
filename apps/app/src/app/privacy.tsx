@@ -109,18 +109,17 @@ export default function PrivacyScreen() {
               목적: 기능 이용 현황 파악, 사용자 흐름 개선, 품질 문제 확인과 제품 우선순위 결정
             </Bullet>
             <Bullet>
-              항목: 아래 9절의 PostHog 자동 수집 정보와 원격 설정 요청 정보, opaque Account ID,
-              이벤트별 선택 Profile ID, 행동 이벤트와 Session Replay
+              항목: 아래 9절의 PostHog 자동 수집 정보, opaque Account ID와 선택 Profile ID, 행동
+              이벤트와 Session Replay
             </Bullet>
             <Bullet>
               법적 근거: 개인정보 보호법 제15조 제1항 제6호(서비스 개선을 위한 정당한 이익).
-              별마루는 입력값과 게시글 본문 원문을 Replay에서 보호하고 전체 세션의 10%만 표본
-              수집하는 등 이용자 권리 침해를 줄입니다.
+              별마루는 input·textarea와 게시물 본문 보호 영역을 masking하고 Session Replay의 10%만
+              표본 수집하는 등 이용자 권리 침해를 줄입니다.
             </Bullet>
             <Bullet>
-              보유: 일반 분석 이벤트는 확인된 PostHog 제공 조건과 적용 법령에 따른 기간 동안 보유한
-              뒤 삭제하며, 구체적인 기준은 확정 후 별도로 공지합니다. Session Replay는 수집일부터
-              30일입니다.
+              보유: 일반 이벤트의 보유·삭제 조건은 확인된 PostHog 정책과 적용 법령에 따릅니다.
+              Session Replay는 수집일부터 30일입니다.
             </Bullet>
           </PolicyCard>
           <PolicyCard title="문의와 권리 행사 처리">
@@ -137,7 +136,7 @@ export default function PrivacyScreen() {
           <Paragraph>
             별마루 ID 로그인과 Kosmo 이용 과정에서 이용자가 직접 입력하거나 서비스 동작으로 생성되는
             정보를 수집합니다. 문의를 보내는 경우 이메일을 통해 정보를 수집합니다. Web 분석 정보는
-            브라우저의 PostHog SDK가 자동으로 수집합니다.
+            브라우저의 PostHog Web SDK가 자동으로 수집합니다.
           </Paragraph>
         </Section>
 
@@ -160,7 +159,10 @@ export default function PrivacyScreen() {
           <Bullet>Amazon Web Services, Inc.: 서비스 인프라 운영과 데이터 보관</Bullet>
           <Bullet>Oracle Corporation: 서비스 인프라 운영과 데이터 보관</Bullet>
           <Bullet>Cloudflare, Inc.: 네트워크 전송, 보안과 콘텐츠 제공</Bullet>
-          <Bullet>PostHog, Inc.: 제품 이용 분석, 원격 설정과 Session Replay 처리</Bullet>
+          <Bullet>PostHog, Inc.: 제품 이용 분석과 Session Replay 서비스</Bullet>
+          <Paragraph>
+            PostHog Cloud에서 수집되는 제품 분석 및 Session Replay 정보는 아래 9절에 설명합니다.
+          </Paragraph>
         </Section>
 
         <Section title="5. 개인정보의 국외 이전">
@@ -172,13 +174,13 @@ export default function PrivacyScreen() {
             처리 목적 달성 시까지 보유됩니다.
           </Paragraph>
           <Paragraph>
-            PostHog Cloud 이용 과정에서 아래 9절의 제품 분석 정보가 PostHog, Inc.가 처리하는 미국
-            Cloud로 이전됩니다. 이전 목적은 제품 이용 분석, 사용자 경험 개선, 원격 설정과 Session
-            Replay 처리입니다. 구체적인 이전 항목·시점·방법·보유 조건, 실제 계약과 적용 법적 근거는
-            확인 중이며 개정 방침의 시행일과 함께 별도로 공지합니다.
+            PostHog Cloud 이용 과정에서 9절의 제품 분석 정보가 미국의 PostHog, Inc.
+            (privacy@posthog.com)로 서비스 이용 시 암호화된 네트워크를 통해 지속적으로 이전되어 제품
+            이용 분석과 Session Replay 제공을 위해 처리됩니다. 일반 이벤트의 보유·삭제 조건은 확인된
+            PostHog 정책과 적용 법령에 따르며, Session Replay는 수집일부터 30일 동안 보유됩니다.
           </Paragraph>
           <Paragraph>
-            Cloudflare 국외 이전은 hello@byulmaru.co로 거부를 요청할 수 있습니다. 이를 거부하면
+            이용자는 hello@byulmaru.co로 국외 이전 거부를 요청할 수 있습니다. 이전을 거부하면
             Kosmo의 전부 또는 일부를 이용하기 어려울 수 있습니다.
           </Paragraph>
         </Section>
@@ -219,46 +221,31 @@ export default function PrivacyScreen() {
 
         <Section title="9. 자동 수집 정보와 행태정보">
           <PolicyCard title="PostHog 제품 분석">
+            <Bullet>운영 주체: PostHog, Inc.가 제공하는 PostHog Cloud</Bullet>
             <Bullet>
-              처리 구조: 별마루가 제품 분석의 목적과 수집 범위를 정하고 PostHog, Inc.의 미국 Cloud가
-              분석 정보를 처리합니다.
+              수집 항목: pageview·pageleave·autocapture 등 표준 event, 페이지
+              URL·query·referrer·session metadata, 기기·OS·브라우저 정보, 접속 일시, 익명
+              device/session ID
             </Bullet>
             <Bullet>
-              자동 이벤트와 metadata: pageview·pageleave·autocapture, 전체 URL과 query, 페이지
-              title·pathname, referrer·session-entry와 protocol metadata, 기기·OS·브라우저 정보,
-              접속 일시와 device/session ID
-            </Bullet>
-            <Bullet>
-              검색·캠페인 metadata: Search q, gclid·fbclid·msclkid 같은 기본 click ID,
-              referrer·session에서 파생되는 검색·캠페인 metadata와 utm_*가 원문으로 수집될 수
-              있습니다.
+              표준 metadata에는 query의 q, 기본 click ID, referrer·session에서 파생된 검색·캠페인
+              metadata와 utm_*가 포함될 수 있습니다. 앱의 명시적 검색 이벤트에는 검색 원문과 선택한
+              Profile ID를 넣지 않습니다.
             </Bullet>
             <Bullet>
               로그인 후 연결 정보: opaque Account ID와 이벤트 발생 시 선택 Profile ID. 이메일,
-              이름과 handle은 identity trait로 보내지 않지만 URL·화면·이벤트의 다른 수집 범위까지
-              비식별화된다는 뜻은 아닙니다.
+              이름과 handle은 identity trait로 보내지 않습니다.
+            </Bullet>
+            <Bullet>원격 설정: feature flag와 remote config 요청이 발생할 수 있습니다.</Bullet>
+            <Bullet>
+              Session Replay: 세션의 10%를 표본 수집하고 30일 보관합니다. Cloud Normal input
+              masking으로 input·textarea 값을 가립니다. 화면의 모든 텍스트·이미지가 자동으로
+              masking된다는 의미는 아닙니다.
             </Bullet>
             <Bullet>
-              행동 이벤트: Profile 생성·선택, 게시, 팔로우, 검색 제출·결과 load·결과 선택 등 타입이
-              지정된 이벤트를 수집합니다. 앱이 보내는 검색 이벤트의 별도 속성에는 검색 원문을
-              추가하지 않지만, 원문 q는 위의 표준 URL·referrer·session metadata에 포함될 수
-              있습니다.
-            </Bullet>
-            <Bullet>
-              검색 입력 위험: q는 자유 형식이어서 예상하지 못한 개인정보가 입력될 수 있습니다. 현재
-              검색 결과는 공개 Profile handle로 한정하며, 게시물·본문·전문 검색 등으로 범위를 넓히기
-              전에 수집 결정을 다시 검토합니다.
-            </Bullet>
-            <Bullet>
-              브라우저 저장과 원격 설정: 분석 식별자와 세션 정보를 cookie와 localStorage에 저장하고
-              feature flag를 포함한 원격 설정을 요청할 수 있습니다. 브라우저 저장기간은 서버의 분석
-              이벤트 보유기간과 다릅니다.
-            </Bullet>
-            <Bullet>
-              Session replay: 세션의 10%에서 화면 전환, 클릭, 스크롤과 렌더링 상태를 기록합니다.
-              input·textarea 값은 마스킹합니다. 게시글 본문에는 ph-mask로 Replay text를 마스킹하고
-              ph-no-capture로 해당 subtree를 autocapture에서 제외합니다. 그 밖의 표시명, handle과
-              화면 텍스트는 보일 수 있으며 녹화본은 수집일부터 30일간 보유합니다.
+              게시물 본문 보호 영역의 ph-mask는 Replay에서 해당 영역의 텍스트를 masking하고,
+              ph-no-capture는 해당 DOM subtree를 autocapture에서 제외합니다. 두 marker는 화면 전체,
+              URL metadata 또는 네트워크 요청 전체를 가리지 않습니다.
             </Bullet>
             <Bullet>
               방법과 통제: Web SDK로 자동 수집하며 맞춤형 광고나 제3자 광고 제공에 사용하지
@@ -266,10 +253,9 @@ export default function PrivacyScreen() {
             </Bullet>
           </PolicyCard>
           <Paragraph>
-            로그인 유지와 보안을 위한 저장 정보와 PostHog 분석용 cookie·localStorage 정보는 서로
-            다른 목적입니다. 분석용 저장을 차단하거나 삭제하면 분석의 연속성이 제한될 수 있지만
-            Kosmo의 핵심 기능은 계속 이용할 수 있습니다. 로그인용 저장까지 차단하거나 삭제하면
-            로그인 유지 등 일부 기능이 제한될 수 있습니다.
+            PostHog 분석 식별자는 cookie 또는 localStorage에 저장될 수 있습니다. 로그인 유지와
+            보안을 위한 cookie 또는 브라우저 저장소를 차단하거나 삭제하면 로그인 유지 등 일부 기능이
+            제한될 수 있습니다.
           </Paragraph>
         </Section>
 
