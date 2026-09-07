@@ -134,6 +134,6 @@ Repost Notification의 Source Repost는 알림을 만든 원인 Repost Post다. 
 
 ## 제외/보류
 
-- 조회 불가 Notification의 비동기 제거를 위한 event, queue/scan, retry와 대량 처리 방식은 후속
-  capability에서 결정한다.
+- 조회 불가 Notification의 비동기 제거를 event-driven 처리로 전환하거나 현재 범위를 넘어 대량 처리하는 방식은
+  후속 capability에서 결정한다.
 - Recipient Profile의 일시 비활성화·정지는 비동기 물리 제거 원인에서 제외한다.

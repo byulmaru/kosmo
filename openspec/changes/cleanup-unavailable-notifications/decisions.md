@@ -8,7 +8,7 @@
 
 - Decision Date: 2026-08-25
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/notification.md`, `PROD-328`
+- Authority / Provenance: `docs/domain/objects/notification.md`, [PROD-328](https://linear.app/byulmaru/issue/PROD-328/unavailable-notification을-비동기-정리한다)
 - Status: Active
 - Decision Outcome: missing source, source/Recipient 불일치와 Recipient 기준 Related Post/Profile unavailable만 삭제한다. Recipient 자체의 일시 비활성·정지는 삭제 원인에서 제외한다.
 - Consequences: API와 cleanup은 viewer-independent availability predicate를 공유하고, cleanup은 삭제 경계에서 이를 다시 확인한다.
@@ -16,8 +16,8 @@
 ### 각 Schedule 실행은 한 bounded batch만 시도한다
 
 - Decision Date: 2026-09-04
-- Decision Class: Product Choice
-- Authority / Provenance: 사용자 결정, `PROD-328`
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/notification.md`, [PROD-328](https://linear.app/byulmaru/issue/PROD-328/unavailable-notification을-비동기-정리한다)
 - Status: Active
 - Decision Outcome: Workflow는 bounded cleanup Activity를 한 번 호출한다. 전체 sweep, cursor, checkpoint, continue-as-new와 rate limit은 두지 않는다.
 - Alternatives Considered: 한 Workflow가 전체 backlog를 순회하는 구조는 필요한 보장보다 복잡해 사용하지 않는다.
@@ -26,8 +26,8 @@
 ### 실행별 정확한 삭제 개수는 보장하지 않는다
 
 - Decision Date: 2026-09-04
-- Decision Class: Product Choice
-- Authority / Provenance: 사용자 결정, `PROD-328`
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/notification.md`, [PROD-328](https://linear.app/byulmaru/issue/PROD-328/unavailable-notification을-비동기-정리한다)
 - Status: Active
 - Decision Outcome: Activity retry가 commit 뒤 다음 batch를 추가 삭제하거나 응답 유실로 관측 개수가 달라져도 허용한다.
 - Alternatives Considered: Schedule 실행별 idempotency ledger는 이 cleanup의 정확성에 필요하지 않아 추가하지 않는다.
@@ -36,8 +36,8 @@
 ### Schedule은 create-if-missing 하고 즉시 활성화한다
 
 - Decision Date: 2026-09-04
-- Decision Class: Product Choice
-- Authority / Provenance: 사용자 결정, `PROD-328`
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/notification.md`, [PROD-328](https://linear.app/byulmaru/issue/PROD-328/unavailable-notification을-비동기-정리한다)
 - Status: Active
 - Decision Outcome: missing Schedule은 24시간 기본 interval로 활성 생성한다. 기존 Schedule은 timing, action, overlap과 pause 상태를 포함해 그대로 둔다.
 - Alternatives Considered: paused 생성과 drift reconciliation은 운영 요구가 아니므로 제거한다.
@@ -46,8 +46,8 @@
 ### 관측은 structured log와 Temporal 기본 상태만 사용한다
 
 - Decision Date: 2026-09-04
-- Decision Class: Product Choice
-- Authority / Provenance: 사용자 결정, `PROD-328`
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/notification.md`, [PROD-328](https://linear.app/byulmaru/issue/PROD-328/unavailable-notification을-비동기-정리한다)
 - Status: Active
 - Decision Outcome: Activity 결과를 structured log에 남기고 Workflow/Schedule 성공·실패는 Temporal 기본 상태로 확인한다.
 - Alternatives Considered: cleanup 전용 counter, histogram, Prometheus endpoint와 scrape metadata는 요구사항이 아니므로 제거한다.

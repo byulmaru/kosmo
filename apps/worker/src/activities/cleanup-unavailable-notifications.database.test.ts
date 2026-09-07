@@ -189,16 +189,43 @@ test('cleanup evaluates every source kind while preserving valid source projecti
   assert.deepEqual(remaining.map(({ id }) => id).sort(), available.map(({ id }) => id).sort());
 });
 
-test('cleanup processes only a bounded batch per Activity invocation', async () => {
+test('cleanup converges across bounded Activity invocations and preserves available notifications', async () => {
   const recipient = await createProfile();
-  await Promise.all(
+  const inactiveRecipient = await createProfile({ state: ProfileState.DISABLED });
+  const follower = await createProfile();
+  const availableFollow = await createFollow(follower.id, recipient.id);
+  const inactiveFollow = await createFollow(follower.id, inactiveRecipient.id);
+  const available = await createNotification({
+    recipientProfileId: recipient.id,
+    sourceId: availableFollow.id,
+  });
+  const recipientOnlyInactive = await createNotification({
+    recipientProfileId: inactiveRecipient.id,
+    sourceId: inactiveFollow.id,
+  });
+  const unavailable = await Promise.all(
     Array.from({ length: 101 }, () => createNotification({ recipientProfileId: recipient.id })),
   );
+  const unavailableIds = unavailable.map(({ id }) => id);
 
   await runCleanup();
 
-  assert.ok(
-    (await db.$count(Notifications, eq(Notifications.recipientProfileId, recipient.id))) > 0,
+  const remainingAfterFirstInvocation = await db.$count(
+    Notifications,
+    inArray(Notifications.id, unavailableIds),
+  );
+  assert.ok(remainingAfterFirstInvocation > 0);
+
+  await runCleanup();
+
+  assert.equal(await db.$count(Notifications, inArray(Notifications.id, unavailableIds)), 0);
+  const remainingSentinels = await db
+    .select({ id: Notifications.id })
+    .from(Notifications)
+    .where(inArray(Notifications.id, [available.id, recipientOnlyInactive.id]));
+  assert.deepEqual(
+    remainingSentinels.map(({ id }) => id).sort(),
+    [available.id, recipientOnlyInactive.id].sort(),
   );
 });
 
