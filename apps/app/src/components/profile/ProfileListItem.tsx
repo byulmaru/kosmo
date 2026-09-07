@@ -69,7 +69,7 @@ export function ProfileListItem({ linked = false, onPress, profile, style }: Pro
           <Pressable
             accessibilityRole="link"
             onPress={onPress}
-            style={[profileStyle, styles.linkedProfile]}
+            style={StyleSheet.flatten([profileStyle, styles.linkedProfile])}
           >
             {content}
           </Pressable>
