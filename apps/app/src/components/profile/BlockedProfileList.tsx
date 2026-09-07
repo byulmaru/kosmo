@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, space, textStyles } from '@/theme/tokens';
 import { ProfileBlockAction } from './ProfileBlockAction';
@@ -28,24 +29,42 @@ type Props = {
 export function BlockedProfileList({ onDismiss, onFeedback, onUnblock, state }: Props) {
   const theme = useTheme();
   const headingRef = useRef<View>(null);
-  const actionRefs = useRef(new Map<string, View>());
-  const removedFocus = useRef<{ id: string; index: number } | null>(null);
+  const focusAfterUnblock = useRef(false);
+  const { showToast } = useToast();
+  const loadError =
+    state.status === 'error'
+      ? state
+      : state.status === 'loaded' && state.pagination.status === 'error'
+        ? state.pagination
+        : null;
+  const errorMessage = loadError
+    ? state.status === 'error'
+      ? '차단한 프로필을 불러오지 못했어요'
+      : '프로필을 더 불러오지 못했어요'
+    : null;
+  const retry = loadError?.onRetry;
+  const retryRef = useRef(retry);
   useEffect(() => {
-    const removed = removedFocus.current;
-    if (
-      !removed ||
-      state.status !== 'loaded' ||
-      state.profiles.some((profile) => profile.id === removed.id)
-    ) {
-      return;
+    retryRef.current = retry;
+  }, [retry]);
+  useEffect(() => {
+    if (errorMessage) {
+      return showToast(errorMessage, {
+        tone: 'danger',
+        action: {
+          label: '다시 시도',
+          onPress: () => {
+            headingRef.current?.focus();
+            retryRef.current?.();
+          },
+        },
+      });
     }
-    removedFocus.current = null;
-    const next = state.profiles[Math.min(removed.index, state.profiles.length - 1)];
-    const action = next ? actionRefs.current.get(next.id) : undefined;
-    if (action) {
-      action.focus();
-    } else {
+  }, [errorMessage, showToast]);
+  useEffect(() => {
+    if (focusAfterUnblock.current) {
       headingRef.current?.focus();
+      focusAfterUnblock.current = false;
     }
   }, [state]);
   return (
@@ -63,17 +82,16 @@ export function BlockedProfileList({ onDismiss, onFeedback, onUnblock, state }: 
       {state.status === 'loading' ? (
         <StateView loading title="차단한 프로필을 불러오는 중입니다." />
       ) : state.status === 'error' ? (
-        <StateView
-          alert
-          title="차단한 프로필을 불러오지 못했어요"
-          actionLabel="다시 시도"
-          onAction={state.onRetry}
-        />
+        <View style={styles.pagination}>
+          <Button onPress={state.onRetry} tone="secondary">
+            다시 시도
+          </Button>
+        </View>
       ) : state.profiles.length === 0 && state.pagination.status === 'end' ? (
         <StateView title="차단한 프로필이 없어요" />
       ) : (
         <>
-          {state.profiles.map((profile, index) => (
+          {state.profiles.map((profile) => (
             <ProfileListItemContent
               key={profile.id}
               avatarLabel={profile.displayName}
@@ -83,20 +101,11 @@ export function BlockedProfileList({ onDismiss, onFeedback, onUnblock, state }: 
             >
               <ProfileBlockAction
                 blocked
-                controlRef={(node) => {
-                  if (node) {
-                    actionRefs.current.set(profile.id, node);
-                  } else {
-                    actionRefs.current.delete(profile.id);
-                  }
-                }}
                 displayName={profile.displayName}
                 onChangeBlocked={() => onUnblock(profile.id)}
                 onDismiss={() => onDismiss?.(profile.id)}
                 onFeedback={(feedback) => {
-                  if (feedback.status === 'success') {
-                    removedFocus.current = { id: profile.id, index };
-                  }
+                  focusAfterUnblock.current = feedback.status === 'success';
                   onFeedback?.({ ...feedback, profileId: profile.id });
                 }}
                 profileId={profile.id}
@@ -105,12 +114,11 @@ export function BlockedProfileList({ onDismiss, onFeedback, onUnblock, state }: 
             </ProfileListItemContent>
           ))}
           {state.pagination.status === 'error' ? (
-            <StateView
-              alert
-              title="프로필을 더 불러오지 못했어요"
-              actionLabel="다시 시도"
-              onAction={state.pagination.onRetry}
-            />
+            <View style={styles.pagination}>
+              <Button onPress={state.pagination.onRetry} tone="secondary">
+                더 불러오기
+              </Button>
+            </View>
           ) : state.pagination.status === 'loading' ? (
             <StateView loading title="프로필을 더 불러오는 중입니다." />
           ) : state.pagination.status === 'more' ? (

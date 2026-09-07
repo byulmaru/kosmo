@@ -20,7 +20,8 @@
 
 - **WHEN** Block mutation이 성공하거나 실패한다
 - **THEN** 성공 시 시스템은 차단된 Profile의 서버 확정 상태와 관리 action을 표시한다
-- **AND** 실패 시 시스템은 Profile의 기존 서버 확정 상태를 유지하고 공용 오류 피드백과 재시도 경로를 제공한다
+- **AND** 실패 시 시스템은 Profile의 기존 서버 확정 상태를 유지하고 확인창을 닫은 뒤 원래 trigger focus를 복원하고 공용 오류 Toast를 표시한다
+- **AND** 같은 action을 다시 열어 재시도할 수 있다
 
 ### Requirement: Separate Profile Block management destination
 
@@ -49,7 +50,16 @@
 - **AND** 해제 mutation과 성공 feedback을 실행하지 않는다
 - **WHEN** 확정한 차단 해제 요청이 pending이거나 실패한다
 - **THEN** pending에는 중복 입력과 dismiss를 차단하고 busy를 전달한다
-- **AND** 실패하면 기존 차단 상태와 확인창을 유지하며 오류 feedback과 재시도 경로를 제공한다
+- **AND** 실패하면 기존 차단 상태와 목록을 유지하고 확인창을 닫은 뒤 원래 trigger focus를 복원하고 공용 오류 Toast를 표시한다
+- **AND** 같은 해제 action을 다시 열어 재시도할 수 있다
+
+#### Scenario: 관리 목록 조회 실패와 성공 제거 후 focus
+
+- **WHEN** 최초 또는 추가 목록 조회가 실패한다
+- **THEN** 시스템은 공용 danger Toast와 `다시 시도` action을 제공한다
+- **AND** Toast가 사라져도 본문에 최초 `다시 시도` 또는 추가 `더 불러오기`를 유지한다
+- **WHEN** 차단 해제 성공 feedback으로 목록 행을 제거한다
+- **THEN** 목록 제목으로 focus를 이동한다
 
 ### Requirement: Profile Block direct route presents basic Profile and content state
 

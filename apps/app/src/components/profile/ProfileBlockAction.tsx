@@ -1,15 +1,13 @@
-import { Ban, MoreHorizontal, ShieldOff } from 'lucide-react-native';
+import { Ban, ShieldOff } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
-import { IconButton } from '@/components/ui/IconButton';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
-import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, iconSizes } from '@/theme/tokens';
-import type { Ref } from 'react';
+import { breakpoints } from '@/theme/tokens';
+import { ProfileMoreButton } from './ProfileMoreButton';
 
 export type ProfileBlockFeedback = { blocked: boolean; status: 'success' | 'error' };
 type Props = {
@@ -19,10 +17,7 @@ type Props = {
   onFeedback?: (feedback: ProfileBlockFeedback) => void;
   onDismiss?: () => void;
   profileId: string;
-} & (
-  | { surface?: 'menu'; blocked: boolean; controlRef?: never }
-  | { surface: 'button'; blocked: true; controlRef?: Ref<View> }
-);
+} & ({ surface?: 'menu'; blocked: boolean } | { surface: 'button'; blocked: true });
 
 export function ProfileBlockAction(props: Props) {
   // A new target owns a fresh lifecycle; an old request cannot publish its feedback here.
@@ -31,14 +26,12 @@ export function ProfileBlockAction(props: Props) {
 
 function ProfileBlockActionContent({
   blocked,
-  controlRef,
   displayName,
   onChangeBlocked,
   onDismiss,
   onFeedback,
   surface = 'menu',
 }: Props) {
-  const theme = useTheme();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
   const mobile = Platform.OS !== 'web' || width < breakpoints.compact;
@@ -53,13 +46,7 @@ function ProfileBlockActionContent({
   const cancelRef = useRef<View>(null);
   const actionRef = useRef<View>(null);
   const focusMenuTrigger = useRef<() => void>(() => {});
-  const restoreCancelFocus = useRef(false);
-  useEffect(() => {
-    if (!pending && restoreCancelFocus.current) {
-      restoreCancelFocus.current = false;
-      cancelRef.current?.focus();
-    }
-  }, [pending]);
+  const completed = useRef<ProfileBlockFeedback | null>(null);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -88,19 +75,9 @@ function ProfileBlockActionContent({
     if (!mounted.current) {
       return;
     }
-    inFlight.current = false;
-    restoreCancelFocus.current = !succeeded;
+    completed.current = { blocked: nextBlocked, status: succeeded ? 'success' : 'error' };
     setPending(false);
-    if (succeeded) {
-      setOpen(false);
-    }
-    showToast(
-      succeeded
-        ? `${displayName} 님이 ${nextBlocked ? '차단되었어요' : '차단 해제되었어요'}`
-        : `${nextBlocked ? '차단하지' : '차단을 해제하지'} 못했어요. 다시 시도해 주세요.`,
-      { tone: succeeded ? 'success' : 'danger' },
-    );
-    onFeedback?.({ blocked: nextBlocked, status: succeeded ? 'success' : 'error' });
+    setOpen(false);
   };
   const activate = () => {
     setNextBlocked(!blocked);
@@ -111,7 +88,7 @@ function ProfileBlockActionContent({
     <>
       {surface === 'menu' ? (
         <ActionMenu
-          accessibilityLabel="프로필 차단 메뉴"
+          accessibilityLabel="더보기"
           disabled={pending}
           items={[
             {
@@ -122,34 +99,23 @@ function ProfileBlockActionContent({
               tone: blocked ? 'default' : 'danger',
             },
           ]}
+          webPlacement="overlap-end"
           renderTrigger={({ expanded, focusTrigger, onPress, ref }) => {
             focusMenuTrigger.current = focusTrigger;
             return (
-              <IconButton
-                accessibilityLabel="프로필 차단 메뉴"
-                accessibilityState={{ expanded, busy: pending }}
-                aria-haspopup="menu"
-                aria-expanded={expanded}
+              <ProfileMoreButton
                 controlRef={ref}
                 disabled={pending}
+                expanded={expanded}
                 onPress={onPress}
-              >
-                <MoreHorizontal color={theme.foregroundPrimary} size={iconSizes[20]} />
-              </IconButton>
+              />
             );
           }}
         />
       ) : (
         <View style={[styles.buttonTarget, { minHeight: targetHeight, width: buttonWidth }]}>
           <Button
-            controlRef={(node) => {
-              actionRef.current = node;
-              if (typeof controlRef === 'function') {
-                controlRef(node);
-              } else if (controlRef) {
-                controlRef.current = node;
-              }
-            }}
+            controlRef={actionRef}
             accessibilityLabel={`${displayName} ${label}`}
             aria-haspopup="dialog"
             aria-busy={pending || undefined}
@@ -180,9 +146,28 @@ function ProfileBlockActionContent({
       <ModalSheet
         dismissDisabled={pending}
         onClose={close}
-        onDismiss={() =>
-          surface === 'menu' ? focusMenuTrigger.current() : actionRef.current?.focus()
-        }
+        onDismiss={() => {
+          if (!mounted.current) {
+            return;
+          }
+          inFlight.current = false;
+          if (surface === 'menu') {
+            focusMenuTrigger.current();
+          } else {
+            actionRef.current?.focus();
+          }
+          const feedback = completed.current;
+          completed.current = null;
+          if (feedback) {
+            showToast(
+              feedback.status === 'success'
+                ? `${displayName} 님이 ${feedback.blocked ? '차단되었어요' : '차단 해제되었어요'}`
+                : `${feedback.blocked ? '차단하지' : '차단을 해제하지'} 못했어요. 다시 시도해 주세요.`,
+              { tone: feedback.status === 'success' ? 'success' : 'danger' },
+            );
+            onFeedback?.(feedback);
+          }
+        }}
         onShow={() => cancelRef.current?.focus()}
         title={nextBlocked ? '이 프로필을 차단할까요?' : '이 프로필의 차단을 해제할까요?'}
         visible={open}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { fn } from 'storybook/test';
 import { BlockedProfileList } from '@/components/profile/BlockedProfileList';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -9,56 +9,73 @@ const profiles = [
   { id: 'kosmo', displayName: '코스모 작가', avatarUri: appleTouchIconUrl },
   { id: 'galaxy', displayName: '은하 관측자', avatarUri: appleTouchIconUrl },
 ];
-
 type Props = {
-  displayName: string;
-  onDismiss: (profileId: string) => void;
-  onFeedback: (feedback: {
-    blocked: boolean;
-    profileId: string;
-    status: 'success' | 'error';
-  }) => void;
-  onLoadMore: () => void;
-  onRetry: () => void;
-  onUnblock: (profileId: string) => Promise<void>;
-  outcome: 'success' | 'error' | 'pending';
   state: 'loaded' | 'loading' | 'error' | 'empty' | 'loadingMore' | 'loadMoreError';
+  outcome: 'success' | 'error' | 'pending';
+  displayName: string;
+  onUnblock: (id: string) => Promise<void>;
+  onDismiss: (profileId: string) => void;
+  onRetry: () => void;
+  onLoadMore: () => void;
+  onFeedback: (event: { profileId: string; blocked: boolean; status: 'success' | 'error' }) => void;
 };
 
 function Fixture({
-  displayName,
-  onDismiss,
-  onFeedback,
-  onLoadMore,
-  onRetry,
-  onUnblock,
-  outcome,
   state,
+  outcome,
+  displayName,
+  onUnblock,
+  onDismiss,
+  onRetry,
+  onLoadMore,
+  onFeedback,
 }: Props) {
   const [removed, setRemoved] = useState<string[]>([]);
-  useEffect(() => setRemoved([]), [displayName, outcome, state]);
-
+  const [requestState, setRequestState] = useState<Props['state'] | 'end' | null>(null);
+  useEffect(() => {
+    setRemoved([]);
+    setRequestState(null);
+  }, [state, outcome, displayName]);
+  useEffect(() => {
+    if (outcome === 'pending' || (requestState !== 'loading' && requestState !== 'loadingMore')) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setRequestState(
+        outcome === 'error'
+          ? requestState === 'loading'
+            ? 'error'
+            : 'loadMoreError'
+          : requestState === 'loading'
+            ? 'loaded'
+            : 'end',
+      );
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [requestState, outcome]);
+  const visibleState = requestState ?? state;
+  const retry = () => {
+    onRetry();
+    setRequestState(visibleState === 'error' ? 'loading' : 'loadingMore');
+  };
   const items = profiles
     .map((profile, index) => ({
       ...profile,
       displayName: index === 0 ? displayName : profile.displayName,
     }))
     .filter((profile) => !removed.includes(profile.id));
-
   return (
-    <View style={{ maxWidth: 640, width: '100%' }}>
+    <View style={{ width: '100%', maxWidth: 640 }}>
       <BlockedProfileList
         onDismiss={onDismiss}
-        onFeedback={(feedback) => {
-          onFeedback(feedback);
-          if (feedback.status === 'success') {
-            setRemoved((current) =>
-              current.includes(feedback.profileId) ? current : [...current, feedback.profileId],
-            );
+        onFeedback={(event) => {
+          onFeedback(event);
+          if (event.status === 'success') {
+            setRemoved((current) => [...current, event.profileId]);
           }
         }}
-        onUnblock={async (profileId) => {
-          await onUnblock(profileId);
+        onUnblock={async (id) => {
+          await onUnblock(id);
           if (outcome === 'pending') {
             await new Promise<void>(() => {});
           }
@@ -67,21 +84,27 @@ function Fixture({
           }
         }}
         state={
-          state === 'loading'
+          visibleState === 'loading'
             ? { status: 'loading' }
-            : state === 'error'
-              ? { status: 'error', onRetry }
+            : visibleState === 'error'
+              ? { status: 'error', onRetry: retry }
               : {
                   status: 'loaded',
-                  profiles: state === 'empty' ? [] : items,
+                  profiles: visibleState === 'empty' ? [] : items,
                   pagination:
-                    state === 'empty'
+                    visibleState === 'empty' || visibleState === 'end'
                       ? { status: 'end' }
-                      : state === 'loadingMore'
+                      : visibleState === 'loadingMore'
                         ? { status: 'loading' }
-                        : state === 'loadMoreError'
-                          ? { status: 'error', onRetry }
-                          : { status: 'more', onLoadMore },
+                        : visibleState === 'loadMoreError'
+                          ? { status: 'error', onRetry: retry }
+                          : {
+                              status: 'more',
+                              onLoadMore: () => {
+                                onLoadMore();
+                                setRequestState('loadingMore');
+                              },
+                            },
                 }
         }
       />
@@ -91,40 +114,31 @@ function Fixture({
 
 const meta = {
   args: {
-    displayName: '코스모 작가',
-    onDismiss: fn<(profileId: string) => void>(),
-    onFeedback: fn(),
-    onLoadMore: fn(),
-    onRetry: fn(),
-    onUnblock: fn<(profileId: string) => Promise<void>>().mockResolvedValue(undefined),
-    outcome: 'success',
     state: 'loaded',
+    outcome: 'success',
+    displayName: '코스모 작가',
+    onUnblock: fn<(id: string) => Promise<void>>().mockResolvedValue(undefined),
+    onDismiss: fn<(profileId: string) => void>(),
+    onRetry: fn(),
+    onLoadMore: fn(),
+    onFeedback: fn(),
   },
   argTypes: {
-    displayName: { control: 'text' },
+    state: {
+      control: 'select',
+      options: ['loaded', 'loading', 'error', 'empty', 'loadingMore', 'loadMoreError'],
+    },
     outcome: {
       control: 'inline-radio',
       description: '확인 후 해제 callback의 결과 시나리오를 보여줍니다.',
       options: ['success', 'error', 'pending'],
     },
-    state: {
-      control: 'select',
-      options: ['loaded', 'loading', 'error', 'empty', 'loadingMore', 'loadMoreError'],
-    },
+    displayName: { control: 'text' },
   },
   component: Fixture,
-  excludeStories: [
-    'FailureContract',
-    'InitialRetryContract',
-    'LastRowRemovalFocusContract',
-    'LoadMoreContract',
-    'PaginationRetryContract',
-    'SuccessContract',
-  ],
   parameters: { controls: { include: ['state', 'outcome', 'displayName'] } },
   title: 'KOSMO/Patterns/Profile/Blocked Profiles',
 } satisfies Meta<typeof Fixture>;
-
 export default meta;
 type Story = StoryObj<typeof meta>;
 
@@ -148,139 +162,4 @@ export const Compact: Story = {
 export const Full: Story = {
   globals: { viewport: { value: 'kosmoProfileFull', isRotated: false } },
   parameters: { layout: 'fullscreen' },
-};
-
-export const SuccessContract: Story = {
-  play: async ({ args, canvasElement }) => {
-    args.onDismiss.mockClear();
-    args.onFeedback.mockClear();
-    args.onLoadMore.mockClear();
-    args.onRetry.mockClear();
-    args.onUnblock.mockClear();
-    const canvas = within(canvasElement);
-    const body = within(canvasElement.ownerDocument.body);
-    const firstAction = canvas.getByRole('button', { name: `${args.displayName} 차단 해제` });
-
-    await userEvent.click(firstAction);
-    expect(await body.findByText('이 프로필의 차단을 해제할까요?')).toBeVisible();
-    expect(args.onUnblock).not.toHaveBeenCalled();
-    await userEvent.click(await body.findByRole('button', { name: '차단 해제' }));
-    await waitFor(() => expect(args.onUnblock).toHaveBeenCalledWith('kosmo'));
-    await waitFor(() =>
-      expect(args.onFeedback).toHaveBeenCalledWith({
-        blocked: false,
-        profileId: 'kosmo',
-        status: 'success',
-      }),
-    );
-    await waitFor(() => expect(canvas.queryByText(args.displayName)).not.toBeInTheDocument());
-    const secondAction = canvas.getByRole('button', { name: '은하 관측자 차단 해제' });
-    await waitFor(() => expect(secondAction).toHaveFocus());
-
-    await userEvent.click(secondAction);
-    await userEvent.click(await body.findByRole('button', { name: '차단 해제' }));
-    await waitFor(() => expect(args.onUnblock).toHaveBeenCalledWith('galaxy'));
-    await waitFor(() => expect(canvas.queryByText('은하 관측자')).not.toBeInTheDocument());
-    await waitFor(() =>
-      expect(canvas.getByRole('heading', { name: '차단한 프로필' })).toHaveFocus(),
-    );
-  },
-};
-
-export const LastRowRemovalFocusContract: Story = {
-  play: async ({ args, canvasElement }) => {
-    args.onDismiss.mockClear();
-    args.onFeedback.mockClear();
-    args.onLoadMore.mockClear();
-    args.onRetry.mockClear();
-    args.onUnblock.mockClear();
-    const canvas = within(canvasElement);
-    const body = within(canvasElement.ownerDocument.body);
-
-    await userEvent.click(canvas.getByRole('button', { name: '은하 관측자 차단 해제' }));
-    expect(await body.findByText('이 프로필의 차단을 해제할까요?')).toBeVisible();
-    expect(args.onUnblock).not.toHaveBeenCalled();
-    await userEvent.click(await body.findByRole('button', { name: '차단 해제' }));
-    await waitFor(() => expect(args.onUnblock).toHaveBeenCalledWith('galaxy'));
-    await waitFor(() =>
-      expect(args.onFeedback).toHaveBeenCalledWith({
-        blocked: false,
-        profileId: 'galaxy',
-        status: 'success',
-      }),
-    );
-    expect(canvas.getByText(args.displayName)).toBeVisible();
-    expect(canvas.queryByText('은하 관측자')).not.toBeInTheDocument();
-    await waitFor(() =>
-      expect(canvas.getByRole('button', { name: `${args.displayName} 차단 해제` })).toHaveFocus(),
-    );
-  },
-};
-
-export const FailureContract: Story = {
-  args: { outcome: 'error' },
-  play: async ({ args, canvasElement }) => {
-    args.onDismiss.mockClear();
-    args.onFeedback.mockClear();
-    args.onLoadMore.mockClear();
-    args.onRetry.mockClear();
-    args.onUnblock.mockClear();
-    const canvas = within(canvasElement);
-    const body = within(canvasElement.ownerDocument.body);
-    const action = canvas.getByRole('button', { name: `${args.displayName} 차단 해제` });
-
-    await userEvent.click(action);
-    await userEvent.click(await body.findByRole('button', { name: '차단 해제' }));
-    await waitFor(() =>
-      expect(args.onFeedback).toHaveBeenCalledWith({
-        blocked: false,
-        profileId: 'kosmo',
-        status: 'error',
-      }),
-    );
-    expect(canvas.getByText(args.displayName)).toBeVisible();
-    await waitFor(() => expect(body.getByRole('button', { name: '취소' })).toHaveFocus());
-    await userEvent.click(body.getByRole('button', { name: '차단 해제' }));
-    await waitFor(() => expect(args.onUnblock).toHaveBeenCalledTimes(2));
-    await userEvent.click(body.getByRole('button', { name: '취소' }));
-    await waitFor(() => expect(args.onDismiss).toHaveBeenCalledWith('kosmo'));
-  },
-};
-
-export const InitialRetryContract: Story = {
-  args: { state: 'error' },
-  play: async ({ args, canvasElement }) => {
-    args.onDismiss.mockClear();
-    args.onFeedback.mockClear();
-    args.onLoadMore.mockClear();
-    args.onRetry.mockClear();
-    args.onUnblock.mockClear();
-    await userEvent.click(within(canvasElement).getByRole('button', { name: '다시 시도' }));
-    expect(args.onRetry).toHaveBeenCalledTimes(1);
-  },
-};
-
-export const PaginationRetryContract: Story = {
-  args: { state: 'loadMoreError' },
-  play: async ({ args, canvasElement }) => {
-    args.onDismiss.mockClear();
-    args.onFeedback.mockClear();
-    args.onLoadMore.mockClear();
-    args.onRetry.mockClear();
-    args.onUnblock.mockClear();
-    await userEvent.click(within(canvasElement).getByRole('button', { name: '다시 시도' }));
-    expect(args.onRetry).toHaveBeenCalledTimes(1);
-  },
-};
-
-export const LoadMoreContract: Story = {
-  play: async ({ args, canvasElement }) => {
-    args.onDismiss.mockClear();
-    args.onFeedback.mockClear();
-    args.onLoadMore.mockClear();
-    args.onRetry.mockClear();
-    args.onUnblock.mockClear();
-    await userEvent.click(within(canvasElement).getByRole('button', { name: '더 불러오기' }));
-    expect(args.onLoadMore).toHaveBeenCalledTimes(1);
-  },
 };

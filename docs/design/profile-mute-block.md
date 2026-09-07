@@ -188,10 +188,14 @@ Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목
 loading/error·retry/empty/pagination 상태를 제공한다. Mute 목록과 상태를 공유하거나 합치지 않는다.
 
 - 실제 요청은 Promise callback으로 받는다. 성공 `onFeedback` 뒤 consumer가 확정 상태·목록을 갱신하며,
-  실패하면 기존 상태와 확인창을 유지하고 오류 Toast·재시도를 제공한다. `onDismiss`는 사용자 취소·닫기만
+  실패하면 기존 상태를 유지하고 확인창을 닫는다. 닫힘 완료 후 원래 trigger focus를 복원한 뒤 공용 오류
+  Toast를 표시하며, 같은 action을 다시 열어 재시도한다. `onDismiss`는 사용자 취소·닫기만
   전달한다. pending에는 중복 요청·dismiss를 막고, 대상 Profile 교체 후 이전 완료의 feedback을 폐기한다.
-- 초기 focus는 `취소`, 실패 후 focus는 확인창의 `취소`, 닫은 뒤에는 원래 trigger로 돌아간다. 목록의 해제
-  성공으로 행이 제거되면 다음 행의 해제 버튼, 다음 행이 없으면 이전 행, 목록이 비면 제목으로 이동한다.
+- 초기 focus는 `취소`이며 성공·실패·취소로 확인창을 닫은 뒤 원래 trigger로 돌아간다. 목록의 해제
+  성공 feedback으로 행을 제거하면 목록 제목으로 focus를 이동한다.
+- 2026-09-08 뮤트 개선 적용 요청에 따라 메뉴 trigger는 공용 `ProfileMoreButton`을 재사용한다.
+  최초·추가 조회 실패는 공용 danger Toast의 `다시 시도`로 알리고, Toast가 사라진 뒤에도 본문에
+  최초 `다시 시도`·추가 `더 불러오기`를 유지한다. Playground의 retry와 pagination은 fixture 상태를 실제 전환한다.
 - loaded 대표는 [Mobile 390](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8089),
   [Compact 1024](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25102),
   [Full 1440](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25582)을 따른다.
@@ -199,6 +203,7 @@ loading/error·retry/empty/pagination 상태를 제공한다. Mute 목록과 상
   시각 geometry를 유지하면서 iOS 44pt·Android 48dp로 확장한다.
 - `KOSMO/Patterns/Profile/Block Action`과 `Blocked Profiles`의 Playground는 수동 Controls·Actions,
   각 Tests 하위는 자동 interaction을 소유한다. 새 route·Settings shell과 차단된 direct Profile 화면은 만들지 않는다.
-- Current는 이 공용 UI와 Storybook presentation이며, Target은 PROD-823의 실제 Profile·Settings 연결이다.
+- Current는 이 공용 UI와 Storybook presentation이다. 실제 Profile·Settings 조립은 PROD-917,
+  mutation·Relay/cache 연결은 PROD-823이 소유한다.
   Product not implemented: 저장·cleanup·GraphQL·Relay/cache·actor 전환·실제 Web/iOS/Android 종단 간 검증.
   `add-profile-block` task 3.x와 전체 검증·archive는 각각 PROD-823·PROD-813이 계속 소유한다.
