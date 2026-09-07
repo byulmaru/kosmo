@@ -18,6 +18,7 @@ export type InfiniteListProps<Item> = Readonly<{
   isLoadingNext: boolean;
   keyExtractor: (item: Item, index: number) => string;
   loadNext: LoadNext;
+  paginationMode?: 'automatic' | 'manual';
   onLoadErrorChange?: (loadError: boolean, onRetry: () => void) => void;
   pageSize: number;
   renderFooter?: (state: InfiniteListFooterState) => ReactElement | null;
@@ -28,6 +29,15 @@ export type InfiniteListProps<Item> = Readonly<{
   testID?: string;
 }>;
 
+export type InfiniteListRenderProps<Item> = Omit<InfiniteListProps<Item>, 'header'> & {
+  listHeader?: ReactElement | null;
+  listIdentityKey?: string;
+};
+
+export type InfiniteListRenderer = <Item>(
+  props: InfiniteListRenderProps<Item>,
+) => ReactElement | null;
+
 export function InfiniteList<Item>({
   data,
   empty,
@@ -37,6 +47,7 @@ export function InfiniteList<Item>({
   loadNext,
   onLoadErrorChange,
   pageSize,
+  paginationMode = 'automatic',
   renderFooter,
   renderItem,
   style,
@@ -50,6 +61,7 @@ export function InfiniteList<Item>({
     loadNext,
     nativePagination: 'endReached',
     pageSize,
+    webScrollTarget: paginationMode === 'automatic' ? 'document' : 'container',
   });
 
   useEffect(() => {
@@ -84,7 +96,7 @@ export function InfiniteList<Item>({
       keyExtractor={keyExtractor}
       ListFooterComponent={footer}
       ListHeaderComponent={header}
-      onEndReached={onEndReached}
+      onEndReached={paginationMode === 'automatic' ? onEndReached : undefined}
       onEndReachedThreshold={1}
       renderItem={({ index, item }) => renderItem({ index, item })}
       style={[style, styles.nativeList]}

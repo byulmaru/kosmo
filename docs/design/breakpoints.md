@@ -199,6 +199,10 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
 - Web 하단 탭, mobile drawer, compact 아이콘 레일과 full sidebar에서 현재와 다른 shell-level 주요 route를
   여는 forward navigation은 대상 route가 준비된 뒤 document 최상단에서 표시한다. 로딩·빈 상태에서도 이전
   route의 document scroll offset을 대상 route에 노출하지 않는다.
+- 프로필 게시물·팔로워·팔로잉 화면은 프로필 레이아웃이 헤더와 바깥 목록 구성을 함께 소유한다. Native에서는
+  하나의 `FlatList`가 ProfileHero와 화면별 목록 헤더·행·footer를 `ListHeaderComponent`와 목록 콘텐츠로
+  렌더링하며, 팔로워·팔로잉의 다음 페이지는 기존 `더 불러오기`와 실패 후 수동 재시도를 유지한다. Web에서는
+  같은 목록 구성을 사용하되 document/window scroll 계약을 유지한다.
 - 브라우저 뒤로/앞으로 history traversal은 browser scroll restoration을 유지한다. 검색 화면의 query-only
   `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존한다.
 - Web의 모바일·compact·full 홈 헤더 브랜드 마크와 shell의 홈 navigation 항목은 모두 홈 진입 control이다.

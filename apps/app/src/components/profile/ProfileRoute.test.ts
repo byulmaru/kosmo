@@ -4,14 +4,15 @@ import { createContext, createElement, useContext } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { InfiniteListRenderer } from '../pagination/InfiniteList';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type QueryMode = 'error' | 'loading' | 'success';
-type QueryName = 'ProfileLayoutQuery' | 'ProfilePostListPageQuery';
+type QueryName = 'ProfileListLayoutQuery' | 'ProfilePostListPageQuery';
 
 const queryModes: Record<QueryName, QueryMode> = {
-  ProfileLayoutQuery: 'success',
+  ProfileListLayoutQuery: 'success',
   ProfilePostListPageQuery: 'success',
 };
 const queryHistory: Array<{
@@ -25,8 +26,6 @@ type RouteParams = { profileHandle?: string | string[] };
 
 const LocalParamsContext = createContext<RouteParams>({});
 
-let globalParams: RouteParams = {};
-let layoutLocalParams: RouteParams = {};
 let screenLocalParams: RouteParams = {};
 let renderer: ReactTestRenderer | null = null;
 let SlotContent: ComponentType | null = null;
@@ -51,9 +50,7 @@ mockModule('expo-router', {
           createElement(SlotContent),
         )
       : null,
-  useGlobalSearchParams: () => globalParams,
   useLocalSearchParams: () => useContext(LocalParamsContext),
-  usePathname: () => `/profile/${String(globalParams.profileHandle ?? '')}`,
 });
 mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   NavigationLink: ({
@@ -65,6 +62,7 @@ mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   }) => createElement('NavigationLink', { href }, children),
 });
 mockModule('react-native', {
+  FlatList: 'FlatList',
   Platform: { OS: 'web' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
@@ -74,7 +72,9 @@ mockModule('react-native', {
 });
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
-    const query = parts.join('').match(/query (ProfileLayoutQuery|ProfilePostListPageQuery)/)?.[1];
+    const query = parts
+      .join('')
+      .match(/query (ProfileListLayoutQuery|ProfilePostListPageQuery)/)?.[1];
     assert.ok(query);
     return query as QueryName;
   },
@@ -129,16 +129,33 @@ mockModule(new URL('../post/PostList.tsx', import.meta.url), {
     loading,
     onRetry,
     profile,
+    renderList,
   }: {
     error?: boolean;
     loading?: boolean;
     onRetry?: () => void;
     profile?: { handle: string };
-  }) =>
-    createElement('PostList', {
+    renderList?: InfiniteListRenderer;
+  }) => {
+    const listState = createElement('PostList', {
       identity: error ? 'error' : loading ? 'loading' : profile?.handle,
       onRetry,
-    }),
+    });
+
+    return renderList
+      ? renderList({
+          data: [],
+          empty: listState,
+          hasNext: false,
+          isLoadingNext: false,
+          keyExtractor: () => 'state',
+          loadNext: () => undefined,
+          paginationMode: 'manual',
+          pageSize: 20,
+          renderItem: () => null,
+        })
+      : listState;
+  },
 });
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
@@ -165,10 +182,8 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
-  globalParams = {};
-  layoutLocalParams = {};
   screenLocalParams = {};
-  queryModes.ProfileLayoutQuery = 'success';
+  queryModes.ProfileListLayoutQuery = 'success';
   queryModes.ProfilePostListPageQuery = 'success';
   queryHistory.length = 0;
   profileAvailable = true;
@@ -177,28 +192,12 @@ afterEach(async () => {
 });
 
 async function renderRoute(profileHandle: string) {
-  globalParams = { profileHandle };
   screenLocalParams = { profileHandle };
-  if (!renderer) {
-    layoutLocalParams = { profileHandle };
-  }
   await act(async () => {
     if (renderer) {
-      renderer.update(
-        createElement(
-          LocalParamsContext.Provider,
-          { value: layoutLocalParams },
-          createElement(ProfileLayout),
-        ),
-      );
+      renderer.update(createElement(ProfileLayout));
     } else {
-      renderer = create(
-        createElement(
-          LocalParamsContext.Provider,
-          { value: layoutLocalParams },
-          createElement(ProfileLayout),
-        ),
-      );
+      renderer = create(createElement(ProfileLayout));
     }
   });
   assert.ok(renderer);
@@ -279,12 +278,12 @@ describe('profile route parameter lifecycle', () => {
   it('handle 전환 중 layout과 nested query의 기존 loading fallback을 유지한다', async () => {
     await renderRoute('@local');
 
-    queryModes.ProfileLayoutQuery = 'loading';
+    queryModes.ProfileListLayoutQuery = 'loading';
     await renderRoute('@remote@activitypub.example');
     assert.deepEqual(identities('ProfileHero'), ['loading']);
     assert.deepEqual(identities('PostList'), []);
 
-    queryModes.ProfileLayoutQuery = 'success';
+    queryModes.ProfileListLayoutQuery = 'success';
     queryModes.ProfilePostListPageQuery = 'loading';
     await renderRoute('@remote@activitypub.example');
     assert.deepEqual(identities('ProfileHero'), ['remote@activitypub.example']);
@@ -295,16 +294,16 @@ describe('profile route parameter lifecycle', () => {
     const originalConsoleError = console.error;
     console.error = () => undefined;
     try {
-      queryModes.ProfileLayoutQuery = 'error';
+      queryModes.ProfileListLayoutQuery = 'error';
       await renderRoute('@remote@activitypub.example');
       assert.equal(requireRendered('StateView').props.title, '프로필을 불러오지 못했어요');
 
-      queryModes.ProfileLayoutQuery = 'success';
+      queryModes.ProfileListLayoutQuery = 'success';
       await act(async () => requireRendered('StateView').props.onAction());
 
       assert.deepEqual(identities('ProfileHero'), ['remote@activitypub.example']);
       const latestLayoutQuery = queryHistory.findLast(
-        ({ query }) => query === 'ProfileLayoutQuery',
+        ({ query }) => query === 'ProfileListLayoutQuery',
       );
       assert.equal(latestLayoutQuery?.handle, 'remote@activitypub.example');
       assert.equal(latestLayoutQuery?.fetchKey, 1);

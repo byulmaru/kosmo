@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { InfiniteList } from '@/components/pagination/InfiniteList';
-import { useProfilePostListHeader } from '@/components/profile/ProfilePostListHeaderContext';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -12,6 +11,10 @@ import { PostListItem } from './PostListItem';
 import { PostMediaViewerHostProvider } from './PostMediaViewerHost';
 import { PostReplyCoordinatorProvider } from './PostReplyCoordinator';
 import type { ReactElement } from 'react';
+import type {
+  InfiniteListRenderer,
+  InfiniteListRenderProps,
+} from '@/components/pagination/InfiniteList';
 import type { PostList_home$key } from './__generated__/PostList_home.graphql';
 import type { PostList_local$key } from './__generated__/PostList_local.graphql';
 import type { PostList_profile$key } from './__generated__/PostList_profile.graphql';
@@ -77,6 +80,7 @@ type Props = {
   loading?: boolean;
   onRetry?: () => void;
   profile?: PostList_profile$key | null;
+  renderList?: InfiniteListRenderer;
   replyProfile?: ReplyComposerSurface_profile$key | null;
 };
 
@@ -88,6 +92,7 @@ export function PostList({
   loading = false,
   onRetry,
   profile: profileKey,
+  renderList,
   replyProfile,
 }: Props) {
   const homePagination = usePaginationFragment<PostListHomeNextPageQuery, PostList_home$key>(
@@ -130,7 +135,6 @@ export function PostList({
       ? localPagination.loadNext
       : profilePagination.loadNext;
   const { showToast } = useToast();
-  const listHeader = useProfilePostListHeader();
   const loadErrorToastCleanup = useRef<(() => void) | null>(null);
   const handleLoadErrorChange = useCallback(
     (loadError: boolean, onRetryNextPage: () => void) => {
@@ -156,22 +160,23 @@ export function PostList({
   );
 
   const listIdentityKey = identityKey ?? (isHome ? 'home' : isLocal ? 'local' : 'profile');
+  const renderInfiniteList = renderList ?? defaultInfiniteListRenderer;
   const renderState = (state: ReactElement) =>
-    listHeader ? (
-      Platform.OS === 'web' ? (
-        <View style={styles.stateRoot}>
-          {listHeader}
-          {state}
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={styles.stateRoot} style={styles.stateScroll}>
-          {listHeader}
-          {state}
-        </ScrollView>
-      )
-    ) : (
-      state
-    );
+    renderList
+      ? renderInfiniteList({
+          data: [],
+          empty: state,
+          hasNext: false,
+          isLoadingNext: false,
+          keyExtractor: () => 'state',
+          listIdentityKey: `${listIdentityKey}:state`,
+          loadNext: () => undefined,
+          paginationMode: 'manual',
+          pageSize: 20,
+          renderItem: () => null,
+          style: styles.root,
+        })
+      : state;
 
   if (loading && !hasData) {
     return renderState(<PostListSkeleton />);
@@ -204,18 +209,17 @@ export function PostList({
     <PostActionAuthenticationProvider>
       <PostReplyCoordinatorProvider owner="list" profile={replyProfile ?? null}>
         <PostMediaViewerHostProvider>
-          <InfiniteList
-            data={visibleEdges}
-            empty={emptyState}
-            hasNext={hasNext}
-            header={listHeader}
-            isLoadingNext={isLoadingNext}
-            key={listIdentityKey}
-            keyExtractor={(edge) => edge.node.id}
-            loadNext={loadNext}
-            onLoadErrorChange={handleLoadErrorChange}
-            pageSize={20}
-            renderFooter={({ isLoadingNext: loadingNext }) =>
+          {renderInfiniteList({
+            data: visibleEdges,
+            empty: emptyState,
+            hasNext,
+            isLoadingNext,
+            keyExtractor: (edge) => edge.node.id,
+            listIdentityKey,
+            loadNext,
+            onLoadErrorChange: handleLoadErrorChange,
+            pageSize: 20,
+            renderFooter: ({ isLoadingNext: loadingNext }) =>
               loadingNext ? (
                 <View style={styles.loadingNext}>
                   <ActivityIndicator accessibilityLabel="게시글을 더 불러오는 중" />
@@ -223,16 +227,23 @@ export function PostList({
                     게시글을 더 불러오는 중입니다.
                   </Text>
                 </View>
-              ) : null
-            }
-            renderItem={({ item }) => <PostListItem post={item.node} />}
-            style={styles.root}
-          />
+              ) : null,
+            renderItem: ({ item }) => <PostListItem post={item.node} />,
+            style: styles.root,
+          })}
         </PostMediaViewerHostProvider>
       </PostReplyCoordinatorProvider>
     </PostActionAuthenticationProvider>
   );
 }
+
+const defaultInfiniteListRenderer: InfiniteListRenderer = <Item,>({
+  listHeader,
+  listIdentityKey,
+  ...props
+}: InfiniteListRenderProps<Item>) => (
+  <InfiniteList {...props} header={listHeader} key={listIdentityKey} />
+);
 
 function PostListSkeleton() {
   const theme = useTheme();
@@ -295,8 +306,6 @@ function PostListState({
 const styles = StyleSheet.create({
   loadingNext: { alignItems: 'center', padding: spacing.lg },
   root: { width: '100%' },
-  stateRoot: { width: '100%' },
-  stateScroll: { flex: 1 },
   skeletonItem: {
     alignItems: 'flex-start',
     borderBottomWidth: 1,
