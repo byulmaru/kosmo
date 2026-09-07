@@ -109,5 +109,6 @@ jobs:
           IOS_APP_STORE_PROVISIONING_PROFILE_BASE64: ${{ steps.ios_signing.outputs.IOS_APP_STORE_PROVISIONING_PROFILE_BASE64 }}
           IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ steps.ios_signing.outputs.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
           IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ steps.ios_signing.outputs.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          NODE_OPTIONS: '--max-old-space-size=4096'
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: bundle exec fastlane ios build_and_upload_ios
