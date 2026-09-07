@@ -5,11 +5,13 @@ import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-nat
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { createOperationDescriptor, getRequest } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
-import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import { getShellLayout } from '@/components/shell/shellLayout';
+import {
+  getShellLayout,
+  getWebMobileShellHeaderStickyOffset,
+} from '@/components/shell/shellLayout';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
@@ -17,6 +19,7 @@ import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorConte
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import type { MutableRefObject, PropsWithChildren } from 'react';
+import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { HomePageQuery, HomePageQuery$data } from './__generated__/HomePageQuery.graphql';
 
@@ -68,7 +71,7 @@ export default function HomeScreen() {
   }, [environment]);
 
   return (
-    <HomeFrame onBrandCurrentNavigate={shellChrome?.reselectHome} paginationOwnerKey="home">
+    <HomeFrame onBrandCurrentNavigate={shellChrome?.reselectHome}>
       <RouteBoundary
         loading={<StateView loading title="홈을 불러오는 중입니다." />}
         ref={routeBoundaryRef}
@@ -83,20 +86,12 @@ export default function HomeScreen() {
 function HomeFrame({
   children,
   onBrandCurrentNavigate,
-  paginationOwnerKey,
-}: PropsWithChildren<{
-  onBrandCurrentNavigate?: () => void;
-  paginationOwnerKey: string;
-}>) {
+}: PropsWithChildren<{ onBrandCurrentNavigate?: () => void }>) {
   const { width } = useWindowDimensions();
   const routeOwnsHeader = getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
   return (
-    <PaginationScrollView
-      contentContainerStyle={styles.root}
-      paginationOwnerKey={paginationOwnerKey}
-      stickyHeaderIndices={[routeOwnsHeader ? 1 : 0]}
-    >
+    <View style={styles.root}>
       {routeOwnsHeader ? (
         <PageHeader
           accessibilityLabel="홈"
@@ -105,9 +100,17 @@ function HomeFrame({
           variant="brand"
         />
       ) : null}
-      <TimelineTabs value="home" />
+      <View
+        style={
+          Platform.OS === 'web'
+            ? [styles.webTimelineTabs, { top: getWebMobileShellHeaderStickyOffset(width) }]
+            : undefined
+        }
+      >
+        <TimelineTabs value="home" />
+      </View>
       <View style={styles.body}>{children}</View>
-    </PaginationScrollView>
+    </View>
   );
 }
 
@@ -221,17 +224,23 @@ function HomeContentView({ data }: { data: HomePageQuery$data }) {
 
   return (
     <View style={styles.timeline}>
-      <PostList home={data} replyProfile={selectedProfile} />
+      <PostList
+        home={data}
+        identityKey={`home:${selectedProfile.id}`}
+        replyProfile={selectedProfile}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    flexGrow: 1,
+    flex: 1,
+    minHeight: 0,
   },
-  body: { flexGrow: 1 },
-  timeline: { width: '100%' },
+  body: { flex: 1, minHeight: 0 },
+  timeline: { flex: 1, minHeight: 0, width: '100%' },
+  webTimelineTabs: { position: 'sticky' as never, zIndex: 10 } as ViewStyle,
   onboardingRoot: {
     alignItems: 'center',
     flexGrow: 1,

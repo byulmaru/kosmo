@@ -179,7 +179,7 @@ PROD-852의 공용 `SidebarNavigation` 목표 표면은 presentation에 따라 �
 
 ## 스크롤 소유권
 
-React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owner로 둔다. 중앙 피드만 별도 internal scroller가 되는 앱형 shell은 이 기준의 목표가 아니다. 사용자가 피드 바깥의 비스크롤 sidebar, 우측 rail, 빈 레이아웃 영역에서 wheel/trackpad를 사용해도 브라우저 기본 document scroll 흐름으로 페이지가 움직여야 한다. Android/iOS 화면은 platform의 `ScrollView`를 사용하되 이 web scroll 계약을 바꾸지 않는다.
+React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owner로 둔다. 중앙 피드만 별도 internal scroller가 되는 앱형 shell은 이 기준의 목표가 아니다. 사용자가 피드 바깥의 비스크롤 sidebar, 우측 rail, 빈 레이아웃 영역에서 wheel/trackpad를 사용해도 브라우저 기본 document scroll 흐름으로 페이지가 움직여야 한다. Android/iOS 화면은 화면 유형에 맞는 platform scroll container(`ScrollView` 또는 `FlatList`)를 사용하되 이 Web scroll 계약을 바꾸지 않는다.
 
 - `< compact`에서는 64px 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
 - Current `< compact` mobile drawer는 `mobile-sidebar-scroll` 하나가 primary navigation과 `피드백 보내기`·로그아웃

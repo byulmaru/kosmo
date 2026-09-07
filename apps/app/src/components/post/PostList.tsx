@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef } from 'react';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
-import { usePaginationScrollRegistration } from '@/components/pagination/PaginationScrollView';
-import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
+import { InfiniteList } from '@/components/pagination/InfiniteList';
+import { useProfilePostListHeader } from '@/components/profile/ProfilePostListHeaderContext';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -11,6 +11,7 @@ import { PostActionAuthenticationProvider } from './PostActionAuthentication';
 import { PostListItem } from './PostListItem';
 import { PostMediaViewerHostProvider } from './PostMediaViewerHost';
 import { PostReplyCoordinatorProvider } from './PostReplyCoordinator';
+import type { ReactElement } from 'react';
 import type { PostList_home$key } from './__generated__/PostList_home.graphql';
 import type { PostList_local$key } from './__generated__/PostList_local.graphql';
 import type { PostList_profile$key } from './__generated__/PostList_profile.graphql';
@@ -71,6 +72,7 @@ const PostListLocalFragment = graphql`
 type Props = {
   error?: boolean;
   home?: PostList_home$key | null;
+  identityKey?: string;
   local?: PostList_local$key | null;
   loading?: boolean;
   onRetry?: () => void;
@@ -81,6 +83,7 @@ type Props = {
 export function PostList({
   error = false,
   home: homeKey,
+  identityKey,
   local: localKey,
   loading = false,
   onRetry,
@@ -126,28 +129,23 @@ export function PostList({
     : isLocal
       ? localPagination.loadNext
       : profilePagination.loadNext;
-  const { loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
-    hasNext,
-    isLoadingNext,
-    itemCount: visibleEdges.length,
-    loadNext,
-    pageSize: 20,
-  });
   const { showToast } = useToast();
+  const listHeader = useProfilePostListHeader();
   const loadErrorToastCleanup = useRef<(() => void) | null>(null);
-  usePaginationScrollRegistration(nativeScrollProps);
-
-  useEffect(() => {
-    if (loadError && !loadErrorToastCleanup.current) {
-      loadErrorToastCleanup.current = showToast('게시글을 더 불러오지 못했어요.', {
-        action: { label: '다시 시도', onPress: loadNextPage },
-        tone: 'danger',
-      });
-    } else if (!loadError && loadErrorToastCleanup.current) {
-      loadErrorToastCleanup.current();
-      loadErrorToastCleanup.current = null;
-    }
-  }, [loadError, loadNextPage, showToast]);
+  const handleLoadErrorChange = useCallback(
+    (loadError: boolean, onRetryNextPage: () => void) => {
+      if (loadError && !loadErrorToastCleanup.current) {
+        loadErrorToastCleanup.current = showToast('게시글을 더 불러오지 못했어요.', {
+          action: { label: '다시 시도', onPress: onRetryNextPage },
+          tone: 'danger',
+        });
+      } else if (!loadError && loadErrorToastCleanup.current) {
+        loadErrorToastCleanup.current();
+        loadErrorToastCleanup.current = null;
+      }
+    },
+    [showToast],
+  );
 
   useEffect(
     () => () => {
@@ -157,12 +155,30 @@ export function PostList({
     [],
   );
 
+  const listIdentityKey = identityKey ?? (isHome ? 'home' : isLocal ? 'local' : 'profile');
+  const renderState = (state: ReactElement) =>
+    listHeader ? (
+      Platform.OS === 'web' ? (
+        <View style={styles.stateRoot}>
+          {listHeader}
+          {state}
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.stateRoot} style={styles.stateScroll}>
+          {listHeader}
+          {state}
+        </ScrollView>
+      )
+    ) : (
+      state
+    );
+
   if (loading && !hasData) {
-    return <PostListSkeleton />;
+    return renderState(<PostListSkeleton />);
   }
 
   if (error && !hasData) {
-    return (
+    const state = (
       <PostListState
         alert
         description="잠시 후 다시 시도해주세요."
@@ -170,34 +186,48 @@ export function PostList({
         title="게시글 목록을 불러오지 못했어요"
       />
     );
+    return renderState(state);
   }
 
-  if (visibleEdges.length === 0) {
-    return (
-      <PostListState
-        description="첫 게시글이 올라오면 여기에 표시돼요."
-        title="아직 게시글이 없어요"
-      />
-    );
+  const emptyState = (
+    <PostListState
+      description="첫 게시글이 올라오면 여기에 표시돼요."
+      title="아직 게시글이 없어요"
+    />
+  );
+
+  if (visibleEdges.length === 0 && !hasData) {
+    return renderState(emptyState);
   }
 
   return (
     <PostActionAuthenticationProvider>
       <PostReplyCoordinatorProvider owner="list" profile={replyProfile ?? null}>
         <PostMediaViewerHostProvider>
-          <View style={styles.root}>
-            {visibleEdges.map((edge) => (
-              <PostListItem key={edge.node.id} post={edge.node} />
-            ))}
-            {isLoadingNext ? (
-              <View style={styles.loadingNext}>
-                <ActivityIndicator accessibilityLabel="게시글을 더 불러오는 중" />
-                <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
-                  게시글을 더 불러오는 중입니다.
-                </Text>
-              </View>
-            ) : null}
-          </View>
+          <InfiniteList
+            data={visibleEdges}
+            empty={emptyState}
+            hasNext={hasNext}
+            header={listHeader}
+            isLoadingNext={isLoadingNext}
+            key={listIdentityKey}
+            keyExtractor={(edge) => edge.node.id}
+            loadNext={loadNext}
+            onLoadErrorChange={handleLoadErrorChange}
+            pageSize={20}
+            renderFooter={({ isLoadingNext: loadingNext }) =>
+              loadingNext ? (
+                <View style={styles.loadingNext}>
+                  <ActivityIndicator accessibilityLabel="게시글을 더 불러오는 중" />
+                  <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
+                    게시글을 더 불러오는 중입니다.
+                  </Text>
+                </View>
+              ) : null
+            }
+            renderItem={({ item }) => <PostListItem post={item.node} />}
+            style={styles.root}
+          />
         </PostMediaViewerHostProvider>
       </PostReplyCoordinatorProvider>
     </PostActionAuthenticationProvider>
@@ -265,6 +295,8 @@ function PostListState({
 const styles = StyleSheet.create({
   loadingNext: { alignItems: 'center', padding: spacing.lg },
   root: { width: '100%' },
+  stateRoot: { width: '100%' },
+  stateScroll: { flex: 1 },
   skeletonItem: {
     alignItems: 'flex-start',
     borderBottomWidth: 1,

@@ -17,6 +17,7 @@ export type UseAutomaticPaginationOptions = {
   isLoadingNext: boolean;
   itemCount: number;
   loadNext: LoadNext;
+  nativePagination?: 'endReached' | 'metrics';
   pageSize: number;
   webScrollTarget?: 'container' | 'document';
 };
@@ -25,6 +26,7 @@ export type UseAutomaticPaginationResult = {
   loadError: boolean;
   loadNextPage: () => void;
   nativeScrollProps: ReturnType<typeof createNativeScrollHandlers>;
+  onEndReached: () => void;
 };
 
 export function useAutomaticPagination({
@@ -32,6 +34,7 @@ export function useAutomaticPagination({
   isLoadingNext,
   itemCount,
   loadNext,
+  nativePagination = 'metrics',
   pageSize,
   webScrollTarget = 'document',
 }: UseAutomaticPaginationOptions): UseAutomaticPaginationResult {
@@ -50,6 +53,7 @@ export function useAutomaticPagination({
     hasNext,
     isLoadingNext,
     loadNext,
+    nativePagination,
     pageSize,
     webScrollTarget,
   });
@@ -57,6 +61,7 @@ export function useAutomaticPagination({
     hasNext,
     isLoadingNext,
     loadNext,
+    nativePagination,
     pageSize,
     webScrollTarget,
   };
@@ -78,19 +83,33 @@ export function useAutomaticPagination({
           requestInFlightRef.current = false;
           return;
         }
+        if (Platform.OS !== 'web' && latestOptions.nativePagination === 'endReached') {
+          requestInFlightRef.current = false;
+          return;
+        }
         setTimeout(() => {
           if (Platform.OS === 'web' && latestOptionsRef.current.webScrollTarget === 'document') {
             window.requestAnimationFrame(() => {
               requestInFlightRef.current = false;
               webNearEndCheckRef.current?.();
             });
-          } else {
+          } else if (latestOptionsRef.current.nativePagination === 'metrics') {
             setContainerPageRevision((revision) => revision + 1);
+          } else {
+            requestInFlightRef.current = false;
           }
         }, 0);
       },
     });
   }, []);
+
+  const onEndReached = useCallback(() => {
+    if (nativePagination !== 'endReached' || pageErrorRef.current || loadError) {
+      return;
+    }
+
+    loadNextPage();
+  }, [loadError, loadNextPage, nativePagination]);
 
   const maybeLoadNextPage = useCallback(
     (metrics: ScrollMetrics) => {
@@ -109,6 +128,7 @@ export function useAutomaticPagination({
   useEffect(() => {
     if (
       (Platform.OS === 'web' && webScrollTarget === 'document') ||
+      nativePagination === 'endReached' ||
       containerPageRevision === 0 ||
       isLoadingNext ||
       handledContainerPageRevisionRef.current === containerPageRevision
@@ -117,7 +137,7 @@ export function useAutomaticPagination({
     }
     handledContainerPageRevisionRef.current = containerPageRevision;
     resumeNativePagination(requestInFlightRef, nativeMetricsRef, maybeLoadNextPage);
-  }, [containerPageRevision, isLoadingNext, maybeLoadNextPage, webScrollTarget]);
+  }, [containerPageRevision, isLoadingNext, maybeLoadNextPage, nativePagination, webScrollTarget]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || webScrollTarget !== 'document') {
@@ -143,5 +163,5 @@ export function useAutomaticPagination({
     };
   }, [itemCount, maybeLoadNextPage, webScrollTarget]);
 
-  return { loadError, loadNextPage, nativeScrollProps };
+  return { loadError, loadNextPage, nativeScrollProps, onEndReached };
 }

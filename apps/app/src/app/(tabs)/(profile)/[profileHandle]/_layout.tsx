@@ -1,9 +1,9 @@
 import { Slot, useGlobalSearchParams, usePathname } from 'expo-router';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
+import { ProfilePostListHeaderProvider } from '@/components/profile/ProfilePostListHeaderContext';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationLink } from '@/components/shell/NavigationLink';
@@ -38,29 +38,29 @@ export default function ProfileLayout() {
   }>();
   const handle = normalizeProfileHandle(profileHandle);
   const pathname = usePathname();
-  const paginationOwnerKey = pathname;
+  const isPostListRoute = !/\/(followers|following)$/.test(pathname);
 
   return (
     <RouteBoundary
       key={handle}
       loading={
-        <ProfileRouteContainer paginationOwnerKey={paginationOwnerKey}>
+        <ProfileRouteContainer scrollable>
           <ProfileHero loading />
         </ProfileRouteContainer>
       }
       title="프로필을 불러오지 못했어요"
     >
-      <ProfileLayoutContent handle={handle} paginationOwnerKey={paginationOwnerKey} />
+      <ProfileLayoutContent handle={handle} isPostListRoute={isPostListRoute} />
     </RouteBoundary>
   );
 }
 
 function ProfileLayoutContent({
   handle,
-  paginationOwnerKey,
+  isPostListRoute,
 }: {
   handle: string;
-  paginationOwnerKey: string;
+  isPostListRoute: boolean;
 }) {
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<ProfileLayoutQueryType>(
@@ -93,27 +93,39 @@ function ProfileLayoutContent({
     <FollowButton profile={profile} />
   );
 
+  const header = <ProfileHero action={action} profile={profile} />;
+
+  if (!isPostListRoute || Platform.OS === 'web') {
+    return (
+      <ProfileRouteContainer scrollable={!isPostListRoute}>
+        {header}
+        <Slot />
+      </ProfileRouteContainer>
+    );
+  }
+
   return (
-    <ProfileRouteContainer paginationOwnerKey={paginationOwnerKey}>
-      <ProfileHero action={action} profile={profile} />
-      <Slot />
-    </ProfileRouteContainer>
+    <ProfilePostListHeaderProvider header={header}>
+      <ProfileRouteContainer scrollable={false}>
+        <Slot />
+      </ProfileRouteContainer>
+    </ProfilePostListHeaderProvider>
   );
 }
 
 function ProfileRouteContainer({
   children,
-  paginationOwnerKey,
+  scrollable,
 }: {
   children: ReactNode;
-  paginationOwnerKey: string;
+  scrollable: boolean;
 }) {
   return Platform.OS === 'web' ? (
     <View style={styles.webRoot}>{children}</View>
+  ) : scrollable ? (
+    <ScrollView style={styles.nativeRoot}>{children}</ScrollView>
   ) : (
-    <PaginationScrollView paginationOwnerKey={paginationOwnerKey} style={styles.nativeRoot}>
-      {children}
-    </PaginationScrollView>
+    <View style={styles.nativeRoot}>{children}</View>
   );
 }
 
