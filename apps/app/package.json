@@ -24,6 +24,10 @@
     "web": "expo start --web --port 5173"
   },
   "dependencies": {
+    "@formatjs/intl-locale": "^5.3.10",
+    "@formatjs/intl-localematcher": "^0.8.13",
+    "@formatjs/intl-numberformat": "^9.4.0",
+    "@formatjs/intl-pluralrules": "^6.3.13",
     "@formatjs/intl-relativetimeformat": "^12.3.13",
     "@kosmo/core": "workspace:*",
     "@sentry/react": "^10.66.0",
