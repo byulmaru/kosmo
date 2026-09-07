@@ -399,6 +399,21 @@ export const Profiles = pgTable(
   (table) => [unique().on(table.instanceId, table.normalizedHandle)],
 );
 
+export const ProfileMigrations = pgTable(
+  'profile_migration',
+  {
+    id: id(),
+    targetProfileId: uuid('target_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    sourceProfileId: uuid('source_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (table) => [unique().on(table.targetProfileId), unique().on(table.sourceProfileId)],
+);
+
 export const ProfileBlocks = pgTable(
   'profile_block',
   {

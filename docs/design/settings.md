@@ -79,6 +79,10 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - Profile detail은 shell의 selected Local Profile을 기본 대상으로 사용하고 표시 이름과 `relativeHandle`,
   대상 전환 affordance, `게시물 기본 공개 범위`를 포함한 Profile 설정 content를 함께 제공한다. Profile 데이터
   조회·입력·저장은 Kosmo 내부 기능으로만 제공한다.
+- Profile Migration source 준비는 이 Profile detail에서 feature flag가 켜져 있고 값을 확인할 수 있을 때만 노출한다.
+  flag가 꺼져 있거나 사용할 수 없거나 로딩 중이면 준비 control을 렌더링하지 않는다. 이 flag는 UI 노출 조건이며
+  Profile Owner 권한을 대신하지 않는다. 이미 준비된 관계와 그로부터 파생된 alias, inbound Move 처리는 flag 상태로
+  중단하거나 제거하지 않는다. 구체적인 flag key·추가 route·시각 세부는 이 문서에서 고정하지 않는다.
 - Profile target selector의 Figma lifecycle source는
   [`Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4867-13083),
   [`Compact`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4868-38112),
@@ -227,6 +231,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   loading·error·retry·lock은 소유하지 않는다.
 - PROD-667은 Profile 선택 대상, 기본 게시 공개 범위의 저장·권한·상태와 Composer 연결 및 해당 기능 검증을
   소유한다. PROD-648은 Backend DB·GraphQL 계약을 소유한다.
+- PROD-743은 Profile detail의 feature-flagged Profile Migration source 준비 노출과 해당 Settings UI 검증을 소유한다.
+  Profile Owner 권한, Profile Migration 관계, alias와 inbound Move 동작은 [Profile](../domain/objects/profile.md)과
+  [ADR 0027](../domain/decisions/0027-profile-migration-inbound-move.md)의 canonical 계약을 따른다.
 - `뮤트 및 차단`의 Figma IA·source·대표 consumer는 DSN-53이 소유한다. runtime의 Mute 진입점·목록·통합
   검증은 PROD-814, Block 진입점·목록과 Relay 수렴은 PROD-823, Block의 종단 간 검증·archive는 PROD-813이
   소유한다. 이 범위를 완료된 PROD-685·PROD-684에 소급해 귀속하지 않는다.
