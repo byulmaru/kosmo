@@ -6,6 +6,7 @@ export { profileBlockWorkflow } from './profile-block';
 export { profileFollowPairWorkflow } from './profile-follow-pair';
 export { profileFollowRemovalWorkflow } from './profile-follow-removal';
 export { profileUnblockWorkflow } from './profile-unblock';
+export { profileMigrationMoveWorkflow } from './profile-migration';
 export { profileUpdateEffectsWorkflow } from './profile-update';
 export { reactionCreateEffectsWorkflow } from './reaction-create';
 export { reactionDeleteEffectsWorkflow } from './reaction-delete';

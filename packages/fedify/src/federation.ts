@@ -7,6 +7,7 @@ import {
   EmojiReact,
   Follow,
   Like,
+  Move,
   Note,
   Object as ActivityObject,
   Reject,
@@ -22,6 +23,7 @@ import { handleInboundAnnounce } from './inbound-announce';
 import { handleInboundCreate } from './inbound-create';
 import { handleInboundDelete } from './inbound-delete';
 import { handleInboundFollow, handleInboundUndo } from './inbound-follow';
+import { handleInboundMove } from './inbound-move';
 import {
   hasInboundErrorBeenObserved,
   isExternalInboundError,
@@ -189,6 +191,7 @@ federation
   .on(EmojiReact, withInboundObservability('reaction', handleInboundReaction))
   .on(Follow, withInboundObservability('follow', handleInboundFollow))
   .on(Like, withInboundObservability('reaction', handleInboundReaction))
+  .on(Move, withInboundObservability('move', handleInboundMove))
   .on(Reject, withInboundObservability('reject', handleInboundReject))
   .on(Undo, withInboundObservability('undo', handleInboundUndo))
   .on(Update, withInboundObservability('update', handleInboundUpdate))
