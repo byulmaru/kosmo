@@ -374,12 +374,15 @@ function PostListRow({
                 style={styles.notificationAuthor}
                 testID="notification-post-author"
               >
-                <Text numberOfLines={1} style={[styles.notificationName, { color: theme.text }]}>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.notificationName, { color: theme.foregroundPrimary }]}
+                >
                   {post.profile.displayName}
                 </Text>
                 <Text
                   numberOfLines={1}
-                  style={[styles.notificationHandle, { color: theme.textSecondary }]}
+                  style={[styles.notificationHandle, { color: theme.foregroundSecondary }]}
                 >
                   {post.profile.relativeHandle}
                 </Text>
@@ -394,7 +397,7 @@ function PostListRow({
                 style={[
                   styles.time,
                   notification && styles.notificationTime,
-                  { color: theme.textSecondary },
+                  { color: notification ? theme.foregroundSecondary : theme.textSecondary },
                 ]}
               >
                 {formatTimelineTimestamp(post.createdAt)}
@@ -403,9 +406,22 @@ function PostListRow({
           </Link>
         </View>
         {notification ? (
-          <Text style={[styles.notificationReason, { color: theme.textSecondary }]}>
-            회원님의 게시글에 답글을 남겼습니다
-          </Text>
+          <View style={styles.notificationReasonRow}>
+            <View
+              aria-hidden
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              style={styles.notificationReasonIcon}
+            >
+              <MessageCircle color={theme.foregroundSecondary} size={16} />
+            </View>
+            <Text
+              testID="notification-reason"
+              style={[styles.notificationReason, { color: theme.foregroundSecondary }]}
+            >
+              회원님의 게시글에 답글을 남겼습니다
+            </Text>
+          </View>
         ) : null}
         {post.content ? (
           <View style={styles.bodyLink}>
@@ -477,7 +493,9 @@ const styles = StyleSheet.create({
   },
   notificationName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md, flexShrink: 1 },
   notificationHandle: { fontFamily: 'SUIT', ...typography.sm, flex: 1, minWidth: 0 },
-  notificationReason: { fontFamily: 'SUIT', ...typography.sm },
+  notificationReasonRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
+  notificationReasonIcon: { height: 20, justifyContent: 'center' },
+  notificationReason: { fontFamily: 'SUIT', ...typography.sm, flex: 1, minWidth: 0 },
   notificationTime: {
     minHeight: Platform.OS === 'web' ? 24 : Platform.OS === 'android' ? 48 : 44,
     minWidth: Platform.OS === 'web' ? 24 : Platform.OS === 'android' ? 48 : 44,

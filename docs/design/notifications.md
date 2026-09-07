@@ -57,7 +57,11 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
   가려지고, 이름도 가용 폭을 넘으면 말줄임한다. 이 계약을 다른 Profile 표시 전체에 확대하지 않는다.
 - 둘째 줄은 답글 대상 목록이 아니라 현재 Recipient가 알림을 받은 이유다. Reply는
   `회원님의 게시글에 답글을 남겼습니다`, Future Mention은 `회원님을 멘션했습니다`로 표시한다.
-  이 문구는 secondary 텍스트이며 Recipient 핸들을 별도 링크 색상으로 강조하지 않는다.
+  문장 앞에 16px `MessageCircle`(Reply)·`AtSign`(Future Mention)을 두며 아이콘과 문장 전체를
+  `foregroundSecondary`(Figma `color/foreground/secondary`)로 통일한다. Light `#64646F`, Dark
+  `#A3A3A3`이며 legacy `textSecondary`는 사용하지 않는다. 알림 작성자 이름은 `foregroundPrimary`,
+  핸들과 시각은 `foregroundSecondary`를 사용한다. Info 색상, 단어별 강조나 별도 배경은 두지 않는다.
+  아이콘은 장식이며 알림 종류는 문장으로도 전달한다.
   여러 Profile을 멘션한 글도 각 Recipient에게 같은 Mention 문구를 사용하며 본문의 멘션은 유지한다.
 - Reply/Mention 알림에는 원글 미리보기나 별도 받는 사람 목록을 추가하지 않는다. 결과 게시글을
   활성화하면 해당 게시글 상세에서 대화 문맥을 확인한다. 이 제한은 Reaction/Repost의 actionless
