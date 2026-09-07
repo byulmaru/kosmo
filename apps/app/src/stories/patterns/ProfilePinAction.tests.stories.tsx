@@ -1,9 +1,7 @@
 import baseMeta, {
-  ContextChangeClosesConfirmation as contextChangeClosesConfirmation,
   ErrorRecoveryFocus as errorRecoveryFocus,
   OwnerMenuAndDirectActions as ownerMenuAndDirectActions,
   PendingContract as pendingContract,
-  ReplaceConfirmationContract as replaceConfirmationContract,
   SheetIconContract as sheetIconContract,
   VisitorMenuContract as visitorMenuContract,
 } from './ProfilePinAction.stories';
@@ -20,10 +18,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const OwnerMenuAndDirectActions: Story = ownerMenuAndDirectActions;
-export const ReplaceConfirmationContract: Story = replaceConfirmationContract;
 export const VisitorMenuContract: Story = visitorMenuContract;
 export const PendingContract: Story = pendingContract;
 export const ErrorRecoveryFocus: Story = errorRecoveryFocus;
 export const SheetIconContract: Story = sheetIconContract;
-
-export const ContextChangeClosesConfirmation: Story = contextChangeClosesConfirmation;

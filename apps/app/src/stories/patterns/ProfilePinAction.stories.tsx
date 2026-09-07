@@ -10,28 +10,21 @@ import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHo
 import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { ProfilePinAction } from '@/components/profile/ProfilePinAction';
 import { ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
-import { Button } from '@/components/ui/Button';
-import { StateView } from '@/components/ui/StateView';
 import { post } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ProfilePinOperation } from '@/components/profile/ProfilePinAction';
 import type { ProfilePinActionStoriesQuery as ProfilePinActionStoriesQueryType } from './__generated__/ProfilePinActionStoriesQuery.graphql';
 
-type Presentation = 'post' | 'empty' | 'removed' | 'unavailable' | 'loading' | 'error';
 type Outcome = 'success' | 'error' | 'pending';
 
 type StoryArgs = {
   action: ProfilePinOperation;
   bodyText: string;
-  onCancel: () => void;
-  onConfirm: () => void;
   onCopyLink: () => void;
   onDelete: () => void;
   onPin: () => Promise<void>;
-  onReplace: () => Promise<void>;
   onUnpin: () => Promise<void>;
   outcome: Outcome;
-  presentation: Presentation;
   viewer: 'owner' | 'visitor';
 };
 
@@ -55,14 +48,6 @@ const storyPost = {
   viewerReactions: [],
 };
 
-const stateCopy: Record<Exclude<Presentation, 'post'>, { description?: string; title: string }> = {
-  empty: { title: '고정된 게시물이 없어요', description: '아직 프로필에 고정된 게시물이 없어요.' },
-  error: { description: '잠시 후 다시 시도해 주세요.', title: '게시물을 불러오지 못했어요' },
-  loading: { title: '게시물을 불러오는 중입니다.' },
-  removed: { title: '고정된 게시물이 삭제됐어요' },
-  unavailable: { title: '고정된 게시물을 볼 수 없어요' },
-};
-
 function useStoryPost() {
   const data = useLazyLoadQuery<ProfilePinActionStoriesQueryType>(ProfilePinActionStoriesQuery, {});
   if (data.node?.__typename !== 'Post' || !data.node.listItem) {
@@ -80,29 +65,12 @@ function updateStoryBody(environment: ReturnType<typeof useRelayEnvironment>, bo
   });
 }
 
-function StatePresentation({ presentation }: { presentation: Exclude<Presentation, 'post'> }) {
-  const copy = stateCopy[presentation];
-  return (
-    <View style={styles.fixture}>
-      <StateView
-        alert={presentation === 'error'}
-        description={copy.description}
-        loading={presentation === 'loading'}
-        title={copy.title}
-      />
-    </View>
-  );
-}
-
-function PostFixture({
+function Fixture({
   action,
   bodyText,
-  onCancel,
-  onConfirm,
   onCopyLink,
   onDelete,
   onPin,
-  onReplace,
   onResult,
   onUnpin,
   outcome,
@@ -117,7 +85,7 @@ function PostFixture({
   useEffect(() => updateStoryBody(environment, bodyText), [bodyText, environment]);
 
   const onAction = async (nextAction: ProfilePinOperation) => {
-    await (nextAction === 'pin' ? onPin : nextAction === 'unpin' ? onUnpin : onReplace)();
+    await (nextAction === 'pin' ? onPin : onUnpin)();
     if (outcome === 'pending') {
       await new Promise<void>(() => undefined);
     }
@@ -143,8 +111,6 @@ function PostFixture({
       <ProfilePinAction
         action={currentAction}
         onAction={onAction}
-        onCancel={onCancel}
-        onConfirm={onConfirm}
         onCopyLink={onCopyLink}
         onDelete={onDelete}
         postId={postId}
@@ -154,13 +120,6 @@ function PostFixture({
       </ProfilePinAction>
     </View>
   );
-}
-
-function Fixture(props: StoryArgs & { onResult?: (action: ProfilePinOperation) => void }) {
-  if (props.presentation !== 'post') {
-    return <StatePresentation presentation={props.presentation} />;
-  }
-  return <PostFixture {...props} />;
 }
 
 function StoryRender(args: StoryArgs) {
@@ -177,25 +136,17 @@ const meta = {
   args: {
     action: 'pin',
     bodyText: storyPost.content?.bodyText ?? '',
-    onCancel: fn(),
-    onConfirm: fn(),
     onCopyLink: fn(),
     onDelete: fn(),
     onPin: fn<() => Promise<void>>().mockResolvedValue(undefined),
-    onReplace: fn<() => Promise<void>>().mockResolvedValue(undefined),
     onUnpin: fn<() => Promise<void>>().mockResolvedValue(undefined),
     outcome: 'success',
-    presentation: 'post',
     viewer: 'owner',
   },
   argTypes: {
-    action: { control: 'inline-radio', options: ['pin', 'unpin', 'replace'] },
+    action: { control: 'inline-radio', options: ['pin', 'unpin'] },
     bodyText: { control: 'text' },
     outcome: { control: 'inline-radio', options: ['success', 'error', 'pending'] },
-    presentation: {
-      control: 'inline-radio',
-      options: ['post', 'empty', 'removed', 'unavailable', 'loading', 'error'],
-    },
     viewer: { control: 'inline-radio', options: ['owner', 'visitor'] },
   },
   component: Fixture,
@@ -211,18 +162,16 @@ const meta = {
     ),
   ],
   excludeStories: [
-    'ContextChangeClosesConfirmation',
     'ErrorRecoveryFocus',
     'OwnerMenuAndDirectActions',
     'PendingContract',
-    'ReplaceConfirmationContract',
     'SheetIconContract',
     'VisitorMenuContract',
   ],
   parameters: {
     controls: {
       disable: true,
-      include: ['viewer', 'action', 'presentation', 'bodyText', 'outcome'],
+      include: ['viewer', 'action', 'bodyText', 'outcome'],
     },
     relay: { data: { node: storyPost } },
   },
@@ -238,11 +187,6 @@ export const Playground: Story = {
 };
 export const OwnerPinned: Story = { args: { action: 'unpin' } };
 export const VisitorPinned: Story = { args: { viewer: 'visitor' } };
-export const Empty: Story = { args: { presentation: 'empty' } };
-export const Removed: Story = { args: { presentation: 'removed' } };
-export const Unavailable: Story = { args: { presentation: 'unavailable' } };
-export const Loading: Story = { args: { presentation: 'loading' } };
-export const ErrorState: Story = { args: { presentation: 'error' } };
 export const Mobile: Story = {
   args: { action: 'unpin' },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
@@ -304,7 +248,7 @@ export const OwnerMenuAndDirectActions: Story = {
     await userEvent.click(body.getByRole('menuitem', { name: '프로필에 고정' }));
     await waitFor(() => expect(args.onPin).toHaveBeenCalledTimes(1));
     expect(await canvas.findByText('고정됨')).toBeVisible();
-    expect(body.queryByText('고정 게시물을 변경할까요?')).not.toBeInTheDocument();
+    expect(body.queryByRole('dialog')).not.toBeInTheDocument();
 
     await waitFor(() => expect(trigger).toHaveFocus());
     await userEvent.click(trigger);
@@ -319,41 +263,7 @@ export const OwnerMenuAndDirectActions: Story = {
     await userEvent.click(await body.findByRole('menuitem', { name: '프로필 고정 해제' }));
     await waitFor(() => expect(args.onUnpin).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(canvas.queryByText('고정됨')).not.toBeInTheDocument());
-    expect(body.queryByText('고정 게시물을 변경할까요?')).not.toBeInTheDocument();
-  },
-};
-
-export const ReplaceConfirmationContract: Story = {
-  args: { action: 'replace' },
-  render: StoryRender,
-  play: async ({ args, canvasElement }) => {
-    args.onCancel.mockClear();
-    args.onConfirm.mockClear();
-    args.onReplace.mockClear();
-    const canvas = within(canvasElement);
-    const body = within(canvasElement.ownerDocument.body);
-    const trigger = canvas.getByRole('button', { name: '더 보기' });
-
-    await userEvent.click(trigger);
-    await userEvent.click(await body.findByRole('menuitem', { name: '프로필에 고정' }));
-    await waitFor(() => expect(body.getByRole('button', { name: '취소' })).toHaveFocus());
-    await userEvent.click(body.getByRole('button', { name: '취소' }));
-    await waitFor(() => expect(args.onCancel).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(trigger).toHaveFocus());
-
-    await userEvent.click(trigger);
-    await userEvent.click(await body.findByRole('menuitem', { name: '프로필에 고정' }));
-    await waitFor(() => expect(body.getByRole('button', { name: '취소' })).toHaveFocus());
-    await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(args.onCancel).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(trigger).toHaveFocus());
-
-    await userEvent.click(trigger);
-    await userEvent.click(await body.findByRole('menuitem', { name: '프로필에 고정' }));
-    await userEvent.click(body.getByRole('button', { name: '변경하기' }));
-    await waitFor(() => expect(args.onConfirm).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(args.onReplace).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(body.queryByRole('dialog')).not.toBeInTheDocument();
   },
 };
 
@@ -374,99 +284,46 @@ export const VisitorMenuContract: Story = {
 };
 
 export const PendingContract: Story = {
-  args: { action: 'replace', outcome: 'pending' },
+  args: { outcome: 'pending' },
   play: async ({ args, canvasElement }) => {
-    args.onConfirm.mockClear();
-    args.onReplace.mockClear();
-    args.onCancel.mockClear();
-    const canvas = within(canvasElement);
-    const body = within(canvasElement.ownerDocument.body);
-    await userEvent.click(canvas.getByRole('button', { name: '더 보기' }));
-    await userEvent.click(await body.findByRole('menuitem', { name: '프로필에 고정' }));
-    const confirm = body.getByRole('button', { name: '변경하기' });
-    confirm.click();
-    await waitFor(() => expect(confirm).toHaveAttribute('aria-busy', 'true'));
-    expect(body.getByRole('button', { name: '취소' })).toHaveAttribute('aria-disabled', 'true');
-    expect(body.getByRole('button', { name: '닫기' })).toHaveAttribute('aria-disabled', 'true');
-    confirm.click();
-    await userEvent.keyboard('{Escape}');
-    expect(confirm).toBeVisible();
-    expect(args.onConfirm).toHaveBeenCalledTimes(1);
-    expect(args.onReplace).toHaveBeenCalledTimes(1);
-    expect(args.onCancel).not.toHaveBeenCalled();
-  },
-};
-
-export const ErrorRecoveryFocus: Story = {
-  args: { action: 'replace', outcome: 'error' },
-  play: async ({ args, canvasElement }) => {
-    args.onCancel.mockClear();
-    args.onReplace.mockClear();
+    args.onPin.mockClear();
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     const trigger = canvas.getByRole('button', { name: '더 보기' });
     await userEvent.click(trigger);
     await userEvent.click(await body.findByRole('menuitem', { name: '프로필에 고정' }));
-    await userEvent.click(body.getByRole('button', { name: '변경하기' }));
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-busy', 'true'));
+    expect(trigger).toHaveAttribute('aria-disabled', 'true');
+    trigger.click();
+    await userEvent.keyboard('{Enter}');
+    expect(body.queryByRole('menuitem', { name: '프로필에 고정' })).not.toBeInTheDocument();
+    expect(canvas.queryByText('고정됨')).not.toBeInTheDocument();
+    expect(args.onPin).toHaveBeenCalledTimes(1);
+  },
+};
+
+export const ErrorRecoveryFocus: Story = {
+  args: { action: 'unpin', outcome: 'error' },
+  play: async ({ args, canvasElement }) => {
+    args.onUnpin.mockClear();
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const trigger = canvas.getByRole('button', { name: '더 보기' });
+    await userEvent.click(trigger);
+    await userEvent.click(await body.findByRole('menuitem', { name: '프로필 고정 해제' }));
     expect(
       await body.findByText('고정 상태를 변경하지 못했어요. 다시 시도해 주세요.'),
     ).toBeVisible();
-    await waitFor(() => expect(body.getByRole('button', { name: '취소' })).toHaveFocus());
-    await userEvent.click(body.getByRole('button', { name: '취소' }));
-    await waitFor(() => expect(args.onCancel).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(trigger).toHaveFocus());
-    expect(args.onReplace).toHaveBeenCalledTimes(1);
+    expect(canvas.getByText('고정됨')).toBeVisible();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.click(await body.findByRole('menuitem', { name: '프로필 고정 해제' }));
+    await waitFor(() => expect(args.onUnpin).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(canvas.getByText('고정됨')).toBeVisible();
   },
 };
 
 const styles = StyleSheet.create({
   fixture: { alignSelf: 'center', maxWidth: 600, width: '100%' },
 });
-
-function ContextChangeFixture(args: StoryArgs) {
-  const [action, setAction] = useState<ProfilePinOperation>('replace');
-  const [viewer, setViewer] = useState<'owner' | 'visitor'>('owner');
-  return (
-    <>
-      <Fixture {...args} action={action} viewer={viewer} />
-      <Button onPress={() => setAction('unpin')}>입력: unpin</Button>
-      <Button onPress={() => setAction('replace')}>입력: replace</Button>
-      <Button onPress={() => setViewer('visitor')}>입력: visitor</Button>
-    </>
-  );
-}
-
-export const ContextChangeClosesConfirmation: Story = {
-  render: ContextChangeFixture,
-  play: async ({ args, canvasElement }) => {
-    args.onPin.mockClear();
-    args.onUnpin.mockClear();
-    args.onReplace.mockClear();
-    args.onConfirm.mockClear();
-    const canvas = within(canvasElement);
-    const body = within(canvasElement.ownerDocument.body);
-    const trigger = canvas.getByRole('button', { name: '더 보기' });
-    await userEvent.click(trigger);
-    await userEvent.click(await body.findByRole('menuitem', { name: '프로필에 고정' }));
-    await waitFor(() => expect(body.getByRole('button', { name: '취소' })).toHaveFocus());
-    // Simulate a host-provided prop update while its confirmation is open.
-    canvas.getByText('입력: unpin').click();
-    await waitFor(() =>
-      expect(body.queryByText('고정 게시물을 변경할까요?')).not.toBeInTheDocument(),
-    );
-    await waitFor(() => expect(trigger).toHaveFocus());
-    await userEvent.click(canvas.getByText('입력: replace'));
-    await userEvent.click(trigger);
-    await userEvent.click(await body.findByRole('menuitem', { name: '프로필에 고정' }));
-    await waitFor(() => expect(body.getByRole('button', { name: '취소' })).toHaveFocus());
-    canvas.getByText('입력: visitor').click();
-    await waitFor(() =>
-      expect(body.queryByText('고정 게시물을 변경할까요?')).not.toBeInTheDocument(),
-    );
-    await waitFor(() => expect(trigger).toHaveFocus());
-    expect(args.onConfirm).not.toHaveBeenCalled();
-    expect(args.onPin).not.toHaveBeenCalled();
-    expect(args.onUnpin).not.toHaveBeenCalled();
-    expect(args.onReplace).not.toHaveBeenCalled();
-  },
-};

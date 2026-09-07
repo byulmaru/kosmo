@@ -216,17 +216,11 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 고정·해제에는 같은 `Pin` glyph를 사용하고 `PinOff`는 사용하지 않는다. attribution은 `16`/`secondary`,
   Web menu는 `18`/`primary`, Native menu는 `24`/`primary`를 사용하며 삭제의 `danger` 색은 유지한다.
 - 고정 Post는 Profile 목록에만 우선 표시하고 Home timeline 순서는 변경하지 않는다.
-- PROD-809에서 확정한 정책에 따라 새 Post를 고정하면 기존 고정 Post가 해제되는 경우
-  `고정 게시물을 변경할까요?` 제목과 `새 게시물을 고정하면 현재 고정된 게시물의 고정이 해제됩니다.` 설명을
-  표시한다. action은 `취소`와 Primary `변경하기`이며 취소·닫기는 상태를 바꾸지 않는다. 단순
-  `프로필 고정 해제`는 확인 없이 수행한다.
-- 교체 확인은 도메인 전용 confirmation component나 OS alert를 만들지 않고 canonical `ModalSheet`에 공용
-  `ConfirmationContent`의 `Tone=Primary`, `State=Idle`을 넣는다. Web에서는 제목으로 이름 붙은 modal `dialog`,
-  Android·iOS에서는 제목으로 이름 붙은 modal 접근성 surface를 제공하며 backdrop과 platform back은 취소와
-  동일하게 처리한다. 접근성 role은 `Tone`에서 파생하지 않고 consumer가 문맥에 맞는 semantic surface 하나로
-  제공한다.
-- empty·removed·unavailable는 representative UI일 뿐이다. 최대 수·대상 자격·권한·lifecycle·pagination·
-  persistence/API·ActivityPub과 교체 mutation·동시성·실패 처리 정책은 PROD-809가 소유한다.
+- 고정 수·대상 자격·권한·교체·lifecycle 정책은 PROD-809에서 아직 확정되지 않았다. 기존 DSN-55의 교체 확인과
+  empty·removed·unavailable 대표 화면만으로 제품 정책을 확정하지 않는다. 필요한 추가 UI는 PROD-809의
+  canonical 계약 확정 후 범위를 정한다.
+- 단순 고정·해제는 확인 없이 실행한다. 실제 호출 가능 여부는 consumer가 판단하며 공용 UI가 자격·권한을
+  계산하지 않는다. persistence/API·ActivityPub·pagination·mutation·동시성은 PROD-809가 소유한다.
 
 ### Storybook 이관 · PROD-863
 
@@ -235,17 +229,21 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   [Mobile Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12988) source다.
 - `PostListItem`의 `pinned`는 표시만 소유한다. 정렬·자격을 계산하거나 Home에 고정을 적용하지 않는다.
   `more`는 `ProfilePinAction`이 만든 기존 액션 바의 More 연결이며 별도 버튼을 덧붙이지 않는다.
-- `ProfilePinAction`은 호출자가 확정한 owner/visitor와 pin/unpin/replace 입력을 표시한다. visitor에는
+- `ProfilePinAction`은 호출자가 확정한 owner/visitor와 pin/unpin 입력을 표시한다. visitor에는
   링크 복사만 제공하며 owner의 삭제 항목은 호출자가 callback을 제공할 때만 표시한다.
 - 이 메뉴의 sheet 아이콘은 DSN-55 source에 맞춰 24px을 사용한다. 공용 `ActionMenu`의 다른 소비자는
   기존 20px을 유지한다. Web 메뉴는 기존 18px을 유지한다.
-- 요청 중 중복 실행을 막고 교체 확인은 닫히지 않는다. 교체 실패는 확인창을 유지하고 취소로 focus를
-  돌리며, 직접 고정·해제 완료와 확인창 dismiss는 More trigger로 복귀한다. 오류 원문은 표시하지 않는다.
-- `KOSMO/Patterns/Profile/Pin Action`의 Playground는 수동 Controls·Actions용이며 자동 조작은 `Tests`에 둔다.
-  empty·removed·unavailable는 공용 `StateView`의 대표 예시다. Figma의 정책·구현 책임 설명은 제품 문구로
-  노출하지 않는다. loading/error 예시는 공용 상태 표현을 재사용하며 노출·재시도 정책을 정의하지 않는다.
-- 이 이관은 기존 DSN-55 계약을 적용하므로 새 OpenSpec을 만들지 않는다. PROD-809의 API·mutation·cache·
-  pagination·권한과 실제 Profile 연결, Native touch·focus·screen reader QA는 미완료 runtime 범위로 남긴다.
+- 요청 중 More trigger의 busy·disabled 상태로 중복 실행을 막는다. 고정·해제 완료 뒤 More trigger로
+  focus를 돌리고, 실패하면 기존 고정 상태를 유지하며 한국어 오류 toast를 표시한다. 오류 원문은 표시하지 않는다.
+  사용자는 메뉴를 다시 열어 같은 action을 재시도한다.
+- `KOSMO/Patterns/Profile/Pin Action`의 Playground는 수동 Controls·Actions용이며 자동 조작은 Controls가
+  비활성화된 `Tests`에 둔다. Controls는 owner/visitor, pin/unpin, 본문과 요청 success/pending/error를 제공한다.
+- 2026-09-08 PROD-863 범위 확정에 따라 empty·removed·unavailable·loading·error 전용 상태 카드와
+  presentation Control, 교체 확인과 replace/confirm/cancel 공개 API는 이 이관에서 제외한다. 고정·해제 요청의
+  pending·실패 피드백은 유지한다. ConfirmationContent는 이 이슈의 선행 조건이 아니다.
+- 이 이관은 제품 정책과 독립적인 공용 UI 범위만 구현하므로 새 OpenSpec을 만들지 않는다. PROD-809의
+  정책 검토·명세 확정은 이 이관 완료를 기다리지 않으며, API·mutation·cache·pagination·권한과 실제 Profile
+  연결, Native touch·focus·screen reader QA는 미완료 runtime 범위로 남긴다.
 
 ## Repost 실패 toast
 
@@ -383,7 +381,6 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Profile 고정의 Mobile `390`, Web `1024`·`1440` Light/Dark 화면, ProfileHero·PostListItem·PostAttributionRow
   source 상속, 메뉴 label·순서·color, 장식 Pin의 중복 announce 방지를 검증한다. 실제 runtime 접근성은 PROD-809에서
   검증한다.
-- 새 고정으로 기존 고정 Post가 해제되는 경우에만 교체 확인을 표시하고 제목·설명·`취소`·Primary `변경하기`가
-  정확한지, canonical `ModalSheet`와 플랫폼별 modal 의미를 재사용하는지, backdrop·platform back을 포함한
-  취소·닫기는 상태를 유지하며 단순 `프로필 고정 해제`에는 확인을 표시하지 않는지 검증한다. 교체 mutation의
-  성공·실패·동시성은 PROD-809에서 검증한다.
+- 고정·해제 callback과 표시 전환, pending 중 중복 실행 차단, 실패 뒤 기존 고정 상태 유지·한국어 toast·재시도,
+  메뉴 keyboard·dismiss·trigger focus return을 검증한다. 교체 확인과 전용 상태 화면은 PROD-809 정책 확정 후
+  필요한 범위가 정해질 때 검증한다.
