@@ -24,7 +24,7 @@ export const HitAreaContract: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const user = userEvent.setup();
-    const link = canvas.getByRole('link');
+    const link = await canvas.findByRole('link');
     const followButton = canvas.getByRole('button', { name: '팔로우' });
     const onPress = args.onPress;
 
