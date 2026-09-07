@@ -131,6 +131,11 @@ const preview: Preview = {
           styles: { height: '844px', width: '390px' },
           type: 'mobile',
         },
+        kosmoMediaViewerWide: {
+          name: 'KOSMO Media Viewer wide',
+          styles: { height: '640px', width: '1024px' },
+          type: 'desktop',
+        },
         kosmoPickerWide: {
           name: 'KOSMO picker wide',
           styles: { height: '900px', width: '600px' },

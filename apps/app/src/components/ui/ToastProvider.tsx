@@ -1,19 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import {
-  Animated,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Animated, Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
+import { breakpoints, space } from '@/theme/tokens';
 import { useToastMotion } from '@/theme/useOverlayMotion';
+import { Toast } from './Toast';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { ViewStyle } from 'react-native';
+import type { ToastProps } from './Toast';
 
 const toastDurationMs = 3000;
 
@@ -23,15 +16,10 @@ type ToastContextValue = Readonly<{
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
-type ToastOptions = Readonly<{
-  action?: Readonly<{
-    label: string;
-    onPress: () => void;
-  }>;
-  tone: 'danger' | 'info' | 'success' | 'warning';
-}>;
+type ToastOptions = Omit<ToastProps, 'message'> & Readonly<{ persistent?: boolean }>;
 
-type Toast = Readonly<{
+type ToastState = Readonly<{
+  persistent?: boolean;
   action?: ToastOptions['action'];
   id: number;
   message: string;
@@ -39,18 +27,15 @@ type Toast = Readonly<{
 }>;
 
 export function ToastProvider({ children }: PropsWithChildren): ReactNode {
-  const [toast, setToast] = useState<Toast | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const activeToastId = useRef<number | null>(null);
   const nextToastId = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const theme = useTheme();
-  const elevation = useElevation();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const hasBottomTabBar = Platform.OS !== 'web' || width < breakpoints.compact;
   const bottom = insets.bottom + (hasBottomTabBar ? 56 : 0) + space[8];
-  const toastColors = toast ? getToastColors(theme, toast.tone) : undefined;
   const toastMotion = useToastMotion(toastVisible);
 
   const dismissToast = useCallback((id?: number) => {
@@ -72,7 +57,13 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
       }
       const id = nextToastId.current++;
       activeToastId.current = id;
-      setToast({ action: options.action, id, message: nextMessage, tone: options.tone });
+      setToast({
+        action: options.action,
+        id,
+        message: nextMessage,
+        persistent: options.persistent,
+        tone: options.tone,
+      });
       setToastVisible(true);
       return () => dismissToast(id);
     },
@@ -80,7 +71,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   );
 
   useEffect(() => {
-    if (!toast || !toastVisible || !toastMotion.entered) {
+    if (!toast || toast.persistent || !toastVisible || !toastMotion.entered) {
       return;
     }
 
@@ -124,71 +115,25 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
             },
           ]}
         >
-          <View
-            style={[
-              styles.toast,
-              toast.action ? styles.actionToast : undefined,
-              elevation.floating,
-              {
-                backgroundColor: toastColors?.background,
-                borderLeftColor: toastColors?.border,
-                borderLeftWidth: toastColors?.border ? 4 : undefined,
-              },
-            ]}
-          >
-            <Text style={[styles.message, { color: toastColors?.foreground }]}>
-              {toast.message}
-            </Text>
-            {toast.action ? (
-              <Pressable
-                accessibilityRole="button"
-                hitSlop={Platform.OS === 'android' ? 2 : undefined}
-                onPress={() => {
-                  const action = toast.action;
-                  dismissToast(toast.id);
-                  action?.onPress();
-                }}
-                style={styles.action}
-              >
-                <Text style={[styles.actionLabel, { color: toastColors?.foreground }]}>
-                  {toast.action.label}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
+          <Toast
+            message={toast.message}
+            tone={toast.tone}
+            action={
+              toast.action
+                ? {
+                    label: toast.action.label,
+                    onPress: () => {
+                      dismissToast(toast.id);
+                      toast.action?.onPress();
+                    },
+                  }
+                : undefined
+            }
+          />
         </Animated.View>
       ) : null}
     </ToastContext.Provider>
   );
-}
-
-function getToastColors(theme: ReturnType<typeof useTheme>, tone: ToastOptions['tone']) {
-  if (tone === 'danger') {
-    return {
-      background: theme.feedbackDangerSubtle,
-      border: theme.feedbackDangerBase,
-      foreground: theme.feedbackDangerOnSubtle,
-    };
-  }
-  if (tone === 'success') {
-    return {
-      background: theme.feedbackSuccessSubtle,
-      border: theme.feedbackSuccessBase,
-      foreground: theme.feedbackSuccessOnSubtle,
-    };
-  }
-  if (tone === 'warning') {
-    return {
-      background: theme.feedbackWarningSubtle,
-      border: theme.feedbackWarningBase,
-      foreground: theme.feedbackWarningOnSubtle,
-    };
-  }
-  return {
-    background: theme.feedbackInfoSubtle,
-    border: theme.feedbackInfoBase,
-    foreground: theme.feedbackInfoOnSubtle,
-  };
 }
 
 export function useToast(): ToastContextValue {
@@ -210,38 +155,11 @@ const webHost = {
 } as unknown as ViewStyle;
 
 const styles = StyleSheet.create({
-  action: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
-    minWidth: 44,
-    paddingHorizontal: space[4],
-    paddingVertical: space[4],
-  },
-  actionLabel: {
-    ...textStyles.uiLabelM,
-  },
-  message: {
-    flex: 1,
-    ...textStyles.uiCopyM,
-  },
   nativeHost: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'flex-end',
     pointerEvents: 'box-none',
     zIndex: 30,
-  },
-  actionToast: { paddingVertical: space[4] },
-  toast: {
-    alignItems: 'center',
-    borderRadius: radius[12],
-    flexDirection: 'row',
-    gap: space[12],
-    maxWidth: 360,
-    paddingHorizontal: space[16],
-    paddingVertical: space[12],
-    pointerEvents: 'auto',
-    width: '100%',
   },
 });
