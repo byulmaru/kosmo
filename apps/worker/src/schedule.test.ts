@@ -2,32 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ScheduleAlreadyRunning } from '@temporalio/client';
-import { createScheduleIfMissing, createSchedules, parseScheduleEnvironment } from './schedule';
+import { createScheduleIfMissing, createSchedules } from './schedule';
 import { notificationCleanupSchedule } from './schedules/notification-cleanup';
 import type { ScheduleOptions } from '@temporalio/client';
 
 const scheduleId = 'kosmo-dev-notification-cleanup';
-const environment = {
-  address: 'temporal:7233',
-  namespace: 'kosmo-dev',
-} as const;
-
-test('스케줄 환경을 Zod로 파싱하고 공백을 제거한다', () => {
-  assert.deepEqual(
-    parseScheduleEnvironment({
-      TEMPORAL_ADDRESS: ` ${environment.address} `,
-      TEMPORAL_NAMESPACE: ` ${environment.namespace} `,
-    }),
-    environment,
-  );
-
-  assert.throws(() =>
-    parseScheduleEnvironment({
-      TEMPORAL_ADDRESS: ' ',
-      TEMPORAL_NAMESPACE: environment.namespace,
-    }),
-  );
-});
 
 test('스케줄 생성 오류는 호출자에게 전파한다', async () => {
   const failure = new Error('Temporal unavailable');
