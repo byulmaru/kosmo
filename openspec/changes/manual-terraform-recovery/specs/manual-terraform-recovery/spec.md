@@ -81,11 +81,11 @@
 - **WHEN** main push의 reviewed PR plan과 현재 main plan이 다르다
 - **THEN** 기존 자동 Apply가 실패하고 current plan 또는 수동 Apply를 자동 시작하지 않는다
 
-### Requirement: 기존 Plan 출력 노출 경계 보존
+### Requirement: 기존 PR Plan/push Apply 출력 경계 보존
 
-**Authority / Provenance:** 적용 canonical domain/design 없음; 운영 context `apps/terraform/README.md`; [PROD-898](https://linear.app/byulmaru/issue/PROD-898/최신-main-terraform-계획을-수동-실행으로-적용한다) — 수동 경로는 기존 Plan comment, workflow summary와 artifact의 노출 경계를 변경하지 않아야 한다(MUST). Terraform plan JSON, 비교용 중간 JSON 또는 cloud secret을 새 로그·artifact·summary에 노출해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 적용 canonical domain/design 없음; 운영 context `apps/terraform/README.md`; [PROD-898](https://linear.app/byulmaru/issue/PROD-898/최신-main-terraform-계획을-수동-실행으로-적용한다) — 기존 PR Plan과 push Apply의 Plan comment, workflow summary와 artifact 노출 경계를 변경해서는 안 된다(MUST). 수동 direct Apply는 Terraform command output에 새 plan JSON, 비교용 JSON 또는 cloud secret을 노출해서는 안 된다(MUST NOT).
 
 #### Scenario: 수동 직접 Apply 출력
 
 - **WHEN** 수동 Apply가 성공하거나 실패한다
-- **THEN** 수동 경로는 별도 plan JSON·비교 JSON·secret을 summary나 artifact에 저장하지 않고 기존 Terraform command output 경계를 유지한다
+- **THEN** 수동 경로의 Terraform command output에 별도 plan JSON·비교 JSON·secret을 노출하지 않는다

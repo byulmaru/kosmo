@@ -34,4 +34,4 @@ PR #766 병합 뒤 Terraform 자동 apply가 reviewed PR plan과 최신 main pla
 - `.github/workflows/terraform.yml`: 수동 dispatch, main-only guard, 기존 Apply job의 직접 Apply 경로, 기존 자동 경로 보존.
 - `apps/terraform/main.tf`: `kosmo-terraform` GCP WIF 조건을 기존 `repository_id`와 main ref 또는 main 대상 PR 분기로 정렬한다. GitHub issuer/provider와 service account IAM 연결, Firebase/native-distribution WIF 및 Firebase 리소스는 변경하지 않는다.
 - `apps/terraform/README.md` 및 필요한 운영 문서: 수동 recovery, credential trust 선행 Apply, 검증·실제 Apply 증거의 경계를 문서화한다.
-- OpenSpec capability/spec와 workflow validation: 소스 문자열·정규식·AST 존재 검사가 아니라 실행 조건, artifact 흐름, 실패 경로와 기존 자동 경로 보존을 검증한다.
+- OpenSpec capability/spec와 workflow validation: 소스 문자열·정규식·AST 존재 검사가 아니라 실행 조건, 수동 direct Apply와 push reviewed-plan artifact 흐름, event별 실패 경로와 기존 자동 경로 보존을 검증한다.
