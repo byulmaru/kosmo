@@ -52,5 +52,6 @@ overrides:
   'xcode@3.0.1>uuid': 11.1.1
   react-native-reanimated: 4.3.1
   react-native-worklets: 0.8.3
+# TODO(PROD-916): Remove this patch, its override, and patch file after a compatible upstream update.
 patchedDependencies:
   decode-uri-component@0.5.0: patches/decode-uri-component@0.5.0.patch
