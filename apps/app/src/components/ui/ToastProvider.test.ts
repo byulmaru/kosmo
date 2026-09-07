@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { before, mock, test } from 'node:test';
-import { createElement } from 'react';
+import { createElement, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ElementType } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -74,6 +74,30 @@ let toastProviderModule: typeof ToastProviderModule | undefined;
 
 before(async () => {
   toastProviderModule = await import('./ToastProvider');
+});
+
+test('a child can show an error toast on initial mount', async () => {
+  assert.ok(toastProviderModule);
+  const { ToastProvider, useToast } = toastProviderModule;
+  function Harness() {
+    const { showToast } = useToast();
+    useEffect(() => showToast('목록을 불러오지 못했어요', { tone: 'danger' }), [showToast]);
+    return null;
+  }
+  let renderer!: ReactTestRenderer;
+  try {
+    await act(async () => {
+      renderer = create(createElement(ToastProvider, null, createElement(Harness)));
+    });
+    assert.equal(renderer.root.findAllByType('AnimatedView' as ElementType).length, 1);
+    assert.ok(
+      renderer.root
+        .findAllByType(TextHost)
+        .some((node) => node.props.children === '목록을 불러오지 못했어요'),
+    );
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
 });
 
 test('toast dwell timer starts after its enter motion finishes', async () => {

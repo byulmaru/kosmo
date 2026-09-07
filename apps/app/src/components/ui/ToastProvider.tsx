@@ -86,7 +86,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   }, [dismissToast, toast, toastMotion.entered, toastVisible]);
 
   useEffect(() => {
-    if (!toastVisible && !toastMotion.mounted) {
+    if (!toastVisible && !toastMotion.mounted && activeToastId.current === null) {
       setToast(null);
     }
   }, [toastMotion.mounted, toastVisible]);

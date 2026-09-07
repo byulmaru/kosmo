@@ -147,7 +147,10 @@ Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목
 - 요청 callback은 성공할 때 resolve하고 실패할 때 reject한다. 성공 feedback이 전달되기 전에는 낙관적으로
   상태를 전환하거나 목록 항목을 제거하지 않는다. `onFeedback`은 요청의 성공/실패를 관찰하며 성공 이후의
   확정 표시 갱신에도 사용할 수 있다. pending target 교체 시 이전 completion의 UI feedback은 폐기한다.
-- 목록은 loading/error/loaded와 pagination의 more/loading/error/end를 구분한다. 초기/추가 요청과
+- 목록은 loading/error/loaded와 pagination의 more/loading/error/end를 구분한다. 최초·추가 조회 실패는
+  inline 오류 대신 공용 danger Toast와 `다시 시도` action으로 안내한다. 추가 실패에도 기존 목록은 유지한다.
+  Toast가 사라지거나 다른 알림으로 교체되어도 재시도할 수 있도록 최초 실패에는 `다시 시도`, 추가 실패에는
+  `더 불러오기` 버튼을 본문에 유지한다. 오류 해소·화면 이탈 시 해당 Toast를 정리한다. 초기/추가 요청과
   실제 Relay connection·cursor·cache 연결은 PROD-814 소유다.
 - 직접 확인하는 loaded 화면은 [Mobile](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8075),
   [Compact](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-24942),
@@ -155,8 +158,8 @@ Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목
 - `KOSMO/Patterns/ProfileHero`, `KOSMO/Patterns/Post/Mute`, `KOSMO/Patterns/Profile/Muted Profiles`에서
   실제 프로필·게시글·관리 목록 맥락으로 검토한다. 단독 Mute Action Playground는 유지하지 않는다.
   Playground는 수동 Controls·Actions, 각 Tests 하위는 자동 interaction을 소유한다.
-- 뮤트·해제 확인창의 초기 focus는 취소이며 pending에는 중복 요청·dismiss를 막는다. 실패 시 확인창과
-  확정 관계를 유지하고 확인창 안의 alert로 오류를 안내하며 취소로 focus를 복구한다. 성공 후 확인창이
+- 뮤트·해제 확인창의 초기 focus는 취소이며 pending에는 중복 요청·dismiss를 막는다. 실패 시 확정 관계와 목록 항목을 유지하고 확인창을 닫는다. 닫힘이 완료되면 원래 action으로 focus를
+  복구하고 공용 danger Toast로 오류를 안내하며 error feedback을 전달한다. 재시도는 action을 다시 열어 진행한다. 성공 후 확인창이
   닫힌 다음 완료 Toast와 feedback을 전달하며,
   제거되는 관리 행 대신 목록 heading, 제거되는 ProfileHero 상태행 대신 팔로잉 링크로 focus를 옮긴다.
 - `ProfileHero.mute`는 현재 확정 상태와 mutation callback을 함께 받는다. `PostLayout.mute`는 해당

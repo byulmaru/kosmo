@@ -56,13 +56,11 @@ function ProfileMuteActionContent({
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
   const mounted = useRef(false);
   const cancelRef = useRef<View>(null);
   const actionRef = useRef<View>(null);
   const focusTrigger = useRef<() => void>(() => {});
-  const restoreFocus = useRef(false);
   const completed = useRef<ProfileMuteFeedback | null>(null);
   const restoreTriggerFocus = () => {
     if (surface === 'menu') {
@@ -71,12 +69,6 @@ function ProfileMuteActionContent({
       actionRef.current?.focus();
     }
   };
-  useEffect(() => {
-    if (!pending && restoreFocus.current) {
-      cancelRef.current?.focus();
-      restoreFocus.current = false;
-    }
-  }, [pending, surface]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -94,7 +86,6 @@ function ProfileMuteActionContent({
     }
     inFlight.current = true;
     setPending(true);
-    setError(null);
     let succeeded = false;
     try {
       await onChangeMuted(nextMuted);
@@ -105,23 +96,11 @@ function ProfileMuteActionContent({
     if (!mounted.current) {
       return;
     }
-    if (!succeeded) {
-      inFlight.current = false;
-    }
-    restoreFocus.current = !succeeded;
+    completed.current = { muted: nextMuted, status: succeeded ? 'success' : 'error' };
     setPending(false);
-    if (succeeded) {
-      setOpen(false);
-    }
-    if (succeeded) {
-      completed.current = { muted: nextMuted, status: 'success' };
-    } else {
-      setError(`${nextMuted ? '뮤트하지' : '뮤트를 해제하지'} 못했어요. 다시 시도해 주세요.`);
-      onFeedback?.({ muted: nextMuted, status: 'error' });
-    }
+    setOpen(false);
   };
   const activate = () => {
-    setError(null);
     setOpen(true);
   };
   const label = muted ? '뮤트 해제' : '뮤트';
@@ -246,8 +225,10 @@ function ProfileMuteActionContent({
           completed.current = null;
           if (feedback) {
             showToast(
-              `${displayName} 님이 ${feedback.muted ? '뮤트되었어요' : '뮤트 해제되었어요'}`,
-              { tone: 'success' },
+              feedback.status === 'success'
+                ? `${displayName} 님이 ${feedback.muted ? '뮤트되었어요' : '뮤트 해제되었어요'}`
+                : `${feedback.muted ? '뮤트하지' : '뮤트를 해제하지'} 못했어요. 다시 시도해 주세요.`,
+              { tone: feedback.status === 'success' ? 'success' : 'danger' },
             );
             onFeedback?.(feedback);
           }
@@ -269,14 +250,6 @@ function ProfileMuteActionContent({
           onConfirm={() => void request(!muted)}
           pending={pending}
         />
-        {error ? (
-          <Text
-            accessibilityRole="alert"
-            style={[textStyles.uiCopyS, { color: theme.feedbackDangerOnSubtle }]}
-          >
-            {error}
-          </Text>
-        ) : null}
       </ModalSheet>
     </>
   );
