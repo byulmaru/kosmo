@@ -138,8 +138,6 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
       aria-disabled={blocked}
       disabled={blocked}
       onBlur={() => setFocusVisible(false)}
-      onHoverIn={() => setHovered(true)}
-      onHoverOut={() => setHovered(false)}
       onFocus={(event) => {
         const target = event.currentTarget as unknown as {
           matches?: (selector: string) => boolean;
@@ -151,12 +149,6 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
       style={[
         styles.target,
         {
-          backgroundColor:
-            web && hovered
-              ? theme.stateHover
-              : web && unread
-                ? theme.actionPrimarySubtle
-                : 'transparent',
           outlineColor: theme.stateFocusRing,
           outlineOffset: -2,
           outlineStyle: focusVisible ? 'solid' : 'none',
@@ -203,9 +195,6 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
           ) : null}
         </View>
       ) : null}
-      {web && unread ? (
-        <View style={[styles.unreadRail, { backgroundColor: theme.actionPrimaryBase }]} />
-      ) : null}
     </Pressable>
   );
 
@@ -214,14 +203,34 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
       style={[styles.root, { borderBottomColor: theme.borderSubtle }]}
       testID="notification-list-item"
     >
-      {blocked ? (
-        target
-      ) : (
-        <Link asChild href={href}>
-          {target}
-        </Link>
-      )}
-      {kind === 'reply' ? props.children : null}
+      <View
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+        style={{
+          backgroundColor: web && unread ? theme.actionPrimarySubtle : 'transparent',
+        }}
+        testID="notification-item-surface"
+      >
+        {web && hovered ? (
+          <View
+            aria-hidden
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFillObject, { backgroundColor: theme.stateHover }]}
+            testID="notification-hover-overlay"
+          />
+        ) : null}
+        {blocked ? (
+          target
+        ) : (
+          <Link asChild href={href}>
+            {target}
+          </Link>
+        )}
+        {kind === 'reply' ? props.children : null}
+        {web && unread ? (
+          <View style={[styles.unreadRail, { backgroundColor: theme.actionPrimaryBase }]} />
+        ) : null}
+      </View>
     </PostContentPrivacyBoundary>
   );
 }

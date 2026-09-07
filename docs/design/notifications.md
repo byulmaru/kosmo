@@ -27,12 +27,14 @@ Reply다. Mention은 Future 표본이므로 public props와 Playground에 노출
   Android에서는 접근성 기준에 따라 48dp 최소 target을 유지한다. Web inset은 좌 12px·우 16px,
   Native는 좌우 8px, kind/content gap은 12px이다.
 - Web Read 배경은 투명, Unread는 Figma가 사용하는 `actionPrimarySubtle`과 4px
-  `actionPrimaryBase` rail이다. Hover는 `stateHover`, keyboard focus는 `stateFocusRing`이다.
+  `actionPrimaryBase` rail이다. Hover는 기존 배경 위에 `stateHover`를 얹으며 Unread의 primary 배경을
+  지우지 않는다. 따라서 Read와 Unread의 hover 색상이 구분된다. keyboard focus는 `stateFocusRing`이다.
   이는 unread 전용 semantic token 신설이 아니다. Native는 Default 표시를 사용하되 접근 가능한 이름에
   unread 정보를 유지한다.
 - Reaction/Repost는 요약 헤더·한 줄 미리보기·썸네일을 하나의 이동 target으로 취급한다.
-  hover·읽음 배경과 읽음 rail은 이 target 전체에 적용한다. Reply는 헤더만 알림 이동 target이며
-  아래 PostListItem과 Action Bar는 별도 상호작용 영역을 유지한다.
+  hover·읽음 배경과 읽음 rail은 알림 전체에 적용한다. Reply도 헤더와 PostListItem을 하나의 알림
+  surface로 표시하며 게시글 위에서도 전체 hover 배경이 유지된다. 헤더 이동 링크와 Post 내부 링크·
+  Action Bar는 독립적으로 동작하고, 내부 버튼 클릭이 알림 이동을 함께 실행하지 않는다.
 - Follow에는 `UserRoundPlus`, Repost에는 `Repeat2`를 사용한다. Reaction의 Figma
   `FaceSlightlySmiling`은 설치된 Lucide export에 없으므로 Figma description과 [icons.md](./icons.md)의
   기존 `Smile` fallback을 유지한다.

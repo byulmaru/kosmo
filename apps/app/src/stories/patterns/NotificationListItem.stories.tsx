@@ -284,6 +284,7 @@ export const ReadAndUnavailableStates: Story = {
   parameters: { controls: { disable: true } },
   render: (args) => (
     <View>
+      <NotificationExample {...args} unread={false} name="읽은 알림" />
       <NotificationExample {...args} unread />
       <NotificationExample {...args} pending name="이동 처리 중" />
       <NotificationExample {...args} disabled name="더 이상 접근할 수 없는 알림" />
@@ -350,7 +351,7 @@ export const CompositionContract: Story = {
         <NotificationExample {...args} kind="reaction" grouped hasMedia unread />
       </View>
       <View testID="reply-notification">
-        <NotificationExample {...args} kind="reply" />
+        <NotificationExample {...args} kind="reply" unread />
       </View>
     </View>
   ),
@@ -358,12 +359,15 @@ export const CompositionContract: Story = {
     args.onNavigate.mockClear();
     const canvas = within(canvasElement);
     const reaction = within(canvas.getByTestId('reaction-notification'));
-    const link = reaction.getByRole('link');
+    const surface = reaction.getByTestId('notification-item-surface');
     const excerpt = reaction.getByText(args.bodyText);
-    const unreadBackground = getComputedStyle(link).backgroundColor;
+    const unreadBackground = getComputedStyle(surface).backgroundColor;
     await expect(unreadBackground).not.toBe('rgba(0, 0, 0, 0)');
     await userEvent.hover(excerpt);
-    await expect(getComputedStyle(link).backgroundColor).not.toBe(unreadBackground);
+    await expect(getComputedStyle(surface).backgroundColor).toBe(unreadBackground);
+    await expect(reaction.getByTestId('notification-hover-overlay')).toHaveStyle({
+      pointerEvents: 'none',
+    });
     await userEvent.click(excerpt);
     await expect(args.onNavigate).toHaveBeenCalledOnce();
     await userEvent.click(reaction.getByTestId('post-media-frame-notification-thumbnail'));
@@ -376,10 +380,19 @@ export const CompositionContract: Story = {
       height: '64px',
     });
     const reply = within(canvas.getByTestId('reply-notification'));
+    const replySurface = reply.getByTestId('notification-item-surface');
+    const replyPost = reply.getByTestId('post-list-standard-row');
+    await expect(replySurface).toContainElement(replyPost);
+    await expect(getComputedStyle(replySurface).backgroundColor).toBe(unreadBackground);
+    await userEvent.hover(replyPost);
+    await expect(getComputedStyle(replySurface).backgroundColor).toBe(unreadBackground);
+    await expect(reply.getByTestId('notification-hover-overlay')).toBeInTheDocument();
     const action = await reply.findByRole('button', { name: '답글' });
     await expect(action.closest('a')).toBeNull();
     await expect(reply.getByTestId('post-list-standard-row')).toBeInTheDocument();
     await expect(reply.getByRole('button', { name: /더 보기/ })).toBeInTheDocument();
+    await userEvent.click(reply.getByRole('button', { name: /더 보기/ }));
+    await expect(args.onNavigate).toHaveBeenCalledTimes(2);
   },
 };
 
