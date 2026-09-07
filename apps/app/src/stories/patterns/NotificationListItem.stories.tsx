@@ -39,7 +39,7 @@ const replyPost = {
   viewerReactions: [],
   replyParent: post({
     id: 'notification-parent',
-    profile: profile({ displayName: '원글 작성자' }),
+    profile: profile({ id: 'notification-parent-author', displayName: '원글 작성자' }),
   }),
 };
 
@@ -464,10 +464,14 @@ export const ReplyQuoteContract: Story = {
           data: {
             node: {
               ...replyPost,
-              repostSource: post({
-                id: 'quoted-post',
-                bodyText: '답글이 인용한 게시글 본문입니다.',
-              }),
+              repostSource: {
+                ...post({
+                  id: 'quoted-post',
+                  profile: profile({ id: 'notification-quoted-author' }),
+                  bodyText: '답글이 인용한 게시글 본문입니다.',
+                }),
+                viewerReactions: [],
+              },
             },
             composer: profile({ id: 'notification-viewer' }),
           },
