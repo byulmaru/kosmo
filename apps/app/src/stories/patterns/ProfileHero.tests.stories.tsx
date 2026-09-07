@@ -28,16 +28,12 @@ export const MobileFollowError: Story = {
   parameters: { relay: { mutationError: '팔로우 실패' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
-    const alert = await canvas.findByRole('alert');
-    await canvasElement.ownerDocument.fonts.ready;
-    const heading = canvas.getByRole('heading', { name: '프로필 히어로' });
-    const surface = canvas.getByTestId('profile-hero-surface').getBoundingClientRect();
-    const bounds = alert.getBoundingClientRect();
-    expect(surface.width).toBe(390);
-    expect(bounds.bottom).toBeLessThanOrEqual(heading.getBoundingClientRect().top);
-    expect(bounds.left).toBeGreaterThanOrEqual(surface.left);
-    expect(bounds.right).toBeLessThanOrEqual(surface.right);
-    expect(canvas.getByRole('button', { name: '팔로우' })).toBeEnabled();
+    const button = await canvas.findByRole('button', { name: '팔로우' });
+    const surface = canvas.getByTestId('profile-hero-surface');
+    await userEvent.click(button);
+    const alert = await within(canvasElement.ownerDocument.body).findByRole('alert');
+    expect(surface.contains(alert)).toBe(false);
+    expect(alert).toHaveTextContent('팔로우 상태를 변경하지 못했습니다.');
+    expect(button).toBeEnabled();
   },
 };

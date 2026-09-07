@@ -40,8 +40,8 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - 공용 source는 Native 버튼의 위·아래에 iOS `2`, Android `4`의 입력 여백을 확보한다. Hero의 action 부모도
   `44`·`48` 높이를 수용하고 중심축을 유지한다. 목록에서는 이 입력 여백을 기존 행의 여백 안에 배치해
   Avatar `40`과 기본 행 높이 `64`를 유지한다. `hitSlop`만 늘리고 부모 bounds에 잘리게 두지 않는다.
-- 관계 action에 오류 문구가 표시되면 Hero의 avatar/action 행은 기본 최소 높이에서 늘어나며,
-  오류 문구와 이름·핸들이 겹치지 않게 한다. 목록 행 높이는 하단 divider까지 포함해 `64`로 맞춘다.
+- 관계 action 실패는 행 밖의 공용 오류 토스트로 전달하고 Hero의 avatar/action 행 높이는 유지한다.
+  목록 행 높이는 하단 divider까지 포함해 `64`로 맞춘다.
 - 로딩 중 전달된 실제 action도 같은 slot에 표시하고 접근성 트리에 유지한다. 접근성 제외는 장식용
   cover·avatar·본문 skeleton에만 적용하며 로딩 안내는 별도로 전달한다.
 
@@ -53,6 +53,12 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
   독립 버튼으로 동작하며 `linked={false}`의 View 구조는 바꾸지 않는다.
 - Web Storybook에서 bio/no-bio 행과 링크·gap·Follow 키보드 동작을 검증한다. 실제 iOS·Android touch
   target은 Native 출시 QA에서 별도로 확인한다.
+
+## Follow action 실패 피드백
+
+- Follow·Unfollow·Cancel의 GraphQL 또는 network 실패는 공용 `ToastProvider`의 danger toast로 표시한다.
+  ProfileHero와 ProfileListItem의 행 높이·action geometry를 늘리지 않으며, 실패 뒤 같은 버튼을 다시 눌러
+  재시도할 수 있다. 토스트는 focus를 이동시키지 않고 기존 assertive live region으로 오류를 알린다.
 
 ## PROD-851 이관 상태와 Figma 정렬
 

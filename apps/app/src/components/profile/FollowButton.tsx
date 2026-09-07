@@ -1,11 +1,9 @@
-import { useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
-import { useTheme } from '@/theme/ThemeProvider';
-import { layoutRecipes, textStyles } from '@/theme/tokens';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { RecordProxy, RecordSourceSelectorProxy } from 'relay-runtime';
 import type { FollowButton_profile$key } from './__generated__/FollowButton_profile.graphql';
@@ -85,6 +83,8 @@ const unfollowProfileMutation = graphql`
   }
 `;
 
+const followFailureMessage = '팔로우 상태를 변경하지 못했습니다.';
+
 const updateProfileCount = (
   profile: RecordProxy | null | undefined,
   field: 'followersCount' | 'followingCount',
@@ -100,8 +100,8 @@ const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
 export function FollowButton({ profile, size = 'medium', style }: FollowButtonProps) {
-  const theme = useTheme();
   const { selectedProfileId } = useSession();
+  const { showToast } = useToast();
   const data = useFragment(followButtonProfileFragment, profile);
   const [commitFollow, following] =
     useMutation<FollowButtonFollowProfileMutation>(followProfileMutation);
@@ -110,13 +110,16 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
   );
   const [commitUnfollow, unfollowing] =
     useMutation<FollowButtonUnfollowProfileMutation>(unfollowProfileMutation);
-  const [error, setError] = useState(false);
   const viewerState = data.viewerState;
   const isFollowing = Boolean(viewerState?.follow);
   const isPending = Boolean(viewerState?.followRequest);
   const loading = following || cancelling || unfollowing;
   const targetHeight = Platform.OS === 'android' ? 48 : Platform.OS === 'ios' ? 44 : 0;
   const hitSlop = Math.max(0, (targetHeight - (size === 'compact' ? 32 : 40)) / 2);
+
+  const showFailureToast = () => {
+    showToast(followFailureMessage, { tone: 'danger' });
+  };
 
   if (!viewerState || viewerState.isSelf) {
     return null;
@@ -127,11 +130,10 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
       return;
     }
 
-    setError(false);
     const callbacks = {
       onCompleted: (_response: unknown, errors: ReadonlyArray<unknown> | null | undefined) =>
-        setError(Boolean(errors?.length)),
-      onError: () => setError(true),
+        errors?.length ? showFailureToast() : undefined,
+      onError: showFailureToast,
     };
 
     if (isFollowing) {
@@ -175,8 +177,11 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
       commitFollow({
         onCompleted: (response, errors) => {
           const failed = Boolean(errors?.length);
-          setError(failed);
-          if (failed || !selectedProfileId) {
+          if (failed) {
+            showFailureToast();
+            return;
+          }
+          if (!selectedProfileId) {
             return;
           }
 
@@ -188,7 +193,7 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
             selected_profile_id: selectedProfileId,
           });
         },
-        onError: callbacks.onError,
+        onError: showFailureToast,
         optimisticUpdater: (store) => {
           const followee = store.get(data.id);
           const follower = getSelectedProfile(store);
@@ -253,21 +258,12 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
       >
         {isFollowing ? '팔로잉' : isPending ? '요청됨' : '팔로우'}
       </Button>
-      {error ? (
-        <Text
-          accessibilityRole="alert"
-          style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
-        >
-          팔로우 상태를 변경하지 못했습니다.
-        </Text>
-      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { ...layoutRecipes.labelSupportStack, alignItems: 'flex-end' },
+  root: { alignItems: 'flex-end' },
   compactButton: { height: 32, width: 72 },
   mediumButton: { height: 40, minWidth: 96, width: 96 },
-  error: { maxWidth: 224, textAlign: 'right', width: 224, ...textStyles.uiCopyS },
 });

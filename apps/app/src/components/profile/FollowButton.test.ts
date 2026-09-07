@@ -39,6 +39,9 @@ mockModule('react-relay', {
   useMutation: () => [() => {}, false],
 });
 mockModule('@/analytics/client', { trackAnalytics: () => {} });
+mockModule('@/components/ui/ToastProvider', {
+  useToast: () => ({ showToast: () => () => {} }),
+});
 mockModule('@/session/SessionProvider', {
   useSession: () => ({ selectedProfileId: 'viewer' }),
 });

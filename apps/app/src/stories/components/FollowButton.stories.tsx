@@ -95,8 +95,9 @@ function FollowButtonPlayground(args: Parameters<typeof FollowButtonFixture>[0])
 
   return (
     <RelayStoryProvider
+      mutationError={args.failureResponse ? '팔로우 실패' : undefined}
       mutationRequestObserver={mutationRequestObserver}
-      operationResponses={operationResponses}
+      operationResponses={args.failureResponse ? undefined : operationResponses}
       queryData={meta.parameters.relay.data}
     >
       <Suspense fallback={null}>
@@ -143,6 +144,7 @@ function FollowButtonFixture({
   profileId = followable.id,
   size,
 }: {
+  failureResponse?: boolean;
   profileId?: string;
   size?: 'compact' | 'medium';
 }) {
@@ -272,14 +274,15 @@ type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
   render: (args) => <FollowButtonPlayground {...args} />,
-  args: { profileId: followable.id, size: 'medium' },
+  args: { failureResponse: false, profileId: followable.id, size: 'medium' },
   argTypes: {
+    failureResponse: { control: 'boolean', name: '실패 응답' },
     profileId: { control: 'select', options: storyProfileIds },
     size: { control: 'inline-radio', options: ['compact', 'medium'] },
   },
   parameters: {
     relay: { mutationRequestObserver },
-    controls: { disable: false, include: ['profileId', 'size'] },
+    controls: { disable: false },
   },
 };
 
@@ -318,14 +321,15 @@ export const FollowPending: Story = {
 
 export const FollowError: Story = {
   args: { profileId: followable.id, size: 'medium' },
-  parameters: { relay: { mutationError: '팔로우 실패' } },
+  parameters: { relay: { mutationGraphQLErrors: ['팔로우 실패'] } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '팔로우 상태를 변경하지 못했습니다.',
-    );
-    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
+    const button = await canvas.findByRole('button', { name: '팔로우' });
+    await userEvent.click(button);
+    const alert = await within(canvasElement.ownerDocument.body).findByRole('alert');
+    expect(alert).toHaveTextContent('팔로우 상태를 변경하지 못했습니다.');
+    expect(button.parentElement!.contains(alert)).toBe(false);
+    expect(button).toBeEnabled();
     expect(trackAnalytics).not.toHaveBeenCalled();
   },
 };
@@ -355,11 +359,11 @@ export const RequestError: Story = {
   parameters: { relay: { mutationError: '요청 실패' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '팔로우 상태를 변경하지 못했습니다.',
-    );
-    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
+    const button = await canvas.findByRole('button', { name: '팔로우' });
+    await userEvent.click(button);
+    const alert = await within(canvasElement.ownerDocument.body).findByRole('alert');
+    expect(alert).toHaveTextContent('팔로우 상태를 변경하지 못했습니다.');
+    expect(button).toBeEnabled();
   },
 };
 
@@ -385,14 +389,14 @@ export const UnfollowPending: Story = {
 
 export const UnfollowError: Story = {
   args: { profileId: following.id, size: 'medium' },
-  parameters: { relay: { mutationError: '언팔로우 실패' } },
+  parameters: { relay: { mutationGraphQLErrors: ['언팔로우 실패'] } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '팔로우 상태를 변경하지 못했습니다.',
-    );
-    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
+    const button = await canvas.findByRole('button', { name: '팔로잉' });
+    await userEvent.click(button);
+    const alert = await within(canvasElement.ownerDocument.body).findByRole('alert');
+    expect(alert).toHaveTextContent('팔로우 상태를 변경하지 못했습니다.');
+    expect(button).toBeEnabled();
   },
 };
 
@@ -421,10 +425,10 @@ export const CancelError: Story = {
   parameters: { relay: { mutationError: '취소 실패' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '요청됨' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '팔로우 상태를 변경하지 못했습니다.',
-    );
-    await expect(canvas.findByRole('button', { name: '요청됨' })).resolves.toBeEnabled();
+    const button = await canvas.findByRole('button', { name: '요청됨' });
+    await userEvent.click(button);
+    const alert = await within(canvasElement.ownerDocument.body).findByRole('alert');
+    expect(alert).toHaveTextContent('팔로우 상태를 변경하지 못했습니다.');
+    expect(button).toBeEnabled();
   },
 };

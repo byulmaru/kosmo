@@ -110,14 +110,9 @@ export const HitAreaContract: Story = {
       onPress.mockClear();
       await user.click(followButton);
       expect(onPress).not.toHaveBeenCalled();
-      const alert = await canvas.findByRole('alert');
-      const updatedRowBounds = row.getBoundingClientRect();
-      const updatedLinkBounds = link.getBoundingClientRect();
-      const alertBounds = alert.getBoundingClientRect();
-      expect(updatedLinkBounds.left).toBeGreaterThanOrEqual(updatedRowBounds.left);
-      expect(updatedLinkBounds.bottom).toBeCloseTo(updatedRowBounds.bottom - rowBorderBottom);
-      expect(updatedLinkBounds.right).toBeLessThanOrEqual(alertBounds.left);
-      expect(alertBounds.right).toBeLessThanOrEqual(updatedRowBounds.right);
+      const alert = await within(canvasElement.ownerDocument.body).findByRole('alert');
+      expect(row.contains(alert)).toBe(false);
+      expect(alert).toHaveTextContent('팔로우 상태를 변경하지 못했습니다.');
     } finally {
       link.removeEventListener('click', preventNavigation);
     }
