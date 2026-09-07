@@ -77,7 +77,7 @@ platform :ios do
     )
   end
 
-  private_lane :write_testflight_summary do |uploaded_build:|
+  private_lane :write_testflight_summary do |app_version:, build_number:|
     summary_path = ENV['GITHUB_STEP_SUMMARY']
     return unless summary_path && !summary_path.empty?
 
@@ -85,7 +85,7 @@ platform :ios do
       file.puts('## iOS TestFlight internal testing')
       file.puts
       file.puts("- Bundle: `#{BUNDLE_IDENTIFIER}`")
-      file.puts("- Version: `#{uploaded_build.app_version} (#{uploaded_build.version})`")
+      file.puts("- Version: `#{app_version} (#{build_number})`")
       file.puts('- Processing: completed')
       file.puts('- TestFlight group: `Internal Testers`')
       file.puts("- Source: `#{ENV.fetch('GITHUB_SHA', 'local')}`")
@@ -185,8 +185,7 @@ platform :ios do
       api_key = load_apple_api_key
       app = Spaceship::ConnectAPI::App.find(BUNDLE_IDENTIFIER)
       matching_groups = (app&.get_beta_groups || []).select { |group| group.name == 'Internal Testers' }
-      internal_group = matching_groups.first
-      UI.user_error!('TestFlight group "Internal Testers" must exist exactly once as an internal group.') unless matching_groups.one? && internal_group.is_internal_group == true
+      UI.user_error!('TestFlight group "Internal Testers" must exist exactly once as an internal group.') unless matching_groups.one? && matching_groups.first.is_internal_group == true
 
       ipa_path = build_app(
         clean: true,
@@ -215,6 +214,7 @@ platform :ios do
       )
       ipa_path = File.expand_path(ipa_path.to_s)
       UI.user_error!("Fastlane did not produce a signed IPA at #{ipa_path}.") unless File.file?(ipa_path) && File.size?(ipa_path)
+      app_version = FastlaneCore::IpaFileAnalyser.fetch_app_version(ipa_path)
 
       upload_to_testflight(
         api_key: api_key,
@@ -226,21 +226,7 @@ platform :ios do
         skip_waiting_for_build_processing: false,
       )
 
-      uploaded_build = Spaceship::ConnectAPI::Build.all(
-        app_id: app.id,
-        build_number: build_number,
-        platform: Spaceship::ConnectAPI::Platform::IOS,
-        processing_states: Spaceship::ConnectAPI::Build::ProcessingState::VALID,
-      ).find do |build|
-        build.processing_state == Spaceship::ConnectAPI::Build::ProcessingState::VALID &&
-          build.bundle_id == BUNDLE_IDENTIFIER &&
-          build.version == build_number
-      end
-      UI.user_error!('Uploaded IPA was not found as a valid App Store Connect build.') unless uploaded_build
-      UI.user_error!('Uploaded App Store Connect build is not ready for internal testing.') unless uploaded_build.ready_for_internal_testing?
-      UI.user_error!('Uploaded App Store Connect build was not assigned to Internal Testers.') unless internal_group.fetch_builds.any? { |build| build.id == uploaded_build.id }
-
-      write_testflight_summary(uploaded_build: uploaded_build)
+      write_testflight_summary(app_version: app_version, build_number: build_number)
     rescue StandardError => error
       primary_error = error
     ensure
