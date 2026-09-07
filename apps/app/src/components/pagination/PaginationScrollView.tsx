@@ -4,6 +4,8 @@ import type { ScrollViewProps } from 'react-native';
 import type { UseAutomaticPaginationResult } from './useAutomaticPagination';
 
 type NativeScrollProps = UseAutomaticPaginationResult['nativeScrollProps'];
+type NativeLayoutEvent = Parameters<NativeScrollProps['onLayout']>[0];
+type NativeScrollEvent = Parameters<NativeScrollProps['onScroll']>[0];
 type Registration = Readonly<{ id: symbol; props: NativeScrollProps }>;
 type ActiveRegistration = Registration & Readonly<{ ownerKey: string }>;
 type Register = (registration: Registration) => () => void;
@@ -28,6 +30,20 @@ function recordLatestEvent(events: LatestEvent[], event: LatestEvent) {
     events.splice(previousIndex, 1);
   }
   events.push(event);
+}
+
+function snapshotLayoutEvent(event: NativeLayoutEvent): NativeLayoutEvent {
+  return { nativeEvent: { layout: { height: event.nativeEvent.layout.height } } };
+}
+
+function snapshotScrollEvent(event: NativeScrollEvent): NativeScrollEvent {
+  return {
+    nativeEvent: {
+      contentOffset: { y: event.nativeEvent.contentOffset.y },
+      contentSize: { height: event.nativeEvent.contentSize.height },
+      layoutMeasurement: { height: event.nativeEvent.layoutMeasurement.height },
+    },
+  };
 }
 
 export function PaginationScrollView({
@@ -57,7 +73,10 @@ export function PaginationScrollView({
   );
   const onLayout = useCallback(
     (...args: Parameters<NativeScrollProps['onLayout']>) => {
-      recordLatestEvent(latestEventsRef.current, { args, type: 'layout' });
+      recordLatestEvent(latestEventsRef.current, {
+        args: [snapshotLayoutEvent(args[0])],
+        type: 'layout',
+      });
       const registration = registrationRef.current;
       const handler =
         registration?.ownerKey === paginationOwnerKey ? registration.props.onLayout : undefined;
@@ -69,7 +88,10 @@ export function PaginationScrollView({
   );
   const onScroll = useCallback(
     (...args: Parameters<NativeScrollProps['onScroll']>) => {
-      recordLatestEvent(latestEventsRef.current, { args, type: 'scroll' });
+      recordLatestEvent(latestEventsRef.current, {
+        args: [snapshotScrollEvent(args[0])],
+        type: 'scroll',
+      });
       const registration = registrationRef.current;
       const handler =
         registration?.ownerKey === paginationOwnerKey ? registration.props.onScroll : undefined;

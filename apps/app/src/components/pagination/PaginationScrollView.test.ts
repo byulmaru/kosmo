@@ -133,6 +133,51 @@ describe('PaginationScrollView', () => {
     assert.equal(contentHeight, 960);
   });
 
+  it('registration 전 Native event가 정리돼도 layout과 scroll metric을 replay한다', async () => {
+    await act(async () => {
+      renderer = create(renderOwner(false));
+    });
+    assert.ok(renderer);
+
+    const scrollView = renderer.root.findAll((node) => (node.type as unknown) === 'ScrollView')[0];
+    assert.ok(scrollView);
+    const layoutEvent = { nativeEvent: { layout: { height: 240 } } };
+    const scrollEvent = {
+      nativeEvent: {
+        contentOffset: { y: 24 },
+        contentSize: { height: 960 },
+        layoutMeasurement: { height: 320 },
+      },
+    };
+
+    scrollView.props.onLayout(layoutEvent);
+    (layoutEvent as unknown as { nativeEvent: null }).nativeEvent = null;
+
+    await act(async () => {
+      renderer?.update(renderOwner(true));
+    });
+
+    assert.equal(layoutHeight, 240);
+
+    await act(async () => {
+      renderer?.update(renderOwner(false));
+    });
+    const unregisteredScrollView = renderer.root.findAll(
+      (node) => (node.type as unknown) === 'ScrollView',
+    )[0];
+    assert.ok(unregisteredScrollView);
+    unregisteredScrollView.props.onScroll(scrollEvent);
+    (scrollEvent as unknown as { nativeEvent: null }).nativeEvent = null;
+
+    await act(async () => {
+      renderer?.update(renderOwner(true));
+    });
+
+    assert.equal(contentHeight, 960);
+    assert.equal(layoutHeight, 320);
+    assert.equal(scrollOffset, 24);
+  });
+
   it('owner가 바뀌면 이전 metric을 새 registration에 재생하지 않는다', async () => {
     await act(async () => {
       renderer = create(renderOwner(false, 'owner-a'));
