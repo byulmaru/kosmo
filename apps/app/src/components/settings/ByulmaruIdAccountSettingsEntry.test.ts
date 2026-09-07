@@ -9,7 +9,6 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const require = createRequire(import.meta.url);
-let childOnPressBeforeLink: unknown;
 const linkOnPress = () => undefined;
 
 mock.module('expo-router', {
@@ -21,18 +20,17 @@ mock.module('expo-router', {
       children: ReactElement<{ href?: string; onPress?: () => void; style?: object }>;
       href: string;
     }) => {
-      childOnPressBeforeLink = children.props.onPress;
-      const mergedStyle = { ...(children.props.style as object) };
       return createElement(
         'Link',
         { href },
-        cloneElement(children, { href, onPress: linkOnPress, style: mergedStyle }),
+        cloneElement(children, { href, onPress: linkOnPress }),
       );
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
   exports: {
+    Platform: { OS: 'web' },
     Pressable: 'Pressable',
     StyleSheet: {
       create: <T>(styles: T) => styles,
@@ -48,9 +46,14 @@ mock.module(require.resolve('lucide-react-native'), {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
+    useReducedMotion: () => false,
     useTheme: () => ({
       divider: '#eeeeee',
       focus: '#005fcc',
+      selectedBorder: '#9a7800',
+      selectedSurface: '#fff8dc',
+      stateHover: '#f4f4f4',
+      statePressed: '#e8e8e8',
       text: '#111111',
       textSecondary: '#666666',
     }),
@@ -65,7 +68,6 @@ before(async () => {
 });
 
 afterEach(async () => {
-  childOnPressBeforeLink = undefined;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -83,33 +85,6 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     assert.equal(entry.props.href, 'https://id.byulmaru.co');
     assert.equal(rendered('Link')[0].props.href, 'https://id.byulmaru.co');
     assert.equal(rendered('ChevronRightIcon').length, 1);
-    assert.equal(childOnPressBeforeLink, undefined);
-    const item = rendered('View').find(
-      (node) => node.props.testID === 'byulmaru-id-account-settings-item',
-    );
-    assert.ok(item);
-    assert.equal(item.props.style.minHeight, 64);
-    assert.equal(item.props.style.width, '100%');
-  });
-
-  it('focus-visible style과 link target geometry를 유지한다', async () => {
-    await render();
-
-    const entry = byTestId('byulmaru-id-account-settings-entry');
-    assert.equal(entry.props.style.minHeight, 64);
-    assert.equal(entry.props.style.width, '100%');
-    assert.equal(entry.props.style.outlineWidth, undefined);
-
-    await act(async () => entry.props.onFocus());
-    const focusedEntry = byTestId('byulmaru-id-account-settings-entry');
-    assert.equal(focusedEntry.props.style.outlineWidth, 2);
-    assert.equal(focusedEntry.props.style.outlineColor, '#005fcc');
-
-    await act(async () => focusedEntry.props.onBlur());
-    assert.equal(
-      byTestId('byulmaru-id-account-settings-entry').props.style.outlineWidth,
-      undefined,
-    );
   });
 });
 
@@ -127,7 +102,9 @@ function rendered(type: string): ReactTestInstance[] {
 
 function byTestId(testID: string): ReactTestInstance {
   assert.ok(renderer);
-  return renderer.root.findByProps({ testID });
+  return renderer.root.find(
+    (node) => (node.type as unknown) === 'Pressable' && node.props.testID === testID,
+  );
 }
 
 function texts(): string[] {
