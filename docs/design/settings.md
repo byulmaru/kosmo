@@ -221,6 +221,43 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - 자동화·source/unit 결과는 실제 Web keyboard·screen reader·zoom 또는 Android·iOS runtime 접근성·
   navigation 통과 증거로 일반화하지 않는다.
 
+## Switch·SearchField 재사용 매핑 (PROD-895)
+
+Figma 이름마다 public component를 추가하지 않는다. Switch는 기존 `react-native` Switch를 사용하고,
+SearchField는 Production `TextField`·`IconButton`을 합성한다. Playground의 얇은 consumer fixture가
+입력 상태와 clear 뒤 입력 focus 복귀를 소유하며, route·검색 결과·debounce 정책은 포함하지 않는다.
+
+| Figma source                                                                               | Production 구현·consumer                                   | Storybook 표면                                                                                                 |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| [Switch](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3324-22405)     | `react-native` Switch                                      | `KOSMO/Components/Switch` Playground·RepresentativeStates·Tests                                                |
+| 같은 Switch                                                                                | `ProfileEditForm.tsx`의 Follow Approval                    | `screens/ProfileEdit.stories.tsx`의 `FollowPolicySwitchSubmitsEnum`·`FollowPolicyApprovalRequiredInitialState` |
+| 같은 Switch                                                                                | `PostComposerMediaControls.tsx`의 `PostComposerMediaItems` | `patterns/Posts.stories.tsx`의 `ComposerMediaStates`·`ComposerReplyMediaMutationContract`                      |
+| [SearchField](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3899-1389) | `ui/TextField.tsx`·`ui/IconButton.tsx` 합성                | `KOSMO/Patterns/Search Field` Playground·RepresentativeStates·Tests                                            |
+
+- Switch는 Off/On·Disabled와 boolean `onValueChange`를 유지한다. Figma의 40×20은 의도 표현이며
+  Web·iOS·Android의 native 렌더 크기·모양·색상 차이를 허용한다. `OPEN`/`APPROVAL_REQUIRED` 변환은
+  [ProfileEdit consumer](./profile-edit.md)의 계약이다. 민감한 이미지 Switch는 별도의 boolean 값을 전달한다.
+- SearchField는 TextField의 44px 높이·테마·focus ring을 재사용하며 Empty/Filled와
+  Default/Focused/Disabled를 표현한다. Filled라도 disabled이면 clear를 숨긴다. Focused는 실제 입력
+  focus로 도달하며 테스트 전용 state prop을 추가하지 않는다. Web 입력은 `searchbox`, Native 입력은
+  `search` 접근성 역할을 사용한다. clear는 선택 상태가 없는 버튼이며 기존 IconButton의 플랫폼 target
+  보정을 사용한다. 입력 callback과 clear callback은 별도 Actions로 관찰한다.
+- `SearchToolbar`는 별도의 toolbar다. 기존 48px 입력·Filled+Disabled의 비활성 clear 표시와
+  leading action·route focus lifecycle을 유지한다. SearchField로 rename하거나 치환하지 않는다.
+- Light/Dark는 공용 toolbar로 전환한다. 대표 상태는 disabled Off/On, Empty/Filled, 긴 label/value를
+  제공하며 자동 interaction은 Controls가 비활성화된 `*.tests.stories.tsx`에서 실행한다.
+
+2026-09-07 검증: `pnpm --filter @kosmo/app check`, 변경 story ESLint·Prettier,
+`pnpm --filter @kosmo/app build-storybook` 통과. `vitest run --project=storybook`으로 Switch·SearchField의
+main/Tests 파일 4개에서 8개 테스트와 위 표의 기존 consumer 테스트 4개가 통과했다. 기존
+`TextField.test.ts`·`IconButton.test.ts`의 단위 테스트 14개도 통과했다. 내장 Browser에서 Light/Dark,
+긴 label/value, disabled 상태와 Playground Controls·Actions를 확인했다. 기존 Posts consumer 검증에는
+Relay mock의 누락 field 경고가 남는다.
+
+Storybook의 자동 a11y 검사는 `color-contrast`를 제외하며 실제 screen reader나 Android/iOS runtime QA를
+의미하지 않는다. 해당 Settings runtime QA 소유자는 PROD-727이다. 이번에는 새 public API나 행동 계약을
+도입하지 않고 기존 계약을 검증하므로 새 OpenSpec은 만들지 않는다. Tailnet serve는 범위에서 제외한다.
+
 ## 제외 범위
 
 - Byulmaru ID Account Settings 페이지 자체와 Account 데이터 조회·입력·저장·관리 기능

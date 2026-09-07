@@ -50,6 +50,15 @@ Lucide path를 별도 SVG 묶음으로 레포에 복제하지 않는다. lockfil
 Profile 고정 action은 canonical `24×24` `Pin`을 재사용한다. attribution의 인접 label은 `고정됨`, owner
 action label은 상태에 따라 `프로필에 고정` 또는 `프로필 고정 해제`다.
 
+입력 지우기의 visual size는 각 surface의 정본을 따른다. 위 Search route 매핑은 입력 지우기 `X` `18px`와
+최근 검색 삭제 `X` `16px`, stroke `2`를 유지한다. PROD-895의
+[Figma SearchField](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3899-1389)는
+clear `X` / code export `XIcon`을 `20px`, stroke `2`, `32×32px` 버튼으로 사용한다.
+기존 `TextField`·`IconButton` 합성의 [SearchField Storybook](./settings.md#switchsearchfield-재사용-매핑-prod-895)이
+이 계약을 검증하며, Filled라도 disabled이면 clear를 숨기고 clear 뒤 입력 focus를 복귀시킨다.
+Native target은 기존 `IconButton`의 iOS `44pt`·Android `48dp` 보정을 따르며 실제 runtime QA는 별도다.
+이 차이는 승인된 surface별 크기이며 Search route를 `20px`로 바꾸거나 SearchField를 `18px`로 축소하는 근거가 아니다.
+
 `ArrowLeft`는 화면·경로 또는 overlay 안의 하위 view에서 이전 navigation state로 돌아간다. `ChevronLeft`·
 `ChevronRight`는 carousel·단계처럼 같은 view 안의 순서를 이동하거나 목록의 destination을 나타낸다. route·subview
 back에 chevron을 사용하지 않는다.

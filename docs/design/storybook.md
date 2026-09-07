@@ -55,6 +55,7 @@ apps/app/src/stories/
 
 - Story는 `apps/app/src`의 실제 Production 컴포넌트나 screen을 직접 렌더링한다.
 - args를 controlled prop에 연결하거나 사용자 시나리오를 구성하는 얇은 fixture는 허용한다. Production UI, 상태 전이 또는 시각 구조를 story 전용 컴포넌트로 복제하지 않는다.
+- 승인된 이관 범위가 기존 Production primitive의 합성 가능성 검증이면, 해당 primitive를 직접 조합하는 consumer fixture도 허용한다. PROD-895의 SearchField는 기존 `TextField`·`IconButton`으로 leading icon·clear 배치, 입력 상태, disabled 시 clear 숨김과 clear 뒤 입력 focus 복귀를 검증한다. 이 범위에서는 새 public `SearchField`나 Production caller를 의무화하지 않으며, caller 부재만으로 컴포넌트 추출을 요구하지 않는다. 검증 결과는 primitive 합성과 UI 계약에 한정하고 실제 Search route·검색 결과·debounce·제품 정책의 회귀 검증으로 일반화하지 않는다. 기존 Production UI를 story 전용으로 복제해도 된다는 예외는 아니다.
 - Relay fragment component는 공용 `RelayStoryProvider`와 operation payload를 사용해 실제 fragment ref 계약을 유지한다. raw object를 generated `$key`로 cast하지 않는다.
 - 공용 Theme, Safe Area, Toast, Content Warning, Relay와 Router 환경은 `.storybook/preview.tsx`의 decorator와 mock을 재사용한다. component가 직접 소유하지 않는 provider를 일반 story마다 중복하지 않는다. 두 theme의 semantic style을 한 번에 비교하는 자동화 전용 `Tests` fixture만 명시적인 `ThemeProvider`를 중첩할 수 있다.
 - route·Relay·platform mock은 해당 story를 실행하는 데 필요한 최소 경계만 제공한다. mock 성공은 Production route, network, cache나 platform integration의 증거가 아니다.
