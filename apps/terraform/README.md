@@ -60,7 +60,7 @@ terraform output -raw android_play_workload_identity_provider
 
 PR이 `main`에 병합되면 현재 main에서 plan을 새로 만들고, configuration, variables, 실제 action이 `no-op`이 아닌 resource changes, output changes와 checks가 reviewed plan과 같은지 확인한다. 이 JSON 비교는 sensitive value의 차이를 보존하되 Argo CD Application의 resource version이나 reconcile 시각처럼 실행 사이에 바뀌는 no-op 관측 상태는 제외한다. plan이 다르면 current plan을 자동 적용하지 않고 중단하며, 같으면 reviewed saved plan을 그대로 apply하므로 Terraform의 native stale-plan 검증도 유지된다. 여러 Terraform PR이 같은 merge queue 배치에 포함되어 plan이 달라지면 즉시 apply하지 않고 실패한다. 비교용 JSON은 로그나 artifact에 남기지 않고 job 안에서 삭제한다. plan과 apply는 같은 GCP 서비스 계정과 AWS role을 사용한다.
 
-Terraform workflow는 `main`에서만 `workflow_dispatch` 수동 recovery를 허용한다. 수동 Plan과 이어지는 Apply는 모두 `terraform-apply` Environment를 사용해 기존 AWS subject를 재사용하며, 수동 Plan은 선택한 `github.sha`를 checkout하고 같은 run의 saved plan만 적용한다. Plan 실패, artifact 누락 또는 SHA 불일치이면 Apply를 시작하지 않는다. PR Plan은 기존처럼 Environment 없이 실행하고, push 경로는 병합된 PR의 reviewed plan과 현재 plan을 비교하는 기존 계약을 유지한다.
+Terraform workflow는 `main`에서만 `workflow_dispatch` 수동 recovery를 허용한다. 수동 실행은 기존 Apply job에서 선택한 `github.sha`를 checkout하고, main ref guard와 기존 AWS/GCP/Tailscale/Argo 인증·Terraform 초기화 뒤 `terraform apply -auto-approve`를 한 번 직접 실행한다. 별도 Manual Plan job, `needs`, `terraform plan`, saved plan 파일, artifact 전달과 SHA metadata 검증은 사용하지 않으며 Terraform Apply 자체의 내부 계획 계산을 사용한다. PR Plan은 기존처럼 Environment 없이 실행하고, push 경로는 병합된 PR의 reviewed plan과 현재 plan을 비교한 뒤 reviewed saved plan을 적용하는 기존 계약을 유지한다.
 
 외부 기여자의 PR workflow는 기여 이력과 무관하게 저장소 관리자의 실행 승인을 받아야 한다. Repository의 Actions 설정에서 fork pull request 승인 정책을 `all_external_contributors`로 직접 관리하며, 조직 구성원의 PR만 자동 실행한다.
 
