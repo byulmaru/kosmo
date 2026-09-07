@@ -21,13 +21,41 @@ const UnreadNotificationBadgeControllerQuery = graphql`
   }
 `;
 
+type UnreadNotificationBadgeStateContextValue = {
+  lastSuccess: UnreadNotificationBadgeLastSuccess | null;
+  recordSuccess: (profileId: string, count: number) => void;
+};
+
+const UnreadNotificationBadgeStateContext =
+  createContext<UnreadNotificationBadgeStateContextValue | null>(null);
 const UnreadNotificationCountContext = createContext<number | null>(null);
+
+export function UnreadNotificationBadgeStateProvider({ children }: PropsWithChildren) {
+  const [lastSuccess, setLastSuccess] = useState<UnreadNotificationBadgeLastSuccess | null>(null);
+  const recordSuccess = (profileId: string, count: number) => {
+    setLastSuccess({ profileId, count });
+  };
+
+  return (
+    <UnreadNotificationBadgeStateContext.Provider value={{ lastSuccess, recordSuccess }}>
+      {children}
+    </UnreadNotificationBadgeStateContext.Provider>
+  );
+}
+
+function useUnreadNotificationBadgeState(): UnreadNotificationBadgeStateContextValue {
+  const state = useContext(UnreadNotificationBadgeStateContext);
+  if (!state) {
+    throw new Error('UnreadNotificationBadgeStateProvider is required.');
+  }
+  return state;
+}
 
 export function UnreadNotificationBadgeController({ children }: PropsWithChildren) {
   const environment = useRelayEnvironment();
   const { selectedProfileId } = useSession();
   const selectedProfileRef = useRef(selectedProfileId);
-  const [lastSuccess, setLastSuccess] = useState<UnreadNotificationBadgeLastSuccess | null>(null);
+  const { lastSuccess, recordSuccess } = useUnreadNotificationBadgeState();
 
   selectedProfileRef.current = selectedProfileId;
 
@@ -47,7 +75,7 @@ export function UnreadNotificationBadgeController({ children }: PropsWithChildre
       const count = getUnreadNotificationCountForProfile(node, selectedProfileId);
 
       if (selectedProfileRef.current === selectedProfileId && count !== null) {
-        setLastSuccess({ profileId: selectedProfileId, count });
+        recordSuccess(selectedProfileId, count);
       }
     };
     const snapshot = environment.lookup(operation.fragment);

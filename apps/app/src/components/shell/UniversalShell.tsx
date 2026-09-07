@@ -18,11 +18,10 @@ import {
   NotificationReadAllProvider,
 } from '@/components/notification/NotificationReadAllContext';
 import { PageHeader } from '@/components/PageHeader';
-import { RouteBoundary } from '@/components/RouteBoundary';
-import { Splash } from '@/components/Splash';
+import { PostMediaViewerScreenFallbackProvider } from '@/components/post/PostMediaViewerHost';
 import { IconButton } from '@/components/ui/IconButton';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
-import { useRelayActor } from '@/relay/RelayActorProvider';
+import { RelayActorBoundary } from '@/relay/RelayActorProvider';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { returnToSettingsRoot } from '../settings/settingsNavigation';
@@ -95,28 +94,20 @@ const webFixedBottomBar = {
 const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
 
 export function UniversalShell() {
-  const { retry, revision } = useRelayActor();
-
   return (
     <UnreadNotificationBadgeController>
       <NavigationGuardProvider>
         <PrimaryNavigationScrollProvider>
-          <RouteBoundary
-            loading={<Splash label="앱을 불러오는 중입니다." />}
-            onRetry={retry}
-            title="앱을 불러오지 못했어요"
-          >
-            <NotificationReadAllProvider>
-              <UniversalShellContent revision={revision} />
-            </NotificationReadAllProvider>
-          </RouteBoundary>
+          <NotificationReadAllProvider>
+            <UniversalShellContent />
+          </NotificationReadAllProvider>
         </PrimaryNavigationScrollProvider>
       </NavigationGuardProvider>
     </UnreadNotificationBadgeController>
   );
 }
 
-function UniversalShellContent({ revision }: { revision: number }) {
+function UniversalShellContent() {
   const theme = useTheme();
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
@@ -129,6 +120,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const menuButtonRef = useRef<NativeView>(null);
+  const screenFallbackRef = useRef<NativeView>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
   const pendingDrawerHomeReselectionRef = useRef(false);
   const registerHomeReselection = useCallback((handler: HomeReselectionHandler) => {
@@ -148,10 +140,13 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const data = useLazyLoadQuery<UniversalShellQuery>(
     ShellQuery,
     {},
-    { fetchKey: revision, fetchPolicy: 'store-and-network' },
+    { fetchPolicy: 'store-and-network' },
   );
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
+  // Web keeps the shell root out of the tab order. Native View#focus() requires an explicit
+  // focusable host target; tabIndex={-1} maps to focusable=false on Native.
+  const screenFallbackFocusProps = web ? { tabIndex: -1 as const } : { focusable: true };
   const { layout, settingsWorkspace, showRightRail } = getShellRoutePresentation(
     web,
     width,
@@ -283,6 +278,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
     >
       <PrimaryNavigationScrollReset pathname={pathname} />
       <View
+        ref={screenFallbackRef}
         {...swipeToOpenDrawer.panHandlers}
         accessibilityElementsHidden={feedbackOverlayVisible}
         aria-hidden={feedbackOverlayVisible || undefined}
@@ -294,6 +290,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
           feedbackOverlayVisible ? styles.backgroundBlocked : null,
           { backgroundColor: theme.backgroundCanvas },
         ]}
+        {...screenFallbackFocusProps}
         testID="universal-shell-root"
       >
         {!mobile ? (
@@ -377,7 +374,11 @@ function UniversalShellContent({ revision }: { revision: number }) {
                 : null,
             ]}
           >
-            <Slot />
+            <PostMediaViewerScreenFallbackProvider fallbackFocus={screenFallbackRef}>
+              <RelayActorBoundary>
+                <Slot />
+              </RelayActorBoundary>
+            </PostMediaViewerScreenFallbackProvider>
           </View>
           {mobile ? (
             <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>

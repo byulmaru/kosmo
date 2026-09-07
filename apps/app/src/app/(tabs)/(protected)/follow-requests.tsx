@@ -1,11 +1,9 @@
-import { useState } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import {
   FollowRequestList,
   FollowRequestListState,
 } from '@/components/follow-request/FollowRequestList';
-import { RouteBoundary } from '@/components/RouteBoundary';
-import { useRelayActor } from '@/relay/RelayActorProvider';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import type { FollowRequestsPageQuery } from './__generated__/FollowRequestsPageQuery.graphql';
 
 const FollowRequestsQuery = graphql`
@@ -21,27 +19,23 @@ const FollowRequestsQuery = graphql`
 `;
 
 export default function FollowRequestsScreen() {
-  const { revision } = useRelayActor();
-
-  return <FollowRequestsRoute key={revision} revision={revision} />;
+  return <FollowRequestsRoute />;
 }
 
-function FollowRequestsRoute({ revision }: { revision: number }) {
-  const [fetchKey, setFetchKey] = useState(0);
-
+function FollowRequestsRoute() {
   return (
     <RouteBoundary
       error={(retry) => <FollowRequestListState onRetry={retry} state="error" />}
       loading={<FollowRequestListState state="loading" />}
-      onRetry={() => setFetchKey((value) => value + 1)}
       title="팔로워 요청을 불러오지 못했어요"
     >
-      <FollowRequestsContent fetchKey={`${revision}:${fetchKey}`} />
+      <FollowRequestsContent />
     </RouteBoundary>
   );
 }
 
-function FollowRequestsContent({ fetchKey }: { fetchKey: string }) {
+function FollowRequestsContent() {
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<FollowRequestsPageQuery>(
     FollowRequestsQuery,
     {},

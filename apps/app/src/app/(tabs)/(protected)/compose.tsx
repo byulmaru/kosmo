@@ -1,14 +1,12 @@
 import { usePathname, useRouter, useSegments } from 'expo-router';
-import { useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostComposer } from '@/components/post/PostComposer';
-import { RouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { space, spacing, typography } from '@/theme/tokens';
 import type { ComposePageQuery } from './__generated__/ComposePageQuery.graphql';
@@ -30,8 +28,6 @@ export default function ComposeScreen() {
   const routeSegments = useSegments();
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { revision } = useRelayActor();
-  const [fetchKey, setFetchKey] = useState(0);
   const shellOwnsHeader =
     getWebMobileShellHeader(Platform.OS === 'web', width, pathname, routeSegments)?.title ===
     '글쓰기';
@@ -50,20 +46,17 @@ export default function ComposeScreen() {
             />
           )}
           loading={<ComposeLoading />}
-          onRetry={() => setFetchKey((key) => key + 1)}
           title="글쓰기 정보를 불러오지 못했어요"
         >
-          <ComposeContent
-            fetchKey={`${revision}:${fetchKey}`}
-            onGoHome={() => router.push('/home')}
-          />
+          <ComposeContent onGoHome={() => router.push('/home')} />
         </RouteBoundary>
       </View>
     </ScrollView>
   );
 }
 
-function ComposeContent({ fetchKey, onGoHome }: { fetchKey: string; onGoHome: () => void }) {
+function ComposeContent({ onGoHome }: { onGoHome: () => void }) {
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<ComposePageQuery>(
     ComposeQuery,
     {},

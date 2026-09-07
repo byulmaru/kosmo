@@ -1,8 +1,16 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { RouteBoundary } from '@/components/RouteBoundary';
-import { useRelayActor } from '@/relay/RelayActorProvider';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import {
@@ -56,26 +64,57 @@ type ViewerSession = Readonly<{
 type OpenViewer = (session: ViewerSession) => void;
 
 const PostMediaViewerHostContext = createContext<OpenViewer | null>(null);
+const PostMediaViewerScreenFallbackContext = createContext<RefObject<NativeView | null> | null>(
+  null,
+);
+
+export function PostMediaViewerScreenFallbackProvider({
+  children,
+  fallbackFocus,
+}: PropsWithChildren<{ fallbackFocus: RefObject<NativeView | null> }>) {
+  return (
+    <PostMediaViewerScreenFallbackContext.Provider value={fallbackFocus}>
+      {children}
+    </PostMediaViewerScreenFallbackContext.Provider>
+  );
+}
 
 export function PostMediaViewerHostProvider({ children }: PropsWithChildren) {
-  const { revision: actorRevision } = useRelayActor();
-  const previousActorRevision = useRef(actorRevision);
+  const actorLifecycleKey = useRelayActorLifecycleKey();
+  const previousActorLifecycleKey = useRef(actorLifecycleKey);
   const fallbackFocus = useRef<NativeView>(null);
-  const [fetchRevision, setFetchRevision] = useState(0);
+  const screenFallback = useContext(PostMediaViewerScreenFallbackContext);
   const [session, setSession] = useState<ViewerSession | null>(null);
+  const sessionRef = useRef<ViewerSession | null>(null);
+  sessionRef.current = session;
   const openViewer = useCallback<OpenViewer>((nextSession) => setSession(nextSession), []);
   const closeViewer = useCallback(() => setSession(null), []);
+  const lifecycleFallbackFocus = screenFallback ?? fallbackFocus;
+
+  useLayoutEffect(() => {
+    return () => {
+      const activeSession = sessionRef.current;
+      if (activeSession) {
+        // A keyed actor/route boundary can delete this provider before the actor key effect runs.
+        // Layout cleanup is the last point at which the origin or a stable screen target can still
+        // be captured. Focus after the deletion commit so the stable target is the active screen.
+        requestAnimationFrame(() =>
+          focusPostMediaViewerTarget(activeSession.originControl, lifecycleFallbackFocus),
+        );
+      }
+    };
+  }, [lifecycleFallbackFocus]);
 
   useEffect(() => {
-    if (previousActorRevision.current === actorRevision) {
+    if (previousActorLifecycleKey.current === actorLifecycleKey) {
       return;
     }
-    previousActorRevision.current = actorRevision;
+    previousActorLifecycleKey.current = actorLifecycleKey;
     if (session) {
       setSession(null);
-      requestAnimationFrame(() => focusPostMediaViewerTarget(fallbackFocus));
+      requestAnimationFrame(() => focusPostMediaViewerTarget(lifecycleFallbackFocus));
     }
-  }, [actorRevision, session]);
+  }, [actorLifecycleKey, lifecycleFallbackFocus, session]);
 
   const handleDeleted = useCallback(() => {
     session?.onDeleted?.();
@@ -98,12 +137,9 @@ export function PostMediaViewerHostProvider({ children }: PropsWithChildren) {
           <RouteBoundary
             error={(retry) => <PostMediaViewerQueryState onRetry={retry} />}
             loading={<PostMediaViewerQueryState loading />}
-            onRetry={() => setFetchRevision((revision) => revision + 1)}
             title="게시글을 불러오지 못했어요"
           >
             <PostMediaViewerHostContent
-              actorRevision={actorRevision}
-              fetchRevision={fetchRevision}
               onClose={closeViewer}
               onDeleted={handleDeleted}
               session={session}
@@ -124,23 +160,20 @@ export function usePostMediaViewerHost(): OpenViewer {
 }
 
 function PostMediaViewerHostContent({
-  actorRevision,
-  fetchRevision,
   onClose,
   onDeleted,
   session,
 }: Readonly<{
-  actorRevision: number;
-  fetchRevision: number;
   onClose: () => void;
   onDeleted: () => void;
   session: ViewerSession;
 }>) {
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<PostMediaViewerHostQuery>(
     PostMediaViewerHostOperation,
     { surfacePostId: session.surfacePostId },
     {
-      fetchKey: `${actorRevision}:${session.surfacePostId}:${fetchRevision}`,
+      fetchKey: `${session.surfacePostId}:${fetchKey}`,
       fetchPolicy: 'store-and-network',
     },
   );

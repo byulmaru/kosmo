@@ -1,20 +1,20 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useState } from 'react';
+import { useRef } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { PostList } from '@/components/post/PostList';
-import { RouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import type { PropsWithChildren } from 'react';
+import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { LocalPageQuery } from './__generated__/LocalPageQuery.graphql';
 
 const LocalQuery = graphql`
@@ -37,18 +37,17 @@ const LocalQuery = graphql`
 `;
 
 export default function LocalScreen() {
-  const { revision } = useRelayActor();
-  const [fetchKey, setFetchKey] = useState(0);
-  const refresh = () => setFetchKey((key) => key + 1);
+  const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
+  const refresh = () => routeBoundaryRef.current?.refetch();
 
   return (
-    <LocalFrame onReselect={refresh} paginationOwnerKey={`local:${revision}`}>
+    <LocalFrame onReselect={refresh} paginationOwnerKey="local">
       <RouteBoundary
         loading={<StateView loading title="로컬 타임라인을 불러오는 중입니다." />}
-        onRetry={refresh}
+        ref={routeBoundaryRef}
         title="로컬 타임라인을 불러오지 못했어요"
       >
-        <LocalContent fetchKey={`${revision}:${fetchKey}`} key={revision} />
+        <LocalContent />
       </RouteBoundary>
     </LocalFrame>
   );
@@ -75,9 +74,10 @@ function LocalFrame({
   );
 }
 
-function LocalContent({ fetchKey }: { fetchKey: string }) {
+function LocalContent() {
   const theme = useTheme();
   const shellChrome = useShellChrome();
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<LocalPageQuery>(
     LocalQuery,
     {},
