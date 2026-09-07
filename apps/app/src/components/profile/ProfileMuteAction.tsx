@@ -123,7 +123,7 @@ function ProfileMuteActionContent({
             { icon: muted ? Volume2 : VolumeOff, key: 'mute', label, onSelect: activate },
           ]}
           {...(renderTrigger
-            ? ({ webHorizontalPlacement: 'end', webVerticalPlacement: 'after' } as const)
+            ? ({ webHorizontalPlacement: 'end' } as const)
             : ({ webPlacement: 'overlap-end' } as const))}
           renderTrigger={(trigger) => {
             const { expanded, focusTrigger: focus, onPress, ref } = trigger;

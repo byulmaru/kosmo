@@ -21,6 +21,12 @@ export const MuteContract: Story = {
     expect(await body.findByRole('menuitem', { name: '링크 복사' })).toBeVisible();
     const menu = body.getByRole('menu', { name: '더보기' });
     await waitFor(() =>
+      expect(menu.getBoundingClientRect().top).toBeCloseTo(
+        trigger.getBoundingClientRect().top - 5,
+        0,
+      ),
+    );
+    await waitFor(() =>
       expect(
         Math.abs(menu.getBoundingClientRect().right - trigger.getBoundingClientRect().right),
       ).toBeLessThanOrEqual(5),
