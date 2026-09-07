@@ -1394,3 +1394,37 @@ test(
     });
   },
 );
+
+test(
+  'Notification Cleanup Workflow는 cleanup Activity를 한 번만 호출한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-notification-cleanup-test-${process.pid}`;
+    let activityCalls = 0;
+    const worker = await Worker.create({
+      activities: {
+        cleanupUnavailableNotificationsActivity: async () => {
+          activityCalls += 1;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await environment.client.workflow.execute('notificationCleanupWorkflow', {
+        args: [],
+        taskQueue,
+        workflowId: `notification-cleanup-boundary:${process.pid}`,
+      });
+    });
+
+    assert.equal(activityCalls, 1);
+  },
+);
