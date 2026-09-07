@@ -102,6 +102,7 @@ export function ActionMenu({
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
   const menuRef = useRef<View>(null);
+  const itemsRef = useRef(items);
   const pendingSelectionRef = useRef<(() => void) | null>(null);
   const triggerRef = useRef<View>(null);
   const [hoveredWebItemKey, setHoveredWebItemKey] = useState<string | null>(null);
@@ -171,19 +172,23 @@ export function ActionMenu({
     onOpenChange?.(open);
   }, [onOpenChange, open]);
 
+  useLayoutEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
   const focusTrigger = useCallback(() => {
     triggerRef.current?.focus();
   }, []);
   const dismiss = useCallback(
     (restoreFocus = true) => {
       setHoveredWebItemKey(null);
-      setClosingItems(items);
+      setClosingItems(itemsRef.current);
       setOpen(false);
       if (restoreFocus) {
         focusTrigger();
       }
     },
-    [focusTrigger, items],
+    [focusTrigger],
   );
   const toggle = useCallback(() => {
     if (!disabled) {
