@@ -8,8 +8,8 @@ const temporalPortValue = process.env.TEMPORAL_PORT?.trim();
 const temporalPort = temporalPortValue ? Number(temporalPortValue) : undefined;
 const namespace = process.env.TEMPORAL_NAMESPACE?.trim();
 
-if (!Number.isInteger(healthPort) || healthPort < 1 || healthPort > 65_535) {
-  throw new Error('PORT must be an integer between 1 and 65535');
+if (!Number.isInteger(healthPort) || healthPort < 0 || healthPort > 65_535) {
+  throw new Error('PORT must be an integer between 0 and 65535');
 }
 if (
   temporalPort !== undefined &&
@@ -38,6 +38,11 @@ const healthServer = createServer((request, response) => {
 try {
   healthServer.listen(healthPort, host);
   await once(healthServer, 'listening');
+  const address = healthServer.address();
+  if (address === null || typeof address === 'string') {
+    throw new Error('Unable to determine the Temporal test health port.');
+  }
+  process.send?.(address.port);
   await Promise.race([once(process, 'SIGINT'), once(process, 'SIGTERM')]);
 } finally {
   await healthServer[Symbol.asyncDispose]();

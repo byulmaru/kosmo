@@ -15,11 +15,19 @@ test('Temporal environment를 검증한다', async () => {
   assert.throws(
     () =>
       validateWorkerEnvironment({
-        PORT: '0',
+        PORT: '-1',
         TEMPORAL_ADDRESS: 'temporal.test:7233',
         TEMPORAL_NAMESPACE: 'kosmo-test',
       }),
     /PORT must be an integer/,
+  );
+  assert.equal(
+    validateWorkerEnvironment({
+      PORT: '0',
+      TEMPORAL_ADDRESS: 'temporal.test:7233',
+      TEMPORAL_NAMESPACE: 'kosmo-test',
+    }).port,
+    0,
   );
 });
 
@@ -47,12 +55,6 @@ test('Temporal connect 중 SIGTERM을 process 종료로 전달한다', { timeout
     return temporal[Symbol.asyncDispose]();
   });
 
-  const healthPortReservation = createServer();
-  healthPortReservation.listen(0, '127.0.0.1');
-  await once(healthPortReservation, 'listening');
-  const healthPort = (healthPortReservation.address() as AddressInfo).port;
-  await healthPortReservation[Symbol.asyncDispose]();
-
   const temporalPort = (temporal.address() as AddressInfo).port;
   const child = spawn(
     process.execPath,
@@ -62,15 +64,25 @@ test('Temporal connect 중 SIGTERM을 process 종료로 전달한다', { timeout
       env: {
         ...process.env,
         HOST: '127.0.0.1',
-        PORT: String(healthPort),
+        PORT: '0',
         TEMPORAL_ADDRESS: `127.0.0.1:${temporalPort}`,
         TEMPORAL_NAMESPACE: 'test',
       },
+      stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
     },
   );
   t.after(() => child.kill('SIGKILL'));
 
+  const portPromise = once(child, 'message');
   await once(temporal, 'connection');
+  const [port] = await portPromise;
+  assert.equal(typeof port, 'number');
+  assert.ok(port > 0 && port <= 65_535);
+  const healthResponse = await fetch(`http://127.0.0.1:${port}/ready`);
+  assert.equal(healthResponse.status, 503);
+  if (child.connected) {
+    child.disconnect();
+  }
   child.kill('SIGTERM');
   const [code, signal] = await once(child, 'exit');
 
