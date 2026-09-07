@@ -1538,6 +1538,24 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 - **WHEN** 사용자가 이미 선택된 Local 탭을 다시 선택한다
 - **THEN** 시스템은 현재 selected Profile의 Local 첫 page를 다시 요청한다
 
+#### Scenario: Show Local refresh progress while retaining posts
+
+- **WHEN** the user reselects the active Local tab with a previously loaded timeline
+- **THEN** the existing posts MUST remain visible while the request is pending
+- **AND** a loading indicator with an accessible refresh label MUST appear above the posts
+- **AND** the indicator MUST disappear when the request succeeds or fails
+- **AND** repeated tab activation while pending MUST NOT start a duplicate request
+
+#### Scenario: Retain Local timeline after refresh failure
+
+- **GIVEN** 현재 actor의 Local 목록을 성공적으로 표시했다
+- **WHEN** Local 첫 page 새로고침 요청이 실패한다
+- **THEN** 시스템은 마지막 성공 목록과 scroll position을 유지한다
+- **AND** `로컬 타임라인을 불러오지 못했어요`와 `다시 시도` action을 오류 toast로 표시한다
+- **AND** toast는 표시 애니메이션 완료 후 3초 뒤 사라지고 목록은 계속 표시한다
+- **AND** toast의 action 또는 선택된 Local 탭 재선택으로 다시 요청할 수 있다
+- **AND** selected Profile·Relay actor가 바뀌면 이전 actor의 성공 목록을 재사용하지 않는다
+
 #### Scenario: Append next Local page
 
 - **WHEN** Local connection에 다음 page가 있고 사용자가 목록 near-end에 도달한다

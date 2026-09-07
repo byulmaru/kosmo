@@ -1,7 +1,15 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useRef } from 'react';
-import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Platform,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
+import { createOperationDescriptor, fetchQuery, getRequest } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -13,10 +21,12 @@ import {
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import type { PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
+import type { Subscription } from 'relay-runtime';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { LocalPageQuery } from './__generated__/LocalPageQuery.graphql';
 
@@ -40,11 +50,61 @@ const LocalQuery = graphql`
 `;
 
 export default function LocalScreen() {
+  const environment = useRelayEnvironment();
+  const [refreshing, setRefreshing] = useState(false);
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const refresh = () => routeBoundaryRef.current?.refetch();
+  const refreshRequest = useRef<Subscription | null>(null);
+  const toastCleanup = useRef<(() => void) | null>(null);
+  const { showToast } = useToast();
+  const refresh = () => {
+    if (refreshRequest.current) {
+      return;
+    }
+    const operation = createOperationDescriptor(getRequest(LocalQuery), {});
+    if (environment.check(operation).status === 'missing') {
+      routeBoundaryRef.current?.refetch();
+      return;
+    }
+    toastCleanup.current?.();
+    toastCleanup.current = null;
+    fetchQuery<LocalPageQuery>(
+      environment,
+      LocalQuery,
+      {},
+      { fetchPolicy: 'network-only' },
+    ).subscribe({
+      start: (subscription) => {
+        refreshRequest.current = subscription;
+        setRefreshing(true);
+      },
+      complete: () => {
+        refreshRequest.current = null;
+        setRefreshing(false);
+      },
+      error: () => {
+        refreshRequest.current = null;
+        setRefreshing(false);
+        toastCleanup.current = showToast('로컬 타임라인을 불러오지 못했어요', {
+          action: { label: '다시 시도', onPress: refresh },
+          tone: 'danger',
+        });
+      },
+    });
+  };
+
+  useEffect(() => {
+    const retain = environment.retain(createOperationDescriptor(getRequest(LocalQuery), {}));
+    return () => {
+      refreshRequest.current?.unsubscribe();
+      refreshRequest.current = null;
+      toastCleanup.current?.();
+      toastCleanup.current = null;
+      retain.dispose();
+    };
+  }, [environment]);
 
   return (
-    <LocalFrame onReselect={refresh}>
+    <LocalFrame onReselect={refresh} refreshing={refreshing}>
       <RouteBoundary
         loading={<StateView loading title="로컬 타임라인을 불러오는 중입니다." />}
         ref={routeBoundaryRef}
@@ -56,7 +116,12 @@ export default function LocalScreen() {
   );
 }
 
-function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: () => void }>) {
+function LocalFrame({
+  children,
+  onReselect,
+  refreshing,
+}: PropsWithChildren<{ onReselect: () => void; refreshing: boolean }>) {
+  const theme = useTheme();
   const { width } = useWindowDimensions();
   const routeOwnsHeader = getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
@@ -72,7 +137,16 @@ function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: ()
       >
         <TimelineTabs onReselect={onReselect} value="local" />
       </View>
-      <View style={styles.body}>{children}</View>
+      <View style={styles.body}>
+        {refreshing ? (
+          <ActivityIndicator
+            accessibilityLabel="로컬 타임라인을 새로고침하는 중"
+            color={theme.foregroundSecondary}
+            style={styles.refreshIndicator}
+          />
+        ) : null}
+        {children}
+      </View>
     </View>
   );
 }
@@ -126,6 +200,7 @@ const styles = StyleSheet.create({
   body: { flex: 1, minHeight: 0 },
   timeline: { flex: 1, minHeight: 0, width: '100%' },
   webTimelineTabs: { position: 'sticky' as never, zIndex: 10 } as ViewStyle,
+  refreshIndicator: { padding: spacing.lg },
   onboardingRoot: {
     alignItems: 'center',
     flexGrow: 1,
