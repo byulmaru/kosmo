@@ -105,28 +105,40 @@ Profile Migration feature flag가 확인된 ON일 때만 Settings Profile detail
 - 지원된 Web/Native 환경의 접근성·reflow 및 Profile/Move/Follow cross-slice 결과를 검증하고, 검증하지 않은 플랫폼은 명시한다.
 - 모든 task가 완료되고 canonical·Linear·delta spec 정합성, strict validation과 archive 전 확인이 준비됐는지 점검한다.
 
-- [ ] 3.1 Settings Profile detail에 확인된 feature flag 조건부 source 준비 control과 기존 Owner 권한 연결을 구현한다.
-- [ ] 3.2 source 입력·저장 성공·실패·재시도와 입력 보존, ON/OFF/unknown/loading 및 접근성 상태 검증을 추가한다.
-- [ ] 3.3 준비 관계·alias·inbound Move·Follow 이전의 cross-slice 통합 검증과 환경별 실제 검증/미실행 기록을 남긴다.
-- [ ] 3.4 PROD-743의 전체 구현·검증 증거와 canonical·Linear 정합성을 확인하고 delta spec을 동기화한 뒤, 선언된 범위와 모든 task가 완료된 경우에만 archive한다.
+- [x] 3.1 Settings Profile detail에 확인된 feature flag 조건부 source 준비 control과 기존 Owner 권한 연결을 구현한다.
+- [x] 3.2 source 입력·저장 성공·실패·재시도와 입력 보존, ON/OFF/unknown/loading 및 접근성 상태 검증을 추가한다.
+- [x] 3.3 준비 관계·alias·inbound Move·Follow 이전의 cross-slice 통합 검증과 환경별 실제 검증/미실행 기록을 남긴다.
+- [x] 3.4 PROD-743의 전체 구현·검증 증거와 canonical·Linear 정합성을 확인하고 delta spec을 동기화한 뒤, 선언된 범위와 모든 task가 완료된 경우에만 archive한다.
 
-## Verification ledger (middle active evidence — 2026-09-08)
+## Verification ledger (archive history — 2026-09-07)
 
-이 ledger는 middle layer가 보유하거나 bottom에서 전달받은 pre-split 실행 증거를 역할별로 나눈다. 그룹 1·2의 `[x]`와 그룹 3의 `[ ]`는 기존 구현 상태를 유지한 것이며, 분리 head 재검증 완료를 뜻하지 않는다.
+이 절은 archive 당시 확인한 실행 증거와 보장 경계를 기록한다. 12개 checkbox는 archive 당시 모두 완료 상태이며, 2026-09-08 Stack 분리 후 재검증은 아래와 같이 별도 pending이다. 이전 증거를 새 Stack 결과로 간주하지 않는다.
 
-### Carried bottom evidence (pre-split history)
+### Confirmed execution evidence (archive history)
 
-- Core 준비 관계 통합 검증(`packages/core/services/profile-migration.integration.test.ts`)은 6/6 pass였고 API `tsc --noEmit` 검사는 pass였다.
-- 재배치 전 전용 DB API integration 3/3과 Local Actor alias projection 4/4는 2026-09-07 evidence로 보존한다. 현재 middle head 결과로 간주하지 않는다.
+- Core의 준비 관계 통합 검증(`packages/core/services/profile-migration.integration.test.ts`)은 6/6 pass였다. Owner·`Account.Active`, Local·Open·Active target, Remote source materialization, same-pair no-op, 양쪽 conflict와 concurrent 동일 요청을 실행 확인했다.
+- Core Move coordinator 검증(`packages/core/services/profile-migration-move.test.ts`)은 8/8 pass였고 Worker의 재시도 workflow 검증은 1/1 pass, `@kosmo/worker` build도 pass였다. Local·Remote target의 Open/Approval Required admission, target-first 저장, 실패 시 source 보존, 기존 target state 재개와 follower 선별을 포함한다.
+- 재배치 후 Settings focused unit은 12/12 pass, Storybook Chromium 검증은 5/5 pass였고 App/API TypeScript 검사와 Relay compiler가 pass했다. 재배치 전 전용 DB API integration 3/3, alias projection 4/4와 관련 회귀 60 pass도 별도 시점의 증거로 보존한다.
+- inbound `Move` protocol suite는 전용 disposable PostgreSQL에서 9/9 pass였다. actor/object mismatch, prepared remote-to-local, canonical target alias를 확인한 remote-to-remote, unknown source materialization, non-Person Actor, target identity mismatch, Local target rejection, Temporal start failure 전파와 embedded target alias 위조 거부를 포함한다. 실제 Worker cross-slice test도 전용 disposable PostgreSQL에서 1/1 pass였고 bundle/start 및 follower state DB assertion을 통과했다.
+- 빈 DB migration chain은 44개 migration 적용과 `20260907095823_prod_743_profile_migration` 최신 migration, Profile Migration PK/FK·source/target unique·not-null 제약을 확인했다.
+- 검증 명령은 각 package의 focused test runner와 `tsc --noEmit`, Worker `build`, App `relay`/TypeScript, Storybook Chromium runner를 사용했다. 모든 실행은 로컬 disposable 환경에서 수행한 archive 당시 증거다.
 
-### Middle-scope implementation history
+### Scope and verification boundaries
 
-- 이번 구현 snapshot에서 Worker 재시도 workflow 검증은 1/1 pass였고 `@kosmo/worker` build도 pass였다. 이는 분리된 middle head의 새 검증 결과가 아니다.
-- Core Move coordinator 검증 8/8과 inbound `Move` protocol suite 9/9는 2026-09-07 archive 전 evidence다. 분리된 middle head에서 새로 실행한 결과가 아니다.
-
-이 middle ledger는 Settings UI, 실제 PostgreSQL/Temporal cross-slice fullflow 또는 최종 archive의 완료를 주장하지 않는다.
+- Core 전체 TypeScript 검사는 실패했다. 이를 baseline 기존 오류라고 확정하지 않으며 성공 증거로 사용하지 않는다.
+- Native Android/iOS runtime, 실제 screen reader, 원격 HTTP 수신/receipt, 실제 운영 계정 migration·flag 변경·배포는 실행하지 않았다. 로컬/CI 결과를 운영 성공으로 일반화하지 않는다.
+- cross-slice 실행 중 기존 source removal `sendProfileUnfollowActivity`가 key pair 부재로 attempt 1/2 warning을 남겼지만 Workflow result와 scoped DB assertions는 pass했다. HTTP receipt은 본 change의 완료 조건이 아니다.
+- 서버 간 receipt 순서와 동시 Follow/Unfollow race에 대한 추가 보장은 제공하거나 검증하지 않는다.
 
 ### Post-split revalidation (pending — 2026-09-08)
 
-- 분리된 layer의 exact head/base와 소유 범위 focused 검증을 새로 확인해야 한다. 새 layer 검증 결과가 생기기 전까지 이 ledger의 pre-split evidence를 현재 Stack 결과로 해석하지 않는다.
-- Native Android/iOS runtime, 실제 screen reader, 원격 HTTP 수신/receipt, 실제 운영 계정 migration·flag 변경·배포는 실행하지 않았다. 서버 간 receipt 순서와 동시 Follow/Unfollow race에 대한 추가 보장은 제공하거나 검증하지 않는다.
+- Stack 분리·간략화 후 새 테스트/CI 결과는 아직 없다. 각 layer의 exact head/base와 소유 범위 focused 검증, top의 cross-slice·strict spec 재검증을 새로 확인해야 한다.
+
+### Archive-time environment cleanup (2026-09-07)
+
+- synthetic backend/API/protocol PostgreSQL DB와 각 runner의 정리를 완료했다. PostgreSQL 18.4 검증 cluster는 정상 종료했고 port `55432` listener와 Temporal 잔여 process가 각각 0개임을 확인했다. 복구용 cluster 파일은 보존하며, 제품 DB와 다른 test DB는 변경하지 않았다.
+
+### Post-split top-layer verification ledger (pending — 2026-09-08)
+
+- `PROD-743-settings`의 exact head/base, Settings UI, full-flow integration, canonical main specs와 archive artifact를 분리 후 다시 검증해야 한다.
+- 이 layer의 새 검증 결과가 생기기 전까지 archive 당시 증거와 bottom/middle의 pre-split evidence를 현재 top head 결과로 해석하지 않는다.
