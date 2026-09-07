@@ -45,6 +45,15 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - 로딩 중 전달된 실제 action도 같은 slot에 표시하고 접근성 트리에 유지한다. 접근성 제외는 장식용
   cover·avatar·본문 skeleton에만 적용하며 로딩 안내는 별도로 전달한다.
 
+## ProfileListItem 클릭 영역
+
+- `linked` ProfileListItem의 프로필 링크는 기존 행의 왼쪽·위·아래 padding까지 확장한다. 링크 안의
+  콘텐츠 위치와 행의 시각 geometry는 유지한다.
+- 링크 오른쪽의 `12px` gap, Follow action column과 그 주변 padding은 링크 밖에 둔다. Follow action은
+  독립 버튼으로 동작하며 `linked={false}`의 View 구조는 바꾸지 않는다.
+- Web Storybook에서 bio/no-bio 행과 링크·gap·Follow 키보드 동작을 검증한다. 실제 iOS·Android touch
+  target은 Native 출시 QA에서 별도로 확인한다.
+
 ## PROD-851 이관 상태와 Figma 정렬
 
 - PROD-851의 공용 source는 Medium `96×40`을 기본으로 사용한다. `ProfileListItem`은 Web의

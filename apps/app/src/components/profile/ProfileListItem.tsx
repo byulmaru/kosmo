@@ -66,7 +66,11 @@ export function ProfileListItem({ linked = false, onPress, profile, style }: Pro
     >
       {linked ? (
         <NavigationLink href={profileHref}>
-          <Pressable accessibilityRole="link" onPress={onPress} style={profileStyle}>
+          <Pressable
+            accessibilityRole="link"
+            onPress={onPress}
+            style={[profileStyle, styles.linkedProfile]}
+          >
             {content}
           </Pressable>
         </NavigationLink>
@@ -95,6 +99,15 @@ const styles = StyleSheet.create({
   withBio: { alignItems: 'flex-start' },
   profile: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: space[12], minWidth: 0 },
   profileWithBio: { alignItems: 'flex-start' },
+  linkedProfile: {
+    alignSelf: 'stretch',
+    marginBottom: -(space[12] - borderWidths[1]),
+    marginLeft: -space[16],
+    marginTop: -space[12],
+    paddingBottom: space[12] - borderWidths[1],
+    paddingLeft: space[16],
+    paddingTop: space[12],
+  },
   copy: { flex: 1, minWidth: 0 },
   identity: { flex: 0 },
   bio: textStyles.uiCopyS,
