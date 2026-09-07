@@ -3,6 +3,7 @@ import './delete';
 import './follow';
 import './follow-request';
 import './mute';
+import './migration';
 import './select';
 import './unfollow';
 import './update';
