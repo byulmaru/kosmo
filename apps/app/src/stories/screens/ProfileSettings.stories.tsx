@@ -118,6 +118,7 @@ const meta = {
   excludeStories: [
     'SettingsContract',
     'DeactivateContract',
+    'DeactivateErrorContract',
     'ReactivateContract',
     'DeleteRetryContract',
     'DeleteSuccessContract',
@@ -225,6 +226,12 @@ export const DeactivateContract: Story = {
     await userEvent.click(confirm);
     await expect(confirm).toHaveAttribute('aria-busy', 'true');
     await expect(checkbox).toHaveAttribute('aria-disabled', 'true');
+    const back = canvas.getByRole('button', { name: '취소하고 프로필 설정으로 돌아가기' });
+    await expect(back).toHaveAttribute('aria-disabled', 'true');
+    back.click();
+    await expect(args.onCancel).toHaveBeenCalledTimes(1);
+    await expect(confirm).toBeVisible();
+    await expect(canvas.queryByRole('combobox')).not.toBeInTheDocument();
     confirm.click();
     await expect(args.onConfirm).toHaveBeenCalledTimes(1);
     await expect(args.onConfirm).toHaveBeenCalledWith('deactivate');
@@ -232,6 +239,32 @@ export const DeactivateContract: Story = {
     await expect(canvas.getByRole('button', { name: '다시 활성화' })).toBeVisible();
     await expect(args.onAction).toHaveBeenCalledTimes(2);
     await expect(args.onAction).toHaveBeenCalledWith('deactivate');
+  },
+};
+
+export const DeactivateErrorContract: Story = {
+  args: { outcome: 'error' },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: /프로필 비활성화/ }));
+    const checkbox = canvas.getByRole('checkbox', { name: '위 영향을 모두 확인했습니다.' });
+    const confirm = canvas.getByRole('button', { name: '비활성화' });
+    await userEvent.click(checkbox);
+    await userEvent.click(confirm);
+    await waitFor(() =>
+      expect(page.getByText('프로필을 비활성화하지 못했어요. 다시 시도해주세요.')).toBeVisible(),
+    );
+    await expect(checkbox).toBeChecked();
+    await expect(confirm).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(canvas.queryByRole('combobox')).not.toBeInTheDocument();
+    await userEvent.click(confirm);
+    await expect(args.onRetry).toHaveBeenCalledTimes(1);
+    await expect(args.onRetry).toHaveBeenCalledWith('deactivate');
+    await expect(args.onConfirm).toHaveBeenCalledTimes(1);
+    await expect(confirm).toHaveAttribute('aria-busy', 'true');
+    await waitFor(() => expect(confirm).not.toHaveAttribute('aria-busy', 'true'));
+    await expect(checkbox).toBeChecked();
   },
 };
 

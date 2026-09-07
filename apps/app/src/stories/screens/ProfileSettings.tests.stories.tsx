@@ -1,5 +1,6 @@
 import baseMeta, {
   DeactivateContract as deactivateContract,
+  DeactivateErrorContract as deactivateErrorContract,
   DeleteErrorContract as deleteErrorContract,
   DeleteRetryContract as deleteRetryContract,
   DeleteSuccessContract as deleteSuccessContract,
@@ -10,6 +11,7 @@ import baseMeta, {
 
 export default { ...baseMeta, excludeStories: [], title: 'KOSMO/Screens/Profile Settings/Tests' };
 export const DeactivateContract = deactivateContract;
+export const DeactivateErrorContract = deactivateErrorContract;
 export const DeleteErrorContract = deleteErrorContract;
 export const ReactivateContract = reactivateContract;
 export const DeleteRetryContract = deleteRetryContract;
