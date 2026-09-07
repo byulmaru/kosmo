@@ -28,7 +28,33 @@ function Fixture({
   onFeedback,
 }: Props) {
   const [removed, setRemoved] = useState<string[]>([]);
-  useEffect(() => setRemoved([]), [state, outcome, displayName]);
+  const [requestState, setRequestState] = useState<Props['state'] | 'end' | null>(null);
+  useEffect(() => {
+    setRemoved([]);
+    setRequestState(null);
+  }, [state, outcome, displayName]);
+  useEffect(() => {
+    if (outcome === 'pending' || (requestState !== 'loading' && requestState !== 'loadingMore')) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setRequestState(
+        outcome === 'error'
+          ? requestState === 'loading'
+            ? 'error'
+            : 'loadMoreError'
+          : requestState === 'loading'
+            ? 'loaded'
+            : 'end',
+      );
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [requestState, outcome]);
+  const visibleState = requestState ?? state;
+  const retry = () => {
+    onRetry();
+    setRequestState(visibleState === 'error' ? 'loading' : 'loadingMore');
+  };
   const items = profiles
     .map((p, index) => ({ ...p, displayName: index ? p.displayName : displayName }))
     .filter((p) => !removed.includes(p.id));
@@ -51,21 +77,27 @@ function Fixture({
           }
         }}
         state={
-          state === 'loading'
+          visibleState === 'loading'
             ? { status: 'loading' }
-            : state === 'error'
-              ? { status: 'error', onRetry }
+            : visibleState === 'error'
+              ? { status: 'error', onRetry: retry }
               : {
                   status: 'loaded',
-                  profiles: state === 'empty' ? [] : items,
+                  profiles: visibleState === 'empty' ? [] : items,
                   pagination:
-                    state === 'empty'
+                    visibleState === 'empty' || visibleState === 'end'
                       ? { status: 'end' }
-                      : state === 'loadingMore'
+                      : visibleState === 'loadingMore'
                         ? { status: 'loading' }
-                        : state === 'loadMoreError'
-                          ? { status: 'error', onRetry }
-                          : { status: 'more', onLoadMore },
+                        : visibleState === 'loadMoreError'
+                          ? { status: 'error', onRetry: retry }
+                          : {
+                              status: 'more',
+                              onLoadMore: () => {
+                                onLoadMore();
+                                setRequestState('loadingMore');
+                              },
+                            },
                 }
         }
       />

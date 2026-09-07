@@ -176,8 +176,8 @@ export const RetryContract: Story = {
     await waitFor(() =>
       expect(canvas.getByRole('heading', { name: '뮤트한 프로필' })).toHaveFocus(),
     );
-    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
-    expect(args.onRetry).toHaveBeenCalledTimes(2);
+    expect(await canvas.findByText(args.displayName)).toBeVisible();
+    expect(canvas.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
   },
 };
 
@@ -187,17 +187,31 @@ export const PaginationContract: Story = {
     args.onLoadMore.mockClear();
     await userEvent.click(within(canvasElement).getByRole('button', { name: '더 불러오기' }));
     expect(args.onLoadMore).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(
+        within(canvasElement).queryByText('프로필을 더 불러오는 중입니다.'),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      within(canvasElement).queryByRole('button', { name: '더 불러오기' }),
+    ).not.toBeInTheDocument();
+    expect(within(canvasElement).getByText(args.displayName)).toBeVisible();
   },
 };
 
 export const LoadMoreFailureContract: Story = {
-  args: { state: 'loadMoreError' },
+  args: { state: 'loaded', outcome: 'error' },
   play: async ({ args, canvasElement }) => {
     args.onRetry.mockClear();
+    args.onLoadMore.mockClear();
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
+    expect(args.onLoadMore).toHaveBeenCalledTimes(1);
     const toast = await body.findByRole('alert');
-    expect(within(toast).getByText('프로필을 더 불러오지 못했어요')).toBeVisible();
+    await waitFor(() =>
+      expect(within(toast).getByText('프로필을 더 불러오지 못했어요')).toBeVisible(),
+    );
     expect(
       canvas.getByRole('heading', { name: '뮤트한 프로필' }).parentElement?.contains(toast),
     ).toBe(false);
@@ -206,7 +220,12 @@ export const LoadMoreFailureContract: Story = {
     await userEvent.click(within(toast).getByRole('button', { name: '다시 시도' }));
     expect(args.onRetry).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(body.queryByRole('alert')).not.toBeInTheDocument());
+    const repeated = await body.findByRole('alert');
+    await waitFor(() =>
+      expect(within(repeated).getByText('프로필을 더 불러오지 못했어요')).toBeVisible(),
+    );
     await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
     expect(args.onRetry).toHaveBeenCalledTimes(2);
+    expect(canvas.getByText(args.displayName)).toBeVisible();
   },
 };
