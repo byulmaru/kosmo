@@ -1,10 +1,24 @@
+import { useCallback, useMemo, useState } from 'react';
+import { Text } from 'react-native';
+import {
+  createOperationDescriptor,
+  Environment,
+  getRequest,
+  Network,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
 import { expect, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
+import SearchPeopleByHandlePageQueryNode from '@/app/(tabs)/(protected)/__generated__/SearchPeopleByHandlePageQuery.graphql';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
 import { StateView } from '@/components/ui/StateView';
+import { RelayActorProvider } from '@/relay/RelayActorProvider';
+import { RouterMockProvider } from '../../../.storybook/mocks/expo-router';
 import { profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { GraphQLResponse, RequestParameters } from 'relay-runtime';
 
 const result = profile({
   bio: '코스모에서 만나는 첫 프로필',
@@ -36,6 +50,54 @@ const searchConnection = (
     hasNextPage,
   },
 });
+
+type SearchRefreshMode = 'changed' | 'failed';
+
+function StoreAndNetworkSearchStory({ mode }: { mode: SearchRefreshMode }) {
+  const [refreshStatus, setRefreshStatus] = useState<'waiting' | SearchRefreshMode>('waiting');
+  const environment = useMemo(() => {
+    const network = Network.create((request: RequestParameters) => {
+      if (request.name !== 'SearchPeopleByHandlePageQuery') {
+        return Promise.resolve({ data: {} } as GraphQLResponse);
+      }
+
+      if (mode === 'changed') {
+        return Promise.resolve({ data: { searchProfiles: searchConnection([]) } }).then(
+          (response) => {
+            setRefreshStatus('changed');
+            return response as GraphQLResponse;
+          },
+        );
+      }
+
+      return Promise.reject(new Error('검색 결과 재검증 실패')).catch((error: Error) => {
+        setRefreshStatus('failed');
+        throw error;
+      });
+    });
+    const nextEnvironment = new Environment({
+      network,
+      store: new Store(new RecordSource()),
+    });
+    nextEnvironment.commitPayload(
+      createOperationDescriptor(getRequest(SearchPeopleByHandlePageQueryNode), {
+        query: 'byulmaru',
+      }),
+      { searchProfiles: searchConnection([result]) },
+    );
+    return nextEnvironment;
+  }, [mode]);
+  const createEnvironment = useCallback(() => environment, [environment]);
+
+  return (
+    <RelayActorProvider createEnvironment={createEnvironment}>
+      <RouterMockProvider params={{ q: 'byulmaru', tab: 'people' }} pathname="/search">
+        <SearchScreen />
+        <Text testID="search-refresh-status">{refreshStatus}</Text>
+      </RouterMockProvider>
+    </RelayActorProvider>
+  );
+}
 
 const meta = {
   beforeEach: () => {
@@ -81,6 +143,36 @@ export const Result: Story = {
     expect(trackAnalytics).not.toHaveBeenCalledWith('search_submitted', expect.anything());
     await userEvent.click(canvas.getByRole('link', { name: /@byulmaru / }));
     expect(trackAnalytics).toHaveBeenCalledWith('search_result_selected', { tab: 'people' });
+  },
+};
+
+export const StoreHitThenNetworkChangedDoesNotDuplicateLoadedEvent: Story = {
+  render: () => <StoreAndNetworkSearchStory mode="changed" />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByTestId('search-refresh-status')).resolves.toHaveTextContent(
+      'changed',
+    );
+    await expect(canvas.findByText('검색 결과가 없어요')).resolves.toBeVisible();
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
+    expect(trackAnalytics).toHaveBeenCalledWith('search_results_loaded', {
+      has_results: true,
+      tab: 'people',
+    });
+  },
+};
+
+export const StoreHitThenNetworkFailureDoesNotDuplicateLoadedEvent: Story = {
+  render: () => <StoreAndNetworkSearchStory mode="failed" />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByTestId('search-refresh-status')).resolves.toHaveTextContent('failed');
+    await expect(canvas.findByText('검색 결과를 불러오지 못했어요')).resolves.toBeVisible();
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
+    expect(trackAnalytics).toHaveBeenCalledWith('search_results_loaded', {
+      has_results: true,
+      tab: 'people',
+    });
   },
 };
 

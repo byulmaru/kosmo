@@ -97,6 +97,13 @@
 - **WHEN** app code가 `$pageview`를 custom event API로 호출하려 한다
 - **THEN** TypeScript contract는 이를 허용하지 않는다
 
+#### Scenario: 검색 결과 load는 fetchKey별 첫 renderable snapshot만 기록한다
+
+- **WHEN** `store-and-network` 검색이 cache snapshot을 먼저 렌더링한 뒤 background network response로 결과를 변경하거나 재검증에 실패한다
+- **THEN** `search_results_loaded`는 해당 `fetchKey`의 첫 renderable first-page snapshot에 대해 한 번만 전송된다
+- **AND** cache snapshot 뒤의 결과 변경이나 network failure는 두 번째 성공 event 또는 실패 event를 전송하지 않는다
+- **AND** cache miss의 first-page network failure에는 `search_results_loaded`를 전송하지 않는다
+
 ### Requirement: Account identity 수명주기
 
 **Authority / Provenance:** `PROD-819`, `PROD-469` — Kosmo Web은 확인된 로그인 Session의 opaque Account ID만 PostHog distinct identity로 사용해야 한다(MUST). email·이름·handle 또는 Profile 속성을 identity trait로 보내지 않아야 하며(MUST), 공개 `get_property('$user_id')`와 `get_distinct_id()`를 기준으로 Account 전환과 guest reset을 판정해야 한다(MUST). `$user_state`, `identified` 같은 SDK 내부 persistence 값은 identity 계약에 사용하지 않아야 한다(MUST NOT).

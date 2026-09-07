@@ -463,6 +463,44 @@ describe('AppProviders runtime composition', () => {
     }
   });
 
+  it('root retry preserves the last unread count when the replacement fetch fails', async () => {
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+    try {
+      await act(async () => {
+        renderer = create(createElement(AppProviders, null, createElement(UniversalShell)));
+      });
+
+      assert.deepEqual(unreadFetches, ['profile-a']);
+      assert.deepEqual(findTag('BadgeValue').props, {
+        count: 7,
+        selectedProfileId: 'profile-a',
+      });
+
+      queryModes.UniversalShellQuery = 'error';
+      await act(async () => {
+        renderer?.update(createElement(AppProviders, null, createElement(UniversalShell)));
+      });
+
+      assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 1);
+
+      queryModes.UniversalShellQuery = 'success';
+      currentEnvironment = createEnvironment(null);
+      unreadFailure = true;
+      const fallback = findTag('StateView');
+      await act(async () => fallback.props.onAction());
+
+      assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 0);
+      assert.deepEqual(unreadFetches, ['profile-a', 'profile-a']);
+      assert.deepEqual(findTag('BadgeValue').props, {
+        count: 7,
+        selectedProfileId: 'profile-a',
+      });
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
+
   it('root suspense uses the app loading splash for a pending runtime', async () => {
     rootShouldSuspend = true;
     await act(async () => {
