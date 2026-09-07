@@ -1,16 +1,11 @@
-import { Volume2, VolumeOff } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { ActionMenu } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, breakpoints, textStyles } from '@/theme/tokens';
-import { ProfileMoreButton } from './ProfileMoreButton';
-import type { ComponentProps } from 'react';
-import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 
 export type ProfileMuteFeedback = { muted: boolean; status: 'success' | 'error' };
 export type ProfileMuteControl = {
@@ -18,24 +13,14 @@ export type ProfileMuteControl = {
   onChangeMuted: (muted: boolean) => Promise<void>;
   onFeedback?: (feedback: ProfileMuteFeedback) => void;
 };
-type Props = {
+type Props = ProfileMuteControl & {
   displayName: string;
-  onChangeMuted: (muted: boolean) => Promise<void>;
-  onFeedback?: (feedback: ProfileMuteFeedback) => void;
   profileId: string;
-  /** Menu on the profile, button in management, text in the ProfileHero status row. */
-} & (
-  | {
-      surface?: 'menu';
-      muted: boolean;
-      items?: readonly ActionMenuItem[];
-      renderTrigger?: ComponentProps<typeof ActionMenu>['renderTrigger'];
-    }
-  | { surface: 'button' | 'text'; muted: true; items?: never; renderTrigger?: never }
-);
+  surface: 'button' | 'text';
+  muted: true;
+};
 
 export function ProfileMuteAction(props: Props) {
-  // A changed target owns a fresh request lifecycle; old completions cannot update its feedback.
   return <ProfileMuteActionContent key={props.profileId} {...props} />;
 }
 
@@ -44,66 +29,22 @@ function ProfileMuteActionContent({
   muted,
   onChangeMuted,
   onFeedback,
-  surface = 'menu',
-  items = [],
-  renderTrigger,
+  surface,
 }: Props) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const mobile = Platform.OS !== 'web' || width < breakpoints.compact;
   const buttonHeight = mobile ? 40 : 32;
   const buttonWidth = mobile ? 88 : 72;
-  const { showToast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState(false);
-  const inFlight = useRef(false);
-  const mounted = useRef(false);
-  const cancelRef = useRef<View>(null);
   const actionRef = useRef<View>(null);
-  const focusTrigger = useRef<() => void>(() => {});
-  const completed = useRef<ProfileMuteFeedback | null>(null);
-  const restoreTriggerFocus = () => {
-    if (surface === 'menu') {
-      focusTrigger.current();
-    } else {
-      actionRef.current?.focus();
-    }
-  };
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  const close = () => {
-    if (!inFlight.current) {
-      setOpen(false);
-    }
-  };
-  const request = async (nextMuted: boolean) => {
-    if (inFlight.current) {
-      return;
-    }
-    inFlight.current = true;
-    setPending(true);
-    let succeeded = false;
-    try {
-      await onChangeMuted(nextMuted);
-      succeeded = true;
-    } catch {
-      // The public boundary presents a safe message, never a backend error string.
-    }
-    if (!mounted.current) {
-      return;
-    }
-    completed.current = { muted: nextMuted, status: succeeded ? 'success' : 'error' };
-    setPending(false);
-    setOpen(false);
-  };
-  const activate = () => {
-    setOpen(true);
-  };
-  const label = muted ? '뮤트 해제' : '뮤트';
+  const { activate, pending, confirmation } = useProfileMuteConfirmation({
+    displayName,
+    muted,
+    onChangeMuted,
+    onFeedback,
+    restoreTriggerFocus: () => actionRef.current?.focus(),
+  });
+  const label = '뮤트 해제';
   const targetHeight =
     Platform.OS === 'web'
       ? surface === 'text'
@@ -114,34 +55,7 @@ function ProfileMuteActionContent({
         : 48;
   return (
     <>
-      {surface === 'menu' ? (
-        <ActionMenu
-          accessibilityLabel="더보기"
-          disabled={pending}
-          items={[
-            ...items,
-            { icon: muted ? Volume2 : VolumeOff, key: 'mute', label, onSelect: activate },
-          ]}
-          {...(renderTrigger
-            ? ({ webHorizontalPlacement: 'end' } as const)
-            : ({ webPlacement: 'overlap-end' } as const))}
-          renderTrigger={(trigger) => {
-            const { expanded, focusTrigger: focus, onPress, ref } = trigger;
-            focusTrigger.current = focus;
-            if (renderTrigger) {
-              return renderTrigger(trigger);
-            }
-            return (
-              <ProfileMoreButton
-                controlRef={ref}
-                disabled={pending}
-                expanded={expanded}
-                onPress={onPress}
-              />
-            );
-          }}
-        />
-      ) : surface === 'text' ? (
+      {surface === 'text' ? (
         <Pressable
           ref={actionRef}
           accessibilityLabel={label}
@@ -212,6 +126,71 @@ function ProfileMuteActionContent({
           </Button>
         </View>
       )}
+      {confirmation}
+    </>
+  );
+}
+
+// The button and menu wrappers key this lifecycle by the target profile ID.
+export function useProfileMuteConfirmation({
+  displayName,
+  muted,
+  onChangeMuted,
+  onFeedback,
+  restoreTriggerFocus,
+}: {
+  displayName: string;
+  muted: boolean;
+  onChangeMuted?: ProfileMuteControl['onChangeMuted'];
+  onFeedback?: ProfileMuteControl['onFeedback'];
+  restoreTriggerFocus: () => void;
+}) {
+  const { showToast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const inFlight = useRef(false);
+  const mounted = useRef(false);
+  const cancelRef = useRef<View>(null);
+  const completed = useRef<ProfileMuteFeedback | null>(null);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const close = () => {
+    if (!inFlight.current) {
+      setOpen(false);
+    }
+  };
+  const request = async (nextMuted: boolean) => {
+    if (!onChangeMuted || inFlight.current) {
+      return;
+    }
+    inFlight.current = true;
+    setPending(true);
+    let succeeded = false;
+    try {
+      await onChangeMuted(nextMuted);
+      succeeded = true;
+    } catch {
+      // The public boundary presents a safe message, never a backend error string.
+    }
+    if (!mounted.current) {
+      return;
+    }
+    completed.current = { muted: nextMuted, status: succeeded ? 'success' : 'error' };
+    setPending(false);
+    setOpen(false);
+  };
+  const activate = () => {
+    setOpen(true);
+  };
+  const label = muted ? '뮤트 해제' : '뮤트';
+  return {
+    activate,
+    pending,
+    confirmation: (
       <ModalSheet
         dismissDisabled={pending}
         onClose={close}
@@ -251,9 +230,10 @@ function ProfileMuteActionContent({
           pending={pending}
         />
       </ModalSheet>
-    </>
-  );
+    ),
+  };
 }
+
 const styles = StyleSheet.create({
   buttonTarget: { alignItems: 'center', justifyContent: 'center' },
   button: { paddingHorizontal: 0 },

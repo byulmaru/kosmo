@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Platform, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { fn } from 'storybook/test';
 import { FollowButton } from '@/components/profile/FollowButton';
+import { ProfileBlockAction } from '@/components/profile/ProfileBlockAction';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { SessionProvider } from '@/session/SessionProvider';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
@@ -69,6 +70,7 @@ const ProfileHeroStoriesQuery = graphql`
       __typename
       ... on Profile {
         id
+        displayName
         ...FollowButton_profile @alias(as: "followButton")
         ...ProfileHero_profile @alias(as: "hero")
       }
@@ -85,7 +87,12 @@ function useStoryProfiles() {
     if (node?.__typename !== 'Profile' || !node.hero || !node.followButton) {
       throw new Error('ProfileHeroStoriesQuery must return Profile fragments in fixture order.');
     }
-    return { followButton: node.followButton, hero: node.hero, id: node.id };
+    return {
+      displayName: node.displayName,
+      followButton: node.followButton,
+      hero: node.hero,
+      id: node.id,
+    };
   });
 }
 
@@ -97,7 +104,10 @@ function requireProfile(profiles: ReturnType<typeof useStoryProfiles>, id: strin
   return result;
 }
 
-function ProfileHeroFixture({
+type BlockFeedback = { blocked: boolean; status: 'success' | 'error' };
+const focusProps = Platform.OS === 'web' ? { tabIndex: -1 as const } : { focusable: true };
+
+export function ProfileHeroFixture({
   actionSize,
   containerWidth = 600,
   loading = false,
@@ -106,6 +116,11 @@ function ProfileHeroFixture({
   muted = false,
   onUnmute,
   onMute,
+  initialBlocked = false,
+  onBlock,
+  onBlockFeedback,
+  onBlockDismiss,
+  onUnblock = async () => {},
   outcome = 'success',
 }: {
   actionSize?: 'compact' | 'medium';
@@ -116,25 +131,91 @@ function ProfileHeroFixture({
   muted?: boolean;
   onUnmute?: () => Promise<void>;
   onMute?: () => Promise<void>;
+  initialBlocked?: boolean;
+  onBlock: () => Promise<void>;
+  onBlockFeedback: (feedback: BlockFeedback) => void;
+  onBlockDismiss?: () => void;
+  onUnblock?: () => Promise<void>;
   outcome?: 'success' | 'error' | 'pending';
 }) {
   const [isMuted, setMuted] = useState(muted);
-  useEffect(() => setMuted(muted), [muted]);
+  const [isBlocked, setBlocked] = useState(initialBlocked);
+  const profileHeroSurfaceRef = useRef<View>(null);
+  const focusAfterBlock = useRef(false);
+  useEffect(() => {
+    setMuted(muted);
+    setBlocked(initialBlocked);
+  }, [initialBlocked, muted, outcome, profileId]);
+  useEffect(() => {
+    if (focusAfterBlock.current) {
+      profileHeroSurfaceRef.current?.focus();
+      focusAfterBlock.current = false;
+    }
+  }, [isBlocked]);
   const profiles = useStoryProfiles();
   const target = requireProfile(profiles, profileId);
 
+  const changeBlocked = async (nextBlocked: boolean) => {
+    await (nextBlocked ? onBlock() : onUnblock());
+    if (outcome === 'pending') {
+      await new Promise<void>(() => {});
+    }
+    if (outcome === 'error') {
+      throw new Error('요청 실패');
+    }
+  };
+  const handleBlockFeedback = (feedback: BlockFeedback) => {
+    onBlockFeedback(feedback);
+    if (feedback.status === 'success') {
+      focusAfterBlock.current = true;
+      setBlocked(feedback.blocked);
+    }
+  };
+
   return (
     <SessionProvider>
-      <View style={{ width: containerWidth }} testID="profile-hero-surface">
+      <View
+        ref={profileHeroSurfaceRef}
+        {...focusProps}
+        style={{ maxWidth: '100%', width: containerWidth }}
+        testID="profile-hero-surface"
+      >
         <ProfileHero
           action={
-            showAction ? (
+            isBlocked ? (
+              <ProfileBlockAction
+                blocked
+                displayName={target.displayName}
+                onChangeBlocked={changeBlocked}
+                onFeedback={handleBlockFeedback}
+                onDismiss={onBlockDismiss}
+                profileId={target.id}
+                size={actionSize ?? 'medium'}
+                surface="button"
+              />
+            ) : showAction ? (
               <FollowButton profile={target.followButton} size={actionSize} />
             ) : undefined
           }
+          block={
+            isBlocked
+              ? {
+                  blocked: true,
+                  onUnblock: () => changeBlocked(false),
+                  onDismiss: onBlockDismiss,
+                  onFeedback: handleBlockFeedback,
+                }
+              : showAction
+                ? {
+                    onBlock: () => changeBlocked(true),
+                    onFeedback: handleBlockFeedback,
+                    onDismiss: onBlockDismiss,
+                  }
+                : undefined
+          }
           loading={loading}
           mute={
-            showAction && onUnmute && onMute
+            !isBlocked && showAction && onUnmute && onMute
               ? {
                   muted: isMuted,
                   onChangeMuted: async (nextMuted) => {
@@ -182,13 +263,19 @@ function ProfileHeroCatalog() {
 }
 
 const meta = {
+  excludeStories: ['ProfileHeroFixture'],
   args: {
     actionSize: undefined,
     containerWidth: 600,
+    initialBlocked: false,
     loading: false,
     muted: false,
     onUnmute: fn<() => Promise<void>>().mockResolvedValue(undefined),
     onMute: fn<() => Promise<void>>().mockResolvedValue(undefined),
+    onBlock: fn<() => Promise<void>>().mockResolvedValue(undefined),
+    onBlockFeedback: fn(),
+    onBlockDismiss: fn(),
+    onUnblock: fn<() => Promise<void>>().mockResolvedValue(undefined),
     outcome: 'success',
     profileId: defaultProfile.id,
     showAction: true,
@@ -196,6 +283,7 @@ const meta = {
   argTypes: {
     actionSize: { control: 'inline-radio', options: ['compact', 'medium'] },
     containerWidth: { control: 'inline-radio', options: [390, 600] },
+    initialBlocked: { control: 'boolean' },
     loading: { control: 'boolean' },
     muted: { control: 'boolean' },
     outcome: { control: 'inline-radio', options: ['success', 'error', 'pending'] },
@@ -204,6 +292,12 @@ const meta = {
   },
   component: ProfileHeroFixture,
   parameters: {
+    docs: {
+      description: {
+        component:
+          '메뉴·확인 동작을 검증하는 ProfileHero 패턴입니다. 차단 후에도 프로필 정보는 유지되고, Follow action은 차단 해제 action으로 바뀝니다. 화면 단위 흐름은 Screens/Profile Block에서 검토합니다.',
+      },
+    },
     layout: 'centered',
     relay: {
       data: {
@@ -220,12 +314,13 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
-  args: { actionSize: 'medium' },
+  args: { actionSize: 'medium', initialBlocked: false },
   parameters: {
     controls: {
       disable: false,
       include: [
         'profileId',
+        'initialBlocked',
         'muted',
         'outcome',
         'loading',

@@ -97,6 +97,14 @@ export function BlockedProfileList({ onDismiss, onFeedback, onUnblock, state }: 
               avatarLabel={profile.displayName}
               avatarUri={profile.avatarUri}
               displayName={profile.displayName}
+              identity={
+                <Text
+                  numberOfLines={1}
+                  style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}
+                >
+                  {profile.displayName}
+                </Text>
+              }
               style={styles.row}
             >
               <ProfileBlockAction

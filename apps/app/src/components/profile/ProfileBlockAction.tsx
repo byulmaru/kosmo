@@ -1,26 +1,37 @@
-import { Ban, ShieldOff } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { ActionMenu } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
 import { breakpoints } from '@/theme/tokens';
-import { ProfileMoreButton } from './ProfileMoreButton';
 
 export type ProfileBlockFeedback = { blocked: boolean; status: 'success' | 'error' };
+export type ProfileBlockControl = {
+  onBlock: () => Promise<void>;
+  onDismiss?: () => void;
+  onFeedback?: (feedback: ProfileBlockFeedback) => void;
+};
+export type ProfileBlockMenuControl =
+  | (ProfileBlockControl & { blocked?: false })
+  | {
+      blocked: true;
+      onUnblock: () => Promise<void>;
+      onDismiss?: () => void;
+      onFeedback?: (feedback: ProfileBlockFeedback) => void;
+    };
 type Props = {
+  blocked: true;
   displayName: string;
   onChangeBlocked: (blocked: boolean) => Promise<void>;
-  /** Observe the result and apply the confirmed state; failed requests keep their previous state. */
   onFeedback?: (feedback: ProfileBlockFeedback) => void;
   onDismiss?: () => void;
   profileId: string;
-} & ({ surface?: 'menu'; blocked: boolean } | { surface: 'button'; blocked: true });
+  surface: 'button';
+  size?: 'compact' | 'medium';
+};
 
 export function ProfileBlockAction(props: Props) {
-  // A new target owns a fresh lifecycle; an old request cannot publish its feedback here.
   return <ProfileBlockActionContent key={props.profileId} {...props} />;
 }
 
@@ -30,22 +41,83 @@ function ProfileBlockActionContent({
   onChangeBlocked,
   onDismiss,
   onFeedback,
-  surface = 'menu',
+  size,
 }: Props) {
-  const { showToast } = useToast();
   const { width } = useWindowDimensions();
   const mobile = Platform.OS !== 'web' || width < breakpoints.compact;
-  const buttonHeight = mobile ? 40 : 32;
-  const buttonWidth = mobile ? 88 : 72;
+  const compact = size ? size === 'compact' : !mobile;
+  const buttonHeight = compact ? 32 : 40;
+  const buttonWidth = size ? (compact ? 72 : 96) : mobile ? 88 : 72;
   const targetHeight = Platform.OS === 'web' ? buttonHeight : Platform.OS === 'ios' ? 44 : 48;
+  const actionRef = useRef<View>(null);
+  const { activate, pending, confirmation } = useProfileBlockConfirmation({
+    blocked,
+    displayName,
+    onChangeBlocked,
+    onDismiss,
+    onFeedback,
+    restoreTriggerFocus: () => actionRef.current?.focus(),
+  });
+  const label = '차단 해제';
+  return (
+    <>
+      <View style={[styles.buttonTarget, { minHeight: targetHeight, width: buttonWidth }]}>
+        <Button
+          controlRef={actionRef}
+          accessibilityLabel={`${displayName} ${label}`}
+          aria-haspopup="dialog"
+          aria-busy={pending || undefined}
+          hitSlop={
+            Platform.OS === 'web'
+              ? undefined
+              : {
+                  top: (targetHeight - buttonHeight) / 2,
+                  bottom: (targetHeight - buttonHeight) / 2,
+                }
+          }
+          loading={pending}
+          onPress={activate}
+          size={compact ? 'compact' : 'default'}
+          style={{
+            height: buttonHeight,
+            minHeight: buttonHeight,
+            minWidth: buttonWidth,
+            paddingHorizontal: 0,
+            width: buttonWidth,
+          }}
+          tone="secondary"
+        >
+          {label}
+        </Button>
+      </View>
+      {confirmation}
+    </>
+  );
+}
+
+// The button and menu wrappers key this lifecycle by the target profile ID.
+export function useProfileBlockConfirmation({
+  blocked,
+  displayName,
+  onChangeBlocked,
+  onDismiss,
+  onFeedback,
+  restoreTriggerFocus,
+}: {
+  blocked: boolean;
+  displayName: string;
+  onChangeBlocked?: (blocked: boolean) => Promise<void>;
+  onDismiss?: () => void;
+  onFeedback?: (feedback: ProfileBlockFeedback) => void;
+  restoreTriggerFocus: () => void;
+}) {
+  const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [nextBlocked, setNextBlocked] = useState(!blocked);
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
   const mounted = useRef(false);
   const cancelRef = useRef<View>(null);
-  const actionRef = useRef<View>(null);
-  const focusMenuTrigger = useRef<() => void>(() => {});
   const completed = useRef<ProfileBlockFeedback | null>(null);
   useEffect(() => {
     mounted.current = true;
@@ -60,7 +132,7 @@ function ProfileBlockActionContent({
     }
   };
   const request = async () => {
-    if (inFlight.current) {
+    if (!onChangeBlocked || inFlight.current) {
       return;
     }
     inFlight.current = true;
@@ -83,66 +155,10 @@ function ProfileBlockActionContent({
     setNextBlocked(!blocked);
     setOpen(true);
   };
-  const label = blocked ? '차단 해제' : '차단';
-  return (
-    <>
-      {surface === 'menu' ? (
-        <ActionMenu
-          accessibilityLabel="더보기"
-          disabled={pending}
-          items={[
-            {
-              icon: blocked ? ShieldOff : Ban,
-              key: 'block',
-              label,
-              onSelect: activate,
-              tone: blocked ? 'default' : 'danger',
-            },
-          ]}
-          webPlacement="overlap-end"
-          renderTrigger={({ expanded, focusTrigger, onPress, ref }) => {
-            focusMenuTrigger.current = focusTrigger;
-            return (
-              <ProfileMoreButton
-                controlRef={ref}
-                disabled={pending}
-                expanded={expanded}
-                onPress={onPress}
-              />
-            );
-          }}
-        />
-      ) : (
-        <View style={[styles.buttonTarget, { minHeight: targetHeight, width: buttonWidth }]}>
-          <Button
-            controlRef={actionRef}
-            accessibilityLabel={`${displayName} ${label}`}
-            aria-haspopup="dialog"
-            aria-busy={pending || undefined}
-            hitSlop={
-              Platform.OS === 'web'
-                ? undefined
-                : {
-                    top: (targetHeight - buttonHeight) / 2,
-                    bottom: (targetHeight - buttonHeight) / 2,
-                  }
-            }
-            loading={pending}
-            onPress={activate}
-            size={mobile ? 'default' : 'compact'}
-            style={{
-              height: buttonHeight,
-              minHeight: buttonHeight,
-              minWidth: buttonWidth,
-              paddingHorizontal: 0,
-              width: buttonWidth,
-            }}
-            tone="secondary"
-          >
-            {label}
-          </Button>
-        </View>
-      )}
+  return {
+    activate,
+    pending,
+    confirmation: (
       <ModalSheet
         dismissDisabled={pending}
         onClose={close}
@@ -151,11 +167,7 @@ function ProfileBlockActionContent({
             return;
           }
           inFlight.current = false;
-          if (surface === 'menu') {
-            focusMenuTrigger.current();
-          } else {
-            actionRef.current?.focus();
-          }
+          restoreTriggerFocus();
           const feedback = completed.current;
           completed.current = null;
           if (feedback) {
@@ -184,11 +196,11 @@ function ProfileBlockActionContent({
           onCancel={close}
           onConfirm={() => void request()}
           pending={pending}
-          tone={nextBlocked ? 'danger' : 'primary'}
+          tone="danger"
         />
       </ModalSheet>
-    </>
-  );
+    ),
+  };
 }
 
 const styles = StyleSheet.create({

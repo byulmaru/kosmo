@@ -21,6 +21,9 @@ export const SuccessContract: Story = {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     const title = '이 프로필의 차단을 해제할까요?';
+    const nameStyle = getComputedStyle(canvas.getByText(args.displayName));
+    expect(nameStyle.fontSize).toBe('16px');
+    expect(nameStyle.lineHeight).toBe('24px');
     const firstAction = canvas.getByRole('button', { name: `${args.displayName} 차단 해제` });
 
     await userEvent.click(firstAction);

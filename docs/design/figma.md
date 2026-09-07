@@ -274,6 +274,10 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   Compact [`7371:19453`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7371-19453),
   Full [`7380:20771`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-20771) Target은 당시
   identity-free 조립의 물리 참고 자료로 유지한다.
+- PROD-861 Storybook의 `blocking` 표현은 2026-09-08 사용자 승인에 따라 Legacy
+  [`Profile / Blocked 348:3910`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=348-3910)을 사용한다.
+  ProfileHero·수치·탭을 유지하고 FollowButton 자리에 차단 해제, 게시물 영역에 안내를 둔다.
+  이 fixture와 최신 runtime 정책의 범위는 [Profile Mute·Block 계약](profile-mute-block.md#prod-861-storybook-표현의-범위)을 따른다.
 - 같은 section의 Mobile [`blocking 7580:14180`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7580-14180)은
   기존 Android Dark Profile route chrome 안의 identity-free `StateView`와 Secondary `차단 해제` 조립을 물리적 참고
   자료로 유지한다. Full Web [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)도

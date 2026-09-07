@@ -37,7 +37,7 @@
 #### Scenario: Block 목록에서 Target을 해제한다
 
 - **WHEN** Owner가 `차단한 프로필` 목록의 한 Target에 대해 `차단 해제` action을 선택한다
-- **THEN** 시스템은 canonical 공용 확인창에 차단 해제 제목·설명과 `취소`·`차단 해제` action을 표시한다
+- **THEN** 시스템은 canonical 공용 확인창에 차단 해제 제목·설명과 `취소`·Danger `차단 해제` action을 표시한다
 - **AND** 확인창에서 해제를 확정하기 전에는 해제 mutation을 실행하지 않는다
 - **WHEN** Owner가 확인창의 `차단 해제`를 확정한다
 - **THEN** 시스템은 해당 Profile Block 해제 mutation을 실행한다
