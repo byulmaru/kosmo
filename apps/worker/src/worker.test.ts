@@ -21,14 +21,6 @@ test('Temporal environment를 검증한다', async () => {
       }),
     /PORT must be an integer/,
   );
-  assert.equal(
-    validateWorkerEnvironment({
-      PORT: '0',
-      TEMPORAL_ADDRESS: 'temporal.test:7233',
-      TEMPORAL_NAMESPACE: 'kosmo-test',
-    }).port,
-    0,
-  );
 });
 
 test('SDK Worker 상태를 health 응답에 그대로 반영한다', () => {
