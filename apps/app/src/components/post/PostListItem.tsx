@@ -1,9 +1,10 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -13,7 +14,7 @@ import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplyBinding } from './PostReplyCoordinator';
-import { PostSourcePresentationView } from './PostSourcePresentationView';
+import { PostSourcePresentationView, PostSourcePreview } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
 import type { ReactNode } from 'react';
@@ -50,6 +51,9 @@ const PostListRowFragment = graphql`
     }
     ...PostActionSurface_post @alias(as: "actionSurface")
     ...PostBody_post
+    repostSource {
+      ...PostSourcePreview_source
+    }
   }
 `;
 
@@ -98,10 +102,13 @@ export function PostListItem({
   post: postKey,
   showDivider = true,
   showReplyAttribution = true,
+  notification,
 }: {
   post: PostListItem_post$key;
   showDivider?: boolean;
   showReplyAttribution?: boolean;
+  /** Recipient-relative presentation used only inside a Reply notification. */
+  notification?: 'reply';
 }) {
   const theme = useTheme();
   const [deleted, setDeleted] = useState(false);
@@ -177,7 +184,7 @@ export function PostListItem({
     showDivider && { borderColor: theme.borderSubtle },
   ];
   const replyAttribution =
-    showReplyAttribution && post.replyParent ? (
+    !notification && showReplyAttribution && post.replyParent ? (
       <PostAttributionRow
         icon={
           <View
@@ -207,7 +214,7 @@ export function PostListItem({
     </>
   );
 
-  if (!post.repostSource) {
+  if (!post.repostSource || notification === 'reply') {
     if (!post.content) {
       return renderWithReplySurface(null);
     }
@@ -217,6 +224,7 @@ export function PostListItem({
         <PostListRow
           actionBarStyle={styles.actionBarSlot}
           onDeleted={onDeleted}
+          notification={notification}
           post={post}
           reply={reply}
         />
@@ -307,12 +315,14 @@ function PostAttributionRow({ children, icon }: { children: ReactNode; icon: Rea
 
 function PostListRow({
   actionBarStyle,
+  notification,
   onDeleted,
   post: postKey,
   reply,
   surfacePostId,
 }: {
   actionBarStyle?: StyleProp<ViewStyle>;
+  notification?: 'reply';
   onDeleted: () => void;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
@@ -357,15 +367,46 @@ function PostListRow({
       </Link>
       <View style={styles.content}>
         <View style={styles.header}>
-          <ProfileNameBlock href={profileHref} profile={post.profile} />
+          {notification ? (
+            <NavigationLink href={profileHref}>
+              <Pressable
+                accessibilityRole="link"
+                style={styles.notificationAuthor}
+                testID="notification-post-author"
+              >
+                <Text numberOfLines={1} style={[styles.notificationName, { color: theme.text }]}>
+                  {post.profile.displayName}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.notificationHandle, { color: theme.textSecondary }]}
+                >
+                  {post.profile.relativeHandle}
+                </Text>
+              </Pressable>
+            </NavigationLink>
+          ) : (
+            <ProfileNameBlock href={profileHref} profile={post.profile} />
+          )}
           <Link asChild href={detailHref}>
             <Pressable accessibilityRole="link" style={styles.timeLink}>
-              <Text style={[styles.time, { color: theme.textSecondary }]}>
+              <Text
+                style={[
+                  styles.time,
+                  notification && styles.notificationTime,
+                  { color: theme.textSecondary },
+                ]}
+              >
                 {formatTimelineTimestamp(post.createdAt)}
               </Text>
             </Pressable>
           </Link>
         </View>
+        {notification ? (
+          <Text style={[styles.notificationReason, { color: theme.textSecondary }]}>
+            회원님의 게시글에 답글을 남겼습니다
+          </Text>
+        ) : null}
         {post.content ? (
           <View style={styles.bodyLink}>
             <PostBody
@@ -374,6 +415,9 @@ function PostListRow({
               post={post}
             />
           </View>
+        ) : null}
+        {notification && post.repostSource ? (
+          <PostSourcePreview source={post.repostSource} />
         ) : null}
         <PostActionSurface
           actionBarStyle={actionBarStyle}
@@ -422,6 +466,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   timeLink: { borderRadius: radii.sm, flexShrink: 0 },
+  notificationAuthor: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.xs,
+    minHeight: Platform.OS === 'web' ? 24 : Platform.OS === 'android' ? 48 : 44,
+    overflow: 'hidden',
+  },
+  notificationName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md, flexShrink: 1 },
+  notificationHandle: { fontFamily: 'SUIT', ...typography.sm, flex: 1, minWidth: 0 },
+  notificationReason: { fontFamily: 'SUIT', ...typography.sm },
+  notificationTime: {
+    minHeight: Platform.OS === 'web' ? 24 : Platform.OS === 'android' ? 48 : 44,
+    minWidth: Platform.OS === 'web' ? 24 : Platform.OS === 'android' ? 48 : 44,
+    paddingTop: 0,
+  },
   time: {
     fontFamily: 'SUIT',
     minHeight: 44,

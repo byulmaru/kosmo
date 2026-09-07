@@ -29,7 +29,7 @@ type ActorSummary = {
   children?: never;
 };
 
-export type NotificationListItemViewProps = {
+type GroupedNotificationProps = {
   href: Href;
   onNavigate?: () => void;
   timestamp: string;
@@ -39,27 +39,77 @@ export type NotificationListItemViewProps = {
 } & (
   | (ActorSummary & { kind: 'follow' | 'followRequest'; preview?: never })
   | (ActorSummary & { kind: 'reaction' | 'repost'; preview: Preview | null })
+);
+
+export type NotificationListItemViewProps =
+  | GroupedNotificationProps
   | {
       kind: 'reply';
-      actor: Actor;
-      /** Compose the existing PostListItem with showDivider={false}. */
+      unread?: boolean;
+      /** Compose PostListItem with notification="reply" and showDivider={false}. */
       children: ReactElement;
+      actor?: never;
       actors?: never;
       totalActorCount?: never;
       preview?: never;
-    }
-);
+      href?: never;
+      timestamp?: never;
+      onNavigate?: never;
+      disabled?: never;
+      pending?: never;
+    };
 
 const actions = {
   follow: '팔로우했습니다',
   followRequest: '팔로우를 요청했습니다',
   reaction: '이 게시글에 반응했습니다',
   repost: '이 게시글을 재게시했습니다',
-  reply: '답글을 남겼습니다',
 } as const;
 
-/** Presentation only. The consumer owns navigation, Read and pending state. */
+/** Presentation only. The consumer owns navigation and Read state. */
 export function NotificationListItemView(props: NotificationListItemViewProps) {
+  const theme = useTheme();
+  const web = Platform.OS === 'web';
+  const unread = props.unread ?? false;
+  const [hovered, setHovered] = useState(false);
+  return (
+    <PostContentPrivacyBoundary
+      style={[styles.root, { borderBottomColor: theme.borderSubtle }]}
+      testID="notification-list-item"
+    >
+      <View
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+        style={{
+          backgroundColor: web && unread ? theme.actionPrimarySubtle : 'transparent',
+        }}
+        testID="notification-item-surface"
+      >
+        {web && hovered ? (
+          <View
+            aria-hidden
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { backgroundColor: theme.stateHover }]}
+            testID="notification-hover-overlay"
+          />
+        ) : null}
+        {props.kind === 'reply' ? (
+          <>
+            {unread ? <Text style={styles.srOnly}>읽지 않은 알림</Text> : null}
+            {props.children}
+          </>
+        ) : (
+          <NotificationTarget {...props} />
+        )}
+        {web && unread ? (
+          <View style={[styles.unreadRail, { backgroundColor: theme.actionPrimaryBase }]} />
+        ) : null}
+      </View>
+    </PostContentPrivacyBoundary>
+  );
+}
+
+function NotificationTarget(props: GroupedNotificationProps) {
   const {
     disabled = false,
     href,
@@ -72,18 +122,14 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
   const theme = useTheme();
   const web = Platform.OS === 'web';
   const [focusVisible, setFocusVisible] = useState(false);
-  const [hovered, setHovered] = useState(false);
   const blocked = disabled || pending;
-  const actors = kind === 'reply' ? [props.actor] : props.actors;
+  const actors = props.actors;
   const actor = actors[0];
   const suppliedCount = props.totalActorCount ?? actors.length;
-  const count =
-    kind === 'reply'
-      ? 1
-      : Math.max(
-          actors.length,
-          Number.isFinite(suppliedCount) ? Math.floor(suppliedCount) : actors.length,
-        );
+  const count = Math.max(
+    actors.length,
+    Number.isFinite(suppliedCount) ? Math.floor(suppliedCount) : actors.length,
+  );
   const otherCount = count - 1;
   const subject = `${actor.name}${otherCount > 0 ? ` 외 ${otherCount}명이` : '님이'}`;
   const destination =
@@ -157,30 +203,21 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
         } as ViewStyle,
       ]}
     >
-      <View style={[styles.row, web && styles.webRow, kind === 'reply' && styles.replyRow]}>
+      <View style={[styles.row, web && styles.webRow]}>
         <View
           aria-hidden
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
-          style={[styles.kind, kind === 'reply' && styles.replyKind]}
+          style={styles.kind}
         >
-          {kind === 'reply' ? avatarStack : <KindIcon color={iconColor} size={32} />}
+          <KindIcon color={iconColor} size={32} />
         </View>
-        <View style={[styles.summary, kind === 'reply' && styles.replySummary]}>
-          {kind === 'reply' ? (
-            <>
-              {copy}
-              {time}
-            </>
-          ) : (
-            <>
-              <View style={styles.avatarAndTime}>
-                {avatarStack}
-                {time}
-              </View>
-              {copy}
-            </>
-          )}
+        <View style={styles.summary}>
+          <View style={styles.avatarAndTime}>
+            {avatarStack}
+            {time}
+          </View>
+          {copy}
         </View>
       </View>
       {preview !== undefined ? (
@@ -198,46 +235,19 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
     </Pressable>
   );
 
-  return (
-    <PostContentPrivacyBoundary
-      style={[styles.root, { borderBottomColor: theme.borderSubtle }]}
-      testID="notification-list-item"
-    >
-      <View
-        onPointerEnter={() => setHovered(true)}
-        onPointerLeave={() => setHovered(false)}
-        style={{
-          backgroundColor: web && unread ? theme.actionPrimarySubtle : 'transparent',
-        }}
-        testID="notification-item-surface"
-      >
-        {web && hovered ? (
-          <View
-            aria-hidden
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFillObject, { backgroundColor: theme.stateHover }]}
-            testID="notification-hover-overlay"
-          />
-        ) : null}
-        {blocked ? (
-          target
-        ) : (
-          <Link asChild href={href}>
-            {target}
-          </Link>
-        )}
-        {kind === 'reply' ? props.children : null}
-        {web && unread ? (
-          <View style={[styles.unreadRail, { backgroundColor: theme.actionPrimaryBase }]} />
-        ) : null}
-      </View>
-    </PostContentPrivacyBoundary>
+  return blocked ? (
+    target
+  ) : (
+    <Link asChild href={href}>
+      {target}
+    </Link>
   );
 }
 
 const styles = StyleSheet.create({
   root: { borderBottomWidth: borderWidths[1], minWidth: 0, width: '100%' },
   target: { minWidth: 0 },
+  srOnly: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', left: 0, top: 0 },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -261,9 +271,6 @@ const styles = StyleSheet.create({
   overlap: { marginLeft: -space[12] },
   copy: { ...textStyles.uiCopyM, flexShrink: 1, minWidth: 0 },
   time: { ...textStyles.uiCopyS, flexShrink: 0 },
-  replyRow: { paddingTop: space[8], minHeight: Platform.OS === 'android' ? 48 : 44 },
-  replyKind: { alignItems: 'flex-end', height: 28 },
-  replySummary: { alignItems: 'center', flexDirection: 'row', minHeight: 20 },
   preview: {
     flexDirection: 'row',
     gap: space[12],

@@ -98,6 +98,9 @@ Repost Notification의 Source Repost는 알림을 만든 원인 Repost Post다. 
 이슈와 필요한 OpenSpec scenario에 아래 정책을 연결하고 검증한다.
 
 - 분류 기준은 해당 Post가 답글인지 여부만이 아니라 각 Recipient와 원인 Post의 관계다.
+- Mention의 source와 Related Post는 Recipient를 멘션한 원인 Post이며, Related Profile은 그 Post의
+  Author Profile이다. 같은 원인 Post에서 같은 Recipient를 여러 번 멘션해도 source는 하나이며,
+  동일 source·Recipient 쌍에 Mention Notification은 최대 하나만 존재한다.
 - Recipient의 Post에 답하면서 같은 Recipient를 멘션한 경우, 같은 원인 Post에 대해 해당 Recipient에게
   Reply Notification 하나만 생성하고 Mention Notification을 중복 생성하지 않는다.
 - 타인의 Post에 답하면서 Recipient를 멘션한 경우, 해당 Recipient에게는 Mention Notification이다.

@@ -15,7 +15,7 @@ PROD-811이 실제 목록 연결, Relay projection·그룹 집계, 읽음 처리
 Reply다. Mention은 Future 표본이므로 public props와 Playground에 노출하지 않는다.
 
 2026-09-08 사용자 승인으로 Reply/Mention의 Figma 표본을 아래 표시 계약으로 갱신했다.
-이 계약의 코드·Storybook·Tailnet 반영은 아직 완료되지 않았다. Mention의 디자인 승인은
+Reply 계약은 로컬 코드·Storybook에 반영했으며 Tailnet은 이전 빌드를 유지한다. Mention의 디자인 승인은
 API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는다.
 
 ## 표시와 합성
@@ -65,25 +65,31 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
   [Notification 도메인의 Future 계약](../domain/objects/notification.md#replymention-수신자별-분류와-중복-처리-future)을 따른다.
 - Reply는 실제 Post 컴포넌트와 기존 Action Bar를 재사용한다. Post action/provider·Relay ref는
   기존 Post 계약을 따르며 action을 알림 이동 링크 안에 중첩하지 않는다. 단일 하단 divider는
-  Notification wrapper가 소유한다. 기존 `children`·attribution 합성 방식의 구체적 조정은 코드 반영 시
-  이 표시 계약에 맞춰 결정한다.
-- pending/disabled는 알림 이동을 차단한다. consumer가 pending 수명을 소유하며, presentation에서
-  읽음 mutation·cache 또는 실패 복구 정책을 실행하지 않는다. Reply Post action의 상태는 해당 Post가
-  소유한다. 권한 상실로 Post를 숨겨야 하면 consumer가 전체 item을 제거해야 한다.
+  Notification wrapper가 소유한다. Reply wrapper는 `children`과 `unread`만 받으며, 자식은
+  `PostListItem`의 `notification="reply"`와 `showDivider={false}`로 합성한다. 게시글 identity와 이동은
+  Post가 소유하므로 wrapper에 actor·timestamp·별도 이동 props를 중복 전달하지 않는다.
+- Follow/FollowRequest/Reaction/Repost의 pending/disabled는 알림 이동을 차단한다. consumer가 pending
+  수명을 소유하며 presentation에서 읽음 mutation·cache 또는 실패 복구 정책을 실행하지 않는다.
+  Reply의 이동과 Post action 상태는 해당 Post가 소유한다. 권한 상실로 Post를 숨겨야 하면 consumer가
+  전체 item을 제거해야 한다.
 
 ## 검증 경계
 
 2026-09-08 Figma에서 Reply의 Light/Dark·긴 이름·읽음/읽지 않음 표본과 Mention의 Light/Dark
-표본을 시각 확인했다. 아래 기존 Storybook 검증은 변경 전 구현에 대한 것이므로 새 계약의 통과
-증거로 재사용하지 않는다. 코드 반영 시 중복 header 제거, 이름·핸들 overflow, 알림 이유 문구,
-원글 미리보기 부재, Action Bar의 독립 동작과 unread/hover 범위를 다시 검증해야 한다.
+표본을 시각 확인했다. 새 Reply Storybook에서 중복 header 제거, 이름·핸들 overflow, 알림 이유 문구,
+Reply Parent 미리보기 부재, Action Bar의 독립 동작과 unread/hover 범위를 다시 검증한다.
+답글 자체가 Quote를 포함하는 경우 기존 인용 내용은 유지하며 Reply Parent 미리보기와 구분한다.
+Web 자동화는 Native 실제 기기의 touch·focus 검증을 대체하지 않는다.
 
 PROD-811 통합 시 [현행 Notification OpenSpec](../../openspec/specs/notification/spec.md)의 기존
 Follow 표시 scenario(28px kind icon·image avatar와 복수 사용자 aggregation 없음)와 새 presentation의
-차이를 정렬한다. 이 문서의 target 계약만으로 기존 runtime scenario나 완료 task를 변경하지 않는다.
+차이를 정렬한다. 공통 `Web pointer hover`와 Follow 전용 `Read와 Unread 표시` scenario의 기존
+`surface` 배경도 Read/Unread 기본 배경 위에 `stateHover`를 얹는 계약으로 함께 갱신한다.
+이 문서의 target 계약만으로 기존 runtime scenario나 완료 task를 변경하지 않는다.
 
 개별 스토리 기본 폭은 실제 앱 중앙 열의 최대 폭과 같은 600px이며 좁은 화면에서는 가용 폭으로 줄어든다.
-Controls에서 320·390·600·720px 또는 전체 폭을 선택할 수 있다. LongContent만 320px를 기본값으로 쓴다.
+Controls에서 320·390·600·720px 또는 전체 폭을 선택할 수 있다. LongContent와 ReplyLongName은
+320px를 기본값으로 쓴다.
 `Screens/Notifications/Presentation`에는 PageHeader와 알림 5종을 조립해 목록 밀도와 읽음 상태를
 검토한다. 해당 화면의 모두 읽음은 로컬 표시 상태만 변경하며 실제 mutation 통합을 입증하지 않는다.
 

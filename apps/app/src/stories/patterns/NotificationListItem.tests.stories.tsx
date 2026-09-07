@@ -3,6 +3,8 @@ import baseMeta, {
   CompositionContract as composition,
   PendingContract as pending,
   ProtectionContract as protection,
+  ReplyLayoutContract as replyLayout,
+  ReplyQuoteContract as replyQuote,
 } from './NotificationListItem.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { NotificationStoryArgs } from './NotificationListItem.stories';
@@ -19,3 +21,5 @@ export const ActivationContract: Story = activation;
 export const PendingContract: Story = pending;
 export const CompositionContract: Story = composition;
 export const ProtectionContract: Story = protection;
+export const ReplyLayoutContract: Story = replyLayout;
+export const ReplyQuoteContract: Story = replyQuote;
