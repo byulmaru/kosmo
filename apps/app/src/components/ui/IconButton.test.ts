@@ -361,3 +361,12 @@ test('visual feedback is opt-in and explicit opacity feedback preserves prior st
   assert.equal(defaultStyle.opacity, undefined);
   assert.equal(opacityStyle.opacity, 0.45);
 });
+
+test('default target has a bounded square size in a stretching parent', () => {
+  const button = renderIconButton({ accessibilityLabel: 'More', children: '+', targetSize: 32 });
+  const style = flattenStyle(
+    (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: false }),
+  );
+  assert.equal(style.width, 32);
+  assert.equal(style.height, 32);
+});

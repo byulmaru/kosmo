@@ -9,15 +9,30 @@ import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, breakpoints, iconSizes, textStyles } from '@/theme/tokens';
+import type { ComponentProps } from 'react';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 
 export type ProfileMuteFeedback = { muted: boolean; status: 'success' | 'error' };
+export type ProfileMuteControl = {
+  muted: boolean;
+  onChangeMuted: (muted: boolean) => Promise<void>;
+  onFeedback?: (feedback: ProfileMuteFeedback) => void;
+};
 type Props = {
   displayName: string;
   onChangeMuted: (muted: boolean) => Promise<void>;
   onFeedback?: (feedback: ProfileMuteFeedback) => void;
   profileId: string;
   /** Menu on the profile, button in management, text in the ProfileHero status row. */
-} & ({ surface?: 'menu'; muted: boolean } | { surface: 'button' | 'text'; muted: true });
+} & (
+  | {
+      surface?: 'menu';
+      muted: boolean;
+      items?: readonly ActionMenuItem[];
+      renderTrigger?: ComponentProps<typeof ActionMenu>['renderTrigger'];
+    }
+  | { surface: 'button' | 'text'; muted: true; items?: never; renderTrigger?: never }
+);
 
 export function ProfileMuteAction(props: Props) {
   // A changed target owns a fresh request lifecycle; old completions cannot update its feedback.
@@ -30,6 +45,8 @@ function ProfileMuteActionContent({
   onChangeMuted,
   onFeedback,
   surface = 'menu',
+  items = [],
+  renderTrigger,
 }: Props) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
@@ -39,22 +56,25 @@ function ProfileMuteActionContent({
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
   const mounted = useRef(false);
   const cancelRef = useRef<View>(null);
   const actionRef = useRef<View>(null);
   const focusTrigger = useRef<() => void>(() => {});
-  const restoreFocus = useRef<'cancel' | 'trigger' | null>(null);
+  const restoreFocus = useRef(false);
+  const completed = useRef<ProfileMuteFeedback | null>(null);
+  const restoreTriggerFocus = () => {
+    if (surface === 'menu') {
+      focusTrigger.current();
+    } else {
+      actionRef.current?.focus();
+    }
+  };
   useEffect(() => {
     if (!pending && restoreFocus.current) {
-      if (restoreFocus.current === 'cancel') {
-        cancelRef.current?.focus();
-      } else if (surface === 'menu') {
-        focusTrigger.current();
-      } else {
-        actionRef.current?.focus();
-      }
-      restoreFocus.current = null;
+      cancelRef.current?.focus();
+      restoreFocus.current = false;
     }
   }, [pending, surface]);
   useEffect(() => {
@@ -74,6 +94,7 @@ function ProfileMuteActionContent({
     }
     inFlight.current = true;
     setPending(true);
+    setError(null);
     let succeeded = false;
     try {
       await onChangeMuted(nextMuted);
@@ -84,26 +105,24 @@ function ProfileMuteActionContent({
     if (!mounted.current) {
       return;
     }
-    inFlight.current = false;
-    restoreFocus.current = nextMuted ? (succeeded ? null : 'cancel') : 'trigger';
+    if (!succeeded) {
+      inFlight.current = false;
+    }
+    restoreFocus.current = !succeeded;
     setPending(false);
     if (succeeded) {
       setOpen(false);
     }
-    showToast(
-      succeeded
-        ? `${displayName} 님이 ${nextMuted ? '뮤트되었어요' : '뮤트 해제되었어요'}`
-        : `${nextMuted ? '뮤트하지' : '뮤트를 해제하지'} 못했어요. 다시 시도해 주세요.`,
-      { tone: succeeded ? 'success' : 'danger' },
-    );
-    onFeedback?.({ muted: nextMuted, status: succeeded ? 'success' : 'error' });
+    if (succeeded) {
+      completed.current = { muted: nextMuted, status: 'success' };
+    } else {
+      setError(`${nextMuted ? '뮤트하지' : '뮤트를 해제하지'} 못했어요. 다시 시도해 주세요.`);
+      onFeedback?.({ muted: nextMuted, status: 'error' });
+    }
   };
   const activate = () => {
-    if (muted) {
-      void request(false);
-    } else {
-      setOpen(true);
-    }
+    setError(null);
+    setOpen(true);
   };
   const label = muted ? '뮤트 해제' : '뮤트';
   const targetHeight =
@@ -118,14 +137,23 @@ function ProfileMuteActionContent({
     <>
       {surface === 'menu' ? (
         <ActionMenu
-          accessibilityLabel="프로필 뮤트 메뉴"
+          accessibilityLabel="더보기"
           disabled={pending}
-          items={[{ icon: muted ? Volume2 : VolumeOff, key: 'mute', label, onSelect: activate }]}
-          renderTrigger={({ expanded, focusTrigger: focus, onPress, ref }) => {
+          items={[
+            ...items,
+            { icon: muted ? Volume2 : VolumeOff, key: 'mute', label, onSelect: activate },
+          ]}
+          webHorizontalPlacement="end"
+          webVerticalPlacement="after"
+          renderTrigger={(trigger) => {
+            const { expanded, focusTrigger: focus, onPress, ref } = trigger;
             focusTrigger.current = focus;
+            if (renderTrigger) {
+              return renderTrigger(trigger);
+            }
             return (
               <IconButton
-                accessibilityLabel="프로필 뮤트 메뉴"
+                accessibilityLabel="더보기"
                 accessibilityState={{ expanded, busy: pending }}
                 aria-haspopup="menu"
                 aria-expanded={expanded}
@@ -212,20 +240,47 @@ function ProfileMuteActionContent({
       <ModalSheet
         dismissDisabled={pending}
         onClose={close}
-        onDismiss={() => focusTrigger.current()}
+        onDismiss={() => {
+          if (!mounted.current) {
+            return;
+          }
+          inFlight.current = false;
+          restoreTriggerFocus();
+          const feedback = completed.current;
+          completed.current = null;
+          if (feedback) {
+            showToast(
+              `${displayName} 님이 ${feedback.muted ? '뮤트되었어요' : '뮤트 해제되었어요'}`,
+              { tone: 'success' },
+            );
+            onFeedback?.(feedback);
+          }
+        }}
         onShow={() => cancelRef.current?.focus()}
-        title="이 프로필을 뮤트할까요?"
+        title={muted ? '이 프로필을 뮤트 해제할까요?' : '이 프로필을 뮤트할까요?'}
         visible={open}
       >
         <ConfirmationContent
           cancelLabel="취소"
           cancelRef={cancelRef}
-          confirmLabel="뮤트"
-          message="홈과 해시태그에서 이 프로필의 게시물이 숨겨지고 새 알림을 받지 않아요. 팔로우 관계는 유지돼요."
+          confirmLabel={label}
+          message={
+            muted
+              ? `${displayName} 님의 게시물이 타임라인에 다시 표시되고 새 알림을 받을 수 있어요. 팔로우 관계는 유지돼요.`
+              : '홈과 해시태그에서 이 프로필의 게시물이 숨겨지고 새 알림을 받지 않아요. 팔로우 관계는 유지돼요.'
+          }
           onCancel={close}
-          onConfirm={() => void request(true)}
+          onConfirm={() => void request(!muted)}
           pending={pending}
         />
+        {error ? (
+          <Text
+            accessibilityRole="alert"
+            style={[textStyles.uiCopyS, { color: theme.feedbackDangerOnSubtle }]}
+          >
+            {error}
+          </Text>
+        ) : null}
       </ModalSheet>
     </>
   );

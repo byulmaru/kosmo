@@ -8,6 +8,14 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 ## Profile action과 완료 피드백
 
 - Mute는 `이 프로필을 뮤트할까요?` 확인을 거친 뒤 실행한다. 취소하면 Profile과 관계 상태를 바꾸지 않는다.
+- Mute 해제도 `이 프로필을 뮤트 해제할까요?` 확인을 거친다. `{표시 이름} 님의 게시물이 타임라인에 다시
+표시되고 새 알림을 받을 수 있어요. 팔로우 관계는 유지돼요.`를 안내하고 `취소`·`뮤트 해제`를 제공한다.
+  취소 시 요청하지 않으며 확인 후 성공한 경우에만 상태를 바꾸고 `{표시 이름} 님이 뮤트 해제되었어요`
+  Toast를 표시한다. 이 확인 흐름은 2026-09-06 사용자 검토에서 확정했으며 기존 Figma loaded 관리 목록은
+  해제 확인창 자체의 증거가 아니다.
+- 프로필에서는 FollowButton 옆 더보기 메뉴에 프로필 링크 복사와 뮤트를 합성한다. 게시글에서는 기존
+  더보기 메뉴의 링크 복사와 함께 작성자 뮤트를 제공한다. 더보기 입력 target은 아이콘 버튼의 크기를
+  유지하고 Web 메뉴는 해당 target을 기준으로 배치한다.
 - Mute가 성공하면 기존 공용 Toast에 `{표시 이름} 님이 뮤트되었어요`를 표시하고 Mute 관리 action을
   `뮤트 해제`로 전환한다. `ProfileHero` 상단 Action SLOT의 관계 action은 바꾸지 않으며, 성공 전에 상태나
   Toast를 낙관적으로 확정하지 않는다.
@@ -131,7 +139,7 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 관리 목록은 `MutedProfileList`, 행 표시는 기존 Relay `ProfileListItem`과 공유하는 `ProfileListItemContent`를 사용한다.
 Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목록은 이름·핸들 기본 표시를 사용한다.
 행의 action은 `children`으로 합성하며, FollowButton의 Web·Native 크기 선택은 Relay wrapper가 유지한다.
-`ProfileHero.mute`는 서버 확정 뮤트 상태에서만 제공하고, loading에서는 내부 상태행을 표시하지 않는다.
+`ProfileHero.mute.muted`에는 서버 확정 상태를 전달하고, loading에서는 메뉴·상태행을 표시하지 않는다.
 
 - 요청 callback은 성공할 때 resolve하고 실패할 때 reject한다. 성공 feedback이 전달되기 전에는 낙관적으로
   상태를 전환하거나 목록 항목을 제거하지 않는다. `onFeedback`은 요청의 성공/실패를 관찰하며 성공 이후의
@@ -141,8 +149,16 @@ Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목
 - 직접 확인하는 loaded 화면은 [Mobile](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8075),
   [Compact](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-24942),
   [Full](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25436)이다.
-- `KOSMO/Patterns/Profile/Mute Action`과 `Muted Profiles`의 Playground는 수동 Controls·Actions,
-  각 Tests 하위는 자동 interaction을 소유한다. ProfileHero의 muted 상태도 기존 component title에서 검증한다.
+- `KOSMO/Patterns/ProfileHero`, `KOSMO/Patterns/Post/Mute`, `KOSMO/Patterns/Profile/Muted Profiles`에서
+  실제 프로필·게시글·관리 목록 맥락으로 검토한다. 단독 Mute Action Playground는 유지하지 않는다.
+  Playground는 수동 Controls·Actions, 각 Tests 하위는 자동 interaction을 소유한다.
+- 뮤트·해제 확인창의 초기 focus는 취소이며 pending에는 중복 요청·dismiss를 막는다. 실패 시 확인창과
+  확정 관계를 유지하고 확인창 안의 alert로 오류를 안내하며 취소로 focus를 복구한다. 성공 후 확인창이
+  닫힌 다음 완료 Toast와 feedback을 전달하며,
+  제거되는 관리 행 대신 목록 heading, 제거되는 ProfileHero 상태행 대신 팔로잉 링크로 focus를 옮긴다.
+- `ProfileHero.mute`는 현재 확정 상태와 mutation callback을 함께 받는다. `PostLayout.mute`는 해당
+  더보기 메뉴 작성자의 Profile ID까지 명시하며 selected Profile 자신 또는 다른 작성자에는 노출하지
+  않는다. 실제 mutation·Relay 연결은 PROD-814 소유다.
 - Current: 위 공용 컴포넌트와 Storybook 검증 표면. Target: 실제 Profile/Settings route에서의 사용.
   Product not implemented: 뮤트 storage·GraphQL·content policy·Relay 연동 및 Web/iOS/Android 종단 간 검증.
   PROD-824·825·814의 완료나 `add-profile-mute` OpenSpec 전체 완료를 뜻하지 않는다.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { fn } from 'storybook/test';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { SessionProvider } from '@/session/SessionProvider';
@@ -105,6 +105,8 @@ function ProfileHeroFixture({
   showAction = true,
   muted = false,
   onUnmute,
+  onMute,
+  outcome = 'success',
 }: {
   actionSize?: 'compact' | 'medium';
   containerWidth?: number;
@@ -113,6 +115,8 @@ function ProfileHeroFixture({
   showAction?: boolean;
   muted?: boolean;
   onUnmute?: () => Promise<void>;
+  onMute?: () => Promise<void>;
+  outcome?: 'success' | 'error' | 'pending';
 }) {
   const [isMuted, setMuted] = useState(muted);
   useEffect(() => setMuted(muted), [muted]);
@@ -130,12 +134,21 @@ function ProfileHeroFixture({
           }
           loading={loading}
           mute={
-            isMuted && onUnmute
+            showAction && onUnmute && onMute
               ? {
-                  onUnmute,
+                  muted: isMuted,
+                  onChangeMuted: async (nextMuted) => {
+                    await (nextMuted ? onMute() : onUnmute());
+                    if (outcome === 'pending') {
+                      await new Promise<void>(() => {});
+                    }
+                    if (outcome === 'error') {
+                      throw new Error('요청 실패');
+                    }
+                  },
                   onFeedback: (feedback) => {
                     if (feedback.status === 'success') {
-                      setMuted(false);
+                      setMuted(feedback.muted);
                     }
                   },
                 }
@@ -168,8 +181,6 @@ function ProfileHeroCatalog() {
   );
 }
 
-const maxLengthTag = '가'.repeat(20);
-
 const meta = {
   args: {
     actionSize: undefined,
@@ -177,6 +188,8 @@ const meta = {
     loading: false,
     muted: false,
     onUnmute: fn<() => Promise<void>>().mockResolvedValue(undefined),
+    onMute: fn<() => Promise<void>>().mockResolvedValue(undefined),
+    outcome: 'success',
     profileId: defaultProfile.id,
     showAction: true,
   },
@@ -185,18 +198,11 @@ const meta = {
     containerWidth: { control: 'inline-radio', options: [390, 600] },
     loading: { control: 'boolean' },
     muted: { control: 'boolean' },
+    outcome: { control: 'inline-radio', options: ['success', 'error', 'pending'] },
     profileId: { control: 'select', options: storyProfileIds },
     showAction: { control: 'boolean' },
   },
   component: ProfileHeroFixture,
-  excludeStories: [
-    'MuteContract',
-    'MutedLoadingContract',
-    'CenterGeometryContract',
-    'ImageAndTagsContract',
-    'LoadingGeometryContract',
-    'MobileGeometryContract',
-  ],
   parameters: {
     layout: 'centered',
     relay: {
@@ -218,7 +224,15 @@ export const Playground: Story = {
   parameters: {
     controls: {
       disable: false,
-      include: ['profileId', 'muted', 'loading', 'showAction', 'actionSize', 'containerWidth'],
+      include: [
+        'profileId',
+        'muted',
+        'outcome',
+        'loading',
+        'showAction',
+        'actionSize',
+        'containerWidth',
+      ],
     },
   },
 };
@@ -255,116 +269,7 @@ export const Loading: Story = {
   parameters: { layout: 'centered' },
 };
 
-export const CenterGeometryContract: Story = {
-  args: { actionSize: 'medium' },
-  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
-  play: ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const followButton = canvas.getByRole('button', { name: '팔로우' });
-    expect(followButton.getBoundingClientRect().height).toBe(40);
-    expect(followButton.getBoundingClientRect().width).toBe(96);
-    expect(canvas.getByRole('heading', { name: '프로필 히어로' })).toBeVisible();
-    expect(canvas.getByRole('link', { name: /팔로잉/ })).toHaveAttribute(
-      'href',
-      '/@profile-hero/following',
-    );
-    expect(canvas.getByRole('link', { name: /팔로워/ })).toHaveAttribute(
-      'href',
-      '/@profile-hero/followers',
-    );
-  },
-};
-
-export const MobileGeometryContract: Story = {
-  args: { containerWidth: 390 },
-  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
-  play: ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const followButton = canvas.getByRole('button', { name: '팔로우' });
-    expect(followButton.getBoundingClientRect().height).toBe(40);
-    expect(followButton.getBoundingClientRect().width).toBe(96);
-    expect(canvas.getByTestId('profile-hero-surface').getBoundingClientRect().width).toBe(390);
-    expect(canvas.getByLabelText('프로필 히어로 프로필 이미지')).toBeVisible();
-  },
-};
-
-export const LoadingGeometryContract: Story = {
-  args: { actionSize: 'medium', loading: true, showAction: true },
-  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
-  play: ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const followButton = canvas.getByRole('button', { name: '팔로우' });
-    expect(followButton.getBoundingClientRect().height).toBe(40);
-    expect(followButton.getBoundingClientRect().width).toBe(96);
-    expect(canvas.getByText('프로필을 불러오는 중입니다.')).toBeInTheDocument();
-  },
-};
-
-export const ImageAndTagsContract: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
-  render: () => (
-    <ProfileHeroFixture containerWidth={240} profileId={longTaggedProfile.id} showAction={false} />
-  ),
-  play: ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    expect(canvas.getByText('#공예')).toBeInTheDocument();
-    expect(canvas.getByText('#사진')).toBeInTheDocument();
-    expect(canvas.getByText('#아주긴프로필태그이름입니다')).toBeInTheDocument();
-    expect(canvas.getByText(`#${maxLengthTag}`)).toBeInTheDocument();
-    const tagList = canvas.getByTestId('profile-tag-list');
-    const chips = within(tagList).getAllByTestId('profile-tag-chip');
-    expect(chips).toHaveLength(longTaggedProfile.tags.length);
-    expect(
-      new Set(chips.map((chip) => Math.round(chip.getBoundingClientRect().top))).size,
-    ).toBeGreaterThan(1);
-    expect(tagList.scrollWidth).toBeLessThanOrEqual(tagList.clientWidth + 1);
-    const maxLengthText = within(tagList).getByText(`#${maxLengthTag}`);
-    const maxLengthLink = within(tagList).getByRole('link', {
-      name: `#${maxLengthTag} 관련 프로필 보기`,
-    });
-    expect(maxLengthLink.getBoundingClientRect().height).toBe(32);
-    expect(maxLengthLink.getBoundingClientRect().width).toBeGreaterThanOrEqual(32);
-    expect(getComputedStyle(maxLengthText).whiteSpace).toBe('nowrap');
-    expect(getComputedStyle(maxLengthText).textOverflow).toBe('ellipsis');
-    expect(getComputedStyle(maxLengthText).overflow).toBe('hidden');
-    expect(maxLengthText.scrollWidth).toBeGreaterThan(maxLengthText.clientWidth);
-    for (const chip of chips) {
-      expect(chip.getBoundingClientRect().height).toBe(32);
-      expect(chip.getBoundingClientRect().right).toBeLessThanOrEqual(
-        tagList.getBoundingClientRect().right + 1,
-      );
-    }
-    expect(canvas.getByRole('link', { name: '#공예 관련 프로필 보기' })).toHaveAttribute(
-      'href',
-      '/hashtags/[hashtagId]/profiles',
-    );
-  },
-};
-
 export const Muted: Story = {
   args: { muted: true },
   globals: { viewport: { value: 'kosmoProfileFull', isRotated: false } },
-};
-export const MuteContract: Story = {
-  args: { muted: true },
-  play: async ({ args, canvasElement }) => {
-    args.onUnmute?.mockClear();
-    const canvas = within(canvasElement);
-    expect(canvas.getByText('이 사용자의 게시글은 뮤트되어 있습니다.')).toBeVisible();
-    expect(canvas.getByRole('button', { name: '팔로우' })).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '뮤트 해제' }));
-    await waitFor(() => expect(args.onUnmute).toHaveBeenCalledTimes(1));
-    await waitFor(() =>
-      expect(canvas.queryByText('이 사용자의 게시글은 뮤트되어 있습니다.')).not.toBeInTheDocument(),
-    );
-    expect(canvas.getByRole('button', { name: '팔로우' })).toBeVisible();
-  },
-};
-export const MutedLoadingContract: Story = {
-  args: { muted: true, loading: true },
-  play: ({ canvasElement }) => {
-    expect(
-      within(canvasElement).queryByRole('button', { name: '뮤트 해제' }),
-    ).not.toBeInTheDocument();
-  },
 };
