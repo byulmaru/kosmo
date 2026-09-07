@@ -24,6 +24,7 @@
     "web": "expo start --web --port 5173"
   },
   "dependencies": {
+    "@formatjs/intl-relativetimeformat": "^12.3.13",
     "@kosmo/core": "workspace:*",
     "@sentry/react": "^10.66.0",
     "@sentry/react-native": "^8.24.0",

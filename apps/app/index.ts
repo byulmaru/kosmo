@@ -1,5 +1,7 @@
 // `@expo/metro-runtime` MUST be the first import to ensure Fast Refresh works.
 import '@expo/metro-runtime';
+import '@formatjs/intl-relativetimeformat/polyfill-force.js';
+import '@formatjs/intl-relativetimeformat/locale-data/ko.js';
 
 import { App } from 'expo-router/build/qualified-entry';
 import { renderRootComponent } from 'expo-router/build/renderRootComponent';

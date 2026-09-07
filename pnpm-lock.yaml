@@ -236,6 +236,9 @@ importers:
 
   apps/app:
     dependencies:
+      '@formatjs/intl-relativetimeformat':
+        specifier: ^12.3.13
+        version: 12.3.13
       '@kosmo/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -1564,6 +1567,15 @@ packages:
 
   '@fontsource-variable/inter@5.3.0':
     resolution: {integrity: sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA==}
+
+  '@formatjs/fast-memoize@3.1.7':
+    resolution: {integrity: sha512-zXfhLpvA6T7+efdt9JLbBwZ00tT7NsBMDVnDu8rpHeNNv8KfRZAMo2gkG0k9lK/Nzc//3kJ9pImsfuJxk3KhUA==}
+
+  '@formatjs/intl-localematcher@0.8.13':
+    resolution: {integrity: sha512-kHEAFOkeJSPNi7c5PaKaRjxcBrJwzzt81ifUu+8uve1EDW/VJl83KsxmqgqNZLzcFEhSliZGvx3+pk/RH0IOmg==}
+
+  '@formatjs/intl-relativetimeformat@12.3.13':
+    resolution: {integrity: sha512-qgH6XQugzCrFyZIMvhi5xlk6JcJxyF87kcWzH8XT6X8oJQpdljt4xQSsF55TjaRHhi+iK1Nu7YAI9QkNGF7L2g==}
 
   '@graphql-tools/executor@1.5.3':
     resolution: {integrity: sha512-mgBFC0bsrZPZLu9EnydpMnAuQ8Iiq0CEbUcsmvXsm2/iYektGHDN/+bmb7hicA6dWZtdPfklYJmr21WD0GnOfA==}
@@ -9407,6 +9419,16 @@ snapshots:
   '@floating-ui/utils@0.2.12': {}
 
   '@fontsource-variable/inter@5.3.0': {}
+
+  '@formatjs/fast-memoize@3.1.7': {}
+
+  '@formatjs/intl-localematcher@0.8.13':
+    dependencies:
+      '@formatjs/fast-memoize': 3.1.7
+
+  '@formatjs/intl-relativetimeformat@12.3.13':
+    dependencies:
+      '@formatjs/intl-localematcher': 0.8.13
 
   '@graphql-tools/executor@1.5.3(graphql@16.14.0)':
     dependencies:
