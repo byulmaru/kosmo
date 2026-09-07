@@ -17,6 +17,7 @@ import { PostSourcePreview } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
 import type { LayoutChangeEvent } from 'react-native';
+import type { ProfileMuteControl } from '@/components/profile/ProfileMuteAction';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostContentWarningPresentation } from './PostContentRenderer';
@@ -71,6 +72,7 @@ const visibilityLabels: Record<string, string> = {
 export function PostLayout({
   contentWarningPresentation = 'default',
   mediaPresentation = 'default',
+  mute,
   onDeleted,
   post: postKey,
   presentation = 'default',
@@ -79,6 +81,7 @@ export function PostLayout({
 }: {
   contentWarningPresentation?: PostContentWarningPresentation;
   mediaPresentation?: 'default' | 'hidden';
+  mute?: ProfileMuteControl & { profileId: string };
   onDeleted?: () => void;
   post: PostLayout_post$key;
   presentation?: 'compact' | 'default';
@@ -277,6 +280,7 @@ export function PostLayout({
         ) : null}
         <View style={styles.engagement} testID="post-layout-engagement">
           <PostActionSurface
+            mute={mute}
             actionBarStyle={[styles.actionBarFrame, { borderColor: theme.borderSubtle }]}
             onDeleted={handleDeleted}
             reactionSummaryStyle={compact ? styles.compactReactionSummary : undefined}

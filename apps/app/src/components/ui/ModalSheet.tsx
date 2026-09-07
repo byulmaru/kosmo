@@ -1,5 +1,6 @@
 import { XIcon } from 'lucide-react-native';
-import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
@@ -27,6 +28,13 @@ export function ModalSheet({
   const theme = useTheme();
   const elevation = useElevation();
   const overlayMotion = useOverlayMotion(visible);
+  const wasMounted = useRef(overlayMotion.mounted);
+  useEffect(() => {
+    if (Platform.OS !== 'ios' && wasMounted.current && !overlayMotion.mounted) {
+      onDismiss?.();
+    }
+    wasMounted.current = overlayMotion.mounted;
+  }, [onDismiss, overlayMotion.mounted]);
 
   return (
     <Modal
@@ -38,7 +46,7 @@ export function ModalSheet({
         }
       }}
       onShow={onShow}
-      onDismiss={onDismiss}
+      onDismiss={Platform.OS === 'ios' ? onDismiss : undefined}
       role="dialog"
       transparent
       visible={overlayMotion.mounted}
@@ -84,7 +92,7 @@ export function ModalSheet({
             accessibilityLabel={title}
             accessibilityViewIsModal
             onPress={(event) => event.stopPropagation()}
-            role="dialog"
+            role={Platform.OS === 'web' ? undefined : 'dialog'}
             style={[
               styles.surface,
               elevation.overlay,

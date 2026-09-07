@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
@@ -25,17 +26,26 @@ type Props = {
 
 export function MutedProfileList({ onFeedback, onUnmute, state }: Props) {
   const theme = useTheme();
+  const headingRef = useRef<View>(null);
+  const focusAfterUnmute = useRef(false);
+  useEffect(() => {
+    if (focusAfterUnmute.current) {
+      headingRef.current?.focus();
+      focusAfterUnmute.current = false;
+    }
+  }, [state]);
   return (
     <ScrollView contentContainerStyle={styles.root}>
-      <Text
-        accessibilityRole="header"
-        style={[
-          styles.heading,
-          { color: theme.foregroundPrimary, borderColor: theme.borderDefault },
-        ]}
-      >
-        뮤트한 프로필
-      </Text>
+      <View accessibilityRole="header" ref={headingRef} tabIndex={-1}>
+        <Text
+          style={[
+            styles.heading,
+            { color: theme.foregroundPrimary, borderColor: theme.borderDefault },
+          ]}
+        >
+          뮤트한 프로필
+        </Text>
+      </View>
       {state.status === 'loading' ? (
         <StateView loading title="뮤트한 프로필을 불러오는 중입니다." />
       ) : state.status === 'error' ? (
@@ -61,7 +71,10 @@ export function MutedProfileList({ onFeedback, onUnmute, state }: Props) {
                 displayName={profile.displayName}
                 muted
                 onChangeMuted={() => onUnmute(profile.id)}
-                onFeedback={(feedback) => onFeedback?.({ ...feedback, profileId: profile.id })}
+                onFeedback={(feedback) => {
+                  focusAfterUnmute.current = feedback.status === 'success';
+                  onFeedback?.({ ...feedback, profileId: profile.id });
+                }}
                 profileId={profile.id}
                 surface="button"
               />

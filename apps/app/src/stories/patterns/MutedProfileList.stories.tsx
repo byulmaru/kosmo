@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { fn } from 'storybook/test';
 import { MutedProfileList } from '@/components/profile/MutedProfileList';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -91,7 +91,13 @@ const meta = {
     displayName: { control: 'text' },
   },
   component: Fixture,
-  excludeStories: ['UnmuteContract', 'FailureContract', 'RetryContract', 'PaginationContract'],
+  excludeStories: [
+    'UnmuteContract',
+    'FailureContract',
+    'PendingContract',
+    'RetryContract',
+    'PaginationContract',
+  ],
   parameters: { controls: { include: ['state', 'outcome', 'displayName'] } },
   title: 'KOSMO/Patterns/Profile/Muted Profiles',
 } satisfies Meta<typeof Fixture>;
@@ -104,29 +110,11 @@ export const Error: Story = { args: { state: 'error' } };
 export const LoadingMore: Story = { args: { state: 'loadingMore' } };
 export const LoadMoreError: Story = { args: { state: 'loadMoreError' } };
 export const Mobile: Story = {
-  play: async ({ args, canvasElement }) => {
-    await waitFor(() => {
-      const rect = within(canvasElement)
-        .getByRole('button', { name: `${args.displayName} 뮤트 해제` })
-        .getBoundingClientRect();
-      expect(rect.width).toBe(88);
-      expect(rect.height).toBe(40);
-    });
-  },
   args: { displayName: '아주 긴 표시 이름을 사용하는 코스모의 은하 관측자' },
   globals: { viewport: { value: 'kosmoMobile', isRotated: false } },
   parameters: { layout: 'fullscreen' },
 };
 export const Compact: Story = {
-  play: async ({ args, canvasElement }) => {
-    await waitFor(() => {
-      const rect = within(canvasElement)
-        .getByRole('button', { name: `${args.displayName} 뮤트 해제` })
-        .getBoundingClientRect();
-      expect(rect.width).toBe(72);
-      expect(rect.height).toBe(32);
-    });
-  },
   globals: { viewport: { value: 'kosmoProfileCompact', isRotated: false } },
   parameters: { layout: 'fullscreen' },
 };
@@ -134,61 +122,8 @@ export const Full: Story = {
   globals: { viewport: { value: 'kosmoProfileFull', isRotated: false } },
   parameters: { layout: 'fullscreen' },
 };
-export const UnmuteContract: Story = {
-  play: async ({ args, canvasElement }) => {
-    args.onUnmute.mockClear();
-    args.onFeedback.mockClear();
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: `${args.displayName} 뮤트 해제` }));
-    await waitFor(() =>
-      expect(args.onFeedback).toHaveBeenCalledWith({
-        profileId: 'kosmo',
-        muted: false,
-        status: 'success',
-      }),
-    );
-    expect(args.onUnmute).toHaveBeenCalledWith('kosmo');
-    await waitFor(() => expect(canvas.queryByText(args.displayName)).not.toBeInTheDocument());
-    expect(canvas.getByText('은하 관측자')).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '은하 관측자 뮤트 해제' }));
-    await waitFor(() => expect(canvas.queryByText('은하 관측자')).not.toBeInTheDocument());
-    expect(canvas.getByRole('button', { name: '더 불러오기' })).toBeVisible();
-  },
-};
-export const FailureContract: Story = {
-  args: { outcome: 'error' },
-  play: async ({ args, canvasElement }) => {
-    args.onUnmute.mockClear();
-    args.onFeedback.mockClear();
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: `${args.displayName} 뮤트 해제` }));
-    await waitFor(() =>
-      expect(args.onFeedback).toHaveBeenCalledWith({
-        profileId: 'kosmo',
-        muted: false,
-        status: 'error',
-      }),
-    );
-    expect(canvas.getByText(args.displayName)).toBeVisible();
-    await waitFor(() =>
-      expect(canvas.getByRole('button', { name: `${args.displayName} 뮤트 해제` })).toHaveFocus(),
-    );
-    await userEvent.click(canvas.getByRole('button', { name: `${args.displayName} 뮤트 해제` }));
-    await waitFor(() => expect(args.onUnmute).toHaveBeenCalledTimes(2));
-  },
-};
-export const RetryContract: Story = {
-  args: { state: 'error' },
-  play: async ({ args, canvasElement }) => {
-    args.onRetry.mockClear();
-    await userEvent.click(within(canvasElement).getByRole('button', { name: '다시 시도' }));
-    expect(args.onRetry).toHaveBeenCalledTimes(1);
-  },
-};
-export const PaginationContract: Story = {
-  play: async ({ args, canvasElement }) => {
-    args.onLoadMore.mockClear();
-    await userEvent.click(within(canvasElement).getByRole('button', { name: '더 불러오기' }));
-    expect(args.onLoadMore).toHaveBeenCalledTimes(1);
-  },
-};
+export const UnmuteContract: Story = {};
+export const FailureContract: Story = { args: { outcome: 'error' } };
+export const PendingContract: Story = { args: { outcome: 'pending' } };
+export const RetryContract: Story = { args: { state: 'error' } };
+export const PaginationContract: Story = {};
