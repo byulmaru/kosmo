@@ -1,5 +1,6 @@
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { isRepostTargetEligible } from './postActionAvailability';
@@ -9,11 +10,13 @@ import { usePostMoreMenuItem } from './PostMoreMenu';
 import { usePostReactionController } from './PostReactionController';
 import { useRepostFailureToast } from './useRepostFailureToast';
 import type { StyleProp, ViewStyle } from 'react-native';
+import type { ProfileMuteControl } from '@/components/profile/ProfileMuteAction';
 import type { PostActionSurface_post$key } from './__generated__/PostActionSurface_post.graphql';
-import type { PostActionBarProps } from './PostActionBar';
+import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
 
 type Props = Readonly<{
   actionBarStyle?: StyleProp<ViewStyle>;
+  mute?: ProfileMuteControl & { profileId: string };
   onDeleted?: () => void;
   reactionSummaryStyle?: StyleProp<ViewStyle>;
   reply?: PostActionBarProps['reply'];
@@ -27,6 +30,7 @@ const postActionSurfaceFragment = graphql`
     profile {
       id
       relativeHandle
+      displayName
     }
     ...PostActionBar_post @alias(as: "actionBar")
     ...PostReactionController_post @alias(as: "reactionController")
@@ -35,6 +39,7 @@ const postActionSurfaceFragment = graphql`
 
 export function PostActionSurface({
   actionBarStyle,
+  mute,
   onDeleted,
   reactionSummaryStyle,
   reply,
@@ -60,22 +65,48 @@ export function PostActionSurface({
     relativeHandle: target.profile.relativeHandle,
   });
 
+  const renderActions = (more?: MoreActionConfig) => (
+    <PostActionBar
+      execution={authentication.execution}
+      more={more}
+      moreItems={[copyLinkItem]}
+      onBookmarkError={onBookmarkError}
+      onDeleted={onDeleted}
+      onRepostError={onRepostError}
+      onResolutionRequired={authentication.resolve}
+      post={target.actionBar}
+      reactionController={reactionController}
+      reply={reply}
+      repostExecution={repostAuthentication.execution}
+    />
+  );
+
   return (
     <>
       <PostReactionSummary controller={reactionController} style={reactionSummaryStyle} />
       <View style={actionBarStyle}>
-        <PostActionBar
-          execution={authentication.execution}
-          moreItems={[copyLinkItem]}
-          onBookmarkError={onBookmarkError}
-          onDeleted={onDeleted}
-          onRepostError={onRepostError}
-          onResolutionRequired={authentication.resolve}
-          post={target.actionBar}
-          reactionController={reactionController}
-          reply={reply}
-          repostExecution={repostAuthentication.execution}
-        />
+        {mute &&
+        mute.profileId === target.profile.id &&
+        authentication.selectedProfileId &&
+        authentication.selectedProfileId !== target.profile.id ? (
+          <ProfileMuteAction
+            {...mute}
+            displayName={target.profile.displayName}
+            profileId={target.profile.id}
+            items={[copyLinkItem]}
+            renderTrigger={({ expanded, onPress, ref }) =>
+              renderActions({
+                accessibilityLabel: '더보기',
+                controlRef: ref,
+                menuExpanded: expanded,
+                onPress,
+                popupRole: 'menu',
+              })
+            }
+          />
+        ) : (
+          renderActions()
+        )}
       </View>
     </>
   );

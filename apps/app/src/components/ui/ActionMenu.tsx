@@ -54,9 +54,14 @@ type Props = {
   items: readonly ActionMenuItem[];
   onOpenChange?: (open: boolean) => void;
   renderTrigger: (props: ActionMenuTriggerRenderProps) => ReactNode;
-  webHorizontalPlacement?: 'after' | 'end' | 'start';
-  webVerticalPlacement?: 'end' | 'start';
-};
+} & (
+  | { webPlacement: 'overlap-end'; webHorizontalPlacement?: never; webVerticalPlacement?: never }
+  | {
+      webPlacement?: never;
+      webHorizontalPlacement?: 'after' | 'end' | 'start';
+      webVerticalPlacement?: 'after' | 'end' | 'start';
+    }
+);
 
 type ActionMenuPresentation = 'platform' | 'sheet';
 
@@ -83,6 +88,7 @@ export function ActionMenu({
   items,
   onOpenChange,
   renderTrigger,
+  webPlacement,
   webHorizontalPlacement = 'start',
   webVerticalPlacement = 'start',
 }: Props): ReactNode {
@@ -120,15 +126,23 @@ export function ActionMenu({
     const viewportWidth = trigger.ownerDocument.documentElement.clientWidth;
     const viewportHeight = trigger.ownerDocument.documentElement.clientHeight;
     const anchoredLeft =
-      webHorizontalPlacement === 'after'
-        ? triggerRect.right + space[8]
-        : webHorizontalPlacement === 'end'
-          ? triggerRect.right + webMenuInset - menuWidth
-          : triggerRect.left - webMenuInset;
+      webPlacement === 'overlap-end'
+        ? triggerRect.right - menuWidth
+        : webHorizontalPlacement === 'after'
+          ? triggerRect.right + space[8]
+          : webHorizontalPlacement === 'end'
+            ? triggerRect.right + webMenuInset - menuWidth
+            : triggerRect.left - webMenuInset;
     const anchoredTop =
-      webVerticalPlacement === 'end'
-        ? triggerRect.bottom - menuHeight
-        : triggerRect.top - webMenuInset;
+      webPlacement === 'overlap-end'
+        ? triggerRect.top + menuHeight > viewportHeight
+          ? triggerRect.bottom - menuHeight
+          : triggerRect.top
+        : webVerticalPlacement === 'after'
+          ? triggerRect.bottom + space[8]
+          : webVerticalPlacement === 'end'
+            ? triggerRect.bottom - menuHeight
+            : triggerRect.top - webMenuInset;
     const viewportLeft = Math.max(0, Math.min(anchoredLeft, viewportWidth - menuWidth));
     const viewportTop = Math.max(0, Math.min(anchoredTop, viewportHeight - menuHeight));
     const nextPosition = {
@@ -141,7 +155,7 @@ export function ActionMenu({
         ? current
         : nextPosition,
     );
-  }, [items.length, web, webHorizontalPlacement, webVerticalPlacement]);
+  }, [items.length, web, webHorizontalPlacement, webPlacement, webVerticalPlacement]);
 
   useEffect(() => {
     if (previousOpenRef.current === open) {

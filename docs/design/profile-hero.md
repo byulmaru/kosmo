@@ -30,6 +30,33 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - 위 Web 목록 기준은 Compact Web 1024와 Full Web 1440에 모두 적용한다. 화면 이름의 Compact와
   Button variant의 Compact는 별개다. Mobile에서 높이만 32로 줄이거나 웹 목록을 일괄 Medium으로 키우지 않는다.
 
+## Profile 더보기 배치
+
+- Mobile Web·iOS·Android·Compact·Full Web 모두 Medium Follow 왼쪽 `16px` 간격에 `40×40` 원형
+  더보기 버튼을 둔다. `20px` 가로 Ellipsis와 `color/border/default`의 `1px` 안쪽 테두리를 사용한다.
+  두 버튼의 위·아래 경계를 맞추고 커버 이미지에는 겹치지 않는다. Mobile 공통 상단 바에는 더보기를 두지 않는다.
+- Native 입력 target은 visual box 중심을 유지하며 iOS 최소 `44pt`, Android 최소 `48dp`로 확장한다.
+  부모가 입력 영역을 수용하고 인접 Follow·avatar의 입력 영역과 겹치지 않게 한다.
+- 원형 전체의 Hover·Pressed 배경에는 각각 `color/state/hover`, `color/state/pressed` overlay를 적용한다.
+  Default는 투명 배경과 기본 테두리다. 아이콘만 흐리게 하는 피드백으로 대체하지 않는다.
+- Web focus-visible은 현재 배경을 유지하면서 원 바깥 `2px` 간격의 `2px` 링을
+  `color/state/focus-ring`으로 표시한다. Hover·Pressed와 독립적으로 함께 표시할 수 있다.
+- Disabled는 `color/state/disabled-surface`, `color/state/disabled-foreground`, `color/border/disabled`를
+  사용하고 활성화·hover·focus 반응을 제공하지 않는다. Hover·Pressed 색상 전환은 공용 motion의
+  `120ms`·standard를 따르며 reduced motion에서는 즉시 반영한다.
+- Figma `ProfileMoreButton` 원본의 State와 별도 Focus visible 속성이 위 상태를 소유한다.
+  [Light·Dark 상태표](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=8380-13737)에서
+  Default·Hover·Pressed·Focus·Hover + focus·Disabled를 비교한다. Native에는 hover를 요구하지 않는다.
+- 프로필 팝오버 메뉴는 오른쪽 위 모서리를 더보기 trigger의 오른쪽 위에 맞춘다. 간격 없이 trigger와
+  겹치며 왼쪽·아래로 펼쳐진다. viewport 밖으로 나가면 경계 안으로 보정하고 아래 공간이 부족하면 방향을
+  전환한다. 메뉴 항목과 dismiss·focus 복귀 계약은 유지한다.
+- 로딩 중이거나 프로필 action을 사용할 수 없는 상태에서는 더보기를 숨긴다. `blockedBy`의 최소 정보
+  화면에도 더보기를 노출하지 않는다.
+- 2026-09-07 승인된 Figma 계약을 `ProfileMoreButton`·`ProfileHero`·`ActionMenu`에 반영했다.
+  Storybook Tests에서 40px 원형·16px 간격, hover·pressed·focus 조합, 메뉴 겹침·viewport 보정과
+  dismiss 후 trigger 복귀를 검증한다. Native 44/48 입력 target과 disabled·reduced motion은 단위
+  테스트로 확인하며, Native 실기기 및 실제 Profile route의 데이터 연동 완료를 뜻하지 않는다.
+
 ## Mobile Follow action geometry
 
 - Figma Target의 Action slot은 `96×40`, `right: 16`에 두고 기존 Compact action의 중심축을 유지하도록 `top: 142`에

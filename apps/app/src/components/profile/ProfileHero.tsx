@@ -1,3 +1,5 @@
+import { Link2, VolumeOff } from 'lucide-react-native';
+import { useEffect, useRef } from 'react';
 import {
   Image,
   Platform,
@@ -8,25 +10,32 @@ import {
   View,
 } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { setStringAsync } from '@/components/post/postClipboard';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
+import { useToast } from '@/components/ui/ToastProvider';
+import { getPublicWebOrigin } from '@/config/origin';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
+import { ProfileMuteAction } from './ProfileMuteAction';
 import { ProfileNameBlock } from './ProfileNameBlock';
 import { ProfileTagChip } from './ProfileTagChip';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
+import type { ProfileMuteControl } from './ProfileMuteAction';
 
 type ProfileHeroProps = {
   action?: ReactNode;
+  mute?: ProfileMuteControl;
   loading?: boolean;
   profile?: ProfileHero_profile$key | null;
 };
 
 const profileHeroFragment = graphql`
   fragment ProfileHero_profile on Profile {
+    id
     handle
     relativeHandle
     displayName
@@ -54,8 +63,17 @@ const countFormatter = new Intl.NumberFormat('en', {
   notation: 'compact',
 });
 
-export function ProfileHero({ action, loading = false, profile = null }: ProfileHeroProps) {
+export function ProfileHero({ action, mute, loading = false, profile = null }: ProfileHeroProps) {
+  const followingRef = useRef<View>(null);
+  const focusAfterUnmute = useRef(false);
+  useEffect(() => {
+    if (!mute?.muted && focusAfterUnmute.current) {
+      followingRef.current?.focus();
+      focusAfterUnmute.current = false;
+    }
+  }, [mute]);
   const theme = useTheme();
+  const { showToast } = useToast();
   const { width } = useWindowDimensions();
   const data = useFragment(profileHeroFragment, profile);
   const compact = Platform.OS !== 'web' || width < breakpoints.compact;
@@ -143,7 +161,50 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
             size={avatarSize}
           />
         </View>
-        {action ? <View style={[styles.action, actionGeometry]}>{action}</View> : null}
+        {action || mute ? (
+          <View
+            style={[
+              actionGeometry,
+              {
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                gap: space[16] - actionTargetInset,
+              },
+            ]}
+          >
+            {mute ? (
+              <ProfileMuteAction
+                {...mute}
+                displayName={data.displayName}
+                profileId={data.id}
+                items={[
+                  {
+                    key: 'copy-profile-link',
+                    icon: Link2,
+                    label: '프로필 링크 복사',
+                    onSelect: () => {
+                      void (async () => {
+                        try {
+                          const copied = await setStringAsync(
+                            new URL(`/${data.relativeHandle}`, getPublicWebOrigin()).toString(),
+                          );
+                          if (!copied) {
+                            throw new Error('Clipboard did not confirm the copy.');
+                          }
+                        } catch {
+                          showToast('링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
+                            tone: 'danger',
+                          });
+                        }
+                      })();
+                    },
+                  },
+                ]}
+              />
+            ) : null}
+            {action ? <View style={styles.action}>{action}</View> : null}
+          </View>
+        ) : null}
       </View>
       <View style={styles.body}>
         <ProfileNameBlock profile={data} style={styles.identity} variant="hero" />
@@ -159,7 +220,7 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
         ) : null}
         <View style={styles.counts}>
           <NavigationLink href={followingHref}>
-            <Pressable accessibilityRole="link" style={styles.countLink}>
+            <Pressable ref={followingRef} accessibilityRole="link" style={styles.countLink}>
               <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
                 {countFormatter.format(data.followingCount).toLowerCase()}
               </Text>
@@ -175,6 +236,31 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
             </Pressable>
           </NavigationLink>
         </View>
+        {mute?.muted ? (
+          <View style={[styles.muteRow, compact ? styles.mobileMuteRow : undefined]}>
+            <VolumeOff accessible={false} aria-hidden color={theme.foregroundSecondary} size={16} />
+            <Text
+              style={[
+                styles.muteMessage,
+                compact ? styles.mobileMuteMessage : undefined,
+                { color: theme.foregroundSecondary },
+              ]}
+            >
+              이 사용자의 게시글은 뮤트되어 있습니다.
+            </Text>
+            <ProfileMuteAction
+              displayName={data.displayName}
+              muted
+              onChangeMuted={mute.onChangeMuted}
+              onFeedback={(feedback) => {
+                focusAfterUnmute.current = feedback.status === 'success';
+                mute.onFeedback?.(feedback);
+              }}
+              profileId={data.id}
+              surface="text"
+            />
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -204,6 +290,10 @@ function ProfileTagLink({ id, name }: { id: string; name: string }) {
 }
 
 const styles = StyleSheet.create({
+  muteRow: { alignItems: 'center', flexDirection: 'row', gap: space[8], marginTop: space[8] },
+  mobileMuteRow: { width: '100%' },
+  muteMessage: { ...textStyles.uiCopyS, flexShrink: 1 },
+  mobileMuteMessage: { flex: 1 },
   root: { marginBottom: space[24] },
   cover: { aspectRatio: 3, width: '100%' },
   coverImage: { height: '100%', width: '100%' },

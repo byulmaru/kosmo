@@ -1,5 +1,6 @@
 import { XIcon } from 'lucide-react-native';
-import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
@@ -8,20 +9,44 @@ import type { PropsWithChildren } from 'react';
 
 type Props = PropsWithChildren<{
   onClose: () => void;
+  dismissDisabled?: boolean;
+  onShow?: () => void;
+  onDismiss?: () => void;
   title: string;
   visible: boolean;
 }>;
 
-export function ModalSheet({ children, onClose, title, visible }: Props) {
+export function ModalSheet({
+  children,
+  dismissDisabled = false,
+  onClose,
+  onShow,
+  onDismiss,
+  title,
+  visible,
+}: Props) {
   const theme = useTheme();
   const elevation = useElevation();
   const overlayMotion = useOverlayMotion(visible);
+  const wasMounted = useRef(overlayMotion.mounted);
+  useEffect(() => {
+    if (Platform.OS !== 'ios' && wasMounted.current && !overlayMotion.mounted) {
+      onDismiss?.();
+    }
+    wasMounted.current = overlayMotion.mounted;
+  }, [onDismiss, overlayMotion.mounted]);
 
   return (
     <Modal
       accessibilityLabel={title}
       animationType="none"
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        if (!dismissDisabled) {
+          onClose();
+        }
+      }}
+      onShow={onShow}
+      onDismiss={Platform.OS === 'ios' ? onDismiss : undefined}
       role="dialog"
       transparent
       visible={overlayMotion.mounted}
@@ -36,6 +61,8 @@ export function ModalSheet({ children, onClose, title, visible }: Props) {
         />
         <Pressable
           accessibilityLabel={`${title} 닫기`}
+          accessibilityRole="button"
+          disabled={dismissDisabled}
           onPress={onClose}
           style={StyleSheet.absoluteFill}
         />
@@ -65,7 +92,7 @@ export function ModalSheet({ children, onClose, title, visible }: Props) {
             accessibilityLabel={title}
             accessibilityViewIsModal
             onPress={(event) => event.stopPropagation()}
-            role="dialog"
+            role={Platform.OS === 'web' ? undefined : 'dialog'}
             style={[
               styles.surface,
               elevation.overlay,
@@ -81,6 +108,7 @@ export function ModalSheet({ children, onClose, title, visible }: Props) {
               </Text>
               <IconButton
                 accessibilityLabel="닫기"
+                disabled={dismissDisabled}
                 onPress={onClose}
                 style={styles.close}
                 targetSize={44}

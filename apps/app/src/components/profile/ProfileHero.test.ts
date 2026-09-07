@@ -78,12 +78,22 @@ mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   Skeleton: (props: object) => createElement('Skeleton', props),
 });
+mockModule(new URL('../post/postClipboard.ts', import.meta.url), {
+  setStringAsync: async () => true,
+});
+mockModule(new URL('../ui/ToastProvider.tsx', import.meta.url), {
+  useToast: () => ({ showToast: mock.fn() }),
+});
 
 const require = createRequire(import.meta.url);
 require.extensions['.png'] = (module, filename) => {
   module.exports = filename;
 };
-mockModule(require.resolve('lucide-react-native'), { XIcon: 'XIcon' });
+mockModule('lucide-react-native', { XIcon: 'XIcon', VolumeOff: 'VolumeOff' });
+mockModule(require.resolve('lucide-react-native'), { XIcon: 'XIcon', VolumeOff: 'VolumeOff' });
+mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
+  ProfileMuteAction: 'ProfileMuteAction',
+});
 
 let ProfileHero: typeof ProfileHeroExport;
 
@@ -152,13 +162,17 @@ for (const [os, targetHeight, inset] of [
         }
       });
       assert.ok(renderer);
+      const actionParent = renderer.root.find(
+        (node) => (node.type as unknown) === 'Action',
+      ).parent!;
       const actionStyle = Object.assign(
         {},
-        ...renderer.root.find((node) => (node.type as unknown) === 'Action').parent!.props.style,
+        ...[(loading ? actionParent : actionParent.parent!).props.style].flat(),
       );
+      const contentStyle = Object.assign({}, ...[actionParent.props.style].flat());
       assert.equal(actionStyle.minHeight, targetHeight);
       assert.equal(actionStyle.marginTop + inset, 12);
-      assert.equal(actionStyle.justifyContent, 'center');
+      assert.equal(contentStyle.justifyContent, 'center');
       assert.ok(actionStyle.marginTop >= 0);
       assert.ok(actionStyle.marginTop + targetHeight <= 64);
 

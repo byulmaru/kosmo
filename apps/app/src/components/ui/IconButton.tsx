@@ -153,6 +153,7 @@ export function IconButton({
       ref={controlRef}
       style={(state) => [
         styles.target,
+        { height: minimumTargetSize, width: minimumTargetSize },
         feedback === 'opacity'
           ? { opacity: buttonDisabled ? 0.45 : state.pressed ? 0.7 : 1 }
           : undefined,

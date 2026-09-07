@@ -49,6 +49,10 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
 
 ## 소유권
 
+- 공개 Profile의 Figma Target에서는 Mobile 공통 상단 바를 메뉴 전용으로 유지한다. 더보기는 모든
+  레이아웃에서 Hero의 Follow 왼쪽 `16px` 간격에 `40×40` 원형 버튼으로 배치한다. Compact·Full Web에
+  공통 상단 바를 추가하지 않는다. 자세한 메뉴 배치는 `profile-hero.md`를 따른다.
+
 - 모바일 Web과 Android/iOS `/home`: `UniversalShell`이 메뉴 버튼, 브랜드 마크와 native safe-area를 소유한다. 홈 route는 헤더를 렌더링하지 않는다.
 - Web `/search`: 검색 route가 모든 breakpoint의 `64px` 검색 도구막대와 검색 상태를 소유한다. 모바일 Web
   `< compact`에서 `UniversalShell`은 기본 메뉴 전용 헤더 대신 drawer action과 가장자리 스와이프만 제공한다.

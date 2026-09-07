@@ -209,6 +209,10 @@ Profile action·관리 목록·Relay 상태를 연결하고 Home·Local·Profile
   제거된 관계를 사용하지 않게 한다.
 - `PROD-858`의 재사용 가능한 Production 공용 UI와 Storybook 검증 증거를 소비한다. 공용 presentation을
   다시 구현하거나 Storybook 증거를 Web·Native runtime 완료 증거로 일반화하지 않는다.
+- 뮤트·해제는 Profile·Post 더보기 및 관리 목록의 확인 흐름을 공용 presentation으로 재사용한다.
+  취소는 요청하지 않고, 성공 후에만 상태·목록을 갱신하고 성공 Toast를 표시한다. 실패 시 기존 관계·목록을
+  유지하고 확인창을 닫은 뒤 원래 action으로 focus를 복구하며 에러 Toast를 표시한다. 목록 최초·추가 조회
+  실패도 재시도 action이 있는 에러 Toast로 표시하며, 기존 목록과 본문의 재시도 경로를 유지한다.
 - `뮤트 및 차단` 공통 Settings 진입점과 destination 순서는 `PROD-814`와 `PROD-823` 중 실제 구현에 먼저
   착수한 이슈가 최초 구현·통합 검증을 소유하고 이 책임을 해당 이슈와 PR에 기록한다. 나중에 착수한 이슈는
   선행 구현의 repository 상태와 PR 증거를 재사용하고 같은 Settings shell·navigation을 다시 만들지 않는다.
