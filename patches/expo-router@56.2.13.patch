@@ -1,0 +1,27 @@
+diff --git a/build/useScreens.js b/build/useScreens.js
+index 9299061832496c67d3e83226a58f4fe33d714c69..d34170b52834b023327da942e2f3aef198ab6f9c 100644
+--- a/build/useScreens.js
++++ b/build/useScreens.js
+@@ -138,7 +138,11 @@ function useSortedScreens(order, protectedScreens, useOnlyUserDefinedScreens = f
+         return routeToScreen(value.route, value.props);
+     }), [sorted, protectedScreens]);
+ }
+-function fromImport(value, { ErrorBoundary, SuspenseFallback, ...component }) {
++function fromImport(value, routeModule) {
++    if (routeModule == null) {
++        throw new Error('Failed to load route module.');
++    }
++    const { ErrorBoundary, SuspenseFallback, ...component } = routeModule;
+     // If possible, add a more helpful display name for the component stack to improve debugging of React errors such as `Text strings must be rendered within a <Text> component.`.
+     if (component?.default && __DEV__) {
+         component.default.displayName ??= `${component.default.name ?? 'Route'}(${value.contextKey})`;
+@@ -182,6 +186,9 @@ function getQualifiedRouteComponent(value) {
+     if (import_mode_1.default === 'lazy') {
+         ScreenComponent = react_2.default.lazy(() => {
+             const res = value.loadRoute();
++            if (res == null) {
++                throw new Error('Failed to load route module.');
++            }
+             // NOTE(@kitten): React.lazy supports promise likes, which we can use to ensure that
+             // the route is synchronously available, if the `loadRoute` method returns a loaded route
+             // synchronously
