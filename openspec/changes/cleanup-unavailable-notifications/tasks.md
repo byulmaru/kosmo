@@ -62,7 +62,7 @@ cleanup 대상에서 제외한다. 구현·검증 소유: PR #661.
 
 **Deliverable**
 
-namespace가 준비된 뒤 환경별 deterministic ID로 활성 Schedule을 create-if-missing 하고 기존 Schedule을 보존한다. 구현·검증 소유: PR #666.
+namespace가 준비된 뒤 Worker 시작 시 환경별 deterministic ID로 활성 Schedule을 create-if-missing 하고 기존 Schedule을 보존한다. 등록 실패는 structured log로 남기고 Worker 시작을 계속하며, 다음 Worker 시작 때 다시 시도한다. 구현·검증 소유: PR #666.
 
 **Guardrails**
 
@@ -70,16 +70,18 @@ namespace가 준비된 뒤 환경별 deterministic ID로 활성 Schedule을 crea
 - existing Schedule의 timing, action, overlap과 pause 상태를 변경하지 않는다.
 - best-effort 주기를 drift reconciliation이나 정확한 실행 간격 보장으로 해석하지 않는다.
 - Worker metrics endpoint와 Helm metrics metadata를 추가하지 않는다.
+- Schedule 전용 Helm PreSync Job과 별도 CLI 진입점을 사용하지 않는다.
 
 **Verification**
 
-- PreSync Job의 Schedule create/already-exists 경계, active 상태·Workflow 연결과 기존 Schedule 보존을 확인한다.
+- Worker 시작 시 Schedule create/already-exists 경계, active 상태·Workflow 연결과 기존 Schedule 보존을 확인한다.
+- Schedule 등록 실패가 structured log를 남기고 Worker 시작을 계속하며, 다음 시작에서 재시도되는지 확인한다.
 
 - [x] 3.1 missing Schedule을 24시간 기본 interval과 `SKIP` overlap으로 활성 생성한다.
 - [x] 3.2 existing Schedule은 아무것도 변경하지 않는다.
-- [x] 3.3 namespace 뒤 실행되는 bounded PreSync Job과 환경별 deterministic ID를 유지한다.
+- [ ] 3.3 namespace가 준비된 뒤 Worker 시작 시 Schedule을 등록하고, 등록 실패 시 시작을 계속하며 다음 시작에서 재시도한다.
 - [x] 3.4 pause/enabled reconciliation, Worker metrics endpoint와 Helm metrics metadata를 제거한다.
-- [x] 3.5 create와 already-exists 경계만 의미 있는 test로 검증한다.
+- [ ] 3.5 Worker 시작의 create/already-exists/등록 실패 경계를 의미 있는 동작 test로 검증한다.
 
 ## 4. PROD-328 통합 검증과 OpenSpec archive — PR [#666](https://github.com/byulmaru/kosmo/pull/666)
 
@@ -102,9 +104,9 @@ PR #661·#665·#666의 전체 범위를 통합 검증하고 최신 계약·canon
 
 **Verification**
 
-- focused Worker/DB/Schedule/Helm·workspace 검증, dev 동작, 전체 task·delta spec 정합성과 `openspec validate --strict`를 확인한다.
+- focused Worker/DB/Worker-start Schedule/Helm·workspace 검증, dev 동작, 전체 task·delta spec 정합성과 `openspec validate --strict`를 확인한다.
 
-- [ ] 4.1 focused Worker/DB/Schedule/Helm 검증과 workspace 필수 검증을 실행한다.
+- [ ] 4.1 focused Worker/DB/Worker-start Schedule/Helm 검증과 workspace 필수 검증을 실행한다.
 - [ ] 4.2 dev에서 API 즉시 비노출과 cleanup 삭제, available row 보존을 확인한다.
 - [ ] 4.3 dev에서 active Schedule 생성과 Workflow 실행 상태를 확인한다.
 - [x] 4.4 최신 Linear 계약과 OpenSpec artifacts를 동기화한다.

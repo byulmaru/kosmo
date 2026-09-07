@@ -41,11 +41,18 @@
 - **AND** 실행별 정확한 삭제 개수를 보장하지 않지만 available row와 대상 외 row는 보존한다
 - **AND** 반복 실행으로 backlog가 best-effort 수렴한다
 
-#### Scenario: Schedule 생성
+#### Scenario: Worker 시작 시 Schedule 생성
 
-- **WHEN** 환경의 deterministic cleanup Schedule이 없다
+- **WHEN** Worker가 시작되고 환경의 deterministic cleanup Schedule이 없다
 - **THEN** 시스템은 24시간 기본 interval과 `SKIP` overlap으로 활성 Schedule을 생성한다
 - **AND** 기존 Schedule이 있으면 timing, action, overlap과 pause 상태를 변경하지 않는다
+
+#### Scenario: Schedule 등록 실패
+
+- **WHEN** Worker 시작 시 Schedule 등록이 실패한다
+- **THEN** 시스템은 등록 실패를 structured log에 남긴다
+- **AND** Worker 시작을 계속한다
+- **AND** 다음 Worker 시작 때 Schedule 등록을 다시 시도한다
 
 #### Scenario: 관측
 
