@@ -25,8 +25,8 @@ export function validateWorkerEnvironment(environment: NodeJS.ProcessEnv): {
   if (!namespace) {
     throw new Error('TEMPORAL_NAMESPACE is required');
   }
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    throw new Error('PORT must be an integer between 1 and 65535');
+  if (!Number.isInteger(port) || port < 0 || port > 65_535) {
+    throw new Error('PORT must be an integer between 0 and 65535');
   }
 
   return {

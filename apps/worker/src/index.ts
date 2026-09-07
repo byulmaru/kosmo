@@ -17,6 +17,11 @@ if (import.meta.main) {
     });
     server.listen(port, host);
     await once(server, 'listening');
+    const listeningAddress = server.address();
+    if (listeningAddress === null || typeof listeningAddress === 'string') {
+      throw new Error('Unable to determine the Worker health port.');
+    }
+    process.send?.(listeningAddress.port);
 
     const terminateDuringStartup = () => {
       process.off('SIGTERM', terminateDuringStartup);

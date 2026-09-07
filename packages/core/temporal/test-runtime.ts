@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import type { ChildProcess } from 'node:child_process';
 
@@ -26,7 +25,6 @@ export const startTestTemporalRuntime = async (): Promise<void> => {
 async function startRuntime(): Promise<void> {
   const host = '127.0.0.1';
   const namespace = process.env.TEMPORAL_NAMESPACE?.trim() || 'test';
-  const [healthPort, workerPort] = await Promise.all([findFreePort(host), findFreePort(host)]);
   const databaseUrl = process.env.DATABASE_URL ?? defaultDatabaseUrl;
   const workerEnvironment: NodeJS.ProcessEnv = {
     ...process.env,
@@ -36,7 +34,7 @@ async function startRuntime(): Promise<void> {
     FEDIFY_QUEUE_DATABASE_URL: databaseUrl,
     HOST: host,
     NODE_ENV: process.env.NODE_ENV ?? 'test',
-    PORT: String(workerPort),
+    PORT: '0',
     PUBLIC_ORIGIN: process.env.PUBLIC_ORIGIN ?? 'http://127.0.0.1:4173',
     TEMPORAL_NAMESPACE: namespace,
   };
@@ -44,16 +42,16 @@ async function startRuntime(): Promise<void> {
     cwd: workerDirectory,
     env: {
       ...workerEnvironment,
-      PORT: String(healthPort),
       TEMPORAL_PORT: undefined,
     },
     // Keep startup failures visible in CI and avoid keeping the parent alive
     // with a long-lived stderr pipe after the children are unref'ed.
-    stdio: ['ignore', 'ignore', 'inherit'],
+    stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
   });
   let worker: ChildProcess | undefined;
 
   try {
+    const healthPort = await waitForChildPort(server, startupTimeoutMs);
     workerEnvironment.TEMPORAL_ADDRESS = await waitForChildHealth(
       `http://${host}:${healthPort}/health`,
       server,
@@ -62,8 +60,9 @@ async function startRuntime(): Promise<void> {
     worker = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
       cwd: workerDirectory,
       env: workerEnvironment,
-      stdio: ['ignore', 'ignore', 'inherit'],
+      stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
     });
+    const workerPort = await waitForChildPort(worker, startupTimeoutMs);
     await waitForChildHealth(`http://${host}:${workerPort}/ready`, worker, startupTimeoutMs);
   } catch (error) {
     terminate(server);
@@ -94,20 +93,6 @@ async function startRuntime(): Promise<void> {
     terminateChildren();
     process.exit(143);
   });
-}
-
-async function findFreePort(host: string): Promise<number> {
-  const reservation = createServer();
-  reservation.listen(0, host);
-  await once(reservation, 'listening');
-  const address = reservation.address();
-  if (address === null || typeof address === 'string') {
-    await closeServer(reservation);
-    throw new Error('Unable to determine a free local port for Temporal tests.');
-  }
-  const port = address.port;
-  await closeServer(reservation);
-  return port;
 }
 
 async function waitForHealth(url: string, child: ChildProcess, timeoutMs: number): Promise<string> {
@@ -141,6 +126,43 @@ async function waitForHealth(url: string, child: ChildProcess, timeoutMs: number
   );
 }
 
+async function waitForChildPort(child: ChildProcess, timeoutMs: number): Promise<number> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const message = await Promise.race([
+      once(child, 'message', { signal: controller.signal }).then(([value]) => value),
+      once(child, 'exit', { signal: controller.signal }).then(() => {
+        throw new Error(`Child process exited before binding a port (${formatChildExit(child)})`);
+      }),
+    ]);
+    if (
+      typeof message !== 'number' ||
+      !Number.isInteger(message) ||
+      message < 1 ||
+      message > 65_535
+    ) {
+      throw new Error(`Child process sent an invalid listening port (${formatChildExit(child)})`);
+    }
+    return message;
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(
+        `Timed out waiting for child process to bind a port (${formatChildExit(child)})`,
+        { cause: error },
+      );
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    controller.abort();
+    if (child.connected) {
+      child.disconnect();
+    }
+  }
+}
+
 async function waitForChildHealth(
   url: string,
   child: ChildProcess,
@@ -171,10 +193,4 @@ function terminate(child: ChildProcess): void {
   if (child.exitCode === null && child.signalCode === null) {
     child.kill('SIGTERM');
   }
-}
-
-function closeServer(server: ReturnType<typeof createServer>): Promise<void> {
-  return new Promise((resolve, reject) => {
-    server.close((error) => (error ? reject(error) : resolve()));
-  });
 }
