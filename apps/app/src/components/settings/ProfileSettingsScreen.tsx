@@ -22,17 +22,16 @@ import {
   ProfileLifecycleDeleteConfirmContent,
   ProfileLifecycleIdentity,
   ProfileLifecycleReactivateContent,
-} from './ProfileLifecycleContent';
-import type { Ref } from 'react';
-import type { ProfileLifecycleProfile } from './ProfileLifecycleContent';
+} from '../profile/ProfileLifecycleContent';
+import type { ReactNode, Ref } from 'react';
+import type { ProfileLifecycleProfile } from '../profile/ProfileLifecycleContent';
 
 export type ProfileLifecycleAction = 'deactivate' | 'reactivate' | 'delete';
 export type ProfileLifecycleState = {
   action: ProfileLifecycleAction;
   phase: 'entry' | 'idle' | 'pending' | 'error' | 'success';
 };
-type Props = {
-  profile: ProfileLifecycleProfile;
+export type ProfileSettingsLifecycle = {
   state: ProfileLifecycleState;
   onAction: (action: ProfileLifecycleAction) => void;
   onCancel: () => void;
@@ -40,19 +39,20 @@ type Props = {
   onRetry: (action: ProfileLifecycleAction) => void;
 };
 
+type Props = {
+  profile: ProfileLifecycleProfile;
+  children: ReactNode;
+  lifecycle?: ProfileSettingsLifecycle;
+};
+
 /** Controlled presentation only: the caller owns request results, authentication and navigation. */
-export function ProfileLifecycle(props: Props) {
-  return <ProfileLifecycleSurface key={props.profile.id} {...props} />;
+export function ProfileSettingsScreen(props: Props) {
+  return <ProfileSettingsSurface key={props.profile.id} {...props} />;
 }
 
-function ProfileLifecycleSurface({
-  profile,
-  state,
-  onAction,
-  onCancel,
-  onConfirm,
-  onRetry,
-}: Props) {
+function ProfileSettingsSurface({ profile, children, lifecycle }: Props) {
+  const state = lifecycle?.state ?? { action: 'deactivate', phase: 'entry' };
+  const { onAction, onCancel, onConfirm, onRetry } = lifecycle ?? {};
   const theme = useTheme();
   const { height } = useWindowDimensions();
   const { action, phase } = state;
@@ -88,17 +88,17 @@ function ProfileLifecycleSurface({
   });
   const cancel = () => {
     if (confirming && !pending) {
-      onCancel();
+      onCancel?.();
     }
   };
   const confirm = () => {
     if (confirming && !pending) {
-      (phase === 'error' ? onRetry : onConfirm)(action);
+      (phase === 'error' ? onRetry : onConfirm)?.(action);
     }
   };
   const selectAction = (nextAction: ProfileLifecycleAction) => {
     if (!confirming) {
-      onAction(nextAction);
+      onAction?.(nextAction);
     }
   };
 
@@ -190,29 +190,34 @@ function ProfileLifecycleSurface({
               </>
             ) : (
               <>
-                <Text style={[textStyles.uiLabelM, { color: theme.foregroundSecondary }]}>
-                  프로필 관리
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  ref={deactivateRef}
-                  onPress={() => selectAction('deactivate')}
-                  style={[styles.actionRow, { borderColor: theme.borderSubtle }]}
-                >
-                  <View style={styles.rowCopy}>
-                    <Text style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}>
-                      프로필 비활성화
+                {children}
+                {lifecycle ? (
+                  <>
+                    <Text style={[textStyles.uiLabelM, { color: theme.foregroundSecondary }]}>
+                      프로필 관리
                     </Text>
-                    <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-                      프로필 활동과 공개를 일시적으로 중지합니다.
-                    </Text>
-                  </View>
-                  <ChevronRight
-                    aria-hidden
-                    color={theme.foregroundSecondary}
-                    size={iconSizes[24]}
-                  />
-                </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      ref={deactivateRef}
+                      onPress={() => selectAction('deactivate')}
+                      style={[styles.actionRow, { borderColor: theme.borderSubtle }]}
+                    >
+                      <View style={styles.rowCopy}>
+                        <Text style={[textStyles.uiLabelL, { color: theme.feedbackDangerBase }]}>
+                          프로필 비활성화
+                        </Text>
+                        <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
+                          프로필 활동과 공개를 일시적으로 중지합니다.
+                        </Text>
+                      </View>
+                      <ChevronRight
+                        aria-hidden
+                        color={theme.foregroundSecondary}
+                        size={iconSizes[24]}
+                      />
+                    </Pressable>
+                  </>
+                ) : null}
               </>
             )}
           </>
@@ -261,10 +266,11 @@ function LifecycleConfirmation({
   onConfirm,
   onCancel,
   cancelRef,
-}: Pick<Props, 'profile' | 'state' | 'onCancel'> & {
-  onConfirm: () => void;
-  cancelRef: Ref<View>;
-}) {
+}: Pick<Props, 'profile'> &
+  Pick<ProfileSettingsLifecycle, 'state' | 'onCancel'> & {
+    onConfirm: () => void;
+    cancelRef: Ref<View>;
+  }) {
   const [acknowledged, setAcknowledged] = useState(
     state.phase === 'pending' || state.phase === 'error',
   );

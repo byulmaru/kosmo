@@ -12,7 +12,7 @@
 - [영구 삭제 acknowledgement](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5096-15083)
 - [삭제 실패와 확인 유지](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4868-37698)
 
-`ProfileLifecycle`은 대상 identity와 lifecycle content를 렌더링하는 controlled presentation이다.
+`ProfileSettingsScreen`은 대상 identity·설정 content와 선택적인 lifecycle을 합성하는 controlled presentation이다.
 Settings route·shell·target selector는 조립하지 않는다. 세션의 현재 활동 Profile을 바꾸지 않으며,
 실제 권한·보존 기간·재인증·mutation·session·navigation은 PROD-815가 소유한다.
 기존 [Profile spec](../../openspec/specs/profile/spec.md)의 runtime 계약을 확장하지 않는다.
@@ -20,8 +20,23 @@ Settings route·shell·target selector는 조립하지 않는다. 세션의 현�
 
 ## 컴포넌트와 표시 상태
 
-`apps/app/src/components/profile/ProfileLifecycle.tsx`가 진입·확인·결과를 조립한다.
+`apps/app/src/components/settings/ProfileSettingsScreen.tsx`가 프로필 설정 화면을 소유한다.
+기존 설정은 필수 `children`으로 합성하며, `lifecycle`을 전달하지 않으면 비활성화 진입점도 표시하지 않는다.
+`ProfilePostingSettings`는 Figma의 게시물 기본 공개 범위와 팔로우 요청 자동 승인 두 field를 제공한다.
+입력값과 `onChange`만 받으며 draft·저장 수명은 caller가 소유한다. Web 공개 범위 선택은 native `select`,
+Native는 기존 ModalSheet·RadioGroup을 사용하고 Switch는 플랫폼 기본 control을 재사용한다.
 `ProfileLifecycleContent.tsx`는 identity와 세 확인 콘텐츠를 제공한다.
+
+2026-09-08 사용자 검토에서 다음 두 표현 경계를 확정했다.
+
+- 기본 설정 화면은 기존 게시 설정을 유지하고 lifecycle을 숨긴다. 도입 후 화면은 같은 설정 아래에
+  비활성화 진입점을 추가한다. [현재 Figma Target registry](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13422)의
+  `Show deactivation=False`와 [Lifecycle Active](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4868-38138)의 두 게시 설정을 함께 따른다.
+- 비활성화 확인은 Web·Native 모두 화면 내용을 교체하고, 재활성화·영구 삭제 확인은 팝업으로 연다.
+  비활성화 취소 후 caller가 보관한 설정값과 진입 버튼 focus를 복원한다.
+
+현재 앱의 `SettingsProfileDetail`은 기본 공개 범위 control을, Follow Approval은 Profile Edit를 사용한다.
+이번 Screen은 Figma Target 조립이며 기존 Settings route·목록·저장 consumer를 교체하지 않는다.
 Profile identity는 `ProfileListItemContent`·Avatar, 재활성화는 `ConfirmationContent`,
 확인창은 `ModalSheet`, 삭제 완료는 `StateView`, 결과 알림은 `ToastProvider`를 재사용한다.
 영구 삭제의 대상·설명·acknowledgement·인증 안내·48px action 행은
@@ -37,7 +52,7 @@ Profile identity는 `ProfileListItemContent`·Avatar, 재활성화는 `Confirmat
 | `phase=error`   | 대상과 확인 내용을 유지하고 Danger Toast 제공, 같은 확정 action으로 재시도        |
 | `phase=success` | 비활성화는 비활성 상태, 재활성화는 활성 관리, 영구 삭제는 identity 없는 삭제 완료 |
 
-`onAction`은 확인 진입, `onCancel`은 취소, `onConfirm`과 `onRetry`는 실행 의도를 전달한다.
+`lifecycle.state`는 위 표시 상태를 제공한다. `lifecycle.onAction`은 확인 진입, `onCancel`은 취소, `onConfirm`과 `onRetry`는 실행 의도를 전달한다.
 caller는 실행 시 즉시 `pending`으로 바꾸고 요청 결과에 따라 `success` 또는 `error`를 전달한다.
 공용 UI는 API를 호출하거나 성공을 추측하지 않는다. 실제 caller는 대상 ID와 요청 수명을 기준으로
 늦은 응답을 처리해야 한다. `profile.id` 또는 확인 action이 바뀌면 acknowledgement와 focus ref는 새로 만든다.
@@ -61,10 +76,15 @@ caller는 실행 시 즉시 `pending`으로 바꾸고 요청 결과에 따라 `s
 
 ## Storybook과 검증 경계
 
-`KOSMO/Patterns/Profile/Lifecycle`의 Playground는 수동 action/state/outcome·identity Controls와
-Actions를 제공한다. outcome은 caller의 요청 결과만 모의하며, 성공·오류·응답 대기를 비교한다.
+`KOSMO/Screens/Profile Settings`의 Playground는 lifecycle 미도입 상태를 기본으로 보여준다.
+`WithLifecycle`은 같은 게시 설정에 후속 lifecycle을 합성한 화면이다. 수동 lifecycleEnabled/action/state/outcome·
+identity Controls와 Actions를 제공하며 outcome은 caller의 요청 결과만 모의한다.
 별도 대표 상태는 확인·pending·error·deleted·긴 identity를 보여준다.
-자동 입력·callback·focus 검증은 `Lifecycle/Tests`에서만 실행하고 Controls를 비활성화한다.
+자동 입력·callback·focus·설정값 보존 검증은 `Profile Settings/Tests`에서 실행하고 Controls를 비활성화한다.
+기존 `KOSMO/Screens/Settings`의 현재 앱 route story는 그대로 유지한다.
+
+`KOSMO/Patterns/Profile/Lifecycle`은 세 확인 콘텐츠만 단독으로 검토하는 수동 Playground다.
+설정 화면 제목·설정 목록·화면 전환은 소유하지 않는다. 화면 조립과 중복된 interaction tests를 만들지 않는다.
 
 검증 대상은 확인 전 disabled, keyboard acknowledgement, confirm/cancel/retry, pending 중 중복 실행·dismiss
 차단, 오류 안내와 복구, 결과 표시와 focus 복귀다. Mobile 390·Compact 1024·Full 1440 및 Light/Dark를
