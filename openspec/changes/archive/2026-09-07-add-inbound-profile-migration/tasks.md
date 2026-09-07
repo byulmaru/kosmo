@@ -112,7 +112,7 @@ Profile Migration feature flag가 확인된 ON일 때만 Settings Profile detail
 
 ## Verification ledger (archive history — 2026-09-07)
 
-이 절은 archive 당시 확인한 실행 증거와 보장 경계를 기록한다. 12개 checkbox는 archive 당시 모두 완료 상태이며, 2026-09-08 Stack 분리 후 재검증은 아래와 같이 별도 pending이다. 이전 증거를 새 Stack 결과로 간주하지 않는다.
+이 절은 archive 당시 확인한 실행 증거와 보장 경계를 기록한다. 12개 checkbox는 archive 당시 모두 완료 상태이며, 2026-09-08 Stack 분리 후 재검증은 아래 `Post-split verification ledger`에 별도로 기록한다. 이전 증거와 현재 Stack 결과를 섞지 않는다.
 
 ### Confirmed execution evidence (archive history)
 
@@ -130,15 +130,17 @@ Profile Migration feature flag가 확인된 ON일 때만 Settings Profile detail
 - cross-slice 실행 중 기존 source removal `sendProfileUnfollowActivity`가 key pair 부재로 attempt 1/2 warning을 남겼지만 Workflow result와 scoped DB assertions는 pass했다. HTTP receipt은 본 change의 완료 조건이 아니다.
 - 서버 간 receipt 순서와 동시 Follow/Unfollow race에 대한 추가 보장은 제공하거나 검증하지 않는다.
 
-### Post-split revalidation (pending — 2026-09-08)
+### Post-split verification ledger (completed — 2026-09-08)
 
-- Stack 분리·간략화 후 새 테스트/CI 결과는 아직 없다. 각 layer의 exact head/base와 소유 범위 focused 검증, top의 cross-slice·strict spec 재검증을 새로 확인해야 한다.
+Stack 분리·간략화 후 각 layer의 exact head와 소유 범위를 독립적으로 재검증했다. 아래 결과로 하위 active ledger에 남아 있던 당시 pending 문구와 top-layer pending 문구를 해소한다. 각 결과는 다른 layer의 결과를 대신하지 않는다.
+
+- Bottom exact head `3e540c96f5593fb97433fada709d49d209dce62e`: Core preparation integration 6/6, API profile-migration integration 3/3, Fedify actor-alias delivery 4/4, API/Fedify TypeScript 검사를 통과했다.
+- Middle exact head `bd4018757c1594fc25d3dbe1f1c64b7bfef107cb`: Core Move coordinator 8/8, inbound Move protocol 9/9, Worker retry/cursor 1/1, Worker build를 통과했다.
+- Top exact head `7f1a377121bf60622b839ef887034e1febbc9889`: Settings focused unit 12/12, Relay compiler(`--noWatchman`), App TypeScript, Fedify TypeScript를 통과했다. Relay는 123 reader, 79 normalization, 137 operation text를 생성했다.
+- Top cross-slice 검증은 독립 실행에서 Storybook Chromium 5/5와 실제 PostgreSQL/Temporal full-flow 1/1을 통과했다. full-flow의 Worker 결과와 DB cleanup fixture 0, seed local instance 1을 확인했다.
+- Top canonical specs strict 검증(`openspec validate --specs --strict --no-interactive`)은 75/75 pass였다. 초기 active change(`openspec/changes/add-inbound-profile-migration`)는 top에서 archive(`openspec/changes/archive/2026-09-07-add-inbound-profile-migration`)로 이동했고 canonical `openspec/specs/inbound-profile-migration` 및 delta spec이 동기화되어 있다.
+- 위 결과는 local disposable PostgreSQL/Temporal 및 독립 Chromium 환경의 실행 증거다. 전체 Stack의 current proof로 재사용할 수 있는 범위와 각 layer의 exact SHA를 함께 보존한다.
 
 ### Archive-time environment cleanup (2026-09-07)
 
 - synthetic backend/API/protocol PostgreSQL DB와 각 runner의 정리를 완료했다. PostgreSQL 18.4 검증 cluster는 정상 종료했고 port `55432` listener와 Temporal 잔여 process가 각각 0개임을 확인했다. 복구용 cluster 파일은 보존하며, 제품 DB와 다른 test DB는 변경하지 않았다.
-
-### Post-split top-layer verification ledger (pending — 2026-09-08)
-
-- `PROD-743-settings`의 exact head/base, Settings UI, full-flow integration, canonical main specs와 archive artifact를 분리 후 다시 검증해야 한다.
-- 이 layer의 새 검증 결과가 생기기 전까지 archive 당시 증거와 bottom/middle의 pre-split evidence를 현재 top head 결과로 해석하지 않는다.
