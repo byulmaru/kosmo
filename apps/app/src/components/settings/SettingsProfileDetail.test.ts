@@ -9,6 +9,7 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
 type QueryData = {
   currentSession: {
+    account: { featureFlags: string[] } | null;
     selectedProfile: {
       id: string;
       instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
@@ -49,6 +50,12 @@ mock.module(new URL('../profile/ProfileDefaultPostVisibilityControl.tsx', import
       createElement('ProfileDefaultPostVisibilityControl', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../profile/ProfileMigrationSourceControl.tsx', import.meta.url), {
+  exports: {
+    ProfileMigrationSourceControl: (props: Record<string, unknown>) =>
+      createElement('ProfileMigrationSourceControl', props),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
   exports: {
     useShellChrome: () => ({
@@ -78,7 +85,7 @@ before(async () => {
 });
 
 afterEach(async () => {
-  queryData = { currentSession: { selectedProfile: null } };
+  queryData = { currentSession: { account: null, selectedProfile: null } };
   queryFetchKeys = [];
   openProfileSwitcherCalls = 0;
   queryMode = 'success';
@@ -97,7 +104,10 @@ describe('SettingsProfileDetail', () => {
       viewerState: { membership: { role: 'OWNER' as const } },
     };
     queryData = {
-      currentSession: { selectedProfile: profile },
+      currentSession: {
+        account: { featureFlags: ['profile-migration'] },
+        selectedProfile: profile,
+      },
     };
     await render();
 
@@ -105,6 +115,9 @@ describe('SettingsProfileDetail', () => {
     assert.equal(control.props.profile, profile);
     assert.equal(control.props.editable, true);
     assert.equal(control.props.showTitle, false);
+    const migration = rendered('ProfileMigrationSourceControl')[0];
+    assert.equal(migration.props.profile, profile);
+    assert.equal(migration.props.editable, true);
     assert.deepEqual(queryFetchKeys, [0]);
   });
 
@@ -114,15 +127,22 @@ describe('SettingsProfileDetail', () => {
       instance: { kind: 'LOCAL' as const },
       viewerState: { membership: { role: 'MEMBER' as const } },
     };
-    queryData = { currentSession: { selectedProfile: profile } };
+    queryData = {
+      currentSession: {
+        account: { featureFlags: ['profile-migration'] },
+        selectedProfile: profile,
+      },
+    };
     await render();
 
     assert.equal(rendered('ProfileDefaultPostVisibilityControl')[0].props.editable, false);
+    assert.equal(rendered('ProfileMigrationSourceControl')[0].props.editable, false);
   });
 
   it('selected Remote Profile에는 Local 공개 범위 control을 표시하지 않는다', async () => {
     queryData = {
       currentSession: {
+        account: { featureFlags: ['profile-migration'] },
         selectedProfile: {
           id: 'profile:remote',
           instance: { kind: 'ACTIVITYPUB' },
@@ -137,7 +157,7 @@ describe('SettingsProfileDetail', () => {
   });
 
   it('selected Profile이 없으면 기존 Profile 선택 흐름을 연다', async () => {
-    queryData = { currentSession: { selectedProfile: null } };
+    queryData = { currentSession: { account: null, selectedProfile: null } };
     await render();
 
     const state = rendered('StateView')[0];
@@ -148,7 +168,7 @@ describe('SettingsProfileDetail', () => {
   });
 
   it('production RouteBoundary가 manual retry와 actor lifecycle의 fetchKey를 소유한다', async () => {
-    queryData = { currentSession: { selectedProfile: null } };
+    queryData = { currentSession: { account: null, selectedProfile: null } };
     queryMode = 'error';
     const originalConsoleError = console.error;
     console.error = () => undefined;
@@ -174,6 +194,24 @@ describe('SettingsProfileDetail', () => {
     } finally {
       console.error = originalConsoleError;
     }
+  });
+
+  it('confirmed feature flag가 없거나 확인되지 않으면 migration control을 숨긴다', async () => {
+    const profile = {
+      id: 'profile:flag-off',
+      instance: { kind: 'LOCAL' as const },
+      viewerState: { membership: { role: 'OWNER' as const } },
+    };
+    queryData = {
+      currentSession: { account: { featureFlags: ['other-flag'] }, selectedProfile: profile },
+    };
+    await render();
+    assert.equal(rendered('ProfileMigrationSourceControl').length, 0);
+
+    queryData = { currentSession: { account: null, selectedProfile: profile } };
+    assert.ok(renderer);
+    await act(async () => renderer?.update(createElement(SettingsProfileDetail)));
+    assert.equal(rendered('ProfileMigrationSourceControl').length, 0);
   });
 });
 
