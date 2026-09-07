@@ -14,6 +14,10 @@ PROD-811이 실제 목록 연결, Relay projection·그룹 집계, 읽음 처리
 2026-09-07 readback과 DSN-42 최종 결정의 현재 kind는 Follow, FollowRequest, Reaction, Repost,
 Reply다. Mention은 Future 표본이므로 public props와 Playground에 노출하지 않는다.
 
+2026-09-08 사용자 승인으로 Reply/Mention의 Figma 표본을 아래 표시 계약으로 갱신했다.
+이 계약의 코드·Storybook·Tailnet 반영은 아직 완료되지 않았다. Mention의 디자인 승인은
+API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는다.
+
 ## 표시와 합성
 
 - Follow/FollowRequest/Reaction/Repost는 48px kind rail 안에 32px 아이콘을 표시한다. 원형 배경을
@@ -23,18 +27,19 @@ Reply다. Mention은 Future 표본이므로 public props와 Playground에 노출
 - Follow는 프로필, FollowRequest는 `/follow-requests`가 Target destination이며 inline 수락 버튼은
   없다. 기존 runtime과 notification OpenSpec의 requester-profile 이동은 아직 교체하지 않는다.
   PROD-811에서 navigation 계약과 spec을 함께 정렬해야 한다.
-- 일반 행은 최소 80px이며 긴 이름·문구에 맞춰 높이가 늘어난다. Reply header는 Web/iOS에서 44px,
-  Android에서는 접근성 기준에 따라 48dp 최소 target을 유지한다. Web inset은 좌 12px·우 16px,
-  Native는 좌우 8px, kind/content gap은 12px이다.
+- Follow/FollowRequest/Reaction/Repost 행은 최소 80px이며 긴 이름·문구에 맞춰 높이가 늘어난다.
+  Web inset은 좌 12px·우 16px, Native는 좌우 8px, kind/content gap은 12px이다.
+  Reply에는 별도 알림 header나 그 header의 최소 높이를 두지 않는다. 게시글 내부 링크와 action의
+  플랫폼별 접근성 target은 기존 Post 계약을 유지한다.
 - Web Read 배경은 투명, Unread는 Figma가 사용하는 `actionPrimarySubtle`과 4px
   `actionPrimaryBase` rail이다. Hover는 기존 배경 위에 `stateHover`를 얹으며 Unread의 primary 배경을
   지우지 않는다. 따라서 Read와 Unread의 hover 색상이 구분된다. keyboard focus는 `stateFocusRing`이다.
   이는 unread 전용 semantic token 신설이 아니다. Native는 Default 표시를 사용하되 접근 가능한 이름에
   unread 정보를 유지한다.
 - Reaction/Repost는 요약 헤더·한 줄 미리보기·썸네일을 하나의 이동 target으로 취급한다.
-  hover·읽음 배경과 읽음 rail은 알림 전체에 적용한다. Reply도 헤더와 PostListItem을 하나의 알림
-  surface로 표시하며 게시글 위에서도 전체 hover 배경이 유지된다. 헤더 이동 링크와 Post 내부 링크·
-  Action Bar는 독립적으로 동작하고, 내부 버튼 클릭이 알림 이동을 함께 실행하지 않는다.
+  hover·읽음 배경과 읽음 rail은 알림 전체에 적용한다. Reply도 게시글 전체를 하나의 알림 surface로
+  표시하며 게시글 위에서 전체 hover 배경이 유지된다. 별도 header 이동 링크는 없으며 Post 내부 링크·
+  Action Bar는 독립적으로 동작한다. 내부 버튼 클릭이 알림 이동을 함께 실행하지 않는다.
 - Follow에는 `UserRoundPlus`, Repost에는 `Repeat2`를 사용한다. Reaction의 Figma
   `FaceSlightlySmiling`은 설치된 Lucide export에 없으므로 Figma description과 [icons.md](./icons.md)의
   기존 `Smile` fallback을 유지한다.
@@ -46,14 +51,36 @@ Reply다. Mention은 Future 표본이므로 public props와 Playground에 노출
   가져오지 않고 프로덕션 UI의 SUIT와 본문의 Pretendard를 유지한다.
 - 미리보기의 하단 여백은 썸네일 유무와 무관하게 일반 행과 같은 8px이다.
   2026-09-07 사용자 결정에 따라 Figma Light/Dark 조합 표본과 구현을 함께 정렬했다.
-- Reply의 `children`에는 실제 `PostListItem`을 `showDivider={false}`와 필요한 attribution 설정으로
-  조합한다. Post action/provider·Relay ref는 기존 Post 계약을 따른다. 자식은 알림 이동 링크의 바깥에
-  위치해 action이 알림 이동을 함께 실행하지 않는다. 단일 하단 divider는 Notification wrapper가 소유한다.
+- Reply/Mention은 작성자 이름·핸들 → 알림 이유 → 본문·미디어 → Action Bar의 동일한 게시글
+  구성을 사용한다. 작성자 아바타·이름과 시각을 별도 알림 header에 중복 표시하지 않는다.
+  알림 안의 작성자 이름과 핸들은 한 줄에 배치하며 이름을 우선한다. 공간이 부족하면 핸들이 먼저
+  가려지고, 이름도 가용 폭을 넘으면 말줄임한다. 이 계약을 다른 Profile 표시 전체에 확대하지 않는다.
+- 둘째 줄은 답글 대상 목록이 아니라 현재 Recipient가 알림을 받은 이유다. Reply는
+  `회원님의 게시글에 답글을 남겼습니다`, Future Mention은 `회원님을 멘션했습니다`로 표시한다.
+  이 문구는 secondary 텍스트이며 Recipient 핸들을 별도 링크 색상으로 강조하지 않는다.
+  여러 Profile을 멘션한 글도 각 Recipient에게 같은 Mention 문구를 사용하며 본문의 멘션은 유지한다.
+- Reply/Mention 알림에는 원글 미리보기나 별도 받는 사람 목록을 추가하지 않는다. 결과 게시글을
+  활성화하면 해당 게시글 상세에서 대화 문맥을 확인한다. 이 제한은 Reaction/Repost의 actionless
+  미리보기에는 적용하지 않는다. 수신자별 Reply/Mention 중복 정책은
+  [Notification 도메인의 Future 계약](../domain/objects/notification.md#replymention-수신자별-분류와-중복-처리-future)을 따른다.
+- Reply는 실제 Post 컴포넌트와 기존 Action Bar를 재사용한다. Post action/provider·Relay ref는
+  기존 Post 계약을 따르며 action을 알림 이동 링크 안에 중첩하지 않는다. 단일 하단 divider는
+  Notification wrapper가 소유한다. 기존 `children`·attribution 합성 방식의 구체적 조정은 코드 반영 시
+  이 표시 계약에 맞춰 결정한다.
 - pending/disabled는 알림 이동을 차단한다. consumer가 pending 수명을 소유하며, presentation에서
   읽음 mutation·cache 또는 실패 복구 정책을 실행하지 않는다. Reply Post action의 상태는 해당 Post가
   소유한다. 권한 상실로 Post를 숨겨야 하면 consumer가 전체 item을 제거해야 한다.
 
 ## 검증 경계
+
+2026-09-08 Figma에서 Reply의 Light/Dark·긴 이름·읽음/읽지 않음 표본과 Mention의 Light/Dark
+표본을 시각 확인했다. 아래 기존 Storybook 검증은 변경 전 구현에 대한 것이므로 새 계약의 통과
+증거로 재사용하지 않는다. 코드 반영 시 중복 header 제거, 이름·핸들 overflow, 알림 이유 문구,
+원글 미리보기 부재, Action Bar의 독립 동작과 unread/hover 범위를 다시 검증해야 한다.
+
+PROD-811 통합 시 [현행 Notification OpenSpec](../../openspec/specs/notification/spec.md)의 기존
+Follow 표시 scenario(28px kind icon·image avatar와 복수 사용자 aggregation 없음)와 새 presentation의
+차이를 정렬한다. 이 문서의 target 계약만으로 기존 runtime scenario나 완료 task를 변경하지 않는다.
 
 개별 스토리 기본 폭은 실제 앱 중앙 열의 최대 폭과 같은 600px이며 좁은 화면에서는 가용 폭으로 줄어든다.
 Controls에서 320·390·600·720px 또는 전체 폭을 선택할 수 있다. LongContent만 320px를 기본값으로 쓴다.
