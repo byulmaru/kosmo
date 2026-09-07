@@ -242,6 +242,8 @@ export const OwnerMenuAndDirectActions: Story = {
       '프로필에 고정',
       '삭제',
     ]);
+    const pinMenu = body.getByRole('menu', { name: '더 보기 메뉴' });
+    expect(pinMenu.getBoundingClientRect().width).toBeCloseTo(160, 0);
     expect(await body.findByRole('menuitem', { name: '링크 복사' })).toBeVisible();
     expect(await body.findByRole('menuitem', { name: '프로필에 고정' })).toBeVisible();
     expect(await body.findByRole('menuitem', { name: '삭제' })).toBeVisible();
@@ -252,6 +254,8 @@ export const OwnerMenuAndDirectActions: Story = {
 
     await waitFor(() => expect(trigger).toHaveFocus());
     await userEvent.click(trigger);
+    const unpinMenu = await body.findByRole('menu', { name: '더 보기 메뉴' });
+    expect(unpinMenu.getBoundingClientRect().width).toBeCloseTo(160, 0);
     const profileLink = canvas.getByRole('link', { name: /코스모 작가/ });
     profileLink.focus();
     await waitFor(() =>

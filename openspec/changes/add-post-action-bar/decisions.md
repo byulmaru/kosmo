@@ -545,6 +545,18 @@
 - Consequences: Playground는 하나의 `replyState` control로 collapsed·expanded·disabled만 제공하고 Catalog와 interaction story에서 Reply pending fixture·assertion을 제거한다. canonical 문서와 OpenSpec은 Reply default·disabled를 Reaction·Bookmark default·pending·disabled와 구분한다. 공개 Reply 처리 상태와 production helper 반환 타입도 default·disabled로 제한한다.
 - Confirmation / Follow-up: focused Storybook에서 Reply 세 상태와 Repost pending을 함께 검증하고, disabled이면서 `expanded=true`인 consumer 입력도 `aria-disabled=true`·`aria-expanded=false`로 정규화되는지 확인한다. 저장소의 Action Bar Storybook·OpenSpec에 Reply pending fixture나 규범 문구가 남지 않았으며 공개 Reply 타입이 `pending`을 거부하는지도 확인한다.
 
+### More 메뉴 폭과 퇴장 중 항목 표시를 안정화한다
+
+- Decision Date: 2026-09-08
+- Decision Class: Human Decision
+- Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-863`, 사용자 승인 “More 최소 160px + 닫힘 중 표시 유지”
+- Status: Active
+- Context / Problem: 고정 callback의 빠른 완료로 퇴장 중인 메뉴 문구가 고정 해제로 바뀌고 intrinsic 폭이 늘어났다.
+- Decision Outcome: 게시글·프로필 More는 최소폭 160px을 사용한다. 다른 메뉴의 기본 128px은 유지한다. Web ActionMenu는 닫기 직전 항목을 퇴장 동안 표시하고 다음 open에서 최신 항목을 사용한다. 선택 callback은 즉시 실행하며 Native의 퇴장 후 실행 순서는 유지한다.
+- Alternatives Considered: 전역 최소폭 변경은 Repost·picker까지 넓히므로 제외했다. callback을 퇴장 뒤로 미루면 clipboard 사용자 활성화와 기존 focus 계약에 영향을 주므로 제외했다.
+- Consequences: More consumer가 공용 메뉴의 최소폭을 지정한다. 이 결정은 More 표시만 확장하며 기존 Repost 메뉴의 128px 계약을 대체하지 않는다.
+- Confirmation / Follow-up: 기존 ActionMenu 단위 테스트로 퇴장 중 항목 유지·callback 시점·재열기를 검증하고 Pin Storybook에서 고정 전후 160px 폭을 확인한다. PROD-863이 이 변경의 검증을 소유하며 전체 OpenSpec archive는 기존 통합 책임을 유지한다.
+
 ## Remaining Decisions
 
 - 없음.

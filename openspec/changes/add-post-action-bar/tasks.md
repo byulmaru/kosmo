@@ -318,3 +318,9 @@ Reaction과 Repost가 전역 feedback 의미와 분리된 presentation semantic�
 
 - [x] 8.1 Repost child의 미선택 base color override를 제거하고 기존 selected·hover semantic을 유지한다.
 - [x] 8.2 Light·Dark Storybook 회귀와 app·OpenSpec 검증을 통과시킨다.
+
+## PROD-863 More 메뉴 표시 안정화
+
+- [x] 게시글·프로필 More 최소폭 160px, 다른 메뉴 기본 128px을 적용한다.
+- [x] Web callback 시점을 유지하면서 퇴장 중 항목을 보존하고 다음 open에서 갱신한다.
+- [x] ActionMenu 단위 테스트 5개, Pin·공용 메뉴·관련 More Storybook 147개, 타입 검사와 static build 검증을 완료한다.

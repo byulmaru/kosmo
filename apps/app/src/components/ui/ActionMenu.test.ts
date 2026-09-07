@@ -217,6 +217,7 @@ test('Web ActionMenu stays mounted through exit motion before unmounting', async
   const selected: string[] = [];
   const props = {
     accessibilityLabel: '메뉴',
+    webMinWidth: 160,
     items: [{ key: 'open-modal', label: '확인 열기', onSelect: () => selected.push('selected') }],
     renderTrigger: ({ onPress }: { onPress: () => void }) =>
       createElement(PressableHost, { onPress, testID: 'trigger' }),
@@ -237,9 +238,20 @@ test('Web ActionMenu stays mounted through exit motion before unmounting', async
   assert.equal(exitingMenu?.props['aria-hidden'], true);
   assert.equal(exitingMenu?.props.accessibilityElementsHidden, true);
 
+  const nextProps = {
+    ...props,
+    items: [{ ...props.items[0]!, label: '더 길어진 다음 메뉴 항목' }],
+  };
+  await act(async () => renderer?.update(createElement(actionMenuModule!.ActionMenu, nextProps)));
+  assert.equal(renderer?.root.findByType(TextHost).props.children, '확인 열기');
+  assert.equal(flattenStyle(exitingMenu?.props.style).minWidth, 160);
+
   exitMounted = false;
   await act(async () => renderer?.update(createElement(actionMenuModule!.ActionMenu, props)));
   assert.equal(renderer?.root.findAllByProps({ role: 'menu' }).length, 0);
+  await act(async () => renderer?.update(createElement(actionMenuModule!.ActionMenu, nextProps)));
+  await act(async () => renderer?.root.findByProps({ testID: 'trigger' }).props.onPress());
+  assert.equal(renderer?.root.findByType(TextHost).props.children, '더 길어진 다음 메뉴 항목');
   await act(async () => renderer?.unmount());
   platformOS = 'ios';
 });

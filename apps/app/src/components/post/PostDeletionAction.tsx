@@ -264,6 +264,7 @@ export function PostDeletionAction({ items = [], onDeleted, post: postKey }: Pro
   return (
     <>
       <ActionMenu
+        webMinWidth={160}
         accessibilityLabel="더 보기 메뉴"
         disabled={requesting || isDeleting}
         items={menuItems}

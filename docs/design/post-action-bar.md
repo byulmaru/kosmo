@@ -196,6 +196,11 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 ## More 링크 복사 menu
 
+- Web More 메뉴는 게시글·프로필에서 최소폭 160px을 사용한다. `프로필에 고정`과 `프로필 고정 해제`의
+  문구 전환으로 폭이 달라지지 않게 여유를 두며, Repost와 다른 메뉴의 기본 최소폭 128px은 유지한다.
+- Web ActionMenu는 퇴장 애니메이션 동안 닫기 직전 항목의 문구·아이콘·폭을 유지하고 다음 open에서 최신
+  항목을 표시한다. 선택 callback은 사용자 입력 시점에 즉시 실행해 clipboard 등 사용자 활성화를 보존한다.
+
 - Web의 More menu는 Repost와 같은 외부 overlay·viewport 보정·dismiss·keyboard 계약을 재사용하되 More
   trigger의 오른쪽을 기준으로 왼쪽을 향해 펼친다. menu card의 오른쪽 경계는 trigger 오른쪽보다 5px
   바깥에 두고 첫 item의 시각 target 오른쪽 경계는 trigger 오른쪽과 맞춘다. 따라서 28×36px Web More trigger는

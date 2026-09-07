@@ -74,6 +74,7 @@ function ProfilePinActionContent(props: Props) {
   };
   return (
     <ActionMenu
+      webMinWidth={160}
       accessibilityLabel="더 보기 메뉴"
       disabled={pending}
       items={[

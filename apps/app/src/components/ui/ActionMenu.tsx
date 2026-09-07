@@ -54,6 +54,7 @@ type Props = {
   items: readonly ActionMenuItem[];
   webMinWidth?: number;
   sheetIconSize?: 20 | 24;
+  webMinWidth?: number;
   onOpenChange?: (open: boolean) => void;
   renderTrigger: (props: ActionMenuTriggerRenderProps) => ReactNode;
 } & (
@@ -92,6 +93,7 @@ export function ActionMenu({
   renderTrigger,
   webMinWidth = defaultWebMenuMinWidth,
   sheetIconSize = 20,
+  webMinWidth = defaultWebMenuMinWidth,
   webPlacement,
   webHorizontalPlacement = 'start',
   webVerticalPlacement = 'start',
@@ -104,6 +106,7 @@ export function ActionMenu({
   const triggerRef = useRef<View>(null);
   const [hoveredWebItemKey, setHoveredWebItemKey] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [closingItems, setClosingItems] = useState(items);
   const previousOpenRef = useRef(open);
   const [webPosition, setWebPosition] = useState({ left: 0, top: 0 });
   const presentation = useContext(ActionMenuPresentationContext);
@@ -174,16 +177,20 @@ export function ActionMenu({
   const dismiss = useCallback(
     (restoreFocus = true) => {
       setHoveredWebItemKey(null);
+      setClosingItems(items);
       setOpen(false);
       if (restoreFocus) {
         focusTrigger();
       }
     },
-    [focusTrigger],
+    [focusTrigger, items],
   );
   const toggle = useCallback(() => {
     if (!disabled) {
       setHoveredWebItemKey(null);
+      if (open) {
+        setClosingItems(items);
+      }
       setOpen((value) => {
         if (!value) {
           positionWebMenu();
@@ -191,7 +198,7 @@ export function ActionMenu({
         return !value;
       });
     }
-  }, [disabled, positionWebMenu]);
+  }, [disabled, items, open, positionWebMenu]);
   const select = useCallback(
     (item: ActionMenuItem) => {
       if (web) {
@@ -387,7 +394,7 @@ export function ActionMenu({
                   },
                 ]}
               >
-                {items.map((item, index) => {
+                {(open ? items : closingItems).map((item, index) => {
                   const Icon = item.icon;
                   const itemColor =
                     item.tone === 'danger' ? theme.feedbackDangerOnSubtle : theme.foregroundPrimary;
