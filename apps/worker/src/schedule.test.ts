@@ -78,6 +78,7 @@ test('스케줄 목록은 이미 있는 항목을 건너뛰고 나머지도 생�
         throw new ScheduleAlreadyRunning('already exists', options.scheduleId);
       }
       created.push(options);
+      return undefined;
     },
   };
 
