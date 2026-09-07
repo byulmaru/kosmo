@@ -17,6 +17,7 @@ RUN pnpm runtime set node ${NODE_VERSION} -g
 FROM base AS workspace
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches ./patches
 COPY apps/admin/package.json ./apps/admin/package.json
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/app/package.json ./apps/app/package.json
