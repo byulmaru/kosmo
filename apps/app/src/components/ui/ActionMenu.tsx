@@ -52,8 +52,10 @@ type Props = {
   accessibilityLabel: string;
   disabled?: boolean;
   items: readonly ActionMenuItem[];
+  onOpenChange?: (open: boolean) => void;
   renderTrigger: (props: ActionMenuTriggerRenderProps) => ReactNode;
-  webHorizontalPlacement?: 'start' | 'end';
+  webHorizontalPlacement?: 'after' | 'end' | 'start';
+  webVerticalPlacement?: 'end' | 'start';
 };
 
 type ActionMenuPresentation = 'platform' | 'sheet';
@@ -79,8 +81,10 @@ export function ActionMenu({
   accessibilityLabel,
   disabled = false,
   items,
+  onOpenChange,
   renderTrigger,
   webHorizontalPlacement = 'start',
+  webVerticalPlacement = 'start',
 }: Props): ReactNode {
   const theme = useTheme();
   const elevation = useElevation();
@@ -91,6 +95,7 @@ export function ActionMenu({
   const triggerRef = useRef<View>(null);
   const [hoveredWebItemKey, setHoveredWebItemKey] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const previousOpenRef = useRef(open);
   const [webPosition, setWebPosition] = useState({ left: 0, top: 0 });
   const presentation = useContext(ActionMenuPresentationContext);
   const web = Platform.OS === 'web' && presentation === 'platform';
@@ -115,14 +120,17 @@ export function ActionMenu({
     const viewportWidth = trigger.ownerDocument.documentElement.clientWidth;
     const viewportHeight = trigger.ownerDocument.documentElement.clientHeight;
     const anchoredLeft =
-      webHorizontalPlacement === 'end'
-        ? triggerRect.right + webMenuInset - menuWidth
-        : triggerRect.left - webMenuInset;
+      webHorizontalPlacement === 'after'
+        ? triggerRect.right + space[8]
+        : webHorizontalPlacement === 'end'
+          ? triggerRect.right + webMenuInset - menuWidth
+          : triggerRect.left - webMenuInset;
+    const anchoredTop =
+      webVerticalPlacement === 'end'
+        ? triggerRect.bottom - menuHeight
+        : triggerRect.top - webMenuInset;
     const viewportLeft = Math.max(0, Math.min(anchoredLeft, viewportWidth - menuWidth));
-    const viewportTop = Math.max(
-      0,
-      Math.min(triggerRect.top - webMenuInset, viewportHeight - menuHeight),
-    );
+    const viewportTop = Math.max(0, Math.min(anchoredTop, viewportHeight - menuHeight));
     const nextPosition = {
       left: viewportLeft + ownerWindow.scrollX,
       top: viewportTop + ownerWindow.scrollY,
@@ -133,7 +141,15 @@ export function ActionMenu({
         ? current
         : nextPosition,
     );
-  }, [items.length, web, webHorizontalPlacement]);
+  }, [items.length, web, webHorizontalPlacement, webVerticalPlacement]);
+
+  useEffect(() => {
+    if (previousOpenRef.current === open) {
+      return;
+    }
+    previousOpenRef.current = open;
+    onOpenChange?.(open);
+  }, [onOpenChange, open]);
 
   const focusTrigger = useCallback(() => {
     triggerRef.current?.focus();
