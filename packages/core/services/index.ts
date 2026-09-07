@@ -50,6 +50,15 @@ export {
 export type { AcceptProfileFollowRequestResult } from './profile-follow-transaction';
 export type { PrepareProfileMigrationInput } from './profile-migration';
 export { prepareProfileMigration } from './profile-migration';
+export type {
+  ProfileMigrationMoveFollower,
+  ProfileMigrationMoveFollowerInput,
+  ProfileMigrationMoveInput,
+} from './profile-migration-move';
+export {
+  executeProfileMigrationMoveFollower,
+  loadProfileMigrationMoveFollowerBatch,
+} from './profile-migration-move';
 export { muteProfile, unmuteProfile } from './profile-mute';
 export { updateProfile } from './profile-update';
 export { addReaction, deleteReaction } from './reaction';
