@@ -1,7 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- Metro loads its config through CommonJS.
 const http = require('node:http');
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- Metro loads its config through CommonJS.
-const { getDefaultConfig } = require('expo/metro-config');
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 
 const WEB_BFF_PORT = 5174;
 // Generic application/json belongs to Metro manifests and symbolication too, so only
@@ -12,7 +12,7 @@ const FEDERATION_MEDIA_TYPES = new Set([
   'application/ld+json',
   'application/xrd+xml',
 ]);
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname);
 const defaultEnhanceMiddleware = config.server.enhanceMiddleware;
 
 const preferredMediaTypes = (value) => {

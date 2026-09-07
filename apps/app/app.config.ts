@@ -62,6 +62,16 @@ const config: ExpoConfig = {
     'expo-router',
     'expo-secure-store',
     [
+      '@sentry/react-native/expo',
+      {
+        experimental_android: {
+          enableAndroidGradlePlugin: true,
+        },
+        organization: process.env.SENTRY_ORG,
+        project: process.env.SENTRY_PROJECT,
+      },
+    ],
+    [
       'expo-image-picker',
       {
         cameraPermission: false,
