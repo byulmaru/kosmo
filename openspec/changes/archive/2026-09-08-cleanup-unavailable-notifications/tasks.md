@@ -98,7 +98,7 @@ PR #661·#665·#666의 전체 범위를 통합 검증하고 최신 계약·canon
 
 **Guardrails**
 
-- 모든 declared task와 required validation evidence가 완료되기 전에는 change를 archive하지 않는다.
+- 미완료 검증이 남아 있는 동안 PROD-328을 완료로 표시하지 않는다.
 - PR readiness와 OpenSpec completion을 별도로 판단한다.
 - 계약 충돌이 발견되면 canonical 문서와 Linear 계약을 먼저 정렬한 뒤 OpenSpec을 갱신한다.
 
@@ -111,3 +111,5 @@ PR #661·#665·#666의 전체 범위를 통합 검증하고 최신 계약·canon
 - [ ] 4.3 dev에서 active Schedule 생성과 Workflow 실행 상태를 확인한다.
 - [x] 4.4 최신 Linear 계약과 OpenSpec artifacts를 동기화한다.
 - [ ] 4.5 전체 범위 완료 뒤 strict validation과 canonical sync를 확인하고 change를 archive한다.
+
+> Archive note (2026-09-08): 이 change는 명시적인 사용자 승인에 따라 canonical spec 동기화 뒤 보관한다. 3.3, 3.5, 4.1, 4.2, 4.3, 4.5의 미완료 표시는 유지하며, archive 자체는 PROD-328 완료나 dev 배포·실행 증명을 의미하지 않는다. Worker 시작 경계 직접 검증은 미실행 후속 항목으로 남기고, dev 동작 확인은 merge·배포 이후 수행한다.
