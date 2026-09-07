@@ -1,6 +1,7 @@
 name: Terraform
 
 on:
+  workflow_dispatch:
   pull_request:
     branches:
       - main
@@ -220,13 +221,25 @@ jobs:
 
   apply:
     name: Terraform Apply
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04-arm
     environment: terraform-apply
 
     steps:
+      - name: Validate manual ref
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "Manual Terraform recovery is allowed only for refs/heads/main; got ${GITHUB_REF}." >&2
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
@@ -302,6 +315,7 @@ jobs:
         run: terraform init
 
       - name: Download reviewed Terraform plan
+        if: ${{ github.event_name == 'push' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -366,6 +380,7 @@ jobs:
           } >> "${GITHUB_ENV}"
 
       - name: Compare reviewed and current Terraform plans
+        if: ${{ github.event_name == 'push' }}
         working-directory: ${{ env.TF_ROOT }}
         run: |
           set -euo pipefail
@@ -432,6 +447,7 @@ jobs:
           fi
 
       - name: Summarize Terraform apply
+        if: ${{ github.event_name == 'push' }}
         run: |
           {
             echo "## Terraform apply"
@@ -442,7 +458,7 @@ jobs:
             echo "- Plan workflow run: [${TF_PLAN_SOURCE_RUN_ID}](${TF_PLAN_SOURCE_URL})"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Terraform apply saved plan
+      - name: Terraform apply
         working-directory: ${{ env.TF_ROOT }}
         run: |
           set -euo pipefail
@@ -461,7 +477,11 @@ jobs:
           }
 
           trap cleanup_lock_on_cancel INT TERM
-          terraform apply -auto-approve terraform.tfplan &
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            terraform apply -auto-approve &
+          else
+            terraform apply -auto-approve terraform.tfplan &
+          fi
           terraform_pid=$!
           wait "${terraform_pid}"
 
