@@ -1,12 +1,7 @@
-import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import {
-  Client,
-  Connection,
-  ScheduleAlreadyRunning,
-  ScheduleOverlapPolicy,
-} from '@temporalio/client';
+import { Client, Connection, ScheduleAlreadyRunning } from '@temporalio/client';
 import { z } from 'zod';
 import type { ScheduleOptions } from '@temporalio/client';
+import { notificationCleanupSchedule } from './schedules/notification-cleanup';
 
 const scheduleEnvironmentSchema = z.object({
   TEMPORAL_ADDRESS: z
@@ -19,7 +14,7 @@ const scheduleEnvironmentSchema = z.object({
     .min(1, 'TEMPORAL_NAMESPACE is required'),
 });
 
-type NotificationCleanupScheduleEnvironment = {
+type ScheduleEnvironment = {
   readonly address: string;
   readonly namespace: string;
 };
@@ -28,9 +23,12 @@ type ScheduleClientLike = {
   readonly create: (options: ScheduleOptions) => Promise<unknown>;
 };
 
-export function parseScheduleEnvironment(
-  environment: NodeJS.ProcessEnv,
-): NotificationCleanupScheduleEnvironment {
+type ScheduleRegistration = {
+  readonly scheduleId: string;
+  readonly action: 'created' | 'unchanged';
+};
+
+export function parseScheduleEnvironment(environment: NodeJS.ProcessEnv): ScheduleEnvironment {
   const result = scheduleEnvironmentSchema.safeParse(environment);
   if (!result.success) {
     throw new Error(result.error.issues[0]?.message ?? 'Schedule environment is invalid');
@@ -42,42 +40,35 @@ export function parseScheduleEnvironment(
   };
 }
 
-export async function createNotificationCleanupSchedule(
+export async function createScheduleIfMissing(
   scheduleClient: ScheduleClientLike,
-  scheduleId: string,
-): Promise<'created' | 'unchanged'> {
+  options: ScheduleOptions,
+): Promise<ScheduleRegistration> {
   try {
-    await scheduleClient.create({
-      scheduleId,
-      spec: {
-        intervals: [{ every: '24 hours' }],
-      },
-      action: {
-        type: 'startWorkflow',
-        workflowType: 'notificationCleanupWorkflow',
-        workflowId: `${scheduleId}-workflow`,
-        taskQueue: KOSMO_TASK_QUEUE,
-        args: [],
-      },
-      policies: {
-        overlap: ScheduleOverlapPolicy.SKIP,
-      },
-      state: {
-        paused: false,
-      },
-    });
-    return 'created';
+    await scheduleClient.create(options);
+    return { scheduleId: options.scheduleId, action: 'created' };
   } catch (error) {
     if (error instanceof ScheduleAlreadyRunning) {
-      return 'unchanged';
+      return { scheduleId: options.scheduleId, action: 'unchanged' };
     }
     throw error;
   }
 }
 
-export async function runNotificationCleanupSchedule(
+export async function createSchedules(
+  scheduleClient: ScheduleClientLike,
+  schedules: readonly ScheduleOptions[],
+): Promise<ScheduleRegistration[]> {
+  const registrations: ScheduleRegistration[] = [];
+  for (const schedule of schedules) {
+    registrations.push(await createScheduleIfMissing(scheduleClient, schedule));
+  }
+  return registrations;
+}
+
+export async function runSchedules(
   environment: NodeJS.ProcessEnv = process.env,
-): Promise<'created' | 'unchanged'> {
+): Promise<ScheduleRegistration[]> {
   const config = parseScheduleEnvironment(environment);
   const connection = await Connection.connect({
     address: config.address,
@@ -86,10 +77,7 @@ export async function runNotificationCleanupSchedule(
 
   try {
     const client = new Client({ connection, namespace: config.namespace });
-    return await createNotificationCleanupSchedule(
-      client.schedule,
-      `${config.namespace}-notification-cleanup`,
-    );
+    return await createSchedules(client.schedule, [notificationCleanupSchedule(config.namespace)]);
   } finally {
     await connection.close();
   }
@@ -97,8 +85,8 @@ export async function runNotificationCleanupSchedule(
 
 if (import.meta.main) {
   try {
-    const action = await runNotificationCleanupSchedule();
-    console.log(JSON.stringify({ event: 'notification_cleanup_schedule', action }));
+    const schedules = await runSchedules();
+    console.log(JSON.stringify({ event: 'temporal_schedules_registered', schedules }));
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
