@@ -165,7 +165,11 @@ export function ProfileHero({ action, mute, loading = false, profile = null }: P
           <View
             style={[
               actionGeometry,
-              { flexDirection: 'row', alignItems: 'flex-start', gap: space[8] },
+              {
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                gap: space[16] - actionTargetInset,
+              },
             ]}
           >
             {mute ? (

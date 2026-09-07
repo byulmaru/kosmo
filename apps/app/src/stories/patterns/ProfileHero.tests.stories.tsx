@@ -1,4 +1,5 @@
 import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { semanticColors } from '@/theme/tokens';
 import baseMeta from './ProfileHero.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -10,6 +11,12 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+function getTriggerVisual(trigger: HTMLElement) {
+  const visual = trigger.firstElementChild;
+  expect(visual).toBeInstanceOf(HTMLElement);
+  return visual as HTMLElement;
+}
 
 export const MobileFollowError: Story = {
   args: { containerWidth: 390 },
@@ -34,9 +41,16 @@ export const CenterGeometryContract: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const moreButton = canvas.getByRole('button', { name: '더보기' });
+    const moreRect = getTriggerVisual(moreButton).getBoundingClientRect();
     const followButton = canvas.getByRole('button', { name: '팔로우' });
-    expect(followButton.getBoundingClientRect().height).toBe(40);
-    expect(followButton.getBoundingClientRect().width).toBe(96);
+    const followRect = followButton.getBoundingClientRect();
+    expect(moreRect.height).toBe(40);
+    expect(moreRect.width).toBe(40);
+    expect(followRect.height).toBe(40);
+    expect(followRect.width).toBe(96);
+    expect(followRect.left - moreRect.right).toBeCloseTo(16, 0);
+    expect(followRect.top).toBeCloseTo(moreRect.top, 0);
     expect(canvas.getByRole('heading', { name: '프로필 히어로' })).toBeVisible();
     expect(canvas.getByRole('link', { name: /팔로잉/ })).toHaveAttribute(
       'href',
@@ -54,9 +68,16 @@ export const MobileGeometryContract: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const moreButton = canvas.getByRole('button', { name: '더보기' });
+    const moreRect = getTriggerVisual(moreButton).getBoundingClientRect();
     const followButton = canvas.getByRole('button', { name: '팔로우' });
-    expect(followButton.getBoundingClientRect().height).toBe(40);
-    expect(followButton.getBoundingClientRect().width).toBe(96);
+    const followRect = followButton.getBoundingClientRect();
+    expect(moreRect.height).toBe(40);
+    expect(moreRect.width).toBe(40);
+    expect(followRect.height).toBe(40);
+    expect(followRect.width).toBe(96);
+    expect(followRect.left - moreRect.right).toBeCloseTo(16, 0);
+    expect(followRect.top).toBeCloseTo(moreRect.top, 0);
     expect(canvas.getByTestId('profile-hero-surface').getBoundingClientRect().width).toBe(390);
     expect(canvas.getByLabelText('프로필 히어로 프로필 이미지')).toBeVisible();
   },
@@ -149,20 +170,18 @@ export const MenuMuteContract: Story = {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     const trigger = canvas.getByRole('button', { name: '더보기' });
-    expect(trigger.getBoundingClientRect().width).toBe(32);
+    expect(trigger.getBoundingClientRect().height).toBe(40);
+    expect(trigger.getBoundingClientRect().width).toBe(40);
     await userEvent.click(trigger);
     expect(await body.findByRole('menuitem', { name: '프로필 링크 복사' })).toBeVisible();
     const menu = body.getByRole('menu', { name: '더보기' });
     await waitFor(() =>
       expect(
         Math.abs(menu.getBoundingClientRect().right - trigger.getBoundingClientRect().right),
-      ).toBeLessThanOrEqual(5),
+      ).toBeLessThanOrEqual(1),
     );
     await waitFor(() =>
-      expect(menu.getBoundingClientRect().top - trigger.getBoundingClientRect().bottom).toBeCloseTo(
-        8,
-        0,
-      ),
+      expect(menu.getBoundingClientRect().top).toBeCloseTo(trigger.getBoundingClientRect().top, 0),
     );
     await userEvent.click(body.getByRole('menuitem', { name: '뮤트' }));
     await userEvent.click(await body.findByRole('button', { name: '취소' }));
@@ -173,6 +192,67 @@ export const MenuMuteContract: Story = {
     await userEvent.click(await body.findByRole('button', { name: '뮤트' }));
     expect(await canvas.findByText('이 사용자의 게시글은 뮤트되어 있습니다.')).toBeVisible();
     expect(canvas.getByRole('button', { name: '팔로우' })).toBeVisible();
+    await waitFor(() => expect(trigger).toHaveFocus());
+  },
+};
+
+export const MoreButtonInteraction: Story = {
+  args: { actionSize: 'medium' },
+  globals: { theme: 'light', viewport: { isRotated: false, value: 'kosmoFull' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '더보기' });
+    const visual = getTriggerVisual(trigger);
+    const serializeColor = (color: string) => {
+      const probe = canvasElement.ownerDocument.createElement('div');
+      probe.style.color = color;
+      return probe.style.color;
+    };
+    const hoverColor = serializeColor(semanticColors.light.stateHover);
+    const pressedColor = serializeColor(semanticColors.light.statePressed);
+
+    await userEvent.hover(trigger);
+    await waitFor(() => expect(getComputedStyle(visual).backgroundColor).toBe(hoverColor));
+    await userEvent.pointer({ keys: '[MouseLeft>]', target: trigger });
+    await waitFor(() => expect(getComputedStyle(visual).backgroundColor).toBe(pressedColor));
+    await userEvent.pointer({ keys: '[/MouseLeft]', target: trigger });
+    await userEvent.keyboard('{Escape}');
+
+    trigger.blur();
+    await userEvent.tab();
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await waitFor(() => {
+      const style = getComputedStyle(visual);
+      expect(style.backgroundColor).toBe(hoverColor);
+      expect(style.outlineStyle).toBe('solid');
+      expect(style.outlineWidth).toBe('2px');
+    });
+  },
+};
+
+export const CompactMenuViewportCollision: Story = {
+  args: { actionSize: 'medium' },
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const trigger = canvas.getByRole('button', { name: '더보기' });
+    Object.assign(trigger.style, { bottom: '8px', left: '8px', position: 'fixed' });
+    await userEvent.click(trigger);
+    const menu = await body.findByRole('menu', { name: '더보기' });
+    const viewport = canvasElement.ownerDocument.documentElement;
+
+    await waitFor(() => {
+      const menuRect = menu.getBoundingClientRect();
+      const triggerRect = trigger.getBoundingClientRect();
+      expect(menuRect.left).toBeGreaterThanOrEqual(0);
+      expect(menuRect.top).toBeGreaterThanOrEqual(0);
+      expect(menuRect.right).toBeLessThanOrEqual(viewport.clientWidth);
+      expect(menuRect.bottom).toBeLessThanOrEqual(viewport.clientHeight);
+      expect(menuRect.bottom).toBeCloseTo(triggerRect.bottom, 0);
+    });
+
+    await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(trigger).toHaveFocus());
   },
 };

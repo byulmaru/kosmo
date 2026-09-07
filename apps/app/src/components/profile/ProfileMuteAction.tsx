@@ -1,14 +1,14 @@
-import { MoreHorizontal, Volume2, VolumeOff } from 'lucide-react-native';
+import { Volume2, VolumeOff } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
-import { IconButton } from '@/components/ui/IconButton';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, breakpoints, iconSizes, textStyles } from '@/theme/tokens';
+import { borderWidths, breakpoints, textStyles } from '@/theme/tokens';
+import { ProfileMoreButton } from './ProfileMoreButton';
 import type { ComponentProps } from 'react';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 
@@ -143,8 +143,9 @@ function ProfileMuteActionContent({
             ...items,
             { icon: muted ? Volume2 : VolumeOff, key: 'mute', label, onSelect: activate },
           ]}
-          webHorizontalPlacement="end"
-          webVerticalPlacement="after"
+          {...(renderTrigger
+            ? ({ webHorizontalPlacement: 'end', webVerticalPlacement: 'after' } as const)
+            : ({ webPlacement: 'overlap-end' } as const))}
           renderTrigger={(trigger) => {
             const { expanded, focusTrigger: focus, onPress, ref } = trigger;
             focusTrigger.current = focus;
@@ -152,17 +153,12 @@ function ProfileMuteActionContent({
               return renderTrigger(trigger);
             }
             return (
-              <IconButton
-                accessibilityLabel="더보기"
-                accessibilityState={{ expanded, busy: pending }}
-                aria-haspopup="menu"
-                aria-expanded={expanded}
+              <ProfileMoreButton
                 controlRef={ref}
                 disabled={pending}
+                expanded={expanded}
                 onPress={onPress}
-              >
-                <MoreHorizontal color={theme.foregroundPrimary} size={iconSizes[20]} />
-              </IconButton>
+              />
             );
           }}
         />
