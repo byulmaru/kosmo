@@ -199,6 +199,11 @@ export const DeactivateContract: Story = {
     );
     await userEvent.click(canvas.getByRole('switch', { name: '팔로우 요청 자동 승인' }));
     await userEvent.click(trigger);
+    await waitFor(() =>
+      expect(
+        canvas.getByRole('heading', { name: '비활성화' }).closest('[tabindex="-1"]'),
+      ).toHaveFocus(),
+    );
     await expect(page.queryByRole('dialog')).not.toBeInTheDocument();
     await expect(page.queryByRole('alertdialog')).not.toBeInTheDocument();
     await expect(canvas.queryByRole('combobox')).not.toBeInTheDocument();
@@ -237,6 +242,9 @@ export const DeactivateContract: Story = {
     await expect(args.onConfirm).toHaveBeenCalledWith('deactivate');
     await waitFor(() => expect(canvas.getByText('이 프로필은 비활성 상태예요')).toBeVisible());
     await expect(canvas.getByRole('button', { name: '다시 활성화' })).toBeVisible();
+    await waitFor(() =>
+      expect(page.getByRole('alert')).toHaveTextContent('프로필을 비활성화했어요.'),
+    );
     await expect(args.onAction).toHaveBeenCalledTimes(2);
     await expect(args.onAction).toHaveBeenCalledWith('deactivate');
   },
@@ -292,6 +300,9 @@ export const ReactivateContract: Story = {
     await expect(args.onConfirm).toHaveBeenCalledTimes(1);
     await expect(args.onConfirm).toHaveBeenCalledWith('reactivate');
     await expect(canvas.getByRole('button', { name: /프로필 비활성화/ })).toBeVisible();
+    await waitFor(() =>
+      expect(page.getByRole('alert')).toHaveTextContent('프로필을 다시 활성화했어요.'),
+    );
   },
 };
 
@@ -324,6 +335,7 @@ export const DeleteSuccessContract: Story = {
     await userEvent.click(within(canvasElement).getByRole('button', { name: /영구 삭제/ }));
     const dialog = await page.findByRole('alertdialog', { name: '프로필을 영구 삭제할까요?' });
     const surface = within(dialog);
+    await waitFor(() => expect(surface.getByRole('button', { name: '취소' })).toHaveFocus());
     const confirm = surface.getByRole('button', { name: '영구 삭제' });
     await expect(confirm).toHaveAttribute('aria-disabled', 'true');
     await userEvent.click(surface.getByRole('checkbox'));
@@ -344,6 +356,7 @@ export const DeleteSuccessContract: Story = {
     await expect(args.onConfirm).toHaveBeenCalledTimes(1);
     await expect(args.onConfirm).toHaveBeenCalledWith('delete');
     await expect(within(canvasElement).queryByText('@selected')).not.toBeInTheDocument();
+    await waitFor(() => expect(page.getByRole('alert')).toHaveTextContent('프로필을 삭제했어요.'));
   },
 };
 
