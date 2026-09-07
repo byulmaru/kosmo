@@ -62,6 +62,27 @@ export const RefreshErrorKeepsPosts: Story = {
   },
 };
 
+export const RefreshErrorToastRetry: Story = {
+  ...refreshErrorKeepsPosts,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await expect(
+      canvas.findByText('같은 인스턴스의 소식을 한곳에서 확인해요.'),
+    ).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('tab', { name: '로컬' }));
+    const alert = await body.findByRole('alert');
+    expect(alert).toHaveTextContent('로컬 타임라인을 불러오지 못했어요');
+
+    await userEvent.click(within(alert).getByRole('button', { name: '다시 시도' }));
+    await expect(
+      canvas.findByText('새로고침에 성공한 뒤 다시 표시된 로컬 게시글입니다.'),
+    ).resolves.toBeVisible();
+    await waitFor(() => expect(body.queryByRole('alert')).not.toBeInTheDocument());
+  },
+};
+
 function scrollStoryToEnd(canvasElement: HTMLElement) {
   const storyWindow = canvasElement.ownerDocument.defaultView!;
   storyWindow.scrollTo(0, storyWindow.document.documentElement.scrollHeight);
