@@ -151,6 +151,12 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
       style={[
         styles.target,
         {
+          backgroundColor:
+            web && hovered
+              ? theme.stateHover
+              : web && unread
+                ? theme.actionPrimarySubtle
+                : 'transparent',
           outlineColor: theme.stateFocusRing,
           outlineOffset: -2,
           outlineStyle: focusVisible ? 'solid' : 'none',
@@ -159,21 +165,7 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
         } as ViewStyle,
       ]}
     >
-      <View
-        style={[
-          styles.row,
-          web && styles.webRow,
-          kind === 'reply' && styles.replyRow,
-          {
-            backgroundColor:
-              web && hovered
-                ? theme.stateHover
-                : web && unread
-                  ? theme.actionPrimarySubtle
-                  : 'transparent',
-          },
-        ]}
-      >
+      <View style={[styles.row, web && styles.webRow, kind === 'reply' && styles.replyRow]}>
         <View
           aria-hidden
           accessibilityElementsHidden
@@ -198,9 +190,6 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
             </>
           )}
         </View>
-        {web && unread ? (
-          <View style={[styles.unreadRail, { backgroundColor: theme.actionPrimaryBase }]} />
-        ) : null}
       </View>
       {preview !== undefined ? (
         <View style={[styles.preview, web && styles.webPreview]}>
@@ -213,6 +202,9 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
             </View>
           ) : null}
         </View>
+      ) : null}
+      {web && unread ? (
+        <View style={[styles.unreadRail, { backgroundColor: theme.actionPrimaryBase }]} />
       ) : null}
     </Pressable>
   );
@@ -260,16 +252,16 @@ const styles = StyleSheet.create({
   overlap: { marginLeft: -space[12] },
   copy: { ...textStyles.uiCopyM, flexShrink: 1, minWidth: 0 },
   time: { ...textStyles.uiCopyS, flexShrink: 0 },
-  replyRow: { paddingTop: space[8], minHeight: 48 },
+  replyRow: { paddingTop: space[8], minHeight: Platform.OS === 'android' ? 48 : 44 },
   replyKind: { alignItems: 'flex-end', height: 28 },
-  replySummary: { alignItems: 'center', flexDirection: 'row', minHeight: 28 },
+  replySummary: { alignItems: 'center', flexDirection: 'row', minHeight: 20 },
   preview: {
     flexDirection: 'row',
     gap: space[12],
     alignItems: 'flex-start',
     paddingLeft: space[8] + 48 + space[12],
     paddingRight: space[8],
-    paddingBottom: space[16],
+    paddingBottom: space[8],
   },
   webPreview: { paddingLeft: space[12] + 48 + space[12], paddingRight: space[16] },
   excerpt: { ...textStyles.contentM, flex: 1, minWidth: 0 },

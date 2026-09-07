@@ -48,7 +48,7 @@ export type NotificationStoryArgs = {
   hasMedia: boolean;
   sensitiveMedia: boolean;
   unavailable: boolean;
-  containerWidth: number;
+  containerWidth: 'auto' | number;
   onNavigate: ReturnType<typeof fn>;
 };
 type Args = NotificationStoryArgs;
@@ -87,7 +87,7 @@ function ReplyPost() {
   );
 }
 
-function NotificationExample(args: Args) {
+export function NotificationExample(args: Args) {
   const actor = { id: 'notification-actor', name: args.name };
   const shared = {
     disabled: args.disabled,
@@ -165,7 +165,7 @@ const meta = {
     hasMedia: false,
     sensitiveMedia: false,
     unavailable: false,
-    containerWidth: 390,
+    containerWidth: 600,
     onNavigate: fn(),
   },
   argTypes: {
@@ -185,16 +185,22 @@ const meta = {
     hasMedia: { control: 'boolean' },
     sensitiveMedia: { control: 'boolean' },
     unavailable: { control: 'boolean' },
-    containerWidth: { control: { type: 'range', min: 320, max: 720, step: 10 } },
+    containerWidth: { control: 'select', options: [320, 390, 600, 720, 'auto'] },
   },
   decorators: [
     (Story, context) => (
-      <View style={{ width: context.args.containerWidth, maxWidth: '100%' }}>
+      <View
+        style={{
+          width: context.args.containerWidth === 'auto' ? '100%' : context.args.containerWidth,
+          maxWidth: '100%',
+        }}
+      >
         <Story />
       </View>
     ),
   ],
   excludeStories: [
+    'NotificationExample',
     'ActivationContract',
     'PendingContract',
     'CompositionContract',
@@ -341,16 +347,28 @@ export const CompositionContract: Story = {
   render: (args) => (
     <View>
       <View testID="reaction-notification">
-        <NotificationExample {...args} kind="reaction" grouped hasMedia />
+        <NotificationExample {...args} kind="reaction" grouped hasMedia unread />
       </View>
       <View testID="reply-notification">
         <NotificationExample {...args} kind="reply" />
       </View>
     </View>
   ),
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
+    args.onNavigate.mockClear();
     const canvas = within(canvasElement);
     const reaction = within(canvas.getByTestId('reaction-notification'));
+    const link = reaction.getByRole('link');
+    const excerpt = reaction.getByText(args.bodyText);
+    const unreadBackground = getComputedStyle(link).backgroundColor;
+    await expect(unreadBackground).not.toBe('rgba(0, 0, 0, 0)');
+    await userEvent.hover(excerpt);
+    await expect(getComputedStyle(link).backgroundColor).not.toBe(unreadBackground);
+    await userEvent.click(excerpt);
+    await expect(args.onNavigate).toHaveBeenCalledOnce();
+    await userEvent.click(reaction.getByTestId('post-media-frame-notification-thumbnail'));
+    await expect(args.onNavigate).toHaveBeenCalledTimes(2);
+    await userEvent.unhover(excerpt);
     await expect(reaction.getByText(/외 3명/)).toBeInTheDocument();
     await expect(reaction.queryByRole('button')).not.toBeInTheDocument();
     await expect(reaction.getByTestId('post-media-frame-notification-thumbnail')).toHaveStyle({
