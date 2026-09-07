@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { ProfileHero as ProfileHeroExport } from './ProfileHero';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -23,6 +23,14 @@ type ProfileData = {
 let fragmentData: ProfileData;
 const platformSelections: Array<Record<string, number>> = [];
 let renderer: ReactTestRenderer | null = null;
+let windowWidth = 1280;
+const platform = {
+  OS: 'web',
+  select: (options: Record<string, number>) => {
+    platformSelections.push(options);
+    return options[platform.OS] ?? options.default;
+  },
+};
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -40,13 +48,7 @@ mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
 });
 mockModule('react-native', {
   Image: 'Image',
-  Platform: {
-    OS: 'web',
-    select: (options: Record<string, number>) => {
-      platformSelections.push(options);
-      return options.web;
-    },
-  },
+  Platform: platform,
   Pressable: 'Pressable',
   StyleSheet: {
     absoluteFillObject: {},
@@ -54,6 +56,7 @@ mockModule('react-native', {
     flatten: (styles: ReadonlyArray<Record<string, unknown>>) => Object.assign({}, ...styles),
   },
   Text: 'Text',
+  useWindowDimensions: () => ({ height: 800, width: windowWidth }),
   View: 'View',
 });
 mockModule('react-relay', {
@@ -94,6 +97,8 @@ afterEach(async () => {
     renderer = null;
   }
   platformSelections.length = 0;
+  windowWidth = 1280;
+  platform.OS = 'web';
 });
 
 const renderProfile = async (data: ProfileData) => {
@@ -125,6 +130,79 @@ const findCoverStyle = () => {
   );
   return cover.props.style[0];
 };
+
+for (const [os, targetHeight, inset] of [
+  ['ios', 44, 2],
+  ['android', 48, 4],
+] as const) {
+  it(`${os} action parent contains the Native target and preserves the visual center`, async () => {
+    platform.OS = os;
+    fragmentData = baseProfile;
+    for (const loading of [false, true]) {
+      await act(async () => {
+        const element = createElement(ProfileHero, {
+          action: createElement('Action'),
+          loading,
+          profile: {} as never,
+        });
+        if (renderer) {
+          renderer.update(element);
+        } else {
+          renderer = create(element);
+        }
+      });
+      assert.ok(renderer);
+      const actionStyle = Object.assign(
+        {},
+        ...renderer.root.find((node) => (node.type as unknown) === 'Action').parent!.props.style,
+      );
+      assert.equal(actionStyle.minHeight, targetHeight);
+      assert.equal(actionStyle.marginTop + inset, 12);
+      assert.equal(actionStyle.justifyContent, 'center');
+      assert.ok(actionStyle.marginTop >= 0);
+      assert.ok(actionStyle.marginTop + targetHeight <= 64);
+
+      if (loading) {
+        const action = renderer.root.find((node) => (node.type as unknown) === 'Action');
+        for (let ancestor = action.parent; ancestor; ancestor = ancestor.parent) {
+          assert.notEqual(ancestor.props.accessibilityElementsHidden, true);
+          assert.notEqual(ancestor.props.importantForAccessibility, 'no-hide-descendants');
+          assert.notEqual(ancestor.props['aria-hidden'], true);
+          assert.notEqual(ancestor.props['aria-hidden'], 'true');
+        }
+
+        const cover = renderer.root.find(
+          (node) =>
+            (node.type as unknown) === 'View' &&
+            Array.isArray(node.props.style) &&
+            node.props.style[0]?.width === '100%',
+        );
+        assert.equal(cover.props.accessibilityElementsHidden, true);
+        assert.equal(cover.props.importantForAccessibility, 'no-hide-descendants');
+
+        const skeletons = renderer.root.findAll((node) => (node.type as unknown) === 'Skeleton');
+        assert.equal(skeletons.length, 4);
+        for (const skeleton of skeletons) {
+          let hidden = false;
+          for (
+            let ancestor: ReactTestInstance | null = skeleton;
+            ancestor;
+            ancestor = ancestor.parent
+          ) {
+            if (
+              ancestor.props.accessibilityElementsHidden === true &&
+              ancestor.props.importantForAccessibility === 'no-hide-descendants'
+            ) {
+              hidden = true;
+              break;
+            }
+          }
+          assert.equal(hidden, true);
+        }
+      }
+    }
+  });
+}
 
 describe('ProfileHero cover geometry', () => {
   it('data/no-header branch uses the shared 3:1 cover geometry', async () => {
@@ -160,6 +238,49 @@ describe('ProfileHero cover geometry', () => {
 
     assert.equal(cover.props.style[1].backgroundColor, '#semantic-surface');
     assert.equal(avatar.props.style[1].borderColor, '#semantic-canvas');
+  });
+
+  it('center와 mobile에서 Figma Avatar 크기를 사용한다', async () => {
+    await renderProfile(baseProfile);
+
+    const centerAvatar = renderer!.root.findByProps({
+      accessibilityLabel: '코스모 프로필 이미지',
+    });
+    assert.equal(centerAvatar.props.style[1].width, 120);
+
+    windowWidth = 390;
+    await act(async () => {
+      renderer!.update(createElement(ProfileHero, { profile: {} as never }));
+    });
+
+    const mobileAvatar = renderer!.root.findByProps({
+      accessibilityLabel: '코스모 프로필 이미지',
+    });
+    assert.equal(mobileAvatar.props.style[1].width, 88);
+  });
+
+  it('loading Avatar도 center와 mobile 외곽 크기를 유지한다', async () => {
+    await act(async () => {
+      renderer = create(createElement(ProfileHero, { loading: true }));
+    });
+    assert.ok(renderer);
+    assert.equal(
+      renderer.root.find(
+        (node) => (node.type as unknown) === 'Skeleton' && node.props.circular === true,
+      ).props.width,
+      128,
+    );
+
+    windowWidth = 390;
+    await act(async () => {
+      renderer!.update(createElement(ProfileHero, { loading: true }));
+    });
+    assert.equal(
+      renderer.root.find(
+        (node) => (node.type as unknown) === 'Skeleton' && node.props.circular === true,
+      ).props.width,
+      96,
+    );
   });
 });
 

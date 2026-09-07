@@ -27,13 +27,13 @@ mockModule('react-relay', {
   }),
 });
 mockModule('@/theme/ThemeProvider', {
-  useTheme: () => ({ text: '#111111', textSecondary: '#666666' }),
+  useTheme: () => ({
+    text: '#111111',
+    textSecondary: '#666666',
+    foregroundPrimary: '#1a1a1a',
+    foregroundSecondary: '#64646f',
+  }),
 });
-mockModule('@/theme/tokens', {
-  radii: { md: 8 },
-  typography: { md: { fontSize: 16, lineHeight: 24 }, sm: { fontSize: 14, lineHeight: 20 } },
-});
-
 let ProfileNameBlock: typeof ProfileNameBlockExport;
 let renderer: ReactTestRenderer | null = null;
 
@@ -49,28 +49,69 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-test('ProfileNameBlock truncates long display names and handles to one line', async () => {
-  assert.ok(ProfileNameBlock);
-  await act(async () => {
-    renderer = create(createElement(ProfileNameBlock, { profile: {} as never }));
-  });
+for (const { variant, nameSize, nameLineHeight, nameWeight, handleSize, handleLineHeight } of [
+  {
+    variant: 'default',
+    nameSize: 16,
+    nameLineHeight: 24,
+    nameWeight: '600',
+    handleSize: 14,
+    handleLineHeight: 20,
+  },
+  {
+    variant: 'compact',
+    nameSize: 14,
+    nameLineHeight: 20,
+    nameWeight: '600',
+    handleSize: 12,
+    handleLineHeight: 15.6,
+  },
+  {
+    variant: 'hero',
+    nameSize: 24,
+    nameLineHeight: 27.6,
+    nameWeight: '700',
+    handleSize: 14,
+    handleLineHeight: 20,
+  },
+] as const) {
+  test(`ProfileNameBlock ${variant} preserves typography, text and heading semantics`, async () => {
+    await act(async () => {
+      renderer = create(createElement(ProfileNameBlock, { profile: {} as never, variant }));
+    });
 
-  assert.ok(renderer);
-  const textNodes = renderer.root.findAll((node) => (node.type as unknown) === 'Text');
-  assert.deepEqual(
-    textNodes.map((node) => ({
-      numberOfLines: node.props.numberOfLines,
-      value: node.children.join(''),
-    })),
-    [
-      {
-        numberOfLines: 1,
-        value: '아주 긴 표시 이름이 한 줄을 넘을 수 있습니다',
-      },
-      {
-        numberOfLines: 1,
-        value: '@very-long-relative-handle-that-must-stay-on-one-line',
-      },
-    ],
-  );
-});
+    assert.ok(renderer);
+    const textNodes = renderer.root.findAll((node) => (node.type as unknown) === 'Text');
+    const hero = variant === 'hero';
+    assert.deepEqual(
+      textNodes.map((node) => ({
+        numberOfLines: node.props.numberOfLines,
+        role: node.props.accessibilityRole,
+        value: node.children.join(''),
+      })),
+      [
+        {
+          numberOfLines: hero ? undefined : 1,
+          role: hero ? 'header' : undefined,
+          value: '아주 긴 표시 이름이 한 줄을 넘을 수 있습니다',
+        },
+        {
+          numberOfLines: hero ? undefined : 1,
+          role: undefined,
+          value: '@very-long-relative-handle-that-must-stay-on-one-line',
+        },
+      ],
+    );
+    for (const [index, fontSize, lineHeight, fontWeight] of [
+      [0, nameSize, nameLineHeight, nameWeight],
+      [1, handleSize, handleLineHeight, '400'],
+    ] as const) {
+      const style = Object.assign({}, ...textNodes[index]!.props.style);
+      assert.equal(style.fontFamily, 'SUIT');
+      assert.equal(style.fontSize, fontSize);
+      assert.equal(style.fontWeight, fontWeight);
+      assert.equal(style.color, ['#1a1a1a', '#64646f'][index]);
+      assert.ok(Math.abs(style.lineHeight - lineHeight) < 0.001);
+    }
+  });
+}

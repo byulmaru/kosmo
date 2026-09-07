@@ -1,10 +1,11 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
-import { layoutRecipes, spacing, typography } from '@/theme/tokens';
+import { borderWidths, breakpoints, layoutRecipes, space, textStyles } from '@/theme/tokens';
 import { FollowButton } from './FollowButton';
+import { ProfileNameBlock } from './ProfileNameBlock';
 import type { Href } from 'expo-router';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { ProfileListItem_profile$key } from './__generated__/ProfileListItem_profile.graphql';
@@ -27,25 +28,26 @@ const profileListItemFragment = graphql`
     relativeHandle
     bio
     ...FollowButton_profile
+    ...ProfileNameBlock_profile
   }
 `;
 
 export function ProfileListItem({ linked = false, onPress, profile, style }: ProfileListItemProps) {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const data = useFragment(profileListItemFragment, profile);
   const profileHref = `/${data.relativeHandle}` as Href;
+  const profileStyle = StyleSheet.flatten([
+    styles.profile,
+    data.bio ? styles.profileWithBio : undefined,
+  ]);
   const content = (
     <>
       <Avatar imageUri={data.avatar?.url} label={data.displayName || data.handle} size={40} />
       <View style={styles.copy}>
-        <Text numberOfLines={1} style={[styles.name, { color: theme.text }]}>
-          {data.displayName}
-        </Text>
-        <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
-          {data.relativeHandle}
-        </Text>
+        <ProfileNameBlock profile={data} style={styles.identity} variant="compact" />
         {data.bio ? (
-          <Text numberOfLines={1} style={[styles.bio, { color: theme.text }]}>
+          <Text numberOfLines={3} style={[styles.bio, { color: theme.foregroundPrimary }]}>
             {data.bio}
           </Text>
         ) : null}
@@ -54,17 +56,35 @@ export function ProfileListItem({ linked = false, onPress, profile, style }: Pro
   );
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }, style]}>
+    <View
+      style={[
+        styles.root,
+        data.bio ? styles.withBio : undefined,
+        { borderColor: theme.borderDefault },
+        style,
+      ]}
+    >
       {linked ? (
         <NavigationLink href={profileHref}>
-          <Pressable accessibilityRole="link" onPress={onPress} style={styles.profile}>
+          <Pressable
+            accessibilityRole="link"
+            onPress={onPress}
+            style={StyleSheet.flatten([profileStyle, styles.linkedProfile])}
+          >
             {content}
           </Pressable>
         </NavigationLink>
       ) : (
-        <View style={styles.profile}>{content}</View>
+        <View style={profileStyle}>{content}</View>
       )}
-      <FollowButton profile={data} style={styles.follow} />
+      <FollowButton
+        profile={data}
+        size={Platform.OS === 'web' && width >= breakpoints.compact ? 'compact' : 'medium'}
+        style={[
+          styles.follow,
+          { marginVertical: Platform.OS === 'android' ? -4 : Platform.OS === 'ios' ? -2 : 0 },
+        ]}
+      />
     </View>
   );
 }
@@ -72,12 +92,24 @@ export function ProfileListItem({ linked = false, onPress, profile, style }: Pro
 const styles = StyleSheet.create({
   root: {
     ...layoutRecipes.listRow,
-    borderBottomWidth: 1,
+    borderBottomWidth: borderWidths[1],
+    paddingBottom: space[12] - borderWidths[1],
+    paddingTop: space[12],
   },
-  profile: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.md, minWidth: 0 },
+  withBio: { alignItems: 'flex-start' },
+  profile: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: space[12], minWidth: 0 },
+  profileWithBio: { alignItems: 'flex-start' },
+  linkedProfile: {
+    alignSelf: 'stretch',
+    marginBottom: -(space[12] - borderWidths[1]),
+    marginLeft: -space[16],
+    marginTop: -space[12],
+    paddingBottom: space[12] - borderWidths[1],
+    paddingLeft: space[16],
+    paddingTop: space[12],
+  },
   copy: { flex: 1, minWidth: 0 },
-  name: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  handle: { fontFamily: 'SUIT', ...typography.xsm },
-  bio: { fontFamily: 'SUIT', marginTop: spacing.xs, ...typography.xsm },
+  identity: { flex: 0 },
+  bio: textStyles.uiCopyS,
   follow: { flexShrink: 0 },
 });
