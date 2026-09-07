@@ -78,7 +78,7 @@ Terraform CI용 `kosmo-terraform` GCP WIF provider가 기존 `repository_id`와 
 - 운영 문서의 포함·제외 범위가 PROD-898과 일치하고, Firebase/native-distribution WIF 보존·trust 선행 조건·실제 Apply 증거 경계가 명시되어 있는지 검토한다.
 
 - [x] 3.1 `apps/terraform/README.md` 및 필요한 운영 설명을 승인된 manual recovery 흐름과 선행 조건에 맞춰 갱신한다.
-- [ ] 3.2 구현 diff, 운영 문서와 OpenSpec의 requirement/decision/task를 독립 대조해 누락·과장·범위 확장을 제거한다.
+- [x] 3.2 구현 diff, 운영 문서와 OpenSpec의 requirement/decision/task를 독립 대조해 누락·과장·범위 확장을 제거한다.
 
 ## 4. PROD-898 통합 검증과 완료·archive
 
@@ -105,6 +105,6 @@ Terraform CI용 `kosmo-terraform` GCP WIF provider가 기존 `repository_id`와 
 - 구현 PR merge 후 CI trust 선행 Apply가 완료되었는지와 manual run을 아직 수행하지 않았다는 운영 상태를 분리해 기록한다. 이 task에서는 실제 manual dispatch·Apply를 실행하거나 그 성공을 주장하지 않는다.
 
 - [ ] 4.1 표준 workflow/Terraform/OpenSpec validation과 event·artifact·failure-path 검증을 통과시킨다.
-- [ ] 4.2 독립 검토 결과를 반영하고 PROD-898 전체 변경과 기존 자동 계약의 정합성을 최종 확인한다.
+- [x] 4.2 독립 검토 결과를 반영하고 PROD-898 전체 변경과 기존 자동 계약의 정합성을 최종 확인한다.
 - [ ] 4.3 구현 PR merge 후 CI trust 선행 Apply 요구와 manual run 미실행 상태를 분리해 기록한다.
 - [ ] 4.4 전체 requirement·task·검증·문서 sync가 완료되고 미해결 Blocked/Upstream Change Required decision이 없을 때 PROD-898이 OpenSpec change를 archive하며, 실제 manual Apply 성공은 주장하지 않는다.
