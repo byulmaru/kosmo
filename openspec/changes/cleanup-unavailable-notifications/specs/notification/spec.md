@@ -45,7 +45,11 @@
 
 - **WHEN** Worker가 시작되고 환경의 deterministic cleanup Schedule이 없다
 - **THEN** 시스템은 24시간 기본 interval과 `SKIP` overlap으로 활성 Schedule을 생성한다
-- **AND** 기존 Schedule이 있으면 timing, action, overlap과 pause 상태를 변경하지 않는다
+
+#### Scenario: 기존 Schedule 보존
+
+- **WHEN** Worker가 시작되고 환경의 deterministic cleanup Schedule이 이미 있다
+- **THEN** 시스템은 기존 Schedule의 timing, action, overlap과 pause 상태를 변경하지 않는다
 
 #### Scenario: Schedule 등록 실패
 
