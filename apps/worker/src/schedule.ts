@@ -1,7 +1,7 @@
 import { Client, Connection, ScheduleAlreadyRunning } from '@temporalio/client';
 import { z } from 'zod';
-import type { ScheduleOptions } from '@temporalio/client';
 import { notificationCleanupSchedule } from './schedules/notification-cleanup';
+import type { ScheduleOptions } from '@temporalio/client';
 
 const scheduleEnvironmentSchema = z.object({
   TEMPORAL_ADDRESS: z
