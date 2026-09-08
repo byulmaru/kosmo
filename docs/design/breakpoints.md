@@ -179,7 +179,7 @@ PROD-852의 공용 `SidebarNavigation` 목표 표면은 presentation에 따라 �
 
 ## 스크롤 소유권
 
-React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owner로 둔다. 중앙 피드만 별도 internal scroller가 되는 앱형 shell은 이 기준의 목표가 아니다. 사용자가 피드 바깥의 비스크롤 sidebar, 우측 rail, 빈 레이아웃 영역에서 wheel/trackpad를 사용해도 브라우저 기본 document scroll 흐름으로 페이지가 움직여야 한다. Android/iOS 화면은 platform의 `ScrollView`를 사용하되 이 web scroll 계약을 바꾸지 않는다.
+React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owner로 둔다. 중앙 피드만 별도 internal scroller가 되는 앱형 shell은 이 기준의 목표가 아니다. 사용자가 피드 바깥의 비스크롤 sidebar, 우측 rail, 빈 레이아웃 영역에서 wheel/trackpad를 사용해도 브라우저 기본 document scroll 흐름으로 페이지가 움직여야 한다. Android/iOS 화면은 화면 유형에 맞는 platform scroll container(`ScrollView` 또는 `FlatList`)를 사용하되 이 Web scroll 계약을 바꾸지 않는다.
 
 - `< compact`에서는 64px 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
 - Current `< compact` mobile drawer는 `mobile-sidebar-scroll` 하나가 primary navigation과 `피드백 보내기`·로그아웃
@@ -199,6 +199,10 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
 - Web 하단 탭, mobile drawer, compact 아이콘 레일과 full sidebar에서 현재와 다른 shell-level 주요 route를
   여는 forward navigation은 대상 route가 준비된 뒤 document 최상단에서 표시한다. 로딩·빈 상태에서도 이전
   route의 document scroll offset을 대상 route에 노출하지 않는다.
+- 프로필 게시물·팔로워·팔로잉 화면은 프로필 레이아웃이 Hero와 Slot의 바깥 scroll 구성을 함께 소유한다. Native에서는
+  하나의 `PaginationScrollView`가 ProfileHero와 leaf 목록 body를 함께 스크롤하고, 게시물 `InfiniteList`는
+  outer metric에 등록해 목록 body를 비스크롤 `View`로 렌더링한다. 팔로워·팔로잉 leaf는 기존 `더 불러오기`와
+  실패 후 수동 재시도를 유지한다. Web에서는 leaf 목록이 document/window scroll 계약을 유지한다.
 - 브라우저 뒤로/앞으로 history traversal은 browser scroll restoration을 유지한다. 검색 화면의 query-only
   `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존한다.
 - Web의 모바일·compact·full 홈 헤더 브랜드 마크와 shell의 홈 navigation 항목은 모두 홈 진입 control이다.

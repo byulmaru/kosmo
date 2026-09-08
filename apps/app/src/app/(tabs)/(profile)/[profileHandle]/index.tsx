@@ -49,6 +49,7 @@ function ProfilePostListPageContent({ handle }: { handle: string }) {
 
   return (
     <PostList
+      identityKey={`profile:${data.profileByHandle?.id ?? handle}`}
       profile={data.profileByHandle}
       replyProfile={data.currentSession?.selectedProfile ?? null}
     />

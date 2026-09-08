@@ -1347,11 +1347,7 @@ function HomePostListPaginationIdentityStory() {
       <Pressable accessibilityRole="button" onPress={() => setIdentity('actor-b')}>
         <Text>다른 actor로 전환</Text>
       </Pressable>
-      {identity === 'actor-a' ? (
-        <PostList home={data.home} key={identity} />
-      ) : (
-        <PostList key={identity} loading />
-      )}
+      <PostList home={data.home} identityKey={identity} />
     </>
   );
 }
@@ -3147,7 +3143,10 @@ export const HomePostListPageFailureClearsOnIdentityChange: Story = {
     relay: {
       data: postListPaginationRelayData,
       paginationRequestObserver: homeIdentityPaginationRequestObserver,
-      paginationResponses: [{ error: '이전 actor Home 다음 page 실패' }],
+      paginationResponses: [
+        { error: '이전 actor Home 다음 page 실패' },
+        paginationHomeNextPageResponse,
+      ],
     },
   },
   play: async ({ canvasElement }) => {
@@ -3159,7 +3158,8 @@ export const HomePostListPageFailureClearsOnIdentityChange: Story = {
     );
     await userEvent.click(canvas.getByRole('button', { name: '다른 actor로 전환' }));
     await waitFor(() => expect(canvas.queryByRole('alert')).not.toBeInTheDocument());
-    expect(homeIdentityPaginationRequestObserver).toHaveBeenCalledOnce();
+    await expect(canvas.findByText('Home 다음 page 게시글')).resolves.toBeVisible();
+    expect(homeIdentityPaginationRequestObserver).toHaveBeenCalledTimes(2);
     storyWindow.scrollTo(0, 0);
   },
   render: () => <HomePostListPaginationIdentityStory />,

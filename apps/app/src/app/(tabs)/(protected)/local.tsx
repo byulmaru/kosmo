@@ -3,17 +3,20 @@ import { useRef } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
-import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import { getShellLayout } from '@/components/shell/shellLayout';
+import {
+  getShellLayout,
+  getWebMobileShellHeaderStickyOffset,
+} from '@/components/shell/shellLayout';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import type { PropsWithChildren } from 'react';
+import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { LocalPageQuery } from './__generated__/LocalPageQuery.graphql';
 
@@ -41,7 +44,7 @@ export default function LocalScreen() {
   const refresh = () => routeBoundaryRef.current?.refetch();
 
   return (
-    <LocalFrame onReselect={refresh} paginationOwnerKey="local">
+    <LocalFrame onReselect={refresh}>
       <RouteBoundary
         loading={<StateView loading title="로컬 타임라인을 불러오는 중입니다." />}
         ref={routeBoundaryRef}
@@ -53,24 +56,24 @@ export default function LocalScreen() {
   );
 }
 
-function LocalFrame({
-  children,
-  onReselect,
-  paginationOwnerKey,
-}: PropsWithChildren<{ onReselect: () => void; paginationOwnerKey: string }>) {
+function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: () => void }>) {
   const { width } = useWindowDimensions();
   const routeOwnsHeader = getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
   return (
-    <PaginationScrollView
-      contentContainerStyle={styles.root}
-      paginationOwnerKey={paginationOwnerKey}
-      stickyHeaderIndices={[routeOwnsHeader ? 1 : 0]}
-    >
+    <View style={styles.root}>
       {routeOwnsHeader ? <PageHeader accessibilityLabel="로컬" variant="brand" /> : null}
-      <TimelineTabs onReselect={onReselect} value="local" />
+      <View
+        style={
+          Platform.OS === 'web'
+            ? [styles.webTimelineTabs, { top: getWebMobileShellHeaderStickyOffset(width) }]
+            : undefined
+        }
+      >
+        <TimelineTabs onReselect={onReselect} value="local" />
+      </View>
       <View style={styles.body}>{children}</View>
-    </PaginationScrollView>
+    </View>
   );
 }
 
@@ -109,15 +112,20 @@ function LocalContent() {
 
   return (
     <View style={styles.timeline}>
-      <PostList local={data} replyProfile={selectedProfile} />
+      <PostList
+        identityKey={`local:${selectedProfile.id}`}
+        local={data}
+        replyProfile={selectedProfile}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flexGrow: 1 },
-  body: { flexGrow: 1 },
-  timeline: { width: '100%' },
+  root: { flex: 1, minHeight: 0 },
+  body: { flex: 1, minHeight: 0 },
+  timeline: { flex: 1, minHeight: 0, width: '100%' },
+  webTimelineTabs: { position: 'sticky' as never, zIndex: 10 } as ViewStyle,
   onboardingRoot: {
     alignItems: 'center',
     flexGrow: 1,

@@ -12,6 +12,7 @@ type HookOptions = {
   isLoadingNext: boolean;
   itemCount: number;
   loadNext: (count: number, options: { onComplete: (error: Error | null) => void }) => void;
+  nativePagination?: 'endReached' | 'metrics';
   pageSize: number;
   webScrollTarget?: 'container' | 'document';
 };
@@ -20,6 +21,7 @@ type HookResult = {
   loadError: boolean;
   loadNextPage: () => void;
   nativeScrollProps: ReturnType<typeof createNativeScrollHandlers>;
+  onEndReached: () => void;
 };
 
 const platform = { OS: 'web' };
@@ -345,6 +347,24 @@ describe('useAutomaticPagination', () => {
 
     await updateHook(options({ isLoadingNext: false, itemCount: 40 }));
     assert.equal(loadRequests.length, 2, '성공 뒤 저장된 Native metric을 다시 측정한다');
+  });
+
+  it('Native endReached는 page 완료 뒤 다음 FlatList 이벤트를 받을 수 있다', async () => {
+    platform.OS = 'ios';
+    await renderHook(options({ nativePagination: 'endReached' }));
+
+    await act(async () => currentResult().onEndReached());
+    assert.equal(loadRequests.length, 1);
+    await act(async () => currentResult().onEndReached());
+    assert.equal(loadRequests.length, 1, 'in-flight 요청은 중복 실행하지 않는다');
+
+    await updateHook(options({ isLoadingNext: true, nativePagination: 'endReached' }));
+    await act(async () => loadRequests[0]?.onComplete(null));
+    await updateHook(
+      options({ isLoadingNext: false, itemCount: 40, nativePagination: 'endReached' }),
+    );
+    await act(async () => currentResult().onEndReached());
+    assert.equal(loadRequests.length, 2, '성공 page 뒤 FlatList endReached가 다음 page를 요청한다');
   });
 
   it('Web listener와 pending RAF를 unmount 때 정리한다', async () => {
