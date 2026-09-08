@@ -1,5 +1,9 @@
 import { Fragment, useEffect } from 'react';
 import { FlatList, Platform, View } from 'react-native';
+import {
+  usePaginationScrollContext,
+  usePaginationScrollRegistration,
+} from './PaginationScrollView';
 import { useAutomaticPagination } from './useAutomaticPagination';
 import type { ReactElement } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -18,7 +22,6 @@ export type InfiniteListProps<Item> = Readonly<{
   isLoadingNext: boolean;
   keyExtractor: (item: Item, index: number) => string;
   loadNext: LoadNext;
-  paginationMode?: 'automatic' | 'manual';
   onLoadErrorChange?: (loadError: boolean, onRetry: () => void) => void;
   pageSize: number;
   renderFooter?: (state: InfiniteListFooterState) => ReactElement | null;
@@ -29,15 +32,6 @@ export type InfiniteListProps<Item> = Readonly<{
   testID?: string;
 }>;
 
-export type InfiniteListRenderProps<Item> = Omit<InfiniteListProps<Item>, 'header'> & {
-  listHeader?: ReactElement | null;
-  listIdentityKey?: string;
-};
-
-export type InfiniteListRenderer = <Item>(
-  props: InfiniteListRenderProps<Item>,
-) => ReactElement | null;
-
 export function InfiniteList<Item>({
   data,
   empty,
@@ -47,22 +41,23 @@ export function InfiniteList<Item>({
   loadNext,
   onLoadErrorChange,
   pageSize,
-  paginationMode = 'automatic',
   renderFooter,
   renderItem,
   style,
   header,
   testID,
 }: InfiniteListProps<Item>) {
-  const { loadError, loadNextPage, onEndReached } = useAutomaticPagination({
+  const hasPaginationScrollContext = usePaginationScrollContext();
+  const hasNativeScrollParent = Platform.OS !== 'web' && hasPaginationScrollContext;
+  const { loadError, loadNextPage, nativeScrollProps, onEndReached } = useAutomaticPagination({
     hasNext,
     isLoadingNext,
     itemCount: data.length,
     loadNext,
-    nativePagination: 'endReached',
+    nativePagination: hasNativeScrollParent ? 'metrics' : 'endReached',
     pageSize,
-    webScrollTarget: paginationMode === 'automatic' ? 'document' : 'container',
   });
+  usePaginationScrollRegistration(hasNativeScrollParent ? nativeScrollProps : null);
 
   useEffect(() => {
     onLoadErrorChange?.(loadError, loadNextPage);
@@ -75,7 +70,7 @@ export function InfiniteList<Item>({
     onRetry: loadNextPage,
   });
 
-  if (Platform.OS === 'web') {
+  if (Platform.OS === 'web' || hasNativeScrollParent) {
     return (
       <View style={style} testID={testID}>
         {header}
@@ -96,7 +91,7 @@ export function InfiniteList<Item>({
       keyExtractor={keyExtractor}
       ListFooterComponent={footer}
       ListHeaderComponent={header}
-      onEndReached={paginationMode === 'automatic' ? onEndReached : undefined}
+      onEndReached={onEndReached}
       onEndReachedThreshold={1}
       renderItem={({ index, item }) => renderItem({ index, item })}
       style={[style, styles.nativeList]}

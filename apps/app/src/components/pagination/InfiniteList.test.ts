@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { InfiniteListProps } from './InfiniteList';
 
@@ -12,38 +12,28 @@ type Item = Readonly<{ id: string; label: string }>;
 type TestProps = Omit<InfiniteListProps<Item>, 'loadNext'>;
 
 const platform = { OS: 'ios' };
-const animationFrames = new Map<number, FrameRequestCallback>();
-const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
-const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
 const loadRequests: Array<{
   count: number;
   onComplete: (error: Error | null) => void;
 }> = [];
-const documentFixture = { documentElement: { scrollHeight: 1200 } };
-const windowFixture = {
-  addEventListener: () => undefined,
-  cancelAnimationFrame: (id: number) => animationFrames.delete(id),
-  innerHeight: 800,
-  removeEventListener: () => undefined,
-  requestAnimationFrame: (callback: FrameRequestCallback) => {
-    const id = animationFrames.size + 1;
-    animationFrames.set(id, callback);
-    return id;
-  },
-  scrollY: 0,
-};
 let renderer: ReactTestRenderer | null = null;
 let InfiniteList: ComponentType<InfiniteListProps<Item>>;
+let PaginationScrollView: ComponentType<{
+  children?: ReactNode;
+  paginationOwnerKey: string;
+}>;
 
 mock.module('react-native', {
   exports: {
     FlatList: 'FlatList',
     Platform: platform,
+    ScrollView: 'ScrollView',
     View: 'View',
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 before(async () => {
+  ({ PaginationScrollView } = await import('./PaginationScrollView'));
   ({ InfiniteList } = await import('./InfiniteList'));
 });
 
@@ -53,30 +43,8 @@ afterEach(async () => {
     renderer = null;
   }
   loadRequests.length = 0;
-  animationFrames.clear();
   platform.OS = 'ios';
 });
-
-const installWebFixture = () => {
-  Object.defineProperty(globalThis, 'window', {
-    configurable: true,
-    value: windowFixture,
-    writable: true,
-  });
-  Object.defineProperty(globalThis, 'document', {
-    configurable: true,
-    value: documentFixture,
-    writable: true,
-  });
-};
-
-const restoreGlobal = (name: 'document' | 'window', descriptor?: PropertyDescriptor) => {
-  if (descriptor) {
-    Object.defineProperty(globalThis, name, descriptor);
-  } else {
-    delete (globalThis as Record<string, unknown>)[name];
-  }
-};
 
 const loadNext = (count: number, options: { onComplete: (error: Error | null) => void }) => {
   loadRequests.push({ count, onComplete: options.onComplete });
@@ -100,11 +68,6 @@ function flatList() {
   const list = renderer.root.findAll((node) => (node.type as unknown) === 'FlatList')[0];
   assert.ok(list);
   return list;
-}
-
-function requireRenderer() {
-  assert.ok(renderer);
-  return renderer;
 }
 
 async function update(nextProps: InfiniteListProps<Item>) {
@@ -202,48 +165,33 @@ describe('InfiniteList', () => {
     assert.equal(loadRequests.length, 2);
   });
 
-  it('native manual 목록은 endReached를 연결하지 않는다', async () => {
+  it('PaginationScrollView 안에서는 View body가 outer metrics pagination을 등록한다', async () => {
     await act(async () => {
-      renderer = create(createElement(InfiniteList, props({ paginationMode: 'manual' })));
+      renderer = create(
+        createElement(
+          PaginationScrollView,
+          { paginationOwnerKey: 'profile' },
+          createElement(InfiniteList, props()),
+        ),
+      );
     });
 
-    assert.equal(flatList().props.onEndReached, undefined);
-    assert.equal(loadRequests.length, 0);
-  });
+    assert.equal(renderer?.root.findAll((node) => (node.type as unknown) === 'FlatList').length, 0);
+    const scrollView = renderer?.root.findAll((node) => (node.type as unknown) === 'ScrollView')[0];
+    assert.ok(scrollView);
 
-  it('Web manual 목록은 같은 document 끝 geometry에서도 자동 pagination을 실행하지 않는다', async () => {
-    platform.OS = 'web';
-    installWebFixture();
-
-    try {
-      await act(async () => {
-        renderer = create(createElement(InfiniteList, props({ paginationMode: 'automatic' })));
+    await act(async () => {
+      scrollView.props.onContentSizeChange(320, 1000);
+      scrollView.props.onLayout({ nativeEvent: { layout: { height: 100 } } });
+      scrollView.props.onScroll({
+        nativeEvent: {
+          contentOffset: { y: 920 },
+          contentSize: { height: 1000 },
+          layoutMeasurement: { height: 100 },
+        },
       });
-      const automaticFrames = [...animationFrames.values()];
-      animationFrames.clear();
-      await act(async () => automaticFrames.forEach((callback) => callback(0)));
-      assert.equal(loadRequests.length, 1, '자동 목록은 document 끝에서 요청한다');
+    });
 
-      await act(async () => renderer?.unmount());
-      renderer = null;
-      loadRequests.length = 0;
-
-      await act(async () => {
-        renderer = create(createElement(InfiniteList, props({ paginationMode: 'manual' })));
-      });
-      const manualFrames = [...animationFrames.values()];
-      animationFrames.clear();
-      await act(async () => manualFrames.forEach((callback) => callback(0)));
-      const manualRenderer = requireRenderer();
-
-      assert.equal(
-        manualRenderer.root.findAll((node) => (node.type as unknown) === 'FlatList').length,
-        0,
-      );
-      assert.equal(loadRequests.length, 0);
-    } finally {
-      restoreGlobal('window', originalWindowDescriptor);
-      restoreGlobal('document', originalDocumentDescriptor);
-    }
+    assert.equal(loadRequests.length, 1);
   });
 });

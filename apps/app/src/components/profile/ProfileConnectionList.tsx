@@ -6,7 +6,6 @@ import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { layoutRecipes, spacing, typography } from '@/theme/tokens';
 import { ProfileListItem } from './ProfileListItem';
-import type { InfiniteListRenderer } from '@/components/pagination/InfiniteList';
 import type { ProfileConnectionList_followersProfile$key } from './__generated__/ProfileConnectionList_followersProfile.graphql';
 import type { ProfileConnectionList_followingProfile$key } from './__generated__/ProfileConnectionList_followingProfile.graphql';
 import type { ProfileFollowersNextPageQuery } from './__generated__/ProfileFollowersNextPageQuery.graphql';
@@ -15,18 +14,8 @@ import type { ProfileFollowingNextPageQuery } from './__generated__/ProfileFollo
 type ConnectionKind = 'followers' | 'following';
 
 type ProfileConnectionListProps =
-  | {
-      kind: 'followers';
-      listIdentityKey?: string;
-      profile: ProfileConnectionList_followersProfile$key;
-      renderList?: InfiniteListRenderer;
-    }
-  | {
-      kind: 'following';
-      listIdentityKey?: string;
-      profile: ProfileConnectionList_followingProfile$key;
-      renderList?: InfiniteListRenderer;
-    };
+  | { kind: 'followers'; profile: ProfileConnectionList_followersProfile$key }
+  | { kind: 'following'; profile: ProfileConnectionList_followingProfile$key };
 
 const followersFragment = graphql`
   fragment ProfileConnectionList_followersProfile on Profile
@@ -89,37 +78,25 @@ const copy = {
 
 export function ProfileConnectionList(props: ProfileConnectionListProps) {
   return props.kind === 'followers' ? (
-    <FollowersList
-      listIdentityKey={props.listIdentityKey}
-      profile={props.profile}
-      renderList={props.renderList}
-    />
+    <FollowersList profile={props.profile} />
   ) : (
-    <FollowingList
-      listIdentityKey={props.listIdentityKey}
-      profile={props.profile}
-      renderList={props.renderList}
-    />
+    <FollowingList profile={props.profile} />
   );
 }
 
 export function ProfileConnectionListState({
-  listIdentityKey,
   kind,
   onRetry,
-  renderList,
   state,
 }: {
   kind: ConnectionKind;
-  listIdentityKey?: string;
   onRetry?: () => void;
-  renderList?: InfiniteListRenderer;
   state: 'error' | 'loading';
 }) {
   const theme = useTheme();
   const text = copy[kind];
 
-  const content = (
+  return (
     <View>
       <ConnectionTitle kind={kind} />
       {state === 'loading' ? (
@@ -156,32 +133,9 @@ export function ProfileConnectionListState({
       )}
     </View>
   );
-
-  return renderList
-    ? renderList({
-        data: [],
-        empty: content,
-        hasNext: false,
-        isLoadingNext: false,
-        keyExtractor: () => 'state',
-        listIdentityKey,
-        loadNext: () => undefined,
-        paginationMode: 'manual',
-        pageSize: 20,
-        renderItem: () => null,
-      })
-    : content;
 }
 
-function FollowersList({
-  listIdentityKey,
-  profile,
-  renderList,
-}: {
-  listIdentityKey?: string;
-  profile: ProfileConnectionList_followersProfile$key;
-  renderList?: InfiniteListRenderer;
-}) {
+function FollowersList({ profile }: { profile: ProfileConnectionList_followersProfile$key }) {
   const pagination = usePaginationFragment<
     ProfileFollowersNextPageQuery,
     ProfileConnectionList_followersProfile$key
@@ -195,23 +149,13 @@ function FollowersList({
       hasNext={pagination.hasNext}
       isLoadingNext={pagination.isLoadingNext}
       kind="followers"
-      listIdentityKey={listIdentityKey}
       loadNext={pagination.loadNext}
       profiles={profiles}
-      renderList={renderList}
     />
   );
 }
 
-function FollowingList({
-  listIdentityKey,
-  profile,
-  renderList,
-}: {
-  listIdentityKey?: string;
-  profile: ProfileConnectionList_followingProfile$key;
-  renderList?: InfiniteListRenderer;
-}) {
+function FollowingList({ profile }: { profile: ProfileConnectionList_followingProfile$key }) {
   const pagination = usePaginationFragment<
     ProfileFollowingNextPageQuery,
     ProfileConnectionList_followingProfile$key
@@ -225,10 +169,8 @@ function FollowingList({
       hasNext={pagination.hasNext}
       isLoadingNext={pagination.isLoadingNext}
       kind="following"
-      listIdentityKey={listIdentityKey}
       loadNext={pagination.loadNext}
       profiles={profiles}
-      renderList={renderList}
     />
   );
 }
@@ -237,24 +179,14 @@ type ConnectionListProps = {
   hasNext: boolean;
   isLoadingNext: boolean;
   kind: keyof typeof copy;
-  listIdentityKey?: string;
   loadNext: (count: number, options?: { onComplete?: (error: Error | null) => void }) => void;
   profiles: ReadonlyArray<{
     cursor: string;
     profile: Parameters<typeof ProfileListItem>[0]['profile'];
   }>;
-  renderList?: InfiniteListRenderer;
 };
 
-function ConnectionList({
-  hasNext,
-  isLoadingNext,
-  kind,
-  listIdentityKey,
-  loadNext,
-  profiles,
-  renderList,
-}: ConnectionListProps) {
+function ConnectionList({ hasNext, isLoadingNext, kind, loadNext, profiles }: ConnectionListProps) {
   const theme = useTheme();
   const [loadError, setLoadError] = useState(false);
   const text = copy[kind];
@@ -267,63 +199,47 @@ function ConnectionList({
     loadNext(20, { onComplete: (error) => setLoadError(Boolean(error)) });
   };
 
-  const emptyState = (
-    <StateView description={text.emptyDescription} style={styles.state} title={text.emptyTitle} />
-  );
-  const footer = loadError ? (
-    <StateView
-      actionLabel="다시 시도"
-      alert
-      description="잠시 후 다시 시도해주세요."
-      onAction={loadMore}
-      style={[styles.pagination, { borderColor: theme.border }]}
-      title={text.loadError}
-    />
-  ) : hasNext ? (
-    <View style={[styles.pagination, { borderColor: theme.border }]}>
-      <Button
-        accessibilityState={{ busy: isLoadingNext, disabled: isLoadingNext }}
-        disabled={isLoadingNext}
-        onPress={loadMore}
-        style={styles.paginationAction}
-        tone="secondary"
-      >
-        {isLoadingNext ? '불러오는 중' : '더 불러오기'}
-      </Button>
-      {isLoadingNext ? (
-        <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
-          {text.loadingNextLabel}
-        </Text>
-      ) : null}
-    </View>
-  ) : null;
-
-  if (renderList) {
-    return renderList({
-      data: profiles,
-      empty: emptyState,
-      hasNext,
-      isLoadingNext,
-      keyExtractor: (item) => item.cursor,
-      listHeader: <ConnectionTitle kind={kind} />,
-      listIdentityKey,
-      loadNext,
-      paginationMode: 'manual',
-      pageSize: 20,
-      renderFooter: () => footer,
-      renderItem: ({ item }) => <ProfileListItem linked profile={item.profile} />,
-    });
-  }
-
   return (
     <View>
       <ConnectionTitle kind={kind} />
-      {profiles.length
-        ? profiles.map((item) => (
-            <ProfileListItem key={item.cursor} linked profile={item.profile} />
-          ))
-        : emptyState}
-      {footer}
+      {profiles.length ? (
+        profiles.map((item) => <ProfileListItem key={item.cursor} linked profile={item.profile} />)
+      ) : (
+        <StateView
+          description={text.emptyDescription}
+          style={styles.state}
+          title={text.emptyTitle}
+        />
+      )}
+      {hasNext || loadError ? (
+        loadError ? (
+          <StateView
+            actionLabel="다시 시도"
+            alert
+            description="잠시 후 다시 시도해주세요."
+            onAction={loadMore}
+            style={[styles.pagination, { borderColor: theme.border }]}
+            title={text.loadError}
+          />
+        ) : (
+          <View style={[styles.pagination, { borderColor: theme.border }]}>
+            <Button
+              accessibilityState={{ busy: isLoadingNext, disabled: isLoadingNext }}
+              disabled={isLoadingNext}
+              onPress={loadMore}
+              style={styles.paginationAction}
+              tone="secondary"
+            >
+              {isLoadingNext ? '불러오는 중' : '더 불러오기'}
+            </Button>
+            {isLoadingNext ? (
+              <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
+                {text.loadingNextLabel}
+              </Text>
+            ) : null}
+          </View>
+        )
+      ) : null}
     </View>
   );
 }
