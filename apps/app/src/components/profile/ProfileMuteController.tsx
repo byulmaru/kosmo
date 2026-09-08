@@ -34,13 +34,6 @@ export type ProfileMuteChange = Readonly<{
   targetProfileId: string;
 }>;
 
-type ActiveRequest = Readonly<{
-  environment: ReturnType<typeof useRelayEnvironment>;
-  generation: number | undefined;
-  ownerProfileId: string;
-  token: number;
-}>;
-
 const staleRequestError = () => new Error('Profile mute request belongs to an inactive Profile.');
 
 function responseError(errors: ReadonlyArray<{ message: string }> | null | undefined) {
@@ -57,8 +50,6 @@ export function useProfileMuteMutations() {
   const mountedRef = useRef(true);
   const currentEnvironmentRef = useRef(environment);
   const selectedProfileIdRef = useRef(selectedProfileId);
-  const nextTokenRef = useRef(0);
-  const activeRequestsRef = useRef(new Map<string, ActiveRequest>());
 
   currentEnvironmentRef.current = environment;
   selectedProfileIdRef.current = selectedProfileId;
@@ -70,22 +61,10 @@ export function useProfileMuteMutations() {
     };
   }, []);
 
-  useEffect(() => {
-    activeRequestsRef.current.clear();
-  }, [environment, selectedProfileId]);
-
   const changeMuted = useCallback(
     (change: ProfileMuteChange, nextMuted: boolean) => {
       const requestEnvironment = environment;
       const requestGeneration = environmentGenerationRef?.current;
-      const requestKey = `${change.ownerProfileId}:${change.targetProfileId}`;
-      const request: ActiveRequest = {
-        environment: requestEnvironment,
-        generation: requestGeneration,
-        ownerProfileId: change.ownerProfileId,
-        token: nextTokenRef.current + 1,
-      };
-      nextTokenRef.current = request.token;
 
       return new Promise<void>((resolve, reject) => {
         if (
@@ -96,22 +75,12 @@ export function useProfileMuteMutations() {
           reject(new Error('Profile mute request is missing its selected Profile identity.'));
           return;
         }
-        if (activeRequestsRef.current.has(requestKey)) {
-          reject(new Error('Profile mute request is already in progress.'));
-          return;
-        }
-        activeRequestsRef.current.set(requestKey, request);
-
         const isCurrent = () =>
           mountedRef.current &&
-          currentEnvironmentRef.current === request.environment &&
-          environmentGenerationRef?.current === request.generation &&
-          selectedProfileIdRef.current === request.ownerProfileId &&
-          activeRequestsRef.current.get(requestKey)?.token === request.token;
+          currentEnvironmentRef.current === requestEnvironment &&
+          environmentGenerationRef?.current === requestGeneration &&
+          selectedProfileIdRef.current === change.ownerProfileId;
         const finish = (error?: Error) => {
-          if (activeRequestsRef.current.get(requestKey)?.token === request.token) {
-            activeRequestsRef.current.delete(requestKey);
-          }
           if (error) {
             reject(error);
           } else {
