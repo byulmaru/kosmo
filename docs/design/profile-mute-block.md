@@ -76,6 +76,10 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 - Settings root에는 `뮤트 및 차단` 진입점 하나를 제공한다.
 - 진입점 안에는 `뮤트한 프로필`과 `차단한 프로필`을 이 순서의 별도 destination으로 제공한다. 두 상태를
   하나의 혼합 목록이나 filter로 만들지 않는다.
+- 공통 Settings source는 `PROD-814`·`PROD-823` 중 실제로 먼저 구현한 이슈가 소유하고, 후행 이슈는 그 source를
+  재사용한다. 완성된 destination부터 공개하며, Block은 route·data·action 연결과 검증을 마친 뒤 추가한다.
+  미완성 destination의 disabled item·placeholder·연결되지 않은 route는 노출하지 않는다. 두 destination이
+  모두 완성되면 `뮤트한 프로필 → 차단한 프로필` 순서를 유지한다.
 - 각 목록은 자기 heading, loading, error·retry, empty, pagination과 해제 action을 소유한다. 한 목록의 상태나
   action이 다른 목록의 항목을 바꾸지 않는다.
 - 같은 Target에 Mute와 Block이 모두 적용돼도 두 관리 관계는 각각의 목록·관계 Node·해제 경로에 남는다. Active
@@ -286,3 +290,16 @@ Web 최소 폭 160px과 키보드·focus 처리를 재사용하고, 목록은 �
 네이티브 앱 자체가 별도 이슈/PR에서 아직 작업 중이므로 iOS·Android runtime·접근성 검증은
 앱 작업 완료 후 수행한다. 이는 미실행 후속 검증이며 Native 제품 계약이나 지원 대상의 삭제가 아니다.
 PROD-814 담당자가 후속 검증 추적을 소유한다. OpenSpec archive는 Native 검증 통과나 PR 머지를 뜻하지 않는다.
+
+## 기존 UI 구현과 후속 교체
+
+2026-09-08 `PROD-823`·`PROD-813`·`PROD-917`의 확정 범위에 따라, 기존 UI의 기능 구현과 신규 UI 교체를 나누어
+진행한다. `PROD-823`은 기존 레거시 컴포넌트를 조합해 실제 Profile·Settings의 차단 화면과 관리 진입점을
+연결하고, 조회·생성·해제·pagination·재시도·pending·성공 피드백을 구현·검증한다. 기존 UI에서도 위 제품 행동,
+접근성과 기본 Profile 정보·viewer 방향별 콘텐츠 계약을 지킨다.
+
+`PROD-858`·`PROD-861`의 신규 공용 UI·Storybook 확정이나 `PROD-917`의 교체 완료를 기다리지 않는다.
+`PROD-823`은 기존 화면·데이터·action 연결 코드와 인터페이스, 상태·접근성·cache·프로필 전환 검증 증거를
+인계하고, `PROD-813`은 기존 UI 기준 차단 종단 간 통합 검증과 `add-profile-block` archive를 소유한다.
+`PROD-917`은 Storybook 확정 뒤 신규 UI로 교체하고 교체에 따른 회귀를 검증한다. 교체 작업자의 수신 확인과
+신규 UI 교체 완료는 기존 기능의 완료나 archive 조건이 아니다.
