@@ -201,4 +201,44 @@ describe('차단한 프로필 목록', () => {
     await act(async () => retry?.props.onPress());
     assert.equal(retries, 1);
   });
+
+  it('마지막 항목 해제 뒤 모달 dismiss가 끝난 다음 목록 제목에 포커스를 복원한다', async () => {
+    const focus = mock.fn();
+    const loadedState = {
+      pagination: { status: 'end' as const },
+      profiles: [{ displayName: '별마루', profileBlockId: 'profile-block-a' }],
+      status: 'loaded' as const,
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(BlockedProfilesView, {
+          onUnblock: async () => undefined,
+          state: loadedState,
+        }),
+        {
+          createNodeMock: (element) => {
+            const props = element.props as { accessibilityRole?: string };
+            return element.type === 'View' && props.accessibilityRole === 'header' ? { focus } : {};
+          },
+        },
+      );
+    });
+    await act(async () => find('Button')?.props.onPress());
+    await act(async () => find('ConfirmationContent')?.props.onConfirm());
+    await act(async () => {
+      renderer?.update(
+        createElement(BlockedProfilesView, {
+          onUnblock: async () => undefined,
+          state: { pagination: { status: 'end' }, profiles: [], status: 'loaded' },
+        }),
+      );
+    });
+
+    assert.equal(focus.mock.callCount(), 0);
+    await act(async () => {
+      find('ModalSheet')?.props.onDismiss();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(focus.mock.callCount(), 1);
+  });
 });

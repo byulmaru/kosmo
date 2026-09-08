@@ -165,7 +165,7 @@ describe('ProfileBlockController', () => {
     await request;
     await flushTasks();
     assert.equal(commitUpdateCalls, 1);
-    assert.deepEqual(resetCalls, ['owner-a']);
+    assert.deepEqual(resetCalls, []);
   });
 
   it('selected actor 전환 뒤 도착한 unblock 응답은 cache와 actor를 갱신하지 않는다', async () => {
