@@ -1,5 +1,5 @@
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { FollowRequestListItem } from '@/components/follow-request/FollowRequestListItem';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import { profile } from '../fixtures';
@@ -25,6 +25,7 @@ const missingRequest = {
 };
 const storyRequests = [availableRequest, missingRequest];
 const storyRequestIds = storyRequests.map(({ id }) => id);
+const mutationRequestObserver = fn().mockName('FollowRequestListItem mutation');
 
 const FollowRequestListItemStoriesQuery = graphql`
   query FollowRequestListItemStoriesQuery($ids: [ID!]!) {
@@ -117,6 +118,7 @@ const rejectRetryResponse = {
 };
 
 const meta = {
+  beforeEach: () => mutationRequestObserver.mockClear(),
   args: { requestId: availableRequest.id },
   argTypes: {
     requestId: { control: 'select', options: storyRequestIds },
@@ -202,6 +204,7 @@ export const RejectPending: Story = {
 export const ApproveFailureAndRetry: Story = {
   parameters: {
     relay: {
+      mutationRequestObserver,
       operationResponses: {
         FollowRequestListItemApproveMutation: {
           sequence: [{ error: '승인 mutation 실패' }, { data: approveRetryResponse }],
@@ -218,8 +221,12 @@ export const ApproveFailureAndRetry: Story = {
     await userEvent.click(approveButton);
     const alert = await canvas.findByRole('alert');
     expect(alert).toHaveTextContent('팔로우 요청을 승인하지 못했어요');
+    expect(
+      getComputedStyle(within(alert).getByText(/승인하지 못했어요/).parentElement!).borderLeftColor,
+    ).toBe('rgb(180, 35, 24)');
     expect(row?.contains(alert)).toBe(false);
     await userEvent.click(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인' }));
+    expect(mutationRequestObserver).toHaveBeenCalledTimes(2);
     await expect(
       canvas.findByRole('button', { name: '별빛 여행자 팔로우 요청 승인' }),
     ).resolves.toBeEnabled();
@@ -229,6 +236,7 @@ export const ApproveFailureAndRetry: Story = {
 export const RejectFailureAndRetry: Story = {
   parameters: {
     relay: {
+      mutationRequestObserver,
       operationResponses: {
         FollowRequestListItemRejectMutation: {
           sequence: [{ error: '거절 mutation 실패' }, { data: rejectRetryResponse }],
@@ -245,8 +253,12 @@ export const RejectFailureAndRetry: Story = {
     await userEvent.click(rejectButton);
     const alert = await canvas.findByRole('alert');
     expect(alert).toHaveTextContent('팔로우 요청을 거절하지 못했어요');
+    expect(
+      getComputedStyle(within(alert).getByText(/거절하지 못했어요/).parentElement!).borderLeftColor,
+    ).toBe('rgb(180, 35, 24)');
     expect(row?.contains(alert)).toBe(false);
     await userEvent.click(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 거절' }));
+    expect(mutationRequestObserver).toHaveBeenCalledTimes(2);
     await expect(
       canvas.findByRole('button', { name: '별빛 여행자 팔로우 요청 거절' }),
     ).resolves.toBeEnabled();

@@ -1,6 +1,6 @@
 import { Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import FollowRequestsScreen from '@/app/(tabs)/(protected)/follow-requests';
 import {
   FollowRequestList,
@@ -112,6 +112,7 @@ const paginationNextPage = {
   },
 };
 const storyProfiles = [emptyProfile, contentProfile, paginationProfile, requesterACacheProfile];
+const mutationRequestObserver = fn().mockName('FollowRequests mutation');
 
 const FollowRequestsStoriesQuery = graphql`
   query FollowRequestsStoriesQuery($ids: [ID!]!) {
@@ -240,6 +241,7 @@ const rejectMutationResponse = {
 };
 
 const meta = {
+  beforeEach: () => mutationRequestObserver.mockClear(),
   component: FollowRequestCatalog,
   parameters: {
     relay: { data: { nodes: storyProfiles } },
@@ -293,7 +295,7 @@ export const RowLocalPending: Story = {
 };
 
 export const MutationFailureAndSameActionRetry: Story = {
-  parameters: { relay: { mutationError: '승인 mutation 실패' } },
+  parameters: { relay: { mutationError: '승인 mutation 실패', mutationRequestObserver } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const approveButton = await canvas.findByRole('button', {
@@ -304,9 +306,13 @@ export const MutationFailureAndSameActionRetry: Story = {
 
     const alert = await canvas.findByRole('alert');
     expect(alert).toHaveTextContent('팔로우 요청을 승인하지 못했어요');
+    expect(
+      getComputedStyle(within(alert).getByText(/승인하지 못했어요/).parentElement!).borderLeftColor,
+    ).toBe('rgb(180, 35, 24)');
     expect(row?.contains(alert)).toBe(false);
     expect(canvas.getByRole('link', { name: '별빛 여행자 프로필로 이동' })).toBeVisible();
-    expect(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인' })).toBeEnabled();
+    await userEvent.click(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인' }));
+    expect(mutationRequestObserver).toHaveBeenCalledTimes(2);
   },
   render: () => <ContentList />,
 };
