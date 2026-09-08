@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { MutedProfileList } from '@/components/profile/MutedProfileList';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
@@ -76,7 +77,19 @@ function SettingsMutedProfilesContent() {
     SettingsMutedProfiles_profile$key
   >(SettingsMutedProfilesFragment, profile ?? null);
   const edges = pagination.data?.profileMutes.edges ?? [];
+  const listRef = useRef<View>(null);
+  const [focusAfterUnmuteProfileId, setFocusAfterUnmuteProfileId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
+  useEffect(() => {
+    if (
+      !focusAfterUnmuteProfileId ||
+      edges.some((edge) => edge.node.targetProfile.id === focusAfterUnmuteProfileId)
+    ) {
+      return;
+    }
+    listRef.current?.focus();
+    setFocusAfterUnmuteProfileId(null);
+  }, [edges, focusAfterUnmuteProfileId]);
   const loadMore = useCallback(() => {
     if (!pagination.hasNext || pagination.isLoadingNext) {
       return;
@@ -103,7 +116,17 @@ function SettingsMutedProfilesContent() {
           ? { onLoadMore: loadMore, status: 'more' as const }
           : { status: 'end' as const },
     profiles: edges.map((edge) => ({
-      action: <ProfileMuteAction profile={edge.node.targetProfile} surface="button" />,
+      action: (
+        <ProfileMuteAction
+          onFeedback={(feedback) => {
+            if (feedback.status === 'success') {
+              setFocusAfterUnmuteProfileId(edge.node.targetProfile.id);
+            }
+          }}
+          profile={edge.node.targetProfile}
+          surface="button"
+        />
+      ),
       avatarUri: edge.node.targetProfile.avatar?.url,
       displayName: edge.node.targetProfile.displayName,
       id: edge.node.targetProfile.id,
@@ -112,5 +135,9 @@ function SettingsMutedProfilesContent() {
     status: 'loaded' as const,
   };
 
-  return <MutedProfileList state={listState} />;
+  return (
+    <View accessibilityLabel="뮤트한 프로필 목록" ref={listRef} tabIndex={-1}>
+      <MutedProfileList state={listState} />
+    </View>
+  );
 }
