@@ -62,12 +62,12 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 
 ## 행동
 
-| 행동                                | 행동 주체 | 대상 객체         | 입력값                     | 권한                                       | 조건                                                                                                                                                                          | 결과                                                                                                          |
-| ----------------------------------- | --------- | ----------------- | -------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Notification 생성                   | 시스템    | Notification      | Type, Recipient, 원인 객체 | `System.NotificationSource`                | Type별 필수 관계가 존재하고 Recipient가 원인 객체의 조회 정책을 통과하며 아래 억제 정책에 걸리지 않는다                                                                       | 입력 Notification Type과 Read State=Unread인 Notification 및 원인 관계가 생성된다                             |
-| 상호작용 Notification 정리          | 시스템    | Notification      | 정리 대상 Notification     | `System.NotificationSource`                | 지원 Type의 필수 원인 관계 결손·원인 Recipient 불일치·Recipient 기준 Related Post/Profile 비가용 (Recipient 자체의 복구 가능한 비활성화·정지와 Quote의 아래 보존 예외는 제외) | 시점과 성공을 보장하지 않고 Notification 제거를 Best Effort로 시도한다                                        |
-| Profile Notification 지정 읽음 처리 | Account   | Notification 목록 | Notification ID 목록       | `Account.Active`, `Notification.Recipient` | Type이 Operational이 아닌 입력 항목 중 요청 Account가 현재 조회할 수 있는 Notification이다                                                                                    | 처리 가능한 입력 항목은 Read가 되고 읽음 시각이 최초 기록된다. 이미 Read이면 상태와 읽음 시각을 바꾸지 않는다 |
-| Account Notification 읽음 처리      | Account   | Notification      | 없음                       | `Notification.Recipient`                   | Type이 Operational이고 Recipient Account State가 Deleted가 아니며 Read State가 Unread다                                                                                       | Read State가 Read가 되고 읽음 시각이 기록된다                                                                 |
+| 행동                                | 행동 주체 | 대상 객체         | 입력값                     | 권한                                       | 조건                                                                                                                                                 | 결과                                                                                                          |
+| ----------------------------------- | --------- | ----------------- | -------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Notification 생성                   | 시스템    | Notification      | Type, Recipient, 원인 객체 | `System.NotificationSource`                | Type별 필수 관계가 존재하고 Recipient가 원인 객체의 조회 정책을 통과하며 아래 억제 정책에 걸리지 않는다                                              | 입력 Notification Type과 Read State=Unread인 Notification 및 원인 관계가 생성된다                             |
+| 상호작용 Notification 정리          | 시스템    | Notification      | 정리 대상 Notification     | `System.NotificationSource`                | 지원 Type의 필수 원인 관계 결손·원인 Recipient 불일치·Recipient 기준 Related Post/Profile 비가용 (Recipient 자체의 복구 가능한 비활성화·정지는 제외) | 시점과 성공을 보장하지 않고 Notification 제거를 Best Effort로 시도한다                                        |
+| Profile Notification 지정 읽음 처리 | Account   | Notification 목록 | Notification ID 목록       | `Account.Active`, `Notification.Recipient` | Type이 Operational이 아닌 입력 항목 중 요청 Account가 현재 조회할 수 있는 Notification이다                                                           | 처리 가능한 입력 항목은 Read가 되고 읽음 시각이 최초 기록된다. 이미 Read이면 상태와 읽음 시각을 바꾸지 않는다 |
+| Account Notification 읽음 처리      | Account   | Notification      | 없음                       | `Notification.Recipient`                   | Type이 Operational이고 Recipient Account State가 Deleted가 아니며 Read State가 Unread다                                                              | Read State가 Read가 되고 읽음 시각이 기록된다                                                                 |
 
 ### Profile Notification 지정 읽음 처리
 
@@ -147,8 +147,7 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
   방향의 Post·Media 정책과 독립적으로 적용한다.
 - 필수 원인 관계가 없거나 Recipient와 일치하지 않거나 Related Post/Profile을 Recipient 기준으로 조회할 수 없게
   된 Notification은 비동기적으로 제거한다. 제거 전까지 저장 행과 Read State가 남을 수 있으며, 현재
-  delivery는 모든 API 표면에서 숨기는 것으로 이 간격을 격리한다. Quote Notification에는 아래의 복구 가능한
-  조회 제한 보존 예외를 우선 적용한다.
+  delivery는 모든 API 표면에서 숨기는 것으로 이 간격을 격리한다.
 - Recipient Profile 자체가 일시적으로 조회 불가인 경우에도 item은 숨기되, 복구 가능한 Recipient Profile의
   일시 비활성화·정지만으로는 Notification을 비동기 제거하지 않는다.
 - Mute가 나중에 생성되어도 기존 Notification의 존재와 Read State는 바꾸지 않는다. Profile Block은 제거된
@@ -168,9 +167,11 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 - 같은 Quote Post가 같은 Recipient Profile에게 Reply, Quote, Mention Notification을 동시에 발생시키면
   각 Type의 생성·Mute 조건을 먼저 적용한 뒤 남은 후보에서 Reply, Quote, Mention 순서로 한 건만 제공한다.
   Recipient가 서로 다르면 각각 판정한다.
-- 같은 Quote·Recipient의 Quote와 Mention이 처음부터 동시에 생성 후보이면 각 Type의 생성·Mute 조건을
-  적용한 뒤 Quote를 우선한다. Mention Notification이 먼저 생성됐다면 이후 인용 관계가 승인돼도
-  별도 Quote Notification을 추가하지 않는다. 기존 Mention Notification과 Read State·최초 읽음 시각을 보존한다.
+- 같은 Quote·Recipient의 Quote와 Mention이 동시에 생성 후보이면 각 Type의 생성·Mute 조건을 먼저
+  적용한다. 둘 다 남으면 Quote Notification 한 건만 제공한다. Reply도 후보이면 위 세 Type의 규칙을 적용한다.
+  인용 관계가 승인 대기여서 Mention Notification이 먼저 생성됐다면 이후 승인돼도 별도 Quote Notification을
+  추가하거나 기존 Mention의 Type을 교체하지 않는다. 이 승인 처리로 기존 Notification과 Read State·최초 읽음
+  시각을 변경하지 않는다. 다른 사유에 따른 조회·정리는 해당 Type의 기존 정책을 따른다.
 - 같은 Quote·Recipient의 Reply Notification이 먼저 생성된 경우에도 Mention과 동일하게 처리한다.
   이후 Quote 승인으로 알림을 추가하지 않고 기존 Reply Notification과 Read State·최초 읽음 시각을 보존한다.
 - Followee Post Notification은 이 중복 제거 대상에 포함하지 않고 기존 독립 정책을 따른다.
@@ -186,14 +187,16 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 - 최초 생성 판단에서 Mute·조회 권한 때문에 억제된 Quote는 나중에 조건이 풀려도 소급 생성하지 않는다.
   기능 도입 전의 Quote에도 소급 알림을 만들지 않는다. 이 정책이 적용되는 Remote Quote의 최초 승인 시점은
   생성 판단 시점으로 인정하며, 이미 저장된 알림의 일시적인 숨김 해제와 구분한다.
-- 승인 철회 또는 Quote·direct Source 삭제로 기존 Quote Notification이 유효하지 않게 되면 목록,
-  Unread count, Node 조회와 읽음 처리에서 즉시 없는 것으로 취급하고 기존 unavailable Notification 정리
-  정책에 따라 비동기로 제거한다. 물리 정리 뒤에도 같은 Quote의 재처리·재승인으로 알림을 다시 만들 수 없다.
-- Block·공개 범위 변경 등 복구 가능한 조회 제한, 일시적인 조회 실패나 Recipient 측 비활성화·정지만으로
-  Quote Notification을 물리적으로 제거하지 않는다. 목록, Unread count, Node 조회와 읽음 처리에서만 숨긴다.
-  제한이 해제되어 다시 조회 가능해지면 기존 Notification과 Read State·최초 읽음 시각을 그대로 사용한다.
-  물리 정리는 승인 철회·Quote 삭제·Source 삭제 등 인용 관계가 확정적으로 무효가 된 경우에만 적용한다.
-  복구 가능한 제한이나 일시적인 조회 실패를 승인 철회나 Post 삭제로 간주하지 않는다.
+- Block·공개 범위 변경 등으로 Quote 또는 direct Source를 현재 조회할 수 없으면 목록, Unread count,
+  Node 조회와 읽음 처리에서 즉시 숨긴다. 이후에는 기존 unavailable Notification 정책에 따라
+  Best Effort로 비동기 정리할 수 있으며 삭제 시점과 성공은 보장하지 않는다.
+- 비동기 삭제 전에 조회 제한이 풀리고 다른 조회 조건도 충족하면 남아 있는 Notification이 다시 보일 수 있다.
+  이를 위한 Notification, Read State, 최초 읽음 시각의 보존이나 이후 복원은 보장하지 않는다.
+- 승인 철회·Quote 삭제·direct Source 삭제 등 확정적인 무효 사유도 즉시 숨김과 기존 unavailable
+  Notification의 Best Effort 비동기 정리 정책을 따른다. 물리 정리 뒤에도 같은 Quote의 재처리·재승인으로
+  새 알림을 만들거나 삭제된 알림을 복원하지 않는다.
+- Quote 전용 보존 예외는 두지 않는다. Recipient 자체의 일시 비활성화·정지만으로 제거하지 않는 공통
+  정책은 그대로 적용하며, 이를 Quote나 direct Source 조회 불가 전반의 보존 보장으로 확대하지 않는다.
 
 ## 확정 용어
 

@@ -4,6 +4,9 @@
 
 Accepted — 사용자의 “Spec Gate 승인” 응답으로 PROD-903 정책 결과와 후속 책임안을 승인했다. 제품 정책의 미결정 사항은 없다. 이 이슈는 Domain 전용이며 후속 구현 OpenSpec의 승인은 포함하지 않는다.
 
+2026-09-09 PR #803 리뷰 후 사람의 명시적 요청으로 조회 제한의 보존 보장을 아래 결정으로 대체했다.
+이전 대화의 보존 보장은 더 이상 현재 계약이 아니다.
+
 ## 날짜
 
 2026-09-08
@@ -18,8 +21,8 @@ Accepted — 사용자의 “Spec Gate 승인” 응답으로 PROD-903 정책 �
   일시적인 조회 불가·Recipient 비활성화 시 물리 보존을 명시적으로 확정한 응답.
 - 후속 질문에서 “억제 후·기능 도입 전 Quote는 소급 생성하지 않음 (권장)” 선택.
 - 후속 질문에서 “로컬 작성도 인용 관계 승인 후 최초 판단 (권장)” 선택.
-- 최신 응답에서 Mention 선생성·Read State 보존, 동시 후보 Quote 우선, Followee Post 독립과
-  Block·공개 범위 변경의 복구 가능한 제한 보존을 명시적으로 확정했다.
+- 2026-09-08 응답에서 Mention 선생성·Read State 유지, 동시 후보 Quote 우선, Followee Post 독립을 확정했다.
+  당시 조회 제한의 보존 보장은 2026-09-09 리뷰 반영 요청으로 철회됐다.
 - [ADR 0014](./0014-post-structure-relations.md)의 Quote 관계 조합과
   [ADR 0015](./0015-post-share-reference.md)의 Quote 자체 상세 경로.
 
@@ -50,15 +53,33 @@ Accepted — 사용자의 “Spec Gate 승인” 응답으로 PROD-903 정책 �
   정책이 적용되는 Remote Quote의 최초 승인은 생성 판단 시점으로 인정한다. 보존된 알림의 숨김 해제는 새 생성이 아니다.
 - 승인 철회·Quote 또는 Source 삭제로 무효가 되면 모든 알림 조회 표면에서 즉시 숨기고 기존 unavailable
   Notification 정책에 따라 비동기로 정리한다. 물리 정리 뒤에도 같은 Quote에 다시 알리지 않는다.
-- Block·공개 범위 변경 등 복구 가능한 조회 제한, 일시적인 조회 실패나 Recipient 측 비활성화·정지에서는
-  조회 표면에서만 숨기고 Notification과 Read State·최초 읽음 시각을 보존한다. 다시 조회 가능해지면
-  기존 상태를 사용한다. 물리 정리는 승인 철회·Quote 삭제·Source 삭제 등 확정적 관계 무효화에만 적용한다.
+- Block·공개 범위 변경 등으로 Quote 또는 direct Source를 현재 조회할 수 없으면 모든 조회·읽음 표면에서
+  즉시 숨기고 기존 unavailable Notification 정책에 따라 Best Effort로 비동기 정리할 수 있다.
+  삭제 전에 제한이 풀리면 남아 있는 알림이 다시 보일 수 있지만 Notification·Read State·최초 읽음 시각의
+  보존이나 이후 복원은 보장하지 않는다. 승인 철회·Quote/direct Source 삭제도 같은 정리 정책을 따른다.
+  물리 정리 뒤에도 재처리·재승인으로 새 알림을 생성하거나 복원하지 않는다.
+- Quote 전용 cleanup 보존 예외는 제거한다. Recipient 자체의 일시 비활성화·정지에 대한 기존 공통 예외는
+  유지하며 Quote/direct Source 조회 불가 전반으로 확대하지 않는다.
 
 ## 이유와 결과
 
 Quote는 자체 Content와 상세 경로를 가진다. 별도 알림에서 Quote로 이동하면 수신자가 인용글을 바로
 확인할 수 있다. 원인은 같은 Quote이고 수신자도 같을 때 알림을 한 건으로 제한하며, 우선순위는 사람의
 선택에 따라 Reply, Quote, Mention 순서로 고정한다. 이 규칙을 전체 Notification grouping 변경으로 넓히지 않는다.
+
+2026-09-09 재검토에서도 ADR 0014와 Post 구조 검증·테스트는 Reply와 Quote의 동시 성립을 허용한다.
+따라서 해당 조합은 제거하지 않는다. 다만 구조가 이 알림 순서를 필연적으로 정하는 것은 아니다.
+기존 결정 기록에는 순서의 선택은 있지만 Reply와 Mention 사이에 Quote를 둔 별도 제품 이유는 없다.
+관계의 강도나 저장 구조를 당시 선택 이유로 새로 만들어 기록하지 않는다.
+
+Quote와 Mention만 후보인 경우에는 Type별 생성·Mute 조건을 먼저 적용하고 둘 다 남으면 Quote 한 건을
+제공한다. 승인 대기로 Mention이 먼저 생성됐다면 이후 승인으로 Quote를 추가하거나 Mention의 Type을
+교체하지 않는다. 기존 Notification과 Read State를 그 승인 처리에서 변경하지 않는 규칙이며,
+조회 불가에 따른 물리 보존·복원 보장과는 별개다. Followee Post는 독립 정책을 따른다.
+
+조회 제한의 보존 보장은 PR #803의 제안과 후속 사람의 결정을 받아들여 완화했다. 조회 불가 시 즉시 숨기는
+결과를 보장하고, 물리 정리는 기존 unavailable 정책에 맡긴다. cleanup 실행 시점에 따라 제한 해제 후 알림이
+다시 보이거나 이미 삭제되어 보이지 않을 수 있다는 결과를 허용한다.
 
 알림 제공 여부는 원문과 인용글의 조회 권한을 넓히지 않는다. 기본 행동 주체인 Profile로 자기 인용을 판단하며,
 Account를 공유한다는 이유로 다른 Profile의 알림까지 억제하지 않는다.
@@ -69,13 +90,15 @@ Account를 공유한다는 이유로 다른 Profile의 알림까지 억제하지
 - 원문 상세로 이동하는 안 대신 Quote 자체 상세로 이동하는 안을 선택했다.
 - Quote 우선 또는 유형별 개별 알림 대신 Reply 우선의 한 건을 선택했다.
 - Account 단위 자기 인용 억제와 Source 조회 불가 시 알림 유지 대신 Profile 단위 억제와 두 Post의 조회 확인을 선택했다.
+- 복구 가능한 제한에서 저장 상태와 복원을 보장하던 이전 선택은 철회했다. 기존 unavailable 정책과 같은
+  Best Effort 정리를 선택했으며, 조회 제한 해제 후의 복원을 보장하지 않는 결과를 허용한다.
 
 ## 남은 결정
 
 현재 Post 구조는 Reply와 Quote의 동시 성립을 허용하므로 해당 구조 전제는 제거하지 않는다.
 동시 후보는 기존 Reply 우선을 유지하고, 먼저 생성된 Reply는 Mention과 같은 원칙으로 보존하기로 확정했다.
 PROD-903 자체의 제품 정책상 미결정 사항은 없다.
-Quote·Mention 중복, Followee Post 독립, 복구 가능한 조회 제한의 보존은 확정했다.
+Quote·Mention 중복, Followee Post 독립, 조회 제한의 즉시 숨김과 Best Effort 정리는 확정했다.
 원격 관계의 legacy 승인·재승인 허용 조건은 해당 관계 owner가 확정해야 하며, 알림의 재승인 시 재생성 금지와
 구분한다. 후속 구현·OpenSpec·통합 검증·archive owner는 정혜주로 승인됐고,
 [PROD-926](https://linear.app/byulmaru/issue/PROD-926)으로 생성·배정했다. 해당 이슈의 Issue Gate와
