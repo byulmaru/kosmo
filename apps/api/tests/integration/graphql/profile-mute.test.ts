@@ -114,18 +114,50 @@ describe('GraphQL Profile Mute', () => {
 
     const management = await requestGraphQL<{
       node: {
-        profileMutes: { edges: Array<{ node: { id: string } }> };
+        profileMutes: {
+          edges: Array<{
+            node: {
+              id: string;
+              targetProfile: {
+                id: string;
+                handle: string;
+                displayName: string;
+                domain: string;
+                instanceKind: string;
+              };
+            };
+          }>;
+        };
       } | null;
-      profileMute: { id: string } | null;
+      profileMute: {
+        id: string;
+        targetProfile: {
+          id: string;
+          handle: string;
+          displayName: string;
+          domain: string;
+          instanceKind: string;
+        };
+      } | null;
     }>(
       `query MutedAndBlockedManagement($ownerId: ID!, $profileMuteId: ID!) {
         node(id: $ownerId) {
           ... on Profile {
-            profileMutes(first: 10) { edges { node { id } } }
+            profileMutes(first: 10) {
+              edges {
+                node {
+                  id
+                  targetProfile { id handle displayName domain instanceKind }
+                }
+              }
+            }
           }
         }
         profileMute: node(id: $profileMuteId) {
-          ... on ProfileMute { id }
+          ... on ProfileMute {
+            id
+            targetProfile { id handle displayName domain instanceKind }
+          }
         }
       }`,
       {
@@ -140,6 +172,20 @@ describe('GraphQL Profile Mute', () => {
       [profileMuteId],
     );
     assert.equal(management.data?.profileMute?.id, profileMuteId);
+    assert.deepEqual(management.data?.node?.profileMutes.edges[0]?.node.targetProfile, {
+      id: globalId('ProfileMuteTarget', target.id),
+      handle: target.handle,
+      displayName: target.displayName,
+      domain: '127.0.0.1:4173',
+      instanceKind: 'LOCAL',
+    });
+    assert.deepEqual(management.data?.profileMute?.targetProfile, {
+      id: globalId('ProfileMuteTarget', target.id),
+      handle: target.handle,
+      displayName: target.displayName,
+      domain: '127.0.0.1:4173',
+      instanceKind: 'LOCAL',
+    });
 
     const removed = await unmuteProfile(profileMuteId, auth.token);
     assertNoGraphQLErrors(removed);
@@ -184,7 +230,7 @@ describe('GraphQL Profile Mute', () => {
     assertNoGraphQLErrors(remoteMutation);
     const remoteMute = remoteMutation.data?.muteProfile.profileMute;
     assert.ok(remoteMute);
-    assert.equal(remoteMute.targetProfile.id, globalId('Profile', remoteTarget.id));
+    assert.equal(remoteMute.targetProfile.id, globalId('ProfileMuteTarget', remoteTarget.id));
 
     const expectedIds = [remoteMute.id, localMute.id].sort((first, second) =>
       decodeGlobalId(second).id.localeCompare(decodeGlobalId(first).id),
@@ -285,7 +331,7 @@ describe('GraphQL Profile Mute', () => {
     assertNoGraphQLErrors(targetState);
     assert.deepEqual(targetState.data?.node?.viewerState.profileMute, {
       id: localMute.id,
-      targetProfile: { id: globalId('Profile', localTarget.id) },
+      targetProfile: { id: globalId('ProfileMuteTarget', localTarget.id) },
     });
 
     const muteNode = await requestGraphQL<{
@@ -305,7 +351,10 @@ describe('GraphQL Profile Mute', () => {
     );
     assertNoGraphQLErrors(muteNode);
     assert.equal(muteNode.data?.node?.id, localMute.id);
-    assert.equal(muteNode.data?.node?.targetProfile?.id, globalId('Profile', localTarget.id));
+    assert.equal(
+      muteNode.data?.node?.targetProfile?.id,
+      globalId('ProfileMuteTarget', localTarget.id),
+    );
 
     await db
       .update(Profiles)

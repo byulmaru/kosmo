@@ -1,17 +1,42 @@
 import { db, Instances, ProfileMutes, Profiles } from '@kosmo/core/db';
-import { AccountProfileRole } from '@kosmo/core/enums';
-import { PermissionDeniedError } from '@kosmo/core/error';
+import { AccountProfileRole, InstanceKind } from '@kosmo/core/enums';
+import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, isNull, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { visibleProfileWhere } from '@/profile/visibility';
+import { profileMuteTargetLoader } from '../loader/mute';
 import { Profile, ProfileMute, ProfileMuteConnection } from '../ref';
+import type { ProfileMuteTargetRow } from '../loader/mute';
 import type { ProfileMuteRow } from '../ref';
+
+const ProfileMuteTarget = builder.objectRef<ProfileMuteTargetRow>('ProfileMuteTarget');
+
+ProfileMuteTarget.implement({
+  fields: (t) => ({
+    id: t.globalID({
+      resolve: (target) => ({ id: target.id, type: 'ProfileMuteTarget' }),
+    }),
+    handle: t.exposeString('handle'),
+    displayName: t.exposeString('displayName'),
+    domain: t.exposeString('domain'),
+    instanceKind: t.expose('kind', {
+      type: InstanceKind,
+    }),
+  }),
+});
 
 builder.objectField(ProfileMute, 'targetProfile', (t) =>
   t.field({
-    type: Profile,
-    resolve: (profileMute) => profileMute.targetProfileId,
+    type: ProfileMuteTarget,
+    resolve: async (profileMute, _, ctx) => {
+      const target = await profileMuteTargetLoader(ctx).load(profileMute.targetProfileId);
+      if (!target) {
+        throw new NotFoundError('Profile Mute target not found');
+      }
+
+      return target;
+    },
   }),
 );
 
