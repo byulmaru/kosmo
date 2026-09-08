@@ -44,12 +44,13 @@
 - UI의 IBM Plex Sans KR은 100~600을 가능한 동일 weight로 대응하고, SUIT 700 이상은 IBM Plex Sans KR Bold로 축소한다.
 - 본문의 Noto Sans KR은 Thin, Light, DemiLight, Regular, Medium, Bold, Black 중 가장 가까운 weight로 대응한다.
 - 대치 과정에서는 font size, line-height, letter spacing token을 바꾸지 않는다.
-- 이는 **MCP 작업 환경 한정 대치**다. 코드·실서비스와 Production 검수는 그대로 SUIT·Pretendard Variable을 사용한다.
+- 이는 **MCP 작업 환경 한정 대치**다. 코드·실서비스와 Production 검수는 플랫폼별 runtime 로딩 규칙에 따라 SUIT·Pretendard family를 사용한다(아래 Expo/React Native 구현 참조).
 - 로고처럼 SUIT로 지정하려던 임시 text node도 MCP에서는 IBM Plex Sans KR로 표기한다(로고 에셋 확정 전까지는 대문자 "K").
 
 ## Expo/React Native 구현 (`apps/app`)
 
-- 두 폰트는 **npm 패키지로 관리**한다(`pretendard`, `@sun-typeface/suit`, 둘 다 Variable). `apps/app/src/app/_layout.tsx`가 package의 Variable TTF를 `expo-font` `useFonts`로 로드하므로 Android/iOS/Web이 같은 asset을 bundle한다. 외부 CDN 런타임 의존과 git에 복제한 폰트 binary는 두지 않는다.
+- 두 폰트는 **npm 패키지로 관리**한다(`pretendard`, `@sun-typeface/suit`). `apps/app/src/app/_layout.tsx`는 iOS에서 필요한 static face만 `expo-font` `useFonts`로 로드하고, Android/Web에서는 package의 Variable TTF를 기존 consumer family name으로 로드한다. 외부 CDN 런타임 의존과 git에 복제한 폰트 binary는 두지 않는다.
+- iOS loader의 static face key(`SUIT-Regular`, `SUIT-SemiBold`, `SUIT-Bold`, `SUIT-ExtraBold`, `Pretendard-Regular`)는 등록용 namespace이며 component가 사용하는 family name이 아니다. iOS의 `fontFamily`는 Android/Web과 동일하게 `SUIT` 또는 `Pretendard`를 사용한다. 필요한 weight만 static face로 등록해 iOS의 family/weight 선택을 보존한다.
 - app에서 사용하는 family name은 `SUIT`와 `Pretendard`다. package 경로나 내부 font filename을 component style에 직접 사용하지 않는다.
 - React Native `Text`/`TextInput`은 CSS font 상속에 의존하지 않는다. 공용 primitive와 각 text style은 용도에 맞는 `fontFamily`를 명시한다.
   - UI, 버튼, 내비게이션, 라벨, heading: `fontFamily: 'SUIT'`
