@@ -46,7 +46,7 @@ export type NotificationListItemViewProps =
   | {
       kind: 'reply';
       unread?: boolean;
-      /** Compose PostListItem with notification="reply" and showDivider={false}. */
+      /** Compose ReplyNotificationPost; this wrapper owns the divider and Read state. */
       children: ReactElement;
       actor?: never;
       actors?: never;

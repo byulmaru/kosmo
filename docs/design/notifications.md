@@ -67,11 +67,13 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
   활성화하면 해당 게시글 상세에서 대화 문맥을 확인한다. 이 제한은 Reaction/Repost의 actionless
   미리보기에는 적용하지 않는다. 수신자별 Reply/Mention 중복 정책은
   [Notification 도메인의 Future 계약](../domain/objects/notification.md#replymention-수신자별-분류와-중복-처리-future)을 따른다.
-- Reply는 실제 Post 컴포넌트와 기존 Action Bar를 재사용한다. Post action/provider·Relay ref는
-  기존 Post 계약을 따르며 action을 알림 이동 링크 안에 중첩하지 않는다. 단일 하단 divider는
-  Notification wrapper가 소유한다. Reply wrapper는 `children`과 `unread`만 받으며, 자식은
-  `PostListItem`의 `notification="reply"`와 `showDivider={false}`로 합성한다. 게시글 identity와 이동은
-  Post가 소유하므로 wrapper에 actor·timestamp·별도 이동 props를 중복 전달하지 않는다.
+- Reply 알림은 `ReplyNotificationPost`가 작성자·시각·알림 이유와 게시글 내용을 조립한다.
+  `PostBody`·`PostSourcePreview`·`PostActionSurface`를 재사용하고, Reply 버튼·composer·focus 연결은
+  `usePostReplySurface`를 게시글 목록과 공유한다. `PostListItem`은 알림 종류·문구·배치를 소유하지 않는다.
+  기존 Post action/provider·Relay ref 계약을 따르며 action을 알림 이동 링크 안에 중첩하지 않는다.
+  단일 하단 divider는 Notification wrapper가 소유한다. Reply wrapper는 `children`과 `unread`만 받고
+  자식으로 `ReplyNotificationPost`를 합성한다. 게시글 identity와 이동은 이 자식이 소유하므로 wrapper에
+  actor·timestamp·별도 이동 props를 중복 전달하지 않는다.
 - Follow/FollowRequest/Reaction/Repost의 pending/disabled는 알림 이동을 차단한다. consumer가 pending
   수명을 소유하며 presentation에서 읽음 mutation·cache 또는 실패 복구 정책을 실행하지 않는다.
   Reply의 이동과 Post action 상태는 해당 Post가 소유한다. 권한 상실로 Post를 숨겨야 하면 consumer가

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
+import { expect, fireEvent, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { NotificationListItemView } from '@/components/notification/NotificationListItemView';
+import { ReplyNotificationPost } from '@/components/notification/ReplyNotificationPost';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
-import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { SessionProvider } from '@/session/SessionProvider';
+import { getCopiedStrings, resetClipboardMock } from '../../../.storybook/mocks/postClipboard';
 import { post, profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { NotificationListItemViewProps } from '@/components/notification/NotificationListItemView';
@@ -68,7 +69,7 @@ function ReplyPost() {
       query NotificationListItemStoriesQuery {
         node(id: "notification-reply-post") {
           ... on Post {
-            ...PostListItem_post @alias(as: "post")
+            ...ReplyNotificationPost_post @alias(as: "post")
           }
         }
         composer: node(id: "notification-viewer") {
@@ -88,7 +89,7 @@ function ReplyPost() {
       <PostActionAuthenticationProvider>
         <PostReplyCoordinatorProvider owner="list" profile={data.composer?.replyProfile ?? null}>
           <PostMediaViewerHostProvider>
-            <PostListItem post={data.node.post} showDivider={false} notification="reply" />
+            <ReplyNotificationPost post={data.node.post} />
           </PostMediaViewerHostProvider>
         </PostReplyCoordinatorProvider>
       </PostActionAuthenticationProvider>
@@ -211,6 +212,7 @@ const meta = {
     'ProtectionContract',
     'ReplyLayoutContract',
     'ReplyQuoteContract',
+    'ReplyActionsContract',
   ],
   parameters: {
     layout: 'fullscreen',
@@ -406,7 +408,7 @@ export const CompositionContract: Story = {
     });
     const reply = within(canvas.getByTestId('reply-notification'));
     const replySurface = reply.getByTestId('notification-item-surface');
-    const replyPost = reply.getByTestId('post-list-standard-row');
+    const replyPost = reply.getByTestId('reply-notification-post');
     await expect(reply.getByTestId('notification-reason')).toBeVisible();
     await expect(reply.getByTestId('notification-reason')).toHaveTextContent(
       /^회원님의 게시글에 답글을 남겼습니다$/,
@@ -422,7 +424,7 @@ export const CompositionContract: Story = {
     await expect(reply.getByTestId('notification-hover-overlay')).toBeInTheDocument();
     const action = await reply.findByRole('button', { name: '답글' });
     await expect(action.closest('a')).toBeNull();
-    await expect(reply.getByTestId('post-list-standard-row')).toBeInTheDocument();
+    await expect(reply.getByTestId('reply-notification-post')).toBeInTheDocument();
     await expect(reply.getByRole('button', { name: /더 보기/ })).toBeInTheDocument();
     await userEvent.click(reply.getByRole('button', { name: /더 보기/ }));
     await expect(args.onNavigate).toHaveBeenCalledTimes(2);
@@ -498,5 +500,38 @@ export const ProtectionContract: Story = {
       canvas.queryByTestId('post-media-image-notification-thumbnail'),
     ).not.toBeInTheDocument();
     await expect(canvas.getAllByText(args.bodyText)).toHaveLength(1);
+  },
+};
+
+export const ReplyActionsContract: Story = {
+  args: { kind: 'reply' },
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    controls: { disable: true },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const reply = canvas.getByRole('button', { name: '답글' });
+    await userEvent.click(reply);
+    const composer = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    await expect(within(composer).getByRole('textbox', { name: '답글 본문' })).toHaveFocus();
+    await userEvent.click(within(composer).getByRole('button', { name: '닫기' }));
+    const confirm = await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' });
+    await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
+    await expect(reply).toHaveFocus();
+
+    resetClipboardMock();
+    await userEvent.click(canvas.getByRole('button', { name: '더 보기' }));
+    const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '링크 복사' }));
+    await waitFor(() =>
+      expect(getCopiedStrings()).toEqual([
+        `${window.location.origin}/@starlight/notification-reply-post`,
+      ]),
+    );
+    await userEvent.click(canvas.getByRole('button', { name: '더 보기' }));
+    const reopenedMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    await expect(within(reopenedMenu).queryByRole('menuitem', { name: '게시글 삭제' })).toBeNull();
   },
 };
