@@ -34,7 +34,14 @@ export function getShellLayout(web: boolean, width: number) {
 
 export type WebMobileShellHeader = Readonly<{
   leading: 'back' | 'menu';
-  title: '게시글' | '게시물 기본 공개 범위' | '글쓰기' | '설정' | '알림';
+  title:
+    | '게시글'
+    | '게시물 기본 공개 범위'
+    | '글쓰기'
+    | '뮤트 및 차단'
+    | '뮤트한 프로필'
+    | '설정'
+    | '알림';
 }>;
 
 export function isSettingsRoute(pathname: string) {
@@ -77,6 +84,12 @@ export function getWebMobileShellHeader(
   }
   if (pathname === '/settings/default-post-visibility') {
     return { leading: 'back', title: '게시물 기본 공개 범위' };
+  }
+  if (pathname === '/settings/mute-and-block') {
+    return { leading: 'back', title: '뮤트 및 차단' };
+  }
+  if (pathname === '/settings/muted-profiles') {
+    return { leading: 'back', title: '뮤트한 프로필' };
   }
 
   if (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]') {
