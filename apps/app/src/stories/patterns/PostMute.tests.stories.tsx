@@ -16,10 +16,10 @@ export const MuteContract: Story = {
     args.onFeedback.mockClear();
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
-    const trigger = canvas.getByRole('button', { name: '더보기' });
+    const trigger = canvas.getByRole('button', { name: '더 보기' });
     await userEvent.click(trigger);
     expect(await body.findByRole('menuitem', { name: '링크 복사' })).toBeVisible();
-    const menu = body.getByRole('menu', { name: '더보기' });
+    const menu = body.getByRole('menu', { name: '더 보기 메뉴' });
     await waitFor(() =>
       expect(menu.getBoundingClientRect().top).toBeCloseTo(
         trigger.getBoundingClientRect().top - 5,
@@ -57,7 +57,7 @@ export const FailureContract: Story = {
     args.onMute.mockClear();
     args.onFeedback.mockClear();
     const body = within(canvasElement.ownerDocument.body);
-    await userEvent.click(within(canvasElement).getByRole('button', { name: '더보기' }));
+    await userEvent.click(within(canvasElement).getByRole('button', { name: '더 보기' }));
     await userEvent.click(await body.findByRole('menuitem', { name: '뮤트' }));
     await userEvent.click(await body.findByRole('button', { name: '뮤트' }));
     await waitFor(() =>
@@ -65,7 +65,7 @@ export const FailureContract: Story = {
     );
     expect(await body.findByText('뮤트하지 못했어요. 다시 시도해 주세요.')).toBeVisible();
     expect(body.queryByRole('dialog')).not.toBeInTheDocument();
-    const trigger = within(canvasElement).getByRole('button', { name: '더보기' });
+    const trigger = within(canvasElement).getByRole('button', { name: '더 보기' });
     await waitFor(() => expect(trigger).toHaveFocus());
     await userEvent.click(trigger);
     await userEvent.click(await body.findByRole('menuitem', { name: '뮤트' }));
@@ -82,7 +82,7 @@ export const PendingContract: Story = {
     args.onMute.mockClear();
     args.onFeedback.mockClear();
     const body = within(canvasElement.ownerDocument.body);
-    await userEvent.click(within(canvasElement).getByRole('button', { name: '더보기' }));
+    await userEvent.click(within(canvasElement).getByRole('button', { name: '더 보기' }));
     await userEvent.click(await body.findByRole('menuitem', { name: '뮤트' }));
     const confirm = await body.findByRole('button', { name: '뮤트' });
     await userEvent.click(confirm);
@@ -100,7 +100,7 @@ export const UnmuteContract: Story = {
     args.onUnmute.mockClear();
     args.onFeedback.mockClear();
     const body = within(canvasElement.ownerDocument.body);
-    await userEvent.click(within(canvasElement).getByRole('button', { name: '더보기' }));
+    await userEvent.click(within(canvasElement).getByRole('button', { name: '더 보기' }));
     await userEvent.click(await body.findByRole('menuitem', { name: '뮤트 해제' }));
     expect(args.onUnmute).not.toHaveBeenCalled();
     await userEvent.click(await body.findByRole('button', { name: '뮤트 해제' }));
@@ -109,7 +109,7 @@ export const UnmuteContract: Story = {
     );
     expect(args.onUnmute).toHaveBeenCalledTimes(1);
     await waitFor(() =>
-      expect(within(canvasElement).getByRole('button', { name: '더보기' })).toHaveFocus(),
+      expect(within(canvasElement).getByRole('button', { name: '더 보기' })).toHaveFocus(),
     );
     expect(body.queryByText('이 프로필을 뮤트할까요?')).not.toBeInTheDocument();
   },

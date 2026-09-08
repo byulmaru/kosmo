@@ -225,10 +225,13 @@ test('Mute mutation 실패는 서버 확정 상태를 바꾸지 않고 다시 �
   const dialog = page.getByRole('dialog', { name: '이 프로필을 뮤트할까요?' }).last();
   await dialog.getByRole('button', { name: '뮤트', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('뮤트하지 못했어요. 다시 시도해 주세요.');
-  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '더보기', exact: true })).toBeFocused();
   await expect(page.getByText('이 사용자의 게시글은 뮤트되어 있습니다.')).toHaveCount(0);
+  await openMuteConfirmation(page);
+  const retryDialog = page.getByRole('dialog', { name: '이 프로필을 뮤트할까요?' }).last();
   const retryResponse = waitForGraphQLOperation(page, 'ProfileMuteControllerMuteMutation');
-  await dialog.getByRole('button', { name: '뮤트', exact: true }).click();
+  await retryDialog.getByRole('button', { name: '뮤트', exact: true }).click();
   await retryResponse;
   await expect(page.getByRole('alert')).toContainText('E2E Mute Failure Target 님이 뮤트되었어요');
   await expect(dialog).toHaveCount(0);
@@ -515,7 +518,7 @@ test('Mute Settings의 초기 오류는 retry 뒤 실제 목록을 로드한다'
   await page.goto('/settings/mute-and-block');
   await page.getByRole('link', { name: '뮤트한 프로필 관리 열기' }).click();
   await expect(page.getByRole('alert')).toContainText('뮤트한 프로필을 불러오지 못했어요');
-  await page.getByRole('button', { name: '다시 시도' }).click();
+  await page.getByRole('alert').getByRole('button', { name: '다시 시도', exact: true }).click();
   await expect.poll(() => queryAttempts).toBe(2);
   await expect(page.getByText('E2E Settings Error Target', { exact: true })).toBeVisible();
 });

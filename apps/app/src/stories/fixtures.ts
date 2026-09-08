@@ -36,6 +36,7 @@ export type StoryProfile = {
     follow: { follower?: { followingCount: number; id: string } | null; id: string } | null;
     followRequest: { id: string } | null;
     isSelf: boolean;
+    profileMute?: { id: string } | null;
     membership?: { role: 'MEMBER' | 'OWNER' } | null;
   } | null;
 };
@@ -59,6 +60,15 @@ function pageInfo(hasNextPage = false, endCursor: string | null = null): StoryPa
 export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
   const defaultPostVisibility =
     overrides.defaultPostVisibility === undefined ? 'UNLISTED' : overrides.defaultPostVisibility;
+  const viewerState =
+    overrides.viewerState === undefined
+      ? { follow: null, followRequest: null, isSelf: false, profileMute: null }
+      : overrides.viewerState === null
+        ? null
+        : {
+            ...overrides.viewerState,
+            profileMute: overrides.viewerState.profileMute ?? null,
+          };
   return {
     __typename: 'Profile',
     avatar: null,
@@ -76,7 +86,7 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     relativeHandle: '@kosmo',
     tags: [],
     unreadNotificationCount: 0,
-    viewerState: { follow: null, followRequest: null, isSelf: false },
+    viewerState,
     ...overrides,
     defaultPostVisibility,
     private:
