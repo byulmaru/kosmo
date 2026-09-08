@@ -207,7 +207,6 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     loading,
     moreItems,
     menuItems,
-    onMenuTriggerReady,
     profile,
   }: {
     action?: ReturnType<typeof createElement>;
@@ -215,10 +214,8 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     loading?: boolean;
     moreItems?: readonly ReportMenuItem[];
     menuItems?: readonly object[];
-    onMenuTriggerReady?: (focusTrigger: () => void) => void;
     profile?: { handle: string };
   }) => {
-    onMenuTriggerReady?.(() => undefined);
     return createElement(
       'ProfileHero',
       { heading, identity: loading ? 'loading' : profile?.handle, moreItems },
@@ -849,6 +846,7 @@ describe('profile route parameter lifecycle', () => {
     await act(async () => requireRendered('ActionMenu').props.items[0].onSelect());
     const confirmation = requireRendered('ConfirmationContent');
     assert.equal(confirmation.props.confirmLabel, '차단');
+    assert.equal(confirmation.props.tone, 'danger');
 
     await act(async () => confirmation.props.onConfirm());
     assert.equal(changeBlockedCalls.length, 1);
