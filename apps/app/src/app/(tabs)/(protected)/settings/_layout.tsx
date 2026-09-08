@@ -28,13 +28,18 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   const web = Platform.OS === 'web';
   const layout = getShellLayout(web, width);
   const root = pathname === '/settings' || pathname === '/settings/';
-  const mutedProfiles = pathname === '/settings/muted-profiles';
+  const muteAndBlockDetail =
+    pathname === '/settings/muted-profiles' || pathname === '/settings/blocked-profiles';
   const selected =
     root || pathname === '/settings/default-post-visibility'
       ? 'default-post-visibility'
       : pathname === '/settings/info'
         ? 'info'
-        : undefined;
+        : pathname === '/settings/mute-and-block' ||
+            pathname === '/settings/muted-profiles' ||
+            pathname === '/settings/blocked-profiles'
+          ? 'mute-and-block'
+          : undefined;
   const detailHeaderMode: SettingsDetailHeaderMode =
     layout === 'full' ? 'plain' : web && layout === 'mobile' ? 'hidden' : 'back';
 
@@ -47,8 +52,14 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
             testID="settings-master-pane"
           >
             <PageHeader title="설정" />
-            {mutedProfiles ? (
-              <SettingsMuteAndBlockNavigation selected="muted-profiles" />
+            {muteAndBlockDetail ? (
+              <SettingsMuteAndBlockNavigation
+                selected={
+                  pathname === '/settings/blocked-profiles'
+                    ? 'blocked-profiles'
+                    : 'muted-profiles'
+                }
+              />
             ) : (
               <SettingsNavigationList selected={selected} />
             )}
