@@ -50,7 +50,7 @@ export const BlockContract: Story = {
     const dialog = await body.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
     expect(
       within(dialog).getByText(
-        '서로의 프로필과 게시물을 볼 수 없게 되고, 팔로우 관계와 요청이 삭제돼요.',
+        '상대방은 내 게시물을 볼 수 없고, 타임라인과 검색에서 서로의 게시물이 숨겨져요. 팔로우 관계와 요청은 삭제돼요.',
       ),
     ).toBeVisible();
     expect(args.onBlock).not.toHaveBeenCalled();

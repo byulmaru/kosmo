@@ -51,10 +51,10 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   이 확인 단계는 2026-09-05 PROD-861 구현 계획 검토에서 승인한 presentation 계약이며, Figma에 별도 해제
   confirmation consumer가 있다는 의미는 아니다. 해제 action의 Danger tone은 2026-09-08 사용자 검토에서
   확정했다. geometry는 기존 `ModalSheet`·`ConfirmationContent`를 따른다.
-- 차단 확인의 결과 설명은 `서로의 프로필과 게시물을 볼 수 없게 되고, 팔로우 관계와 요청이 삭제돼요.`를
-  사용한다. Figma [`4595:6482`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4595-6482)에
-  남아 있는 기존 리액션 삭제 문구는 [현재 Block 정책](../domain/objects/profile-block.md)과 다르므로
-  이관하지 않는다. Storybook은 차단·해제 callback과 feedback을 검증하며 관계·리액션 정리를 구현하지 않는다.
+- 차단 확인의 결과 설명은 `상대방은 내 게시물을 볼 수 없고, 타임라인과 검색에서 서로의 게시물이 숨겨져요. 팔로우 관계와 요청은 삭제돼요.`를
+  사용한다. 2026-09-09 [현재 Block 정책](../domain/objects/profile-block.md)에 맞춰
+  Figma [`4595:6482`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4595-6482)의
+  설명도 같은 문구로 갱신했다. 기존 리액션은 삭제하지 않는다. Storybook은 차단·해제 callback과 feedback을 검증하며 관계·리액션 정리를 구현하지 않는다.
 - pending에는 같은 action의 중복 입력과 dismiss를 막고 busy 상태를 전달한다. 실패하면 기존 서버 확정 상태를
   유지하고 제품의 기존 오류 피드백을 사용한다.
 

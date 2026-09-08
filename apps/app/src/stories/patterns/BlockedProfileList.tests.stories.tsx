@@ -197,3 +197,39 @@ export const LoadMoreContract: Story = {
     expect(canvas.getByText('코스모 작가')).toBeVisible();
   },
 };
+
+export const InitialRetryAfterToastExpires: Story = {
+  args: { state: 'error' },
+  play: async ({ args, canvasElement }) => {
+    args.onRetry.mockClear();
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await body.findByRole('alert');
+    await waitFor(() => expect(body.queryByRole('alert')).not.toBeInTheDocument(), {
+      timeout: 5000,
+    });
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    expect(args.onRetry).toHaveBeenCalledTimes(1);
+    expect(await canvas.findByText(args.displayName)).toBeVisible();
+  },
+};
+
+export const PaginationRetryAfterToastExpires: Story = {
+  args: { state: 'loadMoreError' },
+  play: async ({ args, canvasElement }) => {
+    args.onRetry.mockClear();
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await body.findByRole('alert');
+    await waitFor(() => expect(body.queryByRole('alert')).not.toBeInTheDocument(), {
+      timeout: 5000,
+    });
+    expect(canvas.getByText(args.displayName)).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
+    expect(args.onRetry).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(canvas.queryByRole('button', { name: '더 불러오기' })).not.toBeInTheDocument(),
+    );
+    expect(canvas.getByText(args.displayName)).toBeVisible();
+  },
+};

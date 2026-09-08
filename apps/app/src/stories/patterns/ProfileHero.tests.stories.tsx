@@ -28,6 +28,7 @@ function LateCompletionFixture({
 }: Pick<ComponentProps<typeof ProfileHeroFixture>, 'onBlock' | 'onBlockFeedback'>) {
   const [profileId, setProfileId] = useState('profile-hero-default');
   const staleCompletion = useRef<(() => void) | null>(null);
+  const [settled, setSettled] = useState(false);
 
   return (
     <View style={{ gap: 12, padding: 24 }}>
@@ -40,13 +41,14 @@ function LateCompletionFixture({
             });
             setProfileId('profile-hero-images');
             await completion;
+            setSettled(true);
           }
         }}
         onBlockFeedback={onBlockFeedback}
         profileId={profileId}
       />
       <Button onPress={() => staleCompletion.current?.()} tone="secondary">
-        이전 요청 완료
+        {settled ? '이전 요청 완료됨' : '이전 요청 완료'}
       </Button>
     </View>
   );
@@ -275,7 +277,7 @@ export const BlockContract: Story = {
     const dialog = await body.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
     expect(
       within(dialog).getByText(
-        '서로의 프로필과 게시물을 볼 수 없게 되고, 팔로우 관계와 요청이 삭제돼요.',
+        '상대방은 내 게시물을 볼 수 없고, 타임라인과 검색에서 서로의 게시물이 숨겨져요. 팔로우 관계와 요청은 삭제돼요.',
       ),
     ).toBeVisible();
     expect(args.onBlock).not.toHaveBeenCalled();
@@ -385,8 +387,9 @@ export const LateCompletionIgnoredAfterProfileChange: Story = {
     await waitFor(() =>
       expect(canvas.getByRole('heading', { name: '이미지 프로필' })).toBeVisible(),
     );
+    await waitFor(() => expect(body.queryByRole('dialog')).not.toBeInTheDocument());
     await userEvent.click(canvas.getByRole('button', { name: '이전 요청 완료' }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(await canvas.findByRole('button', { name: '이전 요청 완료됨' })).toBeVisible();
     expect(args.onBlockFeedback).not.toHaveBeenCalled();
     expect(body.queryByText('프로필 히어로 님이 차단되었어요')).not.toBeInTheDocument();
     expect(body.queryByText('이미지 프로필 님이 차단되었어요')).not.toBeInTheDocument();
