@@ -200,6 +200,7 @@ export function useProfileBlockMutations() {
                   );
                 });
                 finish();
+                scheduleRefresh();
               },
               onError: (error) => {
                 if (!isCurrent()) {

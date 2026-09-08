@@ -64,6 +64,39 @@ const ProfileLayoutQuery = graphql`
   }
 `;
 
+type PostRefreshFocusIntent = Readonly<{
+  actorLifecycleKey: string;
+  target: 'menu' | 'state';
+  timeout: ReturnType<typeof setTimeout>;
+}>;
+
+const postRefreshFocusIntents = new Map<string, PostRefreshFocusIntent>();
+
+function focusIntentKey(ownerProfileId: string, handle: string) {
+  return `${ownerProfileId}:${handle}`;
+}
+
+function rememberPostRefreshFocus(
+  intentKey: string,
+  actorLifecycleKey: string,
+  target: 'menu' | 'state',
+) {
+  const previous = postRefreshFocusIntents.get(intentKey);
+  if (previous) {
+    clearTimeout(previous.timeout);
+  }
+  const intent: PostRefreshFocusIntent = {
+    actorLifecycleKey,
+    target,
+    timeout: setTimeout(() => {
+      if (postRefreshFocusIntents.get(intentKey) === intent) {
+        postRefreshFocusIntents.delete(intentKey);
+      }
+    }, 5_000),
+  };
+  postRefreshFocusIntents.set(intentKey, intent);
+}
+
 export default function ProfileLayout() {
   const { profileHandle } = useGlobalSearchParams<{
     profileHandle?: string | string[];
@@ -145,6 +178,7 @@ export default function ProfileLayout() {
       title="프로필을 불러오지 못했어요"
     >
       <ProfileLayoutContent
+        actorLifecycleKey={actorLifecycleKey}
         backButton={backButton}
         connectionKind={connectionKind}
         handle={handle}
@@ -156,12 +190,14 @@ export default function ProfileLayout() {
 }
 
 function ProfileLayoutContent({
+  actorLifecycleKey,
   backButton,
   connectionKind,
   handle,
   scrollKey,
   showPageHeader,
 }: {
+  actorLifecycleKey: string;
   backButton: ReactNode;
   connectionKind: ProfileConnectionKind | null;
   handle: string;
@@ -189,6 +225,7 @@ function ProfileLayoutContent({
   const mounted = useRef(true);
   const inFlight = useRef(false);
   const cancelRef = useRef<View>(null);
+  const dismissFocusRef = useRef<'menu' | 'state' | null>(null);
   const stateActionRef = useRef<View>(null);
   const focusMenuTrigger = useRef<() => void>(() => {});
 
@@ -198,6 +235,33 @@ function ProfileLayoutContent({
       mounted.current = false;
     };
   }, []);
+  useEffect(() => {
+    if (!selectedProfileId) {
+      return;
+    }
+    const intentKey = focusIntentKey(selectedProfileId, handle);
+    const intent = postRefreshFocusIntents.get(intentKey);
+    const target = intent?.target;
+    if (
+      !intent ||
+      intent.actorLifecycleKey === actorLifecycleKey ||
+      !target ||
+      (target === 'state' && !blockStatus?.blocking) ||
+      (target === 'menu' && (blockStatus?.blocking || !profile))
+    ) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      clearTimeout(intent.timeout);
+      postRefreshFocusIntents.delete(intentKey);
+      if (target === 'state') {
+        stateActionRef.current?.focus();
+      } else {
+        focusMenuTrigger.current();
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [actorLifecycleKey, blockStatus?.blocking, handle, profile, selectedProfileId]);
 
   const closeConfirmation = () => {
     if (!inFlight.current) {
@@ -228,6 +292,12 @@ function ProfileLayoutContent({
       if (!mounted.current) {
         return;
       }
+      dismissFocusRef.current = null;
+      rememberPostRefreshFocus(
+        focusIntentKey(selectedProfileId, handle),
+        actorLifecycleKey,
+        nextBlocked ? 'state' : 'menu',
+      );
       setConfirmation(null);
       showToast(nextBlocked ? '프로필을 차단했어요' : '차단을 해제했어요', {
         tone: 'success',
@@ -254,10 +324,12 @@ function ProfileLayoutContent({
       dismissDisabled={pending}
       onClose={closeConfirmation}
       onDismiss={() => {
-        if (profile) {
-          focusMenuTrigger.current();
-        } else {
+        const target = dismissFocusRef.current;
+        dismissFocusRef.current = null;
+        if (target === 'state') {
           stateActionRef.current?.focus();
+        } else if (target === 'menu') {
+          focusMenuTrigger.current();
         }
       }}
       onShow={() => cancelRef.current?.focus()}
@@ -278,7 +350,7 @@ function ProfileLayoutContent({
         onCancel={closeConfirmation}
         onConfirm={() => void requestChange()}
         pending={pending}
-        tone="danger"
+        tone={confirmation === 'block' ? 'danger' : 'primary'}
       />
     </ModalSheet>
   );
@@ -291,7 +363,10 @@ function ProfileLayoutContent({
           <Button
             controlRef={stateActionRef}
             accessibilityLabel="차단 해제"
-            onPress={() => setConfirmation('unblock')}
+            onPress={() => {
+              dismissFocusRef.current = 'state';
+              setConfirmation('unblock');
+            }}
             tone="secondary"
           >
             차단 해제
