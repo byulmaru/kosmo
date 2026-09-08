@@ -2,10 +2,9 @@ import { useCallback, useState } from 'react';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { MutedProfileList } from '@/components/profile/MutedProfileList';
 import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
-import { RouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import type { SettingsMutedProfiles_profile$key } from './__generated__/SettingsMutedProfiles_profile.graphql';
 import type { SettingsMutedProfilesNextPageQuery } from './__generated__/SettingsMutedProfilesNextPageQuery.graphql';
 import type { SettingsMutedProfilesQuery } from './__generated__/SettingsMutedProfilesQuery.graphql';
@@ -53,10 +52,6 @@ const SettingsMutedProfilesFragment = graphql`
 const noopUnmute = () => Promise.resolve();
 
 export function SettingsMutedProfiles() {
-  const { revision } = useRelayActor();
-  const [fetchKey, setFetchKey] = useState(0);
-  const identity = `${revision}:${fetchKey}`;
-
   return (
     <RouteBoundary
       error={(retry) => (
@@ -65,19 +60,18 @@ export function SettingsMutedProfiles() {
           state={{ onRetry: retry, status: 'error' }}
         />
       )}
-      key={identity}
       loading={<MutedProfileList onUnmute={noopUnmute} state={{ status: 'loading' }} />}
-      onRetry={() => setFetchKey((current) => current + 1)}
       title="뮤트한 프로필을 불러오지 못했어요"
     >
-      <SettingsMutedProfilesContent fetchKey={identity} />
+      <SettingsMutedProfilesContent />
     </RouteBoundary>
   );
 }
 
-function SettingsMutedProfilesContent({ fetchKey }: { fetchKey: string }) {
+function SettingsMutedProfilesContent() {
   const shellChrome = useShellChrome();
   const { changeMuted } = useProfileMuteMutations();
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<SettingsMutedProfilesQuery>(
     SettingsMutedProfilesQuery,
     {},

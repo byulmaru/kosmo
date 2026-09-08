@@ -1,4 +1,4 @@
-import { MoreHorizontal, Volume2, VolumeOff } from 'lucide-react-native';
+import { Volume2, VolumeOff } from 'lucide-react-native';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { ActionMenu } from '@/components/ui/ActionMenu';
@@ -78,6 +78,7 @@ function ProfileMuteActionContent({
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
   const mounted = useRef(false);
   const claimedRevisionRef = useRef<number | null>(null);
@@ -104,6 +105,12 @@ function ProfileMuteActionContent({
     claimedRevisionRef.current = committedTargetRef.current.revision;
   }, [committedTargetRef, profileId]);
   useEffect(() => {
+    if (!pending && restoreFocus.current) {
+      cancelRef.current?.focus();
+      restoreFocus.current = false;
+    }
+  }, [pending, surface]);
+  useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
@@ -128,6 +135,7 @@ function ProfileMuteActionContent({
     }
     inFlight.current = true;
     setPending(true);
+    setError(null);
     let succeeded = false;
     try {
       await onChangeMuted(nextMuted);
@@ -152,7 +160,10 @@ function ProfileMuteActionContent({
       onFeedback?.({ muted: nextMuted, status: 'success' });
       return;
     }
-    completed.current = { muted: nextMuted, status: succeeded ? 'success' : 'error' };
+    if (!succeeded) {
+      inFlight.current = false;
+    }
+    restoreFocus.current = !succeeded;
     setPending(false);
     if (succeeded) {
       setOpen(false);
@@ -170,6 +181,7 @@ function ProfileMuteActionContent({
     }
   };
   const activate = () => {
+    setError(null);
     setOpen(true);
   };
   const label = muted ? '뮤트 해제' : '뮤트';
@@ -311,6 +323,14 @@ function ProfileMuteActionContent({
           onConfirm={() => void request(!muted)}
           pending={pending}
         />
+        {error ? (
+          <Text
+            accessibilityRole="alert"
+            style={[textStyles.uiCopyS, { color: theme.feedbackDangerOnSubtle }]}
+          >
+            {error}
+          </Text>
+        ) : null}
       </ModalSheet>
     </>
   );

@@ -54,8 +54,8 @@ export default function HomeScreen() {
     if (Platform.OS === 'web') {
       window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
     }
-    setFetchKey((key) => key + 1);
-  }, []);
+    handleHomeRefresh();
+  }, [handleHomeRefresh]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !registerHomeReselection) {
