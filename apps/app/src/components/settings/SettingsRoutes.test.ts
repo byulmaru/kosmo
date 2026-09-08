@@ -188,8 +188,51 @@ describe('Settings routes', () => {
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '뮤트한 프로필'],
     );
-    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
+    assert.equal(rendered('SettingsNavigationList').length, 0);
+    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
+    assert.equal(rendered('SettingsMuteAndBlockNavigation')[0].props.selected, 'muted-profiles');
+    assert.equal(
+      byTestId('settings-master-pane').findAll(
+        (node) => (node.type as unknown) === 'SettingsMuteAndBlockNavigation',
+      ).length,
+      1,
+    );
+    assert.equal(
+      byTestId('settings-detail-pane').findAll(
+        (node) => (node.type as unknown) === 'SettingsMutedProfiles',
+      ).length,
+      1,
+    );
     assert.equal(rendered('SettingsMutedProfiles').length, 1);
+  });
+
+  it('compact Web muted profile detail은 parent으로 돌아가는 caller label과 navigation을 사용한다', async () => {
+    width = 768;
+    await renderRoute('/settings/muted-profiles', SettingsMutedProfilesRoute);
+
+    const back = rendered('PageHeader')[0].props.leading;
+    assert.equal(back.props.accessibilityLabel, '뮤트 및 차단으로 돌아가기');
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { replace: (href: string) => locationReplacements.push(href) },
+    });
+    await act(async () => back.props.onPress());
+    assert.equal(backCalls, 0);
+    assert.deepEqual(locationReplacements, ['/settings/mute-and-block']);
+  });
+
+  it('Native muted profile detail은 parent label과 replace navigation을 사용한다', async () => {
+    platform = 'android';
+    width = 390;
+    await renderRoute('/settings/muted-profiles', SettingsMutedProfilesRoute);
+
+    const back = rendered('Pressable').find(
+      (node) => node.props.accessibilityLabel === '뮤트 및 차단으로 돌아가기',
+    );
+    assert.ok(back);
+    await act(async () => back.props.onPress());
+    assert.equal(backCalls, 0);
+    assert.deepEqual(replacedPaths, ['/settings/mute-and-block']);
   });
 
   it('compact Web root는 선택 없는 root 목록부터 표시한다', async () => {
