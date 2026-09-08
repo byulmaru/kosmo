@@ -125,6 +125,38 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   간격을 공유한다. Repost의 Profile link 의미와 Reply의 비대화형 텍스트 의미는 각 변형이 따로 소유하며,
   공용 행이 링크 여부를 추론하지 않는다.
 
+## Source가 Quote인 순수 Repost
+
+이 절은 [PROD-828](https://linear.app/byulmaru/issue/PROD-828)의 `X(Twitter) 방식대로`라는 표시 방향을
+구체화한다. Domain Gate 전환 승인 상태는
+[ADR 0027](../domain/decisions/0027-repost-of-quote-source-presentation.md)에서 추적한다. 제품 결정과 현재 UI에
+반영된 범위를 구분한다.
+
+- A가 B의 Quote를 Repost하고 B가 C의 Post를 인용했다면, `A님이 재게시함`, B의 표준 Author·생성 시각·Content,
+  C의 Source preview, Action Bar 순서로 표시한다. B의 Quote를 별도 Source 카드 안에 다시 감싸지 않는다.
+- preview는 B를 기준으로 한 단계다. C도 Quote이면 C의 Author·생성 시각·Content까지만 보여주며, C가
+  인용한 Post는 추가로 표시하거나 이를 대신하는 placeholder·별도 CTA를 두지 않는다. Quote와 Reply+Quote를
+  직접 표시할 때도 같은 preview 깊이를 사용한다.
+- 바깥 목록 항목이 article, 카드 padding과 row divider를 한 번만 소유한다. B의 표준 행과 C의 preview에
+  article이나 전체 게시글 renderer를 재귀적으로 중첩하지 않는다. C의 preview border는 인용 관계를 구분하는
+  기존 Quote 표현으로 유지한다.
+- A의 attribution은 A의 Profile로, B의 Author는 B의 Profile로 이동한다. B의 본문 shortcut·생성 시각과
+  순수 Repost ID 직접 진입은 B의 canonical Post 상세로 이동한다. C의 Author는 C의 Profile로, C의 본문
+  shortcut·생성 시각은 C의 canonical Post 상세로 이동한다. B의 직접 관계를 C로 평탄화하지 않는다.
+- C의 preview는 기존 Source preview 입력 경계를 따른다. Author·생성 시각은 각각 독립 Link이고, 본문은
+  pointer·touch shortcut을 제공한다. 본문 shortcut을 별도 접근성 Link나 keyboard focus 대상으로 중복하지
+  않는다. 본문의 외부 Link는 자신의 URL만 열며 preview 전체와 빈 padding을 하나의 Link로 감싸지 않는다.
+- Action Bar와 Reaction Summary는 C의 preview 뒤에 한 번만 배치하며 모든 navigation target의 sibling으로
+  둔다. Repost·Reaction·Bookmark·More와 Summary는 B를 대상으로 하고, Reply는 바깥 contentless Repost의
+  기존 binding과 disabled 상태를 유지한다. C에 별도의 Action Bar를 붙이지 않는다.
+- B를 조회할 수 있고 C가 unavailable이면 C의 preview를 생략하고 B의 Content와 Repost 항목을 유지한다.
+  B 자체를 조회할 수 없으면 기존 Post Eligibility에 따라 순수 Repost 항목을 표시하지 않는다. preview의
+  Content Warning·Media 표현과 조회 범위는 각 대상의 기존 계약을 따른다.
+- 순수 Repost의 별도 상세 화면은 만들지 않는다. B 상세로 replace redirect한 뒤에는 B의 기존 Quote 상세와
+  C의 한 단계 preview를 사용하며, A의 attribution이나 바깥 Repost의 Reply 상태를 B 상세로 전달하지 않는다.
+- Web과 공용 Native presentation은 같은 표시·이동 계약을 사용한다. Web Storybook·runtime 검증과 Native의
+  실제 touch·VoiceOver·TalkBack 검증은 구분하며, Native runtime 관찰은 출시 gate에 남긴다.
+
 ## Repost action menu
 
 - Mobile Target consumer section [`6772:10989`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6772-10989)은

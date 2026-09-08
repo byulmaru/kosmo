@@ -128,6 +128,15 @@ Reply·Quote·Repost 작성은 각 입력 Parent·Source Post의 Author Profile�
   이동하거나 replace redirect한다. Repost 자체의 별도 상세 화면은 표시하지 않는다.
 - Content와 Repost Source가 있는 Quote는 Quote 자체의 canonical Post 상세를 유지하고, Quote 안의 Source
   preview를 활성화했을 때만 Source의 canonical Post route로 이동한다.
+- 순수 Repost의 직접 Repost Source가 Quote이면 재게시한 Quote의 Author와 Content를 주된 표시 대상으로
+  유지하고, 그 Quote가 직접 참조한 조회 가능한 Source를 preview로 함께 표시한다. Content 없는 Repost를
+  거치는 것만으로 Quote의 Source preview를 생략하지 않는다.
+- Quote의 Source preview는 표시 중인 Content Post를 기준으로 한 단계까지만 제공한다. preview 대상이
+  Quote여도 그 대상의 Author와 Content까지만 표시하고, 그 아래 Source나 이를 대신하는 placeholder·별도
+  진입 안내를 추가하지 않는다. 각 Source의 조회 정책은 독립적으로 적용한다.
+- 이 표시 깊이와 이동 대상의 구분은 [ADR 0027](../decisions/0027-repost-of-quote-source-presentation.md)과
+  [Post Action Bar의 Source가 Quote인 순수 Repost](../../design/post-action-bar.md#source가-quote인-순수-repost)를
+  따른다. PROD-828의 Domain Gate 전환 승인은 해당 ADR에서 별도로 추적한다.
 - Post의 Repost 수는 해당 Post를 Repost Source로 직접 참조하면서 Content와 Reply Parent가 없는 eligible
   Active Repost만 포함하고 Quote는 포함하지 않는다.
 
