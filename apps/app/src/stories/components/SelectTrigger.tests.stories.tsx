@@ -46,7 +46,9 @@ export const PlaygroundInteractionContract: Story = {
         borderTopWidth: '1px',
       }),
     );
-    await userEvent.click(canvas.getByRole('option', { name: '팔로워에게만 공개' }));
+    const followerOption = canvas.getByRole('option', { name: '팔로워에게만 공개' });
+    expect(followerOption).toHaveStyle({ borderRadius: '8px' });
+    await userEvent.click(followerOption);
 
     expect(canvas.getByRole('button', { name: '공개 범위: 팔로워에게만 공개' })).toHaveFocus();
     expect(canvas.queryByRole('listbox')).not.toBeInTheDocument();

@@ -82,6 +82,7 @@ function SelectTriggerCatalog({ open, disabled, interactive = false, ...args }: 
                 <ListboxOption
                   label={choice}
                   selected={currentValue === choice}
+                  style={{ borderRadius: radius[8] }}
                   onSelect={() => {
                     setCurrentValue(choice);
                     setCurrentOpen(false);
@@ -94,6 +95,7 @@ function SelectTriggerCatalog({ open, disabled, interactive = false, ...args }: 
             <ListboxOption
               label={args.value || args.placeholder}
               selected={Boolean(args.value)}
+              style={{ borderRadius: radius[8] }}
               onSelect={args.onPress}
             />
           )}
