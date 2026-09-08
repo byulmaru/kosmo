@@ -83,6 +83,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   flag가 꺼져 있거나 사용할 수 없거나 로딩 중이면 준비 control을 렌더링하지 않는다. 이 flag는 UI 노출 조건이며
   Profile Owner 권한을 대신하지 않는다. 이미 준비된 관계와 그로부터 파생된 alias, inbound Move 처리는 flag 상태로
   중단하거나 제거하지 않는다. 구체적인 flag key·추가 route·시각 세부는 이 문서에서 고정하지 않는다.
+- source 준비 성공은 Profile Migration 준비 관계와 Local Actor alias를 등록할 뿐, Profile 이전 완료를 의미하지
+  않는다. 성공 안내는 사용자가 기존 Mastodon 계정에서 새 Kosmo handle로 ActivityPub `Move`를 시작하도록 제공하며,
+  Move 이후 완료를 위해 호출하는 Kosmo API나 별도 완료 action은 제공하지 않는다.
 - Profile target selector의 Figma lifecycle source는
   [`Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4867-13083),
   [`Compact`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4868-38112),

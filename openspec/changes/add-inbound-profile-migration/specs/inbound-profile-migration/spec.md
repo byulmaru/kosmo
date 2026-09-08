@@ -6,13 +6,20 @@
 
 ### Requirement: Profile Migration 준비 관계
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`. 시스템은 `Account.Active`와 `Profile.Owner` 권한을 통과한 사용자가 source qualified handle을 지정해 Active·Normal·Local이며 Follow Approval Policy가 Open인 target Profile에 Profile Migration을 준비할 수 있게 해야 한다(MUST). 시스템은 source를 Remote Profile로 materialize한 뒤 Local target에서 Remote source로 향하는 준비 관계를 저장해야 하며(MUST), 하나의 Local target과 하나의 Remote source가 각각 하나의 준비 관계만 갖도록 해야 한다(MUST). 이 관계는 inbound Move 처리 이력이나 전체 Profile 이전 이력을 의미해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `docs/design/settings.md`, `PROD-743`. 시스템은 `Account.Active`와 `Profile.Owner` 권한을 통과한 사용자가 source qualified handle을 지정해 Active·Normal·Local이며 Follow Approval Policy가 Open인 target Profile에 Profile Migration을 준비할 수 있게 해야 한다(MUST). 시스템은 공개 GraphQL `registerProfileMigrationSource` mutation을 `RegisterProfileMigrationSourceInput`으로 받고 `RegisterProfileMigrationSourcePayload`를 반환해야 한다(MUST). 시스템은 source를 Remote Profile로 materialize한 뒤 Local target에서 Remote source로 향하는 준비 관계를 저장해야 하며(MUST), 하나의 Local target과 하나의 Remote source가 각각 하나의 준비 관계만 갖도록 해야 한다(MUST). 이 관계와 source 등록 성공은 inbound Move 처리 이력이나 전체 Profile 이전 이력을 의미해서는 안 된다(MUST NOT).
 
 #### Scenario: 권한 있는 Local target에 source를 준비한다
 
 - **WHEN** `Account.Active` 사용자가 `Profile.Owner`인 Active·Normal·Local·Open Profile을 target으로 선택하고 유효한 remote source qualified handle을 제출한다
 - **THEN** 시스템은 검증된 source를 Remote Profile로 materialize한다
 - **AND** Local target에서 Remote source로 향하는 Profile Migration 준비 관계를 저장한다
+
+#### Scenario: source 등록 mutation이 준비된 target을 반환한다
+
+- **WHEN** 권한 있는 사용자의 `registerProfileMigrationSource` mutation이 `RegisterProfileMigrationSourceInput`으로 성공한다
+- **THEN** 시스템은 `RegisterProfileMigrationSourcePayload.profile`로 준비된 target Profile을 반환한다
+- **AND** 반환된 target Profile의 `migrationSource` field는 등록된 Remote source Profile을 가리킨다
+- **AND** source 등록은 inbound Move 처리나 전체 Profile 이전으로 간주되지 않는다
 
 #### Scenario: 준비 조건을 통과하지 못한 target을 거부한다
 

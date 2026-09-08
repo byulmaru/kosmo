@@ -250,7 +250,7 @@ type Mutation {
   issueMediaUploadUrl: IssueMediaUploadUrlPayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   muteProfile(input: MuteProfileInput!): MuteProfilePayload!
-  prepareProfileMigration(input: PrepareProfileMigrationInput!): PrepareProfileMigrationPayload!
+  registerProfileMigrationSource(input: RegisterProfileMigrationSourceInput!): RegisterProfileMigrationSourcePayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
   repostPost(input: RepostPostInput!): RepostPostPayload!
   revokeCurrentSession: RevokeCurrentSessionPayload!
@@ -347,15 +347,6 @@ enum PostVisibility {
   FOLLOWERS
   PUBLIC
   UNLISTED
-}
-
-input PrepareProfileMigrationInput {
-  profileId: ID!
-  sourceHandle: String!
-}
-
-type PrepareProfileMigrationPayload {
-  profile: Profile!
 }
 
 type Profile implements Node {
@@ -524,6 +515,15 @@ type ReactionNotification implements Node & Notification {
   profile: Profile!
   readAt: DateTime
   type: String!
+}
+
+input RegisterProfileMigrationSourceInput {
+  profileId: ID!
+  sourceHandle: String!
+}
+
+type RegisterProfileMigrationSourcePayload {
+  profile: Profile!
 }
 
 input RejectProfileFollowRequestInput {

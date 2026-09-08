@@ -14,9 +14,9 @@ const isExpectedSourceMaterializationError = (error: unknown) =>
   error instanceof ConflictError ||
   error instanceof NotFoundError;
 
-builder.mutationField('prepareProfileMigration', (t) =>
+builder.mutationField('registerProfileMigrationSource', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
-    type: builder.simpleObject('PrepareProfileMigrationPayload', {
+    type: builder.simpleObject('RegisterProfileMigrationSourcePayload', {
       fields: (field) => ({
         profile: field.field({ type: Profile }),
       }),
