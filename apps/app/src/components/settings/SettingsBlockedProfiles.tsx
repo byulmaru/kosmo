@@ -163,30 +163,39 @@ export function BlockedProfilesView({
   const headingRef = useRef<View>(null);
   const actionRefs = useRef(new Map<string, View>());
   const removedFocus = useRef<{ index: number; profileBlockId: string } | null>(null);
+  const selectedForFocus = useRef<BlockedProfile | null>(null);
+  const stateRef = useRef(state);
+  const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  stateRef.current = state;
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      if (focusTimer.current) {
+        clearTimeout(focusTimer.current);
+      }
     };
   }, []);
-  useEffect(() => {
+  const restoreRemovedFocus = () => {
     const removed = removedFocus.current;
+    const currentState = stateRef.current;
     if (
       !removed ||
-      state.status !== 'loaded' ||
-      state.profiles.some((profile) => profile.profileBlockId === removed.profileBlockId)
+      currentState.status !== 'loaded' ||
+      currentState.profiles.some((profile) => profile.profileBlockId === removed.profileBlockId)
     ) {
-      return;
+      return false;
     }
     removedFocus.current = null;
-    const next = state.profiles[Math.min(removed.index, state.profiles.length - 1)];
+    const next = currentState.profiles[Math.min(removed.index, currentState.profiles.length - 1)];
     if (next) {
       actionRefs.current.get(next.profileBlockId)?.focus();
     } else {
       headingRef.current?.focus();
     }
-  }, [state]);
+    return true;
+  };
 
   const close = () => {
     if (!inFlight.current) {
@@ -268,7 +277,10 @@ export function BlockedProfilesView({
                     actionRefs.current.delete(profile.profileBlockId);
                   }
                 }}
-                onPress={() => setSelected(profile)}
+                onPress={() => {
+                  selectedForFocus.current = profile;
+                  setSelected(profile);
+                }}
                 size="compact"
                 tone="secondary"
               >
@@ -297,9 +309,17 @@ export function BlockedProfilesView({
         dismissDisabled={pending}
         onClose={close}
         onDismiss={() => {
-          if (selected) {
-            actionRefs.current.get(selected.profileBlockId)?.focus();
-          }
+          const previous = selectedForFocus.current;
+          selectedForFocus.current = null;
+          focusTimer.current = setTimeout(() => {
+            focusTimer.current = null;
+            if (!mounted.current || restoreRemovedFocus()) {
+              return;
+            }
+            if (previous) {
+              actionRefs.current.get(previous.profileBlockId)?.focus();
+            }
+          }, 0);
         }}
         onShow={() => cancelRef.current?.focus()}
         title="이 프로필의 차단을 해제할까요?"
