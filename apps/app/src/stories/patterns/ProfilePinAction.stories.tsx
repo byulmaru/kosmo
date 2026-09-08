@@ -162,16 +162,6 @@ function StoryProviders({
   );
 }
 
-function StoryRender(args: StoryArgs) {
-  const [, updateArgs] = useArgs();
-  return (
-    <Fixture
-      {...args}
-      onResult={(nextAction) => updateArgs({ action: nextAction === 'unpin' ? 'pin' : 'unpin' })}
-    />
-  );
-}
-
 const meta = {
   args: {
     action: 'pin',
@@ -190,11 +180,20 @@ const meta = {
   },
   component: Fixture,
   decorators: [
-    (Story, { args }) => (
-      <StoryProviders viewer={args.viewer} onDeleteRequest={args.onDeleteRequest}>
-        <Story />
-      </StoryProviders>
-    ),
+    (Story, { args }) => {
+      const [, updateArgs] = useArgs();
+      return (
+        <StoryProviders viewer={args.viewer} onDeleteRequest={args.onDeleteRequest}>
+          <Story
+            args={{
+              ...args,
+              onResult: (nextAction: ProfilePinOperation) =>
+                updateArgs({ action: nextAction === 'unpin' ? 'pin' : 'unpin' }),
+            }}
+          />
+        </StoryProviders>
+      );
+    },
   ],
   excludeStories: [
     'ErrorRecoveryFocus',
@@ -218,7 +217,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
-  render: StoryRender,
   parameters: { controls: { disable: false } },
 };
 export const OwnerPinned: Story = { args: { action: 'unpin' } };
@@ -260,7 +258,6 @@ export const SheetIconContract: Story = {
 };
 
 export const OwnerMenuAndDirectActions: Story = {
-  render: StoryRender,
   play: async ({ args, canvasElement }) => {
     args.onPin.mockClear();
     args.onUnpin.mockClear();
