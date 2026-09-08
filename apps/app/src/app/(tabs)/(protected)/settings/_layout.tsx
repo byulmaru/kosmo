@@ -55,9 +55,7 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
             {muteAndBlockDetail ? (
               <SettingsMuteAndBlockNavigation
                 selected={
-                  pathname === '/settings/blocked-profiles'
-                    ? 'blocked-profiles'
-                    : 'muted-profiles'
+                  pathname === '/settings/blocked-profiles' ? 'blocked-profiles' : 'muted-profiles'
                 }
               />
             ) : (
