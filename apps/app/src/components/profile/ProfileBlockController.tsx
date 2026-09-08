@@ -142,6 +142,7 @@ export function useProfileBlockMutations() {
                   return;
                 }
                 finish();
+                scheduleRefresh();
               },
               onError: (error) => {
                 if (!mountedRef.current || selectedProfileIdRef.current !== change.ownerProfileId) {
