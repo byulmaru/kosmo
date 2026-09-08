@@ -11,6 +11,10 @@ indicator를 표시해야 한다(MUST). `full`·`drawer`는 20px chevron 옆에 
 `compact`는 40px avatar 우상단에 `background/canvas` 1px halo가 있는 12px dot을 사용해야 한다(MUST).
 picker가 열리면 닫힌 indicator를 중복 표시해서는 안 된다(MUST NOT).
 
+**Current implementation choice (2026-09-09, user-authorized scope):** `null` 또는 제공되지 않은
+`unreadNotificationCount`는 Unread 없음으로 처리하되 visible Profile option 자체를 숨기지 않는다. 이 nullable
+GraphQL 동작은 현재 구현 범위를 기록하며, UI는 다른 Profile count나 별도 last-success snapshot을 사용하지 않는다.
+
 #### Scenario: Show Other Unread on a closed full or drawer trigger
 
 - **GIVEN** selected Profile의 `unreadNotificationCount`는 `0`이고 non-selected Profile의 count는 양수다
@@ -32,6 +36,13 @@ picker가 열리면 닫힌 indicator를 중복 표시해서는 안 된다(MUST N
 - **WHEN** ProfileSwitcher가 닫혀 있다
 - **THEN** ProfileSwitcher trigger는 Other Unread indicator를 표시하지 않는다
 - **AND** selected Profile의 기존 notification shell badge 계약은 그대로 유지된다
+
+#### Scenario: Preserve the Profile option when count is unavailable
+
+- **GIVEN** visible Profile option의 identity는 반환되지만 `unreadNotificationCount`가 `null`이거나 제공되지 않는다
+- **WHEN** ProfileSwitcher가 해당 Profile을 렌더링한다
+- **THEN** Profile option은 계속 표시하고 Other Unread indicator는 표시하지 않는다
+- **AND** 다른 Profile count나 별도 last-success snapshot을 사용하지 않는다
 
 #### Scenario: Hide the closed indicator while open
 
@@ -70,9 +81,9 @@ picker가 열리면 닫힌 indicator를 중복 표시해서는 안 된다(MUST N
 - **THEN** selected 행은 기존 check를 표시한다
 - **AND** 같은 trailing slot에 숫자 badge를 함께 표시하지 않는다
 
-#### Scenario: Hide zero Unread
+#### Scenario: Hide zero or unavailable Unread
 
-- **GIVEN** non-selected Profile의 `unreadNotificationCount`가 `0`이다
+- **GIVEN** non-selected Profile의 `unreadNotificationCount`가 `0` 또는 `null`이다
 - **WHEN** 사용자가 Profile picker를 연다
 - **THEN** 해당 행에 Unread badge를 표시하지 않는다
 

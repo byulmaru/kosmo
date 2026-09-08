@@ -121,6 +121,7 @@ input DeleteBookmarkInput {
 type DeleteBookmarkPayload {
   bookmarkId: ID
   post: Post
+  requestedBookmarkId: ID!
 }
 
 input DeletePostInput {
@@ -370,7 +371,7 @@ type Profile implements Node {
   profileMutes(after: String, before: String, first: Int, last: Int): ProfileMuteConnection!
   relativeHandle: String!
   tags: [Hashtag!]!
-  unreadNotificationCount: Int!
+  unreadNotificationCount: Int
   viewerState: ProfileViewerState
 }
 

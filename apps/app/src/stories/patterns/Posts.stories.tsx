@@ -1641,7 +1641,7 @@ function ProductionBookmarkMutationStory({
           return Promise.resolve({
             data: {
               deleteBookmark: {
-                bookmarkId: input.id,
+                requestedBookmarkId: input.id,
                 post: {
                   __typename: 'Post',
                   id: shortPost.id,

@@ -97,11 +97,10 @@ function ProfileDefaultPostVisibilityControlContents({
   const environmentGenerationRef = useRelayEnvironmentGeneration();
 
   const savedFromRelay = resolveProfileDefaultVisibility(profile.private?.defaultPostVisibility);
-  const [saved, setSaved] = useState(savedFromRelay);
   const [selected, setSelected] = useState(savedFromRelay);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [commit] = useMutation<ProfileDefaultPostVisibilityControlMutation>(UpdateMutation);
-  const dirty = saved !== selected;
+  const dirty = savedFromRelay !== selected;
   const saveRequestIdRef = useRef(0);
   const saveInFlightRef = useRef<number | null>(null);
   const save = useCallback(() => {
@@ -133,7 +132,6 @@ function ProfileDefaultPostVisibilityControlContents({
         const next = resolveProfileDefaultVisibility(
           response.updateProfile.profile.private?.defaultPostVisibility,
         );
-        setSaved(next);
         setSelected(next);
         setSaveState('success');
       },

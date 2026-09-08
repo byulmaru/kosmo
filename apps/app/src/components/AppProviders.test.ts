@@ -26,9 +26,6 @@ const queryModes: Record<QueryName, QueryMode> = {
 const queryHistory: Array<{ fetchKey: unknown; query: QueryName }> = [];
 const pendingSessionQueries: Array<() => void> = [];
 const pendingRootRenders: Array<() => void> = [];
-const unreadFetches: string[] = [];
-let currentEnvironment: FakeEnvironment;
-let unreadFailure = false;
 let navigationMounts = 0;
 let navigationUnmounts = 0;
 let relayActorMounts = 0;
@@ -50,8 +47,6 @@ let useSession: () => {
   sessionId: string | null;
   status: string;
 };
-let useUnreadNotificationCount: () => number | null;
-let UnreadNotificationBadgeController: ComponentType<PropsWithChildren>;
 let renderer: ReactTestRenderer | null = null;
 
 type MockRelayActorValue = {
@@ -64,18 +59,6 @@ type MockRelayActorValue = {
 
 const MockRelayActorContext = createContext<MockRelayActorValue | null>(null);
 
-type FakeSnapshot = {
-  data: { node: { id: string; unreadNotificationCount: number } | null };
-};
-type FakeEnvironment = {
-  lookup: () => FakeSnapshot;
-  retain: () => { dispose: () => void };
-  subscribe: (
-    _snapshot: FakeSnapshot,
-    _callback: (snapshot: FakeSnapshot) => void,
-  ) => { dispose: () => void };
-};
-
 function MockRelayActorProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     relayActorMounts += 1;
@@ -87,7 +70,6 @@ function MockRelayActorProvider({ children }: PropsWithChildren) {
   const [nativeToken, setNativeToken] = useState<string | null>(null);
   const [actorLifecycleKey, setActorLifecycleKey] = useState('actor-session');
   const setNativeSession = useCallback(async (token: string) => {
-    currentEnvironment = createEnvironment({ id: 'profile-a', unreadNotificationCount: 7 });
     setNativeToken(token);
     setActorLifecycleKey((current) => `${current}:native`);
   }, []);
@@ -142,7 +124,7 @@ function MockRelayActorBoundaryContent({
 }
 
 function MockSlot() {
-  return createElement('Slot', null, createElement(ShellRecoveryRoute), createElement(BadgeValue));
+  return createElement('Slot', null, createElement(ShellRecoveryRoute));
 }
 
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -176,7 +158,7 @@ mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     const query = parts.join('').match(/query (\w+)/)?.[1];
     assert.ok(query);
-    return query as QueryName | 'UnreadNotificationBadgeControllerQuery';
+    return query as QueryName;
   },
   useLazyLoadQuery: (
     query: QueryName,
@@ -198,25 +180,6 @@ mockModule('react-relay', {
     }
     return { action: 'ready' };
   },
-  useRelayEnvironment: () => currentEnvironment,
-});
-mockModule('relay-runtime', {
-  createOperationDescriptor: (_request: unknown, variables: Record<string, unknown>) => ({
-    fragment: {},
-    variables,
-  }),
-  fetchQuery: (_environment: FakeEnvironment, _query: unknown, variables: { id: string }) => {
-    unreadFetches.push(variables.id);
-    return {
-      subscribe: (observer: { error?: (error: Error) => void }) => {
-        if (unreadFailure) {
-          observer.error?.(new Error('unread count failed'));
-        }
-        return { unsubscribe: () => undefined };
-      },
-    };
-  },
-  getRequest: (query: unknown) => query,
 });
 mockModule(new URL('../analytics/client.ts', import.meta.url), {
   initializeAnalytics: () => undefined,
@@ -312,8 +275,6 @@ before(async () => {
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
   ({ useSession } = await import('../session/SessionProvider'));
   ({ useRelayActor } = await import('../relay/RelayActorProvider'));
-  ({ UnreadNotificationBadgeController, useUnreadNotificationCount } =
-    await import('./shell/UnreadNotificationBadgeController'));
 });
 
 beforeEach(() => {
@@ -322,8 +283,6 @@ beforeEach(() => {
   queryModes.UniversalShellQuery = 'success';
   queryHistory.length = 0;
   pendingSessionQueries.length = 0;
-  unreadFetches.length = 0;
-  unreadFailure = false;
   navigationMounts = 0;
   navigationUnmounts = 0;
   relayActorMounts = 0;
@@ -331,7 +290,6 @@ beforeEach(() => {
   rootShouldThrow = false;
   rootShouldSuspend = false;
   pendingRootRenders.length = 0;
-  currentEnvironment = createEnvironment({ id: 'profile-a', unreadNotificationCount: 7 });
 });
 
 afterEach(async () => {
@@ -340,15 +298,6 @@ afterEach(async () => {
     renderer = null;
   }
 });
-
-function createEnvironment(node: FakeSnapshot['data']['node']): FakeEnvironment {
-  const snapshot = { data: { node } };
-  return {
-    lookup: () => snapshot,
-    retain: () => ({ dispose: () => undefined }),
-    subscribe: () => ({ dispose: () => undefined }),
-  };
-}
 
 function ShellRecoveryContent() {
   const { fetchKey } = useRouteBoundary();
@@ -409,14 +358,6 @@ function RootRuntimeProbe() {
   return createElement('RootRuntimeProbe');
 }
 
-function BadgeValue() {
-  const { selectedProfileId } = useSession();
-  return createElement('BadgeValue', {
-    count: useUnreadNotificationCount(),
-    selectedProfileId,
-  });
-}
-
 function findTag(tag: string) {
   assert.ok(renderer);
   const node = renderer.root.findAll((candidate) => String(candidate.type) === tag)[0];
@@ -458,44 +399,6 @@ describe('AppProviders runtime composition', () => {
       assert.equal(relayActorMounts, 2);
       assert.equal(relayActorUnmounts, 1);
       assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 0);
-    } finally {
-      console.error = originalConsoleError;
-    }
-  });
-
-  it('root retry preserves the last unread count when the replacement fetch fails', async () => {
-    const originalConsoleError = console.error;
-    console.error = () => undefined;
-    try {
-      await act(async () => {
-        renderer = create(createElement(AppProviders, null, createElement(UniversalShell)));
-      });
-
-      assert.deepEqual(unreadFetches, ['profile-a']);
-      assert.deepEqual(findTag('BadgeValue').props, {
-        count: 7,
-        selectedProfileId: 'profile-a',
-      });
-
-      queryModes.UniversalShellQuery = 'error';
-      await act(async () => {
-        renderer?.update(createElement(AppProviders, null, createElement(UniversalShell)));
-      });
-
-      assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 1);
-
-      queryModes.UniversalShellQuery = 'success';
-      currentEnvironment = createEnvironment(null);
-      unreadFailure = true;
-      const fallback = findTag('StateView');
-      await act(async () => fallback.props.onAction());
-
-      assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 0);
-      assert.deepEqual(unreadFetches, ['profile-a', 'profile-a']);
-      assert.deepEqual(findTag('BadgeValue').props, {
-        count: 7,
-        selectedProfileId: 'profile-a',
-      });
     } finally {
       console.error = originalConsoleError;
     }
@@ -575,8 +478,6 @@ describe('AppProviders runtime composition', () => {
   it('one route retry reruns only the failed route query', async () => {
     queryModes.SessionProviderQuery = 'success';
     queryModes.ShellRecoveryQuery = 'error';
-    currentEnvironment = createEnvironment(null);
-    unreadFailure = true;
 
     await act(async () => {
       renderer = create(createElement(AppProviders, null, createElement(UniversalShell)));
@@ -587,11 +488,6 @@ describe('AppProviders runtime composition', () => {
     assert.ok(actorBoundary.findAll((node) => String(node.type) === 'Slot').length > 0);
     assert.ok(queryHistory.some(({ query }) => query === 'UniversalShellQuery'));
     const shellRoot = findByTestId('universal-shell-root');
-    assert.deepEqual(unreadFetches, ['profile-a']);
-    assert.deepEqual(findTag('BadgeValue').props, {
-      count: null,
-      selectedProfileId: 'profile-a',
-    });
     const sessionQueryCountBeforeRetry = queryHistory.filter(
       ({ query }) => query === 'SessionProviderQuery',
     ).length;
@@ -601,8 +497,6 @@ describe('AppProviders runtime composition', () => {
 
     queryModes.SessionProviderQuery = 'success';
     queryModes.ShellRecoveryQuery = 'success';
-    currentEnvironment = createEnvironment({ id: 'profile-a', unreadNotificationCount: 7 });
-    unreadFailure = false;
 
     const retry = findTag('Retry');
     await act(async () => retry.props.onPress());
@@ -618,46 +512,5 @@ describe('AppProviders runtime composition', () => {
     );
     assert.strictEqual(findByTestId('universal-shell-root'), shellRoot);
     assert.ok(queryHistory.filter(({ query }) => query === 'ShellRecoveryQuery').length > 1);
-    assert.deepEqual(unreadFetches, ['profile-a']);
-    assert.deepEqual(findTag('BadgeValue').props, {
-      count: null,
-      selectedProfileId: 'profile-a',
-    });
-  });
-
-  it('same-profile unread recovery retains the last successful count when refetch fails', async () => {
-    await act(async () => {
-      renderer = create(
-        createElement(
-          AppProviders,
-          null,
-          createElement(UnreadNotificationBadgeController, null, createElement(BadgeValue)),
-        ),
-      );
-    });
-
-    assert.deepEqual(unreadFetches, ['profile-a']);
-    assert.deepEqual(findTag('BadgeValue').props, {
-      count: 7,
-      selectedProfileId: 'profile-a',
-    });
-    currentEnvironment = createEnvironment(null);
-    unreadFailure = true;
-
-    await act(async () => {
-      renderer?.update(
-        createElement(
-          AppProviders,
-          null,
-          createElement(UnreadNotificationBadgeController, null, createElement(BadgeValue)),
-        ),
-      );
-    });
-
-    assert.deepEqual(unreadFetches, ['profile-a', 'profile-a']);
-    assert.deepEqual(findTag('BadgeValue').props, {
-      count: 7,
-      selectedProfileId: 'profile-a',
-    });
   });
 });

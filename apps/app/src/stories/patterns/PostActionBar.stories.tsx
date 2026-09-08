@@ -221,23 +221,18 @@ function PostActionBarFixtureContents({
   showReactionSummary = false,
   ...props
 }: Omit<PostActionBarProps, 'post' | 'reactionController'> & { showReactionSummary?: boolean }) {
-  const [deleted, setDeleted] = useState(false);
   const data = useLazyLoadQuery<PostActionBarStoryQuery>(
     postActionBarStoryQuery,
     { id: sourcePostId },
     { fetchPolicy: 'store-only' },
   );
-  if (deleted || !data.node) {
+  if (!data.node) {
     return <Text>삭제된 게시글</Text>;
   }
 
   return (
     <PostActionBarFixtureLoaded
       data={data.node}
-      onDeleted={() => {
-        setDeleted(true);
-        props.onDeleted?.();
-      }}
       props={props}
       showReactionSummary={showReactionSummary}
     />
@@ -246,12 +241,10 @@ function PostActionBarFixtureContents({
 
 function PostActionBarFixtureLoaded({
   data,
-  onDeleted,
   props,
   showReactionSummary,
 }: {
   data: NonNullable<PostActionBarStoryQuery['response']['node']>;
-  onDeleted: () => void;
   props: Omit<PostActionBarProps, 'post' | 'reactionController'>;
   showReactionSummary: boolean;
 }) {
@@ -259,12 +252,7 @@ function PostActionBarFixtureLoaded({
   return (
     <>
       {showReactionSummary ? <PostReactionSummary controller={controller} /> : null}
-      <PostActionBar
-        {...props}
-        onDeleted={onDeleted}
-        post={data.actionBar!}
-        reactionController={controller}
-      />
+      <PostActionBar {...props} post={data.actionBar!} reactionController={controller} />
     </>
   );
 }

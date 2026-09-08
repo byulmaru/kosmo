@@ -8,12 +8,19 @@ import { Bookmark } from '../ref';
 type DeleteBookmarkPayload = {
   readonly bookmarkId: string | null;
   readonly post: string | null;
+  readonly requestedBookmarkId: string;
 };
 
 builder.mutationField('deleteBookmark', (t) =>
   t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('DeleteBookmarkPayload', {
       fields: (field) => ({
+        requestedBookmarkId: field.globalID({
+          resolve: (payload) => ({
+            id: (payload as DeleteBookmarkPayload).requestedBookmarkId,
+            type: Bookmark,
+          }),
+        }),
         bookmarkId: field.globalID({
           nullable: true,
           resolve: (payload) => {
@@ -42,6 +49,7 @@ builder.mutationField('deleteBookmark', (t) =>
       return {
         bookmarkId: deleted?.id ?? null,
         post: deleted?.postId ?? null,
+        requestedBookmarkId: input.id.id,
       };
     },
   }),

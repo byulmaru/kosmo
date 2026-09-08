@@ -96,9 +96,6 @@ mockModule('./RightRail', {
 });
 mockModule('./ShellChromeContext', { ShellChromeProvider: PassThrough });
 mockModule('./SidebarNavigation', { SidebarNavigation: () => null });
-mockModule('./UnreadNotificationBadgeController', {
-  UnreadNotificationBadgeController: PassThrough,
-});
 mockModule('./shellLayout', {
   getWebMobileShellHeader: () => null,
   getShellRoutePresentation: () => ({

@@ -6,7 +6,6 @@ import { Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { sb } from 'storybook/test';
 import { PostContentWarningRevealProvider } from '@/components/post/PostContentWarningRevealContext';
-import { UnreadNotificationBadgeStateProvider } from '@/components/shell/UnreadNotificationBadgeController';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { RouterMockProvider } from './mocks/expo-router';
@@ -31,44 +30,42 @@ const preview: Preview = {
         <SafeAreaProvider>
           <ThemeProvider mode={theme} reduceMotion={reduceMotion}>
             <ToastProvider>
-              <UnreadNotificationBadgeStateProvider key={context.id}>
-                <PostContentWarningRevealProvider>
-                  <RelayStoryProvider
-                    actorBoundary={relay.actorBoundary}
-                    mutationError={relay.mutationError}
-                    mutationGraphQLErrors={relay.mutationGraphQLErrors}
-                    mutationLoading={relay.mutationLoading}
-                    mutationRequestObserver={relay.mutationRequestObserver}
-                    mutationResponse={relay.mutationResponse}
-                    paginationError={relay.paginationError}
-                    paginationLoading={relay.paginationLoading}
-                    paginationRequestObserver={relay.paginationRequestObserver}
-                    paginationResponse={relay.paginationResponse}
-                    paginationResponses={relay.paginationResponses}
-                    operationResponses={relay.operationResponses}
-                    queryData={relay.data}
+              <PostContentWarningRevealProvider>
+                <RelayStoryProvider
+                  actorBoundary={relay.actorBoundary}
+                  mutationError={relay.mutationError}
+                  mutationGraphQLErrors={relay.mutationGraphQLErrors}
+                  mutationLoading={relay.mutationLoading}
+                  mutationRequestObserver={relay.mutationRequestObserver}
+                  mutationResponse={relay.mutationResponse}
+                  paginationError={relay.paginationError}
+                  paginationLoading={relay.paginationLoading}
+                  paginationRequestObserver={relay.paginationRequestObserver}
+                  paginationResponse={relay.paginationResponse}
+                  paginationResponses={relay.paginationResponses}
+                  operationResponses={relay.operationResponses}
+                  queryData={relay.data}
+                >
+                  <RouterMockProvider
+                    params={router.params}
+                    pathname={router.pathname}
+                    segments={router.segments}
+                    slotLabel={router.slotLabel}
                   >
-                    <RouterMockProvider
-                      params={router.params}
-                      pathname={router.pathname}
-                      segments={router.segments}
-                      slotLabel={router.slotLabel}
+                    <Suspense
+                      fallback={
+                        <View style={{ padding: 24 }}>
+                          <Text>스토리를 불러오는 중입니다.</Text>
+                        </View>
+                      }
                     >
-                      <Suspense
-                        fallback={
-                          <View style={{ padding: 24 }}>
-                            <Text>스토리를 불러오는 중입니다.</Text>
-                          </View>
-                        }
-                      >
-                        <ThemedStory>
-                          <Story />
-                        </ThemedStory>
-                      </Suspense>
-                    </RouterMockProvider>
-                  </RelayStoryProvider>
-                </PostContentWarningRevealProvider>
-              </UnreadNotificationBadgeStateProvider>
+                      <ThemedStory>
+                        <Story />
+                      </ThemedStory>
+                    </Suspense>
+                  </RouterMockProvider>
+                </RelayStoryProvider>
+              </PostContentWarningRevealProvider>
             </ToastProvider>
           </ThemeProvider>
         </SafeAreaProvider>

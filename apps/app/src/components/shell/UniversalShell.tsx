@@ -42,7 +42,6 @@ import {
   webMobileShellHeaderHeight,
 } from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
-import { UnreadNotificationBadgeController } from './UnreadNotificationBadgeController';
 import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
 import type { HomeReselectionHandler } from './ShellChromeContext';
@@ -95,15 +94,13 @@ const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
 
 export function UniversalShell() {
   return (
-    <UnreadNotificationBadgeController>
-      <NavigationGuardProvider>
-        <PrimaryNavigationScrollProvider>
-          <NotificationReadAllProvider>
-            <UniversalShellContent />
-          </NotificationReadAllProvider>
-        </PrimaryNavigationScrollProvider>
-      </NavigationGuardProvider>
-    </UnreadNotificationBadgeController>
+    <NavigationGuardProvider>
+      <PrimaryNavigationScrollProvider>
+        <NotificationReadAllProvider>
+          <UniversalShellContent />
+        </NotificationReadAllProvider>
+      </PrimaryNavigationScrollProvider>
+    </NavigationGuardProvider>
   );
 }
 

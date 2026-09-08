@@ -57,7 +57,7 @@ const addReactionMutation = graphql`
 const deleteReactionMutation = graphql`
   mutation PostReactionControllerDeleteReactionMutation($postId: ID!, $type: String!) {
     deleteReaction(input: { postId: $postId, type: $type }) {
-      reactionId
+      reactionId @deleteRecord
       post {
         id
         viewerReactions {

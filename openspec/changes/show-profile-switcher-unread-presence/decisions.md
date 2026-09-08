@@ -59,6 +59,26 @@ ProfileSwitcher 계약으로 갱신한다. selected Profile 셸 badge와 Profile
 - Consequences: shell query 재실행 전에는 표시가 서버 최신 상태와 시차가 날 수 있으며 기존 Relay 수렴에 맡긴다.
 - Confirmation / Follow-up: Profile 전환 E2E와 기존 notification regression을 유지한다.
 
+### 현재 Relay field 소유권과 nullable count fallback
+
+- Decision Date: 2026-09-09
+- Decision Class: Implementation Choice
+- Authority / Provenance: 현재 사용자 승인 구현 범위. 이 기록은 `PROD-643`의 추가 Linear 승인을 주장하지 않는다.
+- Status: Active
+- Context / Problem: Profile picker와 selected Profile 셸 badge는 현재 Profile의 colocated Relay field를 직접
+  읽어야 하며, field-level count가 제공되지 않는 응답에서도 Profile identity와 navigation을 유지해야 한다.
+- Decision Outcome: picker와 셸 badge는 각 호출부가 현재 Profile의 `Profile.unreadNotificationCount`를 직접
+  소비한다. `null` 또는 미제공 count는 dot과 badge를 숨기는 값으로 처리하고 Profile object, session과
+  navigation entry의 identity를 유지한다. 별도 React bridge·controller·last-success snapshot·count query는
+  추가하지 않는다.
+- Alternatives Considered: 이전 Profile count를 재사용하거나 count를 별도 React 상태에 복제하는 방식은 actor
+  전환 중 stale count를 노출할 수 있어 거절했다. `null`을 `0`으로 정규화해 Profile object를 대체하는 방식은
+  field-level 오류와 object identity를 혼동하므로 거절했다.
+- Consequences: field-level count 오류는 visible Profile과 sibling field를 보존하면서 indicator만 숨긴다. 기존
+  Relay refresh와 actor 전환이 제공하는 서버 상태 수렴 경계를 유지한다.
+- Confirmation / Follow-up: 현재 Relay fragment 소비자와 nullable GraphQL field의 app/API 검증 결과를 이
+  implementation choice의 확인 근거로 사용한다.
+
 ## Remaining Decisions
 
 - 없음.

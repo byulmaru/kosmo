@@ -14,11 +14,15 @@ ProfileSwitcher는 기존 shell query와 Relay Store의 Profile별 `unreadNotifi
 
 - 별도 query, snapshot, client-side count 보정, schema·resolver·DB 변경을 추가하지 않는다.
 - selected Profile shell badge와 notification lifecycle을 변경하지 않는다.
+- `Profile.unreadNotificationCount`는 membership field 오류가 visible Profile object 전체를 null bubble하지 않도록
+  nullable로 유지하며, `null` 또는 미제공 count는 다른 Profile count나 last-success snapshot으로 대체하지 않는다.
 
 **Verification**
 
 - 기존 fragment와 generated artifact에서 Profile별 count ownership을 확인한다.
 - Profile 전환 E2E에서 기존 actor·shell badge·알림 목록 수렴을 유지한다.
+- API notification integration test에서 count field 오류가 parent Profile identity를 보존하고, Relay consumer가 현재
+  field의 nullable 값을 직접 처리하는지 확인한다.
 
 - [x] 1.1 `ProfileSwitcher_query.me.profiles[].unreadNotificationCount`와 기존 Relay ownership을 재사용한다.
 - [x] 1.2 별도 query·snapshot·client count 보정과 schema·DB·dependency 변경을 추가하지 않는다.

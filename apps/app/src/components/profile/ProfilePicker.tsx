@@ -14,7 +14,7 @@ export type ProfilePickerProfile = Readonly<{
   displayName: string;
   id: string;
   relativeHandle: string;
-  unreadNotificationCount?: number;
+  unreadNotificationCount?: number | null;
 }>;
 
 type Props = Readonly<{

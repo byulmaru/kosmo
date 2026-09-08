@@ -75,6 +75,7 @@ builder.objectField(Profile, 'notifications', (t) =>
 builder.objectField(Profile, 'unreadNotificationCount', (t) =>
   t.withAuth({ login: true }).field({
     type: 'Int',
+    nullable: true,
     resolve: async (profile, _, ctx) => {
       await requireProfileNotificationMembership(ctx.session.accountId, profile.id, db);
 

@@ -1,5 +1,5 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useCallback, useEffect, useRef } from 'react';
+import { startTransition, useCallback, useEffect, useRef } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
@@ -18,7 +18,7 @@ import { StateView } from '@/components/ui/StateView';
 import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
-import type { MutableRefObject, PropsWithChildren } from 'react';
+import type { PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { HomePageQuery, HomePageQuery$data } from './__generated__/HomePageQuery.graphql';
@@ -52,7 +52,7 @@ export default function HomeScreen() {
     if (Platform.OS === 'web') {
       window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
     }
-    routeBoundaryRef.current?.refetch();
+    startTransition(() => routeBoundaryRef.current?.refetch());
   }, []);
 
   useEffect(() => {
@@ -114,58 +114,24 @@ function HomeFrame({
   );
 }
 
-type HomeLastSuccessful = {
-  data: HomePageQuery$data;
-};
-
 function HomeRouteContent() {
   const { fetchKey, refetch } = useRouteBoundary();
-  const lastSuccessfulHomeRef = useRef<HomeLastSuccessful | null>(null);
 
-  return (
-    <HomeContentBoundary
-      fetchKey={fetchKey}
-      lastSuccessfulHomeRef={lastSuccessfulHomeRef}
-      onRetry={refetch}
-    />
-  );
+  return <HomeContentBoundary fetchKey={fetchKey} onRetry={refetch} />;
 }
 
-function HomeContentBoundary({
-  fetchKey,
-  lastSuccessfulHomeRef,
-  onRetry,
-}: {
-  fetchKey: number;
-  lastSuccessfulHomeRef: MutableRefObject<HomeLastSuccessful | null>;
-  onRetry: () => void;
-}) {
+function HomeContentBoundary({ fetchKey, onRetry }: { fetchKey: number; onRetry: () => void }) {
   const reportUnexpectedError = useUnexpectedErrorReporter();
 
   return (
     <ErrorBoundary
-      fallbackRender={({ resetErrorBoundary }) => {
-        const lastSuccessful = lastSuccessfulHomeRef.current;
-        if (!lastSuccessful) {
-          return (
-            <StateView
-              actionLabel="다시 시도"
-              alert
-              description="잠시 후 다시 시도해주세요."
-              onAction={resetErrorBoundary}
-              title="홈을 불러오지 못했어요"
-            />
-          );
-        }
-        return <HomeContentView data={lastSuccessful.data} />;
-      }}
-      onError={(error, info) => {
-        const lastSuccessful = lastSuccessfulHomeRef.current;
-        if (!lastSuccessful) {
-          reportUnexpectedError?.(error, info);
-          console.error('Route error', error, info.componentStack);
-        }
-      }}
+      fallbackRender={({ error, resetErrorBoundary }) => (
+        <HomeRecoveryContent
+          error={error}
+          onRetry={resetErrorBoundary}
+          reportError={reportUnexpectedError}
+        />
+      )}
       onReset={(details) => {
         if (details.reason === 'imperative-api') {
           onRetry();
@@ -173,24 +139,60 @@ function HomeContentBoundary({
       }}
       resetKeys={[fetchKey]}
     >
-      <HomeContent fetchKey={fetchKey} lastSuccessfulHomeRef={lastSuccessfulHomeRef} />
+      <HomeContent fetchKey={fetchKey} />
+    </ErrorBoundary>
+  );
+}
+
+function HomeRecoveryContent({
+  error,
+  onRetry,
+  reportError,
+}: {
+  error: unknown;
+  onRetry: () => void;
+  reportError?: ReturnType<typeof useUnexpectedErrorReporter>;
+}) {
+  return (
+    <ErrorBoundary
+      fallbackRender={() => (
+        <StateView
+          actionLabel="다시 시도"
+          alert
+          description="잠시 후 다시 시도해주세요."
+          onAction={onRetry}
+          title="홈을 불러오지 못했어요"
+        />
+      )}
+      onError={(_, info) => {
+        reportError?.(error, info);
+        console.error('Route error', error, info.componentStack);
+      }}
+    >
+      <StateView
+        actionLabel="다시 시도"
+        alert
+        description="잠시 후 다시 시도해주세요."
+        onAction={onRetry}
+        title="홈을 불러오지 못했어요"
+      />
+      <HomeContent fetchPolicy="store-only" />
     </ErrorBoundary>
   );
 }
 
 function HomeContent({
   fetchKey,
-  lastSuccessfulHomeRef,
+  fetchPolicy,
 }: {
-  fetchKey: number;
-  lastSuccessfulHomeRef: MutableRefObject<HomeLastSuccessful | null>;
+  fetchKey?: number;
+  fetchPolicy?: 'network-only' | 'store-and-network' | 'store-only';
 }) {
   const data = useLazyLoadQuery<HomePageQuery>(
     HomeQuery,
     {},
-    { fetchKey, fetchPolicy: 'store-and-network' },
+    { fetchKey, fetchPolicy: fetchPolicy ?? (fetchKey ? 'network-only' : 'store-and-network') },
   );
-  lastSuccessfulHomeRef.current = { data };
 
   return <HomeContentView data={data} />;
 }

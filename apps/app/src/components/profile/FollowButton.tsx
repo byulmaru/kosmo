@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { ConnectionHandler } from 'relay-runtime';
 import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -69,9 +70,14 @@ const cancelProfileFollowRequestMutation = graphql`
   }
 `;
 
+const followersConnectionKey = 'ProfileConnectionList_followers';
+const followingConnectionKey = 'ProfileConnectionList_following';
+
 const unfollowProfileMutation = graphql`
-  mutation FollowButtonUnfollowProfileMutation($id: ID!) {
+  mutation FollowButtonUnfollowProfileMutation($connections: [ID!]!, $id: ID!) {
     unfollowProfile(input: { id: $id }) {
+      profileFollowId @deleteEdge(connections: $connections)
+      profileFollowId @deleteRecord
       followerProfile {
         id
         followingCount
@@ -159,7 +165,15 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
               },
             }
           : undefined,
-        variables: { id: data.id },
+        variables: {
+          connections: [
+            ...(follower?.id
+              ? [ConnectionHandler.getConnectionID(follower.id, followingConnectionKey)]
+              : []),
+            ConnectionHandler.getConnectionID(data.id, followersConnectionKey),
+          ],
+          id: data.id,
+        },
       });
     } else if (viewerState.followRequest) {
       commitCancel({
@@ -219,19 +233,6 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
           state?.setValue(null, 'followRequest');
           updateProfileCount(followee, 'followersCount', 1);
           updateProfileCount(follower, 'followingCount', 1);
-        },
-        updater: (store) => {
-          const payload = store.getRootField('followProfile');
-          const result = payload?.getLinkedRecord('result');
-          const state = payload?.getLinkedRecord('followeeProfile')?.getLinkedRecord('viewerState');
-
-          if (result?.getType() === 'ProfileFollow') {
-            state?.setLinkedRecord(result, 'follow');
-            state?.setValue(null, 'followRequest');
-          } else if (result?.getType() === 'ProfileFollowRequest') {
-            state?.setValue(null, 'follow');
-            state?.setLinkedRecord(result, 'followRequest');
-          }
         },
         variables: { id: data.id },
       });

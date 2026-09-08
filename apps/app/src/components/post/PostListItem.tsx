@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -103,10 +103,8 @@ export function PostListItem({
   showReplyAttribution?: boolean;
 }) {
   const theme = useTheme();
-  const [deleted, setDeleted] = useState(false);
   const post = useFragment(PostListItemFragment, postKey);
   const openViewer = usePostMediaViewerHost();
-  const onDeleted = useCallback(() => setDeleted(true), []);
   const { reply, replySurface, owner: replyOwner } = usePostReplySurface(post);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const presentedReplySurface =
@@ -119,13 +117,12 @@ export function PostListItem({
     (selectedIndex, originControl) => {
       openViewer({
         mediaOwnerPostId: post.id,
-        onDeleted,
         originControl,
         selectedIndex,
         surfacePostId: post.id,
       });
     },
-    [onDeleted, openViewer, post.id],
+    [openViewer, post.id],
   );
   const standardCardStyle = [
     styles.card,
@@ -177,10 +174,6 @@ export function PostListItem({
       </PostAttributionRow>
     ) : null;
 
-  if (deleted) {
-    return null;
-  }
-
   const renderWithReplySurface = (presentation: ReactNode) => (
     <>
       {presentation}
@@ -196,12 +189,7 @@ export function PostListItem({
       <View role="article" style={standardCardStyle}>
         {pinnedAttribution}
         {replyAttribution}
-        <PostListRow
-          actionBarStyle={styles.actionBarSlot}
-          onDeleted={onDeleted}
-          post={post}
-          reply={reply}
-        />
+        <PostListRow actionBarStyle={styles.actionBarSlot} post={post} reply={reply} />
       </View>,
     );
   }
@@ -234,7 +222,7 @@ export function PostListItem({
             </Pressable>
           </Link>
         </PostAttributionRow>
-        <PostListRow onDeleted={onDeleted} post={source} reply={reply} surfacePostId={post.id} />
+        <PostListRow post={source} reply={reply} surfacePostId={post.id} />
       </View>,
     );
   }
@@ -269,7 +257,6 @@ export function PostListItem({
             sourcePreviewStyle={styles.quoteSourcePreview}
           />
           <PostActionSurface
-            onDeleted={onDeleted}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
             socialActionTarget={post.actionSurface!}
@@ -291,13 +278,11 @@ function PostAttributionRow({ children, icon }: { children: ReactNode; icon: Rea
 
 function PostListRow({
   actionBarStyle,
-  onDeleted,
   post: postKey,
   reply,
   surfacePostId,
 }: {
   actionBarStyle?: StyleProp<ViewStyle>;
-  onDeleted: () => void;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
   surfacePostId?: string;
@@ -312,13 +297,12 @@ function PostListRow({
     (selectedIndex, originControl) => {
       openViewer({
         mediaOwnerPostId: post.id,
-        onDeleted,
         originControl,
         selectedIndex,
         surfacePostId: surfacePostId ?? post.id,
       });
     },
-    [onDeleted, openViewer, post.id, surfacePostId],
+    [openViewer, post.id, surfacePostId],
   );
   return (
     <View style={styles.standardRow} testID="post-list-standard-row">
@@ -361,7 +345,6 @@ function PostListRow({
         ) : null}
         <PostActionSurface
           actionBarStyle={actionBarStyle}
-          onDeleted={onDeleted}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
           socialActionTarget={post.actionSurface!}

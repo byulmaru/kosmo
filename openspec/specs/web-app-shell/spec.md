@@ -1110,54 +1110,44 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 - **THEN** 진입점은 실제 서버 count를 사용한 `알림, 읽지 않은 알림 N개`라는 하나의 accessible name으로 노출된다
 - **AND** 시각적 badge는 별도 focus 대상이나 중복 accessibility element로 노출되지 않는다
 
-### Requirement: Unread badge profile isolation and freshness
+### Requirement: Unread badge profile isolation and Relay ownership
 
-유니버설 앱 셸은 다른 Profile의 마지막 count를 selected Profile의 badge로 재사용하지 않아야 한다(MUST). selected Profile별 최초 성공 전에는 badge를 숨기고, 같은 Profile의 재조회가 실패하면 마지막 성공 count와 셸 진입점을 유지해야 한다(MUST). count 조회 오류는 전체 셸 query의 loading/error boundary로 전파되지 않는 non-suspending badge 상태 경계가 처리해야 하며(MUST), 그 상태 경계는 actor environment가 교체되어도 같은 selected Profile ID의 마지막 성공값을 보존해야 한다(MUST). 클라이언트는 목록 길이, hidden item 또는 임의의 로컬 증감으로 count를 다시 계산하지 않고 Relay의 normalized `Profile.unreadNotificationCount`와 이후 서버 재조회 결과에 수렴해야 한다(MUST).
+유니버설 앱 셸은 현재 selected Profile fragment가 제공하는 `Profile.unreadNotificationCount`를 각 Relay 소비자에서 직접 사용해야 한다(MUST). 다른 Profile의 count를 selected Profile의 badge로 재사용하거나 별도의 React bridge, controller, last-success snapshot으로 count를 복제해서는 안 된다(MUST NOT). count가 `null`이거나 현재 Profile에 대해 제공되지 않으면 badge를 숨기되 selected Profile object, 세션과 알림 navigation entry의 identity를 유지해야 한다(MUST). actor environment/store가 교체될 때 이전 Profile의 normalized record를 새 Profile에 재사용해서는 안 되며(MUST NOT), Relay fragment와 기존 server-backed refresh 결과에 수렴해야 한다(MUST). 클라이언트는 목록 길이, hidden item 또는 임의의 로컬 증감으로 count를 다시 계산하지 않아야 한다(MUST).
 
-#### Scenario: Hide the badge before the first successful count
+#### Scenario: Hide the badge when the current count is unavailable
 
-- **GIVEN** selected Profile의 count 조회가 아직 성공하지 않았다
-- **WHEN** 셸이 loading 상태 또는 최초 조회 오류 상태를 표시한다
+- **GIVEN** selected Profile의 `unreadNotificationCount`가 `null`이거나 현재 Relay fragment에 제공되지 않는다
+- **WHEN** 셸이 selected Profile과 알림 navigation entry를 렌더링한다
 - **THEN** 알림 진입점은 badge를 표시하지 않는다
-- **AND** 진입점 자체는 `알림`이라는 accessible name을 유지한다
+- **AND** selected Profile object와 진입점 자체는 유지하고 accessible name은 `알림`이다
 
-#### Scenario: Wait for the next existing refresh after an initial count-only failure
+#### Scenario: Preserve the Profile around a transient count resolver failure
 
-- **GIVEN** selected Profile의 최초 count 조회만 실패했고 셸의 다른 데이터와 진입점은 정상 렌더링됐다
-- **WHEN** 시스템이 count 오류를 non-suspending badge 상태 경계에서 처리한다
-- **THEN** 알림 진입점은 badge를 숨긴 채 유지된다
-- **AND** badge 전용 오류 메시지나 retry control을 추가하지 않는다
-- **AND** 다음 Profile 전환, 셸 재진입 또는 기존 셸 오류의 명시적 retry가 발생할 때 count를 다시 조회한다
+- **GIVEN** visible selected Profile object가 `id`와 함께 반환되지만 transient count resolver/read failure로
+  `unreadNotificationCount`가 `null`이거나 제공되지 않는다
+- **WHEN** 셸이 해당 Relay response를 반영한다
+- **THEN** 시스템은 selected Profile identity와 sibling field를 유지한다
+- **AND** count 오류를 다른 Profile의 count로 대체하거나 Profile 전체를 `null`로 만들지 않는다
 
 #### Scenario: Do not leak the previous Profile count
 
-- **GIVEN** Profile A의 마지막 성공 count가 `12`다
-- **WHEN** 사용자가 Profile B로 전환한다
-- **THEN** 시스템은 Profile B의 첫 성공 count가 도착할 때까지 badge를 숨긴다
+- **GIVEN** Profile A의 Relay count가 `12`다
+- **WHEN** 사용자가 Profile B로 전환하고 B의 첫 count가 `null`이거나 아직 제공되지 않는다
+- **THEN** 시스템은 Profile B의 badge를 숨긴다
 - **AND** Profile A의 `12`를 Profile B의 진입점에 표시하지 않는다
 
-#### Scenario: Keep the same Profile's last successful count after failure
+#### Scenario: Converge through the existing Relay refresh
 
-- **GIVEN** 현재 selected Profile의 마지막 성공 count가 `7`이다
-- **WHEN** 같은 Profile을 위한 후속 재조회가 실패한다
-- **THEN** 시스템은 마지막 성공 count `7`을 계속 표시한다
-- **AND** 실패를 `0`으로 해석하거나 badge를 제거하지 않는다
-- **AND** count 오류 때문에 셸 진입점을 전체 오류 화면으로 교체하지 않는다
-
-#### Scenario: Converge through the existing refresh lifecycle
-
-- **GIVEN** selected Profile의 서버 count가 마지막 성공 count와 달라졌다
-- **WHEN** Profile 전환, 셸 초기 로드·재진입, Session recovery 또는 기존 셸 오류 UI의 명시적 retry가 actor lifecycle과 `store-and-network` 재조회를 실행한다
-- **THEN** 성공한 서버 응답이 해당 Profile의 badge count를 갱신한다
-- **AND** badge 상태 경계는 같은 Profile의 environment 교체 중 마지막 성공값을 지우지 않고 count 조회 오류를 전체 셸 오류로 전파하지 않는다
-- **AND** count-only 오류를 위한 별도 retry control은 제공하지 않는다
-- **AND** foreground 또는 network reconnect만을 위한 별도 자동 재조회 계약은 요구하지 않는다
+- **GIVEN** selected Profile의 서버 count가 이전 Relay record와 달라졌다
+- **WHEN** 기존 shell query, actor 전환 또는 성공 payload가 현재 Profile의 normalized Relay record를 갱신한다
+- **THEN** 같은 Profile을 표시하는 모든 셸 진입점은 갱신된 count를 사용한다
+- **AND** 별도 count query, retry control, React snapshot 또는 controller를 시작하지 않는다
 
 #### Scenario: Reflect a normalized Profile cache update
 
 - **GIVEN** 현재 selected Profile의 `unreadNotificationCount` Relay record가 새 값으로 갱신된다
 - **WHEN** 같은 Profile을 표시하는 셸 진입점이 렌더링되어 있다
-- **THEN** 모든 진입점은 같은 새 count를 표시한다
+- **THEN** 모든 진입점은 같은 새 count를 표시하거나 값이 `null`이면 badge를 숨긴다
 - **AND** badge consumer는 Notification 목록 길이 또는 hidden item 보정으로 별도 값을 만들지 않는다
 
 ### Requirement: 준비되지 않은 sidebar 진입점 비노출

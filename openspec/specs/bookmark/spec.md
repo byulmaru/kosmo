@@ -88,6 +88,8 @@ Profile이 조회 가능한 Post를 개인적으로 저장하고, Profile별로 
 
 GraphQL은 현재 `usingProfile`을 Owner로 사용하는 `deleteBookmark(input: { id })` mutation을 제공해야 한다(MUST). 성공 payload는 nullable `bookmarkId`와 nullable `post`를 반환해야 한다(MUST). Owner가 존재하는 Bookmark를 처음 삭제하면 `bookmarkId`로 삭제된 Bookmark 관계를 정확히 식별하고, `post`는 현재 조회 가능한 Target Post를 반환해야 한다(MUST). Target Post가 현재 조회 불가능하면 삭제는 그대로 성공하되 `post`는 `null`이어야 한다(MUST).
 
+성공 payload는 입력으로 확인된 opaque Bookmark ID를 `requestedBookmarkId: ID!`로도 반환해야 한다(MUST). 이 필드는 요청 자체를 반영하는 client cleanup token이며 관계의 존재·소유권·삭제 여부를 나타내지 않아야 한다(MUST NOT); 따라서 missing, non-owner, 순차·동시 loser 응답에서도 같은 입력 ID를 반환할 수 있다.
+
 Bookmark가 없거나 현재 `usingProfile`의 소유가 아니거나 순차·동시 요청에서 이미 삭제되었으면 시스템은 서로 구분되지 않는 멱등 성공으로 정규화하고 `bookmarkId`와 `post`를 모두 `null`로 반환해야 한다(MUST). 다른 Profile에는 Bookmark 존재 여부를 노출하지 않아야 한다(MUST NOT).
 
 #### Scenario: Owner가 Bookmark를 삭제함
