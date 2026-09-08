@@ -1,0 +1,537 @@
+import { useState } from 'react';
+import { View } from 'react-native';
+import { graphql, useLazyLoadQuery } from 'react-relay';
+import { expect, fireEvent, fn, screen, userEvent, waitFor, within } from 'storybook/test';
+import { NotificationListItemView } from '@/components/notification/NotificationListItemView';
+import { ReplyNotificationPost } from '@/components/notification/ReplyNotificationPost';
+import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
+import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
+import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
+import { SessionProvider } from '@/session/SessionProvider';
+import { getCopiedStrings, resetClipboardMock } from '../../../.storybook/mocks/postClipboard';
+import { post, profile } from '../fixtures';
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { NotificationListItemViewProps } from '@/components/notification/NotificationListItemView';
+import type { NotificationListItemStoriesQuery as Query } from './__generated__/NotificationListItemStoriesQuery.graphql';
+
+const thumbnail = {
+  id: 'notification-thumbnail',
+  altText: '보라색 하늘',
+  url:
+    'data:image/svg+xml,' +
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#8b7dea"/></svg>',
+    ),
+};
+const author = profile({
+  id: 'notification-reply-author',
+  displayName: '별빛여행자',
+  handle: 'starlight',
+  relativeHandle: '@starlight',
+});
+const replyPost = {
+  ...post({
+    id: 'notification-reply-post',
+    profile: author,
+    bodyText: '코스모에서 함께 나누고 싶은 오늘의 이야기입니다.',
+  }),
+  replyCount: 12,
+  repostCount: 3,
+  viewerReactions: [],
+  replyParent: post({
+    id: 'notification-parent',
+    profile: profile({ id: 'notification-parent-author', displayName: '원글 작성자' }),
+  }),
+};
+
+export type NotificationStoryArgs = {
+  kind: NotificationListItemViewProps['kind'];
+  name: string;
+  grouped: boolean;
+  otherActorCount: number;
+  timestamp: string;
+  unread: boolean;
+  pending: boolean;
+  disabled: boolean;
+  bodyText: string;
+  contentWarning: string;
+  hasMedia: boolean;
+  sensitiveMedia: boolean;
+  unavailable: boolean;
+  containerWidth: 'auto' | number;
+  onNavigate: ReturnType<typeof fn>;
+};
+type Args = NotificationStoryArgs;
+
+function ReplyPost() {
+  const data = useLazyLoadQuery<Query>(
+    graphql`
+      query NotificationListItemStoriesQuery {
+        node(id: "notification-reply-post") {
+          ... on Post {
+            ...ReplyNotificationPost_post @alias(as: "post")
+          }
+        }
+        composer: node(id: "notification-viewer") {
+          ... on Profile {
+            ...ReplyComposerSurface_profile @alias(as: "replyProfile")
+          }
+        }
+      }
+    `,
+    {},
+  );
+  if (!data.node?.post) {
+    throw new Error('Reply story Post fixture is missing.');
+  }
+  return (
+    <SessionProvider>
+      <PostActionAuthenticationProvider>
+        <PostReplyCoordinatorProvider owner="list" profile={data.composer?.replyProfile ?? null}>
+          <PostMediaViewerHostProvider>
+            <ReplyNotificationPost post={data.node.post} />
+          </PostMediaViewerHostProvider>
+        </PostReplyCoordinatorProvider>
+      </PostActionAuthenticationProvider>
+    </SessionProvider>
+  );
+}
+
+export function NotificationExample(args: Args) {
+  const actor = { id: 'notification-actor', name: args.name };
+  const shared = {
+    disabled: args.disabled,
+    onNavigate: args.onNavigate,
+    pending: args.pending,
+    timestamp: args.timestamp,
+    unread: args.unread,
+  };
+  if (args.kind === 'reply') {
+    return (
+      <NotificationListItemView kind="reply" unread={args.unread}>
+        <ReplyPost />
+      </NotificationListItemView>
+    );
+  }
+  const actors = args.grouped
+    ? ([
+        actor,
+        { id: 'actor-2', name: '은하 관측자' },
+        { id: 'actor-3', name: '우주 여행자' },
+      ] as const)
+    : ([actor] as const);
+  const summary = {
+    actors,
+    totalActorCount: args.grouped ? Math.max(3, (args.otherActorCount ?? 3) + 1) : 1,
+  };
+  if (args.kind === 'follow' || args.kind === 'followRequest') {
+    return (
+      <NotificationListItemView
+        {...shared}
+        {...summary}
+        href={args.kind === 'follow' ? '/@kosmo' : '/follow-requests'}
+        kind={args.kind}
+      />
+    );
+  }
+  return (
+    <NotificationListItemView
+      {...shared}
+      {...summary}
+      href="/@kosmo/notification-related-post"
+      kind={args.kind}
+      preview={
+        args.unavailable
+          ? null
+          : {
+              bodyText: args.bodyText,
+              contentWarning: args.contentWarning || null,
+              media: args.hasMedia ? [thumbnail] : [],
+              sensitiveMedia: args.sensitiveMedia,
+            }
+      }
+    />
+  );
+}
+
+const meta = {
+  title: 'KOSMO/Patterns/Notification List Item',
+  args: {
+    kind: 'follow',
+    name: '별빛 여행자',
+    grouped: false,
+    otherActorCount: 3,
+    timestamp: '5분 전',
+    unread: false,
+    pending: false,
+    disabled: false,
+    bodyText: '새 디자인 시스템을 적용한 게시글의 한 줄 미리보기입니다.',
+    contentWarning: '',
+    hasMedia: false,
+    sensitiveMedia: false,
+    unavailable: false,
+    containerWidth: 600,
+    onNavigate: fn(),
+  },
+  argTypes: {
+    kind: {
+      control: 'select',
+      options: ['follow', 'followRequest', 'reaction', 'repost', 'reply'],
+    },
+    name: { control: 'text', if: { arg: 'kind', neq: 'reply' } },
+    timestamp: { control: 'text', if: { arg: 'kind', neq: 'reply' } },
+    grouped: { control: 'boolean', if: { arg: 'kind', neq: 'reply' } },
+    otherActorCount: { control: { type: 'number', min: 2, step: 1 }, if: { arg: 'grouped' } },
+    unread: { control: 'boolean' },
+    pending: { control: 'boolean', if: { arg: 'kind', neq: 'reply' } },
+    disabled: { control: 'boolean', if: { arg: 'kind', neq: 'reply' } },
+    bodyText: { control: 'text' },
+    contentWarning: { control: 'text' },
+    hasMedia: { control: 'boolean' },
+    sensitiveMedia: { control: 'boolean' },
+    unavailable: { control: 'boolean' },
+    containerWidth: { control: 'select', options: [320, 390, 600, 720, 'auto'] },
+  },
+  decorators: [
+    (Story, context) => (
+      <View
+        style={{
+          width: context.args.containerWidth === 'auto' ? '100%' : context.args.containerWidth,
+          maxWidth: '100%',
+        }}
+      >
+        <Story />
+      </View>
+    ),
+  ],
+  excludeStories: [
+    'NotificationExample',
+    'ActivationContract',
+    'PendingContract',
+    'CompositionContract',
+    'ProtectionContract',
+    'ReplyLayoutContract',
+    'ReplyQuoteContract',
+    'ReplyActionsContract',
+  ],
+  parameters: {
+    layout: 'fullscreen',
+    relay: {
+      operationResponses: {
+        NotificationListItemStoriesQuery: {
+          data: { node: replyPost, composer: profile({ id: 'notification-viewer' }) },
+        },
+        SessionProviderQuery: {
+          data: {
+            currentSession: {
+              id: 'notification-session',
+              selectedProfile: { id: 'notification-viewer' },
+            },
+            me: { id: 'notification-account', name: 'Story' },
+          },
+        },
+      },
+    },
+  },
+  render: (args) => <NotificationExample {...args} />,
+} satisfies Meta<Args>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Playground: Story = {};
+
+export const GroupedKinds: Story = {
+  parameters: { controls: { disable: true } },
+  render: (args) => (
+    <View>
+      {(['follow', 'followRequest', 'reaction', 'repost'] as const).map((kind) => (
+        <NotificationExample
+          key={kind}
+          {...args}
+          grouped
+          kind={kind}
+          hasMedia={kind === 'repost'}
+        />
+      ))}
+    </View>
+  ),
+};
+
+export const Reply: Story = { args: { kind: 'reply' } };
+
+export const ReplyLongName: Story = {
+  args: { kind: 'reply', containerWidth: 320, unread: true },
+  parameters: {
+    relay: {
+      operationResponses: {
+        NotificationListItemStoriesQuery: {
+          data: {
+            node: {
+              ...replyPost,
+              profile: { ...author, displayName: '아주 긴 이름으로 우주를 여행하는 별빛 여행자' },
+            },
+            composer: profile({ id: 'notification-viewer' }),
+          },
+        },
+      },
+    },
+  },
+};
+
+export const LongContent: Story = {
+  args: {
+    kind: 'reaction',
+    grouped: true,
+    name: '아주 긴 표시 이름을 사용하는 머나먼 은하의 여행자',
+    timestamp: '2026년 9월 7일',
+    bodyText: '긴 첫 번째 줄입니다. '.repeat(20) + '\n두 번째 줄입니다.',
+    hasMedia: true,
+    containerWidth: 320,
+  },
+};
+
+export const ProtectedContent: Story = {
+  parameters: { controls: { disable: true } },
+  render: (args) => (
+    <View>
+      <NotificationExample
+        {...args}
+        kind="reaction"
+        hasMedia
+        contentWarning="내용 확인에 주의가 필요합니다"
+      />
+      <NotificationExample {...args} kind="repost" hasMedia sensitiveMedia />
+      <NotificationExample {...args} kind="reaction" unavailable />
+    </View>
+  ),
+};
+
+export const ReadAndUnavailableStates: Story = {
+  parameters: { controls: { disable: true } },
+  render: (args) => (
+    <View>
+      <NotificationExample {...args} unread={false} name="읽은 알림" />
+      <NotificationExample {...args} unread />
+      <NotificationExample {...args} pending name="이동 처리 중" />
+      <NotificationExample {...args} disabled name="더 이상 접근할 수 없는 알림" />
+    </View>
+  ),
+};
+
+export const ActivationContract: Story = {
+  args: { kind: 'followRequest' },
+  parameters: { controls: { disable: true } },
+  play: async ({ args, canvasElement }) => {
+    args.onNavigate.mockClear();
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: /팔로우 요청 관리 화면으로 이동/ });
+    await expect(link).toHaveAttribute('href', '/follow-requests');
+    await expect(canvas.queryByRole('button', { name: /수락/ })).not.toBeInTheDocument();
+    await userEvent.tab();
+    await expect(link).toHaveFocus();
+    await expect(link).toHaveStyle({ outlineWidth: '2px' });
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onNavigate).toHaveBeenCalledOnce();
+  },
+};
+
+function PendingExample(args: Args) {
+  const [pending, setPending] = useState(false);
+  return (
+    <NotificationListItemView
+      actors={[{ id: 'pending-actor', name: args.name }]}
+      href="/@kosmo"
+      kind="follow"
+      onNavigate={() => {
+        args.onNavigate();
+        setPending(true);
+      }}
+      pending={pending}
+      timestamp={args.timestamp}
+    />
+  );
+}
+
+export const PendingContract: Story = {
+  parameters: { controls: { disable: true } },
+  render: (args) => <PendingExample {...args} />,
+  play: async ({ args, canvasElement }) => {
+    args.onNavigate.mockClear();
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('link'));
+    const pending = canvas.getByRole('link');
+    await expect(pending).toHaveAttribute('aria-busy', 'true');
+    await expect(pending).toHaveAttribute('aria-disabled', 'true');
+    await expect(pending).not.toHaveAttribute('href');
+    await expect(pending).toHaveStyle({ pointerEvents: 'none' });
+    fireEvent.click(pending);
+    await expect(args.onNavigate).toHaveBeenCalledOnce();
+  },
+};
+
+export const CompositionContract: Story = {
+  parameters: { controls: { disable: true } },
+  render: (args) => (
+    <View>
+      <View testID="reaction-notification">
+        <NotificationExample {...args} kind="reaction" grouped hasMedia unread />
+      </View>
+      <View testID="reply-notification">
+        <NotificationExample {...args} kind="reply" unread />
+      </View>
+    </View>
+  ),
+  play: async ({ args, canvasElement }) => {
+    args.onNavigate.mockClear();
+    const canvas = within(canvasElement);
+    const reaction = within(canvas.getByTestId('reaction-notification'));
+    const surface = reaction.getByTestId('notification-item-surface');
+    const excerpt = reaction.getByText(args.bodyText);
+    const unreadBackground = getComputedStyle(surface).backgroundColor;
+    await expect(unreadBackground).not.toBe('rgba(0, 0, 0, 0)');
+    await userEvent.hover(excerpt);
+    await expect(getComputedStyle(surface).backgroundColor).toBe(unreadBackground);
+    await expect(reaction.getByTestId('notification-hover-overlay')).toHaveStyle({
+      pointerEvents: 'none',
+    });
+    await userEvent.click(excerpt);
+    await expect(args.onNavigate).toHaveBeenCalledOnce();
+    await userEvent.click(reaction.getByTestId('post-media-frame-notification-thumbnail'));
+    await expect(args.onNavigate).toHaveBeenCalledTimes(2);
+    await userEvent.unhover(excerpt);
+    await expect(reaction.getByText(/외 3명/)).toBeInTheDocument();
+    await expect(reaction.queryByRole('button')).not.toBeInTheDocument();
+    await expect(reaction.getByTestId('post-media-frame-notification-thumbnail')).toHaveStyle({
+      width: '64px',
+      height: '64px',
+    });
+    const reply = within(canvas.getByTestId('reply-notification'));
+    const replySurface = reply.getByTestId('notification-item-surface');
+    const replyPost = reply.getByTestId('reply-notification-post');
+    await expect(reply.getByTestId('notification-reason')).toBeVisible();
+    await expect(reply.getByTestId('notification-reason')).toHaveTextContent(
+      /^회원님의 게시글에 답글을 남겼습니다$/,
+    );
+    await expect(reply.getAllByText('별빛여행자')).toHaveLength(1);
+    await expect(reply.queryByText(/원글 작성자/)).not.toBeInTheDocument();
+    await expect(reply.queryByRole('link', { name: /답글을 남겼습니다/ })).not.toBeInTheDocument();
+    await expect(reply.getByText('읽지 않은 알림')).toBeInTheDocument();
+    await expect(replySurface).toContainElement(replyPost);
+    await expect(getComputedStyle(replySurface).backgroundColor).toBe(unreadBackground);
+    await userEvent.hover(replyPost);
+    await expect(getComputedStyle(replySurface).backgroundColor).toBe(unreadBackground);
+    await expect(reply.getByTestId('notification-hover-overlay')).toBeInTheDocument();
+    const action = await reply.findByRole('button', { name: '답글' });
+    await expect(action.closest('a')).toBeNull();
+    await expect(reply.getByTestId('reply-notification-post')).toBeInTheDocument();
+    await expect(reply.getByRole('button', { name: /더 보기/ })).toBeInTheDocument();
+    await userEvent.click(reply.getByRole('button', { name: /더 보기/ }));
+    await expect(args.onNavigate).toHaveBeenCalledTimes(2);
+  },
+};
+
+export const ReplyLayoutContract: Story = {
+  ...ReplyLongName,
+  parameters: { ...ReplyLongName.parameters, controls: { disable: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const author = canvas.getByTestId('notification-post-author');
+    const name = within(author).getByText('아주 긴 이름으로 우주를 여행하는 별빛 여행자');
+    const handle = within(author).getByText('@starlight');
+    await expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
+    await expect(handle.getBoundingClientRect().width).toBeLessThanOrEqual(1);
+    await expect(name.getBoundingClientRect().right).toBeLessThanOrEqual(
+      author.getBoundingClientRect().right,
+    );
+    await expect(canvas.getByTestId('notification-reason')).toBeVisible();
+    await expect(canvas.getByRole('toolbar', { name: '액션 바' })).toBeVisible();
+    await userEvent.tab();
+    await expect(author).toHaveFocus();
+    await userEvent.tab();
+    await expect(document.activeElement).toHaveAttribute(
+      'href',
+      '/@starlight/notification-reply-post',
+    );
+  },
+};
+
+export const ReplyQuoteContract: Story = {
+  args: { kind: 'reply' },
+  parameters: {
+    controls: { disable: true },
+    relay: {
+      operationResponses: {
+        NotificationListItemStoriesQuery: {
+          data: {
+            node: {
+              ...replyPost,
+              repostSource: {
+                ...post({
+                  id: 'quoted-post',
+                  profile: profile({ id: 'notification-quoted-author' }),
+                  bodyText: '답글이 인용한 게시글 본문입니다.',
+                }),
+                viewerReactions: [],
+              },
+            },
+            composer: profile({ id: 'notification-viewer' }),
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getAllByTestId('notification-reason')).toHaveLength(1);
+    await expect(canvas.getByText('답글이 인용한 게시글 본문입니다.')).toBeVisible();
+    await expect(canvas.queryByText(/원글 작성자/)).not.toBeInTheDocument();
+    await expect(canvas.getAllByRole('toolbar', { name: '액션 바' })).toHaveLength(1);
+  },
+};
+
+export const ProtectionContract: Story = {
+  ...ProtectedContent,
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('내용 경고: 내용 확인에 주의가 필요합니다')).toBeInTheDocument();
+    await expect(canvas.getByText('게시글을 볼 수 없습니다')).toBeInTheDocument();
+    await expect(
+      canvas.queryByTestId('post-media-image-notification-thumbnail'),
+    ).not.toBeInTheDocument();
+    await expect(canvas.getAllByText(args.bodyText)).toHaveLength(1);
+  },
+};
+
+export const ReplyActionsContract: Story = {
+  args: { kind: 'reply' },
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    controls: { disable: true },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const reply = canvas.getByRole('button', { name: '답글' });
+    await userEvent.click(reply);
+    const composer = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    await expect(within(composer).getByRole('textbox', { name: '답글 본문' })).toHaveFocus();
+    await userEvent.click(within(composer).getByRole('button', { name: '닫기' }));
+    const confirm = await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' });
+    await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
+    await expect(reply).toHaveFocus();
+
+    resetClipboardMock();
+    await userEvent.click(canvas.getByRole('button', { name: '더 보기' }));
+    const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '링크 복사' }));
+    await waitFor(() =>
+      expect(getCopiedStrings()).toEqual([
+        `${window.location.origin}/@starlight/notification-reply-post`,
+      ]),
+    );
+    await userEvent.click(canvas.getByRole('button', { name: '더 보기' }));
+    const reopenedMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    await expect(within(reopenedMenu).queryByRole('menuitem', { name: '게시글 삭제' })).toBeNull();
+  },
+};

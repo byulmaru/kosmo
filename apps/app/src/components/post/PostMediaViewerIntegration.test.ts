@@ -5,6 +5,8 @@ import { act, create } from 'react-test-renderer';
 import type { PropsWithChildren, ReactElement, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { ReplyNotificationPost_post$key } from '@/components/notification/__generated__/ReplyNotificationPost_post.graphql';
+import type { ReplyNotificationPost as ReplyNotificationPostComponent } from '@/components/notification/ReplyNotificationPost';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostLayout as PostLayoutComponent } from './PostLayout';
@@ -95,6 +97,10 @@ mock.module('@/components/profile/ProfileNameBlock', {
     ProfileNameBlock: (props: Record<string, unknown>) =>
       createElement('ProfileNameBlock', { ...props, testID: 'profile-name-block' }),
   },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('@/components/shell/NavigationLink', {
+  exports: { NavigationLink: ({ children }: { children?: unknown }) => children },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/components/ui/Avatar', {
@@ -232,6 +238,7 @@ let HostProvider: typeof HostProviderComponent;
 let ScreenFallbackProvider: typeof ScreenFallbackProviderComponent;
 let PostLayout: typeof PostLayoutComponent;
 let PostListItem: typeof PostListItemComponent;
+let ReplyNotificationPost: typeof ReplyNotificationPostComponent;
 
 before(async () => {
   ({
@@ -240,6 +247,7 @@ before(async () => {
   } = await import('./PostMediaViewerHost'));
   ({ PostLayout } = await import('./PostLayout'));
   ({ PostListItem } = await import('./PostListItem'));
+  ({ ReplyNotificationPost } = await import('@/components/notification/ReplyNotificationPost'));
 });
 
 afterEach(async () => {
@@ -299,6 +307,32 @@ describe('Post Media Viewer Host production wiring', () => {
     assert.equal(viewerThread.props.mediaOwnerPostId, 'source');
     assert.equal(viewerThread.props.replyAvailable, false);
     assert.equal(viewerThread.props.replySurfacePostId, 'repost');
+  });
+
+  it('Reply 알림의 Media identity와 focus 복귀를 유지한다', async () => {
+    let focused = false;
+    const originControl = {
+      current: {
+        focus: () => {
+          focused = true;
+        },
+      },
+    };
+    const post = storyPost('reply-notification', 'reply-content');
+    queryPosts.set(post.id, hostPost(post));
+    await renderHost(
+      createElement(ReplyNotificationPost, {
+        post: post as unknown as ReplyNotificationPost_post$key,
+      }),
+    );
+    await openFromBody(originControl, 1);
+    assert.equal(queriedSurfacePostId, post.id);
+    assert.equal(currentImage().props.source.uri, 'https://media.example/reply-content-2.webp');
+    await closeViewer();
+    await act(async () => {
+      animationFrames.splice(0).forEach((callback) => callback(0));
+    });
+    assert.equal(focused, true);
   });
 
   it('Relay actor generation이 바뀌면 열린 Viewer와 이전 query projection을 닫는다', async () => {

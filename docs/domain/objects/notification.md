@@ -91,6 +91,27 @@ Repost Notification의 Source Repost는 알림을 만든 원인 Repost Post다. 
 | Followee Post     | Follower Profile              | Related Post, Followee인 Related Profile, Related Follow Relationship |
 | Operational       | Account                       | 운영 메시지                                                           |
 
+### Reply/Mention 수신자별 분류와 중복 처리 (Future)
+
+2026-09-08 사용자 승인으로 확정한 후속 Mention 구현 계약이다. Mention은 도메인 Type으로
+정의되어 있으나 현재 API·알림 생성·inbox 통합의 완료를 의미하지 않는다. 후속 구현 전 담당 Linear
+이슈와 필요한 OpenSpec scenario에 아래 정책을 연결하고 검증한다.
+
+- 분류 기준은 해당 Post가 답글인지 여부만이 아니라 각 Recipient와 원인 Post의 관계다.
+- Mention의 source와 Related Post는 Recipient를 멘션한 원인 Post이며, Related Profile은 그 Post의
+  Author Profile이다. 같은 원인 Post에서 같은 Recipient를 여러 번 멘션해도 source는 하나이며,
+  동일 source·Recipient 쌍에 Mention Notification은 최대 하나만 존재한다.
+- Recipient의 Post에 답하면서 같은 Recipient를 멘션한 경우, 같은 원인 Post에 대해 해당 Recipient에게
+  Reply Notification 하나만 생성하고 Mention Notification을 중복 생성하지 않는다.
+- 타인의 Post에 답하면서 Recipient를 멘션한 경우, 해당 Recipient에게는 Mention Notification이다.
+  그 글이 Reply라는 이유만으로 해당 Recipient의 Mention을 Reply로 바꾸거나 제외하지 않는다.
+- 여러 Profile이 멘션되면 각 Recipient별로 분류한다. 같은 Post가 원글 작성자에게는 Reply,
+  다른 Mentioned Profile에게는 Mention의 원인이 될 수 있다. 각 Recipient의 조회·생성 억제 정책은
+  그대로 적용한다.
+
+표시 문구와 원글 미리보기 여부는 [Notification presentation](../../design/notifications.md)이
+소유하며, 알림 UI의 구성만으로 Related Post나 Recipient 관계를 바꾸지 않는다.
+
 ## 권한
 
 | 권한                        | 종류      | 성립 조건                                                                                    |

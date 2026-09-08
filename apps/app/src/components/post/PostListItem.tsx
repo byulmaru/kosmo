@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle } from 'lucide-react-native';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -8,14 +8,11 @@ import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
-import { usePostReplyBinding } from './PostReplyCoordinator';
+import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
-import { ReplyComposerSurface } from './ReplyComposerSurface';
-import { getReplyProcessingState } from './replySurface';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
@@ -84,7 +81,7 @@ const PostListItemFragment = graphql`
         displayName
       }
     }
-    ...ReplyComposerSurface_parent @alias(as: "replySurface")
+    ...PostReplySurface_post
     ...PostActionSurface_post @alias(as: "actionSurface")
     ...PostSourcePresentationView_post
     repostSource {
@@ -107,47 +104,11 @@ export function PostListItem({
   const [deleted, setDeleted] = useState(false);
   const post = useFragment(PostListItemFragment, postKey);
   const openViewer = usePostMediaViewerHost();
-  const replyBinding = usePostReplyBinding(post.id);
   const onDeleted = useCallback(() => setDeleted(true), []);
-  const replyAuthentication = usePostActionAuthentication(Boolean(post.content));
+  const { reply, replySurface, owner: replyOwner } = usePostReplySurface(post);
   const profileHref = `/${post.profile.relativeHandle}` as const;
-  const replyTriggerRef = useRef<View>(null);
-  const reply = replyBinding
-    ? {
-        accessibilityLabel: '답글',
-        controlRef: replyTriggerRef,
-        expanded: replyAuthentication.execution.kind === 'enabled' && replyBinding.expanded,
-        onPress: () => {
-          if (replyAuthentication.execution.kind === 'resolution-required') {
-            replyAuthentication.resolve(replyAuthentication.execution.reason);
-          } else if (replyAuthentication.execution.kind === 'enabled') {
-            replyBinding.onPress();
-          }
-        },
-        processing: getReplyProcessingState(
-          replyAuthentication.execution,
-          Boolean(replyBinding.profile),
-        ),
-      }
-    : undefined;
-  const replySurface =
-    replyAuthentication.execution.kind === 'enabled' &&
-    replyBinding?.profile &&
-    post.content &&
-    post.replySurface ? (
-      <ReplyComposerSurface
-        ref={replyBinding.surfaceRef}
-        onPostCreated={replyBinding.onPostCreated}
-        onRequestClose={replyBinding.onRequestClose}
-        open={replyBinding.expanded}
-        owner={replyBinding.owner}
-        parent={post.replySurface}
-        profile={replyBinding.profile}
-        triggerRef={replyTriggerRef}
-      />
-    ) : null;
   const presentedReplySurface =
-    replySurface && replyBinding?.owner === 'detail' ? (
+    replySurface && replyOwner === 'detail' ? (
       <View style={styles.detailReplySurface}>{replySurface}</View>
     ) : (
       replySurface
