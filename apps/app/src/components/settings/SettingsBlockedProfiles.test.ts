@@ -134,7 +134,7 @@ describe('차단한 프로필 목록', () => {
       '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.',
     );
     assert.equal(find('ModalSheet')?.props.title, '이 프로필의 차단을 해제할까요?');
-    assert.equal(confirmation?.props.tone, 'danger');
+    assert.equal(confirmation?.props.tone, 'primary');
 
     await act(async () => {
       confirmation?.props.onConfirm();
@@ -197,9 +197,44 @@ describe('차단한 프로필 목록', () => {
       );
     });
     assert.equal(findAll('ProfileListItemContent').length, 1);
-    const retry = findAll('Button').find((node) => node.children.includes('더 불러오기'));
-    await act(async () => retry?.props.onPress());
+    const error = find('StateView');
+    assert.equal(error?.props.alert, true);
+    assert.equal(error?.props.title, '프로필을 더 불러오지 못했어요');
+    assert.equal(error?.props.actionLabel, '더 불러오기');
+    await act(async () => error?.props.onAction());
     assert.equal(retries, 1);
+  });
+
+  it('최초 조회 오류를 alert와 재시도 action으로 전달한다', async () => {
+    let retries = 0;
+    await act(async () => {
+      renderer = create(
+        createElement(BlockedProfilesView, {
+          onUnblock: async () => undefined,
+          state: { status: 'error', onRetry: () => (retries += 1) },
+        }),
+      );
+    });
+
+    const error = find('StateView');
+    assert.equal(error?.props.alert, true);
+    assert.equal(error?.props.title, '차단한 프로필을 불러오지 못했어요');
+    assert.equal(error?.props.actionLabel, '다시 시도');
+    await act(async () => error?.props.onAction());
+    assert.equal(retries, 1);
+  });
+
+  it('route heading을 목록 내부에서 중복 렌더링하지 않는다', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(BlockedProfilesView, {
+          onUnblock: async () => undefined,
+          state: { pagination: { status: 'end' }, profiles: [], status: 'loaded' },
+        }),
+      );
+    });
+
+    assert.equal(findAll('Text').length, 0);
   });
 
   it('마지막 항목 해제 뒤 모달 dismiss가 끝난 다음 목록 제목에 포커스를 복원한다', async () => {
@@ -217,8 +252,10 @@ describe('차단한 프로필 목록', () => {
         }),
         {
           createNodeMock: (element) => {
-            const props = element.props as { accessibilityRole?: string };
-            return element.type === 'View' && props.accessibilityRole === 'header' ? { focus } : {};
+            const props = element.props as { accessibilityLabel?: string };
+            return element.type === 'View' && props.accessibilityLabel === '차단한 프로필 목록'
+              ? { focus }
+              : {};
           },
         },
       );
