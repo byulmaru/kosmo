@@ -170,14 +170,14 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsProfileDetail').length, 1);
   });
 
-  it('full Web mute category는 완료된 관리 entry와 공통 master를 연결한다', async () => {
+  it('full Web mute category는 데이터 연결 전에 master entry를 선택하지 않는다', async () => {
     await renderRoute('/settings/mute-and-block', SettingsMuteAndBlockRoute);
 
     assert.deepEqual(
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '뮤트 및 차단'],
     );
-    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, undefined);
     assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
   });
 
@@ -298,7 +298,8 @@ describe('Settings routes', () => {
     );
 
     await act(async () => header.props.leading.props.onPress());
-    assert.equal(backCalls, 1);
+    assert.equal(backCalls, 0);
+    assert.deepEqual(replacedPaths, ['/settings']);
   });
 
   it('compact Web detail은 route-owned back header로 Settings root를 연다', async () => {
@@ -337,7 +338,8 @@ describe('Settings routes', () => {
     assert.equal(style.width, 44);
     assert.deepEqual(back.props.hitSlop, { bottom: 2, left: 2, right: 2, top: 2 });
     await act(async () => back.props.onPress());
-    assert.equal(backCalls, 1);
+    assert.equal(backCalls, 0);
+    assert.deepEqual(replacedPaths, ['/settings']);
   });
 
   it('Native root는 route-owned 설정 heading을 표시한다', async () => {

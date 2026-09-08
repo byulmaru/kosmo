@@ -55,7 +55,7 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let SettingsNavigationList: ComponentType<{
-  selected?: 'default-post-visibility' | 'mute-and-block';
+  selected?: 'default-post-visibility';
 }>;
 let renderer: ReactTestRenderer | null = null;
 
@@ -71,11 +71,11 @@ afterEach(async () => {
 });
 
 describe('SettingsNavigationList', () => {
-  it('승인된 외부 Account와 내부 Profile entry만 이 순서로 제공한다', async () => {
+  it('실제 데이터가 연결된 설정 진입점만 제공한다', async () => {
     await render();
 
     const links = rendered('Pressable');
-    assert.equal(links.length, 3);
+    assert.equal(links.length, 2);
     assert.equal(
       links[0].props.accessibilityLabel,
       'Byulmaru ID Account Settings 외부 서비스로 이동',
@@ -83,9 +83,7 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[0].props.href, 'https://id.byulmaru.co');
     assert.equal(links[1].props.accessibilityLabel, '게시물 기본 공개 범위 설정 열기');
     assert.equal(links[1].props.href, '/settings/default-post-visibility');
-    assert.equal(links[2].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
-    assert.equal(links[2].props.href, '/settings/mute-and-block');
-    assert.deepEqual(texts(), ['계정 설정', '게시물 기본 공개 범위', '뮤트 및 차단']);
+    assert.deepEqual(texts(), ['계정 설정', '게시물 기본 공개 범위']);
   });
 
   it('full master가 표시한 내부 detail만 current destination으로 전달한다', async () => {
@@ -95,17 +93,9 @@ describe('SettingsNavigationList', () => {
     assert.equal(internal.props['aria-current'], 'page');
     assert.deepEqual(internal.props.accessibilityState, { selected: true });
   });
-
-  it('뮤트 및 차단 master destination을 current로 표시한다', async () => {
-    await render('mute-and-block');
-
-    const internal = rendered('Pressable')[2];
-    assert.equal(internal.props['aria-current'], 'page');
-    assert.deepEqual(internal.props.accessibilityState, { selected: true });
-  });
 });
 
-async function render(selected?: 'default-post-visibility' | 'mute-and-block') {
+async function render(selected?: 'default-post-visibility') {
   await act(async () => {
     renderer = create(createElement(SettingsNavigationList, { selected }));
   });
