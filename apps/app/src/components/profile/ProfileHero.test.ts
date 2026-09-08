@@ -326,6 +326,36 @@ describe('ProfileHero media presentation', () => {
   });
 });
 
+describe('ProfileHero 관리 메뉴 조립', () => {
+  it('기존 링크 복사와 호출자가 제공한 항목을 하나의 뮤트 메뉴에 합친다', async () => {
+    fragmentData = baseProfile;
+    await act(async () => {
+      renderer = create(
+        createElement(ProfileHero, {
+          menuItems: [
+            {
+              icon: 'Ban',
+              key: 'block',
+              label: '차단',
+              onSelect: () => undefined,
+              tone: 'danger',
+            },
+          ],
+          mute: { muted: false, onChangeMuted: async () => undefined },
+          profile: {} as never,
+        }),
+      );
+    });
+    assert.ok(renderer);
+
+    const menu = renderer.root.find((node) => (node.type as unknown) === 'ProfileMuteAction');
+    assert.deepEqual(
+      menu.props.items.map((item: { key: string }) => item.key),
+      ['copy-profile-link', 'block'],
+    );
+  });
+});
+
 describe('ProfileHero Profile Tag presentation', () => {
   it('빈 Profile Tag 목록은 섹션을 렌더하지 않는다', async () => {
     await renderProfile(baseProfile);

@@ -132,6 +132,7 @@ describe('차단한 프로필 목록', () => {
       '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.',
     );
     assert.equal(find('ModalSheet')?.props.title, '이 프로필의 차단을 해제할까요?');
+    assert.equal(confirmation?.props.tone, 'danger');
 
     await act(async () => {
       confirmation?.props.onConfirm();

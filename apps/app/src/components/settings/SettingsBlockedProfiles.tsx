@@ -312,6 +312,7 @@ export function BlockedProfilesView({
           onCancel={close}
           onConfirm={() => void requestUnblock()}
           pending={pending}
+          tone="danger"
         />
       </ModalSheet>
     </ScrollView>

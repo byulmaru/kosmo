@@ -232,6 +232,7 @@ function ProfileLayoutContent({
         onCancel={closeConfirmation}
         onConfirm={() => void requestChange()}
         pending={pending}
+        tone="danger"
       />
     </ModalSheet>
   );
