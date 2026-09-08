@@ -49,13 +49,12 @@ export default function HomeScreen() {
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
   const profileMuteTimelineRevision = shellChrome?.profileMuteTimelineRevision ?? 0;
-  const handleHomeRefresh = useCallback(() => routeBoundaryRef.current?.refetch(), []);
   const handleHomeReselection = useCallback(() => {
     if (Platform.OS === 'web') {
       window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
     }
-    handleHomeRefresh();
-  }, [handleHomeRefresh]);
+    routeBoundaryRef.current?.refetch();
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !registerHomeReselection) {
@@ -79,10 +78,7 @@ export default function HomeScreen() {
         ref={routeBoundaryRef}
         title="홈을 불러오지 못했어요"
       >
-        <HomeRouteContent
-          key={profileMuteTimelineRevision}
-          profileMuteTimelineRevision={profileMuteTimelineRevision}
-        />
+        <HomeRouteContent key={profileMuteTimelineRevision} />
       </RouteBoundary>
     </HomeFrame>
   );
@@ -123,11 +119,7 @@ type HomeLastSuccessful = {
   data: HomePageQuery$data;
 };
 
-function HomeRouteContent({
-  profileMuteTimelineRevision,
-}: {
-  profileMuteTimelineRevision: number;
-}) {
+function HomeRouteContent() {
   const { fetchKey, refetch } = useRouteBoundary();
   const lastSuccessfulHomeRef = useRef<HomeLastSuccessful | null>(null);
 
@@ -136,7 +128,6 @@ function HomeRouteContent({
       fetchKey={fetchKey}
       lastSuccessfulHomeRef={lastSuccessfulHomeRef}
       onRetry={refetch}
-      profileMuteTimelineRevision={profileMuteTimelineRevision}
     />
   );
 }
@@ -145,12 +136,10 @@ function HomeContentBoundary({
   fetchKey,
   lastSuccessfulHomeRef,
   onRetry,
-  profileMuteTimelineRevision,
 }: {
   fetchKey: number;
   lastSuccessfulHomeRef: MutableRefObject<HomeLastSuccessful | null>;
   onRetry: () => void;
-  profileMuteTimelineRevision: number;
 }) {
   const reportUnexpectedError = useUnexpectedErrorReporter();
 
@@ -185,11 +174,7 @@ function HomeContentBoundary({
       }}
       resetKeys={[fetchKey]}
     >
-      <HomeContent
-        fetchKey={fetchKey}
-        lastSuccessfulHomeRef={lastSuccessfulHomeRef}
-        profileMuteTimelineRevision={profileMuteTimelineRevision}
-      />
+      <HomeContent fetchKey={fetchKey} lastSuccessfulHomeRef={lastSuccessfulHomeRef} />
     </ErrorBoundary>
   );
 }
@@ -197,12 +182,12 @@ function HomeContentBoundary({
 function HomeContent({
   fetchKey,
   lastSuccessfulHomeRef,
-  profileMuteTimelineRevision,
 }: {
   fetchKey: number;
   lastSuccessfulHomeRef: MutableRefObject<HomeLastSuccessful | null>;
-  profileMuteTimelineRevision: number;
 }) {
+  const shellChrome = useShellChrome();
+  const profileMuteTimelineRevision = shellChrome?.profileMuteTimelineRevision ?? 0;
   const data = useLazyLoadQuery<HomePageQuery>(
     HomeQuery,
     {},
