@@ -34,6 +34,17 @@ export const TargetGeometryContract: Story = {
   },
 };
 
+export const CompositionOwnershipContract: Story = {
+  ...unmute,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const heading = canvas.getByRole('heading', { name: '뮤트한 프로필' });
+    const list = canvas.getByTestId('muted-profile-list');
+
+    expect(list.contains(heading)).toBe(false);
+  },
+};
+
 export const UnmuteContract: Story = {
   ...unmute,
   play: async ({ args, canvasElement }) => {
