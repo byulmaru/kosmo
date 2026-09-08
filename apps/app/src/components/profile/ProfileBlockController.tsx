@@ -254,6 +254,7 @@ export function useProfileBlockMutations() {
                   return;
                 }
                 finish();
+                scheduleRefresh();
               },
               onError: (error) => {
                 if (!isCurrent()) {

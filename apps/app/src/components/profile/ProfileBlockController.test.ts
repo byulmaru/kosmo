@@ -165,6 +165,29 @@ describe('ProfileBlockController', () => {
     await request;
     await flushTasks();
     assert.equal(commitUpdateCalls, 1);
+    assert.deepEqual(resetCalls, ['owner-a']);
+  });
+
+  it('selected actor 전환 뒤 도착한 unblock 응답은 cache와 actor를 갱신하지 않는다', async () => {
+    await renderController();
+    const request = controller?.changeBlocked(
+      { handle: '@target', ownerProfileId: 'owner-a', profileBlockId: 'block-a' },
+      false,
+    );
+    assert.ok(request);
+    assert.ok(unblockMutation);
+
+    selectedProfileId = 'owner-b';
+    generationRef.current = 2;
+    await act(async () => {
+      renderer?.update(createElement(Harness, { onReady: (value) => (controller = value) }));
+    });
+
+    unblockMutation.onCompleted?.({ unblockProfile: { profileBlockId: 'block-a' } }, null);
+
+    await assert.rejects(request, /inactive Profile/);
+    await flushTasks();
+    assert.equal(commitUpdateCalls, 0);
     assert.deepEqual(resetCalls, []);
   });
 

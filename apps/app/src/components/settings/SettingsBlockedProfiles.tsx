@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { useProfileBlockMutations } from '@/components/profile/ProfileBlockController';
 import { StaleProfileBlockRequestError } from '@/components/profile/profileBlockErrors';
@@ -12,8 +12,7 @@ import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
-import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, space, textStyles } from '@/theme/tokens';
+import { space } from '@/theme/tokens';
 import type { SettingsBlockedProfiles_profile$key } from './__generated__/SettingsBlockedProfiles_profile.graphql';
 import type { SettingsBlockedProfilesNextPageQuery } from './__generated__/SettingsBlockedProfilesNextPageQuery.graphql';
 import type { SettingsBlockedProfilesQuery } from './__generated__/SettingsBlockedProfilesQuery.graphql';
@@ -153,14 +152,13 @@ export function BlockedProfilesView({
   onUnblock: (profileBlockId: string) => Promise<void>;
   state: BlockedProfilesState;
 }) {
-  const theme = useTheme();
   const { showToast } = useToast();
   const [selected, setSelected] = useState<BlockedProfile | null>(null);
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
   const mounted = useRef(true);
   const cancelRef = useRef<View>(null);
-  const headingRef = useRef<View>(null);
+  const listRef = useRef<View>(null);
   const actionRefs = useRef(new Map<string, View>());
   const removedFocus = useRef<{ index: number; profileBlockId: string } | null>(null);
   const selectedForFocus = useRef<BlockedProfile | null>(null);
@@ -192,7 +190,7 @@ export function BlockedProfilesView({
     if (next) {
       actionRefs.current.get(next.profileBlockId)?.focus();
     } else {
-      headingRef.current?.focus();
+      listRef.current?.focus();
     }
     return true;
   };
@@ -239,72 +237,66 @@ export function BlockedProfilesView({
 
   return (
     <ScrollView contentContainerStyle={styles.root}>
-      <View accessibilityRole="header" ref={headingRef} tabIndex={-1}>
-        <Text
-          style={[
-            styles.heading,
-            { borderColor: theme.borderDefault, color: theme.foregroundPrimary },
-          ]}
-        >
-          차단한 프로필
-        </Text>
-      </View>
-      {state.status === 'loading' ? (
-        <StateView loading title="차단한 프로필을 불러오는 중입니다." />
-      ) : state.status === 'error' ? (
-        <View style={styles.pagination}>
-          <Button onPress={state.onRetry} tone="secondary">
-            다시 시도
-          </Button>
-        </View>
-      ) : state.profiles.length === 0 && state.pagination.status === 'end' ? (
-        <StateView title="차단한 프로필이 없어요" />
-      ) : (
-        <>
-          {state.profiles.map((profile) => (
-            <ProfileListItemContent
-              avatarLabel={profile.displayName}
-              displayName={profile.displayName}
-              key={profile.profileBlockId}
-              style={styles.row}
-            >
-              <Button
-                accessibilityLabel={`${profile.displayName} 차단 해제`}
-                controlRef={(node) => {
-                  if (node) {
-                    actionRefs.current.set(profile.profileBlockId, node);
-                  } else {
-                    actionRefs.current.delete(profile.profileBlockId);
-                  }
-                }}
-                onPress={() => {
-                  selectedForFocus.current = profile;
-                  setSelected(profile);
-                }}
-                size="compact"
-                tone="secondary"
+      <View accessibilityLabel="차단한 프로필 목록" ref={listRef} tabIndex={-1}>
+        {state.status === 'loading' ? (
+          <StateView loading title="차단한 프로필을 불러오는 중입니다." />
+        ) : state.status === 'error' ? (
+          <StateView
+            actionLabel="다시 시도"
+            alert
+            onAction={state.onRetry}
+            title="차단한 프로필을 불러오지 못했어요"
+          />
+        ) : state.profiles.length === 0 && state.pagination.status === 'end' ? (
+          <StateView title="차단한 프로필이 없어요" />
+        ) : (
+          <>
+            {state.profiles.map((profile) => (
+              <ProfileListItemContent
+                avatarLabel={profile.displayName}
+                displayName={profile.displayName}
+                key={profile.profileBlockId}
+                style={styles.row}
               >
-                차단 해제
-              </Button>
-            </ProfileListItemContent>
-          ))}
-          {state.pagination.status === 'error' ? (
-            <View style={styles.pagination}>
-              <Button onPress={state.pagination.onRetry} tone="secondary">
-                더 불러오기
-              </Button>
-            </View>
-          ) : state.pagination.status === 'loading' ? (
-            <StateView loading title="프로필을 더 불러오는 중입니다." />
-          ) : state.pagination.status === 'more' ? (
-            <View style={styles.pagination}>
-              <Button onPress={state.pagination.onLoadMore} tone="secondary">
-                더 불러오기
-              </Button>
-            </View>
-          ) : null}
-        </>
-      )}
+                <Button
+                  accessibilityLabel={`${profile.displayName} 차단 해제`}
+                  controlRef={(node) => {
+                    if (node) {
+                      actionRefs.current.set(profile.profileBlockId, node);
+                    } else {
+                      actionRefs.current.delete(profile.profileBlockId);
+                    }
+                  }}
+                  onPress={() => {
+                    selectedForFocus.current = profile;
+                    setSelected(profile);
+                  }}
+                  size="compact"
+                  tone="secondary"
+                >
+                  차단 해제
+                </Button>
+              </ProfileListItemContent>
+            ))}
+            {state.pagination.status === 'error' ? (
+              <StateView
+                actionLabel="더 불러오기"
+                alert
+                onAction={state.pagination.onRetry}
+                title="프로필을 더 불러오지 못했어요"
+              />
+            ) : state.pagination.status === 'loading' ? (
+              <StateView loading title="프로필을 더 불러오는 중입니다." />
+            ) : state.pagination.status === 'more' ? (
+              <View style={styles.pagination}>
+                <Button onPress={state.pagination.onLoadMore} tone="secondary">
+                  더 불러오기
+                </Button>
+              </View>
+            ) : null}
+          </>
+        )}
+      </View>
       <ModalSheet
         dismissDisabled={pending}
         onClose={close}
@@ -333,7 +325,7 @@ export function BlockedProfilesView({
           onCancel={close}
           onConfirm={() => void requestUnblock()}
           pending={pending}
-          tone="danger"
+          tone="primary"
         />
       </ModalSheet>
     </ScrollView>
@@ -342,7 +334,6 @@ export function BlockedProfilesView({
 
 const styles = StyleSheet.create({
   root: { flexGrow: 1, width: '100%' },
-  heading: { ...textStyles.uiHeadingM, borderBottomWidth: borderWidths[1], padding: space[16] },
   row: { height: 64, paddingVertical: 0 },
   pagination: { alignItems: 'center', padding: space[16] },
 });

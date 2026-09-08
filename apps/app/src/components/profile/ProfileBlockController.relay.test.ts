@@ -150,7 +150,7 @@ describe('ProfileBlockController Relay cache boundary', () => {
 
     assert.deepEqual(connectionNodeIds(), []);
     assert.deepEqual(statusValues(), { blocking: false, profileBlockId: null });
-    assert.deepEqual(resetCalls, []);
+    assert.deepEqual(resetCalls, [ownerProfileId]);
   });
 
   it('해제 응답이 null이면 기존 connection과 status를 보존한다', async () => {

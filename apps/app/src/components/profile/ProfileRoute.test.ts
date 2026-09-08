@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createContext, createElement, useContext } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType, ReactNode, Ref } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { UseAutomaticPaginationResult } from '../pagination/useAutomaticPagination';
 
@@ -45,6 +45,7 @@ let routeMetrics = {
   layoutHeight: 0,
   scrollOffset: 0,
 };
+let relayActorLifecycleKey = 'actor-a';
 let selectedProfileId: string | null = null;
 let profileBlockStatus: { blockedBy: boolean; blocking: boolean; profileBlockId: string | null } = {
   blockedBy: false,
@@ -57,6 +58,8 @@ let profileViewerState: {
 } | null = null;
 const changeBlockedCalls: Array<{ change: object; nextBlocked: boolean }> = [];
 const toastCalls: Array<{ message: string; tone: string }> = [];
+const menuTriggerFocus = mock.fn();
+const stateActionFocus = mock.fn();
 let changeBlockedImpl: (change: object, nextBlocked: boolean) => Promise<void> = async () =>
   undefined;
 
@@ -170,14 +173,17 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     heading,
     loading,
     menuItems,
+    onMenuTriggerReady,
     profile,
   }: {
     action?: ReturnType<typeof createElement>;
     heading?: boolean;
     loading?: boolean;
     menuItems?: readonly object[];
+    onMenuTriggerReady?: (focusTrigger: () => void) => void;
     profile?: { handle: string };
   }) => {
+    onMenuTriggerReady?.(() => menuTriggerFocus());
     return createElement(
       'ProfileHero',
       { heading, identity: loading ? 'loading' : profile?.handle },
@@ -192,9 +198,6 @@ mockModule(new URL('./FollowButton.tsx', import.meta.url), {
 });
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
   ProfileMuteAction: 'ProfileMuteAction',
-});
-mockModule(new URL('./ProfileMuteController.tsx', import.meta.url), {
-  useProfileMuteMutations: () => ({ changeMuted: () => Promise.resolve() }),
 });
 mockModule(new URL('../ui/ActionMenu.tsx', import.meta.url), {
   ActionMenu: (props: object) => createElement('ActionMenu', props),
@@ -224,8 +227,12 @@ mockModule(new URL('./profileBlockErrors.ts', import.meta.url), {
   StaleProfileBlockRequestError: class StaleProfileBlockRequestError extends Error {},
 });
 mockModule(new URL('../ui/Button.tsx', import.meta.url), {
-  Button: ({ children, ...props }: { children: string }) =>
-    createElement('Button', props, children),
+  Button: ({ children, controlRef, ...props }: { children: string; controlRef?: Ref<unknown> }) => {
+    if (controlRef && typeof controlRef === 'object' && 'current' in controlRef) {
+      controlRef.current = { focus: () => stateActionFocus() };
+    }
+    return createElement('Button', props, children);
+  },
 });
 mockModule(new URL('../ui/IconButton.tsx', import.meta.url), {
   IconButton: ({ children, ...props }: { children: ReactNode }) =>
@@ -260,7 +267,7 @@ mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.
   useUnexpectedErrorReporter: () => undefined,
 });
 mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  useRelayActorLifecycleKey: () => 'actor-a',
+  useRelayActorLifecycleKey: () => relayActorLifecycleKey,
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => ({ selectedProfileId }),
@@ -295,11 +302,14 @@ afterEach(async () => {
   queryHistory.length = 0;
   profileAvailable = true;
   profileInstanceKind = 'LOCAL';
+  relayActorLifecycleKey = 'actor-a';
   selectedProfileId = null;
   profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
   profileViewerState = null;
   changeBlockedCalls.length = 0;
   toastCalls.length = 0;
+  menuTriggerFocus.mock.resetCalls();
+  stateActionFocus.mock.resetCalls();
   changeBlockedImpl = async () => undefined;
 });
 
@@ -316,7 +326,7 @@ async function renderRoute(profileHandle: string, routePath = `/profile/${profil
         createElement(
           LocalParamsContext.Provider,
           { value: layoutLocalParams },
-          createElement(ProfileLayout),
+          createElement(ProfileLayout, { key: relayActorLifecycleKey }),
         ),
       );
     } else {
@@ -324,7 +334,7 @@ async function renderRoute(profileHandle: string, routePath = `/profile/${profil
         createElement(
           LocalParamsContext.Provider,
           { value: layoutLocalParams },
-          createElement(ProfileLayout),
+          createElement(ProfileLayout, { key: relayActorLifecycleKey }),
         ),
       );
     }
@@ -623,8 +633,12 @@ describe('profile route parameter lifecycle', () => {
       requireRendered('ConfirmationContent').props.message,
       '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.',
     );
+    assert.equal(requireRendered('ConfirmationContent').props.tone, 'primary');
 
     await act(async () => requireRendered('ConfirmationContent').props.onCancel());
+    assert.equal(stateActionFocus.mock.callCount(), 0);
+    await act(async () => requireRendered('ModalSheet').props.onDismiss());
+    assert.equal(stateActionFocus.mock.callCount(), 1);
     assert.equal(changeBlockedCalls.length, 0);
   });
 
@@ -679,5 +693,71 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(changeBlockedCalls.length, 2);
     assert.equal(requireRendered('ModalSheet').props.visible, false);
     assert.equal(toastCalls.at(-1)?.tone, 'success');
+  });
+
+  it('Profile 메뉴의 차단 확인을 취소하면 더보기 trigger로 포커스를 복원한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    await renderRoute('@target');
+
+    await act(async () => requireRendered('ActionMenu').props.items[0].onSelect());
+    await act(async () => requireRendered('ConfirmationContent').props.onCancel());
+    await act(async () => requireRendered('ModalSheet').props.onDismiss());
+
+    assert.equal(menuTriggerFocus.mock.callCount(), 1);
+  });
+
+  it('Profile 메뉴의 차단 성공 후 actor remount를 넘어 결과 action으로 포커스를 복원한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    changeBlockedImpl = async (_change, nextBlocked) => {
+      if (nextBlocked) {
+        profileAvailable = false;
+        profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+        relayActorLifecycleKey = 'actor-b';
+      }
+    };
+    await renderRoute('@target');
+
+    await act(async () => requireRendered('ActionMenu').props.items[0].onSelect());
+    await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
+    await renderRoute('@target');
+
+    assert.equal(menuTriggerFocus.mock.callCount(), 0);
+    assert.equal(stateActionFocus.mock.callCount(), 0);
+
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+    assert.equal(menuTriggerFocus.mock.callCount(), 0);
+    assert.equal(stateActionFocus.mock.callCount(), 1);
+  });
+
+  it('identity-free 차단 해제 성공 후 actor remount를 넘어 다시 나타난 메뉴로 포커스를 복원한다', async () => {
+    selectedProfileId = 'owner';
+    profileAvailable = false;
+    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    changeBlockedImpl = async (_change, nextBlocked) => {
+      if (!nextBlocked) {
+        profileAvailable = true;
+        profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
+        relayActorLifecycleKey = 'actor-b';
+      }
+    };
+    await renderRoute('@target');
+
+    const action = rendered('Button').find((node) => node.props.accessibilityLabel === '차단 해제');
+    assert.ok(action);
+    await act(async () => action.props.onPress());
+    await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
+    await renderRoute('@target');
+
+    assert.equal(menuTriggerFocus.mock.callCount(), 0);
+    assert.equal(stateActionFocus.mock.callCount(), 0);
+
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+    assert.equal(menuTriggerFocus.mock.callCount(), 1);
+    assert.equal(stateActionFocus.mock.callCount(), 0);
   });
 });
