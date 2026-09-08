@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
@@ -9,12 +9,7 @@ import { ProfileListItemContent } from './ProfileListItemContent';
 import { ProfileMuteAction } from './ProfileMuteAction';
 import type { ProfileMuteFeedback } from './ProfileMuteAction';
 
-export type MutedProfile = {
-  id: string;
-  displayName: string;
-  avatarUri?: string | null;
-  relativeHandle?: string | null;
-};
+export type MutedProfile = { id: string; displayName: string; avatarUri?: string | null };
 type Pagination =
   | { status: 'end' }
   | { status: 'loading' }
@@ -42,7 +37,7 @@ export function MutedProfileList({
   const theme = useTheme();
   const headingRef = useRef<View>(null);
   const listRef = useRef<View>(null);
-  const [unmuteFocusRevision, setUnmuteFocusRevision] = useState(0);
+  const focusAfterUnmute = useRef(false);
   const { showToast } = useToast();
   const loadError =
     state.status === 'error'
@@ -75,10 +70,11 @@ export function MutedProfileList({
     }
   }, [errorMessage, showToast]);
   useEffect(() => {
-    if (unmuteFocusRevision > 0) {
+    if (focusAfterUnmute.current) {
       (headingRef.current ?? listRef.current)?.focus();
+      focusAfterUnmute.current = false;
     }
-  }, [unmuteFocusRevision]);
+  }, [state]);
   const content = (
     <View
       accessibilityLabel="뮤트한 프로필"
@@ -117,7 +113,6 @@ export function MutedProfileList({
               avatarLabel={profile.displayName}
               avatarUri={profile.avatarUri}
               displayName={profile.displayName}
-              relativeHandle={profile.relativeHandle ?? undefined}
               style={styles.row}
             >
               <ProfileMuteAction
@@ -125,9 +120,7 @@ export function MutedProfileList({
                 muted
                 onChangeMuted={() => onUnmute(profile.id)}
                 onFeedback={(feedback) => {
-                  if (feedback.status === 'success') {
-                    setUnmuteFocusRevision((revision) => revision + 1);
-                  }
+                  focusAfterUnmute.current = feedback.status === 'success';
                   onFeedback?.({ ...feedback, profileId: profile.id });
                 }}
                 profileId={profile.id}
