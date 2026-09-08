@@ -1,9 +1,10 @@
-import { useId, useRef, useState } from 'react';
+import { Fragment, useId, useRef, useState } from 'react';
 import { Platform, View } from 'react-native';
 import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
 import { ListboxOption } from '@/components/ui/ListboxOption';
 import { SelectTrigger } from '@/components/ui/SelectTrigger';
-import { colors } from '@/theme/tokens';
+import { useElevation, useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, colors, radius, space } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 type CatalogProps = {
@@ -18,6 +19,8 @@ type CatalogProps = {
 };
 
 function SelectTriggerCatalog({ open, disabled, interactive = false, ...args }: CatalogProps) {
+  const elevation = useElevation();
+  const theme = useTheme();
   const controls = useId();
   const controlRef = useRef<View>(null);
   const [currentOpen, setCurrentOpen] = useState(open);
@@ -52,19 +55,40 @@ function SelectTriggerCatalog({ open, disabled, interactive = false, ...args }: 
           nativeID={controls}
           {...({ role: 'listbox' } as unknown as { role?: never })}
           accessibilityLabel={args.accessibilityLabel}
+          style={[
+            elevation.floating,
+            {
+              backgroundColor: theme.backgroundElevated,
+              borderColor: theme.borderDefault,
+              borderRadius: radius[12],
+              borderWidth: borderWidths[1],
+              gap: space[4],
+              padding: space[4],
+            },
+          ]}
         >
           {interactive ? (
-            choices.map((choice) => (
-              <ListboxOption
-                key={choice}
-                label={choice}
-                selected={currentValue === choice}
-                onSelect={() => {
-                  setCurrentValue(choice);
-                  setCurrentOpen(false);
-                  focusTrigger();
-                }}
-              />
+            choices.map((choice, index) => (
+              <Fragment key={choice}>
+                {index > 0 ? (
+                  <View
+                    testID="select-trigger-option-divider"
+                    style={{
+                      borderTopColor: theme.borderSubtle,
+                      borderTopWidth: borderWidths[1],
+                    }}
+                  />
+                ) : null}
+                <ListboxOption
+                  label={choice}
+                  selected={currentValue === choice}
+                  onSelect={() => {
+                    setCurrentValue(choice);
+                    setCurrentOpen(false);
+                    focusTrigger();
+                  }}
+                />
+              </Fragment>
             ))
           ) : (
             <ListboxOption
