@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
 import { MutedProfileList } from '@/components/profile/MutedProfileList';
+import { useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, space, textStyles } from '@/theme/tokens';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -27,12 +29,21 @@ function Fixture({
   onLoadMore,
   onFeedback,
 }: Props) {
+  const theme = useTheme();
+  const headingRef = useRef<View>(null);
+  const focusAfterRemoval = useRef(false);
   const [removed, setRemoved] = useState<string[]>([]);
   const [requestState, setRequestState] = useState<Props['state'] | 'end' | null>(null);
   useEffect(() => {
     setRemoved([]);
     setRequestState(null);
   }, [state, outcome, displayName]);
+  useEffect(() => {
+    if (focusAfterRemoval.current) {
+      headingRef.current?.focus();
+      focusAfterRemoval.current = false;
+    }
+  }, [removed]);
   useEffect(() => {
     if (outcome === 'pending' || (requestState !== 'loading' && requestState !== 'loadingMore')) {
       return;
@@ -52,6 +63,7 @@ function Fixture({
   }, [requestState, outcome]);
   const visibleState = requestState ?? state;
   const retry = () => {
+    headingRef.current?.focus();
     onRetry();
     setRequestState(visibleState === 'error' ? 'loading' : 'loadingMore');
   };
@@ -59,11 +71,22 @@ function Fixture({
     .map((p, index) => ({ ...p, displayName: index ? p.displayName : displayName }))
     .filter((p) => !removed.includes(p.id));
   return (
-    <View style={{ width: '100%', maxWidth: 640 }}>
+    <ScrollView contentContainerStyle={styles.content} style={styles.frame}>
+      <View accessibilityRole="header" ref={headingRef} tabIndex={-1}>
+        <Text
+          style={[
+            styles.heading,
+            { color: theme.foregroundPrimary, borderColor: theme.borderDefault },
+          ]}
+        >
+          뮤트한 프로필
+        </Text>
+      </View>
       <MutedProfileList
         onFeedback={(event) => {
           onFeedback(event);
           if (event.status === 'success') {
+            focusAfterRemoval.current = true;
             setRemoved((current) => [...current, event.profileId]);
           }
         }}
@@ -101,9 +124,15 @@ function Fixture({
                 }
         }
       />
-    </View>
+    </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  content: { flexGrow: 1, width: '100%' },
+  frame: { maxWidth: 640, width: '100%' },
+  heading: { ...textStyles.uiHeadingM, borderBottomWidth: borderWidths[1], padding: space[16] },
+});
 const meta = {
   args: {
     state: 'loaded',

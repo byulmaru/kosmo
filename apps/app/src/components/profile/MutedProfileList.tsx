@@ -1,10 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
-import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, space, textStyles } from '@/theme/tokens';
+import { space } from '@/theme/tokens';
 import { ProfileListItemContent } from './ProfileListItemContent';
 import { ProfileMuteAction } from './ProfileMuteAction';
 import type { ProfileMuteFeedback } from './ProfileMuteAction';
@@ -22,22 +21,10 @@ export type MutedProfileListState =
 type Props = {
   onFeedback?: (feedback: ProfileMuteFeedback & { profileId: string }) => void;
   onUnmute: (profileId: string) => Promise<void>;
-  showHeading?: boolean;
-  scrollable?: boolean;
   state: MutedProfileListState;
 };
 
-export function MutedProfileList({
-  onFeedback,
-  onUnmute,
-  scrollable = true,
-  showHeading = true,
-  state,
-}: Props) {
-  const theme = useTheme();
-  const headingRef = useRef<View>(null);
-  const listRef = useRef<View>(null);
-  const focusAfterUnmute = useRef(false);
+export function MutedProfileList({ onFeedback, onUnmute, state }: Props) {
   const { showToast } = useToast();
   const loadError =
     state.status === 'error'
@@ -62,39 +49,14 @@ export function MutedProfileList({
         action: {
           label: '다시 시도',
           onPress: () => {
-            (headingRef.current ?? listRef.current)?.focus();
             retryRef.current?.();
           },
         },
       });
     }
   }, [errorMessage, showToast]);
-  useEffect(() => {
-    if (focusAfterUnmute.current) {
-      (headingRef.current ?? listRef.current)?.focus();
-      focusAfterUnmute.current = false;
-    }
-  }, [state]);
-  const content = (
-    <View
-      accessibilityLabel="뮤트한 프로필"
-      ref={listRef}
-      style={styles.root}
-      tabIndex={-1}
-      testID="muted-profile-list"
-    >
-      {showHeading ? (
-        <View accessibilityRole="header" ref={headingRef} tabIndex={-1}>
-          <Text
-            style={[
-              styles.heading,
-              { color: theme.foregroundPrimary, borderColor: theme.borderDefault },
-            ]}
-          >
-            뮤트한 프로필
-          </Text>
-        </View>
-      ) : null}
+  return (
+    <View accessibilityLabel="뮤트한 프로필" style={styles.root} testID="muted-profile-list">
       {state.status === 'loading' ? (
         <StateView loading title="뮤트한 프로필을 불러오는 중입니다." />
       ) : state.status === 'error' ? (
@@ -120,7 +82,6 @@ export function MutedProfileList({
                 muted
                 onChangeMuted={() => onUnmute(profile.id)}
                 onFeedback={(feedback) => {
-                  focusAfterUnmute.current = feedback.status === 'success';
                   onFeedback?.({ ...feedback, profileId: profile.id });
                 }}
                 profileId={profile.id}
@@ -147,15 +108,9 @@ export function MutedProfileList({
       )}
     </View>
   );
-  return scrollable ? (
-    <ScrollView contentContainerStyle={styles.root}>{content}</ScrollView>
-  ) : (
-    content
-  );
 }
 const styles = StyleSheet.create({
   root: { flexGrow: 1, width: '100%' },
-  heading: { ...textStyles.uiHeadingM, borderBottomWidth: borderWidths[1], padding: space[16] },
   row: { height: 64, paddingVertical: 0 },
   pagination: { alignItems: 'center', padding: space[16] },
 });
