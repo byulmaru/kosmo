@@ -48,7 +48,6 @@ export default function HomeScreen() {
   const shellChrome = useShellChrome();
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const profileMuteTimelineRevision = shellChrome?.profileMuteTimelineRevision ?? 0;
   const handleHomeReselection = useCallback(() => {
     if (Platform.OS === 'web') {
       window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
@@ -78,7 +77,7 @@ export default function HomeScreen() {
         ref={routeBoundaryRef}
         title="홈을 불러오지 못했어요"
       >
-        <HomeRouteContent key={profileMuteTimelineRevision} />
+        <HomeRouteContent />
       </RouteBoundary>
     </HomeFrame>
   );
