@@ -296,7 +296,7 @@ export const MutationFailureAndSameActionRetry: Story = {
   parameters: { relay: { mutationError: '승인 mutation 실패' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const approveButton = canvas.getByRole('button', {
+    const approveButton = await canvas.findByRole('button', {
       name: '별빛 여행자 팔로우 요청 승인',
     });
     const row = approveButton.parentElement?.parentElement;
