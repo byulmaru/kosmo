@@ -82,6 +82,11 @@ mock.module(new URL('./SettingsMutedProfiles.tsx', import.meta.url), {
     SettingsMutedProfiles: () => createElement('SettingsMutedProfiles'),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('./SettingsBlockedProfiles.tsx', import.meta.url), {
+  exports: {
+    SettingsBlockedProfiles: () => createElement('SettingsBlockedProfiles'),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: { useTheme: () => ({ border: '#333333', text: '#111111' }) },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -97,6 +102,7 @@ mock.module(new URL('../../session/SessionProvider.tsx', import.meta.url), {
 let SettingsDefaultPostVisibilityRoute: ComponentType;
 let SettingsMuteAndBlockRoute: ComponentType;
 let SettingsMutedProfilesRoute: ComponentType;
+let SettingsBlockedProfilesRoute: ComponentType;
 let SettingsLayout: ComponentType;
 let SettingsRoute: ComponentType;
 let ProtectedLayout: ComponentType;
@@ -114,6 +120,8 @@ before(async () => {
     await import('../../app/(tabs)/(protected)/settings/mute-and-block'));
   ({ default: SettingsMutedProfilesRoute } =
     await import('../../app/(tabs)/(protected)/settings/muted-profiles'));
+  ({ default: SettingsBlockedProfilesRoute } =
+    await import('../../app/(tabs)/(protected)/settings/blocked-profiles'));
   ({ default: ProtectedLayout } = await import('../../app/(tabs)/(protected)/_layout'));
 });
 
@@ -233,6 +241,19 @@ describe('Settings routes', () => {
     await act(async () => back.props.onPress());
     assert.equal(backCalls, 0);
     assert.deepEqual(replacedPaths, ['/settings/mute-and-block']);
+  });
+
+  it('full Web blocked profile deep link도 공통 master의 mute category를 선택한다', async () => {
+    await renderRoute('/settings/blocked-profiles', SettingsBlockedProfilesRoute);
+
+    assert.deepEqual(
+      rendered('PageHeader').map((node) => node.props.title),
+      ['설정', '차단한 프로필'],
+    );
+    assert.equal(rendered('SettingsNavigationList').length, 0);
+    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
+    assert.equal(rendered('SettingsMuteAndBlockNavigation')[0].props.selected, 'blocked-profiles');
+    assert.equal(rendered('SettingsBlockedProfiles').length, 1);
   });
 
   it('compact Web root는 선택 없는 root 목록부터 표시한다', async () => {
