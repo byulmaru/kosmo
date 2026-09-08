@@ -16,11 +16,7 @@ import type {
   ProfileUnblockTransitionResult,
 } from '../services/profile-block';
 
-export const PROFILE_BLOCK_WORKFLOW_TYPE = 'profileBlockWorkflow';
-export const PROFILE_BLOCK_WORKFLOW_ID_PREFIX = 'profile-block:';
-export const PROFILE_UNBLOCK_WORKFLOW_TYPE = 'profileUnblockWorkflow';
-export const PROFILE_UNBLOCK_WORKFLOW_ID_PREFIX = 'profile-unblock:';
-export const PROFILE_BLOCK_COMMAND_RPC_TIMEOUT_MS = 5_000;
+const PROFILE_BLOCK_COMMAND_RPC_TIMEOUT_MS = 5_000;
 
 const rehydrateProfileBlockWorkflowFailure = (error: unknown): unknown => {
   if (!(error instanceof WorkflowFailedError) || !(error.cause instanceof ApplicationFailure)) {
@@ -41,30 +37,16 @@ const rehydrateProfileBlockWorkflowFailure = (error: unknown): unknown => {
   }
 };
 
-export type ProfileBlockInput = {
+type ProfileBlockInput = {
   readonly ownerProfileId: string;
   readonly targetProfileId: string;
   readonly origin: ProfileBlockEffectOrigin;
 };
 
-export type ProfileUnblockInput = ProfileBlockInput & {
+type ProfileUnblockInput = ProfileBlockInput & {
   /** Stable Profile Block generation targeted by this Unblock command. */
   readonly profileBlockId: string;
 };
-
-/**
- * The directed pair identifies one logical Block generation. A completed
- * generation may be started again with ALLOW_DUPLICATE; an active generation
- * is joined by USE_EXISTING so concurrent callers observe one cleanup run.
- */
-export const profileBlockWorkflowId = (
-  input: Pick<ProfileBlockInput, 'ownerProfileId' | 'targetProfileId'>,
-): string => `${PROFILE_BLOCK_WORKFLOW_ID_PREFIX}${input.ownerProfileId}:${input.targetProfileId}`;
-
-export const profileUnblockWorkflowId = (
-  input: Pick<ProfileUnblockInput, 'ownerProfileId' | 'targetProfileId' | 'profileBlockId'>,
-): string =>
-  `${PROFILE_UNBLOCK_WORKFLOW_ID_PREFIX}${input.ownerProfileId}:${input.targetProfileId}:${input.profileBlockId}`;
 
 /**
  * Starts one durable Profile Block generation and waits for its full result.
@@ -78,10 +60,10 @@ export const executeProfileBlock = async (
     return await temporalClient.withDeadline(
       Date.now() + PROFILE_BLOCK_COMMAND_RPC_TIMEOUT_MS,
       () =>
-        temporalClient.workflow.execute(PROFILE_BLOCK_WORKFLOW_TYPE, {
+        temporalClient.workflow.execute('profileBlockWorkflow', {
           args: [input],
           taskQueue: KOSMO_TASK_QUEUE,
-          workflowId: profileBlockWorkflowId(input),
+          workflowId: `profile-block:${input.ownerProfileId}:${input.targetProfileId}`,
           workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
           workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
         }),
@@ -99,13 +81,13 @@ export const executeProfileBlock = async (
 export const executeProfileUnblock = async (
   input: ProfileUnblockInput,
 ): Promise<ProfileUnblockTransitionResult> => {
-  const workflowId = profileUnblockWorkflowId(input);
+  const workflowId = `profile-unblock:${input.ownerProfileId}:${input.targetProfileId}:${input.profileBlockId}`;
   try {
     return await temporalClient.withDeadline(
       Date.now() + PROFILE_BLOCK_COMMAND_RPC_TIMEOUT_MS,
       async () => {
         try {
-          return await temporalClient.workflow.execute(PROFILE_UNBLOCK_WORKFLOW_TYPE, {
+          return await temporalClient.workflow.execute('profileUnblockWorkflow', {
             args: [input],
             taskQueue: KOSMO_TASK_QUEUE,
             workflowId,
