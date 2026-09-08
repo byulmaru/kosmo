@@ -60,6 +60,7 @@ Mute Scope는 여러 값을 동시에 가질 수 있다.
 - Post List와 검색에서는 Mute Decision을 적용하고 Notification Scope에서는 일치하는 새 Notification을
   생성하지 않는다.
 - 기존 Notification의 존재와 Read State는 바꾸지 않는다.
+- Quote Notification에서는 Quote의 내용을 검사하고 인용된 direct Source의 내용을 다시 검사하지 않는다.
 - 만료 시각이 지난 Rule은 조회 정책에 적용하지 않는다.
 
 ## 확정 용어

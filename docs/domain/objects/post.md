@@ -82,6 +82,10 @@ Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조
 Reply·Quote·Repost 작성은 각 입력 Parent·Source Post의 Author Profile과 행동 주체 Profile 사이에 Profile Block이
 없어야 한다. 이 상호작용 조건은 Post Visibility·Post Eligibility와 별도로 양방향 적용한다.
 
+Local 작성과 Remote 수신의 Quote는 direct Repost Source Author를 수신자로 하는
+[Quote Notification](./notification.md#quote-notification)의 원인이다. 알림의 생성 조건과 중복 처리는
+Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 독립적인 조회 정책은 바뀌지 않는다.
+
 ## 권한
 
 | 권한                    | 종류      | 성립 조건                                               |

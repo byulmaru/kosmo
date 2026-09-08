@@ -60,6 +60,9 @@ Local Profile만 actor로 사용하며, remote ActivityPub ingress와 Block/Undo
   다른 기존 Notification Item은 Block action에서 동기적으로 바꾸지 않으며, Notification 조회는 Recipient·Related
   Profile pair 정책과 Recipient 기준 Related Post/Profile 조회 정책을 적용한다. 후속 비동기 cleanup 전까지 저장
   상태가 남을 수 있다.
+  Block으로 조회할 수 없어진 Quote Notification과 Read State는 물리 삭제하지 않고 조회 표면에서만 숨긴다.
+  Block 해제 후 다시 조회 가능하면 같은 상태를 사용한다. 승인 철회·삭제 등 확정적 관계 무효화의 정리는
+  [Notification](./notification.md)의 Quote 정책을 따른다.
 - Block 실행 중 이미 진입한 Follow transition이 cleanup 뒤 Follow/Request 또는 그 직접 원인 Notification을 남길 수 있다. Active Block 동안
   공통 정책은 이 잔존 row를 inactive/invisible로 취급한다.
   차단 뒤 모든 Notification source에 신규 생성 억제 정책을 연결하는 일은 `PROD-327`의 후속 범위다. 이 객체의 현재

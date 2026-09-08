@@ -3,7 +3,7 @@
 ## 정의
 
 Post Notification Mute는 Owner Profile이 Root Post thread에서 발생하는 새 Reply, Reaction, Repost
-Notification을 억제한 관계다.
+Notification과 해당 thread의 Post를 인용한 새 Quote Notification을 억제한 관계다.
 
 ## 상태
 
@@ -41,6 +41,10 @@ Notification을 억제한 관계다.
 
 - Root Post와 그 Reply 하위에서 발생한 새 Reply, Reaction, Repost Notification을 Owner Profile에게
   생성하지 않는다.
+- Quote Notification은 direct Repost Source가 Root Post 또는 그 Reply 하위에 속하면 Owner Profile에게
+  생성하지 않는다. Quote 자체가 속한 thread나 Quote의 Reply Parent로 원문 thread 기준을 대체하지 않는다.
+- Reply이면서 Quote인 Post에서는 Reply와 Quote의 thread Mute를 각각 판정한 뒤 Notification의
+  Reply, Quote, Mention 우선순위를 적용한다. 이 관계를 Mention 억제 조건으로 확대하지 않는다.
 - 기존 Notification의 존재와 Read State는 바꾸지 않는다.
 
 ## 확정 용어
