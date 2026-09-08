@@ -55,6 +55,10 @@ let profileViewerState: {
   isSelf: boolean;
   membership: { role: 'MEMBER' | 'OWNER' } | null;
 } | null = null;
+const changeBlockedCalls: Array<{ change: object; nextBlocked: boolean }> = [];
+const toastCalls: Array<{ message: string; tone: string }> = [];
+let changeBlockedImpl: (change: object, nextBlocked: boolean) => Promise<void> = async () =>
+  undefined;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -96,9 +100,11 @@ mockModule('expo-router', {
   useRouter: () => ({ back: () => (routerBackCount += 1) }),
 });
 mockModule('lucide-react-native', {
+  Ban: 'Ban',
   ChevronLeftIcon: 'ChevronLeftIcon',
 });
 mockModule(createRequire(import.meta.url).resolve('lucide-react-native'), {
+  Ban: 'Ban',
   ChevronLeftIcon: 'ChevronLeftIcon',
 });
 mockModule(new URL('../PageHeader.tsx', import.meta.url), {
@@ -163,18 +169,25 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     action,
     heading,
     loading,
+    menuItems,
+    onMenuTriggerReady,
     profile,
   }: {
     action?: ReturnType<typeof createElement>;
     heading?: boolean;
     loading?: boolean;
+    menuItems?: readonly object[];
+    onMenuTriggerReady?: (focusTrigger: () => void) => void;
     profile?: { handle: string };
-  }) =>
-    createElement(
+  }) => {
+    onMenuTriggerReady?.(() => undefined);
+    return createElement(
       'ProfileHero',
       { heading, identity: loading ? 'loading' : profile?.handle },
+      menuItems ? createElement('ActionMenu', { items: menuItems }) : null,
       action,
-    ),
+    );
+  },
 });
 mockModule(new URL('./FollowButton.tsx', import.meta.url), {
   FollowButton: ({ profile }: { profile: { handle: string } }) =>
@@ -185,6 +198,33 @@ mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
 });
 mockModule(new URL('./ProfileMuteController.tsx', import.meta.url), {
   useProfileMuteMutations: () => ({ changeMuted: () => Promise.resolve() }),
+});
+mockModule(new URL('../ui/ActionMenu.tsx', import.meta.url), {
+  ActionMenu: (props: object) => createElement('ActionMenu', props),
+});
+mockModule(new URL('../ui/ConfirmationContent.tsx', import.meta.url), {
+  ConfirmationContent: (props: object) => createElement('ConfirmationContent', props),
+});
+mockModule(new URL('../ui/ModalSheet.tsx', import.meta.url), {
+  ModalSheet: ({ children, ...props }: { children?: ReturnType<typeof createElement> }) =>
+    createElement('ModalSheet', props, children),
+});
+mockModule(new URL('../ui/ToastProvider.tsx', import.meta.url), {
+  useToast: () => ({
+    showToast: (message: string, options: { tone: string }) =>
+      toastCalls.push({ message, tone: options.tone }),
+  }),
+});
+mockModule(new URL('./ProfileBlockController.tsx', import.meta.url), {
+  useProfileBlockMutations: () => ({
+    changeBlocked: (change: object, nextBlocked: boolean) => {
+      changeBlockedCalls.push({ change, nextBlocked });
+      return changeBlockedImpl(change, nextBlocked);
+    },
+  }),
+});
+mockModule(new URL('./profileBlockErrors.ts', import.meta.url), {
+  StaleProfileBlockRequestError: class StaleProfileBlockRequestError extends Error {},
 });
 mockModule(new URL('../ui/Button.tsx', import.meta.url), {
   Button: ({ children, ...props }: { children: string }) =>
@@ -261,6 +301,9 @@ afterEach(async () => {
   selectedProfileId = null;
   profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
   profileViewerState = null;
+  changeBlockedCalls.length = 0;
+  toastCalls.length = 0;
+  changeBlockedImpl = async () => undefined;
 });
 
 async function renderRoute(profileHandle: string, routePath = `/profile/${profileHandle}`) {
@@ -573,10 +616,19 @@ describe('profile route parameter lifecycle', () => {
 
     assert.equal(requireRendered('StateView').props.title, '차단한 프로필입니다');
     assert.equal(rendered('ProfileHero').length, 0);
-    const action = requireRendered('StateView').props.action;
+    const action = rendered('Button').find((node) => node.props.accessibilityLabel === '차단 해제');
     assert.ok(action);
-    assert.equal(action.props.profileId, 'block-1');
-    assert.equal(action.props.displayName, undefined);
+
+    await act(async () => action.props.onPress());
+    assert.equal(requireRendered('ModalSheet').props.visible, true);
+    assert.equal(requireRendered('ModalSheet').props.title, '이 프로필의 차단을 해제할까요?');
+    assert.equal(
+      requireRendered('ConfirmationContent').props.message,
+      '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.',
+    );
+
+    await act(async () => requireRendered('ConfirmationContent').props.onCancel());
+    assert.equal(changeBlockedCalls.length, 0);
   });
 
   it('상대에게 차단된 Profile은 actionless StateView만 표시한다', async () => {
@@ -587,7 +639,8 @@ describe('profile route parameter lifecycle', () => {
     await renderRoute('@blocked');
 
     assert.equal(requireRendered('StateView').props.title, '이 프로필을 볼 수 없습니다');
-    assert.equal(rendered('ProfileBlockAction').length, 0);
+    assert.equal(rendered('Button').length, 0);
+    assert.equal(rendered('ActionMenu').length, 0);
     assert.equal(rendered('ProfileHero').length, 0);
   });
 
@@ -595,10 +648,38 @@ describe('profile route parameter lifecycle', () => {
     selectedProfileId = 'owner';
     profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
     await renderRoute('@local');
-    assert.equal(rendered('ProfileBlockAction').length, 0);
+    assert.equal(rendered('ActionMenu').length, 0);
 
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     await renderRoute('@target');
-    assert.equal(rendered('ProfileBlockAction').length, 1);
+    const menu = requireRendered('ActionMenu');
+    assert.equal(menu.props.items[0].label, '차단');
+  });
+
+  it('Profile 메뉴의 차단 실패는 확인창을 유지하고 같은 action으로 재시도한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    let attempts = 0;
+    changeBlockedImpl = async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error('network');
+      }
+    };
+    await renderRoute('@target');
+
+    await act(async () => requireRendered('ActionMenu').props.items[0].onSelect());
+    const confirmation = requireRendered('ConfirmationContent');
+    assert.equal(confirmation.props.confirmLabel, '차단');
+
+    await act(async () => confirmation.props.onConfirm());
+    assert.equal(changeBlockedCalls.length, 1);
+    assert.equal(requireRendered('ModalSheet').props.visible, true);
+    assert.equal(toastCalls.at(-1)?.tone, 'danger');
+
+    await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
+    assert.equal(changeBlockedCalls.length, 2);
+    assert.equal(requireRendered('ModalSheet').props.visible, false);
+    assert.equal(toastCalls.at(-1)?.tone, 'success');
   });
 });
