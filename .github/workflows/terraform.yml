@@ -306,7 +306,7 @@ jobs:
       - name: Setup AWS CLI
         uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
         with:
-          cache: false
+          version: '2026.9.2'
           tool_versions: |
             aws-cli 2.35.14
 
