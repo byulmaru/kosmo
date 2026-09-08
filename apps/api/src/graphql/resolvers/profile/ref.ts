@@ -26,7 +26,7 @@ const ViewerOwnerAccountProfiles = alias(AccountProfiles, 'viewer_owner_account_
 const ViewerOwnerProfiles = alias(Profiles, 'viewer_owner_profile');
 const ViewerOwnerInstances = alias(Instances, 'viewer_owner_instance');
 
-export const Profile = createObjectRef('Profile', (ids, ctx) =>
+export const Profile = createObjectRef('Profile', (ids) =>
   db
     .select(getColumns(Profiles))
     .from(Profiles)
@@ -34,12 +34,7 @@ export const Profile = createObjectRef('Profile', (ids, ctx) =>
     .where(
       and(
         inArray(Profiles.id, ids),
-        visibleProfileWhere({
-          profile: Profiles,
-          instance: Instances,
-          database: db,
-          viewerProfileId: ctx.session?.profileId,
-        }),
+        visibleProfileWhere({ profile: Profiles, instance: Instances }),
       ),
     ),
 );

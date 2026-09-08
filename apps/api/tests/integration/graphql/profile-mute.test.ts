@@ -102,15 +102,15 @@ describe('GraphQL Profile Mute', () => {
       targetProfileId: target.id,
     });
 
-    const hiddenTarget = await requestGraphQL<{ node: { id: string } | null }>(
+    const visibleTarget = await requestGraphQL<{ node: { id: string } | null }>(
       `query BlockedTarget($id: ID!) {
         node(id: $id) { ... on Profile { id } }
       }`,
       { id: globalId('Profile', target.id) },
       auth.token,
     );
-    assertNoGraphQLErrors(hiddenTarget);
-    assert.equal(hiddenTarget.data?.node, null);
+    assertNoGraphQLErrors(visibleTarget);
+    assert.deepEqual(visibleTarget.data?.node, { id: globalId('Profile', target.id) });
 
     const management = await requestGraphQL<{
       node: {
@@ -122,8 +122,7 @@ describe('GraphQL Profile Mute', () => {
                 id: string;
                 handle: string;
                 displayName: string;
-                domain: string;
-                instanceKind: string;
+                instance: { kind: string };
               };
             };
           }>;
@@ -135,8 +134,7 @@ describe('GraphQL Profile Mute', () => {
           id: string;
           handle: string;
           displayName: string;
-          domain: string;
-          instanceKind: string;
+          instance: { kind: string };
         };
       } | null;
     }>(
@@ -147,7 +145,7 @@ describe('GraphQL Profile Mute', () => {
               edges {
                 node {
                   id
-                  targetProfile { id handle displayName domain instanceKind }
+                  targetProfile { id handle displayName instance { kind } }
                 }
               }
             }
@@ -156,7 +154,7 @@ describe('GraphQL Profile Mute', () => {
         profileMute: node(id: $profileMuteId) {
           ... on ProfileMute {
             id
-            targetProfile { id handle displayName domain instanceKind }
+            targetProfile { id handle displayName instance { kind } }
           }
         }
       }`,
@@ -173,18 +171,16 @@ describe('GraphQL Profile Mute', () => {
     );
     assert.equal(management.data?.profileMute?.id, profileMuteId);
     assert.deepEqual(management.data?.node?.profileMutes.edges[0]?.node.targetProfile, {
-      id: globalId('ProfileMuteTarget', target.id),
+      id: globalId('Profile', target.id),
       handle: target.handle,
       displayName: target.displayName,
-      domain: '127.0.0.1:4173',
-      instanceKind: 'LOCAL',
+      instance: { kind: 'LOCAL' },
     });
     assert.deepEqual(management.data?.profileMute?.targetProfile, {
-      id: globalId('ProfileMuteTarget', target.id),
+      id: globalId('Profile', target.id),
       handle: target.handle,
       displayName: target.displayName,
-      domain: '127.0.0.1:4173',
-      instanceKind: 'LOCAL',
+      instance: { kind: 'LOCAL' },
     });
 
     const removed = await unmuteProfile(profileMuteId, auth.token);
@@ -230,7 +226,7 @@ describe('GraphQL Profile Mute', () => {
     assertNoGraphQLErrors(remoteMutation);
     const remoteMute = remoteMutation.data?.muteProfile.profileMute;
     assert.ok(remoteMute);
-    assert.equal(remoteMute.targetProfile.id, globalId('ProfileMuteTarget', remoteTarget.id));
+    assert.equal(remoteMute.targetProfile.id, globalId('Profile', remoteTarget.id));
 
     const expectedIds = [remoteMute.id, localMute.id].sort((first, second) =>
       decodeGlobalId(second).id.localeCompare(decodeGlobalId(first).id),
@@ -331,7 +327,7 @@ describe('GraphQL Profile Mute', () => {
     assertNoGraphQLErrors(targetState);
     assert.deepEqual(targetState.data?.node?.viewerState.profileMute, {
       id: localMute.id,
-      targetProfile: { id: globalId('ProfileMuteTarget', localTarget.id) },
+      targetProfile: { id: globalId('Profile', localTarget.id) },
     });
 
     const muteNode = await requestGraphQL<{
@@ -351,10 +347,7 @@ describe('GraphQL Profile Mute', () => {
     );
     assertNoGraphQLErrors(muteNode);
     assert.equal(muteNode.data?.node?.id, localMute.id);
-    assert.equal(
-      muteNode.data?.node?.targetProfile?.id,
-      globalId('ProfileMuteTarget', localTarget.id),
-    );
+    assert.equal(muteNode.data?.node?.targetProfile?.id, globalId('Profile', localTarget.id));
 
     await db
       .update(Profiles)

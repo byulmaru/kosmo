@@ -30,7 +30,6 @@ import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const publicOrigin = 'http://127.0.0.1:4173';
-const localDomain = '127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
@@ -136,15 +135,14 @@ describe('GraphQL Profile Block', () => {
     const localBlockId = localBlock.data?.blockProfile.profileBlock.id;
     assert.ok(localBlockId);
     assert.deepEqual(localBlock.data?.blockProfile.profileBlock.targetProfile, {
-      id: globalId('ProfileBlockTarget', localTarget.id),
+      id: globalId('Profile', localTarget.id),
       handle: localTarget.handle,
       displayName: localTarget.displayName,
-      domain: localDomain,
-      instanceKind: 'LOCAL',
+      instance: { kind: 'LOCAL' },
     });
     assert.deepEqual(
       decodeGlobalId(localBlock.data?.blockProfile.profileBlock.targetProfile.id ?? ''),
-      { id: localTarget.id, typename: 'ProfileBlockTarget' },
+      { id: localTarget.id, typename: 'Profile' },
     );
 
     const repeated = await blockProfile(localTarget.id, owner.token);
@@ -156,7 +154,7 @@ describe('GraphQL Profile Block', () => {
     const remoteBlockId = remoteBlock.data?.blockProfile.profileBlock.id;
     assert.ok(remoteBlockId);
     assert.equal(
-      remoteBlock.data?.blockProfile.profileBlock.targetProfile.instanceKind,
+      remoteBlock.data?.blockProfile.profileBlock.targetProfile.instance.kind,
       'ACTIVITYPUB',
     );
 
@@ -179,9 +177,9 @@ describe('GraphQL Profile Block', () => {
     );
     assertNoGraphQLErrors(ownerViews);
     assert.deepEqual(ownerViews.data, {
-      node: null,
-      profileByHandle: null,
-      searchProfiles: { edges: [] },
+      node: { id: globalId('Profile', localTarget.id) },
+      profileByHandle: { id: globalId('Profile', localTarget.id) },
+      searchProfiles: { edges: [{ node: { id: globalId('Profile', localTarget.id) } }] },
     });
 
     const thirdPartyView = await requestGraphQL<{ node: { id: string } | null }>(
@@ -206,8 +204,7 @@ describe('GraphQL Profile Block', () => {
                 id: string;
                 handle: string;
                 displayName: string;
-                domain: string;
-                instanceKind: string;
+                instance: { kind: string };
               };
             };
           }>;
@@ -218,7 +215,7 @@ describe('GraphQL Profile Block', () => {
         node(id: $id) {
           ... on Profile {
             profileBlocks(first: 10) {
-              edges { node { id targetProfile { id handle displayName domain instanceKind } } }
+              edges { node { id targetProfile { id handle displayName instance { kind } } } }
             }
           }
         }
@@ -233,10 +230,7 @@ describe('GraphQL Profile Block', () => {
     );
     assert.deepEqual(
       managed.data?.node?.profileBlocks.edges.map(({ node }) => node.targetProfile.id).sort(),
-      [
-        globalId('ProfileBlockTarget', localTarget.id),
-        globalId('ProfileBlockTarget', remoteTarget.id),
-      ].sort(),
+      [globalId('Profile', localTarget.id), globalId('Profile', remoteTarget.id)].sort(),
     );
 
     const localStatus = await profileBlockStatus(localTarget.handle, owner.token);
@@ -285,15 +279,17 @@ describe('GraphQL Profile Block', () => {
     assertNoGraphQLErrors(deletedNode);
     assert.equal(deletedNode.data?.node, null);
 
-    const remoteStillHidden = await requestGraphQL<{ node: { id: string } | null }>(
+    const remoteStillVisible = await requestGraphQL<{ node: { id: string } | null }>(
       `query RemoteProfile($id: ID!) {
         node(id: $id) { ... on Profile { id } }
       }`,
       { id: globalId('Profile', remoteTarget.id) },
       owner.token,
     );
-    assertNoGraphQLErrors(remoteStillHidden);
-    assert.equal(remoteStillHidden.data?.node, null);
+    assertNoGraphQLErrors(remoteStillVisible);
+    assert.deepEqual(remoteStillVisible.data?.node, {
+      id: globalId('Profile', remoteTarget.id),
+    });
   });
 
   test('keeps Block management owner-scoped and exposes reverse status without the other ID', async () => {
@@ -456,10 +452,10 @@ describe('GraphQL Profile Block', () => {
       { id: globalId('Profile', ownerA.profile.id) },
       { id: globalId('Profile', ownerB.id) },
     ]);
-    assert.equal(result.data?.node, null);
+    assert.deepEqual(result.data?.node, { id: globalId('Profile', ownerB.id) });
   });
 
-  test('filters blocked Profile search candidates before applying cursor pagination', async () => {
+  test('keeps blocked Profile identity in search pagination', async () => {
     const owner = await createAuthenticatedSession();
     const blocked = await createProfile(
       'search-blocked-candidate',
@@ -499,7 +495,7 @@ describe('GraphQL Profile Block', () => {
     assertNoGraphQLErrors(firstPage);
     assert.deepEqual(
       firstPage.data?.searchProfiles.edges.map(({ node }) => node.handle),
-      [firstVisible.handle],
+      [blocked.handle],
     );
     assert.equal(firstPage.data?.searchProfiles.pageInfo.hasNextPage, true);
 
@@ -517,9 +513,27 @@ describe('GraphQL Profile Block', () => {
     assertNoGraphQLErrors(secondPage);
     assert.deepEqual(
       secondPage.data?.searchProfiles.edges.map(({ node }) => node.handle),
+      [firstVisible.handle],
+    );
+    assert.equal(secondPage.data?.searchProfiles.pageInfo.hasNextPage, true);
+
+    const thirdPage = await requestGraphQL<typeof firstPage.data>(
+      `query SearchBlockedProfiles($after: String) {
+        searchProfiles(query: "search-", first: 1, after: $after) {
+          edges { node { handle } }
+          pageInfo { endCursor hasNextPage }
+        }
+      }`,
+      { after: secondPage.data?.searchProfiles.pageInfo.endCursor },
+      owner.token,
+    );
+
+    assertNoGraphQLErrors(thirdPage);
+    assert.deepEqual(
+      thirdPage.data?.searchProfiles.edges.map(({ node }) => node.handle),
       [secondVisible.handle],
     );
-    assert.equal(secondPage.data?.searchProfiles.pageInfo.hasNextPage, false);
+    assert.equal(thirdPage.data?.searchProfiles.pageInfo.hasNextPage, false);
   });
 
   test('does not let residual Follow or Follow Request rows expose a blocked pair', async () => {
@@ -878,8 +892,7 @@ const blockProfile = (profileId: string, token?: string) =>
           id: string;
           handle: string;
           displayName: string;
-          domain: string;
-          instanceKind: string;
+          instance: { kind: string };
         };
       };
     };
@@ -888,7 +901,7 @@ const blockProfile = (profileId: string, token?: string) =>
       blockProfile(input: { id: $id }) {
         profileBlock {
           id
-          targetProfile { id handle displayName domain instanceKind }
+          targetProfile { id handle displayName instance { kind } }
         }
       }
     }`,

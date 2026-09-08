@@ -388,7 +388,7 @@ type Profile implements Node {
 type ProfileBlock implements Node {
   createdAt: DateTime!
   id: ID!
-  targetProfile: ProfileBlockTarget!
+  targetProfile: Profile!
 }
 
 type ProfileBlockConnection {
@@ -405,14 +405,6 @@ type ProfileBlockStatus {
   blockedBy: Boolean!
   blocking: Boolean!
   profileBlockId: ID
-}
-
-type ProfileBlockTarget {
-  displayName: String!
-  domain: String!
-  handle: String!
-  id: ID!
-  instanceKind: InstanceKind!
 }
 
 type ProfileConnection {
@@ -483,7 +475,7 @@ type ProfileInstance {
 type ProfileMute implements Node {
   createdAt: DateTime!
   id: ID!
-  targetProfile: ProfileMuteTarget!
+  targetProfile: Profile!
 }
 
 type ProfileMuteConnection {
@@ -494,14 +486,6 @@ type ProfileMuteConnection {
 type ProfileMuteConnectionEdge {
   cursor: String!
   node: ProfileMute!
-}
-
-type ProfileMuteTarget {
-  displayName: String!
-  domain: String!
-  handle: String!
-  id: ID!
-  instanceKind: InstanceKind!
 }
 
 type ProfileOutgoingProfileFollowRequestsConnection {

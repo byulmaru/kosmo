@@ -51,11 +51,11 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `PROD-822`
 - Status: Active
-- Context / Problem: Profile 기본 정보 조회, 콘텐츠 직접 조회, 탐색 목록, 상호작용과 Notification은 서로 다른 결과를 가지므로 저장 방향만으로 하나의 표면 결과를 결정할 수 없다.
-- Decision Outcome: 저장된 Owner → Target row는 Profile Block pair를 양쪽 viewer 방향으로 평가하는 공통 관계 판정에 사용한다. Profile Node·handle route·일반 Profile 검색은 기존 Profile 조회 정책을 적용한다. Post·Media 직접 조회와 Profile Post List는 viewer 방향의 콘텐츠 정책을 적용한다. Home·Local·Hashtag Post List·Post 검색·Follow 후보·Follow/Reply/Quote/Repost/Reaction interaction·Notification은 양쪽 Profile에 대한 보호 정책을 적용한다.
-- Alternatives Considered: 모든 surface에 동일한 hidden 결과를 적용하면 Profile identity와 콘텐츠 접근의 계약이 섞인다. 각 resolver나 앱 화면에서 판정을 복제하면 surface 누락과 actor별 불일치가 생긴다. page limit 뒤 client filter는 cursor와 보안 결과를 깨뜨린다.
-- Consequences: Profile·Post·Notification spec은 각 surface의 구체 결과를 소유하고, 이 결정은 저장 방향을 양쪽 viewer 정책으로 평가하는 공통 경계만 소유한다. 기존 Profile 조회 조건, Post Visibility·Eligibility, Local PUBLIC eligibility와 cursor 계약은 유지한다.
-- Confirmation / Follow-up: `PROD-822` policy/GraphQL test에서 Profile identity, directional direct content, bilateral list/search/interaction/Notification 표면을 같은 fixture로 검증한다.
+- Context / Problem: Owner → Target row만 확인하면 Target이 Owner의 Profile·Post를 계속 조회하거나 상호작용할 수 있고, surface별 client filter는 page·Node·mutation에서 우회된다.
+- Decision Outcome: 저장된 Owner → Target row는 Profile Block pair를 양쪽 viewer 방향으로 평가하는 공통 관계 판정에 사용한다. Profile Node·handle route·일반 Profile 검색은 기존 Profile 조회 정책을 적용하고, Post·Media와 목록·상호작용·Notification은 각 surface의 방향별 또는 양방향 정책을 적용한다.
+- Alternatives Considered: Owner 방향만 검사하면 차단을 unilateral visibility로 잘못 해석한다. 각 resolver나 앱 화면에서 predicate를 복제하면 surface 누락과 actor별 불일치가 생긴다. page limit 뒤 client filter는 cursor와 보안 결과를 깨뜨린다.
+- Consequences: Profile·Post spec은 각 surface의 구체적인 Exclude/interaction 결과를, 이 결정은 대칭 predicate와 consumer 원칙을 소유한다. 기존 Post Visibility·Local PUBLIC eligibility와 cursor 계약은 유지한다.
+- Confirmation / Follow-up: `PROD-822` policy/GraphQL test에서 direct·list·search·interaction 표면을 같은 fixture로 검증한다.
 
 ### GraphQL은 selected Local Profile actor와 중앙 application policy를 따른다
 
@@ -64,9 +64,9 @@
 - Authority / Provenance: `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/domain/objects/profile-block.md`, `PROD-822`, `PROD-823`
 - Status: Active
 - Context / Problem: GraphQL resolver가 입력 Profile ID를 actor로 신뢰하거나 resolver·loader마다 차단 조건을 복제하면 selected Profile 격리와 중앙 정책이 무너진다.
-- Decision Outcome: 현재 GraphQL Block 생성·해제 mutation과 Owner 관리 조회의 connection·관계 Node/loader는 검증된 Session의 selected Local Profile actor를 사용한다. resolver·loader는 공통 core/application policy를 호출하고, 요청별 DB actor state(GUC 등)·client 전용 filter를 권한 또는 visibility의 대체 수단으로 사용하지 않는다. Block 관리 projection인 `ProfileBlockTarget`의 global ID는 일반 `Profile` global ID와 구분한다. Unblock은 실제 제거한 관계 ID를 반환하며 관계를 제거하지 않은 결과만 `null`로 나타낸다. concrete helper와 field/payload 이름, resolver·loader 배치는 기존 naming·generated schema에 맞춘 구현 선택으로 남긴다.
+- Decision Outcome: 현재 GraphQL Block 생성·해제 mutation과 Owner 관리 조회의 connection·관계 Node/loader는 검증된 Session의 selected Local Profile actor를 사용한다. resolver·loader는 공통 core/application policy를 호출하고, 요청별 DB actor state(GUC 등)·client 전용 filter를 권한 또는 visibility의 대체 수단으로 사용하지 않는다. Block·Mute 관계의 Target은 기존 `Profile` ref와 global ID를 사용한다. Unblock은 실제 제거한 관계 ID를 반환하며 관계를 제거하지 않은 결과만 `null`로 나타낸다. concrete helper와 field/payload 이름, resolver·loader 배치는 기존 naming·generated schema에 맞춘 구현 선택으로 남긴다.
 - Alternatives Considered: 입력된 arbitrary Profile ID를 actor로 사용하면 다른 Owner의 관계를 변경할 수 있다. resolver-local predicate나 client-only filter는 policy drift와 visibility 우회를 만든다. 요청별 DB actor state를 권한 경계로 사용하면 현재 application policy와 runtime 경계를 확장한다.
-- Consequences: selected Local Profile이 없는 Block 생성·해제·Owner 관리 operation은 기존 auth 경계에서 거부되고, Block 목록은 해당 actor가 Owner인 관계만 반환한다. 일반 GraphQL 조회와 Notification의 Account membership 권한을 이 제한으로 바꾸지 않는다. 같은 Target의 Mute 관계는 Block과 별개이므로 Mute Owner connection·관계 Node·해제 경로에서 유지하며, 이 관리 경계가 일반 Target Profile 조회 권한을 열지는 않는다. remote ActivityPub ingress는 이 decision의 consumer가 아니다.
+- Consequences: selected Local Profile이 없는 Block 생성·해제·Owner 관리 operation은 기존 auth 경계에서 거부되고, Block 목록은 해당 actor가 Owner인 관계만 반환한다. 일반 GraphQL 조회와 Notification의 Account membership 권한을 이 제한으로 바꾸지 않는다. 같은 Target의 Mute 관계는 Block과 별개이므로 Mute Owner connection·관계 Node·해제 경로에서 유지한다. remote ActivityPub ingress는 이 decision의 consumer가 아니다.
 - Confirmation / Follow-up: `PROD-822`에서 Owner A/B·guest·membership mismatch와 direct/list Node 경계를 검증하고, `PROD-823`에서 selected Profile별 client 상태 결과를 확인한다.
 
 ### 기존 Notification은 가시성으로 숨기고 source 생성 연결은 후속으로 둔다
@@ -88,10 +88,10 @@
 - Authority / Provenance: 정본 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/design/accessibility.md`, `DSN-51`, `DSN-53`; 책임 이슈 `PROD-823`; 후속 UI 교체 `PROD-917`
 - Status: Active
 - Context / Problem: 공용 presentation 이관 결과를 Block runtime 계약으로 오인하거나 Mute와 Block을 하나의 목록으로 합치면 Profile Block 책임이 바뀐다.
-- Decision Outcome: `PROD-823`은 기존 레거시 Profile·Settings UI를 사용해 `DSN-51`·`DSN-53`과 최신 canonical이 정한 direct Profile route 계약을 구현·통합한다. 양쪽 route는 기존 Profile 조회 정책에 따른 기본 Profile 정보를 표시하고, `blocking` route는 Target의 허용된 Post·Media를 표시하기 전에 frontend 콘텐츠 경고를 제공하며, `blockedBy` route는 상대의 기본 Profile 정보와 콘텐츠 차단 상태를 표시한다. 양방향 Block에서는 양쪽 route에 콘텐츠 차단 상태를 적용하고 `blocking` route의 `차단 해제` action을 유지한다. 경고 문구와 표시 기간은 후속 디자인 계약에서 정한다. 공용 presentation 이관·Storybook 확정은 `PROD-861`의 별도 후속 범위로 관리하고, `PROD-917`의 신규 UI 교체도 후속 범위로 유지한다. Block confirmation은 Mute와 분리된 Danger·pending·실패·retry 상태를 사용하고, Settings에는 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 둔다.
-- Alternatives Considered: 공용 presentation 이관이나 신규 UI 교체를 현재 lifecycle에 결합하면 기존 레거시 UI의 구현·통합 검증과 runtime 책임이 지연된다. Mute/Block 혼합 목록은 별도 관리 계약과 destination 상태를 잃는다. 경고와 콘텐츠 상태를 별도 route 계약으로 관리하지 않으면 API 조회 정책과 presentation 책임이 섞인다.
-- Consequences: `PROD-823`은 기존 레거시 UI의 실제 mutation·management·접근성 runtime과 서버 정책에 따른 direct route 상태 수렴을 완성하고, `PROD-813`은 그 통합 결과를 검증한다. `PROD-861`과 `PROD-917`의 presentation 작업은 별도 후속 책임으로 유지하며, 새 범용 safety component나 Settings shell을 현재 change에 추가하지 않는다.
-- Confirmation / Follow-up: `PROD-823`과 `PROD-813`은 기존 레거시 UI의 구현·통합을 기준으로 confirmation·별도 list·accessibility·viewport·selected actor UI와 플랫폼별 실제 runtime evidence를 검증한다. `PROD-861`·`PROD-917`의 presentation 작업은 별도 후속 일정으로 기록한다.
+- Decision Outcome: `PROD-823`은 기존 Profile 정보를 유지하고 viewer 방향의 콘텐츠 상태를 각 surface 정책에 맞게 표시한다. `PROD-861` 결과는 prerequisite evidence로 참고하고 신규 UI 교체는 `PROD-917` 후속 범위로 둔다. Block confirmation은 Mute와 분리된 Danger·pending·실패·retry 상태를 사용하고, Settings에는 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 둔다.
+- Alternatives Considered: `PROD-861`을 이 change에 다시 포함하면 presentation·runtime lifecycle이 결합된다. Mute/Block 혼합 목록은 별도 관리 계약과 destination 상태를 잃는다. blocked 대상의 최신 detail을 다시 요청하면 visibility policy를 우회한다.
+- Consequences: DSN-53 visual result와 861 implementation은 선행 증거이고, 823은 실제 mutation·management·접근성 runtime과 protected-data guard를 완성한다. 새 범용 safety component나 Settings shell을 추가하지 않는다.
+- Confirmation / Follow-up: `PROD-823`에서 confirmation·별도 list·accessibility·viewport와 selected actor UI를 검증하고, `PROD-813`에서 플랫폼별 실제 runtime evidence를 별도로 기록한다.
 
 ### Client 상태는 selected actor 경계 안에서 서버 결과로 수렴한다
 
@@ -128,18 +128,6 @@
 - Alternatives Considered: Profile pair 전체 직렬화와 모든 물리 row 부재 보장은 기존 승인 범위를 강화하므로 채택하지 않는다. GraphQL 앞단만 검사하거나 잔존 관계를 유효한 Follow로 반환하는 방식은 공통 admission·visibility 결과를 만족하지 못한다.
 - Consequences: 새 admission 거부와 잔존 row 비활성·비노출은 각각 자동화 검증한다. `PROD-821`은 captured cleanup·Unblock 정리를, `PROD-822`는 정책·admission을, `PROD-813`은 cross-slice 검증을 계속 소유한다.
 - Confirmation / Follow-up: Block 뒤 시작한 FOLLOW·로컬 APPROVE의 저장 거부, 잔존 Follow/Request fixture의 Node·목록·권한 비활성, 해제 뒤 반대 Block과 다른 정책 재평가를 검증한다. 기존 cleanup decision을 대체하지 않고 그 소비 경계를 구체화한다.
-
-### Owner 관리 정보는 일반 Profile 조회 권한을 열지 않는다
-
-- Decision Date: 2026-09-05
-- Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/profile-block.md`, `docs/design/profile-mute-block.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `memory/coding-style.md`, `PROD-822`, `PROD-823`.
-- Status: Active
-- Context / Problem: Block Target은 일반 Profile 조회가 불가능하지만 Owner는 자신의 관계를 식별하고 해제할 수 있어야 한다. 관리를 편하게 하려고 일반 Profile ref 전체를 반환하면 nested field와 loader가 직접 조회 제한을 우회할 수 있다.
-- Decision Outcome: selected Local Owner만 관계 Node·관리 목록과 관리에 필요한 최소 Target 정보를 조회한다. 직접 route 진입·새로고침에서도 일반 Target Profile이나 이전 client cache 없이 자신의 차단 여부와 해제 관계 ID를 확인할 수 있어야 한다. 자신의 Block이 없으면 다른 Owner의 Block ID를 반환하지 않는다. 이 정보는 일반 Profile·Post·Media·Follow 조회 권한을 부여하지 않는다. mutation은 required cleanup 완료 결과를 사용하고 성공한 해제는 실제 삭제한 관계 ID를 반환한다. selected actor가 바뀌면 후속 field는 현재 actor의 권한을 사용한다.
-- Alternatives Considered: 관리 목록도 일반 Target visibility로 제거하면 Owner의 해제 경로가 사라진다. 일반 Profile에 예외 scope를 주거나 client에서 field를 숨기는 방식은 서버 조회 경계를 약화한다. 구체 projection·field·loader 구성은 같은 결과를 만족하는 구현 선택으로 남긴다.
-- Consequences: Owner 관리 성공과 타인 관계·일반 Target 조회의 거부를 같은 fixture로 검증한다. mutation 결과를 만들기 위해 보호된 Target 상세를 다시 로드하지 않는다.
-- Confirmation / Follow-up: Owner A/B, Remote selected actor·guest·membership mismatch, Target·제삼자의 Block ID 조회, 같은 operation의 actor 전환, cleanup 실패와 정확한 해제 ID를 검증한다. 2026-09-06 HITL 정정에 따라 직접 route 진입·새로고침의 Owner 상태와 해제 ID, 자신의 Block이 없는 unavailable 결과를 API·UI에서 검증한다.
 
 ### 기존 Notification의 차단은 각 Recipient 기준으로 판정한다
 

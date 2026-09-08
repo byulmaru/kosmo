@@ -5,14 +5,6 @@ import type { UserContext } from '@/context';
 
 export type ProfileBlockRow = typeof ProfileBlocks.$inferSelect;
 
-export type ProfileBlockTargetRow = {
-  readonly id: string;
-  readonly handle: string;
-  readonly displayName: string;
-  readonly domain: string;
-  readonly kind: InstanceKind;
-};
-
 export const profileBlockByIdLoader = (ctx: UserContext) =>
   ctx.loader<string, ProfileBlockRow, string, true>({
     name: `profileBlock.byId:${ctx.session?.profileId ?? 'anonymous'}`,
@@ -37,23 +29,4 @@ export const profileBlockByIdLoader = (ctx: UserContext) =>
         );
     },
     key: (profileBlock) => profileBlock?.id ?? null,
-  });
-
-export const profileBlockTargetLoader = (ctx: UserContext) =>
-  ctx.loader<string, ProfileBlockTargetRow, string, true>({
-    name: 'profileBlock.target',
-    nullable: true,
-    load: async (ids) =>
-      db
-        .select({
-          id: Profiles.id,
-          handle: Profiles.handle,
-          displayName: Profiles.displayName,
-          domain: Instances.domain,
-          kind: Instances.kind,
-        })
-        .from(Profiles)
-        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-        .where(inArray(Profiles.id, ids)),
-    key: (target) => target?.id ?? null,
   });

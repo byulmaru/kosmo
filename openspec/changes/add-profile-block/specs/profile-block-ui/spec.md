@@ -64,7 +64,7 @@
 
 ### Requirement: Profile Block actor and client-state isolation
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-51`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 후속 UI 교체는 `PROD-917`의 범위다. Block UI는 selected Profile별 actor 상태 격리를 유지해야 하며(MUST), 기존 Profile 기본 정보와 viewer 방향에 따른 콘텐츠 상태를 최신 서버 정책과 함께 표시해야 한다(MUST). Block·Unblock 성공 결과는 현재 화면, Block 목록, 이미 표시 중인 timeline·Profile Post List와 Notification client 상태를 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 각 actor의 Block 상태를 해당 actor의 결과로 격리해야 한다(MUST).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-51`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block UI는 selected Profile별 actor 상태 격리를 유지해야 하며(MUST), 기존 Profile 정보를 유지하면서 viewer 방향 콘텐츠 상태와 각 surface의 정책을 표시해야 한다(MUST). Block·Unblock 성공 결과는 현재 화면, Block 목록과 이미 표시 중인 표면의 상태를 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 이전 Owner의 Block 상태를 새 actor에 재사용해서는 안 된다(MUST NOT).
 
 #### Scenario: Block 성공 뒤 표시 중인 결과가 정책에 수렴한다
 
@@ -77,15 +77,15 @@
 #### Scenario: 새로고침과 직접 링크 진입에서도 차단 화면과 해제를 제공한다
 
 - **WHEN** selected Local Owner가 이미 차단한 Target의 Profile route에 이전 client cache 없이 직접 진입하거나 새로고침한다
-- **THEN** 시스템은 API의 현재 Owner 차단 결과로 identity-free `blocking` 화면과 해당 Profile Block ID의 `차단 해제` action을 제공한다
-- **AND** 일반 Target Profile 조회 성공이나 차단 목록을 먼저 열어 본 상태를 요구하지 않는다
-- **AND** loading부터 차단 화면이 확정될 때까지 Target identity·이미 알고 있는 handle·content·social action을 표시하지 않는다
+- **THEN** 시스템은 기존 Target Profile 정보와 API의 현재 Owner 차단 결과, 해당 Profile Block ID의 `차단 해제` action을 제공한다
+- **AND** 차단 목록을 먼저 열어 본 상태를 요구하지 않는다
+- **AND** 콘텐츠는 viewer 방향 Profile Block 정책에 따라 표시한다
 
 #### Scenario: 상대에게만 차단된 직접 route는 해제 action을 제공하지 않는다
 
-- **WHEN** 현재 selected Profile은 Target을 차단하지 않았지만 Target의 Block 때문에 직접 Profile을 조회할 수 없다
-- **THEN** 시스템은 identity-free `blockedBy` 화면을 actionless로 표시한다
-- **AND** 다른 Owner의 Block을 해제할 action이나 보호된 Target 정보를 표시하지 않는다
+- **WHEN** 현재 selected Profile은 Target을 차단하지 않았지만 Target의 Block 때문에 콘텐츠 조회가 제한된다
+- **THEN** 시스템은 기존 Target Profile 정보와 콘텐츠 차단 상태를 표시한다
+- **AND** 다른 Owner의 Block을 해제할 action을 표시하지 않는다
 
 #### Scenario: selected Profile을 전환해도 Block 상태를 섞지 않는다
 

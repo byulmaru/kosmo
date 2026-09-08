@@ -50,7 +50,7 @@ builder.queryField('profileByHandle', (t) =>
     args: {
       handle: t.arg.string({ required: true }),
     },
-    resolve: async (_, args, ctx) => {
+    resolve: async (_, args) => {
       const localInstance = await resolveConfiguredLocalInstance();
       const parsed = parseProfileHandle(args.handle, {
         configuredLocalDomain: localInstance.domain,
@@ -70,12 +70,7 @@ builder.queryField('profileByHandle', (t) =>
               eq(Instances.domain, parsed.domain),
               eq(Instances.kind, InstanceKind.ACTIVITYPUB),
               eq(Profiles.normalizedHandle, parsed.normalizedHandle),
-              visibleProfileWhere({
-                profile: Profiles,
-                instance: Instances,
-                database: db,
-                viewerProfileId: ctx.session?.profileId,
-              }),
+              visibleProfileWhere({ profile: Profiles, instance: Instances }),
             ),
           )
           .limit(1)
@@ -90,12 +85,7 @@ builder.queryField('profileByHandle', (t) =>
           and(
             eq(Profiles.instanceId, localInstance.id),
             eq(Profiles.normalizedHandle, parsed.normalizedHandle),
-            visibleProfileWhere({
-              profile: Profiles,
-              instance: Instances,
-              database: db,
-              viewerProfileId: ctx.session?.profileId,
-            }),
+            visibleProfileWhere({ profile: Profiles, instance: Instances }),
           ),
         )
         .limit(1)
@@ -111,7 +101,7 @@ builder.queryField('searchProfiles', (t) =>
       args: {
         query: t.arg.string({ required: true }),
       },
-      resolve: async (_, args, ctx) => {
+      resolve: async (_, args) => {
         const localInstance = await resolveConfiguredLocalInstance();
         const parsed = parseProfileHandle(args.query, {
           configuredLocalDomain: localInstance.domain,
@@ -168,12 +158,7 @@ builder.queryField('searchProfiles', (t) =>
                   and(
                     eq(Profiles.id, materializedProfileId),
                     cursorWhere,
-                    visibleProfileWhere({
-                      profile: Profiles,
-                      instance: Instances,
-                      database: db,
-                      viewerProfileId: ctx.session?.profileId,
-                    }),
+                    visibleProfileWhere({ profile: Profiles, instance: Instances }),
                   ),
                 )
                 .orderBy(inverted ? desc(Profiles.id) : asc(Profiles.id))
@@ -191,12 +176,7 @@ builder.queryField('searchProfiles', (t) =>
                     eq(Instances.kind, InstanceKind.ACTIVITYPUB),
                     normalizedHandleLike,
                     cursorWhere,
-                    visibleProfileWhere({
-                      profile: Profiles,
-                      instance: Instances,
-                      database: db,
-                      viewerProfileId: ctx.session?.profileId,
-                    }),
+                    visibleProfileWhere({ profile: Profiles, instance: Instances }),
                   ),
                 )
                 .orderBy(inverted ? desc(Profiles.id) : asc(Profiles.id))
@@ -212,12 +192,7 @@ builder.queryField('searchProfiles', (t) =>
                   eq(Profiles.instanceId, localInstance.id),
                   normalizedHandleLike,
                   cursorWhere,
-                  visibleProfileWhere({
-                    profile: Profiles,
-                    instance: Instances,
-                    database: db,
-                    viewerProfileId: ctx.session?.profileId,
-                  }),
+                  visibleProfileWhere({ profile: Profiles, instance: Instances }),
                 ),
               )
               .orderBy(inverted ? desc(Profiles.id) : asc(Profiles.id))

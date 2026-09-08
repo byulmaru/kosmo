@@ -27,8 +27,8 @@ canonical `profile-block.md`는 이 결과와 durable 경계만 정하며, 각 �
   `blockedBy` route는 콘텐츠 차단 상태를 표시한다. 경고 문구·표시 기간은 후속 디자인 계약으로 남기고, `PROD-917` 신규 UI 교체는 이 change와 분리한다.
 - Profile·Post·Media·Follow 후보와 Home·Local·Profile·Hashtag Post List·검색 및 새 로컬 상호작용에 같은 Profile Block policy를 적용한다.
 - selected Local Profile을 actor로 사용하는 GraphQL Block 생성·해제와 Owner-only management 조회를 제공한다.
-- Confirmation·관리 목록·접근성 등 기존 presentation contract와 최신 canonical이 승인한 identity-free `blocking`·`blockedBy` route presentation을 소비하는
-  흐름을 제공한다. presentation 결정·이관 자체는 이 change가 소유하지 않으며, UI는 보호된 데이터를 복구하지 않는다.
+- Confirmation·관리 목록·접근성 등 기존 presentation contract와 최신 canonical의 기존 Profile 정보·viewer 방향 콘텐츠 상태를 소비하는
+  흐름을 제공한다. 신규 UI 교체는 `PROD-917` 후속 범위다.
 - `PROD-813`에서 Local·Remote pair와 주요 surface의 cross-slice 결과를 검증하고 canonical·Linear·OpenSpec sync 뒤 archive한다.
 - `PROD-813`에서 Local·Remote pair와 주요 surface의 cross-slice 결과를 검증하고 canonical·Linear·OpenSpec sync 뒤 archive한다.
 
@@ -61,9 +61,8 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
   양방향 보호 정책을 적용하고 pagination/page limit 뒤 client filter가 policy를 대신하지 않게 한다.
 - GraphQL은 selected Local Profile actor와 Owner scope를 사용하고 중앙 application policy를 호출해야 한다. ADR 0024의 경계에 따라 request-specific DB actor
   state(GUC 등)나 client-only filter로 권한·가시성을 대체하지 않는다.
-- UI는 canonical design의 기존 Button·ActionMenu·ModalSheet·Toast·SettingsItem과 기존 Profile/Settings 흐름을 재사용하고, 최신 canonical이 정한 direct
-  Profile route 계약을 구현·통합한다. 이 기능만을 위한 새 범용 safety component나 Settings shell을 추가하지 않으며, `PROD-861` 공용 presentation 이관·Storybook 확정과
-  `PROD-917` 신규 UI 교체는 각각 후속 범위로 관리한다.
+- UI는 canonical design의 기존 Button·ActionMenu·ModalSheet·Toast·SettingsItem과 기존 Profile/Settings 흐름을 재사용하고, 최신 canonical의 기존 Profile 정보와
+  viewer 방향 콘텐츠 상태를 소비한다. 이 기능만을 위한 새 범용 safety component나 Settings shell을 추가하지 않으며 신규 UI 교체는 `PROD-917` 후속 범위다.
 
 ### Implementation ownership (non-normative)
 
@@ -107,25 +106,24 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
 5. GraphQL은 기존 Mute 문법에 맞춘 `blockProfile`·`unblockProfile`, `ProfileBlock` 관계와 Owner connection을 기본안으로 검토한다.
    생성 input의 대상과 해제 input의 관계 ID만 받고 Owner는 selected Local Profile에서 얻는다. `usingProfile`만으로 Local 조건이
    보장된다고 추정하지 않는다. mutation은 부모 layer #726이 제공하는 durable action을 호출하며 cleanup 구현을 `PROD-822`에 복제하지 않는다.
-   일반 Target loader에서 차단된다는 이유로 자기 Block을 관리할 수 없게 하거나, 관리 목적으로 일반 Target 조회 권한을 열지 않는다.
-6. Owner 관리 payload는 관계 ID·생성 시각과 관계 식별에 필요한 Target projection으로 제한한다. 일반 `Profile` ref에 예외 권한을 주기보다
-   허용 field만 가진 관리 전용 projection을 우선 검토한다. 정확한 field·nullability·error mapping은 기존 schema와 정렬해 구현 PR에서 확정한다.
+   자기 Block 관계의 Owner scope와 일반 Target Profile 조회 정책을 서로 혼동하지 않는다.
+6. Owner 관리 payload는 관계 ID·생성 시각과 기존 `Profile` Target ref를 제공한다. Profile field에는 기존 조회 조건을 적용하고,
+   Post·Media·Follow에는 각 surface의 Profile Block 정책을 적용한다. 정확한 field·nullability·error mapping은 기존 schema와 정렬해 구현 PR에서 확정한다.
    해제 결과는 실제 삭제한 관계 ID를 반환하며, stale ID 재시도가 새 Block 세대를 삭제하지 않도록 선행 action의 generation 계약을 유지한다.
-   직접 route는 handle과 현재 selected actor로 자신의 차단 여부·해제 관계 ID를 얻을 수 있어야 한다. 일반 Target Profile을 조회했거나
-   기존 관리 목록의 client cache가 있어야 한다는 조건을 두지 않는다. 자신의 Block이 없고 Profile을 조회할 수 없으면 해제 관계를 반환하지 않으며,
-   UI는 상대에게 차단된 경우 actionless 화면을 표시한다. 구체 query·projection 배치는 구현 선택으로 남긴다.
+   직접 route는 handle과 현재 selected actor로 기존 Profile 결과와 자신의 차단 여부·해제 관계 ID를 얻을 수 있어야 한다.
+   기존 관리 목록의 client cache가 있어야 한다는 조건을 두지 않으며, 자신의 Block이 없으면 다른 Owner의 해제 관계를 반환하지 않는다.
+   구체 query 배치는 구현 선택으로 남긴다.
 7. Block·Unblock 성공과 같은 operation의 `selectProfile` 이후에 request-scoped loader와 scope가 이전 정책 결과를 재사용하지 않게 한다.
    다음 HTTP request에서는 현재 관계와 저장된 selected Profile을 다시 평가한다. client cache 수렴은 `PROD-823`이 이 공개 결과를 소비한다.
-8. viewer별 Block predicate를 일반 Profile visibility에 적용하되, Owner 전용 Mute 관리 connection과 `ProfileMute` 관계·viewer 상태 loader에는 적용하지 않는다.
-   같은 Target의 Mute·Block 관계는 독립적으로 관리할 수 있어야 하며, Mute 관리 관계를 유지하는 일이 일반 Target Profile payload를 공개하는
-   예외 권한이 되지는 않는다.
+8. 일반 Profile visibility에는 viewer별 Block predicate를 적용하지 않는다. Owner 전용 Mute 관리 connection과 `ProfileMute` 관계·viewer 상태 loader도
+   같은 기존 Profile Target ref를 사용하며, 같은 Target의 Mute·Block 관계는 독립적으로 관리할 수 있어야 한다.
 
 ### Allowed Alternatives — PROD-822
 
 - pair 판정을 기존 visibility 모듈에 두거나 전용 모듈로 나눌 수 있다. SQL의 `NOT EXISTS`, 동등한 join/anti-join이나
   action용 조회 방식은 동일한 양방향 결과·후보 필터링·공통 정책 재사용을 증명하면 허용한다.
-- API field와 관리 projection의 배치는 기존 object 소유권과 generated schema에 맞게 정할 수 있다. 일반 Profile의 보호된 field를
-  관리 projection으로 열거나 actor 입력을 client에 맡기는 방식은 허용하지 않는다.
+- API field 배치는 기존 object 소유권과 generated schema에 맞게 정할 수 있다. Block·Mute 관계 Target에 별도 projection이나 global ID를 추가하거나
+  actor 입력을 client에 맡기는 방식은 허용하지 않는다.
 - loader invalidation과 actor별 key 방식 중 현재 request context에 맞춰 수단을 선택할 수 있다. 선택 자체를 새 공용 cache 추상화나
   모든 loader의 일괄 재작성 요구로 확대하지 않는다.
 
@@ -140,16 +138,15 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
 
 - Block 실행이 포착한 required cleanup이 남은 상태에서 action 성공을 확정해 부분 성공을 만들지 않는다.
 - 일시 오류·재시작에서 이미 처리한 cleanup이 중복되어 Repost·Bookmark·기존 Reaction·비직접 원인 Notification 또는 Read State를 바꾸지 않게 한다.
-- Profile route는 기본 Profile 정보와 viewer 방향의 콘텐츠 상태를 기존 정책에 따라 표시하고, `blocking` route의 frontend 경고는 콘텐츠 결과 표시와
-  별도의 presentation 상태로 제공한다.
+- Owner → Target 한 방향만 검사해 Target이 Owner의 Profile·Post·Media·Follow 후보를 계속 보게 하지 않는다.
+- Profile identity와 Post·Media·list/search의 surface별 정책을 하나의 양방향 hidden 결과로 합치지 않는다.
 - Block 해제 시 현재 남아 있는 양방향 Follow Request·Follow Relationship과 그 직접 원인 Notification을 먼저 정리한 뒤 Block을 제거하며, 차단 생성 때 제거된
   Follow Request·Follow Relationship을 자동 복구하지 않는다. 기존 Reaction cleanup은 현재 action에서 정하지 않는다.
 - `PROD-327` source 신규 Notification suppression, `PROD-818` federation, `PROD-328` async physical cleanup을 현재 task나 완료 증거로 끌어오지 않는다.
 - 기존 레거시 UI의 구현·통합 결과와 API·cache·Native runtime 결과를 `PROD-813`에서 환경별 실제 evidence로 기록한다. `PROD-861` 공용 presentation 이관·Storybook 확정과
   `PROD-917` 신규 UI 교체는 이 change의 완료 조건과 별도 후속 범위로 관리한다.
 - DSN-51·DSN-53/`PROD-861` presentation 결과를 API·cache·Native runtime 완료 증거로 일반화하지 않는다.
-- Block을 일반 Profile loader에만 넣고 Follow Node·viewer 상태·Reaction Profile 목록·PostContent·Bookmark 경로를 빠뜨리지 않는다.
-- 차단된 Target의 일반 Profile ref를 관리 payload에 반환한 뒤 nested field를 client가 요청하지 않을 것이라고 가정하지 않는다.
+- Block을 일반 Profile loader에 넣지 않는다. Follow Node·viewer 상태·Reaction Profile 목록·PostContent·Bookmark 경로에는 각 surface의 정책을 명시적으로 적용한다.
 - Notification 가시성을 selected Profile 하나로 계산해 같은 Account의 다른 Recipient 알림을 잘못 노출하거나 숨기지 않는다.
 - 아직 없는 Hashtag Post List·Post 검색의 공통 후보 정책 검증을 실제 endpoint 통합 검증으로 보고하지 않는다.
 
@@ -188,11 +185,10 @@ ESLint·Prettier를 실행한다. 기존 Mute·Follow·Post visibility·Notifica
    backfill하지 않는다.
 2. `PROD-821`의 cleanup PR #726에서 Block admission, durable cleanup orchestration과 required cleanup success gate를 연결하고
    restart/retry·보존·no-restore 결과를 검증한다.
-3. `PROD-822`를 #726 위의 자식 layer로 쌓아 Profile identity, directional direct content/Profile Post List, bilateral list/search/interaction/Notification과
-   GraphQL policy를 연결한다. Profile/Post/Media/Follow candidate와 Home·Local·Hashtag list/search는 각 surface의 정책 결과를 사용한다.
-4. `PROD-823`에서 최신 canonical이 승인한 identity-free `blocking`·`blockedBy` route presentation과 Settings Block destination, selected actor 상태 수렴을
-   기존 레거시 Profile·Settings UI에 연결한다. `DSN-51`·DSN-53은 presentation 근거이고 `PROD-861`은 선행 구현 증거이며, 해당 presentation의 결정·이관 자체와
-   `PROD-917` 신규 UI 교체는 이 change와 분리된 후속 범위로 유지한다.
+3. `PROD-822`를 #726 위의 자식 layer로 쌓아 common policy·GraphQL을 연결한다. Profile/Post/Media/Follow candidate와 Home·Local·Profile·Hashtag list/search 및 새 interaction은 같은
+   양방향 policy 결과를 사용한다.
+4. `PROD-823`에서 최신 canonical의 기존 Profile 정보·viewer 방향 콘텐츠 상태와 Settings Block destination, selected actor 상태 수렴을 연결한다.
+   `DSN-51`·DSN-53은 presentation 근거이고 `PROD-861`은 선행 구현 증거이며 신규 UI 교체는 `PROD-917` 후속 범위다.
 5. `PROD-813`에서 Local·Remote pair와 현재 구현된 direct/list/search/interaction 및 cross-slice E2E, canonical·Linear·OpenSpec 정합성, 플랫폼별 실제 evidence를 확인한다.
    미구현 Hashtag Post List·Post 검색은 공통 후보 정책 검증 결과와 실제 API 미실행 기록으로 완료 기준을 충족한다. 이 검증 범위에 따른 모든 declared task와
    required validation 뒤에만 `add-profile-block`을 archive한다.

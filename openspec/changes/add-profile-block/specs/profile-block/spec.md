@@ -100,32 +100,25 @@
 - **THEN** 각 응답은 해당 시점의 selected Local Profile이 Owner인 Profile Block만 반환한다
 - **AND** Owner A의 관계가 Owner B의 목록·mutation·Node 조회 결과에 섞이지 않는다
 
-#### Scenario: GraphQL 각 surface가 해당 Profile Block 정책을 사용한다
+#### Scenario: GraphQL 각 surface가 해당 Profile Block policy를 사용한다
 
 - **WHEN** GraphQL client가 Profile Node, Post connection, Media relation, Follow 후보 또는 Profile Block 목록을 같은 Block 관계에 대해 요청한다
 - **THEN** Profile Node는 기존 Profile 조회 정책을, Post·Media는 viewer 방향의 콘텐츠 정책을, Follow 후보는 양방향 보호 정책을 적용한다
 - **AND** Profile Block 목록은 selected Local Profile이 Owner인 관계만 반환한다
-- **AND** client가 숨겨진 결과를 후처리해 상대 Profile 또는 Post를 복원할 수 있는 payload를 반환하지 않는다
 
 #### Scenario: 관리 조회가 일반 Profile 조회의 우회 경로가 되지 않는다
 
 - **WHEN** selected Local Owner가 자신의 Profile Block Node 또는 관리 connection을 조회한다
-- **THEN** 시스템은 관계 관리에 필요한 최소 Target 식별 정보와 Owner 소유 관계만 제공한다
-- **AND** 이 관리 정보로 Target의 일반 Profile·Post·Media·Follow 관계를 추가 조회할 수 있는 권한을 부여하지 않는다
+- **THEN** 시스템은 기존 `Profile` Target 정보와 Owner 소유 관계만 제공한다
+- **AND** Post·Media·Follow 관계에는 각각의 기존 권한과 Profile Block surface policy를 적용한다
 - **AND** 같은 Block ID를 Target 또는 다른 selected Profile이 조회하면 관계와 Target 식별 정보를 반환하지 않는다
 
 #### Scenario: Mute와 Block 관리 관계를 독립적으로 유지한다
 
 - **WHEN** selected Local Owner가 같은 Target을 Mute한 뒤 Block한다
-- **THEN** 일반 Target Profile은 Block policy에 따라 조회할 수 없다
+- **THEN** 일반 Target Profile은 기존 Profile 조회 정책에 따라 조회할 수 있다
 - **AND** 기존 Profile Mute는 Owner의 Mute connection·관계 Node·해제 경로에 계속 남는다
-- **AND** Mute 관리 관계를 조회할 수 있다는 사실로 일반 Target Profile의 보호된 field를 공개하지 않는다
-
-#### Scenario: Block 관리 projection의 ID를 일반 Profile ID로 재사용하지 않는다
-
-- **WHEN** Owner가 Profile Block 관리 connection에서 `ProfileBlockTarget`을 조회한다
-- **THEN** Target projection은 일반 `Profile`과 다른 global ID typename을 사용한다
-- **AND** client는 두 ID가 같다는 가정으로 일반 Profile cache를 갱신하지 않는다
+- **AND** Block·Mute 관계의 `targetProfile`은 기존 `Profile` global ID를 사용한다
 
 #### Scenario: 같은 operation에서 selected Profile이 바뀌면 이전 actor 권한을 재사용하지 않는다
 
@@ -136,16 +129,16 @@
 #### Scenario: 직접 route 진입에서도 Owner의 차단과 해제 대상을 확인한다
 
 - **WHEN** selected Local Owner가 이전 Profile·Block client cache 없이 route handle로 이미 차단한 Target의 Profile에 직접 진입하거나 새로고침한다
-- **THEN** API는 일반 Target Profile을 반환하지 않고도 현재 Owner의 차단 여부와 해제할 Profile Block ID를 확인할 수 있는 관리 결과를 제공한다
-- **AND** 일반 Profile 조회 성공이나 기존 Block 목록의 client cache가 있어야 이 결과를 제공할 수 있다는 조건을 두지 않는다
-- **AND** route용 결과는 보호된 Target identity·content·social field를 노출하거나 일반 Profile·Post·Media 조회 권한을 부여하지 않는다
+- **THEN** API는 기존 Profile 조회 정책을 충족한 Target Profile과 현재 Owner의 차단 여부·해제할 Profile Block ID를 제공한다
+- **AND** 기존 Block 목록의 client cache가 있어야 이 결과를 제공할 수 있다는 조건을 두지 않는다
+- **AND** Post·Media·social field는 각 surface의 Profile Block 정책을 적용한다
 - **AND** 구체 field·payload 이름과 관리 조회의 배치는 구현 PR이 기존 GraphQL 계약 안에서 정한다
 
-#### Scenario: 자신의 Block이 없는 unavailable route에 다른 Owner의 관계를 반환하지 않는다
+#### Scenario: 자신의 Block이 없는 route에 다른 Owner의 관계를 반환하지 않는다
 
-- **WHEN** selected Local Profile이 route handle의 Target을 직접 조회할 수 없고 자신이 Owner인 Block도 없다
+- **WHEN** selected Local Profile이 route handle의 Target을 조회하고 자신이 Owner인 Block은 없다
 - **THEN** API는 자신의 차단 관리 결과에 해제할 관계가 없음을 나타낸다
-- **AND** 상대가 Owner인 Block ID나 보호된 Target Profile을 대신 반환하지 않는다
+- **AND** 상대가 Owner인 Block ID를 반환하지 않는다
 
 ### Requirement: Profile Block GraphQL durable result
 
