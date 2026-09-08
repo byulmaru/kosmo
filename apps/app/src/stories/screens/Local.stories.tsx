@@ -98,6 +98,7 @@ type LocalState =
   | 'empty'
   | 'error'
   | 'refresh-error'
+  | 'refresh-partial-error'
   | 'refreshing'
   | 'filtered'
   | 'long-content'
@@ -143,6 +144,21 @@ function localRelayForState(state: LocalState) {
             sequence: [
               { data: localPageData() },
               { data: localPageData(localConnection([refreshedPost])), delayMs: 2_000 },
+            ],
+          },
+        },
+      };
+    case 'refresh-partial-error':
+      return {
+        operationResponses: {
+          LocalPageQuery: {
+            sequence: [
+              { data: localPageData() },
+              {
+                data: { ...localPageData(), localTimeline: null },
+                errors: [{ message: 'Local timeline resolver failed' }],
+              },
+              { data: localPageData(localConnection([refreshedPost])) },
             ],
           },
         },
@@ -221,6 +237,7 @@ const meta = {
         'empty',
         'error',
         'refresh-error',
+        'refresh-partial-error',
         'refreshing',
         'filtered',
         'long-content',

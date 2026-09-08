@@ -1549,8 +1549,8 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 #### Scenario: Retain Local timeline after refresh failure
 
 - **GIVEN** 현재 actor의 Local 목록을 성공적으로 표시했다
-- **WHEN** Local 첫 page 새로고침 요청이 실패한다
-- **THEN** 시스템은 마지막 성공 목록과 scroll position을 유지한다
+- **WHEN** Local 첫 page 새로고침 요청이 transport 오류 또는 GraphQL `errors`가 포함된 응답으로 실패한다
+- **THEN** 시스템은 실패 payload를 Relay Store에 적용하지 않고 마지막 성공 목록과 scroll position을 유지한다
 - **AND** `로컬 타임라인을 불러오지 못했어요`와 `다시 시도` action을 오류 toast로 표시한다
 - **AND** toast는 표시 애니메이션 완료 후 3초 뒤 사라지고 목록은 계속 표시한다
 - **AND** toast의 action 또는 선택된 Local 탭 재선택으로 다시 요청할 수 있다

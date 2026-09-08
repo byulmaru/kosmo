@@ -33,6 +33,7 @@ type StoryOperationResponse = {
   data?: unknown;
   delayMs?: number;
   error?: string;
+  errors?: StoryGraphQLError[];
 };
 
 type StoryOperationResponseSequence = {
@@ -161,7 +162,10 @@ async function executeStoryOperation(
       return Promise.reject(new Error(operationResponse.error));
     }
 
-    return { data: (operationResponse.data ?? {}) as PayloadData };
+    return {
+      data: (operationResponse.data ?? {}) as PayloadData,
+      errors: operationResponse.errors,
+    };
   };
 
   if (request.operationKind === 'mutation') {

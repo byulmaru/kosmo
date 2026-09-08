@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
-import { createOperationDescriptor, fetchQuery, getRequest } from 'relay-runtime';
+import { createOperationDescriptor, getRequest } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -67,29 +67,38 @@ export default function LocalScreen() {
     }
     toastCleanup.current?.();
     toastCleanup.current = null;
-    fetchQuery<LocalPageQuery>(
-      environment,
-      LocalQuery,
-      {},
-      { fetchPolicy: 'network-only' },
-    ).subscribe({
-      start: (subscription) => {
-        refreshRequest.current = subscription;
-        setRefreshing(true);
-      },
-      complete: () => {
-        refreshRequest.current = null;
-        setRefreshing(false);
-      },
-      error: () => {
-        refreshRequest.current = null;
-        setRefreshing(false);
-        toastCleanup.current = showToast('로컬 타임라인을 불러오지 못했어요', {
-          action: { label: '다시 시도', onPress: refresh },
-          tone: 'danger',
-        });
-      },
-    });
+    const source = environment
+      .getNetwork()
+      .execute(operation.request.node.params, {}, { force: true });
+    environment
+      .executeWithSource({
+        operation,
+        source: source.map((response) => {
+          // Reject partial failures before Relay can overwrite the retained connection.
+          if ([response].flat().some((payload) => 'errors' in payload && payload.errors?.length)) {
+            throw new Error('Local timeline refresh failed.');
+          }
+          return response;
+        }),
+      })
+      .subscribe({
+        start: (subscription) => {
+          refreshRequest.current = subscription;
+          setRefreshing(true);
+        },
+        complete: () => {
+          refreshRequest.current = null;
+          setRefreshing(false);
+        },
+        error: () => {
+          refreshRequest.current = null;
+          setRefreshing(false);
+          toastCleanup.current = showToast('로컬 타임라인을 불러오지 못했어요', {
+            action: { label: '다시 시도', onPress: refresh },
+            tone: 'danger',
+          });
+        },
+      });
   };
 
   useEffect(() => {

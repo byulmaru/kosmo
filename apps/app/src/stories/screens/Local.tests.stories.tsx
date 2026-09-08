@@ -83,6 +83,27 @@ export const RefreshErrorToastRetry: Story = {
   },
 };
 
+export const RefreshPartialErrorKeepsPosts: Story = {
+  args: { state: 'refresh-partial-error' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const retainedPost = '같은 인스턴스의 소식을 한곳에서 확인해요.';
+    await expect(canvas.findByText(retainedPost)).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('tab', { name: '로컬' }));
+    const alert = await body.findByRole('alert');
+    expect(alert).toHaveTextContent('로컬 타임라인을 불러오지 못했어요');
+    expect(canvas.getByText(retainedPost)).toBeVisible();
+    expect(canvas.queryByText('아직 게시글이 없어요')).not.toBeInTheDocument();
+    expect(canvas.queryByRole('progressbar')).not.toBeInTheDocument();
+    await userEvent.click(within(alert).getByRole('button', { name: '다시 시도' }));
+    await expect(
+      canvas.findByText('새로고침에 성공한 뒤 다시 표시된 로컬 게시글입니다.'),
+    ).resolves.toBeVisible();
+    await waitFor(() => expect(body.queryByRole('alert')).not.toBeInTheDocument());
+  },
+};
+
 function scrollStoryToEnd(canvasElement: HTMLElement) {
   const storyWindow = canvasElement.ownerDocument.defaultView!;
   storyWindow.scrollTo(0, storyWindow.document.documentElement.scrollHeight);
