@@ -25,7 +25,7 @@
 
 ### Requirement: Profile Block removal confirmation
 
-**Authority / Provenance:** `docs/design/profile-mute-block.md`의 Profile action과 완료 피드백, `PROD-823`의 2026-09-06 차단 해제 확인 방식 결정. Profile 메뉴, identity-free `blocking` 상태와 차단 관리 목록의 해제는 확인창을 거쳐야 한다(MUST). 확인창은 `이 프로필의 차단을 해제할까요?`, `차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.`, `취소`와 Primary `차단 해제`를 제공해야 하며(MUST), 확정하기 전에는 해제 요청을 실행해서는 안 된다(MUST NOT). identity-free 상태의 확인창에서 Target identity를 표시해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/profile-mute-block.md`의 Profile action과 완료 피드백, `PROD-823`의 2026-09-06 차단 해제 확인 방식 결정과 2026-09-08 기존 UI 구현 범위. Profile 메뉴, identity-free `blocking` 상태와 차단 관리 목록에서 차단을 해제할 때는 확인창을 거쳐야 한다(MUST). 확인창은 `이 프로필의 차단을 해제할까요?`, `차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.`, `취소`와 Primary `차단 해제`를 제공해야 하며(MUST), 확정하기 전에는 해제 요청을 실행해서는 안 된다(MUST NOT). identity-free 상태의 확인창에서 Target identity를 표시해서는 안 된다(MUST NOT).
 
 #### Scenario: 해제 확인을 취소한다
 
@@ -154,7 +154,7 @@
 
 ### Requirement: Identity-free direct Profile access after reload and actor switch
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`의 조회 정책, `docs/design/profile-mute-block.md`의 차단 관계의 직접 Profile, `PROD-823`의 새로고침·직접 링크·selected Profile 전환 완료 조건, `DSN-51`, `DSN-53`. 직접 Profile route는 이전 Profile cache나 일반 Target Profile 조회 성공을 전제로 삼지 않고, 현재 Owner에 대한 서버의 차단 결과를 소비해야 한다(MUST). 자신의 Block이 있으면 identity-free `blocking`과 해당 관계 ID의 해제 action을 제공해야 하며(MUST), 자신의 Block 없이 상대에게 차단되었으면 identity-free `blockedBy`를 actionless로 표시해야 한다(MUST). Target identity·handle·content·social action을 이전 cache나 route parameter에서 복구해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`의 조회 정책, `docs/design/profile-mute-block.md`의 차단 관계의 직접 Profile, `PROD-823`의 새로고침·직접 링크·selected Profile 전환 완료 조건, `DSN-51`, `DSN-53`. 직접 Profile route는 이전 Profile cache나 일반 Target Profile 조회 성공을 전제로 삼지 않고, 현재 Owner에 대한 서버의 차단 결과를 소비해야 한다(MUST). 자신의 Block이 있으면 identity-free `blocking`과 해당 관계 ID의 해제 action을 제공해야 하며(MUST), 자신의 Block 없이 상대에게 차단되었으면 identity-free `blockedBy`를 actionless로 표시해야 한다(MUST). Target identity·handle·content·social action을 이전 cache나 route parameter에서 복구해서는 안 된다(MUST NOT). 두 상태는 기존 viewport별 Profile route chrome을 유지하고, Web 중앙 column에 별도 PageHeader를 추가해서는 안 된다(MUST NOT).
 
 #### Scenario: cache 없는 직접 링크에서도 자신의 Block을 해제할 수 있다
 
