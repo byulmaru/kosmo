@@ -105,7 +105,7 @@ afterEach(async () => {
 });
 
 describe('ProfileMigrationSourceControl', () => {
-  it('Owner가 입력한 source handle을 준비하고 서버의 canonical source를 표시한다', async () => {
+  it('Owner가 입력한 source handle을 등록하고 서버의 canonical source를 표시한다', async () => {
     await render(true);
 
     const input = rendered('TextField')[0];
@@ -122,6 +122,7 @@ describe('ProfileMigrationSourceControl', () => {
       input: { profileId: 'profile-target', sourceHandle: '@source@remote.example' },
     });
     assert.equal(rendered('Button')[0].props.loading, true);
+    assert.equal(rendered('Button')[0].props.loadingText, '등록 중');
 
     profile.migrationSource = {
       displayName: '원격 원본',
@@ -130,7 +131,7 @@ describe('ProfileMigrationSourceControl', () => {
     };
     await act(async () =>
       mutationConfigs[0].onCompleted({
-        prepareProfileMigration: {
+        registerProfileMigrationSource: {
           profile: { migrationSource: profile.migrationSource },
         },
       }),
@@ -139,13 +140,20 @@ describe('ProfileMigrationSourceControl', () => {
     assert.equal(rendered('Text')[0].children.join(''), '프로필 이전 원본');
     assert.equal(rendered('TextField').length, 0);
     assert.equal(
-      rendered('Text').some((node) => node.children.join('') === '원본 프로필을 준비했어요.'),
+      rendered('Text').some((node) => node.children.join('') === '이전 원본을 등록했어요'),
+      true,
+    );
+    assert.equal(
+      rendered('Text').some(
+        (node) =>
+          node.children.join('') === '기존 Mastodon 계정에서 이 Kosmo 프로필로 이전을 실행하세요',
+      ),
       true,
     );
     assert.equal(
       rendered('View').some(
         (node) =>
-          node.props.accessibilityLabel === '현재 준비된 원본 원격 원본 @source@remote.example',
+          node.props.accessibilityLabel === '현재 등록된 원본 원격 원본 @source@remote.example',
       ),
       true,
     );
@@ -171,6 +179,14 @@ describe('ProfileMigrationSourceControl', () => {
       rendered('Text').some((node) => node.props.accessibilityRole === 'alert'),
       true,
     );
+    assert.equal(
+      rendered('Text').some(
+        (node) =>
+          node.props.accessibilityRole === 'alert' &&
+          node.children.join('') === '이전 원본을 등록하지 못했어요.',
+      ),
+      true,
+    );
     const retry = rendered('Button').find((node) => node.props.children === '다시 시도');
     assert.ok(retry);
     await act(async () => retry?.props.onPress());
@@ -178,20 +194,20 @@ describe('ProfileMigrationSourceControl', () => {
     assert.equal(mutationConfigs[1].variables.input.sourceHandle, '@source@remote.example');
   });
 
-  it('Member는 입력과 준비 action을 사용할 수 없다', async () => {
+  it('Member는 입력과 원본 등록 action을 사용할 수 없다', async () => {
     await render(false);
 
     assert.equal(rendered('TextField')[0].props.editable, false);
     assert.equal(rendered('Button').length, 0);
     assert.equal(
       rendered('Text').some(
-        (node) => node.children.join('') === '프로필 소유자만 원본을 준비할 수 있어요.',
+        (node) => node.children.join('') === '프로필 소유자만 원본을 등록할 수 있어요.',
       ),
       true,
     );
   });
 
-  it('이미 연결된 원본은 교체 입력이나 준비 action을 제공하지 않는다', async () => {
+  it('이미 연결된 원본은 교체 입력이나 원본 등록 action을 제공하지 않는다', async () => {
     profile.migrationSource = {
       displayName: '원격 원본',
       id: 'profile-source',
@@ -202,12 +218,12 @@ describe('ProfileMigrationSourceControl', () => {
     assert.equal(rendered('TextField').length, 0);
     assert.equal(rendered('Button').length, 0);
     assert.equal(
-      rendered('Text').some((node) => node.children.join('') === '준비된 원본은 교체할 수 없어요.'),
+      rendered('Text').some((node) => node.children.join('') === '등록된 원본은 교체할 수 없어요.'),
       true,
     );
   });
 
-  it('환경 세대가 바뀐 뒤 이전 mutation의 완료를 반영하지 않는다', async () => {
+  it('환경 세대가 바뀐 뒤 이전 등록 mutation의 완료를 반영하지 않는다', async () => {
     await render(true);
     await act(async () => rendered('TextField')[0].props.onChangeText('@source@remote.example'));
     await act(async () => rendered('Button')[0].props.onPress());
@@ -222,7 +238,7 @@ describe('ProfileMigrationSourceControl', () => {
     );
     await act(async () =>
       staleCompletion({
-        prepareProfileMigration: {
+        registerProfileMigrationSource: {
           profile: {
             migrationSource: {
               displayName: '늦은 원본',
@@ -236,7 +252,7 @@ describe('ProfileMigrationSourceControl', () => {
 
     assert.equal(rendered('TextField')[0].props.value, '');
     assert.equal(
-      rendered('Text').some((node) => node.children.join('') === '원본 프로필을 준비했어요.'),
+      rendered('Text').some((node) => node.children.join('') === '이전 원본을 등록했어요'),
       false,
     );
   });
