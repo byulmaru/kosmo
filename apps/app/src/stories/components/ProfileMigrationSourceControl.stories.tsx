@@ -107,7 +107,7 @@ function preparePayload(
 ) {
   const input = variables.input as { sourceHandle: string };
   return {
-    prepareProfileMigration: {
+    registerProfileMigrationSource: {
       profile: {
         __typename: 'Profile',
         displayName: '현재 Profile',
@@ -168,11 +168,11 @@ function ProfileMigrationSourceStory({
       ) : null}
       {mode === 'pending' ? (
         <Pressable
-          accessibilityLabel="이전 준비 완료"
+          accessibilityLabel="이전 원본 등록 완료"
           accessibilityRole="button"
           onPress={() => pendingCompletionRef.current?.()}
         >
-          <Text>이전 준비 완료</Text>
+          <Text>이전 원본 등록 완료</Text>
         </Pressable>
       ) : null}
     </View>
@@ -234,11 +234,14 @@ export const OwnerPreparationAndSuccess: Story = {
       canvas.getByRole('textbox', { name: '이전할 프로필 주소' }),
       '@source@remote.example',
     );
-    await userEvent.click(canvas.getByRole('button', { name: '원본 프로필 준비' }));
-    await expect(canvas.findByText('원본 프로필을 준비했어요.')).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '원본 등록' }));
+    await expect(canvas.findByText('이전 원본을 등록했어요')).resolves.toBeVisible();
+    await expect(
+      canvas.findByText('기존 Mastodon 계정에서 이 Kosmo 프로필로 이전을 실행하세요'),
+    ).resolves.toBeVisible();
     await expect(
       canvas.findByRole('group', {
-        name: '현재 준비된 원본 원격 원본 Profile @source@remote.example',
+        name: '현재 등록된 원본 원격 원본 Profile @source@remote.example',
       }),
     ).resolves.toBeVisible();
   },
@@ -252,12 +255,12 @@ export const FailureAndRetry: Story = {
       canvas.getByRole('textbox', { name: '이전할 프로필 주소' }),
       '@source@remote.example',
     );
-    await userEvent.click(canvas.getByRole('button', { name: '원본 프로필 준비' }));
+    await userEvent.click(canvas.getByRole('button', { name: '원본 등록' }));
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '원본 프로필을 준비하지 못했어요.',
+      '이전 원본을 등록하지 못했어요.',
     );
     await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
-    await expect(canvas.findByText('원본 프로필을 준비했어요.')).resolves.toBeVisible();
+    await expect(canvas.findByText('이전 원본을 등록했어요')).resolves.toBeVisible();
   },
   render: (args) => <ProfileMigrationSourceStory {...args} editable mode="error-once" />,
 };
@@ -270,11 +273,11 @@ export const LateCompletionIgnoredAfterEnvironmentTransition: Story = {
       canvas.getByRole('textbox', { name: '이전할 프로필 주소' }),
       '@source@remote.example',
     );
-    await userEvent.click(canvas.getByRole('button', { name: '원본 프로필 준비' }));
+    await userEvent.click(canvas.getByRole('button', { name: '원본 등록' }));
     expect(args.onMutationAttempt).toHaveBeenCalledOnce();
     await userEvent.click(canvas.getByRole('button', { name: 'Profile과 Environment 전환' }));
-    await userEvent.click(canvas.getByRole('button', { name: '이전 준비 완료' }));
-    expect(canvas.queryByText('원본 프로필을 준비했어요.')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '이전 원본 등록 완료' }));
+    expect(canvas.queryByText('이전 원본을 등록했어요')).toBeNull();
   },
   render: (args) => <ProfileMigrationSourceStory {...args} editable mode="pending" />,
 };
@@ -286,14 +289,14 @@ const longSourceReflowPlay = async ({ canvasElement }: { canvasElement: HTMLElem
   const longHandle = longPreparedSource.relativeHandle;
 
   expect(input).toBeVisible();
-  expect(canvas.getByRole('button', { name: '원본 프로필 준비' })).toBeVisible();
+  expect(canvas.getByRole('button', { name: '원본 등록' })).toBeVisible();
   await userEvent.type(input, longHandle);
-  expect(canvas.getByRole('button', { name: '원본 프로필 준비' })).toBeEnabled();
+  expect(canvas.getByRole('button', { name: '원본 등록' })).toBeEnabled();
   expect(control.scrollWidth).toBeLessThanOrEqual(control.clientWidth + 1);
   expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth + 1);
 
-  await userEvent.click(canvas.getByRole('button', { name: '원본 프로필 준비' }));
-  const source = await canvas.findByRole('group', { name: /현재 준비된 원본/ });
+  await userEvent.click(canvas.getByRole('button', { name: '원본 등록' }));
+  const source = await canvas.findByRole('group', { name: /현재 등록된 원본/ });
   expect(source).toBeVisible();
   expect(within(source).getByText(longPreparedSource.displayName)).toBeVisible();
   expect(within(source).getByText(longHandle)).toBeVisible();
