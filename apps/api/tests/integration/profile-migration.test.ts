@@ -52,8 +52,8 @@ type GraphQLResult<TData = Record<string, unknown>> = {
   errors?: GraphQLErrorResult[];
 };
 
-const prepareMutation = `mutation PrepareProfileMigration($input: PrepareProfileMigrationInput!) {
-  prepareProfileMigration(input: $input) {
+const registerSourceMutation = `mutation RegisterProfileMigrationSource($input: RegisterProfileMigrationSourceInput!) {
+  registerProfileMigrationSource(input: $input) {
     profile {
       id
       displayName
@@ -131,7 +131,7 @@ describe('GraphQL profile migration', () => {
 
     for (const token of [member.token, inactive.token, undefined]) {
       const result = await requestGraphQL(
-        prepareMutation,
+        registerSourceMutation,
         {
           input: {
             profileId: globalId('Profile', target.id),
@@ -156,7 +156,7 @@ describe('GraphQL profile migration', () => {
     t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
 
     const result = await requestGraphQL(
-      prepareMutation,
+      registerSourceMutation,
       {
         input: {
           profileId: globalId('Profile', auth.profile.id),
@@ -183,7 +183,7 @@ describe('GraphQL profile migration', () => {
     t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
 
     const result = await requestGraphQL<{
-      prepareProfileMigration: {
+      registerProfileMigrationSource: {
         profile: {
           displayName: string;
           id: string;
@@ -192,7 +192,7 @@ describe('GraphQL profile migration', () => {
         };
       };
     }>(
-      prepareMutation,
+      registerSourceMutation,
       {
         input: {
           profileId: globalId('Profile', auth.profile.id),
@@ -216,7 +216,7 @@ describe('GraphQL profile migration', () => {
       .where(eq(Profiles.id, migration.sourceProfileId))
       .then(firstOrThrow);
 
-    assert.deepEqual(result.data?.prepareProfileMigration.profile, {
+    assert.deepEqual(result.data?.registerProfileMigrationSource.profile, {
       displayName: 'Migration Target',
       id: globalId('Profile', auth.profile.id),
       migrationSource: {

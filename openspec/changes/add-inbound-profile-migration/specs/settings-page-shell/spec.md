@@ -16,6 +16,13 @@
 - **THEN** Profile detail은 source qualified handle을 준비할 수 있는 Profile Migration control을 표시한다
 - **AND** control 실행은 기존 `Account.Active`와 `Profile.Owner` 권한 경계를 사용한다
 
+#### Scenario: source 등록 성공 뒤 ActivityPub Move를 안내한다
+
+- **WHEN** Profile detail의 `registerProfileMigrationSource` mutation이 `RegisterProfileMigrationSourceInput`으로 성공한다
+- **THEN** detail은 `RegisterProfileMigrationSourcePayload.profile`의 target Profile과 `migrationSource` field를 반영한다
+- **AND** 성공 안내는 기존 Mastodon 계정에서 새 Kosmo handle로 ActivityPub `Move`를 시작하도록 설명한다
+- **AND** detail은 Profile 이전 완료를 표시하거나 Move 이후 완료를 위한 별도 Kosmo API·action을 제공하지 않는다
+
 #### Scenario: feature flag가 꺼졌거나 확인되지 않으면 source 준비 control을 숨긴다
 
 - **WHEN** Profile Migration feature flag가 꺼져 있거나 값을 확인할 수 없거나 로딩 중이다

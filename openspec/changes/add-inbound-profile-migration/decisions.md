@@ -28,6 +28,18 @@
 - Consequences: 저장 경계는 pair uniqueness와 기존 Profile identity를 보존해야 하며, source materialization 실패나 준비 충돌은 기존 관계를 변경하지 않는다.
 - Confirmation / Follow-up: eligible target, source materialization, same-pair no-op, target/source 양쪽 충돌을 실행 결과로 확인한다.
 
+### 공개 source 등록은 준비 결과만 반환하고 Move 완료를 제공하지 않는다
+
+- Decision Date: 2026-09-08
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/settings.md`, `PROD-743`, 승인 정정 comment `b326d91f-0736-4aff-a465-5b7ba4124723`
+- Status: Active
+- Context / Problem: 공개 source 등록 action이 무엇을 등록하는지와 등록 성공 뒤 사용자의 다음 행동을 충분히 드러내지 못해 공개 경계를 명확히 해야 한다.
+- Decision Outcome: 공개 GraphQL mutation은 `registerProfileMigrationSource`이며 `RegisterProfileMigrationSourceInput`을 받고 `RegisterProfileMigrationSourcePayload`를 반환한다. 이 public rename은 Core 내부 `prepareProfileMigration` 서비스명을 변경하지 않는다. 성공은 Profile Migration 준비 관계와 Local Actor alias의 등록 결과일 뿐 Profile 이전 완료가 아니다. 성공 안내는 기존 Mastodon 계정에서 새 Kosmo handle로 ActivityPub `Move`를 시작하도록 제공하며, Move 이후 완료를 위한 별도 Kosmo API나 action은 제공하지 않는다.
+- Alternatives Considered: 기존 `prepareProfileMigration` 이름을 유지하면 등록 행위와 다음 행동이 모호하므로 `registerProfileMigrationSource`를 선택했다.
+- Consequences: API schema와 Settings client는 새 public name과 type names를 사용하고, 성공 상태는 실제 Move를 기다리거나 완료로 표시하지 않는다. inbound Move 처리는 기존 protocol·Temporal lifecycle로 계속 수렴한다.
+- Confirmation / Follow-up: schema, Relay operation, Settings success 안내가 새 public name과 preparation-only 결과를 사용하고, 별도 post-Move completion action이 노출되지 않는지 구현 검증한다.
+
 ### Local Actor alias는 준비 관계의 canonical source URI에서만 파생한다
 
 - Decision Date: 2026-09-07
