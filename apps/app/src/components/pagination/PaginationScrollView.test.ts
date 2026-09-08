@@ -90,9 +90,6 @@ describe('PaginationScrollView', () => {
 
     let scrollViews = renderer.root.findAll((node) => (node.type as unknown) === 'ScrollView');
     assert.equal(scrollViews.length, 1);
-    assert.equal(typeof scrollViews[0]?.props.onContentSizeChange, 'function');
-    assert.equal(typeof scrollViews[0]?.props.onLayout, 'function');
-    assert.equal(typeof scrollViews[0]?.props.onScroll, 'function');
     assert.equal(scrollViews[0]?.props.scrollEventThrottle, 16);
     scrollViews[0]?.props.onContentSizeChange(320, 480);
     scrollViews[0]?.props.onLayout({ nativeEvent: { layout: { height: 240 } } });

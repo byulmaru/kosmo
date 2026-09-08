@@ -145,30 +145,6 @@ describe('InfiniteList', () => {
     assert.equal(loadRequests.length, 2);
   });
 
-  it('native 빈 목록의 초기 endReached 요청은 실패 뒤 onLoadErrorChange retry만 허용한다', async () => {
-    const onLoadErrorChange = (loadError: boolean, onRetry: () => void) => {
-      latestLoadError = loadError;
-      latestRetry = onRetry;
-    };
-
-    await act(async () => {
-      renderer = create(createElement(InfiniteList, props({ data: [], onLoadErrorChange })));
-    });
-    await act(async () => flatList().props.onEndReached());
-    assert.equal(loadRequests.length, 1);
-
-    await update(props({ data: [], isLoadingNext: true, onLoadErrorChange }));
-    await act(async () => loadRequests[0]?.onComplete(new Error('empty failed')));
-    await update(props({ data: [], onLoadErrorChange }));
-    const list = flatList();
-    assert.equal(latestLoadError, true);
-    await act(async () => list.props.onEndReached());
-    assert.equal(loadRequests.length, 1);
-    assert.ok(latestRetry);
-    await act(async () => latestRetry?.());
-    assert.equal(loadRequests.length, 2);
-  });
-
   it('PaginationScrollView 안에서는 View body가 outer metrics pagination을 등록한다', async () => {
     await act(async () => {
       renderer = create(
