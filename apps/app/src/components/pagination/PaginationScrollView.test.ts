@@ -46,14 +46,12 @@ mock.module('react-native', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-let PaginationScrollView: ComponentType<PropsWithChildren<{ paginationOwnerKey: string }>>;
+let PaginationScrollView: ComponentType<PropsWithChildren<object>>;
 let usePaginationScrollRegistration: (props: NativeScrollProps) => void;
 
 before(async () => {
   const module = await import('./PaginationScrollView');
-  PaginationScrollView = module.PaginationScrollView as ComponentType<
-    PropsWithChildren<{ paginationOwnerKey: string }>
-  >;
+  PaginationScrollView = module.PaginationScrollView as ComponentType<PropsWithChildren<object>>;
   usePaginationScrollRegistration = module.usePaginationScrollRegistration;
 });
 
@@ -75,10 +73,10 @@ function RegistrationProbe() {
   return createElement('Content');
 }
 
-function renderOwner(registered: boolean, paginationOwnerKey = 'owner-a') {
+function renderOwner(registered: boolean, scrollKey = 'owner-a') {
   return createElement(
     PaginationScrollView,
-    { paginationOwnerKey },
+    { key: scrollKey },
     registered ? createElement(RegistrationProbe) : createElement('Content'),
   );
 }
@@ -178,7 +176,7 @@ describe('PaginationScrollView', () => {
     assert.equal(scrollOffset, 24);
   });
 
-  it('owner가 바뀌면 이전 metric을 새 registration에 재생하지 않는다', async () => {
+  it('React key가 바뀌면 이전 metric을 새 registration에 재생하지 않는다', async () => {
     await act(async () => {
       renderer = create(renderOwner(false, 'owner-a'));
     });

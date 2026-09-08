@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef } from 'react';
 import { Platform, ScrollView } from 'react-native';
 import type { ScrollViewProps } from 'react-native';
 import type { UseAutomaticPaginationResult } from './useAutomaticPagination';
@@ -7,7 +7,6 @@ type NativeScrollProps = UseAutomaticPaginationResult['nativeScrollProps'];
 type NativeLayoutEvent = Parameters<NativeScrollProps['onLayout']>[0];
 type NativeScrollEvent = Parameters<NativeScrollProps['onScroll']>[0];
 type Registration = Readonly<{ id: symbol; props: NativeScrollProps }>;
-type ActiveRegistration = Registration & Readonly<{ ownerKey: string }>;
 type Register = (registration: Registration) => () => void;
 type LatestEvent =
   | Readonly<{
@@ -19,10 +18,7 @@ type LatestEvent =
 
 const PaginationScrollContext = createContext<Register | null>(null);
 
-type PaginationScrollViewProps = ScrollViewProps &
-  Readonly<{
-    paginationOwnerKey: string;
-  }>;
+type PaginationScrollViewProps = ScrollViewProps;
 
 function recordLatestEvent(events: LatestEvent[], event: LatestEvent) {
   const previousIndex = events.findIndex((previous) => previous.type === event.type);
@@ -46,81 +42,59 @@ function snapshotScrollEvent(event: NativeScrollEvent): NativeScrollEvent {
   };
 }
 
-export function PaginationScrollView({
-  children,
-  paginationOwnerKey,
-  ...props
-}: PaginationScrollViewProps) {
-  const registrationRef = useRef<ActiveRegistration | null>(null);
+export function PaginationScrollView({ children, ...props }: PaginationScrollViewProps) {
+  const registrationRef = useRef<Registration | null>(null);
   const latestEventsRef = useRef<LatestEvent[]>([]);
-  useLayoutEffect(() => {
-    registrationRef.current = null;
-    latestEventsRef.current = [];
-  }, [paginationOwnerKey]);
   const onContentSizeChange = useCallback(
     (...args: Parameters<NativeScrollProps['onContentSizeChange']>) => {
       recordLatestEvent(latestEventsRef.current, { args, type: 'contentSize' });
       const registration = registrationRef.current;
-      const handler =
-        registration?.ownerKey === paginationOwnerKey
-          ? registration.props.onContentSizeChange
-          : undefined;
+      const handler = registration?.props.onContentSizeChange;
       if (handler) {
         handler(...args);
       }
     },
-    [paginationOwnerKey],
+    [],
   );
-  const onLayout = useCallback(
-    (...args: Parameters<NativeScrollProps['onLayout']>) => {
-      recordLatestEvent(latestEventsRef.current, {
-        args: [snapshotLayoutEvent(args[0])],
-        type: 'layout',
-      });
-      const registration = registrationRef.current;
-      const handler =
-        registration?.ownerKey === paginationOwnerKey ? registration.props.onLayout : undefined;
-      if (handler) {
-        handler(...args);
+  const onLayout = useCallback((...args: Parameters<NativeScrollProps['onLayout']>) => {
+    recordLatestEvent(latestEventsRef.current, {
+      args: [snapshotLayoutEvent(args[0])],
+      type: 'layout',
+    });
+    const registration = registrationRef.current;
+    const handler = registration?.props.onLayout;
+    if (handler) {
+      handler(...args);
+    }
+  }, []);
+  const onScroll = useCallback((...args: Parameters<NativeScrollProps['onScroll']>) => {
+    recordLatestEvent(latestEventsRef.current, {
+      args: [snapshotScrollEvent(args[0])],
+      type: 'scroll',
+    });
+    const registration = registrationRef.current;
+    const handler = registration?.props.onScroll;
+    if (handler) {
+      handler(...args);
+    }
+  }, []);
+  const register = useCallback<Register>((registration) => {
+    registrationRef.current = registration;
+    for (const event of latestEventsRef.current) {
+      if (event.type === 'contentSize') {
+        registration.props.onContentSizeChange(...event.args);
+      } else if (event.type === 'layout') {
+        registration.props.onLayout(...event.args);
+      } else {
+        registration.props.onScroll(...event.args);
       }
-    },
-    [paginationOwnerKey],
-  );
-  const onScroll = useCallback(
-    (...args: Parameters<NativeScrollProps['onScroll']>) => {
-      recordLatestEvent(latestEventsRef.current, {
-        args: [snapshotScrollEvent(args[0])],
-        type: 'scroll',
-      });
-      const registration = registrationRef.current;
-      const handler =
-        registration?.ownerKey === paginationOwnerKey ? registration.props.onScroll : undefined;
-      if (handler) {
-        handler(...args);
+    }
+    return () => {
+      if (registrationRef.current?.id === registration.id) {
+        registrationRef.current = null;
       }
-    },
-    [paginationOwnerKey],
-  );
-  const register = useCallback<Register>(
-    (registration) => {
-      registrationRef.current = { ...registration, ownerKey: paginationOwnerKey };
-      for (const event of latestEventsRef.current) {
-        if (event.type === 'contentSize') {
-          registration.props.onContentSizeChange(...event.args);
-        } else if (event.type === 'layout') {
-          registration.props.onLayout(...event.args);
-        } else {
-          registration.props.onScroll(...event.args);
-        }
-      }
-      return () => {
-        if (registrationRef.current?.id === registration.id) {
-          registrationRef.current = null;
-        }
-      };
-    },
-    [paginationOwnerKey],
-  );
+    };
+  }, []);
   const nativeScrollProps =
     Platform.OS === 'web'
       ? {}

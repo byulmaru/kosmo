@@ -195,8 +195,8 @@ export function PostList({
             loadNext={loadNext}
             onLoadErrorChange={handleLoadErrorChange}
             pageSize={20}
-            renderFooter={({ isLoadingNext: loadingNext }) =>
-              loadingNext ? (
+            footer={
+              isLoadingNext ? (
                 <View style={styles.loadingNext}>
                   <ActivityIndicator accessibilityLabel="게시글을 더 불러오는 중" />
                   <Text accessibilityLiveRegion="polite" style={styles.srOnly}>

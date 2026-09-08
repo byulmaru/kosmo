@@ -38,30 +38,24 @@ export default function ProfileLayout() {
   }>();
   const handle = normalizeProfileHandle(profileHandle);
   const pathname = usePathname();
-  const paginationOwnerKey = pathname;
+  const scrollKey = pathname;
 
   return (
     <RouteBoundary
       key={handle}
       loading={
-        <ProfileRouteContainer paginationOwnerKey={paginationOwnerKey}>
+        <ProfileRouteContainer scrollKey={scrollKey}>
           <ProfileHero loading />
         </ProfileRouteContainer>
       }
       title="프로필을 불러오지 못했어요"
     >
-      <ProfileLayoutContent handle={handle} paginationOwnerKey={paginationOwnerKey} />
+      <ProfileLayoutContent handle={handle} scrollKey={scrollKey} />
     </RouteBoundary>
   );
 }
 
-function ProfileLayoutContent({
-  handle,
-  paginationOwnerKey,
-}: {
-  handle: string;
-  paginationOwnerKey: string;
-}) {
+function ProfileLayoutContent({ handle, scrollKey }: { handle: string; scrollKey: string }) {
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<ProfileLayoutQueryType>(
     ProfileLayoutQuery,
@@ -94,7 +88,7 @@ function ProfileLayoutContent({
   );
 
   return (
-    <ProfileRouteContainer paginationOwnerKey={paginationOwnerKey}>
+    <ProfileRouteContainer scrollKey={scrollKey}>
       <ProfileHero action={action} profile={profile} />
       <Slot />
     </ProfileRouteContainer>
@@ -103,19 +97,15 @@ function ProfileLayoutContent({
 
 function ProfileRouteContainer({
   children,
-  paginationOwnerKey,
+  scrollKey,
 }: {
   children: ReactNode;
-  paginationOwnerKey: string;
+  scrollKey: string;
 }) {
   return Platform.OS === 'web' ? (
     <View style={styles.webRoot}>{children}</View>
   ) : (
-    <PaginationScrollView
-      key={paginationOwnerKey}
-      paginationOwnerKey={paginationOwnerKey}
-      style={styles.nativeRoot}
-    >
+    <PaginationScrollView key={scrollKey} style={styles.nativeRoot}>
       {children}
     </PaginationScrollView>
   );

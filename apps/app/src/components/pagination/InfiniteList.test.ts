@@ -20,8 +20,9 @@ let renderer: ReactTestRenderer | null = null;
 let InfiniteList: ComponentType<InfiniteListProps<Item>>;
 let PaginationScrollView: ComponentType<{
   children?: ReactNode;
-  paginationOwnerKey: string;
 }>;
+let latestLoadError = false;
+let latestRetry: (() => void) | null = null;
 
 mock.module('react-native', {
   exports: {
@@ -43,6 +44,8 @@ afterEach(async () => {
     renderer = null;
   }
   loadRequests.length = 0;
+  latestLoadError = false;
+  latestRetry = null;
   platform.OS = 'ios';
 });
 
@@ -76,22 +79,19 @@ async function update(nextProps: InfiniteListProps<Item>) {
 }
 
 describe('InfiniteList', () => {
-  it('native FlatList가 header, footer와 endReached pagination을 소유한다', async () => {
-    const header = createElement('Header');
+  it('native FlatList가 footer와 endReached pagination을 소유한다', async () => {
     const empty = createElement('Empty');
-    const renderFooter = ({ isLoadingNext }: { isLoadingNext: boolean }) =>
-      isLoadingNext ? createElement('LoadingFooter') : null;
+    const footer = createElement('LoadingFooter');
 
     await act(async () => {
       renderer = create(
         createElement(InfiniteList, {
-          ...props({ empty, header, renderFooter }),
+          ...props({ empty, footer: null }),
         }),
       );
     });
 
     let list = flatList();
-    assert.equal(list.props.ListHeaderComponent, header);
     assert.equal(list.props.ListEmptyComponent, empty);
     assert.equal(list.props.ListFooterComponent, null);
     assert.equal(list.props.onEndReachedThreshold, 1);
@@ -101,7 +101,7 @@ describe('InfiniteList', () => {
     assert.equal(loadRequests.length, 1);
     assert.equal(loadRequests[0]?.count, 20);
 
-    await update(props({ empty, header, isLoadingNext: true, renderFooter }));
+    await update(props({ empty, footer, isLoadingNext: true }));
     list = flatList();
     assert.equal((list.props.ListFooterComponent as ReactTestInstance).type, 'LoadingFooter');
 
@@ -113,8 +113,7 @@ describe('InfiniteList', () => {
           { id: 'b', label: 'B' },
         ],
         empty,
-        header,
-        renderFooter,
+        footer: null,
       }),
     );
     list = flatList();
@@ -124,55 +123,56 @@ describe('InfiniteList', () => {
     assert.equal(loadRequests.length, 2, 'page 완료 뒤 다음 endReached를 처리한다');
   });
 
-  it('native endReached는 실패 뒤 자동 재요청하지 않고 footer retry만 노출한다', async () => {
-    const renderFooter = ({ loadError, onRetry }: { loadError: boolean; onRetry: () => void }) =>
-      loadError ? createElement('RetryFooter', { onRetry }) : null;
+  it('native endReached는 실패 뒤 자동 재요청하지 않고 onLoadErrorChange retry만 허용한다', async () => {
+    const onLoadErrorChange = (loadError: boolean, onRetry: () => void) => {
+      latestLoadError = loadError;
+      latestRetry = onRetry;
+    };
 
     await act(async () => {
-      renderer = create(createElement(InfiniteList, props({ renderFooter })));
+      renderer = create(createElement(InfiniteList, props({ onLoadErrorChange })));
     });
     await act(async () => flatList().props.onEndReached());
     await act(async () => loadRequests[0]?.onComplete(new Error('failed')));
 
-    await update(props({ renderFooter }));
+    await update(props({ onLoadErrorChange }));
     const list = flatList();
-    const retryFooter = list.props.ListFooterComponent as ReactTestInstance;
-    assert.equal(retryFooter.type, 'RetryFooter');
+    assert.equal(latestLoadError, true);
     await act(async () => list.props.onEndReached());
     assert.equal(loadRequests.length, 1);
-    await act(async () => retryFooter.props.onRetry());
+    assert.ok(latestRetry);
+    await act(async () => latestRetry?.());
     assert.equal(loadRequests.length, 2);
   });
 
-  it('native 빈 목록의 초기 endReached 요청은 실패 뒤 수동 retry만 허용한다', async () => {
-    const renderFooter = ({ loadError, onRetry }: { loadError: boolean; onRetry: () => void }) =>
-      loadError ? createElement('RetryFooter', { onRetry }) : null;
+  it('native 빈 목록의 초기 endReached 요청은 실패 뒤 onLoadErrorChange retry만 허용한다', async () => {
+    const onLoadErrorChange = (loadError: boolean, onRetry: () => void) => {
+      latestLoadError = loadError;
+      latestRetry = onRetry;
+    };
 
     await act(async () => {
-      renderer = create(createElement(InfiniteList, props({ data: [], renderFooter })));
+      renderer = create(createElement(InfiniteList, props({ data: [], onLoadErrorChange })));
     });
     await act(async () => flatList().props.onEndReached());
     assert.equal(loadRequests.length, 1);
 
-    await update(props({ data: [], isLoadingNext: true, renderFooter }));
+    await update(props({ data: [], isLoadingNext: true, onLoadErrorChange }));
     await act(async () => loadRequests[0]?.onComplete(new Error('empty failed')));
-    await update(props({ data: [], renderFooter }));
+    await update(props({ data: [], onLoadErrorChange }));
     const list = flatList();
-    assert.equal((list.props.ListFooterComponent as ReactTestInstance).type, 'RetryFooter');
+    assert.equal(latestLoadError, true);
     await act(async () => list.props.onEndReached());
     assert.equal(loadRequests.length, 1);
-    await act(async () => (list.props.ListFooterComponent as ReactTestInstance).props.onRetry());
+    assert.ok(latestRetry);
+    await act(async () => latestRetry?.());
     assert.equal(loadRequests.length, 2);
   });
 
   it('PaginationScrollView 안에서는 View body가 outer metrics pagination을 등록한다', async () => {
     await act(async () => {
       renderer = create(
-        createElement(
-          PaginationScrollView,
-          { paginationOwnerKey: 'profile' },
-          createElement(InfiniteList, props()),
-        ),
+        createElement(PaginationScrollView, null, createElement(InfiniteList, props())),
       );
     });
 

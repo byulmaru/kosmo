@@ -9,13 +9,6 @@ import type { ReactElement } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { LoadNext } from './useAutomaticPagination';
 
-export type InfiniteListFooterState = Readonly<{
-  hasNext: boolean;
-  isLoadingNext: boolean;
-  loadError: boolean;
-  onRetry: () => void;
-}>;
-
 export type InfiniteListProps<Item> = Readonly<{
   data: ReadonlyArray<Item>;
   hasNext: boolean;
@@ -24,12 +17,10 @@ export type InfiniteListProps<Item> = Readonly<{
   loadNext: LoadNext;
   onLoadErrorChange?: (loadError: boolean, onRetry: () => void) => void;
   pageSize: number;
-  renderFooter?: (state: InfiniteListFooterState) => ReactElement | null;
   renderItem: (params: { index: number; item: Item }) => ReactElement | null;
   style?: StyleProp<ViewStyle>;
-  header?: ReactElement | null;
+  footer?: ReactElement | null;
   empty?: ReactElement | null;
-  testID?: string;
 }>;
 
 export function InfiniteList<Item>({
@@ -41,11 +32,9 @@ export function InfiniteList<Item>({
   loadNext,
   onLoadErrorChange,
   pageSize,
-  renderFooter,
+  footer,
   renderItem,
   style,
-  header,
-  testID,
 }: InfiniteListProps<Item>) {
   const hasPaginationScrollContext = usePaginationScrollContext();
   const hasNativeScrollParent = Platform.OS !== 'web' && hasPaginationScrollContext;
@@ -63,17 +52,9 @@ export function InfiniteList<Item>({
     onLoadErrorChange?.(loadError, loadNextPage);
   }, [loadError, loadNextPage, onLoadErrorChange]);
 
-  const footer = renderFooter?.({
-    hasNext,
-    isLoadingNext,
-    loadError,
-    onRetry: loadNextPage,
-  });
-
   if (Platform.OS === 'web' || hasNativeScrollParent) {
     return (
-      <View style={style} testID={testID}>
-        {header}
+      <View style={style}>
         {data.length === 0
           ? empty
           : data.map((item, index) => (
@@ -90,12 +71,10 @@ export function InfiniteList<Item>({
       ListEmptyComponent={empty}
       keyExtractor={keyExtractor}
       ListFooterComponent={footer}
-      ListHeaderComponent={header}
       onEndReached={onEndReached}
       onEndReachedThreshold={1}
       renderItem={({ index, item }) => renderItem({ index, item })}
       style={[style, styles.nativeList]}
-      testID={testID}
     />
   );
 }
