@@ -35,11 +35,7 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
       ? 'default-post-visibility'
       : pathname === '/settings/info'
         ? 'info'
-        : pathname === '/settings/mute-and-block' ||
-            pathname === '/settings/muted-profiles' ||
-            pathname === '/settings/blocked-profiles'
-          ? 'mute-and-block'
-          : undefined;
+        : undefined;
   const detailHeaderMode: SettingsDetailHeaderMode =
     layout === 'full' ? 'plain' : web && layout === 'mobile' ? 'hidden' : 'back';
 
