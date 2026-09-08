@@ -296,15 +296,17 @@ export const MutationFailureAndSameActionRetry: Story = {
   parameters: { relay: { mutationError: '승인 mutation 실패' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인' }));
+    const approveButton = canvas.getByRole('button', {
+      name: '별빛 여행자 팔로우 요청 승인',
+    });
+    const row = approveButton.parentElement?.parentElement;
+    await userEvent.click(approveButton);
 
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '팔로우 요청을 승인하지 못했어요',
-    );
+    const alert = await canvas.findByRole('alert');
+    expect(alert).toHaveTextContent('팔로우 요청을 승인하지 못했어요');
+    expect(row?.contains(alert)).toBe(false);
     expect(canvas.getByRole('link', { name: '별빛 여행자 프로필로 이동' })).toBeVisible();
-    expect(
-      canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인 다시 시도' }),
-    ).toBeEnabled();
+    expect(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인' })).toBeEnabled();
   },
   render: () => <ContentList />,
 };

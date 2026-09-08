@@ -164,6 +164,7 @@ export const LayoutContract: Story = {
     expect(rejectButton.getBoundingClientRect().height).toBe(32);
     expect(rejectButton.getBoundingClientRect().width).toBe(32);
     expect(rejectButton.querySelector('svg')).toBeInTheDocument();
+    expect(approveButton.parentElement?.parentElement?.getBoundingClientRect().height).toBe(64);
     expect(canvas.getByLabelText('별빛 여행자 프로필 이미지').querySelector('img')).toHaveAttribute(
       'src',
       appleTouchIconUrl,
@@ -210,17 +211,18 @@ export const ApproveFailureAndRetry: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const approveButton = canvas.getByRole('button', {
+      name: '별빛 여행자 팔로우 요청 승인',
+    });
+    const row = approveButton.parentElement?.parentElement;
+    await userEvent.click(approveButton);
+    const alert = await canvas.findByRole('alert');
+    expect(alert).toHaveTextContent('팔로우 요청을 승인하지 못했어요');
+    expect(row?.contains(alert)).toBe(false);
     await userEvent.click(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '팔로우 요청을 승인하지 못했어요',
-    );
-    await userEvent.click(
-      canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인 다시 시도' }),
-    );
     await expect(
       canvas.findByRole('button', { name: '별빛 여행자 팔로우 요청 승인' }),
     ).resolves.toBeEnabled();
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
   },
 };
 
@@ -236,16 +238,17 @@ export const RejectFailureAndRetry: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const rejectButton = canvas.getByRole('button', {
+      name: '별빛 여행자 팔로우 요청 거절',
+    });
+    const row = rejectButton.parentElement?.parentElement;
+    await userEvent.click(rejectButton);
+    const alert = await canvas.findByRole('alert');
+    expect(alert).toHaveTextContent('팔로우 요청을 거절하지 못했어요');
+    expect(row?.contains(alert)).toBe(false);
     await userEvent.click(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 거절' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '팔로우 요청을 거절하지 못했어요',
-    );
-    await userEvent.click(
-      canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 거절 다시 시도' }),
-    );
     await expect(
       canvas.findByRole('button', { name: '별빛 여행자 팔로우 요청 거절' }),
     ).resolves.toBeEnabled();
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
   },
 };
