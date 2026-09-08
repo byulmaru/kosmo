@@ -41,8 +41,6 @@ const LocalQuery = graphql`
 
 export default function LocalScreen() {
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const shellChrome = useShellChrome();
-  const profileMuteTimelineRevision = shellChrome?.profileMuteTimelineRevision ?? 0;
   const refresh = useCallback(() => routeBoundaryRef.current?.refetch(), []);
 
   return (
@@ -52,7 +50,7 @@ export default function LocalScreen() {
         ref={routeBoundaryRef}
         title="로컬 타임라인을 불러오지 못했어요"
       >
-        <LocalContent key={profileMuteTimelineRevision} />
+        <LocalContent />
       </RouteBoundary>
     </LocalFrame>
   );
