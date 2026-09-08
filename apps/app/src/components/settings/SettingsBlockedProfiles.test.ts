@@ -125,7 +125,9 @@ describe('차단한 프로필 목록', () => {
       renderer = create(createElement(BlockedProfilesView, { onUnblock, state }));
     });
 
-    await act(async () => find('Button')?.props.onPress());
+    const action = find('Button');
+    assert.equal(action?.props.accessibilityLabel, '별마루 차단 해제');
+    await act(async () => action?.props.onPress());
     const confirmation = find('ConfirmationContent');
     assert.equal(
       confirmation?.props.message,
