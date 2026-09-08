@@ -1,5 +1,6 @@
 import baseMeta, {
   ErrorRecoveryFocus as errorRecoveryFocus,
+  ExistingDeletionFlow as existingDeletionFlow,
   OwnerMenuAndDirectActions as ownerMenuAndDirectActions,
   PendingContract as pendingContract,
   SheetIconContract as sheetIconContract,
@@ -12,7 +13,7 @@ const meta = {
   excludeStories: [],
   parameters: { ...baseMeta.parameters, controls: { disable: true } },
   title: 'KOSMO/Patterns/Profile/Pin Action/Tests',
-} satisfies Meta;
+} satisfies Meta<typeof baseMeta.component>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -22,3 +23,5 @@ export const VisitorMenuContract: Story = visitorMenuContract;
 export const PendingContract: Story = pendingContract;
 export const ErrorRecoveryFocus: Story = errorRecoveryFocus;
 export const SheetIconContract: Story = sheetIconContract;
+
+export const ExistingDeletionFlow: Story = existingDeletionFlow;

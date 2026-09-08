@@ -52,7 +52,6 @@ type Props = {
   accessibilityLabel: string;
   disabled?: boolean;
   items: readonly ActionMenuItem[];
-  webMinWidth?: number;
   sheetIconSize?: 20 | 24;
   webMinWidth?: number;
   onOpenChange?: (open: boolean) => void;
@@ -91,7 +90,6 @@ export function ActionMenu({
   items,
   onOpenChange,
   renderTrigger,
-  webMinWidth = defaultWebMenuMinWidth,
   sheetIconSize = 20,
   webMinWidth = defaultWebMenuMinWidth,
   webPlacement,

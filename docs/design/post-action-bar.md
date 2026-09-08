@@ -233,9 +233,13 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   `PostAttributionRow`의 [Center Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12984)·
   [Mobile Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12988) source다.
 - `PostListItem`의 `pinned`는 표시만 소유한다. 정렬·자격을 계산하거나 Home에 고정을 적용하지 않는다.
-  `more`는 `ProfilePinAction`이 만든 기존 액션 바의 More 연결이며 별도 버튼을 덧붙이지 않는다.
-- `ProfilePinAction`은 호출자가 확정한 owner/visitor와 pin/unpin 입력을 표시한다. visitor에는
-  링크 복사만 제공하며 owner의 삭제 항목은 호출자가 callback을 제공할 때만 표시한다.
+  `profilePin`은 대상 Post ID·pin/unpin 상태·요청 callback을 전달하며 완성된 More 메뉴를 교체하지 않는다.
+- `PostActionSurface`는 전달된 고정 대상이 현재 액션 대상과 같고 selected Profile이 작성자일 때만
+  고정 항목을 합성한다. 추가 자격·정책은 후속 Profile consumer가 확정한다.
+- `ProfilePinAction`은 고정 항목의 실행·pending·실패 피드백·완료 뒤 focus 복귀만 소유한다.
+  기존 `usePostMoreMenuItem`이 복사 URL·클립보드 실패 처리를 유지하고, `PostDeletionAction`이 삭제
+  eligibility·확인창·mutation·cache·실패 처리를 유지한다. 복사·고정·삭제 순서로 합성하며 삭제 노출을
+  별도의 optional callback으로 대체하지 않는다. visitor에는 고정·삭제 없이 기존 링크 복사를 제공한다.
 - 이 메뉴의 sheet 아이콘은 DSN-55 source에 맞춰 24px을 사용한다. 공용 `ActionMenu`의 다른 소비자는
   기존 20px을 유지한다. Web 메뉴는 기존 18px을 유지한다.
 - 요청 중 More trigger의 busy·disabled 상태로 중복 실행을 막는다. 고정·해제 완료 뒤 More trigger로

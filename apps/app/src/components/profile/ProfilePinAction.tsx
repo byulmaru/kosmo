@@ -1,29 +1,25 @@
-import { Link2, Pin, Trash2 } from 'lucide-react-native';
+import { Pin } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActionMenu } from '@/components/ui/ActionMenu';
 import { useToast } from '@/components/ui/ToastProvider';
 import type { ReactNode } from 'react';
-import type { MoreActionConfig } from '@/components/post/PostActionBar';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 
 export type ProfilePinOperation = 'pin' | 'unpin';
-type Props = {
-  children: (more: MoreActionConfig) => ReactNode;
-  onCopyLink: () => void;
+export type ProfilePinControl = {
   postId: string;
-} & (
-  | {
-      viewer: 'owner';
-      action: ProfilePinOperation;
-      onAction: (action: ProfilePinOperation) => Promise<void>;
-      onDelete?: () => void;
-    }
-  | {
-      viewer: 'visitor';
-      action?: never;
-      onAction?: never;
-      onDelete?: never;
-    }
-);
+  action: ProfilePinOperation;
+  onAction: (action: ProfilePinOperation) => Promise<void>;
+};
+
+export type ProfilePinMenuAction = {
+  item: ActionMenuItem;
+  pending: boolean;
+  onTriggerReady: (focus: () => void) => void;
+};
+
+type Props = ProfilePinControl & {
+  children: (action: ProfilePinMenuAction) => ReactNode;
+};
 
 /** Eligibility and the result of each request belong to the calling Profile surface. */
 export function ProfilePinAction(props: Props) {
@@ -50,7 +46,7 @@ function ProfilePinActionContent(props: Props) {
     }
   }, [pending]);
   const request = async () => {
-    if (props.viewer !== 'owner' || inFlight.current) {
+    if (inFlight.current) {
       return;
     }
     inFlight.current = true;
@@ -72,48 +68,16 @@ function ProfilePinActionContent(props: Props) {
       showToast('고정 상태를 변경하지 못했어요. 다시 시도해 주세요.', { tone: 'danger' });
     }
   };
-  return (
-    <ActionMenu
-      webMinWidth={160}
-      accessibilityLabel="더 보기 메뉴"
-      disabled={pending}
-      items={[
-        { key: 'copy', icon: Link2, label: '링크 복사', onSelect: props.onCopyLink },
-        ...(props.viewer === 'owner'
-          ? [
-              {
-                key: 'pin',
-                icon: Pin,
-                label: props.action === 'unpin' ? '프로필 고정 해제' : '프로필에 고정',
-                onSelect: () => void request(),
-              },
-            ]
-          : []),
-        ...(props.viewer === 'owner' && props.onDelete
-          ? [
-              {
-                key: 'delete',
-                icon: Trash2,
-                label: '삭제',
-                tone: 'danger' as const,
-                onSelect: props.onDelete,
-              },
-            ]
-          : []),
-      ]}
-      renderTrigger={({ expanded, focusTrigger: restoreFocus, onPress, ref }) => {
-        focusTrigger.current = restoreFocus;
-        return props.children({
-          accessibilityLabel: '더 보기',
-          controlRef: ref,
-          menuExpanded: expanded,
-          onPress,
-          popupRole: 'menu',
-          processing: pending ? 'pending' : 'default',
-        });
-      }}
-      sheetIconSize={24}
-      webHorizontalPlacement="end"
-    />
-  );
+  return props.children({
+    item: {
+      key: 'pin',
+      icon: Pin,
+      label: props.action === 'unpin' ? '프로필 고정 해제' : '프로필에 고정',
+      onSelect: () => void request(),
+    },
+    pending,
+    onTriggerReady: (focus) => {
+      focusTrigger.current = focus;
+    },
+  });
 }
