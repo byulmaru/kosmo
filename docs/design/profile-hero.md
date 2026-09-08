@@ -79,6 +79,20 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - Web Storybook에서 bio/no-bio 행과 링크·gap·Follow 키보드 동작을 검증한다. 실제 iOS·Android touch
   target은 Native 출시 QA에서 별도로 확인한다.
 
+## FollowRequestListItem 행 계약
+
+- `FollowRequestListItem`의 loaded 행은 `ProfileListItem`과 같은 `ProfileListItemContent`를 재사용한다.
+  Avatar `40`, 콘텐츠·action 사이 `12`, 좌우 `16`과 상하 `12` padding, fill 없는 배경과 하단 divider를
+  유지한다.
+- 승인·거절 `IconButton`의 입력 target은 Web `32`, iOS `44`, Android `48`이며 행 높이는 divider를 포함해
+  각각 `64`, `68`, `72`가 된다. 요청자 정보를 확인할 수 없으면 승인 action과 프로필 링크는 생략하고 거절
+  action은 유지한다.
+- 프로필 링크는 명시적인 접근 가능한 이름을 가지며 왼쪽·위·아래 padding까지 확장한다. 승인·거절 action은
+  링크 밖의 독립 버튼으로 유지한다.
+- 승인·거절 실패는 공용 danger toast로 알리고 행 내부에 error 문구나 별도 retry 상태를 추가하지 않는다.
+  실패 뒤 원래 이름의 같은 action을 다시 누를 수 있으며, mutation과 Relay connection 제거는
+  `FollowRequestListItem`이 계속 소유한다.
+
 ## Follow action 실패 피드백
 
 - Follow·Unfollow·Cancel의 GraphQL 또는 network 실패는 공용 `ToastProvider`의 danger toast로 표시한다.
