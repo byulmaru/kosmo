@@ -260,6 +260,7 @@ export function BlockedProfilesView({
               style={styles.row}
             >
               <Button
+                accessibilityLabel={`${profile.displayName} 차단 해제`}
                 controlRef={(node) => {
                   if (node) {
                     actionRefs.current.set(profile.profileBlockId, node);
