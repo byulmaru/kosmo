@@ -1,6 +1,7 @@
 import { Slot, usePathname } from 'expo-router';
 import { Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
+import { SettingsMuteAndBlockNavigation } from '@/components/settings/SettingsMuteAndBlockNavigation';
 import { SettingsNavigationList } from '@/components/settings/SettingsNavigationList';
 import { SettingsRouteProvider } from '@/components/settings/SettingsRouteContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
@@ -27,6 +28,7 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   const web = Platform.OS === 'web';
   const layout = getShellLayout(web, width);
   const root = pathname === '/settings' || pathname === '/settings/';
+  const mutedProfiles = pathname === '/settings/muted-profiles';
   const selected =
     root || pathname === '/settings/default-post-visibility'
       ? 'default-post-visibility'
@@ -45,7 +47,11 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
             testID="settings-master-pane"
           >
             <PageHeader title="설정" />
-            <SettingsNavigationList selected={selected} />
+            {mutedProfiles ? (
+              <SettingsMuteAndBlockNavigation selected="muted-profiles" />
+            ) : (
+              <SettingsNavigationList selected={selected} />
+            )}
           </View>
           <View style={styles.detailPane} testID="settings-detail-pane">
             {children}
