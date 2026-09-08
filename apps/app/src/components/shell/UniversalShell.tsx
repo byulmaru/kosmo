@@ -24,7 +24,7 @@ import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { RelayActorBoundary } from '@/relay/RelayActorProvider';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
-import { returnToSettingsRoot } from '../settings/settingsNavigation';
+import { returnToSettingsParent } from '../settings/settingsNavigation';
 import { BottomTabBar } from './BottomTabBar';
 import { NavigationGuardProvider } from './NavigationGuardContext';
 import {
@@ -258,7 +258,9 @@ function UniversalShellContent() {
   const backButton = (
     <IconButton
       accessibilityLabel="뒤로 가기"
-      onPress={() => (isSettingsRoute(pathname) ? returnToSettingsRoot(router) : router.back())}
+      onPress={() =>
+        isSettingsRoute(pathname) ? returnToSettingsParent(pathname, router) : router.back()
+      }
       style={styles.menuButton}
       targetSize={44}
       visualSize={44}

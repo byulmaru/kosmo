@@ -4,7 +4,12 @@ import type { ImperativeRouter } from 'expo-router';
 
 type SettingsNavigationRouter = Pick<ImperativeRouter, 'back'>;
 
+let returnToMuteAndBlockRoot: (router: Pick<ImperativeRouter, 'replace'>) => void;
 let returnToSettingsRoot: (router: SettingsNavigationRouter) => void;
+let returnToSettingsParent: (
+  pathname: string,
+  router: Pick<ImperativeRouter, 'back' | 'replace'>,
+) => void;
 let platform: 'ios' | 'web' = 'web';
 const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
 
@@ -19,7 +24,8 @@ mock.module('react-native', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 before(async () => {
-  ({ returnToSettingsRoot } = await import('./settingsNavigation'));
+  ({ returnToMuteAndBlockRoot, returnToSettingsParent, returnToSettingsRoot } =
+    await import('./settingsNavigation'));
 });
 
 afterEach(() => {
@@ -54,5 +60,30 @@ describe('Settings detail back navigation', () => {
     returnToSettingsRoot({ back: () => (backCalls += 1) });
 
     assert.equal(backCalls, 1);
+  });
+
+  it('중첩된 Native detail은 바로 위 mute category를 명시적으로 연다', () => {
+    platform = 'ios';
+    const replaced: string[] = [];
+
+    returnToMuteAndBlockRoot({ replace: (href) => replaced.push(String(href)) });
+
+    assert.deepEqual(replaced, ['/settings/mute-and-block']);
+  });
+
+  it('Muted profiles의 shell back은 바로 위 mute category를 연다', () => {
+    const replaced: string[] = [];
+
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { replace: (href: string) => replaced.push(href) },
+    });
+
+    returnToSettingsParent('/settings/muted-profiles', {
+      back: () => {},
+      replace: (href) => replaced.push(String(href)),
+    });
+
+    assert.deepEqual(replaced, ['/settings/mute-and-block']);
   });
 });
