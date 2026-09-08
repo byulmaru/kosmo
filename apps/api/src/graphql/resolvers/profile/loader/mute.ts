@@ -26,8 +26,6 @@ export const viewerProfileMuteLoader = (ctx: UserContext) =>
             visibleProfileWhere({
               profile: Profiles,
               instance: Instances,
-              database: db,
-              viewerProfileId: ctx.session?.profileId,
             }),
           ),
         );
@@ -57,8 +55,6 @@ export const profileMuteByIdLoader = (ctx: UserContext) =>
             visibleProfileWhere({
               profile: Profiles,
               instance: Instances,
-              database: db,
-              viewerProfileId: ctx.session?.profileId,
             }),
           ),
         );

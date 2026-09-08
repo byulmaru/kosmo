@@ -116,6 +116,9 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
    UI는 상대에게 차단된 경우 actionless 화면을 표시한다. 구체 query·projection 배치는 구현 선택으로 남긴다.
 7. Block·Unblock 성공과 같은 operation의 `selectProfile` 이후에 request-scoped loader와 scope가 이전 정책 결과를 재사용하지 않게 한다.
    다음 HTTP request에서는 현재 관계와 저장된 selected Profile을 다시 평가한다. client cache 수렴은 `PROD-823`이 이 공개 결과를 소비한다.
+8. viewer별 Block predicate를 일반 Profile visibility에 적용하되, Owner 전용 Mute 관리 connection과 `ProfileMute` 관계·viewer 상태 loader에는 적용하지 않는다.
+   같은 Target의 Mute·Block 관계는 독립적으로 관리할 수 있어야 하며, Mute 관리 관계를 유지하는 일이 일반 Target Profile payload를 공개하는
+   예외 권한이 되지는 않는다.
 
 ### Allowed Alternatives — PROD-822
 

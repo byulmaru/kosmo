@@ -64,9 +64,9 @@
 - Authority / Provenance: `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/domain/objects/profile-block.md`, `PROD-822`, `PROD-823`
 - Status: Active
 - Context / Problem: GraphQL resolver가 입력 Profile ID를 actor로 신뢰하거나 resolver·loader마다 차단 조건을 복제하면 selected Profile 격리와 중앙 정책이 무너진다.
-- Decision Outcome: 현재 GraphQL Block 생성·해제 mutation과 Owner 관리 조회의 connection·관계 Node/loader는 검증된 Session의 selected Local Profile actor를 사용한다. resolver·loader는 공통 core/application policy를 호출하고, 요청별 DB actor state(GUC 등)·client 전용 filter를 권한 또는 visibility의 대체 수단으로 사용하지 않는다. concrete helper와 field/payload 이름, resolver·loader 배치는 기존 naming·generated schema에 맞춘 구현 선택으로 남긴다.
+- Decision Outcome: 현재 GraphQL Block 생성·해제 mutation과 Owner 관리 조회의 connection·관계 Node/loader는 검증된 Session의 selected Local Profile actor를 사용한다. resolver·loader는 공통 core/application policy를 호출하고, 요청별 DB actor state(GUC 등)·client 전용 filter를 권한 또는 visibility의 대체 수단으로 사용하지 않는다. Block 관리 projection인 `ProfileBlockTarget`의 global ID는 일반 `Profile` global ID와 구분한다. Unblock은 실제 제거한 관계 ID를 반환하며 관계를 제거하지 않은 결과만 `null`로 나타낸다. concrete helper와 field/payload 이름, resolver·loader 배치는 기존 naming·generated schema에 맞춘 구현 선택으로 남긴다.
 - Alternatives Considered: 입력된 arbitrary Profile ID를 actor로 사용하면 다른 Owner의 관계를 변경할 수 있다. resolver-local predicate나 client-only filter는 policy drift와 visibility 우회를 만든다. 요청별 DB actor state를 권한 경계로 사용하면 현재 application policy와 runtime 경계를 확장한다.
-- Consequences: selected Local Profile이 없는 Block 생성·해제·Owner 관리 operation은 기존 auth 경계에서 거부되고, Block 목록은 해당 actor가 Owner인 관계만 반환한다. 일반 GraphQL 조회와 Notification의 Account membership 권한을 이 제한으로 바꾸지 않는다. remote ActivityPub ingress는 이 decision의 consumer가 아니다.
+- Consequences: selected Local Profile이 없는 Block 생성·해제·Owner 관리 operation은 기존 auth 경계에서 거부되고, Block 목록은 해당 actor가 Owner인 관계만 반환한다. 일반 GraphQL 조회와 Notification의 Account membership 권한을 이 제한으로 바꾸지 않는다. 같은 Target의 Mute 관계는 Block과 별개이므로 Mute Owner connection·관계 Node·해제 경로에서 유지하며, 이 관리 경계가 일반 Target Profile 조회 권한을 열지는 않는다. remote ActivityPub ingress는 이 decision의 consumer가 아니다.
 - Confirmation / Follow-up: `PROD-822`에서 Owner A/B·guest·membership mismatch와 direct/list Node 경계를 검증하고, `PROD-823`에서 selected Profile별 client 상태 결과를 확인한다.
 
 ### 기존 Notification은 가시성으로 숨기고 source 생성 연결은 후속으로 둔다

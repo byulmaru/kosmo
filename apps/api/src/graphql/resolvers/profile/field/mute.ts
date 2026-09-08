@@ -42,8 +42,6 @@ builder.objectField(Profile, 'profileMutes', (t) =>
                   visibleProfileWhere({
                     profile: Profiles,
                     instance: Instances,
-                    database: db,
-                    viewerProfileId: ctx.session?.profileId,
                   }),
                   before ? gt(ProfileMutes.id, before) : undefined,
                   after ? lt(ProfileMutes.id, after) : undefined,

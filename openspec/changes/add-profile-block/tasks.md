@@ -114,6 +114,10 @@ connection을 제공한다. Profile identity는 기존 Profile 조회 정책을 
   완료 결과를 사용하고 성공한 해제는 실제 삭제한 관계 ID를 반환한다. 같은 operation의 actor 전환과 mutation 뒤에도 이전 loader 권한을 재사용하지 않는다.
 - 직접 route handle로 자신의 차단 여부·해제 관계 ID를 얻는 결과는 일반 Target Profile 조회나 이전 client cache를 요구하지 않는다.
   자신의 Block이 없으면 다른 Owner의 관계 ID나 보호된 Profile payload를 반환하지 않는다.
+- `ProfileBlockTarget` ID는 일반 `Profile` ID와 같은 값으로 취급하지 않는다. Unblock 성공은 실제 삭제한 관계 ID를 반환하고 관계를 제거하지
+  않은 결과만 `null`이며, 오류·partial 결과를 성공으로 확정하지 않는다.
+- Mute와 Block 관리 관계는 독립적이다. 같은 Target의 Active Block이 일반 Profile을 숨겨도 기존 Mute 관계는 Owner connection·관계 Node·해제
+  경로에 남아야 하며, Mute 관리 경계를 일반 Target Profile 조회 권한으로 확장하지 않는다.
 - 저장·durable cleanup(`PROD-821`), UI/Relay(`PROD-823`)와 최종 cross-slice E2E/archive(`PROD-813`)를 이 그룹에서 재구현하지 않는다.
 
 **Verification**
@@ -144,6 +148,7 @@ connection을 제공한다. Profile identity는 기존 Profile 조회 정책을 
 - [x] 2.9 기존 Notification의 Recipient별 list·Unread·Node·mark-read 비노출을 연결하고 비직접 row·Read State 보존과 혼합 ID 처리를 검증한다.
 - [x] 2.10 현재 모든 consumer의 공개 계약 회귀와 미구현 Hashtag Post List·Post 검색의 공통 후보 정책 검증을 수행하고 실제 endpoint 검증 여부를 구분해 기록한다.
 - [x] 2.11 generated GraphQL schema·적용 문서와 실제 공개 결과를 정렬하고 Core·API 및 영향받은 caller 회귀와 required checks를 통과시킨다.
+- [x] 2.12 같은 Target의 Mute·Block 관계가 함께 있을 때 일반 Profile 비노출과 Mute Owner connection·관계 Node·해제 경로의 독립성을 검증한다.
 
 ## 3. PROD-823 — Profile Block UI·Relay 관리 흐름
 

@@ -41,6 +41,10 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
   cleanup과 겹쳐 이미 진행 중이던 Follow transition의 잔존 row는 기존 승인 범위대로 허용하고 비활성·비노출로 취급한다.
 - GraphQL 생성·해제는 선행 durable action의 완료를 기다리며, Owner 관리 정보는 일반 Profile 조회와 구분한다.
   selected Local Profile과 request-scoped loader의 actor 격리를 함께 검증한다.
+- `ProfileBlockTarget`의 global ID는 일반 `Profile` global ID와 다른 관리 projection 식별자다. Unblock 성공은 실제 삭제한
+  `ProfileBlock` ID를 반환하고, 관계를 제거하지 않은 결과만 `null`이며 오류·partial 결과를 성공으로 취급하지 않는다.
+- Mute와 Block 관리 관계는 독립적으로 유지한다. 같은 Target을 Mute한 뒤 Block해도 Mute Owner connection·관계 Node·해제
+  경로는 유지하되, 이를 일반 Target Profile 조회 권한으로 사용하지 않는다.
 - 직접 Profile route에 새로고침·링크로 진입해도 현재 Owner의 차단 여부와 해제할 관계 ID를 얻을 수 있게 한다.
   일반 Target Profile 조회나 이전 client cache 없이 승인된 identity-free 화면과 해제 action을 연결한다.
 - 기존 consumer의 공개 결과와 공통 후보 정책을 검증한다. 아직 없는 Hashtag Post List·Post 검색 endpoint를 새로 만드는 일은

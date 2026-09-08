@@ -64,6 +64,8 @@ Local Profile만 actor로 사용하며, remote ActivityPub ingress와 Block/Undo
   공통 정책은 이 잔존 row를 inactive/invisible로 취급한다.
   차단 뒤 모든 Notification source에 신규 생성 억제 정책을 연결하는 일은 `PROD-327`의 후속 범위다. 이 객체의 현재
   cleanup·조회 계약은 해당 source 연결을 전제로 하지 않는다.
+- Profile Mute와 Profile Block은 독립된 관리 관계다. Active Block은 일반 Target Profile 조회를 계속 숨기지만, 같은 Owner가 이미 가진
+  Profile Mute 관계를 Mute 관리 connection·관계 Node·해제 경로에서 제거하거나 숨기는 근거가 아니다.
 
 ## 확정 용어
 

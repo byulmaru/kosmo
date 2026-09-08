@@ -114,6 +114,19 @@
 - **AND** 이 관리 정보로 Target의 일반 Profile·Post·Media·Follow 관계를 추가 조회할 수 있는 권한을 부여하지 않는다
 - **AND** 같은 Block ID를 Target 또는 다른 selected Profile이 조회하면 관계와 Target 식별 정보를 반환하지 않는다
 
+#### Scenario: Mute와 Block 관리 관계를 독립적으로 유지한다
+
+- **WHEN** selected Local Owner가 같은 Target을 Mute한 뒤 Block한다
+- **THEN** 일반 Target Profile은 Block policy에 따라 조회할 수 없다
+- **AND** 기존 Profile Mute는 Owner의 Mute connection·관계 Node·해제 경로에 계속 남는다
+- **AND** Mute 관리 관계를 조회할 수 있다는 사실로 일반 Target Profile의 보호된 field를 공개하지 않는다
+
+#### Scenario: Block 관리 projection의 ID를 일반 Profile ID로 재사용하지 않는다
+
+- **WHEN** Owner가 Profile Block 관리 connection에서 `ProfileBlockTarget`을 조회한다
+- **THEN** Target projection은 일반 `Profile`과 다른 global ID typename을 사용한다
+- **AND** client는 두 ID가 같다는 가정으로 일반 Profile cache를 갱신하지 않는다
+
 #### Scenario: 같은 operation에서 selected Profile이 바뀌면 이전 actor 권한을 재사용하지 않는다
 
 - **WHEN** 하나의 GraphQL Mutation에서 selected Profile이 A에서 B로 바뀐 뒤 후속 직렬 top-level field가 Block 관계를 조회하거나 변경한다
@@ -150,3 +163,4 @@
 - **WHEN** selected Local Owner의 Unblock이 required cleanup과 관계 제거를 완료한다
 - **THEN** mutation은 실제 제거한 Profile Block의 식별자를 반환한다
 - **AND** 다른 Owner의 관계나 이후 생성된 별도 Block을 삭제 결과로 반환하지 않는다
+- **AND** 관계를 제거하지 않은 결과만 `null`로 반환하며 오류·partial 결과를 성공으로 취급하지 않는다

@@ -51,6 +51,8 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   하나의 혼합 목록이나 filter로 만들지 않는다.
 - 각 목록은 자기 heading, loading, error·retry, empty, pagination과 해제 action을 소유한다. 한 목록의 상태나
   action이 다른 목록의 항목을 바꾸지 않는다.
+- 같은 Target에 Mute와 Block이 모두 적용돼도 두 관리 관계는 각각의 목록·관계 Node·해제 경로에 남는다. Block의 일반
+  Profile 가시성 제한을 Mute 관리 connection에 적용해 저장된 Mute를 숨기지 않는다.
 - full Web은 기존 Settings master/detail 문법을, compact Web·mobile Web·Android·iOS는 기존 한 화면 이동
   문법을 사용한다. Mute·Block 때문에 새 Settings shell이나 navigation pattern을 만들지 않는다.
 - Target screen evidence는 [`05 Screens - Web`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-16233)의
