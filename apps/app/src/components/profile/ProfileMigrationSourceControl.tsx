@@ -25,9 +25,9 @@ const ProfileFragment = graphql`
   }
 `;
 
-const PrepareMutation = graphql`
-  mutation ProfileMigrationSourceControlMutation($input: PrepareProfileMigrationInput!) {
-    prepareProfileMigration(input: $input) {
+const RegisterMutation = graphql`
+  mutation ProfileMigrationSourceControlMutation($input: RegisterProfileMigrationSourceInput!) {
+    registerProfileMigrationSource(input: $input) {
       profile {
         id
         migrationSource {
@@ -41,7 +41,7 @@ const PrepareMutation = graphql`
   }
 `;
 
-type PrepareState = 'idle' | 'preparing' | 'success' | 'error';
+type RegisterState = 'idle' | 'registering' | 'success' | 'error';
 
 export type ProfileMigrationSourceControlProps = {
   editable: boolean;
@@ -81,74 +81,74 @@ function ProfileMigrationSourceControlContents({
   const theme = useTheme();
   const environmentGenerationRef = useRelayEnvironmentGeneration();
   const [sourceHandle, setSourceHandle] = useState('');
-  const [prepareState, setPrepareState] = useState<PrepareState>('idle');
+  const [registerState, setRegisterState] = useState<RegisterState>('idle');
   const [validationError, setValidationError] = useState<string | undefined>();
-  const [commit] = useMutation<ProfileMigrationSourceControlMutation>(PrepareMutation);
-  const prepareRequestIdRef = useRef(0);
-  const prepareInFlightRef = useRef<number | null>(null);
+  const [commit] = useMutation<ProfileMigrationSourceControlMutation>(RegisterMutation);
+  const registerRequestIdRef = useRef(0);
+  const registerInFlightRef = useRef<number | null>(null);
 
-  const prepare = () => {
-    if (!editable || prepareInFlightRef.current !== null) {
+  const register = () => {
+    if (!editable || registerInFlightRef.current !== null) {
       return;
     }
 
     const normalizedInput = sourceHandle.trim();
     if (!normalizedInput) {
       setValidationError('이전할 프로필 주소를 입력해주세요.');
-      setPrepareState('idle');
+      setRegisterState('idle');
       return;
     }
 
     setValidationError(undefined);
     const environmentGeneration = environmentGenerationRef?.current;
-    const requestId = prepareRequestIdRef.current + 1;
-    prepareRequestIdRef.current = requestId;
-    prepareInFlightRef.current = requestId;
-    setPrepareState('preparing');
+    const requestId = registerRequestIdRef.current + 1;
+    registerRequestIdRef.current = requestId;
+    registerInFlightRef.current = requestId;
+    setRegisterState('registering');
 
     commit({
       variables: { input: { profileId: profile.id, sourceHandle: normalizedInput } },
       onCompleted: (response, errors) => {
         if (
-          prepareInFlightRef.current !== requestId ||
+          registerInFlightRef.current !== requestId ||
           environmentGenerationRef?.current !== environmentGeneration
         ) {
-          if (prepareInFlightRef.current === requestId) {
-            prepareInFlightRef.current = null;
+          if (registerInFlightRef.current === requestId) {
+            registerInFlightRef.current = null;
           }
           return;
         }
-        prepareInFlightRef.current = null;
+        registerInFlightRef.current = null;
 
-        const nextSource = response.prepareProfileMigration?.profile?.migrationSource;
+        const nextSource = response.registerProfileMigrationSource?.profile?.migrationSource;
         if (errors?.length || !nextSource) {
-          setPrepareState('error');
+          setRegisterState('error');
           return;
         }
 
         setSourceHandle(nextSource.relativeHandle);
-        setPrepareState('success');
+        setRegisterState('success');
       },
       onError: () => {
         if (
-          prepareInFlightRef.current !== requestId ||
+          registerInFlightRef.current !== requestId ||
           environmentGenerationRef?.current !== environmentGeneration
         ) {
-          if (prepareInFlightRef.current === requestId) {
-            prepareInFlightRef.current = null;
+          if (registerInFlightRef.current === requestId) {
+            registerInFlightRef.current = null;
           }
           return;
         }
-        prepareInFlightRef.current = null;
-        setPrepareState('error');
+        registerInFlightRef.current = null;
+        setRegisterState('error');
       },
     });
   };
 
-  const preparing = prepareState === 'preparing';
+  const registering = registerState === 'registering';
   const preparedSource = profile.migrationSource;
   const controlLabel = `Kosmo 프로필 이전 원본 ${profile.displayName} ${profile.relativeHandle}`;
-  const prepareButtonLabel = prepareState === 'error' ? '다시 시도' : '원본 프로필 준비';
+  const registerButtonLabel = registerState === 'error' ? '다시 시도' : '원본 등록';
 
   return (
     <View
@@ -160,14 +160,14 @@ function ProfileMigrationSourceControlContents({
         프로필 이전 원본
       </Text>
       <Text style={[styles.description, { color: theme.textSecondary }]}>
-        이전할 프로필 주소(@name@server)를 입력해 원본으로 미리 연결하세요.
+        이전할 프로필 주소(@name@server)를 입력해 원본으로 등록하세요.
       </Text>
       {preparedSource ? (
         <View
-          accessibilityLabel={`현재 준비된 원본 ${preparedSource.displayName} ${preparedSource.relativeHandle}`}
+          accessibilityLabel={`현재 등록된 원본 ${preparedSource.displayName} ${preparedSource.relativeHandle}`}
           role="group"
         >
-          <Text style={[styles.sourceLabel, { color: theme.textSecondary }]}>현재 준비된 원본</Text>
+          <Text style={[styles.sourceLabel, { color: theme.textSecondary }]}>현재 등록된 원본</Text>
           <Text style={[styles.sourceName, { color: theme.text }]}>
             {preparedSource.displayName}
           </Text>
@@ -181,13 +181,13 @@ function ProfileMigrationSourceControlContents({
           accessibilityLabel="이전할 프로필 주소"
           autoCapitalize="none"
           autoCorrect={false}
-          editable={editable && !preparing}
+          editable={editable && !registering}
           error={validationError}
           label="이전할 프로필 주소"
           onChangeText={(value) => {
             setSourceHandle(value);
             setValidationError(undefined);
-            setPrepareState('idle');
+            setRegisterState('idle');
           }}
           placeholder="@handle@example.com"
           value={sourceHandle}
@@ -195,37 +195,39 @@ function ProfileMigrationSourceControlContents({
       ) : null}
       {editable && !preparedSource ? (
         <Button
-          accessibilityLabel={prepareButtonLabel}
-          accessibilityState={{ busy: preparing, disabled: !sourceHandle.trim() }}
+          accessibilityLabel={registerButtonLabel}
+          accessibilityState={{ busy: registering, disabled: !sourceHandle.trim() }}
           disabled={!sourceHandle.trim()}
-          loading={preparing}
-          loadingText="준비 중"
-          onPress={prepare}
-          style={styles.prepare}
+          loading={registering}
+          loadingText="등록 중"
+          onPress={register}
+          style={styles.register}
         >
-          {prepareButtonLabel}
+          {registerButtonLabel}
         </Button>
       ) : editable && preparedSource ? (
         <Text style={[styles.memberNote, { color: theme.textSecondary }]}>
-          준비된 원본은 교체할 수 없어요.
+          등록된 원본은 교체할 수 없어요.
         </Text>
       ) : (
         <Text style={[styles.memberNote, { color: theme.textSecondary }]}>
-          프로필 소유자만 원본을 준비할 수 있어요.
+          프로필 소유자만 원본을 등록할 수 있어요.
         </Text>
       )}
-      {prepareState === 'error' ? (
+      {registerState === 'error' ? (
         <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-          원본 프로필을 준비하지 못했어요.
+          이전 원본을 등록하지 못했어요.
         </Text>
       ) : null}
-      {prepareState === 'success' ? (
-        <Text
-          accessibilityLiveRegion="polite"
-          style={[styles.success, { color: theme.textSecondary }]}
-        >
-          원본 프로필을 준비했어요.
-        </Text>
+      {registerState === 'success' ? (
+        <View accessibilityLiveRegion="polite">
+          <Text style={[styles.success, { color: theme.textSecondary }]}>
+            이전 원본을 등록했어요
+          </Text>
+          <Text style={[styles.success, { color: theme.textSecondary }]}>
+            기존 Mastodon 계정에서 이 Kosmo 프로필로 이전을 실행하세요
+          </Text>
+        </View>
       ) : null}
     </View>
   );
@@ -241,5 +243,5 @@ const styles = StyleSheet.create({
   error: { fontFamily: 'SUIT', ...typography.sm },
   success: { fontFamily: 'SUIT', ...typography.sm },
   memberNote: { fontFamily: 'SUIT', ...typography.sm },
-  prepare: { alignSelf: 'flex-start' },
+  register: { alignSelf: 'flex-start' },
 });
