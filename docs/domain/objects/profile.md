@@ -174,6 +174,8 @@ Hashtag에는 영향을 주지 않는다.
 ## 조회 정책
 
 - 공개 Profile 정보는 Lifecycle State가 Active이고 Suspension State가 Normal일 때 조회할 수 있다.
+- Profile Node, handle route와 일반 Profile 검색은 위 공개 조회 정책에 따라 기존 공개 기본 Profile 정보 범위를
+  제공한다.
 - Local Profile의 Owner와 운영자 Account는 운영에 필요한 비공개 상태를 조회할 수 있다.
 - Remote Profile은 Instance의 Safety State가 Domain Block이 아니어야 한다.
 - viewer Profile의 Profile Domain Block 대상 Instance에 속한 Remote Profile은 viewer에게 없는 것처럼 취급한다.

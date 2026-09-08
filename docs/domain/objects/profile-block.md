@@ -2,7 +2,9 @@
 
 ## 정의
 
-Profile Block은 Owner Profile과 Target Profile 사이의 조회와 상호작용을 차단하는 관계다.
+Profile Block은 Owner Profile과 Target Profile 사이의 콘텐츠 조회와 상호작용 정책을 정하는 방향성 관계다.
+Profile의 기본 정보는 Profile 조회 정책을 따르고, Post·Media 콘텐츠와 상호작용은 이 관계의 방향과 양쪽 관계
+상태를 함께 적용한다.
 
 ## 상태
 
@@ -42,11 +44,22 @@ Local Profile만 actor로 사용하며, remote ActivityPub ingress와 Block/Undo
 
 ## 조회 정책
 
-- Owner와 Target은 서로의 Profile, Post, Media와 Follow 후보를 직접 조회할 수 없다.
-- 모든 Post List와 검색 결과에서 상대 Profile의 콘텐츠를 Exclude한다.
+- Profile Node, handle route와 일반 Profile 검색은 [Profile](./profile.md)의 공개 조회 정책을 적용해 조회 가능한
+  기본 Profile 정보를 제공한다.
+- Owner Profile이 Target Profile의 Post를 직접 조회하는 경우에는 Post Visibility·Post Eligibility와 Media 조회
+  정책을 적용한다. Target Profile의 Post List, Post detail과 첨부 Media도 같은 정책을 따른다.
+- Target Profile이 Owner Profile의 Post를 조회하는 경우에는 Post와 첨부 Media를 모든 직접 API 조회 표면에서
+  제공하지 않는다. 두 Profile이 서로 Block한 경우에는 양쪽 방향의 콘텐츠 조회를 제공하지 않으며, 상대 Profile이
+  나를 Block한 상태의 콘텐츠 제한을 우선한다.
+- Home·Local·Hashtag 타임라인과 Post 콘텐츠 검색은 각 viewer가 상대 Profile의 콘텐츠를 양방향으로 필터링한다.
+  Profile Post List는 방향별 Post 조회 정책을 적용해 Owner의 Target Post 접근과 Target의 Owner Post 제한을 각각
+  적용한다.
+- Follow 후보와 Follow·Follow Request·Reply·Quote·Repost·Reaction 상호작용은 기존 양방향 Profile Block 조건을
+  유지한다.
 - 이번 Block 실행이 포착해 제거한 Follow Request/Relationship을 원인으로 가진 Notification은 필수 cleanup orchestration에서 함께 제거한다.
-  다른 기존 Notification Item은 Block action에서 동기적으로 바꾸지 않지만, 상대 Profile을 조회할 수 없어지면
-  Notification 조회에서 없는 것으로 취급하고 후속 비동기 cleanup 전까지 저장 상태가 남을 수 있다.
+  다른 기존 Notification Item은 Block action에서 동기적으로 바꾸지 않으며, Notification 조회는 Recipient·Related
+  Profile pair 정책과 Recipient 기준 Related Post/Profile 조회 정책을 적용한다. 후속 비동기 cleanup 전까지 저장
+  상태가 남을 수 있다.
 - Block 실행 중 이미 진입한 Follow transition이 cleanup 뒤 Follow/Request 또는 그 직접 원인 Notification을 남길 수 있다. Active Block 동안
   공통 정책은 이 잔존 row를 inactive/invisible로 취급한다.
   차단 뒤 모든 Notification source에 신규 생성 억제 정책을 연결하는 일은 `PROD-327`의 후속 범위다. 이 객체의 현재

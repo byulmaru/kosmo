@@ -60,7 +60,7 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 | Control              | Home                           | Local                      | Profile                    | Hashtag                    |
 | -------------------- | ------------------------------ | -------------------------- | -------------------------- | -------------------------- |
-| Profile Block        | Exclude                        | Exclude                    | Exclude                    | Exclude                    |
+| Profile Block        | 상대 콘텐츠 양방향 Exclude     | 상대 콘텐츠 양방향 Exclude | 방향별 Post 조회 정책 적용 | 상대 콘텐츠 양방향 Exclude |
 | Profile Mute         | Exclude                        | Exclude                    | 방문한 Profile만 예외      | Exclude                    |
 | Word Mute Rule       | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 |
 | Hashtag Mute Rule    | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 |
@@ -76,6 +76,12 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
   현재 established Follow Relationship을 추가로 요구하며, pending·rejected Follow Request 또는 unfollow로
   removed된 관계와 guest에는 접근 범위를 넓히지 않는다.
 - Repost에는 Repost Author와 Source Post Author에 대한 Profile Block을 모두 적용한다.
+- Home·Local·Hashtag Post List의 상대 콘텐츠는 Profile Block 관계의 양쪽 viewer 방향에서 Exclude한다. 이 필터는
+  cursor와 page limit 전에 적용한다.
+- Profile Post List는 직접 방문한 Profile이 Profile Block의 Target이고 viewer가 Owner이며 역방향 Block이 없는
+  경우 해당 Profile의 eligible Post와 첨부 Media를 기존 Post Visibility·Post Eligibility에 따라 Include한다.
+  viewer가 Profile Block의 Target인 경우 상대 Owner의 Post와 첨부 Media를 Exclude하며, 양방향 Block이면 양쪽
+  방향에 이 제한을 적용한다.
 - Home·Local·Hashtag Post List에서 Repost Source가 있는 후보에는 바깥 Post Author와 direct Source Post
   Author의 Profile Mute를 모두 적용하고, 둘 중 하나라도 Mute Target이면 Exclude한다. Content가 있는
   Quote도 direct Source Author를 판정한다.

@@ -2,7 +2,7 @@
 
 ### Requirement: Profile Block action confirmation and state lifecycle
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `DSN-53`; 책임 이슈는 `PROD-823`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Profile surface의 Block action은 Mute와 구분되는 공용 ConfirmationContent를 사용하고 Danger tone의 확인 제목·결과 설명·확정 action을 제공해야 한다(MUST). pending 동안 같은 action의 중복 입력과 dismiss를 차단하고 busy 상태를 전달해야 하며(MUST), 성공 상태는 서버 확정 결과를 사용하고 실패 시 기존 서버 상태와 제품의 공용 오류 피드백을 유지해야 한다(MUST).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `DSN-53`; 책임 이슈는 `PROD-823`. Profile surface의 Block action은 Mute와 구분되는 공용 ConfirmationContent를 사용하고 Danger tone의 확인 제목·결과 설명·확정 action을 제공해야 한다(MUST). pending 동안 같은 action의 중복 입력과 dismiss를 차단하고 busy 상태를 전달해야 하며(MUST), 성공 상태는 서버 확정 결과를 사용하고 실패 시 기존 서버 상태와 제품의 공용 오류 피드백을 유지해야 한다(MUST).
 
 #### Scenario: Block 확인을 취소하면 상태를 바꾸지 않는다
 
@@ -24,7 +24,7 @@
 
 ### Requirement: Separate Profile Block management destination
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `DSN-53`; 책임 이슈는 `PROD-823`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Settings root는 `뮤트 및 차단` 진입점에서 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 이 순서에 제공해야 하며(MUST), Block destination은 자기 heading, loading, error·retry, empty, pagination과 해제 action을 소유해야 한다(MUST). Block과 Mute를 하나의 혼합 목록이나 이 흐름만을 위한 새 Settings shell로 합쳐서는 안 된다(MUST NOT).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `DSN-53`; 책임 이슈는 `PROD-823`. Settings root는 `뮤트 및 차단` 진입점에서 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 이 순서에 제공해야 하며(MUST), Block destination은 자기 heading, loading, error·retry, empty, pagination과 해제 action을 소유해야 한다(MUST). Block과 Mute를 하나의 혼합 목록이나 이 흐름만을 위한 새 Settings shell로 합쳐서는 안 된다(MUST NOT).
 
 #### Scenario: 차단한 프로필 목록의 독립 상태를 표시한다
 
@@ -39,15 +39,39 @@
 - **THEN** 시스템은 해당 Profile Block 해제 mutation을 실행한다
 - **AND** 성공한 Target은 현재 Block 목록에서 제거되고 다른 목록 항목의 상태는 바꾸지 않는다
 
+### Requirement: Profile Block direct route presents basic Profile and content state
+
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/policies/post-list.md`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 후속 UI 교체는 `PROD-917`의 범위다. Block 관계의 direct Profile route는 기존 Profile 조회 정책에 따른 기본 Profile 정보를 표시해야 한다(MUST). `blocking` route는 기존 Post·Media 정책으로 허용된 Target 콘텐츠를 표시하기 전에 frontend 콘텐츠 경고를 제공하고, `blockedBy` route는 기본 Profile 정보와 콘텐츠 차단 상태를 표시해야 한다(MUST). 양방향 Block은 양쪽 route에 콘텐츠 차단 상태를 적용해야 한다(MUST). `차단 해제` action은 `blocking` route의 기존 관계 관리 흐름을 유지해야 하며(MUST), 경고 문구와 표시 기간은 후속 디자인 계약에서 정한다(MUST).
+
+#### Scenario: 역방향 Block이 없을 때 blocking route에서 기본 Profile과 확인 후 콘텐츠를 표시한다
+
+- **WHEN** selected Profile이 Owner이고 Target이 Owner를 차단하지 않은 상태에서 차단한 Target의 direct Profile route를 연다
+- **THEN** 시스템은 기존 Profile 조회 정책에 따른 Target의 기본 Profile 정보를 표시한다
+- **AND** frontend는 Target의 Post·Media를 표시하기 전에 콘텐츠 경고를 제공한다
+- **AND** 사용자가 확인하면 기존 Post·Media 정책으로 허용된 Target 콘텐츠를 표시한다
+- **AND** `차단 해제` action은 기존 blocking route 관계 관리 흐름으로 제공한다
+
+#### Scenario: blockedBy route에서 기본 Profile과 콘텐츠 차단 상태를 표시한다
+
+- **WHEN** selected Profile이 Target이고 차단한 Owner의 direct Profile route를 연다
+- **THEN** 시스템은 기존 Profile 조회 정책에 따른 Owner의 기본 Profile 정보를 표시한다
+- **AND** 시스템은 Owner의 Post·Media 콘텐츠에 차단 상태를 표시한다
+
+#### Scenario: 양방향 Block route에 양쪽 콘텐츠 차단 상태를 적용한다
+
+- **WHEN** 두 Profile 사이에 양방향 Profile Block이 있고 어느 한쪽이 상대의 direct Profile route를 연다
+- **THEN** 시스템은 양쪽 route에 기본 Profile 정보와 콘텐츠 차단 상태를 표시한다
+
 ### Requirement: Profile Block actor and client-state isolation
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-51`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block UI는 selected Profile별 actor 상태 격리를 유지해야 하며(MUST), 최신 canonical이 승인한 identity-free `blocking`·`blockedBy` route presentation을 소비하고 Target identity·이미 알고 있는 handle·content·social action을 UI 상태로 복구해서는 안 된다(MUST NOT). Block·Unblock 성공 결과는 현재 화면, Block 목록과 이미 표시 중인 unavailable 표면의 상태를 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 이전 Owner의 Block 상태를 새 actor에 재사용해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-51`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 후속 UI 교체는 `PROD-917`의 범위다. Block UI는 selected Profile별 actor 상태 격리를 유지해야 하며(MUST), 기존 Profile 기본 정보와 viewer 방향에 따른 콘텐츠 상태를 최신 서버 정책과 함께 표시해야 한다(MUST). Block·Unblock 성공 결과는 현재 화면, Block 목록, 이미 표시 중인 timeline·Profile Post List와 Notification client 상태를 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 각 actor의 Block 상태를 해당 actor의 결과로 격리해야 한다(MUST).
 
 #### Scenario: Block 성공 뒤 표시 중인 결과가 정책에 수렴한다
 
 - **WHEN** selected Profile이 Target을 차단하는 mutation이 성공한다
 - **THEN** 시스템은 현재 Profile 화면과 Block 목록을 서버 확정 Block 상태로 갱신한다
-- **AND** 접근할 수 없게 된 Target의 Profile·Post·Notification을 화면과 client 상태에서 제거하거나 숨긴다
+- **AND** 현재 Profile 화면은 기본 Profile 정보와 viewer 방향에 따른 콘텐츠 상태를 서버 정책에 맞춰 표시한다
+- **AND** 이미 표시 중인 Home·Local·Hashtag timeline·Profile Post List와 Notification은 각 surface의 서버 Profile Block 정책에 맞춰 숨기거나 갱신한다
 - **AND** mutation 실패 시 이전 cache를 차단된 것으로 확정하지 않는다
 
 #### Scenario: selected Profile을 전환해도 Block 상태를 섞지 않는다
@@ -61,11 +85,11 @@
 - **WHEN** Owner가 Block 목록에서 Target의 차단을 해제한다
 - **THEN** 시스템은 최신 Block 상태에 맞게 목록과 Profile surface를 갱신한다
 - **AND** 차단 생성 때 제거된 Follow 관계를 client optimistic 상태로 복구하지 않는다
-- **AND** 이후 새 요청에서만 서버가 허용한 상대 Profile·Post·상호작용이 다시 나타날 수 있다
+- **AND** 기본 Profile 정보는 기존 Profile 조회 정책에 따라 계속 표시할 수 있고, Post·상호작용은 이후 새 요청에서 서버가 허용한 경우에만 다시 나타날 수 있다
 
 ### Requirement: Profile Block interaction accessibility
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/accessibility.md`, `DSN-53`; 책임 이슈는 `PROD-823`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block confirmation과 management list는 실제 동작에 맞는 role·accessible name·current·disabled·busy 상태와 안전한 초기 focus, modal 의미, Web `Escape`·Native back 및 focus 복원을 제공해야 한다(MUST). 공용 Button, ActionMenu, ModalSheet, Toast와 SettingsItem을 재사용해야 하며(MUST), 이 흐름만을 위한 새 Toast·범용 safety component·별도 UI package를 추가해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/accessibility.md`, `DSN-53`; 책임 이슈는 `PROD-823`. Block confirmation과 management list는 실제 동작에 맞는 role·accessible name·current·disabled·busy 상태와 안전한 초기 focus, modal 의미, Web `Escape`·Native back 및 focus 복원을 제공해야 한다(MUST). 공용 Button, ActionMenu, ModalSheet, Toast와 SettingsItem을 재사용해야 하며(MUST), 이 흐름만을 위한 새 Toast·범용 safety component·별도 UI package를 추가해서는 안 된다(MUST NOT).
 
 #### Scenario: 확인 UI와 해제 action이 접근 가능한 이름과 상태를 제공한다
 

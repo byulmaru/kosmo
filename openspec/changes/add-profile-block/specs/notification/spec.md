@@ -1,14 +1,20 @@
 ## ADDED Requirements
 
-### Requirement: Profile Block hides unavailable existing Notifications
+### Requirement: Profile Block hides paired existing Notifications
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0002-pr-review-domain-adjustments.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, `docs/domain/decisions/0007-spec-boundary-and-state-clarifications.md`, `PROD-822`, `PROD-813`. Profile Block 생성으로 Recipient가 Related Profile 또는 Related Post를 조회할 수 없게 된 기존 Notification은 Notification connection, Unread count, Node 조회와 읽음 처리에서 없는 것처럼 취급해야 한다(MUST). 저장 row와 Read State는 후속 cleanup 전까지 남을 수 있다(MAY).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0002-pr-review-domain-adjustments.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, `docs/domain/decisions/0007-spec-boundary-and-state-clarifications.md`, `PROD-822`, `PROD-813`. Recipient Profile과 Related Profile 사이에 Profile Block pair가 있으면 기존 Notification을 Notification connection, Unread count, Node 조회와 읽음 처리에서 숨겨야 한다(MUST). 이 Notification pair 정책은 Recipient가 Related Post를 직접 조회할 수 있는 방향의 Post·Media 정책과 독립적으로 적용해야 한다(MUST). 저장 row와 Read State는 후속 cleanup 전까지 남을 수 있다(MAY).
 
-#### Scenario: 차단으로 조회 불가가 된 기존 Notification을 숨긴다
+#### Scenario: Profile Block pair의 기존 Notification을 숨긴다
 
-- **WHEN** Profile Block이 생성된 뒤 Recipient가 상대 Profile 또는 상대 Profile의 Post를 원인으로 가진 기존 Notification을 조회한다
+- **WHEN** Recipient Profile과 Related Profile 사이에 Profile Block pair가 있고 Recipient가 해당 Notification을 조회한다
 - **THEN** 시스템은 해당 item을 목록, Unread count, Node 조회와 읽음 처리 대상에서 제외한다
 - **AND** Notification 저장 row와 Read State가 남아 있어도 API 표면에 노출하지 않는다
+
+#### Scenario: Notification pair policy와 직접 Post 조회 policy를 분리한다
+
+- **WHEN** Recipient가 Related Post를 직접 조회할 수 있는 방향의 Profile Block pair에 연결된 기존 Notification을 조회한다
+- **THEN** 시스템은 Notification pair policy에 따라 해당 item을 숨긴다
+- **AND** Related Post·Media 직접 조회 결과는 Post·Media의 viewer 방향 정책으로 별도 판정한다
 
 ### Requirement: Follow-cause Notification cleanup follows durable Profile Block cleanup
 

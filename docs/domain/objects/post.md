@@ -79,6 +79,9 @@ Source=Local, State=Ready이고 Media의 Upload Account가 행동을 요청한 A
 Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조할 수 있다. State=Uploading인 Media는
 사용할 수 없다. Tombstone Post에는 다른 상태 전이를 적용하지 않는다.
 
+Reply·Quote·Repost 작성은 각 입력 Parent·Source Post의 Author Profile과 행동 주체 Profile 사이에 Profile Block이
+없어야 한다. 이 상호작용 조건은 Post Visibility·Post Eligibility와 별도로 양방향 적용한다.
+
 ## 권한
 
 | 권한                    | 종류      | 성립 조건                                               |
@@ -102,8 +105,10 @@ Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조
 - Lifecycle State가 Active여야 한다.
 - Author Profile의 Lifecycle State가 Active이고 Suspension State가 Normal이어야 한다.
 - 현재 Post Content가 참조하는 Media가 Media 조회 정책을 통과해야 한다.
-- viewer Profile과 Author Profile 사이에 어느 방향으로든 Profile Block이 존재하거나, viewer가 Author Profile의
-  Instance를 Profile Domain Block한 경우 없는 것처럼 취급한다.
+- viewer Profile과 Author Profile 사이의 Profile Block은 조회 방향에 따라 적용한다. viewer가 Profile Block의
+  Owner이고 역방향 Block이 없으면 기존 Post Visibility·Post Eligibility에 따라 Post를 조회할 수 있다. viewer가
+  Profile Block의 Target이면 Post를 조회할 수 없으며, 양방향 Block이면 이 제한을 양쪽 viewer에 적용한다.
+- viewer가 Author Profile의 Instance를 Profile Domain Block한 경우 없는 것처럼 취급한다.
 - Author Profile의 Instance Safety State가 Domain Block이면 없는 것처럼 취급한다.
 - Content 없는 Repost는 Repost Source가 Tombstone이거나 조회 정책을 통과하지 못하면 후보가 아니다.
 - Quote와 Reply이면서 Quote인 Post는 Repost Source가 Tombstone이거나 조회 정책을 통과하지 못해도 자체
@@ -232,6 +237,8 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - 검색 후보는 Post Visibility가 Public이고 Post Eligibility를 통과한 Post다.
 - Unlisted, Followers Only, Mentioned Profiles Post는 검색 후보가 아니다.
 - Domain Limit Instance의 Post는 공개 검색 후보에서 제외한다.
+- Profile Block 관계에서 각 viewer의 상대 Profile이 작성한 콘텐츠는 viewer 방향에 관계없이 검색 후보에서
+  제외한다.
 - Word Mute Rule과 Hashtag Mute Rule은 Search Scope를 포함한 경우에만 viewer별 결과에 적용한다.
 
 ## 확정 용어

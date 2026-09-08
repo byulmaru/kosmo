@@ -62,22 +62,25 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 
 ## 차단 관계의 직접 Profile
 
-- 차단 관계의 direct Profile route는 [Profile Block 조회 정책](../domain/objects/profile-block.md#조회-정책)을 따르는
-  identity-free presentation이다. `blocking`·`blockedBy` 모두 Target의 identity·content·social action을 표시하지
-  않는다.
-- `blockedBy` Target은 별개 오류 화면을 만들지 않고 viewport별 기존 Profile route chrome 안의 중앙 column에
-  actionless `StateView`로 `이 프로필을 볼 수 없습니다`만 표시한다. Mobile Dark
-  [`6774:12067`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6774-12067), Compact Web Light
+- 차단 관계의 direct Profile route는 [Profile Block 조회 정책](../domain/objects/profile-block.md#조회-정책)과
+  [Profile 조회 정책](../domain/objects/profile.md#조회-정책)에 따라 기존 공개 기본 Profile 정보와 콘텐츠 상태를
+  함께 표시한다. `blocking`과 `blockedBy` 모두 Profile Node·handle route·일반 Profile 검색과 같은 기본 Profile
+  정보 범위를 사용한다.
+- `blocking` 화면에서는 Target Profile의 Post List·Post detail·첨부 Media를 기존 Post·Media 조회 정책으로
+  제공한다. Profile route는 콘텐츠 경고를 먼저 표시하고, 사용자가 확인한 뒤 해당 결과를 표시한다. 경고의
+  구체적인 문구와 표시 기간은 후속 디자인 계약에서 정한다.
+- `blockedBy` 화면에서는 Owner Profile의 기본 Profile 정보를 유지하면서 Post·Media 콘텐츠 차단 상태를 표시한다.
+  양방향 Block이면 양쪽 화면에서 콘텐츠 차단 상태를 적용하며, Profile route와 다른 API 표면은 같은 콘텐츠 정책을
+  사용한다. 차단 해제의 data와 lifecycle은 적용 Product/OpenSpec/runtime 범위다.
+- Mobile Dark [`6774:12067`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6774-12067), Compact Web Light
   [`7371:19453`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7371-19453), Full Web Light
-  [`7380:20771`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-20771)이 exact evidence다.
-- `blocking`도 같은 identity-free route shell을 사용하되 action이 있는 `StateView`로 `차단한 프로필입니다`와
-  Secondary `차단 해제`를 제공한다. Mobile Dark [`7580:14180`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7580-14180)과
-  Full Web [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)이
-  Target evidence다. 차단 해제의 data와 lifecycle은 적용 Product/OpenSpec/runtime 범위다.
+  [`7380:20771`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-20771), Mobile Dark
+  [`7580:14180`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7580-14180)와 Full Web
+  [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)은 기존 route chrome과 StateView
+  조립의 물리적 참고 자료로 유지한다. 이 Target들은 현재 기본 Profile 정보와 방향성 콘텐츠 조회 계약의 전체
+  표현을 확정하지 않는다.
 - Mobile은 MenuOnly header와 BottomTabBar, Compact는 Sidebar, Full은 Sidebar와 RightRail을 유지한다. Web 중앙
   column에는 별도 PageHeader를 두지 않는다. Sidebar와 RightRail의 로그인 Owner 정보는 차단 Target identity가
-  아니다.
-- Block 관리 목록에서 관계 관리를 위해 표시하는 최소 identity는 direct Profile route의 identity 노출 근거가
   아니다.
 
 ## 뮤트 관계의 직접 Profile
