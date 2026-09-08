@@ -268,16 +268,17 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
 - [`ProfileSwitcher overlay lifecycle`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6773-11566)는
   Drawer의 ProfileSwitcher OpenLong을 기존 host·scrim·drawer 안에서 교체한 Target이다. picker 목록과 새 프로필
   추가 행은 scroll/fixed 영역을 나누고, Drawer의 primary navigation만 남은 높이를 채워 스크롤하며 divider 아래
-  footer는 바닥에 고정한다. Feedback Error는 Web exception section으로 이동했다. `blockedBy`는 별도 오류 화면이
-  아니라 기존 Profile route chrome 안에서 Target identity 없이 중앙 정렬한 actionless StateView로 통일한다.
+  footer는 바닥에 고정한다. Feedback Error는 Web exception section으로 이동했다. 차단 관계의 Profile route 표시
+  계약은 [Profile Mute·Block 디자인 계약](profile-mute-block.md#차단-관계의-직접-profile)을 따른다.
   Mobile [`6774:12067`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6774-12067),
   Compact [`7371:19453`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7371-19453),
-  Full [`7380:20771`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-20771) Target을 두며,
-  Target의 cover·avatar·표시 이름·handle·bio·수치·게시물·관계 action은 표시하지 않는다.
+  Full [`7380:20771`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-20771) Target은 당시
+  identity-free 조립의 물리 참고 자료로 유지한다.
 - 같은 section의 Mobile [`blocking 7580:14180`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7580-14180)은
-  기존 Android Dark Profile route chrome 안에서 Target identity를 제거하고, 중앙 정렬한 `StateView`에
-  `차단한 프로필입니다`와 Secondary `차단 해제`만 제공한다. Full Web [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)도
-  같은 identity-free presentation을 사용한다. 차단 해제의 data와 lifecycle은 Product 후속 범위다.
+  기존 Android Dark Profile route chrome 안의 identity-free `StateView`와 Secondary `차단 해제` 조립을 물리적 참고
+  자료로 유지한다. Full Web [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)도
+  같은 참고 범위다. Profile route의 콘텐츠 경고 문구·기간은 후속 디자인 계약에서 정하며, 차단 해제의 data와
+  lifecycle은 Product 후속 범위다.
 - 같은 section의 Mobile muted direct Profile Target [`7541:14061`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7541-14061)은
   기존 Android baseline Profile shell과 `ProfileHero.Muted=true` 상태·해제 action의 배치 근거로만 사용한다.
   이 Target에 남아 있는 `PostContent.CW=MutedCollapsed`와 Mute disclosure는 [Profile Mute 조회 정책](../domain/objects/profile-mute.md#조회-정책)과
@@ -291,8 +292,9 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   `17 Composer state consumers`, `15 Mobile route and state consumers`의 Target evidence로 유지한다.
   `Assembled Target consumers + contract review · 15`는 Composer state consumer, Post content warning의 Mobile
   List/detail 4-state consumer와 moderation direct consumer의 물리 인벤토리를 기록한다. moderation 행의
-  `blocking 7580:14180`·`blockedBy 6774:12067`은 현재 Target이고, `muted 7541:14061`의 Post collapse는 대체된
-  이력이다. `Remaining Mobile contract review`는 confirmation, retained-list pagination loading과 Native/direct
+  `blocking 7580:14180`·`blockedBy 6774:12067`은 기존 route chrome·StateView 참고 Target으로 유지한다.
+  `muted 7541:14061`의 Post collapse는 대체된 이력이다. `Remaining Mobile contract review`는 confirmation,
+  retained-list pagination loading과 Native/direct
   `/feedback`의 Product/runtime 소유권만 남긴다.
 
 #### Screens 승격 결과와 남은 검증 공백
@@ -349,8 +351,9 @@ Collapsed·Revealed 시각은 유지한다. 새 `Reason=Muted`는 canonical `Vol
 
 Search Popular·Media, Profile edit, Profile Replies·Media처럼 `Candidate`·`Product not implemented`로 이미
 inventory에 등록된 항목은 누락 화면으로 다시 세지 않는다. canonical route family의 광범위한 공백은 찾지
-않았다. Mobile `blocking`·`blockedBy` identity-free state는 Target으로 조립됐고, `muted` direct consumer의
-Post collapse는 대체된 이력으로만 남는다. Mute·Block confirmation sheet 배치와 retained-list pagination
+않았다. Mobile `blocking`·`blockedBy`는 기존 identity-free StateView 조립의 물리 참고 자료로 유지하며, 현재 차단
+관계 표시는 [Profile Mute·Block 디자인 계약](profile-mute-block.md#차단-관계의-직접-profile)을 따른다. `muted` direct
+consumer의 Post collapse는 대체된 이력으로만 남는다. Mute·Block confirmation sheet 배치와 retained-list pagination
 loading은 Product/runtime 계약 전 임의 geometry를 만들지 않는다. 현재
 Native/direct `/feedback` page는 누락 화면이 아니라 호환 runtime route이며, overlay-only Target으로 이관하는
 별도 Product 계약에서 제거 여부와 Native presentation을 결정한다. Inventory의 `Remaining Mobile contract review`

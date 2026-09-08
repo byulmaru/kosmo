@@ -54,25 +54,26 @@
 - **THEN** 시스템은 현재 남아 있는 양방향 Follow Request·Follow Relationship과 그 직접 원인 Notification을 정리한 뒤 Profile Block 관계를 제거한다
 - **AND** 차단 생성 때 제거된 Follow Request와 Follow Relationship을 자동으로 재생성하지 않는다
 
-### Requirement: Profile Block symmetric policy invariant
+### Requirement: Profile Block applies the policy for each surface
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `PROD-822`. 시스템은 저장된 Owner → Target Profile Block을 임의의 viewer·target pair 양쪽에 적용되는 공통 blocked predicate로 정규화해야 한다(MUST). 이 predicate가 true인 동안 모든 policy consumer는 차단 상태를 유지해야 하며(MUST), Profile Block 관계가 사라져도 차단 생성 중 제거된 Follow Request·Follow Relationship을 자동으로 복구해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `docs/domain/objects/media.md`, `docs/domain/objects/notification.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `PROD-822`. Profile Block은 저장 방향과 요청 surface를 함께 평가해야 한다(MUST). Profile Node·handle route·일반 Profile 검색은 기존 Profile 조회 정책을 적용하고, Post·Media 직접 조회는 viewer 방향에 따른 콘텐츠 정책을 적용하며, Home·Local·Hashtag Post List·Post 검색·Follow 후보·상호작용·Notification은 양쪽 Profile에 대한 보호 정책을 적용해야 한다(MUST). 각 surface는 기존 Visibility·Eligibility와 자체 lifecycle·권한 조건을 함께 적용해야 한다(MUST).
 
-#### Scenario: Block 방향과 무관하게 공통 predicate를 적용한다
+#### Scenario: Profile Block이 surface별 정책을 적용한다
 
-- **WHEN** Owner → Target Profile Block이 존재하고 Owner 또는 Target이 상대를 대상으로 하나의 policy consumer를 실행한다
-- **THEN** 시스템은 어느 요청 방향에서도 같은 pair를 blocked로 판정한다
-- **AND** consumer가 Owner 방향만 검사해 반대 방향의 정책 결정을 우회하지 않는다
+- **WHEN** Owner → Target Profile Block이 존재하고 Owner 또는 Target이 Profile identity, 직접 콘텐츠, 탐색 목록, Follow 후보, interaction 또는 Notification을 요청한다
+- **THEN** 시스템은 Profile identity에 기존 Profile 조회 정책을 적용한다
+- **AND** 직접 Post·Media 조회에는 viewer 방향의 Profile Block 콘텐츠 정책을 적용한다
+- **AND** 탐색 목록·Follow 후보·interaction·Notification에는 양방향 Profile Block 보호 정책을 적용한다
 
-#### Scenario: 차단 해제 뒤 삭제된 상태를 복구하지 않는다
+#### Scenario: 차단 해제 뒤 새 요청을 현재 정책으로 평가한다
 
 - **WHEN** Owner가 Profile Block을 해제한 뒤 양쪽 Profile이 새 요청을 실행한다
-- **THEN** 시스템은 새 요청 시점의 현재 Block predicate와 다른 정책을 평가한다
-- **AND** 차단 생성 때 제거된 Follow Request와 Follow Relationship을 자동으로 재생성하지 않는다
+- **THEN** 시스템은 새 요청 시점의 현재 Profile Block 관계와 각 surface의 기존 조회·상호작용 정책을 함께 평가한다
+- **AND** 차단 생성 때 제거된 Follow Request와 Follow Relationship은 cleanup·no-restore 계약에 따라 자동 복구하지 않는다
 
 ### Requirement: Profile Block GraphQL actor and policy boundary
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `PROD-822`, `PROD-823`. 현재 GraphQL ingress는 검증된 Session의 selected Local Profile을 actor로 사용해 Profile Block 생성·해제와 Owner 차단 목록 조회를 제공해야 한다(MUST). GraphQL resolver·loader·Node 조회·connection은 중앙 application policy를 재사용해야 하며(MUST), 요청별 DB actor state(GUC 등)·client 전용 차단 필터로 권한이나 가시성을 대체해서는 안 된다(MUST NOT). 차단 목록은 selected Local Profile이 Owner인 관계만 반환해야 하며(MUST), Target Profile의 일반 조회 가능성을 우회해 관계 관리에 필요한 최소 식별 정보만 제공해야 한다(MUST). 이 GraphQL ingress 계약을 remote ActivityPub ingress에 적용하는 것은 이 change의 범위가 아니다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `PROD-822`, `PROD-823`. 현재 GraphQL ingress는 검증된 Session의 selected Local Profile을 actor로 사용해 Profile Block 생성·해제와 Owner 차단 목록 조회를 제공해야 한다(MUST). GraphQL resolver·loader·Node 조회·connection은 중앙 application policy를 재사용해야 하며(MUST), 차단 목록은 selected Local Profile이 Owner인 관계만 반환해야 한다(MUST). Target Profile의 기본 정보는 기존 Profile 조회 정책으로 제공하고, Post·Media와 각 목록·상호작용·Notification은 해당 surface의 Profile Block 정책을 적용해야 한다(MUST). 이 GraphQL ingress 계약을 remote ActivityPub ingress에 적용하는 것은 이 change의 범위가 아니다(MUST NOT).
 
 #### Scenario: selected Local Profile 없이 GraphQL Block operation을 실행하지 않는다
 
@@ -86,8 +87,8 @@
 - **THEN** 각 응답은 해당 시점의 selected Local Profile이 Owner인 Profile Block만 반환한다
 - **AND** Owner A의 관계가 Owner B의 목록·mutation·Node 조회 결과에 섞이지 않는다
 
-#### Scenario: GraphQL 직접 조회와 목록이 같은 Block policy를 사용한다
+#### Scenario: GraphQL 각 surface가 해당 Profile Block 정책을 사용한다
 
 - **WHEN** GraphQL client가 Profile Node, Post connection, Media relation, Follow 후보 또는 Profile Block 목록을 같은 Block 관계에 대해 요청한다
-- **THEN** 시스템은 요청 surface와 무관하게 동일한 양방향 Profile Block policy를 적용한다
-- **AND** client가 숨겨진 결과를 후처리해 상대 Profile 또는 Post를 복원할 수 있는 payload를 반환하지 않는다
+- **THEN** Profile Node는 기존 Profile 조회 정책을, Post·Media는 viewer 방향의 콘텐츠 정책을, Follow 후보는 양방향 보호 정책을 적용한다
+- **AND** Profile Block 목록은 selected Local Profile이 Owner인 관계만 반환한다
