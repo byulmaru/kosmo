@@ -144,11 +144,14 @@ export const FailureContract: Story = {
       expect(args.onFeedback).toHaveBeenCalledWith({ muted: true, status: 'error' }),
     );
     expect(await body.findByText('뮤트하지 못했어요. 다시 시도해 주세요.')).toBeVisible();
-    await waitFor(() => expect(body.getByRole('button', { name: '취소' })).toHaveFocus());
-    const retry = body.getByRole('button', { name: '뮤트' });
-    await userEvent.click(retry);
+    expect(body.queryByRole('dialog')).not.toBeInTheDocument();
+    const trigger = within(canvasElement).getByRole('button', { name: '더보기' });
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await userEvent.click(trigger);
+    await userEvent.click(await body.findByRole('menuitem', { name: '뮤트' }));
+    await userEvent.click(await body.findByRole('button', { name: '뮤트' }));
     await waitFor(() => expect(args.onMute).toHaveBeenCalledTimes(2));
-    await userEvent.click(body.getByRole('button', { name: '취소' }));
+    await waitFor(() => expect(body.queryByRole('dialog')).not.toBeInTheDocument());
   },
 };
 export const PendingContract: Story = {

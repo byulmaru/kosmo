@@ -79,7 +79,10 @@ export default function HomeScreen() {
         ref={routeBoundaryRef}
         title="홈을 불러오지 못했어요"
       >
-        <HomeRouteContent key={profileMuteTimelineRevision} />
+        <HomeRouteContent
+          key={profileMuteTimelineRevision}
+          profileMuteTimelineRevision={profileMuteTimelineRevision}
+        />
       </RouteBoundary>
     </HomeFrame>
   );
@@ -120,7 +123,11 @@ type HomeLastSuccessful = {
   data: HomePageQuery$data;
 };
 
-function HomeRouteContent() {
+function HomeRouteContent({
+  profileMuteTimelineRevision,
+}: {
+  profileMuteTimelineRevision: number;
+}) {
   const { fetchKey, refetch } = useRouteBoundary();
   const lastSuccessfulHomeRef = useRef<HomeLastSuccessful | null>(null);
 
@@ -129,6 +136,7 @@ function HomeRouteContent() {
       fetchKey={fetchKey}
       lastSuccessfulHomeRef={lastSuccessfulHomeRef}
       onRetry={refetch}
+      profileMuteTimelineRevision={profileMuteTimelineRevision}
     />
   );
 }
@@ -137,10 +145,12 @@ function HomeContentBoundary({
   fetchKey,
   lastSuccessfulHomeRef,
   onRetry,
+  profileMuteTimelineRevision,
 }: {
   fetchKey: number;
   lastSuccessfulHomeRef: MutableRefObject<HomeLastSuccessful | null>;
   onRetry: () => void;
+  profileMuteTimelineRevision: number;
 }) {
   const reportUnexpectedError = useUnexpectedErrorReporter();
 
@@ -175,7 +185,11 @@ function HomeContentBoundary({
       }}
       resetKeys={[fetchKey]}
     >
-      <HomeContent fetchKey={fetchKey} lastSuccessfulHomeRef={lastSuccessfulHomeRef} />
+      <HomeContent
+        fetchKey={fetchKey}
+        lastSuccessfulHomeRef={lastSuccessfulHomeRef}
+        profileMuteTimelineRevision={profileMuteTimelineRevision}
+      />
     </ErrorBoundary>
   );
 }
@@ -183,14 +197,16 @@ function HomeContentBoundary({
 function HomeContent({
   fetchKey,
   lastSuccessfulHomeRef,
+  profileMuteTimelineRevision,
 }: {
   fetchKey: number;
   lastSuccessfulHomeRef: MutableRefObject<HomeLastSuccessful | null>;
+  profileMuteTimelineRevision: number;
 }) {
   const data = useLazyLoadQuery<HomePageQuery>(
     HomeQuery,
     {},
-    { fetchKey, fetchPolicy: 'store-and-network' },
+    { fetchKey: `${profileMuteTimelineRevision}:${fetchKey}`, fetchPolicy: 'store-and-network' },
   );
   lastSuccessfulHomeRef.current = { data };
 

@@ -52,7 +52,10 @@ export default function LocalScreen() {
         ref={routeBoundaryRef}
         title="로컬 타임라인을 불러오지 못했어요"
       >
-        <LocalContent key={profileMuteTimelineRevision} />
+        <LocalContent
+          key={profileMuteTimelineRevision}
+          profileMuteTimelineRevision={profileMuteTimelineRevision}
+        />
       </RouteBoundary>
     </LocalFrame>
   );
@@ -79,14 +82,14 @@ function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: ()
   );
 }
 
-function LocalContent() {
+function LocalContent({ profileMuteTimelineRevision }: { profileMuteTimelineRevision: number }) {
   const theme = useTheme();
   const shellChrome = useShellChrome();
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<LocalPageQuery>(
     LocalQuery,
     {},
-    { fetchKey, fetchPolicy: 'store-and-network' },
+    { fetchKey: `${profileMuteTimelineRevision}:${fetchKey}`, fetchPolicy: 'store-and-network' },
   );
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;

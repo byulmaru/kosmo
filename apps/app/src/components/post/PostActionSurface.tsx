@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
+import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { isRepostTargetEligible } from './postActionAvailability';
@@ -31,6 +32,11 @@ const postActionSurfaceFragment = graphql`
       id
       relativeHandle
       displayName
+      viewerState {
+        profileMute {
+          id
+        }
+      }
     }
     ...PostActionBar_post @alias(as: "actionBar")
     ...PostReactionController_post @alias(as: "reactionController")
@@ -60,54 +66,73 @@ export function PostActionSurface({
   );
   const onBookmarkError = useBookmarkFailureToast();
   const onRepostError = useRepostFailureToast();
+  const { changeMuted } = useProfileMuteMutations();
   const copyLinkItem = usePostMoreMenuItem({
     postId: target.id,
     relativeHandle: target.profile.relativeHandle,
   });
 
+  const resolvedMute =
+    mute ??
+    (authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id
+      ? {
+          muted: Boolean(target.profile.viewerState?.profileMute),
+          onChangeMuted: (nextMuted: boolean) =>
+            changeMuted(
+              {
+                ownerProfileId: authentication.selectedProfileId as string,
+                profileMuteId: target.profile.viewerState?.profileMute?.id,
+                targetProfileId: target.profile.id,
+              },
+              nextMuted,
+            ),
+          profileId: target.profile.id,
+        }
+      : undefined);
+
   const renderActions = (more?: MoreActionConfig) => (
-    <PostActionBar
-      execution={authentication.execution}
-      more={more}
-      moreItems={[copyLinkItem]}
-      onBookmarkError={onBookmarkError}
-      onDeleted={onDeleted}
-      onRepostError={onRepostError}
-      onResolutionRequired={authentication.resolve}
-      post={target.actionBar}
-      reactionController={reactionController}
-      reply={reply}
-      repostExecution={repostAuthentication.execution}
-    />
+    <View style={actionBarStyle}>
+      <PostActionBar
+        execution={authentication.execution}
+        more={more}
+        moreItems={[copyLinkItem]}
+        onBookmarkError={onBookmarkError}
+        onDeleted={onDeleted}
+        onRepostError={onRepostError}
+        onResolutionRequired={authentication.resolve}
+        post={target.actionBar}
+        reactionController={reactionController}
+        reply={reply}
+        repostExecution={repostAuthentication.execution}
+      />
+    </View>
   );
 
   return (
     <>
       <PostReactionSummary controller={reactionController} style={reactionSummaryStyle} />
-      <View style={actionBarStyle}>
-        {mute &&
-        mute.profileId === target.profile.id &&
-        authentication.selectedProfileId &&
-        authentication.selectedProfileId !== target.profile.id ? (
-          <ProfileMuteAction
-            {...mute}
-            displayName={target.profile.displayName}
-            profileId={target.profile.id}
-            items={[copyLinkItem]}
-            renderTrigger={({ expanded, onPress, ref }) =>
-              renderActions({
-                accessibilityLabel: '더보기',
-                controlRef: ref,
-                menuExpanded: expanded,
-                onPress,
-                popupRole: 'menu',
-              })
-            }
-          />
-        ) : (
-          renderActions()
-        )}
-      </View>
+      {resolvedMute &&
+      resolvedMute.profileId === target.profile.id &&
+      authentication.selectedProfileId &&
+      authentication.selectedProfileId !== target.profile.id ? (
+        <ProfileMuteAction
+          {...resolvedMute}
+          displayName={target.profile.displayName}
+          profileId={target.profile.id}
+          items={[copyLinkItem]}
+          renderTrigger={({ expanded, onPress, ref }) =>
+            renderActions({
+              accessibilityLabel: '더 보기',
+              controlRef: ref,
+              menuExpanded: expanded,
+              onPress,
+              popupRole: 'menu',
+            })
+          }
+        />
+      ) : (
+        renderActions()
+      )}
     </>
   );
 }
