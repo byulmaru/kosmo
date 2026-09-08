@@ -1,5 +1,5 @@
-import { useId } from 'react';
-import { View } from 'react-native';
+import { useId, useRef, useState } from 'react';
+import { Platform, View } from 'react-native';
 import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
 import { ListboxOption } from '@/components/ui/ListboxOption';
 import { SelectTrigger } from '@/components/ui/SelectTrigger';
@@ -10,19 +10,41 @@ type CatalogProps = {
   accessibilityLabel: string;
   disabled: boolean;
   error: string;
+  interactive?: boolean;
   onPress: () => void;
   open: boolean;
   placeholder: string;
   value: string;
 };
 
-function SelectTriggerCatalog({ open, disabled, ...args }: CatalogProps) {
+function SelectTriggerCatalog({ open, disabled, interactive = false, ...args }: CatalogProps) {
   const controls = useId();
-  const expanded = open && !disabled;
+  const controlRef = useRef<View>(null);
+  const [currentOpen, setCurrentOpen] = useState(open);
+  const [currentValue, setCurrentValue] = useState(args.value);
+  const expanded = currentOpen && !disabled;
+  const choices = ['전체 공개', '팔로워에게만 공개', '비공개'];
+
+  const focusTrigger = () => {
+    if (Platform.OS === 'web') {
+      requestAnimationFrame(() => {
+        (controlRef.current as unknown as HTMLElement | null)?.focus();
+      });
+    }
+  };
+
   return (
     <View style={{ gap: 8, width: '100%', maxWidth: 320, padding: 4 }}>
       <SelectTrigger
         {...args}
+        controlRef={controlRef}
+        value={currentValue}
+        onPress={() => {
+          if (interactive) {
+            setCurrentOpen((current) => !current);
+          }
+          args.onPress();
+        }}
         {...(expanded ? { open: true, controls } : { open: false, disabled })}
       />
       {expanded ? (
@@ -31,11 +53,26 @@ function SelectTriggerCatalog({ open, disabled, ...args }: CatalogProps) {
           {...({ role: 'listbox' } as unknown as { role?: never })}
           accessibilityLabel={args.accessibilityLabel}
         >
-          <ListboxOption
-            label={args.value || args.placeholder}
-            selected={Boolean(args.value)}
-            onSelect={args.onPress}
-          />
+          {interactive ? (
+            choices.map((choice) => (
+              <ListboxOption
+                key={choice}
+                label={choice}
+                selected={currentValue === choice}
+                onSelect={() => {
+                  setCurrentValue(choice);
+                  setCurrentOpen(false);
+                  focusTrigger();
+                }}
+              />
+            ))
+          ) : (
+            <ListboxOption
+              label={args.value || args.placeholder}
+              selected={Boolean(args.value)}
+              onSelect={args.onPress}
+            />
+          )}
         </View>
       ) : null}
     </View>
@@ -49,6 +86,7 @@ const meta = {
     accessibilityLabel: '공개 범위',
     disabled: false,
     error: '',
+    interactive: false,
     onPress: fn(),
     open: false,
     placeholder: '선택하세요',
@@ -58,6 +96,7 @@ const meta = {
     accessibilityLabel: { control: 'text' },
     disabled: { control: 'boolean' },
     error: { control: 'text' },
+    interactive: { control: false },
     open: { control: 'boolean' },
     placeholder: { control: 'text' },
     value: { control: 'text' },
@@ -70,7 +109,15 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Playground: Story = {};
+export const Playground: Story = {
+  render: (args) => (
+    <SelectTriggerCatalog
+      key={`${args.accessibilityLabel}:${args.disabled}:${args.error}:${args.open}:${args.placeholder}:${args.value}`}
+      {...args}
+      interactive
+    />
+  ),
+};
 
 export const RepresentativeStates: Story = {
   parameters: { controls: { disable: true } },

@@ -1,13 +1,54 @@
+import { useState } from 'react';
 import { View } from 'react-native';
 import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
+import { ColorPickerPanel, hexToHsb, hsbToHex } from '@/components/ui/ColorPickerPanel';
 import { ColorWell } from '@/components/ui/ColorWell';
 import { colors } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ColorWellProps } from '@/components/ui/ColorWell';
+
+const fallbackValue = { brightness: 76, hue: 210, saturation: 64 };
+
+function ColorWellCatalog({ color = '#4684C2', ...args }: ColorWellProps) {
+  const initialValue = hexToHsb(color) ?? fallbackValue;
+  const [committedValue, setCommittedValue] = useState(initialValue);
+  const [draftValue, setDraftValue] = useState(initialValue);
+  const [open, setOpen] = useState(false);
+
+  return (
+    <View style={{ gap: 12, width: 360 }}>
+      <ColorWell
+        {...args}
+        color={hsbToHex(committedValue)}
+        onPress={() => {
+          setDraftValue(committedValue);
+          setOpen((current) => !current);
+          args.onPress();
+        }}
+      />
+      {open ? (
+        <ColorPickerPanel
+          onCancel={() => {
+            setDraftValue(committedValue);
+            setOpen(false);
+          }}
+          onChange={setDraftValue}
+          onCommit={(value) => {
+            setCommittedValue(value);
+            setOpen(false);
+          }}
+          title="강조 색상 선택"
+          value={draftValue}
+        />
+      ) : null}
+    </View>
+  );
+}
 
 const meta = {
   title: 'KOSMO/Components/Color Well',
-  component: ColorWell,
-  args: { accessibilityLabel: '강조 색상', color: '', disabled: false, onPress: fn() },
+  component: ColorWellCatalog,
+  args: { accessibilityLabel: '강조 색상', color: '#4684C2', disabled: false, onPress: fn() },
   argTypes: {
     accessibilityLabel: { control: 'text' },
     color: { control: 'color' },
@@ -20,7 +61,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Playground: Story = {};
+export const Playground: Story = {
+  render: (args) => (
+    <ColorWellCatalog key={`${args.accessibilityLabel}:${args.color}:${args.disabled}`} {...args} />
+  ),
+};
 
 export const RepresentativeStates: Story = {
   parameters: { controls: { disable: true } },

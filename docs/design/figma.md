@@ -614,12 +614,16 @@ PROD-894는 다음 두 트리거를 Production 공용 UI와 Storybook으로 이�
   placeholder를 접근성 이름으로 조합하고, `error`가 있으면 오류 문구를 함께 렌더링해 Web의 `aria-describedby`와
   Native의 hint에 연결한다. hover와 focus는 실제 입력에서 유도하며 error+focus와 open+focus를 지원한다.
 - `open: true`는 `controls` ID를 필수로 요구하고 disabled와 조합할 수 없다. consumer가 실제 listbox의
-  존재·값·선택·keyboard·dismiss·focus 복귀를 소유한다. Storybook의 open Control은 ID가 연결된 최소
-  ListboxOption composition도 함께 표시한다. 트리거를 누르는 것만으로 내부 open 상태를 만들지 않는다.
+  존재·값·선택·keyboard·dismiss·focus 복귀를 소유한다. Storybook Playground의 최소 consumer fixture는
+  트리거 클릭으로 세 옵션을 열고, 선택한 값을 반영한 뒤 닫고 focus를 돌려준다. Production 트리거 자체는
+  내부 open 상태를 만들지 않는다.
 - ColorWell은 기존 IconButton의 48×48 target과 40×40 interaction surface를 재사용하며 32×32 swatch만
   선택 색상으로 채운다. 기본 색상은 `actionPrimaryBase`이고 disabled에서도 선택 색상을 보존한다.
   이름과 색상 값을 함께 읽고 일반 button action으로 동작하며 selected·pressed toggle 상태를 노출하지 않는다.
   ColorPickerPanel의 기존 swatch는 패널 내부의 비대화형 현재값 표시이므로 이 트리거로 재사용하지 않는다.
+- Storybook Playground의 최소 consumer fixture는 ColorWell에서 기존 ColorPickerPanel을 열고, Cancel은
+  draft를 버리며 Apply는 선택 색상을 ColorWell에 반영한다. 이 fixture 상태는 Production picker lifecycle의
+  구현 완료 증거가 아니다.
 - 기존 Figma 계약을 적용하는 이관으로 새 OpenSpec은 만들지 않는다. 별도 Tests에서 접근성 이름·값·오류 연결,
   disabled 콜백 차단, 키보드 활성화·focus와 open 연결을 검증한다. Light/Dark는 공용 toolbar를 사용한다.
   실제 popup/picker lifecycle, 설정 route·저장·API, Web screen reader·Android/iOS runtime QA는 이 이관의

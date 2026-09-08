@@ -91,7 +91,7 @@ function normalizeValue(value: ColorPickerValue): ColorPickerValue {
   };
 }
 
-function hsbToHex(value: ColorPickerValue): string {
+export function hsbToHex(value: ColorPickerValue): string {
   const normalized = normalizeValue(value);
   const hue = normalized.hue === 360 ? 0 : normalized.hue;
   const saturation = normalized.saturation / 100;
@@ -120,7 +120,7 @@ function hsbToHex(value: ColorPickerValue): string {
   return `#${channel(red)}${channel(green)}${channel(blue)}`;
 }
 
-function hexToHsb(rawText: string): ColorPickerValue | null {
+export function hexToHsb(rawText: string): ColorPickerValue | null {
   const match = /^#([0-9a-f]{6})$/i.exec(rawText);
   if (!match) {
     return null;
