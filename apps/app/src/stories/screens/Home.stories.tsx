@@ -183,7 +183,9 @@ function HomeRefreshTrigger() {
   const environment = useRelayEnvironment();
   const shellChrome = useShellChrome();
   const { changeMuted } = useProfileMuteMutations();
-  const [muteRelationVisible, setMuteRelationVisible] = useState(false);
+  const [, refreshMuteRelation] = useState(0);
+  const rereadMuteRelation = () => refreshMuteRelation((version) => version + 1);
+  const muteRelationVisible = hasProfileMute(environment, homeTargetProfile.id);
 
   const applyMute = async () => {
     try {
@@ -194,9 +196,9 @@ function HomeRefreshTrigger() {
         },
         true,
       );
-      setMuteRelationVisible(hasProfileMute(environment, homeTargetProfile.id));
+      rereadMuteRelation();
     } catch {
-      setMuteRelationVisible(false);
+      return;
     }
   };
 
@@ -215,6 +217,13 @@ function HomeRefreshTrigger() {
         onPress={() => shellChrome?.refreshProfileMuteTimelines?.()}
       >
         <Text>다음 revision 복구</Text>
+      </Pressable>
+      <Pressable
+        accessibilityLabel="뮤트 관계 상태 다시 읽기"
+        accessibilityRole="button"
+        onPress={rereadMuteRelation}
+      >
+        <Text>뮤트 관계 상태 다시 읽기</Text>
       </Pressable>
       <Text>뮤트 관계: {muteRelationVisible ? '유지됨' : '없음'}</Text>
     </>
@@ -321,17 +330,20 @@ export const RefetchFailureKeepsTimelineAndRecovers: Story = {
     const canvas = within(canvasElement);
     const applyMute = canvas.getByRole('button', { name: '프로필 뮤트 적용' });
     const recover = canvas.getByRole('button', { name: '다음 revision 복구' });
+    const rereadMuteRelation = canvas.getByRole('button', { name: '뮤트 관계 상태 다시 읽기' });
 
     await expect(canvas.findByText('뮤트 전 홈 게시글')).resolves.toBeVisible();
 
     await userEvent.click(applyMute);
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('홈을 불러오지 못했어요');
+    await userEvent.click(rereadMuteRelation);
     await expect(canvas.findByText('뮤트 관계: 유지됨')).resolves.toBeVisible();
     expect(canvas.getByText('뮤트 전 홈 게시글')).toBeVisible();
     expect(canvas.queryByText('뮤트 후 복구된 홈 게시글')).not.toBeInTheDocument();
 
     await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('홈을 불러오지 못했어요');
+    await userEvent.click(rereadMuteRelation);
     expect(canvas.getByText('뮤트 관계: 유지됨')).toBeVisible();
     expect(canvas.getByText('뮤트 전 홈 게시글')).toBeVisible();
     expect(canvas.queryByText('뮤트 후 복구된 홈 게시글')).not.toBeInTheDocument();
@@ -339,10 +351,11 @@ export const RefetchFailureKeepsTimelineAndRecovers: Story = {
     await userEvent.click(recover);
     await waitFor(() => {
       expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
-      expect(canvas.getByText('뮤트 관계: 유지됨')).toBeVisible();
       expect(canvas.getByText('뮤트 후 복구된 홈 게시글')).toBeVisible();
       expect(canvas.queryByText('뮤트 전 홈 게시글')).not.toBeInTheDocument();
     });
+    await userEvent.click(rereadMuteRelation);
+    expect(canvas.getByText('뮤트 관계: 유지됨')).toBeVisible();
   },
   render: () => <HomeRefreshStory />,
 };
