@@ -24,6 +24,7 @@ let fragmentData: ProfileData;
 const platformSelections: Array<Record<string, number>> = [];
 let renderer: ReactTestRenderer | null = null;
 let windowWidth = 1280;
+const BlockIcon = () => null;
 const platform = {
   OS: 'web',
   select: (options: Record<string, number>) => {
@@ -334,7 +335,7 @@ describe('ProfileHero 관리 메뉴 조립', () => {
         createElement(ProfileHero, {
           menuItems: [
             {
-              icon: 'Ban',
+              icon: BlockIcon,
               key: 'block',
               label: '차단',
               onSelect: () => undefined,
