@@ -22,7 +22,7 @@ Notification은 loose `source_id`를 가지므로 unavailable row가 남을 수 
 
 Activity는 unavailable predicate로 최대 batch size의 Notification ID를 고르고, 같은 transaction의 delete 조건에서 ID와 unavailable predicate를 다시 확인한다. Workflow는 이 Activity를 한 번 호출한다. Activity 응답이 commit 뒤 유실되어 retry가 다음 batch를 추가 삭제해도 허용한다.
 
-Schedule command는 deterministic ID로 24시간 interval, cleanup Workflow, 공용 task queue와 `SKIP` overlap을 가진 활성 Schedule을 생성한다. 이미 같은 ID가 있으면 아무것도 바꾸지 않는다.
+Worker 시작 시 deterministic ID로 24시간 interval, cleanup Workflow, 공용 task queue와 `SKIP` overlap을 가진 활성 Schedule 등록을 시도한다. 이미 같은 ID가 있으면 아무것도 바꾸지 않는다. 등록이 실패해도 실패를 structured log에 남기고 Worker 시작을 계속하며, 다음 Worker 시작 때 다시 시도한다.
 
 ## Known Traps
 
@@ -30,6 +30,7 @@ Schedule command는 deterministic ID로 24시간 interval, cleanup Workflow, 공
 - candidate ID만 믿고 availability 재확인 없이 삭제하지 않는다.
 - 한 Workflow에서 반복 loop를 만들지 않는다.
 - 기존 Schedule을 update, pause 또는 unpause하지 않는다.
+- Schedule 등록 실패를 Worker 시작 실패로 전파하지 않는다.
 
 ## Risks / Trade-offs
 
@@ -40,7 +41,7 @@ Schedule command는 deterministic ID로 24시간 interval, cleanup Workflow, 공
 ## Migration Plan
 
 1. #665에서 bounded Activity와 단일 Activity Workflow를 구현한다.
-2. #666에서 create-if-missing Schedule Job을 활성 상태로 배포한다.
+2. #666에서 Worker 시작 시 create-if-missing Schedule 등록을 활성화한다.
 3. focused tests와 dev 실행으로 삭제 안전성 및 Schedule 생성을 확인한다.
 
 ## Open Questions

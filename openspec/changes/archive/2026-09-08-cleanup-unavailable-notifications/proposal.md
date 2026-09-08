@@ -7,7 +7,8 @@
 - 활성 Temporal Schedule이 cleanup Workflow를 대략 하루에 한 번 시작한다.
 - 각 Workflow 실행은 현재 unavailable인 Notification을 한 번의 bounded batch로 삭제한다.
 - 삭제 시점에 availability를 다시 확인해 회복된 row를 보존한다.
-- Schedule이 없으면 활성 상태로 만들고, 이미 있으면 변경하지 않는다.
+- Worker 시작 시 Schedule이 없으면 활성 상태로 만들고, 이미 있으면 변경하지 않는다.
+- Schedule 등록 실패는 structured log로 남기고 Worker 시작을 계속하며, 다음 Worker 시작 때 다시 시도한다.
 - structured log와 Temporal 기본 실행 상태만 사용한다.
 
 ## Authority / Provenance
@@ -27,6 +28,7 @@
 
 ## Impact
 
+- `apps/worker`: Worker 시작 시 활성 Schedule을 create-if-missing 하는 등록 경계
 - `apps/worker`: bounded cleanup Activity와 단일 Activity Workflow
-- `apps/helm`: 활성 Schedule을 create-if-missing 하는 one-shot Job
+- `apps/helm`: Worker가 Schedule 등록에 사용할 Temporal endpoint·namespace 입력
 - 외부 GraphQL schema와 앱 UI에는 변경이 없다.

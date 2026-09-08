@@ -160,7 +160,7 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 
 ### Requirement: Unavailable Notification 숨김
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-703` — 시스템은 Recipient Profile 자체가 API에 노출되지 않거나 kind별 source가 없거나 source에서 파생한 Recipient가 저장 Recipient와 일치하지 않거나, 해당 kind에 필요한 Related Profile 또는 Related Post를 Recipient Profile 기준으로 조회할 수 없는 Notification을 모든 API 표면에서 존재하지 않는 것으로 취급해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-703`, `PROD-328` — 시스템은 Recipient Profile 자체가 API에 노출되지 않거나 kind별 source가 없거나 source에서 파생한 Recipient가 저장 Recipient와 일치하지 않거나, 해당 kind에 필요한 Related Profile 또는 Related Post를 Recipient Profile 기준으로 조회할 수 없는 Notification을 모든 API 표면에서 존재하지 않는 것으로 취급해야 한다(MUST).
 
 #### Scenario: unavailable item connection과 count
 
@@ -180,18 +180,75 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 - **THEN** database row와 기존 Read 상태는 남을 수 있다
 - **AND** cleanup 전에 visibility가 회복되면 item은 기존 Read 상태로 다시 visible해질 수 있다
 
+#### Scenario: cleanup과 API visibility의 독립성
+
+- **WHEN** cleanup이 아직 실행되지 않았거나 실패한다
+- **THEN** connection, count, Node와 Read mutation은 unavailable item을 계속 즉시 숨긴다
+- **AND** database row와 기존 Read State는 cleanup 전까지 남을 수 있다
+
+#### Scenario: Recipient 자체의 복구 가능한 비가시성
+
+- **WHEN** source와 Related 관계는 유효하지만 Recipient 자체가 일시 비활성 또는 정지된다
+- **THEN** API는 item을 숨긴다
+- **AND** cleanup은 이 상태만으로 Notification과 Read State를 삭제하지 않는다
+
 #### Scenario: generic fallback 금지
 
 - **WHEN** item이 unavailable이다
 - **THEN** API와 client는 `profile: null` Follow item, 이름·handle snapshot 또는 type-only generic item을 반환·표시하지 않는다
 - **AND** client는 서버가 반환한 page나 count를 unavailable 기준으로 다시 필터링하지 않는다
 
-#### Scenario: 후속 비동기 삭제 경계
+#### Scenario: 후속 비동기 삭제 확장 경계
 
-- **WHEN** source가 없거나 Recipient와 일치하지 않거나 Related Profile이 Recipient 기준으로 unavailable인 item의 장기 물리 정리를 설계한다
-- **THEN** 원인별 event, queue 또는 scan, worker, retry와 허용 지연은 별도 `PROD-328` OpenSpec이 소유한다
-- **AND** Recipient Profile 자체의 일시 비활성화·정지가 물리 삭제 원인인지도 `PROD-328`이 결정한다
-- **AND** 이번 capability의 구현 task와 archive gate에는 포함하지 않는다
+- **WHEN** 현재 bounded cleanup을 event-driven 처리로 전환하거나 현재 범위를 넘어 대량 처리하는 방식을 설계한다
+- **THEN** 해당 후속 capability가 event, queue 또는 scan, worker, retry와 허용 지연을 별도로 소유한다
+- **AND** 현재 cleanup은 Recipient Profile 자체의 복구 가능한 일시 비활성화·정지를 물리 삭제 원인으로 사용하지 않는다
+
+### Requirement: Unavailable Notification의 bounded 비동기 cleanup
+
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-328` — 시스템은 활성 Temporal Schedule의 반복 실행마다 한 번의 bounded cleanup Activity로 unavailable Notification을 best-effort 삭제해야 한다(MUST).
+
+#### Scenario: bounded batch 삭제
+
+- **WHEN** cleanup Workflow가 실행된다
+- **THEN** Workflow는 cleanup Activity를 한 번 호출한다
+- **AND** Activity는 현재 unavailable인 Notification을 제한된 수만 삭제한다
+
+#### Scenario: 삭제 직전 availability 회복
+
+- **WHEN** candidate 선택 뒤 삭제 전에 source 또는 Related 관계가 available로 회복된다
+- **THEN** delete 조건은 Notification ID와 현재 unavailable 조건을 다시 확인한다
+- **AND** 회복된 row를 보존한다
+
+#### Scenario: retry와 반복 실행
+
+- **WHEN** Activity commit 뒤 응답이 유실되어 retry되거나 다음 Schedule 실행이 시작된다
+- **THEN** 추가 batch가 삭제될 수 있다
+- **AND** 실행별 정확한 삭제 개수를 보장하지 않지만 available row와 대상 외 row는 보존한다
+- **AND** 반복 실행으로 backlog가 best-effort 수렴한다
+
+#### Scenario: Worker 시작 시 Schedule 생성
+
+- **WHEN** Worker가 시작되고 환경의 deterministic cleanup Schedule이 없다
+- **THEN** 시스템은 24시간 기본 interval과 `SKIP` overlap으로 활성 Schedule을 생성한다
+
+#### Scenario: 기존 Schedule 보존
+
+- **WHEN** Worker가 시작되고 환경의 deterministic cleanup Schedule이 이미 있다
+- **THEN** 시스템은 기존 Schedule의 timing, action, overlap과 pause 상태를 변경하지 않는다
+
+#### Scenario: Schedule 등록 실패
+
+- **WHEN** Worker 시작 시 Schedule 등록이 실패한다
+- **THEN** 시스템은 등록 실패를 structured log에 남긴다
+- **AND** Worker 시작을 계속한다
+- **AND** 다음 Worker 시작 때 Schedule 등록을 다시 시도한다
+
+#### Scenario: 관측
+
+- **WHEN** cleanup이 실행되거나 실패한다
+- **THEN** Activity structured log와 Temporal의 기본 Workflow/Schedule 상태로 결과를 확인할 수 있다
+- **AND** cleanup 전용 custom metrics나 정확한 처리량 회계를 요구하지 않는다
 
 ### Requirement: Selected Profile Follow Notification 목록 UI
 

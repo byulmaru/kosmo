@@ -62,7 +62,7 @@ cleanup 대상에서 제외한다. 구현·검증 소유: PR #661.
 
 **Deliverable**
 
-namespace가 준비된 뒤 환경별 deterministic ID로 활성 Schedule을 create-if-missing 하고 기존 Schedule을 보존한다. 구현·검증 소유: PR #666.
+namespace가 준비된 뒤 Worker 시작 시 환경별 deterministic ID로 활성 Schedule을 create-if-missing 하고 기존 Schedule을 보존한다. 등록 실패는 structured log로 남기고 Worker 시작을 계속하며, 다음 Worker 시작 때 다시 시도한다. 구현·검증 소유: PR #666.
 
 **Guardrails**
 
@@ -70,16 +70,18 @@ namespace가 준비된 뒤 환경별 deterministic ID로 활성 Schedule을 crea
 - existing Schedule의 timing, action, overlap과 pause 상태를 변경하지 않는다.
 - best-effort 주기를 drift reconciliation이나 정확한 실행 간격 보장으로 해석하지 않는다.
 - Worker metrics endpoint와 Helm metrics metadata를 추가하지 않는다.
+- Schedule 전용 Helm PreSync Job과 별도 CLI 진입점을 사용하지 않는다.
 
 **Verification**
 
-- PreSync Job의 Schedule create/already-exists 경계, active 상태·Workflow 연결과 기존 Schedule 보존을 확인한다.
+- Worker 시작 시 Schedule create/already-exists 경계, active 상태·Workflow 연결과 기존 Schedule 보존을 확인한다.
+- Schedule 등록 실패가 structured log를 남기고 Worker 시작을 계속하며, 다음 시작에서 재시도되는지 확인한다.
 
-- [ ] 3.1 missing Schedule을 24시간 기본 interval과 `SKIP` overlap으로 활성 생성한다.
-- [ ] 3.2 existing Schedule은 아무것도 변경하지 않는다.
-- [ ] 3.3 namespace 뒤 실행되는 bounded PreSync Job과 환경별 deterministic ID를 유지한다.
-- [ ] 3.4 pause/enabled reconciliation, Worker metrics endpoint와 Helm metrics metadata를 제거한다.
-- [ ] 3.5 create와 already-exists 경계만 의미 있는 test로 검증한다.
+- [x] 3.1 missing Schedule을 24시간 기본 interval과 `SKIP` overlap으로 활성 생성한다.
+- [x] 3.2 existing Schedule은 아무것도 변경하지 않는다.
+- [ ] 3.3 namespace가 준비된 뒤 Worker 시작 시 Schedule을 등록하고, 등록 실패 시 시작을 계속하며 다음 시작에서 재시도한다.
+- [x] 3.4 pause/enabled reconciliation, Worker metrics endpoint와 Helm metrics metadata를 제거한다.
+- [ ] 3.5 Worker 시작의 create/already-exists/등록 실패 경계를 의미 있는 동작 test로 검증한다.
 
 ## 4. PROD-328 통합 검증과 OpenSpec archive — PR [#666](https://github.com/byulmaru/kosmo/pull/666)
 
@@ -96,16 +98,18 @@ PR #661·#665·#666의 전체 범위를 통합 검증하고 최신 계약·canon
 
 **Guardrails**
 
-- 모든 declared task와 required validation evidence가 완료되기 전에는 change를 archive하지 않는다.
+- 미완료 검증이 남아 있는 동안 PROD-328을 완료로 표시하지 않는다.
 - PR readiness와 OpenSpec completion을 별도로 판단한다.
 - 계약 충돌이 발견되면 canonical 문서와 Linear 계약을 먼저 정렬한 뒤 OpenSpec을 갱신한다.
 
 **Verification**
 
-- focused Worker/DB/Schedule/Helm·workspace 검증, dev 동작, 전체 task·delta spec 정합성과 `openspec validate --strict`를 확인한다.
+- focused Worker/DB/Worker-start Schedule/Helm·workspace 검증, dev 동작, 전체 task·delta spec 정합성과 `openspec validate --strict`를 확인한다.
 
-- [ ] 4.1 focused Worker/DB/Schedule/Helm 검증과 workspace 필수 검증을 실행한다.
+- [ ] 4.1 focused Worker/DB/Worker-start Schedule/Helm 검증과 workspace 필수 검증을 실행한다.
 - [ ] 4.2 dev에서 API 즉시 비노출과 cleanup 삭제, available row 보존을 확인한다.
 - [ ] 4.3 dev에서 active Schedule 생성과 Workflow 실행 상태를 확인한다.
 - [x] 4.4 최신 Linear 계약과 OpenSpec artifacts를 동기화한다.
 - [ ] 4.5 전체 범위 완료 뒤 strict validation과 canonical sync를 확인하고 change를 archive한다.
+
+> Archive note (2026-09-08): 이 change는 명시적인 사용자 승인에 따라 canonical spec 동기화 뒤 보관한다. 3.3, 3.5, 4.1, 4.2, 4.3, 4.5의 미완료 표시는 유지하며, archive 자체는 PROD-328 완료나 dev 배포·실행 증명을 의미하지 않는다. Worker 시작 경계 직접 검증은 미실행 후속 항목으로 남기고, dev 동작 확인은 merge·배포 이후 수행한다.

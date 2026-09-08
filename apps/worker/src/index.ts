@@ -5,6 +5,7 @@ import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { closeFedifyQueue } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
 import * as activities from './activities';
+import { runSchedules } from './schedule';
 import { healthStatus, validateWorkerEnvironment } from './worker';
 
 if (import.meta.main) {
@@ -41,6 +42,18 @@ if (import.meta.main) {
       });
       const running = worker.run();
       process.off('SIGTERM', terminateDuringStartup);
+      void runSchedules(connection, namespace)
+        .then((schedules) => {
+          console.log(JSON.stringify({ event: 'temporal_schedules_registered', schedules }));
+        })
+        .catch((error) => {
+          console.error(
+            JSON.stringify({
+              event: 'temporal_schedules_registration_failed',
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        });
       await running;
     } finally {
       process.off('SIGTERM', terminateDuringStartup);
