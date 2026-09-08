@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, space, textStyles } from '@/theme/tokens';
 import { ProfileListItemContent } from './ProfileListItemContent';
@@ -42,6 +43,37 @@ export function MutedProfileList({
   const headingRef = useRef<View>(null);
   const listRef = useRef<View>(null);
   const [unmuteFocusRevision, setUnmuteFocusRevision] = useState(0);
+  const { showToast } = useToast();
+  const loadError =
+    state.status === 'error'
+      ? state
+      : state.status === 'loaded' && state.pagination.status === 'error'
+        ? state.pagination
+        : null;
+  const errorMessage = loadError
+    ? state.status === 'error'
+      ? '뮤트한 프로필을 불러오지 못했어요'
+      : '프로필을 더 불러오지 못했어요'
+    : null;
+  const retry = loadError?.onRetry;
+  const retryRef = useRef(retry);
+  useEffect(() => {
+    retryRef.current = retry;
+  }, [retry]);
+  useEffect(() => {
+    if (errorMessage) {
+      return showToast(errorMessage, {
+        tone: 'danger',
+        action: {
+          label: '다시 시도',
+          onPress: () => {
+            (headingRef.current ?? listRef.current)?.focus();
+            retryRef.current?.();
+          },
+        },
+      });
+    }
+  }, [errorMessage, showToast]);
   useEffect(() => {
     if (unmuteFocusRevision > 0) {
       (headingRef.current ?? listRef.current)?.focus();
@@ -70,12 +102,11 @@ export function MutedProfileList({
       {state.status === 'loading' ? (
         <StateView loading title="뮤트한 프로필을 불러오는 중입니다." />
       ) : state.status === 'error' ? (
-        <StateView
-          actionLabel="다시 시도"
-          alert
-          onAction={state.onRetry}
-          title="뮤트한 프로필을 불러오지 못했어요"
-        />
+        <View style={styles.pagination}>
+          <Button onPress={state.onRetry} tone="secondary">
+            다시 시도
+          </Button>
+        </View>
       ) : state.profiles.length === 0 && state.pagination.status === 'end' ? (
         <StateView title="뮤트한 프로필이 없어요" />
       ) : (
@@ -105,12 +136,11 @@ export function MutedProfileList({
             </ProfileListItemContent>
           ))}
           {state.pagination.status === 'error' ? (
-            <StateView
-              actionLabel="다시 시도"
-              alert
-              onAction={state.pagination.onRetry}
-              title="프로필을 더 불러오지 못했어요"
-            />
+            <View style={styles.pagination}>
+              <Button onPress={state.pagination.onRetry} tone="secondary">
+                더 불러오기
+              </Button>
+            </View>
           ) : state.pagination.status === 'loading' ? (
             <StateView loading title="프로필을 더 불러오는 중입니다." />
           ) : state.pagination.status === 'more' ? (
