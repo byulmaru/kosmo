@@ -143,6 +143,57 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(content.document.summary, '통합 검증 경고');
   });
 
+  test('repostSourceId는 기존 CreatePost mutation으로 자체 Content와 Source를 함께 저장하고 다시 조회한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const sourceAuthor = await createProfile('quote-source-author');
+    const source = await createContentfulPost(sourceAuthor.id, { bodyText: '인용 원문' });
+
+    const result = await requestGraphQL<{
+      createPost: {
+        post: {
+          content: { bodyText: string };
+          id: string;
+          replyParent: { id: string } | null;
+          repostSource: { id: string } | null;
+        };
+      };
+    }>(
+      `mutation CreateQuotePost($input: CreatePostInput!) {
+        createPost(input: $input) {
+          post {
+            id
+            content { bodyText }
+            replyParent { id }
+            repostSource { id }
+          }
+        }
+      }`,
+      {
+        input: {
+          bodyText: '인용 본문',
+          repostSourceId: encodeGlobalId('Post', source.id),
+          visibility: PostVisibility.UNLISTED,
+        },
+      },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.createPost.post, {
+      content: { bodyText: '인용 본문' },
+      id: result.data?.createPost.post.id,
+      replyParent: null,
+      repostSource: { id: encodeGlobalId('Post', source.id) },
+    });
+    const stored = await db
+      .select()
+      .from(Posts)
+      .where(and(eq(Posts.profileId, auth.profile.id), eq(Posts.repostSourceId, source.id)))
+      .then(firstOrThrow);
+    assert.equal(stored.repostSourceId, source.id);
+    assert.equal(stored.replyParentId, null);
+  });
+
   test('Ready Media 참조와 Media-owned Alt Text를 저장하고 조회 ID를 global ID로 투영한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const uploadProfile = await createProfile('media-upload-profile');

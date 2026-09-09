@@ -56,5 +56,5 @@ export function usePostReplySurface(postKey: PostReplySurface_post$key) {
       />
     ) : null;
 
-  return { reply, replySurface, owner: binding?.owner };
+  return { binding, reply, replySurface, owner: binding?.owner };
 }

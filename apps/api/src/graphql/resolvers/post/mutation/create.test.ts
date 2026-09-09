@@ -22,6 +22,7 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.equal(String(createPostInput.getFields().bodyText?.type), 'String!');
   assert.equal(String(createPostInput.getFields().media?.type), '[CreatePostMediaInput!]');
   assert.equal(String(createPostInput.getFields().replyParentId?.type), 'ID');
+  assert.equal(String(createPostInput.getFields().repostSourceId?.type), 'ID');
   assert.equal(String(createPostInput.getFields().sensitiveMedia?.type), 'Boolean');
 
   const createPostMediaInput = schema.getType('CreatePostMediaInput');

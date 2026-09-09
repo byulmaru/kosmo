@@ -52,9 +52,11 @@ const PostLayoutFragment = graphql`
       id
     }
     ...ReplyComposerSurface_parent @alias(as: "replySurface")
+    ...ReplyComposerSurface_parent @alias(as: "quoteSurface")
     ...PostActionSurface_post @alias(as: "actionSurface")
     repostSource {
       ...PostSourcePreview_source
+      ...ReplyComposerSurface_parent @alias(as: "quoteSurface")
       ...PostActionSurface_post @alias(as: "actionSurface")
     }
     ...PostBody_post
@@ -88,6 +90,7 @@ export function PostLayout({
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
   const [bodyExpanded, setBodyExpanded] = useState(false);
+  const [quoteOpen, setQuoteOpen] = useState(false);
   const bodyMeasurementKey = JSON.stringify([post.content?.id, post.content?.bodyText]);
   const currentBodyMeasurementKey = useRef(bodyMeasurementKey);
   currentBodyMeasurementKey.current = bodyMeasurementKey;
@@ -119,6 +122,12 @@ export function PostLayout({
   const source = post.repostSource;
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
   const socialActionTarget = pureRepost ? post.repostSource?.actionSurface : post.actionSurface;
+  const quoteParent = pureRepost ? source?.quoteSurface : post.quoteSurface;
+  const openQuote = useCallback(() => {
+    if (replyBinding?.profile && quoteParent) {
+      setQuoteOpen(true);
+    }
+  }, [quoteParent, replyBinding?.profile]);
   const handleDeleted = useCallback(() => onDeleted?.(), [onDeleted]);
   const handleMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
@@ -279,11 +288,24 @@ export function PostLayout({
           <PostActionSurface
             actionBarStyle={[styles.actionBarFrame, { borderColor: theme.borderSubtle }]}
             onDeleted={handleDeleted}
+            onQuote={openQuote}
             reactionSummaryStyle={compact ? styles.compactReactionSummary : undefined}
             reply={reply}
             socialActionTarget={socialActionTarget!}
           />
         </View>
+        {quoteOpen && quoteParent && replyBinding?.profile ? (
+          <View style={styles.quoteSurface}>
+            <ReplyComposerSurface
+              mode="quote"
+              onRequestClose={() => setQuoteOpen(false)}
+              open
+              owner={replyBinding.owner}
+              parent={quoteParent}
+              profile={replyBinding.profile}
+            />
+          </View>
+        ) : null}
         {!compact &&
         replyBinding?.expanded &&
         replyAuthentication.execution.kind === 'enabled' &&
@@ -342,6 +364,7 @@ const styles = StyleSheet.create({
   },
   engagement: { gap: spacing.xs, marginTop: spacing.sm, width: '100%' },
   compactReactionSummary: { display: 'none' },
+  quoteSurface: { marginTop: spacing.lg },
   moreButton: {
     alignSelf: 'flex-start',
     flexShrink: 0,

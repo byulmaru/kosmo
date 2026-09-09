@@ -37,6 +37,7 @@ import type { PostComposerCreatedPost } from './PostComposer';
 
 const ReplyComposerSurfaceParentFragment = graphql`
   fragment ReplyComposerSurface_parent on Post {
+    ...PostSourcePreview_source
     id
     createdAt
     content {
@@ -70,6 +71,7 @@ const ReplyComposerSurfaceParentFragmentNode = getFragment(ReplyComposerSurfaceP
 const ReplyComposerSurfaceProfileFragmentNode = getFragment(ReplyComposerSurfaceProfileFragment);
 
 type ReplyComposerSurfaceProps = {
+  mode?: 'quote' | 'reply';
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onRequestClose: () => void;
   open: boolean;
@@ -93,14 +95,14 @@ export const ReplyComposerSurface = forwardRef<
   const identityRef = useRef(
     `${String(getDataIDsFromFragment(ReplyComposerSurfaceParentFragmentNode, props.parent))}:${String(
       getDataIDsFromFragment(ReplyComposerSurfaceProfileFragmentNode, props.profile),
-    )}:${props.open ? 'open' : 'closed'}`,
+    )}:${props.mode ?? 'reply'}:${props.open ? 'open' : 'closed'}`,
   );
   const contextGuard = useRef(0);
   const identity = `${String(
     getDataIDsFromFragment(ReplyComposerSurfaceParentFragmentNode, props.parent),
   )}:${String(getDataIDsFromFragment(ReplyComposerSurfaceProfileFragmentNode, props.profile))}:${
-    props.open ? 'open' : 'closed'
-  }`;
+    props.mode ?? 'reply'
+  }:${props.open ? 'open' : 'closed'}`;
 
   if (!environmentGenerationRef && environmentRef.current !== environment) {
     environmentRef.current = environment;
@@ -128,6 +130,7 @@ type ReplyComposerSurfaceContentsProps = ReplyComposerSurfaceProps & {
 
 function ReplyComposerSurfaceContents({
   contextGuard,
+  mode = 'reply',
   onPostCreated,
   onRequestClose,
   open,
@@ -144,6 +147,8 @@ function ReplyComposerSurfaceContents({
   const { width } = useWindowDimensions();
   const parent = useFragment(ReplyComposerSurfaceParentFragment, parentKey);
   const profile = useFragment(ReplyComposerSurfaceProfileFragment, profileKey);
+  const quoteMode = mode === 'quote';
+  const composerName = quoteMode ? '인용 게시글' : '답글';
   const [submitting, setSubmitting] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const dialogRef = useRef<NativeView>(null);
@@ -162,7 +167,7 @@ function ReplyComposerSurfaceContents({
       setDiscardConfirmOpen(false);
       closeAfterDiscardRef.current = undefined;
     }
-  }, [open, parent.id]);
+  }, [mode, open, parent.id]);
 
   const closeImmediately = useCallback(
     (onClosed?: () => void) => {
@@ -197,7 +202,7 @@ function ReplyComposerSurfaceContents({
   const handlePostCreated = useCallback(
     (post: PostComposerCreatedPost) => {
       closeImmediately();
-      showToast('답글을 게시했어요', {
+      showToast(`${composerName}을 게시했어요`, {
         action: {
           label: '보기',
           onPress: () => router.push(`/${profile.relativeHandle}/${post.id}` as Href),
@@ -206,7 +211,7 @@ function ReplyComposerSurfaceContents({
       });
       requestAnimationFrame(() => onPostCreated?.(post));
     },
-    [closeImmediately, onPostCreated, profile.relativeHandle, router, showToast],
+    [closeImmediately, composerName, onPostCreated, profile.relativeHandle, router, showToast],
   );
 
   useEffect(() => {
@@ -306,7 +311,7 @@ function ReplyComposerSurfaceContents({
   const discardConfirm = discardConfirmOpen ? (
     <View style={[styles.confirmBackdrop, { backgroundColor: theme.overlayScrim }]}>
       <View
-        accessibilityLabel="답글 작성을 취소할까요?"
+        accessibilityLabel={`${composerName} 작성을 취소할까요?`}
         accessibilityViewIsModal
         ref={discardConfirmRef}
         role="alertdialog"
@@ -317,7 +322,7 @@ function ReplyComposerSurfaceContents({
         ]}
       >
         <Text accessibilityRole="header" style={[styles.confirmTitle, { color: theme.text }]}>
-          답글 작성을 취소할까요?
+          {composerName} 작성을 취소할까요?
         </Text>
         <Text style={[styles.confirmDescription, { color: theme.textSecondary }]}>
           작성 중인 내용은 저장되지 않습니다.
@@ -344,6 +349,9 @@ function ReplyComposerSurfaceContents({
           style={discardConfirmOpen ? styles.mainBlocked : null}
         >
           <PostComposer
+            beforeEditor={
+              quoteMode ? <PostSourcePreview interactive={false} source={parent} /> : undefined
+            }
             contextGuard={contextGuard}
             editorRef={editorRef}
             focusOnMount
@@ -351,7 +359,8 @@ function ReplyComposerSurfaceContents({
             onPostCreated={handlePostCreated}
             onSubmittingChange={setSubmitting}
             profile={profile.composer}
-            replyParentId={parent.id}
+            replyParentId={quoteMode ? undefined : parent.id}
+            repostSourceId={quoteMode ? parent.id : undefined}
           />
         </View>
         {discardConfirm}
@@ -363,7 +372,7 @@ function ReplyComposerSurfaceContents({
 
   return (
     <Modal
-      accessibilityLabel="답글 쓰기"
+      accessibilityLabel={`${composerName} 쓰기`}
       animationType={Platform.OS === 'web' ? 'none' : 'fade'}
       navigationBarTranslucent
       onRequestClose={() => {
@@ -398,7 +407,7 @@ function ReplyComposerSurfaceContents({
               borderColor: theme.border,
             },
           ]}
-          testID="reply-composer-dialog-surface"
+          testID={`${quoteMode ? 'quote' : 'reply'}-composer-dialog-surface`}
         >
           <View style={styles.contentFrame}>
             <View
@@ -409,7 +418,7 @@ function ReplyComposerSurfaceContents({
             >
               <View style={[styles.header, { borderColor: theme.border }]}>
                 <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-                  답글 쓰기
+                  {composerName} 쓰기
                 </Text>
                 <IconButton
                   accessibilityLabel="닫기"
@@ -436,35 +445,43 @@ function ReplyComposerSurfaceContents({
               >
                 <PostComposer
                   beforeEditor={
-                    <View style={styles.parent} testID="reply-parent">
-                      <View style={styles.parentAvatarColumn}>
-                        <Avatar
-                          imageUri={parent.profile.avatar?.url}
-                          label={parent.profile.displayName || parent.profile.handle}
-                          size={40}
-                        />
-                        <PostThreadConnector
-                          style={styles.parentConnector}
-                          testID="reply-parent-thread-connector"
-                        />
-                      </View>
-                      <View style={styles.parentContent}>
-                        <View style={styles.parentIdentity}>
-                          <ProfileNameBlock profile={parent.profile} />
-                          <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
-                            {formatTimelineTimestamp(parent.createdAt)}
-                          </Text>
-                        </View>
-                        <PostBody interactive={false} post={parent} />
-                        {parent.repostSource ? (
-                          <PostSourcePreview
-                            interactive={false}
-                            source={parent.repostSource}
-                            style={styles.source}
+                    quoteMode ? (
+                      <PostSourcePreview
+                        interactive={false}
+                        source={parent}
+                        style={styles.quoteSource}
+                      />
+                    ) : (
+                      <View style={styles.parent} testID="reply-parent">
+                        <View style={styles.parentAvatarColumn}>
+                          <Avatar
+                            imageUri={parent.profile.avatar?.url}
+                            label={parent.profile.displayName || parent.profile.handle}
+                            size={40}
                           />
-                        ) : null}
+                          <PostThreadConnector
+                            style={styles.parentConnector}
+                            testID="reply-parent-thread-connector"
+                          />
+                        </View>
+                        <View style={styles.parentContent}>
+                          <View style={styles.parentIdentity}>
+                            <ProfileNameBlock profile={parent.profile} />
+                            <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
+                              {formatTimelineTimestamp(parent.createdAt)}
+                            </Text>
+                          </View>
+                          <PostBody interactive={false} post={parent} />
+                          {parent.repostSource ? (
+                            <PostSourcePreview
+                              interactive={false}
+                              source={parent.repostSource}
+                              style={styles.source}
+                            />
+                          ) : null}
+                        </View>
                       </View>
-                    </View>
+                    )
                   }
                   contextGuard={contextGuard}
                   editorRef={editorRef}
@@ -473,7 +490,8 @@ function ReplyComposerSurfaceContents({
                   onPostCreated={handlePostCreated}
                   onSubmittingChange={setSubmitting}
                   profile={profile.composer}
-                  replyParentId={parent.id}
+                  replyParentId={quoteMode ? undefined : parent.id}
+                  repostSourceId={quoteMode ? parent.id : undefined}
                   scrollable
                   surface
                 />
@@ -546,6 +564,7 @@ const styles = StyleSheet.create({
   parentContent: { flex: 1, gap: spacing.md, minWidth: 0 },
   parentIdentity: { flex: 1, minWidth: 0 },
   timestamp: { fontFamily: fontFamilies.ui, marginTop: spacing.xs, ...typography.xsm },
+  quoteSource: { marginBottom: spacing.sm },
   source: { marginTop: spacing.sm },
   confirmBackdrop: {
     bottom: 0,

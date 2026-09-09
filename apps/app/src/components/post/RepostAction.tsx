@@ -1,4 +1,4 @@
-import { Repeat2 } from 'lucide-react-native';
+import { Quote, Repeat2 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { ActionMenu } from '@/components/ui/ActionMenu';
@@ -19,12 +19,16 @@ export type RepostActionFailure = Readonly<{
 type Props = {
   execution?: PostActionExecution;
   onError?: (failure: RepostActionFailure) => void;
+  onQuote?: () => void;
   onResolutionRequired?: (reason: PostActionResolutionReason) => void;
   post: RepostAction_post$key;
 };
 
 const repostActionPostFragment = graphql`
   fragment RepostAction_post on Post {
+    content {
+      id
+    }
     id
     repostCount
     viewerRepost {
@@ -68,6 +72,7 @@ const deletePostMutation = graphql`
 export function RepostAction({
   execution = { kind: 'enabled' },
   onError,
+  onQuote,
   onResolutionRequired,
   post,
 }: Props) {
@@ -151,12 +156,18 @@ export function RepostAction({
 
   const action: RepostActionKind = data.viewerRepost ? 'cancel' : 'create';
   const label = action === 'cancel' ? '재게시 취소' : '재게시하기';
+  const items = [
+    { icon: Repeat2, key: action, label, onSelect: () => runMutation(action) },
+    ...(data.content && onQuote
+      ? [{ icon: Quote, key: 'quote', label: '인용하기', onSelect: onQuote }]
+      : []),
+  ];
 
   return (
     <ActionMenu
       accessibilityLabel="재게시 메뉴"
       disabled={processing || execution.kind !== 'enabled'}
-      items={[{ icon: Repeat2, key: action, label, onSelect: () => runMutation(action) }]}
+      items={items}
       renderTrigger={({ expanded: menuExpanded, onPress, ref }) => {
         const triggerPress =
           execution.kind === 'resolution-required'

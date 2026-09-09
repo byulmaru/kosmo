@@ -57,6 +57,7 @@ builder.mutationField('createPost', (t) =>
         validate: z.array(z.unknown()).max(4, { message: '이미지는 4개까지 첨부할 수 있어요.' }),
       }),
       replyParentId: t.input.globalID({ for: Post, required: false }),
+      repostSourceId: t.input.globalID({ for: Post, required: false }),
       sensitiveMedia: t.input.boolean({ required: false }),
       visibility: t.input.field({ type: PostVisibility }),
     },
@@ -81,6 +82,7 @@ builder.mutationField('createPost', (t) =>
         origin: 'LOCAL',
         profileId: ctx.session.profile.id,
         replyParentId: input.replyParentId?.id,
+        repostSourceId: input.repostSourceId?.id,
         visibility: input.visibility,
       });
 

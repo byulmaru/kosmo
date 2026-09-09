@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -13,6 +13,7 @@ import { PostBody } from './PostBody';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
+import { ReplyComposerSurface } from './ReplyComposerSurface';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
@@ -45,6 +46,7 @@ const PostListRowFragment = graphql`
       displayName
       ...ProfileNameBlock_profile
     }
+    ...ReplyComposerSurface_parent @alias(as: "quoteSurface")
     ...PostActionSurface_post @alias(as: "actionSurface")
     ...PostBody_post
   }
@@ -82,10 +84,12 @@ const PostListItemFragment = graphql`
       }
     }
     ...PostReplySurface_post
+    ...ReplyComposerSurface_parent @alias(as: "quoteSurface")
     ...PostActionSurface_post @alias(as: "actionSurface")
     ...PostSourcePresentationView_post
     repostSource {
       ...PostListRow_post
+      ...ReplyComposerSurface_parent @alias(as: "quoteSurface")
     }
     ...PostListRow_post
   }
@@ -103,9 +107,22 @@ export function PostListItem({
   showReplyAttribution?: boolean;
 }) {
   const theme = useTheme();
+  const [quoteOpen, setQuoteOpen] = useState(false);
   const post = useFragment(PostListItemFragment, postKey);
   const openViewer = usePostMediaViewerHost();
-  const { reply, replySurface, owner: replyOwner } = usePostReplySurface(post);
+  const {
+    binding: replyBinding,
+    reply,
+    replySurface,
+    owner: replyOwner,
+  } = usePostReplySurface(post);
+  const pureRepost = !post.content && !post.replyParent && post.repostSource;
+  const quoteParent = pureRepost ? post.repostSource?.quoteSurface : post.quoteSurface;
+  const openQuote = useCallback(() => {
+    if (replyBinding?.profile && quoteParent) {
+      setQuoteOpen(true);
+    }
+  }, [quoteParent, replyBinding?.profile]);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const presentedReplySurface =
     replySurface && replyOwner === 'detail' ? (
@@ -113,6 +130,17 @@ export function PostListItem({
     ) : (
       replySurface
     );
+  const quoteSurface =
+    quoteOpen && quoteParent && replyBinding?.profile ? (
+      <ReplyComposerSurface
+        mode="quote"
+        onRequestClose={() => setQuoteOpen(false)}
+        open
+        owner={replyBinding.owner}
+        parent={quoteParent}
+        profile={replyBinding.profile}
+      />
+    ) : null;
   const handleQuoteMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
       openViewer({
@@ -178,6 +206,7 @@ export function PostListItem({
     <>
       {presentation}
       {presentedReplySurface}
+      {quoteSurface}
     </>
   );
 
@@ -189,7 +218,12 @@ export function PostListItem({
       <View role="article" style={standardCardStyle}>
         {pinnedAttribution}
         {replyAttribution}
-        <PostListRow actionBarStyle={styles.actionBarSlot} post={post} reply={reply} />
+        <PostListRow
+          actionBarStyle={styles.actionBarSlot}
+          onQuote={openQuote}
+          post={post}
+          reply={reply}
+        />
       </View>,
     );
   }
@@ -222,7 +256,12 @@ export function PostListItem({
             </Pressable>
           </Link>
         </PostAttributionRow>
-        <PostListRow post={source} reply={reply} surfacePostId={post.id} />
+        <PostListRow
+          onQuote={openQuote}
+          post={source}
+          reply={reply}
+          surfacePostId={post.id}
+        />
       </View>,
     );
   }
@@ -257,6 +296,7 @@ export function PostListItem({
             sourcePreviewStyle={styles.quoteSourcePreview}
           />
           <PostActionSurface
+            onQuote={openQuote}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
             socialActionTarget={post.actionSurface!}
@@ -278,11 +318,13 @@ function PostAttributionRow({ children, icon }: { children: ReactNode; icon: Rea
 
 function PostListRow({
   actionBarStyle,
+  onQuote,
   post: postKey,
   reply,
   surfacePostId,
 }: {
   actionBarStyle?: StyleProp<ViewStyle>;
+  onQuote?: () => void;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
   surfacePostId?: string;
@@ -345,6 +387,7 @@ function PostListRow({
         ) : null}
         <PostActionSurface
           actionBarStyle={actionBarStyle}
+          onQuote={onQuote}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
           socialActionTarget={post.actionSurface!}

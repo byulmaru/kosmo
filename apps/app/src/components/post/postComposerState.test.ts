@@ -27,6 +27,15 @@ describe('PostComposer Reply context contract', () => {
       bodyText: '본문',
       visibility: 'UNLISTED',
     });
+    assert.deepEqual(
+      createPostComposerMutationInput('인용 본문', 'PUBLIC', undefined, '경고', 'post-source'),
+      {
+        bodyText: '인용 본문',
+        contentWarning: '경고',
+        repostSourceId: 'post-source',
+        visibility: 'PUBLIC',
+      },
+    );
   });
 
   it('excludes DIRECT only while composing a Reply', async () => {
@@ -53,6 +62,10 @@ describe('PostComposer Reply context contract', () => {
     assert.notEqual(
       createPostComposerContextKey('profile-a'),
       createPostComposerContextKey('profile-a', 'post-parent'),
+    );
+    assert.notEqual(
+      createPostComposerContextKey('profile-a', undefined, 'post-source'),
+      createPostComposerContextKey('profile-a', undefined, 'post-other-source'),
     );
   });
 

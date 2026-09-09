@@ -20,6 +20,8 @@ type RepostTargetEligibilityInput = Readonly<{
   visibility: string;
 }>;
 
+type QuoteTargetEligibilityInput = RepostTargetEligibilityInput & Readonly<{ hasContent: boolean }>;
+
 export function isRepostTargetEligible({
   authorProfileId,
   selectedProfileId,
@@ -32,6 +34,15 @@ export function isRepostTargetEligible({
     return selectedProfileId === null || selectedProfileId === authorProfileId;
   }
   return false;
+}
+
+export function isQuoteTargetEligible({
+  hasContent,
+  authorProfileId,
+  selectedProfileId,
+  visibility,
+}: QuoteTargetEligibilityInput): boolean {
+  return hasContent && isRepostTargetEligible({ authorProfileId, selectedProfileId, visibility });
 }
 
 export function resolvePostActionExecution({
