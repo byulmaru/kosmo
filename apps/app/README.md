@@ -25,7 +25,7 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 
 ## Android Google Play closed testing (Alpha)
 
-`Android Google Play Alpha Distribution`은 `main`에서만 수동 실행하는 protected workflow다. 매 실행마다 clean CNG Android project를 만들고, Fastlane이 upload key로 서명한 Release AAB를 빌드해 Google Play closed testing의 Alpha track에 업로드한다. Play가 package name, versionCode, upload certificate를 검증한다. versionCode는 고정 기준값 `210579434`에 GitHub Actions `run_number`를 더해 계산하므로 새 workflow run마다 증가하고, 같은 run의 재실행에서는 같은 값을 유지한다. 결과는 양의 정수이며 Android signed 32-bit 범위 안에 있다. 이미 업로드에 성공한 run을 재실행하면 같은 versionCode를 다시 사용하므로 새 AAB를 업로드할 수 없다. 새 versionCode가 필요하면 새 workflow run을 시작한다. Play API를 미리 조회하거나 장기 credential을 저장하지 않는다. 기존 internal testing release는 Play Console에 남아 있으며 이 workflow가 변경하지 않는다.
+`Native Store Distribution`의 Android job은 `main`에서 수동 실행하는 protected workflow의 일부다. 하나의 dispatch가 Android와 iOS job을 함께 시작하며 두 job은 서로 독립적으로 실행된다. 매 실행마다 clean CNG Android project를 만들고, Fastlane이 upload key로 서명한 Release AAB를 빌드해 Google Play closed testing의 Alpha track에 업로드한다. Play가 package name, versionCode, upload certificate를 검증한다. versionCode는 고정 기준값 `210579434`에 GitHub Actions `run_number`를 더해 계산하므로 새 workflow run마다 증가하고, 같은 run의 재실행에서는 같은 값을 유지한다. 결과는 양의 정수이며 Android signed 32-bit 범위 안에 있다. 이미 업로드에 성공한 run을 재실행하면 같은 versionCode를 다시 사용하므로 새 AAB를 업로드할 수 없다. 새 versionCode가 필요하면 새 workflow run을 시작한다. Play API를 미리 조회하거나 장기 credential을 저장하지 않는다. 기존 internal testing release는 Play Console에 남아 있으며 이 workflow가 변경하지 않는다.
 
 이 앱의 Play app, Google 관리 Play App Signing, upload key는 이미 설정되어 있다. Alpha track의 첫 signed AAB는 이 workflow가 업로드한다. 앱이 아직 draft 상태인 최초 실행에서는 workflow dispatch의 `release_status`를 `draft`로 선택하고, 업로드 후 Play Console에서 Alpha release를 검토 제출한다. 앱 검토가 끝나 draft 상태를 벗어난 뒤의 실행은 기본값인 `completed`를 사용한다. Play Console에서 다음 Alpha 설정과 CI 자산을 확인한다.
 
@@ -47,7 +47,7 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 | `ANDROID_RELEASE_STORE_PASSWORD`  | upload keystore password           |
 | `ANDROID_RELEASE_KEY_PASSWORD`    | upload key password                |
 
-`Android Google Play Alpha Distribution`은 조직 수준 `VAULT_ADDR`와 `VAULT_GITHUB_ACTIONS_AUDIENCE`, 저장소 수준 `TAILSCALE_OAUTH_CLIENT_ID`와 `TAILSCALE_AUDIENCE`를 사용한다. Vault tailnet에 접속한 뒤 GitHub OIDC JWT로 `kosmo-android-play` role을 인증하고 실행 중에만 서명 값을 읽는다. Vault role과 policy는 `prod` Environment의 이 workflow만 해당 경로를 읽도록 제한해야 한다.
+`Native Store Distribution`의 Android job은 조직 수준 `VAULT_ADDR`와 `VAULT_GITHUB_ACTIONS_AUDIENCE`, 저장소 수준 `TAILSCALE_OAUTH_CLIENT_ID`와 `TAILSCALE_AUDIENCE`를 사용한다. Vault tailnet에 접속한 뒤 GitHub OIDC JWT로 `kosmo-android-play` role을 인증하고 실행 중에만 서명 값을 읽는다. Vault role과 policy는 `prod` Environment의 이 workflow만 해당 경로를 읽도록 제한해야 한다.
 
 upload key 예시는 다음과 같다. password는 명령행이나 저장소에 넣지 말고 `keytool` prompt에서 입력한다.
 
@@ -68,7 +68,7 @@ base64 결과와 password는 shell history, 저장소, GitHub 로그에 남기�
 
 ## iOS App Store Connect upload
 
-`iOS App Store Connect Upload`는 iOS의 유일한 native 배포 채널로, `main`에서 수동 실행하는 protected workflow다. 기존 `prod` GitHub Environment의 승인을 거쳐 clean Expo CNG iOS project를 만들고, App Store 배포용 profile과 Apple Distribution certificate로 서명한 archive를 검증·업로드한다. 네이티브 모듈 변경이 없는 업데이트는 OTA로 배포한다. 앱은 `expo-secure-store`의 Keychain 저장소를 사용하지만 현재 비면제 암호화를 사용하지 않으므로 `ios.config.usesNonExemptEncryption`을 `false`로 설정한다. 이후 별도 암호화 기능이나 암호화 라이브러리를 추가하면 이 판단과 App Store Connect 수출 규정 응답을 다시 검토해야 한다.
+`Native Store Distribution`의 iOS job은 iOS의 유일한 native 배포 채널로, Android job과 함께 `main`에서 수동 실행되는 protected workflow다. 기존 `prod` GitHub Environment의 승인을 거쳐 clean Expo CNG iOS project를 만들고, App Store 배포용 profile과 Apple Distribution certificate로 서명한 archive를 검증·업로드한다. 네이티브 모듈 변경이 없는 업데이트는 OTA로 배포한다. 앱은 `expo-secure-store`의 Keychain 저장소를 사용하지만 현재 비면제 암호화를 사용하지 않으므로 `ios.config.usesNonExemptEncryption`을 `false`로 설정한다. 이후 별도 암호화 기능이나 암호화 라이브러리를 추가하면 이 판단과 App Store Connect 수출 규정 응답을 다시 검토해야 한다.
 
 ### One-time administrator setup
 
@@ -96,7 +96,9 @@ GitHub Actions에서는 새 environment를 만들지 않고 기존 `prod`를 사
 
 ### First upload and verification
 
-`main`에서 workflow를 dispatch하고 `prod` deployment를 승인한다. 첫 실행 전에 위의 Apple 계약·앱 레코드·서명 자산·App Manager API key·`Internal Testers` group과 Vault six fields가 준비되어 있어야 한다. 수출 규정 응답은 현재 설정(`ios.config.usesNonExemptEncryption: false`)에 맞춰 비면제 암호화를 사용하지 않는 것으로 확인한다. workflow는 bundle ID, profile의 Team ID, certificate, version/build metadata를 확인한 뒤 signed IPA 하나만 App Store Connect에 업로드하고, Actions summary에 revision, version/build, processing 상태와 `Internal Testers` group 결과를 남긴다. App Store Connect에서 업로드한 build가 Processing을 끝내고 TestFlight 내부 그룹에 배포되는지 확인한다.
+새 unified workflow를 최초 실행하기 전 Kosmo GCP WIF provider의 exact `workflow_ref`와 Kubernetes의 Android/iOS Vault role·policy가 `.github/workflows/native-store-distribution.yml` 경로를 허용하도록 각각 적용되어야 하며, 실제 apply와 live JWT allow/deny는 별도 운영 gate에서 확인한다.
+
+`main`에서 `Native Store Distribution` workflow를 dispatch하고 Android/iOS 각 `prod` deployment를 승인한다. 첫 실행 전에 위의 Apple 계약·앱 레코드·서명 자산·App Manager API key·`Internal Testers` group과 Vault six fields가 준비되어 있어야 한다. 수출 규정 응답은 현재 설정(`ios.config.usesNonExemptEncryption: false`)에 맞춰 비면제 암호화를 사용하지 않는 것으로 확인한다. workflow의 iOS job은 bundle ID, profile의 Team ID, certificate, version/build metadata를 확인한 뒤 signed IPA 하나만 App Store Connect에 업로드하고, Actions summary에 revision, version/build, processing 상태와 `Internal Testers` group 결과를 남긴다. Android job과 iOS job은 서로 독립적이므로 한쪽 실패가 다른 쪽을 취소하지 않는다. App Store Connect에서 업로드한 build가 Processing을 끝내고 TestFlight 내부 그룹에 배포되는지 확인한다.
 
 현재 확인되지 않은 운영 게이트는 live workflow JWT에 대한 Vault role/policy의 allow/deny와 첫 upload, App Store Connect processing/group assignment 결과다. 이 문서와 코드만으로 해당 게이트가 완료됐다고 간주하지 않는다.
 

@@ -88,7 +88,7 @@ Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에�
 
 `Docker Build` workflow는 GitHub-hosted `ubuntu-24.04-arm` runner에서 `main` push마다 canonical image를 한 번 build하고, `sha-<full SHA>` tag와 Web bundle의 Sentry release/source map을 생성·검증·업로드한다. Dev는 triggering `head_sha` tag의 GHCR digest를 사용한다. Production `workflow_dispatch`는 target SHA에 해당하는 성공한 main push Docker Build run을 확인한 뒤 GHCR SHA tag digest를 preflight에서 조회·고정하고, `prod` Environment 승인 뒤 image checkout·build·push·source map upload나 tag/digest 재조회 없이 그 digest만 배포한다. SHA tag 재빌드로 Dev와 Production의 조회 digest가 달라질 수 있으나, production approval 이후에는 preflight digest를 유지한다. 두 경로 모두 공개 client 설정을 Vault나 GitHub Variables에서 읽지 않으며, 코드의 채널 설정표가 Web bundle에 포함된다. Web runtime의 `ENVIRONMENT`는 Helm 값에서 주입되고 BFF의 same-origin `/channel.js`가 이를 검증해 bundle보다 먼저 채널을 선택한다. Sentry organization·project는 canonical build metadata로, repository secret의 `SENTRY_AUTH_TOKEN`은 canonical BuildKit secret mount로만 전달한다. `SENTRY_UPLOAD_REQUIRED=1`인 canonical CI에서는 token, organization, release 또는 project가 누락되면 source map upload와 image build가 실패한다. 최종 image에는 upload token이나 organization/project 설정을 남기지 않으며, 업로드가 성공한 뒤 Web static root에는 `.map` 파일이 남지 않는다. Tag push·`production` branch push·일반 branch push는 Docker Build나 production release를 시작하지 않는다.
 
-Android `workflow_dispatch`와 iOS `workflow_dispatch`는 각각 `main`에서 `prod` Environment 승인을 받은 뒤 clean Expo prebuild와 Release build를 수행한다. 두 workflow는 `SENTRY_ORG`·`SENTRY_PROJECT`와 full `GITHUB_SHA` 기반의 `SENTRY_RELEASE`·`EXPO_PUBLIC_SENTRY_RELEASE`를 전달하고, `SENTRY_AUTH_TOKEN`은 실제 Gradle/Xcode Release build step 환경 변수로만 전달한다. `@sentry/react-native`가 생성한 build hook이 JavaScript source map과 native debug symbol을 해당 release에 업로드하며, build 후 generated native project와 signing material을 cleanup한다. Android Gradle과 iOS source-map hook은 upload CLI의 nonzero를 Release build 실패로 전파한다. iOS Fastlane은 `build_app` 성공 직후 동일 archive의 `dSYMs`를 `pnpm exec sentry-cli debug-files upload --type dsym --wait`로 명시적으로 업로드하고 CLI nonzero를 lane 실패로 전파한다. Xcode hook의 중복 debug symbol 업로드는 Sentry debug ID dedupe에 맡긴다. token은 앱 bundle·repository·배포 artifact에 포함되지 않는다.
+하나의 `Native Store Distribution` `workflow_dispatch`가 Android/iOS job을 함께 시작하며, 두 job은 `main`에서 각각 `prod` Environment 승인을 받은 뒤 clean Expo prebuild와 Release build를 독립적으로 수행한다. 한 job의 실패가 다른 job을 취소하거나 성공으로 숨기지 않는다. 두 job은 `SENTRY_ORG`·`SENTRY_PROJECT`와 full `GITHUB_SHA` 기반의 `SENTRY_RELEASE`·`EXPO_PUBLIC_SENTRY_RELEASE`를 전달하고, `SENTRY_AUTH_TOKEN`은 실제 Gradle/Xcode Release build step 환경 변수로만 전달한다. `@sentry/react-native`가 생성한 build hook이 JavaScript source map과 native debug symbol을 해당 release에 업로드하며, build 후 generated native project와 signing material을 cleanup한다. Android Gradle과 iOS source-map hook은 upload CLI의 nonzero를 Release build 실패로 전파한다. iOS Fastlane은 `build_app` 성공 직후 동일 archive의 `dSYMs`를 `pnpm exec sentry-cli debug-files upload --type dsym --wait`로 명시적으로 업로드하고 CLI nonzero를 lane 실패로 전파한다. Xcode hook의 중복 debug symbol 업로드는 Sentry debug ID dedupe에 맡긴다. token은 앱 bundle·repository·배포 artifact에 포함되지 않는다.
 
 로컬에서 artifact 보안 경계를 확인한다.
 
@@ -96,7 +96,7 @@ Android `workflow_dispatch`와 iOS `workflow_dispatch`는 각각 `main`에서 `p
 pnpm build:sentry-artifacts
 find apps/app/dist -name '*.map' -print
 rg 'sourceMappingURL=|SENTRY_AUTH_TOKEN' apps/app/dist
-actionlint .github/workflows/android-play-internal-distribution.yml .github/workflows/ios-app-store-connect-upload.yml
+actionlint .github/workflows/native-store-distribution.yml
 ```
 
 두 검색은 결과가 없어야 한다. generated `dist`는 커밋하지 않는다.

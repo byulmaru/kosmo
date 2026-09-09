@@ -6,7 +6,7 @@
 
 - 기존 Firebase 활성화와 Android/iOS 앱 등록 (`moe.kos`)
 - Google Play Developer API 활성화, Android Publisher 전용 service account와 최소 WIF 권한
-- 각 store workflow에 필요한 GitHub Actions Workload Identity Federation. Android Play는 `main`의 정확한 workflow와 기존 `prod` Environment만 허용한다.
+- 각 store workflow에 필요한 GitHub Actions Workload Identity Federation. Native Store Distribution의 Android job은 `main`의 정확한 workflow와 기존 `prod` Environment만 허용한다.
 - Terraform plan/apply가 공유하는 GitHub Actions WIF 서비스 계정
 - GitHub에서 직접 관리하는 Actions environment와 변수 (`terraform-apply`, 승인형 `prod` release)
 - `byulmaru-kosmo-prod-postgresql-backups-822638974464` PostgreSQL backup bucket과 `byulmaru-kosmo-prod-postgres-backup` EKS Pod Identity role
@@ -96,6 +96,6 @@ bucket은 `byulmaru-terraform-state`, state key는 `kosmo/terraform.tfstate`이�
 
 ## Rotation과 revocation
 
-정적 Google credential은 없으므로 정기 key rotation은 필요하지 않다. repository, workflow, branch 또는 environment가 바뀌면 WIF provider의 숫자 ID 기반 trust condition을 먼저 수정하고 저장한 plan을 적용한다. Android Play provider는 `main`의 `.github/workflows/android-play-internal-distribution.yml`과 기존 `prod` Environment만 허용한다. Firebase App Distribution provider는 disabled 상태이고 해당 service account의 GitHub Actions binding은 제거됐으며, 두 리소스는 `PREVENT` 삭제 정책의 후속 state 정리 전까지 deprecated 상태로 유지한다.
+정적 Google credential은 없으므로 정기 key rotation은 필요하지 않다. repository, workflow, branch 또는 environment가 바뀌면 WIF provider의 숫자 ID 기반 trust condition을 먼저 수정하고 저장한 plan을 적용한다. Android Play provider는 `main`의 `.github/workflows/native-store-distribution.yml`과 기존 `prod` Environment만 허용한다. Firebase App Distribution provider는 disabled 상태이고 해당 service account의 GitHub Actions binding은 제거됐으며, 두 리소스는 `PREVENT` 삭제 정책의 후속 state 정리 전까지 deprecated 상태로 유지한다.
 
 긴급 차단은 WIF provider에 `disabled = true`를 추가해 적용한다. 현재 Firebase App Distribution provider는 이 상태이며 GitHub Actions와 project IAM binding도 제거되어 있다. 영구 폐기는 외부 사용 중단을 확인한 뒤 별도 검토로 보호된 provider·service account·API 리소스를 state에서 제거한다.
