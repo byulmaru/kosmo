@@ -5,11 +5,8 @@ import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, space, textStyles } from '@/theme/tokens';
-import { ProfileBlockAction } from './ProfileBlockAction';
-import { ProfileListItemContent } from './ProfileListItemContent';
-import type { ProfileBlockFeedback } from './ProfileBlockAction';
+import type { ReactNode } from 'react';
 
-export type BlockedProfile = { id: string; displayName: string; avatarUri?: string | null };
 type Pagination =
   | { status: 'end' }
   | { status: 'loading' }
@@ -18,18 +15,14 @@ type Pagination =
 export type BlockedProfileListState =
   | { status: 'loading' }
   | { status: 'error'; onRetry: () => void }
-  | { status: 'loaded'; profiles: readonly BlockedProfile[]; pagination: Pagination };
-type Props = {
-  onDismiss?: (profileId: string) => void;
-  onFeedback?: (feedback: ProfileBlockFeedback & { profileId: string }) => void;
-  onUnblock: (profileId: string) => Promise<void>;
-  state: BlockedProfileListState;
-};
+  | { status: 'loaded'; children: ReactNode; pagination: Pagination }
+  | { status: 'empty' };
+type Props = { state: BlockedProfileListState };
 
-export function BlockedProfileList({ onDismiss, onFeedback, onUnblock, state }: Props) {
+/** The action owner composes rows; this list does not execute relationship mutations. */
+export function BlockedProfileList({ state }: Props) {
   const theme = useTheme();
   const headingRef = useRef<View>(null);
-  const focusAfterUnblock = useRef(false);
   const { showToast } = useToast();
   const loadError =
     state.status === 'error'
@@ -61,12 +54,6 @@ export function BlockedProfileList({ onDismiss, onFeedback, onUnblock, state }: 
       });
     }
   }, [errorMessage, showToast]);
-  useEffect(() => {
-    if (focusAfterUnblock.current) {
-      headingRef.current?.focus();
-      focusAfterUnblock.current = false;
-    }
-  }, [state]);
   return (
     <ScrollView contentContainerStyle={styles.root}>
       <View accessible accessibilityRole="header" ref={headingRef} tabIndex={-1}>
@@ -87,40 +74,11 @@ export function BlockedProfileList({ onDismiss, onFeedback, onUnblock, state }: 
             다시 시도
           </Button>
         </View>
-      ) : state.profiles.length === 0 && state.pagination.status === 'end' ? (
+      ) : state.status === 'empty' ? (
         <StateView title="차단한 프로필이 없어요" />
       ) : (
         <>
-          {state.profiles.map((profile) => (
-            <ProfileListItemContent
-              key={profile.id}
-              avatarLabel={profile.displayName}
-              avatarUri={profile.avatarUri}
-              displayName={profile.displayName}
-              identity={
-                <Text
-                  numberOfLines={1}
-                  style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}
-                >
-                  {profile.displayName}
-                </Text>
-              }
-              style={styles.row}
-            >
-              <ProfileBlockAction
-                blocked
-                displayName={profile.displayName}
-                onChangeBlocked={() => onUnblock(profile.id)}
-                onDismiss={() => onDismiss?.(profile.id)}
-                onFeedback={(feedback) => {
-                  focusAfterUnblock.current = feedback.status === 'success';
-                  onFeedback?.({ ...feedback, profileId: profile.id });
-                }}
-                profileId={profile.id}
-                surface="button"
-              />
-            </ProfileListItemContent>
-          ))}
+          {state.children}
           {state.pagination.status === 'error' ? (
             <View style={styles.pagination}>
               <Button onPress={state.pagination.onRetry} tone="secondary">
@@ -144,6 +102,5 @@ export function BlockedProfileList({ onDismiss, onFeedback, onUnblock, state }: 
 const styles = StyleSheet.create({
   root: { flexGrow: 1, width: '100%' },
   heading: { ...textStyles.uiHeadingM, borderBottomWidth: borderWidths[1], padding: space[16] },
-  row: { height: 64, paddingVertical: 0 },
   pagination: { alignItems: 'center', padding: space[16] },
 });

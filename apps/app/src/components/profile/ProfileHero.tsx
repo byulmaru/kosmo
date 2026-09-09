@@ -18,19 +18,16 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { getPublicWebOrigin } from '@/config/origin';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
-import { ProfileMoreMenu } from './ProfileMoreMenu';
 import { ProfileMuteAction } from './ProfileMuteAction';
 import { ProfileNameBlock } from './ProfileNameBlock';
 import { ProfileTagChip } from './ProfileTagChip';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
-import type { ProfileBlockMenuControl } from './ProfileBlockAction';
 import type { ProfileMuteControl } from './ProfileMuteAction';
 
 type ProfileHeroProps = {
   action?: ReactNode;
-  block?: ProfileBlockMenuControl;
   mute?: ProfileMuteControl;
   loading?: boolean;
   profile?: ProfileHero_profile$key | null;
@@ -66,13 +63,7 @@ const countFormatter = new Intl.NumberFormat('en', {
   notation: 'compact',
 });
 
-export function ProfileHero({
-  action,
-  block,
-  mute,
-  loading = false,
-  profile = null,
-}: ProfileHeroProps) {
+export function ProfileHero({ action, mute, loading = false, profile = null }: ProfileHeroProps) {
   const followingRef = useRef<View>(null);
   const focusAfterUnmute = useRef(false);
   useEffect(() => {
@@ -170,7 +161,7 @@ export function ProfileHero({
             size={avatarSize}
           />
         </View>
-        {action || mute || block ? (
+        {action || mute ? (
           <View
             style={[
               actionGeometry,
@@ -181,10 +172,9 @@ export function ProfileHero({
               },
             ]}
           >
-            {mute || block ? (
-              <ProfileMoreMenu
-                block={block}
-                mute={mute}
+            {mute ? (
+              <ProfileMuteAction
+                {...mute}
                 displayName={data.displayName}
                 profileId={data.id}
                 items={[
@@ -314,7 +304,7 @@ const styles = StyleSheet.create({
     borderWidth: space[4],
   },
   action: { alignItems: 'flex-end', justifyContent: 'center', width: 96 },
-  identity: { flex: 0, flexBasis: 'auto' },
+  identity: { flex: 0 },
   bio: { marginTop: space[12], ...textStyles.uiCopyL },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space[8], marginTop: space[12] },
   tagTarget: {

@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { ProfileMoreMenu } from '@/components/profile/ProfileMoreMenu';
+import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { isRepostTargetEligible } from './postActionAvailability';
@@ -10,14 +10,12 @@ import { usePostMoreMenuItem } from './PostMoreMenu';
 import { usePostReactionController } from './PostReactionController';
 import { useRepostFailureToast } from './useRepostFailureToast';
 import type { StyleProp, ViewStyle } from 'react-native';
-import type { ProfileBlockControl } from '@/components/profile/ProfileBlockAction';
 import type { ProfileMuteControl } from '@/components/profile/ProfileMuteAction';
 import type { PostActionSurface_post$key } from './__generated__/PostActionSurface_post.graphql';
 import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
 
 type Props = Readonly<{
   actionBarStyle?: StyleProp<ViewStyle>;
-  block?: ProfileBlockControl & { profileId: string };
   mute?: ProfileMuteControl & { profileId: string };
   onDeleted?: () => void;
   reactionSummaryStyle?: StyleProp<ViewStyle>;
@@ -41,7 +39,6 @@ const postActionSurfaceFragment = graphql`
 
 export function PostActionSurface({
   actionBarStyle,
-  block,
   mute,
   onDeleted,
   reactionSummaryStyle,
@@ -68,12 +65,6 @@ export function PostActionSurface({
     relativeHandle: target.profile.relativeHandle,
   });
 
-  const otherProfile = Boolean(
-    authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id,
-  );
-  const targetMute = otherProfile && mute?.profileId === target.profile.id ? mute : undefined;
-  const targetBlock = otherProfile && block?.profileId === target.profile.id ? block : undefined;
-
   const renderActions = (more?: MoreActionConfig) => (
     <PostActionBar
       execution={authentication.execution}
@@ -94,10 +85,12 @@ export function PostActionSurface({
     <>
       <PostReactionSummary controller={reactionController} style={reactionSummaryStyle} />
       <View style={actionBarStyle}>
-        {targetMute || targetBlock ? (
-          <ProfileMoreMenu
-            block={targetBlock}
-            mute={targetMute}
+        {mute &&
+        mute.profileId === target.profile.id &&
+        authentication.selectedProfileId &&
+        authentication.selectedProfileId !== target.profile.id ? (
+          <ProfileMuteAction
+            {...mute}
             displayName={target.profile.displayName}
             profileId={target.profile.id}
             items={[copyLinkItem]}

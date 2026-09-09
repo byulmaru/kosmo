@@ -108,6 +108,10 @@ transition이 cleanup 뒤 관계를 남길 수 있으므로, Unblock은 현재 �
 
 ## 3. PROD-823 — Profile Block UI·Relay 관리 흐름
 
+2026-09-09 리뷰 반영: PROD-861은 메뉴·목록 presentation만 유지하며 부모 mutation callback과 가짜 요청 fixture를 제거한다.
+이 그룹이 실제 action의 요청·confirmation·pending·오류·Relay 갱신과 메뉴·버튼 공통 동작을 구현·검증한다.
+PROD-917은 인계된 action을 신규 UI에 합성한다. 기존 presentation 검증을 아래 task의 완료 증거로 사용하지 않는다.
+
 **Authority / Provenance**
 
 - `docs/design/profile-mute-block.md`

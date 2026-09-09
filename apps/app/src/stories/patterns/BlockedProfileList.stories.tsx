@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, Text, useWindowDimensions, View } from 'react-native';
 import { fn } from 'storybook/test';
 import { BlockedProfileList } from '@/components/profile/BlockedProfileList';
+import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
+import { Button } from '@/components/ui/Button';
+import { useTheme } from '@/theme/ThemeProvider';
+import { breakpoints, textStyles } from '@/theme/tokens';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -11,100 +15,94 @@ const profiles = [
 ];
 type Props = {
   state: 'loaded' | 'loading' | 'error' | 'empty' | 'loadingMore' | 'loadMoreError';
-  outcome: 'success' | 'error' | 'pending';
   displayName: string;
-  onUnblock: (id: string) => Promise<void>;
-  onDismiss: (profileId: string) => void;
+  onSelectAction: (profileId: string) => void;
   onRetry: () => void;
   onLoadMore: () => void;
-  onFeedback: (event: { profileId: string; blocked: boolean; status: 'success' | 'error' }) => void;
 };
 
-function Fixture({
-  state,
-  outcome,
-  displayName,
-  onUnblock,
-  onDismiss,
-  onRetry,
-  onLoadMore,
-  onFeedback,
-}: Props) {
-  const [removed, setRemoved] = useState<string[]>([]);
-  const [requestState, setRequestState] = useState<Props['state'] | 'end' | null>(null);
-  useEffect(() => {
-    setRemoved([]);
-    setRequestState(null);
-  }, [state, outcome, displayName]);
-  useEffect(() => {
-    if (outcome === 'pending' || (requestState !== 'loading' && requestState !== 'loadingMore')) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      setRequestState(
-        outcome === 'error'
-          ? requestState === 'loading'
-            ? 'error'
-            : 'loadMoreError'
-          : requestState === 'loading'
-            ? 'loaded'
-            : 'end',
-      );
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [requestState, outcome]);
-  const visibleState = requestState ?? state;
+function Fixture({ state, displayName, onSelectAction, onRetry, onLoadMore }: Props) {
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => setLoaded(false), [state]);
+  const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const mobile = Platform.OS !== 'web' || width < breakpoints.compact;
+  const targetHeight = Platform.OS === 'ios' ? 44 : Platform.OS === 'android' ? 48 : 40;
+  const visibleState = loaded ? 'loaded' : state;
   const retry = () => {
     onRetry();
-    setRequestState(visibleState === 'error' ? 'loading' : 'loadingMore');
+    setLoaded(true);
   };
-  const items = profiles
-    .map((profile, index) => ({
-      ...profile,
-      displayName: index === 0 ? displayName : profile.displayName,
-    }))
-    .filter((profile) => !removed.includes(profile.id));
   return (
     <View style={{ width: '100%', maxWidth: 640 }}>
       <BlockedProfileList
-        onDismiss={onDismiss}
-        onFeedback={(event) => {
-          onFeedback(event);
-          if (event.status === 'success') {
-            setRemoved((current) => [...current, event.profileId]);
-          }
-        }}
-        onUnblock={async (id) => {
-          await onUnblock(id);
-          if (outcome === 'pending') {
-            await new Promise<void>(() => {});
-          }
-          if (outcome === 'error') {
-            throw new globalThis.Error('요청 실패');
-          }
-        }}
         state={
-          visibleState === 'loading'
-            ? { status: 'loading' }
+          visibleState === 'loading' || visibleState === 'empty'
+            ? { status: visibleState }
             : visibleState === 'error'
               ? { status: 'error', onRetry: retry }
               : {
                   status: 'loaded',
-                  profiles: visibleState === 'empty' ? [] : items,
-                  pagination:
-                    visibleState === 'empty' || visibleState === 'end'
-                      ? { status: 'end' }
-                      : visibleState === 'loadingMore'
-                        ? { status: 'loading' }
-                        : visibleState === 'loadMoreError'
-                          ? { status: 'error', onRetry: retry }
-                          : {
-                              status: 'more',
-                              onLoadMore: () => {
-                                onLoadMore();
-                                setRequestState('loadingMore');
-                              },
+                  children: profiles.map((profile, index) => {
+                    const name = index === 0 ? displayName : profile.displayName;
+                    return (
+                      <ProfileListItemContent
+                        key={profile.id}
+                        avatarLabel={name}
+                        avatarUri={profile.avatarUri}
+                        displayName={name}
+                        identity={
+                          <Text
+                            numberOfLines={1}
+                            style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}
+                          >
+                            {name}
+                          </Text>
+                        }
+                        style={{ height: 64, paddingVertical: 0 }}
+                      >
+                        {/* Presentation event only; no fake mutation or relationship update. */}
+                        <View
+                          style={{
+                            minHeight: mobile ? targetHeight : 32,
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Button
+                            accessibilityLabel={`${name} 차단 해제`}
+                            onPress={() => onSelectAction(profile.id)}
+                            hitSlop={
+                              Platform.OS === 'web'
+                                ? undefined
+                                : { top: (targetHeight - 40) / 2, bottom: (targetHeight - 40) / 2 }
+                            }
+                            size={mobile ? 'default' : 'compact'}
+                            style={{
+                              width: mobile ? 88 : 72,
+                              minWidth: mobile ? 88 : 72,
+                              paddingHorizontal: 0,
+                            }}
+                            tone="secondary"
+                          >
+                            차단 해제
+                          </Button>
+                        </View>
+                      </ProfileListItemContent>
+                    );
+                  }),
+                  pagination: loaded
+                    ? { status: 'end' }
+                    : visibleState === 'loadingMore'
+                      ? { status: 'loading' }
+                      : visibleState === 'loadMoreError'
+                        ? { status: 'error', onRetry: retry }
+                        : {
+                            status: 'more',
+                            onLoadMore: () => {
+                              onLoadMore();
+                              setLoaded(true);
                             },
+                          },
                 }
         }
       />
@@ -115,28 +113,28 @@ function Fixture({
 const meta = {
   args: {
     state: 'loaded',
-    outcome: 'success',
     displayName: '코스모 작가',
-    onUnblock: fn<(id: string) => Promise<void>>().mockResolvedValue(undefined),
-    onDismiss: fn<(profileId: string) => void>(),
+    onSelectAction: fn<(profileId: string) => void>(),
     onRetry: fn(),
     onLoadMore: fn(),
-    onFeedback: fn(),
   },
   argTypes: {
     state: {
       control: 'select',
       options: ['loaded', 'loading', 'error', 'empty', 'loadingMore', 'loadMoreError'],
     },
-    outcome: {
-      control: 'inline-radio',
-      description: '확인 후 해제 callback의 결과 시나리오를 보여줍니다.',
-      options: ['success', 'error', 'pending'],
-    },
     displayName: { control: 'text' },
   },
   component: Fixture,
-  parameters: { controls: { include: ['state', 'outcome', 'displayName'] } },
+  parameters: {
+    controls: { include: ['state', 'displayName'] },
+    docs: {
+      description: {
+        component:
+          '목록·행·버튼 presentation입니다. 버튼 선택은 Actions에 기록하며 차단 해제 요청이나 성공 상태 전환을 구현하지 않습니다.',
+      },
+    },
+  },
   title: 'KOSMO/Patterns/Profile/Blocked Profiles',
 } satisfies Meta<typeof Fixture>;
 export default meta;

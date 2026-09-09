@@ -91,9 +91,6 @@ require.extensions['.png'] = (module, filename) => {
 };
 mockModule('lucide-react-native', { XIcon: 'XIcon', VolumeOff: 'VolumeOff' });
 mockModule(require.resolve('lucide-react-native'), { XIcon: 'XIcon', VolumeOff: 'VolumeOff' });
-mockModule(new URL('./ProfileMoreMenu.tsx', import.meta.url), {
-  ProfileMoreMenu: 'ProfileMoreMenu',
-});
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
   ProfileMuteAction: 'ProfileMuteAction',
 });
