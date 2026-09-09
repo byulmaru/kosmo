@@ -258,6 +258,14 @@ describe('GraphQL remote profile boundary', () => {
       [`@alice@${remoteDomain}`],
     );
     assert.equal(execute.mock.calls.length, 1);
+    const options = execute.mock.calls[0]?.arguments[1];
+    assert.ok(options);
+    assert.deepEqual(options.args, [
+      {
+        handle: `alice@${remoteDomain}`,
+        profileId: auth.profile.id,
+      },
+    ]);
     assert.equal(await db.$count(Profiles), 2);
     assert.equal(await db.$count(ActivityPubActors), 0);
   });
@@ -293,14 +301,28 @@ describe('GraphQL remote profile boundary', () => {
       },
     ]);
     assert.equal(start.mock.calls.length, 1);
+    const options = start.mock.calls[0]?.arguments[1];
+    assert.ok(options);
+    assert.deepEqual(options.args, [
+      {
+        handle: `alice@${remoteDomain}`,
+        profileId: auth.profile.id,
+      },
+    ]);
   });
 
   for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
-    test(`returns an empty connection for a stored ${state} remote profile without lookup`, async () => {
+    test(`returns an empty connection for a stored ${state} remote profile without lookup`, async (t) => {
       const auth = await createAuthenticatedSession();
       const domain = `${state.toLowerCase()}.remote.example`;
       const stored = await createStoredActivityPubAuthor({ domain, handle: 'alice' });
       await db.update(Profiles).set({ state }).where(eq(Profiles.id, stored.profile.id));
+      const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+      const execute = t.mock.method(
+        temporalClient.workflow,
+        'execute',
+        async () => undefined as never,
+      );
 
       const result = await requestGraphQL<{
         searchProfiles: { edges: unknown[]; pageInfo: { hasNextPage: boolean } };
@@ -320,6 +342,8 @@ describe('GraphQL remote profile boundary', () => {
         edges: [],
         pageInfo: { hasNextPage: false },
       });
+      assert.equal(start.mock.calls.length, 0);
+      assert.equal(execute.mock.calls.length, 0);
     });
   }
 

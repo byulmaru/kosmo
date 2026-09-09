@@ -43,7 +43,19 @@ test('sync caller waits for the Profile identity using one stable Workflow ID', 
 });
 
 test('async caller returns durable start acknowledgement without waiting for the result', async () => {
-  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+  let releaseStart!: () => void;
+  const startReleased = new Promise<void>((resolve) => {
+    releaseStart = resolve;
+  });
+  let signalStartCall!: () => void;
+  const startCall = new Promise<void>((resolve) => {
+    signalStartCall = resolve;
+  });
+  const start = mock.method(temporalClient.workflow, 'start', async () => {
+    signalStartCall();
+    await startReleased;
+    return undefined as never;
+  });
   const execute = mock.method(temporalClient.workflow, 'execute', async () => {
     throw new Error('sync execution should not be called');
   });
@@ -52,9 +64,22 @@ test('async caller returns durable start acknowledgement without waiting for the
     'withDeadline',
     async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
   );
+  const callerResult = startRemoteProfileMaterialization(input, 'async');
+  let callerSettled = false;
+  void callerResult.then(
+    () => {
+      callerSettled = true;
+    },
+    () => {
+      callerSettled = true;
+    },
+  );
 
   try {
-    assert.deepEqual(await startRemoteProfileMaterialization(input, 'async'), { kind: 'started' });
+    await startCall;
+    assert.equal(callerSettled, false);
+    releaseStart();
+    assert.deepEqual(await callerResult, { kind: 'started' });
     assert.equal(execute.mock.calls.length, 0);
 
     const call = start.mock.calls[0];
@@ -68,6 +93,7 @@ test('async caller returns durable start acknowledgement without waiting for the
     assert.equal(options.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
     assert.equal(deadline.mock.calls.length, 1);
   } finally {
+    releaseStart();
     deadline.mock.restore();
     execute.mock.restore();
     start.mock.restore();

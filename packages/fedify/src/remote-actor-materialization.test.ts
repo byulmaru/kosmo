@@ -1177,9 +1177,19 @@ describe('remote actor materialization', () => {
       mode: 'sync',
       now,
     });
+    let profileSettled = false;
+    void workflowResult.then(
+      () => {
+        profileSettled = true;
+      },
+      () => {
+        profileSettled = true;
+      },
+    );
 
     try {
       await startCall;
+      assert.equal(profileSettled, false);
       releaseStart();
       const profile = await workflowResult;
       assert.equal(profile.id, stored.profile.id);
