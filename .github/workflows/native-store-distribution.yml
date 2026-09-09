@@ -58,6 +58,8 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.0.0
         with:
+          cache: gradle
+          cache-dependency-path: pnpm-lock.yaml
           distribution: temurin
           java-version: '17'
 
@@ -133,6 +135,12 @@ jobs:
             secret/data/kosmo/prod/android-play ANDROID_RELEASE_STORE_PASSWORD | ANDROID_RELEASE_STORE_PASSWORD ;
             secret/data/kosmo/prod/android-play ANDROID_RELEASE_KEY_PASSWORD | ANDROID_RELEASE_KEY_PASSWORD
 
+      - name: Generate clean Expo Android project
+        working-directory: apps/app
+        run: |
+          pnpm relay
+          pnpm exec expo prebuild --clean --platform android --no-install
+
       - name: Restore Android upload key
         shell: bash
         env:
@@ -190,8 +198,6 @@ jobs:
               );
 
               const keystorePath = path.join(signingDir, "upload.jks");
-              const gradleHome = path.join(signingDir, "gradle");
-              fs.mkdirSync(gradleHome, { mode: 0o700 });
               fs.writeFileSync(keystorePath, keystore, { mode: 0o600 });
 
               const properties = [
@@ -200,20 +206,17 @@ jobs:
                 `android.injected.signing.key.alias=${escapeProperty(keyAlias)}`,
                 `android.injected.signing.key.password=${escapeProperty(keyPassword)}`,
               ].join("\n");
-              const propertiesPath = path.join(gradleHome, "gradle.properties");
-              fs.writeFileSync(propertiesPath, `${properties}\n`, { mode: 0o600 });
-              fs.appendFileSync(process.env.GITHUB_ENV, `GRADLE_USER_HOME=${gradleHome}\n`);
+              const propertiesPath = path.join(
+                process.env.GITHUB_WORKSPACE,
+                "apps/app/android/gradle.properties",
+              );
+              fs.chmodSync(propertiesPath, 0o600);
+              fs.appendFileSync(propertiesPath, `\n${properties}\n`);
             } catch (error) {
               if (signingDir) fs.rmSync(signingDir, { recursive: true, force: true });
               throw error;
             }
           '
-
-      - name: Generate clean Expo Android project
-        working-directory: apps/app
-        run: |
-          pnpm relay
-          pnpm exec expo prebuild --clean --platform android --no-install
 
       - name: Authenticate to Google Cloud for Play upload
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
