@@ -117,15 +117,27 @@ describe('Post action 실행 가능성', () => {
         hasContent: true,
         authorProfileId: 'author-id',
         selectedProfileId: 'author-id',
+        sourceInstanceKind: 'LOCAL',
         visibility: 'FOLLOWERS',
       }),
       true,
     );
     assert.equal(
       policy.isQuoteTargetEligible({
+        hasContent: true,
+        authorProfileId: 'author-id',
+        selectedProfileId: 'viewer-id',
+        sourceInstanceKind: 'ACTIVITYPUB',
+        visibility: 'PUBLIC',
+      }),
+      false,
+    );
+    assert.equal(
+      policy.isQuoteTargetEligible({
         hasContent: false,
         authorProfileId: 'author-id',
         selectedProfileId: 'author-id',
+        sourceInstanceKind: 'LOCAL',
         visibility: 'PUBLIC',
       }),
       false,

@@ -19,7 +19,7 @@ export type RepostActionFailure = Readonly<{
 type Props = {
   execution?: PostActionExecution;
   onError?: (failure: RepostActionFailure) => void;
-  onQuote?: () => void;
+  onQuote?: (restoreFocus: () => void) => void;
   onResolutionRequired?: (reason: PostActionResolutionReason) => void;
   post: RepostAction_post$key;
 };
@@ -85,6 +85,7 @@ export function RepostAction({
     useMutation<RepostActionDeletePostMutation>(deletePostMutation);
   const inFlight = useRef(false);
   const currentEnvironment = useRef(environment);
+  const restoreFocusRef = useRef<() => void>(() => undefined);
   const processing = isReposting || isDeleting;
 
   currentEnvironment.current = environment;
@@ -159,7 +160,14 @@ export function RepostAction({
   const items = [
     { icon: Repeat2, key: action, label, onSelect: () => runMutation(action) },
     ...(data.content && onQuote
-      ? [{ icon: Quote, key: 'quote', label: '인용하기', onSelect: onQuote }]
+      ? [
+          {
+            icon: Quote,
+            key: 'quote',
+            label: '인용하기',
+            onSelect: () => onQuote(restoreFocusRef.current),
+          },
+        ]
       : []),
   ];
 
@@ -168,7 +176,8 @@ export function RepostAction({
       accessibilityLabel="재게시 메뉴"
       disabled={processing || execution.kind !== 'enabled'}
       items={items}
-      renderTrigger={({ expanded: menuExpanded, onPress, ref }) => {
+      renderTrigger={({ expanded: menuExpanded, focusTrigger, onPress, ref }) => {
+        restoreFocusRef.current = focusTrigger;
         const triggerPress =
           execution.kind === 'resolution-required'
             ? () => onResolutionRequired?.(execution.reason)

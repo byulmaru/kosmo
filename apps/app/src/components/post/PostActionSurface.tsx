@@ -17,7 +17,7 @@ import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
 type Props = Readonly<{
   actionBarStyle?: StyleProp<ViewStyle>;
   onDeleted?: () => void;
-  onQuote?: () => void;
+  onQuote?: (restoreFocus: () => void) => void;
   reactionSummaryStyle?: StyleProp<ViewStyle>;
   reply?: PostActionBarProps['reply'];
   socialActionTarget: PostActionSurface_post$key;
@@ -34,6 +34,9 @@ const postActionSurfaceFragment = graphql`
       id
       relativeHandle
       ...ProfileMuteAction_profile
+      instance {
+        kind
+      }
     }
     ...PostActionBar_post @alias(as: "actionBar")
     ...PostReactionController_post @alias(as: "reactionController")
@@ -61,6 +64,7 @@ export function PostActionSurface({
     authorProfileId: target.profile.id,
     hasContent: Boolean(target.content),
     selectedProfileId: authentication.selectedProfileId,
+    sourceInstanceKind: target.profile.instance.kind,
     visibility: target.visibility,
   });
   const reactionController = usePostReactionController(

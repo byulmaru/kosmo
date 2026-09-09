@@ -179,17 +179,17 @@ describe('Post Reply GraphQL 경계', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.deepEqual(result.data?.createPost.post, {
-      content: { bodyText: '인용 본문' },
-      id: result.data?.createPost.post.id,
-      replyParent: null,
-      repostSource: { id: encodeGlobalId('Post', source.id) },
-    });
     const stored = await db
       .select()
       .from(Posts)
       .where(and(eq(Posts.profileId, auth.profile.id), eq(Posts.repostSourceId, source.id)))
       .then(firstOrThrow);
+    assert.deepEqual(result.data?.createPost.post, {
+      content: { bodyText: '인용 본문' },
+      id: encodeGlobalId('Post', stored.id),
+      replyParent: null,
+      repostSource: { id: encodeGlobalId('Post', source.id) },
+    });
     assert.equal(stored.repostSourceId, source.id);
     assert.equal(stored.replyParentId, null);
   });

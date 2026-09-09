@@ -75,7 +75,7 @@ const CreatePostMutation = graphql`
   }
 `;
 
-type PostComposerProps = {
+type PostComposerBaseProps = {
   beforeEditor?: ReactNode;
   contextGuard?: RefObject<number>;
   editorRef?: RefObject<TextInput | null>;
@@ -84,11 +84,16 @@ type PostComposerProps = {
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
-  replyParentId?: string;
-  repostSourceId?: string;
   scrollable?: boolean;
   surface?: boolean;
 };
+
+type PostComposerRelationshipProps =
+  | { replyParentId: string; repostSourceId?: never }
+  | { replyParentId?: never; repostSourceId: string }
+  | { replyParentId?: never; repostSourceId?: never };
+
+export type PostComposerProps = PostComposerBaseProps & PostComposerRelationshipProps;
 
 export function PostComposer({
   profile: profileKey,
@@ -112,25 +117,30 @@ export function PostComposer({
     contextKeyRef.current = contextKey;
     contextGenerationRef.current += 1;
   }
+  const relationshipProps: PostComposerRelationshipProps = replyParentId
+    ? { replyParentId }
+    : repostSourceId
+      ? { repostSourceId }
+      : {};
 
   return (
     <PostComposerContents
       {...props}
+      {...relationshipProps}
       contextGenerationRef={contextGenerationRef}
       environmentGenerationRef={environmentGenerationRef}
       key={`${contextGenerationRef.current}:${environmentGenerationRef?.current ?? 0}`}
       profile={profile}
-      replyParentId={replyParentId}
-      repostSourceId={repostSourceId}
     />
   );
 }
 
-type PostComposerContentsProps = Omit<PostComposerProps, 'profile'> & {
-  contextGenerationRef: RefObject<number>;
-  environmentGenerationRef: RefObject<number> | null;
-  profile: PostComposer_profile$data;
-};
+type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
+  PostComposerRelationshipProps & {
+    contextGenerationRef: RefObject<number>;
+    environmentGenerationRef: RefObject<number> | null;
+    profile: PostComposer_profile$data;
+  };
 
 function PostComposerContents({
   beforeEditor,

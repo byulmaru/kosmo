@@ -91,6 +91,7 @@ export function PostLayout({
   const post = useFragment(PostLayoutFragment, postKey);
   const [bodyExpanded, setBodyExpanded] = useState(false);
   const [quoteOpen, setQuoteOpen] = useState(false);
+  const restoreQuoteTriggerFocusRef = useRef<(() => void) | null>(null);
   const bodyMeasurementKey = JSON.stringify([post.content?.id, post.content?.bodyText]);
   const currentBodyMeasurementKey = useRef(bodyMeasurementKey);
   currentBodyMeasurementKey.current = bodyMeasurementKey;
@@ -123,11 +124,19 @@ export function PostLayout({
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
   const socialActionTarget = pureRepost ? post.repostSource?.actionSurface : post.actionSurface;
   const quoteParent = pureRepost ? source?.quoteSurface : post.quoteSurface;
-  const openQuote = useCallback(() => {
-    if (replyBinding?.profile && quoteParent) {
-      setQuoteOpen(true);
-    }
-  }, [quoteParent, replyBinding?.profile]);
+  const openQuote = useCallback(
+    (restoreFocus: () => void) => {
+      if (replyBinding?.profile && quoteParent) {
+        restoreQuoteTriggerFocusRef.current = restoreFocus;
+        setQuoteOpen(true);
+      }
+    },
+    [quoteParent, replyBinding?.profile],
+  );
+  const closeQuote = useCallback(() => {
+    setQuoteOpen(false);
+    requestAnimationFrame(() => restoreQuoteTriggerFocusRef.current?.());
+  }, []);
   const handleDeleted = useCallback(() => onDeleted?.(), [onDeleted]);
   const handleMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
@@ -298,7 +307,7 @@ export function PostLayout({
           <View style={styles.quoteSurface}>
             <ReplyComposerSurface
               mode="quote"
-              onRequestClose={() => setQuoteOpen(false)}
+              onRequestClose={closeQuote}
               open
               owner={replyBinding.owner}
               parent={quoteParent}

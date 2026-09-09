@@ -7131,6 +7131,36 @@ export const ReplyDetailInlineIntegration: Story = {
     await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
     await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
     expect(replyButton).toHaveAttribute('aria-expanded', 'false');
+
+    const quoteTrigger = canvas.getByRole('button', { name: '재게시 취소' });
+    await userEvent.click(quoteTrigger);
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '인용하기',
+      }),
+    );
+    const quoteBody = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
+    await userEvent.type(quoteBody, '상세에서 작성 중인 인용');
+    await userEvent.click(canvas.getByRole('button', { name: '인용 게시글 닫기' }));
+    const quoteConfirm = await screen.findByRole('alertdialog', {
+      name: '인용 게시글 작성을 취소할까요?',
+    });
+    await userEvent.click(within(quoteConfirm).getByRole('button', { name: '계속 작성' }));
+    expect(quoteBody).toHaveValue('상세에서 작성 중인 인용');
+    await waitFor(() => expect(quoteBody).toHaveFocus());
+
+    await userEvent.click(canvas.getByRole('button', { name: '인용 게시글 닫기' }));
+    await userEvent.click(
+      within(
+        await screen.findByRole('alertdialog', {
+          name: '인용 게시글 작성을 취소할까요?',
+        }),
+      ).getByRole('button', { name: '작성 취소' }),
+    );
+    await waitFor(() =>
+      expect(canvas.queryByRole('textbox', { name: '인용 게시글 본문' })).toBeNull(),
+    );
+    expect(quoteTrigger).toHaveFocus();
   },
   render: () => <ReplyDetailInlineStory />,
 };

@@ -433,6 +433,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 - `인용하기`는 현재 action 대상 Post를 direct Source로 선택해 공용 Composer를 연다. Source 자체가 Quote여도
   그 Source의 Source로 대상을 바꾸지 않는다. 작성 중 preview는 한 단계만 표시한다.
+- 상세 화면의 inline Quote Composer는 자체 닫기 control을 제공하고, 기존 폐기 확인을 거쳐 닫힌 뒤
+  `인용하기`를 선택한 Repost trigger로 keyboard focus를 복귀한다.
+- PROD-924의 pending·QuoteRequest lifecycle이 연결되기 전에는 현재 core가 거부하는 ActivityPub Source에
+  `인용하기`를 노출하지 않는다. Local Source 작성 경로는 유지한다.
 - 본문·Visibility·Content Warning·Sensitive Media·Media, pending·폐기·실패 복구는 기존 Composer를 재사용한다.
   Source preview만으로 유효한 작성 Content를 만들지 않는다.
 - 로컬 Quote 작성에는 Reply Parent를 추가하지 않는다. Reply+Quote 작성 UI·API와 본문 링크의 인용 카드

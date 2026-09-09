@@ -44,7 +44,7 @@ export type PostActionBarProps = {
   moreSheetIconSize?: 20 | 24;
   onDeleted?: () => void;
   onBookmarkError?: (failure: BookmarkActionFailure) => void;
-  onQuote?: () => void;
+  onQuote?: (restoreFocus: () => void) => void;
   onRepostError?: (failure: RepostActionFailure) => void;
   onResolutionRequired?: (reason: PostActionResolutionReason) => void;
   post?: PostActionBar_post$key | null;

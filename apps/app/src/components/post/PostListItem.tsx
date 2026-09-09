@@ -108,6 +108,7 @@ export function PostListItem({
 }) {
   const theme = useTheme();
   const [quoteOpen, setQuoteOpen] = useState(false);
+  const restoreQuoteTriggerFocusRef = useRef<(() => void) | null>(null);
   const post = useFragment(PostListItemFragment, postKey);
   const openViewer = usePostMediaViewerHost();
   const {
@@ -118,11 +119,19 @@ export function PostListItem({
   } = usePostReplySurface(post);
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
   const quoteParent = pureRepost ? post.repostSource?.quoteSurface : post.quoteSurface;
-  const openQuote = useCallback(() => {
-    if (replyBinding?.profile && quoteParent) {
-      setQuoteOpen(true);
-    }
-  }, [quoteParent, replyBinding?.profile]);
+  const openQuote = useCallback(
+    (restoreFocus: () => void) => {
+      if (replyBinding?.profile && quoteParent) {
+        restoreQuoteTriggerFocusRef.current = restoreFocus;
+        setQuoteOpen(true);
+      }
+    },
+    [quoteParent, replyBinding?.profile],
+  );
+  const closeQuote = useCallback(() => {
+    setQuoteOpen(false);
+    requestAnimationFrame(() => restoreQuoteTriggerFocusRef.current?.());
+  }, []);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const presentedReplySurface =
     replySurface && replyOwner === 'detail' ? (
@@ -134,7 +143,7 @@ export function PostListItem({
     quoteOpen && quoteParent && replyBinding?.profile ? (
       <ReplyComposerSurface
         mode="quote"
-        onRequestClose={() => setQuoteOpen(false)}
+        onRequestClose={closeQuote}
         open
         owner={replyBinding.owner}
         parent={quoteParent}
@@ -324,7 +333,7 @@ function PostListRow({
   surfacePostId,
 }: {
   actionBarStyle?: StyleProp<ViewStyle>;
-  onQuote?: () => void;
+  onQuote?: (restoreFocus: () => void) => void;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
   surfacePostId?: string;

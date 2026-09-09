@@ -339,6 +339,8 @@ function ReplyComposerSurfaceContents({
     </View>
   ) : null;
 
+  const closeControlSize = Platform.OS === 'ios' ? 44 : Platform.OS === 'android' ? 48 : 36;
+
   if (presentation === 'inline') {
     return (
       <View ref={dialogRef} style={styles.inline}>
@@ -348,6 +350,27 @@ function ReplyComposerSurfaceContents({
           importantForAccessibility={discardConfirmOpen ? 'no-hide-descendants' : 'auto'}
           style={discardConfirmOpen ? styles.mainBlocked : null}
         >
+          {quoteMode ? (
+            <View style={styles.inlineHeader}>
+              <IconButton
+                accessibilityLabel="인용 게시글 닫기"
+                disabled={submitting}
+                hitSlop={4}
+                onPress={() => requestClose()}
+                targetSize={closeControlSize}
+                visualSize={closeControlSize}
+                visualStyle={({ pressed }) => [
+                  styles.close,
+                  {
+                    backgroundColor: pressed ? theme.surface : 'transparent',
+                    opacity: submitting ? 0.45 : 1,
+                  },
+                ]}
+              >
+                <XIcon color={theme.text} size={20} strokeWidth={2} />
+              </IconButton>
+            </View>
+          ) : null}
           <PostComposer
             beforeEditor={
               quoteMode ? <PostSourcePreview interactive={false} source={parent} /> : undefined
@@ -359,16 +382,13 @@ function ReplyComposerSurfaceContents({
             onPostCreated={handlePostCreated}
             onSubmittingChange={setSubmitting}
             profile={profile.composer}
-            replyParentId={quoteMode ? undefined : parent.id}
-            repostSourceId={quoteMode ? parent.id : undefined}
+            {...(quoteMode ? { repostSourceId: parent.id } : { replyParentId: parent.id })}
           />
         </View>
         {discardConfirm}
       </View>
     );
   }
-
-  const closeControlSize = Platform.OS === 'ios' ? 44 : Platform.OS === 'android' ? 48 : 36;
 
   return (
     <Modal
@@ -490,8 +510,7 @@ function ReplyComposerSurfaceContents({
                   onPostCreated={handlePostCreated}
                   onSubmittingChange={setSubmitting}
                   profile={profile.composer}
-                  replyParentId={quoteMode ? undefined : parent.id}
-                  repostSourceId={quoteMode ? parent.id : undefined}
+                  {...(quoteMode ? { repostSourceId: parent.id } : { replyParentId: parent.id })}
                   scrollable
                   surface
                 />
@@ -535,6 +554,7 @@ const styles = StyleSheet.create({
   main: { flex: 1, minHeight: 0, width: '100%' },
   mainBlocked: { pointerEvents: 'none' },
   inline: { position: 'relative' },
+  inlineHeader: { alignItems: 'flex-end' },
   composerFrame: { flex: 1, minHeight: 0 },
   header: {
     alignItems: 'center',

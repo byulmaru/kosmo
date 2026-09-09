@@ -20,7 +20,8 @@ type RepostTargetEligibilityInput = Readonly<{
   visibility: string;
 }>;
 
-type QuoteTargetEligibilityInput = RepostTargetEligibilityInput & Readonly<{ hasContent: boolean }>;
+type QuoteTargetEligibilityInput = RepostTargetEligibilityInput &
+  Readonly<{ hasContent: boolean; sourceInstanceKind: string }>;
 
 export function isRepostTargetEligible({
   authorProfileId,
@@ -40,9 +41,14 @@ export function isQuoteTargetEligible({
   hasContent,
   authorProfileId,
   selectedProfileId,
+  sourceInstanceKind,
   visibility,
 }: QuoteTargetEligibilityInput): boolean {
-  return hasContent && isRepostTargetEligible({ authorProfileId, selectedProfileId, visibility });
+  return (
+    sourceInstanceKind === 'LOCAL' &&
+    hasContent &&
+    isRepostTargetEligible({ authorProfileId, selectedProfileId, visibility })
+  );
 }
 
 export function resolvePostActionExecution({
