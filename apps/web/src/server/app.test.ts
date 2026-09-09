@@ -79,7 +79,7 @@ beforeEach(() => {
   vi.stubEnv('PUBLIC_OIDC_ISSUER', 'https://id.example');
   vi.stubEnv('PUBLIC_OIDC_CLIENT_ID', 'kosmo-client');
   vi.stubEnv('OIDC_CLIENT_SECRET', 'kosmo-secret');
-  vi.stubEnv('PUBLIC_API_ORIGIN', 'https://api.example');
+  vi.stubEnv('INTERNAL_API_ORIGIN', 'https://api.example');
   vi.stubEnv('PUBLIC_ORIGIN', undefined);
   vi.stubEnv('ENVIRONMENT', undefined);
   discovery.mockImplementation(
@@ -371,7 +371,7 @@ describe('Web logout BFF', () => {
 
 describe('GraphQL proxy', () => {
   test('captures missing server configuration while preserving its 500 response', async () => {
-    vi.stubEnv('PUBLIC_API_ORIGIN', undefined);
+    vi.stubEnv('INTERNAL_API_ORIGIN', undefined);
 
     const response = await app.request('/graphql', {
       body: '{}',
@@ -380,10 +380,10 @@ describe('GraphQL proxy', () => {
     });
 
     expect(response.status).toBe(500);
-    expect(await response.text()).toBe('PUBLIC_API_ORIGIN is required');
+    expect(await response.text()).toBe('INTERNAL_API_ORIGIN is required');
     expect(captureUnexpectedError).toHaveBeenCalledOnce();
     expect(captureUnexpectedError.mock.calls[0]?.[0]).toMatchObject({
-      message: 'PUBLIC_API_ORIGIN is required',
+      message: 'INTERNAL_API_ORIGIN is required',
       status: 500,
     });
   });

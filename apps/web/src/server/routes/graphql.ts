@@ -8,9 +8,9 @@ type StreamingRequestInit = RequestInit & { duplex: 'half' };
 const graphqlRoutes = new Hono();
 
 graphqlRoutes.post('/graphql', async (c) => {
-  const publicApiOrigin = process.env.PUBLIC_API_ORIGIN;
-  if (!publicApiOrigin) {
-    throw new OidcAuthError(500, 'PUBLIC_API_ORIGIN is required');
+  const internalApiOrigin = process.env.INTERNAL_API_ORIGIN;
+  if (!internalApiOrigin) {
+    throw new OidcAuthError(500, 'INTERNAL_API_ORIGIN is required');
   }
 
   const headers = new Headers();
@@ -39,7 +39,7 @@ graphqlRoutes.post('/graphql', async (c) => {
     method: 'POST',
     redirect: 'manual',
   };
-  const response = await globalThis.fetch(new URL('/graphql', publicApiOrigin), requestInit);
+  const response = await globalThis.fetch(new URL('/graphql', internalApiOrigin), requestInit);
 
   return new Response(response.body, response);
 });
