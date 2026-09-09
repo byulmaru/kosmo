@@ -15,8 +15,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
-  View: ({ children, ...props }: { children?: ReactNode }) =>
-    createElement('View', props, children),
+  View: 'View',
 });
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => parts.join(''),
@@ -38,6 +37,9 @@ mockModule('react-relay', {
 });
 mockModule(new URL('../profile/MutedProfileList.tsx', import.meta.url), {
   MutedProfileList: (props: object) => createElement('MutedProfileList', props),
+});
+mockModule(new URL('../profile/ProfileMuteAction.tsx', import.meta.url), {
+  ProfileMuteAction: (props: object) => createElement('ProfileMuteAction', props),
 });
 mockModule(new URL('../profile/ProfileMuteController.tsx', import.meta.url), {
   useProfileMuteMutations: () => ({ changeMuted: async () => undefined }),
@@ -85,8 +87,17 @@ describe('뮤트한 프로필 설정 화면', () => {
     const activeRenderer = renderer;
     assert.ok(activeRenderer);
     const list = activeRenderer.root.find((node) => (node.type as unknown) === 'MutedProfileList');
+    const state = list.props.state as {
+      profiles: Array<{
+        action: { props: { onFeedback?: (feedback: object) => void } };
+      }>;
+    };
     await act(async () => {
-      list.props.onFeedback?.({ muted: false, profileId: 'target-a', status: 'success' });
+      state.profiles[0]?.action.props.onFeedback?.({
+        muted: false,
+        profileId: 'target-a',
+        status: 'success',
+      });
     });
     assert.equal(focus.mock.callCount(), 0);
 
