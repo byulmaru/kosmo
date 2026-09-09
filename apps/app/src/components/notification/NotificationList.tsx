@@ -1,5 +1,5 @@
 import { usePathname, useSegments } from 'expo-router';
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import {
   Platform,
   RefreshControl,
@@ -9,12 +9,11 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { graphql, useMutation, usePaginationFragment } from 'react-relay';
+import { graphql, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
-import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import {
@@ -26,27 +25,11 @@ import {
 } from './NotificationListItem';
 import { NotificationReadAllAction, useNotificationReadAll } from './NotificationReadAllContext';
 import type { NotificationList_profile$key } from './__generated__/NotificationList_profile.graphql';
-import type { NotificationListMarkAllReadMutation } from './__generated__/NotificationListMarkAllReadMutation.graphql';
 import type { NotificationListNextPageQuery } from './__generated__/NotificationListNextPageQuery.graphql';
 
 type NotificationListProps = {
   profile: NotificationList_profile$key;
 };
-
-const notificationListMarkAllReadMutation = graphql`
-  mutation NotificationListMarkAllReadMutation($ids: [ID!]!) {
-    markNotificationRead(input: { ids: $ids }) {
-      notifications {
-        id
-        readAt
-      }
-      recipientProfiles {
-        id
-        unreadNotificationCount
-      }
-    }
-  }
-`;
 
 const notificationListFragment = graphql`
   fragment NotificationList_profile on Profile
@@ -87,77 +70,16 @@ export function NotificationList({ profile }: NotificationListProps) {
     NotificationListNextPageQuery,
     NotificationList_profile$key
   >(notificationListFragment, profile);
-  const { invoke, register } = useNotificationReadAll();
-  const { showToast } = useToast();
-  const [commitMarkAllRead, isMarkAllReadInFlight] =
-    useMutation<NotificationListMarkAllReadMutation>(notificationListMarkAllReadMutation);
+  const { publishUnreadIds } = useNotificationReadAll();
   const [loadError, setLoadError] = useState(false);
   const [refreshing, startTransition] = useTransition();
-  const [readAllPending, setReadAllPending] = useState(false);
-  const readAllInFlight = useRef(false);
-  const mounted = useRef(false);
-  const currentUnreadIds = useRef<ReadonlyArray<string>>([]);
-  const unreadNotificationIds = pagination.data.notifications.edges.flatMap(({ node }) =>
-    node.readAt === null ? [node.id] : [],
-  );
-  currentUnreadIds.current = unreadNotificationIds;
-  const markAllRead = useCallback(() => {
-    if (readAllInFlight.current || readAllPending || isMarkAllReadInFlight) {
-      return;
-    }
-
-    const ids = currentUnreadIds.current;
-    if (ids.length === 0) {
-      return;
-    }
-
-    readAllInFlight.current = true;
-    setReadAllPending(true);
-    const handleFailure = () => {
-      readAllInFlight.current = false;
-      if (!mounted.current) {
-        return;
-      }
-      setReadAllPending(false);
-      showToast('알림을 모두 읽지 못했어요.', {
-        action: { label: '다시 시도', onPress: invoke },
-        tone: 'danger',
-      });
-    };
-    commitMarkAllRead({
-      onCompleted: (response, errors) => {
-        if (errors?.length || response.markNotificationRead == null) {
-          handleFailure();
-          return;
-        }
-        readAllInFlight.current = false;
-        if (mounted.current) {
-          setReadAllPending(false);
-        }
-      },
-      onError: handleFailure,
-      variables: { ids: [...ids] },
-    });
-  }, [commitMarkAllRead, invoke, isMarkAllReadInFlight, readAllPending, showToast]);
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      readAllInFlight.current = false;
-    };
-  }, []);
+  const { edges } = pagination.data.notifications;
 
   useEffect(
-    () =>
-      register({
-        busy: readAllPending || isMarkAllReadInFlight,
-        disabled: readAllPending || isMarkAllReadInFlight || unreadNotificationIds.length === 0,
-        onPress: markAllRead,
-      }),
-    [isMarkAllReadInFlight, markAllRead, readAllPending, register, unreadNotificationIds.length],
+    () => publishUnreadIds(edges.flatMap(({ node }) => (node.readAt === null ? [node.id] : []))),
+    [edges, publishUnreadIds],
   );
-  const notifications = pagination.data.notifications.edges.flatMap(({ node }) => {
+  const notifications = edges.flatMap(({ node }) => {
     if (node.__typename === 'FollowNotification' && node.follow) {
       return <NotificationListItem key={node.id} notification={node.follow} />;
     }
@@ -314,10 +236,7 @@ function NotificationPageHeader() {
     '알림';
 
   return shellOwnsHeader ? null : (
-    <PageHeader
-      title="알림"
-      trailing={Platform.OS === 'web' ? <NotificationReadAllAction /> : undefined}
-    />
+    <PageHeader title="알림" trailing={<NotificationReadAllAction />} />
   );
 }
 

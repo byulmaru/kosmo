@@ -3,6 +3,8 @@
 PROD-884는 `NotificationListItemView`와 `KOSMO/Patterns/Notification List Item` Storybook을
 소유한다. 이 컴포넌트는 표시용 입력과 이동 callback을 받고, 기존 Notification runtime은 그대로 둔다.
 PROD-811이 실제 목록 연결, Relay projection·그룹 집계, 읽음 처리, 권한과 navigation 통합을 소유한다.
+PROD-930은 production Notification runtime에서 플랫폼별로 나뉘었던 `모두 읽음` action과 Read/Unread
+표시를 Web·iOS·Android에서 같은 계약으로 제공하며, 현재 로드된 ID와 기존 API/Relay 수렴 경계를 유지한다.
 
 ## Canonical source
 
@@ -31,11 +33,11 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
   Web inset은 좌 12px·우 16px, Native는 좌우 8px, kind/content gap은 12px이다.
   Reply에는 별도 알림 header나 그 header의 최소 높이를 두지 않는다. 게시글 내부 링크와 action의
   플랫폼별 접근성 target은 기존 Post 계약을 유지한다.
-- Web Read 배경은 투명, Unread는 Figma가 사용하는 `actionPrimarySubtle`과 4px
-  `actionPrimaryBase` rail이다. Hover는 기존 배경 위에 `stateHover`를 얹으며 Unread의 primary 배경을
-  지우지 않는다. 따라서 Read와 Unread의 hover 색상이 구분된다. keyboard focus는 `stateFocusRing`이다.
-  이는 unread 전용 semantic token 신설이 아니다. Native는 Default 표시를 사용하되 접근 가능한 이름에
-  unread 정보를 유지한다.
+- Read 배경은 투명, Unread는 Figma가 사용하는 `actionPrimarySubtle`과 4px
+  `actionPrimaryBase` rail이다. 모든 플랫폼에서 이 Read/Unread 기본 표시와 접근 가능한 Unread 상태를
+  유지한다. Web hover는 기존 배경 위에 `stateHover`를 얹으며 Unread의 primary 배경을 지우지 않는다.
+  따라서 Read와 Unread의 hover 색상이 구분된다. keyboard focus는 `stateFocusRing`이다. 이는 unread
+  전용 semantic token 신설이 아니다.
 - Reaction/Repost는 요약 헤더·한 줄 미리보기·썸네일을 하나의 이동 target으로 취급한다.
   hover·읽음 배경과 읽음 rail은 알림 전체에 적용한다. Reply도 게시글 전체를 하나의 알림 surface로
   표시하며 게시글 위에서 전체 hover 배경이 유지된다. 별도 header 이동 링크는 없으며 Post 내부 링크·

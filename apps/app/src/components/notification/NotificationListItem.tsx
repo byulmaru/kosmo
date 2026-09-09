@@ -289,15 +289,10 @@ function NotificationRow({
       onPointerLeave={web ? () => setHovered(false) : undefined}
       style={[
         styles.root,
-        web ? styles.webRoot : undefined,
         {
-          backgroundColor: hovered
-            ? theme.surface
-            : web && unread
-              ? theme.primarySubtle
-              : theme.card,
+          backgroundColor: hovered ? theme.surface : unread ? theme.primarySubtle : theme.card,
           borderBottomColor: theme.border,
-          borderLeftColor: web ? (unread ? theme.primary : 'transparent') : undefined,
+          borderLeftColor: unread ? theme.primary : 'transparent',
         },
       ]}
     >
@@ -351,15 +346,12 @@ const styles = StyleSheet.create({
   root: {
     alignItems: 'flex-start',
     borderBottomWidth: 1,
+    borderLeftWidth: 4,
     flexDirection: 'row',
     gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-  },
-  webRoot: {
-    borderLeftWidth: 4,
     paddingLeft: spacing.md,
     paddingRight: spacing.lg,
+    paddingVertical: spacing.lg,
   },
   content: { flex: 1, gap: spacing.sm, minWidth: 0 },
   kind: {
