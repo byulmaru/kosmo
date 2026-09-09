@@ -80,5 +80,5 @@ Post Composer와 Local Profile의 공통 이미지 업로드 실패가 실패당
 - 구현 check 결과와 운영 검증 보류 항목을 PR에 분리해 기록한다.
 
 - [x] 3.1 canonical Sentry·이미지 업로드 문서와 구현 변경의 처리된 실패 범위, privacy 경계와 제외 범위를 동기화한다.
-- [ ] 3.2 OpenSpec·문서 정합성 검사와 PR 범위 검토를 통과시키고, 미검증 운영 증거를 별도 follow-up으로 남긴다.
-  - Evidence so far (2026-09-09): `openspec validate add-handled-upload-observability --strict --no-interactive`와 `git diff --check`는 통과했고 canonical 문서·OpenSpec 범위는 정합하다. 최신 Storybook runtime은 94/96 files, 675/681 tests이며 6개 assertion failure의 baseline 비교가 pending이므로 3.2는 미완료로 유지한다. 실제 운영 Sentry event·release·symbolication 수신도 구현 check와 분리된 배포 후 follow-up으로 남긴다.
+- [x] 3.2 OpenSpec·문서 정합성 검사와 PR 범위 검토를 통과시키고, 미검증 운영 증거를 별도 follow-up으로 남긴다.
+  - Evidence (2026-09-09): baseline SHA `1bb02f04c9d46f8958c9ec845e04e139d9a6dad3`와 current checkout에서 각각 `pnpm --filter @kosmo/app test:storybook`를 실행해 96 files/681 tests, exit 0을 확인했다. 별도 baseline worktree와 current checkout에서 `pnpm --filter @kosmo/app exec vitest run --project=storybook src/stories/patterns/PostMediaViewer.tests.stories.tsx src/stories/patterns/Posts.stories.tsx`를 각각 실행해 2 files/109 tests, exit 0을 확인했다. 초기 6개 Storybook assertion failure는 양쪽 targeted/full 재실행에서 재현되지 않아 PROD-929 attributable regression이 아닌 unverified transient로 분류했다. `openspec validate add-handled-upload-observability --strict --no-interactive`와 `git diff --check`도 통과했다. 실제 운영 Sentry event·release·symbolication 수신은 구현 check와 분리된 배포 후 follow-up으로 남긴다.
