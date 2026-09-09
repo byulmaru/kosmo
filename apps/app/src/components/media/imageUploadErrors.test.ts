@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  asImageUploadError,
   assertImageUploadResponse,
   formatImageUploadFailureMessage,
   formatImageUploadRetryLabel,
+  ImageUploadError,
 } from './imageUploadErrors';
 import type { ImageUploadFailure } from './imageUploadErrors';
 
@@ -13,6 +15,36 @@ async function classify(response: Response): Promise<ImageUploadFailure> {
   } catch (error) {
     assert.ok(error && typeof error === 'object' && 'failure' in error);
     return (error as { failure: ImageUploadFailure }).failure;
+  }
+  throw new Error('expected an upload failure');
+}
+
+test('classification preserves an existing upload Error and its entire cause chain', () => {
+  const root = new TypeError('original decoder detail');
+  const original = new Error('render failed', { cause: root });
+  const wrapped = asImageUploadError(original, 'transfer', 'normalize');
+  assert.equal(wrapped.cause, original);
+  assert.equal(original.cause, root);
+  assert.equal(asImageUploadError(wrapped, 'issue', 'issue'), wrapped);
+  assert.deepEqual(wrapped.failure, { reason: 'transient', stage: 'transfer' });
+  assert.equal(wrapped.observation?.operation, 'normalize');
+});
+
+test('non-Error failures retain their original value as a standard cause', () => {
+  for (const value of ['transport rejected', 503, undefined, null, { code: 'ECONNRESET' }]) {
+    const wrapped = asImageUploadError(value, 'issue', 'issue');
+    assert.ok(wrapped instanceof Error);
+    assert.equal(wrapped.cause, value);
+    assert.deepEqual(wrapped.failure, { reason: 'transient', stage: 'issue' });
+  }
+});
+
+async function classifyError(response: Response): Promise<ImageUploadError> {
+  try {
+    await assertImageUploadResponse(response);
+  } catch (error) {
+    assert.ok(error instanceof ImageUploadError);
+    return error;
   }
   throw new Error('expected an upload failure');
 }
@@ -59,6 +91,25 @@ test('status and code must both match before a transfer error is specialized', a
     ),
     { reason: 'transient', stage: 'transfer' },
   );
+});
+
+test('records only numeric status and allowlisted machine code for PUT failures', async () => {
+  const allowlisted = await classifyError(
+    new Response(JSON.stringify({ error: { code: 'size_limit_exceeded', message: 'secret' } }), {
+      status: 413,
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+  assert.deepEqual(allowlisted.observation, {
+    code: 'size_limit_exceeded',
+    operation: 'put',
+    status: 413,
+  });
+
+  const unknownCode = await classifyError(
+    new Response(JSON.stringify({ error: { code: 'private_code' } }), { status: 413 }),
+  );
+  assert.deepEqual(unknownCode.observation, { operation: 'put', status: 413 });
 });
 
 test('malformed, empty, 5xx, and network-like transfer failures are transient', async () => {

@@ -1,4 +1,25 @@
+import { z } from 'zod';
+
 export type ImageUploadStage = 'issue' | 'transfer' | 'complete';
+
+export type ImageUploadOperation = 'issue' | 'normalize' | 'read' | 'put' | 'complete';
+
+const imageUploadCodeSchema = z.enum([
+  'unsupported_image',
+  'content_type_mismatch',
+  'size_limit_exceeded',
+  'pixel_limit_exceeded',
+  'dimension_limit_exceeded',
+  'invalid_image',
+]);
+
+export type ImageUploadCode = z.infer<typeof imageUploadCodeSchema>;
+
+export type ImageUploadObservation = {
+  readonly code?: ImageUploadCode;
+  readonly operation: ImageUploadOperation;
+  readonly status?: number;
+};
 
 export type ImageUploadReason =
   | 'unsupported-format'
@@ -14,11 +35,17 @@ export type ImageUploadFailure = {
 
 export class ImageUploadError extends Error {
   readonly failure: ImageUploadFailure;
+  readonly observation?: ImageUploadObservation;
 
-  constructor(failure: ImageUploadFailure) {
-    super('Image upload failed');
+  constructor(
+    failure: ImageUploadFailure,
+    observation?: ImageUploadObservation,
+    options?: ErrorOptions,
+  ) {
+    super('Image upload failed', options);
     this.name = 'ImageUploadError';
     this.failure = failure;
+    this.observation = observation;
   }
 }
 
@@ -26,7 +53,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function getTransferReason(status: number, code: unknown): ImageUploadReason {
+function getTransferReason(status: number, code: ImageUploadCode | undefined): ImageUploadReason {
   if (status === 415 && (code === 'unsupported_image' || code === 'content_type_mismatch')) {
     return 'unsupported-format';
   }
@@ -47,27 +74,44 @@ export async function assertImageUploadResponse(response: Response): Promise<voi
     return;
   }
 
-  let code: unknown;
+  let code: ImageUploadCode | undefined;
   try {
     const body: unknown = await response.json();
     const error = isRecord(body) ? body.error : undefined;
-    code = isRecord(error) ? error.code : undefined;
+    const candidate = isRecord(error) ? error.code : undefined;
+    const parsedCode = imageUploadCodeSchema.safeParse(candidate);
+    code = parsedCode.success ? parsedCode.data : undefined;
   } catch {
     // A malformed or empty response is a transient transfer failure.
   }
 
-  throw new ImageUploadError({
-    reason: getTransferReason(response.status, code),
-    stage: 'transfer',
-  });
+  throw new ImageUploadError(
+    {
+      reason: getTransferReason(response.status, code),
+      stage: 'transfer',
+    },
+    {
+      ...(code ? { code } : {}),
+      operation: 'put',
+      ...(Number.isFinite(response.status) ? { status: response.status } : {}),
+    },
+  );
 }
 
-export function asImageUploadError(error: unknown, stage: ImageUploadStage): ImageUploadError {
+export function asImageUploadError(
+  error: unknown,
+  stage: ImageUploadStage,
+  operation?: ImageUploadOperation,
+): ImageUploadError {
   if (error instanceof ImageUploadError) {
     return error;
   }
 
-  return new ImageUploadError({ reason: 'transient', stage });
+  return new ImageUploadError(
+    { reason: 'transient', stage },
+    operation ? { operation } : undefined,
+    { cause: error },
+  );
 }
 
 export function formatImageUploadFailureMessage(

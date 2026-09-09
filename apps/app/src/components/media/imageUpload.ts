@@ -1,11 +1,17 @@
 import { z } from 'zod';
+import { captureHandledError } from '@/observability/sentry';
 import {
   asImageUploadError,
   assertImageUploadResponse,
   ImageUploadError,
 } from './imageUploadErrors';
-import type { ImageRef } from 'expo-image-manipulator';
+import type { ImageManipulatorContext, ImageRef } from 'expo-image-manipulator';
 import type { ImagePickerAsset } from 'expo-image-picker';
+import type {
+  ImageUploadFailure,
+  ImageUploadOperation,
+  ImageUploadStage,
+} from './imageUploadErrors';
 
 type IssuedImageUpload = {
   readonly mediaId: string;
@@ -35,13 +41,14 @@ function getImageResizeDimensions(
 }
 
 async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob> {
-  const { ImageManipulator, SaveFormat } = await import('expo-image-manipulator');
-  const context = ImageManipulator.manipulate(asset.uri);
+  let context: ImageManipulatorContext | undefined;
   let sourceImage: ImageRef | undefined;
   let normalizedImage: ImageRef | undefined;
   let normalizedImageUri: string | undefined;
 
   try {
+    const { ImageManipulator, SaveFormat } = await import('expo-image-manipulator');
+    context = ImageManipulator.manipulate(asset.uri);
     const assetDimensions = imageDimensionsSchema.safeParse(asset);
     const resizeDimensions = assetDimensions.success
       ? getImageResizeDimensions(assetDimensions.data)
@@ -74,11 +81,46 @@ async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob>
     });
     normalizedImageUri = result.uri;
 
-    const response = await fetch(normalizedImageUri);
-    if (!response.ok) {
-      throw new Error('Unable to read normalized image');
+    let response: Response;
+    try {
+      response = await fetch(normalizedImageUri);
+    } catch (error) {
+      throw new ImageUploadError(
+        { reason: 'transient', stage: 'transfer' },
+        { operation: 'read' },
+        { cause: error },
+      );
     }
-    return await response.blob();
+    if (!response.ok) {
+      throw new ImageUploadError(
+        { reason: 'transient', stage: 'transfer' },
+        {
+          operation: 'read',
+          ...(Number.isFinite(response.status) ? { status: response.status } : {}),
+        },
+      );
+    }
+    try {
+      return await response.blob();
+    } catch (error) {
+      throw new ImageUploadError(
+        { reason: 'transient', stage: 'transfer' },
+        {
+          operation: 'read',
+          ...(Number.isFinite(response.status) ? { status: response.status } : {}),
+        },
+        { cause: error },
+      );
+    }
+  } catch (error) {
+    if (error instanceof ImageUploadError) {
+      throw error;
+    }
+    throw new ImageUploadError(
+      { reason: 'transient', stage: 'transfer' },
+      { operation: 'normalize' },
+      { cause: error },
+    );
   } finally {
     for (const imageUri of new Set([
       normalizedImageUri,
@@ -94,7 +136,7 @@ async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob>
       normalizedImage.release();
     }
     sourceImage?.release();
-    context.release();
+    context?.release();
   }
 }
 
@@ -122,45 +164,69 @@ export async function uploadImage({
     return null;
   }
 
-  if (
-    asset.file &&
-    ([asset.mimeType, asset.file.type].some((mimeType) =>
-      ['image/heic', 'image/heif'].includes(mimeType?.toLowerCase() ?? ''),
-    ) ||
-      /\.(heic|heif)$/i.test(asset.file.name))
-  ) {
-    throw new ImageUploadError({ reason: 'unsupported-format', stage: 'transfer' });
-  }
-
+  let operation: ImageUploadOperation = 'issue';
   let issued: IssuedImageUpload;
   try {
-    issued = await issue();
-  } catch (error) {
-    throw asImageUploadError(error, 'issue');
-  }
-  if (!isActive()) {
-    return null;
-  }
+    if (
+      asset.file &&
+      ([asset.mimeType, asset.file.type].some((mimeType) =>
+        ['image/heic', 'image/heif'].includes(mimeType?.toLowerCase() ?? ''),
+      ) ||
+        /\.(heic|heif)$/i.test(asset.file.name))
+    ) {
+      operation = 'normalize';
+      throw new ImageUploadError(
+        { reason: 'unsupported-format', stage: 'transfer' },
+        { operation },
+      );
+    }
 
-  try {
+    issued = await issue();
+    operation = 'normalize';
+    if (!isActive()) {
+      return null;
+    }
+
     const body = await createNormalizedImageBlob(asset);
+    operation = 'put';
     const response = await fetch(issued.uploadUrl, {
       body,
       headers: { 'content-type': 'image/webp' },
       method: 'PUT',
     });
     await assertImageUploadResponse(response);
-  } catch (error) {
-    throw asImageUploadError(error, 'transfer');
-  }
-  if (!isActive()) {
-    return null;
-  }
 
-  try {
+    if (!isActive()) {
+      return null;
+    }
+
+    operation = 'complete';
     await complete(issued.mediaId);
   } catch (error) {
-    throw asImageUploadError(error, 'complete');
+    const stage: ImageUploadStage =
+      operation === 'issue' ? 'issue' : operation === 'complete' ? 'complete' : 'transfer';
+    const uploadError = asImageUploadError(error, stage, operation);
+    try {
+      if (isActive()) {
+        const failure: ImageUploadFailure = uploadError.failure;
+        const observation = uploadError.observation;
+        const context: Record<string, string | number> = {
+          operation: observation?.operation ?? operation,
+          reason: failure.reason,
+          stage: failure.stage,
+        };
+        if (typeof observation?.status === 'number' && Number.isFinite(observation.status)) {
+          context.status = observation.status;
+        }
+        if (observation?.code) {
+          context.code = observation.code;
+        }
+        captureHandledError(uploadError, context);
+      }
+    } catch {
+      // Observability must not change the upload result.
+    }
+    throw uploadError;
   }
   return isActive() ? issued.mediaId : null;
 }

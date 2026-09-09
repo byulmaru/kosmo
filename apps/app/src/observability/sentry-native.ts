@@ -7,6 +7,8 @@ const dsn = getPublicConfig('sentryDsn');
 const release = process.env.EXPO_PUBLIC_SENTRY_RELEASE;
 const enabled = Boolean(dsn && channel && release);
 
+type HandledErrorContext = Readonly<Record<string, string | number | boolean>>;
+
 if (enabled) {
   Sentry.init({
     beforeBreadcrumb: () => null,
@@ -33,4 +35,24 @@ export const captureReactError = (cause: unknown, info: ErrorInfo): void => {
       mechanism: { handled: true, type: 'auto.function.react.error_boundary' },
     });
   });
+};
+
+export const captureHandledError = (error: Error, context?: HandledErrorContext): void => {
+  if (!enabled) {
+    return;
+  }
+
+  try {
+    Sentry.withScope((scope) => {
+      if (context) {
+        scope.setExtras(context);
+      }
+
+      Sentry.captureException(error, {
+        mechanism: { handled: true, type: 'auto.function.handled_error' },
+      });
+    });
+  } catch {
+    // Sentry reporting is best-effort and must not affect the product flow.
+  }
 };

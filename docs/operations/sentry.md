@@ -1,6 +1,6 @@
 # Sentry 오류 수집 운영
 
-Kosmo는 API, Web BFF, Web browser와 Android·iOS Native의 처리되지 않은 오류를 Sentry에 수집한다. BFF에서는 예상된 4xx 인증 거절을 제외하되 설정 누락·upstream 실패 같은 5xx 인증 경로 오류는 수집하고, Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native는 production build의 commit release와 environment를 연결하고 JavaScript source map과 native debug symbol을 업로드한다. Prometheus SLI/SLO, tracing, Session Replay와 사용자 행동 분석도 이 설정의 범위가 아니다.
+Kosmo는 API, Web BFF, Web browser와 Android·iOS Native의 처리되지 않은 오류를 기본적으로 Sentry에 수집한다. 앱은 승인된 처리된 실패도 공통 수집 진입점으로 명시적으로 보고할 수 있으며, 현재 첫 적용 대상은 Post Composer와 Local Profile이 공유하는 이미지 업로드 경계다. BFF에서는 예상된 4xx 인증 거절을 제외하되 설정 누락·upstream 실패 같은 5xx 인증 경로 오류는 수집하고, Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native는 production build의 commit release와 environment를 연결하고 JavaScript source map과 native debug symbol을 업로드한다. Prometheus SLI/SLO, tracing, Session Replay와 사용자 행동 분석도 이 설정의 범위가 아니다.
 
 ## Project와 자격 증명
 
@@ -43,6 +43,22 @@ Sentry SDK가 만든 event는 `beforeSend`에서 재구성하거나 제거하지
 자동 breadcrumb는 `beforeBreadcrumb`에서 모두 제거한다.
 
 - console, network, navigation과 UI breadcrumb
+
+### 앱에서 명시적으로 수집하는 처리된 실패
+
+공통 앱 수집 진입점은 Web·Native 플랫폼별 SDK의 `captureException` 경계를 한 번 호출할 수 있게 한다. 이 진입점은 기존 DSN·environment·release metadata gate와 SDK event 전달 정책을 재사용하며, 전달받은 오류와 호출자가 구성한 안전한 context를 임의의 전역 정제 규칙으로 재작성하지 않는다. 오류를 어떤 context로 전달할지는 호출 경계가 소유하고, 인증 정보·불필요한 사용자 콘텐츠·개인정보를 추가하지 않아야 한다.
+
+현재 처리된 실패의 적용 범위는 공통 이미지 업로드 경계다.
+
+- 게시물·프로필 호출부가 같은 업로드 실패를 다시 capture하지 않도록 공통 업로드 경계에서 실패당 한 번만 수집한다.
+- 업로드 실패 event에는 기존 오류 정책에서 허용한 안전한 `stage`·`reason` 분류와 다음 context를 전달한다. `operation`은 `issue`, `normalize`, `read`, `put`, `complete` 중 하나로 실패 경계를 구분하고, 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 경우에만 숫자 `status`를 기록한다. 응답의 machine-readable `code`는 `unsupported_image`, `content_type_mismatch`, `size_limit_exceeded`, `pixel_limit_exceeded`, `dimension_limit_exceeded`, `invalid_image` 중 하나일 때만 기록하며, 그 밖의 code는 버린다.
+- 성공, 비활성 항목의 `null` 결과와 명시적 no-op은 처리된 실패 event를 만들지 않는다.
+- Sentry capture 자체의 실패나 동기 예외는 업로드 오류 결과, 오류 UI, 재시도와 성공 동작을 바꾸지 않는다.
+- 업로드에서 실제 발생한 Error는 직접 전달하거나 기존 UI 분류 wrapper의 표준 `cause` chain에 원본 객체를 연결하여 원래 message·stack·cause와 SDK 진단 정보를 모든 오류 단계에서 보존한다. 기존 UI 분류 wrapper는 유지할 수 있지만, 원본 오류 연결 없이 수집만을 위한 일반 메시지의 새 Error로 대체하거나 오류를 복제·전역 정제하지 않는다. 사용자-facing 오류 분류와 안내 문구는 기존 정책을 유지한다.
+- 업로드 경계가 추가하는 관측 context에는 위에서 허용한 진단 필드만 넣는다. 이미지 byte, File/Blob, 서명 upload URL, 인증 토큰, raw request/response와 사용자 콘텐츠를 오류나 context에 별도로 첨부하지 않는다.
+- SDK가 생성한 원본 Error는 data/blob/file URI가 message·stack·cause에 포함되어 있어도 수정 없이 보존한다. 업로드 경계는 URI 치환, message·stack 변경이나 오류 복제를 하지 않는다. SDK 오류에 이미 포함된 진단을 보존하는 것과 이미지·토큰·raw response를 별도로 첨부하는 것을 구분한다.
+
+이 처리된 실패 수집은 기존 runtime 활성화 조건을 따른다. DSN·environment·release metadata가 완전하지 않은 local·test 실행은 외부 event를 전송하지 않으며, 자동 breadcrumb·session tracking을 다시 활성화하지 않는다.
 
 ### ActivityPub inbound 처리 실패
 

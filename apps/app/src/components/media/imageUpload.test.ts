@@ -24,9 +24,20 @@ type FakeContext = {
   readonly renderAsync: () => Promise<FakeImage>;
   readonly resize: (size: { readonly height: number; readonly width: number }) => FakeContext;
 };
+type CaptureContext = Record<string, string | number>;
+type CaptureCall = { readonly context?: CaptureContext; readonly error: Error };
 
 const manipulationUris: string[] = [];
+const captureCalls: CaptureCall[] = [];
+let captureHandledErrorImpl: (error: Error, context?: CaptureContext) => void;
 let createManipulatorContext: (uri: string) => FakeContext;
+
+mock.module('@/observability/sentry', {
+  exports: {
+    captureHandledError: (error: Error, context?: CaptureContext) =>
+      captureHandledErrorImpl(error, context),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('expo-image-manipulator', {
   exports: {
@@ -132,6 +143,8 @@ before(async () => {
 
 beforeEach(() => {
   manipulationUris.length = 0;
+  captureCalls.length = 0;
+  captureHandledErrorImpl = (error, context) => captureCalls.push({ context, error });
   createManipulatorContext = () => installManipulator({ height: 100, width: 100 }).context;
 });
 
@@ -192,6 +205,7 @@ test('issues, uploads normalized WebP bytes, and completes in order', async (t) 
   assert.equal(manipulator.renderCount(), 1);
   assert.deepEqual(manipulator.saveOptions, [{ compress: 0.8, format: 'webp' }]);
   assert.equal(put.mock.callCount(), 2);
+  assert.equal(captureCalls.length, 0);
 });
 
 test('reads the normalized Blob and uses WebP content type for small images', async (t) => {
@@ -291,6 +305,11 @@ for (const testCase of [
     );
     assert.equal(issueCalled, false);
     assert.equal(fetchMock.mock.callCount(), 0);
+    assert.deepEqual(captureCalls[0]?.context, {
+      operation: 'normalize',
+      reason: 'unsupported-format',
+      stage: 'transfer',
+    });
   });
 }
 
@@ -409,6 +428,100 @@ test('turns image conversion failures into transfer failures', async (t) => {
       !error.message.includes('private conversion detail'),
   );
   assert.equal(fetchMock.mock.callCount(), 0);
+  assert.deepEqual(captureCalls[0]?.context, {
+    operation: 'normalize',
+    reason: 'transient',
+    stage: 'transfer',
+  });
+});
+
+test('captures normalized Blob read failures with a safe operation and status', async (t) => {
+  installManipulator({ height: 100, width: 100 });
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+    assert.equal(String(input), 'file:///cache/normalized.webp');
+    return new Response(null, { status: 503 });
+  });
+
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset(),
+      complete: async () => undefined,
+      isActive: () => true,
+      issue: async () => ({ mediaId: 'media-read', uploadUrl: 'https://upload.example/read' }),
+    }),
+    (error: unknown) =>
+      error instanceof ImageUploadError &&
+      error.observation?.operation === 'read' &&
+      error.observation.status === 503,
+  );
+  assert.deepEqual(captureCalls[0]?.context, {
+    operation: 'read',
+    reason: 'transient',
+    stage: 'transfer',
+    status: 503,
+  });
+});
+
+test('captures normalized Blob fetch rejections as read failures', async (t) => {
+  installManipulator({ height: 100, width: 100 });
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+    assert.equal(String(input), 'file:///cache/normalized.webp');
+    throw new Error('private normalized read detail');
+  });
+
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset(),
+      complete: async () => undefined,
+      isActive: () => true,
+      issue: async () => ({
+        mediaId: 'media-read-fetch',
+        uploadUrl: 'https://upload.example/read',
+      }),
+    }),
+    (error: unknown) =>
+      error instanceof ImageUploadError &&
+      error.observation?.operation === 'read' &&
+      error.failure.reason === 'transient' &&
+      !error.message.includes('private normalized read detail'),
+  );
+  assert.deepEqual(captureCalls[0]?.context, {
+    operation: 'read',
+    reason: 'transient',
+    stage: 'transfer',
+  });
+});
+
+test('captures normalized Blob body rejections as read failures', async (t) => {
+  installManipulator({ height: 100, width: 100 });
+  const response = new Response(null, { status: 200 });
+  response.blob = async () => {
+    throw new Error('private normalized Blob detail');
+  };
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+    assert.equal(String(input), 'file:///cache/normalized.webp');
+    return response;
+  });
+
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset(),
+      complete: async () => undefined,
+      isActive: () => true,
+      issue: async () => ({ mediaId: 'media-read-blob', uploadUrl: 'https://upload.example/read' }),
+    }),
+    (error: unknown) =>
+      error instanceof ImageUploadError &&
+      error.observation?.operation === 'read' &&
+      error.failure.reason === 'transient' &&
+      !error.message.includes('private normalized Blob detail'),
+  );
+  assert.deepEqual(captureCalls[0]?.context, {
+    operation: 'read',
+    reason: 'transient',
+    stage: 'transfer',
+    status: 200,
+  });
 });
 
 test('does not issue an upload when inactive before starting', async (t) => {
@@ -434,6 +547,7 @@ test('does not issue an upload when inactive before starting', async (t) => {
   assert.equal(issueCalled, false);
   assert.equal(fetchMock.mock.callCount(), 0);
   assert.equal(completeCalled, false);
+  assert.equal(captureCalls.length, 0);
 });
 
 test('stops after a late issue result becomes inactive', async (t) => {
@@ -538,6 +652,7 @@ test('every retry issues a fresh Media and upload URL', async (t) => {
 test('preserves safe issue, transfer, and complete failure classification', async (t) => {
   const asset = createAsset({ file: new File(['image'], 'image.jpg') });
   const normalizedBlob = new Blob(['webp'], { type: 'image/webp' });
+  const rawIssue = new Error('private issue detail');
   const fetchMock = t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) =>
     String(input) === 'file:///cache/normalized.webp'
       ? new Response(normalizedBlob, { status: 200 })
@@ -550,7 +665,7 @@ test('preserves safe issue, transfer, and complete failure classification', asyn
       complete: async () => undefined,
       isActive: () => true,
       issue: async () => {
-        throw new Error('private issue detail');
+        throw rawIssue;
       },
     }),
     (error: unknown) =>
@@ -559,7 +674,16 @@ test('preserves safe issue, transfer, and complete failure classification', asyn
       error.failure.reason === 'transient' &&
       !error.message.includes('private issue detail'),
   );
+  assert.equal(captureCalls.length, 1);
+  assert.notEqual(captureCalls[0]?.error, rawIssue);
+  assert.equal(captureCalls[0]?.error.message, 'Image upload failed');
+  assert.deepEqual(captureCalls[0]?.context, {
+    operation: 'issue',
+    reason: 'transient',
+    stage: 'issue',
+  });
 
+  captureCalls.length = 0;
   fetchMock.mock.mockImplementation(async (input: RequestInfo | URL) =>
     String(input) === 'file:///cache/normalized.webp'
       ? new Response(normalizedBlob, { status: 200 })
@@ -581,7 +705,17 @@ test('preserves safe issue, transfer, and complete failure classification', asyn
       error.failure.reason === 'file-too-large' &&
       !error.message.includes('storage secret'),
   );
+  assert.equal(captureCalls.length, 1);
+  assert.equal(captureCalls[0]?.error.message, 'Image upload failed');
+  assert.deepEqual(captureCalls[0]?.context, {
+    code: 'size_limit_exceeded',
+    operation: 'put',
+    reason: 'file-too-large',
+    stage: 'transfer',
+    status: 413,
+  });
 
+  captureCalls.length = 0;
   fetchMock.mock.mockImplementation(async () => new Response(normalizedBlob, { status: 200 }));
 
   await assert.rejects(
@@ -599,11 +733,20 @@ test('preserves safe issue, transfer, and complete failure classification', asyn
       error.failure.reason === 'transient' &&
       !error.message.includes('private complete detail'),
   );
+  assert.equal(captureCalls.length, 1);
+  assert.deepEqual(captureCalls[0]?.context, {
+    operation: 'complete',
+    reason: 'transient',
+    stage: 'complete',
+  });
 });
 
 test('normalizes a generic PUT rejection as a safe transient transfer failure', async (t) => {
   const rawDetail = 'private network detail';
-  t.mock.method(globalThis, 'fetch', async () => {
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+    if (String(input) === 'file:///cache/normalized.webp') {
+      return new Response(new Blob(['webp'], { type: 'image/webp' }), { status: 200 });
+    }
     throw new Error(rawDetail);
   });
 
@@ -621,4 +764,250 @@ test('normalizes a generic PUT rejection as a safe transient transfer failure', 
       error.message === 'Image upload failed' &&
       !String(error).includes(rawDetail),
   );
+  assert.equal(captureCalls.length, 1);
+  assert.deepEqual(captureCalls[0]?.context, {
+    operation: 'put',
+    reason: 'transient',
+    stage: 'transfer',
+  });
 });
+
+test('does not capture a stale failure after the upload becomes inactive', async () => {
+  let activeChecks = 0;
+
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset(),
+      complete: async () => undefined,
+      isActive: () => activeChecks++ === 0,
+      issue: async () => {
+        throw new Error('private issue detail');
+      },
+    }),
+    (error: unknown) =>
+      error instanceof ImageUploadError &&
+      error.failure.stage === 'issue' &&
+      error.failure.reason === 'transient',
+  );
+  assert.equal(captureCalls.length, 0);
+});
+
+test('preserves the original upload failure when capture throws', async () => {
+  const rawDetail = 'private issue detail';
+  captureHandledErrorImpl = () => {
+    throw new Error('sentry unavailable');
+  };
+
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset(),
+      complete: async () => undefined,
+      isActive: () => true,
+      issue: async () => {
+        throw new Error(rawDetail);
+      },
+    }),
+    (error: unknown) =>
+      error instanceof ImageUploadError &&
+      error.failure.stage === 'issue' &&
+      error.failure.reason === 'transient' &&
+      !error.message.includes(rawDetail),
+  );
+});
+
+for (const boundary of [
+  'issue',
+  'normalize',
+  'read-fetch',
+  'read-blob',
+  'put',
+  'complete',
+] as const) {
+  test(`preserves original Error identity, message, stack, and cause at ${boundary}`, async (t) => {
+    const root = new Error('decoder or transport root cause');
+    const original = new TypeError(`${boundary} failed with actionable detail`, { cause: root });
+    const originalStack = original.stack;
+    const rootStack = root.stack;
+    const manipulator = installManipulator({ height: 100, width: 100 });
+    if (boundary === 'normalize') {
+      t.mock.method(manipulator.context, 'renderAsync', async () => {
+        throw original;
+      });
+    }
+    t.mock.method(globalThis, 'fetch', async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if ((boundary === 'put' && init) || (boundary === 'read-fetch' && !init)) {
+        throw original;
+      }
+      const response = new Response(new Blob(['webp']), { status: 200 });
+      if (boundary === 'read-blob' && !init) {
+        response.blob = async () => {
+          throw original;
+        };
+      }
+      return response;
+    });
+
+    await assert.rejects(
+      uploadImage({
+        asset: createAsset({ file: new File(['private image bytes'], 'private.jpg') }),
+        issue: async () => {
+          if (boundary === 'issue') {
+            throw original;
+          }
+          return {
+            mediaId: 'media-private',
+            uploadUrl: 'https://upload.example/private?token=secret',
+          };
+        },
+        complete: async () => {
+          if (boundary === 'complete') {
+            throw original;
+          }
+        },
+        isActive: () => true,
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof ImageUploadError);
+        assert.equal(captureCalls.length, 1);
+        assert.equal(captureCalls[0]?.error, error);
+        assert.equal(error.cause, original);
+        assert.equal(original.message, `${boundary} failed with actionable detail`);
+        assert.equal(original.stack, originalStack);
+        assert.equal(original.cause, root);
+        assert.equal(root.message, 'decoder or transport root cause');
+        assert.equal(root.stack, rootStack);
+        const stage =
+          boundary === 'issue' ? 'issue' : boundary === 'complete' ? 'complete' : 'transfer';
+        assert.deepEqual(error.failure, { reason: 'transient', stage });
+        assert.deepEqual(captureCalls[0]?.context, {
+          operation: boundary.startsWith('read-') ? 'read' : boundary,
+          reason: 'transient',
+          stage,
+          ...(boundary === 'read-blob' ? { status: 200 } : {}),
+        });
+        return true;
+      },
+    );
+  });
+}
+
+test('preserves Expo image URIs in frozen original errors and their cause chain', async () => {
+  const assetUri = 'file:///private/photos/user-image.jpg';
+  const sourceUri = 'blob:https://kosmo.example/source-secret';
+  const normalizedUri = 'data:image/png;base64,private-image-bytes';
+  const root = new Error(`Could not load the image: ${assetUri}; source ${sourceUri}`);
+  const original = new Error(`Unable to save image: ${normalizedUri}`, { cause: root });
+  root.stack = `${root.name}: ${root.message}\n    at load (image-loader.ts:12:3)`;
+  original.stack = `${original.name}: ${original.message}\n    at save (image-save.ts:34:5)`;
+  const originalStack = original.stack;
+  const rootStack = root.stack;
+  Object.freeze(root);
+  Object.freeze(original);
+  let renders = 0;
+  createManipulatorContext = () => ({
+    release: () => undefined,
+    resize() {
+      return this;
+    },
+    renderAsync: async () => ({
+      height: 3000,
+      width: 6000,
+      uri: renders++ === 0 ? sourceUri : normalizedUri,
+      release: () => undefined,
+      saveAsync: async () => {
+        throw original;
+      },
+    }),
+  });
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset({ uri: assetUri, height: 0, width: 0 }),
+      issue: async () => ({ mediaId: 'media-1', uploadUrl: 'https://upload.example/signed' }),
+      complete: async () => undefined,
+      isActive: () => true,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof ImageUploadError);
+      assert.equal(captureCalls.length, 1);
+      assert.equal(captureCalls[0]?.error, error);
+      assert.equal(error.cause, original);
+      assert.equal(original.cause, root);
+      assert.equal(original.name, 'Error');
+      assert.equal(original.message, `Unable to save image: ${normalizedUri}`);
+      assert.equal(original.stack, originalStack);
+      assert.equal(root.message, `Could not load the image: ${assetUri}; source ${sourceUri}`);
+      assert.equal(root.stack, rootStack);
+      assert.deepEqual(captureCalls[0]?.context, {
+        operation: 'normalize',
+        reason: 'transient',
+        stage: 'transfer',
+      });
+      return true;
+    },
+  );
+});
+
+test('preserves the saved URI and original diagnostics in read errors', async (t) => {
+  const resultUri = 'file:///private/cache/result.webp';
+  const original = new Error(`Read failed: ${resultUri}; see https://docs.example/read`);
+  const originalStack = original.stack;
+  installManipulator({ height: 100, width: 100, resultUri });
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw original;
+  });
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset(),
+      issue: async () => ({ mediaId: 'media-1', uploadUrl: 'https://upload.example/signed' }),
+      complete: async () => undefined,
+      isActive: () => true,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof ImageUploadError);
+      assert.equal(error.cause, original);
+      assert.equal(captureCalls[0]?.error, error);
+      assert.equal(original.message, `Read failed: ${resultUri}; see https://docs.example/read`);
+      assert.equal(original.stack, originalStack);
+      assert.deepEqual(captureCalls[0]?.context, {
+        operation: 'read',
+        reason: 'transient',
+        stage: 'transfer',
+      });
+      return true;
+    },
+  );
+});
+
+for (const includeUri of [false, true]) {
+  test(`preserves Canvas SecurityError identity with${includeUri ? '' : 'out'} a known image URI`, async () => {
+    const uri = 'data:image/png;base64,private-canvas-image';
+    const message = `The canvas has been tainted by cross-origin data${includeUri ? `: ${uri}` : ''}`;
+    const original = new DOMException(message, 'SecurityError');
+    const originalStack = original.stack;
+    const root = new Error('canvas.toBlob failed');
+    Object.defineProperty(original, 'cause', { value: root });
+    createManipulatorContext = () => {
+      throw original;
+    };
+    await assert.rejects(
+      uploadImage({
+        asset: createAsset({ uri }),
+        issue: async () => ({ mediaId: 'media-1', uploadUrl: 'https://upload.example/signed' }),
+        complete: async () => undefined,
+        isActive: () => true,
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof ImageUploadError);
+        assert.equal(captureCalls.length, 1);
+        assert.equal(captureCalls[0]?.error, error);
+        assert.equal(error.cause, original);
+        assert.equal(original.name, 'SecurityError');
+        assert.equal(original.message, message);
+        assert.equal(original.stack, originalStack);
+        assert.equal(original.cause, root);
+        assert.equal(Object.hasOwn(original, 'message'), false);
+        return true;
+      },
+    );
+  });
+}

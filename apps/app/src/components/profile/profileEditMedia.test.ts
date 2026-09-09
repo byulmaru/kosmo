@@ -1,16 +1,37 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
-import {
-  completeProfileEditImageUpload,
-  createProfileEditRouteImage,
-  failProfileEditImageUpload,
-  profileEditImageInput,
-  releaseProfileEditImagePreview,
-  removeProfileEditImage,
-  replaceProfileEditImage,
-  retryProfileEditImageUpload,
-} from './profileEditMedia';
+import test, { before, mock } from 'node:test';
 import type { ImagePickerAsset } from 'expo-image-picker';
+import type * as ProfileEditMediaModule from './profileEditMedia';
+
+type ProfileEditMedia = typeof ProfileEditMediaModule;
+
+mock.module('@/observability/sentry', {
+  exports: {
+    captureHandledError: () => undefined,
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+let completeProfileEditImageUpload: ProfileEditMedia['completeProfileEditImageUpload'];
+let createProfileEditRouteImage: ProfileEditMedia['createProfileEditRouteImage'];
+let failProfileEditImageUpload: ProfileEditMedia['failProfileEditImageUpload'];
+let profileEditImageInput: ProfileEditMedia['profileEditImageInput'];
+let releaseProfileEditImagePreview: ProfileEditMedia['releaseProfileEditImagePreview'];
+let removeProfileEditImage: ProfileEditMedia['removeProfileEditImage'];
+let replaceProfileEditImage: ProfileEditMedia['replaceProfileEditImage'];
+let retryProfileEditImageUpload: ProfileEditMedia['retryProfileEditImageUpload'];
+
+before(async () => {
+  ({
+    completeProfileEditImageUpload,
+    createProfileEditRouteImage,
+    failProfileEditImageUpload,
+    profileEditImageInput,
+    releaseProfileEditImagePreview,
+    removeProfileEditImage,
+    replaceProfileEditImage,
+    retryProfileEditImageUpload,
+  } = await import('./profileEditMedia'));
+});
 
 const asset = (uri: string): ImagePickerAsset => ({ height: 100, uri, width: 100 });
 
