@@ -355,7 +355,7 @@ function ReplyComposerSurfaceContents({
             contextGuard={contextGuard}
             editorRef={editorRef}
             focusOnMount
-            initialContentWarning={parent.content?.contentWarning}
+            initialContentWarning={quoteMode ? undefined : parent.content?.contentWarning}
             onPostCreated={handlePostCreated}
             onSubmittingChange={setSubmitting}
             profile={profile.composer}
@@ -486,7 +486,7 @@ function ReplyComposerSurfaceContents({
                   contextGuard={contextGuard}
                   editorRef={editorRef}
                   focusOnMount
-                  initialContentWarning={parent.content?.contentWarning}
+                  initialContentWarning={quoteMode ? undefined : parent.content?.contentWarning}
                   onPostCreated={handlePostCreated}
                   onSubmittingChange={setSubmitting}
                   profile={profile.composer}
