@@ -132,21 +132,6 @@ mock.module('@/theme/ThemeProvider', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-mock.module('@/theme/tokens', {
-  exports: {
-    breakpoints: { compact: 768 },
-    fontFamilies: { content: 'Pretendard Variable', ui: 'SUIT Variable' },
-    iconSizes: { 24: 24 },
-    radii: { full: 999, lg: 16, md: 12, sm: 8 },
-    spacing: { lg: 24, md: 16, sm: 12, xl: 32, xs: 8, xxl: 40, xxs: 4 },
-    typography: {
-      lg: { fontSize: 18, lineHeight: 28 },
-      md: { fontSize: 16, lineHeight: 24 },
-      sm: { fontSize: 14, lineHeight: 20 },
-    },
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
-
 mock.module('./PostActionAuthentication', {
   exports: {
     usePostActionAuthentication: (enabled: boolean) => ({

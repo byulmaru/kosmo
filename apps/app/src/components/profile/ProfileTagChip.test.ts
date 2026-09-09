@@ -45,14 +45,6 @@ mockModule('@/theme/ThemeProvider', {
     textSecondary: 'secondary',
   }),
 });
-mockModule('@/theme/tokens', {
-  fontFamilies: { ui: 'SUIT Variable', content: 'Pretendard Variable' },
-  iconSizes: { 20: 20 },
-  radii: { full: 999 },
-  spacing: { md: 12 },
-  typography: { sm: {} },
-});
-
 let profileTagChipModule: typeof ProfileTagChipModule | undefined;
 
 before(async () => {
