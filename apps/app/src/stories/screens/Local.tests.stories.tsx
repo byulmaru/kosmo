@@ -89,6 +89,13 @@ export const RefreshQuery: Story = {
     await expect(canvas.findByText(retainedPost)).resolves.toBeVisible();
     const tab = canvas.getByRole('tab', { name: '로컬' });
     await userEvent.click(tab);
+    await waitFor(() => expect(queryRequestObserver).toHaveBeenCalledTimes(2));
+    expect(
+      canvas.queryByText('새로고침에 성공한 뒤 다시 표시된 로컬 게시글입니다.'),
+    ).not.toBeInTheDocument();
+    expect(
+      canvas.queryByRole('progressbar', { name: '로컬 타임라인을 새로고침하는 중' }),
+    ).not.toBeInTheDocument();
     await userEvent.click(tab);
     expect(queryRequestObserver).toHaveBeenCalledTimes(2);
     await expect(
