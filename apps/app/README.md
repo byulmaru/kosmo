@@ -39,7 +39,7 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | variable | `terraform output -raw android_play_workload_identity_provider` |
 | `ANDROID_RELEASE_KEY_ALIAS`      | variable | upload key 생성 시 사용한 alias                                 |
 
-4. upload keystore와 두 password는 GitHub에 저장하지 않고 Vault에 저장한다. 운영자가 Vault CLI/UI에서 사용하는 KV v2 logical path는 `secret/kosmo/prod/android-play`다. Workflow와 Vault ACL policy에서 사용하는 KV v2 API path는 `secret/data/kosmo/prod/android-play`이며, `/data/`는 CLI/UI logical path에 포함하지 않는다. 다음 field를 만들고, `kosmo-android-play` GitHub OIDC role이 이 API path를 읽도록 한다.
+4. upload keystore와 두 password는 GitHub에 저장하지 않고 Vault에 저장한다. 운영자가 Vault CLI/UI에서 사용하는 KV v2 logical path는 `secret/kosmo/prod/android-play`다. Workflow와 Vault ACL policy에서 사용하는 KV v2 API path는 `secret/data/kosmo/prod/android-play`이며, `/data/`는 CLI/UI logical path에 포함하지 않는다. 다음 field를 만들고, `kosmo-native-store-distribution` GitHub OIDC role이 이 API path를 읽도록 한다.
 
 | Field                             | 값                                 |
 | --------------------------------- | ---------------------------------- |
@@ -47,7 +47,7 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 | `ANDROID_RELEASE_STORE_PASSWORD`  | upload keystore password           |
 | `ANDROID_RELEASE_KEY_PASSWORD`    | upload key password                |
 
-`Native Store Distribution`의 Android job은 조직 수준 `VAULT_ADDR`와 `VAULT_GITHUB_ACTIONS_AUDIENCE`, 저장소 수준 `TAILSCALE_OAUTH_CLIENT_ID`와 `TAILSCALE_AUDIENCE`를 사용한다. Vault tailnet에 접속한 뒤 GitHub OIDC JWT로 `kosmo-android-play` role을 인증하고 실행 중에만 서명 값을 읽는다. Vault role과 policy는 `prod` Environment의 이 workflow만 해당 경로를 읽도록 제한해야 한다.
+`Native Store Distribution`의 Android job은 조직 수준 `VAULT_ADDR`와 `VAULT_GITHUB_ACTIONS_AUDIENCE`, 저장소 수준 `TAILSCALE_OAUTH_CLIENT_ID`와 `TAILSCALE_AUDIENCE`를 사용한다. Vault tailnet에 접속한 뒤 GitHub OIDC JWT로 `kosmo-native-store-distribution` role을 인증하고 실행 중에만 서명 값을 읽는다. Vault role과 policy는 `prod` Environment의 이 workflow만 해당 경로를 읽도록 제한해야 한다.
 
 upload key 예시는 다음과 같다. password는 명령행이나 저장소에 넣지 말고 `keytool` prompt에서 입력한다.
 
@@ -81,7 +81,7 @@ base64 결과와 password는 shell history, 저장소, GitHub 로그에 남기�
 5. App Store Connect의 Users and Access → Integrations → App Store Connect API → Team Keys에서 App Manager 권한의 Team API key를 만든다. P8 파일은 생성 시 한 번만 다운로드할 수 있으므로 즉시 Vault에 넣고, 저장소·로그·artifact에는 남기지 않는다.
 6. 앱의 TestFlight → Internal Testing에서 정확히 `Internal Testers` group을 만들고 `Enable automatic distribution`을 끈 manual distribution group으로 설정한 뒤, 해당 그룹에 App Store Connect 사용자 tester를 추가한다. workflow가 build를 이 그룹에 명시적으로 할당하므로 자동 배포 group으로 설정하지 않는다. 외부 tester나 Firebase group은 이 workflow의 대상이 아니다.
 
-Kubernetes의 `kosmo-ios-testflight` role과 read-only policy가 적용된 뒤, Vault 관리자 UI/CLI에서 다음 six fields를 KV v2 logical path `secret/kosmo/prod/ios-signing`에 기록한다. workflow와 ACL이 사용하는 API path는 `secret/data/kosmo/prod/ios-signing`이며, `/data/`는 UI/CLI logical path에 쓰지 않는다.
+Kubernetes의 `kosmo-native-store-distribution` role과 read-only policy가 적용된 뒤, Vault 관리자 UI/CLI에서 다음 six fields를 KV v2 logical path `secret/kosmo/prod/ios-signing`에 기록한다. workflow와 ACL이 사용하는 API path는 `secret/data/kosmo/prod/ios-signing`이며, `/data/`는 UI/CLI logical path에 쓰지 않는다.
 
 | Field                                       | 값                                |
 | ------------------------------------------- | --------------------------------- |
@@ -104,7 +104,7 @@ GitHub Actions에서는 새 environment를 만들지 않고 기존 `prod`를 사
 
 ### Rotation and revoke
 
-새 certificate/profile/API key를 준비한 뒤 해당 Vault field만 교체하고 TestFlight upload와 processing을 확인한 다음 이전 asset을 revoke한다. API key는 수정할 수 없으므로 새 App Manager Team key를 만들고 세 ID/P8 field를 함께 교체한다. 노출이 의심되면 확인을 기다리지 말고 이전 API key와 certificate를 Apple에서 revoke하고, 필요하면 `kosmo-ios-testflight` role/policy를 검토된 Terraform 변경으로 비활성화한다.
+새 certificate/profile/API key를 준비한 뒤 해당 Vault field만 교체하고 TestFlight upload와 processing을 확인한 다음 이전 asset을 revoke한다. API key는 수정할 수 없으므로 새 App Manager Team key를 만들고 세 ID/P8 field를 함께 교체한다. 노출이 의심되면 확인을 기다리지 말고 이전 API key와 certificate를 Apple에서 revoke하고, 필요하면 `kosmo-native-store-distribution` role/policy를 검토된 Terraform 변경으로 비활성화한다.
 
 ## Validation
 
