@@ -42,8 +42,13 @@ const resolveRequestConnection = async (
             eq(participantColumn, profileId),
             profileBlockVisibilityWhere({
               database: db,
-              firstProfileId: ProfileFollowRequests.followerProfileId,
-              secondProfileId: ProfileFollowRequests.followeeProfileId,
+              ownerProfileId: ProfileFollowRequests.followerProfileId,
+              targetProfileId: ProfileFollowRequests.followeeProfileId,
+            }),
+            profileBlockVisibilityWhere({
+              database: db,
+              ownerProfileId: ProfileFollowRequests.followeeProfileId,
+              targetProfileId: ProfileFollowRequests.followerProfileId,
             }),
             before ? gt(ProfileFollowRequests.id, before) : undefined,
             after ? lt(ProfileFollowRequests.id, after) : undefined,

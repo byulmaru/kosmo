@@ -1,7 +1,7 @@
 import { and, eq, exists, inArray, or, sql } from 'drizzle-orm';
 import { ProfileFollows } from '../db';
 import { PostState, PostVisibility } from '../enums';
-import { directedProfileBlockVisibilityWhere, profileBlockVisibilityWhere } from './profile-block';
+import { profileBlockVisibilityWhere } from './profile-block';
 import type { SQL, SQLWrapper } from 'drizzle-orm';
 import type { DatabaseHandle } from '../db';
 
@@ -48,8 +48,6 @@ type VisiblePost = {
   readonly visibility: SQLWrapper;
 };
 
-export type PostProfileBlockMode = 'AUTHOR_TO_VIEWER' | 'PAIR';
-
 /**
  * Applies the canonical post visibility condition for a profile viewer.
  *
@@ -62,14 +60,12 @@ export const visiblePostWhere = ({
   viewerProfileId,
   db,
   includeProfileBlock = true,
-  profileBlockMode = 'PAIR',
 }: {
   readonly post: VisiblePost;
   readonly profileVisible: SQL<boolean>;
   readonly viewerProfileId?: SQLWrapper | string | null;
   readonly db: DatabaseHandle;
   readonly includeProfileBlock?: boolean;
-  readonly profileBlockMode?: PostProfileBlockMode;
 }): SQL<boolean> => {
   const viewerFollowsAuthor = viewerProfileId
     ? exists(
@@ -87,17 +83,11 @@ export const visiblePostWhere = ({
 
   return sql<boolean>`${and(
     includeProfileBlock && viewerProfileId !== undefined && viewerProfileId !== null
-      ? profileBlockMode === 'AUTHOR_TO_VIEWER'
-        ? directedProfileBlockVisibilityWhere({
-            database: db,
-            ownerProfileId: post.profileId,
-            targetProfileId: viewerProfileId,
-          })
-        : profileBlockVisibilityWhere({
-            database: db,
-            firstProfileId: viewerProfileId,
-            secondProfileId: post.profileId,
-          })
+      ? profileBlockVisibilityWhere({
+          database: db,
+          ownerProfileId: post.profileId,
+          targetProfileId: viewerProfileId,
+        })
       : undefined,
     postVisibilityCondition({
       columns: {

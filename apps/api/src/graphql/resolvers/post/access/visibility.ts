@@ -1,17 +1,10 @@
 import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
-import { visiblePostWhere } from '@kosmo/core/visibility';
-import { sql } from 'drizzle-orm';
+import { profileBlockVisibilityWhere, visiblePostWhere } from '@kosmo/core/visibility';
+import { and, sql } from 'drizzle-orm';
 import { visibleProfileWhere } from '@/profile/visibility';
-import type { PostProfileBlockMode } from '@kosmo/core/visibility';
 import type { UserContext } from '@/context';
 
-export const postVisibilityAccessWhere = ({
-  ctx,
-  profileBlockMode,
-}: {
-  readonly ctx: UserContext;
-  readonly profileBlockMode?: PostProfileBlockMode;
-}) =>
+export const directPostVisibilityAccessWhere = ({ ctx }: { readonly ctx: UserContext }) =>
   visiblePostWhere({
     post: Posts,
     profileVisible: sql<boolean>`${visibleProfileWhere({
@@ -20,5 +13,16 @@ export const postVisibilityAccessWhere = ({
     })}`,
     viewerProfileId: ctx.session?.profile?.id,
     db,
-    profileBlockMode,
   });
+
+export const postVisibilityAccessWhere = ({ ctx }: { readonly ctx: UserContext }) =>
+  and(
+    directPostVisibilityAccessWhere({ ctx }),
+    ctx.session?.profileId
+      ? profileBlockVisibilityWhere({
+          database: db,
+          ownerProfileId: ctx.session.profileId,
+          targetProfileId: Posts.profileId,
+        })
+      : undefined,
+  )!;

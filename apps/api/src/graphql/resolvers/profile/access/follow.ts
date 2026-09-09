@@ -46,8 +46,13 @@ export const profileFollowAccessWhere = ({
     ne(followeeInstance.state, InstanceState.SUSPENDED),
     profileBlockVisibilityWhere({
       database: db,
-      firstProfileId: ProfileFollows.followerProfileId,
-      secondProfileId: ProfileFollows.followeeProfileId,
+      ownerProfileId: ProfileFollows.followerProfileId,
+      targetProfileId: ProfileFollows.followeeProfileId,
+    }),
+    profileBlockVisibilityWhere({
+      database: db,
+      ownerProfileId: ProfileFollows.followeeProfileId,
+      targetProfileId: ProfileFollows.followerProfileId,
     }),
     visibleWhere,
   )!;

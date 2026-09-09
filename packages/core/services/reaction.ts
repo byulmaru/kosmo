@@ -47,11 +47,18 @@ export const addReaction = async ({
           eq(Posts.id, postId),
           eq(Posts.state, PostState.ACTIVE),
           origin === 'LOCAL'
-            ? profileBlockVisibilityWhere({
-                database: tx,
-                firstProfileId: actorProfileId,
-                secondProfileId: Posts.profileId,
-              })
+            ? and(
+                profileBlockVisibilityWhere({
+                  database: tx,
+                  ownerProfileId: actorProfileId,
+                  targetProfileId: Posts.profileId,
+                }),
+                profileBlockVisibilityWhere({
+                  database: tx,
+                  ownerProfileId: Posts.profileId,
+                  targetProfileId: actorProfileId,
+                }),
+              )
             : undefined,
         ),
       )

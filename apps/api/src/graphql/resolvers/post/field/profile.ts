@@ -3,7 +3,7 @@ import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, isNull, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
-import { postAccessWhere } from '../access';
+import { directPostAccessWhere } from '../access';
 import { Post, PostConnection } from '../ref';
 
 type PostRow = typeof Posts.$inferSelect;
@@ -29,10 +29,9 @@ builder.objectFields(Profile, (t) => ({
               .where(
                 and(
                   eq(Posts.profileId, profile.id),
-                  postAccessWhere({
+                  directPostAccessWhere({
                     ctx,
                     profileMute: { excludeExcept: profile.id },
-                    profileBlockMode: 'AUTHOR_TO_VIEWER',
                   }),
                   isNull(Posts.replyParentId),
                   before ? gt(Posts.id, before) : undefined,

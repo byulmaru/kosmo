@@ -110,11 +110,18 @@ builder.objectFields(Post, (t) => ({
                   eq(Reactions.type, args.type),
                   visibleProfileWhere({ profile: Profiles, instance: Instances }),
                   ctx.session?.profileId
-                    ? profileBlockVisibilityWhere({
-                        database: db,
-                        firstProfileId: ctx.session.profileId,
-                        secondProfileId: Profiles.id,
-                      })
+                    ? and(
+                        profileBlockVisibilityWhere({
+                          database: db,
+                          ownerProfileId: ctx.session.profileId,
+                          targetProfileId: Profiles.id,
+                        }),
+                        profileBlockVisibilityWhere({
+                          database: db,
+                          ownerProfileId: Profiles.id,
+                          targetProfileId: ctx.session.profileId,
+                        }),
+                      )
                     : undefined,
                   reactionProfileCursorWhere(after, 'after'),
                   reactionProfileCursorWhere(before, 'before'),

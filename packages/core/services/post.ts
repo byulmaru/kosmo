@@ -140,11 +140,18 @@ const findVisiblePost = async (
       and(
         eq(Posts.id, postId),
         includeProfileBlock
-          ? profileBlockVisibilityWhere({
-              database: tx,
-              firstProfileId: actorProfileId,
-              secondProfileId: Posts.profileId,
-            })
+          ? and(
+              profileBlockVisibilityWhere({
+                database: tx,
+                ownerProfileId: actorProfileId,
+                targetProfileId: Posts.profileId,
+              }),
+              profileBlockVisibilityWhere({
+                database: tx,
+                ownerProfileId: Posts.profileId,
+                targetProfileId: actorProfileId,
+              }),
+            )
           : undefined,
         postVisibilityCondition({
           columns: {

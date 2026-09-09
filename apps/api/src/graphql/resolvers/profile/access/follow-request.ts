@@ -17,8 +17,13 @@ export const profileFollowRequestAccessWhere = (ctx: UserContext) => {
     ),
     profileBlockVisibilityWhere({
       database: db,
-      firstProfileId: ProfileFollowRequests.followerProfileId,
-      secondProfileId: ProfileFollowRequests.followeeProfileId,
+      ownerProfileId: ProfileFollowRequests.followerProfileId,
+      targetProfileId: ProfileFollowRequests.followeeProfileId,
+    }),
+    profileBlockVisibilityWhere({
+      database: db,
+      ownerProfileId: ProfileFollowRequests.followeeProfileId,
+      targetProfileId: ProfileFollowRequests.followerProfileId,
     }),
   );
 };

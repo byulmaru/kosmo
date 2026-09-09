@@ -29,8 +29,13 @@ builder.queryField('homeTimeline', (t) =>
                 eq(ProfileFollows.followeeProfileId, Posts.profileId),
                 profileBlockVisibilityWhere({
                   database: db,
-                  firstProfileId: ProfileFollows.followerProfileId,
-                  secondProfileId: ProfileFollows.followeeProfileId,
+                  ownerProfileId: ProfileFollows.followerProfileId,
+                  targetProfileId: ProfileFollows.followeeProfileId,
+                }),
+                profileBlockVisibilityWhere({
+                  database: db,
+                  ownerProfileId: ProfileFollows.followeeProfileId,
+                  targetProfileId: ProfileFollows.followerProfileId,
                 }),
               ),
             ),
@@ -57,8 +62,13 @@ builder.queryField('homeTimeline', (t) =>
                 eq(ProfileFollows.followerProfileId, ctx.session.profile.id),
                 profileBlockVisibilityWhere({
                   database: db,
-                  firstProfileId: ProfileFollows.followerProfileId,
-                  secondProfileId: ProfileFollows.followeeProfileId,
+                  ownerProfileId: ProfileFollows.followerProfileId,
+                  targetProfileId: ProfileFollows.followeeProfileId,
+                }),
+                profileBlockVisibilityWhere({
+                  database: db,
+                  ownerProfileId: ProfileFollows.followeeProfileId,
+                  targetProfileId: ProfileFollows.followerProfileId,
                 }),
               ),
             ),

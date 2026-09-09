@@ -116,8 +116,13 @@ const relatedProfileAvailability = ({
         visible,
         profileBlockVisibilityWhere({
           database,
-          firstProfileId: recipientProfileId,
-          secondProfileId: profile.id,
+          ownerProfileId: recipientProfileId,
+          targetProfileId: profile.id,
+        }),
+        profileBlockVisibilityWhere({
+          database,
+          ownerProfileId: profile.id,
+          targetProfileId: recipientProfileId,
         }),
       )!
     : or(eq(profile.id, Notifications.recipientProfileId), visible)!;

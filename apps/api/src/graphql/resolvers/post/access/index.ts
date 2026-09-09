@@ -1,27 +1,26 @@
 import { db, Posts, ProfileMutes } from '@kosmo/core/db';
 import { and, eq, exists, isNull, ne, not } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { postRepostSourceAccessWhere } from './repost-source';
-import { postVisibilityAccessWhere } from './visibility';
-import type { PostProfileBlockMode } from '@kosmo/core/visibility';
+import {
+  directPostRepostSourceAccessWhere,
+  postRepostSourceAccessWhere,
+} from './repost-source';
+import { directPostVisibilityAccessWhere, postVisibilityAccessWhere } from './visibility';
 import type { SQLWrapper } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
 const DirectRepostSources = alias(Posts, 'muted_direct_repost_source');
+type ProfileMuteMode = 'ignore' | 'exclude' | { excludeExcept: string };
 
-export const postAccessWhere = ({
+const applyProfileMuteAccessWhere = ({
   ctx,
   profileMute,
-  profileBlockMode,
+  accessWhere,
 }: {
   ctx: UserContext;
-  profileMute: 'ignore' | 'exclude' | { excludeExcept: string };
-  readonly profileBlockMode?: PostProfileBlockMode;
+  profileMute: ProfileMuteMode;
+  accessWhere: SQLWrapper;
 }) => {
-  const accessWhere = and(
-    postVisibilityAccessWhere({ ctx, profileBlockMode }),
-    postRepostSourceAccessWhere({ ctx, profileBlockMode }),
-  );
   const ownerProfileId = ctx.session?.profile?.id;
   if (profileMute === 'ignore' || !ownerProfileId) {
     return accessWhere;
@@ -62,3 +61,32 @@ export const postAccessWhere = ({
     ),
   );
 };
+
+export const directPostAccessWhere = ({
+  ctx,
+  profileMute,
+}: {
+  readonly ctx: UserContext;
+  readonly profileMute: ProfileMuteMode;
+}) =>
+  applyProfileMuteAccessWhere({
+    ctx,
+    profileMute,
+    accessWhere: and(
+      directPostVisibilityAccessWhere({ ctx }),
+      directPostRepostSourceAccessWhere({ ctx }),
+    ),
+  });
+
+export const postAccessWhere = ({
+  ctx,
+  profileMute,
+}: {
+  readonly ctx: UserContext;
+  readonly profileMute: ProfileMuteMode;
+}) =>
+  applyProfileMuteAccessWhere({
+    ctx,
+    profileMute,
+    accessWhere: and(postVisibilityAccessWhere({ ctx }), postRepostSourceAccessWhere({ ctx })),
+  });

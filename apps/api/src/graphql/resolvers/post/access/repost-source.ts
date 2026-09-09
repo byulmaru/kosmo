@@ -1,9 +1,8 @@
 import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
-import { visiblePostWhere } from '@kosmo/core/visibility';
+import { profileBlockVisibilityWhere, visiblePostWhere } from '@kosmo/core/visibility';
 import { and, eq, exists, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { visibleProfileWhere } from '@/profile/visibility';
-import type { PostProfileBlockMode } from '@kosmo/core/visibility';
 import type { SQL } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
@@ -11,14 +10,8 @@ const DirectRepostSources = alias(Posts, 'direct_repost_source');
 const DirectRepostSourceProfiles = alias(Profiles, 'direct_repost_source_profile');
 const DirectRepostSourceInstances = alias(Instances, 'direct_repost_source_instance');
 
-export const postRepostSourceAccessWhere = ({
-  ctx,
-  profileBlockMode,
-}: {
-  readonly ctx: UserContext;
-  readonly profileBlockMode?: PostProfileBlockMode;
-}): SQL<boolean> => {
-  const directSourceVisible = visiblePostWhere({
+const directRepostSourceVisibleWhere = ({ ctx }: { readonly ctx: UserContext }) =>
+  visiblePostWhere({
     post: DirectRepostSources,
     profileVisible: sql<boolean>`${visibleProfileWhere({
       profile: DirectRepostSourceProfiles,
@@ -26,10 +19,10 @@ export const postRepostSourceAccessWhere = ({
     })}`,
     viewerProfileId: ctx.session?.profile?.id,
     db,
-    profileBlockMode,
   });
 
-  return sql<boolean>`${or(
+const repostSourceAccessWhere = (sourceVisible: SQL<boolean>): SQL<boolean> =>
+  sql<boolean>`${or(
     isNotNull(Posts.currentContentId),
     isNull(Posts.repostSourceId),
     and(
@@ -51,10 +44,29 @@ export const postRepostSourceAccessWhere = ({
             and(
               eq(DirectRepostSources.id, Posts.repostSourceId),
               isNotNull(DirectRepostSources.currentContentId),
-              directSourceVisible,
+              sourceVisible,
             ),
           ),
       ),
     ),
   )!}`;
-};
+
+export const directPostRepostSourceAccessWhere = ({
+  ctx,
+}: {
+  readonly ctx: UserContext;
+}): SQL<boolean> => repostSourceAccessWhere(directRepostSourceVisibleWhere({ ctx }));
+
+export const postRepostSourceAccessWhere = ({ ctx }: { readonly ctx: UserContext }): SQL<boolean> =>
+  repostSourceAccessWhere(
+    sql<boolean>`${and(
+      directRepostSourceVisibleWhere({ ctx }),
+      ctx.session?.profileId
+        ? profileBlockVisibilityWhere({
+            database: db,
+            ownerProfileId: ctx.session.profileId,
+            targetProfileId: DirectRepostSources.profileId,
+          })
+        : undefined,
+    )!}`,
+  );
