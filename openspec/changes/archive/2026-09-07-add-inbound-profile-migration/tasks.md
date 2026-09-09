@@ -149,6 +149,16 @@ Stack 분리·간략화 후 각 layer의 exact head와 소유 범위를 독립�
 - Core domain: `assertProfileMigrationTarget`와 `prepareProfileMigration`은 target/source Profile ID와 기존 Profile lifecycle·origin·policy·source/pair 조건만 검증하며 Account·membership authorization을 다시 수행하지 않는다. target eligibility는 InstanceState.SUSPENDED를 거부하고 UNRESPONSIVE를 별도 거부 조건으로 추가하지 않는다. focused Core integration은 6/6 pass였다.
 - Contract artifacts: generated GraphQL schema에서 별도 target Profile ID input이 제거되었고, canonical docs와 active/archived delta specs가 selected-target/sourceHandle-only wording으로 동기화되었다. OpenSpec strict validation은 75/75 pass였다.
 
+### Current Stack execution evidence (2026-09-09)
+
+이 절은 위 archive history와 current contract validation ledger를 변경하지 않고, 승인된 하위 layer의 새 실행 증거와 top 재검증 결과를 추가로 기록한다.
+
+- Bottom exact head `5c79674384076094854563208ed0288e0c9ee11d`: Core preparation focused integration 5/5, API integration 6/6, API TypeScript 검사와 generated GraphQL schema 검증을 통과했다.
+- Middle exact head `3c1e1e2693445aa81223790cc34eb86bfb8a85a6`: Core Move 검증 9/9와 Fedify inbound Move 검증 9/9를 통과했다. 실제 PostgreSQL/Temporal cross-slice 실행에서는 새 Local Approval Follow Request 1개가 저장되고 source Follow가 제거되며 target Follow count는 0인 결과를 확인했다.
+- Top checkout base head `0aee072377dad5d59a7bd2853667f12047ac2499`와 승인된 uncommitted test-fixture 수정 `packages/fedify/src/inbound-move.integration.ts`의 현재 실행: isolated PostgreSQL/Temporal full-flow 1/1, Fedify unit 18 suites·241/241, API/Fedify TypeScript 검사를 통과했다. 수정은 void return을 처리하는 integration-test fixture 보강이며 제품 코드 delta는 없다.
+- 최초 공유 `kosmo_test` fixture cleanup에서 session FK 오류가 있었지만, isolated migrated DB로 재실행한 결과는 통과했다. 이는 현재 코드 실패가 아니라 환경 분리 재실행으로 해소된 fixture-cleanup 증거다.
+- 위 결과로 이 절의 top full-flow pending을 해소한다. historical ledger와 기존 test evidence는 변경하지 않고, 이 current proof를 fresh Stack evidence로 기록한다.
+
 ### Archive-time environment cleanup (2026-09-07)
 
 - synthetic backend/API/protocol PostgreSQL DB와 각 runner의 정리를 완료했다. PostgreSQL 18.4 검증 cluster는 정상 종료했고 port `55432` listener와 Temporal 잔여 process가 각각 0개임을 확인했다. 복구용 cluster 파일은 보존하며, 제품 DB와 다른 test DB는 변경하지 않았다.

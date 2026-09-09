@@ -31,6 +31,7 @@ const {
   Instances,
   ProfileFollows,
   ProfileFollowRequests,
+  ProfileMigrations,
   Profiles,
   pg,
 } = await import('@kosmo/core/db');
@@ -76,11 +77,24 @@ test('준비한 source alias에서 inbound Move와 실제 Workflow가 Local foll
   const target = await createLocalTarget();
   const follower = await createLocalFollower();
 
-  const preparation = await prepareProfileMigration({
+  await prepareProfileMigration({
     sourceProfileId: source.profile.id,
     targetProfileId: target.profile.id,
   });
-  assert.equal(preparation.id, target.profile.id);
+  assert.deepEqual(
+    await db
+      .select({
+        sourceProfileId: ProfileMigrations.sourceProfileId,
+        targetProfileId: ProfileMigrations.targetProfileId,
+      })
+      .from(ProfileMigrations)
+      .where(eq(ProfileMigrations.targetProfileId, target.profile.id))
+      .then(firstOrThrow),
+    {
+      sourceProfileId: source.profile.id,
+      targetProfileId: target.profile.id,
+    },
+  );
 
   const targetActorUri = new URL(`/ap/actor/${target.profile.id}`, publicOrigin);
   const actorResponse = await federation.fetch(
