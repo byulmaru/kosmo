@@ -62,6 +62,11 @@ type BlockedProfilesState =
   | { status: 'error'; onRetry: () => void }
   | { status: 'loaded'; profiles: readonly BlockedProfile[]; pagination: Pagination };
 
+type FocusIntent = Readonly<{ index: number; profileBlockId: string }>;
+
+let pendingFocusIntent: FocusIntent | null = null;
+let activeFocusRestorer: (() => boolean) | null = null;
+
 export function SettingsBlockedProfiles() {
   const actorLifecycleKey = useRelayActorLifecycleKey();
   return (
@@ -166,17 +171,8 @@ export function BlockedProfilesView({
   const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   stateRef.current = state;
 
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      if (focusTimer.current) {
-        clearTimeout(focusTimer.current);
-      }
-    };
-  }, []);
   const restoreRemovedFocus = () => {
-    const removed = removedFocus.current;
+    const removed = removedFocus.current ?? pendingFocusIntent;
     const currentState = stateRef.current;
     if (
       !removed ||
@@ -186,6 +182,9 @@ export function BlockedProfilesView({
       return false;
     }
     removedFocus.current = null;
+    if (pendingFocusIntent?.profileBlockId === removed.profileBlockId) {
+      pendingFocusIntent = null;
+    }
     const next = currentState.profiles[Math.min(removed.index, currentState.profiles.length - 1)];
     if (next) {
       actionRefs.current.get(next.profileBlockId)?.focus();
@@ -194,6 +193,23 @@ export function BlockedProfilesView({
     }
     return true;
   };
+  const restoreRemovedFocusRef = useRef(restoreRemovedFocus);
+  restoreRemovedFocusRef.current = restoreRemovedFocus;
+
+  useEffect(() => {
+    mounted.current = true;
+    const restoreFocus = () => restoreRemovedFocusRef.current();
+    activeFocusRestorer = restoreFocus;
+    return () => {
+      mounted.current = false;
+      if (activeFocusRestorer === restoreFocus) {
+        activeFocusRestorer = null;
+      }
+      if (focusTimer.current) {
+        clearTimeout(focusTimer.current);
+      }
+    };
+  }, []);
 
   const close = () => {
     if (!inFlight.current) {
@@ -207,12 +223,14 @@ export function BlockedProfilesView({
     inFlight.current = true;
     setPending(true);
     if (state.status === 'loaded') {
-      removedFocus.current = {
+      const intent = {
         index: state.profiles.findIndex(
           (profile) => profile.profileBlockId === selected.profileBlockId,
         ),
         profileBlockId: selected.profileBlockId,
       };
+      removedFocus.current = intent;
+      pendingFocusIntent = intent;
     }
     try {
       await onUnblock(selected.profileBlockId);
@@ -223,6 +241,7 @@ export function BlockedProfilesView({
       showToast('차단을 해제했어요', { tone: 'success' });
     } catch (error) {
       removedFocus.current = null;
+      pendingFocusIntent = null;
       if (!mounted.current || error instanceof StaleProfileBlockRequestError) {
         return;
       }
@@ -305,7 +324,11 @@ export function BlockedProfilesView({
           selectedForFocus.current = null;
           focusTimer.current = setTimeout(() => {
             focusTimer.current = null;
-            if (!mounted.current || restoreRemovedFocus()) {
+            if (!mounted.current) {
+              activeFocusRestorer?.();
+              return;
+            }
+            if (restoreRemovedFocus()) {
               return;
             }
             if (previous) {

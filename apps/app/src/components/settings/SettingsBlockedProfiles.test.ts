@@ -278,4 +278,48 @@ describe('차단한 프로필 목록', () => {
     });
     assert.equal(focus.mock.callCount(), 1);
   });
+
+  it('해제 성공 뒤 actor remount가 먼저 일어나도 새 목록 surface가 제목 focus를 복원한다', async () => {
+    const focus = mock.fn();
+    const loadedState = {
+      pagination: { status: 'end' as const },
+      profiles: [{ displayName: '별마루', profileBlockId: 'profile-block-remount' }],
+      status: 'loaded' as const,
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(BlockedProfilesView, {
+          onUnblock: async () => undefined,
+          state: loadedState,
+        }),
+        {
+          createNodeMock: (element) => {
+            const props = element.props as { accessibilityLabel?: string };
+            return element.type === 'View' && props.accessibilityLabel === '차단한 프로필 목록'
+              ? { focus }
+              : {};
+          },
+        },
+      );
+    });
+
+    await act(async () => find('Button')?.props.onPress());
+    await act(async () => find('ConfirmationContent')?.props.onConfirm());
+    const dismiss = find('ModalSheet')?.props.onDismiss;
+
+    await act(async () => {
+      renderer?.update(
+        createElement(BlockedProfilesView, {
+          key: 'actor-b',
+          onUnblock: async () => undefined,
+          state: { pagination: { status: 'end' }, profiles: [], status: 'loaded' },
+        }),
+      );
+    });
+    dismiss?.();
+
+    assert.equal(focus.mock.callCount(), 0);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.equal(focus.mock.callCount(), 1);
+  });
 });
