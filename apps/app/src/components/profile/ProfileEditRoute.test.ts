@@ -177,6 +177,9 @@ mockModule('expo-router/react-navigation', {
 mockModule('react-native', {
   Platform: { OS: 'web' },
 });
+mockModule('@/observability/sentry', {
+  captureHandledError: () => undefined,
+});
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     const operation = parts.join('').match(/(?:query|mutation) (\w+)/)?.[1];

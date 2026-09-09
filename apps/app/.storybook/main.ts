@@ -17,6 +17,10 @@ const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|tsx)'],
   viteFinal: (viteConfig) => ({
     ...viteConfig,
+    define: {
+      ...viteConfig.define,
+      'process.env.EXPO_PUBLIC_SENTRY_RELEASE': 'undefined',
+    },
     publicDir: false,
     plugins: [relayVitePlugin(), ...(viteConfig.plugins ?? [])],
     resolve: {

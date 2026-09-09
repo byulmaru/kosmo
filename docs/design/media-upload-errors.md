@@ -58,6 +58,14 @@ accessible name에 사용하지 않는다.
   `issue → transfer → complete` 전체 순서를 다시 실행한다.
 - 자동 재시도, 실패한 signed URL 재사용, upload 취소와 orphan Media/object 정리는 이 정책에 포함하지 않는다.
 
+## 처리된 실패의 Sentry 관측
+
+- Post Composer와 Profile 편집은 각자 실패를 capture하지 않고, 두 흐름이 공유하는 이미지 업로드 경계에서 처리된 실패를 공통 Web·Native Sentry 수집 진입점으로 한 번만 전달한다.
+- 실패 event에는 이 문서의 공통 오류 모델에서 안전하게 구성한 `stage`·`reason`과 `operation`을 context로 전달한다. `operation`은 `issue`, `normalize`, `read`, `put`, `complete` 중 하나이며, `transfer` 단계 안에서 정규화·normalized Blob read·signed PUT을 구분한다. 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 실패에만 숫자 `status`를 추가하고, `unsupported_image`, `content_type_mismatch`, `size_limit_exceeded`, `pixel_limit_exceeded`, `dimension_limit_exceeded`, `invalid_image` 중 하나인 경우에만 machine-readable `code`를 추가한다.
+- 성공, 비활성 항목의 `null` 결과와 명시적 no-op은 Sentry 처리된 실패 event를 만들지 않는다.
+- Sentry capture 실패는 원래 업로드 오류, 실패 항목 보존, 오류 UI와 재시도 동작을 바꾸지 않는다.
+- 업로드 경계가 capture에 전달하는 오류 payload와 새 관측 context에는 이미지 byte, File/Blob, signed upload URL, 인증 토큰, 응답 본문·request payload와 사용자 콘텐츠를 포함하지 않는다. 공통 Sentry facade가 모든 Error를 전역 정제하는 책임을 갖지는 않는다.
+
 ## 접근성
 
 - 새 실패 문구는 해당 항목이나 field의 오류 상태에서 한 번 alert로 전달하며 같은 render의 다른 상태 문구와
@@ -71,6 +79,9 @@ accessible name에 사용하지 않는다.
 
 - 공통 분류는 정상 PUT, 각 허용 status/code 조합, 네트워크 실패, `5xx`, malformed/unknown 응답과 단계별
   fallback을 단위 테스트로 고정한다.
+- 공통 업로드 경계가 처리된 실패를 한 번만 보고하고 성공·no-op은 보고하지 않으며, 허용된 `stage`·`reason`과
+  원래 오류 결과를 보존하고 관측 context에 민감한 입력·URL·토큰·응답 본문이 포함되지 않는지 실행 결과로
+  검증한다. 관측 실패가 업로드 결과를 바꾸지 않는지도 확인한다.
 - Post Composer와 Profile 편집은 같은 분류 결과를 각 UI 상태에 연결하고 실패 보존·항목별 재시도·accessible
   name을 유지하는지 component test로 검증한다.
 - 현재 Web 출시 gate에서는 실제 browser 흐름을 검증한다. 공용 React Native 자동화는 유지하지만 Web 결과를
@@ -81,6 +92,6 @@ accessible name에 사용하지 않는다.
 - Media Storage Service의 status/code 또는 제한 변경
 - Kosmo GraphQL schema, Media 상태와 persistence 변경
 - 자동 retry, backoff, offline queue와 background upload
-- request ID, 구조화 로그와 관측성 정책
+- Media Worker request ID와 구조화 로그
 - HEIC/HEIF 지원이나 client-side 변환
 - upload 취소, 실패 object와 orphan Media 정리

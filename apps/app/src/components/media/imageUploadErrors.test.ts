@@ -4,6 +4,7 @@ import {
   assertImageUploadResponse,
   formatImageUploadFailureMessage,
   formatImageUploadRetryLabel,
+  ImageUploadError,
 } from './imageUploadErrors';
 import type { ImageUploadFailure } from './imageUploadErrors';
 
@@ -13,6 +14,16 @@ async function classify(response: Response): Promise<ImageUploadFailure> {
   } catch (error) {
     assert.ok(error && typeof error === 'object' && 'failure' in error);
     return (error as { failure: ImageUploadFailure }).failure;
+  }
+  throw new Error('expected an upload failure');
+}
+
+async function classifyError(response: Response): Promise<ImageUploadError> {
+  try {
+    await assertImageUploadResponse(response);
+  } catch (error) {
+    assert.ok(error instanceof ImageUploadError);
+    return error;
   }
   throw new Error('expected an upload failure');
 }
@@ -59,6 +70,25 @@ test('status and code must both match before a transfer error is specialized', a
     ),
     { reason: 'transient', stage: 'transfer' },
   );
+});
+
+test('records only numeric status and allowlisted machine code for PUT failures', async () => {
+  const allowlisted = await classifyError(
+    new Response(JSON.stringify({ error: { code: 'size_limit_exceeded', message: 'secret' } }), {
+      status: 413,
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+  assert.deepEqual(allowlisted.observation, {
+    code: 'size_limit_exceeded',
+    operation: 'put',
+    status: 413,
+  });
+
+  const unknownCode = await classifyError(
+    new Response(JSON.stringify({ error: { code: 'private_code' } }), { status: 413 }),
+  );
+  assert.deepEqual(unknownCode.observation, { operation: 'put', status: 413 });
 });
 
 test('malformed, empty, 5xx, and network-like transfer failures are transient', async () => {

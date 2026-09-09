@@ -3,24 +3,40 @@ import { after, beforeEach, describe, it, mock } from 'node:test';
 import type { ErrorInfo } from 'react';
 
 type InitOptions = Record<string, unknown>;
-type CaptureCall = { cause: unknown; hint: unknown; context: unknown };
+type CaptureCall = { cause: unknown; hint: unknown; context: unknown; extras: unknown };
 const initCalls: InitOptions[] = [];
 const captureCalls: CaptureCall[] = [];
+let captureExceptionThrows = false;
 
 mock.module('@sentry/react-native', {
   exports: {
     captureException: (cause: unknown, hint: unknown) => {
-      captureCalls.push({ cause, hint, context: undefined });
+      if (captureExceptionThrows) {
+        throw new Error('capture failed');
+      }
+
+      captureCalls.push({ cause, hint, context: undefined, extras: undefined });
     },
     init: (options: InitOptions) => {
       initCalls.push(options);
     },
     withScope: (
-      callback: (scope: { setContext: (key: string, context: unknown) => void }) => void,
+      callback: (scope: {
+        setContext: (key: string, context: unknown) => void;
+        setExtras: (extras: unknown) => void;
+      }) => void,
     ) => {
       let context: unknown;
-      callback({ setContext: (_key, value) => (context = value) });
-      captureCalls.at(-1)!.context = context;
+      let extras: unknown;
+      callback({
+        setContext: (_key, value) => (context = value),
+        setExtras: (value) => (extras = value),
+      });
+      const capture = captureCalls.at(-1);
+      if (capture) {
+        capture.context = context;
+        capture.extras = extras;
+      }
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -49,12 +65,14 @@ describe('Native app Sentry configuration', () => {
   beforeEach(() => {
     initCalls.length = 0;
     captureCalls.length = 0;
+    captureExceptionThrows = false;
   });
 
   it('does not initialize or capture without a release', async () => {
     delete process.env.EXPO_PUBLIC_SENTRY_RELEASE;
-    const { captureReactError } = await import(`${sentryModule}?disabled`);
+    const { captureHandledError, captureReactError } = await import(`${sentryModule}?disabled`);
 
+    captureHandledError(new Error('not sent'), { operation: 'upload' });
     captureReactError(new Error('not sent'), { componentStack: '\n    at Screen' } as ErrorInfo);
     assert.equal(initCalls.length, 0);
     assert.equal(captureCalls.length, 0);
@@ -85,5 +103,31 @@ describe('Native app Sentry configuration', () => {
       mechanism: { handled: true, type: 'auto.function.react.error_boundary' },
     });
     assert.deepEqual(captureCalls[0]?.context, { componentStack: '\n    at Screen' });
+  });
+
+  it('captures handled errors with the original error and primitive context', async () => {
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const { captureHandledError } = await import(`${sentryModule}?handled`);
+    const cause = new Error('upload failed');
+    const context = { operation: 'put', status: 503, retryable: true } as const;
+
+    captureHandledError(cause, context);
+
+    assert.equal(captureCalls.length, 1);
+    assert.equal(captureCalls[0]?.cause, cause);
+    assert.deepEqual(captureCalls[0]?.hint, {
+      mechanism: { handled: true, type: 'auto.function.handled_error' },
+    });
+    assert.equal(captureCalls[0]?.context, undefined);
+    assert.deepEqual(captureCalls[0]?.extras, context);
+  });
+
+  it('isolates a Sentry capture failure from the caller', async () => {
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const { captureHandledError } = await import(`${sentryModule}?capture-fails`);
+    captureExceptionThrows = true;
+
+    assert.doesNotThrow(() => captureHandledError(new Error('upload failed')));
+    assert.equal(captureCalls.length, 0);
   });
 });
