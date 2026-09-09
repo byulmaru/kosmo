@@ -13,11 +13,13 @@ import {
   ProfileMediaKind,
   ProfileState,
 } from '@kosmo/core/enums';
-import { count, eq, ne } from 'drizzle-orm';
+import { ApplicationFailure } from '@temporalio/client';
+import { and, count, eq, ne } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type * as CoreTemporal from '@kosmo/core/temporal/client';
 import type * as Materialization from './remote-actor-materialization';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -35,6 +37,7 @@ let pg: typeof CoreDb.pg;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
+let temporalClient: typeof CoreTemporal.temporalClient;
 let findOrMaterializeRemoteProfileActor: typeof Materialization.findOrMaterializeRemoteProfileActor;
 let findOrMaterializeRemoteProfileActorByUri: typeof Materialization.findOrMaterializeRemoteProfileActorByUri;
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
@@ -50,6 +53,7 @@ describe('remote actor materialization', () => {
     ({ ActivityPubActors, db, first, firstOrThrow, Instances, Media, pg, ProfileMedia, Profiles } =
       await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
+    ({ temporalClient } = await import('@kosmo/core/temporal/client'));
     ({
       findOrMaterializeRemoteProfileActor,
       findOrMaterializeRemoteProfileActorByUri,
@@ -622,13 +626,12 @@ describe('remote actor materialization', () => {
     const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
     const { context, lookupObject } = createLookupContext(async () => createActor());
 
-    const materialized = await findOrMaterializeRemoteProfileActor({
+    const materialized = await materializeRemoteProfileActor({
       context,
       handle: `alice@${remoteAliasDomain}`,
       now,
     });
     const canonical = await findOrMaterializeRemoteProfileActor({
-      context,
       handle: `alice@${remoteDomain}`,
       now,
     });
@@ -654,7 +657,7 @@ describe('remote actor materialization', () => {
     });
     const { context } = createLookupContext(async () => createActor());
 
-    const materialized = await findOrMaterializeRemoteProfileActor({
+    const materialized = await materializeRemoteProfileActor({
       context,
       handle: `alice@${remoteDomain}`,
     });
@@ -1051,17 +1054,13 @@ describe('remote actor materialization', () => {
   for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
     test(`returns NotFound for a stored ${state} profile without a remote lookup`, async () => {
       const stored = await createStoredRemoteActor({ profileState: state });
-      const { context, lookupObject } = createLookupContext(async () => createActor());
-
       await assert.rejects(
         findOrMaterializeRemoteProfileActor({
-          context,
           handle: `alice@${remoteDomain}`,
         }),
         /Profile not found/,
       );
 
-      assert.equal(lookupObject.mock.calls.length, 0);
       const profile = await db
         .select()
         .from(Profiles)
@@ -1155,47 +1154,87 @@ describe('remote actor materialization', () => {
     );
   });
 
-  test('returns stale profiles before scheduling refresh', async () => {
+  test('returns a stale profile after the refresh Workflow is durably started', async () => {
     const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
     const stored = await createStoredRemoteActor({
       lastFetchedAt: now.subtract({ hours: 8 * 24 }),
     });
-    const { context, lookupObject } = createLookupContext(async () => createActor());
-    const refreshes: Array<() => Promise<void>> = [];
-
-    const profile = await findOrMaterializeRemoteProfileActor({
-      context,
+    let releaseStart!: () => void;
+    const startEntered = new Promise<void>((resolve) => {
+      releaseStart = resolve;
+    });
+    let signalStartCall!: () => void;
+    const startCall = new Promise<void>((resolve) => {
+      signalStartCall = resolve;
+    });
+    const start = mock.method(temporalClient.workflow, 'start', async () => {
+      signalStartCall();
+      await startEntered;
+      return undefined as never;
+    });
+    const workflowResult = findOrMaterializeRemoteProfileActor({
       handle: `alice@${remoteDomain}`,
+      mode: 'sync',
       now,
-      scheduleRefresh: (refresh) => refreshes.push(refresh),
     });
 
-    assert.equal(profile.id, stored.profile.id);
-    assert.equal(lookupObject.mock.calls.length, 0);
-    assert.equal(refreshes.length, 1);
-
-    await refreshes[0]!();
-    assert.equal(lookupObject.mock.calls.length, 1);
+    try {
+      await startCall;
+      releaseStart();
+      const profile = await workflowResult;
+      assert.equal(profile.id, stored.profile.id);
+      assert.equal(start.mock.calls.length, 1);
+      assert.equal(start.mock.calls[0]?.arguments[0], 'remoteProfileMaterializationWorkflow');
+    } finally {
+      releaseStart();
+      start.mock.restore();
+    }
   });
 
-  test('returns a stale profile when scheduling refresh throws synchronously', async () => {
+  test('returns a fresh profile without starting a refresh Workflow', async () => {
+    const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
+    const stored = await createStoredRemoteActor({
+      lastFetchedAt: now.subtract({ hours: 1 }),
+    });
+    const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+
+    try {
+      const profile = await findOrMaterializeRemoteProfileActor({
+        handle: `alice@${remoteDomain}`,
+        now,
+      });
+
+      assert.equal(profile.id, stored.profile.id);
+      assert.equal(start.mock.calls.length, 0);
+    } finally {
+      start.mock.restore();
+    }
+  });
+
+  test('keeps a stale profile when starting its refresh fails', async () => {
     const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
     const stored = await createStoredRemoteActor({
       lastFetchedAt: now.subtract({ hours: 8 * 24 }),
     });
-    const { context, lookupObject } = createLookupContext(async () => createActor());
-
-    const profile = await findOrMaterializeRemoteProfileActor({
-      context,
-      handle: `alice@${remoteDomain}`,
-      now,
-      scheduleRefresh: () => {
-        throw new Error('queue unavailable');
-      },
+    const start = mock.method(temporalClient.workflow, 'start', async () => {
+      throw new Error('Temporal is unavailable');
     });
+    const error = mock.method(console, 'error', () => undefined);
 
-    assert.equal(profile.id, stored.profile.id);
-    assert.equal(lookupObject.mock.calls.length, 0);
+    try {
+      const profile = await findOrMaterializeRemoteProfileActor({
+        handle: `alice@${remoteDomain}`,
+        mode: 'sync',
+        now,
+      });
+
+      assert.equal(profile.id, stored.profile.id);
+      assert.equal(start.mock.calls.length, 1);
+      assert.equal(error.mock.calls.length, 1);
+    } finally {
+      error.mock.restore();
+      start.mock.restore();
+    }
   });
 
   test('returns stale profiles without refresh for unresponsive instances', async () => {
@@ -1204,33 +1243,119 @@ describe('remote actor materialization', () => {
       instanceState: InstanceState.UNRESPONSIVE,
       lastFetchedAt: now.subtract({ hours: 8 * 24 }),
     });
-    const { context, lookupObject } = createLookupContext(async () => createActor());
-    const refreshes: Array<() => Promise<void>> = [];
-
+    const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
     const profile = await findOrMaterializeRemoteProfileActor({
-      context,
       handle: `alice@${remoteDomain}`,
       now,
-      scheduleRefresh: (refresh) => refreshes.push(refresh),
     });
 
     assert.equal(profile.id, stored.profile.id);
-    assert.equal(lookupObject.mock.calls.length, 0);
-    assert.equal(refreshes.length, 0);
+    assert.equal(start.mock.calls.length, 0);
+    start.mock.restore();
+  });
+
+  test('waits for a missing remote Profile ID and reloads the stored row', async () => {
+    const instance = await createRemoteInstance();
+    const profile = await createProfile({ handle: 'alice', instanceId: instance.id });
+    const execute = mock.method(
+      temporalClient.workflow,
+      'execute',
+      async () => profile.id as never,
+    );
+
+    try {
+      const result = await findOrMaterializeRemoteProfileActor({
+        handle: `alice@${remoteDomain}`,
+        mode: 'sync',
+        profileId: '00000000-0000-8000-8000-000000000002',
+      });
+
+      assert.equal(result.id, profile.id);
+      assert.equal(execute.mock.calls.length, 1);
+      const options = execute.mock.calls[0]?.arguments[1];
+      assert.ok(options);
+      assert.deepEqual(options.args, [
+        {
+          handle: `alice@${remoteDomain}`,
+          profileId: '00000000-0000-8000-8000-000000000002',
+        },
+      ]);
+    } finally {
+      execute.mock.restore();
+    }
+  });
+
+  for (const [label, invalidate] of [
+    [
+      'inactive Profile',
+      async (profileId: string, instanceId: string) => {
+        await db
+          .update(Profiles)
+          .set({ state: ProfileState.DISABLED })
+          .where(and(eq(Profiles.id, profileId), eq(Profiles.instanceId, instanceId)));
+      },
+    ],
+    [
+      'suspended Instance',
+      async (_profileId: string, instanceId: string) => {
+        await db
+          .update(Instances)
+          .set({ state: InstanceState.SUSPENDED })
+          .where(eq(Instances.id, instanceId));
+      },
+    ],
+  ] as const) {
+    test(`does not return a ${label} after sync materialization`, async () => {
+      const instance = await createRemoteInstance();
+      const profile = await createProfile({ handle: 'bob', instanceId: instance.id });
+      const execute = mock.method(temporalClient.workflow, 'execute', async () => {
+        await invalidate(profile.id, instance.id);
+        return profile.id as never;
+      });
+
+      try {
+        await assert.rejects(
+          findOrMaterializeRemoteProfileActor({
+            handle: `alice@${remoteDomain}`,
+            mode: 'sync',
+          }),
+          /Profile not found/,
+        );
+      } finally {
+        execute.mock.restore();
+      }
+    });
+  }
+
+  test('rehydrates non-retryable materialization errors from the Workflow', async () => {
+    const execute = mock.method(temporalClient.workflow, 'execute', async () => {
+      throw ApplicationFailure.nonRetryable(
+        'Remote lookup did not return an actor.',
+        'RemoteActorMaterializationError',
+      );
+    });
+
+    try {
+      await assert.rejects(
+        findOrMaterializeRemoteProfileActor({ handle: `alice@${remoteDomain}`, mode: 'sync' }),
+        (error: unknown) =>
+          error instanceof RemoteActorMaterializationError &&
+          error.message === 'Remote lookup did not return an actor.',
+      );
+      assert.equal(execute.mock.calls.length, 1);
+    } finally {
+      execute.mock.restore();
+    }
   });
 
   test('rejects stored profiles from suspended instances', async () => {
     await createStoredRemoteActor({ instanceState: InstanceState.SUSPENDED });
-    const { context, lookupObject } = createLookupContext(async () => createActor());
-
     await assert.rejects(
       findOrMaterializeRemoteProfileActor({
-        context,
         handle: `alice@${remoteDomain}`,
       }),
       /Profile not found/,
     );
-    assert.equal(lookupObject.mock.calls.length, 0);
   });
 
   test('recovers concurrent first materialization as one remote identity', async () => {

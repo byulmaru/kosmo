@@ -196,10 +196,13 @@ partial lookup을 함께 전환해야 한다.
 인증된 Account가 `searchProfiles`에 명시적인 `@handle@instance` qualified handle 전체를 입력하고 해당 Remote
 Profile이 아직 저장되지 않은 경우에만, [ADR 0017](../decisions/0017-profile-search-staged-visibility.md)에 따라
 기존 원격 actor lookup과 Remote Profile 등록을 먼저 수행할 수 있다. 등록 뒤에도 기존 DB 검색과 같은
-visibility를 통과한 Profile만 반환한다. 일반 텍스트, 부분 remote handle, local handle, malformed handle,
-이미 저장된 Remote Profile 검색은 원격 fetch·refresh를 시작하지 않는다. exact `profileByHandle`, 프로필
-route와 그 하위 경로도 저장된 Profile만 조회한다. 원격 lookup 실패, identity 충돌 또는 새 원격 요청을 보낼 수
-없는 Instance는 Profile이 없는 검색 결과로 처리하고 예상하지 못한 오류는 관측 가능하게 남긴다.
+visibility를 통과한 Profile만 반환한다. 같은 명시적 qualified handle 검색에서 이미 저장된 Remote Profile이
+stale한 경우에는 기존 DB 검색과 visibility를 먼저 적용한 결과를 즉시 반환하고, 결과를 기다리지 않는 Temporal
+refresh를 시작한다. refresh 실패는 기존 Profile 검색 결과를 실패로 바꾸거나 저장된 Profile을 제거하지
+않으며, 예상하지 못한 오류는 관측 가능하게 남긴다. 일반 텍스트, 부분 remote handle, local handle, malformed
+handle은 원격 fetch·refresh를 시작하지 않는다. exact `profileByHandle`, 프로필 route와 그 하위 경로도 원격
+materialization이나 refresh 없이 저장된 Profile만 조회한다. 원격 lookup 실패, identity 충돌 또는 새 원격 요청을
+보낼 수 없는 Instance는 Profile이 없는 검색 결과로 처리하고 예상하지 못한 오류는 관측 가능하게 남긴다.
 
 - Remote Profile lookup은 Instance의 Safety State가 Domain Block이 아니고 Reachability State가
   Reachable이며 Service State가 Active일 때만 새 원격 요청을 보낼 수 있다.

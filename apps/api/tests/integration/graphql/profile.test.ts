@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, mock, test } from 'node:test';
-import { Create, Delete, Endpoints, Note, Person, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Create, Delete, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
   AccountProfileRole,
   AccountState,
@@ -232,9 +232,13 @@ describe('GraphQL remote profile boundary', () => {
 
   test('materializes a missing explicit remote profile into the existing connection', async (t) => {
     const auth = await createAuthenticatedSession();
-    const actor = createLookupActor();
-    const lookupObject = mock.fn(async () => actor);
-    t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({ handle: 'alice', instanceId: remoteInstance.id });
+    const execute = t.mock.method(
+      temporalClient.workflow,
+      'execute',
+      async () => remote.id as never,
+    );
 
     const result = await requestGraphQL<{
       searchProfiles: { edges: Array<{ node: { id: string; relativeHandle: string } }> };
@@ -253,22 +257,19 @@ describe('GraphQL remote profile boundary', () => {
       result.data?.searchProfiles.edges.map(({ node }) => node.relativeHandle),
       [`@alice@${remoteDomain}`],
     );
-    assert.equal(lookupObject.mock.calls.length, 1);
+    assert.equal(execute.mock.calls.length, 1);
     assert.equal(await db.$count(Profiles), 2);
-    assert.equal(await db.$count(ActivityPubActors), 1);
+    assert.equal(await db.$count(ActivityPubActors), 0);
   });
 
-  test('returns a stored stale remote profile without scheduling a refresh', async (t) => {
+  test('returns a stored stale remote profile after scheduling a Temporal refresh', async (t) => {
     const auth = await createAuthenticatedSession();
     const stored = await createStoredActivityPubAuthor({ domain: remoteDomain, handle: 'alice' });
     await db
       .update(ActivityPubActors)
       .set({ lastFetchedAt: Temporal.Instant.from('2025-01-01T00:00:00Z') })
       .where(eq(ActivityPubActors.profileId, stored.profile.id));
-    const lookupObject = mock.fn(async () => {
-      throw new Error('Stored profile search must not look up the actor');
-    });
-    t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
+    const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
 
     const result = await requestGraphQL<{
       searchProfiles: { edges: Array<{ node: { id: string; relativeHandle: string } }> };
@@ -291,17 +292,15 @@ describe('GraphQL remote profile boundary', () => {
         },
       },
     ]);
-    assert.equal(lookupObject.mock.calls.length, 0);
+    assert.equal(start.mock.calls.length, 1);
   });
 
   for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
-    test(`returns an empty connection for a stored ${state} remote profile without lookup`, async (t) => {
+    test(`returns an empty connection for a stored ${state} remote profile without lookup`, async () => {
       const auth = await createAuthenticatedSession();
       const domain = `${state.toLowerCase()}.remote.example`;
       const stored = await createStoredActivityPubAuthor({ domain, handle: 'alice' });
       await db.update(Profiles).set({ state }).where(eq(Profiles.id, stored.profile.id));
-      const lookupObject = mock.fn(async () => createLookupActor());
-      t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
 
       const result = await requestGraphQL<{
         searchProfiles: { edges: unknown[]; pageInfo: { hasNextPage: boolean } };
@@ -321,15 +320,20 @@ describe('GraphQL remote profile boundary', () => {
         edges: [],
         pageInfo: { hasNextPage: false },
       });
-      assert.equal(lookupObject.mock.calls.length, 0);
     });
   }
 
   test('uses the canonical profile when an explicit remote search resolves an alias domain', async (t) => {
     const auth = await createAuthenticatedSession();
-    const actor = createLookupActor();
-    const lookupObject = mock.fn(async () => actor);
-    t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
+    const canonical = await createStoredActivityPubAuthor({
+      domain: remoteDomain,
+      handle: 'alice',
+    });
+    const execute = t.mock.method(
+      temporalClient.workflow,
+      'execute',
+      async () => canonical.profile.id as never,
+    );
 
     const result = await requestGraphQL<{
       searchProfiles: { edges: Array<{ node: { id: string; relativeHandle: string } }> };
@@ -348,50 +352,20 @@ describe('GraphQL remote profile boundary', () => {
       result.data?.searchProfiles.edges.map(({ node }) => node.relativeHandle),
       [`@alice@${remoteDomain}`],
     );
-    assert.equal(await db.$count(Profiles), 2);
-    assert.equal(await db.$count(ActivityPubActors), 1);
-  });
-
-  test('keeps concurrent explicit remote searches on one canonical identity', async (t) => {
-    const auth = await createAuthenticatedSession();
-    const actor = createLookupActor();
-    const lookupObject = mock.fn(async () => actor);
-    t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
-
-    const results = await Promise.all(
-      Array.from({ length: 2 }, () =>
-        requestGraphQL<{
-          searchProfiles: { edges: Array<{ node: { id: string; relativeHandle: string } }> };
-        }>(
-          `query SearchRemoteProfile($query: String!) {
-            searchProfiles(query: $query, first: 20) {
-              edges { node { id relativeHandle } }
-            }
-          }`,
-          { query: `@alice@${remoteDomain}` },
-          auth.token,
-        ),
-      ),
-    );
-
-    for (const result of results) {
-      assertNoGraphQLErrors(result);
-      assert.deepEqual(
-        result.data?.searchProfiles.edges.map(({ node }) => node.relativeHandle),
-        [`@alice@${remoteDomain}`],
-      );
-    }
+    assert.equal(execute.mock.calls.length, 1);
     assert.equal(await db.$count(Profiles), 2);
     assert.equal(await db.$count(ActivityPubActors), 1);
   });
 
   test('falls back to an empty connection for expected remote materialization failures', async (t) => {
     const auth = await createAuthenticatedSession();
+    const { RemoteActorMaterializationError } = await import('@kosmo/fedify');
     const { remoteProfileSearchErrorReporter } =
       await import('../../../src/graphql/resolvers/profile/query/by-handle');
     const captureUnexpectedError = t.mock.method(remoteProfileSearchErrorReporter, 'capture');
-    const lookupObject = mock.fn(async () => null);
-    t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
+    const execute = t.mock.method(temporalClient.workflow, 'execute', async () => {
+      throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
+    });
     const instanceCountBefore = await db.$count(Instances);
 
     const result = await requestGraphQL<{
@@ -409,7 +383,7 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.searchProfiles, { edges: [], pageInfo: { hasNextPage: false } });
-    assert.equal(lookupObject.mock.calls.length, 1);
+    assert.equal(execute.mock.calls.length, 1);
     assert.equal(captureUnexpectedError.mock.calls.length, 0);
     assert.equal(await db.$count(Instances), instanceCountBefore);
   });
@@ -420,10 +394,9 @@ describe('GraphQL remote profile boundary', () => {
       await import('../../../src/graphql/resolvers/profile/query/by-handle');
     const captureUnexpectedError = t.mock.method(remoteProfileSearchErrorReporter, 'capture');
     const lookupError = new Error('remote lookup unavailable');
-    const lookupObject = mock.fn(async () => {
+    const execute = t.mock.method(temporalClient.workflow, 'execute', async () => {
       throw lookupError;
     });
-    t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
 
     const result = await requestGraphQL<{
       searchProfiles: { edges: unknown[] };
@@ -437,6 +410,7 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.searchProfiles.edges, []);
+    assert.equal(execute.mock.calls.length, 1);
     assert.equal(captureUnexpectedError.mock.calls.length, 1);
     assert.strictEqual(captureUnexpectedError.mock.calls[0]?.arguments[0], lookupError);
   });
@@ -4636,20 +4610,6 @@ const createStoredActivityPubAuthor = async ({
 
   return { actorUri, instance, profile };
 };
-
-const createLookupActor = () =>
-  new Person({
-    endpoints: new Endpoints({ sharedInbox: new URL(`https://${remoteDomain}/inbox`) }),
-    followers: new URL(`https://${remoteDomain}/users/alice/followers`),
-    following: new URL(`https://${remoteDomain}/users/alice/following`),
-    id: new URL(`https://${remoteDomain}/users/alice`),
-    inbox: new URL(`https://${remoteDomain}/users/alice/inbox`),
-    name: 'Alice Remote',
-    outbox: new URL(`https://${remoteDomain}/users/alice/outbox`),
-    preferredUsername: 'alice',
-    published: Temporal.Instant.from('2024-01-02T03:04:05Z'),
-    summary: 'Remote bio',
-  });
 
 const materializeRemotePost = async ({
   actorUri,

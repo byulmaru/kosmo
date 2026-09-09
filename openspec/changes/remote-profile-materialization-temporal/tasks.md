@@ -1,0 +1,102 @@
+## 1. PROD-808 Remote actor materialization execution
+
+**Authority / Provenance**
+
+- `docs/domain/objects/profile.md`
+- `docs/domain/objects/instance.md`
+- `docs/architecture/core-services.md`
+- `PROD-808`
+- `PROD-248`
+
+**Deliverable**
+
+신규 remote actor materialization과 stale refresh가 같은 내구성 있는 실행 경로에서 기존 Profile identity·projection·transaction 결과를 만든다. 상위 caller는 선택적 `profileId`와 기존 unsigned lookup을 사용하면서 동기 결과 대기와 비동기 시작 확인을 선택할 수 있다.
+
+**Guardrails**
+
+- `profileId`가 없으면 configured Local Instance canonical origin을 사용하고, 있으면 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용한다. 필요한 Remote actor 정보가 없을 때 origin을 추측하지 않는다.
+- 하나의 짧은 Workflow가 하나의 Activity를 호출하며, caller mode를 Workflow input이나 branch로 분리하지 않는다.
+- Fedify context, actor object와 전체 DB row를 Workflow payload로 전달하지 않고, Workflow/Activity 결과는 Profile identity 중심으로 유지한다.
+- 기존 identity, canonical actor reuse, state eligibility, projection, transaction과 ordering 계약 및 schema/migration 범위를 유지한다.
+
+**Verification**
+
+- `profileId` 생략·Local Profile·Remote Profile·Remote actor metadata 결손 입력을 실행해 origin 선택과 실패 경계를 검증한다.
+- Workflow 밖 Temporal Client caller의 같은 qualified handle과 origin-selection identity 동시 sync/async 요청이 중복 Profile/actor row를 만들지 않고, sync는 Profile identity를 받고 async는 durable start acknowledgement를 받는지 검증한다.
+- caller가 stale row를 본 뒤 Activity가 늦게 실행되는 경우 최신 Profile/actor/Instance 상태와 TTL을 다시 확인해 불필요한 원격 fetch를 하지 않는지 검증한다.
+- async child caller가 start acknowledgement 뒤 child result를 기다리지 않고 반환하는지, sync/async 선택과 결과 처리가 adapter 계약대로 동작하는지 검증한다. parent lifecycle 이후 child 생존은 Temporal SDK semantics로 둔다.
+- Activity/Worker 재시작 후 실행 재개와 기존 projection·transaction 결과를 검증한다.
+
+- [x] 1.1 상위 remote actor caller가 `profileId?: string`과 caller sync/async 선택을 전달하고, unsigned lookup 및 Profile origin 선택·결손 오류를 보존하도록 전환한다.
+- [x] 1.2 신규 materialization과 stale refresh가 기존 Fedify lookup·projection·transaction을 한 번의 Temporal Workflow/Activity 실행 경로에서 수행하고 Worker에 연결되도록 구현한다.
+- [x] 1.3 JSON-safe handle/profileId 입력·Profile ID 결과, origin 선택 identity를 포함한 stable Workflow identity, in-flight reuse와 완료 후 재시도 semantics를 적용한다.
+- [x] 1.4 영구 domain rejection과 일시적 외부/DB 장애의 retry 경계를 적용하고, caller deadline이 이미 시작된 Workflow를 취소하지 않도록 검증한다.
+- [x] 1.5 Workflow 내부 async caller가 `startChild`의 start acknowledgement만 기다리고 `parentClosePolicy: ABANDON` 및 `cancellationType: ABANDON`으로 parent 종료·취소 이후에도 child를 유지하도록 연결하며, child active-ID conflict를 자동 join으로 가장하지 않는다.
+
+## 2. PROD-808 Profile search and read boundaries
+
+**Authority / Provenance**
+
+- `docs/domain/objects/profile.md`
+- `docs/domain/decisions/0017-profile-search-staged-visibility.md`
+- `PROD-504`
+- `PROD-573`
+- `PROD-808`
+
+**Deliverable**
+
+인증된 명시적 qualified remote search는 저장된 stale Profile을 즉시 반환하면서 같은 Temporal refresh를 시작하고, 원격 요청이 허용되지 않은 검색·route와 inbound Update no-network 경계를 그대로 유지한다. inbound Follow의 기존 request context와 lookup 경계는 유지한다.
+
+**Guardrails**
+
+- fresh stored Profile은 원격 작업 없이 반환하고, stale Profile의 refresh 실패나 시작 실패는 기존 row와 성공한 검색 결과를 무효화하지 않는다.
+- 일반 partial/local/malformed 검색, `profileByHandle`, profile route와 하위 route는 원격 materialization·refresh를 시작하지 않는다.
+- `SUSPENDED` Profile/Instance 비노출, `UNRESPONSIVE` Instance refresh 금지, 기존 empty-result와 unexpected-error 관측 매핑을 유지한다.
+- inbound Follow request context와 lookup, 검증된 inbound Update actor/no-network projection은 이 전환에 포함하지 않으며 기존 경계를 유지한다.
+
+**Verification**
+
+- 명시적 검색의 missing/fresh/stale actor, refresh failure/start failure와 visibility 결과를 실행해 즉시 반환·refresh·fallback을 검증한다.
+- partial/local/malformed 검색, `profileByHandle`, profile route와 inbound Update 경로에서 외부 lookup이 발생하지 않는지 행동 수준으로 검증하고, inbound Follow는 기존 request context와 lookup 동작을 유지하는지 별도로 검증한다.
+
+- [x] 2.1 명시적 qualified search가 missing Profile의 기존 synchronous materialization과 canonical identity 결과를 유지하도록 caller를 연결한다.
+- [x] 2.2 명시적 qualified search가 stale Profile을 즉시 반환하고 refresh를 끄지 않으면서 동일한 Temporal 경로를 시작하도록 전환한다.
+- [x] 2.3 partial/local/malformed/profileByHandle/route 및 inbound Update no-network 경계 회귀와 inbound Follow 기존 lookup 경계, expected empty-result·unexpected error 관측을 검증한다.
+
+## 3. PROD-808 Integration and completion verification
+
+**Authority / Provenance**
+
+- `docs/domain/objects/profile.md`
+- `docs/domain/objects/instance.md`
+- `docs/architecture/core-services.md`
+- `PROD-808`
+
+**Deliverable**
+
+최신 `main`에서 독립적으로 검증 가능한 1-layer 구현과 정합성 증거를 완성하고, 이후 migration Stack이 이 layer 위에서 호출부를 재배치할 수 있는 상태를 만든다.
+
+**Guardrails**
+
+- DB schema/migration, Profile Migration, inbound Update 동작, production rollout/merge/queue와 migration Stack branch/base 변경을 이 scope에 포함하지 않는다.
+- 새 status API, 주기 scanner, 장수명 Profile Workflow, URI discriminator, parser/client/projection/framework를 추가하지 않는다.
+- CI·개발·production 증거를 섞지 않고 각 검증 결과를 실제 실행 결과로 기록한다.
+
+**Verification**
+
+- 영향받은 package typecheck와 Worker build를 통과시킨다.
+- Temporal test environment 또는 동등한 실행 검증으로 adapter의 sync/async 대기 선택·start acknowledgement·결과 처리, fresh/stale, retry/error, timeout continuation, restart와 concurrency를 확인한다. SDK의 parent-close/cancellation semantics 자체를 source/options equality test로 재검증하지 않는다.
+- `openspec validate remote-profile-materialization-temporal --type change --strict --no-interactive`를 통과시키고, 전체 declared scope 완료 후 canonical spec sync와 archive 판단을 PROD-808 owner가 수행한다.
+
+- [x] 3.1 영향받은 Fedify/API/core/Worker 행동 테스트를 추가·실행해 두 capability의 scenarios와 기존 회귀 경계를 검증한다.
+- [x] 3.2 영향받은 typecheck, Worker build와 필요한 lint/check를 실행하고 결과를 기록한다.
+- [x] 3.3 OpenSpec strict validation과 canonical 문서 정합성을 확인한 뒤 migration Stack owner에게 reparent 가능한 handoff 증거를 전달한다.
+
+## Completion evidence
+
+- Fedify remote actor materialization integration: 55/55 passed against the isolated PostgreSQL and Temporal runtime.
+- API GraphQL profile integration: 68/68 passed against the isolated PostgreSQL and Temporal runtime.
+- Worker Remote Profile Workflow and Activity integration: 5/5 passed with Temporal's local test server, including retry and non-retryable rejection paths.
+- Core Temporal caller tests: 3/3 passed, covering sync Profile ID results, async durable start acknowledgement, stable identity and deadlines.
+- `pnpm --filter @kosmo/fedify exec tsc --noEmit --pretty false`, `pnpm --filter @kosmo/api exec tsc --noEmit --pretty false`, `pnpm --filter @kosmo/worker build`, changed-file ESLint, changed-file Prettier and `git diff --check` passed. The repository-wide Core TypeScript command still reports unrelated pre-existing cross-package and generated-app errors.
+- `pnpm exec openspec validate remote-profile-materialization-temporal --type change --strict --no-interactive` passed. Parent-close and cancellation behavior remain delegated to Temporal SDK semantics as declared above.

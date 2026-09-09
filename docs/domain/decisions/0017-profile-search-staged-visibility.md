@@ -37,18 +37,21 @@ Instance의 Remote Profile은 검색 결과에서 제외되어야 한다.
   `InstanceState.SUSPENDED`가 아닌 Instance만 포함한다. 따라서 `ProfileState.SUSPENDED` Profile과 suspended
   Instance의 Remote Profile은 현재 단계에서도 제외된다.
 - 기본 검색 대상은 configured local Instance에 저장된 Local Profile과 입력 domain의 ActivityPub Instance에
-  이미 저장된 Remote Profile로 한정한다. 일반 텍스트, 부분 remote handle, local handle, malformed handle과
-  저장된 Remote Profile 검색은 WebFinger, actor document fetch·refresh 또는 새 Remote Profile
-  materialization을 수행하지 않는다.
+  이미 저장된 Remote Profile로 한정한다. 일반 텍스트, 부분 remote handle, local handle, malformed handle은
+  WebFinger, actor document fetch·refresh 또는 새 Remote Profile materialization을 수행하지 않는다.
 - 유효한 Account 인증을 통과한 `searchProfiles`가 명시적인 `@handle@instance` qualified handle 전체를 입력받고
   해당 Remote Profile이 아직 저장되지 않은 경우에만, 기존 Remote Profile lookup 정책과 actor materialization
   경계로 원격 actor를 조회하고 저장한 뒤 기존 DB 검색을 수행할 수 있다. materialization 뒤에도 이 ADR의
   staged visibility를 통과한 Profile만 검색 결과로 반환한다.
+- 같은 명시적 qualified handle 검색에서 Remote Profile이 이미 저장되어 있지만 stale한 경우에는 기존 DB 검색과
+  staged visibility를 먼저 적용한 결과를 즉시 반환하고, 결과를 기다리지 않는 Temporal refresh를 시작한다.
+  refresh 실패는 기존 Profile 검색 결과를 실패로 바꾸거나 저장된 Profile을 제거하지 않으며, 예상하지 못한
+  오류는 관측 가능하게 남긴다.
 - 명시적 원격 검색의 lookup 실패, identity 충돌 또는 새 원격 요청을 보낼 수 없는 Instance는 검색 요청을
   실패시키지 않고 materialization 전과 같은 빈 검색 결과로 처리한다. 예상하지 못한 오류는 관측 가능하게
   남긴다.
-- exact `profileByHandle`, 프로필 route와 그 하위 경로는 원격 materialization을 시작하지 않으며 저장된
-  Profile만 조회한다.
+- exact `profileByHandle`, 프로필 route와 그 하위 경로는 원격 materialization이나 refresh를 시작하지 않으며
+  저장된 Profile만 조회한다.
 - 이 staged 예외는 현재 저장된 Profile의 exact/partial handle lookup에만 적용한다. ADR이 최종 moderation 정책의
   예외를 직접 승인하거나 Domain Limit/Profile Domain Block을 생략해도 된다는 일반 권한을 부여하는 것은 아니다.
 - Domain Limit과 viewer Profile Domain Block의 저장 모델 및 공통 predicate가 도입되면, exact `profileByHandle`과

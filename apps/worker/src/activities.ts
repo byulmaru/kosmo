@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
 export { cleanupUnavailableNotificationsActivity } from './activities/cleanup-unavailable-notifications';
+export { materializeRemoteProfileActorActivity } from './activities/remote-profile-materialization';
 export {
   sendProfileFollowActivity,
   sendProfileUnfollowActivity,

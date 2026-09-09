@@ -14,6 +14,7 @@
     "@fedify/postgres": "2.3.0",
     "@fedify/vocab": "2.3.0",
     "@kosmo/core": "workspace:*",
+    "@temporalio/client": "^1.22.0",
     "drizzle-orm": "1.0.0-beta.22",
     "entities": "^8.0.0",
     "postgres": "^3.4.9",

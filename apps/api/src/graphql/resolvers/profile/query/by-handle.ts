@@ -5,7 +5,6 @@ import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
 import { profileHandleSchema } from '@kosmo/core/validation';
 import {
-  federation,
   findOrMaterializeRemoteProfileActor,
   RemoteActorMaterializationError,
 } from '@kosmo/fedify';
@@ -100,7 +99,7 @@ builder.queryField('searchProfiles', (t) =>
       args: {
         query: t.arg.string({ required: true }),
       },
-      resolve: async (_, args) => {
+      resolve: async (_, args, ctx) => {
         const localInstance = await resolveConfiguredLocalInstance();
         const parsed = parseProfileHandle(args.query, {
           configuredLocalDomain: localInstance.domain,
@@ -118,9 +117,9 @@ builder.queryField('searchProfiles', (t) =>
         if (isExplicitRemoteHandle(args.query, parsed)) {
           try {
             const profile = await findOrMaterializeRemoteProfileActor({
-              context: federation.createContext(new URL(localInstance.canonicalOrigin), undefined),
               handle: `${parsed.handle}@${parsed.domain}`,
-              scheduleRefresh: () => undefined,
+              mode: 'sync',
+              profileId: ctx.session.profile?.id,
             });
             materializedProfileId = profile.id;
           } catch (error) {
