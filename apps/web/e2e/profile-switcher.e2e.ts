@@ -328,7 +328,9 @@ test('home onboarding stays hidden while the home active profile query errors', 
   await page.reload();
 
   await expect(page.getByText('사용할 프로필을 선택해주세요')).toBeHidden();
+  await expect(page.getByText('프로필을 만들어 시작하세요')).toBeHidden();
   await expect(page.getByRole('alert')).toContainText('홈을 불러오지 못했어요');
+  await expect(page.getByText('잠시 후 다시 시도해주세요.')).toBeVisible();
   expect(graphQLRequests.operationNames).toContain('HomePageQuery');
 });
 

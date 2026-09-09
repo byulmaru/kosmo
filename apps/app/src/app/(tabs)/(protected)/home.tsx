@@ -1,9 +1,8 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { startTransition, useCallback, useEffect, useRef } from 'react';
-import { ErrorBoundary } from 'react-error-boundary';
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
-import { createOperationDescriptor, getRequest } from 'relay-runtime';
+import { createOperationDescriptor, fetchQuery, getRequest } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -15,7 +14,7 @@ import {
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
-import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { PropsWithChildren } from 'react';
@@ -48,11 +47,24 @@ export default function HomeScreen() {
   const shellChrome = useShellChrome();
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
+  const [revalidateCachedHome] = useState(
+    () =>
+      environment.check(createOperationDescriptor(getRequest(HomeQuery), {})).status ===
+      'available',
+  );
+  const homeRefreshRef = useRef<(() => void) | null>(null);
+  const registerHomeRefresh = useCallback((refresh: (() => void) | null) => {
+    homeRefreshRef.current = refresh;
+  }, []);
   const handleHomeReselection = useCallback(() => {
     if (Platform.OS === 'web') {
       window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
     }
-    startTransition(() => routeBoundaryRef.current?.refetch());
+    if (homeRefreshRef.current) {
+      homeRefreshRef.current();
+    } else {
+      startTransition(() => routeBoundaryRef.current?.refetch());
+    }
   }, []);
 
   useEffect(() => {
@@ -77,7 +89,10 @@ export default function HomeScreen() {
         ref={routeBoundaryRef}
         title="홈을 불러오지 못했어요"
       >
-        <HomeRouteContent />
+        <HomeRouteContent
+          registerHomeRefresh={registerHomeRefresh}
+          revalidateCachedHome={revalidateCachedHome}
+        />
       </RouteBoundary>
     </HomeFrame>
   );
@@ -114,85 +129,75 @@ function HomeFrame({
   );
 }
 
-function HomeRouteContent() {
-  const { fetchKey, refetch } = useRouteBoundary();
-
-  return <HomeContentBoundary fetchKey={fetchKey} onRetry={refetch} />;
-}
-
-function HomeContentBoundary({ fetchKey, onRetry }: { fetchKey: number; onRetry: () => void }) {
-  const reportUnexpectedError = useUnexpectedErrorReporter();
-
-  return (
-    <ErrorBoundary
-      fallbackRender={({ error, resetErrorBoundary }) => (
-        <HomeRecoveryContent
-          error={error}
-          onRetry={resetErrorBoundary}
-          reportError={reportUnexpectedError}
-        />
-      )}
-      onReset={(details) => {
-        if (details.reason === 'imperative-api') {
-          onRetry();
-        }
-      }}
-      resetKeys={[fetchKey]}
-    >
-      <HomeContent fetchKey={fetchKey} />
-    </ErrorBoundary>
-  );
-}
-
-function HomeRecoveryContent({
-  error,
-  onRetry,
-  reportError,
+function HomeRouteContent({
+  registerHomeRefresh,
+  revalidateCachedHome,
 }: {
-  error: unknown;
-  onRetry: () => void;
-  reportError?: ReturnType<typeof useUnexpectedErrorReporter>;
+  registerHomeRefresh: (refresh: (() => void) | null) => void;
+  revalidateCachedHome: boolean;
 }) {
+  const { fetchKey } = useRouteBoundary();
+
   return (
-    <ErrorBoundary
-      fallbackRender={() => (
-        <StateView
-          actionLabel="다시 시도"
-          alert
-          description="잠시 후 다시 시도해주세요."
-          onAction={onRetry}
-          title="홈을 불러오지 못했어요"
-        />
-      )}
-      onError={(_, info) => {
-        reportError?.(error, info);
-        console.error('Route error', error, info.componentStack);
-      }}
-    >
-      <StateView
-        actionLabel="다시 시도"
-        alert
-        description="잠시 후 다시 시도해주세요."
-        onAction={onRetry}
-        title="홈을 불러오지 못했어요"
-      />
-      <HomeContent fetchPolicy="store-only" />
-    </ErrorBoundary>
+    <HomeContent
+      fetchKey={fetchKey}
+      registerHomeRefresh={registerHomeRefresh}
+      revalidateCachedHome={revalidateCachedHome}
+    />
   );
 }
 
 function HomeContent({
   fetchKey,
-  fetchPolicy,
+  registerHomeRefresh,
+  revalidateCachedHome,
 }: {
-  fetchKey?: number;
-  fetchPolicy?: 'network-only' | 'store-and-network' | 'store-only';
+  fetchKey: number;
+  registerHomeRefresh: (refresh: (() => void) | null) => void;
+  revalidateCachedHome: boolean;
 }) {
+  const environment = useRelayEnvironment();
+  const { showToast } = useToast();
   const data = useLazyLoadQuery<HomePageQuery>(
     HomeQuery,
     {},
-    { fetchKey, fetchPolicy: fetchPolicy ?? (fetchKey ? 'network-only' : 'store-and-network') },
+    { fetchKey, fetchPolicy: 'store-or-network' },
   );
+
+  useEffect(() => {
+    let refreshInFlight = false;
+    let subscription: { unsubscribe: () => void } | null = null;
+    const refresh = () => {
+      if (refreshInFlight) {
+        return;
+      }
+
+      refreshInFlight = true;
+      subscription = fetchQuery(
+        environment,
+        HomeQuery,
+        {},
+        { fetchPolicy: 'network-only' },
+      ).subscribe({
+        complete: () => {
+          refreshInFlight = false;
+        },
+        error: () => {
+          refreshInFlight = false;
+          showToast('홈을 새로 불러오지 못했어요.', { tone: 'danger' });
+        },
+      });
+    };
+
+    registerHomeRefresh(refresh);
+    if (revalidateCachedHome) {
+      refresh();
+    }
+    return () => {
+      registerHomeRefresh(null);
+      subscription?.unsubscribe();
+    };
+  }, [environment, registerHomeRefresh, revalidateCachedHome, showToast]);
 
   return <HomeContentView data={data} />;
 }

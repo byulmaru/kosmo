@@ -1,8 +1,18 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { expect, spyOn, userEvent, within } from 'storybook/test';
+import {
+  createOperationDescriptor,
+  Environment,
+  getRequest,
+  Network,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
+import { expect, spyOn, userEvent, waitFor, within } from 'storybook/test';
+import HomePageQueryNode from '@/app/(tabs)/(protected)/__generated__/HomePageQuery.graphql';
 import HomeScreen from '@/app/(tabs)/(protected)/home';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
+import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import { post, profile, shellQuery, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -103,6 +113,38 @@ function HomeRefreshStory() {
   );
 }
 
+function CachedHomeAutoRevalidationStory() {
+  const [requestCount, setRequestCount] = useState(0);
+  const environment = useMemo(() => {
+    const network = Network.create((request) => {
+      if (request.name === 'HomePageQuery') {
+        setRequestCount((count) => count + 1);
+        return Promise.reject(new Error('홈 자동 재검증 실패'));
+      }
+
+      return Promise.resolve({ data: {} });
+    });
+    const nextEnvironment = new Environment({
+      network,
+      store: new Store(new RecordSource()),
+    });
+
+    nextEnvironment.commitPayload(
+      createOperationDescriptor(getRequest(HomePageQueryNode), {}),
+      cachedHomeData,
+    );
+    return nextEnvironment;
+  }, []);
+  const createEnvironment = useCallback(() => environment, [environment]);
+
+  return (
+    <RelayActorProvider createEnvironment={createEnvironment}>
+      <HomeScreen />
+      <Text testID="home-automatic-request-count">{requestCount}</Text>
+    </RelayActorProvider>
+  );
+}
+
 export const EmptyTimelineFull: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   parameters: {
@@ -167,22 +209,17 @@ export const ErrorFull: Story = {
     relay: { operationResponses: { HomePageQuery: { error: '홈을 불러오지 못했습니다.' } } },
   },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).findByRole('alert')).resolves.toBeVisible();
+    const canvas = within(canvasElement);
+    const alert = await canvas.findByRole('alert');
+    expect(alert).toBeVisible();
+    expect(canvas.queryByText('사용할 프로필을 선택해주세요')).not.toBeInTheDocument();
+    expect(canvas.queryByText('프로필을 만들어 시작하세요')).not.toBeInTheDocument();
+    expect(canvas.getByText('잠시 후 다시 시도해주세요.')).toBeVisible();
     expectHomeBrandHeader(canvasElement);
   },
 };
 
 export const RefetchFailureKeepsCachedTimelineAndRecovers: Story = {
-  beforeEach: () => {
-    const originalError = console.error;
-    const errorSpy = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
-      if (!args.some((argument) => String(argument).includes('홈 재조회 실패'))) {
-        originalError(...args);
-      }
-    });
-
-    return () => errorSpy.mockRestore();
-  },
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   parameters: {
     relay: {
@@ -199,18 +236,38 @@ export const RefetchFailureKeepsCachedTimelineAndRecovers: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
     await expect(canvas.findByText('캐시된 홈 게시글')).resolves.toBeVisible();
 
     await userEvent.click(canvas.getByRole('button', { name: '홈 다시 불러오기' }));
     expect(canvas.queryByText('홈을 불러오는 중입니다.')).not.toBeInTheDocument();
     expect(canvas.getByText('캐시된 홈 게시글')).toBeVisible();
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('홈을 불러오지 못했어요');
+    const refreshToast = await body.findByText('홈을 새로 불러오지 못했어요.');
+    await waitFor(() => expect(refreshToast).toBeVisible());
+    expect(canvas.queryByText('잠시 후 다시 시도해주세요.')).not.toBeInTheDocument();
     expect(canvas.getByText('캐시된 홈 게시글')).toBeVisible();
 
-    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await userEvent.click(canvas.getByRole('button', { name: '홈 다시 불러오기' }));
     await expect(canvas.findByText('복구된 홈 게시글')).resolves.toBeVisible();
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    expect(canvas.queryByText('잠시 후 다시 시도해주세요.')).not.toBeInTheDocument();
     expect(canvas.queryByText('캐시된 홈 게시글')).not.toBeInTheDocument();
   },
   render: () => <HomeRefreshStory />,
+};
+
+export const CachedMountRevalidationFailureKeepsTimeline: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await expect(canvas.findByText('캐시된 홈 게시글')).resolves.toBeVisible();
+
+    const refreshToast = await body.findByText('홈을 새로 불러오지 못했어요.');
+    await waitFor(() => expect(refreshToast).toBeVisible());
+    expect(canvas.getByText('캐시된 홈 게시글')).toBeVisible();
+    expect(canvas.queryByText('잠시 후 다시 시도해주세요.')).not.toBeInTheDocument();
+    expect(canvas.queryByText('홈을 불러오는 중입니다.')).not.toBeInTheDocument();
+    expect(canvas.getByTestId('home-automatic-request-count')).toHaveTextContent('1');
+  },
+  render: () => <CachedHomeAutoRevalidationStory />,
 };

@@ -55,6 +55,15 @@ query·cursor·filtering 정책과 추가 페이지 로딩 동작은 유지한�
 추가 오류도 기존 목록과 자동으로 사라지는 `게시글을 더 불러오지 못했어요.` / `다시 시도` toast를 유지한다.
 Storybook의 오류·재시도 검증은 실제 Web·Native network/runtime QA 완료를 뜻하지 않는다.
 
+### Home 오류 동작 (현재 사용자 결정 기반 구현 결정, 2026-09-09)
+
+- 최초 Home query가 완전한 Relay timeline data 없이 실패하면 blocking 오류 화면과 `다시 시도` action을 표시하고,
+  프로필 onboarding으로 대체하지 않는다. 이 오류는 기존 unexpected-error reporter에 한 번만 보고한다.
+- 이미 표시 중인 Home timeline을 새로고침하거나 재검증하는 query가 실패하면 현재 timeline 내용을 유지하고 Home
+  오류 toast만 표시한다. blocking 오류 화면이나 별도 inline 오류·재시도 상태로 교체하지 않는다.
+- 이 Home 결정은 위 표의 최초·새로고침 `Target` 표현보다 우선한다. Local의 해당 상태와 Figma Target 승격 범위는
+  기존 계약을 유지한다.
+
 ## Figma 근거
 
 - [Mobile Home/Local route](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4522-3985)

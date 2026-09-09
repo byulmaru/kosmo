@@ -91,6 +91,26 @@ Android, iOS, Web에서 공유하는 kosmo 앱 shell과 canonical route 계약�
 - **WHEN** 사용자가 홈이 아닌 현재 route의 navigation 항목을 다시 실행하거나 Android/iOS Native에서 홈을 다시 실행한다
 - **THEN** 시스템은 이 요구사항에 따른 document 최상단 이동이나 Home Relay 새로고침을 추가하지 않는다
 
+### Requirement: Home timeline query error states
+
+**Authority / Provenance:** `docs/design/local-timeline.md`, `docs/design/accessibility.md` — **The app MUST** Home의 최초
+query 오류와 이미 표시 중인 timeline을 새로고침·재검증하는 query에 서로 다른 복구 상태를 제공해야 한다.
+
+#### Scenario: Block on an initial Home query error without complete data
+
+- **WHEN** 최초 Home query가 완전한 Relay timeline data 없이 실패한다
+- **THEN** 시스템은 blocking 오류 화면을 제공한다
+- **AND** 시스템은 `다시 시도` action을 제공한다
+- **AND** 시스템은 프로필 onboarding을 오류 대체 화면으로 표시하지 않는다
+- **AND** 시스템은 해당 오류를 기존 unexpected-error reporter에 정확히 한 번 보고한다
+
+#### Scenario: Preserve the Home timeline on a refresh error
+
+- **WHEN** 이미 표시 중이거나 완전한 Relay cache에서 복원된 Home timeline의 새로고침 또는 재검증 query가 실패한다
+- **THEN** 시스템은 현재 timeline 내용을 유지한다
+- **AND** 시스템은 Home 오류 toast만 표시한다
+- **AND** 시스템은 inline 오류·재시도 상태나 blocking 오류 화면으로 timeline을 교체하지 않는다
+
 ### Requirement: Mobile bottom tab profile entry
 
 모바일 하단 탭 바의 마지막 항목은 메뉴 drawer control이 아니라 현재 세션에서 선택된 프로필의 프로필 페이지로 이동하는 "프로필" 항목이어야 한다(MUST). 선택된 프로필이 없으면 이 항목은 비활성화되어야 하며(MUST), 하단 탭 바는 사이드바 drawer를 여는 메뉴 control을 제공하지 않아야 한다(MUST NOT).

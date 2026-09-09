@@ -1,6 +1,5 @@
 import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
-import { ConnectionHandler } from 'relay-runtime';
 import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -70,14 +69,9 @@ const cancelProfileFollowRequestMutation = graphql`
   }
 `;
 
-const followersConnectionKey = 'ProfileConnectionList_followers';
-const followingConnectionKey = 'ProfileConnectionList_following';
-
 const unfollowProfileMutation = graphql`
-  mutation FollowButtonUnfollowProfileMutation($connections: [ID!]!, $id: ID!) {
+  mutation FollowButtonUnfollowProfileMutation($id: ID!) {
     unfollowProfile(input: { id: $id }) {
-      profileFollowId @deleteEdge(connections: $connections)
-      profileFollowId @deleteRecord
       followerProfile {
         id
         followingCount
@@ -165,15 +159,7 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
               },
             }
           : undefined,
-        variables: {
-          connections: [
-            ...(follower?.id
-              ? [ConnectionHandler.getConnectionID(follower.id, followingConnectionKey)]
-              : []),
-            ConnectionHandler.getConnectionID(data.id, followersConnectionKey),
-          ],
-          id: data.id,
-        },
+        variables: { id: data.id },
       });
     } else if (viewerState.followRequest) {
       commitCancel({

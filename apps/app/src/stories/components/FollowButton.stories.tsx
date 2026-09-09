@@ -79,7 +79,6 @@ function FollowButtonPlayground(args: Parameters<typeof FollowButtonFixture>[0])
       FollowButtonUnfollowProfileMutation: {
         data: {
           unfollowProfile: {
-            profileFollowId: follow.id,
             followeeProfile: {
               ...target,
               viewerState: { isSelf: false, follow: null, followRequest: null },
@@ -222,7 +221,6 @@ const requestSuccessResponse = {
 
 const unfollowSuccessResponse = {
   unfollowProfile: {
-    profileFollowId: following.viewerState?.follow?.id,
     followeeProfile: {
       ...following,
       followersCount: Math.max(following.followersCount - 1, 0),

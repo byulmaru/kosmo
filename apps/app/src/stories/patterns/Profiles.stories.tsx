@@ -344,12 +344,11 @@ export const ListAndFollowStates: Story = {
   render: () => <ProfileListCatalog />,
 };
 
-export const UnfollowRemovesConnectionRowAfterSuccess: Story = {
+export const UnfollowKeepsConnectionRowAfterSuccess: Story = {
   parameters: {
     relay: {
       mutationResponse: {
         unfollowProfile: {
-          profileFollowId: followed.viewerState?.follow?.id,
           followeeProfile: {
             ...followed,
             followersCount: followed.followersCount - 1,
@@ -366,8 +365,9 @@ export const UnfollowRemovesConnectionRowAfterSuccess: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
-    await expect(canvas.findByText('아직 팔로잉이 없어요')).resolves.toBeVisible();
-    expect(canvas.queryByText('코스모 작가')).not.toBeInTheDocument();
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
+    expect(canvas.getByText('코스모 작가')).toBeVisible();
+    expect(canvas.queryByText('아직 팔로잉이 없어요')).not.toBeInTheDocument();
   },
   render: () => <FollowingWithFollowedProfile />,
 };
