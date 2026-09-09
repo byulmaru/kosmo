@@ -628,9 +628,10 @@ PROD-894는 다음 두 트리거를 Production 공용 UI와 Storybook으로 이�
   disabled 콜백 차단, 키보드 활성화·focus와 open 연결을 검증한다. Light/Dark는 공용 toolbar를 사용한다.
   실제 popup/picker lifecycle, 설정 route·저장·API, Web screen reader·Android/iOS runtime QA는 이 이관의
   완료 증거가 아니며 실제 Settings runtime QA는 PROD-727에 남는다.
-- 2026-09-08 검증: 앱 Relay·TypeScript 검사, 변경 파일 ESLint·Prettier, Storybook static build와 관련
-  Storybook 4개 파일의 9개 테스트가 통과했다. Tests는 Light/Dark의 ColorWell 크기·색상·focus·pressed→hover 복귀,
-  SelectTrigger의 error+focus·open+focus·ARIA 연결과 disabled 콜백 차단을 다룬다. 내장 Browser에서
+- 2026-09-09 검증: 앱 Relay·TypeScript 검사, 변경 파일 ESLint·Prettier, Storybook static build와 관련
+  Storybook 4개 파일의 11개 테스트가 통과했다. Tests는 Light/Dark의 ColorWell 크기·색상·focus·pressed→hover 복귀,
+  SelectTrigger의 error+focus·open+focus·ARIA 연결, disabled 콜백 차단과 두 Playground consumer의 선택·적용·취소·focus
+  복귀를 다룬다. 내장 Browser에서
   대표 Light/Dark·긴 값과 수동 open Controls·Actions를 확인했다. 실제 Native runtime과 screen reader는
   미검증이며 자동 a11y에서 제외된 color-contrast를 포함한 전체 WCAG 적합성을 주장하지 않는다.
 
