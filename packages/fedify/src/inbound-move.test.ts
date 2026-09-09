@@ -284,7 +284,7 @@ describe('inbound Move', () => {
     assert.deepEqual(await readMigrationAndFollowState(), beforeState);
   });
 
-  test('rejects a Local target without an eligible preparation', async () => {
+  test('requires Local preparation but accepts an approval-required prepared target', async () => {
     for (const options of [
       { targetFollowPolicy: ProfileFollowPolicy.OPEN, withMigration: false },
       {
@@ -313,7 +313,7 @@ describe('inbound Move', () => {
         start.mock.restore();
       }
 
-      assert.equal(start.mock.calls.length, 0);
+      assert.equal(start.mock.calls.length, options.withMigration ? 1 : 0);
       assert.deepEqual(await readMigrationAndFollowState(), beforeState);
     }
   });
