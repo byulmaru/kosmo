@@ -352,7 +352,11 @@ function UniversalShellContent() {
                   leading={mobileShellHeader.leading === 'back' ? backButton : menuButton}
                   title={mobileShellHeader.title}
                   trailing={
-                    mobileShellHeader.title === '알림' ? <NotificationReadAllAction /> : undefined
+                    mobileShellHeader.title === '알림' ? (
+                      <RelayActorBoundary>
+                        <NotificationReadAllAction />
+                      </RelayActorBoundary>
+                    ) : undefined
                   }
                 />
               ) : (

@@ -18,12 +18,19 @@
 ### 알림 모두 읽음
 
 - 모든 플랫폼의 `/notifications` trailing action은 기존 공용 `Button`의 secondary 표현(흰 배경과 `border` 색상 테두리)으로 `모두 읽음` 텍스트를 표시한다. `<768px` 모바일 Web에서는 `UniversalShell`이, compact/full Web과 Android/iOS에서는 알림 route가 소유한 `PageHeader`가 렌더링한다.
+- Shell app bar의 header·menu 위치와 layout은 `UniversalShell`이 계속 소유하고, 목록 query·pagination은 알림 목록이 소유한다.
+- `모두 읽음` action은 mutation·pending·error·retry를 소유하며, 현재 loaded unread ID snapshot만 최소 Context bridge로 전달받는다.
 - action은 클릭 시점에 현재 Relay connection에 로드된 unread Notification ID만 처리하며, 아직 로드하지 않았거나 요청 이후 새로 도착한 Notification을 처리하기 위해 추가 page를 먼저 가져오지 않는다.
 - 현재 로드된 unread item이 없거나 요청 중이면 action을 disabled 처리하고 접근성 상태에도 반영한다.
 - 성공 뒤 처리된 item은 목록에 남고 Unread 강조만 제거된다. 전역 인디케이터는 서버 count로 수렴하므로 아직 처리하지 않은 unread item이 있으면 `모두 읽음` 성공 뒤에도 남을 수 있다.
 - pending 또는 실패 중에는 item 강조와 전역 인디케이터를 낙관적으로 제거하지 않는다. 실패하면 기존 앱
   toast로 `알림을 모두 읽지 못했어요.`와 `다시 시도` action을 제공하고, 재시도 시점의 current Relay
   connection에 로드된 unread Notification ID를 다시 수집한다.
+- 중복 입력 차단은 하나의 Action instance가 살아 있는 동안의 연속 입력으로 한정하며, 전역 coordinator 없이
+  action lifetime 밖의 pending·retry·ID batch 실행 상태를 이어가지 않는다. Web breakpoint 전환이나
+  동일 Profile에서 breakpoint 전환으로 새 instance가 생기면 현재 loaded ID를 다시 요청할 수 있고, 이
+  재요청은 서버의 idempotent Read 수렴에 맡긴다. actor·route 변경으로 lifetime이 끝나면 이전 ID
+  snapshot·pending·retry를 이어가지 않고, action이 자신이 등록한 실패 toast retry를 정리한다.
 
 ## Web 검색 헤더
 

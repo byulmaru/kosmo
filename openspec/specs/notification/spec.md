@@ -596,6 +596,8 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 
 **Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/design/page-header.md`, `docs/design/colors.md`, `docs/design/breakpoints.md`, `PROD-703`, `PROD-679`, `PROD-930` — 모든 지원 플랫폼의 `/notifications`는 현재 Relay connection에 로드된 unread Notification만 지정 ID 일괄 Read로 처리하는 `모두 읽음` action을 제공하고, 서버 payload로 목록과 전역 인디케이터를 수렴시켜야 한다(MUST).
 
+Shell header·menu 위치와 layout은 `UniversalShell`이, 목록 query·pagination은 알림 목록이, action mutation·pending·error·retry는 action이 소유해야 한다(MUST). Action에는 현재 loaded unread ID snapshot만 최소 Context bridge로 전달해야 한다(MUST).
+
 #### Scenario: 플랫폼별 header action 소유권
 
 - **WHEN** 사용자가 지원 플랫폼에서 `/notifications`를 연다
@@ -606,7 +608,7 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 
 - **WHEN** 현재 Relay connection에 loaded unread Notification이 하나 이상 있고 Read 요청이 pending이 아니다
 - **THEN** `모두 읽음` action은 활성화된다
-- **AND** loaded unread가 없거나 요청 중이면 disabled와 접근성 disabled 상태를 함께 제공하고 중복 요청을 시작하지 않는다
+- **AND** loaded unread가 없거나 요청 중이면 disabled와 접근성 disabled 상태를 함께 제공하고, 동일 Action instance의 연속 입력으로 중복 요청을 시작하지 않는다
 
 #### Scenario: 현재 로드된 unread ID만 처리
 
@@ -630,6 +632,8 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 - **AND** 실패한 요청 전의 Unread 강조와 전역 인디케이터를 유지하고 사용자가 다시 시도할 수 있게 한다
 - **AND** 실패하면 기존 앱 toast로 `알림을 모두 읽지 못했어요.`와 `다시 시도` action을 제공한다
 - **AND** toast의 재시도는 실행 시점의 current Relay connection에서 loaded unread ID를 다시 수집한다
+- **AND** 동일 Profile에서 Web breakpoint 전환으로 새 Action instance가 생기면 현재 loaded ID를 다시 요청할 수 있고, 이 재요청은 서버의 idempotent Read 수렴에 맡긴다
+- **AND** actor·route 변경으로 Action lifetime이 끝나면 이전 ID snapshot·pending·retry를 이어가지 않고, action이 등록한 실패 toast retry를 정리한다
 
 #### Scenario: Web 상태와 수직 검증
 
