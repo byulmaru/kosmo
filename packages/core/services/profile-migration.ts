@@ -1,58 +1,15 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { ActivityPubActors, db, first, Instances, ProfileMigrations, Profiles } from '../db';
-import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
+import { InstanceKind, InstanceState, ProfileState } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
-import type { Transaction } from '../db';
 
-export type ProfileMigrationTargetInput = {
+export type PrepareProfileMigrationInput = {
+  readonly sourceProfileId: string;
   readonly targetProfileId: string;
 };
 
-export type PrepareProfileMigrationInput = ProfileMigrationTargetInput & {
-  readonly sourceProfileId: string;
-};
-
-const assertProfileMigrationTargetInTransaction = async (
-  tx: Transaction,
-  input: ProfileMigrationTargetInput,
-) => {
-  const target = await tx
-    .select({ instance: Instances, profile: Profiles })
-    .from(Profiles)
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(eq(Profiles.id, input.targetProfileId))
-    .limit(1)
-    .then(first);
-  if (!target) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  if (
-    target.profile.state !== ProfileState.ACTIVE ||
-    target.instance.kind !== InstanceKind.LOCAL ||
-    target.instance.state === InstanceState.SUSPENDED ||
-    target.profile.followPolicy !== ProfileFollowPolicy.OPEN
-  ) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  return target.profile;
-};
-
-/**
- * Validates the target before a caller performs remote source materialization.
- * The check is intentionally read-only; the mutating method repeats it in its
- * transaction so a caller cannot bypass the domain eligibility check.
- */
-export const assertProfileMigrationTarget = async (input: ProfileMigrationTargetInput) =>
-  db.transaction((tx) => assertProfileMigrationTargetInTransaction(tx, input));
-
-export const prepareProfileMigration = async (
-  input: PrepareProfileMigrationInput,
-): Promise<typeof Profiles.$inferSelect> =>
+export const prepareProfileMigration = async (input: PrepareProfileMigrationInput): Promise<void> =>
   db.transaction(async (tx) => {
-    const targetProfile = await assertProfileMigrationTargetInTransaction(tx, input);
-
     if (input.sourceProfileId === input.targetProfileId) {
       throw new ConflictError({ message: 'Profile cannot migrate to itself' });
     }
@@ -87,7 +44,7 @@ export const prepareProfileMigration = async (
       .then(first);
 
     if (inserted) {
-      return targetProfile;
+      return;
     }
 
     // A concurrent request won either unique key. Re-read the exact pair once
@@ -104,7 +61,7 @@ export const prepareProfileMigration = async (
       .limit(1)
       .then(first);
     if (concurrent) {
-      return targetProfile;
+      return;
     }
 
     throw new ConflictError({ message: 'Profile migration pair conflicts' });

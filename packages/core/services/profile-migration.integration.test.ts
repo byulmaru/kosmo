@@ -11,9 +11,9 @@ import {
   ProfileMigrations,
   Profiles,
 } from '../db';
-import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
+import { InstanceKind, ProfileFollowPolicy } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
-import { assertProfileMigrationTarget, prepareProfileMigration } from './profile-migration';
+import { prepareProfileMigration } from './profile-migration';
 
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
@@ -39,14 +39,10 @@ after(async () => {
 const createProfileFixture = async ({
   followPolicy = ProfileFollowPolicy.OPEN,
   instanceKind = InstanceKind.LOCAL,
-  instanceState = InstanceState.ACTIVE,
-  profileState = ProfileState.ACTIVE,
   withActor = instanceKind === InstanceKind.ACTIVITYPUB,
 }: {
   followPolicy?: ProfileFollowPolicy;
   instanceKind?: InstanceKind;
-  instanceState?: InstanceState;
-  profileState?: ProfileState;
   withActor?: boolean;
 } = {}) => {
   const suffix = randomUUID();
@@ -55,7 +51,6 @@ const createProfileFixture = async ({
     .values({
       domain: `${suffix}.example`,
       kind: instanceKind,
-      state: instanceState,
     })
     .returning()
     .then(firstOrThrow);
@@ -69,7 +64,6 @@ const createProfileFixture = async ({
       handle: suffix,
       instanceId: instance.id,
       normalizedHandle: suffix,
-      state: profileState,
     })
     .returning()
     .then(firstOrThrow);
@@ -88,43 +82,16 @@ const createProfileFixture = async ({
   return { instance, profile };
 };
 
-test('migration target 검증은 허용된 target Profile을 반환한다', async () => {
-  const target = await createProfileFixture();
-  const result = await assertProfileMigrationTarget({
-    targetProfileId: target.profile.id,
-  });
-  assert.equal(result.id, target.profile.id);
-});
-
-test('migration target은 Local·OPEN·ACTIVE 조합만 허용한다', async () => {
-  const approvalRequired = await createProfileFixture({
+test('migration source는 ACTIVE·비정지 Remote Actor만 허용한다', async () => {
+  const target = await createProfileFixture({
     followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
   });
   const remote = await createProfileFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
-  const suspendedInstance = await createProfileFixture({
-    instanceState: InstanceState.SUSPENDED,
-  });
-  const disabledProfile = await createProfileFixture({ profileState: ProfileState.DISABLED });
-
-  for (const fixture of [approvalRequired, remote, suspendedInstance, disabledProfile]) {
-    await assert.rejects(
-      assertProfileMigrationTarget({
-        targetProfileId: fixture.profile.id,
-      }),
-      NotFoundError,
-    );
-  }
-});
-
-test('migration source는 ACTIVE·비정지 Remote Actor만 허용한다', async () => {
-  const target = await createProfileFixture();
-  const remote = await createProfileFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
-  const prepared = await prepareProfileMigration({
+  await prepareProfileMigration({
     sourceProfileId: remote.profile.id,
     targetProfileId: target.profile.id,
   });
 
-  assert.equal(prepared.id, target.profile.id);
   const [migration] = await db
     .select()
     .from(ProfileMigrations)
@@ -170,7 +137,7 @@ test('같은 migration pair는 DB row를 멱등 재사용한다', async () => {
     targetProfileId: target.profile.id,
   } as const;
 
-  const first = await prepareProfileMigration(input);
+  await prepareProfileMigration(input);
   const firstMigration = await db
     .select({
       id: ProfileMigrations.id,
@@ -180,10 +147,7 @@ test('같은 migration pair는 DB row를 멱등 재사용한다', async () => {
     .from(ProfileMigrations)
     .where(eq(ProfileMigrations.targetProfileId, target.profile.id))
     .then(firstOrThrow);
-  const duplicate = await prepareProfileMigration(input);
-
-  assert.equal(first.id, target.profile.id);
-  assert.equal(duplicate.id, target.profile.id);
+  await prepareProfileMigration(input);
   const migrations = await db
     .select({
       id: ProfileMigrations.id,
@@ -230,15 +194,8 @@ test('동시 동일 요청은 DB unique 제약으로 하나의 migration만 만�
     targetProfileId: target.profile.id,
   } as const;
 
-  const results = await Promise.all([
-    prepareProfileMigration(input),
-    prepareProfileMigration(input),
-  ]);
+  await Promise.all([prepareProfileMigration(input), prepareProfileMigration(input)]);
 
-  assert.deepEqual(
-    results.map(({ id }) => id),
-    [target.profile.id, target.profile.id],
-  );
   const migrations = await db
     .select({
       sourceProfileId: ProfileMigrations.sourceProfileId,
@@ -252,4 +209,24 @@ test('동시 동일 요청은 DB unique 제약으로 하나의 migration만 만�
       targetProfileId: target.profile.id,
     },
   ]);
+});
+
+test('source와 target이 같으면 migration을 만들지 않고 거부한다', async () => {
+  const profile = await createProfileFixture();
+
+  await assert.rejects(
+    prepareProfileMigration({
+      sourceProfileId: profile.profile.id,
+      targetProfileId: profile.profile.id,
+    }),
+    ConflictError,
+  );
+
+  assert.deepEqual(
+    await db
+      .select()
+      .from(ProfileMigrations)
+      .where(eq(ProfileMigrations.targetProfileId, profile.profile.id)),
+    [],
+  );
 });
