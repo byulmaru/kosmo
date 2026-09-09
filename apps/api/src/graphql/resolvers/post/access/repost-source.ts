@@ -3,6 +3,7 @@ import { visiblePostWhere } from '@kosmo/core/visibility';
 import { and, eq, exists, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { visibleProfileWhere } from '@/profile/visibility';
+import type { PostProfileBlockMode } from '@kosmo/core/visibility';
 import type { SQL } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
@@ -10,7 +11,13 @@ const DirectRepostSources = alias(Posts, 'direct_repost_source');
 const DirectRepostSourceProfiles = alias(Profiles, 'direct_repost_source_profile');
 const DirectRepostSourceInstances = alias(Instances, 'direct_repost_source_instance');
 
-export const postRepostSourceAccessWhere = ({ ctx }: { ctx: UserContext }): SQL<boolean> => {
+export const postRepostSourceAccessWhere = ({
+  ctx,
+  profileBlockMode,
+}: {
+  readonly ctx: UserContext;
+  readonly profileBlockMode?: PostProfileBlockMode;
+}): SQL<boolean> => {
   const directSourceVisible = visiblePostWhere({
     post: DirectRepostSources,
     profileVisible: sql<boolean>`${visibleProfileWhere({
@@ -19,6 +26,7 @@ export const postRepostSourceAccessWhere = ({ ctx }: { ctx: UserContext }): SQL<
     })}`,
     viewerProfileId: ctx.session?.profile?.id,
     db,
+    profileBlockMode,
   });
 
   return sql<boolean>`${or(

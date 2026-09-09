@@ -86,7 +86,7 @@
 
 ### Requirement: Profile Block GraphQL actor and policy boundary
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `PROD-822`, `PROD-823`. 현재 GraphQL ingress는 검증된 Session의 selected Local Profile을 actor로 사용해 Profile Block 생성·해제와 Owner 차단 목록 조회를 제공해야 한다(MUST). GraphQL resolver·loader·Node 조회·connection은 중앙 application policy를 재사용해야 하며(MUST), 차단 목록은 selected Local Profile이 Owner인 관계만 반환해야 한다(MUST). Target Profile의 기본 정보는 기존 Profile 조회 정책으로 제공하고, Post·Media와 각 목록·상호작용·Notification은 해당 surface의 Profile Block 정책을 적용해야 한다(MUST). 이 GraphQL ingress 계약을 remote ActivityPub ingress에 적용하는 것은 이 change의 범위가 아니다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `PROD-822`, `PROD-823`. 현재 GraphQL ingress는 검증된 Session의 selected Local Profile을 actor로 사용해 Profile Block 생성·해제와 Owner 차단 목록 조회를 제공해야 한다(MUST). GraphQL resolver·loader·Node 조회·connection은 중앙 application policy를 재사용해야 하며(MUST), 요청별 DB actor state(GUC 등)·client 전용 차단 필터로 권한이나 가시성을 대체해서는 안 된다(MUST NOT). 차단 목록은 selected Local Profile이 Owner인 관계만 반환해야 하고(MUST), Target Profile이 기존 Profile 조회 조건을 충족할 때만 기존 `Profile` Target과 관계를 반환해야 한다(MUST). 목록은 pagination 전에 이 조건을 적용하고 관계 Node도 같은 조건을 적용해야 하며(MUST), Target을 다시 조회할 수 있게 되면 저장된 관계를 다시 반환해야 한다(MUST). 이 GraphQL ingress 계약을 remote ActivityPub ingress에 적용하는 것은 이 change의 범위가 아니다(MUST NOT).
 
 #### Scenario: selected Local Profile 없이 GraphQL Block operation을 실행하지 않는다
 
@@ -112,6 +112,12 @@
 - **THEN** 시스템은 기존 `Profile` Target 정보와 Owner 소유 관계만 제공한다
 - **AND** Post·Media·Follow 관계에는 각각의 기존 권한과 Profile Block surface policy를 적용한다
 - **AND** 같은 Block ID를 Target 또는 다른 selected Profile이 조회하면 관계와 Target 식별 정보를 반환하지 않는다
+
+#### Scenario: 조회할 수 없는 Target의 관리 관계를 pagination 전에 제외한다
+
+- **WHEN** selected Local Owner의 Profile Block Target이 비활성화되거나 연결된 Instance가 정지되어 기존 Profile 조회 조건을 충족하지 않는다
+- **THEN** 시스템은 해당 관계를 관리 connection의 pagination 전에 제외하고 관계 Node에서도 반환하지 않는다
+- **AND** Profile Block row 자체는 삭제하지 않으며 Target이 다시 조회 가능해지면 관리 connection과 관계 Node에 다시 포함한다
 
 #### Scenario: Mute와 Block 관리 관계를 독립적으로 유지한다
 

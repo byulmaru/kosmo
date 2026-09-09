@@ -29,7 +29,11 @@ builder.objectFields(Profile, (t) => ({
               .where(
                 and(
                   eq(Posts.profileId, profile.id),
-                  postAccessWhere({ ctx, profileMute: { excludeExcept: profile.id } }),
+                  postAccessWhere({
+                    ctx,
+                    profileMute: { excludeExcept: profile.id },
+                    profileBlockMode: 'AUTHOR_TO_VIEWER',
+                  }),
                   isNull(Posts.replyParentId),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,

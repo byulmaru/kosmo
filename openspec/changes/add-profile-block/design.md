@@ -77,16 +77,16 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
 `PROD-821`에 남으며, `PROD-822`는 정책·GraphQL만 소유한다. 부모 PR이 Draft여도 자식 layer 구현을 시작할 수 있지만, 자식 PR의 검증 base에는
 #726 결과가 포함되어야 한다.
 
-| 경계                      | 현재 코드와 구현 시 확인할 점                                                                                                                                                                                                                          |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 공통 Profile policy       | `packages/core/visibility/profile.ts`의 `visibleProfileWhere`는 viewer 입력 없이 Profile·Instance 상태만 검사한다. 인증용 actor 조회와 viewer별 Target 조회를 구분해야 한다.                                                                           |
-| Post·Repost·Media         | `packages/core/visibility/post.ts`, `apps/api/src/graphql/resolvers/post/access/visibility.ts`에서 기존 Visibility와 Follow 조건을 조합한다. PostContent Node, Repost Source, Bookmark, avatar/header와 Media grant도 확인한다.                        |
-| Profile 검색·관련 Profile | `apps/api/src/graphql/resolvers/profile/query/by-handle.ts`, `hashtag/field/related-profiles.ts`의 SQL 후보에 정책을 적용한다. 기존 exact/partial 검색과 명시적인 Remote materialization 조건은 유지한다.                                              |
-| 목록                      | `post/query/home-timeline.ts`, `post/query/local-timeline.ts`, `post/field/profile.ts`는 이미 후보 SQL 뒤에 cursor·limit을 적용한다. 조사한 `apps/api/src`와 `apps/api/schema.graphql`에는 Hashtag Post List·Post 검색 endpoint가 없다.                |
-| Follow                    | `packages/core/services/profile-follow-command.ts`, `profile-follow-transaction.ts`가 FOLLOW·APPROVE·ACCEPT와 관계 쓰기를 처리한다. 앞단에서 승인 여부만 확인하면 이미 존재하는 Request·Follow를 반환하는 경로가 정책을 우회할 수 있다.                |
-| 새 Post interaction       | `packages/core/services/post.ts`, `reaction.ts`의 transaction에서 실제 대상·Source visibility와 pair 조건을 적용한다. GraphQL 사전 검사만으로 core caller의 우회를 막을 수 없다.                                                                       |
-| Notification              | `packages/core/visibility/notification.ts`의 source availability를 API connection·Unread·Node·mark-read가 공유한다. Notification별 Recipient와 Related Profile·Post를 기준으로 판단하며 Account membership 범위를 selected actor 하나로 줄이지 않는다. |
-| GraphQL 관리              | `apps/api/src/graphql/resolvers/profile/{mutation,field,loader}/mute.ts`와 `profile/ref.ts`가 relation payload·Owner connection의 선례다. Block Target은 일반 Profile 조회가 불가능하므로 Mute의 Target loader를 그대로 복사할 수 없다.                |
+| 경계                      | 현재 코드와 구현 시 확인할 점                                                                                                                                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 공통 Profile policy       | `packages/core/visibility/profile.ts`의 `visibleProfileWhere`는 viewer 입력 없이 Profile·Instance 상태만 검사한다. 인증용 actor 조회와 viewer별 Target 조회를 구분해야 한다.                                                                                 |
+| Post·Repost·Media         | `packages/core/visibility/post.ts`, `apps/api/src/graphql/resolvers/post/access/visibility.ts`에서 기존 Visibility와 Follow 조건을 조합한다. PostContent Node, Repost Source, Bookmark, avatar/header와 Media grant도 확인한다.                              |
+| Profile 검색·관련 Profile | `apps/api/src/graphql/resolvers/profile/query/by-handle.ts`, `hashtag/field/related-profiles.ts`의 SQL 후보에 정책을 적용한다. 기존 exact/partial 검색과 명시적인 Remote materialization 조건은 유지한다.                                                    |
+| 목록                      | `post/query/home-timeline.ts`, `post/query/local-timeline.ts`, `post/field/profile.ts`는 이미 후보 SQL 뒤에 cursor·limit을 적용한다. 조사한 `apps/api/src`와 `apps/api/schema.graphql`에는 Hashtag Post List·Post 검색 endpoint가 없다.                      |
+| Follow                    | `packages/core/services/profile-follow-command.ts`, `profile-follow-transaction.ts`가 FOLLOW·APPROVE·ACCEPT와 관계 쓰기를 처리한다. 앞단에서 승인 여부만 확인하면 이미 존재하는 Request·Follow를 반환하는 경로가 정책을 우회할 수 있다.                      |
+| 새 Post interaction       | `packages/core/services/post.ts`, `reaction.ts`의 transaction에서 실제 대상·Source visibility와 pair 조건을 적용한다. GraphQL 사전 검사만으로 core caller의 우회를 막을 수 없다.                                                                             |
+| Notification              | `packages/core/visibility/notification.ts`의 source availability를 API connection·Unread·Node·mark-read가 공유한다. Notification별 Recipient와 Related Profile·Post를 기준으로 판단하며 Account membership 범위를 selected actor 하나로 줄이지 않는다.       |
+| GraphQL 관리              | `apps/api/src/graphql/resolvers/profile/{mutation,field,loader}/mute.ts`와 `profile/ref.ts`가 relation payload·Owner connection의 선례다. Block Target도 기존 Profile 조회 조건을 적용해 unavailable Target 관계를 pagination 전과 Node loader에서 제외한다. |
 
 표의 `post/`, `profile/`, `hashtag/` 상대 경로는 `apps/api/src/graphql/resolvers/` 아래를 뜻한다.
 
@@ -95,7 +95,7 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
 1. `packages/core/visibility`에서 검증된 viewer identity와 대상 Profile identity로 양방향 Block을 평가하는 공통 조건을 제공한다.
    SQL 후보용 조건과 action의 거부 판정은 같은 pair 정의를 공유한다. 기존 Profile·Instance 상태 조건은 유지하고,
    인증·Account 소유권 조회와 viewer별 공개 조회에 필요한 입력을 명확히 구분한다. 다른 계층의 타입이나 GraphQL context를 core로 전달하지 않는다.
-2. direct Profile·Post·PostContent와 기존 목록·검색 query에 공통 조건을 합성한다. Repost는 Author와 Source Author를 모두 확인한다.
+2. direct Profile에는 기존 Profile 조회 조건을 유지하고, direct Post·PostContent·첨부 Media와 Profile Post List에는 Author → viewer 방향의 Block 조건을 합성한다. Home·Local·Hashtag 목록·검색·Bookmark 등 양방향 surface는 pair 조건을 유지한다. Repost는 Author와 Source Author를 모두 확인한다.
    Follow 후보는 viewer와 후보 Profile의 차단뿐 아니라 저장된 Follow/Request 참여자 사이의 Active Block도 확인한다.
    잔존 Follow를 Home 또는 `FOLLOWERS` 가시성의 근거로 사용하지 않는다. Reaction Profile 목록은 필터링하되 기존 Reaction count는 유지한다.
 3. 기존 Follow transaction의 생성·승인 경로가 새 관계를 쓰거나 잔존 관계를 성공으로 반환하기 전에 현재 pair 정책을 평가한다.
@@ -107,7 +107,7 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
    생성 input의 대상과 해제 input의 관계 ID만 받고 Owner는 selected Local Profile에서 얻는다. `usingProfile`만으로 Local 조건이
    보장된다고 추정하지 않는다. mutation은 부모 layer #726이 제공하는 durable action을 호출하며 cleanup 구현을 `PROD-822`에 복제하지 않는다.
    자기 Block 관계의 Owner scope와 일반 Target Profile 조회 정책을 서로 혼동하지 않는다.
-6. Owner 관리 payload는 관계 ID·생성 시각과 기존 `Profile` Target ref를 제공한다. Profile field에는 기존 조회 조건을 적용하고,
+6. Owner 관리 payload는 관계 ID·생성 시각과 기존 `Profile` Target ref를 제공한다. Target이 기존 Profile 조회 조건을 충족할 때만 관계를 pagination 전과 Node loader에서 반환하고,
    Post·Media·Follow에는 각 surface의 Profile Block 정책을 적용한다. 정확한 field·nullability·error mapping은 기존 schema와 정렬해 구현 PR에서 확정한다.
    해제 결과는 실제 삭제한 관계 ID를 반환하며, stale ID 재시도가 새 Block 세대를 삭제하지 않도록 선행 action의 generation 계약을 유지한다.
    직접 route는 handle과 현재 selected actor로 기존 Profile 결과와 자신의 차단 여부·해제 관계 ID를 얻을 수 있어야 한다.
@@ -173,8 +173,8 @@ ESLint·Prettier를 실행한다. 기존 Mute·Follow·Post visibility·Notifica
 - [여러 관계 정리를 durable orchestration으로 묶으면 retry와 작업 범위가 늘어날 수 있다] → 구현 수단과 무관하게 pair 범위의 required cleanup과 재시작·일시 오류
   결과를 검증한다.
 - [orchestration이 cleanup 완료 전에 성공하거나 중단될 수 있다] → 명시적인 success gate와 restart·retry fixture로 Block 상태와 cleanup 완료를 확인한다.
-- [여러 GraphQL surface가 policy를 빠뜨릴 수 있다] → Profile identity, directional direct content, bilateral list/search/interaction/Notification consumer가
-  각각의 policy와 cursor 전 filtering을 사용하는지 `PROD-822` integration test에서 검증한다.
+- [여러 GraphQL surface가 policy를 빠뜨릴 수 있다] → direct 콘텐츠는 Block 방향별 결과를, 목록·검색·interaction은 각 surface의 양방향 결과와 cursor 전 filtering을 사용하는지
+  `PROD-822` integration test에서 검증한다.
 - [mutation 뒤 client cache가 stale하거나 actor가 섞일 수 있다] → 서버 확정 결과와 selected actor 격리를 검증하고, 실패 시 optimistic 상태를 성공으로 확정하지 않는다.
 - [구버전 workload와 additive schema가 공존할 수 있다] → 기존 row 보존, rollout 중 read/write 공존과 rollback 결과를 `PROD-821`에서 확인한다.
 - [기존 Web 실행 결과가 Native·federation 완료로 오인될 수 있다] → `PROD-813`에서 기존 레거시 UI의 Web/iOS/Android 통합 결과와 미검증 범위를 환경별 실제 evidence로 분리 기록한다.
@@ -185,8 +185,7 @@ ESLint·Prettier를 실행한다. 기존 Mute·Follow·Post visibility·Notifica
    backfill하지 않는다.
 2. `PROD-821`의 cleanup PR #726에서 Block admission, durable cleanup orchestration과 required cleanup success gate를 연결하고
    restart/retry·보존·no-restore 결과를 검증한다.
-3. `PROD-822`를 #726 위의 자식 layer로 쌓아 common policy·GraphQL을 연결한다. Profile/Post/Media/Follow candidate와 Home·Local·Profile·Hashtag list/search 및 새 interaction은 같은
-   양방향 policy 결과를 사용한다.
+3. `PROD-822`를 #726 위의 자식 layer로 쌓아 common policy·GraphQL을 연결한다. Profile은 기존 조회 정책을 유지하고 direct Post·Media와 Profile Post List는 방향별 정책을, Follow 후보·Home·Local·Hashtag list/search 및 새 interaction은 양방향 정책을 사용한다.
 4. `PROD-823`에서 최신 canonical의 기존 Profile 정보·viewer 방향 콘텐츠 상태와 Settings Block destination, selected actor 상태 수렴을 연결한다.
    `DSN-51`·DSN-53은 presentation 근거이고 `PROD-861`은 선행 구현 증거이며 신규 UI 교체는 `PROD-917` 후속 범위다.
 5. `PROD-813`에서 Local·Remote pair와 현재 구현된 direct/list/search/interaction 및 cross-slice E2E, canonical·Linear·OpenSpec 정합성, 플랫폼별 실제 evidence를 확인한다.

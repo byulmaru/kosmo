@@ -16,7 +16,16 @@ export const Post = createObjectRef('Post', (ids, ctx) =>
     .from(Posts)
     .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(inArray(Posts.id, ids), postAccessWhere({ ctx, profileMute: 'ignore' }))),
+    .where(
+      and(
+        inArray(Posts.id, ids),
+        postAccessWhere({
+          ctx,
+          profileMute: 'ignore',
+          profileBlockMode: 'AUTHOR_TO_VIEWER',
+        }),
+      ),
+    ),
 );
 
 Post.implement({
@@ -44,7 +53,12 @@ export const PostContent = createObjectRef('PostContent', (ids, ctx) =>
     .innerJoin(Posts, eq(Posts.id, PostContents.postId))
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(inArray(PostContents.id, ids), postVisibilityAccessWhere({ ctx }))),
+    .where(
+      and(
+        inArray(PostContents.id, ids),
+        postVisibilityAccessWhere({ ctx, profileBlockMode: 'AUTHOR_TO_VIEWER' }),
+      ),
+    ),
 );
 
 PostContent.implement({

@@ -94,9 +94,7 @@ connection을 제공한다. Profile identity는 기존 Profile 조회 정책을 
 
 **Guardrails**
 
-- 저장된 Owner → Target 관계를 양쪽 viewer 방향으로 평가한다. Profile Node·handle route·일반 Profile search는 기존 Profile 조회 정책을 사용하고,
-  Post·Media direct 조회와 Profile Post List는 viewer 방향 콘텐츠 정책을 사용하며, Home·Local·Hashtag Post List·Post search·Follow 후보·interaction·
-  Notification은 양방향 보호 정책을 사용한다. Repost는 Author와 Source Post Author를 모두 검사한다.
+- 저장된 pair는 양쪽 viewer/target의 차단 상태 판정에 사용하되, Profile identity는 기존 조회 정책을 유지한다. direct Post·Media와 Profile Post List는 Owner → Target과 Target → Owner 방향을 구분하고, 후보·Home·Local·Hashtag list/search·interaction은 양방향으로 후보 반환 전에 Exclude한다. Repost는 Author와 Source Post Author를 모두 검사한다.
 - Active Block은 cleanup 뒤 남은 Follow Request·Follow Relationship의 물리적 존재보다 우선하며, Follow·Reply·Reaction·Repost의 새 로컬 입력은 양쪽에서
   거부한다. page limit 뒤 client filter나 resolver별 정책 복제를 보안 경계로 사용하지 않는다.
 - Profile Block pair의 기존 Notification은 connection·Unread count·Node·read 처리에서 숨기되, `PROD-821`의 직접 원인 삭제 이외의 기존 Notification을
@@ -111,7 +109,7 @@ connection을 제공한다. Profile identity는 기존 Profile 조회 정책을 
 - GraphQL Block 생성·해제와 Owner 관리 조회는 검증된 Session의 selected Local Profile actor 및 Owner scope를 사용하고, request-specific DB actor state나 client-only filter로
   중앙 application policy를 대체하지 않는다. 일반 조회·Notification membership 권한을 이 Local 제한으로 바꾸지 않으며 remote ActivityPub ingress는 `PROD-818`에 남긴다.
 - Block·Mute 관계의 Target은 기존 `Profile` 조회 결과와 global ID를 사용하고, Post·Media·Follow에는 각 surface의 Profile Block 정책을 적용한다.
-  생성·해제는 durable action의 완료 결과를 사용하고 성공한 해제는 실제 삭제한 관계 ID를 반환한다. 같은 operation의 actor 전환과 mutation 뒤에도 이전 loader 권한을 재사용하지 않는다.
+  Block 관리 connection과 관계 Node는 Target의 기존 Profile 조회 조건을 적용하고 목록에서는 pagination 전에 제외한다. 생성·해제는 durable action의 완료 결과를 사용하고 성공한 해제는 실제 삭제한 관계 ID를 반환한다. 같은 operation의 actor 전환과 mutation 뒤에도 이전 loader 권한을 재사용하지 않는다.
 - 직접 route handle로 자신의 차단 여부·해제 관계 ID를 얻는 결과는 이전 client cache를 요구하지 않는다.
   자신의 Block이 없으면 다른 Owner의 관계 ID를 반환하지 않는다.
 - Unblock 성공은 실제 삭제한 관계 ID를 반환하고 관계를 제거하지
@@ -138,10 +136,10 @@ connection을 제공한다. Profile identity는 기존 Profile 조회 정책을 
 - [x] 2.1 Local/Remote Owner·Target과 양쪽 viewer에 적용할 공통 pair 정책을 제공하고, Active Block이 잔존 Follow/Request보다 우선함을 검증한다.
 - [x] 2.2 Profile Node·handle route·일반 검색에서 기존 Profile 조회 조건을 유지하고, 관련 Follow 후보에는 양방향 차단을 적용한다.
 - [x] 2.3 Follow/Request Node·followers/following·요청 목록·viewer 상태와 Home·`FOLLOWERS` 권한이 차단 중 잔존 관계를 유효하게 사용하지 않도록 한다.
-- [x] 2.4 Post·PostContent·Media relation·기존 Post 목록·Bookmark·Reaction Profile 목록에 정책을 연결하고 Author·Source Author의 후보 제외와 cursor/pageInfo를 검증한다.
+- [x] 2.4 Post·PostContent·Media relation·Profile Post List에는 방향별 정책을, Home·Local·Bookmark·Reaction Profile 목록에는 양방향 정책을 연결하고 Author·Source Author의 후보 제외와 cursor/pageInfo를 검증한다.
 - [x] 2.5 Block 적용 뒤 시작한 로컬 Follow·Follow Request 승인·Reply·Reaction·Repost가 새 관계나 상호작용을 저장하지 않도록 쓰기 경계를 검증한다.
 - [x] 2.6 selected Local actor의 Block 생성·해제 mutation을 부모 layer의 durable action에 연결하고 cleanup 지연·실패·정확한 해제 ID·no-restore를 검증한다.
-- [x] 2.7 Owner 전용 Block connection·관계 Node에서 기존 Profile Target과 직접 route 진입의 차단 여부·해제 ID를 제공하고 타인 Block ID 접근을 차단한다.
+- [x] 2.7 Owner 전용 Block connection·관계 Node에서 조회 가능한 기존 Profile Target과 직접 route 진입의 차단 여부·해제 ID를 제공하고, unavailable Target은 pagination 전과 관계 Node에서 제외하며 타인 Block ID 접근을 차단한다.
 - [x] 2.8 Block·Unblock과 같은 operation의 selected Profile 전환 뒤 후속 field 및 다음 요청이 현재 actor·Block 정책을 반영하게 한다.
 - [x] 2.9 기존 Notification의 Recipient별 list·Unread·Node·mark-read 비노출을 연결하고 비직접 row·Read State 보존과 혼합 ID 처리를 검증한다.
 - [x] 2.10 현재 모든 consumer의 공개 계약 회귀와 미구현 Hashtag Post List·Post 검색의 공통 후보 정책 검증을 수행하고 실제 endpoint 검증 여부를 구분해 기록한다.

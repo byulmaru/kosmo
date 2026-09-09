@@ -2,13 +2,13 @@
 
 ### Requirement: Profile identity lookup uses the existing Profile policy
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-822`. Profile Node, handle route와 일반 Profile 검색은 기존 Profile 조회 정책에 따라 조회 가능한 기본 Profile 정보를 제공해야 한다(MUST). Profile Lifecycle·Suspension·Instance Domain Block·Account 및 Membership에 따른 기존 조회 조건은 각 surface에서 계속 적용해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `docs/domain/policies/post-list.md`, `PROD-822`. Profile Node·handle route·일반 Profile 검색은 Profile Block과 무관하게 기존 Profile 조회 정책을 적용해야 한다(MUST). Profile의 followers/following 후보와 새 Follow 입력은 양방향 Profile Block 관계를 적용해야 하며(MUST), 상대 Profile을 Follow 후보로 반환하거나 새 Follow Request·Relationship을 저장해서는 안 된다(MUST NOT). Owner가 관리하는 차단 목록은 일반 Profile 공개 조회와 구분된 Owner 전용 관계 조회로 제공해야 한다(MUST).
 
-#### Scenario: Block 관계가 있어도 기존 조건을 충족한 Profile을 조회한다
+#### Scenario: Block된 상대 Profile의 기본 정보를 기존 정책으로 조회한다
 
-- **WHEN** Owner → Target Profile Block이 존재하고 Owner 또는 Target이 상대 Profile Node, handle route 또는 일반 Profile 검색을 조회한다
-- **THEN** 시스템은 기존 Profile 조회 정책을 충족하는 경우 상대 Profile의 기본 정보를 반환한다
-- **AND** Profile Node·handle route·일반 Profile 검색은 동일한 기존 Profile 조회 조건을 사용한다
+- **WHEN** Owner → Target Profile Block이 존재하고 Owner 또는 Target이 상대 Profile Node, handle route 또는 exact/partial search를 조회한다
+- **THEN** 시스템은 Block 관계를 이유로 기본 Profile 정보를 숨기지 않고 기존 Profile 조회 정책을 적용한다
+- **AND** Post·Media·Follow와 상호작용에는 각 surface의 방향별 또는 양방향 Profile Block 정책을 별도로 적용한다
 
 ### Requirement: Profile Block preserves the bilateral Follow boundary
 

@@ -292,6 +292,100 @@ describe('GraphQL Profile Block', () => {
     });
   });
 
+  test('excludes unavailable Block targets before pagination and from relation Nodes', async () => {
+    const owner = await createAuthenticatedSession();
+    const activeTarget = await createProfile('block-active-target');
+    const deactivatedTarget = await createProfile('block-deactivated-target');
+    const suspendedInstance = await createRemoteInstance('block-suspended.example');
+    const suspendedTarget = await createProfile('block-suspended-target', suspendedInstance.id);
+
+    const activeBlock = await blockProfile(activeTarget.id, owner.token);
+    const deactivatedBlock = await blockProfile(deactivatedTarget.id, owner.token);
+    const suspendedBlock = await blockProfile(suspendedTarget.id, owner.token);
+    for (const result of [activeBlock, deactivatedBlock, suspendedBlock]) {
+      assertNoGraphQLErrors(result);
+    }
+    const activeBlockId = activeBlock.data?.blockProfile.profileBlock.id;
+    const deactivatedBlockId = deactivatedBlock.data?.blockProfile.profileBlock.id;
+    const suspendedBlockId = suspendedBlock.data?.blockProfile.profileBlock.id;
+    assert.ok(activeBlockId);
+    assert.ok(deactivatedBlockId);
+    assert.ok(suspendedBlockId);
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, deactivatedTarget.id));
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, suspendedInstance.id));
+
+    const hidden = await requestGraphQL<{
+      node: {
+        profileBlocks: { edges: Array<{ node: { id: string } }> };
+      } | null;
+      nodes: Array<{ id: string } | null>;
+    }>(
+      `query HiddenBlockTargets($ownerId: ID!, $blockIds: [ID!]!) {
+        node(id: $ownerId) {
+          ... on Profile {
+            profileBlocks(first: 1) { edges { node { id } } }
+          }
+        }
+        nodes(ids: $blockIds) { ... on ProfileBlock { id } }
+      }`,
+      {
+        blockIds: [activeBlockId, deactivatedBlockId, suspendedBlockId],
+        ownerId: globalId('Profile', owner.profile.id),
+      },
+      owner.token,
+    );
+    assertNoGraphQLErrors(hidden);
+    assert.deepEqual(hidden.data?.node?.profileBlocks.edges, [{ node: { id: activeBlockId } }]);
+    assert.deepEqual(hidden.data?.nodes, [{ id: activeBlockId }, null, null]);
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.ACTIVE })
+      .where(eq(Profiles.id, deactivatedTarget.id));
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.ACTIVE })
+      .where(eq(Instances.id, suspendedInstance.id));
+
+    const restored = await requestGraphQL<{
+      node: {
+        profileBlocks: { edges: Array<{ node: { id: string } }> };
+      } | null;
+      nodes: Array<{ id: string } | null>;
+    }>(
+      `query RestoredBlockTargets($ownerId: ID!, $blockIds: [ID!]!) {
+        node(id: $ownerId) {
+          ... on Profile {
+            profileBlocks(first: 10) { edges { node { id } } }
+          }
+        }
+        nodes(ids: $blockIds) { ... on ProfileBlock { id } }
+      }`,
+      {
+        blockIds: [activeBlockId, deactivatedBlockId, suspendedBlockId],
+        ownerId: globalId('Profile', owner.profile.id),
+      },
+      owner.token,
+    );
+    assertNoGraphQLErrors(restored);
+    assert.deepEqual(
+      restored.data?.node?.profileBlocks.edges.map(({ node }) => node.id).sort(),
+      [activeBlockId, deactivatedBlockId, suspendedBlockId].sort(),
+    );
+    assert.deepEqual(restored.data?.nodes, [
+      { id: activeBlockId },
+      { id: deactivatedBlockId },
+      { id: suspendedBlockId },
+    ]);
+  });
+
   test('keeps Block management owner-scoped and exposes reverse status without the other ID', async () => {
     const owner = await createAuthenticatedSession();
     const target = await createProfile('blocked-target');
@@ -612,7 +706,115 @@ describe('GraphQL Profile Block', () => {
     );
   });
 
-  test('hides blocked Reposts, their PostContent and Media from posts and relation lists', async () => {
+  test('applies directional Block policy to direct Post content and Profile Post lists', async () => {
+    const owner = await createAuthenticatedSession();
+    const target = await createProfile('directional-post-target');
+    const targetSession = await createAuthenticatedSession(target);
+    const targetMedia = await db
+      .insert(Media)
+      .values({
+        mediaType: 'image/png',
+        profileId: target.id,
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: 'https://remote.example/directional-post.png',
+      })
+      .returning()
+      .then(firstOrThrow);
+    const ownerPost = await createContentPost(owner.profile.id);
+    const targetPost = await createContentPost(target.id, targetMedia.id);
+
+    const ownerBlock = await blockProfile(target.id, owner.token);
+    assertNoGraphQLErrors(ownerBlock);
+
+    const ownerView = await requestGraphQL<{
+      nodes: Array<
+        | { __typename: 'Post'; content: { id: string; media: Array<{ id: string }> } | null }
+        | { __typename: 'PostContent'; id: string; media: Array<{ id: string }> }
+        | null
+      >;
+      target: { posts: { edges: Array<{ node: { id: string } }> } } | null;
+    }>(
+      `query BlockingOwnerDirectPost($ids: [ID!]!, $targetId: ID!) {
+        nodes(ids: $ids) {
+          __typename
+          ... on Post { content { id media { id } } }
+          ... on PostContent { id media { id } }
+        }
+        target: node(id: $targetId) {
+          ... on Profile { posts(first: 10) { edges { node { id } } } }
+        }
+      }`,
+      {
+        ids: [globalId('Post', targetPost.post.id), globalId('PostContent', targetPost.content.id)],
+        targetId: globalId('Profile', target.id),
+      },
+      owner.token,
+    );
+    assertNoGraphQLErrors(ownerView);
+    assert.deepEqual(ownerView.data?.nodes, [
+      {
+        __typename: 'Post',
+        content: {
+          id: globalId('PostContent', targetPost.content.id),
+          media: [{ id: globalId('Media', targetMedia.id) }],
+        },
+      },
+      {
+        __typename: 'PostContent',
+        id: globalId('PostContent', targetPost.content.id),
+        media: [{ id: globalId('Media', targetMedia.id) }],
+      },
+    ]);
+    assert.deepEqual(ownerView.data?.target?.posts.edges, [
+      { node: { id: globalId('Post', targetPost.post.id) } },
+    ]);
+
+    const blockedTargetView = await requestGraphQL<{
+      nodes: Array<{ id: string } | null>;
+      owner: { posts: { edges: Array<{ node: { id: string } }> } } | null;
+    }>(
+      `query BlockedTargetDirectPost($ids: [ID!]!, $ownerId: ID!) {
+        nodes(ids: $ids) { __typename id }
+        owner: node(id: $ownerId) {
+          ... on Profile { posts(first: 10) { edges { node { id } } } }
+        }
+      }`,
+      {
+        ids: [globalId('Post', ownerPost.post.id), globalId('PostContent', ownerPost.content.id)],
+        ownerId: globalId('Profile', owner.profile.id),
+      },
+      targetSession.token,
+    );
+    assertNoGraphQLErrors(blockedTargetView);
+    assert.deepEqual(blockedTargetView.data?.nodes, [null, null]);
+    assert.deepEqual(blockedTargetView.data?.owner?.posts.edges, []);
+
+    const reverseBlock = await blockProfile(owner.profile.id, targetSession.token);
+    assertNoGraphQLErrors(reverseBlock);
+
+    const mutualView = await requestGraphQL<{
+      nodes: Array<{ id: string } | null>;
+      target: { posts: { edges: Array<{ node: { id: string } }> } } | null;
+    }>(
+      `query MutualBlockDirectPost($ids: [ID!]!, $targetId: ID!) {
+        nodes(ids: $ids) { __typename id }
+        target: node(id: $targetId) {
+          ... on Profile { posts(first: 10) { edges { node { id } } } }
+        }
+      }`,
+      {
+        ids: [globalId('Post', targetPost.post.id), globalId('PostContent', targetPost.content.id)],
+        targetId: globalId('Profile', target.id),
+      },
+      owner.token,
+    );
+    assertNoGraphQLErrors(mutualView);
+    assert.deepEqual(mutualView.data?.nodes, [null, null]);
+    assert.deepEqual(mutualView.data?.target?.posts.edges, []);
+  });
+
+  test('keeps blocking Owner direct Repost content while hiding it from relation lists', async () => {
     const viewer = await createAuthenticatedSession();
     const repostAuthor = await createProfile('blocked-repost-author');
     const sourceAuthor = await createProfile('blocked-repost-source');
@@ -700,7 +902,12 @@ describe('GraphQL Profile Block', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.deepEqual(result.data?.nodes, [null, null, null, null]);
+    assert.deepEqual(result.data?.nodes, [
+      { __typename: 'Post', id: globalId('Post', repost.id) },
+      { __typename: 'Post', id: globalId('Post', source.post.id) },
+      { __typename: 'PostContent', id: globalId('PostContent', source.content.id) },
+      null,
+    ]);
     assert.deepEqual(
       result.data?.viewer?.bookmarks.edges.map(({ node }) => node.post.id),
       [globalId('Post', visible.post.id)],

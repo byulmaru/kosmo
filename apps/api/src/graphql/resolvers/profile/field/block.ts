@@ -1,8 +1,9 @@
-import { db, ProfileBlocks } from '@kosmo/core/db';
+import { db, Instances, ProfileBlocks, Profiles } from '@kosmo/core/db';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { requireSelectedLocalProfile } from '../access/block';
 import { Profile, ProfileBlock, ProfileBlockConnection } from '../ref';
 import type { ProfileBlockRow } from '../loader/block';
@@ -33,9 +34,12 @@ builder.objectField(Profile, 'profileBlocks', (t) =>
             db
               .select(getColumns(ProfileBlocks))
               .from(ProfileBlocks)
+              .innerJoin(Profiles, eq(Profiles.id, ProfileBlocks.targetProfileId))
+              .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
               .where(
                 and(
                   eq(ProfileBlocks.ownerProfileId, profile.id),
+                  visibleProfileWhere({ profile: Profiles, instance: Instances }),
                   before ? gt(ProfileBlocks.id, before) : undefined,
                   after ? lt(ProfileBlocks.id, after) : undefined,
                 ),

@@ -41,3 +41,25 @@ export const profileBlockVisibilityWhere = ({
       .from(ProfileBlocks)
       .where(profileBlockPairWhere(firstProfileId, secondProfileId)),
   );
+
+/** Returns visibility for one stored Block direction: owner -> target. */
+export const directedProfileBlockVisibilityWhere = ({
+  database,
+  ownerProfileId,
+  targetProfileId,
+}: {
+  readonly database: DatabaseHandle;
+  readonly ownerProfileId: ProfileIdExpression;
+  readonly targetProfileId: ProfileIdExpression;
+}) =>
+  notExists(
+    database
+      .select({ id: ProfileBlocks.id })
+      .from(ProfileBlocks)
+      .where(
+        and(
+          eq(ProfileBlocks.ownerProfileId, ownerProfileId),
+          eq(ProfileBlocks.targetProfileId, targetProfileId),
+        ),
+      ),
+  );
