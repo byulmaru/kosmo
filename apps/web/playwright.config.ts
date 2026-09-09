@@ -31,7 +31,7 @@ const browserUserAgent =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 
 process.env.DATABASE_URL = databaseUrl;
-process.env.PUBLIC_API_ORIGIN = apiOrigin;
+process.env.INTERNAL_API_ORIGIN = apiOrigin;
 process.env.PUBLIC_OIDC_CLIENT_ID = oidcClientId;
 process.env.PUBLIC_OIDC_ISSUER = oidcOrigin;
 process.env.PUBLIC_ORIGIN = webOrigin;
@@ -141,7 +141,7 @@ export default defineConfig({
         EXPO_WEB_ROOT: '../app/dist',
         OIDC_CLIENT_SECRET: oidcClientSecret,
         PORT: String(webPort),
-        PUBLIC_API_ORIGIN: apiOrigin,
+        INTERNAL_API_ORIGIN: apiOrigin,
         PUBLIC_ORIGIN: webOrigin,
         PUBLIC_OIDC_CLIENT_ID: oidcClientId,
         PUBLIC_OIDC_ISSUER: oidcOrigin,
@@ -160,7 +160,7 @@ export default defineConfig({
         EXPO_WEB_ROOT: '../app/dist',
         OIDC_CLIENT_SECRET: oidcClientSecret,
         PORT: String(noAnalyticsWebPort),
-        PUBLIC_API_ORIGIN: apiOrigin,
+        INTERNAL_API_ORIGIN: apiOrigin,
         PUBLIC_ORIGIN: noAnalyticsWebOrigin,
         PUBLIC_OIDC_CLIENT_ID: oidcClientId,
         PUBLIC_OIDC_ISSUER: oidcOrigin,

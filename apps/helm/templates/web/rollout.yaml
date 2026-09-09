@@ -1,3 +1,4 @@
+{{- $apiServiceName := printf "%s-api" .Release.Name | trunc 63 | trimSuffix "-" -}}
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
 metadata:
@@ -51,6 +52,8 @@ spec:
           env:
             - name: ENVIRONMENT
               value: {{ .Values.env | quote }}
+            - name: INTERNAL_API_ORIGIN
+              value: {{ printf "http://%s" $apiServiceName | quote }}
             - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:

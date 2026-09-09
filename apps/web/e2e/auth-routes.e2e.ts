@@ -9,7 +9,7 @@ import type { APIRequestContext } from '@playwright/test';
 
 const loginCodeVerifierCookie = 'kosmo_oidc_code_verifier';
 const loginStateCookie = 'kosmo_oidc_state';
-const apiOrigin = process.env.PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3001';
+const apiOrigin = process.env.INTERNAL_API_ORIGIN ?? 'http://127.0.0.1:3001';
 const oidcOrigin = process.env.PUBLIC_OIDC_ISSUER ?? 'http://127.0.0.1:4300';
 const nativeSessionEndpoint = new URL('/graphql', apiOrigin).toString();
 const nativeSessionOperationName = 'E2ENativeOidcSessionExchange';
