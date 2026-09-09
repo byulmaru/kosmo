@@ -107,7 +107,7 @@ function ProfileMigrationSourceControlContents({
     setRegisterState('registering');
 
     commit({
-      variables: { input: { profileId: profile.id, sourceHandle: normalizedInput } },
+      variables: { input: { sourceHandle: normalizedInput } },
       onCompleted: (response, errors) => {
         if (
           registerInFlightRef.current !== requestId ||

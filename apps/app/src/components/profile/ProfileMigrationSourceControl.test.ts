@@ -23,7 +23,7 @@ type Profile = {
 type MutationConfig = {
   onCompleted: (response: unknown, errors?: ReadonlyArray<unknown> | null) => void;
   onError: (error: Error) => void;
-  variables: { input: { profileId: string; sourceHandle: string } };
+  variables: { input: { sourceHandle: string } };
 };
 
 let profile: Profile = {
@@ -119,7 +119,7 @@ describe('ProfileMigrationSourceControl', () => {
 
     await act(async () => rendered('Button')[0].props.onPress());
     assert.deepEqual(mutationConfigs[0].variables, {
-      input: { profileId: 'profile-target', sourceHandle: '@source@remote.example' },
+      input: { sourceHandle: '@source@remote.example' },
     });
     assert.equal(rendered('Button')[0].props.loading, true);
     assert.equal(rendered('Button')[0].props.loadingText, '등록 중');
