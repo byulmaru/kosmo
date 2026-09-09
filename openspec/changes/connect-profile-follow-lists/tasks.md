@@ -17,8 +17,8 @@
 
 - [x] 3.1 기존 ProfileRoute·shellLayout 실행 테스트로 Profile 홈 Hero 유지, 관계 route Hero 제외, 제목·탭·navigation, Mobile Web header ownership과 Native 단일 scroll을 검증한다
 - [x] 3.2 기존 FollowButton 단위 테스트와 Profile Storybook에서 breakpoint 공통 Medium 크기, loading·error·empty·content·pagination retry와 ProfileListItem 표시를 검증한다
-- [ ] 3.3 `pnpm --filter @kosmo/app check`, 대상 테스트, 전체 앱 테스트와 `pnpm lint:prettier`를 통과시킨다
-- [ ] 3.4 Mobile/Compact/Full Web의 대표 Light/Dark route를 브라우저에서 확인하고 실제 Android/iOS 미검증 여부를 기록한다
+- [x] 3.3 `pnpm --filter @kosmo/app check`, 대상 테스트, 전체 앱 테스트와 `pnpm lint:prettier`를 통과시킨다
+- [x] 3.4 Mobile/Compact/Full Web Light route와 Profile Storybook Dark 상태를 브라우저에서 확인하고 실제 Android/iOS 미검증 여부를 기록한다
 
 ## 4. 문서와 전달
 
