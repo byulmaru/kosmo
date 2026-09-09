@@ -70,16 +70,13 @@ export function useNotificationReadAll() {
 export function NotificationReadAllAction() {
   const { action } = useNotificationReadAll();
 
-  if (Platform.OS !== 'web') {
-    return null;
-  }
-
   return (
     <Button
       accessibilityLabel="모두 읽음"
       accessibilityState={{ busy: action.busy, disabled: action.disabled }}
       aria-busy={action.busy || undefined}
       disabled={action.disabled}
+      hitSlop={Platform.OS === 'web' ? undefined : 4}
       onPress={action.onPress}
       tone="secondary"
     >

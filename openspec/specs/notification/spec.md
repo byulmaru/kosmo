@@ -252,7 +252,7 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 
 ### Requirement: Selected Profile Follow Notification 목록 UI
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/colors.md`, `PROD-277`, `PROD-372`, `PROD-541`, `PROD-680`, `PROD-703` — 클라이언트는 selected Profile의 visible Follow Notification을 모바일과 Web에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/colors.md`, `PROD-277`, `PROD-372`, `PROD-541`, `PROD-680`, `PROD-703`, `PROD-930` — 클라이언트는 selected Profile의 visible Follow Notification을 모든 지원 플랫폼에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST).
 
 #### Scenario: 단일 Follow item 표시와 Profile link
 
@@ -272,10 +272,10 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 #### Scenario: Read와 Unread 표시
 
 - **WHEN** Follow item의 `readAt`이 `null`이다
-- **THEN** Web item은 토큰 기반의 분명한 좌측 상태선, 은은한 배경과 접근성 Unread 상태를 제공한다
-- **AND** `readAt`이 존재하면 Web item은 Unread 좌측 상태선·배경 강조·접근성 Unread 상태를 제공하지 않는다
+- **THEN** 각 지원 플랫폼의 item은 토큰 기반의 분명한 좌측 상태선, 은은한 배경과 접근성 Unread 상태를 제공한다
+- **AND** `readAt`이 존재하면 각 지원 플랫폼의 item은 Unread 좌측 상태선·배경 강조·접근성 Unread 상태를 제공하지 않는다
 - **AND** Web pointer hover 중에는 기존 `surface` 배경을 사용하며 Unread item의 좌측 상태선은 유지한다
-- **AND** hover가 없는 native 화면은 Read 상태와 관계없이 `card` 기본 배경을 유지한다
+- **AND** hover가 없는 native 화면도 Read/Unread 기본 표시와 접근성 상태를 유지한다
 
 #### Scenario: Profile 이동과 Read side effect 분리
 
@@ -456,20 +456,20 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 - **AND** 남은 Notification row는 source가 없으므로 모든 API 표면에서 숨겨진다
 - **AND** retry, cron, queue, backfill 또는 bulk cleanup은 이번 capability에 포함하지 않는다
 
-### Requirement: Selected Profile Web Notification Unread 시각 상태
+### Requirement: Selected Profile Notification Unread 시각 상태
 
-**Authority / Provenance:** `docs/design/colors.md`, `docs/design/accessibility.md`, `PROD-680`, `PROD-703` — 클라이언트는 selected Profile의 Web 알림 목록에서 visible Notification item의 Read와 Unread 상태를 시각·접근성 정보로 일관되게 구분해야 한다(MUST).
+**Authority / Provenance:** `docs/design/colors.md`, `docs/design/accessibility.md`, `PROD-680`, `PROD-703`, `PROD-930` — 클라이언트는 selected Profile의 알림 목록에서 visible Notification item의 Read와 Unread 상태를 모든 지원 플랫폼에서 시각·접근성 정보로 일관되게 구분해야 한다(MUST).
 
-#### Scenario: Web Unread 기본 표시
+#### Scenario: Unread 기본 표시
 
-- **WHEN** Web 알림 목록의 visible Notification item이 `readAt = null`이고 pointer hover 중이 아니다
+- **WHEN** 알림 목록의 visible Notification item이 `readAt = null`이고 pointer hover 중이 아니다
 - **THEN** item은 토큰 기반의 분명한 좌측 상태선과 은은한 배경으로 Unread임을 표시한다
 - **AND** 기존 접근성 Unread 설명을 함께 제공해 상태를 색만으로 전달하지 않는다
 - **AND** 텍스트, icon과 link는 배경 강조와 독립적으로 기존 가독성과 상호작용을 유지한다
 
-#### Scenario: Web Read 기본 표시
+#### Scenario: Read 기본 표시
 
-- **WHEN** Web 알림 목록의 visible Notification item에 `readAt`이 존재하고 pointer hover 중이 아니다
+- **WHEN** 알림 목록의 visible Notification item에 `readAt`이 존재하고 pointer hover 중이 아니다
 - **THEN** item은 Unread 좌측 상태선과 배경 강조를 표시하지 않는다
 - **AND** 접근성 Unread 설명을 제공하지 않는다
 - **AND** Read와 Unread 전환 전후에 item 콘텐츠의 수평 정렬이 움직이지 않는다
@@ -592,15 +592,15 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 - **THEN** API는 item을 page limit 전 connection과 Unread count에서 제외한다
 - **AND** Node는 `null`을 반환하고 `markNotificationRead(input: { ids })`는 해당 ID를 조용히 제외하며 generic Notification으로 대신 노출하지 않는다
 
-### Requirement: 현재 로드된 Web Notification 일괄 Read action
+### Requirement: 현재 로드된 Notification 일괄 Read action
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/design/page-header.md`, `docs/design/colors.md`, `docs/design/breakpoints.md`, `PROD-703`, `PROD-679` — Web `/notifications`는 현재 Relay connection에 로드된 unread Notification만 지정 ID 일괄 Read로 처리하는 `모두 읽음` action을 제공하고, 서버 payload로 목록과 전역 인디케이터를 수렴시켜야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/design/page-header.md`, `docs/design/colors.md`, `docs/design/breakpoints.md`, `PROD-703`, `PROD-679`, `PROD-930` — 모든 지원 플랫폼의 `/notifications`는 현재 Relay connection에 로드된 unread Notification만 지정 ID 일괄 Read로 처리하는 `모두 읽음` action을 제공하고, 서버 payload로 목록과 전역 인디케이터를 수렴시켜야 한다(MUST).
 
-#### Scenario: Web header action 소유권
+#### Scenario: 플랫폼별 header action 소유권
 
-- **WHEN** 사용자가 Web `/notifications`를 연다
-- **THEN** `<768px` 모바일 Web에서는 `UniversalShell` app bar가, compact/full Web에서는 route의 `PageHeader`가 `모두 읽음` trailing text action을 렌더링한다
-- **AND** Android/iOS 화면에는 이 action을 렌더링하지 않는다
+- **WHEN** 사용자가 지원 플랫폼에서 `/notifications`를 연다
+- **THEN** `<768px` 모바일 Web에서는 `UniversalShell` app bar가, compact/full Web과 Android/iOS에서는 route의 `PageHeader`가 `모두 읽음` trailing text action을 렌더링한다
+- **AND** 각 플랫폼은 같은 loaded unread ID, mutation input과 payload 수렴 계약을 사용한다
 
 #### Scenario: action enabled와 pending 상태
 

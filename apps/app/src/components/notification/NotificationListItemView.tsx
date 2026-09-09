@@ -81,7 +81,7 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
         style={{
-          backgroundColor: web && unread ? theme.actionPrimarySubtle : 'transparent',
+          backgroundColor: unread ? theme.actionPrimarySubtle : 'transparent',
         }}
         testID="notification-item-surface"
       >
@@ -101,7 +101,7 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
         ) : (
           <NotificationTarget {...props} />
         )}
-        {web && unread ? (
+        {unread ? (
           <View style={[styles.unreadRail, { backgroundColor: theme.actionPrimaryBase }]} />
         ) : null}
       </View>

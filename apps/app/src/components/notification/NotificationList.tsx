@@ -314,10 +314,7 @@ function NotificationPageHeader() {
     '알림';
 
   return shellOwnsHeader ? null : (
-    <PageHeader
-      title="알림"
-      trailing={Platform.OS === 'web' ? <NotificationReadAllAction /> : undefined}
-    />
+    <PageHeader title="알림" trailing={<NotificationReadAllAction />} />
   );
 }
 
