@@ -35,24 +35,32 @@ const profileMuteActionFragment = graphql`
   }
 `;
 
+type ProfileMuteActionProps = {
+  onFeedback?: (feedback: ProfileMuteFeedback) => void;
+  profile: ProfileMuteAction_profile$key;
+} & (
+  | {
+      items?: readonly ActionMenuItem[];
+      renderTrigger?: ComponentProps<typeof ActionMenu>['renderTrigger'];
+      surface?: 'menu';
+    }
+  | { items?: never; renderTrigger?: never; surface: 'button' | 'text' }
+);
+
 export function ProfileMuteAction({
   items,
   onFeedback,
   profile,
+  renderTrigger,
   surface = 'menu',
-}: {
-  items?: readonly ActionMenuItem[];
-  onFeedback?: (feedback: ProfileMuteFeedback) => void;
-  profile: ProfileMuteAction_profile$key;
-  surface?: 'menu' | 'text';
-}) {
+}: ProfileMuteActionProps) {
   const data = useFragment(profileMuteActionFragment, profile);
   const { selectedProfileId } = useSession();
   const { changeMuted } = useProfileMuteMutations();
   const profileMuteId = data.viewerState?.profileMute?.id;
   const muted = Boolean(profileMuteId);
 
-  if (!selectedProfileId || (surface === 'text' && !muted)) {
+  if (!selectedProfileId || (surface !== 'menu' && !muted)) {
     return null;
   }
 
@@ -66,7 +74,7 @@ export function ProfileMuteAction({
       nextMuted,
     );
 
-  if (surface === 'text') {
+  if (surface !== 'menu') {
     return (
       <ProfileMuteActionControl
         displayName={data.displayName}
@@ -74,7 +82,7 @@ export function ProfileMuteAction({
         onChangeMuted={onChangeMuted}
         onFeedback={onFeedback}
         profileId={data.id}
-        surface="text"
+        surface={surface}
       />
     );
   }
@@ -87,6 +95,7 @@ export function ProfileMuteAction({
       onChangeMuted={onChangeMuted}
       onFeedback={onFeedback}
       profileId={data.id}
+      renderTrigger={renderTrigger}
     />
   );
 }

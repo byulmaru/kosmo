@@ -21,10 +21,8 @@ type Target = {
 };
 
 type MuteProps = {
-  displayName: string;
-  muted: boolean;
-  onChangeMuted: (muted: boolean) => Promise<void>;
-  profileId: string;
+  profile: Target['profile'];
+  renderTrigger: (props: unknown) => unknown;
 };
 
 const target: Target = {
@@ -38,27 +36,6 @@ const target: Target = {
   },
   reactionController: {},
   visibility: 'PUBLIC',
-};
-const changeCalls: Array<
-  [
-    {
-      ownerProfileId: string;
-      profileMuteId?: string | null;
-      targetProfileId: string;
-    },
-    boolean,
-  ]
-> = [];
-const changeMuted = (
-  change: {
-    ownerProfileId: string;
-    profileMuteId?: string | null;
-    targetProfileId: string;
-  },
-  nextMuted: boolean,
-) => {
-  changeCalls.push([change, nextMuted]);
-  return Promise.resolve();
 };
 const capturedMute = { value: null as MuteProps | null };
 let PostActionSurface: ComponentType<{ socialActionTarget: never }>;
@@ -74,7 +51,11 @@ mock.module('react-native', {
   exports: { View: (props: Record<string, unknown>) => createElement('View', props) },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/components/profile/ProfileMuteController', {
-  exports: { useProfileMuteMutations: () => ({ changeMuted }) },
+  exports: {
+    useProfileMuteMutations: () => {
+      throw new Error('PostActionSurface must not own the profile mute mutation.');
+    },
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/session/SessionProvider', {
   exports: { useSession: () => ({ selectedProfileId: 'profile:viewer' }) },
@@ -110,7 +91,7 @@ mock.module('@/components/reaction/PostReactionSummary', {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/components/profile/ProfileMuteAction', {
   exports: {
-    ProfileMuteActionControl: (props: MuteProps) => {
+    ProfileMuteAction: (props: MuteProps) => {
       capturedMute.value = props;
       return createElement('ProfileMuteAction', props);
     },
@@ -122,9 +103,8 @@ before(async () => {
 });
 
 describe('PostActionSurface mute wiring', () => {
-  it('현재 action target 작성자의 mute 상태와 selected Profile mutation을 연결한다', async () => {
+  it('현재 action target 작성자의 fragment를 mute action에 위임한다', async () => {
     capturedMute.value = null;
-    changeCalls.length = 0;
 
     await act(async () => {
       renderer = create(createElement(PostActionSurface, { socialActionTarget: target as never }));
@@ -134,24 +114,8 @@ describe('PostActionSurface mute wiring', () => {
       throw new Error('PostActionSurface did not render ProfileMuteAction.');
     }
     const mute = capturedMute.value as unknown as MuteProps;
-    assert.deepEqual(
-      {
-        displayName: mute.displayName,
-        muted: mute.muted,
-        profileId: mute.profileId,
-      },
-      { displayName: '코스모 작가', muted: true, profileId: 'profile:author' },
-    );
-
-    await mute.onChangeMuted(false);
-    assert.deepEqual(changeCalls[0], [
-      {
-        ownerProfileId: 'profile:viewer',
-        profileMuteId: 'profile-mute:1',
-        targetProfileId: 'profile:author',
-      },
-      false,
-    ]);
+    assert.equal(mute.profile, target.profile);
+    assert.equal(typeof mute.renderTrigger, 'function');
   });
 });
 
