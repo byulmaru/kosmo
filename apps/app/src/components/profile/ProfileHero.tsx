@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     borderWidth: space[4],
   },
   action: { alignItems: 'flex-end', justifyContent: 'center', width: 96 },
-  identity: { flex: 0 },
+  identity: { flex: -1 },
   bio: { marginTop: space[12], ...textStyles.uiCopyL },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space[8], marginTop: space[12] },
   tagTarget: {
