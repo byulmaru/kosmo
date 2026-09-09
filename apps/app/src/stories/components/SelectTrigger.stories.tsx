@@ -27,7 +27,6 @@ function SelectTriggerCatalog({ open, disabled, ...args }: CatalogProps) {
     <View style={{ gap: 8, width: '100%', maxWidth: 320, padding: 4 }}>
       <SelectTrigger
         {...args}
-        onPress={args.onPress}
         {...(expanded ? { open: true, controls } : { open: false, disabled })}
       />
       {expanded ? (
