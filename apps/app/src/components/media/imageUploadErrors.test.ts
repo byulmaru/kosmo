@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  asImageUploadError,
   assertImageUploadResponse,
   formatImageUploadFailureMessage,
   formatImageUploadRetryLabel,
@@ -17,6 +18,26 @@ async function classify(response: Response): Promise<ImageUploadFailure> {
   }
   throw new Error('expected an upload failure');
 }
+
+test('classification preserves an existing upload Error and its entire cause chain', () => {
+  const root = new TypeError('original decoder detail');
+  const original = new Error('render failed', { cause: root });
+  const wrapped = asImageUploadError(original, 'transfer', 'normalize');
+  assert.equal(wrapped.cause, original);
+  assert.equal(original.cause, root);
+  assert.equal(asImageUploadError(wrapped, 'issue', 'issue'), wrapped);
+  assert.deepEqual(wrapped.failure, { reason: 'transient', stage: 'transfer' });
+  assert.equal(wrapped.observation?.operation, 'normalize');
+});
+
+test('non-Error failures retain their original value as a standard cause', () => {
+  for (const value of ['transport rejected', 503, undefined, null, { code: 'ECONNRESET' }]) {
+    const wrapped = asImageUploadError(value, 'issue', 'issue');
+    assert.ok(wrapped instanceof Error);
+    assert.equal(wrapped.cause, value);
+    assert.deepEqual(wrapped.failure, { reason: 'transient', stage: 'issue' });
+  }
+});
 
 async function classifyError(response: Response): Promise<ImageUploadError> {
   try {

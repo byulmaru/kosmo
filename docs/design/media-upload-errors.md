@@ -64,7 +64,9 @@ accessible name에 사용하지 않는다.
 - 실패 event에는 이 문서의 공통 오류 모델에서 안전하게 구성한 `stage`·`reason`과 `operation`을 context로 전달한다. `operation`은 `issue`, `normalize`, `read`, `put`, `complete` 중 하나이며, `transfer` 단계 안에서 정규화·normalized Blob read·signed PUT을 구분한다. 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 실패에만 숫자 `status`를 추가하고, `unsupported_image`, `content_type_mismatch`, `size_limit_exceeded`, `pixel_limit_exceeded`, `dimension_limit_exceeded`, `invalid_image` 중 하나인 경우에만 machine-readable `code`를 추가한다.
 - 성공, 비활성 항목의 `null` 결과와 명시적 no-op은 Sentry 처리된 실패 event를 만들지 않는다.
 - Sentry capture 실패는 원래 업로드 오류, 실패 항목 보존, 오류 UI와 재시도 동작을 바꾸지 않는다.
-- 업로드 경계가 capture에 전달하는 오류 payload와 새 관측 context에는 이미지 byte, File/Blob, signed upload URL, 인증 토큰, 응답 본문·request payload와 사용자 콘텐츠를 포함하지 않는다. 공통 Sentry facade가 모든 Error를 전역 정제하는 책임을 갖지는 않는다.
+- 업로드에서 실제 발생한 Error는 직접 capture에 전달하거나 기존 UI 분류 wrapper의 표준 `cause` chain에 원본 객체를 연결하여 원래 message·stack·cause를 모든 오류 단계에서 보존한다. 기존 UI 분류 wrapper는 유지할 수 있지만, 원본 오류 연결 없이 수집만을 위한 일반 메시지의 새 Error로 대체하거나 복제·전역 정제하지 않는다. 이 진단 정보는 Sentry에서 사용하며 사용자-facing 오류 분류와 안내 문구는 기존 정책을 유지한다.
+- 새 관측 context에는 위에서 허용한 진단 필드만 넣는다. 이미지 byte, File/Blob, signed upload URL, 인증 토큰, raw request/response와 사용자 콘텐츠를 오류나 context에 별도로 첨부하지 않는다. 실제 오류에 인증 정보나 불필요한 개인정보가 포함되는 구체적 경로가 확인되면 해당 데이터가 생성·첨부되는 경계에서 필요한 제한을 정하며, 원문 message·stack·cause를 일괄 제거하지 않는다.
+- Expo 이미지 처리 SDK가 오류 메시지에 넣는 asset/source/normalized 이미지 URI는 blob URL·로컬 경로·data URI의 이미지 byte를 포함할 수 있다. 이미지 처리 경계에서 알고 있는 해당 URI와 정확히 일치하는 부분만 message와 stack에서 제한하고 표준 cause chain에도 적용한다. 오류 객체·type·나머지 메시지·stack frame은 보존하며 일반 URL 패턴이나 모든 오류로 제한을 확대하지 않는다.
 
 ## 접근성
 
@@ -80,8 +82,9 @@ accessible name에 사용하지 않는다.
 - 공통 분류는 정상 PUT, 각 허용 status/code 조합, 네트워크 실패, `5xx`, malformed/unknown 응답과 단계별
   fallback을 단위 테스트로 고정한다.
 - 공통 업로드 경계가 처리된 실패를 한 번만 보고하고 성공·no-op은 보고하지 않으며, 허용된 `stage`·`reason`과
-  원래 오류 결과를 보존하고 관측 context에 민감한 입력·URL·토큰·응답 본문이 포함되지 않는지 실행 결과로
-  검증한다. 관측 실패가 업로드 결과를 바꾸지 않는지도 확인한다.
+  원래 오류 결과를 보존하는지 검증한다. 직접 전달하거나 표준 `cause` chain으로 연결한 실제 Error의 객체 identity·message·stack·cause 보존과 관측 context에
+  민감한 입력·URL·토큰·응답 본문이 추가되지 않는지를 실행 결과로 검증한다. 관측 실패가 업로드 결과를 바꾸지
+  않는지도 확인한다.
 - Post Composer와 Profile 편집은 같은 분류 결과를 각 UI 상태에 연결하고 실패 보존·항목별 재시도·accessible
   name을 유지하는지 component test로 검증한다.
 - 현재 Web 출시 gate에서는 실제 browser 흐름을 검증한다. 공용 React Native 자동화는 유지하지만 Web 결과를

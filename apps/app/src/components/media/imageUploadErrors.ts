@@ -37,8 +37,12 @@ export class ImageUploadError extends Error {
   readonly failure: ImageUploadFailure;
   readonly observation?: ImageUploadObservation;
 
-  constructor(failure: ImageUploadFailure, observation?: ImageUploadObservation) {
-    super('Image upload failed');
+  constructor(
+    failure: ImageUploadFailure,
+    observation?: ImageUploadObservation,
+    options?: ErrorOptions,
+  ) {
+    super('Image upload failed', options);
     this.name = 'ImageUploadError';
     this.failure = failure;
     this.observation = observation;
@@ -106,6 +110,7 @@ export function asImageUploadError(
   return new ImageUploadError(
     { reason: 'transient', stage },
     operation ? { operation } : undefined,
+    { cause: error },
   );
 }
 

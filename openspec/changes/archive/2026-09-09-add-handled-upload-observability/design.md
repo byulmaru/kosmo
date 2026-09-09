@@ -26,14 +26,14 @@
 
 - `apps/app/src/observability/sentry-browser.ts`와 `sentry-native.ts`는 각 플랫폼 SDK를 초기화하고 `captureReactError`를 노출한다. 두 SDK를 하나의 module에서 함께 참조하지 않고, 현재 platform resolution 경계를 재사용해야 한다.
 - `apps/app/src/components/media/imageUpload.ts`의 `uploadImage`가 issue, 정규화·PUT transfer, complete를 모두 소유하는 공통 실행 경계다. Post Composer와 Profile 호출부는 이 함수의 오류를 UI 상태로만 처리하므로 caller capture는 중복과 잘못된 단계 분류를 만들 수 있다.
-- `ImageUploadError`는 고정된 오류 이름과 안전한 `stage`·`reason`을 가진다. `asImageUploadError`는 임의의 원문 오류를 transient 분류로 바꾸므로 업로드 경계에서 raw `Error`, asset, Blob, signed URL 또는 response를 Sentry context로 넘기지 않아야 한다.
+- `ImageUploadError`는 고정된 오류 이름과 안전한 `stage`·`reason`을 가진다. 내부 catch와 `asImageUploadError`는 표준 `ErrorOptions.cause`로 원본 오류 객체를 보존하며, 최종 UI 분류 오류를 capture에 전달한다. asset, Blob, signed URL 또는 response를 새 context에 첨부하지 않는다.
 - 기존 operations 정책은 SDK가 만든 exception·message·stack과 context를 `beforeSend`에서 재작성하지 않고 전달한다. 따라서 일반 facade가 모든 Error를 일괄 삭제하거나 sanitizer로 재구성하면 기존 PROD-493 계약과 충돌한다. 안전한 context를 만드는 책임은 호출 경계에 있다.
 - React 오류는 `ErrorInfo`와 함께 별도 경계를 사용한다. 일반 처리된 오류 facade를 React reporter로 합치면 component stack 전달과 중복 capture 정책이 바뀔 수 있다.
 
 ### Recommended Approach
 
 1. 각 플랫폼 Sentry adapter에 `Error`와 선택적 primitive context를 받는 일반 처리된 오류 capture entry point를 추가한다. 이 entry point는 현재 SDK의 `captureException`과 scope/context 전달 방식을 얇게 감싸고, 기존 활성화 gate와 SDK event 전달 정책을 그대로 사용한다. 입력 Error의 SDK 진단 정보를 재작성하지 않으며, React `ErrorInfo`는 계속 기존 `captureReactError`로 보낸다.
-2. 공통 업로드 실행 경계의 하나의 upload-level error boundary에서 최종 `ImageUploadError`를 만든 뒤 일반 facade를 한 번 호출한다. 기존 issue·transfer·complete 분류와 `null` early return을 유지하고, Composer·Profile 호출부에는 capture를 추가하지 않는다.
+2. 공통 업로드 실행 경계의 하나의 upload-level error boundary에서 원본 객체와 전체 cause chain을 보존하는 최종 `ImageUploadError`로 일반 facade를 한 번 호출한다. 내부 normalize/read catch에서도 원본 cause를 보존한다. 기존 issue·transfer·complete 분류와 `null` early return을 유지하고, Composer·Profile 호출부에는 capture를 추가하지 않는다.
 3. 업로드 경계는 고정된 `ImageUploadError.failure`의 기존 `stage`·`reason`과 오류에 부착된 승인된 operation·숫자 status·allowlist code 관측값에서 안전한 진단 context를 구성한다. 일반 facade는 입력을 upload-specific하게 해석하거나 전역으로 정제하지 않는다. capture 호출이 동기적으로 실패하거나 전송되지 않더라도 원래 오류를 다시 전달하고 UI·재시도·성공 결과를 유지한다.
 4. 실행 테스트는 활성화된 Web·Native facade 전달, 비활성화된 local·test 비전송, 업로드 실패 1회와 stage/reason 보존, 성공·no-op 무보고, capture 실패 격리와 민감 입력 미포함을 행동으로 검증한다. 실제 운영 Sentry event·symbolication 증거는 이 로컬 구현 검증과 별도다.
 
@@ -47,7 +47,8 @@
 
 - Composer와 Profile의 각 `catch`에 capture를 추가하면 하나의 업로드 실패가 두 번 보고되거나 UI 호출부가 단계의 owner가 된다.
 - `createNormalizedImageBlob` 내부, issue/PUT URL, complete response와 같은 하위 단계마다 reporter callback을 넣으면 최종 실패 하나가 여러 event로 쪼개지고 raw 입력이 leak될 수 있다.
-- 공통 facade에서 모든 원문 Error·stack을 금지하거나 `beforeSend` sanitizer로 다시 만들면 기존 SDK 진단 보존 계약을 약화시킨다. 반대로 upload boundary가 raw unknown error, File/Blob, URI, URL, token, response body를 그대로 넘겨서도 안 된다.
+- 원본 연결 없는 capture 전용 placeholder 또는 내부 catch의 cause 누락은 SDK 진단을 잃게 한다. 원본 Error는 표준 cause chain으로 보존하며, File/Blob, URI, URL, token, response body를 별도 context로 첨부하지 않는다.
+- Expo Web `saveAsync`는 `Unable to save image: ${this.uri}`에 blob/data URI를 포함하고 Android image load 실패도 asset URI를 포함한다. 이미지 처리 경계에서 알고 있는 asset/source/normalized URI와 정확히 일치하는 부분만 원본 Error의 message·stack에서 제한하고 cause chain에도 적용한다. 오류 객체·type·나머지 메시지·stack frame을 보존하며 전역 regex나 복제 sanitizer로 확장하지 않는다.
 - `captureReactError`와 일반 처리된 오류 capture를 합치면 React component stack, mechanism 또는 기존 중복 방지 경계가 달라질 수 있다.
 - 비활성 항목의 `null` 반환, 명시적 no-op와 Sentry SDK 호출 실패를 업로드 실패 자체로 오인하지 않아야 한다.
 - 현재 `transfer` 단계는 정규화·normalized Blob read와 signed PUT을 함께 포함한다. 처리된 오류 context는 `issue`·`normalize`·`read`·`put`·`complete` operation으로 이 경계를 구분하고, 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 경우에만 숫자 status와 승인된 machine code를 보존한다.
@@ -55,7 +56,7 @@
 ## Risks / Trade-offs
 
 - [일반 facade의 재사용 범위가 넓어짐] → facade는 Error/context를 SDK에 전달하는 얇은 경계로 유지하고, 안전한 context 작성 책임과 적용 caller를 문서·review로 제한한다.
-- [현재 업로드 분류가 실제 원인 분석에 충분하지 않을 수 있음] → operation으로 transfer 내부 경계를 구분하고, 숫자 status와 승인된 code만 추가한다. 원본 response·message·payload는 계속 제외하므로 실제 원인 해결이나 운영 event 수신을 주장하지 않는다.
+- [현재 업로드 분류가 실제 원인 분석에 충분하지 않을 수 있음] → 원본 Error와 cause chain을 보존하고 operation·숫자 status·승인된 code를 추가한다. raw request/response를 별도 첨부하지 않으며 실제 원인 해결이나 운영 event 수신은 별도 검증한다.
 - [Sentry capture 실패가 사용자 동작에 영향을 줄 수 있음] → capture 예외·전송 실패를 원래 업로드 오류와 분리하고 결과·UI·재시도 regression test를 둔다.
 - [Web·Native adapter 동작이 어긋날 수 있음] → 두 플랫폼의 기존 metadata gate·privacy 설정을 재사용하고 각 adapter의 unit test를 유지한다.
 
@@ -66,4 +67,4 @@
 ## Resolved Scope
 
 - 처리된 업로드 실패 context는 `stage`·`reason`에 더해 `issue`·`normalize`·`read`·`put`·`complete` operation을 포함한다.
-- 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 실패에는 숫자 status를 포함하고, 승인된 machine code allowlist 값만 포함한다. 원본 response body·request payload·URL·token·message는 포함하지 않는다.
+- 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 실패에는 숫자 status를 포함하고, 승인된 machine code allowlist 값만 포함한다. raw request/response·URL·token을 별도 context에 첨부하지 않으며 원본 Error 진단은 보존한다.

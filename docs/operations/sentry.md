@@ -54,7 +54,9 @@ Sentry SDK가 만든 event는 `beforeSend`에서 재구성하거나 제거하지
 - 업로드 실패 event에는 기존 오류 정책에서 허용한 안전한 `stage`·`reason` 분류와 다음 context를 전달한다. `operation`은 `issue`, `normalize`, `read`, `put`, `complete` 중 하나로 실패 경계를 구분하고, 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 경우에만 숫자 `status`를 기록한다. 응답의 machine-readable `code`는 `unsupported_image`, `content_type_mismatch`, `size_limit_exceeded`, `pixel_limit_exceeded`, `dimension_limit_exceeded`, `invalid_image` 중 하나일 때만 기록하며, 그 밖의 code는 버린다.
 - 성공, 비활성 항목의 `null` 결과와 명시적 no-op은 처리된 실패 event를 만들지 않는다.
 - Sentry capture 자체의 실패나 동기 예외는 업로드 오류 결과, 오류 UI, 재시도와 성공 동작을 바꾸지 않는다.
-- 공통 진입점은 입력 Error를 전역 정제 규칙으로 삭제하거나 재작성하지 않으며, 각 호출 경계가 안전한 오류 payload와 context를 구성한다. 업로드 경계가 capture에 전달하는 오류 payload와 새 context에는 이미지 byte, File/Blob, 서명 upload URL, 인증 토큰, 응답 본문·request payload와 사용자 콘텐츠를 넣지 않는다.
+- 업로드에서 실제 발생한 Error는 직접 전달하거나 기존 UI 분류 wrapper의 표준 `cause` chain에 원본 객체를 연결하여 원래 message·stack·cause와 SDK 진단 정보를 모든 오류 단계에서 보존한다. 기존 UI 분류 wrapper는 유지할 수 있지만, 원본 오류 연결 없이 수집만을 위한 일반 메시지의 새 Error로 대체하거나 오류를 복제·전역 정제하지 않는다. 사용자-facing 오류 분류와 안내 문구는 기존 정책을 유지한다.
+- 업로드 경계가 추가하는 관측 context에는 위에서 허용한 진단 필드만 넣는다. 이미지 byte, File/Blob, 서명 upload URL, 인증 토큰, raw request/response와 사용자 콘텐츠를 오류나 context에 별도로 첨부하지 않는다. 실제 오류에 인증 정보나 불필요한 개인정보가 포함되는 구체적 경로가 확인되면 해당 데이터가 생성·첨부되는 경계에서 필요한 제한을 정한다. 원문 message·stack·cause 자체를 민감정보로 간주하여 일괄 제거하지 않는다.
+- Expo 이미지 처리 SDK가 오류 메시지에 넣는 asset/source/normalized 이미지 URI는 blob URL·로컬 경로·data URI의 이미지 byte를 포함할 수 있다. 이미지 처리 경계에서 알고 있는 해당 URI와 정확히 일치하는 부분만 message와 stack에서 제한하고 표준 cause chain에도 적용한다. 오류 객체·type·나머지 메시지·stack frame은 보존하며 일반 URL 패턴이나 모든 오류로 제한을 확대하지 않는다.
 
 이 처리된 실패 수집은 기존 runtime 활성화 조건을 따른다. DSN·environment·release metadata가 완전하지 않은 local·test 실행은 외부 event를 전송하지 않으며, 자동 breadcrumb·session tracking을 다시 활성화하지 않는다.
 

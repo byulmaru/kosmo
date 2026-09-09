@@ -814,3 +814,200 @@ test('preserves the original upload failure when capture throws', async () => {
       !error.message.includes(rawDetail),
   );
 });
+
+for (const boundary of [
+  'issue',
+  'normalize',
+  'read-fetch',
+  'read-blob',
+  'put',
+  'complete',
+] as const) {
+  test(`preserves original Error identity, message, stack, and cause at ${boundary}`, async (t) => {
+    const root = new Error('decoder or transport root cause');
+    const original = new TypeError(`${boundary} failed with actionable detail`, { cause: root });
+    const originalStack = original.stack;
+    const rootStack = root.stack;
+    const manipulator = installManipulator({ height: 100, width: 100 });
+    if (boundary === 'normalize') {
+      t.mock.method(manipulator.context, 'renderAsync', async () => {
+        throw original;
+      });
+    }
+    t.mock.method(globalThis, 'fetch', async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if ((boundary === 'put' && init) || (boundary === 'read-fetch' && !init)) {
+        throw original;
+      }
+      const response = new Response(new Blob(['webp']), { status: 200 });
+      if (boundary === 'read-blob' && !init) {
+        response.blob = async () => {
+          throw original;
+        };
+      }
+      return response;
+    });
+
+    await assert.rejects(
+      uploadImage({
+        asset: createAsset({ file: new File(['private image bytes'], 'private.jpg') }),
+        issue: async () => {
+          if (boundary === 'issue') {
+            throw original;
+          }
+          return {
+            mediaId: 'media-private',
+            uploadUrl: 'https://upload.example/private?token=secret',
+          };
+        },
+        complete: async () => {
+          if (boundary === 'complete') {
+            throw original;
+          }
+        },
+        isActive: () => true,
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof ImageUploadError);
+        assert.equal(captureCalls.length, 1);
+        assert.equal(captureCalls[0]?.error, error);
+        assert.equal(error.cause, original);
+        assert.equal(original.message, `${boundary} failed with actionable detail`);
+        assert.equal(original.stack, originalStack);
+        assert.equal(original.cause, root);
+        assert.equal(root.message, 'decoder or transport root cause');
+        assert.equal(root.stack, rootStack);
+        const stage =
+          boundary === 'issue' ? 'issue' : boundary === 'complete' ? 'complete' : 'transfer';
+        assert.deepEqual(error.failure, { reason: 'transient', stage });
+        assert.deepEqual(captureCalls[0]?.context, {
+          operation: boundary.startsWith('read-') ? 'read' : boundary,
+          reason: 'transient',
+          stage,
+          ...(boundary === 'read-blob' ? { status: 200 } : {}),
+        });
+        return true;
+      },
+    );
+  });
+}
+
+test('restricts known Expo image URIs while preserving original errors and stack frames', async () => {
+  const assetUri = 'file:///private/photos/user-image.jpg';
+  const sourceUri = 'blob:https://kosmo.example/source-secret';
+  const normalizedUri = 'data:image/png;base64,private-image-bytes';
+  const root = new Error(`Could not load the image: ${assetUri}; source ${sourceUri}`);
+  const original = new Error(`Unable to save image: ${normalizedUri}`, { cause: root });
+  root.stack = `${root.name}: ${root.message}\n    at load (image-loader.ts:12:3)`;
+  original.stack = `${original.name}: ${original.message}\n    at save (image-save.ts:34:5)`;
+  let renders = 0;
+  createManipulatorContext = () => ({
+    release: () => undefined,
+    resize() {
+      return this;
+    },
+    renderAsync: async () => ({
+      height: 3000,
+      width: 6000,
+      uri: renders++ === 0 ? sourceUri : normalizedUri,
+      release: () => undefined,
+      saveAsync: async () => {
+        throw original;
+      },
+    }),
+  });
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset({ uri: assetUri, height: 0, width: 0 }),
+      issue: async () => ({ mediaId: 'media-1', uploadUrl: 'https://upload.example/signed' }),
+      complete: async () => undefined,
+      isActive: () => true,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof ImageUploadError);
+      assert.equal(captureCalls.length, 1);
+      assert.equal(captureCalls[0]?.error, error);
+      assert.equal(error.cause, original);
+      assert.equal(original.cause, root);
+      assert.equal(original.name, 'Error');
+      assert.equal(original.message, 'Unable to save image: [image URI]');
+      assert.equal(
+        original.stack,
+        'Error: Unable to save image: [image URI]\n    at save (image-save.ts:34:5)',
+      );
+      assert.equal(root.message, 'Could not load the image: [image URI]; source [image URI]');
+      assert.equal(
+        root.stack,
+        'Error: Could not load the image: [image URI]; source [image URI]\n    at load (image-loader.ts:12:3)',
+      );
+      assert.deepEqual(captureCalls[0]?.context, {
+        operation: 'normalize',
+        reason: 'transient',
+        stage: 'transfer',
+      });
+      return true;
+    },
+  );
+});
+
+test('restricts the known saved URI in read errors without removing other diagnostics', async (t) => {
+  const resultUri = 'file:///private/cache/result.webp';
+  const original = new Error(`Read failed: ${resultUri}; see https://docs.example/read`);
+  installManipulator({ height: 100, width: 100, resultUri });
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw original;
+  });
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset(),
+      issue: async () => ({ mediaId: 'media-1', uploadUrl: 'https://upload.example/signed' }),
+      complete: async () => undefined,
+      isActive: () => true,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof ImageUploadError);
+      assert.equal(error.cause, original);
+      assert.equal(captureCalls[0]?.error, error);
+      assert.equal(original.message, 'Read failed: [image URI]; see https://docs.example/read');
+      assert.deepEqual(captureCalls[0]?.context, {
+        operation: 'read',
+        reason: 'transient',
+        stage: 'transfer',
+      });
+      return true;
+    },
+  );
+});
+
+for (const includeUri of [false, true]) {
+  test(`preserves Canvas SecurityError identity with${includeUri ? '' : 'out'} a known image URI`, async () => {
+    const uri = 'data:image/png;base64,private-canvas-image';
+    const message = `The canvas has been tainted by cross-origin data${includeUri ? `: ${uri}` : ''}`;
+    const original = new DOMException(message, 'SecurityError');
+    const originalStack = original.stack;
+    const root = new Error('canvas.toBlob failed');
+    Object.defineProperty(original, 'cause', { value: root });
+    createManipulatorContext = () => {
+      throw original;
+    };
+    await assert.rejects(
+      uploadImage({
+        asset: createAsset({ uri }),
+        issue: async () => ({ mediaId: 'media-1', uploadUrl: 'https://upload.example/signed' }),
+        complete: async () => undefined,
+        isActive: () => true,
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof ImageUploadError);
+        assert.equal(captureCalls.length, 1);
+        assert.equal(captureCalls[0]?.error, error);
+        assert.equal(error.cause, original);
+        assert.equal(original.name, 'SecurityError');
+        assert.equal(original.message, message.replaceAll(uri, '[image URI]'));
+        assert.equal(original.stack, originalStack?.replaceAll(uri, '[image URI]'));
+        assert.equal(original.cause, root);
+        assert.equal(Object.hasOwn(original, 'message'), includeUri);
+        return true;
+      },
+    );
+  });
+}

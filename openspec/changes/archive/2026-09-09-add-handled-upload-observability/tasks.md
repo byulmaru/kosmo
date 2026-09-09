@@ -44,17 +44,20 @@ Post Composer와 Local Profile의 공통 이미지 업로드 실패가 실패당
 
 - issue·transfer·complete의 기존 lifecycle과 `stage`·`reason` 분류를 유지한다.
 - consumer별 중복 capture를 추가하지 않으며 성공·비활성 항목·명시적 no-op은 실패 event를 만들지 않는다.
-- 이미지 byte, File/Blob, signed upload URL, 인증 토큰, response body·request payload, 사용자 콘텐츠와 원본 unknown exception·cause·message를 전달하지 않는다.
+- 실제 Error 객체와 message·stack·cause를 직접 또는 기존 UI 분류 wrapper의 표준 cause chain으로 보존한다. 원본 연결 없는 수집 전용 placeholder를 사용하지 않는다.
+- 이미지 byte, File/Blob, signed upload URL, 인증 토큰, raw request/response와 사용자 콘텐츠를 오류나 새 context에 별도로 첨부하지 않는다. 실제 민감정보는 확인된 생성·첨부 경계에서 제한하며 오류 진단을 일괄 제거하지 않는다.
 - operation은 `issue`·`normalize`·`read`·`put`·`complete` 중 하나로 구분하고, 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 경우에만 숫자 status와 승인된 machine code allowlist 값만 포함한다.
 - capture 실패가 오류 UI, 실패 항목 보존, 재시도 또는 성공 결과를 바꾸지 않는다.
 
 **Verification**
 
 - issue·transfer·complete 실패와 성공·no-op의 capture 횟수, 안전한 `stage`·`reason`, 기존 오류 결과를 실행 테스트로 검증한다.
-- 두 consumer에서 별도 capture가 발생하지 않는지와 금지된 입력이 event payload/context에 없는지 행동 검증으로 확인한다.
+- 내부 catch를 포함한 원본 Error identity·message·stack·cause 보존, 두 consumer의 중복 capture 방지와 새 context에 금지된 입력을 별도로 첨부하지 않는지 행동 검증으로 확인한다.
 
 - [x] 2.1 공통 이미지 업로드 실패 경계에서 최종 분류 오류를 한 번 관측하고 consumer의 기존 UI 처리와 lifecycle을 유지한다.
 - [x] 2.2 단계별 실패·성공·no-op·capture 실패 격리·privacy 경계와 consumer 중복 방지를 검증하는 행동 테스트를 추가하고 관련 check를 통과시킨다.
+- [x] 2.3 PR #810 사용자 정정: 내부 catch와 UI 분류 wrapper에서 원본 cause를 보존하고 수집 전용 placeholder를 제거한 뒤 identity·message·stack·cause 및 제한된 context를 검증한다.
+  - Evidence (2026-09-09, 사용자 정정 후): direct upload/error tests 44/44, app unit tests 515/515 통과. issue·normalize·read fetch·Blob read·PUT·complete의 원본 Error 및 cause chain, non-Error cause, 알려진 Expo 이미지 URI만 제한하는 동작과 URI 유무에 따른 Canvas SecurityError identity 보존을 검증했다. app TypeScript·변경 app 파일 ESLint·main spec strict validation·git diff check 통과. 아래의 Storybook 증거는 정정 이전 실행 결과이며 이번 수정에서 Storybook·운영 수신을 다시 검증했다고 주장하지 않는다.
 
 ## 3. PROD-929 문서와 구현 handoff 정합성
 

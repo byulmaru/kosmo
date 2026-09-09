@@ -84,8 +84,12 @@ async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob>
     let response: Response;
     try {
       response = await fetch(normalizedImageUri);
-    } catch {
-      throw new ImageUploadError({ reason: 'transient', stage: 'transfer' }, { operation: 'read' });
+    } catch (error) {
+      throw new ImageUploadError(
+        { reason: 'transient', stage: 'transfer' },
+        { operation: 'read' },
+        { cause: error },
+      );
     }
     if (!response.ok) {
       throw new ImageUploadError(
@@ -98,22 +102,54 @@ async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob>
     }
     try {
       return await response.blob();
-    } catch {
+    } catch (error) {
       throw new ImageUploadError(
         { reason: 'transient', stage: 'transfer' },
         {
           operation: 'read',
           ...(Number.isFinite(response.status) ? { status: response.status } : {}),
         },
+        { cause: error },
       );
     }
   } catch (error) {
+    // Expo errors can include the image URI, including a canvas data URI.
+    const imageUris = [
+      asset.uri,
+      normalizedImageUri,
+      ...[sourceImage, normalizedImage].map((image) =>
+        image && 'uri' in image && typeof image.uri === 'string' ? image.uri : undefined,
+      ),
+    ];
+    const seen = new Set<Error>();
+    let cause = error;
+    while (cause instanceof Error && !seen.has(cause)) {
+      seen.add(cause);
+      for (const uri of imageUris) {
+        if (uri) {
+          const message = cause.message.replaceAll(uri, '[image URI]');
+          if (message !== cause.message) {
+            Object.defineProperty(cause, 'message', {
+              configurable: true,
+              value: message,
+              writable: true,
+            });
+          }
+          const stack = cause.stack?.replaceAll(uri, '[image URI]');
+          if (stack !== cause.stack) {
+            cause.stack = stack;
+          }
+        }
+      }
+      cause = cause.cause;
+    }
     if (error instanceof ImageUploadError) {
       throw error;
     }
     throw new ImageUploadError(
       { reason: 'transient', stage: 'transfer' },
       { operation: 'normalize' },
+      { cause: error },
     );
   } finally {
     for (const imageUri of new Set([
@@ -215,7 +251,7 @@ export async function uploadImage({
         if (observation?.code) {
           context.code = observation.code;
         }
-        captureHandledError(new Error('Image upload failed'), context);
+        captureHandledError(uploadError, context);
       }
     } catch {
       // Observability must not change the upload result.
