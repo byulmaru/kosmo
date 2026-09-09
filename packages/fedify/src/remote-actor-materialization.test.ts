@@ -2,6 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
+import { setImmediate } from 'node:timers/promises';
 import { Endpoints, Image, LanguageString, Link, Note, Person } from '@fedify/vocab';
 import {
   ActivityPubActorType,
@@ -125,11 +126,12 @@ describe('remote actor materialization', () => {
   test('stores the first validated actor profile URL and clears it on refresh', async () => {
     const firstUrl = new URL('https://profile.example/@alice');
     const secondUrl = new URL('https://profile.example/@alice-second');
+    const actorUri = new URL(`https://${remoteDomain}/users/alice`);
     const firstNow = Temporal.Instant.from('2026-07-10T00:00:00Z');
     const profile = await materializeRemoteProfileActor({
       context: createLookupContext(async () => createActor({ urls: [firstUrl, secondUrl] }))
         .context,
-      handle: `alice@${remoteDomain}`,
+      actorUri,
       now: firstNow,
     });
 
@@ -144,7 +146,7 @@ describe('remote actor materialization', () => {
     await materializeRemoteProfileActor({
       context: createLookupContext(async () => createActor({ url: new Link({ href: linkUrl }) }))
         .context,
-      handle: `alice@${remoteDomain}`,
+      actorUri,
       now: firstNow.add({ seconds: 1 }),
     });
 
@@ -159,7 +161,7 @@ describe('remote actor materialization', () => {
       context: createLookupContext(async () =>
         createActor({ url: new URL('ftp://profile.example/@alice') }),
       ).context,
-      handle: `alice@${remoteDomain}`,
+      actorUri,
       now: firstNow.add({ seconds: 2 }),
     });
 
@@ -172,7 +174,7 @@ describe('remote actor materialization', () => {
 
     await materializeRemoteProfileActor({
       context: createLookupContext(async () => createActor({ url: secondUrl })).context,
-      handle: `alice@${remoteDomain}`,
+      actorUri,
       now: firstNow.add({ seconds: 3 }),
     });
 
@@ -185,7 +187,7 @@ describe('remote actor materialization', () => {
 
     await materializeRemoteProfileActor({
       context: createLookupContext(async () => createActor()).context,
-      handle: `alice@${remoteDomain}`,
+      actorUri,
       now: firstNow.add({ seconds: 4 }),
     });
 
@@ -1189,6 +1191,7 @@ describe('remote actor materialization', () => {
 
     try {
       await startCall;
+      await setImmediate();
       assert.equal(profileSettled, false);
       releaseStart();
       const profile = await workflowResult;

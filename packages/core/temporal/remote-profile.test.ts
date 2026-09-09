@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
+import { setImmediate } from 'node:timers/promises';
 
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
@@ -77,6 +78,7 @@ test('async caller returns durable start acknowledgement without waiting for the
 
   try {
     await startCall;
+    await setImmediate();
     assert.equal(callerSettled, false);
     releaseStart();
     assert.deepEqual(await callerResult, { kind: 'started' });
