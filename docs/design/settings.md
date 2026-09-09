@@ -76,6 +76,14 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - selected Profile이 없으면 Profile detail은 대상이 없음을 설명하고 기존 Profile 선택·생성 흐름으로 이동할
   수 있는 action을 제공한다. 다른 Profile의 마지막 설정값을 대신 표시하지 않는다.
 
+## Profile 설정의 후속 lifecycle 조립
+
+PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아 유지하고, optional `lifecycle`이
+주어진 경우에만 비활성화·재활성화·영구 삭제 흐름을 조립한다. 기본 Storybook에는 lifecycle 진입점이 없고,
+`WithLifecycle`에서 도입 후 구성을 검토한다. 비활성화는 Web·Native 모두 내용 전체를 교체하며,
+재활성화·영구 삭제는 확인 팝업을 사용한다. 자세한 계약은 [Profile lifecycle](./profile-lifecycle.md)을 따른다.
+이 Target presentation은 현재 `SettingsProfileDetail`과 Profile Edit의 저장·route를 교체하거나 기능을 활성화하지 않는다.
+
 ## SettingsItem
 
 - 공통 presentational `SettingsItem`은 Mobile Figma 설정 cell을 기준으로 행 높이·padding·divider를

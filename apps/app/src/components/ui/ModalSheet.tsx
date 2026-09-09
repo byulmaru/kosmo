@@ -1,10 +1,11 @@
 import { XIcon } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
-import { Animated, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { IconButton } from './IconButton';
+import { ModalSheetHost } from './ModalSheetHost';
 import type { PropsWithChildren } from 'react';
 
 type Props = PropsWithChildren<{
@@ -12,6 +13,7 @@ type Props = PropsWithChildren<{
   dismissDisabled?: boolean;
   onShow?: () => void;
   onDismiss?: () => void;
+  role?: 'dialog' | 'alertdialog';
   title: string;
   visible: boolean;
 }>;
@@ -22,6 +24,7 @@ export function ModalSheet({
   onClose,
   onShow,
   onDismiss,
+  role = 'dialog',
   title,
   visible,
 }: Props) {
@@ -37,7 +40,7 @@ export function ModalSheet({
   }, [onDismiss, overlayMotion.mounted]);
 
   return (
-    <Modal
+    <ModalSheetHost
       accessibilityLabel={title}
       animationType="none"
       onRequestClose={() => {
@@ -47,7 +50,7 @@ export function ModalSheet({
       }}
       onShow={onShow}
       onDismiss={Platform.OS === 'ios' ? onDismiss : undefined}
-      role="dialog"
+      role={Platform.OS === 'web' ? role : 'dialog'}
       transparent
       visible={overlayMotion.mounted}
     >
@@ -121,7 +124,7 @@ export function ModalSheet({
           </Pressable>
         </Animated.View>
       </View>
-    </Modal>
+    </ModalSheetHost>
   );
 }
 
