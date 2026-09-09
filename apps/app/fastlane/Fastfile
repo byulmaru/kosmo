@@ -260,7 +260,7 @@ platform :android do
 
     gradle(
       build_type: 'Release',
-      flags: '--no-daemon',
+      flags: '--no-daemon --build-cache',
       project_dir: 'android',
       task: 'bundle',
     )
