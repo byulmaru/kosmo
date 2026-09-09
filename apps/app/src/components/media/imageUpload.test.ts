@@ -160,7 +160,11 @@ test('releases only Web object URL previews', () => {
 
 test('issues, uploads normalized WebP bytes, and completes in order', async (t) => {
   const calls: string[] = [];
-  const normalizedBlob = new Blob(['normalized-webp'], { type: 'image/webp' });
+  const bytes = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 255, 128, 0x57, 0x45, 0x42, 0x50]);
+  const readResponse = new Response(bytes, { status: 200 });
+  t.mock.method(readResponse, 'blob', async () => {
+    throw new Error("Creating blobs from 'ArrayBuffer' and 'ArrayBufferView' are not supported");
+  });
   const manipulator = installManipulator({ height: 2000, width: 4000 });
   const put = t.mock.method(
     globalThis,
@@ -168,10 +172,10 @@ test('issues, uploads normalized WebP bytes, and completes in order', async (t) 
     async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input) === 'file:///cache/normalized.webp') {
         calls.push('read-normalized');
-        return new Response(normalizedBlob, { status: 200 });
+        return readResponse;
       }
       calls.push(`${init?.method}:${String(input)}`);
-      assert.equal(await (init?.body as Blob).text(), 'normalized-webp');
+      assert.deepEqual(new Uint8Array(await new Request(String(input), init).arrayBuffer()), bytes);
       assert.deepEqual(init?.headers, { 'content-type': 'image/webp' });
       return new Response(null, { status: 204 });
     },
@@ -208,7 +212,7 @@ test('issues, uploads normalized WebP bytes, and completes in order', async (t) 
   assert.equal(captureCalls.length, 0);
 });
 
-test('reads the normalized Blob and uses WebP content type for small images', async (t) => {
+test('reads the normalized bytes and uses WebP content type for small images', async (t) => {
   const normalizedBlob = new Blob(['normalized-webp'], { type: 'image/webp' });
   const manipulator = installManipulator({ height: 800, width: 1200 });
   const calls: Array<{ readonly body?: BodyInit | null; readonly headers?: HeadersInit }> = [];
@@ -235,8 +239,7 @@ test('reads the normalized Blob and uses WebP content type for small images', as
   assert.equal(manipulator.renderCount(), 1);
   assert.deepEqual(manipulator.saveOptions, [{ compress: 0.8, format: 'webp' }]);
   assert.deepEqual(calls[0], { body: undefined, headers: undefined });
-  assert.equal(await (calls[1]?.body as Blob).text(), 'normalized-webp');
-  assert.equal((calls[1]?.body as Blob).type, 'image/webp');
+  assert.equal(await new Response(calls[1]?.body).text(), 'normalized-webp');
   assert.deepEqual(calls[1]?.headers, { 'content-type': 'image/webp' });
 });
 
@@ -350,7 +353,7 @@ for (const testCase of [
   });
 }
 
-test('releases a WebP object URL after reading its upload Blob', async (t) => {
+test('releases a WebP object URL after reading its upload bytes', async (t) => {
   const normalizedUri = 'blob:https://kosmo.example/normalized';
   const manipulator = installManipulator({
     height: 800,
@@ -435,7 +438,7 @@ test('turns image conversion failures into transfer failures', async (t) => {
   });
 });
 
-test('captures normalized Blob read failures with a safe operation and status', async (t) => {
+test('captures normalized image read failures with a safe operation and status', async (t) => {
   installManipulator({ height: 100, width: 100 });
   t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
     assert.equal(String(input), 'file:///cache/normalized.webp');
@@ -462,7 +465,7 @@ test('captures normalized Blob read failures with a safe operation and status', 
   });
 });
 
-test('captures normalized Blob fetch rejections as read failures', async (t) => {
+test('captures normalized image fetch rejections as read failures', async (t) => {
   installManipulator({ height: 100, width: 100 });
   t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
     assert.equal(String(input), 'file:///cache/normalized.webp');
@@ -492,11 +495,11 @@ test('captures normalized Blob fetch rejections as read failures', async (t) => 
   });
 });
 
-test('captures normalized Blob body rejections as read failures', async (t) => {
+test('captures normalized ArrayBuffer body rejections as read failures', async (t) => {
   installManipulator({ height: 100, width: 100 });
   const response = new Response(null, { status: 200 });
-  response.blob = async () => {
-    throw new Error('private normalized Blob detail');
+  response.arrayBuffer = async () => {
+    throw new Error('private normalized ArrayBuffer detail');
   };
   t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
     assert.equal(String(input), 'file:///cache/normalized.webp');
@@ -514,7 +517,7 @@ test('captures normalized Blob body rejections as read failures', async (t) => {
       error instanceof ImageUploadError &&
       error.observation?.operation === 'read' &&
       error.failure.reason === 'transient' &&
-      !error.message.includes('private normalized Blob detail'),
+      !error.message.includes('private normalized ArrayBuffer detail'),
   );
   assert.deepEqual(captureCalls[0]?.context, {
     operation: 'read',
@@ -819,7 +822,7 @@ for (const boundary of [
   'issue',
   'normalize',
   'read-fetch',
-  'read-blob',
+  'read-body',
   'put',
   'complete',
 ] as const) {
@@ -839,8 +842,8 @@ for (const boundary of [
         throw original;
       }
       const response = new Response(new Blob(['webp']), { status: 200 });
-      if (boundary === 'read-blob' && !init) {
-        response.blob = async () => {
+      if (boundary === 'read-body' && !init) {
+        response.arrayBuffer = async () => {
           throw original;
         };
       }
@@ -883,7 +886,7 @@ for (const boundary of [
           operation: boundary.startsWith('read-') ? 'read' : boundary,
           reason: 'transient',
           stage,
-          ...(boundary === 'read-blob' ? { status: 200 } : {}),
+          ...(boundary === 'read-body' ? { status: 200 } : {}),
         });
         return true;
       },

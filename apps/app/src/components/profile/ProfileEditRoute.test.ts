@@ -328,7 +328,6 @@ const mockSuccessfulUploadFetch = () =>
     }
     assert.equal(init?.method, 'PUT');
     assert.deepEqual(init?.headers, { 'content-type': 'image/webp' });
-    assert.equal((init?.body as Blob).type, 'image/webp');
     return new Response(null, { status: 204 });
   });
 
