@@ -115,4 +115,4 @@ PROD-509가 공통 경계·Create의 통합 완료 증거를 남기고 이 chang
 
 - [x] 5.1 관련 Fedify/core 검증과 영향 패키지 정적 검증을 통과시키고 DB-only 조회·authorization 보존 증거를 남긴다.
 - [x] 5.2 후속 consumer에 입력·결과·거절·원자성·budget 계약과 Create 회귀 증거를 인계한다.
-- [ ] 5.3 전체 scope·tasks·strict validation을 확인하고 delta 동기화 및 이 change의 archive를 수행한다.
+- [x] 5.3 전체 scope·tasks·strict validation을 확인하고 delta 동기화 및 이 change의 archive를 수행한다.

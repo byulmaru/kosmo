@@ -82,13 +82,13 @@ node로 원자적으로 투영하는 수신 계약을 정의한다.
 
 ### Requirement: 최초 원격 Media materialization 원자성
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/objects/post-content.md`, PROD-585, PROD-256. 시스템은 Remote Media projection을 기존 원격 Post 최초 materialization의 PostgreSQL transaction과 first-write-wins 경계에 포함해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/objects/post-content.md`, PROD-585, PROD-256, PROD-509의 2026-09-09 독립 Actor/Post 저장 결정. 시스템은 Remote Media projection을 기존 원격 Post 최초 materialization의 PostgreSQL transaction과 first-write-wins 경계에 포함해야 한다(MUST).
 
 #### Scenario: Media와 Post를 함께 commit
 
 - **WHEN** Media가 있는 유효한 원격 Note object URI가 최초로 materialize된다
 - **THEN** 시스템은 필요한 Remote Media, ActivityPub Post mapping, Post, first PostContent와 currentContent를 같은 transaction에서 commit한다
-- **AND** 하나의 write라도 실패하면 이 delivery가 새로 만든 모든 row를 rollback한다
+- **AND** 하나의 write라도 실패하면 이 Post transaction이 새로 만든 Post·PostContent·mapping·첨부 Media와 관계 변경을 rollback한다
 
 #### Scenario: duplicate Create first-write-wins
 
@@ -102,3 +102,11 @@ node로 원자적으로 투영하는 수신 계약을 정의한다.
 - **THEN** database uniqueness와 transaction 결과가 object URI당 Post 하나로 수렴한다
 - **AND** 서로 다른 object URI에서 commit된 attachment는 URL이 같아도 각각 별도 Media identity를 가진다
 - **AND** 같은 object URI의 conflict loser는 orphan Post, PostContent 또는 Media를 남기지 않는다
+
+#### Scenario: PROD-509 reuses the existing Media boundary
+
+- **WHEN** PROD-509가 검증된 PUBLIC/UNLISTED 신규 Note의 embedded 이미지를 materialize한다
+- **THEN** 기존 Image/Document 분류·앞 4개·IRI-only 및 비지원 무시·선택 후보 필수 검증·nullable metadata·attachment별 identity 규칙을 동일하게 적용한다
+- **AND** attachment metadata나 byte를 추가 fetch하지 않는다
+- **AND** Post/첨부 Media transaction 실패나 duplicate는 별도로 commit된 유효 Actor와 그 Profile 표현을 되돌리지 않는다
+- **AND** 기존 Create의 Media 동작은 변경하지 않는다
