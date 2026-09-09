@@ -48,7 +48,7 @@
 - Composer와 Profile의 각 `catch`에 capture를 추가하면 하나의 업로드 실패가 두 번 보고되거나 UI 호출부가 단계의 owner가 된다.
 - `createNormalizedImageBlob` 내부, issue/PUT URL, complete response와 같은 하위 단계마다 reporter callback을 넣으면 최종 실패 하나가 여러 event로 쪼개지고 raw 입력이 leak될 수 있다.
 - 원본 연결 없는 capture 전용 placeholder 또는 내부 catch의 cause 누락은 SDK 진단을 잃게 한다. 원본 Error는 표준 cause chain으로 보존하며, File/Blob, URI, URL, token, response body를 별도 context로 첨부하지 않는다.
-- Expo Web `saveAsync`는 `Unable to save image: ${this.uri}`에 blob/data URI를 포함하고 Android image load 실패도 asset URI를 포함한다. 이미지 처리 경계에서 알고 있는 asset/source/normalized URI와 정확히 일치하는 부분만 원본 Error의 message·stack에서 제한하고 cause chain에도 적용한다. 오류 객체·type·나머지 메시지·stack frame을 보존하며 전역 regex나 복제 sanitizer로 확장하지 않는다.
+- Expo Web `saveAsync`와 Android image load 실패는 이미지 URI를 message에 포함할 수 있다. 최신 사용자 결정에 따라 data/blob/file URI를 포함한 SDK 원본 Error를 수정 없이 보존한다. URI 치환이나 오류 필드 쓰기를 제거하여 frozen Error·DOMException도 그대로 전달하며, asset·token·raw response를 별도로 첨부하지 않는다.
 - `captureReactError`와 일반 처리된 오류 capture를 합치면 React component stack, mechanism 또는 기존 중복 방지 경계가 달라질 수 있다.
 - 비활성 항목의 `null` 반환, 명시적 no-op와 Sentry SDK 호출 실패를 업로드 실패 자체로 오인하지 않아야 한다.
 - 현재 `transfer` 단계는 정규화·normalized Blob read와 signed PUT을 함께 포함한다. 처리된 오류 context는 `issue`·`normalize`·`read`·`put`·`complete` operation으로 이 경계를 구분하고, 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 경우에만 숫자 status와 승인된 machine code를 보존한다.

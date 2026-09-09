@@ -65,8 +65,8 @@ accessible name에 사용하지 않는다.
 - 성공, 비활성 항목의 `null` 결과와 명시적 no-op은 Sentry 처리된 실패 event를 만들지 않는다.
 - Sentry capture 실패는 원래 업로드 오류, 실패 항목 보존, 오류 UI와 재시도 동작을 바꾸지 않는다.
 - 업로드에서 실제 발생한 Error는 직접 capture에 전달하거나 기존 UI 분류 wrapper의 표준 `cause` chain에 원본 객체를 연결하여 원래 message·stack·cause를 모든 오류 단계에서 보존한다. 기존 UI 분류 wrapper는 유지할 수 있지만, 원본 오류 연결 없이 수집만을 위한 일반 메시지의 새 Error로 대체하거나 복제·전역 정제하지 않는다. 이 진단 정보는 Sentry에서 사용하며 사용자-facing 오류 분류와 안내 문구는 기존 정책을 유지한다.
-- 새 관측 context에는 위에서 허용한 진단 필드만 넣는다. 이미지 byte, File/Blob, signed upload URL, 인증 토큰, raw request/response와 사용자 콘텐츠를 오류나 context에 별도로 첨부하지 않는다. 실제 오류에 인증 정보나 불필요한 개인정보가 포함되는 구체적 경로가 확인되면 해당 데이터가 생성·첨부되는 경계에서 필요한 제한을 정하며, 원문 message·stack·cause를 일괄 제거하지 않는다.
-- Expo 이미지 처리 SDK가 오류 메시지에 넣는 asset/source/normalized 이미지 URI는 blob URL·로컬 경로·data URI의 이미지 byte를 포함할 수 있다. 이미지 처리 경계에서 알고 있는 해당 URI와 정확히 일치하는 부분만 message와 stack에서 제한하고 표준 cause chain에도 적용한다. 오류 객체·type·나머지 메시지·stack frame은 보존하며 일반 URL 패턴이나 모든 오류로 제한을 확대하지 않는다.
+- 새 관측 context에는 위에서 허용한 진단 필드만 넣는다. 이미지 byte, File/Blob, signed upload URL, 인증 토큰, raw request/response와 사용자 콘텐츠를 오류나 context에 별도로 첨부하지 않는다.
+- SDK가 생성한 원본 Error는 data/blob/file URI가 message·stack·cause에 포함되어 있어도 수정 없이 보존한다. 업로드 경계는 URI 치환, message·stack 변경이나 오류 복제를 하지 않는다. SDK 오류에 이미 포함된 진단을 보존하는 것과 이미지·토큰·raw response를 별도로 첨부하는 것을 구분한다.
 
 ## 접근성
 

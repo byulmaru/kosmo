@@ -891,7 +891,7 @@ for (const boundary of [
   });
 }
 
-test('restricts known Expo image URIs while preserving original errors and stack frames', async () => {
+test('preserves Expo image URIs in frozen original errors and their cause chain', async () => {
   const assetUri = 'file:///private/photos/user-image.jpg';
   const sourceUri = 'blob:https://kosmo.example/source-secret';
   const normalizedUri = 'data:image/png;base64,private-image-bytes';
@@ -899,6 +899,10 @@ test('restricts known Expo image URIs while preserving original errors and stack
   const original = new Error(`Unable to save image: ${normalizedUri}`, { cause: root });
   root.stack = `${root.name}: ${root.message}\n    at load (image-loader.ts:12:3)`;
   original.stack = `${original.name}: ${original.message}\n    at save (image-save.ts:34:5)`;
+  const originalStack = original.stack;
+  const rootStack = root.stack;
+  Object.freeze(root);
+  Object.freeze(original);
   let renders = 0;
   createManipulatorContext = () => ({
     release: () => undefined,
@@ -929,16 +933,10 @@ test('restricts known Expo image URIs while preserving original errors and stack
       assert.equal(error.cause, original);
       assert.equal(original.cause, root);
       assert.equal(original.name, 'Error');
-      assert.equal(original.message, 'Unable to save image: [image URI]');
-      assert.equal(
-        original.stack,
-        'Error: Unable to save image: [image URI]\n    at save (image-save.ts:34:5)',
-      );
-      assert.equal(root.message, 'Could not load the image: [image URI]; source [image URI]');
-      assert.equal(
-        root.stack,
-        'Error: Could not load the image: [image URI]; source [image URI]\n    at load (image-loader.ts:12:3)',
-      );
+      assert.equal(original.message, `Unable to save image: ${normalizedUri}`);
+      assert.equal(original.stack, originalStack);
+      assert.equal(root.message, `Could not load the image: ${assetUri}; source ${sourceUri}`);
+      assert.equal(root.stack, rootStack);
       assert.deepEqual(captureCalls[0]?.context, {
         operation: 'normalize',
         reason: 'transient',
@@ -949,9 +947,10 @@ test('restricts known Expo image URIs while preserving original errors and stack
   );
 });
 
-test('restricts the known saved URI in read errors without removing other diagnostics', async (t) => {
+test('preserves the saved URI and original diagnostics in read errors', async (t) => {
   const resultUri = 'file:///private/cache/result.webp';
   const original = new Error(`Read failed: ${resultUri}; see https://docs.example/read`);
+  const originalStack = original.stack;
   installManipulator({ height: 100, width: 100, resultUri });
   t.mock.method(globalThis, 'fetch', async () => {
     throw original;
@@ -967,7 +966,8 @@ test('restricts the known saved URI in read errors without removing other diagno
       assert.ok(error instanceof ImageUploadError);
       assert.equal(error.cause, original);
       assert.equal(captureCalls[0]?.error, error);
-      assert.equal(original.message, 'Read failed: [image URI]; see https://docs.example/read');
+      assert.equal(original.message, `Read failed: ${resultUri}; see https://docs.example/read`);
+      assert.equal(original.stack, originalStack);
       assert.deepEqual(captureCalls[0]?.context, {
         operation: 'read',
         reason: 'transient',
@@ -1002,10 +1002,10 @@ for (const includeUri of [false, true]) {
         assert.equal(captureCalls[0]?.error, error);
         assert.equal(error.cause, original);
         assert.equal(original.name, 'SecurityError');
-        assert.equal(original.message, message.replaceAll(uri, '[image URI]'));
-        assert.equal(original.stack, originalStack?.replaceAll(uri, '[image URI]'));
+        assert.equal(original.message, message);
+        assert.equal(original.stack, originalStack);
         assert.equal(original.cause, root);
-        assert.equal(Object.hasOwn(original, 'message'), includeUri);
+        assert.equal(Object.hasOwn(original, 'message'), false);
         return true;
       },
     );

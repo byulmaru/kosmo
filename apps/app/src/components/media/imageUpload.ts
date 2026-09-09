@@ -113,36 +113,6 @@ async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob>
       );
     }
   } catch (error) {
-    // Expo errors can include the image URI, including a canvas data URI.
-    const imageUris = [
-      asset.uri,
-      normalizedImageUri,
-      ...[sourceImage, normalizedImage].map((image) =>
-        image && 'uri' in image && typeof image.uri === 'string' ? image.uri : undefined,
-      ),
-    ];
-    const seen = new Set<Error>();
-    let cause = error;
-    while (cause instanceof Error && !seen.has(cause)) {
-      seen.add(cause);
-      for (const uri of imageUris) {
-        if (uri) {
-          const message = cause.message.replaceAll(uri, '[image URI]');
-          if (message !== cause.message) {
-            Object.defineProperty(cause, 'message', {
-              configurable: true,
-              value: message,
-              writable: true,
-            });
-          }
-          const stack = cause.stack?.replaceAll(uri, '[image URI]');
-          if (stack !== cause.stack) {
-            cause.stack = stack;
-          }
-        }
-      }
-      cause = cause.cause;
-    }
     if (error instanceof ImageUploadError) {
       throw error;
     }

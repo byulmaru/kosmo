@@ -30,7 +30,7 @@ Post Composer와 Local Profile의 공통 이미지 업로드 실패를 한 번�
 
 ### Requirement: 공통 이미지 업로드 경계에서 처리된 실패를 한 번 관측한다
 
-**Authority / Provenance:** `docs/operations/sentry.md`, `docs/design/media-upload-errors.md`, PROD-929. Post Composer와 Local Profile이 공유하는 이미지 업로드 경계는 처리된 실패를 공통 Sentry 진입점으로 실패당 한 번 수집해야 한다(MUST). 실패 event에는 기존 이미지 업로드 오류 모델에서 안전하게 구성한 `stage`와 `reason`, `issue`·`normalize`·`read`·`put`·`complete` 중 하나의 `operation`을 전달해야 한다(MUST). 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 실패에는 숫자 HTTP `status`를 전달하며, machine-readable `code`는 승인된 allowlist 값만 전달해야 한다(MUST). 호출부가 같은 실패를 다시 수집해서는 안 되며(MUST NOT), 성공·비활성 항목의 `null` 결과·명시적 no-op은 처리된 실패 event를 만들지 않아야 한다(MUST NOT). 관측 수집의 실패는 업로드 결과, 기존 오류 UI, 실패 항목 보존과 재시도 동작을 바꾸어서는 안 된다(MUST NOT). 업로드 경계는 실제 Error를 직접 전달하거나 기존 UI 분류 wrapper의 표준 `cause` chain에 원본 객체를 연결하여 모든 오류 단계의 message·stack·cause와 SDK 진단 정보를 보존해야 한다(MUST). 원본 연결 없이 수집만을 위한 일반 메시지의 새 Error로 대체하거나 오류를 복제·전역 정제해서는 안 된다(MUST NOT). 업로드 경계는 이미지 byte, File/Blob, signed upload URL, 인증 토큰, raw request/response와 사용자 콘텐츠를 오류나 새 event context에 별도로 첨부해서는 안 된다(MUST NOT). 실제 오류에 인증 정보나 불필요한 개인정보가 포함되는 구체적 경로가 확인되면 해당 데이터가 생성·첨부되는 경계에서 필요한 제한을 정해야 하며(MUST), 원문 message·stack·cause 자체를 일괄 제거해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/operations/sentry.md`, `docs/design/media-upload-errors.md`, PROD-929. Post Composer와 Local Profile이 공유하는 이미지 업로드 경계는 처리된 실패를 공통 Sentry 진입점으로 실패당 한 번 수집해야 한다(MUST). 실패 event에는 기존 이미지 업로드 오류 모델에서 안전하게 구성한 `stage`와 `reason`, `issue`·`normalize`·`read`·`put`·`complete` 중 하나의 `operation`을 전달해야 한다(MUST). 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 실패에는 숫자 HTTP `status`를 전달하며, machine-readable `code`는 승인된 allowlist 값만 전달해야 한다(MUST). 호출부가 같은 실패를 다시 수집해서는 안 되며(MUST NOT), 성공·비활성 항목의 `null` 결과·명시적 no-op은 처리된 실패 event를 만들지 않아야 한다(MUST NOT). 관측 수집의 실패는 업로드 결과, 기존 오류 UI, 실패 항목 보존과 재시도 동작을 바꾸어서는 안 된다(MUST NOT). 업로드 경계는 실제 Error를 직접 전달하거나 기존 UI 분류 wrapper의 표준 `cause` chain에 원본 객체를 연결하여 모든 오류 단계의 message·stack·cause와 SDK 진단 정보를 보존해야 한다(MUST). 원본 연결 없이 수집만을 위한 일반 메시지의 새 Error로 대체하거나 오류를 복제·전역 정제해서는 안 된다(MUST NOT). 업로드 경계는 이미지 byte, File/Blob, signed upload URL, 인증 토큰, raw request/response와 사용자 콘텐츠를 오류나 새 event context에 별도로 첨부해서는 안 된다(MUST NOT). SDK가 생성한 원본 Error는 data/blob/file URI를 포함해 message·stack·cause를 수정 없이 보존해야 하며(MUST), 업로드 경계에서 URI 치환이나 오류 필드 변경을 해서는 안 된다(MUST NOT).
 
 #### Scenario: 이미지 업로드 실패를 한 번 수집하고 기존 오류 결과를 유지한다
 
@@ -43,11 +43,11 @@ Post Composer와 Local Profile의 공통 이미지 업로드 실패를 한 번�
 - **THEN** Sentry에 전달되는 Error 자체 또는 표준 cause chain에서 원본 Error의 identity·message·stack·cause가 보존되고 기존 UI 분류가 유지된다
 - **AND** 새 context에는 승인된 진단 필드만 포함하며 raw request/response나 asset을 별도로 첨부하지 않는다
 
-#### Scenario: 이미지 SDK가 삽입한 알려진 이미지 URI만 제한한다
+#### Scenario: 이미지 SDK 오류의 URI를 포함한 원본 진단을 보존한다
 
 - **WHEN** 이미지 처리 SDK의 오류 message·stack 또는 cause chain에 현재 asset/source/normalized 이미지 URI가 포함된다
-- **THEN** 이미지 처리 경계가 알고 있는 해당 URI와 정확히 일치하는 부분만 제한하고 원본 오류 객체·type·나머지 메시지·stack frame을 보존한다
-- **AND** 일반 URL 패턴이나 다른 기능의 오류에 전역 정제를 적용하지 않는다
+- **THEN** 해당 URI를 포함한 원본 오류 객체·type·message·stack·cause를 수정 없이 보존한다
+- **AND** 오류 필드를 변경하거나 복제하지 않으므로 frozen Error와 DOMException도 원본 객체로 유지된다
 
 #### Scenario: 두 consumer가 같은 공통 업로드 실패를 중복 수집하지 않는다
 

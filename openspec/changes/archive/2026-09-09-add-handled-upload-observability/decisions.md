@@ -69,9 +69,30 @@ machine code를 포함하는 것으로 승인되었으며, 이 기록은 해당 
 - Context / Problem: 이전 원본 exception·message·cause 일괄 금지 결정으로 수집 전용 placeholder와 내부 catch에서 실제 원인과 stack이 사라졌다. 사용자가 실제 오류 진단을 보존하고 실제 민감정보만 제한하도록 명시적으로 정정했다.
 - Decision Outcome: 원본 Error 객체를 직접 전달하거나 기존 UI 분류 wrapper의 표준 `cause` chain에 연결해 모든 오류 단계의 message·stack·cause를 보존한다. 기존 UI wrapper는 허용하지만, 원본 연결 없이 수집만을 위한 placeholder로 대체하지 않는다. 새 context에는 승인된 진단 필드만 넣고 raw request/response·asset·credential·사용자 콘텐츠를 별도로 첨부하지 않는다.
 - Alternatives Considered: capture 인자만 변경하면 내부 catch에서 이미 버린 원인을 복구할 수 없다. 표준 Error cause를 사용하며 복제·regex sanitizer·새 의존성을 추가하지 않는다.
-- Consequences: 기존 UI 분류·단일 capture·runtime gate를 유지하면서 SDK가 원본 오류 chain을 진단할 수 있다. 실제 민감정보가 포함되는 구체적 경로가 확인되면 해당 생성·첨부 경계의 필요한 제한을 정하며, 추정으로 오류 진단 전체를 지우지 않는다.
+- Consequences: 기존 UI 분류·단일 capture·runtime gate를 유지하면서 SDK가 원본 오류 chain을 진단할 수 있다. 이 기록에 뒤이어 적용했던 URI 제한 부분은 아래 최신 사용자 결정으로 대체되었으며, 표준 cause 보존 결정은 계속 유효하다.
 - Confirmation / Follow-up: 원본 객체 identity·message·stack·cause, 내부 catch와 non-Error cause 보존, 단일 capture와 제한된 context를 실행 테스트로 확인한다.
-- Concrete Sensitive Path: Expo Web save 실패는 이미지 ref의 URI(blob 또는 canvas data URI)를 message에 포함하고 Android load 실패도 asset URI를 포함한다. 사용자 승인한 실제 민감정보 제한에 따라 이미지 처리 경계가 보유한 asset/source/normalized URI의 정확한 문자열만 message·stack과 cause chain에서 제한한다. 같은 Error 객체와 나머지 진단은 보존하며 전역 패턴 정제나 복제를 추가하지 않는다.
+
+### 알려진 이미지 URI를 오류에서 제한한다 (이전 결정)
+
+- Decision Date: 2026-09-09
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-929`의 이전 실제 민감정보 제한 해석과 당시 canonical 문서
+- Status: Superseded
+- Decision Outcome: Expo Web save 실패의 이미지 ref URI와 Android load 실패의 asset URI를 알고 있는 문자열로 치환하며 오류 객체와 나머지 진단을 보존한다.
+- Superseded By: 아래 `SDK 오류는 URI를 포함해 수정 없이 보존한다` 사용자 승인. URI 제한만 대체하며 기존 표준 cause 보존을 철회하지 않는다.
+
+### SDK 오류는 URI를 포함해 수정 없이 보존한다
+
+- Decision Date: 2026-09-09
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/operations/sentry.md`, `docs/design/media-upload-errors.md`, `PROD-929`의 PR #810 URI 치환 제거 사용자 승인
+- Status: Active
+- Supersedes: 알려진 이미지 URI를 오류에서 제한한다 (이전 결정).
+- Context / Problem: 이미지 URI를 포함한 SDK 오류를 수정하는 것은 사용자가 요청한 진단 보존 범위보다 과도하며, frozen Error·DOMException의 필드 쓰기가 원래 실패를 다른 오류로 대체할 수 있다.
+- Decision Outcome: data/blob/file URI를 포함한 원본 Error의 identity·message·stack·cause를 수정 없이 보존한다. URI 치환·오류 필드 변경·복제를 하지 않으며 기존 표준 ErrorOptions.cause와 단일 capture를 유지한다. 이미지·토큰·raw request/response를 별도로 첨부하지 않는 제한은 유지한다.
+- Alternatives Considered: URI 치환을 유지하거나 readonly 오류를 위한 새 복제·mapping 계층을 추가하는 대신 기존 치환 루프를 삭제한다.
+- Consequences: SDK 오류에 이미 포함된 URI도 진단으로 보존하며 이를 별도 asset·credential 첨부와 구분한다. 사용자-facing 오류 분류와 runtime gate는 유지한다.
+- Confirmation / Follow-up: URI 포함 Error·cause chain·frozen Error·DOMException의 원본 보존과 제한된 새 context를 실행 테스트로 검증한다.
 
 ## Remaining Decisions
 
