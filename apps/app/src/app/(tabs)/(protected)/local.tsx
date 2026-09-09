@@ -85,7 +85,10 @@ function LocalContent() {
   const data = useLazyLoadQuery<LocalPageQuery>(
     LocalQuery,
     {},
-    { fetchKey: `${profileMuteTimelineRevision}:${fetchKey}`, fetchPolicy: 'store-and-network' },
+    {
+      fetchKey: `${profileMuteTimelineRevision}:${fetchKey}`,
+      fetchPolicy: profileMuteTimelineRevision === 0 ? 'store-and-network' : 'network-only',
+    },
   );
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;

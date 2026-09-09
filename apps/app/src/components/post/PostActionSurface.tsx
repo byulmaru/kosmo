@@ -11,13 +11,11 @@ import { usePostMoreMenuItem } from './PostMoreMenu';
 import { usePostReactionController } from './PostReactionController';
 import { useRepostFailureToast } from './useRepostFailureToast';
 import type { StyleProp, ViewStyle } from 'react-native';
-import type { ProfileMuteControl } from '@/components/profile/ProfileMuteAction';
 import type { PostActionSurface_post$key } from './__generated__/PostActionSurface_post.graphql';
 import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
 
 type Props = Readonly<{
   actionBarStyle?: StyleProp<ViewStyle>;
-  mute?: ProfileMuteControl & { profileId: string };
   onDeleted?: () => void;
   reactionSummaryStyle?: StyleProp<ViewStyle>;
   reply?: PostActionBarProps['reply'];
@@ -45,7 +43,6 @@ const postActionSurfaceFragment = graphql`
 
 export function PostActionSurface({
   actionBarStyle,
-  mute,
   onDeleted,
   reactionSummaryStyle,
   reply,
@@ -72,9 +69,8 @@ export function PostActionSurface({
     relativeHandle: target.profile.relativeHandle,
   });
 
-  const resolvedMute =
-    mute ??
-    (authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id
+  const mute =
+    authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id
       ? {
           muted: Boolean(target.profile.viewerState?.profileMute),
           onChangeMuted: (nextMuted: boolean) =>
@@ -88,7 +84,7 @@ export function PostActionSurface({
             ),
           profileId: target.profile.id,
         }
-      : undefined);
+      : undefined;
 
   const renderActions = (more?: MoreActionConfig) => (
     <View style={actionBarStyle}>
@@ -111,12 +107,9 @@ export function PostActionSurface({
   return (
     <>
       <PostReactionSummary controller={reactionController} style={reactionSummaryStyle} />
-      {resolvedMute &&
-      resolvedMute.profileId === target.profile.id &&
-      authentication.selectedProfileId &&
-      authentication.selectedProfileId !== target.profile.id ? (
+      {mute ? (
         <ProfileMuteAction
-          {...resolvedMute}
+          {...mute}
           displayName={target.profile.displayName}
           profileId={target.profile.id}
           items={[copyLinkItem]}

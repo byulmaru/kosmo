@@ -1,18 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { useRelayEnvironment } from 'react-relay';
-import {
-  createOperationDescriptor,
-  Environment,
-  getRequest,
-  Network,
-  RecordSource,
-  Store,
-} from 'relay-runtime';
+import { Environment, Network, RecordSource, Store } from 'relay-runtime';
 import { expect, spyOn, userEvent, waitFor, within } from 'storybook/test';
-import HomePageQueryNode from '@/app/(tabs)/(protected)/__generated__/HomePageQuery.graphql';
 import HomeScreen from '@/app/(tabs)/(protected)/home';
-import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
 import { ShellChromeProvider, useShellChrome } from '@/components/shell/ShellChromeContext';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
@@ -37,16 +27,6 @@ const homeTargetProfile = profile({
   id: 'home-target-profile',
   relativeHandle: '@home-target',
 });
-const homeMuteRelationId = 'home-profile-mute';
-const homeTargetProfileAfterMute = profile({
-  ...homeTargetProfile,
-  viewerState: {
-    follow: null,
-    followRequest: null,
-    isSelf: false,
-    profileMute: { id: homeMuteRelationId },
-  },
-});
 const selectedProfileData = {
   ...shellQuery({ profiles: [homeViewerProfile], selectedProfile: homeViewerProfile }),
   homeTimeline: emptyHomeTimeline,
@@ -63,7 +43,7 @@ const homeRefreshRecoveredPost = {
   ...post({
     bodyText: '뮤트 후 복구된 홈 게시글',
     id: 'home-refresh-recovered-post',
-    profile: homeTargetProfileAfterMute,
+    profile: homeTargetProfile,
   }),
   viewerReactions: [],
 };
@@ -112,7 +92,6 @@ function HomeRefreshStory() {
           profileMuteTimelineRevision={profileMuteTimelineRevision}
           refreshProfileMuteTimelines={() => {
             homeRefreshStateRef.current.revision += 1;
-            invalidateHomeQueryData(environment);
             setProfileMuteTimelineRevision((revision) => revision + 1);
           }}
           registerHomeReselection={() => () => undefined}
@@ -135,20 +114,6 @@ function createHomeRefreshEnvironment(homeRefreshStateRef: { current: { revision
         return Promise.resolve({ data: selectedProfileData } as GraphQLResponse);
       }
 
-      if (request.name === 'ProfileMuteControllerMuteMutation') {
-        return Promise.resolve({
-          data: {
-            muteProfile: {
-              profileMute: {
-                __typename: 'ProfileMute',
-                id: homeMuteRelationId,
-                targetProfile: { __typename: 'Profile', id: homeTargetProfile.id },
-              },
-            },
-          },
-        } as GraphQLResponse);
-      }
-
       if (request.name === 'HomePageQuery') {
         if (homeRefreshStateRef.current.revision === 1) {
           return Promise.reject(new Error('홈 재조회 실패'));
@@ -167,49 +132,20 @@ function createHomeRefreshEnvironment(homeRefreshStateRef: { current: { revision
     store: new Store(new RecordSource()),
   });
 
-  environment.commitPayload(
-    createOperationDescriptor(getRequest(HomePageQueryNode), {}),
-    homeRefreshInitialData,
-  );
-
   return environment;
 }
 
-function invalidateHomeQueryData(environment: Environment) {
-  environment.getStore().notify(undefined, true);
-}
-
 function HomeRefreshTrigger() {
-  const environment = useRelayEnvironment();
   const shellChrome = useShellChrome();
-  const { changeMuted } = useProfileMuteMutations();
-  const [, refreshMuteRelation] = useState(0);
-  const rereadMuteRelation = () => refreshMuteRelation((version) => version + 1);
-  const muteRelationVisible = hasProfileMute(environment, homeTargetProfile.id);
-
-  const applyMute = async () => {
-    try {
-      await changeMuted(
-        {
-          ownerProfileId: homeViewerProfile.id,
-          targetProfileId: homeTargetProfile.id,
-        },
-        true,
-      );
-      rereadMuteRelation();
-    } catch {
-      return;
-    }
-  };
 
   return (
     <>
       <Pressable
-        accessibilityLabel="프로필 뮤트 적용"
+        accessibilityLabel="재조회 실패 트리거"
         accessibilityRole="button"
-        onPress={() => void applyMute()}
+        onPress={() => shellChrome?.refreshProfileMuteTimelines?.()}
       >
-        <Text>프로필 뮤트 적용</Text>
+        <Text>재조회 실패 트리거</Text>
       </Pressable>
       <Pressable
         accessibilityLabel="다음 revision 복구"
@@ -218,34 +154,8 @@ function HomeRefreshTrigger() {
       >
         <Text>다음 revision 복구</Text>
       </Pressable>
-      <Pressable
-        accessibilityLabel="뮤트 관계 상태 다시 읽기"
-        accessibilityRole="button"
-        onPress={rereadMuteRelation}
-      >
-        <Text>뮤트 관계 상태 다시 읽기</Text>
-      </Pressable>
-      <Text>뮤트 관계: {muteRelationVisible ? '유지됨' : '없음'}</Text>
     </>
   );
-}
-
-function hasProfileMute(environment: Environment, targetProfileId: string) {
-  const source = environment.getStore().getSource();
-  const targetProfile = source.get(targetProfileId);
-  const viewerStateId = getRelayRecordRef(targetProfile?.viewerState);
-  const viewerState = viewerStateId ? source.get(viewerStateId) : null;
-
-  return Boolean(getRelayRecordRef(viewerState?.profileMute));
-}
-
-function getRelayRecordRef(value: unknown): string | null {
-  if (typeof value !== 'object' || value === null) {
-    return null;
-  }
-
-  const ref = (value as { __ref?: unknown }).__ref;
-  return typeof ref === 'string' ? ref : null;
 }
 
 export const EmptyTimelineFull: Story = {
@@ -328,23 +238,18 @@ export const RefetchFailureKeepsTimelineAndRecovers: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const applyMute = canvas.getByRole('button', { name: '프로필 뮤트 적용' });
+    const triggerFailure = canvas.getByRole('button', { name: '재조회 실패 트리거' });
     const recover = canvas.getByRole('button', { name: '다음 revision 복구' });
-    const rereadMuteRelation = canvas.getByRole('button', { name: '뮤트 관계 상태 다시 읽기' });
 
     await expect(canvas.findByText('뮤트 전 홈 게시글')).resolves.toBeVisible();
 
-    await userEvent.click(applyMute);
+    await userEvent.click(triggerFailure);
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('홈을 불러오지 못했어요');
-    await userEvent.click(rereadMuteRelation);
-    await expect(canvas.findByText('뮤트 관계: 유지됨')).resolves.toBeVisible();
     expect(canvas.getByText('뮤트 전 홈 게시글')).toBeVisible();
     expect(canvas.queryByText('뮤트 후 복구된 홈 게시글')).not.toBeInTheDocument();
 
     await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('홈을 불러오지 못했어요');
-    await userEvent.click(rereadMuteRelation);
-    expect(canvas.getByText('뮤트 관계: 유지됨')).toBeVisible();
     expect(canvas.getByText('뮤트 전 홈 게시글')).toBeVisible();
     expect(canvas.queryByText('뮤트 후 복구된 홈 게시글')).not.toBeInTheDocument();
 
@@ -354,8 +259,6 @@ export const RefetchFailureKeepsTimelineAndRecovers: Story = {
       expect(canvas.getByText('뮤트 후 복구된 홈 게시글')).toBeVisible();
       expect(canvas.queryByText('뮤트 전 홈 게시글')).not.toBeInTheDocument();
     });
-    await userEvent.click(rereadMuteRelation);
-    expect(canvas.getByText('뮤트 관계: 유지됨')).toBeVisible();
   },
   render: () => <HomeRefreshStory />,
 };

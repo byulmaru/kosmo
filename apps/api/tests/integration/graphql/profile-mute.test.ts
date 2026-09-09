@@ -106,6 +106,7 @@ describe('GraphQL Profile Mute', () => {
     const localMute = localMutation.data?.muteProfile.profileMute;
     assert.ok(localMute);
     assert.equal(localMute.targetProfile.id, globalId('Profile', localTarget.id));
+    assert.equal(localMute.targetProfile.viewerState?.profileMute?.id, localMute.id);
     assert.ok(localMute.createdAt);
 
     const repeatedMutation = await muteProfile(localTarget.id, auth.token);
@@ -448,6 +449,7 @@ describe('GraphQL Profile Mute', () => {
     const switchedUnmute = await unmuteProfile(muteId, auth.token);
     assertNoGraphQLErrors(switchedUnmute);
     assert.equal(switchedUnmute.data?.unmuteProfile.profileMuteId, null);
+    assert.equal(switchedUnmute.data?.unmuteProfile.targetProfile, null);
     assert.equal(await db.$count(ProfileMutes, eq(ProfileMutes.id, decodeGlobalId(muteId).id)), 1);
 
     await db
@@ -458,6 +460,8 @@ describe('GraphQL Profile Mute', () => {
     const removed = await unmuteProfile(muteId, auth.token);
     assertNoGraphQLErrors(removed);
     assert.equal(removed.data?.unmuteProfile.profileMuteId, muteId);
+    assert.equal(removed.data?.unmuteProfile.targetProfile?.id, globalId('Profile', target.id));
+    assert.equal(removed.data?.unmuteProfile.targetProfile?.viewerState?.profileMute, null);
     assert.equal(await db.$count(ProfileMutes, eq(ProfileMutes.id, decodeGlobalId(muteId).id)), 0);
   });
 
@@ -504,13 +508,20 @@ const muteProfile = (targetProfileId: string, token: string) =>
       profileMute: {
         id: string;
         createdAt: string;
-        targetProfile: { id: string };
+        targetProfile: {
+          id: string;
+          viewerState: { profileMute: { id: string } | null } | null;
+        };
       };
     };
   }>(
     `mutation MuteProfile($input: MuteProfileInput!) {
       muteProfile(input: $input) {
-        profileMute { id createdAt targetProfile { id } }
+        profileMute {
+          id
+          createdAt
+          targetProfile { id viewerState { profileMute { id } } }
+        }
       }
     }`,
     { input: { id: globalId('Profile', targetProfileId) } },
@@ -519,10 +530,19 @@ const muteProfile = (targetProfileId: string, token: string) =>
 
 const unmuteProfile = (profileMuteId: string, token: string) =>
   requestGraphQL<{
-    unmuteProfile: { profileMuteId: string | null };
+    unmuteProfile: {
+      profileMuteId: string | null;
+      targetProfile: {
+        id: string;
+        viewerState: { profileMute: { id: string } | null } | null;
+      } | null;
+    };
   }>(
     `mutation UnmuteProfile($input: UnmuteProfileInput!) {
-      unmuteProfile(input: $input) { profileMuteId }
+      unmuteProfile(input: $input) {
+        profileMuteId
+        targetProfile { id viewerState { profileMute { id } } }
+      }
     }`,
     { input: { id: profileMuteId } },
     token,

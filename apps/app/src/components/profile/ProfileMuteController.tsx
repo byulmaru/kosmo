@@ -1,19 +1,25 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { graphql, useMutation, useRelayEnvironment } from 'react-relay';
+import { ConnectionHandler } from 'relay-runtime';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
-import { addProfileMuteToStore, removeProfileMuteFromStore } from './profileMuteCache';
 import type { ProfileMuteControllerMuteMutation } from './__generated__/ProfileMuteControllerMuteMutation.graphql';
 import type { ProfileMuteControllerUnmuteMutation } from './__generated__/ProfileMuteControllerUnmuteMutation.graphql';
 
 const muteProfileMutation = graphql`
-  mutation ProfileMuteControllerMuteMutation($id: ID!) {
+  mutation ProfileMuteControllerMuteMutation($connections: [ID!]!, $id: ID!) {
     muteProfile(input: { id: $id }) {
-      profileMute {
+      profileMute
+        @prependNode(connections: $connections, edgeTypeName: "ProfileMuteConnectionEdge") {
         id
         targetProfile {
           id
+          viewerState {
+            profileMute {
+              id
+            }
+          }
         }
       }
     }
@@ -21,12 +27,23 @@ const muteProfileMutation = graphql`
 `;
 
 const unmuteProfileMutation = graphql`
-  mutation ProfileMuteControllerUnmuteMutation($id: ID!) {
+  mutation ProfileMuteControllerUnmuteMutation($connections: [ID!]!, $id: ID!) {
     unmuteProfile(input: { id: $id }) {
-      profileMuteId
+      profileMuteId @deleteEdge(connections: $connections)
+      deletedProfileMuteId: profileMuteId @deleteRecord
+      targetProfile {
+        id
+        viewerState {
+          profileMute {
+            id
+          }
+        }
+      }
     }
   }
 `;
+
+const profileMuteConnectionKey = 'SettingsMutedProfiles_profileMutes';
 
 export type ProfileMuteChange = Readonly<{
   ownerProfileId: string;
@@ -65,6 +82,13 @@ export function useProfileMuteMutations() {
     (change: ProfileMuteChange, nextMuted: boolean) => {
       const requestEnvironment = environment;
       const requestGeneration = environmentGenerationRef?.current;
+      const connectionId = ConnectionHandler.getConnectionID(
+        change.ownerProfileId,
+        profileMuteConnectionKey,
+      );
+      const connections = requestEnvironment.getStore().getSource().has(connectionId)
+        ? [connectionId]
+        : [];
 
       return new Promise<void>((resolve, reject) => {
         if (
@@ -103,17 +127,6 @@ export function useProfileMuteMutations() {
                   finish(error ?? new Error('Profile mute response did not confirm the relation.'));
                   return;
                 }
-                requestEnvironment.commitUpdate((store) => {
-                  const normalizedProfileMute = store.get(profileMute.id);
-                  if (normalizedProfileMute) {
-                    addProfileMuteToStore(
-                      store,
-                      change.ownerProfileId,
-                      normalizedProfileMute.getDataID(),
-                      change.targetProfileId,
-                    );
-                  }
-                });
                 shellChrome?.refreshProfileMuteTimelines?.();
                 finish();
               },
@@ -124,7 +137,7 @@ export function useProfileMuteMutations() {
                 }
                 finish(error instanceof Error ? error : new Error(String(error)));
               },
-              variables: { id: change.targetProfileId },
+              variables: { connections, id: change.targetProfileId },
             });
           } else {
             const profileMuteId = change.profileMuteId as string;
@@ -145,14 +158,6 @@ export function useProfileMuteMutations() {
                   );
                   return;
                 }
-                requestEnvironment.commitUpdate((store) =>
-                  removeProfileMuteFromStore(
-                    store,
-                    change.ownerProfileId,
-                    profileMuteId,
-                    change.targetProfileId,
-                  ),
-                );
                 shellChrome?.refreshProfileMuteTimelines?.();
                 finish();
               },
@@ -163,7 +168,7 @@ export function useProfileMuteMutations() {
                 }
                 finish(error instanceof Error ? error : new Error(String(error)));
               },
-              variables: { id: profileMuteId },
+              variables: { connections, id: profileMuteId },
             });
           }
         } catch (error) {

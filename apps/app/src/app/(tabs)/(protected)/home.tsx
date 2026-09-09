@@ -210,7 +210,10 @@ function HomeContent({
   const data = useLazyLoadQuery<HomePageQuery>(
     HomeQuery,
     {},
-    { fetchKey: `${profileMuteTimelineRevision}:${fetchKey}`, fetchPolicy: 'store-and-network' },
+    {
+      fetchKey: `${profileMuteTimelineRevision}:${fetchKey}`,
+      fetchPolicy: profileMuteTimelineRevision === 0 ? 'store-and-network' : 'network-only',
+    },
   );
   lastSuccessfulHomeRef.current = { data };
 

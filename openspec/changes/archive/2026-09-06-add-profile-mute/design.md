@@ -59,7 +59,7 @@ GraphQL의 나머지 읽기 전용 요청은 DB query나 loader가 처리한다.
    `PROD-825`가 현재 호출부와 API 회귀 검증을 소유하며 `PROD-827`이 Hashtag에서 같은 경계를 재사용한다.
    GraphQL viewer-relative 조회와 Owner 목록은 기존 요청 단위 loader·connection을 유지한다.
    `ProfileMute` Node 조회는 Owner 조건과 `visibleProfileWhere`로 비가시 Target과 제삼자 노출을 막는다.
-6. GraphQL에는 `ProfileMute` Node, Owner 전용 non-null `targetProfile: Profile!`, `ProfileViewerState`의 nullable Mute 관계, 현재 Profile의 Owner 전용 connection과 생성·해제 mutation을 추가한다. 비가시화된 Target의 관계는 Node와 Owner connection에서 제외하되, Owner가 보관한 `ProfileMute` global ID를 `unmuteProfile` 입력에 재사용할 수 있게 한다. 생성 mutation 입력은 concrete `Profile` global ID인 Target만 받고 해제 mutation 입력은 concrete `ProfileMute` global ID인 관계만 받으며 Owner는 session에서 정한다. 공개 schema를 다시 생성해 source와 함께 검증한다.
+6. GraphQL에는 `ProfileMute` Node, Owner 전용 non-null `targetProfile: Profile!`, `ProfileViewerState`의 nullable Mute 관계, 현재 Profile의 Owner 전용 connection과 생성·해제 mutation을 추가한다. 비가시화된 Target의 관계는 Node와 Owner connection에서 제외하되, Owner가 보관한 `ProfileMute` global ID를 `unmuteProfile` 입력에 재사용할 수 있게 한다. 생성 mutation 입력은 concrete `Profile` global ID인 Target만 받고 해제 mutation 입력은 concrete `ProfileMute` global ID인 관계만 받으며 Owner는 session에서 정한다. 생성 payload의 관계 Target과 해제 payload의 nullable Target에서 mutation 후 viewer-relative 상태를 선택할 수 있게 해 Relay 정규화가 상태 갱신을 소유하도록 한다. 공개 schema를 다시 생성해 source와 함께 검증한다.
 7. DB schema·migration, Core action과 GraphQL integration을 각각 테스트한다. 특히 Remote Target, 중복·동시 생성, self-target, 비-Local Owner, 다른 Account와 같은 Account의 다른 selected Profile, 다른 Owner 해제 시도를 포함한다. 기존 관계·상호작용·Notification이 그대로인지도 회귀 테스트로 고정한다.
 8. Mute 조건의 Owner는 요청의 selected Profile이며 `expires_at IS NULL`인 관계만 판정한다.
    `postAccessWhere` 내부에서 outer Author와 direct Source Author를 같은 조건으로 판정하고,

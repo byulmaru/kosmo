@@ -3,10 +3,16 @@ import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
-import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
+import {
+  ConnectionHandler,
+  Environment,
+  Network,
+  Observable,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
 import MuteMutation from './__generated__/ProfileMuteControllerMuteMutation.graphql';
 import UnmuteMutation from './__generated__/ProfileMuteControllerUnmuteMutation.graphql';
-import { getProfileMuteConnectionId } from './profileMuteCache';
 import type { ComponentType } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
@@ -26,6 +32,7 @@ type ProfileMuteController = {
 };
 
 type PendingRequest = {
+  variables: Record<string, unknown>;
   sink: {
     complete(): void;
     error(error: Error): void;
@@ -114,6 +121,10 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     const request = startChangeMuted({ ownerProfileId: ownerA, targetProfileId: targetA }, true);
     const pending = pendingRequests[0];
     assert.ok(pending);
+    assert.deepEqual(pending.variables, {
+      connections: [getProfileMuteConnectionId(ownerA)],
+      id: targetA,
+    });
     await respond(pending, muteResponse('profile-mute:new', targetA));
     await request;
 
@@ -127,7 +138,7 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     );
   });
 
-  it('mute with a partial GraphQL error keeps viewer state and connection unchanged', async () => {
+  it('mute GraphQL failure keeps viewer state and connection unchanged', async () => {
     const { environment, ownerA, targetA } = createEnvironment({
       loadOwnerAConnection: true,
       loadOwnerBConnection: false,
@@ -139,11 +150,11 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     const pending = pendingRequests[0];
     assert.ok(pending);
     await respond(pending, {
-      data: mutePayload('profile-mute:partial', targetA),
-      errors: [{ message: 'partial mute failure' }],
-    });
+      data: null,
+      errors: [{ message: 'mute failure' }],
+    } as unknown as GraphQLResponse);
 
-    assert.match(String(await rejection), /partial mute failure/);
+    assert.match(String(await rejection), /mute failure/);
     assert.equal(viewerStateMuteId(environment, targetA), null);
     assert.deepEqual(connectionNodeIds(environment, getProfileMuteConnectionId(ownerA)), []);
     assert.equal(refreshCalls, 0);
@@ -159,6 +170,7 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     const request = startChangeMuted({ ownerProfileId: ownerA, targetProfileId: targetA }, true);
     const pending = pendingRequests[0];
     assert.ok(pending);
+    assert.deepEqual(pending.variables, { connections: [], id: targetA });
     await respond(pending, muteResponse('profile-mute:unloaded', targetA));
     await request;
 
@@ -191,8 +203,22 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     );
     const pending = pendingRequests[0];
     assert.ok(pending);
+    assert.deepEqual(pending.variables, {
+      connections: [getProfileMuteConnectionId(ownerA)],
+      id: 'profile-mute:a',
+    });
     await respond(pending, {
-      data: { unmuteProfile: { profileMuteId: null } },
+      data: {
+        unmuteProfile: {
+          profileMuteId: 'profile-mute:a',
+          deletedProfileMuteId: 'profile-mute:a',
+          targetProfile: {
+            __typename: 'Profile',
+            id: targetA,
+            viewerState: { __typename: 'ProfileViewerState', profileMute: null },
+          },
+        },
+      },
     });
     await request;
 
@@ -279,6 +305,26 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     );
     assert.equal(refreshCalls, 0);
   });
+
+  it('an unmounted controller does not classify a delayed response as current', async () => {
+    const { environment, ownerA, targetA } = createEnvironment({
+      loadOwnerAConnection: false,
+      loadOwnerBConnection: false,
+    });
+    await renderController(environment);
+
+    const request = startChangeMuted({ ownerProfileId: ownerA, targetProfileId: targetA }, true);
+    const rejection = request.catch((error: unknown) => error);
+    const pending = pendingRequests[0];
+    assert.ok(pending);
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    await respond(pending, muteResponse('profile-mute:unmounted', targetA));
+
+    assert.match(String(await rejection), /inactive Profile/);
+    assert.equal(refreshCalls, 0);
+  });
 });
 
 function createEnvironment(options: {
@@ -320,9 +366,9 @@ function createEnvironment(options: {
     },
   });
   const environment = new Environment({
-    network: Network.create(() =>
+    network: Network.create((_request, variables) =>
       Observable.create((sink) => {
-        const request: PendingRequest = { settled: false, sink };
+        const request: PendingRequest = { settled: false, sink, variables };
         pendingRequests.push(request);
       }),
     ),
@@ -359,6 +405,10 @@ function createEnvironment(options: {
   }
 
   return { environment, ownerA, ownerB, targetA, targetB };
+}
+
+function getProfileMuteConnectionId(ownerProfileId: string) {
+  return ConnectionHandler.getConnectionID(ownerProfileId, 'SettingsMutedProfiles_profileMutes');
 }
 
 function renderController(environment: Environment) {
