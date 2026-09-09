@@ -125,7 +125,7 @@ jobs:
           url: ${{ vars.VAULT_ADDR }}
           path: github-actions
           method: jwt
-          role: kosmo-android-play
+          role: kosmo-native-store-distribution
           jwtGithubAudience: ${{ vars.VAULT_GITHUB_ACTIONS_AUDIENCE }}
           exportEnv: false
           secrets: |
@@ -349,7 +349,7 @@ jobs:
           url: ${{ vars.VAULT_ADDR }}
           path: github-actions
           method: jwt
-          role: kosmo-ios-testflight
+          role: kosmo-native-store-distribution
           jwtGithubAudience: ${{ vars.VAULT_GITHUB_ACTIONS_AUDIENCE }}
           exportEnv: false
           secrets: |
