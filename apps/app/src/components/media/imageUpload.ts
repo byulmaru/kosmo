@@ -40,7 +40,7 @@ function getImageResizeDimensions(
   };
 }
 
-async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob> {
+async function createNormalizedImageBody(asset: ImagePickerAsset): Promise<ArrayBuffer> {
   let context: ImageManipulatorContext | undefined;
   let sourceImage: ImageRef | undefined;
   let normalizedImage: ImageRef | undefined;
@@ -101,7 +101,7 @@ async function createNormalizedImageBlob(asset: ImagePickerAsset): Promise<Blob>
       );
     }
     try {
-      return await response.blob();
+      return await response.arrayBuffer();
     } catch (error) {
       throw new ImageUploadError(
         { reason: 'transient', stage: 'transfer' },
@@ -187,7 +187,7 @@ export async function uploadImage({
       return null;
     }
 
-    const body = await createNormalizedImageBlob(asset);
+    const body = await createNormalizedImageBody(asset);
     operation = 'put';
     const response = await fetch(issued.uploadUrl, {
       body,

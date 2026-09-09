@@ -61,7 +61,7 @@ accessible name에 사용하지 않는다.
 ## 처리된 실패의 Sentry 관측
 
 - Post Composer와 Profile 편집은 각자 실패를 capture하지 않고, 두 흐름이 공유하는 이미지 업로드 경계에서 처리된 실패를 공통 Web·Native Sentry 수집 진입점으로 한 번만 전달한다.
-- 실패 event에는 이 문서의 공통 오류 모델에서 안전하게 구성한 `stage`·`reason`과 `operation`을 context로 전달한다. `operation`은 `issue`, `normalize`, `read`, `put`, `complete` 중 하나이며, `transfer` 단계 안에서 정규화·normalized Blob read·signed PUT을 구분한다. 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 실패에만 숫자 `status`를 추가하고, `unsupported_image`, `content_type_mismatch`, `size_limit_exceeded`, `pixel_limit_exceeded`, `dimension_limit_exceeded`, `invalid_image` 중 하나인 경우에만 machine-readable `code`를 추가한다.
+- 실패 event에는 이 문서의 공통 오류 모델에서 안전하게 구성한 `stage`·`reason`과 `operation`을 context로 전달한다. `operation`은 `issue`, `normalize`, `read`, `put`, `complete` 중 하나이며, `transfer` 단계 안에서 정규화·정규화된 이미지 byte 읽기·signed PUT을 구분한다. 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 실패에만 숫자 `status`를 추가하고, `unsupported_image`, `content_type_mismatch`, `size_limit_exceeded`, `pixel_limit_exceeded`, `dimension_limit_exceeded`, `invalid_image` 중 하나인 경우에만 machine-readable `code`를 추가한다.
 - 성공, 비활성 항목의 `null` 결과와 명시적 no-op은 Sentry 처리된 실패 event를 만들지 않는다.
 - Sentry capture 실패는 원래 업로드 오류, 실패 항목 보존, 오류 UI와 재시도 동작을 바꾸지 않는다.
 - 업로드에서 실제 발생한 Error는 직접 capture에 전달하거나 기존 UI 분류 wrapper의 표준 `cause` chain에 원본 객체를 연결하여 원래 message·stack·cause를 모든 오류 단계에서 보존한다. 기존 UI 분류 wrapper는 유지할 수 있지만, 원본 오류 연결 없이 수집만을 위한 일반 메시지의 새 Error로 대체하거나 복제·전역 정제하지 않는다. 이 진단 정보는 Sentry에서 사용하며 사용자-facing 오류 분류와 안내 문구는 기존 정책을 유지한다.
