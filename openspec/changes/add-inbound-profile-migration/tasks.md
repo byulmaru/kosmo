@@ -18,11 +18,11 @@
 
 **Deliverable**
 
-사용자가 권한 있는 Local Profile에 Remote source를 준비하면 source Profile과 1:1 준비 관계가 저장되고, 해당 Local Actor가 검증된 source canonical URI를 migration alias로 제공한다.
+사용자가 권한 있는 현재 선택된 Profile에 Remote source를 준비하면 source Profile과 1:1 준비 관계가 저장되고, Local target인 경우 해당 Local Actor가 검증된 source canonical URI를 migration alias로 제공한다.
 
 **Guardrails**
 
-- GraphQL API는 기존 `withAuth({ profileRole: OWNER })`로 `Account.Active`와 selected Profile의 `Profile.Owner`를 확인하고, Core는 `ctx.session.profile.id`에서 파생된 target Profile ID만 받아 Active·Normal·Local·Open eligibility와 source/pair 조건을 검증한다. Core는 Account·membership authorization을 다시 수행하지 않으며 `InstanceState.UNRESPONSIVE`를 새 거부 조건으로 추가하지 않는다.
+- GraphQL API는 기존 `withAuth({ profileRole: OWNER })`로 `Account.Active`와 selected Profile의 `Profile.Owner`를 확인하고, Core는 `ctx.session.profile.id`에서 파생된 target Profile ID와 source Profile ID만 받아 source/pair 조건을 검증한다. Core는 Account·membership authorization과 별도 target eligibility를 다시 수행하지 않으며 `InstanceState.UNRESPONSIVE`를 새 거부 조건으로 추가하지 않는다.
 - source는 Remote Profile로 materialize하며 target 하나와 source 하나의 cardinality를 지킨다.
 - 같은 pair는 no-op으로, 다른 pair와의 충돌은 거부하며 기존 관계를 바꾸지 않는다.
 - `alsoKnownAs`는 준비 관계의 검증된 canonical Actor URI에서만 파생하고 raw 입력·stale client 값을 사용하지 않는다.
@@ -34,7 +34,7 @@
 - source materialization 실패와 concurrent 동일 pair의 중복 방지를 확인한다.
 - 준비 관계가 있는 Actor의 exact alias와 관계가 없는 Actor의 alias 부재를 검증한다.
 
-- [x] 1.1 Profile Migration 준비 관계의 저장·권한·target eligibility·1:1 cardinality와 same-pair/conflict 결과를 구현한다.
+- [x] 1.1 Profile Migration 준비 관계의 저장·selected-context 권한·1:1 cardinality와 same-pair/conflict 결과를 구현한다.
 - [x] 1.2 기존 Fedify remote actor materialization 경계를 사용해 source qualified handle을 검증하고 Remote Profile identity를 준비 관계에 연결한다.
 - [x] 1.3 Local Actor 표현에 준비 관계의 canonical source URI만 `alsoKnownAs`로 투영한다.
 - [x] 1.4 준비 성공·거부·충돌·반복·alias projection의 Core/API/Actor 검증을 통과시킨다.
@@ -56,7 +56,7 @@
 **Guardrails**
 
 - 인증된 actor와 object의 canonical source URI가 같고 target canonical Actor에 exact source alias가 있을 때만 처리한다.
-- source가 Remote Profile이어야 하며 기존 지원 Actor 종류를 유지한다. remote-to-remote는 Local 준비 관계를 요구하지 않고, remote-to-local은 준비된 Local·Open target을 사용한다.
+- source가 Remote Profile이어야 하며 기존 지원 Actor 종류를 유지한다. remote-to-remote는 Local 준비 관계를 요구하지 않고, remote-to-local은 준비된 Local target을 사용한다.
 - source Followee의 established Follow 중 Local Follower만 대상이며 target policy에 따라 Follow 또는 Request를 먼저 저장한다.
 - target 저장이 확정되기 전 source 관계를 제거하지 않는다. 기존 target row/request가 있는 재시도는 중복 없이 source cleanup을 재개한다.
 - Remote target의 Open policy는 기존 Local-to-Remote Follow effect, Approval Required는 기존 Request lifecycle을 사용하고, source removal은 기존 Unfollow·Undo lifecycle을 따른다. HTTP receipt은 별도 완료 조건이 아니다.
@@ -65,7 +65,7 @@
 **Verification**
 
 - actor/object mismatch, missing exact alias, source/target identity 불일치와 검증되지 않은 actor의 no-change 결과를 확인한다.
-- unknown source materialization, Local/Open target, Remote target의 기존 policy, 지원 Actor 종류를 검증한다.
+- unknown source materialization, 준비된 Local target, Remote target의 기존 policy, 지원 Actor 종류를 검증한다.
 - Local established follower만 선택하고 remote/non-established/pending 관계를 제외하는지 확인한다.
 - Open Follow·Approval Required Request의 target-first 순서, target 실패 시 source 보존을 실행 검증한다.
 - Remote target의 Open/Approval Required effect·Request lifecycle과 source removal/Undo 경계를 기존 계약대로 검증한다. HTTP receipt 도착을 source removal 조건으로 삼지 않는지 확인한다.

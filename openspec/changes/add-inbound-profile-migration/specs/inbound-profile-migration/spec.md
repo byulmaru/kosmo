@@ -6,13 +6,13 @@
 
 ### Requirement: Profile Migration 준비 관계
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `docs/design/settings.md`, `PROD-743`. 시스템은 `Account.Active`와 현재 선택된 Profile의 `Profile.Owner` 권한을 통과한 사용자가 현재 선택된 Active·Normal·Local이며 Follow Approval Policy가 Open인 Profile을 target으로 source qualified handle을 지정해 Profile Migration을 준비할 수 있게 해야 한다(MUST). 공개 GraphQL `registerProfileMigrationSource` mutation은 `RegisterProfileMigrationSourceInput`으로 source qualified handle만 받고 별도 target Profile ID를 받지 않으며, 요청의 현재 선택된 Profile을 target으로 사용해야 한다(MUST). 이 mutation은 `RegisterProfileMigrationSourcePayload`를 반환해야 한다(MUST). 시스템은 source를 Remote Profile로 materialize한 뒤 현재 선택된 Local target에서 Remote source로 향하는 준비 관계를 저장해야 하며(MUST), 하나의 Local target과 하나의 Remote source가 각각 하나의 준비 관계만 갖도록 해야 한다(MUST). 이 관계와 source 등록 성공은 inbound Move 처리 이력이나 전체 Profile 이전 이력을 의미해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `docs/design/settings.md`, `PROD-743`. 시스템은 `Account.Active`와 현재 선택된 Profile의 `Profile.Owner` 권한을 통과한 사용자가 현재 선택된 Profile을 target으로 source qualified handle을 지정해 Profile Migration을 준비할 수 있게 해야 한다(MUST). 별도 target Profile ID를 받지 않는 공개 GraphQL `registerProfileMigrationSource` mutation은 `RegisterProfileMigrationSourceInput`으로 source qualified handle만 받고 요청의 현재 선택된 Profile을 target으로 사용해야 한다(MUST). 이 mutation은 `RegisterProfileMigrationSourcePayload`를 반환해야 한다(MUST). 시스템은 source를 Remote Profile로 materialize한 뒤 현재 선택된 target Profile에서 Remote source로 향하는 준비 관계를 저장해야 하며(MUST), 하나의 target Profile과 하나의 Remote source가 각각 하나의 준비 관계만 갖도록 해야 한다(MUST). 이 관계와 source 등록 성공은 inbound Move 처리 이력이나 전체 Profile 이전 이력을 의미해서는 안 된다(MUST NOT).
 
-#### Scenario: 권한 있는 Local target에 source를 준비한다
+#### Scenario: 권한 있는 selected target에 source를 준비한다
 
-- **WHEN** `Account.Active` 사용자가 `Profile.Owner`인 현재 선택된 Active·Normal·Local·Open Profile에서 유효한 remote source qualified handle을 제출한다
+- **WHEN** `Account.Active` 사용자가 `Profile.Owner`인 현재 선택된 Profile에서 유효한 remote source qualified handle을 제출한다
 - **THEN** 시스템은 검증된 source를 Remote Profile로 materialize한다
-- **AND** Local target에서 Remote source로 향하는 Profile Migration 준비 관계를 저장한다
+- **AND** 현재 선택된 target Profile에서 Remote source로 향하는 Profile Migration 준비 관계를 저장한다
 
 #### Scenario: source 등록 mutation이 준비된 target을 반환한다
 
@@ -21,21 +21,21 @@
 - **AND** 반환된 target Profile의 `migrationSource` field는 등록된 Remote source Profile을 가리킨다
 - **AND** source 등록은 inbound Move 처리나 전체 Profile 이전으로 간주되지 않는다
 
-#### Scenario: 준비 조건을 통과하지 못한 target을 거부한다
+#### Scenario: 권한 없는 source 등록을 거부한다
 
-- **WHEN** 현재 선택된 target이 Local이 아니거나 Active·Normal 상태가 아니거나 Follow Approval Policy가 Open이 아니거나 요청자가 현재 선택된 Profile의 Owner가 아니다
+- **WHEN** 요청자가 현재 선택된 Profile의 Owner가 아니다
 - **THEN** 시스템은 Profile Migration 준비를 거부한다
 - **AND** 기존 Profile과 준비 관계를 변경하지 않는다
 
 #### Scenario: 같은 source와 target pair를 반복 지정한다
 
-- **WHEN** 이미 같은 Local target과 Remote source pair가 준비된 상태에서 같은 요청을 다시 제출한다
+- **WHEN** 이미 같은 target Profile과 Remote source pair가 준비된 상태에서 같은 요청을 다시 제출한다
 - **THEN** 시스템은 요청을 no-op으로 처리한다
 - **AND** 중복 준비 관계나 새로운 source identity를 만들지 않는다
 
 #### Scenario: 다른 pair와 충돌하는 준비를 거부한다
 
-- **WHEN** Local target에 다른 source가 준비되어 있거나 Remote source가 다른 Local target에 이미 연결된 상태에서 요청한다
+- **WHEN** target Profile에 다른 source가 준비되어 있거나 Remote source가 다른 target Profile에 이미 연결된 상태에서 요청한다
 - **THEN** 시스템은 충돌을 거부한다
 - **AND** 기존 Profile과 준비 관계를 변경하지 않는다
 
@@ -75,7 +75,7 @@
 
 - **WHEN** 검증된 source가 Remote Profile이고 target이 Profile Migration 준비 관계로 연결된 Local Actor identity다
 - **THEN** 시스템은 remote-to-local Move를 처리한다
-- **AND** Local target의 Open Follow Approval Policy를 사용한다
+- **AND** Local target의 기존 Follow Approval Policy에 따라 Follow Relationship 또는 Follow Request를 사용한다
 
 #### Scenario: 준비 관계 없이 remote-to-remote Move를 처리한다
 
@@ -93,7 +93,7 @@
 
 **Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`. 시스템은 source Profile을 Followee로 가진 기존 established Follow Relationship 중 Follower가 Local Profile인 관계만 이전해야 한다(MUST). 각 관계는 target의 기존 Follow Approval Policy에 따라 target Follow Relationship 또는 Follow Request를 먼저 성공적으로 저장한 뒤 기존 Follow removal/Unfollow·Undo lifecycle로 source Follow Relationship을 제거해야 하며(MUST), target 저장이 실패한 경우 source 관계를 먼저 제거해서는 안 된다(MUST NOT). Remote target의 Open policy도 기존 Local-to-Remote Follow effect semantics를 사용하며, Move 완료를 원격 HTTP receipt 도착에 묶어서는 안 된다(MUST NOT). 이 순서는 remote-to-local과 remote-to-remote target에 동일하게 적용해야 한다(MUST).
 
-#### Scenario: Open Local target으로 Local follower를 이전한다
+#### Scenario: Local target의 기존 Follow policy로 Local follower를 이전한다
 
 - **WHEN** 검증된 Move에 source Followee와 established Follow를 가진 Local Follower가 있고 target Local Profile의 policy가 Open이다
 - **THEN** 시스템은 target Follow Relationship을 먼저 저장한다

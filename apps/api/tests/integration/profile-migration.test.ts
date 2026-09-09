@@ -27,6 +27,7 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
+let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
@@ -75,6 +76,7 @@ describe('GraphQL profile migration', () => {
     ({
       AccountProfiles,
       Accounts,
+      ActivityPubActors,
       db,
       firstOrThrow,
       Instances,
@@ -145,13 +147,18 @@ describe('GraphQL profile migration', () => {
     assert.equal(await countMigrations(), 0);
   });
 
-  test('selected target eligibility is checked before remote lookup', async (t) => {
+  test('selected target follow policy does not block remote lookup', async (t) => {
     const target = await createProfile({
       followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
       handle: 'migration-target-approval-required',
     });
     const auth = await createAuthenticatedSession({ profileId: target.id });
-    const createContext = t.mock.method(remoteFederation, 'createContext');
+    const lookupObject = mock.fn(async () => createLookupActor());
+    const createContext = t.mock.method(
+      remoteFederation,
+      'createContext',
+      () => ({ lookupObject }) as never,
+    );
 
     const result = await requestGraphQL(
       registerSourceMutation,
@@ -159,10 +166,10 @@ describe('GraphQL profile migration', () => {
       auth.token,
     );
 
-    assertGraphQLErrorCode(result, 'NOT_FOUND');
-    assert.equal(createContext.mock.calls.length, 0);
-    assert.equal(await countMigrations(), 0);
-    assert.equal(await countProfiles(), 1);
+    assertNoGraphQLErrors(result);
+    assert.equal(createContext.mock.calls.length, 1);
+    assert.equal(await countMigrations(), 1);
+    assert.equal(await countProfiles(), 2);
   });
 
   test('remote source lookup failure leaves the target and migration rows unchanged', async (t) => {
@@ -271,7 +278,7 @@ describe('GraphQL profile migration', () => {
     });
   });
 
-  test('uses the acting Profile instance origin for remote source materialization', async (t) => {
+  test('uses the acting Local Profile instance origin for remote source materialization', async (t) => {
     const actingInstance = await db
       .insert(Instances)
       .values({
@@ -282,7 +289,7 @@ describe('GraphQL profile migration', () => {
       .returning()
       .then(firstOrThrow);
     const actingProfile = await createProfile({
-      handle: 'migration-acting',
+      handle: 'migration-acting-local',
       instanceId: actingInstance.id,
     });
     const auth = await createAuthenticatedSession({ profileId: actingProfile.id });
@@ -308,6 +315,52 @@ describe('GraphQL profile migration', () => {
     const origin = createContext.mock.calls[0]?.arguments[0];
     assert.ok(origin instanceof URL);
     assert.equal(origin.origin, 'https://acting-local.example');
+  });
+
+  test('uses the acting Remote Profile actor origin for remote source materialization', async (t) => {
+    const actingInstance = await db
+      .insert(Instances)
+      .values({
+        canonicalOrigin: null,
+        domain: 'acting-remote.example',
+        kind: InstanceKind.ACTIVITYPUB,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const actingProfile = await createProfile({
+      handle: 'migration-acting',
+      instanceId: actingInstance.id,
+    });
+    await db.insert(ActivityPubActors).values({
+      inboxUri: 'https://acting-remote.example/users/acting/inbox',
+      profileId: actingProfile.id,
+      sharedInboxUri: 'https://acting-remote.example/inbox',
+      type: 'PERSON',
+      uri: 'https://acting-remote.example/users/acting',
+    });
+    const auth = await createAuthenticatedSession({ profileId: actingProfile.id });
+
+    const lookupObject = mock.fn(async () => createLookupActor());
+    const createContext = t.mock.method(
+      remoteFederation,
+      'createContext',
+      () => ({ lookupObject }) as never,
+    );
+
+    const result = await requestGraphQL(
+      registerSourceMutation,
+      {
+        input: {
+          sourceHandle: `@alice@${remoteDomain}`,
+        },
+      },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    const origin = createContext.mock.calls[0]?.arguments[0];
+    assert.ok(origin instanceof URL);
+    assert.equal(origin.origin, 'https://acting-remote.example');
   });
 });
 

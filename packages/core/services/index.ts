@@ -48,11 +48,8 @@ export {
   rejectProfileFollowRequest,
 } from './profile-follow-request';
 export type { AcceptProfileFollowRequestResult } from './profile-follow-transaction';
-export type {
-  PrepareProfileMigrationInput,
-  ProfileMigrationTargetInput,
-} from './profile-migration';
-export { assertProfileMigrationTarget, prepareProfileMigration } from './profile-migration';
+export type { PrepareProfileMigrationInput } from './profile-migration';
+export { prepareProfileMigration } from './profile-migration';
 export { muteProfile, unmuteProfile } from './profile-mute';
 export { updateProfile } from './profile-update';
 export { addReaction, deleteReaction } from './reaction';

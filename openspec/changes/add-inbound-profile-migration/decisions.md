@@ -16,17 +16,17 @@
 - Consequences: 각 task는 자기 실행 증거를 남기고, 개별 구현 완료만으로 change를 archive하지 않는다. 전체 흐름과 delta spec 정합성을 `PROD-743`이 마지막에 확인한다.
 - Confirmation / Follow-up: `tasks.md`의 단계별 검증과 최종 strict validation, canonical·Linear 정합성 확인으로 검증한다.
 
-### Profile Migration은 Local target과 Remote source 사이의 1:1 준비 관계다
+### Profile Migration은 target Profile과 Remote source 사이의 1:1 준비 관계다
 
 - Decision Date: 2026-09-07
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`
 - Status: Active
 - Context / Problem: source와 target을 별도 입력 목록이나 전역 migration history로 다루면 같은 identity가 여러 target으로 연결되고 준비와 실제 Move 완료를 혼동할 수 있다.
-- Decision Outcome: 준비 관계는 Local Profile target → Remote Profile source 방향이며 target 하나와 source 하나가 각각 하나의 관계만 가진다. source를 먼저 Remote Profile로 materialize하고, 같은 pair는 no-op, 다른 pair와의 충돌은 거부한다. 관계 자체는 inbound Move 완료나 전체 Profile 이전 이력이 아니다.
+- Decision Outcome: 준비 관계는 target Profile → Remote Profile source 방향이며 target 하나와 source 하나가 각각 하나의 관계만 가진다. source를 먼저 Remote Profile로 materialize하고, 같은 pair는 no-op, 다른 pair와의 충돌은 거부한다. 관계 자체는 inbound Move 완료나 전체 Profile 이전 이력이 아니다.
 - Alternatives Considered: source·target 선택을 다대다 관계로 허용하면 이번에 승인된 target당 source 하나·source당 target 하나 범위를 넘어선다. 전역 migration registry나 관계가 없는 별도 source 속성은 준비 관계와 실제 Move 결과·alias의 책임을 넓히므로 이번 범위에서 선택하지 않는다.
 - Consequences: 저장 경계는 pair uniqueness와 기존 Profile identity를 보존해야 하며, source materialization 실패나 준비 충돌은 기존 관계를 변경하지 않는다.
-- Confirmation / Follow-up: eligible target, source materialization, same-pair no-op, target/source 양쪽 충돌을 실행 결과로 확인한다.
+- Confirmation / Follow-up: selected target, source materialization, same-pair no-op, target/source 양쪽 충돌을 실행 결과로 확인한다.
 
 ### 공개 source 등록은 준비 결과만 반환하고 Move 완료를 제공하지 않는다
 
@@ -45,12 +45,21 @@
 - Decision Date: 2026-09-09
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `docs/design/settings.md`, Linear `c9707aa3c`, `PROD-743`
-- Status: Active
+- Status: Superseded by 2026-09-09 correction; retained as historical decision ledger
 - Context / Problem: client가 target Profile ID를 보내거나 Core service가 Account·membership authorization을 다시 수행하면 selected Profile identity와 API authorization 경계가 분리되고, remote source materialization 전에 target 검증이 보장되지 않는다.
 - Decision Outcome: 공개 `registerProfileMigrationSource` mutation은 source qualified handle만 받고 `ctx.session.profile.id`를 target Profile ID로 사용한다. GraphQL resolver는 기존 `withAuth({ profileRole: OWNER })` 경계에서 Account.Active와 selected Profile의 Profile.Owner 권한을 확인하고, remote source materialization 전에 selected target의 domain eligibility를 확인한다. Core의 `assertProfileMigrationTarget`와 `prepareProfileMigration`은 target/source Profile ID만 받아 Profile lifecycle·origin·Follow Approval Policy·InstanceState.SUSPENDED와 source/pair 조건을 검증하며 Account·AccountProfiles authorization을 다시 수행하지 않는다. `InstanceState.UNRESPONSIVE`는 이 target eligibility 계약의 거부 조건으로 추가하지 않는다.
 - Alternatives Considered: client가 제출한 target Profile ID를 신뢰하는 방식은 selected Profile과 mutation target을 분리한다. Core에서 Account·membership을 다시 조회하는 방식은 API authorization을 중복하고 service 입력을 넓힌다. UNRESPONSIVE를 새 거부 조건으로 취급하는 방식은 승인된 domain eligibility 범위를 넓힌다.
 - Consequences: API와 Settings는 selected Profile identity를 단일 target source로 사용하고, Core는 재사용 가능한 domain validation과 pair idempotency·conflict 경계만 소유한다. API preflight는 rejected target에서 remote Profile materialization과 write를 시작하지 않는다.
 - Confirmation / Follow-up: selected target GraphQL preflight와 alternate Local `canonicalOrigin`을 API integration에서, Core target/source/pair 경계를 Core integration에서 각각 실행 검증한다.
+
+### 2026-09-09 correction: selected context에는 추가 target eligibility를 적용하지 않는다
+
+- Decision Date: 2026-09-09
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `docs/design/settings.md`, `PROD-743`, 사용자 정정 comment `3ccf48b5-b38a-49aa-8f12-f4496064d09b`
+- Status: Active
+- Decision Outcome: 공개 `registerProfileMigrationSource` mutation은 source qualified handle만 받고 현재 선택된 Profile을 target으로 사용한다. GraphQL `withAuth({ profileRole: OWNER })`가 Account.Active와 selected Profile Owner 권한을 확인하며, 별도 target Profile ID·Local/Open/Active/Normal eligibility gate와 Core의 target 재검증을 추가하지 않는다. source validation, target/source 1:1 uniqueness와 same-pair idempotency/conflict는 기존 경계를 유지한다.
+- Consequences: API는 selected context와 Owner authorization을 단일 target 증거로 사용하고, Core는 전달된 target/source identity의 source·pair 결과만 소유한다. 기존 inbound Move identity, remote-to-local 준비 관계, target-first Follow/Request와 feature flag 경계는 변경하지 않는다.
 
 ### Local Actor alias는 준비 관계의 canonical source URI에서만 파생한다
 
@@ -71,7 +80,7 @@
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`
 - Status: Active
 - Context / Problem: actor와 object가 다른 Move 또는 target alias가 맞지 않는 Move를 수용하면 임의 source가 Profile과 Follow state를 변경할 수 있다. 반대로 Local target 준비 관계만 요구하면 remote-to-remote 이전 계약을 잃는다.
-- Decision Outcome: 인증된 actor와 object가 같은 canonical source URI이고 target canonical Actor의 `alsoKnownAs`에 exact source URI가 있을 때만 Move를 처리한다. source는 Remote Profile이어야 하며, 기존 지원 Actor 종류를 사용한다. remote-to-local은 이미 준비된 Local target과 Open policy를 사용하고, remote-to-remote는 사전 Local 준비 없이 target Remote Profile의 기존 policy를 사용한다. 저장되지 않은 source는 검증 뒤 Remote Profile로 materialize한다.
+- Decision Outcome: 인증된 actor와 object가 같은 canonical source URI이고 target canonical Actor의 `alsoKnownAs`에 exact source URI가 있을 때만 Move를 처리한다. source는 Remote Profile이어야 하며, 기존 지원 Actor 종류를 사용한다. remote-to-local은 이미 준비된 Local target과 해당 target의 기존 Follow Approval Policy를 사용하고, remote-to-remote는 사전 Local 준비 없이 target Remote Profile의 기존 policy를 사용한다. 저장되지 않은 source는 검증 뒤 Remote Profile로 materialize한다.
 - Alternatives Considered: actor/object 중 하나만 검증하는 방식은 source spoofing을 허용한다. target을 문자열 handle로만 해석하거나 `Person`만 허용하는 방식은 canonical identity와 기존 Actor 종류 계약을 좁힌다. remote-to-remote에도 Local 준비를 강제하는 방식은 ADR 0027과 Issue 범위를 벗어난다.
 - Consequences: invalid Move는 기존 준비 관계와 Follow state를 변경하지 않고, target origin별 policy admission만 분기한다. outbound Kosmo Move는 이 change의 결과가 아니다.
 - Confirmation / Follow-up: actor/object mismatch, missing exact alias, valid local/remote targets, non-Person supported Actor type와 unknown-source materialization을 실행 검증한다.

@@ -10,27 +10,27 @@ Accepted
 
 ## 맥락
 
-현재 Profile은 Local·Remote origin과 Follow lifecycle을 정의하지만 Local Profile이 이전 원본 Remote Profile을
+현재 Profile은 Local·Remote origin과 Follow lifecycle을 정의하지만 target Profile이 이전 원본 Remote Profile을
 가리키는 준비 관계와 ActivityPub `Move` 수신 결과는 정의하지 않는다. 이 경계를 정하지 않으면 source와 target의
 identity, `alsoKnownAs` 표현, Local·Remote Follow 정책과 기존 follower 관계의 변경 순서를 구현이 임의로
 결정하게 된다.
 
 ## 결정
 
-- Profile Migration은 Local Profile target에서 이전 원본인 Remote Profile source로 향하는 준비 관계다. source Profile은
-  먼저 materialize하며, 하나의 source는 하나의 Local target에만 연결한다. Local target은 source를 하나만 가질 수
+- Profile Migration은 target Profile에서 이전 원본인 Remote Profile source로 향하는 준비 관계다. source Profile은
+  먼저 materialize하며, 하나의 source는 하나의 target Profile에만 연결한다. target Profile은 source를 하나만 가질 수
   있다. 이 준비 관계는 inbound Move 처리 완료나 전체 migration 이력을 뜻하지 않는다.
 - Local Actor의 `alsoKnownAs` aliases는 Profile Migration 관계의 Remote source canonical Actor URI에서만 파생한다.
   aliases를 별도 사용자 입력이나 독립적인 Profile 속성으로 관리하지 않는다.
 - inbound `Move`는 인증된 ActivityPub actor와 object가 같은 canonical Actor URI일 때만 처리한다. target은 기존
   canonical Actor identity로 해석하고, target actor의 `alsoKnownAs`에는 exact source URI가 있어야 한다. 기존
   Actor 종류를 사용하며 Person으로 한정하지 않는다.
-- inbound Move는 remote-to-local과 remote-to-remote target을 지원한다. Profile Migration의 Local target은 Follow
-  Approval Policy가 Open이어야 하며, remote-to-remote target은 target Profile에 존재하는 Follow Approval Policy를
-  따른다.
+- inbound Move는 remote-to-local과 remote-to-remote target을 지원한다. 준비 관계가 있는 target Profile과
+  remote-to-remote target은 각각 target Profile에 존재하는 Follow Approval Policy를 따른다.
 - Profile Migration source 지정은 Settings의 Profile detail에서 feature flag가 켜져 있을 때만 노출한다. flag가 꺼져
-  있거나 값을 확인할 수 없거나 로딩 중이면 source 준비 control을 노출하지 않는다. source 등록은 현재 선택된 Local
-  Profile을 target으로 사용하며 별도 target Profile ID 입력을 받지 않는다. flag는 UI 노출 조건일 뿐 권한 증거가 아니며,
+  있거나 값을 확인할 수 없거나 로딩 중이면 source 준비 control을 노출하지 않는다. source 등록은 현재 선택된
+  Profile을 target으로 사용하며 별도 target Profile ID 입력을 받지 않는다. 현재 context의 `Account.Active`와
+  `Profile.Owner` 권한을 재사용하고 별도 target eligibility를 적용하지 않는다. flag는 UI 노출 조건일 뿐 권한 증거가 아니며,
   기존 `Account.Active`와 `Profile.Owner` 권한을 유지한다. 같은 source·target pair는 no-op으로 처리하고,
   다른 pair와 충돌하는 요청은 거부한다. 이미 준비된 관계·alias와 inbound Move 처리는 flag 상태로 중단하거나 제거하지
   않는다. Kosmo가 source가 되어 발행하는 outgoing Move는 이 결정의 범위가 아니다.

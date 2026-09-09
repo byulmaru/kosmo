@@ -1,7 +1,7 @@
-import { db, firstOrThrow, Instances, Profiles } from '@kosmo/core/db';
-import { AccountProfileRole } from '@kosmo/core/enums';
+import { ActivityPubActors, db, firstOrThrow, Instances, Profiles } from '@kosmo/core/db';
+import { AccountProfileRole, InstanceKind } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
-import { assertProfileMigrationTarget, prepareProfileMigration } from '@kosmo/core/services';
+import { prepareProfileMigration } from '@kosmo/core/services';
 import {
   federation,
   findOrMaterializeRemoteProfileActor,
@@ -27,29 +27,34 @@ builder.mutationField('registerProfileMigrationSource', (t) =>
       sourceHandle: t.input.string(),
     },
     resolve: async (_, { input }, ctx) => {
-      const targetInput = {
-        targetProfileId: ctx.session.profile.id,
-      };
-
-      // Authorize and validate the target before materializing any remote
-      // source, so a rejected request cannot create a Remote Profile.
-      await assertProfileMigrationTarget(targetInput);
+      const targetProfileId = ctx.session.profile.id;
 
       const actingProfileInstance = await db
-        .select({ canonicalOrigin: Instances.canonicalOrigin })
+        .select({
+          actorUri: ActivityPubActors.uri,
+          canonicalOrigin: Instances.canonicalOrigin,
+          instanceKind: Instances.kind,
+        })
         .from(Profiles)
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-        .where(eq(Profiles.id, targetInput.targetProfileId))
+        .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+        .where(eq(Profiles.id, targetProfileId))
         .limit(1)
         .then(firstOrThrow);
-      if (!actingProfileInstance.canonicalOrigin) {
+
+      const actingProfileOrigin =
+        actingProfileInstance.instanceKind === InstanceKind.LOCAL
+          ? actingProfileInstance.canonicalOrigin
+          : actingProfileInstance.actorUri
+            ? new URL(actingProfileInstance.actorUri).origin
+            : null;
+      if (!actingProfileOrigin) {
         throw new NotFoundError('Acting Profile origin not found');
       }
-      const actingProfileOrigin = new URL(actingProfileInstance.canonicalOrigin);
       let sourceProfile: Awaited<ReturnType<typeof findOrMaterializeRemoteProfileActor>>;
       try {
         sourceProfile = await findOrMaterializeRemoteProfileActor({
-          context: federation.createContext(actingProfileOrigin, undefined),
+          context: federation.createContext(new URL(actingProfileOrigin), undefined),
           handle: input.sourceHandle,
           scheduleRefresh: () => undefined,
         });
@@ -60,12 +65,12 @@ builder.mutationField('registerProfileMigrationSource', (t) =>
         throw error;
       }
 
-      const result = await prepareProfileMigration({
-        ...targetInput,
+      await prepareProfileMigration({
+        targetProfileId,
         sourceProfileId: sourceProfile.id,
       });
 
-      return { profile: result };
+      return { profile: targetProfileId };
     },
   }),
 );
