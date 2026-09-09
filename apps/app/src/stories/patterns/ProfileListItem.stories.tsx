@@ -113,7 +113,7 @@ function ProfileListItemCatalog() {
 
   return (
     <Catalog>
-      <Section title="Bio and compact action">
+      <Section title="Bio and Medium action">
         <ProfileListItem linked profile={requireProfile(profiles, withBio.id).listItem} />
       </Section>
       <Section title="Following and no bio">
@@ -181,8 +181,8 @@ export const LayoutContract: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const followButton = canvas.getAllByRole('button', { name: '팔로우' })[0]!;
-    expect(followButton.getBoundingClientRect().height).toBe(32);
-    expect(followButton.getBoundingClientRect().width).toBe(72);
+    expect(followButton.getBoundingClientRect().height).toBe(40);
+    expect(followButton.getBoundingClientRect().width).toBe(96);
     expect(getComputedStyle(canvas.getByText(longBio)).webkitLineClamp).toBe('3');
     const withBioAvatar = canvas.getByLabelText('긴 소개 프로필 프로필 이미지');
     expect(withBioAvatar).toBeVisible();

@@ -8,6 +8,7 @@
 - 두 route는 `ProfileHero` 대신 `~님의 팔로워`·`~님의 팔로잉` `PageHeader`와 `팔로워`·`팔로잉` `TabList`를 표시한다.
 - 뒤로가기는 해당 Profile 홈으로, 탭 선택은 같은 Profile의 다른 관계 목록으로 이동한다.
 - Mobile Web에서는 셸의 메뉴 전용 헤더를 중복하지 않고 route 헤더가 safe-area 아래의 상단 chrome을 소유한다.
+- Web 프로필 목록의 Follow action은 Mobile·Native와 같은 기존 Medium `96×40`을 사용하고 행 높이 `64px`를 유지한다.
 - 기존 `ProfileConnectionList`, Relay connection, edge 순서, 수동 pagination·retry와 Native 단일 외부 scroll은 유지한다.
 - follow/unfollow mutation, 권한, Relay cache, pagination 정책과 Profile 홈의 `ProfileHero`는 변경하지 않는다.
 
@@ -25,7 +26,9 @@
 
 - `apps/app/src/app/(tabs)/(profile)/[profileHandle]/_layout.tsx`
 - `apps/app/src/components/profile/ProfileConnectionList.tsx`
+- `apps/app/src/components/profile/ProfileListItem.tsx`와 기존 `FollowButton.test.ts`
 - `apps/app/src/components/shell/shellLayout.ts`
 - 관련 기존 route·shell 테스트와 Profile Storybook
 - `docs/design/page-header.md`, `docs/design/breakpoints.md`, `docs/design/figma.md`
+- `docs/design/profile-hero.md`, `docs/design/accessibility.md`
 - API schema와 Relay connection identity 변경 없음

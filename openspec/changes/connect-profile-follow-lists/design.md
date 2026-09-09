@@ -10,6 +10,7 @@
 - 현재 Profile의 표시 이름과 `relativeHandle`로 제목, Profile 홈 복귀, 관계 탭 이동을 구성한다.
 - Mobile Web 셸 헤더 중복을 막고 Native에서는 기존 단일 `PaginationScrollView`를 유지한다.
 - 목록의 loading·error·empty·content·추가 페이지 상태와 Relay 책임을 보존한다.
+- Web 관계 목록을 포함한 공용 `ProfileListItem`의 Follow action을 기존 Medium `96×40`으로 통일하고 행 높이 `64px`를 유지한다.
 
 **Non-Goals:**
 
@@ -33,6 +34,9 @@
   - 이유: 셸의 메뉴 전용 64px header와 route의 64px `PageHeader`가 동시에 렌더되는 것을 막고 기존 route safe-area 경계를 재사용한다.
 - Relay fragment, edge 순서, `loadNext(20)`, 추가 조회 오류 재시도는 변경하지 않는다.
   - 이유: 화면 presentation 동기화만 PROD-785 범위이며 pagination은 별도 계약이 이미 소유한다.
+- `ProfileListItem`은 Web breakpoint 분기 없이 기존 Medium `FollowButton`을 사용한다.
+  - 이유: 40px Avatar와 64px 행에서 action 높이를 맞추고 Web·Mobile의 시각 계약을 하나로 유지한다.
+  - 대안: `72×40` variant 추가는 현재 Button 크기 체계를 늘리므로 선택하지 않는다.
 
 ## Risks / Trade-offs
 
@@ -40,7 +44,9 @@
 - **Mobile Web에서 헤더가 중복될 수 있음** → shell route-owned header 판정의 실행 테스트로 두 경로를 고정한다.
 - **Native scroll이 중첩될 수 있음** → layout의 기존 `PaginationScrollView` 하나만 유지하고 leaf 목록에 새 scroll container를 추가하지 않는다.
 - **탭 이동이 현재 Profile을 잃을 수 있음** → query의 `relativeHandle`로 두 URL을 만들고 route 테스트에서 둘 다 확인한다.
+- **Medium action이 Web identity 영역을 24px 줄임** → 기존 말줄임 계약을 유지하고 대표 Web 목록에서 비중첩을 확인한다.
 
 ## Decision history
 
 - 2026-09-09: PROD-785가 DSN-51의 독립 followers/following route를 Web·Android·iOS Production으로 이관하고, 기존 데이터·pagination lifecycle은 유지한다.
+- 2026-09-09: 사용자 결정으로 Web 프로필 목록도 기존 Medium `96×40` FollowButton을 사용하며 별도 `72×40` variant는 추가하지 않는다.

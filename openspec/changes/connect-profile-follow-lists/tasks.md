@@ -11,11 +11,12 @@
 - [x] 2.3 TabList는 현재 관계를 selected로 표시하고 같은 Profile의 followers/following route를 전환한다
 - [x] 2.4 ProfileConnectionList의 중복 관계 heading을 제거하고 기존 목록 lifecycle은 유지한다
 - [x] 2.5 Mobile Web 셸은 두 route에서 메뉴 전용 header를 중복 렌더링하지 않는다
+- [x] 2.6 공용 ProfileListItem의 Web Follow action을 기존 Medium 96×40으로 통일하고 64px 행을 유지한다
 
 ## 3. 실행 검증
 
 - [x] 3.1 기존 ProfileRoute·shellLayout 실행 테스트로 Profile 홈 Hero 유지, 관계 route Hero 제외, 제목·탭·navigation, Mobile Web header ownership과 Native 단일 scroll을 검증한다
-- [x] 3.2 기존 Profile Storybook에서 loading·error·empty·content·pagination retry와 ProfileListItem 표시를 검증한다
+- [x] 3.2 기존 FollowButton 단위 테스트와 Profile Storybook에서 breakpoint 공통 Medium 크기, loading·error·empty·content·pagination retry와 ProfileListItem 표시를 검증한다
 - [ ] 3.3 `pnpm --filter @kosmo/app check`, 대상 테스트, 전체 앱 테스트와 `pnpm lint:prettier`를 통과시킨다
 - [ ] 3.4 Mobile/Compact/Full Web의 대표 Light/Dark route를 브라우저에서 확인하고 실제 Android/iOS 미검증 여부를 기록한다
 
