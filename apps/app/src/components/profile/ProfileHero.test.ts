@@ -328,7 +328,7 @@ describe('ProfileHero media presentation', () => {
 });
 
 describe('ProfileHero 관리 메뉴 조립', () => {
-  it('기존 링크 복사와 호출자가 제공한 항목을 하나의 뮤트 메뉴에 합친다', async () => {
+  it('showMuteAction이 링크 복사와 호출자 항목을 ProfileMuteAction에 위임한다', async () => {
     fragmentData = baseProfile;
     await act(async () => {
       renderer = create(
@@ -342,8 +342,8 @@ describe('ProfileHero 관리 메뉴 조립', () => {
               tone: 'danger',
             },
           ],
-          mute: { muted: false, onChangeMuted: async () => undefined },
           profile: {} as never,
+          showMuteAction: true,
         }),
       );
     });
