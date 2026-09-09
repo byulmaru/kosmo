@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  RemoteNoteContentLengthExceededError,
   projectRemoteActivityPubHtmlToPlainText,
   projectRemoteNoteContent,
+  RemoteNoteContentLengthExceededError,
 } from './activitypub-note-content';
 
 describe('projectRemoteNoteContent', () => {
