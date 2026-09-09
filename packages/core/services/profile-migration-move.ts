@@ -9,7 +9,7 @@ import {
   ProfileMigrations,
   Profiles,
 } from '../db';
-import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
+import { InstanceKind, InstanceState, ProfileState } from '../enums';
 import {
   executeProfileFollowPairTransition,
   executeProfileFollowRemoval,
@@ -41,7 +41,6 @@ const findEligibleTarget = async ({
       instanceKind: Instances.kind,
       instanceState: Instances.state,
       profileState: Profiles.state,
-      followPolicy: Profiles.followPolicy,
     })
     .from(Profiles)
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
@@ -58,10 +57,6 @@ const findEligibleTarget = async ({
   }
 
   if (target.instanceKind === InstanceKind.LOCAL) {
-    if (target.followPolicy !== ProfileFollowPolicy.OPEN) {
-      return undefined;
-    }
-
     const migration = await db
       .select({ id: ProfileMigrations.id })
       .from(ProfileMigrations)

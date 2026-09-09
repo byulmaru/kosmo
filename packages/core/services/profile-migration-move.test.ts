@@ -217,13 +217,12 @@ test('Move follower batch는 Local target 준비와 Remote target origin을 다�
     sourceProfileId: source.profile.id,
     targetProfileId: approvalTarget.profile.id,
   });
-  assert.deepEqual(
-    await loadProfileMigrationMoveFollowerBatch({
-      sourceProfileId: source.profile.id,
-      targetProfileId: approvalTarget.profile.id,
-    }),
-    [],
-  );
+  const approvalTargetBatch = await loadProfileMigrationMoveFollowerBatch({
+    sourceProfileId: source.profile.id,
+    targetProfileId: approvalTarget.profile.id,
+  });
+  assert.equal(approvalTargetBatch.length, 1);
+  assert.equal(approvalTargetBatch[0]?.followerProfileId, follower.profile.id);
 });
 
 test('Move follower target 저장 실패는 source Follow를 보존한다', async () => {

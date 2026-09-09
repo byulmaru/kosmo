@@ -9,7 +9,7 @@ import {
   ProfileMigrations,
   Profiles,
 } from '@kosmo/core/db';
-import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { startProfileMigration } from '@kosmo/core/temporal/profile-migration';
 import { and, eq } from 'drizzle-orm';
@@ -88,7 +88,6 @@ const findPreparedLocalTarget = async ({
         eq(Instances.kind, InstanceKind.LOCAL),
         eq(Instances.state, InstanceState.ACTIVE),
         eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Profiles.followPolicy, ProfileFollowPolicy.OPEN),
       ),
     )
     .limit(1)
