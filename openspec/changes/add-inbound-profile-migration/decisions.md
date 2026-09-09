@@ -40,6 +40,18 @@
 - Consequences: API schema와 Settings client는 새 public name과 type names를 사용하고, 성공 상태는 실제 Move를 기다리거나 완료로 표시하지 않는다. inbound Move 처리는 기존 protocol·Temporal lifecycle로 계속 수렴한다.
 - Confirmation / Follow-up: schema, Relay operation, Settings success 안내가 새 public name과 preparation-only 결과를 사용하고, 별도 post-Move completion action이 노출되지 않는지 구현 검증한다.
 
+### 공개 source 등록은 selected Profile을 target으로 사용하고 API와 Core 검증 경계를 분리한다
+
+- Decision Date: 2026-09-09
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `docs/design/settings.md`, Linear `c9707aa3c`, `PROD-743`
+- Status: Active
+- Context / Problem: client가 target Profile ID를 보내거나 Core service가 Account·membership authorization을 다시 수행하면 selected Profile identity와 API authorization 경계가 분리되고, remote source materialization 전에 target 검증이 보장되지 않는다.
+- Decision Outcome: 공개 `registerProfileMigrationSource` mutation은 source qualified handle만 받고 `ctx.session.profile.id`를 target Profile ID로 사용한다. GraphQL resolver는 기존 `withAuth({ profileRole: OWNER })` 경계에서 Account.Active와 selected Profile의 Profile.Owner 권한을 확인하고, remote source materialization 전에 selected target의 domain eligibility를 확인한다. Core의 `assertProfileMigrationTarget`와 `prepareProfileMigration`은 target/source Profile ID만 받아 Profile lifecycle·origin·Follow Approval Policy·InstanceState.SUSPENDED와 source/pair 조건을 검증하며 Account·AccountProfiles authorization을 다시 수행하지 않는다. `InstanceState.UNRESPONSIVE`는 이 target eligibility 계약의 거부 조건으로 추가하지 않는다.
+- Alternatives Considered: client가 제출한 target Profile ID를 신뢰하는 방식은 selected Profile과 mutation target을 분리한다. Core에서 Account·membership을 다시 조회하는 방식은 API authorization을 중복하고 service 입력을 넓힌다. UNRESPONSIVE를 새 거부 조건으로 취급하는 방식은 승인된 domain eligibility 범위를 넓힌다.
+- Consequences: API와 Settings는 selected Profile identity를 단일 target source로 사용하고, Core는 재사용 가능한 domain validation과 pair idempotency·conflict 경계만 소유한다. API preflight는 rejected target에서 remote Profile materialization과 write를 시작하지 않는다.
+- Confirmation / Follow-up: selected target GraphQL preflight와 alternate Local `canonicalOrigin`을 API integration에서, Core target/source/pair 경계를 Core integration에서 각각 실행 검증한다.
+
 ### Local Actor alias는 준비 관계의 canonical source URI에서만 파생한다
 
 - Decision Date: 2026-09-07

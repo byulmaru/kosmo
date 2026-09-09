@@ -22,7 +22,7 @@
 
 **Guardrails**
 
-- `Account.Active`와 `Profile.Owner`를 유지하고 target은 Active·Normal·Local·Open이어야 한다.
+- GraphQL API는 기존 `withAuth({ profileRole: OWNER })`로 `Account.Active`와 selected Profile의 `Profile.Owner`를 확인하고, Core는 `ctx.session.profile.id`에서 파생된 target Profile ID만 받아 Active·Normal·Local·Open eligibility와 source/pair 조건을 검증한다. Core는 Account·membership authorization을 다시 수행하지 않으며 `InstanceState.UNRESPONSIVE`를 새 거부 조건으로 추가하지 않는다.
 - source는 Remote Profile로 materialize하며 target 하나와 source 하나의 cardinality를 지킨다.
 - 같은 pair는 no-op으로, 다른 pair와의 충돌은 거부하며 기존 관계를 바꾸지 않는다.
 - `alsoKnownAs`는 준비 관계의 검증된 canonical Actor URI에서만 파생하고 raw 입력·stale client 값을 사용하지 않는다.

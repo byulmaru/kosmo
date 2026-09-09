@@ -4,7 +4,7 @@
 
 ## What Changes
 
-- 사용자가 Settings의 Profile detail에서 source qualified handle을 입력해 Remote Profile을 materialize하고, 자신이 소유한 Active·Normal·Local·Open target과 Profile Migration 준비 관계를 만들 수 있게 한다.
+- 사용자가 Settings의 Profile detail에서 현재 선택된 Local Profile을 target으로 사용하고 별도 target Profile ID 없이 source qualified handle만 제출해 Remote Profile을 materialize하고, Active·Normal·Local·Open target과 Profile Migration 준비 관계를 만들 수 있게 한다.
 - 준비 관계는 Local target 하나당 source 하나, Remote source 하나당 Local target 하나만 허용한다. 같은 pair 재지정은 no-op이고 다른 pair와 충돌하는 요청은 거부한다.
 - Local Actor의 `alsoKnownAs` aliases를 준비 관계의 Remote source canonical Actor URI에서만 파생한다.
 - 인증된 inbound ActivityPub `Move`의 actor와 object가 같은 canonical source URI인지, target canonical Actor와 target의 exact source alias가 일치하는지 검증한다. remote-to-local과 remote-to-remote target을 모두 지원하고 기존 Actor 종류를 유지한다.
