@@ -27,10 +27,12 @@
   toast로 `알림을 모두 읽지 못했어요.`와 `다시 시도` action을 제공하고, 재시도 시점의 current Relay
   connection에 로드된 unread Notification ID를 다시 수집한다.
 - 중복 입력 차단은 하나의 Action instance가 살아 있는 동안의 연속 입력으로 한정하며, 전역 coordinator 없이
-  action lifetime 밖의 pending·retry·ID batch 실행 상태를 이어가지 않는다. Web breakpoint 전환이나
-  동일 Profile에서 breakpoint 전환으로 새 instance가 생기면 현재 loaded ID를 다시 요청할 수 있고, 이
-  재요청은 서버의 idempotent Read 수렴에 맡긴다. actor·route 변경으로 lifetime이 끝나면 이전 ID
-  snapshot·pending·retry를 이어가지 않고, action이 자신이 등록한 실패 toast retry를 정리한다.
+  action lifetime 밖의 pending·ID batch 실행 상태를 이어가지 않는다. 동일 Profile에서 pending 중 Web
+  breakpoint 전환으로 새 instance가 생기면 현재 loaded ID를 다시 요청할 수 있고, 이 재요청은 서버의
+  idempotent Read 수렴에 맡긴다.
+- 동일 actor에서 Home 등 다른 route를 방문한 뒤 `/notifications`로 돌아오면 남아 있는 실패 toast의 retry는
+  새로 로드된 current ID로 실행한다. actor 변경으로 lifetime이 끝나면 이전 ID snapshot·pending·retry를
+  새 actor에 이어가지 않는다.
 
 ## Web 검색 헤더
 

@@ -21,6 +21,7 @@ type PublishedUnreadIds = Readonly<{
 }>;
 
 type NotificationReadAllContextValue = Readonly<{
+  getCurrentTarget: () => ReadonlyArray<string> | null;
   publishUnreadIds: (unreadIds: ReadonlyArray<string>) => () => void;
   unreadIds: ReadonlyArray<string>;
 }>;
@@ -45,22 +46,40 @@ const markAllReadMutation = graphql`
 
 export function NotificationReadAllProvider({ children }: PropsWithChildren): ReactNode {
   const actorLifecycleKey = useRelayActorLifecycleKey();
+  const actorLifecycleKeyRef = useRef(actorLifecycleKey);
+  actorLifecycleKeyRef.current = actorLifecycleKey;
   const [publishedUnreadIds, setPublishedUnreadIds] = useState<PublishedUnreadIds | null>(null);
+  const publishedUnreadIdsRef = useRef<PublishedUnreadIds | null>(null);
   const publishUnreadIds = useCallback(
     (unreadIds: ReadonlyArray<string>) => {
       const next = { actorLifecycleKey, unreadIds };
+      publishedUnreadIdsRef.current = next;
       setPublishedUnreadIds(next);
       return () => {
+        if (publishedUnreadIdsRef.current !== next) {
+          return;
+        }
+        publishedUnreadIdsRef.current = null;
         setPublishedUnreadIds((current) => (current === next ? null : current));
       };
     },
     [actorLifecycleKey],
   );
+  const getCurrentTarget = useCallback(() => {
+    const current = publishedUnreadIdsRef.current;
+    return actorLifecycleKeyRef.current === actorLifecycleKey &&
+      current?.actorLifecycleKey === actorLifecycleKey
+      ? current.unreadIds
+      : null;
+  }, [actorLifecycleKey]);
   const unreadIds =
     publishedUnreadIds?.actorLifecycleKey === actorLifecycleKey
       ? publishedUnreadIds.unreadIds
       : noUnreadIds;
-  const value = useMemo(() => ({ publishUnreadIds, unreadIds }), [publishUnreadIds, unreadIds]);
+  const value = useMemo(
+    () => ({ getCurrentTarget, publishUnreadIds, unreadIds }),
+    [getCurrentTarget, publishUnreadIds, unreadIds],
+  );
 
   return (
     <NotificationReadAllContext.Provider value={value}>
@@ -80,44 +99,36 @@ export function useNotificationReadAll() {
 }
 
 export function NotificationReadAllAction() {
-  const { unreadIds } = useNotificationReadAll();
+  const { getCurrentTarget, unreadIds } = useNotificationReadAll();
   const { showToast } = useToast();
   const [commitMarkAllRead, isMarkAllReadInFlight] =
     useMutation<NotificationListMarkAllReadMutation>(markAllReadMutation);
   const readAllInFlight = useRef(false);
-  const mounted = useRef(false);
-  const failureToastCleanup = useRef<(() => void) | null>(null);
-  const retryRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
-    mounted.current = true;
     return () => {
-      mounted.current = false;
       readAllInFlight.current = false;
-      failureToastCleanup.current?.();
-      failureToastCleanup.current = null;
-      retryRef.current = () => undefined;
     };
   }, []);
 
   const markAllRead = useCallback(() => {
-    if (!mounted.current || readAllInFlight.current || isMarkAllReadInFlight) {
+    const target = getCurrentTarget();
+    if (!target || readAllInFlight.current || isMarkAllReadInFlight) {
       return;
     }
 
-    if (unreadIds.length === 0) {
+    if (target.length === 0) {
       return;
     }
 
     readAllInFlight.current = true;
     const handleFailure = () => {
       readAllInFlight.current = false;
-      if (!mounted.current) {
+      if (!getCurrentTarget()?.length) {
         return;
       }
-      failureToastCleanup.current?.();
-      failureToastCleanup.current = showToast('알림을 모두 읽지 못했어요.', {
-        action: { label: '다시 시도', onPress: () => retryRef.current() },
+      showToast('알림을 모두 읽지 못했어요.', {
+        action: { label: '다시 시도', onPress: markAllRead },
         tone: 'danger',
       });
     };
@@ -130,10 +141,9 @@ export function NotificationReadAllAction() {
         readAllInFlight.current = false;
       },
       onError: handleFailure,
-      variables: { ids: [...unreadIds] },
+      variables: { ids: [...target] },
     });
-  }, [commitMarkAllRead, isMarkAllReadInFlight, showToast, unreadIds]);
-  retryRef.current = markAllRead;
+  }, [commitMarkAllRead, getCurrentTarget, isMarkAllReadInFlight, showToast]);
 
   return (
     <Button

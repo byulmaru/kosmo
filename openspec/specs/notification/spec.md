@@ -632,8 +632,9 @@ Shell header·menu 위치와 layout은 `UniversalShell`이, 목록 query·pagina
 - **AND** 실패한 요청 전의 Unread 강조와 전역 인디케이터를 유지하고 사용자가 다시 시도할 수 있게 한다
 - **AND** 실패하면 기존 앱 toast로 `알림을 모두 읽지 못했어요.`와 `다시 시도` action을 제공한다
 - **AND** toast의 재시도는 실행 시점의 current Relay connection에서 loaded unread ID를 다시 수집한다
-- **AND** 동일 Profile에서 Web breakpoint 전환으로 새 Action instance가 생기면 현재 loaded ID를 다시 요청할 수 있고, 이 재요청은 서버의 idempotent Read 수렴에 맡긴다
-- **AND** actor·route 변경으로 Action lifetime이 끝나면 이전 ID snapshot·pending·retry를 이어가지 않고, action이 등록한 실패 toast retry를 정리한다
+- **AND** 동일 Profile에서 pending 중 Web breakpoint 전환으로 새 Action instance가 생기면 현재 loaded ID를 다시 요청할 수 있고, 이 재요청은 서버의 idempotent Read 수렴에 맡긴다
+- **AND** 동일 actor에서 Home 등 다른 route를 방문한 뒤 `/notifications`로 돌아오면 남아 있는 실패 toast의 retry를 새로 로드된 current ID로 실행한다
+- **AND** actor 변경으로 Action lifetime이 끝나면 이전 ID snapshot·pending·retry를 새 actor에 이어가지 않으며, 이전 toast retry를 새 actor에서 실행하지 않는다
 
 #### Scenario: Web 상태와 수직 검증
 
