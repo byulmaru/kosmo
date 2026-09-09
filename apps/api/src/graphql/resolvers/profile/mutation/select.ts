@@ -29,7 +29,7 @@ builder.mutationField('selectProfile', (t) =>
     resolve: async (_, { input }, ctx) => {
       const profile = await db.transaction(async (tx) => {
         const profile = await tx
-          .select(getColumns(Profiles))
+          .select({ ...getColumns(Profiles), profileRole: AccountProfiles.role })
           .from(Profiles)
           .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
           .leftJoin(AccountProfiles, and(eq(AccountProfiles.profileId, Profiles.id)))
@@ -54,6 +54,7 @@ builder.mutationField('selectProfile', (t) =>
       });
 
       ctx.session.profileId = profile.id;
+      ctx.session.profileRole = profile.profileRole;
       RequestCache.clearForContext(ctx);
 
       return { profile, session: ctx.session.id };

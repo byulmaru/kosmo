@@ -213,7 +213,7 @@ describe('Bookmark GraphQL 경계', () => {
     assert.equal(await countBookmarks(), 0);
   });
 
-  test('usingProfile context는 사용할 수 없는 actor를 거부하고 Instance 종류를 제한하지 않는다', async () => {
+  test('profileRole context는 사용할 수 없는 actor를 거부하고 Instance 종류를 제한하지 않는다', async () => {
     const author = await createProfile('actor-check-author');
     const post = await createPost(author.id);
     const suffix = crypto.randomUUID();

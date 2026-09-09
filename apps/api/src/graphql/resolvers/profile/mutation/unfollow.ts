@@ -1,5 +1,5 @@
 import { ActivityPubActors, db, firstOrThrowWith, Instances, Profiles } from '@kosmo/core/db';
-import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
+import { AccountProfileRole, InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { unfollowProfile } from '@kosmo/core/services';
 import { and, eq, exists, inArray, isNotNull, ne, or } from 'drizzle-orm';
@@ -11,7 +11,7 @@ const FollowerProfiles = alias(Profiles, 'unfollow_follower_profile');
 const FollowerInstances = alias(Instances, 'unfollow_follower_instance');
 
 builder.mutationField('unfollowProfile', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('UnfollowProfilePayload', {
       fields: (field) => ({
         followeeProfile: field.field({ nullable: true, type: Profile }),

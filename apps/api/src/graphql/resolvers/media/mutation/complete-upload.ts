@@ -1,5 +1,5 @@
 import { db, first, firstOrThrowWith, Media as MediaTable } from '@kosmo/core/db';
-import { MediaSource, MediaState } from '@kosmo/core/enums';
+import { AccountProfileRole, MediaSource, MediaState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -14,7 +14,7 @@ const representationResponseSchema = z.object({
 const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 10_000;
 
 builder.mutationField('completeMediaUpload', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('CompleteMediaUploadPayload', {
       fields: (field) => ({
         media: field.field({ type: Media }),

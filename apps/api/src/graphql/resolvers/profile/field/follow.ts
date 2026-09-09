@@ -1,4 +1,5 @@
 import { db, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -114,7 +115,7 @@ builder.objectFields(Profile, (t) => ({
   }),
   followersCount: t.exposeInt('followersCount'),
   followingCount: t.exposeInt('followingCount'),
-  viewerState: t.withAuth({ usingProfile: true }).field({
+  viewerState: t.withAuth({ profileRole: AccountProfileRole.MEMBER }).field({
     type: ProfileViewerState,
     nullable: true,
     unauthorizedResolver: () => null,

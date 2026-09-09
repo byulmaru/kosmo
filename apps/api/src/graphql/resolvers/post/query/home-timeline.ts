@@ -1,4 +1,5 @@
 import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, exists, getColumns, gt, isNull, lt, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -11,7 +12,7 @@ type PostRow = typeof Posts.$inferSelect;
 const ReplyParents = alias(Posts, 'home_timeline_reply_parent');
 
 builder.queryField('homeTimeline', (t) =>
-  t.withAuth({ usingProfile: true }).connection(
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).connection(
     {
       type: Post,
       nullable: true,

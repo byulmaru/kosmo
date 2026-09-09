@@ -1,3 +1,4 @@
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { deleteReaction } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { builder } from '@/graphql/builder';
@@ -10,7 +11,7 @@ type DeleteReactionPayload = {
 };
 
 builder.mutationField('deleteReaction', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('DeleteReactionPayload', {
       fields: (field) => ({
         reactionId: field.globalID({

@@ -1,3 +1,4 @@
+import { AccountProfileRole } from '@kosmo/core/enums';
 import {
   approveProfileFollowRequest,
   cancelProfileFollowRequest,
@@ -7,7 +8,7 @@ import { builder } from '@/graphql/builder';
 import { Profile, ProfileFollow, ProfileFollowRequest } from '../ref';
 
 builder.mutationField('approveProfileFollowRequest', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('ApproveProfileFollowRequestPayload', {
       fields: (field) => ({
         followeeProfile: field.field({ type: Profile }),
@@ -33,7 +34,7 @@ builder.mutationField('approveProfileFollowRequest', (t) =>
 );
 
 builder.mutationField('rejectProfileFollowRequest', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('RejectProfileFollowRequestPayload', {
       fields: (field) => ({
         followeeProfile: field.field({ type: Profile }),
@@ -57,7 +58,7 @@ builder.mutationField('rejectProfileFollowRequest', (t) =>
 );
 
 builder.mutationField('cancelProfileFollowRequest', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('CancelProfileFollowRequestPayload', {
       fields: (field) => ({
         followerProfile: field.field({ type: Profile }),

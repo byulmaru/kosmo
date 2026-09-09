@@ -108,10 +108,11 @@ Mutation도 필드별로 나눈다.
 - domain error는 result union으로 반환하지 않고 GraphQL `errors[]` 경로로 전달한다.
 - Zod/Pothos validation 실패는 builder의 `validation.validationError`가 `ValidationError`로 변환한다.
 - 인증 scope 부족은 resolver에서 직접 던지지 않고 `t.withAuth({ login: true })` 같은 auth 설정으로 처리한다.
-- `login`과 `usingProfile` resolver는 production context가 이미 검증한 Active Account, selected Profile
-  membership과 조회 가능 상태를 별도 actor query로 반복 검증하지 않는다. canonical action이 추가 조건을
-  명시할 때만 그 조건을 조회한다. `Media.Source=Local`처럼 생성 결과의 source가 Local이라는 사실만으로
-  selected Profile의 Instance 종류를 Local로 제한하지 않는다.
+- `login`과 `profileRole` resolver는 production context가 이미 검증한 Active Account, selected Profile
+  membership·role과 조회 가능 상태를 별도 actor query로 반복 검증하지 않는다. `profileRole`은
+  `AccountProfileRole.MEMBER`처럼 필요한 최소 role을 선언하고 Owner도 통과시키며, canonical action이
+  추가 조건을 명시할 때만 그 조건을 조회한다. `Media.Source=Local`처럼 생성 결과의 source가 Local이라는
+  사실만으로 selected Profile의 Instance 종류를 Local로 제한하지 않는다.
 - resolver에서 환경 변수 묶음을 별도 Zod object로 다시 파싱하지 않는다. 중앙 env 모듈이 없는 현재
   runtime에서는 필요한 값을 직접 읽고 필수값 부재만 진입점에서 실패시키며, URL처럼 실제 사용 시 생성자가
   검증하는 값은 중복 schema를 두지 않는다.

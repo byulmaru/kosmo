@@ -1,9 +1,10 @@
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { deletePost } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Post } from '../ref';
 
 builder.mutationField('deletePost', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('DeletePostPayload', {
       fields: (field) => ({
         postId: field.globalID({

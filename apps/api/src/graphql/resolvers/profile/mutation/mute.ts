@@ -1,9 +1,10 @@
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { muteProfile, unmuteProfile } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Profile, ProfileMute } from '../ref';
 
 builder.mutationField('muteProfile', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('MuteProfilePayload', {
       fields: (field) => ({
         profileMute: field.field({ type: ProfileMute }),
@@ -22,7 +23,7 @@ builder.mutationField('muteProfile', (t) =>
 );
 
 builder.mutationField('unmuteProfile', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('UnmuteProfilePayload', {
       fields: (field) => ({
         profileMuteId: field.globalID({

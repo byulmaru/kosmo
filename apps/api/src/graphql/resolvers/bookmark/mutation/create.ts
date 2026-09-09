@@ -1,4 +1,5 @@
 import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { createBookmark } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
@@ -8,7 +9,7 @@ import { postAccessWhere } from '@/graphql/resolvers/post/access';
 import { Bookmark } from '../ref';
 
 builder.mutationField('createBookmark', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('CreateBookmarkPayload', {
       fields: (field) => ({
         bookmark: field.field({ type: Bookmark }),

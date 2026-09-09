@@ -3,6 +3,10 @@ export const AccountProfileRole = {
   MEMBER: 'MEMBER',
 } as const;
 export type AccountProfileRole = keyof typeof AccountProfileRole;
+export const AccountProfileRoleOrder = [
+  AccountProfileRole.MEMBER,
+  AccountProfileRole.OWNER,
+] as const;
 
 export const AccountState = {
   ACTIVE: 'ACTIVE',

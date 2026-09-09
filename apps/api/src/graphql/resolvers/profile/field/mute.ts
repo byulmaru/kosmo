@@ -1,4 +1,5 @@
 import { db, Instances, ProfileMutes, Profiles } from '@kosmo/core/db';
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, isNull, lt } from 'drizzle-orm';
@@ -15,7 +16,7 @@ builder.objectField(ProfileMute, 'targetProfile', (t) =>
 );
 
 builder.objectField(Profile, 'profileMutes', (t) =>
-  t.withAuth({ usingProfile: true }).connection(
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).connection(
     {
       type: ProfileMute,
       resolve: (profile, args, ctx) => {

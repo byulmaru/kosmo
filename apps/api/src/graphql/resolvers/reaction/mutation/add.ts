@@ -1,4 +1,5 @@
 import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { addReaction } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
@@ -9,7 +10,7 @@ import { postAccessWhere } from '../../post/access';
 import { Reaction } from '../ref';
 
 builder.mutationField('addReaction', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('AddReactionPayload', {
       fields: (field) => ({
         post: field.field({ type: Post }),

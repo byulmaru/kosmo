@@ -13,6 +13,7 @@ import { and, eq } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
 import * as R from 'remeda';
 import { visibleProfileWhere } from './profile/visibility';
+import type { AccountProfileRole } from '@kosmo/core/enums';
 import type { Context as HonoContext } from 'hono';
 
 type LoaderParams<Key, Result, SortKey, Nullability extends boolean, Many extends boolean> = {
@@ -46,12 +47,14 @@ export type SessionContext = {
     id: string;
     accountId: string;
     profileId: string | null;
+    profileRole: AccountProfileRole | null;
   };
 };
 
 export type SessionWithProfileContext = SessionContext & {
   session: {
     profileId: string;
+    profileRole: AccountProfileRole;
   };
 };
 
@@ -89,10 +92,12 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
 
     if (session) {
       let profileId = session.activeProfileId;
+      let profileRole: AccountProfileRole | null = null;
       if (profileId) {
         await db
           .select({
             id: Profiles.id,
+            role: AccountProfiles.role,
           })
           .from(Profiles)
           .innerJoin(
@@ -113,6 +118,7 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
           .then(first)
           .then((profile) => {
             profileId = profile?.id ?? null;
+            profileRole = profile?.role ?? null;
           });
       }
 
@@ -120,6 +126,7 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
         id: session.id,
         accountId: session.accountId,
         profileId,
+        profileRole,
       };
     }
   }
