@@ -41,8 +41,8 @@ const connectionOptions: readonly TabOption<ProfileConnectionKind>[] = [
 ];
 
 const ProfileLayoutQuery = graphql`
-  query ProfileLayoutQuery($handle: String!) {
-    profileBlockStatus(handle: $handle) {
+  query ProfileLayoutQuery($handle: String!, $withProfileBlockStatus: Boolean!) {
+    profileBlockStatus(handle: $handle) @include(if: $withProfileBlockStatus) {
       blockedBy
       blocking
       profileBlockId
@@ -211,7 +211,7 @@ function ProfileLayoutContent({
   const { selectedProfileId, sessionId } = useSession();
   const data = useLazyLoadQuery<ProfileLayoutQueryType>(
     ProfileLayoutQuery,
-    { handle },
+    { handle, withProfileBlockStatus: Boolean(selectedProfileId) },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const profile = data.profileByHandle;
@@ -224,6 +224,7 @@ function ProfileLayoutContent({
   const { changeBlocked } = useProfileBlockMutations();
   const { showToast } = useToast();
   const [confirmation, setConfirmation] = useState<'block' | 'unblock' | null>(null);
+  const [blockedContentVisible, setBlockedContentVisible] = useState(false);
   const [pending, setPending] = useState(false);
   const mounted = useRef(true);
   const inFlight = useRef(false);
@@ -358,29 +359,33 @@ function ProfileLayoutContent({
     </ModalSheet>
   );
 
-  if (blockStatus?.blocking) {
+  const unblockAction = blockStatus?.blocking ? (
+    <Button
+      controlRef={stateActionRef}
+      accessibilityLabel="차단 해제"
+      onPress={() => {
+        dismissFocusRef.current = 'state';
+        setConfirmation('unblock');
+      }}
+      tone="secondary"
+    >
+      차단 해제
+    </Button>
+  ) : null;
+
+  if (!profile && blockStatus?.blocking) {
     return (
       <>
         <View style={styles.blockedState}>
           <StateView title="차단한 프로필입니다" />
-          <Button
-            controlRef={stateActionRef}
-            accessibilityLabel="차단 해제"
-            onPress={() => {
-              dismissFocusRef.current = 'state';
-              setConfirmation('unblock');
-            }}
-            tone="secondary"
-          >
-            차단 해제
-          </Button>
+          {unblockAction}
         </View>
         {confirmationModal}
       </>
     );
   }
 
-  if (blockStatus?.blockedBy) {
+  if (!profile && blockStatus?.blockedBy) {
     return <StateView title="이 프로필을 볼 수 없습니다" />;
   }
 
@@ -438,7 +443,11 @@ function ProfileLayoutContent({
   ) : (
     <FollowButton profile={profile} />
   );
-
+  const profileAction = blockStatus?.blocking
+    ? unblockAction
+    : blockStatus?.blockedBy
+      ? undefined
+      : relationshipAction;
   const chrome = (
     <>
       {showPageHeader ? (
@@ -446,7 +455,7 @@ function ProfileLayoutContent({
       ) : null}
       <ProfileHero
         key={selectedProfileId}
-        action={relationshipAction}
+        action={profileAction}
         heading={!showPageHeader}
         moreItems={sessionId ? [reportItem] : undefined}
         profile={profile}
@@ -456,15 +465,31 @@ function ProfileLayoutContent({
     </>
   );
 
+  const blockedProfileContent = blockStatus?.blockedBy ? (
+    <StateView title="게시물을 볼 수 없습니다" />
+  ) : blockStatus?.blocking && !blockedContentVisible ? (
+    <StateView
+      actionLabel="게시물 보기"
+      onAction={() => setBlockedContentVisible(true)}
+      title="차단한 프로필의 게시물입니다"
+    />
+  ) : null;
+  const blockedProfileRoute = blockedProfileContent ? (
+    <ProfileRouteContainer scrollKey={scrollKey}>
+      {chrome}
+      {blockedProfileContent}
+    </ProfileRouteContainer>
+  ) : null;
+
   return (
     <ProfileRouteProvider chrome={chrome} scrollKey={scrollKey}>
-      {Platform.OS === 'web' ? (
+      {blockedProfileRoute ?? (Platform.OS === 'web' ? (
         <Slot />
       ) : (
         <View style={styles.nativeRoute}>
           <Stack screenOptions={{ headerShown: false }} />
         </View>
-      )}
+      ))}
     </ProfileRouteProvider>
   );
 }
