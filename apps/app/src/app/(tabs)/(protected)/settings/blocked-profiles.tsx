@@ -3,7 +3,7 @@ import { ChevronLeftIcon } from 'lucide-react-native';
 import { StyleSheet } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { SettingsBlockedProfiles } from '@/components/settings/SettingsBlockedProfiles';
-import { returnToMuteAndBlockRoot } from '@/components/settings/settingsNavigation';
+import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -16,7 +16,7 @@ export default function SettingsBlockedProfilesRoute() {
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="뮤트 및 차단으로 돌아가기"
-        onPress={() => returnToMuteAndBlockRoot(router)}
+        onPress={() => returnToSettingsParent('/settings/muted-profiles', router)}
         style={styles.backButton}
         targetSize={44}
       >
