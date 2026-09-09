@@ -146,12 +146,12 @@
 #### Scenario: selected Profile로 Mute를 생성한다
 
 - **WHEN** 인증된 요청이 Target Profile을 지정해 생성 mutation을 실행한다
-- **THEN** 시스템은 현재 selected Profile을 Owner로 사용해 Core action을 실행하고 생성되거나 기존에 있던 관계를 반환한다
+- **THEN** 시스템은 현재 selected Profile을 Owner로 사용해 Core action을 실행하고 생성되거나 기존에 있던 관계와 생성 후 Target Profile의 viewer-relative 상태를 반환한다
 
 #### Scenario: selected Profile로 Profile Mute 관계를 해제한다
 
 - **WHEN** 인증된 요청이 현재 selected Profile이 소유한 Profile Mute global ID를 지정해 해제 mutation을 실행한다
-- **THEN** 시스템은 현재 selected Profile이 소유한 관계만 제거하고 제거한 관계의 식별자를 반환한다
+- **THEN** 시스템은 현재 selected Profile이 소유한 관계만 제거하고 제거한 관계의 식별자와 해제 후 viewer-relative 상태를 읽을 Target Profile을 반환한다
 
 #### Scenario: selected Profile이 바뀌면 관계도 격리된다
 

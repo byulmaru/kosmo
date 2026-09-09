@@ -55,10 +55,7 @@ export function SettingsMutedProfiles() {
   return (
     <RouteBoundary
       error={(retry) => (
-        <MutedProfileList
-          onUnmute={noopUnmute}
-          state={{ onRetry: retry, status: 'error' }}
-        />
+        <MutedProfileList onUnmute={noopUnmute} state={{ onRetry: retry, status: 'error' }} />
       )}
       loading={<MutedProfileList onUnmute={noopUnmute} state={{ status: 'loading' }} />}
       title="뮤트한 프로필을 불러오지 못했어요"

@@ -83,7 +83,7 @@ Owner와 Target을 잇는 영구 Profile Mute를 중복 없이 저장하고, 기
 - 현재 Profile에는 Owner 전용 `profileMutes` Relay connection을, `ProfileViewerState`에는 nullable `profileMute`를 제공한다.
 - `muteProfile`은 concrete `Profile` global ID를, `unmuteProfile`은 concrete `ProfileMute` global ID를 입력으로 받고 Owner는 session의 selected Profile에서 정한다.
 - `muteProfile`은 DISABLED Profile 또는 SUSPENDED Instance의 Target을 거부하고 관계를 만들지 않는다.
-- 생성 payload는 `profileMute`, 해제 payload는 nullable `profileMuteId`를 반환한다.
+- 생성 payload는 `profileMute`, 해제 payload는 nullable `profileMuteId`와 삭제된 관계의 nullable `targetProfile`을 반환하며 mutation 후 viewer-relative 상태를 선택할 수 있게 한다.
 - 공개 schema에 기간·만료 입력이나 `expires_at`에 대응하는 필드를 추가하지 않는다.
 - 같은 Account의 다른 selected Profile도 별도 Owner로 취급한다.
 
