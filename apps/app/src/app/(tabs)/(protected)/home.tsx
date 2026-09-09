@@ -120,8 +120,6 @@ type HomeLastSuccessful = {
 
 function HomeRouteContent() {
   const { fetchKey, refetch } = useRouteBoundary();
-  const shellChrome = useShellChrome();
-  const profileMuteTimelineRevision = shellChrome?.profileMuteTimelineRevision ?? 0;
   const lastSuccessfulHomeRef = useRef<HomeLastSuccessful | null>(null);
 
   return (
@@ -129,7 +127,6 @@ function HomeRouteContent() {
       fetchKey={fetchKey}
       lastSuccessfulHomeRef={lastSuccessfulHomeRef}
       onRetry={refetch}
-      profileMuteTimelineRevision={profileMuteTimelineRevision}
     />
   );
 }
@@ -138,12 +135,10 @@ function HomeContentBoundary({
   fetchKey,
   lastSuccessfulHomeRef,
   onRetry,
-  profileMuteTimelineRevision,
 }: {
   fetchKey: number;
   lastSuccessfulHomeRef: MutableRefObject<HomeLastSuccessful | null>;
   onRetry: () => void;
-  profileMuteTimelineRevision: number;
 }) {
   const reportUnexpectedError = useUnexpectedErrorReporter();
 
@@ -187,13 +182,9 @@ function HomeContentBoundary({
           onRetry();
         }
       }}
-      resetKeys={[profileMuteTimelineRevision, fetchKey]}
+      resetKeys={[fetchKey]}
     >
-      <HomeContent
-        fetchKey={fetchKey}
-        lastSuccessfulHomeRef={lastSuccessfulHomeRef}
-        profileMuteTimelineRevision={profileMuteTimelineRevision}
-      />
+      <HomeContent fetchKey={fetchKey} lastSuccessfulHomeRef={lastSuccessfulHomeRef} />
     </ErrorBoundary>
   );
 }
@@ -201,19 +192,14 @@ function HomeContentBoundary({
 function HomeContent({
   fetchKey,
   lastSuccessfulHomeRef,
-  profileMuteTimelineRevision,
 }: {
   fetchKey: number;
   lastSuccessfulHomeRef: MutableRefObject<HomeLastSuccessful | null>;
-  profileMuteTimelineRevision: number;
 }) {
   const data = useLazyLoadQuery<HomePageQuery>(
     HomeQuery,
     {},
-    {
-      fetchKey: `${profileMuteTimelineRevision}:${fetchKey}`,
-      fetchPolicy: profileMuteTimelineRevision === 0 ? 'store-and-network' : 'network-only',
-    },
+    { fetchKey, fetchPolicy: 'store-and-network' },
   );
   lastSuccessfulHomeRef.current = { data };
 

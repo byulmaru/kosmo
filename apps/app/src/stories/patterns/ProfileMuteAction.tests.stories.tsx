@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
+import { ProfileMuteActionControl } from '@/components/profile/ProfileMuteAction';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 type Props = {
@@ -34,7 +34,7 @@ function Fixture({
   useEffect(() => setProfileId(initialProfileId), [initialProfileId]);
   return visible ? (
     <View style={{ padding: 24 }}>
-      <ProfileMuteAction
+      <ProfileMuteActionControl
         {...props}
         muted={muted}
         onChangeMuted={async (nextMuted) => {

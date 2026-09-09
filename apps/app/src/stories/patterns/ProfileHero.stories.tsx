@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { fn } from 'storybook/test';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { SessionProvider } from '@/session/SessionProvider';
@@ -53,6 +51,17 @@ const noBioProfile = profile({
   id: 'profile-hero-no-bio',
   relativeHandle: '@no-bio',
 });
+const mutedProfile = profile({
+  displayName: '뮤트한 프로필',
+  id: 'profile-hero-muted',
+  relativeHandle: '@muted',
+  viewerState: {
+    follow: null,
+    followRequest: null,
+    isSelf: false,
+    profileMute: { id: 'profile-mute-story' },
+  },
+});
 
 const storyProfiles = [
   defaultProfile,
@@ -60,6 +69,7 @@ const storyProfiles = [
   taggedProfile,
   longTaggedProfile,
   noBioProfile,
+  mutedProfile,
 ];
 const storyProfileIds = storyProfiles.map(({ id }) => id);
 
@@ -103,23 +113,13 @@ function ProfileHeroFixture({
   loading = false,
   profileId = defaultProfile.id,
   showAction = true,
-  muted = false,
-  onUnmute,
-  onMute,
-  outcome = 'success',
 }: {
   actionSize?: 'compact' | 'medium';
   containerWidth?: number;
   loading?: boolean;
   profileId?: string;
   showAction?: boolean;
-  muted?: boolean;
-  onUnmute?: () => Promise<void>;
-  onMute?: () => Promise<void>;
-  outcome?: 'success' | 'error' | 'pending';
 }) {
-  const [isMuted, setMuted] = useState(muted);
-  useEffect(() => setMuted(muted), [muted]);
   const profiles = useStoryProfiles();
   const target = requireProfile(profiles, profileId);
 
@@ -133,28 +133,8 @@ function ProfileHeroFixture({
             ) : undefined
           }
           loading={loading}
-          mute={
-            showAction && onUnmute && onMute
-              ? {
-                  muted: isMuted,
-                  onChangeMuted: async (nextMuted) => {
-                    await (nextMuted ? onMute() : onUnmute());
-                    if (outcome === 'pending') {
-                      await new Promise<void>(() => {});
-                    }
-                    if (outcome === 'error') {
-                      throw new Error('요청 실패');
-                    }
-                  },
-                  onFeedback: (feedback) => {
-                    if (feedback.status === 'success') {
-                      setMuted(feedback.muted);
-                    }
-                  },
-                }
-              : undefined
-          }
           profile={target.hero}
+          showMuteAction={showAction}
         />
       </View>
     </SessionProvider>
@@ -186,10 +166,6 @@ const meta = {
     actionSize: undefined,
     containerWidth: 600,
     loading: false,
-    muted: false,
-    onUnmute: fn<() => Promise<void>>().mockResolvedValue(undefined),
-    onMute: fn<() => Promise<void>>().mockResolvedValue(undefined),
-    outcome: 'success',
     profileId: defaultProfile.id,
     showAction: true,
   },
@@ -197,8 +173,6 @@ const meta = {
     actionSize: { control: 'inline-radio', options: ['compact', 'medium'] },
     containerWidth: { control: 'inline-radio', options: [390, 600] },
     loading: { control: 'boolean' },
-    muted: { control: 'boolean' },
-    outcome: { control: 'inline-radio', options: ['success', 'error', 'pending'] },
     profileId: { control: 'select', options: storyProfileIds },
     showAction: { control: 'boolean' },
   },
@@ -224,15 +198,7 @@ export const Playground: Story = {
   parameters: {
     controls: {
       disable: false,
-      include: [
-        'profileId',
-        'muted',
-        'outcome',
-        'loading',
-        'showAction',
-        'actionSize',
-        'containerWidth',
-      ],
+      include: ['profileId', 'loading', 'showAction', 'actionSize', 'containerWidth'],
     },
   },
 };
@@ -270,6 +236,6 @@ export const Loading: Story = {
 };
 
 export const Muted: Story = {
-  args: { muted: true },
+  args: { profileId: mutedProfile.id },
   globals: { viewport: { value: 'kosmoProfileFull', isRotated: false } },
 };

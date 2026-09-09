@@ -4,7 +4,6 @@ import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
-import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationLink } from '@/components/shell/NavigationLink';
@@ -27,9 +26,6 @@ const ProfileLayoutQuery = graphql`
         isSelf
         membership {
           role
-        }
-        profileMute {
-          id
         }
       }
       ...ProfileHero_profile
@@ -70,7 +66,6 @@ function ProfileLayoutContent({ handle, scrollKey }: { handle: string; scrollKey
   );
   const profile = data.profileByHandle;
   const { selectedProfileId } = useSession();
-  const { changeMuted } = useProfileMuteMutations();
 
   if (!profile) {
     return (
@@ -95,28 +90,14 @@ function ProfileLayoutContent({ handle, scrollKey }: { handle: string; scrollKey
   ) : (
     <FollowButton profile={profile} />
   );
-  const mute = canMute
-    ? {
-        muted: Boolean(profile.viewerState?.profileMute),
-        onChangeMuted: (muted: boolean) =>
-          changeMuted(
-            {
-              ownerProfileId: selectedProfileId as string,
-              profileMuteId: profile.viewerState?.profileMute?.id,
-              targetProfileId: profile.id,
-            },
-            muted,
-          ),
-      }
-    : undefined;
 
   return (
     <ProfileRouteContainer scrollKey={scrollKey}>
       <ProfileHero
         key={selectedProfileId}
         action={relationshipAction}
-        mute={mute}
         profile={profile}
+        showMuteAction={canMute}
       />
       <Slot />
     </ProfileRouteContainer>

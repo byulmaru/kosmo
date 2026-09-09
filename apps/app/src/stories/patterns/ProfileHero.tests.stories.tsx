@@ -135,28 +135,17 @@ export const ImageAndTagsContract: Story = {
 };
 
 export const MuteContract: Story = {
-  args: { muted: true },
-  play: async ({ args, canvasElement }) => {
-    args.onUnmute?.mockClear();
+  args: { profileId: 'profile-hero-muted' },
+  play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByText('이 사용자의 게시글은 뮤트되어 있습니다.')).toBeVisible();
     expect(canvas.getByRole('button', { name: '팔로우' })).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '뮤트 해제' }));
-    const body = within(canvasElement.ownerDocument.body);
-    expect(args.onUnmute).not.toHaveBeenCalled();
-    const dialog = await body.findByRole('dialog', { name: '이 프로필을 뮤트 해제할까요?' });
-    await userEvent.click(within(dialog).getByRole('button', { name: '뮤트 해제' }));
-    await waitFor(() => expect(args.onUnmute).toHaveBeenCalledTimes(1));
-    await waitFor(() =>
-      expect(canvas.queryByText('이 사용자의 게시글은 뮤트되어 있습니다.')).not.toBeInTheDocument(),
-    );
-    expect(canvas.getByRole('button', { name: '팔로우' })).toBeVisible();
-    await waitFor(() => expect(canvas.getByRole('link', { name: /팔로잉/ })).toHaveFocus());
+    expect(canvas.getByRole('button', { name: '뮤트 해제' })).toBeVisible();
   },
 };
 
 export const MutedLoadingContract: Story = {
-  args: { muted: true, loading: true },
+  args: { loading: true, profileId: 'profile-hero-muted' },
   play: ({ canvasElement }) => {
     expect(
       within(canvasElement).queryByRole('button', { name: '뮤트 해제' }),
@@ -165,8 +154,7 @@ export const MutedLoadingContract: Story = {
 };
 
 export const MenuMuteContract: Story = {
-  play: async ({ args, canvasElement }) => {
-    args.onMute?.mockClear();
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     const trigger = canvas.getByRole('button', { name: '더보기' });
@@ -183,16 +171,7 @@ export const MenuMuteContract: Story = {
     await waitFor(() =>
       expect(menu.getBoundingClientRect().top).toBeCloseTo(trigger.getBoundingClientRect().top, 0),
     );
-    await userEvent.click(body.getByRole('menuitem', { name: '뮤트' }));
-    await userEvent.click(await body.findByRole('button', { name: '취소' }));
-    expect(args.onMute).not.toHaveBeenCalled();
-    await waitFor(() => expect(trigger).toHaveFocus());
-    await userEvent.click(trigger);
-    await userEvent.click(await body.findByRole('menuitem', { name: '뮤트' }));
-    await userEvent.click(await body.findByRole('button', { name: '뮤트' }));
-    expect(await canvas.findByText('이 사용자의 게시글은 뮤트되어 있습니다.')).toBeVisible();
-    expect(canvas.getByRole('button', { name: '팔로우' })).toBeVisible();
-    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(body.getByRole('menuitem', { name: '뮤트' })).toBeVisible();
   },
 };
 

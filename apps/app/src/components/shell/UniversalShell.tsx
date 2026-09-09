@@ -119,7 +119,6 @@ function UniversalShellContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [profileMuteTimelineRevision, setProfileMuteTimelineRevision] = useState(0);
   const menuButtonRef = useRef<NativeView>(null);
   const screenFallbackRef = useRef<NativeView>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
@@ -134,9 +133,6 @@ function UniversalShellContent() {
   }, []);
   const reselectHome = useCallback(() => {
     homeReselectionHandlerRef.current?.();
-  }, []);
-  const refreshProfileMuteTimelines = useCallback(() => {
-    setProfileMuteTimelineRevision((revision) => revision + 1);
   }, []);
   const queueDrawerHomeReselection = useCallback(() => {
     pendingDrawerHomeReselectionRef.current = true;
@@ -280,8 +276,6 @@ function UniversalShellContent() {
       openNavigationDrawer={openNavigationDrawer}
       openProfileSwitcher={openProfileSwitcher}
       registerHomeReselection={registerHomeReselection}
-      profileMuteTimelineRevision={profileMuteTimelineRevision}
-      refreshProfileMuteTimelines={refreshProfileMuteTimelines}
       reselectHome={reselectHome}
     >
       <PrimaryNavigationScrollReset pathname={pathname} />

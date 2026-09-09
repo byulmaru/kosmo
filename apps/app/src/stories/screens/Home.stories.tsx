@@ -1,14 +1,7 @@
-import { useCallback, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { Environment, Network, RecordSource, Store } from 'relay-runtime';
-import { expect, spyOn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, spyOn, within } from 'storybook/test';
 import HomeScreen from '@/app/(tabs)/(protected)/home';
-import { ShellChromeProvider, useShellChrome } from '@/components/shell/ShellChromeContext';
-import { RelayActorProvider } from '@/relay/RelayActorProvider';
-import { SessionProvider } from '@/session/SessionProvider';
-import { post, profile, shellQuery, timeline } from '../fixtures';
+import { profile, shellQuery } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { GraphQLResponse, RequestParameters } from 'relay-runtime';
 
 const emptyHomeTimeline = {
   edges: [],
@@ -21,39 +14,9 @@ const homeViewerProfile = profile({
   relativeHandle: '@home-profile',
   viewerState: { follow: null, followRequest: null, isSelf: true, profileMute: null },
 });
-const homeTargetProfile = profile({
-  displayName: 'Home Target',
-  handle: 'home-target',
-  id: 'home-target-profile',
-  relativeHandle: '@home-target',
-});
 const selectedProfileData = {
   ...shellQuery({ profiles: [homeViewerProfile], selectedProfile: homeViewerProfile }),
   homeTimeline: emptyHomeTimeline,
-};
-const homeRefreshInitialPost = {
-  ...post({
-    bodyText: '뮤트 전 홈 게시글',
-    id: 'home-refresh-initial-post',
-    profile: homeTargetProfile,
-  }),
-  viewerReactions: [],
-};
-const homeRefreshRecoveredPost = {
-  ...post({
-    bodyText: '뮤트 후 복구된 홈 게시글',
-    id: 'home-refresh-recovered-post',
-    profile: homeTargetProfile,
-  }),
-  viewerReactions: [],
-};
-const homeRefreshInitialData = {
-  ...shellQuery({ profiles: [homeViewerProfile], selectedProfile: homeViewerProfile }),
-  homeTimeline: timeline(homeRefreshInitialPost),
-};
-const homeRefreshRecoveredData = {
-  ...shellQuery({ profiles: [homeViewerProfile], selectedProfile: homeViewerProfile }),
-  homeTimeline: timeline(homeRefreshRecoveredPost),
 };
 
 const meta = {
@@ -74,88 +37,6 @@ function expectHomeBrandHeader(canvasElement: HTMLElement) {
   expect(mark).not.toBeNull();
   expect(mark?.getBoundingClientRect().width).toBe(38);
   expect(mark?.closest('[aria-hidden="true"]')).not.toBeNull();
-}
-
-function HomeRefreshStory() {
-  const [profileMuteTimelineRevision, setProfileMuteTimelineRevision] = useState(0);
-  const homeRefreshStateRef = useRef({ revision: 0 });
-  const [environment] = useState(() => createHomeRefreshEnvironment(homeRefreshStateRef));
-  const createEnvironment = useCallback(() => environment, [environment]);
-
-  return (
-    <RelayActorProvider createEnvironment={createEnvironment}>
-      <SessionProvider>
-        <ShellChromeProvider
-          navigationDrawerOpen={false}
-          openNavigationDrawer={() => undefined}
-          openProfileSwitcher={() => undefined}
-          profileMuteTimelineRevision={profileMuteTimelineRevision}
-          refreshProfileMuteTimelines={() => {
-            homeRefreshStateRef.current.revision += 1;
-            setProfileMuteTimelineRevision((revision) => revision + 1);
-          }}
-          registerHomeReselection={() => () => undefined}
-          reselectHome={() => undefined}
-        >
-          <View>
-            <HomeRefreshTrigger />
-            <HomeScreen />
-          </View>
-        </ShellChromeProvider>
-      </SessionProvider>
-    </RelayActorProvider>
-  );
-}
-
-function createHomeRefreshEnvironment(homeRefreshStateRef: { current: { revision: number } }) {
-  const environment = new Environment({
-    network: Network.create((request: RequestParameters) => {
-      if (request.name === 'SessionProviderQuery') {
-        return Promise.resolve({ data: selectedProfileData } as GraphQLResponse);
-      }
-
-      if (request.name === 'HomePageQuery') {
-        if (homeRefreshStateRef.current.revision === 1) {
-          return Promise.reject(new Error('홈 재조회 실패'));
-        }
-
-        return Promise.resolve({
-          data:
-            homeRefreshStateRef.current.revision === 0
-              ? homeRefreshInitialData
-              : homeRefreshRecoveredData,
-        } as GraphQLResponse);
-      }
-
-      return Promise.resolve({ data: {} } as GraphQLResponse);
-    }),
-    store: new Store(new RecordSource()),
-  });
-
-  return environment;
-}
-
-function HomeRefreshTrigger() {
-  const shellChrome = useShellChrome();
-
-  return (
-    <>
-      <Pressable
-        accessibilityLabel="재조회 실패 트리거"
-        accessibilityRole="button"
-        onPress={() => shellChrome?.refreshProfileMuteTimelines?.()}
-      >
-        <Text>재조회 실패 트리거</Text>
-      </Pressable>
-      <Pressable
-        accessibilityLabel="다음 revision 복구"
-        accessibilityRole="button"
-        onPress={() => shellChrome?.refreshProfileMuteTimelines?.()}
-      >
-        <Text>다음 revision 복구</Text>
-      </Pressable>
-    </>
-  );
 }
 
 export const EmptyTimelineFull: Story = {
@@ -222,43 +103,4 @@ export const ErrorFull: Story = {
     await expect(within(canvasElement).findByRole('alert')).resolves.toBeVisible();
     expectHomeBrandHeader(canvasElement);
   },
-};
-
-export const RefetchFailureKeepsTimelineAndRecovers: Story = {
-  beforeEach: () => {
-    const originalError = console.error;
-    const errorSpy = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
-      if (!args.some((argument) => String(argument).includes('홈 재조회 실패'))) {
-        originalError(...args);
-      }
-    });
-
-    return () => errorSpy.mockRestore();
-  },
-  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const triggerFailure = canvas.getByRole('button', { name: '재조회 실패 트리거' });
-    const recover = canvas.getByRole('button', { name: '다음 revision 복구' });
-
-    await expect(canvas.findByText('뮤트 전 홈 게시글')).resolves.toBeVisible();
-
-    await userEvent.click(triggerFailure);
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('홈을 불러오지 못했어요');
-    expect(canvas.getByText('뮤트 전 홈 게시글')).toBeVisible();
-    expect(canvas.queryByText('뮤트 후 복구된 홈 게시글')).not.toBeInTheDocument();
-
-    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('홈을 불러오지 못했어요');
-    expect(canvas.getByText('뮤트 전 홈 게시글')).toBeVisible();
-    expect(canvas.queryByText('뮤트 후 복구된 홈 게시글')).not.toBeInTheDocument();
-
-    await userEvent.click(recover);
-    await waitFor(() => {
-      expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
-      expect(canvas.getByText('뮤트 후 복구된 홈 게시글')).toBeVisible();
-      expect(canvas.queryByText('뮤트 전 홈 게시글')).not.toBeInTheDocument();
-    });
-  },
-  render: () => <HomeRefreshStory />,
 };

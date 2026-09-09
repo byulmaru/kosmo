@@ -1,16 +1,20 @@
 import { Volume2, VolumeOff } from 'lucide-react-native';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { graphql, useFragment } from 'react-relay';
+import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, breakpoints, textStyles } from '@/theme/tokens';
 import { ProfileMoreButton } from './ProfileMoreButton';
 import type { ComponentProps } from 'react';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
+import type { ProfileMuteAction_profile$key } from './__generated__/ProfileMuteAction_profile.graphql';
 
 export type ProfileMuteFeedback = { muted: boolean; status: 'success' | 'error' };
 export type ProfileMuteControl = {
@@ -18,6 +22,74 @@ export type ProfileMuteControl = {
   onChangeMuted: (muted: boolean) => Promise<void>;
   onFeedback?: (feedback: ProfileMuteFeedback) => void;
 };
+
+const profileMuteActionFragment = graphql`
+  fragment ProfileMuteAction_profile on Profile {
+    id
+    displayName
+    viewerState {
+      profileMute {
+        id
+      }
+    }
+  }
+`;
+
+export function ProfileMuteAction({
+  items,
+  onFeedback,
+  profile,
+  surface = 'menu',
+}: {
+  items?: readonly ActionMenuItem[];
+  onFeedback?: (feedback: ProfileMuteFeedback) => void;
+  profile: ProfileMuteAction_profile$key;
+  surface?: 'menu' | 'text';
+}) {
+  const data = useFragment(profileMuteActionFragment, profile);
+  const { selectedProfileId } = useSession();
+  const { changeMuted } = useProfileMuteMutations();
+  const profileMuteId = data.viewerState?.profileMute?.id;
+  const muted = Boolean(profileMuteId);
+
+  if (!selectedProfileId || (surface === 'text' && !muted)) {
+    return null;
+  }
+
+  const onChangeMuted = (nextMuted: boolean) =>
+    changeMuted(
+      {
+        ownerProfileId: selectedProfileId,
+        profileMuteId,
+        targetProfileId: data.id,
+      },
+      nextMuted,
+    );
+
+  if (surface === 'text') {
+    return (
+      <ProfileMuteActionControl
+        displayName={data.displayName}
+        muted
+        onChangeMuted={onChangeMuted}
+        onFeedback={onFeedback}
+        profileId={data.id}
+        surface="text"
+      />
+    );
+  }
+
+  return (
+    <ProfileMuteActionControl
+      displayName={data.displayName}
+      items={items}
+      muted={muted}
+      onChangeMuted={onChangeMuted}
+      onFeedback={onFeedback}
+      profileId={data.id}
+    />
+  );
+}
 type Props = {
   displayName: string;
   onChangeMuted: (muted: boolean) => Promise<void>;
@@ -43,7 +115,7 @@ type CommittedProfileTargetRef = {
   current: CommittedProfileTarget;
 };
 
-export function ProfileMuteAction(props: Props) {
+export function ProfileMuteActionControl(props: Props) {
   const committedTargetRef = useRef<CommittedProfileTarget>({
     profileId: props.profileId,
     revision: 0,

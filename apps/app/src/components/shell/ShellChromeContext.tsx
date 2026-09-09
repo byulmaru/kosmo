@@ -3,7 +3,6 @@ import type { PropsWithChildren, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 
 export type HomeReselectionHandler = () => void;
-export type TimelineRefreshHandler = () => void;
 
 type ShellChromeActions = {
   navigationDrawerOpen: boolean;
@@ -11,8 +10,6 @@ type ShellChromeActions = {
   openNavigationDrawer: () => void;
   openProfileSwitcher: () => void;
   registerHomeReselection: (handler: HomeReselectionHandler) => () => void;
-  profileMuteTimelineRevision?: number;
-  refreshProfileMuteTimelines?: TimelineRefreshHandler;
   reselectHome: HomeReselectionHandler;
 };
 
@@ -27,8 +24,6 @@ export function ShellChromeProvider({
   openNavigationDrawer,
   openProfileSwitcher,
   registerHomeReselection,
-  profileMuteTimelineRevision,
-  refreshProfileMuteTimelines,
   reselectHome,
 }: ShellChromeProviderProps) {
   return (
@@ -39,8 +34,6 @@ export function ShellChromeProvider({
         openNavigationDrawer,
         openProfileSwitcher,
         registerHomeReselection,
-        profileMuteTimelineRevision,
-        refreshProfileMuteTimelines,
         reselectHome,
       }}
     >

@@ -5,7 +5,7 @@ import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { space } from '@/theme/tokens';
 import { ProfileListItemContent } from './ProfileListItemContent';
-import { ProfileMuteAction } from './ProfileMuteAction';
+import { ProfileMuteActionControl } from './ProfileMuteAction';
 import type { ProfileMuteFeedback } from './ProfileMuteAction';
 
 export type MutedProfile = { id: string; displayName: string; avatarUri?: string | null };
@@ -77,7 +77,7 @@ export function MutedProfileList({ onFeedback, onUnmute, state }: Props) {
               displayName={profile.displayName}
               style={styles.row}
             >
-              <ProfileMuteAction
+              <ProfileMuteActionControl
                 displayName={profile.displayName}
                 muted
                 onChangeMuted={() => onUnmute(profile.id)}

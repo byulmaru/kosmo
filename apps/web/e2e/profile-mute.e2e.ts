@@ -331,7 +331,7 @@ test('Home·Local은 muted outer/source Author의 Post·Quote·Repost를 제외�
   await expect(page.getByText('E2E muted outer direct body', { exact: true })).toBeVisible();
 });
 
-test('같은 Account의 selected Profile별 Mute를 분리하고 실제 switcher 전환·해제 후 feed를 복구한다', async ({
+test('같은 Account의 selected Profile별 Mute를 분리하고 switcher 전환·해제 뒤 새 조회에서 feed를 복구한다', async ({
   context,
   page,
 }) => {
@@ -419,9 +419,11 @@ test('같은 Account의 selected Profile별 Mute를 분리하고 실제 switcher
   ).toHaveCount(0);
   await navigatePrimary(page, '홈');
   await expect(page).toHaveURL(/\/home$/u);
+  await page.reload();
   await expect(page.getByText(targetPostBody, { exact: true })).toBeVisible();
   await navigatePrimary(page, '로컬');
   await expect(page).toHaveURL(/\/local$/u);
+  await page.reload();
   await expect(page.getByText(targetPostBody, { exact: true })).toBeVisible();
   expect(
     await db.$count(

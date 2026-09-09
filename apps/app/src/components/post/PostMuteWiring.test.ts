@@ -110,7 +110,7 @@ mock.module('@/components/reaction/PostReactionSummary', {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/components/profile/ProfileMuteAction', {
   exports: {
-    ProfileMuteAction: (props: MuteProps) => {
+    ProfileMuteActionControl: (props: MuteProps) => {
       capturedMute.value = props;
       return createElement('ProfileMuteAction', props);
     },

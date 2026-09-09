@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
+import { ProfileMuteActionControl } from '@/components/profile/ProfileMuteAction';
 import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { usePostActionAuthentication } from './PostActionAuthentication';
@@ -108,7 +108,7 @@ export function PostActionSurface({
     <>
       <PostReactionSummary controller={reactionController} style={reactionSummaryStyle} />
       {mute ? (
-        <ProfileMuteAction
+        <ProfileMuteActionControl
           {...mute}
           displayName={target.profile.displayName}
           profileId={target.profile.id}

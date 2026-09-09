@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { graphql, useMutation, useRelayEnvironment } from 'react-relay';
 import { ConnectionHandler } from 'relay-runtime';
-import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
 import type { ProfileMuteControllerMuteMutation } from './__generated__/ProfileMuteControllerMuteMutation.graphql';
@@ -60,7 +59,6 @@ function responseError(errors: ReadonlyArray<{ message: string }> | null | undef
 export function useProfileMuteMutations() {
   const environment = useRelayEnvironment();
   const environmentGenerationRef = useRelayEnvironmentGeneration();
-  const shellChrome = useShellChrome();
   const { selectedProfileId } = useSession();
   const [commitMute] = useMutation<ProfileMuteControllerMuteMutation>(muteProfileMutation);
   const [commitUnmute] = useMutation<ProfileMuteControllerUnmuteMutation>(unmuteProfileMutation);
@@ -127,7 +125,6 @@ export function useProfileMuteMutations() {
                   finish(error ?? new Error('Profile mute response did not confirm the relation.'));
                   return;
                 }
-                shellChrome?.refreshProfileMuteTimelines?.();
                 finish();
               },
               onError: (error) => {
@@ -158,7 +155,6 @@ export function useProfileMuteMutations() {
                   );
                   return;
                 }
-                shellChrome?.refreshProfileMuteTimelines?.();
                 finish();
               },
               onError: (error) => {
@@ -176,14 +172,7 @@ export function useProfileMuteMutations() {
         }
       });
     },
-    [
-      commitMute,
-      commitUnmute,
-      environment,
-      environmentGenerationRef,
-      selectedProfileId,
-      shellChrome,
-    ],
+    [commitMute, commitUnmute, environment, environmentGenerationRef, selectedProfileId],
   );
 
   return { changeMuted };
