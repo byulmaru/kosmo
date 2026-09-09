@@ -64,7 +64,7 @@ export const CenterGeometryContract: Story = {
 };
 
 export const MobileGeometryContract: Story = {
-  args: { containerWidth: 390 },
+  args: { containerWidth: 390, profileId: 'profile-hero-no-bio' },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -79,7 +79,14 @@ export const MobileGeometryContract: Story = {
     expect(followRect.left - moreRect.right).toBeCloseTo(16, 0);
     expect(followRect.top).toBeCloseTo(moreRect.top, 0);
     expect(canvas.getByTestId('profile-hero-surface').getBoundingClientRect().width).toBe(390);
-    expect(canvas.getByLabelText('프로필 히어로 프로필 이미지')).toBeVisible();
+    expect(canvas.getByLabelText('소개 없는 히어로 프로필 이미지')).toBeVisible();
+    const handle = canvas.getByText('@no-bio');
+    const identity = handle.parentElement;
+    expect(identity).toBeInstanceOf(HTMLElement);
+    expect(getComputedStyle(identity as HTMLElement).flexBasis).toBe('auto');
+    const handleRect = handle.getBoundingClientRect();
+    const countsRect = canvas.getByRole('link', { name: /팔로잉/ }).getBoundingClientRect();
+    expect(countsRect.top - handleRect.bottom).toBeCloseTo(12, 0);
   },
 };
 
