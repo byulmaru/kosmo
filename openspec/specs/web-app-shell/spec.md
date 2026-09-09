@@ -1530,31 +1530,21 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 ### Requirement: Local timeline refresh and pagination
 
 **Authority / Provenance:** `docs/design/local-timeline.md`, `docs/design/accessibility.md`, `PROD-649` — The app SHALL 선택된 Local 탭을 다시 선택하면 현재 Local 목록의 최신 데이터를 다시 요청한다. 다음 page가
-있고 목록 near-end에 도달하면 같은 Local connection에서 최대 20개를 누적해야 하며(MUST), loading과 실패 중에도
+있고 목록 near-end에 도달하면 같은 Local connection에서 최대 20개를 누적해야 하며(MUST), 추가 page의 loading과 실패 중에도
 기존 목록과 scroll position을 유지해야 한다(MUST).
 
 #### Scenario: Refresh selected Local tab
 
 - **WHEN** 사용자가 이미 선택된 Local 탭을 다시 선택한다
-- **THEN** 시스템은 현재 selected Profile의 Local 첫 page를 다시 요청한다
+- **THEN** 시스템은 공용 RouteBoundary의 `fetchKey`를 갱신해 현재 selected Profile의 Local 첫 page를 Relay 기본 조회 경로로 다시 요청한다
+- **AND** 새로고침 전용 목록 보존·오류 toast·상단 spinner를 별도로 관리하지 않는다
 
-#### Scenario: Show Local refresh progress while retaining posts
+#### Scenario: Apply partial Local query responses
 
-- **WHEN** the user reselects the active Local tab with a previously loaded timeline
-- **THEN** the existing posts MUST remain visible while the request is pending
-- **AND** a loading indicator with an accessible refresh label MUST appear above the posts
-- **AND** the indicator MUST disappear when the request succeeds or fails
-- **AND** repeated tab activation while pending MUST NOT start a duplicate request
-
-#### Scenario: Retain Local timeline after refresh failure
-
-- **GIVEN** 현재 actor의 Local 목록을 성공적으로 표시했다
-- **WHEN** Local 첫 page 새로고침 요청이 transport 오류 또는 GraphQL `errors`가 포함된 응답으로 실패한다
-- **THEN** 시스템은 실패 payload를 Relay Store에 적용하지 않고 마지막 성공 목록과 scroll position을 유지한다
-- **AND** `로컬 타임라인을 불러오지 못했어요`와 `다시 시도` action을 오류 toast로 표시한다
-- **AND** toast는 표시 애니메이션 완료 후 3초 뒤 사라지고 목록은 계속 표시한다
-- **AND** toast의 action 또는 선택된 Local 탭 재선택으로 다시 요청할 수 있다
-- **AND** selected Profile·Relay actor가 바뀌면 이전 actor의 성공 목록을 재사용하지 않는다
+- **WHEN** Local 조회에 HTTP 200의 `data + errors` 응답이 반환된다
+- **THEN** 시스템은 Relay 기본 조회 경로에서 부분 데이터를 처리한다
+- **AND** Local 화면은 응답 전체 거절이나 이전 목록 복원을 별도로 수행하지 않는다
+- **AND** `localTimeline: null`이면 목록의 빈 상태를 표시할 수 있다
 
 #### Scenario: Append next Local page
 

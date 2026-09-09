@@ -97,7 +97,6 @@ type LocalState =
   | 'loading'
   | 'empty'
   | 'error'
-  | 'refresh-error'
   | 'refresh-partial-error'
   | 'refreshing'
   | 'filtered'
@@ -158,19 +157,10 @@ function localRelayForState(state: LocalState) {
                 data: { ...localPageData(), localTimeline: null },
                 errors: [{ message: 'Local timeline resolver failed' }],
               },
-              { data: localPageData(localConnection([refreshedPost])) },
-            ],
-          },
-        },
-      };
-    case 'refresh-error':
-      return {
-        operationResponses: {
-          LocalPageQuery: {
-            sequence: [
-              { data: localPageData() },
-              { error: '로컬 타임라인 새로고침 실패' },
-              { data: localPageData(localConnection([refreshedPost])) },
+              {
+                data: { ...localPageData(localConnection([refreshedPost])), me: null },
+                errors: [{ message: 'Account resolver failed' }],
+              },
             ],
           },
         },
@@ -230,13 +220,12 @@ const meta = {
     state: {
       control: 'select',
       description:
-        'refresh-error: 로컬 탭을 다시 선택하면 실패 후 재시도합니다. filtered: 뮤트·차단 대상을 서버에서 제외한 결과 예시이며 filtering 정책을 실행하지 않습니다.',
+        'refresh-partial-error: 로컬 탭 재선택 시 부분 응답을 적용하고, 다시 선택하면 성공 응답을 적용합니다. filtered: 뮤트·차단 대상을 서버에서 제외한 결과 예시이며 filtering 정책을 실행하지 않습니다.',
       options: [
         'default',
         'loading',
         'empty',
         'error',
-        'refresh-error',
         'refresh-partial-error',
         'refreshing',
         'filtered',
@@ -248,12 +237,7 @@ const meta = {
     },
   },
   component: LocalPlayground,
-  excludeStories: [
-    'InitialErrorRetry',
-    'RefreshErrorKeepsPosts',
-    'PaginationErrorRetry',
-    'queryRequestObserver',
-  ],
+  excludeStories: ['InitialErrorRetry', 'PaginationErrorRetry', 'queryRequestObserver'],
   parameters: {
     layout: 'fullscreen',
     router: { pathname: '/local' },
@@ -294,7 +278,7 @@ export const Refreshing: Story = {
     docs: {
       description: {
         story:
-          '로컬 탭을 다시 선택하면 기존 글 위에 2초 동안 로딩 표시가 나타난 뒤 최신 글로 갱신됩니다.',
+          '로컬 탭을 다시 선택하면 Relay 기본 조회 경로로 요청하고 2초 뒤 최신 글로 갱신됩니다.',
       },
     },
   },
@@ -313,24 +297,8 @@ export const PaginationFlow: Story = {
   },
 };
 
-export const RefreshError: Story = {
-  args: { state: 'refresh-error' },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          '로컬 탭을 다시 선택하면 새로고침이 실패합니다. 기존 게시글은 유지되고 오류 안내는 3초 뒤 사라집니다. 안내의 다시 시도 또는 로컬 탭으로 재시도할 수 있습니다.',
-      },
-    },
-  },
-};
-
 export const InitialErrorRetry: Story = {
   args: { state: 'error' },
-};
-
-export const RefreshErrorKeepsPosts: Story = {
-  args: { state: 'refresh-error' },
 };
 
 export const PaginationErrorRetry: Story = {

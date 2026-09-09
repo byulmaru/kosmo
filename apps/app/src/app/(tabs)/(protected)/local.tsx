@@ -1,15 +1,7 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Platform,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
-import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
-import { createOperationDescriptor, getRequest } from 'relay-runtime';
+import { useRef } from 'react';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -21,12 +13,10 @@ import {
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
-import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import type { PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
-import type { Subscription } from 'relay-runtime';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { LocalPageQuery } from './__generated__/LocalPageQuery.graphql';
 
@@ -50,70 +40,11 @@ const LocalQuery = graphql`
 `;
 
 export default function LocalScreen() {
-  const environment = useRelayEnvironment();
-  const [refreshing, setRefreshing] = useState(false);
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const refreshRequest = useRef<Subscription | null>(null);
-  const toastCleanup = useRef<(() => void) | null>(null);
-  const { showToast } = useToast();
-  const refresh = () => {
-    if (refreshRequest.current) {
-      return;
-    }
-    const operation = createOperationDescriptor(getRequest(LocalQuery), {});
-    if (environment.check(operation).status === 'missing') {
-      routeBoundaryRef.current?.refetch();
-      return;
-    }
-    toastCleanup.current?.();
-    toastCleanup.current = null;
-    const source = environment
-      .getNetwork()
-      .execute(operation.request.node.params, {}, { force: true });
-    environment
-      .executeWithSource({
-        operation,
-        source: source.map((response) => {
-          // Reject partial failures before Relay can overwrite the retained connection.
-          if ([response].flat().some((payload) => 'errors' in payload && payload.errors?.length)) {
-            throw new Error('Local timeline refresh failed.');
-          }
-          return response;
-        }),
-      })
-      .subscribe({
-        start: (subscription) => {
-          refreshRequest.current = subscription;
-          setRefreshing(true);
-        },
-        complete: () => {
-          refreshRequest.current = null;
-          setRefreshing(false);
-        },
-        error: () => {
-          refreshRequest.current = null;
-          setRefreshing(false);
-          toastCleanup.current = showToast('로컬 타임라인을 불러오지 못했어요', {
-            action: { label: '다시 시도', onPress: refresh },
-            tone: 'danger',
-          });
-        },
-      });
-  };
-
-  useEffect(() => {
-    const retain = environment.retain(createOperationDescriptor(getRequest(LocalQuery), {}));
-    return () => {
-      refreshRequest.current?.unsubscribe();
-      refreshRequest.current = null;
-      toastCleanup.current?.();
-      toastCleanup.current = null;
-      retain.dispose();
-    };
-  }, [environment]);
+  const refresh = () => routeBoundaryRef.current?.refetch();
 
   return (
-    <LocalFrame onReselect={refresh} refreshing={refreshing}>
+    <LocalFrame onReselect={refresh}>
       <RouteBoundary
         loading={<StateView loading title="로컬 타임라인을 불러오는 중입니다." />}
         ref={routeBoundaryRef}
@@ -125,12 +56,7 @@ export default function LocalScreen() {
   );
 }
 
-function LocalFrame({
-  children,
-  onReselect,
-  refreshing,
-}: PropsWithChildren<{ onReselect: () => void; refreshing: boolean }>) {
-  const theme = useTheme();
+function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: () => void }>) {
   const { width } = useWindowDimensions();
   const routeOwnsHeader = getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
@@ -146,16 +72,7 @@ function LocalFrame({
       >
         <TimelineTabs onReselect={onReselect} value="local" />
       </View>
-      <View style={styles.body}>
-        {refreshing ? (
-          <ActivityIndicator
-            accessibilityLabel="로컬 타임라인을 새로고침하는 중"
-            color={theme.foregroundSecondary}
-            style={styles.refreshIndicator}
-          />
-        ) : null}
-        {children}
-      </View>
+      <View style={styles.body}>{children}</View>
     </View>
   );
 }
@@ -209,7 +126,6 @@ const styles = StyleSheet.create({
   body: { flex: 1, minHeight: 0 },
   timeline: { flex: 1, minHeight: 0, width: '100%' },
   webTimelineTabs: { position: 'sticky' as never, zIndex: 10 } as ViewStyle,
-  refreshIndicator: { padding: spacing.lg },
   onboardingRoot: {
     alignItems: 'center',
     flexGrow: 1,
