@@ -8,7 +8,7 @@ locals {
   github_owner_id      = "29172280"
 
   app_identifier        = "moe.kos"
-  android_play_workflow = ".github/workflows/android-play-internal-distribution.yml"
+  android_play_workflow = ".github/workflows/native-store-distribution.yml"
 
   terraform_apply_environment = "terraform-apply"
   terraform_roles = toset([
