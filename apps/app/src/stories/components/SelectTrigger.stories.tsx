@@ -6,6 +6,9 @@ import { SelectTrigger } from '@/components/ui/SelectTrigger';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, colors, radius, space } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { KeyboardEvent } from 'react';
+
+const choices = ['전체 공개', '팔로워에게만 공개', '비공개'];
 
 type CatalogProps = {
   accessibilityLabel: string;
@@ -25,8 +28,16 @@ function SelectTriggerCatalog({ open, disabled, interactive = false, ...args }: 
   const controlRef = useRef<View>(null);
   const [currentOpen, setCurrentOpen] = useState(open);
   const [currentValue, setCurrentValue] = useState(args.value);
+  const [activeIndex, setActiveIndex] = useState(Math.max(0, choices.indexOf(args.value)));
   const expanded = currentOpen && !disabled;
-  const choices = ['전체 공개', '팔로워에게만 공개', '비공개'];
+
+  const optionId = (index: number) => `${controls}-option-${index}`;
+
+  const focusOption = (index: number) => {
+    if (Platform.OS === 'web') {
+      requestAnimationFrame(() => document.getElementById(optionId(index))?.focus());
+    }
+  };
 
   const focusTrigger = () => {
     if (Platform.OS === 'web') {
@@ -34,6 +45,35 @@ function SelectTriggerCatalog({ open, disabled, interactive = false, ...args }: 
         (controlRef.current as unknown as HTMLElement | null)?.focus();
       });
     }
+  };
+
+  const close = () => {
+    setCurrentOpen(false);
+    focusTrigger();
+  };
+
+  const select = (choice: string) => {
+    setCurrentValue(choice);
+    close();
+  };
+
+  const handleListboxKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (!interactive) {
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+      return;
+    }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+      return;
+    }
+    event.preventDefault();
+    const direction = event.key === 'ArrowDown' ? 1 : -1;
+    const nextIndex = (activeIndex + direction + choices.length) % choices.length;
+    setActiveIndex(nextIndex);
+    focusOption(nextIndex);
   };
 
   return (
@@ -44,7 +84,13 @@ function SelectTriggerCatalog({ open, disabled, interactive = false, ...args }: 
         value={currentValue}
         onPress={() => {
           if (interactive) {
-            setCurrentOpen((current) => !current);
+            const nextOpen = !currentOpen;
+            setCurrentOpen(nextOpen);
+            if (nextOpen) {
+              const nextIndex = Math.max(0, choices.indexOf(currentValue));
+              setActiveIndex(nextIndex);
+              focusOption(nextIndex);
+            }
           }
           args.onPress();
         }}
@@ -53,7 +99,10 @@ function SelectTriggerCatalog({ open, disabled, interactive = false, ...args }: 
       {expanded ? (
         <View
           nativeID={controls}
-          {...({ role: 'listbox' } as unknown as { role?: never })}
+          {...({
+            role: 'listbox',
+            ...(Platform.OS === 'web' ? { onKeyDown: handleListboxKeyDown } : {}),
+          } as unknown as { role?: never })}
           accessibilityLabel={args.accessibilityLabel}
           style={[
             elevation.floating,
@@ -80,14 +129,12 @@ function SelectTriggerCatalog({ open, disabled, interactive = false, ...args }: 
                   />
                 ) : null}
                 <ListboxOption
+                  active={activeIndex === index}
                   label={choice}
+                  nativeID={optionId(index)}
                   selected={currentValue === choice}
                   style={{ borderRadius: radius[8] }}
-                  onSelect={() => {
-                    setCurrentValue(choice);
-                    setCurrentOpen(false);
-                    focusTrigger();
-                  }}
+                  onSelect={() => select(choice)}
                 />
               </Fragment>
             ))

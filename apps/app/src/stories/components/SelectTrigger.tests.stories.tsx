@@ -1,4 +1,4 @@
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { colors, elevations } from '@/theme/tokens';
 import baseMeta, {
   InteractionContract as interactionContract,
@@ -46,12 +46,26 @@ export const PlaygroundInteractionContract: Story = {
         borderTopWidth: '1px',
       }),
     );
+    const publicOption = canvas.getByRole('option', { name: '전체 공개' });
     const followerOption = canvas.getByRole('option', { name: '팔로워에게만 공개' });
     expect(followerOption).toHaveStyle({ borderRadius: '8px' });
-    await userEvent.click(followerOption);
+    await waitFor(() => expect(publicOption).toHaveFocus());
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(followerOption).toHaveFocus());
+    await userEvent.keyboard('{Enter}');
 
-    expect(canvas.getByRole('button', { name: '공개 범위: 팔로워에게만 공개' })).toHaveFocus();
+    const selectedTrigger = canvas.getByRole('button', { name: '공개 범위: 팔로워에게만 공개' });
+    expect(selectedTrigger).toHaveFocus();
     expect(canvas.queryByRole('listbox')).not.toBeInTheDocument();
     expect(args.onPress).toHaveBeenCalledOnce();
+
+    await userEvent.click(selectedTrigger);
+    await waitFor(() =>
+      expect(canvas.getByRole('option', { name: '팔로워에게만 공개' })).toHaveFocus(),
+    );
+    await userEvent.keyboard('{Escape}');
+    expect(selectedTrigger).toHaveFocus();
+    expect(canvas.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(args.onPress).toHaveBeenCalledTimes(2);
   },
 };

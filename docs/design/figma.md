@@ -615,8 +615,9 @@ PROD-894는 다음 두 트리거를 Production 공용 UI와 Storybook으로 이�
   Native의 hint에 연결한다. hover와 focus는 실제 입력에서 유도하며 error+focus와 open+focus를 지원한다.
 - `open: true`는 `controls` ID를 필수로 요구하고 disabled와 조합할 수 없다. consumer가 실제 listbox의
   존재·값·선택·keyboard·dismiss·focus 복귀를 소유한다. Storybook Playground의 최소 consumer fixture는
-  트리거 클릭으로 세 옵션을 열고 내부 option은 radius 8과 `borderSubtle` 1px 구분선으로 구분하며, 선택한 값을
-  반영한 뒤 닫고 focus를 돌려준다. Production 트리거 자체는 내부 open 상태를 만들지 않는다.
+  트리거 클릭으로 세 옵션을 열고 내부 option은 radius 8과 `borderSubtle` 1px 구분선으로 구분한다. Web은 현재
+  옵션에 focus를 옮기고 Arrow key로 active option을 이동하며 Enter로 선택하거나 Escape로 닫은 뒤 trigger에 focus를
+  돌려준다. Production 트리거 자체는 내부 open 상태를 만들지 않는다.
 - ColorWell은 기존 IconButton의 48×48 target과 40×40 interaction surface를 재사용하며 32×32 swatch만
   선택 색상으로 채운다. 기본 색상은 `actionPrimaryBase`이고 disabled에서도 선택 색상을 보존한다.
   이름과 색상 값을 함께 읽고 일반 button action으로 동작하며 selected·pressed toggle 상태를 노출하지 않는다.
@@ -630,8 +631,8 @@ PROD-894는 다음 두 트리거를 Production 공용 UI와 Storybook으로 이�
   완료 증거가 아니며 실제 Settings runtime QA는 PROD-727에 남는다.
 - 2026-09-09 검증: 앱 Relay·TypeScript 검사, 변경 파일 ESLint·Prettier, Storybook static build와 관련
   Storybook 4개 파일의 11개 테스트가 통과했다. Tests는 Light/Dark의 ColorWell 크기·색상·focus·pressed→hover 복귀,
-  SelectTrigger의 error+focus·open+focus·ARIA 연결, disabled 콜백 차단과 두 Playground consumer의 선택·적용·취소·focus
-  복귀를 다룬다. 내장 Browser에서
+  SelectTrigger의 error+focus·open+focus·ARIA 연결, disabled 콜백 차단과 두 Playground consumer의 keyboard 선택·Escape
+  dismiss·적용·취소·focus 복귀를 다룬다. 내장 Browser에서
   대표 Light/Dark·긴 값과 수동 open Controls·Actions를 확인했다. 실제 Native runtime과 screen reader는
   미검증이며 자동 a11y에서 제외된 color-contrast를 포함한 전체 WCAG 적합성을 주장하지 않는다.
 
