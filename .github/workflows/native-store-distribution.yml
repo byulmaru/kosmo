@@ -3,6 +3,14 @@ name: Native Store Distribution
 on:
   workflow_dispatch:
     inputs:
+      ota_channel:
+        description: OTA channel for the seed binary
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
       release_status:
         description: Play release status for the Alpha release
         required: true
@@ -34,6 +42,7 @@ jobs:
       GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       KOSMO_ANDROID_AAB_PATH: ${{ github.workspace }}/apps/app/android/app/build/outputs/bundle/release/app-release.aab
+      KOSMO_OTA_CHANNEL: ${{ inputs.ota_channel || 'staging' }}
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
       SENTRY_RELEASE: ${{ github.sha }}
@@ -99,6 +108,21 @@ jobs:
             exit 1
           fi
           echo "KOSMO_ANDROID_VERSION_CODE=${version_code}" >> "${GITHUB_ENV}"
+
+      - name: Resolve Android OTA runtime version
+        working-directory: apps/app
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          runtime_info="$(pnpm exec expo-updates runtimeversion:resolve --platform android --workflow managed)"
+          runtime_version="$(printf '%s\n' "${runtime_info}" | node --input-type=module -e 'import fs from "node:fs"; const info = JSON.parse(fs.readFileSync(0, "utf8")); process.stdout.write(typeof info.runtimeVersion === "string" ? info.runtimeVersion : "");')"
+          if [[ ! "${runtime_version}" =~ ^[0-9a-f]{40,64}$ ]]; then
+            echo "::error::Resolved Android runtimeVersion must be a lowercase fingerprint hash."
+            exit 1
+          fi
+          echo "KOSMO_OTA_RUNTIME_VERSION=${runtime_version}" >> "${GITHUB_ENV}"
+          echo "Resolved Android OTA runtimeVersion: ${runtime_version}"
 
       - name: Validate Android Play inputs
         shell: bash
@@ -249,6 +273,8 @@ jobs:
             echo '- Package: moe.kos'
             echo "- Release status: \`${ANDROID_PLAY_RELEASE_STATUS}\`"
             echo "- Version code: \`${KOSMO_ANDROID_VERSION_CODE}\`"
+            echo "- OTA channel: \`${KOSMO_OTA_CHANNEL}\`"
+            echo "- OTA runtimeVersion: \`${KOSMO_OTA_RUNTIME_VERSION}\`"
             echo "- AAB SHA-256: \`${artifact_sha256}\`"
             echo "- AAB size: \`${artifact_size_bytes} bytes\`"
             echo "- Source: \`${GITHUB_SHA}\`"
@@ -279,6 +305,7 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       EXPO_NO_GIT_STATUS: '1'
+      KOSMO_OTA_CHANNEL: ${{ inputs.ota_channel || 'staging' }}
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
       SENTRY_RELEASE: ${{ github.sha }}
@@ -337,6 +364,21 @@ jobs:
             exit 1
           fi
           echo "IOS_BUILD_NUMBER=${ios_build_number}" >> "${GITHUB_ENV}"
+
+      - name: Resolve iOS OTA runtime version
+        working-directory: apps/app
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          runtime_info="$(pnpm exec expo-updates runtimeversion:resolve --platform ios --workflow managed)"
+          runtime_version="$(printf '%s\n' "${runtime_info}" | node --input-type=module -e 'import fs from "node:fs"; const info = JSON.parse(fs.readFileSync(0, "utf8")); process.stdout.write(typeof info.runtimeVersion === "string" ? info.runtimeVersion : "");')"
+          if [[ ! "${runtime_version}" =~ ^[0-9a-f]{40,64}$ ]]; then
+            echo "::error::Resolved iOS runtimeVersion must be a lowercase fingerprint hash."
+            exit 1
+          fi
+          echo "KOSMO_OTA_RUNTIME_VERSION=${runtime_version}" >> "${GITHUB_ENV}"
+          echo "Resolved iOS OTA runtimeVersion: ${runtime_version}"
 
       - name: Connect to Tailscale for Vault
         uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3

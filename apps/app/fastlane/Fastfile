@@ -86,6 +86,8 @@ platform :ios do
       file.puts
       file.puts("- Bundle: `#{BUNDLE_IDENTIFIER}`")
       file.puts("- Version: `#{app_version} (#{build_number})`")
+      file.puts("- OTA channel: `#{ENV.fetch('KOSMO_OTA_CHANNEL')}`")
+      file.puts("- OTA runtimeVersion: `#{ENV.fetch('KOSMO_OTA_RUNTIME_VERSION')}`")
       file.puts('- Processing: completed')
       file.puts('- TestFlight group: `Internal Testers`')
       file.puts("- Source: `#{ENV.fetch('GITHUB_SHA', 'local')}`")
@@ -105,6 +107,8 @@ platform :ios do
       'IOS_BUILD_NUMBER',
       'IOS_DISTRIBUTION_CERTIFICATE_BASE64',
       'IOS_DISTRIBUTION_CERTIFICATE_PASSWORD',
+      'KOSMO_OTA_CHANNEL',
+      'KOSMO_OTA_RUNTIME_VERSION',
       'RUNNER_TEMP',
       'GITHUB_RUN_ID',
       'GITHUB_RUN_ATTEMPT',

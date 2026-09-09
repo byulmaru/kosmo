@@ -58,7 +58,21 @@ const config: ExpoConfig = {
     favicon: './public/favicon-32x32.png',
     output: 'single',
   },
+  runtimeVersion: {
+    policy: 'fingerprint',
+  },
+  updates: {
+    checkAutomatically: 'ON_LOAD',
+    codeSigningCertificate: './certs/certificate.pem',
+    codeSigningMetadata: {
+      alg: 'rsa-v1_5-sha256',
+      keyid: '2026-09',
+    },
+    enabled: true,
+    url: 'https://expo-ota.byulmaru.co/releases/kosmo-native',
+  },
   plugins: [
+    './plugins/withKosmoOta.cjs',
     'expo-router',
     'expo-secure-store',
     [
