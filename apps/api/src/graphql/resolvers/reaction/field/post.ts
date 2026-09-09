@@ -1,4 +1,5 @@
 import { db, Instances, Profiles, Reactions } from '@kosmo/core/db';
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
@@ -75,7 +76,7 @@ const reactionProfileCursorWhere = (cursor: string | undefined, direction: 'afte
 };
 
 builder.objectFields(Post, (t) => ({
-  viewerReactions: t.withAuth({ usingProfile: true }).field({
+  viewerReactions: t.withAuth({ profileRole: AccountProfileRole.MEMBER }).field({
     type: [Reaction],
     unauthorizedResolver: () => [],
     resolve: (post, _, ctx) => viewerReactionLoader(ctx).load(post.id),

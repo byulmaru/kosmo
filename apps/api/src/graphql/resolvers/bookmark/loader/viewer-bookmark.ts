@@ -8,7 +8,7 @@ export const viewerBookmarkLoader = (ctx: UserContext) =>
     name: 'bookmark.viewerBookmark',
     nullable: true,
     load: async (postIds) => {
-      if (!ctx.session?.profileId) {
+      if (!ctx.session?.profile?.id) {
         return [];
       }
 
@@ -16,7 +16,7 @@ export const viewerBookmarkLoader = (ctx: UserContext) =>
         .select(getColumns(Bookmarks))
         .from(Bookmarks)
         .where(
-          and(eq(Bookmarks.profileId, ctx.session.profileId), inArray(Bookmarks.postId, postIds)),
+          and(eq(Bookmarks.profileId, ctx.session.profile.id), inArray(Bookmarks.postId, postIds)),
         );
     },
     key: (bookmark) => bookmark?.postId ?? null,

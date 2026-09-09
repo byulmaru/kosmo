@@ -1,5 +1,5 @@
 import { db, firstOrThrowWith, Media as MediaTable } from '@kosmo/core/db';
-import { MediaSource, MediaState } from '@kosmo/core/enums';
+import { AccountProfileRole, MediaSource, MediaState } from '@kosmo/core/enums';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { Media } from '../ref';
@@ -13,7 +13,7 @@ const uploadResponseSchema = z.object({
 const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 10_000;
 
 builder.mutationField('issueMediaUploadUrl', (t) =>
-  t.withAuth({ usingProfile: true }).field({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).field({
     type: builder.simpleObject('IssueMediaUploadUrlPayload', {
       fields: (field) => ({
         media: field.field({ type: Media }),
@@ -56,7 +56,7 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
           source: MediaSource.LOCAL,
           state: MediaState.UPLOADING,
           accountId: ctx.session.accountId,
-          profileId: ctx.session.profileId,
+          profileId: ctx.session.profile.id,
           storageReference: upload.data.id,
           uploadExpiresAt: expiresAt,
         })

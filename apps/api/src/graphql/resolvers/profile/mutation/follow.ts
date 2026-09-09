@@ -1,3 +1,4 @@
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { ConflictError } from '@kosmo/core/error';
 import { followProfile } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
@@ -18,7 +19,7 @@ const ProfileFollowResult = builder.unionType('ProfileFollowResult', {
 });
 
 builder.mutationField('followProfile', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('FollowProfilePayload', {
       fields: (field) => ({
         followeeProfile: field.field({ type: Profile }),
@@ -31,7 +32,7 @@ builder.mutationField('followProfile', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const result = await followProfile({
-        followerProfileId: ctx.session.profileId,
+        followerProfileId: ctx.session.profile.id,
         followeeProfileId: input.id.id,
       }).catch((error: unknown) => {
         if (error instanceof ConflictError) {

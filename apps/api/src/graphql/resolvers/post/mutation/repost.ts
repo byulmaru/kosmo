@@ -1,9 +1,10 @@
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { repostPost } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Post } from '../ref';
 
 builder.mutationField('repostPost', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('RepostPostPayload', {
       fields: (field) => ({
         repost: field.field({ type: Post }),
@@ -14,7 +15,7 @@ builder.mutationField('repostPost', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const result = await repostPost({
-        actorProfileId: ctx.session.profileId,
+        actorProfileId: ctx.session.profile.id,
         origin: 'LOCAL',
         sourcePostId: input.sourceId.id,
       });

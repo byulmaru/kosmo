@@ -1,4 +1,4 @@
-import { PostVisibility, ProfileFollowPolicy } from '@kosmo/core/enums';
+import { AccountProfileRole, PostVisibility, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { updateProfile } from '@kosmo/core/services';
 import { profileBioSchema, profileTagsInputSchema } from '@kosmo/core/validation';
@@ -7,7 +7,7 @@ import { Media } from '../../media/ref';
 import { Profile } from '../ref';
 
 builder.mutationField('updateProfile', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('UpdateProfilePayload', {
       fields: (field) => ({
         profile: field.field({ type: Profile }),
@@ -26,7 +26,7 @@ builder.mutationField('updateProfile', (t) =>
       try {
         const result = await updateProfile({
           accountId: ctx.session.accountId,
-          profileId: ctx.session.profileId,
+          profileId: ctx.session.profile.id,
           displayName: input.displayName ?? undefined,
           bio: input.bio,
           followPolicy: input.followPolicy ?? undefined,

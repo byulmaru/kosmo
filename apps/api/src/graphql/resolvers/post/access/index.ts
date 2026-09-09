@@ -16,7 +16,7 @@ export const postAccessWhere = ({
   profileMute: 'ignore' | 'exclude' | { excludeExcept: string };
 }) => {
   const accessWhere = and(postVisibilityAccessWhere({ ctx }), postRepostSourceAccessWhere({ ctx }));
-  const ownerProfileId = ctx.session?.profileId;
+  const ownerProfileId = ctx.session?.profile?.id;
   if (profileMute === 'ignore' || !ownerProfileId) {
     return accessWhere;
   }

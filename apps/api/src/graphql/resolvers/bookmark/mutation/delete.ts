@@ -1,4 +1,5 @@
 import { db } from '@kosmo/core/db';
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { deleteBookmark } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Post } from '@/graphql/resolvers/post';
@@ -10,7 +11,7 @@ type DeleteBookmarkPayload = {
 };
 
 builder.mutationField('deleteBookmark', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('DeleteBookmarkPayload', {
       fields: (field) => ({
         bookmarkId: field.globalID({
@@ -33,7 +34,7 @@ builder.mutationField('deleteBookmark', (t) =>
       const deleted = await deleteBookmark(
         {
           bookmarkId: input.id.id,
-          profileId: ctx.session.profileId,
+          profileId: ctx.session.profile.id,
         },
         db,
       );

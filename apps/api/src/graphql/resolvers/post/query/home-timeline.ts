@@ -1,4 +1,5 @@
 import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, exists, getColumns, gt, isNull, lt, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -11,7 +12,7 @@ type PostRow = typeof Posts.$inferSelect;
 const ReplyParents = alias(Posts, 'home_timeline_reply_parent');
 
 builder.queryField('homeTimeline', (t) =>
-  t.withAuth({ usingProfile: true }).connection(
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).connection(
     {
       type: Post,
       nullable: true,
@@ -23,7 +24,7 @@ builder.queryField('homeTimeline', (t) =>
             .from(ProfileFollows)
             .where(
               and(
-                eq(ProfileFollows.followerProfileId, ctx.session.profileId),
+                eq(ProfileFollows.followerProfileId, ctx.session.profile.id),
                 eq(ProfileFollows.followeeProfileId, Posts.profileId),
               ),
             ),
@@ -35,7 +36,7 @@ builder.queryField('homeTimeline', (t) =>
             .where(
               and(
                 eq(ReplyParents.id, Posts.replyParentId),
-                eq(ReplyParents.profileId, ctx.session.profileId),
+                eq(ReplyParents.profileId, ctx.session.profile.id),
               ),
             ),
         );
@@ -47,12 +48,12 @@ builder.queryField('homeTimeline', (t) =>
             .where(
               and(
                 eq(ReplyParents.id, Posts.replyParentId),
-                eq(ProfileFollows.followerProfileId, ctx.session.profileId),
+                eq(ProfileFollows.followerProfileId, ctx.session.profile.id),
               ),
             ),
         );
         const homeCandidateWhere = or(
-          eq(Posts.profileId, ctx.session.profileId),
+          eq(Posts.profileId, ctx.session.profile.id),
           and(isNull(Posts.replyParentId), followeeWhere),
           replyParentIsViewerPost,
           and(followeeWhere, replyParentAuthorIsFollowee),

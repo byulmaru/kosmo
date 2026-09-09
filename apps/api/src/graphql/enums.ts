@@ -1,7 +1,9 @@
 import * as Enums from '@kosmo/core/enums';
 import { builder } from './builder';
 
-const createEnumRef = (name: keyof typeof Enums) => {
+type EnumName = Exclude<keyof typeof Enums, 'AccountProfileRoleOrder'>;
+
+const createEnumRef = (name: EnumName) => {
   builder.enumType(Enums[name], {
     name,
   });

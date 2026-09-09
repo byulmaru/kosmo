@@ -10,7 +10,7 @@ export const viewerFollowRequestLoader = (ctx: UserContext) =>
     name: 'profileFollowRequest.viewerFollowRequest',
     nullable: true,
     load: async (ids) => {
-      if (!ctx.session?.profileId) {
+      if (!ctx.session?.profile?.id) {
         return [];
       }
 
@@ -19,7 +19,7 @@ export const viewerFollowRequestLoader = (ctx: UserContext) =>
         .from(ProfileFollowRequests)
         .where(
           and(
-            eq(ProfileFollowRequests.followerProfileId, ctx.session.profileId),
+            eq(ProfileFollowRequests.followerProfileId, ctx.session.profile.id),
             inArray(ProfileFollowRequests.followeeProfileId, ids),
           ),
         );

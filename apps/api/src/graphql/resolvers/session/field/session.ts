@@ -8,6 +8,6 @@ builder.objectFields(Session, (t) => ({
   selectedProfile: t.field({
     type: Profile,
     nullable: true,
-    resolve: (_, __, ctx) => ctx.session?.profileId ?? null,
+    resolve: (_, __, ctx) => ctx.session?.profile?.id ?? null,
   }),
 }));

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { db } from '@kosmo/core/db';
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { graphql } from 'graphql';
 import { builder } from '@/graphql/builder';
@@ -12,17 +13,26 @@ const sessionId = '00000000-0000-8000-8000-000000000002';
 test('selectProfile updates the request identity before the next mutation field', async (t) => {
   const { schema } = await import('@/graphql/schema');
   assert.ok(schema.getMutationType()?.getFields().selectProfile);
-  builder.mutationField('selectProfileObservedUsingProfile', (t) =>
-    t.withAuth({ usingProfile: true }).field({
+  builder.mutationField('selectProfileObservedProfileRole', (t) =>
+    t.withAuth({ profileRole: AccountProfileRole.MEMBER }).field({
       type: 'String',
-      resolve: (_source, _args, context) => context.session.profileId,
+      resolve: (_source, _args, context) => context.session.profile.role,
+    }),
+  );
+  builder.mutationField('selectProfileObservedOwnerRole', (t) =>
+    t.withAuth({ profileRole: AccountProfileRole.OWNER }).field({
+      type: 'String',
+      resolve: (_source, _args, context) => context.session.profile.role,
     }),
   );
   const testSchema = builder.toSchema();
 
   let transactionCount = 0;
   let queryMode: 'select' | 'update' = 'select';
-  const selectedProfile = { id: selectedProfileId };
+  const selectedProfile = {
+    profile: { id: selectedProfileId },
+    role: AccountProfileRole.MEMBER,
+  };
   const chain = {
     from: () => chain,
     innerJoin: () => chain,
@@ -51,7 +61,7 @@ test('selectProfile updates the request identity before the next mutation field'
     return callback(tx as never);
   });
   const context = {
-    session: { id: sessionId, accountId: 'account-id', profileId: null },
+    session: { id: sessionId, accountId: 'account-id', profile: null },
   } as unknown as UserContext;
 
   const result = await graphql({
@@ -61,7 +71,7 @@ test('selectProfile updates the request identity before the next mutation field'
         selectProfile(input: { id: "${encodeGlobalId('Profile', selectedProfileId)}" }) {
           profile { id }
         }
-        selectProfileObservedUsingProfile
+        selectProfileObservedProfileRole
       }
     `,
     contextValue: context,
@@ -70,11 +80,54 @@ test('selectProfile updates the request identity before the next mutation field'
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
   const data = result.data as {
     selectProfile?: { profile?: { id?: string } };
-    selectProfileObservedUsingProfile?: string;
+    selectProfileObservedProfileRole?: string;
   } | null;
   assert.equal(data?.selectProfile?.profile?.id, encodeGlobalId('Profile', selectedProfileId));
-  assert.equal(data?.selectProfileObservedUsingProfile, selectedProfileId);
+  assert.equal(data?.selectProfileObservedProfileRole, AccountProfileRole.MEMBER);
   assert.equal(transactionCount, 1);
   assert.ok(context.session);
-  assert.equal(context.session.profileId, selectedProfileId);
+  assert.deepEqual(context.session.profile, {
+    id: selectedProfileId,
+    role: AccountProfileRole.MEMBER,
+  });
+
+  const ownerResult = await graphql({
+    schema: testSchema,
+    source: 'mutation { selectProfileObservedOwnerRole }',
+    contextValue: context,
+  });
+
+  assert.equal(ownerResult.data, null);
+  assert.match(ownerResult.errors?.[0]?.message ?? '', /Not authorized/);
+
+  const ownerContext = {
+    ...context,
+    session: {
+      ...context.session,
+      profile: { id: selectedProfileId, role: AccountProfileRole.OWNER },
+    },
+  };
+  const ownerAsMemberResult = await graphql({
+    schema: testSchema,
+    source: 'mutation { selectProfileObservedProfileRole }',
+    contextValue: ownerContext,
+  });
+
+  assert.equal(ownerAsMemberResult.errors, undefined, JSON.stringify(ownerAsMemberResult.errors));
+  assert.equal(
+    ownerAsMemberResult.data?.selectProfileObservedProfileRole,
+    AccountProfileRole.OWNER,
+  );
+
+  const noProfileResult = await graphql({
+    schema: testSchema,
+    source: 'mutation { selectProfileObservedProfileRole }',
+    contextValue: {
+      ...context,
+      session: { ...context.session, profile: null },
+    },
+  });
+
+  assert.equal(noProfileResult.data, null);
+  assert.match(noProfileResult.errors?.[0]?.message ?? '', /Not authorized/);
 });

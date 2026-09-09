@@ -30,10 +30,10 @@ export const profileFollowAccessWhere = ({
     eq(followerProfile.followPolicy, ProfileFollowPolicy.OPEN),
     eq(followeeProfile.followPolicy, ProfileFollowPolicy.OPEN),
   )!;
-  const visibleWhere = ctx.session?.profileId
+  const visibleWhere = ctx.session?.profile?.id
     ? or(
-        eq(ProfileFollows.followerProfileId, ctx.session.profileId),
-        eq(ProfileFollows.followeeProfileId, ctx.session.profileId),
+        eq(ProfileFollows.followerProfileId, ctx.session.profile.id),
+        eq(ProfileFollows.followeeProfileId, ctx.session.profile.id),
         publicFollowWhere,
       )
     : publicFollowWhere;

@@ -1,4 +1,5 @@
 import { Bookmarks, db, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
@@ -9,11 +10,11 @@ import { Bookmark, BookmarkConnection } from '../ref';
 import type { BookmarkRow } from '../ref';
 
 builder.objectField(Profile, 'bookmarks', (t) =>
-  t.withAuth({ usingProfile: true }).connection(
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).connection(
     {
       type: Bookmark,
       resolve: (profile, args, ctx) => {
-        if (profile.id !== ctx.session.profileId) {
+        if (profile.id !== ctx.session.profile.id) {
           throw new PermissionDeniedError('Bookmark owner is required');
         }
 

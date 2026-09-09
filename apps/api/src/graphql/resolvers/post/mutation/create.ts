@@ -1,4 +1,4 @@
-import { PostVisibility } from '@kosmo/core/enums';
+import { AccountProfileRole, PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
@@ -16,7 +16,7 @@ const CreatePostMediaInput = builder.inputType('CreatePostMediaInput', {
 });
 
 builder.mutationField('createPost', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('CreatePostPayload', {
       fields: (field) => ({
         post: field.field({ type: Post }),
@@ -79,7 +79,7 @@ builder.mutationField('createPost', (t) =>
           mediaId: mediaId.id,
         })),
         origin: 'LOCAL',
-        profileId: ctx.session.profileId,
+        profileId: ctx.session.profile.id,
         replyParentId: input.replyParentId?.id,
         visibility: input.visibility,
       });

@@ -772,7 +772,7 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(await db.$count(Posts), 0);
   });
 
-  test('usingProfile context는 사용할 수 없는 actor를 거부하고 Instance 종류를 제한하지 않는다', async () => {
+  test('profileRole context는 사용할 수 없는 actor를 거부하고 Instance 종류를 제한하지 않는다', async () => {
     const parentAuthor = await createProfile('actor-check-parent');
     const parent = await createContentPost(parentAuthor.id);
     const remoteInstance = await createInstance(InstanceKind.ACTIVITYPUB, InstanceState.ACTIVE);

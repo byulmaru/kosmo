@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { graphql, isInputObjectType, isObjectType } from 'graphql';
@@ -71,7 +72,14 @@ test('validates createPost input before running the resolver', async () => {
         }
       `,
       variableValues: { input },
-      contextValue: { session: { profileId: '00000000-0000-8000-8000-000000000001' } },
+      contextValue: {
+        session: {
+          profile: {
+            id: '00000000-0000-8000-8000-000000000001',
+            role: AccountProfileRole.MEMBER,
+          },
+        },
+      },
     });
 
     assert.equal(result.data == null, true);

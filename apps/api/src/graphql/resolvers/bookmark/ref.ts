@@ -6,14 +6,14 @@ import { createObjectRef } from '@/graphql/utils';
 export type BookmarkRow = typeof Bookmarks.$inferSelect;
 
 export const Bookmark = createObjectRef<BookmarkRow>('Bookmark', (ids, ctx) => {
-  if (!ctx.session?.profileId) {
+  if (!ctx.session?.profile?.id) {
     return Promise.resolve([]);
   }
 
   return db
     .select(getColumns(Bookmarks))
     .from(Bookmarks)
-    .where(and(inArray(Bookmarks.id, ids), eq(Bookmarks.profileId, ctx.session.profileId)));
+    .where(and(inArray(Bookmarks.id, ids), eq(Bookmarks.profileId, ctx.session.profile.id)));
 });
 
 Bookmark.implement({

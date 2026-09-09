@@ -1,3 +1,4 @@
+import { AccountProfileRole } from '@kosmo/core/enums';
 import {
   approveProfileFollowRequest,
   cancelProfileFollowRequest,
@@ -7,7 +8,7 @@ import { builder } from '@/graphql/builder';
 import { Profile, ProfileFollow, ProfileFollowRequest } from '../ref';
 
 builder.mutationField('approveProfileFollowRequest', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('ApproveProfileFollowRequestPayload', {
       fields: (field) => ({
         followeeProfile: field.field({ type: Profile }),
@@ -26,14 +27,14 @@ builder.mutationField('approveProfileFollowRequest', (t) =>
     },
     resolve: (_, { input }, ctx) =>
       approveProfileFollowRequest({
-        actorProfileId: ctx.session.profileId,
+        actorProfileId: ctx.session.profile.id,
         profileFollowRequestId: input.id.id,
       }),
   }),
 );
 
 builder.mutationField('rejectProfileFollowRequest', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('RejectProfileFollowRequestPayload', {
       fields: (field) => ({
         followeeProfile: field.field({ type: Profile }),
@@ -50,14 +51,14 @@ builder.mutationField('rejectProfileFollowRequest', (t) =>
     },
     resolve: (_, { input }, ctx) =>
       rejectProfileFollowRequest({
-        actorProfileId: ctx.session.profileId,
+        actorProfileId: ctx.session.profile.id,
         profileFollowRequestId: input.id.id,
       }),
   }),
 );
 
 builder.mutationField('cancelProfileFollowRequest', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('CancelProfileFollowRequestPayload', {
       fields: (field) => ({
         followerProfile: field.field({ type: Profile }),
@@ -74,7 +75,7 @@ builder.mutationField('cancelProfileFollowRequest', (t) =>
     },
     resolve: (_, { input }, ctx) =>
       cancelProfileFollowRequest({
-        actorProfileId: ctx.session.profileId,
+        actorProfileId: ctx.session.profile.id,
         profileFollowRequestId: input.id.id,
       }),
   }),

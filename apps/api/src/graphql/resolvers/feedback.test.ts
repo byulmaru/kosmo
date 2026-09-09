@@ -52,7 +52,7 @@ test('선택 Profile이 없는 login session도 feedback을 제출할 수 있다
   t.mock.method(globalThis, 'fetch', fetch);
 
   const result = await graphql({
-    contextValue: { session: { accountId, id: 'session-1', profileId: null } },
+    contextValue: { session: { accountId, id: 'session-1', profile: null } },
     schema,
     source: mutation,
     variableValues: {
@@ -81,7 +81,7 @@ test('anonymous와 invalid body는 Slack 전에 거부한다', async (t) => {
     variableValues: { input: { body: 'body', kind: 'POSITIVE' } },
   });
   const empty = await graphql({
-    contextValue: { session: { accountId, id: 'session-1', profileId: null } },
+    contextValue: { session: { accountId, id: 'session-1', profile: null } },
     schema,
     source: mutation,
     variableValues: { input: { body: '   ', kind: 'POSITIVE' } },
