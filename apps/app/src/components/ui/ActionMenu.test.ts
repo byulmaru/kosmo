@@ -217,6 +217,7 @@ test('Web ActionMenu stays mounted through exit motion before unmounting', async
   const selected: string[] = [];
   const props = {
     accessibilityLabel: '메뉴',
+    webMinWidth: 160,
     items: [{ key: 'open-modal', label: '확인 열기', onSelect: () => selected.push('selected') }],
     renderTrigger: ({ onPress }: { onPress: () => void }) =>
       createElement(PressableHost, { onPress, testID: 'trigger' }),
@@ -237,9 +238,20 @@ test('Web ActionMenu stays mounted through exit motion before unmounting', async
   assert.equal(exitingMenu?.props['aria-hidden'], true);
   assert.equal(exitingMenu?.props.accessibilityElementsHidden, true);
 
+  const nextProps = {
+    ...props,
+    items: [{ ...props.items[0]!, label: '더 길어진 다음 메뉴 항목' }],
+  };
+  await act(async () => renderer?.update(createElement(actionMenuModule!.ActionMenu, nextProps)));
+  assert.equal(renderer?.root.findByType(TextHost).props.children, '확인 열기');
+  assert.equal(flattenStyle(exitingMenu?.props.style).minWidth, 160);
+
   exitMounted = false;
   await act(async () => renderer?.update(createElement(actionMenuModule!.ActionMenu, props)));
   assert.equal(renderer?.root.findAllByProps({ role: 'menu' }).length, 0);
+  await act(async () => renderer?.update(createElement(actionMenuModule!.ActionMenu, nextProps)));
+  await act(async () => renderer?.root.findByProps({ testID: 'trigger' }).props.onPress());
+  assert.equal(renderer?.root.findByType(TextHost).props.children, '더 길어진 다음 메뉴 항목');
   await act(async () => renderer?.unmount());
   platformOS = 'ios';
 });
@@ -266,4 +278,76 @@ test('danger menu items use a readable semantic foreground in both themes', asyn
     assert.ok(contrastRatio(theme.feedbackDangerOnSubtle, theme.backgroundElevated) >= 4.5);
   }
   await act(async () => renderer?.unmount());
+});
+
+test('Web ActionMenu preserves focus when its parent refreshes equivalent items', async () => {
+  assert.ok(actionMenuModule);
+  platformOS = 'web';
+  let onKeyDown: ((event: { key: string; preventDefault: () => void }) => void) | undefined;
+  let focused = -1;
+  const menuItems = [0, 1].map((index) => ({
+    focus: () => {
+      focused = index;
+    },
+  }));
+  const menuNode = { querySelectorAll: () => menuItems };
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { addEventListener() {}, removeEventListener() {} },
+  });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: {
+      addEventListener(type: string, listener: typeof onKeyDown) {
+        if (type === 'keydown') {
+          onKeyDown = listener;
+        }
+      },
+      removeEventListener() {},
+    },
+  });
+  const props = {
+    accessibilityLabel: '메뉴',
+    items: [
+      { key: 'settings', label: '설정', onSelect() {} },
+      { key: 'logout', label: '로그아웃', onSelect() {} },
+    ],
+    renderTrigger: ({ onPress }: { onPress: () => void }) =>
+      createElement(PressableHost, { onPress, testID: 'trigger' }),
+  };
+  let renderer: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(createElement(actionMenuModule!.ActionMenu, props), {
+      createNodeMock: (element) =>
+        (element.props as { role?: string }).role === 'menu' ? menuNode : null,
+    });
+  });
+  await act(async () => renderer.root.findByProps({ testID: 'trigger' }).props.onPress());
+  assert.equal(focused, 0);
+  menuItems[1]!.focus();
+  assert.equal(focused, 1);
+  await act(async () =>
+    renderer.update(
+      createElement(actionMenuModule!.ActionMenu, {
+        ...props,
+        items: props.items.map((item) => ({ ...item })),
+      }),
+    ),
+  );
+  assert.equal(focused, 1, 'second menu item should retain focus');
+  const nextProps = {
+    ...props,
+    items: props.items.map((item) => ({ ...item, label: `${item.label} 갱신` })),
+  };
+  await act(async () => renderer.update(createElement(actionMenuModule!.ActionMenu, nextProps)));
+  assert.equal(focused, 1);
+  assert.ok(onKeyDown);
+  exitMounted = true;
+  await act(async () => onKeyDown!({ key: 'Escape', preventDefault() {} }));
+  assert.equal(renderer!.root.findByProps({ role: 'menu' }).props['aria-hidden'], true);
+  assert.deepEqual(
+    renderer!.root.findAllByType(TextHost).map((node) => node.props.children),
+    ['설정 갱신', '로그아웃 갱신'],
+  );
+  await act(async () => renderer.unmount());
 });

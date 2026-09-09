@@ -44,7 +44,7 @@ type Props = {
 export function PostActionControl({
   accessibilityLabel,
   activeColor,
-  active = false,
+  active,
   alignToEnd = false,
   alignToStart = false,
   baseColor,
@@ -75,9 +75,11 @@ export function PostActionControl({
     busy: isPending,
     disabled: blocked,
     ...(popupRole
-      ? { expanded: menuExpanded, selected: active }
+      ? { expanded: menuExpanded, ...(active === undefined ? {} : { selected: active }) }
       : expanded === undefined
-        ? { selected: active }
+        ? active === undefined
+          ? {}
+          : { selected: active }
         : { expanded }),
   };
   const formattedCount = formatPostActionCount(count);

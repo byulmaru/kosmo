@@ -380,6 +380,9 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 
 - **WHEN** production surface에서 사용자가 More를 활성화한다
 - **THEN** surface는 `링크 복사`를 첫 항목으로 가진 접근 가능한 팝업을 연다
+- **AND** Web More menu의 최소폭은 160px이며 Repost 등 다른 menu의 기본 최소폭 128px은 유지한다
+- **AND** Web menu가 닫히는 동안에는 닫기 직전 항목 표시를 유지하고 다음 open에서 최신 항목을 표시한다
+- **AND** Web 선택 callback은 사용자 입력 시점에 즉시 실행한다
 - **AND** Web에서는 menu card 오른쪽이 trigger 오른쪽보다 5px 바깥에 있고 첫 item 오른쪽은 trigger 오른쪽과 맞아 menu가 왼쪽으로 펼쳐진다
 - **AND** 첫 item의 확장 target은 trigger pointer 지점을 덮고 menu는 viewport 안으로 보정되며, Repost의 기존 시작 정렬과 Native bottom action sheet는 유지된다
 

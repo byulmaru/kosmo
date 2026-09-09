@@ -38,13 +38,23 @@ const postDeletionActionFragment = graphql`
 
 type Props = {
   items?: readonly ActionMenuItem[];
+  pending?: boolean;
+  onTriggerReady?: (focus: () => void) => void;
+  sheetIconSize?: 20 | 24;
   onDeleted?: () => void;
   post: PostDeletionAction_post$key;
 };
 
 const failureMessage = '게시글을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.';
 
-export function PostDeletionAction({ items = [], onDeleted, post: postKey }: Props) {
+export function PostDeletionAction({
+  items = [],
+  pending = false,
+  onTriggerReady,
+  sheetIconSize,
+  onDeleted,
+  post: postKey,
+}: Props) {
   const theme = useTheme();
   const elevation = useElevation();
   const { selectedProfileId } = useSession();
@@ -264,11 +274,14 @@ export function PostDeletionAction({ items = [], onDeleted, post: postKey }: Pro
   return (
     <>
       <ActionMenu
+        webMinWidth={160}
         accessibilityLabel="더 보기 메뉴"
-        disabled={requesting || isDeleting}
+        disabled={pending || requesting || isDeleting}
+        sheetIconSize={sheetIconSize}
         items={menuItems}
         renderTrigger={({ expanded, focusTrigger, onPress, ref }) => {
           restoreFocusRef.current = focusTrigger;
+          onTriggerReady?.(focusTrigger);
           return (
             <PostActionControl
               accessibilityLabel="더 보기"
@@ -278,7 +291,7 @@ export function PostDeletionAction({ items = [], onDeleted, post: postKey }: Pro
               menuExpanded={expanded}
               onPress={onPress}
               popupRole="menu"
-              processing={requesting || isDeleting ? 'pending' : 'default'}
+              processing={pending || requesting || isDeleting ? 'pending' : 'default'}
               testID="more"
             />
           );

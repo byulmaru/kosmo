@@ -39,6 +39,9 @@ export type PostActionBarProps = {
   execution?: PostActionExecution;
   more?: MoreActionConfig;
   moreItems?: readonly ActionMenuItem[];
+  morePending?: boolean;
+  onMoreTriggerReady?: (focus: () => void) => void;
+  moreSheetIconSize?: 20 | 24;
   onDeleted?: () => void;
   onBookmarkError?: (failure: BookmarkActionFailure) => void;
   onRepostError?: (failure: RepostActionFailure) => void;
@@ -62,6 +65,9 @@ export function PostActionBar({
   execution = { kind: 'enabled' },
   more,
   moreItems,
+  morePending,
+  onMoreTriggerReady,
+  moreSheetIconSize,
   onDeleted,
   onBookmarkError,
   onRepostError,
@@ -158,7 +164,14 @@ export function PostActionBar({
               testID="more"
             />
           ) : data?.deletion ? (
-            <PostDeletionAction items={moreItems} onDeleted={onDeleted} post={data.deletion} />
+            <PostDeletionAction
+              items={moreItems}
+              pending={morePending}
+              onTriggerReady={onMoreTriggerReady}
+              sheetIconSize={moreSheetIconSize}
+              onDeleted={onDeleted}
+              post={data.deletion}
+            />
           ) : null}
         </View>
       ) : null}

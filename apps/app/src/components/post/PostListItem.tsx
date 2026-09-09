@@ -1,5 +1,5 @@
 import { Link, useRouter } from 'expo-router';
-import { MessageCircle } from 'lucide-react-native';
+import { MessageCircle, Pin } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
@@ -92,10 +92,12 @@ const PostListItemFragment = graphql`
 `;
 
 export function PostListItem({
+  pinned = false,
   post: postKey,
   showDivider = true,
   showReplyAttribution = true,
 }: {
+  pinned?: boolean;
   post: PostListItem_post$key;
   showDivider?: boolean;
   showReplyAttribution?: boolean;
@@ -137,6 +139,24 @@ export function PostListItem({
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
   ];
+  const pinnedAttribution = pinned ? (
+    <View style={styles.pinnedAttribution}>
+      <PostAttributionRow
+        icon={
+          <View
+            aria-hidden
+            accessibilityElementsHidden
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+          >
+            <Pin color={theme.textSecondary} size={16} />
+          </View>
+        }
+      >
+        <Text style={[styles.attributionLabel, { color: theme.textSecondary }]}>고정됨</Text>
+      </PostAttributionRow>
+    </View>
+  ) : null;
   const replyAttribution =
     showReplyAttribution && post.replyParent ? (
       <PostAttributionRow
@@ -174,6 +194,7 @@ export function PostListItem({
     }
     return renderWithReplySurface(
       <View role="article" style={standardCardStyle}>
+        {pinnedAttribution}
         {replyAttribution}
         <PostListRow
           actionBarStyle={styles.actionBarSlot}
@@ -194,6 +215,7 @@ export function PostListItem({
   if (!post.content) {
     return renderWithReplySurface(
       <View role="article" style={compactCardStyle}>
+        {pinnedAttribution}
         <PostAttributionRow
           icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
         >
@@ -219,6 +241,7 @@ export function PostListItem({
 
   return renderWithReplySurface(
     <View style={compactCardStyle}>
+      {pinnedAttribution}
       {replyAttribution}
       <View style={styles.quoteRow}>
         <Link asChild href={profileHref}>
@@ -392,6 +415,7 @@ const styles = StyleSheet.create({
   },
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
   sourcePresentation: { flex: 1, minWidth: 0 },
+  pinnedAttribution: { paddingTop: spacing.xs },
   attributionRow: {
     alignItems: 'center',
     flexDirection: 'row',

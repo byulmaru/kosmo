@@ -52,6 +52,7 @@ type Props = {
   accessibilityLabel: string;
   disabled?: boolean;
   items: readonly ActionMenuItem[];
+  sheetIconSize?: 20 | 24;
   webMinWidth?: number;
   onOpenChange?: (open: boolean) => void;
   renderTrigger: (props: ActionMenuTriggerRenderProps) => ReactNode;
@@ -89,6 +90,7 @@ export function ActionMenu({
   items,
   onOpenChange,
   renderTrigger,
+  sheetIconSize = 20,
   webMinWidth = defaultWebMenuMinWidth,
   webPlacement,
   webHorizontalPlacement = 'start',
@@ -97,12 +99,13 @@ export function ActionMenu({
   const theme = useTheme();
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
-  const controlRef = useRef<View>(null);
   const menuRef = useRef<View>(null);
+  const itemsRef = useRef(items);
   const pendingSelectionRef = useRef<(() => void) | null>(null);
   const triggerRef = useRef<View>(null);
   const [hoveredWebItemKey, setHoveredWebItemKey] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [closingItems, setClosingItems] = useState(items);
   const previousOpenRef = useRef(open);
   const [webPosition, setWebPosition] = useState({ left: 0, top: 0 });
   const presentation = useContext(ActionMenuPresentationContext);
@@ -167,12 +170,17 @@ export function ActionMenu({
     onOpenChange?.(open);
   }, [onOpenChange, open]);
 
+  useLayoutEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
   const focusTrigger = useCallback(() => {
     triggerRef.current?.focus();
   }, []);
   const dismiss = useCallback(
     (restoreFocus = true) => {
       setHoveredWebItemKey(null);
+      setClosingItems(itemsRef.current);
       setOpen(false);
       if (restoreFocus) {
         focusTrigger();
@@ -183,6 +191,9 @@ export function ActionMenu({
   const toggle = useCallback(() => {
     if (!disabled) {
       setHoveredWebItemKey(null);
+      if (open) {
+        setClosingItems(items);
+      }
       setOpen((value) => {
         if (!value) {
           positionWebMenu();
@@ -190,7 +201,7 @@ export function ActionMenu({
         return !value;
       });
     }
-  }, [disabled, positionWebMenu]);
+  }, [disabled, items, open, positionWebMenu]);
   const select = useCallback(
     (item: ActionMenuItem) => {
       if (web) {
@@ -290,13 +301,13 @@ export function ActionMenu({
       (nextElement ?? trigger).focus();
     };
     const onPointerDown = (event: PointerEvent) => {
-      const control = controlRef.current as unknown as HTMLElement | null;
+      const control = triggerRef.current as unknown as HTMLElement | null;
       if (!control?.contains(event.target as Node) && !menu?.contains(event.target as Node)) {
         dismiss(false);
       }
     };
     const onFocusIn = (event: FocusEvent) => {
-      const control = controlRef.current as unknown as HTMLElement | null;
+      const control = triggerRef.current as unknown as HTMLElement | null;
       if (!control?.contains(event.target as Node) && !menu?.contains(event.target as Node)) {
         dismiss(false);
       }
@@ -348,7 +359,7 @@ export function ActionMenu({
 
   if (web) {
     return (
-      <View ref={controlRef} style={styles.control}>
+      <View style={styles.control}>
         {renderTrigger({
           disabled,
           expanded: open,
@@ -386,7 +397,7 @@ export function ActionMenu({
                   },
                 ]}
               >
-                {items.map((item, index) => {
+                {(open ? items : closingItems).map((item, index) => {
                   const Icon = item.icon;
                   const itemColor =
                     item.tone === 'danger' ? theme.feedbackDangerOnSubtle : theme.foregroundPrimary;
@@ -513,7 +524,7 @@ export function ActionMenu({
                     onPress={() => select(item)}
                     style={[styles.item, styles.nativeItem]}
                   >
-                    {Icon ? <Icon color={itemColor} size={iconSizes[20]} strokeWidth={2} /> : null}
+                    {Icon ? <Icon color={itemColor} size={sheetIconSize} strokeWidth={2} /> : null}
                     <Text
                       style={[
                         styles.label,

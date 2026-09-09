@@ -26,6 +26,10 @@ const config: StorybookConfig = {
     resolve: {
       ...viteConfig.resolve,
       alias: [
+        {
+          find: /^\.\/PostActionBar$/,
+          replacement: fileURLToPath(new URL('./mocks/profilePinActionBar.tsx', import.meta.url)),
+        },
         { find: /^react-native$/, replacement: require.resolve('react-native-web') },
         {
           find: /^react-native-svg$/,
