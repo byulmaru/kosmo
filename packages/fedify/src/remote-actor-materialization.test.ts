@@ -399,6 +399,26 @@ describe('remote actor materialization', () => {
     );
   });
 
+  test('rejects an inbound actor URI mismatch before persisting the looked-up actor', async () => {
+    const expectedActorUri = new URL(`https://${remoteDomain}/users/alice`);
+    const returnedActor = createActor({
+      id: new URL(`https://${remoteDomain}/users/mallory`),
+    });
+    const lookupObject = mock.fn(async () => returnedActor);
+    mockWebFinger({ subject: `acct:alice@${remoteDomain}` });
+
+    await assert.rejects(
+      findOrMaterializeRemoteProfileActorByUri({
+        actorUri: expectedActorUri,
+        context: { lookupObject },
+      }),
+      RemoteActorMaterializationError,
+    );
+
+    assert.equal(await db.$count(ActivityPubActors), 0);
+    assert.equal(await db.$count(Profiles), 0);
+  });
+
   test('reactivates an unknown actor instance only after materialization succeeds', async () => {
     const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
     const actor = createActor();

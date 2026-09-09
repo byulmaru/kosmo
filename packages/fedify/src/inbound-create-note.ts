@@ -8,18 +8,29 @@ import {
 } from '@kosmo/core/activitypub-note-content/server';
 import { db, first, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, PostVisibility, ProfileState } from '@kosmo/core/enums';
-import { NotFoundError, ValidationError } from '@kosmo/core/error';
+import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
+import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
-import type { InboxContext } from '@fedify/fedify';
+import {
+  findOrMaterializeRemoteProfileActorByUri,
+  findUsableStoredRemoteProfileActorByUri,
+  RemoteActorMaterializationError,
+} from './remote-actor-materialization';
+import type { Context, InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
 import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 
 type StoredRemoteProfileActor = NonNullable<
   Awaited<ReturnType<typeof findStoredRemoteProfileActorByUri>>
+>;
+
+type RemoteNoteMaterializationContext = Pick<
+  Context<void>,
+  'canonicalOrigin' | 'lookupObject' | 'parseUri'
 >;
 
 const noNetworkDocumentLoader = async (): Promise<never> => {
@@ -81,8 +92,17 @@ export const projectRemoteNoteMedia = async (note: Note) => {
   return candidates;
 };
 
+const projectRemoteNote = async (note: Note) => ({
+  document: projectRemoteNoteContent({
+    content: note.content?.toString() ?? null,
+    mediaType: note.mediaType,
+    summary: note.summary?.toString() ?? null,
+  }),
+  media: await projectRemoteNoteMedia(note),
+});
+
 const resolveReplyParentId = async (
-  context: InboxContext<void>,
+  context: RemoteNoteMaterializationContext,
   note: Note,
 ): Promise<string | undefined> => {
   const replyTargetHref = uniqueHref(note.replyTargetIds);
@@ -96,6 +116,188 @@ const resolveReplyParentId = async (
   }
 
   return findPostByActivityPubUri(context, replyTarget);
+};
+
+type HydratedRemoteNoteMaterializationResult =
+  | { postId: string; status: 'created' | 'duplicate' }
+  | {
+      reason: 'invalid_note' | 'unsupported_note' | 'unusable_author';
+      status: 'rejected';
+    };
+
+type RemoteNotePostMaterializationResult =
+  | {
+      postId?: string;
+      replyParentFallback: boolean;
+      status: 'created' | 'duplicate';
+    }
+  | { reason: 'invalid_note'; status: 'rejected' };
+
+type RemoteNotePostMaterialized = Extract<
+  RemoteNotePostMaterializationResult,
+  { status: 'created' | 'duplicate' }
+>;
+
+const resolveNoteVisibility = (
+  note: Note,
+  followersUri?: string | null,
+): PostVisibility | undefined =>
+  note.toIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
+    ? PostVisibility.PUBLIC
+    : note.ccIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
+      ? PostVisibility.UNLISTED
+      : followersUri && [...note.toIds, ...note.ccIds].some((uri) => uri.href === followersUri)
+        ? PostVisibility.FOLLOWERS
+        : undefined;
+
+const createRemoteNotePost = async ({
+  context,
+  document,
+  media,
+  note,
+  objectUri,
+  profileId,
+  receivedAt,
+  visibility,
+}: {
+  context: RemoteNoteMaterializationContext;
+  document: ReturnType<typeof projectRemoteNoteContent>;
+  media: Awaited<ReturnType<typeof projectRemoteNoteMedia>>;
+  note: Note;
+  objectUri: string;
+  profileId: string;
+  receivedAt: Temporal.Instant;
+  visibility: PostVisibility;
+}): Promise<RemoteNotePostMaterializationResult> => {
+  const replyParentId = await resolveReplyParentId(context, note);
+  const input = {
+    document,
+    media,
+    objectUri,
+    origin: 'ACTIVITYPUB',
+    profileId,
+    publishedAt: note.published,
+    receivedAt,
+    visibility,
+  } satisfies Parameters<typeof createPost>[0];
+  const toResult = (result: Awaited<ReturnType<typeof createPost>>): RemoteNotePostMaterialized => {
+    if (result.created) {
+      return { postId: result.post.id, replyParentFallback: false, status: 'created' };
+    }
+    return { replyParentFallback: false, status: 'duplicate' };
+  };
+
+  try {
+    const result = await createPost(replyParentId ? { ...input, replyParentId } : input);
+    return toResult(result);
+  } catch (error) {
+    if (error instanceof ValidationError && error.field === 'media') {
+      return { reason: 'invalid_note', status: 'rejected' };
+    }
+    if (
+      !replyParentId ||
+      !(
+        error instanceof NotFoundError ||
+        (error instanceof ValidationError && error.field === 'replyParentId')
+      )
+    ) {
+      throw error;
+    }
+
+    const result = await createPost(input);
+    const fallbackResult = await toResult(result);
+    return { ...fallbackResult, replyParentFallback: true };
+  }
+};
+
+export const materializeHydratedRemoteNote = async ({
+  context,
+  note,
+  objectUri,
+  receivedAt,
+}: {
+  context: RemoteNoteMaterializationContext;
+  note: Note;
+  objectUri: URL;
+  receivedAt: Temporal.Instant;
+}): Promise<HydratedRemoteNoteMaterializationResult> => {
+  if (!isHttpUri(objectUri) || note.id?.href !== objectUri.href) {
+    return { reason: 'invalid_note', status: 'rejected' };
+  }
+
+  const attributionHref = uniqueHref(note.attributionIds);
+  if (!attributionHref) {
+    return { reason: 'invalid_note', status: 'rejected' };
+  }
+  const attributionUri = new URL(attributionHref);
+  if (!isHttpUri(attributionUri)) {
+    return { reason: 'invalid_note', status: 'rejected' };
+  }
+
+  const visibility = resolveNoteVisibility(note);
+  if (!visibility) {
+    return { reason: 'unsupported_note', status: 'rejected' };
+  }
+
+  let projection;
+  try {
+    projection = await projectRemoteNote(note);
+  } catch (error) {
+    if (error instanceof RemoteNoteContentLengthExceededError || error instanceof TypeError) {
+      return { reason: 'invalid_note', status: 'rejected' };
+    }
+    throw error;
+  }
+
+  if (
+    postContentDocumentToText(projection.document).length === 0 &&
+    projection.media.length === 0
+  ) {
+    return { reason: 'unsupported_note', status: 'rejected' };
+  }
+
+  let storedActor;
+  try {
+    storedActor =
+      (await findUsableStoredRemoteProfileActorByUri(attributionUri)) ??
+      (await findOrMaterializeRemoteProfileActorByUri({
+        actorUri: attributionUri,
+        context,
+        now: receivedAt,
+      }));
+  } catch (error) {
+    if (
+      error instanceof RemoteActorMaterializationError ||
+      error instanceof ConflictError ||
+      error instanceof NotFoundError
+    ) {
+      return { reason: 'unusable_author', status: 'rejected' };
+    }
+    throw error;
+  }
+
+  const result = await createRemoteNotePost({
+    context,
+    document: projection.document,
+    media: projection.media,
+    note,
+    objectUri: objectUri.href,
+    profileId: storedActor.profile.id,
+    receivedAt,
+    visibility,
+  });
+  if (result.status === 'rejected') {
+    return result;
+  }
+  if (result.status === 'created') {
+    return { postId: result.postId!, status: result.status };
+  }
+
+  const postId = await findPostByActivityPubUri(context, objectUri);
+  if (!postId) {
+    throw new Error('Remote Note Post not found after duplicate materialization');
+  }
+  return { postId, status: result.status };
 };
 
 const hasEstablishedFollower = async ({
@@ -169,14 +371,7 @@ export const handleInboundCreateNote = async ({
     return;
   }
 
-  const visibility = note.toIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
-    ? PostVisibility.PUBLIC
-    : note.ccIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
-      ? PostVisibility.UNLISTED
-      : storedActor.actor.followersUri &&
-          [...note.toIds, ...note.ccIds].some((uri) => uri.href === storedActor.actor.followersUri)
-        ? PostVisibility.FOLLOWERS
-        : undefined;
+  const visibility = resolveNoteVisibility(note, storedActor.actor.followersUri);
   if (!visibility) {
     observeInbound({
       outcome: 'rejected',
@@ -209,17 +404,9 @@ export const handleInboundCreateNote = async ({
     return;
   }
 
-  const replyParentId = await resolveReplyParentId(context, note);
-
-  let document;
-  let media;
+  let projection;
   try {
-    document = projectRemoteNoteContent({
-      content: note.content?.toString() ?? null,
-      mediaType: note.mediaType,
-      summary: note.summary?.toString() ?? null,
-    });
-    media = await projectRemoteNoteMedia(note);
+    projection = await projectRemoteNote(note);
   } catch (error) {
     if (error instanceof RemoteNoteContentLengthExceededError) {
       observeInbound({
@@ -248,17 +435,6 @@ export const handleInboundCreateNote = async ({
     throw error;
   }
 
-  const input = {
-    document,
-    media,
-    objectUri,
-    origin: 'ACTIVITYPUB',
-    profileId: storedActor.profile.id,
-    publishedAt: note.published,
-    receivedAt,
-    visibility,
-  } satisfies Parameters<typeof createPost>[0];
-
   const observeDuplicateCreate = () =>
     observeInbound({
       outcome: 'noop',
@@ -270,35 +446,29 @@ export const handleInboundCreateNote = async ({
       reasonCode: 'duplicate_create_noop',
     });
 
-  try {
-    const result = await createPost(replyParentId ? { ...input, replyParentId } : input);
-    if (!result.created) {
-      observeDuplicateCreate();
-      return;
-    }
-  } catch (error) {
-    if (error instanceof ValidationError && error.field === 'media') {
-      observeInbound({
-        outcome: 'rejected',
-        activityType: 'Create',
-        actorOrigin: actorUri,
-        handler: 'create',
-        objectOrigin: objectUri,
-        phase: 'projection',
-        reasonCode: 'note_media_validation_rejected',
-      });
-      return;
-    }
-    if (
-      !replyParentId ||
-      !(
-        error instanceof NotFoundError ||
-        (error instanceof ValidationError && error.field === 'replyParentId')
-      )
-    ) {
-      throw error;
-    }
-
+  const result = await createRemoteNotePost({
+    context,
+    document: projection.document,
+    media: projection.media,
+    note,
+    objectUri,
+    profileId: storedActor.profile.id,
+    receivedAt,
+    visibility,
+  });
+  if (result.status === 'rejected') {
+    observeInbound({
+      outcome: 'rejected',
+      activityType: 'Create',
+      actorOrigin: actorUri,
+      handler: 'create',
+      objectOrigin: objectUri,
+      phase: 'projection',
+      reasonCode: 'note_media_validation_rejected',
+    });
+    return;
+  }
+  if (result.replyParentFallback) {
     observeInbound({
       outcome: 'noop',
       activityType: 'Create',
@@ -308,10 +478,8 @@ export const handleInboundCreateNote = async ({
       phase: 'projection',
       reasonCode: 'reply_parent_missing_fallback',
     });
-    const result = await createPost(input);
-    if (!result.created) {
-      observeDuplicateCreate();
-      return;
-    }
+  }
+  if (result.status === 'duplicate') {
+    observeDuplicateCreate();
   }
 };
