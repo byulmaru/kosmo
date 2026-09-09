@@ -1,29 +1,40 @@
 import { Slot, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
-import { ChevronLeftIcon } from 'lucide-react-native';
+import { ArrowLeft, ChevronLeftIcon } from 'lucide-react-native';
 import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { FollowButton } from '@/components/profile/FollowButton';
+import { ProfileConnectionListState } from '@/components/profile/ProfileConnectionList';
 import { ProfileHero } from '@/components/profile/ProfileHero';
-import { normalizeProfileHandle } from '@/components/profile/route';
+import { getProfileConnectionKind, normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
 import { useSession } from '@/session/SessionProvider';
+import { Tab, TabList } from '@/components/ui/Tabs';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { iconSizes, spacing } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
+import type { ProfileConnectionKind } from '@/components/profile/route';
+import type { TabOption } from '@/components/ui/Tabs';
 import type { ProfileLayoutQuery as ProfileLayoutQueryType } from './__generated__/ProfileLayoutQuery.graphql';
+
+const connectionOptions: readonly TabOption<ProfileConnectionKind>[] = [
+  { label: '팔로워', value: 'followers' },
+  { label: '팔로잉', value: 'following' },
+];
 
 const ProfileLayoutQuery = graphql`
   query ProfileLayoutQuery($handle: String!) {
     profileByHandle(handle: $handle) {
       id
       displayName
+      handle
+      relativeHandle
       instance {
         kind
       }
@@ -45,12 +56,14 @@ export default function ProfileLayout() {
   }>();
   const handle = normalizeProfileHandle(profileHandle);
   const pathname = usePathname();
+  const connectionKind = getProfileConnectionKind(pathname);
   const scrollKey = pathname;
   const pathSegments = pathname.split('/').filter(Boolean);
   const isProfileHome =
     pathSegments.length === 1 &&
     (pathSegments[0]?.length ?? 0) > 1 &&
     pathSegments[0]?.startsWith('@');
+  const fallbackRelativeHandle = `@${handle}`;
   const router = useRouter();
   const theme = useTheme();
   const backButton = (
@@ -67,33 +80,58 @@ export default function ProfileLayout() {
 
   return (
     <RouteBoundary
-      key={handle}
       error={
-        isProfileHome
+        connectionKind
           ? (retry) => (
               <ProfileRouteContainer scrollKey={scrollKey}>
-                <PageHeader leading={backButton} title="" />
-                <StateView
-                  actionLabel="다시 시도"
-                  alert
-                  description="잠시 후 다시 시도해주세요."
-                  onAction={retry}
-                  title="프로필을 불러오지 못했어요"
+                <ProfileConnectionChrome
+                  displayName={fallbackRelativeHandle}
+                  kind={connectionKind}
+                  relativeHandle={fallbackRelativeHandle}
                 />
+                <ProfileConnectionListState kind={connectionKind} onRetry={retry} state="error" />
               </ProfileRouteContainer>
             )
-          : undefined
+          : isProfileHome
+            ? (retry) => (
+                <ProfileRouteContainer scrollKey={scrollKey}>
+                  <PageHeader leading={backButton} title="" />
+                  <StateView
+                    actionLabel="다시 시도"
+                    alert
+                    description="잠시 후 다시 시도해주세요."
+                    onAction={retry}
+                    title="프로필을 불러오지 못했어요"
+                  />
+                </ProfileRouteContainer>
+              )
+            : undefined
       }
+      key={`${handle}:${connectionKind ?? 'profile'}`}
       loading={
         <ProfileRouteContainer scrollKey={scrollKey}>
-          {isProfileHome ? <PageHeader leading={backButton} title="" /> : null}
-          <ProfileHero loading />
+          {connectionKind ? (
+            <>
+              <ProfileConnectionChrome
+                displayName={fallbackRelativeHandle}
+                kind={connectionKind}
+                relativeHandle={fallbackRelativeHandle}
+              />
+              <ProfileConnectionListState kind={connectionKind} state="loading" />
+            </>
+          ) : (
+            <>
+              {isProfileHome ? <PageHeader leading={backButton} title="" /> : null}
+              <ProfileHero loading />
+            </>
+          )}
         </ProfileRouteContainer>
       }
       title="프로필을 불러오지 못했어요"
     >
       <ProfileLayoutContent
         backButton={backButton}
+        connectionKind={connectionKind}
         handle={handle}
         scrollKey={scrollKey}
         showPageHeader={isProfileHome}
@@ -104,11 +142,13 @@ export default function ProfileLayout() {
 
 function ProfileLayoutContent({
   backButton,
+  connectionKind,
   handle,
   scrollKey,
   showPageHeader,
 }: {
   backButton: ReactNode;
+  connectionKind: ProfileConnectionKind | null;
   handle: string;
   scrollKey: string;
   showPageHeader: boolean;
@@ -136,6 +176,19 @@ function ProfileLayoutContent({
       </ProfileRouteContainer>
     ) : (
       missingState
+    );
+  }
+
+  if (connectionKind) {
+    return (
+      <ProfileRouteContainer scrollKey={scrollKey}>
+        <ProfileConnectionChrome
+          displayName={profile.displayName || profile.handle}
+          kind={connectionKind}
+          relativeHandle={profile.relativeHandle}
+        />
+        <Slot />
+      </ProfileRouteContainer>
     );
   }
 
@@ -168,6 +221,52 @@ function ProfileLayoutContent({
       />
       <Slot />
     </ProfileRouteContainer>
+  );
+}
+
+function ProfileConnectionChrome({
+  displayName,
+  kind,
+  relativeHandle,
+}: {
+  displayName: string;
+  kind: ProfileConnectionKind;
+  relativeHandle: string;
+}) {
+  const router = useRouter();
+  const theme = useTheme();
+  const profileHref = `/${relativeHandle}` as Href;
+
+  return (
+    <>
+      <PageHeader
+        leading={
+          <IconButton
+            accessibilityLabel="프로필로 돌아가기"
+            onPress={() => router.replace(profileHref)}
+            targetSize={44}
+            visualSize={44}
+          >
+            <ArrowLeft color={theme.foregroundPrimary} size={iconSizes[24]} strokeWidth={2} />
+          </IconButton>
+        }
+        title={`${displayName}님의 ${kind === 'followers' ? '팔로워' : '팔로잉'}`}
+      />
+      <TabList
+        accessibilityLabel="프로필 관계"
+        onValueChange={(nextKind) => {
+          if (nextKind !== kind) {
+            router.replace(`${profileHref}/${nextKind}` as Href);
+          }
+        }}
+        value={kind}
+        variant="underline"
+      >
+        {connectionOptions.map((option) => (
+          <Tab key={option.value} option={option} />
+        ))}
+      </TabList>
+    </>
   );
 }
 
