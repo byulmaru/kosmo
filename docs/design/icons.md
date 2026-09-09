@@ -120,6 +120,23 @@ back에 chevron을 사용하지 않는다.
 
 `RotateCcwClock`은 현재 고정한 `lucide-react-native@1.23.0`에서 동일 path의 `History` export를 사용한다. `FaceSlightlySmiling`은 이 버전에 export가 없고 `Smile`과 path도 다르므로 자동 대체하지 않는다. 코드 이관 전에 Lucide 버전 갱신 또는 승인된 source를 별도로 결정한다.
 
+## Profile 차단·해제 — 2026-09-09 결정
+
+- 사용자 검토에서 차단과 차단 해제 모두 Lucide `Ban` / code export `Ban`으로 확정했다.
+  원 안의 사선은 동일하게 유지하고 `차단`·`차단 해제` label로 행동을 구분한다. `ShieldOff`는 사용하지 않는다.
+- source는 `lucide-react-native@1.23.0`의 원본 `Ban`, ISC License, viewBox `24×24`, stroke `2`다.
+  메뉴의 현재 visual은 공용 ActionMenu 기준 Web `18`, Native `20`이며 별도 optical correction이나 filled variant를 추가하지 않는다.
+- 메뉴의 차단 항목은 danger, 해제 항목은 default tone을 사용한다. 해제 **확인창**의 Danger 결정과 메뉴 tone은 구분한다.
+  glyph는 label을 보조하며 별도 toggle 상태를 표현하지 않는다. 아이콘 없는 기존 해제 버튼에 새 아이콘을 추가하지 않는다.
+- Current: `ProfileMoreMenu` presentation의 Storybook 차단·해제 항목에 같은 `Ban`을 적용한다.
+  메뉴는 제공된 항목을 표시하고 선택 이벤트만 전달한다. 실제 action은 PROD-823의 요청 구현과 함께 연결한다.
+- Confirmed migration: 실제 action 소비처와 Figma `Icon/Lucide/Ban` 및 메뉴 instance 반영은 미완료다.
+  이 semantic 결정만으로 Figma 이관·Native runtime 검증 완료로 표시하지 않는다.
+- 비교 근거: [Bluesky](https://github.com/bluesky-social/social-app/blob/fde9ac6d0c74cf1dc5b98eede12236cedbf4d125/src/view/com/profile/ProfileMenu.tsx#L489-L510)는 PersonX/PersonCheck,
+  [Mastodon](https://github.com/mastodon/mastodon/blob/26fce0f2f9e36ea0e0c2b03b7f57d1b1ea58ed1c/app/javascript/mastodon/components/account_header/menu.tsx#L446-L458)과
+  [Misskey](https://github.com/misskey-dev/misskey/blob/b3ce198f4c55ace4daeba4cb1858b3a85bc9529b/packages/frontend/src/utility/get-user-menu.ts#L409-L412)는 두 행동에 같은 금지 glyph를 사용한다.
+  조사한 공식 소스의 snapshot이며 배포 버전 확인은 별도다.
+
 ## Review queue
 
 아래 optical 항목은 전체 redesign의 후속 범위이며 자동 치환하지 않는다. semantic mapping을 다시 열지 않고 실제 화면의 component geometry, Light/Dark와 platform target을 함께 비교해 확정한다.

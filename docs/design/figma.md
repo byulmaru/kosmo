@@ -274,6 +274,11 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   Compact [`7371:19453`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7371-19453),
   Full [`7380:20771`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-20771) Target은 당시
   identity-free 조립의 물리 참고 자료로 유지한다.
+- PROD-861 Storybook의 `blocking` 표현은 2026-09-08 사용자 승인에 따라 Legacy
+  [`Profile / Blocked 348:3910`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=348-3910)을 사용한다.
+  ProfileHero·수치·탭을 유지하고 FollowButton 자리에 차단 해제, 게시물 영역에 안내를 둔다.
+  2026-09-09 임시 mutation callback 제거에 따라 해당 화면 fixture는 제거했으며 위 내용은 시각 참고 계약이다.
+  현재 메뉴·목록 presentation과 후속 실제 action 구현의 경계는 [Profile Mute·Block 계약](profile-mute-block.md#prod-861-storybook-표현의-범위)을 따른다.
 - 같은 section의 Mobile [`blocking 7580:14180`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7580-14180)은
   기존 Android Dark Profile route chrome 안의 identity-free `StateView`와 Secondary `차단 해제` 조립을 물리적 참고
   자료로 유지한다. Full Web [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)도
@@ -570,9 +575,8 @@ documentation·state specimen을 두 번째 행에 둔다.
   `Show supporting content=false`가 기본값이며, 필요할 때만 Message 아래·Actions 위에 체크박스·경고·세부 설명
   같은 흐름형 content를 넣는다. Slot content의 상태와 Confirm 활성화 조건은 consumer가 소유한다. action은
   `취소 → 확인` 순서의 `120×40` 두 개를 `space/8` 간격으로 우측 정렬한다. 이 `120×40`은 visual/layout
-  bounds다. Web은 같은 bounds를 실제 interaction target으로 사용한다. Native consumer는 visual geometry를
-  유지하면서 투명 wrapper 또는 `hitSlop`으로 실제 target을 iOS 최소 `44×44pt`, Android 최소 `48×48dp`로
-  확장한다. 서로 다른 action target의 overlap, parent clipping과 VoiceOver·TalkBack focus boundary는
+  bounds다. Web은 같은 bounds를 실제 interaction target으로 사용한다. 2026-09-09 구현 결정으로 Native는 공용 Button 자체를
+  iOS 최소 `44pt`, Android 최소 `48dp` 높이로 표시한다. 별도 wrapper·hitSlop은 제거하며 Figma의 40px visual은 미수정이다. 서로 다른 action target의 overlap, parent clipping과 VoiceOver·TalkBack focus boundary는
   Product runtime에서 검증한다. Pending은 Cancel을 Disabled, Confirm을 같은 tone의 Loading으로 바꾼다.
   제목·scrim·닫기·centered max-width 420 surface는 canonical
   [`ModalSheet`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1882-926)가 소유한다.

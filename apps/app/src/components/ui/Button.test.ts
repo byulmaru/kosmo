@@ -24,11 +24,13 @@ const theme = {
   stateFocusRing: 'focus-ring',
 };
 
+const platform = { OS: 'web' };
+
 mockModule('react-native', {
   ActivityIndicator: 'ActivityIndicator',
-  Platform: { OS: 'web' },
+  Platform: platform,
   Pressable: 'Pressable',
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: { create: <T>(styles: T) => styles, flatten: flattenStyle },
   Text: 'Text',
   View: 'View',
 });
@@ -57,6 +59,7 @@ type ButtonComponent = (props: {
   disabled?: boolean;
   loading?: boolean;
   size?: 'compact' | 'default';
+  style?: { minHeight: number } | (() => { minHeight: number });
   tone?: 'danger' | 'primary' | 'secondary';
 }) => TestElement;
 
@@ -77,9 +80,10 @@ function render(
   tone: 'danger' | 'primary' | 'secondary' = 'primary',
   disabled = false,
   size: 'compact' | 'default' = 'default',
+  style?: { minHeight: number } | (() => { minHeight: number }),
 ) {
   assert.ok(Button);
-  const button = Button({ children: tone, disabled, size, tone });
+  const button = Button({ children: tone, disabled, size, style, tone });
   const rootStyle = button.props.style as (state: {
     focused?: boolean;
     hovered?: boolean;
@@ -146,4 +150,25 @@ test('Button exposes the Figma default and compact sizes', () => {
   assert.equal(compactButton.resting.minWidth, 72);
   assert.equal(compactButton.resting.paddingHorizontal, 12);
   assert.equal(compactButton.resting.paddingVertical, 4);
+});
+
+test('Native Button sizes provide the platform touch height without caller hitSlop', () => {
+  try {
+    for (const [os, height] of [
+      ['ios', 44],
+      ['android', 48],
+    ] as const) {
+      platform.OS = os;
+      for (const size of ['compact', 'default'] as const) {
+        assert.equal(render('secondary', false, size).resting.minHeight, height);
+        assert.equal(render('secondary', false, size, { minHeight: 36 }).resting.minHeight, height);
+        assert.equal(
+          render('secondary', false, size, () => ({ minHeight: 64 })).resting.minHeight,
+          64,
+        );
+      }
+    }
+  } finally {
+    platform.OS = 'web';
+  }
 });

@@ -59,6 +59,8 @@ export function Button({
         const webState = state as { focused?: boolean; hovered?: boolean };
         const focused = Platform.OS === 'web' && Boolean(webState.focused);
         const hovered = Platform.OS === 'web' && Boolean(webState.hovered);
+        const customStyle = typeof style === 'function' ? style(state) : style;
+        const minHeight = StyleSheet.flatten(customStyle)?.minHeight;
         return [
           styles.root,
           size === 'compact' ? styles.compact : styles.default,
@@ -97,7 +99,15 @@ export function Button({
                 } as unknown as ViewStyle)
               : undefined),
           },
-          typeof style === 'function' ? style(state) : style,
+          customStyle,
+          Platform.OS !== 'web'
+            ? {
+                minHeight: Math.max(
+                  Platform.OS === 'ios' ? 44 : 48,
+                  typeof minHeight === 'number' ? minHeight : 0,
+                ),
+              }
+            : undefined,
         ];
       }}
       {...props}

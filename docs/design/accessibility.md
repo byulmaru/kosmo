@@ -155,3 +155,12 @@ PR과 이슈에는 실행한 자동화, 실제 관찰한 platform·viewport·입
 - [Guidance on Applying WCAG 2 to Non-Web ICT (WCAG2ICT)](https://www.w3.org/TR/wcag2ict-22/)
 - [Apple Human Interface Guidelines: Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
 - [Android Developers: Make apps more accessible](https://developer.android.com/guide/topics/ui/accessibility/views/apps-views)
+
+## 공용 텍스트 Button · 2026-09-09
+
+- 공용 `Button`은 Web에서 compact 32px·default 40px 최소 높이를 유지한다. Native는 두 size 모두
+  iOS 44pt·Android 48dp 최소 높이의 버튼 자체를 제공한다. 투명 wrapper와 개별 hitSlop 대신 이 크기를 사용한다.
+- FollowButton·뮤트/차단 해제·ConfirmationContent는 공용 높이를 사용하고 필요한 폭만 제한한다.
+  좁은 해제 버튼은 문구가 줄바꿈되지 않게 수평 padding을 제거한다. 공용 Button은 consumer의 더 작은 숫자 minHeight를 플랫폼 최소값으로 올리고 더 큰 값은 유지한다.
+- 이는 기존 32/40 visual box를 유지하던 Native 보정에서 변경한 구현 결정이다. Figma 원본은 변경하지 않았으며
+  Native의 실제 parent clipping·VoiceOver·TalkBack 검증은 별도다.

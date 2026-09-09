@@ -1,4 +1,4 @@
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { layoutRecipes, space, textStyles } from '@/theme/tokens';
 import { Button } from './Button';
@@ -30,21 +30,15 @@ export function ConfirmationContent({
   tone = 'primary',
 }: Props) {
   const theme = useTheme();
-  const verticalTargetInset = Platform.OS === 'ios' ? 2 : Platform.OS === 'android' ? 4 : 0;
-  const targetHeight = Platform.OS === 'web' ? 40 : Platform.OS === 'ios' ? 44 : 48;
-  const hitSlop = verticalTargetInset
-    ? { bottom: verticalTargetInset, left: 0, right: 0, top: verticalTargetInset }
-    : undefined;
 
   return (
     <View style={styles.root}>
       <Text style={[styles.message, { color: theme.foregroundSecondary }]}>{message}</Text>
       {children}
-      <View style={[styles.actions, { minHeight: targetHeight }]}>
+      <View style={styles.actions}>
         <Button
           controlRef={cancelRef}
           disabled={pending}
-          hitSlop={hitSlop}
           onPress={() => onCancel()}
           style={styles.action}
           tone="secondary"
@@ -54,7 +48,6 @@ export function ConfirmationContent({
         <Button
           aria-busy={pending || undefined}
           disabled={pending ? undefined : confirmDisabled}
-          hitSlop={hitSlop}
           loading={pending}
           onPress={() => onConfirm()}
           style={styles.action}
@@ -74,5 +67,5 @@ const styles = StyleSheet.create({
     ...layoutRecipes.dialogActions,
     alignItems: 'center',
   },
-  action: { height: 40, width: 120 },
+  action: { width: 120 },
 });

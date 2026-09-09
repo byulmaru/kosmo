@@ -13,12 +13,17 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   취소 시 요청하지 않으며 확인 후 성공한 경우에만 상태를 바꾸고 `{표시 이름} 님이 뮤트 해제되었어요`
   Toast를 표시한다. 이 확인 흐름은 2026-09-06 사용자 검토에서 확정했으며 기존 Figma loaded 관리 목록은
   해제 확인창 자체의 증거가 아니다.
-- 프로필에서는 더보기 메뉴에 프로필 링크 복사와 뮤트를 합성한다. 승인된 Figma Target은 모든
+- 프로필에서는 더보기 메뉴에 프로필 링크 복사·뮤트·차단을 이 순서로 합성한다. 승인된 Figma Target은 모든
   레이아웃에서 FollowButton 왼쪽 `16px` 간격의 `40×40` 원형 테두리 버튼이다. 메뉴 오른쪽 위를 trigger
   오른쪽 위에 맞춰 겹치게 두고 왼쪽·아래로 펼친다. viewport 경계에서는 위치·방향을 보정한다.
   Native 입력 target은 iOS 최소 `44pt`, Android 최소 `48dp`를 확보한다. 공용 컴포넌트에 반영했으며
   Web focus 복귀와 메뉴 배치를 Storybook에서 검증한다. Native 실기기 검증은 별도다.
-  게시글은 기존 더보기 메뉴의 링크 복사와 작성자 뮤트 합성 및 메뉴 배치를 유지한다.
+  게시글은 기존 더보기 메뉴의 링크 복사·작성자 뮤트·작성자 차단을 이 순서로 합성하고 메뉴 배치를 유지한다.
+  차단 항목의 패턴 합성은 2026-09-08 사용자 검토에 따른다.
+  Profile/Post 합성 메뉴는 기존 차단·뮤트 메뉴와 같은 ActionMenu·ProfileMoreButton 및 Web 최소 폭 160px을 사용한다.
+  차단 상태에서도 Hero의 기존 액션 영역(차단 해제 버튼 옆)에 더보기 진입점을 유지한다. header로 옮기지 않는다.
+  Hero의 팔로우·차단 해제 버튼은 동일한 size를 사용한다: medium `96×40`, compact `72×32`.
+  같은 ProfileMoreMenu에 링크 복사와 차단 해제를 표시하며, 메뉴와 Hero 버튼 모두 기존 확인 처리를 사용한다.
 - Mute가 성공하면 기존 공용 Toast에 `{표시 이름} 님이 뮤트되었어요`를 표시하고 Mute 관리 action을
   `뮤트 해제`로 전환한다. `ProfileHero` 상단 Action SLOT의 관계 action은 바꾸지 않으며, 성공 전에 상태나
   Toast를 낙관적으로 확정하지 않는다.
@@ -40,6 +45,16 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   않는다.
 - Block은 관계·상호작용 정리 결과를 설명하는 별도 확인을 사용한다. Mute 확인 문구나 완료 상태를 재사용해
   두 행동의 결과를 같게 표현하지 않는다.
+- 차단 해제도 차단과 같은 공용 확인창을 거친다. `이 프로필의 차단을 해제할까요?` 제목,
+  `차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.` 설명, `취소`와 Danger `차단 해제` action을
+  제공한다. 확인 전에는 요청하지 않고, 취소·닫기·Escape는 기존 차단 상태를 유지한다.
+  이 확인 단계는 2026-09-05 PROD-861 구현 계획 검토에서 승인한 presentation 계약이며, Figma에 별도 해제
+  confirmation consumer가 있다는 의미는 아니다. 해제 action의 Danger tone은 2026-09-08 사용자 검토에서
+  확정했다. geometry는 기존 `ModalSheet`·`ConfirmationContent`를 따른다.
+- 차단 확인의 결과 설명은 `상대방은 내 게시물을 볼 수 없고, 타임라인과 검색에서 서로의 게시물이 숨겨져요. 팔로우 관계와 요청은 삭제돼요.`를
+  사용한다. 2026-09-09 [현재 Block 정책](../domain/objects/profile-block.md)에 맞춰
+  Figma [`4595:6482`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4595-6482)의
+  설명도 같은 문구로 갱신했다. 기존 리액션은 삭제하지 않는다. 현재 Storybook은 메뉴·목록 presentation을 검증하며 차단·해제 요청과 관계·리액션 정리를 구현하지 않는다.
 - pending에는 같은 action의 중복 입력과 dismiss를 막고 busy 상태를 전달한다. 실패하면 기존 서버 확정 상태를
   유지하고 제품의 기존 오류 피드백을 사용한다.
 
@@ -83,6 +98,27 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   column에는 별도 PageHeader를 두지 않는다. Sidebar와 RightRail의 로그인 Owner 정보는 차단 Target identity가
   아니다.
 
+### PROD-861 Storybook 표현의 범위
+
+2026-09-08 사용자 검토에서 Storybook의 `blocking` 표현은 Legacy 페이지의
+[`Profile / Blocked · 348:3910`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=348-3910)으로 승인했다.
+이전 Storybook 표현에는 DSN-53 중앙 안내형 `7580:14180`·`4592:16216` 대신 다음 조립을 사용한다.
+
+- cover·avatar·표시 이름·handle·bio·태그·팔로우 수치와 게시물·답글·미디어·별 탭을 유지한다.
+  FollowButton 자리에 Secondary `차단 해제`를 두고, 게시물 영역에는 `차단됨`과 원본 설명
+  `이 사용자의 게시물·프로필을 보지 않아요.`를 표시한다. 탭 전환에도 이 안내를 유지한다.
+  과거 placeholder·typography 대신 현재 production ProfileHero·TabList·Button을 재사용한다.
+- Mobile은 이름·뒤로가기 header 아래에 배치하고 BottomTabBar를 추가하지 않는다.
+  Compact·Full은 기존 Sidebar 옆 600px Profile column에 배치하며 별도 RightRail을 추가하지 않는다.
+- 해제 확인·pending·취소·실패·retry 계약을 유지한다. 성공하면 같은 Hero의 FollowButton을 복원하고
+  게시물 안내를 제거한다. 이전 Follow 관계를 복원한다는 의미는 아니다.
+
+2026-09-09 리뷰 반영으로 이 callback 기반 화면 fixture는 제거했다. 위 내용은 당시 승인한 시각 참고 계약이며 현재 구현 완료를 뜻하지 않는다.
+이전 fixture의 안내와 콘텐츠 숨김은 위의 최신 runtime 조회 정책을 정의하지 않는다. 양쪽 기본 Profile 정보 유지와
+viewer 방향별 콘텐츠 정책은 위 계약을 따르며, 실제 route의 경고 확인 뒤 콘텐츠 노출은 PROD-823이 기존 레거시 UI에
+구현·통합한다. PROD-917의 신규 UI 교체는 별도 후속 범위다. PROD-861은 `blockedBy` 화면을 구현하지 않으며,
+기존 identity-free Figma Target은 물리 참고 자료다. Storybook 검증은 API·actor·cache와 runtime 완료 증거가 아니다.
+
 ## 뮤트 관계의 직접 Profile
 
 - Mobile Light Target [`7541:14061`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7541-14061)은
@@ -106,7 +142,7 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   `88×40px` visual로 유지하고 투명 `88×48dp` wrapper 가운데 배치한다. 공용 Button source와 Web compact
   geometry는 변경하지 않는다.
 - 확인은 공용 [`ConfirmationContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5103-15173)를
-  사용한다. Mute는 `Tone=Primary`, Block은 `Tone=Danger`이며 둘 다 `Idle|Pending`에서 같은 제목·설명·action
+  사용한다. Mute는 `Tone=Primary`, Block·Unblock은 `Tone=Danger`이며 각 action의 `Idle|Pending`에서 같은 제목·설명·action
   label을 유지한다.
 - Mute 상태·action 행은 `ProfileHero` 내부 sublayer로 유지하고 Profile hashtag 의미를 가진
   `ProfileTagChip`이나 새 범용 Badge로 승격하지 않는다. 팔로잉·팔로워 아래 `space/8`을 두고, canonical
@@ -138,9 +174,29 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 - Mute와 Block을 합친 단일 관리 목록 또는 새 Settings shell
 - Figma 결과를 production runtime 완료 증거로 사용하는 것
 
+## 요청 소유권과 신규 UI 연결 · 2026-09-09
+
+이 결정은 같은 날의 임시 presentation callback 유지 결정을 대체한다. `ProfileHero.block`·`PostLayout.block`과
+`ProfileBlockAction`의 부모 mutation callback·요청 hook, 이를 전제로 한 성공·실패·pending fixture를 제거한다.
+메뉴·목록 presentation은 유지하며, callback 이름을 바꾸거나 실행하지 않는 요청 stub으로 대체하지 않는다.
+
+- `ProfileMoreMenu`는 기존 `ActionMenuItem`과 trigger를 표시하며 각 항목의 선택·닫힘·focus를 처리한다.
+  Profile 상태나 mutation callback은 받지 않는다. 실제 요청과 확인창 lifecycle은 항목을 제공하는 action 소유다.
+- `BlockedProfileList`는 loading·error·empty·pagination과 전달된 행 `children`을 표시한다.
+  실제 action을 포함한 행은 기존 `ProfileListItemContent.children`으로 합성하며 목록은 mutation이나 성공 feedback을 받지 않는다.
+- PROD-814·823은 실제 action의 Profile fragment·mutation·pending·실패·Relay/cache 갱신·actor 격리를 구현하고
+  해당 코드·인터페이스·검증 증거를 인계한다. 메뉴·버튼은 같은 요청 처리를 재사용한다.
+- PROD-917은 인계된 실제 action으로 신규 UI를 연결하고 실제 action과 mock Relay 응답으로 조합을 검증한다.
+  임시 callback 화면을 보존하기 위해 mutation 구현을 신규 UI 교체 작업으로 넘기지 않는다.
+- 기존 Mute public API는 PROD-858에서 들어온 범위로 유지한다. #764의 Block 결합·공유 요청 hook만 제거하며,
+  기존 Mute API의 최종 전환은 PROD-814와 정렬한다. 기존 기능 완료·archive는 신규 UI 교체 완료에 종속시키지 않는다.
+- Storybook의 메뉴·버튼 선택은 Actions 이벤트만 검증하며 차단 상태·목록을 성공한 것처럼 바꾸지 않는다.
+  확인창·요청 성공·오류·actor 전환과 실제 route는 후속 action 검증 범위다.
+
 ## Storybook 이관 · PROD-858
 
-`ProfileMuteAction`은 기존 ActionMenu·ModalSheet·ConfirmationContent·ToastProvider를 재사용한다.
+`ProfileMuteAction`은 Profile/Post의 메뉴와 관리용 확인 처리를 소유하며 기존
+ModalSheet·ConfirmationContent·ToastProvider를 재사용한다. 메뉴 표시에는 요청을 모르는 `ProfileMoreMenu`를 사용한다.
 확인과 pending/dismiss, 오류 피드백은 공용 UI 경계에서 제공하며 실제 요청은 callback으로 전달한다.
 관리 목록은 `MutedProfileList`, 행 표시는 기존 Relay `ProfileListItem`과 공유하는 `ProfileListItemContent`를 사용한다.
 Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목록은 이름·핸들 기본 표시를 사용한다.
@@ -171,3 +227,27 @@ Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목
 - Current: 위 공용 컴포넌트와 Storybook 검증 표면. Target: 실제 Profile/Settings route에서의 사용.
   Product not implemented: 뮤트 storage·GraphQL·content policy·Relay 연동 및 Web/iOS/Android 종단 간 검증.
   PROD-824·825·814의 완료나 `add-profile-mute` OpenSpec 전체 완료를 뜻하지 않는다.
+
+## Storybook 이관 · PROD-861
+
+현재 범위는 `ProfileMoreMenu`와 `BlockedProfileList` presentation이다. 메뉴는 공용 `ProfileMoreButton`·ActionMenu의
+Web 최소 폭 160px과 키보드·focus 처리를 재사용하고, 목록은 제목·loading·empty·오류 Toast·재시도·pagination을 제공한다.
+행은 기존 `ProfileListItemContent`를 children으로 합성한다. Mute와 목록 상태를 공유하거나 합치지 않는다.
+
+- `KOSMO/Patterns/Profile/More Menu`는 차단·해제 모두 [아이콘 정본](icons.md#profile-차단해제--2026-09-09-결정)의 `Ban`을 표시한다.
+  Playground는 수동 Controls·Actions, Tests는 선택·닫힘·focus 복귀를 검증한다. 실제 요청은 실행하지 않는다.
+- `KOSMO/Patterns/Profile/Blocked Profiles`는 행·버튼 선택과 loading/error/empty/pagination을 검증한다.
+  해제 버튼은 기존 Button의 presentation이며 선택을 Actions에 기록한다. 성공 Toast·행 삭제·가짜 Promise 요청은 없다.
+- 최초·추가 조회 실패는 공용 danger Toast와 `다시 시도`로 알리고, Toast가 사라진 뒤에도 본문의 최초 `다시 시도`·추가
+  `더 불러오기`를 유지한다. retry·pagination fixture는 목록 표시 상태만 전환한다.
+- loaded 대표는 [Mobile 390](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8089),
+  [Compact 1024](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25102),
+  [Full 1440](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25582)을 참고한다.
+  행은 64px, 표시 이름은 `UI/Label/L`이며 해제 버튼은 Mobile Web `88×40`, Desktop Web `72×32`다.
+  2026-09-09 결정에 따라 Native는 폭 88과 공용 Button 자체의 최소 높이 iOS 44pt·Android 48dp를 사용한다.
+  별도 wrapper·hitSlop 보정은 두지 않는다. Figma의 40px visual 원본은 미수정이다.
+- `ProfileBlockAction`, Block을 결합한 Hero·Post props와 해당 fixture·Tests, `Screens/Profile Block`은 제거했다.
+  실제 action을 전제로 하는 확인·성공·실패·pending·focus lifecycle 검증은 PROD-823의 action 구현과 함께 완료한다.
+  Profile·Settings 신규 UI 조립과 교체 회귀는 PROD-917이 소유한다.
+- 저장·cleanup·GraphQL·Relay/cache·actor 전환·실제 Web/iOS/Android 종단 간 검증은 완료하지 않았다.
+  `add-profile-block` task 3.x와 전체 검증·archive는 각각 PROD-823·PROD-813 소유다.

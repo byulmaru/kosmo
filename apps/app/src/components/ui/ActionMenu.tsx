@@ -52,6 +52,7 @@ type Props = {
   accessibilityLabel: string;
   disabled?: boolean;
   items: readonly ActionMenuItem[];
+  webMinWidth?: number;
   onOpenChange?: (open: boolean) => void;
   renderTrigger: (props: ActionMenuTriggerRenderProps) => ReactNode;
 } & (
@@ -80,7 +81,7 @@ export function ActionMenuPresentationProvider({
 
 const webMenuInset = space[4] + borderWidths[1];
 const webMenuItemHeight = 36;
-const webMenuMinWidth = 128;
+const defaultWebMenuMinWidth = 128;
 
 export function ActionMenu({
   accessibilityLabel,
@@ -88,6 +89,7 @@ export function ActionMenu({
   items,
   onOpenChange,
   renderTrigger,
+  webMinWidth = defaultWebMenuMinWidth,
   webPlacement,
   webHorizontalPlacement = 'start',
   webVerticalPlacement = 'start',
@@ -121,7 +123,7 @@ export function ActionMenu({
     const triggerRect = trigger.getBoundingClientRect();
     const menu = menuRef.current as unknown as HTMLElement | null;
     const menuRect = menu?.getBoundingClientRect();
-    const menuWidth = menuRect?.width ?? webMenuMinWidth;
+    const menuWidth = menuRect?.width ?? webMinWidth;
     const menuHeight = menuRect?.height ?? items.length * webMenuItemHeight + webMenuInset * 2;
     const viewportWidth = trigger.ownerDocument.documentElement.clientWidth;
     const viewportHeight = trigger.ownerDocument.documentElement.clientHeight;
@@ -155,7 +157,7 @@ export function ActionMenu({
         ? current
         : nextPosition,
     );
-  }, [items.length, web, webHorizontalPlacement, webPlacement, webVerticalPlacement]);
+  }, [items.length, web, webHorizontalPlacement, webMinWidth, webPlacement, webVerticalPlacement]);
 
   useEffect(() => {
     if (previousOpenRef.current === open) {
@@ -369,6 +371,7 @@ export function ActionMenu({
                   styles.webMenu,
                   elevation.floating,
                   {
+                    minWidth: webMinWidth,
                     backgroundColor: theme.backgroundElevated,
                     borderColor: theme.borderDefault,
                     opacity: overlayMotion.progress,
@@ -577,7 +580,6 @@ const styles = StyleSheet.create({
   webLabel: { flex: 1, textAlign: 'left', ...textStyles.uiCopyM },
   webMenu: {
     borderWidth: borderWidths[1],
-    minWidth: webMenuMinWidth,
   },
   webPosition: { position: 'absolute', zIndex: 100 },
 });
