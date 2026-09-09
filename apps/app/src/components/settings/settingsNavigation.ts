@@ -1,30 +1,15 @@
 import { Platform } from 'react-native';
 import type { ImperativeRouter } from 'expo-router';
 
-type SettingsNavigationRouter = Pick<ImperativeRouter, 'back' | 'replace'>;
-type SettingsParentNavigationRouter = Pick<ImperativeRouter, 'back' | 'replace'>;
-type NestedSettingsNavigationRouter = Pick<ImperativeRouter, 'replace'>;
+type SettingsNavigationRouter = Pick<ImperativeRouter, 'replace'>;
 
-export function returnToSettingsRoot(router: SettingsNavigationRouter) {
+export function returnToSettingsParent(pathname: string, router: SettingsNavigationRouter) {
+  const parentPath =
+    pathname === '/settings/muted-profiles' ? '/settings/mute-and-block' : '/settings';
+
   if (Platform.OS === 'web') {
-    globalThis.location.replace('/settings');
+    globalThis.location.replace(parentPath);
   } else {
-    router.replace('/settings');
+    router.replace(parentPath);
   }
-}
-
-export function returnToMuteAndBlockRoot(router: NestedSettingsNavigationRouter) {
-  if (Platform.OS === 'web') {
-    globalThis.location.replace('/settings/mute-and-block');
-  } else {
-    router.replace('/settings/mute-and-block');
-  }
-}
-
-export function returnToSettingsParent(pathname: string, router: SettingsParentNavigationRouter) {
-  if (pathname === '/settings/muted-profiles') {
-    return returnToMuteAndBlockRoot(router);
-  }
-
-  return returnToSettingsRoot(router);
 }
