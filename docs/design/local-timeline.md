@@ -31,18 +31,29 @@ Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` ca
 
 ## 상태
 
-| 상태                   | 표시                                                                                                                          |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 최초 로딩              | 공용 `StateView` loading으로 `로컬 타임라인을 불러오는 중입니다.`를 표시하고 보조 기술에 알린다                               |
-| 빈 목록                | `아직 게시글이 없어요` / `첫 게시글이 올라오면 여기에 표시돼요.`                                                              |
-| 최초 오류 · Target     | 저장 목록이 없으면 2행 목록 skeleton을 표시하고 `로컬 타임라인을 불러오지 못했어요` / `다시 시도` persistent toast를 표시한다 |
-| 새로고침 오류 · Target | 마지막 성공 목록을 유지하고 `로컬 타임라인을 불러오지 못했어요` / `다시 시도` persistent toast를 표시한다                     |
-| 추가 로딩              | 기존 목록 아래 spinner와 `게시글을 더 불러오는 중입니다.` live status                                                         |
-| 추가 오류 · Target     | 기존 목록을 유지하고 `더 불러오지 못했어요` toast와 `다시 시도` action                                                        |
-| Profile 없음           | Home과 같은 기존 Profile 생성·선택 흐름으로 이동하는 onboarding을 표시한다                                                    |
+| 상태               | 표시                                                                                                                          |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| 최초 로딩          | 공용 `StateView` loading으로 `로컬 타임라인을 불러오는 중입니다.`를 표시하고 보조 기술에 알린다                               |
+| 빈 목록            | `아직 게시글이 없어요` / `첫 게시글이 올라오면 여기에 표시돼요.`                                                              |
+| 최초 오류 · Target | 저장 목록이 없으면 2행 목록 skeleton을 표시하고 `로컬 타임라인을 불러오지 못했어요` / `다시 시도` persistent toast를 표시한다 |
+| 새로고침 중        | Relay의 `store-and-network` 조회 상태를 따른다. 별도 상단 spinner는 표시하지 않는다                                           |
+| 새로고침 오류      | Relay 기본 오류 처리와 RouteBoundary 재시도를 따른다. 별도 목록 보존·toast는 보장하지 않는다                                  |
+| 추가 로딩          | 기존 목록 아래 spinner와 `게시글을 더 불러오는 중입니다.` live status                                                         |
+| 추가 오류 · Target | 기존 목록을 유지하고 `더 불러오지 못했어요` toast와 `다시 시도` action                                                        |
+| Profile 없음       | Home과 같은 기존 Profile 생성·선택 흐름으로 이동하는 onboarding을 표시한다                                                    |
 
-세 오류 표현은 연결된 Figma `Target`이며 현재 runtime/OpenSpec 완료 계약이 아니다. Current 오류 표현은 기존
-RouteBoundary·목록·toast를 유지하고, Target 승격은 Product/runtime/OpenSpec/QA 후속 범위다.
+추가 로딩 spinner는 공용 secondary 전경 색상(`theme.foregroundSecondary`)을 사용한다.
+
+PROD-864는 Local 탭 재선택 시 공용 `RouteBoundary.refetch()`로 `fetchKey`를 갱신하고 Relay 기본 조회 경로를 사용한다.
+새로고침 전용 요청·응답 검사·목록 보존·toast·spinner는 두지 않는다. HTTP 200의 `data + errors`는 Relay가 처리하며,
+사용 가능한 부분 데이터를 적용한다. `localTimeline: null`이면 목록의 빈 상태를 표시할 수 있다.
+이는 리뷰 후 승인한 단순화이며, 새로고침 실패 시 마지막 성공 목록과 scroll position을 반드시 보존한다는 계약을 대체한다.
+query·cursor·filtering 정책과 추가 페이지 로딩 동작은 유지한다.
+
+저장된 성공 목록이 없는 최초 오류는 기존 `로컬 타임라인을 불러오지 못했어요` / `잠시 후 다시 시도해주세요.` /
+`다시 시도` 인라인 StateView를 유지한다. 최초 오류의 skeleton·persistent Toast는 Figma Target으로 남긴다.
+추가 오류도 기존 목록과 자동으로 사라지는 `게시글을 더 불러오지 못했어요.` / `다시 시도` toast를 유지한다.
+Storybook의 오류·재시도 검증은 실제 Web·Native network/runtime QA 완료를 뜻하지 않는다.
 
 ## Figma 근거
 

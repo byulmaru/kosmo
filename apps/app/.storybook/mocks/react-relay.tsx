@@ -21,6 +21,7 @@ type RelayMockValue = {
     StoryOperationResponse | StoryOperationResponse[] | StoryOperationResponseSequence
   >;
   queryData?: unknown;
+  queryRequestObserver?: (request: RequestParameters, variables: Variables) => void;
 };
 
 type StoryGraphQLError = {
@@ -32,6 +33,7 @@ type StoryOperationResponse = {
   data?: unknown;
   delayMs?: number;
   error?: string;
+  errors?: StoryGraphQLError[];
 };
 
 type StoryOperationResponseSequence = {
@@ -53,6 +55,7 @@ export function RelayStoryProvider({
   paginationResponses,
   operationResponses,
   queryData,
+  queryRequestObserver,
 }: PropsWithChildren<RelayMockValue>) {
   const mock = useMemo<RelayMockValue>(
     () => ({
@@ -68,6 +71,7 @@ export function RelayStoryProvider({
       paginationResponses,
       operationResponses,
       queryData,
+      queryRequestObserver,
     }),
     [
       mutationError,
@@ -82,6 +86,7 @@ export function RelayStoryProvider({
       paginationResponses,
       operationResponses,
       queryData,
+      queryRequestObserver,
     ],
   );
   const environmentState = useRef({ index: 0, mock });
@@ -157,7 +162,10 @@ async function executeStoryOperation(
       return Promise.reject(new Error(operationResponse.error));
     }
 
-    return { data: (operationResponse.data ?? {}) as PayloadData };
+    return {
+      data: (operationResponse.data ?? {}) as PayloadData,
+      errors: operationResponse.errors,
+    };
   };
 
   if (request.operationKind === 'mutation') {
@@ -187,11 +195,8 @@ async function executeStoryOperation(
       mock.paginationResponses?.[
         Math.min(nextPaginationResponseIndex(), mock.paginationResponses.length - 1)
       ];
-    if (configuredResponse?.error) {
-      return Promise.reject(new Error(configuredResponse.error));
-    }
     if (configuredResponse) {
-      return Promise.resolve({ data: (configuredResponse.data ?? {}) as PayloadData });
+      return resolveOperationResponse(configuredResponse);
     }
     if (mock.paginationError) {
       return Promise.reject(
@@ -209,6 +214,7 @@ async function executeStoryOperation(
     return Promise.resolve({ data: (mock.paginationResponse ?? {}) as PayloadData });
   }
 
+  mock.queryRequestObserver?.(request, variables);
   const operationResponse = getOperationResponse();
   if (operationResponse) {
     return resolveOperationResponse(operationResponse);

@@ -1530,13 +1530,21 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 ### Requirement: Local timeline refresh and pagination
 
 **Authority / Provenance:** `docs/design/local-timeline.md`, `docs/design/accessibility.md`, `PROD-649` — The app SHALL 선택된 Local 탭을 다시 선택하면 현재 Local 목록의 최신 데이터를 다시 요청한다. 다음 page가
-있고 목록 near-end에 도달하면 같은 Local connection에서 최대 20개를 누적해야 하며(MUST), loading과 실패 중에도
+있고 목록 near-end에 도달하면 같은 Local connection에서 최대 20개를 누적해야 하며(MUST), 추가 page의 loading과 실패 중에도
 기존 목록과 scroll position을 유지해야 한다(MUST).
 
 #### Scenario: Refresh selected Local tab
 
 - **WHEN** 사용자가 이미 선택된 Local 탭을 다시 선택한다
-- **THEN** 시스템은 현재 selected Profile의 Local 첫 page를 다시 요청한다
+- **THEN** 시스템은 공용 RouteBoundary의 `fetchKey`를 갱신해 현재 selected Profile의 Local 첫 page를 Relay 기본 조회 경로로 다시 요청한다
+- **AND** 새로고침 전용 목록 보존·오류 toast·상단 spinner를 별도로 관리하지 않는다
+
+#### Scenario: Apply partial Local query responses
+
+- **WHEN** Local 조회에 HTTP 200의 `data + errors` 응답이 반환된다
+- **THEN** 시스템은 Relay 기본 조회 경로에서 부분 데이터를 처리한다
+- **AND** Local 화면은 응답 전체 거절이나 이전 목록 복원을 별도로 수행하지 않는다
+- **AND** `localTimeline: null`이면 목록의 빈 상태를 표시할 수 있다
 
 #### Scenario: Append next Local page
 

@@ -88,6 +88,7 @@ export function PostList({
   profile: profileKey,
   replyProfile,
 }: Props) {
+  const theme = useTheme();
   const homePagination = usePaginationFragment<PostListHomeNextPageQuery, PostList_home$key>(
     PostListHomeFragment,
     homeKey ?? null,
@@ -198,7 +199,10 @@ export function PostList({
             footer={
               isLoadingNext ? (
                 <View style={styles.loadingNext}>
-                  <ActivityIndicator accessibilityLabel="게시글을 더 불러오는 중" />
+                  <ActivityIndicator
+                    accessibilityLabel="게시글을 더 불러오는 중"
+                    color={theme.foregroundSecondary}
+                  />
                   <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
                     게시글을 더 불러오는 중입니다.
                   </Text>
