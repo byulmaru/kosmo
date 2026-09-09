@@ -106,22 +106,52 @@ test('Checkbox exposes false, true, and mixed checked states and emits the next 
   }
 });
 
-test('Checkbox preserves its visual box and supplies the Native target deficit as hit slop', () => {
-  for (const [platform, hitSlop] of [
-    ['web', undefined],
-    ['ios', 6],
-    ['android', 8],
+test('Checkbox preserves its visual box inside the platform target size', () => {
+  for (const [platform, targetSize] of [
+    ['web', 32],
+    ['ios', 44],
+    ['android', 48],
   ] as const) {
     platformOS = platform;
     const checkbox = renderCheckbox(false);
-    assert.equal(checkbox.props.hitSlop, hitSlop);
-    assert.deepEqual(checkbox.props.style, {
+    assert.deepEqual(checkbox.props.style, [
+      {
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      { height: targetSize, width: targetSize },
+    ]);
+    const [visual, indicator] = checkbox.findAllByType(ViewHost);
+    assert.deepEqual(visual.props.style, {
       alignItems: 'center',
       height: 32,
       justifyContent: 'center',
       width: 32,
     });
+    assert.equal(indicator.props.style[0].height, 20);
+    assert.equal(indicator.props.style[0].width, 20);
   }
+});
+
+test('Web keyboard toggles Checkbox once and ignores repeated Space', () => {
+  const changes: boolean[] = [];
+  const checkbox = renderCheckbox(false, (value) => changes.push(value));
+  let prevented = 0;
+
+  for (const repeat of [false, true]) {
+    act(() =>
+      checkbox.props.onKeyDown({
+        key: ' ',
+        preventDefault: () => {
+          prevented += 1;
+        },
+        repeat,
+      }),
+    );
+  }
+
+  assert.equal(prevented, 2);
+  assert.deepEqual(changes, [true]);
 });
 
 test('Disabled Checkbox does not emit a change', () => {

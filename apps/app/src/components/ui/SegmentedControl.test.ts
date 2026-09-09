@@ -210,7 +210,7 @@ test('SegmentedControl exposes a radiogroup with exactly one selected radio', ()
   );
 });
 
-test('Arrow keys move focus and selection with wrapping', () => {
+test('Arrow keys move focus and selection while Space activates the focused option once', () => {
   const changes: string[] = [];
   const renderer = renderControl({ onValueChange: (value) => changes.push(value) });
   const first = radios(renderer)[0];
@@ -222,12 +222,20 @@ test('Arrow keys move focus and selection with wrapping', () => {
       preventDefault: () => {
         prevented = true;
       },
+      repeat: false,
     }),
   );
 
   assert.equal(prevented, true);
   assert.deepEqual(changes, ['three']);
   assert.deepEqual(focusedLabels, ['옵션 3']);
+
+  const second = radios(renderer)[1];
+  act(() => {
+    second.props.onKeyDown({ key: ' ', preventDefault: () => undefined, repeat: false });
+    second.props.onKeyDown({ key: ' ', preventDefault: () => undefined, repeat: true });
+  });
+  assert.deepEqual(changes, ['three', 'two']);
 });
 
 test('Selection pill stretch stays subtle across distance and direction', () => {

@@ -281,7 +281,7 @@ Checkbox와 SegmentedControl은 실제 Settings route나 저장 정책에 연결
 
 - Checkbox는 `false`·`true`·`mixed` checked 상태와 필수 accessible name을 제공한다. `mixed`는
   indeterminate/group summary 전용이며 activation은 `true`를 요청한다. 32×32 root와 20×20 indicator를
-  유지하고 Native에서는 iOS 44×44pt·Android 48×48dp target의 부족분을 hit slop으로 보충한다.
+  유지하고 Native host 자체는 iOS 44×44pt·Android 48×48dp target을 제공한다.
 - SegmentedControl은 타입에서 2–4개 option만 받고, 유효하지 않은 controlled value도 첫 option으로
   정규화해 정확히 하나의 radio를 선택한다. Web은 선택 항목 하나만 Tab stop으로 두고 방향키가 focus와
   선택을 함께 순환 이동한다. 320px × 48px root 안에서 option은 같은 폭을 나누고 긴 label은 줄인다.
@@ -294,6 +294,11 @@ Checkbox와 SegmentedControl은 실제 Settings route나 저장 정책에 연결
   runtime QA를 계속 소유한다.
 - 새 제품 정책이나 route 계약을 만들지 않고 승인된 Figma·Linear 계약을 코드로 이관하므로 별도 OpenSpec은
   만들지 않는다.
+
+2026-09-09 검증: `pnpm --filter @kosmo/app test`로 Relay·TypeScript 검사, 단위 테스트 498개,
+Storybook static build와 Storybook 테스트 707개가 통과했다. 내장 Browser에서 SegmentedControl의 320×48
+root, 3개 option 균등 폭, 선택 이동과 최종 pill 위치를 확인했다. 실제 screen reader, iOS·Android
+touch·focus, 빠른 연속 입력의 중간 frame은 확인하지 않았으며 PROD-727 runtime QA 범위로 남긴다.
 
 ## 제외 범위
 

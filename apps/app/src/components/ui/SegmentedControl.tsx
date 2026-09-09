@@ -37,7 +37,7 @@ type WebGroupProps = { role: 'radiogroup' };
 type WebRadioProps = {
   'aria-checked': boolean;
   'aria-disabled': boolean;
-  onKeyDown: (event: { key: string; preventDefault: () => void }) => void;
+  onKeyDown: (event: { key: string; preventDefault: () => void; repeat: boolean }) => void;
   onPointerDown: () => void;
   role: 'radio';
   tabIndex: -1 | 0;
@@ -71,14 +71,26 @@ function SegmentedControlItem<Value extends string>({
   const web = Platform.OS === 'web';
   optionRefs.set(option.value, optionRef);
 
-  const onKeyDown = (event: { key: string; preventDefault: () => void }) => {
+  const onKeyDown = (event: { key: string; preventDefault: () => void; repeat: boolean }) => {
+    if (disabled || !web) {
+      return;
+    }
+
+    if (event.key === ' ' || event.key === 'Spacebar') {
+      event.preventDefault();
+      if (!event.repeat) {
+        onValueChange(option.value);
+      }
+      return;
+    }
+
     const direction =
       event.key === 'ArrowRight' || event.key === 'ArrowDown'
         ? 1
         : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
           ? -1
           : 0;
-    if (disabled || !web || direction === 0) {
+    if (direction === 0) {
       return;
     }
 

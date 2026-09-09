@@ -17,7 +17,7 @@ export type CheckboxProps = {
 type WebCheckboxProps = {
   'aria-checked': CheckboxValue;
   'aria-disabled': boolean;
-  onKeyDown: (event: { key: string; preventDefault: () => void }) => void;
+  onKeyDown: (event: { key: string; preventDefault: () => void; repeat: boolean }) => void;
   onPointerDown: () => void;
   role: 'checkbox';
 };
@@ -31,7 +31,7 @@ export function Checkbox({
   const theme = useTheme();
   const [focusVisible, setFocusVisible] = useState(false);
   const web = Platform.OS === 'web';
-  const hitSlop = web ? undefined : Platform.OS === 'ios' ? 6 : 8;
+  const targetSize = web ? 32 : Platform.OS === 'ios' ? 44 : 48;
   const toggle = () => {
     if (!disabled) {
       onCheckedChange(checked !== true);
@@ -44,7 +44,6 @@ export function Checkbox({
       accessibilityRole="checkbox"
       accessibilityState={{ checked, disabled }}
       disabled={disabled}
-      hitSlop={hitSlop}
       onBlur={() => setFocusVisible(false)}
       onFocus={(event) => {
         const target = event.currentTarget as unknown as {
@@ -53,7 +52,7 @@ export function Checkbox({
         setFocusVisible(!web || Boolean(target.matches?.(':focus-visible')));
       }}
       onPress={toggle}
-      style={styles.root}
+      style={[styles.root, { height: targetSize, width: targetSize }]}
       {...(web
         ? ({
             'aria-checked': checked,
@@ -61,7 +60,9 @@ export function Checkbox({
             onKeyDown: (event) => {
               if (event.key === ' ' || event.key === 'Spacebar') {
                 event.preventDefault();
-                toggle();
+                if (!event.repeat) {
+                  toggle();
+                }
               }
             },
             onPointerDown: () => setFocusVisible(false),
@@ -82,7 +83,7 @@ export function Checkbox({
         const foreground = disabled ? theme.actionPrimaryOnDisabled : theme.actionPrimaryOnBase;
 
         return (
-          <>
+          <View style={styles.visual}>
             {hovered || state.pressed ? (
               <View
                 style={[
@@ -114,7 +115,7 @@ export function Checkbox({
                 <View style={[styles.mixed, { backgroundColor: foreground }]} />
               ) : null}
             </View>
-          </>
+          </View>
         );
       }}
     </Pressable>
@@ -123,6 +124,10 @@ export function Checkbox({
 
 const styles = StyleSheet.create({
   root: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  visual: {
     alignItems: 'center',
     height: 32,
     justifyContent: 'center',
