@@ -32,11 +32,7 @@ export function ColorWell({
         };
         setFocusVisible(Platform.OS !== 'web' || Boolean(target.matches?.(':focus-visible')));
       }}
-      onPress={() => {
-        if (!disabled) {
-          onPress();
-        }
-      }}
+      onPress={onPress}
       {...(Platform.OS === 'web' ? { onPointerDown: () => setFocusVisible(false) } : {})}
       style={Platform.OS === 'web' ? { outlineStyle: 'solid', outlineWidth: 0 } : undefined}
       targetSize={48}

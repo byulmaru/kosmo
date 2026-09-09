@@ -51,11 +51,7 @@ export function SelectTrigger({
           };
           setFocusVisible(Platform.OS !== 'web' || Boolean(target.matches?.(':focus-visible')));
         }}
-        onPress={() => {
-          if (!disabled) {
-            onPress();
-          }
-        }}
+        onPress={onPress}
         style={[
           styles.target,
           Platform.OS === 'web' ? { outlineStyle: 'solid', outlineWidth: 0 } : undefined,
