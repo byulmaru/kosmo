@@ -123,6 +123,52 @@ describe('GraphQL Profile Block', () => {
     assertGraphQLErrorCode(result, 'NOT_FOUND');
   });
 
+  test('rejects unavailable targets before durable Block cleanup', async () => {
+    const owner = await createAuthenticatedSession();
+    const disabledTarget = await createProfile('disabled-block-target');
+    const suspendedInstance = await createRemoteInstance('suspended-block-target.example');
+    const suspendedTarget = await createProfile('suspended-block-target', suspendedInstance.id);
+    await Promise.all([
+      createFollowNotification(owner.profile.id, disabledTarget.id),
+      createFollowNotification(owner.profile.id, suspendedTarget.id),
+    ]);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, disabledTarget.id));
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, suspendedInstance.id));
+
+    const disabledResult = await blockProfile(disabledTarget.id, owner.token);
+    const suspendedResult = await blockProfile(suspendedTarget.id, owner.token);
+
+    assertGraphQLErrorCode(disabledResult, 'NOT_FOUND');
+    assertGraphQLErrorCode(suspendedResult, 'NOT_FOUND');
+    assert.equal(
+      await db
+        .select()
+        .from(ProfileBlocks)
+        .then((rows) => rows.length),
+      0,
+    );
+    assert.equal(
+      await db
+        .select()
+        .from(ProfileFollows)
+        .then((rows) => rows.length),
+      2,
+    );
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .then((rows) => rows.length),
+      2,
+    );
+  });
+
   test('selected Local owner can block Local and Remote targets and manage exact IDs', async () => {
     const owner = await createAuthenticatedSession();
     const localTarget = await createProfile('blocked-local');
@@ -344,6 +390,19 @@ describe('GraphQL Profile Block', () => {
     assertNoGraphQLErrors(hidden);
     assert.deepEqual(hidden.data?.node?.profileBlocks.edges, [{ node: { id: activeBlockId } }]);
     assert.deepEqual(hidden.data?.nodes, [{ id: activeBlockId }, null, null]);
+
+    const [deactivatedStatus, suspendedStatus] = await Promise.all([
+      profileBlockStatus(deactivatedTarget.handle, owner.token),
+      profileBlockStatus(suspendedTarget.handle, owner.token),
+    ]);
+    for (const status of [deactivatedStatus, suspendedStatus]) {
+      assertNoGraphQLErrors(status);
+      assert.deepEqual(status.data?.profileBlockStatus, {
+        blocking: false,
+        blockedBy: false,
+        profileBlockId: null,
+      });
+    }
 
     await db
       .update(Profiles)
@@ -723,13 +782,23 @@ describe('GraphQL Profile Block', () => {
       .then(firstOrThrow);
     const ownerPost = await createContentPost(owner.profile.id);
     const targetPost = await createContentPost(target.id, targetMedia.id);
+    const reactor = await createProfile('directional-post-reactor');
+    await db.insert(Reactions).values({
+      postId: targetPost.post.id,
+      profileId: reactor.id,
+      type: '❤️',
+    });
 
     const ownerBlock = await blockProfile(target.id, owner.token);
     assertNoGraphQLErrors(ownerBlock);
 
     const ownerView = await requestGraphQL<{
       nodes: Array<
-        | { __typename: 'Post'; content: { id: string; media: Array<{ id: string }> } | null }
+        | {
+            __typename: 'Post';
+            content: { id: string; media: Array<{ id: string }> } | null;
+            reactionCounts: Array<{ count: number; type: string }>;
+          }
         | { __typename: 'PostContent'; id: string; media: Array<{ id: string }> }
         | null
       >;
@@ -738,7 +807,7 @@ describe('GraphQL Profile Block', () => {
       `query BlockingOwnerDirectPost($ids: [ID!]!, $targetId: ID!) {
         nodes(ids: $ids) {
           __typename
-          ... on Post { content { id media { id } } }
+          ... on Post { content { id media { id } } reactionCounts { count type } }
           ... on PostContent { id media { id } }
         }
         target: node(id: $targetId) {
@@ -759,6 +828,7 @@ describe('GraphQL Profile Block', () => {
           id: globalId('PostContent', targetPost.content.id),
           media: [{ id: globalId('Media', targetMedia.id) }],
         },
+        reactionCounts: [{ count: 1, type: '❤️' }],
       },
       {
         __typename: 'PostContent',

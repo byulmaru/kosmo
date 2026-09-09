@@ -5,6 +5,7 @@ import { parseProfileHandle } from '@kosmo/core/profile';
 import { profileBlockPairWhere } from '@kosmo/core/visibility';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { requireSelectedLocalProfile } from '../access/block';
 import { ProfileBlock } from '../ref';
 
@@ -63,6 +64,7 @@ builder.queryField('profileBlockStatus', (t) =>
                 )
               : and(eq(Instances.id, localInstance.id), eq(Instances.kind, InstanceKind.LOCAL)),
             eq(Profiles.normalizedHandle, parsed.normalizedHandle),
+            visibleProfileWhere({ profile: Profiles, instance: Instances }),
           ),
         )
         .limit(1)

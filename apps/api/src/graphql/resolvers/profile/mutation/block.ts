@@ -1,7 +1,10 @@
+import { db, first, Instances, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { executeProfileBlock, executeProfileUnblock } from '@kosmo/core/temporal/profile-block';
+import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { requireSelectedLocalProfile } from '../access/block';
 import { profileBlockByIdLoader } from '../loader/block';
 import { Profile, ProfileBlock } from '../ref';
@@ -18,9 +21,25 @@ builder.mutationField('blockProfile', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const selected = await requireSelectedLocalProfile(ctx);
+      const target = await db
+        .select({ id: Profiles.id })
+        .from(Profiles)
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+        .where(
+          and(
+            eq(Profiles.id, input.id.id),
+            visibleProfileWhere({ profile: Profiles, instance: Instances }),
+          ),
+        )
+        .limit(1)
+        .then(first);
+      if (!target) {
+        throw new NotFoundError('Profile not found');
+      }
+
       const result = await executeProfileBlock({
         ownerProfileId: selected.id,
-        targetProfileId: input.id.id,
+        targetProfileId: target.id,
         origin: 'LOCAL',
       });
       const profileBlock = await profileBlockByIdLoader(ctx).load(result.profileBlockId);

@@ -11,16 +11,16 @@ archive 조건이 아니며, 공통 정책 검증 결과와 실제 endpoint 검�
 
 **Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/post.md`, `docs/domain/objects/media.md`, `docs/domain/objects/bookmark.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `PROD-822`. Post object·Post detail·Media relation과 Profile Post List는 Block 방향에 따른 콘텐츠 정책을 적용해야 한다(MUST). Owner → Target Block에서 Owner는 Target의 Post·PostContent·첨부 Media를 기존 Post Visibility·Eligibility와 Media 정책에 따라 조회할 수 있고(MUST), Target은 Owner의 해당 콘텐츠를 조회할 수 없어야 한다(MUST NOT). 서로 Block한 경우에는 양쪽 직접 조회를 모두 제한해야 한다(MUST). Home·Local·Hashtag Post List·Post 검색·Bookmark·Reaction Profile 목록은 상대 Profile의 콘텐츠를 양방향으로 Exclude해야 하며(MUST), Repost는 Repost Author와 Source Post Author에 해당 surface의 방향별 또는 양방향 정책을 각각 적용해야 한다(MUST). 어느 경우에도 기존 Post Visibility·Eligibility보다 접근 범위를 넓혀서는 안 된다(MUST NOT).
 
-#### Scenario: Owner와 Target의 직접 Post·Media 조회 방향을 구분한다
+#### Scenario: Owner와 Target의 직접 Post·Media·Profile Post List 조회 방향을 구분한다
 
-- **WHEN** Owner → Target Profile Block이 존재하고 Owner 또는 Target이 상대 Author의 Post detail, PostContent 또는 첨부 Media를 조회한다
-- **THEN** Owner의 Target 콘텐츠 조회에는 기존 Post Visibility·Eligibility와 Media 정책을 적용한다
-- **AND** Target의 Owner 콘텐츠 조회에는 해당 Post·PostContent·첨부 Media를 반환하지 않는다
+- **WHEN** Owner → Target Profile Block이 존재하고 Owner 또는 Target이 상대 Author의 Post detail, PostContent, 첨부 Media 또는 Profile Post List를 조회한다
+- **THEN** Owner의 Target 콘텐츠와 Profile Post List 조회에는 기존 Post Visibility·Eligibility와 Media 정책을 적용한다
+- **AND** Target의 Owner 콘텐츠와 Profile Post List 조회에는 해당 Post·PostContent·첨부 Media를 반환하지 않는다
 - **AND** Target → Owner Block도 함께 존재하면 양쪽 직접 조회를 모두 제한한다
 
-#### Scenario: Home·Profile·Hashtag·Local 목록에서 Block 대상을 제외한다
+#### Scenario: Home·Hashtag·Local 목록에서 Block 대상을 제외한다
 
-- **WHEN** Block 관계의 한쪽 Profile이 Home, Profile, Hashtag 또는 Local Post List를 조회한다
+- **WHEN** Block 관계의 한쪽 Profile이 Home, Hashtag 또는 Local Post List를 조회한다
 - **THEN** 시스템은 상대 Profile이 작성한 Post를 후보에서 Exclude한다
 - **AND** 현재 목록의 cursor/page limit 계산 전에 같은 Profile Block policy를 적용한다
 
