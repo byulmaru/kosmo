@@ -49,10 +49,10 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
 - Status: Active
 - Context / Problem: 원문 제어가 Quote 작성자의 본문과 제3자 조회에 미치는 범위를 정해야 했다.
-- Decision Outcome: 삭제·거절·철회 후 본문을 유지하고 Source를 숨긴다. 차단은 당사자 접근·새 요청을 막되 기존 승인을 자동 철회하지 않는다. 제3자 Source 비노출은 명시적 철회다.
+- Decision Outcome: 삭제·거절·철회 후 본문을 유지하고 Source를 숨긴다. 차단은 당사자 접근·새 요청을 막되 기존 승인을 자동 철회하지 않는다. 제3자 Source 비노출은 명시적 철회이며, 로컬 Quote가 수신한 유효한 철회는 기존 Quote audience에도 전달한다.
 - Alternatives Considered: 정책 변경·차단에 따른 일괄 자동 철회와 Source 삭제에 따른 Quote 전체 삭제는 채택하지 않았다.
 - Consequences: 기존 승인으로 차단을 우회할 수 없고, 명시적 철회는 해당 승인을 무효화해 원격에 전달한다.
-- Confirmation / Follow-up: 당사자와 제3자의 차이, 명시적 철회, 원문 삭제, 본문 보존을 검증한다.
+- Confirmation / Follow-up: 당사자와 제3자의 차이, 명시적 철회, Quote audience 전달, 원문 삭제, 본문 보존을 검증한다.
 
 ### D5 FEP 승인과 레거시 발신 표현
 
@@ -63,8 +63,8 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 - Context / Problem: 인용 지원 여부가 다른 서버에도 승인된 원문 참조를 전달해야 한다.
 - Decision Outcome: FEP를 정식 경로로 쓰며 승인 후 quoteUrl·quoteUri·\_misskey_quote와 원문 링크 fallback을 제공한다. 사용자가 속성 3종과 본문 링크 제공을 선택했다.
 - Alternatives Considered: 속성 3종만 제공하는 방안은 선택하지 않았다. invalid FEP를 legacy로 강등하는 방안은 승인 우회이므로 제외한다.
-- Consequences: 승인 전·거절·철회 때 자동 생성 표현을 숨기고 직접 작성한 Content·링크는 유지한다.
-- Confirmation / Follow-up: 승인 후 호환 payload와 철회 후 자동 표현 제거, 사용자 본문 보존을 검증한다.
+- Consequences: QuoteAuthorization 역참조는 Source 조회 권한을 적용하고 `interactingObject`를 embed하지 않는다. 권한을 확인할 수 없으면 `interactionTarget`도 embed하지 않는다. 승인 전·거절·철회 때 자동 생성 표현을 숨기고 직접 작성한 Content·링크는 유지한다.
+- Confirmation / Follow-up: 권한별 승인 객체 readback과 embed 제한, 승인 후 호환 payload와 철회 후 자동 표현 제거, 사용자 본문 보존을 검증한다.
 
 ### D6 스펙 소유권과 구현·archive 책임
 

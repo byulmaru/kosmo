@@ -9,6 +9,9 @@ PROD-902, PROD-924. 프로토콜 참고: [FEP-044f](https://fediverse.codeberg.p
 자기 인용을 제외하면 원문 작성자가 해당 Quote에 발급한 유효한 승인을 검증해야 한다(MUST).
 `interactionPolicy`의 automatic/manual 광고, 전달 성공, 임의의 승인 URI만으로 최종 승인을 인정해서는
 안 된다(MUST NOT). `interactionPolicy`는 작성 UI와 예상 eligibility의 사전 힌트로만 사용할 수 있다(MAY).
+QuoteAuthorization은 Source를 볼 수 있는 당사자가 역참조할 수 있어야 한다(MUST). 승인 객체는
+`interactingObject`를 embed해서는 안 되며(MUST NOT), 요청자의 Source 조회 권한을 확인할 수 없으면
+`interactionTarget`도 embed해서는 안 된다(MUST NOT).
 
 #### Scenario: 승인된 로컬 Quote 발신
 
@@ -22,6 +25,19 @@ PROD-902, PROD-924. 프로토콜 참고: [FEP-044f](https://fediverse.codeberg.p
 - **THEN** FEP 자기 인용 조건을 확인하고 기본 Quote를 표현한다
 - **AND** QuoteRequest나 별도 QuoteAuthorization을 요구하지 않는다
 - **AND** 자기 인용이 Source의 조회 권한을 넓히지 않는다
+
+#### Scenario: 권한 있는 요청자의 승인 객체 역참조
+
+- **WHEN** Source를 조회할 수 있는 당사자가 연결된 QuoteAuthorization을 역참조한다
+- **THEN** 시스템은 해당 Quote·Source·원문 작성자에 결속한 승인 객체를 반환한다
+- **AND** `interactingObject`는 URI 참조로만 제공하고 embed하지 않는다
+- **AND** 요청자의 Source 조회 권한을 확인한 경우에만 `interactionTarget`을 embed할 수 있다
+
+#### Scenario: Source 조회 권한을 확인할 수 없는 역참조
+
+- **WHEN** QuoteAuthorization 요청자의 Source 조회 권한을 확인할 수 없다
+- **THEN** 시스템은 Source 객체를 `interactionTarget`에 embed하지 않는다
+- **AND** `interactingObject`도 embed하지 않아 Quote나 Source Content를 우회 노출하지 않는다
 
 ### Requirement: Kosmo 원문용 인용 요청의 자동 판정
 
@@ -104,14 +120,21 @@ Kosmo 원문에 들어오는 QuoteRequest는 요청 Profile·인용 Post·Source
 
 로컬 Quote에 대한 유효한 Reject 또는 승인 철회는 자체 Content를 유지한 채 Source를 비노출로 수렴시켜야
 한다(MUST). Kosmo 원문 작성자의 명시적 철회는 승인을 무효화하고 `Delete(QuoteAuthorization)`를 전달해야
-한다(MUST). 수신된 철회는 주체와 대상 승인의 대응을 검증해야 한다(MUST). Source 삭제와 Quote 자체 삭제를
-혼동하여 다른 작성자의 Content를 삭제해서는 안 된다(MUST NOT).
+한다(MUST). 수신된 철회는 주체와 대상 승인의 대응을 검증해야 한다(MUST). 수신자가 Quote의 소유 서버라면
+검증된 `Delete(QuoteAuthorization)`을 기존 Quote audience에 전달해야 한다(MUST). Source 삭제와 Quote 자체
+삭제를 혼동하여 다른 작성자의 Content를 삭제해서는 안 된다(MUST NOT).
 
 #### Scenario: 원격 원문의 Reject 또는 승인 철회
 
 - **WHEN** 로컬 Quote에 대응하는 유효한 Reject 또는 Delete(QuoteAuthorization)을 처리한다
 - **THEN** 해당 Source·승인을 더 이상 정상 인용으로 노출하지 않는다
 - **AND** 자체 Content와 Quote identity를 유지하고 이미 발신한 표현도 필요한 갱신으로 수렴시킨다
+
+#### Scenario: 수신한 승인 철회의 Quote audience 전달
+
+- **WHEN** 로컬 Quote의 소유 서버가 유효한 Delete(QuoteAuthorization)을 수신한다
+- **THEN** 해당 Source를 비노출로 전환하고 기존 Quote audience에 철회를 전달한다
+- **AND** 전달 대상별 실패가 검증된 로컬 철회 상태와 Quote 자체 Content를 되돌리지 않는다
 
 #### Scenario: Kosmo 원문 작성자의 철회
 

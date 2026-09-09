@@ -106,15 +106,18 @@ Kosmo 원문이 요청을 정책대로 자동 승인·거절하고 작성자가 
 
 - 1번 정책과 기존 Follow·Block·조회 경계를 사용한다.
 - 요청 Profile·Quote·Source·승인 발급자 대응을 검증한다. 정책 변경·차단은 기존 승인을 자동 철회하지 않는다.
+- QuoteAuthorization dispatcher는 Source 조회 권한을 적용하고 `interactingObject`를 embed하지 않는다.
+  요청자의 Source 조회 권한을 확인할 수 없으면 `interactionTarget`도 embed하지 않는다.
 - 명시적 철회는 Source만 숨기고 Quote 자체 본문을 보존한다.
 
 **Verification**
 
 - 정상·위조·차단·정책상 거부 요청, 중복 승인, 작성자 철회 권한, 제3자 비노출과 본문 보존을 검증한다.
+- 권한별 QuoteAuthorization dispatcher/readback과 `interactingObject`·`interactionTarget` embed 제한을 검증한다.
 
-- [ ] 4.1 Kosmo 원문 QuoteRequest의 검증·자동 Accept/Reject·승인 발급을 연결한다.
+- [ ] 4.1 Kosmo 원문 QuoteRequest의 검증·자동 Accept/Reject·승인 발급과 권한 기반 QuoteAuthorization dispatcher를 연결한다.
 - [ ] 4.2 작성자의 명시적 승인 철회 조작과 승인 무효화·원격 철회 전달을 연결한다.
-- [ ] 4.3 요청 대응·중복·철회 권한과 차단/명시적 철회의 다른 결과를 검증한다.
+- [ ] 4.3 요청 대응·중복·철회 권한, 승인 객체 readback·embed 제한과 차단/명시적 철회의 다른 결과를 검증한다.
 
 ## 5. PROD-924 로컬 Quote 발신과 원격 승인 결과
 
@@ -133,15 +136,17 @@ QuoteRequest와 유효한 QuoteAuthorization을 통해 같은 Quote의 Source �
 - 2번 작성 결과와 기존 canonical identity·audience·공통 delivery를 사용한다.
 - automatic/manual 광고와 정책 부재·해석 실패 모두 별도 QuoteRequest를 보내고, 유효한 Accept·승인 후 Update를 지킨다.
 - `interactionPolicy`는 UI·예상 eligibility의 힌트일 뿐 승인 증거가 아니다. 승인 전 Source와 자동 생성 호환 표현을 숨긴다.
+- 유효한 원격 철회를 수신하면 Source를 숨기고 기존 Quote audience에 `Delete(QuoteAuthorization)`을 전달한다.
 - 원격 Quote 수신 PROD-792를 중복 구현하거나 일반 사용자용 본문 수정을 추가하지 않는다.
 
 **Verification**
 
 - local/remote Source, 자기 인용, automatic/manual, 정책 부재·해석 실패, 어느 집합에도 포함되지 않는 경우,
   valid/invalid Accept, Reject, source delete와 동일 identity Update를 확인한다. 발신 payload와 최종 Source 조회를 함께 검증한다.
+- 유효·위조 철회 수신, 기존 Quote audience forwarding과 대상별 전달 실패 뒤의 상태 보존을 검증한다.
 
 - [ ] 5.1 승인된 Quote projection과 pending 본문 선발신·원격 요청을 연결한다.
-- [ ] 5.2 로컬 Quote의 원격 Accept/Reject·승인 철회를 검증해 Source와 필요한 Update를 연결한다.
+- [ ] 5.2 로컬 Quote의 원격 Accept/Reject·승인 철회를 검증해 Source·필요한 Update와 기존 Quote audience 철회 전달을 연결한다.
 - [ ] 5.3 일반 Post·Reply·Repost identity/audience 회귀와 승인 전 Source 비노출을 검증한다.
 - [ ] 5.4 자기 인용의 요청 생략과 원격 타인 원문의 정책별 QuoteRequest·pending·승인 증거 경계를 검증한다.
 
@@ -190,11 +195,12 @@ PROD-431·924의 작성·정책·승인·발신 결과가 하나의 사용자 �
 
 **Verification**
 
-- 작성→pending 게시·전달→Accept→Source 표시→명시적 철회→제3자 Source 비노출과 자체 Content 보존을 확인한다.
+- 작성→pending 게시·전달→Accept→Source 표시→명시적 철회→Quote audience 철회 전달→제3자 Source 비노출과
+  자체 Content 보존을 확인한다.
 - 타인 Followers Only 거부·자기 인용 접근, 차단 당사자/제3자 차이, 원문 삭제와 legacy 수신을 통합 확인한다.
 - 실제 schema diff의 초기화·기존 승인 보존·배포 순서와 rollback 시 Source 접근 보호를 확인한다.
 
-- [ ] 7.1 PROD-431 작성과 승인·발신·원격 수신 경계를 연결하는 연합 통합 검증을 수행한다.
+- [ ] 7.1 PROD-431 작성과 승인·발신·원격 수신·철회 audience forwarding 경계를 연결하는 연합 통합 검증을 수행한다.
 - [ ] 7.2 기존 데이터·승인 보존, 출시·복구 시 접근 보호와 플랫폼별 필요한 release 증거를 확인한다.
 - [ ] 7.3 최신 canonical·Linear·OpenSpec과 전체 구현 결과를 대조하고 미완료 범위가 없음을 확인한다.
 - [ ] 7.4 전체 선언 task 완료 후 delta spec 동기화·archive와 archive 후 validation을 수행한다.
