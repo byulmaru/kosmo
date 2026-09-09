@@ -1,6 +1,6 @@
 ## Purpose
 
-검증된 ActivityPub `Move`를 Profile 단위의 준비 관계와 기존 Follow lifecycle에 연결해, 원격 source Profile을 Local 또는 Remote target으로 안전하게 전환한다.
+검증된 ActivityPub `Move`를 Profile 단위의 준비 관계와 기존 Follow lifecycle에 연결해, 원격 source의 Local follower를 검증된 Local 또는 Remote target으로 안전하게 이전한다.
 
 ## ADDED Requirements
 
