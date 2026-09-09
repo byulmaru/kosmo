@@ -226,6 +226,7 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     menuItems,
     onMenuTriggerReady,
     profile,
+    showMuteAction,
   }: {
     action?: ReturnType<typeof createElement>;
     heading?: boolean;
@@ -234,11 +235,12 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     menuItems?: readonly object[];
     onMenuTriggerReady?: (focusTrigger: () => void) => void;
     profile?: { handle: string };
+    showMuteAction?: boolean;
   }) => {
     onMenuTriggerReady?.(() => menuTriggerFocus());
     return createElement(
       'ProfileHero',
-      { heading, identity: loading ? 'loading' : profile?.handle, moreItems },
+      { heading, identity: loading ? 'loading' : profile?.handle, moreItems, showMuteAction },
       menuItems ? createElement('ActionMenu', { items: menuItems }) : null,
       action,
     );
@@ -522,6 +524,14 @@ describe('profile route parameter lifecycle', () => {
         .map(({ withProfileBlockStatus }) => withProfileBlockStatus),
       [false],
     );
+  });
+  it('인증된 Profile의 viewerState가 한 렌더 동안 없어도 뮤트 메뉴를 유지한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = null;
+
+    await renderRoute('@target');
+
+    assert.equal(requireRendered('ProfileHero').props.showMuteAction, true);
   });
   it('표시 중인 selected Local Owner Profile에만 편집 Link를 노출한다', async () => {
     profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
