@@ -22,4 +22,4 @@
 ## 4. 문서와 전달
 
 - [x] 4.1 PageHeader·breakpoint scroll·Figma implementation 상태 문서를 Production 계약에 맞춘다
-- [ ] 4.2 Draft PR에 범위, 검증 결과와 남은 Native runtime 공백을 기록한다
+- [x] 4.2 Draft PR에 범위, 검증 결과와 남은 Native runtime 공백을 기록한다
