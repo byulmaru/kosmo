@@ -66,6 +66,7 @@ let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
+let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let createPost: typeof CoreServices.createPost;
 let findPostByActivityPubUri: typeof findPostByActivityPubUriType;
@@ -89,6 +90,7 @@ describe('inbound Create dispatch', () => {
       PostContents,
       Posts,
       ProfileFollows,
+      ProfileMedia,
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
@@ -105,6 +107,7 @@ describe('inbound Create dispatch', () => {
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
+    await db.delete(ProfileMedia);
     await db.delete(Media);
     await db.delete(Profiles);
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
@@ -115,6 +118,7 @@ describe('inbound Create dispatch', () => {
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
+    await db.delete(ProfileMedia);
     await db.delete(Media);
     await pg.end();
   });
@@ -267,7 +271,7 @@ describe('inbound Create dispatch', () => {
         }),
       },
       {
-        expected: { reason: 'invalid_note', status: 'rejected' },
+        expected: { reason: 'note_content_length_exceeded', status: 'rejected' },
         note: new Note({
           attribution: remoteActorUri,
           content: 'x'.repeat(10_001),
@@ -346,6 +350,68 @@ describe('inbound Create dispatch', () => {
     } finally {
       fetchMock.mock.restore();
     }
+  });
+
+  test('rolls back an unsaved author Profile projection when hydrated materialization fails internally', async () => {
+    const objectUri = new URL('https://objects.example/notes/author-persistence-failure');
+    const actor = new Person({
+      icon: new Image({
+        mediaType: 'image/png',
+        name: 'Avatar',
+        url: new URL('https://remote.example/media/unsaved-avatar.png'),
+      }),
+      id: remoteActorUri,
+      preferredUsername: 'alice',
+    });
+    const lookupObject = mock.fn(async () => actor);
+    const fetchMock = mock.method(globalThis, 'fetch', async () =>
+      Response.json(
+        { subject: 'acct:alice@remote.example' },
+        { headers: { 'Content-Type': 'application/jrd+json' } },
+      ),
+    );
+    await pg`
+      CREATE FUNCTION fail_hydrated_author_profile_media_insert() RETURNS trigger
+      LANGUAGE plpgsql AS $function$
+      BEGIN
+        RAISE EXCEPTION 'intentional hydrated author profile media failure';
+      END
+      $function$
+    `;
+    await pg`
+      CREATE TRIGGER fail_hydrated_author_profile_media_insert
+      BEFORE INSERT ON profile_media
+      FOR EACH ROW EXECUTE FUNCTION fail_hydrated_author_profile_media_insert()
+    `;
+
+    try {
+      await assert.rejects(
+        materializeHydratedRemoteNote({
+          context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
+          note: new Note({
+            attribution: remoteActorUri,
+            content: 'Author persistence failure',
+            id: objectUri,
+            to: PUBLIC_COLLECTION,
+          }),
+          objectUri,
+          receivedAt,
+        }),
+      );
+    } finally {
+      await pg`DROP TRIGGER fail_hydrated_author_profile_media_insert ON profile_media`;
+      await pg`DROP FUNCTION fail_hydrated_author_profile_media_insert()`;
+      fetchMock.mock.restore();
+    }
+
+    assert.equal(await db.$count(ActivityPubActors), 0);
+    assert.equal(await db.$count(Profiles), 0);
+    assert.equal(await db.$count(ProfileMedia), 0);
+    assert.equal(await db.$count(Media), 0);
+    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+    assert.equal(await db.$count(Instances), 2);
   });
 
   test('preserves a committed discovered author when Post materialization fails', async () => {
@@ -1840,6 +1906,183 @@ describe('inbound Create dispatch', () => {
     assert.equal(await db.$count(ActivityPubPosts), 0);
     assert.equal(await db.$count(Posts), 0);
     assert.equal(await db.$count(PostContents), 0);
+  });
+
+  test('preserves the bounded rejection reason for a hydrated action without Create observation', async () => {
+    await createStoredRemoteActor();
+    const objectUri = new URL('https://objects.example/notes/over-limit-action');
+    const logs: unknown[] = [];
+    const metrics: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      countMetric: (name, attributes) => metrics.push({ attributes, name }),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      const result = await materializeHydratedRemoteNote({
+        context: createContext(),
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'a'.repeat(10_001),
+          id: objectUri,
+          mediaType: 'text/plain',
+          to: PUBLIC_COLLECTION,
+        }),
+        objectUri,
+        receivedAt,
+      });
+
+      assert.deepEqual(result, {
+        reason: 'note_content_length_exceeded',
+        status: 'rejected',
+      });
+    } finally {
+      restoreReporter();
+    }
+
+    assert.deepEqual(logs, []);
+    assert.deepEqual(metrics, []);
+    assert.equal(await db.$count(Media), 0);
+    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+  });
+
+  test('applies the content budget at the embedded Create and hydrated action boundaries', async () => {
+    await createStoredRemoteActor();
+    const embeddedCases = [
+      { expected: 'created', length: 9_999 },
+      { expected: 'created', length: 10_000 },
+      { expected: 'rejected', length: 10_001 },
+    ] as const;
+    const hydratedCases = [
+      { expected: 'created', length: 9_999 },
+      { expected: 'created', length: 10_000 },
+      { expected: 'rejected', length: 10_001 },
+    ] as const;
+
+    for (const { expected, length } of embeddedCases) {
+      const objectUri = new URL(`https://remote.example/notes/budget-embedded-${length}`);
+      await handleInboundCreate(
+        createContext(),
+        new Create({
+          actor: remoteActorUri,
+          object: new Note({
+            attribution: remoteActorUri,
+            content: 'a'.repeat(length),
+            id: objectUri,
+            mediaType: 'text/plain',
+            to: PUBLIC_COLLECTION,
+          }),
+        }),
+        receivedAt,
+      );
+
+      if (expected === 'created') {
+        assert.equal((await getMaterializedPost(objectUri)).post.visibility, PostVisibility.PUBLIC);
+      } else {
+        assert.equal(await db.$count(Posts), 2);
+      }
+    }
+
+    for (const { expected, length } of hydratedCases) {
+      const objectUri = new URL(`https://objects.example/notes/budget-hydrated-${length}`);
+      const result = await materializeHydratedRemoteNote({
+        context: createContext(),
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'a'.repeat(length),
+          id: objectUri,
+          mediaType: 'text/plain',
+          to: PUBLIC_COLLECTION,
+        }),
+        objectUri,
+        receivedAt,
+      });
+
+      if (expected === 'created') {
+        assert.equal(result.status, 'created');
+        assert.equal((await getMaterializedPost(objectUri)).post.visibility, PostVisibility.PUBLIC);
+      } else {
+        assert.deepEqual(result, {
+          reason: 'note_content_length_exceeded',
+          status: 'rejected',
+        });
+      }
+    }
+
+    assert.equal(await db.$count(Posts), 4);
+    assert.equal(await db.$count(PostContents), 4);
+    assert.equal(await db.$count(ActivityPubPosts), 4);
+  });
+
+  test('converges unsaved Actor and Post identity for concurrent hydrated materialization without loser Media', async () => {
+    const objectUri = new URL('https://objects.example/notes/concurrent-new-materialization');
+    const mediaUrl = new URL('https://remote.example/media/concurrent-new-materialization.webp');
+    const actor = new Person({ id: remoteActorUri, preferredUsername: 'alice' });
+    let lookupCount = 0;
+    let releaseLookups!: () => void;
+    const bothLookupsStarted = new Promise<void>((resolve) => {
+      releaseLookups = resolve;
+    });
+    const lookupObject = mock.fn(async () => {
+      lookupCount += 1;
+      if (lookupCount === 2) {
+        releaseLookups();
+      }
+      await bothLookupsStarted;
+      return actor;
+    });
+    const fetchMock = mock.method(globalThis, 'fetch', async () =>
+      Response.json(
+        { subject: 'acct:alice@remote.example' },
+        { headers: { 'Content-Type': 'application/jrd+json' } },
+      ),
+    );
+    const note = () =>
+      new Note({
+        attachments: [new Image({ mediaType: 'image/webp', url: mediaUrl })],
+        attribution: remoteActorUri,
+        content: 'Concurrent new materialization',
+        id: objectUri,
+        mediaType: 'text/plain',
+        to: PUBLIC_COLLECTION,
+      });
+
+    try {
+      const results = await Promise.all([
+        materializeHydratedRemoteNote({
+          context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
+          note: note(),
+          objectUri,
+          receivedAt,
+        }),
+        materializeHydratedRemoteNote({
+          context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
+          note: note(),
+          objectUri,
+          receivedAt,
+        }),
+      ]);
+
+      assert.deepEqual(results.map((result) => result.status).sort(), ['created', 'duplicate']);
+      const materialized = await getMaterializedPost(objectUri);
+      assert.equal(await db.$count(ActivityPubActors), 1);
+      assert.equal(await db.$count(Profiles), 1);
+      assert.equal(await db.$count(Posts), 1);
+      assert.equal(await db.$count(PostContents), 1);
+      assert.equal(await db.$count(ActivityPubPosts), 1);
+      assert.equal(await db.$count(Media), 1);
+      assert.equal(materialized.post.profileId, (await db.select().from(Profiles))[0]?.id);
+      assert.deepEqual(
+        materialized.content.document.body.content
+          .filter((block) => block.type === 'media')
+          .map((block) => block.attrs.mediaId),
+        [(await db.select().from(Media))[0]?.id],
+      );
+    } finally {
+      fetchMock.mock.restore();
+    }
   });
 
   test('keeps the first content, visibility, and timestamps for duplicate Create', async () => {

@@ -121,7 +121,11 @@ const resolveReplyParentId = async (
 type HydratedRemoteNoteMaterializationResult =
   | { postId: string; status: 'created' | 'duplicate' }
   | {
-      reason: 'invalid_note' | 'unsupported_note' | 'unusable_author';
+      reason:
+        | 'invalid_note'
+        | 'note_content_length_exceeded'
+        | 'unsupported_note'
+        | 'unusable_author';
       status: 'rejected';
     };
 
@@ -243,7 +247,10 @@ export const materializeHydratedRemoteNote = async ({
   try {
     projection = await projectRemoteNote(note);
   } catch (error) {
-    if (error instanceof RemoteNoteContentLengthExceededError || error instanceof TypeError) {
+    if (error instanceof RemoteNoteContentLengthExceededError) {
+      return { reason: 'note_content_length_exceeded', status: 'rejected' };
+    }
+    if (error instanceof TypeError) {
       return { reason: 'invalid_note', status: 'rejected' };
     }
     throw error;

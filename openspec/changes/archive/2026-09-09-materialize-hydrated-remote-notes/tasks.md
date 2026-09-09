@@ -116,3 +116,9 @@ PROD-509가 공통 경계·Create의 통합 완료 증거를 남기고 이 chang
 - [x] 5.1 관련 Fedify/core 검증과 영향 패키지 정적 검증을 통과시키고 DB-only 조회·authorization 보존 증거를 남긴다.
 - [x] 5.2 후속 consumer에 입력·결과·거절·원자성·budget 계약과 Create 회귀 증거를 인계한다.
 - [x] 5.3 전체 scope·tasks·strict validation을 확인하고 delta 동기화 및 이 change의 archive를 수행한다.
+
+## Verification Evidence (2026-09-09 review repair)
+
+- 3.2: `packages/fedify/src/inbound-create.test.ts`의 `rolls back an unsaved author Profile projection when hydrated materialization fails internally`가 실제 `materializeHydratedRemoteNote` 신규 action에서 미저장 작성자의 Profile Media insert를 PostgreSQL trigger로 실패시키고, 오류 전파와 Actor/Profile/ProfileMedia/Media/Post/Content/mapping rollback 및 확보된 Instance 보존을 확인한다. 기존 Actor commit 후 Post 실패 경로는 같은 파일의 `preserves a committed discovered author when Post materialization fails`가 계속 검증한다.
+- 3.4: 같은 파일의 `converges unsaved Actor and Post identity for concurrent hydrated materialization without loser Media`가 미저장 동일 Actor·동일 object에 대한 병렬 action을 실행해 Actor/Profile/Post identity 수렴, 단일 mapping/content/media와 패배 시도 Media 잔존 없음을 실제 DB row와 Content Media reference로 확인한다.
+- 4.3: 같은 파일의 `applies the content budget at the embedded Create and hydrated action boundaries`가 embedded Create와 direct hydrated action 각각 UTF-16 Plain Text 9,999/10,000 수락 및 10,001 거부·no-op을 실제 production 경로에서 확인한다. `preserves the bounded rejection reason for a hydrated action without Create observation`은 direct action이 `note_content_length_exceeded`를 caller에게 보존하고 Create 관측을 임의로 발생시키지 않음을 검증하며, 기존 embedded Create 관측 회귀는 `rejects an over-limit Note before Media materialization and records a bounded reason`이 담당한다.
