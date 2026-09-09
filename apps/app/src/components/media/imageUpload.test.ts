@@ -148,43 +148,6 @@ beforeEach(() => {
   createManipulatorContext = () => installManipulator({ height: 100, width: 100 }).context;
 });
 
-test('uploads identical normalized bytes when native Blob creation from ArrayBuffer is unsupported', async (t) => {
-  const bytes = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 255, 128, 0x57, 0x45, 0x42, 0x50]);
-  const normalizedUri = 'file:///cache/normalized.webp';
-  const manipulator = installManipulator({ height: 100, width: 100, resultUri: normalizedUri });
-  const readResponse = new Response(bytes, { status: 200 });
-  const blob = t.mock.method(readResponse, 'blob', async () => {
-    throw new Error("Creating blobs from 'ArrayBuffer' and 'ArrayBufferView' are not supported");
-  });
-  const calls: string[] = [];
-  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
-    if (String(input) === normalizedUri) {
-      calls.push('read');
-      return readResponse;
-    }
-    calls.push('put');
-    assert.equal(init?.method, 'PUT');
-    assert.deepEqual(init?.headers, { 'content-type': 'image/webp' });
-    assert.deepEqual(new Uint8Array(await new Request(String(input), init).arrayBuffer()), bytes);
-    assert.equal(manipulator.contextReleased(), true);
-    return new Response(null, { status: 204 });
-  });
-  const result = await uploadImage({
-    asset: createAsset(),
-    issue: async () => ({ mediaId: 'media-native', uploadUrl: 'https://upload.example/native' }),
-    complete: async (mediaId) => {
-      assert.equal(mediaId, 'media-native');
-      calls.push('complete');
-    },
-    isActive: () => true,
-  });
-  assert.equal(result, 'media-native');
-  assert.deepEqual(calls, ['read', 'put', 'complete']);
-  assert.equal(blob.mock.callCount(), 0);
-  assert.deepEqual(manipulator.saveOptions, [{ compress: 0.8, format: 'webp' }]);
-  assert.equal(captureCalls.length, 0);
-});
-
 test('releases only Web object URL previews', () => {
   const released: string[] = [];
 
@@ -197,7 +160,11 @@ test('releases only Web object URL previews', () => {
 
 test('issues, uploads normalized WebP bytes, and completes in order', async (t) => {
   const calls: string[] = [];
-  const normalizedBlob = new Blob(['normalized-webp'], { type: 'image/webp' });
+  const bytes = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 255, 128, 0x57, 0x45, 0x42, 0x50]);
+  const readResponse = new Response(bytes, { status: 200 });
+  t.mock.method(readResponse, 'blob', async () => {
+    throw new Error("Creating blobs from 'ArrayBuffer' and 'ArrayBufferView' are not supported");
+  });
   const manipulator = installManipulator({ height: 2000, width: 4000 });
   const put = t.mock.method(
     globalThis,
@@ -205,10 +172,10 @@ test('issues, uploads normalized WebP bytes, and completes in order', async (t) 
     async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input) === 'file:///cache/normalized.webp') {
         calls.push('read-normalized');
-        return new Response(normalizedBlob, { status: 200 });
+        return readResponse;
       }
       calls.push(`${init?.method}:${String(input)}`);
-      assert.equal(await new Response(init?.body).text(), 'normalized-webp');
+      assert.deepEqual(new Uint8Array(await new Request(String(input), init).arrayBuffer()), bytes);
       assert.deepEqual(init?.headers, { 'content-type': 'image/webp' });
       return new Response(null, { status: 204 });
     },
