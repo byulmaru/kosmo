@@ -723,7 +723,7 @@ test('current Home refresh error는 timeline을 유지하고 다음 activation�
     await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
     await page.setViewportSize({ height: 360, width: 1024 });
     await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
-    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.getByRole('alert')).toContainText('홈을 불러오지 못했어요');
     const rerenderedEntry = await homeEntry(page, 'navigation');
     await expect
       .poll(async () => {
