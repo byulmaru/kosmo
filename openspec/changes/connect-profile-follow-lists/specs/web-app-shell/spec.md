@@ -41,9 +41,39 @@
 - **THEN** 시스템은 기존 ProfileHero와 게시물 영역을 표시한다
 - **AND** 관계 목록 PageHeader나 TabList를 표시하지 않는다
 
+### Requirement: Profile connection list area states
+
+팔로워·팔로잉 목록 영역은 관계 TabList 아래에서 로딩, 오류, 빈 목록 상태를 표시할 수 있어야 한다(MUST). 두 목록은 같은 상태 표현(로딩 스켈레톤·인라인 오류·인라인 빈 상태)을 공유해 시각/상태 구조가 어긋나지 않아야 하고(MUST), 별도 목록 종류 heading을 중복 표시하지 않아야 한다(MUST NOT). 로딩 중에는 프로필 행 형태의 스켈레톤과 스크린리더용 로딩 안내를 표시해야 하며, 스켈레톤 시각 요소는 보조 기술에 노출하지 않아야 한다(MUST). 목록 query가 실패하고 표시할 기존 데이터가 없을 때는 인라인 오류 상태와 재시도 동작을 제공해야 한다(MUST). 표시할 항목이 없을 때는 목록 종류에 맞는 빈 상태 제목과 보조 설명을 표시해야 한다(MUST). 색·반경은 시맨틱 디자인 토큰을 사용해 라이트/다크에 대응해야 한다(MUST). 상태 표현은 기존 게시글 목록 상태(`Profile post list ...`)와 같은 토큰·접근성 패턴을 따라야 한다(MUST).
+
+#### Scenario: Loading state
+
+- **WHEN** 목록 영역이 로딩 중 상태다
+- **THEN** 시스템은 관계 TabList 아래에 프로필 행 형태의 스켈레톤을 표시한다
+- **AND** 스켈레톤 시각 요소는 보조 기술에 노출하지 않고, 스크린리더에는 목록 로딩 안내를 제공한다
+
+#### Scenario: Error state with retry
+
+- **WHEN** 목록 query가 실패했고 표시할 기존 데이터가 없다
+- **THEN** 시스템은 관계 TabList 아래에 인라인 오류 상태를 표시한다
+- **AND** 사용자는 다시 시도 동작으로 해당 목록 query를 다시 요청할 수 있다
+
+#### Scenario: Empty state
+
+- **WHEN** 표시할 팔로워 또는 팔로잉 항목이 없다
+- **THEN** 시스템은 목록 종류에 맞는 빈 상태 제목과 보조 설명을 표시한다
+- **AND** 별도 `팔로워` 또는 `팔로잉` 목록 heading을 중복 표시하지 않는다
+
+#### Scenario: Shared structure across both lists
+
+- **WHEN** 팔로워 목록과 팔로잉 목록을 비교한다
+- **THEN** 두 목록은 같은 로딩·오류·빈 상태 구조를 사용한다
+- **AND** 상태는 각 route의 관계 TabList 바로 아래에 놓인다
+
+## ADDED Requirements
+
 ### Requirement: Profile connection list data rendering
 
-팔로워·팔로잉 route는 해당 Profile의 기존 Relay follow connection을 `ProfileListItem` 목록으로 렌더해야 한다(MUST). `/@{handle}/followers`는 각 edge의 `node.follower`를, `/@{handle}/following`은 각 edge의 `node.followee`를 표시해야 한다(MUST). 두 목록은 connection edge 순서를 보존하고 클라이언트에서 재정렬하지 않아야 한다(MUST NOT). Web을 포함한 `ProfileListItem`의 Follow action은 기존 Medium `96×40`을 사용하면서 기본 행 높이 `64px`를 유지해야 한다(MUST). 이 시각 크기 변경은 기존 loading·error·empty·pagination·retry, follow/unfollow 동작과 Relay connection identity를 바꾸지 않아야 한다(MUST NOT).
+팔로워·팔로잉 route는 해당 Profile의 기존 Relay follow connection을 `ProfileListItem` 목록으로 렌더해야 한다(MUST). `/@{handle}/followers`는 각 edge의 `node.follower`를, `/@{handle}/following`은 각 edge의 `node.followee`를 표시해야 한다(MUST). 두 목록은 connection edge 순서를 보존하고 클라이언트에서 재정렬하지 않아야 한다(MUST NOT). Web을 포함한 `ProfileListItem`의 Follow action은 기존 Medium `96×40`을 사용하면서 기본 행 높이 `64px`를 유지해야 한다(MUST). 이 시각 크기 변경은 follow/unfollow 동작과 Relay connection identity를 바꾸지 않아야 한다(MUST NOT).
 
 #### Scenario: Render followers from connection
 
@@ -56,12 +86,6 @@
 - **WHEN** following connection이 edge를 반환한다
 - **THEN** 시스템은 각 `node.followee`를 탭 바로 아래의 `ProfileListItem`으로 표시한다
 - **AND** 별도 `팔로잉` 목록 heading을 중복 표시하지 않는다
-
-#### Scenario: Preserve list lifecycle
-
-- **WHEN** connection이 loading, initial error, empty, content, 추가 조회 중 또는 추가 조회 오류 상태가 된다
-- **THEN** 시스템은 기존 상태 문구, 기존 edge, 수동 `더 불러오기`와 같은 위치의 재시도를 유지한다
-- **AND** follow action과 Relay connection identity를 새로 정의하지 않는다
 
 #### Scenario: Keep the Web follow action aligned with the list row
 
