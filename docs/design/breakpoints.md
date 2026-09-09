@@ -48,21 +48,22 @@ PostComposer presentation은 `Rail`과 `Overlay`만 사용한다. 중앙 timelin
 - 모바일 검색 상태에서도 왼쪽 가장자리 스와이프로 drawer를 열 수 있어야 한다.
 - Android/iOS에는 이 검색 상단바 통합을 적용하지 않는다.
 
-## 개인정보 처리방침 진입
+## 공개 정책 문서 진입
 
-공개 `/privacy` route와 비로그인 landing의 링크는 유지한다. 인증 후 셸에서는 generic `/menu`를 법적 고지의
-영구 위치로 사용하지 않고 full Web 우측 레일에만 보조 진입점을 둔다.
+공개 `/privacy`, `/account-deletion`, `/child-safety` route와 비로그인 landing의 링크를 제공한다. 인증 후
+셸에서는 `SidebarNavigation` footer에서 세 문서에 접근할 수 있으며, 기존 full Web 우측 레일의 개인정보
+처리방침 footer도 유지한다.
 
 - `≥ full`: 우측 레일 최하단에 `textSecondary` 색의 개인정보 처리방침 footer를 둔다. Production branch
   전환 중에는 표시 tag 공급 방식이 정해지지 않았으므로 기존 `· 버전: <Git tag>` 정적 텍스트를 렌더링하지
   않는다. 선택한 Profile이 없어 컴포저가 표시되지 않아도 개인정보 처리방침 링크는 유지하며, 기존 위치보다
   viewport 하단에 가깝게 배치한다. 표시 tag 공급과 version label 재활성화는 후속 변경에서 결정한다.
-- `compact`~`full`: 좁은 아이콘 레일의 공간과 navigation 위계를 보존하기 위해 개인정보 처리방침 진입점을
-  포함한 footer를 표시하지 않는다.
-- `< compact` mobile Web과 Android/iOS: mobile drawer에 개인정보 처리방침 진입점을 표시하지 않는다.
-- 가입·로그인 온보딩 안의 추가 개인정보 처리방침 진입점은 후속 범위에서 결정한다. 현재 범위에서는 공개
-  route와 landing 링크, full Web 보조 진입점만 유지하며 준비되지 않은 팔로워 요청 또는 generic menu
-  navigation을 다시 만들지 않는다.
+- `compact`~`full`: Sidebar footer에서 개인정보 처리방침·계정 삭제 안내·아동 안전 정책 링크를 제공한다.
+  compact icon rail은 아이콘과 accessible name을 사용하고, full sidebar는 텍스트 label을 함께 표시한다.
+- `< compact` mobile Web과 Android/iOS: mobile drawer footer에서 같은 세 문서 링크를 제공한다. 링크 자체는
+  shell이 소유하지만 문서 내용과 이메일 요청 처리는 각 public route가 소유한다.
+- 가입·로그인 온보딩에서는 landing의 public route 링크를 유지한다. 준비되지 않은 Account form, 자동 삭제,
+  공통 신고 navigation은 추가하지 않는다.
 
 ## 설정 진입
 

@@ -2,11 +2,14 @@ import { usePathname } from 'expo-router';
 import {
   Bell,
   Bookmark,
+  FileText,
   House,
   Mail,
   PenLine,
   Search,
   Settings as SettingsIcon,
+  ShieldCheck,
+  Trash2,
   UserRound,
   UserRoundPlus,
 } from 'lucide-react-native';
@@ -52,6 +55,12 @@ type ProfileNavigationItem = {
 };
 
 type NavigationItem = ProfileNavigationItem | RouteNavigationItem;
+
+const policyLinks = [
+  { href: '/privacy' as Href, Icon: FileText, label: '개인정보 처리방침' },
+  { href: '/account-deletion' as Href, Icon: Trash2, label: '계정 삭제 안내' },
+  { href: '/child-safety' as Href, Icon: ShieldCheck, label: '아동 안전 정책' },
+] as const;
 
 const navigation: NavigationItem[] = [
   { href: '/home', Icon: House, label: '홈' },
@@ -304,6 +313,28 @@ export function SidebarNavigation({
               </NavigationLink>
             )
           ) : null}
+          <View style={styles.policyLinks}>
+            {policyLinks.map(({ href, Icon, label }) => (
+              <NavigationLink href={href} key={label} onNavigate={onNavigate}>
+                <Pressable
+                  accessibilityLabel={label}
+                  accessibilityRole="link"
+                  style={StyleSheet.flatten([
+                    styles.footerItem,
+                    styles.policyFooterItem,
+                    compact && styles.compactItem,
+                  ])}
+                >
+                  <Icon color={theme.foregroundSecondary} size={20} strokeWidth={2} />
+                  {!compact ? (
+                    <Text style={[styles.footerLabel, { color: theme.foregroundPrimary }]}>
+                      {label}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              </NavigationLink>
+            ))}
+          </View>
           {compact ? (
             <LogoutControl compact style={[styles.footerItem, styles.compactItem]} />
           ) : (
@@ -382,6 +413,8 @@ const styles = StyleSheet.create({
   },
   footer: { borderTopWidth: 1, marginTop: 'auto', paddingTop: spacing.xs, width: '100%' },
   compactFooter: { borderTopWidth: 0 },
+  policyLinks: { gap: spacing.xs },
+  policyFooterItem: { height: 48, minHeight: 48 },
   footerItem: {
     alignItems: 'center',
     borderRadius: radii.sm,
