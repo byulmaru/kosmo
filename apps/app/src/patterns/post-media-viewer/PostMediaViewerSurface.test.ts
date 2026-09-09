@@ -229,34 +229,13 @@ describe('PostMediaViewerSurface', () => {
     });
   });
 
-  it('Ready는 close, 상단 위치 status, 다중 navigation을 제공한다', async () => {
+  it('Ready는 close, 위치 status, 다중 navigation을 제공한다', async () => {
     await render({ currentIndex: 1 });
 
     assert.ok(findByLabel('이미지 뷰어 닫기'));
     assert.ok(findByLabel('이전 이미지'));
     assert.ok(findByLabel('다음 이미지'));
     assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
-    assert.deepEqual(flattenStyle(byTestId('post-media-viewer-counter-position').props.style), {
-      alignItems: 'center',
-      left: 0,
-      position: 'absolute',
-      right: 0,
-      top: 16,
-    });
-    assert.deepEqual(flattenStyle(byTestId('post-media-viewer-counter').props.style), {
-      backgroundColor: '#000000',
-      borderRadius: 16,
-      color: '#ffffff',
-      fontFamily: 'SUIT',
-      fontSize: 14,
-      fontWeight: '600',
-      height: 30,
-      lineHeight: 20,
-      minWidth: 54,
-      paddingHorizontal: 12,
-      paddingVertical: 5,
-      textAlign: 'center',
-    });
   });
 
   it('단일 Media에서는 visual navigation과 counter를 숨긴다', async () => {

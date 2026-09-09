@@ -2,7 +2,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing } from '@/theme/tokens';
+import { fontFamilies, radii, spacing } from '@/theme/tokens';
 import type React from 'react';
 import type { ReactionToggleIntent } from './ReactionSelector';
 
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     top: 0,
   },
   entryCount: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     fontWeight: '700',
     ...Platform.select({
       default: { fontSize: 16, lineHeight: 24 },
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   moreGlyph: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     fontSize: 16,
     fontWeight: '700',
     lineHeight: 20,

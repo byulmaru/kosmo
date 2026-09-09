@@ -14,7 +14,7 @@ import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
@@ -134,14 +134,14 @@ const styles = StyleSheet.create({
   },
   onboarding: { alignItems: 'center', maxWidth: 448, width: '100%' },
   onboardingTitle: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     fontWeight: '600',
     marginTop: spacing.lg,
     textAlign: 'center',
     ...typography.md,
   },
   description: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     marginTop: spacing.sm,
     textAlign: 'center',
     ...typography.sm,

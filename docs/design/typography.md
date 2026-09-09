@@ -44,17 +44,18 @@
 - UI의 IBM Plex Sans KR은 100~600을 가능한 동일 weight로 대응하고, SUIT 700 이상은 IBM Plex Sans KR Bold로 축소한다.
 - 본문의 Noto Sans KR은 Thin, Light, DemiLight, Regular, Medium, Bold, Black 중 가장 가까운 weight로 대응한다.
 - 대치 과정에서는 font size, line-height, letter spacing token을 바꾸지 않는다.
-- 이는 **MCP 작업 환경 한정 대치**다. 코드·실서비스와 Production 검수는 그대로 SUIT·Pretendard Variable을 사용한다.
+- 이는 **MCP 작업 환경 한정 대치**다. 코드·실서비스와 Production 검수는 플랫폼별 runtime 로딩 규칙에 따라 SUIT·Pretendard family를 사용한다(아래 Expo/React Native 구현 참조).
 - 로고처럼 SUIT로 지정하려던 임시 text node도 MCP에서는 IBM Plex Sans KR로 표기한다(로고 에셋 확정 전까지는 대문자 "K").
 
 ## Expo/React Native 구현 (`apps/app`)
 
-- 두 폰트는 **npm 패키지로 관리**한다(`pretendard`, `@sun-typeface/suit`, 둘 다 Variable). `apps/app/src/app/_layout.tsx`가 package의 Variable TTF를 `expo-font` `useFonts`로 로드하므로 Android/iOS/Web이 같은 asset을 bundle한다. 외부 CDN 런타임 의존과 git에 복제한 폰트 binary는 두지 않는다.
-- app에서 사용하는 family name은 `SUIT`와 `Pretendard`다. package 경로나 내부 font filename을 component style에 직접 사용하지 않는다.
+- 두 폰트는 **npm 패키지로 관리**한다(`pretendard`, `@sun-typeface/suit`). `apps/app/src/app/_layout.tsx`는 모든 플랫폼에서 package의 Variable TTF를 `expo-font` `useFonts`로 번들 로드한다. iOS loader key는 `Pretendard`와 `SUIT`로, Android/Web loader key와 공용 consumer family name은 각각 `Pretendard Variable`과 `SUIT Variable`로 유지한다. 외부 CDN 런타임 의존과 git에 복제한 폰트 binary는 두지 않는다.
+- iOS loader key(`Pretendard`, `SUIT`)는 등록용 namespace이며 component가 사용하는 family name이 아니다. component는 `apps/app/src/theme/tokens.ts`의 `fontFamilies.content`/`fontFamilies.ui`를 통해 `Pretendard Variable`/`SUIT Variable`을 사용한다. iOS key를 내부 family name과 분리해 `expo-font`의 UIKit alias 처리가 Variable family 조회를 가리지 않게 한다.
+- package 경로나 내부 font filename을 component style에 직접 사용하지 않는다.
 - React Native `Text`/`TextInput`은 CSS font 상속에 의존하지 않는다. 공용 primitive와 각 text style은 용도에 맞는 `fontFamily`를 명시한다.
-  - UI, 버튼, 내비게이션, 라벨, heading: `fontFamily: 'SUIT'`
-  - 포스트 본문, 긴 글 입력: `fontFamily: 'Pretendard'`
+  - UI, 버튼, 내비게이션, 라벨, heading: `fontFamilies.ui` (`SUIT Variable`)
+  - 포스트 본문, 긴 글 입력: `fontFamilies.content` (`Pretendard Variable`)
 - 새 구현은 `apps/app/src/theme/tokens.ts`의 역할 기반 `textStyles`를 사용한다. 기존 consumer는 DSN-21 이관 완료 전까지 deprecated `typography` 호환 alias를 사용할 수 있으며, 화면에서 같은 Foundation 값을 raw number로 반복하지 않는다.
 - React Native Web Storybook은 전용 `@font-face` 설정으로 같은 npm package의 Variable WOFF2 asset을
-  `SUIT`와 `Pretendard` family로 등록한다. Expo runtime의 `useFonts` loader는 사용하지 않지만,
+  `SUIT Variable`과 `Pretendard Variable` family로 등록한다. Expo runtime의 `useFonts` loader는 사용하지 않지만,
   component의 production family name과 asset은 동일하게 유지한다.

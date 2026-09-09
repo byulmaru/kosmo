@@ -8,7 +8,7 @@ import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { space, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
 import type { ComposePageQuery } from './__generated__/ComposePageQuery.graphql';
 
 const ComposeQuery = graphql`
@@ -142,8 +142,8 @@ const styles = StyleSheet.create({
   stateCard: {
     padding: space[16],
   },
-  stateTitle: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
-  stateDescription: { fontFamily: 'SUIT', marginTop: spacing.xs, ...typography.sm },
+  stateTitle: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md },
+  stateDescription: { fontFamily: fontFamilies.ui, marginTop: spacing.xs, ...typography.sm },
   stateAction: { alignItems: 'flex-start', marginTop: spacing.lg },
   srOnly: { height: 1, opacity: 0, overflow: 'hidden', position: 'absolute', width: 1 },
 });

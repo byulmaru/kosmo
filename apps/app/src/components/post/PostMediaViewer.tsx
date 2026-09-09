@@ -26,7 +26,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, iconSizes, radii, spacing, typography } from '@/theme/tokens';
+import { breakpoints, fontFamilies, iconSizes, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { focusPostMediaViewerTarget } from './postMediaViewerSession';
 import type { ReactNode, RefObject } from 'react';
@@ -746,7 +746,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 48,
   },
-  counter: { color: '#ffffff', fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
+  counter: { color: '#ffffff', fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
   layout: { flex: 1, minHeight: 0, minWidth: 0 },
   mobileLayout: { flexDirection: 'column' },
   wideLayout: { flexDirection: 'row' },
@@ -763,7 +763,7 @@ const styles = StyleSheet.create({
   image: { height: '100%', width: '100%' },
   imagePrivacyBoundary: { height: '100%', width: '100%' },
   imageFallback: { alignItems: 'center', gap: spacing.md, justifyContent: 'center' },
-  imageFallbackText: { color: '#ffffff', fontFamily: 'SUIT', ...typography.sm },
+  imageFallbackText: { color: '#ffffff', fontFamily: fontFamilies.ui, ...typography.sm },
   retryButton: {
     alignItems: 'center',
     borderColor: '#777777',
@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
     minWidth: 112,
     paddingHorizontal: spacing.lg,
   },
-  retryText: { color: '#ffffff', fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
+  retryText: { color: '#ffffff', fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
   navigationButton: {
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
@@ -802,7 +802,7 @@ const styles = StyleSheet.create({
   bodyRegion: { flexShrink: 1, minHeight: 0, position: 'relative' },
   bodyPrivacyBoundary: { flexShrink: 1, minHeight: 0, position: 'relative' },
   bodyMeasure: { left: 0, opacity: 0, position: 'absolute', right: 0, top: 0 },
-  bodyText: { fontFamily: 'Pretendard', ...typography.md },
+  bodyText: { fontFamily: fontFamilies.content, ...typography.md },
   collapsedBody: { flexShrink: 1, minHeight: 0, overflow: 'hidden' },
   bodyScroll: { flexShrink: 1, minHeight: 0 },
   moreButton: {
@@ -811,6 +811,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 44,
   },
-  moreText: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
+  moreText: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
   actionBar: { borderTopWidth: 1, paddingBottom: spacing.sm, paddingTop: spacing.sm },
 });

@@ -13,7 +13,7 @@ import {
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, textStyles } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, textStyles } from '@/theme/tokens';
 import { LogoutControl } from './LogoutControl';
 import { NavigationLink } from './NavigationLink';
 import { ProfileSwitcher } from './ProfileSwitcher';
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     width: 44,
   },
-  itemLabel: { fontFamily: 'SUIT', fontSize: 16, lineHeight: 21 },
+  itemLabel: { fontFamily: fontFamilies.ui, fontSize: 16, lineHeight: 21 },
   activeItemLabel: { fontWeight: '600' },
   pressedContent: { opacity: 0.7 },
   compose: {

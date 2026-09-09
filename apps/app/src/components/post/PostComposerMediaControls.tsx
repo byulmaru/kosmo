@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/IconButton';
 import { TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
-import { colors, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
+import { colors, fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import {
   createClipboardMediaAsset,
   getClipboardImageFiles,
@@ -483,7 +483,7 @@ export function PostComposerMediaItems({
 
 const styles = StyleSheet.create({
   mediaSection: { gap: spacing.md },
-  error: { fontFamily: 'SUIT', ...typography.sm },
+  error: { fontFamily: fontFamilies.ui, ...typography.sm },
   footer: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -526,6 +526,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sensitiveMediaCopy: { ...layoutRecipes.labelSupportStack, flex: 1 },
-  sensitiveMediaLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  sensitiveMediaDescription: { fontFamily: 'SUIT', ...typography.xsm },
+  sensitiveMediaLabel: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
+  sensitiveMediaDescription: { fontFamily: fontFamilies.ui, ...typography.xsm },
 });

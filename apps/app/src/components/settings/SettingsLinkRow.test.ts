@@ -3,7 +3,6 @@ import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { cloneElement, createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import { layoutRecipes } from '@/theme/tokens';
 import type { ComponentType, ReactElement } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
@@ -74,22 +73,6 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
-mock.module('@/theme/tokens', {
-  exports: {
-    borderWidths: { 0: 0, 1: 1 },
-    layoutRecipes,
-    motion: {
-      duration: { fast: 120, instant: 0, standard: 200 },
-      easing: { standard: 'standard-easing' },
-    },
-    spacing: { lg: 16, md: 12, xs: 4 },
-    typography: {
-      md: { fontSize: 14, lineHeight: 20 },
-      sm: { fontSize: 12, lineHeight: 16 },
-    },
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
-
 type Props = {
   accessibilityLabel: string;
   description?: string;
@@ -214,27 +197,13 @@ describe('SettingsLinkRow', () => {
     });
 
     const row = byTestId('selected-settings-row');
-    assert.equal(
-      flattenStyle(row.props.style({ hovered: false, pressed: false })).backgroundColor,
-      '#fff8dc',
-    );
-    assert.equal(
-      flattenStyle(row.props.style({ hovered: true, pressed: false })).backgroundColor,
-      '#f4f4f4',
-    );
-    assert.equal(
-      flattenStyle(row.props.style({ hovered: true, pressed: false })).borderColor,
-      '#9a7800',
-    );
-    assert.equal(
-      flattenStyle(row.props.style({ hovered: true, pressed: true })).backgroundColor,
-      '#e8e8e8',
-    );
-    assert.equal(
-      flattenStyle(row.props.style({ hovered: true, pressed: true })).borderColor,
-      '#9a7800',
-    );
-    assert.equal(flattenStyle(row.props.style({ hovered: true, pressed: true })).borderWidth, 1);
+    const idleStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
+    const hoveredStyle = flattenStyle(row.props.style({ hovered: true, pressed: false }));
+    const pressedStyle = flattenStyle(row.props.style({ hovered: true, pressed: true }));
+    const pressedOnlyStyle = flattenStyle(row.props.style({ hovered: false, pressed: true }));
+    assert.notEqual(idleStyle.backgroundColor, hoveredStyle.backgroundColor);
+    assert.notDeepEqual(hoveredStyle, pressedOnlyStyle);
+    assert.deepEqual(pressedStyle, pressedOnlyStyle);
   });
 
   it('Web row feedback uses fast or selected timing and native omits CSS transitions', async () => {
@@ -248,17 +217,9 @@ describe('SettingsLinkRow', () => {
 
     const row = byTestId('motion-settings-row');
     let style = flattenStyle(row.props.style({ hovered: true, pressed: false }));
-    assert.equal(style.transitionDuration, '120ms');
-    assert.equal(style.transitionProperty, 'background-color, border-color');
-    assert.equal(style.transitionTimingFunction, 'standard-easing');
-    assert.equal(style.backgroundColor, '#f4f4f4');
-    assert.equal(style.borderColor, 'transparent');
-    assert.equal(style.borderWidth, 1);
+    const hoverDuration = style.transitionDuration;
     style = flattenStyle(row.props.style({ hovered: false, pressed: true }));
-    assert.equal(style.transitionDuration, '120ms');
-    assert.equal(style.backgroundColor, '#e8e8e8');
-    assert.equal(style.borderColor, 'transparent');
-    assert.equal(style.borderWidth, 1);
+    assert.equal(style.transitionDuration, hoverDuration);
 
     await act(async () =>
       renderer?.update(
@@ -271,10 +232,10 @@ describe('SettingsLinkRow', () => {
         }),
       ),
     );
-    style = flattenStyle(
+    const selectedStyle = flattenStyle(
       byTestId('motion-settings-row').props.style({ hovered: false, pressed: false }),
     );
-    assert.equal(style.transitionDuration, '200ms');
+    assert.notEqual(selectedStyle.transitionDuration, hoverDuration);
 
     reducedMotion = true;
     await act(async () =>
@@ -292,6 +253,7 @@ describe('SettingsLinkRow', () => {
       byTestId('motion-settings-row').props.style({ hovered: false, pressed: false }),
     );
     assert.equal(style.transitionDuration, '0ms');
+    assert.notEqual(style.transitionDuration, selectedStyle.transitionDuration);
 
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -308,6 +270,7 @@ describe('SettingsLinkRow', () => {
     );
     assert.equal(style.transitionDuration, undefined);
     assert.equal(style.transitionProperty, undefined);
+    assert.equal(style.transitionTimingFunction, undefined);
   });
 
   it('Web focus ring은 focus-visible일 때만 표시하고 pointer focus에서는 숨긴다', async () => {

@@ -3,7 +3,7 @@ import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type React from 'react';
 
 export type ReactionProfileListEntry = Readonly<{
@@ -126,13 +126,18 @@ export function ReactionProfileList({
 
 const styles = StyleSheet.create({
   root: { gap: spacing.md },
-  title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
+  title: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.lg },
   item: { alignItems: 'center', flexDirection: 'row' },
   itemReaction: { fontSize: 20, lineHeight: 24, marginLeft: spacing.lg },
   itemSeparator: { borderBottomWidth: 1 },
   profileItem: { borderBottomWidth: 0, flex: 1, minWidth: 0 },
   pagination: { borderTopWidth: 1, gap: spacing.sm, paddingTop: spacing.md },
   paginationAction: { minHeight: 44 },
-  stateTitle: { fontFamily: 'SUIT', fontWeight: '700', textAlign: 'center', ...typography.md },
-  stateDescription: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
+  stateTitle: {
+    fontFamily: fontFamilies.ui,
+    fontWeight: '700',
+    textAlign: 'center',
+    ...typography.md,
+  },
+  stateDescription: { fontFamily: fontFamilies.ui, textAlign: 'center', ...typography.sm },
 });

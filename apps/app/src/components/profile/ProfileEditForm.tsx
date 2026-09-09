@@ -1,6 +1,6 @@
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { layoutRecipes, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, layoutRecipes, spacing, typography } from '@/theme/tokens';
 import { TextArea, TextField } from '../ui/TextField';
 import { ProfileEditImageFields } from './ProfileEditImageFields';
 import { validateProfileEditDraft } from './profileEditState';
@@ -164,17 +164,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   followPolicyLabel: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     fontWeight: '600',
     ...typography.md,
   },
   counter: {
     alignSelf: 'flex-end',
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     ...typography.xsm,
   },
   error: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     ...typography.xsm,
   },
 });

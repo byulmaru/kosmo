@@ -26,7 +26,7 @@ import { StateView } from '@/components/ui/StateView';
 import { Tab, TabList } from '@/components/ui/Tabs';
 import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/recentSearches';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { SearchPeopleByHandlePageQuery } from './__generated__/SearchPeopleByHandlePageQuery.graphql';
 import type { SearchPeopleResults_query$key } from './__generated__/SearchPeopleResults_query.graphql';
@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
   webInputShell: { height: 48 },
   input: {
     flex: 1,
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     minWidth: 0,
     paddingHorizontal: spacing.sm,
     paddingVertical: 0,
@@ -614,7 +614,7 @@ const styles = StyleSheet.create({
   clearButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
   recent: { width: '100%' },
   sectionTitle: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     fontWeight: '600',
     paddingBottom: spacing.xs,
     paddingHorizontal: spacing.lg,
@@ -635,10 +635,10 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: spacing.lg,
   },
-  recentText: { fontFamily: 'SUIT', ...typography.sm },
+  recentText: { fontFamily: fontFamilies.ui, ...typography.sm },
   deleteButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
   help: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xxxl,
     textAlign: 'center',
@@ -651,7 +651,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl,
   },
   paginationError: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     textAlign: 'center',
     ...typography.xsm,
   },

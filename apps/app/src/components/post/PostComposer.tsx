@@ -13,7 +13,7 @@ import { Form } from '@/components/ui/Form';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
@@ -694,7 +694,7 @@ const styles = StyleSheet.create({
     minWidth: 120,
     paddingHorizontal: spacing.lg,
   },
-  visibilityTriggerLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
+  visibilityTriggerLabel: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
   webVisibilityMenu: {
     left: 0,
     position: 'absolute',
@@ -704,7 +704,7 @@ const styles = StyleSheet.create({
   webVisibilityMenuAbove: { bottom: 44 },
   webVisibilityMenuBelow: { top: 44 },
   submit: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
-  remaining: { fontFamily: 'SUIT', ...typography.xsm },
+  remaining: { fontFamily: fontFamilies.ui, ...typography.xsm },
   screenReaderOnly: {
     height: 1,
     left: -10000,
@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 1,
   },
-  error: { fontFamily: 'SUIT', ...typography.sm },
+  error: { fontFamily: fontFamilies.ui, ...typography.sm },
   backdrop: {
     alignItems: 'center',
     flex: 1,
@@ -738,6 +738,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   visibilityCopy: { ...layoutRecipes.labelSupportStack, flex: 1 },
-  visibilityLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  visibilityDescription: { fontFamily: 'SUIT', ...typography.xsm },
+  visibilityLabel: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
+  visibilityDescription: { fontFamily: fontFamilies.ui, ...typography.xsm },
 });

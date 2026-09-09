@@ -275,7 +275,7 @@ export const radii = {
 export const borderWidths = { 0: 0, 1: 1, 2: 2 } as const;
 export const iconSizes = { 16: 16, 18: 18, 20: 20, 24: 24, 48: 48, 64: 64 } as const;
 
-export const fontFamilies = { content: 'Pretendard', ui: 'SUIT' } as const;
+export const fontFamilies = { content: 'Pretendard Variable', ui: 'SUIT Variable' } as const;
 export const fontSizes = {
   12: 12,
   14: 14,

@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
-import { spacing, typography } from '../theme/tokens';
+import { fontFamilies, spacing, typography } from '../theme/tokens';
 import { BrandLogo } from './BrandLogo';
 import { NavigationLink } from './shell/NavigationLink';
 import type { Href } from 'expo-router';
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   },
   title: {
     flexShrink: 1,
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     fontWeight: '700',
     minWidth: 0,
     ...typography.xl,

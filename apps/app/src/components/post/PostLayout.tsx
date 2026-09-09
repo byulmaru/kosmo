@@ -6,7 +6,7 @@ import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatPostDate } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
   },
   bodyMeasurePrivacyBoundary: { minWidth: 0 },
   bodyMeasure: {
-    fontFamily: 'Pretendard',
+    fontFamily: fontFamilies.content,
     opacity: 0,
     ...typography.md,
   },
@@ -352,8 +352,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 44,
   },
-  moreText: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  meta: { fontFamily: 'SUIT', marginTop: 6, textAlign: 'right', ...typography.xsm },
+  moreText: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
+  meta: { fontFamily: fontFamilies.ui, marginTop: 6, textAlign: 'right', ...typography.xsm },
   source: { marginTop: spacing.sm },
   replySurface: { marginTop: spacing.lg },
 });

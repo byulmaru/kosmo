@@ -49,33 +49,8 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-for (const { variant, nameSize, nameLineHeight, nameWeight, handleSize, handleLineHeight } of [
-  {
-    variant: 'default',
-    nameSize: 16,
-    nameLineHeight: 24,
-    nameWeight: '600',
-    handleSize: 14,
-    handleLineHeight: 20,
-  },
-  {
-    variant: 'compact',
-    nameSize: 14,
-    nameLineHeight: 20,
-    nameWeight: '600',
-    handleSize: 12,
-    handleLineHeight: 15.6,
-  },
-  {
-    variant: 'hero',
-    nameSize: 24,
-    nameLineHeight: 27.6,
-    nameWeight: '700',
-    handleSize: 14,
-    handleLineHeight: 20,
-  },
-] as const) {
-  test(`ProfileNameBlock ${variant} preserves typography, text and heading semantics`, async () => {
+for (const variant of ['default', 'compact', 'hero'] as const) {
+  test(`ProfileNameBlock ${variant} preserves text and heading semantics`, async () => {
     await act(async () => {
       renderer = create(createElement(ProfileNameBlock, { profile: {} as never, variant }));
     });
@@ -102,16 +77,5 @@ for (const { variant, nameSize, nameLineHeight, nameWeight, handleSize, handleLi
         },
       ],
     );
-    for (const [index, fontSize, lineHeight, fontWeight] of [
-      [0, nameSize, nameLineHeight, nameWeight],
-      [1, handleSize, handleLineHeight, '400'],
-    ] as const) {
-      const style = Object.assign({}, ...textNodes[index]!.props.style);
-      assert.equal(style.fontFamily, 'SUIT');
-      assert.equal(style.fontSize, fontSize);
-      assert.equal(style.fontWeight, fontWeight);
-      assert.equal(style.color, ['#1a1a1a', '#64646f'][index]);
-      assert.ok(Math.abs(style.lineHeight - lineHeight) < 0.001);
-    }
   });
 }

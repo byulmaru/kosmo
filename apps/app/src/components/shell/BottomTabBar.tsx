@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
 import { isTimelineRoute } from './shellLayout';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
@@ -164,6 +164,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   iconWithBadge: { position: 'relative' },
-  label: { fontFamily: 'SUIT', fontWeight: '700', ...typography.xsm },
+  label: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.xsm },
   pressedContent: { opacity: 0.7 },
 });

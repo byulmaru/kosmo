@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import { PostActionControl } from './PostActionControl';
 import type { ViewStyle } from 'react-native';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.lg,
   },
-  description: { fontFamily: 'SUIT', marginTop: spacing.sm, ...typography.sm },
+  description: { fontFamily: fontFamilies.ui, marginTop: spacing.sm, ...typography.sm },
   dialogShell: { maxWidth: 480, pointerEvents: 'box-none', width: '100%' },
   dialog: {
     borderRadius: radii.lg,
@@ -333,5 +333,5 @@ const styles = StyleSheet.create({
     top: 0,
     zIndex: 100,
   } as unknown as ViewStyle,
-  title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
+  title: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.lg },
 });

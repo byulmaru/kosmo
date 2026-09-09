@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { postVisibilityPresentation } from '../post/postVisibilityPresentation';
 import { resolveProfileDefaultVisibility } from './profileDefaultPostVisibilityState';
 import type {
@@ -225,11 +225,11 @@ function ProfileDefaultPostVisibilityControlContents({
 
 const styles = StyleSheet.create({
   root: { borderRadius: radii.md, borderWidth: 1, gap: spacing.md, padding: spacing.lg },
-  title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
+  title: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.lg },
   target: { paddingVertical: spacing.xs },
   options: { gap: spacing.sm },
-  error: { fontFamily: 'SUIT', ...typography.sm },
-  success: { fontFamily: 'SUIT', ...typography.sm },
-  memberNote: { fontFamily: 'SUIT', ...typography.sm },
+  error: { fontFamily: fontFamilies.ui, ...typography.sm },
+  success: { fontFamily: fontFamilies.ui, ...typography.sm },
+  memberNote: { fontFamily: fontFamilies.ui, ...typography.sm },
   save: { alignSelf: 'flex-start' },
 });

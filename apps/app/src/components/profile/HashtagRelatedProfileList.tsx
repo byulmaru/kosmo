@@ -6,7 +6,7 @@ import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { HashtagRelatedProfileList_hashtag$key } from './__generated__/HashtagRelatedProfileList_hashtag.graphql';
 import type { HashtagRelatedProfilesNextPageQuery } from './__generated__/HashtagRelatedProfilesNextPageQuery.graphql';
 
@@ -132,9 +132,14 @@ const styles = StyleSheet.create({
   root: { flexGrow: 1, paddingBottom: spacing.xxxl },
   pagination: { alignItems: 'center', borderTopWidth: 1, padding: spacing.lg },
   paginationAction: { marginTop: spacing.md },
-  stateTitle: { fontFamily: 'SUIT', fontWeight: '700', textAlign: 'center', ...typography.md },
+  stateTitle: {
+    fontFamily: fontFamilies.ui,
+    fontWeight: '700',
+    textAlign: 'center',
+    ...typography.md,
+  },
   stateDescription: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     marginTop: spacing.xs,
     textAlign: 'center',
     ...typography.sm,

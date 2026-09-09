@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 
 export default function LoginCallbackScreen() {
   const theme = useTheme();
@@ -22,6 +22,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xl,
   },
-  title: { fontFamily: 'SUIT', fontWeight: '800', ...typography.lg },
-  description: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
+  title: { fontFamily: fontFamilies.ui, fontWeight: '800', ...typography.lg },
+  description: { fontFamily: fontFamilies.ui, textAlign: 'center', ...typography.sm },
 });

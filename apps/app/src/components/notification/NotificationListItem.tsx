@@ -6,7 +6,7 @@ import { graphql, useFragment, useMutation } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { FollowRequestNotificationListItem_notification$key } from './__generated__/FollowRequestNotificationListItem_notification.graphql';
 import type { NotificationListItem_notification$key } from './__generated__/NotificationListItem_notification.graphql';
@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingVertical: spacing.md,
   },
-  copy: { fontFamily: 'SUIT', ...typography.sm },
-  name: { fontFamily: 'SUIT', fontWeight: '700' },
-  time: { fontFamily: 'SUIT', ...typography.xsm },
+  copy: { fontFamily: fontFamilies.ui, ...typography.sm },
+  name: { fontFamily: fontFamilies.ui, fontWeight: '700' },
+  time: { fontFamily: fontFamilies.ui, ...typography.xsm },
 });

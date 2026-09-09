@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
-import { layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import type { FeedbackKind } from '@kosmo/core/enums';
 import type { FeedbackFormSubmitFeedbackMutation } from './__generated__/FeedbackFormSubmitFeedbackMutation.graphql';
 
@@ -192,12 +192,12 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   header: { gap: spacing.xs },
-  title: { fontFamily: 'SUIT', fontSize: 24, fontWeight: '700', lineHeight: 32 },
-  description: { fontFamily: 'SUIT', ...typography.md },
+  title: { fontFamily: fontFamilies.ui, fontSize: 24, fontWeight: '700', lineHeight: 32 },
+  description: { fontFamily: fontFamilies.ui, ...typography.md },
   webOptions: { gap: 0 },
   nativeOptions: { gap: spacing.sm },
-  success: { fontFamily: 'SUIT', ...typography.sm },
-  error: { fontFamily: 'SUIT', ...typography.sm },
+  success: { fontFamily: fontFamilies.ui, ...typography.sm },
+  error: { fontFamily: fontFamilies.ui, ...typography.sm },
   submitButton: { minHeight: 48 },
   webSubmitButton: { width: '100%' },
   webActions: { width: '100%' },

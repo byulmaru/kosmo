@@ -6,7 +6,7 @@ import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
   authorSlot: { flex: 1, minWidth: 0 },
   timestamp: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     minHeight: 44,
     minWidth: 44,
     paddingTop: 12,

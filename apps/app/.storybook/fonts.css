@@ -1,12 +1,12 @@
 @font-face {
-  font-family: 'SUIT';
+  font-family: 'SUIT Variable';
   font-weight: 100 900;
   src: url('../node_modules/@sun-typeface/suit/fonts/variable/woff2/SUIT-Variable.woff2')
     format('woff2-variations');
 }
 
 @font-face {
-  font-family: 'Pretendard';
+  font-family: 'Pretendard Variable';
   font-weight: 45 920;
   font-style: normal;
   font-display: swap;

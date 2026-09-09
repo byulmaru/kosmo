@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { PropsWithChildren, ReactNode } from 'react';
 
@@ -268,20 +268,20 @@ export default function PrivacyScreen() {
 const styles = StyleSheet.create({
   root: { flexGrow: 1, paddingHorizontal: spacing.lg, paddingVertical: spacing.xxxl },
   article: { alignSelf: 'center', maxWidth: 840, width: '100%' },
-  backLink: { fontFamily: 'SUIT', marginBottom: spacing.xl, ...typography.sm },
-  title: { fontFamily: 'SUIT', fontSize: 32, fontWeight: '800', lineHeight: 40 },
+  backLink: { fontFamily: fontFamilies.ui, marginBottom: spacing.xl, ...typography.sm },
+  title: { fontFamily: fontFamilies.ui, fontSize: 32, fontWeight: '800', lineHeight: 40 },
   effectiveDate: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     marginBottom: spacing.xl,
     marginTop: spacing.sm,
     ...typography.sm,
   },
   section: { gap: spacing.md, marginTop: spacing.xxxl },
-  sectionTitle: { fontFamily: 'SUIT', fontWeight: '800', ...typography.xl },
-  paragraph: { fontFamily: 'SUIT', ...typography.md },
+  sectionTitle: { fontFamily: fontFamilies.ui, fontWeight: '800', ...typography.xl },
+  paragraph: { fontFamily: fontFamilies.ui, ...typography.md },
   card: { borderRadius: radii.md, borderWidth: 1, gap: spacing.sm, padding: spacing.lg },
-  cardTitle: { fontFamily: 'SUIT', fontWeight: '800', ...typography.md },
+  cardTitle: { fontFamily: fontFamilies.ui, fontWeight: '800', ...typography.md },
   bulletRow: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.sm },
-  bulletMark: { fontFamily: 'SUIT', ...typography.md },
-  bulletText: { flex: 1, fontFamily: 'SUIT', ...typography.md },
+  bulletMark: { fontFamily: fontFamilies.ui, ...typography.md },
+  bulletText: { flex: 1, fontFamily: fontFamilies.ui, ...typography.md },
 });
