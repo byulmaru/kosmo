@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import { Environment, Network, RecordSource, Store } from 'relay-runtime';
 import { RelayActorBoundary, RelayActorProvider } from '@/relay/RelayActorProvider';
 import type { PropsWithChildren } from 'react';
-import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
+import type { GraphQLResponse, PayloadData, RequestParameters, Variables } from 'relay-runtime';
 
 type RelayMockValue = {
   actorBoundary?: boolean;
@@ -177,9 +177,7 @@ async function executeStoryOperation(
     }
 
     return Promise.resolve({
-      data: (mock.mutationResponse === undefined
-        ? {}
-        : mock.mutationResponse) as GraphQLResponse['data'],
+      data: (mock.mutationResponse === undefined ? {} : mock.mutationResponse) as PayloadData,
       errors: mock.mutationGraphQLErrors?.map((error) =>
         typeof error === 'string' ? { message: error } : error,
       ),
@@ -211,7 +209,7 @@ async function executeStoryOperation(
       return new Promise(() => undefined);
     }
 
-    return Promise.resolve({ data: (mock.paginationResponse ?? {}) as GraphQLResponse['data'] });
+    return Promise.resolve({ data: (mock.paginationResponse ?? {}) as PayloadData });
   }
 
   const operationResponse = getOperationResponse();
@@ -219,5 +217,5 @@ async function executeStoryOperation(
     return resolveOperationResponse(operationResponse);
   }
 
-  return Promise.resolve({ data: (mock.queryData ?? {}) as GraphQLResponse['data'] });
+  return Promise.resolve({ data: (mock.queryData ?? {}) as PayloadData });
 }

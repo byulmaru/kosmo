@@ -9,18 +9,16 @@ import type { UserContext } from '@/context';
 const DirectRepostSources = alias(Posts, 'muted_direct_repost_source');
 type ProfileMuteMode = 'ignore' | 'exclude' | { excludeExcept: string };
 
-const applyProfileMuteAccessWhere = ({
+const profileMuteWhere = ({
   ctx,
   profileMute,
-  accessWhere,
 }: {
   ctx: UserContext;
   profileMute: ProfileMuteMode;
-  accessWhere: SQLWrapper | undefined;
 }) => {
   const ownerProfileId = ctx.session?.profile?.id;
   if (profileMute === 'ignore' || !ownerProfileId) {
-    return accessWhere;
+    return undefined;
   }
 
   const mutedAuthorWhere = (targetProfileId: SQLWrapper) =>
@@ -41,7 +39,6 @@ const applyProfileMuteAccessWhere = ({
     );
 
   return and(
-    accessWhere,
     not(mutedAuthorWhere(Posts.profileId)),
     not(
       exists(
@@ -66,14 +63,11 @@ export const directPostAccessWhere = ({
   readonly ctx: UserContext;
   readonly profileMute: ProfileMuteMode;
 }) =>
-  applyProfileMuteAccessWhere({
-    ctx,
-    profileMute,
-    accessWhere: and(
-      directPostVisibilityAccessWhere({ ctx }),
-      directPostRepostSourceAccessWhere({ ctx }),
-    ),
-  });
+  and(
+    directPostVisibilityAccessWhere({ ctx }),
+    directPostRepostSourceAccessWhere({ ctx }),
+    profileMuteWhere({ ctx, profileMute }),
+  );
 
 export const postAccessWhere = ({
   ctx,
@@ -82,8 +76,8 @@ export const postAccessWhere = ({
   readonly ctx: UserContext;
   readonly profileMute: ProfileMuteMode;
 }) =>
-  applyProfileMuteAccessWhere({
-    ctx,
-    profileMute,
-    accessWhere: and(postVisibilityAccessWhere({ ctx }), postRepostSourceAccessWhere({ ctx })),
-  });
+  and(
+    postVisibilityAccessWhere({ ctx }),
+    postRepostSourceAccessWhere({ ctx }),
+    profileMuteWhere({ ctx, profileMute }),
+  );
