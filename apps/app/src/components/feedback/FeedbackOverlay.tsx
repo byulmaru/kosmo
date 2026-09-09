@@ -13,7 +13,14 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
+import {
+  breakpoints,
+  fontFamilies,
+  layoutRecipes,
+  radii,
+  spacing,
+  typography,
+} from '@/theme/tokens';
 import { FeedbackForm } from './FeedbackForm';
 import type { RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
@@ -324,7 +331,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
   },
-  title: { fontFamily: 'SUIT', fontWeight: '800', ...typography.lg },
+  title: { fontFamily: fontFamilies.ui, fontWeight: '800', ...typography.lg },
   close: {
     alignItems: 'center',
     borderRadius: radii.full,
@@ -354,7 +361,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     width: '100%',
   },
-  confirmTitle: { fontFamily: 'SUIT', fontWeight: '800', ...typography.lg },
-  confirmDescription: { fontFamily: 'SUIT', ...typography.sm },
+  confirmTitle: { fontFamily: fontFamilies.ui, fontWeight: '800', ...typography.lg },
+  confirmDescription: { fontFamily: fontFamilies.ui, ...typography.sm },
   confirmActions: { ...layoutRecipes.dialogActions },
 });

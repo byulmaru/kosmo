@@ -3,7 +3,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';
 
 export type PostComposerProfileSwitcherSurface = 'overlay' | 'rail';
@@ -209,8 +209,8 @@ const styles = StyleSheet.create({
   },
   avatarTrigger: { borderRadius: 999 },
   triggerCopy: { flex: 1, minWidth: 0 },
-  triggerName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
-  triggerHandle: { fontFamily: 'SUIT', ...typography.sm },
+  triggerName: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md },
+  triggerHandle: { fontFamily: fontFamilies.ui, ...typography.sm },
   pickerLayer: { left: 0, position: 'absolute', top: 48, zIndex: 30 },
-  error: { fontFamily: 'SUIT', padding: spacing.sm, ...typography.xsm },
+  error: { fontFamily: fontFamilies.ui, padding: spacing.sm, ...typography.xsm },
 });

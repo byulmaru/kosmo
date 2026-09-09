@@ -1,7 +1,7 @@
 import { ArrowLeft } from 'lucide-react-native';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { Button } from '../ui/Button';
 import { IconButton } from '../ui/IconButton';
 import { ProfileEditForm } from './ProfileEditForm';
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     fontWeight: '700',
     textAlign: 'center',
     ...typography.lg,
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   nativeContent: { flexGrow: 1 },
   nativeScroll: { flex: 1 },
   submitStatus: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     marginBottom: spacing.xl,
     paddingHorizontal: spacing.lg,
     ...typography.sm,

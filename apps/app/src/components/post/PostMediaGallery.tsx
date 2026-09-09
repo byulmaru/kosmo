@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostMediaImage } from './PostMediaImage';
 import type { ReactNode } from 'react';
 import type { PostMediaItem, PostMediaOpenHandler } from './PostMediaImage';
@@ -211,8 +211,8 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
   },
-  sensitiveDescription: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
-  sensitiveTitle: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
+  sensitiveDescription: { fontFamily: fontFamilies.ui, textAlign: 'center', ...typography.sm },
+  sensitiveTitle: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md },
   singleSensitive: { aspectRatio: 1, width: '100%' },
   sensitiveSurface: {
     borderRadius: radii.md,
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     minHeight: 144,
     padding: spacing.lg,
   },
-  unavailableText: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
+  unavailableText: { fontFamily: fontFamilies.ui, textAlign: 'center', ...typography.sm },
   visibilityButton: {
     marginTop: spacing.xs,
     minHeight: 48,

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import { fontFamilies } from '@/theme/tokens';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { ProfileNameBlock as ProfileNameBlockExport } from './ProfileNameBlock';
 
@@ -107,7 +108,7 @@ for (const { variant, nameSize, nameLineHeight, nameWeight, handleSize, handleLi
       [1, handleSize, handleLineHeight, '400'],
     ] as const) {
       const style = Object.assign({}, ...textNodes[index]!.props.style);
-      assert.equal(style.fontFamily, 'SUIT');
+      assert.equal(style.fontFamily, fontFamilies.ui);
       assert.equal(style.fontSize, fontSize);
       assert.equal(style.fontWeight, fontWeight);
       assert.equal(style.color, ['#1a1a1a', '#64646f'][index]);

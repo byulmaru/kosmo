@@ -4,7 +4,7 @@ import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-nati
 import { match } from 'ts-pattern';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { usePostContentWarningReveal } from './PostContentWarningRevealContext';
 import { PostMediaGallery } from './PostMediaGallery';
@@ -210,7 +210,7 @@ function renderMark(
 
 const styles = StyleSheet.create({
   root: { gap: spacing.sm, minWidth: 0 },
-  body: { fontFamily: 'Pretendard' },
+  body: { fontFamily: fontFamilies.content },
   link: { textDecorationLine: 'underline' },
   warning: {
     alignItems: 'flex-start',
@@ -219,8 +219,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     padding: spacing.md,
   },
-  warningLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  warningText: { fontFamily: 'SUIT', ...typography.sm },
+  warningLabel: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
+  warningText: { fontFamily: fontFamilies.ui, ...typography.sm },
   warningButton: {
     marginTop: spacing.xs,
     minHeight: Platform.OS === 'android' ? 48 : 44,

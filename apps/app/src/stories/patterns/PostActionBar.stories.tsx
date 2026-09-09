@@ -19,7 +19,7 @@ import { usePostReactionController } from '@/components/post/PostReactionControl
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { RelayActorBoundary, RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
-import { colors, spacing, typography } from '@/theme/tokens';
+import { colors, fontFamilies, spacing, typography } from '@/theme/tokens';
 import { Catalog, Section } from '../StoryFrame';
 import PostActionBarStoryQueryNode from './__generated__/PostActionBarStoryQuery.graphql';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -1850,7 +1850,7 @@ const styles = {
     paddingHorizontal: spacing.sm,
   } satisfies ViewStyle,
   listContent: { flex: 1, minWidth: 0 } satisfies ViewStyle,
-  localeCopy: { fontFamily: 'SUIT', ...typography.sm },
+  localeCopy: { fontFamily: fontFamilies.ui, ...typography.sm },
   playground: { maxWidth: 600, width: '100%' } satisfies ViewStyle,
   placementFixture: {
     height: 640,

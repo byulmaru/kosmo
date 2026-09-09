@@ -3,7 +3,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { UnreadDot } from '@/components/shell/UnreadDot';
 import { Avatar } from '@/components/ui/Avatar';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { space, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
 import type { ReactNode, Ref } from 'react';
 import type { ViewStyle } from 'react-native';
 
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   profileLabel: { flex: 1, minWidth: 0 },
-  displayName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
-  handle: { fontFamily: 'SUIT', ...typography.sm },
+  displayName: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md },
+  handle: { fontFamily: fontFamilies.ui, ...typography.sm },
   divider: { height: 1, marginVertical: space[4], width: '100%' },
 });

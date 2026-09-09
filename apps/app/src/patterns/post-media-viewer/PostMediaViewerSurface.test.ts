@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import { fontFamilies } from '@/theme/tokens';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
@@ -247,7 +248,7 @@ describe('PostMediaViewerSurface', () => {
       backgroundColor: '#000000',
       borderRadius: 16,
       color: '#ffffff',
-      fontFamily: 'SUIT',
+      fontFamily: fontFamilies.ui,
       fontSize: 14,
       fontWeight: '600',
       height: 30,

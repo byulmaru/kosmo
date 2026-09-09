@@ -135,6 +135,7 @@ mock.module('@/theme/ThemeProvider', {
 mock.module('@/theme/tokens', {
   exports: {
     breakpoints: { compact: 768 },
+    fontFamilies: { content: 'Pretendard Variable', ui: 'SUIT Variable' },
     iconSizes: { 24: 24 },
     radii: { full: 999, lg: 16, md: 12, sm: 8 },
     spacing: { lg: 24, md: 16, sm: 12, xl: 32, xs: 8, xxl: 40, xxs: 4 },

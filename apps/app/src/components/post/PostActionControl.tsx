@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { formatPostActionCount } from './postActionCount';
 import type { ComponentType, Ref } from 'react';
 import type { AccessibilityState } from 'react-native';
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
   blocked: { opacity: 0.45 },
   count: {
     flexShrink: 0,
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     fontSize: typography.md.fontSize,
     lineHeight: typography.md.fontSize,
   },

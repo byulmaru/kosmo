@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { Button } from '../ui/Button';
 import { TextField } from '../ui/TextField';
 import { validateProfileTagDraftInput } from './profileEditState';
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   label: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     fontWeight: '700',
     ...typography.sm,
   },

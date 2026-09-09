@@ -2,7 +2,7 @@ import { XIcon } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { ICON_BUTTON_TARGET_SIZE, IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
-import { iconSizes, radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, iconSizes, radii, spacing, typography } from '@/theme/tokens';
 
 export const PROFILE_TAG_CHIP_VISUAL_SIZE = 32;
 
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   },
   text: {
     flexShrink: 1,
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     ...typography.sm,
   },
 });

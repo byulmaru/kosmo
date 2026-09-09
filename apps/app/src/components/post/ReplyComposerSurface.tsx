@@ -22,7 +22,7 @@ import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
 import { PostComposer } from './PostComposer';
 import { PostSourcePreview } from './PostSourcePresentationView';
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     width: '100%',
   },
-  title: { fontFamily: 'SUIT', fontWeight: '800', ...typography.lg },
+  title: { fontFamily: fontFamilies.ui, fontWeight: '800', ...typography.lg },
   close: { alignItems: 'center', borderRadius: radii.full, justifyContent: 'center' },
   parent: {
     alignItems: 'stretch',
@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
   },
   parentContent: { flex: 1, gap: spacing.md, minWidth: 0 },
   parentIdentity: { flex: 1, minWidth: 0 },
-  timestamp: { fontFamily: 'SUIT', marginTop: spacing.xs, ...typography.xsm },
+  timestamp: { fontFamily: fontFamilies.ui, marginTop: spacing.xs, ...typography.xsm },
   source: { marginTop: spacing.sm },
   confirmBackdrop: {
     bottom: 0,
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     width: '100%',
   },
-  confirmTitle: { fontFamily: 'SUIT', fontWeight: '800', ...typography.lg },
-  confirmDescription: { fontFamily: 'SUIT', ...typography.sm },
+  confirmTitle: { fontFamily: fontFamilies.ui, fontWeight: '800', ...typography.lg },
+  confirmDescription: { fontFamily: fontFamilies.ui, ...typography.sm },
   confirmActions: { ...layoutRecipes.dialogActions },
 });

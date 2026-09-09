@@ -4,7 +4,7 @@ import { graphql, usePaginationFragment } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { layoutRecipes, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, layoutRecipes, spacing, typography } from '@/theme/tokens';
 import { ProfileListItem } from './ProfileListItem';
 import type { ProfileConnectionList_followersProfile$key } from './__generated__/ProfileConnectionList_followersProfile.graphql';
 import type { ProfileConnectionList_followingProfile$key } from './__generated__/ProfileConnectionList_followingProfile.graphql';
@@ -260,7 +260,7 @@ function ConnectionTitle({ kind }: { kind: ConnectionKind }) {
 const styles = StyleSheet.create({
   title: {
     borderBottomWidth: 1,
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     fontWeight: '700',
     paddingBottom: spacing.md,
     paddingHorizontal: spacing.lg,

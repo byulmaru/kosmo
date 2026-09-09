@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { layoutRecipes, typography } from '@/theme/tokens';
+import { fontFamilies, layoutRecipes, typography } from '@/theme/tokens';
 import type { ReactNode } from 'react';
 
 export type SettingsItemProps = {
@@ -56,10 +56,10 @@ const styles = StyleSheet.create({
   copy: { ...layoutRecipes.labelSupportStack, flex: 1, minWidth: 0 },
   label: {
     flexShrink: 1,
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     fontWeight: '700',
     ...typography.md,
   },
-  description: { flexShrink: 1, fontFamily: 'SUIT', ...typography.sm },
+  description: { flexShrink: 1, fontFamily: fontFamilies.ui, ...typography.sm },
   trailing: { flexShrink: 0 },
 });

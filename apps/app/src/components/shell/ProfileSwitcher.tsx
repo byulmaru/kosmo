@@ -11,7 +11,14 @@ import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { layoutRecipes, radii, spacing, textStyles, typography } from '@/theme/tokens';
+import {
+  fontFamilies,
+  layoutRecipes,
+  radii,
+  spacing,
+  textStyles,
+  typography,
+} from '@/theme/tokens';
 import { useNavigationGuard } from './NavigationGuardContext';
 import { NavigationLink } from './NavigationLink';
 import {
@@ -665,7 +672,7 @@ const styles = StyleSheet.create({
   },
   triggerName: {
     flexShrink: 1,
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     fontWeight: '700',
     ...typography.xl,
   },
@@ -701,13 +708,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 72,
   },
-  profileEditLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  profileHandle: { fontFamily: 'SUIT', ...typography.sm },
-  emptyProfile: { fontFamily: 'SUIT', marginTop: spacing.sm, ...typography.sm },
+  profileEditLabel: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
+  profileHandle: { fontFamily: fontFamilies.ui, ...typography.sm },
+  emptyProfile: { fontFamily: fontFamilies.ui, marginTop: spacing.sm, ...typography.sm },
   counts: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
   countLink: { flexDirection: 'row', gap: spacing.sm },
-  count: { fontFamily: 'SUIT', ...typography.sm },
-  countLabel: { fontFamily: 'SUIT', ...typography.sm },
+  count: { fontFamily: fontFamilies.ui, ...typography.sm },
+  countLabel: { fontFamily: fontFamilies.ui, ...typography.sm },
   backdrop: {
     alignItems: 'center',
     flex: 1,
@@ -720,8 +727,8 @@ const styles = StyleSheet.create({
   inputField: { flex: 1, minWidth: 0 },
   input: { flex: 1, minWidth: 0 },
   createButton: { minHeight: 40, minWidth: 72, paddingHorizontal: spacing.md },
-  help: { fontFamily: 'SUIT', paddingHorizontal: spacing.xs, ...typography.xsm },
-  error: { fontFamily: 'SUIT', paddingHorizontal: spacing.xs, ...typography.xsm },
+  help: { fontFamily: fontFamilies.ui, paddingHorizontal: spacing.xs, ...typography.xsm },
+  error: { fontFamily: fontFamilies.ui, paddingHorizontal: spacing.xs, ...typography.xsm },
   addProfile: {
     alignItems: 'center',
     borderRadius: 10,

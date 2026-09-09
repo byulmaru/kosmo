@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { PostComposer } from '@/components/post/PostComposer';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
 import type { RightRail_profile$key } from './__generated__/RightRail_profile.graphql';
 
@@ -56,5 +56,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 32,
   },
-  footerText: { fontFamily: 'SUIT', ...typography.xsm },
+  footerText: { fontFamily: fontFamilies.ui, ...typography.xsm },
 });

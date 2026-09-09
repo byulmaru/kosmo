@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, radii, space, spacing, typography } from '@/theme/tokens';
+import { breakpoints, fontFamilies, radii, space, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { TextStyle } from 'react-native';
 import type { IndexScreenExchangeNativeOidcSessionMutation } from './__generated__/IndexScreenExchangeNativeOidcSessionMutation.graphql';
@@ -183,11 +183,11 @@ const styles = StyleSheet.create({
   },
   betaNotice: { gap: spacing.xs },
   accountNotice: { gap: spacing.xs },
-  title: { fontFamily: 'SUIT', fontSize: 30, fontWeight: '700', lineHeight: 36 },
-  description: { fontFamily: 'SUIT', ...typography.md },
+  title: { fontFamily: fontFamilies.ui, fontSize: 30, fontWeight: '700', lineHeight: 36 },
+  description: { fontFamily: fontFamilies.ui, ...typography.md },
   action: { alignItems: 'flex-start', gap: spacing.sm },
   startButton: { borderRadius: radii.sm, height: 48, width: 200 },
-  hint: { fontFamily: 'SUIT', ...typography.xsm },
-  error: { fontFamily: 'SUIT', ...typography.sm },
-  privacyLink: { fontFamily: 'SUIT', marginTop: spacing.lg, ...typography.sm },
+  hint: { fontFamily: fontFamilies.ui, ...typography.xsm },
+  error: { fontFamily: fontFamilies.ui, ...typography.sm },
+  privacyLink: { fontFamily: fontFamilies.ui, marginTop: spacing.lg, ...typography.sm },
 });

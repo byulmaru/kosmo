@@ -1,7 +1,7 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { BrandLogo } from '@/components/BrandLogo';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 
 export function Splash({ label = 'Kosmo를 불러오는 중입니다.' }: { label?: string }) {
   const theme = useTheme();
@@ -23,5 +23,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: '100%',
   },
-  label: { fontFamily: 'SUIT', ...typography.sm },
+  label: { fontFamily: fontFamilies.ui, ...typography.sm },
 });

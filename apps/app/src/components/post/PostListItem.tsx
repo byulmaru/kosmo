@@ -7,7 +7,7 @@ import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
   },
   timeLink: { borderRadius: radii.sm, flexShrink: 0 },
   time: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     minHeight: 44,
     minWidth: 44,
     paddingTop: 12,
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   },
   attributionIconColumn: { alignItems: 'flex-end', width: 48 },
   attributionContent: { flex: 1, minWidth: 0 },
-  attributionLabel: { fontFamily: 'SUIT', ...typography.sm },
-  repeat: { fontFamily: 'SUIT', ...typography.sm },
+  attributionLabel: { fontFamily: fontFamilies.ui, ...typography.sm },
+  repeat: { fontFamily: fontFamilies.ui, ...typography.sm },
   repostLabelTarget: { minWidth: 0 },
 });

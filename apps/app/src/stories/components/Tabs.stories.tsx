@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { Tab, TabList } from '@/components/ui/Tabs';
+import { fontFamilies } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { TabOption, TabVariant } from '@/components/ui/Tabs';
 
@@ -104,7 +105,7 @@ export const UnderlineInteractionContract: Story = {
       });
       expect(getComputedStyle(popular).backgroundColor).toBe('rgba(0, 0, 0, 0)');
       expect(popularLabel).toHaveStyle({
-        fontFamily: 'SUIT',
+        fontFamily: fontFamilies.ui,
         fontSize: '14px',
         fontWeight: '600',
         lineHeight: '20px',

@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { FollowRequestListItem } from './FollowRequestListItem';
 import type { FollowRequestList_profile$key } from './__generated__/FollowRequestList_profile.graphql';
 import type { FollowRequestListNextPageQuery } from './__generated__/FollowRequestListNextPageQuery.graphql';
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xxxl,
   },
-  stateDescription: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
+  stateDescription: { fontFamily: fontFamilies.ui, textAlign: 'center', ...typography.sm },
   pagination: {
     alignItems: 'center',
     borderTopWidth: 1,

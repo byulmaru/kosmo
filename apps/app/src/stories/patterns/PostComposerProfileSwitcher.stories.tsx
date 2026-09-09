@@ -6,7 +6,7 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { PostComposerProfileSwitcher } from '@/components/post/PostComposerProfileSwitcher';
 import { PostComposerTarget } from '@/components/post/PostComposerTarget';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { composerMedia } from './PostComposer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
@@ -471,6 +471,6 @@ export const CancelSelectionContract: Story = {
 const styles = {
   fixture: { gap: spacing.lg, maxWidth: 600, padding: spacing.lg, width: '100%' },
   globalProfile: { gap: spacing.xs },
-  globalLabel: { fontFamily: 'SUIT', ...typography.xsm },
-  globalName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
+  globalLabel: { fontFamily: fontFamilies.ui, ...typography.xsm },
+  globalName: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md },
 } as const;

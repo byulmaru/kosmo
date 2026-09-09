@@ -6,7 +6,7 @@ import {
 } from '@/components/media/imageUploadErrors';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { useTheme } from '@/theme/ThemeProvider';
-import { colors, radii, spacing, typography } from '@/theme/tokens';
+import { colors, fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import type { Ref } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { ProfileEditImageDraft } from './profileEditState';
@@ -300,10 +300,10 @@ const styles = StyleSheet.create({
   },
   status: {
     flex: 1,
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     ...typography.xsm,
   },
   statusRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   retry: { minHeight: 36, justifyContent: 'center', paddingHorizontal: spacing.sm },
-  retryLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.xsm },
+  retryLabel: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.xsm },
 });

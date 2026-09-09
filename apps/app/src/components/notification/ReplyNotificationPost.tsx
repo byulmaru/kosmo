@@ -12,7 +12,7 @@ import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import type { PostMediaOpenHandler } from '@/components/post/PostMediaImage';
 import type { ReplyNotificationPost_post$key } from './__generated__/ReplyNotificationPost_post.graphql';
 
@@ -180,18 +180,18 @@ const styles = StyleSheet.create({
     minHeight: Platform.OS === 'web' ? 24 : Platform.OS === 'android' ? 48 : 44,
     overflow: 'hidden',
   },
-  name: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md, flexShrink: 1 },
-  handle: { fontFamily: 'SUIT', ...typography.sm, flex: 1, minWidth: 0 },
+  name: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md, flexShrink: 1 },
+  handle: { fontFamily: fontFamilies.ui, ...typography.sm, flex: 1, minWidth: 0 },
   timeLink: { borderRadius: radii.sm, flexShrink: 0 },
   time: {
-    fontFamily: 'SUIT',
+    fontFamily: fontFamilies.ui,
     ...typography.sm,
     minHeight: Platform.OS === 'web' ? 24 : Platform.OS === 'android' ? 48 : 44,
     minWidth: Platform.OS === 'web' ? 24 : Platform.OS === 'android' ? 48 : 44,
   },
   reasonRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
   reasonIcon: { height: 20, justifyContent: 'center' },
-  reason: { fontFamily: 'SUIT', ...typography.sm, flex: 1, minWidth: 0 },
+  reason: { fontFamily: fontFamilies.ui, ...typography.sm, flex: 1, minWidth: 0 },
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
   actionBar: { paddingTop: spacing.xs },
   reactionSummary: { marginTop: spacing.xs },

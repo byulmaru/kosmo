@@ -77,6 +77,7 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
 mock.module('@/theme/tokens', {
   exports: {
     borderWidths: { 0: 0, 1: 1 },
+    fontFamilies: { content: 'Pretendard Variable', ui: 'SUIT Variable' },
     layoutRecipes,
     motion: {
       duration: { fast: 120, instant: 0, standard: 200 },

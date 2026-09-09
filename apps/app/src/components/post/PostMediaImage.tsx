@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import type { RefObject } from 'react';
 import type { GestureResponderEvent, ImageLoadEvent, View as NativeView } from 'react-native';
 
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   fillFallback: { height: '100%', minHeight: 0, padding: spacing.xs, width: '100%' },
-  fallbackText: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
+  fallbackText: { fontFamily: fontFamilies.ui, textAlign: 'center', ...typography.sm },
   fillFrame: { height: '100%', minHeight: 0, width: '100%' },
   fillRetryButton: { minWidth: 0, paddingHorizontal: spacing.xs, width: '100%' },
   retryButton: {
@@ -203,5 +203,5 @@ const styles = StyleSheet.create({
     minWidth: 112,
     paddingHorizontal: spacing.lg,
   },
-  retryButtonText: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
+  retryButtonText: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
 });

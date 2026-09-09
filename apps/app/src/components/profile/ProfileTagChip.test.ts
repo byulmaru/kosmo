@@ -46,6 +46,7 @@ mockModule('@/theme/ThemeProvider', {
   }),
 });
 mockModule('@/theme/tokens', {
+  fontFamilies: { ui: 'SUIT Variable', content: 'Pretendard Variable' },
   iconSizes: { 20: 20 },
   radii: { full: 999 },
   spacing: { md: 12 },
