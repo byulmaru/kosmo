@@ -233,26 +233,33 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   `PostAttributionRow`의 [Center Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12984)·
   [Mobile Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12988) source다.
 - `PostListItem`의 `pinned`는 표시만 소유한다. 정렬·자격을 계산하거나 Home에 고정을 적용하지 않는다.
-  `profilePin`은 대상 Post ID·pin/unpin 상태·요청 callback을 전달하며 완성된 More 메뉴를 교체하지 않는다.
-- `PostActionSurface`는 전달된 고정 대상이 현재 액션 대상과 같고 selected Profile이 작성자일 때만
-  고정 항목을 합성한다. 추가 자격·정책은 후속 Profile consumer가 확정한다.
-- `ProfilePinAction`은 고정 항목의 실행·pending·실패 피드백·완료 뒤 focus 복귀만 소유한다.
-  기존 `usePostMoreMenuItem`이 복사 URL·클립보드 실패 처리를 유지하고, `PostDeletionAction`이 삭제
-  eligibility·확인창·mutation·cache·실패 처리를 유지한다. 복사·고정·삭제 순서로 합성하며 삭제 노출을
-  별도의 optional callback으로 대체하지 않는다. visitor에는 고정·삭제 없이 기존 링크 복사를 제공한다.
+  실제 Pin mutation과 production 호출자가 없으므로 `profilePin`·`onAction` 공개 API와 가짜 요청 함수를
+  미리 만들지 않는다. 실제 요청 실행은 PROD-809에서 mutation을 연결할 때 개별 액션 내부에 둔다.
+- 고정·해제 메뉴 조립과 요청·상태 전환 모의는 Storybook fixture가 소유한다. Storybook 전용 adapter가
+  실제 `PostActionBar`에 메뉴 항목·pending 표시·focus 복귀 연결·sheet 아이콘 크기를 공급한다.
+  fixture 밖에서는 원래 props를 그대로 전달하며 production `PostActionSurface`는 고정 항목을 조립하지 않는다.
+- 기존 `usePostMoreMenuItem`이 복사 URL·클립보드 실패 처리를 유지하고, `PostDeletionAction`이 삭제
+  eligibility·확인창·mutation·cache·실패 처리를 유지한다. fixture는 owner의 복사·고정·삭제 순서와
+  visitor의 링크 복사만 있는 메뉴를 보여준다. 실제 고정 자격·정책은 후속 Profile consumer가 확정한다.
 - 이 메뉴의 sheet 아이콘은 DSN-55 source에 맞춰 24px을 사용한다. 공용 `ActionMenu`의 다른 소비자는
   기존 20px을 유지한다. Web 메뉴는 기존 18px을 유지한다.
-- 요청 중 More trigger의 busy·disabled 상태로 중복 실행을 막는다. 고정·해제 완료 뒤 More trigger로
-  focus를 돌리고, 실패하면 기존 고정 상태를 유지하며 한국어 오류 toast를 표시한다. 오류 원문은 표시하지 않는다.
-  사용자는 메뉴를 다시 열어 같은 action을 재시도한다.
+- fixture의 모의 요청 중 실제 More trigger의 busy·disabled 표시를 검증한다. 모의 완료 뒤 More trigger로
+  focus를 돌리고, 실패하면 기존 고정 표시를 유지하며 공용 toast에 한국어 오류를 표시한다. 오류 원문은
+  표시하지 않는다. 메뉴를 다시 열어 재시도할 수 있지만, 이는 실제 Pin 요청의 중복 방지·실패 복구 증거가 아니다.
 - `KOSMO/Patterns/Profile/Pin Action`의 Playground는 수동 Controls·Actions용이며 자동 조작은 Controls가
   비활성화된 `Tests`에 둔다. Controls는 owner/visitor, pin/unpin, 본문과 요청 success/pending/error를 제공한다.
 - 2026-09-08 PROD-863 범위 확정에 따라 empty·removed·unavailable·loading·error 전용 상태 카드와
   presentation Control, 교체 확인과 replace/confirm/cancel 공개 API는 이 이관에서 제외한다. 고정·해제 요청의
   pending·실패 피드백은 유지한다. ConfirmationContent는 이 이슈의 선행 조건이 아니다.
+- 2026-09-09 리뷰 답변과 사용자 승인에 따라 기존 callback 기반 실행 계약을 위의 fixture 기반 표시
+  검증으로 변경했다. `ProfilePinAction` production controller를 제거하며 요청 수명과 결과 반영은
+  실제 mutation 구현 시 다시 검증한다.
 - 이 이관은 제품 정책과 독립적인 공용 UI 범위만 구현하므로 새 OpenSpec을 만들지 않는다. PROD-809의
   정책 검토·명세 확정은 이 이관 완료를 기다리지 않으며, API·mutation·cache·pagination·권한과 실제 Profile
   연결, Native touch·focus·screen reader QA는 미완료 runtime 범위로 남긴다.
+- 2026-09-09 로컬 검증: Relay·TypeScript·lint·Storybook 빌드와 Pin·PostActionBar·Posts의 123개 테스트가
+  통과했다. 새 정적 빌드의 키보드 고정 모의 실행·표시 전환·More focus 복귀를 확인했고, 완료 상태의
+  접근성 재검사는 위반 0건이었다. 이 기록은 fixture의 공용 UI 검증이며 실제 Pin mutation 증거가 아니다.
 
 ## Repost 실패 toast
 
@@ -390,6 +397,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Profile 고정의 Mobile `390`, Web `1024`·`1440` Light/Dark 화면, ProfileHero·PostListItem·PostAttributionRow
   source 상속, 메뉴 label·순서·color, 장식 Pin의 중복 announce 방지를 검증한다. 실제 runtime 접근성은 PROD-809에서
   검증한다.
-- 고정·해제 callback과 표시 전환, pending 중 중복 실행 차단, 실패 뒤 기존 고정 상태 유지·한국어 toast·재시도,
-  메뉴 keyboard·dismiss·trigger focus return을 검증한다. 교체 확인과 전용 상태 화면은 PROD-809 정책 확정 후
-  필요한 범위가 정해질 때 검증한다.
+- Storybook에서 고정·해제 모의 상태에 따른 표시 전환, pending의 busy·disabled UI, 실패 표시 유지·한국어
+  toast·재시도와 메뉴 keyboard·dismiss·trigger focus return을 검증한다. fixture 없는 production 메뉴에
+  고정 action이 추가되지 않는지도 검증한다. 실제 요청 수명·결과 반영과 교체 확인·전용 상태 화면은
+  PROD-809의 mutation·정책 구현 범위에서 검증한다.

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pin } from 'lucide-react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
@@ -9,17 +10,19 @@ import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
+import { useToast } from '@/components/ui/ToastProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { getCopiedStrings, resetClipboardMock } from '../../../.storybook/mocks/postClipboard';
+import { ProfilePinStoryContext } from '../../../.storybook/mocks/profilePinActionBar';
 import { RelayStoryProvider } from '../../../.storybook/mocks/react-relay';
 import { post } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { PropsWithChildren } from 'react';
 import type { RequestParameters, Variables } from 'relay-runtime';
-import type { ProfilePinOperation } from '@/components/profile/ProfilePinAction';
 import type { ProfilePinActionStoriesQuery as ProfilePinActionStoriesQueryType } from './__generated__/ProfilePinActionStoriesQuery.graphql';
 
 type Outcome = 'success' | 'error' | 'pending';
+type ProfilePinOperation = 'pin' | 'unpin';
 
 type StoryArgs = {
   action: ProfilePinOperation;
@@ -77,21 +80,57 @@ function Fixture({
   const postNode = useStoryPost();
   const environment = useRelayEnvironment();
   const [currentAction, setCurrentAction] = useState(action);
+  const [pending, setPending] = useState(false);
+  const { showToast } = useToast();
+  const inFlight = useRef(false);
+  const mounted = useRef(false);
+  const focusTrigger = useRef(() => {});
+  const restoreTriggerFocus = useRef(false);
   const pinned = viewer === 'visitor' || currentAction === 'unpin';
 
   useEffect(() => setCurrentAction(action), [action]);
   useEffect(() => updateStoryBody(environment, bodyText), [bodyText, environment]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!pending && restoreTriggerFocus.current) {
+      restoreTriggerFocus.current = false;
+      focusTrigger.current();
+    }
+  }, [pending]);
 
-  const onAction = async (nextAction: ProfilePinOperation) => {
-    await (nextAction === 'pin' ? onPin : onUnpin)();
-    if (outcome === 'pending') {
-      await new Promise<void>(() => undefined);
+  const simulateRequest = async () => {
+    if (inFlight.current) {
+      return;
     }
-    if (outcome === 'error') {
-      throw new Error('요청 실패');
+    inFlight.current = true;
+    setPending(true);
+    let succeeded = false;
+    try {
+      await (currentAction === 'pin' ? onPin : onUnpin)();
+      if (outcome === 'pending') {
+        return;
+      }
+      succeeded = outcome === 'success';
+    } catch {
+      // Story Actions may reject too; never display the supplied error text.
     }
-    setCurrentAction(nextAction === 'unpin' ? 'pin' : 'unpin');
-    onResult?.(nextAction);
+    if (!mounted.current) {
+      return;
+    }
+    inFlight.current = false;
+    restoreTriggerFocus.current = true;
+    setPending(false);
+    if (succeeded) {
+      setCurrentAction(currentAction === 'unpin' ? 'pin' : 'unpin');
+      onResult?.(currentAction);
+    } else {
+      showToast('고정 상태를 변경하지 못했어요. 다시 시도해 주세요.', { tone: 'danger' });
+    }
   };
 
   if (!postNode) {
@@ -100,11 +139,28 @@ function Fixture({
 
   return (
     <View style={styles.fixture}>
-      <PostListItem
-        profilePin={{ postId: storyPost.id, action: currentAction, onAction }}
-        pinned={pinned}
-        post={postNode}
-      />
+      <ProfilePinStoryContext
+        value={{
+          moreItems:
+            viewer === 'owner'
+              ? [
+                  {
+                    key: 'pin',
+                    icon: Pin,
+                    label: currentAction === 'unpin' ? '프로필 고정 해제' : '프로필에 고정',
+                    onSelect: () => void simulateRequest(),
+                  },
+                ]
+              : [],
+          morePending: pending,
+          moreSheetIconSize: 24,
+          onMoreTriggerReady: (focus) => {
+            focusTrigger.current = focus;
+          },
+        }}
+      >
+        <PostListItem pinned={pinned} post={postNode} />
+      </ProfilePinStoryContext>
     </View>
   );
 }
@@ -202,8 +258,15 @@ const meta = {
     'SheetIconContract',
     'VisitorMenuContract',
     'ExistingDeletionFlow',
+    'ProductionWithoutPinFixture',
   ],
   parameters: {
+    docs: {
+      description: {
+        component:
+          '고정 요청과 상태 전환은 Storybook fixture의 모의 동작입니다. 실제 PostListItem·PostActionBar·메뉴·toast를 사용하지만 Pin mutation과 production 연결은 검증하지 않습니다.',
+      },
+    },
     controls: {
       disable: true,
       include: ['viewer', 'action', 'bodyText', 'outcome'],
@@ -389,5 +452,23 @@ export const ExistingDeletionFlow: Story = {
     await waitFor(() => expect(args.onDeleteRequest).toHaveBeenCalledWith(storyPost.id));
     expect(args.onDeleteRequest).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(canvas.queryByRole('article')).not.toBeInTheDocument());
+  },
+};
+
+export const ProductionWithoutPinFixture: Story = {
+  render: function ProductionPost() {
+    const postNode = useStoryPost();
+    return postNode ? <PostListItem pinned post={postNode} /> : <></>;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    expect(canvas.getByText('고정됨')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '더 보기' }));
+    expect((await body.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual([
+      '링크 복사',
+      '삭제',
+    ]);
+    await userEvent.keyboard('{Escape}');
   },
 };

@@ -15,7 +15,6 @@ import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
-import type { ProfilePinControl } from '@/components/profile/ProfilePinAction';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
@@ -93,13 +92,11 @@ const PostListItemFragment = graphql`
 `;
 
 export function PostListItem({
-  profilePin,
   pinned = false,
   post: postKey,
   showDivider = true,
   showReplyAttribution = true,
 }: {
-  profilePin?: ProfilePinControl;
   pinned?: boolean;
   post: PostListItem_post$key;
   showDivider?: boolean;
@@ -201,7 +198,6 @@ export function PostListItem({
         {replyAttribution}
         <PostListRow
           actionBarStyle={styles.actionBarSlot}
-          profilePin={profilePin}
           onDeleted={onDeleted}
           post={post}
           reply={reply}
@@ -238,13 +234,7 @@ export function PostListItem({
             </Pressable>
           </Link>
         </PostAttributionRow>
-        <PostListRow
-          profilePin={profilePin}
-          onDeleted={onDeleted}
-          post={source}
-          reply={reply}
-          surfacePostId={post.id}
-        />
+        <PostListRow onDeleted={onDeleted} post={source} reply={reply} surfacePostId={post.id} />
       </View>,
     );
   }
@@ -279,7 +269,6 @@ export function PostListItem({
             sourcePreviewStyle={styles.quoteSourcePreview}
           />
           <PostActionSurface
-            profilePin={profilePin}
             onDeleted={onDeleted}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
@@ -302,14 +291,12 @@ function PostAttributionRow({ children, icon }: { children: ReactNode; icon: Rea
 
 function PostListRow({
   actionBarStyle,
-  profilePin,
   onDeleted,
   post: postKey,
   reply,
   surfacePostId,
 }: {
   actionBarStyle?: StyleProp<ViewStyle>;
-  profilePin?: ProfilePinControl;
   onDeleted: () => void;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
@@ -374,7 +361,6 @@ function PostListRow({
         ) : null}
         <PostActionSurface
           actionBarStyle={actionBarStyle}
-          profilePin={profilePin}
           onDeleted={onDeleted}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}

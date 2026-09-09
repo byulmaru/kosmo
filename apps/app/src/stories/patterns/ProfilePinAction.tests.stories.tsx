@@ -3,6 +3,7 @@ import baseMeta, {
   ExistingDeletionFlow as existingDeletionFlow,
   OwnerMenuAndDirectActions as ownerMenuAndDirectActions,
   PendingContract as pendingContract,
+  ProductionWithoutPinFixture as productionWithoutPinFixture,
   SheetIconContract as sheetIconContract,
   VisitorMenuContract as visitorMenuContract,
 } from './ProfilePinAction.stories';
@@ -25,3 +26,4 @@ export const ErrorRecoveryFocus: Story = errorRecoveryFocus;
 export const SheetIconContract: Story = sheetIconContract;
 
 export const ExistingDeletionFlow: Story = existingDeletionFlow;
+export const ProductionWithoutPinFixture: Story = productionWithoutPinFixture;
