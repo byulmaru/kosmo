@@ -1,108 +1,39 @@
-import { Fragment, useId, useRef, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { useId } from 'react';
+import { View } from 'react-native';
 import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
 import { ListboxOption } from '@/components/ui/ListboxOption';
 import { SelectTrigger } from '@/components/ui/SelectTrigger';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, colors, radius, space } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { KeyboardEvent } from 'react';
-
-const choices = ['전체 공개', '팔로워에게만 공개', '비공개'];
 
 type CatalogProps = {
   accessibilityLabel: string;
   disabled: boolean;
   error: string;
-  interactive?: boolean;
   onPress: () => void;
   open: boolean;
   placeholder: string;
   value: string;
 };
 
-function SelectTriggerCatalog({ open, disabled, interactive = false, ...args }: CatalogProps) {
+function SelectTriggerCatalog({ open, disabled, ...args }: CatalogProps) {
   const elevation = useElevation();
   const theme = useTheme();
   const controls = useId();
-  const controlRef = useRef<View>(null);
-  const [currentOpen, setCurrentOpen] = useState(open);
-  const [currentValue, setCurrentValue] = useState(args.value);
-  const [activeIndex, setActiveIndex] = useState(Math.max(0, choices.indexOf(args.value)));
-  const expanded = currentOpen && !disabled;
-
-  const optionId = (index: number) => `${controls}-option-${index}`;
-
-  const focusOption = (index: number) => {
-    if (Platform.OS === 'web') {
-      requestAnimationFrame(() => document.getElementById(optionId(index))?.focus());
-    }
-  };
-
-  const focusTrigger = () => {
-    if (Platform.OS === 'web') {
-      requestAnimationFrame(() => {
-        (controlRef.current as unknown as HTMLElement | null)?.focus();
-      });
-    }
-  };
-
-  const close = () => {
-    setCurrentOpen(false);
-    focusTrigger();
-  };
-
-  const select = (choice: string) => {
-    setCurrentValue(choice);
-    close();
-  };
-
-  const handleListboxKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (!interactive) {
-      return;
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      close();
-      return;
-    }
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
-      return;
-    }
-    event.preventDefault();
-    const direction = event.key === 'ArrowDown' ? 1 : -1;
-    const nextIndex = (activeIndex + direction + choices.length) % choices.length;
-    setActiveIndex(nextIndex);
-    focusOption(nextIndex);
-  };
+  const expanded = open && !disabled;
 
   return (
     <View style={{ gap: 8, width: '100%', maxWidth: 320, padding: 4 }}>
       <SelectTrigger
         {...args}
-        controlRef={controlRef}
-        value={currentValue}
-        onPress={() => {
-          if (interactive) {
-            const nextOpen = !currentOpen;
-            setCurrentOpen(nextOpen);
-            if (nextOpen) {
-              const nextIndex = Math.max(0, choices.indexOf(currentValue));
-              setActiveIndex(nextIndex);
-              focusOption(nextIndex);
-            }
-          }
-          args.onPress();
-        }}
+        onPress={args.onPress}
         {...(expanded ? { open: true, controls } : { open: false, disabled })}
       />
       {expanded ? (
         <View
           nativeID={controls}
-          {...({
-            role: 'listbox',
-            ...(Platform.OS === 'web' ? { onKeyDown: handleListboxKeyDown } : {}),
-          } as unknown as { role?: never })}
+          {...({ role: 'listbox' } as unknown as { role?: never })}
           accessibilityLabel={args.accessibilityLabel}
           style={[
             elevation.floating,
@@ -116,36 +47,12 @@ function SelectTriggerCatalog({ open, disabled, interactive = false, ...args }: 
             },
           ]}
         >
-          {interactive ? (
-            choices.map((choice, index) => (
-              <Fragment key={choice}>
-                {index > 0 ? (
-                  <View
-                    testID="select-trigger-option-divider"
-                    style={{
-                      borderTopColor: theme.borderSubtle,
-                      borderTopWidth: borderWidths[1],
-                    }}
-                  />
-                ) : null}
-                <ListboxOption
-                  active={activeIndex === index}
-                  label={choice}
-                  nativeID={optionId(index)}
-                  selected={currentValue === choice}
-                  style={{ borderRadius: radius[8] }}
-                  onSelect={() => select(choice)}
-                />
-              </Fragment>
-            ))
-          ) : (
-            <ListboxOption
-              label={args.value || args.placeholder}
-              selected={Boolean(args.value)}
-              style={{ borderRadius: radius[8] }}
-              onSelect={args.onPress}
-            />
-          )}
+          <ListboxOption
+            label={args.value || args.placeholder}
+            selected={Boolean(args.value)}
+            style={{ borderRadius: radius[8] }}
+            onSelect={args.onPress}
+          />
         </View>
       ) : null}
     </View>
@@ -159,7 +66,6 @@ const meta = {
     accessibilityLabel: '공개 범위',
     disabled: false,
     error: '',
-    interactive: false,
     onPress: fn(),
     open: false,
     placeholder: '선택하세요',
@@ -169,7 +75,6 @@ const meta = {
     accessibilityLabel: { control: 'text' },
     disabled: { control: 'boolean' },
     error: { control: 'text' },
-    interactive: { control: false },
     open: { control: 'boolean' },
     placeholder: { control: 'text' },
     value: { control: 'text' },
@@ -182,15 +87,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Playground: Story = {
-  render: (args) => (
-    <SelectTriggerCatalog
-      key={`${args.accessibilityLabel}:${args.disabled}:${args.error}:${args.open}:${args.placeholder}:${args.value}`}
-      {...args}
-      interactive
-    />
-  ),
-};
+export const Playground: Story = {};
 
 export const RepresentativeStates: Story = {
   parameters: { controls: { disable: true } },
