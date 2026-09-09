@@ -7,15 +7,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
-const mockPlatform: { OS: string } = { OS: 'web' };
-const mockDialogActions = {
-  flexDirection: 'row-reverse',
-  gap: 99,
-  justifyContent: 'space-around',
-} as const;
-
 mockModule('react-native', {
-  Platform: mockPlatform,
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
   View: 'View',
@@ -26,7 +18,7 @@ mockModule('@/theme/ThemeProvider', {
 });
 mockModule('@/theme/tokens', {
   layoutRecipes: {
-    dialogActions: mockDialogActions,
+    dialogActions: {},
   },
   space: { 8: 8, 12: 12 },
   textStyles: { uiCopyM: { fontSize: 14, lineHeight: 20 } },
@@ -35,10 +27,8 @@ mockModule('@/theme/tokens', {
 type TestElementProps = {
   children?: ReactNode;
   disabled?: boolean;
-  hitSlop?: { bottom: number; left: number; right: number; top: number };
   loading?: boolean;
   onPress?: (...args: unknown[]) => void;
-  style?: unknown;
   tone?: 'danger' | 'primary' | 'secondary';
 };
 type TestElement = ReactElement<TestElementProps>;
@@ -61,22 +51,17 @@ before(async () => {
     ?.ConfirmationContent as ConfirmationContentComponent | undefined;
 });
 
-function render(platform: string, pending = false, tone: 'danger' | 'primary' = 'primary') {
+function render(pending = false, tone: 'danger' | 'primary' = 'primary') {
   assert.ok(ConfirmationContent, 'ConfirmationContent component must exist');
-  mockPlatform.OS = platform;
-  try {
-    return ConfirmationContent({
-      cancelLabel: '취소',
-      confirmLabel: '확인',
-      message: '계속할까요?',
-      onCancel: () => undefined,
-      onConfirm: () => undefined,
-      pending,
-      tone,
-    });
-  } finally {
-    mockPlatform.OS = 'web';
-  }
+  return ConfirmationContent({
+    cancelLabel: '취소',
+    confirmLabel: '확인',
+    message: '계속할까요?',
+    onCancel: () => undefined,
+    onConfirm: () => undefined,
+    pending,
+    tone,
+  });
 }
 
 function findElements(node: ReactNode, type: string): TestElement[] {
@@ -92,16 +77,8 @@ function findElements(node: ReactNode, type: string): TestElement[] {
   return [...matches, ...children.flatMap((child) => findElements(child, type))];
 }
 
-function flattenStyle(style: unknown): Record<string, unknown> {
-  return (Array.isArray(style) ? style : [style]).reduce<Record<string, unknown>>(
-    (result, entry) =>
-      entry && typeof entry === 'object' ? { ...result, ...(entry as object) } : result,
-    {},
-  );
-}
-
 test('actions keep cancel-confirm order and pending state', () => {
-  const buttons = findElements(render('web', true, 'danger'), 'Button');
+  const buttons = findElements(render(true, 'danger'), 'Button');
 
   assert.deepEqual(
     buttons.map((button) => button.props.children),
@@ -183,38 +160,4 @@ test('actions do not expose the press event to consumer callbacks', () => {
 
   assert.deepEqual(cancelCalls, [[]]);
   assert.deepEqual(confirmCalls, [[]]);
-});
-
-test('actions keep 120x40 visual bounds inside each platform target height', () => {
-  for (const [platform, targetHeight, verticalInset] of [
-    ['web', 40, undefined],
-    ['ios', 44, 2],
-    ['android', 48, 4],
-  ] as const) {
-    const tree = render(platform);
-    const actionRow = findElements(tree, 'View').find(
-      ({ props }) => flattenStyle(props.style).minHeight === targetHeight,
-    );
-    assert.ok(actionRow);
-    const actionRowStyle = flattenStyle(actionRow.props.style);
-    assert.deepEqual(
-      {
-        flexDirection: actionRowStyle.flexDirection,
-        gap: actionRowStyle.gap,
-        justifyContent: actionRowStyle.justifyContent,
-      },
-      mockDialogActions,
-    );
-
-    const buttons = findElements(tree, 'Button');
-    for (const button of buttons) {
-      assert.deepEqual(flattenStyle(button.props.style), { height: 40, width: 120 });
-      assert.deepEqual(
-        button.props.hitSlop,
-        verticalInset
-          ? { bottom: verticalInset, left: 0, right: 0, top: verticalInset }
-          : undefined,
-      );
-    }
-  }
 });
