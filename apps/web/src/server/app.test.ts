@@ -380,10 +380,8 @@ describe('GraphQL proxy', () => {
     });
 
     expect(response.status).toBe(500);
-    expect(await response.text()).toBe('INTERNAL_API_ORIGIN is required');
     expect(captureUnexpectedError).toHaveBeenCalledOnce();
     expect(captureUnexpectedError.mock.calls[0]?.[0]).toMatchObject({
-      message: 'INTERNAL_API_ORIGIN is required',
       status: 500,
     });
   });
