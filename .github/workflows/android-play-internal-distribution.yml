@@ -90,8 +90,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # ponytail: avoid a pre-build Play API query; replace this offset before 2086.
-          version_code=$(( $(date -u +%s) - 1577836800 ))
+          # Keep reruns on the same run number at the same version code.
+          version_code=$(( 210579434 + GITHUB_RUN_NUMBER ))
           if (( version_code < 1 || version_code > 2147483647 )); then
             echo "::error::KOSMO_ANDROID_VERSION_CODE is outside the signed 32-bit Android limit."
             exit 1
