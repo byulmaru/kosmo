@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { MutedProfileList } from '@/components/profile/MutedProfileList';
-import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
+import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
@@ -38,6 +38,7 @@ const SettingsMutedProfilesFragment = graphql`
             id
             displayName
             relativeHandle
+            ...ProfileMuteAction_profile
             avatar {
               id
               url
@@ -49,15 +50,11 @@ const SettingsMutedProfilesFragment = graphql`
   }
 `;
 
-const noopUnmute = () => Promise.resolve();
-
 export function SettingsMutedProfiles() {
   return (
     <RouteBoundary
-      error={(retry) => (
-        <MutedProfileList onUnmute={noopUnmute} state={{ onRetry: retry, status: 'error' }} />
-      )}
-      loading={<MutedProfileList onUnmute={noopUnmute} state={{ status: 'loading' }} />}
+      error={(retry) => <MutedProfileList state={{ onRetry: retry, status: 'error' }} />}
+      loading={<MutedProfileList state={{ status: 'loading' }} />}
       title="뮤트한 프로필을 불러오지 못했어요"
     >
       <SettingsMutedProfilesContent />
@@ -67,7 +64,6 @@ export function SettingsMutedProfiles() {
 
 function SettingsMutedProfilesContent() {
   const shellChrome = useShellChrome();
-  const { changeMuted } = useProfileMuteMutations();
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<SettingsMutedProfilesQuery>(
     SettingsMutedProfilesQuery,
@@ -88,25 +84,6 @@ function SettingsMutedProfilesContent() {
     setLoadError(false);
     pagination.loadNext(20, { onComplete: (error) => setLoadError(Boolean(error)) });
   }, [pagination.hasNext, pagination.isLoadingNext, pagination.loadNext]);
-  const onUnmute = useCallback(
-    (targetProfileId: string) => {
-      const profileMuteId = edges.find((edge) => edge.node.targetProfile.id === targetProfileId)
-        ?.node.id;
-      if (!profileMuteId || !profile?.id) {
-        return Promise.reject(new Error('Profile mute relation is no longer available.'));
-      }
-      return changeMuted(
-        {
-          ownerProfileId: profile.id,
-          profileMuteId,
-          targetProfileId,
-        },
-        false,
-      );
-    },
-    [changeMuted, edges, profile?.id],
-  );
-
   if (!profile || profile.instance.kind !== 'LOCAL') {
     return (
       <StateView
@@ -126,6 +103,7 @@ function SettingsMutedProfilesContent() {
           ? { onLoadMore: loadMore, status: 'more' as const }
           : { status: 'end' as const },
     profiles: edges.map((edge) => ({
+      action: <ProfileMuteAction profile={edge.node.targetProfile} surface="button" />,
       avatarUri: edge.node.targetProfile.avatar?.url,
       displayName: edge.node.targetProfile.displayName,
       id: edge.node.targetProfile.id,
@@ -134,5 +112,5 @@ function SettingsMutedProfilesContent() {
     status: 'loaded' as const,
   };
 
-  return <MutedProfileList onUnmute={onUnmute} state={listState} />;
+  return <MutedProfileList state={listState} />;
 }

@@ -5,10 +5,14 @@ import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { space } from '@/theme/tokens';
 import { ProfileListItemContent } from './ProfileListItemContent';
-import { ProfileMuteActionControl } from './ProfileMuteAction';
-import type { ProfileMuteFeedback } from './ProfileMuteAction';
+import type { ReactNode } from 'react';
 
-export type MutedProfile = { id: string; displayName: string; avatarUri?: string | null };
+export type MutedProfile = {
+  action: ReactNode;
+  id: string;
+  displayName: string;
+  avatarUri?: string | null;
+};
 type Pagination =
   | { status: 'end' }
   | { status: 'loading' }
@@ -19,12 +23,10 @@ export type MutedProfileListState =
   | { status: 'error'; onRetry: () => void }
   | { status: 'loaded'; profiles: readonly MutedProfile[]; pagination: Pagination };
 type Props = {
-  onFeedback?: (feedback: ProfileMuteFeedback & { profileId: string }) => void;
-  onUnmute: (profileId: string) => Promise<void>;
   state: MutedProfileListState;
 };
 
-export function MutedProfileList({ onFeedback, onUnmute, state }: Props) {
+export function MutedProfileList({ state }: Props) {
   const { showToast } = useToast();
   const loadError =
     state.status === 'error'
@@ -77,16 +79,7 @@ export function MutedProfileList({ onFeedback, onUnmute, state }: Props) {
               displayName={profile.displayName}
               style={styles.row}
             >
-              <ProfileMuteActionControl
-                displayName={profile.displayName}
-                muted
-                onChangeMuted={() => onUnmute(profile.id)}
-                onFeedback={(feedback) => {
-                  onFeedback?.({ ...feedback, profileId: profile.id });
-                }}
-                profileId={profile.id}
-                surface="button"
-              />
+              {profile.action}
             </ProfileListItemContent>
           ))}
           {state.pagination.status === 'error' ? (

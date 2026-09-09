@@ -1,7 +1,6 @@
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { ProfileMuteActionControl } from '@/components/profile/ProfileMuteAction';
-import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
+import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { isRepostTargetEligible } from './postActionAvailability';
@@ -29,12 +28,7 @@ const postActionSurfaceFragment = graphql`
     profile {
       id
       relativeHandle
-      displayName
-      viewerState {
-        profileMute {
-          id
-        }
-      }
+      ...ProfileMuteAction_profile
     }
     ...PostActionBar_post @alias(as: "actionBar")
     ...PostReactionController_post @alias(as: "reactionController")
@@ -63,28 +57,13 @@ export function PostActionSurface({
   );
   const onBookmarkError = useBookmarkFailureToast();
   const onRepostError = useRepostFailureToast();
-  const { changeMuted } = useProfileMuteMutations();
   const copyLinkItem = usePostMoreMenuItem({
     postId: target.id,
     relativeHandle: target.profile.relativeHandle,
   });
 
-  const mute =
-    authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id
-      ? {
-          muted: Boolean(target.profile.viewerState?.profileMute),
-          onChangeMuted: (nextMuted: boolean) =>
-            changeMuted(
-              {
-                ownerProfileId: authentication.selectedProfileId as string,
-                profileMuteId: target.profile.viewerState?.profileMute?.id,
-                targetProfileId: target.profile.id,
-              },
-              nextMuted,
-            ),
-          profileId: target.profile.id,
-        }
-      : undefined;
+  const canMute =
+    authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id;
 
   const renderActions = (more?: MoreActionConfig) => (
     <View style={actionBarStyle}>
@@ -107,12 +86,10 @@ export function PostActionSurface({
   return (
     <>
       <PostReactionSummary controller={reactionController} style={reactionSummaryStyle} />
-      {mute ? (
-        <ProfileMuteActionControl
-          {...mute}
-          displayName={target.profile.displayName}
-          profileId={target.profile.id}
+      {canMute ? (
+        <ProfileMuteAction
           items={[copyLinkItem]}
+          profile={target.profile}
           renderTrigger={({ expanded, onPress, ref }) =>
             renderActions({
               accessibilityLabel: '더 보기',
