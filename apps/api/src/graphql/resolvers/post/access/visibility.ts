@@ -11,6 +11,6 @@ export const postVisibilityAccessWhere = ({ ctx }: { ctx: UserContext }) =>
       profile: Profiles,
       instance: Instances,
     })}`,
-    viewerProfileId: ctx.session?.profileId,
+    viewerProfileId: ctx.session?.profile?.id,
     db,
   });

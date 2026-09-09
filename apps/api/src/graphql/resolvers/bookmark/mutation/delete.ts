@@ -34,7 +34,7 @@ builder.mutationField('deleteBookmark', (t) =>
       const deleted = await deleteBookmark(
         {
           bookmarkId: input.id.id,
-          profileId: ctx.session.profileId,
+          profileId: ctx.session.profile.id,
         },
         db,
       );

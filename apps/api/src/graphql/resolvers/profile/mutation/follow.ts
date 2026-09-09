@@ -32,7 +32,7 @@ builder.mutationField('followProfile', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const result = await followProfile({
-        followerProfileId: ctx.session.profileId,
+        followerProfileId: ctx.session.profile.id,
         followeeProfileId: input.id.id,
       }).catch((error: unknown) => {
         if (error instanceof ConflictError) {

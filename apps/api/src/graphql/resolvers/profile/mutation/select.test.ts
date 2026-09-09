@@ -16,20 +16,23 @@ test('selectProfile updates the request identity before the next mutation field'
   builder.mutationField('selectProfileObservedProfileRole', (t) =>
     t.withAuth({ profileRole: AccountProfileRole.MEMBER }).field({
       type: 'String',
-      resolve: (_source, _args, context) => context.session.profileRole,
+      resolve: (_source, _args, context) => context.session.profile.role,
     }),
   );
   builder.mutationField('selectProfileObservedOwnerRole', (t) =>
     t.withAuth({ profileRole: AccountProfileRole.OWNER }).field({
       type: 'String',
-      resolve: (_source, _args, context) => context.session.profileRole,
+      resolve: (_source, _args, context) => context.session.profile.role,
     }),
   );
   const testSchema = builder.toSchema();
 
   let transactionCount = 0;
   let queryMode: 'select' | 'update' = 'select';
-  const selectedProfile = { id: selectedProfileId, profileRole: AccountProfileRole.MEMBER };
+  const selectedProfile = {
+    profile: { id: selectedProfileId },
+    role: AccountProfileRole.MEMBER,
+  };
   const chain = {
     from: () => chain,
     innerJoin: () => chain,
@@ -58,7 +61,7 @@ test('selectProfile updates the request identity before the next mutation field'
     return callback(tx as never);
   });
   const context = {
-    session: { id: sessionId, accountId: 'account-id', profileId: null, profileRole: null },
+    session: { id: sessionId, accountId: 'account-id', profile: null },
   } as unknown as UserContext;
 
   const result = await graphql({
@@ -83,8 +86,10 @@ test('selectProfile updates the request identity before the next mutation field'
   assert.equal(data?.selectProfileObservedProfileRole, AccountProfileRole.MEMBER);
   assert.equal(transactionCount, 1);
   assert.ok(context.session);
-  assert.equal(context.session.profileId, selectedProfileId);
-  assert.equal(context.session.profileRole, AccountProfileRole.MEMBER);
+  assert.deepEqual(context.session.profile, {
+    id: selectedProfileId,
+    role: AccountProfileRole.MEMBER,
+  });
 
   const ownerResult = await graphql({
     schema: testSchema,
@@ -97,7 +102,10 @@ test('selectProfile updates the request identity before the next mutation field'
 
   const ownerContext = {
     ...context,
-    session: { ...context.session, profileRole: AccountProfileRole.OWNER },
+    session: {
+      ...context.session,
+      profile: { id: selectedProfileId, role: AccountProfileRole.OWNER },
+    },
   };
   const ownerAsMemberResult = await graphql({
     schema: testSchema,
@@ -116,7 +124,7 @@ test('selectProfile updates the request identity before the next mutation field'
     source: 'mutation { selectProfileObservedProfileRole }',
     contextValue: {
       ...context,
-      session: { ...context.session, profileId: null, profileRole: null },
+      session: { ...context.session, profile: null },
     },
   });
 

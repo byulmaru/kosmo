@@ -46,15 +46,13 @@ export type SessionContext = {
   session: {
     id: string;
     accountId: string;
-    profileId: string | null;
-    profileRole: AccountProfileRole | null;
+    profile: { id: string; role: AccountProfileRole } | null;
   };
 };
 
 export type SessionWithProfileContext = SessionContext & {
   session: {
-    profileId: string;
-    profileRole: AccountProfileRole;
+    profile: { id: string; role: AccountProfileRole };
   };
 };
 
@@ -91,9 +89,8 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
       .then(first);
 
     if (session) {
-      let profileId = session.activeProfileId;
-      let profileRole: AccountProfileRole | null = null;
-      if (profileId) {
+      let profile: { id: string; role: AccountProfileRole } | null = null;
+      if (session.activeProfileId) {
         await db
           .select({
             id: Profiles.id,
@@ -110,23 +107,21 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
           .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
           .where(
             and(
-              eq(Profiles.id, profileId),
+              eq(Profiles.id, session.activeProfileId),
               visibleProfileWhere({ profile: Profiles, instance: Instances }),
             ),
           )
           .limit(1)
           .then(first)
-          .then((profile) => {
-            profileId = profile?.id ?? null;
-            profileRole = profile?.role ?? null;
+          .then((selectedProfile) => {
+            profile = selectedProfile ?? null;
           });
       }
 
       ctx.session = {
         id: session.id,
         accountId: session.accountId,
-        profileId,
-        profileRole,
+        profile,
       };
     }
   }

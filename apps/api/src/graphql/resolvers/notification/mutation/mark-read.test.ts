@@ -16,7 +16,7 @@ test('silently excludes a non-Notification global ID', async () => {
     variableValues: {
       ids: [encodeGlobalId('Profile', '00000000-0000-8006-8000-000000000001')],
     },
-    contextValue: { session: { accountId: 'account', id: 'session' } },
+    contextValue: { session: { accountId: 'account', id: 'session', profile: null } },
   });
 
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));

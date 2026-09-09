@@ -79,7 +79,7 @@ builder.mutationField('createPost', (t) =>
           mediaId: mediaId.id,
         })),
         origin: 'LOCAL',
-        profileId: ctx.session.profileId,
+        profileId: ctx.session.profile.id,
         replyParentId: input.replyParentId?.id,
         visibility: input.visibility,
       });

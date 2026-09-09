@@ -14,7 +14,7 @@ builder.objectField(Profile, 'bookmarks', (t) =>
     {
       type: Bookmark,
       resolve: (profile, args, ctx) => {
-        if (profile.id !== ctx.session.profileId) {
+        if (profile.id !== ctx.session.profile.id) {
           throw new PermissionDeniedError('Bookmark owner is required');
         }
 

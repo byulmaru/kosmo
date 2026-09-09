@@ -35,7 +35,10 @@ builder.mutationField('createBookmark', (t) =>
         }
 
         return {
-          bookmark: await createBookmark({ postId: post.id, profileId: ctx.session.profileId }, tx),
+          bookmark: await createBookmark(
+            { postId: post.id, profileId: ctx.session.profile.id },
+            tx,
+          ),
         };
       }),
   }),

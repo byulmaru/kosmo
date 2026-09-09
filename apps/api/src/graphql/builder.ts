@@ -66,13 +66,13 @@ export const builder = new SchemaBuilder<{
     authScopes: async (ctx) => ({
       login: !!ctx.session,
       profileRole: (minimumRole) => {
-        const currentRole = ctx.session?.profileRole;
-        if (!ctx.session?.profileId || !currentRole) {
+        const currentProfile = ctx.session?.profile;
+        if (!currentProfile) {
           return false;
         }
 
         return (
-          AccountProfileRoleOrder.indexOf(currentRole) >=
+          AccountProfileRoleOrder.indexOf(currentProfile.role) >=
           AccountProfileRoleOrder.indexOf(minimumRole)
         );
       },

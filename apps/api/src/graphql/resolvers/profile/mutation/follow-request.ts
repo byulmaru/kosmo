@@ -27,7 +27,7 @@ builder.mutationField('approveProfileFollowRequest', (t) =>
     },
     resolve: (_, { input }, ctx) =>
       approveProfileFollowRequest({
-        actorProfileId: ctx.session.profileId,
+        actorProfileId: ctx.session.profile.id,
         profileFollowRequestId: input.id.id,
       }),
   }),
@@ -51,7 +51,7 @@ builder.mutationField('rejectProfileFollowRequest', (t) =>
     },
     resolve: (_, { input }, ctx) =>
       rejectProfileFollowRequest({
-        actorProfileId: ctx.session.profileId,
+        actorProfileId: ctx.session.profile.id,
         profileFollowRequestId: input.id.id,
       }),
   }),
@@ -75,7 +75,7 @@ builder.mutationField('cancelProfileFollowRequest', (t) =>
     },
     resolve: (_, { input }, ctx) =>
       cancelProfileFollowRequest({
-        actorProfileId: ctx.session.profileId,
+        actorProfileId: ctx.session.profile.id,
         profileFollowRequestId: input.id.id,
       }),
   }),

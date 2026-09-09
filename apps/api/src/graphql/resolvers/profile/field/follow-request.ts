@@ -52,7 +52,7 @@ builder.objectFields(Profile, (t) => ({
     type: ProfileFollowRequest,
     nullable: true,
     resolve: (profile, args, ctx) =>
-      ctx.session?.profileId === profile.id
+      ctx.session?.profile?.id === profile.id
         ? resolveRequestConnection(ctx, profile.id, ProfileFollowRequests.followeeProfileId, args)
         : null,
   }),
@@ -60,7 +60,7 @@ builder.objectFields(Profile, (t) => ({
     type: ProfileFollowRequest,
     nullable: true,
     resolve: (profile, args, ctx) =>
-      ctx.session?.profileId === profile.id
+      ctx.session?.profile?.id === profile.id
         ? resolveRequestConnection(ctx, profile.id, ProfileFollowRequests.followerProfileId, args)
         : null,
   }),

@@ -20,7 +20,7 @@ builder.objectField(Profile, 'profileMutes', (t) =>
     {
       type: ProfileMute,
       resolve: (profile, args, ctx) => {
-        if (profile.id !== ctx.session.profileId) {
+        if (profile.id !== ctx.session.profile.id) {
           throw new PermissionDeniedError('Profile mute owner is required');
         }
 

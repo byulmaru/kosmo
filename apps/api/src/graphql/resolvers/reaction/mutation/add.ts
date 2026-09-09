@@ -35,7 +35,7 @@ builder.mutationField('addReaction', (t) =>
       }
 
       const result = await addReaction({
-        actorProfileId: ctx.session.profileId,
+        actorProfileId: ctx.session.profile.id,
         origin: 'LOCAL',
         postId: post.id,
         type: input.type,

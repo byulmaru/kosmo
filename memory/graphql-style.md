@@ -110,6 +110,7 @@ Mutation도 필드별로 나눈다.
 - 인증 scope 부족은 resolver에서 직접 던지지 않고 `t.withAuth({ login: true })` 같은 auth 설정으로 처리한다.
 - `login`과 `profileRole` resolver는 production context가 이미 검증한 Active Account, selected Profile
   membership·role과 조회 가능 상태를 별도 actor query로 반복 검증하지 않는다. `profileRole`은
+  `session.profile: { id, role } | null`에서 현재 selected Profile의 role을 검사하며,
   `AccountProfileRole.MEMBER`처럼 필요한 최소 role을 선언하고 Owner도 통과시키며, canonical action이
   추가 조건을 명시할 때만 그 조건을 조회한다. `Media.Source=Local`처럼 생성 결과의 source가 Local이라는
   사실만으로 selected Profile의 Instance 종류를 Local로 제한하지 않는다.

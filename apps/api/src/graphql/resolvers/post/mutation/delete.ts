@@ -24,7 +24,7 @@ builder.mutationField('deletePost', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const result = await deletePost({
-        actorProfileId: ctx.session.profileId,
+        actorProfileId: ctx.session.profile.id,
         origin: 'LOCAL',
         postId: input.id.id,
       });

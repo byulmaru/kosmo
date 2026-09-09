@@ -56,7 +56,7 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
           source: MediaSource.LOCAL,
           state: MediaState.UPLOADING,
           accountId: ctx.session.accountId,
-          profileId: ctx.session.profileId,
+          profileId: ctx.session.profile.id,
           storageReference: upload.data.id,
           uploadExpiresAt: expiresAt,
         })

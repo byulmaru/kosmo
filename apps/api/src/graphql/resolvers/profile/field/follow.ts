@@ -120,7 +120,7 @@ builder.objectFields(Profile, (t) => ({
     nullable: true,
     unauthorizedResolver: () => null,
     resolve: async (profile, _, ctx) => {
-      const viewerProfileId = ctx.session.profileId;
+      const viewerProfileId = ctx.session.profile.id;
       const [follow, followRequest, membership, profileMute] = await Promise.all([
         viewerFollowLoader(ctx).load(profile.id),
         viewerFollowRequestLoader(ctx).load(profile.id),

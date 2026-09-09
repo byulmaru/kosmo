@@ -42,7 +42,7 @@ export const viewerRepostLoader = (ctx: UserContext) =>
     name: 'post.viewerRepost',
     nullable: true,
     load: async (sourceIds) => {
-      if (!ctx.session?.profileId) {
+      if (!ctx.session?.profile?.id) {
         return [];
       }
 
@@ -51,7 +51,7 @@ export const viewerRepostLoader = (ctx: UserContext) =>
         .from(Posts)
         .where(
           and(
-            eq(Posts.profileId, ctx.session.profileId),
+            eq(Posts.profileId, ctx.session.profile.id),
             inArray(Posts.repostSourceId, sourceIds),
             eq(Posts.state, PostState.ACTIVE),
             isNull(Posts.currentContentId),

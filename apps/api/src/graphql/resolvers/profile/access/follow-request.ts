@@ -3,7 +3,7 @@ import { eq, or } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
 export const profileFollowRequestAccessWhere = (ctx: UserContext) => {
-  const viewerProfileId = ctx.session?.profileId;
+  const viewerProfileId = ctx.session?.profile?.id;
 
   if (!viewerProfileId) {
     return undefined;

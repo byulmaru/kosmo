@@ -16,7 +16,7 @@ export const viewerFollowLoader = (ctx: UserContext) =>
     name: 'profileFollow.viewerFollow',
     nullable: true,
     load: async (ids) => {
-      if (!ctx.session?.profileId) {
+      if (!ctx.session?.profile?.id) {
         return [];
       }
 
@@ -29,7 +29,7 @@ export const viewerFollowLoader = (ctx: UserContext) =>
         .innerJoin(FolloweeInstances, eq(FolloweeInstances.id, FolloweeProfiles.instanceId))
         .where(
           and(
-            eq(ProfileFollows.followerProfileId, ctx.session.profileId),
+            eq(ProfileFollows.followerProfileId, ctx.session.profile.id),
             inArray(ProfileFollows.followeeProfileId, ids),
             profileFollowAccessWhere({
               ctx,

@@ -26,7 +26,7 @@ builder.mutationField('updateProfile', (t) =>
       try {
         const result = await updateProfile({
           accountId: ctx.session.accountId,
-          profileId: ctx.session.profileId,
+          profileId: ctx.session.profile.id,
           displayName: input.displayName ?? undefined,
           bio: input.bio,
           followPolicy: input.followPolicy ?? undefined,

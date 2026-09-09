@@ -24,7 +24,7 @@ builder.queryField('homeTimeline', (t) =>
             .from(ProfileFollows)
             .where(
               and(
-                eq(ProfileFollows.followerProfileId, ctx.session.profileId),
+                eq(ProfileFollows.followerProfileId, ctx.session.profile.id),
                 eq(ProfileFollows.followeeProfileId, Posts.profileId),
               ),
             ),
@@ -36,7 +36,7 @@ builder.queryField('homeTimeline', (t) =>
             .where(
               and(
                 eq(ReplyParents.id, Posts.replyParentId),
-                eq(ReplyParents.profileId, ctx.session.profileId),
+                eq(ReplyParents.profileId, ctx.session.profile.id),
               ),
             ),
         );
@@ -48,12 +48,12 @@ builder.queryField('homeTimeline', (t) =>
             .where(
               and(
                 eq(ReplyParents.id, Posts.replyParentId),
-                eq(ProfileFollows.followerProfileId, ctx.session.profileId),
+                eq(ProfileFollows.followerProfileId, ctx.session.profile.id),
               ),
             ),
         );
         const homeCandidateWhere = or(
-          eq(Posts.profileId, ctx.session.profileId),
+          eq(Posts.profileId, ctx.session.profile.id),
           and(isNull(Posts.replyParentId), followeeWhere),
           replyParentIsViewerPost,
           and(followeeWhere, replyParentAuthorIsFollowee),

@@ -6,7 +6,7 @@ import { schema } from '@/graphql/schema';
 test('requires an authenticated selected Profile', async () => {
   for (const contextValue of [
     {},
-    { session: { id: 'session', accountId: 'account', profileId: null } },
+    { session: { id: 'session', accountId: 'account', profile: null } },
   ]) {
     const result = await graphql({
       schema,

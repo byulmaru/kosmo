@@ -46,7 +46,7 @@ builder.mutationField('unfollowProfile', (t) =>
                 .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
                 .where(
                   and(
-                    eq(FollowerProfiles.id, ctx.session.profileId),
+                    eq(FollowerProfiles.id, ctx.session.profile.id),
                     eq(FollowerProfiles.state, ProfileState.ACTIVE),
                     eq(FollowerInstances.kind, InstanceKind.LOCAL),
                     ne(FollowerInstances.state, InstanceState.SUSPENDED),
@@ -63,14 +63,14 @@ builder.mutationField('unfollowProfile', (t) =>
         .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 
       const result = await unfollowProfile({
-        followerProfileId: ctx.session.profileId,
+        followerProfileId: ctx.session.profile.id,
         followeeProfileId: input.id.id,
       });
       const profiles = await db
         .select()
         .from(Profiles)
-        .where(inArray(Profiles.id, [ctx.session.profileId, input.id.id]));
-      const followerProfile = profiles.find(({ id }) => id === ctx.session.profileId);
+        .where(inArray(Profiles.id, [ctx.session.profile.id, input.id.id]));
+      const followerProfile = profiles.find(({ id }) => id === ctx.session.profile.id);
       const followeeProfile = profiles.find(({ id }) => id === input.id.id);
       if (!followerProfile || !followeeProfile) {
         throw new NotFoundError('Profile not found');

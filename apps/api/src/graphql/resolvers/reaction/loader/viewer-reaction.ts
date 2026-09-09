@@ -9,7 +9,7 @@ export const viewerReactionLoader = (ctx: UserContext) =>
     name: 'reaction.viewerReactions',
     many: true,
     load: async (postIds) => {
-      if (!ctx.session?.profileId) {
+      if (!ctx.session?.profile?.id) {
         return [];
       }
 
@@ -17,7 +17,7 @@ export const viewerReactionLoader = (ctx: UserContext) =>
         .select(getColumns(Reactions))
         .from(Reactions)
         .where(
-          and(eq(Reactions.profileId, ctx.session.profileId), inArray(Reactions.postId, postIds)),
+          and(eq(Reactions.profileId, ctx.session.profile.id), inArray(Reactions.postId, postIds)),
         )
         .orderBy(asc(Reactions.postId), asc(Reactions.id));
     },

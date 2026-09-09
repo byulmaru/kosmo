@@ -15,7 +15,7 @@ builder.mutationField('repostPost', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const result = await repostPost({
-        actorProfileId: ctx.session.profileId,
+        actorProfileId: ctx.session.profile.id,
         origin: 'LOCAL',
         sourcePostId: input.sourceId.id,
       });

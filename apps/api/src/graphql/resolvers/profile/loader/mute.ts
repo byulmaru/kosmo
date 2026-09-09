@@ -9,7 +9,7 @@ export const viewerProfileMuteLoader = (ctx: UserContext) =>
     name: 'profileMute.viewerProfileMute',
     nullable: true,
     load: async (targetProfileIds) => {
-      if (!ctx.session?.profileId) {
+      if (!ctx.session?.profile?.id) {
         return [];
       }
 
@@ -20,7 +20,7 @@ export const viewerProfileMuteLoader = (ctx: UserContext) =>
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .where(
           and(
-            eq(ProfileMutes.ownerProfileId, ctx.session.profileId),
+            eq(ProfileMutes.ownerProfileId, ctx.session.profile.id),
             inArray(ProfileMutes.targetProfileId, targetProfileIds),
             isNull(ProfileMutes.expiresAt),
             visibleProfileWhere({ profile: Profiles, instance: Instances }),
@@ -35,7 +35,7 @@ export const profileMuteByIdLoader = (ctx: UserContext) =>
     name: 'profileMute.byId',
     nullable: true,
     load: async (ids) => {
-      if (!ctx.session?.profileId) {
+      if (!ctx.session?.profile?.id) {
         return [];
       }
 
@@ -47,7 +47,7 @@ export const profileMuteByIdLoader = (ctx: UserContext) =>
         .where(
           and(
             inArray(ProfileMutes.id, ids),
-            eq(ProfileMutes.ownerProfileId, ctx.session.profileId),
+            eq(ProfileMutes.ownerProfileId, ctx.session.profile.id),
             isNull(ProfileMutes.expiresAt),
             visibleProfileWhere({ profile: Profiles, instance: Instances }),
           ),

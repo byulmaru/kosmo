@@ -15,7 +15,7 @@ builder.mutationField('muteProfile', (t) =>
     },
     resolve: async (_, { input }, ctx) => ({
       profileMute: await muteProfile({
-        ownerProfileId: ctx.session.profileId,
+        ownerProfileId: ctx.session.profile.id,
         targetProfileId: input.id.id,
       }),
     }),
@@ -40,7 +40,7 @@ builder.mutationField('unmuteProfile', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const profileMute = await unmuteProfile({
-        ownerProfileId: ctx.session.profileId,
+        ownerProfileId: ctx.session.profile.id,
         profileMuteId: input.id.id,
       });
 
