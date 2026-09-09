@@ -137,7 +137,7 @@ connection을 제공한다. Profile identity는 기존 Profile 조회 정책을 
 - [x] 2.2 Profile Node·handle route·일반 검색에서 기존 Profile 조회 조건을 유지하고, 관련 Follow 후보에는 양방향 차단을 적용한다.
 - [x] 2.3 Follow/Request Node·followers/following·요청 목록·viewer 상태와 Home·`FOLLOWERS` 권한이 차단 중 잔존 관계를 유효하게 사용하지 않도록 한다.
 - [x] 2.4 Post·PostContent·Media relation·Profile Post List에는 방향별 정책을, Home·Local·Bookmark·Reaction Profile 목록에는 양방향 정책을 연결하고 Author·Source Author의 후보 제외와 cursor/pageInfo를 검증한다.
-- [x] 2.5 Block 적용 뒤 시작한 로컬 Follow·Follow Request 승인·Reply·Reaction·Repost가 새 관계나 상호작용을 저장하지 않도록 쓰기 경계를 검증한다.
+- [x] 2.5 Block 적용 뒤 시작한 로컬 Follow·Follow Request 승인·Reply·Reaction·Repost와 기존 ActivityPub inbound Follow·Accept가 새 관계나 상호작용을 저장하지 않도록 쓰기 경계를 검증한다. inbound Follow·Accept의 예상 거절은 내부 오류로 보고하지 않는다.
 - [x] 2.6 selected Local actor의 Block 생성·해제 mutation을 부모 layer의 durable action에 연결하고 cleanup 지연·실패·정확한 해제 ID·no-restore를 검증한다.
 - [x] 2.7 Owner 전용 Block connection·관계 Node에서 조회 가능한 기존 Profile Target과 직접 route 진입의 차단 여부·해제 ID를 제공하고, unavailable Target은 pagination 전과 관계 Node에서 제외하며 타인 Block ID 접근을 차단한다.
 - [x] 2.8 Block·Unblock과 같은 operation의 selected Profile 전환 뒤 후속 field 및 다음 요청이 현재 actor·Block 정책을 반영하게 한다.

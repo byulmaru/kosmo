@@ -117,17 +117,17 @@
 - Consequences: old/new app이 schema 확장 중 공존할 수 있고 Profile Block을 사용하지 않는 기존 데이터는 그대로 남는다. migration 실패·rollback 안전성과 관계 불변식은 `PROD-821`에서 확인한다.
 - Confirmation / Follow-up: `PROD-821`에서 additive migration, referential integrity, uniqueness, self-block 거부, 기존 row 보존과 rollback evidence를 검증하고, `PROD-813` archive 전까지 정합성을 확인한다.
 
-### 새 로컬 Follow admission과 이미 진행 중인 transition의 잔존 결과를 구분한다
+### 새 Follow admission과 이미 진행 중인 transition의 잔존 결과를 구분한다
 
 - Decision Date: 2026-09-05
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/follow-relationship.md`, `memory/database-design.md`, `PROD-822`; `PROD-821` concurrency 정정 댓글 `5ceda55c-f3b6-4109-987c-27c12c413ce2`.
 - Status: Active
-- Context / Problem: Block 뒤 새 Follow를 거부한다는 결과를 모든 in-flight transition의 commit 금지로 해석하면 이미 승인된 overlap 허용과 충돌한다. 반대로 잔존 row를 허용한다는 이유로 새 Follow나 승인을 허용하면 Active Block이 무력해진다.
-- Decision Outcome: Block이 이미 적용된 상태에서 시작한 로컬 Follow·Follow Request 승인은 새 관계를 만들기 전에 공통 pair 정책으로 거부한다. cleanup과 겹쳐 이미 진행 중이던 transition이 남긴 row는 허용하되 Active Block 동안 관계 조회·viewer 상태·Home 후보·`FOLLOWERS` 접근의 유효한 근거로 사용하지 않는다.
+- Context / Problem: Block 뒤 새 Follow를 거부한다는 결과를 모든 in-flight transition의 commit 금지로 해석하면 이미 승인된 overlap 허용과 충돌한다. 반대로 잔존 row를 허용한다는 이유로 새 Follow나 승인을 허용하면 Active Block이 무력화된다. 공통 transition을 소비하는 기존 ActivityPub Follow·Accept는 이 정책 거절을 내부 장애와 구분해야 한다.
+- Decision Outcome: Block이 이미 적용된 상태에서 시작한 로컬 Follow·Follow Request 승인과 기존 ActivityPub inbound Follow·Accept는 새 관계를 만들기 전에 공통 pair 정책으로 거부한다. inbound 경계는 이 예상 가능한 도메인 거절을 `rejected`로 관찰하고 `internal_failure`로 보고하거나 다시 던지지 않는다. cleanup과 겹쳐 이미 진행 중이던 transition이 남긴 row는 허용하되 Active Block 동안 관계 조회·viewer 상태·Home 후보·`FOLLOWERS` 접근의 유효한 근거로 사용하지 않는다.
 - Alternatives Considered: Profile pair 전체 직렬화와 모든 물리 row 부재 보장은 기존 승인 범위를 강화하므로 채택하지 않는다. GraphQL 앞단만 검사하거나 잔존 관계를 유효한 Follow로 반환하는 방식은 공통 admission·visibility 결과를 만족하지 못한다.
-- Consequences: 새 admission 거부와 잔존 row 비활성·비노출은 각각 자동화 검증한다. `PROD-821`은 captured cleanup·Unblock 정리를, `PROD-822`는 정책·admission을, `PROD-813`은 cross-slice 검증을 계속 소유한다.
-- Confirmation / Follow-up: Block 뒤 시작한 FOLLOW·로컬 APPROVE의 저장 거부, 잔존 Follow/Request fixture의 Node·목록·권한 비활성, 해제 뒤 반대 Block과 다른 정책 재평가를 검증한다. 기존 cleanup decision을 대체하지 않고 그 소비 경계를 구체화한다.
+- Consequences: 새 admission 거부와 잔존 row 비활성·비노출은 각각 자동화 검증한다. 기존 ActivityPub Follow·Accept의 차단 거절은 관계 미생성과 내부 오류 미보고를 함께 확인한다. `PROD-821`은 captured cleanup·Unblock 정리를, `PROD-822`는 정책·admission을, `PROD-813`은 cross-slice 검증을 계속 소유한다.
+- Confirmation / Follow-up: Block 뒤 시작한 FOLLOW·로컬 APPROVE와 ActivityPub Follow·Accept의 저장 거부, inbound 내부 오류 미보고, 잔존 Follow/Request fixture의 Node·목록·권한 비활성, 해제 뒤 반대 Block과 다른 정책 재평가를 검증한다. ActivityPub Block/Undo 구현 범위를 가져오지 않으며 기존 cleanup decision을 대체하지 않고 그 소비 경계를 구체화한다.
 
 ### 기존 Notification의 차단은 각 Recipient 기준으로 판정한다
 
