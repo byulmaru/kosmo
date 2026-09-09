@@ -200,11 +200,12 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
 - Web 하단 탭, mobile drawer, compact 아이콘 레일과 full sidebar에서 현재와 다른 shell-level 주요 route를
   여는 forward navigation은 대상 route가 준비된 뒤 document 최상단에서 표시한다. 로딩·빈 상태에서도 이전
   route의 document scroll offset을 대상 route에 노출하지 않는다.
-- 프로필 Home 게시물 화면은 프로필 레이아웃이 PageHeader, Hero와 Slot의 바깥 scroll 구성을 함께 소유한다.
-  PageHeader는 표시 이름을 한 줄 tail ellipsis로 표시하며 없는 프로필에서도 빈 제목 chrome을 유지한다. Native에서는
-  하나의 `PaginationScrollView`가 PageHeader, ProfileHero와 leaf 목록 body를 함께 스크롤하고, 게시물 `InfiniteList`는
-  outer metric에 등록해 목록 body를 비스크롤 `View`로 렌더링한다. 팔로워·팔로잉 leaf는 기존 `더 불러오기`와
-  실패 후 수동 재시도를 유지한다. Web에서는 leaf 목록이 document/window scroll 계약을 유지한다.
+- 프로필 레이아웃은 Profile Home에서는 PageHeader·Hero·Slot을, 팔로워·팔로잉 독립 route에서는
+  PageHeader·관계 TabList·Slot을 같은 바깥 scroll 구성으로 렌더링한다. Home PageHeader는 표시 이름을
+  한 줄 tail ellipsis로 표시하며 없는 프로필에서도 빈 제목 chrome을 유지한다. Native에서는 하나의
+  `PaginationScrollView`가 이 chrome과 leaf body를 함께 스크롤하고, 게시물 `InfiniteList`는 outer metric에
+  등록해 목록 body를 비스크롤 `View`로 렌더링한다. 팔로워·팔로잉 leaf는 별도 scroll owner를 만들지 않고
+  기존 `더 불러오기`와 실패 후 수동 재시도를 유지한다. Web에서는 leaf 목록이 document/window scroll 계약을 유지한다.
 - 브라우저 뒤로/앞으로 history traversal은 browser scroll restoration을 유지한다. 검색 화면의 query-only
   `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존한다.
 - Web의 모바일·compact·full 홈 헤더 브랜드 마크와 shell의 홈 navigation 항목은 모두 홈 진입 control이다.

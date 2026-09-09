@@ -1,42 +1,46 @@
 ## Context
 
-팔로워·팔로잉 목록 라우트와 `ProfileConnectionList` 상태 골격은 이미 존재하지만, 두 라우트는 아직 GraphQL 데이터를 조회하지 않아 항상 빈 상태를 표시한다. API는 기존 `Profile.followers`/`Profile.following` connection과 `ProfileFollow.follower`/`ProfileFollow.followee` 필드를 제공하므로 서버 스키마나 resolver를 바꾸지 않고 웹 라우트만 데이터에 연결할 수 있다.
+공용 Expo route의 팔로워·팔로잉 목록은 `ProfileConnectionList`와 Relay pagination을 이미 사용한다. 그러나 `[profileHandle]/_layout.tsx`가 모든 하위 route에 `ProfileHero`를 렌더하고 목록 컴포넌트도 `팔로워`·`팔로잉` 제목을 추가한다. DSN-51 Mobile 정본 `1943:1852`·`1943:1998`과 Compact/Full 공통 계약은 이 두 화면을 `PageHeader`와 관계 `TabList`로 시작하는 독립 route로 정의한다.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- `/@{handle}/followers`에서 `Profile.followers(first: 20)` 첫 페이지를 조회해 follower 프로필 목록을 렌더한다.
-- `/@{handle}/following`에서 `Profile.following(first: 20)` 첫 페이지를 조회해 followee 프로필 목록을 렌더한다.
-- 목록 항목은 기존 `ProfileListItem`과 `FollowButton` 정책을 재사용한다.
-- 로딩·오류·빈 상태는 기존 `ProfileConnectionList` 골격을 유지한다.
+- Web·Android·iOS의 두 직접 route에서 `ProfileHero`를 제거하고 정본의 `PageHeader`·관계 탭 구조를 사용한다.
+- 현재 Profile의 표시 이름과 `relativeHandle`로 제목, Profile 홈 복귀, 관계 탭 이동을 구성한다.
+- Mobile Web 셸 헤더 중복을 막고 Native에서는 기존 단일 `PaginationScrollView`를 유지한다.
+- 목록의 loading·error·empty·content·추가 페이지 상태와 Relay 책임을 보존한다.
 
 **Non-Goals:**
 
-- pagination 또는 추가 페이지 로딩.
-- follow/unfollow mutation 추가나 `FollowButton` 책임 경계 변경.
-- active profile 전환 시 이미 렌더된 목록의 viewer 상태 재동기화.
-- API GraphQL connection, resolver, schema 변경.
+- Profile 홈의 `ProfileHero` 또는 게시물 목록 구조 변경.
+- follow/unfollow mutation, 권한, Relay cache·connection identity, pagination 정책 변경.
+- 새 route, 새 상태 관리 계층, 전용 Web/Native 구현 추가.
 
 ## Decisions
 
-- `ProfileConnectionList`가 `followersProfile`/`followingProfile` fragment prop을 받아 connection을 읽는다.
-  - 이유: `PostList`처럼 query는 route에 colocate하고, 목록 컴포넌트가 자신이 필요한 fragment와 항목 렌더링 책임을 가진다.
-  - 대안: route에서 edge 배열을 직접 풀어 scalar props로 넘길 수 있지만, `ProfileListItem_profile` fragment 계약을 route에 중복시키게 된다.
-- 두 route page는 각각 `ProfileFollowersPageQuery`와 `ProfileFollowingPageQuery`를 둔다.
-  - 이유: PROD-184와 PROD-185를 별도 구현 PR로 나눌 수 있고, 각 route가 필요한 connection만 조회한다.
-  - 대안: 하나의 공용 route helper나 query document로 묶을 수 있지만, Svelte route별 colocation과 stacked PR 분리가 흐려진다.
-- 첫 페이지는 `first: 20`으로 고정한다.
-  - 이유: 사용자 확인 범위가 첫 페이지 렌더링이고, pagination은 PROD-188로 분리되어 있다.
-- `ProfileListItem`에는 connection node의 상대 프로필(`followers.node.follower`, `following.node.followee`)을 넘긴다.
-  - 이유: API connection edge의 node는 `ProfileFollow`이므로 실제 목록에 표시할 프로필은 관계의 follower/followee 필드다.
-- 목록 항목은 connection edge가 반환된 순서를 그대로 사용하고 클라이언트에서 별도 정렬하지 않는다.
-  - 이유: 정렬 기준은 API connection 계약의 책임이다. 이번 변경은 기존 connection 첫 페이지를 화면에 연결하는 것이며, 웹에서 별도 정렬하면 향후 pagination과 서버 cursor 순서가 어긋날 수 있다.
-- `viewerProfileId`는 profile layout에서 쓰는 `currentSession.selectedProfile.id`와 같은 query shape로 route page에서 조회해 `ProfileListItem`에 전달한다.
-  - 이유: `ProfileListItem`/`FollowButton`의 기존 표시 정책을 유지한다. 비로그인 또는 선택 프로필 없음은 `viewerProfileId=null`로 처리한다.
+- Profile route layout이 현재 pathname의 마지막 segment로 `followers`·`following`을 판별하고 관계 화면 chrome과 leaf `Slot`을 같은 외부 scroll 안에 렌더한다.
+  - 이유: 두 leaf가 공유하는 Profile query와 Native scroll owner를 유지하면서 `ProfileHero`만 route별로 교체한다.
+  - 대안: 각 leaf route에 별도 header wrapper를 복제하면 query와 navigation chrome이 중복된다.
+- 기존 `ProfileLayoutQuery`에 `displayName`과 `relativeHandle`을 직접 선택한다.
+  - 이유: layout이 route 제목과 navigation URL을 실제로 소비하며, 표시 URL에는 lookup용 `handle`이 아니라 `relativeHandle`을 사용한다.
+- 관계 chrome은 기존 `PageHeader`, `IconButton`, `TabList`·`Tab`만 조합한다.
+  - 뒤로가기는 history 상태에 의존하지 않고 해당 Profile 홈으로 이동한다.
+  - 탭은 현재 route를 controlled value로 표시하고 다른 값 선택 시 같은 Profile의 관계 route로 `replace`한다.
+- `ProfileConnectionList` 내부의 별도 `ConnectionTitle`은 제거한다.
+  - 이유: route `PageHeader`와 `TabList`가 현재 화면과 선택 관계를 이미 명명하므로 같은 제목은 정본에 없고 heading도 중복한다.
+- Mobile Web의 두 관계 route는 `isWebMobileRouteOwnedHeader`에 포함한다.
+  - 이유: 셸의 메뉴 전용 64px header와 route의 64px `PageHeader`가 동시에 렌더되는 것을 막고 기존 route safe-area 경계를 재사용한다.
+- Relay fragment, edge 순서, `loadNext(20)`, 추가 조회 오류 재시도는 변경하지 않는다.
+  - 이유: 화면 presentation 동기화만 PROD-785 범위이며 pagination은 별도 계약이 이미 소유한다.
 
 ## Risks / Trade-offs
 
-- **첫 페이지만 렌더링해 목록이 잘릴 수 있음** → pagination은 PROD-188에서 별도 UI/connection 정책으로 추가한다.
-- **active profile 전환 후 목록 항목의 follow button viewer 상태가 즉시 재동기화되지 않을 수 있음** → 기존 `ProfileListItem` 정책을 유지하고, 재동기화는 PROD-189에서 다룬다.
-- **두 route query가 유사해 중복이 생김** → 이번 stack에서는 PROD-184/185를 독립 PR로 유지하는 이점이 더 크다.
+- **긴 display name이 제목 높이를 늘릴 수 있음** → `PageHeader`의 기존 reflow 계약을 그대로 사용하고 한 줄 강제나 새 truncation을 추가하지 않는다.
+- **Mobile Web에서 헤더가 중복될 수 있음** → shell route-owned header 판정의 실행 테스트로 두 경로를 고정한다.
+- **Native scroll이 중첩될 수 있음** → layout의 기존 `PaginationScrollView` 하나만 유지하고 leaf 목록에 새 scroll container를 추가하지 않는다.
+- **탭 이동이 현재 Profile을 잃을 수 있음** → query의 `relativeHandle`로 두 URL을 만들고 route 테스트에서 둘 다 확인한다.
+
+## Decision history
+
+- 2026-09-09: PROD-785가 DSN-51의 독립 followers/following route를 Web·Android·iOS Production으로 이관하고, 기존 데이터·pagination lifecycle은 유지한다.

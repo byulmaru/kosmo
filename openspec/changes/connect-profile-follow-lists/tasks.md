@@ -1,24 +1,25 @@
-## 1. 공유 목록 컴포넌트
+## 1. 정본과 범위
 
-- [x] 1.1 `ProfileConnectionList.svelte`가 `Profile.followers(first: 20)`/`Profile.following(first: 20)` fragment prop을 받아 각 edge의 상대 프로필을 `ProfileListItem`으로 렌더하도록 확장한다
-- [x] 1.2 `viewerProfileId`를 `ProfileListItem`에 전달해 기존 `FollowButton` 표시 정책을 유지한다
-- [x] 1.3 로딩·오류·빈 상태는 기존 표시 구조를 유지하고, connection 데이터가 있을 때만 항목 목록을 표시한다
-- [x] 1.4 Storybook에 실제 항목이 있는 followers/following 상태를 추가한다
+- [x] 1.1 PROD-785에 DSN-51 독립 followers/following route의 Web·Android·iOS 이관 범위와 제외 범위를 기록한다
+- [x] 1.2 Figma Mobile followers `1943:1852`와 following `1943:1998`의 PageHeader·TabList·목록 순서를 readback한다
+- [x] 1.3 OpenSpec proposal·design·delta spec을 현재 Expo route와 보존할 Relay lifecycle 기준으로 갱신한다
 
-## 2. 팔로워 목록 데이터 연결 (PROD-184)
+## 2. 관계 route presentation
 
-- [x] 2.1 `/@{handle}/followers` route query에서 `profileByHandle(handle:)`와 `Profile.followers(first: 20).edges[].node.follower`를 조회한다
-- [x] 2.2 같은 query에서 `currentSession.selectedProfile.id`를 조회해 `viewerProfileId`로 전달한다
-- [x] 2.3 followers route가 `ProfileConnectionList kind="followers"`에 profile data, loading, error, retry를 연결한다
+- [ ] 2.1 Profile layout이 followers/following pathname에서는 ProfileHero 대신 공용 PageHeader·관계 TabList·leaf Slot을 렌더한다
+- [ ] 2.2 PageHeader는 표시 이름과 관계 종류를 명명하고 같은 Profile 홈으로 돌아가는 44px visual back action을 제공한다
+- [ ] 2.3 TabList는 현재 관계를 selected로 표시하고 같은 Profile의 followers/following route를 전환한다
+- [ ] 2.4 ProfileConnectionList의 중복 관계 heading을 제거하고 기존 목록 lifecycle은 유지한다
+- [ ] 2.5 Mobile Web 셸은 두 route에서 메뉴 전용 header를 중복 렌더링하지 않는다
 
-## 3. 팔로잉 목록 데이터 연결 (PROD-185)
+## 3. 실행 검증
 
-- [x] 3.1 `/@{handle}/following` route query에서 `profileByHandle(handle:)`와 `Profile.following(first: 20).edges[].node.followee`를 조회한다
-- [x] 3.2 같은 query에서 `currentSession.selectedProfile.id`를 조회해 `viewerProfileId`로 전달한다
-- [x] 3.3 following route가 `ProfileConnectionList kind="following"`에 profile data, loading, error, retry를 연결한다
+- [ ] 3.1 기존 ProfileRoute·shellLayout 실행 테스트로 Profile 홈 Hero 유지, 관계 route Hero 제외, 제목·탭·navigation, Mobile Web header ownership과 Native 단일 scroll을 검증한다
+- [ ] 3.2 기존 Profile Storybook에서 loading·error·empty·content·pagination retry와 ProfileListItem 표시를 검증한다
+- [ ] 3.3 `pnpm --filter @kosmo/app check`, 대상 테스트, 전체 앱 테스트와 `pnpm lint:prettier`를 통과시킨다
+- [ ] 3.4 Mobile/Compact/Full Web의 대표 Light/Dark route를 브라우저에서 확인하고 실제 Android/iOS 미검증 여부를 기록한다
 
-## 4. 검증
+## 4. 문서와 전달
 
-- [ ] 4.1 `pnpm -F @kosmo/web check`를 통과시킨다
-- [ ] 4.2 `pnpm lint:prettier`를 통과시킨다
-- [ ] 4.3 followers/following 목록에서 실제 항목 표시, 빈 상태, connection edge 순서 보존(클라이언트 재정렬 없음), 비로그인/선택 프로필 없음/본인 프로필 follow action 정책을 수동 확인한다
+- [x] 4.1 PageHeader·breakpoint scroll·Figma implementation 상태 문서를 Production 계약에 맞춘다
+- [ ] 4.2 Draft PR에 범위, 검증 결과와 남은 Native runtime 공백을 기록한다

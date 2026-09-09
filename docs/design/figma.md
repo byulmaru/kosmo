@@ -245,6 +245,8 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   `Product not implemented`를 유지한다. iOS 결과 consumer도 같은 4탭의 iOS `TabList`를 사용한다.
 - Mobile [`followers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-1852)·[`following`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-1998)은
   ProfileHero 없이 `~님의 팔로워`·`~님의 팔로잉` PageHeader와 Android `팔로워 / 팔로잉` TabList를 가진 독립 route다.
+  이 화면 구조는 PROD-785가 공용 Expo Web·Android·iOS route에 이관하며, Relay connection·pagination lifecycle은
+  기존 Production 계약을 유지한다.
 - [`Profile content tabs consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6713-10042)는
   Default와 Pinned Light/Dark에 `게시물 / 답글 / 미디어` TabList를 추가한 Target 복제본이다. 기존 Pinned
   Light [`4843:4813`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4843-4813)·Dark
