@@ -379,4 +379,8 @@ jobs:
           USE_CCACHE: '1'
           NODE_OPTIONS: '--max-old-space-size=4096'
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        run: bundle exec fastlane ios build_and_upload_ios
+        run: |
+          # Xcode does not export custom build settings to compiler processes.
+          CCACHE_BINARY="$(command -v ccache)"
+          export CCACHE_BINARY
+          bundle exec fastlane ios build_and_upload_ios
