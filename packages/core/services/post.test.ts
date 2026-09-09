@@ -37,13 +37,13 @@ import { createPost } from './post';
 
 after(async () => pg.end());
 
-const createProfile = async () => {
+const createProfile = async (kind = InstanceKind.LOCAL) => {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const instance = await db
     .insert(Instances)
     .values({
       domain: `${suffix}.example`,
-      kind: InstanceKind.LOCAL,
+      kind,
       state: InstanceState.ACTIVE,
     })
     .returning()
@@ -160,6 +160,37 @@ test('createPost는 Source와 자체 Content를 원자적으로 연결하고 Rep
     }),
     (error) => error instanceof ValidationError && error.field === 'repostSourceId',
   );
+});
+
+test('createPost는 승인 경계가 없는 ActivityPub Source Quote를 거부한다', async () => {
+  const sourceAuthor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const quoteAuthor = await createProfile();
+  const source = await createPost({
+    document: postContentDocumentFromText('remote source'),
+    objectUri: `https://remote.example/notes/${sourceAuthor.id}`,
+    origin: 'ACTIVITYPUB',
+    profileId: sourceAuthor.id,
+    publishedAt: null,
+    receivedAt: Temporal.Now.instant(),
+    visibility: PostVisibility.PUBLIC,
+  });
+  const postCount = await db.$count(Posts);
+
+  await assert.rejects(
+    createPost({
+      document: postContentDocumentFromText('quoted content'),
+      origin: 'LOCAL',
+      profileId: quoteAuthor.id,
+      repostSourceId: source.post.id,
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error) =>
+      error instanceof ValidationError &&
+      error.field === 'repostSourceId' &&
+      error.message === 'Quote approval is not available',
+  );
+
+  assert.equal(await db.$count(Posts), postCount);
 });
 
 test('createPost는 타인의 Followers Only Source를 거부하고 자기 Source는 접근 범위를 넓히지 않는다', async () => {

@@ -102,6 +102,23 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 - Consequences: 작성자가 automatic/manual 어느 쪽에도 명백히 포함되지 않으면 승인 가능성이 낮다는 안내에 사용할 수 있지만, 그 정보만으로 승인 또는 거절을 확정하지 않는다. 승인 전에는 Source와 자동 생성 FEP·legacy·fallback을 숨기며, 승인 후 같은 Post에 Source를 활성화하고 필요한 Update를 전달한다.
 - Confirmation / Follow-up: 자기 인용, automatic, manual, 정책 부재·해석 실패, 어느 집합에도 포함되지 않는 경우와 유효·무효 QuoteAuthorization을 각각 검증한다.
 
+### D9 PROD-431 작성과 PROD-924 federation lifecycle의 완료 책임 분리
+
+- Decision Date: 2026-09-09
+- Decision Class: Derived Contract
+- Authority / Provenance: PROD-431, PROD-924, PR #817과 현재 사용자의 책임 분리 지시.
+- Status: Active
+- Context / Problem: PR #817의 기본 Quote 작성 구현이 완료됐어도 FEP-044f 원격 승인 lifecycle 미구현을 이유로 Draft 상태가 유지됐다.
+- Decision Outcome: PROD-431은 기본 Quote API/core/client, 기존 Source·Composer·ActionMenu·presentation 재사용,
+  작성 시 eligibility·접근·차단 검증, 원자적 Content·Source 저장과 미승인 Remote Source 비노출 seam을 맡는다.
+  PROD-924는 게시글 정책과 FEP-044f QuoteRequest·Accept/Reject·QuoteAuthorization·pending·철회·Update/sync 및
+  PROD-431과의 전체 federation 통합 검증을 맡는다.
+- Alternatives Considered: PROD-431이 federation lifecycle 완료를 기다리거나 같은 lifecycle을 중복 구현하는 안은 채택하지 않았다.
+- Consequences: tasks 2~3과 담당 회귀 검증이 완료되면 PROD-431과 PR #817은 PROD-924와 독립적으로 Ready가 될 수 있다.
+  PROD-924가 작성 기반을 소비하는 동안의 Git 작업 순서는 `main → PROD-431 → PROD-924`이며 문서상 관련성을
+  역방향 Stack의 근거로 사용하지 않는다.
+- Confirmation / Follow-up: PROD-924는 승인 상태 없이 Source FK를 승인 증거로 사용하지 않고, 최종 sync/archive를 소유한다.
+
 ## Remaining Decisions
 
 - 현재 범위의 미결정 제품 정책은 없다. Profile 기본값은 현재 계약의 승인 근거가 아닌 PROD-925 Backlog다.

@@ -78,6 +78,11 @@ Accepted
 - [PROD-431](https://linear.app/byulmaru/issue/PROD-431)은 로컬 Quote 작성과 Composer를,
   [PROD-924](https://linear.app/byulmaru/issue/PROD-924)는 게시글별 정책과 발신·승인·철회 연합을 구현한다.
   PROD-902가 OpenSpec을 소유한다. 저장 표현, delivery와 재시도 세부는 해당 스펙의 구현 가이드를 따른다.
+- PROD-431은 작성 시 Source eligibility·접근·차단을 검증하고 승인 경계가 없는 ActivityPub Source를 정상
+  Source로 노출하지 않는다. 현재 단계에서는 해당 작성을 안전하게 거부한다. PROD-924는 이 seam에 승인
+  상태와 pending lifecycle을 연결한다. PROD-924의 미완료는 PROD-431이나 PR #817의 완료 조건이 아니다.
+  타인의 Remote Source는 `interactionPolicy`의 유무나 해석 결과와 관계없이 pending 게시 후 QuoteRequest를
+  보내며, 이 lifecycle의 구현은 PROD-924가 담당한다.
 - [PROD-792](https://linear.app/byulmaru/issue/PROD-792)의 원격 Quote 수신과
   [PROD-793](https://linear.app/byulmaru/issue/PROD-793)의 Followers Only Source signed fetch 책임은 유지한다.
   로컬 작성 제한을 원격 수신 계약의 축소로 적용하지 않는다.

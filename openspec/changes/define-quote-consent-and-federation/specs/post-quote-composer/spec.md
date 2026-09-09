@@ -25,7 +25,7 @@
 
 ### Requirement: 작성 취소와 오류 복구
 
-**Authority / Provenance:** `docs/design/post-action-bar.md`, `docs/design/reply-composer.md`, PROD-431. 클라이언트는 기존 Composer의 폐기 보호·pending·오류 복구를 유지해야 한다(MUST). 제출 중 중복 요청을 막고 실패 시 작성 내용을 보존해야 한다(MUST). 원격 승인 대기를 게시 실패로 취급해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/post-action-bar.md`, `docs/design/reply-composer.md`, PROD-431, PROD-924. 클라이언트는 기존 Composer의 폐기 보호·mutation pending·오류 복구를 유지해야 한다(MUST). 제출 중 중복 요청을 막고 실패 시 작성 내용을 보존해야 한다(MUST). PROD-924가 원격 승인 대기 Post를 성공으로 반환하면 이를 게시 실패로 취급해서는 안 된다(MUST NOT).
 
 #### Scenario: 취소와 focus
 
@@ -41,7 +41,7 @@
 
 ### Requirement: 서버 결과와 actor별 상태 반영
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/design/post-action-bar.md`, PROD-431. 생성된 Post는 요청 actor의 기존 Relay Environment와 관리 대상 connection에만 반영해야 한다(MUST). 서버의 승인·Source 반환 결과를 유지하고(MUST), 늦은 응답이 다른 actor나 새 draft를 변경해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/design/post-action-bar.md`, PROD-431, PROD-924. 생성된 Post는 요청 actor의 기존 Relay Environment와 관리 대상 connection에만 반영해야 한다(MUST). 서버의 승인·Source 반환 결과를 유지하고(MUST), 늦은 응답이 다른 actor나 새 draft를 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: 승인 대기 게시 성공
 
@@ -60,6 +60,9 @@
 - **WHEN** 승인·철회·Source 삭제 뒤 같은 Post를 다시 조회한다
 - **THEN** 기존 Post identity와 자체 Content를 유지하고 서버가 반환한 Source 또는 null을 표시한다
 - **AND** 승인 없이 저장된 Source나 이전 cache만으로 Source를 복원하지 않는다
+
+이 요구사항의 actor별 cache·서버 payload 준수는 PROD-431이 검증하고, 승인 대기·승인·철회 상태를 실제로
+생성해 같은 identity로 갱신하는 federation readback은 PROD-924가 검증한다.
 
 ### Requirement: 작성 통합과 플랫폼 검증
 
