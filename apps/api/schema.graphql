@@ -518,7 +518,6 @@ type ReactionNotification implements Node & Notification {
 }
 
 input RegisterProfileMigrationSourceInput {
-  profileId: ID!
   sourceHandle: String!
 }
 

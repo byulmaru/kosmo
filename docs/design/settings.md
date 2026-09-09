@@ -79,8 +79,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - Profile detail은 shell의 selected Local Profile을 기본 대상으로 사용하고 표시 이름과 `relativeHandle`,
   대상 전환 affordance, `게시물 기본 공개 범위`를 포함한 Profile 설정 content를 함께 제공한다. Profile 데이터
   조회·입력·저장은 Kosmo 내부 기능으로만 제공한다.
-- Profile Migration source 준비는 이 Profile detail에서 feature flag가 켜져 있고 값을 확인할 수 있을 때만 노출한다.
-  flag가 꺼져 있거나 사용할 수 없거나 로딩 중이면 준비 control을 렌더링하지 않는다. 이 flag는 UI 노출 조건이며
+- Profile Migration source 준비는 이 Profile detail의 현재 selected Local Profile을 target으로 사용하며, 별도 target
+  Profile ID 입력을 받지 않는다. feature flag가 켜져 있고 값을 확인할 수 있을 때만 노출한다. flag가 꺼져 있거나
+  사용할 수 없거나 로딩 중이면 준비 control을 렌더링하지 않는다. 이 flag는 UI 노출 조건이며
   Profile Owner 권한을 대신하지 않는다. 이미 준비된 관계와 그로부터 파생된 alias, inbound Move 처리는 flag 상태로
   중단하거나 제거하지 않는다. 구체적인 flag key·추가 route·시각 세부는 이 문서에서 고정하지 않는다.
 - source 준비 성공은 Profile Migration 준비 관계와 Local Actor alias를 등록할 뿐, Profile 이전 완료를 의미하지
