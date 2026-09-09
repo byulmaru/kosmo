@@ -266,6 +266,35 @@ Storybook의 자동 a11y 검사는 `color-contrast`를 제외하며 실제 scree
 의미하지 않는다. 해당 Settings runtime QA 소유자는 PROD-727이다. 이번에는 새 public API나 행동 계약을
 도입하지 않고 기존 계약을 검증하므로 새 OpenSpec은 만들지 않는다. Tailnet serve는 범위에서 제외한다.
 
+## Checkbox·SegmentedControl 매핑 (PROD-893)
+
+Checkbox와 SegmentedControl은 실제 Settings route나 저장 정책에 연결하지 않고 재사용 가능한 Production
+공용 UI로 제공한다. 두 컴포넌트의 controlled value와 callback까지만 소유하며 label 배치, group summary의
+데이터 lifecycle과 제품별 선택 정책은 consumer가 소유한다.
+
+| Figma source                                                                                      | Production 구현                      | Storybook 표면                                                             |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------- |
+| [Checkbox](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3435-7529)           | `ui/Checkbox.tsx`                    | `KOSMO/Components/Checkbox` Playground·RepresentativeStates·Tests          |
+| [SegmentedControl/2](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3455-7525) | `ui/SegmentedControl.tsx`의 2개 옵션 | `KOSMO/Components/Segmented Control` Playground·RepresentativeStates·Tests |
+| [SegmentedControl/3](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3457-7465) | 같은 컴포넌트의 3개 옵션             | 같은 표면                                                                  |
+| [SegmentedControl/4](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3459-7609) | 같은 컴포넌트의 4개 옵션             | 같은 표면                                                                  |
+
+- Checkbox는 `false`·`true`·`mixed` checked 상태와 필수 accessible name을 제공한다. `mixed`는
+  indeterminate/group summary 전용이며 activation은 `true`를 요청한다. 32×32 root와 20×20 indicator를
+  유지하고 Native에서는 iOS 44×44pt·Android 48×48dp target의 부족분을 hit slop으로 보충한다.
+- SegmentedControl은 타입에서 2–4개 option만 받고, 유효하지 않은 controlled value도 첫 option으로
+  정규화해 정확히 하나의 radio를 선택한다. Web은 선택 항목 하나만 Tab stop으로 두고 방향키가 focus와
+  선택을 함께 순환 이동한다. 320px × 48px root 안에서 option은 같은 폭을 나누고 긴 label은 줄인다.
+  selected는 항목마다 border를 다시 만들지 않고 하나의 pill이 이동 방향으로 최대 8px만 60ms 동안
+  늘어난 뒤 140ms 동안 목표 항목에 정착한다. 시각 전환은 `motion/duration/standard` 200ms와
+  `motion/easing/standard`를 사용하고 accessible selected 상태는 즉시 갱신하며 reduced motion에서는 최종
+  pill 위치를 즉시 표시한다.
+- Light/Dark는 semantic theme token과 Storybook toolbar를 사용한다. Storybook 자동화와 Web 시각 검토는
+  실제 screen reader, iOS·Android touch/focus 또는 Settings runtime 완료 증거가 아니며 PROD-727이 해당
+  runtime QA를 계속 소유한다.
+- 새 제품 정책이나 route 계약을 만들지 않고 승인된 Figma·Linear 계약을 코드로 이관하므로 별도 OpenSpec은
+  만들지 않는다.
+
 ## 제외 범위
 
 - Byulmaru ID Account Settings 페이지 자체와 Account 데이터 조회·입력·저장·관리 기능
