@@ -228,3 +228,6 @@ route와 그 하위 경로도 저장된 Profile만 조회한다. 원격 lookup �
 - active Profile 선택은 Profile 객체를 바꾸지 않는 세션 동작이므로 도메인 행동에서 제외한다.
 - theme, 계정 이동, 서버 이전은 현재 범위에서 제외한다.
 - Remote Profile의 Profile Tag 수집·동기화와 ActivityPub 표현은 현재 범위에서 제외한다.
+
+- Profile의 새 Post 인용 허용 기본값 설정은 [PROD-925](https://linear.app/byulmaru/issue/PROD-925) Backlog에서
+  다룬다. 이번 사이클은 게시글별 설정만 제공하며 새 Post와 기존 Post의 초기값은 `모두`다.
