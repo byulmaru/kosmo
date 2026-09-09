@@ -141,6 +141,14 @@ Stack 분리·간략화 후 각 layer의 exact head와 소유 범위를 독립�
 - Top canonical specs strict 검증(`openspec validate --specs --strict --no-interactive`)은 75/75 pass였다. 초기 active change(`openspec/changes/add-inbound-profile-migration`)는 top에서 archive(`openspec/changes/archive/2026-09-07-add-inbound-profile-migration`)로 이동했고 canonical `openspec/specs/inbound-profile-migration` 및 delta spec이 동기화되어 있다.
 - 위 결과는 local disposable PostgreSQL/Temporal 및 독립 Chromium 환경의 실행 증거다. 전체 Stack의 current proof로 재사용할 수 있는 범위와 각 layer의 exact SHA를 함께 보존한다.
 
+### Current contract validation ledger (2026-09-09)
+
+이번 계약 정정의 현재 실행 증거는 archive history와 분리해 기록한다. 이전 ledger의 historical test evidence와 exact-head snapshot은 변경하지 않는다.
+
+- API boundary: `registerProfileMigrationSource`는 sourceHandle만 받고 `ctx.session.profile.id`를 target으로 사용한다. `withAuth({ profileRole: OWNER })` authorization과 selected target preflight가 remote lookup보다 먼저 실행되고, selected target의 Local Instance `canonicalOrigin`을 materialization context로 사용한다. focused API integration은 5/5 pass였다.
+- Core domain: `assertProfileMigrationTarget`와 `prepareProfileMigration`은 target/source Profile ID와 기존 Profile lifecycle·origin·policy·source/pair 조건만 검증하며 Account·membership authorization을 다시 수행하지 않는다. target eligibility는 InstanceState.SUSPENDED를 거부하고 UNRESPONSIVE를 별도 거부 조건으로 추가하지 않는다. focused Core integration은 6/6 pass였다.
+- Contract artifacts: generated GraphQL schema에서 별도 target Profile ID input이 제거되었고, canonical docs와 active/archived delta specs가 selected-target/sourceHandle-only wording으로 동기화되었다. OpenSpec strict validation은 75/75 pass였다.
+
 ### Archive-time environment cleanup (2026-09-07)
 
 - synthetic backend/API/protocol PostgreSQL DB와 각 runner의 정리를 완료했다. PostgreSQL 18.4 검증 cluster는 정상 종료했고 port `55432` listener와 Temporal 잔여 process가 각각 0개임을 확인했다. 복구용 cluster 파일은 보존하며, 제품 DB와 다른 test DB는 변경하지 않았다.

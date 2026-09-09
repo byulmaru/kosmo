@@ -77,7 +77,6 @@ test('준비한 source alias에서 inbound Move와 실제 Workflow가 Local foll
   const follower = await createLocalFollower();
 
   const preparation = await prepareProfileMigration({
-    accountId: target.accountId,
     sourceProfileId: source.profile.id,
     targetProfileId: target.profile.id,
   });
