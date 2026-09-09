@@ -21,6 +21,8 @@ allowBuilds:
   protobufjs: false
   unrs-resolver: true
 minimumReleaseAgeExclude:
+  # fast-uri 3.1.7 fixes CVE-2026-75899 and its follow-up advisories.
+  - fast-uri@3.1.7
   # Temporal 1.22.0 clears GHSA-4w2j-m93h-cj5j from the bundled Rust lockfile.
   - '@temporalio/activity@1.22.0'
   - '@temporalio/client@1.22.0'
@@ -32,6 +34,8 @@ minimumReleaseAgeExclude:
   - '@temporalio/workflow@1.22.0'
 overrides:
   '@opentelemetry/sdk-metrics@<2.8.0': ^2.8.0
+  # Ajv accepts fast-uri 3.x, so keep the security override within its declared range.
+  'ajv@8.20.0>fast-uri': 3.1.7
   # Expo Router exposes broad native peers; align every peer snapshot with SDK 56 / RN 0.85.
   '@react-native/metro-config': 0.85.3
   # eslint-react 5.11.3 accepts 8.62.1; avoid newer incomplete registry dependency graphs.
