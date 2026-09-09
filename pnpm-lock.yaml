@@ -170,7 +170,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^2.0.10
-        version: 2.0.10(hono@4.12.34)
+        version: 2.0.10(hono@4.13.5)
       '@kosmo/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -217,8 +217,8 @@ importers:
         specifier: ^5.21.0
         version: 5.21.0(graphql@16.14.0)
       hono:
-        specifier: ^4.12.34
-        version: 4.12.34
+        specifier: ^4.13.5
+        version: 4.13.5
       openid-client:
         specifier: 6.8.4
         version: 6.8.4
@@ -442,7 +442,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^2.0.10
-        version: 2.0.10(hono@4.12.34)
+        version: 2.0.10(hono@4.13.5)
       '@kosmo/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -456,8 +456,8 @@ importers:
         specifier: 1.0.0-beta.22
         version: 1.0.0-beta.22(@opentelemetry/api@1.9.1)(postgres@3.4.9)(zod@4.4.3)
       hono:
-        specifier: ^4.12.34
-        version: 4.12.34
+        specifier: ^4.13.5
+        version: 4.13.5
       openid-client:
         specifier: 6.8.4
         version: 6.8.4
@@ -5565,8 +5565,8 @@ packages:
   hermes-parser@0.35.0:
     resolution: {integrity: sha512-9JLjeHxBx8T4CAsydZR49PNZUaix+WpQJwu9p2010lu+7Kwl6D/7wYFFJxoz+aXkaaClp9Zfg6W6/zVlSJORaA==}
 
-  hono@4.12.34:
-    resolution: {integrity: sha512-GqXJqY/xJkJmuloTrnV1ZEXG3fqte+VjkUqoRNZXcrUidiUOP4fMSIHHY4tsqZBK++kVyWmt/AAfSUuy57/eSA==}
+  hono@4.13.5:
+    resolution: {integrity: sha512-O6+/eCYRkzzzy0rPWwKLiGBR1nFuUPZynnwjxN1MBA62NNqbT0wQEzQyK2gSO5yDIDB336sXQleAhOHrzlYyKw==}
     engines: {node: '>=16.9.0'}
 
   hosted-git-info@7.0.2:
@@ -9562,9 +9562,9 @@ snapshots:
       protobufjs: 7.6.5
       yargs: 17.7.3
 
-  '@hono/node-server@2.0.10(hono@4.12.34)':
+  '@hono/node-server@2.0.10(hono@4.13.5)':
     dependencies:
-      hono: 4.12.34
+      hono: 4.13.5
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -13533,7 +13533,7 @@ snapshots:
     dependencies:
       hermes-estree: 0.35.0
 
-  hono@4.12.34: {}
+  hono@4.13.5: {}
 
   hosted-git-info@7.0.2:
     dependencies:
