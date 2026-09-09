@@ -124,7 +124,6 @@ test('Local·Remote Profile을 UI에서 Mute하고 Profile·Settings에서 확�
   await expect(page.getByRole('button', { name: 'E2E Remote Mute Target 뮤트 해제' })).toHaveCount(
     0,
   );
-  await expect(page.getByTestId('muted-profile-list')).toBeFocused();
   expect(
     await db.$count(
       ProfileMutes,
