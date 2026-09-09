@@ -1255,7 +1255,9 @@ describe('inbound Create dispatch', () => {
     await createStoredRemoteActor();
     const objectUri = new URL('https://remote.example/notes/over-limit');
     const logs: unknown[] = [];
+    const metrics: unknown[] = [];
     const restoreReporter = setInboundObservabilityReporter({
+      countMetric: (name, attributes) => metrics.push({ attributes, name }),
       log: (observation) => logs.push(observation),
     });
 
@@ -1296,6 +1298,19 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.doesNotMatch(JSON.stringify(logs), /a{100}/u);
+    assert.deepEqual(metrics, [
+      {
+        attributes: {
+          activity_type: 'Create',
+          handler: 'create',
+          outcome: 'rejected',
+          phase: 'projection',
+          reason_code: 'note_content_length_exceeded',
+        },
+        name: 'activitypub.inbound.note_content_length_exceeded',
+      },
+    ]);
+    assert.doesNotMatch(JSON.stringify(metrics), /a{100}|remote\.example|over-limit/u);
     assert.equal(await db.$count(Media), 0);
     assert.equal(await db.$count(ActivityPubPosts), 0);
     assert.equal(await db.$count(Posts), 0);

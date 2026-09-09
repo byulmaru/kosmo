@@ -8,6 +8,7 @@ const sentryScope = vi.hoisted(() => ({
 const sentry = vi.hoisted(() => ({
   captureException: vi.fn(),
   init: vi.fn(),
+  metrics: { count: vi.fn() },
   withScope: vi.fn(),
 }));
 
@@ -17,6 +18,7 @@ beforeEach(() => {
   vi.resetModules();
   sentry.init.mockReset();
   sentry.captureException.mockReset();
+  sentry.metrics.count.mockReset();
   sentry.withScope.mockReset();
   sentryScope.setExtras.mockReset();
   sentryScope.setFingerprint.mockReset();
@@ -90,5 +92,35 @@ describe('Web BFF Sentry configuration', () => {
       'projection_failed',
     ]);
     expect(sentry.captureException).toHaveBeenCalledWith(error);
+  });
+
+  it('counts an inbound metric with fixed bounded attributes', async () => {
+    vi.stubEnv('EXPO_PUBLIC_SENTRY_DSN', 'https://public@example.invalid/1');
+    vi.stubEnv('ENVIRONMENT', 'production');
+    vi.stubEnv('SENTRY_RELEASE', 'kosmo@abc123');
+
+    const { countMetric } = await import('./sentry');
+    countMetric('activitypub.inbound.note_content_length_exceeded', {
+      activity_type: 'Create',
+      handler: 'create',
+      outcome: 'rejected',
+      phase: 'projection',
+      reason_code: 'note_content_length_exceeded',
+    });
+
+    expect(sentry.metrics.count).toHaveBeenCalledOnce();
+    expect(sentry.metrics.count).toHaveBeenCalledWith(
+      'activitypub.inbound.note_content_length_exceeded',
+      1,
+      {
+        attributes: {
+          activity_type: 'Create',
+          handler: 'create',
+          outcome: 'rejected',
+          phase: 'projection',
+          reason_code: 'note_content_length_exceeded',
+        },
+      },
+    );
   });
 });

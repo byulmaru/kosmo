@@ -104,6 +104,65 @@ describe('inbound ActivityPub observability', () => {
     }
   });
 
+  test('records one bounded metric for a note content length rejection', () => {
+    const metrics: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      countMetric: (name, attributes) => metrics.push({ attributes, name }),
+      log: () => undefined,
+    });
+
+    try {
+      observeInbound({
+        activityType: 'Create',
+        actorOrigin: 'https://remote.example/users/alice',
+        handler: 'create',
+        objectOrigin: 'https://remote.example/notes/1',
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'note_content_length_exceeded',
+      });
+
+      assert.deepEqual(metrics, [
+        {
+          attributes: {
+            activity_type: 'Create',
+            handler: 'create',
+            outcome: 'rejected',
+            phase: 'projection',
+            reason_code: 'note_content_length_exceeded',
+          },
+          name: 'activitypub.inbound.note_content_length_exceeded',
+        },
+      ]);
+      assert.doesNotMatch(JSON.stringify(metrics), /remote\.example|notes\/1/u);
+    } finally {
+      restore();
+    }
+  });
+
+  test('ignores metric backend failures', () => {
+    const restore = setInboundObservabilityReporter({
+      countMetric: () => {
+        throw new Error('metric backend failed');
+      },
+      log: () => undefined,
+    });
+
+    try {
+      assert.doesNotThrow(() =>
+        observeInbound({
+          activityType: 'Create',
+          handler: 'create',
+          outcome: 'rejected',
+          phase: 'projection',
+          reasonCode: 'note_content_length_exceeded',
+        }),
+      );
+    } finally {
+      restore();
+    }
+  });
+
   test('listener wrapper reports internal errors once and rethrows', async () => {
     const captures: unknown[] = [];
     const restore = setInboundObservabilityReporter({

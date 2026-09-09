@@ -6,10 +6,13 @@ import graphqlRoutes from './routes/graphql';
 import loginRoutes from './routes/login';
 import logoutRoutes from './routes/logout';
 import staticRoutes from './routes/static';
-import { captureUnexpectedError } from './sentry';
+import { captureUnexpectedError, countMetric } from './sentry';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
-setInboundObservabilityReporter({ captureException: captureUnexpectedError });
+setInboundObservabilityReporter({
+  captureException: captureUnexpectedError,
+  countMetric,
+});
 
 const app = new Hono();
 
