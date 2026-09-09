@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  RemoteNoteContentLengthExceededError,
   projectRemoteActivityPubHtmlToPlainText,
   projectRemoteNoteContent,
 } from './activitypub-note-content';
@@ -151,6 +152,77 @@ describe('projectRemoteNoteContent', () => {
         mediaType: 'image/png',
       }).summary,
       'warning',
+    );
+  });
+
+  it('rejects a canonical summary and body whose UTF-16 length exceeds 10,000', () => {
+    assert.throws(
+      () =>
+        projectRemoteNoteContent({
+          content: `<p>${'a'.repeat(10_000)}</p>`,
+          summary: '<p>warning</p>',
+          mediaType: 'text/html',
+        }),
+      RemoteNoteContentLengthExceededError,
+    );
+  });
+
+  it('allows the exact limit and sums normalized summary and body text', () => {
+    assert.doesNotThrow(() =>
+      projectRemoteNoteContent({
+        content: 'a'.repeat(9_999),
+        summary: null,
+        mediaType: 'text/plain',
+      }),
+    );
+    assert.doesNotThrow(() =>
+      projectRemoteNoteContent({
+        content: 'a'.repeat(10_000),
+        summary: null,
+        mediaType: 'text/plain',
+      }),
+    );
+    assert.doesNotThrow(() =>
+      projectRemoteNoteContent({
+        content: 'b'.repeat(5_000),
+        summary: 'a'.repeat(5_000),
+        mediaType: 'text/plain',
+      }),
+    );
+    assert.throws(
+      () =>
+        projectRemoteNoteContent({
+          content: 'b'.repeat(5_001),
+          summary: 'a'.repeat(5_000),
+          mediaType: 'text/plain',
+        }),
+      RemoteNoteContentLengthExceededError,
+    );
+  });
+
+  it('counts UTF-16 units after HTML and hard-break normalization', () => {
+    assert.doesNotThrow(() =>
+      projectRemoteNoteContent({
+        content: `<p>${'a'.repeat(4_999)}<br>${'b'.repeat(4_999)}</p>`,
+        summary: null,
+        mediaType: 'text/html',
+      }),
+    );
+    assert.doesNotThrow(() =>
+      projectRemoteNoteContent({
+        content: '😀'.repeat(5_000),
+        summary: null,
+        mediaType: 'text/plain',
+      }),
+    );
+    assert.throws(
+      () =>
+        projectRemoteNoteContent({
+          content: '😀'.repeat(5_001),
+          summary: null,
+          mediaType: 'text/plain',
+        }),
+      RemoteNoteContentLengthExceededError,
     );
   });
 

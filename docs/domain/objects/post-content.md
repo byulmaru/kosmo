@@ -8,10 +8,10 @@ Post Content를 가리키며, 작성 내용을 수정하면 기존 revision을 �
 
 ## 속성
 
-| 속성             | 타입/nullability | 검증 정책                                                                                                                                                                                                                                                                                                                                                  | 존재 조건 | 조회 조건           | 조회 권한 |
-| ---------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------- | --------- |
-| Content Document | Versioned JSON   | `{ version, summary, body }`; `version`은 breaking schema version이며 revision 번호가 아니다. V1 `summary`는 nullable Plain Text Content Warning이고 `body`는 ProseMirror document다. V1은 기존 paragraph/text/hard-break/link와 additive한 Media node를 지원한다. summary와 body Plain Text 합계는 500자 이하이며 Media가 없으면 body가 비어 있을 수 없다 | 항상      | Post 조회 정책 통과 | 없음      |
-| 생성 시각        | 시각, 필수       | revision 생성 결과로 기록하며 변경 불가                                                                                                                                                                                                                                                                                                                    | 항상      | Post 조회 정책 통과 | 없음      |
+| 속성             | 타입/nullability | 검증 정책                                                                                                                                                                                                                                                                                                                                                               | 존재 조건 | 조회 조건           | 조회 권한 |
+| ---------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------- | --------- |
+| Content Document | Versioned JSON   | `{ version, summary, body }`; `version`은 breaking schema version이며 revision 번호가 아니다. V1 `summary`는 nullable Plain Text Content Warning이고 `body`는 ProseMirror document다. V1은 기존 paragraph/text/hard-break/link와 additive한 Media node를 지원한다. Local Post의 summary와 body Plain Text 합계는 500자 이하이며 Media가 없으면 body가 비어 있을 수 없다 | 항상      | Post 조회 정책 통과 | 없음      |
+| 생성 시각        | 시각, 필수       | revision 생성 결과로 기록하며 변경 불가                                                                                                                                                                                                                                                                                                                                 | 항상      | Post 조회 정책 통과 | 없음      |
 
 V1 Media node는 `mediaId`를 attr로 가지며 body 안의 위치가 표시 순서를 결정한다. 하나의
 document는 Media node를 최대 4개 가질 수 있다. V1 document root의 `sensitiveMedia` attr는 모든 Media node의
@@ -22,6 +22,15 @@ Media 첨부 기능이 아직 배포되지 않은 출시 전 단계에서 제거
 계약으로 보지 않으며, Media 소유로 바로잡기 위해 V2를 만들지 않는다.
 
 Plain Text는 body에서 결정적으로 파생되는 읽기·검색·접근성 projection이며 별도 canonical 저장값이 아니다.
+
+500자 작성 제한은 Local Post의 작성 내용에만 적용한다. Remote Post는 정규화한 summary와 body Plain Text의
+UTF-16 길이(`.length`) 합계가 10,000자 이하일 때 수신할 수 있다. 정확히 10,000자는 허용하며 초과하면
+원문을 자르지 않고 해당 Note 전체를 무시한다. 기존에 저장된 Post와 revision은 변경하지 않는다.
+길이는 기존 canonical Plain Text 변환이 만드는 줄바꿈을 포함하며 HTML markup, Media와 표시용 구분자는
+포함하지 않는다. Quote의 원문인 Remote Post에도 같은 원격 기준을 적용한다. Local Quote 자체의 작성 내용은
+로컬 제한을 따르고 참조하는 원격 원문의 길이는 합산하지 않는다.
+원격 수신의 입력 byte, HTML 구조, 저장 JSON과 hydration 응답 크기를 보호하는 resource budget은
+이 문자 수 정책과 구분한다. 문자 수 검사만으로 파싱이나 네트워크 자원 소비가 제한되지는 않는다.
 
 ActivityPub 표현은 Content Document의 저장 구조를 그대로 직렬화하지 않는다. paragraph, text, hard break와
 link는 Media node를 제외한 안전한 HTML `Note.content`로 투영하고, Media node는 document 순서대로

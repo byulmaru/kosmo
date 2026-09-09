@@ -2,7 +2,10 @@ import '@kosmo/core/polyfill';
 
 import { MIMEType } from 'node:util';
 import { Document, Image, Link, PUBLIC_COLLECTION } from '@fedify/vocab';
-import { projectRemoteNoteContent } from '@kosmo/core/activitypub-note-content/server';
+import {
+  projectRemoteNoteContent,
+  RemoteNoteContentLengthExceededError,
+} from '@kosmo/core/activitypub-note-content/server';
 import { db, first, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, PostVisibility, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError, ValidationError } from '@kosmo/core/error';
@@ -218,6 +221,18 @@ export const handleInboundCreateNote = async ({
     });
     media = await projectRemoteNoteMedia(note);
   } catch (error) {
+    if (error instanceof RemoteNoteContentLengthExceededError) {
+      observeInbound({
+        outcome: 'rejected',
+        activityType: 'Create',
+        actorOrigin: actorUri,
+        handler: 'create',
+        objectOrigin: objectUri,
+        phase: 'projection',
+        reasonCode: 'note_content_length_exceeded',
+      });
+      return;
+    }
     if (error instanceof TypeError) {
       observeInbound({
         outcome: 'rejected',
