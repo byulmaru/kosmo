@@ -16,6 +16,8 @@ Accepted — 사용자의 “Spec Gate 승인” 응답으로 PROD-903 정책 �
 - [PROD-903](https://linear.app/byulmaru/issue/PROD-903)의 정책 결정 범위.
 - PROD-903 Spec 대화에서 제공 범위, 유형·수신자·이동 대상, 동시 중복 처리의 권장안에 대한 사람의
   “권장안대로” 응답.
+- 최초 동시 우선순위는 Codex가 권장하고 사람이 채택했다. 당시 Quote의 위치를 선택한 상세 이유는
+  기록되지 않았다. 2026-09-09 리뷰 재검토 뒤 사람의 “PR에 반영” 요청으로 아래 현재 유지 이유를 확정했다.
 - 같은 대화의 후속 질문에서 “Profile 단위 자기 인용 억제 + 두 글의 조회 권한 확인 (권장)” 선택.
 - 같은 대화에서 Mute 적용 대상, Remote Quote 최초 1회 생성, 철회·삭제 시 숨김·정리와
   일시적인 조회 불가·Recipient 비활성화 시 물리 보존을 명시적으로 확정한 응답.
@@ -28,8 +30,8 @@ Accepted — 사용자의 “Spec Gate 승인” 응답으로 PROD-903 정책 �
 
 ## 결정
 
-- 마지막 후속 응답 “Mention과 동일한 원칙”에 따라 먼저 생성된 Reply도 보존한다. 이후 Quote 승인으로
-  별도 알림을 추가하지 않고 기존 Reply Notification과 Read State·최초 읽음 시각을 유지한다.
+- 먼저 생성된 Reply가 있으면 이후 Quote 승인으로 별도 알림을 추가하지 않고 기존 Reply Notification과
+  Read State·최초 읽음 시각을 유지한다. 이 규칙은 동시 후보의 우선순위와 별개다.
 
 - Local 작성과 Remote 수신 모두 Quote 알림을 제공한다.
 - 별도 Quote Notification Type을 사용하고 direct Repost Source의 Author Profile에게 알린다.
@@ -71,6 +73,24 @@ Quote는 자체 Content와 상세 경로를 가진다. 별도 알림에서 Quote
 따라서 해당 조합은 제거하지 않는다. 다만 구조가 이 알림 순서를 필연적으로 정하는 것은 아니다.
 기존 결정 기록에는 순서의 선택은 있지만 Reply와 Mention 사이에 Quote를 둔 별도 제품 이유는 없다.
 관계의 강도나 저장 구조를 당시 선택 이유로 새로 만들어 기록하지 않는다.
+
+### 2026-09-09 재검토에서 확정한 유지 이유
+
+[기존 Reply/Mention 분류 계약](../objects/notification.md#replymention-수신자별-분류와-중복-처리-future)은
+수신자의 Post에 답하면서 같은 수신자를 Mention하면 Reply 한 건을 제공한다. 이 선행 계약은
+[PROD-884의 PR #778](https://github.com/byulmaru/kosmo/pull/778)에 있으며 Quote의 위치까지 정하지는 않았다.
+
+현재 순서는 같은 글·수신자의 알림을 하나로 줄일 때 수신자의 글에 생긴 반응을 대표 정보로 전달하기 위해
+유지한다. Reply 후보가 있으면 내 글에 달린 답글을 우선해 기존 분류를 유지한다. Reply 없이 Quote와 Mention이
+겹치면 내 글이 인용됐다는 사실을 대표 알림으로 선택한다. Mention의 알림 이유는 수신자가 언급됐다는 사실을
+전달하지만 인용 관계까지 설명하지는 않는다. 게시글 안의 인용 내용 표시는 별개이며,
+[Notification presentation](../../design/notifications.md)의 Reply 알림도 글에 포함된 인용 내용을 유지한다.
+
+Mention이 덜 직접적이거나 덜 중요하다는 판단은 아니다. 중복 상황에서 Mention 대신 답글·인용을 대표 유형으로
+남기는 절충이다. 각 Type의 생성·Mute 조건을 통과한 동시 후보에만 적용하며, 아래 선생성 알림을 이후 승인으로
+추가·교체하지 않는 규칙은 유지한다. 이 설명은 이번 재검토에서 확정한 이유이며 당시 선택 배경으로 소급하지 않는다.
+
+### 다른 정책과의 경계
 
 Quote와 Mention만 후보인 경우에는 Type별 생성·Mute 조건을 먼저 적용하고 둘 다 남으면 Quote 한 건을
 제공한다. 승인 대기로 Mention이 먼저 생성됐다면 이후 승인으로 Quote를 추가하거나 Mention의 Type을

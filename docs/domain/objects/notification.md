@@ -167,6 +167,9 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 - 같은 Quote Post가 같은 Recipient Profile에게 Reply, Quote, Mention Notification을 동시에 발생시키면
   각 Type의 생성·Mute 조건을 먼저 적용한 뒤 남은 후보에서 Reply, Quote, Mention 순서로 한 건만 제공한다.
   Recipient가 서로 다르면 각각 판정한다.
+- 이 순서는 같은 글·수신자의 알림에서 수신자의 글에 생긴 답글·인용을 대표 정보로 전달하려는 선택이다.
+  Mention의 중요도를 낮추거나 Post 구조가 순서를 강제한다는 뜻은 아니다. 알림 이유와 게시글 안의 인용 내용
+  표시는 구분한다. 선택 배경과 이번 재검토의 이유는 [ADR 0028](../decisions/0028-quote-notification-policy.md#2026-09-09-재검토에서-확정한-유지-이유)에 기록한다.
 - 같은 Quote·Recipient의 Quote와 Mention이 동시에 생성 후보이면 각 Type의 생성·Mute 조건을 먼저
   적용한다. 둘 다 남으면 Quote Notification 한 건만 제공한다. Reply도 후보이면 위 세 Type의 규칙을 적용한다.
   인용 관계가 승인 대기여서 Mention Notification이 먼저 생성됐다면 이후 승인돼도 별도 Quote Notification을
