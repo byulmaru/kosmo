@@ -1,27 +1,10 @@
 import { and, eq, ne } from 'drizzle-orm';
-import {
-  AccountProfiles,
-  Accounts,
-  ActivityPubActors,
-  db,
-  first,
-  Instances,
-  ProfileMigrations,
-  Profiles,
-} from '../db';
-import {
-  AccountProfileRole,
-  AccountState,
-  InstanceKind,
-  InstanceState,
-  ProfileFollowPolicy,
-  ProfileState,
-} from '../enums';
-import { ConflictError, NotFoundError, PermissionDeniedError } from '../error';
+import { ActivityPubActors, db, first, Instances, ProfileMigrations, Profiles } from '../db';
+import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
+import { ConflictError, NotFoundError } from '../error';
 import type { Transaction } from '../db';
 
 export type ProfileMigrationTargetInput = {
-  readonly accountId: string;
   readonly targetProfileId: string;
 };
 
@@ -33,16 +16,6 @@ const assertProfileMigrationTargetInTransaction = async (
   tx: Transaction,
   input: ProfileMigrationTargetInput,
 ) => {
-  const account = await tx
-    .select({ state: Accounts.state })
-    .from(Accounts)
-    .where(eq(Accounts.id, input.accountId))
-    .limit(1)
-    .then(first);
-  if (!account || account.state !== AccountState.ACTIVE) {
-    throw new PermissionDeniedError('Active account is required');
-  }
-
   const target = await tx
     .select({ instance: Instances, profile: Profiles })
     .from(Profiles)
@@ -52,21 +25,6 @@ const assertProfileMigrationTargetInTransaction = async (
     .then(first);
   if (!target) {
     throw new NotFoundError('Profile not found');
-  }
-
-  const membership = await tx
-    .select({ role: AccountProfiles.role })
-    .from(AccountProfiles)
-    .where(
-      and(
-        eq(AccountProfiles.accountId, input.accountId),
-        eq(AccountProfiles.profileId, input.targetProfileId),
-      ),
-    )
-    .limit(1)
-    .then(first);
-  if (!membership || membership.role !== AccountProfileRole.OWNER) {
-    throw new PermissionDeniedError('Profile owner permission is required');
   }
 
   if (
@@ -84,7 +42,7 @@ const assertProfileMigrationTargetInTransaction = async (
 /**
  * Validates the target before a caller performs remote source materialization.
  * The check is intentionally read-only; the mutating method repeats it in its
- * transaction so a caller cannot widen the authorization window.
+ * transaction so a caller cannot bypass the domain eligibility check.
  */
 export const assertProfileMigrationTarget = async (input: ProfileMigrationTargetInput) =>
   db.transaction((tx) => assertProfileMigrationTargetInTransaction(tx, input));

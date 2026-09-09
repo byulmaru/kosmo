@@ -27,7 +27,6 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
-let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
@@ -76,7 +75,6 @@ describe('GraphQL profile migration', () => {
     ({
       AccountProfiles,
       Accounts,
-      ActivityPubActors,
       db,
       firstOrThrow,
       Instances,
@@ -134,7 +132,6 @@ describe('GraphQL profile migration', () => {
         registerSourceMutation,
         {
           input: {
-            profileId: globalId('Profile', target.id),
             sourceHandle: `@alice@${remoteDomain}`,
           },
         },
@@ -148,6 +145,26 @@ describe('GraphQL profile migration', () => {
     assert.equal(await countMigrations(), 0);
   });
 
+  test('selected target eligibility is checked before remote lookup', async (t) => {
+    const target = await createProfile({
+      followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+      handle: 'migration-target-approval-required',
+    });
+    const auth = await createAuthenticatedSession({ profileId: target.id });
+    const createContext = t.mock.method(remoteFederation, 'createContext');
+
+    const result = await requestGraphQL(
+      registerSourceMutation,
+      { input: { sourceHandle: `@alice@${remoteDomain}` } },
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(result, 'NOT_FOUND');
+    assert.equal(createContext.mock.calls.length, 0);
+    assert.equal(await countMigrations(), 0);
+    assert.equal(await countProfiles(), 1);
+  });
+
   test('remote source lookup failure leaves the target and migration rows unchanged', async (t) => {
     const auth = await createAuthenticatedSession({
       profileId: (await createProfile({ handle: 'migration-target' })).id,
@@ -159,7 +176,6 @@ describe('GraphQL profile migration', () => {
       registerSourceMutation,
       {
         input: {
-          profileId: globalId('Profile', auth.profile.id),
           sourceHandle: `@missing@${remoteDomain}`,
         },
       },
@@ -195,7 +211,6 @@ describe('GraphQL profile migration', () => {
       registerSourceMutation,
       {
         input: {
-          profileId: globalId('Profile', auth.profile.id),
           sourceHandle: `@alice@${remoteDomain}`,
         },
       },
@@ -254,6 +269,45 @@ describe('GraphQL profile migration', () => {
         migrationSource: { id: globalId('Profile', source.id) },
       },
     });
+  });
+
+  test('uses the acting Profile instance origin for remote source materialization', async (t) => {
+    const actingInstance = await db
+      .insert(Instances)
+      .values({
+        canonicalOrigin: 'https://acting-local.example',
+        domain: 'acting-local.example',
+        kind: InstanceKind.LOCAL,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const actingProfile = await createProfile({
+      handle: 'migration-acting',
+      instanceId: actingInstance.id,
+    });
+    const auth = await createAuthenticatedSession({ profileId: actingProfile.id });
+
+    const lookupObject = mock.fn(async () => createLookupActor());
+    const createContext = t.mock.method(
+      remoteFederation,
+      'createContext',
+      () => ({ lookupObject }) as never,
+    );
+
+    const result = await requestGraphQL(
+      registerSourceMutation,
+      {
+        input: {
+          sourceHandle: `@alice@${remoteDomain}`,
+        },
+      },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    const origin = createContext.mock.calls[0]?.arguments[0];
+    assert.ok(origin instanceof URL);
+    assert.equal(origin.origin, 'https://acting-local.example');
   });
 });
 
@@ -371,7 +425,6 @@ const resetFixtures = async () => {
   await db.delete(ProfileMigrations);
   await db.delete(Sessions);
   await db.delete(AccountProfiles);
-  await db.delete(ActivityPubActors);
   await db.delete(Accounts);
   await db.delete(Profiles);
   await db.delete(Instances).where(eq(Instances.kind, InstanceKind.ACTIVITYPUB));

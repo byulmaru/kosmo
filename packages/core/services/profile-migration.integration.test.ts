@@ -3,8 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { after, test } from 'node:test';
 import { eq, inArray, or } from 'drizzle-orm';
 import {
-  AccountProfiles,
-  Accounts,
   ActivityPubActors,
   db,
   firstOrThrow,
@@ -13,18 +11,10 @@ import {
   ProfileMigrations,
   Profiles,
 } from '../db';
-import {
-  AccountProfileRole,
-  AccountState,
-  InstanceKind,
-  InstanceState,
-  ProfileFollowPolicy,
-  ProfileState,
-} from '../enums';
-import { ConflictError, NotFoundError, PermissionDeniedError } from '../error';
+import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
+import { ConflictError, NotFoundError } from '../error';
 import { assertProfileMigrationTarget, prepareProfileMigration } from './profile-migration';
 
-const accountIds: string[] = [];
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
 
@@ -43,28 +33,20 @@ after(async () => {
   if (instanceIds.length > 0) {
     await db.delete(Instances).where(inArray(Instances.id, instanceIds));
   }
-  if (accountIds.length > 0) {
-    await db.delete(AccountProfiles).where(inArray(AccountProfiles.accountId, accountIds));
-    await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
-  }
   await pg.end();
 });
 
 const createProfileFixture = async ({
-  accountState = AccountState.ACTIVE,
   followPolicy = ProfileFollowPolicy.OPEN,
   instanceKind = InstanceKind.LOCAL,
   instanceState = InstanceState.ACTIVE,
   profileState = ProfileState.ACTIVE,
-  role = AccountProfileRole.OWNER,
   withActor = instanceKind === InstanceKind.ACTIVITYPUB,
 }: {
-  accountState?: AccountState;
   followPolicy?: ProfileFollowPolicy;
   instanceKind?: InstanceKind;
   instanceState?: InstanceState;
   profileState?: ProfileState;
-  role?: AccountProfileRole;
   withActor?: boolean;
 } = {}) => {
   const suffix = randomUUID();
@@ -93,23 +75,6 @@ const createProfileFixture = async ({
     .then(firstOrThrow);
   profileIds.push(profile.id);
 
-  const account = await db
-    .insert(Accounts)
-    .values({
-      displayName: suffix,
-      oidcSubject: suffix,
-      state: accountState,
-    })
-    .returning()
-    .then(firstOrThrow);
-  accountIds.push(account.id);
-
-  await db.insert(AccountProfiles).values({
-    accountId: account.id,
-    profileId: profile.id,
-    role,
-  });
-
   if (withActor) {
     await db.insert(ActivityPubActors).values({
       inboxUri: `https://${instance.domain}/users/${suffix}/inbox`,
@@ -120,34 +85,15 @@ const createProfileFixture = async ({
     });
   }
 
-  return { account, instance, profile };
+  return { instance, profile };
 };
 
-test('migration target은 ACTIVE account의 OWNER에게만 공개되고 결과를 재사용한다', async () => {
-  const owner = await createProfileFixture();
-  const target = await assertProfileMigrationTarget({
-    accountId: owner.account.id,
-    targetProfileId: owner.profile.id,
+test('migration target 검증은 허용된 target Profile을 반환한다', async () => {
+  const target = await createProfileFixture();
+  const result = await assertProfileMigrationTarget({
+    targetProfileId: target.profile.id,
   });
-  assert.equal(target.id, owner.profile.id);
-
-  const member = await createProfileFixture({ role: AccountProfileRole.MEMBER });
-  await assert.rejects(
-    assertProfileMigrationTarget({
-      accountId: member.account.id,
-      targetProfileId: member.profile.id,
-    }),
-    PermissionDeniedError,
-  );
-
-  const inactiveAccount = await createProfileFixture({ accountState: AccountState.DISABLED });
-  await assert.rejects(
-    assertProfileMigrationTarget({
-      accountId: inactiveAccount.account.id,
-      targetProfileId: inactiveAccount.profile.id,
-    }),
-    PermissionDeniedError,
-  );
+  assert.equal(result.id, target.profile.id);
 });
 
 test('migration target은 Local·OPEN·ACTIVE 조합만 허용한다', async () => {
@@ -163,7 +109,6 @@ test('migration target은 Local·OPEN·ACTIVE 조합만 허용한다', async () 
   for (const fixture of [approvalRequired, remote, suspendedInstance, disabledProfile]) {
     await assert.rejects(
       assertProfileMigrationTarget({
-        accountId: fixture.account.id,
         targetProfileId: fixture.profile.id,
       }),
       NotFoundError,
@@ -175,7 +120,6 @@ test('migration source는 ACTIVE·비정지 Remote Actor만 허용한다', async
   const target = await createProfileFixture();
   const remote = await createProfileFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
   const prepared = await prepareProfileMigration({
-    accountId: target.account.id,
     sourceProfileId: remote.profile.id,
     targetProfileId: target.profile.id,
   });
@@ -199,7 +143,6 @@ test('migration source는 ACTIVE·비정지 Remote Actor만 허용한다', async
   const localSource = await createProfileFixture();
   await assert.rejects(
     prepareProfileMigration({
-      accountId: target.account.id,
       sourceProfileId: localSource.profile.id,
       targetProfileId: target.profile.id,
     }),
@@ -212,7 +155,6 @@ test('migration source는 ACTIVE·비정지 Remote Actor만 허용한다', async
   });
   await assert.rejects(
     prepareProfileMigration({
-      accountId: target.account.id,
       sourceProfileId: remoteWithoutActor.profile.id,
       targetProfileId: target.profile.id,
     }),
@@ -224,7 +166,6 @@ test('같은 migration pair는 DB row를 멱등 재사용한다', async () => {
   const target = await createProfileFixture();
   const source = await createProfileFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
   const input = {
-    accountId: target.account.id,
     sourceProfileId: source.profile.id,
     targetProfileId: target.profile.id,
   } as const;
@@ -261,14 +202,12 @@ test('서로 다른 source와 target이 기존 pair의 양쪽 unique 제약과 �
   const secondSource = await createProfileFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
 
   await prepareProfileMigration({
-    accountId: firstTarget.account.id,
     sourceProfileId: firstSource.profile.id,
     targetProfileId: firstTarget.profile.id,
   });
 
   await assert.rejects(
     prepareProfileMigration({
-      accountId: secondTarget.account.id,
       sourceProfileId: firstSource.profile.id,
       targetProfileId: secondTarget.profile.id,
     }),
@@ -276,7 +215,6 @@ test('서로 다른 source와 target이 기존 pair의 양쪽 unique 제약과 �
   );
   await assert.rejects(
     prepareProfileMigration({
-      accountId: firstTarget.account.id,
       sourceProfileId: secondSource.profile.id,
       targetProfileId: firstTarget.profile.id,
     }),
@@ -288,7 +226,6 @@ test('동시 동일 요청은 DB unique 제약으로 하나의 migration만 만�
   const target = await createProfileFixture();
   const source = await createProfileFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
   const input = {
-    accountId: target.account.id,
     sourceProfileId: source.profile.id,
     targetProfileId: target.profile.id,
   } as const;

@@ -536,7 +536,6 @@ type RegisterPushInstallationPayload {
 }
 
 input RegisterProfileMigrationSourceInput {
-  profileId: ID!
   sourceHandle: String!
 }
 

@@ -29,8 +29,9 @@ identity, `alsoKnownAs` 표현, Local·Remote Follow 정책과 기존 follower �
   Approval Policy가 Open이어야 하며, remote-to-remote target은 target Profile에 존재하는 Follow Approval Policy를
   따른다.
 - Profile Migration source 지정은 Settings의 Profile detail에서 feature flag가 켜져 있을 때만 노출한다. flag가 꺼져
-  있거나 값을 확인할 수 없거나 로딩 중이면 source 준비 control을 노출하지 않는다. flag는 UI 노출 조건일 뿐 권한
-  증거가 아니며, 기존 `Account.Active`와 `Profile.Owner` 권한을 유지한다. 같은 source·target pair는 no-op으로 처리하고,
+  있거나 값을 확인할 수 없거나 로딩 중이면 source 준비 control을 노출하지 않는다. source 등록은 현재 선택된 Local
+  Profile을 target으로 사용하며 별도 target Profile ID 입력을 받지 않는다. flag는 UI 노출 조건일 뿐 권한 증거가 아니며,
+  기존 `Account.Active`와 `Profile.Owner` 권한을 유지한다. 같은 source·target pair는 no-op으로 처리하고,
   다른 pair와 충돌하는 요청은 거부한다. 이미 준비된 관계·alias와 inbound Move 처리는 flag 상태로 중단하거나 제거하지
   않는다. Kosmo가 source가 되어 발행하는 outgoing Move는 이 결정의 범위가 아니다.
 - source Profile을 Followee로 가진 기존 established Follow Relationship 중 Follower가 Local Profile인 관계는 target
@@ -54,8 +55,8 @@ race는 제품 보장으로 승격하지 않아 구현 복잡도를 제한한다
 
 ## 결과
 
-- [Profile](../objects/profile.md)은 Profile Migration 관계, inbound Move validation과 Profile Owner의 source 지정
-  경계를 소유한다.
+- [Profile](../objects/profile.md)은 Profile Migration 관계, inbound Move validation과 현재 선택된 Profile의
+  Profile Owner source 지정 경계를 소유한다.
 - [Follow Relationship](../objects/follow-relationship.md)은 target Follow/Request 선저장과 source 관계 제거
   순서를 소유한다.
 - inbound ActivityPub Move만 후속 계약 대상이며, outgoing Kosmo Move·일반 계정 이동/서버 이전 UI·게시물·미디어·
