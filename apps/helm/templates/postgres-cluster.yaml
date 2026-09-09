@@ -18,11 +18,13 @@ spec:
 {{- end }}
   resources:
 {{ toYaml .Values.postgres.resources | indent 4 }}
-{{- if eq .Values.env "prod" }}
-  serviceAccountName: kosmo-postgres-backup
   postgresql:
     parameters:
+      log_min_duration_statement: 1s
+      log_parameter_max_length: "0"
+{{ if eq .Values.env "prod" }}
       archive_timeout: 4min
+  serviceAccountName: kosmo-postgres-backup
   plugins:
     - name: barman-cloud.cloudnative-pg.io
       isWALArchiver: true
