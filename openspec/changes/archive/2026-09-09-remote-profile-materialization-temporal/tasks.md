@@ -96,7 +96,8 @@
 
 - Fedify remote actor materialization integration: 55/55 passed against the isolated PostgreSQL and Temporal runtime.
 - API GraphQL profile integration: 68/68 passed against the isolated PostgreSQL and Temporal runtime.
-- Worker Remote Profile Workflow and Activity integration: 5/5 passed with Temporal's local test server, including retry and non-retryable rejection paths.
-- Core Temporal caller tests: 3/3 passed, covering sync Profile ID results, async durable start acknowledgement, stable identity and deadlines.
-- `pnpm --filter @kosmo/fedify exec tsc --noEmit --pretty false`, `pnpm --filter @kosmo/api exec tsc --noEmit --pretty false`, `pnpm --filter @kosmo/worker build`, changed-file ESLint, changed-file Prettier and `git diff --check` passed. The repository-wide Core TypeScript command still reports unrelated pre-existing cross-package and generated-app errors.
+- Worker Remote Profile Workflow and Activity integration: 6/6 passed with Temporal's local test server, including retry and non-retryable rejection paths.
+- Core Temporal caller tests: 3/3 passed, covering sync Profile ID results, async durable start acknowledgement and stable identity. The deadline check verifies that the adapter invokes a deadline-bound wait.
+- Changed Core call sites were covered by the consumer package typechecks and the focused Core tests. Core has no dedicated `tsconfig` or typecheck script; a standalone invocation follows the root configuration and is not a scoped Core check. `pnpm --filter @kosmo/fedify exec tsc --noEmit --pretty false`, `pnpm --filter @kosmo/api exec tsc --noEmit --pretty false`, `pnpm --filter @kosmo/worker build`, changed-file ESLint, changed-file Prettier and `git diff --check` passed.
 - `pnpm exec openspec validate remote-profile-materialization-temporal --type change --strict --no-interactive` passed. Parent-close and cancellation behavior remain delegated to Temporal SDK semantics as declared above.
+- Native Temporal execution evidence for caller-timeout continuation, Worker restart recovery and parent-close/cancellation lifecycle is not included in this change; those boundaries remain delegated to Temporal SDK semantics as declared above.
