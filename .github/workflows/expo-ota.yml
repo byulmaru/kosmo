@@ -1,0 +1,487 @@
+name: Expo OTA Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Release operation to run
+        required: true
+        type: choice
+        options:
+          - release
+          - stage
+          - promote
+          - recover
+        default: release
+      platform:
+        description: Native platform for the release
+        required: true
+        type: choice
+        options:
+          - android
+          - ios
+        default: android
+      source_sha:
+        description: Full 40-character approved source SHA for release or stage
+        required: false
+        type: string
+        default: ''
+      source_run_id:
+        description: Previous workflow run ID for promote or recover
+        required: false
+        type: string
+        default: ''
+      source_artifact_name:
+        description: Verified artifact name from source_run_id (defaults to the standard name)
+        required: false
+        type: string
+        default: ''
+      source_channel:
+        description: Channel containing the verified source artifact
+        required: false
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
+      keyid:
+        description: Expo Updates signing key identifier
+        required: true
+        type: string
+        default: 2026-09
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  preflight:
+    name: Validate OTA release inputs
+    runs-on: ubuntu-latest
+    outputs:
+      public_base_url: ${{ steps.validate.outputs.public_base_url }}
+      source_artifact_name: ${{ steps.validate.outputs.source_artifact_name }}
+    steps:
+      - name: Validate operation and source coordinates
+        id: validate
+        env:
+          OPERATION: ${{ inputs.operation }}
+          PLATFORM: ${{ inputs.platform }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_ARTIFACT_NAME: ${{ inputs.source_artifact_name }}
+          SOURCE_CHANNEL: ${{ inputs.source_channel }}
+          KEYID: ${{ inputs.keyid }}
+          PUBLIC_BASE_URL: ${{ vars.EXPO_OTA_PUBLIC_BASE_URL }}
+          R2_BUCKET: ${{ vars.EXPO_OTA_R2_BUCKET }}
+          R2_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF}" != 'refs/heads/main' ]]; then
+            echo "::error::Expo OTA workflow must run from refs/heads/main."
+            exit 1
+          fi
+          if [[ "${OPERATION}" != 'release' && "${OPERATION}" != 'stage' && "${OPERATION}" != 'promote' && "${OPERATION}" != 'recover' ]]; then
+            echo "::error::Unknown OTA operation: ${OPERATION}."
+            exit 1
+          fi
+          if [[ "${PLATFORM}" != 'android' && "${PLATFORM}" != 'ios' ]]; then
+            echo "::error::Platform must be android or ios."
+            exit 1
+          fi
+          if [[ ! "${KEYID}" =~ ^[A-Za-z0-9._-]+$ || "${KEYID}" == '.' || "${KEYID}" == '..' ]]; then
+            echo "::error::keyid must be a safe signing-key path segment."
+            exit 1
+          fi
+
+          if [[ "${OPERATION}" == 'release' || "${OPERATION}" == 'stage' ]]; then
+            if [[ ! "${SOURCE_SHA}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+              echo "::error::source_sha must be an exact 40-character commit SHA for ${OPERATION}."
+              exit 1
+            fi
+          else
+            if [[ ! "${SOURCE_RUN_ID}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::source_run_id must be a positive workflow run ID for ${OPERATION}."
+              exit 1
+            fi
+            if [[ -n "${SOURCE_ARTIFACT_NAME}" && ! "${SOURCE_ARTIFACT_NAME}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+              echo "::error::source_artifact_name contains unsupported characters."
+              exit 1
+            fi
+            if [[ "${OPERATION}" == 'promote' && "${SOURCE_CHANNEL}" != 'staging' ]]; then
+              echo "::error::promote requires a verified staging artifact."
+              exit 1
+            fi
+            if [[ "${OPERATION}" == 'recover' && "${SOURCE_CHANNEL}" != 'production' ]]; then
+              echo "::error::recover requires a verified production artifact."
+              exit 1
+            fi
+          fi
+
+          for value in PUBLIC_BASE_URL R2_BUCKET R2_ACCOUNT_ID; do
+            if [[ -z "${!value}" ]]; then
+              echo "::error::${value} must be configured for the Expo OTA publisher."
+              exit 1
+            fi
+          done
+
+          {
+            printf 'public_base_url=%s\n' "${PUBLIC_BASE_URL}"
+            if [[ "${OPERATION}" == 'recover' ]]; then
+              printf 'source_artifact_name=%s\n' "${SOURCE_ARTIFACT_NAME:-expo-ota-${PLATFORM}-${SOURCE_RUN_ID}-production-verified}"
+            elif [[ "${OPERATION}" == 'promote' ]]; then
+              printf 'source_artifact_name=%s\n' "${SOURCE_ARTIFACT_NAME:-expo-ota-${PLATFORM}-${SOURCE_RUN_ID}-verified}"
+            else
+              printf 'source_artifact_name=\n'
+            fi
+          } >> "${GITHUB_OUTPUT}"
+
+  export:
+    name: Export approved Expo update
+    needs: preflight
+    if: inputs.operation == 'release' || inputs.operation == 'stage'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: expo-ota-export-${{ inputs.platform }}-${{ inputs.source_sha }}
+      cancel-in-progress: false
+    outputs:
+      artifact_name: ${{ steps.export.outputs.artifact_name }}
+      runtime_version: ${{ steps.export.outputs.runtime_version }}
+    env:
+      EXPO_NO_GIT_STATUS: '1'
+    steps:
+      - name: Checkout approved source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ inputs.source_sha }}
+
+      - name: Set up mise
+        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          version: '2026.9.2'
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Export approved update
+        id: export
+        working-directory: apps/app
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          KEYID: ${{ inputs.keyid }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          output_dir="${RUNNER_TEMP}/kosmo-expo-ota-export"
+          node --import tsx scripts/export-ota.ts export \
+            --platform "${{ inputs.platform }}" \
+            --channel staging \
+            --source-sha "${SOURCE_SHA}" \
+            --keyid "${KEYID}" \
+            --output-dir "${output_dir}"
+          artifact_name="expo-ota-${{ inputs.platform }}-${GITHUB_RUN_ID}-export"
+          echo "artifact_name=${artifact_name}" >> "${GITHUB_OUTPUT}"
+
+          mkdir -p .artifacts
+          cp -R "${output_dir}" .artifacts/export
+
+      - name: Upload approved export artifact
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          if-no-files-found: error
+          include-hidden-files: true
+          name: ${{ steps.export.outputs.artifact_name }}
+          path: apps/app/.artifacts/export
+          retention-days: 90
+
+  publish_staging:
+    name: Publish signed staging release
+    needs: [preflight, export]
+    if: inputs.operation == 'release' || inputs.operation == 'stage'
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    uses: byulmaru/expo-ota/.github/workflows/publish.yml@refs/heads/main
+    with:
+      artifact_name: ${{ needs.export.outputs.artifact_name }}
+      channel: staging
+      keyid: ${{ inputs.keyid }}
+      platform: ${{ inputs.platform }}
+      project: kosmo-native
+      runtime_version: ${{ needs.export.outputs.runtime_version }}
+    concurrency:
+      group: expo-ota-kosmo-native-${{ inputs.platform }}-staging-${{ needs.export.outputs.runtime_version }}
+      cancel-in-progress: false
+
+  verify_staging:
+    name: Verify staging manifest and assets
+    needs: [preflight, export, publish_staging]
+    if: inputs.operation == 'release' || inputs.operation == 'stage'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      artifact_name: ${{ steps.prepare.outputs.artifact_name }}
+      runtime_version: ${{ steps.verify.outputs.runtime_version }}
+      manifest_id: ${{ steps.verify.outputs.manifest_id }}
+      manifest_url: ${{ steps.verify.outputs.manifest_url }}
+    env:
+      PUBLIC_BASE_URL: ${{ needs.preflight.outputs.public_base_url }}
+    steps:
+      - name: Checkout workflow verifier
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Set up mise
+        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          version: '2026.9.2'
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download exported artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        with:
+          name: ${{ needs.export.outputs.artifact_name }}
+          path: .artifacts/export
+
+      - name: Verify staging update
+        id: verify
+        working-directory: apps/app
+        env:
+          KEYID: ${{ inputs.keyid }}
+          RUNTIME_VERSION: ${{ needs.export.outputs.runtime_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node --import tsx scripts/export-ota.ts verify \
+            --platform "${{ inputs.platform }}" \
+            --channel staging \
+            --keyid "${KEYID}" \
+            --runtime-version "${RUNTIME_VERSION}" \
+            --public-base-url "${PUBLIC_BASE_URL}" \
+            --output-dir "${GITHUB_WORKSPACE}/.artifacts/export"
+
+      - name: Prepare promotion provenance
+        id: prepare
+        working-directory: apps/app
+        env:
+          KEYID: ${{ inputs.keyid }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node --import tsx scripts/export-ota.ts promote \
+            --operation promote \
+            --platform "${{ inputs.platform }}" \
+            --source-channel staging \
+            --keyid "${KEYID}" \
+            --public-base-url "${PUBLIC_BASE_URL}" \
+            --output-dir "${GITHUB_WORKSPACE}/.artifacts/export"
+          echo "artifact_name=expo-ota-${{ inputs.platform }}-${GITHUB_RUN_ID}-verified" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload staging verification artifact
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          if-no-files-found: error
+          include-hidden-files: true
+          name: ${{ steps.prepare.outputs.artifact_name }}
+          path: .artifacts/export
+          retention-days: 90
+
+  prepare_existing:
+    name: Verify existing release artifact
+    needs: preflight
+    if: inputs.operation == 'promote' || inputs.operation == 'recover'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      artifact_name: ${{ steps.prepare.outputs.artifact_name }}
+      runtime_version: ${{ steps.prepare.outputs.runtime_version }}
+      manifest_id: ${{ steps.prepare.outputs.manifest_id }}
+      manifest_url: ${{ steps.prepare.outputs.manifest_url }}
+    env:
+      PUBLIC_BASE_URL: ${{ needs.preflight.outputs.public_base_url }}
+    steps:
+      - name: Checkout workflow verifier
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Set up mise
+        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          version: '2026.9.2'
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download verified source artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        with:
+          github-token: ${{ github.token }}
+          name: ${{ needs.preflight.outputs.source_artifact_name }}
+          path: .artifacts/export
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+
+      - name: Verify source and prepare current-run artifact
+        id: prepare
+        working-directory: apps/app
+        env:
+          KEYID: ${{ inputs.keyid }}
+          SOURCE_CHANNEL: ${{ inputs.source_channel }}
+          OPERATION: ${{ inputs.operation }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node --import tsx scripts/export-ota.ts promote \
+            --operation "${OPERATION}" \
+            --platform "${{ inputs.platform }}" \
+            --source-channel "${SOURCE_CHANNEL}" \
+            --keyid "${KEYID}" \
+            --public-base-url "${PUBLIC_BASE_URL}" \
+            --output-dir "${GITHUB_WORKSPACE}/.artifacts/export"
+          echo "artifact_name=expo-ota-${{ inputs.platform }}-${GITHUB_RUN_ID}-verified" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload current-run verified artifact
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          if-no-files-found: error
+          include-hidden-files: true
+          name: ${{ steps.prepare.outputs.artifact_name }}
+          path: .artifacts/export
+          retention-days: 90
+
+  production_approval:
+    name: Approve production OTA publication
+    needs: [verify_staging, prepare_existing]
+    if: >-
+      always() &&
+      ((inputs.operation == 'release' && needs.verify_staging.result == 'success') ||
+      ((inputs.operation == 'promote' || inputs.operation == 'recover') && needs.prepare_existing.result == 'success'))
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      contents: read
+    concurrency:
+      group: expo-ota-kosmo-native-${{ inputs.platform }}-production-${{ needs.verify_staging.outputs.runtime_version || needs.prepare_existing.outputs.runtime_version }}
+      cancel-in-progress: false
+    steps:
+      - name: Record approval boundary
+        env:
+          OPERATION: ${{ inputs.operation }}
+          PLATFORM: ${{ inputs.platform }}
+          RUNTIME_VERSION: ${{ needs.verify_staging.outputs.runtime_version || needs.prepare_existing.outputs.runtime_version }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id || github.run_id }}
+          SOURCE_MANIFEST_ID: ${{ needs.verify_staging.outputs.manifest_id || needs.prepare_existing.outputs.manifest_id }}
+          SOURCE_MANIFEST_URL: ${{ needs.verify_staging.outputs.manifest_url || needs.prepare_existing.outputs.manifest_url }}
+        run: |
+          {
+            echo '### Expo OTA production approval'
+            echo
+            echo "- Operation: \`${OPERATION}\`"
+            echo "- Platform: \`${PLATFORM}\`"
+            echo "- RuntimeVersion: \`${RUNTIME_VERSION}\`"
+            echo "- Source workflow run: \`${SOURCE_RUN_ID}\`"
+            echo "- Source manifest: [\`${SOURCE_MANIFEST_ID}\`](${SOURCE_MANIFEST_URL})"
+            echo "- Approval boundary: \`prod\` Environment"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  publish_production:
+    name: Publish production OTA release
+    needs: [verify_staging, prepare_existing, production_approval]
+    if: >-
+      always() && needs.production_approval.result == 'success' &&
+      ((inputs.operation == 'release' && needs.verify_staging.result == 'success') ||
+      ((inputs.operation == 'promote' || inputs.operation == 'recover') && needs.prepare_existing.result == 'success'))
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    uses: byulmaru/expo-ota/.github/workflows/publish.yml@refs/heads/main
+    with:
+      artifact_name: ${{ inputs.operation == 'release' && needs.verify_staging.outputs.artifact_name || needs.prepare_existing.outputs.artifact_name }}
+      channel: production
+      keyid: ${{ inputs.keyid }}
+      platform: ${{ inputs.platform }}
+      project: kosmo-native
+      runtime_version: ${{ inputs.operation == 'release' && needs.verify_staging.outputs.runtime_version || needs.prepare_existing.outputs.runtime_version }}
+    concurrency:
+      group: expo-ota-kosmo-native-${{ inputs.platform }}-production-${{ inputs.operation == 'release' && needs.verify_staging.outputs.runtime_version || needs.prepare_existing.outputs.runtime_version }}
+      cancel-in-progress: false
+
+  verify_production:
+    name: Verify production manifest and assets
+    needs: [preflight, verify_staging, prepare_existing, publish_production]
+    if: >-
+      always() && needs.publish_production.result == 'success' &&
+      ((inputs.operation == 'release' && needs.verify_staging.result == 'success') ||
+      ((inputs.operation == 'promote' || inputs.operation == 'recover') && needs.prepare_existing.result == 'success'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PUBLIC_BASE_URL: ${{ needs.preflight.outputs.public_base_url }}
+    steps:
+      - name: Checkout workflow verifier
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Set up mise
+        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          version: '2026.9.2'
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download published artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        with:
+          name: ${{ inputs.operation == 'release' && needs.verify_staging.outputs.artifact_name || needs.prepare_existing.outputs.artifact_name }}
+          path: .artifacts/export
+
+      - name: Verify production update
+        working-directory: apps/app
+        env:
+          KEYID: ${{ inputs.keyid }}
+          RUNTIME_VERSION: ${{ inputs.operation == 'release' && needs.verify_staging.outputs.runtime_version || needs.prepare_existing.outputs.runtime_version }}
+          SOURCE_MANIFEST_ID: ${{ inputs.operation == 'release' && needs.verify_staging.outputs.manifest_id || needs.prepare_existing.outputs.manifest_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node --import tsx scripts/export-ota.ts verify \
+            --platform "${{ inputs.platform }}" \
+            --channel production \
+            --keyid "${KEYID}" \
+            --runtime-version "${RUNTIME_VERSION}" \
+            --source-manifest-id "${SOURCE_MANIFEST_ID}" \
+            --public-base-url "${PUBLIC_BASE_URL}" \
+            --output-dir "${GITHUB_WORKSPACE}/.artifacts/export"
+
+      - name: Upload production verification artifact
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          if-no-files-found: error
+          include-hidden-files: true
+          name: expo-ota-${{ inputs.platform }}-${{ github.run_id }}-production-verified
+          path: .artifacts/export
+          retention-days: 90
