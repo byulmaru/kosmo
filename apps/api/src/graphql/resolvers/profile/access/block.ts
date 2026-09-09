@@ -6,7 +6,7 @@ import type { UserContext } from '@/context';
 
 /** Block management is intentionally restricted to the selected Local actor. */
 export const requireSelectedLocalProfile = async (ctx: UserContext) => {
-  const profileId = ctx.session?.profileId;
+  const profileId = ctx.session?.profile?.id;
   if (!profileId) {
     throw new PermissionDeniedError('A selected Local Profile is required');
   }

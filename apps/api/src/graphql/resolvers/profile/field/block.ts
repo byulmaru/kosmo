@@ -1,4 +1,5 @@
 import { db, Instances, ProfileBlocks, Profiles } from '@kosmo/core/db';
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
@@ -16,7 +17,7 @@ builder.objectField(ProfileBlock, 'targetProfile', (t) =>
 );
 
 builder.objectField(Profile, 'profileBlocks', (t) =>
-  t.withAuth({ usingProfile: true }).connection(
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).connection(
     {
       type: ProfileBlock,
       resolve: async (profile, args, ctx) => {

@@ -1,5 +1,5 @@
 import { db, first, Instances, ProfileBlocks, Profiles } from '@kosmo/core/db';
-import { InstanceKind } from '@kosmo/core/enums';
+import { AccountProfileRole, InstanceKind } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
 import { profileBlockPairWhere } from '@kosmo/core/visibility';
@@ -35,7 +35,7 @@ const emptyStatus = (): ProfileBlockStatusRow => ({
 });
 
 builder.queryField('profileBlockStatus', (t) =>
-  t.withAuth({ usingProfile: true }).field({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).field({
     type: ProfileBlockStatus,
     args: {
       handle: t.arg.string({ required: true }),

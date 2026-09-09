@@ -228,7 +228,7 @@ E2E를 완료하고, 최신 canonical·Linear·OpenSpec을 동기화한 뒤 모�
   구현·완료 증거가 아니다.
 - `PROD-861` Storybook/presentation 결과를 API·cache·Native runtime 완료 증거로 일반화하지 않는다. 환경별 실제 증거와 미검증 범위를 분리 기록한다.
 - 미구현 Hashtag Post List·Post 검색은 공통 정책 검증 결과와 실제 API 미실행을 구분해 기록한다. 검증 시점에 endpoint가 이미 제공되면 실제 공개 결과로 검증하며,
-archive 이후 추가되는 endpoint의 연결·검증은 해당 기능 이슈가 소유한다. 미래 endpoint를 기다리기 위해 이 change를 미완료로 유지하거나 다시 열지 않는다.
+  archive 이후 추가되는 endpoint의 연결·검증은 해당 기능 이슈가 소유한다. 미래 endpoint를 기다리기 위해 이 change를 미완료로 유지하거나 다시 열지 않는다.
 - 모든 declared task와 required validation, canonical·Linear 정합성이 완료되기 전에는 archive하지 않는다.
 
 **Verification**

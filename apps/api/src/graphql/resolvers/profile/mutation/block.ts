@@ -1,3 +1,4 @@
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { executeProfileBlock, executeProfileUnblock } from '@kosmo/core/temporal/profile-block';
 import { builder } from '@/graphql/builder';
@@ -6,7 +7,7 @@ import { profileBlockByIdLoader } from '../loader/block';
 import { Profile, ProfileBlock } from '../ref';
 
 builder.mutationField('blockProfile', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('BlockProfilePayload', {
       fields: (field) => ({
         profileBlock: field.field({ type: ProfileBlock }),
@@ -33,7 +34,7 @@ builder.mutationField('blockProfile', (t) =>
 );
 
 builder.mutationField('unblockProfile', (t) =>
-  t.withAuth({ usingProfile: true }).fieldWithInput({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('UnblockProfilePayload', {
       fields: (field) => ({
         profileBlockId: field.globalID({

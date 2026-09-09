@@ -14,10 +14,10 @@ const TargetInstances = alias(Instances, 'profile_block_target_instance');
 
 export const profileBlockByIdLoader = (ctx: UserContext) =>
   ctx.loader<string, ProfileBlockRow, string, true>({
-    name: `profileBlock.byId:${ctx.session?.profileId ?? 'anonymous'}`,
+    name: `profileBlock.byId:${ctx.session?.profile?.id ?? 'anonymous'}`,
     nullable: true,
     load: async (ids) => {
-      const ownerProfileId = ctx.session?.profileId;
+      const ownerProfileId = ctx.session?.profile?.id;
       if (!ownerProfileId) {
         return [];
       }

@@ -54,17 +54,17 @@ builder.objectField(Hashtag, 'relatedProfiles', (t) =>
               and(
                 eq(ProfileHashtags.hashtagId, hashtag.id),
                 visibleProfileWhere({ profile: Profiles, instance: Instances }),
-                ctx.session?.profileId
+                ctx.session?.profile?.id
                   ? and(
                       profileBlockVisibilityWhere({
                         database: db,
-                        ownerProfileId: ctx.session.profileId,
+                        ownerProfileId: ctx.session.profile.id,
                         targetProfileId: Profiles.id,
                       }),
                       profileBlockVisibilityWhere({
                         database: db,
                         ownerProfileId: Profiles.id,
-                        targetProfileId: ctx.session.profileId,
+                        targetProfileId: ctx.session.profile.id,
                       }),
                     )
                   : undefined,

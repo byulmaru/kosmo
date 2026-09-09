@@ -33,6 +33,7 @@ archive 조건이 아니며, 공통 정책 검증 결과와 실제 endpoint 검�
 ### Requirement: Profile Block protects Post interactions in both directions
 
 **Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0012-post-interaction-followup-clarifications.md`, `PROD-822`. Post surface의 새 Reply·Quote·Reaction·Repost 입력은 Profile Block의 양쪽 viewer 방향에 따라 거부해야 한다(MUST). Profile Block으로 거부된 입력의 기존 보존 대상 Post·Reaction·Repost·Bookmark 상태는 유지해야 한다(MUST).
+
 #### Scenario: PostContent와 Media 표시 필드가 방향별 Post 정책을 우회하지 않는다
 
 - **WHEN** Block 관계의 상대 Author가 작성한 PostContent Node, PostContent의 Media 또는 Profile avatar/header를 조회한다
@@ -57,6 +58,7 @@ archive 조건이 아니며, 공통 정책 검증 결과와 실제 endpoint 검�
 ### Requirement: Profile Block Post interaction boundary
 
 **Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0012-post-interaction-followup-clarifications.md`, `PROD-822`. Post surface의 새 Reply·Reaction·Repost 입력은 공통 Profile Block predicate를 적용해 차단된 pair를 거부해야 한다(MUST). 차단으로 거부된 입력은 새 Post·Reaction·Repost 저장 결과를 남겨서는 안 되고(MUST NOT), 기존 Repost Post·Bookmark는 보존해야 한다(MUST).
+
 #### Scenario: 차단된 상대를 향한 새 Post interaction을 거부한다
 
 - **WHEN** Block 관계의 Owner 또는 Target이 상대 Profile의 Post에 Reply·Quote·Reaction·Repost를 새로 입력한다

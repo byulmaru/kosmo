@@ -18,10 +18,10 @@ export const directPostVisibilityAccessWhere = ({ ctx }: { readonly ctx: UserCon
 export const postVisibilityAccessWhere = ({ ctx }: { readonly ctx: UserContext }) =>
   and(
     directPostVisibilityAccessWhere({ ctx }),
-    ctx.session?.profileId
+    ctx.session?.profile?.id
       ? profileBlockVisibilityWhere({
           database: db,
-          ownerProfileId: ctx.session.profileId,
+          ownerProfileId: ctx.session.profile.id,
           targetProfileId: Posts.profileId,
         })
       : undefined,

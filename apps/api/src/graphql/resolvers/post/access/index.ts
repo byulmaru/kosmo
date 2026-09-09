@@ -1,10 +1,7 @@
 import { db, Posts, ProfileMutes } from '@kosmo/core/db';
 import { and, eq, exists, isNull, ne, not } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import {
-  directPostRepostSourceAccessWhere,
-  postRepostSourceAccessWhere,
-} from './repost-source';
+import { directPostRepostSourceAccessWhere, postRepostSourceAccessWhere } from './repost-source';
 import { directPostVisibilityAccessWhere, postVisibilityAccessWhere } from './visibility';
 import type { SQLWrapper } from 'drizzle-orm';
 import type { UserContext } from '@/context';
@@ -19,7 +16,7 @@ const applyProfileMuteAccessWhere = ({
 }: {
   ctx: UserContext;
   profileMute: ProfileMuteMode;
-  accessWhere: SQLWrapper;
+  accessWhere: SQLWrapper | undefined;
 }) => {
   const ownerProfileId = ctx.session?.profile?.id;
   if (profileMute === 'ignore' || !ownerProfileId) {

@@ -61,10 +61,10 @@ export const postRepostSourceAccessWhere = ({ ctx }: { readonly ctx: UserContext
   repostSourceAccessWhere(
     sql<boolean>`${and(
       directRepostSourceVisibleWhere({ ctx }),
-      ctx.session?.profileId
+      ctx.session?.profile?.id
         ? profileBlockVisibilityWhere({
             database: db,
-            ownerProfileId: ctx.session.profileId,
+            ownerProfileId: ctx.session.profile.id,
             targetProfileId: DirectRepostSources.profileId,
           })
         : undefined,
