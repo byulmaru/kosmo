@@ -43,7 +43,6 @@ type PendingRequest = {
 
 const generationRef = { current: 1 };
 let selectedProfileId: string | null = 'profile:owner-a';
-let refreshCalls = 0;
 let renderer: ReactTestRenderer | null = null;
 let pendingRequests: PendingRequest[] = [];
 let controller: ProfileMuteController | null = null;
@@ -62,15 +61,6 @@ mock.module('react-relay', {
       }
       throw new Error('Unexpected GraphQL document.');
     },
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
-mock.module('@/components/shell/ShellChromeContext', {
-  exports: {
-    useShellChrome: () => ({
-      refreshProfileMuteTimelines: () => {
-        refreshCalls += 1;
-      },
-    }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/relay/RelayEnvironmentBoundary', {
@@ -107,7 +97,6 @@ afterEach(async () => {
   pendingRequests = [];
   generationRef.current = 1;
   selectedProfileId = 'profile:owner-a';
-  refreshCalls = 0;
 });
 
 describe('ProfileMuteController real Relay mutation contract', () => {
@@ -157,7 +146,6 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     assert.match(String(await rejection), /mute failure/);
     assert.equal(viewerStateMuteId(environment, targetA), null);
     assert.deepEqual(connectionNodeIds(environment, getProfileMuteConnectionId(ownerA)), []);
-    assert.equal(refreshCalls, 0);
   });
 
   it('mute does not create an unloaded owner connection', async () => {
@@ -229,10 +217,9 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     assert.deepEqual(connectionNodeIds(environment, getProfileMuteConnectionId(ownerB)), [
       'profile-mute:b',
     ]);
-    assert.equal(refreshCalls, 1);
   });
 
-  it('network errors preserve the existing unmute relation and do not refresh timelines', async () => {
+  it('network errors preserve the existing unmute relation', async () => {
     const { environment, ownerA, targetA } = createEnvironment({
       loadOwnerAConnection: true,
       loadOwnerBConnection: false,
@@ -262,10 +249,9 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     assert.deepEqual(connectionNodeIds(environment, getProfileMuteConnectionId(ownerA)), [
       'profile-mute:active',
     ]);
-    assert.equal(refreshCalls, 0);
   });
 
-  it('a delayed actor A response cannot mutate actor B or refresh actor B', async () => {
+  it('a delayed actor A response cannot mutate actor B', async () => {
     const actorA = createEnvironment({
       loadOwnerAConnection: true,
       loadOwnerBConnection: false,
@@ -303,7 +289,6 @@ describe('ProfileMuteController real Relay mutation contract', () => {
       connectionNodeIds(actorB.environment, getProfileMuteConnectionId(actorB.ownerB)),
       [],
     );
-    assert.equal(refreshCalls, 0);
   });
 
   it('an unmounted controller does not classify a delayed response as current', async () => {
@@ -323,7 +308,6 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     await respond(pending, muteResponse('profile-mute:unmounted', targetA));
 
     assert.match(String(await rejection), /inactive Profile/);
-    assert.equal(refreshCalls, 0);
   });
 });
 

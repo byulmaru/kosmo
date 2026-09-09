@@ -24,11 +24,10 @@ import { ProfileTagChip } from './ProfileTagChip';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
-import type { ProfileMuteControl } from './ProfileMuteAction';
 
 type ProfileHeroProps = {
   action?: ReactNode;
-  mute?: ProfileMuteControl;
+  showMuteAction?: boolean;
   loading?: boolean;
   profile?: ProfileHero_profile$key | null;
 };
@@ -55,6 +54,12 @@ const profileHeroFragment = graphql`
     followersCount
     followingCount
     ...ProfileNameBlock_profile
+    ...ProfileMuteAction_profile
+    viewerState {
+      profileMute {
+        id
+      }
+    }
   }
 `;
 
@@ -63,7 +68,12 @@ const countFormatter = new Intl.NumberFormat('en', {
   notation: 'compact',
 });
 
-export function ProfileHero({ action, mute, loading = false, profile = null }: ProfileHeroProps) {
+export function ProfileHero({
+  action,
+  showMuteAction = false,
+  loading = false,
+  profile = null,
+}: ProfileHeroProps) {
   const followingRef = useRef<View>(null);
   const [unmuteFocusRevision, setUnmuteFocusRevision] = useState(0);
   useEffect(() => {
@@ -160,7 +170,7 @@ export function ProfileHero({ action, mute, loading = false, profile = null }: P
             size={avatarSize}
           />
         </View>
-        {action || mute ? (
+        {action || showMuteAction ? (
           <View
             style={[
               actionGeometry,
@@ -171,11 +181,8 @@ export function ProfileHero({ action, mute, loading = false, profile = null }: P
               },
             ]}
           >
-            {mute ? (
+            {showMuteAction ? (
               <ProfileMuteAction
-                {...mute}
-                displayName={data.displayName}
-                profileId={data.id}
                 items={[
                   {
                     key: 'copy-profile-link',
@@ -199,6 +206,7 @@ export function ProfileHero({ action, mute, loading = false, profile = null }: P
                     },
                   },
                 ]}
+                profile={data}
               />
             ) : null}
             {action ? <View style={styles.action}>{action}</View> : null}
@@ -235,7 +243,7 @@ export function ProfileHero({ action, mute, loading = false, profile = null }: P
             </Pressable>
           </NavigationLink>
         </View>
-        {mute?.muted ? (
+        {data.viewerState?.profileMute ? (
           <View style={[styles.muteRow, compact ? styles.mobileMuteRow : undefined]}>
             <VolumeOff accessible={false} aria-hidden color={theme.foregroundSecondary} size={16} />
             <Text
@@ -248,16 +256,12 @@ export function ProfileHero({ action, mute, loading = false, profile = null }: P
               이 사용자의 게시글은 뮤트되어 있습니다.
             </Text>
             <ProfileMuteAction
-              displayName={data.displayName}
-              muted
-              onChangeMuted={mute.onChangeMuted}
               onFeedback={(feedback) => {
                 if (feedback.status === 'success') {
                   setUnmuteFocusRevision((revision) => revision + 1);
                 }
-                mute.onFeedback?.(feedback);
               }}
-              profileId={data.id}
+              profile={data}
               surface="text"
             />
           </View>

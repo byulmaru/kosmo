@@ -81,14 +81,10 @@ function LocalContent() {
   const theme = useTheme();
   const shellChrome = useShellChrome();
   const { fetchKey } = useRouteBoundary();
-  const profileMuteTimelineRevision = shellChrome?.profileMuteTimelineRevision ?? 0;
   const data = useLazyLoadQuery<LocalPageQuery>(
     LocalQuery,
     {},
-    {
-      fetchKey: `${profileMuteTimelineRevision}:${fetchKey}`,
-      fetchPolicy: profileMuteTimelineRevision === 0 ? 'store-and-network' : 'network-only',
-    },
+    { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
