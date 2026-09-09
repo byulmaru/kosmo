@@ -626,6 +626,33 @@ describe('profile route parameter lifecycle', () => {
     }
   });
 
+  for (const [kind, path, query] of [
+    ['followers', '/@local/followers', 'ProfileFollowersPageQuery'],
+    ['following', '/@local/following', 'ProfileFollowingPageQuery'],
+  ] as const) {
+    it(`${kind} leaf query error를 표시하고 retry에서 같은 query를 다시 실행한다`, async () => {
+      const originalConsoleError = console.error;
+      console.error = () => undefined;
+      try {
+        queryModes[query] = 'error';
+        await renderRoute('@local', path);
+        const errorState = requireRendered('ProfileConnectionListState');
+        assert.equal(errorState.props.kind, kind);
+        assert.equal(errorState.props.state, 'error');
+
+        queryModes[query] = 'success';
+        await act(async () => errorState.props.onRetry());
+
+        assert.equal(requireRendered('ProfileConnectionList').props.kind, kind);
+        const latestQuery = queryHistory.findLast(({ query: current }) => current === query);
+        assert.equal(latestQuery?.handle, 'local');
+        assert.equal(latestQuery?.fetchKey, 1);
+      } finally {
+        console.error = originalConsoleError;
+      }
+    });
+  }
+
   it('현재 handle의 nested error와 retry 동작을 유지한다', async () => {
     const originalConsoleError = console.error;
     console.error = () => undefined;
