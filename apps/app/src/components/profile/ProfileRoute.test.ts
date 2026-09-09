@@ -20,6 +20,7 @@ const queryHistory: Array<{
   fetchKey: number;
   handle: string;
   query: QueryName;
+  withProfileBlockStatus?: boolean;
 }> = [];
 const pending = new Promise<never>(() => undefined);
 
@@ -138,10 +139,23 @@ mockModule('react-relay', {
   },
   useLazyLoadQuery: (
     query: QueryName,
-    variables: { handle: string },
+    variables: { handle: string; withProfileBlockStatus?: boolean },
     options: { fetchKey: number },
   ) => {
-    queryHistory.push({ fetchKey: options.fetchKey, handle: variables.handle, query });
+    queryHistory.push({
+      fetchKey: options.fetchKey,
+      handle: variables.handle,
+      query,
+      withProfileBlockStatus:
+        'withProfileBlockStatus' in variables ? variables.withProfileBlockStatus : undefined,
+    });
+    if (
+      query === 'ProfileLayoutQuery' &&
+      !selectedProfileId &&
+      variables.withProfileBlockStatus !== false
+    ) {
+      throw new Error('profileBlockStatus requires an authenticated selected Profile');
+    }
     const mode = queryModes[query];
     if (mode === 'loading') {
       throw pending;
@@ -154,7 +168,7 @@ mockModule('react-relay', {
       currentSession: selectedProfileId
         ? { selectedProfile: { id: selectedProfileId } }
         : { selectedProfile: null },
-      profileBlockStatus,
+      profileBlockStatus: variables.withProfileBlockStatus === false ? null : profileBlockStatus,
       profileByHandle: profileAvailable
         ? {
             displayName: `Display ${variables.handle}`,
@@ -415,6 +429,18 @@ describe('profile route parameter lifecycle', () => {
     }
   });
 
+  it('selected Profile이 없는 공개 Profile은 auth-required block status 없이 사용할 수 있다', async () => {
+    await renderRoute('@public');
+
+    assert.deepEqual(identities('ProfileHero'), ['public']);
+    assert.deepEqual(
+      queryHistory
+        .filter(({ query }) => query === 'ProfileLayoutQuery')
+        .map(({ withProfileBlockStatus }) => withProfileBlockStatus),
+      [false],
+    );
+  });
+
   it('표시 중인 selected Local Owner Profile에만 편집 Link를 노출한다', async () => {
     profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
     await renderRoute('@local');
@@ -653,6 +679,39 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(rendered('Button').length, 0);
     assert.equal(rendered('ActionMenu').length, 0);
     assert.equal(rendered('ProfileHero').length, 0);
+  });
+
+  it('조회 가능한 blocking Profile은 ProfileHero와 확인 전 경고 뒤 Slot 콘텐츠를 유지한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+
+    await renderRoute('@blocked');
+
+    assert.deepEqual(identities('ProfileHero'), ['blocked']);
+    assert.deepEqual(identities('PostList'), []);
+    assert.equal(requireRendered('StateView').props.title, '차단한 프로필의 게시물입니다');
+    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+    assert.equal(
+      rendered('Button').some((node) => node.props.accessibilityLabel === '차단 해제'),
+      true,
+    );
+
+    await act(async () => requireRendered('StateView').props.onAction());
+    assert.deepEqual(identities('PostList'), ['blocked']);
+  });
+
+  it('조회 가능한 blockedBy Profile은 ProfileHero와 콘텐츠 차단 상태를 유지한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
+
+    await renderRoute('@blocked');
+
+    assert.deepEqual(identities('ProfileHero'), ['blocked']);
+    assert.deepEqual(identities('PostList'), []);
+    assert.equal(requireRendered('StateView').props.title, '게시물을 볼 수 없습니다');
+    assert.equal(rendered('Button').length, 0);
   });
 
   it('selected Profile 자기 자신에게는 차단 action을 표시하지 않는다', async () => {

@@ -152,28 +152,29 @@
 - **AND** 차단 생성 때 제거된 Follow 관계를 client optimistic 상태로 복구하지 않는다
 - **AND** 기본 Profile 정보는 기존 Profile 조회 정책에 따라 계속 표시할 수 있고, Post·상호작용은 이후 새 요청에서 서버가 허용한 경우에만 다시 나타날 수 있다
 
-### Requirement: Identity-free direct Profile access after reload and actor switch
+### Requirement: Direct Profile access after reload and actor switch
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`의 조회 정책, `docs/design/profile-mute-block.md`의 차단 관계의 직접 Profile, `PROD-823`의 새로고침·직접 링크·selected Profile 전환 완료 조건, `DSN-51`, `DSN-53`. 직접 Profile route는 이전 Profile cache나 일반 Target Profile 조회 성공을 전제로 삼지 않고, 현재 Owner에 대한 서버의 차단 결과를 소비해야 한다(MUST). 자신의 Block이 있으면 identity-free `blocking`과 해당 관계 ID의 해제 action을 제공해야 하며(MUST), 자신의 Block 없이 상대에게 차단되었으면 identity-free `blockedBy`를 actionless로 표시해야 한다(MUST). Target identity·handle·content·social action을 이전 cache나 route parameter에서 복구해서는 안 된다(MUST NOT). 두 상태는 기존 viewport별 Profile route chrome을 유지하고, Web 중앙 column에 별도 PageHeader를 추가해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`의 조회 정책, `docs/design/profile-mute-block.md`의 차단 관계의 직접 Profile, `PROD-823`의 새로고침·직접 링크·selected Profile 전환 완료 조건, `DSN-51`, `DSN-53`. 직접 Profile route는 이전 Profile cache나 관리 목록 선행 로딩에 의존하지 않고 현재 Owner의 서버 차단 결과와 기존 Profile 조회 결과를 함께 소비해야 한다(MUST). Profile이 조회되면 `blocking`·`blockedBy` 모두 기존 기본 Profile 정보와 방향별 콘텐츠 상태를 유지해야 하며(MUST). Profile이 조회되지 않는 경우에만 identity-free `blocking` 또는 `blockedBy` fallback을 표시해야 한다(MUST). Target identity·handle·content·social action을 이전 cache나 route parameter에서 복구해서는 안 된다(MUST NOT). 두 상태는 기존 viewport별 Profile route chrome을 유지하고, Web 중앙 column에 별도 PageHeader를 추가해서는 안 된다(MUST NOT).
 
-#### Scenario: cache 없는 직접 링크에서도 자신의 Block을 해제할 수 있다
+#### Scenario: cache 없는 직접 링크에서도 서버 결과에 따라 Profile과 차단 상태를 표시한다
 
 - **WHEN** 자신의 Block이 있는 Target의 직접 링크를 새로 열거나 새로고침해 이전 Profile cache가 없다
-- **THEN** 시스템은 현재 Owner의 서버 결과로 `차단한 프로필입니다`와 `차단 해제`를 표시한다
+- **THEN** 시스템은 현재 Owner의 서버 결과와 기존 Profile 조회 정책에 따라 조회 가능한 Target의 기본 Profile 정보, `blocking` 콘텐츠 경고와 `차단 해제`를 표시한다
 - **AND** 해제 요청에는 서버가 제공한 자신의 Block 관계 ID를 사용한다
-- **AND** Target의 일반 Profile 조회 성공이나 관리 목록의 사전 로딩을 요구하지 않는다
+- **AND** Profile을 조회할 수 없는 경우에만 Target identity 없는 `blocking`과 `차단 해제`를 표시한다
 
-#### Scenario: 상대에게만 차단된 직접 Profile에는 action을 표시하지 않는다
+#### Scenario: 상대에게만 차단된 직접 Profile은 기본 Profile과 콘텐츠 차단 상태를 유지한다
 
 - **WHEN** 현재 Owner의 Block은 없고 상대의 Block 때문에 직접 Profile을 볼 수 없다
-- **THEN** 시스템은 기존 viewport별 Profile chrome의 actionless StateView에 `이 프로필을 볼 수 없습니다`를 표시한다
-- **AND** Target identity·content·social action과 차단 해제 action을 표시하지 않는다
+- **THEN** 시스템은 조회 가능한 상대 Profile의 기본 정보를 유지하면서 `이 프로필을 볼 수 없습니다` 콘텐츠 상태를 표시한다
+- **AND** Profile을 조회할 수 없는 경우에만 기존 viewport별 Profile chrome의 actionless identity-free StateView를 표시한다
+- **AND** 어느 경우에도 상대의 차단을 해제하는 action은 표시하지 않는다
 
 #### Scenario: 양방향 Block에서 자신의 관계를 해제한 뒤에도 상대의 정책을 유지한다
 
 - **WHEN** 양쪽 모두 Block이 있어 `blocking`을 표시한 상태에서 자신의 Block 해제가 성공한다
 - **THEN** 시스템은 현재 Owner의 최신 서버 결과를 다시 확인한다
-- **AND** 상대의 Block이 남아 있으면 `blockedBy`를 표시하고 이전 Target identity·content를 복원하지 않는다
+- **AND** 상대의 Block이 남아 있으면 조회 가능한 Profile의 기본 정보와 `blockedBy` 콘텐츠 상태를 유지하고, Profile을 조회할 수 없으면 identity-free `blockedBy`를 표시한다
 
 #### Scenario: 같은 직접 링크에서 selected Profile을 전환한다
 
