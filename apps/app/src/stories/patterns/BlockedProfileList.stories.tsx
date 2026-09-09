@@ -27,7 +27,6 @@ function Fixture({ state, displayName, onSelectAction, onRetry, onLoadMore }: Pr
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const mobile = Platform.OS !== 'web' || width < breakpoints.compact;
-  const targetHeight = Platform.OS === 'ios' ? 44 : Platform.OS === 'android' ? 48 : 40;
   const visibleState = loaded ? 'loaded' : state;
   const retry = () => {
     onRetry();
@@ -62,31 +61,19 @@ function Fixture({ state, displayName, onSelectAction, onRetry, onLoadMore }: Pr
                         style={{ height: 64, paddingVertical: 0 }}
                       >
                         {/* Presentation event only; no fake mutation or relationship update. */}
-                        <View
+                        <Button
+                          accessibilityLabel={`${name} 차단 해제`}
+                          onPress={() => onSelectAction(profile.id)}
+                          size={mobile ? 'default' : 'compact'}
                           style={{
-                            minHeight: mobile ? targetHeight : 32,
-                            justifyContent: 'center',
+                            width: mobile ? 88 : 72,
+                            minWidth: mobile ? 88 : 72,
+                            paddingHorizontal: 0,
                           }}
+                          tone="secondary"
                         >
-                          <Button
-                            accessibilityLabel={`${name} 차단 해제`}
-                            onPress={() => onSelectAction(profile.id)}
-                            hitSlop={
-                              Platform.OS === 'web'
-                                ? undefined
-                                : { top: (targetHeight - 40) / 2, bottom: (targetHeight - 40) / 2 }
-                            }
-                            size={mobile ? 'default' : 'compact'}
-                            style={{
-                              width: mobile ? 88 : 72,
-                              minWidth: mobile ? 88 : 72,
-                              paddingHorizontal: 0,
-                            }}
-                            tone="secondary"
-                          >
-                            차단 해제
-                          </Button>
-                        </View>
+                          차단 해제
+                        </Button>
                       </ProfileListItemContent>
                     );
                   }),

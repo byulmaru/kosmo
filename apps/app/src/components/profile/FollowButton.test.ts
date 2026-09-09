@@ -67,28 +67,18 @@ afterEach(async () => {
   windowWidth = 1280;
 });
 
-for (const [os, targetHeight] of [
-  ['web', 0],
-  ['ios', 44],
-  ['android', 48],
-] as const) {
-  for (const size of [undefined, 'compact'] as const) {
-    test(`${os} FollowButton ${size ?? 'default'} preserves visual size and contains its hit target`, async () => {
-      platform.OS = os;
-      await act(async () => {
-        renderer = create(createElement(FollowButton, { profile: {} as never, size }));
-      });
-      assert.ok(renderer);
-      const button = renderer.root.find((node) => (node.type as unknown) === 'Button');
-      const height = size === 'compact' ? 32 : 40;
-      assert.equal(button.props.style.height, height);
-      assert.equal(button.props.style.width, size === 'compact' ? 72 : 96);
-      assert.equal(button.props.hitSlop, Math.max(0, (targetHeight - height) / 2));
-      const parentStyle = Object.assign({}, ...button.parent!.props.style.flat());
-      assert.equal(parentStyle.paddingVertical, button.props.hitSlop);
-      assert.equal(height + parentStyle.paddingVertical * 2, Math.max(height, targetHeight));
+for (const size of [undefined, 'compact'] as const) {
+  test(`FollowButton ${size ?? 'default'} delegates height to Button and supplies width`, async () => {
+    await act(async () => {
+      renderer = create(createElement(FollowButton, { profile: {} as never, size }));
     });
-  }
+    assert.ok(renderer);
+    const button = renderer.root.find((node) => (node.type as unknown) === 'Button');
+    assert.equal(button.props.size, size === 'compact' ? 'compact' : 'default');
+    assert.equal(button.props.style.width, size === 'compact' ? 72 : 96);
+    assert.equal(button.props.style.height, undefined);
+    assert.equal(button.props.hitSlop, undefined);
+  });
 }
 
 for (const [os, width, expectedWidth, marginVertical] of [
@@ -109,9 +99,5 @@ for (const [os, width, expectedWidth, marginVertical] of [
     assert.equal(button.props.style.width, expectedWidth);
     const parentStyle = Object.assign({}, ...button.parent!.props.style.flat());
     assert.equal(parentStyle.marginVertical, marginVertical);
-    assert.equal(
-      button.props.style.height + (parentStyle.paddingVertical + marginVertical) * 2,
-      expectedWidth === 72 ? 32 : 40,
-    );
   });
 }

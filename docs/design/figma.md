@@ -575,9 +575,8 @@ documentation·state specimen을 두 번째 행에 둔다.
   `Show supporting content=false`가 기본값이며, 필요할 때만 Message 아래·Actions 위에 체크박스·경고·세부 설명
   같은 흐름형 content를 넣는다. Slot content의 상태와 Confirm 활성화 조건은 consumer가 소유한다. action은
   `취소 → 확인` 순서의 `120×40` 두 개를 `space/8` 간격으로 우측 정렬한다. 이 `120×40`은 visual/layout
-  bounds다. Web은 같은 bounds를 실제 interaction target으로 사용한다. Native consumer는 visual geometry를
-  유지하면서 투명 wrapper 또는 `hitSlop`으로 실제 target을 iOS 최소 `44×44pt`, Android 최소 `48×48dp`로
-  확장한다. 서로 다른 action target의 overlap, parent clipping과 VoiceOver·TalkBack focus boundary는
+  bounds다. Web은 같은 bounds를 실제 interaction target으로 사용한다. 2026-09-09 구현 결정으로 Native는 공용 Button 자체를
+  iOS 최소 `44pt`, Android 최소 `48dp` 높이로 표시한다. 별도 wrapper·hitSlop은 제거하며 Figma의 40px visual은 미수정이다. 서로 다른 action target의 overlap, parent clipping과 VoiceOver·TalkBack focus boundary는
   Product runtime에서 검증한다. Pending은 Cancel을 Disabled, Confirm을 같은 tone의 Loading으로 바꾼다.
   제목·scrim·닫기·centered max-width 420 surface는 canonical
   [`ModalSheet`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1882-926)가 소유한다.

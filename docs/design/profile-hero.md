@@ -61,12 +61,10 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 
 - Figma Target의 Action slot은 `96×40`, `right: 16`에 두고 기존 Compact action의 중심축을 유지하도록 `top: 142`에
   배치한다. Loading·Tags를 포함한 모든 Mobile `ProfileHero` variant가 같은 slot geometry를 사용한다.
-- Target을 Product runtime으로 이관할 때 iOS와 Android의 실제 입력 target은 이 `40` 높이의 visual box와
-  분리해 각각 최소 `44pt`, `48dp`를
-  충족한다. target 확장 영역은 avatar, Connections와 인접 action을 침범하지 않는다.
-- 공용 source는 Native 버튼의 위·아래에 iOS `2`, Android `4`의 입력 여백을 확보한다. Hero의 action 부모도
-  `44`·`48` 높이를 수용하고 중심축을 유지한다. 목록에서는 이 입력 여백을 기존 행의 여백 안에 배치해
-  Avatar `40`과 기본 행 높이 `64`를 유지한다. `hitSlop`만 늘리고 부모 bounds에 잘리게 두지 않는다.
+- 2026-09-09 결정에 따라 Native는 공용 Button 자체의 최소 높이 iOS `44`·Android `48`을 사용한다.
+  FollowButton은 size·폭을 제공하며 별도 hitSlop·입력 여백을 중복 추가하지 않는다. Web visual은 그대로다.
+  Hero의 action 부모와 목록의 기존 음수 margin은 이 높이를 수용하며 중심축·기본 행 높이 `64`를 유지한다.
+  Figma의 40px visual 원본은 아직 수정하지 않았다.
 - 관계 action 실패는 행 밖의 공용 오류 토스트로 전달하고 Hero의 avatar/action 행 높이는 유지한다.
   목록 행 높이는 하단 divider까지 포함해 `64`로 맞춘다.
 - 로딩 중 전달된 실제 action도 같은 slot에 표시하고 접근성 트리에 유지한다. 접근성 제외는 장식용

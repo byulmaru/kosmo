@@ -243,8 +243,9 @@ Web 최소 폭 160px과 키보드·focus 처리를 재사용하고, 목록은 �
 - loaded 대표는 [Mobile 390](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8089),
   [Compact 1024](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25102),
   [Full 1440](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25582)을 참고한다.
-  행은 64px, 표시 이름은 `UI/Label/L`이며 해제 버튼 visual은 Mobile `88×40`, Web `72×32`다.
-  Native target은 iOS 44pt·Android 48dp 최소값을 유지한다.
+  행은 64px, 표시 이름은 `UI/Label/L`이며 해제 버튼은 Mobile Web `88×40`, Desktop Web `72×32`다.
+  2026-09-09 결정에 따라 Native는 폭 88과 공용 Button 자체의 최소 높이 iOS 44pt·Android 48dp를 사용한다.
+  별도 wrapper·hitSlop 보정은 두지 않는다. Figma의 40px visual 원본은 미수정이다.
 - `ProfileBlockAction`, Block을 결합한 Hero·Post props와 해당 fixture·Tests, `Screens/Profile Block`은 제거했다.
   실제 action을 전제로 하는 확인·성공·실패·pending·focus lifecycle 검증은 PROD-823의 action 구현과 함께 완료한다.
   Profile·Settings 신규 UI 조립과 교체 회귀는 PROD-917이 소유한다.

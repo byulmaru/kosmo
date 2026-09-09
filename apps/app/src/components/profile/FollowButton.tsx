@@ -1,4 +1,4 @@
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
@@ -114,8 +114,6 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
   const isFollowing = Boolean(viewerState?.follow);
   const isPending = Boolean(viewerState?.followRequest);
   const loading = following || cancelling || unfollowing;
-  const targetHeight = Platform.OS === 'android' ? 48 : Platform.OS === 'ios' ? 44 : 0;
-  const hitSlop = Math.max(0, (targetHeight - (size === 'compact' ? 32 : 40)) / 2);
 
   const showFailureToast = () => {
     showToast(followFailureMessage, { tone: 'danger' });
@@ -241,7 +239,7 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
   };
 
   return (
-    <View style={[styles.root, { paddingVertical: hitSlop }, style]}>
+    <View style={[styles.root, style]}>
       <Button
         aria-pressed={isFollowing || isPending}
         accessibilityState={{
@@ -250,7 +248,6 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
           selected: isFollowing || isPending,
         }}
         disabled={loading}
-        hitSlop={hitSlop}
         onPress={toggleFollow}
         size={size === 'compact' ? 'compact' : 'default'}
         style={size === 'compact' ? styles.compactButton : styles.mediumButton}
@@ -264,6 +261,6 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
 
 const styles = StyleSheet.create({
   root: { alignItems: 'flex-end' },
-  compactButton: { height: 32, width: 72 },
-  mediumButton: { height: 40, minWidth: 96, width: 96 },
+  compactButton: { width: 72 },
+  mediumButton: { minWidth: 96, width: 96 },
 });

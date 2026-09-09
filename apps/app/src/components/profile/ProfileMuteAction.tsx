@@ -1,6 +1,6 @@
 import { Volume2, VolumeOff } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
@@ -9,6 +9,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, breakpoints, textStyles } from '@/theme/tokens';
 import { ProfileMoreMenu } from './ProfileMoreMenu';
 import type { ComponentProps } from 'react';
+import type { View } from 'react-native';
 import type { ActionMenu, ActionMenuItem } from '@/components/ui/ActionMenu';
 
 export type ProfileMuteFeedback = { muted: boolean; status: 'success' | 'error' };
@@ -50,7 +51,6 @@ function ProfileMuteActionContent({
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const mobile = Platform.OS !== 'web' || width < breakpoints.compact;
-  const buttonHeight = mobile ? 40 : 32;
   const buttonWidth = mobile ? 88 : 72;
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
@@ -103,14 +103,7 @@ function ProfileMuteActionContent({
     setOpen(true);
   };
   const label = muted ? '뮤트 해제' : '뮤트';
-  const targetHeight =
-    Platform.OS === 'web'
-      ? surface === 'text'
-        ? 32
-        : buttonHeight
-      : Platform.OS === 'ios'
-        ? 44
-        : 48;
+  const targetHeight = Platform.OS === 'web' ? 32 : Platform.OS === 'ios' ? 44 : 48;
   return (
     <>
       {surface === 'menu' ? (
@@ -166,33 +159,18 @@ function ProfileMuteActionContent({
           )}
         </Pressable>
       ) : (
-        <View style={[styles.buttonTarget, { minHeight: targetHeight, width: buttonWidth }]}>
-          <Button
-            controlRef={actionRef}
-            accessibilityLabel={`${displayName} ${label}`}
-            aria-busy={pending || undefined}
-            hitSlop={
-              Platform.OS === 'web'
-                ? undefined
-                : { top: (targetHeight - 40) / 2, bottom: (targetHeight - 40) / 2 }
-            }
-            loading={pending}
-            onPress={activate}
-            size={mobile ? 'default' : 'compact'}
-            style={[
-              styles.button,
-              {
-                height: buttonHeight,
-                minHeight: buttonHeight,
-                minWidth: buttonWidth,
-                width: buttonWidth,
-              },
-            ]}
-            tone="secondary"
-          >
-            {label}
-          </Button>
-        </View>
+        <Button
+          controlRef={actionRef}
+          accessibilityLabel={`${displayName} ${label}`}
+          aria-busy={pending || undefined}
+          loading={pending}
+          onPress={activate}
+          size={mobile ? 'default' : 'compact'}
+          style={{ minWidth: buttonWidth, width: buttonWidth, paddingHorizontal: 0 }}
+          tone="secondary"
+        >
+          {label}
+        </Button>
       )}
       <ModalSheet
         dismissDisabled={pending}
@@ -237,7 +215,5 @@ function ProfileMuteActionContent({
   );
 }
 const styles = StyleSheet.create({
-  buttonTarget: { alignItems: 'center', justifyContent: 'center' },
-  button: { paddingHorizontal: 0 },
   textAction: { alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
 });
