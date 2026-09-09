@@ -39,9 +39,10 @@ export function ProfileSwitcherTarget({
     ? Math.max(44, getIconButtonTargetSize(Platform.OS))
     : getIconButtonTargetSize(Platform.OS);
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);
-  const selectedHasUnread = (selectedProfile?.unreadNotificationCount ?? 0) > 0;
-  const triggerLabel =
-    !open && selectedHasUnread ? '프로필 목록, 읽지 않은 알림 있음' : '프로필 목록';
+  const otherHasUnread = profiles.some(
+    (profile) => profile.id !== selectedProfileId && (profile.unreadNotificationCount ?? 0) > 0,
+  );
+  const triggerLabel = !open && otherHasUnread ? '프로필 목록, 읽지 않은 알림 있음' : '프로필 목록';
   const webMenuBounds =
     Platform.OS === 'web'
       ? ({
@@ -121,7 +122,7 @@ export function ProfileSwitcherTarget({
               label={selectedProfile?.displayName ?? '프로필'}
               size={40}
             />
-            {!open && selectedHasUnread ? (
+            {!open && otherHasUnread ? (
               <View
                 accessible={false}
                 accessibilityElementsHidden
@@ -151,7 +152,7 @@ export function ProfileSwitcherTarget({
               {selectedProfile?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
             </Text>
             <View style={styles.chevron}>
-              {!open && selectedHasUnread ? (
+              {!open && otherHasUnread ? (
                 <View
                   accessible={false}
                   accessibilityElementsHidden

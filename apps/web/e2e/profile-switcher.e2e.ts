@@ -13,7 +13,7 @@ test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
-test('다른 Profile의 Unread dot에서 전환하면 기존 badge와 알림 목록이 새 actor에 수렴한다', async ({
+test('다른 Profile의 Unread badge에서 전환하면 기존 badge와 알림 목록이 새 actor에 수렴한다', async ({
   browser,
   context,
   page,
@@ -52,7 +52,11 @@ test('다른 Profile의 Unread dot에서 전환하면 기존 badge와 알림 목
 
     await page.reload();
     await expect(page.getByRole('progressbar')).toHaveCount(0);
-    await openProfileSwitcher(page);
+    const trigger = page.getByRole('button', {
+      name: '프로필 목록, 읽지 않은 알림 있음',
+    });
+    await expect(trigger.getByTestId('profile-switcher-closed-unread')).toBeVisible();
+    await trigger.click();
 
     const list = page.getByLabel('전환할 프로필 목록');
     const unreadOption = list.getByRole('button', {
@@ -63,10 +67,11 @@ test('다른 Profile의 Unread dot에서 전환하면 기존 badge와 알림 목
     });
 
     await expect(unreadOption).toBeVisible();
-    await expect(unreadOption.getByTestId('profile-switcher-unread-dot')).toBeVisible();
+    await expect(unreadOption.getByTestId('profile-switcher-unread-count')).toHaveText('1');
     await expect(unreadOption).not.toHaveAccessibleName(/1개/);
     await expect(selectedOption).toHaveAttribute('aria-pressed', 'true');
-    await expect(selectedOption.getByTestId('profile-switcher-unread-dot')).toHaveCount(0);
+    await expect(selectedOption.getByTestId('profile-switcher-unread-count')).toHaveCount(0);
+    await expect(page.getByTestId('profile-switcher-closed-unread')).toHaveCount(0);
 
     const selectResponse = waitForGraphQLOperation(page, 'ProfileSwitcherSelectProfileMutation');
     await unreadOption.click();

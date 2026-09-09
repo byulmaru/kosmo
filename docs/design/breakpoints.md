@@ -152,19 +152,15 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
 
 ### Profile별 Unread 표시
 
-- **Current:** Production Profile picker는 Web·Android·iOS의 각 Profile option 아바타 우상단에
-  `unreadNotificationCount > 0`이면 숫자 없는 `12` logical unit semantic `accent` dot을 표시한다. dot 자체는
-  접근성 트리에서 숨기고 option의 accessible name에만 `읽지 않은 알림 있음`을 덧붙이며, 정확한 count와
-  알림 내용은 노출하지 않는다. Profile 전환 뒤의 actor·서버 재조회, 셸 badge, Push·OS badge와 realtime
-  lifecycle은 기존 runtime 계약을 유지한다.
-- **Target:** DSN-40 Figma와 PROD-855의 `ProfileSwitcherTarget`은 닫힌 `full`·`drawer` trigger에 `8px`
-  `action/primary/base` dot, 닫힌 `compact` avatar에 canvas `1px` halo를 둔 `12px` dot을 표시한다. 열리면 닫힌
-  indicator를 숨기고 non-selected Profile row 오른쪽에 `24px` 숫자 badge를 표시해 `1`~`9`는 실제 값,
+- Production ProfileSwitcher는 닫힌 `full`·`drawer` trigger에 `8px` `action/primary/base` dot, 닫힌
+  `compact` avatar에 canvas `1px` halo를 둔 `12px` dot을 표시한다. indicator의 source는 selected Profile을
+  제외한 Profile 중 `unreadNotificationCount > 0`인 항목의 존재 여부다. 열리면 닫힌 indicator를 숨기고
+  non-selected Profile row 오른쪽에 `24px` 숫자 badge를 표시해 `1`~`9`는 실제 값,
   `10` 이상은 `9+`로 축약한다. selected row는 count badge 대신 기존 check를 표시해 두 요소가 겹치지 않게
   한다. indicator와 badge는 접근성 트리에서 숨기고 Profile option의 accessible name은 정확한 count 대신
   `읽지 않은 알림 있음`만 유지한다. full·drawer chevron은 기존 20px를 유지하고 dot은 chevron 우상단 기준 `right: -9px`, `top: -4px`,
-  compact dot은 40px avatar 기준 `right: 0`, `top: 0`으로 배치한다. 이 Target은 Storybook 검토 표면이며 Production runtime 연결과 unread
-  data·Relay·badge lifecycle 이관은 PROD-786이 소유한다.
+  compact dot은 40px avatar 기준 `right: 0`, `top: 0`으로 배치한다. Profile 전환 뒤의 actor·서버 재조회,
+  selected Profile 셸 badge, 알림 목록, Push·OS badge와 realtime lifecycle은 기존 runtime 계약을 유지한다.
 
 ## 알림 Unread badge
 

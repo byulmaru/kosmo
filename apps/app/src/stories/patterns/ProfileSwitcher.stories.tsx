@@ -123,7 +123,7 @@ const meta = {
     profileCount: 3,
     selectionOutcome: 'success',
     selectedProfileId: 'profile-kosmo',
-    selectedUnreadCount: 1,
+    selectedUnreadCount: 0,
     surface: 'full',
   },
   argTypes: {
@@ -206,12 +206,13 @@ export const InteractionContract: Story = {
 
     const group = canvas.getByRole('group', { name: '프로필 전환' });
     const selected = within(group).getByRole('button', {
-      name: '코스모 작가, @kosmo, 읽지 않은 알림 있음',
+      name: '코스모 작가, @kosmo',
     });
     const remote = within(group).getByRole('button', {
       name: '먼 우주의 사용자, @remote, 읽지 않은 알림 있음',
     });
     expect(selected).toHaveAttribute('aria-pressed', 'true');
+    expect(within(remote).getByTestId('profile-switcher-unread-count')).toHaveTextContent('9');
 
     await userEvent.tab();
     expect(selected).toHaveFocus();
@@ -341,6 +342,7 @@ export const CompactClosedUnreadContract: Story = {
     expect(bounds.left).toBe(avatarBounds.left + 28);
     expect(bounds.top).toBe(avatarBounds.top);
     expect(getComputedStyle(indicator).borderTopWidth).toBe('1px');
+    expect(getComputedStyle(indicator).borderTopColor).toBe('rgb(255, 255, 255)');
   },
 };
 
@@ -350,7 +352,7 @@ export const OpenUnreadContract: Story = {
     const canvas = within(canvasElement);
     const group = canvas.getByRole('group', { name: '프로필 전환' });
     const selected = within(group).getByRole('button', {
-      name: '코스모 작가, @kosmo, 읽지 않은 알림 있음',
+      name: '코스모 작가, @kosmo',
     });
     const remote = within(group).getByRole('button', {
       name: '먼 우주의 사용자, @remote, 읽지 않은 알림 있음',
