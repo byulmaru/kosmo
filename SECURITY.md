@@ -61,8 +61,12 @@ namespace, Vault path, PostgreSQL cluster와 Temporal namespace를 사용하지�
   cloud metadata, cluster·관리 surface로 우회하지 않게 한다.
 - secret과 session credential은 server·secure device storage 경계에 유지하고 client
   bundle, telemetry, 로그와 오류 응답에 노출하지 않는다.
-- transaction rollback, replay와 retry가 중복 상태 변경이나 delivery를 만들지 않아야
-  한다. 외부 side effect는 선언된 commit 경계를 지키고 idempotency를 유지한다.
+- transaction rollback, replay와 retry가 domain state transition을 중복 적용해서는 안
+  된다. 외부 side effect는 선언된 commit 경계를 지키고 각 capability가 정의한 멱등
+  계약을 유지한다.
+- ActivityPub delivery retry는 같은 stable Activity ID를 사용한다. Queue acknowledgement가
+  모호한 경우 cross-system exactly-once를 요구하지 않으며, 같은 Activity ID의 중복
+  delivery는 수신 측의 멱등 처리로 의미상 수렴한다.
 - 신뢰하지 않는 입력의 크기·복잡도·fan-out과 처리량을 제한해 parsing, query, queue,
   workflow 또는 storage 자원을 고갈시키지 않는다.
 - GraphQL의 사용자별 권한은 중앙 application policy가 적용하며 runtime database role은
@@ -138,5 +142,7 @@ source와 live evidence에 맞게 재검토한다.
 
 ## 보안 연락처
 
-보안 관련 연락은 공개 Issue나 Pull Request 대신
-[hello@byulmaru.co](mailto:hello@byulmaru.co)로 보내며 제목에 `[Security] KOSMO`를 포함한다.
+외부에서 발견한 미공개 취약점은 공개 Issue나 Pull Request 대신
+[hello@byulmaru.co](mailto:hello@byulmaru.co)로 제보하며 제목에 `[Security] KOSMO`를
+포함한다. 사용자가 요청한 저장소 변경·Pull Request 리뷰에서 발견한 regression과
+finding은 해당 협업 흐름에 기록한다.
