@@ -2,7 +2,7 @@
 
 ### Requirement: Profile detail 상태 소유
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-685`, `PROD-743`; Profile 데이터·전환·저장 경계 `PROD-667` — Profile detail은 현재 Local Profile identity와 Profile query·loading·error·empty·content·retry 상태를 자기 화면 안에서 소유해야 한다(MUST). Profile loading 중 확인되지 않은 값을 확정된 것처럼 표시해서는 안 되며(MUST NOT), Profile 전환 뒤 이전 Profile 결과를 새 대상 아래에 표시해서는 안 된다(MUST NOT). 오류에는 backend 원문이 아닌 안전한 한국어 설명과 재시도 action을 제공해야 한다(MUST). Settings shell과 Account entry가 Profile 오류 종류나 저장 상태를 공통 상태로 해석하거나 재구현해서는 안 된다(MUST NOT). page shell은 공개 범위 control의 inline·dropdown·sheet 또는 즉시·명시적 저장 interaction을 고정해서는 안 된다(MUST NOT). Profile Migration source 준비 control은 이 detail에서 해당 feature flag가 켜져 있고 값이 확인된 경우에만 노출해야 하며(MUST), flag가 꺼져 있거나 확인할 수 없거나 로딩 중이면 렌더링해서는 안 된다(MUST NOT). 이 flag는 Profile Owner 권한을 대신하지 않으며(MUST NOT), 이미 준비된 관계와 그로부터 파생된 alias 및 inbound Move 처리를 flag 상태로 중단하거나 제거해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/settings.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-685`, `PROD-743`; Profile 데이터·전환·저장 경계 `PROD-667` — Profile detail은 현재 Local Profile identity와 Profile query·loading·error·empty·content·retry 상태를 자기 화면 안에서 소유해야 한다(MUST). Profile loading 중 확인되지 않은 값을 확정된 것처럼 표시해서는 안 되며(MUST NOT), Profile 전환 뒤 이전 Profile 결과를 새 대상 아래에 표시해서는 안 된다(MUST NOT). 오류에는 backend 원문이 아닌 안전한 한국어 설명과 재시도 action을 제공해야 한다(MUST). Settings shell과 Account entry가 Profile 오류 종류나 저장 상태를 공통 상태로 해석하거나 재구현해서는 안 된다(MUST NOT). page shell은 공개 범위 control의 inline·dropdown·sheet 또는 즉시·명시적 저장 interaction을 고정해서는 안 된다(MUST NOT). Profile Migration source 준비 control은 이 detail에서 현재 선택된 Local Profile을 target으로 사용하고 별도 target Profile ID 입력 없이 source qualified handle만 제출하도록 해당 feature flag가 켜져 있고 값이 확인된 경우에만 노출해야 하며(MUST), flag가 꺼져 있거나 확인할 수 없거나 로딩 중이면 렌더링해서는 안 된다(MUST NOT). 이 flag는 Profile Owner 권한을 대신하지 않으며(MUST NOT), 이미 준비된 관계와 그로부터 파생된 alias 및 inbound Move 처리를 flag 상태로 중단하거나 제거해서는 안 된다(MUST NOT).
 
 #### Scenario: 선택한 Profile detail을 표시한다
 
@@ -18,7 +18,7 @@
 
 #### Scenario: source 등록 성공 뒤 ActivityPub Move를 안내한다
 
-- **WHEN** Profile detail의 `registerProfileMigrationSource` mutation이 `RegisterProfileMigrationSourceInput`으로 성공한다
+- **WHEN** Profile detail의 현재 selected Local Profile에서 source qualified handle만 담은 `RegisterProfileMigrationSourceInput`으로 `registerProfileMigrationSource` mutation이 성공한다
 - **THEN** detail은 `RegisterProfileMigrationSourcePayload.profile`의 target Profile과 `migrationSource` field를 반영한다
 - **AND** 성공 안내는 기존 Mastodon 계정에서 새 Kosmo handle로 ActivityPub `Move`를 시작하도록 설명한다
 - **AND** detail은 Profile 이전 완료를 표시하거나 Move 이후 완료를 위한 별도 Kosmo API·action을 제공하지 않는다
