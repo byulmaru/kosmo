@@ -1,10 +1,4 @@
-# image-upload-normalization Specification
-
-## Purpose
-
-공통 이미지 업로드 경계가 Post Composer와 Profile 편집의 선택 이미지를 같은 크기·형식으로 정규화해 Media Storage Service에 직접 전송하는 클라이언트 계약을 정의한다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: 공통 이미지 업로드 크기와 형식 정규화
 

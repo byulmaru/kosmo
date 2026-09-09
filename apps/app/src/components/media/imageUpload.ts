@@ -5,7 +5,7 @@ import {
   assertImageUploadResponse,
   ImageUploadError,
 } from './imageUploadErrors';
-import type { ImageManipulatorContext, ImageRef } from 'expo-image-manipulator';
+import type { ImageManipulatorContext, ImageRef, ImageResult } from 'expo-image-manipulator';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import type {
   ImageUploadFailure,
@@ -16,6 +16,11 @@ import type {
 type IssuedImageUpload = {
   readonly mediaId: string;
   readonly uploadUrl: string;
+};
+
+type NormalizedImage = {
+  readonly body: ArrayBuffer;
+  readonly contentType: 'image/png' | 'image/webp';
 };
 
 const imageUploadMaxDimension = 2048;
@@ -40,7 +45,7 @@ function getImageResizeDimensions(
   };
 }
 
-async function createNormalizedImageBody(asset: ImagePickerAsset): Promise<ArrayBuffer> {
+async function createNormalizedImageBody(asset: ImagePickerAsset): Promise<NormalizedImage> {
   let context: ImageManipulatorContext | undefined;
   let sourceImage: ImageRef | undefined;
   let normalizedImage: ImageRef | undefined;
@@ -75,10 +80,25 @@ async function createNormalizedImageBody(asset: ImagePickerAsset): Promise<Array
       throw new Error('Unable to render normalized image');
     }
 
-    const result = await normalizedImage.saveAsync({
-      compress: imageUploadWebpQuality,
-      format: SaveFormat.WEBP,
-    });
+    let contentType: NormalizedImage['contentType'] = 'image/webp';
+    let result: ImageResult;
+    try {
+      result = await normalizedImage.saveAsync({
+        compress: imageUploadWebpQuality,
+        format: SaveFormat.WEBP,
+      });
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !error.message.startsWith(
+          'The browser does not support encoding "image/webp" images. Got "image/png" instead.',
+        )
+      ) {
+        throw error;
+      }
+      contentType = 'image/png';
+      result = await normalizedImage.saveAsync({ format: SaveFormat.PNG });
+    }
     normalizedImageUri = result.uri;
 
     let response: Response;
@@ -101,7 +121,7 @@ async function createNormalizedImageBody(asset: ImagePickerAsset): Promise<Array
       );
     }
     try {
-      return await response.arrayBuffer();
+      return { body: await response.arrayBuffer(), contentType };
     } catch (error) {
       throw new ImageUploadError(
         { reason: 'transient', stage: 'transfer' },
@@ -187,11 +207,11 @@ export async function uploadImage({
       return null;
     }
 
-    const body = await createNormalizedImageBody(asset);
+    const normalizedImage = await createNormalizedImageBody(asset);
     operation = 'put';
     const response = await fetch(issued.uploadUrl, {
-      body,
-      headers: { 'content-type': 'image/webp' },
+      body: normalizedImage.body,
+      headers: { 'content-type': normalizedImage.contentType },
       method: 'PUT',
     });
     await assertImageUploadResponse(response);
