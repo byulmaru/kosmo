@@ -3,7 +3,7 @@ import { ChevronLeftIcon } from 'lucide-react-native';
 import { StyleSheet } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { SettingsMuteAndBlockNavigation } from '@/components/settings/SettingsMuteAndBlockNavigation';
-import { returnToSettingsRoot } from '@/components/settings/settingsNavigation';
+import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -16,7 +16,7 @@ export default function SettingsMuteAndBlockRoute() {
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="설정으로 돌아가기"
-        onPress={() => returnToSettingsRoot(router)}
+        onPress={() => returnToSettingsParent('/settings/mute-and-block', router)}
         style={styles.backButton}
         targetSize={44}
       >

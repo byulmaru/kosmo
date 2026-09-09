@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { StyleSheet } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
-import { returnToSettingsRoot } from '@/components/settings/settingsNavigation';
+import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
@@ -16,7 +16,7 @@ export default function SettingsDefaultPostVisibilityRoute() {
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="설정으로 돌아가기"
-        onPress={() => returnToSettingsRoot(router)}
+        onPress={() => returnToSettingsParent('/settings/default-post-visibility', router)}
         style={styles.backButton}
         targetSize={44}
       >
