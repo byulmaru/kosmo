@@ -166,7 +166,20 @@ export const LayoutContract: Story = {
     expect(rejectButton.getBoundingClientRect().height).toBe(32);
     expect(rejectButton.getBoundingClientRect().width).toBe(32);
     expect(rejectButton.querySelector('svg')).toBeInTheDocument();
-    expect(approveButton.parentElement?.parentElement?.getBoundingClientRect().height).toBe(64);
+    const requesterLink = canvas.getByRole('link', { name: '별빛 여행자 프로필로 이동' });
+    const row = requesterLink.parentElement;
+    const actionArea = approveButton.parentElement;
+    if (!row || !actionArea) {
+      throw new Error('FollowRequestListItem LayoutContract requires row and action parents.');
+    }
+    const rowBounds = row.getBoundingClientRect();
+    const requesterLinkBounds = requesterLink.getBoundingClientRect();
+    const rowBorderBottom = Number.parseFloat(getComputedStyle(row).borderBottomWidth);
+    expect(rowBounds.height).toBe(64);
+    expect(requesterLinkBounds.left).toBeCloseTo(rowBounds.left);
+    expect(requesterLinkBounds.top).toBeCloseTo(rowBounds.top);
+    expect(requesterLinkBounds.bottom).toBeCloseTo(rowBounds.bottom - rowBorderBottom);
+    expect(requesterLinkBounds.right).toBeLessThanOrEqual(actionArea.getBoundingClientRect().left);
     expect(canvas.getByLabelText('별빛 여행자 프로필 이미지').querySelector('img')).toHaveAttribute(
       'src',
       appleTouchIconUrl,
