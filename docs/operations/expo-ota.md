@@ -7,11 +7,10 @@ permission 또는 그 밖의 native 설정이 바뀐 release는 OTA가 아니라
 
 ## 책임과 release tuple
 
-Kosmo는 승인된 source checkout, Expo export, provenance, Vault 인증과 publish 후 검증을
-소유한다. 각 platform publish job은 같은 runner에서 Tailscale을 연결하고 Kosmo 전용 Vault
-role로 R2 credential과 signing key를 읽은 뒤 public `byulmaru/expo-ota` JavaScript Action에
-필요한 입력으로 전달한다. Action은 입력을 검증하고 static `multipart/mixed` manifest와
-immutable asset을 발행하며, Vault 저장 경로나 signing key 선택을 결정하지 않는다. Client와
+Kosmo는 승인된 source checkout, Expo export, provenance와 publish 후 검증을 소유한다.
+`byulmaru/expo-ota` reusable workflow는 R2 credential을 읽고 caller가 제공한
+`signing_private_key`를 사용해 static `multipart/mixed` manifest와 immutable asset을
+발행한다. Publisher는 signing key의 저장 경로나 provider를 결정하지 않는다. Client와
 static delivery에는 private key나 publish credential을 넣지 않는다.
 
 모든 release는 다음 tuple로 식별한다.
@@ -42,10 +41,10 @@ Manifest는 Expo protocol headers를 포함한 `multipart/mixed` 응답으로 �
 
 정상 OTA publish는 두 배포 caller가 성공한 뒤 자동으로 시작한다.
 `.github/workflows/deploy-dev.yml`과 `.github/workflows/production-release.yml`이
-배포 성공 뒤 reusable workflow인 `.github/workflows/expo-ota.yml`을 호출한다. 이 workflow의
-Android와 iOS publish job은 reusable publisher job을 중첩 호출하지 않고, 각 job 안에서
-artifact download, Tailscale 연결, Vault 조회와 public JavaScript Action 실행을 순서대로
-수행한다.
+배포 성공 뒤 reusable workflow인 `.github/workflows/expo-ota.yml`을 호출한다. Android와
+iOS publish job은 기존 job-level reusable workflow 호출을 유지한다. 이 호출부에는
+`signing_private_key`를 전달할 확정된 secret 원점이 아직 없으므로, 해당 계약이 정해지기
+전까지 실제 publish 실행을 완료로 기록하지 않는다.
 
 | 호출 workflow      | 성공한 배포            | OTA channel | source SHA                       |
 | ------------------ | ---------------------- | ----------- | -------------------------------- |
@@ -66,9 +65,8 @@ iOS 각각 실행한다. Export helper는 선택된 platform의 Metro `metadata.
 - metadata SHA-256
 - 모든 export file의 path, size와 SHA-256
 
-각 platform artifact는 해당 publish job이 같은 job에서 내려 받아 public Action에 전달한다.
-publish가 성공한 뒤 verify job이 같은 artifact를 다시 내려 받아 `export-ota.ts verify`로
-다음을 확인한다.
+각 platform artifact는 publisher reusable workflow에 전달되고, publish가 성공한 뒤 같은
+artifact를 다시 내려 받아 `export-ota.ts verify`로 다음을 확인한다.
 
 - manifest URL이 요청한 project/platform/channel/runtime tuple인지
 - Expo protocol headers와 signing keyid/algorithm이 맞는지
@@ -85,34 +83,20 @@ binary 설치와 device update/rejection evidence를 대신하지 않는다.
 - 두 caller workflow는 `main`에서 source를 선택하고, Deploy Dev는 성공한 Docker Build의
   `workflow_run.head_sha`를 사용한다.
 - Production Release는 기존 `canonical_preflight`가 확인한 SHA와 image digest를 사용한다.
-- `EXPO_OTA_PUBLIC_BASE_URL`, `EXPO_OTA_R2_BUCKET`, `CLOUDFLARE_ACCOUNT_ID`, `VAULT_ADDR`,
-  `TAILSCALE_OAUTH_CLIENT_ID`와 `TAILSCALE_AUDIENCE` repository variables가 설정되어 있어야
-  한다. 기존 GitHub OIDC 계약은 `VAULT_ADDR`를 Vault endpoint와 JWT audience에 함께 사용한다.
-  Public Action은 전달된 service input을 검증한다.
-- 각 publish job은 GitHub OIDC로 Kosmo 전용 Vault role에 접근한다. Signing key와 R2
-  credential은 workflow input, export artifact, job output, client bundle에 넣지 않고 같은
-  job의 Vault step 출력에서 직접 public Action 입력으로 전달한다.
+- `EXPO_OTA_PUBLIC_BASE_URL` repository variable이 설정되어 있어야 한다. Publisher는
+  `EXPO_OTA_R2_BUCKET`, `CLOUDFLARE_ACCOUNT_ID`와 R2 credential도 검증한다.
+- reusable publisher는 GitHub OIDC로 Vault에 접근해 R2 credential을 읽고
+  `signing_private_key` caller secret을 publisher input으로 전달받는다. Signing key와 R2
+  credential을 export artifact, client bundle 또는 job output으로 운반하지 않는다.
+- 현재 Kosmo deploy caller에는 `signing_private_key` 전달이 없으며, 사용할 secret 원점도
+  확인되지 않았다. 따라서 public reusable workflow의 required secret handoff가 별도로
+  확정되기 전까지 자동 publish 실행은 보류한다. 새 secret, job output 또는 artifact 전달
+  경로를 이 workflow에서 임의로 만들지 않는다.
 - `keyid`는 현재 기본값 `2026-09`이며 publisher에 등록된 identifier여야 한다.
 
-각 publish job은 `kosmo-expo-ota-publish` role을 사용한다. 이 role은 `github-actions` JWT
-mount에서 `repository_owner_id=29172280`과
-`byulmaru/kosmo/.github/workflows/expo-ota.yml@refs/heads/main`의
-`job_workflow_ref`를 함께 확인한다. 연결된 read-only policy는 다음 두 경로만 허용한다.
-
-```text
-secret/data/expo-ota/r2
-secret/data/expo-ota/signing/kosmo-native/+
-```
-
-Vault step은 R2 객체의 `access_key_id`, `secret_access_key`와 signing 객체의
-`private_key`를 한 번에 읽는다. 이후 같은 job의 `byulmaru/expo-ota@<immutable commit SHA>`
-Action에 각각 `r2-access-key-id`, `r2-secret-access-key`, `signing-private-key` 입력으로
-전달한다. Action ref는 branch가 아니라 publisher public commit SHA로 고정하며, signing
-key를 별도 job output이나 artifact로 운반하지 않는다.
-
-Public Action의 prepublish read-back/hash 검증, manifest signing 또는 R2 write가 실패하면
-해당 OTA workflow가 실패하고 caller 배포 성공과 섞여 기록되지 않는다. Publish 후 caller
-verify가 실패하면 실제 manifest 상태를 확인하기 전까지 OTA 완료를 주장하지 않는다.
+Publisher의 prepublish read-back/hash 검증, manifest signing 또는 R2 write가 실패하면 해당
+OTA workflow가 실패하고 caller 배포 성공과 섞여 기록되지 않는다. Publish 후 caller verify가
+실패하면 실제 manifest 상태를 확인하기 전까지 OTA 완료를 주장하지 않는다.
 
 ## Signing key와 certificate rotation
 
