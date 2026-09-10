@@ -2,6 +2,7 @@ import { db, Instances, Profiles, Reactions } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { reactionTypeSchema } from '@kosmo/core/validation';
+import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt, or } from 'drizzle-orm';
 import { parse as parseUuid } from 'uuid';
@@ -87,7 +88,7 @@ builder.objectFields(Post, (t) => ({
       args: {
         type: t.arg.string({ required: true, validate: reactionTypeSchema }),
       },
-      resolve: (post, args) =>
+      resolve: (post, args, ctx) =>
         resolveCursorConnection<Promise<ReactionProfileRow[]>>(
           {
             args,
@@ -108,6 +109,20 @@ builder.objectFields(Post, (t) => ({
                   eq(Reactions.postId, post.id),
                   eq(Reactions.type, args.type),
                   visibleProfileWhere({ profile: Profiles, instance: Instances }),
+                  ctx.session?.profile?.id
+                    ? and(
+                        profileBlockVisibilityWhere({
+                          database: db,
+                          ownerProfileId: ctx.session.profile.id,
+                          targetProfileId: Profiles.id,
+                        }),
+                        profileBlockVisibilityWhere({
+                          database: db,
+                          ownerProfileId: Profiles.id,
+                          targetProfileId: ctx.session.profile.id,
+                        }),
+                      )
+                    : undefined,
                   reactionProfileCursorWhere(after, 'after'),
                   reactionProfileCursorWhere(before, 'before'),
                 ),

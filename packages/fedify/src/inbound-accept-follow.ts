@@ -1,4 +1,5 @@
 import { db, first, ProfileFollowRequests, ProfileFollows } from '@kosmo/core/db';
+import { NotFoundError } from '@kosmo/core/error';
 import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
 import { and, eq } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
@@ -114,17 +115,34 @@ export const handleInboundAcceptFollow = async ({
     return;
   }
 
-  const transition = await executeProfileFollowPairTransition({
-    pair: {
-      followeeProfileId,
-      followerProfileId: followerProfile.id,
-    },
-    command: {
-      kind: 'ACCEPT',
-      expectedRowId: projection.id,
-      origin: 'ACTIVITYPUB',
-    },
-  });
+  let transition: Awaited<ReturnType<typeof executeProfileFollowPairTransition>>;
+  try {
+    transition = await executeProfileFollowPairTransition({
+      pair: {
+        followeeProfileId,
+        followerProfileId: followerProfile.id,
+      },
+      command: {
+        kind: 'ACCEPT',
+        expectedRowId: projection.id,
+        origin: 'ACTIVITYPUB',
+      },
+    });
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      observeInbound({
+        outcome: 'rejected',
+        activityType: 'Accept',
+        actorOrigin: followerActorUri.origin,
+        handler: 'accept',
+        objectOrigin: objectUri.origin,
+        phase: 'projection',
+        reasonCode: 'accept_follow_policy_rejected',
+      });
+      return;
+    }
+    throw error;
+  }
   if (transition.result.commandKind !== 'ACCEPT') {
     throw new Error('Unexpected inbound Accept transition result');
   }

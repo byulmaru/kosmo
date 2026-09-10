@@ -1,4 +1,5 @@
 import { db, ProfileFollowRequests } from '@kosmo/core/db';
+import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -39,6 +40,16 @@ const resolveRequestConnection = async (
         .where(
           and(
             eq(participantColumn, profileId),
+            profileBlockVisibilityWhere({
+              database: db,
+              ownerProfileId: ProfileFollowRequests.followerProfileId,
+              targetProfileId: ProfileFollowRequests.followeeProfileId,
+            }),
+            profileBlockVisibilityWhere({
+              database: db,
+              ownerProfileId: ProfileFollowRequests.followeeProfileId,
+              targetProfileId: ProfileFollowRequests.followerProfileId,
+            }),
             before ? gt(ProfileFollowRequests.id, before) : undefined,
             after ? lt(ProfileFollowRequests.id, after) : undefined,
           ),

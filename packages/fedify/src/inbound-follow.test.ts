@@ -13,7 +13,7 @@ import {
 } from '@kosmo/core/enums';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq, ne } from 'drizzle-orm';
-import { setInboundObservabilityReporter } from './inbound-observability';
+import { setInboundObservabilityReporter, withInboundObservability } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -32,6 +32,7 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
+let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
@@ -51,6 +52,7 @@ describe('inbound Follow and Undo', () => {
       Instances,
       Notifications,
       pg,
+      ProfileBlocks,
       ProfileFollowRequests,
       ProfileFollows,
       Profiles,
@@ -510,6 +512,45 @@ describe('inbound Follow and Undo', () => {
     } finally {
       restore();
     }
+  });
+
+  test('rejects a blocked inbound Follow without reporting an internal failure', async () => {
+    const fixture = await createFixture();
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: fixture.localProfile.id,
+      targetProfileId: fixture.remoteProfile.id,
+    });
+    const logs: unknown[] = [];
+    const captures: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await withInboundObservability('follow', handleInboundFollow)(
+        createContext({ recipient: localProfileId }),
+        new Follow({ actor: remoteActorUri, object: localActorUri }),
+      );
+    } finally {
+      restore();
+    }
+
+    assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.equal((await db.select().from(Notifications)).length, 0);
+    assert.equal(captures.length, 0);
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Follow',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'follow',
+        objectOrigin: localActorUri.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'follow_policy_rejected',
+      },
+    ]);
   });
 
   test('deduplicates a repeated pending Follow without logging a second noop', async () => {

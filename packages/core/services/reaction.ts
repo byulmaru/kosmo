@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../error';
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { reactionTypeSchema } from '../validation';
+import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 
 type AddReactionInput = {
   readonly actorProfileId: string;
@@ -39,7 +40,7 @@ export const addReaction = async ({
 
   const result = await db.transaction(async (tx) => {
     const post = await tx
-      .select({ id: Posts.id })
+      .select({ id: Posts.id, profileId: Posts.profileId })
       .from(Posts)
       .where(and(eq(Posts.id, postId), eq(Posts.state, PostState.ACTIVE)))
       .limit(1)
@@ -47,6 +48,10 @@ export const addReaction = async ({
     if (!post) {
       throw new NotFoundError('Post not found');
     }
+    await assertProfilePairIsNotBlocked(tx, {
+      firstProfileId: actorProfileId,
+      secondProfileId: post.profileId,
+    });
 
     const inserted = await tx
       .insert(Reactions)
