@@ -225,9 +225,8 @@ test('로그인 후 full shell에서도 공개 정책 문서로 이동한다', a
   for (const route of publicPolicyRoutes) {
     await page.goto('/home');
 
-    const policyLink = page
-      .getByRole('navigation', { name: '주요 메뉴' })
-      .getByRole('link', { name: route.label });
+    const sidebar = page.getByRole('navigation', { name: '주요 메뉴' }).locator('..');
+    const policyLink = sidebar.getByRole('link', { name: route.label });
     await policyLink.click();
     await expect(page).toHaveURL(new RegExp(`${route.path}$`));
     await expect(page.getByRole('heading', { name: route.heading })).toBeVisible();
@@ -779,7 +778,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
     const home = navigation.getByRole('link', { name: '홈' });
     const homeIcon = home.locator('svg');
     const homeLabel = home.getByText('홈', { exact: true });
-    const privacyLink = navigation.getByRole('link', { name: '개인정보 처리방침' });
+    const privacyLink = drawer.getByRole('link', { name: '개인정보 처리방침' });
 
     await expect(drawer).toBeVisible();
     await expect.poll(() => canonicalProfilePath).not.toBe('');
