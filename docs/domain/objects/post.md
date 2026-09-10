@@ -288,8 +288,8 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - FEP-044f의 `quote`와 `QuoteAuthorization`을 정식 경로로 사용한다. 자기 인용 외에는 원문 작성자가 발급한
   유효한 개별 승인을 검증해야 하며, `interactionPolicy` 광고만으로 승인을 대체하지 않는다.
 - `QuoteAuthorization` dispatcher는 Source를 조회할 수 있는 요청자에게 승인 객체를 제공한다. 승인 객체의
-  `interactingObject`는 URI 참조로만 제공하고 embed하지 않는다. 요청자의 Source 조회 권한을 확인할 수 없는
-  경우 `interactionTarget`도 embed하지 않는다.
+  `interactingObject`는 URI 참조로만 제공하고 embed하지 않는다. 요청자의 Source 조회 권한이 없거나 이를
+  확인할 수 없으면 승인 객체 자체를 제공하지 않는다.
 - Kosmo 원문에 들어오는 `QuoteRequest`는 요청 주체·인용 Post·Source의 대응과 원문 정책·조회·차단 조건을
   확인해 자동 승인하거나 거절한다. 승인에는 `Accept`와 해당 `QuoteAuthorization`을 연결하고 거절에는
   `Reject`를 사용한다.
@@ -305,7 +305,8 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   않는다.
 - 명시적 인용 승인 철회는 `QuoteAuthorization`을 무효로 만들고 `Delete(QuoteAuthorization)`를 전달한다.
   이를 수신하는 경계도 철회 주체와 승인의 대응을 검증한 뒤 Source를 비노출한다. 수신자가 Quote의 소유
-  서버라면 기존 Quote audience에도 검증된 `Delete(QuoteAuthorization)`을 전달한다.
+  서버라면 기존 Quote audience에도 검증된 `Delete(QuoteAuthorization)`을 전달한다. 발신·전달하는 철회
+  `Delete`의 `object`와 `target`에는 객체를 embed하지 않고 URI 참조만 제공한다.
 - 레거시 Quote 속성의 상호운용을 지원하되 FEP 형식이 존재하지만 유효하지 않은 경우 레거시 형식으로
   강등하지 않는다. 승인된 인용에는 `quoteUrl`, `quoteUri`, `_misskey_quote`와 원문 링크의 본문 fallback을
   발신 표현으로 제공한다. 승인 전·거절·철회 상태에서는 자동 생성한 이 표현을 숨기되 직접 작성한 본문은

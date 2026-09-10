@@ -63,8 +63,8 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 - Context / Problem: 인용 지원 여부가 다른 서버에도 승인된 원문 참조를 전달해야 한다.
 - Decision Outcome: FEP를 정식 경로로 쓰며 승인 후 quoteUrl·quoteUri·\_misskey_quote와 원문 링크 fallback을 제공한다. 사용자가 속성 3종과 본문 링크 제공을 선택했다.
 - Alternatives Considered: 속성 3종만 제공하는 방안은 선택하지 않았다. invalid FEP를 legacy로 강등하는 방안은 승인 우회이므로 제외한다.
-- Consequences: QuoteAuthorization 역참조는 Source 조회 권한을 적용하고 `interactingObject`를 embed하지 않는다. 권한을 확인할 수 없으면 `interactionTarget`도 embed하지 않는다. 승인 전·거절·철회 때 자동 생성 표현을 숨기고 직접 작성한 Content·링크는 유지한다.
-- Confirmation / Follow-up: 권한별 승인 객체 readback과 embed 제한, 승인 후 호환 payload와 철회 후 자동 표현 제거, 사용자 본문 보존을 검증한다.
+- Consequences: QuoteAuthorization 역참조는 Source 조회 권한을 적용하고 `interactingObject`를 embed하지 않는다. 권한이 없거나 이를 확인할 수 없으면 승인 객체를 제공하지 않는다. 철회 `Delete`의 `object`와 `target`에는 객체를 embed하지 않는다. 승인 전·거절·철회 때 자동 생성 표현을 숨기고 직접 작성한 Content·링크는 유지한다.
+- Confirmation / Follow-up: 권한별 승인 객체 readback과 무권한 비제공, 철회 payload의 URI 참조·embed 제한, 승인 후 호환 payload와 철회 후 자동 표현 제거, 사용자 본문 보존을 검증한다.
 
 ### D6 스펙 소유권과 구현·archive 책임
 

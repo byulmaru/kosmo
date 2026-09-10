@@ -10,8 +10,8 @@ PROD-902, PROD-924. 프로토콜 참고: [FEP-044f](https://fediverse.codeberg.p
 `interactionPolicy`의 automatic/manual 광고, 전달 성공, 임의의 승인 URI만으로 최종 승인을 인정해서는
 안 된다(MUST NOT). `interactionPolicy`는 작성 UI와 예상 eligibility의 사전 힌트로만 사용할 수 있다(MAY).
 QuoteAuthorization은 Source를 볼 수 있는 당사자가 역참조할 수 있어야 한다(MUST). 승인 객체는
-`interactingObject`를 embed해서는 안 되며(MUST NOT), 요청자의 Source 조회 권한을 확인할 수 없으면
-`interactionTarget`도 embed해서는 안 된다(MUST NOT).
+`interactingObject`를 embed해서는 안 된다(MUST NOT). 요청자의 Source 조회 권한이 없거나 이를 확인할 수
+없으면 승인 객체 자체를 제공해서는 안 된다(MUST NOT).
 
 #### Scenario: 승인된 로컬 Quote 발신
 
@@ -33,11 +33,11 @@ QuoteAuthorization은 Source를 볼 수 있는 당사자가 역참조할 수 있
 - **AND** `interactingObject`는 URI 참조로만 제공하고 embed하지 않는다
 - **AND** 요청자의 Source 조회 권한을 확인한 경우에만 `interactionTarget`을 embed할 수 있다
 
-#### Scenario: Source 조회 권한을 확인할 수 없는 역참조
+#### Scenario: Source 조회 권한이 없거나 확인할 수 없는 역참조
 
-- **WHEN** QuoteAuthorization 요청자의 Source 조회 권한을 확인할 수 없다
-- **THEN** 시스템은 Source 객체를 `interactionTarget`에 embed하지 않는다
-- **AND** `interactingObject`도 embed하지 않아 Quote나 Source Content를 우회 노출하지 않는다
+- **WHEN** QuoteAuthorization 요청자에게 Source 조회 권한이 없거나 그 권한을 확인할 수 없다
+- **THEN** 시스템은 QuoteAuthorization 객체를 제공하지 않는다
+- **AND** Quote·Source URI, 발급자나 Content를 통해 승인 또는 Source 존재를 우회 노출하지 않는다
 
 ### Requirement: Kosmo 원문용 인용 요청의 자동 판정
 
@@ -122,7 +122,8 @@ Kosmo 원문에 들어오는 QuoteRequest는 요청 Profile·인용 Post·Source
 한다(MUST). Kosmo 원문 작성자의 명시적 철회는 승인을 무효화하고 `Delete(QuoteAuthorization)`를 전달해야
 한다(MUST). 수신된 철회는 주체와 대상 승인의 대응을 검증해야 한다(MUST). 수신자가 Quote의 소유 서버라면
 검증된 `Delete(QuoteAuthorization)`을 기존 Quote audience에 전달해야 한다(MUST). Source 삭제와 Quote 자체
-삭제를 혼동하여 다른 작성자의 Content를 삭제해서는 안 된다(MUST NOT).
+삭제를 혼동하여 다른 작성자의 Content를 삭제해서는 안 된다(MUST NOT). 발신하거나 전달하는 철회 `Delete`는
+`object`와 `target`에 객체를 embed해서는 안 된다(MUST NOT). 두 속성은 URI 참조만 제공해야 한다(MUST).
 
 #### Scenario: 원격 원문의 Reject 또는 승인 철회
 
@@ -134,12 +135,14 @@ Kosmo 원문에 들어오는 QuoteRequest는 요청 Profile·인용 Post·Source
 
 - **WHEN** 로컬 Quote의 소유 서버가 유효한 Delete(QuoteAuthorization)을 수신한다
 - **THEN** 해당 Source를 비노출로 전환하고 기존 Quote audience에 철회를 전달한다
+- **AND** 전달하는 `Delete`의 `object`와 `target`에는 객체를 embed하지 않고 URI 참조만 제공한다
 - **AND** 전달 대상별 실패가 검증된 로컬 철회 상태와 Quote 자체 Content를 되돌리지 않는다
 
 #### Scenario: Kosmo 원문 작성자의 철회
 
 - **WHEN** 원문 작성자가 자신의 Source에 발급한 기존 승인을 철회한다
 - **THEN** 해당 승인을 무효화하고 철회 신호를 원격에 전달한다
+- **AND** `Delete`의 `object`와 `target`에는 객체를 embed하지 않고 URI 참조만 제공한다
 - **AND** 차단만으로 같은 철회 신호를 자동 생성하지 않는다
 
 #### Scenario: 잘못된 철회와 Quote 삭제

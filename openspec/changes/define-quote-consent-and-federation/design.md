@@ -41,12 +41,12 @@ Canonical 근거는 `docs/domain/objects/post.md`, `docs/domain/objects/profile-
 
 아래는 구현 출발점이며 내부 이름이나 저장 구조를 고정하는 규범이 아니다.
 
-1. 먼저 게시글 정책과 요청 판정·조회 판정을 연결한다. 정책 값, 자기 인용, established Follow, Block과
-   Source 조회 여부를 읽는 기존 경계를 재사용한다. 초기값은 새 글·기존 글 모두 `모두`다.
-2. PROD-431은 자체 Content와 인용 대상 정보의 원자적 작성을 연결하고, 자기 인용이 아닌 원격 타인 원문은
-   `interactionPolicy`와 관계없이 Quote를 pending으로 게시한다. 요청 가능 여부와 최종 승인 여부를
-   API·클라이언트에서 혼동하지 않도록 결과를 구분한다.
-3. PROD-924는 요청에 대응하는 Quote·Source·발급자와 처리된 응답의 순서를 식별할 수 있도록 승인 정보를
+1. PROD-431은 기존 Post/Repost Source 구조와 createPost transaction을 재사용해 자체 Content와 인용 대상
+   정보를 원자적으로 작성한다. 작성 시 Source Content·visibility·viewer 접근·Block을 검증하고, FEP 승인이
+   필요한 ActivityPub Source는 승인 경계가 없을 때 명시적으로 거부한다.
+2. PROD-431의 Composer·ActionMenu·presentation은 서버 payload를 진실로 사용한다. 서버가 반환하지 않은
+   Source를 낙관적으로 만들지 않는 seam을 유지하고, 정책·승인 상태·lifecycle을 별도로 구현하지 않는다.
+3. PROD-924는 게시글 정책을 연결하고 요청에 대응하는 Quote·Source·발급자와 처리된 응답의 순서를 식별할 수 있도록 승인 정보를
    보존한다. FK는 승인 상태가 아니므로 Source projection은 별도 승인 판정과 기존 접근 판정을 통과시킨다.
 4. 일반 Note projection을 공유해 자체 Content를 먼저 전달하고 원문 서버에 QuoteRequest를 보낸다. 자기 인용은
    요청 없이 허용한다. 타인 원문의 `interactionPolicy`는 automatic/manual 분류나 부재·해석 실패 모두
@@ -114,11 +114,11 @@ PROD-924의 구현 PR과 통합 검증에 남긴다.
   기존 resolver 경계에서 해석하고 core에 DB identity를 전달한다. 생략·null은 기존 Post·Reply 동작이다.
   Source와 Parent를 함께 받는 작성 조합은 허용하지 않는다. Source 입력 자체의 shape와 기존 payload를 유지한다.
 - `packages/core/services/post.ts`의 기존 transaction에서 Media·Content와 인용 대상 정보를 기록한다.
-  Source의 Content·조회·공개 범위·정책·차단을 제출 시 다시 확인한다. 부적격 Source의 존재를 오류로 노출하지
+  Source의 Content·조회·공개 범위·차단을 제출 시 다시 확인한다. 부적격 Source의 존재를 오류로 노출하지
   않으며, transaction 실패는 Media metadata까지 rollback한다. post-commit 효과 실패는 게시 실패와 구분한다.
-- PROD-924가 소유한 정책·요청 판정·승인 상태 저장 경계를 먼저 대조한다. 승인 정보 없이 FK만 추가해 작성이나
-  조회를 배포하지 않는다. 실제 저장 표현은 양쪽 구현이 공유해야 하며 PROD-431이 임의의 두 번째 승인 모델을
-  만들지 않는다. 현재 코드에는 해당 경계가 없으므로 작업 시작 시 PROD-924의 구현·설계 상태를 확인한다.
+- PROD-431은 승인 정보 없이 ActivityPub Source를 정상 Source로 노출하지 않는다. 현재 경계에서는 해당 작성에
+  `Quote approval is not available` 오류를 반환한다. PROD-924는 이 안전한 거부 seam을 승인 상태와 pending
+  lifecycle로 교체하며 PROD-431이 별도의 승인 모델을 만들거나 PROD-924 완료를 기다릴 필요는 없다.
 - menu eligibility를 순수 Repost의 계산에 그대로 종속시키지 않는다. `인용하기`는 조회 가능하고 인용 조건에 맞는
   Content Post에서 기본 Composer를 열며 Source 자체의 direct preview를 표시한다. Reply Parent 선택·링크
   자동 전환·새 검색기는 제공하지 않는다. 본문·Media·Content Warning·Sensitive Media·Visibility를 재사용한다.
@@ -127,8 +127,9 @@ PROD-924의 구현 PR과 통합 검증에 남긴다.
 - 서버가 반환한 Post는 기존 `@prependNode`와 관리 대상 Home connection에 반영한다. 없는 connection을 합성하거나
   Source의 Repost count·viewerRepost를 Quote 성공으로 변경하지 않는다. 성공 Post가 포함된 nullable field 오류와
   Post 없는 실패를 구분한다. 승인 대기 성공에서는 서버의 null Source를 유지한다.
-- 승인·철회 뒤 재조회한 같은 Post identity에서 Source가 바뀌는지 확인한다. 서버 승인 lifecycle을 클라이언트에서
-  추측하거나 별도 polling·subscription 기능을 이 스펙만으로 추가하지 않는다. 기존 화면 재조회 경계를 재사용한다.
+- PROD-431에서는 서버가 반환한 같은 Post identity와 Source를 정확히 표시하고 Source가 없는 payload를 그대로
+  유지한다. 승인·철회 뒤 Source가 바뀌는 전체 federation readback은 PROD-924가 검증한다. 클라이언트에서
+  lifecycle을 추측하거나 별도 polling·subscription 기능을 이 스펙만으로 추가하지 않는다.
 
 ## Open Questions
 

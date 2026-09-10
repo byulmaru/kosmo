@@ -38,12 +38,13 @@ Accepted
   Source를 숨기려면 원문 작성자가 별도 승인 철회를 사용한다.
 - 원문 작성자의 명시적 철회는 QuoteAuthorization을 무효로 만들고 Delete(QuoteAuthorization)를 전달한다.
   수신자는 철회 주체와 대상 승인의 대응을 검증한 뒤 Source를 숨긴다. 수신자가 Quote의 소유 서버라면
-  기존 Quote audience에도 같은 철회를 전달한다.
+  기존 Quote audience에도 같은 철회를 전달한다. 발신·전달하는 철회 Delete의 object와 target은 객체를
+  embed하지 않고 URI 참조로만 제공한다.
 - FEP-044f의 quote와 QuoteAuthorization을 정식 경로로 사용한다. `interactionPolicy`상 요청자가
   `automaticApproval`과 `manualApproval` 어느 쪽에도 명백히 포함되지 않으면 승인되지 않을 것으로
   예상된다는 정보를 UI·eligibility 힌트로 사용할 수 있지만, 정책 광고만으로 개별 승인을 대체하지 않는다.
-  QuoteAuthorization은 Source를 볼 수 있는 요청자에게 역참조를 허용하되 `interactingObject`를 embed하지
-  않는다. 요청자의 Source 조회 권한을 확인할 수 없으면 `interactionTarget`도 embed하지 않는다. 레거시
+  QuoteAuthorization은 Source를 볼 수 있는 요청자에게만 역참조를 허용하되 `interactingObject`를 embed하지
+  않는다. 요청자의 Source 조회 권한이 없거나 이를 확인할 수 없으면 승인 객체 자체를 제공하지 않는다. 레거시
   상호운용을 지원하되 유효하지 않은 FEP Quote를 레거시 형식으로 강등하지 않는다.
 - 승인된 인용은 `quoteUrl`, `quoteUri`, `_misskey_quote`와 원문 링크의 본문 fallback을 발신 표현으로
   제공한다. 승인 전·거절·철회 상태에서는 자동 생성한 표현을 숨기고 직접 작성한 본문·링크는 유지한다.

@@ -401,10 +401,6 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   toast·재시도와 메뉴 keyboard·dismiss·trigger focus return을 검증한다. fixture 없는 production 메뉴에
   고정 action이 추가되지 않는지도 검증한다. 실제 요청 수명·결과 반영과 교체 확인·전용 상태 화면은
   PROD-809의 mutation·정책 구현 범위에서 검증한다.
-- 새 고정으로 기존 고정 Post가 해제되는 경우에만 교체 확인을 표시하고 제목·설명·`취소`·Primary `변경하기`가
-  정확한지, canonical `ModalSheet`와 플랫폼별 modal 의미를 재사용하는지, backdrop·platform back을 포함한
-  취소·닫기는 상태를 유지하며 단순 `프로필 고정 해제`에는 확인을 표시하지 않는지 검증한다. 교체 mutation의
-  성공·실패·동시성은 PROD-809에서 검증한다.
 
 ## 인용 동의와 원문 표시
 
