@@ -212,7 +212,7 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
   보정을 유지한다.
 - header 이미지 변경 영역은 surface 폭을 기준으로 `aspect-ratio: 3 / 1`을 적용한다. 따라서 `600px`
   중앙 surface에서는 `600×200`, `390px` mobile에서는 `390×130`이며 임의 폭 `W`에서는 높이가
-  `W / 3`이 된다.
+  `W / 3`이 된다. 이미지와 아래 surface의 경계에는 `border/default` 1px 하단선을 표시한다.
 - Web `< compact`와 Android/iOS는 avatar frame/content/overlap/row를 `96/88/48/64`, compact·full Web은
   `128/120/64/80`으로 사용한다. frame은 왼쪽 `16px` inset에 두고 preview 중앙의 camera affordance는
   `40×40` surface 안의 `20px` glyph를 사용한다.

@@ -243,7 +243,10 @@ export function ProfileEditImageFields({
         draft={header}
         onEdit={onHeaderEdit}
         onRemove={onHeaderRemove}
-        style={[styles.headerPreview, { backgroundColor: theme.primary }]}
+        style={[
+          styles.headerPreview,
+          { backgroundColor: theme.primary, borderColor: theme.borderDefault },
+        ]}
         testID="profile-edit-header-preview"
       />
 
@@ -291,6 +294,7 @@ const styles = StyleSheet.create({
   root: { width: '100%' },
   headerPreview: {
     aspectRatio: 3,
+    borderBottomWidth: borderWidths[1],
     overflow: 'hidden',
     position: 'relative',
     width: '100%',

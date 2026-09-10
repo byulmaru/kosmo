@@ -175,7 +175,8 @@ function expectResponsiveSurface(
 ) {
   const canvas = within(canvasElement);
   const surface = canvas.getByTestId('profile-edit-screen').getBoundingClientRect();
-  const header = canvas.getByTestId('profile-edit-header-preview').getBoundingClientRect();
+  const headerPreview = canvas.getByTestId('profile-edit-header-preview');
+  const header = headerPreview.getBoundingClientRect();
   const navigationHeader = canvas.getByTestId('profile-edit-screen-header').getBoundingClientRect();
   const backButton = canvas.getByRole('button', { name: '프로필 편집 닫기' });
   const backAction = backButton.getBoundingClientRect();
@@ -201,6 +202,10 @@ function expectResponsiveSurface(
   expect(Math.round(header.width)).toBe(expectedWidth);
   expect(Math.round(header.height)).toBe(expectedHeaderHeight);
   expect(Math.round(header.width / header.height)).toBe(3);
+  expect(headerPreview).toHaveStyle({
+    borderBottomWidth: 1,
+    borderColor: colors.light.borderDefault,
+  });
   expect(Math.round(navigationHeader.height)).toBe(64);
   expect(Math.round(backAction.width)).toBe(44);
   expect(Math.round(backAction.height)).toBe(44);
