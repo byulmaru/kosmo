@@ -10,6 +10,7 @@ import {
   firstOrThrow,
   Instances,
   pg,
+  ProfileBlocks,
   Profiles,
   Reactions,
 } from '@kosmo/core/db';
@@ -239,6 +240,81 @@ test('activity audience와 personal/shared inbox route에 의존하지 않는다
     }),
   );
   assert.equal((await readReaction(actor.profile.id, personalTarget.post.id))?.type, '❤️');
+});
+
+test('Active Profile Block은 Like와 EmojiReact를 양방향 rejected projection으로 관측한다', async () => {
+  const actor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const firstTarget = await createLocalTarget();
+  const secondTarget = await createLocalTarget();
+  await db.insert(ProfileBlocks).values([
+    {
+      ownerProfileId: firstTarget.author.profile.id,
+      targetProfileId: actor.profile.id,
+    },
+    {
+      ownerProfileId: actor.profile.id,
+      targetProfileId: secondTarget.author.profile.id,
+    },
+  ]);
+  const logs: unknown[] = [];
+  const restoreReporter = setInboundObservabilityReporter({
+    log: (observation) => logs.push(observation),
+  });
+
+  try {
+    await handleInboundReaction(
+      createContext(null),
+      new Like({
+        actor: new URL(actor.actorUri),
+        id: new URL(`/activities/${crypto.randomUUID()}`, actor.actorUri),
+        object: firstTarget.objectUri,
+      }),
+    );
+    await handleInboundReaction(
+      createContext(null),
+      new EmojiReact({
+        actor: new URL(actor.actorUri),
+        content: '🎉',
+        id: new URL(`/activities/${crypto.randomUUID()}`, actor.actorUri),
+        object: secondTarget.objectUri,
+      }),
+    );
+  } finally {
+    restoreReporter();
+  }
+
+  assert.equal(await readReaction(actor.profile.id, firstTarget.post.id), undefined);
+  assert.equal(await readReaction(actor.profile.id, secondTarget.post.id), undefined);
+  assert.deepEqual(logs, [
+    {
+      activityType: 'Like',
+      actorOrigin: new URL(actor.actorUri).origin,
+      handler: 'reaction',
+      objectOrigin: firstTarget.objectUri.origin,
+      outcome: 'rejected',
+      phase: 'projection',
+      reasonCode: 'reaction_projection_rejected',
+    },
+    {
+      activityType: 'EmojiReact',
+      actorOrigin: new URL(actor.actorUri).origin,
+      handler: 'reaction',
+      objectOrigin: secondTarget.objectUri.origin,
+      outcome: 'rejected',
+      phase: 'projection',
+      reasonCode: 'reaction_projection_rejected',
+    },
+  ]);
+  assert.equal(
+    logs.some(
+      (observation) =>
+        typeof observation === 'object' &&
+        observation !== null &&
+        'outcome' in observation &&
+        observation.outcome === 'internal_failure',
+    ),
+    false,
+  );
 });
 
 test('malformed identity와 복수 actor/object activity는 side effect 없이 거부한다', async () => {

@@ -16,6 +16,7 @@ import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { reactionTypeSchema } from '../validation';
 import { postVisibilityCondition } from '../visibility/post';
+import { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';
 import type { Transaction } from '../db';
 
 type MaterializeInboundReactionInput = {
@@ -34,6 +35,7 @@ type MaterializeInboundReactionResult =
   | { readonly kind: 'REJECTED' };
 
 type InboundReactionTarget = {
+  readonly authorProfileId: string;
   readonly postId: string;
 };
 
@@ -78,6 +80,7 @@ const findInboundReactionTarget = async (
 ): Promise<InboundReactionTarget | undefined> => {
   const remote = await tx
     .select({
+      authorProfileId: Posts.profileId,
       postId: Posts.id,
     })
     .from(ActivityPubPosts)
@@ -112,6 +115,7 @@ const findInboundReactionTarget = async (
   const local = await tx
     .select({
       canonicalOrigin: Instances.canonicalOrigin,
+      authorProfileId: Posts.profileId,
       postId: Posts.id,
     })
     .from(Posts)
@@ -144,6 +148,7 @@ const findInboundReactionTarget = async (
   }
 
   return {
+    authorProfileId: local.authorProfileId,
     postId: local.postId,
   };
 };
@@ -205,6 +210,10 @@ export const materializeInboundReaction = async (
       if (!target) {
         throw new InboundReactionConflict();
       }
+      await assertProfilePairIsNotBlocked(tx, {
+        firstProfileId: actor.profileId,
+        secondProfileId: target.authorProfileId,
+      });
 
       const identity = {
         actorProfileId: actor.profileId,
@@ -276,7 +285,7 @@ export const materializeInboundReaction = async (
       };
     });
   } catch (error) {
-    if (error instanceof InboundReactionConflict) {
+    if (error instanceof InboundReactionConflict || error instanceof ProfilePairBlockedError) {
       return { kind: 'REJECTED' };
     }
     throw error;

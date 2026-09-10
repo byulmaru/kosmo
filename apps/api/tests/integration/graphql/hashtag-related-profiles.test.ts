@@ -31,6 +31,7 @@ let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
+let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileHashtags: typeof CoreDb.ProfileHashtags;
 let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
@@ -85,6 +86,7 @@ describe('GraphQL Hashtag related Profiles', () => {
       firstOrThrow,
       Hashtags,
       Instances,
+      ProfileBlocks,
       ProfileHashtags,
       Profiles,
       Sessions,
@@ -136,6 +138,30 @@ describe('GraphQL Hashtag related Profiles', () => {
       relatedProfilesQuery,
       { id: globalId('Hashtag', hashtag.id) },
       authenticatedWithoutProfile.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(
+      result.data?.node?.relatedProfiles.edges.map(({ node }) => node.id),
+      [globalId('Profile', related.id)],
+    );
+  });
+
+  test('keeps related Profiles when the selected Profile blocks a candidate', async () => {
+    const hashtag = await createHashtag('block-neutral');
+    const related = await createProfile({ handle: 'block-neutral-related', id: profileId(2) });
+    await addTag(related.id, hashtag.id);
+
+    const auth = await createAuthenticatedSession();
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: auth.profile.id,
+      targetProfileId: related.id,
+    });
+
+    const result = await requestGraphQL<RelatedProfilesData>(
+      relatedProfilesQuery,
+      { id: globalId('Hashtag', hashtag.id) },
+      auth.token,
     );
 
     assertNoGraphQLErrors(result);
@@ -449,12 +475,13 @@ const createAuthenticatedSession = async ({
     token,
   });
 
-  return { token };
+  return { profile, token };
 };
 
 const resetFixtures = async () => {
   await db.delete(ProfileHashtags);
   await db.delete(Hashtags);
+  await db.delete(ProfileBlocks);
   await db.delete(Sessions);
   await db.delete(AccountProfiles);
   await db.delete(Accounts);
