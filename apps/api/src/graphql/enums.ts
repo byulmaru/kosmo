@@ -18,3 +18,4 @@ createEnumRef('PostVisibility');
 createEnumRef('ProfileFollowPolicy');
 createEnumRef('InstanceKind');
 createEnumRef('ProfileState');
+createEnumRef('PushInstallationPlatform');

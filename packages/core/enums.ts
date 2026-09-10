@@ -124,6 +124,12 @@ export const ProfileState = {
 } as const;
 export type ProfileState = keyof typeof ProfileState;
 
+export const PushInstallationPlatform = {
+  ANDROID: 'ANDROID',
+  IOS: 'IOS',
+} as const;
+export type PushInstallationPlatform = keyof typeof PushInstallationPlatform;
+
 export const SessionState = {
   ACTIVE: 'ACTIVE',
   REVOKED: 'REVOKED',

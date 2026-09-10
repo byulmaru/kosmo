@@ -250,6 +250,7 @@ type Mutation {
   issueMediaUploadUrl: IssueMediaUploadUrlPayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   muteProfile(input: MuteProfileInput!): MuteProfilePayload!
+  registerPushInstallation(input: RegisterPushInstallationInput!): RegisterPushInstallationPayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
   repostPost(input: RepostPostInput!): RepostPostPayload!
   revokeCurrentSession: RevokeCurrentSessionPayload!
@@ -257,6 +258,7 @@ type Mutation {
   submitFeedback(input: SubmitFeedbackInput!): SubmitFeedbackPayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   unmuteProfile(input: UnmuteProfileInput!): UnmuteProfilePayload!
+  unregisterPushInstallation(input: UnregisterPushInstallationInput!): UnregisterPushInstallationPayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
 }
 
@@ -484,6 +486,11 @@ type ProfileViewerState {
   profileMute: ProfileMute
 }
 
+enum PushInstallationPlatform {
+  ANDROID
+  IOS
+}
+
 type Query {
   currentSession: Session
   homeTimeline(after: String, before: String, first: Int, last: Int): PostConnection
@@ -513,6 +520,16 @@ type ReactionNotification implements Node & Notification {
   profile: Profile!
   readAt: DateTime
   type: String!
+}
+
+input RegisterPushInstallationInput {
+  installationId: String!
+  platform: PushInstallationPlatform!
+  token: String!
+}
+
+type RegisterPushInstallationPayload {
+  completed: Boolean!
 }
 
 input RejectProfileFollowRequestInput {
@@ -593,6 +610,14 @@ input UnmuteProfileInput {
 type UnmuteProfilePayload {
   profileMuteId: ID
   targetProfile: Profile
+}
+
+input UnregisterPushInstallationInput {
+  installationId: String!
+}
+
+type UnregisterPushInstallationPayload {
+  completed: Boolean!
 }
 
 input UpdateProfileInput {

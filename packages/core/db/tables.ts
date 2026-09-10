@@ -551,3 +551,34 @@ export const Sessions = pgTable(
   },
   (table) => [index().on(table.accountId)],
 );
+
+export const PushInstallations = pgTable(
+  'push_installation',
+  {
+    id: id(),
+    installationId: text('installation_id').notNull(),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => Accounts.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => Sessions.id, { onDelete: 'cascade' }),
+    platform: Enum.pushInstallationPlatform('platform').notNull(),
+    token: text('token').notNull(),
+    registrationEpoch: datetime('registration_epoch')
+      .notNull()
+      .default(sql`now()`),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    unique().on(table.installationId),
+    // Escape backslashes before PostgreSQL's text-to-bytea cast so opaque strings stay distinct.
+    uniqueIndex('push_installation_token_hash_unique').using(
+      'btree',
+      sql`sha256(replace(${table.token}, chr(92), chr(92) || chr(92))::bytea)`,
+    ),
+    index().on(table.accountId),
+    index().on(table.sessionId),
+  ],
+);
