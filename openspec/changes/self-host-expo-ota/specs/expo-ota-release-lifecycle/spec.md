@@ -1,53 +1,64 @@
 ## ADDED Requirements
 
-### Requirement: Release lifecycle verifies before promotion
+### Requirement: Deploy workflow publishes to its selected OTA channel
 
-**Authority / Provenance:** explicit user-approved repository boundary; `PROD-331`, `PROD-332`, `PROD-335`; `PROD-333` owns client bootstrap and compatibility handoff. Kosmo owns the approved app export and publish/promotion orchestration, while public `byulmaru/expo-ota` owns the organization-shared static R2 endpoint and multipart publisher Action/reusable workflow. The release pipeline MUST create a signed immutable staging release, verify its multipart manifest and assets in the staging OTA channel, and promote the same approved export bytes and their verified asset provenance to the production OTA channel. Promotion MUST separately upload the verified production-channel asset bytes into destination channel object identities, verify each object by read-back and hash, and issue a newly signed production-channel multipart manifest/release record with its own production metadata; it MUST NOT create a second unverified asset set. Signing MUST use the Vault-held private key only during the publisher job, and production publication/promotion MUST retain its existing explicit approval gate. A release requiring native code, a native module, or an SDK change MUST be sent through a new store binary rather than this OTA lifecycle. Staging and production MUST use the same compatibility and signature contract.
+**Authority / Provenance:** explicit user scope correction recorded for `PROD-333` and `PROD-335`; `PROD-331`, `PROD-332`, `PROD-335`; 적용되는 `docs/domain`·`docs/design` canonical release 문서 없음. Deploy Dev MUST use the triggering Docker Build `workflow_run.head_sha` as its approved source and logically map that release to OTA channel `dev`. Deploy Production MUST use the canonical preflight approved target SHA, retain its existing `prod` Environment approval, and logically map that release to OTA channel `prod`. The client and publisher MUST accept any OTA channel that is a safe single path segment using only `[A-Za-z0-9._-]+`, except the exact values `.` and `..`; deploy mappings are not an allowlist. Native Store binary upload MUST remain a separate workflow and MUST NOT publish an OTA release.
 
-#### Scenario: Promote a staged release
+#### Scenario: Publish a Deploy Dev source to the dev channel
 
-- **WHEN** a signed release is complete and passes staging manifest, asset, and compatibility verification
-- **THEN** the pipeline uses the same approved export bytes and verified asset provenance to separately upload and read-back/hash-verify the production-channel asset objects
-- **AND** the pipeline creates and signs a production-channel manifest/release record with production metadata
-- **AND** the fixed tuple production manifest object refers to that newly signed production record
+- **WHEN** a successful Docker Build run triggers Deploy Dev
+- **THEN** the OTA publisher receives that run's exact `workflow_run.head_sha` as the approved source
+- **AND** the release is addressed to channel `dev`
 
-#### Scenario: Hold a failed staging release
+#### Scenario: Publish an approved production source to the prod channel
 
-- **WHEN** staging verification fails or an artifact is incomplete
-- **THEN** the pipeline does not promote the release to production
-- **AND** the current production release remains unchanged
+- **WHEN** Deploy Production's preflight resolves an approved target SHA and the existing `prod` Environment approval is granted
+- **THEN** the OTA publisher receives that exact target SHA as the approved source
+- **AND** the release is addressed to channel `prod`
 
-### Requirement: Recovery reissues a known-good release
+#### Scenario: Keep native Store upload separate
 
-**Authority / Provenance:** `PROD-331`, `PROD-332`, `PROD-335`, `PROD-336`. The pipeline MUST provide a recovery operation that reissues a previously verified known-good update as a new normal signed multipart manifest/release record with fresh release metadata under the same project/platform/channel/runtime contract. Recovery MUST preserve immutable asset contents and MUST replace the fixed tuple manifest only with a complete verified record; it MUST NOT mutate an already-published asset or expose an incomplete current release.
+- **WHEN** native-store-distribution builds or uploads an Android or iOS Store binary
+- **THEN** the workflow uses the fixed OTA consumer channel `prod` in the binary metadata
+- **AND** the workflow does not publish an OTA release or expose a manual OTA channel selector
 
-#### Scenario: Recover production with a known-good update
+### Requirement: Release publication exposes only complete signed artifacts
 
-- **WHEN** the current production release is found unsuitable after promotion
-- **THEN** the operator reissues a previously verified known-good update
-- **AND** compatible clients can select the newly identified and signed release without a native binary change
+**Authority / Provenance:** `PROD-331`, `PROD-332`, `PROD-334`, `PROD-335`; the publisher contract is owned by public `byulmaru/expo-ota`. Each deploy-selected release MUST use the same canonical project/platform/safe-channel-segment/runtime tuple, MUST sign the exact multipart manifest JSON part, and MUST verify every referenced asset before replacing the fixed tuple manifest object. An incomplete artifact, failed verification, or native code/module/SDK requirement MUST not be published as an applicable OTA update; native requirements go through a new Store binary.
 
-#### Scenario: Reject an unverified recovery target
+#### Scenario: Publish a complete signed channel release
 
-- **WHEN** the requested recovery target lacks complete manifest, asset, or signature evidence
-- **THEN** the pipeline refuses to publish or promote it
-- **AND** the existing production release remains the current complete release
+- **WHEN** the approved export, multipart manifest JSON part, signature, and every referenced asset pass verification
+- **THEN** the publisher records a signed release under the selected safe channel segment and tuple
+- **AND** the fixed tuple manifest object refers only to that complete release
+
+#### Scenario: Hold a failed release
+
+- **WHEN** an artifact is incomplete or manifest, signature, asset, or compatibility verification fails
+- **THEN** the publisher refuses to expose it as the fixed tuple release
+- **AND** the currently serving complete release remains unchanged
+
+#### Scenario: Route native requirements to Store distribution
+
+- **WHEN** a release requires native code, a native module, or an SDK change
+- **THEN** the release is excluded from OTA publication
+- **AND** the change is sent through a new Android or iOS Store binary path
 
 ### Requirement: Rotation and operation evidence are bounded
 
-**Authority / Provenance:** `PROD-331`, `PROD-332`, `PROD-335`, `PROD-336`. The release runbook MUST document the boundary between signing-key/credential rotation and normal release publication. The signing certificate has one-year validity and is rotated every six months; each rotation uses a new certificate, runtime, and Store binary, while an existing runtime continues to use its existing bundled certificate. The private key is read from Vault during the publisher job and the public certificate is bundled in each native seed binary. The initial `2026-09` private key is registered in Vault KV v2 at `secret/data/expo-ota/signing/kosmo-native/2026-09` under `private_key` (version 1), and the public certificate source is `apps/app/certs/certificate.pem`; its recorded validity is 2026-09-10 through 2027-09-10 (KST), with the first rotation scheduled for 2027-03-10. The runbook MUST record evidence for staging verification, protected production promotion, recovery, failed verification, and offline behavior. Publisher read, seed binary, device, and rotation execution evidence remain pending, and dual trust is not part of this contract.
+**Authority / Provenance:** `PROD-331`, `PROD-332`, `PROD-335`, `PROD-336`. The release runbook MUST document the boundary between signing-key/credential rotation and normal channel publication. The signing certificate has one-year validity and is rotated every six months; each rotation uses a new certificate, runtime, and Store binary, while an existing runtime continues to use its existing bundled certificate. The private key is read from Vault during the publisher job and the public certificate is bundled in each native seed binary. The initial `2026-09` private key is registered in Vault KV v2 at `secret/data/expo-ota/signing/kosmo-native/2026-09` under `private_key` (version 1), and the public certificate source is `apps/app/certs/certificate.pem`; its recorded validity is 2026-09-10 through 2027-09-10 (KST), with the first rotation scheduled for 2027-03-10. Publisher read, seed binary, and rotation execution evidence remain pending, and dual trust is not part of this contract.
 
 #### Scenario: Rotate trust material with an explicit transition
 
 - **WHEN** signing trust material is rotated
 - **THEN** the runbook records the new certificate, runtime, and Store binary for the rotation
 - **AND** each existing runtime continues to use its existing certificate without dual trust
-- **AND** a release is not promoted using an unrecorded or implicitly changed key
+- **AND** a release is not published using an unrecorded or implicitly changed key
 
 #### Scenario: Verify both seed binary paths on device
 
 - **WHEN** a new OTA-enabled Android binary is distributed through completed PROD-886 Google Play Alpha and an iOS binary through completed PROD-876 TestFlight
-- **THEN** PROD-336 installs each binary on a real device and verifies update, rejection, offline fallback, and recovery behavior
+- **THEN** PROD-336 installs each binary on a real device and verifies update, rejection, and offline fallback behavior
 - **AND** the evidence identifies the platform, binary, runtimeVersion, OTA channel, and release identity used
 
 #### Scenario: Keep store automation separate from OTA verification
@@ -55,3 +66,7 @@
 - **WHEN** PROD-287's store-native automation or device flow is unavailable or changes
 - **THEN** OTA-specific device verification remains owned by PROD-336 using PROD-886 and PROD-876
 - **AND** PROD-287 is treated as related context rather than an OTA blocker
+
+## Deferred Long-Term Contract
+
+Release promotion and known-good recovery reissue remain held outside the current active requirements. The long-term contract preserves the same approved export and verified asset provenance across any future channel promotion, uses a new signed release metadata record for recovery, keeps content-addressed asset bytes immutable, and changes the fixed tuple manifest only after complete verification. No promotion or recovery implementation, evidence, or separate issue is required for this change; the scope may be reopened when the external publisher's generic safe channel segment contract and an operating owner are ready.

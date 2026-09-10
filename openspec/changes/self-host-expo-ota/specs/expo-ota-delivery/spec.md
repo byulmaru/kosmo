@@ -2,19 +2,25 @@
 
 ### Requirement: Static R2 delivery resolves the canonical OTA namespace
 
-**Authority / Provenance:** explicit user-approved repository boundary; `PROD-331`, `PROD-332`, `PROD-334`; 적용되는 `docs/domain`·`docs/design` canonical delivery 문서 없음. The organization-shared static R2 endpoint and publisher Action/reusable workflow MUST be owned by public `byulmaru/expo-ota`; its delivery MUST serve a fixed path using logical project `kosmo-native`, platform(`ios` or `android`), OTA channel(`staging` or `production`), and `runtimeVersion`. The namespace MUST be carried by the delivery URL, and `runtimeVersion` alone MUST NOT identify a project. Delivery MUST expose read-only multipart manifest and asset retrieval for this namespace.
+**Authority / Provenance:** explicit user-approved repository boundary; `PROD-331`, `PROD-332`, `PROD-334`; 적용되는 `docs/domain`·`docs/design` canonical delivery 문서 없음. The organization-shared static R2 endpoint and publisher Action/reusable workflow MUST be owned by public `byulmaru/expo-ota`; its delivery MUST serve a fixed path using logical project `kosmo-native`, platform(`ios` or `android`), a safe single path segment OTA channel using only `[A-Za-z0-9._-]+` except the exact values `.` and `..`, and `runtimeVersion`. The namespace MUST be carried by the delivery URL, and `runtimeVersion` alone MUST NOT identify a project. Delivery MUST expose read-only multipart manifest and asset retrieval for this namespace. Deploy workflow mappings `dev` and `prod` are logical values and MUST NOT become a channel allowlist.
 
-#### Scenario: Resolve a namespace-specific manifest
+#### Scenario: Resolve a namespace-specific prod manifest
 
-- **WHEN** a client requests the fixed manifest path for `kosmo-native`, `ios`, `staging`, and its `runtimeVersion`
+- **WHEN** a client requests the fixed manifest path for `kosmo-native`, `ios`, `prod`, and its `runtimeVersion`
 - **THEN** the static origin serves only the corresponding tuple object
 - **AND** it returns the multipart manifest for that namespace and compatible runtime
 
 #### Scenario: Isolate platform and channel namespaces
 
-- **WHEN** Android and iOS, or staging and production, request otherwise identical release identifiers
+- **WHEN** Android and iOS, or dev and prod, request otherwise identical release identifiers
 - **THEN** the static origin resolves each path to its own platform/channel namespace
 - **AND** one namespace cannot read another namespace's manifest through runtimeVersion alone
+
+#### Scenario: Reject an unsafe channel path
+
+- **WHEN** a request contains an empty channel, a channel containing `/` or `\\`, or the exact values `.` or `..`
+- **THEN** the static origin rejects the path
+- **AND** it does not resolve an object outside the requested channel segment
 
 ### Requirement: Static R2 serves complete immutable releases
 

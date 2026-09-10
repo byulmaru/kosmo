@@ -44,8 +44,10 @@ function releaseUpdateConfig(config, platform) {
     );
   }
 
-  if (channel !== 'staging' && channel !== 'production') {
-    throw new Error('KOSMO_OTA_CHANNEL must be either staging or production.');
+  if (!/^[A-Za-z0-9._-]+$/u.test(channel) || channel === '.' || channel === '..') {
+    throw new Error(
+      'KOSMO_OTA_CHANNEL must be a safe single path segment using only letters, numbers, dot, underscore, or hyphen.',
+    );
   }
 
   const certificatePath = path.join(config.modRequest.projectRoot, codeSigningCertificate);
