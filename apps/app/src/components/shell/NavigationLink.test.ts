@@ -141,7 +141,12 @@ function shouldHandleNavigation(event: LinkPressEvent) {
 const renderLink = async (
   handler: NavigationRequestHandler,
   onNavigate?: () => void,
-  options: { href?: Href; onCurrentNavigate?: () => void; primary?: boolean } = {},
+  options: {
+    current?: boolean;
+    href?: Href;
+    onCurrentNavigate?: () => void;
+    primary?: boolean;
+  } = {},
 ) => {
   await act(async () => {
     renderer = create(
@@ -154,6 +159,7 @@ const renderLink = async (
           createElement(PrimaryNavigationProbe),
           createElement(GuardRegistrar, { handler }),
           createElement(NavigationLink, {
+            current: options.current,
             children: createElement(TestPressable),
             href: options.href ?? '/timeline',
             onNavigate,
@@ -271,6 +277,28 @@ describe('NavigationLink', () => {
     assert.equal(onCurrentNavigate.mock.callCount(), 1);
     assert.deepEqual(navigations, []);
     assert.equal(consumeIntent?.('/home'), false);
+  });
+
+  it('현재 Local 화면군은 /home link를 유지하면서 재선택 callback을 실행한다', async () => {
+    const guard = mock.fn(() => true);
+    const onNavigate = mock.fn();
+    const onCurrentNavigate = mock.fn();
+    currentPathname = '/local';
+    await renderLink(guard, onNavigate, {
+      current: true,
+      href: '/home',
+      onCurrentNavigate,
+      primary: true,
+    });
+    const event = createPressEvent();
+
+    await act(async () => composedLinkPress?.(event as unknown as Parameters<LinkPress>[0]));
+
+    assert.equal(event.preventDefault.mock.callCount(), 1);
+    assert.equal(guard.mock.callCount(), 0);
+    assert.equal(onNavigate.mock.callCount(), 1);
+    assert.equal(onCurrentNavigate.mock.callCount(), 1);
+    assert.deepEqual(navigations, []);
   });
 
   it('Web modifier click은 현재 편집 route를 떠나지 않으므로 guard가 가로채지 않는다', async () => {

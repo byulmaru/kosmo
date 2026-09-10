@@ -18,7 +18,7 @@ import { RightRail, RightRailFooter } from '@/components/shell/RightRail';
 import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
 import { UniversalShell } from '@/components/shell/UniversalShell';
 import { SessionProvider } from '@/session/SessionProvider';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, elevations, semanticColors, spacing } from '@/theme/tokens';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import appIconUrl from '../../../public/icon-192.png?url';
 import ogDefaultUrl from '../../../public/og-default.png?url';
@@ -71,6 +71,7 @@ const query = {
   ...shellQuery({ profiles: [selectedProfile, secondProfile], selectedProfile }),
   node: followedProfile,
 };
+const publicQuery = { ...query, currentSession: null, me: null };
 const firstProfileQuery = {
   ...query,
   ...shellQuery({ profiles: [], selectedProfile: null }),
@@ -221,6 +222,15 @@ function CompactSidebarStory() {
   );
 }
 
+function PublicSidebarNavigationStory() {
+  const data = useLazyLoadQuery<ShellStoriesQueryType>(ShellStoriesQuery, {});
+  return (
+    <View style={{ height: 560, width: 320 }}>
+      <SidebarNavigation query={data} />
+    </View>
+  );
+}
+
 function FeedbackNavigationFullStory() {
   return (
     <View style={{ height: 560, width: 320 }}>
@@ -360,7 +370,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const SharedNavigation: Story = {
-  play: ({ canvasElement }) => {
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const activeProfile = canvas.getByLabelText('활성 프로필');
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
@@ -370,10 +380,11 @@ export const SharedNavigation: Story = {
     const profileEdit = within(activeProfile).getByRole('link', { name: '프로필 편집' });
     const profileEditVisual = within(profileEdit).getByTestId('profile-edit-action-visual');
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
+    const searchVisual = within(search).getByTestId('sidebar-control-visual');
     const activeProfileRect = activeProfile.getBoundingClientRect();
     const profileEditRect = profileEdit.getBoundingClientRect();
     expect(bookmarks).toHaveAttribute('href', '/bookmarks');
-    expect(window.getComputedStyle(search).backgroundColor).toBe('rgb(255, 249, 230)');
+    expect(window.getComputedStyle(searchVisual).backgroundColor).toBe('rgb(255, 249, 230)');
     expect(profile).toHaveAttribute('href', '/@selected');
     expect(profileEdit).toHaveAttribute('href', '/profile-edit');
     expect(within(profileEdit).getByText('편집', { exact: true })).toBeVisible();
@@ -389,6 +400,7 @@ export const SharedNavigation: Story = {
       width: '72px',
     });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
+    await userEvent.click(canvas.getByRole('button', { name: '설정 및 기타' }));
     const settings = canvas.getByRole('link', { name: '설정' });
     expect(settings).toHaveAttribute('href', '/settings');
     expect(
@@ -414,7 +426,7 @@ export const SharedNavigation: Story = {
 export const BottomNavigation: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
+    const navigation = canvas.getByRole('navigation', { name: '하단 탐색' });
     const avatar = canvas.getByLabelText(`${selectedProfile.displayName} 프로필 이미지`);
     expect(window.getComputedStyle(navigation).backgroundColor).toBe('rgb(255, 255, 255)');
     expect(window.getComputedStyle(navigation).borderTopColor).toBe('rgb(236, 236, 240)');
@@ -428,7 +440,7 @@ export const BottomNavigation: Story = {
 };
 
 export const CompactSidebar: Story = {
-  play: ({ canvasElement }) => {
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const profile = canvas.getByRole('link', { name: '프로필' });
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
@@ -436,33 +448,34 @@ export const CompactSidebar: Story = {
     expect(profile).toHaveAttribute('href', '/@selected');
     expect(canvas.queryByRole('link', { name: '프로필 편집' })).toBeNull();
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
-    expect(canvas.getByRole('link', { name: '설정' })).toHaveAttribute('href', '/settings');
-    const logout = canvas.getByRole('button', { name: '로그아웃' });
+    const utility = canvas.getByRole('button', { name: '설정 및 기타' });
+    await userEvent.click(utility);
+    const menu = await canvasElement.ownerDocument.body.querySelector<HTMLElement>('[role="menu"]');
+    if (!menu) {
+      throw new Error('Compact sidebar utility menu is required.');
+    }
+    const settings = within(menu).getByRole('menuitem', { name: '설정' });
+    const logout = within(menu).getByRole('menuitem', { name: '로그아웃' });
     const feedback = canvas.getByRole('button', { name: '피드백 보내기' });
     const trigger = canvas.getByRole('button', { name: '프로필 목록' });
-    const avatar = canvas.getByLabelText('코스모 작가 프로필 이미지');
+    const avatar = within(trigger).getByLabelText('코스모 작가 프로필 이미지');
     const triggerRect = trigger.getBoundingClientRect();
     const avatarRect = avatar.getBoundingClientRect();
     const logoutRect = logout.getBoundingClientRect();
     const feedbackRect = feedback.getBoundingClientRect();
 
+    expect(settings).toBeInTheDocument();
+    expect(settings).toHaveAttribute('href', '/settings');
     expect(logout).toBeInTheDocument();
-    expect(logoutRect.width).toBe(44);
-    expect(logoutRect.height).toBe(44);
+    expect(logoutRect.height).toBe(36);
     expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
-    expect(avatarRect.x + avatarRect.width / 2).toBeCloseTo(
-      feedbackRect.x + feedbackRect.width / 2,
-      0,
-    );
-    expect(triggerRect.x + triggerRect.width / 2).toBeCloseTo(
-      feedbackRect.x + feedbackRect.width / 2,
-      0,
-    );
+    expect(
+      Math.abs(avatarRect.x + avatarRect.width / 2 - (feedbackRect.x + feedbackRect.width / 2)),
+    ).toBeLessThanOrEqual(0.5);
+    expect(
+      Math.abs(triggerRect.x + triggerRect.width / 2 - (feedbackRect.x + feedbackRect.width / 2)),
+    ).toBeLessThanOrEqual(0.5);
     expect(feedback.querySelector('svg')).toHaveAttribute('stroke-width', '2');
-    expect(logoutRect.x + logoutRect.width / 2).toBeCloseTo(
-      feedbackRect.x + feedbackRect.width / 2,
-      0,
-    );
     expect(canvas.getByRole('link', { name: '글쓰기' })).toHaveAttribute('href', '/compose');
     expect(canvas.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('link', { name: '프로필 설정' })).not.toBeInTheDocument();
@@ -470,10 +483,23 @@ export const CompactSidebar: Story = {
   render: () => <CompactSidebarStory />,
 };
 
+export const PublicSidebarHidesFeedback: Story = {
+  parameters: { relay: { data: publicQuery } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.queryByRole('button', { name: '피드백 보내기' })).toBeNull();
+    expect(canvas.getByRole('button', { name: '설정 및 기타' })).toBeVisible();
+  },
+  render: () => <PublicSidebarNavigationStory />,
+};
+
 export const SettingsNavigationCurrentState: Story = {
   parameters: { router: { pathname: '/settings/default-post-visibility' } },
-  play: ({ canvasElement }) => {
-    const settings = within(canvasElement).getByRole('link', { name: '설정' });
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const utility = canvas.getByRole('button', { name: '설정 및 기타' });
+    await userEvent.click(utility);
+    const settings = canvas.getByRole('link', { name: '설정' });
     expect(settings).toHaveAttribute('href', '/settings');
     expect(settings).toHaveAttribute('aria-current', 'page');
   },
@@ -482,19 +508,21 @@ export const SettingsNavigationCurrentState: Story = {
 
 export const FeedbackNavigationCurrentState: Story = {
   parameters: { router: { pathname: '/feedback' } },
-  play: ({ canvasElement }) => {
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    await userEvent.click(canvas.getByRole('button', { name: '설정 및 기타' }));
     const logout = canvas.getByRole('button', { name: '로그아웃' });
     const feedbackLabel = within(link).getByText('피드백 보내기');
     const logoutLabel = within(logout).getByText('로그아웃');
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(link).toHaveStyle({ backgroundColor: 'rgb(255, 249, 230)' });
-    expect(link.nextElementSibling).toContainElement(logout);
+    expect(within(link).getByTestId('sidebar-control-visual')).toHaveStyle({
+      backgroundColor: 'rgb(255, 249, 230)',
+    });
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
-    expect(feedbackLabel).toHaveStyle({ fontSize: '14px', lineHeight: '20px' });
-    expect(logoutLabel).toHaveStyle({ fontSize: '14px', lineHeight: '20px' });
+    expect(feedbackLabel).toHaveStyle({ fontSize: '16px', lineHeight: '24px' });
+    expect(logoutLabel).toHaveStyle({ fontSize: '16px', lineHeight: '24px' });
     expect(link.querySelector('svg')).toHaveAttribute('height', '20');
     expect(link.querySelector('svg')).toHaveAttribute('width', '20');
     expect(logout.querySelector('svg')).toHaveAttribute('height', '20');
@@ -544,21 +572,29 @@ export const FollowRequestsNavigationCurrentState: Story = {
     const link = canvas.getByRole('link', { name: '팔로워 요청' });
     expect(link).toHaveAttribute('href', '/follow-requests');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(link).toHaveStyle({ backgroundColor: 'rgb(255, 249, 230)' });
+    expect(within(link).getByTestId('sidebar-control-visual')).toHaveStyle({
+      backgroundColor: 'rgb(255, 249, 230)',
+    });
   },
   render: () => <FeedbackNavigationFullStory />,
 };
 
 export const FeedbackNavigationCompactCurrentState: Story = {
   parameters: { router: { pathname: '/feedback' } },
-  play: ({ canvasElement }) => {
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
-    const logout = canvas.getByRole('button', { name: '로그아웃' });
+    await userEvent.click(canvas.getByRole('button', { name: '설정 및 기타' }));
+    const menu = await canvasElement.ownerDocument.body.querySelector<HTMLElement>('[role="menu"]');
+    if (!menu) {
+      throw new Error('Compact sidebar utility menu is required.');
+    }
+    expect(within(menu).getByRole('menuitem', { name: '로그아웃' })).toBeInTheDocument();
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(link).toHaveStyle({ backgroundColor: 'rgb(255, 249, 230)' });
-    expect(link.nextElementSibling).toContainElement(logout);
+    expect(within(link).getByTestId('sidebar-control-visual')).toHaveStyle({
+      backgroundColor: 'rgb(255, 249, 230)',
+    });
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '0px' });
   },
   render: () => <CompactSidebarStory />,
@@ -566,17 +602,19 @@ export const FeedbackNavigationCompactCurrentState: Story = {
 
 export const FeedbackNavigationDrawerCurrentState: Story = {
   parameters: { router: { pathname: '/feedback' } },
-  play: ({ canvasElement }) => {
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const activeProfile = canvas.getByLabelText('활성 프로필');
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
     const profileEdit = within(activeProfile).getByRole('link', { name: '프로필 편집' });
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    await userEvent.click(canvas.getByRole('button', { name: '설정 및 기타' }));
     const logout = canvas.getByRole('button', { name: '로그아웃' });
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(link).toHaveStyle({ backgroundColor: 'rgb(255, 249, 230)' });
-    expect(link.nextElementSibling).toContainElement(logout);
+    expect(within(link).getByTestId('sidebar-control-visual')).toHaveStyle({
+      backgroundColor: 'rgb(255, 249, 230)',
+    });
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
     expect(canvas.queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
@@ -1725,8 +1763,23 @@ function unreadBadgeParameters(count: number) {
 export const UniversalMobile: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   parameters: universalParameters,
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, globals }) => {
     const canvas = within(canvasElement);
+    const mode = globals.theme === 'dark' ? 'dark' : 'light';
+    const theme = semanticColors[mode];
+    const serializeColor = (color: string) => {
+      const probe = canvasElement.ownerDocument.createElement('div');
+      probe.style.color = color;
+      return probe.style.color;
+    };
+    const serializeBoxShadow = (boxShadow: string | undefined) => {
+      const probe = canvasElement.ownerDocument.createElement('div');
+      probe.style.boxShadow = boxShadow ?? 'none';
+      canvasElement.ownerDocument.body.append(probe);
+      const value = window.getComputedStyle(probe).boxShadow;
+      probe.remove();
+      return value;
+    };
     const shellRoot = canvas.getByTestId('universal-shell-root');
     const homeHeading = canvas.getByRole('heading', { name: '홈' });
     const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
@@ -1737,7 +1790,9 @@ export const UniversalMobile: Story = {
     );
 
     expect(homeHeader).not.toBeNull();
-    expect(window.getComputedStyle(shellRoot).backgroundColor).toBe('rgb(255, 255, 255)');
+    expect(window.getComputedStyle(shellRoot).backgroundColor).toBe(
+      serializeColor(theme.backgroundCanvas),
+    );
     expect(homeHeader).toContainElement(menuButton);
     expect(brandMark).not.toBeNull();
     expect(trailingSlot).not.toBeNull();
@@ -1761,7 +1816,7 @@ export const UniversalMobile: Story = {
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
     const drawerSurface = ownerDocument.getElementById('mobile-sidebar');
     const drawerBackdrop = drawerSurface?.parentElement;
-    const drawerNavigationSurface = page.getByTestId('mobile-sidebar-scroll').parentElement;
+    const drawerNavigationSurface = page.getByRole('navigation', { name: '주요 메뉴' });
     const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
     const triggerName = within(profileTrigger).getByText('코스모 작가');
     const profileHandle = page.getByLabelText('활성 프로필 핸들');
@@ -1775,11 +1830,15 @@ export const UniversalMobile: Story = {
     expect(drawerSurface).not.toBeNull();
     expect(drawerBackdrop).not.toBeNull();
     expect(drawerNavigationSurface).not.toBeNull();
-    expect(window.getComputedStyle(drawerSurface!).backgroundColor).toBe('rgb(255, 255, 255)');
-    expect(window.getComputedStyle(drawerNavigationSurface!).backgroundColor).toBe(
-      'rgb(255, 255, 255)',
+    expect(window.getComputedStyle(drawerSurface!).backgroundColor).toBe(
+      serializeColor(theme.backgroundElevated),
     );
-    expect(window.getComputedStyle(drawerSurface!).boxShadow).toContain('rgba(0, 0, 0, 0.1)');
+    expect(window.getComputedStyle(drawerNavigationSurface).backgroundColor).toBe(
+      serializeColor(theme.backgroundElevated),
+    );
+    expect(window.getComputedStyle(drawerSurface!).boxShadow).toBe(
+      serializeBoxShadow(elevations[mode].overlay.boxShadow as string | undefined),
+    );
     expect(window.getComputedStyle(drawerBackdrop!).backgroundColor).toBe('rgba(0, 0, 0, 0.45)');
     expect(within(drawer).getByRole('link', { name: '북마크' })).toHaveAttribute(
       'href',
@@ -1791,6 +1850,7 @@ export const UniversalMobile: Story = {
     );
     const followRequests = within(drawer).getByRole('link', { name: '팔로워 요청' });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
+    await userEvent.click(within(drawer).getByRole('button', { name: '설정 및 기타' }));
     expect(within(drawer).getByRole('link', { name: '설정' })).toHaveAttribute('href', '/settings');
     expect(page.getByRole('button', { name: '피드백 보내기' })).toBeInTheDocument();
     expect(within(drawer).queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
@@ -1856,6 +1916,7 @@ export const UniversalMobile: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
     const settingsDrawer = await page.findByRole('navigation', { name: '주요 메뉴' });
+    await userEvent.click(within(settingsDrawer).getByRole('button', { name: '설정 및 기타' }));
     await userEvent.click(within(settingsDrawer).getByRole('link', { name: '설정' }));
     await waitFor(() => {
       expect(ownerDocument.getElementById('mobile-sidebar')).toBeNull();
@@ -1997,7 +2058,7 @@ export const UniversalMobileUnreadBadge: Story = {
     ).resolves.toBeVisible();
     expect(canvas.getAllByRole('link', { name: '알림, 읽지 않은 알림 100개' })).toHaveLength(1);
     expect(canvas.queryByText('99+')).toBeNull();
-    const bottomTabDot = canvas.getByTestId('unread-notification-dot');
+    const bottomTabDot = canvas.getByTestId('bottom-tab-unread-indicator');
     expect(bottomTabDot).toBeVisible();
     expect(bottomTabDot).toHaveStyle({ height: '8px', right: '2px', top: '-1px', width: '8px' });
     expect(bottomTabDot.closest('[aria-hidden="true"]')).not.toBeNull();
@@ -2008,9 +2069,8 @@ export const UniversalMobileUnreadBadge: Story = {
       within(drawerNavigation).findByRole('link', { name: '알림, 읽지 않은 알림 100개' }),
     ).resolves.toBeVisible();
     expect(page.getAllByRole('link', { name: '알림, 읽지 않은 알림 100개' })).toHaveLength(1);
-    const drawerDot = within(drawerNavigation).getByTestId('unread-notification-dot');
-    expect(drawerDot).toBeVisible();
-    expect(drawerDot).toHaveStyle({ height: '8px', right: '2px', top: '-1px', width: '8px' });
+    const drawerCount = within(drawerNavigation).getByTestId('sidebar-unread-count');
+    expect(drawerCount).toHaveTextContent('9+');
     expect(within(drawerNavigation).queryByText('99+')).toBeNull();
   },
   render: () => (
@@ -2027,7 +2087,7 @@ export const UniversalMobileUnreadBadgeZero: Story = {
     const canvas = within(canvasElement);
     const notification = await canvas.findByRole('link', { name: '알림' });
     expect(notification).toBeVisible();
-    expect(canvas.queryByTestId('unread-notification-dot')).toBeNull();
+    expect(canvas.queryByTestId('bottom-tab-unread-indicator')).toBeNull();
   },
   render: () => <UniversalShellStory />,
 };
@@ -2149,10 +2209,10 @@ export const UniversalCompactUnreadBadge: Story = {
       canvas.findByRole('link', { name: '알림, 읽지 않은 알림 99개' }),
     ).resolves.toBeVisible();
     expect(canvas.queryByText('99')).toBeNull();
-    expect(canvas.getByTestId('unread-notification-dot')).toHaveStyle({
+    expect(canvas.getByTestId('sidebar-unread-indicator')).toHaveStyle({
       height: '8px',
-      right: '2px',
-      top: '-1px',
+      right: '-2px',
+      top: '-2px',
       width: '8px',
     });
   },
@@ -2167,13 +2227,7 @@ export const UniversalFullUnreadBadge: Story = {
     await expect(
       canvas.findByRole('link', { name: '알림, 읽지 않은 알림 1개' }),
     ).resolves.toBeVisible();
-    expect(canvas.queryByText('1')).toBeNull();
-    expect(canvas.getByTestId('unread-notification-dot')).toHaveStyle({
-      height: '8px',
-      right: '2px',
-      top: '-1px',
-      width: '8px',
-    });
+    expect(canvas.getByTestId('sidebar-unread-count')).toHaveTextContent('1');
   },
   render: () => <UniversalShellStory />,
 };
@@ -2191,7 +2245,7 @@ export const UnreadBadgeUsesNormalizedRelayProfileRecord: Story = {
       canvas.findByRole('link', { name: '알림, 읽지 않은 알림 100개' }),
     ).resolves.toBeVisible();
     expect(canvas.queryByText('99+')).toBeNull();
-    expect(canvas.getByTestId('unread-notification-dot')).toBeVisible();
+    expect(canvas.getByTestId('bottom-tab-unread-indicator')).toBeVisible();
   },
   render: () => (
     <>

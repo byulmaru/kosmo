@@ -1,17 +1,17 @@
 import { usePathname } from 'expo-router';
-import { Bell, House, PenLine, Search } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { cloneElement } from 'react';
+import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment } from 'react-relay';
-import { Avatar } from '@/components/ui/Avatar';
-import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import { BottomTabBar as BottomTabBarPresentation } from '@/components/ui/BottomTabBar';
 import { NavigationLink } from './NavigationLink';
 import { isTimelineRoute } from './shellLayout';
-import { UnreadNotificationBadge } from './UnreadNotificationBadge';
-import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
-import type { Href } from 'expo-router';
-import type { LucideIcon } from 'lucide-react-native';
+import type { Href, LinkProps } from 'expo-router';
+import type { ReactElement } from 'react';
+import type {
+  BottomTabBarRenderControlProps,
+  BottomTabDestination,
+} from '@/components/ui/navigationChrome';
 import type { BottomTabBar_profile$key } from './__generated__/BottomTabBar_profile.graphql';
 
 const BottomTabBarFragment = graphql`
@@ -26,144 +26,94 @@ const BottomTabBarFragment = graphql`
   }
 `;
 
-type Tab = {
-  href?: Href;
-  Icon?: LucideIcon;
-  label: string;
-};
-
-const baseTabs: Tab[] = [
-  { href: '/home', Icon: House, label: '홈' },
-  { href: '/search', Icon: Search, label: '검색' },
-  { href: '/compose', Icon: PenLine, label: '글쓰기' },
-  { href: '/notifications', Icon: Bell, label: '알림' },
-];
-
-export function BottomTabBar({
-  onHomeReselect,
-  profile: profileKey,
-}: {
+type Props = {
   onHomeReselect?: () => void;
   profile?: BottomTabBar_profile$key | null;
-}) {
-  const theme = useTheme();
+};
+
+const hrefs: Record<BottomTabDestination, Href | undefined> = {
+  compose: '/compose',
+  home: '/home',
+  notifications: '/notifications',
+  profile: undefined,
+  search: '/search',
+};
+
+export function BottomTabBar({ onHomeReselect, profile: profileKey }: Props) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const profile = useFragment(BottomTabBarFragment, profileKey ?? null);
   const unreadNotificationCount = profile?.unreadNotificationCount ?? null;
-  const tabs: Tab[] = [
-    ...baseTabs,
-    {
-      href: profile ? (`/${profile.relativeHandle}` as Href) : undefined,
-      label: '프로필',
-    },
-  ];
+  const profileHref = profile ? (`/${profile.relativeHandle}` as Href) : undefined;
+  const currentDestination = getCurrentDestination(pathname, profileHref);
+  const renderControl = ({
+    children,
+    destination,
+    selected,
+  }: BottomTabBarRenderControlProps): ReactElement => {
+    const href = destination === 'profile' ? profileHref : hrefs[destination];
+    if (!href) {
+      return children;
+    }
+
+    const linkControl = cloneElement(
+      children as ReactElement<{
+        accessibilityRole?: 'button' | 'link';
+        onPress?: NonNullable<LinkProps['onPress']>;
+      }>,
+      { accessibilityRole: 'link' },
+    );
+
+    return (
+      <NavigationLink
+        current={destination === 'home' ? selected : undefined}
+        href={href}
+        onCurrentNavigate={destination === 'home' ? onHomeReselect : undefined}
+        primary
+      >
+        {linkControl}
+      </NavigationLink>
+    );
+  };
 
   return (
-    <View
-      accessibilityLabel="주요 메뉴"
-      role="navigation"
-      style={[
-        styles.root,
-        {
-          backgroundColor: theme.backgroundCanvas,
-          borderColor: theme.borderSubtle,
-          paddingBottom: insets.bottom,
-        },
-      ]}
-    >
-      {tabs.map((tab) => {
-        const active = Boolean(
-          tab.href && (tab.href === '/home' ? isTimelineRoute(pathname) : pathname === tab.href),
-        );
-        const content = (
-          <Pressable
-            aria-current={tab.href && pathname === tab.href ? 'page' : undefined}
-            accessibilityLabel={
-              tab.label === '알림'
-                ? getUnreadNotificationAccessibilityLabel(unreadNotificationCount)
-                : tab.label
+    <BottomTabBarPresentation
+      currentDestination={currentDestination}
+      onNavigate={() => undefined}
+      platform={Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android'}
+      profile={
+        profile
+          ? {
+              imageUri: profile.avatar?.url,
+              label: profile.displayName,
             }
-            accessibilityRole={tab.href ? 'link' : 'button'}
-            accessibilityState={{ disabled: !tab.href }}
-            disabled={!tab.href}
-            style={StyleSheet.flatten([
-              styles.item,
-              {
-                backgroundColor: active ? theme.stateSelectedSurface : 'transparent',
-                opacity: tab.href ? 1 : 0.45,
-              },
-            ])}
-          >
-            {({ pressed }) => (
-              <>
-                {tab.label === '프로필' ? (
-                  <Avatar
-                    imageUri={profile?.avatar?.url}
-                    label={profile?.displayName ?? '프로필'}
-                    size={24}
-                    style={pressed && styles.pressedContent}
-                  />
-                ) : tab.Icon ? (
-                  <View style={styles.iconWithBadge}>
-                    <tab.Icon
-                      color={active ? theme.foregroundPrimary : theme.foregroundSecondary}
-                      size={24}
-                      strokeWidth={2}
-                      style={pressed && styles.pressedContent}
-                    />
-                    {tab.label === '알림' ? (
-                      <UnreadNotificationBadge count={unreadNotificationCount} />
-                    ) : null}
-                  </View>
-                ) : null}
-                <Text
-                  style={[
-                    styles.label,
-                    pressed && styles.pressedContent,
-                    {
-                      color: active ? theme.foregroundPrimary : theme.foregroundSecondary,
-                    },
-                  ]}
-                >
-                  {tab.label}
-                </Text>
-              </>
-            )}
-          </Pressable>
-        );
-
-        return tab.href ? (
-          <NavigationLink
-            href={tab.href}
-            key={tab.label}
-            onCurrentNavigate={tab.href === '/home' ? onHomeReselect : undefined}
-            primary
-          >
-            {content}
-          </NavigationLink>
-        ) : (
-          <View key={tab.label} style={styles.disabledItem}>
-            {content}
-          </View>
-        );
-      })}
-    </View>
+          : null
+      }
+      renderControl={renderControl}
+      safeAreaBottom={insets.bottom}
+      unreadNotificationCount={unreadNotificationCount}
+    />
   );
 }
 
-const styles = StyleSheet.create({
-  root: { borderTopWidth: 1, flexDirection: 'row' },
-  disabledItem: { flex: 1 },
-  item: {
-    alignItems: 'center',
-    flex: 1,
-    gap: 1,
-    justifyContent: 'center',
-    minHeight: 56,
-    paddingVertical: spacing.xs,
-  },
-  iconWithBadge: { position: 'relative' },
-  label: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.xsm },
-  pressedContent: { opacity: 0.7 },
-});
+function getCurrentDestination(
+  pathname: string,
+  profileHref: Href | undefined,
+): BottomTabDestination | null {
+  if (isTimelineRoute(pathname)) {
+    return 'home';
+  }
+  if (pathname === '/search') {
+    return 'search';
+  }
+  if (pathname === '/compose') {
+    return 'compose';
+  }
+  if (pathname === '/notifications') {
+    return 'notifications';
+  }
+  if (profileHref && pathname === profileHref) {
+    return 'profile';
+  }
+  return null;
+}
