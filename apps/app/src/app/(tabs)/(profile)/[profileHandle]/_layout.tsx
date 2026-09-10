@@ -26,6 +26,7 @@ const ProfileLayoutQuery = graphql`
     profileByHandle(handle: $handle) {
       id
       displayName
+      relativeHandle
       instance {
         kind
       }
@@ -126,7 +127,7 @@ function ProfileLayoutContent({
   const reportItem = useContentReportMenuItem({
     id: profile?.id ?? '',
     kind: ContentReportTargetType.PROFILE,
-    label: `@${handle}`,
+    label: profile?.relativeHandle ?? '',
   });
   if (!profile) {
     const missingState = (
