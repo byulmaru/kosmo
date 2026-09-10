@@ -11,6 +11,7 @@ import {
   Reactions,
 } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, PostState, ProfileState } from '../enums';
+import { isNotificationProfileEligible } from './notification-policy';
 import type { Database } from '../db';
 
 const NotificationRepostAuthors = alias(Profiles, 'notification_repost_author');
@@ -25,7 +26,11 @@ const NotificationRepostRecipientInstances = alias(
 export const createFollowNotification = async (sourceId: string): Promise<void> => {
   await getDatabaseConnection().transaction(async (tx) => {
     const source = await tx
-      .select({ id: ProfileFollows.id, recipientProfileId: ProfileFollows.followeeProfileId })
+      .select({
+        id: ProfileFollows.id,
+        recipientProfileId: ProfileFollows.followeeProfileId,
+        relatedProfileId: ProfileFollows.followerProfileId,
+      })
       .from(ProfileFollows)
       .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followeeProfileId))
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
@@ -36,6 +41,15 @@ export const createFollowNotification = async (sourceId: string): Promise<void> 
     // The relation may be consumed by a concurrent terminal action before this
     // post-commit projection is materialized. There is no Notification to project.
     if (!source) {
+      return;
+    }
+
+    if (
+      !(await isNotificationProfileEligible(tx, {
+        recipientProfileId: source.recipientProfileId,
+        relatedProfileId: source.relatedProfileId,
+      }))
+    ) {
       return;
     }
 
@@ -59,6 +73,7 @@ export const createFollowRequestNotification = async (sourceId: string): Promise
       .select({
         id: ProfileFollowRequests.id,
         recipientProfileId: ProfileFollowRequests.followeeProfileId,
+        relatedProfileId: ProfileFollowRequests.followerProfileId,
       })
       .from(ProfileFollowRequests)
       .innerJoin(Profiles, eq(Profiles.id, ProfileFollowRequests.followeeProfileId))
@@ -77,6 +92,15 @@ export const createFollowRequestNotification = async (sourceId: string): Promise
     // The source may have reached a terminal state between the source commit and this
     // post-commit effect. In that case there is no Notification to project.
     if (!source) {
+      return;
+    }
+
+    if (
+      !(await isNotificationProfileEligible(tx, {
+        recipientProfileId: source.recipientProfileId,
+        relatedProfileId: source.relatedProfileId,
+      }))
+    ) {
       return;
     }
 
@@ -123,6 +147,15 @@ export const createReactionNotification = async (
     if (
       source.actorProfileId === source.recipientProfileId ||
       source.recipientInstanceKind !== InstanceKind.LOCAL
+    ) {
+      return;
+    }
+
+    if (
+      !(await isNotificationProfileEligible(tx, {
+        recipientProfileId: source.recipientProfileId,
+        relatedProfileId: source.actorProfileId,
+      }))
     ) {
       return;
     }
@@ -198,6 +231,15 @@ export const createRepostNotification = async (
   if (
     source.actorProfileId === source.recipientProfileId ||
     source.recipientInstanceKind !== InstanceKind.LOCAL
+  ) {
+    return;
+  }
+
+  if (
+    !(await isNotificationProfileEligible(connection, {
+      recipientProfileId: source.recipientProfileId,
+      relatedProfileId: source.actorProfileId,
+    }))
   ) {
     return;
   }

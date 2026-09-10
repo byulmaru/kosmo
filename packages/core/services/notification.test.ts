@@ -9,8 +9,10 @@ import {
   pg,
   PostContents,
   Posts,
+  ProfileBlocks,
   ProfileFollowRequests,
   ProfileFollows,
+  ProfileMutes,
   Profiles,
   Reactions,
 } from '../db';
@@ -413,6 +415,48 @@ test('Follow Request 알림은 Remote Recipient에 투영하지 않는다', asyn
   assert.deepEqual(await readNotifications(request.id), []);
 });
 
+test('Follow·Follow Request 알림은 Recipient Mute와 양방향 Block을 반영한다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  const profileFollow = getEstablishedFollow(
+    await followProfile({
+      followerProfileId: follower.id,
+      followeeProfileId: followee.id,
+    }),
+  );
+  const request = await db
+    .insert(ProfileFollowRequests)
+    .values({ followerProfileId: follower.id, followeeProfileId: followee.id })
+    .returning()
+    .then(firstOrThrow);
+
+  await db.insert(ProfileMutes).values({
+    ownerProfileId: followee.id,
+    targetProfileId: follower.id,
+    expiresAt: null,
+  });
+  await createFollowNotification(profileFollow.id);
+  await createFollowRequestNotification(request.id);
+  assert.deepEqual(await readNotifications(profileFollow.id), []);
+  assert.deepEqual(await readNotifications(request.id), []);
+
+  await db.delete(ProfileMutes).where(eq(ProfileMutes.ownerProfileId, followee.id));
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: follower.id,
+    targetProfileId: followee.id,
+  });
+  await createFollowNotification(profileFollow.id);
+  await createFollowRequestNotification(request.id);
+  assert.deepEqual(await readNotifications(profileFollow.id), []);
+  assert.deepEqual(await readNotifications(request.id), []);
+
+  await db.delete(ProfileBlocks).where(eq(ProfileBlocks.ownerProfileId, follower.id));
+  await createFollowNotification(profileFollow.id);
+  await createFollowRequestNotification(request.id);
+  assert.equal((await readNotifications(profileFollow.id)).length, 1);
+  assert.equal((await readNotifications(request.id)).length, 1);
+});
+
 test('Follow Notification create/delete race does not lock the source row', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
@@ -621,6 +665,52 @@ test('Reaction 알림은 존재하지 않는 source를 post-commit no-op으로 �
   assert.deepEqual(await readNotifications(sourceId), []);
 });
 
+test('Reaction 알림 정책은 Recipient의 영구 Mute와 양방향 Block만 차단한다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const reaction = await createReaction(author.id, recipient.id);
+
+  await db.insert(ProfileMutes).values({
+    ownerProfileId: author.id,
+    targetProfileId: recipient.id,
+    expiresAt: null,
+  });
+  await createReactionNotification(reaction.id);
+  assert.equal((await readNotifications(reaction.id)).length, 1);
+
+  await deleteNotificationBySource(NotificationKind.REACTION, reaction.id);
+  await db.delete(ProfileMutes).where(eq(ProfileMutes.ownerProfileId, author.id));
+  await db.insert(ProfileMutes).values({
+    ownerProfileId: recipient.id,
+    targetProfileId: author.id,
+    expiresAt: Temporal.Instant.from('2099-01-01T00:00:00Z'),
+  });
+  await createReactionNotification(reaction.id);
+  assert.equal((await readNotifications(reaction.id)).length, 1);
+
+  await deleteNotificationBySource(NotificationKind.REACTION, reaction.id);
+  await db.delete(ProfileMutes).where(eq(ProfileMutes.ownerProfileId, recipient.id));
+  await db.insert(ProfileMutes).values({
+    ownerProfileId: recipient.id,
+    targetProfileId: author.id,
+    expiresAt: null,
+  });
+  await createReactionNotification(reaction.id);
+  assert.deepEqual(await readNotifications(reaction.id), []);
+
+  await db.delete(ProfileMutes).where(eq(ProfileMutes.ownerProfileId, recipient.id));
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: author.id,
+    targetProfileId: recipient.id,
+  });
+  await createReactionNotification(reaction.id);
+  assert.deepEqual(await readNotifications(reaction.id), []);
+
+  await db.delete(ProfileBlocks).where(eq(ProfileBlocks.ownerProfileId, author.id));
+  await createReactionNotification(reaction.id);
+  assert.equal((await readNotifications(reaction.id)).length, 1);
+});
+
 test('Repost 알림은 direct Source에서 Recipient와 Related 객체를 파생하고 idempotent하다', async () => {
   const author = await createProfile();
   const recipient = await createProfile();
@@ -681,6 +771,37 @@ test('Repost 알림은 존재하지 않거나 pure Repost가 아닌 source에서
   const contentPost = await createContentPost(author.id);
   await assert.doesNotReject(createRepostNotification(contentPost.id));
   assert.equal(await db.$count(Notifications), notificationCount);
+});
+
+test('Repost 알림은 Recipient Mute와 양방향 Block이 있으면 생성하지 않는다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const source = await createContentPost(recipient.id);
+  const { repost } = await repostPost({
+    actorProfileId: author.id,
+    origin: 'LOCAL',
+    sourcePostId: source.id,
+  });
+
+  await db.insert(ProfileMutes).values({
+    ownerProfileId: recipient.id,
+    targetProfileId: author.id,
+    expiresAt: null,
+  });
+  await createRepostNotification(repost.id);
+  assert.deepEqual(await readNotifications(repost.id), []);
+
+  await db.delete(ProfileMutes).where(eq(ProfileMutes.ownerProfileId, recipient.id));
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: recipient.id,
+    targetProfileId: author.id,
+  });
+  await createRepostNotification(repost.id);
+  assert.deepEqual(await readNotifications(repost.id), []);
+
+  await db.delete(ProfileBlocks).where(eq(ProfileBlocks.ownerProfileId, recipient.id));
+  await createRepostNotification(repost.id);
+  assert.equal((await readNotifications(repost.id)).length, 1);
 });
 
 test('Repost 알림 정리는 정상·반복·없는 source에 idempotent하다', async () => {
