@@ -350,9 +350,14 @@ describe('ProfileHero 관리 메뉴 조립', () => {
     assert.ok(renderer);
 
     const menu = renderer.root.find((node) => (node.type as unknown) === 'ProfileMuteAction');
+    const actionMenu = menu.props.renderMenuItem({
+      disabled: false,
+      item: { key: 'mute' },
+      registerTriggerFocus: () => undefined,
+    });
     assert.deepEqual(
-      menu.props.items.map((item: { key: string }) => item.key),
-      ['copy-profile-link', 'block'],
+      actionMenu.props.items.map((item: { key: string }) => item.key),
+      ['copy-profile-link', 'block', 'mute'],
     );
   });
 });

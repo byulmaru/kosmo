@@ -32,6 +32,7 @@ const ProfileLayoutQuery = graphql`
       blockedBy
       blocking
       profileBlockId
+      ...FollowButton_profileBlockStatus
     }
     profileByHandle(handle: $handle) {
       id
@@ -369,13 +370,22 @@ function ProfileLayoutContent({
       </Button>
     </NavigationLink>
   ) : (
-    <FollowButton profile={profile} />
+    <FollowButton
+      onUnblockSuccess={() => {
+        if (selectedProfileId) {
+          rememberPostRefreshFocus(
+            focusIntentKey(selectedProfileId, handle),
+            actorLifecycleKey,
+            'menu',
+          );
+        }
+      }}
+      profile={profile}
+      profileBlockStatus={blockStatus}
+    />
   );
-  const profileAction = blockStatus?.blocking
-    ? unblockAction
-    : blockStatus?.blockedBy
-      ? undefined
-      : relationshipAction;
+  const profileAction =
+    blockStatus?.blockedBy && !blockStatus.blocking ? undefined : relationshipAction;
   const profileContent = blockStatus?.blockedBy ? (
     <StateView title="게시물을 볼 수 없습니다" />
   ) : blockStatus?.blocking && !blockedContentVisible ? (
