@@ -402,3 +402,37 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   toast·재시도와 메뉴 keyboard·dismiss·trigger focus return을 검증한다. fixture 없는 production 메뉴에
   고정 action이 추가되지 않는지도 검증한다. 실제 요청 수명·결과 반영과 교체 확인·전용 상태 화면은
   PROD-809의 mutation·정책 구현 범위에서 검증한다.
+
+## 인용 동의와 원문 표시
+
+[ADR 0029](../domain/decisions/0029-quote-consent-and-federation.md)의 인용 정책을 작성과 표시 흐름에 적용한다.
+
+- 이번 사이클에는 게시글별 인용 허용 설정 `모두`, `팔로워`, `본인만`을 제공한다. 새 글과 기존 글의 초기값은
+  `모두`다. Profile 기본값 설정은 PROD-925 Backlog로 분리한다.
+- 타인의 글은 Public·Unlisted이고 조회 가능한 경우에만 인용 대상으로 선택한다. 자기 Followers Only 글은
+  기존 원문 접근 범위를 유지하며 인용할 수 있다.
+- 자기 인용은 QuoteRequest 없이 허용한다. 타인의 원격 글은 `interactionPolicy`가 automatic/manual approval을
+  광고하거나, 정책이 없거나 해석되지 않는 경우에도 작성자의 본문을 pending 상태로 게시하고 QuoteRequest를
+  보낸다. 게시된 글에서 승인 전 Source를 정상 인용 카드로 표시하지 않으며, Accept와 유효한
+  QuoteAuthorization을 받은 뒤 Source를 표시한다. 거절·철회·원문 삭제 후에는 자체 본문을 유지한 채 Source를 숨긴다.
+- `interactionPolicy`는 작성 전 UI·eligibility 힌트로만 사용한다. 현재 작성자가 automatic/manual 어느 쪽에도
+  포함되지 않으면 승인이 예상되지 않는다고 안내할 수 있지만, 정책 자체를 승인 증거로 사용하지 않는다.
+- Kosmo 자체의 건별 수동 승인 UI는 제공하지 않는다. 작성자는 자기 글의 정책을 변경하거나 기존 인용 승인을
+  명시적으로 철회할 수 있다. 정책 변경과 차단만으로 기존 승인을 자동 철회하지 않는다.
+- 새 QuoteRequest와 새 인용 승인은 양방향 차단 관계에서 막는다. 기존 승인 Source는 기존 방향별 Post 조회
+  정책을 적용하므로 Viewer가 Source Author를 차단한 방향만 존재하면 직접 조회 조건에 따라 표시할 수 있고,
+  Source Author가 Viewer를 차단했거나 상호 차단한 경우에는 숨긴다. 제3자에게도 Source를 숨기는 사용자 조작은
+  별도 승인 철회다.
+- PROD-431은 인용 작성과 Composer를, PROD-924는 게시글별 정책·철회 조작과 승인 lifecycle 연동을 소유한다.
+  후속 설계에서는 이 조작의 진입점·오류 복구·접근성을 기존 공용 UI 계약에 맞춰 구체화한다.
+
+## 인용 작성 범위
+
+- `인용하기`는 현재 action 대상 Post를 direct Source로 선택해 공용 Composer를 연다. Source 자체가 Quote여도
+  그 Source의 Source로 대상을 바꾸지 않는다. 작성 중 preview는 한 단계만 표시한다.
+- 본문·Visibility·Content Warning·Sensitive Media·Media, pending·폐기·실패 복구는 기존 Composer를 재사용한다.
+  Source preview만으로 유효한 작성 Content를 만들지 않는다.
+- 로컬 Quote 작성에는 Reply Parent를 추가하지 않는다. Reply+Quote 작성 UI·API와 본문 링크의 인용 카드
+  전환은 2026-09-09 PROD-431 사용자 지시로 제외했다. 기존 Reply 작성과 저장된 관계의 표시 계약은 유지한다.
+- 게시 전의 Source preview와 게시 후 승인에 따른 Source 표시는 구분한다. 작성 성공은 요청한 selected Profile의
+  Relay Environment에 반영하며, 승인 대기 성공을 작성 실패로 처리하거나 Source를 낙관적으로 노출하지 않는다.

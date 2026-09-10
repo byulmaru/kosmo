@@ -14,6 +14,8 @@ Post Content Media node의 `Note.attachment` Image, Alt Text와 sensitive 투영
 [ADR 0022](./0022-post-content-revision-media-nodes.md)가 정의한다. 나머지 Local Note identity, HTML content,
 summary, audience와 역참조 결정은 유지한다.
 
+Quote 동의와 federation 표현은 [ADR 0029](./0029-quote-consent-and-federation.md)이 정의한다.
+
 ## 결정
 
 - Content가 있는 Local Post의 ActivityPub identity는 Author Profile이 연결된 Local Instance의 canonical
@@ -87,7 +89,7 @@ Note 역참조 권한이 독립적으로 제한하므로, Reply를 조회한 req
   유지된다.
 - Parent의 Tombstone 전이는 `inReplyTo`를 제거하지 않는다. 현재 physical delete 행동을 추가하지 않고 Reply
   Parent FK만 향후 실제 row 삭제에 대비해 `SET NULL`로 정의하며 Reply Post에는 cascade delete를 적용하지 않는다.
-- Mentioned Profiles, custom emoji, Quote 전용 federation 표현과 실제 Activity delivery는 독립 후속 계약으로
+- Mentioned Profiles, custom emoji와 실제 Activity delivery는 독립 후속 계약으로
   남는다. Media federation 표현은 [ADR 0022](./0022-post-content-revision-media-nodes.md)가 정의한다.
 
 ## 문서 반영
