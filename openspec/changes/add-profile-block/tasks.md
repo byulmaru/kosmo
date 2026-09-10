@@ -58,8 +58,6 @@ required cleanup으로 정리하며, 필수 cleanup 완료 전에는 Block actio
 - `docs/domain/objects/media.md`
 - `docs/domain/objects/follow-relationship.md`
 - `docs/domain/objects/follow-request.md`
-- `docs/domain/objects/post.md`
-- `docs/domain/objects/media.md`
 - `docs/domain/objects/bookmark.md`
 - `docs/domain/objects/reaction.md`
 - `docs/domain/objects/notification.md`
