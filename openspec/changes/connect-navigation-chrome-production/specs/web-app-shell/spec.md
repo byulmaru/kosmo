@@ -42,7 +42,7 @@
 
 ### Requirement: Primary navigation targets home route
 
-**Authority / Provenance:** `docs/design/breakpoints.md`, `docs/design/accessibility.md`, `docs/design/local-timeline.md`, `docs/design/page-header.md`, `PROD-610`, `PROD-649`, `PROD-796` — 공통 navigation의 홈 항목은 실제 `/home` link를 유지해야 하며(MUST), compact·full Web의 홈 헤더 브랜드 마크도 같은 link와 일반 활성화 동작을 제공해야 한다(MUST). 모바일 Web·Android·iOS 브랜드 마크는 비상호작용 요소로 유지해야 한다(MUST). 현재 경로가 `/home` 또는 `/local`이면 navigation의 홈 항목은 Home/Local 화면군의 active 진입점으로 표시해야 하며(MUST), Local 전용 primary navigation 항목을 추가해서는 안 된다(MUST NOT). 다른 route에서 홈 진입 control을 일반 활성화하면 기존 guarded forward navigation으로 `/home`을 열어야 하고(MUST), Web에서 이미 `/home` 또는 `/local`이면 route를 바꾸지 않고 document scroll을 매번 최상단으로 이동하면서 현재 타임라인의 Relay 데이터를 서버에서 한 번 다시 요청해야 한다(MUST). 재선택 새로고침이 진행 중일 때 추가 일반 활성화는 document scroll을 최상단으로 이동해야 하지만(MUST) 추가 네트워크 요청을 시작해서는 안 된다(MUST NOT). 요청이 성공하거나 실패해 종료된 뒤의 다음 일반 활성화는 새 네트워크 요청을 정확히 한 번 시작해야 하며(MUST), 이전 요청이 실패했어도 현재 타임라인 데이터를 유지해야 한다(MUST). modifier 또는 새 탭 활성화는 실제 `/home` link 의미를 유지하고 현재 타임라인 재선택을 실행해서는 안 된다(MUST NOT). 이 정책은 다른 현재 route 재선택, Android/iOS Native navigation 또는 Home·Local 외 Relay 데이터 정책을 변경해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/breakpoints.md`, `docs/design/accessibility.md`, `docs/design/local-timeline.md`, `docs/design/page-header.md`, `PROD-610`, `PROD-649`, `PROD-796` — 공통 navigation의 홈 항목은 실제 `/home` link를 유지해야 하며(MUST), compact·full Web의 홈 헤더 브랜드 마크도 같은 link와 일반 활성화 동작을 제공해야 한다(MUST). 모바일 Web·Android·iOS 브랜드 마크는 비상호작용 요소로 유지해야 한다(MUST). 현재 경로가 `/home` 또는 `/local`이면 navigation의 홈 항목은 Home/Local 화면군의 active 진입점으로 표시해야 하며(MUST), Local 전용 primary navigation 항목을 추가해서는 안 된다(MUST NOT). 다른 route에서 홈 진입 control을 일반 활성화하면 기존 guarded forward navigation으로 `/home`을 열어야 하고(MUST), Web에서 이미 `/home` 또는 `/local`이면 route를 바꾸지 않고 document scroll을 매번 최상단으로 이동하면서 현재 타임라인의 기존 Relay 새로고침 경로를 실행해야 한다(MUST). Home은 기존 `PROD-610`의 진행 중 중복 요청 방지와 마지막 성공 데이터 보존을 유지해야 한다(MUST). Local은 기존 `RouteBoundary.refetch()` 경로를 재사용해야 하며(MUST), 별도 요청 조정 계층이나 상태 표시를 추가해서는 안 된다(MUST NOT). modifier 또는 새 탭 활성화는 실제 `/home` link 의미를 유지하고 현재 타임라인 재선택을 실행해서는 안 된다(MUST NOT). 이 정책은 다른 현재 route 재선택, Android/iOS Native navigation 또는 Home·Local 외 Relay 데이터 정책을 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: Home navigation links to /home
 
@@ -67,21 +67,27 @@
 
 #### Scenario: Reselect the current Web timeline route
 
-- **WHEN** Web의 현재 경로가 `/home` 또는 `/local`이고 진행 중인 재선택 새로고침이 없는 상태에서 사용자가 활성 홈 항목이나 compact·full 브랜드 마크를 일반 활성화한다
+- **WHEN** Web의 현재 경로가 `/home` 또는 `/local`이고 사용자가 활성 홈 항목이나 compact·full 브랜드 마크를 일반 활성화한다
 - **THEN** 시스템은 route를 바꾸지 않고 document scroll을 최상단으로 이동한다
-- **AND** 현재 Home 또는 Local Relay 데이터를 서버에서 다시 요청하는 네트워크 요청을 정확히 한 번 시작한다
+- **AND** 현재 Home 또는 Local이 이미 사용하는 Relay 새로고침 경로를 실행한다
 
-#### Scenario: Reselect the current timeline while refresh is in flight
+#### Scenario: Reselect Home while refresh is in flight
 
-- **WHEN** 현재 타임라인 재선택 새로고침이 진행 중이고 사용자가 해당 Web 진입점을 다시 일반 활성화한다
+- **WHEN** Home 재선택 새로고침이 진행 중이고 사용자가 해당 Web 진입점을 다시 일반 활성화한다
 - **THEN** 시스템은 document scroll을 다시 최상단으로 이동한다
 - **AND** 추가 Relay 네트워크 요청을 시작하지 않는다
 
-#### Scenario: Reselect the current timeline after refresh settles
+#### Scenario: Reselect Home after refresh settles
 
-- **WHEN** 이전 재선택 새로고침이 성공 또는 실패로 종료된 뒤 사용자가 해당 Web 진입점을 일반 활성화한다
-- **THEN** 시스템은 현재 타임라인의 새로운 Relay 네트워크 요청을 정확히 한 번 시작한다
-- **AND** 이전 요청이 실패했어도 현재 타임라인 데이터를 유지한다
+- **WHEN** 이전 Home 재선택 새로고침이 성공 또는 실패로 종료된 뒤 사용자가 해당 Web 진입점을 일반 활성화한다
+- **THEN** 시스템은 Home의 새로운 Relay 네트워크 요청을 정확히 한 번 시작한다
+- **AND** 이전 요청이 실패했어도 현재 Home 데이터를 유지한다
+
+#### Scenario: Reuse Local refresh without a new coordinator
+
+- **WHEN** Web `/local`에서 사용자가 활성 홈 항목이나 compact·full 브랜드 마크를 일반 활성화한다
+- **THEN** 시스템은 선택된 Local 탭이 이미 사용하는 `RouteBoundary.refetch()` 경로를 실행한다
+- **AND** 별도 요청 조정 계층이나 새로고침 상태 표시를 추가하지 않는다
 
 #### Scenario: Preserve the actual home link
 
