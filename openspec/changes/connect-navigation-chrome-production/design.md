@@ -33,7 +33,7 @@ Home은 `ShellChromeContext`에 Web 재선택 callback을 등록하지만 Local�
 
 1. `components/shell/SidebarNavigation.tsx`와 `BottomTabBar.tsx`는 Production adapter로 유지한다. pathname, Relay profile·unread, safe area, presentation과 destination을 계산하고 공용 UI에 전달한다.
 2. 공용 navigation control에 현재 Production 소비자가 필요한 좁은 render seam을 추가한다. 기본값은 기존 `Pressable`이며 Production adapter는 동일 visual control을 `NavigationLink`로 감싸 실제 href, modifier·새 탭, guard와 primary scroll 기록을 보존한다.
-3. `NavigationLink`가 실제 href와 별도로 Home/Local 화면군의 현재 상태를 받을 수 있게 하고, 일반 활성화에만 현재 타임라인 callback을 실행한다. Shell context의 Home 전용 이름을 현재 timeline 재선택 의미로 정렬하고 Home·Local route가 각각 document top 이동과 자기 `RouteBoundary.refetch()`를 등록한다.
+3. `NavigationLink`가 실제 href와 별도로 Home/Local 화면군의 현재 상태를 받을 수 있게 하고, 일반 활성화에만 현재 타임라인 callback을 실행한다. 기존 shell callback을 재사용하고 Home·Local route가 각각 document top 이동과 자기 새로고침 경로를 등록한다. Home은 기존 중복 요청 방지를 유지하고 Local은 별도 coordinator 없이 `RouteBoundary.refetch()`를 사용한다.
 4. compact·full Web `PageHeader` 브랜드 마크는 같은 실제 `/home` link와 현재 timeline callback을 사용한다. mobile Web·Android·iOS에는 href나 press handler를 전달하지 않는다.
 5. `SidebarNavigation` adapter가 기존 `useLogout`과 navigation guard를 직접 연결하고, 공용 presentation에는 현재 필요한 pending·error만 전달한다. 중복 visual `LogoutControl`은 다른 소비자가 없으면 제거한다.
 6. `/search`에서는 인라인 toolbar 구간만 공용 `SearchToolbar`로 교체한다. route가 leading phase, input value, submit·clear·back, drawer와 focus를 계속 소유하도록 필요한 ref·expanded 상태만 현재 소비 범위에서 노출한다.

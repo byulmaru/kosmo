@@ -41,13 +41,13 @@ Production shell이 공용 Sidebar·BottomTab presentation을 사용하면서 �
 **Guardrails**
 
 - 실제 Home link 대상 `/home`, modifier·새 탭, navigation guard와 primary scroll 기록을 유지한다.
-- 재선택은 `/home`·`/local` 일반 활성화에만 적용하고 진행 중 추가 network 요청을 만들지 않는다.
+- 재선택은 `/home`·`/local` 일반 활성화에만 적용한다. Home은 기존 진행 중 중복 요청 방지를 유지하고 Local은 기존 `RouteBoundary.refetch()`를 재사용한다.
 - mobile Web·Android·iOS 브랜드 마크는 비상호작용 요소이며 Native 하단 navigation 재선택·scroll을 추가하지 않는다.
 - logout pending·error·retry와 credential 보존 계약을 유지한다.
 
 **Verification**
 
-- NavigationLink·shell·Home·Local 관련 unit test에서 일반 활성화, guard, modifier·새 탭, 중복 재선택과 logout 상태를 검증한다.
+- NavigationLink·shell·Home·Local 관련 unit test에서 일반 활성화, guard, modifier·새 탭, Home 중복 재선택, Local 기존 refetch와 logout 상태를 검증한다.
 - 실제 `Shell.stories.tsx`에서 full·compact·drawer·bottom과 Home/Local 상태를 검증한다.
 
 - [ ] 2.1 Production Sidebar·BottomTab adapter를 공용 presentation에 연결하고 기존 ProfileSwitcher·Relay·drawer 동작을 보존한다.
