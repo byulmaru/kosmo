@@ -49,7 +49,7 @@ root.render(
     <Suspense fallback={<AppSkeleton />}>
       <App queryRef={queryRef} />
     </Suspense>
-  </RelayEnvironmentProvider>
+  </RelayEnvironmentProvider>,
 );
 ```
 
@@ -88,6 +88,7 @@ function ProfileScreen({ queryRef }) {
 ```
 
 Good candidates for `@defer`:
+
 - Sidebar content
 - Below-the-fold sections
 - Tabs and accordions not visible on initial load
@@ -98,12 +99,12 @@ Good candidates for `@defer`:
 `store-or-network` (the default) is correct for most cases — it reuses cached
 data and only hits the network for missing or stale data.
 
-| Policy | When to use |
-|--------|-------------|
-| `store-or-network` | Default. Best balance of speed and freshness. |
-| `store-and-network` | Show cached data immediately, update in background. |
-| `network-only` | Freshness is critical (e.g., after a mutation with wide side effects). |
-| `store-only` | Offline-first or reading data already guaranteed to be in the store. |
+| Policy              | When to use                                                            |
+| ------------------- | ---------------------------------------------------------------------- |
+| `store-or-network`  | Default. Best balance of speed and freshness.                          |
+| `store-and-network` | Show cached data immediately, update in background.                    |
+| `network-only`      | Freshness is critical (e.g., after a mutation with wide side effects). |
+| `store-only`        | Offline-first or reading data already guaranteed to be in the store.   |
 
 Reserve `network-only` for rare cases. Overusing it turns Relay into a
 no-cache client and eliminates the benefit of the normalized store.
@@ -131,19 +132,32 @@ fetching everything and processing in JavaScript.
 
 ```tsx
 // BAD: fetch all tasks, filter on client
-const data = useFragment(graphql`
-  fragment TaskList_user on User {
-    tasks { id, title, status }
-  }
-`, user);
-const active = data.tasks.filter(t => t.status === 'ACTIVE');
+const data = useFragment(
+  graphql`
+    fragment TaskList_user on User {
+      tasks {
+        id
+        title
+        status
+      }
+    }
+  `,
+  user,
+);
+const active = data.tasks.filter((t) => t.status === 'ACTIVE');
 
 // GOOD: filter on server via field argument
-const data = useFragment(graphql`
-  fragment TaskList_user on User {
-    tasks(status: ACTIVE) { id, title }
-  }
-`, user);
+const data = useFragment(
+  graphql`
+    fragment TaskList_user on User {
+      tasks(status: ACTIVE) {
+        id
+        title
+      }
+    }
+  `,
+  user,
+);
 ```
 
 Server-side filtering reduces payload size, avoids unnecessary network
@@ -169,13 +183,9 @@ fragment NotificationList_user on User {
 
 # GOOD: paginated with a bounded first page
 fragment NotificationList_user on User
-  @argumentDefinitions(
-    count: { type: "Int", defaultValue: 10 }
-    cursor: { type: "String" }
-  )
-  @refetchable(queryName: "NotificationListPaginationQuery") {
-  notifications(first: $count, after: $cursor)
-    @connection(key: "NotificationList_notifications") {
+@argumentDefinitions(count: { type: "Int", defaultValue: 10 }, cursor: { type: "String" })
+@refetchable(queryName: "NotificationListPaginationQuery") {
+  notifications(first: $count, after: $cursor) @connection(key: "NotificationList_notifications") {
     edges {
       node {
         id
@@ -196,15 +206,23 @@ when any field in the fragment changes.
 ```tsx
 // BAD: one large fragment, all children re-render on any field change
 function PostCard({ post }) {
-  const data = useFragment(graphql`
-    fragment PostCard_post on Post {
-      title
-      body
-      author { name, profilePicture { uri } }
-      likeCount
-      commentCount
-    }
-  `, post);
+  const data = useFragment(
+    graphql`
+      fragment PostCard_post on Post {
+        title
+        body
+        author {
+          name
+          profilePicture {
+            uri
+          }
+        }
+        likeCount
+        commentCount
+      }
+    `,
+    post,
+  );
   return (
     <>
       <PostHeader title={data.title} author={data.author} />
@@ -216,22 +234,30 @@ function PostCard({ post }) {
 
 // GOOD: each child owns its fragment, re-renders independently
 function PostHeader({ post }: { post: PostHeader_post$key }) {
-  const data = useFragment(graphql`
-    fragment PostHeader_post on Post {
-      title
-      author { name }
-    }
-  `, post);
+  const data = useFragment(
+    graphql`
+      fragment PostHeader_post on Post {
+        title
+        author {
+          name
+        }
+      }
+    `,
+    post,
+  );
   // Only re-renders when title or author.name changes
 }
 
 function PostFooter({ post }: { post: PostFooter_post$key }) {
-  const data = useFragment(graphql`
-    fragment PostFooter_post on Post {
-      likeCount
-      commentCount
-    }
-  `, post);
+  const data = useFragment(
+    graphql`
+      fragment PostFooter_post on Post {
+        likeCount
+        commentCount
+      }
+    `,
+    post,
+  );
   // Only re-renders when like/comment counts change
 }
 ```
@@ -263,7 +289,9 @@ mutation UpdateUserMutation($input: UpdateUserInput!) {
 # BAD: requires a separate round-trip after mutation
 mutation UpdateUserMutation($input: UpdateUserInput!) {
   updateUser(input: $input) {
-    user { id }
+    user {
+      id
+    }
   }
 }
 ```

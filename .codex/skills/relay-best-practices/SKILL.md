@@ -29,27 +29,27 @@ Relay ships LLM-friendly docs in `node_modules/relay-runtime/llm-docs/`
 Paths below are relative to this directory (`<llm-docs>/`). Read the relevant
 page before writing Relay code. Key docs:
 
-| Topic | Path |
-|-------|------|
-| Core concepts & philosophy | `principles-and-architecture/thinking-in-relay.mdx` |
-| Fragments | `guided-tour/rendering/fragments.mdx` |
-| Queries | `guided-tour/rendering/queries.mdx` |
-| Mutations | `guided-tour/updating-data/graphql-mutations.mdx` |
-| Pagination | `guided-tour/list-data/pagination.mdx` |
-| Refetching | `guided-tour/refetching/refetching-queries-with-different-data.mdx` |
-| `useFragment` | `api-reference/hooks/use-fragment.mdx` |
-| `usePreloadedQuery` | `api-reference/hooks/use-preloaded-query.mdx` |
-| `useQueryLoader` / `loadQuery` | `api-reference/hooks/load-query.mdx` |
-| `useMutation` | `api-reference/hooks/use-mutation.mdx` |
-| `usePaginationFragment` | `api-reference/hooks/use-pagination-fragment.mdx` |
-| `@throwOnFieldError` | `guides/throw-on-field-error-directive.mdx` |
-| `@catch` directive | `guides/catch-directive.mdx` |
-| Semantic nullability | `guides/semantic-nullability.mdx` |
-| Relay Resolvers | `guides/relay-resolvers/introduction.mdx` |
-| Testing | `guides/testing-relay-components.mdx` |
-| Compiler setup | `getting-started/compiler.mdx` |
-| Compiler configuration | `getting-started/compiler-config.mdx` |
-| Lint rules (ESLint plugin) | `getting-started/lint-rules.mdx` |
+| Topic                          | Path                                                                |
+| ------------------------------ | ------------------------------------------------------------------- |
+| Core concepts & philosophy     | `principles-and-architecture/thinking-in-relay.mdx`                 |
+| Fragments                      | `guided-tour/rendering/fragments.mdx`                               |
+| Queries                        | `guided-tour/rendering/queries.mdx`                                 |
+| Mutations                      | `guided-tour/updating-data/graphql-mutations.mdx`                   |
+| Pagination                     | `guided-tour/list-data/pagination.mdx`                              |
+| Refetching                     | `guided-tour/refetching/refetching-queries-with-different-data.mdx` |
+| `useFragment`                  | `api-reference/hooks/use-fragment.mdx`                              |
+| `usePreloadedQuery`            | `api-reference/hooks/use-preloaded-query.mdx`                       |
+| `useQueryLoader` / `loadQuery` | `api-reference/hooks/load-query.mdx`                                |
+| `useMutation`                  | `api-reference/hooks/use-mutation.mdx`                              |
+| `usePaginationFragment`        | `api-reference/hooks/use-pagination-fragment.mdx`                   |
+| `@throwOnFieldError`           | `guides/throw-on-field-error-directive.mdx`                         |
+| `@catch` directive             | `guides/catch-directive.mdx`                                        |
+| Semantic nullability           | `guides/semantic-nullability.mdx`                                   |
+| Relay Resolvers                | `guides/relay-resolvers/introduction.mdx`                           |
+| Testing                        | `guides/testing-relay-components.mdx`                               |
+| Compiler setup                 | `getting-started/compiler.mdx`                                      |
+| Compiler configuration         | `getting-started/compiler-config.mdx`                               |
+| Lint rules (ESLint plugin)     | `getting-started/lint-rules.mdx`                                    |
 
 **For performance-specific guidance** (query placement, `@defer`, pagination,
 fetch policies, caching, fragment granularity), see the companion
@@ -83,6 +83,7 @@ literals in your code and generates runtime artifacts and TypeScript/Flow types.
 ### Finding the config
 
 The compiler looks for its config in these locations (checked in order):
+
 - `relay.config.{json,js,mjs,ts}` in the project root
 - A `"relay"` key in `package.json`
 
@@ -133,14 +134,14 @@ creating waterfalls. See `<llm-docs>/guided-tour/rendering/queries.mdx` for the 
 
 ### Before fixing where a query lives, ask if it should exist
 
-| Question | If YES |
-|----------|--------|
-| Parent already fetches this GraphQL type? | Delete query, use `useFragment` |
+| Question                                     | If YES                                                      |
+| -------------------------------------------- | ----------------------------------------------------------- |
+| Parent already fetches this GraphQL type?    | Delete query, use `useFragment`                             |
 | Component only fetches and passes data down? | Delete the wrapper component entirely (loader anti-pattern) |
-| Query is inside a custom hook? | Delete query, accept a fragment key param |
-| Two components fetch the same data? | Delete one query, fetch in a common ancestor |
-| Data is only used for logging/analytics? | Move to `@defer` or server-side logging |
-| Data is static config (same for every user)? | Inject server-side, no round-trip needed |
+| Query is inside a custom hook?               | Delete query, accept a fragment key param                   |
+| Two components fetch the same data?          | Delete one query, fetch in a common ancestor                |
+| Data is only used for logging/analytics?     | Move to `@defer` or server-side logging                     |
+| Data is static config (same for every user)? | Inject server-side, no round-trip needed                    |
 
 ### `loadQuery` in `useEffect` is worse than `useLazyLoadQuery`
 
@@ -227,14 +228,14 @@ copy it into `useState`, and do not update that state manually in mutation
 
 ```tsx
 // WRONG: Copying Relay data into React state
-function UserProfile({userKey}) {
+function UserProfile({ userKey }) {
   const data = useFragment(UserProfileFragment, userKey);
   const [name, setName] = useState(data.name); // broken
 
   const [commit] = useMutation(UpdateNameMutation);
   const handleSave = (newName) => {
     commit({
-      variables: {name: newName},
+      variables: { name: newName },
       onCompleted: (response) => {
         setName(response.updateName.user.name); // broken
       },
@@ -253,12 +254,12 @@ mutation, subscription, or refetch elsewhere in the app.
 
 ```tsx
 // CORRECT: Read directly from the fragment
-function UserProfile({userKey}) {
+function UserProfile({ userKey }) {
   const data = useFragment(UserProfileFragment, userKey);
   const [commit, isInFlight] = useMutation(UpdateNameMutation);
 
   const handleSave = (newName) => {
-    commit({variables: {name: newName}});
+    commit({ variables: { name: newName } });
     // No onCompleted needed — Relay updates the store automatically,
     // and useFragment re-renders this component with the new data.
   };
@@ -282,28 +283,34 @@ fragment.
 
 ```tsx
 // WRONG: Parent fetches everything, passes raw data
-function Parent({queryRef}) {
-  const data = usePreloadedQuery(graphql`
-    query ParentQuery {
-      user {
-        name
-        email
-        avatarUrl
+function Parent({ queryRef }) {
+  const data = usePreloadedQuery(
+    graphql`
+      query ParentQuery {
+        user {
+          name
+          email
+          avatarUrl
+        }
       }
-    }
-  `, queryRef);
+    `,
+    queryRef,
+  );
   return <UserCard name={data.user.name} avatarUrl={data.user.avatarUrl} />;
 }
 
 // CORRECT: Child declares its own fragment
-function Parent({queryRef}) {
-  const data = usePreloadedQuery(graphql`
-    query ParentQuery {
-      user {
-        ...UserCard_user
+function Parent({ queryRef }) {
+  const data = usePreloadedQuery(
+    graphql`
+      query ParentQuery {
+        user {
+          ...UserCard_user
+        }
       }
-    }
-  `, queryRef);
+    `,
+    queryRef,
+  );
   return <UserCard user={data.user} />;
 }
 ```
@@ -317,14 +324,21 @@ they will drift out of sync. Spread the fragment instead:
 # WRONG
 mutation UpdateUserMutation($input: UpdateUserInput!) {
   updateUser(input: $input) {
-    user { id, name, email, avatarUrl }
+    user {
+      id
+      name
+      email
+      avatarUrl
+    }
   }
 }
 
 # CORRECT
 mutation UpdateUserMutation($input: UpdateUserInput!) {
   updateUser(input: $input) {
-    user { ...UserCard_user }
+    user {
+      ...UserCard_user
+    }
   }
 }
 ```
@@ -394,12 +408,12 @@ automatically.
 Relay **enforces** that operation names match the module (file) they are defined
 in. Mismatched names cause compiler errors, not just style warnings.
 
-| Element | Convention | Example |
-|---------|-----------|---------|
-| Fragment | `ComponentName_propName` | `UserCard_user` |
-| Query | `ComponentNameQuery` | `HomePageQuery` |
-| Mutation | `ComponentNameMutation` | `LikeButtonMutation` |
-| Generated files | `__generated__/*.graphql` | Never edit these |
+| Element         | Convention                | Example              |
+| --------------- | ------------------------- | -------------------- |
+| Fragment        | `ComponentName_propName`  | `UserCard_user`      |
+| Query           | `ComponentNameQuery`      | `HomePageQuery`      |
+| Mutation        | `ComponentNameMutation`   | `LikeButtonMutation` |
+| Generated files | `__generated__/*.graphql` | Never edit these     |
 
 The module name is the filename stripped of all extensions (`.react.js`, `.tsx`,
 etc.). `UserCard.react.js` → module name `UserCard`.
