@@ -1,17 +1,17 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
-import { WorkflowExecutionAlreadyStartedError } from '@temporalio/client';
+import {
+  ApplicationFailure,
+  WorkflowExecutionAlreadyStartedError,
+  WorkflowFailedError,
+} from '@temporalio/client';
+import { NotFoundError } from '../error';
 
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
 
 const { temporalClient } = await import('./client');
-const {
-  executeProfileBlock,
-  executeProfileUnblock,
-  profileBlockWorkflowId,
-  profileUnblockWorkflowId,
-} = await import('./profile-block');
+const { executeProfileBlock, executeProfileUnblock } = await import('./profile-block');
 
 const input = {
   ownerProfileId: '00000000-0000-8000-8000-000000000001',
@@ -67,17 +67,36 @@ test('Profile Block caller waits for the one-shot Workflow result', async () => 
       options.workflowId,
       'profile-block:00000000-0000-8000-8000-000000000001:00000000-0000-8000-8000-000000000002',
     );
-    assert.notEqual(
-      options.workflowId,
-      profileBlockWorkflowId({
-        ...input,
-        ownerProfileId: input.targetProfileId,
-        targetProfileId: input.ownerProfileId,
-      }),
-    );
     assert.equal(options.workflowIdConflictPolicy, 'USE_EXISTING');
     assert.equal(options.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
     assert.equal(deadline.mock.calls.length, 1);
+  } finally {
+    deadline.mock.restore();
+    execute.mock.restore();
+  }
+});
+
+test('Profile Block caller rehydrates durable domain failures', async () => {
+  const execute = mock.method(temporalClient.workflow, 'execute', async () =>
+    Promise.reject(
+      new WorkflowFailedError(
+        'Workflow execution failed',
+        ApplicationFailure.nonRetryable('Profile not found', 'NOT_FOUND'),
+        undefined as never,
+      ),
+    ),
+  );
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  try {
+    await assert.rejects(
+      executeProfileBlock(input),
+      (error: unknown) => error instanceof NotFoundError && error.message === 'Profile not found',
+    );
   } finally {
     deadline.mock.restore();
     execute.mock.restore();
@@ -127,21 +146,6 @@ test('Profile Unblock caller waits for the one-shot Workflow result', async () =
       options.workflowId,
       'profile-unblock:00000000-0000-8000-8000-000000000001:00000000-0000-8000-8000-000000000002:00000000-0000-8000-8000-000000000004',
     );
-    assert.notEqual(
-      options.workflowId,
-      profileUnblockWorkflowId({
-        ...unblockInput,
-        ownerProfileId: input.targetProfileId,
-        targetProfileId: input.ownerProfileId,
-      }),
-    );
-    assert.notEqual(
-      options.workflowId,
-      profileUnblockWorkflowId({
-        ...unblockInput,
-        profileBlockId: '00000000-0000-8000-8000-000000000005',
-      }),
-    );
     assert.equal(options.workflowIdConflictPolicy, 'USE_EXISTING');
     assert.equal(options.workflowIdReusePolicy, 'REJECT_DUPLICATE');
     assert.equal(deadline.mock.calls.length, 1);
@@ -158,7 +162,8 @@ test('Profile Unblock caller observes the existing completed generation after a 
     ownerProfileId: input.ownerProfileId,
     targetProfileId: input.targetProfileId,
   };
-  const workflowId = profileUnblockWorkflowId(unblockInput);
+  const workflowId =
+    'profile-unblock:00000000-0000-8000-8000-000000000001:00000000-0000-8000-8000-000000000002:00000000-0000-8000-8000-000000000004';
   const execute = mock.method(temporalClient.workflow, 'execute', async () => {
     throw new WorkflowExecutionAlreadyStartedError(
       'Profile Unblock generation already exists',

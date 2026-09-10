@@ -5,6 +5,8 @@ import './query';
 export {
   AccountProfile,
   Profile,
+  ProfileBlock,
+  ProfileBlockConnection,
   ProfileConnection,
   ProfileFollow,
   ProfileFollowRequest,

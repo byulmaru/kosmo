@@ -42,6 +42,14 @@ type ApproveProfileFollowRequestPayload {
   profileFollowRequestId: ID!
 }
 
+input BlockProfileInput {
+  id: ID!
+}
+
+type BlockProfilePayload {
+  profileBlock: ProfileBlock!
+}
+
 type Bookmark implements Node {
   createdAt: DateTime!
   id: ID!
@@ -237,6 +245,7 @@ enum MediaState {
 type Mutation {
   addReaction(input: AddReactionInput!): AddReactionPayload!
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
+  blockProfile(input: BlockProfileInput!): BlockProfilePayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
   completeMediaUpload(input: CompleteMediaUploadInput!): CompleteMediaUploadPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
@@ -257,6 +266,7 @@ type Mutation {
   revokeCurrentSession: RevokeCurrentSessionPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   submitFeedback(input: SubmitFeedbackInput!): SubmitFeedbackPayload!
+  unblockProfile(input: UnblockProfileInput!): UnblockProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   unmuteProfile(input: UnmuteProfileInput!): UnmuteProfilePayload!
   unregisterPushInstallation(input: UnregisterPushInstallationInput!): UnregisterPushInstallationPayload!
@@ -372,11 +382,34 @@ type Profile implements Node {
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   private: ProfilePrivate
+  profileBlocks(after: String, before: String, first: Int, last: Int): ProfileBlockConnection!
   profileMutes(after: String, before: String, first: Int, last: Int): ProfileMuteConnection!
   relativeHandle: String!
   tags: [Hashtag!]!
   unreadNotificationCount: Int
   viewerState: ProfileViewerState
+}
+
+type ProfileBlock implements Node {
+  createdAt: DateTime!
+  id: ID!
+  targetProfile: Profile!
+}
+
+type ProfileBlockConnection {
+  edges: [ProfileBlockConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProfileBlockConnectionEdge {
+  cursor: String!
+  node: ProfileBlock!
+}
+
+type ProfileBlockStatus {
+  blockedBy: Boolean!
+  blocking: Boolean!
+  profileBlockId: ID
 }
 
 type ProfileConnection {
@@ -500,6 +533,7 @@ type Query {
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
+  profileBlockStatus(handle: String!): ProfileBlockStatus!
   profileByHandle(handle: String!): Profile
   searchProfiles(after: String, before: String, first: Int, last: Int, query: String!): ProfileConnection!
 }
@@ -592,6 +626,14 @@ input SubmitFeedbackInput {
 
 type SubmitFeedbackPayload {
   completed: Boolean!
+}
+
+input UnblockProfileInput {
+  id: ID!
+}
+
+type UnblockProfilePayload {
+  profileBlockId: ID
 }
 
 input UnfollowProfileInput {
