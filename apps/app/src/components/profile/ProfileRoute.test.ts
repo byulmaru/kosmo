@@ -726,6 +726,7 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('StateView').props.title, '게시물을 볼 수 없습니다');
     assert.equal(rendered('Button').length, 0);
     assert.equal(rendered('FollowButton').length, 0);
+    assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
   });
 
   it('서로 차단한 Profile은 공통 action을 표시하고 내 해제 뒤 상대 차단이 남으면 숨긴다', async () => {
@@ -735,10 +736,12 @@ describe('profile route parameter lifecycle', () => {
 
     await renderRoute('@blocked');
     assert.deepEqual(requireRendered('FollowButton').props.profileBlockStatus, profileBlockStatus);
+    assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
 
     profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
     await renderRoute('@blocked');
     assert.equal(rendered('FollowButton').length, 0);
+    assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
   });
 
   it('selected Profile 자기 자신에게는 차단 action을 표시하지 않는다', async () => {
