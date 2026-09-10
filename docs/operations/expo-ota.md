@@ -45,7 +45,7 @@ Manifest는 Expo protocol headers를 포함한 `multipart/mixed` 응답으로 �
 iOS publish job은 기존 job-level reusable workflow 호출을 유지한다. 두 caller는
 Kosmo repository secret `EXPO_OTA_SIGNING_PRIVATE_KEY`를 local reusable workflow의
 `signing_private_key`로 전달하고, local workflow는 이를 public publisher의 동일한 secret
-이름으로 전달한다. Secret 등록 여부와 실제 publish 실행은 아직 검증하지 않았다.
+이름으로 전달한다. Secret은 2026-09-10 10:06:24 UTC에 등록했다. 실제 publish 실행은 아직 검증하지 않았다.
 
 | 호출 workflow      | 성공한 배포            | OTA channel | source SHA                       |
 | ------------------ | ---------------------- | ----------- | -------------------------------- |
@@ -91,7 +91,10 @@ device에서 update, rejection, offline fallback을 수행하는지는 별도 �
 certificate source는 [`apps/app/certs/certificate.pem`](../../apps/app/certs/certificate.pem)이며,
 기록된 certificate validity는 2026-09-10부터 2027-09-10까지(KST)다. 첫 rotation 예정일은
 2027-03-10이다. 동일한 signing private key는 Kosmo repository secret
-`EXPO_OTA_SIGNING_PRIVATE_KEY`에도 동기화해 deploy caller가 사용한다.
+`EXPO_OTA_SIGNING_PRIVATE_KEY`에도 동기화해 deploy caller가 사용한다. 최초 등록은
+2026-09-10 10:06:24 UTC에 완료했다. Vault version 1 키의 공개키와 bundled certificate의
+일치를 확인한 뒤 GitHub에 전달했으며, 등록 결과는 secret 이름과 `updatedAt`으로 확인했다.
+GitHub에 저장된 값의 재조회나 실제 OTA 발행 검증을 수행한 것은 아니다.
 
 Rotation은 새 certificate, 새 runtimeVersion과 새 Android/iOS Store binary를 함께 기록하는
 명시적 전환이다. Vault 값과 Kosmo repository secret을 함께 갱신하고, 새 keyid를 publisher에
