@@ -32,6 +32,7 @@ type StoryOperationResponse = {
   data?: unknown;
   delayMs?: number;
   error?: string;
+  errors?: StoryGraphQLError[];
 };
 
 type StoryOperationResponseSequence = {
