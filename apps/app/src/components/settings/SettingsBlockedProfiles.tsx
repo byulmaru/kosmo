@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
-import { space } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, space, textStyles } from '@/theme/tokens';
 import type { FollowButton_profile$key } from '@/components/profile/__generated__/FollowButton_profile.graphql';
 import type { FollowButton_profileBlock$key } from '@/components/profile/__generated__/FollowButton_profileBlock.graphql';
 import type { SettingsBlockedProfiles_profile$key } from './__generated__/SettingsBlockedProfiles_profile.graphql';
@@ -88,6 +91,7 @@ export function SettingsBlockedProfiles() {
 }
 
 function SettingsBlockedProfilesContent() {
+  const shellChrome = useShellChrome();
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<SettingsBlockedProfilesQuery>(
     SettingsBlockedProfilesQuery,
@@ -111,8 +115,10 @@ function SettingsBlockedProfilesContent() {
 
   if (!profile || profile.instance.kind !== 'LOCAL') {
     return (
-      <BlockedProfilesView
-        state={{ pagination: { status: 'end' }, profiles: [], status: 'loaded' }}
+      <StateView
+        actionLabel={shellChrome ? 'Profile 선택하기' : undefined}
+        onAction={shellChrome?.openProfileSwitcher}
+        title="설정할 Profile이 없어요"
       />
     );
   }
@@ -140,13 +146,44 @@ function SettingsBlockedProfilesContent() {
 }
 
 export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) {
+  const theme = useTheme();
+  const { showToast } = useToast();
   const mounted = useRef(true);
-  const listRef = useRef<View>(null);
+  const headingRef = useRef<View>(null);
   const actionRefs = useRef(new Map<string, View>());
   const removedFocus = useRef<{ index: number; profileBlockId: string } | null>(null);
   const stateRef = useRef(state);
   const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   stateRef.current = state;
+  const loadError =
+    state.status === 'error'
+      ? state
+      : state.status === 'loaded' && state.pagination.status === 'error'
+        ? state.pagination
+        : null;
+  const errorMessage = loadError
+    ? state.status === 'error'
+      ? '차단한 프로필을 불러오지 못했어요'
+      : '프로필을 더 불러오지 못했어요'
+    : null;
+  const retryRef = useRef(loadError?.onRetry);
+  useEffect(() => {
+    retryRef.current = loadError?.onRetry;
+  }, [loadError?.onRetry]);
+  useEffect(() => {
+    if (errorMessage) {
+      return showToast(errorMessage, {
+        action: {
+          label: '다시 시도',
+          onPress: () => {
+            headingRef.current?.focus();
+            retryRef.current?.();
+          },
+        },
+        tone: 'danger',
+      });
+    }
+  }, [errorMessage, showToast]);
 
   const restoreRemovedFocus = () => {
     const removed = removedFocus.current ?? pendingFocusIntent;
@@ -166,7 +203,7 @@ export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) 
     if (next) {
       actionRefs.current.get(next.profileBlockId)?.focus();
     } else {
-      listRef.current?.focus();
+      headingRef.current?.focus();
     }
     return true;
   };
@@ -220,7 +257,17 @@ export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) 
 
   return (
     <ScrollView contentContainerStyle={styles.root}>
-      <View accessibilityLabel="차단한 프로필 목록" ref={listRef} tabIndex={-1}>
+      <View accessible accessibilityRole="header" ref={headingRef} tabIndex={-1}>
+        <Text
+          style={[
+            styles.heading,
+            { color: theme.foregroundPrimary, borderColor: theme.borderDefault },
+          ]}
+        >
+          차단한 프로필
+        </Text>
+      </View>
+      <View accessibilityLabel="차단한 프로필 목록">
         {state.status === 'loading' ? (
           <StateView loading title="차단한 프로필을 불러오는 중입니다." />
         ) : state.status === 'error' ? (
@@ -282,6 +329,7 @@ export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) 
 
 const styles = StyleSheet.create({
   root: { flexGrow: 1, width: '100%' },
+  heading: { ...textStyles.uiHeadingM, borderBottomWidth: borderWidths[1], padding: space[16] },
   row: { height: 64, paddingVertical: 0 },
   pagination: { alignItems: 'center', padding: space[16] },
 });

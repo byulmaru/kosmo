@@ -261,6 +261,7 @@ function ProfileLayoutContent({
       if (!mounted.current || error instanceof StaleProfileBlockRequestError) {
         return;
       }
+      setConfirmation(null);
       showToast(
         nextBlocked
           ? '프로필을 차단하지 못했어요. 다시 시도해 주세요.'
@@ -299,13 +300,13 @@ function ProfileLayoutContent({
         confirmLabel={confirmation === 'block' ? '차단' : '차단 해제'}
         message={
           confirmation === 'block'
-            ? '기존 팔로우 관계와 요청이 삭제되고, 서로 팔로우하거나 게시물에 반응할 수 없어요.'
+            ? '상대방은 내 게시물을 볼 수 없고, 타임라인과 검색에서 서로의 게시물이 숨겨져요. 팔로우 관계와 요청은 삭제돼요.'
             : '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.'
         }
         onCancel={closeConfirmation}
         onConfirm={() => void requestChange()}
         pending={pending}
-        tone={confirmation === 'block' ? 'danger' : 'primary'}
+        tone="danger"
       />
     </ModalSheet>
   );
@@ -371,6 +372,9 @@ function ProfileLayoutContent({
     </NavigationLink>
   ) : (
     <FollowButton
+      onActionRef={(node) => {
+        stateActionRef.current = node;
+      }}
       onUnblockSuccess={() => {
         if (selectedProfileId) {
           rememberPostRefreshFocus(

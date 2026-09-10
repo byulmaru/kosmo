@@ -210,12 +210,17 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
 });
 mockModule(new URL('./FollowButton.tsx', import.meta.url), {
   FollowButton: ({
+    onActionRef,
     profile,
     profileBlockStatus,
   }: {
+    onActionRef?: (node: { focus: () => void }) => void;
     profile: { handle: string };
     profileBlockStatus?: { blockedBy: boolean; blocking: boolean; profileBlockId: string | null };
-  }) => createElement('FollowButton', { identity: profile.handle, profileBlockStatus }),
+  }) => {
+    onActionRef?.({ focus: () => stateActionFocus() });
+    return createElement('FollowButton', { identity: profile.handle, profileBlockStatus });
+  },
 });
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
   ProfileMuteAction: 'ProfileMuteAction',
@@ -675,7 +680,7 @@ describe('profile route parameter lifecycle', () => {
       requireRendered('ConfirmationContent').props.message,
       '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.',
     );
-    assert.equal(requireRendered('ConfirmationContent').props.tone, 'primary');
+    assert.equal(requireRendered('ConfirmationContent').props.tone, 'danger');
 
     await act(async () => requireRendered('ConfirmationContent').props.onCancel());
     assert.equal(stateActionFocus.mock.callCount(), 0);
@@ -756,7 +761,7 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(menu.props.items[0].label, '차단');
   });
 
-  it('Profile 메뉴의 차단 실패는 확인창을 유지하고 같은 action으로 재시도한다', async () => {
+  it('Profile 메뉴의 차단 실패는 확인창을 닫고 trigger로 복귀한 뒤 다시 열어 재시도한다', async () => {
     selectedProfileId = 'owner';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     let attempts = 0;
@@ -773,15 +778,18 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(confirmation.props.confirmLabel, '차단');
     assert.equal(
       confirmation.props.message,
-      '기존 팔로우 관계와 요청이 삭제되고, 서로 팔로우하거나 게시물에 반응할 수 없어요.',
+      '상대방은 내 게시물을 볼 수 없고, 타임라인과 검색에서 서로의 게시물이 숨겨져요. 팔로우 관계와 요청은 삭제돼요.',
     );
     assert.equal(confirmation.props.tone, 'danger');
 
     await act(async () => confirmation.props.onConfirm());
     assert.equal(changeBlockedCalls.length, 1);
-    assert.equal(requireRendered('ModalSheet').props.visible, true);
+    assert.equal(requireRendered('ModalSheet').props.visible, false);
     assert.equal(toastCalls.at(-1)?.tone, 'danger');
+    await act(async () => requireRendered('ModalSheet').props.onDismiss());
+    assert.equal(menuTriggerFocus.mock.callCount(), 1);
 
+    await act(async () => requireRendered('ActionMenu').props.items[0].onSelect());
     await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
     assert.equal(changeBlockedCalls.length, 2);
     assert.equal(requireRendered('ModalSheet').props.visible, false);
@@ -805,7 +813,6 @@ describe('profile route parameter lifecycle', () => {
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     changeBlockedImpl = async (_change, nextBlocked) => {
       if (nextBlocked) {
-        profileAvailable = false;
         profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
         relayActorLifecycleKey = 'actor-b';
       }

@@ -212,7 +212,7 @@
 - Status: Active
 - Context / Problem: 기존 공용 UI는 해제 확인을 제공하지만 canonical에 확인 여부가 명시되지 않아 runtime 연결 기준을 확인했다.
 - Decision Outcome: Profile 메뉴, identity-free `blocking` 상태와 차단 관리 목록의 해제는 확인창을 거친다. `취소`는 요청하지 않고,
-  Primary `차단 해제` 확정 뒤에만 요청한다. 확인창은 이전 팔로우 관계가 복구되지 않음을 알리며 identity-free 상태에서는 Target identity를 표시하지 않는다.
+  Danger `차단 해제` 확정 뒤에만 요청한다. 확인창은 이전 팔로우 관계가 복구되지 않음을 알리며 identity-free 상태에서는 Target identity를 표시하지 않는다.
 - Alternatives Considered: 확인 없이 즉시 요청하는 방식도 검토했지만 사용자가 기존 Block UI의 확인창 방식을 선택했다.
 - Consequences: 해제 확인의 취소·pending 중복 입력 및 dismiss 차단·실패 후 재시도를 runtime 검증에 포함한다. 기존 서버 확정 상태와
   actor 격리, Unblock no-restore는 유지한다.
