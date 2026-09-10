@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
+import { BlockedProfileList } from '@/components/profile/BlockedProfileList';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
-import { useToast } from '@/components/ui/ToastProvider';
 import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
-import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, space, textStyles } from '@/theme/tokens';
+import type { View } from 'react-native';
 import type { FollowButton_profile$key } from '@/components/profile/__generated__/FollowButton_profile.graphql';
 import type { FollowButton_profileBlock$key } from '@/components/profile/__generated__/FollowButton_profileBlock.graphql';
 import type { SettingsBlockedProfiles_profile$key } from './__generated__/SettingsBlockedProfiles_profile.graphql';
@@ -146,8 +144,6 @@ function SettingsBlockedProfilesContent() {
 }
 
 export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) {
-  const theme = useTheme();
-  const { showToast } = useToast();
   const mounted = useRef(true);
   const headingRef = useRef<View>(null);
   const actionRefs = useRef(new Map<string, View>());
@@ -155,36 +151,6 @@ export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) 
   const stateRef = useRef(state);
   const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   stateRef.current = state;
-  const loadError =
-    state.status === 'error'
-      ? state
-      : state.status === 'loaded' && state.pagination.status === 'error'
-        ? state.pagination
-        : null;
-  const errorMessage = loadError
-    ? state.status === 'error'
-      ? '차단한 프로필을 불러오지 못했어요'
-      : '프로필을 더 불러오지 못했어요'
-    : null;
-  const retryRef = useRef(loadError?.onRetry);
-  useEffect(() => {
-    retryRef.current = loadError?.onRetry;
-  }, [loadError?.onRetry]);
-  useEffect(() => {
-    if (errorMessage) {
-      return showToast(errorMessage, {
-        action: {
-          label: '다시 시도',
-          onPress: () => {
-            headingRef.current?.focus();
-            retryRef.current?.();
-          },
-        },
-        tone: 'danger',
-      });
-    }
-  }, [errorMessage, showToast]);
-
   const restoreRemovedFocus = () => {
     const removed = removedFocus.current ?? pendingFocusIntent;
     const currentState = stateRef.current;
@@ -255,81 +221,44 @@ export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) 
     pendingFocusIntent = intent;
   };
 
-  return (
-    <ScrollView contentContainerStyle={styles.root}>
-      <View accessible accessibilityRole="header" ref={headingRef} tabIndex={-1}>
-        <Text
-          style={[
-            styles.heading,
-            { color: theme.foregroundPrimary, borderColor: theme.borderDefault },
-          ]}
-        >
-          차단한 프로필
-        </Text>
-      </View>
-      <View accessibilityLabel="차단한 프로필 목록">
-        {state.status === 'loading' ? (
-          <StateView loading title="차단한 프로필을 불러오는 중입니다." />
-        ) : state.status === 'error' ? (
-          <StateView
-            actionLabel="다시 시도"
-            alert
-            onAction={state.onRetry}
-            title="차단한 프로필을 불러오지 못했어요"
-          />
-        ) : state.profiles.length === 0 && state.pagination.status === 'end' ? (
-          <StateView title="차단한 프로필이 없어요" />
-        ) : (
-          <>
-            {state.profiles.map((profile) => (
-              <ProfileListItemContent
-                avatarLabel={profile.displayName}
-                displayName={profile.displayName}
-                key={profile.profileBlockId}
-                relativeHandle={profile.relativeHandle}
-                style={styles.row}
-              >
-                <FollowButton
-                  onActionRef={(node) => {
-                    if (node) {
-                      actionRefs.current.set(profile.profileBlockId, node);
-                    } else {
-                      actionRefs.current.delete(profile.profileBlockId);
-                    }
-                  }}
-                  onUnblockSuccess={() => rememberRemovedProfile(profile)}
-                  profile={profile.profile}
-                  profileBlock={profile.profileBlock}
-                  size="compact"
-                />
-              </ProfileListItemContent>
-            ))}
-            {state.pagination.status === 'error' ? (
-              <StateView
-                actionLabel="더 불러오기"
-                alert
-                onAction={state.pagination.onRetry}
-                title="프로필을 더 불러오지 못했어요"
-              />
-            ) : state.pagination.status === 'loading' ? (
-              <StateView loading title="프로필을 더 불러오는 중입니다." />
-            ) : state.pagination.status === 'more' ? (
-              <View style={styles.pagination}>
-                <Button onPress={state.pagination.onLoadMore} tone="secondary">
-                  더 불러오기
-                </Button>
-              </View>
-            ) : null}
-          </>
-        )}
-      </View>
-    </ScrollView>
-  );
+  const children =
+    state.status === 'loaded'
+      ? state.profiles.map((profile) => (
+          <ProfileListItemContent
+            avatarLabel={profile.displayName}
+            displayName={profile.displayName}
+            key={profile.profileBlockId}
+            relativeHandle={profile.relativeHandle}
+            style={styles.row}
+          >
+            <FollowButton
+              onActionRef={(node) => {
+                if (node) {
+                  actionRefs.current.set(profile.profileBlockId, node);
+                } else {
+                  actionRefs.current.delete(profile.profileBlockId);
+                }
+              }}
+              onUnblockSuccess={() => rememberRemovedProfile(profile)}
+              profile={profile.profile}
+              profileBlock={profile.profileBlock}
+              size="compact"
+            />
+          </ProfileListItemContent>
+        ))
+      : null;
+  const listState =
+    state.status === 'loading'
+      ? ({ status: 'loading' } as const)
+      : state.status === 'error'
+        ? state
+        : state.profiles.length === 0 && state.pagination.status === 'end'
+          ? ({ status: 'empty' } as const)
+          : ({ children, pagination: state.pagination, status: 'loaded' } as const);
+
+  return <BlockedProfileList headingRef={headingRef} state={listState} />;
 }
 
 const styles = StyleSheet.create({
-  root: { flexGrow: 1, width: '100%' },
-  heading: { ...textStyles.uiHeadingM, borderBottomWidth: borderWidths[1], padding: space[16] },
   row: { height: 64, paddingVertical: 0 },
-  pagination: { alignItems: 'center', padding: space[16] },
 });

@@ -5,7 +5,7 @@ import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, space, textStyles } from '@/theme/tokens';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 
 type Pagination =
   | { status: 'end' }
@@ -17,12 +17,13 @@ export type BlockedProfileListState =
   | { status: 'error'; onRetry: () => void }
   | { status: 'loaded'; children: ReactNode; pagination: Pagination }
   | { status: 'empty' };
-type Props = { state: BlockedProfileListState };
+type Props = { headingRef?: RefObject<View | null>; state: BlockedProfileListState };
 
 /** The action owner composes rows; this list does not execute relationship mutations. */
-export function BlockedProfileList({ state }: Props) {
+export function BlockedProfileList({ headingRef: suppliedHeadingRef, state }: Props) {
   const theme = useTheme();
-  const headingRef = useRef<View>(null);
+  const internalHeadingRef = useRef<View>(null);
+  const headingRef = suppliedHeadingRef ?? internalHeadingRef;
   const { showToast } = useToast();
   const loadError =
     state.status === 'error'
