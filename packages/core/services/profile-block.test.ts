@@ -137,22 +137,15 @@ test('Block removes captured Follow generations and preserves existing Reactions
   const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const ownerPost = await createPost(owner.id);
   const targetPost = await createPost(target.id);
-  const followOwnerToTargetId = '00000000-0000-4000-8000-000000000301';
-  const followTargetToOwnerId = '00000000-0000-4000-8000-000000000302';
   const requestOwnerToTargetId = '00000000-0000-4000-8000-000000000401';
   const requestTargetToOwnerId = '00000000-0000-4000-8000-000000000402';
-  const newFollowId = '00000000-0000-4000-8000-000000000601';
 
-  await ensureProfileFollow(
-    { followerProfileId: owner.id, followeeProfileId: target.id },
-    undefined,
-    { id: followOwnerToTargetId },
-  );
-  await ensureProfileFollow(
-    { followerProfileId: target.id, followeeProfileId: owner.id },
-    undefined,
-    { id: followTargetToOwnerId },
-  );
+  const followOwnerToTargetId = (
+    await ensureProfileFollow({ followerProfileId: owner.id, followeeProfileId: target.id })
+  ).profileFollow.id;
+  const followTargetToOwnerId = (
+    await ensureProfileFollow({ followerProfileId: target.id, followeeProfileId: owner.id })
+  ).profileFollow.id;
   await db.insert(ProfileFollowRequests).values([
     {
       id: requestOwnerToTargetId,
@@ -374,11 +367,9 @@ test('Block removes captured Follow generations and preserves existing Reactions
   assert.deepEqual(retry.effectPlan, firstExecution.effectPlan);
   await assertReactionsAndNotificationPreserved();
 
-  await ensureProfileFollow(
-    { followerProfileId: owner.id, followeeProfileId: target.id },
-    undefined,
-    { id: newFollowId },
-  );
+  const newFollowId = (
+    await ensureProfileFollow({ followerProfileId: owner.id, followeeProfileId: target.id })
+  ).profileFollow.id;
   const retryWithNewGeneration = await executeProfileBlockTransition(input);
   assert.equal(retryWithNewGeneration.ok, true);
   assert.equal(
@@ -438,11 +429,8 @@ test('Unblock cleans current Follow generations before removing the exact Block'
   const { profile: owner } = await createProfile();
   const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const profileBlockId = '00000000-0000-4000-8000-000000000801';
-  const followOwnerToTargetId = '00000000-0000-4000-8000-000000000802';
-  const followTargetToOwnerId = '00000000-0000-4000-8000-000000000803';
   const requestOwnerToTargetId = '00000000-0000-4000-8000-000000000804';
   const requestTargetToOwnerId = '00000000-0000-4000-8000-000000000805';
-  const lateFollowId = '00000000-0000-4000-8000-000000000806';
   const replacementProfileBlockId = '00000000-0000-4000-8000-000000000807';
 
   await db.insert(ProfileBlocks).values({
@@ -450,16 +438,12 @@ test('Unblock cleans current Follow generations before removing the exact Block'
     ownerProfileId: owner.id,
     targetProfileId: target.id,
   });
-  await ensureProfileFollow(
-    { followerProfileId: owner.id, followeeProfileId: target.id },
-    undefined,
-    { id: followOwnerToTargetId },
-  );
-  await ensureProfileFollow(
-    { followerProfileId: target.id, followeeProfileId: owner.id },
-    undefined,
-    { id: followTargetToOwnerId },
-  );
+  const followOwnerToTargetId = (
+    await ensureProfileFollow({ followerProfileId: owner.id, followeeProfileId: target.id })
+  ).profileFollow.id;
+  const followTargetToOwnerId = (
+    await ensureProfileFollow({ followerProfileId: target.id, followeeProfileId: owner.id })
+  ).profileFollow.id;
   await db.insert(ProfileFollowRequests).values([
     {
       id: requestOwnerToTargetId,
@@ -581,11 +565,9 @@ test('Unblock cleans current Follow generations before removing the exact Block'
 
   // A later Unblock run captures and removes a Follow generation created while
   // the original Block is still active.
-  await ensureProfileFollow(
-    { followerProfileId: owner.id, followeeProfileId: target.id },
-    undefined,
-    { id: lateFollowId },
-  );
+  const lateFollowId = (
+    await ensureProfileFollow({ followerProfileId: owner.id, followeeProfileId: target.id })
+  ).profileFollow.id;
   await db.insert(Notifications).values({
     kind: NotificationKind.FOLLOW,
     recipientProfileId: target.id,
