@@ -1,6 +1,10 @@
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ProfileSwitcherUnreadBadge,
+  ProfileSwitcherUnreadIndicator,
+} from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
 import { getIconButtonTargetSize } from '@/components/ui/IconButton';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
@@ -122,23 +126,7 @@ export function ProfileSwitcherTarget({
               label={selectedProfile?.displayName ?? '프로필'}
               size={40}
             />
-            {!open && otherHasUnread ? (
-              <View
-                accessible={false}
-                accessibilityElementsHidden
-                aria-hidden
-                importantForAccessibility="no-hide-descendants"
-                style={[
-                  styles.closedUnread,
-                  styles.compactUnread,
-                  {
-                    backgroundColor: theme.actionPrimaryBase,
-                    borderColor: theme.backgroundCanvas,
-                  },
-                ]}
-                testID="profile-switcher-closed-unread"
-              />
-            ) : null}
+            <ProfileSwitcherUnreadIndicator compact visible={!open && otherHasUnread} />
           </View>
         ) : (
           <>
@@ -152,20 +140,7 @@ export function ProfileSwitcherTarget({
               {selectedProfile?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
             </Text>
             <View style={styles.chevron}>
-              {!open && otherHasUnread ? (
-                <View
-                  accessible={false}
-                  accessibilityElementsHidden
-                  aria-hidden
-                  importantForAccessibility="no-hide-descendants"
-                  style={[
-                    styles.closedUnread,
-                    styles.wideUnread,
-                    { backgroundColor: theme.actionPrimaryBase },
-                  ]}
-                  testID="profile-switcher-closed-unread"
-                />
-              ) : null}
+              <ProfileSwitcherUnreadIndicator compact={false} visible={!open && otherHasUnread} />
               {open ? (
                 <ChevronUpIcon color={theme.foregroundSecondary} size={iconSizes[20]} />
               ) : (
@@ -254,22 +229,9 @@ export function ProfileSwitcherTarget({
                     <View style={styles.trailing}>
                       {selected ? (
                         <CheckIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
-                      ) : hasUnread ? (
-                        <View
-                          accessible={false}
-                          accessibilityElementsHidden
-                          aria-hidden
-                          importantForAccessibility="no-hide-descendants"
-                          style={[styles.unreadCount, { backgroundColor: theme.actionPrimaryBase }]}
-                          testID="profile-switcher-unread-count"
-                        >
-                          <Text style={[textStyles.uiLabelS, { color: theme.actionPrimaryOnBase }]}>
-                            {(profile.unreadNotificationCount ?? 0) > 9
-                              ? '9+'
-                              : profile.unreadNotificationCount}
-                          </Text>
-                        </View>
-                      ) : null}
+                      ) : (
+                        <ProfileSwitcherUnreadBadge count={profile.unreadNotificationCount} />
+                      )}
                     </View>
                   </Pressable>
                 );
@@ -291,17 +253,7 @@ const styles = StyleSheet.create({
   wideTrigger: { gap: space[8], position: 'relative', width: 240 },
   compactAvatar: { position: 'relative' },
   triggerName: { flex: 1, minWidth: 0, ...textStyles.uiLabelL },
-  closedUnread: { borderRadius: radius.full, height: 8, width: 8 },
-  compactUnread: {
-    borderWidth: borderWidths[1],
-    height: 12,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: 12,
-  },
   chevron: { position: 'relative', height: iconSizes[20], width: iconSizes[20] },
-  wideUnread: { position: 'absolute', right: -9, top: -4 },
   menu: {
     borderRadius: radius[16],
     borderWidth: borderWidths[1],
@@ -325,12 +277,5 @@ const styles = StyleSheet.create({
   },
   optionCopy: { flex: 1, minWidth: 0 },
   trailing: { alignItems: 'center', height: 24, justifyContent: 'center', width: 24 },
-  unreadCount: {
-    alignItems: 'center',
-    borderRadius: radius.full,
-    height: 24,
-    justifyContent: 'center',
-    width: 24,
-  },
   empty: { ...textStyles.uiCopyM, padding: space[16], textAlign: 'center' },
 });

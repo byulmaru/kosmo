@@ -1,8 +1,9 @@
 import { CheckIcon } from 'lucide-react-native';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ProfileSwitcherUnreadBadge } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radius, space, spacing, textStyles, typography } from '@/theme/tokens';
+import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
 import type { ReactNode, Ref } from 'react';
 import type { ViewStyle } from 'react-native';
 
@@ -101,20 +102,9 @@ export function ProfilePicker({
         </View>
         {selected ? (
           <CheckIcon color={theme.text} size={16} />
-        ) : hasUnread ? (
-          <View
-            accessible={false}
-            accessibilityElementsHidden
-            aria-hidden
-            importantForAccessibility="no-hide-descendants"
-            style={[styles.unreadCount, { backgroundColor: theme.actionPrimaryBase }]}
-            testID="profile-switcher-unread-count"
-          >
-            <Text style={[textStyles.uiLabelS, { color: theme.actionPrimaryOnBase }]}>
-              {(profile.unreadNotificationCount ?? 0) > 9 ? '9+' : profile.unreadNotificationCount}
-            </Text>
-          </View>
-        ) : null}
+        ) : (
+          <ProfileSwitcherUnreadBadge count={profile.unreadNotificationCount} />
+        )}
       </Pressable>
     );
   });
@@ -186,12 +176,5 @@ const styles = StyleSheet.create({
   profileLabel: { flex: 1, minWidth: 0 },
   displayName: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md },
   handle: { fontFamily: fontFamilies.ui, ...typography.sm },
-  unreadCount: {
-    alignItems: 'center',
-    borderRadius: radius.full,
-    height: 24,
-    justifyContent: 'center',
-    width: 24,
-  },
   divider: { height: 1, marginVertical: space[4], width: '100%' },
 });

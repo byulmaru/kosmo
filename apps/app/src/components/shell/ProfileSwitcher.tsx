@@ -6,18 +6,17 @@ import { Image, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
+import { ProfileSwitcherUnreadIndicator } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
-  borderWidths,
   fontFamilies,
   iconSizes,
   layoutRecipes,
   radii,
-  radius,
   spacing,
   textStyles,
   typography,
@@ -458,20 +457,7 @@ export function ProfileSwitcher({
         {active?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
       </Text>
       <View style={styles.chevron}>
-        {!open && otherHasUnread ? (
-          <View
-            accessible={false}
-            accessibilityElementsHidden
-            aria-hidden
-            importantForAccessibility="no-hide-descendants"
-            style={[
-              styles.closedUnread,
-              styles.wideUnread,
-              { backgroundColor: theme.actionPrimaryBase },
-            ]}
-            testID="profile-switcher-closed-unread"
-          />
-        ) : null}
+        <ProfileSwitcherUnreadIndicator compact={false} visible={!open && otherHasUnread} />
         {webExpandedChevron ? (
           <ChevronUpIcon color={theme.textSecondary} size={iconSizes[20]} />
         ) : (
@@ -500,23 +486,7 @@ export function ProfileSwitcher({
       {compact ? (
         <View style={styles.compactAvatar}>
           <Avatar imageUri={active?.avatar?.url} label={active?.displayName ?? '?'} size={40} />
-          {!open && otherHasUnread ? (
-            <View
-              accessible={false}
-              accessibilityElementsHidden
-              aria-hidden
-              importantForAccessibility="no-hide-descendants"
-              style={[
-                styles.closedUnread,
-                styles.compactUnread,
-                {
-                  backgroundColor: theme.actionPrimaryBase,
-                  borderColor: theme.backgroundCanvas,
-                },
-              ]}
-              testID="profile-switcher-closed-unread"
-            />
-          ) : null}
+          <ProfileSwitcherUnreadIndicator compact visible={!open && otherHasUnread} />
         </View>
       ) : null}
       {fullWeb || mobileWebDrawer ? (
@@ -720,17 +690,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     ...typography.xl,
   },
-  closedUnread: { borderRadius: radius.full, height: 8, width: 8 },
-  compactUnread: {
-    borderWidth: borderWidths[1],
-    height: 12,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: 12,
-  },
   chevron: { height: iconSizes[20], position: 'relative', width: iconSizes[20] },
-  wideUnread: { position: 'absolute', right: -9, top: -4 },
   webMenu: { position: 'absolute', width: 280, zIndex: 30 },
   compactMenuPosition: { left: 72, top: 0 },
   drawerMenuPosition: { left: 0, top: 190 },
