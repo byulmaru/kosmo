@@ -3,6 +3,7 @@ import '@kosmo/core/polyfill';
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { Image } from '@fedify/vocab';
+import { projectRemoteNoteContent } from '@kosmo/core/activitypub-note-content/server';
 import {
   AccountProfileRole,
   AccountState,
@@ -18,6 +19,7 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import {
+  canonicalizePostContentDocument,
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
 } from '@kosmo/core/post-content/server';
@@ -282,6 +284,86 @@ describe('Post Reply GraphQL 경계', () => {
         altText: '원격 이미지',
         id: encodeGlobalId('Media', media.id),
         mediaType: null,
+        url: media.url,
+      },
+    ]);
+  });
+
+  test('Mention-bearing PostContent의 bodyText·Content Warning·Media와 canonical document를 조회한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const media = await createReadyMedia(auth.account.id, auth.profile.id);
+    const projectedDocument = projectRemoteNoteContent({
+      content: '<p>앞쪽 <a href="https://remote.example/users/mentioned">@mentioned</a> 뒤쪽</p>',
+      mentions: [
+        {
+          label: '@mentioned',
+          targetHref: 'https://remote.example/users/mentioned',
+        },
+      ],
+      mediaType: 'text/html',
+      summary: '통합 검증 경고',
+    });
+    const document = canonicalizePostContentDocument({
+      ...projectedDocument,
+      body: {
+        ...projectedDocument.body,
+        attrs: { sensitiveMedia: true },
+        content: [
+          ...projectedDocument.body.content,
+          { attrs: { mediaId: media.id }, type: 'media' },
+        ],
+      },
+    });
+    const post = await createContentfulPost(auth.profile.id, {
+      bodyText: 'placeholder',
+      mediaIds: [media.id],
+    });
+    assert.ok(post.currentContentId);
+    await db
+      .update(PostContents)
+      .set({ document })
+      .where(eq(PostContents.id, post.currentContentId));
+
+    const result = await requestPostContent(encodeGlobalId('Post', post.id), auth.token);
+
+    assertNoGraphQLErrors(result);
+    const content = result.data?.node?.content;
+    assert.ok(content);
+    assert.equal(content.bodyText, '앞쪽 @mentioned 뒤쪽');
+    assert.equal(content.contentWarning, '통합 검증 경고');
+    const returnedDocument = content.document as {
+      body: {
+        attrs?: { sensitiveMedia?: boolean };
+        content: Array<{
+          attrs?: { mediaId?: string };
+          content?: Array<{
+            attrs?: { href?: string; label?: string; target?: string };
+            text?: string;
+            type: string;
+          }>;
+          type: string;
+        }>;
+      };
+      summary: string | null;
+      version: number;
+    };
+    assert.equal(returnedDocument.version, 1);
+    assert.equal(returnedDocument.summary, '통합 검증 경고');
+    assert.equal(returnedDocument.body.attrs?.sensitiveMedia, true);
+    assert.equal(returnedDocument.body.content[0]?.content?.[1]?.type, 'mention');
+    assert.deepEqual(returnedDocument.body.content[0]?.content?.[1]?.attrs, {
+      href: 'https://remote.example/users/mentioned',
+      label: '@mentioned',
+      target: 'https://remote.example/users/mentioned',
+    });
+    assert.deepEqual(returnedDocument.body.content[1]?.attrs, {
+      mediaId: encodeGlobalId('Media', media.id),
+    });
+    assert.deepEqual(content.media, [
+      {
+        altText: media.altText,
+        id: encodeGlobalId('Media', media.id),
+        mediaType: media.mediaType,
         url: media.url,
       },
     ]);
@@ -1242,6 +1324,7 @@ type CreatePostNode = {
 type PostContentNode = {
   content: {
     bodyText: string;
+    contentWarning: string | null;
     document: unknown;
     media: Array<{
       altText: string | null;
@@ -1312,6 +1395,7 @@ const requestPostContent = (postId: string, token?: string) =>
         ... on Post {
           content {
             bodyText
+            contentWarning
             document
             media { altText id mediaType url }
           }

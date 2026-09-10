@@ -19,7 +19,22 @@ export interface PostContentHardBreakNode {
   readonly type: 'hard_break';
 }
 
-export type PostContentInlineNode = PostContentTextNode | PostContentHardBreakNode;
+export interface PostContentMentionNode {
+  readonly type: 'mention';
+  readonly attrs: {
+    /** The typed ActivityPub Mention target identity. */
+    readonly target: string;
+    /** The identity href present on the rendered anchor. */
+    readonly href: string;
+    /** The normalized visible label rendered for this occurrence. */
+    readonly label: string;
+  };
+}
+
+export type PostContentInlineNode =
+  | PostContentTextNode
+  | PostContentHardBreakNode
+  | PostContentMentionNode;
 
 export interface PostContentParagraphNode {
   readonly type: 'paragraph';
@@ -51,6 +66,24 @@ export interface PostContentDocumentV1 {
 
 export function normalizePostContentPlainText(bodyText: string): string {
   return bodyText.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
+}
+
+export function normalizePostContentMentionLabel(value: string): string {
+  const normalized = normalizePostContentPlainText(value);
+  if (normalized.length === 0 || normalized.length > 256 || hasControlCharacter(normalized)) {
+    throw new TypeError('Mention label must be a visible string');
+  }
+  return normalized;
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function isPostContentDocumentV1(value: unknown): value is PostContentDocumentV1 {
@@ -116,6 +149,9 @@ function isInlineNode(value: unknown): value is PostContentInlineNode {
   if (value.type === 'hard_break') {
     return true;
   }
+  if (value.type === 'mention') {
+    return isRecordWithKeys(value, ['type', 'attrs']) && isMentionAttrs(value.attrs);
+  }
   if (value.type !== 'text') {
     return false;
   }
@@ -131,6 +167,18 @@ function isInlineNode(value: unknown): value is PostContentInlineNode {
   }
   const hrefs = new Set(value.marks.map((mark) => new URL(mark.attrs.href).href));
   return hrefs.size <= 1;
+}
+
+function isMentionAttrs(value: unknown): value is PostContentMentionNode['attrs'] {
+  return (
+    isRecordWithKeys(value, ['target', 'href', 'label']) &&
+    typeof value.target === 'string' &&
+    typeof value.href === 'string' &&
+    typeof value.label === 'string' &&
+    value.target.length > 0 &&
+    value.href.length > 0 &&
+    value.label.length > 0
+  );
 }
 
 function isLinkMark(value: unknown): value is PostContentLinkMark {

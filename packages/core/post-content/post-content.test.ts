@@ -364,6 +364,82 @@ test('compares canonical body and summary meaning', () => {
   assert.equal(arePostContentRevisionsEqual(first, { ...second, summary: 'warning' }), false);
 });
 
+test('preserves Mention labels in text and distinguishes independently verified targets', () => {
+  const first = canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Hello ' },
+            {
+              type: 'mention',
+              attrs: {
+                href: 'HTTPS://remote.example:443/@alice',
+                label: '@alice',
+                target: 'https://remote.example/users/alice',
+              },
+            },
+          ],
+        },
+      ],
+    },
+  });
+  const formattingEquivalent = {
+    ...first,
+    body: {
+      ...first.body,
+      content: [
+        {
+          type: 'paragraph' as const,
+          content: [
+            { type: 'text' as const, text: 'Hello ' },
+            {
+              type: 'mention' as const,
+              attrs: {
+                href: 'https://remote.example/@alice',
+                label: '@alice',
+                target: 'https://remote.example/users/alice',
+              },
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  assert.equal(postContentDocumentToText(first), 'Hello @alice');
+  assert.equal(arePostContentRevisionsEqual(first, formattingEquivalent), true);
+  assert.equal(
+    arePostContentRevisionsEqual(first, {
+      ...first,
+      body: {
+        ...first.body,
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Hello ' },
+              {
+                type: 'mention',
+                attrs: {
+                  href: 'https://remote.example/@alice',
+                  label: '@alice',
+                  target: 'https://remote.example/users/other',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    }),
+    false,
+  );
+});
+
 test('native-safe guard accepts additive V1 properties while validating consumed values', () => {
   assert.equal(isPostContentDocumentV1(postContentDocumentFromText('body')), true);
   assert.equal(
@@ -469,5 +545,34 @@ test('validates the combined local summary and body length', () => {
         { mediaId: '019f6678-86fa-709b-984e-1520766b8447' },
       ]),
     ),
+  );
+});
+
+test('rejects inbound Mention nodes from the local Post Content validator', () => {
+  assert.throws(
+    () =>
+      validateLocalPostContentDocument({
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'mention',
+                  attrs: {
+                    href: 'https://remote.example/@alice',
+                    label: '@alice',
+                    target: 'https://remote.example/users/alice',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    /Local PostContent cannot contain Mention nodes/,
   );
 });

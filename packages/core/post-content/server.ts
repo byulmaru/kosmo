@@ -2,7 +2,11 @@ import { isDeepStrictEqual } from 'node:util';
 import { JSDOM } from 'jsdom';
 import { DOMSerializer } from 'prosemirror-model';
 import { postBodyMaxLength } from '../validation/post-policy';
-import { normalizePostContentPlainText, postContentSchemaVersion } from './index';
+import {
+  normalizePostContentMentionLabel,
+  normalizePostContentPlainText,
+  postContentSchemaVersion,
+} from './index';
 import { postContentSchema } from './schema';
 import { normalizeLinkHref } from './schema/marks/link';
 import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model';
@@ -69,6 +73,14 @@ function canonicalizePostContentBody(
     block.forEach((node) => {
       if (node.isText) {
         appendNormalizedText(inline, node.text!, node.marks);
+      } else if (node.type === postContentSchema.nodes.mention) {
+        inline.push(
+          postContentSchema.nodes.mention.create({
+            href: normalizeLinkHref(node.attrs.href),
+            label: normalizePostContentMentionLabel(node.attrs.label),
+            target: normalizeLinkHref(node.attrs.target),
+          }),
+        );
       } else {
         inline.push(postContentSchema.nodes.hard_break.create());
       }
@@ -157,6 +169,14 @@ export function postContentDocumentToHtml(document: PostContentDocumentV1): stri
 
 export function validateLocalPostContentDocument(value: unknown): PostContentDocumentV1 {
   const document = canonicalizePostContentDocument(value);
+  if (
+    document.body.content.some(
+      (block) =>
+        block.type === 'paragraph' && (block.content ?? []).some((node) => node.type === 'mention'),
+    )
+  ) {
+    throw new TypeError('Local PostContent cannot contain Mention nodes');
+  }
   const mediaCount = document.body.content.filter((block) => block.type === 'media').length;
   const bodyTextLength = postContentBodyToText(document.body).length;
   const authoredTextLength = (document.summary?.length ?? 0) + bodyTextLength;
@@ -175,7 +195,17 @@ function postContentBodyToText(document: PostContentBodyDocumentV1): string {
   return document.content
     .filter((block) => block.type === 'paragraph')
     .map((paragraph) =>
-      (paragraph.content ?? []).map((node) => (node.type === 'text' ? node.text : '\n')).join(''),
+      (paragraph.content ?? [])
+        .map((node) => {
+          if (node.type === 'text') {
+            return node.text;
+          }
+          if (node.type === 'mention') {
+            return node.attrs.label;
+          }
+          return '\n';
+        })
+        .join(''),
     )
     .join('\n\n');
 }
@@ -286,6 +316,20 @@ function assertPostContentJsonKeys(value: unknown): void {
   }
   if (value.type === 'hard_break') {
     assertOnlyKeys(value, ['type']);
+    return;
+  }
+  if (value.type === 'mention') {
+    assertOnlyKeys(value, ['type', 'attrs']);
+    if (!isRecord(value.attrs)) {
+      throw new TypeError('Mention attrs must be an object');
+    }
+    assertOnlyKeys(value.attrs, ['target', 'href', 'label']);
+    normalizeLinkHref(value.attrs.target);
+    normalizeLinkHref(value.attrs.href);
+    if (typeof value.attrs.label !== 'string') {
+      throw new TypeError('Mention label must be a visible string');
+    }
+    normalizePostContentMentionLabel(value.attrs.label);
   }
 }
 

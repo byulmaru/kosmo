@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
+import { projectRemoteNoteContent } from '@kosmo/core/activitypub-note-content/server';
+import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
+import {
+  canonicalizePostContentDocument,
+  postContentDocumentToText,
+} from '@kosmo/core/post-content/server';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
@@ -21,6 +27,10 @@ mockModule('react-native', {
   StyleSheet: { create: (styles: object) => styles },
   Text: 'Text',
   View: 'View',
+});
+mockModule('react-relay', {
+  graphql: () => ({}),
+  useFragment: (_fragment: unknown, key: unknown) => key,
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => ({ selectedProfileId: null, sessionId: null }),
@@ -53,12 +63,14 @@ type RendererProps = {
 };
 
 let PostContentRenderer: ComponentType<RendererProps>;
+let PostBody: ComponentType<{ post: unknown }>;
 let PostContentWarningRevealProvider: ComponentType<{ children?: ReactNode }>;
 let Button: ComponentType<Record<string, unknown>>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
   ({ PostContentRenderer } = await import('./PostContentRenderer'));
+  ({ PostBody } = await import('./PostBody'));
   ({ PostContentWarningRevealProvider } = await import('./PostContentWarningRevealContext'));
   ({ Button } = await import('@/components/ui/Button'));
 });
@@ -191,6 +203,97 @@ describe('PostContentRenderer', () => {
     assert.equal(rendered('PostMediaGallery').length, 0);
   });
 
+  it('지원하지 않는 inline node가 있는 문서는 bodyText fallback으로 본문과 Media를 보존한다', async () => {
+    const bodyText = '앞쪽 @mentioned 뒤쪽';
+    const media = [
+      { altText: '이미지 설명', id: 'media-mention', url: 'https://media.example/1.webp' },
+    ];
+    const document = {
+      body: {
+        attrs: { sensitiveMedia: true },
+        content: [
+          {
+            content: [
+              { text: '앞쪽 ', type: 'text' },
+              {
+                attrs: {
+                  href: 'https://remote.example/users/mentioned',
+                  label: '@mentioned',
+                  target: 'https://remote.example/users/mentioned',
+                },
+                type: 'mention',
+              },
+              { text: ' 뒤쪽', type: 'text' },
+            ],
+            type: 'paragraph',
+          },
+          { attrs: { mediaId: 'media-mention' }, type: 'media' },
+        ],
+        type: 'doc',
+      },
+      summary: '통합 검증 경고',
+      version: 1,
+    };
+    assert.equal(isPostContentDocumentV1(document), true);
+    await render({
+      bodyText,
+      contentWarning: '통합 검증 경고',
+      document,
+      media,
+      postId: 'post-mention-fallback',
+    });
+
+    assert.equal(rendered('PostMediaGallery').length, 0);
+    const toggle = rendered('Pressable').find(
+      (node) => node.props.testID === 'post-content-warning-toggle',
+    );
+    assert.ok(toggle);
+
+    await act(async () =>
+      toggle.props.onPress({
+        stopPropagation: () => undefined,
+      }),
+    );
+
+    assert.equal(
+      rendered('Text').some((node) => node.props.children === bodyText),
+      true,
+    );
+    const gallery = rendered('PostMediaGallery');
+    assert.equal(gallery.length, 1);
+    assert.deepEqual(gallery[0].props.media, media);
+    assert.equal(gallery[0].props.sensitive, true);
+  });
+
+  it('GraphQL PostBody fragment payload를 legacy renderer에 연결해 bodyText·Media·Content Warning을 보존한다', async () => {
+    const post = createMentionGraphqlPayload();
+    assert.equal(isPostContentDocumentV1(post.content.document), true);
+    assert.equal(post.content.bodyText, '앞쪽 @mentioned 뒤쪽');
+
+    await renderPostBody(post);
+
+    assert.equal(rendered('PostMediaGallery').length, 0);
+    const toggle = rendered('Pressable').find(
+      (node) => node.props.testID === 'post-content-warning-toggle',
+    );
+    assert.ok(toggle);
+
+    await act(async () =>
+      toggle.props.onPress({
+        stopPropagation: () => undefined,
+      }),
+    );
+
+    assert.equal(
+      rendered('Text').some((node) => node.props.children === post.content.bodyText),
+      true,
+    );
+    const gallery = rendered('PostMediaGallery');
+    assert.equal(gallery.length, 1);
+    assert.deepEqual(gallery[0].props.media, post.content.media);
+    assert.equal(gallery[0].props.sensitive, true);
+  });
+
   it('요청한 원문 줄 수를 plain text와 document root에 적용한다', async () => {
     await render({
       bodyText: '세 줄까지만 표시할 원문',
@@ -286,6 +389,57 @@ async function render(props: RendererProps) {
     }
   });
   assert.ok(renderer);
+}
+
+async function renderPostBody(post: { content: unknown; id: string }) {
+  await act(async () => {
+    renderer = create(
+      createElement(PostContentWarningRevealProvider, null, createElement(PostBody, { post })),
+    );
+  });
+  assert.ok(renderer);
+}
+
+function createMentionGraphqlPayload() {
+  const projectedDocument = projectRemoteNoteContent({
+    content: '<p>앞쪽 <a href="https://remote.example/users/mentioned">@mentioned</a> 뒤쪽</p>',
+    mentions: [
+      {
+        label: '@mentioned',
+        targetHref: 'https://remote.example/users/mentioned',
+      },
+    ],
+    mediaType: 'text/html',
+    summary: '통합 검증 경고',
+  });
+  const document = canonicalizePostContentDocument({
+    ...projectedDocument,
+    body: {
+      ...projectedDocument.body,
+      attrs: { sensitiveMedia: true },
+      content: [
+        ...projectedDocument.body.content,
+        { attrs: { mediaId: 'media-mention' }, type: 'media' },
+      ],
+    },
+  });
+
+  return {
+    content: {
+      bodyText: postContentDocumentToText(document),
+      contentWarning: document.summary,
+      document,
+      id: 'content-mention',
+      media: [
+        {
+          altText: '이미지 설명',
+          id: 'media-mention',
+          url: 'https://media.example/1.webp',
+        },
+      ],
+    },
+    id: 'post-mention-fragment',
+  };
 }
 
 function rendered(type: string): ReactTestInstance[] {

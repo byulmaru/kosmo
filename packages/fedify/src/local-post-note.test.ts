@@ -277,6 +277,49 @@ describe('ActivityPub Local Post Note', () => {
     assert.equal(json.includes(secondMedia.id), false);
   });
 
+  test('serializes a stored Mention node as safe HTML without emitting an outbound tag', async () => {
+    const author = await createProfile({ handle: 'mention-author', kind: InstanceKind.LOCAL });
+    const post = await createPost(author.id);
+    assert.ok(post.currentContentId);
+
+    await db
+      .update(PostContents)
+      .set({
+        document: {
+          body: {
+            content: [
+              {
+                content: [
+                  { text: 'Hello ', type: 'text' },
+                  {
+                    attrs: {
+                      href: 'https://remote.example/users/alice',
+                      label: '@alice',
+                      target: 'https://remote.example/users/alice',
+                    },
+                    type: 'mention',
+                  },
+                ],
+                type: 'paragraph',
+              },
+            ],
+            type: 'doc',
+          },
+          summary: null,
+          version: 1,
+        },
+      })
+      .where(eq(PostContents.id, post.currentContentId));
+
+    const note = await dispatchLocalPostNote(createContext(), { id: post.id });
+    assert.ok(note);
+    assert.equal(
+      note.content?.toString(),
+      '<p>Hello <a href="https://remote.example/users/alice">@alice</a></p>',
+    );
+    assert.deepEqual(note.tagIds, []);
+  });
+
   test('does not project a partial Note when required Media is unavailable', async () => {
     const author = await createProfile({ handle: 'unavailable-media', kind: InstanceKind.LOCAL });
     const uploading = await createMedia(author.id, { state: MediaState.UPLOADING });

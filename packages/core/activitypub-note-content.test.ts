@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   projectRemoteActivityPubHtmlToPlainText,
   projectRemoteNoteContent,
+  remoteNoteContentMaxLength,
   RemoteNoteContentLengthExceededError,
 } from './activitypub-note-content';
 
@@ -200,6 +201,32 @@ describe('projectRemoteNoteContent', () => {
     );
   });
 
+  it('counts a typed Mention label in the remote Note length limit', () => {
+    const nearLimit = 'a'.repeat(remoteNoteContentMaxLength - '@alice'.length + 1);
+    const mention = {
+      label: '@alice',
+      targetHref: 'https://remote.example/@alice',
+    };
+
+    assert.doesNotThrow(() =>
+      projectRemoteNoteContent({
+        content: nearLimit,
+        summary: null,
+        mediaType: 'text/plain',
+      }),
+    );
+    assert.throws(
+      () =>
+        projectRemoteNoteContent({
+          content: `<p>${nearLimit}<a href="${mention.targetHref}">${mention.label}</a></p>`,
+          mentions: [mention],
+          summary: null,
+          mediaType: 'text/html',
+        }),
+      RemoteNoteContentLengthExceededError,
+    );
+  });
+
   it('counts UTF-16 units after HTML and hard-break normalization', () => {
     assert.doesNotThrow(() =>
       projectRemoteNoteContent({
@@ -260,6 +287,142 @@ describe('projectRemoteNoteContent', () => {
     });
 
     assert.deepEqual(formatted, compact);
+  });
+
+  it('projects typed Mention candidates only onto matching safe anchor labels', () => {
+    const result = projectRemoteNoteContent({
+      content:
+        '<p>Hello <a href="https://remote.example/@alice">@alice</a> and ' +
+        '<a href="https://example.com/guide">guide</a></p>',
+      mentions: [
+        {
+          label: '@alice',
+          targetHref: 'https://remote.example/@alice',
+        },
+      ],
+      summary: null,
+      mediaType: 'text/html',
+    });
+
+    assert.deepEqual(result.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Hello ' },
+          {
+            type: 'mention',
+            attrs: {
+              href: 'https://remote.example/@alice',
+              label: '@alice',
+              target: 'https://remote.example/@alice',
+            },
+          },
+          { type: 'text', text: ' and ' },
+          {
+            type: 'text',
+            text: 'guide',
+            marks: [{ type: 'link', attrs: { href: 'https://example.com/guide' } }],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('does not use another same-label candidate when an anchor href is unmatched', () => {
+    const result = projectRemoteNoteContent({
+      content:
+        '<p><a href="https://remote.example/users/alice">@alice</a> ' +
+        '<a href="https://remote.example/users/bob">@alice</a> ' +
+        '<a href="https://remote.example/users/unknown">@alice</a></p>',
+      mentions: [
+        { label: '@alice', targetHref: 'https://remote.example/users/alice' },
+        { label: '@alice', targetHref: 'https://remote.example/users/bob' },
+      ],
+      summary: null,
+      mediaType: 'text/html',
+    });
+
+    assert.deepEqual(result.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            type: 'mention',
+            attrs: {
+              href: 'https://remote.example/users/alice',
+              label: '@alice',
+              target: 'https://remote.example/users/alice',
+            },
+          },
+          { type: 'text', text: ' ' },
+          {
+            type: 'mention',
+            attrs: {
+              href: 'https://remote.example/users/bob',
+              label: '@alice',
+              target: 'https://remote.example/users/bob',
+            },
+          },
+          { type: 'text', text: ' ' },
+          {
+            marks: [
+              {
+                attrs: { href: 'https://remote.example/users/unknown' },
+                type: 'link',
+              },
+            ],
+            text: '@alice',
+            type: 'text',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('keeps malformed or label-mismatched typed Mention candidates as safe links', () => {
+    const result = projectRemoteNoteContent({
+      content:
+        '<p><a href="https://remote.example/users/alice">not-alice</a> ' +
+        '<a href="javascript:steal()">@alice</a></p>',
+      mentions: [
+        { label: '@alice', targetHref: 'not a URI' },
+        { label: '@alice', targetHref: 'https://remote.example/users/alice' },
+      ],
+      summary: null,
+      mediaType: 'text/html',
+    });
+
+    assert.deepEqual(result.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            marks: [{ type: 'link', attrs: { href: 'https://remote.example/users/alice' } }],
+            text: 'not-alice',
+            type: 'text',
+          },
+          { type: 'text', text: ' @alice' },
+        ],
+      },
+    ]);
+  });
+
+  it('does not trust forged internal Mention markup without typed candidates', () => {
+    const result = projectRemoteNoteContent({
+      content:
+        '<p>before <kosmo-mention data-target="https://remote.example/users/alice" ' +
+        'data-href="https://remote.example/@alice" data-label="@alice">@alice</kosmo-mention> after</p>',
+      mentions: [],
+      summary: null,
+      mediaType: 'text/html',
+    });
+
+    assert.deepEqual(result.body.content, [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'before @alice after' }],
+      },
+    ]);
   });
 });
 

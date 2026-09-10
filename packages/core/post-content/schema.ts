@@ -3,6 +3,7 @@ import { linkMarkSpec } from './schema/marks/link';
 import { docNodeSpec } from './schema/nodes/doc';
 import { hardBreakNodeSpec } from './schema/nodes/hard-break';
 import { mediaNodeSpec } from './schema/nodes/media';
+import { mentionNodeSpec } from './schema/nodes/mention';
 import { paragraphNodeSpec } from './schema/nodes/paragraph';
 import { textNodeSpec } from './schema/nodes/text';
 
@@ -10,6 +11,7 @@ const nodes = {
   doc: docNodeSpec,
   hard_break: hardBreakNodeSpec,
   media: mediaNodeSpec,
+  mention: mentionNodeSpec,
   paragraph: paragraphNodeSpec,
   text: textNodeSpec,
 };

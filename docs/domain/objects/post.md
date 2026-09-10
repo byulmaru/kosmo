@@ -396,9 +396,10 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   바꾸는 도메인 방향은 정의되어 있지만 현재 사용자용 Post 수정 기능은 제공하지 않는다. 이 기능은 이미지가
   있는 새 Post 작성과 독립된 후속 계약이다. Post Visibility 변경도 현재 지원하지 않는다.
 - 본문의 canonical 표현은 schema version이 식별된 document다. Plain Text는 작성 입력과 읽기·검색·접근성 projection이며 별도 canonical 저장값이 아니다.
-- 현재 document V1은 paragraph, text, hard break, 안전한 HTTP(S) link와 Media node를 지원한다. `pre`와
-  일반 rich-text editor는 지원하지 않는다.
-- Mentioned Profiles audience와 ActivityPub Mention·custom emoji는 후속 계약에서 정의한다.
+- 현재 document V1은 paragraph, text, hard break, 안전한 HTTP(S) link와 Media node를 지원하며, 검증된 inbound
+  typed Mention은 V1에 additive한 node로 보존한다. `pre`와 일반 rich-text editor는 지원하지 않는다.
+- Mentioned Profiles audience와 ActivityPub outbound Mention projection·custom emoji·Quote 전용 속성은 후속
+  계약에서 정의한다. inbound Note의 typed Mention 보존은 별도 수신 계약을 따른다.
 - Quote 정책은 [ADR 0029](../decisions/0029-quote-consent-and-federation.md)과
   [PROD-902](https://linear.app/byulmaru/issue/PROD-902)를 따른다. 로컬 작성은 PROD-431,
   federation·승인 발급·철회는 PROD-924, 원격 Quote 수신·검증은 PROD-792가 구현한다.

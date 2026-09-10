@@ -14,6 +14,7 @@ import { createPost } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
+import { collectInboundMentionCandidates } from './inbound-mention';
 import { observeInbound } from './inbound-observability';
 import {
   findOrMaterializeRemoteProfileActorByUri,
@@ -97,6 +98,7 @@ const projectRemoteNote = async (note: Note) => ({
   document: projectRemoteNoteContent({
     content: note.content?.toString() ?? null,
     mediaType: note.mediaType,
+    mentions: await collectInboundMentionCandidates(note),
     summary: note.summary?.toString() ?? null,
   }),
   media: await projectRemoteNoteMedia(note),

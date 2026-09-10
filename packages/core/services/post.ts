@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNotNull, isNull, ne, notExists, or, sql } from 'drizzle-orm';
 import {
+  ActivityPubActors,
   ActivityPubPosts,
   db,
   first,
@@ -9,6 +10,7 @@ import {
   isUniqueViolation,
   Media,
   PostContents,
+  PostMentions,
   Posts,
   ProfileBlocks,
   ProfileFollows,
@@ -24,6 +26,7 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import { normalizeLinkHref } from '../post-content/schema/marks/link';
 import {
   canonicalizePostContentDocument,
   validateLocalPostContentDocument,
@@ -33,7 +36,7 @@ import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
 import { validatePostStructure } from './post-structure';
 import type { Transaction } from '../db';
-import type { PostContentDocumentV1 } from '../post-content';
+import type { PostContentDocumentV1, PostContentMentionNode } from '../post-content';
 
 type LocalPostInput = {
   accountId?: string;
@@ -419,6 +422,116 @@ const materializeRemoteMedia = async (
   return materialized;
 };
 
+type StoredMentionIdentity = {
+  readonly actorUri: string;
+  readonly profileId: string;
+};
+
+type MentionProjection = {
+  readonly document: PostContentDocumentV1;
+  readonly profileIds: readonly string[];
+};
+
+const canonicalMentionUri = (value: unknown): string | null => {
+  try {
+    return normalizeLinkHref(value);
+  } catch {
+    return null;
+  }
+};
+
+const fallbackMention = (node: PostContentMentionNode) => {
+  const href = canonicalMentionUri(node.attrs.href);
+  return {
+    type: 'text' as const,
+    text: node.attrs.label,
+    ...(href
+      ? {
+          marks: [
+            {
+              attrs: { href },
+              type: 'link' as const,
+            },
+          ],
+        }
+      : {}),
+  };
+};
+
+const projectRemoteMentions = async (
+  tx: Transaction,
+  document: PostContentDocumentV1,
+): Promise<MentionProjection> => {
+  const mentionNodes = document.body.content.flatMap((block) =>
+    block.type === 'paragraph'
+      ? (block.content ?? []).filter(
+          (node): node is PostContentMentionNode => node.type === 'mention',
+        )
+      : [],
+  );
+  if (mentionNodes.length === 0) {
+    return { document, profileIds: [] };
+  }
+
+  const identities = [
+    ...new Set(mentionNodes.flatMap((node) => [node.attrs.target, node.attrs.href])),
+  ];
+  const rows = await tx
+    .select({
+      actorUri: ActivityPubActors.uri,
+      profileId: ActivityPubActors.profileId,
+    })
+    .from(ActivityPubActors)
+    .where(inArray(ActivityPubActors.uri, identities));
+
+  const profileIdByActorUri = new Map(
+    (rows satisfies StoredMentionIdentity[]).map(({ actorUri, profileId }) => [
+      actorUri,
+      profileId,
+    ]),
+  );
+  const profileIdByNode = new Map<string, string>();
+  const nodeKey = (node: PostContentMentionNode) =>
+    `${node.attrs.target}\u0000${node.attrs.href}\u0000${node.attrs.label}`;
+
+  for (const node of mentionNodes) {
+    const target = canonicalMentionUri(node.attrs.target);
+    const href = canonicalMentionUri(node.attrs.href);
+    if (!target || !href) {
+      continue;
+    }
+
+    const targetProfileId = profileIdByActorUri.get(target);
+    const hrefProfileId = profileIdByActorUri.get(href);
+    if (targetProfileId !== undefined && targetProfileId === hrefProfileId) {
+      profileIdByNode.set(nodeKey(node), targetProfileId);
+    }
+  }
+
+  const profileIds = [...new Set(profileIdByNode.values())];
+  const projectedDocument = canonicalizePostContentDocument({
+    ...document,
+    body: {
+      ...document.body,
+      content: document.body.content.map((block) =>
+        block.type === 'paragraph'
+          ? {
+              ...block,
+              content: (block.content ?? []).flatMap((node) => {
+                if (node.type !== 'mention' || profileIdByNode.has(nodeKey(node))) {
+                  return [node];
+                }
+                return [fallbackMention(node)];
+              }),
+            }
+          : block,
+      ),
+    },
+  });
+
+  return { document: projectedDocument, profileIds };
+};
+
 export const deletePost = async ({
   actorProfileId,
   origin,
@@ -570,6 +683,7 @@ export async function createPost(
         input.origin === 'LOCAL'
           ? validateLocalPostContentDocument(input.document)
           : input.document;
+      let mentionProjection: MentionProjection | undefined;
 
       if (
         input.origin === 'LOCAL' &&
@@ -688,6 +802,9 @@ export async function createPost(
             },
           });
         }
+
+        mentionProjection = await projectRemoteMentions(tx, document);
+        document = mentionProjection.document;
       }
 
       const content = await tx
@@ -699,6 +816,17 @@ export async function createPost(
         })
         .returning()
         .then(firstOrThrow);
+
+      if (input.origin === 'ACTIVITYPUB') {
+        if (mentionProjection?.profileIds.length) {
+          await tx.insert(PostMentions).values(
+            mentionProjection.profileIds.map((profileId) => ({
+              postContentId: content.id,
+              profileId,
+            })),
+          );
+        }
+      }
 
       validatePostStructure({
         currentContentId: content.id,
