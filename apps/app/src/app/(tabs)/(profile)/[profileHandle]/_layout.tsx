@@ -54,7 +54,7 @@ const ProfileLayoutQuery = graphql`
 
 type PostRefreshFocusIntent = Readonly<{
   actorLifecycleKey: string;
-  target: 'menu' | 'state';
+  target: 'content' | 'menu' | 'state';
   timeout: ReturnType<typeof setTimeout>;
 }>;
 
@@ -67,7 +67,7 @@ function focusIntentKey(ownerProfileId: string, handle: string) {
 function rememberPostRefreshFocus(
   intentKey: string,
   actorLifecycleKey: string,
-  target: 'menu' | 'state',
+  target: 'content' | 'menu' | 'state',
 ) {
   const previous = postRefreshFocusIntents.get(intentKey);
   if (previous) {
@@ -182,6 +182,7 @@ function ProfileLayoutContent({
   const cancelRef = useRef<View>(null);
   const dismissFocusRef = useRef<'menu' | 'state' | null>(null);
   const stateActionRef = useRef<View>(null);
+  const contentStateRef = useRef<View>(null);
   const focusMenuTrigger = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -202,6 +203,7 @@ function ProfileLayoutContent({
       intent.actorLifecycleKey === actorLifecycleKey ||
       !target ||
       (target === 'state' && !blockStatus?.blocking) ||
+      (target === 'content' && !blockStatus?.blockedBy) ||
       (target === 'menu' && (blockStatus?.blocking || !profile))
     ) {
       return;
@@ -211,12 +213,21 @@ function ProfileLayoutContent({
       postRefreshFocusIntents.delete(intentKey);
       if (target === 'state') {
         stateActionRef.current?.focus();
+      } else if (target === 'content') {
+        contentStateRef.current?.focus();
       } else {
         focusMenuTrigger.current();
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [actorLifecycleKey, blockStatus?.blocking, handle, profile, selectedProfileId]);
+  }, [
+    actorLifecycleKey,
+    blockStatus?.blockedBy,
+    blockStatus?.blocking,
+    handle,
+    profile,
+    selectedProfileId,
+  ]);
 
   const closeConfirmation = () => {
     if (!inFlight.current) {
@@ -380,7 +391,7 @@ function ProfileLayoutContent({
           rememberPostRefreshFocus(
             focusIntentKey(selectedProfileId, handle),
             actorLifecycleKey,
-            'menu',
+            blockStatus?.blockedBy ? 'content' : 'menu',
           );
         }
       }}
@@ -391,7 +402,7 @@ function ProfileLayoutContent({
   const profileAction =
     blockStatus?.blockedBy && !blockStatus.blocking ? undefined : relationshipAction;
   const profileContent = blockStatus?.blockedBy ? (
-    <StateView title="게시물을 볼 수 없습니다" />
+    <StateView controlRef={contentStateRef} title="게시물을 볼 수 없습니다" />
   ) : blockStatus?.blocking && !blockedContentVisible ? (
     <StateView
       actionLabel="게시물 보기"
