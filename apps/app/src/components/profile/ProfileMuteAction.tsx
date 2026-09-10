@@ -10,10 +10,9 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, breakpoints, textStyles } from '@/theme/tokens';
-import { ProfileMoreMenu } from './ProfileMoreMenu';
-import type { ComponentProps } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import type { View } from 'react-native';
-import type { ActionMenu, ActionMenuItem } from '@/components/ui/ActionMenu';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfileMuteAction_profile$key } from './__generated__/ProfileMuteAction_profile.graphql';
 
 export type ProfileMuteFeedback = { muted: boolean; status: 'success' | 'error' };
@@ -40,18 +39,22 @@ type ProfileMuteActionProps = {
   profile: ProfileMuteAction_profile$key;
 } & (
   | {
-      items?: readonly ActionMenuItem[];
-      renderTrigger?: ComponentProps<typeof ActionMenu>['renderTrigger'];
+      renderMenuItem: (props: ProfileMuteMenuItemRenderProps) => ReactNode;
       surface?: 'menu';
     }
-  | { items?: never; renderTrigger?: never; surface: 'button' | 'text' }
+  | { renderMenuItem?: never; surface: 'button' | 'text' }
 );
 
+export type ProfileMuteMenuItemRenderProps = Readonly<{
+  disabled: boolean;
+  focusTriggerRef: RefObject<() => void>;
+  item: ActionMenuItem;
+}>;
+
 export function ProfileMuteAction({
-  items,
   onFeedback,
   profile,
-  renderTrigger,
+  renderMenuItem,
   surface = 'menu',
 }: ProfileMuteActionProps) {
   const data = useFragment(profileMuteActionFragment, profile);
@@ -90,12 +93,12 @@ export function ProfileMuteAction({
   return (
     <ProfileMuteActionControl
       displayName={data.displayName}
-      items={items}
       muted={muted}
       onChangeMuted={onChangeMuted}
       onFeedback={onFeedback}
       profileId={data.id}
-      renderTrigger={renderTrigger}
+      renderMenuItem={renderMenuItem!}
+      surface="menu"
     />
   );
 }
@@ -107,12 +110,11 @@ type Props = {
   /** Menu on the profile, button in management, text in the ProfileHero status row. */
 } & (
   | {
+      renderMenuItem: (props: ProfileMuteMenuItemRenderProps) => ReactNode;
       surface?: 'menu';
       muted: boolean;
-      items?: readonly ActionMenuItem[];
-      renderTrigger?: ComponentProps<typeof ActionMenu>['renderTrigger'];
     }
-  | { surface: 'button' | 'text'; muted: true; items?: never; renderTrigger?: never }
+  | { surface: 'button' | 'text'; muted: true; renderMenuItem?: never }
 );
 
 type CommittedProfileTarget = Readonly<{
@@ -148,8 +150,7 @@ function ProfileMuteActionContent({
   onFeedback,
   profileId,
   surface = 'menu',
-  items = [],
-  renderTrigger,
+  renderMenuItem,
 }: Props & { committedTargetRef: CommittedProfileTargetRef }) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
@@ -252,15 +253,11 @@ function ProfileMuteActionContent({
   return (
     <>
       {surface === 'menu' ? (
-        <ProfileMoreMenu
-          disabled={pending}
-          items={[
-            ...items,
-            { icon: muted ? Volume2 : VolumeOff, key: 'mute', label, onSelect: activate },
-          ]}
-          focusTriggerRef={focusTrigger}
-          renderTrigger={renderTrigger}
-        />
+        renderMenuItem!({
+          disabled: pending,
+          focusTriggerRef: focusTrigger,
+          item: { icon: muted ? Volume2 : VolumeOff, key: 'mute', label, onSelect: activate },
+        })
       ) : surface === 'text' ? (
         <Pressable
           ref={actionRef}

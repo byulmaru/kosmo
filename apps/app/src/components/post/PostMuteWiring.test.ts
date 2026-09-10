@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactElement } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -22,7 +22,11 @@ type Target = {
 
 type MuteProps = {
   profile: Target['profile'];
-  renderTrigger: (props: unknown) => unknown;
+  renderMenuItem: (props: {
+    disabled: boolean;
+    focusTriggerRef: { current: () => void };
+    item: object;
+  }) => ReactElement;
 };
 
 const target: Target = {
@@ -97,6 +101,9 @@ mock.module('@/components/profile/ProfileMuteAction', {
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/components/profile/ProfileMoreMenu', {
+  exports: { ProfileMoreMenu: (props: object) => createElement('ProfileMoreMenu', props) },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 before(async () => {
   ({ PostActionSurface } = await import('./PostActionSurface'));
@@ -115,7 +122,15 @@ describe('PostActionSurface mute wiring', () => {
     }
     const mute = capturedMute.value as unknown as MuteProps;
     assert.equal(mute.profile, target.profile);
-    assert.equal(typeof mute.renderTrigger, 'function');
+    const muteItem = { key: 'mute', label: '뮤트' };
+    const menu = mute.renderMenuItem({
+      disabled: false,
+      focusTriggerRef: { current: () => undefined },
+      item: muteItem,
+    });
+    const menuProps = menu.props as { disabled: boolean; items: object[] };
+    assert.equal(menuProps.disabled, false);
+    assert.deepEqual(menuProps.items, [{ key: 'copy-link', label: '링크 복사' }, muteItem]);
   });
 });
 

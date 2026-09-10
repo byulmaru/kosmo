@@ -13,7 +13,8 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   취소 시 요청하지 않으며 확인 후 성공한 경우에만 상태를 바꾸고 `{표시 이름} 님이 뮤트 해제되었어요`
   Toast를 표시한다. 이 확인 흐름은 2026-09-06 사용자 검토에서 확정했으며 기존 Figma loaded 관리 목록은
   해제 확인창 자체의 증거가 아니다.
-- 프로필에서는 더보기 메뉴에 프로필 링크 복사·뮤트·차단을 이 순서로 합성한다. 승인된 Figma Target은 모든
+- 프로필에서는 더보기 메뉴가 프로필 링크 복사·뮤트·차단 항목을 이 순서로 합성한다. 뮤트 액션은 Relay fragment·mutation·확인창과
+  pending을 소유한 메뉴 항목으로 참여하며 더보기 메뉴와 trigger 전체를 소유하지 않는다. 승인된 Figma Target은 모든
   레이아웃에서 FollowButton 왼쪽 `16px` 간격의 `40×40` 원형 테두리 버튼이다. 메뉴 오른쪽 위를 trigger
   오른쪽 위에 맞춰 겹치게 두고 왼쪽·아래로 펼친다. viewport 경계에서는 위치·방향을 보정한다.
   Native 입력 target은 iOS 최소 `44pt`, Android 최소 `48dp`를 확보한다. 공용 컴포넌트에 반영했으며
@@ -195,8 +196,8 @@ viewer 방향별 콘텐츠 정책은 위 계약을 따르며, 실제 route의 �
 
 ## Storybook 이관 · PROD-858
 
-`ProfileMuteAction`은 Profile/Post의 메뉴와 관리용 확인 처리를 소유하며 기존
-ModalSheet·ConfirmationContent·ToastProvider를 재사용한다. 메뉴 표시에는 요청을 모르는 `ProfileMoreMenu`를 사용한다.
+`ProfileMuteAction`은 기존 ModalSheet·ConfirmationContent·ToastProvider를 재사용한다. Profile/Post 소비자가
+요청을 모르는 `ProfileMoreMenu`를 소유하고, 뮤트 액션이 제공하는 메뉴 항목을 다른 항목과 합성한다.
 확인과 pending/dismiss, 오류 피드백은 공용 UI 경계에서 제공하며 실제 요청은 callback으로 전달한다.
 관리 목록은 본문·상태·행·pagination을 소유하는 `MutedProfileList`, 행 표시는 기존 Relay `ProfileListItem`과
 공유하는 `ProfileListItemContent`를 사용한다. 화면과 Storybook은 목록 밖의 heading·scroll container와

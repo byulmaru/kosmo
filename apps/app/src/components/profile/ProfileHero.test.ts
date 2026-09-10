@@ -94,6 +94,9 @@ mockModule(require.resolve('lucide-react-native'), { XIcon: 'XIcon', VolumeOff: 
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
   ProfileMuteAction: 'ProfileMuteAction',
 });
+mockModule(new URL('./ProfileMoreMenu.tsx', import.meta.url), {
+  ProfileMoreMenu: 'ProfileMoreMenu',
+});
 
 let ProfileHero: typeof ProfileHeroExport;
 
