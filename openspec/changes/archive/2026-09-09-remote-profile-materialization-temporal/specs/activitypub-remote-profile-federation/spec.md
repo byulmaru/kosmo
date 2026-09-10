@@ -7,13 +7,14 @@
 #### Scenario: Materialize remote actor from federated handle
 
 - **WHEN** federation 내부 service가 `@{handle}@{domain}` 형식의 federated handle materialization을 요청하고 caller가 동기 또는 비동기 결과 모드를 선택한다
-- **THEN** 시스템은 `profileId`가 없으면 configured Local Instance의 canonical origin을 사용하고, `profileId`가 있으면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용한다
+- **THEN** Temporal Workflow와 Activity wire input은 초기 actor discovery key인 `handle` 또는 저장된 canonical actor URI를 이용한 refresh key인 `actorUri` 중 정확히 하나와 선택적인 `profileId`를 가진다
+- **AND** `profileId`가 없으면 configured Local Instance의 canonical origin을 사용하고, 있으면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용한다
 - **AND** 전달된 `profileId`가 필요한 Remote actor 정보를 제공하지 않으면 origin을 추측하지 않고 materialization을 실패 처리한다
 - **AND** `profileId`는 기존 unsigned lookup의 권한을 대신하지 않는다
 - **AND** 시스템은 Fedify lookup 전에 normalized domain의 기존 ActivityPub instance를 조회한다
 - **AND** 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이면 Fedify lookup 없이 materialization을 실패 처리한다
 - **AND** 기존 instance가 없으면 normalized domain의 ActivityPub instance를 생성한다
-- **AND** 시스템은 하나의 Temporal Workflow 경로에서 Fedify lookup API로 `acct:{handle}@{domain}`을 해석한다
+- **AND** `handle` input branch에서는 하나의 Temporal Workflow 경로에서 Fedify lookup API로 `acct:{handle}@{domain}`을 해석한다
 - **AND** Fedify가 ActivityPub actor 객체를 반환하면 해당 actor의 canonical actor URI를 remote identity로 처리한다
 - **AND** 시스템은 요청 handle의 normalized value와 actor `preferredUsername`의 normalized value가 일치하는지 검증한다
 - **AND** 시스템은 actor URI가 기존 ActivityPub remote profile actor metadata에 연결되어 있으면 해당 remote profile을 갱신하고, 없으면 새 `Profile`을 생성한다
@@ -29,9 +30,18 @@
 
 #### Scenario: Reject actor URI without federated handle lookup
 
-- **WHEN** remote actor URI만 주어지고 federated handle lookup을 통과하지 않았다
+- **WHEN** 저장된 remote actor identity를 가리키는 `actorUri` refresh도 아니고 federated handle lookup을 통과한 초기 materialization도 아닌 actor URI가 주어진다
 - **THEN** 시스템은 remote profile을 저장하지 않는다
 - **AND** 시스템은 actor URI만으로 `Profile`을 생성하지 않는다
+
+#### Scenario: Refresh a stored remote actor by canonical URI
+
+- **WHEN** stale remote actor materialization이 저장된 canonical actor URI와 선택적인 `profileId`를 가진 `actorUri` refresh input으로 실행된다
+- **THEN** 시스템은 저장된 `actorUri`를 Fedify lookup target으로 사용하고 `acct:{handle}@{domain}` lookup을 다시 수행하지 않는다
+- **AND** Fedify가 반환한 actor의 canonical URI가 예상한 `actorUri`와 일치하는지 확인하기 전에는 Profile 또는 actor metadata를 저장하지 않는다
+- **AND** URI가 일치하면 기존 actor identity에 연결된 같은 `Profile`을 갱신한다
+- **AND** 같은 canonical URI에서 actor `preferredUsername`이 바뀌어도 새 Profile을 만들지 않고 같은 Profile의 handle, normalized handle과 qualified handle을 갱신한다
+- **AND** 반환 URI가 예상한 `actorUri`와 다르면 materialization을 실패 처리하고 Profile 또는 actor metadata를 변경하지 않는다
 
 #### Scenario: Reject unresolved or non-actor lookup
 
@@ -86,6 +96,7 @@
 - **WHEN** 저장된 remote actor의 `lastFetchedAt`이 없거나 7일을 초과했고 federation 내부 service가 해당 remote actor를 사용해야 한다
 - **THEN** 시스템은 저장된 active profile을 refresh 완료 전에도 반환한다
 - **AND** 시스템은 신규 materialization과 같은 Temporal Workflow 경로의 refresh를 시작한다
+- **AND** refresh input은 저장된 canonical actor URI를 `actorUri`로 재사용하고 qualified handle lookup을 다시 수행하지 않는다
 - **AND** refresh가 성공하면 기존 `createdAt` 보존 정책을 지키면서 `Profile` projection과 actor metadata를 갱신한다
 
 #### Scenario: Keep stale actor on refresh failure

@@ -445,6 +445,245 @@ test('Remote Profile Activity는 stale actor 실행 시 현재 Profile·Instance
   assert.equal(await db.$count(ActivityPubActors), staleStateScenarios.length);
 });
 
+test('Remote Profile Activity는 같은 actor URI의 username 변경을 기존 Profile에 반영한다', async (t) => {
+  const actorUri = new URL(`https://${remoteDomain}/users/alice`);
+  const refreshedActor = createActor({
+    id: actorUri,
+    name: 'Renamed Alice',
+    preferredUsername: 'alice_renamed',
+  });
+  const lookups: Array<string | URL> = [];
+  t.mock.method(
+    federation,
+    'createContext',
+    () =>
+      ({
+        lookupObject: async (identifier: string | URL) => {
+          lookups.push(identifier);
+          return refreshedActor;
+        },
+      }) as never,
+  );
+
+  const remoteInstance = await createInstance({ domain: remoteDomain });
+  const profile = await createStoredProfile({
+    actorUri: actorUri.href,
+    handle: 'alice',
+    instanceId: remoteInstance.id,
+    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 24 * 8 }),
+  });
+  const before = await readStoredProfile(profile.id);
+
+  assert.equal(
+    await materializeRemoteProfileActorActivity({ actorUri: actorUri.href }),
+    profile.id,
+  );
+  assert.deepEqual(lookups.map(String), [actorUri.href]);
+
+  const after = await readStoredProfile(profile.id);
+  assert.equal(after.profile.id, before.profile.id);
+  assert.equal(after.profile.handle, 'alice_renamed');
+  assert.equal(after.profile.normalizedHandle, 'alice_renamed');
+  assert.equal(after.profile.displayName, 'Renamed Alice');
+  assert.equal(after.actor.uri, actorUri.href);
+  assert.equal(await db.$count(Profiles), 1);
+  assert.equal(await db.$count(ActivityPubActors), 1);
+});
+
+test('Remote Profile Activity는 handle 재할당 시에도 원래 actor URI를 갱신한다', async (t) => {
+  const originalActorUri = new URL(`https://${remoteDomain}/users/alice`);
+  const reassignedActorUri = new URL(`https://${remoteDomain}/users/reassigned`);
+  const originalActor = createActor({
+    id: originalActorUri,
+    name: 'Renamed Alice',
+    preferredUsername: 'alice_renamed',
+  });
+  const reassignedActor = createActor({
+    id: reassignedActorUri,
+    name: 'Reassigned Alice',
+    preferredUsername: 'alice',
+  });
+  const lookups: Array<string | URL> = [];
+  t.mock.method(
+    federation,
+    'createContext',
+    () =>
+      ({
+        lookupObject: async (identifier: string | URL) => {
+          lookups.push(identifier);
+          return String(identifier) === originalActorUri.href ? originalActor : reassignedActor;
+        },
+      }) as never,
+  );
+
+  const remoteInstance = await createInstance({ domain: remoteDomain });
+  const profile = await createStoredProfile({
+    actorUri: originalActorUri.href,
+    handle: 'alice',
+    instanceId: remoteInstance.id,
+    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 24 * 8 }),
+  });
+
+  assert.equal(
+    await materializeRemoteProfileActorActivity({ actorUri: originalActorUri.href }),
+    profile.id,
+  );
+  assert.deepEqual(lookups.map(String), [originalActorUri.href]);
+
+  const stored = await readStoredProfile(profile.id);
+  assert.equal(stored.profile.id, profile.id);
+  assert.equal(stored.profile.handle, 'alice_renamed');
+  assert.equal(stored.actor.uri, originalActorUri.href);
+  assert.equal(
+    await db.$count(ActivityPubActors, eq(ActivityPubActors.uri, reassignedActorUri.href)),
+    0,
+  );
+  assert.equal(await db.$count(Profiles), 1);
+});
+
+test('Remote Profile Activity는 lookup actor URI가 요청 URI와 다르면 저장하지 않는다', async (t) => {
+  const requestedActorUri = new URL(`https://${remoteDomain}/users/alice`);
+  const mismatchedActorUri = new URL(`https://${remoteDomain}/users/mismatched`);
+  const mismatchedActor = createActor({
+    id: mismatchedActorUri,
+    name: 'Mismatched Actor',
+    preferredUsername: 'alice',
+  });
+  const lookups: Array<string | URL> = [];
+  t.mock.method(
+    federation,
+    'createContext',
+    () =>
+      ({
+        lookupObject: async (identifier: string | URL) => {
+          lookups.push(identifier);
+          return mismatchedActor;
+        },
+      }) as never,
+  );
+
+  const remoteInstance = await createInstance({ domain: remoteDomain });
+  const profile = await createStoredProfile({
+    actorUri: requestedActorUri.href,
+    handle: 'alice',
+    instanceId: remoteInstance.id,
+    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 24 * 8 }),
+  });
+  const before = await readStoredProfile(profile.id);
+
+  await assert.rejects(
+    materializeRemoteProfileActorActivity({ actorUri: requestedActorUri.href }),
+    (error: unknown) => {
+      assert.equal((error as { nonRetryable?: boolean }).nonRetryable, true);
+      assert.equal((error as { type?: string }).type, 'RemoteActorMaterializationError');
+      return true;
+    },
+  );
+
+  assert.deepEqual(lookups.map(String), [requestedActorUri.href]);
+  const after = await readStoredProfile(profile.id);
+  assert.equal(after.profile.id, before.profile.id);
+  assert.equal(after.profile.handle, before.profile.handle);
+  assert.equal(after.profile.displayName, before.profile.displayName);
+  assert.equal(after.actor.uri, before.actor.uri);
+  assert.equal(after.actor.lastFetchedAt?.toString(), before.actor.lastFetchedAt?.toString());
+  assert.equal(await db.$count(Profiles), 1);
+  assert.equal(await db.$count(ActivityPubActors), 1);
+  assert.equal(
+    await db.$count(ActivityPubActors, eq(ActivityPubActors.uri, mismatchedActorUri.href)),
+    0,
+  );
+});
+
+test('Remote Profile Activity는 URI 기준으로 TTL과 Profile·Instance eligibility를 다시 확인한다', async (t) => {
+  let lookupCalls = 0;
+  t.mock.method(
+    federation,
+    'createContext',
+    () =>
+      ({
+        lookupObject: async () => {
+          lookupCalls += 1;
+          return createActor();
+        },
+      }) as never,
+  );
+
+  const freshUri = new URL('https://uri-fresh.example/users/fresh');
+  const freshInstance = await createInstance({ domain: freshUri.hostname });
+  const freshProfile = await createStoredProfile({
+    actorUri: freshUri.href,
+    handle: 'renamed-fresh',
+    instanceId: freshInstance.id,
+    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 1 }),
+  });
+  assert.equal(
+    await materializeRemoteProfileActorActivity({ actorUri: freshUri.href }),
+    freshProfile.id,
+  );
+
+  const disabledUri = new URL('https://uri-disabled.example/users/alice');
+  const disabledInstance = await createInstance({ domain: disabledUri.hostname });
+  const disabledProfile = await createStoredProfile({
+    actorUri: disabledUri.href,
+    handle: 'renamed-disabled',
+    instanceId: disabledInstance.id,
+    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 24 * 8 }),
+  });
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.DISABLED })
+    .where(eq(Profiles.id, disabledProfile.id));
+  await assert.rejects(
+    materializeRemoteProfileActorActivity({ actorUri: disabledUri.href }),
+    (error: unknown) => {
+      assert.equal((error as { nonRetryable?: boolean }).nonRetryable, true);
+      assert.equal((error as { type?: string }).type, 'NotFoundError');
+      return true;
+    },
+  );
+
+  const suspendedUri = new URL('https://uri-suspended.example/users/alice');
+  const suspendedInstance = await createInstance({ domain: suspendedUri.hostname });
+  await createStoredProfile({
+    actorUri: suspendedUri.href,
+    handle: 'renamed-suspended',
+    instanceId: suspendedInstance.id,
+    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 24 * 8 }),
+  });
+  await db
+    .update(Instances)
+    .set({ state: InstanceState.SUSPENDED })
+    .where(eq(Instances.id, suspendedInstance.id));
+  await assert.rejects(
+    materializeRemoteProfileActorActivity({ actorUri: suspendedUri.href }),
+    (error: unknown) => {
+      assert.equal((error as { nonRetryable?: boolean }).nonRetryable, true);
+      assert.equal((error as { type?: string }).type, 'NotFoundError');
+      return true;
+    },
+  );
+
+  const unresponsiveUri = new URL('https://uri-unresponsive.example/users/alice');
+  const unresponsiveInstance = await createInstance({ domain: unresponsiveUri.hostname });
+  const unresponsiveProfile = await createStoredProfile({
+    actorUri: unresponsiveUri.href,
+    handle: 'renamed-unresponsive',
+    instanceId: unresponsiveInstance.id,
+    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 24 * 8 }),
+  });
+  await db
+    .update(Instances)
+    .set({ state: InstanceState.UNRESPONSIVE })
+    .where(eq(Instances.id, unresponsiveInstance.id));
+  assert.equal(
+    await materializeRemoteProfileActorActivity({ actorUri: unresponsiveUri.href }),
+    unresponsiveProfile.id,
+  );
+
+  assert.equal(lookupCalls, 0);
+});
+
 type PersonOptions = ConstructorParameters<typeof Person>[0];
 
 const createActor = (overrides: Partial<PersonOptions> = {}) =>

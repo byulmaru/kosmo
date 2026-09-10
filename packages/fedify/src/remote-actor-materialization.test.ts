@@ -1198,6 +1198,9 @@ describe('remote actor materialization', () => {
       assert.equal(profile.id, stored.profile.id);
       assert.equal(start.mock.calls.length, 1);
       assert.equal(start.mock.calls[0]?.arguments[0], 'remoteProfileMaterializationWorkflow');
+      const options = start.mock.calls[0]?.arguments[1];
+      assert.ok(options);
+      assert.deepEqual(options.args, [{ actorUri: stored.actor.uri }]);
     } finally {
       releaseStart();
       start.mock.restore();

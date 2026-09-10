@@ -52,6 +52,18 @@
 - Consequences: Activity가 실행 시점 DB에서 Profile·actor metadata를 다시 읽어 context와 origin을 구성한다. sync caller는 Profile ID를 받은 뒤 row를 다시 읽을 수 있고, async caller는 start acknowledgement만 관찰한다.
 - Confirmation / Follow-up: Temporal payload serialization, sync result ID, async durable start acknowledgement와 missing Remote actor error mapping을 검증한다.
 
+### Superseding review correction: discovery key와 stored actor refresh key를 분리한다
+
+- Decision Date: 2026-09-10
+- Decision Class: Corrective Contract
+- Authority / Provenance: `docs/domain/objects/profile.md`, `PROD-808` review correction
+- Status: Active
+- Context / Problem: 2026-09-09 기록은 Workflow input을 qualified handle 중심으로 설명해 stale refresh가 `acct:{handle}@{domain}`를 다시 해석하는 것으로 읽힐 수 있었다. actor `preferredUsername`이 바뀌면 이 재조회는 저장된 actor identity를 보존하지 못한다.
+- Decision Outcome: Temporal Workflow와 Activity wire input은 초기 discovery key인 `handle` 또는 저장된 canonical actor URI refresh key인 `actorUri` 중 정확히 하나와 선택적인 `profileId`를 갖는다. `handle` branch만 `acct:{handle}@{domain}` lookup을 수행하고, `actorUri` branch는 저장된 URI를 직접 재사용해 handle lookup을 수행하지 않는다. Activity는 반환된 actor URI가 예상한 `actorUri`와 일치하는지 확인한 뒤에만 저장하며, 불일치는 Profile 또는 actor metadata 변경 없이 실패한다. 같은 URI에서 `preferredUsername`이 바뀌면 새 Profile을 만들지 않고 기존 Profile의 handle, normalized handle과 qualified handle을 갱신한다. `profileId`가 없으면 configured Local Instance canonical origin을 사용하고, 있으면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용하며, 필요한 actor 정보가 없으면 origin을 추측하지 않고 실패한다. 기존 unsigned lookup과 caller-only sync/async 선택은 유지한다.
+- Alternatives Considered: stale refresh에서도 handle을 다시 조회하거나 actor URI만으로 별도 Profile을 만드는 방식은 canonical actor identity와 preferredUsername 변경을 안전하게 연결하지 못하므로 선택하지 않았다. caller mode를 wire input에 넣거나 별도 Workflow를 추가하는 방식도 one-Workflow 경계를 넓히므로 선택하지 않았다.
+- Consequences: 초기 요청과 stale refresh는 서로 다른 JSON-safe input identity를 사용하지만 같은 Workflow 종류와 Activity 경계를 공유한다. archive의 이전 wire-input 서술 중 qualified handle 단일 입력과 URI discriminator 배제 문장은 이 corrective contract로 대체되고, 이전 결정의 origin 선택과 sync/async 결론은 유지된다.
+- Confirmation / Follow-up: handle 초기 materialization, actorUri refresh의 no-acct lookup, URI mismatch 저장 거부와 동일 URI preferredUsername 변경 시 Profile identity 유지 동작을 검증한다.
+
 ### Stable workflow identity, retry classification, and timeout boundary
 
 - Decision Date: 2026-09-09
@@ -82,4 +94,4 @@
 
 ## Superseded Decisions
 
-없음.
+- 2026-09-09 `Remote actor lookup caller contract` 및 `Serializable DTO, caller-only mode, and identity result`의 wire-input 부분(qualified handle 중심 input과 URI discriminator 배제)은 2026-09-10 `Superseding review correction: discovery key와 stored actor refresh key를 분리한다` 결정으로 대체됐다. 해당 결정들의 origin 선택, unsigned lookup과 caller-only sync/async 결론은 계속 유효하다.

@@ -8,6 +8,7 @@ import { parseProfileHandle } from '@kosmo/core/profile';
 import {
   federation,
   findStoredRemoteProfileActorByHandle,
+  findStoredRemoteProfileActorByUri,
   materializeRemoteProfileActor,
   RemoteActorMaterializationError,
 } from '@kosmo/fedify';
@@ -72,17 +73,24 @@ const skipRemoteLookupIfCurrent = async (
   input: RemoteProfileMaterializationInput,
   now: Temporal.Instant,
 ) => {
-  const configuredLocalInstance = await resolveConfiguredLocalInstance();
-  const parsed = parseProfileHandle(input.handle, {
-    configuredLocalDomain: configuredLocalInstance.domain,
-  });
+  const parsed =
+    input.handle !== undefined
+      ? parseProfileHandle(input.handle, {
+          configuredLocalDomain: (await resolveConfiguredLocalInstance()).domain,
+        })
+      : undefined;
+  const stored =
+    input.actorUri !== undefined
+      ? await findStoredRemoteProfileActorByUri(input.actorUri)
+      : parsed?.kind === 'remote'
+        ? await findStoredRemoteProfileActorByHandle(parsed.domain, parsed.normalizedHandle)
+        : undefined;
 
-  if (!parsed || parsed.kind !== 'remote') {
-    return undefined;
-  }
-
-  const stored = await findStoredRemoteProfileActorByHandle(parsed.domain, parsed.normalizedHandle);
   if (!stored) {
+    if (input.actorUri !== undefined) {
+      throw new NotFoundError('Profile not found');
+    }
+
     return undefined;
   }
 
@@ -130,11 +138,18 @@ export const materializeRemoteProfileActorActivity = async (
 
     const origin = await resolveRemoteProfileMaterializationOrigin(input.profileId);
     const context = federation.createContext(new URL(origin), undefined);
-    const profile = await materializeRemoteProfileActor({
-      context,
-      handle: input.handle,
-      now,
-    });
+    const profile =
+      input.handle !== undefined
+        ? await materializeRemoteProfileActor({
+            context,
+            handle: input.handle,
+            now,
+          })
+        : await materializeRemoteProfileActor({
+            context,
+            actorUri: new URL(input.actorUri),
+            now,
+          });
 
     return profile.id;
   } catch (error) {

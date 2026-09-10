@@ -24,6 +24,7 @@ export { sendReaction, sendReactionUndo } from './src/reaction-delivery';
 export {
   findOrMaterializeRemoteProfileActor,
   findStoredRemoteProfileActorByHandle,
+  findStoredRemoteProfileActorByUri,
   materializeRemoteProfileActor,
   RemoteActorMaterializationError,
 } from './src/remote-actor-materialization';

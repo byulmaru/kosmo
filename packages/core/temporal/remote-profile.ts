@@ -4,10 +4,17 @@ import { KOSMO_TASK_QUEUE } from './task-queue';
 
 export const REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE = 'remoteProfileMaterializationWorkflow';
 
-export type RemoteProfileMaterializationInput = {
-  readonly handle: string;
-  readonly profileId?: string;
-};
+export type RemoteProfileMaterializationInput =
+  | {
+      readonly handle: string;
+      readonly actorUri?: never;
+      readonly profileId?: string;
+    }
+  | {
+      readonly actorUri: string;
+      readonly handle?: never;
+      readonly profileId?: string;
+    };
 
 export type RemoteProfileMaterializationAcknowledgement = {
   readonly kind: 'started';
@@ -15,11 +22,10 @@ export type RemoteProfileMaterializationAcknowledgement = {
 
 export type RemoteProfileMaterializationMode = 'sync' | 'async';
 
-export const remoteProfileMaterializationWorkflowId = ({
-  handle,
-  profileId,
-}: RemoteProfileMaterializationInput): string =>
-  `remote-profile-materialization:${handle}:${profileId ?? 'configured-local'}`;
+export const remoteProfileMaterializationWorkflowId = (
+  input: RemoteProfileMaterializationInput,
+): string =>
+  `remote-profile-materialization:${input.actorUri ?? input.handle}:${input.profileId ?? 'configured-local'}`;
 
 const remoteProfileMaterializationRpcTimeoutMs = 5_000;
 

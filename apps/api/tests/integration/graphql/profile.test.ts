@@ -305,7 +305,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.ok(options);
     assert.deepEqual(options.args, [
       {
-        handle: `alice@${remoteDomain}`,
+        actorUri: stored.actorUri,
         profileId: auth.profile.id,
       },
     ]);

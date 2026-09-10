@@ -9,7 +9,7 @@ Temporal Workflow에는 Fedify `Context`, hydrated actor 또는 DB row를 전달
 **Goals:**
 
 - 신규 materialization과 stale refresh를 하나의 짧은 Workflow와 하나의 Activity 실행 경로로 통합한다.
-- `profileId?: string`에 따른 origin 선택, unsigned lookup, sync/async caller 계약과 fresh/stale fast path를 유지한다.
+- `handle` 초기 discovery와 저장된 `actorUri` refresh를 구분하는 wire input union을 사용하고, 선택적인 `profileId`에 따른 origin 선택, unsigned lookup, sync/async caller 계약과 fresh/stale fast path를 유지한다.
 - stale Profile과 명시적 qualified remote search는 기존 row를 즉시 반환하고 동일한 Workflow refresh를 시작한다.
 - sync caller의 대기 제한이 끝나도 이미 시작된 Workflow가 계속 실행되도록 하며, 결과 payload는 Profile identity로 제한한다.
 - async child caller가 start acknowledgement 뒤 parent 종료·실패·취소를 거쳐도 child가 계속 실행되도록 한다.
@@ -20,7 +20,7 @@ Temporal Workflow에는 Fedify `Context`, hydrated actor 또는 DB row를 전달
 - DB schema/migration, target eligibility 정책, Profile Migration 동작
 - inbound Update 또는 inbound Follow context의 동작 변경
 - 새 HTTP client, parser, projection, status API, 주기 scanner, 장수명 Profile Workflow 또는 범용 Workflow framework
-- URI discriminator를 추가하거나 Temporal Workflow 안에서 caller mode에 따라 분기하는 것
+- Temporal Workflow 안에서 caller mode에 따라 분기하거나 wire payload에 actor object·DB row를 추가하는 것
 - production rollout, merge/queue와 migration Stack의 branch/base 재배치
 
 ## Implementation Guidance
@@ -28,16 +28,16 @@ Temporal Workflow에는 Fedify `Context`, hydrated actor 또는 DB row를 전달
 ### Current Constraints
 
 - 상위 materializer가 stale 판단과 저장 Profile 반환을 담당하고, 실제 remote lookup과 transaction은 별도 low-level 경로로 분리해야 Activity가 상위 Temporal coordinator를 재귀 호출하지 않는다.
-- Activity는 JSON-safe 입력으로 필요한 origin을 재구성해야 한다. `profileId`가 없으면 configured Local Instance의 canonical origin을 사용하고, 있으면 DB에서 Profile과 actor metadata를 읽어 Local Instance canonical origin 또는 Remote actor URI origin을 선택한다. 필요한 Remote actor 정보가 없으면 실패한다.
+- Activity는 JSON-safe input union으로 필요한 origin을 재구성해야 한다. `profileId`가 없으면 configured Local Instance의 canonical origin을 사용하고, 있으면 DB에서 Profile과 actor metadata를 읽어 Local Instance canonical origin 또는 Remote actor URI origin을 선택한다. 필요한 Remote actor 정보가 없으면 실패한다. `handle` input은 초기 discovery key로 acct lookup을 수행하고, `actorUri` input은 저장된 canonical actor URI refresh로 직접 사용하며 acct lookup을 다시 수행하지 않는다.
 - Temporal payload에 Fedify context, actor object, DB row를 넣을 수 없으므로 Activity가 새 federation context를 만들고 실행 시각을 정한다. 결과는 Profile ID만 반환한 뒤 caller가 필요하면 DB에서 다시 읽는다.
 - 현재 Activity 기본 재시도 설정은 외부 일시 장애에는 유용하지만, actor 미해결·identity 충돌·suspended/unresponsive 같은 예상 domain 결과를 그대로 재시도하면 불필요한 원격 요청이 반복된다.
 - Child Workflow 옵션은 `workflowIdConflictPolicy`를 지원하지 않으므로 client caller의 `USE_EXISTING`을 child 호출에 그대로 적용할 수 없다. parent close와 parent cancellation 전파는 각각 별도 옵션으로 다뤄야 한다.
 
 ### Recommended Approach
 
-1. 기존 public helper의 입력을 `handle`, 선택적 `profileId`와 caller mode로 정리한다. Workflow input에는 caller mode를 넣지 않고, caller가 동기 요청이면 같은 stable Workflow ID로 실행 결과를 기다리고 비동기 요청이면 같은 ID로 durable start acknowledgement만 기다린다.
-2. 입력 handle과 origin 선택 identity(`profileId` 값 또는 기본 origin marker)로 stable Workflow ID를 만든다. Workflow 밖 Temporal Client caller가 같은 handle이라도 다른 origin 선택 identity를 사용하면 실행을 합치지 않으며, 같은 identity로 동시에 요청하면 `USE_EXISTING`으로 진행 중 실행에 합류한다. 완료 후에는 DB fast path가 새 실행을 막지 않도록 한다.
-3. Activity는 `profileId`와 handle을 검증하고 origin에서 새 federation context를 만든다. 외부 lookup 전에 현재 Profile·actor metadata·Instance 상태와 staleness를 다시 확인하고, 이미 fresh하거나 더 이상 eligible하지 않은 대상은 원격 작업 없이 종료한다. 기존 Fedify lookup, actor 검증·projection, canonical identity 재사용, transaction과 stale ordering을 한 번 호출한다. Workflow는 이 Activity를 한 번 호출하고 Profile ID를 반환한다.
+1. 기존 public helper의 `handle`, 선택적인 `profileId`와 caller mode 입력을 유지한다. helper가 stale row를 관찰하면 저장된 actor URI를 internal Temporal `actorUri` input으로 변환하고, 신규 materialization에는 `handle` input을 사용한다. Workflow input에는 caller mode를 넣지 않고, caller가 동기 요청이면 같은 stable Workflow ID로 실행 결과를 기다리고 비동기 요청이면 같은 ID로 durable start acknowledgement만 기다린다.
+2. 입력 identity(`handle` 또는 `actorUri`)와 origin 선택 identity(`profileId` 값 또는 기본 origin marker)로 stable Workflow ID를 만든다. Workflow 밖 Temporal Client caller가 같은 identity라도 다른 origin 선택 identity를 사용하면 실행을 합치지 않으며, 같은 identity로 동시에 요청하면 `USE_EXISTING`으로 진행 중 실행에 합류한다. 완료 후에는 DB fast path가 새 실행을 막지 않도록 한다.
+3. Activity는 input union과 `profileId`를 검증하고 origin에서 새 federation context를 만든다. `handle` branch는 초기 acct lookup을 수행하고, `actorUri` branch는 저장된 canonical actor URI를 직접 조회하며 acct handle을 재해석하지 않는다. 외부 lookup 전에 현재 Profile·actor metadata·Instance 상태와 staleness를 다시 확인하고, 이미 fresh하거나 더 이상 eligible하지 않은 대상은 원격 작업 없이 종료한다. 반환 actor URI가 예상한 `actorUri`와 일치하는지 확인한 뒤 기존 actor 검증·projection, canonical identity 재사용, transaction과 stale ordering을 한 번 호출한다. URI 불일치는 저장 없이 실패한다. Workflow는 이 Activity를 한 번 호출하고 Profile ID를 반환한다.
 4. 상위 caller는 저장 row를 먼저 확인한다. fresh row는 Workflow를 시작하지 않고 반환한다. stale active row는 eligibility가 허용되는 경우 row를 즉시 반환하면서 동일한 Workflow를 시작하고, 시작 실패는 row를 무효화하지 않는다. 저장 row가 없으면 동기 caller만 Activity 결과를 기다려 Profile ID를 다시 읽고, 비동기 caller는 durable start acknowledgement 뒤 반환한다.
 5. caller가 다른 Workflow인 경우에도 동기 mode는 같은 Workflow child의 완료를 기다린다. 비동기 mode는 같은 Workflow를 child로 `startChild`하고 child start event acknowledgement만 기다린다. 이 child에는 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`을 각각 적용해 start acknowledgement 이후 parent 종료·실패·취소가 child 완료를 막지 않게 한다. `ChildWorkflowOptions`에 없는 `workflowIdConflictPolicy`를 설정하거나, 동일 active child를 자동 join하는 wrapper를 추가하지 않는다.
 6. `searchProfiles`의 명시적 qualified handle은 이 helper의 기본 refresh 경계를 사용한다. partial/local/malformed 검색, `profileByHandle`, profile route는 DB-only로 유지한다. inbound Follow는 기존 request context와 lookup 경계를 유지하고, inbound Update는 검증된 actor를 직접 투영하는 기존 no-network 경계를 유지한다.
@@ -57,7 +57,7 @@ Temporal Workflow에는 Fedify `Context`, hydrated actor 또는 DB row를 전달
 - child 호출에 `parentClosePolicy`만 설정하고 `cancellationType`을 빠뜨리거나, 반대로 하나만 설정해 parent 종료·취소 전파를 혼동하는 것
 - child start acknowledgement 전에 parent를 완료시키거나 async child의 result를 기다려 async 계약을 동기화하는 것
 - client caller 전용 `USE_EXISTING`을 `ChildWorkflowOptions`에 억지로 적용하거나 active child conflict를 성공 start로 가장하는 것
-- domain rejection을 무조건 재시도하거나 handle과 origin 선택 identity를 무시한 actor URI·random 값으로 Workflow ID를 만들어 동시 fetch를 늘리는 것
+- domain rejection을 무조건 재시도하거나 input identity와 origin 선택 identity를 무시한 random 값으로 Workflow ID를 만들어 동시 fetch를 늘리는 것
 - inbound Update의 검증된 actor/no-network 경계를 일반 원격 lookup 경로로 바꾸는 것
 
 ## Risks / Trade-offs
@@ -65,7 +65,7 @@ Temporal Workflow에는 Fedify `Context`, hydrated actor 또는 DB row를 전달
 - [Temporal 시작·Worker 가용성 장애] stale Profile은 기존 row와 검색 결과를 유지하고, 신규 materialization은 기존 예상 실패/empty-result 경계로 매핑한다.
 - [Activity retry 중 외부 fetch 재실행] 기존 transaction의 actor URI·handle uniqueness와 `lastFetchedAt` ordering으로 중복 저장과 오래된 projection 덮어쓰기를 막는다.
 - [동기 caller timeout 뒤 늦은 완료] caller deadline은 대기만 끝내며 Workflow는 계속 실행한다. 이후 요청은 같은 stable ID 또는 DB fast path로 결과를 관찰한다.
-- [alias domain이 같은 canonical actor를 가리킴] Workflow ID는 요청 qualified handle과 origin 선택 identity 단위로 안정화하고, 최종 actor URI uniqueness와 canonical instance 저장 정책은 기존 materializer에 맡긴다.
+- [alias domain이 같은 canonical actor를 가리킴] 초기 요청은 `handle`, stale refresh는 저장된 `actorUri`와 origin 선택 identity 단위로 Workflow ID를 안정화하고, 최종 actor URI uniqueness와 canonical instance 저장 정책은 기존 materializer에 맡긴다.
 - [async child lifetime] child start acknowledgement를 기다리고 async caller가 child result를 기다리지 않는 adapter 경계만 검증한다. parent close와 cancellation 이후 child가 유지되는 동작은 Temporal SDK 책임으로 둔다.
 - [동일 active child ID의 재시작] ChildWorkflowOptions의 conflict policy 부재를 숨기지 않고 start conflict를 기존 오류 의미로 전달하며, 범용 join wrapper를 추가하지 않는다.
 

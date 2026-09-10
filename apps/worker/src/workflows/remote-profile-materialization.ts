@@ -30,7 +30,7 @@ export const startRemoteProfileMaterializationChild = async (
 ): Promise<RemoteProfileMaterializationAcknowledgement> => {
   await startChild(remoteProfileMaterializationWorkflow, {
     args: [input],
-    workflowId: `remote-profile-materialization:${input.handle}:${input.profileId ?? 'configured-local'}`,
+    workflowId: `remote-profile-materialization:${input.actorUri ?? input.handle}:${input.profileId ?? 'configured-local'}`,
     parentClosePolicy: ParentClosePolicy.ABANDON,
     cancellationType: ChildWorkflowCancellationType.ABANDON,
   });

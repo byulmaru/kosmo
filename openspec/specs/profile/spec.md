@@ -15,6 +15,13 @@ kosmo 프로필 capability의 현재 계약을 문서화한다. 이 스펙은 �
 - **AND** 소속 instance와 정규화된 handle 조합은 중복될 수 없다
 - **AND** 신규 프로필 상태는 `ACTIVE`이다
 
+#### Scenario: Preserve remote identity when actor handle changes
+
+- **WHEN** stale Remote Profile이 저장된 canonical actor URI를 이용해 refresh되고 actor `preferredUsername`이 바뀐다
+- **THEN** 시스템은 같은 canonical actor URI와 같은 `Profile` identity를 유지한다
+- **AND** 시스템은 같은 Profile의 handle, normalized handle과 qualified handle을 새 `preferredUsername`에서 갱신한다
+- **AND** refresh 결과의 actor URI가 저장된 canonical URI와 일치하지 않으면 Profile 또는 actor metadata를 저장하지 않는다
+
 #### Scenario: Find active local profile by bare or local-domain handle
 
 - **WHEN** 클라이언트가 bare handle 또는 configured local domain의 `handle@domain`/`@handle@domain` 형식 handle로 프로필 조회를 요청한다
@@ -117,6 +124,7 @@ Block 공통 predicate를 선행 조건으로 요구해서는 안 된다(MUST NO
 - **WHEN** 로그인한 클라이언트가 명시적인 `@handle@instance` 전체를 검색하고 해당 active Remote Profile과 actor metadata가 이미 저장되어 있지만 actor가 stale하다
 - **THEN** 시스템은 기존 DB connection과 staged visibility를 적용한 저장 Profile을 refresh 완료 전에 즉시 반환한다
 - **AND** 시스템은 결과를 기다리지 않고 같은 Temporal Workflow 경로에서 remote actor refresh를 시작한다
+- **AND** refresh는 저장된 canonical actor URI를 input identity로 재사용하고 qualified handle lookup을 다시 수행하지 않는다
 - **AND** refresh 시작 또는 실행이 실패해도 기존 Profile과 성공한 검색 결과를 제거하거나 실패로 바꾸지 않는다
 
 #### Scenario: Return a canonical actor found through an alias domain
