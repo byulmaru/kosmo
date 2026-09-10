@@ -5,6 +5,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import {
   AccountProfileRole,
   AccountState,
+  ActivityPubActorType,
   InstanceKind,
   InstanceState,
   MediaSource,
@@ -34,6 +35,7 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
+let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let Bookmarks: typeof CoreDb.Bookmarks;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
@@ -76,6 +78,7 @@ describe('GraphQL Profile Block', () => {
     ({
       AccountProfiles,
       Accounts,
+      ActivityPubActors,
       Bookmarks,
       db,
       firstOrThrow,
@@ -225,7 +228,7 @@ describe('GraphQL Profile Block', () => {
     assert.deepEqual(ownerViews.data, {
       node: { id: globalId('Profile', localTarget.id) },
       profileByHandle: { id: globalId('Profile', localTarget.id) },
-      searchProfiles: { edges: [{ node: { id: globalId('Profile', localTarget.id) } }] },
+      searchProfiles: { edges: [] },
     });
 
     const thirdPartyView = await requestGraphQL<{ node: { id: string } | null }>(
@@ -608,26 +611,35 @@ describe('GraphQL Profile Block', () => {
     assert.deepEqual(result.data?.node, { id: globalId('Profile', ownerB.id) });
   });
 
-  test('keeps blocked Profile identity in search pagination', async () => {
+  test('filters both Block directions before filling search pages', async () => {
     const owner = await createAuthenticatedSession();
-    const blocked = await createProfile(
+    const blockedByOwner = await createProfile(
       'search-blocked-candidate',
       localInstanceId,
       '00000000-0000-8000-8000-000000000100',
     );
+    const blockedByTarget = await createProfile(
+      'search-reverse-blocked-candidate',
+      localInstanceId,
+      '00000000-0000-8000-8000-000000000101',
+    );
     const firstVisible = await createProfile(
       'search-visible-first',
       localInstanceId,
-      '00000000-0000-8000-8000-000000000101',
+      '00000000-0000-8000-8000-000000000102',
     );
     const secondVisible = await createProfile(
       'search-visible-second',
       localInstanceId,
-      '00000000-0000-8000-8000-000000000102',
+      '00000000-0000-8000-8000-000000000103',
     );
 
-    const blockedResult = await blockProfile(blocked.id, owner.token);
-    assertNoGraphQLErrors(blockedResult);
+    const blockedByOwnerResult = await blockProfile(blockedByOwner.id, owner.token);
+    assertNoGraphQLErrors(blockedByOwnerResult);
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: blockedByTarget.id,
+      targetProfileId: owner.profile.id,
+    });
 
     const firstPage = await requestGraphQL<{
       searchProfiles: {
@@ -648,7 +660,7 @@ describe('GraphQL Profile Block', () => {
     assertNoGraphQLErrors(firstPage);
     assert.deepEqual(
       firstPage.data?.searchProfiles.edges.map(({ node }) => node.handle),
-      [blocked.handle],
+      [firstVisible.handle],
     );
     assert.equal(firstPage.data?.searchProfiles.pageInfo.hasNextPage, true);
 
@@ -666,27 +678,109 @@ describe('GraphQL Profile Block', () => {
     assertNoGraphQLErrors(secondPage);
     assert.deepEqual(
       secondPage.data?.searchProfiles.edges.map(({ node }) => node.handle),
-      [firstVisible.handle],
+      [secondVisible.handle],
     );
-    assert.equal(secondPage.data?.searchProfiles.pageInfo.hasNextPage, true);
+    assert.equal(secondPage.data?.searchProfiles.pageInfo.hasNextPage, false);
 
-    const thirdPage = await requestGraphQL<typeof firstPage.data>(
-      `query SearchBlockedProfiles($after: String) {
-        searchProfiles(query: "search-", first: 1, after: $after) {
-          edges { node { handle } }
-          pageInfo { endCursor hasNextPage }
+    const selectedProfileExact = await requestGraphQL<{
+      searchProfiles: {
+        edges: Array<{ node: { id: string } }>;
+        pageInfo: { hasNextPage: boolean };
+      };
+    }>(
+      `query SearchBlockedExact($query: String!) {
+        searchProfiles(query: $query, first: 10) {
+          edges { node { id } }
+          pageInfo { hasNextPage }
         }
       }`,
-      { after: secondPage.data?.searchProfiles.pageInfo.endCursor },
+      { query: blockedByOwner.handle },
+      owner.token,
+    );
+    assertNoGraphQLErrors(selectedProfileExact);
+    assert.deepEqual(selectedProfileExact.data?.searchProfiles.edges, []);
+    assert.equal(selectedProfileExact.data?.searchProfiles.pageInfo.hasNextPage, false);
+
+    const unselected = await db
+      .update(Sessions)
+      .set({ activeProfileId: null })
+      .where(eq(Sessions.id, owner.session.id))
+      .returning()
+      .then(firstOrThrow);
+    assert.equal(unselected.activeProfileId, null);
+
+    const noSelectedProfile = await requestGraphQL<{
+      searchProfiles: { edges: Array<{ node: { handle: string } }> };
+    }>(
+      `query SearchWithoutSelectedProfile($query: String!) {
+        searchProfiles(query: $query, first: 10) { edges { node { handle } } }
+      }`,
+      { query: 'search-blocked' },
+      owner.token,
+    );
+    assertNoGraphQLErrors(noSelectedProfile);
+    assert.deepEqual(
+      noSelectedProfile.data?.searchProfiles.edges.map(({ node }) => node.handle),
+      [blockedByOwner.handle],
+    );
+  });
+
+  test('filters both Block directions from a remote partial search', async () => {
+    const owner = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance('search.remote.example');
+    const blockedByOwner = await createProfile('remote-search-blocked', remoteInstance.id);
+    const blockedByTarget = await createProfile('remote-search-reverse', remoteInstance.id);
+    const visible = await createProfile('remote-search-visible', remoteInstance.id);
+    const exactBlocked = await createProfile('remote-search-exact', remoteInstance.id);
+    await db.insert(ActivityPubActors).values({
+      profileId: exactBlocked.id,
+      type: ActivityPubActorType.PERSON,
+      uri: 'https://search.remote.example/users/exact',
+    });
+
+    const blockedByOwnerResult = await blockProfile(blockedByOwner.id, owner.token);
+    assertNoGraphQLErrors(blockedByOwnerResult);
+    const exactBlockedResult = await blockProfile(exactBlocked.id, owner.token);
+    assertNoGraphQLErrors(exactBlockedResult);
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: blockedByTarget.id,
+      targetProfileId: owner.profile.id,
+    });
+
+    const result = await requestGraphQL<{
+      searchProfiles: {
+        edges: Array<{ node: { handle: string } }>;
+        pageInfo: { hasNextPage: boolean };
+      };
+    }>(
+      `query SearchRemotePartial($query: String!) {
+        searchProfiles(query: $query, first: 10) {
+          edges { node { handle } }
+          pageInfo { hasNextPage }
+        }
+      }`,
+      { query: 'remote-search@search.remote.example' },
       owner.token,
     );
 
-    assertNoGraphQLErrors(thirdPage);
+    assertNoGraphQLErrors(result);
     assert.deepEqual(
-      thirdPage.data?.searchProfiles.edges.map(({ node }) => node.handle),
-      [secondVisible.handle],
+      result.data?.searchProfiles.edges.map(({ node }) => node.handle),
+      [visible.handle],
     );
-    assert.equal(thirdPage.data?.searchProfiles.pageInfo.hasNextPage, false);
+    assert.equal(result.data?.searchProfiles.pageInfo.hasNextPage, false);
+
+    const exactResult = await requestGraphQL<{
+      searchProfiles: { edges: Array<{ node: { handle: string } }> };
+    }>(
+      `query SearchRemoteExact($query: String!) {
+        searchProfiles(query: $query, first: 10) { edges { node { handle } } }
+      }`,
+      { query: '@remote-search-exact@search.remote.example' },
+      owner.token,
+    );
+    assertNoGraphQLErrors(exactResult);
+    assert.deepEqual(exactResult.data?.searchProfiles.edges, []);
   });
 
   test('does not let residual Follow or Follow Request rows expose a blocked pair', async () => {
