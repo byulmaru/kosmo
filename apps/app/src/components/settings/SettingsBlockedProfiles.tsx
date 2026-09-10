@@ -69,7 +69,7 @@ type BlockedProfilesState =
   | { status: 'error'; onRetry: () => void }
   | { status: 'loaded'; profiles: readonly BlockedProfile[]; pagination: Pagination };
 
-type FocusIntent = Readonly<{ index: number; profileBlockId: string }>;
+type FocusIntent = Readonly<{ index: number; ownerProfileId: string; profileBlockId: string }>;
 
 let pendingFocusIntent: FocusIntent | null = null;
 
@@ -121,6 +121,7 @@ function SettingsBlockedProfilesContent() {
   }
   return (
     <BlockedProfilesView
+      ownerProfileId={profile.id}
       state={{
         pagination: loadError
           ? { onRetry: loadMore, status: 'error' }
@@ -142,14 +143,22 @@ function SettingsBlockedProfilesContent() {
   );
 }
 
-export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) {
+export function BlockedProfilesView({
+  ownerProfileId,
+  state,
+}: {
+  ownerProfileId?: string;
+  state: BlockedProfilesState;
+}) {
   const headingRef = useRef<View>(null);
   const actionRefs = useRef(new Map<string, View>());
   const removedFocus = useRef<{ index: number; profileBlockId: string } | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const removed = removedFocus.current ?? pendingFocusIntent;
+      const pending =
+        pendingFocusIntent?.ownerProfileId === ownerProfileId ? pendingFocusIntent : null;
+      const removed = removedFocus.current ?? pending;
       if (
         !removed ||
         state.status !== 'loaded' ||
@@ -158,7 +167,7 @@ export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) 
         return;
       }
       removedFocus.current = null;
-      if (pendingFocusIntent?.profileBlockId === removed.profileBlockId) {
+      if (pending?.profileBlockId === removed.profileBlockId) {
         pendingFocusIntent = null;
       }
       const next = state.profiles[Math.min(removed.index, state.profiles.length - 1)];
@@ -182,7 +191,9 @@ export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) 
       profileBlockId: profile.profileBlockId,
     };
     removedFocus.current = intent;
-    pendingFocusIntent = intent;
+    if (ownerProfileId) {
+      pendingFocusIntent = { ...intent, ownerProfileId };
+    }
   };
 
   const children =
