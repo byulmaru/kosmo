@@ -117,17 +117,64 @@ jobs:
             -p "imageDigest=${IMAGE_DIGEST}" \
             --validate
 
-  publish_dev_ota:
-    name: Publish Dev Expo OTA
-    needs: update_dev
-    if: needs.update_dev.result == 'success'
+  export_android:
+    name: Export Dev Android OTA
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/expo-ota.yml
+    with:
+      channel: dev
+      platform: android
+      source_sha: ${{ github.event.workflow_run.head_sha }}
+
+  export_ios:
+    name: Export Dev iOS OTA
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/expo-ota.yml
+    with:
+      channel: dev
+      platform: ios
+      source_sha: ${{ github.event.workflow_run.head_sha }}
+
+  publish_android:
+    name: Publish Dev Android OTA
+    needs: [update_dev, export_android]
+    if: needs.update_dev.result == 'success' && needs.export_android.result == 'success'
     permissions:
       actions: read
       contents: read
       id-token: write
-    uses: ./.github/workflows/expo-ota.yml
+    uses: byulmaru/expo-ota/.github/workflows/publish.yml@main
     with:
+      artifact_name: ${{ needs.export_android.outputs.artifact_name }}
       channel: dev
-      source_sha: ${{ github.event.workflow_run.head_sha }}
+      keyid: 2026-09
+      platform: android
+      project: kosmo-native
+      runtime_version: ${{ needs.export_android.outputs.runtime_version }}
+    secrets:
+      signing_private_key: ${{ secrets.EXPO_OTA_SIGNING_PRIVATE_KEY }}
+
+  publish_ios:
+    name: Publish Dev iOS OTA
+    needs: [update_dev, export_ios]
+    if: needs.update_dev.result == 'success' && needs.export_ios.result == 'success'
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    uses: byulmaru/expo-ota/.github/workflows/publish.yml@main
+    with:
+      artifact_name: ${{ needs.export_ios.outputs.artifact_name }}
+      channel: dev
+      keyid: 2026-09
+      platform: ios
+      project: kosmo-native
+      runtime_version: ${{ needs.export_ios.outputs.runtime_version }}
     secrets:
       signing_private_key: ${{ secrets.EXPO_OTA_SIGNING_PRIVATE_KEY }}

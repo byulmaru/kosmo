@@ -146,18 +146,67 @@ jobs:
             echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-  publish_prod_ota:
-    name: Publish Production Expo OTA
+  export_android:
+    name: Export Production Android OTA
     needs: [canonical_preflight, production_deploy]
     if: needs.production_deploy.result == 'success'
     permissions:
       actions: read
       contents: read
-      id-token: write
     uses: ./.github/workflows/expo-ota.yml
     with:
       channel: prod
+      platform: android
       source_sha: ${{ needs.canonical_preflight.outputs.target_sha }}
+
+  export_ios:
+    name: Export Production iOS OTA
+    needs: [canonical_preflight, production_deploy]
+    if: needs.production_deploy.result == 'success'
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/expo-ota.yml
+    with:
+      channel: prod
+      platform: ios
+      source_sha: ${{ needs.canonical_preflight.outputs.target_sha }}
+
+  publish_android:
+    name: Publish Production Android OTA
+    needs: [canonical_preflight, production_deploy, export_android]
+    if: needs.production_deploy.result == 'success' && needs.export_android.result == 'success'
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    uses: byulmaru/expo-ota/.github/workflows/publish.yml@main
+    with:
+      artifact_name: ${{ needs.export_android.outputs.artifact_name }}
+      channel: prod
+      keyid: 2026-09
+      platform: android
+      project: kosmo-native
+      runtime_version: ${{ needs.export_android.outputs.runtime_version }}
+    secrets:
+      signing_private_key: ${{ secrets.EXPO_OTA_SIGNING_PRIVATE_KEY }}
+
+  publish_ios:
+    name: Publish Production iOS OTA
+    needs: [canonical_preflight, production_deploy, export_ios]
+    if: needs.production_deploy.result == 'success' && needs.export_ios.result == 'success'
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    uses: byulmaru/expo-ota/.github/workflows/publish.yml@main
+    with:
+      artifact_name: ${{ needs.export_ios.outputs.artifact_name }}
+      channel: prod
+      keyid: 2026-09
+      platform: ios
+      project: kosmo-native
+      runtime_version: ${{ needs.export_ios.outputs.runtime_version }}
     secrets:
       signing_private_key: ${{ secrets.EXPO_OTA_SIGNING_PRIVATE_KEY }}
 
