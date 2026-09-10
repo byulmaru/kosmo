@@ -198,7 +198,12 @@ export function ProfileSwitcher({
   const redesignedWeb = Platform.OS === 'web' && surface !== 'drawer';
   const open = controlledOpen ?? internalOpen;
   const webExpandedChevron = Platform.OS === 'web' && open;
+  const nativePickerPresentedRef = useRef(Platform.OS === 'ios' && open);
+  const pendingActorResetProfileIdRef = useRef<string | null>(null);
   const setOpen = (nextOpen: boolean) => {
+    if (Platform.OS === 'ios' && nextOpen) {
+      nativePickerPresentedRef.current = true;
+    }
     if (controlledOpen === undefined) {
       setInternalOpen(nextOpen);
     }
@@ -214,11 +219,46 @@ export function ProfileSwitcher({
     }
     setOpen(false);
   };
+  const flushPendingActorReset = () => {
+    nativePickerPresentedRef.current = false;
+    const profileId = pendingActorResetProfileIdRef.current;
+    pendingActorResetProfileIdRef.current = null;
+    if (profileId) {
+      resetActor(profileId);
+    }
+  };
+  const resetActorAfterPickerDismissal = (profileId: string) => {
+    if (Platform.OS !== 'ios' || !nativePickerPresentedRef.current) {
+      resetActor(profileId);
+      return;
+    }
+
+    pendingActorResetProfileIdRef.current = profileId;
+  };
   const setOperationError = (version: number, message: string) => {
     if (!redesignedWeb || version === dismissalVersionRef.current) {
       setOperationErrorState(message);
     }
   };
+
+  // iOS keeps a Modal mounted while its native dismissal animation completes. Defer the actor
+  // Environment replacement across that boundary so an enclosing drawer host stays mounted.
+  useEffect(() => {
+    if (Platform.OS === 'ios' && open) {
+      nativePickerPresentedRef.current = true;
+    }
+  }, [open]);
+
+  useEffect(() => {
+    return () => {
+      nativePickerPresentedRef.current = false;
+      const profileId = pendingActorResetProfileIdRef.current;
+      pendingActorResetProfileIdRef.current = null;
+      if (profileId) {
+        resetActor(profileId);
+      }
+    };
+  }, [resetActor]);
 
   useEffect(() => {
     if (!open) {
@@ -286,7 +326,7 @@ export function ProfileSwitcher({
         const selectedProfileId = response.selectProfile.session.selectedProfile?.id ?? id;
         trackAnalytics('profile_selected', { selected_profile_id: selectedProfileId });
         setOpen(false);
-        resetActor(selectedProfileId);
+        resetActorAfterPickerDismissal(selectedProfileId);
       },
       onError: (cause) =>
         setOperationError(operationVersion, cause.message || '프로필을 전환하지 못했습니다.'),
@@ -645,6 +685,10 @@ export function ProfileSwitcher({
           accessibilityLabel="프로필 전환"
           animationType="fade"
           onRequestClose={() => setOpen(false)}
+          onDismiss={flushPendingActorReset}
+          onShow={() => {
+            nativePickerPresentedRef.current = true;
+          }}
           role="dialog"
           transparent
           visible={open}
