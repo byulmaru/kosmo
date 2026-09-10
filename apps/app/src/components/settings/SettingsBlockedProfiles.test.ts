@@ -307,4 +307,47 @@ describe('차단한 프로필 목록', () => {
     });
     assert.equal(nextFocus.mock.callCount(), 1);
   });
+
+  it('다른 actor는 이전 Profile의 해제 포커스 intent를 소비하지 않는다', async () => {
+    const focus = mock.fn();
+    await act(async () => {
+      renderer = create(
+        createElement(BlockedProfilesView, {
+          ownerProfileId: 'owner-a',
+          state: {
+            pagination: { status: 'end' },
+            profiles: [profile('star')],
+            status: 'loaded',
+          },
+        }),
+      );
+    });
+    await act(async () => find('Button')?.props.onPress());
+    await act(async () => renderer?.unmount());
+
+    const renderEmptyOwner = async (ownerProfileId: string) => {
+      await act(async () => {
+        renderer = create(
+          createElement(BlockedProfilesView, {
+            ownerProfileId,
+            state: { pagination: { status: 'end' }, profiles: [], status: 'loaded' },
+          }),
+          {
+            createNodeMock: (element) =>
+              element.type === 'View' &&
+              (element.props as { accessibilityRole?: string }).accessibilityRole === 'header'
+                ? { focus }
+                : {},
+          },
+        );
+      });
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
+    };
+
+    await renderEmptyOwner('owner-b');
+    assert.equal(focus.mock.callCount(), 0);
+    await act(async () => renderer?.unmount());
+    await renderEmptyOwner('owner-a');
+    assert.equal(focus.mock.callCount(), 1);
+  });
 });
