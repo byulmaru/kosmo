@@ -28,7 +28,7 @@ Temporal Workflow에는 Fedify `Context`, hydrated actor 또는 DB row를 전달
 ### Current Constraints
 
 - 상위 materializer가 stale 판단과 저장 Profile 반환을 담당하고, 실제 remote lookup과 transaction은 별도 low-level 경로로 분리해야 Activity가 상위 Temporal coordinator를 재귀 호출하지 않는다.
-- 각 Workflow는 자기 input에서 Workflow ID를 만드는 규칙을 한 곳에 정의한다. Workflow caller는 Workflow 종류와 무관한 공용 `runWorkflow`에 Workflow name 또는 SDK Workflow 함수, native Workflow options, input, `workflowIdFromArgs: (...args: Parameters<T>) => string` callback과 `start`/`execute` mode를 전달한다. `runWorkflow`는 native args를 callback에 한 번 전달해 ID 문자열을 얻고, KOSMO task queue와 5초 bounded deadline을 적용해 native `start` 또는 `execute`만 호출하며, native result·start 반환값·error와 conflict·reuse policy를 그대로 전달하고 domain 오류 정책은 공통화하지 않는다.
+- 각 Workflow는 자기 input에서 Workflow ID를 만드는 규칙을 한 곳에 정의한다. `packages/core/temporal/client.ts`의 `WorkflowDefinition<T>` plain interface는 SDK Workflow 함수 또는 이름과 `workflowIdFromArgs: (...args: Parameters<T>) => string` callback을 한 객체로 묶는다. Workflow caller는 Workflow 종류와 무관한 공용 `runWorkflow(definition, { args, mode, ...native Workflow options })`에 이 객체와 native 정책을 전달한다. `runWorkflow`는 definition의 callback에 native args를 한 번 전달해 ID 문자열을 얻고, KOSMO task queue와 5초 bounded deadline을 적용해 native `start` 또는 `execute`만 호출하며, native result·start 반환값·error와 conflict·reuse policy를 그대로 전달하고 domain 오류 정책은 공통화하지 않는다.
 - Activity는 JSON-safe `actorUri`와 선택적인 `profileId`로 필요한 origin을 재구성해야 한다. `profileId`가 없으면 configured Local Instance의 canonical origin을 사용하고, 있으면 DB에서 Profile과 actor metadata를 읽어 Local Instance canonical origin 또는 Remote actor URI origin을 선택한다. 필요한 Remote actor 정보가 없으면 실패한다. `actorUri`는 저장된 actor가 없어도 직접 Fedify lookup target으로 사용할 수 있으며, acct handle lookup을 수행하지 않는다.
 - Temporal payload에 Fedify context, actor object, DB row를 넣을 수 없으므로 Activity가 새 federation context를 만들고 실행 시각을 정한다. 결과는 Profile ID만 반환한 뒤 caller가 필요하면 DB에서 다시 읽는다.
 - 현재 Activity 기본 재시도 설정은 외부 일시 장애에는 유용하지만, actor 미해결·identity 충돌·suspended/unresponsive 같은 예상 domain 결과를 그대로 재시도하면 불필요한 원격 요청이 반복된다.
@@ -36,8 +36,8 @@ Temporal Workflow에는 Fedify `Context`, hydrated actor 또는 DB row를 전달
 
 ### Recommended Approach
 
-1. 상위 remote actor caller는 검색·발견 경계에서 canonical `actorUri`를 전달받고, 선택적인 `profileId`와 caller mode를 유지한다. stale row를 관찰하면 저장된 actor URI를 `actorUri` input으로 재사용하고, 저장된 row가 없어도 검색·발견 결과의 `actorUri`로 신규 materialization을 요청한다. Caller는 `remoteProfileMaterializationWorkflowId` 함수 reference와 `[input]` args를 `runWorkflow`에 전달해 remote Workflow의 기존 input-to-ID 규칙을 적용한다. Workflow input에는 caller mode를 넣지 않고, caller가 동기 요청이면 같은 ID의 실행 결과를 기다리고 비동기 요청이면 같은 ID의 durable start acknowledgement만 기다린다.
-2. `packages/core/temporal/remote-profile.ts`의 pure `remoteProfileMaterializationWorkflowId(input)`는 canonical `actorUri`와 origin 선택 identity(`profileId` 값 또는 기본 origin marker)를 기존 ID 규칙에 사용해 `${REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE}:${JSON.stringify([input.actorUri, input.profileId ?? 'configured-local'])}` 문자열을 만든다. `runWorkflow`는 caller가 넘긴 함수 reference와 native args로 이 규칙을 적용하며, Workflow 밖 Temporal Client caller가 같은 actor URI와 origin 선택 identity로 요청하면 기존과 같은 ID를 사용한다. 진행 중 실행의 `USE_EXISTING`과 완료 후 새 실행의 reuse policy는 caller가 native options로 명시한다. 완료 후에는 DB fast path가 새 실행을 막지 않도록 한다.
+1. 상위 remote actor caller는 검색·발견 경계에서 canonical `actorUri`를 전달받고, 선택적인 `profileId`와 caller mode를 유지한다. stale row를 관찰하면 저장된 actor URI를 `actorUri` input으로 재사용하고, 저장된 row가 없어도 검색·발견 결과의 `actorUri`로 신규 materialization을 요청한다. Caller는 `packages/core/temporal/remote-profile.ts`의 `remoteProfileMaterializationWorkflow` 정의 객체와 `[input]` args를 `runWorkflow`에 전달해 remote Workflow의 기존 input-to-ID 규칙을 적용한다. Workflow input에는 caller mode를 넣지 않고, caller가 동기 요청이면 같은 ID의 실행 결과를 기다리고 비동기 요청이면 같은 ID의 durable start acknowledgement만 기다린다.
+2. `remoteProfileMaterializationWorkflow` 정의 객체는 SDK Workflow 이름과 canonical `actorUri`·origin 선택 identity(`profileId` 값 또는 기본 origin marker)를 기존 규칙으로 조합하는 ID callback을 함께 보유한다. 기존 ID 문자열은 `${REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE}:${JSON.stringify([input.actorUri, input.profileId ?? 'configured-local'])}`로 유지한다. `runWorkflow`는 definition과 native args로 이 규칙을 적용하며, Workflow 밖 Temporal Client caller가 같은 actor URI와 origin 선택 identity로 요청하면 기존과 같은 ID를 사용한다. definition에서 native args와 Workflow 결과/handle type이 함께 추론되고, 진행 중 실행의 `USE_EXISTING`과 완료 후 새 실행의 reuse policy는 caller가 native options로 명시한다. 완료 후에는 DB fast path가 새 실행을 막지 않도록 한다.
 3. Activity는 `actorUri`와 선택적인 `profileId`를 검증하고 origin에서 새 federation context를 만든다. `actorUri`를 직접 조회하며 acct handle lookup을 수행하지 않는다. 외부 lookup 전에 현재 Profile·actor metadata·Instance 상태와 staleness를 다시 확인하고, 이미 fresh하거나 더 이상 eligible하지 않은 대상은 원격 작업 없이 종료한다. 반환 actor URI가 예상한 `actorUri`와 일치하는지 확인한 뒤 기존 actor 검증·projection, canonical identity 재사용, transaction과 stale ordering을 한 번 호출한다. URI 불일치는 저장 없이 실패한다. Workflow는 이 Activity를 한 번 호출하고 Profile ID를 반환한다.
 4. 상위 caller는 저장 row를 먼저 확인한다. fresh row는 Workflow를 시작하지 않고 반환한다. stale active row는 eligibility가 허용되는 경우 row를 즉시 반환하면서 동일한 Workflow를 시작하고, 시작 실패는 row를 무효화하지 않는다. 저장 row가 없으면 동기 caller만 Activity 결과를 기다려 Profile ID를 다시 읽고, 비동기 caller는 durable start acknowledgement 뒤 반환한다.
 5. caller가 다른 Workflow인 경우에도 동기 mode는 같은 Workflow child의 완료를 기다린다. 비동기 mode는 실제 Workflow 호출부에서 같은 Workflow를 child로 `startChild`하고 child start event acknowledgement만 기다린다. 이 child에는 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`을 각각 적용해 start acknowledgement 이후 parent 종료·실패·취소가 child 완료를 막지 않게 한다. `ChildWorkflowOptions`에 없는 `workflowIdConflictPolicy`를 설정하거나, 미리 만든 child adapter나 동일 active child를 자동 join하는 wrapper를 추가하지 않는다.
@@ -46,7 +46,7 @@ Temporal Workflow에는 Fedify `Context`, hydrated actor 또는 DB row를 전달
 
 ### Allowed Alternatives
 
-공용 `runWorkflow`가 Workflow name 또는 SDK Workflow 함수, native options, input, `workflowIdFromArgs` callback과 mode를 받아 해당 Workflow의 ID 규칙을 적용하고 caller-only mode 경계를 유지한다면, 내부적으로 native `workflow.execute`/`workflow.start`를 사용하는 구현은 허용한다. 실제 Workflow child 호출부가 추가되면 해당 호출부는 Temporal SDK `startChild`로 start acknowledgement만 기다리며, child 호출에서는 `workflowIdConflictPolicy`를 설정하지 않는다. 두 경우 모두 Workflow 종류를 나누거나 wire payload에 mode를 넣어서는 안 된다.
+공용 `runWorkflow`가 `WorkflowDefinition<T>`와 `{ args, mode, ...native options }`를 받아 definition의 ID 규칙을 적용하고 caller-only mode 경계를 유지한다면, 내부적으로 native `workflow.execute`/`workflow.start`를 사용하는 구현은 허용한다. 실제 Workflow child 호출부가 추가되면 해당 호출부는 Temporal SDK `startChild`로 start acknowledgement만 기다리며, child 호출에서는 `workflowIdConflictPolicy`를 설정하지 않는다. 두 경우 모두 Workflow 종류를 나누거나 wire payload에 mode를 넣어서는 안 된다.
 
 ### Known Traps
 
@@ -59,7 +59,7 @@ Temporal Workflow에는 Fedify `Context`, hydrated actor 또는 DB row를 전달
 - child start acknowledgement 전에 parent를 완료시키거나 async child의 result를 기다려 async 계약을 동기화하는 것
 - client caller 전용 `USE_EXISTING`을 `ChildWorkflowOptions`에 억지로 적용하거나 active child conflict를 성공 start로 가장하는 것
 - domain rejection을 무조건 재시도하거나 Workflow별 ID 규칙을 무시한 random 값으로 Workflow ID를 만들어 동시 fetch를 늘리는 것
-- Workflow name과 해당 Workflow의 ID 규칙을 숨기는 remote 전용 wrapper, Workflow 자동 감지, trampoline, registry, decorator 또는 framework를 추가하는 것
+- Workflow name과 해당 Workflow의 ID 규칙을 호출부에서 따로 반복하거나 숨기는 remote 전용 wrapper, Workflow 자동 감지, trampoline, registry, decorator 또는 framework를 추가하는 것. 기존 모듈의 `WorkflowDefinition<T>` plain interface/object로 Workflow와 ID callback을 함께 전달하는 것은 이 명시된 API 경계다.
 - inbound Update의 검증된 actor/no-network 경계를 일반 원격 lookup 경로로 바꾸는 것
 
 ## Risks / Trade-offs
@@ -73,7 +73,7 @@ Temporal Workflow에는 Fedify `Context`, hydrated actor 또는 DB row를 전달
 
 ## Migration Plan
 
-이 change는 최신 `main`에서 Worker Workflow·Activity와 caller를 함께 검증하는 선행 1-layer 범위다. Worker가 새 Workflow와 Activity를 등록한 뒤 caller가 공용 `runWorkflow`를 통해 같은 Temporal 경로를 사용하도록 전환하고, 이 change에서는 remote materialization Workflow만 기존 Workflow별 ID 규칙을 공용 wrapper에 적용한다. 다른 domain의 canonical Workflow ID와 UWS는 일괄 마이그레이션하지 않으며, 이후 migration Stack이 이 layer 위에서 호출부를 재배치한다. DB schema와 migration은 추가하지 않는다. 롤백은 caller와 Worker를 호환되는 이전 버전으로 함께 되돌리는 범위로 한정하며, caller timeout 때문에 진행 중 Workflow를 취소하지 않는다.
+이 change는 최신 `main`에서 Worker Workflow·Activity와 caller를 함께 검증하는 선행 1-layer 범위다. Worker가 새 Workflow와 Activity를 등록한 뒤 caller가 공유 `remoteProfileMaterializationWorkflow` 정의 객체를 공용 `runWorkflow`에 전달해 같은 Temporal 경로를 사용하도록 전환하고, 이 change에서는 remote materialization Workflow만 기존 Workflow별 ID 규칙을 공용 wrapper에 적용한다. 다른 domain의 canonical Workflow ID와 UWS는 일괄 마이그레이션하지 않으며, 새 registry/runtime factory/fake Workflow function/new contracts file도 추가하지 않는다. 이후 migration Stack이 이 layer 위에서 호출부를 재배치한다. DB schema와 migration은 추가하지 않는다. 롤백은 caller와 Worker를 호환되는 이전 버전으로 함께 되돌리는 범위로 한정하며, caller timeout 때문에 진행 중 Workflow를 취소하지 않는다.
 
 ## Open Questions
 

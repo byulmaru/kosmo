@@ -93,12 +93,24 @@
 - Decision Date: 2026-09-10
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808` user decision
-- Status: Active
+- Status: Superseded only in API 전달 형식 by the 2026-09-10 `WorkflowDefinition<T>` interface correction; Workflow별 ID 규칙 소유 원칙 remains Active
 - Context / Problem: 공용 wrapper가 caller identity keys를 조합해 모든 Workflow ID를 결정하면 각 Workflow가 정의한 기존 input-to-ID 규칙과 ID 문자열을 덮고, native conflict/reuse/error와 domain 오류 정책의 경계가 흐려진다.
 - Decision Outcome: 각 Workflow는 자기 input에서 Workflow ID를 만드는 규칙을 한 곳에 정의한다. 공용 `runWorkflow`는 `workflowIdFromArgs: (...args: Parameters<T>) => string` callback에 native args를 한 번 전달해 해당 Workflow의 ID를 계산하고, 그 ID와 KOSMO task queue·5초 bounded deadline으로 native `start` 또는 `execute`만 호출한다. Native result·start 반환값·error와 conflict/reuse policy는 그대로 전달하며 domain 오류 정책은 공통화하지 않는다. Workflow 함수/이름, input, mode와 native options는 호출부가 선택하고, 공통 ID format·name prefix·JSON 조합은 wrapper에 두지 않는다. `packages/core/temporal/remote-profile.ts`의 pure `remoteProfileMaterializationWorkflowId(input)`는 기존 `${REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE}:${JSON.stringify([input.actorUri, input.profileId ?? 'configured-local'])}` ID 문자열을 유지한다. 기존 remote materialization Workflow의 sync/async, stale, URI/origin 선택과 URI mismatch 저장 거부 계약도 유지하며, 이 change에서는 remote materialization Workflow만 공용 wrapper를 사용하고 다른 domain의 ID와 UWS는 일괄 마이그레이션하지 않는다.
 - Alternatives Considered: generic identity key composition은 Workflow별 ID 규칙과 기존 ID 문자열을 숨기고, remote 전용 start wrapper나 새 registry/decorator/framework/domain start wrapper는 transport와 domain 책임을 다시 결합하므로 선택하지 않는다.
 - Consequences: remote caller는 기존 `actorUri`/`profileId` input과 native 정책을 유지한 채 `remoteProfileMaterializationWorkflowId` 함수 reference와 Workflow args를 공용 wrapper에 전달한다. 이 경계에는 새 registry/decorator/framework나 domain start wrapper를 추가하지 않으며, wrapper는 Workflow 선택이나 domain 오류 처리까지 소유하지 않는다.
-- Confirmation / Follow-up: Workflow별 ID 규칙 callback 적용, 공통 queue/deadline, native start/execute 결과·반환값·error와 conflict/reuse 정책의 pass-through, remote-only adoption 및 기존 domain ID/UWS 보존을 검증한다. 새 계약의 실행 evidence는 과거 generic wrapper evidence와 별도 최신 항목으로 기록한다.
+- Confirmation / Follow-up: Workflow별 ID 규칙 callback 적용, 공통 queue/deadline, native start/execute 결과·반환값·error와 conflict/reuse 정책의 pass-through, remote-only adoption 및 기존 domain ID/UWS 보존을 검증한다. 이 record의 callback 단독 전달 형식은 다음 `WorkflowDefinition<T>` 결정으로 대체하고, ID 소유 원칙과 실행 evidence는 유지한다.
+
+### WorkflowDefinition 인터페이스와 공용 래퍼 입력 정정
+
+- Decision Date: 2026-09-10
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808` user decision
+- Status: Active
+- Context / Problem: `runWorkflow`에 Workflow name/function과 ID callback을 각각 전달하면 caller가 같은 Workflow 정의를 반복하고, Workflow 함수·ID 규칙·native args의 generic 관계를 호출 위치에서 다시 적게 된다. 사용자가 요청한 plain interface/object 형태로 이 정의를 하나의 입력으로 묶어도 기존 transport와 identity 의미는 유지해야 한다.
+- Decision Outcome: `packages/core/temporal/client.ts`에 `WorkflowDefinition<T extends Workflow>` plain interface를 둔다. 이 객체는 `workflow: string | T`와 `workflowIdFromArgs: (...args: Parameters<T>) => string`를 함께 정의한다. 공용 `runWorkflow(definition, { args, mode, ...native Workflow options })`는 definition에서 Workflow와 ID 규칙을 받고 native args를 callback에 한 번 전달해 기존 ID 문자열을 계산한 뒤 KOSMO task queue와 5초 bounded deadline으로 native `start` 또는 `execute`만 호출한다. Native args, mode별 result/handle type, start 반환값·error와 conflict/reuse policy는 그대로 전달·추론하고 domain 오류 정책은 호출부에 남긴다. `packages/core/temporal/remote-profile.ts`의 `remoteProfileMaterializationWorkflow` 정의 객체는 기존 remote Workflow와 ID callback을 함께 보유하며, 세 caller가 이를 공유한다. 기존 ID 문자열, sync/async, stale, origin, actorUri identity와 URI mismatch 저장 거부 계약은 변경하지 않는다.
+- Alternatives Considered: Workflow name/function과 ID callback을 별도 인자로 계속 전달하면 세 caller의 동일 설정과 local Workflow function type이 반복된다. 새 registry, runtime factory, fake Workflow function, contracts file, decorator 또는 다른 Workflow의 일괄 migration은 현재 plain object 입력 계약에 필요하지 않으며 scope와 runtime surface를 넓힌다.
+- Consequences: caller는 `runWorkflow`에 definition 하나와 args/mode/native policy를 전달하고, definition의 generic type에서 native args와 mode별 result/handle이 추론된다. Workflow별 ID 생성 책임은 각 definition/Workflow 경계에 남고 공용 wrapper는 queue, deadline, native invocation과 pass-through만 소유한다. 기존 remote ID 문자열과 actorUri/profileId origin identity를 유지하며 다른 domain ID와 UWS는 변경하지 않는다.
+- Confirmation / Follow-up: 세 remote caller가 `remoteProfileMaterializationWorkflow`를 사용하고 별도 Workflow name·ID callback·local Workflow function type을 반복하지 않는지 확인한다. `WorkflowDefinition<T>`의 args/result/handle inference, 기존 ID 문자열, 5초 queue/deadline, sync/async, conflict/reuse/error pass-through와 remote-only adoption을 실행 evidence로 기록한다. 이전 callback 단독 evidence는 Historical로 유지하고 새 interface 결과를 별도 항목에 기록한다.
 
 ### Stable workflow identity, retry classification, and timeout boundary
 

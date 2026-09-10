@@ -1,3 +1,5 @@
+import type { WorkflowDefinition } from './client';
+
 export const REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE = 'remoteProfileMaterializationWorkflow';
 
 export type RemoteProfileMaterializationInput = {
@@ -5,10 +7,13 @@ export type RemoteProfileMaterializationInput = {
   readonly profileId?: string;
 };
 
-export const remoteProfileMaterializationWorkflowId = (
-  input: RemoteProfileMaterializationInput,
-): string =>
-  `${REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE}:${JSON.stringify([
-    input.actorUri,
-    input.profileId ?? 'configured-local',
-  ])}`;
+export const remoteProfileMaterializationWorkflow: WorkflowDefinition<
+  (input: RemoteProfileMaterializationInput) => Promise<string>
+> = {
+  workflow: REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE,
+  workflowIdFromArgs: (input) =>
+    `${REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE}:${JSON.stringify([
+      input.actorUri,
+      input.profileId ?? 'configured-local',
+    ])}`,
+};
