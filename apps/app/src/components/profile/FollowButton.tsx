@@ -19,6 +19,7 @@ import type { FollowButtonFollowProfileMutation } from './__generated__/FollowBu
 import type { FollowButtonUnfollowProfileMutation } from './__generated__/FollowButtonUnfollowProfileMutation.graphql';
 
 type FollowButtonProps = {
+  onActionRef?: (node: View | null) => void;
   onUnblockSuccess?: () => void;
   profile: FollowButton_profile$key;
   profileBlock?: FollowButton_profileBlock$key | null;
@@ -126,6 +127,7 @@ const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
 export function FollowButton({
+  onActionRef,
   onUnblockSuccess,
   profile,
   profileBlock = null,
@@ -227,7 +229,10 @@ export function FollowButton({
           <Button
             accessibilityLabel={`${data.displayName} 차단 해제`}
             accessibilityState={{ busy: unblockPending, disabled: unblockPending, selected: true }}
-            controlRef={actionRef}
+            controlRef={(node) => {
+              actionRef.current = node;
+              onActionRef?.(node);
+            }}
             disabled={unblockPending}
             hitSlop={hitSlop}
             onBlur={Platform.OS === 'web' ? () => setBlockedFocused(false) : undefined}
@@ -394,6 +399,7 @@ export function FollowButton({
           selected: isFollowing || isPending,
         }}
         disabled={loading}
+        controlRef={onActionRef}
         hitSlop={hitSlop}
         onPress={toggleFollow}
         size={size === 'compact' ? 'compact' : 'default'}
