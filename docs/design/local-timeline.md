@@ -25,6 +25,11 @@ Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` ca
 
 - 비활성 탭을 선택하면 해당 canonical route로 전환한다.
 - 이미 선택된 Local 탭을 다시 선택하면 현재 목록의 최신 데이터를 다시 요청한다.
+- Web의 sidebar·mobile drawer·하단 탭 바에서 `/local`의 active 홈 항목을 다시 실행하면 `/home`으로 이동하지
+  않고 document scroll을 최상단으로 이동한 뒤 같은 Local 새로고침 경로를 실행한다.
+- compact·full Web의 Local 헤더 브랜드 마크도 현재 Local 타임라인을 재선택한다. 실제 link 대상은 `/home`으로
+  유지해 새 탭·modifier 활성화는 홈 진입으로 처리한다. 모바일 Web과 Android/iOS 헤더의 브랜드 마크는
+  비상호작용 요소로 유지하며 Android/iOS bottom navigation의 재선택·scroll 정책은 변경하지 않는다.
 - 키보드에서는 기존 `TabList`의 방향키, `Home`, `End`, `Enter`, `Space` 동작과 focus-visible 표현을 유지한다.
 - 선택된 Profile이 바뀌면 Local 목록은 이전 Relay actor/store의 connection data, edge와 cursor를 재사용하지
   않는다.
