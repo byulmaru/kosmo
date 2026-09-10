@@ -35,6 +35,7 @@ jobs:
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       KOSMO_ANDROID_AAB_PATH: ${{ github.workspace }}/apps/app/android/app/build/outputs/bundle/release/app-release.aab
       KOSMO_OTA_CHANNEL: prod
+      KOSMO_OTA_PLATFORM: android
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
       SENTRY_RELEASE: ${{ github.sha }}
@@ -298,6 +299,7 @@ jobs:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       EXPO_NO_GIT_STATUS: '1'
       KOSMO_OTA_CHANNEL: prod
+      KOSMO_OTA_PLATFORM: ios
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
       SENTRY_RELEASE: ${{ github.sha }}

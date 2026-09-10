@@ -41,7 +41,7 @@ Android·iOS Expo SDK 56 release binary가 static update service에서 `kosmo-na
 
 **Guardrails**
 
-- Deploy mapping의 논리 `dev`/`prod`와 Native public-config `dev|prod`를 별도 축으로 유지한다. OTA channel은 이름 목록을 제한하지 않고 안전한 단일 path segment 형식으로 검증하며, Store release binary의 OTA consumer channel과 Native public-config는 모두 `prod`로 고정한다.
+- Deploy mapping의 논리 `dev`/`prod`와 Native public-config `dev|prod`를 별도 축으로 유지한다. Approved handoff의 OTA channel은 이름 목록을 제한하지 않으며 release/delivery contract가 안전한 단일 path segment 형식을 검증한다. Client bootstrap은 별도 native prebuild 입력 검증을 추가하지 않고, Store release binary의 OTA consumer channel과 Native public-config는 모두 `prod`로 고정한다.
 - runtimeVersion만으로 project를 식별하지 않고 project/platform/channel/runtime을 함께 검증한다.
 - `multipart/mixed` manifest JSON part의 signature와 asset hash를 bundled public certificate로 확인하며 native module·SDK·native code 변경은 OTA로 적용하지 않는다.
 

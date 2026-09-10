@@ -6,5 +6,5 @@ module.exports = {
       reasons: ['otaCodeSigningCertificate'],
     },
   ],
-  sourceSkips: ['ExpoConfigVersions'],
+  sourceSkips: ['ExpoConfigEASProject', 'ExpoConfigVersions'],
 };

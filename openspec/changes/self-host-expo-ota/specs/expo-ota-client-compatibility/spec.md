@@ -2,19 +2,13 @@
 
 ### Requirement: OTA client selects a trusted project and channel tuple
 
-**Authority / Provenance:** `PROD-331`, `PROD-332`, `PROD-333`; 적용되는 `docs/domain`·`docs/design` canonical 행동 문서 없음. Android·iOS release binary는 static update service URL에서 논리 project `kosmo-native`, binary platform(`ios` 또는 `android`), 안전한 단일 path segment 형식의 OTA channel, 그리고 binary의 `runtimeVersion`을 함께 사용하는 fixed tuple을 조회해야 한다(MUST). `runtimeVersion`만으로 project를 식별하거나 OTA channel을 Native public-config channel로 해석해서는 안 된다(MUST NOT). Deploy workflow는 논리적으로 `dev`/`prod` mapping을 사용하며 Store release binary는 OTA consumer channel `prod`와 Native public-config `prod`를 사용해야 한다(MUST). Channel 이름 자체는 이 목록으로 제한하지 않는다.
+**Authority / Provenance:** `PROD-331`, `PROD-332`, `PROD-333`; 적용되는 `docs/domain`·`docs/design` canonical 행동 문서 없음. Android·iOS release binary는 approved handoff가 제공한 논리 project `kosmo-native`, binary platform(`ios` 또는 `android`), OTA channel path segment, 그리고 binary의 `runtimeVersion`을 함께 사용하는 fixed tuple을 조회해야 한다(MUST). Channel path safety는 release/delivery contract에서 보장하며 client bootstrap은 이를 위한 별도 native prebuild 검증을 추가하지 않는다. `runtimeVersion`만으로 project를 식별하거나 OTA channel을 Native public-config channel로 해석해서는 안 된다(MUST NOT). Deploy workflow는 논리적으로 `dev`/`prod` mapping을 사용하며 Store release binary는 OTA consumer channel `prod`와 Native public-config `prod`를 사용해야 한다(MUST). Channel 이름 자체는 이 목록으로 제한하지 않는다.
 
 #### Scenario: Select the prod route for a Store Android binary
 
 - **WHEN** `kosmo-native` Android Store binary with a known `runtimeVersion` requests the fixed `prod` OTA channel
 - **THEN** the client requests the static manifest for the trusted Android project/channel/runtime tuple
 - **AND** the binary keeps Native public-config `prod` independently of the OTA channel
-
-#### Scenario: Reject an unsafe channel path segment
-
-- **WHEN** a binary is configured with an empty channel, a channel containing `/` or `\\`, or the exact values `.` or `..`
-- **THEN** the native prebuild rejects the channel configuration
-- **AND** it does not write an update URL containing that value
 
 #### Scenario: Reject runtime-only project selection
 

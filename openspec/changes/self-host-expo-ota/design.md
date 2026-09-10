@@ -38,7 +38,7 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 
 ### Recommended Approach
 
-1. PROD-333이 client bootstrap을 먼저 `expo-updates`가 지원하는 native config와 앱 초기화 경계에 연결한다. 요청에 project/platform/channel/runtime tuple을 제공하고 channel은 안전한 단일 path segment로 검증한다. Store binary의 OTA consumer channel과 public-config `prod` 선택은 고정하되 deploy workflow의 논리 `dev`/`prod` mapping과 분리한다.
+1. PROD-333이 client bootstrap을 먼저 `expo-updates`가 지원하는 native config와 앱 초기화 경계에 연결한다. approved handoff가 제공한 project/platform/channel/runtime tuple을 URL에 사용하고, channel path safety는 release/delivery contract에서 검증한다. Store binary의 OTA consumer channel과 public-config `prod` 선택은 고정하되 deploy workflow의 논리 `dev`/`prod` mapping과 분리한다.
 2. manifest의 `expo-signature`와 asset hash 검증은 public certificate를 신뢰하는 client의 update 적용 직전 경계로 모으고, 오류는 last-known-good 또는 embedded update로 되돌린다. native requirement가 있는 변경은 release pipeline에서 새 store binary 경로로 보낸다.
 3. PROD-334가 public `byulmaru/expo-ota` repository에서 조직 공용 정적 R2 delivery와 multipart publisher Action을 유지한다. asset은 content-addressed immutable object로 업로드하고 모두 검증한 뒤 fixed tuple manifest object를 갱신한다. 정적 endpoint는 이미 서명된 bytes만 제공하며 signing이나 요청별 release 선택을 하지 않는다.
 4. Kosmo의 Deploy Dev/Production workflow가 각각 기존 approved source SHA와 승인 경계를 사용해 `dev`/`prod` channel을 선택하고 app export를 publisher에 전달한다. promotion과 recovery reissue는 이 구현에서 보류한다. native-store-distribution의 binary upload는 publisher 호출과 분리한다.
@@ -47,7 +47,7 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 
 ### Allowed Alternatives
 
-- Expo 공식 config plugin 또는 package가 제공하는 동등한 bootstrap hook을 사용할 수 있다. 단, 결과가 동일한 runtime/project/channel 선택, 안전한 channel path segment 검증, code-signing 검증, fallback을 증명해야 한다. Store binary consumer channel은 `prod`로 고정하고, deploy workflow의 논리 channel mapping과 혼동하지 않는다.
+- Expo 공식 config plugin 또는 package가 제공하는 동등한 bootstrap hook을 사용할 수 있다. 단, 결과가 동일한 runtime/project/channel 선택, release/delivery contract의 안전한 channel path segment, code-signing 검증, fallback을 증명해야 한다. Client bootstrap은 별도 native prebuild 입력 검증을 추가하지 않는다. Store binary consumer channel은 `prod`로 고정하고, deploy workflow의 논리 channel mapping과 혼동하지 않는다.
 - 현재 static R2 public base URL은 `https://expo-ota.byulmaru.co`, bucket은 `expo-ota`다. Host와 object layout은 PROD-334 delivery context로 기록하며, PROD-335 caller handoff에는 별도 public-edge verification 단계를 추가하지 않는다.
 - CI release runner나 별도 release service가 publish를 수행할 수 있다. 단, Kosmo caller는 repository secret `EXPO_OTA_SIGNING_PRIVATE_KEY`를 local reusable workflow의 required `signing_private_key` input으로 제공하고, local workflow는 이를 public publisher에 전달한다. Vault version 1과 공개 인증서의 일치를 확인한 뒤 Kosmo repository secret을 2026-09-10 10:06:24 UTC에 등록했다. 이후 rotation 동기화와 publish handoff 실행 결과는 남은 운영 evidence로 관리한다. private key는 client·static R2 runtime에 두지 않으며, publisher가 signing storage 경로·field·provider·backend를 고정하지 않고 protected production approval과 immutable complete-release 계약을 보존해야 한다. promotion/recovery는 보류한다.
 
