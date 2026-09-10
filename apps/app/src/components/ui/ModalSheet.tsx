@@ -43,6 +43,7 @@ export function ModalSheet({
     <ModalSheetHost
       accessibilityLabel={title}
       animationType="none"
+      closeRequestDisabled={dismissDisabled}
       onRequestClose={() => {
         if (!dismissDisabled) {
           onClose();
@@ -93,7 +94,12 @@ export function ModalSheet({
         >
           <Pressable
             accessibilityLabel={title}
-            accessibilityViewIsModal
+            accessibilityViewIsModal={Platform.OS !== 'web'}
+            onAccessibilityEscape={() => {
+              if (!dismissDisabled) {
+                onClose();
+              }
+            }}
             onPress={(event) => event.stopPropagation()}
             role={Platform.OS === 'web' ? undefined : 'dialog'}
             style={[

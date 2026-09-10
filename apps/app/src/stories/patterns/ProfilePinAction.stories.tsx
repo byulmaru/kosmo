@@ -438,7 +438,7 @@ export const ExistingDeletionFlow: Story = {
     const trigger = canvas.getByRole('button', { name: '더 보기' });
     await userEvent.click(trigger);
     await userEvent.click(await body.findByRole('menuitem', { name: '게시글 삭제' }));
-    const dialog = await body.findByRole('alertdialog', { name: '게시글 삭제 확인' });
+    const dialog = await body.findByRole('alertdialog', { name: '게시글을 삭제할까요?' });
     expect(args.onDeleteRequest).not.toHaveBeenCalled();
     const cancel = within(dialog).getByRole('button', { name: '취소' });
     await waitFor(() => expect(cancel).toHaveFocus());
@@ -447,7 +447,7 @@ export const ExistingDeletionFlow: Story = {
     expect(args.onDeleteRequest).not.toHaveBeenCalled();
     await userEvent.click(trigger);
     await userEvent.click(await body.findByRole('menuitem', { name: '게시글 삭제' }));
-    const confirmation = await body.findByRole('alertdialog', { name: '게시글 삭제 확인' });
+    const confirmation = await body.findByRole('alertdialog', { name: '게시글을 삭제할까요?' });
     await userEvent.click(within(confirmation).getByRole('button', { name: '삭제' }));
     await waitFor(() => expect(args.onDeleteRequest).toHaveBeenCalledWith(storyPost.id));
     expect(args.onDeleteRequest).toHaveBeenCalledTimes(1);

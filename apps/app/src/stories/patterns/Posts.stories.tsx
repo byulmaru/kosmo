@@ -3493,7 +3493,7 @@ export const ProductionPostDeletionListEdgeSafety: Story = {
         name: '게시글 삭제',
       }),
     );
-    const dialog = await screen.findByRole('alertdialog', { name: '게시글 삭제 확인' });
+    const dialog = await screen.findByRole('alertdialog', { name: '게시글을 삭제할까요?' });
     await userEvent.click(within(dialog).getByRole('button', { name: '삭제' }));
 
     await waitFor(() => {

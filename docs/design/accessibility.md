@@ -107,6 +107,15 @@ library에 종속하지 않고 icon, glyph, 짧은 기호 문자 또는 loading 
 - iOS·Android floor mapping과 부족분 계산은 공용 source와 자동화에서 유지하되, Web 자동화나 source 계산을
   Native 실제 기기·simulator의 touch·focus·assistive technology 검증 완료 증거로 사용하지 않는다.
 
+### ModalSheet
+
+- Web `ModalSheet`의 `alertdialog` 경로는 native `<dialog>` 하나만 `alertdialog` role과 `aria-modal`을
+  소유하고, 기본 `dialog` 경로는 기존 React Native Web `Modal` 하나가 이를 소유한다. 두 경로 모두 inner
+  React Native surface에는 중복 role이나 modal semantics를 만들지 않는다. Android·iOS는 기존 Native Modal과
+  inner dialog semantics를 유지한다.
+- `onAccessibilityEscape`는 `dismissDisabled`가 false일 때만 `onClose`로 이어진다. backdrop, 닫기 button과
+  platform back도 같은 dismiss 경계를 사용하며 pending 중에는 닫히지 않는다.
+
 ### Post Action Bar의 출시 전 임시 예외
 
 Post Action Bar는 모든 플랫폼에서 28 logical unit visual row를 공유한다. Web actual target은 visual row를 위아래 4px씩 확장하고, Native actual target은 아직 28pt·28dp를 사용하는 출시 전 임시 예외다. 이 예외는 [post-action-bar.md](./post-action-bar.md)가 소유하며 다른 toolbar나 icon button의 선례로 일반화하지 않는다.

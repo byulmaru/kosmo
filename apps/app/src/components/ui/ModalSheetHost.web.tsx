@@ -2,19 +2,36 @@ import { useEffect, useRef } from 'react';
 import { Modal } from 'react-native';
 import type { ModalSheetHostProps } from './ModalSheetHost';
 
-export function ModalSheetHost(props: ModalSheetHostProps) {
+export function ModalSheetHost({ closeRequestDisabled, ...props }: ModalSheetHostProps) {
   // React Native Web's Modal always overwrites role with dialog. Keep its existing dialog path.
-  return props.role === 'alertdialog' ? <AlertDialog {...props} /> : <Modal {...props} />;
+  return props.role === 'alertdialog' ? (
+    <AlertDialog closeRequestDisabled={closeRequestDisabled} {...props} />
+  ) : (
+    <Modal {...props} />
+  );
 }
 
 function AlertDialog({
   accessibilityLabel,
   children,
+  closeRequestDisabled,
   onRequestClose,
   onShow,
   visible,
 }: ModalSheetHostProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) {
+      return;
+    }
+    const handleCancel = (event: Event) => {
+      event.preventDefault();
+      onRequestClose?.();
+    };
+    dialog.addEventListener('cancel', handleCancel);
+    return () => dialog.removeEventListener('cancel', handleCancel);
+  }, [onRequestClose]);
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) {
@@ -31,11 +48,8 @@ function AlertDialog({
     <dialog
       aria-label={accessibilityLabel}
       aria-modal="true"
+      closedby={closeRequestDisabled ? 'none' : 'closerequest'}
       data-kosmo-modal-sheet
-      onCancel={(event) => {
-        event.preventDefault();
-        onRequestClose?.();
-      }}
       ref={ref}
       role="alertdialog"
       style={{

@@ -596,11 +596,10 @@ documentation·state specimen을 두 번째 행에 둔다.
   확인 content에 축약하지 않고 별도 `ProfileLifecycleDeleteConfirmContent`를 유지한다. acknowledgement의
   Checked·Unchecked와 삭제 action의 Disabled·Default 연결도 해당 consumer 계약이다.
 - 이 section은 `More → 삭제 → Idle confirmation → Pending`의 responsive placement와 theme 상속만 증명한다.
-  Production Screens consumer, focus handoff, dismiss 차단, 접근성 semantics, mutation과 cache 반영은 연결된 Product
-  이슈의 runtime 검증으로 남긴다. canonical runtime이 단일 `alertdialog` surface를 지원하기 전에는 현재
-  consumer-owned semantic surface를 유지한다. 현재 Post 삭제 runtime의 `480px` max-width와 legacy card·border
-  token은 canonical `ModalSheet`의 `420px` 및 `backgroundElevated`·`borderDefault` 계약과 아직 다르며, 이 visual
-  정렬은 별도 Product/Frontend migration으로 남긴다. 임시 semantic surface는 별도 visual component source가 아니다.
+  PROD-937에서 공용 `ModalSheet`·`ConfirmationContent`, canonical `420px` shell과 `backgroundElevated`·
+  `borderDefault` semantic token, Web 단일 `alertdialog` surface와 dismiss·pending 경계로 정렬됐다. 이
+  문서의 Figma placement는 runtime 전체 완료의 증거가 아니며, Native 실기기·VoiceOver·TalkBack 검증은 여전히
+  남아 있다.
 
 #### DSN-44 설정 control 계약
 
