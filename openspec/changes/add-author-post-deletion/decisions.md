@@ -88,6 +88,18 @@
 - Consequences: 같은 component를 수정하더라도 각 change의 spec과 task는 자기 행동 계약만 검증한다. 후속 통합은 이미 구현된 삭제 item을 회귀시키지 않아야 한다.
 - Confirmation / Follow-up: 이 change의 tasks와 PR이 PROD-598 범위만 포함하고 독립 archive evidence를 남긴다.
 
+### PROD-937 후속 slice는 공용 confirmation presentation을 사용한다
+
+- Decision Date: 2026-09-10
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/post-action-bar.md`, `docs/design/accessibility.md`, `PROD-937`
+- Status: Active
+- Context / Problem: PROD-598의 author deletion behavior는 이미 확인·삭제·Relay/cache 계약을 소유하지만, Post 삭제 consumer의 feature-local confirmation shell이 canonical `ModalSheet`·`ConfirmationContent`와 분리되어 있었다. 후속 migration은 deletion domain을 다시 정의하지 않고 presentation과 공용 modal 접근성 경계를 정렬해야 한다.
+- Decision Outcome: `PostDeletionAction`은 공용 `ModalSheet`와 `ConfirmationContent tone="danger"`를 사용한다. Web에서는 native `<dialog>` 하나가 `alertdialog` role과 `aria-modal`을 소유하고 inner surface에는 중복 semantics를 두지 않는다. canonical `420px` shell과 semantic tokens를 사용하며, 처음 열릴 때 `취소`에 focus를 두고 pending 전 dismiss 및 닫힘 완료 뒤 More trigger focus 복구를 유지한다. PROD-598의 API·eligibility·target·Relay/cache lifecycle은 변경하지 않는다.
+- Alternatives Considered: 기존 feature-local portal/native `Modal`, 자체 backdrop·focus trap·480px shell을 유지하는 방식은 canonical presentation과 shared modal semantics의 drift를 남기므로 채택하지 않았다. 삭제 API나 actor Store lifecycle을 이 migration에 포함하는 방식은 PROD-598 ownership을 침범하므로 채택하지 않았다.
+- Consequences: shared `ModalSheet` Web host의 native cancel 경계를 보강해야 하며 기존 Profile mute·visibility·lifecycle consumer 회귀를 확인해야 한다. Native 실기기·VoiceOver·TalkBack 결과는 자동 Storybook 증거와 별도로 기록한다.
+- Confirmation / Follow-up: 삭제 Storybook 15개와 전체 Storybook 115개 파일/761개 테스트, app Relay·TypeScript·변경 범위 ESLint, strict OpenSpec validation으로 자동 검증한다. Web trusted Escape는 pending 유지와 idle dismiss·focus 복귀를 실제 브라우저에서 확인했다. Native assistive technology runtime 검증은 별도 handoff로 남긴다.
+
 ## Remaining Decisions
 
 - 없음.

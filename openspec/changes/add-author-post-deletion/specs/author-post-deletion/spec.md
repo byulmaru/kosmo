@@ -43,7 +43,7 @@
 
 ### Requirement: 삭제 확인과 단일 실행
 
-**Authority / Provenance:** `docs/design/post-action-bar.md`, `docs/design/accessibility.md`, `PROD-598` — 사용자가 `삭제` menu item을 선택하면 앱은 More menu를 닫고 title `게시글을 삭제할까요?`, 설명 `삭제한 게시글은 복구할 수 없습니다.`, action `취소`와 `삭제`를 가진 확인 dialog를 열어야 한다(MUST). menu item 선택만으로 mutation이나 cache 변경을 시작해서는 안 되며(MUST NOT), 사용자가 dialog의 `삭제`를 확인한 경우에만 target Post ID로 `deletePost`를 한 번 실행해야 한다(MUST). pending 중에는 중복 action과 dismiss 입력을 막고 destructive action에 busy 상태를 노출해야 한다(MUST).
+**Authority / Provenance:** `docs/design/post-action-bar.md`, `docs/design/accessibility.md`, `PROD-598`, `PROD-937` — 사용자가 `삭제` menu item을 선택하면 앱은 More menu를 닫고 title `게시글을 삭제할까요?`, 설명 `삭제한 게시글은 복구할 수 없습니다.`, action `취소`와 `삭제`를 가진 확인 dialog를 열어야 한다(MUST). 확인 dialog는 공용 `ModalSheet`와 `ConfirmationContent` 조합을 사용해야 하며(MUST), Web에서는 native `<dialog>` 하나만 `alertdialog` role과 `aria-modal`을 소유하고 inner surface에는 중복 modal semantics를 두지 않아야 한다(MUST). menu item 선택만으로 mutation이나 cache 변경을 시작해서는 안 되며(MUST NOT), 사용자가 dialog의 `삭제`를 확인한 경우에만 target Post ID로 `deletePost`를 한 번 실행해야 한다(MUST). pending 중에는 중복 action과 dismiss 입력을 막고 destructive action에 busy 상태를 노출해야 한다(MUST).
 
 #### Scenario: 사용자가 삭제를 취소한다
 
@@ -100,7 +100,7 @@
 
 ### Requirement: Web·Android·iOS 삭제 흐름 접근성
 
-**Authority / Provenance:** `docs/design/post-action-bar.md`, `docs/design/accessibility.md`, `PROD-598` — More trigger는 button role, `더 보기` accessible name과 menu expanded 상태를 제공해야 하며(MUST), Web은 기존 anchored menu의 keyboard·focus·dismiss 계약을, Android·iOS는 기존 safe-area bottom action sheet와 modal/menu 계약을 재사용해야 한다(MUST). 삭제 확인은 Web에서 `alertdialog`, Android·iOS에서 modal 접근성 의미를 제공하고 처음 열릴 때 안전한 `취소` action에 focus를 두어야 하며(MUST), pending 전 취소로 닫으면 More trigger에 focus를 복구해야 한다(MUST).
+**Authority / Provenance:** `docs/design/post-action-bar.md`, `docs/design/accessibility.md`, `PROD-598`, `PROD-937` — More trigger는 button role, `더 보기` accessible name과 menu expanded 상태를 제공해야 하며(MUST), Web은 기존 anchored menu의 keyboard·focus·dismiss 계약을, Android·iOS는 기존 safe-area bottom action sheet와 modal/menu 계약을 재사용해야 한다(MUST). 삭제 확인은 공용 `ModalSheet`와 `ConfirmationContent`를 재사용해야 하며(MUST), Web에서는 native `<dialog>` 하나가 `alertdialog` role과 `aria-modal`을 제공하고 inner surface에는 중복 semantics를 두지 않아야 한다(MUST), Android·iOS에서는 기존 modal 접근성 의미를 유지해야 한다(MUST). 처음 열릴 때 안전한 `취소` action에 focus를 두어야 하며(MUST), pending 전 취소로 닫으면 More trigger에 focus를 복구해야 한다(MUST).
 
 #### Scenario: Web keyboard 삭제 흐름
 

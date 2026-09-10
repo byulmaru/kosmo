@@ -4,6 +4,8 @@ Post 삭제 domain, Core service와 GraphQL `deletePost` resolver는 이미 Auth
 
 PROD-598은 기존 server behavior를 바꾸지 않고 Home·Profile Post List와 Post 상세의 Action Bar target에 작성자 삭제를 연결한다. Relay environment는 selected Profile 전환마다 교체되므로 mutation completion과 cache update는 요청을 시작한 actor Store에만 적용되어야 한다. 목록 fragment 일부는 Relay `@connection`으로 관리되지 않으므로 record 삭제만으로 모든 표시 edge가 안전하게 사라진다고 가정할 수 없다.
 
+PROD-937은 PROD-598의 삭제 API·eligibility·target·Relay/cache lifecycle을 변경하지 않는 후속 presentation migration이다. 확인 UI를 공용 `ModalSheet`와 `ConfirmationContent`로 정렬하고 Web 단일 `alertdialog`·`aria-modal` surface, canonical shell, focus·dismiss·pending 계약의 회귀를 검증한다.
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -45,7 +47,7 @@ PROD-598은 기존 server behavior를 바꾸지 않고 Home·Profile Post List�
 ### Allowed Alternatives
 
 - Relay 성공 동기화는 declarative `@deleteRecord`와 explicit connection cleanup, feature-local updater, 또는 성공 뒤 현재 surface refetch 중 하나를 사용할 수 있다. 서버 성공 전 cache를 바꾸지 않고 현재 actor Store만 갱신하며 목록·상세·pure Repost Source 시나리오가 독립 테스트로 증명되면 허용한다.
-- 확인 UI는 같은 semantics, copy, focus와 pending 계약을 만족하는 기존 공용 modal primitive가 구현 시점에 존재하면 재사용할 수 있다.
+- 확인 UI는 기존 공용 `ModalSheet`와 `ConfirmationContent`를 재사용하고, `ModalSheet`가 Web에서 하나의 role·`aria-modal` surface만 소유하도록 한다. Post feature-local portal, native `Modal`, focus trap과 전용 shell은 두지 않는다.
 
 ### Known Traps
 
@@ -60,7 +62,7 @@ PROD-598은 기존 server behavior를 바꾸지 않고 Home·Profile Post List�
 
 - [여러 목록 shape의 cache 정리가 누락될 수 있음] → Home·Profile·상세 thread와 pure Repost Source를 각각 Relay payload test로 재현하고, 결과 기준으로 updater·reader를 함께 보완한다.
 - [More child가 아직 완료되지 않은 PROD-432 링크 복사와 같은 surface를 수정함] → item 배열과 ActionMenu boundary를 확장 가능하게 유지하되 링크 복사를 미리 구현하지 않고, `삭제`가 존재할 때만 현재 trigger를 표시한다.
-- [확인 modal을 feature-local로 두면 후속 destructive action에서 중복될 수 있음] → 현재 단일 use case에는 최소 구현을 유지하고 실제 두 번째 소비자가 생길 때 공용화한다.
+- [공용 ModalSheet 변경이 기존 소비자에 회귀를 만들 수 있음] → Web role·`aria-modal` 중복 제거와 접근성 Escape guard만 최소 수정하고, Profile mute·visibility·lifecycle 소비자를 회귀 검증한다.
 - [Native 접근성 runtime은 Web 자동화로 증명할 수 없음] → universal component/Storybook test와 플랫폼별 semantics를 검증하고 VoiceOver·TalkBack 실기기 확인 여부를 별도 기록한다.
 
 ## Migration Plan

@@ -9,13 +9,14 @@ Kosmo의 Post domain과 GraphQL `deletePost` mutation은 Author가 Active Post�
 - 삭제 항목 선택 뒤 별도 확인 dialog를 열고 사용자가 확인한 경우에만 mutation을 한 번 실행하며, pending 중 중복 입력과 dismiss를 막는다.
 - 서버 성공 뒤 현재 Relay actor Store의 Home·Profile 목록과 상세를 삭제 결과에 맞게 갱신하고, 실패·취소에는 서버 확정 cache를 유지하며 접근 가능한 한국어 오류 안내와 재시도를 제공한다.
 - 일반 Post·Reply·Quote·Reply이면서 Quote, 순수 Repost Source target, guest·다른 Profile, Web·Android·iOS 흐름과 Repost 취소 회귀를 component·integration test로 검증한다.
-- 기존 `add-post-action-bar` change의 링크 복사·전체 통합 생명주기와 독립적으로 PROD-598이 이 change의 구현, 통합 검증과 archive를 소유한다.
+- 기존 `add-post-action-bar` change의 링크 복사·전체 통합 생명주기와 독립적으로 PROD-598이 이 change의 원래 구현, 통합 검증과 archive를 소유한다.
+- PROD-937은 후속 slice로 공용 `ModalSheet`·`ConfirmationContent` presentation과 Web 단일 alertdialog/aria-modal semantics를 정렬하고, 해당 focus·dismiss·pending 회귀 검증을 추가한다.
 
 ## Authority / Provenance
 
 - Canonical: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `docs/design/accessibility.md`
 - Linear Contract: `PROD-598`
-- Linear Implementations: `PROD-598`
+- Linear Implementations: `PROD-598`, `PROD-937`
 
 ## Capabilities
 
@@ -32,4 +33,5 @@ Kosmo의 Post domain과 GraphQL `deletePost` mutation은 Author가 Active Post�
 - `apps/api/src/graphql/resolvers/post/mutation/delete.ts`와 관련 GraphQL integration test의 기존 resolver 경계를 재검증한다. Core service, DB schema와 GraphQL schema shape는 변경하지 않는다.
 - `apps/app/src/components/post`의 Action Bar·목록·상세 surface, 공용 `ActionMenu`와 toast/확인 UI, Relay mutation updater 및 component/Storybook test가 영향을 받는다.
 - Home·Profile Post connection과 Post 상세의 현재 actor Store cache가 서버 성공 뒤 갱신되며, selected Profile별 Store 격리는 유지된다.
+- PROD-937 후속 migration은 기존 삭제 API·eligibility·target·Relay/cache lifecycle을 변경하지 않고, `PostDeletionAction`의 확인 presentation을 공용 `ModalSheet`·`ConfirmationContent`와 Web 단일 alertdialog/aria-modal surface로 정렬하며 focus·dismiss·pending 회귀 검증을 추가한다.
 - 새 외부 dependency, DB migration, physical delete, 복구, 원격 Post 사용자 삭제와 ActivityPub delivery 재설계는 없다.

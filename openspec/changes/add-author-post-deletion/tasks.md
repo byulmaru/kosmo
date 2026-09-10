@@ -111,3 +111,42 @@ PROD-598의 backend resolver 경계와 Web·Android·iOS 공용 삭제 흐름이
 - [ ] 4.1 Relay artifact와 관련 API·app component/Storybook·typecheck·lint 검증을 실행하고 발견된 범위 내 결함을 수정한다.
 - [ ] 4.2 Web 목록·상세의 삭제 menu·확인·성공·실패와 기존 Repost/Action Bar 회귀를 통합 검증한다.
 - [ ] 4.3 OpenSpec strict validation, 구현 diff, 미실행 Native runtime과 남은 위험을 handoff에 기록한다.
+
+## 5. PROD-937 삭제 확인 presentation migration
+
+**Authority / Provenance**
+
+- `docs/design/post-action-bar.md`
+- `docs/design/accessibility.md`
+- `PROD-937`
+- 기존 삭제 동작 계약: `PROD-598`
+
+**Deliverable**
+
+기존 PROD-598 author deletion의 API·eligibility·target·Relay/cache lifecycle을 유지하면서 `PostDeletionAction`의
+확인 UI를 공용 `ModalSheet`와 `ConfirmationContent`로 정렬하고, Web 단일 `alertdialog`·`aria-modal` surface와
+focus·dismiss·pending semantics의 회귀 검증을 제공한다.
+
+**Guardrails**
+
+- `deletePost` resolver, selected Profile 권한, direct Source target, server-success cache lifecycle과 실패 복구
+  동작은 변경하지 않는다.
+- Web에서는 native `<dialog>` 하나만 `alertdialog` role과 `aria-modal`을 소유하며 inner surface에는 중복
+  modal semantics를 두지 않는다. feature-local portal/native `Modal`, 자체 focus trap과 별도 confirmation shell을
+  추가하지 않는다.
+- pending 중 action·dismiss를 차단하고, 취소·Escape·backdrop 뒤 닫힘 완료 시 More trigger focus 복구 계약을
+  유지한다.
+
+**Verification**
+
+- canonical copy, cancel initial focus, idle dismiss/focus return, pending disabled/busy, failure retry와 정확한
+  target ID를 Storybook interaction으로 확인한다.
+- 변경된 shared Web cancel 경계와 app Relay artifact·TypeScript·lint, 관련 Storybook 및 strict OpenSpec 검증을
+  통과시킨다.
+- 실제 Web trusted Escape의 idle dismiss·focus 복귀와 pending 차단은 자동화와 분리해 브라우저에서 확인하고,
+  Native Android·iOS 실기기 back/backdrop 및 VoiceOver·TalkBack은 미검증 항목으로 남긴다.
+
+- [x] 5.1 공용 ModalSheet·ConfirmationContent presentation migration과 자동 Storybook/typecheck/lint/OpenSpec
+      검증을 구현한다.
+- [x] 5.2 실제 Web trusted Escape runtime을 검증한다.
+- [ ] 5.3 Native 실기기·VoiceOver·TalkBack runtime을 검증한다.
