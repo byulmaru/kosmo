@@ -97,14 +97,14 @@ public `byulmaru/expo-ota` repository의 조직 공용 static R2 endpoint와 pub
 
 **Deliverable**
 
-Kosmo repository의 approved app export와 deploy channel handoff가 Vault private key를 사용하는 `byulmaru/expo-ota` multipart publisher를 호출해 signed immutable release를 선택된 `dev` 또는 `prod` channel에 발행하고, static R2 read-only delivery가 이를 제공하는 pipeline과 runbook. release promotion과 known-good recovery reissue는 이번 구현에서 보류한다.
+Kosmo repository의 approved app export와 deploy channel handoff가 Kosmo caller의 Vault private-key read 결과를 `signing-private-key` 입력으로 전달해 `byulmaru/expo-ota` multipart publisher를 호출하고, signed immutable release를 선택된 `dev` 또는 `prod` channel에 발행하며, static R2 read-only delivery가 이를 제공하는 pipeline과 runbook. common publisher는 Vault path·field·provider·storage backend를 고정하거나 직접 조회하지 않는다. release promotion과 known-good recovery reissue는 이번 구현에서 보류한다.
 
 **Guardrails**
 
 - `dev` 또는 `prod` channel 검증 실패 또는 incomplete artifact는 해당 channel의 fixed tuple manifest object를 변경하지 않는다.
 - Deploy Dev는 Docker Build `workflow_run.head_sha`, Deploy Production은 canonical preflight의 approved target SHA와 기존 `prod` Environment 승인을 사용한다.
 - native-store-distribution은 OTA publisher를 호출하지 않고 Store binary의 OTA consumer channel을 `prod`로 고정한다.
-- signing private key와 release credential은 client·static R2 runtime에 두지 않으며, publisher job은 private key를 Vault에서 읽는다.
+- signing private key와 release credential은 client·static R2 runtime에 두지 않는다. Kosmo caller는 같은 release job에서 private key를 자기 Vault 설정으로 읽어 common publisher의 `signing-private-key` 입력으로 전달하고, common publisher는 전달된 입력만 사용한다.
 - static R2 source·publisher workflow는 `byulmaru/expo-ota`에서 소유하고, approved app export와 channel별 publish handoff는 Kosmo에서 소유한다.
 
 **Verification**
@@ -112,7 +112,7 @@ Kosmo repository의 approved app export와 deploy channel handoff가 Vault priva
 - signed release 생성 → 선택된 `dev`/`prod` manifest·asset·compatibility 검증의 artifact, manifest identity, asset hash와 fixed tuple manifest object evidence를 확인한다.
 - channel publish failure, fixed tuple manifest object update failure, missing asset, invalid signature 시 현재 serving complete release가 유지됨을 재현한다.
 - Deploy Dev의 `workflow_run.head_sha`, Deploy Production의 approved target SHA와 `prod` Environment approval, native Store workflow와의 분리 evidence를 확인한다. promotion/recovery evidence는 보류한다.
-- Vault private-key read, 1년 signing certificate validity, 6개월 rotation 경계와 새 runtime·Store binary 및 구 runtime certificate 유지 evidence가 runbook에 기록된다. 초기 `2026-09` key registration과 public certificate validity evidence는 기록되었고, publisher read·rotation·seed binary·device proof는 남은 작업이다.
+- Kosmo caller의 Vault private-key read와 common publisher의 `signing-private-key` input handoff, 1년 signing certificate validity, 6개월 rotation 경계와 새 runtime·Store binary 및 구 runtime certificate 유지 evidence가 runbook에 기록된다. 초기 `2026-09` key registration과 public certificate validity evidence는 기록되었고, caller read·publisher handoff·rotation·seed binary·device proof는 남은 작업이다.
 
 - [ ] 4.1 signed immutable artifact의 complete-release 검증과 safe channel segment 형식 검증을 구현하고 native code/module/SDK 요구 artifact를 새 Store binary 경로로 보낸다.
 - [ ] 4.2 Deploy Dev의 `workflow_run.head_sha`와 Deploy Production의 approved target SHA를 각각 `dev`/`prod` channel publish handoff에 연결하고 native Store upload과 분리한다. promotion은 보류한다.

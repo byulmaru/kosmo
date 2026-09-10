@@ -33,7 +33,7 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 - 이번 구현에서는 release promotion과 known-good recovery reissue를 active scope에 포함하지 않는다. 해당 계약과 장기 운영 맥락은 decisions와 migration notes에 보존하며, publisher contract가 준비된 뒤 별도로 재개한다.
 - 정적 R2 manifest는 `multipart/mixed` 응답이며 첫 JSON part의 정확한 바이트에 `expo-signature`를 붙인다. publisher는 bundle과 asset을 SHA-256 content-addressed object로 먼저 업로드하고 read-back 검증한 뒤 tuple의 `manifest.json` object를 쓴다. manifest는 `private, no-store`, asset은 `public, max-age=31536000, immutable`이며 static host는 multipart bytes와 Expo protocol headers를 변형하지 않아야 한다.
 - 정적 endpoint는 요청별 negotiation이나 signing을 하지 않는다. 서명·asset hash 검증은 public certificate를 포함한 client가 update 적용 전에 수행한다.
-- publisher job은 signing private key를 Vault에서 읽어 사용하고, native seed binary에는 public certificate를 포함한다. `2026-09` 초기 private key는 Vault KV v2 `secret/data/expo-ota/signing/kosmo-native/2026-09`의 `private_key` field, version 1로 등록되었다. certificate validity는 `2026-09-10`부터 `2027-09-10`까지(KST)이며 첫 rotation은 `2027-03-10`에 예정되어 있다. 초기 provision과 public certificate source evidence는 기록되었고 publisher read·rotation·seed binary·device evidence는 남은 검증으로 관리한다.
+- Kosmo caller는 release job에서 signing private key를 Vault의 자기 설정 경로로 읽어 common publisher의 `signing-private-key` 입력으로 전달한다. common publisher는 Vault 경로·field·provider·storage backend를 고정하거나 직접 조회하지 않으며, native seed binary에는 public certificate를 포함한다. `2026-09` 초기 private key는 현재 caller 설정인 Vault KV v2 `secret/data/expo-ota/signing/kosmo-native/2026-09`의 `private_key` field, version 1로 등록되었다. certificate validity는 `2026-09-10`부터 `2027-09-10`까지(KST)이며 첫 rotation은 `2027-03-10`에 예정되어 있다. 초기 provision과 public certificate source evidence는 기록되었고 caller read·publisher handoff·rotation·seed binary·device evidence는 남은 검증으로 관리한다.
 - 조직 공용 정적 R2 source와 publisher workflow는 public `byulmaru/expo-ota`에서 관리한다. Kosmo에서는 delivery runtime을 복제하지 않고 client와 approved export/publish handoff만 연결한다.
 
 ### Recommended Approach
@@ -49,7 +49,7 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 
 - Expo 공식 config plugin 또는 package가 제공하는 동등한 bootstrap hook을 사용할 수 있다. 단, 결과가 동일한 runtime/project/channel 선택, 안전한 channel path segment 검증, code-signing 검증, fallback을 증명해야 한다. Store binary consumer channel은 `prod`로 고정하고, deploy workflow의 논리 channel mapping과 혼동하지 않는다.
 - 현재 static R2 public base URL은 `https://expo-ota.byulmaru.co`, bucket은 `expo-ota`다. 설정된 host가 fixed tuple path, multipart response, immutable assets와 complete-release 계약을 보존하는지 운영 evidence로 확인한다.
-- CI release runner나 별도 release service가 publish를 수행할 수 있다. 단, signing private key는 Vault에서 publisher job 실행 중에만 사용하고 client·static R2 runtime에 두지 않으며, protected production approval과 immutable complete-release 계약을 보존해야 한다. promotion/recovery는 보류한다.
+- CI release runner나 별도 release service가 publish를 수행할 수 있다. 단, Kosmo caller가 signing private key를 Vault에서 release job 중에만 읽어 common publisher의 `signing-private-key` 입력으로 전달하고 client·static R2 runtime에 두지 않으며, publisher가 Vault 경로·field·provider·storage backend를 고정하지 않고 protected production approval과 immutable complete-release 계약을 보존해야 한다. promotion/recovery는 보류한다.
 
 ### Known Traps
 
