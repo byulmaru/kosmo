@@ -265,12 +265,7 @@ export function PostListItem({
             </Pressable>
           </Link>
         </PostAttributionRow>
-        <PostListRow
-          onQuote={openQuote}
-          post={source}
-          reply={reply}
-          surfacePostId={post.id}
-        />
+        <PostListRow onQuote={openQuote} post={source} reply={reply} surfacePostId={post.id} />
       </View>,
     );
   }
