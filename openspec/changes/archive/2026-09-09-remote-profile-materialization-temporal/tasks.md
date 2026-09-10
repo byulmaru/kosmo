@@ -26,7 +26,7 @@
 - Workflow 밖 Temporal Client caller의 같은 `actorUri`와 origin-selection identity 동시 sync/async 요청이 중복 Profile/actor row를 만들지 않고, sync는 Profile identity를 받고 async는 durable start acknowledgement를 받는지 검증한다.
 - caller가 stale row를 본 뒤 Activity가 늦게 실행되는 경우 최신 Profile/actor/Instance 상태와 TTL을 다시 확인해 불필요한 원격 fetch를 하지 않는지 검증한다.
 - `actorUri` materialization과 저장된 actor URI refresh가 acct handle lookup을 수행하지 않고, 반환 URI 불일치와 같은 URI의 `preferredUsername` 변경을 각각 저장 거부·기존 Profile 갱신으로 처리하는지 검증한다.
-- async child caller가 start acknowledgement 뒤 child result를 기다리지 않고 반환하는지, sync/async 선택과 결과 처리가 adapter 계약대로 동작하는지 검증한다. parent lifecycle 이후 child 생존은 Temporal SDK semantics로 둔다.
+- async child caller가 start acknowledgement 뒤 child result를 기다리지 않고 반환하는지, sync/async 선택과 결과 처리가 공통 Core client wrapper 계약대로 동작하는지 검증한다. 실제 Workflow child 호출부가 추가되는 경우에만 해당 호출부의 child contract를 별도로 검증하며, parent lifecycle 이후 child 생존은 Temporal SDK semantics로 둔다.
 - Activity/Worker 재시작 후 실행 재개와 기존 projection·transaction 결과를 검증한다.
 
 - [x] 1.1 상위 remote actor caller가 검색·발견 경계에서 받은 `actorUri`, 선택적인 `profileId`와 caller sync/async 선택을 유지하고, stale branch가 저장된 actor URI를 Temporal `actorUri` input으로 재사용하도록 전환하며 unsigned lookup 및 Profile origin 선택·결손 오류를 보존한다.
@@ -87,7 +87,7 @@
 **Verification**
 
 - 영향받은 package typecheck와 Worker build를 통과시킨다.
-- Temporal test environment 또는 동등한 실행 검증으로 adapter의 sync/async 대기 선택·start acknowledgement·결과 처리, fresh/stale, retry/error, timeout continuation, restart와 concurrency를 확인한다. SDK의 parent-close/cancellation semantics 자체를 source/options equality test로 재검증하지 않는다.
+- Temporal test environment 또는 동등한 실행 검증으로 공통 Core client wrapper의 sync/async 대기 선택·start acknowledgement·결과 처리, fresh/stale, retry/error, timeout continuation, restart와 concurrency를 확인한다. 실제 Workflow child 호출부가 추가되는 경우에는 그 호출부의 start acknowledgement 경계도 확인하며, SDK의 parent-close/cancellation semantics 자체를 source/options equality test로 재검증하지 않는다.
 - `openspec validate remote-profile-materialization-temporal --type change --strict --no-interactive`를 통과시키고, 전체 declared scope 완료 후 canonical spec sync와 archive 판단을 PROD-808 owner가 수행한다.
 
 - [x] 3.1 영향받은 Fedify/API/core/Worker 행동 테스트를 추가·실행해 두 capability의 scenarios와 기존 회귀 경계를 검증한다.
@@ -99,7 +99,7 @@
 - Fedify remote actor materialization integration: 55/55 passed against the isolated PostgreSQL and Temporal runtime.
 - API GraphQL profile integration: 68/68 passed against the isolated PostgreSQL and Temporal runtime.
 - Worker Remote Profile Workflow and Activity integration: 6/6 passed with Temporal's local test server, including retry and non-retryable rejection paths.
-- Core Temporal caller tests: 3/3 passed, covering sync Profile ID results, async durable start acknowledgement and stable identity. The deadline check verifies that the adapter invokes a deadline-bound wait.
+- Core Temporal caller tests: 3/3 passed, covering sync Profile ID results, async durable start acknowledgement and stable identity. The deadline check verifies that the shared Core client wrapper invokes a deadline-bound wait.
 - Changed Core call sites were covered by the consumer package typechecks and the focused Core tests. Core has no dedicated `tsconfig` or typecheck script; a standalone invocation follows the root configuration and is not a scoped Core check. `pnpm --filter @kosmo/fedify exec tsc --noEmit --pretty false`, `pnpm --filter @kosmo/api exec tsc --noEmit --pretty false`, `pnpm --filter @kosmo/worker build`, changed-file ESLint, changed-file Prettier and `git diff --check` passed.
 - `pnpm exec openspec validate remote-profile-materialization-temporal --type change --strict --no-interactive` passed. Parent-close and cancellation behavior remain delegated to Temporal SDK semantics as declared above.
 - Native Temporal execution evidence for caller-timeout continuation, Worker restart recovery and parent-close/cancellation lifecycle is not included in this change; those boundaries remain delegated to Temporal SDK semantics as declared above.

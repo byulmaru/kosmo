@@ -66,7 +66,7 @@ Temporal Workflow에는 Fedify `Context`, hydrated actor 또는 DB row를 전달
 - [Activity retry 중 외부 fetch 재실행] 기존 transaction의 actor URI·handle uniqueness와 `lastFetchedAt` ordering으로 중복 저장과 오래된 projection 덮어쓰기를 막는다.
 - [동기 caller timeout 뒤 늦은 완료] caller deadline은 대기만 끝내며 Workflow는 계속 실행한다. 이후 요청은 같은 stable ID 또는 DB fast path로 결과를 관찰한다.
 - [alias domain이 같은 canonical actor를 가리킴] 신규 요청과 stale refresh 모두 `actorUri`와 origin 선택 identity 단위로 Workflow ID를 안정화하고, 최종 actor URI uniqueness와 canonical instance 저장 정책은 기존 materializer에 맡긴다.
-- [async child lifetime] child start acknowledgement를 기다리고 async caller가 child result를 기다리지 않는 adapter 경계만 검증한다. parent close와 cancellation 이후 child가 유지되는 동작은 Temporal SDK 책임으로 둔다.
+- [async child lifetime] 실제 Workflow child 호출부가 추가되는 경우에만 child start acknowledgement를 기다리고 async caller가 child result를 기다리지 않는 경계를 검증한다. parent close와 cancellation 이후 child가 유지되는 동작은 Temporal SDK 책임으로 둔다.
 - [동일 active child ID의 재시작] ChildWorkflowOptions의 conflict policy 부재를 숨기지 않고 start conflict를 기존 오류 의미로 전달하며, 범용 join wrapper를 추가하지 않는다.
 
 ## Migration Plan
