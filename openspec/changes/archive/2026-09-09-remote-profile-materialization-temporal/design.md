@@ -20,8 +20,8 @@ context와 기존 lookup, inbound Update의 검증된 actor/no-network projectio
   `UNRESPONSIVE`)는 cached Profile ID를 즉시 반환하며 missing은 기존 materialization Activity 결과를 기다리도록 한다.
 - stale는 별도 refresh child를 start acknowledgement까지 시작한 뒤 cached Profile ID를 반환하게 하고, child가
   기존 materialization Activity를 실제 fetch·projection·transaction 경로로 재사용하도록 한다.
-- 동기 caller는 public Workflow 결과를 기다리고 비동기 caller는 모든 분기에서 public Workflow start acknowledgement만
-  받도록 하며, caller mode를 Workflow input이나 branch에 넣지 않는다.
+- `mode: 'execute'` caller는 public Workflow 결과를 기다리고 `mode: 'start'` caller는 모든 분기에서 public Workflow의
+  native start acknowledgement만 받도록 하며, caller mode를 Workflow input이나 branch에 넣지 않는다.
 - caller가 materialization을 위해 DB row·actor metadata·TTL을 직접 pre-read하거나 public Workflow start failure 뒤
   DB fallback을 만들지 않도록 한다. qualified-handle discovery와 materialization 이후 visibility 조회는 기존 검색
   경계를 유지한다.
@@ -39,10 +39,10 @@ context와 기존 lookup, inbound Update의 검증된 actor/no-network projectio
 
 ### Current Constraints
 
-- 검색·발견 경계는 qualified handle을 canonical `actorUri`로 해석한다. materialization caller는 canonical
-  `actorUri`와 선택적인 `profileId`를 public Workflow에 전달하고, materialization을 결정하기 위한 stored state와
-  TTL은 caller에서 직접 판단하지 않는다. materialization 성공 뒤 connection·staged visibility 조회는 기존 검색
-  경계가 수행한다.
+- 검색·발견 경계는 qualified handle을 canonical `actorUri`로 해석한다. materialization caller는 Profile row를 다시
+  읽는 domain wrapper 없이 canonical `actorUri`와 선택적인 acting `profileId`를 args로 공용
+  `runWorkflow(remoteProfileMaterializationWorkflow, ...)`에 전달하고 반환된 Profile ID를 사용한다. materialization
+  성공 뒤 connection·staged visibility 조회는 기존 검색 경계가 수행한다.
 - `packages/core/temporal/client.ts`의 `WorkflowDefinition<T>` plain interface는 SDK Workflow 함수 또는 이름과
   `workflowIdFromArgs: (...args: Parameters<T>) => string` callback을 한 객체로 묶는다. Workflow caller는 Workflow
   종류와 무관한 공용 `runWorkflow(definition, { args, mode, ...native Workflow options })`에 이 객체와 native 정책을
@@ -70,10 +70,10 @@ context와 기존 lookup, inbound Update의 검증된 actor/no-network projectio
 
 ### Recommended Approach
 
-1. 검색·발견 caller가 qualified handle을 canonical `actorUri`로 해석한 뒤 `remoteProfileMaterializationWorkflow`
-   정의 객체와 `[input]` args를 공용 `runWorkflow`에 전달한다. caller는 stored state나 TTL을 pre-read해 Workflow
-   분기를 결정하지 않는다. `mode: 'execute'`는 Coordinator 결과를 기다리고 `mode: 'start'`는 모든 분기에서 public
-   Workflow start acknowledgement 뒤 반환한다.
+1. 검색·발견 caller가 qualified handle을 canonical `actorUri`로 해석한 뒤 `remoteProfileMaterializationWorkflow` 정의
+   객체와 `[input]` args를 공용 `runWorkflow`에 직접 전달한다. caller는 Profile row를 다시 읽지 않고, `mode: 'execute'`의
+   native Workflow 결과(Profile ID)를 사용한다. `mode: 'start'`는 generic caller가 native start acknowledgement를
+   선택할 때만 사용한다.
 2. `remoteProfileMaterializationWorkflow`는 기존 `actorUri`·`profileId` input-to-ID 규칙을 유지한다. Workflow
    input에는 caller mode를 넣지 않으며, public Workflow의 existing ID와 native conflict/reuse/error 의미를 보존한다.
 3. Coordinator가 state Activity를 한 번 호출해 missing·갱신 불필요·stale DTO를 받는다. 갱신 불필요 상태이면 외부

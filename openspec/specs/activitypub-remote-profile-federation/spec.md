@@ -28,9 +28,9 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 
 #### Scenario: Materialize remote actor from canonical actor URI
 
-- **WHEN** federation 내부 service가 검색·발견 경계에서 확보한 canonical `actorUri`로 materialization을 요청하고 caller가 동기 또는 비동기 결과 모드를 선택한다
+- **WHEN** 검색·발견 경계에서 확보한 canonical `actorUri`로 materialization을 요청하고 caller가 공용 `runWorkflow`의 native `execute` 또는 `start` mode를 선택한다
 - **THEN** Temporal Workflow와 Activity wire input은 canonical `actorUri`와 선택적인 `profileId`만 가진다
-- **AND** materialization을 결정하는 `findOrMaterialize` 경계는 stored Profile, actor metadata와 TTL을 직접 조회·판단하지 않고 하나의 public materialization Workflow를 dispatch한다
+- **AND** materialization caller는 stored Profile, actor metadata와 TTL을 직접 조회·판단하거나 Profile row를 다시 읽는 wrapper 없이 canonical `actorUri`와 선택적인 acting `profileId`를 args로 공용 `runWorkflow(remoteProfileMaterializationWorkflow, ...)`에 전달하고, native conflict/reuse policy를 caller에서 정하며, `execute`의 Workflow 결과(Profile ID) 또는 `start`의 native start acknowledgement를 사용한다
 - **AND** Workflow는 Activity에서 `{ profileId, needsRefresh } | null` 최소 JSON-safe stored-state DTO만 받는다. `null`은 missing, `needsRefresh: false`는 갱신이 불필요하거나 허용되지 않는 상태(fresh 또는 `UNRESPONSIVE`), `needsRefresh: true`는 갱신 가능한 stale을 나타낸다. DTO의 `profileId`는 조회 대상인 cached Remote Profile ID이고, input의 선택적인 `profileId`는 origin 선택용 행동 Profile ID다
 - **AND** 전달된 `actorUri`에 저장된 remote Profile 또는 actor metadata가 없어도 새 remote `Profile`을 materialize할 수 있다
 - **AND** `profileId`가 없으면 configured Local Instance의 canonical origin을 사용하고, 있으면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용한다
@@ -45,8 +45,8 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 - **AND** `needsRefresh: false` 분기의 Workflow는 외부 lookup이나 refresh child 없이 cached Profile identity를 반환한다
 - **AND** stale 분기의 Workflow는 state DTO의 `profileId`를 cached target identity로 반환하는 데만 사용하고, refresh child에는 Workflow가 원래 받은 input(`actorUri`와 선택적인 `profileId`)을 그대로 전달한다. child는 별도 refresh ID prefix에서 기존 materialization Activity를 실행하도록 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`으로 시작한 뒤 child start acknowledgement를 받고 cached Profile identity를 반환한다
 - **AND** 이미 실행 중인 같은 refresh child는 정상 coalescing으로 처리하고, 그 밖의 child start failure는 관측한 뒤 cached Profile identity를 반환한다
-- **AND** 동기 caller는 missing 분기의 materialization 완료 또는 갱신 불필요/stale 분기의 Profile identity를 받을 때까지 기다리고, 비동기 caller는 모든 분기에서 public Workflow start acknowledgement만 받은 뒤 반환한다
-- **AND** 동기·비동기 caller는 같은 Workflow 종류와 실행 경로를 사용한다
+- **AND** `mode: 'execute'` caller는 missing 분기의 materialization 완료 또는 갱신 불필요/stale 분기의 Profile identity를 받을 때까지 기다리고, `mode: 'start'` caller는 모든 분기에서 public Workflow의 native start acknowledgement만 받은 뒤 반환한다
+- **AND** 두 mode의 caller는 같은 Workflow 종류와 실행 경로를 사용한다
 
 #### Scenario: Keep a stale refresh child after coordinator closure
 

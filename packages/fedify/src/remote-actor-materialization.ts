@@ -25,19 +25,12 @@ import {
 } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { runWorkflow } from '@kosmo/core/temporal/client';
-import { remoteProfileMaterializationWorkflow } from '@kosmo/core/temporal/remote-profile';
 import { normalizeHandle } from '@kosmo/core/utils';
 import {
   profileBioSchema,
   profileDisplayNameSchema,
   profileHandleSchema,
 } from '@kosmo/core/validation';
-import {
-  ApplicationFailure,
-  WorkflowIdConflictPolicy,
-  WorkflowIdReusePolicy,
-} from '@temporalio/client';
 import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import type { Context } from '@fedify/fedify';
@@ -57,21 +50,6 @@ export type RemoteActorMaterializationOptions = {
   now?: Temporal.Instant;
   reactivateUnresponsive?: boolean;
 };
-
-type FindOrMaterializeRemoteActorOptions = {
-  /** Origin evidence used by the Temporal caller. */
-  profileId?: string;
-  actorUri: URL | string;
-  mode?: 'sync' | 'async';
-};
-
-export type RemoteProfileMaterializationAcknowledgement = {
-  readonly kind: 'started';
-};
-
-export type RemoteProfileMaterializationCallerResult =
-  | typeof Profiles.$inferSelect
-  | RemoteProfileMaterializationAcknowledgement;
 
 type ActorProjection = {
   avatar: RemoteProfileMediaCandidate | null;
@@ -416,91 +394,6 @@ export const findOrMaterializeRemoteProfileActorByUri = async ({
 
   return requireUsableStoredRemoteActor(materialized);
 };
-
-const findApplicationFailure = (error: unknown): ApplicationFailure | undefined => {
-  if (error instanceof ApplicationFailure) {
-    return error;
-  }
-
-  if (error instanceof Error && error.cause) {
-    return findApplicationFailure(error.cause);
-  }
-
-  return undefined;
-};
-
-const rehydrateRemoteMaterializationError = (error: unknown): unknown => {
-  const failure = findApplicationFailure(error);
-  if (!failure) {
-    return error;
-  }
-
-  switch (failure.type) {
-    case 'RemoteActorMaterializationError':
-      return new RemoteActorMaterializationError(failure.message);
-    case 'ConflictError':
-      return new ConflictError({ message: failure.message });
-    case 'NotFoundError':
-      return new NotFoundError(failure.message);
-    default:
-      return error;
-  }
-};
-
-export function findOrMaterializeRemoteProfileActor(
-  options: FindOrMaterializeRemoteActorOptions & { mode?: 'sync' },
-): Promise<typeof Profiles.$inferSelect>;
-export function findOrMaterializeRemoteProfileActor(
-  options: FindOrMaterializeRemoteActorOptions & { mode: 'async' },
-): Promise<RemoteProfileMaterializationAcknowledgement>;
-export function findOrMaterializeRemoteProfileActor(
-  options: FindOrMaterializeRemoteActorOptions,
-): Promise<RemoteProfileMaterializationCallerResult>;
-export async function findOrMaterializeRemoteProfileActor({
-  actorUri,
-  mode = 'sync',
-  profileId,
-}: FindOrMaterializeRemoteActorOptions): Promise<RemoteProfileMaterializationCallerResult> {
-  try {
-    const input = {
-      actorUri: actorUri.toString(),
-      ...(profileId ? { profileId } : {}),
-    } as const;
-
-    const result = await runWorkflow(remoteProfileMaterializationWorkflow, {
-      args: [input],
-      mode: mode === 'async' ? 'start' : 'execute',
-      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-      workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
-    });
-
-    if (typeof result !== 'string') {
-      return { kind: 'started' };
-    }
-
-    const profile = await db
-      .select(getColumns(Profiles))
-      .from(Profiles)
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(
-        and(
-          eq(Profiles.id, result),
-          eq(Profiles.state, ProfileState.ACTIVE),
-          ne(Instances.state, InstanceState.SUSPENDED),
-        ),
-      )
-      .limit(1)
-      .then(first);
-
-    if (!profile) {
-      throw new NotFoundError('Profile not found');
-    }
-
-    return profile;
-  } catch (error) {
-    throw rehydrateRemoteMaterializationError(error);
-  }
-}
 
 export const materializeRemoteProfileActor = async (options: RemoteActorMaterializationOptions) => {
   const { context, now = getNow(), reactivateUnresponsive = false } = options;

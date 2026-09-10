@@ -3,13 +3,16 @@ import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { remoteProfileMaterializationWorkflow } from '@kosmo/core/temporal/remote-profile';
 import { profileHandleSchema } from '@kosmo/core/validation';
-import {
-  federation as remoteFederation,
-  findOrMaterializeRemoteProfileActor,
-  RemoteActorMaterializationError,
-} from '@kosmo/fedify';
+import { federation as remoteFederation, RemoteActorMaterializationError } from '@kosmo/fedify';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
+import {
+  ApplicationFailure,
+  WorkflowIdConflictPolicy,
+  WorkflowIdReusePolicy,
+} from '@temporalio/client';
 import { and, asc, desc, eq, getColumns, gt, lt, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { visibleProfileWhere } from '@/profile/visibility';
@@ -37,11 +40,6 @@ const isExplicitRemoteHandle = (
   parsed?.kind === 'remote' &&
   profileHandleSchema.safeParse(parsed.handle).success &&
   parsed.handle === parsed.handle.trim();
-
-const isExpectedRemoteMaterializationError = (error: unknown) =>
-  error instanceof RemoteActorMaterializationError ||
-  error instanceof ConflictError ||
-  error instanceof NotFoundError;
 
 builder.queryField('profileByHandle', (t) =>
   t.field({
@@ -205,15 +203,40 @@ builder.queryField('searchProfiles', (t) =>
             }
 
             if (actorUri) {
-              const profile = await findOrMaterializeRemoteProfileActor({
-                actorUri,
-                mode: 'sync',
-                profileId: ctx.session.profile?.id,
+              materializedProfileId = await runWorkflow(remoteProfileMaterializationWorkflow, {
+                args: [
+                  {
+                    actorUri,
+                    ...(ctx.session.profile?.id ? { profileId: ctx.session.profile.id } : {}),
+                  },
+                ],
+                mode: 'execute',
+                workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+                workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
               });
-              materializedProfileId = profile.id;
             }
           } catch (error) {
-            if (!isExpectedRemoteMaterializationError(error)) {
+            let materializationError: unknown = error;
+            while (
+              materializationError instanceof Error &&
+              !(materializationError instanceof ApplicationFailure) &&
+              !(materializationError instanceof RemoteActorMaterializationError) &&
+              !(materializationError instanceof ConflictError) &&
+              !(materializationError instanceof NotFoundError)
+            ) {
+              materializationError = materializationError.cause;
+            }
+
+            const isExpectedMaterializationError =
+              materializationError instanceof RemoteActorMaterializationError ||
+              materializationError instanceof ConflictError ||
+              materializationError instanceof NotFoundError ||
+              (materializationError instanceof ApplicationFailure &&
+                (materializationError.type === 'RemoteActorMaterializationError' ||
+                  materializationError.type === 'ConflictError' ||
+                  materializationError.type === 'NotFoundError'));
+
+            if (!isExpectedMaterializationError) {
               remoteProfileSearchErrorReporter.capture(error);
             }
 

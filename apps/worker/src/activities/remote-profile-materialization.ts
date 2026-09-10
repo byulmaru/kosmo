@@ -53,25 +53,10 @@ export const materializeRemoteProfileActorActivity = async (
   const now = Temporal.Now.instant();
 
   try {
-    const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
+    const stored = await findStoredRemoteProfileActorActivity(input);
 
-    if (stored) {
-      if (stored.profile.state !== ProfileState.ACTIVE) {
-        throw new NotFoundError('Profile not found');
-      }
-
-      if (stored.instance.state === InstanceState.SUSPENDED) {
-        throw new NotFoundError('Profile not found');
-      }
-
-      if (
-        stored.instance.state === InstanceState.UNRESPONSIVE ||
-        (stored.actor.lastFetchedAt !== null &&
-          stored.actor.lastFetchedAt.add(remoteActorRefreshTtl).epochNanoseconds >
-            now.epochNanoseconds)
-      ) {
-        return stored.profile.id;
-      }
+    if (stored && !stored.needsRefresh) {
+      return stored.profileId;
     }
 
     let origin: string;

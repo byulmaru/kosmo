@@ -14,13 +14,11 @@ import {
   ProfileMediaKind,
   ProfileState,
 } from '@kosmo/core/enums';
-import { ApplicationFailure } from '@temporalio/client';
-import { and, count, eq, ne } from 'drizzle-orm';
+import { count, eq, ne } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type * as CoreTemporal from '@kosmo/core/temporal/client';
 import type * as Materialization from './remote-actor-materialization';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -39,8 +37,6 @@ let pg: typeof CoreDb.pg;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
-let temporalClient: typeof CoreTemporal.temporalClient;
-let findOrMaterializeRemoteProfileActor: typeof Materialization.findOrMaterializeRemoteProfileActor;
 let findOrMaterializeRemoteProfileActorByUri: typeof Materialization.findOrMaterializeRemoteProfileActorByUri;
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
 let RemoteActorMaterializationError: typeof Materialization.RemoteActorMaterializationError;
@@ -55,9 +51,7 @@ describe('remote actor materialization', () => {
     ({ ActivityPubActors, db, first, firstOrThrow, Instances, Media, pg, ProfileMedia, Profiles } =
       await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
-    ({ temporalClient } = await import('@kosmo/core/temporal/client'));
     ({
-      findOrMaterializeRemoteProfileActor,
       findOrMaterializeRemoteProfileActorByUri,
       materializeRemoteProfileActor,
       RemoteActorMaterializationError,
@@ -582,30 +576,6 @@ describe('remote actor materialization', () => {
     assert.equal(lookupObject.mock.calls[0]?.arguments[0], remoteActorUri);
   });
 
-  test('finds a stored actor by its canonical URI', async () => {
-    const { context, lookupObject } = createLookupContext(async () => createActor());
-    const now = Temporal.Now.instant().subtract({ hours: 1 });
-
-    const materialized = await materializeRemoteProfileActor({
-      context,
-      actorUri: remoteActorUri,
-      now,
-    });
-    const canonical = await findOrMaterializeRemoteProfileActor({
-      actorUri: remoteActorUri,
-    });
-
-    const instance = await db
-      .select()
-      .from(Instances)
-      .where(eq(Instances.id, materialized.instanceId!))
-      .limit(1)
-      .then(firstOrThrow);
-    assert.equal(instance.domain, remoteDomain);
-    assert.equal(canonical.id, materialized.id);
-    assert.equal(lookupObject.mock.calls.length, 1);
-  });
-
   test('moves an existing actor to the canonical actor domain', async () => {
     const aliasInstance = await createRemoteInstance({ domain: remoteAliasDomain });
     const aliasProfile = await createProfile({ handle: 'alice', instanceId: aliasInstance.id });
@@ -978,26 +948,6 @@ describe('remote actor materialization', () => {
     });
   }
 
-  for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
-    test(`returns NotFound for a stored ${state} profile without a remote lookup`, async () => {
-      const stored = await createStoredRemoteActor({ profileState: state });
-      await assert.rejects(
-        findOrMaterializeRemoteProfileActor({
-          actorUri: remoteActorUri,
-        }),
-        /Profile not found/,
-      );
-
-      const profile = await db
-        .select()
-        .from(Profiles)
-        .where(eq(Profiles.id, stored.profile.id))
-        .limit(1)
-        .then(firstOrThrow);
-      assert.equal(profile.state, state);
-    });
-  }
-
   test('rejects actor URI collisions with local profiles', async () => {
     const profile = await createProfile({ handle: 'local', instanceId: localInstanceId });
     const actor = createActor();
@@ -1055,205 +1005,6 @@ describe('remote actor materialization', () => {
     await assert.rejects(
       materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
       /handle collides with another actor/,
-    );
-  });
-
-  test('returns a stale profile from the materialization Workflow', async () => {
-    const stored = await createStoredRemoteActor({
-      lastFetchedAt: Temporal.Instant.from('2025-01-01T00:00:00Z'),
-    });
-    const execute = mock.method(
-      temporalClient.workflow,
-      'execute',
-      async () => stored.profile.id as never,
-    );
-
-    try {
-      const profile = await findOrMaterializeRemoteProfileActor({
-        actorUri: remoteActorUri,
-        mode: 'sync',
-      });
-      assert.equal(profile.id, stored.profile.id);
-      assert.equal(execute.mock.calls.length, 1);
-      const options = execute.mock.calls[0]?.arguments[1];
-      assert.ok(options);
-      assert.deepEqual(options.args, [{ actorUri: stored.actor.uri }]);
-    } finally {
-      execute.mock.restore();
-    }
-  });
-
-  test('returns a fresh profile from the materialization Workflow', async () => {
-    const stored = await createStoredRemoteActor({
-      lastFetchedAt: Temporal.Now.instant().subtract({ hours: 1 }),
-    });
-    const execute = mock.method(
-      temporalClient.workflow,
-      'execute',
-      async () => stored.profile.id as never,
-    );
-
-    try {
-      const profile = await findOrMaterializeRemoteProfileActor({
-        actorUri: remoteActorUri,
-      });
-
-      assert.equal(profile.id, stored.profile.id);
-      assert.equal(execute.mock.calls.length, 1);
-    } finally {
-      execute.mock.restore();
-    }
-  });
-
-  test('returns stale profiles without remote lookup for unresponsive instances', async () => {
-    const stored = await createStoredRemoteActor({
-      instanceState: InstanceState.UNRESPONSIVE,
-      lastFetchedAt: Temporal.Instant.from('2025-01-01T00:00:00Z'),
-    });
-    const execute = mock.method(
-      temporalClient.workflow,
-      'execute',
-      async () => stored.profile.id as never,
-    );
-
-    try {
-      const profile = await findOrMaterializeRemoteProfileActor({
-        actorUri: remoteActorUri,
-      });
-
-      assert.equal(profile.id, stored.profile.id);
-      assert.equal(execute.mock.calls.length, 1);
-    } finally {
-      execute.mock.restore();
-    }
-  });
-
-  test('async caller는 stored Profile에서도 Workflow start acknowledgement만 반환한다', async () => {
-    await createStoredRemoteActor({
-      lastFetchedAt: Temporal.Now.instant().subtract({ hours: 1 }),
-    });
-    const start = mock.method(temporalClient.workflow, 'start', async () => {
-      return {
-        result: async () => {
-          throw new Error('async mode must not wait for the Workflow result');
-        },
-      } as never;
-    });
-
-    try {
-      const result = await findOrMaterializeRemoteProfileActor({
-        actorUri: remoteActorUri,
-        mode: 'async',
-      });
-
-      assert.deepEqual(result, { kind: 'started' });
-      assert.equal(start.mock.calls.length, 1);
-    } finally {
-      start.mock.restore();
-    }
-  });
-
-  test('waits for a missing remote Profile ID and reloads the stored row', async () => {
-    const instance = await createRemoteInstance();
-    const profile = await createProfile({ handle: 'alice', instanceId: instance.id });
-    const execute = mock.method(
-      temporalClient.workflow,
-      'execute',
-      async () => profile.id as never,
-    );
-
-    try {
-      const result = await findOrMaterializeRemoteProfileActor({
-        actorUri: remoteActorUri,
-        mode: 'sync',
-        profileId: '00000000-0000-8000-8000-000000000002',
-      });
-
-      assert.equal(result.id, profile.id);
-      assert.equal(execute.mock.calls.length, 1);
-      const options = execute.mock.calls[0]?.arguments[1];
-      assert.ok(options);
-      assert.deepEqual(options.args, [
-        {
-          actorUri: remoteActorUri.href,
-          profileId: '00000000-0000-8000-8000-000000000002',
-        },
-      ]);
-    } finally {
-      execute.mock.restore();
-    }
-  });
-
-  for (const [label, invalidate] of [
-    [
-      'inactive Profile',
-      async (profileId: string, instanceId: string) => {
-        await db
-          .update(Profiles)
-          .set({ state: ProfileState.DISABLED })
-          .where(and(eq(Profiles.id, profileId), eq(Profiles.instanceId, instanceId)));
-      },
-    ],
-    [
-      'suspended Instance',
-      async (_profileId: string, instanceId: string) => {
-        await db
-          .update(Instances)
-          .set({ state: InstanceState.SUSPENDED })
-          .where(eq(Instances.id, instanceId));
-      },
-    ],
-  ] as const) {
-    test(`does not return a ${label} after sync materialization`, async () => {
-      const instance = await createRemoteInstance();
-      const profile = await createProfile({ handle: 'bob', instanceId: instance.id });
-      const execute = mock.method(temporalClient.workflow, 'execute', async () => {
-        await invalidate(profile.id, instance.id);
-        return profile.id as never;
-      });
-
-      try {
-        await assert.rejects(
-          findOrMaterializeRemoteProfileActor({
-            actorUri: remoteActorUri,
-            mode: 'sync',
-          }),
-          /Profile not found/,
-        );
-      } finally {
-        execute.mock.restore();
-      }
-    });
-  }
-
-  test('rehydrates non-retryable materialization errors from the Workflow', async () => {
-    const execute = mock.method(temporalClient.workflow, 'execute', async () => {
-      throw ApplicationFailure.nonRetryable(
-        'Remote lookup did not return an actor.',
-        'RemoteActorMaterializationError',
-      );
-    });
-
-    try {
-      await assert.rejects(
-        findOrMaterializeRemoteProfileActor({ actorUri: remoteActorUri, mode: 'sync' }),
-        (error: unknown) =>
-          error instanceof RemoteActorMaterializationError &&
-          error.message === 'Remote lookup did not return an actor.',
-      );
-      assert.equal(execute.mock.calls.length, 1);
-    } finally {
-      execute.mock.restore();
-    }
-  });
-
-  test('rejects stored profiles from suspended instances', async () => {
-    await createStoredRemoteActor({ instanceState: InstanceState.SUSPENDED });
-    await assert.rejects(
-      findOrMaterializeRemoteProfileActor({
-        actorUri: remoteActorUri,
-      }),
-      /Profile not found/,
     );
   });
 

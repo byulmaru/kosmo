@@ -8,10 +8,10 @@
 
 ## What Changes
 
-- 검색·발견 경계가 qualified handle을 canonical `actorUri`로 해석하고, materialization caller는 canonical
-  `actorUri`와 선택적인 `profileId`를 가진 하나의 public `remoteProfileMaterializationWorkflow`를 dispatch한다.
-  caller는 materialization을 결정하기 위해 stored row, actor metadata와 TTL을 직접 pre-read하지 않으며, 기존
-  Workflow ID 규칙과 `profileId`에 따른 origin 선택을 유지한다.
+- 검색·발견 경계가 qualified handle을 canonical `actorUri`로 해석하고, materialization caller는 domain wrapper나 Profile
+  row 재조회 없이 canonical `actorUri`와 선택적인 acting `profileId`를 args로 공용
+  `runWorkflow(remoteProfileMaterializationWorkflow, ...)`에 전달해 반환된 Profile ID를 사용한다. 기존 Workflow ID
+  규칙과 `profileId`에 따른 origin 선택은 유지한다.
 - Coordinator Workflow가 `{ profileId, needsRefresh } | null` 형태의 최소 JSON-safe stored-state DTO를 반환하는
   state Activity를 호출해 missing·갱신 불필요·stale를 분기한다. `null`은 missing, `needsRefresh: false`는 갱신이
   불필요하거나 허용되지 않는 상태(fresh 또는 `UNRESPONSIVE`), `needsRefresh: true`는 갱신 가능한 stale을 나타내며
@@ -24,10 +24,10 @@
   반환한다. refresh child는 기존 materialization Activity를 실제 fetch 경로로 재사용하고 별도 refresh ID prefix,
   `parentClosePolicy: ABANDON`, `cancellationType: ABANDON`을 사용한다. 이미 실행 중인 같은 child는 정상 coalescing으로
   처리하고, 그 밖의 child start·execution failure는 관측하면서 cached identity를 유지한다.
-- 동기 caller는 public Workflow 결과를 기다려 missing에서는 materialization 완료를, fresh/stale에서는 Profile
-  identity를 받는다. 비동기 caller는 fresh/missing/stale 모든 분기에서 public Workflow start acknowledgement만
-  받은 뒤 반환한다. public Workflow 자체의 start failure에서는 caller가 DB fallback을 만들지 않고 기존 오류
-  경계로 전달한다.
+- `mode: 'execute'` caller는 public Workflow 결과를 기다려 missing에서는 materialization 완료를, fresh/stale에서는
+  Profile identity를 받는다. `mode: 'start'` caller는 fresh/missing/stale 모든 분기에서 public Workflow의 native
+  start acknowledgement만 받은 뒤 반환한다. public Workflow 자체의 start failure에서는 caller가 DB fallback을
+  만들지 않고 기존 오류 경계로 전달한다.
 - Worker의 Workflow-safe generic `runChildWorkflow<T>`는 `WorkflowDefinition<T>`와 native child lifecycle을
   재사용하며, child ID·args·result/handle·native options/error/queue inheritance를 보존한다. helper는 caller의
   parent lifetime 정책을 자동으로 정하지 않는다.
@@ -53,7 +53,7 @@
 ### Modified Capabilities
 
 - `activitypub-remote-profile-federation`: public coordinator Workflow의 stored-state routing, 신규 materialization과
-  stale refresh의 실행 경계, caller sync/async 계약과 child lifetime을 구체화한다.
+  stale refresh의 실행 경계, caller의 native result/start mode와 child lifetime을 구체화한다.
 - `profile`: 명시적 qualified remote search가 하나의 public Workflow를 dispatch하고, 갱신 불필요/missing/stale 결과를
   기존 connection·staged visibility 경계에 연결하는 동작을 구체화한다.
 
