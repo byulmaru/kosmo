@@ -1187,12 +1187,15 @@ export const AuthorPostDeletion: Story = {
 
     const cancel = within(dialog).getByRole('button', { name: '취소' });
     const close = within(dialog).getByRole('button', { name: '닫기' });
+    const confirm = within(dialog).getByRole('button', { name: '삭제' });
     await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
     expect(canvasElement.ownerDocument.activeElement).toBe(close);
     await userEvent.keyboard('{Tab}');
     expect(canvasElement.ownerDocument.activeElement).toBe(cancel);
 
-    await userEvent.click(cancel);
+    fireEvent.click(cancel);
+    fireEvent.click(confirm);
+    expect(deletionMutationRequest).not.toHaveBeenCalled();
     await waitFor(() =>
       expect(screen.queryByRole('alertdialog', { name: '게시글을 삭제할까요?' })).toBeNull(),
     );

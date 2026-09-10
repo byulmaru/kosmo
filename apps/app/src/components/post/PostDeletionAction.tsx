@@ -113,7 +113,7 @@ export function PostDeletionAction({
   );
 
   const confirmDelete = useCallback(() => {
-    if (inFlight.current || requesting || isDeleting || !eligible) {
+    if (inFlight.current || requesting || isDeleting || !confirmationOpen || !eligible) {
       return;
     }
 
@@ -152,7 +152,17 @@ export function PostDeletionAction({
       onError: fail,
       variables: { id: data.id },
     });
-  }, [commitDelete, data.id, eligible, environment, fail, isDeleting, onDeleted, requesting]);
+  }, [
+    commitDelete,
+    confirmationOpen,
+    data.id,
+    eligible,
+    environment,
+    fail,
+    isDeleting,
+    onDeleted,
+    requesting,
+  ]);
 
   if (!eligible && items.length === 0) {
     return null;
