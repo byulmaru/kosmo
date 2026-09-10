@@ -299,14 +299,12 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   Light·Dark 배치 표본은 source 조합 evidence이며 Production Screens consumer나 runtime 상호작용 완료를
   뜻하지 않는다. 이 조합은 visual/layout source 계약이며 runtime semantic surface를 `Tone=Danger`에서 자동
   파생한다는 뜻이 아니다.
-- 확인 dialog는 Web에서 이름이 있는 `alertdialog` 하나, Android·iOS에서 modal 접근성 의미를 제공한다. Web의
-  `dialog`와 `alertdialog`를 중첩하지 않는다. canonical `ModalSheet` runtime이 단일 role 선택을 지원하기 전에는
-  현재 Post 삭제 consumer의 전용 semantic surface를 유지한다. 이 surface의 현재 `480px` max-width와 legacy
-  card·border token은 canonical `ModalSheet`의 `420px` 및 `backgroundElevated`·`borderDefault` 계약과 아직 다르며,
-  별도 Product/Frontend migration에서 정렬한다. 임시 semantic surface는 별도 visual component source가 아니다.
-  처음 열릴 때 안전한
-  `취소`에 focus를 두고 pending 전에는 Escape, platform back과 backdrop으로 취소할 수 있으며 닫은 뒤 More
-  trigger로 focus를 돌려보낸다.
+- 확인 dialog는 공용 `ModalSheet`와 `ConfirmationContent` 조합을 사용한다. Web에서는 native `<dialog>`가
+  `alertdialog` role과 `aria-modal`을 가진 유일한 modal surface이고, inner React Native surface에는 중복
+  modal semantics를 두지 않는다. Android·iOS에서는 기존 `ModalSheet`의 modal 접근성 의미를 재사용한다.
+  `ModalSheet`의 canonical `420px` semantic shell과 `backgroundElevated`·`borderDefault` token을 사용하며,
+  처음 열릴 때 안전한 `취소`에 focus를 두고 pending 전에는 Escape, platform back과 backdrop으로 취소할 수
+  있으며 닫힘이 완료된 뒤 More trigger로 focus를 돌려보낸다.
 - 사용자가 dialog의 `삭제`를 확인한 경우에만 target Post ID로 기존 GraphQL `deletePost` mutation을 한 번
   실행한다. pending 중에는 두 action과 dismiss 입력을 막고 destructive action에 busy 상태를 노출한다.
 - 서버 성공 payload의 `postId`를 확인한 뒤에만 현재 Relay actor Store에서 해당 Post를 Active content로
@@ -325,6 +323,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `PROD-471`은 Repost 취소 뒤 서버 확정 Source 상태를 같은 actor Store에 정규화하는 cache 갱신을 소유한다.
 - `PROD-598`은 기존 Post 삭제 domain과 GraphQL resolver를 재사용해 More의 작성자 삭제 항목, 확인 dialog,
   Relay cache 동기화와 실패 복구를 소유한다.
+- `PROD-937`은 `PROD-598`의 author deletion behavior를 바꾸지 않고 공용 `ModalSheet`·`ConfirmationContent`
+  presentation migration, Web 단일 `alertdialog`·`aria-modal` surface, canonical `420px` shell과
+  focus·dismiss·pending 회귀 검증을 소유한다.
 - `PROD-809`는 Profile 고정의 최대 수·대상 자격·권한·lifecycle·pagination·persistence/API·ActivityPub과
   교체 mutation·동시성·실패 처리 정책, 실제 Production·runtime 검증을 소유한다.
 - `PROD-425`는 pure Repost Reply의 바깥 contentless Post binding과 disabled 상태를 소유한다.
