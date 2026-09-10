@@ -190,9 +190,6 @@ mockModule(new URL('../content-report/ContentReportContext.tsx', import.meta.url
     tone: 'danger',
   }),
 });
-mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
-  useSession: () => ({ sessionId: null }),
-});
 mockModule(new URL('./FollowButton.tsx', import.meta.url), {
   FollowButton: ({ profile }: { profile: { handle: string } }) =>
     createElement('FollowButton', { identity: profile.handle }),
@@ -254,7 +251,7 @@ mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
   useRelayActorLifecycleKey: () => 'actor-a',
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
-  useSession: () => ({ selectedProfileId: 'profile:viewer' }),
+  useSession: () => ({ selectedProfileId: 'profile:viewer', sessionId: null }),
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({ foregroundPrimary: '#111111' }),
