@@ -3,6 +3,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { db, Instances, Notifications, Posts, ProfileFollows, Profiles } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, ProfileState } from '../enums';
 import { postVisibilityCondition } from '../visibility/post';
+import { isNotificationProfileEligible } from './notification-policy';
 
 const ReplyParents = alias(Posts, 'reply_notification_parent');
 const ReplyAuthors = alias(Profiles, 'reply_notification_author');
@@ -20,6 +21,7 @@ export const createReplyNotification = async (postId: string): Promise<void> => 
       .select({
         id: Posts.id,
         recipientProfileId: ReplyParents.profileId,
+        relatedProfileId: Posts.profileId,
       })
       .from(Posts)
       .innerJoin(ReplyParents, eq(ReplyParents.id, Posts.replyParentId))
@@ -60,6 +62,15 @@ export const createReplyNotification = async (postId: string): Promise<void> => 
       .then((rows) => rows[0]);
 
     if (!source) {
+      return;
+    }
+
+    if (
+      !(await isNotificationProfileEligible(tx, {
+        recipientProfileId: source.recipientProfileId,
+        relatedProfileId: source.relatedProfileId,
+      }))
+    ) {
       return;
     }
 
