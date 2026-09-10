@@ -14,7 +14,7 @@ import { parseArgs } from 'node:util';
 import { z } from 'zod';
 
 type Platform = 'android' | 'ios';
-type Channel = 'staging' | 'production';
+type Channel = string;
 
 const PROJECT = 'kosmo-native';
 
@@ -47,7 +47,10 @@ interface Provenance {
 }
 
 const platformSchema = z.enum(['android', 'ios']);
-const channelSchema = z.enum(['staging', 'production']);
+const channelSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9._-]+$/u)
+  .refine((value) => value !== '.' && value !== '..');
 const exportFileSchema = z.object({
   path: z.string().min(1),
   size: z.number().int().nonnegative(),
@@ -97,13 +100,10 @@ function error(message: string): never {
 const argumentOptions = {
   channel: { type: 'string' },
   keyid: { type: 'string' },
-  operation: { type: 'string' },
   'output-dir': { type: 'string' },
   platform: { type: 'string' },
   'public-base-url': { type: 'string' },
   'runtime-version': { type: 'string' },
-  'source-manifest-id': { type: 'string' },
-  'source-channel': { type: 'string' },
   'source-sha': { type: 'string' },
 } as const;
 
@@ -126,12 +126,12 @@ function args(argv: string[]): Map<string, string> {
 }
 
 function commandArgs(argv: string[]): {
-  command: 'export' | 'verify' | 'promote';
+  command: 'export' | 'verify';
   values: Map<string, string>;
 } {
   const [command, ...rest] = argv;
-  if (command !== 'export' && command !== 'verify' && command !== 'promote') {
-    error('Usage: export-ota.ts <export|verify|promote> [options]');
+  if (command !== 'export' && command !== 'verify') {
+    error('Usage: export-ota.ts <export|verify> [options]');
   }
   return { command, values: args(rest) };
 }
@@ -154,8 +154,8 @@ function platform(values: Map<string, string>): Platform {
 
 function channel(values: Map<string, string>): Channel {
   const value = required(values, 'channel');
-  if (value !== 'staging' && value !== 'production') {
-    error('--channel must be staging or production.');
+  if (!channelSchema.safeParse(value).success) {
+    error('--channel must be a safe path segment.');
   }
   return value;
 }
@@ -530,35 +530,6 @@ async function verifyRemote(
   };
 }
 
-function verifyPreservedEvidence(
-  evidence: NonNullable<Provenance['verification']>,
-  selectedPlatform: Platform,
-  selectedChannel: Channel,
-  runtimeVersion: string,
-  local: ReturnType<typeof inventory>,
-): NonNullable<Provenance['verification']> {
-  if (evidence.channel !== selectedChannel) {
-    error(`provenance.json has no verified ${selectedChannel} evidence.`);
-  }
-  let url: URL;
-  try {
-    url = new URL(evidence.manifestUrl);
-  } catch {
-    error('provenance.json has an invalid verified manifest URL.');
-  }
-  if (url.protocol !== 'https:') {
-    error('provenance.json verified manifest URL must use HTTPS.');
-  }
-  const expectedSuffix = `/releases/${PROJECT}/${selectedPlatform}/${selectedChannel}/${encodeURIComponent(runtimeVersion)}/manifest.json`;
-  if (!url.pathname.endsWith(expectedSuffix) || url.search || url.hash) {
-    error('provenance.json verified manifest URL does not match the requested tuple.');
-  }
-  if (evidence.assetCount !== local.files.length) {
-    error('provenance.json verified asset count does not match the export inventory.');
-  }
-  return evidence;
-}
-
 async function verifyCommand(values: Map<string, string>, appRoot: string): Promise<void> {
   const selectedPlatform = platform(values);
   const selectedChannel = channel(values);
@@ -569,10 +540,6 @@ async function verifyCommand(values: Map<string, string>, appRoot: string): Prom
     error('runtimeVersion does not match provenance.json.');
   }
   const local = verifyLocal(root, provenance, selectedPlatform, keyid);
-  const sourceManifestId = values.get('source-manifest-id')?.trim();
-  if (selectedChannel === 'production' && !sourceManifestId) {
-    error('--source-manifest-id is required for production verification.');
-  }
   const verification = await verifyRemote(
     resolve(appRoot, 'certs/certificate.pem'),
     selectedPlatform,
@@ -582,88 +549,11 @@ async function verifyCommand(values: Map<string, string>, appRoot: string): Prom
     required(values, 'public-base-url'),
     local,
   );
-  if (selectedChannel === 'production' && sourceManifestId === verification.manifestId) {
-    error('Production verification requires a new manifest ID.');
-  }
   writeProvenance(root, { ...provenance, verification });
   writeOutput('runtime_version', provenance.runtimeVersion);
   writeOutput('manifest_id', verification.manifestId);
   writeOutput('manifest_url', verification.manifestUrl);
   console.log(`Verified ${selectedChannel} OTA manifest ${verification.manifestId}.`);
-}
-
-async function promoteCommand(values: Map<string, string>, appRoot: string): Promise<void> {
-  const selectedPlatform = platform(values);
-  const sourceChannel = required(values, 'source-channel');
-  if (sourceChannel !== 'staging' && sourceChannel !== 'production') {
-    error('--source-channel must be staging or production.');
-  }
-  const root = resolve(required(values, 'output-dir'));
-  const keyid = required(values, 'keyid');
-  const provenance = readProvenance(root);
-  const local = verifyLocal(root, provenance, selectedPlatform, keyid);
-  if (
-    !provenance.verification ||
-    provenance.verification.status !== 'verified' ||
-    provenance.verification.channel !== sourceChannel
-  ) {
-    error(`provenance.json has no verified ${sourceChannel} evidence.`);
-  }
-  const operation = values.get('operation');
-  if (operation !== 'promote' && operation !== 'recover') {
-    error('--operation must be promote or recover.');
-  }
-  if (operation === 'promote' && sourceChannel !== 'staging') {
-    error('--source-channel must be staging for promote.');
-  }
-  if (operation === 'recover' && sourceChannel !== 'production') {
-    error('--source-channel must be production for recover.');
-  }
-  const source =
-    operation === 'recover'
-      ? verifyPreservedEvidence(
-          provenance.verification,
-          selectedPlatform,
-          sourceChannel,
-          provenance.runtimeVersion,
-          local,
-        )
-      : await verifyRemote(
-          resolve(appRoot, 'certs/certificate.pem'),
-          selectedPlatform,
-          sourceChannel,
-          keyid,
-          provenance.runtimeVersion,
-          required(values, 'public-base-url'),
-          local,
-        );
-  writeFileSync(
-    resolve(root, 'promotion.json'),
-    `${JSON.stringify(
-      {
-        schemaVersion: 1,
-        operation,
-        project: PROJECT,
-        platform: selectedPlatform,
-        sourceChannel,
-        destinationChannel: 'production',
-        runtimeVersion: provenance.runtimeVersion,
-        sourceSha: provenance.sourceSha,
-        sourceManifestId: source.manifestId,
-        sourceManifestUrl: source.manifestUrl,
-        sourceManifestSha256: source.manifestSha256,
-        sourceFiles: local.files,
-        preparedAt: new Date().toISOString(),
-      },
-      null,
-      2,
-    )}\n`,
-    { encoding: 'utf8', mode: 0o600 },
-  );
-  writeOutput('runtime_version', provenance.runtimeVersion);
-  writeOutput('manifest_id', source.manifestId);
-  writeOutput('manifest_url', source.manifestUrl);
-  console.log(`Prepared ${operation} artifact from verified ${sourceChannel} bytes.`);
 }
 
 function exportCommand(values: Map<string, string>, appRoot: string): void {
@@ -727,8 +617,6 @@ async function main(): Promise<void> {
     exportCommand(values, appRoot);
   } else if (command === 'verify') {
     await verifyCommand(values, appRoot);
-  } else {
-    await promoteCommand(values, appRoot);
   }
 }
 

@@ -10,10 +10,11 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-type Channel = 'staging' | 'production';
+type Channel = string;
+type Platform = 'android' | 'ios';
 type ResponseMode =
   | 'valid'
-  | 'same-manifest-id'
+  | 'runtime-mismatch'
   | 'invalid-signature'
   | 'asset-hash'
   | 'missing-asset';
@@ -23,7 +24,9 @@ const helperPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../scrip
 const tsxLoaderPath = require.resolve('tsx');
 const keyid = 'test-key';
 const runtimeVersion = 'a'.repeat(64);
+const mismatchedRuntimeVersion = 'c'.repeat(64);
 const sourceSha = 'b'.repeat(40);
+const repositoryAppRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 interface ExportFixture {
   artifactDir: string;
@@ -40,7 +43,11 @@ function base64UrlSha256(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('base64url');
 }
 
-function createExportFixture(root: string): ExportFixture {
+function createExportFixture(
+  root: string,
+  channel: Channel = 'dev',
+  platform: Platform = 'android',
+): ExportFixture {
   mkdirSync(join(root, 'assets'), { recursive: true });
   const bundle = Buffer.from('bundle bytes for OTA behavior verification\n');
   const assets = [
@@ -55,7 +62,7 @@ function createExportFixture(root: string): ExportFixture {
     version: 0,
     bundler: 'metro',
     fileMetadata: {
-      android: {
+      [platform]: {
         bundle: 'bundle.js',
         assets: assets.map(({ path, ext }) => ({ path, ext })),
       },
@@ -75,8 +82,8 @@ function createExportFixture(root: string): ExportFixture {
       {
         schemaVersion: 1,
         project: 'kosmo-native',
-        platform: 'android',
-        channel: 'staging',
+        platform,
+        channel,
         keyid,
         runtimeVersion,
         sourceSha,
@@ -139,18 +146,18 @@ function generateTestCertificate(root: string): { certificatePath: string; keyPa
 
 function responseBody(
   fixture: ExportFixture,
+  platform: Platform,
   channel: Channel,
   origin: string,
   privateKey: string,
   mode: ResponseMode,
 ): Buffer {
-  const prefix = `${origin}/releases/kosmo-native/android/${channel}/${runtimeVersion}`;
+  const manifestRuntimeVersion =
+    mode === 'runtime-mismatch' ? mismatchedRuntimeVersion : runtimeVersion;
+  const prefix = `${origin}/releases/kosmo-native/${platform}/${channel}/${runtimeVersion}`;
   const manifest = {
-    id:
-      mode === 'same-manifest-id'
-        ? 'staging-manifest-1'
-        : `${channel}-manifest-${channel === 'staging' ? '1' : '2'}`,
-    runtimeVersion,
+    id: `${channel}-manifest-1`,
+    runtimeVersion: manifestRuntimeVersion,
     launchAsset: {
       hash: fixture.bundle.hash,
       url: `${prefix}/assets/${fixture.bundle.hex}`,
@@ -214,16 +221,17 @@ function makeServer(
         return;
       }
       const manifestMatch =
-        /\/releases\/kosmo-native\/android\/(staging|production)\/([a-f0-9]{64})\/manifest\.json$/u.exec(
+        /\/releases\/kosmo-native\/(android|ios)\/([A-Za-z0-9._-]+)\/([a-f0-9]{64})\/manifest\.json$/u.exec(
           requestUrl.pathname,
         );
-      if (!manifestMatch || manifestMatch[2] !== runtimeVersion) {
+      if (!manifestMatch || manifestMatch[3] !== runtimeVersion) {
         response.writeHead(404).end();
         return;
       }
       const body = responseBody(
         fixture,
-        manifestMatch[1] as Channel,
+        manifestMatch[1] as Platform,
+        manifestMatch[2] as Channel,
         `https://${host}`,
         readFileSync(keyPath, 'utf8'),
         mode,
@@ -292,19 +300,18 @@ function verifyArgs(
   channel: Channel,
   artifactDir: string,
   baseUrl: string,
-  sourceManifestId?: string,
+  platform: Platform = 'android',
 ): string[] {
   return [
     'verify',
     '--platform',
-    'android',
+    platform,
     '--channel',
     channel,
     '--keyid',
     keyid,
     '--runtime-version',
     runtimeVersion,
-    ...(sourceManifestId ? ['--source-manifest-id', sourceManifestId] : []),
     '--public-base-url',
     baseUrl,
     '--output-dir',
@@ -312,30 +319,7 @@ function verifyArgs(
   ];
 }
 
-function promoteArgs(
-  operation: 'promote' | 'recover',
-  sourceChannel: Channel,
-  artifactDir: string,
-  baseUrl: string,
-): string[] {
-  return [
-    'promote',
-    '--operation',
-    operation,
-    '--platform',
-    'android',
-    '--source-channel',
-    sourceChannel,
-    '--keyid',
-    keyid,
-    '--public-base-url',
-    baseUrl,
-    '--output-dir',
-    artifactDir,
-  ];
-}
-
-test('verifies OTA manifests and preserves export bytes across promotion and recovery', async () => {
+test('verifies signed OTA manifests for deployment and preview channels', async () => {
   const root = mkdtempSync(join(tmpdir(), 'kosmo-ota-behavior-'));
   const { certificatePath, keyPath } = generateTestCertificate(root);
   const appRoot = join(root, 'app');
@@ -346,101 +330,78 @@ test('verifies OTA manifests and preserves export bytes across promotion and rec
   const port = await listen(server);
   const baseUrl = `https://127.0.0.1:${port}`;
   try {
+    for (const channel of ['dev', 'prod', 'preview-123']) {
+      const channelFixture =
+        channel === 'dev' ? fixture : createExportFixture(join(root, channel), channel);
+      setMode('valid');
+      const verification = await runHelper(
+        appRoot,
+        channelFixture.artifactDir,
+        certificatePath,
+        verifyArgs(channel, channelFixture.artifactDir, baseUrl),
+      );
+      assert.equal(verification.status, 0, verification.stderr);
+      const verifiedProvenance = JSON.parse(
+        readFileSync(join(channelFixture.artifactDir, 'provenance.json'), 'utf8'),
+      ) as {
+        platform: Platform;
+        files: ExportFixture['files'];
+        verification: { channel: Channel; manifestId: string; assetCount: number };
+      };
+      assert.equal(verifiedProvenance.platform, 'android');
+      assert.deepEqual(verifiedProvenance.files, channelFixture.files);
+      assert.equal(verifiedProvenance.verification.channel, channel);
+      assert.equal(verifiedProvenance.verification.manifestId, `${channel}-manifest-1`);
+      assert.equal(verifiedProvenance.verification.assetCount, 3);
+      assert.match(verification.output, new RegExp(`runtime_version=${runtimeVersion}`));
+    }
+
+    const iosFixture = createExportFixture(join(root, 'ios'), 'dev', 'ios');
     setMode('valid');
-    const stagingVerification = await runHelper(
+    const iosVerification = await runHelper(
       appRoot,
-      fixture.artifactDir,
+      iosFixture.artifactDir,
       certificatePath,
-      verifyArgs('staging', fixture.artifactDir, baseUrl),
+      verifyArgs('dev', iosFixture.artifactDir, baseUrl, 'ios'),
     );
-    assert.equal(stagingVerification.status, 0, stagingVerification.stderr);
-    const verifiedProvenance = JSON.parse(
-      readFileSync(join(fixture.artifactDir, 'provenance.json'), 'utf8'),
+    assert.equal(iosVerification.status, 0, iosVerification.stderr);
+    const iosProvenance = JSON.parse(
+      readFileSync(join(iosFixture.artifactDir, 'provenance.json'), 'utf8'),
     ) as {
-      files: ExportFixture['files'];
-      verification: { channel: Channel; manifestId: string; assetCount: number };
+      platform: Platform;
+      verification: { channel: Channel; manifestUrl: string; assetCount: number };
     };
-    assert.deepEqual(verifiedProvenance.files, fixture.files);
-    assert.equal(verifiedProvenance.verification.channel, 'staging');
-    assert.equal(verifiedProvenance.verification.manifestId, 'staging-manifest-1');
-    assert.equal(verifiedProvenance.verification.assetCount, 3);
-    assert.match(stagingVerification.output, new RegExp(`runtime_version=${runtimeVersion}`));
+    assert.equal(iosProvenance.platform, 'ios');
+    assert.equal(iosProvenance.verification.channel, 'dev');
+    assert.equal(
+      iosProvenance.verification.manifestUrl,
+      `${baseUrl}/releases/kosmo-native/ios/dev/${runtimeVersion}/manifest.json`,
+    );
+    assert.equal(iosProvenance.verification.assetCount, 3);
+    assert.match(iosVerification.output, new RegExp(`runtime_version=${runtimeVersion}`));
 
-    const promotion = await runHelper(
-      appRoot,
-      fixture.artifactDir,
-      certificatePath,
-      promoteArgs('promote', 'staging', fixture.artifactDir, baseUrl),
-    );
-    assert.equal(promotion.status, 0, promotion.stderr);
-    const promotionRecord = JSON.parse(
-      readFileSync(join(fixture.artifactDir, 'promotion.json'), 'utf8'),
-    ) as {
-      operation: string;
-      runtimeVersion: string;
-      sourceManifestId: string;
-      sourceFiles: ExportFixture['files'];
-    };
-    assert.equal(promotionRecord.operation, 'promote');
-    assert.equal(promotionRecord.runtimeVersion, runtimeVersion);
-    assert.equal(promotionRecord.sourceManifestId, 'staging-manifest-1');
-    assert.deepEqual(promotionRecord.sourceFiles, fixture.files);
-
-    const recoveryFixture = createExportFixture(join(root, 'recovery-fixture'));
-    const productionVerification = await runHelper(
-      appRoot,
-      recoveryFixture.artifactDir,
-      certificatePath,
-      verifyArgs('production', recoveryFixture.artifactDir, baseUrl, 'staging-manifest-1'),
-    );
-    assert.equal(productionVerification.status, 0, productionVerification.stderr);
-    setMode('invalid-signature');
-    const recovery = await runHelper(
-      appRoot,
-      recoveryFixture.artifactDir,
-      certificatePath,
-      promoteArgs('recover', 'production', recoveryFixture.artifactDir, baseUrl),
-    );
-    assert.equal(recovery.status, 0, recovery.stderr);
-    const recoveryRecord = JSON.parse(
-      readFileSync(join(recoveryFixture.artifactDir, 'promotion.json'), 'utf8'),
-    ) as {
-      operation: string;
-      runtimeVersion: string;
-      sourceManifestId: string;
-      sourceFiles: ExportFixture['files'];
-    };
-    assert.equal(recoveryRecord.operation, 'recover');
-    assert.equal(recoveryRecord.runtimeVersion, runtimeVersion);
-    assert.equal(recoveryRecord.sourceManifestId, 'production-manifest-2');
-    assert.deepEqual(recoveryRecord.sourceFiles, promotionRecord.sourceFiles);
-    for (const file of ['metadata.json', 'bundle.js', 'assets/first.bin', 'assets/second.bin']) {
-      assert.deepEqual(
-        readFileSync(join(fixture.artifactDir, file)),
-        readFileSync(join(recoveryFixture.artifactDir, file)),
-        file,
+    for (const invalidChannel of ['', 'preview/123', '.', '..']) {
+      const invalidFixture = createExportFixture(
+        join(root, `invalid-${invalidChannel || 'empty'}`),
+      );
+      setMode('valid');
+      const result = await runHelper(
+        appRoot,
+        invalidFixture.artifactDir,
+        certificatePath,
+        verifyArgs(invalidChannel, invalidFixture.artifactDir, baseUrl),
+      );
+      assert.notEqual(result.status, 0, invalidChannel || 'empty');
+      assert.match(
+        `${result.stdout}\n${result.stderr}`,
+        invalidChannel === ''
+          ? /--channel is required\./u
+          : /--channel must be a safe path segment\./u,
       );
     }
 
-    const sameManifestFixture = createExportFixture(join(root, 'same-manifest-id'));
-    setMode('same-manifest-id');
-    const sameManifest = await runHelper(
-      appRoot,
-      sameManifestFixture.artifactDir,
-      certificatePath,
-      verifyArgs('production', sameManifestFixture.artifactDir, baseUrl, 'staging-manifest-1'),
-    );
-    assert.notEqual(sameManifest.status, 0);
-    assert.match(
-      `${sameManifest.stdout}\n${sameManifest.stderr}`,
-      /Production verification requires a new manifest ID\./u,
-    );
-    const sameManifestProvenance = JSON.parse(
-      readFileSync(join(sameManifestFixture.artifactDir, 'provenance.json'), 'utf8'),
-    ) as { verification?: unknown };
-    assert.equal(sameManifestProvenance.verification, undefined);
-
     for (const [mode, expectedMessage] of [
+      ['runtime-mismatch', 'OTA manifest runtimeVersion does not match the requested tuple.'],
       ['invalid-signature', 'OTA manifest signature verification failed.'],
       ['asset-hash', 'OTA asset 1 hash verification failed.'],
       ['missing-asset', 'OTA asset 1 request failed with HTTP 404.'],
@@ -451,7 +412,7 @@ test('verifies OTA manifests and preserves export bytes across promotion and rec
         appRoot,
         invalidFixture.artifactDir,
         certificatePath,
-        verifyArgs('staging', invalidFixture.artifactDir, baseUrl),
+        verifyArgs('dev', invalidFixture.artifactDir, baseUrl),
       );
       assert.notEqual(result.status, 0, mode);
       assert.match(`${result.stdout}\n${result.stderr}`, new RegExp(expectedMessage));
@@ -460,6 +421,26 @@ test('verifies OTA manifests and preserves export bytes across promotion and rec
       ) as { verification?: unknown };
       assert.equal(failedProvenance.verification, undefined, mode);
     }
+
+    const sourceMismatchDir = mkdtempSync(join(root, 'source-sha-mismatch-'));
+    const sourceMismatch = await runHelper(repositoryAppRoot, sourceMismatchDir, certificatePath, [
+      'export',
+      '--platform',
+      'android',
+      '--channel',
+      'dev',
+      '--source-sha',
+      '0'.repeat(40),
+      '--keyid',
+      keyid,
+      '--output-dir',
+      sourceMismatchDir,
+    ]);
+    assert.notEqual(sourceMismatch.status, 0);
+    assert.match(
+      `${sourceMismatch.stdout}\n${sourceMismatch.stderr}`,
+      /Checked out [a-f0-9]{40}, expected approved source 0{40}\./u,
+    );
   } finally {
     await close(server);
     rmSync(root, { recursive: true, force: true });
