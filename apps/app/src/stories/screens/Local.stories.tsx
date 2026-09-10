@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { fn } from 'storybook/test';
 import LocalScreen from '@/app/(tabs)/(protected)/local';
+import { Button } from '@/components/ui/Button';
+import { useRelayActor } from '@/relay/RelayActorProvider';
 import { RelayStoryProvider } from '../../../.storybook/mocks/react-relay';
 import { post, profile, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -98,6 +100,7 @@ type LocalState =
   | 'empty'
   | 'error'
   | 'refresh-hard-error'
+  | 'refresh-hard-error-lifetime'
   | 'refresh-partial-error'
   | 'refreshing'
   | 'filtered'
@@ -106,7 +109,11 @@ type LocalState =
   | 'pagination-flow'
   | 'pagination-error';
 
-type LocalStoryArgs = { state: LocalState };
+type LocalStoryArgs = {
+  actorBoundary?: boolean;
+  showActorReset?: boolean;
+  state: LocalState;
+};
 
 function localRelayForState(state: LocalState) {
   switch (state) {
@@ -140,6 +147,18 @@ function localRelayForState(state: LocalState) {
               { error: 'Local timeline hard refresh failure' },
               { error: 'Local timeline hard refresh failure again' },
               { data: localPageData(localConnection([refreshedPost])) },
+            ],
+          },
+        },
+      };
+    case 'refresh-hard-error-lifetime':
+      return {
+        operationResponses: {
+          LocalPageQuery: {
+            sequence: [
+              { data: localPageData() },
+              { error: 'Local timeline hard refresh failure' },
+              { delayMs: 500, error: 'Local timeline hard refresh failure after actor reset' },
             ],
           },
         },
@@ -212,11 +231,12 @@ function localRelayForState(state: LocalState) {
   }
 }
 
-function LocalPlayground({ state }: LocalStoryArgs) {
+function LocalPlayground({ actorBoundary = false, showActorReset = false, state }: LocalStoryArgs) {
   const relay = useMemo(() => localRelayForState(state), [state]);
 
   return (
     <RelayStoryProvider
+      actorBoundary={actorBoundary}
       key={state}
       operationResponses={relay.operationResponses}
       paginationLoading={relay.paginationLoading}
@@ -224,8 +244,19 @@ function LocalPlayground({ state }: LocalStoryArgs) {
       paginationResponses={relay.paginationResponses}
       queryRequestObserver={queryRequestObserver}
     >
-      <LocalScreen />
+      {showActorReset ? <LocalActorResetScreen /> : <LocalScreen />}
     </RelayStoryProvider>
+  );
+}
+
+function LocalActorResetScreen() {
+  const { resetActor } = useRelayActor();
+
+  return (
+    <>
+      <Button onPress={() => resetActor('local-story-second-profile')}>프로필 전환</Button>
+      <LocalScreen />
+    </>
   );
 }
 
@@ -252,7 +283,12 @@ const meta = {
     },
   },
   component: LocalPlayground,
-  excludeStories: ['InitialErrorRetry', 'PaginationErrorRetry', 'queryRequestObserver'],
+  excludeStories: [
+    'InitialErrorRetry',
+    'PaginationErrorRetry',
+    'RefreshHardErrorActorCleanup',
+    'queryRequestObserver',
+  ],
   parameters: {
     layout: 'fullscreen',
     router: { pathname: '/local' },
@@ -329,6 +365,13 @@ export const RefreshHardError: Story = {
       },
     },
   },
+};
+
+export const RefreshHardErrorActorCleanup: Story = {
+  args: { actorBoundary: true, showActorReset: true, state: 'refresh-hard-error-lifetime' },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  name: 'Refresh Hard Error Actor Cleanup',
+  parameters: { controls: { disable: true } },
 };
 
 export const PaginationErrorRetry: Story = {
