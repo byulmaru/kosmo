@@ -349,7 +349,7 @@ function ProfileLayoutContent({
   }
 
   if (!profile && blockStatus?.blockedBy) {
-    return <StateView title="이 프로필을 볼 수 없습니다" />;
+    return <StateView controlRef={contentStateRef} title="이 프로필을 볼 수 없습니다" />;
   }
 
   if (!profile) {
