@@ -72,7 +72,6 @@ type BlockedProfilesState =
 type FocusIntent = Readonly<{ index: number; profileBlockId: string }>;
 
 let pendingFocusIntent: FocusIntent | null = null;
-let activeFocusRestorer: (() => boolean) | null = null;
 
 export function SettingsBlockedProfiles() {
   const actorLifecycleKey = useRelayActorLifecycleKey();
@@ -144,67 +143,32 @@ function SettingsBlockedProfilesContent() {
 }
 
 export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) {
-  const mounted = useRef(true);
   const headingRef = useRef<View>(null);
   const actionRefs = useRef(new Map<string, View>());
   const removedFocus = useRef<{ index: number; profileBlockId: string } | null>(null);
-  const stateRef = useRef(state);
-  const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  stateRef.current = state;
-  const restoreRemovedFocus = () => {
-    const removed = removedFocus.current ?? pendingFocusIntent;
-    const currentState = stateRef.current;
-    if (
-      !removed ||
-      currentState.status !== 'loaded' ||
-      currentState.profiles.some((profile) => profile.profileBlockId === removed.profileBlockId)
-    ) {
-      return false;
-    }
-    removedFocus.current = null;
-    if (pendingFocusIntent?.profileBlockId === removed.profileBlockId) {
-      pendingFocusIntent = null;
-    }
-    const next = currentState.profiles[Math.min(removed.index, currentState.profiles.length - 1)];
-    if (next) {
-      actionRefs.current.get(next.profileBlockId)?.focus();
-    } else {
-      headingRef.current?.focus();
-    }
-    return true;
-  };
-  const restoreRemovedFocusRef = useRef(restoreRemovedFocus);
-  restoreRemovedFocusRef.current = restoreRemovedFocus;
 
   useEffect(() => {
-    mounted.current = true;
-    const restoreFocus = () => restoreRemovedFocusRef.current();
-    activeFocusRestorer = restoreFocus;
-    return () => {
-      mounted.current = false;
-      if (activeFocusRestorer === restoreFocus) {
-        activeFocusRestorer = null;
-      }
-      if (focusTimer.current) {
-        clearTimeout(focusTimer.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    focusTimer.current = setTimeout(() => {
-      focusTimer.current = null;
-      if (!mounted.current) {
-        activeFocusRestorer?.();
+    const timer = setTimeout(() => {
+      const removed = removedFocus.current ?? pendingFocusIntent;
+      if (
+        !removed ||
+        state.status !== 'loaded' ||
+        state.profiles.some((profile) => profile.profileBlockId === removed.profileBlockId)
+      ) {
         return;
       }
-      restoreRemovedFocusRef.current();
-    }, 0);
-    return () => {
-      if (focusTimer.current) {
-        clearTimeout(focusTimer.current);
+      removedFocus.current = null;
+      if (pendingFocusIntent?.profileBlockId === removed.profileBlockId) {
+        pendingFocusIntent = null;
       }
-    };
+      const next = state.profiles[Math.min(removed.index, state.profiles.length - 1)];
+      if (next) {
+        actionRefs.current.get(next.profileBlockId)?.focus();
+      } else {
+        headingRef.current?.focus();
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [state]);
 
   const rememberRemovedProfile = (profile: BlockedProfile) => {
