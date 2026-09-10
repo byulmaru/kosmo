@@ -63,15 +63,22 @@
 
 ### Requirement: Profile Block direct route presents basic Profile and content state
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/policies/post-list.md`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 후속 UI 교체는 `PROD-917`의 범위다. Block 관계의 direct Profile route는 기존 Profile 조회 정책에 따른 기본 Profile 정보를 표시해야 한다(MUST). `blocking` route는 기존 Post·Media 정책으로 허용된 Target 콘텐츠를 표시하기 전에 frontend 콘텐츠 경고를 제공하고, `blockedBy` route는 기본 Profile 정보와 콘텐츠 차단 상태를 표시해야 한다(MUST). 양방향 Block은 양쪽 route에 콘텐츠 차단 상태를 적용해야 한다(MUST). `차단 해제` action은 `blocking` route의 기존 관계 관리 흐름을 유지해야 하며(MUST), 경고 문구와 표시 기간은 후속 디자인 계약에서 정한다(MUST).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 후속 UI 교체는 `PROD-917`의 범위다. Block 관계의 direct Profile route는 기존 Profile 조회 정책에 따른 기본 Profile 정보를 표시해야 한다(MUST). `blocking` route는 기존 Post·Media 정책으로 허용된 Target 콘텐츠를 표시하기 전에 frontend 콘텐츠 경고를 제공하고, `blockedBy` route는 기본 Profile 정보와 콘텐츠 차단 상태를 표시해야 한다(MUST). 양방향 Block은 양쪽 route에 콘텐츠 차단 상태를 적용해야 한다(MUST). `차단 해제` action은 selected Local Profile이 Owner인 `blocking` route에서만 기존 관계 관리 흐름을 유지해야 하며(MUST), Remote Profile이 selected된 상태에서는 실행할 수 없는 Block 관리 action을 제공해서는 안 된다(MUST NOT). 경고 문구와 표시 기간은 후속 디자인 계약에서 정한다.
 
 #### Scenario: 역방향 Block이 없을 때 blocking route에서 기본 Profile과 확인 후 콘텐츠를 표시한다
 
-- **WHEN** selected Profile이 Owner이고 Target이 Owner를 차단하지 않은 상태에서 차단한 Target의 direct Profile route를 연다
+- **WHEN** selected Local Profile이 Owner이고 Target이 Owner를 차단하지 않은 상태에서 차단한 Target의 direct Profile route를 연다
 - **THEN** 시스템은 기존 Profile 조회 정책에 따른 Target의 기본 Profile 정보를 표시한다
 - **AND** frontend는 Target의 Post·Media를 표시하기 전에 콘텐츠 경고를 제공한다
 - **AND** 사용자가 확인하면 기존 Post·Media 정책으로 허용된 Target 콘텐츠를 표시한다
 - **AND** `차단 해제` action은 기존 blocking route 관계 관리 흐름으로 제공한다
+
+#### Scenario: Remote-selected route에는 실행할 수 없는 Block 관리 action을 제공하지 않는다
+
+- **WHEN** Remote Profile이 selected된 상태에서 Block 관계인 상대의 direct Profile route를 연다
+- **THEN** 시스템은 기존 Profile identity와 viewer 방향 콘텐츠 상태를 표시한다
+- **AND** GraphQL selected Local actor가 필요한 Block 생성·해제·관리 action을 제공하지 않는다
+- **AND** Remote Owner의 Block/Undo ingress는 `PROD-818` 범위로 유지한다
 
 #### Scenario: blockedBy route에서 기본 Profile과 콘텐츠 차단 상태를 표시한다
 
@@ -86,7 +93,7 @@
 
 ### Requirement: Profile Block actor and client-state isolation
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-51`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 후속 UI 교체는 `PROD-917`의 범위다. Block UI는 selected Profile별 actor 상태 격리를 유지해야 하며(MUST), 기존 Profile 기본 정보와 viewer 방향에 따른 콘텐츠 상태를 최신 서버 정책과 함께 표시해야 한다(MUST). Block·Unblock 성공 결과는 현재 화면, Block 목록, 이미 표시 중인 timeline·Profile Post List와 Notification client 상태를 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 각 actor의 Block 상태를 해당 actor의 결과로 격리해야 한다(MUST).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-51`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block UI는 selected Profile별 actor 상태 격리를 유지해야 하며(MUST), 기존 Profile 정보를 유지하면서 viewer 방향 콘텐츠 상태와 각 surface의 정책을 표시해야 한다(MUST). Block·Unblock 성공 결과는 현재 화면, Block 목록과 이미 표시 중인 표면의 상태를 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 이전 Owner의 Block 상태를 새 actor에 재사용해서는 안 된다(MUST NOT).
 
 #### Scenario: Block 성공 뒤 표시 중인 결과가 정책에 수렴한다
 
@@ -96,11 +103,25 @@
 - **AND** 이미 표시 중인 Home·Local·Hashtag timeline·Profile Post List와 Notification은 각 surface의 서버 Profile Block 정책에 맞춰 숨기거나 갱신한다
 - **AND** mutation 실패 시 이전 cache를 차단된 것으로 확정하지 않는다
 
+#### Scenario: 새로고침과 직접 링크 진입에서도 차단 화면과 해제를 제공한다
+
+- **WHEN** selected Local Owner가 이미 차단한 Target의 Profile route에 이전 client cache 없이 직접 진입하거나 새로고침한다
+- **THEN** 시스템은 기존 Target Profile 정보와 API의 현재 Owner 차단 결과, 해당 Profile Block ID의 `차단 해제` action을 제공한다
+- **AND** 차단 목록을 먼저 열어 본 상태를 요구하지 않는다
+- **AND** 콘텐츠는 viewer 방향 Profile Block 정책에 따라 표시한다
+
+#### Scenario: 상대에게만 차단된 직접 route는 해제 action을 제공하지 않는다
+
+- **WHEN** 현재 selected Profile은 Target을 차단하지 않았지만 Target의 Block 때문에 콘텐츠 조회가 제한된다
+- **THEN** 시스템은 기존 Target Profile 정보와 콘텐츠 차단 상태를 표시한다
+- **AND** 다른 Owner의 Block을 해제할 action을 표시하지 않는다
+
 #### Scenario: selected Profile을 전환해도 Block 상태를 섞지 않는다
 
 - **WHEN** selected Profile A의 Block 목록을 본 뒤 selected Profile B로 전환한다
 - **THEN** 시스템은 A의 Block 상태와 client 상태를 B의 결과로 재사용하지 않는다
 - **AND** B의 Block 목록은 B가 Owner인 관계만 표시한다
+- **AND** 같은 Target의 직접 route도 B의 현재 서버 결과로 다시 판정하며 A의 차단 상태·해제 ID를 사용하지 않는다
 
 #### Scenario: Unblock 뒤 제거된 관계를 UI가 복구하지 않는다
 
