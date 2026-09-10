@@ -29,7 +29,7 @@
 
 ### Requirement: Account authentication before Profile candidate lookup
 
-**Authority / Provenance:** `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `docs/design/hashtag-related-profiles.md`, `PROD-524`, `PROD-525`, `PROD-528`, `PROD-822` — 시스템은 `Hashtag.relatedProfiles`를 유효한 현재 Session으로 확인되는 Account 요청에만 제공해야 한다(MUST). 인증할 수 없는 요청은 관련 Profile 후보를 조회하기 전에 기존 GraphQL permission error로 거부해야 한다(MUST). 유효한 Account에 selected Profile이 있으면 그 Profile을 viewer로 사용해야 하며(MUST), selected Profile이 없는 Account에도 기존 공개 후보 결과를 제공하고 selected Local Profile을 새로 요구해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `docs/design/hashtag-related-profiles.md`, `PROD-524`, `PROD-525`, `PROD-528` — 시스템은 `Hashtag.relatedProfiles`를 유효한 현재 Session으로 확인되는 Account 요청에만 제공해야 한다(MUST). 인증할 수 없는 요청은 관련 Profile 후보를 조회하기 전에 기존 GraphQL permission error로 거부해야 하며(MUST), selected Profile을 요구해서는 안 된다(MUST NOT).
 
 #### Scenario: Reject an unauthenticated request before candidate lookup
 
@@ -48,11 +48,10 @@
 - **WHEN** 유효한 현재 Session은 있지만 selected Profile이 없는 Account가 `Hashtag.relatedProfiles`를 요청한다
 - **THEN** 시스템은 Account 로그인 경계를 통과시킨다
 - **AND** 공개 조회 가능한 관련 Profile connection을 정상적으로 반환한다
-- **AND** Profile Block predicate를 적용하거나 selected Local Profile을 새로 요구하지 않는다
 
 ### Requirement: Exact relation and public Profile visibility
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `PROD-523`, `PROD-524`, `PROD-525`, `PROD-528`, `PROD-822` — 시스템은 parent Hashtag identity와 정확한 Profile Tag 관계가 있고 공개 조회 조건을 통과한 Active·Normal Profile을 `relatedProfiles` 후보로 사용해야 한다(MUST). 유효한 Account에 selected Profile이 있으면 그 viewer와 양방향 Active Block 관계인 Profile을 후보에서 제외해야 한다(MUST). Profile visibility와 Profile Block 후보 제외는 page limit 전에 SQL 후보에 적용해야 하며(MUST), 저장된 Profile Origin을 별도로 제한하거나 원격 Profile을 새로 조회해서는 안 되며(MUST NOT), 같은 Profile을 한 page 또는 여러 page에 중복 반환해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `PROD-523`, `PROD-524`, `PROD-525`, `PROD-528` — 시스템은 parent Hashtag identity와 정확한 Profile Tag 관계가 있고 공개 조회 조건을 통과한 Active·Normal Profile을 `relatedProfiles` 후보로 사용해야 한다(MUST). Profile visibility는 page limit 전에 SQL 후보에 적용해야 하며(MUST), 저장된 Profile Origin을 별도로 제한하거나 원격 Profile을 새로 조회해서는 안 되며(MUST NOT), 같은 Profile을 한 page 또는 여러 page에 중복 반환해서는 안 된다(MUST NOT).
 
 #### Scenario: Include an exact related public Profile
 
@@ -68,12 +67,6 @@
 
 - **WHEN** parent Hashtag와 관계된 Profile의 lifecycle이 Active가 아니거나 suspension 상태가 Normal이 아니다
 - **THEN** 시스템은 그 Profile을 page limit 계산 전에 후보에서 제외한다
-
-#### Scenario: Exclude a blocked candidate for either Block direction
-
-- **WHEN** 유효한 Account의 selected Profile과 관련 Profile 후보 사이에 어느 방향으로든 Active Profile Block이 존재한다
-- **THEN** 시스템은 해당 Profile을 page limit 계산 전에 후보에서 제외한다
-- **AND** 이후의 조회 가능한 후보로 요청한 page와 pageInfo를 계산한다
 
 #### Scenario: Do not materialize Remote Profiles
 
