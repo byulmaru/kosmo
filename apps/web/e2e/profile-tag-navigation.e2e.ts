@@ -74,5 +74,5 @@ test('공개 Profile Tag link는 keyboard로 exact Hashtag 관련 Profile과 기
   await expect(relatedProfileLink).toBeVisible();
   await relatedProfileLink.click();
   await expect(page).toHaveURL(/\/@prod529-related-a$/);
-  await expect(page.getByRole('heading', { name: '별빛 여행자' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '별빛 여행자' }).first()).toBeVisible();
 });
