@@ -44,11 +44,14 @@ const labels = {
 
 function SidebarNavigationCatalog({
   currentDestination = 'home',
+  logoutError = null,
+  logoutPending = false,
   onLogout,
   onMenuOpenChange,
   onNavigate,
   presentation = 'full',
   profileAvailable,
+  showFeedback = true,
   unreadNotificationCount = null,
 }: CatalogProps) {
   const [destination, setDestination] = useState<NavigationDestination | null>(currentDestination);
@@ -64,6 +67,8 @@ function SidebarNavigationCatalog({
     >
       <SidebarNavigation
         currentDestination={destination}
+        logoutError={logoutError}
+        logoutPending={logoutPending}
         onLogout={onLogout}
         onMenuOpenChange={onMenuOpenChange}
         onNavigate={(nextDestination) => {
@@ -72,8 +77,44 @@ function SidebarNavigationCatalog({
         }}
         presentation={presentation}
         profile={profileAvailable ? profile : null}
+        showFeedback={showFeedback}
         unreadNotificationCount={unreadNotificationCount}
       />
+    </View>
+  );
+}
+
+function SidebarNavigationLogoutLifecycleFixture({
+  presentation,
+}: {
+  presentation: SidebarPresentation;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  return (
+    <View>
+      <Button
+        onPress={() => {
+          setPending(false);
+          setError('로그아웃하지 못했어요.');
+        }}
+        title="로그아웃 실패 응답"
+      />
+      <View style={{ height: 720, width: presentation === 'compact' ? 80 : 320 }}>
+        <SidebarNavigation
+          currentDestination="home"
+          logoutError={error}
+          logoutPending={pending}
+          onLogout={() => {
+            setError(null);
+            setPending(true);
+          }}
+          onNavigate={() => undefined}
+          presentation={presentation}
+          profile={profile}
+        />
+      </View>
     </View>
   );
 }
@@ -108,11 +149,14 @@ function SidebarNavigationTransitionFixture({
 const meta = {
   args: {
     currentDestination: 'home',
+    logoutError: null,
+    logoutPending: false,
     onLogout: fn(),
     onMenuOpenChange: fn(),
     onNavigate: fn(),
     presentation: 'full',
     profileAvailable: true,
+    showFeedback: true,
     unreadNotificationCount: null,
   },
   argTypes: {
@@ -132,6 +176,13 @@ const meta = {
     'CompactInteractionContract',
     'DrawerInteractionContract',
     'InteractionContract',
+    'CompactLogoutPendingContract',
+    'CompactLogoutLifecycleContract',
+    'DrawerLogoutLifecycleContract',
+    'FeedbackUnavailableContract',
+    'LogoutErrorContract',
+    'LogoutLifecycleContract',
+    'LogoutPendingContract',
     'PresentationTransitionContract',
     'ProfileUnavailableContract',
     'ReducedMotionContract',
@@ -227,6 +278,8 @@ export const Playground: Story = {
       disable: false,
       include: [
         'currentDestination',
+        'logoutError',
+        'logoutPending',
         'presentation',
         'profileAvailable',
         'unreadNotificationCount',
@@ -396,7 +449,8 @@ export const CompactInteractionContract: Story = {
       const logoutMenu = await screen.findByRole('menu');
       await userEvent.click(within(logoutMenu).getByRole('menuitem', { name: '로그아웃' }));
       expect(args.onLogout).toHaveBeenCalledOnce();
-      await waitFor(() => expect(onMenuOpenChange).toHaveBeenLastCalledWith(false));
+      expect(onMenuOpenChange).toHaveBeenLastCalledWith(true);
+      expect(logoutMenu).toBeVisible();
     });
   },
 };
@@ -484,6 +538,106 @@ export const ProfileUnavailableContract: Story = {
     profileButton.click();
     expect(args.onNavigate).not.toHaveBeenCalled();
   },
+};
+
+export const FeedbackUnavailableContract: Story = {
+  args: { showFeedback: false },
+  play: async ({ args, canvasElement }) => {
+    args.onNavigate.mockClear();
+    const navigation = getNavigation(canvasElement);
+    expect(within(navigation).queryByRole('button', { name: '피드백 보내기' })).toBeNull();
+    expect(within(navigation).getByRole('button', { name: '설정 및 기타' })).toBeVisible();
+    expect(args.onNavigate).not.toHaveBeenCalledWith('feedback');
+  },
+};
+
+export const LogoutPendingContract: Story = {
+  args: { logoutPending: true },
+  parameters: { controls: { disable: true } },
+  play: async ({ args, canvasElement }) => {
+    args.onLogout.mockClear();
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: '설정 및 기타' }));
+    const logout = canvas.getByRole('button', { name: '로그아웃' });
+    expect(logout).toHaveAttribute('aria-disabled', 'true');
+    expect(logout).toHaveAttribute('tabindex', '-1');
+    expect(logout).toHaveAttribute('aria-busy', 'true');
+    expect(within(logout).getByLabelText('로그아웃 처리 중')).toBeVisible();
+    logout.click();
+    expect(args.onLogout).not.toHaveBeenCalled();
+  },
+};
+
+export const CompactLogoutPendingContract: Story = {
+  render: () => <SidebarNavigationLogoutLifecycleFixture presentation="compact" />,
+  parameters: { controls: { disable: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: '설정 및 기타' }));
+    const menu = screen.getByRole('menu', { name: '설정 및 기타 메뉴' });
+    const logout = within(menu).getByRole('menuitem', { name: '로그아웃' });
+    await userEvent.click(logout);
+    await waitFor(() => expect(logout).toHaveAttribute('aria-busy', 'true'));
+    expect(logout).toHaveAttribute('aria-disabled', 'true');
+    expect(logout).toHaveAttribute('tabindex', '-1');
+    expect(logout.querySelector('svg')).not.toBeNull();
+  },
+};
+
+export const LogoutErrorContract: Story = {
+  args: { logoutError: '로그아웃하지 못했어요.' },
+  parameters: { controls: { disable: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('alert')).toHaveTextContent('로그아웃하지 못했어요.');
+
+    await userEvent.click(canvas.getByRole('button', { name: '설정 및 기타' }));
+    expect(canvas.getByRole('button', { name: '로그아웃' })).toBeEnabled();
+  },
+};
+
+async function playLogoutLifecycle(canvasElement: HTMLElement, compact: boolean) {
+  const canvas = within(canvasElement);
+  await userEvent.click(canvas.getByRole('button', { name: '설정 및 기타' }));
+  const getLogout = () =>
+    compact
+      ? within(screen.getByRole('menu', { name: '설정 및 기타 메뉴' })).getByRole('menuitem', {
+          name: '로그아웃',
+        })
+      : canvas.getByRole('button', { name: '로그아웃' });
+
+  await userEvent.click(getLogout());
+  await waitFor(() => expect(getLogout()).toHaveAttribute('aria-busy', 'true'));
+  if (compact) {
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByRole('menu', { name: '설정 및 기타 메뉴' })).toBeVisible();
+  }
+
+  canvas.getByRole('button', { name: '로그아웃 실패 응답' }).click();
+  await waitFor(() =>
+    expect(screen.getByRole('alert')).toHaveTextContent('로그아웃하지 못했어요.'),
+  );
+  expect(getLogout()).toBeEnabled();
+
+  await userEvent.click(getLogout());
+  await waitFor(() => expect(getLogout()).toHaveAttribute('aria-busy', 'true'));
+}
+
+export const LogoutLifecycleContract: Story = {
+  render: () => <SidebarNavigationLogoutLifecycleFixture presentation="full" />,
+  play: async ({ canvasElement }) => playLogoutLifecycle(canvasElement, false),
+};
+
+export const DrawerLogoutLifecycleContract: Story = {
+  render: () => <SidebarNavigationLogoutLifecycleFixture presentation="drawer" />,
+  play: async ({ canvasElement }) => playLogoutLifecycle(canvasElement, false),
+};
+
+export const CompactLogoutLifecycleContract: Story = {
+  render: () => <SidebarNavigationLogoutLifecycleFixture presentation="compact" />,
+  play: async ({ canvasElement }) => playLogoutLifecycle(canvasElement, true),
 };
 
 export const PresentationTransitionContract: Story = {
