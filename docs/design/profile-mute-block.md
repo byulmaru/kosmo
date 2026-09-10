@@ -8,12 +8,13 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 ## Profile action과 완료 피드백
 
 - Mute는 `이 프로필을 뮤트할까요?` 확인을 거친 뒤 실행한다. 취소하면 Profile과 관계 상태를 바꾸지 않는다.
-- Mute 해제도 `이 프로필을 뮤트 해제할까요?` 확인을 거친다. `{표시 이름} 님의 게시물이 타임라인에 다시
-표시되고 새 알림을 받을 수 있어요. 팔로우 관계는 유지돼요.`를 안내하고 `취소`·`뮤트 해제`를 제공한다.
+- Mute 해제도 `이 프로필을 뮤트 해제할까요?` 확인을 거친다. `{표시 이름} 님의 게시물이 홈과 로컬 타임라인에 다시
+표시돼요. 팔로우 관계는 유지돼요.`를 안내하고 `취소`·`뮤트 해제`를 제공한다.
   취소 시 요청하지 않으며 확인 후 성공한 경우에만 상태를 바꾸고 `{표시 이름} 님이 뮤트 해제되었어요`
   Toast를 표시한다. 이 확인 흐름은 2026-09-06 사용자 검토에서 확정했으며 기존 Figma loaded 관리 목록은
   해제 확인창 자체의 증거가 아니다.
-- 프로필에서는 더보기 메뉴에 프로필 링크 복사·뮤트·차단을 이 순서로 합성한다. 승인된 Figma Target은 모든
+- 프로필에서는 더보기 메뉴가 프로필 링크 복사·뮤트·차단 항목을 이 순서로 합성한다. 뮤트 액션은 Relay fragment·mutation·확인창과
+  pending을 소유한 메뉴 항목으로 참여하며 더보기 메뉴와 trigger 전체를 소유하지 않는다. 승인된 Figma Target은 모든
   레이아웃에서 FollowButton 왼쪽 `16px` 간격의 `40×40` 원형 테두리 버튼이다. 메뉴 오른쪽 위를 trigger
   오른쪽 위에 맞춰 겹치게 두고 왼쪽·아래로 펼친다. viewport 경계에서는 위치·방향을 보정한다.
   Native 입력 target은 iOS 최소 `44pt`, Android 최소 `48dp`를 확보한다. 공용 컴포넌트에 반영했으며
@@ -27,6 +28,11 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 - Mute가 성공하면 기존 공용 Toast에 `{표시 이름} 님이 뮤트되었어요`를 표시하고 Mute 관리 action을
   `뮤트 해제`로 전환한다. `ProfileHero` 상단 Action SLOT의 관계 action은 바꾸지 않으며, 성공 전에 상태나
   Toast를 낙관적으로 확정하지 않는다.
+- Mute·해제 성공 직후 현재 selected Profile의 viewer-relative 관계와 Settings 관리 connection은 `PROD-814`가
+  소유한 mutation 응답/Relay 갱신으로 반영한다. 이미 로드된 Home·Local timeline은 Mute 전용 강제 재조회 대상이
+  아니며, mutation 자체가 해당 timeline을 다시 조회하도록 요구하지 않는다. 이후 사용자가 발생시킨
+  refresh·navigation·새 query 같은 다음 조회에서 서버 후보 정책으로 수렴한다. 클라이언트에서 Mute 후보를
+  별도로 필터링하지 않는다.
 - Mute가 확정된 직접 Profile은 기존 Profile 내용과 Post를 유지한다. 팔로잉·팔로워 수치 아래에는 canonical
   `VolumeOff`, `이 사용자의 게시글은 뮤트되어 있습니다.`, link-colored text action `뮤트 해제`를 한
   상태·action 행으로 표시한다. 상단 Action SLOT에는 현재 관계 상태에 맞는 기존 `FollowButton`의 `팔로우`
@@ -195,8 +201,8 @@ viewer 방향별 콘텐츠 정책은 위 계약을 따르며, 실제 route의 �
 
 ## Storybook 이관 · PROD-858
 
-`ProfileMuteAction`은 Profile/Post의 메뉴와 관리용 확인 처리를 소유하며 기존
-ModalSheet·ConfirmationContent·ToastProvider를 재사용한다. 메뉴 표시에는 요청을 모르는 `ProfileMoreMenu`를 사용한다.
+`ProfileMuteAction`은 기존 ModalSheet·ConfirmationContent·ToastProvider를 재사용한다. Profile/Post 소비자가
+요청을 모르는 `ProfileMoreMenu`를 소유하고, 뮤트 액션이 제공하는 메뉴 항목을 다른 항목과 합성한다.
 확인과 pending/dismiss, 오류 피드백은 공용 UI 경계에서 제공하며 실제 요청은 callback으로 전달한다.
 관리 목록은 본문·상태·행·pagination을 소유하는 `MutedProfileList`, 행 표시는 기존 Relay `ProfileListItem`과
 공유하는 `ProfileListItemContent`를 사용한다. 화면과 Storybook은 목록 밖의 heading·scroll container와
@@ -253,3 +259,11 @@ Web 최소 폭 160px과 키보드·focus 처리를 재사용하고, 목록은 �
   Profile·Settings 신규 UI 조립과 교체 회귀는 PROD-917이 소유한다.
 - 저장·cleanup·GraphQL·Relay/cache·actor 전환·실제 Web/iOS/Android 종단 간 검증은 완료하지 않았다.
   `add-profile-block` task 3.x와 전체 검증·archive는 각각 PROD-823·PROD-813 소유다.
+
+## 검증 시점 분리 · PROD-814 · 2026-09-06
+
+위 Storybook 이관 시점의 상태와 별개로 PROD-814는 shared UI·Relay와 Web 종단 간·접근성 검증을
+완료했다. 사용자 결정에 따라 현재 OpenSpec의 완료 범위는 이 검증까지로 확정한다.
+네이티브 앱 자체가 별도 이슈/PR에서 아직 작업 중이므로 iOS·Android runtime·접근성 검증은
+앱 작업 완료 후 수행한다. 이는 미실행 후속 검증이며 Native 제품 계약이나 지원 대상의 삭제가 아니다.
+PROD-814 담당자가 후속 검증 추적을 소유한다. OpenSpec archive는 Native 검증 통과나 PR 머지를 뜻하지 않는다.

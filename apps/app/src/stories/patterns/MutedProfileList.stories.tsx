@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
 import { MutedProfileList } from '@/components/profile/MutedProfileList';
+import { ProfileMuteActionControl } from '@/components/profile/ProfileMuteAction';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, space, textStyles } from '@/theme/tokens';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
@@ -68,7 +69,36 @@ function Fixture({
     setRequestState(visibleState === 'error' ? 'loading' : 'loadingMore');
   };
   const items = profiles
-    .map((p, index) => ({ ...p, displayName: index ? p.displayName : displayName }))
+    .map((p, index) => {
+      const item = { ...p, displayName: index ? p.displayName : displayName };
+      return {
+        ...item,
+        action: (
+          <ProfileMuteActionControl
+            displayName={item.displayName}
+            muted
+            onChangeMuted={async () => {
+              await onUnmute(item.id);
+              if (outcome === 'pending') {
+                await new Promise<void>(() => {});
+              }
+              if (outcome === 'error') {
+                throw new globalThis.Error('요청 실패');
+              }
+            }}
+            onFeedback={(event) => {
+              onFeedback({ ...event, profileId: item.id });
+              if (event.status === 'success') {
+                focusAfterRemoval.current = true;
+                setRemoved((current) => [...current, item.id]);
+              }
+            }}
+            profileId={item.id}
+            surface="button"
+          />
+        ),
+      };
+    })
     .filter((p) => !removed.includes(p.id));
   return (
     <ScrollView contentContainerStyle={styles.content} style={styles.frame}>
@@ -83,22 +113,6 @@ function Fixture({
         </Text>
       </View>
       <MutedProfileList
-        onFeedback={(event) => {
-          onFeedback(event);
-          if (event.status === 'success') {
-            focusAfterRemoval.current = true;
-            setRemoved((current) => [...current, event.profileId]);
-          }
-        }}
-        onUnmute={async (id) => {
-          await onUnmute(id);
-          if (outcome === 'pending') {
-            await new Promise<void>(() => {});
-          }
-          if (outcome === 'error') {
-            throw new globalThis.Error('요청 실패');
-          }
-        }}
         state={
           visibleState === 'loading'
             ? { status: 'loading' }

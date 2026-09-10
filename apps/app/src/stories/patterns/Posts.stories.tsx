@@ -3936,7 +3936,11 @@ export const ProductionMoreShareReferences: Story = {
       await userEvent.click(more);
       expect(more).toHaveAttribute('aria-expanded', 'true');
       const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
-      expect(within(menu).getAllByRole('menuitem')).toHaveLength(1);
+      expect(
+        within(menu)
+          .getAllByRole('menuitem')
+          .map((item) => item.getAttribute('aria-label')),
+      ).toEqual(['링크 복사', '뮤트']);
       await userEvent.click(within(menu).getByRole('menuitem', { name: '링크 복사' }));
       await waitFor(() => expect(more).toHaveAttribute('aria-expanded', 'false'));
       await waitFor(() => expect(getCopiedStrings()[index]).toBe(reference));

@@ -77,9 +77,9 @@
 - Authority / Provenance: `docs/domain/objects/profile-mute.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/design/profile-mute-block.md`, `PROD-814`, `PROD-824`
 - Status: Active
 - Context / Problem: 이전 결정은 비가시화된 Target을 nullable `targetProfile`과 별도 `targetProfileId`로 노출하고 Profile global ID로 해제하도록 기록했다. 이는 Target 관계를 Owner에게만 조회한다는 canonical visibility 경계와 관계 자체를 식별하는 Relay identity를 분리하지 못한다.
-- Decision Outcome: `ProfileMute`의 공개 `targetProfile`은 `Profile!`이며 Target Profile과 Instance가 `visibleProfileWhere`를 통과하지 못하면 `ProfileMute` Node와 Owner connection에서 관계 전체를 반환하지 않는다. 생성 action의 `ensureTarget`도 같은 Core transaction에서 이 predicate를 적용해 DISABLED Profile과 SUSPENDED Instance Target의 관계 저장을 거부한다. `targetProfileId` 공개 필드는 제공하지 않는다. `unmuteProfile(input: { id: ProfileMute global ID })`는 관계 identity와 selected Owner를 Core에 전달하고, nullable `profileMuteId` payload로 삭제된 관계 ID를 반환한다. `muteProfile(input: { id: Profile global ID })`의 Target 입력과 기존 Owner·Target unique upsert 및 같은 ID로 수렴하는 생성 semantics는 유지한다.
+- Decision Outcome: `ProfileMute`의 공개 `targetProfile`은 `Profile!`이며 Target Profile과 Instance가 `visibleProfileWhere`를 통과하지 못하면 `ProfileMute` Node와 Owner connection에서 관계 전체를 반환하지 않는다. 생성 action의 `ensureTarget`도 같은 Core transaction에서 이 predicate를 적용해 DISABLED Profile과 SUSPENDED Instance Target의 관계 저장을 거부한다. `targetProfileId` 공개 필드는 제공하지 않는다. `unmuteProfile(input: { id: ProfileMute global ID })`는 관계 identity와 selected Owner를 Core에 전달하고, nullable `profileMuteId`와 삭제된 관계의 nullable `targetProfile`을 payload로 반환한다. Relay consumer는 Target의 해제 후 `viewerState`를 이 경로로 선택한다. `muteProfile(input: { id: Profile global ID })`의 Target 입력과 기존 Owner·Target unique upsert 및 같은 ID로 수렴하는 생성 semantics는 유지하며, 생성 후 viewer-relative 상태는 반환된 `profileMute.targetProfile`에서 선택한다.
 - Alternatives Considered: 비가시 Target을 nullable Target과 Profile ID로 계속 반환하는 방식은 관계의 공개 visibility와 Node identity를 분리해 hidden relation을 발견하게 하므로 제외했다. Target ID를 먼저 조회한 뒤 해제하는 방식은 hidden Target의 공개 경계를 우회하고 추가 조회를 요구하므로 선택하지 않는다.
-- Consequences: Owner는 hidden Target의 관계를 목록이나 Node에서 볼 수 없지만 보관한 관계 global ID로 정확히 해제할 수 있다. 후속 UI는 nullable Target fallback이나 `targetProfileId` field에 의존하지 않고 관계 ID를 cache identity로 사용해야 한다.
+- Consequences: Owner는 hidden Target의 관계를 목록이나 Node에서 볼 수 없지만 보관한 관계 global ID로 정확히 해제할 수 있다. 후속 UI는 `targetProfileId` field에 의존하지 않고 관계 ID를 cache identity로 사용한다. mutation 응답의 Target viewer-relative 상태와 Relay connection directive가 정규화와 목록 membership 갱신을 소유하므로 클라이언트가 관계를 직접 연결하거나 해제하지 않는다.
 - Confirmation / Follow-up: disabled/suspended Target의 Node·Owner connection 제외, non-null Local·Remote Target field, 다른 Owner와 selected Profile 격리, ProfileMute global ID 해제를 GraphQL 통합 테스트로 확인한다.
 
 ### 저장 변경은 backfill 없는 additive migration으로 배포한다
@@ -250,3 +250,30 @@
   Local 구현을 `PROD-814`로 미룬 이전 결정. PostConnection·schema, 관계 데이터와 UI presentation은 유지한다.
 - Confirmation / Follow-up: Home·Local·Profile·Bookmark 실제 GraphQL 경로, Content 없는 Repost·Quote,
   방문 ID 예외, 양방향 pagination, selected Profile 격리·해제·비로그인 조회와 기존 Visibility·Eligibility를 검증한다.
+
+### Mutation 응답과 다음 조회로 Mute 상태를 수렴한다
+
+- Decision Date: 2026-09-10
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/profile-mute-block.md`, `PROD-814`
+- Status: Active
+- Context / Problem: 2026-09-03의 「목록의 Profile Mute Owner는 요청의 selected Profile이며 해제는 새 조회부터 반영한다」 결정에 기록된
+  `기존 클라이언트 connection의 즉시 갱신 방식`은 이미 로드된 Home·Local timeline의 mutation 직후 재조회로
+  해석될 여지가 있다. 관계 상태와 목록 후보 정책의 갱신 시점을 분리해 각 소비자의 소유권을 명확히 해야 한다.
+- Decision Outcome: Mute·해제 성공 직후 현재 selected Profile의 viewer-relative 관계와 Settings 관리 connection은
+  `PROD-814`가 소유한 mutation 응답/Relay 갱신으로 반영한다. 이미 로드된 Home·Local timeline은 Mute 전용 강제
+  재조회 대상이 아니며 mutation 자체가 해당 timeline을 다시 조회하도록 요구하지 않는다. 이후 사용자가 발생시킨
+  refresh·navigation·새 query 같은 다음 조회에서 서버 후보 정책으로 수렴한다. 클라이언트에서 Mute 후보를 별도로
+  필터링하지 않는다.
+- Alternatives Considered: Mute mutation 직후 Home·Local을 강제 재조회하는 방식은 관계 UI 갱신과 타임라인 후보
+  정책의 소유권을 섞으므로 제외한다. 클라이언트가 후보를 별도로 필터링하는 방식은 서버 pagination과 후보 정책을
+  중복하므로 선택하지 않는다.
+- Consequences: mutation 응답/Relay는 viewer-relative 관계와 Settings 관리 connection만 성공 직후 갱신하고,
+  Home·Local은 사용자가 시작한 다음 조회에서 서버 정책을 적용한다. 구현·API·테스트의 동작 범위는 바꾸지 않으며,
+  `PROD-814`는 이 Relay 갱신과 다음 조회 수렴의 정합성 검증을 소유한다.
+- Supersedes: 2026-09-03의 「목록의 Profile Mute Owner는 요청의 selected Profile이며 해제는 새 조회부터 반영한다」
+  결정 중 `기존 클라이언트 connection의 즉시 갱신 방식`을 이미 로드된 Home·Local timeline의 즉시 재조회로
+  해석하거나 요구하는 부분을 명시적으로 대체한다. selected Profile Owner와 새 조회의 서버 판정 계약은 유지한다.
+- Confirmation / Follow-up: Mute·해제 mutation 응답의 viewer-relative 관계와 Settings 관리 connection Relay 갱신,
+  기존 Home·Local의 비강제 재조회, 사용자 refresh·navigation·새 query 뒤 서버 후보 정책 수렴과 클라이언트 별도
+  필터 부재를 `PROD-814` 범위에서 확인한다.

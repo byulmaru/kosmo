@@ -1,16 +1,19 @@
 import { Volume2, VolumeOff } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
+import { graphql, useFragment } from 'react-relay';
+import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, breakpoints, textStyles } from '@/theme/tokens';
-import { ProfileMoreMenu } from './ProfileMoreMenu';
-import type { ComponentProps } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import type { View } from 'react-native';
-import type { ActionMenu, ActionMenuItem } from '@/components/ui/ActionMenu';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
+import type { ProfileMuteAction_profile$key } from './__generated__/ProfileMuteAction_profile.graphql';
 
 export type ProfileMuteFeedback = { muted: boolean; status: 'success' | 'error' };
 export type ProfileMuteControl = {
@@ -18,6 +21,87 @@ export type ProfileMuteControl = {
   onChangeMuted: (muted: boolean) => Promise<void>;
   onFeedback?: (feedback: ProfileMuteFeedback) => void;
 };
+
+const profileMuteActionFragment = graphql`
+  fragment ProfileMuteAction_profile on Profile {
+    id
+    displayName
+    viewerState {
+      profileMute {
+        id
+      }
+    }
+  }
+`;
+
+type ProfileMuteActionProps = {
+  onFeedback?: (feedback: ProfileMuteFeedback) => void;
+  profile: ProfileMuteAction_profile$key;
+} & (
+  | {
+      renderMenuItem: (props: ProfileMuteMenuItemRenderProps) => ReactNode;
+      surface?: 'menu';
+    }
+  | { renderMenuItem?: never; surface: 'button' | 'text' }
+);
+
+export type ProfileMuteMenuItemRenderProps = Readonly<{
+  disabled: boolean;
+  focusTriggerRef: RefObject<() => void>;
+  item: ActionMenuItem;
+}>;
+
+export function ProfileMuteAction({
+  onFeedback,
+  profile,
+  renderMenuItem,
+  surface = 'menu',
+}: ProfileMuteActionProps) {
+  const data = useFragment(profileMuteActionFragment, profile);
+  const { selectedProfileId } = useSession();
+  const { changeMuted } = useProfileMuteMutations();
+  const profileMuteId = data.viewerState?.profileMute?.id;
+  const muted = Boolean(profileMuteId);
+
+  if (!selectedProfileId || (surface !== 'menu' && !muted)) {
+    return null;
+  }
+
+  const onChangeMuted = (nextMuted: boolean) =>
+    changeMuted(
+      {
+        ownerProfileId: selectedProfileId,
+        profileMuteId,
+        targetProfileId: data.id,
+      },
+      nextMuted,
+    );
+
+  if (surface !== 'menu') {
+    return (
+      <ProfileMuteActionControl
+        displayName={data.displayName}
+        muted
+        onChangeMuted={onChangeMuted}
+        onFeedback={onFeedback}
+        profileId={data.id}
+        surface={surface}
+      />
+    );
+  }
+
+  return (
+    <ProfileMuteActionControl
+      displayName={data.displayName}
+      muted={muted}
+      onChangeMuted={onChangeMuted}
+      onFeedback={onFeedback}
+      profileId={data.id}
+      renderMenuItem={renderMenuItem!}
+      surface="menu"
+    />
+  );
+}
 type Props = {
   displayName: string;
   onChangeMuted: (muted: boolean) => Promise<void>;
@@ -26,28 +110,48 @@ type Props = {
   /** Menu on the profile, button in management, text in the ProfileHero status row. */
 } & (
   | {
+      renderMenuItem: (props: ProfileMuteMenuItemRenderProps) => ReactNode;
       surface?: 'menu';
       muted: boolean;
-      items?: readonly ActionMenuItem[];
-      renderTrigger?: ComponentProps<typeof ActionMenu>['renderTrigger'];
     }
-  | { surface: 'button' | 'text'; muted: true; items?: never; renderTrigger?: never }
+  | { surface: 'button' | 'text'; muted: true; renderMenuItem?: never }
 );
 
-export function ProfileMuteAction(props: Props) {
+type CommittedProfileTarget = Readonly<{
+  profileId: string;
+  revision: number;
+}>;
+
+type CommittedProfileTargetRef = {
+  current: CommittedProfileTarget;
+};
+
+export function ProfileMuteActionControl(props: Props) {
+  const committedTargetRef = useRef<CommittedProfileTarget>({
+    profileId: props.profileId,
+    revision: 0,
+  });
+
   // A changed target owns a fresh request lifecycle; old completions cannot update its feedback.
-  return <ProfileMuteActionContent key={props.profileId} {...props} />;
+  return (
+    <ProfileMuteActionContent
+      key={props.profileId}
+      {...props}
+      committedTargetRef={committedTargetRef}
+    />
+  );
 }
 
 function ProfileMuteActionContent({
   displayName,
+  committedTargetRef,
   muted,
   onChangeMuted,
   onFeedback,
+  profileId,
   surface = 'menu',
-  items = [],
-  renderTrigger,
-}: Props) {
+  renderMenuItem,
+}: Props & { committedTargetRef: CommittedProfileTargetRef }) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const mobile = Platform.OS !== 'web' || width < breakpoints.compact;
@@ -57,10 +161,11 @@ function ProfileMuteActionContent({
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
   const mounted = useRef(false);
+  const claimedRevisionRef = useRef<number | null>(null);
   const cancelRef = useRef<View>(null);
   const actionRef = useRef<View>(null);
   const focusTrigger = useRef<() => void>(() => {});
-  const completed = useRef<ProfileMuteFeedback | null>(null);
+  const completed = useRef<(() => void) | null>(null);
   const restoreTriggerFocus = () => {
     if (surface === 'menu') {
       focusTrigger.current();
@@ -68,12 +173,30 @@ function ProfileMuteActionContent({
       actionRef.current?.focus();
     }
   };
+  useLayoutEffect(() => {
+    const committedTarget = committedTargetRef.current;
+    if (committedTarget.profileId !== profileId) {
+      committedTargetRef.current = {
+        profileId,
+        revision: committedTarget.revision + 1,
+      };
+    }
+    claimedRevisionRef.current = committedTargetRef.current.revision;
+  }, [committedTargetRef, profileId]);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      const notify = completed.current;
+      completed.current = null;
+      if (
+        committedTargetRef.current.profileId === profileId &&
+        committedTargetRef.current.revision === claimedRevisionRef.current
+      ) {
+        notify?.();
+      }
     };
-  }, []);
+  }, [committedTargetRef, profileId]);
   const close = () => {
     if (!inFlight.current) {
       setOpen(false);
@@ -92,11 +215,34 @@ function ProfileMuteActionContent({
     } catch {
       // The public boundary presents a safe message, never a backend error string.
     }
-    if (!mounted.current) {
+    if (
+      claimedRevisionRef.current === null ||
+      committedTargetRef.current.profileId !== profileId ||
+      committedTargetRef.current.revision !== claimedRevisionRef.current
+    ) {
       return;
     }
-    completed.current = { muted: nextMuted, status: succeeded ? 'success' : 'error' };
+    if (!mounted.current && !succeeded) {
+      return;
+    }
+    if (!mounted.current) {
+      showToast(`${displayName} 님이 ${nextMuted ? '뮤트되었어요' : '뮤트 해제되었어요'}`, {
+        tone: 'success',
+      });
+      onFeedback?.({ muted: nextMuted, status: 'success' });
+      return;
+    }
     setPending(false);
+    completed.current = () => {
+      const status = succeeded ? 'success' : 'error';
+      showToast(
+        succeeded
+          ? `${displayName} 님이 ${nextMuted ? '뮤트되었어요' : '뮤트 해제되었어요'}`
+          : `${nextMuted ? '뮤트하지' : '뮤트를 해제하지'} 못했어요. 다시 시도해 주세요.`,
+        { tone: status === 'success' ? 'success' : 'danger' },
+      );
+      onFeedback?.({ muted: nextMuted, status });
+    };
     setOpen(false);
   };
   const activate = () => {
@@ -107,15 +253,11 @@ function ProfileMuteActionContent({
   return (
     <>
       {surface === 'menu' ? (
-        <ProfileMoreMenu
-          disabled={pending}
-          items={[
-            ...items,
-            { icon: muted ? Volume2 : VolumeOff, key: 'mute', label, onSelect: activate },
-          ]}
-          focusTriggerRef={focusTrigger}
-          renderTrigger={renderTrigger}
-        />
+        renderMenuItem!({
+          disabled: pending,
+          focusTriggerRef: focusTrigger,
+          item: { icon: muted ? Volume2 : VolumeOff, key: 'mute', label, onSelect: activate },
+        })
       ) : surface === 'text' ? (
         <Pressable
           ref={actionRef}
@@ -181,17 +323,9 @@ function ProfileMuteActionContent({
           }
           inFlight.current = false;
           restoreTriggerFocus();
-          const feedback = completed.current;
+          const notify = completed.current;
           completed.current = null;
-          if (feedback) {
-            showToast(
-              feedback.status === 'success'
-                ? `${displayName} 님이 ${feedback.muted ? '뮤트되었어요' : '뮤트 해제되었어요'}`
-                : `${feedback.muted ? '뮤트하지' : '뮤트를 해제하지'} 못했어요. 다시 시도해 주세요.`,
-              { tone: feedback.status === 'success' ? 'success' : 'danger' },
-            );
-            onFeedback?.(feedback);
-          }
+          notify?.();
         }}
         onShow={() => cancelRef.current?.focus()}
         title={muted ? '이 프로필을 뮤트 해제할까요?' : '이 프로필을 뮤트할까요?'}
@@ -203,8 +337,8 @@ function ProfileMuteActionContent({
           confirmLabel={label}
           message={
             muted
-              ? `${displayName} 님의 게시물이 타임라인에 다시 표시되고 새 알림을 받을 수 있어요. 팔로우 관계는 유지돼요.`
-              : '홈과 해시태그에서 이 프로필의 게시물이 숨겨지고 새 알림을 받지 않아요. 팔로우 관계는 유지돼요.'
+              ? `${displayName} 님의 게시물이 홈과 로컬 타임라인에 다시 표시돼요. 팔로우 관계는 유지돼요.`
+              : '홈과 로컬 타임라인에서 이 프로필의 게시물이 숨겨지고 팔로우 관계는 유지돼요.'
           }
           onCancel={close}
           onConfirm={() => void request(!muted)}

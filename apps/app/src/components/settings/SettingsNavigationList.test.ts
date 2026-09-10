@@ -75,7 +75,7 @@ describe('SettingsNavigationList', () => {
     await render();
 
     const links = rendered('Pressable');
-    assert.equal(links.length, 2);
+    assert.equal(links.length, 3);
     assert.equal(
       links[0].props.accessibilityLabel,
       'Byulmaru ID Account Settings 외부 서비스로 이동',
@@ -83,7 +83,9 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[0].props.href, 'https://id.byulmaru.co');
     assert.equal(links[1].props.accessibilityLabel, '게시물 기본 공개 범위 설정 열기');
     assert.equal(links[1].props.href, '/settings/default-post-visibility');
-    assert.deepEqual(texts(), ['계정 설정', '게시물 기본 공개 범위']);
+    assert.equal(links[2].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
+    assert.equal(links[2].props.href, '/settings/mute-and-block');
+    assert.deepEqual(texts(), ['계정 설정', '게시물 기본 공개 범위', '뮤트 및 차단']);
   });
 
   it('full master가 표시한 내부 detail만 current destination으로 전달한다', async () => {

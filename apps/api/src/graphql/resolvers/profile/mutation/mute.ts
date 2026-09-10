@@ -33,6 +33,10 @@ builder.mutationField('unmuteProfile', (t) =>
             return profileMuteId ? { id: profileMuteId, type: ProfileMute } : null;
           },
         }),
+        targetProfile: field.field({
+          type: Profile,
+          nullable: true,
+        }),
       }),
     }),
     input: {
@@ -44,7 +48,10 @@ builder.mutationField('unmuteProfile', (t) =>
         profileMuteId: input.id.id,
       });
 
-      return { profileMuteId: profileMute?.id ?? null };
+      return {
+        profileMuteId: profileMute?.id ?? null,
+        targetProfile: profileMute?.targetProfileId ?? null,
+      };
     },
   }),
 );

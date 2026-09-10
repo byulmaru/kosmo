@@ -4,6 +4,7 @@ import type { ComponentProps, RefObject } from 'react';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 
 type Props = {
+  accessibilityLabel?: string;
   disabled?: boolean;
   items: readonly ActionMenuItem[];
   focusTriggerRef?: RefObject<() => void>;
@@ -12,6 +13,7 @@ type Props = {
 
 /** Menu presentation only. Supplied actions own requests and completion lifecycles. */
 export function ProfileMoreMenu({
+  accessibilityLabel = '더보기',
   disabled = false,
   items,
   focusTriggerRef,
@@ -19,7 +21,7 @@ export function ProfileMoreMenu({
 }: Props) {
   return (
     <ActionMenu
-      accessibilityLabel="더보기"
+      accessibilityLabel={accessibilityLabel}
       disabled={disabled}
       items={items}
       webMinWidth={160}

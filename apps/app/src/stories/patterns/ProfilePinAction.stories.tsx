@@ -371,8 +371,12 @@ export const VisitorMenuContract: Story = {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     await userEvent.click(canvas.getByRole('button', { name: '더 보기' }));
-    expect(await body.findAllByRole('menuitem')).toHaveLength(1);
+    expect((await body.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual([
+      '링크 복사',
+      '뮤트',
+    ]);
     expect(await body.findByRole('menuitem', { name: '링크 복사' })).toBeVisible();
+    expect(await body.findByRole('menuitem', { name: '뮤트' })).toBeVisible();
     expect(body.queryByRole('menuitem', { name: '프로필에 고정' })).not.toBeInTheDocument();
     expect(body.queryByRole('menuitem', { name: '게시글 삭제' })).not.toBeInTheDocument();
     resetClipboardMock();

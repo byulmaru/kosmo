@@ -1,5 +1,5 @@
 import { Link2, VolumeOff } from 'lucide-react-native';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Image,
   Platform,
@@ -18,17 +18,17 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { getPublicWebOrigin } from '@/config/origin';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
+import { ProfileMoreMenu } from './ProfileMoreMenu';
 import { ProfileMuteAction } from './ProfileMuteAction';
 import { ProfileNameBlock } from './ProfileNameBlock';
 import { ProfileTagChip } from './ProfileTagChip';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
-import type { ProfileMuteControl } from './ProfileMuteAction';
 
 type ProfileHeroProps = {
   action?: ReactNode;
-  mute?: ProfileMuteControl;
+  showMuteAction?: boolean;
   loading?: boolean;
   profile?: ProfileHero_profile$key | null;
 };
@@ -55,6 +55,12 @@ const profileHeroFragment = graphql`
     followersCount
     followingCount
     ...ProfileNameBlock_profile
+    ...ProfileMuteAction_profile
+    viewerState {
+      profileMute {
+        id
+      }
+    }
   }
 `;
 
@@ -63,15 +69,19 @@ const countFormatter = new Intl.NumberFormat('en', {
   notation: 'compact',
 });
 
-export function ProfileHero({ action, mute, loading = false, profile = null }: ProfileHeroProps) {
+export function ProfileHero({
+  action,
+  showMuteAction = false,
+  loading = false,
+  profile = null,
+}: ProfileHeroProps) {
   const followingRef = useRef<View>(null);
-  const focusAfterUnmute = useRef(false);
+  const [unmuteFocusRevision, setUnmuteFocusRevision] = useState(0);
   useEffect(() => {
-    if (!mute?.muted && focusAfterUnmute.current) {
+    if (unmuteFocusRevision > 0) {
       followingRef.current?.focus();
-      focusAfterUnmute.current = false;
     }
-  }, [mute]);
+  }, [unmuteFocusRevision]);
   const theme = useTheme();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
@@ -161,7 +171,7 @@ export function ProfileHero({ action, mute, loading = false, profile = null }: P
             size={avatarSize}
           />
         </View>
-        {action || mute ? (
+        {action || showMuteAction ? (
           <View
             style={[
               actionGeometry,
@@ -172,34 +182,39 @@ export function ProfileHero({ action, mute, loading = false, profile = null }: P
               },
             ]}
           >
-            {mute ? (
+            {showMuteAction ? (
               <ProfileMuteAction
-                {...mute}
-                displayName={data.displayName}
-                profileId={data.id}
-                items={[
-                  {
-                    key: 'copy-profile-link',
-                    icon: Link2,
-                    label: '프로필 링크 복사',
-                    onSelect: () => {
-                      void (async () => {
-                        try {
-                          const copied = await setStringAsync(
-                            new URL(`/${data.relativeHandle}`, getPublicWebOrigin()).toString(),
-                          );
-                          if (!copied) {
-                            throw new Error('Clipboard did not confirm the copy.');
-                          }
-                        } catch {
-                          showToast('링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
-                            tone: 'danger',
-                          });
-                        }
-                      })();
-                    },
-                  },
-                ]}
+                profile={data}
+                renderMenuItem={({ disabled, focusTriggerRef, item }) => (
+                  <ProfileMoreMenu
+                    disabled={disabled}
+                    focusTriggerRef={focusTriggerRef}
+                    items={[
+                      {
+                        key: 'copy-profile-link',
+                        icon: Link2,
+                        label: '프로필 링크 복사',
+                        onSelect: () => {
+                          void (async () => {
+                            try {
+                              const copied = await setStringAsync(
+                                new URL(`/${data.relativeHandle}`, getPublicWebOrigin()).toString(),
+                              );
+                              if (!copied) {
+                                throw new Error('Clipboard did not confirm the copy.');
+                              }
+                            } catch {
+                              showToast('링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
+                                tone: 'danger',
+                              });
+                            }
+                          })();
+                        },
+                      },
+                      item,
+                    ]}
+                  />
+                )}
               />
             ) : null}
             {action ? <View style={styles.action}>{action}</View> : null}
@@ -236,7 +251,7 @@ export function ProfileHero({ action, mute, loading = false, profile = null }: P
             </Pressable>
           </NavigationLink>
         </View>
-        {mute?.muted ? (
+        {data.viewerState?.profileMute ? (
           <View style={[styles.muteRow, compact ? styles.mobileMuteRow : undefined]}>
             <VolumeOff accessible={false} aria-hidden color={theme.foregroundSecondary} size={16} />
             <Text
@@ -249,14 +264,12 @@ export function ProfileHero({ action, mute, loading = false, profile = null }: P
               이 사용자의 게시글은 뮤트되어 있습니다.
             </Text>
             <ProfileMuteAction
-              displayName={data.displayName}
-              muted
-              onChangeMuted={mute.onChangeMuted}
               onFeedback={(feedback) => {
-                focusAfterUnmute.current = feedback.status === 'success';
-                mute.onFeedback?.(feedback);
+                if (feedback.status === 'success') {
+                  setUnmuteFocusRevision((revision) => revision + 1);
+                }
               }}
-              profileId={data.id}
+              profile={data}
               surface="text"
             />
           </View>

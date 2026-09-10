@@ -1,5 +1,6 @@
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { ProfileMoreMenu } from '@/components/profile/ProfileMoreMenu';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { usePostActionAuthentication } from './PostActionAuthentication';
@@ -10,13 +11,11 @@ import { usePostMoreMenuItem } from './PostMoreMenu';
 import { usePostReactionController } from './PostReactionController';
 import { useRepostFailureToast } from './useRepostFailureToast';
 import type { StyleProp, ViewStyle } from 'react-native';
-import type { ProfileMuteControl } from '@/components/profile/ProfileMuteAction';
 import type { PostActionSurface_post$key } from './__generated__/PostActionSurface_post.graphql';
 import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
 
 type Props = Readonly<{
   actionBarStyle?: StyleProp<ViewStyle>;
-  mute?: ProfileMuteControl & { profileId: string };
   onDeleted?: () => void;
   reactionSummaryStyle?: StyleProp<ViewStyle>;
   reply?: PostActionBarProps['reply'];
@@ -30,7 +29,7 @@ const postActionSurfaceFragment = graphql`
     profile {
       id
       relativeHandle
-      displayName
+      ...ProfileMuteAction_profile
     }
     ...PostActionBar_post @alias(as: "actionBar")
     ...PostReactionController_post @alias(as: "reactionController")
@@ -39,7 +38,6 @@ const postActionSurfaceFragment = graphql`
 
 export function PostActionSurface({
   actionBarStyle,
-  mute,
   onDeleted,
   reactionSummaryStyle,
   reply,
@@ -65,49 +63,54 @@ export function PostActionSurface({
     relativeHandle: target.profile.relativeHandle,
   });
 
+  const canMute =
+    authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id;
+
   const renderActions = (more?: MoreActionConfig) => (
-    <PostActionBar
-      execution={authentication.execution}
-      more={more}
-      moreItems={[copyLinkItem]}
-      onBookmarkError={onBookmarkError}
-      onDeleted={onDeleted}
-      onRepostError={onRepostError}
-      onResolutionRequired={authentication.resolve}
-      post={target.actionBar}
-      reactionController={reactionController}
-      reply={reply}
-      repostExecution={repostAuthentication.execution}
-    />
+    <View style={actionBarStyle}>
+      <PostActionBar
+        execution={authentication.execution}
+        more={more}
+        moreItems={[copyLinkItem]}
+        onBookmarkError={onBookmarkError}
+        onDeleted={onDeleted}
+        onRepostError={onRepostError}
+        onResolutionRequired={authentication.resolve}
+        post={target.actionBar}
+        reactionController={reactionController}
+        reply={reply}
+        repostExecution={repostAuthentication.execution}
+      />
+    </View>
   );
 
   return (
     <>
       <PostReactionSummary controller={reactionController} style={reactionSummaryStyle} />
-      <View style={actionBarStyle}>
-        {mute &&
-        mute.profileId === target.profile.id &&
-        authentication.selectedProfileId &&
-        authentication.selectedProfileId !== target.profile.id ? (
-          <ProfileMuteAction
-            {...mute}
-            displayName={target.profile.displayName}
-            profileId={target.profile.id}
-            items={[copyLinkItem]}
-            renderTrigger={({ expanded, onPress, ref }) =>
-              renderActions({
-                accessibilityLabel: '더보기',
-                controlRef: ref,
-                menuExpanded: expanded,
-                onPress,
-                popupRole: 'menu',
-              })
-            }
-          />
-        ) : (
-          renderActions()
-        )}
-      </View>
+      {canMute ? (
+        <ProfileMuteAction
+          profile={target.profile}
+          renderMenuItem={({ disabled, focusTriggerRef, item }) => (
+            <ProfileMoreMenu
+              accessibilityLabel="더 보기 메뉴"
+              disabled={disabled}
+              focusTriggerRef={focusTriggerRef}
+              items={[copyLinkItem, item]}
+              renderTrigger={({ expanded, onPress, ref }) =>
+                renderActions({
+                  accessibilityLabel: '더 보기',
+                  controlRef: ref,
+                  menuExpanded: expanded,
+                  onPress,
+                  popupRole: 'menu',
+                })
+              }
+            />
+          )}
+        />
+      ) : (
+        renderActions()
+      )}
     </>
   );
 }

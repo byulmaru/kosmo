@@ -9,6 +9,7 @@ import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
+import { useSession } from '@/session/SessionProvider';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileLayoutQuery as ProfileLayoutQueryType } from './__generated__/ProfileLayoutQuery.graphql';
@@ -17,6 +18,7 @@ const ProfileLayoutQuery = graphql`
   query ProfileLayoutQuery($handle: String!) {
     profileByHandle(handle: $handle) {
       id
+      displayName
       instance {
         kind
       }
@@ -63,6 +65,7 @@ function ProfileLayoutContent({ handle, scrollKey }: { handle: string; scrollKey
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const profile = data.profileByHandle;
+  const { selectedProfileId } = useSession();
 
   if (!profile) {
     return (
@@ -77,7 +80,8 @@ function ProfileLayoutContent({ handle, scrollKey }: { handle: string; scrollKey
     profile.instance.kind === 'LOCAL' &&
     profile.viewerState?.isSelf === true &&
     profile.viewerState.membership?.role === 'OWNER';
-  const action = canEdit ? (
+  const canMute = Boolean(selectedProfileId && profile.viewerState && !profile.viewerState.isSelf);
+  const relationshipAction = canEdit ? (
     <NavigationLink href={'/profile-edit' as Href}>
       <Button accessibilityLabel="프로필 편집" tone="secondary">
         편집
@@ -89,7 +93,12 @@ function ProfileLayoutContent({ handle, scrollKey }: { handle: string; scrollKey
 
   return (
     <ProfileRouteContainer scrollKey={scrollKey}>
-      <ProfileHero action={action} profile={profile} />
+      <ProfileHero
+        key={selectedProfileId}
+        action={relationshipAction}
+        profile={profile}
+        showMuteAction={canMute}
+      />
       <Slot />
     </ProfileRouteContainer>
   );

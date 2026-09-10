@@ -150,6 +150,12 @@ mockModule(new URL('./FollowButton.tsx', import.meta.url), {
   FollowButton: ({ profile }: { profile: { handle: string } }) =>
     createElement('FollowButton', { identity: profile.handle }),
 });
+mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
+  ProfileMuteAction: 'ProfileMuteAction',
+});
+mockModule(new URL('./ProfileMuteController.tsx', import.meta.url), {
+  useProfileMuteMutations: () => ({ changeMuted: () => Promise.resolve() }),
+});
 mockModule(new URL('../ui/Button.tsx', import.meta.url), {
   Button: ({ children, ...props }: { children: string }) =>
     createElement('Button', props, children),
@@ -181,6 +187,9 @@ mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.
 });
 mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
   useRelayActorLifecycleKey: () => 'actor-a',
+});
+mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
+  useSession: () => ({ selectedProfileId: 'profile:viewer' }),
 });
 
 let ProfileLayout: ComponentType;

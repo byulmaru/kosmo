@@ -592,6 +592,7 @@ input UnmuteProfileInput {
 
 type UnmuteProfilePayload {
   profileMuteId: ID
+  targetProfile: Profile
 }
 
 input UpdateProfileInput {

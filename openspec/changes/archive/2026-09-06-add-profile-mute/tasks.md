@@ -83,7 +83,7 @@ Owner와 Target을 잇는 영구 Profile Mute를 중복 없이 저장하고, 기
 - 현재 Profile에는 Owner 전용 `profileMutes` Relay connection을, `ProfileViewerState`에는 nullable `profileMute`를 제공한다.
 - `muteProfile`은 concrete `Profile` global ID를, `unmuteProfile`은 concrete `ProfileMute` global ID를 입력으로 받고 Owner는 session의 selected Profile에서 정한다.
 - `muteProfile`은 DISABLED Profile 또는 SUSPENDED Instance의 Target을 거부하고 관계를 만들지 않는다.
-- 생성 payload는 `profileMute`, 해제 payload는 nullable `profileMuteId`를 반환한다.
+- 생성 payload는 `profileMute`, 해제 payload는 nullable `profileMuteId`와 삭제된 관계의 nullable `targetProfile`을 반환하며 mutation 후 viewer-relative 상태를 선택할 수 있게 한다.
 - 공개 schema에 기간·만료 입력이나 `expires_at`에 대응하는 필드를 추가하지 않는다.
 - 같은 Account의 다른 selected Profile도 별도 Owner로 취급한다.
 
@@ -218,7 +218,9 @@ Profile action·관리 목록·Relay 상태를 연결하고 Home·Local·Profile
   선행 구현의 repository 상태와 PR 증거를 재사용하고 같은 Settings shell·navigation을 다시 만들지 않는다.
 - Hashtag Post List API·projection·runtime은 `PROD-827`의 별도 계약으로 남기며 이 change의 archive를 막지
   않는다.
-- `PROD-824`·`PROD-825`·`PROD-814`가 맡은 task와 검증을 모두 마치기 전에는 이 change를 archive하지 않는다.
+- `PROD-824`·`PROD-825`·`PROD-814`의 현재 합의된 범위가 완료되면 archive한다. 2026-09-06 사용자 결정과
+  PROD-814 계약에 따라 Native runtime·접근성은 네이티브 앱 작업 완료 후의 미실행 후속 검증으로 분리한다.
+  부모 충돌·Stack 정리는 선행 PR #763 머지 후 수행한다. 두 후속 작업의 추적 owner는 PROD-814 담당자다.
 
 **Verification**
 
@@ -227,20 +229,22 @@ Profile action·관리 목록·Relay 상태를 연결하고 Home·Local·Profile
 - 제외 후보 뒤의 eligible Post로 Local 페이지가 채워지고 cursor와 `hasNextPage`가 유지되는지 확인한다.
 - 같은 Account의 selected Profile 전환과 Mute 해제 뒤 Home·Local·Profile·관리 목록의 새 조회 결과를
   검증한다.
-- Local·Remote Target의 Web·iOS·Android 흐름과 접근성, 기존 관계·상호작용·Notification·Read State 불변성을
-  통합 검증한다.
+- Local·Remote Target의 Web 흐름과 접근성, 기존 관계·상호작용·Notification·Read State 불변성을
+  통합 검증한다. Native 제품 계약은 유지하되 runtime·접근성 검증은 위 후속 작업으로 남긴다.
 - 공통 Settings IA의 최초 owner와 선행 구현의 repository 상태·PR 증거를 기록하고, 후행 이슈가 같은
   shell·navigation을 중복 구현하지 않았는지 확인한다.
 - canonical·Linear·OpenSpec을 최종 대조하고 archive 전후 strict validation을 통과시킨다.
 
-- [ ] 6.1 PROD-825의 Local 서버 후보 정책 구현·API 검증 증거를 확인하고 기존 Local UI에 연결한다.
-- [ ] 6.2 PROD-825의 Local API 회귀 증거를 재사용하고 selected Profile 전환·Mute 해제 뒤 Local 화면과
-      Relay connection이 최신 서버 결과에 맞춰 갱신되는지 runtime에서 검증한다.
-- [ ] 6.3 `PROD-858`의 공용 UI 결과를 Profile action·관리 목록·완료 피드백에 재사용하고 Relay
+- [x] 6.1 PROD-825의 Local 서버 후보 정책 구현·API 검증 증거를 확인하고 기존 Local UI에 연결한다. — [검증 기록](./verification.md#61-local-ui-연결)
+- [x] 6.2 PROD-825의 Local API 회귀 증거를 재사용하고 selected Profile 전환·Mute 해제 뒤 Local 화면과
+      Relay connection이 최신 서버 결과에 맞춰 갱신되는지 runtime에서 검증한다. — [검증 기록](./verification.md#62-selected-profile-전환과-해제-후-relay-갱신)
+- [x] 6.3 `PROD-858`의 공용 UI 결과를 Profile action·관리 목록·완료 피드백에 재사용하고 Relay
       store·connection 갱신을 기존 GraphQL 관계에 연결한다. 공통 Settings IA는 먼저 착수한 runtime 이슈의
       결과를 사용한다.
-- [ ] 6.4 직접 Target Profile의 정상 Post 표시와 Mute 상태·해제 action을 Web·iOS·Android 및 접근성 경계에서
-      검증한다.
-- [ ] 6.5 Home·Local·Profile·Repost와 기존 관계·상호작용 상태를 연결하는 cross-slice E2E를 통과시킨다.
-- [ ] 6.6 모든 적용 이슈와 artifact를 최종 대조하고 delta spec을 동기화한 뒤 OpenSpec을 archive해 archive 후
+- [x] 6.4 직접 Target Profile의 정상 Post 표시와 Mute 상태·해제 action을 Web·접근성 경계에서 검증하고,
+      Native 미실행 검증의 owner와 앱 작업 완료 후 실행 조건을 이관한다. 원래의 Native 검증 통과를 뜻하지 않는다.
+      — [검증 및 후속 범위](./verification.md#64-target-profile-web-native와-접근성)
+- [x] 6.5 Home·Local·Profile·Repost와 기존 관계·상호작용 상태를 연결하는 cross-slice E2E를 통과시킨다.
+      — [최종 E2E 8/8](./verification.md#65-cross-slice-e2e와-불변성)
+- [x] 6.6 모든 적용 이슈와 artifact를 최종 대조하고 delta spec을 동기화한 뒤 OpenSpec을 archive해 archive 후
       strict validation을 통과시킨다.
