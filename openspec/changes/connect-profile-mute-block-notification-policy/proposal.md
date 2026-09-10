@@ -5,10 +5,10 @@
 ## What Changes
 
 - 다섯 source가 저장 전에 같은 Notification 정책 경계에서 Recipient Profile과 Related Profile을 판정한다.
-- Recipient가 Related Profile을 영구 Mute했거나 어느 방향으로든 Profile Block이 존재하면 새 Notification을 억제한다. 콘텐츠 직접 조회가 허용되는 방향에도 Notification의 양방향 Block 정책을 독립 적용한다.
+- Recipient가 Related Profile을 적용 중인 Profile Mute(`expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP`)했거나 어느 방향으로든 Profile Block이 존재하면 새 Notification을 억제한다. 콘텐츠 직접 조회가 허용되는 방향에도 Notification의 양방향 Block 정책을 독립 적용한다.
 - 정책 deny는 생성하지 않는 정상 결과이며, 평가 실패도 생성하지 않는다. 평가 오류의 관찰과 기존 retry를 유지하고 이미 commit된 source action을 되돌리지 않는다.
 - Profile별 정책 격리, 해제 뒤 새 행동, duplicate·retry, 기존 Notification·Read State 보존을 source별로 검증한다.
-- 기간 Mute, Domain Block, 기존 unavailable cleanup, UI, Push, 새 Quote·Mention source와 source lifecycle retry 변경은 포함하지 않는다.
+- 기간 Mute의 preset·생성·변경 UI/action, Domain Block, 기존 unavailable cleanup, UI, Push, 새 Quote·Mention source와 source lifecycle retry 변경은 포함하지 않는다. 이미 저장된 기간 Mute의 Notification 활성 판정은 포함한다.
 
 ## Authority / Provenance
 
@@ -26,12 +26,12 @@
 
 ### Modified Capabilities
 
-- `notification`: 기존 capability에 다섯 source의 공통 영구 Mute·양방향 Block 생성 정책과 failure isolation 회귀 계약을 추가한다.
+- `notification`: 기존 capability에 다섯 source의 공통 활성 Mute·양방향 Block 생성 정책과 failure isolation 회귀 계약을 추가한다.
 
 ## Impact
 
 - Core Notification 생성 service, 공통 capability 조회 경계, 기존 Worker Notification Activity와 관련 Core/API/Worker 통합 검증이 영향 대상이다.
 - 기존 source commit, Notification 고유성, 읽음 처리, 공개 GraphQL shape와 UI 흐름을 유지한다. 새 테이블·migration·의존성은 필요하지 않다.
-- OpenSpec은 먼저 작성하되 구현 착수는 PROD-813·814 완료와 실제 capability 반영을 재확인한 뒤 진행한다. 작성 시 PROD-813은 Done, PROD-814·822는 In Review이며 문서 계약과 main runtime의 반영 상태는 다를 수 있다.
+- OpenSpec은 먼저 작성하고, PROD-813·814 완료 및 실제 capability 반영은 현재 전달 상태와 runtime에서 별도로 확인한다. 문서 계약과 main runtime의 반영 상태는 다를 수 있다. 2026-09-10 후속 사용자 결정과 PR 리뷰에 따라 Notification의 기간 Mute 활성 판정은 이 change에 포함하고, 기간 기능 자체는 PROD-826에 남긴다.
 - Quote·Mention 규범은 최신 canonical에 있지만 현재 main의 생성 source는 다섯 종류다. 구현 시 새 source가 이미 제공되면 Linear 범위를 먼저 정렬하고 공통 정책을 적용한다.
 - 이 change는 PROD-271의 첫 전달이나 PROD-817의 Domain Block 연동과 별도 lifecycle이다. 전체 tasks·통합 검증·delta 동기화·strict validation 완료 뒤 PROD-327의 완료 증거를 소유한 구현 PR이 archive한다.

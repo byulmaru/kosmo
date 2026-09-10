@@ -2,7 +2,7 @@
 
 **Authority / Provenance**
 
-- `docs/domain/objects/notification.md`의 생성·조회 정책, `docs/domain/objects/profile-mute.md`의 영구 Mute, `docs/domain/objects/profile-block.md`의 Notification pair 정책.
+- `docs/domain/objects/notification.md`의 생성·조회 정책, `docs/domain/objects/profile-mute.md`의 Mute, `docs/domain/objects/profile-block.md`의 Notification pair 정책.
 - [PROD-327](https://linear.app/byulmaru/issue/PROD-327)의 `Domain / Issue Gate 승인 — 2026-09-10`과 선행 [PROD-813](https://linear.app/byulmaru/issue/PROD-813)·[PROD-814](https://linear.app/byulmaru/issue/PROD-814)·[PROD-822](https://linear.app/byulmaru/issue/PROD-822).
 
 **Deliverable**
@@ -17,10 +17,10 @@
 **Verification**
 
 - Spec 승인 근거, 선행 이슈 상태·merge/runtime 반영, 기존 source 목록과 capability 조회 API를 기록한다.
-- 실제 관계를 사용해 Recipient→Related 영구 Mute, 반대 방향 Mute 허용, non-null 값 제외, 양방향·mutual Block을 실행 검증한다.
+- 실제 관계를 사용해 Recipient→Related Mute의 NULL·미래·과거·정확한 DB 현재 시각 경계, 반대 방향 Mute 허용, 양방향·mutual Block을 실행 검증한다.
 
 - [ ] 1.1 최신 authority·Spec 승인·선행 완료·실제 capability와 source 목록을 확인하고 작성 시점 대비 차이를 정렬한다.
-- [x] 1.2 실제 capability를 소비하는 공통 Notification 생성 판정을 구현하고 영구 Mute·양방향 Block의 실행 결과를 검증한다.
+- [x] 1.2 실제 capability를 소비하는 공통 Notification 생성 판정을 구현하고 활성 Mute·양방향 Block의 실행 결과를 검증한다.
 
 ## 2. PROD-327 다섯 source 연결과 Recipient 격리
 
@@ -40,7 +40,7 @@
 
 **Verification**
 
-- 다섯 종류 각각에서 allow, 영구 Mute deny, Block 양방향 deny와 올바른 source·Recipient correlation을 검증한다.
+- 다섯 종류 각각에서 allow, 활성 Mute(NULL·미래) deny, 만료·정확한 경계 allow, Block 양방향 deny와 올바른 source·Recipient correlation을 검증한다.
 - 같은 Account의 A1·A2 중 한 Profile에만 Mute를 적용해 격리를 검증한다. 실제 제공되는 Local/Remote ingress가 같은 core 생성 정책을 사용하는지 확인한다.
 - Block 전에 source가 commit되고 effect 실행 전에 Block이 생기는 순서, 콘텐츠 직접 조회 허용 방향에서도 알림이 억제되는 순서를 검증한다.
 
@@ -70,7 +70,7 @@
 
 - 실제 Mute/Block 정책 조회 실패를 유발하고 각 source의 commit 보존·Notification 미생성·오류 관찰을 함께 확인한다.
 - 오류 후 allow/deny 재시도, 삭제·terminal source, duplicate, 이미 Read인 Notification의 값 보존을 검증한다.
-- 영구 Mute 해제·마지막 Block 해제 뒤 새 행동, mutual 한쪽 해제의 지속 억제, Mute 생성 전 Read/Unread 보존을 검증한다.
+- Mute 해제·마지막 Block 해제 뒤 새 행동과 mutual 한쪽 해제의 지속 억제를 검증한다. Mute 생성 전 Read/Unread snapshot 보존은 `packages/core/services/profile-mute.test.ts`의 기존 회귀가 소유한다.
 
 - [x] 3.1 다섯 source의 정책 평가 실패에서 Notification 미생성과 source commit 보존·오류 전파를 검증한다.
 - [x] 3.2 기존 Activity retry·sibling settlement와 source 삭제/terminal·duplicate 멱등성 회귀를 검증한다.
@@ -100,4 +100,4 @@
 
 - [ ] 4.1 관련 Core/API/Worker 통합·회귀와 정적 검증을 실행하고 source별 검증 결과·환경·남은 제한을 기록한다.
 - [ ] 4.2 최종 구현·canonical·Linear·OpenSpec을 정렬하고 strict validation 및 기존 배포·rollback 확인 근거를 기록한다.
-- [ ] 4.3 모든 선행 task와 전체 검증 완료를 확인한 PROD-327 담당 구현 PR에서 delta spec을 동기화하고 archive·archive 후 validation을 완료한다.
+- [ ] 4.3 모든 선행 task와 전체 검증 완료를 확인한 PROD-327 담당 구현 PR에서 delta spec을 동기화하고 archive한 뒤 validation을 완료한다. 이번 리뷰 대응에서는 archive를 수행하지 않는다.
