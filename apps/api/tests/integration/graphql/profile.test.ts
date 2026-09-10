@@ -292,21 +292,17 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(await db.$count(ActivityPubActors), 0);
   });
 
-  test('returns a stored stale remote profile from the Temporal materialization Workflow', async (t) => {
+  test('returns a stored remote profile through the Temporal materialization Workflow', async (t) => {
     const auth = await createAuthenticatedSession();
     const stored = await createStoredActivityPubAuthor({ domain: remoteDomain, handle: 'alice' });
     await db
       .update(ActivityPubActors)
-      .set({ lastFetchedAt: Temporal.Instant.from('2025-01-01T00:00:00Z') })
+      .set({ lastFetchedAt: Temporal.Now.instant() })
       .where(eq(ActivityPubActors.profileId, stored.profile.id));
     const createContext = t.mock.method(remoteFederation, 'createContext', () => {
       throw new Error('Cached actor refresh must not perform WebFinger discovery');
     });
-    const execute = t.mock.method(
-      temporalClient.workflow,
-      'execute',
-      async () => stored.profile.id as never,
-    );
+    const execute = t.mock.method(temporalClient.workflow, 'execute');
 
     const result = await requestGraphQL<{
       searchProfiles: { edges: Array<{ node: { id: string; relativeHandle: string } }> };
@@ -342,19 +338,96 @@ describe('GraphQL remote profile boundary', () => {
   });
 
   for (const state of [InstanceState.SUSPENDED, InstanceState.UNRESPONSIVE]) {
-    test(`does not discover an explicit remote profile on a ${state.toLowerCase()} instance`, async (t) => {
+    test(`uses the canonical actor despite a ${state.toLowerCase()} handle domain`, async (t) => {
       const auth = await createAuthenticatedSession();
+      const canonical = await createStoredActivityPubAuthor({
+        domain: remoteDomain,
+        handle: 'alice',
+      });
       const domain = `${state.toLowerCase()}.remote.example`;
       await createRemoteInstance({ domain, state });
-      const createContext = t.mock.method(remoteFederation, 'createContext', () => {
-        throw new Error('Blocked instance must not perform WebFinger discovery');
+      await db
+        .update(ActivityPubActors)
+        .set({ lastFetchedAt: Temporal.Now.instant() })
+        .where(eq(ActivityPubActors.profileId, canonical.profile.id));
+      const lookupWebFinger = mock.fn(async (resource: URL | string) => {
+        assert.equal(resource, `acct:alice@${domain}`);
+        return {
+          links: [
+            {
+              href: canonical.actorUri,
+              rel: 'self',
+              type: 'application/activity+json',
+            },
+          ],
+        };
       });
-      const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
-      const execute = t.mock.method(
-        temporalClient.workflow,
-        'execute',
-        async () => undefined as never,
+      const createContext = t.mock.method(
+        remoteFederation,
+        'createContext',
+        () => ({ lookupWebFinger }) as unknown as ReturnType<typeof remoteFederation.createContext>,
       );
+      const execute = t.mock.method(temporalClient.workflow, 'execute');
+
+      const result = await requestGraphQL<{
+        searchProfiles: { edges: Array<{ node: { id: string; relativeHandle: string } }> };
+      }>(
+        `query SearchRemoteProfile($query: String!) {
+          searchProfiles(query: $query, first: 20) {
+            edges { node { id relativeHandle } }
+          }
+        }`,
+        { query: `@alice@${domain}` },
+        auth.token,
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.searchProfiles.edges, [
+        {
+          node: {
+            id: globalId('Profile', canonical.profile.id),
+            relativeHandle: `@alice@${remoteDomain}`,
+          },
+        },
+      ]);
+      assert.equal(createContext.mock.calls.length, 1);
+      assert.equal(lookupWebFinger.mock.calls.length, 1);
+      assert.equal(execute.mock.calls.length, 1);
+      const options = execute.mock.calls[0]?.arguments[1];
+      assert.ok(options);
+      assert.deepEqual(options.args, [
+        {
+          actorUri: canonical.actorUri,
+          profileId: auth.profile.id,
+        },
+      ]);
+    });
+  }
+
+  for (const scenario of [
+    { label: 'DISABLED profile', profileState: ProfileState.DISABLED },
+    { label: 'SUSPENDED profile', profileState: ProfileState.SUSPENDED },
+    { label: 'SUSPENDED instance', instanceState: InstanceState.SUSPENDED },
+  ] as const) {
+    test(`passes a cached ${scenario.label} to the Workflow for rejection`, async (t) => {
+      const auth = await createAuthenticatedSession();
+      const domain = `${scenario.label.toLowerCase().replaceAll(' ', '-')}.remote.example`;
+      const stored = await createStoredActivityPubAuthor({ domain, handle: 'alice' });
+      if (scenario.profileState !== undefined) {
+        await db
+          .update(Profiles)
+          .set({ state: scenario.profileState })
+          .where(eq(Profiles.id, stored.profile.id));
+      } else {
+        await db
+          .update(Instances)
+          .set({ state: scenario.instanceState })
+          .where(eq(Instances.id, stored.instance.id));
+      }
+      const createContext = t.mock.method(remoteFederation, 'createContext', () => {
+        throw new Error('Cached actor policy must not perform WebFinger discovery');
+      });
+      const execute = t.mock.method(temporalClient.workflow, 'execute');
 
       const result = await requestGraphQL<{
         searchProfiles: { edges: unknown[]; pageInfo: { hasNextPage: boolean } };
@@ -375,44 +448,32 @@ describe('GraphQL remote profile boundary', () => {
         pageInfo: { hasNextPage: false },
       });
       assert.equal(createContext.mock.calls.length, 0);
-      assert.equal(start.mock.calls.length, 0);
-      assert.equal(execute.mock.calls.length, 0);
-    });
-  }
+      assert.equal(execute.mock.calls.length, 1);
+      const workflowResult = execute.mock.calls[0]?.result;
+      assert.ok(workflowResult);
+      await assert.rejects(workflowResult, (error: unknown) => {
+        let current: unknown = error;
+        let isNotFoundFailure = false;
 
-  for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
-    test(`returns an empty connection for a stored ${state} remote profile without lookup`, async (t) => {
-      const auth = await createAuthenticatedSession();
-      const domain = `${state.toLowerCase()}.remote.example`;
-      const stored = await createStoredActivityPubAuthor({ domain, handle: 'alice' });
-      await db.update(Profiles).set({ state }).where(eq(Profiles.id, stored.profile.id));
-      const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
-      const execute = t.mock.method(
-        temporalClient.workflow,
-        'execute',
-        async () => undefined as never,
-      );
-
-      const result = await requestGraphQL<{
-        searchProfiles: { edges: unknown[]; pageInfo: { hasNextPage: boolean } };
-      }>(
-        `query SearchRemoteProfile($query: String!) {
-          searchProfiles(query: $query, first: 20) {
-            edges { node { id } }
-            pageInfo { hasNextPage }
+        while (current && typeof current === 'object') {
+          if ('type' in current && current.type === 'NotFoundError') {
+            isNotFoundFailure = true;
+            break;
           }
-        }`,
-        { query: `@alice@${domain}` },
-        auth.token,
-      );
+          current = 'cause' in current ? current.cause : undefined;
+        }
 
-      assertNoGraphQLErrors(result);
-      assert.deepEqual(result.data?.searchProfiles, {
-        edges: [],
-        pageInfo: { hasNextPage: false },
+        assert.equal(isNotFoundFailure, true);
+        return true;
       });
-      assert.equal(start.mock.calls.length, 0);
-      assert.equal(execute.mock.calls.length, 0);
+      const options = execute.mock.calls[0]?.arguments[1];
+      assert.ok(options);
+      assert.deepEqual(options.args, [
+        {
+          actorUri: stored.actorUri,
+          profileId: auth.profile.id,
+        },
+      ]);
     });
   }
 
@@ -462,6 +523,10 @@ describe('GraphQL remote profile boundary', () => {
       domain: remoteDomain,
       handle: 'alice',
     });
+    await db
+      .update(ActivityPubActors)
+      .set({ lastFetchedAt: Temporal.Now.instant() })
+      .where(eq(ActivityPubActors.profileId, canonical.profile.id));
     const lookupWebFinger = mock.fn(async (resource: URL | string) => {
       assert.equal(resource, 'acct:alice@alias.example');
       return {
@@ -479,11 +544,7 @@ describe('GraphQL remote profile boundary', () => {
       'createContext',
       () => ({ lookupWebFinger }) as unknown as ReturnType<typeof remoteFederation.createContext>,
     );
-    const execute = t.mock.method(
-      temporalClient.workflow,
-      'execute',
-      async () => canonical.profile.id as never,
-    );
+    const execute = t.mock.method(temporalClient.workflow, 'execute');
 
     const result = await requestGraphQL<{
       searchProfiles: { edges: Array<{ node: { id: string; relativeHandle: string } }> };

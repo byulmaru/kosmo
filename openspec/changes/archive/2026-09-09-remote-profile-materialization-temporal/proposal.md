@@ -8,8 +8,9 @@
 
 ## What Changes
 
-- 검색·발견 경계가 qualified handle을 canonical `actorUri`로 해석하고, materialization caller는 domain wrapper나 Profile
-  row 재조회 없이 canonical `actorUri`와 선택적인 acting `profileId`를 args로 공용
+- 검색·발견 경계가 저장된 canonical `actorUri`를 재사용하거나 WebFinger의 ActivityPub self link에서 canonical
+  `actorUri`를 확인하며, WebFinger 응답만으로 Instance를 추출하지 않는다. materialization caller는 domain wrapper나
+  Profile row 재조회 없이 canonical `actorUri`와 선택적인 acting `profileId`를 args로 공용
   `runWorkflow(remoteProfileMaterializationWorkflow, ...)`에 전달해 반환된 Profile ID를 사용한다. 기존 Workflow ID
   규칙과 `profileId`에 따른 origin 선택은 유지한다.
 - Coordinator Workflow가 `{ profileId, needsRefresh } | null` 형태의 최소 JSON-safe stored-state DTO를 반환하는

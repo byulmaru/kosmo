@@ -39,7 +39,8 @@ context와 기존 lookup, inbound Update의 검증된 actor/no-network projectio
 
 ### Current Constraints
 
-- 검색·발견 경계는 qualified handle을 canonical `actorUri`로 해석한다. materialization caller는 Profile row를 다시
+- 검색·발견 경계는 저장된 canonical `actorUri`를 재사용하거나 WebFinger의 ActivityPub self link에서 canonical
+  `actorUri`를 확인하며, WebFinger 응답만으로 Instance를 추출하지 않는다. materialization caller는 Profile row를 다시
   읽는 domain wrapper 없이 canonical `actorUri`와 선택적인 acting `profileId`를 args로 공용
   `runWorkflow(remoteProfileMaterializationWorkflow, ...)`에 전달하고 반환된 Profile ID를 사용한다. materialization
   성공 뒤 connection·staged visibility 조회는 기존 검색 경계가 수행한다.
@@ -70,8 +71,9 @@ context와 기존 lookup, inbound Update의 검증된 actor/no-network projectio
 
 ### Recommended Approach
 
-1. 검색·발견 caller가 qualified handle을 canonical `actorUri`로 해석한 뒤 `remoteProfileMaterializationWorkflow` 정의
-   객체와 `[input]` args를 공용 `runWorkflow`에 직접 전달한다. caller는 Profile row를 다시 읽지 않고, `mode: 'execute'`의
+1. 검색·발견 caller가 저장된 canonical `actorUri`를 재사용하거나 WebFinger의 ActivityPub self link에서 canonical
+   `actorUri`를 확인한 뒤 `remoteProfileMaterializationWorkflow` 정의 객체와 `[input]` args를 공용 `runWorkflow`에 직접
+   전달한다. WebFinger 응답만으로 Instance를 추출하지 않으며 caller는 Profile row를 다시 읽지 않고, `mode: 'execute'`의
    native Workflow 결과(Profile ID)를 사용한다. `mode: 'start'`는 generic caller가 native start acknowledgement를
    선택할 때만 사용한다.
 2. `remoteProfileMaterializationWorkflow`는 기존 `actorUri`·`profileId` input-to-ID 규칙을 유지한다. Workflow

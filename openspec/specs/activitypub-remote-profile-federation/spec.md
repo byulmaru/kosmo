@@ -30,14 +30,15 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 
 - **WHEN** 검색·발견 경계에서 확보한 canonical `actorUri`로 materialization을 요청하고 caller가 공용 `runWorkflow`의 native `execute` 또는 `start` mode를 선택한다
 - **THEN** Temporal Workflow와 Activity wire input은 canonical `actorUri`와 선택적인 `profileId`만 가진다
-- **AND** materialization caller는 stored Profile, actor metadata와 TTL을 직접 조회·판단하거나 Profile row를 다시 읽는 wrapper 없이 canonical `actorUri`와 선택적인 acting `profileId`를 args로 공용 `runWorkflow(remoteProfileMaterializationWorkflow, ...)`에 전달하고, native conflict/reuse policy를 caller에서 정하며, `execute`의 Workflow 결과(Profile ID) 또는 `start`의 native start acknowledgement를 사용한다
+- **AND** materialization caller는 상태·TTL을 직접 판단하거나 Profile row를 다시 읽는 wrapper 없이 canonical `actorUri`와 선택적인 acting `profileId`를 args로 공용 `runWorkflow(remoteProfileMaterializationWorkflow, ...)`에 전달하고, native conflict/reuse policy를 caller에서 정하며, `execute`의 Workflow 결과(Profile ID) 또는 `start`의 native start acknowledgement를 사용한다
 - **AND** Workflow는 Activity에서 `{ profileId, needsRefresh } | null` 최소 JSON-safe stored-state DTO만 받는다. `null`은 missing, `needsRefresh: false`는 갱신이 불필요하거나 허용되지 않는 상태(fresh 또는 `UNRESPONSIVE`), `needsRefresh: true`는 갱신 가능한 stale을 나타낸다. DTO의 `profileId`는 조회 대상인 cached Remote Profile ID이고, input의 선택적인 `profileId`는 origin 선택용 행동 Profile ID다
 - **AND** 전달된 `actorUri`에 저장된 remote Profile 또는 actor metadata가 없어도 새 remote `Profile`을 materialize할 수 있다
 - **AND** `profileId`가 없으면 configured Local Instance의 canonical origin을 사용하고, 있으면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용한다
 - **AND** 전달된 `profileId`가 필요한 Remote actor 정보를 제공하지 않으면 origin을 추측하지 않고 materialization을 실패 처리한다
 - **AND** `profileId`는 기존 unsigned lookup의 권한을 대신하지 않는다
-- **AND** 시스템은 Fedify lookup 전에 `actorUri` host의 normalized domain에 해당하는 기존 ActivityPub instance를 조회한다
-- **AND** 저장 actor 또는 actor metadata가 없어 외부 조회가 필요한 missing 경로에서 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이면 Fedify lookup 없이 materialization을 실패 처리한다
+- **AND** 저장된 canonical actor URI가 있으면 이를 재사용하고, 없으면 검색·발견 경계가 WebFinger의 ActivityPub self link에서 canonical actor URI를 확인한다
+- **AND** WebFinger discovery는 Actor Instance 상태 판정 전에 수행할 수 있으며 WebFinger 응답만으로 Instance를 추출하거나 상태를 판정하지 않는다
+- **AND** canonical actor URI의 현재 Profile/Instance 상태와 actor TTL은 public Workflow 실행 경로에서 판정하고, 기존 `SUSPENDED`/`UNRESPONSIVE` 대상의 Actor document fetch 제한을 유지한다
 - **AND** 기존 instance가 없으면 `actorUri` host의 normalized domain에 ActivityPub instance를 생성한다
 - **AND** missing 분기에서는 기존 materialization Activity가 하나의 실행 경로에서 Fedify lookup API로 `actorUri`를 직접 해석한다
 - **AND** Fedify가 ActivityPub actor 객체를 반환하면 해당 actor의 canonical actor URI를 remote identity로 처리한다
@@ -80,7 +81,7 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 #### Scenario: Reject materialization for unavailable instance
 
 - **WHEN** 저장 actor 또는 actor metadata가 없어 외부 조회가 필요한 materialization에서 `actorUri` host의 normalized domain에 해당하는 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이다
-- **THEN** 시스템은 Fedify lookup을 수행하지 않고 remote actor materialization을 실패로 처리한다
+- **THEN** 시스템은 Actor document lookup과 remote actor materialization을 수행하지 않고 실패로 처리한다
 - **AND** 시스템은 새 `Profile`을 만들거나 기존 profile을 refresh하지 않는다
 
 #### Scenario: Reuse existing actor URI

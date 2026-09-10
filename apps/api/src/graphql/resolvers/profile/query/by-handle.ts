@@ -1,5 +1,5 @@
 import { ActivityPubActors, db, first, Instances, Profiles } from '@kosmo/core/db';
-import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
+import { InstanceKind, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
@@ -118,8 +118,6 @@ builder.queryField('searchProfiles', (t) =>
             const cached = await db
               .select({
                 actorUri: ActivityPubActors.uri,
-                instanceState: Instances.state,
-                profileState: Profiles.state,
               })
               .from(Profiles)
               .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
@@ -137,84 +135,60 @@ builder.queryField('searchProfiles', (t) =>
             let actorUri: string | undefined;
 
             if (cached) {
-              if (
-                cached.profileState === ProfileState.ACTIVE &&
-                cached.instanceState !== InstanceState.SUSPENDED
-              ) {
-                actorUri = cached.actorUri;
-              }
+              actorUri = cached.actorUri;
             } else {
-              const knownInstance = await db
-                .select({ state: Instances.state })
-                .from(Instances)
-                .where(
-                  and(
-                    eq(Instances.domain, parsed.domain),
-                    eq(Instances.kind, InstanceKind.ACTIVITYPUB),
-                  ),
-                )
-                .limit(1)
-                .then(first);
+              const context = remoteFederation.createContext(
+                new URL(localInstance.canonicalOrigin),
+                undefined,
+              );
+              const descriptor = await context.lookupWebFinger(
+                `acct:${parsed.handle}@${parsed.domain}`,
+              );
 
-              if (
-                knownInstance?.state !== InstanceState.SUSPENDED &&
-                knownInstance?.state !== InstanceState.UNRESPONSIVE
-              ) {
-                const context = remoteFederation.createContext(
-                  new URL(localInstance.canonicalOrigin),
-                  undefined,
-                );
-                const descriptor = await context.lookupWebFinger(
-                  `acct:${parsed.handle}@${parsed.domain}`,
-                );
+              for (const link of descriptor?.links ?? []) {
+                if (
+                  link.rel !== 'self' ||
+                  (link.type !== 'application/activity+json' &&
+                    !link.type?.match(
+                      /application\/ld\+json;\s*profile="https:\/\/www\.w3\.org\/ns\/activitystreams"/,
+                    )) ||
+                  link.href == null
+                ) {
+                  continue;
+                }
 
-                for (const link of descriptor?.links ?? []) {
+                try {
+                  const candidate = new URL(link.href);
                   if (
-                    link.rel !== 'self' ||
-                    (link.type !== 'application/activity+json' &&
-                      !link.type?.match(
-                        /application\/ld\+json;\s*profile="https:\/\/www\.w3\.org\/ns\/activitystreams"/,
-                      )) ||
-                    link.href == null
+                    (candidate.protocol === 'http:' || candidate.protocol === 'https:') &&
+                    candidate.hostname
                   ) {
-                    continue;
+                    actorUri = candidate.href;
+                    break;
                   }
-
-                  try {
-                    const candidate = new URL(link.href);
-                    if (
-                      (candidate.protocol === 'http:' || candidate.protocol === 'https:') &&
-                      candidate.hostname
-                    ) {
-                      actorUri = candidate.href;
-                      break;
-                    }
-                  } catch {
-                    // Try another ActivityPub self link before reporting an invalid response.
-                  }
+                } catch {
+                  // Try another ActivityPub self link before reporting an invalid response.
                 }
+              }
 
-                if (!actorUri) {
-                  throw new RemoteActorMaterializationError(
-                    'Remote WebFinger response is missing a valid ActivityPub self link.',
-                  );
-                }
+              if (!actorUri) {
+                throw new RemoteActorMaterializationError(
+                  'Remote WebFinger response is missing a valid ActivityPub self link.',
+                );
               }
             }
 
-            if (actorUri) {
-              materializedProfileId = await runWorkflow(remoteProfileMaterializationWorkflow, {
-                args: [
-                  {
-                    actorUri,
-                    ...(ctx.session.profile?.id ? { profileId: ctx.session.profile.id } : {}),
-                  },
-                ],
-                mode: 'execute',
-                workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-                workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
-              });
-            }
+            materializedProfileId = await runWorkflow(remoteProfileMaterializationWorkflow, {
+              args: [
+                {
+                  actorUri,
+                  ...(ctx.session.profile?.id ? { profileId: ctx.session.profile.id } : {}),
+                },
+              ],
+              mode: 'execute',
+              workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+              workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+            });
           } catch (error) {
             let materializationError: unknown = error;
             while (

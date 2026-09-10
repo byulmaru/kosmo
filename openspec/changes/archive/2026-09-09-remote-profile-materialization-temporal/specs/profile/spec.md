@@ -9,15 +9,20 @@
 lookup 전에 GraphQL permission error로 거부해야 한다(MUST). 인증된 요청은 입력 query를 기존 handle 정책으로
 정규화하고 DB에 저장된 Local/Remote Profile을 `Profile.id` cursor connection으로 검색해야 한다(MUST).
 명시적인 `@handle@instance` qualified handle 전체가 remote handle로 파싱되고 저장된 Remote Profile이 없을
-때만 기존 Fedify actor lookup과 materialization을 먼저 수행해야 하며(MUST). 저장된 actor가 갱신 불필요 상태(fresh 또는
-`UNRESPONSIVE`)이면 외부 actor fetch나 refresh를 예약·수행하지 않아야 하고(MUST NOT), stale이면 기존 DB connection과
-staged visibility를 적용한 Profile identity를 refresh 완료 전에 반환하면서 refresh를 시작해야 한다(MUST). 저장된
-Profile이 없으면 동기 검색은 materialization 완료 뒤 Profile identity를 받아야 한다(MUST). qualified-handle discovery와
-materialization 성공 뒤 Profile connection·staged visibility DB 조회는 기존 검색 경계가 수행해야 한다(MUST). lookup 실패,
-unavailable Instance, identity 충돌과 그 밖의 materialization 실패는 성공한
-빈 connection으로 fallback해야 하며(MUST), 예상하지 못한 materialization 오류는 fallback 전에 관측해야 한다
-(MUST). 일반 텍스트, local handle, 불완전한 remote handle과 `profileByHandle`은 새 원격 요청을 시작해서는
-안 된다(MUST NOT).
+때만 기존 원격 actor discovery와 materialization을 먼저 수행해야 하며(MUST). 검색 경계는 저장된 canonical actor URI가
+있으면 이를 재사용하고, 없으면 WebFinger의 ActivityPub self link에서 canonical actor URI를 확인해야 한다(MUST).
+WebFinger discovery는 Actor Instance 상태 판정 전에 수행할 수 있지만 WebFinger 응답만으로 Instance를 추출하거나
+상태를 판정하지 않아야 한다(MUST NOT). API 검색 caller는 cached Profile/Instance state를 precheck하지 않고, canonical
+actor URI의 현재 Profile/Instance 상태와 actor TTL 판정은 materialization Workflow 실행 경로에서 수행해야 한다
+(MUST). 저장된 actor가 갱신 불필요 상태(fresh 또는 `UNRESPONSIVE`)이면 materialization Workflow는 외부 actor fetch나
+refresh를 예약·수행하지 않아야 하고(MUST NOT), stale이면 시스템은 기존 DB connection과 staged visibility를 적용한
+Profile identity를 refresh 완료 전에 반환하고 materialization Workflow는 refresh를 시작해야 한다(MUST). 저장된 Profile이
+없으면 동기 검색은 materialization
+완료 뒤 Profile identity를 받아야 한다(MUST). qualified-handle discovery와 materialization 성공 뒤 Profile
+connection·staged visibility DB 조회는 기존 검색 경계가 수행해야 한다(MUST). lookup 실패, unavailable Instance, identity
+충돌과 그 밖의 materialization 실패는 성공한 빈 connection으로 fallback해야 하며(MUST), 예상하지 못한 materialization
+오류는 fallback 전에 관측해야 한다(MUST). 일반 텍스트, local handle, 불완전한 remote handle과 `profileByHandle`은
+새 원격 요청을 시작해서는 안 된다(MUST NOT).
 
 connection은 immutable하고 유일한 `Profile.id ASC`를 cursor 순서로 사용해 페이지 사이 중복·누락 없이 결과
 비용을 제한해야 한다(MUST). exact `profileByHandle`과 materialization 이후 `searchProfiles` DB 조회는 configured
@@ -62,7 +67,7 @@ Block 공통 predicate를 선행 조건으로 요구해서는 안 된다(MUST NO
 #### Scenario: Materialize a missing remote profile for an explicit qualified handle
 
 - **WHEN** 로그인한 클라이언트가 명시적인 `@handle@instance` 전체를 검색하고 해당 remote actor와 Profile이 아직 저장되지 않았다
-- **THEN** 검색 경계는 해당 qualified handle을 canonical `actorUri`로 먼저 해석한다
+- **THEN** 검색 경계는 WebFinger의 ActivityPub self link에서 해당 qualified handle의 canonical `actorUri`를 확인한 뒤 actor materialization 경계를 호출한다
 - **AND** actor materialization 경계는 canonical `actorUri`와 선택적인 `profileId`만 전달받아 호출된다
 - **AND** materialization 성공 뒤 connection·staged visibility DB 조회는 기존 검색 경계에서 수행한다
 - **AND** 저장된 actor URI나 Profile이 없어도 actor URI를 사용해 새 remote Profile을 materialize할 수 있다

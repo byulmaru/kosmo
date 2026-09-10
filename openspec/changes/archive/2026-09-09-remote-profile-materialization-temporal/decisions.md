@@ -114,6 +114,18 @@
 - Consequences: 명시적 검색은 qualified handle을 canonical actor URI로 먼저 해석하고, 신규 요청과 stale refresh는 같은 actorUri-only Workflow 종류와 Activity 경계를 공유한다. 이전 union wire-input 서술은 이 final corrective contract로 대체되고, origin 선택, sync/async, stale immediate return과 child lifetime 결론은 유지된다.
 - Confirmation / Follow-up: search-boundary handle resolution, actorUri 신규 materialization, actorUri refresh의 no-acct lookup, URI mismatch 저장 거부와 동일 URI preferredUsername 변경 시 Profile identity 유지를 검증한다.
 
+### Search discovery, Workflow state, and API visibility boundary
+
+- Decision Date: 2026-09-11
+- Decision Class: Corrective Contract
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `PROD-808` user decision
+- Status: Active
+- Context / Problem: qualified handle discovery, durable state routing과 API 결과 visibility의 책임이 서로 섞이면 WebFinger 응답만으로 Instance를 판단하거나 caller가 stale state를 재현할 수 있다.
+- Decision Outcome: API 검색 caller는 저장된 canonical `actorUri`를 재사용하고, 없으면 WebFinger의 ActivityPub self link에서 canonical URI를 확인한 뒤 하나의 public materialization Workflow를 호출한다. WebFinger 응답만으로 Instance를 추출하거나 상태를 판단하지 않는다. 현재 Profile/Instance state와 actor TTL 판정 및 refresh 여부는 Workflow 실행 경로가 소유하고, API는 Workflow 결과 뒤 기존 connection·staged visibility를 최종 적용한다.
+- Alternatives Considered: caller precheck 또는 WebFinger host만으로 state를 판정하면 durable Workflow와 API의 책임이 갈라지고 canonical Actor와 다른 Instance의 상태를 적용할 수 있으므로 선택하지 않았다.
+- Consequences: discovery는 canonical URI까지만 책임지고, Workflow는 state/TTL과 materialization lifecycle을 일관되게 결정하며, API는 기존 visibility 정책을 유지한다.
+- Confirmation / Follow-up: cached URI reuse, WebFinger self-link discovery, Workflow state/TTL routing과 materialization 뒤 connection·visibility 적용을 각각 실행 검증한다.
+
 ### Workflow 종류와 무관한 공용 래퍼 정정
 
 - Decision Date: 2026-09-10
