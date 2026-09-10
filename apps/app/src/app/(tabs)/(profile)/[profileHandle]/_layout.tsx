@@ -166,6 +166,7 @@ function ProfileLayoutContent({
   const reportItem = useContentReportMenuItem({
     id: profile?.id ?? '',
     kind: ContentReportTargetType.PROFILE,
+    label: `@${handle}`,
   });
   if (!profile) {
     const missingState = (

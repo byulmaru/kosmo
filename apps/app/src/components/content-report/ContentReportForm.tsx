@@ -51,7 +51,9 @@ export function ContentReportForm({ onStateChange, target }: Props) {
   latestStateRef.current = formState;
   const parsedInput = contentReportInputSchema.safeParse({ details, reason });
   const validationError = parsedInput.success ? null : parsedInput.error.issues[0]?.message;
-  const showValidationError = detailsTouched || (status === 'rejected' && validationError != null);
+  const showValidationError =
+    validationError != null &&
+    (detailsTouched || reason === ContentReportReason.OTHER || status === 'rejected');
   const canSubmit = !submitting && parsedInput.success;
   const targetLabel = target.kind === 'PROFILE' ? '프로필' : '게시물';
   const reportState = (nextState: ContentReportFormState) => {
@@ -104,6 +106,12 @@ export function ContentReportForm({ onStateChange, target }: Props) {
   return (
     <View style={[styles.root, web ? null : styles.nativeRoot]}>
       <View style={styles.header}>
+        <Text
+          accessibilityLabel={`신고 대상 ${target.label}`}
+          style={[styles.target, { color: theme.text }]}
+        >
+          신고 대상: {target.label}
+        </Text>
         <Text style={[styles.description, { color: theme.textSecondary }]}>
           신고할 {targetLabel}의 사유를 선택해주세요. 신고 대상은 제출할 때 다시 확인합니다.
         </Text>
@@ -129,7 +137,7 @@ export function ContentReportForm({ onStateChange, target }: Props) {
         aria-invalid={Boolean(validationError && showValidationError)}
         editable={!submitting}
         error={showValidationError ? (validationError ?? undefined) : undefined}
-        label="상세 내용 (선택)"
+        label={`상세 내용 (${reason === ContentReportReason.OTHER ? '필수' : '선택'})`}
         maxLength={contentReportDetailsMaxLength}
         onChangeText={(value) => {
           setDetails(value);
@@ -191,6 +199,7 @@ const styles = StyleSheet.create({
   root: { ...layoutRecipes.formStack, width: '100%' },
   nativeRoot: { padding: spacing.xl },
   header: { gap: spacing.xs },
+  target: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md },
   description: { fontFamily: fontFamilies.ui, ...typography.md },
   options: { gap: spacing.xs },
   counter: { alignSelf: 'flex-end', fontFamily: fontFamilies.ui, ...typography.xsm },
