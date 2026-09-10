@@ -5,6 +5,7 @@ import { parseProfileHandle } from '@kosmo/core/profile';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/remote-profile';
 import { profileHandleSchema } from '@kosmo/core/validation';
+import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { and, asc, desc, eq, getColumns, gt, lt, sql } from 'drizzle-orm';
@@ -128,6 +129,20 @@ builder.queryField('searchProfiles', (t) =>
         const normalizedHandleLike = sql`
         ${Profiles.normalizedHandle} LIKE ${handlePattern} ESCAPE '\\'
       `;
+        const selectedProfileBlockWhere = ctx.session?.profile?.id
+          ? and(
+              profileBlockVisibilityWhere({
+                database: db,
+                ownerProfileId: ctx.session.profile.id,
+                targetProfileId: Profiles.id,
+              }),
+              profileBlockVisibilityWhere({
+                database: db,
+                ownerProfileId: Profiles.id,
+                targetProfileId: ctx.session.profile.id,
+              }),
+            )
+          : undefined;
 
         return resolveCursorConnection<Promise<ProfileRow[]>>(
           { args, toCursor: (profile) => profile.id },
@@ -147,6 +162,7 @@ builder.queryField('searchProfiles', (t) =>
                     eq(Profiles.id, materializedProfileId),
                     cursorWhere,
                     visibleProfileWhere({ profile: Profiles, instance: Instances }),
+                    selectedProfileBlockWhere,
                   ),
                 )
                 .orderBy(inverted ? desc(Profiles.id) : asc(Profiles.id))
@@ -165,6 +181,7 @@ builder.queryField('searchProfiles', (t) =>
                     normalizedHandleLike,
                     cursorWhere,
                     visibleProfileWhere({ profile: Profiles, instance: Instances }),
+                    selectedProfileBlockWhere,
                   ),
                 )
                 .orderBy(inverted ? desc(Profiles.id) : asc(Profiles.id))
@@ -181,6 +198,7 @@ builder.queryField('searchProfiles', (t) =>
                   normalizedHandleLike,
                   cursorWhere,
                   visibleProfileWhere({ profile: Profiles, instance: Instances }),
+                  selectedProfileBlockWhere,
                 ),
               )
               .orderBy(inverted ? desc(Profiles.id) : asc(Profiles.id))
