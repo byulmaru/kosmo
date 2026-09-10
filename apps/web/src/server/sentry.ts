@@ -36,3 +36,11 @@ export const captureUnexpectedError = (cause: unknown, context?: InboundCaptureC
     Sentry.captureException(cause);
   });
 };
+
+export const countMetric = (name: string, attributes: Record<string, string>): void => {
+  if (!enabled) {
+    return;
+  }
+
+  Sentry.metrics.count(name, 1, { attributes });
+};

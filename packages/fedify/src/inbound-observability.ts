@@ -57,6 +57,7 @@ export type InboundCaptureContext = {
 };
 
 export type InboundObservabilityReporter = {
+  countMetric: (name: string, attributes: Record<string, string>) => void;
   log: (observation: Omit<InboundObservation, 'error'>) => void;
   captureException: (error: unknown, context: InboundCaptureContext) => void;
 };
@@ -99,6 +100,7 @@ const externalErrorNames = new Set([
 ]);
 
 const defaultReporter: InboundObservabilityReporter = {
+  countMetric: () => undefined,
   log: (observation) => {
     const log =
       observation.message || observation.outcome === 'internal_failure'
@@ -132,6 +134,7 @@ export const setInboundObservabilityReporter = (
 ): (() => void) => {
   const previous = reporter;
   reporter = {
+    countMetric: next?.countMetric ?? defaultReporter.countMetric,
     log: next?.log ?? defaultReporter.log,
     captureException: next?.captureException ?? defaultReporter.captureException,
   };
@@ -164,6 +167,26 @@ export const observeInbound = ({ error, message, ...observation }: InboundObserv
     reporter.log(safeObservation);
   } catch {
     // Observability must not alter ActivityPub processing.
+  }
+
+  if (
+    observation.activityType === 'Create' &&
+    observation.handler === 'create' &&
+    observation.outcome === 'rejected' &&
+    observation.phase === 'projection' &&
+    observation.reasonCode === 'note_content_length_exceeded'
+  ) {
+    try {
+      reporter.countMetric('activitypub.inbound.note_content_length_exceeded', {
+        activity_type: 'Create',
+        handler: 'create',
+        outcome: 'rejected',
+        phase: 'projection',
+        reason_code: 'note_content_length_exceeded',
+      });
+    } catch {
+      // Observability must not alter ActivityPub processing.
+    }
   }
 
   if (observation.outcome !== 'internal_failure') {

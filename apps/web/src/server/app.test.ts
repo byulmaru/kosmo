@@ -16,6 +16,7 @@ import type {
 const {
   authorizationCodeGrant,
   captureUnexpectedError,
+  countMetric,
   createSession,
   discovery,
   federationFetch,
@@ -24,6 +25,7 @@ const {
 } = vi.hoisted(() => ({
   authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
   captureUnexpectedError: vi.fn<(cause: unknown) => void>(),
+  countMetric: vi.fn<(name: string, attributes: Record<string, string>) => void>(),
   createSession:
     vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
   discovery: vi.fn<typeof oidcDiscovery>(),
@@ -51,7 +53,7 @@ vi.mock('@kosmo/fedify', () => ({
   setInboundObservabilityReporter,
 }));
 
-vi.mock('./sentry', () => ({ captureUnexpectedError }));
+vi.mock('./sentry', () => ({ captureUnexpectedError, countMetric }));
 
 let staticRoot: string;
 let app: Hono;
@@ -71,6 +73,7 @@ beforeAll(async () => {
   ({ default: app } = await import('./app'));
   expect(setInboundObservabilityReporter).toHaveBeenCalledWith({
     captureException: captureUnexpectedError,
+    countMetric,
   });
 });
 

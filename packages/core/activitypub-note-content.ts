@@ -22,6 +22,15 @@ const remoteNoteDOMParser = new ProseMirrorDOMParser(postContentSchema, [
   ...schemaDOMParser.rules,
 ]);
 
+export const remoteNoteContentMaxLength = 10_000;
+
+export class RemoteNoteContentLengthExceededError extends RangeError {
+  constructor() {
+    super(`Remote Note content exceeds ${remoteNoteContentMaxLength} characters`);
+    this.name = new.target.name;
+  }
+}
+
 function htmlToBodyDocument(html: string): PostContentBodyDocumentV1 {
   const fragment = JSDOM.fragment(html);
 
@@ -78,9 +87,17 @@ export function projectRemoteNoteContent({
   summary,
   mediaType,
 }: RemoteNoteContentInput): PostContentDocumentV1 {
-  return canonicalizePostContentDocument({
+  const document = canonicalizePostContentDocument({
     version: postContentSchemaVersion,
     summary: projectSummary(summary),
     body: projectBody(content, mediaType),
   });
+
+  const plainTextLength =
+    (document.summary?.length ?? 0) + postContentDocumentToText(document).length;
+  if (plainTextLength > remoteNoteContentMaxLength) {
+    throw new RemoteNoteContentLengthExceededError();
+  }
+
+  return document;
 }

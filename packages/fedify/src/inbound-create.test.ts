@@ -1251,6 +1251,121 @@ describe('inbound Create dispatch', () => {
     assert.equal((await db.select().from(PostContents)).length, 0);
   });
 
+  test('rejects an over-limit Note before Media materialization and records a bounded reason', async () => {
+    await createStoredRemoteActor();
+    const objectUri = new URL('https://remote.example/notes/over-limit');
+    const logs: unknown[] = [];
+    const metrics: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      countMetric: (name, attributes) => metrics.push({ attributes, name }),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await handleInboundCreate(
+        createContext(),
+        new Create({
+          actor: remoteActorUri,
+          object: new Note({
+            attachments: [
+              new Image({
+                mediaType: 'image/webp',
+                url: new URL('https://remote.example/media/over-limit.webp'),
+              }),
+            ],
+            attribution: remoteActorUri,
+            content: 'a'.repeat(10_001),
+            id: objectUri,
+            mediaType: 'text/plain',
+            to: PUBLIC_COLLECTION,
+          }),
+        }),
+        receivedAt,
+      );
+    } finally {
+      restoreReporter();
+    }
+
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Create',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'create',
+        objectOrigin: objectUri.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'note_content_length_exceeded',
+      },
+    ]);
+    assert.doesNotMatch(JSON.stringify(logs), /a{100}/u);
+    assert.deepEqual(metrics, [
+      {
+        attributes: {
+          activity_type: 'Create',
+          handler: 'create',
+          outcome: 'rejected',
+          phase: 'projection',
+          reason_code: 'note_content_length_exceeded',
+        },
+        name: 'activitypub.inbound.note_content_length_exceeded',
+      },
+    ]);
+    assert.doesNotMatch(JSON.stringify(metrics), /a{100}|remote\.example|over-limit/u);
+    assert.equal(await db.$count(Media), 0);
+    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+  });
+
+  test('rejects an over-limit hydrated Note before canonical storage', async () => {
+    await createStoredRemoteActor();
+    const objectUri = new URL('https://objects.example/notes/over-limit-iri');
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: 'a'.repeat(10_001),
+      id: objectUri,
+      mediaType: 'text/plain',
+      to: PUBLIC_COLLECTION,
+    });
+    const documentLoader = mock.fn(async (url: string) => ({
+      contextUrl: null,
+      document: await note.toJsonLd({ format: 'expand' }),
+      documentUrl: url,
+    }));
+
+    try {
+      await handleInboundCreate(
+        createContext(documentLoader),
+        new Create({ actor: remoteActorUri, object: objectUri }),
+        receivedAt,
+      );
+    } finally {
+      restoreReporter();
+    }
+
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Create',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'create',
+        objectOrigin: objectUri.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'note_content_length_exceeded',
+      },
+    ]);
+    assert.doesNotMatch(JSON.stringify(logs), /a{100}/u);
+    assert.equal(documentLoader.mock.calls.length, 1);
+    assert.equal(await db.$count(Media), 0);
+    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+  });
+
   test('keeps the first content, visibility, and timestamps for duplicate Create', async () => {
     await createStoredRemoteActor();
     const publishedAt = Temporal.Instant.from('2026-07-15T12:00:00Z');
