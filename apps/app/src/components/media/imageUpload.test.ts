@@ -47,7 +47,7 @@ mock.module('expo-image-manipulator', {
         return createManipulatorContext(uri);
       },
     },
-    SaveFormat: { WEBP: 'webp' },
+    SaveFormat: { PNG: 'png', WEBP: 'webp' },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -65,16 +65,20 @@ function installManipulator({
   height,
   imageUris,
   resultUri = 'file:///cache/normalized.webp',
+  saveErrors,
   width,
 }: {
   readonly height: number;
   readonly imageUris?: readonly (string | undefined)[];
   readonly resultUri?: string;
+  readonly saveErrors?: readonly unknown[];
   readonly width: number;
 }) {
   const resizeCalls: Array<{ readonly height: number; readonly width: number }> = [];
   const saveOptions: unknown[] = [];
+  const pendingSaveErrors = [...(saveErrors ?? [])];
   let contextReleased = false;
+  let imageReleaseCount = 0;
   let renderCount = 0;
   let renderedWidth = width;
   let renderedHeight = height;
@@ -87,9 +91,14 @@ function installManipulator({
       renderCount += 1;
       const image: FakeImage = {
         height: renderedHeight,
-        release: () => undefined,
+        release: () => {
+          imageReleaseCount += 1;
+        },
         saveAsync: async (options) => {
           saveOptions.push(options);
+          if (pendingSaveErrors.length > 0) {
+            throw pendingSaveErrors.shift();
+          }
           return {
             height: renderedHeight,
             uri: resultUri,
@@ -113,6 +122,7 @@ function installManipulator({
   return {
     context,
     contextReleased: () => contextReleased,
+    imageReleaseCount: () => imageReleaseCount,
     renderCount: () => renderCount,
     resizeCalls,
     saveOptions,
@@ -212,8 +222,116 @@ test('issues, uploads normalized WebP bytes, and completes in order', async (t) 
   assert.equal(captureCalls.length, 0);
 });
 
-test('reads the normalized bytes and uses WebP content type for small images', async (t) => {
-  const normalizedBlob = new Blob(['normalized-webp'], { type: 'image/webp' });
+test('falls back to PNG when the browser rejects WebP encoding and propagates its content type', async (t) => {
+  const unsupportedWebpError = new Error(
+    'The browser does not support encoding "image/webp" images. Got "image/png" instead. Try a different format like JPEG or PNG.',
+  );
+  const normalizedUri = 'file:///cache/normalized.png';
+  const normalizedPng = new Blob(['normalized-png'], { type: 'image/png' });
+  const manipulator = installManipulator({
+    height: 3200,
+    resultUri: normalizedUri,
+    saveErrors: [unsupportedWebpError],
+    width: 4800,
+  });
+  const calls: string[] = [];
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === normalizedUri) {
+      calls.push('read-png');
+      return new Response(normalizedPng, { status: 200 });
+    }
+    calls.push(`${init?.method}:${String(input)}`);
+    assert.equal(await new Response(init?.body).text(), 'normalized-png');
+    assert.deepEqual(init?.headers, { 'content-type': 'image/png' });
+    return new Response(null, { status: 204 });
+  });
+
+  const mediaId = await uploadImage({
+    asset: createAsset({ height: 3200, width: 4800 }),
+    complete: async (id) => {
+      calls.push(`complete:${id}`);
+    },
+    isActive: () => true,
+    issue: async () => ({ mediaId: 'media-png', uploadUrl: 'https://upload.example/png' }),
+  });
+
+  assert.equal(mediaId, 'media-png');
+  assert.deepEqual(calls, ['read-png', 'PUT:https://upload.example/png', 'complete:media-png']);
+  assert.deepEqual(manipulator.resizeCalls, [{ height: 1365, width: 2048 }]);
+  assert.deepEqual(manipulator.saveOptions, [{ compress: 0.8, format: 'webp' }, { format: 'png' }]);
+  assert.equal(manipulator.contextReleased(), true);
+  assert.equal(captureCalls.length, 0);
+});
+
+test('does not retry an unrelated WebP save failure or start a PUT', async (t) => {
+  const saveError = new Error('image decoder failed');
+  const manipulator = installManipulator({ height: 800, saveErrors: [saveError], width: 1200 });
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('fetch must not run');
+  });
+
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset(),
+      complete: async () => undefined,
+      isActive: () => true,
+      issue: async () => ({ mediaId: 'media-failed', uploadUrl: 'https://upload.example/failed' }),
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof ImageUploadError);
+      assert.equal(error.cause, saveError);
+      assert.deepEqual(error.failure, { reason: 'transient', stage: 'transfer' });
+      return true;
+    },
+  );
+
+  assert.deepEqual(manipulator.saveOptions, [{ compress: 0.8, format: 'webp' }]);
+  assert.equal(fetchMock.mock.callCount(), 0);
+  assert.equal(manipulator.imageReleaseCount(), 1);
+  assert.equal(manipulator.contextReleased(), true);
+});
+
+test('cleans up when the PNG fallback save also fails', async (t) => {
+  const pngSaveError = new Error('png encoder failed');
+  const manipulator = installManipulator({
+    height: 800,
+    saveErrors: [
+      new Error(
+        'The browser does not support encoding "image/webp" images. Got "image/png" instead. Try a different format like JPEG or PNG.',
+      ),
+      pngSaveError,
+    ],
+    width: 1200,
+  });
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('fetch must not run');
+  });
+
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset(),
+      complete: async () => undefined,
+      isActive: () => true,
+      issue: async () => ({
+        mediaId: 'media-png-failed',
+        uploadUrl: 'https://upload.example/png-failed',
+      }),
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof ImageUploadError);
+      assert.equal(error.cause, pngSaveError);
+      return true;
+    },
+  );
+
+  assert.deepEqual(manipulator.saveOptions, [{ compress: 0.8, format: 'webp' }, { format: 'png' }]);
+  assert.equal(fetchMock.mock.callCount(), 0);
+  assert.equal(manipulator.imageReleaseCount(), 1);
+  assert.equal(manipulator.contextReleased(), true);
+});
+
+test('reads the normalized bytes and uses WebP content type even when Blob metadata is empty', async (t) => {
+  const normalizedBlob = new Blob(['normalized-webp']);
   const manipulator = installManipulator({ height: 800, width: 1200 });
   const calls: Array<{ readonly body?: BodyInit | null; readonly headers?: HeadersInit }> = [];
   const fetchMock = t.mock.method(
