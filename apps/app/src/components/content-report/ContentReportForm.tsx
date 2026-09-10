@@ -21,9 +21,10 @@ const contentReportOptions = [
   { label: '기타', value: ContentReportReason.OTHER },
 ] as const;
 
-type ContentReportStatus = 'idle' | 'rejected' | 'success' | 'unknown';
+type ContentReportStatus = 'idle' | 'rejected' | 'unknown';
 
 type Props = {
+  onDelivered?: () => void;
   onStateChange?: (state: ContentReportFormState) => void;
   target: ContentReportTarget;
 };
@@ -36,7 +37,7 @@ const SubmitContentReportMutation = graphql`
   }
 `;
 
-export function ContentReportForm({ onStateChange, target }: Props) {
+export function ContentReportForm({ onDelivered, onStateChange, target }: Props) {
   const theme = useTheme();
   const web = Platform.OS === 'web';
   const [reason, setReason] = useState<ContentReportReason>(ContentReportReason.HARMFUL_CONTENT);
@@ -83,8 +84,8 @@ export function ContentReportForm({ onStateChange, target }: Props) {
         if (nextStatus === 'DELIVERED') {
           setDetails('');
           setReason(ContentReportReason.HARMFUL_CONTENT);
-          setStatus('success');
           reportState({ dirty: false, submitting: false });
+          onDelivered?.();
           return;
         }
 
@@ -145,11 +146,6 @@ export function ContentReportForm({ onStateChange, target }: Props) {
         {details.length.toLocaleString()} / {contentReportDetailsMaxLength.toLocaleString()}
       </Text>
 
-      {status === 'success' ? (
-        <Text accessibilityLiveRegion="polite" style={[styles.success, { color: theme.text }]}>
-          신고를 전달했습니다.
-        </Text>
-      ) : null}
       {status === 'rejected' ? (
         <Text
           accessibilityLiveRegion="polite"
@@ -197,7 +193,6 @@ const styles = StyleSheet.create({
   description: { fontFamily: fontFamilies.ui, ...typography.md },
   options: { gap: spacing.xs },
   counter: { alignSelf: 'flex-end', fontFamily: fontFamilies.ui, ...typography.xsm },
-  success: { fontFamily: fontFamilies.ui, ...typography.sm },
   error: { fontFamily: fontFamilies.ui, ...typography.sm },
   warning: { fontFamily: fontFamilies.ui, ...typography.sm },
   actions: { alignItems: 'flex-start', width: '100%' },
