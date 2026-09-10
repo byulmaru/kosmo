@@ -810,11 +810,16 @@ Mute가 Visibility·Eligibility 검사나 Bookmark Owner 권한을 대신해서�
 
 인증된 Post List 조회의 Profile Mute Owner는 요청의 현재 selected Profile이어야 한다(MUST).
 
-**Authority / Provenance**: `docs/domain/objects/profile-mute.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/policies/post-list.md`, `PROD-814`, `PROD-825`
+**Authority / Provenance**: `docs/domain/objects/profile-mute.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/policies/post-list.md`, `docs/design/profile-mute-block.md`, `PROD-814`, `PROD-825`
 
 같은 Account의 다른 Profile이 가진 Mute 관계를 조회 결과에 사용해서는 안 된다(MUST NOT).
 Profile Mute를 해제한 뒤 시작한 새 조회는 제거된 관계를 적용해서는 안 된다(MUST NOT). 서버 요청 사이에
 Owner별 Mute 판정 결과를 섞거나 오래된 관계를 재사용해서는 안 된다(MUST NOT).
+Profile Mute 생성·해제 mutation이 성공하면 mutation 응답을 Relay가 반영해 현재 selected Profile의
+viewer-relative 관계와 Settings 관리 connection을 갱신해야 한다(MUST). 이미 로드된 Home·Local timeline은
+Mute 전용 강제 재조회 대상이 아니며(MUST NOT), mutation 자체가 해당 timeline을 다시 조회하도록 요구해서는
+안 된다(MUST NOT). 이후 사용자가 발생시킨 refresh·navigation·새 query 같은 다음 조회는 서버 후보 정책으로
+수렴해야 한다(MUST). 클라이언트에서 Mute 후보를 별도로 필터링해서는 안 된다(MUST NOT).
 
 #### Scenario: 같은 Account의 selected Profile별 결과를 격리한다
 

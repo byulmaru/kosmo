@@ -250,3 +250,30 @@
   Local 구현을 `PROD-814`로 미룬 이전 결정. PostConnection·schema, 관계 데이터와 UI presentation은 유지한다.
 - Confirmation / Follow-up: Home·Local·Profile·Bookmark 실제 GraphQL 경로, Content 없는 Repost·Quote,
   방문 ID 예외, 양방향 pagination, selected Profile 격리·해제·비로그인 조회와 기존 Visibility·Eligibility를 검증한다.
+
+### Mutation 응답과 다음 조회로 Mute 상태를 수렴한다
+
+- Decision Date: 2026-09-10
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/profile-mute-block.md`, `PROD-814`
+- Status: Active
+- Context / Problem: 2026-09-03의 「목록의 Profile Mute Owner는 요청의 selected Profile이며 해제는 새 조회부터 반영한다」 결정에 기록된
+  `기존 클라이언트 connection의 즉시 갱신 방식`은 이미 로드된 Home·Local timeline의 mutation 직후 재조회로
+  해석될 여지가 있다. 관계 상태와 목록 후보 정책의 갱신 시점을 분리해 각 소비자의 소유권을 명확히 해야 한다.
+- Decision Outcome: Mute·해제 성공 직후 현재 selected Profile의 viewer-relative 관계와 Settings 관리 connection은
+  `PROD-814`가 소유한 mutation 응답/Relay 갱신으로 반영한다. 이미 로드된 Home·Local timeline은 Mute 전용 강제
+  재조회 대상이 아니며 mutation 자체가 해당 timeline을 다시 조회하도록 요구하지 않는다. 이후 사용자가 발생시킨
+  refresh·navigation·새 query 같은 다음 조회에서 서버 후보 정책으로 수렴한다. 클라이언트에서 Mute 후보를 별도로
+  필터링하지 않는다.
+- Alternatives Considered: Mute mutation 직후 Home·Local을 강제 재조회하는 방식은 관계 UI 갱신과 타임라인 후보
+  정책의 소유권을 섞으므로 제외한다. 클라이언트가 후보를 별도로 필터링하는 방식은 서버 pagination과 후보 정책을
+  중복하므로 선택하지 않는다.
+- Consequences: mutation 응답/Relay는 viewer-relative 관계와 Settings 관리 connection만 성공 직후 갱신하고,
+  Home·Local은 사용자가 시작한 다음 조회에서 서버 정책을 적용한다. 구현·API·테스트의 동작 범위는 바꾸지 않으며,
+  `PROD-814`는 이 Relay 갱신과 다음 조회 수렴의 정합성 검증을 소유한다.
+- Supersedes: 2026-09-03의 「목록의 Profile Mute Owner는 요청의 selected Profile이며 해제는 새 조회부터 반영한다」
+  결정 중 `기존 클라이언트 connection의 즉시 갱신 방식`을 이미 로드된 Home·Local timeline의 즉시 재조회로
+  해석하거나 요구하는 부분을 명시적으로 대체한다. selected Profile Owner와 새 조회의 서버 판정 계약은 유지한다.
+- Confirmation / Follow-up: Mute·해제 mutation 응답의 viewer-relative 관계와 Settings 관리 connection Relay 갱신,
+  기존 Home·Local의 비강제 재조회, 사용자 refresh·navigation·새 query 뒤 서버 후보 정책 수렴과 클라이언트 별도
+  필터 부재를 `PROD-814` 범위에서 확인한다.

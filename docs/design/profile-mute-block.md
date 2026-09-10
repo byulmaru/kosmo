@@ -28,6 +28,11 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 - Mute가 성공하면 기존 공용 Toast에 `{표시 이름} 님이 뮤트되었어요`를 표시하고 Mute 관리 action을
   `뮤트 해제`로 전환한다. `ProfileHero` 상단 Action SLOT의 관계 action은 바꾸지 않으며, 성공 전에 상태나
   Toast를 낙관적으로 확정하지 않는다.
+- Mute·해제 성공 직후 현재 selected Profile의 viewer-relative 관계와 Settings 관리 connection은 `PROD-814`가
+  소유한 mutation 응답/Relay 갱신으로 반영한다. 이미 로드된 Home·Local timeline은 Mute 전용 강제 재조회 대상이
+  아니며, mutation 자체가 해당 timeline을 다시 조회하도록 요구하지 않는다. 이후 사용자가 발생시킨
+  refresh·navigation·새 query 같은 다음 조회에서 서버 후보 정책으로 수렴한다. 클라이언트에서 Mute 후보를
+  별도로 필터링하지 않는다.
 - Mute가 확정된 직접 Profile은 기존 Profile 내용과 Post를 유지한다. 팔로잉·팔로워 수치 아래에는 canonical
   `VolumeOff`, `이 사용자의 게시글은 뮤트되어 있습니다.`, link-colored text action `뮤트 해제`를 한
   상태·action 행으로 표시한다. 상단 Action SLOT에는 현재 관계 상태에 맞는 기존 `FollowButton`의 `팔로우`
