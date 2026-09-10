@@ -415,7 +415,11 @@ export const LatePreviousActorMutationIsIsolated: Story = {
     relay: {
       operationResponses: {
         FollowRequestListItemApproveMutation: [
-          { data: approveMutationResponse, delayMs: 100 },
+          {
+            data: approveMutationResponse,
+            delayMs: 100,
+            errors: [{ message: '승인 mutation 실패' }],
+          },
           { data: approveMutationResponse },
         ],
         FollowRequestsPageQuery: [
@@ -449,6 +453,7 @@ export const LatePreviousActorMutationIsIsolated: Story = {
     expect(
       canvas.queryByRole('link', { name: '별빛 여행자 프로필로 이동' }),
     ).not.toBeInTheDocument();
+    expect(canvas.queryByText(/팔로우 요청을 승인하지 못했어요/)).not.toBeInTheDocument();
   },
   render: () => <ActorSwitchScreen />,
 };

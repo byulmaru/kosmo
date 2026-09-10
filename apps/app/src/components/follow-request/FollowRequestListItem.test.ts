@@ -46,21 +46,20 @@ function createEnvironment() {
 }
 
 function variables() {
-  return { connections: [connectionId], id: requestId };
+  return { id: requestId };
 }
 
-function assertRequestRemoved(environment: Environment) {
-  assert.equal(environment.getStore().getSource().get(requestId), null);
+function assertRequestPresent(environment: Environment) {
+  assert.ok(environment.getStore().getSource().get(requestId));
   assert.deepEqual(environment.getStore().getSource().get(connectionId)?.edges, {
-    __refs: [],
+    __refs: [edgeId],
   });
 }
 
 describe('follow request mutation connection contract', () => {
-  it('removes an approved request edge before deleting its Relay record', () => {
+  it('keeps an approved request until completion handles the successful payload', () => {
     const environment = createEnvironment();
     const operation = createOperationDescriptor(getRequest(approveMutation), variables());
-
     environment.commitPayload(operation, {
       approveProfileFollowRequest: {
         profileFollowRequestId: requestId,
@@ -83,13 +82,12 @@ describe('follow request mutation connection contract', () => {
       },
     });
 
-    assertRequestRemoved(environment);
+    assertRequestPresent(environment);
   });
 
-  it('removes a rejected request edge before deleting its Relay record', () => {
+  it('keeps a rejected request until completion handles the successful payload', () => {
     const environment = createEnvironment();
     const operation = createOperationDescriptor(getRequest(rejectMutation), variables());
-
     environment.commitPayload(operation, {
       rejectProfileFollowRequest: {
         profileFollowRequestId: requestId,
@@ -97,6 +95,6 @@ describe('follow request mutation connection contract', () => {
       },
     });
 
-    assertRequestRemoved(environment);
+    assertRequestPresent(environment);
   });
 });

@@ -1,11 +1,13 @@
 import { CheckIcon, XIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
-import { graphql, useFragment, useMutation } from 'react-relay';
+import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { ConnectionHandler } from 'relay-runtime';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { getIconButtonTargetSize, IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { iconSizes, space } from '@/theme/tokens';
 import type { Href } from 'expo-router';
@@ -38,10 +40,9 @@ const followRequestListItemFragment = graphql`
 `;
 
 const approveFollowRequestMutation = graphql`
-  mutation FollowRequestListItemApproveMutation($connections: [ID!]!, $id: ID!) {
+  mutation FollowRequestListItemApproveMutation($id: ID!) {
     approveProfileFollowRequest(input: { id: $id }) {
-      profileFollowRequestId @deleteEdge(connections: $connections)
-      profileFollowRequestId @deleteRecord
+      profileFollowRequestId
       followerProfile {
         id
         followingCount
@@ -64,10 +65,9 @@ const approveFollowRequestMutation = graphql`
 `;
 
 const rejectFollowRequestMutation = graphql`
-  mutation FollowRequestListItemRejectMutation($connections: [ID!]!, $id: ID!) {
+  mutation FollowRequestListItemRejectMutation($id: ID!) {
     rejectProfileFollowRequest(input: { id: $id }) {
-      profileFollowRequestId @deleteEdge(connections: $connections)
-      profileFollowRequestId @deleteRecord
+      profileFollowRequestId
       followeeProfile {
         id
       }
@@ -77,6 +77,8 @@ const rejectFollowRequestMutation = graphql`
 
 export function FollowRequestListItem({ connectionId, request }: FollowRequestListItemProps) {
   const { showToast } = useToast();
+  const environment = useRelayEnvironment();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const data = useFragment(followRequestListItemFragment, request);
   const [commitApprove] = useMutation<FollowRequestListItemApproveMutation>(
     approveFollowRequestMutation,
@@ -97,34 +99,66 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
     );
   };
 
+  const handleCompleted = (requestId: string) => {
+    environment.commitUpdate((store) => {
+      const connection = store.get(connectionId);
+      if (connection) {
+        ConnectionHandler.deleteNode(connection, requestId);
+      }
+      store.delete(requestId);
+    });
+    setPendingAction(null);
+  };
+
   const commit = (action: FollowRequestAction) => {
     if (busy) {
       return;
     }
 
     setPendingAction(action);
-    const callbacks = {
-      onCompleted: (_response: unknown, errors: ReadonlyArray<unknown> | null | undefined) => {
-        if (errors?.length) {
-          handleFailure(action);
-          return;
-        }
-        setPendingAction(null);
-      },
-      onError: () => handleFailure(action),
-    };
+    const mutationGeneration = environmentGenerationRef?.current;
 
     if (action === 'approve') {
       commitApprove({
-        ...callbacks,
-        variables: { connections: [connectionId], id: data.id },
+        onCompleted: (response, errors) => {
+          if (environmentGenerationRef?.current !== mutationGeneration) {
+            return;
+          }
+          if (errors?.length) {
+            handleFailure(action);
+            return;
+          }
+          handleCompleted(response.approveProfileFollowRequest.profileFollowRequestId);
+        },
+        onError: () => {
+          if (environmentGenerationRef?.current !== mutationGeneration) {
+            return;
+          }
+          handleFailure(action);
+        },
+        variables: { id: data.id },
       });
       return;
     }
 
     commitReject({
-      ...callbacks,
-      variables: { connections: [connectionId], id: data.id },
+      onCompleted: (response, errors) => {
+        if (environmentGenerationRef?.current !== mutationGeneration) {
+          return;
+        }
+        if (errors?.length) {
+          handleFailure(action);
+          return;
+        }
+        handleCompleted(response.rejectProfileFollowRequest.profileFollowRequestId);
+      },
+      onError: () => {
+        if (environmentGenerationRef?.current !== mutationGeneration) {
+          return;
+        }
+        handleFailure(action);
+      },
+      variables: { id: data.id },
     });
   };
 

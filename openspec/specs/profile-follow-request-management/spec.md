@@ -58,7 +58,7 @@
 
 ### Requirement: 승인·거절 결과와 행별 복구
 
-**Authority / Provenance:** `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `docs/design/accessibility.md`, `PROD-272`, `PROD-566` 시스템은 한 요청의 처리가 진행되는 동안 그 행의 승인·거절 동작만 비활성화하고 다른 행은 계속 처리할 수 있게 해야 한다(MUST). 처리된 행은 서버 성공 응답 뒤에만 제거해야 하며(MUST), mutation payload의 삭제된 request global ID로 현재 selected Profile의 connection에서 정확한 요청을 제거해야 한다(MUST). 실패하면 행을 유지하고 인라인 오류와 같은 동작의 재시도를 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `docs/design/accessibility.md`, `docs/design/profile-hero.md`, `PROD-272`, `PROD-566`, `PROD-785` 시스템은 한 요청의 처리가 진행되는 동안 그 행의 승인·거절 동작만 비활성화하고 다른 행은 계속 처리할 수 있게 해야 한다(MUST). 처리된 행은 서버 성공 응답 뒤에만 제거해야 하며(MUST), mutation payload의 삭제된 request global ID로 현재 selected Profile의 connection에서 정확한 요청을 제거해야 한다(MUST). 실패하면 행을 유지하고 행 밖의 공용 danger Toast로 실패를 알리며, 같은 동작의 재시도를 제공해야 한다(MUST). 행 내부에 전용 오류 상태를 추가해서는 안 된다(MUST NOT).
 
 #### Scenario: 요청 승인 성공
 
@@ -76,7 +76,8 @@
 
 - **WHEN** 승인 또는 거절 mutation이 실패한다
 - **THEN** 시스템은 해당 요청 행을 목록에 유지한다
-- **AND** 실패한 동작을 나타내는 인라인 오류와 같은 동작의 재시도를 제공한다
+- **AND** 행 밖의 공용 danger Toast로 실패를 알리고 실패한 동작과 같은 action을 다시 사용할 수 있게 한다
+- **AND** 행 내부에 전용 오류 상태를 표시하지 않는다
 - **AND** 다른 요청 행의 동작은 계속 사용할 수 있다
 
 ### Requirement: selected Profile 상태 격리
