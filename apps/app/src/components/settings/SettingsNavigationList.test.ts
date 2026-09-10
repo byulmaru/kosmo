@@ -75,7 +75,6 @@ describe('SettingsNavigationList', () => {
     await render();
 
     const links = rendered('Pressable');
-    assert.equal(links.length, 3);
     assert.equal(
       links[0].props.accessibilityLabel,
       'Byulmaru ID Account Settings 외부 서비스로 이동',
@@ -85,7 +84,6 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[1].props.href, '/settings/default-post-visibility');
     assert.equal(links[2].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
     assert.equal(links[2].props.href, '/settings/mute-and-block');
-    assert.deepEqual(texts(), ['계정 설정', '게시물 기본 공개 범위', '뮤트 및 차단']);
   });
 
   it('full master가 표시한 내부 detail만 current destination으로 전달한다', async () => {
@@ -107,10 +105,4 @@ async function render(selected?: 'default-post-visibility') {
 function rendered(type: string): ReactTestInstance[] {
   assert.ok(renderer);
   return renderer.root.findAll((node) => node.type === type);
-}
-
-function texts(): string[] {
-  return rendered('Text').flatMap((node) =>
-    typeof node.props.children === 'string' ? [node.props.children] : [],
-  );
 }

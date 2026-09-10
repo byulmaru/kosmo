@@ -3,7 +3,7 @@ import { ChevronLeftIcon } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { SettingsLinkRow } from '@/components/settings/SettingsLinkRow';
-import { returnToSettingsRoot } from '@/components/settings/settingsNavigation';
+import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -17,7 +17,7 @@ export default function SettingsInfoRoute() {
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="설정으로 돌아가기"
-        onPress={() => returnToSettingsRoot(router)}
+        onPress={() => returnToSettingsParent('/settings/info', router)}
         style={styles.backButton}
         targetSize={44}
       >

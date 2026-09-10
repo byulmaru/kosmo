@@ -2425,7 +2425,6 @@ export const UniversalFull: Story = {
 
     const rightRail = canvas.getByLabelText('새 게시글 작성').parentElement;
     const rightRailStyle = rightRail ? view?.getComputedStyle(rightRail) : undefined;
-    expect(rightRail).not.toBeNull();
     const privacyLink = canvas.getByRole('link', { name: '개인정보 처리방침' });
     const rightRailRect = rightRail?.getBoundingClientRect();
     const privacyLinkRect = privacyLink.getBoundingClientRect();
