@@ -817,15 +817,13 @@ export async function createPost(
         .returning()
         .then(firstOrThrow);
 
-      if (input.origin === 'ACTIVITYPUB') {
-        if (mentionProjection?.profileIds.length) {
-          await tx.insert(PostMentions).values(
-            mentionProjection.profileIds.map((profileId) => ({
-              postContentId: content.id,
-              profileId,
-            })),
-          );
-        }
+      if (mentionProjection?.profileIds.length) {
+        await tx.insert(PostMentions).values(
+          mentionProjection.profileIds.map((profileId) => ({
+            postContentId: content.id,
+            profileId,
+          })),
+        );
       }
 
       validatePostStructure({
