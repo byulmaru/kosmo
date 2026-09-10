@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { isRepostTargetEligible } from './postActionAvailability';
 import { PostActionBar } from './PostActionBar';
@@ -88,17 +89,25 @@ export function PostActionSurface({
       <PostReactionSummary controller={reactionController} style={reactionSummaryStyle} />
       {canMute ? (
         <ProfileMuteAction
-          items={[copyLinkItem]}
           profile={target.profile}
-          renderTrigger={({ expanded, onPress, ref }) =>
-            renderActions({
-              accessibilityLabel: '더 보기',
-              controlRef: ref,
-              menuExpanded: expanded,
-              onPress,
-              popupRole: 'menu',
-            })
-          }
+          renderMenuItem={({ disabled, item, registerTriggerFocus }) => (
+            <ActionMenu
+              accessibilityLabel="더 보기 메뉴"
+              disabled={disabled}
+              items={[copyLinkItem, item]}
+              renderTrigger={({ expanded, focusTrigger, onPress, ref }) => {
+                registerTriggerFocus(focusTrigger);
+                return renderActions({
+                  accessibilityLabel: '더 보기',
+                  controlRef: ref,
+                  menuExpanded: expanded,
+                  onPress,
+                  popupRole: 'menu',
+                });
+              }}
+              webHorizontalPlacement="end"
+            />
+          )}
         />
       ) : (
         renderActions()

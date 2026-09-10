@@ -3,7 +3,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
-import { ActionMenu } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
@@ -11,8 +10,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, breakpoints, textStyles } from '@/theme/tokens';
-import { ProfileMoreButton } from './ProfileMoreButton';
-import type { ComponentProps } from 'react';
+import type { ReactNode } from 'react';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfileMuteAction_profile$key } from './__generated__/ProfileMuteAction_profile.graphql';
 
@@ -40,18 +38,22 @@ type ProfileMuteActionProps = {
   profile: ProfileMuteAction_profile$key;
 } & (
   | {
-      items?: readonly ActionMenuItem[];
-      renderTrigger?: ComponentProps<typeof ActionMenu>['renderTrigger'];
+      renderMenuItem: (props: ProfileMuteMenuItemRenderProps) => ReactNode;
       surface?: 'menu';
     }
-  | { items?: never; renderTrigger?: never; surface: 'button' | 'text' }
+  | { renderMenuItem?: never; surface: 'button' | 'text' }
 );
 
+export type ProfileMuteMenuItemRenderProps = Readonly<{
+  disabled: boolean;
+  item: ActionMenuItem;
+  registerTriggerFocus: (focusTrigger: () => void) => void;
+}>;
+
 export function ProfileMuteAction({
-  items,
   onFeedback,
   profile,
-  renderTrigger,
+  renderMenuItem,
   surface = 'menu',
 }: ProfileMuteActionProps) {
   const data = useFragment(profileMuteActionFragment, profile);
@@ -90,12 +92,12 @@ export function ProfileMuteAction({
   return (
     <ProfileMuteActionControl
       displayName={data.displayName}
-      items={items}
       muted={muted}
       onChangeMuted={onChangeMuted}
       onFeedback={onFeedback}
       profileId={data.id}
-      renderTrigger={renderTrigger}
+      renderMenuItem={renderMenuItem!}
+      surface="menu"
     />
   );
 }
@@ -107,12 +109,11 @@ type Props = {
   /** Menu on the profile, button in management, text in the ProfileHero status row. */
 } & (
   | {
+      renderMenuItem: (props: ProfileMuteMenuItemRenderProps) => ReactNode;
       surface?: 'menu';
       muted: boolean;
-      items?: readonly ActionMenuItem[];
-      renderTrigger?: ComponentProps<typeof ActionMenu>['renderTrigger'];
     }
-  | { surface: 'button' | 'text'; muted: true; items?: never; renderTrigger?: never }
+  | { surface: 'button' | 'text'; muted: true; renderMenuItem?: never }
 );
 
 type CommittedProfileTarget = Readonly<{
@@ -148,8 +149,7 @@ function ProfileMuteActionContent({
   onFeedback,
   profileId,
   surface = 'menu',
-  items = [],
-  renderTrigger,
+  renderMenuItem,
 }: Props & { committedTargetRef: CommittedProfileTargetRef }) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
@@ -260,32 +260,13 @@ function ProfileMuteActionContent({
   return (
     <>
       {surface === 'menu' ? (
-        <ActionMenu
-          accessibilityLabel={renderTrigger ? '더 보기 메뉴' : '더보기'}
-          disabled={pending}
-          items={[
-            ...items,
-            { icon: muted ? Volume2 : VolumeOff, key: 'mute', label, onSelect: activate },
-          ]}
-          {...(renderTrigger
-            ? ({ webHorizontalPlacement: 'end' } as const)
-            : ({ webPlacement: 'overlap-end' } as const))}
-          renderTrigger={(trigger) => {
-            const { expanded, focusTrigger: focus, onPress, ref } = trigger;
+        renderMenuItem!({
+          disabled: pending,
+          item: { icon: muted ? Volume2 : VolumeOff, key: 'mute', label, onSelect: activate },
+          registerTriggerFocus: (focus) => {
             focusTrigger.current = focus;
-            if (renderTrigger) {
-              return renderTrigger(trigger);
-            }
-            return (
-              <ProfileMoreButton
-                controlRef={ref}
-                disabled={pending}
-                expanded={expanded}
-                onPress={onPress}
-              />
-            );
-          }}
-        />
+          },
+        })
       ) : surface === 'text' ? (
         <Pressable
           ref={actionRef}

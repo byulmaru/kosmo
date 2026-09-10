@@ -12,12 +12,14 @@ import {
 import { graphql, useFragment } from 'react-relay';
 import { setStringAsync } from '@/components/post/postClipboard';
 import { NavigationLink } from '@/components/shell/NavigationLink';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getPublicWebOrigin } from '@/config/origin';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
+import { ProfileMoreButton } from './ProfileMoreButton';
 import { ProfileMuteAction } from './ProfileMuteAction';
 import { ProfileNameBlock } from './ProfileNameBlock';
 import { ProfileTagChip } from './ProfileTagChip';
@@ -183,30 +185,49 @@ export function ProfileHero({
           >
             {showMuteAction ? (
               <ProfileMuteAction
-                items={[
-                  {
-                    key: 'copy-profile-link',
-                    icon: Link2,
-                    label: '프로필 링크 복사',
-                    onSelect: () => {
-                      void (async () => {
-                        try {
-                          const copied = await setStringAsync(
-                            new URL(`/${data.relativeHandle}`, getPublicWebOrigin()).toString(),
-                          );
-                          if (!copied) {
-                            throw new Error('Clipboard did not confirm the copy.');
-                          }
-                        } catch {
-                          showToast('링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
-                            tone: 'danger',
-                          });
-                        }
-                      })();
-                    },
-                  },
-                ]}
                 profile={data}
+                renderMenuItem={({ disabled, item, registerTriggerFocus }) => (
+                  <ActionMenu
+                    accessibilityLabel="더보기"
+                    disabled={disabled}
+                    items={[
+                      {
+                        key: 'copy-profile-link',
+                        icon: Link2,
+                        label: '프로필 링크 복사',
+                        onSelect: () => {
+                          void (async () => {
+                            try {
+                              const copied = await setStringAsync(
+                                new URL(`/${data.relativeHandle}`, getPublicWebOrigin()).toString(),
+                              );
+                              if (!copied) {
+                                throw new Error('Clipboard did not confirm the copy.');
+                              }
+                            } catch {
+                              showToast('링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
+                                tone: 'danger',
+                              });
+                            }
+                          })();
+                        },
+                      },
+                      item,
+                    ]}
+                    renderTrigger={({ expanded, focusTrigger, onPress, ref }) => {
+                      registerTriggerFocus(focusTrigger);
+                      return (
+                        <ProfileMoreButton
+                          controlRef={ref}
+                          disabled={disabled}
+                          expanded={expanded}
+                          onPress={onPress}
+                        />
+                      );
+                    }}
+                    webPlacement="overlap-end"
+                  />
+                )}
               />
             ) : null}
             {action ? <View style={styles.action}>{action}</View> : null}

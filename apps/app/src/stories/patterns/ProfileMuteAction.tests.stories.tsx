@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { ProfileMoreButton } from '@/components/profile/ProfileMoreButton';
 import { ProfileMuteActionControl } from '@/components/profile/ProfileMuteAction';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 type Props = {
@@ -62,6 +64,28 @@ function Fixture({
           setRequestComplete(true);
         }}
         profileId={profileId}
+        renderMenuItem={({ disabled, item, registerTriggerFocus }) => (
+          <ActionMenu
+            accessibilityLabel="더보기"
+            disabled={disabled}
+            items={[
+              { key: 'copy-profile-link', label: '프로필 링크 복사', onSelect: () => undefined },
+              item,
+            ]}
+            renderTrigger={({ expanded, focusTrigger, onPress, ref }) => {
+              registerTriggerFocus(focusTrigger);
+              return (
+                <ProfileMoreButton
+                  controlRef={ref}
+                  disabled={disabled}
+                  expanded={expanded}
+                  onPress={onPress}
+                />
+              );
+            }}
+            webPlacement="overlap-end"
+          />
+        )}
       />
       {changeProfileOnRequest && requestComplete ? (
         <Text testID="profile-mute-request-complete">요청 완료</Text>
@@ -106,6 +130,7 @@ export const MuteContract: Story = {
     const body = within(canvasElement.ownerDocument.body);
     const trigger = canvas.getByRole('button', { name: '더보기' });
     await userEvent.click(trigger);
+    expect(await body.findByRole('menuitem', { name: '프로필 링크 복사' })).toBeVisible();
     await userEvent.click(await body.findByRole('menuitem', { name: '뮤트' }));
     expect(
       await body.findByText(

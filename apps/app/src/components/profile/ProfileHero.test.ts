@@ -78,6 +78,9 @@ mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   Skeleton: (props: object) => createElement('Skeleton', props),
 });
+mockModule(new URL('../ui/ActionMenu.tsx', import.meta.url), {
+  ActionMenu: 'ActionMenu',
+});
 mockModule(new URL('../post/postClipboard.ts', import.meta.url), {
   setStringAsync: async () => true,
 });
@@ -93,6 +96,9 @@ mockModule('lucide-react-native', { XIcon: 'XIcon', VolumeOff: 'VolumeOff' });
 mockModule(require.resolve('lucide-react-native'), { XIcon: 'XIcon', VolumeOff: 'VolumeOff' });
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
   ProfileMuteAction: 'ProfileMuteAction',
+});
+mockModule(new URL('./ProfileMoreButton.tsx', import.meta.url), {
+  ProfileMoreButton: 'ProfileMoreButton',
 });
 
 let ProfileHero: typeof ProfileHeroExport;
