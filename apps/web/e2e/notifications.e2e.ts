@@ -1,8 +1,10 @@
 import { db, Notifications } from '@kosmo/core/db';
+import { NotificationKind } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
 import {
   createE2EAccountProfile,
   createE2EFollow,
+  createE2EPost,
   createE2ESession,
   resetE2EDatabase,
   setE2ESessionCookie,
@@ -188,6 +190,74 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
   } finally {
     await followerContext.close();
   }
+});
+
+test('Reply 알림 본문은 작성자와 Unread를 표시하고 본문 이동에서 한 번만 Read한다', async ({
+  context,
+  page,
+}) => {
+  const recipient = await createE2ESession({
+    displayName: 'E2E Reply Recipient',
+    handle: 'e2e-reply-recipient',
+  });
+  const replyAuthor = await createE2ESession({
+    displayName: 'E2E Reply Author',
+    handle: 'e2e-reply-author',
+  });
+
+  if (!recipient.profile || !replyAuthor.profile) {
+    throw new Error('Reply Notification fixture requires local profiles.');
+  }
+
+  const parent = await createE2EPost({
+    body: 'E2E Reply parent body',
+    profileId: recipient.profile.id,
+  });
+  const reply = await createE2EPost({
+    body: 'E2E Reply notification body',
+    profileId: replyAuthor.profile.id,
+    replyParentId: parent.id,
+  });
+  const notification = await db
+    .insert(Notifications)
+    .values({
+      kind: NotificationKind.REPLY,
+      recipientProfileId: recipient.profile.id,
+      sourceId: reply.id,
+    })
+    .returning()
+    .then(([row]) => row!);
+
+  await setE2ESessionCookie(context, recipient.token);
+  await page.goto('/notifications');
+
+  const replyRow = page.getByTestId('reply-notification-post');
+  const replySurface = page.getByTestId('notification-item-surface').filter({ has: replyRow });
+  await expect(replyRow).toBeVisible();
+  await expect(replyRow.getByTestId('notification-post-author')).toContainText(
+    replyAuthor.profile.displayName,
+  );
+  await expect(replyRow.getByTestId('post-list-row-body')).toContainText(
+    'E2E Reply notification body',
+  );
+  await expect(replySurface.getByText('읽지 않은 알림')).toBeAttached();
+
+  let markReadRequestCount = 0;
+  await page.route('**/graphql', async (route) => {
+    if (
+      readGraphQLOperation(route.request().postData())?.operationName ===
+      'NotificationListItemMarkReadMutation'
+    ) {
+      markReadRequestCount += 1;
+    }
+    await route.fallback();
+  });
+
+  await replyRow.getByTestId('post-list-row-body').click();
+  await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${toGlobalId('Post', reply.id)}`);
+  await expect.poll(() => markReadRequestCount).toBe(1);
+  await expect.poll(() => notificationReadAt(notification.id)).not.toBeNull();
+  await page.unroute('**/graphql');
 });
 
 test('Web 모두 읽음은 current loaded unread만 한 번 요청하고 실패 재시도에서 상태를 보존한다', async ({

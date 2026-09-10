@@ -192,7 +192,7 @@ function NotificationTarget(props: GroupedNotificationProps) {
       }}
       onPointerDown={() => setFocusVisible(false)}
       onPress={blocked ? undefined : onNavigate}
-      style={[
+      style={StyleSheet.flatten([
         styles.target,
         {
           outlineColor: theme.stateFocusRing,
@@ -201,7 +201,7 @@ function NotificationTarget(props: GroupedNotificationProps) {
           outlineWidth: focusVisible ? 2 : 0,
           opacity: blocked ? 0.5 : 1,
         } as ViewStyle,
-      ]}
+      ])}
     >
       <View style={[styles.row, web && styles.webRow]}>
         <View

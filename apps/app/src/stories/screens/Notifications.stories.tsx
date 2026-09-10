@@ -2,7 +2,7 @@ import { usePathname } from 'expo-router';
 import { useState } from 'react';
 import { Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import NotificationsScreen from '@/app/(tabs)/(protected)/notifications';
 import {
   NotificationList,
@@ -11,6 +11,8 @@ import {
 import { NotificationReadAllProvider } from '@/components/notification/NotificationReadAllContext';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
+import { SessionProvider } from '@/session/SessionProvider';
+import { colors } from '@/theme/tokens';
 import {
   followNotification,
   followRequestNotification,
@@ -23,6 +25,7 @@ import {
 } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { RequestParameters, Variables } from 'relay-runtime';
 import type { NotificationsStoriesQuery as NotificationsStoriesQueryType } from './__generated__/NotificationsStoriesQuery.graphql';
 
 const unreadFollowerAvatarUrl =
@@ -56,6 +59,16 @@ const notificationRecipient = profile({
   id: 'notification-profile-content',
   relativeHandle: '@recipient',
 });
+const notificationReplyMedia = {
+  __typename: 'Media' as const,
+  altText: '답글 첨부 이미지',
+  id: 'notification-reply-media',
+  url: unreadFollowerAvatarUrl,
+};
+
+function notificationPost(options: Parameters<typeof post>[0] = {}) {
+  return { ...post(options), viewerReactions: [] };
+}
 
 const emptyProfile = notificationsProfile([], {}, { id: 'notification-profile-empty' });
 const contentProfile = notificationsProfile(
@@ -73,18 +86,27 @@ const contentProfile = notificationsProfile(
     followNotification({ id: 'notification-long', profile: longFollower }),
     reactionNotification({
       id: 'notification-reaction',
-      post: post({ id: 'notification-related-post', profile: notificationRecipient }),
+      post: notificationPost({ id: 'notification-related-post', profile: notificationRecipient }),
       profile: unreadFollower,
       type: '🎉',
     }),
     replyNotification({
       id: 'notification-reply',
-      post: post({ id: 'notification-reply-post', profile: notificationRecipient }),
+      post: notificationPost({
+        bodyText: '알림에서 바로 확인할 수 있는 답글 본문입니다.',
+        contentWarning: '답글 내용에 주의가 필요합니다.',
+        id: 'notification-reply-post',
+        media: [notificationReplyMedia],
+        profile: unreadFollower,
+      }),
       profile: unreadFollower,
     }),
     repostNotification({
       id: 'notification-repost',
-      post: post({ id: 'notification-repost-related-post', profile: notificationRecipient }),
+      post: notificationPost({
+        id: 'notification-repost-related-post',
+        profile: notificationRecipient,
+      }),
       profile: readFollower,
     }),
   ],
@@ -96,8 +118,21 @@ const paginationProfile = notificationsProfile(
   { hasNext: true },
   { id: 'notification-profile-pagination' },
 );
+const profileSwitchReplyNotification = replyNotification({
+  id: 'notification-profile-a-reply',
+  post: notificationPost({
+    bodyText: '프로필 전환 중인 답글 본문입니다.',
+    id: 'notification-profile-a-reply-post',
+    media: [notificationReplyMedia],
+    profile: unreadFollower,
+  }),
+  profile: unreadFollower,
+});
 const profileA = notificationsProfile(
-  [followNotification({ id: 'notification-item-profile-a', profile: unreadFollower })],
+  [
+    followNotification({ id: 'notification-item-profile-a', profile: unreadFollower }),
+    profileSwitchReplyNotification,
+  ],
   {},
   { id: 'notification-profile-a' },
 );
@@ -146,6 +181,18 @@ function requireProfile(profiles: ReadonlyArray<ProfileNode>, index: number): Pr
   return result;
 }
 
+function notificationSurface(link: HTMLElement): HTMLElement {
+  const surface = link.closest<HTMLElement>('[data-testid="notification-item-surface"]');
+  if (!surface) {
+    throw new Error('Notification target is missing its presentation surface.');
+  }
+  return surface;
+}
+
+function storyColors(theme: unknown) {
+  return theme === 'dark' ? colors.dark : colors.light;
+}
+
 function NotificationCatalog() {
   const profiles = useStoryProfiles();
 
@@ -191,6 +238,14 @@ function ReadNavigationList() {
   );
 }
 
+function AuthenticatedReadNavigationList() {
+  return (
+    <SessionProvider>
+      <ReadNavigationList />
+    </SessionProvider>
+  );
+}
+
 const readMutationResponse = {
   markNotificationRead: {
     notifications: [
@@ -209,6 +264,27 @@ const readMutationResponse = {
     ],
   },
 };
+
+const replyReadMutationResponse = {
+  markNotificationRead: {
+    notifications: [
+      {
+        __typename: 'ReplyNotification',
+        id: 'notification-reply',
+        readAt: '2026-07-21T12:00:00Z',
+      },
+    ],
+    recipientProfiles: [
+      {
+        __typename: 'Profile',
+        id: 'notification-profile-content',
+        unreadNotificationCount: 1,
+      },
+    ],
+  },
+};
+
+const notificationMutationRequest = fn<(operationName: string, variables: Variables) => void>();
 
 const repostReadMutationResponse = {
   markNotificationRead: {
@@ -268,10 +344,10 @@ function ProfileSwitchList() {
   const profileNode = requireProfile(profiles, selected);
 
   return (
-    <>
+    <SessionProvider>
       <Button onPress={() => setSelected((current) => (current === 3 ? 4 : 3))}>프로필 전환</Button>
       <NotificationList key={profileNode.id} profile={profileNode.notificationList!} />
-    </>
+    </SessionProvider>
   );
 }
 
@@ -317,8 +393,9 @@ async function verifyReadAllFailure(canvasElement: HTMLElement) {
 }
 
 export const StatesAndFollowItems: Story = {
-  play: ({ canvasElement }) => {
+  play: ({ canvasElement, globals }) => {
     const canvas = within(canvasElement);
+    const theme = storyColors(globals.theme);
     for (const avatar of canvas.getAllByLabelText('별빛 여행자 프로필 이미지')) {
       expect(avatar.querySelector('img')).toHaveAttribute('src', unreadFollowerAvatarUrl);
     }
@@ -334,36 +411,31 @@ export const StatesAndFollowItems: Story = {
     const readCopyLink = canvas.getByRole('link', {
       name: /은하 기록자님이 팔로우했습니다/,
     });
-    const unreadRow = unreadCopyLink.parentElement?.parentElement;
-    const readRow = readCopyLink.parentElement?.parentElement;
+    const unreadRow = notificationSurface(unreadCopyLink);
+    const readRow = notificationSurface(readCopyLink);
 
     expect(unreadCopyLink).toBeVisible();
     expect(unreadRow).not.toBeNull();
     expect(readRow).not.toBeNull();
-    expect(getComputedStyle(unreadRow!).backgroundColor).toBe('rgba(252, 231, 154, 0.3)');
-    expect(getComputedStyle(unreadRow!).borderLeftColor).toBe('rgb(252, 231, 154)');
-    expect(getComputedStyle(unreadRow!).borderLeftWidth).toBe('4px');
-    expect(getComputedStyle(unreadRow!).paddingLeft).toBe('12px');
-    expect(getComputedStyle(readRow!).backgroundColor).toBe('rgb(255, 255, 255)');
-    expect(getComputedStyle(readRow!).borderLeftColor).toBe('rgba(0, 0, 0, 0)');
-    expect(getComputedStyle(readRow!).borderLeftWidth).toBe('4px');
-    expect(getComputedStyle(readRow!).paddingLeft).toBe('12px');
-    expect(unreadRow!.firstElementChild!.getBoundingClientRect().left).toBe(
-      readRow!.firstElementChild!.getBoundingClientRect().left,
+    expect(unreadRow).toHaveStyle({ backgroundColor: theme.actionPrimarySubtle });
+    expect(getComputedStyle(readRow).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(unreadRow.firstElementChild!.getBoundingClientRect().left).toBe(
+      readRow.firstElementChild!.getBoundingClientRect().left,
     );
     expect(
       canvas.getByRole('link', { name: /새 요청자님이 팔로우를 요청했습니다/ }),
-    ).toHaveAttribute('href', '/@requester');
+    ).toHaveAttribute('href', '/follow-requests');
     expect(canvasElement.querySelector('a[href="/@starlight"]')).toBeInTheDocument();
     expect(
-      canvas.getByRole('link', { name: /별빛 여행자님이 🎉 반응을 남겼습니다/ }),
+      canvas.getByRole('link', { name: /별빛 여행자님이 이 게시글에 반응했습니다/ }),
     ).toHaveAttribute('href', '/@recipient/notification-related-post');
-    expect(canvas.getByRole('link', { name: /별빛 여행자님이 답글을 남겼습니다/ })).toHaveAttribute(
+    expect(canvas.getByTestId('notification-post-author')).toHaveAttribute('href', '/@starlight');
+    expect(canvas.getByRole('link', { name: '5분 전' })).toHaveAttribute(
       'href',
-      '/@recipient/notification-reply-post',
+      '/@starlight/notification-reply-post',
     );
     expect(
-      canvas.getByRole('link', { name: /은하 기록자님이 게시물을 재게시했습니다/ }),
+      canvas.getByRole('link', { name: /은하 기록자님이 이 게시글을 재게시했습니다/ }),
     ).toHaveAttribute('href', '/@recipient/notification-repost-related-post');
   },
 };
@@ -392,8 +464,9 @@ export const NextPageFailureAndRetry: Story = {
 };
 
 export const HeaderAndWebRefreshPolicy: Story = {
-  play: ({ canvasElement }) => {
+  play: ({ canvasElement, globals }) => {
     const canvas = within(canvasElement);
+    const theme = storyColors(globals.theme);
     const heading = canvas.getByRole('heading', { name: '알림' });
     const action = canvas.getByRole('button', { name: '모두 읽음' });
     const headerRect = heading.parentElement!.getBoundingClientRect();
@@ -403,8 +476,8 @@ export const HeaderAndWebRefreshPolicy: Story = {
     expect(heading).toBeVisible();
     expect(headerRect.height).toBe(64);
     expect(headerRect.right - actionRect.right).toBe(16);
-    expect(actionStyle.backgroundColor).toBe('rgb(250, 250, 251)');
-    expect(actionStyle.borderColor).toBe('rgb(223, 223, 229)');
+    expect(action).toHaveStyle({ backgroundColor: theme.actionSecondaryBase });
+    expect(action).toHaveStyle({ borderColor: theme.actionSecondaryBorder });
     expect(actionStyle.borderWidth).toBe('1px');
     expect(canvas.queryByRole('button', { name: '알림 설정 (준비 중)' })).not.toBeInTheDocument();
     expect(canvas.queryByText('KOSMO')).not.toBeInTheDocument();
@@ -432,7 +505,7 @@ export const ReadAllLoadedUnread: Story = {
     await userEvent.click(action);
 
     await expect(
-      canvas.findByRole('link', { name: '별빛 여행자 프로필로 이동.' }),
+      canvas.findByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }),
     ).resolves.toBeVisible();
     expect(
       canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }),
@@ -512,7 +585,7 @@ export const ReadAllPendingAndFailureRetry: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
     await expect(
-      canvas.findByRole('link', { name: '별빛 여행자 프로필로 이동.' }),
+      canvas.findByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }),
     ).resolves.toBeVisible();
   },
   render: () => <RefreshList />,
@@ -522,19 +595,13 @@ export const KeyboardFocusableProfileLink: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ });
-    const unreadAvatarLink = canvas.getByRole('link', {
-      name: '별빛 여행자 프로필로 이동. 읽지 않은 알림.',
-    });
-    const readAvatarLink = canvas.getByRole('link', {
-      name: '은하 기록자 프로필로 이동.',
-    });
-
     link.focus();
     expect(link).toHaveFocus();
     expect(link).toHaveAttribute('href', '/@starlight');
-    expect(unreadAvatarLink).toHaveAttribute('href', '/@starlight');
-    expect(readAvatarLink).toHaveAttribute('href', '/@galaxy');
-    expect(readAvatarLink).not.toHaveAccessibleName(/읽지 않은 알림/);
+    expect(link).toHaveAccessibleName(/읽지 않은 알림/);
+    expect(
+      canvas.getByRole('link', { name: /은하 기록자님이 팔로우했습니다/ }),
+    ).not.toHaveAccessibleName(/읽지 않은 알림/);
   },
   render: () => <RefreshList />,
 };
@@ -546,18 +613,20 @@ export const ReadSuccessNormalizesAndNavigates: Story = {
     await userEvent.click(canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }));
     await expect(canvas.findByText('/@starlight')).resolves.toBeVisible();
     await expect(
-      canvas.findByRole('link', { name: '별빛 여행자 프로필로 이동.' }),
+      canvas.findByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }),
     ).resolves.toBeVisible();
     const readCopyLink = await canvas.findByRole('link', {
       name: /별빛 여행자님이 팔로우했습니다/,
     });
-    const readRow = readCopyLink.parentElement?.parentElement;
+    const readRow = notificationSurface(readCopyLink);
 
     expect(readRow).not.toBeNull();
-    expect(getComputedStyle(readRow!).backgroundColor).toBe('rgb(246, 246, 246)');
-    expect(getComputedStyle(readRow!).borderLeftColor).toBe('rgba(0, 0, 0, 0)');
+    expect(getComputedStyle(readRow).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(readRow.querySelector('[data-testid="notification-hover-overlay"]')).toBeInTheDocument();
     await userEvent.unhover(readCopyLink);
-    expect(getComputedStyle(readRow!).backgroundColor).toBe('rgb(255, 255, 255)');
+    expect(
+      readRow.querySelector('[data-testid="notification-hover-overlay"]'),
+    ).not.toBeInTheDocument();
   },
   render: () => <ReadNavigationList />,
 };
@@ -567,13 +636,13 @@ export const RepostReadNormalizesAndNavigates: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(
-      canvas.getByRole('link', { name: /은하 기록자님이 게시물을 재게시했습니다/ }),
+      canvas.getByRole('link', { name: /은하 기록자님이 이 게시글을 재게시했습니다/ }),
     );
     await expect(
       canvas.findByText('/@recipient/notification-repost-related-post'),
     ).resolves.toBeVisible();
     await expect(
-      canvas.findByRole('link', { name: '은하 기록자 게시글로 이동.' }),
+      canvas.findByRole('link', { name: /은하 기록자님이 이 게시글을 재게시했습니다/ }),
     ).resolves.toBeVisible();
   },
   render: () => <ReadNavigationList />,
@@ -581,50 +650,49 @@ export const RepostReadNormalizesAndNavigates: Story = {
 
 export const ReadPendingDoesNotBlockAvatarNavigation: Story = {
   parameters: { relay: { mutationLoading: true } },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, globals }) => {
     const canvas = within(canvasElement);
+    const theme = storyColors(globals.theme);
     await userEvent.click(
-      canvas.getByRole('link', {
-        name: '별빛 여행자 프로필로 이동. 읽지 않은 알림.',
-      }),
+      canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다.*읽지 않은 알림/ }),
     );
     await expect(canvas.findByText('/@starlight')).resolves.toBeVisible();
-    expect(
-      canvas.getByRole('link', {
-        name: '별빛 여행자 프로필로 이동. 읽지 않은 알림.',
-      }),
-    ).toBeVisible();
+    expect(canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ })).toBeVisible();
     const unreadCopyLink = canvas.getByRole('link', {
       name: /별빛 여행자님이 팔로우했습니다.*읽지 않은 알림/,
     });
-    const unreadRow = unreadCopyLink.parentElement?.parentElement;
+    const unreadRow = notificationSurface(unreadCopyLink);
 
     expect(unreadRow).not.toBeNull();
-    expect(getComputedStyle(unreadRow!).backgroundColor).toBe('rgb(246, 246, 246)');
-    expect(getComputedStyle(unreadRow!).borderLeftColor).toBe('rgb(252, 231, 154)');
+    expect(unreadRow).toHaveStyle({ backgroundColor: theme.actionPrimarySubtle });
+    expect(
+      unreadRow.querySelector('[data-testid="notification-hover-overlay"]'),
+    ).toBeInTheDocument();
     await userEvent.unhover(unreadCopyLink);
-    expect(getComputedStyle(unreadRow!).backgroundColor).toBe('rgba(252, 231, 154, 0.3)');
+    expect(
+      unreadRow.querySelector('[data-testid="notification-hover-overlay"]'),
+    ).not.toBeInTheDocument();
   },
   render: () => <ReadNavigationList />,
 };
 
 export const ReadNetworkErrorDoesNotBlockCopyNavigation: Story = {
   parameters: { relay: { mutationError: 'Read failed' } },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, globals }) => {
     const canvas = within(canvasElement);
+    const theme = storyColors(globals.theme);
     await userEvent.click(canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }));
     await expect(canvas.findByText('/@starlight')).resolves.toBeVisible();
     expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
     const unreadCopyLink = canvas.getByRole('link', {
       name: /별빛 여행자님이 팔로우했습니다.*읽지 않은 알림/,
     });
-    const unreadRow = unreadCopyLink.parentElement?.parentElement;
+    const unreadRow = notificationSurface(unreadCopyLink);
 
     expect(unreadRow).not.toBeNull();
-    expect(getComputedStyle(unreadRow!).backgroundColor).toBe('rgb(246, 246, 246)');
-    expect(getComputedStyle(unreadRow!).borderLeftColor).toBe('rgb(252, 231, 154)');
+    expect(unreadRow).toHaveStyle({ backgroundColor: theme.actionPrimarySubtle });
     await userEvent.unhover(unreadCopyLink);
-    expect(getComputedStyle(unreadRow!).backgroundColor).toBe('rgba(252, 231, 154, 0.3)');
+    expect(unreadRow).toHaveStyle({ backgroundColor: theme.actionPrimarySubtle });
   },
   render: () => <ReadNavigationList />,
 };
@@ -645,20 +713,139 @@ export const ReadGraphQLErrorDoesNotBlockNavigation: Story = {
   render: () => <ReadNavigationList />,
 };
 
+export const ReplyContentAndProtectedActions: Story = {
+  parameters: {
+    relay: {
+      mutationRequestObserver: (request: RequestParameters, variables: Variables) =>
+        notificationMutationRequest(request.name, variables),
+      operationResponses: {
+        SessionProviderQuery: {
+          data: {
+            currentSession: {
+              id: 'notification-session',
+              selectedProfile: { id: 'notification-profile-content' },
+            },
+            me: { id: 'notification-account', name: 'Notification Story' },
+          },
+        },
+      },
+    },
+    controls: { disable: true },
+  },
+  play: async ({ canvasElement }) => {
+    notificationMutationRequest.mockClear();
+    const canvas = within(canvasElement);
+
+    await expect(canvas.findByTestId('post-content-warning')).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '내용 보기' }));
+    await expect(
+      canvas.findByText('알림에서 바로 확인할 수 있는 답글 본문입니다.'),
+    ).resolves.toBeVisible();
+    expect(canvas.getByText('/notifications')).toBeVisible();
+    expect(notificationMutationRequest).not.toHaveBeenCalledWith(
+      'NotificationListItemMarkReadMutation',
+      expect.anything(),
+    );
+
+    const replyButton = canvas.getByRole('button', { name: '답글' });
+    await waitFor(() => expect(replyButton).not.toHaveAttribute('aria-disabled', 'true'));
+    await userEvent.click(replyButton);
+    const composer = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    await expect(composer).toBeVisible();
+    expect(canvas.getByText('/notifications')).toBeVisible();
+    expect(notificationMutationRequest).not.toHaveBeenCalledWith(
+      'NotificationListItemMarkReadMutation',
+      expect.anything(),
+    );
+    await userEvent.click(within(composer).getByRole('button', { name: '닫기' }));
+    const confirm = await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' });
+    await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
+    await expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).not.toBeInTheDocument();
+    expect(canvas.getByText('/notifications')).toBeVisible();
+    expect(replyButton).toHaveFocus();
+    expect(notificationMutationRequest).not.toHaveBeenCalledWith(
+      'NotificationListItemMarkReadMutation',
+      expect.anything(),
+    );
+  },
+  render: () => <AuthenticatedReadNavigationList />,
+};
+
+export const ReplyAuthorActivationReadsOnce: Story = {
+  parameters: {
+    relay: {
+      mutationRequestObserver: (request: RequestParameters, variables: Variables) =>
+        notificationMutationRequest(request.name, variables),
+      mutationResponse: replyReadMutationResponse,
+    },
+    controls: { disable: true },
+  },
+  play: async ({ canvasElement }) => {
+    notificationMutationRequest.mockClear();
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '내용 보기' }));
+    await expect(
+      canvas.findByText('알림에서 바로 확인할 수 있는 답글 본문입니다.'),
+    ).resolves.toBeVisible();
+    expect(canvas.getByText('/notifications')).toBeVisible();
+    expect(notificationMutationRequest).not.toHaveBeenCalledWith(
+      'NotificationListItemMarkReadMutation',
+      expect.anything(),
+    );
+
+    const detailPath = '/@starlight/notification-reply-post';
+    const activations = [
+      { target: canvas.getByTestId('notification-post-author'), path: '/@starlight' },
+      { target: canvas.getByRole('link', { name: '5분 전' }), path: detailPath },
+      { target: canvas.getByTestId('post-list-row-body'), path: detailPath },
+      {
+        target: canvas.getByTestId('post-media-open-notification-reply-media'),
+        path: detailPath,
+        opensViewer: true,
+      },
+    ];
+
+    for (const activation of activations) {
+      notificationMutationRequest.mockClear();
+      await userEvent.click(activation.target);
+      await expect(canvas.findByText(activation.path)).resolves.toBeVisible();
+      if (activation.opensViewer) {
+        await expect(screen.findByTestId('post-media-viewer-dialog')).resolves.toBeVisible();
+      }
+      expect(notificationMutationRequest).toHaveBeenCalledTimes(1);
+      expect(notificationMutationRequest).toHaveBeenCalledWith(
+        'NotificationListItemMarkReadMutation',
+        { ids: ['notification-reply'] },
+      );
+
+      if (activation.target === activations[0]!.target) {
+        await waitFor(() => expect(canvas.queryByText('읽지 않은 알림')).not.toBeInTheDocument());
+      }
+
+      if (activation.opensViewer) {
+        await userEvent.click(screen.getByTestId('post-media-viewer-close'));
+        await expect(screen.queryByTestId('post-media-viewer-dialog')).not.toBeInTheDocument();
+      }
+    }
+  },
+  render: () => <ReadNavigationList />,
+};
+
 export const FigmaFollowRowHierarchy: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const followLink = canvas.getByRole('link', {
+      name: /별빛 여행자님이 팔로우했습니다/,
+    });
+    const surface = notificationSurface(followLink);
     const avatar = canvas.getAllByLabelText('별빛 여행자 프로필 이미지')[0];
-    const avatarLink = avatar?.closest('a');
-    let content = avatarLink?.parentElement;
-    while (content && !content.previousElementSibling) {
-      content = content.parentElement;
-    }
-    const kindIcon = content?.previousElementSibling;
+    const kindIcon = surface.querySelector('svg')?.parentElement;
     const copyLink = canvas.getByRole('link', {
       name: /별빛 여행자님이 팔로우했습니다/,
     });
-    const copy = copyLink.querySelector('[dir="auto"]');
+    const copy = [...copyLink.querySelectorAll<HTMLElement>('[dir="auto"]')].find((element) =>
+      element.textContent?.includes('팔로우했습니다'),
+    );
     const timestamp = canvas.getAllByText('5분 전')[0];
 
     expect(kindIcon).not.toBeNull();
@@ -668,8 +855,8 @@ export const FigmaFollowRowHierarchy: Story = {
 
     const kindRect = kindIcon!.getBoundingClientRect();
     const avatarRect = avatar!.getBoundingClientRect();
-    expect(kindRect.width).toBe(28);
-    expect(kindRect.height).toBe(28);
+    expect(kindRect.width).toBe(48);
+    expect(kindRect.height).toBe(48);
     expect(avatarRect.width).toBe(28);
     expect(avatarRect.height).toBe(28);
     expect(avatarRect.top).toBe(kindRect.top);
@@ -679,32 +866,24 @@ export const FigmaFollowRowHierarchy: Story = {
 };
 
 export const HoverBackgroundFeedback: Story = {
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, globals }) => {
     const canvas = within(canvasElement);
-    const avatarLink = canvas.getByRole('link', {
-      name: '별빛 여행자 프로필로 이동. 읽지 않은 알림.',
-    });
+    const theme = storyColors(globals.theme);
     const copyLink = canvas.getByRole('link', {
       name: /별빛 여행자님이 팔로우했습니다/,
     });
-    const row = copyLink.parentElement?.parentElement;
+    const row = notificationSurface(copyLink);
 
     expect(row).not.toBeNull();
-    expect(row).toHaveStyle({ backgroundColor: 'rgba(252, 231, 154, 0.3)' });
-    expect(getComputedStyle(row!).borderLeftColor).toBe('rgb(252, 231, 154)');
+    expect(row).toHaveStyle({ backgroundColor: theme.actionPrimarySubtle });
+    expect(row.querySelector('[data-testid="notification-hover-overlay"]')).not.toBeInTheDocument();
     await userEvent.hover(row!);
-    expect(row).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
-    expect(getComputedStyle(row!).borderLeftColor).toBe('rgb(252, 231, 154)');
+    expect(row).toHaveStyle({ backgroundColor: theme.actionPrimarySubtle });
+    expect(row.querySelector('[data-testid="notification-hover-overlay"]')).toBeInTheDocument();
     await userEvent.hover(copyLink);
-    expect(row).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    expect(row.querySelector('[data-testid="notification-hover-overlay"]')).toBeInTheDocument();
     await userEvent.unhover(copyLink);
-    expect(row).toHaveStyle({ backgroundColor: 'rgba(252, 231, 154, 0.3)' });
-    await userEvent.hover(row!);
-    expect(row).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
-    await userEvent.hover(avatarLink);
-    expect(row).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
-    await userEvent.unhover(avatarLink);
-    expect(row).toHaveStyle({ backgroundColor: 'rgba(252, 231, 154, 0.3)' });
+    expect(row.querySelector('[data-testid="notification-hover-overlay"]')).not.toBeInTheDocument();
   },
   render: () => <RefreshList />,
 };
@@ -715,29 +894,60 @@ export const NonInteractiveRowAndCompactCopyLink: Story = {
       name: /별빛 여행자님이 팔로우했습니다/,
     });
     const copy = copyLink.querySelector('[dir="auto"]');
-    const row = copyLink.parentElement?.parentElement;
+    const row = notificationSurface(copyLink);
 
     expect(copy).not.toBeNull();
     expect(row).not.toBeNull();
     expect(row).not.toHaveAttribute('tabindex');
     expect(copyLink.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     expect(copy!.getBoundingClientRect().height).toBeLessThan(44);
-    expect(row!.getBoundingClientRect().height).toBeLessThan(100);
+    expect(row.getBoundingClientRect().height).toBeLessThan(100);
   },
   render: () => <RefreshList />,
 };
 
 export const SelectedProfileSwitch: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        SessionProviderQuery: {
+          data: {
+            currentSession: {
+              id: 'notification-session',
+              selectedProfile: { id: 'notification-profile-a' },
+            },
+            me: { id: 'notification-account', name: 'Notification Story' },
+          },
+        },
+      },
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const switchButton = canvas.getByRole('button', { name: '프로필 전환' });
     expect(canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ })).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '프로필 전환' }));
+
+    await userEvent.click(canvas.getByRole('button', { name: '답글' }));
+    await expect(screen.findByRole('dialog', { name: '답글 쓰기' })).resolves.toBeVisible();
+    fireEvent.click(switchButton);
     await expect(
       canvas.findByRole('link', { name: /은하 기록자님이 팔로우했습니다/ }),
     ).resolves.toBeVisible();
+    expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).not.toBeInTheDocument();
     expect(
       canvas.queryByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }),
     ).not.toBeInTheDocument();
+
+    await userEvent.click(switchButton);
+    await expect(canvas.findByTestId('reply-notification-post')).resolves.toBeVisible();
+    await userEvent.click(canvas.getByTestId('post-media-open-notification-reply-media'));
+    await expect(screen.findByTestId('post-media-viewer-dialog')).resolves.toBeVisible();
+
+    fireEvent.click(switchButton);
+    await expect(
+      canvas.findByRole('link', { name: /은하 기록자님이 팔로우했습니다/ }),
+    ).resolves.toBeVisible();
+    expect(screen.queryByTestId('post-media-viewer-dialog')).not.toBeInTheDocument();
   },
   render: () => <ProfileSwitchList />,
 };

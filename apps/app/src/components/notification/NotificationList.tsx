@@ -11,6 +11,9 @@ import {
 } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
+import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
+import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
+import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
@@ -35,6 +38,7 @@ const notificationListFragment = graphql`
   fragment NotificationList_profile on Profile
   @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
   @refetchable(queryName: "NotificationListNextPageQuery") {
+    ...ReplyComposerSurface_profile
     notifications(first: $count, after: $cursor)
       @connection(key: "NotificationList_notifications") {
       edges {
@@ -126,50 +130,60 @@ export function NotificationList({ profile }: NotificationListProps) {
   };
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.root}
-      refreshControl={
-        Platform.OS === 'web' ? undefined : (
-          <RefreshControl onRefresh={refresh} refreshing={refreshing} tintColor={theme.text} />
-        )
-      }
-    >
-      <NotificationPageHeader />
-      {notifications.length ? (
-        notifications
-      ) : (
-        <StateView
-          description="새로운 팔로우, 팔로우 요청, 답글, 반응 또는 재게시 알림이 생기면 여기에 표시돼요."
-          style={styles.state}
-          title="아직 알림이 없어요"
-        />
-      )}
-      {pagination.hasNext || loadError ? (
-        loadError ? (
-          <StateView
-            actionLabel="다시 시도"
-            alert
-            onAction={loadMore}
-            style={[styles.pagination, { borderColor: theme.border }]}
-            title="알림을 더 불러오지 못했어요"
-          />
-        ) : (
-          <View style={[styles.pagination, { borderColor: theme.border }]}>
-            <Button
-              accessibilityState={{
-                busy: pagination.isLoadingNext,
-                disabled: pagination.isLoadingNext,
-              }}
-              disabled={pagination.isLoadingNext}
-              onPress={loadMore}
-              tone="secondary"
-            >
-              {pagination.isLoadingNext ? '불러오는 중' : '더 불러오기'}
-            </Button>
-          </View>
-        )
-      ) : null}
-    </ScrollView>
+    <PostActionAuthenticationProvider>
+      <PostReplyCoordinatorProvider key={pagination.data.id} owner="list" profile={pagination.data}>
+        <PostMediaViewerHostProvider>
+          <ScrollView
+            contentContainerStyle={styles.root}
+            refreshControl={
+              Platform.OS === 'web' ? undefined : (
+                <RefreshControl
+                  onRefresh={refresh}
+                  refreshing={refreshing}
+                  tintColor={theme.text}
+                />
+              )
+            }
+          >
+            <NotificationPageHeader />
+            {notifications.length ? (
+              notifications
+            ) : (
+              <StateView
+                description="새로운 팔로우, 팔로우 요청, 답글, 반응 또는 재게시 알림이 생기면 여기에 표시돼요."
+                style={styles.state}
+                title="아직 알림이 없어요"
+              />
+            )}
+            {pagination.hasNext || loadError ? (
+              loadError ? (
+                <StateView
+                  actionLabel="다시 시도"
+                  alert
+                  onAction={loadMore}
+                  style={[styles.pagination, { borderColor: theme.border }]}
+                  title="알림을 더 불러오지 못했어요"
+                />
+              ) : (
+                <View style={[styles.pagination, { borderColor: theme.border }]}>
+                  <Button
+                    accessibilityState={{
+                      busy: pagination.isLoadingNext,
+                      disabled: pagination.isLoadingNext,
+                    }}
+                    disabled={pagination.isLoadingNext}
+                    onPress={loadMore}
+                    tone="secondary"
+                  >
+                    {pagination.isLoadingNext ? '불러오는 중' : '더 불러오기'}
+                  </Button>
+                </View>
+              )
+            ) : null}
+          </ScrollView>
+        </PostMediaViewerHostProvider>
+      </PostReplyCoordinatorProvider>
+    </PostActionAuthenticationProvider>
   );
 }
 
@@ -190,7 +204,7 @@ export function NotificationListState({
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             {[0, 1, 2].map((item) => (
               <View key={item} style={[styles.skeletonItem, { borderColor: theme.border }]}>
-                <Skeleton circular height={28} width={28} />
+                <Skeleton circular height={48} width={48} />
                 <View style={styles.skeletonContent}>
                   <View style={styles.skeletonAvatarRow}>
                     <Skeleton circular height={28} width={28} />

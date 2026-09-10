@@ -2,7 +2,7 @@
 
 PROD-884는 `NotificationListItemView`와 `KOSMO/Patterns/Notification List Item` Storybook을
 소유한다. 이 컴포넌트는 표시용 입력과 이동 callback을 받고, 기존 Notification runtime은 그대로 둔다.
-PROD-811이 실제 목록 연결, Relay projection·그룹 집계, 읽음 처리, 권한과 navigation 통합을 소유한다.
+PROD-811이 실제 목록 연결, Relay projection, 읽음 처리, 권한과 navigation 통합을 소유한다.
 PROD-930은 production Notification runtime에서 플랫폼별로 나뉘었던 `모두 읽음` action과 Read/Unread
 표시를 Web·iOS·Android에서 같은 계약으로 제공하며, 현재 로드된 ID와 기존 API/Relay 수렴 경계를 유지한다.
 
@@ -71,7 +71,9 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
   [Notification 도메인의 Future 계약](../domain/objects/notification.md#replymention-수신자별-분류와-중복-처리-future)을 따른다.
 - Reply 알림은 `ReplyNotificationPost`가 작성자·시각·알림 이유와 게시글 내용을 조립한다.
   `PostBody`·`PostSourcePreview`·`PostActionSurface`를 재사용하고, Reply 버튼·composer·focus 연결은
-  `usePostReplySurface`를 게시글 목록과 공유한다. `PostListItem`은 알림 종류·문구·배치를 소유하지 않는다.
+  `usePostReplySurface`를 게시글 목록과 공유한다. Reply 버튼은 `owner="list"`인 기존 Reply composer의
+  popup modal을 열며 Notification 전용 composer나 별도 popup lifecycle을 만들지 않는다. `PostListItem`은
+  알림 종류·문구·배치를 소유하지 않는다.
   기존 Post action/provider·Relay ref 계약을 따르며 action을 알림 이동 링크 안에 중첩하지 않는다.
   단일 하단 divider는 Notification wrapper가 소유한다. Reply wrapper는 `children`과 `unread`만 받고
   자식으로 `ReplyNotificationPost`를 합성한다. 게시글 identity와 이동은 이 자식이 소유하므로 wrapper에
@@ -80,6 +82,10 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
   수명을 소유하며 presentation에서 읽음 mutation·cache 또는 실패 복구 정책을 실행하지 않는다.
   Reply의 이동과 Post action 상태는 해당 Post가 소유한다. 권한 상실로 Post를 숨겨야 하면 consumer가
   전체 item을 제거해야 한다.
+- Notification 활성화에 따른 Best Effort Read는 이동이나 열기를 기다리게 하지 않는다.
+  Follow/FollowRequest/Reaction/Repost는 단일 item target 활성화에서, Reply는 작성자 Profile·시각·본문의
+  link navigation과 미디어 열기에서 각각 한 번 시작한다. Reply의 Content Warning 공개, Action Bar와 열린
+  composer의 control은 자체 동작만 수행하며 item navigation이나 Read를 함께 시작하지 않는다.
 
 ## 검증 경계
 
