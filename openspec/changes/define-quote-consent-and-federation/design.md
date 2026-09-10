@@ -3,7 +3,7 @@
 계약·스펙 owner는 PROD-902다. 같은 계약의 로컬 작성은 PROD-431, 게시글별 정책·발신·승인·철회와 연합
 통합 검증은 PROD-924가 맡는다. PROD-792·793의 기존 수신·signed fetch 구현을 이 change에서 복제하지 않는다.
 
-Canonical 근거는 `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`, ADR 0027과
+Canonical 근거는 `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`, ADR 0029과
 `docs/design/post-action-bar.md`다. 2026-09-08 사용자의 정책 선택과 스펙 소유권 정정을 Linear에서 확인했다.
 
 ## Goals / Non-Goals

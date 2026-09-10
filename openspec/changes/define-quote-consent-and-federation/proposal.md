@@ -23,7 +23,7 @@ Kosmo에는 Quote 저장·표시 기반이 있지만, 로컬 작성과 원문 �
 ## Authority / Provenance
 
 - Canonical: `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`,
-  `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`,
+  `docs/domain/objects/profile.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`,
   `docs/domain/decisions/0017-activitypub-local-post-note.md`, `docs/design/post-action-bar.md`.
 - Linear Contract: [PROD-902](https://linear.app/byulmaru/issue/PROD-902). 2026-09-08 갱신된 본문과 현재 대화의
   정책 선택 및 “902의 스펙을 작성해야지” 지시로 기존 OpenSpec 제외·소유권 이동을 정정했다.

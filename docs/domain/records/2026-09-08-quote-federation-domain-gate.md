@@ -183,7 +183,7 @@ Only Source 발신을 보류하더라도 기존 로컬 Quote Visibility를 제�
 ## 갱신된 이슈와 후속 결정 (2026-09-08)
 
 앞선 기록은 당시 조사 상태를 보존한다. 이후 갱신된 PROD-902 본문과 Spec 대화에서 다음 결정을 추가로
-확인했다. 현재 canonical 계약은 [ADR 0027](../decisions/0027-quote-consent-and-federation.md)과
+확인했다. 현재 canonical 계약은 [ADR 0029](../decisions/0029-quote-consent-and-federation.md)과
 [Post](../objects/post.md)를 따른다.
 
 - 원격 manual approval은 지원한다. 자체 Content를 먼저 게시·전달하고, 승인 전 Source는 정상 인용으로

@@ -10,7 +10,7 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 
 - Decision Date: 2026-09-08
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 - Status: Active
 - Context / Problem: 설정 단위·기존 글 초기값과 기존 승인의 처리 기준이 필요했다.
 - Decision Outcome: 게시글별 모두·팔로워·본인만 자동 승인을 사용하고 새 글·기존 Local Post 모두 초기값을 모두로 한다. 사용자가 이번 사이클 범위를 게시글별로 선택했다.
@@ -22,7 +22,7 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 
 - Decision Date: 2026-09-08
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-431, PROD-924.
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-431, PROD-924.
 - Status: Active
 - Context / Problem: 원격 타인 원문 승인을 기다리는 동안 자체 본문 게시와 Source 노출을 구분해야 한다.
 - Decision Outcome: 사용자가 채택한 계약대로 본문을 먼저 게시·일반 전달하고 승인 전 Source는 정상 인용으로 노출하지 않는다. Kosmo 자체 건별 수동 승인 UI는 제외한다.
@@ -34,7 +34,7 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 
 - Decision Date: 2026-09-08
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-431, PROD-924.
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-431, PROD-924.
 - Status: Active
 - Context / Problem: 조회 가능한 타인의 제한 공개 글까지 재증폭할지 결정해야 했다.
 - Decision Outcome: 타인 Local·Remote Source는 Public·Unlisted만 허용한다. 자기 Followers Only 인용은 Source 접근 범위를 유지한다.
@@ -46,7 +46,7 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 
 - Decision Date: 2026-09-08
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 - Status: Active
 - Context / Problem: 원문 제어가 Quote 작성자의 본문과 제3자 조회에 미치는 범위를 정해야 했다.
 - Decision Outcome: 삭제·거절·철회 후 본문을 유지하고 Source를 숨긴다. 차단은 당사자 접근·새 요청을 막되 기존 승인을 자동 철회하지 않는다. 제3자 Source 비노출은 명시적 철회이며, 로컬 Quote가 수신한 유효한 철회는 기존 Quote audience에도 전달한다.
@@ -58,7 +58,7 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 
 - Decision Date: 2026-09-08
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 - Status: Active
 - Context / Problem: 인용 지원 여부가 다른 서버에도 승인된 원문 참조를 전달해야 한다.
 - Decision Outcome: FEP를 정식 경로로 쓰며 승인 후 quoteUrl·quoteUri·\_misskey_quote와 원문 링크 fallback을 제공한다. 사용자가 속성 3종과 본문 링크 제공을 선택했다.
@@ -70,7 +70,7 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 
 - Decision Date: 2026-09-08
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/decisions/0027-quote-consent-and-federation.md`, `memory/issue-openspec-workflow.md`, PROD-902, PROD-431, PROD-924.
+- Authority / Provenance: `docs/domain/decisions/0029-quote-consent-and-federation.md`, `memory/issue-openspec-workflow.md`, PROD-902, PROD-431, PROD-924.
 - Status: Active
 - Context / Problem: 스펙 작성 세션을 구현 이슈로 이동하려던 해석이 사용자 요청과 달랐다.
 - Decision Outcome: 사용자 정정에 따라 PROD-902가 이 OpenSpec을 소유한다. PROD-431·924가 담당 task를 구현하며 PROD-924는 전체 선언 task와 연합 통합 검증 후 archive를 수행한다.
@@ -82,7 +82,7 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 
 - Decision Date: 2026-09-09
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`, `docs/design/post-action-bar.md`, PROD-431·902·924의 2026-09-09 범위 정정과 PROD-431 사용자 지시.
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, `docs/design/post-action-bar.md`, PROD-431·902·924의 2026-09-09 범위 정정과 PROD-431 사용자 지시.
 - Status: Active
 - Context / Problem: 이전 미구현 작성 초안에 Reply+Quote API와 링크 인용 UX가 포함됐다.
 - Decision Outcome: 사용자가 해당 기능 전체와 문서 제거를 지시했으므로 기본 Quote 작성만 제공한다. Quote 작성에 Reply Parent를 추가하지 않으며 링크를 인용 카드로 전환하지 않는다.
@@ -94,7 +94,7 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 
 - Decision Date: 2026-09-09
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`, `docs/design/post-action-bar.md`, PROD-902의 2026-09-09 사용자 결정. 프로토콜 참고: [FEP-044f](https://fediverse.codeberg.page/fep/fep/044f/).
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, `docs/design/post-action-bar.md`, PROD-902의 2026-09-09 사용자 결정. 프로토콜 참고: [FEP-044f](https://fediverse.codeberg.page/fep/fep/044f/).
 - Status: Active
 - Context / Problem: 원격 `interactionPolicy`의 automatic/manual 분류나 부재·해석 실패를 QuoteRequest 발신과 실제 승인 판단에 어떻게 사용할지 확정해야 했다.
 - Decision Outcome: 자기 인용은 QuoteRequest 없이 허용한다. 타인 원문은 automatic/manual 여부와 정책 부재·해석 실패에 관계없이 자체 Content를 pending으로 게시하고 QuoteRequest를 보낸다. `interactionPolicy`는 작성 UI와 예상 eligibility의 힌트일 뿐이며, 실제 승인은 해당 Quote·Source에 결속한 유효한 QuoteAuthorization으로만 확인한다.

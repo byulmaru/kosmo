@@ -1,4 +1,4 @@
-# ADR 0027: Quote Consent and Federation
+# ADR 0029: Quote Consent and Federation
 
 ## 상태
 

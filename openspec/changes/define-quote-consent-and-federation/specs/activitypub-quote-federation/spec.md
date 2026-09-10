@@ -3,7 +3,7 @@
 ### Requirement: Local Note의 인용 정책 광고
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`,
-`docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924. 프로토콜 참고:
+`docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924. 프로토콜 참고:
 [FEP-044f](https://fediverse.codeberg.page/fep/fep/044f/).
 
 시스템은 Content가 있는 Local Post의 인용 허용 정책을 Local Note의 `interactionPolicy.canQuote`에 광고해야
@@ -32,7 +32,7 @@ followers collection과 Author Actor, `본인만`은 Author Actor여야 한다(M
 
 ### Requirement: FEP Quote 표현과 승인 검증
 
-**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`,
+**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`,
 PROD-902, PROD-924. 프로토콜 참고: [FEP-044f](https://fediverse.codeberg.page/fep/fep/044f/).
 
 시스템은 FEP-044f의 `quote`와 `QuoteAuthorization`을 정식 인용 표현으로 사용해야 한다(MUST).
@@ -72,7 +72,7 @@ QuoteAuthorization은 Source를 볼 수 있는 당사자가 역참조할 수 있
 ### Requirement: Kosmo 원문용 인용 요청의 자동 판정
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`,
-`docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
+`docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 Kosmo 원문에 들어오는 QuoteRequest는 요청 Profile·인용 Post·Source의 대응과 Source 정책·조회·차단
 조건을 검증해야 한다(MUST). 허용된 요청에는 해당 Quote·Source에 결속한 QuoteAuthorization과 Accept를
@@ -99,7 +99,7 @@ Kosmo 원문에 들어오는 QuoteRequest는 요청 Profile·인용 Post·Source
 ### Requirement: 원격 승인 대기 중 발신과 승인 후 Update
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`,
-`docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
+`docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 자기 인용이 아닌 원격 타인 원문의 로컬 Quote는 `interactionPolicy`의 automatic/manual 분류나 부재·해석
 실패와 관계없이 자체 Content를 먼저 게시하고 일반 federation 전달을 진행해야 한다(MUST). 승인 전 Source를
@@ -146,7 +146,7 @@ Kosmo 원문에 들어오는 QuoteRequest는 요청 Profile·인용 Post·Source
 ### Requirement: 거절과 철회 및 삭제 연합
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`,
-`docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
+`docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 로컬 Quote에 대한 유효한 Reject 또는 승인 철회는 자체 Content를 유지한 채 Source를 비노출로 수렴시켜야
 한다(MUST). Kosmo 원문 작성자의 명시적 철회는 승인을 무효화하고 `Delete(QuoteAuthorization)`를 전달해야
@@ -189,7 +189,7 @@ Kosmo 원문에 들어오는 QuoteRequest는 요청 Profile·인용 Post·Source
 
 ### Requirement: 재전달과 역순 응답의 수렴
 
-**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`,
+**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`,
 PROD-902, PROD-924.
 
 중복·동시 요청과 delivery 재시도는 하나의 유효한 승인·Source 결과로 수렴해야 한다(MUST).
@@ -214,7 +214,7 @@ PROD-902, PROD-924.
 
 ### Requirement: 레거시 상호운용과 승인 우회 방지
 
-**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`,
+**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`,
 PROD-902, PROD-924. 기존 원격 수신 경계: PROD-792.
 
 시스템은 승인된 Quote의 레거시 발신 호환을 지원해야 한다(MUST). FEP 형식이 존재하지만 유효하지 않은

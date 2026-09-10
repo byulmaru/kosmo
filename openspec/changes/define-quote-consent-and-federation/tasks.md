@@ -3,7 +3,7 @@
 **Authority / Provenance**
 
 - `docs/domain/objects/post.md`, `docs/domain/objects/profile.md`,
-  `docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
+  `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 **Deliverable**
 
@@ -35,7 +35,7 @@ field·mutation 이름, payload와 오류 shape는 이 공개 행동을 지키�
 
 - `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`,
   `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`,
-  `docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-431·902의 2026-09-09 정정, PROD-924.
+  `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-431·902의 2026-09-09 정정, PROD-924.
 
 **Deliverable**
 
@@ -70,7 +70,7 @@ field·mutation 이름, payload와 오류 shape는 이 공개 행동을 지키�
 **Authority / Provenance**
 
 - `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `docs/design/reply-composer.md`,
-  `docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-431·902의 2026-09-09 정정, PROD-924.
+  `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-431·902의 2026-09-09 정정, PROD-924.
 
 **Deliverable**
 
@@ -109,7 +109,7 @@ lifecycle·전체 change archive는 PROD-431의 Draft 또는 완료 blocker가 �
 **Authority / Provenance**
 
 - `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`, `docs/design/post-action-bar.md`,
-  `docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
+  `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 **Deliverable**
 
@@ -142,7 +142,7 @@ Kosmo 원문이 요청을 정책대로 자동 승인·거절하고 작성자가 
 **Authority / Provenance**
 
 - `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`,
-  `docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
+  `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 **Deliverable**
 
@@ -178,7 +178,7 @@ QuoteRequest와 유효한 QuoteAuthorization을 통해 같은 Quote의 Source �
 
 **Authority / Provenance**
 
-- `docs/domain/objects/post.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
+- `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 **Deliverable**
 
@@ -205,7 +205,7 @@ QuoteRequest와 유효한 QuoteAuthorization을 통해 같은 Quote의 Source �
 **Authority / Provenance**
 
 - `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`,
-  `docs/domain/decisions/0027-quote-consent-and-federation.md`, `memory/issue-openspec-workflow.md`,
+  `docs/domain/decisions/0029-quote-consent-and-federation.md`, `memory/issue-openspec-workflow.md`,
   PROD-902, PROD-431, PROD-924.
 
 **Deliverable**

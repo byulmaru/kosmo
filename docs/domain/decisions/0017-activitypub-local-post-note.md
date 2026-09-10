@@ -14,7 +14,7 @@ Post Content Media node의 `Note.attachment` Image, Alt Text와 sensitive 투영
 [ADR 0022](./0022-post-content-revision-media-nodes.md)가 정의한다. 나머지 Local Note identity, HTML content,
 summary, audience와 역참조 결정은 유지한다.
 
-Quote 동의와 federation 표현은 [ADR 0027](./0027-quote-consent-and-federation.md)이 정의한다.
+Quote 동의와 federation 표현은 [ADR 0029](./0029-quote-consent-and-federation.md)이 정의한다.
 
 ## 결정
 

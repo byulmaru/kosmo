@@ -404,7 +404,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 ## 인용 동의와 원문 표시
 
-[ADR 0027](../domain/decisions/0027-quote-consent-and-federation.md)의 인용 정책을 작성과 표시 흐름에 적용한다.
+[ADR 0029](../domain/decisions/0029-quote-consent-and-federation.md)의 인용 정책을 작성과 표시 흐름에 적용한다.
 
 - 이번 사이클에는 게시글별 인용 허용 설정 `모두`, `팔로워`, `본인만`을 제공한다. 새 글과 기존 글의 초기값은
   `모두`다. Profile 기본값 설정은 PROD-925 Backlog로 분리한다.
@@ -418,7 +418,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   포함되지 않으면 승인이 예상되지 않는다고 안내할 수 있지만, 정책 자체를 승인 증거로 사용하지 않는다.
 - Kosmo 자체의 건별 수동 승인 UI는 제공하지 않는다. 작성자는 자기 글의 정책을 변경하거나 기존 인용 승인을
   명시적으로 철회할 수 있다. 정책 변경과 차단만으로 기존 승인을 자동 철회하지 않는다.
-- 차단은 당사자 간 접근을 막는다. 제3자에게도 Source를 숨기는 사용자 조작은 별도 승인 철회다.
+- 새 QuoteRequest와 새 인용 승인은 양방향 차단 관계에서 막는다. 기존 승인 Source는 기존 방향별 Post 조회
+  정책을 적용하므로 Viewer가 Source Author를 차단한 방향만 존재하면 직접 조회 조건에 따라 표시할 수 있고,
+  Source Author가 Viewer를 차단했거나 상호 차단한 경우에는 숨긴다. 제3자에게도 Source를 숨기는 사용자 조작은
+  별도 승인 철회다.
 - PROD-431은 인용 작성과 Composer를, PROD-924는 게시글별 정책·철회 조작과 승인 lifecycle 연동을 소유한다.
   후속 설계에서는 이 조작의 진입점·오류 복구·접근성을 기존 공용 UI 계약에 맞춰 구체화한다.
 

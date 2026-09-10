@@ -365,7 +365,7 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - 현재 document V1은 paragraph, text, hard break, 안전한 HTTP(S) link와 Media node를 지원한다. `pre`와
   일반 rich-text editor는 지원하지 않는다.
 - Mentioned Profiles audience와 ActivityPub Mention·custom emoji는 후속 계약에서 정의한다.
-- Quote 정책은 [ADR 0027](../decisions/0027-quote-consent-and-federation.md)과
+- Quote 정책은 [ADR 0029](../decisions/0029-quote-consent-and-federation.md)과
   [PROD-902](https://linear.app/byulmaru/issue/PROD-902)를 따른다. 로컬 작성은 PROD-431,
   federation·승인 발급·철회는 PROD-924, 원격 Quote 수신·검증은 PROD-792가 구현한다.
 - 이번 사이클에는 게시글별 인용 허용 설정만 제공한다. Profile의 새 Post 인용 허용 기본값 설정은

@@ -3,7 +3,7 @@
 ### Requirement: 게시글별 인용 허용 정책과 초기값
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/objects/profile.md`,
-`docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
+`docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 시스템은 Content가 있는 Local Post마다 `모두`, `팔로워`, `본인만` 중 하나의 인용 허용 정책을 제공해야
 한다(MUST). 새 Post와 도입 전의 기존 Post 초기값은 `모두`여야 한다(MUST). `팔로워`는 established
@@ -31,7 +31,7 @@ Source 조회 권한을 부여해서는 안 된다(MUST NOT).
 ### Requirement: 작성자의 정책 변경과 비소급 적용
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`,
-`docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
+`docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 인증된 Account 요청은 `Account.Active`와 행동 Profile의 `Post.Author` 사실을 확인한 뒤 Content가 있는
 Active Local Post의 정책 변경을 허용해야 한다(MUST). 새 정책은 이후 요청·승인 판단에만 적용하고 기존
@@ -51,7 +51,7 @@ Active Local Post의 정책 변경을 허용해야 한다(MUST). 새 정책은 �
 
 ### Requirement: Quote Source의 인용 가능 범위
 
-**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`,
+**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`,
 PROD-902, PROD-431, PROD-924.
 
 시스템은 타인의 Local·Remote Source를 Public·Unlisted에 한정하고 Content 존재·조회·인용 정책·차단
@@ -117,7 +117,7 @@ PROD-902, PROD-431, PROD-924.
 ### Requirement: 승인 상태와 본문 보존
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`,
-`docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-431, PROD-924.
+`docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-431, PROD-924.
 
 원격 승인 대기 중에도 Quote 자체 Content를 게시해야 하며(MUST), Source는 정상 인용으로 노출해서는
 안 된다(MUST NOT). 검증된 승인 후에만 Source를 연결·표시하고 거절·철회·원문 삭제 후에는 자체 Content를
@@ -144,7 +144,7 @@ PROD-902, PROD-431, PROD-924.
 ### Requirement: 차단과 명시적 승인 철회의 구분
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`,
-`docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
+`docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 차단 관계는 당사자의 새 인용 요청·새 승인보다 양방향으로 우선해야 한다(MUST). 기존 승인에 따른 Source
 표시는 별도 양방향 제한을 추가하지 않고 viewer별 기존 Post 조회 정책으로 판정해야 한다(MUST). 차단 자체로
