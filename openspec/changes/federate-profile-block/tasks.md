@@ -11,7 +11,7 @@
 
 **Guardrails**
 
-- D6에 따라 Spec Gate 승인과 PROD-813 완료를 모두 확인한다. PROD-821·PROD-813 Done만으로 선행 구현·통합 검증 완료를 추론하지 않는다.
+- D6에 따른 PROD-813 선행 조건은 D8의 사용자 명시 면제로 이번 구현 세션에서 적용하지 않는다. 이 면제는 PROD-813의 구현·통합 검증·archive 완료를 뜻하지 않는다.
 - PROD-818은 자기 연합 change만 소유하며 PROD-813의 local change를 대신 archive하지 않는다.
 
 **Verification**
@@ -20,8 +20,8 @@
 - 2026-09-10에는 PROD-813 Done과 PROD-822·PROD-823 In Review가 함께 관측됐다. 실제 병합·검증 증거를 확인하며, 후속 신규 UI 교체 PROD-917을 추가 선행 조건으로 삼지 않는다.
 - 그 revision의 core action·cleanup·policy·dispatcher·Worker registry를 직접 읽어 현재 설계와 차이를 기록한다.
 
-- [ ] 1.1 Spec Gate 승인과 PROD-813 전체 완료 증거를 확인하고 구현 기준 revision을 기록한다.
-- [ ] 1.2 최종 공통 Block action과 cleanup 경계를 확인하고 계약 변화가 있으면 canonical·Linear부터 정렬한다.
+- [x] 1.1 Spec Gate 승인과 PROD-813 선행 조건 면제 지시를 확인하고, 현재 local baseline을 PROD-818 구현 기준으로 기록한다.
+- [x] 1.2 최종 공통 Block action과 cleanup 경계를 확인하고 계약 변화가 있으면 canonical·Linear부터 정렬한다.
 
 ## 2. PROD-818 원본 identity와 복구 가능한 관계 적용
 
@@ -47,9 +47,9 @@ Block 원본과 해제를 구분하며 중복·completion loss에도 같은 doma
 - domain commit 직후 응답 유실과 새 row 생성 후 과거 효과 재시도를 주입해 관계와 effect 결과를 확인한다.
 - 저장 변경이 있으면 구버전 read/write·기존 row 유지·forward migration 재실행 결과를 검증한다.
 
-- [ ] 2.1 검증 원본·종료 증거·exact row와 미완료 효과를 보존하는 최소 경계를 구현한다.
-- [ ] 2.2 원본별 종료와 마지막 원본의 canonical cleanup·해제를 연결하고 completion-loss 복구를 검증한다.
-- [ ] 2.3 필요한 additive migration과 old/new 호환 검증을 수행한다. 저장 변경이 없으면 그 근거를 남긴다.
+- [x] 2.1 검증 원본·종료 증거·exact row와 미완료 효과를 보존하는 최소 경계를 구현한다.
+- [x] 2.2 원본별 종료와 마지막 원본의 canonical cleanup·해제를 연결하고 completion-loss 복구를 검증한다.
+- [x] 2.3 필요한 additive migration과 old/new 호환 검증을 수행한다. 저장 변경이 없으면 그 근거를 남긴다.
 
 ## 3. PROD-818 verified inbound Block·Undo
 
@@ -76,8 +76,8 @@ Block 원본과 해제를 구분하며 중복·completion loss에도 같은 doma
 - embedded·저장 원본 IRI·미확인 IRI, cleanup 실패·재시도, 반대 방향 유지와 Follow 비복구를 확인한다.
 - 등록된 기존 Follow·Like·EmojiReact Undo 경로의 실행 회귀를 확인한다.
 
-- [ ] 3.1 Block listener와 Undo 분기를 기존 인증·recipient·원본 검증 경계에 연결한다.
-- [ ] 3.2 ActivityPub-origin을 공통 action과 효과에 전달하고 echo 0건·필수 cleanup을 검증한다.
+- [x] 3.1 Block listener와 Undo 분기를 기존 인증·recipient·원본 검증 경계에 연결한다.
+- [x] 3.2 ActivityPub-origin을 공통 action과 효과에 전달하고 echo 0건·필수 cleanup을 검증한다.
 - [ ] 3.3 잘못된 입력과 URI-only·embedded 원본의 실제 처리 결과를 검증하고 기존 Undo 회귀를 통과시킨다.
 
 ## 4. PROD-818 대상 한 명에 대한 Block·Undo 발신
@@ -110,8 +110,8 @@ Block 원본과 해제를 구분하며 중복·completion loss에도 같은 doma
 - 이전 attempt가 살아 있어도 후속 attempt의 실제 수락을 확인·보존하면 Undo가 진행되는지 Workflow 결과로 확인한다. 이전 attempt 종료 증명이나 원격 retry 완료를 기다리는 새 조건을 추가하지 않는다.
 - 응답 유실과 pending 상태 Worker restart에서 같은 원본과 로컬 결과를 보존한다. 원격 순서 보장이나 두 Worker·INSERT barrier 실험은 필수 완료 조건이 아니다.
 
-- [ ] 4.1 Block·Undo의 안정적인 ID·원본 snapshot과 origin별 발신 효과를 연결한다.
-- [ ] 4.2 dispatcher에 대상 한 명과 orderingKey를 보존하는 경로를 마련하고 기존 caller 회귀를 검증한다.
+- [x] 4.1 Block·Undo의 안정적인 ID·원본 snapshot과 origin별 발신 효과를 연결한다.
+- [x] 4.2 dispatcher에 대상 한 명과 orderingKey를 보존하는 경로를 마련하고 기존 caller 회귀를 검증한다.
 - [ ] 4.3 순차 queue 인계·인계 실패 복구·인계 후 Fedify retry와 로컬 결과 격리를 검증한다.
 - [ ] 4.4 공통 dispatcher의 실제 인계·recipient 제외 결과를 구분하고 확정 후 unavailable은 pending·Undo 대기로 정산한다. 기존 Post·Profile Update의 정상 no-op·audience·오류와 Reaction·Repost 기존 경로를 보존한다.
 - [ ] 4.5 D7에 따라 실제 queue 수락 정산 후 이전 attempt 생존 가능성만으로 Undo를 보류하지 않는지 검증한다. stable identity와 로컬 상태 보존을 확인하며 remote-visible ordering 보장은 검증 완료 조건에서 제외한다.
@@ -173,7 +173,7 @@ Block 원본과 해제를 구분하며 중복·completion loss에도 같은 doma
 
 - [ ] 6.1 모든 spec scenario의 실행 증거와 요구사항 대응표를 만들고 관련 core·Fedify·Worker 검증을 통과시킨다.
 - [ ] 6.2 실제 Mastodon 버전의 양방향 Block/Undo와 로컬 제한·해제 후 Follow 비복구를 확인한다.
-- [ ] 6.3 기존 로컬 차단·Follow cleanup·다른 Undo·기존 recipient dispatcher 회귀를 확인한다.
+- [x] 6.3 기존 로컬 차단·Follow cleanup·다른 Undo·기존 recipient dispatcher 회귀를 확인한다.
 
 ## 7. PROD-818 연합 change 동기화·archive
 

@@ -1,3 +1,9 @@
+import '../polyfill';
+
+import { ApplicationFailure } from '@temporalio/client';
+import { ConflictError, NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import type { ProfileBlockProtocolActivityInput } from '../services/profile-block-protocol';
+import { runWorkflow } from './client';
 import type { WorkflowUpdateDefinition } from './client';
 
 export const PROFILE_BLOCK_WORKFLOW_TYPE = 'profileBlockWorkflow';
@@ -15,6 +21,8 @@ export type ProfileBlockInput = {
   readonly ownerProfileId: string;
   readonly targetProfileId: string;
   readonly origin: ProfileBlockEffectOrigin;
+  /** Optional ActivityPub identity recorded after the product transition. */
+  readonly protocolActivity?: ProfileBlockProtocolActivityInput;
 };
 
 export type ProfileBlockTransitionResult = {
@@ -29,6 +37,10 @@ export type ProfileUnblockInput = {
   readonly targetProfileId: string;
   /** Exact Profile Block relation ID targeted by this Unblock command. */
   readonly profileBlockId: string;
+  /** Origin controls whether the post-commit Undo effect is scheduled. */
+  readonly origin?: ProfileBlockEffectOrigin;
+  /** Original inbound ActivityPub Block URI, when this is an inbound Undo. */
+  readonly protocolActivityUri?: string;
 };
 
 export type ProfileUnblockTransitionResult = {

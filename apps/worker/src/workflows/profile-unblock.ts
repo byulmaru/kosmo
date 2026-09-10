@@ -23,9 +23,11 @@ const profileUnblockInputSchema = z.strictObject({
   ownerProfileId: profileIdSchema,
   targetProfileId: profileIdSchema,
   profileBlockId: profileIdSchema,
+  origin: z.enum(['LOCAL', 'ACTIVITYPUB']).default('LOCAL'),
+  protocolActivityUri: profileIdSchema.optional(),
 });
 
-const { executeProfileUnblockTransitionActivity } =
+const { executeProfileUnblockTransitionActivity, sendProfileBlockUndoActivity } =
   proxyActivities<typeof activities>(workflowActivityOptions);
 
 type ProfileUnblockTransitionExecution = Awaited<
@@ -59,6 +61,7 @@ export async function profileUnblockWorkflow(input: ProfileUnblockInput): Promis
   parseProfileUnblockInput(input);
 
   let transitionPromise: ReturnType<typeof executeProfileUnblockTransitionActivity> | undefined;
+  let transitionOrigin: ProfileUnblockInput['origin'] | undefined;
 
   setHandler(
     defineUpdate<ProfileUnblockTransitionResult, [ProfileUnblockInput]>(
@@ -70,6 +73,7 @@ export async function profileUnblockWorkflow(input: ProfileUnblockInput): Promis
       }
 
       const parsedCommand = parseProfileUnblockInput(command);
+      transitionOrigin = parsedCommand.origin;
       const promise = executeProfileUnblockTransitionActivity(parsedCommand);
       transitionPromise = promise;
       const execution = await promise;
@@ -101,5 +105,14 @@ export async function profileUnblockWorkflow(input: ProfileUnblockInput): Promis
   }
   if (!settled.value.ok) {
     throw profileUnblockTransitionFailure(settled.value.error);
+  }
+  if (settled.value.result.removed && (transitionOrigin ?? input.origin) !== 'ACTIVITYPUB') {
+    await Promise.allSettled([
+      sendProfileBlockUndoActivity({
+        ownerProfileId: settled.value.result.ownerProfileId,
+        profileBlockId: settled.value.result.profileBlockId ?? input.profileBlockId,
+        targetProfileId: settled.value.result.targetProfileId,
+      }),
+    ]);
   }
 }

@@ -25,10 +25,24 @@ const profileBlockInputSchema = z.strictObject({
   origin: z.enum(['LOCAL', 'ACTIVITYPUB'], {
     error: 'Profile Block origin is invalid',
   }),
+  protocolActivity: z
+    .strictObject({
+      activityUri: profileIdSchema,
+      actorUri: profileIdSchema,
+      objectUri: profileIdSchema,
+      ownerProfileId: profileIdSchema,
+      targetProfileId: profileIdSchema,
+      origin: z.enum(['INBOUND', 'OUTBOUND']),
+      profileBlockId: profileIdSchema.optional(),
+    })
+    .optional(),
 });
 
-const { executeProfileBlockTransitionActivity, sendProfileUnfollowActivity } =
-  proxyActivities<typeof activities>(workflowActivityOptions);
+const {
+  executeProfileBlockTransitionActivity,
+  sendProfileBlockActivity,
+  sendProfileUnfollowActivity,
+} = proxyActivities<typeof activities>(workflowActivityOptions);
 
 type ProfileBlockTransitionExecution = Awaited<
   ReturnType<typeof executeProfileBlockTransitionActivity>
@@ -64,6 +78,7 @@ export async function profileBlockWorkflow(input: ProfileBlockInput): Promise<vo
   const workflowInput = parseProfileBlockInput(input);
 
   let transitionPromise: ReturnType<typeof executeProfileBlockTransitionActivity> | undefined;
+  let transitionOrigin: ProfileBlockInput['origin'] | undefined;
 
   setHandler(
     defineUpdate<ProfileBlockTransitionResult, [ProfileBlockInput]>(PROFILE_BLOCK_UPDATE_NAME),
@@ -76,6 +91,7 @@ export async function profileBlockWorkflow(input: ProfileBlockInput): Promise<vo
       ) {
         throw profileBlockConflict();
       }
+      transitionOrigin = parsedCommand.origin;
       const promise =
         transitionPromise ??
         (transitionPromise = executeProfileBlockTransitionActivity(parsedCommand));
@@ -114,7 +130,11 @@ export async function profileBlockWorkflow(input: ProfileBlockInput): Promise<vo
   if (!execution.ok) {
     throw profileBlockTransitionFailure(execution.error);
   }
-  await Promise.allSettled(
-    execution.unfollowInputs.map((input) => sendProfileUnfollowActivity(input)),
-  );
+  const effects = [
+    ...execution.unfollowInputs.map((input) => sendProfileUnfollowActivity(input)),
+    ...((transitionOrigin ?? input.origin) === 'LOCAL' && execution.result.created
+      ? [sendProfileBlockActivity(execution.result.profileBlockId, { createIfMissing: true })]
+      : []),
+  ];
+  await Promise.allSettled(effects);
 }
