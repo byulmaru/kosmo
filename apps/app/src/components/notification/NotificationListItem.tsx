@@ -1,13 +1,10 @@
-import { Link } from 'expo-router';
-import { MessageCircle, Repeat2, Smile, UserPlus } from 'lucide-react-native';
-import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
+import { useCallback } from 'react';
 import { graphql, useFragment, useMutation } from 'react-relay';
-import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
-import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
-import type { Href } from 'expo-router';
+import { NotificationListItemView } from './NotificationListItemView';
+import { ReplyNotificationPost } from './ReplyNotificationPost';
+import type { PostMediaItem } from '@/components/post/PostMediaImage';
 import type { FollowRequestNotificationListItem_notification$key } from './__generated__/FollowRequestNotificationListItem_notification.graphql';
 import type { NotificationListItem_notification$key } from './__generated__/NotificationListItem_notification.graphql';
 import type { NotificationListItemMarkReadMutation } from './__generated__/NotificationListItemMarkReadMutation.graphql';
@@ -19,24 +16,13 @@ type NotificationListItemProps = {
   notification: NotificationListItem_notification$key;
 };
 
-type NotificationRowProps = {
-  action: string;
-  avatarUrl: string | null | undefined;
-  destination: string;
-  href: Href;
-  id: string;
-  kind: 'follow' | 'followRequest' | 'reaction' | 'reply' | 'repost';
-  name: string;
-  readAt: string | null | undefined;
-  timestamp: string;
-};
-
 const notificationFragment = graphql`
   fragment NotificationListItem_notification on FollowNotification {
     id
     createdAt
     readAt
     profile {
+      id
       displayName
       handle
       relativeHandle
@@ -63,21 +49,46 @@ const notificationListItemMarkReadMutation = graphql`
   }
 `;
 
+function useNotificationRead() {
+  const [commitMarkRead] = useMutation<NotificationListItemMarkReadMutation>(
+    notificationListItemMarkReadMutation,
+  );
+  return useCallback(
+    (id: string) => {
+      commitMarkRead({
+        onError: () => undefined,
+        variables: { ids: [id] },
+      });
+    },
+    [commitMarkRead],
+  );
+}
+
+function actor(profile: {
+  avatar?: { url: string | null | undefined } | null;
+  displayName: string;
+  handle: string;
+  id: string;
+}) {
+  return {
+    avatarUrl: profile.avatar?.url,
+    id: profile.id,
+    name: profile.displayName || profile.handle,
+  };
+}
+
 export function NotificationListItem({ notification }: NotificationListItemProps) {
   const data = useFragment(notificationFragment, notification);
-  const name = data.profile.displayName || data.profile.handle;
+  const markRead = useNotificationRead();
 
   return (
-    <NotificationRow
-      action="팔로우했습니다"
-      avatarUrl={data.profile.avatar?.url}
-      destination="프로필"
-      href={`/${data.profile.relativeHandle}` as Href}
-      id={data.id}
+    <NotificationListItemView
+      actors={[actor(data.profile)]}
+      href={`/${data.profile.relativeHandle}`}
       kind="follow"
-      name={name}
-      readAt={data.readAt}
+      onNavigate={() => markRead(data.id)}
       timestamp={formatTimelineTimestamp(data.createdAt)}
+      unread={data.readAt === null}
     />
   );
 }
@@ -88,6 +99,7 @@ const followRequestNotificationFragment = graphql`
     createdAt
     readAt
     profile {
+      id
       displayName
       handle
       relativeHandle
@@ -105,19 +117,16 @@ export function FollowRequestNotificationListItem({
   notification: FollowRequestNotificationListItem_notification$key;
 }) {
   const data = useFragment(followRequestNotificationFragment, notification);
-  const name = data.profile.displayName || data.profile.handle;
+  const markRead = useNotificationRead();
 
   return (
-    <NotificationRow
-      action="팔로우를 요청했습니다"
-      avatarUrl={data.profile.avatar?.url}
-      destination="프로필"
-      href={`/${data.profile.relativeHandle}` as Href}
-      id={data.id}
+    <NotificationListItemView
+      actors={[actor(data.profile)]}
+      href="/follow-requests"
       kind="followRequest"
-      name={name}
-      readAt={data.readAt}
+      onNavigate={() => markRead(data.id)}
       timestamp={formatTimelineTimestamp(data.createdAt)}
+      unread={data.readAt === null}
     />
   );
 }
@@ -127,8 +136,8 @@ const reactionNotificationFragment = graphql`
     id
     createdAt
     readAt
-    type
     profile {
+      id
       displayName
       handle
       avatar {
@@ -140,6 +149,16 @@ const reactionNotificationFragment = graphql`
       id
       profile {
         relativeHandle
+      }
+      content {
+        bodyText
+        contentWarning
+        document
+        media {
+          id
+          altText
+          url
+        }
       }
     }
   }
@@ -151,19 +170,17 @@ export function ReactionNotificationListItem({
   notification: ReactionNotificationListItem_notification$key;
 }) {
   const data = useFragment(reactionNotificationFragment, notification);
-  const name = data.profile.displayName || data.profile.handle;
+  const markRead = useNotificationRead();
 
   return (
-    <NotificationRow
-      action={`${data.type} 반응을 남겼습니다`}
-      avatarUrl={data.profile.avatar?.url}
-      destination="게시글"
-      href={`/${data.post.profile.relativeHandle}/${data.post.id}` as Href}
-      id={data.id}
+    <NotificationListItemView
+      actors={[actor(data.profile)]}
+      href={`/${data.post.profile.relativeHandle}/${data.post.id}`}
       kind="reaction"
-      name={name}
-      readAt={data.readAt}
+      onNavigate={() => markRead(data.id)}
+      preview={toPreview(data.post)}
       timestamp={formatTimelineTimestamp(data.createdAt)}
+      unread={data.readAt === null}
     />
   );
 }
@@ -171,21 +188,9 @@ export function ReactionNotificationListItem({
 const replyNotificationFragment = graphql`
   fragment ReplyNotificationListItem_notification on ReplyNotification {
     id
-    createdAt
     readAt
-    profile {
-      displayName
-      handle
-      avatar {
-        id
-        url
-      }
-    }
     post {
-      id
-      profile {
-        relativeHandle
-      }
+      ...ReplyNotificationPost_post
     }
   }
 `;
@@ -196,19 +201,12 @@ export function ReplyNotificationListItem({
   notification: ReplyNotificationListItem_notification$key;
 }) {
   const data = useFragment(replyNotificationFragment, notification);
-  const name = data.profile.displayName || data.profile.handle;
+  const markRead = useNotificationRead();
+
   return (
-    <NotificationRow
-      action="답글을 남겼습니다"
-      avatarUrl={data.profile.avatar?.url}
-      destination="게시글"
-      href={`/${data.post.profile.relativeHandle}/${data.post.id}` as Href}
-      id={data.id}
-      kind="reply"
-      name={name}
-      readAt={data.readAt}
-      timestamp={formatTimelineTimestamp(data.createdAt)}
-    />
+    <NotificationListItemView kind="reply" unread={data.readAt === null}>
+      <ReplyNotificationPost onActivate={() => markRead(data.id)} post={data.post} />
+    </NotificationListItemView>
   );
 }
 
@@ -218,6 +216,7 @@ const repostNotificationFragment = graphql`
     createdAt
     readAt
     profile {
+      id
       displayName
       handle
       avatar {
@@ -229,6 +228,16 @@ const repostNotificationFragment = graphql`
       id
       profile {
         relativeHandle
+      }
+      content {
+        bodyText
+        contentWarning
+        document
+        media {
+          id
+          altText
+          url
+        }
       }
     }
   }
@@ -240,147 +249,55 @@ export function RepostNotificationListItem({
   notification: RepostNotificationListItem_notification$key;
 }) {
   const data = useFragment(repostNotificationFragment, notification);
-  const name = data.profile.displayName || data.profile.handle;
+  const markRead = useNotificationRead();
 
   return (
-    <NotificationRow
-      action="게시물을 재게시했습니다"
-      avatarUrl={data.profile.avatar?.url}
-      destination="게시글"
-      href={`/${data.post.profile.relativeHandle}/${data.post.id}` as Href}
-      id={data.id}
+    <NotificationListItemView
+      actors={[actor(data.profile)]}
+      href={`/${data.post.profile.relativeHandle}/${data.post.id}`}
       kind="repost"
-      name={name}
-      readAt={data.readAt}
+      onNavigate={() => markRead(data.id)}
+      preview={toPreview(data.post)}
       timestamp={formatTimelineTimestamp(data.createdAt)}
+      unread={data.readAt === null}
     />
   );
 }
 
-function NotificationRow({
-  action,
-  avatarUrl,
-  destination,
-  href,
-  id,
-  kind,
-  name,
-  readAt,
-  timestamp,
-}: NotificationRowProps) {
-  const theme = useTheme();
-  const [hovered, setHovered] = useState(false);
-  const [commitMarkRead] = useMutation<NotificationListItemMarkReadMutation>(
-    notificationListItemMarkReadMutation,
-  );
-  const web = Platform.OS === 'web';
-  const unread = readAt === null;
-  const unreadDescription = unread ? ' 읽지 않은 알림.' : '';
-  const markRead = () => {
-    commitMarkRead({
-      onError: () => undefined,
-      variables: { ids: [id] },
-    });
+function toPreview(post: {
+  content:
+    | {
+        bodyText: string;
+        contentWarning: string | null | undefined;
+        document: unknown;
+        media:
+          | ReadonlyArray<{
+              altText: string | null | undefined;
+              id: string;
+              url: string | null | undefined;
+            }>
+          | null
+          | undefined;
+      }
+    | null
+    | undefined;
+}) {
+  const content = post.content;
+  if (!content) {
+    return null;
+  }
+
+  return {
+    bodyText: content.bodyText,
+    contentWarning: content.contentWarning ?? null,
+    media:
+      content.media?.map<PostMediaItem>(({ altText, id, url }) => ({
+        altText: altText ?? null,
+        id,
+        url: url ?? null,
+      })) ?? null,
+    sensitiveMedia: isPostContentDocumentV1(content.document)
+      ? content.document.body.attrs?.sensitiveMedia === true
+      : false,
   };
-
-  return (
-    <View
-      onPointerEnter={web ? () => setHovered(true) : undefined}
-      onPointerLeave={web ? () => setHovered(false) : undefined}
-      style={[
-        styles.root,
-        {
-          backgroundColor: hovered ? theme.surface : unread ? theme.primarySubtle : theme.card,
-          borderBottomColor: theme.border,
-          borderLeftColor: unread ? theme.primary : 'transparent',
-        },
-      ]}
-    >
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={[styles.kind, { backgroundColor: theme.primary }]}
-      >
-        {kind === 'follow' || kind === 'followRequest' ? (
-          <UserPlus color={theme.text} size={18} strokeWidth={2} />
-        ) : kind === 'reaction' ? (
-          <Smile color={theme.text} size={18} strokeWidth={2} />
-        ) : kind === 'reply' ? (
-          <MessageCircle color={theme.text} size={18} strokeWidth={2} />
-        ) : (
-          <Repeat2 color={theme.text} size={18} strokeWidth={2} />
-        )}
-      </View>
-      <View style={styles.content}>
-        <View style={styles.avatarRow}>
-          <Link asChild href={href}>
-            <Pressable
-              accessibilityLabel={`${name} ${destination}로 이동.${unreadDescription}`}
-              accessibilityRole="link"
-              onPress={markRead}
-              style={styles.avatarLink}
-            >
-              <Avatar imageUri={avatarUrl} label={name} size={28} />
-            </Pressable>
-          </Link>
-          <Text style={[styles.time, { color: theme.textSecondary }]}>{timestamp}</Text>
-        </View>
-        <Link asChild href={href}>
-          <Pressable
-            accessibilityLabel={`${name}님이 ${action}. ${timestamp}.${unreadDescription} ${destination}로 이동`}
-            accessibilityRole="link"
-            onPress={markRead}
-            style={styles.copyLink}
-          >
-            <Text style={[styles.copy, { color: theme.text }]}>
-              <Text style={styles.name}>{name}</Text>님이 {action}
-            </Text>
-          </Pressable>
-        </Link>
-      </View>
-    </View>
-  );
 }
-
-const styles = StyleSheet.create({
-  root: {
-    alignItems: 'flex-start',
-    borderBottomWidth: 1,
-    borderLeftWidth: 4,
-    flexDirection: 'row',
-    gap: spacing.md,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.lg,
-    paddingVertical: spacing.lg,
-  },
-  content: { flex: 1, gap: spacing.sm, minWidth: 0 },
-  kind: {
-    alignItems: 'center',
-    borderRadius: radii.full,
-    height: 28,
-    justifyContent: 'center',
-    width: 28,
-  },
-  avatarRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    height: 28,
-    justifyContent: 'space-between',
-  },
-  avatarLink: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    margin: -spacing.sm,
-    width: 44,
-  },
-  copyLink: {
-    flex: 1,
-    marginVertical: -spacing.md,
-    minWidth: 0,
-    paddingVertical: spacing.md,
-  },
-  copy: { fontFamily: fontFamilies.ui, ...typography.sm },
-  name: { fontFamily: fontFamilies.ui, fontWeight: '700' },
-  time: { fontFamily: fontFamilies.ui, ...typography.xsm },
-});

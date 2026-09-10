@@ -19,6 +19,7 @@ const readAt = '2026-07-21T12:00:00Z';
 type NotificationTypename =
   | 'FollowNotification'
   | 'FollowRequestNotification'
+  | 'ReplyNotification'
   | 'RepostNotification';
 
 function createEnvironment(typename: NotificationTypename = 'FollowNotification') {
@@ -106,6 +107,16 @@ describe('NotificationListItem Read cache', () => {
       requireRecord(environment, notificationId).__typename,
       'FollowRequestNotification',
     );
+    assert.equal(requireRecord(environment, notificationId).readAt, readAt);
+    assert.equal(requireRecord(environment, recipientId).unreadNotificationCount, 1);
+  });
+
+  it('normalizes a Reply Notification and Recipient Profile', () => {
+    const environment = createEnvironment('ReplyNotification');
+
+    commitReadPayload(environment, 'ReplyNotification');
+
+    assert.equal(requireRecord(environment, notificationId).__typename, 'ReplyNotification');
     assert.equal(requireRecord(environment, notificationId).readAt, readAt);
     assert.equal(requireRecord(environment, recipientId).unreadNotificationCount, 1);
   });

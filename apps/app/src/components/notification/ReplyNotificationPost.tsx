@@ -1,4 +1,4 @@
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { MessageCircle } from 'lucide-react-native';
 import { useCallback } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -41,7 +41,13 @@ const ReplyNotificationPostFragment = graphql`
 `;
 
 /** Recipient-relative Reply presentation, composed inside NotificationListItemView. */
-export function ReplyNotificationPost({ post: postKey }: { post: ReplyNotificationPost_post$key }) {
+export function ReplyNotificationPost({
+  onActivate,
+  post: postKey,
+}: {
+  onActivate?: () => void;
+  post: ReplyNotificationPost_post$key;
+}) {
   const post = useFragment(ReplyNotificationPostFragment, postKey);
   const theme = useTheme();
   const router = useRouter();
@@ -51,6 +57,7 @@ export function ReplyNotificationPost({ post: postKey }: { post: ReplyNotificati
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
   const onMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
+      onActivate?.();
       openViewer({
         mediaOwnerPostId: post.id,
         originControl,
@@ -58,7 +65,7 @@ export function ReplyNotificationPost({ post: postKey }: { post: ReplyNotificati
         surfacePostId: post.id,
       });
     },
-    [openViewer, post.id],
+    [onActivate, openViewer, post.id],
   );
 
   if (!post.content) {
@@ -68,13 +75,14 @@ export function ReplyNotificationPost({ post: postKey }: { post: ReplyNotificati
   return (
     <>
       <View role="article" style={styles.root} testID="reply-notification-post">
-        <Link asChild href={profileHref}>
+        <NavigationLink href={profileHref}>
           <Pressable
             aria-hidden
             accessibilityElementsHidden
             accessible={false}
             focusable={false}
             importantForAccessibility="no-hide-descendants"
+            onPress={onActivate}
             style={styles.avatar}
             tabIndex={-1}
           >
@@ -84,12 +92,13 @@ export function ReplyNotificationPost({ post: postKey }: { post: ReplyNotificati
               size={48}
             />
           </Pressable>
-        </Link>
+        </NavigationLink>
         <View style={styles.content}>
           <View style={styles.header}>
             <NavigationLink href={profileHref}>
               <Pressable
                 accessibilityRole="link"
+                onPress={onActivate}
                 style={styles.author}
                 testID="notification-post-author"
               >
@@ -104,13 +113,13 @@ export function ReplyNotificationPost({ post: postKey }: { post: ReplyNotificati
                 </Text>
               </Pressable>
             </NavigationLink>
-            <Link asChild href={detailHref}>
-              <Pressable accessibilityRole="link" style={styles.timeLink}>
+            <NavigationLink href={detailHref}>
+              <Pressable accessibilityRole="link" onPress={onActivate} style={styles.timeLink}>
                 <Text style={[styles.time, { color: theme.foregroundSecondary }]}>
                   {formatTimelineTimestamp(post.createdAt)}
                 </Text>
               </Pressable>
-            </Link>
+            </NavigationLink>
           </View>
           <View style={styles.reasonRow}>
             <View
@@ -130,7 +139,10 @@ export function ReplyNotificationPost({ post: postKey }: { post: ReplyNotificati
           </View>
           <View style={styles.bodyLink}>
             <PostBody
-              onBodyPress={() => router.push(detailHref)}
+              onBodyPress={() => {
+                onActivate?.();
+                router.push(detailHref);
+              }}
               onMediaOpen={onMediaOpen}
               post={post}
             />
