@@ -44,7 +44,7 @@ App provider가 Session query 경계 밖에서 anonymous client를 초기화하�
 
 SDK는 `trackScreenViews`, `trackOutgoingLinks`, `trackAttributes`를 활성화하고 replay를 10%로 설정한다. `maskAllInputs`를 사용하고 canonical Post Content root에는 플랫폼 분기 없이 OpenPanel replay block attribute를 부여해 텍스트와 하위 DOM 속성을 함께 제외한다.
 
-개인정보 처리방침은 인증 바깥 `/privacy` route로 제공하고 landing과 인증 후 full Web shell에서 연결한다. full Web은 right rail 최하단의 muted text를 사용하고 기존보다 viewport 하단에 가깝게 배치한다. compact Web icon rail과 mobile Web·Android/iOS drawer에는 개인정보 처리방침 진입점을 표시하지 않는다. 가입·로그인 온보딩 안의 추가 진입점은 후속 범위로 두며, OpenPanel 배포·검증·Account별 삭제는 운영 문서에 분리해 기록한다.
+개인정보 처리방침은 인증 바깥 `/privacy` route로 제공하고 landing과 기존 인증 후 full Web right rail에서 연결한다. full Web은 right rail 최하단의 muted text를 사용하고 기존보다 viewport 하단에 가깝게 배치한다. 인증된 Web·Android·iOS의 Settings `정보` detail(`/settings/info`)에서는 개인정보 처리방침으로 추가 진입할 수 있게 한다. 전역 Web Sidebar, compact Web icon rail과 mobile Web·Android/iOS drawer에는 정책 링크를 추가하지 않으며 기존 landing과 full Web right rail link는 유지한다. Settings `정보` detail의 다른 정책 링크 계약은 PROD-889와 canonical `docs/design/settings.md`·`docs/design/breakpoints.md` 범위에 남기고 이 analytics change의 요구사항으로 확장하지 않는다. 가입·로그인 온보딩 안의 추가 진입점은 후속 범위로 두며, OpenPanel 배포·검증·Account별 삭제는 운영 문서에 분리해 기록한다.
 
 ### Allowed Alternatives
 

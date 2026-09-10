@@ -97,12 +97,24 @@
 - Decision Date: 2026-07-30
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-469`, `PROD-541`, `PROD-575`; `docs/design/breakpoints.md`; 개인정보보호위원회 「개인정보 처리방침 작성지침」 2026.4 개정
-- Status: Active
+- Status: Superseded
 - Context / Problem: compact icon rail과 mobile drawer의 개인정보 처리방침 진입점이 좁은 navigation 공간에서 주요 기능과 같은 크기로 표시된다. 공개 `/privacy`와 landing link가 이미 있고 인증 후 full Web에도 안정적인 보조 위치가 있으므로 모든 shell surface에서 상시 노출할 필요는 없다.
 - Decision Outcome: 인증 없는 `/privacy`와 landing link를 유지하고, 인증 후 link는 full Web right rail 최하단의 muted text로만 제공한다. compact Web icon rail과 mobile Web·Android/iOS drawer에는 개인정보 처리방침 진입점을 표시하지 않는다. 가입·로그인 온보딩 안의 추가 진입점은 후속 범위로 두며 v1 Account별 삭제 runbook과 처리방침 본문은 변경하지 않는다.
 - Alternatives Considered: full·compact·mobile responsive shell 전체 노출 유지, generic `더보기` disclosure menu에 통합, 인증 후 link 전체 제거.
 - Consequences: 공개 landing과 full Web에서 접근성을 유지하면서 compact·mobile navigation 위계를 단순화한다. production acceptance와 이 OpenSpec archive는 PROD-575가 계속 소유한다.
 - Confirmation / Follow-up: PROD-541의 Storybook/E2E로 full 진입과 compact·mobile 비노출을 검증하고 PROD-575가 production 수집 검증 후 전체 change를 archive한다.
+
+### 공개 처리방침을 Settings 정보에서 추가 연결한다
+
+- Decision Date: 2026-09-10
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-889`, `docs/design/settings.md`, `docs/design/breakpoints.md`
+- Status: Active
+- Context / Problem: 최신 Settings 구조는 정책 문서의 추가 인증 후 진입을 전역 navigation에 링크를 늘리지 않고 `정보` detail에서 제공하며, 기존 공개 landing과 full Web right rail 진입은 유지한다.
+- Decision Outcome: 인증된 Web·Android·iOS에서 Settings의 `정보` detail(`/settings/info`)을 통해 공개 `/privacy`로 추가 진입할 수 있어야 한다. 기존 landing과 full Web right rail의 개인정보 처리방침 link는 유지하고, full Web Sidebar·compact Web icon rail·mobile Web·Android/iOS drawer에는 정책 링크를 추가하지 않는다. Settings `정보` detail의 다른 정책 링크는 PROD-889가 소유하며 이 analytics change의 계정 삭제·아동 안전 요구사항으로 확장하지 않는다.
+- Alternatives Considered: 전역 Sidebar·compact icon rail·mobile drawer에 정책 link를 추가하는 방법, 기존 full Web right rail 또는 landing link를 제거하는 방법은 navigation 위계를 변경하거나 기존 공개 접근성을 잃게 하므로 제외했다.
+- Consequences: `/settings/info`는 모든 지원 플랫폼에서 인증 후 개인정보 처리방침의 보조 진입점이 된다. 이번 change는 해당 detail의 개인정보 처리방침 link만 계약에 포함하며, 기존 analytics 고지·삭제 runbook·production acceptance와 archive ownership은 변경하지 않는다.
+- Confirmation / Follow-up: PROD-889의 Settings 구현이 Web·Android·iOS에서 `/settings/info`와 공개 `/privacy` link를 제공하고, 기존 landing·full Web right rail을 보존하며 전역 Sidebar·compact icon rail·mobile drawer에 정책 link를 추가하지 않는지 확인한다.
 
 ## Remaining Decisions
 
@@ -112,3 +124,4 @@
 
 - 위 `공개 처리방침과 수동 삭제 절차` Derived Contract는 공개 route·수동 삭제 결과를 유지하되 인증 후 진입 위치를 responsive shell로 옮기는 Active Derived Contract로 대체됐다.
 - 위 `공개 처리방침을 landing과 responsive shell에서 연결한다` Derived Contract는 compact·mobile 상시 노출을 제거하고 full Web과 공개 landing만 유지하는 Active Derived Contract로 대체됐다.
+- 위 `공개 처리방침을 landing과 full Web shell에서 연결한다` Derived Contract는 기존 landing·full Web right rail link를 유지하면서 Settings `정보` detail의 추가 privacy 진입과 전역 navigation 비노출을 정의하는 2026-09-10 `PROD-889` Derived Contract로 대체됐다.
