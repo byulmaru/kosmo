@@ -64,7 +64,7 @@ type RepostPlaygroundState = Exclude<RepostFixtureState, 'pending'>;
 type DeleteOutcome = 'graphql-error' | 'network-error' | 'pending' | 'success';
 type FixtureProps = Omit<PostActionBarProps, 'post'> & {
   deleteOutcome?: DeleteOutcome;
-  onMutationRequest?: (requestName: string) => void;
+  onMutationRequest?: (requestName: string, variables: Variables) => void;
   reactionSelected?: boolean;
   repostState?: RepostFixtureState;
   selectedProfileId?: string | null;
@@ -127,9 +127,9 @@ function PostActionBarFixture({
         : unselectedSource.viewerReactions,
     };
     const result = new Environment({
-      network: Network.create((request) => {
+      network: Network.create((request, variables) => {
         if (request.operationKind === 'mutation') {
-          onMutationRequest?.(request.name);
+          onMutationRequest?.(request.name, variables);
           if (request.name === 'PostDeletionActionDeletePostMutation') {
             if (deleteOutcome === 'pending') {
               return Observable.create(() => undefined);
@@ -1175,7 +1175,8 @@ export const AuthorPostDeletion: Story = {
     expect(within(menu).getByRole('menuitem', { name: '게시글 삭제' })).toBeVisible();
     await userEvent.click(within(menu).getByRole('menuitem', { name: '게시글 삭제' }));
 
-    const dialog = await screen.findByRole('alertdialog', { name: '게시글 삭제 확인' });
+    const dialog = await screen.findByRole('alertdialog', { name: '게시글을 삭제할까요?' });
+    expect(dialog).toHaveAttribute('closedby', 'closerequest');
     expect(dialog).toHaveTextContent('게시글을 삭제할까요?');
     expect(dialog).toHaveTextContent('삭제한 게시글은 복구할 수 없습니다.');
     await waitFor(() =>
@@ -1184,15 +1185,15 @@ export const AuthorPostDeletion: Story = {
     expect(deletionMutationRequest).not.toHaveBeenCalled();
 
     const cancel = within(dialog).getByRole('button', { name: '취소' });
-    const confirm = within(dialog).getByRole('button', { name: '삭제' });
+    const close = within(dialog).getByRole('button', { name: '닫기' });
     await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
-    expect(canvasElement.ownerDocument.activeElement).toBe(confirm);
+    expect(canvasElement.ownerDocument.activeElement).toBe(close);
     await userEvent.keyboard('{Tab}');
     expect(canvasElement.ownerDocument.activeElement).toBe(cancel);
 
     await userEvent.click(cancel);
     await waitFor(() =>
-      expect(screen.queryByRole('alertdialog', { name: '게시글 삭제 확인' })).toBeNull(),
+      expect(screen.queryByRole('alertdialog', { name: '게시글을 삭제할까요?' })).toBeNull(),
     );
     expect(canvasElement.ownerDocument.activeElement).toBe(trigger);
     expect(deletionMutationRequest).not.toHaveBeenCalled();
@@ -1203,10 +1204,13 @@ export const AuthorPostDeletion: Story = {
         name: '게시글 삭제',
       }),
     );
-    await screen.findByRole('alertdialog', { name: '게시글 삭제 확인' });
-    await userEvent.keyboard('{Escape}');
+    await screen.findByRole('alertdialog', { name: '게시글을 삭제할까요?' });
+    fireEvent(
+      screen.getByRole('alertdialog', { name: '게시글을 삭제할까요?' }),
+      new Event('cancel', { cancelable: true }),
+    );
     await waitFor(() =>
-      expect(screen.queryByRole('alertdialog', { name: '게시글 삭제 확인' })).toBeNull(),
+      expect(screen.queryByRole('alertdialog', { name: '게시글을 삭제할까요?' })).toBeNull(),
     );
     expect(canvasElement.ownerDocument.activeElement).toBe(trigger);
 
@@ -1216,10 +1220,10 @@ export const AuthorPostDeletion: Story = {
         name: '게시글 삭제',
       }),
     );
-    await screen.findByRole('alertdialog', { name: '게시글 삭제 확인' });
-    await userEvent.click(screen.getByTestId('post-deletion-backdrop'));
+    await screen.findByRole('alertdialog', { name: '게시글을 삭제할까요?' });
+    await userEvent.click(screen.getByRole('button', { name: '게시글을 삭제할까요? 닫기' }));
     await waitFor(() =>
-      expect(screen.queryByRole('alertdialog', { name: '게시글 삭제 확인' })).toBeNull(),
+      expect(screen.queryByRole('alertdialog', { name: '게시글을 삭제할까요?' })).toBeNull(),
     );
     expect(canvasElement.ownerDocument.activeElement).toBe(trigger);
 
@@ -1230,12 +1234,16 @@ export const AuthorPostDeletion: Story = {
       }),
     );
     await userEvent.click(
-      within(await screen.findByRole('alertdialog', { name: '게시글 삭제 확인' })).getByRole(
+      within(await screen.findByRole('alertdialog', { name: '게시글을 삭제할까요?' })).getByRole(
         'button',
         { name: '삭제' },
       ),
     );
     await waitFor(() => expect(deletionMutationRequest).toHaveBeenCalledTimes(1));
+    expect(deletionMutationRequest).toHaveBeenLastCalledWith(
+      'PostDeletionActionDeletePostMutation',
+      { id: sourcePostId },
+    );
   },
   render: () => (
     <PostActionBarFixture
@@ -1256,16 +1264,18 @@ export const AuthorPostDeletionPending: Story = {
         name: '게시글 삭제',
       }),
     );
-    const dialog = await screen.findByRole('alertdialog', { name: '게시글 삭제 확인' });
+    const dialog = await screen.findByRole('alertdialog', { name: '게시글을 삭제할까요?' });
+    expect(dialog).toHaveAttribute('closedby', 'closerequest');
     const confirm = within(dialog).getByRole('button', { name: '삭제' });
     await userEvent.click(confirm);
     await waitFor(() => expect(deletionMutationRequest).toHaveBeenCalledTimes(1));
+    expect(dialog).toHaveAttribute('closedby', 'none');
     expect(confirm).toBeDisabled();
     expect(within(dialog).getByRole('button', { name: '취소' })).toBeDisabled();
-    await userEvent.keyboard('{Escape}');
-    expect(screen.getByRole('alertdialog', { name: '게시글 삭제 확인' })).toBeVisible();
-    await userEvent.click(screen.getByTestId('post-deletion-backdrop'));
-    expect(screen.getByRole('alertdialog', { name: '게시글 삭제 확인' })).toBeVisible();
+    fireEvent(dialog, new Event('cancel', { cancelable: true }));
+    expect(screen.getByRole('alertdialog', { name: '게시글을 삭제할까요?' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '게시글을 삭제할까요? 닫기' })).toBeDisabled();
+    expect(screen.getByRole('alertdialog', { name: '게시글을 삭제할까요?' })).toBeVisible();
     expect(deletionMutationRequest).toHaveBeenCalledTimes(1);
   },
   render: () => (
@@ -1304,15 +1314,15 @@ async function authorPostDeletionFailureRetryPlay({
       name: '게시글 삭제',
     }),
   );
-  const dialog = await screen.findByRole('alertdialog', { name: '게시글 삭제 확인' });
+  const dialog = await screen.findByRole('alertdialog', { name: '게시글을 삭제할까요?' });
   await userEvent.click(within(dialog).getByRole('button', { name: '삭제' }));
   await waitFor(() => expect(deletionMutationRequest).toHaveBeenCalledTimes(1));
   const alert = await screen.findByRole('alert');
   expect(alert).toHaveTextContent('게시글을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.');
-  expect(screen.getByRole('alertdialog', { name: '게시글 삭제 확인' })).toBeVisible();
+  expect(screen.getByRole('alertdialog', { name: '게시글을 삭제할까요?' })).toBeVisible();
 
   await userEvent.click(
-    within(screen.getByRole('alertdialog', { name: '게시글 삭제 확인' })).getByRole('button', {
+    within(screen.getByRole('alertdialog', { name: '게시글을 삭제할까요?' })).getByRole('button', {
       name: '삭제',
     }),
   );
