@@ -122,7 +122,7 @@
 - Decision Outcome: OTA signing certificate의 validity는 1년으로 하고 6개월마다 rotation한다. `2026-09` 초기 signing private key는 Vault KV v2의 `secret/data/expo-ota/signing/kosmo-native/2026-09` 경로에 `private_key` field로 등록된 것으로 기록되었고 version 1이다. 이 path·field는 Vault 원본의 caller 운영 설정이며 common publisher contract가 고정하지 않는다. 동일한 key는 Kosmo repository secret `EXPO_OTA_SIGNING_PRIVATE_KEY`에도 보관하고, Deploy Dev/Production caller가 이를 local reusable workflow의 required `signing_private_key` input으로 전달해 public publisher까지 전달한다. Vault와 Kosmo repository secret은 rotation 때 함께 갱신한다. public certificate는 `apps/app/certs/certificate.pem`에 두고 Android/iOS native seed binary에 bundle한다. 현재 certificate validity window는 `2026-09-10`부터 `2027-09-10`까지(KST)이며 첫 rotation 예정일은 `2027-03-10`이다.
 - Alternatives Considered: public `byulmaru/expo-ota` repository, static R2, job output, log 또는 artifact에 signing private key를 두는 방식은 승인된 Vault/Kosmo caller credential boundary와 client/server trust 분리를 깨므로 제외한다.
 - Consequences: PROD-333 task 2.1의 client bootstrap/build metadata와 public certificate source evidence는 연결되었지만 seed binary 배포 및 device proof는 아직 남아 있다. rotation마다 Vault 원본과 Kosmo repository secret을 함께 갱신하고, 새 certificate를 포함한 새 runtime·Store binary를 배포하며, 구 runtime은 구 certificate를 계속 사용하고 dual trust를 추가하지 않는다. PROD-335는 repository secret registration, top caller→local workflow→public publisher input forwarding, Vault synchronization과 1년/6개월 rotation evidence를 기록하며, 실제 secret registration과 publish 결과는 운영 evidence로 확인한다.
-- Confirmation / Follow-up: 초기 key/certificate provision과 client config evidence는 2026-09-10 KST에 기록되었다. Kosmo repository secret 등록·Vault 동기화, caller input forwarding, signed release, 새 runtime·Store binary, 구 runtime certificate 유지 및 실기기 결과는 운영 evidence로 확인해야 한다.
+- Confirmation / Follow-up: 초기 key/certificate provision과 client config evidence는 2026-09-10 KST에 기록되었다. Kosmo repository secret은 2026-09-10 10:06:24 UTC에 Vault version 1의 키와 공개 인증서 일치를 확인한 뒤 등록했다. caller input forwarding 실행, signed release, 새 runtime·Store binary, 구 runtime certificate 유지 및 실기기 결과는 운영 evidence로 확인해야 한다.
 
 ### 2026-09-09 handoff revision
 
@@ -132,7 +132,7 @@
 
 ### 2026-09-10 initial OTA credential provision evidence
 
-- `2026-09` private key registration completed in Vault KV v2 at `secret/data/expo-ota/signing/kosmo-native/2026-09`, field `private_key`, version 1. The corresponding Kosmo repository secret is `EXPO_OTA_SIGNING_PRIVATE_KEY`; its registration and synchronization evidence are operational follow-up, and private key material is not stored in this change or in public `byulmaru/expo-ota`.
+- `2026-09` private key registration completed in Vault KV v2 at `secret/data/expo-ota/signing/kosmo-native/2026-09`, field `private_key`, version 1. The corresponding Kosmo repository secret is `EXPO_OTA_SIGNING_PRIVATE_KEY`; registration completed at 2026-09-10 10:06:24 UTC using the Vault version 1 key after matching its public key to the bundled certificate; future rotation synchronization remains operational follow-up, and private key material is not stored in this change or in public `byulmaru/expo-ota`.
 - Public certificate source is `apps/app/certs/certificate.pem`; its recorded validity is `2026-09-10` through `2027-09-10` (KST), with the first six-month rotation scheduled for `2027-03-10`.
 - PROD-333 task 2.1 is complete for the client bootstrap/build metadata implementation. Compatible update, rejection/offline/fallback proof (2.2), and new PROD-886/PROD-876 seed binary build/distribution evidence (2.3) remain incomplete.
 
