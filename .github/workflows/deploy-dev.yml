@@ -116,3 +116,18 @@ jobs:
             -p "version=${TARGET_SHA}" \
             -p "imageDigest=${IMAGE_DIGEST}" \
             --validate
+
+  publish_dev_ota:
+    name: Publish Dev Expo OTA
+    needs: update_dev
+    if: needs.update_dev.result == 'success'
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/expo-ota.yml
+    with:
+      channel: dev
+      source_sha: ${{ github.event.workflow_run.head_sha }}
+    secrets:
+      signing_private_key: ${{ secrets.EXPO_OTA_SIGNING_PRIVATE_KEY }}
