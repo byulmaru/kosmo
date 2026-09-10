@@ -158,6 +158,8 @@ jobs:
     with:
       channel: prod
       source_sha: ${{ needs.canonical_preflight.outputs.target_sha }}
+    secrets:
+      signing_private_key: ${{ secrets.EXPO_OTA_SIGNING_PRIVATE_KEY }}
 
   canonical_preflight:
     name: Validate SHA Tag Release

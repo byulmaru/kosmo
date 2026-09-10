@@ -16,6 +16,10 @@ on:
         required: false
         type: string
         default: 2026-09
+    secrets:
+      signing_private_key:
+        description: App-owned PEM encoded RSA private key used for Expo Updates signing
+        required: true
 
 permissions:
   actions: read
@@ -109,6 +113,8 @@ jobs:
       platform: android
       project: kosmo-native
       runtime_version: ${{ needs.export.outputs.android_runtime_version }}
+    secrets:
+      signing_private_key: ${{ secrets.signing_private_key }}
 
   publish_ios:
     name: Publish iOS ${{ inputs.channel }} OTA
@@ -125,3 +131,5 @@ jobs:
       platform: ios
       project: kosmo-native
       runtime_version: ${{ needs.export.outputs.ios_runtime_version }}
+    secrets:
+      signing_private_key: ${{ secrets.signing_private_key }}

@@ -129,3 +129,5 @@ jobs:
     with:
       channel: dev
       source_sha: ${{ github.event.workflow_run.head_sha }}
+    secrets:
+      signing_private_key: ${{ secrets.EXPO_OTA_SIGNING_PRIVATE_KEY }}

@@ -42,9 +42,10 @@ Manifest는 Expo protocol headers를 포함한 `multipart/mixed` 응답으로 �
 정상 OTA publish는 두 배포 caller가 성공한 뒤 자동으로 시작한다.
 `.github/workflows/deploy-dev.yml`과 `.github/workflows/production-release.yml`이
 배포 성공 뒤 reusable workflow인 `.github/workflows/expo-ota.yml`을 호출한다. Android와
-iOS publish job은 기존 job-level reusable workflow 호출을 유지한다. 이 호출부에는
-`signing_private_key`를 전달할 확정된 secret 원점이 아직 없으므로, 해당 계약이 정해지기
-전까지 실제 publish 실행을 완료로 기록하지 않는다.
+iOS publish job은 기존 job-level reusable workflow 호출을 유지한다. 두 caller는
+Kosmo repository secret `EXPO_OTA_SIGNING_PRIVATE_KEY`를 local reusable workflow의
+`signing_private_key`로 전달하고, local workflow는 이를 public publisher의 동일한 secret
+이름으로 전달한다. Secret 등록 여부와 실제 publish 실행은 아직 검증하지 않았다.
 
 | 호출 workflow      | 성공한 배포            | OTA channel | source SHA                       |
 | ------------------ | ---------------------- | ----------- | -------------------------------- |
@@ -75,13 +76,12 @@ device에서 update, rejection, offline fallback을 수행하는지는 별도 �
 - Production Release는 기존 `canonical_preflight`가 확인한 SHA와 image digest를 사용한다.
 - Publisher reusable workflow는 `EXPO_OTA_PUBLIC_BASE_URL`, `EXPO_OTA_R2_BUCKET`,
   `CLOUDFLARE_ACCOUNT_ID`와 R2 credential을 검증한다.
-- reusable publisher는 GitHub OIDC로 Vault에 접근해 R2 credential을 읽고
-  `signing_private_key` caller secret을 publisher input으로 전달받는다. Signing key와 R2
-  credential을 export artifact, client bundle 또는 job output으로 운반하지 않는다.
-- 현재 Kosmo deploy caller에는 `signing_private_key` 전달이 없으며, 사용할 secret 원점도
-  확인되지 않았다. 따라서 public reusable workflow의 required secret handoff가 별도로
-  확정되기 전까지 자동 publish 실행은 보류한다. 새 secret, job output 또는 artifact 전달
-  경로를 이 workflow에서 임의로 만들지 않는다.
+- reusable publisher는 GitHub OIDC로 Vault에서 R2 credential을 읽고, caller가 전달한
+  `signing_private_key`를 publisher input으로 사용한다. Signing key와 R2 credential을
+  export artifact, client bundle 또는 job output으로 운반하지 않는다.
+- Signing private key는 Vault 원본과 Kosmo repository secret
+  `EXPO_OTA_SIGNING_PRIVATE_KEY`에 함께 보관하며, 두 값은 rotation 때 동기화한다. Secret
+  값의 등록과 실제 publisher 실행 결과는 별도 운영 evidence로 확인한다.
 - `keyid`는 현재 기본값 `2026-09`이며 publisher에 등록된 identifier여야 한다.
 
 ## Signing key와 certificate rotation
@@ -90,11 +90,13 @@ device에서 update, rejection, offline fallback을 수행하는지는 별도 �
 `secret/data/expo-ota/signing/kosmo-native/2026-09`의 `private_key` version 1이다. Public
 certificate source는 [`apps/app/certs/certificate.pem`](../../apps/app/certs/certificate.pem)이며,
 기록된 certificate validity는 2026-09-10부터 2027-09-10까지(KST)다. 첫 rotation 예정일은
-2027-03-10이다.
+2027-03-10이다. 동일한 signing private key는 Kosmo repository secret
+`EXPO_OTA_SIGNING_PRIVATE_KEY`에도 동기화해 deploy caller가 사용한다.
 
 Rotation은 새 certificate, 새 runtimeVersion과 새 Android/iOS Store binary를 함께 기록하는
-명시적 전환이다. 새 keyid를 publisher에 등록하고 public certificate를 새 binary에 bundle한
-뒤 새 runtime의 dev publish 결과와 device evidence를 완료한다. 기존 runtime은
+명시적 전환이다. Vault 값과 Kosmo repository secret을 함께 갱신하고, 새 keyid를 publisher에
+등록하고 public certificate를 새 binary에 bundle한 뒤 새 runtime의 dev publish 결과와 device
+evidence를 완료한다. 기존 runtime은
 기존 bundled certificate를 계속 사용하며 기존 binary에 새 certificate를 주입하거나 dual
 trust를 추가하지 않는다.
 
