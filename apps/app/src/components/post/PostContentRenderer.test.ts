@@ -10,6 +10,7 @@ import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { PostBody_post$data, PostBody_post$key } from './__generated__/PostBody_post.graphql';
 import type { PostMediaItem } from './PostMediaGallery';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
@@ -62,8 +63,13 @@ type RendererProps = {
   postId: string;
 };
 
+type PostBodyFixture = PostBody_post$key & {
+  readonly content: NonNullable<PostBody_post$data['content']>;
+  readonly id: PostBody_post$data['id'];
+};
+
 let PostContentRenderer: ComponentType<RendererProps>;
-let PostBody: ComponentType<{ post: unknown }>;
+let PostBody: ComponentType<{ post: PostBody_post$key }>;
 let PostContentWarningRevealProvider: ComponentType<{ children?: ReactNode }>;
 let Button: ComponentType<Record<string, unknown>>;
 let renderer: ReactTestRenderer | null = null;
@@ -391,7 +397,7 @@ async function render(props: RendererProps) {
   assert.ok(renderer);
 }
 
-async function renderPostBody(post: { content: unknown; id: string }) {
+async function renderPostBody(post: PostBody_post$key) {
   await act(async () => {
     renderer = create(
       createElement(PostContentWarningRevealProvider, null, createElement(PostBody, { post })),
@@ -400,7 +406,7 @@ async function renderPostBody(post: { content: unknown; id: string }) {
   assert.ok(renderer);
 }
 
-function createMentionGraphqlPayload() {
+function createMentionGraphqlPayload(): PostBodyFixture {
   const projectedDocument = projectRemoteNoteContent({
     content: '<p>앞쪽 <a href="https://remote.example/users/mentioned">@mentioned</a> 뒤쪽</p>',
     mentions: [
@@ -425,6 +431,7 @@ function createMentionGraphqlPayload() {
   });
 
   return {
+    ' $fragmentSpreads': { PostBody_post: true },
     content: {
       bodyText: postContentDocumentToText(document),
       contentWarning: document.summary,

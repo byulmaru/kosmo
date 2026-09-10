@@ -3,8 +3,8 @@ import { describe, it } from 'node:test';
 import {
   projectRemoteActivityPubHtmlToPlainText,
   projectRemoteNoteContent,
-  remoteNoteContentMaxLength,
   RemoteNoteContentLengthExceededError,
+  remoteNoteContentMaxLength,
 } from './activitypub-note-content';
 
 describe('projectRemoteNoteContent', () => {
