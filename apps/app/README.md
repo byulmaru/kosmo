@@ -23,13 +23,13 @@ After a successful callback, native login sends only the authorization code, PKC
 
 Native projects are generated with `expo prebuild --clean`; they are not source-of-truth files.
 
-## Android Google Play closed testing (Alpha)
+## Android Google Play internal and closed testing (Alpha)
 
-`Native Store Distribution`의 Android job은 `main`에서 수동 실행하는 protected workflow의 일부다. 하나의 dispatch가 Android와 iOS job을 함께 시작하며 두 job은 서로 독립적으로 실행된다. 매 실행마다 clean CNG Android project를 만들고, Fastlane이 upload key로 서명한 Release AAB를 빌드해 Google Play closed testing의 Alpha track에 업로드한다. Play가 package name, versionCode, upload certificate를 검증한다. versionCode는 고정 기준값 `210579434`에 GitHub Actions `run_number`를 더해 계산하므로 새 workflow run마다 증가하고, 같은 run의 재실행에서는 같은 값을 유지한다. 결과는 양의 정수이며 Android signed 32-bit 범위 안에 있다. 이미 업로드에 성공한 run을 재실행하면 같은 versionCode를 다시 사용하므로 새 AAB를 업로드할 수 없다. 새 versionCode가 필요하면 새 workflow run을 시작한다. Play API를 미리 조회하거나 장기 credential을 저장하지 않는다. 기존 internal testing release는 Play Console에 남아 있으며 이 workflow가 변경하지 않는다.
+`Native Store Distribution`의 Android job은 `main`에서 수동 실행하는 protected workflow의 일부다. 하나의 dispatch가 Android와 iOS job을 함께 시작하며 두 job은 서로 독립적으로 실행된다. 매 실행마다 clean CNG Android project를 만들고, Fastlane이 upload key로 서명한 Release AAB를 한 번 빌드·업로드한 뒤 같은 versionCode를 Google Play internal track에서 closed testing의 Alpha track으로 promote한다. Play가 package name, versionCode, upload certificate를 검증한다. versionCode는 고정 기준값 `210579434`에 GitHub Actions `run_number`를 더해 계산하므로 새 workflow run마다 증가하고, 같은 run의 재실행에서는 같은 값을 유지한다. 결과는 양의 정수이며 Android signed 32-bit 범위 안에 있다. 이미 업로드에 성공한 run을 재실행하면 같은 versionCode를 다시 사용하므로 새 AAB를 업로드할 수 없다. 새 versionCode가 필요하면 새 workflow run을 시작한다. Play API를 미리 조회하거나 장기 credential을 저장하지 않는다.
 
-이 앱의 Play app, Google 관리 Play App Signing, upload key는 이미 설정되어 있다. Alpha track의 첫 signed AAB는 이 workflow가 업로드한다. 앱이 아직 draft 상태인 최초 실행에서는 workflow dispatch의 `release_status`를 `draft`로 선택하고, 업로드 후 Play Console에서 Alpha release를 검토 제출한다. 앱 검토가 끝나 draft 상태를 벗어난 뒤의 실행은 기본값인 `completed`를 사용한다. Play Console에서 다음 Alpha 설정과 CI 자산을 확인한다.
+이 앱의 Play app, Google 관리 Play App Signing, upload key는 이미 설정되어 있다. workflow는 새 AAB를 Internal track에 한 번 업로드하고, 업로드가 성공한 이번 실행의 `versionCode`만 Alpha track으로 promote한다. `release_status` 입력은 두 track에 같은 값으로 적용된다. 앱이 아직 draft 상태인 최초 실행에서는 `release_status`를 `draft`로 선택하고, 두 track의 release를 Play Console에서 검토·제출한다. 검토가 끝나 draft 상태를 벗어난 뒤의 실행은 기본값인 `completed`를 사용한다. Play Console에서 다음 Internal/Alpha 설정과 CI 자산을 확인한다.
 
-1. closed testing의 Alpha track에 Doply tester 목록을 연결하고 출시 국가/지역에 대한민국을 포함한다.
+1. internal testing track의 tester 목록을 유지하고, closed testing의 Alpha track에 Doply tester 목록을 연결하며 출시 국가/지역에 대한민국을 포함한다.
 2. [Terraform outputs](../terraform/README.md)의 `android_play_service_account` service account를 Play Console Users and permissions에 추가하고 `Release apps to testing tracks` 권한만 부여한다.
 3. 기존 승인형 `prod` GitHub Environment에 다음 non-secret variable만 넣는다. 새 Environment는 만들지 않는다.
 
@@ -48,6 +48,8 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 | `ANDROID_RELEASE_KEY_PASSWORD`    | upload key password                |
 
 `Native Store Distribution`의 Android job은 조직 수준 `VAULT_ADDR`와 `VAULT_GITHUB_ACTIONS_AUDIENCE`, 저장소 수준 `TAILSCALE_OAUTH_CLIENT_ID`와 `TAILSCALE_AUDIENCE`를 사용한다. Vault tailnet에 접속한 뒤 GitHub OIDC JWT로 `kosmo-native-store-distribution` role을 인증하고 실행 중에만 서명 값을 읽는다. Vault role과 policy는 `prod` Environment의 이 workflow만 해당 경로를 읽도록 제한해야 한다.
+
+Internal 업로드와 Alpha promote는 각각 별도의 Play edit로 commit된다. Internal 업로드가 성공한 뒤 Alpha promote가 실패하면 이번 versionCode는 Internal track에만 반영된 부분 상태가 남으며, workflow는 자동 retry나 rollback을 수행하지 않는다. 이 경우 Play Console에서 이미 업로드된 versionCode를 Alpha 릴리스에 반영하여 복구한다.
 
 upload key 예시는 다음과 같다. password는 명령행이나 저장소에 넣지 말고 `keytool` prompt에서 입력한다.
 

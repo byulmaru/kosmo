@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_status:
-        description: Play release status for the Alpha release
+        description: Play release status for the Internal and Alpha releases
         required: true
         type: choice
         options:
@@ -22,7 +22,7 @@ jobs:
       group: android-play-alpha-distribution
       cancel-in-progress: false
 
-    name: Build and upload Android Alpha AAB
+    name: Build and distribute Android Internal and Alpha AAB
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -227,7 +227,7 @@ jobs:
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
 
-      - name: Build and upload signed Alpha AAB with Fastlane
+      - name: Build and distribute signed AAB to Internal and Alpha with Fastlane
         working-directory: apps/app
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -244,9 +244,10 @@ jobs:
           artifact_sha256="${artifact_sha256%% *}"
           artifact_size_bytes="$(wc -c < "${aab_path}" | tr -d '[:space:]')"
           {
-            echo '## Android Google Play closed testing (Alpha)'
+            echo '## Android Google Play internal and closed testing (Alpha)'
             echo
             echo '- Package: moe.kos'
+            echo '- Distribution: Internal upload followed by Alpha promotion'
             echo "- Release status: \`${ANDROID_PLAY_RELEASE_STATUS}\`"
             echo "- Version code: \`${KOSMO_ANDROID_VERSION_CODE}\`"
             echo "- AAB SHA-256: \`${artifact_sha256}\`"
