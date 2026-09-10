@@ -79,23 +79,35 @@
 ### Workflow 종류와 무관한 공용 래퍼 정정
 
 - Decision Date: 2026-09-10
-- Decision Class: Corrective Implementation Choice
+- Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808` user decision
-- Status: Active
+- Status: Superseded by the 2026-09-10 Workflow별 ID 규칙과 공용 래퍼 책임 정정
 - Context / Problem: 이전 구현 해석은 remote materialization 전용 Core start wrapper가 Workflow 시작과 ID 생성을 소유하는 것으로 읽힐 수 있었다. 이 wrapper는 실제로 다른 Workflow에서도 공유할 transport와 identity composition 경계를 공통화해야 하며, 사용하지 않는 child helper나 자동 Workflow 선택 경계를 만들면 안 된다.
 - Decision Outcome: `packages/core/temporal/client.ts`의 `runWorkflow` 하나가 Workflow 종류와 무관하게 SDK Workflow 함수 또는 이름, native Workflow options, `readonly string[]` caller identity keys와 `start`/`execute` mode를 받는다. 공용 wrapper는 KOSMO task queue, 5초 bounded deadline과 `${workflowName}:${JSON.stringify(identityKeys)}` ID를 조합하고 native result 또는 start 반환값과 error를 그대로 전달한다. conflict·reuse policy와 identity keys는 caller가 native options와 호출부에서 명시한다. Workflow 자동 감지, trampoline, domain 전용 pass-through wrapper와 사용하지 않는 child helper는 추가하지 않는다. 이 change에서는 remote materialization Workflow만 새 ID composition을 사용하고, 다른 domain의 canonical Workflow ID와 UWS는 마이그레이션하지 않는다. actorUri identity, profileId origin 선택, sync/async, stale immediate return, inbound 경계와 조건부 child `ABANDON` 계약은 유지한다.
 - Alternatives Considered: remote materialization 전용 wrapper를 유지하거나 Workflow 종류를 자동 감지하면 transport와 identity 정책을 재사용하지 못하고 호출부의 caller identity가 숨겨진다. 기존 모든 domain ID와 UWS를 한 번에 바꾸면 이 change의 범위와 rollback 경계가 불필요하게 넓어진다.
 - Consequences: remote caller는 `runWorkflow`에 Workflow name, native options, `[actorUri, profileId ?? 'configured-local']` keys와 mode를 전달한다. 동일 actorUri와 origin 선택 identity의 동시 실행은 caller가 선택한 native conflict/reuse policy로 처리하며, child 호출이 실제로 추가되는 경우에는 해당 Workflow 호출부가 Temporal SDK `startChild`와 `ABANDON` 옵션을 직접 소유한다.
 - Confirmation / Follow-up: shared queue/deadline, generic ID composition, native start/execute result and error propagation, explicit conflict/reuse policy와 remote-only adoption을 검증한다. 기존 domain Workflow ID와 UWS가 변경되지 않았는지 확인한다.
 
+### Workflow별 ID 규칙과 공용 래퍼 책임 정정
+
+- Decision Date: 2026-09-10
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808` user decision
+- Status: Active
+- Context / Problem: 공용 wrapper가 caller identity keys를 조합해 모든 Workflow ID를 결정하면 각 Workflow가 정의한 기존 input-to-ID 규칙과 ID 문자열을 덮고, native conflict/reuse/error와 domain 오류 정책의 경계가 흐려진다.
+- Decision Outcome: 각 Workflow는 자기 input에서 Workflow ID를 만드는 규칙을 한 곳에 정의한다. 공용 `runWorkflow`는 `workflowIdFromArgs: (...args: Parameters<T>) => string` callback에 native args를 한 번 전달해 해당 Workflow의 ID를 계산하고, 그 ID와 KOSMO task queue·5초 bounded deadline으로 native `start` 또는 `execute`만 호출한다. Native result·start 반환값·error와 conflict/reuse policy는 그대로 전달하며 domain 오류 정책은 공통화하지 않는다. Workflow 함수/이름, input, mode와 native options는 호출부가 선택하고, 공통 ID format·name prefix·JSON 조합은 wrapper에 두지 않는다. `packages/core/temporal/remote-profile.ts`의 pure `remoteProfileMaterializationWorkflowId(input)`는 기존 `${REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE}:${JSON.stringify([input.actorUri, input.profileId ?? 'configured-local'])}` ID 문자열을 유지한다. 기존 remote materialization Workflow의 sync/async, stale, URI/origin 선택과 URI mismatch 저장 거부 계약도 유지하며, 이 change에서는 remote materialization Workflow만 공용 wrapper를 사용하고 다른 domain의 ID와 UWS는 일괄 마이그레이션하지 않는다.
+- Alternatives Considered: generic identity key composition은 Workflow별 ID 규칙과 기존 ID 문자열을 숨기고, remote 전용 start wrapper나 새 registry/decorator/framework/domain start wrapper는 transport와 domain 책임을 다시 결합하므로 선택하지 않는다.
+- Consequences: remote caller는 기존 `actorUri`/`profileId` input과 native 정책을 유지한 채 `remoteProfileMaterializationWorkflowId` 함수 reference와 Workflow args를 공용 wrapper에 전달한다. 이 경계에는 새 registry/decorator/framework나 domain start wrapper를 추가하지 않으며, wrapper는 Workflow 선택이나 domain 오류 처리까지 소유하지 않는다.
+- Confirmation / Follow-up: Workflow별 ID 규칙 callback 적용, 공통 queue/deadline, native start/execute 결과·반환값·error와 conflict/reuse 정책의 pass-through, remote-only adoption 및 기존 domain ID/UWS 보존을 검증한다. 새 계약의 실행 evidence는 과거 generic wrapper evidence와 별도 최신 항목으로 기록한다.
+
 ### Stable workflow identity, retry classification, and timeout boundary
 
 - Decision Date: 2026-09-09
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808`
-- Status: Active except for Workflow ID composition superseded by the 2026-09-10 generic wrapper correction
+- Status: Active except for Workflow ID composition superseded by the 2026-09-10 Workflow별 ID 규칙과 공용 래퍼 책임 정정
 - Context / Problem: random Workflow ID는 동일 handle의 동시 fetch를 합치지 못하고, 모든 예외를 retry하면 영구적인 identity·state rejection을 반복한다. caller timeout을 cancellation으로 취급하면 이미 시작된 결과의 durability가 깨진다.
-- Decision Outcome: Workflow ID의 remote materialization identity는 canonical `actorUri`와 origin 선택 identity(`profileId` 값 또는 기본 origin marker)이며, 실제 문자열 조합은 2026-09-10 generic wrapper correction을 따른다. Workflow 밖 Temporal Client caller의 진행 중 실행에는 `USE_EXISTING`, 완료 후 새로운 시도에는 `ALLOW_DUPLICATE` reuse semantics를 사용한다. actor 미해결, identity 충돌, suspended/unresponsive 등 예상 가능한 domain rejection은 non-retryable로 매핑하고 일시적 외부·DB 장애는 기존 Activity retry 정책을 사용한다. client deadline은 대기 RPC에만 적용하며 이미 시작된 Workflow를 취소하거나 완료된 Profile을 rollback하지 않는다.
+- Decision Outcome: Workflow ID의 remote materialization identity는 canonical `actorUri`와 origin 선택 identity(`profileId` 값 또는 기본 origin marker)이며, 기존 remote Workflow ID 문자열 규칙을 유지하고 공용 wrapper가 그 규칙을 적용한다. Workflow 밖 Temporal Client caller의 진행 중 실행에는 `USE_EXISTING`, 완료 후 새로운 시도에는 `ALLOW_DUPLICATE` reuse semantics를 사용한다. actor 미해결, identity 충돌, suspended/unresponsive 등 예상 가능한 domain rejection은 non-retryable로 매핑하고 일시적 외부·DB 장애는 기존 Activity retry 정책을 사용한다. client deadline은 대기 RPC에만 적용하며 이미 시작된 Workflow를 취소하거나 완료된 Profile을 rollback하지 않는다.
 - Alternatives Considered: random ID나 검색용 qualified handle ID는 동일 actor URI의 동시 fetch와 alias 경계를 불안정하게 만든다. 모든 예외를 재시도하거나 timeout 때 Workflow를 취소하면 불필요한 fetch와 stale result 손실이 발생한다.
 - Consequences: alias domain 또는 origin 선택 identity별 시작은 별도 요청 identity가 될 수 있지만 기존 actor URI uniqueness와 transaction ordering이 최종 Profile 중복을 막는다. 실패한 실행 뒤 다음 stale cycle에서 새 시도가 가능해야 한다.
 - Confirmation / Follow-up: concurrent trigger deduplication, permanent/transient error behavior, caller timeout 뒤 Workflow 지속 실행과 subsequent DB observation을 검증한다.
@@ -120,3 +132,4 @@
 
 - 2026-09-09 `Serializable DTO, caller-only mode, and identity result` 및 2026-09-10 `Superseding review correction: discovery key와 stored actor refresh key를 분리한다`의 wire-input 부분은 2026-09-10 `Final review correction: actorUri-only materialization boundary` 결정으로 대체됐다. 해당 결정들의 origin 선택, unsigned lookup, caller-only sync/async와 actor identity 결론은 계속 유효하다.
 - 이전 remote materialization 전용 start wrapper와 `remote-profile-materialization:${actorUri}:${profileId}` ID 조합 해석은 2026-09-10 `Workflow 종류와 무관한 공용 래퍼 정정` 결정으로 대체됐다. remote Workflow의 actorUri/profileId identity와 conflict/reuse 의미, 다른 domain의 기존 ID와 UWS는 각자의 경계에서 유지된다.
+- 2026-09-10 `Workflow 종류와 무관한 공용 래퍼 정정`의 caller identity keys 및 `${workflowName}:${JSON.stringify(identityKeys)}` generic ID composition은 같은 날 `Workflow별 ID 규칙과 공용 래퍼 책임 정정`으로 대체됐다. 기존 remote Workflow ID 문자열과 native conflict/reuse/error 정책, 다른 domain의 ID와 UWS는 유지한다.

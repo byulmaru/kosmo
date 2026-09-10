@@ -4,3 +4,11 @@ export type RemoteProfileMaterializationInput = {
   readonly actorUri: string;
   readonly profileId?: string;
 };
+
+export const remoteProfileMaterializationWorkflowId = (
+  input: RemoteProfileMaterializationInput,
+): string =>
+  `${REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE}:${JSON.stringify([
+    input.actorUri,
+    input.profileId ?? 'configured-local',
+  ])}`;

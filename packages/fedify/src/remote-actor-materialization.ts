@@ -26,7 +26,10 @@ import {
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { runWorkflow } from '@kosmo/core/temporal/client';
-import { REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE } from '@kosmo/core/temporal/remote-profile';
+import {
+  REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE,
+  remoteProfileMaterializationWorkflowId,
+} from '@kosmo/core/temporal/remote-profile';
 import { normalizeHandle } from '@kosmo/core/utils';
 import {
   profileBioSchema,
@@ -501,7 +504,7 @@ export async function findOrMaterializeRemoteProfileActor({
           REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE,
           {
             args: [input],
-            identityKeys: [input.actorUri, input.profileId ?? 'configured-local'],
+            workflowIdFromArgs: remoteProfileMaterializationWorkflowId,
             mode: 'start',
             workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
             workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
@@ -526,7 +529,7 @@ export async function findOrMaterializeRemoteProfileActor({
         REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE,
         {
           args: [input],
-          identityKeys: [input.actorUri, input.profileId ?? 'configured-local'],
+          workflowIdFromArgs: remoteProfileMaterializationWorkflowId,
           mode: 'start',
           workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
           workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
@@ -539,7 +542,7 @@ export async function findOrMaterializeRemoteProfileActor({
       REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE,
       {
         args: [input],
-        identityKeys: [input.actorUri, input.profileId ?? 'configured-local'],
+        workflowIdFromArgs: remoteProfileMaterializationWorkflowId,
         mode: 'execute',
         workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
         workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
