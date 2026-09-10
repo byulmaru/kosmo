@@ -22,6 +22,7 @@ import {
 } from './remote-actor-materialization';
 import type { Context, InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
+import type { InboundObservation } from './inbound-observability';
 import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 
 type StoredRemoteProfileActor = NonNullable<
@@ -375,11 +376,13 @@ export const materializeHydratedRemoteNote = async ({
   context,
   note,
   objectUri,
+  observation,
   receivedAt,
 }: {
   context: RemoteNoteMaterializationContext;
   note: Note;
   objectUri: URL;
+  observation: Pick<InboundObservation, 'activityType' | 'handler'>;
   receivedAt: Temporal.Instant;
 }): Promise<HydratedRemoteNoteMaterializationResult> => {
   const result = await materializeRemoteNote({
@@ -391,6 +394,13 @@ export const materializeHydratedRemoteNote = async ({
   });
   if (result.status === 'rejected') {
     if (result.reason === 'note_content_length_exceeded') {
+      observeInbound({
+        ...observation,
+        objectOrigin: objectUri.href,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: result.reason,
+      });
       return { reason: 'note_content_length_exceeded', status: 'rejected' };
     }
     if (result.reason === 'empty_note' || result.reason === 'unsupported_note_visibility') {

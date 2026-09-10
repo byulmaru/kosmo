@@ -51,6 +51,7 @@ const remoteActorUri = new URL('https://remote.example/users/alice');
 const remoteKeyUri = new URL('#main-key', remoteActorUri);
 const remoteObjectUri = new URL('https://remote.example/notes/1');
 const receivedAt = Temporal.Instant.from('2026-07-16T00:00:00Z');
+const createObservation = { activityType: 'Create', handler: 'create' } as const;
 const uriFederation = createFederation<void>({ kv: new MemoryKvStore() });
 uriFederation.setObjectDispatcher(Note, '/ap/note/{id}', () => null);
 const uriContext = uriFederation.createContext(new URL(publicOrigin), undefined);
@@ -162,6 +163,7 @@ describe('inbound Create dispatch', () => {
         to: PUBLIC_COLLECTION,
       }),
       objectUri,
+      observation: createObservation,
       receivedAt,
     });
 
@@ -198,6 +200,7 @@ describe('inbound Create dispatch', () => {
           to: PUBLIC_COLLECTION,
         }),
         objectUri,
+        observation: createObservation,
         receivedAt,
       });
 
@@ -298,6 +301,7 @@ describe('inbound Create dispatch', () => {
           context,
           note,
           objectUri: objectUri ?? note.id,
+          observation: createObservation,
           receivedAt,
         }),
         expected,
@@ -334,6 +338,7 @@ describe('inbound Create dispatch', () => {
           to: PUBLIC_COLLECTION,
         }),
         objectUri,
+        observation: createObservation,
         receivedAt,
       });
       const materialized = await getMaterializedPost(objectUri);
@@ -395,6 +400,7 @@ describe('inbound Create dispatch', () => {
             to: PUBLIC_COLLECTION,
           }),
           objectUri,
+          observation: createObservation,
           receivedAt,
         }),
       );
@@ -451,6 +457,7 @@ describe('inbound Create dispatch', () => {
             to: PUBLIC_COLLECTION,
           }),
           objectUri,
+          observation: createObservation,
           receivedAt,
         }),
       );
@@ -481,6 +488,7 @@ describe('inbound Create dispatch', () => {
         to: PUBLIC_COLLECTION,
       }),
       objectUri,
+      observation: createObservation,
       receivedAt,
     });
     const duplicate = await materializeHydratedRemoteNote({
@@ -493,6 +501,7 @@ describe('inbound Create dispatch', () => {
         replyTarget: new URL('https://remote.example/notes/late-parent'),
       }),
       objectUri,
+      observation: createObservation,
       receivedAt: receivedAt.add({ hours: 1 }),
     });
     const materialized = await getMaterializedPost(objectUri);
@@ -536,6 +545,7 @@ describe('inbound Create dispatch', () => {
         to: PUBLIC_COLLECTION,
       }),
       objectUri: publicReplyUri,
+      observation: createObservation,
       receivedAt,
     });
     await materializeHydratedRemoteNote({
@@ -548,6 +558,7 @@ describe('inbound Create dispatch', () => {
         replyTarget: remoteParentUri,
       }),
       objectUri: unlistedReplyUri,
+      observation: createObservation,
       receivedAt,
     });
     await materializeHydratedRemoteNote({
@@ -563,6 +574,7 @@ describe('inbound Create dispatch', () => {
         to: PUBLIC_COLLECTION,
       }),
       objectUri: fallbackReplyUri,
+      observation: createObservation,
       receivedAt,
     });
 
@@ -593,6 +605,7 @@ describe('inbound Create dispatch', () => {
             to: PUBLIC_COLLECTION,
           }),
           objectUri: databaseFailureUri,
+          observation: createObservation,
           receivedAt,
         }),
       );
@@ -617,6 +630,7 @@ describe('inbound Create dispatch', () => {
           to: PUBLIC_COLLECTION,
         }),
         objectUri: parserFailureUri,
+        observation: createObservation,
         receivedAt,
       }),
       /intentional Parent parser failure/,
@@ -641,6 +655,7 @@ describe('inbound Create dispatch', () => {
         context: createContext(),
         note: note(),
         objectUri,
+        observation: createObservation,
         receivedAt,
       }),
       handleInboundCreate(
@@ -676,6 +691,7 @@ describe('inbound Create dispatch', () => {
           to: PUBLIC_COLLECTION,
         }),
         objectUri,
+        observation: createObservation,
         receivedAt,
       });
       const materialized = await getMaterializedPost(objectUri);
@@ -1929,6 +1945,10 @@ describe('inbound Create dispatch', () => {
           to: PUBLIC_COLLECTION,
         }),
         objectUri,
+        observation: {
+          activityType: 'Announce',
+          handler: 'announce',
+        },
         receivedAt,
       });
 
@@ -1940,8 +1960,30 @@ describe('inbound Create dispatch', () => {
       restoreReporter();
     }
 
-    assert.deepEqual(logs, []);
-    assert.deepEqual(metrics, []);
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Announce',
+        handler: 'announce',
+        objectOrigin: objectUri.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'note_content_length_exceeded',
+      },
+    ]);
+    assert.doesNotMatch(JSON.stringify(logs), /a{100}/u);
+    assert.deepEqual(metrics, [
+      {
+        attributes: {
+          activity_type: 'Announce',
+          handler: 'announce',
+          outcome: 'rejected',
+          phase: 'projection',
+          reason_code: 'note_content_length_exceeded',
+        },
+        name: 'activitypub.inbound.note_content_length_exceeded',
+      },
+    ]);
+    assert.doesNotMatch(JSON.stringify(metrics), /a{100}|objects\.example|over-limit-action/u);
     assert.equal(await db.$count(Media), 0);
     assert.equal(await db.$count(ActivityPubPosts), 0);
     assert.equal(await db.$count(Posts), 0);
@@ -1997,6 +2039,7 @@ describe('inbound Create dispatch', () => {
           to: PUBLIC_COLLECTION,
         }),
         objectUri,
+        observation: createObservation,
         receivedAt,
       });
 
@@ -2055,12 +2098,14 @@ describe('inbound Create dispatch', () => {
           context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
           note: note(),
           objectUri,
+          observation: createObservation,
           receivedAt,
         }),
         materializeHydratedRemoteNote({
           context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
           note: note(),
           objectUri,
+          observation: createObservation,
           receivedAt,
         }),
       ]);
