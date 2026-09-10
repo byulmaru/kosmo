@@ -146,15 +146,22 @@ PROD-902, PROD-431, PROD-924.
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`,
 `docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
-차단 관계는 당사자의 새 인용 요청·새 승인과 Source 접근보다 우선해야 한다(MUST). 차단 자체로 기존
-승인을 자동 철회하거나 제3자의 Source를 일괄 숨겨서는 안 된다(MUST NOT). 인증된 원문 작성자가 기존
+차단 관계는 당사자의 새 인용 요청·새 승인보다 양방향으로 우선해야 한다(MUST). 기존 승인에 따른 Source
+표시는 별도 양방향 제한을 추가하지 않고 viewer별 기존 Post 조회 정책으로 판정해야 한다(MUST). 차단 자체로
+기존 승인을 자동 철회하거나 제3자의 Source를 일괄 숨겨서는 안 된다(MUST NOT). 인증된 원문 작성자가 기존
 승인을 명시적으로 철회하면 승인에 의존하는 Source를 비노출해야 한다(MUST).
 
-#### Scenario: 차단 뒤 새 요청과 기존 승인
+#### Scenario: 차단 뒤 새 요청
 
-- **WHEN** 이미 승인된 Quote의 두 Profile 사이에 차단 관계를 만든다
-- **THEN** 당사자 간 Source 접근과 새 요청·승인을 막는다
-- **AND** 기존 승인은 자동 철회하지 않으며 제3자는 자신의 Source 조회 정책에 따라 조회한다
+- **WHEN** 두 Profile 사이 어느 방향이든 차단 관계가 있는 상태에서 새 QuoteRequest 또는 새 승인을 시도한다
+- **THEN** 새 요청·승인을 허용하지 않는다
+- **AND** 기존 승인은 자동 철회하지 않는다
+
+#### Scenario: 기존 승인 Source의 방향별 조회
+
+- **WHEN** Viewer가 Source Author를 차단한 방향만 있거나 Source Author가 Viewer를 차단한 역방향·상호 차단이 있다
+- **THEN** 전자는 기존 직접 Post 조회 조건을 통과하면 Source를 표시한다
+- **AND** 후자와 상호 차단은 Source를 숨기며 Quote 자체 Content는 별도 조회 정책으로 판정한다
 
 #### Scenario: 제3자에게도 인용 원문 숨기기
 

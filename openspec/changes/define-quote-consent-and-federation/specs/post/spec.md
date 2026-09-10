@@ -76,11 +76,23 @@ Quote Source는 인용 승인 조건과 viewer별 Source 조회 조건을 모두
 - **THEN** 같은 Post Node와 자체 Content를 반환하고 `repostSource`는 null이다
 - **AND** Source가 저장되어 있거나 legacy 속성이 있다는 이유로 비노출을 우회하지 않는다
 
-#### Scenario: 승인된 Source와 차단된 당사자
+#### Scenario: Viewer가 Source Author를 차단한 단방향 관계
 
-- **WHEN** 유효한 승인은 있지만 viewer와 Source Author 사이에 차단 관계가 있다
-- **THEN** Source를 반환하지 않는다
-- **AND** 차단 당사자가 아닌 제3자는 기존 승인이 명시적으로 철회되지 않았다면 자신의 Source 조회 정책으로 판정한다
+- **WHEN** 유효한 승인이 있고 Viewer가 Source Author를 차단했지만 Source Author는 Viewer를 차단하지 않았다
+- **THEN** Quote에 별도 양방향 제한을 추가하지 않고 Viewer의 기존 방향별 Post 조회 정책으로 Source를 판정한다
+- **AND** 기존 Post 조회 조건을 통과하면 Source를 반환한다
+
+#### Scenario: Source Author가 Viewer를 차단한 역방향 관계
+
+- **WHEN** 유효한 승인이 있지만 Source Author가 Viewer를 차단했다
+- **THEN** 기존 방향별 Post 조회 정책에 따라 Source를 반환하지 않는다
+- **AND** Quote 자체와 자체 Content는 그 Post의 조회 정책을 통과하면 유지한다
+
+#### Scenario: 상호 차단과 제3자 조회
+
+- **WHEN** Viewer와 Source Author가 서로 차단했거나 차단 당사자가 아닌 제3자가 승인된 Quote를 조회한다
+- **THEN** 상호 차단 당사자에게는 Source를 반환하지 않는다
+- **AND** 제3자는 승인이 철회되지 않았다면 자신의 기존 Source 조회 정책으로 판정한다
 
 ### Requirement: Plain Text post creation
 

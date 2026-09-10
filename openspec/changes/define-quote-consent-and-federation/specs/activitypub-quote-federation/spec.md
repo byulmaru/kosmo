@@ -1,5 +1,35 @@
 ## ADDED Requirements
 
+### Requirement: Local Note의 인용 정책 광고
+
+**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`,
+`docs/domain/decisions/0027-quote-consent-and-federation.md`, PROD-902, PROD-924. 프로토콜 참고:
+[FEP-044f](https://fediverse.codeberg.page/fep/fep/044f/).
+
+시스템은 Content가 있는 Local Post의 인용 허용 정책을 Local Note의 `interactionPolicy.canQuote`에 광고해야
+한다(MUST). `모두`의 `automaticApproval`은 ActivityStreams Public collection, `팔로워`는 Author의
+followers collection과 Author Actor, `본인만`은 Author Actor여야 한다(MUST). 세 정책 모두
+`manualApproval`을 제공해서는 안 된다(MUST NOT). 최초 Note projection과 정책 변경 뒤 같은 Note identity의
+갱신 표현에 현재 정책을 반영해야 한다(MUST).
+
+#### Scenario: 모두 정책의 최초 Note projection
+
+- **WHEN** `모두` 정책인 Local Post를 ActivityPub Note로 처음 표현한다
+- **THEN** `canQuote.automaticApproval`에 ActivityStreams Public collection을 제공한다
+- **AND** `manualApproval`은 제공하지 않으며 광고를 개별 QuoteAuthorization으로 취급하지 않는다
+
+#### Scenario: 팔로워와 본인만 정책의 mapping
+
+- **WHEN** Local Post 정책이 `팔로워` 또는 `본인만`이다
+- **THEN** `팔로워`는 Author의 followers collection과 Author Actor를 automatic 대상으로 제공한다
+- **AND** `본인만`은 Author Actor만 automatic 대상으로 제공하고 두 정책 모두 manual 대상을 제공하지 않는다
+
+#### Scenario: 정책 변경 뒤 Note 갱신
+
+- **WHEN** Author가 Local Post의 인용 허용 정책을 변경한다
+- **THEN** 같은 Note identity의 갱신된 `canQuote` projection을 기존 Post audience에 전달한다
+- **AND** 이미 발급한 QuoteAuthorization은 변경하거나 철회하지 않는다
+
 ### Requirement: FEP Quote 표현과 승인 검증
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/decisions/0027-quote-consent-and-federation.md`,
@@ -144,6 +174,13 @@ Kosmo 원문에 들어오는 QuoteRequest는 요청 Profile·인용 Post·Source
 - **THEN** 해당 승인을 무효화하고 철회 신호를 원격에 전달한다
 - **AND** `Delete`의 `object`와 `target`에는 객체를 embed하지 않고 URI 참조만 제공한다
 - **AND** 차단만으로 같은 철회 신호를 자동 생성하지 않는다
+
+#### Scenario: Local Source 삭제의 원격 Quote 수렴
+
+- **WHEN** Local Source가 삭제되고 그 Source에 결속된 유효한 QuoteAuthorization이 있다
+- **THEN** 각 승인을 철회하고 결속된 Quote Author 또는 Quote 소유 서버의 inbox에 `Delete(QuoteAuthorization)`을 전달한다
+- **AND** Quote 소유 서버는 철회를 기존 Quote audience에 전달해 자체 Content를 유지하고 Source를 비노출한다
+- **AND** 일반 Source audience에 보내는 `Delete(Note)`만으로 승인 철회 전달을 대신하지 않는다
 
 #### Scenario: 잘못된 철회와 Quote 삭제
 

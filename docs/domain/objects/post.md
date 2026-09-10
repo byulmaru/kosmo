@@ -36,6 +36,12 @@ Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 �
 새 Post와 정책 도입 전 작성한 Local Post의 초기값은 `모두`다. 이 값은 이후 인용 요청을 판단하는 기준이며
 이미 발급한 인용 승인을 변경하지 않는다.
 
+Local Post의 ActivityPub Note는 이 정책을 `interactionPolicy.canQuote`에 광고한다. `모두`는
+`automaticApproval`에 ActivityStreams Public collection을, `팔로워`는 Author의 followers collection과
+Author Actor를, `본인만`은 Author Actor만 제공한다. Kosmo는 건별 수동 승인 기능을 제공하지 않으므로 세
+정책 모두 `manualApproval`을 제공하지 않는다. 이 광고는 원격 서버의 예상 eligibility를 위한 힌트이며 개별
+QuoteAuthorization을 대신하지 않는다. 정책 변경 뒤에는 같은 Note identity의 갱신된 표현을 전달한다.
+
 ## 관계
 
 | 관계              | 대상                              | 방향                 | cardinality | 존재 조건                                             | 조회 조건                                             | 조회 권한        |
@@ -115,12 +121,17 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 - 검증된 승인을 받으면 승인과 Source 관계를 연결하고 이미 전달한 Quote를 갱신한다. 거절·승인 철회 또는
   Source 삭제 시에는 Quote 자체 Content를 유지하고 Source 카드·관계는 비노출한다. 비노출을 위해 저장
   관계를 물리적으로 제거해야 하는지는 도메인 계약으로 고정하지 않는다.
+- Local Source가 삭제되면 그 Source에 발급된 각 유효한 QuoteAuthorization을 철회하고, 승인에 결속된
+  Quote Author의 inbox 또는 Quote 소유 서버가 수신하는 inbox로 `Delete(QuoteAuthorization)`을 전달한다.
+  Quote 소유 서버는 이를 기존 Quote audience에 전달해 원문 작성자를 팔로우하지 않는 수신자도 Source
+  비노출로 수렴시킨다. 일반 Source Post audience에만 보내는 `Delete(Note)`로 이 경로를 대신하지 않는다.
 - 전송 실패나 응답 부재를 승인으로 간주하지 않는다. 늦게 도착한 응답이나 중복 전달이 더 최신의 거절·철회를
   무효화하지 않도록 한다. 세부 재시도와 전달 순서는 해당 lifecycle의 구현 계약에서 정한다.
 - 게시글별 인용 허용 설정의 변경은 이후 요청에만 적용한다. 기존 승인을 없애려면 별도 인용 승인 철회를
   사용하며, 설정 변경 자체로 기존 Quote의 Source를 일괄 숨기지 않는다.
-- 차단은 당사자 간 접근과 새 인용 요청·승인을 막지만 기존 승인을 자동 철회하지 않는다. 제3자에게도
-  Source를 숨기려면 원문 작성자가 별도 승인 철회를 사용한다.
+- 차단은 새 인용 요청·승인을 양방향으로 막지만 기존 승인을 자동 철회하지 않는다. 기존 승인 Source 표시는
+  Viewer별 방향별 Post 조회 정책을 적용하며, 제3자에게도 Source를 숨기려면 원문 작성자가 별도 승인 철회를
+  사용한다.
 
 ## 권한
 

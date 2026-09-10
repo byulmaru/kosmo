@@ -21,6 +21,10 @@ Accepted
   허용된 요청도 Source 조회와 차단 조건을 통과해야 한다.
 - 정책 변경은 이후 요청에만 적용한다. 기존 QuoteAuthorization을 자동 철회하지 않는다.
 - Kosmo 원문은 정책에 따라 자동 승인·거절한다. Kosmo 자체의 건별 수동 승인 UI는 제공하지 않는다.
+- Local Note의 `interactionPolicy.canQuote.automaticApproval`은 `모두`를 ActivityStreams Public,
+  `팔로워`를 Author의 followers collection과 Author Actor, `본인만`을 Author Actor로 광고한다. 첫 출시에는
+  건별 수동 승인 기능이 없으므로 `manualApproval`은 제공하지 않는다. 최초 Note와 정책 변경 뒤 같은 identity의
+  Update에 이 projection을 적용하되, 광고 자체는 개별 승인 증거로 사용하지 않는다.
 - 자기 인용은 QuoteRequest 없이 허용한다. 타인의 원격 원문을 인용할 때는 `interactionPolicy`의
   `automaticApproval`·`manualApproval` 여부, 정책 부재 또는 해석 실패와 관계없이 QuoteRequest를 보낸다.
   `interactionPolicy`는 작성 전 UI·정책 힌트일 뿐 승인 근거가 아니며, 실제 승인은 원문 작성자가 발급한
@@ -31,11 +35,16 @@ Accepted
 - 타인의 원격 원문은 승인 대기 중에도 Quote 자체 Content를 게시하고 일반 federation 전달을 진행한다. 승인 전에는
   Source를 정상 인용으로 노출하지 않으며 원문 서버에 별도 승인 요청을 보낸다. 유효한 승인을 받으면
   Source와 승인을 연결하고 필요한 Update를 보낸다.
-- 거절·승인 철회·Source 삭제 후에도 Quote 자체 Content는 유지하고 Source는 비노출한다. 실패나 응답
-  부재는 승인이 아니며, 뒤늦은 응답이 더 최신의 거절·철회를 되돌려서는 안 된다.
-- 차단은 당사자 간 접근과 새로운 인용 요청·승인을 막는다. 기존 승인도 당사자 간 접근 제한을 우회하지
-  못한다. 차단 자체가 기존 승인을 자동 철회하거나 제3자의 Source 조회를 일괄 막지는 않는다. 제3자에게도
-  Source를 숨기려면 원문 작성자가 별도 승인 철회를 사용한다.
+- 거절·승인 철회·Source 삭제 후에도 Quote 자체 Content는 유지하고 Source는 비노출한다. Local Source 삭제는
+  그 Source의 유효한 승인마다 `Delete(QuoteAuthorization)`을 Quote Author 또는 Quote 소유 서버에 전달하고,
+  소유 서버가 기존 Quote audience에 전달하게 해 일반 Source audience 밖의 원격 Quote도 수렴시킨다. 일반
+  `Delete(Note)` 전달만으로 이 경로를 대신하지 않는다. 실패나 응답 부재는 승인이 아니며, 뒤늦은 응답이 더
+  최신의 거절·철회를 되돌려서는 안 된다.
+- 차단은 새로운 인용 요청·승인을 양방향으로 막는다. 기존 승인 Source의 표시는 별도 양방향 규칙을 만들지
+  않고 기존 방향별 Post 조회 정책을 적용한다. Viewer가 Source Author를 차단한 방향만 존재하면 Viewer의 직접
+  조회 조건에 따라 Source를 볼 수 있고, Source Author가 Viewer를 차단했거나 상호 차단이면 Source를 숨긴다.
+  차단 자체가 기존 승인을 자동 철회하거나 제3자의 Source 조회를 일괄 막지는 않는다. 제3자에게도 Source를
+  숨기려면 원문 작성자가 별도 승인 철회를 사용한다.
 - 원문 작성자의 명시적 철회는 QuoteAuthorization을 무효로 만들고 Delete(QuoteAuthorization)를 전달한다.
   수신자는 철회 주체와 대상 승인의 대응을 검증한 뒤 Source를 숨긴다. 수신자가 Quote의 소유 서버라면
   기존 Quote audience에도 같은 철회를 전달한다. 발신·전달하는 철회 Delete의 object와 target은 객체를
