@@ -11,6 +11,11 @@ import type { ProfileListItem as ProfileListItemExport } from './ProfileListItem
 const platform = { OS: 'web' };
 let windowWidth = 1280;
 let renderer: ReactTestRenderer | null = null;
+const changeBlockedCalls: Array<{
+  change: { handle?: string | null; ownerProfileId: string; profileBlockId?: string | null };
+  nextBlocked: boolean;
+}> = [];
+const toastCalls: Array<{ message: string; tone: string }> = [];
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -26,31 +31,57 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('react-relay', {
-  graphql: () => ({}),
-  useFragment: () => ({
-    avatar: null,
-    bio: null,
-    displayName: '코스모',
-    handle: 'kosmo',
-    id: 'profile-kosmo',
-    relativeHandle: '@kosmo',
-    viewerState: { follow: null, followRequest: null, isSelf: false },
-  }),
+  graphql: (parts: TemplateStringsArray) => parts.join(''),
+  useFragment: (fragment: unknown, reference: Record<string, unknown> | null) =>
+    String(fragment).includes('FollowButton_profileBlock on') ||
+    String(fragment).includes('FollowButton_profileBlockStatus on')
+      ? reference
+      : reference && Object.keys(reference).length > 0
+        ? reference
+        : {
+            avatar: null,
+            bio: null,
+            displayName: '코스모',
+            followersCount: 0,
+            followPolicy: 'OPEN',
+            handle: 'kosmo',
+            id: 'profile-kosmo',
+            relativeHandle: '@kosmo',
+            viewerState: { follow: null, followRequest: null, isSelf: false },
+          },
   useMutation: () => [() => {}, false],
 });
 mockModule('@/analytics/client', { trackAnalytics: () => {} });
 mockModule('@/components/ui/ToastProvider', {
-  useToast: () => ({ showToast: () => () => {} }),
+  useToast: () => ({
+    showToast: (message: string, options: { tone: string }) =>
+      toastCalls.push({ message, tone: options.tone }),
+  }),
 });
 mockModule('@/session/SessionProvider', {
   useSession: () => ({ selectedProfileId: 'viewer' }),
 });
 mockModule('@/theme/ThemeProvider', { useTheme: () => ({}) });
 mockModule('@/components/ui/Button', { Button: 'Button' });
+mockModule('@/components/ui/ConfirmationContent', { ConfirmationContent: 'ConfirmationContent' });
+mockModule('@/components/ui/ModalSheet', { ModalSheet: 'ModalSheet' });
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
 mockModule('@/components/shell/NavigationLink', { NavigationLink: 'NavigationLink' });
 mockModule(new URL('./ProfileNameBlock.tsx', import.meta.url), {
   ProfileNameBlock: 'ProfileNameBlock',
+});
+mockModule(new URL('./ProfileBlockController.tsx', import.meta.url), {
+  useProfileBlockMutations: () => ({
+    changeBlocked: async (
+      change: { handle?: string | null; ownerProfileId: string; profileBlockId?: string | null },
+      nextBlocked: boolean,
+    ) => {
+      changeBlockedCalls.push({ change, nextBlocked });
+    },
+  }),
+});
+mockModule(new URL('./profileBlockErrors.ts', import.meta.url), {
+  StaleProfileBlockRequestError: class StaleProfileBlockRequestError extends Error {},
 });
 
 let FollowButton: typeof FollowButtonExport;
@@ -65,6 +96,123 @@ afterEach(async () => {
   renderer = null;
   platform.OS = 'web';
   windowWidth = 1280;
+  changeBlockedCalls.length = 0;
+  toastCalls.length = 0;
+});
+
+const profile = {
+  displayName: '코스모',
+  followersCount: 0,
+  followPolicy: 'OPEN',
+  handle: 'kosmo',
+  id: 'profile-kosmo',
+  relativeHandle: '@kosmo',
+  viewerState: { follow: null, followRequest: null, isSelf: false },
+};
+
+test('내가 차단한 Profile은 기본 차단됨, hover와 keyboard focus에서는 차단 해제를 표시한다', async () => {
+  await act(async () => {
+    renderer = create(
+      createElement(FollowButton, {
+        profile: profile as never,
+        profileBlockStatus: {
+          blockedBy: false,
+          blocking: true,
+          profileBlockId: 'profile-block-a',
+        } as never,
+      }),
+    );
+  });
+  const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
+  assert.equal(button?.props.children, '차단됨');
+
+  await act(async () => button?.props.onHoverIn());
+  assert.equal(
+    renderer?.root.find((node) => (node.type as unknown) === 'Button').props.children,
+    '차단 해제',
+  );
+  await act(async () => button?.props.onHoverOut());
+  await act(async () => button?.props.onFocus());
+  await act(async () => button?.props.onHoverIn());
+  await act(async () => button?.props.onHoverOut());
+  assert.equal(
+    renderer?.root.find((node) => (node.type as unknown) === 'Button').props.children,
+    '차단 해제',
+  );
+});
+
+test('상대만 나를 차단한 Profile은 관계 버튼을 숨긴다', async () => {
+  await act(async () => {
+    renderer = create(
+      createElement(FollowButton, {
+        profile: profile as never,
+        profileBlockStatus: {
+          blockedBy: true,
+          blocking: false,
+          profileBlockId: null,
+        } as never,
+      }),
+    );
+  });
+  assert.equal(renderer?.toJSON(), null);
+});
+
+test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유한다', async () => {
+  await act(async () => {
+    renderer = create(
+      createElement(FollowButton, {
+        profile: profile as never,
+        profileBlockStatus: {
+          blockedBy: true,
+          blocking: true,
+          profileBlockId: 'profile-block-a',
+        } as never,
+      }),
+    );
+  });
+  const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
+  assert.equal(button?.props.children, '차단됨');
+  await act(async () => button?.props.onPress());
+  const modal = renderer?.root.find((node) => (node.type as unknown) === 'ModalSheet');
+  const confirmation = renderer?.root.find(
+    (node) => (node.type as unknown) === 'ConfirmationContent',
+  );
+  assert.equal(modal?.props.visible, true);
+  assert.equal(confirmation?.props.message, '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.');
+
+  await act(async () => confirmation?.props.onConfirm());
+  assert.deepEqual(changeBlockedCalls, [
+    {
+      change: {
+        handle: 'kosmo',
+        ownerProfileId: 'viewer',
+        profileBlockId: 'profile-block-a',
+      },
+      nextBlocked: false,
+    },
+  ]);
+  assert.deepEqual(toastCalls, [{ message: '차단을 해제했어요', tone: 'success' }]);
+});
+
+test('관리 관계 fragment도 같은 차단 해제 action을 사용한다', async () => {
+  await act(async () => {
+    renderer = create(
+      createElement(FollowButton, {
+        profile: profile as never,
+        profileBlock: { id: 'profile-block-list' } as never,
+        size: 'compact',
+      }),
+    );
+  });
+  const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
+  assert.equal(button?.props.children, '차단됨');
+  await act(async () => button?.props.onPress());
+  await act(async () =>
+    renderer?.root
+      .find((node) => (node.type as unknown) === 'ConfirmationContent')
+      .props.onConfirm(),
+  );
+  assert.equal(changeBlockedCalls[0]?.change.profileBlockId, 'profile-block-list');
 });
 
 for (const [os, targetHeight] of [
