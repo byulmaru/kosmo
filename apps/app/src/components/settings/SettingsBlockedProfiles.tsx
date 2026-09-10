@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
-import { useProfileBlockMutations } from '@/components/profile/ProfileBlockController';
-import { StaleProfileBlockRequestError } from '@/components/profile/profileBlockErrors';
+import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { Button } from '@/components/ui/Button';
-import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
-import { ModalSheet } from '@/components/ui/ModalSheet';
 import { StateView } from '@/components/ui/StateView';
-import { useToast } from '@/components/ui/ToastProvider';
 import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
-import { useSession } from '@/session/SessionProvider';
 import { space } from '@/theme/tokens';
+import type { FollowButton_profile$key } from '@/components/profile/__generated__/FollowButton_profile.graphql';
+import type { FollowButton_profileBlock$key } from '@/components/profile/__generated__/FollowButton_profileBlock.graphql';
 import type { SettingsBlockedProfiles_profile$key } from './__generated__/SettingsBlockedProfiles_profile.graphql';
 import type { SettingsBlockedProfilesNextPageQuery } from './__generated__/SettingsBlockedProfilesNextPageQuery.graphql';
 import type { SettingsBlockedProfilesQuery } from './__generated__/SettingsBlockedProfilesQuery.graphql';
@@ -42,9 +39,11 @@ const SettingsBlockedProfilesFragment = graphql`
         cursor
         node {
           id
+          ...FollowButton_profileBlock
           targetProfile {
             displayName
             relativeHandle
+            ...FollowButton_profile
           }
         }
       }
@@ -54,6 +53,8 @@ const SettingsBlockedProfilesFragment = graphql`
 
 type BlockedProfile = Readonly<{
   displayName: string;
+  profile: FollowButton_profile$key;
+  profileBlock: FollowButton_profileBlock$key;
   profileBlockId: string;
   relativeHandle: string;
 }>;
@@ -76,16 +77,9 @@ export function SettingsBlockedProfiles() {
   const actorLifecycleKey = useRelayActorLifecycleKey();
   return (
     <RouteBoundary
-      error={(retry) => (
-        <BlockedProfilesView
-          onUnblock={() => Promise.reject(new Error('retry'))}
-          state={{ onRetry: retry, status: 'error' }}
-        />
-      )}
+      error={(retry) => <BlockedProfilesView state={{ onRetry: retry, status: 'error' }} />}
       key={actorLifecycleKey}
-      loading={
-        <BlockedProfilesView onUnblock={() => Promise.resolve()} state={{ status: 'loading' }} />
-      }
+      loading={<BlockedProfilesView state={{ status: 'loading' }} />}
       title="차단한 프로필을 불러오지 못했어요"
     >
       <SettingsBlockedProfilesContent />
@@ -95,7 +89,6 @@ export function SettingsBlockedProfiles() {
 
 function SettingsBlockedProfilesContent() {
   const { fetchKey } = useRouteBoundary();
-  const { selectedProfileId } = useSession();
   const data = useLazyLoadQuery<SettingsBlockedProfilesQuery>(
     SettingsBlockedProfilesQuery,
     {},
@@ -106,18 +99,8 @@ function SettingsBlockedProfilesContent() {
     SettingsBlockedProfilesNextPageQuery,
     SettingsBlockedProfiles_profile$key
   >(SettingsBlockedProfilesFragment, profile ?? null);
-  const { changeBlocked } = useProfileBlockMutations();
   const [loadError, setLoadError] = useState(false);
   const edges = pagination.data?.profileBlocks.edges ?? [];
-  const onUnblock = useCallback(
-    (profileBlockId: string) => {
-      if (!profile?.id || !selectedProfileId || selectedProfileId !== profile.id) {
-        return Promise.reject(new Error('Profile block request is no longer available.'));
-      }
-      return changeBlocked({ ownerProfileId: profile.id, profileBlockId }, false);
-    },
-    [changeBlocked, profile?.id, selectedProfileId],
-  );
   const loadMore = useCallback(() => {
     if (!pagination.hasNext || pagination.isLoadingNext) {
       return;
@@ -129,14 +112,12 @@ function SettingsBlockedProfilesContent() {
   if (!profile || profile.instance.kind !== 'LOCAL') {
     return (
       <BlockedProfilesView
-        onUnblock={() => Promise.resolve()}
         state={{ pagination: { status: 'end' }, profiles: [], status: 'loaded' }}
       />
     );
   }
   return (
     <BlockedProfilesView
-      onUnblock={onUnblock}
       state={{
         pagination: loadError
           ? { onRetry: loadMore, status: 'error' }
@@ -147,6 +128,8 @@ function SettingsBlockedProfilesContent() {
               : { status: 'end' },
         profiles: edges.map((edge) => ({
           displayName: edge.node.targetProfile.displayName,
+          profile: edge.node.targetProfile,
+          profileBlock: edge.node,
           profileBlockId: edge.node.id,
           relativeHandle: edge.node.targetProfile.relativeHandle,
         })),
@@ -156,23 +139,11 @@ function SettingsBlockedProfilesContent() {
   );
 }
 
-export function BlockedProfilesView({
-  onUnblock,
-  state,
-}: {
-  onUnblock: (profileBlockId: string) => Promise<void>;
-  state: BlockedProfilesState;
-}) {
-  const { showToast } = useToast();
-  const [selected, setSelected] = useState<BlockedProfile | null>(null);
-  const [pending, setPending] = useState(false);
-  const inFlight = useRef(false);
+export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) {
   const mounted = useRef(true);
-  const cancelRef = useRef<View>(null);
   const listRef = useRef<View>(null);
   const actionRefs = useRef(new Map<string, View>());
   const removedFocus = useRef<{ index: number; profileBlockId: string } | null>(null);
-  const selectedForFocus = useRef<BlockedProfile | null>(null);
   const stateRef = useRef(state);
   const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   stateRef.current = state;
@@ -217,47 +188,34 @@ export function BlockedProfilesView({
     };
   }, []);
 
-  const close = () => {
-    if (!inFlight.current) {
-      setSelected(null);
-    }
-  };
-  const requestUnblock = async () => {
-    if (!selected || inFlight.current) {
+  useEffect(() => {
+    focusTimer.current = setTimeout(() => {
+      focusTimer.current = null;
+      if (!mounted.current) {
+        activeFocusRestorer?.();
+        return;
+      }
+      restoreRemovedFocusRef.current();
+    }, 0);
+    return () => {
+      if (focusTimer.current) {
+        clearTimeout(focusTimer.current);
+      }
+    };
+  }, [state]);
+
+  const rememberRemovedProfile = (profile: BlockedProfile) => {
+    if (state.status !== 'loaded') {
       return;
     }
-    inFlight.current = true;
-    setPending(true);
-    if (state.status === 'loaded') {
-      const intent = {
-        index: state.profiles.findIndex(
-          (profile) => profile.profileBlockId === selected.profileBlockId,
-        ),
-        profileBlockId: selected.profileBlockId,
-      };
-      removedFocus.current = intent;
-      pendingFocusIntent = intent;
-    }
-    try {
-      await onUnblock(selected.profileBlockId);
-      if (!mounted.current) {
-        return;
-      }
-      setSelected(null);
-      showToast('차단을 해제했어요', { tone: 'success' });
-    } catch (error) {
-      removedFocus.current = null;
-      pendingFocusIntent = null;
-      if (!mounted.current || error instanceof StaleProfileBlockRequestError) {
-        return;
-      }
-      showToast('차단을 해제하지 못했어요. 다시 시도해 주세요.', { tone: 'danger' });
-    } finally {
-      if (mounted.current) {
-        inFlight.current = false;
-        setPending(false);
-      }
-    }
+    const intent = {
+      index: state.profiles.findIndex(
+        (candidate) => candidate.profileBlockId === profile.profileBlockId,
+      ),
+      profileBlockId: profile.profileBlockId,
+    };
+    removedFocus.current = intent;
+    pendingFocusIntent = intent;
   };
 
   return (
@@ -284,24 +242,19 @@ export function BlockedProfilesView({
                 relativeHandle={profile.relativeHandle}
                 style={styles.row}
               >
-                <Button
-                  accessibilityLabel={`${profile.displayName} ${profile.relativeHandle} 차단 해제`}
-                  controlRef={(node) => {
+                <FollowButton
+                  onActionRef={(node) => {
                     if (node) {
                       actionRefs.current.set(profile.profileBlockId, node);
                     } else {
                       actionRefs.current.delete(profile.profileBlockId);
                     }
                   }}
-                  onPress={() => {
-                    selectedForFocus.current = profile;
-                    setSelected(profile);
-                  }}
+                  onUnblockSuccess={() => rememberRemovedProfile(profile)}
+                  profile={profile.profile}
+                  profileBlock={profile.profileBlock}
                   size="compact"
-                  tone="secondary"
-                >
-                  차단 해제
-                </Button>
+                />
               </ProfileListItemContent>
             ))}
             {state.pagination.status === 'error' ? (
@@ -323,41 +276,6 @@ export function BlockedProfilesView({
           </>
         )}
       </View>
-      <ModalSheet
-        dismissDisabled={pending}
-        onClose={close}
-        onDismiss={() => {
-          const previous = selectedForFocus.current;
-          selectedForFocus.current = null;
-          focusTimer.current = setTimeout(() => {
-            focusTimer.current = null;
-            if (!mounted.current) {
-              activeFocusRestorer?.();
-              return;
-            }
-            if (restoreRemovedFocus()) {
-              return;
-            }
-            if (previous) {
-              actionRefs.current.get(previous.profileBlockId)?.focus();
-            }
-          }, 0);
-        }}
-        onShow={() => cancelRef.current?.focus()}
-        title="이 프로필의 차단을 해제할까요?"
-        visible={selected !== null}
-      >
-        <ConfirmationContent
-          cancelLabel="취소"
-          cancelRef={cancelRef}
-          confirmLabel="차단 해제"
-          message="차단을 해제해도 이전 팔로우 관계는 복구되지 않아요."
-          onCancel={close}
-          onConfirm={() => void requestUnblock()}
-          pending={pending}
-          tone="primary"
-        />
-      </ModalSheet>
     </ScrollView>
   );
 }
