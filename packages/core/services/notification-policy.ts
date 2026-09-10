@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import { first, ProfileBlocks, ProfileMutes } from '../db';
 import { profileBlockPairWhere } from '../visibility/profile-block';
 import type { DatabaseHandle } from '../db';
@@ -11,10 +11,10 @@ type NotificationProfilePolicyInput = {
 /**
  * Returns whether a notification may be materialized for a profile pair.
  *
- * Mute is recipient-owned and only a permanent row applies to notification
- * creation. Block is pair-owned and applies in either direction. Query errors
- * intentionally propagate so the caller's existing retry boundary can handle
- * an incomplete post-commit projection.
+ * Mute is recipient-owned and applies while it has no expiry or expires after
+ * the database transaction timestamp. Block is pair-owned and applies in
+ * either direction. Query errors intentionally propagate so the caller's
+ * existing retry boundary can handle an incomplete post-commit projection.
  */
 export const isNotificationProfileEligible = async (
   database: DatabaseHandle,
@@ -38,7 +38,7 @@ export const isNotificationProfileEligible = async (
       and(
         eq(ProfileMutes.ownerProfileId, recipientProfileId),
         eq(ProfileMutes.targetProfileId, relatedProfileId),
-        isNull(ProfileMutes.expiresAt),
+        or(isNull(ProfileMutes.expiresAt), gt(ProfileMutes.expiresAt, sql`CURRENT_TIMESTAMP`)),
       ),
     )
     .limit(1)

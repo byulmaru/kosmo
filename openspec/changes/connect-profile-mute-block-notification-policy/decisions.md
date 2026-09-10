@@ -16,17 +16,17 @@ proposal, Notification delta spec와 design을 현재 canonical·Linear에 대�
 - Consequences: 새 정책 저장소와 production 테스트용 evaluator/callback을 만들지 않는다. 신규 source 연결 원칙은 유지하되 Quote·Mention source를 이번 작업에 추가하지 않는다.
 - Confirmation / Follow-up: 다섯 source의 allow/deny·진입점·Recipient 격리를 실제 실행 결과로 검증한다.
 
-### D2. 영구 Mute와 독립된 양방향 Notification Block
+### D2. 활성 Mute와 독립된 양방향 Notification Block
 
 - Decision Date: 2026-09-10
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile-mute.md`의 상태·관계·제외/보류; `docs/domain/objects/profile-block.md`의 조회 정책; `docs/domain/objects/notification.md`의 pair 정책; [PROD-327](https://linear.app/byulmaru/issue/PROD-327)의 `Domain / Issue Gate 승인 — 2026-09-10`.
 - Status: Active
-- Context / Problem: 최신 Block 계약은 콘텐츠 직접 조회를 방향별로 허용하지만 알림은 양방향으로 제한한다. Mute 기간·만료는 v1 범위 밖이다.
-- Decision Outcome: Mute는 Recipient→Related 방향의 `expires_at IS NULL` 관계만 적용한다. Block은 두 Profile 사이 어느 방향으로든 존재하면 억제한다. Profile·Post·Media 직접 조회 허용을 알림 허용으로 재사용하지 않는다.
-- Alternatives Considered: Mute 양방향 적용, 기간 Mute 활성 판정 추가, 직접 조회 결과만 사용하는 Block 판정은 현재 상위 계약을 바꾸므로 채택하지 않는다.
-- Consequences: 같은 Account의 다른 Profile을 오염시키지 않는다. 기간·만료는 PROD-826, Domain Block은 PROD-817의 독립 계약으로 유지한다.
-- Confirmation / Follow-up: Mute 역방향·non-null 값·Profile 격리와 Block 양방향·mutual 일부 해제·직접 콘텐츠 조회 허용 상황을 검증한다.
+- Context / Problem: 최신 Block 계약은 콘텐츠 직접 조회를 방향별로 허용하지만 알림은 양방향으로 제한한다. PR #842 리뷰와 2026-09-10 사용자 결정으로 Notification 생성에서는 기간 Mute의 활성 경계를 함께 평가해야 한다.
+- Decision Outcome: Mute는 Recipient→Related 방향에서 `expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP`인 관계를 적용한다. DB `CURRENT_TIMESTAMP`와 같은 시각이거나 과거인 관계는 Mute에 의한 deny가 아니다. Block은 두 Profile 사이 어느 방향으로든 존재하면 억제한다. Profile·Post·Media 직접 조회 허용을 알림 허용으로 재사용하지 않는다.
+- Alternatives Considered: Mute 양방향 적용, `expires_at IS NULL`만 확인하는 방식, 만료를 `>= CURRENT_TIMESTAMP`로 비교하는 방식, 직접 조회 결과만 사용하는 Block 판정은 최신 상위 계약 또는 정확한 경계 조건을 충족하지 못한다.
+- Consequences: 같은 Account의 다른 Profile을 오염시키지 않는다. 기간 preset·생성·변경 action/UI, Post List 적용과 만료 관계 정리는 PROD-826의 독립 계약으로 유지하고, 이미 저장된 관계의 Notification 판정만 이 change에서 평가한다.
+- Confirmation / Follow-up: Mute 역방향·NULL·미래·과거·정확한 DB 현재 시각·Profile 격리와 Block 양방향·mutual 일부 해제·직접 콘텐츠 조회 허용 상황을 검증한다.
 
 ### D3. deny와 평가 오류를 구분하고 source commit을 보존한다
 
@@ -68,11 +68,11 @@ proposal, Notification delta spec와 design을 현재 canonical·Linear에 대�
 
 - Decision Date: 2026-09-10
 - Decision Class: Delivery Handoff
-- Authority / Provenance: 사용자의 2026-09-10 메시지 `스택으로 쌓아서 구현해`; 현재 `PROD-814` Linear 상태 `In Review`; local/remote `gh stack` 상태 `main → PROD-814-ui → PROD-814-data → PROD-823 → PROD-327`.
-- Context / Problem: D5의 구현 착수 조건인 PROD-814 완료·merge는 아직 충족되지 않았지만, 사용자가 선행 작업 위에 dependent Stack으로 구현을 진행하도록 명시했다.
-- Decision Outcome: PROD-327 구현은 선행 layer를 포함한 dependent Stack에서 진행한다. PROD-814가 완료·merge되었다고 간주하거나 보고하지 않으며, PROD-327의 delivery·Ready·archive 판단은 선행 layer의 실제 capability 반영과 전체 검증 결과에 계속 종속된다.
-- Consequences: 현재 branch/PR은 선행 layer 위에서만 의미가 있으며, 선행 변경이 rebase·retarget되면 PROD-327도 함께 재검증한다. 기존 `PROD-823-follow-action` partial layer는 원격 Stack의 실제 `PROD-823` top과 중복되어 Stack에 포함하지 않는다. 이 결정은 Notification 정책 계약이나 PROD-814의 소유 범위를 변경하지 않는다.
-- Confirmation / Follow-up: checkpoint commit·push 후 local Stack과 remote PR base/head/stack 상태를 확인하고, 선행 PR merge 전에는 PROD-327 change를 archive하지 않는다.
+- Authority / Provenance: 사용자의 2026-09-10 지시 `스택으로 쌓아서 구현해`와 후속 실행 승인 `진행해`; 현재 PR 리뷰 [#842](https://github.com/byulmaru/kosmo/pull/842#discussion_r3979149987)의 annotation 승인; 현재 전달 순서 `#726 → #770 → #848 → #854 → #844 → #772 → #842`.
+- Context / Problem: 이전 기록의 Stack 정보가 현재 전달 구조와 달라 구현·검증 문서가 낡은 순서를 가리킬 수 있다. 선행 PR 위에서 dependent Stack으로 구현을 진행하더라도 선행 PR의 완료·merge를 추정해서는 안 된다.
+- Decision Outcome: PROD-327 구현·전달·검증은 현재 `#726 → #770 → #848 → #854 → #844 → #772 → #842` 순서의 dependent Stack에서 진행한다. 이 기록은 선행 PR의 완료·merge를 추정하지 않으며, Notification 정책 계약과 각 PR의 소유 범위를 변경하지 않는다.
+- Consequences: 선행 Stack의 실제 capability·base/head가 바뀌면 PROD-327 구현과 검증 결과를 다시 확인한다. 현재 branch/PR은 선행 layer 위에서만 의미가 있으며, 선행 PR이 merge되기 전에는 PROD-327 change를 archive하지 않는다. archive는 전체 change 완료 증거와 별도 판단을 따른다.
+- Confirmation / Follow-up: 현재 Stack과 PR 리뷰의 정책 blocker를 구현·검증 기록에 반영하고, 선행 PR merge 전 archive하지 않는 gate와 archive 미수행 상태를 tasks에 정직하게 남긴다.
 
 ## Remaining Decisions
 

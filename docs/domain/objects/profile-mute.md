@@ -8,8 +8,9 @@ Profile Mute는 Owner Profile이 Target Profile의 콘텐츠가 탐색 목록과
 
 ## 상태
 
-이 객체는 별도 상태 차원을 가지지 않는다. 현재 v1에서는 `expires_at`이 `null`인 관계의 존재가 적용 중인
-Mute를 뜻한다. non-null 값의 기간·만료 의미는 `PROD-826`에서 결정한다.
+이 객체는 별도 상태 차원을 가지지 않는다. 현재 v1 생성 경로는 만료 시각이 없는 영구 Mute만 만든다.
+새 Notification 생성에서는 만료 시각이 없거나 DB 현재 시각보다 미래인 관계를 적용 중인 Mute로
+판정한다. 만료 시각이 DB 현재 시각과 같거나 과거이면 새 Notification을 억제하지 않는다.
 
 ## 속성
 
@@ -24,8 +25,8 @@ Mute를 뜻한다. non-null 값의 기간·만료 의미는 `PROD-826`에서 결
 | Owner Profile  | [Profile](./profile.md) | Profile Mute -> Profile | 1 -> 1      | 항상      | Owner만 조회 | `ProfileMute.Owner` |
 | Target Profile | [Profile](./profile.md) | Profile Mute -> Profile | 1 -> 1      | 항상      | Owner만 조회 | `ProfileMute.Owner` |
 
-같은 Owner/Target 조합에는 Profile Mute가 하나만 존재하며, 현재 v1에서는 `expires_at`이 `null`인 관계만
-적용 중으로 판정한다.
+같은 Owner/Target 조합에는 Profile Mute가 하나만 존재한다. 만료된 관계가 남아 있어도 그 관계만으로
+새 Notification을 억제하지 않으며, 만료 판정이 관계를 삭제하지는 않는다.
 
 ## 행동
 
@@ -50,7 +51,11 @@ Mute를 뜻한다. non-null 값의 기간·만료 의미는 `PROD-826`에서 결
   모두 판정하며, 예외로 허용한 Profile을 제외한 둘 중 하나라도 Mute Target이면 Exclude한다.
 - Bookmark 목록과 Post 직접 조회·상호작용에는 Profile Mute를 적용하지 않는다. 기존 Visibility와
   Eligibility는 계속 적용한다.
-- Target Profile에서 발생한 새 Notification은 생성하지 않는다.
+- 새 Notification 생성 시 Owner인 Recipient가 Target인 Related Profile을 Mute했고 만료 시각이 없거나
+  DB 현재 시각보다 미래이면 생성하지 않는다. 만료 시각이 DB 현재 시각과 같거나 과거이면 Mute에 의한
+  생성 억제는 적용하지 않으며, Profile Block과 다른 생성 조건은 계속 적용한다.
+- 만료 뒤 새 원인 행동에는 당시의 Mute 상태를 적용한다. 만료만으로 과거에 억제한 Notification을
+  소급 생성하지 않는다.
 - 기존 Notification의 존재와 Read State는 바꾸지 않는다.
 - 현재 v1 Post List 적용 여부는 `expires_at IS NULL` 관계로만 판정한다.
 
@@ -63,5 +68,5 @@ Mute를 뜻한다. non-null 값의 기간·만료 의미는 `PROD-826`에서 결
 ## 제외/보류
 
 - Profile Mute는 Follow Relationship, Follow Request, Reaction, Repost Post, Bookmark를 제거하지 않는다.
-- non-null `expires_at`의 기간 지정, 만료 판정·정리와 만료 시각 생성·변경 의미 및 action은 `PROD-826`에서
-  결정하며 현재 범위에서 제공하지 않는다.
+- 기간 preset, 만료 시각 생성·변경 action, Post List의 기간 Mute 적용과 만료 관계 정리는 `PROD-826`에서
+  결정하며 현재 범위에서 제공하지 않는다. 새 Notification 생성의 만료 판정은 위 정책을 따른다.
