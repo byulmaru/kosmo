@@ -71,6 +71,11 @@ export const deliverContentReport = async (
     });
 
     if (response.status !== 200) {
+      try {
+        await response.body?.cancel();
+      } catch {
+        // The HTTP failure remains a rejected delivery even if cleanup fails.
+      }
       return ContentReportDeliveryStatus.REJECTED;
     }
 

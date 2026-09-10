@@ -71,9 +71,9 @@
 - Authority / Provenance: `docs/design/content-reporting.md`, `docs/design/feedback.md`, `docs/design/accessibility.md`, [PROD-915](https://linear.app/byulmaru/issue/PROD-915), 2026-09-10 Native modal/sheet 선택 및 Gate 전환 승인.
 - Status: Active
 - Context / Problem: 신고 중 대상 문맥과 입력을 유지하면서 닫기·재시도 결과를 알 수 있어야 한다.
-- Decision Outcome: Web 반응형 dialog/sheet, Native 현재 화면 위 modal/sheet를 사용한다. dirty 폐기 확인·pending 명시적 닫기 차단·실패/확인 불가 입력 유지·성공 입력 초기화와 결과 유지를 적용한다.
+- Decision Outcome: Web 반응형 dialog/sheet, Native 현재 화면 위 modal/sheet를 사용한다. dirty 폐기 확인·pending 명시적 닫기 차단·실패/확인 불가 입력 유지·정상 성공 시 입력 초기화 후 overlay 종료와 기존 공용 성공 toast `신고를 전달했습니다.`를 적용한다.
 - Alternatives Considered: Native 별도 페이지 대신 사용자가 modal/sheet를 선택했다. 자동 draft 폐기와 durable 복원은 승인된 lifecycle과 맞지 않는다.
-- Consequences: 지원 dismissal을 같은 경계로 연결한다. 폐기 후 재열기는 새 draft이며 앱/탭 종료 복원은 보장하지 않는다.
+- Consequences: 지원 dismissal을 같은 경계로 연결하고 성공 결과는 공용 toast로 알린다. 폐기 후 재열기는 새 draft이며 앱/탭 종료 복원은 보장하지 않는다.
 - Confirmation / Follow-up: Web keyboard/focus와 Android/iOS의 keyboard·dismissal·보조 기술을 각각 실행 검증한다.
 
 ### D7. 하나의 신고 제출 change와 완료 책임

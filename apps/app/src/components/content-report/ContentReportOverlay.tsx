@@ -61,28 +61,32 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
     setFormState(nextState);
   }, []);
 
-  const handleDelivered = useCallback(() => {
-    formStateRef.current = initialFormState;
-    setFormState(initialFormState);
-    onRequestClose();
-    showToast('신고를 전달했습니다.', { tone: 'success' });
-  }, [onRequestClose, showToast]);
-
   const restoreFocus = useCallback(() => {
     if (Platform.OS !== 'web') {
       return;
     }
 
-    requestAnimationFrame(() => {
-      const previousFocus = restoreFocusRef.current;
-      const fallback = document.querySelector<HTMLElement>(
-        '[data-content-report-focus-fallback], [data-testid="universal-shell-root"]',
-      );
-      const focusTarget =
-        previousFocus && document.contains(previousFocus) ? previousFocus : fallback;
-      focusTarget?.focus();
-    });
+    const previousFocus = restoreFocusRef.current;
+    const fallback = document.querySelector<HTMLElement>(
+      '[data-content-report-focus-fallback], [data-testid="universal-shell-root"]',
+    );
+    const focusTarget =
+      previousFocus &&
+      previousFocus !== document.body &&
+      previousFocus !== document.documentElement &&
+      document.contains(previousFocus)
+        ? previousFocus
+        : fallback;
+    focusTarget?.focus();
   }, []);
+
+  const handleDelivered = useCallback(() => {
+    formStateRef.current = initialFormState;
+    setFormState(initialFormState);
+    restoreFocus();
+    onRequestClose();
+    showToast('신고를 전달했습니다.', { tone: 'success' });
+  }, [onRequestClose, restoreFocus, showToast]);
 
   const requestClose = useCallback(() => {
     const currentFormState = formStateRef.current;
@@ -93,8 +97,9 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
       setDiscardConfirmOpen(true);
       return;
     }
+    restoreFocus();
     onRequestClose();
-  }, [discardConfirmOpen, onRequestClose]);
+  }, [discardConfirmOpen, onRequestClose, restoreFocus]);
 
   const continueEditing = useCallback(() => {
     setDiscardConfirmOpen(false);
@@ -113,8 +118,9 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
     setFormState(initialFormState);
     setFormRevision((current) => current + 1);
     setDiscardConfirmOpen(false);
+    restoreFocus();
     onRequestClose();
-  }, [onRequestClose]);
+  }, [onRequestClose, restoreFocus]);
 
   const trapFocus = useCallback(
     (event: KeyboardEvent) => {
