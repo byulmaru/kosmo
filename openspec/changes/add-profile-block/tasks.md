@@ -173,10 +173,6 @@ pagination·cursor·limit 전에 제외한다.
 
 ## 3. PROD-823 — Profile Block UI·Relay 관리 흐름
 
-2026-09-09 리뷰 반영: PROD-861은 메뉴·목록 presentation만 유지하며 부모 mutation callback과 가짜 요청 fixture를 제거한다.
-이 그룹이 실제 action의 요청·confirmation·pending·오류·Relay 갱신과 메뉴·버튼 공통 동작을 구현·검증한다.
-PROD-917은 인계된 action을 신규 UI에 합성한다. 기존 presentation 검증을 아래 task의 완료 증거로 사용하지 않는다.
-
 **Authority / Provenance**
 
 - `docs/design/profile-mute-block.md`
@@ -223,19 +219,6 @@ surface 조합과 목록 조회·pagination을 소유한다.
 - confirmation 취소, pending 중복/dismiss, 성공·실패·retry와 기존 레거시 Profile·Settings UI의 action/state를 app component 또는 E2E로 검증한다.
 - direct `blocking` Profile route에서 `차단한 프로필의 게시물입니다`와 `게시물 보기`를 표시하고, action 전에는 시간 경과만으로 Post·Media를 노출하지 않으며 action 뒤 허용된 콘텐츠를 표시하는지 검증한다. Profile handle·selected actor lifecycle 전환 뒤에는 경고가 다시 적용되는지 component 또는 E2E로 실행한다.
 - Settings의 분리된 Block 목록에서 loading/error·retry/empty/pagination·unblock과 다른 Target 상태 보존을 검증한다.
-- selected Profile A/B와 Session 전환에서 actor별 상태 격리·서버 결과 수렴·optimistic state isolation을 검증한다. Block 성공 뒤 기본 Profile 정보는 유지하고,
-  각 surface 정책상 unavailable한 Post·Media·Notification만 숨기거나 갱신하며 정상 refetch로 현재 서버 상태에 수렴하는지 확인한다.
-- GraphQL `node(id:)`·`profileByHandle` 기반 새로고침·직접 링크 진입에서 기존 Profile 정보와 API의 현재 Owner 결과·정확한 관계 ID의 해제를 제공한다.
-  이전 Profile cache 없이 검증하며 A/B 전환 뒤 이전 해제 ID를 재사용하지 않는다.
-- Web 1024/1440·Mobile 390 Light/Dark, keyboard/보조 기술, Web Escape·Native back·focus 복원과 실제 Web/iOS/Android presentation evidence를
-  실행 환경별로 기록한다.
-
-- [ ] 3.1 기존 차단·차단 해제 공용 confirmation을 Profile mutation 상태에 연결해 확인 전 요청 차단·취소·pending·실패·retry를 구현한다. direct `blocking` Profile route는 `차단한 프로필의 게시물입니다`와 `게시물 보기`를 제공하고, 현재 Profile handle·selected actor lifecycle에서 명시적 확인 전까지 콘텐츠를 숨기며 새 route lifecycle에는 경고를 다시 적용한다.
-- [ ] 3.2 Settings에 Mute와 분리된 Block 관리 destination·목록 상태·pagination·unblock action을 연결한다.
-- [ ] 3.3 selected Local Profile actor 경계 안에서 Block/Unblock 성공·실패 결과에 따라 관리 목록과 표시 중 Profile·Post·Notification 상태를
-      서버 정책에 맞게 수렴시키고, GraphQL `node(id:)`·`profileByHandle` 기반 직접 route 진입·새로고침의 기존 Profile 정보와 정확한 해제 관계를 연결한다. 정상 route 결과는 identity-free가 아니며,
-      Profile 자체가 기존 lifecycle 정책으로 조회 불가할 때 UI에서만 조건부 identity-free fallback을 사용한다.
-- [ ] 3.4 접근성·viewport·Web/Native presentation regression과 actor 전환·Unblock no-restore 검증을 추가하고 통과시킨다.
 - selected Profile A/B와 Session 전환에서 actor별 상태 격리·서버 결과 수렴·optimistic state isolation 및 Block 성공 후 기본 Profile 정보,
   viewer 방향 콘텐츠 상태와 이미 표시 중인 Home·Local·Hashtag timeline·Profile Post List·Notification client 상태의 surface별 갱신을 검증한다.
 - cache 없는 직접 링크·새로고침에서 자신의 Block 관계 ID로 해제하는 경로, 상대에게만 차단된 actionless 경로와 양방향 Block 해제 후
