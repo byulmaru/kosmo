@@ -109,7 +109,7 @@ Kosmo repository의 approved app export와 deploy channel handoff가 caller-prov
 
 **Verification**
 
-- signed release 생성 → 선택된 `dev`/`prod` manifest·asset·compatibility 검증의 artifact, manifest identity, asset hash와 fixed tuple manifest object evidence를 확인한다.
+- signed release 생성 결과에서 publisher가 기록한 선택된 `dev`/`prod` manifest identity, asset hash와 fixed tuple manifest object evidence를 확인한다. client compatibility와 device 결과는 해당 slice에서 별도로 확인한다.
 - channel publish failure, fixed tuple manifest object update failure, missing asset, invalid signature 시 현재 serving complete release가 유지됨을 재현한다.
 - Deploy Dev의 `workflow_run.head_sha`, Deploy Production의 approved target SHA와 `prod` Environment approval, native Store workflow와의 분리 evidence를 확인한다. promotion/recovery evidence는 보류한다.
 - Kosmo caller의 Vault 보관/private-key read와 reusable workflow caller secret `signing_private_key` input linkage, 1년 signing certificate validity, 6개월 rotation 경계와 새 runtime·Store binary 및 구 runtime certificate 유지 evidence가 runbook에 기록된다. 초기 `2026-09` key registration과 public certificate validity evidence는 기록되었고, caller read·workflow input linkage·rotation·seed binary·device proof는 남은 작업이다.

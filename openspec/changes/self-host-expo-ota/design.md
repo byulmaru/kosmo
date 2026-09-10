@@ -19,7 +19,7 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 - 기존 `apps/worker` Temporal workflow를 OTA delivery로 변환
 - Kosmo repository에 조직 공용 정적 R2 source 또는 deploy config를 추가
 - native-store-distribution의 binary upload를 OTA publisher 호출 지점으로 재사용하거나 channel 선택 input을 추가
-- 실제 host/bucket provisioning, Vault secret 생성과 publish 실행 자체. 현재 handoff의 public base URL `https://expo-ota.byulmaru.co`와 R2 bucket `expo-ota`를 사용하고, 설정 및 live response는 운영 evidence로 확인한다.
+- 실제 host/bucket provisioning, Vault secret 생성과 publish 실행 자체. 현재 handoff의 public base URL `https://expo-ota.byulmaru.co`와 R2 bucket `expo-ota`는 handoff context로 기록하며, publish 실행은 각 owner의 운영 범위에서 다룬다.
 
 ## Implementation Guidance
 
@@ -48,7 +48,7 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 ### Allowed Alternatives
 
 - Expo 공식 config plugin 또는 package가 제공하는 동등한 bootstrap hook을 사용할 수 있다. 단, 결과가 동일한 runtime/project/channel 선택, 안전한 channel path segment 검증, code-signing 검증, fallback을 증명해야 한다. Store binary consumer channel은 `prod`로 고정하고, deploy workflow의 논리 channel mapping과 혼동하지 않는다.
-- 현재 static R2 public base URL은 `https://expo-ota.byulmaru.co`, bucket은 `expo-ota`다. 설정된 host가 fixed tuple path, multipart response, immutable assets와 complete-release 계약을 보존하는지 운영 evidence로 확인한다.
+- 현재 static R2 public base URL은 `https://expo-ota.byulmaru.co`, bucket은 `expo-ota`다. Host와 object layout은 PROD-334 delivery context로 기록하며, PROD-335 caller handoff에는 별도 public-edge verification 단계를 추가하지 않는다.
 - CI release runner나 별도 release service가 publish를 수행할 수 있다. 단, Kosmo caller는 reusable publisher workflow의 caller secret `signing_private_key`를 제공하고, Vault 보관값을 해당 workflow 입력으로 연결하는 방법과 실제 handoff는 검증되지 않은 운영 연결로 남긴다. private key는 client·static R2 runtime에 두지 않으며, publisher가 signing storage 경로·field·provider·backend를 고정하지 않고 protected production approval과 immutable complete-release 계약을 보존해야 한다. promotion/recovery는 보류한다.
 
 ### Known Traps
@@ -63,7 +63,7 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 
 ## Risks / Trade-offs
 
-- [Risk] static endpoint는 routing/header 설정만 확인되었고 positive manifest·asset·device 적용 evidence가 아직 없다. → 현재 handoff의 `https://expo-ota.byulmaru.co`와 `expo-ota`를 사용하고, PROD-334/336에서 live response와 device 결과를 별도 evidence로 기록한다.
+- [Risk] static endpoint는 routing/header 설정 context만 확인되었고 positive delivery·device 적용 결과가 아직 없다. → 현재 handoff의 `https://expo-ota.byulmaru.co`와 `expo-ota`를 사용하되, 해당 결과는 PROD-334/336 slice의 운영 evidence로 별도 관리하고 PROD-335 caller handoff에는 포함하지 않는다.
 - [Risk] SDK 56의 `expo-updates` native prebuild가 현재 config와 충돌할 수 있다. → PROD-333이 generated native project, local build, seed binary 설치 결과를 검증한다.
 - [Risk] 1년 certificate를 6개월마다 교체하면 구 runtime과 새 runtime의 신뢰 material이 달라진다. → 새 certificate를 포함한 새 runtime·Store binary를 배포하고, 구 runtime은 구 certificate를 유지하는 rotation evidence를 기록한다.
 - [Risk] offline/failure fallback은 CI만으로는 증명하기 어렵다. → PROD-336이 네트워크 차단과 invalid release를 포함한 실기기 evidence를 소유한다.
