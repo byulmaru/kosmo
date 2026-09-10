@@ -84,6 +84,25 @@ type CompleteMediaUploadPayload {
   media: Media!
 }
 
+enum ContentReportDeliveryStatus {
+  DELIVERED
+  REJECTED
+  UNKNOWN
+}
+
+enum ContentReportReason {
+  CHILD_SAFETY
+  HARASSMENT_HATE_THREAT
+  HARMFUL_CONTENT
+  OTHER
+  SPAM_FRAUD
+}
+
+enum ContentReportTargetType {
+  POST
+  PROFILE
+}
+
 input CreateBookmarkInput {
   postId: ID!
 }
@@ -265,6 +284,7 @@ type Mutation {
   repostPost(input: RepostPostInput!): RepostPostPayload!
   revokeCurrentSession: RevokeCurrentSessionPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
+  submitContentReport(input: SubmitContentReportInput!): SubmitContentReportPayload!
   submitFeedback(input: SubmitFeedbackInput!): SubmitFeedbackPayload!
   unblockProfile(input: UnblockProfileInput!): UnblockProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
@@ -617,6 +637,17 @@ type Session implements Node {
   account: Account!
   id: ID!
   selectedProfile: Profile
+}
+
+input SubmitContentReportInput {
+  details: String
+  reason: ContentReportReason!
+  targetId: String!
+  targetType: ContentReportTargetType!
+}
+
+type SubmitContentReportPayload {
+  status: ContentReportDeliveryStatus!
 }
 
 input SubmitFeedbackInput {

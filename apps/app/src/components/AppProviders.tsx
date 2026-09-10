@@ -1,4 +1,5 @@
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
+import { ContentReportProvider } from '@/components/content-report/ContentReportContext';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { ThemeProvider } from '@/theme/ThemeProvider';
@@ -15,7 +16,9 @@ export function AppProviders({ children }: PropsWithChildren) {
           <RelayActorProvider>
             <SessionProvider>
               <AnalyticsSessionBridge />
-              <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
+              <ContentReportProvider>
+                <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
+              </ContentReportProvider>
             </SessionProvider>
           </RelayActorProvider>
         </GraphQLErrorBoundary>

@@ -1,7 +1,9 @@
+import { ContentReportTargetType } from '@kosmo/core/enums';
 import { Slot, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { FollowButton } from '@/components/profile/FollowButton';
@@ -114,13 +116,17 @@ function ProfileLayoutContent({
   showPageHeader: boolean;
 }) {
   const { fetchKey } = useRouteBoundary();
-  const { selectedProfileId } = useSession();
+  const { selectedProfileId, sessionId } = useSession();
   const data = useLazyLoadQuery<ProfileLayoutQueryType>(
     ProfileLayoutQuery,
     { handle },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const profile = data.profileByHandle;
+  const reportItem = useContentReportMenuItem({
+    id: profile?.id ?? '',
+    kind: ContentReportTargetType.PROFILE,
+  });
   if (!profile) {
     const missingState = (
       <StateView
@@ -163,6 +169,7 @@ function ProfileLayoutContent({
         key={selectedProfileId}
         action={relationshipAction}
         heading={!showPageHeader}
+        moreItems={sessionId ? [reportItem] : undefined}
         profile={profile}
         showMuteAction={canMute}
       />

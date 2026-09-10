@@ -1,3 +1,4 @@
+export * from './content-report';
 export * from './feedback';
 export * from './post';
 export * from './profile';

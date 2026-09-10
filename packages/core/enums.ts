@@ -50,6 +50,28 @@ export const FeedbackKind = {
 } as const;
 export type FeedbackKind = keyof typeof FeedbackKind;
 
+export const ContentReportReason = {
+  HARMFUL_CONTENT: 'HARMFUL_CONTENT',
+  HARASSMENT_HATE_THREAT: 'HARASSMENT_HATE_THREAT',
+  SPAM_FRAUD: 'SPAM_FRAUD',
+  CHILD_SAFETY: 'CHILD_SAFETY',
+  OTHER: 'OTHER',
+} as const;
+export type ContentReportReason = keyof typeof ContentReportReason;
+
+export const ContentReportTargetType = {
+  POST: 'POST',
+  PROFILE: 'PROFILE',
+} as const;
+export type ContentReportTargetType = keyof typeof ContentReportTargetType;
+
+export const ContentReportDeliveryStatus = {
+  DELIVERED: 'DELIVERED',
+  REJECTED: 'REJECTED',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+export type ContentReportDeliveryStatus = keyof typeof ContentReportDeliveryStatus;
+
 export const InstanceKind = {
   LOCAL: 'LOCAL',
   ACTIVITYPUB: 'ACTIVITYPUB',
