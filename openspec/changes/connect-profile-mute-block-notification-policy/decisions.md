@@ -68,10 +68,10 @@ proposal, Notification delta spec와 design을 현재 canonical·Linear에 대�
 
 - Decision Date: 2026-09-10
 - Decision Class: Delivery Handoff
-- Authority / Provenance: 사용자의 2026-09-10 메시지 `스택으로 쌓아서 구현해`; 현재 `PROD-814` Linear 상태 `In Review`; local `gh stack` 상태 `main → PROD-814-ui → PROD-814-data → PROD-823-follow-action → PROD-327`.
+- Authority / Provenance: 사용자의 2026-09-10 메시지 `스택으로 쌓아서 구현해`; 현재 `PROD-814` Linear 상태 `In Review`; local/remote `gh stack` 상태 `main → PROD-814-ui → PROD-814-data → PROD-823 → PROD-327`.
 - Context / Problem: D5의 구현 착수 조건인 PROD-814 완료·merge는 아직 충족되지 않았지만, 사용자가 선행 작업 위에 dependent Stack으로 구현을 진행하도록 명시했다.
 - Decision Outcome: PROD-327 구현은 선행 layer를 포함한 dependent Stack에서 진행한다. PROD-814가 완료·merge되었다고 간주하거나 보고하지 않으며, PROD-327의 delivery·Ready·archive 판단은 선행 layer의 실제 capability 반영과 전체 검증 결과에 계속 종속된다.
-- Consequences: 현재 branch/PR은 선행 layer 위에서만 의미가 있으며, 선행 변경이 rebase·retarget되면 PROD-327도 함께 재검증한다. 이 결정은 Notification 정책 계약이나 PROD-814의 소유 범위를 변경하지 않는다.
+- Consequences: 현재 branch/PR은 선행 layer 위에서만 의미가 있으며, 선행 변경이 rebase·retarget되면 PROD-327도 함께 재검증한다. 기존 `PROD-823-follow-action` partial layer는 원격 Stack의 실제 `PROD-823` top과 중복되어 Stack에 포함하지 않는다. 이 결정은 Notification 정책 계약이나 PROD-814의 소유 범위를 변경하지 않는다.
 - Confirmation / Follow-up: checkpoint commit·push 후 local Stack과 remote PR base/head/stack 상태를 확인하고, 선행 PR merge 전에는 PROD-327 change를 archive하지 않는다.
 
 ## Remaining Decisions
