@@ -209,8 +209,13 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
   },
 });
 mockModule(new URL('./FollowButton.tsx', import.meta.url), {
-  FollowButton: ({ profile }: { profile: { handle: string } }) =>
-    createElement('FollowButton', { identity: profile.handle }),
+  FollowButton: ({
+    profile,
+    profileBlockStatus,
+  }: {
+    profile: { handle: string };
+    profileBlockStatus?: { blockedBy: boolean; blocking: boolean; profileBlockId: string | null };
+  }) => createElement('FollowButton', { identity: profile.handle, profileBlockStatus }),
 });
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
   ProfileMuteAction: 'ProfileMuteAction',
@@ -703,10 +708,7 @@ describe('profile route parameter lifecycle', () => {
     assert.deepEqual(identities('PostList'), []);
     assert.equal(requireRendered('StateView').props.title, '차단한 프로필의 게시물입니다');
     assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
-    assert.equal(
-      rendered('Button').some((node) => node.props.accessibilityLabel === '차단 해제'),
-      true,
-    );
+    assert.deepEqual(requireRendered('FollowButton').props.profileBlockStatus, profileBlockStatus);
 
     await act(async () => requireRendered('StateView').props.onAction());
     assert.deepEqual(identities('PostList'), ['blocked']);
@@ -723,6 +725,20 @@ describe('profile route parameter lifecycle', () => {
     assert.deepEqual(identities('PostList'), []);
     assert.equal(requireRendered('StateView').props.title, '게시물을 볼 수 없습니다');
     assert.equal(rendered('Button').length, 0);
+    assert.equal(rendered('FollowButton').length, 0);
+  });
+
+  it('서로 차단한 Profile은 공통 action을 표시하고 내 해제 뒤 상대 차단이 남으면 숨긴다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = { blockedBy: true, blocking: true, profileBlockId: 'block-1' };
+
+    await renderRoute('@blocked');
+    assert.deepEqual(requireRendered('FollowButton').props.profileBlockStatus, profileBlockStatus);
+
+    profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
+    await renderRoute('@blocked');
+    assert.equal(rendered('FollowButton').length, 0);
   });
 
   it('selected Profile 자기 자신에게는 차단 action을 표시하지 않는다', async () => {
