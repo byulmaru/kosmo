@@ -66,10 +66,13 @@ test(
   'Remote Profile Workflow가 실제 Activity를 실행해 actor와 Profile projection을 저장한다',
   { timeout: 120_000 },
   async (t) => {
-    const actor = createActor();
+    const actorUri = new URL(`https://${remoteDomain}/users/alice`);
+    const actor = createActor({ id: actorUri });
+    const lookups: Array<string | URL> = [];
     let lookupCalls = 0;
-    const lookupObject = async () => {
+    const lookupObject = async (identifier: string | URL) => {
       lookupCalls += 1;
+      lookups.push(identifier);
       return actor;
     };
     t.mock.method(federation, 'createContext', () => ({ lookupObject }) as never);
@@ -87,7 +90,7 @@ test(
       workflowsPath,
     });
 
-    const input: RemoteProfileMaterializationInput = { handle: `alice@${remoteDomain}` };
+    const input: RemoteProfileMaterializationInput = { actorUri: actorUri.href };
     const profileId = (await worker.runUntil(() =>
       environment.client.workflow.execute(REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE, {
         args: [input],
@@ -106,6 +109,7 @@ test(
       .then(firstOrThrow);
 
     assert.equal(lookupCalls, 1);
+    assert.deepEqual(lookups.map(String), [actorUri.href]);
     assert.equal(stored.profile.id, profileId);
     assert.equal(stored.profile.state, ProfileState.ACTIVE);
     assert.equal(stored.profile.handle, 'alice');
@@ -122,10 +126,13 @@ test(
   'Remote Profile Workflow는 일시적인 lookup 오류를 Activity retry 후 한 번의 Profile identity로 저장한다',
   { timeout: 120_000 },
   async (t) => {
-    const actor = createActor();
+    const actorUri = new URL(`https://${remoteDomain}/users/alice`);
+    const actor = createActor({ id: actorUri });
+    const lookups: Array<string | URL> = [];
     let lookupCalls = 0;
-    const lookupObject = async () => {
+    const lookupObject = async (identifier: string | URL) => {
       lookupCalls += 1;
+      lookups.push(identifier);
       if (lookupCalls === 1) {
         throw new Error('temporary remote lookup failure');
       }
@@ -146,7 +153,7 @@ test(
       workflowsPath,
     });
 
-    const input: RemoteProfileMaterializationInput = { handle: `alice@${remoteDomain}` };
+    const input: RemoteProfileMaterializationInput = { actorUri: actorUri.href };
     const profileId = (await worker.runUntil(() =>
       environment.client.workflow.execute(REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE, {
         args: [input],
@@ -162,6 +169,7 @@ test(
       .where(eq(ActivityPubActors.profileId, profileId));
 
     assert.equal(lookupCalls, 2);
+    assert.deepEqual(lookups.map(String), [actorUri.href, actorUri.href]);
     assert.equal(profiles.length, 1);
     assert.equal(actors.length, 1);
     assert.equal(actors[0]?.uri, actor.id?.href);
@@ -172,6 +180,7 @@ test(
   'Remote Profile Workflow는 unavailable instance domain rejection을 retry하지 않고 lookup하지 않는다',
   { timeout: 120_000 },
   async (t) => {
+    const actorUri = new URL(`https://${remoteDomain}/users/alice`);
     await db.insert(Instances).values({
       canonicalOrigin: `https://${remoteDomain}`,
       domain: remoteDomain,
@@ -210,7 +219,7 @@ test(
       workflowsPath,
     });
 
-    const input: RemoteProfileMaterializationInput = { handle: `alice@${remoteDomain}` };
+    const input: RemoteProfileMaterializationInput = { actorUri: actorUri.href };
     await assert.rejects(
       worker.runUntil(() =>
         environment.client.workflow.execute(REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE, {
@@ -230,28 +239,30 @@ test(
 
 test('Remote Profile Activity는 profileId 증거에 따라 origin을 선택하고 actor metadata 결손을 거부한다', async (t) => {
   const origins: string[] = [];
+  const lookupUris: Array<string | URL> = [];
   let lookupCalls = 0;
   const actorDomains = ['omitted-target.example', 'local-target.example', 'remote-target.example'];
   t.mock.method(federation, 'createContext', (origin: URL) => {
     origins.push(origin.origin);
     const actorDomain = actorDomains[origins.length - 1]!;
     return {
-      lookupObject: async () => {
+      lookupObject: async (identifier: string | URL) => {
         lookupCalls += 1;
+        lookupUris.push(identifier);
         return createActor({ id: new URL(`https://${actorDomain}/users/alice`) });
       },
     } as never;
   });
 
   const omittedProfileId = await materializeRemoteProfileActorActivity({
-    handle: 'alice@omitted-target.example',
+    actorUri: 'https://omitted-target.example/users/alice',
   });
   const localProfile = await createStoredProfile({
     handle: 'local-source',
     instanceId: localInstanceId,
   });
   const localProfileId = await materializeRemoteProfileActorActivity({
-    handle: 'alice@local-target.example',
+    actorUri: 'https://local-target.example/users/alice',
     profileId: localProfile.id,
   });
   const sourceOrigin = 'https://origin-source.example';
@@ -265,11 +276,16 @@ test('Remote Profile Activity는 profileId 증거에 따라 origin을 선택하�
     instanceId: sourceInstance.id,
   });
   const remoteProfileId = await materializeRemoteProfileActorActivity({
-    handle: 'alice@remote-target.example',
+    actorUri: 'https://remote-target.example/users/alice',
     profileId: remoteProfile.id,
   });
 
   assert.deepEqual(origins, [publicOrigin, publicOrigin, sourceOrigin]);
+  assert.deepEqual(lookupUris.map(String), [
+    'https://omitted-target.example/users/alice',
+    'https://local-target.example/users/alice',
+    'https://remote-target.example/users/alice',
+  ]);
   assert.equal(lookupCalls, 3);
   for (const profileId of [omittedProfileId, localProfileId, remoteProfileId]) {
     const stored = await readStoredProfile(profileId);
@@ -287,7 +303,7 @@ test('Remote Profile Activity는 profileId 증거에 따라 origin을 선택하�
 
   await assert.rejects(
     materializeRemoteProfileActorActivity({
-      handle: 'alice@missing-target.example',
+      actorUri: 'https://missing-target.example/users/alice',
       profileId: missingMetadataProfile.id,
     }),
     (error: unknown) => {
@@ -304,27 +320,30 @@ test('Remote Profile Activity는 profileId 증거에 따라 origin을 선택하�
 
 test('Remote Profile Activity는 fresh actor를 재조회하지 않고 stale actor만 같은 identity로 갱신한다', async (t) => {
   const origins: string[] = [];
+  const actorUri = new URL(`https://${remoteDomain}/users/alice`);
+  const lookups: Array<string | URL> = [];
   let lookupCalls = 0;
   t.mock.method(federation, 'createContext', (origin: URL) => {
     origins.push(origin.origin);
     return {
-      lookupObject: async () => {
+      lookupObject: async (identifier: string | URL) => {
         lookupCalls += 1;
-        return createActor();
+        lookups.push(identifier);
+        return createActor({ id: actorUri });
       },
     } as never;
   });
 
   const remoteInstance = await createInstance({ domain: remoteDomain });
   const profile = await createStoredProfile({
-    actorUri: `https://${remoteDomain}/users/alice`,
+    actorUri: actorUri.href,
     handle: 'alice',
     instanceId: remoteInstance.id,
     lastFetchedAt: Temporal.Now.instant().subtract({ hours: 1 }),
   });
 
   assert.equal(
-    await materializeRemoteProfileActorActivity({ handle: `alice@${remoteDomain}` }),
+    await materializeRemoteProfileActorActivity({ actorUri: actorUri.href }),
     profile.id,
   );
   assert.equal(lookupCalls, 0);
@@ -337,11 +356,12 @@ test('Remote Profile Activity는 fresh actor를 재조회하지 않고 stale act
     .where(eq(ActivityPubActors.profileId, profile.id));
 
   assert.equal(
-    await materializeRemoteProfileActorActivity({ handle: `alice@${remoteDomain}` }),
+    await materializeRemoteProfileActorActivity({ actorUri: actorUri.href }),
     profile.id,
   );
   assert.equal(lookupCalls, 1);
   assert.deepEqual(origins, [publicOrigin]);
+  assert.deepEqual(lookups.map(String), [actorUri.href]);
 
   const stored = await readStoredProfile(profile.id);
   assert.equal(stored.profile.id, profile.id);
@@ -416,7 +436,7 @@ test('Remote Profile Activity는 stale actor 실행 시 현재 Profile·Instance
     });
     await scenario.apply(profile.id, instance.id);
     const before = await readStoredProfile(profile.id);
-    const input = { handle: `alice@${scenario.domain}` };
+    const input = { actorUri: `https://${scenario.domain}/users/alice` };
 
     if (scenario.expected === 'return') {
       assert.equal(await materializeRemoteProfileActorActivity(input), profile.id);

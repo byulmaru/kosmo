@@ -139,12 +139,14 @@ rename·disable·delete하지 않는다.
 Profile Origin은 연결된 Instance Type과 같아야 한다. Follow Approval Policy 변경은 이미 존재하는 Pending Follow
 Request의 상태나 존재를 바꾸지 않는다.
 
-ActivityPub Remote Profile 등록의 qualified handle은 최초 actor discovery key다. Fedify lookup 결과의 canonical
-actor URI는 ActivityPub actor metadata에 저장해 Remote Profile identity와 연결한다. 이후 stale refresh는 저장된
-actor metadata의 canonical actor URI를 known actor URI로 재사용해 같은 actor를 갱신하며 qualified handle lookup을
-다시 수행하지 않는다. refresh 결과의 actor URI가 저장된 actor identity와 다르면 Profile 또는 actor metadata를
-저장하지 않는다. canonical actor URI가 유지되는 동안 actor `preferredUsername`이 바뀌어도 새 Profile을 만들지
-않고 같은 Profile의 handle, normalized handle과 qualified handle을 갱신한다.
+ActivityPub Remote Profile 검색 경계는 qualified handle을 canonical actor URI로 먼저 해석한다. Remote Profile
+materialization 경계는 canonical actor URI와 선택적인 Profile ID를 입력으로 받아 actor metadata나 Profile이 아직
+저장되지 않은 새 actor도 materialize할 수 있다. Fedify lookup 결과의 canonical actor URI는 ActivityPub actor
+metadata에 저장해 Remote Profile identity와 연결한다. 이후 stale refresh는 저장된 actor metadata의 canonical
+actor URI를 known actor URI로 재사용해 같은 actor를 갱신하며 qualified handle lookup을 다시 수행하지 않는다.
+refresh 결과의 actor URI가 저장된 actor identity와 다르면 Profile 또는 actor metadata를 저장하지 않는다. canonical
+actor URI가 유지되는 동안 actor `preferredUsername`이 바뀌어도 새 Profile을 만들지 않고 같은 Profile의 handle,
+normalized handle과 qualified handle을 갱신한다.
 
 기본 Post Visibility는 Account 공통 설정이 아니라 Local Profile 설정이다. 기존 Local Profile과 저장값이 없는
 Local Profile은 Unlisted로 동작한다. Profile Member는 새 Post·Reply·Quote Composer의 초기값으로 서버가 반환한

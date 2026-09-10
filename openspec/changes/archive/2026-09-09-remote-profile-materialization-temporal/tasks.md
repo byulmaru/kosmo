@@ -10,12 +10,12 @@
 
 **Deliverable**
 
-신규 remote actor materialization과 stale refresh가 같은 내구성 있는 실행 경로에서 기존 Profile identity·projection·transaction 결과를 만든다. public `findOrMaterializeRemoteProfileActor` caller는 `handle`, 선택적 `profileId`와 caller mode를 유지하며, stale row를 관찰하면 저장된 canonical actor URI를 internal Temporal `actorUri` input으로 전달한다. 신규 materialization은 `handle` input을 사용하고 동기 결과 대기와 비동기 시작 확인을 선택할 수 있다.
+신규 remote actor materialization과 stale refresh가 같은 내구성 있는 실행 경로에서 기존 Profile identity·projection·transaction 결과를 만든다. 상위 remote actor caller는 검색·발견 경계에서 받은 canonical `actorUri`, 선택적 `profileId`와 caller mode를 유지하며, stale row를 관찰하면 저장된 canonical actor URI를 Temporal `actorUri` input으로 재사용한다. 저장된 row가 없어도 검색·발견 결과의 `actorUri`로 신규 materialization을 수행하고 동기 결과 대기와 비동기 시작 확인을 선택할 수 있다.
 
 **Guardrails**
 
 - `profileId`가 없으면 configured Local Instance canonical origin을 사용하고, 있으면 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용한다. 필요한 Remote actor 정보가 없을 때 origin을 추측하지 않는다.
-- `handle` input은 최초 discovery에서만 acct lookup key로 사용하고, stale refresh의 `actorUri` input은 저장된 canonical URI를 직접 사용한다. refresh가 반환한 actor URI가 예상한 `actorUri`와 일치하지 않으면 Profile 또는 actor metadata를 저장하지 않는다.
+- `actorUri` input은 저장된 actor가 없어도 직접 Fedify lookup target으로 사용하며 acct handle lookup을 수행하지 않는다. refresh가 반환한 actor URI가 예상한 `actorUri`와 일치하지 않으면 Profile 또는 actor metadata를 저장하지 않는다.
 - 하나의 짧은 Workflow가 하나의 Activity를 호출하며, caller mode를 Workflow input이나 branch로 분리하지 않는다.
 - Fedify context, actor object와 전체 DB row를 Workflow payload로 전달하지 않고, Workflow/Activity 결과는 Profile identity 중심으로 유지한다.
 - 기존 identity, canonical actor reuse, state eligibility, projection, transaction과 ordering 계약 및 schema/migration 범위를 유지한다.
@@ -23,15 +23,15 @@
 **Verification**
 
 - `profileId` 생략·Local Profile·Remote Profile·Remote actor metadata 결손 입력을 실행해 origin 선택과 실패 경계를 검증한다.
-- Workflow 밖 Temporal Client caller의 같은 input identity(`handle` 또는 `actorUri`)와 origin-selection identity 동시 sync/async 요청이 중복 Profile/actor row를 만들지 않고, sync는 Profile identity를 받고 async는 durable start acknowledgement를 받는지 검증한다.
+- Workflow 밖 Temporal Client caller의 같은 `actorUri`와 origin-selection identity 동시 sync/async 요청이 중복 Profile/actor row를 만들지 않고, sync는 Profile identity를 받고 async는 durable start acknowledgement를 받는지 검증한다.
 - caller가 stale row를 본 뒤 Activity가 늦게 실행되는 경우 최신 Profile/actor/Instance 상태와 TTL을 다시 확인해 불필요한 원격 fetch를 하지 않는지 검증한다.
-- 저장된 actor URI refresh가 acct handle lookup을 다시 수행하지 않고, 반환 URI 불일치와 같은 URI의 `preferredUsername` 변경을 각각 저장 거부·기존 Profile 갱신으로 처리하는지 검증한다.
+- `actorUri` materialization과 저장된 actor URI refresh가 acct handle lookup을 수행하지 않고, 반환 URI 불일치와 같은 URI의 `preferredUsername` 변경을 각각 저장 거부·기존 Profile 갱신으로 처리하는지 검증한다.
 - async child caller가 start acknowledgement 뒤 child result를 기다리지 않고 반환하는지, sync/async 선택과 결과 처리가 adapter 계약대로 동작하는지 검증한다. parent lifecycle 이후 child 생존은 Temporal SDK semantics로 둔다.
 - Activity/Worker 재시작 후 실행 재개와 기존 projection·transaction 결과를 검증한다.
 
-- [x] 1.1 상위 remote actor caller가 `handle`, 선택적인 `profileId`와 caller sync/async 선택을 유지하고, stale branch가 저장된 actor URI를 Temporal `handle`/`actorUri` union input으로 전달하도록 전환하며 unsigned lookup 및 Profile origin 선택·결손 오류를 보존한다.
+- [x] 1.1 상위 remote actor caller가 검색·발견 경계에서 받은 `actorUri`, 선택적인 `profileId`와 caller sync/async 선택을 유지하고, stale branch가 저장된 actor URI를 Temporal `actorUri` input으로 재사용하도록 전환하며 unsigned lookup 및 Profile origin 선택·결손 오류를 보존한다.
 - [x] 1.2 신규 materialization과 stale refresh가 기존 Fedify lookup·projection·transaction을 한 번의 Temporal Workflow/Activity 실행 경로에서 수행하고 Worker에 연결되도록 구현한다.
-- [x] 1.3 JSON-safe handle/actorUri/profileId 입력·Profile ID 결과, input 및 origin 선택 identity를 포함한 stable Workflow identity, in-flight reuse와 완료 후 재시도 semantics를 적용한다.
+- [x] 1.3 JSON-safe actorUri/profileId 입력·Profile ID 결과, actorUri 및 origin 선택 identity를 포함한 stable Workflow identity, in-flight reuse와 완료 후 재시도 semantics를 적용한다.
 - [x] 1.4 영구 domain rejection과 일시적 외부/DB 장애의 retry 경계를 적용하고, caller deadline이 이미 시작된 Workflow를 취소하지 않도록 검증한다.
 - [x] 1.5 Workflow 내부 async caller가 `startChild`의 start acknowledgement만 기다리고 `parentClosePolicy: ABANDON` 및 `cancellationType: ABANDON`으로 parent 종료·취소 이후에도 child를 유지하도록 연결하며, child active-ID conflict를 자동 join으로 가장하지 않는다.
 

@@ -10,9 +10,9 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md`, `docs/architecture/core-services.md`, `PROD-808`
 - Status: Active
-- Context / Problem: 상위 handle lookup은 호출자가 context와 origin을 조합하게 하고 있으며, 새 Temporal 경로에서도 기존 unsigned lookup과 origin 선택 조건을 잃으면 안 된다.
-- Decision Outcome: public helper는 `profileId?: string`을 유지한다. 생략하면 configured Local Instance canonical origin을 사용하고, 전달하면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용한다. 필요한 Remote actor 정보가 없으면 origin을 추측하지 않고 실패한다. `profileId`는 권한을 대신하지 않으며 unsigned lookup은 유지한다. 신규 materialization에 대해 동기 caller는 결과를 기다리고 비동기 caller는 Workflow 시작 확인만 받는다.
-- Alternatives Considered: origin을 입력 handle에서 추측하거나 `profileId`를 필수로 만들면 Remote identity 증거가 약해지거나 기존 호출자를 깨뜨리므로 선택하지 않았다. unsigned lookup을 제거하면 기존 contract가 불필요하게 축소된다.
+- Context / Problem: 검색 경계의 qualified handle lookup은 호출자가 context와 origin을 조합하게 하고 있으며, 새 Temporal 경로에서도 기존 unsigned lookup과 origin 선택 조건을 잃으면 안 된다.
+- Decision Outcome: public materialization caller는 canonical `actorUri`와 선택적인 `profileId`를 받는다. `profileId`를 생략하면 configured Local Instance canonical origin을 사용하고, 전달하면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용한다. 필요한 Remote actor 정보가 없으면 origin을 추측하지 않고 실패한다. `profileId`는 권한을 대신하지 않으며 unsigned lookup은 유지한다. 신규 materialization에 대해 동기 caller는 결과를 기다리고 비동기 caller는 Workflow 시작 확인만 받는다.
+- Alternatives Considered: origin을 `actorUri`에서 추측하거나 `profileId`를 필수로 만들면 Remote identity 증거가 약해지거나 기존 호출자를 깨뜨리므로 선택하지 않았다. unsigned lookup을 제거하면 기존 contract가 불필요하게 축소된다.
 - Consequences: caller는 검증된 Profile ID만 선택적으로 전달하고, Remote actor URI가 없는 Profile은 materialization 대상 origin으로 사용할 수 없다. sync/async는 public caller 선택으로 남는다.
 - Confirmation / Follow-up: 2026-09-09 사용자 결정과 `PROD-808` 본문을 기준으로 Profile ID 유무, Local/Remote origin, missing actor, unsigned lookup을 각각 검증한다.
 
@@ -45,7 +45,7 @@
 - Decision Date: 2026-09-09
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808`
-- Status: Active
+- Status: Superseded in the wire-input clause by the final 2026-09-10 correction
 - Context / Problem: Fedify context, hydrated actor와 full DB row는 Workflow wire contract에 안전하게 전달할 수 없고, caller mode를 Workflow history에 넣으면 같은 실행 경로 계약이 흔들린다.
 - Decision Outcome: Workflow input은 qualified handle과 선택적 `profileId`처럼 JSON-safe한 값으로 제한하고 URI discriminator나 actor object를 입력으로 추가하지 않는다. Activity 실행 시각은 Activity 내부에서 정한다. 동기/비동기 mode는 caller helper에서만 선택하며 Workflow input과 branch에 넣지 않는다. 성공 결과는 Profile ID로 제한하고, 실패는 기존 오류 의미를 보존하며, full Profile row나 status 조회 API를 만들지 않는다.
 - Alternatives Considered: Fedify context/actor를 직접 전달하거나 full row를 반환하는 방식은 serialization과 stale row 문제를 만들므로 배제한다. mode를 Workflow input으로 분기하거나 URI variant를 추가하면 두 public caller가 다른 실행 계약을 갖게 된다.
@@ -57,12 +57,24 @@
 - Decision Date: 2026-09-10
 - Decision Class: Corrective Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`, `PROD-808` review correction
-- Status: Active
+- Status: Superseded by the final 2026-09-10 actorUri-only correction
 - Context / Problem: 2026-09-09 기록은 Workflow input을 qualified handle 중심으로 설명해 stale refresh가 `acct:{handle}@{domain}`를 다시 해석하는 것으로 읽힐 수 있었다. actor `preferredUsername`이 바뀌면 이 재조회는 저장된 actor identity를 보존하지 못한다.
 - Decision Outcome: Temporal Workflow와 Activity wire input은 초기 discovery key인 `handle` 또는 저장된 canonical actor URI refresh key인 `actorUri` 중 정확히 하나와 선택적인 `profileId`를 갖는다. `handle` branch만 `acct:{handle}@{domain}` lookup을 수행하고, `actorUri` branch는 저장된 URI를 직접 재사용해 handle lookup을 수행하지 않는다. Activity는 반환된 actor URI가 예상한 `actorUri`와 일치하는지 확인한 뒤에만 저장하며, 불일치는 Profile 또는 actor metadata 변경 없이 실패한다. 같은 URI에서 `preferredUsername`이 바뀌면 새 Profile을 만들지 않고 기존 Profile의 handle, normalized handle과 qualified handle을 갱신한다. `profileId`가 없으면 configured Local Instance canonical origin을 사용하고, 있으면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용하며, 필요한 actor 정보가 없으면 origin을 추측하지 않고 실패한다. 기존 unsigned lookup과 caller-only sync/async 선택은 유지한다.
 - Alternatives Considered: stale refresh에서도 handle을 다시 조회하거나 actor URI만으로 별도 Profile을 만드는 방식은 canonical actor identity와 preferredUsername 변경을 안전하게 연결하지 못하므로 선택하지 않았다. caller mode를 wire input에 넣거나 별도 Workflow를 추가하는 방식도 one-Workflow 경계를 넓히므로 선택하지 않았다.
 - Consequences: 초기 요청과 stale refresh는 서로 다른 JSON-safe input identity를 사용하지만 같은 Workflow 종류와 Activity 경계를 공유한다. archive의 이전 wire-input 서술 중 qualified handle 단일 입력과 URI discriminator 배제 문장은 이 corrective contract로 대체되고, 이전 결정의 origin 선택과 sync/async 결론은 유지된다.
 - Confirmation / Follow-up: handle 초기 materialization, actorUri refresh의 no-acct lookup, URI mismatch 저장 거부와 동일 URI preferredUsername 변경 시 Profile identity 유지 동작을 검증한다.
+
+### Final review correction: actorUri-only materialization boundary
+
+- Decision Date: 2026-09-10
+- Decision Class: Corrective Contract
+- Authority / Provenance: `docs/domain/objects/profile.md`, `PROD-808` final review correction
+- Status: Active
+- Context / Problem: 앞선 corrective record도 초기 materialization의 wire input에 qualified handle과 actorUri union을 남겨 검색·발견 경계와 materialization 경계를 혼동하게 했다.
+- Decision Outcome: public materialization API, low-level materializer와 Temporal Workflow/Activity wire input은 canonical `actorUri`와 선택적인 `profileId`만 받는다. qualified handle을 canonical actor URI로 해석하는 작업은 materialization 전에 검색·발견 경계에서 수행한다. actorUri에 저장된 Profile이나 actor metadata가 없어도 새 remote Profile을 materialize할 수 있으며, Activity는 actorUri를 직접 Fedify lookup target으로 사용하고 acct handle lookup을 수행하지 않는다. 반환 actor URI가 예상한 actorUri와 일치하는지 확인한 뒤에만 저장하며, 불일치는 Profile 또는 actor metadata 변경 없이 실패한다. 같은 URI에서 `preferredUsername`이 바뀌면 새 Profile을 만들지 않고 기존 Profile의 handle, normalized handle과 qualified handle을 갱신한다. `profileId`가 없으면 configured Local Instance canonical origin을 사용하고, 있으면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용하며, 필요한 actor 정보가 없으면 origin을 추측하지 않고 실패한다. 기존 unsigned lookup, caller-only sync/async 선택과 child `ABANDON` 경계는 유지한다.
+- Alternatives Considered: materialization input에 qualified handle을 추가하거나 stale refresh에서 handle을 다시 조회하는 방식은 검색과 materialization 경계를 섞고 canonical actor identity를 안전하게 보존하지 못하므로 선택하지 않았다. actorUri에 저장된 Profile이 있어야만 생성하도록 제한하면 신규 actor materialization을 막으므로 선택하지 않았다.
+- Consequences: 명시적 검색은 qualified handle을 canonical actor URI로 먼저 해석하고, 신규 요청과 stale refresh는 같은 actorUri-only Workflow 종류와 Activity 경계를 공유한다. 이전 union wire-input 서술은 이 final corrective contract로 대체되고, origin 선택, sync/async, stale immediate return과 child lifetime 결론은 유지된다.
+- Confirmation / Follow-up: search-boundary handle resolution, actorUri 신규 materialization, actorUri refresh의 no-acct lookup, URI mismatch 저장 거부와 동일 URI preferredUsername 변경 시 Profile identity 유지를 검증한다.
 
 ### Stable workflow identity, retry classification, and timeout boundary
 
@@ -71,8 +83,8 @@
 - Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808`
 - Status: Active
 - Context / Problem: random Workflow ID는 동일 handle의 동시 fetch를 합치지 못하고, 모든 예외를 retry하면 영구적인 identity·state rejection을 반복한다. caller timeout을 cancellation으로 취급하면 이미 시작된 결과의 durability가 깨진다.
-- Decision Outcome: Workflow ID는 normalized requested qualified handle과 origin 선택 identity(`profileId` 값 또는 기본 origin marker)로 결정해 stable하게 만들고, Workflow 밖 Temporal Client caller의 진행 중 실행에는 `USE_EXISTING`, 완료 후 새로운 시도에는 `ALLOW_DUPLICATE` reuse semantics를 사용한다. actor 미해결, identity 충돌, suspended/unresponsive 등 예상 가능한 domain rejection은 non-retryable로 매핑하고 일시적 외부·DB 장애는 기존 Activity retry 정책을 사용한다. client deadline은 대기 RPC에만 적용하며 이미 시작된 Workflow를 취소하거나 완료된 Profile을 rollback하지 않는다.
-- Alternatives Considered: random ID나 actor URI ID는 동시 호출·alias 경계를 불안정하게 만든다. 모든 예외를 재시도하거나 timeout 때 Workflow를 취소하면 불필요한 fetch와 stale result 손실이 발생한다.
+- Decision Outcome: Workflow ID는 normalized canonical `actorUri`와 origin 선택 identity(`profileId` 값 또는 기본 origin marker)로 결정해 stable하게 만들고, Workflow 밖 Temporal Client caller의 진행 중 실행에는 `USE_EXISTING`, 완료 후 새로운 시도에는 `ALLOW_DUPLICATE` reuse semantics를 사용한다. actor 미해결, identity 충돌, suspended/unresponsive 등 예상 가능한 domain rejection은 non-retryable로 매핑하고 일시적 외부·DB 장애는 기존 Activity retry 정책을 사용한다. client deadline은 대기 RPC에만 적용하며 이미 시작된 Workflow를 취소하거나 완료된 Profile을 rollback하지 않는다.
+- Alternatives Considered: random ID나 검색용 qualified handle ID는 동일 actor URI의 동시 fetch와 alias 경계를 불안정하게 만든다. 모든 예외를 재시도하거나 timeout 때 Workflow를 취소하면 불필요한 fetch와 stale result 손실이 발생한다.
 - Consequences: alias domain 또는 origin 선택 identity별 시작은 별도 요청 identity가 될 수 있지만 기존 actor URI uniqueness와 transaction ordering이 최종 Profile 중복을 막는다. 실패한 실행 뒤 다음 stale cycle에서 새 시도가 가능해야 한다.
 - Confirmation / Follow-up: concurrent trigger deduplication, permanent/transient error behavior, caller timeout 뒤 Workflow 지속 실행과 subsequent DB observation을 검증한다.
 
@@ -94,4 +106,4 @@
 
 ## Superseded Decisions
 
-- 2026-09-09 `Remote actor lookup caller contract` 및 `Serializable DTO, caller-only mode, and identity result`의 wire-input 부분(qualified handle 중심 input과 URI discriminator 배제)은 2026-09-10 `Superseding review correction: discovery key와 stored actor refresh key를 분리한다` 결정으로 대체됐다. 해당 결정들의 origin 선택, unsigned lookup과 caller-only sync/async 결론은 계속 유효하다.
+- 2026-09-09 `Serializable DTO, caller-only mode, and identity result` 및 2026-09-10 `Superseding review correction: discovery key와 stored actor refresh key를 분리한다`의 wire-input 부분은 2026-09-10 `Final review correction: actorUri-only materialization boundary` 결정으로 대체됐다. 해당 결정들의 origin 선택, unsigned lookup, caller-only sync/async와 actor identity 결론은 계속 유효하다.

@@ -23,7 +23,6 @@ export { closeFedifyQueue } from './src/queue';
 export { sendReaction, sendReactionUndo } from './src/reaction-delivery';
 export {
   findOrMaterializeRemoteProfileActor,
-  findStoredRemoteProfileActorByHandle,
   findStoredRemoteProfileActorByUri,
   materializeRemoteProfileActor,
   RemoteActorMaterializationError,

@@ -61,8 +61,9 @@ Block 공통 predicate를 선행 조건으로 요구해서는 안 된다(MUST NO
 #### Scenario: Materialize a missing remote profile for an explicit qualified handle
 
 - **WHEN** 로그인한 클라이언트가 명시적인 `@handle@instance` 전체를 검색하고 해당 remote actor와 Profile이 아직 저장되지 않았다
-- **THEN** 시스템은 기존 actor materialization 경계로 해당 qualified handle을 조회한다
-- **AND** 초기 materialization은 qualified handle을 `handle` discovery key로 전달하고 저장된 actor URI를 refresh key로 사용하지 않는다
+- **THEN** 검색 경계는 해당 qualified handle을 canonical `actorUri`로 먼저 해석한다
+- **AND** actor materialization 경계는 canonical `actorUri`와 선택적인 `profileId`만 전달받아 호출된다
+- **AND** 저장된 actor URI나 Profile이 없어도 actor URI를 사용해 새 remote Profile을 materialize할 수 있다
 - **AND** 검증된 actor를 기존 Profile·ActivityPub actor 저장 계약으로 materialize한다
 - **AND** materialized Profile identity를 기준으로 기존 DB connection과 staged visibility를 적용한 Profile edge를 반환한다
 - **AND** GraphQL field와 connection shape는 변경하지 않는다

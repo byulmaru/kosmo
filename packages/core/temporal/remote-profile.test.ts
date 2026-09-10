@@ -13,7 +13,7 @@ const {
 } = await import('./remote-profile');
 
 const input = {
-  handle: 'alice@remote.example',
+  actorUri: 'https://remote.example/users/alice',
   profileId: '00000000-0000-8000-8000-000000000001',
 };
 
@@ -104,17 +104,13 @@ test('async caller returns durable start acknowledgement without waiting for the
   }
 });
 
-test('Workflow identity keeps origin selection profiles separate for the same requested handle', () => {
+test('Workflow identity keeps actor URIs and origin selection profiles separate', () => {
   const actorUriInput = { actorUri: 'https://remote.example/users/alice' };
   const otherActorUriInput = { actorUri: 'https://remote.example/users/bob' };
 
   assert.notEqual(
-    remoteProfileMaterializationWorkflowId({ handle: input.handle }),
     remoteProfileMaterializationWorkflowId(input),
-  );
-  assert.equal(
-    remoteProfileMaterializationWorkflowId({ handle: input.handle }),
-    remoteProfileMaterializationWorkflowId({ handle: input.handle }),
+    remoteProfileMaterializationWorkflowId(otherActorUriInput),
   );
   assert.equal(
     remoteProfileMaterializationWorkflowId(actorUriInput),
@@ -123,10 +119,6 @@ test('Workflow identity keeps origin selection profiles separate for the same re
   assert.notEqual(
     remoteProfileMaterializationWorkflowId(actorUriInput),
     remoteProfileMaterializationWorkflowId(otherActorUriInput),
-  );
-  assert.notEqual(
-    remoteProfileMaterializationWorkflowId(actorUriInput),
-    remoteProfileMaterializationWorkflowId({ handle: input.handle }),
   );
   assert.notEqual(
     remoteProfileMaterializationWorkflowId(actorUriInput),

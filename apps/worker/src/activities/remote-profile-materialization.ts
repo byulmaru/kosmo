@@ -4,10 +4,8 @@ import { ActivityPubActors, db, first, Instances, Profiles } from '@kosmo/core/d
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { parseProfileHandle } from '@kosmo/core/profile';
 import {
   federation,
-  findStoredRemoteProfileActorByHandle,
   findStoredRemoteProfileActorByUri,
   materializeRemoteProfileActor,
   RemoteActorMaterializationError,
@@ -73,24 +71,9 @@ const skipRemoteLookupIfCurrent = async (
   input: RemoteProfileMaterializationInput,
   now: Temporal.Instant,
 ) => {
-  const parsed =
-    input.handle !== undefined
-      ? parseProfileHandle(input.handle, {
-          configuredLocalDomain: (await resolveConfiguredLocalInstance()).domain,
-        })
-      : undefined;
-  const stored =
-    input.actorUri !== undefined
-      ? await findStoredRemoteProfileActorByUri(input.actorUri)
-      : parsed?.kind === 'remote'
-        ? await findStoredRemoteProfileActorByHandle(parsed.domain, parsed.normalizedHandle)
-        : undefined;
+  const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
 
   if (!stored) {
-    if (input.actorUri !== undefined) {
-      throw new NotFoundError('Profile not found');
-    }
-
     return undefined;
   }
 
@@ -138,18 +121,11 @@ export const materializeRemoteProfileActorActivity = async (
 
     const origin = await resolveRemoteProfileMaterializationOrigin(input.profileId);
     const context = federation.createContext(new URL(origin), undefined);
-    const profile =
-      input.handle !== undefined
-        ? await materializeRemoteProfileActor({
-            context,
-            handle: input.handle,
-            now,
-          })
-        : await materializeRemoteProfileActor({
-            context,
-            actorUri: new URL(input.actorUri),
-            now,
-          });
+    const profile = await materializeRemoteProfileActor({
+      context,
+      actorUri: new URL(input.actorUri),
+      now,
+    });
 
     return profile.id;
   } catch (error) {

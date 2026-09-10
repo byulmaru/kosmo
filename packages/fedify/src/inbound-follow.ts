@@ -9,7 +9,7 @@ import {
   ProfileFollowRequests,
   ProfileFollows,
 } from '@kosmo/core/db';
-import { InstanceState, PostState } from '@kosmo/core/enums';
+import { InstanceState, PostState, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { deletePost, undoInboundReaction } from '@kosmo/core/services';
 import {
@@ -182,7 +182,7 @@ const handleInboundUndoAnnounce = async (
   }
 
   const storedActor = await findStoredRemoteProfileActorByUri(actorUri);
-  if (!storedActor) {
+  if (!storedActor || storedActor.profile.state !== ProfileState.ACTIVE) {
     return null;
   }
   if (

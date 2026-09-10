@@ -27,6 +27,7 @@ const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const remoteDomain = 'remote.example';
 const remoteAliasDomain = 'alias.example';
+const remoteActorUri = new URL(`https://${remoteDomain}/users/alice`);
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
@@ -87,7 +88,7 @@ describe('remote actor materialization', () => {
 
     const profile = await materializeRemoteProfileActor({
       context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
       now,
     });
 
@@ -99,7 +100,7 @@ describe('remote actor materialization', () => {
     assert.equal(lookupObject.mock.calls.length, 1);
     assert.equal(
       (lookupObject.mock.calls as unknown as Array<{ arguments: unknown[] }>)[0]?.arguments[0],
-      `acct:alice@${remoteDomain}`,
+      remoteActorUri,
     );
 
     const stored = await db
@@ -209,7 +210,7 @@ describe('remote actor materialization', () => {
     });
     const first = await materializeRemoteProfileActor({
       context: createLookupContext(async () => firstActor).context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
       now: firstNow,
     });
 
@@ -249,7 +250,7 @@ describe('remote actor materialization', () => {
     });
     await materializeRemoteProfileActor({
       context: createLookupContext(async () => nextActor).context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
       now: firstNow.add({ seconds: 1 }),
     });
 
@@ -282,7 +283,7 @@ describe('remote actor materialization', () => {
           image: new Image({ mediaType: 'image/webp', name: 'Header', url: sharedUrl }),
         }),
       ).context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
     });
 
     const media = await readProfileMedia(profile.id);
@@ -338,7 +339,7 @@ describe('remote actor materialization', () => {
           image: new Image({ mediaType: 'image/webp', name: 'Header', url: sharedUrl }),
         }),
       ).context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
       now: Temporal.Instant.from('2026-07-10T00:00:00Z'),
     });
 
@@ -376,7 +377,7 @@ describe('remote actor materialization', () => {
 
     const profile = await materializeRemoteProfileActor({
       context: createLookupContext(async () => actor).context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
     });
 
     assert.equal(profile.displayName, 'Alice Remote');
@@ -395,7 +396,7 @@ describe('remote actor materialization', () => {
           }),
         }),
       ).context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
       now: originalNow,
     });
     const refreshedActor = createActor({
@@ -423,7 +424,7 @@ describe('remote actor materialization', () => {
       await assert.rejects(
         materializeRemoteProfileActor({
           context: createLookupContext(async () => refreshedActor).context,
-          handle: `alice@${remoteDomain}`,
+          actorUri: remoteActorUri,
           now: originalNow.add({ seconds: 1 }),
         }),
       );
@@ -462,10 +463,9 @@ describe('remote actor materialization', () => {
     }
   });
 
-  test('materializes an inbound actor URI through Fedify actor handle discovery', async () => {
+  test('materializes an inbound actor URI directly', async () => {
     const actor = createActor();
     const lookupObject = mock.fn(async () => actor);
-    const fetch = mockWebFinger({ subject: `acct:alice@${remoteDomain}` });
 
     const result = await findOrMaterializeRemoteProfileActorByUri({
       actorUri: actor.id!,
@@ -473,10 +473,9 @@ describe('remote actor materialization', () => {
     });
 
     assert.equal(result.actor.uri, actor.id?.href);
-    assert.equal(fetch.mock.calls.length, 1);
     assert.equal(
       (lookupObject.mock.calls as unknown as Array<{ arguments: unknown[] }>)[0]?.arguments[0],
-      `acct:alice@${remoteDomain}`,
+      actor.id,
     );
   });
 
@@ -504,7 +503,6 @@ describe('remote actor materialization', () => {
     const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
     const actor = createActor();
     const lookupObject = mock.fn(async () => actor);
-    mockWebFinger({ subject: `acct:alice@${remoteDomain}` });
 
     await findOrMaterializeRemoteProfileActorByUri({
       actorUri: actor.id!,
@@ -524,7 +522,6 @@ describe('remote actor materialization', () => {
     const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
     const actor = createActor();
     const lookupObject = mock.fn(async () => null);
-    mockWebFinger({ subject: `acct:alice@${remoteDomain}` });
 
     await assert.rejects(
       findOrMaterializeRemoteProfileActorByUri({
@@ -577,64 +574,25 @@ describe('remote actor materialization', () => {
 
     const profile = await materializeRemoteProfileActor({
       context,
-      handle: `Admin@${remoteDomain}`,
+      actorUri: remoteActorUri,
     });
 
     assert.equal(profile.handle, 'Admin');
     assert.equal(profile.normalizedHandle, 'admin');
-    assert.equal(lookupObject.mock.calls[0]?.arguments[0], `acct:Admin@${remoteDomain}`);
+    assert.equal(lookupObject.mock.calls[0]?.arguments[0], remoteActorUri);
   });
 
-  test('canonicalizes a trailing DNS root dot before lookup and storage', async () => {
-    const { context, lookupObject } = createLookupContext(async () => createActor());
-
-    const profile = await materializeRemoteProfileActor({
-      context,
-      handle: `alice@${remoteDomain}.`,
-    });
-
-    const instance = await db
-      .select()
-      .from(Instances)
-      .where(eq(Instances.id, profile.instanceId!))
-      .limit(1)
-      .then(firstOrThrow);
-
-    assert.equal(instance.domain, remoteDomain);
-    assert.equal(lookupObject.mock.calls[0]?.arguments[0], `acct:alice@${remoteDomain}`);
-  });
-
-  test('canonicalizes a trailing DNS root dot before a port during storage', async () => {
-    const actor = createActor({ id: new URL('https://remote.example.:8443/users/alice') });
-    const { context, lookupObject } = createLookupContext(async () => actor);
-
-    const profile = await materializeRemoteProfileActor({
-      context,
-      handle: 'alice@remote.example.:8443',
-    });
-
-    const instance = await db
-      .select()
-      .from(Instances)
-      .where(eq(Instances.id, profile.instanceId!))
-      .limit(1)
-      .then(firstOrThrow);
-
-    assert.equal(instance.domain, 'remote.example:8443');
-    assert.equal(lookupObject.mock.calls[0]?.arguments[0], 'acct:alice@remote.example:8443');
-  });
-
-  test('stores an alias lookup under the canonical actor domain', async () => {
+  test('finds a stored actor by its canonical URI', async () => {
     const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
     const { context, lookupObject } = createLookupContext(async () => createActor());
 
     const materialized = await materializeRemoteProfileActor({
       context,
-      handle: `alice@${remoteAliasDomain}`,
+      actorUri: remoteActorUri,
       now,
     });
     const canonical = await findOrMaterializeRemoteProfileActor({
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
       now,
     });
 
@@ -649,7 +607,7 @@ describe('remote actor materialization', () => {
     assert.equal(lookupObject.mock.calls.length, 1);
   });
 
-  test('moves an existing alias-stored actor to the canonical actor domain', async () => {
+  test('moves an existing actor to the canonical actor domain', async () => {
     const aliasInstance = await createRemoteInstance({ domain: remoteAliasDomain });
     const aliasProfile = await createProfile({ handle: 'alice', instanceId: aliasInstance.id });
     await db.insert(ActivityPubActors).values({
@@ -661,7 +619,7 @@ describe('remote actor materialization', () => {
 
     const materialized = await materializeRemoteProfileActor({
       context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
     });
 
     const instance = await db
@@ -697,7 +655,7 @@ describe('remote actor materialization', () => {
       });
 
       await assert.rejects(
-        materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
+        materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
         expected,
       );
       assert.equal(await countRows(Profiles), 0);
@@ -705,19 +663,16 @@ describe('remote actor materialization', () => {
     }
   });
 
-  test('rejects mismatched and unsupported preferred usernames', async () => {
-    for (const actor of [
-      createActor({ preferredUsername: 'bob' }),
+  test('rejects unsupported preferred usernames', async () => {
+    const { context } = createLookupContext(async () =>
       createActor({ preferredUsername: 'alice with spaces' }),
-    ]) {
-      const { context } = createLookupContext(async () => actor);
+    );
 
-      await assert.rejects(
-        materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
-        RemoteActorMaterializationError,
-      );
-      assert.equal(await countRows(Profiles), 0);
-    }
+    await assert.rejects(
+      materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
+      RemoteActorMaterializationError,
+    );
+    assert.equal(await countRows(Profiles), 0);
   });
 
   test('materializes a language-tagged preferred username', async () => {
@@ -726,7 +681,7 @@ describe('remote actor materialization', () => {
 
     const profile = await materializeRemoteProfileActor({
       context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
     });
 
     assert.equal(profile.handle, 'alice');
@@ -739,7 +694,7 @@ describe('remote actor materialization', () => {
 
     const profile = await materializeRemoteProfileActor({
       context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
     });
 
     assert.equal(profile.displayName, 'Alice Remote');
@@ -751,7 +706,7 @@ describe('remote actor materialization', () => {
 
     const profile = await materializeRemoteProfileActor({
       context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
     });
 
     assert.equal(profile.bio, 'Remote bio');
@@ -767,7 +722,7 @@ describe('remote actor materialization', () => {
 
     const profile = await materializeRemoteProfileActor({
       context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
     });
 
     assert.equal(profile.bio, 'Hello world');
@@ -781,7 +736,7 @@ describe('remote actor materialization', () => {
 
     const profile = await materializeRemoteProfileActor({
       context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
     });
 
     assert.equal(profile.bio, 'Hello & world');
@@ -795,7 +750,7 @@ describe('remote actor materialization', () => {
 
     const profile = await materializeRemoteProfileActor({
       context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
     });
 
     assert.equal(profile.bio, visibleText);
@@ -808,7 +763,7 @@ describe('remote actor materialization', () => {
 
     const profile = await materializeRemoteProfileActor({
       context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
     });
 
     assert.equal(profile.bio, null);
@@ -819,7 +774,7 @@ describe('remote actor materialization', () => {
 
     const profile = await materializeRemoteProfileActor({
       context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
     });
 
     assert.equal(profile.displayName, 'alice');
@@ -831,7 +786,7 @@ describe('remote actor materialization', () => {
       const { context, lookupObject } = createLookupContext(async () => createActor());
 
       await assert.rejects(
-        materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
+        materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
         /Remote instance is unavailable/,
       );
 
@@ -858,7 +813,7 @@ describe('remote actor materialization', () => {
 
     const materialization = materializeRemoteProfileActor({
       context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
     });
     await lookupStarted;
     await db
@@ -877,7 +832,7 @@ describe('remote actor materialization', () => {
     const { context, lookupObject } = createLookupContext(async () => createActor());
 
     await assert.rejects(
-      materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
+      materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
       /Remote instance is not an ActivityPub instance/,
     );
 
@@ -899,7 +854,7 @@ describe('remote actor materialization', () => {
 
     const refreshed = await materializeRemoteProfileActor({
       context,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
       now: Temporal.Instant.from('2026-07-10T00:00:00Z'),
     });
 
@@ -913,7 +868,7 @@ describe('remote actor materialization', () => {
     const { context: secondContext } = createLookupContext(async () => withoutPublished);
     const preserved = await materializeRemoteProfileActor({
       context: secondContext,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
       now: Temporal.Instant.from('2026-07-11T00:00:00Z'),
     });
 
@@ -949,13 +904,13 @@ describe('remote actor materialization', () => {
 
     const olderRefresh = materializeRemoteProfileActor({
       context: olderContext,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
       now: olderNow,
     });
     await olderLookupStarted;
     await materializeRemoteProfileActor({
       context: newerContext,
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
       now: newerNow,
     });
     releaseOlderLookup();
@@ -987,7 +942,7 @@ describe('remote actor materialization', () => {
     const { context } = createLookupContext(async () => createActor({ preferredUsername: 'bob' }));
 
     await assert.rejects(
-      materializeRemoteProfileActor({ context, handle: `bob@${remoteDomain}` }),
+      materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
       /Remote actor handle collides with another actor/,
     );
 
@@ -1000,35 +955,6 @@ describe('remote actor materialization', () => {
     assert.equal(profile.handle, 'alice');
   });
 
-  test('rejects requested-domain handle collisions when an actor URI resolves through an alias', async () => {
-    const stored = await createStoredRemoteActor();
-    const aliasInstance = await createRemoteInstance({ domain: remoteAliasDomain });
-    const aliasProfile = await createProfile({ handle: 'alice', instanceId: aliasInstance.id });
-    await db.insert(ActivityPubActors).values({
-      profileId: aliasProfile.id,
-      type: ActivityPubActorType.PERSON,
-      uri: `https://${remoteAliasDomain}/users/alice`,
-    });
-    const { context } = createLookupContext(async () => createActor({ name: 'Alias Refresh' }));
-
-    await assert.rejects(
-      materializeRemoteProfileActor({
-        context,
-        handle: `alice@${remoteAliasDomain}`,
-        now: Temporal.Instant.from('2026-07-10T00:00:00Z'),
-      }),
-      /Remote actor handle collides with another actor/,
-    );
-
-    const profile = await db
-      .select()
-      .from(Profiles)
-      .where(eq(Profiles.id, stored.profile.id))
-      .limit(1)
-      .then(firstOrThrow);
-    assert.equal(profile.displayName, 'alice');
-  });
-
   for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
     test(`does not reactivate or update a ${state} remote profile`, async () => {
       const stored = await createStoredRemoteActor({ profileState: state });
@@ -1037,7 +963,7 @@ describe('remote actor materialization', () => {
       );
 
       await assert.rejects(
-        materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
+        materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
         /Remote profile is unavailable/,
       );
 
@@ -1058,7 +984,7 @@ describe('remote actor materialization', () => {
       const stored = await createStoredRemoteActor({ profileState: state });
       await assert.rejects(
         findOrMaterializeRemoteProfileActor({
-          handle: `alice@${remoteDomain}`,
+          actorUri: remoteActorUri,
         }),
         /Profile not found/,
       );
@@ -1073,29 +999,6 @@ describe('remote actor materialization', () => {
     });
   }
 
-  for (const state of [InstanceState.SUSPENDED, InstanceState.UNRESPONSIVE]) {
-    test(`does not refresh an existing actor from a ${state} instance through an alias`, async () => {
-      const stored = await createStoredRemoteActor({ instanceState: state });
-      const { context, lookupObject } = createLookupContext(async () =>
-        createActor({ name: 'Unexpected Refresh' }),
-      );
-
-      await assert.rejects(
-        materializeRemoteProfileActor({ context, handle: `alice@${remoteAliasDomain}` }),
-        /Remote instance is unavailable/,
-      );
-
-      assert.equal(lookupObject.mock.calls.length, 1);
-      const profile = await db
-        .select()
-        .from(Profiles)
-        .where(eq(Profiles.id, stored.profile.id))
-        .limit(1)
-        .then(firstOrThrow);
-      assert.equal(profile.displayName, 'alice');
-    });
-  }
-
   test('rejects actor URI collisions with local profiles', async () => {
     const profile = await createProfile({ handle: 'local', instanceId: localInstanceId });
     const actor = createActor();
@@ -1107,7 +1010,7 @@ describe('remote actor materialization', () => {
     const { context } = createLookupContext(async () => actor);
 
     await assert.rejects(
-      materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
+      materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
       /collides with a local actor/,
     );
   });
@@ -1117,7 +1020,7 @@ describe('remote actor materialization', () => {
     const { context } = createLookupContext(async () => actor);
 
     await assert.rejects(
-      materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
+      materializeRemoteProfileActor({ context, actorUri: actor.id! }),
       /Remote actor URI uses the local origin/,
     );
 
@@ -1130,7 +1033,7 @@ describe('remote actor materialization', () => {
     const { context } = createLookupContext(async () => actor);
 
     await assert.rejects(
-      materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
+      materializeRemoteProfileActor({ context, actorUri: actor.id! }),
       /Remote actor URI must use HTTP\(S\) with a hostname/,
     );
 
@@ -1151,7 +1054,7 @@ describe('remote actor materialization', () => {
     const { context } = createLookupContext(async () => createActor());
 
     await assert.rejects(
-      materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
+      materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
       /handle collides with another actor/,
     );
   });
@@ -1175,7 +1078,7 @@ describe('remote actor materialization', () => {
       return undefined as never;
     });
     const workflowResult = findOrMaterializeRemoteProfileActor({
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
       mode: 'sync',
       now,
     });
@@ -1216,7 +1119,7 @@ describe('remote actor materialization', () => {
 
     try {
       const profile = await findOrMaterializeRemoteProfileActor({
-        handle: `alice@${remoteDomain}`,
+        actorUri: remoteActorUri,
         now,
       });
 
@@ -1239,7 +1142,7 @@ describe('remote actor materialization', () => {
 
     try {
       const profile = await findOrMaterializeRemoteProfileActor({
-        handle: `alice@${remoteDomain}`,
+        actorUri: remoteActorUri,
         mode: 'sync',
         now,
       });
@@ -1261,7 +1164,7 @@ describe('remote actor materialization', () => {
     });
     const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
     const profile = await findOrMaterializeRemoteProfileActor({
-      handle: `alice@${remoteDomain}`,
+      actorUri: remoteActorUri,
       now,
     });
 
@@ -1281,7 +1184,7 @@ describe('remote actor materialization', () => {
 
     try {
       const result = await findOrMaterializeRemoteProfileActor({
-        handle: `alice@${remoteDomain}`,
+        actorUri: remoteActorUri,
         mode: 'sync',
         profileId: '00000000-0000-8000-8000-000000000002',
       });
@@ -1292,7 +1195,7 @@ describe('remote actor materialization', () => {
       assert.ok(options);
       assert.deepEqual(options.args, [
         {
-          handle: `alice@${remoteDomain}`,
+          actorUri: remoteActorUri.href,
           profileId: '00000000-0000-8000-8000-000000000002',
         },
       ]);
@@ -1332,7 +1235,7 @@ describe('remote actor materialization', () => {
       try {
         await assert.rejects(
           findOrMaterializeRemoteProfileActor({
-            handle: `alice@${remoteDomain}`,
+            actorUri: remoteActorUri,
             mode: 'sync',
           }),
           /Profile not found/,
@@ -1353,7 +1256,7 @@ describe('remote actor materialization', () => {
 
     try {
       await assert.rejects(
-        findOrMaterializeRemoteProfileActor({ handle: `alice@${remoteDomain}`, mode: 'sync' }),
+        findOrMaterializeRemoteProfileActor({ actorUri: remoteActorUri, mode: 'sync' }),
         (error: unknown) =>
           error instanceof RemoteActorMaterializationError &&
           error.message === 'Remote lookup did not return an actor.',
@@ -1368,7 +1271,7 @@ describe('remote actor materialization', () => {
     await createStoredRemoteActor({ instanceState: InstanceState.SUSPENDED });
     await assert.rejects(
       findOrMaterializeRemoteProfileActor({
-        handle: `alice@${remoteDomain}`,
+        actorUri: remoteActorUri,
       }),
       /Profile not found/,
     );
@@ -1396,8 +1299,8 @@ describe('remote actor materialization', () => {
     });
 
     const [firstProfile, secondProfile] = await Promise.all([
-      materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
-      materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
+      materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
+      materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
     ]);
 
     assert.equal(firstProfile.id, secondProfile.id);
@@ -1505,19 +1408,6 @@ const readProfileMedia = (profileId: string) =>
     .innerJoin(Media, eq(Media.id, ProfileMedia.mediaId))
     .where(eq(ProfileMedia.profileId, profileId))
     .orderBy(ProfileMedia.kind);
-
-const mockWebFinger = (descriptor: { subject: string }) =>
-  mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {
-    const url = new URL(input instanceof Request ? input.url : input);
-
-    assert.equal(url.origin, `https://${remoteDomain}`);
-    assert.equal(url.pathname, '/.well-known/webfinger');
-    assert.equal(url.searchParams.get('resource'), `https://${remoteDomain}/users/alice`);
-
-    return Response.json(descriptor, {
-      headers: { 'Content-Type': 'application/jrd+json' },
-    });
-  });
 
 const createLookupContext = (
   implementation: (

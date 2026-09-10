@@ -24,21 +24,21 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 
 ### Requirement: Remote actor materialization through Fedify lookup
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md`, `PROD-808`, `PROD-248`. 시스템은 federation 내부 actor materialization 흐름에서 federated handle을 Fedify lookup으로 해석한 뒤 remote ActivityPub actor를 kosmo `Profile`로 materialize해야 하며(MUST), 신규 materialization과 stale refresh는 하나의 Temporal Workflow 실행 경로를 사용해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md`, `PROD-808`, `PROD-248`. 시스템은 federation 내부 actor materialization 흐름에서 검색·발견 경계가 제공한 canonical `actorUri`로 remote ActivityPub actor를 kosmo `Profile`로 materialize해야 하며(MUST), 명시적인 qualified handle을 actor URI로 해석하는 단계는 materialization 경계 전에 검색·발견 경계에서 수행해야 한다(MUST). 신규 materialization과 stale refresh는 하나의 Temporal Workflow 실행 경로를 사용해야 한다(MUST).
 
-#### Scenario: Materialize remote actor from federated handle
+#### Scenario: Materialize remote actor from canonical actor URI
 
-- **WHEN** federation 내부 service가 `@{handle}@{domain}` 형식의 federated handle materialization을 요청하고 caller가 동기 또는 비동기 결과 모드를 선택한다
-- **THEN** Temporal Workflow와 Activity wire input은 초기 actor discovery key인 `handle` 또는 저장된 canonical actor URI를 이용한 refresh key인 `actorUri` 중 정확히 하나와 선택적인 `profileId`를 가진다
+- **WHEN** federation 내부 service가 검색·발견 경계에서 확보한 canonical `actorUri`로 materialization을 요청하고 caller가 동기 또는 비동기 결과 모드를 선택한다
+- **THEN** Temporal Workflow와 Activity wire input은 canonical `actorUri`와 선택적인 `profileId`만 가진다
+- **AND** 전달된 `actorUri`에 저장된 remote Profile 또는 actor metadata가 없어도 새 remote `Profile`을 materialize할 수 있다
 - **AND** `profileId`가 없으면 configured Local Instance의 canonical origin을 사용하고, 있으면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용한다
 - **AND** 전달된 `profileId`가 필요한 Remote actor 정보를 제공하지 않으면 origin을 추측하지 않고 materialization을 실패 처리한다
 - **AND** `profileId`는 기존 unsigned lookup의 권한을 대신하지 않는다
-- **AND** 시스템은 Fedify lookup 전에 normalized domain의 기존 ActivityPub instance를 조회한다
+- **AND** 시스템은 Fedify lookup 전에 `actorUri` host의 normalized domain에 해당하는 기존 ActivityPub instance를 조회한다
 - **AND** 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이면 Fedify lookup 없이 materialization을 실패 처리한다
-- **AND** 기존 instance가 없으면 normalized domain의 ActivityPub instance를 생성한다
-- **AND** `handle` input branch에서는 하나의 Temporal Workflow 경로에서 Fedify lookup API로 `acct:{handle}@{domain}`을 해석한다
+- **AND** 기존 instance가 없으면 `actorUri` host의 normalized domain에 ActivityPub instance를 생성한다
+- **AND** 하나의 Temporal Workflow 경로에서 Fedify lookup API로 `actorUri`를 직접 해석한다
 - **AND** Fedify가 ActivityPub actor 객체를 반환하면 해당 actor의 canonical actor URI를 remote identity로 처리한다
-- **AND** 시스템은 요청 handle의 normalized value와 actor `preferredUsername`의 normalized value가 일치하는지 검증한다
 - **AND** 시스템은 actor URI가 기존 ActivityPub remote profile actor metadata에 연결되어 있으면 해당 remote profile을 갱신하고, 없으면 새 `Profile`을 생성한다
 - **AND** 동기 caller는 신규 materialization이 완료된 Profile identity를 받을 때까지 기다리고, 비동기 caller는 Workflow 시작 확인을 받은 뒤 반환한다
 - **AND** 동기·비동기 caller는 같은 Workflow 종류와 실행 경로를 사용한다
@@ -49,12 +49,6 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 - **THEN** parent는 child 완료를 기다리지 않고 child start acknowledgement 뒤 종료할 수 있다
 - **AND** parent가 완료·실패·취소되어도 child Workflow는 계속 실행해 필요한 Activity와 Profile 저장을 완료할 수 있다
 - **AND** parent 취소는 시작 확인 이후 child Workflow에 전파되지 않는다
-
-#### Scenario: Reject actor URI without federated handle lookup
-
-- **WHEN** 저장된 remote actor identity를 가리키는 `actorUri` refresh도 아니고 federated handle lookup을 통과한 초기 materialization도 아닌 actor URI가 주어진다
-- **THEN** 시스템은 remote profile을 저장하지 않는다
-- **AND** 시스템은 actor URI만으로 `Profile`을 생성하지 않는다
 
 #### Scenario: Refresh a stored remote actor by canonical URI
 
@@ -71,15 +65,9 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 - **THEN** 시스템은 remote actor materialization을 실패로 처리한다
 - **AND** 시스템은 해당 객체를 `Profile`로 저장하지 않는다
 
-#### Scenario: Reject lookup username mismatch
-
-- **WHEN** Fedify lookup이 `acct:{handle}@{domain}` 요청과 다른 normalized `preferredUsername`을 가진 actor를 반환한다
-- **THEN** 시스템은 remote actor materialization을 실패로 처리한다
-- **AND** 시스템은 해당 actor를 `Profile`로 저장하거나 기존 profile에 재연결하지 않는다
-
 #### Scenario: Reject materialization for unavailable instance
 
-- **WHEN** federated handle의 normalized domain에 해당하는 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이다
+- **WHEN** `actorUri` host의 normalized domain에 해당하는 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이다
 - **THEN** 시스템은 Fedify lookup을 수행하지 않고 remote actor materialization을 실패로 처리한다
 - **AND** 시스템은 새 `Profile`을 만들거나 기존 profile을 refresh하지 않는다
 
@@ -91,10 +79,10 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 
 #### Scenario: Store actor under its canonical domain
 
-- **WHEN** Fedify lookup이 요청한 federated handle domain과 다른 normalized host를 가진 canonical actor URI를 반환한다
+- **WHEN** Fedify lookup이 제공된 canonical `actorUri`와 일치하는 actor를 반환한다
 - **THEN** 시스템은 canonical actor URI host의 ActivityPub instance에 remote `Profile`을 저장한다
-- **AND** 기존 actor가 요청 alias instance에 저장돼 있으면 canonical actor URI instance로 이동한다
-- **AND** 요청 domain만을 위한 별도 `Profile` alias를 만들지 않는다
+- **AND** 기존 actor가 비canonical alias instance에 저장돼 있으면 canonical actor URI instance로 이동한다
+- **AND** actorUri domain만을 위한 별도 `Profile` alias를 만들지 않는다
 - **AND** DB-only remote handle 조회는 canonical actor domain에서 해당 profile을 찾는다
 
 #### Scenario: Reject local actor URI collision

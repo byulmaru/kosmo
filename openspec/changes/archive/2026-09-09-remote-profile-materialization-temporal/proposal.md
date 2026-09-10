@@ -4,8 +4,8 @@
 
 ## What Changes
 
-- 상위 remote profile handle lookup이 선택적인 `profileId`를 받아 필요한 local 또는 remote origin을 선택하고, 기존 unsigned lookup을 유지한다.
-- Temporal Workflow와 Activity wire input을 초기 discovery key인 `handle` 또는 저장된 canonical actor URI refresh key인 `actorUri` 중 하나와 선택적인 `profileId`의 union으로 제한한다.
+- 상위 remote profile 검색 경계가 qualified handle을 canonical `actorUri`로 해석한 뒤, 선택적인 `profileId`와 함께 필요한 local 또는 remote origin을 선택하고 기존 unsigned lookup을 유지한다.
+- Temporal Workflow와 Activity wire input을 canonical `actorUri`와 선택적인 `profileId`로 제한한다. 저장된 actor나 Profile이 없어도 actor URI로 신규 materialization을 수행할 수 있다.
 - 신규 materialization과 stale refresh를 하나의 Temporal Workflow와 하나의 Activity 실행 경로로 통합한다.
 - 호출자가 동기 모드에서는 신규 결과를 기다리고 비동기 모드에서는 Workflow 시작 확인만 받도록 하며, 이 선택은 Workflow 종류를 나누지 않는다.
 - fresh Profile은 원격 작업 없이 즉시 반환하고, stale Profile과 명시적 qualified remote search는 기존 row를 즉시 반환한 뒤 Temporal refresh를 시작한다.

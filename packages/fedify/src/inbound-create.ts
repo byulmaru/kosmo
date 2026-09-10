@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import { Note } from '@fedify/vocab';
-import { InstanceState } from '@kosmo/core/enums';
+import { InstanceState, ProfileState } from '@kosmo/core/enums';
 import { uniqueHref } from './activitypub-uri';
 import { handleInboundCreateNote } from './inbound-create-note';
 import { observeInbound } from './inbound-observability';
@@ -31,6 +31,7 @@ export const handleInboundCreate = async (
   const storedActor = await findStoredRemoteProfileActorByUri(actorUri);
   if (
     !storedActor ||
+    storedActor.profile.state !== ProfileState.ACTIVE ||
     (storedActor.instance.state !== InstanceState.ACTIVE &&
       storedActor.instance.state !== InstanceState.UNRESPONSIVE)
   ) {

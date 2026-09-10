@@ -1,10 +1,11 @@
-import { db, first, Instances, Profiles } from '@kosmo/core/db';
-import { InstanceKind, ProfileState } from '@kosmo/core/enums';
+import { ActivityPubActors, db, first, Instances, Profiles } from '@kosmo/core/db';
+import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
 import { profileHandleSchema } from '@kosmo/core/validation';
 import {
+  federation as remoteFederation,
   findOrMaterializeRemoteProfileActor,
   RemoteActorMaterializationError,
 } from '@kosmo/fedify';
@@ -116,12 +117,101 @@ builder.queryField('searchProfiles', (t) =>
 
         if (isExplicitRemoteHandle(args.query, parsed)) {
           try {
-            const profile = await findOrMaterializeRemoteProfileActor({
-              handle: `${parsed.handle}@${parsed.domain}`,
-              mode: 'sync',
-              profileId: ctx.session.profile?.id,
-            });
-            materializedProfileId = profile.id;
+            const cached = await db
+              .select({
+                actorUri: ActivityPubActors.uri,
+                instanceState: Instances.state,
+                profileState: Profiles.state,
+              })
+              .from(Profiles)
+              .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+              .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+              .where(
+                and(
+                  eq(Instances.domain, parsed.domain),
+                  eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+                  eq(Profiles.normalizedHandle, parsed.normalizedHandle),
+                ),
+              )
+              .limit(1)
+              .then(first);
+
+            let actorUri: string | undefined;
+
+            if (cached) {
+              if (
+                cached.profileState === ProfileState.ACTIVE &&
+                cached.instanceState !== InstanceState.SUSPENDED
+              ) {
+                actorUri = cached.actorUri;
+              }
+            } else {
+              const knownInstance = await db
+                .select({ state: Instances.state })
+                .from(Instances)
+                .where(
+                  and(
+                    eq(Instances.domain, parsed.domain),
+                    eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+                  ),
+                )
+                .limit(1)
+                .then(first);
+
+              if (
+                knownInstance?.state !== InstanceState.SUSPENDED &&
+                knownInstance?.state !== InstanceState.UNRESPONSIVE
+              ) {
+                const context = remoteFederation.createContext(
+                  new URL(localInstance.canonicalOrigin),
+                  undefined,
+                );
+                const descriptor = await context.lookupWebFinger(
+                  `acct:${parsed.handle}@${parsed.domain}`,
+                );
+
+                for (const link of descriptor?.links ?? []) {
+                  if (
+                    link.rel !== 'self' ||
+                    (link.type !== 'application/activity+json' &&
+                      !link.type?.match(
+                        /application\/ld\+json;\s*profile="https:\/\/www\.w3\.org\/ns\/activitystreams"/,
+                      )) ||
+                    link.href == null
+                  ) {
+                    continue;
+                  }
+
+                  try {
+                    const candidate = new URL(link.href);
+                    if (
+                      (candidate.protocol === 'http:' || candidate.protocol === 'https:') &&
+                      candidate.hostname
+                    ) {
+                      actorUri = candidate.href;
+                      break;
+                    }
+                  } catch {
+                    // Try another ActivityPub self link before reporting an invalid response.
+                  }
+                }
+
+                if (!actorUri) {
+                  throw new RemoteActorMaterializationError(
+                    'Remote WebFinger response is missing a valid ActivityPub self link.',
+                  );
+                }
+              }
+            }
+
+            if (actorUri) {
+              const profile = await findOrMaterializeRemoteProfileActor({
+                actorUri,
+                mode: 'sync',
+                profileId: ctx.session.profile?.id,
+              });
+              materializedProfileId = profile.id;
+            }
           } catch (error) {
             if (!isExpectedRemoteMaterializationError(error)) {
               remoteProfileSearchErrorReporter.capture(error);

@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import { isUniqueViolation } from '@kosmo/core/db';
-import { InstanceState } from '@kosmo/core/enums';
+import { InstanceState, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '@kosmo/core/error';
 import { repostPost } from '@kosmo/core/services';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
@@ -55,6 +55,7 @@ export const handleInboundAnnounce = async (
   const storedActor = await findStoredRemoteProfileActorByUri(actorUri);
   if (
     !storedActor ||
+    storedActor.profile.state !== ProfileState.ACTIVE ||
     (storedActor.instance.state !== InstanceState.ACTIVE &&
       storedActor.instance.state !== InstanceState.UNRESPONSIVE)
   ) {
