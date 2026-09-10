@@ -207,15 +207,20 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
   실패 후 수동 재시도를 유지한다. Web에서는 leaf 목록이 document/window scroll 계약을 유지한다.
 - 브라우저 뒤로/앞으로 history traversal은 browser scroll restoration을 유지한다. 검색 화면의 query-only
   `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존한다.
-- Web의 모바일·compact·full 홈 헤더 브랜드 마크와 shell의 홈 navigation 항목은 모두 홈 진입 control이다.
-  다른 route에서 실행하면 기존처럼 홈으로 이동하고, 이미 홈에서 다시 실행하면 document scroll을 매번
-  최상단으로 이동하면서 현재 Home Relay 데이터를 서버에서 다시 요청한다. 브랜드 마크는 기존 시각 geometry를
-  바꾸지 않고 pointer·keyboard·screen reader에서 같은 결과를 제공하는 navigation control이어야 한다.
+- Web shell의 홈 navigation 항목은 Home/Local 타임라인 화면군의 진입 control이다. 다른 route에서 실행하면
+  기존처럼 `/home`으로 이동한다. `/home` 또는 `/local`에서 다시 실행하면 route를 바꾸지 않고 document
+  scroll을 최상단으로 이동하면서 현재 선택된 타임라인의 Relay 데이터를 다시 요청한다.
+- compact·full Web의 Home/Local 헤더 브랜드 마크도 현재 선택된 타임라인을 재선택하는 navigation control이다.
+  실제 link 대상은 `/home`으로 유지해 새 탭·modifier 활성화의 홈 진입 의미를 보존하고, 현재 문서에서의
+  pointer·keyboard·screen reader 활성화만 같은 타임라인 재선택 결과를 제공한다. 기존 시각 geometry는 바꾸지
+  않는다. 모바일 Web과 Android/iOS 헤더의 브랜드 마크는 비상호작용 요소로 유지한다.
 - 홈 재선택으로 시작한 새로고침이 진행 중이면 추가 실행도 document scroll은 최상단으로 이동하지만 네트워크
   요청을 중복 시작하지 않는다. 요청이 성공하거나 실패해 종료된 뒤의 다음 실행은 새 요청을 한 번 시작하며,
   이전 요청이 실패했어도 현재 timeline 데이터는 유지한다.
-- 이 홈 재선택 정책은 `PROD-610`이 소유한다. 다른 현재 route 재선택, Android/iOS Native 동작, Home 외 Relay
-  데이터 정책에는 최상단 이동이나 데이터 새로고침을 추가하지 않는다.
+- Home 재선택의 중복 요청 방지와 마지막 성공 데이터 보존은 `PROD-610` 계약을 유지한다. Local 재선택은
+  기존 `RouteBoundary.refetch()` 경로를 재사용하며 별도 요청 계층이나 상태 표시를 추가하지 않는다. 이 정책은
+  Web shell navigation과 compact·full Web 브랜드 마크에만 적용하고 Android/iOS Native navigation과 다른
+  현재 route의 재선택 정책은 변경하지 않는다.
 - shell chrome에서 중앙 피드로 wheel 이벤트를 인위적으로 전달하지 않는다.
 
 ## 구현 위치
