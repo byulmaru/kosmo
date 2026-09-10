@@ -28,7 +28,7 @@ const webhookUrl = 'https://hooks.slack.com/services/T000/B000/report';
 process.env.DATABASE_URL = databaseUrl;
 process.env.NODE_ENV = 'production';
 process.env.PUBLIC_ORIGIN = publicOrigin;
-process.env.SLACK_CONTENT_REPORT_WEBHOOK_URL = webhookUrl;
+process.env.SLACK_FEEDBACK_WEBHOOK_URL = webhookUrl;
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
@@ -77,11 +77,12 @@ before(async () => {
 });
 
 after(async () => {
+  delete process.env.SLACK_FEEDBACK_WEBHOOK_URL;
   delete process.env.SLACK_CONTENT_REPORT_WEBHOOK_URL;
   await pg.end();
 });
 
-test('Profile report sends a minimal confirmed target payload and returns delivered', async (t) => {
+test('Profile report sends a plain-text confirmed target payload and returns delivered', async (t) => {
   const auth = await createAuthenticatedSession();
   const requests: Request[] = [];
   t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -110,15 +111,70 @@ test('Profile report sends a minimal confirmed target payload and returns delive
 
   const payload = await requests[0]?.json();
   assert.deepEqual(payload, {
-    details: '신고 사유의 추가 정보',
-    kosmoUrl: `${publicOrigin}/@${auth.handle}`,
-    reason: 'OTHER',
-    remoteUri: null,
-    targetId: auth.profile.id,
-    targetType: 'PROFILE',
+    blocks: [
+      {
+        text: { text: '새 콘텐츠 신고', type: 'plain_text' },
+        type: 'header',
+      },
+      {
+        fields: [
+          { text: '대상 종류: PROFILE', type: 'plain_text' },
+          { text: `대상 ID: ${auth.profile.id}`, type: 'plain_text' },
+          { text: `Kosmo URL: ${publicOrigin}/@${auth.handle}`, type: 'plain_text' },
+          { text: 'Remote URI: 없음', type: 'plain_text' },
+          { text: '신고 사유: OTHER', type: 'plain_text' },
+        ],
+        type: 'section',
+      },
+      {
+        text: { text: '상세 내용: 신고 사유의 추가 정보', type: 'plain_text' },
+        type: 'section',
+      },
+    ],
+    text: '새 콘텐츠 신고',
+    unfurl_links: false,
+    unfurl_media: false,
   });
   assert.equal(JSON.stringify(payload).includes(auth.account.id), false);
   assert.equal(JSON.stringify(payload).includes(auth.account.oidcSubject), false);
+});
+
+test('Report without the shared Feedback webhook configuration is rejected before Slack', async (t) => {
+  const auth = await createAuthenticatedSession();
+  const configuredWebhookUrl = process.env.SLACK_FEEDBACK_WEBHOOK_URL;
+  delete process.env.SLACK_FEEDBACK_WEBHOOK_URL;
+  process.env.SLACK_CONTENT_REPORT_WEBHOOK_URL = webhookUrl;
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('ok', { status: 200 });
+  });
+
+  try {
+    const result = await requestGraphQL<{
+      submitContentReport: { status: string };
+    }>(
+      mutation,
+      {
+        input: {
+          reason: 'SPAM_FRAUD',
+          targetId: encodeGlobalId('Profile', auth.profile.id),
+          targetType: 'PROFILE',
+        },
+      },
+      auth.token,
+    );
+
+    assert.deepEqual(result, { data: { submitContentReport: { status: 'REJECTED' } } });
+    assert.equal(calls, 0);
+  } finally {
+    delete process.env.SLACK_CONTENT_REPORT_WEBHOOK_URL;
+    if (configuredWebhookUrl === undefined) {
+      delete process.env.SLACK_FEEDBACK_WEBHOOK_URL;
+    } else {
+      process.env.SLACK_FEEDBACK_WEBHOOK_URL = configuredWebhookUrl;
+    }
+  }
 });
 
 test('Account without a selected Profile can report a public Post', async (t) => {
