@@ -1,5 +1,15 @@
 import type { ExpoConfig } from 'expo/config';
 
+const otaBaseUrl = 'https://expo-ota.byulmaru.co/releases/kosmo-native';
+const otaPathSegments = [
+  process.env.KOSMO_OTA_PLATFORM,
+  process.env.KOSMO_OTA_CHANNEL,
+  process.env.KOSMO_OTA_RUNTIME_VERSION,
+];
+const otaUrl = otaPathSegments.every(Boolean)
+  ? `${otaBaseUrl}/${otaPathSegments.join('/')}/manifest.json`
+  : otaBaseUrl;
+
 function androidVersionCode(): number {
   const configured = process.env.KOSMO_ANDROID_VERSION_CODE;
   if (configured === undefined) {
@@ -57,6 +67,19 @@ const config: ExpoConfig = {
   web: {
     favicon: './public/favicon-32x32.png',
     output: 'single',
+  },
+  runtimeVersion: {
+    policy: 'fingerprint',
+  },
+  updates: {
+    checkAutomatically: 'ON_LOAD',
+    codeSigningCertificate: './certs/certificate.pem',
+    codeSigningMetadata: {
+      alg: 'rsa-v1_5-sha256',
+      keyid: '2026-09',
+    },
+    enabled: true,
+    url: otaUrl,
   },
   plugins: [
     'expo-router',
