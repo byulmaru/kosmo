@@ -21,8 +21,8 @@
 
 - 공용 component test와 Tests story에서 기본 callback, render seam, selected·disabled·busy·error와 focus 동작을 검증한다.
 
-- [ ] 1.1 Production link와 logout 상태를 합성하는 최소 공용 presentation 계약을 구현한다.
-- [ ] 1.2 공용 Sidebar·BottomTab·SearchToolbar의 실행 기반 component test와 Tests story를 정렬한다.
+- [x] 1.1 Production link와 logout 상태를 합성하는 최소 공용 presentation 계약을 구현한다.
+- [x] 1.2 공용 Sidebar·BottomTab·SearchToolbar의 실행 기반 component test와 Tests story를 정렬한다.
 
 ## 2. PROD-796 Production shell과 현재 타임라인 재선택
 
@@ -50,10 +50,10 @@ Production shell이 공용 Sidebar·BottomTab presentation을 사용하면서 �
 - NavigationLink·shell·Home·Local 관련 unit test에서 일반 활성화, guard, modifier·새 탭, Home 중복 재선택, Local 기존 refetch와 logout 상태를 검증한다.
 - 실제 `Shell.stories.tsx`에서 full·compact·drawer·bottom과 Home/Local 상태를 검증한다.
 
-- [ ] 2.1 Production Sidebar·BottomTab adapter를 공용 presentation에 연결하고 기존 ProfileSwitcher·Relay·drawer 동작을 보존한다.
-- [ ] 2.2 Home·Local route와 Web 브랜드 마크를 현재 타임라인 재선택 lifecycle에 연결한다.
-- [ ] 2.3 기존 logout action·guard와 pending·error·retry 상태를 공용 Sidebar에 연결한다.
-- [ ] 2.4 shell·NavigationLink·Home·Local 실행 기반 test와 Production Shell story를 정렬한다.
+- [x] 2.1 Production Sidebar·BottomTab adapter를 공용 presentation에 연결하고 기존 ProfileSwitcher·Relay·drawer 동작을 보존한다.
+- [x] 2.2 Home·Local route와 Web 브랜드 마크를 현재 타임라인 재선택 lifecycle에 연결한다.
+- [x] 2.3 기존 logout action·guard와 pending·error·retry 상태를 공용 Sidebar에 연결한다.
+- [x] 2.4 shell·NavigationLink·Home·Local 실행 기반 test와 Production Shell story를 정렬한다.
 
 ## 3. PROD-796 Web 검색 route 연결
 
@@ -78,8 +78,8 @@ Web `/search`가 공용 SearchToolbar를 표시하면서 기존 검색 query·ta
 
 - 검색 route unit test와 실제 `Search.stories.tsx`에서 idle·focused·query result·clear·back·drawer 동작을 검증한다.
 
-- [ ] 3.1 Web 검색 route의 인라인 toolbar를 공용 SearchToolbar에 연결하고 query·focus·drawer lifecycle을 보존한다.
-- [ ] 3.2 검색 route 실행 기반 test와 Production Search story를 정렬한다.
+- [x] 3.1 Web 검색 route의 인라인 toolbar를 공용 SearchToolbar에 연결하고 query·focus·drawer lifecycle을 보존한다.
+- [x] 3.2 검색 route 실행 기반 test와 Production Search story를 정렬한다.
 
 ## 4. PROD-796 통합 검증과 인벤토리 정렬
 
@@ -107,6 +107,6 @@ Production navigation chrome의 문서·Storybook·코드가 같은 계약을 �
 - 390·1024·1440 Web의 Light/Dark에서 Sidebar·BottomTab·SearchToolbar geometry와 상호작용을 브라우저로 확인한다.
 - 독립 구현 리뷰에서 발견한 유효한 회귀를 반영하고 남은 검증 공백을 기록한다.
 
-- [ ] 4.1 Storybook·디자인 인벤토리를 Production 연결 결과와 정렬한다.
-- [ ] 4.2 OpenSpec·typecheck·관련 unit·Storybook 검증을 통과시킨다.
-- [ ] 4.3 반응형 Light/Dark 브라우저 QA와 독립 구현 리뷰를 완료한다.
+- [x] 4.1 Storybook·디자인 인벤토리를 Production 연결 결과와 정렬한다.
+- [x] 4.2 OpenSpec·typecheck·관련 unit·Storybook 검증을 통과시킨다.
+- [x] 4.3 반응형 Light/Dark 브라우저 QA와 독립 구현 리뷰를 완료한다.
