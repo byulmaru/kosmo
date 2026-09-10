@@ -1,4 +1,4 @@
-## 1. PROD-811 Reply Notification content Production 연결
+## 1. PROD-811 Notification 목록 Production 연결
 
 **Authority / Provenance**
 

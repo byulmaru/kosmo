@@ -810,7 +810,7 @@ export const ReplyAuthorActivationReadsOnce: Story = {
       await userEvent.click(activation.target);
       await expect(canvas.findByText(activation.path)).resolves.toBeVisible();
       if (activation.opensViewer) {
-        await expect(screen.findByTestId('post-media-viewer-dialog')).resolves.toBeVisible();
+        await waitFor(() => expect(screen.getByTestId('post-media-viewer-dialog')).toBeVisible());
       }
       expect(notificationMutationRequest).toHaveBeenCalledTimes(1);
       expect(notificationMutationRequest).toHaveBeenCalledWith(
@@ -941,7 +941,7 @@ export const SelectedProfileSwitch: Story = {
     await userEvent.click(switchButton);
     await expect(canvas.findByTestId('reply-notification-post')).resolves.toBeVisible();
     await userEvent.click(canvas.getByTestId('post-media-open-notification-reply-media'));
-    await expect(screen.findByTestId('post-media-viewer-dialog')).resolves.toBeVisible();
+    await waitFor(() => expect(screen.getByTestId('post-media-viewer-dialog')).toBeVisible());
 
     fireEvent.click(switchButton);
     await expect(

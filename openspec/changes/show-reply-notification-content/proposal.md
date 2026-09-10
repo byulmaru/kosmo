@@ -1,6 +1,6 @@
 ## Why
 
-공용 Notification presentation과 Storybook 계약은 Reply 본문·미디어·Action Bar를 포함하지만 실제 알림 목록은 아직 legacy 행을 사용해 Reply 내용을 보여주지 않는다. PROD-811은 승인된 presentation을 기존 Relay·Read·권한 경계에 연결해 알림 목록에서 Reply를 안전하게 확인할 수 있게 한다.
+공용 Notification presentation과 Storybook 계약은 현재 지원하는 Follow·FollowRequest·Reaction·Reply·Repost 5종을 정의하지만 실제 알림 목록은 아직 legacy 행을 사용한다. PROD-811은 이 5종을 기존 Relay·Read·권한 경계에 연결하고 Reply 본문·미디어·Action Bar까지 제공한다.
 
 ## What Changes
 
