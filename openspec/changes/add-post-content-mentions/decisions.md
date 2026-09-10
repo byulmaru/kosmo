@@ -76,7 +76,7 @@
 - Consequences: V1 canonicalizer와 기존 document equality 경계를 유지하면서 Mention projection을 `post_mentions`에 추가하고, 저장 활성화 전 legacy body text·Media·Content Warning 보존 증거를 요구한다.
 - Confirmation / Follow-up: 기존 V1 document, V1 additive Mention document, unknown version과 unsupported node 방어 및 GraphQL `bodyText` → legacy renderer compatibility matrix를 실행 검증한다.
 
-### 구현된 Mention shape와 stored actor URI exact 검증
+### Canonical Mention은 Profile identity만 저장하고 inbound URI는 보존하지 않음
 
 - Decision Date: 2026-09-10
 - Decision Class: Implementation Choice
@@ -84,10 +84,10 @@
 - Implementation Evidence: `packages/core/post-content/schema/nodes/mention.ts`, `packages/core/services/post.ts`, `packages/core/post-content/server.ts`, `packages/core/db/tables.ts`, `drizzle/20260910073222_sleepy_justin_hammer/migration.sql`
 - Status: Active
 - Context / Problem: canonical node와 revision relation을 구현하려면 typed Mention의 저장 attrs와 Profile identity 조회 기준을 고정해야 하지만, 이 세부를 제품 요구사항으로 확장해서는 안 된다.
-- Decision Outcome: 현재 canonical `mention` node attrs는 정확히 `{ target, href, label }`이다. `target`은 typed Mention target identity, `href`는 rendered anchor identity, `label`은 normalized visible label이며 target/href는 normalized HTTP(S) URI다. `post_mentions`는 `post_content_id`와 `profile_id` column, `(post_content_id, profile_id)` composite primary key, `profile_id` index와 Post Content/Profile foreign key(`ON DELETE CASCADE`)를 사용한다. 저장 시 normalized target과 href를 `ActivityPubActors.uri`의 실제 stored value와 각각 exact match하고 두 값이 같은 `profileId`로 확인될 때만 relation을 저장한다. Profile domain·handle이나 추측한 remote URL을 조합하거나 원격 조회하지 않는다. Local Post Content validator는 Mention node를 write 전에 거부한다.
-- Alternatives Considered: label·handle exact match, Profile domain에서 actor URL 추정, target 하나만 확인하거나 anchor만 확인하는 방식은 stable identity 증거와 revision relation의 안전 경계를 약화하므로 사용하지 않는다.
-- Consequences: node/relation shape는 구현 선택으로 고정되지만 제품 API·UI route를 결정하지 않는다. `PROD-910`은 이 projection을 소비할 read shape와 renderer를 별도로 검증한다.
-- Confirmation / Follow-up: inbound valid/fallback/duplicate/rollback 검증, local validator 검증, migration schema와 canonical document 검증으로 확인한다.
+- Decision Outcome: 사용자 승인으로 기존 `{ target, href, label }` 저장 결정을 대체하고, 현재 canonical `mention` node attrs는 정확히 `{ profileId, label }`이다. `profileId`는 inbound typed Mention의 target URI를 기존 Profile identity로 검증한 값이고, `label`은 normalized visible label이다. inbound candidate는 parser 경계에서만 `{ targetHref, label, profileId }`로 전달하며, parser는 candidate의 normalized `targetHref`와 원문 anchor의 normalized href 및 label을 일치시킬 때만 `{ profileId, label }` node를 만든다. target/href external URI는 identity 검증 입력이며 canonical document에 저장하지 않는다. Core Post 저장은 document의 `profileId`를 common relation input으로 수집하고 같은 transaction에서 `post_mentions`를 저장하며, 별도 ActivityPub actor lookup이나 fallback 재검증을 수행하지 않는다. `post_mentions`는 `post_content_id`와 `profile_id` column, `(post_content_id, profile_id)` composite primary key, `profile_id` index와 Post Content/Profile foreign key(`ON DELETE CASCADE`)를 유지한다. Local Post Content validator는 Mention node를 write 전에 거부한다.
+- Alternatives Considered: `{ target, href, label }`를 canonical document에 저장하거나 Profile domain·handle에서 remote URL을 추정하는 방식은 저장 JSON에 transport identity를 결합하고 renderer가 외부 URI를 재해석하게 하므로 사용하지 않는다. label·handle exact match만으로 Profile을 연결하거나 unresolved URI를 위해 원격 lookup/materialization을 수행하는 방식도 stable identity 경계를 약화하므로 사용하지 않는다.
+- Consequences: canonical document와 renderer는 Profile identity와 label만 소비하고 outbound HTML은 label text만 생성한다. `post_mentions` shape와 transaction/revision ownership은 변경하지 않으며, `PROD-910`은 이 projection을 소비할 read shape와 renderer를 별도로 검증한다.
+- Confirmation / Follow-up: inbound candidate resolution, valid/fallback/duplicate/rollback 저장 검증, canonical document equality, local validator와 label-only HTML serialization을 실행 검증한다.
 
 ### 공통 저장 계약은 `PROD-340`과 `PROD-910`이 함께 완료하고 Notification은 분리함
 

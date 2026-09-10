@@ -277,7 +277,7 @@ describe('ActivityPub Local Post Note', () => {
     assert.equal(json.includes(secondMedia.id), false);
   });
 
-  test('serializes a stored Mention node as safe HTML without emitting an outbound tag', async () => {
+  test('serializes a stored Mention node as label text without emitting an outbound tag', async () => {
     const author = await createProfile({ handle: 'mention-author', kind: InstanceKind.LOCAL });
     const post = await createPost(author.id);
     assert.ok(post.currentContentId);
@@ -293,9 +293,8 @@ describe('ActivityPub Local Post Note', () => {
                   { text: 'Hello ', type: 'text' },
                   {
                     attrs: {
-                      href: 'https://remote.example/users/alice',
                       label: '@alice',
-                      target: 'https://remote.example/users/alice',
+                      profileId: author.id,
                     },
                     type: 'mention',
                   },
@@ -313,10 +312,7 @@ describe('ActivityPub Local Post Note', () => {
 
     const note = await dispatchLocalPostNote(createContext(), { id: post.id });
     assert.ok(note);
-    assert.equal(
-      note.content?.toString(),
-      '<p>Hello <a href="https://remote.example/users/alice">@alice</a></p>',
-    );
+    assert.equal(note.content?.toString(), '<p>Hello <span>@alice</span></p>');
     assert.deepEqual(note.tagIds, []);
   });
 

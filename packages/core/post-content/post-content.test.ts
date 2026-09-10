@@ -10,6 +10,9 @@ import {
   validateLocalPostContentDocument,
 } from './server';
 
+const aliceProfileId = '019f6678-86fa-709b-984e-1520766b8441';
+const otherProfileId = '019f6678-86fa-709b-984e-1520766b8442';
+
 function serializeJson(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
 }
@@ -364,7 +367,7 @@ test('compares canonical body and summary meaning', () => {
   assert.equal(arePostContentRevisionsEqual(first, { ...second, summary: 'warning' }), false);
 });
 
-test('preserves Mention labels in text and distinguishes independently verified targets', () => {
+test('preserves Mention labels in text and distinguishes Profile identities', () => {
   const first = canonicalizePostContentDocument({
     version: 1,
     summary: null,
@@ -378,9 +381,8 @@ test('preserves Mention labels in text and distinguishes independently verified 
             {
               type: 'mention',
               attrs: {
-                href: 'HTTPS://remote.example:443/@alice',
                 label: '@alice',
-                target: 'https://remote.example/users/alice',
+                profileId: aliceProfileId,
               },
             },
           ],
@@ -400,9 +402,8 @@ test('preserves Mention labels in text and distinguishes independently verified 
             {
               type: 'mention' as const,
               attrs: {
-                href: 'https://remote.example/@alice',
                 label: '@alice',
-                target: 'https://remote.example/users/alice',
+                profileId: aliceProfileId,
               },
             },
           ],
@@ -426,9 +427,8 @@ test('preserves Mention labels in text and distinguishes independently verified 
               {
                 type: 'mention',
                 attrs: {
-                  href: 'https://remote.example/@alice',
                   label: '@alice',
-                  target: 'https://remote.example/users/other',
+                  profileId: otherProfileId,
                 },
               },
             ],
@@ -438,6 +438,25 @@ test('preserves Mention labels in text and distinguishes independently verified 
     }),
     false,
   );
+});
+
+test('rejects Mention attrs without a valid Profile identity or visible label', () => {
+  for (const attrs of [
+    { label: '@alice', profileId: 'not-a-uuid' },
+    { label: '', profileId: aliceProfileId },
+    { label: '\u0000', profileId: aliceProfileId },
+  ]) {
+    assert.throws(() =>
+      canonicalizePostContentDocument({
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'mention', attrs }] }],
+        },
+      }),
+    );
+  }
 });
 
 test('native-safe guard accepts additive V1 properties while validating consumed values', () => {
@@ -563,9 +582,8 @@ test('rejects inbound Mention nodes from the local Post Content validator', () =
                 {
                   type: 'mention',
                   attrs: {
-                    href: 'https://remote.example/@alice',
                     label: '@alice',
-                    target: 'https://remote.example/users/alice',
+                    profileId: aliceProfileId,
                   },
                 },
               ],

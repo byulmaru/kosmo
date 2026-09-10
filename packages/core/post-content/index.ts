@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export const postContentSchemaVersion = 1 as const;
 
 export type PostContentSchemaVersion = typeof postContentSchemaVersion;
@@ -22,10 +24,8 @@ export interface PostContentHardBreakNode {
 export interface PostContentMentionNode {
   readonly type: 'mention';
   readonly attrs: {
-    /** The typed ActivityPub Mention target identity. */
-    readonly target: string;
-    /** The identity href present on the rendered anchor. */
-    readonly href: string;
+    /** The stable Profile identity verified at the inbound boundary. */
+    readonly profileId: string;
     /** The normalized visible label rendered for this occurrence. */
     readonly label: string;
   };
@@ -74,6 +74,16 @@ export function normalizePostContentMentionLabel(value: string): string {
     throw new TypeError('Mention label must be a visible string');
   }
   return normalized;
+}
+
+const postContentProfileIdSchema = z.uuid();
+
+export function normalizePostContentProfileId(value: unknown): string {
+  const result = postContentProfileIdSchema.safeParse(value);
+  if (!result.success) {
+    throw new TypeError('Mention Profile ID must be a UUID');
+  }
+  return result.data;
 }
 
 function hasControlCharacter(value: string): boolean {
@@ -171,12 +181,10 @@ function isInlineNode(value: unknown): value is PostContentInlineNode {
 
 function isMentionAttrs(value: unknown): value is PostContentMentionNode['attrs'] {
   return (
-    isRecordWithKeys(value, ['target', 'href', 'label']) &&
-    typeof value.target === 'string' &&
-    typeof value.href === 'string' &&
+    isRecordWithKeys(value, ['profileId', 'label']) &&
+    typeof value.profileId === 'string' &&
     typeof value.label === 'string' &&
-    value.target.length > 0 &&
-    value.href.length > 0 &&
+    postContentProfileIdSchema.safeParse(value.profileId).success &&
     value.label.length > 0
   );
 }

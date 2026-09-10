@@ -65,6 +65,34 @@ test('omits Media nodes from HTML projection', () => {
   );
 });
 
+test('serializes Mention labels without exposing identity URIs', () => {
+  assert.equal(
+    postContentDocumentToHtml({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Hello ' },
+              {
+                type: 'mention',
+                attrs: {
+                  label: '@alice',
+                  profileId: '019f6678-86fa-709b-984e-1520766b8441',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    }),
+    '<p>Hello <span>@alice</span></p>',
+  );
+});
+
 for (const [name, document] of [
   ['unsupported version', { ...canonicalFixture, version: 2 }],
   [

@@ -2,7 +2,7 @@
 
 ### Requirement: V1 canonical PostContent document envelope와 body schema
 
-**Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, `PROD-461`, `PROD-554`, `PROD-340`. 시스템은 `PostContent` revision을 version, summary와 body를 포함한 canonical document JSON으로 저장하고 V1 body를 실제 `prosemirror-model` schema로 검증해야 하며, 기존 V1 body와 의미를 유지한 채 검증된 inbound typed Mention의 additive inline node를 허용해야 한다(MUST). Mention node의 exact attr/field shape는 `post-content-mentions` contract 안에서 구현으로 정한다.
+**Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, `PROD-461`, `PROD-554`, `PROD-340`. 시스템은 `PostContent` revision을 version, summary와 body를 포함한 canonical document JSON으로 저장하고 V1 body를 실제 `prosemirror-model` schema로 검증해야 하며, 기존 V1 body와 의미를 유지한 채 검증된 inbound typed Mention의 additive inline node를 허용해야 한다(MUST). Canonical Mention node는 `profileId`와 정규화된 `label`만 저장하고, inbound target·anchor URI는 저장 전 검증 입력으로만 사용한다.
 
 #### Scenario: V1 envelope 구성
 
@@ -24,7 +24,7 @@
 - **AND** mark는 `link`만 허용하고 attr는 `href` 하나만 허용한다
 - **AND** block `media` node는 non-empty string `mediaId` attr 하나만 허용한다
 - **AND** 하나의 document는 Media node를 최대 4개까지 포함할 수 있다
-- **AND** Mention node는 검증된 target·anchor identity와 안전한 표시 계약을 만족하는 canonical shape만 허용한다
+- **AND** Mention node는 UUID `profileId`와 안전하게 정규화된 표시 `label`만 attrs로 가지며, inbound target·anchor URI를 저장하지 않는다
 - **AND** node와 mark에 열거되지 않은 attr, node 또는 mark가 있으면 검증을 거부한다
 - **AND** `pre` node를 지원하지 않는다
 

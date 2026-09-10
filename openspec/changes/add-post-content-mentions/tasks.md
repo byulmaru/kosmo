@@ -15,8 +15,8 @@
 **Guardrails**
 
 - 일반 HTML anchor와 `to`/`cc` audience actor URI를 Mention으로 추론하지 않는다.
-- target·anchor identity 증거가 저장 Profile stable identity와 일치하고 표시 label이 안전한 표시·구조 검증을 통과한 typed Mention만 관계 입력으로 인정한다. 표시 label exact match만으로 Profile을 연결하지 않는다.
-- normalized target·anchor는 실제 저장된 `ActivityPubActors.uri`와 exact match로 확인하며 Profile domain·handle에서 remote URL을 추측하거나 원격 lookup을 수행하지 않는다. Local Post Content validator는 Mention node를 write 전에 거부한다.
+- inbound adapter가 target URI를 기존 Profile stable identity로 확인해 전달한 `{ targetHref, label, profileId }` candidate만 관계 입력으로 인정하고, core parser는 normalized target href·anchor href·label을 일치시킨다. 표시 label exact match만으로 Profile을 연결하지 않는다.
+- canonical document에는 external URI를 저장하지 않으며 core 저장 경계에서 별도 ActivityPub actor lookup·remote lookup·fallback 재검증을 수행하지 않는다. Local Post Content validator는 Mention node를 write 전에 거부한다.
 - document, `post_mentions` persisted revision-to-Profile 관계와 Current Content pointer는 같은 저장 경계에서 원자적으로 처리하며 과거 revision을 변경하지 않는다. `post_mentions` row는 해당 Post Content revision과 Profile을 foreign key로 가리킨다.
 - duplicate remote `Create`는 first-write-wins no-op으로 유지하고 `Update(Note)`로 승격하지 않는다.
 - unresolved·malformed·identity mismatch는 안전한 link 또는 표시 text로 낮추고 신규 원격 Profile lookup/materialization을 수행하지 않는다.
@@ -25,14 +25,14 @@
 
 - 검증된 단일·다중 Mention, 같은 Profile의 반복 occurrence, 서로 다른 Profile의 occurrence 순서와 relation set 결과를 실행 검증한다.
 - `post_mentions` row가 해당 Post Content revision과 Profile foreign key를 가리키고, 같은 revision/Profile 중복을 만들지 않는지 검증한다.
-- 일반 link·audience-only·target/anchor identity mismatch·안전하지 않은 label 입력이 relation을 만들지 않고 안전 fallback으로 저장되는지 검증한다. 서로 다른 target이 각기 다른 Profile stable identity와 독립적으로 검증되는 Mention은 모두 보존되는지 함께 확인한다.
+- 일반 link·audience-only·identity resolution 실패·anchor mismatch·안전하지 않은 label 입력이 relation을 만들지 않고 안전 fallback으로 저장되는지 검증한다. 서로 다른 Profile identity가 각기 독립적으로 검증되는 Mention은 모두 보존되는지 함께 확인한다.
 - local Note의 plain text/HTML 파생이 label text와 기존 safe link를 보존하고 outbound typed Mention federation을 추가하지 않는지 회귀 검증한다.
 - `post_mentions` relation 또는 Current Content pointer 저장 실패가 새 Post/Content와 함께 rollback되는지 검증한다.
 - 동일 remote object URI의 동일·변경된 duplicate Create가 기존 document, relation, timestamp를 유지하는지 검증한다.
 - HTML formatting만 달라지고 canonical body·Mention identity가 같은 duplicate Create도 새 revision을 만들지 않는지 검증한다.
 
-- [x] 1.1 inbound `tag`에서 typed Mention을 primitive candidate로 변환하고 audience·일반 link와 분리해 저장 Profile identity 검증 경계에 전달한다. core HTML/plain-text parser에는 Fedify vocabulary나 DB/remote lookup을 주입하지 않는다.
-- [x] 1.2 검증된 Mention occurrence와 Profile membership을 canonical document·`post_mentions` revision 저장 결과에 반영하고 반복 occurrence와 relation deduplication을 보장한다. 현재 구현 선택은 `{ target, href, label }` node attrs와 `(post_content_id, profile_id)` composite primary key·foreign key relation이다.
+- [x] 1.1 inbound `tag`에서 typed Mention을 `{ targetHref, label, profileId }` candidate로 변환하고 audience·일반 link와 분리해 core parser에 전달한다. core HTML/plain-text parser에는 Fedify vocabulary나 DB/remote lookup을 주입하지 않는다.
+- [x] 1.2 검증된 Mention occurrence와 Profile membership을 canonical document·`post_mentions` revision 저장 결과에 반영하고 반복 occurrence와 relation deduplication을 보장한다. 현재 구현 선택은 `{ profileId, label }` node attrs와 `(post_content_id, profile_id)` composite primary key·foreign key relation이다.
 - [x] 1.3 mismatch·malformed·unresolved fallback, duplicate Create no-op과 원자적 rollback의 행동 검증을 추가하고 통과시킨다.
 
 ## 2. PROD-340 legacy reader compatibility and activation gate

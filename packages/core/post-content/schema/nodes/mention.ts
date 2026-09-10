@@ -1,27 +1,21 @@
-import { normalizePostContentMentionLabel } from '../../index';
-import { normalizeLinkHref } from '../marks/link';
+import { normalizePostContentMentionLabel, normalizePostContentProfileId } from '../../index';
 import type { NodeSpec } from 'prosemirror-model';
 
 export const mentionNodeSpec = {
   atom: true,
   attrs: {
-    target: { validate: validateMentionUri },
-    href: { validate: validateMentionUri },
+    profileId: { validate: validateMentionProfileId },
     label: { validate: validateMentionLabel },
   },
   group: 'inline',
   inline: true,
   marks: '',
   selectable: false,
-  toDOM: (node) => ['a', { href: node.attrs.href }, node.attrs.label],
+  toDOM: (node) => ['span', node.attrs.label],
 } satisfies NodeSpec;
 
-function validateMentionUri(value: unknown): void {
-  try {
-    normalizeLinkHref(value);
-  } catch {
-    throw new TypeError('Mention URI must use http or https');
-  }
+function validateMentionProfileId(value: unknown): void {
+  normalizePostContentProfileId(value);
 }
 
 function validateMentionLabel(value: unknown): void {

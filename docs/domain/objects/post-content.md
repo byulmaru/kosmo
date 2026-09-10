@@ -33,7 +33,8 @@ UTF-16 길이(`.length`) 합계가 10,000자 이하일 때 수신할 수 있다.
 이 문자 수 정책과 구분한다. 문자 수 검사만으로 파싱이나 네트워크 자원 소비가 제한되지는 않는다.
 
 ActivityPub 표현은 Content Document의 저장 구조를 그대로 직렬화하지 않는다. paragraph, text, hard break와
-link는 Media node를 제외한 안전한 HTML `Note.content`로 투영하고, Media node는 document 순서대로
+link는 Media node를 제외한 안전한 HTML `Note.content`로 투영하고, Mention node는 정규화된 label text만
+투영하며, Media node는 document 순서대로
 `Note.attachment`의 Image로 투영한다. `mediaId`는 외부에 노출하지 않고 조회 시점에 접근 가능한 Media URL과
 MIME type으로 바꾸며 Media의 nullable Alt Text는 Image의 사람이 읽을 수 있는 이름으로 제공한다. document root의
 `sensitiveMedia`는 지원하는 ActivityPub sensitive 속성으로 투영한다. 내부 document의 정확한 Media 삽입
@@ -59,7 +60,9 @@ Source=Local, State=Ready와 Upload Account 조건을 검증한다. Media row의
 깨뜨리지 않는 별도 lifecycle 계약이 생기기 전까지 제공하지 않는다.
 
 Mentioned Profile은 Content Document의 검증된 typed Mention node에서 재구축할 수 있는 revision 관계이며 `post_mentions`
-DB table에 persisted projection으로 저장한다. `post_mentions` row는 Post Content revision과 Profile을 foreign keys로
+DB table에 persisted projection으로 저장한다. canonical Mention node는 저장된 Profile identity인 `profileId`와
+정규화된 표시 label인 `label`만 attr로 가지며, inbound ActivityPub target·anchor URI는 이 identity를 검증하는
+입력일 뿐 Content Document에 저장하지 않는다. `post_mentions` row는 Post Content revision과 Profile을 foreign keys로
 가리키며 독립적인 Post-level source of truth가 아니다. column, index와 primary key의 구체 shape는 이 문서에서
 고정하지 않는다. 새 revision은
 새 Mentioned Profile 관계 집합을 가지며, immutable한 과거 revision과 그 관계는 보존한다. Current Post의
@@ -76,8 +79,9 @@ Mentioned Profile은 현재 Post Content 관계에서 투영한다. document와 
 바뀌면 새 Post Content를 만든다. 이미지 교체는 먼저 새 Local Media를 Ready로 만든 다음 그 Media를 참조하는 새
 revision을 만드는 행동이다. 이전 revision은 이전 Media 참조를 그대로 보존한다.
 
-ActivityPub `tag`의 typed `Mention`은 연결 대상 Profile의 stable identity와 검증될 때만 typed Mention node를
-저장하고, 그 node에서 Mentioned Profile 관계를 재구축한다. unresolved, malformed 또는 identity mismatch는
+ActivityPub `tag`의 typed `Mention`은 inbound target·anchor URI가 연결 대상 Profile의 stable identity와
+검증될 때만 `profileId`와 label을 가진 typed Mention node를 저장하고, 그 node에서 Mentioned Profile 관계를
+재구축한다. inbound URI는 저장 전에만 사용한다. unresolved, malformed 또는 identity mismatch는
 Mention node와 Profile 관계를 만들지 않고, 그 Note가 다른 검증을 통과하면 안전한 일반 link 또는 표시 text로
 보존한다. 이 fallback은 원격 Profile을 새로 탐색하거나 materialize하지 않는다.
 
@@ -91,7 +95,7 @@ Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인�
 동작과 문단 구조의 일시적 저하를 허용하고 Media와 Content Warning은 유지한다. 서버의 본문 파생값부터 구 reader
 표시까지 글자·Media·Content Warning 보존을 검증한 뒤, 현재 Post Content V1에 additive한 Mention node 저장을
 활성화한다. 이 change에서는 document schema version을 올리거나 V1/V2 dual-read 또는 document version 변환을 도입하지 않으며,
-Mention node의 구체 attr/field shape는 구현 계약에서 정한다.
+Mention node는 `profileId`와 정규화된 `label`만 저장하고 inbound target·anchor URI는 저장 전 identity 검증에만 사용한다.
 
 ## 조회 정책
 

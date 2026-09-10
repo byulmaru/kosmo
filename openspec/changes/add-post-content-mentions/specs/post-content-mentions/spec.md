@@ -5,23 +5,24 @@
 ### Requirement: typed Mention identity boundary
 
 시스템은 검증된 inbound typed `Mention`만 canonical Mention projection의 입력으로 인정해야 한다 (MUST).
-target과 anchor에 담긴 identity 증거는 저장된 Local/Remote Profile의 stable identity와 일치해야 하고 표시 label은
-안전한 표시·구조 검증을 통과해야 한다. 표시 label이 Profile 이름·handle과 같다는 사실만으로 identity를 확정해서는
-안 되며 (MUST NOT), 일반 anchor와 `to`/`cc` audience actor URI를 Mention identity와 같은 의미로 취급하지 않아야
-한다 (MUST NOT).
+inbound adapter는 target URI를 저장된 Local/Remote Profile의 stable identity로 확인하고 `{ targetHref, label, profileId }`
+candidate를 전달해야 한다. Core parser는 candidate의 normalized `targetHref`가 원문 anchor href와 같고 label이 안전하게
+정규화될 때만 `profileId`와 `label`을 가진 canonical Mention node를 만든다. 표시 label이 Profile 이름·handle과 같다는
+사실만으로 identity를 확정해서는 안 되며 (MUST NOT), 일반 anchor와 `to`/`cc` audience actor URI를 Mention identity와
+같은 의미로 취급하지 않아야 한다 (MUST NOT).
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `PROD-340`
 
 #### Scenario: Accept a verified typed Mention
 
-- **WHEN** inbound Note의 typed `Mention`이 target과 anchor의 identity 증거로 같은 Profile stable identity를 확인하고 표시 label의 안전한 표시·구조 검증을 통과한다
+- **WHEN** inbound Note의 typed `Mention`이 기존 Profile stable identity로 확인되고 candidate의 normalized target href와 원문 anchor href 및 표시 label이 일치한다
 - **THEN** 시스템은 해당 Mention을 canonical Post Content Mention projection의 입력으로 전달한다
 - **AND** 동일 Note의 일반 link와 `to`/`cc` audience 값은 별도 의미로 유지한다
 
 #### Scenario: Accept independently verified targets
 
-- **WHEN** 하나의 Note에 서로 다른 target을 가진 typed Mention들이 있고 각 target·anchor가 서로 다른 저장 Profile stable identity와 독립적으로 일치한다
-- **THEN** 시스템은 target이 서로 다르다는 사실만으로 Mention을 mismatch로 처리하지 않는다
+- **WHEN** 하나의 Note에 서로 다른 Profile identity를 가진 typed Mention candidate들이 있고 각 candidate의 target href와 anchor 및 label이 독립적으로 일치한다
+- **THEN** 시스템은 Profile identity가 서로 다르다는 사실만으로 Mention을 mismatch로 처리하지 않는다
 - **AND** 각 Mention occurrence를 검증된 canonical projection 입력으로 전달한다
 
 #### Scenario: Do not infer Mention from a general link or audience
@@ -97,19 +98,19 @@ shape는 이 requirement가 고정하지 않는다.
 
 ### Requirement: canonical Mention equality preserves semantic identity
 
-시스템은 기존 canonical Post Content document equality를 유지해야 한다 (MUST). HTML formatting-only 차이는 canonicalization으로 흡수해 같은 의미로 비교하고 (MUST), 표시 label·summary·body의 실제 내용 변경은 기존 equality 규칙에 따라 반영해야 하며 (MUST), 표시 label이 같아도 independently verified target·anchor가 다른 Profile stable identity를 가리키면 다른 document 의미로 비교해야 한다 (MUST). 이 requirement는 document equality invariant만 정의하며 remote `Update(Note)` mutation API를 추가하거나 정의하지 않는다 (MUST NOT).
+시스템은 기존 canonical Post Content document equality를 유지해야 한다 (MUST). HTML formatting-only 차이는 canonicalization으로 흡수해 같은 의미로 비교하고 (MUST), 표시 label·summary·body의 실제 내용 변경은 기존 equality 규칙에 따라 반영해야 하며 (MUST), 표시 label이 같아도 서로 다른 `profileId`를 가진 Profile stable identity를 가리키면 다른 document 의미로 비교해야 한다 (MUST). inbound URI 표현 차이는 canonical document에 저장되지 않으므로 equality 기준이 아니다. 이 requirement는 document equality invariant만 정의하며 remote `Update(Note)` mutation API를 추가하거나 정의하지 않는다 (MUST NOT).
 
 **Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/post.md`, `PROD-340`
 
 #### Scenario: Formatting-only canonical-equivalent Mention remains equal
 
-- **WHEN** 두 typed `Mention` 입력이 동일한 Profile stable identity와 canonicalized target·anchor 증거를 독립적으로 확인하고, 표시 label·summary·body의 실제 내용은 같으며 차이는 HTML 서식뿐이다
+- **WHEN** 두 typed `Mention` 입력이 동일한 `profileId`와 동일한 표시 label을 가지며, 표시 label·summary·body의 실제 내용은 같고 차이는 HTML 서식뿐이다
 - **THEN** 시스템은 두 Mention을 같은 canonical 의미로 비교한다
 - **AND** equality 판단은 서식 차이만으로 다른 Mention identity나 다른 의미를 만들지 않는다
 
 #### Scenario: Independently verified Profile identity change is distinct meaning
 
-- **WHEN** 두 typed `Mention` 입력의 표시 label이 같더라도 target·anchor identity 증거가 독립적으로 서로 다른 Profile stable identity를 확인한다
+- **WHEN** 두 typed `Mention` 입력의 표시 label이 같더라도 `profileId`가 서로 다른 Profile stable identity를 가리킨다
 - **THEN** 시스템은 두 Mention을 서로 다른 canonical 의미로 비교한다
 - **AND** label equality만으로 두 Profile identity를 합치거나 같은 Mention 의미로 판정하지 않는다
 
@@ -148,7 +149,7 @@ timestamp를 만들거나 기존 저장값을 갱신해서는 안 된다 (MUST N
 `bodyText` fallback을 재사용한 plain text 표시를 허용하며, link 클릭 동작과 문단 구조의 일시적 저하는 허용한다.
 서버 canonicalizer에서 GraphQL `bodyText`와 legacy renderer까지의 end-to-end 호환 검증 증거 없이 Mention node
 저장을 활성화해서는 안 된다 (MUST NOT). 이 change에서는 document schema version을 올리거나 V1/V2 dual-read 또는
-document version 변환을 도입하지 않으며 (MUST NOT), Mention node의 구체 attr/field shape는 이 requirement가 고정하지 않는다.
+document version 변환을 도입하지 않으며 (MUST NOT), 이 reader compatibility requirement는 별도로 정한 `{ profileId, label }` canonical Mention attrs를 변경하지 않는다.
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `PROD-340`
 

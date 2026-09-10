@@ -4,6 +4,7 @@ import { DOMParser as ProseMirrorDOMParser } from 'prosemirror-model';
 import {
   normalizePostContentMentionLabel,
   normalizePostContentPlainText,
+  normalizePostContentProfileId,
   postContentSchemaVersion,
 } from './post-content/index';
 import { postContentSchema } from './post-content/schema';
@@ -25,6 +26,7 @@ export interface RemoteNoteContentInput {
 export interface RemoteNoteMentionCandidate {
   readonly label: string | null;
   readonly targetHref: string;
+  readonly profileId: string;
 }
 
 const schemaDOMParser = ProseMirrorDOMParser.fromSchema(postContentSchema);
@@ -61,7 +63,14 @@ function htmlToBodyDocument(
       return [];
     }
 
-    return [{ label, targetHref }];
+    let profileId: string;
+    try {
+      profileId = normalizePostContentProfileId(candidate.profileId);
+    } catch {
+      return [];
+    }
+
+    return [{ label, targetHref, profileId }];
   });
 
   const remoteNoteDOMParser = new ProseMirrorDOMParser(postContentSchema, [
@@ -89,7 +98,7 @@ function htmlToBodyDocument(
           return false;
         }
 
-        return { href, label, target: candidate.targetHref };
+        return { label, profileId: candidate.profileId };
       },
     },
     ...schemaDOMParser.rules,

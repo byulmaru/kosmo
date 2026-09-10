@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
 import { after, mock, test } from 'node:test';
-import { eq } from 'drizzle-orm';
+import { DrizzleQueryError, eq } from 'drizzle-orm';
 import {
   Accounts,
-  ActivityPubActors,
   ActivityPubPosts,
   db,
   firstOrThrow,
@@ -20,7 +19,6 @@ import {
 } from '../db';
 import {
   AccountState,
-  ActivityPubActorType,
   InstanceKind,
   InstanceState,
   MediaSource,
@@ -482,12 +480,6 @@ test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존�
 test('createPost는 검증된 Mention occurrence를 revision 관계로 한 번만 저장한다', async () => {
   const author = await createProfile();
   const mentioned = await createProfile();
-  const actorUri = `https://remote.example/users/${mentioned.handle}`;
-  await db.insert(ActivityPubActors).values({
-    profileId: mentioned.id,
-    type: ActivityPubActorType.PERSON,
-    uri: actorUri,
-  });
 
   const document = canonicalizePostContentDocument({
     version: 1,
@@ -501,12 +493,12 @@ test('createPost는 검증된 Mention occurrence를 revision 관계로 한 번�
             { type: 'text', text: 'Hi ' },
             {
               type: 'mention',
-              attrs: { href: actorUri, label: `@${mentioned.handle}`, target: actorUri },
+              attrs: { label: `@${mentioned.handle}`, profileId: mentioned.id },
             },
             { type: 'text', text: ' and again ' },
             {
               type: 'mention',
-              attrs: { href: actorUri, label: `@${mentioned.handle}`, target: actorUri },
+              attrs: { label: `@${mentioned.handle}`, profileId: mentioned.id },
             },
           ],
         },
@@ -535,12 +527,12 @@ test('createPost는 검증된 Mention occurrence를 revision 관계로 한 번�
         { type: 'text', text: 'Hi ' },
         {
           type: 'mention',
-          attrs: { href: actorUri, label: `@${mentioned.handle}`, target: actorUri },
+          attrs: { label: `@${mentioned.handle}`, profileId: mentioned.id },
         },
         { type: 'text', text: ' and again ' },
         {
           type: 'mention',
-          attrs: { href: actorUri, label: `@${mentioned.handle}`, target: actorUri },
+          attrs: { label: `@${mentioned.handle}`, profileId: mentioned.id },
         },
       ],
     },
@@ -551,12 +543,6 @@ test('createPost는 변경된 Mention duplicate Create에서도 document·relati
   const author = await createProfile();
   const firstMention = await createProfile();
   const changedMention = await createProfile();
-  const firstUri = `https://remote.example/users/${firstMention.handle}`;
-  const changedUri = `https://remote.example/users/${changedMention.handle}`;
-  await db.insert(ActivityPubActors).values([
-    { profileId: firstMention.id, type: ActivityPubActorType.PERSON, uri: firstUri },
-    { profileId: changedMention.id, type: ActivityPubActorType.PERSON, uri: changedUri },
-  ]);
   const objectUri = `https://remote.example/notes/${crypto.randomUUID()}`;
   const firstPublishedAt = Temporal.Instant.from('2026-09-10T00:00:00Z');
   const firstReceivedAt = Temporal.Instant.from('2026-09-10T00:01:00Z');
@@ -572,7 +558,7 @@ test('createPost는 변경된 Mention duplicate Create에서도 document·relati
             content: [
               {
                 type: 'mention',
-                attrs: { href: firstUri, label: '@first', target: firstUri },
+                attrs: { label: '@first', profileId: firstMention.id },
               },
             ],
           },
@@ -600,7 +586,7 @@ test('createPost는 변경된 Mention duplicate Create에서도 document·relati
             content: [
               {
                 type: 'mention',
-                attrs: { href: changedUri, label: '@changed', target: changedUri },
+                attrs: { label: '@changed', profileId: changedMention.id },
               },
             ],
           },
@@ -642,73 +628,10 @@ test('createPost는 변경된 Mention duplicate Create에서도 document·relati
   );
 });
 
-test('createPost는 Mention target과 anchor가 다른 Profile이면 safe link로 낮춘다', async () => {
-  const author = await createProfile();
-  const target = await createProfile();
-  const anchor = await createProfile();
-  const targetUri = `https://remote.example/users/${target.handle}`;
-  const anchorUri = `https://remote.example/users/${anchor.handle}`;
-  await db.insert(ActivityPubActors).values([
-    { profileId: target.id, type: ActivityPubActorType.PERSON, uri: targetUri },
-    { profileId: anchor.id, type: ActivityPubActorType.PERSON, uri: anchorUri },
-  ]);
-
-  const result = await createPost({
-    document: canonicalizePostContentDocument({
-      version: 1,
-      summary: null,
-      body: {
-        type: 'doc',
-        content: [
-          {
-            type: 'paragraph',
-            content: [
-              {
-                type: 'mention',
-                attrs: { href: anchorUri, label: '@target', target: targetUri },
-              },
-            ],
-          },
-        ],
-      },
-    }),
-    objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
-    origin: 'ACTIVITYPUB',
-    profileId: author.id,
-    publishedAt: null,
-    receivedAt: Temporal.Instant.from('2026-09-10T00:00:00Z'),
-    visibility: PostVisibility.PUBLIC,
-  });
-
-  assert.ok(result.created);
-  assert.deepEqual(
-    await db.select().from(PostMentions).where(eq(PostMentions.postContentId, result.content.id)),
-    [],
-  );
-  assert.deepEqual(result.content.document.body.content, [
-    {
-      type: 'paragraph',
-      content: [
-        {
-          type: 'text',
-          text: '@target',
-          marks: [{ type: 'link', attrs: { href: anchorUri } }],
-        },
-      ],
-    },
-  ]);
-});
-
 test('createPost는 서로 다른 Profile의 Mention을 occurrence 순서와 함께 저장한다', async () => {
   const author = await createProfile();
   const firstMention = await createProfile();
   const secondMention = await createProfile();
-  const firstUri = `https://remote.example/users/${firstMention.handle}`;
-  const secondUri = `https://remote.example/users/${secondMention.handle}`;
-  await db.insert(ActivityPubActors).values([
-    { profileId: firstMention.id, type: ActivityPubActorType.PERSON, uri: firstUri },
-    { profileId: secondMention.id, type: ActivityPubActorType.PERSON, uri: secondUri },
-  ]);
 
   const result = await createPost({
     document: canonicalizePostContentDocument({
@@ -722,12 +645,12 @@ test('createPost는 서로 다른 Profile의 Mention을 occurrence 순서와 함
             content: [
               {
                 type: 'mention',
-                attrs: { href: firstUri, label: '@first', target: firstUri },
+                attrs: { label: '@first', profileId: firstMention.id },
               },
               { type: 'text', text: ' then ' },
               {
                 type: 'mention',
-                attrs: { href: secondUri, label: '@second', target: secondUri },
+                attrs: { label: '@second', profileId: secondMention.id },
               },
             ],
           },
@@ -758,77 +681,21 @@ test('createPost는 서로 다른 Profile의 Mention을 occurrence 순서와 함
       content: [
         {
           type: 'mention',
-          attrs: { href: firstUri, label: '@first', target: firstUri },
+          attrs: { label: '@first', profileId: firstMention.id },
         },
         { type: 'text', text: ' then ' },
         {
           type: 'mention',
-          attrs: { href: secondUri, label: '@second', target: secondUri },
+          attrs: { label: '@second', profileId: secondMention.id },
         },
       ],
     },
   ]);
 });
 
-test('createPost는 저장되지 않은 Mention identity를 safe link으로 낮추고 relation을 만들지 않는다', async () => {
+test('createPost는 post_mentions Profile FK 저장 실패 시 Post·Content·pointer를 rollback한다', async () => {
   const author = await createProfile();
-  const targetUri = `https://remote.example/users/unresolved-${crypto.randomUUID()}`;
-
-  const result = await createPost({
-    document: canonicalizePostContentDocument({
-      version: 1,
-      summary: null,
-      body: {
-        type: 'doc',
-        content: [
-          {
-            type: 'paragraph',
-            content: [
-              {
-                type: 'mention',
-                attrs: { href: targetUri, label: '@unresolved', target: targetUri },
-              },
-            ],
-          },
-        ],
-      },
-    }),
-    objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
-    origin: 'ACTIVITYPUB',
-    profileId: author.id,
-    publishedAt: null,
-    receivedAt: Temporal.Instant.from('2026-09-10T00:00:00Z'),
-    visibility: PostVisibility.PUBLIC,
-  });
-
-  assert.ok(result.created);
-  assert.deepEqual(
-    await db.select().from(PostMentions).where(eq(PostMentions.postContentId, result.content.id)),
-    [],
-  );
-  assert.deepEqual(result.content.document.body.content, [
-    {
-      type: 'paragraph',
-      content: [
-        {
-          type: 'text',
-          text: '@unresolved',
-          marks: [{ type: 'link', attrs: { href: targetUri } }],
-        },
-      ],
-    },
-  ]);
-});
-
-test('createPost는 post_mentions 저장 실패 시 Post·Content·pointer를 rollback한다', async () => {
-  const author = await createProfile();
-  const mentioned = await createProfile();
-  const actorUri = `https://remote.example/users/${mentioned.handle}`;
-  await db.insert(ActivityPubActors).values({
-    profileId: mentioned.id,
-    type: ActivityPubActorType.PERSON,
-    uri: actorUri,
-  });
+  const missingProfileId = crypto.randomUUID();
   const objectUri = `https://remote.example/notes/${crypto.randomUUID()}`;
   const counts = {
     activity: await db.$count(ActivityPubPosts),
@@ -837,58 +704,39 @@ test('createPost는 post_mentions 저장 실패 시 Post·Content·pointer를 ro
     post: await db.$count(Posts),
   };
 
-  await pg`
-    create function fail_post_mentions_insert() returns trigger
-    language plpgsql as $function$
-    begin
-      raise exception 'intentional post mention insert failure';
-    end
-    $function$
-  `;
-  await pg`
-    create trigger fail_post_mentions_insert
-    before insert on post_mentions
-    for each row execute function fail_post_mentions_insert()
-  `;
-
-  try {
-    await assert.rejects(
-      createPost({
-        document: canonicalizePostContentDocument({
-          version: 1,
-          summary: null,
-          body: {
-            type: 'doc',
-            content: [
-              {
-                type: 'paragraph',
-                content: [
-                  {
-                    type: 'mention',
-                    attrs: { href: actorUri, label: '@mentioned', target: actorUri },
-                  },
-                ],
-              },
-            ],
-          },
-        }),
-        objectUri,
-        origin: 'ACTIVITYPUB',
-        profileId: author.id,
-        publishedAt: null,
-        receivedAt: Temporal.Instant.from('2026-09-10T00:00:00Z'),
-        visibility: PostVisibility.PUBLIC,
+  await assert.rejects(
+    createPost({
+      document: canonicalizePostContentDocument({
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'mention',
+                  attrs: { label: '@mentioned', profileId: missingProfileId },
+                },
+              ],
+            },
+          ],
+        },
       }),
-      (error: unknown) =>
-        error instanceof Error &&
-        (error.message.includes('intentional post mention insert failure') ||
-          (error.cause instanceof Error &&
-            error.cause.message.includes('intentional post mention insert failure'))),
-    );
-  } finally {
-    await pg`drop trigger fail_post_mentions_insert on post_mentions`;
-    await pg`drop function fail_post_mentions_insert()`;
-  }
+      objectUri,
+      origin: 'ACTIVITYPUB',
+      profileId: author.id,
+      publishedAt: null,
+      receivedAt: Temporal.Instant.from('2026-09-10T00:00:00Z'),
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error: unknown) =>
+      error instanceof DrizzleQueryError &&
+      error.cause &&
+      'code' in error.cause &&
+      error.cause.code === '23503',
+  );
 
   assert.deepEqual(
     {
@@ -912,12 +760,6 @@ test('createPost는 post_mentions 저장 실패 시 Post·Content·pointer를 ro
 test('createPost는 Current Content pointer 저장 실패 시 Post·Content·relation을 rollback한다', async () => {
   const author = await createProfile();
   const mentioned = await createProfile();
-  const actorUri = `https://remote.example/users/${mentioned.handle}`;
-  await db.insert(ActivityPubActors).values({
-    profileId: mentioned.id,
-    type: ActivityPubActorType.PERSON,
-    uri: actorUri,
-  });
   const objectUri = `https://remote.example/notes/${crypto.randomUUID()}`;
   const counts = {
     activity: await db.$count(ActivityPubPosts),
@@ -957,7 +799,7 @@ test('createPost는 Current Content pointer 저장 실패 시 Post·Content·rel
                 content: [
                   {
                     type: 'mention',
-                    attrs: { href: actorUri, label: '@mentioned', target: actorUri },
+                    attrs: { label: '@mentioned', profileId: mentioned.id },
                   },
                 ],
               },

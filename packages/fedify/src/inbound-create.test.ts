@@ -186,9 +186,8 @@ describe('inbound Create dispatch', () => {
           { text: 'Hello ', type: 'text' },
           {
             attrs: {
-              href: remoteActorUri.href,
               label: '@alice',
-              target: remoteActorUri.href,
+              profileId: profile.id,
             },
             type: 'mention',
           },
@@ -200,25 +199,31 @@ describe('inbound Create dispatch', () => {
     ]);
   });
 
-  test('preserves unresolved or malformed typed Mentions as safe links without materializing profiles', async () => {
+  test('preserves unresolved, mismatched, or malformed typed Mentions as safe links', async () => {
     await createStoredRemoteActor();
+    const mismatchedTarget = new URL('https://remote.example/users/alice-mismatch');
     const unresolvedTarget = new URL('https://unknown.example/users/bob');
-    const malformedTarget = new URL('https://unknown.example/users/malformed');
+    const malformedLabelTarget = remoteActorUri;
     const objectUri = new URL('https://remote.example/notes/unresolved-mention');
     const note = new Note({
       attribution: remoteActorUri,
       content:
-        `<p><a href="${unresolvedTarget.href}">@bob</a> ` +
-        `<a href="${malformedTarget.href}">@bad</a></p>`,
+        `<p><a href="${mismatchedTarget.href}">@alice</a> ` +
+        `<a href="${unresolvedTarget.href}">@bob</a> ` +
+        `<a href="${malformedLabelTarget.href}">@bad</a></p>`,
       id: objectUri,
       mediaType: 'text/html',
       tags: [
+        new Mention({
+          href: remoteActorUri,
+          name: '@alice',
+        }),
         new Mention({
           href: unresolvedTarget,
           name: '@bob',
         }),
         new Mention({
-          href: malformedTarget,
+          href: malformedLabelTarget,
           name: '\u0001',
         }),
       ],
@@ -247,13 +252,19 @@ describe('inbound Create dispatch', () => {
         type: 'paragraph',
         content: [
           {
+            marks: [{ attrs: { href: mismatchedTarget.href }, type: 'link' }],
+            text: '@alice',
+            type: 'text',
+          },
+          { text: ' ', type: 'text' },
+          {
             marks: [{ attrs: { href: unresolvedTarget.href }, type: 'link' }],
             text: '@bob',
             type: 'text',
           },
           { text: ' ', type: 'text' },
           {
-            marks: [{ attrs: { href: malformedTarget.href }, type: 'link' }],
+            marks: [{ attrs: { href: malformedLabelTarget.href }, type: 'link' }],
             text: '@bad',
             type: 'text',
           },
@@ -308,9 +319,8 @@ describe('inbound Create dispatch', () => {
         content: [
           {
             attrs: {
-              href: remoteActorUri.href,
               label: '@alice',
-              target: remoteActorUri.href,
+              profileId: profile.id,
             },
             type: 'mention',
           },
@@ -2309,15 +2319,17 @@ describe('inbound Create dispatch', () => {
   });
 
   test('keeps the first content, visibility, and timestamps for duplicate Create', async () => {
-    await createStoredRemoteActor();
+    const profile = await createStoredRemoteActor();
+    const mentionLabel = '@alice';
     const publishedAt = Temporal.Instant.from('2026-07-15T12:00:00Z');
     const first = new Note({
       attribution: remoteActorUri,
-      content: '<p>First</p>',
+      content: `<p>First <a href="${remoteActorUri.href}">${mentionLabel}</a></p>`,
       id: remoteObjectUri,
       mediaType: 'text/html',
       published: publishedAt,
       summary: '<p>Content warning</p>',
+      tags: [new Mention({ href: remoteActorUri, name: mentionLabel })],
       to: PUBLIC_COLLECTION,
     });
 
@@ -2339,10 +2351,13 @@ describe('inbound Create dispatch', () => {
           object: new Note({
             attribution: remoteActorUri,
             cc: PUBLIC_COLLECTION,
-            content: 'Changed',
+            content:
+              `<div>\n  <p>First <a class="h-card" href="${remoteActorUri.href}">` +
+              `<span>${mentionLabel}</span></a></p>\n</div>`,
             id: remoteObjectUri,
-            mediaType: 'text/plain',
+            mediaType: 'text/html',
             published: receivedAt.add({ hours: 1 }),
+            tags: [new Mention({ href: remoteActorUri, name: mentionLabel })],
           }),
         }),
         receivedAt.add({ hours: 2 }),
@@ -2371,8 +2386,11 @@ describe('inbound Create dispatch', () => {
     assert.equal(mapping.publishedAt?.toString(), publishedAt.toString());
     assert.equal(content.createdAt.toString(), receivedAt.toString());
     assert.equal(content.document.summary, 'Content warning');
-    assert.equal(postContentDocumentToText(content.document), 'First');
+    assert.equal(postContentDocumentToText(content.document), `First ${mentionLabel}`);
     assert.equal((await db.select().from(PostContents)).length, 1);
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: content.id, profileId: profile.id },
+    ]);
 
     const futureObjectUri = new URL('https://remote.example/notes/future');
     const futurePublishedAt = receivedAt.add({ hours: 24 });

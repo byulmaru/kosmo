@@ -7,6 +7,9 @@ import {
   remoteNoteContentMaxLength,
 } from './activitypub-note-content';
 
+const aliceProfileId = '019f6678-86fa-709b-984e-1520766b8441';
+const bobProfileId = '019f6678-86fa-709b-984e-1520766b8442';
+
 describe('projectRemoteNoteContent', () => {
   it('projects plain text into the canonical document and preserves internal newlines', () => {
     const result = projectRemoteNoteContent({
@@ -205,6 +208,7 @@ describe('projectRemoteNoteContent', () => {
     const nearLimit = 'a'.repeat(remoteNoteContentMaxLength - '@alice'.length + 1);
     const mention = {
       label: '@alice',
+      profileId: aliceProfileId,
       targetHref: 'https://remote.example/@alice',
     };
 
@@ -299,10 +303,12 @@ describe('projectRemoteNoteContent', () => {
       mentions: [
         {
           label: '@alice',
+          profileId: aliceProfileId,
           targetHref: 'https://remote.example/@alice',
         },
         {
           label: '@bob',
+          profileId: bobProfileId,
           targetHref: 'https://remote.example/@bob',
         },
       ],
@@ -318,18 +324,16 @@ describe('projectRemoteNoteContent', () => {
           {
             type: 'mention',
             attrs: {
-              href: 'https://remote.example/@alice',
               label: '@alice',
-              target: 'https://remote.example/@alice',
+              profileId: aliceProfileId,
             },
           },
           { type: 'text', text: ' and ' },
           {
             type: 'mention',
             attrs: {
-              href: 'https://remote.example/@bob',
               label: '@bob',
-              target: 'https://remote.example/@bob',
+              profileId: bobProfileId,
             },
           },
           { type: 'text', text: ' and ' },
@@ -381,8 +385,16 @@ describe('projectRemoteNoteContent', () => {
         '<a href="https://remote.example/users/bob">@alice</a> ' +
         '<a href="https://remote.example/users/unknown">@alice</a></p>',
       mentions: [
-        { label: '@alice', targetHref: 'https://remote.example/users/alice' },
-        { label: '@alice', targetHref: 'https://remote.example/users/bob' },
+        {
+          label: '@alice',
+          profileId: aliceProfileId,
+          targetHref: 'https://remote.example/users/alice',
+        },
+        {
+          label: '@alice',
+          profileId: bobProfileId,
+          targetHref: 'https://remote.example/users/bob',
+        },
       ],
       summary: null,
       mediaType: 'text/html',
@@ -395,18 +407,16 @@ describe('projectRemoteNoteContent', () => {
           {
             type: 'mention',
             attrs: {
-              href: 'https://remote.example/users/alice',
               label: '@alice',
-              target: 'https://remote.example/users/alice',
+              profileId: aliceProfileId,
             },
           },
           { type: 'text', text: ' ' },
           {
             type: 'mention',
             attrs: {
-              href: 'https://remote.example/users/bob',
               label: '@alice',
-              target: 'https://remote.example/users/bob',
+              profileId: bobProfileId,
             },
           },
           { type: 'text', text: ' ' },
@@ -431,8 +441,12 @@ describe('projectRemoteNoteContent', () => {
         '<p><a href="https://remote.example/users/alice">not-alice</a> ' +
         '<a href="javascript:steal()">@alice</a></p>',
       mentions: [
-        { label: '@alice', targetHref: 'not a URI' },
-        { label: '@alice', targetHref: 'https://remote.example/users/alice' },
+        { label: '@alice', profileId: aliceProfileId, targetHref: 'not a URI' },
+        {
+          label: '@alice',
+          profileId: aliceProfileId,
+          targetHref: 'https://remote.example/users/alice',
+        },
       ],
       summary: null,
       mediaType: 'text/html',

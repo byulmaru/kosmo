@@ -297,6 +297,7 @@ describe('Post Reply GraphQL 경계', () => {
       mentions: [
         {
           label: '@mentioned',
+          profileId: auth.profile.id,
           targetHref: 'https://remote.example/users/mentioned',
         },
       ],
@@ -337,7 +338,7 @@ describe('Post Reply GraphQL 경계', () => {
         content: Array<{
           attrs?: { mediaId?: string };
           content?: Array<{
-            attrs?: { href?: string; label?: string; target?: string };
+            attrs?: { label?: string; profileId?: string };
             text?: string;
             type: string;
           }>;
@@ -352,9 +353,8 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(returnedDocument.body.attrs?.sensitiveMedia, true);
     assert.equal(returnedDocument.body.content[0]?.content?.[1]?.type, 'mention');
     assert.deepEqual(returnedDocument.body.content[0]?.content?.[1]?.attrs, {
-      href: 'https://remote.example/users/mentioned',
       label: '@mentioned',
-      target: 'https://remote.example/users/mentioned',
+      profileId: auth.profile.id,
     });
     assert.deepEqual(returnedDocument.body.content[1]?.attrs, {
       mediaId: encodeGlobalId('Media', media.id),

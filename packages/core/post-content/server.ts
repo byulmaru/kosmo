@@ -5,6 +5,7 @@ import { postBodyMaxLength } from '../validation/post-policy';
 import {
   normalizePostContentMentionLabel,
   normalizePostContentPlainText,
+  normalizePostContentProfileId,
   postContentSchemaVersion,
 } from './index';
 import { postContentSchema } from './schema';
@@ -76,9 +77,8 @@ function canonicalizePostContentBody(
       } else if (node.type === postContentSchema.nodes.mention) {
         inline.push(
           postContentSchema.nodes.mention.create({
-            href: normalizeLinkHref(node.attrs.href),
             label: normalizePostContentMentionLabel(node.attrs.label),
-            target: normalizeLinkHref(node.attrs.target),
+            profileId: normalizePostContentProfileId(node.attrs.profileId),
           }),
         );
       } else {
@@ -323,9 +323,8 @@ function assertPostContentJsonKeys(value: unknown): void {
     if (!isRecord(value.attrs)) {
       throw new TypeError('Mention attrs must be an object');
     }
-    assertOnlyKeys(value.attrs, ['target', 'href', 'label']);
-    normalizeLinkHref(value.attrs.target);
-    normalizeLinkHref(value.attrs.href);
+    assertOnlyKeys(value.attrs, ['profileId', 'label']);
+    normalizePostContentProfileId(value.attrs.profileId);
     if (typeof value.attrs.label !== 'string') {
       throw new TypeError('Mention label must be a visible string');
     }

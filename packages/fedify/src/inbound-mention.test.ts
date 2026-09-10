@@ -5,32 +5,23 @@ import { mock, test } from 'node:test';
 import { Link, Mention, Note } from '@fedify/vocab';
 import { collectInboundMentionCandidates } from './inbound-mention';
 
-test('collects only inline typed Mentions as raw target and label primitives', async () => {
+test('filters non-HTTP Mentions and ordinary Links without fetching', async () => {
   const note = new Note({
-    content: '<p><a href="https://remote.example/users/alice">@alice</a></p>',
+    content: '<p><a href="mailto:alice@example.com">@alice</a></p>',
     id: new URL('https://remote.example/notes/1'),
     tags: [
       new Mention({
-        href: new URL('https://remote.example/users/alice'),
+        href: new URL('mailto:alice@example.com'),
         name: '@alice',
       }),
       new Link({
         href: new URL('https://example.com/guide'),
         name: 'guide',
       }),
-      new Mention({
-        href: new URL('mailto:alice@example.com'),
-        name: '@alice',
-      }),
     ],
   });
 
-  assert.deepEqual(await collectInboundMentionCandidates(note), [
-    {
-      label: '@alice',
-      targetHref: 'https://remote.example/users/alice',
-    },
-  ]);
+  assert.deepEqual(await collectInboundMentionCandidates(note), []);
 });
 
 test('does not fetch URL-only tags while collecting typed Mentions', async () => {
