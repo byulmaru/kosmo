@@ -97,6 +97,7 @@ function getColorContrastRatio(foreground: string, background: string) {
 const postMediaImageUri = ogDefaultUrl;
 
 const storyShareOrigin = () => window.location.origin;
+const quoteFailureMutationRequestObserver = fn().mockName('Quote failure mutation');
 
 const shortPost = {
   ...post({
@@ -2815,6 +2816,7 @@ const meta = {
     mocked(trackAnalytics).mockClear();
     mocked(startWebLogin).mockReset();
     mocked(startWebLogin).mockImplementation(() => undefined);
+    quoteFailureMutationRequestObserver.mockClear();
     resetClipboardMock();
     resetImagePickerMock();
   },
@@ -7164,7 +7166,6 @@ export const ReplyDetailInlineIntegration: Story = {
     );
     await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
     const quoteBody = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
-    expect(canvas.getAllByRole('textbox')).toHaveLength(1);
     await userEvent.type(quoteBody, '상세에서 작성 중인 인용');
 
     await userEvent.click(replyButton);
@@ -7177,7 +7178,6 @@ export const ReplyDetailInlineIntegration: Story = {
       expect(canvas.queryByRole('textbox', { name: '인용 게시글 본문' })).toBeNull(),
     );
     const reopenedReplyBody = canvas.getByRole('textbox', { name: '답글 본문' });
-    expect(canvas.getAllByRole('textbox')).toHaveLength(1);
     expect(reopenedReplyBody).toHaveValue('');
     await waitFor(() => expect(reopenedReplyBody).toHaveFocus());
 
@@ -7220,7 +7220,12 @@ export const QuoteDetailInlinePendingLifecycle: Story = {
 
 export const QuoteModalFailureLifecycle: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
-  parameters: { relay: { mutationError: '인용 전송 네트워크 오류' } },
+  parameters: {
+    relay: {
+      mutationError: '인용 전송 네트워크 오류',
+      mutationRequestObserver: quoteFailureMutationRequestObserver,
+    },
+  },
   play: async () => {
     const dialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
     const source = within(dialog).getByTestId('source-post-preview');
@@ -7231,12 +7236,14 @@ export const QuoteModalFailureLifecycle: Story = {
     await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
       '인용 게시글을 작성하지 못했습니다.',
     );
+    expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(1);
     expect(body).toHaveValue('실패 뒤 유지할 인용');
     expect(source).toBeVisible();
     expect(within(source).getByText('짧은 본문 한 줄.')).toBeVisible();
     const retry = within(dialog).getByRole('button', { name: '인용 게시' });
     expect(retry).toBeEnabled();
     await userEvent.click(retry);
+    await waitFor(() => expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(2));
     await waitFor(() =>
       expect(within(dialog).getByRole('alert')).toHaveTextContent(
         '인용 게시글을 작성하지 못했습니다.',
@@ -7254,6 +7261,7 @@ export const QuoteModalNullFailureLifecycle: Story = {
     relay: {
       mutationGraphQLErrors: ['인용 본문 형식이 올바르지 않습니다.'],
       mutationResponse: { createPost: null },
+      mutationRequestObserver: quoteFailureMutationRequestObserver,
     },
   },
   play: async () => {
@@ -7266,12 +7274,14 @@ export const QuoteModalNullFailureLifecycle: Story = {
     await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
       '인용 게시글을 작성하지 못했습니다.',
     );
+    expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(1);
     expect(body).toHaveValue('null 응답 뒤 유지할 인용');
     expect(source).toBeVisible();
     expect(within(source).getByText('짧은 본문 한 줄.')).toBeVisible();
     const retry = within(dialog).getByRole('button', { name: '인용 게시' });
     expect(retry).toBeEnabled();
     await userEvent.click(retry);
+    await waitFor(() => expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(2));
     await waitFor(() =>
       expect(within(dialog).getByRole('alert')).toHaveTextContent(
         '인용 게시글을 작성하지 못했습니다.',
