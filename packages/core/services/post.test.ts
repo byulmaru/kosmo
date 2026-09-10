@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, mock, test } from 'node:test';
-import { DrizzleQueryError, eq } from 'drizzle-orm';
+import { and, DrizzleQueryError, eq } from 'drizzle-orm';
 import {
   Accounts,
   ActivityPubPosts,
@@ -36,6 +36,7 @@ import {
 } from '../post-content/server';
 import { temporalClient } from '../temporal/client';
 import { createPost } from './post';
+import { ProfilePairBlockedError } from './profile-block-policy';
 
 after(async () => pg.end());
 
@@ -1034,6 +1035,63 @@ test('createPost는 Local과 ActivityPub Reply Parent를 직접 저장한다', a
   assert.equal(localReply.post.replyParentId, parent.post.id);
   assert.equal(activityPubReply.created, true);
   assert.equal(activityPubReply.post.replyParentId, parent.post.id);
+});
+
+test('Active Profile Block은 Local과 ActivityPub Reply를 양방향으로 거부한다', async () => {
+  const actor = await createProfile();
+  const author = await createProfile();
+  const parent = await createPost({
+    document: postContentDocumentFromText('second parent'),
+    origin: 'LOCAL',
+    profileId: author.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  for (const [ownerProfileId, targetProfileId] of [
+    [actor.id, author.id],
+    [author.id, actor.id],
+  ] as const) {
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId,
+      targetProfileId,
+    });
+    const postsBefore = await db.$count(Posts);
+    const contentBefore = await db.$count(PostContents);
+
+    for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
+      const promise =
+        origin === 'LOCAL'
+          ? createPost({
+              document: postContentDocumentFromText('blocked reply'),
+              origin,
+              profileId: actor.id,
+              replyParentId: parent.post.id,
+              visibility: PostVisibility.PUBLIC,
+            })
+          : createPost({
+              document: postContentDocumentFromText('blocked remote reply'),
+              objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+              origin,
+              profileId: actor.id,
+              publishedAt: null,
+              receivedAt: Temporal.Now.instant(),
+              replyParentId: parent.post.id,
+              visibility: PostVisibility.PUBLIC,
+            });
+      await assert.rejects(promise, ProfilePairBlockedError);
+    }
+
+    assert.equal(await db.$count(Posts), postsBefore);
+    assert.equal(await db.$count(PostContents), contentBefore);
+    await db
+      .delete(ProfileBlocks)
+      .where(
+        and(
+          eq(ProfileBlocks.ownerProfileId, ownerProfileId),
+          eq(ProfileBlocks.targetProfileId, targetProfileId),
+        ),
+      );
+  }
 });
 
 test('ActivityPub Reply effects는 duplicate에서 backfill하지 않는다', async () => {

@@ -10,7 +10,7 @@ import { db, first, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, PostVisibility, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
-import { createPost } from '@kosmo/core/services';
+import { createPost, ProfilePairBlockedError } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
@@ -149,6 +149,7 @@ type RemoteNoteMaterializationRejectionReason =
   | 'note_identity_mismatch'
   | 'note_media_projection_rejected'
   | 'note_media_validation_rejected'
+  | 'reply_profile_blocked'
   | 'unsupported_note_visibility'
   | 'unusable_author';
 
@@ -158,7 +159,7 @@ type RemoteNotePostMaterializationResult =
       replyParentFallback: boolean;
       status: 'created' | 'duplicate';
     }
-  | { reason: 'invalid_note'; status: 'rejected' };
+  | { reason: 'note_media_validation_rejected' | 'reply_profile_blocked'; status: 'rejected' };
 
 type RemoteNotePostMaterialized = Extract<
   RemoteNotePostMaterializationResult,
@@ -218,8 +219,11 @@ const createRemoteNotePost = async ({
     const result = await createPost(replyParentId ? { ...input, replyParentId } : input);
     return toResult(result);
   } catch (error) {
+    if (error instanceof ProfilePairBlockedError) {
+      return { reason: 'reply_profile_blocked', status: 'rejected' };
+    }
     if (error instanceof ValidationError && error.field === 'media') {
-      return { reason: 'invalid_note', status: 'rejected' };
+      return { reason: 'note_media_validation_rejected', status: 'rejected' };
     }
     if (
       !replyParentId ||
@@ -369,9 +373,7 @@ const materializeRemoteNote = async ({
     receivedAt,
     visibility,
   });
-  return result.status === 'rejected'
-    ? { reason: 'note_media_validation_rejected', status: 'rejected' }
-    : result;
+  return result;
 };
 
 export const materializeHydratedRemoteNote = async ({

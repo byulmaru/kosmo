@@ -12,6 +12,7 @@ import {
 import { InstanceKind, InstanceState, NotificationKind, PostState, ProfileState } from '../enums';
 import { visiblePostWhere } from './post';
 import { visibleProfileWhere } from './profile';
+import { profileBlockVisibilityWhere } from './profile-block';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { DatabaseHandle } from '../db';
 
@@ -88,11 +89,14 @@ const isRecipientAvailable = ({
 };
 
 const relatedProfileAvailability = ({
+  database,
   includeRecipientAvailability,
   profile,
   instance,
+  recipientProfileId,
 }: {
   readonly includeRecipientAvailability: boolean;
+  readonly database: DatabaseHandle;
   readonly profile: {
     readonly id: AnyPgColumn;
     readonly state: AnyPgColumn;
@@ -100,6 +104,7 @@ const relatedProfileAvailability = ({
   readonly instance: {
     readonly state: AnyPgColumn;
   };
+  readonly recipientProfileId: AnyPgColumn;
 }) => {
   const visible = visibleProfileWhere({ instance, profile });
 
@@ -107,7 +112,19 @@ const relatedProfileAvailability = ({
   // Cleanup must still preserve it when the only unavailable fact is the
   // Recipient's own recoverable state.
   return includeRecipientAvailability
-    ? visible
+    ? and(
+        visible,
+        profileBlockVisibilityWhere({
+          database,
+          ownerProfileId: recipientProfileId,
+          targetProfileId: profile.id,
+        }),
+        profileBlockVisibilityWhere({
+          database,
+          ownerProfileId: profile.id,
+          targetProfileId: recipientProfileId,
+        }),
+      )!
     : or(eq(profile.id, Notifications.recipientProfileId), visible)!;
 };
 
@@ -188,9 +205,11 @@ export const notificationSourceAvailabilityWhere = (
             eq(ProfileFollows.followeeProfileId, Notifications.recipientProfileId),
             recipientAvailability,
             relatedProfileAvailability({
+              database,
               includeRecipientAvailability,
               instance: NotificationRelatedInstances,
               profile: NotificationRelatedProfiles,
+              recipientProfileId: Notifications.recipientProfileId,
             }),
           ),
         ),
@@ -223,9 +242,11 @@ export const notificationSourceAvailabilityWhere = (
             eq(ProfileFollowRequests.followeeProfileId, Notifications.recipientProfileId),
             followRequestRecipientAvailability,
             relatedProfileAvailability({
+              database,
               includeRecipientAvailability,
               instance: NotificationRelatedInstances,
               profile: NotificationRelatedProfiles,
+              recipientProfileId: Notifications.recipientProfileId,
             }),
           ),
         ),
@@ -257,9 +278,11 @@ export const notificationSourceAvailabilityWhere = (
             eq(Posts.state, PostState.ACTIVE),
             reactionRecipientAvailability,
             relatedProfileAvailability({
+              database,
               includeRecipientAvailability,
               instance: NotificationRelatedInstances,
               profile: NotificationRelatedProfiles,
+              recipientProfileId: Notifications.recipientProfileId,
             }),
           ),
         ),
@@ -285,9 +308,11 @@ export const notificationSourceAvailabilityWhere = (
                   and(
                     eq(NotificationRelatedProfiles.id, NotificationSourceReposts.profileId),
                     relatedProfileAvailability({
+                      database,
                       includeRecipientAvailability,
                       instance: NotificationRelatedInstances,
                       profile: NotificationRelatedProfiles,
+                      recipientProfileId: Notifications.recipientProfileId,
                     }),
                   ),
                 ),
@@ -326,6 +351,7 @@ export const notificationSourceAvailabilityWhere = (
                         : sql<boolean>`true`,
                       viewerProfileId: Notifications.recipientProfileId,
                       db: database,
+                      includeProfileBlock: includeRecipientAvailability,
                     }),
                   ),
                 ),
@@ -376,12 +402,15 @@ export const notificationSourceAvailabilityWhere = (
                     visiblePostWhere({
                       post: NotificationReplyPosts,
                       profileVisible: sql<boolean>`${relatedProfileAvailability({
+                        database,
                         includeRecipientAvailability,
                         instance: NotificationReplyAuthorInstances,
                         profile: NotificationReplyAuthors,
+                        recipientProfileId: Notifications.recipientProfileId,
                       })}`,
                       viewerProfileId: Notifications.recipientProfileId,
                       db: database,
+                      includeProfileBlock: includeRecipientAvailability,
                     }),
                   ),
                 ),

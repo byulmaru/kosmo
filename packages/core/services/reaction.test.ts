@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import { after, mock, test } from 'node:test';
 import { and, eq } from 'drizzle-orm';
-import { db, firstOrThrow, Instances, Notifications, pg, Posts, Profiles, Reactions } from '../db';
+import {
+  db,
+  firstOrThrow,
+  Instances,
+  Notifications,
+  pg,
+  Posts,
+  ProfileBlocks,
+  Profiles,
+  Reactions,
+} from '../db';
 import {
   InstanceKind,
   InstanceState,
@@ -14,6 +24,7 @@ import {
 import { NotFoundError, ValidationError } from '../error';
 import { temporalClient } from '../temporal/client';
 import { reactionTypes } from '../validation';
+import { ProfilePairBlockedError } from './profile-block-policy';
 import { addReaction, deleteReaction } from './reaction';
 
 after(async () => {
@@ -202,6 +213,43 @@ test('활성 Post가 아니면 Reaction을 만들지 않는다', async () => {
       .then((rows) => rows.length),
     0,
   );
+});
+
+test('Active Profile Block은 Local과 ActivityPub Reaction을 양방향으로 거부한다', async () => {
+  const actor = await createFixture();
+  const author = await createFixture();
+
+  for (const [ownerProfileId, targetProfileId] of [
+    [actor.profile.id, author.profile.id],
+    [author.profile.id, actor.profile.id],
+  ] as const) {
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId,
+      targetProfileId,
+    });
+
+    for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
+      await assert.rejects(
+        addReaction({
+          actorProfileId: actor.profile.id,
+          origin,
+          postId: author.post.id,
+          type: '🎉',
+        }),
+        ProfilePairBlockedError,
+      );
+      assert.equal(await countReactions(author.post.id), 0);
+    }
+
+    await db
+      .delete(ProfileBlocks)
+      .where(
+        and(
+          eq(ProfileBlocks.ownerProfileId, ownerProfileId),
+          eq(ProfileBlocks.targetProfileId, targetProfileId),
+        ),
+      );
+  }
 });
 
 test('실제 Reaction 생성 commit 뒤에만 Create Effects Workflow를 시작한다', async () => {

@@ -8,6 +8,7 @@ import {
   firstOrThrow,
   Instances,
   pg,
+  ProfileBlocks,
   ProfileFollows,
   Profiles,
   Reactions,
@@ -245,6 +246,49 @@ test('object와 Followers Post 접근을 side effect 없이 검증한다', async
     type: '❤️',
   });
   assert.equal(accepted.kind, 'CREATED');
+});
+
+test('Active Profile Block은 ActivityPub Reaction projection을 양방향으로 거부한다', async () => {
+  const actor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const author = await createProfile(InstanceKind.LOCAL);
+  const post = await createLocalPost(author.profile.id);
+  const objectUri = new URL(`/ap/note/${post.id}`, author.canonicalOrigin!).href;
+
+  for (const [ownerProfileId, targetProfileId] of [
+    [actor.profile.id, author.profile.id],
+    [author.profile.id, actor.profile.id],
+  ] as const) {
+    await db.insert(ProfileBlocks).values({ ownerProfileId, targetProfileId });
+    const activityUri = `https://${actor.instance.domain}/activities/${crypto.randomUUID()}`;
+
+    const result = await materializeInboundReaction({
+      activityUri,
+      actorUri: actor.actorUri,
+      objectUri,
+      type: '🎉',
+    });
+
+    assert.deepEqual(result, { kind: 'REJECTED' });
+    assert.equal((await readMappings(activityUri)).length, 0);
+    assert.equal(
+      (
+        await db
+          .select()
+          .from(Reactions)
+          .where(and(eq(Reactions.profileId, actor.profile.id), eq(Reactions.postId, post.id)))
+      ).length,
+      0,
+    );
+
+    await db
+      .delete(ProfileBlocks)
+      .where(
+        and(
+          eq(ProfileBlocks.ownerProfileId, ownerProfileId),
+          eq(ProfileBlocks.targetProfileId, targetProfileId),
+        ),
+      );
+  }
 });
 
 test('exact duplicate와 기존 core Reaction mapping은 멱등이고 URI conflict는 최초 상태를 보존한다', async () => {

@@ -1,5 +1,6 @@
 import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
+import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, exists, getColumns, gt, isNull, lt, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -26,6 +27,16 @@ builder.queryField('homeTimeline', (t) =>
               and(
                 eq(ProfileFollows.followerProfileId, ctx.session.profile.id),
                 eq(ProfileFollows.followeeProfileId, Posts.profileId),
+                profileBlockVisibilityWhere({
+                  database: db,
+                  ownerProfileId: ProfileFollows.followerProfileId,
+                  targetProfileId: ProfileFollows.followeeProfileId,
+                }),
+                profileBlockVisibilityWhere({
+                  database: db,
+                  ownerProfileId: ProfileFollows.followeeProfileId,
+                  targetProfileId: ProfileFollows.followerProfileId,
+                }),
               ),
             ),
         );
@@ -49,6 +60,16 @@ builder.queryField('homeTimeline', (t) =>
               and(
                 eq(ReplyParents.id, Posts.replyParentId),
                 eq(ProfileFollows.followerProfileId, ctx.session.profile.id),
+                profileBlockVisibilityWhere({
+                  database: db,
+                  ownerProfileId: ProfileFollows.followerProfileId,
+                  targetProfileId: ProfileFollows.followeeProfileId,
+                }),
+                profileBlockVisibilityWhere({
+                  database: db,
+                  ownerProfileId: ProfileFollows.followeeProfileId,
+                  targetProfileId: ProfileFollows.followerProfileId,
+                }),
               ),
             ),
         );

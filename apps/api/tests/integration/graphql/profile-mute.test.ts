@@ -31,6 +31,7 @@ let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
+let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileMutes: typeof CoreDb.ProfileMutes;
 let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
@@ -62,6 +63,7 @@ describe('GraphQL Profile Mute', () => {
       firstOrThrow,
       Instances,
       pg,
+      ProfileBlocks,
       ProfileMutes,
       Profiles,
       Sessions,
@@ -81,6 +83,113 @@ describe('GraphQL Profile Mute', () => {
       return next();
     });
     app.route('/graphql', yoga);
+  });
+
+  test('Block 중에도 Mute 관리 관계는 Owner 목록·Node·해제 경로에 남는다', async () => {
+    const auth = await createAuthenticatedSession();
+    const target = await createProfile({
+      handle: 'muted-and-blocked-target',
+      instanceId: localInstanceId,
+    });
+
+    const created = await muteProfile(target.id, auth.token);
+    assertNoGraphQLErrors(created);
+    const profileMuteId = created.data?.muteProfile.profileMute.id;
+    assert.ok(profileMuteId);
+
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: auth.profile.id,
+      targetProfileId: target.id,
+    });
+
+    const visibleTarget = await requestGraphQL<{ node: { id: string } | null }>(
+      `query BlockedTarget($id: ID!) {
+        node(id: $id) { ... on Profile { id } }
+      }`,
+      { id: globalId('Profile', target.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(visibleTarget);
+    assert.deepEqual(visibleTarget.data?.node, { id: globalId('Profile', target.id) });
+
+    const management = await requestGraphQL<{
+      node: {
+        profileMutes: {
+          edges: Array<{
+            node: {
+              id: string;
+              targetProfile: {
+                id: string;
+                handle: string;
+                displayName: string;
+                instance: { kind: string };
+              };
+            };
+          }>;
+        };
+      } | null;
+      profileMute: {
+        id: string;
+        targetProfile: {
+          id: string;
+          handle: string;
+          displayName: string;
+          instance: { kind: string };
+        };
+      } | null;
+    }>(
+      `query MutedAndBlockedManagement($ownerId: ID!, $profileMuteId: ID!) {
+        node(id: $ownerId) {
+          ... on Profile {
+            profileMutes(first: 10) {
+              edges {
+                node {
+                  id
+                  targetProfile { id handle displayName instance { kind } }
+                }
+              }
+            }
+          }
+        }
+        profileMute: node(id: $profileMuteId) {
+          ... on ProfileMute {
+            id
+            targetProfile { id handle displayName instance { kind } }
+          }
+        }
+      }`,
+      {
+        ownerId: globalId('Profile', auth.profile.id),
+        profileMuteId,
+      },
+      auth.token,
+    );
+    assertNoGraphQLErrors(management);
+    assert.deepEqual(
+      management.data?.node?.profileMutes.edges.map(({ node }) => node.id),
+      [profileMuteId],
+    );
+    assert.equal(management.data?.profileMute?.id, profileMuteId);
+    assert.deepEqual(management.data?.node?.profileMutes.edges[0]?.node.targetProfile, {
+      id: globalId('Profile', target.id),
+      handle: target.handle,
+      displayName: target.displayName,
+      instance: { kind: 'LOCAL' },
+    });
+    assert.deepEqual(management.data?.profileMute?.targetProfile, {
+      id: globalId('Profile', target.id),
+      handle: target.handle,
+      displayName: target.displayName,
+      instance: { kind: 'LOCAL' },
+    });
+
+    const removed = await unmuteProfile(profileMuteId, auth.token);
+    assertNoGraphQLErrors(removed);
+    assert.equal(removed.data?.unmuteProfile.profileMuteId, profileMuteId);
+    assert.equal(
+      await db.$count(ProfileMutes, eq(ProfileMutes.id, decodeGlobalId(profileMuteId).id)),
+      0,
+    );
   });
 
   beforeEach(async () => resetFixtures());
@@ -650,6 +759,7 @@ const createAuthenticatedSession = async ({
 
 const resetFixtures = async () => {
   await db.delete(Sessions);
+  await db.delete(ProfileBlocks);
   await db.delete(ProfileMutes);
   await db.delete(AccountProfiles);
   await db.delete(Accounts);

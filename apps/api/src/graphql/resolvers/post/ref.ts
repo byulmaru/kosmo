@@ -7,8 +7,8 @@ import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { mediaByIdLoader } from '../media/loader/by-id';
 import { Media } from '../media/ref';
-import { postAccessWhere } from './access';
-import { postVisibilityAccessWhere } from './access/visibility';
+import { directPostAccessWhere } from './access';
+import { directPostVisibilityAccessWhere } from './access/visibility';
 
 export const Post = createObjectRef('Post', (ids, ctx) =>
   db
@@ -16,7 +16,7 @@ export const Post = createObjectRef('Post', (ids, ctx) =>
     .from(Posts)
     .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(inArray(Posts.id, ids), postAccessWhere({ ctx, profileMute: 'ignore' }))),
+    .where(and(inArray(Posts.id, ids), directPostAccessWhere({ ctx, profileMute: 'ignore' }))),
 );
 
 Post.implement({
@@ -44,7 +44,7 @@ export const PostContent = createObjectRef('PostContent', (ids, ctx) =>
     .innerJoin(Posts, eq(Posts.id, PostContents.postId))
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(inArray(PostContents.id, ids), postVisibilityAccessWhere({ ctx }))),
+    .where(and(inArray(PostContents.id, ids), directPostVisibilityAccessWhere({ ctx }))),
 );
 
 PostContent.implement({
