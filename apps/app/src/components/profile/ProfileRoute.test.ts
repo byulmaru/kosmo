@@ -61,6 +61,7 @@ const changeBlockedCalls: Array<{ change: object; nextBlocked: boolean }> = [];
 const toastCalls: Array<{ message: string; tone: string }> = [];
 const menuTriggerFocus = mock.fn();
 const stateActionFocus = mock.fn();
+const contentStateFocus = mock.fn();
 let changeBlockedImpl: (change: object, nextBlocked: boolean) => Promise<void> = async () =>
   undefined;
 
@@ -211,15 +212,21 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
 mockModule(new URL('./FollowButton.tsx', import.meta.url), {
   FollowButton: ({
     onActionRef,
+    onUnblockSuccess,
     profile,
     profileBlockStatus,
   }: {
     onActionRef?: (node: { focus: () => void }) => void;
+    onUnblockSuccess?: () => void;
     profile: { handle: string };
     profileBlockStatus?: { blockedBy: boolean; blocking: boolean; profileBlockId: string | null };
   }) => {
     onActionRef?.({ focus: () => stateActionFocus() });
-    return createElement('FollowButton', { identity: profile.handle, profileBlockStatus });
+    return createElement('FollowButton', {
+      identity: profile.handle,
+      onUnblockSuccess,
+      profileBlockStatus,
+    });
   },
 });
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
@@ -287,7 +294,12 @@ mockModule(new URL('../post/PostList.tsx', import.meta.url), {
   },
 });
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
-  StateView: (props: object) => createElement('StateView', props),
+  StateView: ({ controlRef, ...props }: { controlRef?: Ref<unknown> }) => {
+    if (controlRef && typeof controlRef === 'object' && 'current' in controlRef) {
+      controlRef.current = { focus: () => contentStateFocus() };
+    }
+    return createElement('StateView', props);
+  },
 });
 mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
   useUnexpectedErrorReporter: () => undefined,
@@ -336,6 +348,7 @@ afterEach(async () => {
   toastCalls.length = 0;
   menuTriggerFocus.mock.resetCalls();
   stateActionFocus.mock.resetCalls();
+  contentStateFocus.mock.resetCalls();
   changeBlockedImpl = async () => undefined;
 });
 
@@ -742,11 +755,19 @@ describe('profile route parameter lifecycle', () => {
     await renderRoute('@blocked');
     assert.deepEqual(requireRendered('FollowButton').props.profileBlockStatus, profileBlockStatus);
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
+    await act(async () => requireRendered('FollowButton').props.onUnblockSuccess());
 
     profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
+    relayActorLifecycleKey = 'actor-b';
     await renderRoute('@blocked');
     assert.equal(rendered('FollowButton').length, 0);
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
+    assert.equal(contentStateFocus.mock.callCount(), 0);
+
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+    assert.equal(contentStateFocus.mock.callCount(), 1);
+    assert.equal(menuTriggerFocus.mock.callCount(), 0);
   });
 
   it('selected Profile 자기 자신에게는 차단 action을 표시하지 않는다', async () => {
