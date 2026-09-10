@@ -24,12 +24,14 @@ import { ProfileNameBlock } from './ProfileNameBlock';
 import { ProfileTagChip } from './ProfileTagChip';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
 
 type ProfileHeroProps = {
   action?: ReactNode;
   heading?: boolean;
   showMuteAction?: boolean;
+  moreItems?: readonly ActionMenuItem[];
   loading?: boolean;
   profile?: ProfileHero_profile$key | null;
 };
@@ -74,6 +76,7 @@ export function ProfileHero({
   action,
   heading = true,
   showMuteAction = false,
+  moreItems,
   loading = false,
   profile = null,
 }: ProfileHeroProps) {
@@ -173,7 +176,7 @@ export function ProfileHero({
             size={avatarSize}
           />
         </View>
-        {action || showMuteAction ? (
+        {action || showMuteAction || moreItems?.length ? (
           <View
             style={[
               actionGeometry,
@@ -213,6 +216,7 @@ export function ProfileHero({
                           })();
                         },
                       },
+                      ...(moreItems ?? []),
                       item,
                     ]}
                   />
@@ -220,6 +224,7 @@ export function ProfileHero({
               />
             ) : null}
             {action ? <View style={styles.action}>{action}</View> : null}
+            {!showMuteAction && moreItems?.length ? <ProfileMoreMenu items={moreItems} /> : null}
           </View>
         ) : null}
       </View>

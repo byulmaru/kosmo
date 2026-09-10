@@ -8,6 +8,9 @@ Accepted
 
 2026-06-29
 
+2026-09-10 [ADR 0030](./0030-content-report-submission.md)가 신고 제출 제외만 부분 대체한다.
+신고 묶음·처리 단계·durable 객체 제외와 나머지 결정은 유지한다.
+
 ## 결정
 
 - Account-Profile Membership은 별도 lifecycle 상태 차원을 갖지 않는다.
