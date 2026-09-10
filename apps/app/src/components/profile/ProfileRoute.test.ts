@@ -752,6 +752,10 @@ describe('profile route parameter lifecycle', () => {
     await act(async () => requireRendered('ActionMenu').props.items[0].onSelect());
     const confirmation = requireRendered('ConfirmationContent');
     assert.equal(confirmation.props.confirmLabel, '차단');
+    assert.equal(
+      confirmation.props.message,
+      '기존 팔로우 관계와 요청이 삭제되고, 서로 팔로우하거나 게시물에 반응할 수 없어요.',
+    );
     assert.equal(confirmation.props.tone, 'danger');
 
     await act(async () => confirmation.props.onConfirm());

@@ -298,7 +298,7 @@ function ProfileLayoutContent({
         confirmLabel={confirmation === 'block' ? '차단' : '차단 해제'}
         message={
           confirmation === 'block'
-            ? '서로의 프로필과 게시물을 볼 수 없게 되고, 팔로우 관계와 요청이 삭제돼요.'
+            ? '기존 팔로우 관계와 요청이 삭제되고, 서로 팔로우하거나 게시물에 반응할 수 없어요.'
             : '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.'
         }
         onCancel={closeConfirmation}

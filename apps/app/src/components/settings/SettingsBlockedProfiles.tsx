@@ -44,6 +44,7 @@ const SettingsBlockedProfilesFragment = graphql`
           id
           targetProfile {
             displayName
+            relativeHandle
           }
         }
       }
@@ -51,7 +52,11 @@ const SettingsBlockedProfilesFragment = graphql`
   }
 `;
 
-type BlockedProfile = Readonly<{ displayName: string; profileBlockId: string }>;
+type BlockedProfile = Readonly<{
+  displayName: string;
+  profileBlockId: string;
+  relativeHandle: string;
+}>;
 type Pagination =
   | { status: 'end' }
   | { status: 'loading' }
@@ -143,6 +148,7 @@ function SettingsBlockedProfilesContent() {
         profiles: edges.map((edge) => ({
           displayName: edge.node.targetProfile.displayName,
           profileBlockId: edge.node.id,
+          relativeHandle: edge.node.targetProfile.relativeHandle,
         })),
         status: 'loaded',
       }}
@@ -275,10 +281,11 @@ export function BlockedProfilesView({
                 avatarLabel={profile.displayName}
                 displayName={profile.displayName}
                 key={profile.profileBlockId}
+                relativeHandle={profile.relativeHandle}
                 style={styles.row}
               >
                 <Button
-                  accessibilityLabel={`${profile.displayName} 차단 해제`}
+                  accessibilityLabel={`${profile.displayName} ${profile.relativeHandle} 차단 해제`}
                   controlRef={(node) => {
                     if (node) {
                       actionRefs.current.set(profile.profileBlockId, node);

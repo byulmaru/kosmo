@@ -81,7 +81,11 @@ let BlockedProfilesView: ComponentType<{
     | { status: 'error'; onRetry: () => void }
     | {
         status: 'loaded';
-        profiles: readonly { displayName: string; profileBlockId: string }[];
+        profiles: readonly {
+          displayName: string;
+          profileBlockId: string;
+          relativeHandle: string;
+        }[];
         pagination:
           | { status: 'end' }
           | { status: 'loading' }
@@ -118,7 +122,13 @@ describe('차단한 프로필 목록', () => {
     };
     const state = {
       pagination: { status: 'end' as const },
-      profiles: [{ displayName: '별마루', profileBlockId: 'profile-block-a' }],
+      profiles: [
+        {
+          displayName: '별마루',
+          profileBlockId: 'profile-block-a',
+          relativeHandle: '@star',
+        },
+      ],
       status: 'loaded' as const,
     };
     await act(async () => {
@@ -126,7 +136,8 @@ describe('차단한 프로필 목록', () => {
     });
 
     const action = find('Button');
-    assert.equal(action?.props.accessibilityLabel, '별마루 차단 해제');
+    assert.equal(find('ProfileListItemContent')?.props.relativeHandle, '@star');
+    assert.equal(action?.props.accessibilityLabel, '별마루 @star 차단 해제');
     await act(async () => action?.props.onPress());
     const confirmation = find('ConfirmationContent');
     assert.equal(
@@ -152,7 +163,13 @@ describe('차단한 프로필 목록', () => {
     let attempts = 0;
     const state = {
       pagination: { status: 'end' as const },
-      profiles: [{ displayName: '별마루', profileBlockId: 'profile-block-a' }],
+      profiles: [
+        {
+          displayName: '별마루',
+          profileBlockId: 'profile-block-a',
+          relativeHandle: '@star',
+        },
+      ],
       status: 'loaded' as const,
     };
     await act(async () => {
@@ -190,7 +207,13 @@ describe('차단한 프로필 목록', () => {
           onUnblock: async () => undefined,
           state: {
             pagination: { status: 'error', onRetry: () => (retries += 1) },
-            profiles: [{ displayName: '별마루', profileBlockId: 'profile-block-a' }],
+            profiles: [
+              {
+                displayName: '별마루',
+                profileBlockId: 'profile-block-a',
+                relativeHandle: '@star',
+              },
+            ],
             status: 'loaded',
           },
         }),
@@ -241,7 +264,13 @@ describe('차단한 프로필 목록', () => {
     const focus = mock.fn();
     const loadedState = {
       pagination: { status: 'end' as const },
-      profiles: [{ displayName: '별마루', profileBlockId: 'profile-block-a' }],
+      profiles: [
+        {
+          displayName: '별마루',
+          profileBlockId: 'profile-block-a',
+          relativeHandle: '@star',
+        },
+      ],
       status: 'loaded' as const,
     };
     await act(async () => {
@@ -283,7 +312,13 @@ describe('차단한 프로필 목록', () => {
     const focus = mock.fn();
     const loadedState = {
       pagination: { status: 'end' as const },
-      profiles: [{ displayName: '별마루', profileBlockId: 'profile-block-remount' }],
+      profiles: [
+        {
+          displayName: '별마루',
+          profileBlockId: 'profile-block-remount',
+          relativeHandle: '@star',
+        },
+      ],
       status: 'loaded' as const,
     };
     await act(async () => {
