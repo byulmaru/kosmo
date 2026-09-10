@@ -164,8 +164,11 @@ export function FollowButton({
   const blocking = Boolean(block || (blockStatus?.blocking && profileBlockId));
   const blockedByOnly = Boolean(blockStatus?.blockedBy && !blocking);
   const loading = following || cancelling || unfollowing || unblockPending;
-  const targetHeight = Platform.OS === 'android' ? 48 : Platform.OS === 'ios' ? 44 : 0;
-  const hitSlop = Math.max(0, (targetHeight - (size === 'compact' ? 32 : 40)) / 2);
+  const targetHeight = Platform.OS === 'android' ? 48 : 44;
+  const hitSlop =
+    Platform.OS === 'web'
+      ? undefined
+      : Math.max(0, (targetHeight - (size === 'compact' ? 32 : 40)) / 2);
 
   const showFailureToast = () => {
     showToast(followFailureMessage, { tone: 'danger' });
