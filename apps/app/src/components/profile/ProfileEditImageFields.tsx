@@ -1,12 +1,20 @@
 import { Camera } from 'lucide-react-native';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import {
   formatImageUploadFailureMessage,
   formatImageUploadRetryLabel,
 } from '@/components/media/imageUploadErrors';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { useTheme } from '@/theme/ThemeProvider';
-import { colors, fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { breakpoints, colors, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import type { Ref } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { ProfileEditImageDraft } from './profileEditState';
@@ -104,9 +112,10 @@ function CameraAffordance({ disabled }: { disabled: boolean }) {
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       style={[styles.cameraAffordance, { opacity: disabled ? 0.45 : 1 }]}
+      testID="profile-edit-camera-affordance"
     >
       <View style={[StyleSheet.absoluteFill, styles.cameraScrim]} />
-      <Camera color={colors.light.background} size={22} strokeWidth={2} />
+      <Camera color={colors.light.background} size={iconSizes[20]} strokeWidth={2} />
     </View>
   );
 }
@@ -156,9 +165,13 @@ function ImageEditControl({
               resizeMode="cover"
               source={{ uri: draft.previewUri }}
               style={StyleSheet.absoluteFill}
+              testID={`${testID}-content`}
             />
           ) : (
-            <View style={[styles.imagePlaceholder, { backgroundColor: theme.primary }]} />
+            <View
+              style={[styles.imagePlaceholder, { backgroundColor: theme.primary }]}
+              testID={`${testID}-content`}
+            />
           )}
           {pressed ? <View style={[StyleSheet.absoluteFill, styles.pressedVeil]} /> : null}
           <CameraAffordance disabled={disabled} />
@@ -197,14 +210,15 @@ export function ProfileEditImageFields({
   onHeaderRetry,
 }: ProfileEditImageFieldsProps) {
   const theme = useTheme();
-  const headerActionDisabled = disabled || !onHeaderEdit;
-  const avatarActionDisabled = disabled || !onAvatarEdit;
+  const { width } = useWindowDimensions();
+  const mobile = Platform.OS !== 'web' || width < breakpoints.compact;
+  const avatarFrameSize = mobile ? 96 : 128;
 
   return (
     <View style={styles.root}>
       <ImageEditControl
         accessibilityLabel="헤더 이미지 변경"
-        disabled={headerActionDisabled}
+        disabled={disabled || !onHeaderEdit}
         draft={header}
         onEdit={onHeaderEdit}
         onRemove={onHeaderRemove}
@@ -212,15 +226,23 @@ export function ProfileEditImageFields({
         testID="profile-edit-header-preview"
       />
 
-      <View style={styles.avatarRow}>
+      <View
+        style={[styles.avatarRow, { minHeight: mobile ? 64 : 80 }]}
+        testID="profile-edit-avatar-row"
+      >
         <ImageEditControl
           accessibilityLabel="아바타 이미지 편집"
-          disabled={avatarActionDisabled}
+          disabled={disabled || !onAvatarEdit}
           draft={avatar}
           onEdit={onAvatarEdit}
           onRemove={onAvatarRemove}
           style={[
             styles.avatarPreview,
+            {
+              height: avatarFrameSize,
+              marginTop: -avatarFrameSize / 2,
+              width: avatarFrameSize,
+            },
             { backgroundColor: theme.surface, borderColor: theme.background },
           ]}
           testID="profile-edit-avatar-preview"
@@ -273,7 +295,7 @@ const styles = StyleSheet.create({
   },
   cameraScrim: {
     backgroundColor: colors.dark.background,
-    borderRadius: radii.full,
+    borderRadius: radius.full,
     opacity: 0.56,
   },
   pressedVeil: {
@@ -282,28 +304,23 @@ const styles = StyleSheet.create({
     pointerEvents: 'none',
   },
   avatarRow: {
-    minHeight: 60,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: space[16],
   },
   avatarPreview: {
-    borderRadius: radii.full,
+    borderRadius: radius.full,
     borderWidth: 4,
-    height: 96,
-    marginTop: -48,
     overflow: 'hidden',
     position: 'relative',
-    width: 96,
   },
   statuses: {
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
+    gap: space[4],
+    paddingHorizontal: space[16],
   },
   status: {
     flex: 1,
-    fontFamily: fontFamilies.ui,
-    ...typography.xsm,
+    ...textStyles.uiCopyS,
   },
-  statusRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
-  retry: { minHeight: 36, justifyContent: 'center', paddingHorizontal: spacing.sm },
-  retryLabel: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.xsm },
+  statusRow: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
+  retry: { minHeight: 36, justifyContent: 'center', paddingHorizontal: space[8] },
+  retryLabel: textStyles.uiLabelS,
 });

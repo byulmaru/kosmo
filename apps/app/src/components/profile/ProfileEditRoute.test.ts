@@ -26,7 +26,6 @@ type ScreenProps = Record<string, unknown> & {
   onHeaderEdit: () => Promise<void>;
   onSubmit: (value: Record<string, unknown>) => void;
   serverErrors?: { tags?: string };
-  showTags: boolean;
   submitState: { kind: string };
   value: Record<string, unknown> & {
     avatar: { kind: string; failure?: unknown; uploadState?: string };
@@ -382,11 +381,10 @@ describe('ProfileEditRoute', () => {
     }
   });
 
-  it('server Profile Tag를 production form에 hydrate하고 editor를 보인다', async () => {
+  it('server Profile Tag를 production form에 hydrate한다', async () => {
     await renderRoute();
 
     const props = requireScreenProps();
-    assert.equal(props.showTags, true);
     assert.deepEqual(props.value, {
       avatar: { kind: 'current', previewUri: 'https://media.example/avatar-current' },
       bio: '기존 소개',

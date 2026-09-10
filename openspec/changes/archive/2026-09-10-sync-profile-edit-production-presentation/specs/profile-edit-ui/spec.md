@@ -1,12 +1,4 @@
-# profile-edit-ui Specification
-
-## Purpose
-
-선택된 Local Profile Owner가 공용 controlled presentation과 보호된 production route에서 Profile 표현 값,
-Follow Approval Policy와 avatar/header Media를 안전하게 편집·저장하고 실패·navigation 상태에서 복구하는
-Web·Android·iOS 클라이언트 계약을 문서화한다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Controlled universal Profile edit presentation
 
@@ -50,24 +42,6 @@ Web·Android·iOS 클라이언트 계약을 문서화한다.
 - **AND** 별도의 연필 button이나 중첩 focus target을 표시하지 않는다
 - **AND** callback이 없거나 form이 disabled/saving 상태면 해당 preview button을 disabled와 접근성 상태로 표현한다
 
-### Requirement: Follow Approval Policy uses the Profile edit draft boundary
-
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `PROD-490`, `PROD-491`, `PROD-492`, `PROD-531` — Profile edit presentation은 설명 없는 한 줄 `팔로우 요청 자동 승인` Switch를 controlled `followPolicy` enum draft로 제공해야 한다(MUST). Switch가 켜지면 `OPEN`, 꺼지면 `APPROVAL_REQUIRED`를 같은 submit callback으로 제출해야 하며(MUST), 정책 변경을 별도 즉시 저장이나 별도 mutation seam으로 실행해서는 안 된다(MUST NOT).
-
-#### Scenario: Map the policy switch to the controlled enum draft
-
-- **WHEN** 초기 `followPolicy`가 `OPEN` 또는 `APPROVAL_REQUIRED`로 주어지고 사용자가 `팔로우 요청 자동 승인` Switch를 토글한다
-- **THEN** Switch는 각각 켜짐 또는 꺼짐 상태를 표시한다
-- **AND** 토글만 바뀌어도 Profile draft가 dirty가 되고 저장 action이 활성화된다
-- **AND** submit callback에는 현재 displayName·bio·avatar/header와 함께 정확한 `OPEN` 또는 `APPROVAL_REQUIRED` 값이 전달된다
-
-#### Scenario: Keep the policy draft until the shared save completes
-
-- **WHEN** 정책만 변경한 뒤 저장 중이거나 저장이 실패한다
-- **THEN** Switch는 저장 중 다시 변경할 수 없고 현재 선택과 draft를 유지한다
-- **AND** 별도 즉시 저장이나 별도 mutation 요청을 실행하지 않는다
-- **AND** 실패 뒤 재시도할 때 같은 `followPolicy` enum이 다른 Profile draft와 함께 제출된다
-
 ### Requirement: Profile edit fields and Profile Tag interaction
 
 **Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `docs/design/typography.md`, `docs/design/foundations.md`, `docs/domain/objects/hashtag.md`, DSN-45, PROD-491, PROD-522, PROD-526, PROD-941 — Profile edit presentation은 새로 입력하거나 변경한 값에 Unicode code point 기준 1~40 displayName, 앞뒤 공백을 제거한 뒤 500자 이하 bio와 avatar/header별 controlled 편집 control을 제공해야 한다(MUST). displayName·bio·Profile Tag section의 외부 label은 `Label/L` `16/24/600`, label-control 간격은 `8px`, field section 간격은 `16px`를 사용해야 한다(MUST). 개수 상한 없이 Profile Tag를 inline chip으로 추가·제거할 수 있어야 하고(MUST), 순서·재정렬 control을 제공해서는 안 되며(MUST NOT), 승인되지 않은 field를 표시해서는 안 된다(MUST NOT). Profile Tag의 canonical identity는 Hashtag의 NFKC·locale 비종속 `toLowerCase()` 규칙을 사용하되 chip은 최초 입력의 NFKC 표기를 유지해야 한다(MUST).
@@ -101,23 +75,6 @@ Web·Android·iOS 클라이언트 계약을 문서화한다.
 - **AND** 순서 변경 control이나 drag gesture를 표시하지 않는다
 - **AND** 자동완성·추천·trend·검색 link를 표시하지 않는다
 
-### Requirement: Header image editing surface preserves a 3:1 aspect ratio
-
-**Authority / Provenance:** `docs/design/profile-edit.md`, `PROD-491` — header 이미지 변경 영역은 Web·Android·iOS의 모든 지원 폭에서 가로:세로 `3:1`을 유지해야 하며(MUST), avatar overlap과 편집 action을 담는 hero wrapper나 고정 높이가 preview 비율을 왜곡해서는 안 된다(MUST NOT). 원본 이미지 비율이 다르면 `3:1` 경계 안에서 중앙 기준 cover crop해야 한다(MUST).
-
-#### Scenario: Resize the header preview responsively
-
-- **WHEN** Profile edit surface의 가로 폭이 `W`로 바뀐다
-- **THEN** header 이미지 변경 영역은 가로 `W`, 세로 `W / 3`으로 렌더된다
-- **AND** `390px` mobile에서는 `390×130`, `600px` 중앙 surface에서는 `600×200`을 유지한다
-- **AND** avatar와 image action을 배치하는 hero wrapper 높이는 preview 비율 계산에 포함되지 않는다
-
-#### Scenario: Preview a source image with another aspect ratio
-
-- **WHEN** 현재 또는 교체 대상으로 선택한 header 원본 이미지가 `3:1`이 아니다
-- **THEN** preview는 `3:1` container를 유지한 채 중앙 기준 cover crop으로 이미지를 표시한다
-- **AND** 선택·업로드 대기·오류 state 사이에서 container 비율을 바꾸지 않는다
-
 ### Requirement: Responsive accessible Profile edit layout
 
 **Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `docs/design/accessibility.md`, `docs/design/icons.md`, `docs/design/typography.md`, DSN-45, PROD-491, PROD-941 — Profile edit presentation은 Web shell 중앙 최대 `600px` surface와 mobile/native 정보 구조를 공유해야 한다(MUST). safe-area를 제외한 상단 navigation header는 정확히 `64px` 높이와 `16px` horizontal inset을 사용해야 하며(MUST), 제목은 `uiHeadingS` `20/26/700`으로 표시해야 한다(MUST). 뒤로가기 action은 `44×44` layout target 안의 `ArrowLeft` `24px`를 사용하되 Android에서는 hit slop을 포함한 실제 입력 target을 최소 `48×48dp`로 제공해야 한다(MUST). 저장 action은 Web에서 `64×40` visual을 사용하고 iOS·Android에서는 각각 최소 `44pt`, `48dp` 실제 입력 높이를 제공해야 한다(MUST). Profile Tag 제거 action은 시각 크기 `32×32`와 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`를 분리하고, 다른 text action은 최소 높이 `36`과 대상·상태를 설명하는 accessibility label/state를 제공해야 한다(MUST).
@@ -145,84 +102,3 @@ Web·Android·iOS 클라이언트 계약을 문서화한다.
 - **THEN** shell이 platform safe-area를 header 바깥에서 제공하고 Profile edit header content는 `64px`를 유지한다
 - **AND** 제목과 저장 action은 `16px` horizontal inset 안의 같은 header 행에서 정렬되며 font scaling이나 좁은 폭에서도 action의 입력 target과 겹치지 않는다
 - **AND** iOS·Android 저장 action은 각각 최소 `44pt`, `48dp` 입력 높이를 유지한다
-
-### Requirement: Protected selected Owner Profile edit route
-
-**Authority / Provenance:** `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `docs/domain/decisions/0023-profile-viewer-membership-edit-eligibility.md`, `docs/design/profile-edit.md`, `PROD-490`, `PROD-492`, `PROD-705` — Production `/profile-edit` route는 `currentSession.selectedProfile`의 viewer-relative Membership을 사용해 selected Active/Normal Local Profile과 현재 Active Account의 Owner 관계를 server-authoritative하게 확인하고 초기값과 submit을 연결할 때만 제공해야 한다(MUST).
-
-Client는 selected Profile id, Local origin 또는 Membership role 하나만으로 Owner 권한을 추측해서는 안
-된다(MUST NOT).
-
-#### Scenario: Enter the route as selected Local Owner
-
-- **WHEN** 현재 Account가 Active이고 `currentSession.selectedProfile`이 Active/Normal Local이며
-  `selectedProfile.viewerState.membership.role`이 `OWNER`다
-- **THEN** route는 selected Profile에서 서버가 반환한 초기값과 submit callback을 가진 Profile edit form을
-  제공한다
-- **AND** 저장 성공 뒤 갱신된 Profile로 복귀한다
-
-#### Scenario: Render the public Profile edit action for the selected Owner
-
-- **WHEN** 공개 조회 중인 Profile이 Active/Normal Local이고 현재 Active Account의 유효한 viewer Profile과 같아
-  `viewerState.isSelf`가 true이며 `viewerState.membership.role`이 `OWNER`다
-- **THEN** 공개 Profile route는 해당 Profile의 편집 button을 표시한다
-- **AND** top-level `selectedProfileForEdit` 또는 public `canEdit` scalar를 사용하지 않는다
-
-#### Scenario: Reject non-owner or ineligible route access
-
-- **WHEN** guest, 유효한 viewer Profile이 없는 session, inactive Account, selected mismatch, Member·무관 Account
-  또는 Remote·inactive·suspended selected Profile이 직접 URL에 접근한다
-- **THEN** client는 `이 프로필을 수정할 수 없어요`와 `프로필로 돌아가기` action을 가진 StateView를 제공한다
-- **AND** Profile edit content와 enabled 저장 action을 제공하지 않는다
-- **AND** selected Profile id, Local origin 또는 Membership role 하나만으로 접근을 허용하지 않는다
-- **AND** 공개 Profile 화면에 disabled placeholder를 포함한 편집 button을 렌더하지 않는다
-
-### Requirement: Field-scoped Media upload and retry
-
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/domain/objects/media.md`, PROD-492, PROD-581, PROD-881 — production route는 avatar/header별 local asset, preview, upload generation과 Ready Media ID를 독립적으로 보존해야 한다(MUST). 선택 즉시 preview를 표시하고 공통 업로드 경계에서 이미지를 긴 변 최대 `2048px`와 품질 `0.8`의 WebP byte로 정규화한 뒤 issue-upload URL, 정규화 byte PUT, complete 순서로 Ready Media를 확보해야 하며(MUST), stale completion이나 실패한 field 때문에 다른 Ready field를 다시 업로드해서는 안 된다(MUST NOT).
-
-#### Scenario: Upload selected image and ignore a stale completion
-
-- **WHEN** 사용자가 이미지를 선택한 뒤 같은 field를 교체하거나 route를 떠나기 전에 이전 upload가 늦게 완료된다
-- **THEN** route는 최신 local preview와 upload generation만 draft에 반영한다
-- **AND** 공통 이미지 업로드 경계가 해당 field의 PUT byte와 Content-Type을 `2048px` 이내 WebP 결과로 정규화한다
-- **AND** stale completion을 현재 Ready Media ID로 사용하지 않는다
-
-#### Scenario: Retry only the failed image field
-
-- **WHEN** 한 image field는 Ready이고 다른 field의 upload가 실패한다
-- **THEN** form은 실패 field에 canonical 오류와 `다시 시도` action을 표시하고 저장을 disabled로 둔다
-- **AND** retry는 실패 field의 issue→정규화→PUT→complete만 다시 실행한다
-- **AND** Ready field와 text·policy draft를 유지한다
-
-#### Scenario: Retry Profile save without reuploading Ready Media
-
-- **WHEN** 모든 image upload가 Ready인 뒤 updateProfile 저장이 실패한다
-- **THEN** route는 전체 draft와 Ready Media ID를 유지한다
-- **AND** 저장 재시도는 같은 Ready ID를 사용하고 upload sequence를 다시 실행하지 않는다
-
-### Requirement: Dirty Profile edit navigation guard
-
-**Authority / Provenance:** `docs/design/profile-edit.md`, `PROD-492` — dirty Profile edit route는 route navigation, Web browser back과 Android hardware back을 공통 confirmation으로 한 번만 가로채야 한다(MUST). confirmation은 `변경사항을 버릴까요?`, `계속 편집`, `버리기`를 제공해야 하며(MUST), saving 중에는 navigation을 차단해야 한다(MUST).
-
-#### Scenario: Confirm discarding a dirty draft
-
-- **WHEN** dirty route에서 route action, Web browser back 또는 Android hardware back을 시도한다
-- **THEN** 동일한 discard confirmation을 한 번 표시한다
-- **AND** `계속 편집`은 현재 draft와 route를 유지한다
-- **AND** `버리기`는 guard를 재진입하지 않고 원래 navigation action을 한 번 실행한다
-
-#### Scenario: Block navigation while saving and bypass the guard after success
-
-- **WHEN** updateProfile이 진행 중이다
-- **THEN** back과 다른 route navigation을 차단하고 discard confirmation을 열지 않는다
-- **AND** 저장 성공 시 guard를 먼저 해제하고 payload를 Relay에 정규화한 뒤 갱신된 `relativeHandle` Profile로 replace한다
-- **AND** 성공 toast나 presentation 성공 문구를 표시하지 않는다
-
-#### Scenario: Protect a new draft created before the successful replace commits
-
-- **WHEN** 저장 성공 뒤 제출 draft가 clean baseline이 되어 one-shot Profile REPLACE가 시작됐지만 실제 route
-  commit 전에 사용자가 새 draft를 만든다
-- **THEN** route는 새 draft를 dirty 상태로 취급해 대기 중인 REPLACE를 discard confirmation으로 가로챈다
-- **AND** 새 입력을 버리고 강제로 Profile route로 이동하지 않는다
-- **AND** 사용자가 새 draft를 만들지 않으면 늦게 도착한 `beforeRemove`가 성공 REPLACE를 다시 차단하지 않는다

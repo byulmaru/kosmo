@@ -1,6 +1,6 @@
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, layoutRecipes, spacing, typography } from '@/theme/tokens';
+import { layoutRecipes, space, textStyles } from '@/theme/tokens';
 import { TextArea, TextField } from '../ui/TextField';
 import { ProfileEditImageFields } from './ProfileEditImageFields';
 import { validateProfileEditDraft } from './profileEditState';
@@ -18,7 +18,6 @@ export type ProfileEditFormProps = {
   onHeaderRemove?: () => void;
   onHeaderRetry?: () => void;
   serverErrors?: ProfileEditFieldErrors;
-  showTags?: boolean;
   value: ProfileEditDraft;
 };
 
@@ -55,7 +54,6 @@ export function ProfileEditForm({
   onHeaderRemove,
   onHeaderRetry,
   serverErrors,
-  showTags = true,
   value,
 }: ProfileEditFormProps) {
   const theme = useTheme();
@@ -84,31 +82,35 @@ export function ProfileEditForm({
 
       <View style={styles.fields}>
         <View style={styles.field}>
-          <TextField
-            accessibilityLabel="표시 이름"
-            editable={!disabled}
-            error={displayNameError}
-            label="표시 이름"
-            onChangeText={(displayName) => onChange({ ...value, displayName })}
-            value={value.displayName}
-          />
-          <Text style={[styles.counter, { color: theme.textSecondary }]}>
-            {countCodePoints(value.displayName.trim())}/40
-          </Text>
+          <Text style={[styles.label, { color: theme.text }]}>표시 이름</Text>
+          <View style={styles.controlSupport}>
+            <TextField
+              accessibilityLabel="표시 이름"
+              editable={!disabled}
+              error={displayNameError}
+              onChangeText={(displayName) => onChange({ ...value, displayName })}
+              value={value.displayName}
+            />
+            <Text style={[styles.counter, { color: theme.textSecondary }]}>
+              {countCodePoints(value.displayName.trim())}/40
+            </Text>
+          </View>
         </View>
 
         <View style={styles.field}>
-          <TextArea
-            accessibilityLabel="소개"
-            editable={!disabled}
-            error={bioError}
-            label="소개"
-            onChangeText={(bio) => onChange({ ...value, bio })}
-            value={value.bio}
-          />
-          <Text style={[styles.counter, { color: theme.textSecondary }]}>
-            {value.bio.trim().length}/500
-          </Text>
+          <Text style={[styles.label, { color: theme.text }]}>소개</Text>
+          <View style={styles.controlSupport}>
+            <TextArea
+              accessibilityLabel="소개"
+              editable={!disabled}
+              error={bioError}
+              onChangeText={(bio) => onChange({ ...value, bio })}
+              value={value.bio}
+            />
+            <Text style={[styles.counter, { color: theme.textSecondary }]}>
+              {value.bio.trim().length}/500
+            </Text>
+          </View>
         </View>
 
         <View style={styles.followPolicyRow}>
@@ -128,16 +130,14 @@ export function ProfileEditForm({
           />
         </View>
 
-        {showTags ? (
-          <View style={styles.field}>
-            <ProfileTagEditor
-              disabled={disabled}
-              onChange={(tags) => onChange({ ...value, tags })}
-              tags={value.tags}
-            />
-            <FieldError message={serverErrors?.tags} />
-          </View>
-        ) : null}
+        <View style={styles.controlSupport}>
+          <ProfileTagEditor
+            disabled={disabled}
+            onChange={(tags) => onChange({ ...value, tags })}
+            tags={value.tags}
+          />
+          <FieldError message={serverErrors?.tags} />
+        </View>
       </View>
     </View>
   );
@@ -148,33 +148,27 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   imageErrors: {
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
+    gap: space[4],
+    paddingHorizontal: space[16],
   },
   fields: {
     ...layoutRecipes.formStack,
     ...layoutRecipes.formPageInset,
-    paddingBottom: spacing.xxxl,
-    paddingTop: spacing.xl,
+    paddingBottom: space[48],
+    paddingTop: space[24],
   },
-  field: { ...layoutRecipes.labelSupportStack },
+  field: { gap: space[8] },
+  controlSupport: { ...layoutRecipes.labelSupportStack },
+  label: textStyles.uiLabelL,
   followPolicyRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  followPolicyLabel: {
-    fontFamily: fontFamilies.ui,
-    fontWeight: '600',
-    ...typography.md,
-  },
+  followPolicyLabel: textStyles.uiLabelL,
   counter: {
     alignSelf: 'flex-end',
-    fontFamily: fontFamilies.ui,
-    ...typography.xsm,
+    ...textStyles.uiCopyS,
   },
-  error: {
-    fontFamily: fontFamilies.ui,
-    ...typography.xsm,
-  },
+  error: textStyles.uiCopyS,
 });

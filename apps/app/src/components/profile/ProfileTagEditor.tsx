@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import { space, textStyles } from '@/theme/tokens';
 import { Button } from '../ui/Button';
 import { TextField } from '../ui/TextField';
 import { validateProfileTagDraftInput } from './profileEditState';
@@ -35,17 +35,19 @@ export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTa
     <View style={styles.root}>
       <Text style={[styles.label, { color: theme.text }]}>프로필 태그</Text>
 
-      <View style={styles.chips}>
-        {tags.map((tag, index) => (
-          <ProfileTagChip
-            disabled={disabled}
-            key={tag}
-            name={tag}
-            onRemove={() => onChange(tags.filter((_, tagIndex) => tagIndex !== index))}
-            removable
-          />
-        ))}
-      </View>
+      {tags.length > 0 ? (
+        <View style={styles.chips}>
+          {tags.map((tag, index) => (
+            <ProfileTagChip
+              disabled={disabled}
+              key={tag}
+              name={tag}
+              onRemove={() => onChange(tags.filter((_, tagIndex) => tagIndex !== index))}
+              removable
+            />
+          ))}
+        </View>
+      ) : null}
 
       <View style={styles.inputRow}>
         <View style={styles.input}>
@@ -80,22 +82,18 @@ export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTa
 
 const styles = StyleSheet.create({
   root: {
-    gap: spacing.md,
+    gap: space[8],
   },
-  label: {
-    fontFamily: fontFamilies.ui,
-    fontWeight: '700',
-    ...typography.sm,
-  },
+  label: textStyles.uiLabelL,
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: space[8],
   },
   inputRow: {
     alignItems: 'flex-start',
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: space[8],
   },
   input: {
     flex: 1,
