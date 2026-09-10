@@ -9,7 +9,8 @@ Web·Android·iOS에서 같은 정보 구조와 상태로 탐색한다.
 
 - TagChip은 공개 Profile에 표시된 정확한 Hashtag identity를 전달하는 진입점이다. 선택 시 그 Hashtag와 관계된
   Profile 목록을 열며, 임의의 검색창 입력을 Hashtag 조건으로 해석하지 않는다.
-- 기존 사람 검색의 handle 입력·결과·pagination 계약과 `searchProfiles` 동작은 변경하지 않는다.
+- 기존 사람 검색의 handle 입력·검색 진입점·pagination 문법은 유지한다. 다만 후보 eligibility에는 selected
+  Profile과 양방향 Active Block 관계인 Profile을 제외하는 정책이 추가된다.
 - 검색창에서 Hashtag 또는 Hashtag Name 결과를 찾는 기능은 별도 계약이며 이 문서와 현재 PR에서 구현하거나
   확정하지 않는다.
 - 화면 navigation은 PROD-529, API 계약은 PROD-528이 소유한다. 이 문서는 route path나 GraphQL field명이 아닌

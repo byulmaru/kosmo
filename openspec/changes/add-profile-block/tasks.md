@@ -65,8 +65,6 @@ Owner가 지정한 정확한 Profile Block ID 관계만 제거하며 Follow/Requ
 - `docs/domain/objects/media.md`
 - `docs/domain/objects/follow-relationship.md`
 - `docs/domain/objects/follow-request.md`
-- `docs/domain/objects/post.md`
-- `docs/domain/objects/media.md`
 - `docs/domain/objects/bookmark.md`
 - `docs/domain/objects/reaction.md`
 - `docs/domain/objects/notification.md`
