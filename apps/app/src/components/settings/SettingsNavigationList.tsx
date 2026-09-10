@@ -3,7 +3,7 @@ import { layoutRecipes } from '@/theme/tokens';
 import { ByulmaruIdAccountSettingsEntry } from './ByulmaruIdAccountSettingsEntry';
 import { SettingsLinkRow } from './SettingsLinkRow';
 
-type SettingsDestination = 'default-post-visibility' | 'mute-and-block';
+type SettingsDestination = 'default-post-visibility' | 'mute-and-block' | 'info';
 
 export function SettingsNavigationList({ selected }: { selected?: SettingsDestination }) {
   const current = selected === 'default-post-visibility';
@@ -28,6 +28,13 @@ export function SettingsNavigationList({ selected }: { selected?: SettingsDestin
         label="뮤트 및 차단"
         primary
         selected={selected === 'mute-and-block'}
+      />
+      <SettingsLinkRow
+        accessibilityLabel="정보 설정 열기"
+        href="/settings/info"
+        label="정보"
+        primary
+        selected={selected === 'info'}
       />
     </View>
   );

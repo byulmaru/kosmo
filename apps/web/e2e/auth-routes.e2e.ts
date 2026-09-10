@@ -26,6 +26,11 @@ const protectedHeadingRoutes = [
   { heading: '알림', path: '/notifications' },
   { heading: '피드백 보내기', path: '/feedback' },
 ] as const;
+const publicPolicyRoutes = [
+  { heading: 'Kosmo 개인정보 처리방침', path: '/privacy' },
+  { heading: 'Kosmo 계정 삭제 안내', path: '/account-deletion' },
+  { heading: 'Kosmo 아동 안전 정책', path: '/child-safety' },
+] as const;
 
 type NativeSessionGraphQLResponse = {
   data?: {
@@ -195,14 +200,21 @@ for (const viewport of [
   });
 }
 
-test('개인정보 처리방침은 로그인 없이 공개되고 landing으로 돌아갈 수 있다', async ({ page }) => {
+for (const route of publicPolicyRoutes) {
+  test(`${route.path}는 로그인 없이 공개되고 문서 heading을 표시한다`, async ({ page }) => {
+    await page.goto(route.path);
+
+    await expect(page).toHaveURL(new RegExp(`${route.path}$`));
+    await expect(page.getByRole('heading', { name: route.heading })).toBeVisible();
+  });
+}
+
+test('공개 정책 문서에서 landing으로 돌아갈 수 있다', async ({ page }) => {
   await page.goto('/privacy');
 
-  await expect(page.getByRole('heading', { name: 'Kosmo 개인정보 처리방침' })).toBeVisible();
-  await expect(page.getByText('시행일: 2026년 7월 29일')).toBeVisible();
-  await expect(page.getByText('9. 자동 수집 정보와 행태정보')).toBeVisible();
-  await expect(page.getByText(/Session replay: 세션의 10%/)).toBeVisible();
-  await expect(page.getByRole('link', { name: 'KOSMO로 돌아가기' })).toHaveAttribute('href', '/');
+  await page.getByRole('link', { name: 'KOSMO로 돌아가기' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
 });
 
 test('로그인 후 full shell에서도 개인정보 처리방침으로 이동한다', async ({ context, page }) => {
@@ -215,6 +227,23 @@ test('로그인 후 full shell에서도 개인정보 처리방침으로 이동�
   await expect(privacyLink).toHaveAttribute('href', '/privacy');
   await privacyLink.click();
   await expect(page).toHaveURL(/\/privacy$/);
+});
+
+test('로그인 후 Settings 정보에서 공개 정책 문서로 이동한다', async ({ context, page }) => {
+  const session = await createE2ESession();
+  await setE2ESessionCookie(context, session.token);
+  await page.setViewportSize({ height: 900, width: 1440 });
+
+  await page.goto('/settings');
+  await expect(page.getByRole('heading', { name: '설정' })).toBeVisible();
+
+  await page.getByRole('link', { name: '정보 설정 열기' }).click();
+  await expect(page).toHaveURL(/\/settings\/info$/);
+  await expect(page.getByRole('heading', { name: '정보' })).toBeVisible();
+
+  await page.getByRole('link', { name: '개인정보 처리방침' }).click();
+  await expect(page).toHaveURL(/\/privacy$/);
+  await expect(page.getByRole('heading', { name: 'Kosmo 개인정보 처리방침' })).toBeVisible();
 });
 
 test('세션 확인이 실패해도 루트 온보딩과 로그인 진입점을 유지한다', async ({ page }) => {
@@ -762,7 +791,6 @@ test.describe('로그인 사용자 보호 라우트', () => {
     const home = navigation.getByRole('link', { name: '홈' });
     const homeIcon = home.locator('svg');
     const homeLabel = home.getByText('홈', { exact: true });
-
     await expect(drawer).toBeVisible();
     await expect.poll(() => canonicalProfilePath).not.toBe('');
     await expect(navigation.getByRole('link', { exact: true, name: '프로필' })).toHaveAttribute(
@@ -770,7 +798,6 @@ test.describe('로그인 사용자 보호 라우트', () => {
       canonicalProfilePath,
     );
     await expect(drawer.getByRole('link', { name: '글쓰기' })).toHaveCount(0);
-    await expect(drawer.getByRole('link', { name: '개인정보 처리방침' })).toHaveCount(0);
     await expect(drawer.getByRole('button', { name: '피드백 보내기' })).toBeVisible();
     await expect(drawer.getByRole('link', { name: /팔로잉/ })).toHaveAttribute(
       'href',

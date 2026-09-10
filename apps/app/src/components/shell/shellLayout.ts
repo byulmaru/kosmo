@@ -41,7 +41,8 @@ export type WebMobileShellHeader = Readonly<{
     | '뮤트 및 차단'
     | '뮤트한 프로필'
     | '설정'
-    | '알림';
+    | '알림'
+    | '정보';
 }>;
 
 export function isSettingsRoute(pathname: string) {
@@ -90,6 +91,9 @@ export function getWebMobileShellHeader(
   }
   if (pathname === '/settings/muted-profiles') {
     return { leading: 'back', title: '뮤트한 프로필' };
+  }
+  if (pathname === '/settings/info') {
+    return { leading: 'back', title: '정보' };
   }
 
   if (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]') {

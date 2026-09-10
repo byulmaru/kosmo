@@ -32,7 +32,9 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   const selected =
     root || pathname === '/settings/default-post-visibility'
       ? 'default-post-visibility'
-      : undefined;
+      : pathname === '/settings/info'
+        ? 'info'
+        : undefined;
   const detailHeaderMode: SettingsDetailHeaderMode =
     layout === 'full' ? 'plain' : web && layout === 'mobile' ? 'hidden' : 'back';
 

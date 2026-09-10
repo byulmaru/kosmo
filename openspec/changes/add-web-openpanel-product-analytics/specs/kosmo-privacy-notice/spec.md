@@ -2,9 +2,9 @@
 
 ### Requirement: 공개 Kosmo 개인정보 처리방침
 
-Kosmo MUST 인증 없이 접근할 수 있는 개인정보 처리방침을 제공하고 landing과 인증 후 full Web shell에서 연결해야 한다. compact Web과 mobile Web·Android/iOS drawer에는 개인정보 처리방침 진입점을 표시해서는 안 된다(MUST NOT). 처리방침은 실제 처리 목적·항목·법적 근거·보유와 파기·제공과 위탁·국외 이전·권리 행사·행태정보·안전조치·책임자·구제·변경 이력을 구체적으로 밝혀야 한다.
+Kosmo MUST 인증 없이 접근할 수 있는 개인정보 처리방침을 제공하고 landing과 기존 인증 후 full Web right rail에서 연결해야 한다. 인증 후 full Web Sidebar, compact Web icon rail과 mobile Web·Android/iOS drawer에는 개인정보 처리방침 진입점을 추가해서는 안 된다(MUST NOT). 대신 인증된 모든 플랫폼에서 Settings의 `정보` detail(`/settings/info`)을 통해 공개 `/privacy`로 추가 진입할 수 있어야 한다. 처리방침은 실제 처리 목적·항목·법적 근거·보유와 파기·제공과 위탁·국외 이전·권리 행사·행태정보·안전조치·책임자·구제·변경 이력을 구체적으로 밝혀야 한다.
 
-**Authority / Provenance:** `PROD-469`, 개인정보보호위원회 「개인정보 처리방침 작성지침」 2026.4 개정
+**Authority / Provenance:** `PROD-469`, `PROD-889`, `docs/design/settings.md`, `docs/design/breakpoints.md`, 개인정보보호위원회 「개인정보 처리방침 작성지침」 2026.4 개정
 
 #### Scenario: 방문자가 처리방침을 연다
 
@@ -17,11 +17,17 @@ Kosmo MUST 인증 없이 접근할 수 있는 개인정보 처리방침을 제�
 - **THEN** 시스템은 공개 `/privacy` route로 이동한다
 - **AND** link는 accessible name과 Web 최소 target 크기를 제공한다
 
-#### Scenario: compact와 mobile shell에서 처리방침 진입점을 숨긴다
+#### Scenario: 전역 navigation에서 처리방침 진입점을 추가하지 않는다
 
-- **WHEN** 인증된 사용자가 compact Web icon rail 또는 mobile Web·Android/iOS drawer를 연다
+- **WHEN** 인증된 사용자가 full Web Sidebar, compact Web icon rail 또는 mobile Web·Android/iOS drawer를 연다
 - **THEN** 시스템은 개인정보 처리방침 link나 같은 의미의 진입 control을 시각·접근성 트리에 노출하지 않는다
-- **AND** 공개 `/privacy` route와 landing link는 유지한다
+- **AND** 공개 `/privacy` route, landing link와 기존 full Web right rail link는 유지한다
+
+#### Scenario: Settings 정보에서 처리방침을 연다
+
+- **WHEN** 인증된 사용자가 Web 또는 Android/iOS Settings의 `정보` detail(`/settings/info`)에서 `개인정보 처리방침` link를 활성화한다
+- **THEN** 시스템은 공개 `/privacy` route로 이동한다
+- **AND** link는 accessible name과 해당 플랫폼의 최소 target 크기를 제공한다
 
 ### Requirement: OpenPanel 자동 수집과 replay 고지
 

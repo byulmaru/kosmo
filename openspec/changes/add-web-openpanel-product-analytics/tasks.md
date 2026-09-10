@@ -56,21 +56,24 @@ Web의 Profile 생성·선택, Post 생성, Follow와 검색 흐름이 실제 �
 **Authority / Provenance**
 
 - `PROD-469`
+- `PROD-889`
+- `docs/design/settings.md`
+- `docs/design/breakpoints.md`
 - 개인정보보호위원회 「개인정보 처리방침 작성지침」 2026.4 개정
 
 **Deliverable**
 
-비로그인 방문자도 실제 Kosmo·OpenPanel 처리 내용을 반영한 개인정보 처리방침을 읽을 수 있고, 운영자는 Account별 분석 데이터 삭제 요청을 안전하게 처리할 수 있다.
+비로그인 방문자도 실제 Kosmo·OpenPanel 처리 내용을 반영한 개인정보 처리방침을 읽을 수 있고, 인증된 모든 플랫폼에서 Settings `정보` detail의 추가 privacy 진입을 사용할 수 있으며, 운영자는 Account별 분석 데이터 삭제 요청을 안전하게 처리할 수 있다.
 
 **Guardrails**
 
 - 고지는 실제 자동 수집, identity, replay 설정과 보유·권리 행사 절차에 일치해야 한다.
-- landing과 인증 후 full Web right rail 최하단에서 접근할 수 있어야 하며 compact Web·mobile drawer에는 진입점을 표시하지 않는다.
+- landing과 기존 인증 후 full Web right rail 최하단에서 접근할 수 있어야 한다. full Web Sidebar·compact Web icon rail·mobile Web·Android/iOS drawer에는 정책 링크를 추가하지 않으며, 인증된 모든 플랫폼의 Settings `정보` detail(`/settings/info`)에서 공개 `/privacy`로 추가 진입할 수 있어야 한다.
 - 삭제 절차는 대상 확인, dry-run, 승인, 삭제와 잔존 검증을 포함해야 한다.
 
 **Verification**
 
-- 공개 route 렌더링, landing·full Web 진입 링크, compact·mobile 비노출과 필수 고지 항목을 test로 확인하고 runbook 절차를 검토한다.
+- 공개 `/privacy` route 실제 접근, 기존 landing·full Web right rail 링크와 Settings `정보`의 privacy link 이동을 navigation E2E로 확인한다. 전역 Sidebar·compact icon rail·mobile drawer 정책 링크 비노출과 고지 내용은 canonical 문서와 대조하고, 기존 runbook 절차를 검토한다.
 
 - [x] 3.1 공개 개인정보 처리방침 route와 landing·menu 진입 링크를 구현한다. (초기 배치, responsive shell 이전으로 superseded)
 - [x] 3.2 OpenPanel production 설정·검증과 Account별 삭제 runbook을 작성한다.
