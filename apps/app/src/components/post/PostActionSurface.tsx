@@ -70,7 +70,7 @@ export function PostActionSurface({
   const reportItem = useContentReportMenuItem({
     id: target.id,
     kind: ContentReportTargetType.POST,
-    label: target.profile.relativeHandle,
+    label: `${target.profile.relativeHandle}의 게시물 · ${target.id}`,
   });
   const moreItems = sessionId ? [copyLinkItem, reportItem] : [copyLinkItem];
 

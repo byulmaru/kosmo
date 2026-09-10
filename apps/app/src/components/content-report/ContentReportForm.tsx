@@ -41,7 +41,6 @@ export function ContentReportForm({ onStateChange, target }: Props) {
   const web = Platform.OS === 'web';
   const [reason, setReason] = useState<ContentReportReason>(ContentReportReason.HARMFUL_CONTENT);
   const [details, setDetails] = useState('');
-  const [detailsTouched, setDetailsTouched] = useState(false);
   const [status, setStatus] = useState<ContentReportStatus>('idle');
   const [commit, submitting] = useMutation<ContentReportFormSubmitContentReportMutation>(
     SubmitContentReportMutation,
@@ -51,9 +50,7 @@ export function ContentReportForm({ onStateChange, target }: Props) {
   latestStateRef.current = formState;
   const parsedInput = contentReportInputSchema.safeParse({ details, reason });
   const validationError = parsedInput.success ? null : parsedInput.error.issues[0]?.message;
-  const showValidationError =
-    validationError != null &&
-    (detailsTouched || reason === ContentReportReason.OTHER || status === 'rejected');
+  const showValidationError = validationError != null;
   const canSubmit = !submitting && parsedInput.success;
   const targetLabel = target.kind === 'PROFILE' ? '프로필' : '게시물';
   const reportState = (nextState: ContentReportFormState) => {
@@ -67,7 +64,6 @@ export function ContentReportForm({ onStateChange, target }: Props) {
 
   const submit = () => {
     if (!canSubmit || !parsedInput.success) {
-      setDetailsTouched(true);
       return;
     }
 
@@ -86,7 +82,6 @@ export function ContentReportForm({ onStateChange, target }: Props) {
         const nextStatus = errors?.length ? null : (response.submitContentReport?.status ?? null);
         if (nextStatus === 'DELIVERED') {
           setDetails('');
-          setDetailsTouched(false);
           setReason(ContentReportReason.HARMFUL_CONTENT);
           setStatus('success');
           reportState({ dirty: false, submitting: false });
@@ -141,7 +136,6 @@ export function ContentReportForm({ onStateChange, target }: Props) {
         maxLength={contentReportDetailsMaxLength}
         onChangeText={(value) => {
           setDetails(value);
-          setDetailsTouched(true);
           setStatus('idle');
         }}
         placeholder="신고 사유를 설명해주세요."
