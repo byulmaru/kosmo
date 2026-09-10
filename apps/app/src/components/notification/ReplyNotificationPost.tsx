@@ -13,6 +13,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import type { PointerEvent } from 'react-native';
 import type { PostMediaOpenHandler } from '@/components/post/PostMediaImage';
 import type { ReplyNotificationPost_post$key } from './__generated__/ReplyNotificationPost_post.graphql';
 
@@ -55,6 +56,14 @@ export function ReplyNotificationPost({
   const { reply, replySurface, owner: replyOwner } = usePostReplySurface(post);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
+  const onMiddlePointerUp = useCallback(
+    (event: PointerEvent) => {
+      if (Platform.OS === 'web' && event.nativeEvent.button === 1) {
+        onActivate?.();
+      }
+    },
+    [onActivate],
+  );
   const onMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
       onActivate?.();
@@ -75,13 +84,15 @@ export function ReplyNotificationPost({
   return (
     <>
       <View role="article" style={styles.root} testID="reply-notification-post">
-        <NavigationLink href={profileHref} onNavigate={onActivate}>
+        <NavigationLink href={profileHref}>
           <Pressable
             aria-hidden
             accessibilityElementsHidden
             accessible={false}
             focusable={false}
             importantForAccessibility="no-hide-descendants"
+            onPress={onActivate}
+            onPointerUp={onMiddlePointerUp}
             style={styles.avatar}
             tabIndex={-1}
           >
@@ -94,9 +105,11 @@ export function ReplyNotificationPost({
         </NavigationLink>
         <View style={styles.content}>
           <View style={styles.header}>
-            <NavigationLink href={profileHref} onNavigate={onActivate}>
+            <NavigationLink href={profileHref}>
               <Pressable
                 accessibilityRole="link"
+                onPress={onActivate}
+                onPointerUp={onMiddlePointerUp}
                 style={styles.author}
                 testID="notification-post-author"
               >
@@ -111,8 +124,14 @@ export function ReplyNotificationPost({
                 </Text>
               </Pressable>
             </NavigationLink>
-            <NavigationLink href={detailHref} onNavigate={onActivate}>
-              <Pressable accessibilityRole="link" style={styles.timeLink}>
+            <NavigationLink href={detailHref}>
+              <Pressable
+                accessibilityRole="link"
+                onPress={onActivate}
+                onPointerUp={onMiddlePointerUp}
+                style={styles.timeLink}
+                testID="notification-post-time"
+              >
                 <Text style={[styles.time, { color: theme.foregroundSecondary }]}>
                   {formatTimelineTimestamp(post.createdAt)}
                 </Text>
