@@ -14,7 +14,15 @@ import {
 } from '@/components/media/imageUploadErrors';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, colors, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import {
+  borderWidths,
+  breakpoints,
+  colors,
+  iconSizes,
+  radius,
+  space,
+  textStyles,
+} from '@/theme/tokens';
 import type { Ref } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { ProfileEditImageDraft } from './profileEditState';
@@ -124,6 +132,7 @@ function ImageEditControl({
   accessibilityLabel,
   disabled,
   draft,
+  innerBorderColor,
   onEdit,
   onRemove,
   style,
@@ -132,6 +141,7 @@ function ImageEditControl({
   accessibilityLabel: string;
   disabled: boolean;
   draft: ProfileEditImageDraft;
+  innerBorderColor?: string;
   onEdit?: () => void;
   onRemove?: () => void;
   style: StyleProp<ViewStyle>;
@@ -173,6 +183,17 @@ function ImageEditControl({
               testID={`${testID}-content`}
             />
           )}
+          {innerBorderColor ? (
+            <View
+              pointerEvents="none"
+              style={[
+                StyleSheet.absoluteFill,
+                styles.innerBorder,
+                { borderColor: innerBorderColor },
+              ]}
+              testID={`${testID}-inner-border`}
+            />
+          ) : null}
           {pressed ? <View style={[StyleSheet.absoluteFill, styles.pressedVeil]} /> : null}
           <CameraAffordance disabled={disabled} />
         </>
@@ -234,6 +255,7 @@ export function ProfileEditImageFields({
           accessibilityLabel="아바타 이미지 편집"
           disabled={disabled || !onAvatarEdit}
           draft={avatar}
+          innerBorderColor={theme.borderDefault}
           onEdit={onAvatarEdit}
           onRemove={onAvatarRemove}
           style={[
@@ -280,6 +302,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     top: 0,
+  },
+  innerBorder: {
+    borderRadius: radius.full,
+    borderWidth: borderWidths[1],
   },
   cameraAffordance: {
     alignItems: 'center',

@@ -184,6 +184,7 @@ function expectResponsiveSurface(
   const avatarContent = canvas
     .getByTestId('profile-edit-avatar-preview-content')
     .getBoundingClientRect();
+  const avatarInnerBorder = canvas.getByTestId('profile-edit-avatar-preview-inner-border');
   const avatarRow = canvas.getByTestId('profile-edit-avatar-row').getBoundingClientRect();
   const cameraAffordances = canvas.getAllByTestId('profile-edit-camera-affordance');
   const displayNameLabel = canvas.getByText('표시 이름');
@@ -211,6 +212,10 @@ function expectResponsiveSurface(
   expect(Math.round(avatarFrame.height)).toBe(expectedAvatarFrameSize);
   expect(Math.round(avatarContent.width)).toBe(expectedAvatarFrameSize - 8);
   expect(Math.round(avatarContent.height)).toBe(expectedAvatarFrameSize - 8);
+  expect(avatarInnerBorder).toHaveStyle({
+    borderColor: colors.light.borderDefault,
+    borderWidth: 1,
+  });
   expect(Math.round(header.bottom - avatarFrame.top)).toBe(expectedAvatarFrameSize / 2);
   expect(Math.round(avatarRow.height)).toBe(expectedAvatarRowHeight);
   expect(cameraAffordances).toHaveLength(2);
@@ -546,6 +551,14 @@ export const TagAddDuplicateAndRemove: Story = {
     expect(
       Math.round(input.getBoundingClientRect().top - label.getBoundingClientRect().bottom),
     ).toBe(8);
+
+    const inputBounds = input.getBoundingClientRect();
+    const addBounds = add.getBoundingClientRect();
+    expect(Math.round(inputBounds.height)).toBe(44);
+    expect(Math.round(addBounds.height)).toBe(40);
+    expect(Math.round(inputBounds.top + inputBounds.height / 2)).toBe(
+      Math.round(addBounds.top + addBounds.height / 2),
+    );
 
     await userEvent.type(input, ' #Ｆｏｏ ');
     await userEvent.click(add);

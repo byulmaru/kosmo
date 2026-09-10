@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     gap: space[8],
   },
   inputRow: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
     gap: space[8],
   },
@@ -99,7 +99,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   addButton: {
-    minHeight: 36,
     minWidth: 88,
   },
 });
