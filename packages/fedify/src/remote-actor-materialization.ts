@@ -43,8 +43,6 @@ import { isHttpUri } from './activitypub-uri';
 import type { Context } from '@fedify/fedify';
 import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
 
-const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
-
 export class RemoteActorMaterializationError extends Error {
   constructor(message: string) {
     super(message);
@@ -65,7 +63,6 @@ type FindOrMaterializeRemoteActorOptions = {
   profileId?: string;
   actorUri: URL | string;
   mode?: 'sync' | 'async';
-  now?: Temporal.Instant;
 };
 
 export type RemoteProfileMaterializationAcknowledgement = {
@@ -420,10 +417,6 @@ export const findOrMaterializeRemoteProfileActorByUri = async ({
   return requireUsableStoredRemoteActor(materialized);
 };
 
-const isStale = (lastFetchedAt: Temporal.Instant | null, now: Temporal.Instant) =>
-  lastFetchedAt === null ||
-  lastFetchedAt.add(remoteActorRefreshTtl).epochNanoseconds <= now.epochNanoseconds;
-
 const findApplicationFailure = (error: unknown): ApplicationFailure | undefined => {
   if (error instanceof ApplicationFailure) {
     return error;
@@ -459,75 +452,31 @@ export function findOrMaterializeRemoteProfileActor(
 ): Promise<typeof Profiles.$inferSelect>;
 export function findOrMaterializeRemoteProfileActor(
   options: FindOrMaterializeRemoteActorOptions & { mode: 'async' },
-): Promise<RemoteProfileMaterializationAcknowledgement | typeof Profiles.$inferSelect>;
+): Promise<RemoteProfileMaterializationAcknowledgement>;
 export function findOrMaterializeRemoteProfileActor(
   options: FindOrMaterializeRemoteActorOptions,
 ): Promise<RemoteProfileMaterializationCallerResult>;
 export async function findOrMaterializeRemoteProfileActor({
   actorUri,
-  now = getNow(),
   mode = 'sync',
   profileId,
 }: FindOrMaterializeRemoteActorOptions): Promise<RemoteProfileMaterializationCallerResult> {
-  const stored = await findStoredRemoteProfileActorByUri(actorUri);
-
-  if (stored) {
-    if (stored.profile.state !== ProfileState.ACTIVE) {
-      throw new NotFoundError('Profile not found');
-    }
-
-    if (stored.instance.state === InstanceState.SUSPENDED) {
-      throw new NotFoundError('Profile not found');
-    }
-
-    if (
-      stored.instance.state !== InstanceState.UNRESPONSIVE &&
-      isStale(stored.actor.lastFetchedAt, now)
-    ) {
-      const input = {
-        actorUri: stored.actor.uri,
-        ...(profileId ? { profileId } : {}),
-      } as const;
-
-      // Wait only for durable start acknowledgement. The Workflow result is
-      // intentionally detached while this stale Profile remains successful.
-      try {
-        await runWorkflow(remoteProfileMaterializationWorkflow, {
-          args: [input],
-          mode: 'start',
-          workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-          workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
-        });
-      } catch (error: unknown) {
-        console.error('Remote profile refresh failed', error);
-      }
-    }
-
-    return stored.profile;
-  }
-
   try {
     const input = {
       actorUri: actorUri.toString(),
       ...(profileId ? { profileId } : {}),
     } as const;
 
-    if (mode === 'async') {
-      await runWorkflow(remoteProfileMaterializationWorkflow, {
-        args: [input],
-        mode: 'start',
-        workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-        workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
-      });
-      return { kind: 'started' };
-    }
-
     const result = await runWorkflow(remoteProfileMaterializationWorkflow, {
       args: [input],
-      mode: 'execute',
+      mode: mode === 'async' ? 'start' : 'execute',
       workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
       workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
     });
+
+    if (typeof result !== 'string') {
+      return { kind: 'started' };
+    }
 
     const profile = await db
       .select(getColumns(Profiles))

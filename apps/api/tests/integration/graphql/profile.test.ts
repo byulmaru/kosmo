@@ -290,7 +290,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(await db.$count(ActivityPubActors), 0);
   });
 
-  test('returns a stored stale remote profile after scheduling a Temporal refresh', async (t) => {
+  test('returns a stored stale remote profile from the Temporal materialization Workflow', async (t) => {
     const auth = await createAuthenticatedSession();
     const stored = await createStoredActivityPubAuthor({ domain: remoteDomain, handle: 'alice' });
     await db
@@ -300,7 +300,11 @@ describe('GraphQL remote profile boundary', () => {
     const createContext = t.mock.method(remoteFederation, 'createContext', () => {
       throw new Error('Cached actor refresh must not perform WebFinger discovery');
     });
-    const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+    const execute = t.mock.method(
+      temporalClient.workflow,
+      'execute',
+      async () => stored.profile.id as never,
+    );
 
     const result = await requestGraphQL<{
       searchProfiles: { edges: Array<{ node: { id: string; relativeHandle: string } }> };
@@ -323,9 +327,9 @@ describe('GraphQL remote profile boundary', () => {
         },
       },
     ]);
-    assert.equal(start.mock.calls.length, 1);
+    assert.equal(execute.mock.calls.length, 1);
     assert.equal(createContext.mock.calls.length, 0);
-    const options = start.mock.calls[0]?.arguments[1];
+    const options = execute.mock.calls[0]?.arguments[1];
     assert.ok(options);
     assert.deepEqual(options.args, [
       {
@@ -458,7 +462,15 @@ describe('GraphQL remote profile boundary', () => {
     );
     assert.equal(createContext.mock.calls.length, 1);
     assert.equal(lookupWebFinger.mock.calls.length, 1);
-    assert.equal(execute.mock.calls.length, 0);
+    assert.equal(execute.mock.calls.length, 1);
+    const options = execute.mock.calls[0]?.arguments[1];
+    assert.ok(options);
+    assert.deepEqual(options.args, [
+      {
+        actorUri: canonical.actorUri,
+        profileId: auth.profile.id,
+      },
+    ]);
     assert.equal(await db.$count(Profiles), 2);
     assert.equal(await db.$count(ActivityPubActors), 1);
   });

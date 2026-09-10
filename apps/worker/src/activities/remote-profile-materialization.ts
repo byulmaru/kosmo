@@ -16,6 +16,37 @@ import type { RemoteProfileMaterializationInput } from '@kosmo/core/temporal/rem
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
 
+export type RemoteProfileMaterializationState = {
+  readonly profileId: string;
+  readonly needsRefresh: boolean;
+};
+
+export const findStoredRemoteProfileActorActivity = async (
+  input: RemoteProfileMaterializationInput,
+): Promise<RemoteProfileMaterializationState | null> => {
+  const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
+
+  if (!stored) {
+    return null;
+  }
+
+  if (
+    stored.profile.state !== ProfileState.ACTIVE ||
+    stored.instance.state === InstanceState.SUSPENDED
+  ) {
+    throw ApplicationFailure.nonRetryable('Profile not found', 'NotFoundError');
+  }
+
+  return {
+    profileId: stored.profile.id,
+    needsRefresh:
+      stored.instance.state !== InstanceState.UNRESPONSIVE &&
+      (stored.actor.lastFetchedAt === null ||
+        stored.actor.lastFetchedAt.add(remoteActorRefreshTtl).epochNanoseconds <=
+          Temporal.Now.instant().epochNanoseconds),
+  };
+};
+
 export const materializeRemoteProfileActorActivity = async (
   input: RemoteProfileMaterializationInput,
 ): Promise<string> => {

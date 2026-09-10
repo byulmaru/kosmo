@@ -24,30 +24,42 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 
 ### Requirement: Remote actor materialization through Fedify lookup
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md`, `PROD-808`, `PROD-248`. 시스템은 federation 내부 actor materialization 흐름에서 검색·발견 경계가 제공한 canonical `actorUri`로 remote ActivityPub actor를 kosmo `Profile`로 materialize해야 하며(MUST), 명시적인 qualified handle을 actor URI로 해석하는 단계는 materialization 경계 전에 검색·발견 경계에서 수행해야 한다(MUST). 신규 materialization과 stale refresh는 하나의 Temporal Workflow 실행 경로를 사용해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md`, `PROD-808`, `PROD-248`. 시스템은 federation 내부 actor materialization 흐름에서 검색·발견 경계가 제공한 canonical `actorUri`로 remote ActivityPub actor를 kosmo `Profile`로 materialize해야 하며(MUST), 명시적인 qualified handle을 actor URI로 해석하는 단계는 materialization 경계 전에 검색·발견 경계에서 수행해야 한다(MUST). 신규 materialization과 stale refresh는 동일한 public Temporal Workflow dispatch와 durable orchestration 경로를 사용해야 하며(MUST), Workflow가 stored-state Activity의 결과에 따라 missing·갱신 불필요·stale를 분기해야 한다(MUST).
 
 #### Scenario: Materialize remote actor from canonical actor URI
 
 - **WHEN** federation 내부 service가 검색·발견 경계에서 확보한 canonical `actorUri`로 materialization을 요청하고 caller가 동기 또는 비동기 결과 모드를 선택한다
 - **THEN** Temporal Workflow와 Activity wire input은 canonical `actorUri`와 선택적인 `profileId`만 가진다
+- **AND** materialization을 결정하는 `findOrMaterialize` 경계는 stored Profile, actor metadata와 TTL을 직접 조회·판단하지 않고 하나의 public materialization Workflow를 dispatch한다
+- **AND** Workflow는 Activity에서 `{ profileId, needsRefresh } | null` 최소 JSON-safe stored-state DTO만 받는다. `null`은 missing, `needsRefresh: false`는 갱신이 불필요하거나 허용되지 않는 상태(fresh 또는 `UNRESPONSIVE`), `needsRefresh: true`는 갱신 가능한 stale을 나타낸다. DTO의 `profileId`는 조회 대상인 cached Remote Profile ID이고, input의 선택적인 `profileId`는 origin 선택용 행동 Profile ID다
 - **AND** 전달된 `actorUri`에 저장된 remote Profile 또는 actor metadata가 없어도 새 remote `Profile`을 materialize할 수 있다
 - **AND** `profileId`가 없으면 configured Local Instance의 canonical origin을 사용하고, 있으면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용한다
 - **AND** 전달된 `profileId`가 필요한 Remote actor 정보를 제공하지 않으면 origin을 추측하지 않고 materialization을 실패 처리한다
 - **AND** `profileId`는 기존 unsigned lookup의 권한을 대신하지 않는다
 - **AND** 시스템은 Fedify lookup 전에 `actorUri` host의 normalized domain에 해당하는 기존 ActivityPub instance를 조회한다
-- **AND** 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이면 Fedify lookup 없이 materialization을 실패 처리한다
+- **AND** 저장 actor 또는 actor metadata가 없어 외부 조회가 필요한 missing 경로에서 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이면 Fedify lookup 없이 materialization을 실패 처리한다
 - **AND** 기존 instance가 없으면 `actorUri` host의 normalized domain에 ActivityPub instance를 생성한다
-- **AND** 하나의 Temporal Workflow 경로에서 Fedify lookup API로 `actorUri`를 직접 해석한다
+- **AND** missing 분기에서는 기존 materialization Activity가 하나의 실행 경로에서 Fedify lookup API로 `actorUri`를 직접 해석한다
 - **AND** Fedify가 ActivityPub actor 객체를 반환하면 해당 actor의 canonical actor URI를 remote identity로 처리한다
 - **AND** 시스템은 actor URI가 기존 ActivityPub remote profile actor metadata에 연결되어 있으면 해당 remote profile을 갱신하고, 없으면 새 `Profile`을 생성한다
-- **AND** 동기 caller는 신규 materialization이 완료된 Profile identity를 받을 때까지 기다리고, 비동기 caller는 Workflow 시작 확인을 받은 뒤 반환한다
+- **AND** `needsRefresh: false` 분기의 Workflow는 외부 lookup이나 refresh child 없이 cached Profile identity를 반환한다
+- **AND** stale 분기의 Workflow는 state DTO의 `profileId`를 cached target identity로 반환하는 데만 사용하고, refresh child에는 Workflow가 원래 받은 input(`actorUri`와 선택적인 `profileId`)을 그대로 전달한다. child는 별도 refresh ID prefix에서 기존 materialization Activity를 실행하도록 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`으로 시작한 뒤 child start acknowledgement를 받고 cached Profile identity를 반환한다
+- **AND** 이미 실행 중인 같은 refresh child는 정상 coalescing으로 처리하고, 그 밖의 child start failure는 관측한 뒤 cached Profile identity를 반환한다
+- **AND** 동기 caller는 missing 분기의 materialization 완료 또는 갱신 불필요/stale 분기의 Profile identity를 받을 때까지 기다리고, 비동기 caller는 모든 분기에서 public Workflow start acknowledgement만 받은 뒤 반환한다
 - **AND** 동기·비동기 caller는 같은 Workflow 종류와 실행 경로를 사용한다
 
-#### Scenario: Keep an async child workflow after parent closure
+#### Scenario: Keep a stale refresh child after coordinator closure
 
-- **WHEN** 다른 Workflow가 같은 materialization Workflow를 비동기 child로 시작하고 child 실행 시작 확인이 parent 종료 전에 기록된다
+- **WHEN** public materialization Workflow가 stale 상태를 확인하고 refresh child의 실행 시작 확인을 기록한다
+- **THEN** public Workflow는 child 완료를 기다리지 않고 cached Profile identity를 반환할 수 있다
+- **AND** refresh child는 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`에 따라 public Workflow의 완료·실패·취소 뒤에도 필요한 Activity와 Profile 저장을 계속할 수 있다
+- **AND** 이미 실행 중인 같은 child는 정상 coalescing으로 처리하며, 그 밖의 child start failure는 관측하고 cached Profile identity를 유지한다
+
+#### Scenario: Keep a public materialization child after parent closure
+
+- **WHEN** 다른 Workflow가 public materialization Workflow를 비동기 child로 시작하고 child 실행 시작 확인이 parent 종료 전에 기록된다
 - **THEN** parent는 child 완료를 기다리지 않고 child start acknowledgement 뒤 종료할 수 있다
-- **AND** parent가 완료·실패·취소되어도 child Workflow는 계속 실행해 필요한 Activity와 Profile 저장을 완료할 수 있다
+- **AND** child caller가 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`을 명시하면 parent의 완료·실패·취소 뒤에도 child Workflow가 필요한 Activity와 Profile 저장을 계속할 수 있다
 - **AND** parent 취소는 시작 확인 이후 child Workflow에 전파되지 않는다
 
 #### Scenario: Refresh a stored remote actor by canonical URI
@@ -67,7 +79,7 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 
 #### Scenario: Reject materialization for unavailable instance
 
-- **WHEN** `actorUri` host의 normalized domain에 해당하는 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이다
+- **WHEN** 저장 actor 또는 actor metadata가 없어 외부 조회가 필요한 materialization에서 `actorUri` host의 normalized domain에 해당하는 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이다
 - **THEN** 시스템은 Fedify lookup을 수행하지 않고 remote actor materialization을 실패로 처리한다
 - **AND** 시스템은 새 `Profile`을 만들거나 기존 profile을 refresh하지 않는다
 
@@ -190,16 +202,22 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 - **AND** 시스템은 신규 materialization과 같은 Temporal Workflow 경로의 refresh를 시작한다
 - **AND** refresh가 성공하면 기존 `createdAt` 보존 정책을 지키면서 `Profile` projection과 actor metadata를 갱신한다
 
-#### Scenario: Keep stale actor on refresh failure
+#### Scenario: Keep stale actor when the follow-up refresh child fails
 
-- **WHEN** 저장된 active remote profile이 있고 Temporal refresh 또는 그 시작이 실패한다
-- **THEN** 시스템은 기존 stale profile을 계속 반환할 수 있다
+- **WHEN** 저장된 active remote profile이 있고 follow-up refresh child가 이미 실행 중이거나 child start 또는 materialization 실행이 실패한다
+- **THEN** public Workflow는 cached Profile identity를 계속 반환할 수 있다
 - **AND** 시스템은 실패한 resolve에 대한 negative cache row를 만들지 않는다
+
+#### Scenario: Do not synthesize a database fallback when the public Workflow is unavailable
+
+- **WHEN** caller가 public materialization Workflow를 start 또는 execute할 수 없다
+- **THEN** caller는 cached Profile을 만들기 위해 stored row, actor metadata 또는 TTL을 직접 조회하지 않는다
+- **AND** caller는 public Workflow start failure를 기존 materialization 또는 explicit-search 오류 경계로 전달한다
 
 #### Scenario: Recheck freshness and instance state before refresh execution
 
-- **WHEN** caller가 stale actor를 관찰해 Temporal refresh를 시작했지만 Activity가 그 이후 시점에 실행된다
-- **THEN** Activity는 외부 lookup 전에 현재 저장된 Profile, actor metadata와 Instance 상태를 다시 확인한다
+- **WHEN** stored-state Activity가 stale actor를 확인해 refresh child를 시작했지만 materialization Activity가 그 이후 시점에 실행된다
+- **THEN** materialization Activity는 외부 lookup 전에 현재 저장된 Profile, actor metadata, TTL과 Instance 상태를 다시 확인한다
 - **AND** 현재 actor가 fresh하거나 Profile이 inactive이거나 Instance가 `SUSPENDED` 또는 `UNRESPONSIVE`이면 remote lookup과 refresh를 수행하지 않는다
 - **AND** 현재 저장된 Profile은 기존 lifecycle·visibility 규칙을 따른다
 
@@ -213,7 +231,7 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 
 - **WHEN** 저장된 remote actor의 instance 상태가 `UNRESPONSIVE`이다
 - **THEN** 시스템은 저장된 active profile을 stale 상태로 계속 반환할 수 있다
-- **AND** 시스템은 remote actor refresh Workflow를 예약하거나 수행하지 않는다
+- **AND** 시스템은 refresh child 또는 remote actor lookup을 예약하거나 수행하지 않는다
 
 #### Scenario: Do not materialize suspended instance
 

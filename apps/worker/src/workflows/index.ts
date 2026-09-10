@@ -7,5 +7,6 @@ export { profileUpdateEffectsWorkflow } from './profile-update';
 export { reactionCreateEffectsWorkflow } from './reaction-create';
 export { reactionDeleteEffectsWorkflow } from './reaction-delete';
 export { remoteProfileMaterializationWorkflow } from './remote-profile-materialization';
+export { remoteProfileRefreshWorkflow } from './remote-profile-refresh';
 export { postRepostWorkflow } from './repost';
 export { repostDeleteWorkflow } from './repost-delete';

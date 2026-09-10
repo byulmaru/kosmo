@@ -583,8 +583,8 @@ describe('remote actor materialization', () => {
   });
 
   test('finds a stored actor by its canonical URI', async () => {
-    const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
     const { context, lookupObject } = createLookupContext(async () => createActor());
+    const now = Temporal.Now.instant().subtract({ hours: 1 });
 
     const materialized = await materializeRemoteProfileActor({
       context,
@@ -593,7 +593,6 @@ describe('remote actor materialization', () => {
     });
     const canonical = await findOrMaterializeRemoteProfileActor({
       actorUri: remoteActorUri,
-      now,
     });
 
     const instance = await db
@@ -1059,118 +1058,99 @@ describe('remote actor materialization', () => {
     );
   });
 
-  test('returns a stale profile after the refresh Workflow is durably started', async () => {
-    const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
+  test('returns a stale profile from the materialization Workflow', async () => {
     const stored = await createStoredRemoteActor({
-      lastFetchedAt: now.subtract({ hours: 8 * 24 }),
+      lastFetchedAt: Temporal.Instant.from('2025-01-01T00:00:00Z'),
     });
-    let releaseStart!: () => void;
-    const startEntered = new Promise<void>((resolve) => {
-      releaseStart = resolve;
-    });
-    let signalStartCall!: () => void;
-    const startCall = new Promise<void>((resolve) => {
-      signalStartCall = resolve;
-    });
-    const start = mock.method(temporalClient.workflow, 'start', async () => {
-      signalStartCall();
-      await startEntered;
-      return undefined as never;
-    });
-    const workflowResult = findOrMaterializeRemoteProfileActor({
-      actorUri: remoteActorUri,
-      mode: 'sync',
-      now,
-    });
-    let profileSettled = false;
-    void workflowResult.then(
-      () => {
-        profileSettled = true;
-      },
-      () => {
-        profileSettled = true;
-      },
+    const execute = mock.method(
+      temporalClient.workflow,
+      'execute',
+      async () => stored.profile.id as never,
     );
-
-    try {
-      await startCall;
-      await setImmediate();
-      assert.equal(profileSettled, false);
-      releaseStart();
-      const profile = await workflowResult;
-      assert.equal(profile.id, stored.profile.id);
-      assert.equal(start.mock.calls.length, 1);
-      assert.equal(start.mock.calls[0]?.arguments[0], 'remoteProfileMaterializationWorkflow');
-      const options = start.mock.calls[0]?.arguments[1];
-      assert.ok(options);
-      assert.deepEqual(options.args, [{ actorUri: stored.actor.uri }]);
-    } finally {
-      releaseStart();
-      start.mock.restore();
-    }
-  });
-
-  test('returns a fresh profile without starting a refresh Workflow', async () => {
-    const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
-    const stored = await createStoredRemoteActor({
-      lastFetchedAt: now.subtract({ hours: 1 }),
-    });
-    const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
-
-    try {
-      const profile = await findOrMaterializeRemoteProfileActor({
-        actorUri: remoteActorUri,
-        now,
-      });
-
-      assert.equal(profile.id, stored.profile.id);
-      assert.equal(start.mock.calls.length, 0);
-    } finally {
-      start.mock.restore();
-    }
-  });
-
-  test('keeps a stale profile when starting its refresh fails', async () => {
-    const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
-    const stored = await createStoredRemoteActor({
-      lastFetchedAt: now.subtract({ hours: 8 * 24 }),
-    });
-    const start = mock.method(temporalClient.workflow, 'start', async () => {
-      throw new Error('Temporal is unavailable');
-    });
-    const error = mock.method(console, 'error', () => undefined);
 
     try {
       const profile = await findOrMaterializeRemoteProfileActor({
         actorUri: remoteActorUri,
         mode: 'sync',
-        now,
       });
-
       assert.equal(profile.id, stored.profile.id);
-      assert.equal(start.mock.calls.length, 1);
-      assert.equal(error.mock.calls.length, 1);
+      assert.equal(execute.mock.calls.length, 1);
+      const options = execute.mock.calls[0]?.arguments[1];
+      assert.ok(options);
+      assert.deepEqual(options.args, [{ actorUri: stored.actor.uri }]);
     } finally {
-      error.mock.restore();
-      start.mock.restore();
+      execute.mock.restore();
     }
   });
 
-  test('returns stale profiles without refresh for unresponsive instances', async () => {
-    const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
+  test('returns a fresh profile from the materialization Workflow', async () => {
+    const stored = await createStoredRemoteActor({
+      lastFetchedAt: Temporal.Now.instant().subtract({ hours: 1 }),
+    });
+    const execute = mock.method(
+      temporalClient.workflow,
+      'execute',
+      async () => stored.profile.id as never,
+    );
+
+    try {
+      const profile = await findOrMaterializeRemoteProfileActor({
+        actorUri: remoteActorUri,
+      });
+
+      assert.equal(profile.id, stored.profile.id);
+      assert.equal(execute.mock.calls.length, 1);
+    } finally {
+      execute.mock.restore();
+    }
+  });
+
+  test('returns stale profiles without remote lookup for unresponsive instances', async () => {
     const stored = await createStoredRemoteActor({
       instanceState: InstanceState.UNRESPONSIVE,
-      lastFetchedAt: now.subtract({ hours: 8 * 24 }),
+      lastFetchedAt: Temporal.Instant.from('2025-01-01T00:00:00Z'),
     });
-    const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
-    const profile = await findOrMaterializeRemoteProfileActor({
-      actorUri: remoteActorUri,
-      now,
+    const execute = mock.method(
+      temporalClient.workflow,
+      'execute',
+      async () => stored.profile.id as never,
+    );
+
+    try {
+      const profile = await findOrMaterializeRemoteProfileActor({
+        actorUri: remoteActorUri,
+      });
+
+      assert.equal(profile.id, stored.profile.id);
+      assert.equal(execute.mock.calls.length, 1);
+    } finally {
+      execute.mock.restore();
+    }
+  });
+
+  test('async caller는 stored Profile에서도 Workflow start acknowledgement만 반환한다', async () => {
+    await createStoredRemoteActor({
+      lastFetchedAt: Temporal.Now.instant().subtract({ hours: 1 }),
+    });
+    const start = mock.method(temporalClient.workflow, 'start', async () => {
+      return {
+        result: async () => {
+          throw new Error('async mode must not wait for the Workflow result');
+        },
+      } as never;
     });
 
-    assert.equal(profile.id, stored.profile.id);
-    assert.equal(start.mock.calls.length, 0);
-    start.mock.restore();
+    try {
+      const result = await findOrMaterializeRemoteProfileActor({
+        actorUri: remoteActorUri,
+        mode: 'async',
+      });
+
+      assert.deepEqual(result, { kind: 'started' });
+      assert.equal(start.mock.calls.length, 1);
+    } finally {
+      start.mock.restore();
+    }
   });
 
   test('waits for a missing remote Profile ID and reloads the stored row', async () => {

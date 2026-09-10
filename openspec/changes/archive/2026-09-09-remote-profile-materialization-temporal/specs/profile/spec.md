@@ -9,11 +9,12 @@
 lookup 전에 GraphQL permission error로 거부해야 한다(MUST). 인증된 요청은 입력 query를 기존 handle 정책으로
 정규화하고 DB에 저장된 Local/Remote Profile을 `Profile.id` cursor connection으로 검색해야 한다(MUST).
 명시적인 `@handle@instance` qualified handle 전체가 remote handle로 파싱되고 저장된 Remote Profile이 없을
-때만 기존 Fedify actor lookup과 materialization을 먼저 수행해야 하며(MUST), 저장된 actor가 fresh하면 원격
-lookup이나 refresh를 예약해서는 안 된다(MUST NOT). 저장된 actor가 stale하면 기존 DB connection과 staged
-visibility를 적용한 Profile을 먼저 즉시 반환하고 같은 Temporal Workflow 경로의 refresh를 시작해야 한다(MUST).
-materialization 성공 뒤에는 반환된 Profile identity를 기준으로 기존 DB connection과 staged visibility를 다시
-적용해야 한다(MUST). lookup 실패, unavailable Instance, identity 충돌과 그 밖의 materialization 실패는 성공한
+때만 기존 Fedify actor lookup과 materialization을 먼저 수행해야 하며(MUST). 저장된 actor가 갱신 불필요 상태(fresh 또는
+`UNRESPONSIVE`)이면 외부 actor fetch나 refresh를 예약·수행하지 않아야 하고(MUST NOT), stale이면 기존 DB connection과
+staged visibility를 적용한 Profile identity를 refresh 완료 전에 반환하면서 refresh를 시작해야 한다(MUST). 저장된
+Profile이 없으면 동기 검색은 materialization 완료 뒤 Profile identity를 받아야 한다(MUST). qualified-handle discovery와
+materialization 성공 뒤 Profile connection·staged visibility DB 조회는 기존 검색 경계가 수행해야 한다(MUST). lookup 실패,
+unavailable Instance, identity 충돌과 그 밖의 materialization 실패는 성공한
 빈 connection으로 fallback해야 하며(MUST), 예상하지 못한 materialization 오류는 fallback 전에 관측해야 한다
 (MUST). 일반 텍스트, local handle, 불완전한 remote handle과 `profileByHandle`은 새 원격 요청을 시작해서는
 안 된다(MUST NOT).
@@ -63,6 +64,7 @@ Block 공통 predicate를 선행 조건으로 요구해서는 안 된다(MUST NO
 - **WHEN** 로그인한 클라이언트가 명시적인 `@handle@instance` 전체를 검색하고 해당 remote actor와 Profile이 아직 저장되지 않았다
 - **THEN** 검색 경계는 해당 qualified handle을 canonical `actorUri`로 먼저 해석한다
 - **AND** actor materialization 경계는 canonical `actorUri`와 선택적인 `profileId`만 전달받아 호출된다
+- **AND** materialization 성공 뒤 connection·staged visibility DB 조회는 기존 검색 경계에서 수행한다
 - **AND** 저장된 actor URI나 Profile이 없어도 actor URI를 사용해 새 remote Profile을 materialize할 수 있다
 - **AND** 검증된 actor를 기존 Profile·ActivityPub actor 저장 계약으로 materialize한다
 - **AND** materialized Profile identity를 기준으로 기존 DB connection과 staged visibility를 적용한 Profile edge를 반환한다
@@ -72,15 +74,14 @@ Block 공통 predicate를 선행 조건으로 요구해서는 안 된다(MUST NO
 
 - **WHEN** 로그인한 클라이언트가 명시적인 `@handle@instance` 전체를 검색하고 해당 active Remote Profile과 actor metadata가 이미 저장되어 있으며 actor가 stale하지 않다
 - **THEN** 시스템은 저장된 Profile identity를 기존 DB connection에서 반환한다
-- **AND** WebFinger, actor document fetch 또는 Temporal refresh를 예약하지 않는다
+- **AND** WebFinger, actor document fetch 또는 remote actor refresh를 수행하거나 예약하지 않는다
 
 #### Scenario: Return a stale remote profile and start refresh
 
 - **WHEN** 로그인한 클라이언트가 명시적인 `@handle@instance` 전체를 검색하고 해당 active Remote Profile과 actor metadata가 이미 저장되어 있지만 actor가 stale하다
 - **THEN** 시스템은 기존 DB connection과 staged visibility를 적용한 저장 Profile을 refresh 완료 전에 즉시 반환한다
-- **AND** 시스템은 결과를 기다리지 않고 같은 Temporal Workflow 경로에서 remote actor refresh를 시작한다
-- **AND** refresh는 저장된 canonical actor URI를 `actorUri` input identity로 재사용하고 qualified handle lookup을 다시 수행하지 않는다
-- **AND** refresh 시작 또는 실행이 실패해도 기존 Profile과 성공한 검색 결과를 제거하거나 실패로 바꾸지 않는다
+- **AND** 시스템은 같은 Temporal refresh 경로에서 remote actor refresh를 시작한다
+- **AND** 후속 refresh의 시작 또는 실행이 실패해도 기존 Profile과 성공한 검색 결과를 제거하거나 실패로 바꾸지 않는다
 
 #### Scenario: Return a canonical actor found through an alias domain
 

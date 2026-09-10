@@ -33,12 +33,50 @@
 - Decision Date: 2026-09-09
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808`
-- Status: Active
+- Status: Superseded by the 2026-09-10 `Coordinator Workflow owns stored-state routing and stale child lifetime` decision
 - Context / Problem: process-local fire-and-forget callback은 process 종료·재시작 뒤 실행을 보장하지 않고, 신규 materialization과 refresh를 별도 경로로 두면 동시성·재시도 정책이 갈라진다.
 - Decision Outcome: 신규 materialization과 stale refresh는 하나의 짧은 Temporal Workflow 종류에서 하나의 Activity를 한 번 호출하는 구조로 처리한다. Activity가 origin으로 새 Fedify context를 만들고 기존 lookup, actor projection, transaction과 ordering을 소유한다. Workflow는 결과를 전달하고 장수명 Profile entity, 주기 scanner, status API, 범용 framework와 추가 Workflow/Activity 체계를 만들지 않는다.
 - Alternatives Considered: refresh 전용 Workflow, 외부 queue/scanner, Workflow 내부 장수명 loop는 중복 실행 경계와 운영 surface를 늘리므로 선택하지 않았다. process-local callback은 내구성 요구를 충족하지 못한다.
 - Consequences: Worker registry에 한 Workflow와 한 Activity를 추가하고 caller가 durable start를 사용해야 한다. 원격 HTTP와 DB side effect는 Workflow sandbox 밖 Activity에서만 실행된다.
 - Confirmation / Follow-up: Worker restart 중 Workflow 재개와 Activity 단일 실행 호출, existing projection/transaction 재사용을 검증한다.
+
+### Coordinator Workflow owns stored-state routing and stale child lifetime
+
+- Decision Date: 2026-09-10
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808` user decision
+- Status: Active
+- Context / Problem: 기존 `One short-lived Workflow and one Activity` 결정으로 public Workflow와 materialization
+  Activity의 durable path는 이미 정해졌지만, caller가 stored row·actor metadata·TTL을 먼저 읽고 fresh/stale를
+  판단하는 구조와 cached return·refresh child lifetime의 소유권은 남아 있었다. 그 결과 public Workflow가 상태 routing을
+  내구성 있게 소유하지 못하고, fresh/missing/stale 응답 경계가 caller마다 갈라질 수 있었다.
+- Decision Outcome: public `remoteProfileMaterializationWorkflow`와 기존 Workflow ID는 유지한다. Materialization caller는
+  stored row, actor metadata와 TTL을 직접 pre-read해 분기하지 않고 하나의 public Workflow를 dispatch하며, public
+  Workflow start failure 뒤 DB fallback을 만들지 않는다. Coordinator Workflow는 state Activity에서
+  `{ profileId, needsRefresh } | null` 최소 JSON-safe stored-state DTO를 받는다. `null`은 missing,
+  `needsRefresh: false`는 갱신이 불필요하거나 허용되지 않는 상태(fresh 또는 `UNRESPONSIVE`),
+  `needsRefresh: true`는 갱신 가능한 stale을 나타낸다. DTO의 `profileId`는 조회 대상인 cached Remote Profile ID이고,
+  Workflow input의 선택적인 `profileId`는 origin 선택용 행동 Profile ID다. 갱신 불필요 상태는 외부 lookup과 child 없이
+  cached Profile ID를 반환하고, missing은 기존 materialization Activity를 직접 실행해 결과를 반환한다. stale은 state DTO의
+  `profileId`를 cached target identity로 반환하는 데만 사용하고, refresh child에는 Workflow가 원래 받은 input(`actorUri`와
+  선택적인 `profileId`)을 그대로 전달한다. child는 별도 refresh ID prefix를 사용하고 `parentClosePolicy: ABANDON`과
+  `cancellationType: ABANDON`을 명시해 child start acknowledgement 뒤 cached Profile ID를 반환한다. Refresh child는
+  기존 materialization Activity를 실제 fetch 경로로 재사용하고, 이미 실행 중인 같은 child는 정상 coalescing으로 처리하며,
+  그 밖의 child start·execution failure는 관측하고 cached identity를 유지한다. `runWorkflow(..., mode: 'execute')`를
+  사용하는 동기 caller는 public Workflow 결과를 기다리고 `mode: 'start'`를 사용하는 비동기 caller는 모든 분기에서
+  public start acknowledgement 뒤 반환한다. Qualified-handle discovery와 materialization 성공 뒤 connection·staged
+  visibility DB 조회는 기존 검색 경계가 수행한다.
+- Alternatives Considered: caller의 단순 pre-read만 유지하면 stored-state routing과 cached return의 소유권이 caller에
+  남으므로 선택하지 않았다. process-local callback은 이전 전환에서 이미 제거된 경로이며 이 change의 durable mechanism
+  선택지로 다시 도입하지 않는다. fresh/missing/stale마다 public Workflow를 나누면 기존 Workflow ID와 공용 caller 경계가
+  흔들린다. stale child 완료를 기다리면 기존 즉시 반환 계약을 깨고, child start failure를 cached Profile 실패로 바꾸면
+  stale 보존 계약을 깨므로 선택하지 않았다.
+- Consequences: Worker에는 state Activity가 추가되고 existing materialization Activity는 missing과 refresh child 양쪽에서
+  재사용된다. stale child는 public Workflow와 별도 identity를 가지며 parent 종료·취소 이후에도 실행을 계속할 수 있다.
+  Generic child helper는 caller가 전달한 native lifecycle과 options를 보존하고 `ABANDON`을 자동 적용하지 않는다.
+- Confirmation / Follow-up: fresh/missing/stale state routing, public Workflow 단일 dispatch, stale child start
+  acknowledgement·coalescing·failure observability, all-state async acknowledgement와 no-DB-fallback 경계를 새
+  follow-up tasks에서 실행 검증한다.
 
 ### Serializable DTO, caller-only mode, and identity result
 
@@ -130,11 +168,11 @@
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808`, [Temporal TypeScript Child Workflows](https://docs.temporal.io/develop/typescript/workflows/child-workflows), [ChildWorkflowOptions API](https://typescript.temporal.io/api/interfaces/workflow.ChildWorkflowOptions)
 - Status: Active
-- Context / Problem: 실제 caller가 이 작업 Workflow를 다른 Workflow에서 async child로 시작할 수 있다. Temporal의 기본 parent close policy는 child를 종료하며, parent cancellation 전파는 별도 `cancellationType`으로 결정된다. parent가 child start event를 기록하기 전에 종료하면 child 시작이 보장되지 않는다.
-- Decision Outcome: 실제 Workflow parent가 async mode로 이 작업을 호출하는 경우, 해당 caller는 동일한 materialization Workflow를 `startChild`로 시작하고 child start acknowledgement가 기록될 때까지만 기다린다. 해당 caller가 시작 옵션에 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`을 각각 적용해 acknowledgement 이후 parent의 완료·실패·취소가 child 완료를 막거나 취소를 전파하지 않게 한다. async parent는 child result를 기다리지 않는다. `ChildWorkflowOptions`에 없는 `workflowIdConflictPolicy`는 설정하지 않으며, 동일한 active child ID의 재시작은 native join으로 가장하지 않고 start conflict라는 기존 오류 의미를 보존한다. 이 change에는 해당 production caller를 추가하지 않는다.
+- Context / Problem: 향후 external Workflow parent가 public materialization Workflow를 async child로 시작할 수 있다. Temporal의 기본 parent close policy는 child를 종료하며, parent cancellation 전파는 별도 `cancellationType`으로 결정된다. parent가 child start event를 기록하기 전에 종료하면 child 시작이 보장되지 않는다. 현재 change의 Coordinator 내부 stale refresh child는 이 future external public caller와 별도 실행 경계다.
+- Decision Outcome: 향후 external Workflow parent가 async mode로 public materialization Workflow를 호출하는 경우, 해당 caller는 동일한 materialization Workflow를 `startChild`로 시작하고 child start acknowledgement가 기록될 때까지만 기다린다. 해당 caller가 시작 옵션에 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`을 각각 적용해 acknowledgement 이후 parent의 완료·실패·취소가 child 완료를 막거나 취소를 전파하지 않게 한다. async parent는 child result를 기다리지 않는다. `ChildWorkflowOptions`에 없는 `workflowIdConflictPolicy`는 설정하지 않으며, 동일한 active child ID의 재시작은 native join으로 가장하지 않고 start conflict라는 기존 오류 의미를 보존한다. 현재 Coordinator 내부 refresh child의 두 `ABANDON` 옵션과 cached return은 `Coordinator Workflow owns stored-state routing and stale child lifetime` 결정이 소유한다. 이 change에는 public materialization Workflow를 외부 parent에서 호출하는 별도 production caller를 추가하지 않는다.
 - Alternatives Considered: async 경로에서 `executeChild`를 사용하면 child 완료를 기다리게 된다. `parentClosePolicy`만 설정하면 parent cancellation이 child에 전파될 수 있고, `cancellationType`만 설정하면 parent close 시 기본 terminate가 남는다. generic native child helper를 두지 않고 caller마다 lifecycle을 복제하거나, remote 전용 wrapper·second Workflow·external client join을 추가하면 공통 실행 경계와 현재 one-Workflow 범위를 불필요하게 넓힌다.
-- Consequences: parent가 사라진 뒤에도 child Activity가 Profile을 commit할 수 있으며, async parent에는 완료 결과가 없다. active duplicate child start는 client caller의 `USE_EXISTING`처럼 자동 합류하지 않을 수 있으므로 caller는 그 conflict를 성공 acknowledgement로 둔갑시키지 않는다.
-- Confirmation / Follow-up: 실제 Workflow child 호출부가 추가되는 경우 [Temporal Child Workflow guide](https://docs.temporal.io/develop/typescript/workflows/child-workflows)의 start acknowledgement와 parent close policy, [ChildWorkflowOptions API](https://typescript.temporal.io/api/interfaces/workflow.ChildWorkflowOptions)의 cancellation/parent-close 분리를 기준으로 해당 호출부의 start acknowledgement·no-result-wait 경계를 실행 검증한다. parent lifecycle 이후 child 생존은 Temporal SDK 책임으로 둔다.
+- Consequences: future external parent가 사라진 뒤에도 public materialization child가 Profile을 commit할 수 있으며, async parent에는 완료 결과가 없다. active duplicate child start는 client caller의 `USE_EXISTING`처럼 자동 합류하지 않을 수 있으므로 caller는 그 conflict를 성공 acknowledgement로 둔갑시키지 않는다. 현재 Coordinator 내부 refresh child의 생존·cached return은 별도 Coordinator 결정과 구현이 소유한다.
+- Confirmation / Follow-up: public materialization Workflow를 호출하는 별도 external child caller가 추가되는 경우 [Temporal Child Workflow guide](https://docs.temporal.io/develop/typescript/workflows/child-workflows)의 start acknowledgement와 parent close policy, [ChildWorkflowOptions API](https://typescript.temporal.io/api/interfaces/workflow.ChildWorkflowOptions)의 cancellation/parent-close 분리를 기준으로 해당 호출부의 start acknowledgement·no-result-wait 경계를 실행 검증한다. 현재 Coordinator 내부 refresh child의 두 `ABANDON` 옵션은 해당 Coordinator/helper 검증에서 확인한다. parent lifecycle 이후 child 생존은 Temporal SDK 책임으로 둔다.
 
 ### Workflow-safe generic child lifecycle helper
 
@@ -142,11 +180,11 @@
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808` user decision
 - Status: Active
-- Context / Problem: 실제 Workflow child lifecycle을 재사용할 공통 primitive가 필요하지만, 이전 결정의 사용하지 않는 child helper 금지 문구가 generic helper 자체를 금지하는 것으로 읽힐 수 있다. Child 실행은 client `runWorkflow`의 queue/deadline과 remote async caller의 parent lifetime 정책을 그대로 복제하지 않고 native semantics를 보존해야 한다.
-- Decision Outcome: `apps/worker/src/workflows/child.ts`가 `runChildWorkflow<T>(definition, { args, mode: 'start' | 'execute', ...nativeChildOptions })`를 export한다. Helper는 기존 `packages/core/temporal/client.ts`의 `WorkflowDefinition<T>`를 `import type`으로 재사용하고, definition의 `workflowIdFromArgs` callback에 실제 args를 한 번 전달해 child Workflow ID를 만든다. `mode: 'start'`는 native child handle/start acknowledgement를 반환하고 `mode: 'execute'`는 native child result를 반환한다. Native child options·error·queue inheritance는 그대로 전달하며 client `runWorkflow`의 KOSMO task queue와 5초 bounded deadline은 복사하지 않는다. `parentClosePolicy`와 `cancellationType`을 생략하면 Temporal 기본값을 사용하고 helper는 `ABANDON`을 자동 적용하지 않는다. 실제 remote async child caller가 존재할 때만 caller가 두 `ABANDON` 옵션을 명시하며, 이 change에는 production remote child caller를 추가하지 않는다.
+- Context / Problem: 현재 Coordinator Workflow가 stale 상태에서 내부 refresh child를 사용하고, 향후 external Workflow parent도 public materialization Workflow를 async child로 호출할 수 있다. 이전 결정의 사용하지 않는 child helper 금지 문구가 generic helper 자체를 금지하는 것으로 읽힐 수 있지만, 두 caller의 lifecycle은 각각 명시적인 native 경계를 가져야 한다. Child 실행은 client `runWorkflow`의 queue/deadline과 caller의 parent lifetime 정책을 그대로 복제하지 않고 native semantics를 보존해야 한다.
+- Decision Outcome: `apps/worker/src/workflows/child.ts`가 `runChildWorkflow<T>(definition, { args, mode: 'start' | 'execute', ...nativeChildOptions })`를 export한다. Helper는 기존 `packages/core/temporal/client.ts`의 `WorkflowDefinition<T>`를 `import type`으로 재사용하고, definition의 `workflowIdFromArgs` callback에 실제 args를 한 번 전달해 child Workflow ID를 만든다. `mode: 'start'`는 native child handle/start acknowledgement를 반환하고 `mode: 'execute'`는 native child result를 반환한다. Native child options·error·queue inheritance는 그대로 전달하며 client `runWorkflow`의 KOSMO task queue와 5초 bounded deadline은 복사하지 않는다. `parentClosePolicy`와 `cancellationType`을 생략하면 Temporal 기본값을 사용하고 helper는 `ABANDON`을 자동 적용하지 않는다. 현재 Coordinator 내부 refresh child는 두 `ABANDON` 옵션을 명시하고, 향후 external public materialization child caller도 필요할 때 자기 lifecycle에 두 옵션을 명시한다. 이 change에는 public materialization Workflow를 외부 parent에서 호출하는 별도 production caller를 추가하지 않는다.
 - Alternatives Considered: caller마다 `startChild`와 `executeChild`를 직접 호출하면 ID 계산·mode별 반환·options 전달 경계가 반복된다. 새 child 전용 type file, registry, runtime factory, fake Workflow function, decorator 또는 framework를 추가하면 plain `WorkflowDefinition<T>`와 native API로 충분한 범위를 넓힌다. Helper가 `ABANDON`이나 client queue/deadline을 자동 적용하면 native defaults와 caller-owned remote contract를 덮는다.
-- Consequences: 실제 caller가 사용할 때까지 helper는 새로운 runtime behavior를 만들지 않는다. Generic helper 사용자는 native child start/execute lifecycle과 기본 queue/options/error semantics를 받으며, remote async caller는 명시적인 `ABANDON` 정책을 계속 소유한다. 다른 domain의 Workflow ID와 UWS, remote materialization caller와 그 production child caller 부재는 변경하지 않는다.
-- Confirmation / Follow-up: 2026-09-10 실제 helper를 import한 Temporal bundle/integration 3/3이 통과했다. Typed string definition의 `execute` mode에서 args·생성된 Workflow ID·result를 확인했고, function definition의 `start` mode에서 native handle과 `handle.signal`을 사용해 명시적인 `parentClosePolicy: ABANDON`·`cancellationType: ABANDON` child가 parent 완료 뒤에도 `RUNNING`으로 남아 외부 signal/result 완료까지 진행하는 것을 확인했다. Child failure는 native cause chain으로 전달됐다. `/private/tmp/child-helper-real-typecheck.ts`를 실제 helper import 상태로 `tsc` 실행해 exit 0을 확인했고, generic 생략 args/result/`ChildWorkflowHandle` 추론과 wrong args/result·unsupported `workflowIdConflictPolicy`에 대한 `@ts-expect-error` 3개를 검증했다. Worker build, ESLint와 Prettier도 통과했다. 이 evidence는 generic helper의 native 실행·type inference·명시적 option 전달을 확인하지만 remote production caller, Worker restart, caller timeout continuation과 전체 parent-close/cancellation matrix는 검증하지 않는다. 실제 remote async child caller가 추가되면 그 호출부의 두 `ABANDON` 옵션과 no-result-wait 경계를 별도로 검증한다.
+- Consequences: Helper는 명시적으로 사용하는 native child caller의 runtime behavior만 보조하며, 현재 Coordinator 내부 refresh child가 실제 사용 경계를 제공한다. Generic helper 사용자는 native child start/execute lifecycle과 기본 queue/options/error semantics를 받고, Coordinator와 향후 external public caller는 각자의 명시적인 `ABANDON` 정책을 소유한다. 다른 domain의 Workflow ID와 UWS, public materialization Workflow를 외부 parent에서 호출하는 별도 production caller의 부재는 변경하지 않는다.
+- Confirmation / Follow-up: 2026-09-10 실제 helper를 import한 Temporal bundle/integration 3/3이 통과했다. Typed string definition의 `execute` mode에서 args·생성된 Workflow ID·result를 확인했고, function definition의 `start` mode에서 native handle과 `handle.signal`을 사용해 명시적인 `parentClosePolicy: ABANDON`·`cancellationType: ABANDON` child가 parent 완료 뒤에도 `RUNNING`으로 남아 외부 signal/result 완료까지 진행하는 것을 확인했다. Child failure는 native cause chain으로 전달됐다. `/private/tmp/child-helper-real-typecheck.ts`를 실제 helper import 상태로 `tsc` 실행해 exit 0을 확인했고, generic 생략 args/result/`ChildWorkflowHandle` 추론과 wrong args/result·unsupported `workflowIdConflictPolicy`에 대한 `@ts-expect-error` 3개를 검증했다. Worker build, ESLint와 Prettier도 통과했다. 이 evidence는 현재 Coordinator 내부 refresh child와 generic helper의 native 실행·type inference·명시적 option 전달을 확인하지만, 별도 external public child caller, Worker restart, caller timeout continuation과 전체 parent-close/cancellation matrix는 검증하지 않는다. public materialization Workflow를 외부 parent에서 호출하는 별도 child caller가 추가되면 그 호출부의 두 `ABANDON` 옵션과 no-result-wait 경계를 별도로 검증한다.
 
 ## Remaining Decisions
 
@@ -154,6 +192,10 @@
 
 ## Superseded Decisions
 
+- 2026-09-09 `One short-lived Workflow and one Activity`의 caller pre-read 및 단일 Activity orchestration limitation은
+  2026-09-10 `Coordinator Workflow owns stored-state routing and stale child lifetime`으로 대체됐다. 기존 public
+  Workflow ID, materialization Activity의 projection·transaction, retry와 identity 계약은 유지하며, state Activity,
+  fresh/missing/stale routing, stale refresh child와 caller no-DB-fallback 경계를 새 결정으로 적용한다.
 - 2026-09-09 `Serializable DTO, caller-only mode, and identity result` 및 2026-09-10 `Superseding review correction: discovery key와 stored actor refresh key를 분리한다`의 wire-input 부분은 2026-09-10 `Final review correction: actorUri-only materialization boundary` 결정으로 대체됐다. 해당 결정들의 origin 선택, unsigned lookup, caller-only sync/async와 actor identity 결론은 계속 유효하다.
 - 이전 remote materialization 전용 start wrapper와 `remote-profile-materialization:${actorUri}:${profileId}` ID 조합 해석은 2026-09-10 `Workflow 종류와 무관한 공용 래퍼 정정` 결정으로 대체됐다. remote Workflow의 actorUri/profileId identity와 conflict/reuse 의미, 다른 domain의 기존 ID와 UWS는 각자의 경계에서 유지된다.
 - 2026-09-10 `Workflow 종류와 무관한 공용 래퍼 정정`의 caller identity keys 및 `${workflowName}:${JSON.stringify(identityKeys)}` generic ID composition은 같은 날 `Workflow별 ID 규칙과 공용 래퍼 책임 정정`으로 대체됐다. 기존 remote Workflow ID 문자열과 native conflict/reuse/error 정책, 다른 domain의 ID와 UWS는 유지한다.
