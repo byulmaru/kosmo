@@ -162,11 +162,9 @@ export function FollowButton({
   const blocking = Boolean(block || (blockStatus?.blocking && profileBlockId));
   const blockedByOnly = Boolean(blockStatus?.blockedBy && !blocking);
   const loading = following || cancelling || unfollowing || unblockPending;
-  const targetHeight = Platform.OS === 'android' ? 48 : 44;
-  const hitSlop =
-    Platform.OS === 'web'
-      ? undefined
-      : Math.max(0, (targetHeight - (size === 'compact' ? 32 : 40)) / 2);
+  const targetHeight = Platform.OS === 'android' ? 48 : Platform.OS === 'ios' ? 44 : 0;
+  const hitSlop = Math.max(0, (targetHeight - (size === 'compact' ? 32 : 40)) / 2);
+  const blockActionHitSlop = Platform.OS === 'web' ? undefined : hitSlop;
 
   const showFailureToast = () => {
     showToast(followFailureMessage, { tone: 'danger' });
@@ -238,7 +236,7 @@ export function FollowButton({
               onActionRef?.(node);
             }}
             disabled={unblockPending}
-            hitSlop={hitSlop}
+            hitSlop={blockActionHitSlop}
             onPress={() => setUnblockOpen(true)}
             size={size === 'compact' ? 'compact' : 'default'}
             style={size === 'compact' ? styles.compactButton : styles.mediumButton}
@@ -387,7 +385,6 @@ export function FollowButton({
         }}
         disabled={loading}
         controlRef={onActionRef}
-        hitSlop={hitSlop}
         onPress={toggleFollow}
         size={size === 'compact' ? 'compact' : 'default'}
         style={size === 'compact' ? styles.compactButton : styles.mediumButton}
