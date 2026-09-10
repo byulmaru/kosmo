@@ -8,10 +8,12 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type Target = {
+  content: { id: string };
   id: string;
   profile: {
     displayName: string;
     id: string;
+    instance: { kind: 'LOCAL' };
     relativeHandle: string;
     viewerState: { profileMute: { id: string } | null };
   };
@@ -31,10 +33,12 @@ type MuteProps = {
 
 const target: Target = {
   actionBar: {},
+  content: { id: 'content:1' },
   id: 'post:1',
   profile: {
     displayName: '코스모 작가',
     id: 'profile:author',
+    instance: { kind: 'LOCAL' },
     relativeHandle: '@author',
     viewerState: { profileMute: { id: 'profile-mute:1' } },
   },
