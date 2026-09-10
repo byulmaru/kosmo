@@ -97,6 +97,7 @@ type LocalState =
   | 'loading'
   | 'empty'
   | 'error'
+  | 'refresh-hard-error'
   | 'refresh-partial-error'
   | 'refreshing'
   | 'filtered'
@@ -127,6 +128,14 @@ function localRelayForState(state: LocalState) {
               { error: '로컬 타임라인을 불러오지 못했습니다.' },
               { data: localPageData() },
             ],
+          },
+        },
+      };
+    case 'refresh-hard-error':
+      return {
+        operationResponses: {
+          LocalPageQuery: {
+            sequence: [{ data: localPageData() }, { error: 'Local timeline hard refresh failure' }],
           },
         },
       };
@@ -226,6 +235,7 @@ const meta = {
         'loading',
         'empty',
         'error',
+        'refresh-hard-error',
         'refresh-partial-error',
         'refreshing',
         'filtered',
@@ -299,6 +309,10 @@ export const PaginationFlow: Story = {
 
 export const InitialErrorRetry: Story = {
   args: { state: 'error' },
+};
+
+export const RefreshHardError: Story = {
+  args: { state: 'refresh-hard-error' },
 };
 
 export const PaginationErrorRetry: Story = {

@@ -1,5 +1,5 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
@@ -12,10 +12,11 @@ import {
 } from '@/components/shell/shellLayout';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
-import { StateView } from '@/components/ui/StateView';
+import { Skeleton, StateView } from '@/components/ui/StateView';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, spacing, typography } from '@/theme/tokens';
-import type { PropsWithChildren } from 'react';
+import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
+import type { MutableRefObject, PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { LocalPageQuery } from './__generated__/LocalPageQuery.graphql';
@@ -40,6 +41,7 @@ const LocalQuery = graphql`
 `;
 
 export default function LocalScreen() {
+  const hasSuccessfulLocalRef = useRef(false);
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
   const refresh = useCallback(() => routeBoundaryRef.current?.refetch(), []);
 
@@ -47,10 +49,23 @@ export default function LocalScreen() {
     <LocalFrame onReselect={refresh}>
       <RouteBoundary
         loading={<StateView loading title="로컬 타임라인을 불러오는 중입니다." />}
+        error={(resetErrorBoundary) =>
+          hasSuccessfulLocalRef.current ? (
+            <StateView
+              actionLabel="다시 시도"
+              alert
+              description="잠시 후 다시 시도해주세요."
+              onAction={resetErrorBoundary}
+              title="로컬 타임라인을 불러오지 못했어요"
+            />
+          ) : (
+            <LocalInitialError onRetry={resetErrorBoundary} />
+          )
+        }
         ref={routeBoundaryRef}
         title="로컬 타임라인을 불러오지 못했어요"
       >
-        <LocalContent />
+        <LocalContent hasSuccessfulLocalRef={hasSuccessfulLocalRef} />
       </RouteBoundary>
     </LocalFrame>
   );
@@ -77,7 +92,11 @@ function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: ()
   );
 }
 
-function LocalContent() {
+function LocalContent({
+  hasSuccessfulLocalRef,
+}: {
+  hasSuccessfulLocalRef: MutableRefObject<boolean>;
+}) {
   const theme = useTheme();
   const shellChrome = useShellChrome();
   const { fetchKey } = useRouteBoundary();
@@ -86,6 +105,9 @@ function LocalContent() {
     {},
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
+  useEffect(() => {
+    hasSuccessfulLocalRef.current = true;
+  }, [hasSuccessfulLocalRef]);
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
 
@@ -121,10 +143,49 @@ function LocalContent() {
   );
 }
 
+function LocalInitialError({ onRetry }: { onRetry: () => void }) {
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    return showToast('로컬 타임라인을 불러오지 못했어요', {
+      action: { label: '다시 시도', onPress: onRetry },
+      persistent: true,
+      tone: 'danger',
+    });
+  }, [onRetry, showToast]);
+
+  if (Platform.OS === 'web') {
+    return <View style={styles.initialErrorWeb} />;
+  }
+
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={styles.initialErrorNative}
+    >
+      {[0, 1].map((row) => (
+        <View key={row} style={styles.initialErrorRow}>
+          <Skeleton height={16} width={112} />
+          <Skeleton height={14} width={342} />
+          <Skeleton height={12} width={260} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0 },
   body: { flex: 1, minHeight: 0 },
   timeline: { flex: 1, minHeight: 0, width: '100%' },
+  initialErrorWeb: { flex: 1, minHeight: 0, width: '100%' },
+  initialErrorNative: { flex: 1, width: '100%' },
+  initialErrorRow: {
+    gap: space[8],
+    paddingHorizontal: space[16],
+    paddingVertical: space[12],
+  },
   webTimelineTabs: { position: 'sticky' as never, zIndex: 10 } as ViewStyle,
   onboardingRoot: {
     alignItems: 'center',
