@@ -193,6 +193,8 @@ PROD-917은 인계된 action을 신규 UI에 합성한다. 기존 presentation �
 
 `PROD-822`의 서버 확정 상태와 최신 canonical의 기존 Profile 정보·viewer 방향 콘텐츠 상태를 소비해 Profile Block
 confirmation·pending·실패·retry, Mute와 분리된 관리 목록과 selected Profile별 client 상태 수렴을 제공한다. 신규 UI 교체는 `PROD-917` 후속 범위다.
+같은 이슈의 부모 `PROD-823-follow-action` PR은 공통 `FollowButton` 관계 action과 회귀를, 자식 #772는 Profile·Settings
+surface 조합과 목록 조회·pagination을 소유한다.
 
 **Guardrails**
 
@@ -256,6 +258,8 @@ confirmation·pending·실패·retry, Mute와 분리된 관리 목록과 selecte
       `pnpm --filter @kosmo/app check`, `pnpm --filter @kosmo/app test:unit` 및 변경 범위 lint·format 검증을 통과시킨다.
 - [x] 3.8 기존 UI의 코드·PR·진입점, 데이터와 loading·empty·error·pending 인터페이스, action 입력·결과·오류·재시도·pagination,
       실제 기능·접근성·cache·프로필 전환 증거와 남은 제약을 PROD-917에 인계하고 PROD-813의 통합 검증에 제공한다.
+- [x] 3.9 공통 `FollowButton`이 자신의 Block 관계 fragment·해제 mutation·pending·실패·Relay 수렴과 `차단됨`/hover·focus
+      `차단 해제`를 소유하도록 부모 PR로 분리하고, #772가 Profile route와 Block 목록에서 이를 재사용하도록 Stack을 구성한다.
 
 ## 4. PROD-813 — Profile Block cross-slice E2E·canonical sync·archive
 
