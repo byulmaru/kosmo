@@ -266,6 +266,42 @@ test('action toast follows the Figma source auto-layout contract', async () => {
   await act(async () => renderer?.unmount());
 });
 
+test('action toast invokes its callback once while the toast is leaving', async () => {
+  assert.ok(toastProviderModule);
+  const { ToastProvider, useToast } = toastProviderModule;
+  let api: ReturnType<typeof useToast> | undefined;
+  let actionCalls = 0;
+  function Harness() {
+    api = useToast();
+    return null;
+  }
+
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(ToastProvider, null, createElement(Harness)));
+  });
+  await act(async () => {
+    api?.showToast('다시 시도해 주세요.', {
+      action: { label: '다시 시도', onPress: () => actionCalls++ },
+      persistent: true,
+      tone: 'danger',
+    });
+  });
+
+  const action = renderer?.root
+    .findAllByType(PressableHost)
+    .find((node) => node.props.accessibilityRole === 'button');
+  assert.ok(action);
+  const onPress = action.props.onPress as () => void;
+  await act(async () => {
+    onPress();
+    onPress();
+  });
+  assert.equal(actionCalls, 1);
+
+  await act(async () => renderer?.unmount());
+});
+
 test('action toast keeps a 44px target and adds only Android 2px hitSlop', async () => {
   assert.ok(toastProviderModule);
   const { ToastProvider, useToast } = toastProviderModule;
