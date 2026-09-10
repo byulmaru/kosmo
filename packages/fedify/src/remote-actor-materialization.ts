@@ -25,19 +25,24 @@ import {
 } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { startRemoteProfileMaterialization } from '@kosmo/core/temporal/remote-profile';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE } from '@kosmo/core/temporal/remote-profile';
 import { normalizeHandle } from '@kosmo/core/utils';
 import {
   profileBioSchema,
   profileDisplayNameSchema,
   profileHandleSchema,
 } from '@kosmo/core/validation';
-import { ApplicationFailure } from '@temporalio/client';
+import {
+  ApplicationFailure,
+  WorkflowIdConflictPolicy,
+  WorkflowIdReusePolicy,
+} from '@temporalio/client';
 import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import type { Context } from '@fedify/fedify';
 import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
-import type { RemoteProfileMaterializationAcknowledgement } from '@kosmo/core/temporal/remote-profile';
+import type { RemoteProfileMaterializationInput } from '@kosmo/core/temporal/remote-profile';
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
 
@@ -62,6 +67,14 @@ type FindOrMaterializeRemoteActorOptions = {
   actorUri: URL | string;
   mode?: 'sync' | 'async';
   now?: Temporal.Instant;
+};
+
+type RemoteProfileMaterializationWorkflow = (
+  input: RemoteProfileMaterializationInput,
+) => Promise<string>;
+
+export type RemoteProfileMaterializationAcknowledgement = {
+  readonly kind: 'started';
 };
 
 export type RemoteProfileMaterializationCallerResult =
@@ -484,7 +497,16 @@ export async function findOrMaterializeRemoteProfileActor({
       // Wait only for durable start acknowledgement. The Workflow result is
       // intentionally detached while this stale Profile remains successful.
       try {
-        await startRemoteProfileMaterialization(input, 'async');
+        await runWorkflow<RemoteProfileMaterializationWorkflow>(
+          REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE,
+          {
+            args: [input],
+            identityKeys: [input.actorUri, input.profileId ?? 'configured-local'],
+            mode: 'start',
+            workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+            workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+          },
+        );
       } catch (error: unknown) {
         console.error('Remote profile refresh failed', error);
       }
@@ -499,10 +521,30 @@ export async function findOrMaterializeRemoteProfileActor({
       ...(profileId ? { profileId } : {}),
     } as const;
 
-    const result = await startRemoteProfileMaterialization(input, mode);
-    if (typeof result !== 'string') {
-      return result;
+    if (mode === 'async') {
+      await runWorkflow<RemoteProfileMaterializationWorkflow>(
+        REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE,
+        {
+          args: [input],
+          identityKeys: [input.actorUri, input.profileId ?? 'configured-local'],
+          mode: 'start',
+          workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+          workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+        },
+      );
+      return { kind: 'started' };
     }
+
+    const result = await runWorkflow<RemoteProfileMaterializationWorkflow>(
+      REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE,
+      {
+        args: [input],
+        identityKeys: [input.actorUri, input.profileId ?? 'configured-local'],
+        mode: 'execute',
+        workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+        workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+      },
+    );
 
     const profile = await db
       .select(getColumns(Profiles))
