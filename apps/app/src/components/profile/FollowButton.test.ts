@@ -78,7 +78,9 @@ mockModule(new URL('./ProfileBlockController.tsx', import.meta.url), {
       nextBlocked: boolean,
     ) => {
       changeBlockedCalls.push({ change, nextBlocked });
-      if (changeBlockedError) throw changeBlockedError;
+      if (changeBlockedError) {
+        throw changeBlockedError;
+      }
     },
   }),
 });
