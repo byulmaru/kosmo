@@ -57,9 +57,10 @@ ref로 사용한다. reusable workflow가 최신 `main`을 다시 선택하거�
 않는다. Production Release의 기존 `prod` Environment 승인과 canonical Docker Build 확인이
 OTA 호출에 선행한다. OTA에 별도의 두 번째 production approval을 두지 않는다.
 
-Export job은 `pnpm exec expo-updates runtimeversion:resolve`로 Android와 iOS의
-`runtimeVersion`을 각각 얻고, `pnpm exec expo export --clear`로 해당 platform artifact를
-만든다. 각 artifact는 publisher reusable workflow에 전달된다. Publisher는 Expo Metro
+Android와 iOS export job은 각각 `pnpm exec expo-updates runtimeversion:resolve`로 해당
+platform의 `runtimeVersion`을 얻고, `pnpm exec expo export --clear`로 artifact를 만든다.
+각 platform publish job은 자신의 export가 성공하면 해당 artifact를 publisher reusable
+workflow에 전달한다. Publisher는 Expo Metro
 `metadata.json`과 참조된 파일을 읽어 export를 검증하고, 실제 bundle과 asset bytes를
 hashing한 뒤 signed immutable release를 R2에 기록하고 read-back한다.
 

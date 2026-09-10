@@ -26,16 +26,69 @@ permissions:
   contents: read
 
 jobs:
-  export:
-    name: Export approved Expo updates
+  export_android:
+    name: Export approved Android update
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     concurrency:
-      group: expo-ota-export-${{ inputs.channel }}-${{ inputs.source_sha }}
+      group: expo-ota-export-android-${{ inputs.channel }}-${{ inputs.source_sha }}
       cancel-in-progress: false
     outputs:
       android_artifact_name: ${{ steps.export.outputs.android_artifact_name }}
       android_runtime_version: ${{ steps.export.outputs.android_runtime_version }}
+    env:
+      EXPO_NO_GIT_STATUS: '1'
+    steps:
+      - name: Checkout approved source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ inputs.source_sha }}
+
+      - name: Set up mise
+        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          version: '2026.9.2'
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Export Android update
+        id: export
+        working-directory: apps/app
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          runtime_version="$(
+            pnpm exec expo-updates runtimeversion:resolve --platform android \
+              | jq -er '.runtimeVersion'
+          )"
+          pnpm exec expo export \
+            --clear \
+            --platform android \
+            --output-dir .artifacts/android
+          echo "android_artifact_name=expo-ota-android-${GITHUB_RUN_ID}-export" >> "${GITHUB_OUTPUT}"
+          echo "android_runtime_version=${runtime_version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload Android export
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          if-no-files-found: error
+          include-hidden-files: true
+          name: ${{ steps.export.outputs.android_artifact_name }}
+          path: apps/app/.artifacts/android
+          retention-days: 90
+
+  export_ios:
+    name: Export approved iOS update
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: expo-ota-export-ios-${{ inputs.channel }}-${{ inputs.source_sha }}
+      cancel-in-progress: false
+    outputs:
       ios_artifact_name: ${{ steps.export.outputs.ios_artifact_name }}
       ios_runtime_version: ${{ steps.export.outputs.ios_runtime_version }}
     env:
@@ -56,38 +109,23 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Export Android and iOS updates
+      - name: Export iOS update
         id: export
         working-directory: apps/app
         shell: bash
         run: |
           set -euo pipefail
 
-          rm -rf .artifacts
-          mkdir -p .artifacts/android .artifacts/ios
-          for platform in android ios; do
-            output_dir=".artifacts/${platform}"
-            runtime_version="$(
-              pnpm exec expo-updates runtimeversion:resolve --platform "${platform}" \
-                | jq -er '.runtimeVersion'
-            )"
-            pnpm exec expo export \
-              --clear \
-              --platform "${platform}" \
-              --output-dir "${output_dir}"
-            artifact_name="expo-ota-${platform}-${GITHUB_RUN_ID}-export"
-            echo "${platform}_artifact_name=${artifact_name}" >> "${GITHUB_OUTPUT}"
-            echo "${platform}_runtime_version=${runtime_version}" >> "${GITHUB_OUTPUT}"
-          done
-
-      - name: Upload Android export
-        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
-        with:
-          if-no-files-found: error
-          include-hidden-files: true
-          name: ${{ steps.export.outputs.android_artifact_name }}
-          path: apps/app/.artifacts/android
-          retention-days: 90
+          runtime_version="$(
+            pnpm exec expo-updates runtimeversion:resolve --platform ios \
+              | jq -er '.runtimeVersion'
+          )"
+          pnpm exec expo export \
+            --clear \
+            --platform ios \
+            --output-dir .artifacts/ios
+          echo "ios_artifact_name=expo-ota-ios-${GITHUB_RUN_ID}-export" >> "${GITHUB_OUTPUT}"
+          echo "ios_runtime_version=${runtime_version}" >> "${GITHUB_OUTPUT}"
 
       - name: Upload iOS export
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
@@ -100,36 +138,36 @@ jobs:
 
   publish_android:
     name: Publish Android ${{ inputs.channel }} OTA
-    needs: export
+    needs: export_android
     permissions:
       actions: read
       contents: read
       id-token: write
     uses: byulmaru/expo-ota/.github/workflows/publish.yml@refs/heads/main
     with:
-      artifact_name: ${{ needs.export.outputs.android_artifact_name }}
+      artifact_name: ${{ needs.export_android.outputs.android_artifact_name }}
       channel: ${{ inputs.channel }}
       keyid: ${{ inputs.keyid }}
       platform: android
       project: kosmo-native
-      runtime_version: ${{ needs.export.outputs.android_runtime_version }}
+      runtime_version: ${{ needs.export_android.outputs.android_runtime_version }}
     secrets:
       signing_private_key: ${{ secrets.signing_private_key }}
 
   publish_ios:
     name: Publish iOS ${{ inputs.channel }} OTA
-    needs: export
+    needs: export_ios
     permissions:
       actions: read
       contents: read
       id-token: write
     uses: byulmaru/expo-ota/.github/workflows/publish.yml@refs/heads/main
     with:
-      artifact_name: ${{ needs.export.outputs.ios_artifact_name }}
+      artifact_name: ${{ needs.export_ios.outputs.ios_artifact_name }}
       channel: ${{ inputs.channel }}
       keyid: ${{ inputs.keyid }}
       platform: ios
       project: kosmo-native
-      runtime_version: ${{ needs.export.outputs.ios_runtime_version }}
+      runtime_version: ${{ needs.export_ios.outputs.ios_runtime_version }}
     secrets:
       signing_private_key: ${{ secrets.signing_private_key }}
