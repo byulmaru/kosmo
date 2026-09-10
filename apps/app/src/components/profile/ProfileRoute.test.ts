@@ -166,6 +166,17 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
       action,
     ),
 });
+mockModule(new URL('../content-report/ContentReportContext.tsx', import.meta.url), {
+  useContentReportMenuItem: () => ({
+    key: 'report-profile',
+    label: '신고',
+    onSelect: () => undefined,
+    tone: 'danger',
+  }),
+});
+mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
+  useSession: () => ({ sessionId: null }),
+});
 mockModule(new URL('./FollowButton.tsx', import.meta.url), {
   FollowButton: ({ profile }: { profile: { handle: string } }) =>
     createElement('FollowButton', { identity: profile.handle }),
