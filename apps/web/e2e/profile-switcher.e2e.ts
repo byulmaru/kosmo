@@ -89,7 +89,7 @@ test('다른 Profile의 Unread badge에서 전환하면 기존 badge와 알림 �
   }
 });
 
-test('selectProfile response carries selectedProfile and recreates the active Relay environment', async ({
+test('selectProfile response identifies the selected profile and recreates the active Relay environment', async ({
   page,
 }) => {
   const graphQLRequests = collectGraphQLRequests(page);
@@ -97,7 +97,7 @@ test('selectProfile response carries selectedProfile and recreates the active Re
   await page.goto('/login');
   await page.waitForURL('**/home');
 
-  await createProfileFromSwitcher(page, 'alpha');
+  const alphaProfileId = await createProfileFromSwitcher(page, 'alpha');
   await expect(page.getByText('프로필을 만들어 시작하세요')).toBeHidden();
   await expect(page.getByText('홈', { exact: true }).last()).toBeVisible();
   await page.goto('/compose');
@@ -113,7 +113,7 @@ test('selectProfile response carries selectedProfile and recreates the active Re
 
   const responseBody = await selectProfileFromSwitcher(page, 'alpha');
 
-  expect(responseBody.data?.selectProfile?.profile?.handle).toBe('alpha');
+  expect(responseBody.data?.selectProfile?.profile?.id).toBe(alphaProfileId);
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await expect(page).toHaveURL(/\/compose$/);
   await expect(composerProfileHandle(page, 'alpha')).toBeVisible();
@@ -129,7 +129,7 @@ test('profile route action follows Profile.viewerState after switching', async (
   await page.goto('/login');
   await page.waitForURL('**/home');
 
-  await createProfileFromSwitcher(page, 'gamma');
+  const gammaProfileId = await createProfileFromSwitcher(page, 'gamma');
   await createProfileFromSwitcher(page, 'delta');
   await expect(sidebarProfileHandle(page, 'delta')).toBeVisible();
 
@@ -141,7 +141,7 @@ test('profile route action follows Profile.viewerState after switching', async (
 
   const responseBody = await selectProfileFromSwitcher(page, 'gamma');
 
-  expect(responseBody.data?.selectProfile?.profile?.handle).toBe('gamma');
+  expect(responseBody.data?.selectProfile?.profile?.id).toBe(gammaProfileId);
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '팔로우' })).toBeHidden();
   await expect(page.getByText('@gamma', { exact: true }).last()).toBeVisible();
@@ -157,7 +157,7 @@ test('home route active profile query refetches after switching profiles', async
   await page.goto('/login');
   await page.waitForURL('**/home');
 
-  await createProfileFromSwitcher(page, 'alphahome');
+  const alphaHomeProfileId = await createProfileFromSwitcher(page, 'alphahome');
   await createProfileFromSwitcher(page, 'betahome');
   await expect(sidebarProfileHandle(page, 'betahome')).toBeVisible();
 
@@ -171,7 +171,7 @@ test('home route active profile query refetches after switching profiles', async
 
   const responseBody = await selectProfileFromSwitcher(page, 'alphahome');
 
-  expect(responseBody.data?.selectProfile?.profile?.handle).toBe('alphahome');
+  expect(responseBody.data?.selectProfile?.profile?.id).toBe(alphaHomeProfileId);
   const homeQueryBody = (await (await homeQueryResponse).json()) as {
     data?: { homeTimeline?: { edges?: unknown[] | null } | null };
   };
@@ -248,7 +248,9 @@ test('Profile 전환 후 Local query가 새 selected Profile 응답에 수렴한
     errors?: unknown[];
   };
 
-  expect(selectedProfileResponse.data?.selectProfile?.profile?.handle).toBe(secondProfile.handle);
+  expect(selectedProfileResponse.data?.selectProfile?.profile?.id).toBe(
+    toGlobalId('Profile', secondProfile.id),
+  );
   expect(secondLocalResponse.ok(), JSON.stringify(secondLocalBody, null, 2)).toBe(true);
   expect(secondLocalBody.errors, JSON.stringify(secondLocalBody, null, 2)).toBeUndefined();
   expect(secondLocalBody.data?.currentSession?.selectedProfile?.id).toBe(
@@ -380,7 +382,7 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
     data?: {
       createProfile?: {
         account?: {
-          profiles?: Array<{ handle?: string | null } | null> | null;
+          profiles?: Array<{ id?: string | null; handle?: string | null } | null> | null;
         } | null;
       } | null;
     };
@@ -395,12 +397,14 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
     responseBody.errors,
     JSON.stringify({ errors: responseBody.errors, request: createProfilePostData }, null, 2),
   ).toBeUndefined();
-  expect(
-    responseBody.data?.createProfile?.account?.profiles?.some(
-      (profile) => profile?.handle === handle,
-    ),
-  ).toBe(true);
+  const createdProfile = responseBody.data?.createProfile?.account?.profiles?.find(
+    (profile) => profile?.handle === handle,
+  );
+  expect(createdProfile?.handle).toBe(handle);
+  expect(createdProfile?.id).toEqual(expect.any(String));
   await expect(sidebarProfileHandle(page, handle)).toBeVisible();
+
+  return createdProfile?.id as string;
 }
 
 async function openProfileSwitcher(page: Page) {
@@ -426,12 +430,7 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
     data?: {
       selectProfile?: {
         profile?: {
-          handle?: string | null;
-        } | null;
-        session?: {
-          selectedProfile?: {
-            id?: string | null;
-          } | null;
+          id?: string | null;
         } | null;
       } | null;
     };
