@@ -42,4 +42,6 @@ PROD-855는 닫힌 trigger의 Other Unread indicator와 열린 non-selected 행�
 - 공용 UI 정합성: `apps/app/src/components/shell/ProfileSwitcherTarget.tsx`
 - 검증: `apps/app/src/stories/patterns/ProfileSwitcher.stories.tsx`,
   `apps/app/src/stories/patterns/Shell.stories.tsx`, `apps/web/e2e/profile-switcher.e2e.ts`
-- GraphQL schema·resolver, DB·migration, package dependency와 기존 셸 badge controller는 변경하지 않는다.
+- GraphQL `Profile.unreadNotificationCount`는 membership field 오류가 visible Profile object 전체를 무효화하지
+  않도록 nullable 계약을 사용하며, 현재 Profile의 Relay field만 소비한다. DB·migration, package dependency,
+  별도 last-success snapshot과 기존 셸 badge controller는 추가하지 않는다.

@@ -19,7 +19,6 @@ import { NavigationLink } from './NavigationLink';
 import { ProfileSwitcher } from './ProfileSwitcher';
 import { isSettingsRoute, isTimelineRoute } from './shellLayout';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
-import { useUnreadNotificationCount } from './UnreadNotificationBadgeController';
 import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
 import type { Href } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
@@ -33,6 +32,7 @@ const SidebarNavigationFragment = graphql`
       selectedProfile {
         id
         relativeHandle
+        unreadNotificationCount
       }
     }
   }
@@ -87,8 +87,8 @@ export function SidebarNavigation({
   const theme = useTheme();
   const pathname = usePathname();
   const data = useFragment(SidebarNavigationFragment, query);
-  const unreadNotificationCount = useUnreadNotificationCount();
   const profile = data.currentSession?.selectedProfile ?? null;
+  const unreadNotificationCount = profile?.unreadNotificationCount ?? null;
   const feedbackActive = pathname === '/feedback';
   const feedbackUsesOverlay = Platform.OS === 'web' && !feedbackActive;
 

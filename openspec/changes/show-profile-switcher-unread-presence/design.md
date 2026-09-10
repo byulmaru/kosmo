@@ -8,6 +8,9 @@ PROD-786은 새 query나 상태 lifecycle 없이 이 최신 presentation을 실�
 
 `ProfilePicker`는 Shell ProfileSwitcher와 Post Composer가 공유한다. Composer fixture는 Unread count를
 전달하지 않으므로 badge가 나타나지 않아야 하며, 이번 변경은 Composer의 선택·실패·focus 동작을 바꾸지 않는다.
+기존 selected Profile 알림 badge는 현재 actor의 Relay fragment count와 알림 목록이 소유한다. picker의
+indicator와 badge는 이 8px badge presentation이나 별도 React controller·last-success snapshot을 재사용하지 않고,
+각 Profile의 현재 Relay field만 사용한다.
 
 ## Goals / Non-Goals
 
@@ -20,7 +23,8 @@ PROD-786은 새 query나 상태 lifecycle 없이 이 최신 presentation을 실�
 
 **Non-Goals:**
 
-- GraphQL schema·resolver, DB·migration 또는 dependency를 변경하지 않는다.
+- GraphQL count 계약은 membership field 오류가 visible Profile object 전체를 null bubble하지 않도록
+  `Profile.unreadNotificationCount`를 nullable로 유지한다. DB·migration 또는 dependency를 변경하지 않는다.
 - picker open 전용 refresh, retry, snapshot 또는 request identity lifecycle을 추가하지 않는다.
 - selected Profile 셸 badge, 알림 목록, Push·OS badge 또는 realtime delivery를 재구현하지 않는다.
 - ProfileSwitcher 전체 구조를 Target으로 교체하거나 ProfilePicker 공개 API를 미래 용도로 일반화하지 않는다.
@@ -30,6 +34,9 @@ PROD-786은 새 query나 상태 lifecycle 없이 이 최신 presentation을 실�
 ### Current Constraints
 
 - `ProfileSwitcher_query.me.profiles[].unreadNotificationCount`는 이미 Relay artifact에 포함돼 있다.
+- `Profile.unreadNotificationCount`가 `null`이거나 제공되지 않으면 해당 indicator와 badge를 숨기되 visible Profile
+  option은 유지한다. UI는 현재 Profile의 colocated Relay field만 읽고 다른 Profile count나 last-success snapshot을
+  재사용하지 않는다.
 - `ProfileSwitcher`는 profile summary, create form, navigation guard, modal과 actor reset을 함께 소유하지만
   `ProfileSwitcherTarget`은 presentation-only trigger와 list만 소유한다.
 - 닫힌 indicator는 selected Profile의 shell badge와 중복되지 않도록 `profile.id !== selectedProfileId`인
@@ -76,7 +83,8 @@ PROD-786은 새 query나 상태 lifecycle 없이 이 최신 presentation을 실�
 1. OpenSpec의 PROD-643 avatar-dot 계약을 최신 canonical·PROD-786 계약으로 supersede한다.
 2. Target의 Other Unread 계산을 바로잡고 Storybook fixture를 정렬한다.
 3. Production trigger와 ProfilePicker presentation을 최소 변경한다.
-4. Relay/type, Storybook tests/build, targeted Web E2E와 OpenSpec strict validation을 실행한다.
+4. nullable Relay field와 parent Profile identity 보존을 포함한 API·Relay/type, Storybook tests/build, targeted Web
+   E2E와 OpenSpec strict validation을 실행한다.
 5. Web에서 full·compact closed/open geometry와 keyboard·focus를 시각·상호작용 확인한다. Android/iOS runtime과
    assistive technology를 실행하지 못하면 미확인으로 남기고 change를 archive하지 않는다.
 6. 문제가 있으면 presentation과 tests/spec 변경만 되돌린다. data migration은 없다.

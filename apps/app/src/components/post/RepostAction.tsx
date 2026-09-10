@@ -53,7 +53,7 @@ const repostPostMutation = graphql`
 const deletePostMutation = graphql`
   mutation RepostActionDeletePostMutation($id: ID!) {
     deletePost(input: { id: $id }) {
-      postId
+      postId @deleteRecord
       repostSource {
         id
         repostCount

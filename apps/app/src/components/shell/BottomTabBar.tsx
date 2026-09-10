@@ -9,7 +9,6 @@ import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
 import { isTimelineRoute } from './shellLayout';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
-import { useUnreadNotificationCount } from './UnreadNotificationBadgeController';
 import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
 import type { Href } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
@@ -17,6 +16,7 @@ import type { BottomTabBar_profile$key } from './__generated__/BottomTabBar_prof
 
 const BottomTabBarFragment = graphql`
   fragment BottomTabBar_profile on Profile {
+    unreadNotificationCount
     relativeHandle
     displayName
     avatar {
@@ -50,7 +50,7 @@ export function BottomTabBar({
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const profile = useFragment(BottomTabBarFragment, profileKey ?? null);
-  const unreadNotificationCount = useUnreadNotificationCount();
+  const unreadNotificationCount = profile?.unreadNotificationCount ?? null;
   const tabs: Tab[] = [
     ...baseTabs,
     {

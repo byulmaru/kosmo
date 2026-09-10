@@ -17,7 +17,6 @@ import { ProfileSwitcher } from '@/components/shell/ProfileSwitcher';
 import { RightRail, RightRailFooter } from '@/components/shell/RightRail';
 import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
 import { UniversalShell } from '@/components/shell/UniversalShell';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { colors, spacing } from '@/theme/tokens';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
@@ -1703,29 +1702,21 @@ function SetUnreadNotificationCount({ count }: { count: number }) {
   );
 }
 
-function ResetCurrentRelayActor() {
-  const { resetActor } = useRelayActor();
-
-  return (
-    <StoryButton label="현재 Profile actor 재설정" onPress={() => resetActor(selectedProfile.id)} />
-  );
-}
-
-function ResetRelayActorToSecondProfile() {
-  const { resetActor } = useRelayActor();
-
-  return <StoryButton label="두 번째 프로필로 전환" onPress={() => resetActor(secondProfile.id)} />;
-}
-
 function unreadBadgeParameters(count: number) {
+  const selectedProfileWithUnreadCount = {
+    ...selectedProfile,
+    unreadNotificationCount: count,
+  };
+
   return {
     ...universalParameters,
     relay: {
-      data: query,
-      operationResponses: {
-        UnreadNotificationBadgeControllerQuery: {
-          data: { node: { ...selectedProfile, unreadNotificationCount: count } },
-        },
+      data: {
+        ...query,
+        ...shellQuery({
+          profiles: [selectedProfileWithUnreadCount, secondProfile],
+          selectedProfile: selectedProfileWithUnreadCount,
+        }),
       },
     },
   };
@@ -2149,30 +2140,6 @@ export const UniversalMobilePostDetailHeader: Story = {
   render: () => <UniversalShellStory />,
 };
 
-export const UniversalMobileUnreadBadgeInitialFailure: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
-  parameters: {
-    ...universalParameters,
-    relay: {
-      data: query,
-      operationResponses: {
-        UnreadNotificationBadgeControllerQuery: {
-          error: '읽지 않은 알림 수를 불러오지 못했습니다.',
-        },
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const notification = await canvas.findByRole('link', { name: '알림' });
-    expect(notification).toBeVisible();
-    expect(canvas.queryByTestId('unread-notification-dot')).toBeNull();
-    expect(canvas.queryByText('읽지 않은 알림 수를 불러오지 못했습니다.')).toBeNull();
-    expect(canvas.queryByRole('button', { name: /알림.*(재시도|다시)/ })).toBeNull();
-  },
-  render: () => <UniversalShellStory />,
-};
-
 export const UniversalCompactUnreadBadge: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   parameters: unreadBadgeParameters(99),
@@ -2250,100 +2217,6 @@ export const UnreadBadgeRestoresWarmCacheAfterShellRemount: Story = {
     ).resolves.toBeVisible();
   },
   render: () => <RemountableUniversalShellStory />,
-};
-
-export const UnreadBadgeKeepsSameProfileCountAcrossFailedRefresh: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
-  parameters: {
-    ...universalParameters,
-    relay: {
-      data: query,
-      operationResponses: {
-        UnreadNotificationBadgeControllerQuery: [
-          { data: { node: { ...selectedProfile, unreadNotificationCount: 7 } } },
-          { error: '읽지 않은 알림 수를 불러오지 못했습니다.' },
-          { data: { node: { ...selectedProfile, unreadNotificationCount: 9 } } },
-        ],
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const page = within(canvasElement.ownerDocument.body);
-    await expect(
-      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
-    ).resolves.toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '현재 Profile actor 재설정' }));
-    await expect(
-      page.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
-    ).resolves.toBeVisible();
-    expect(page.queryByRole('button', { name: /알림.*다시/ })).toBeNull();
-    expect(page.queryByText('읽지 않은 알림 수를 불러오지 못했습니다.')).toBeNull();
-    await userEvent.click(page.getByRole('button', { name: '현재 Profile actor 재설정' }));
-    await expect(
-      page.findByRole('link', { name: '알림, 읽지 않은 알림 9개' }),
-    ).resolves.toBeVisible();
-  },
-  render: () => (
-    <>
-      <UniversalShellStory />
-      <ResetCurrentRelayActor />
-    </>
-  ),
-};
-
-const transitionedQuery = {
-  ...query,
-  currentSession: { ...query.currentSession, selectedProfile: secondProfile },
-  me: { ...query.me, profiles: [selectedProfile, secondProfile] },
-};
-
-export const UnreadBadgeHidesPreviousProfileCountUntilNextRetry: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
-  parameters: {
-    ...universalParameters,
-    relay: {
-      data: query,
-      operationResponses: {
-        SessionProviderQuery: [
-          { data: query },
-          { data: transitionedQuery },
-          { data: transitionedQuery },
-        ],
-        UniversalShellQuery: [
-          { data: query },
-          { data: transitionedQuery },
-          { data: transitionedQuery },
-        ],
-        UnreadNotificationBadgeControllerQuery: [
-          { data: { node: { ...selectedProfile, unreadNotificationCount: 7 } } },
-          { error: '두 번째 프로필의 읽지 않은 알림 수를 불러오지 못했습니다.' },
-          { data: { node: { ...secondProfile, unreadNotificationCount: 4 } } },
-        ],
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const page = within(canvasElement.ownerDocument.body);
-    await expect(
-      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
-    ).resolves.toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '두 번째 프로필로 전환' }));
-    await expect(page.findByRole('link', { name: '알림' })).resolves.toBeVisible();
-    expect(page.queryByRole('link', { name: '알림, 읽지 않은 알림 7개' })).toBeNull();
-    await userEvent.click(page.getByRole('button', { name: '현재 Profile actor 재설정' }));
-    await expect(
-      page.findByRole('link', { name: '알림, 읽지 않은 알림 4개' }),
-    ).resolves.toBeVisible();
-  },
-  render: () => (
-    <>
-      <UniversalShellStory />
-      <ResetRelayActorToSecondProfile />
-      <ResetCurrentRelayActor />
-    </>
-  ),
 };
 
 export const UniversalCompact: Story = {

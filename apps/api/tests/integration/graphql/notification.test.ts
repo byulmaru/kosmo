@@ -922,7 +922,7 @@ describe('Notification GraphQL Node boundary', () => {
     const withoutMembership = await loadUnreadNotificationCounts(profileIds, unrelated.token);
     assert.deepEqual(
       withoutMembership.data?.nodes,
-      profileIds.map(() => null),
+      profileIds.map((id) => ({ id, unreadNotificationCount: null })),
     );
     assert.equal(withoutMembership.errors?.length, profileIds.length);
     assert.ok(
@@ -930,7 +930,9 @@ describe('Notification GraphQL Node boundary', () => {
     );
 
     const unauthenticated = await loadUnreadNotificationCounts([profileIds[0]!]);
-    assert.deepEqual(unauthenticated.data?.nodes, [null]);
+    assert.deepEqual(unauthenticated.data?.nodes, [
+      { id: profileIds[0], unreadNotificationCount: null },
+    ]);
     assert.equal(unauthenticated.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
   });
 
@@ -1902,7 +1904,7 @@ const markNotificationRead = (ids: string[], token?: string) =>
 
 const loadUnreadNotificationCounts = (ids: string[], token?: string) =>
   requestGraphQL<{
-    nodes: Array<{ id: string; unreadNotificationCount: number } | null>;
+    nodes: Array<{ id: string; unreadNotificationCount: number | null } | null>;
   }>(
     `query NotificationUnreadCounts($ids: [ID!]!) {
       nodes(ids: $ids) {

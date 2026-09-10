@@ -10,6 +10,10 @@ Profile-scoped in-app Notification의 생성과 정리, GraphQL 조회와 Read, 
 
 **Authority / Provenance:** `docs/domain/objects/notification.md`, [PROD-703](https://linear.app/byulmaru/issue/PROD-703/%EA%B8%B0%EC%A1%B4-notification-read-mutation%EC%9D%B4-%EC%A7%80%EC%A0%95%ED%95%9C-%EC%95%8C%EB%A6%BC-%EC%97%AC%EB%9F%AC-%EA%B0%9C%EB%A5%BC-%EC%B2%98%EB%A6%AC%ED%95%98%EB%8F%84%EB%A1%9D-%ED%99%95%EC%9E%A5%ED%95%9C%EB%8B%A4) — PROD-703은 inactive Recipient 지정 ID Read의 조용한 제외 계약을 소유한다. API는 로그인 Account가 Account-Profile membership을 가진 Profile의 Notification connection과 Unread count를 Profile object에 제공해야 한다(MUST).
 
+**Current implementation choice (2026-09-09, user-authorized scope):** `Profile.unreadNotificationCount`는
+field-level membership 오류가 visible Profile object 전체를 무효화하지 않도록 nullable이어야 한다(MUST). 이
+nullable GraphQL 동작은 현재 구현 범위를 기록하며 `PROD-703`의 별도 Linear 승인으로 해석하지 않는다.
+
 #### Scenario: Notification GraphQL shape
 
 - **WHEN** GraphQL schema를 생성한다
@@ -17,7 +21,7 @@ Profile-scoped in-app Notification의 생성과 정리, GraphQL 조회와 Read, 
 - **AND** `FollowNotification implements Notification & Node` concrete object는 non-null `profile`을 제공한다
 - **AND** `notification.kind = FOLLOW`인 row는 `FollowNotification`으로 resolve된다
 - **AND** 각 concrete Notification object는 자신의 concrete typename과 notification DB UUID를 opaque global ID로 반환한다
-- **AND** `Profile.notifications`는 `NotificationConnection`을, `Profile.unreadNotificationCount`는 음수가 아닌 정수를 반환한다
+- **AND** `Profile.notifications`는 `NotificationConnection`을, `Profile.unreadNotificationCount`는 `null` 또는 음수가 아닌 정수를 반환한다
 - **AND** API는 public `NotificationType` enum, 공통 `type` field, raw `kind`, `source_id`, `data`나 과거 이름·handle snapshot을 노출하지 않는다
 - **AND** 클라이언트는 `... on FollowNotification` inline fragment로 Follow 전용 field를 선택한다
 
@@ -48,6 +52,12 @@ Profile-scoped in-app Notification의 생성과 정리, GraphQL 조회와 Read, 
 - **WHEN** 로그인 Account가 target Profile membership 없이 `notifications` 또는 `unreadNotificationCount`를 조회한다
 - **THEN** API는 `PERMISSION_DENIED` GraphQL 오류를 반환한다
 - **AND** 그 Profile의 Notification이나 count를 노출하지 않는다
+
+#### Scenario: visible Profile을 count field 오류와 함께 보존
+
+- **WHEN** 로그인 Account가 membership 없는 visible Profile의 `id`와 `unreadNotificationCount`를 같은 selection set에서 조회한다
+- **THEN** API는 visible Profile object와 sibling field를 유지하고 `unreadNotificationCount: null`을 반환한다
+- **AND** field-level `PERMISSION_DENIED` 오류를 함께 반환한다
 
 #### Scenario: Notification Node 조회
 
@@ -252,7 +262,7 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 
 ### Requirement: Selected Profile Follow Notification 목록 UI
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/colors.md`, `PROD-277`, `PROD-372`, `PROD-541`, `PROD-680`, `PROD-703`, `PROD-930` — 클라이언트는 selected Profile의 visible Follow Notification을 모든 지원 플랫폼에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/colors.md`, `PROD-277`, `PROD-372`, `PROD-541`, `PROD-680`, `PROD-703`, `PROD-930` — 클라이언트는 selected Profile의 visible Follow Notification을 모든 지원 플랫폼에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST). `Profile.unreadNotificationCount`가 nullable이더라도 현재 Profile의 Relay field만 사용하며 다른 Profile count나 별도 last-success snapshot으로 대체해서는 안 된다(MUST NOT).
 
 #### Scenario: 단일 Follow item 표시와 Profile link
 

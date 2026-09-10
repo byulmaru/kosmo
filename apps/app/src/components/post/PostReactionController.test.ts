@@ -188,6 +188,7 @@ describe('PostReactionController Relay cache contract', () => {
 
     assert.deepEqual(viewerReactionIds(environment), ['reaction-eyes']);
     assert.deepEqual(reactionCounts(environment), [{ count: 1, type: 'EYES' }]);
+    assert.ok(environment.getStore().getSource().get('reaction-heart'));
   });
 
   it('does not guess viewer state or counts when delete returns no Post', async () => {
@@ -218,6 +219,7 @@ describe('PostReactionController Relay cache contract', () => {
         reactionId: 'reaction-heart',
       },
     });
+    assert.equal(environment.getStore().getSource().get('reaction-heart'), null);
     await commitAdd(environment, respond, {
       addReaction: {
         post: {

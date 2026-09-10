@@ -220,19 +220,6 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
           updateProfileCount(followee, 'followersCount', 1);
           updateProfileCount(follower, 'followingCount', 1);
         },
-        updater: (store) => {
-          const payload = store.getRootField('followProfile');
-          const result = payload?.getLinkedRecord('result');
-          const state = payload?.getLinkedRecord('followeeProfile')?.getLinkedRecord('viewerState');
-
-          if (result?.getType() === 'ProfileFollow') {
-            state?.setLinkedRecord(result, 'follow');
-            state?.setValue(null, 'followRequest');
-          } else if (result?.getType() === 'ProfileFollowRequest') {
-            state?.setValue(null, 'follow');
-            state?.setLinkedRecord(result, 'followRequest');
-          }
-        },
         variables: { id: data.id },
       });
     }

@@ -1528,7 +1528,13 @@ function ProductionReactionMutationSurfaces() {
   );
 }
 
-type ProductionBookmarkMutationMode = 'success' | 'pending' | 'create-failure' | 'delete-failure';
+type ProductionBookmarkMutationMode =
+  | 'success'
+  | 'pending'
+  | 'create-failure'
+  | 'delete-failure'
+  | 'delete-graphql-failure'
+  | 'delete-partial-success';
 
 function ProductionBookmarkMutationStory({
   initiallyBookmarked = false,
@@ -1637,11 +1643,17 @@ function ProductionBookmarkMutationStory({
           if (mode === 'delete-failure' && deleteAttempts === 1) {
             return Promise.reject(new Error('bookmark delete failed'));
           }
+          if (mode === 'delete-graphql-failure' && deleteAttempts === 1) {
+            return Promise.resolve({
+              data: { deleteBookmark: null },
+              errors: [{ message: 'bookmark delete failed' }],
+            } as GraphQLResponse);
+          }
           activeBookmarkId = null;
-          return Promise.resolve({
+          const response = {
             data: {
               deleteBookmark: {
-                bookmarkId: input.id,
+                requestedBookmarkId: input.id,
                 post: {
                   __typename: 'Post',
                   id: shortPost.id,
@@ -1649,7 +1661,19 @@ function ProductionBookmarkMutationStory({
                 },
               },
             },
-          } as GraphQLResponse);
+          } as GraphQLResponse;
+          if (mode === 'delete-partial-success') {
+            return Promise.resolve({
+              ...response,
+              errors: [
+                {
+                  message: 'viewerBookmark projection failed',
+                  path: ['deleteBookmark', 'post', 'viewerBookmark'],
+                },
+              ],
+            } as GraphQLResponse);
+          }
+          return Promise.resolve(response);
         }
         return Promise.resolve({ data: {} } as GraphQLResponse);
       }),
@@ -3701,6 +3725,59 @@ export const ProductionBookmarkDeleteFailureRetry: Story = {
     ]);
   },
   render: () => <ProductionBookmarkMutationStory initiallyBookmarked mode="delete-failure" />,
+};
+
+export const ProductionBookmarkDeletePartialSuccess: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const cancel = await canvas.findByRole('button', { name: '북마크 취소' });
+
+    await userEvent.click(cancel);
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+      expect(
+        screen.queryByText('북마크를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.'),
+      ).toBeNull();
+    });
+  },
+  render: () => (
+    <ProductionBookmarkMutationStory initiallyBookmarked mode="delete-partial-success" />
+  ),
+};
+
+export const ProductionBookmarkDeleteGraphQLFailureRetry: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const cancel = await canvas.findByRole('button', { name: '북마크 취소' });
+
+    await userEvent.click(cancel);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '북마크를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(cancel).toBeEnabled();
+    expect(cancel).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.click(cancel);
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    });
+    const requests = JSON.parse(
+      canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+    ) as ProductionBookmarkRequest[];
+    expect(requests).toEqual([
+      { action: 'delete', bookmarkId: `bookmark-${shortPost.id}` },
+      { action: 'delete', bookmarkId: `bookmark-${shortPost.id}` },
+    ]);
+  },
+  render: () => (
+    <ProductionBookmarkMutationStory initiallyBookmarked mode="delete-graphql-failure" />
+  ),
 };
 
 export const ProductionBookmarkEnvironmentReplacement: Story = {

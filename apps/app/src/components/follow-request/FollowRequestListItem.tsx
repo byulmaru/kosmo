@@ -8,9 +8,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { getIconButtonTargetSize, IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, space, textStyles } from '@/theme/tokens';
-import { removeFollowRequestFromConnection } from './followRequestStore';
 import type { Href } from 'expo-router';
-import type { RecordSourceSelectorProxy } from 'relay-runtime';
 import type { FollowRequestListItem_request$key } from './__generated__/FollowRequestListItem_request.graphql';
 import type { FollowRequestListItemApproveMutation } from './__generated__/FollowRequestListItemApproveMutation.graphql';
 import type { FollowRequestListItemRejectMutation } from './__generated__/FollowRequestListItemRejectMutation.graphql';
@@ -40,9 +38,10 @@ const followRequestListItemFragment = graphql`
 `;
 
 const approveFollowRequestMutation = graphql`
-  mutation FollowRequestListItemApproveMutation($id: ID!) {
+  mutation FollowRequestListItemApproveMutation($connections: [ID!]!, $id: ID!) {
     approveProfileFollowRequest(input: { id: $id }) {
-      profileFollowRequestId
+      profileFollowRequestId @deleteEdge(connections: $connections)
+      profileFollowRequestId @deleteRecord
       followerProfile {
         id
         followingCount
@@ -65,27 +64,16 @@ const approveFollowRequestMutation = graphql`
 `;
 
 const rejectFollowRequestMutation = graphql`
-  mutation FollowRequestListItemRejectMutation($id: ID!) {
+  mutation FollowRequestListItemRejectMutation($connections: [ID!]!, $id: ID!) {
     rejectProfileFollowRequest(input: { id: $id }) {
-      profileFollowRequestId
+      profileFollowRequestId @deleteEdge(connections: $connections)
+      profileFollowRequestId @deleteRecord
       followeeProfile {
         id
       }
     }
   }
 `;
-
-function removeCompletedRequest(
-  store: RecordSourceSelectorProxy,
-  rootField: 'approveProfileFollowRequest' | 'rejectProfileFollowRequest',
-  connectionId: string,
-) {
-  const requestId = store.getRootField(rootField)?.getValue('profileFollowRequestId');
-
-  if (typeof requestId === 'string') {
-    removeFollowRequestFromConnection(store, connectionId, requestId);
-  }
-}
 
 export function FollowRequestListItem({ connectionId, request }: FollowRequestListItemProps) {
   const theme = useTheme();
@@ -124,21 +112,19 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
         setFailedAction(null);
       },
       onError: () => handleFailure(action),
-      variables: { id: data.id },
     };
 
     if (action === 'approve') {
       commitApprove({
         ...callbacks,
-        updater: (store) =>
-          removeCompletedRequest(store, 'approveProfileFollowRequest', connectionId),
+        variables: { connections: [connectionId], id: data.id },
       });
       return;
     }
 
     commitReject({
       ...callbacks,
-      updater: (store) => removeCompletedRequest(store, 'rejectProfileFollowRequest', connectionId),
+      variables: { connections: [connectionId], id: data.id },
     });
   };
 

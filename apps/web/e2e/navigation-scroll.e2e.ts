@@ -213,6 +213,9 @@ test('no-data Home 오류는 current Home 재선택으로 단일 query를 다시
     await page.setViewportSize({ height: 360, width: 1440 });
     await page.goto('/home');
     await expect(page.getByRole('alert')).toContainText('홈을 불러오지 못했어요');
+    await expect(page.getByText('사용할 프로필을 선택해주세요')).toHaveCount(0);
+    await expect(page.getByText('프로필을 만들어 시작하세요')).toHaveCount(0);
+    await expect(page.getByText('잠시 후 다시 시도해주세요.')).toBeVisible();
 
     await (
       await visiblePrimaryNavigation(page)
@@ -723,7 +726,8 @@ test('current Home refresh error는 timeline을 유지하고 다음 activation�
     await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
     await page.setViewportSize({ height: 360, width: 1024 });
     await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
-    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.getByText('홈을 새로 불러오지 못했어요.')).toBeVisible();
+    await expect(page.getByText('잠시 후 다시 시도해주세요.')).toHaveCount(0);
     const rerenderedEntry = await homeEntry(page, 'navigation');
     await expect
       .poll(async () => {

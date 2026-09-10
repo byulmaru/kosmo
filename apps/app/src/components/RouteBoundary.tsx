@@ -79,7 +79,12 @@ export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>
             reportUnexpectedError?.(error, info);
             console.error('Route error', error, info.componentStack);
           }}
-          onReset={reset}
+          onReset={(details) => {
+            if (details.reason === 'imperative-api') {
+              reset();
+            }
+          }}
+          resetKeys={[fetchKey]}
         >
           <Suspense fallback={loading}>{children}</Suspense>
         </ErrorBoundary>

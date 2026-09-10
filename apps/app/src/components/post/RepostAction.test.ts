@@ -29,6 +29,13 @@ function createEnvironment({
     repostCount,
     viewerRepost,
   });
+  if (viewerRepost) {
+    source.set(viewerRepost.__ref, {
+      __id: viewerRepost.__ref,
+      __typename: 'Post',
+      id: viewerRepost.__ref,
+    });
+  }
 
   return new Environment({
     network: Network.create(() => Promise.reject(new Error('network is not used'))),
@@ -121,7 +128,7 @@ describe('RepostAction Relay cache contract', () => {
   });
 
   it('normalizes cancellation only in the actor Store receiving the payload', () => {
-    const actorA = createEnvironment();
+    const actorA = createEnvironment({ viewerRepost: { __ref: activeRepostId } });
     const actorB = createEnvironment({
       repostCount: 4,
       viewerRepost: { __ref: 'post-repost-other' },
@@ -144,6 +151,7 @@ describe('RepostAction Relay cache contract', () => {
 
     assert.equal(sourceRecord(actorA).repostCount, 2);
     assert.equal(sourceRecord(actorA).viewerRepost, null);
+    assert.equal(actorA.getStore().getSource().get(activeRepostId), null);
     assert.equal(sourceRecord(actorB).repostCount, 4);
     assert.deepEqual(sourceRecord(actorB).viewerRepost, { __ref: 'post-repost-other' });
   });

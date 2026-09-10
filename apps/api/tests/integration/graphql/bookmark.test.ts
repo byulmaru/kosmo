@@ -253,6 +253,7 @@ describe('Bookmark GraphQL 경계', () => {
       const deleted = await requestDeleteBookmark(bookmarkId, token);
       assertNoGraphQLErrors(deleted);
       assert.equal(deleted.data?.deleteBookmark.bookmarkId, bookmarkId);
+      assert.equal(deleted.data?.deleteBookmark.requestedBookmarkId, bookmarkId);
     }
     assert.equal(await countBookmarks(), 0);
   });
@@ -320,8 +321,13 @@ describe('Bookmark GraphQL 경계', () => {
     assert.deepEqual(deleted.data?.deleteBookmark, {
       bookmarkId,
       post: { id: encodeGlobalId('Post', post.id) },
+      requestedBookmarkId: bookmarkId,
     });
-    assert.deepEqual(repeated.data?.deleteBookmark, { bookmarkId: null, post: null });
+    assert.deepEqual(repeated.data?.deleteBookmark, {
+      bookmarkId: null,
+      post: null,
+      requestedBookmarkId: bookmarkId,
+    });
     assert.equal(await countBookmarks(), 0);
   });
 
@@ -333,15 +339,24 @@ describe('Bookmark GraphQL 경계', () => {
     const bookmarkId = created.data?.createBookmark.bookmark.id;
     assert.ok(bookmarkId);
 
+    const missingId = encodeGlobalId('Bookmark', crypto.randomUUID());
     const [missing, nonOwner] = await Promise.all([
-      requestDeleteBookmark(encodeGlobalId('Bookmark', crypto.randomUUID()), owner.token),
+      requestDeleteBookmark(missingId, owner.token),
       requestDeleteBookmark(bookmarkId, other.token),
     ]);
 
     assertNoGraphQLErrors(missing);
     assertNoGraphQLErrors(nonOwner);
-    assert.deepEqual(missing.data?.deleteBookmark, { bookmarkId: null, post: null });
-    assert.deepEqual(nonOwner.data?.deleteBookmark, { bookmarkId: null, post: null });
+    assert.deepEqual(missing.data?.deleteBookmark, {
+      bookmarkId: null,
+      post: null,
+      requestedBookmarkId: missingId,
+    });
+    assert.deepEqual(nonOwner.data?.deleteBookmark, {
+      bookmarkId: null,
+      post: null,
+      requestedBookmarkId: bookmarkId,
+    });
     assert.equal(await countBookmarks(), 1);
   });
 
@@ -375,7 +390,11 @@ describe('Bookmark GraphQL 경계', () => {
     const deleted = await requestDeleteBookmark(bookmarkId, auth.token);
 
     assertNoGraphQLErrors(deleted);
-    assert.deepEqual(deleted.data?.deleteBookmark, { bookmarkId, post: null });
+    assert.deepEqual(deleted.data?.deleteBookmark, {
+      bookmarkId,
+      post: null,
+      requestedBookmarkId: bookmarkId,
+    });
     assert.equal(await countBookmarks(), 0);
   });
 
@@ -559,6 +578,7 @@ type BookmarkNode = {
 type DeleteBookmarkPayload = {
   bookmarkId: string | null;
   post: { id: string } | null;
+  requestedBookmarkId: string;
 };
 
 type BookmarkNodeSummary = { id: string; post: { id: string } | null };
@@ -594,7 +614,7 @@ const requestCreateBookmark = (postId: string, token?: string) =>
 const requestDeleteBookmark = (id: string, token?: string) =>
   requestGraphQL<{ deleteBookmark: DeleteBookmarkPayload }>(
     `mutation DeleteBookmark($input: DeleteBookmarkInput!) {
-      deleteBookmark(input: $input) { bookmarkId post { id } }
+      deleteBookmark(input: $input) { bookmarkId post { id } requestedBookmarkId }
     }`,
     { input: { id } },
     token,

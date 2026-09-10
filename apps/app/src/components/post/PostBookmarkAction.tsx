@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { ConnectionHandler } from 'relay-runtime';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
-import { applyBookmarkDeleteResponse, getBookmarkConnectionId } from './PostBookmarkActionCache';
 import type { PostBookmarkAction_post$key } from './__generated__/PostBookmarkAction_post.graphql';
 import type { PostBookmarkActionCreateBookmarkMutation } from './__generated__/PostBookmarkActionCreateBookmarkMutation.graphql';
 import type { PostBookmarkActionDeleteBookmarkMutation } from './__generated__/PostBookmarkActionDeleteBookmarkMutation.graphql';
@@ -32,6 +32,8 @@ const postBookmarkActionFragment = graphql`
   }
 `;
 
+const bookmarkConnectionKey = 'BookmarkConnectionList_bookmarks';
+
 const createBookmarkMutation = graphql`
   mutation PostBookmarkActionCreateBookmarkMutation($input: CreateBookmarkInput!) {
     createBookmark(input: $input) {
@@ -47,9 +49,19 @@ const createBookmarkMutation = graphql`
 `;
 
 const deleteBookmarkMutation = graphql`
-  mutation PostBookmarkActionDeleteBookmarkMutation($input: DeleteBookmarkInput!) {
+  mutation PostBookmarkActionDeleteBookmarkMutation(
+    $connections: [ID!]!
+    $input: DeleteBookmarkInput!
+  ) {
     deleteBookmark(input: $input) {
-      bookmarkId
+      requestedBookmarkId @deleteEdge(connections: $connections)
+      requestedBookmarkId @deleteRecord
+      post {
+        id
+        viewerBookmark {
+          id
+        }
+      }
     }
   }
 `;
@@ -121,26 +133,27 @@ export function usePostBookmarkAction(
 
     if (activeBookmarkId) {
       const bookmarkConnectionId = selectedProfileId
-        ? getBookmarkConnectionId(selectedProfileId)
+        ? ConnectionHandler.getConnectionID(selectedProfileId, bookmarkConnectionKey)
         : null;
       commitDelete({
         onCompleted: (response, errors) => {
-          const error = applyBookmarkDeleteResponse(
-            requestEnvironment,
-            data.id,
-            activeBookmarkId,
-            bookmarkConnectionId,
-            response?.deleteBookmark?.bookmarkId,
-            errors,
-          );
-          if (error) {
-            finishWithError(error);
+          if (response?.deleteBookmark?.requestedBookmarkId === activeBookmarkId) {
+            finish();
             return;
           }
-          finish();
+
+          finishWithError(
+            new Error(
+              errors?.[0]?.message ??
+                'Bookmark delete response did not confirm the requested Bookmark.',
+            ),
+          );
         },
         onError: finishWithError,
-        variables: { input: { id: activeBookmarkId } },
+        variables: {
+          connections: bookmarkConnectionId ? [bookmarkConnectionId] : [],
+          input: { id: activeBookmarkId },
+        },
       });
       return;
     }
