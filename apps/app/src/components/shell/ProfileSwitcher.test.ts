@@ -2,8 +2,22 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement, useState } from 'react';
 import { act, create } from 'react-test-renderer';
+import {
+  createOperationDescriptor,
+  createReaderSelector,
+  Environment,
+  getFragment,
+  getRequest,
+  Network,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
+import ProfileSwitcherFragment from './__generated__/ProfileSwitcher_query.graphql';
+import SelectProfileMutation from './__generated__/ProfileSwitcherSelectProfileMutation.graphql';
+import UniversalShellQueryArtifact from './__generated__/UniversalShellQuery.graphql';
 import type { ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ProfileSwitcher_query$data } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcher as ProfileSwitcherComponent } from './ProfileSwitcher';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -21,13 +35,9 @@ type PressableChildren = ReactNode | ((state: { pressed: boolean }) => ReactNode
 
 const platform: { OS: PlatformName } = { OS: 'ios' };
 const resetActorCalls: Array<string | null | undefined> = [];
-const documentMock = {
-  addEventListener: () => undefined,
-  querySelector: () => null,
-  removeEventListener: () => undefined,
-};
 const queryData = {
   currentSession: {
+    id: 'session-1',
     selectedProfile: {
       id: 'profile-a',
       handle: 'profile-a',
@@ -36,13 +46,16 @@ const queryData = {
       followingCount: 0,
       followersCount: 0,
       instance: { kind: 'LOCAL' as const },
-      viewerState: { membership: { role: 'OWNER' as const } },
+      viewerState: { membership: { role: 'OWNER' as const, id: 'membership-a' } },
       avatar: null,
       header: null,
+      unreadNotificationCount: 0,
+      private: { defaultPostVisibility: 'PUBLIC' },
     },
   },
   me: {
     id: 'account-1',
+    name: 'Account',
     profiles: [
       {
         id: 'profile-a',
@@ -206,100 +219,91 @@ afterEach(async () => {
   platform.OS = 'ios';
   pendingSelectMutation = null;
   resetActorCalls.length = 0;
-  delete (globalThis as { document?: unknown }).document;
   mock.restoreAll();
 });
 
-describe('ProfileSwitcher native actor reset lifecycle', () => {
-  it('iOS는 native picker가 dismiss된 뒤에만 성공한 profile을 reset한다', async () => {
+describe('ProfileSwitcher selection lifecycle', () => {
+  it('성공한 프로필 전환은 선택된 profile id로 actor를 즉시 reset한다', async () => {
     await renderProfileSwitcher({ controlled: true, surface: 'drawer' });
     await openPicker();
     await startSelection();
 
     await completeSelection();
-    assert.deepEqual(resetActorCalls, []);
+    assert.deepEqual(resetActorCalls, ['profile-b']);
     assert.equal(modal().props.visible, false);
-
-    await dismissModal();
-    assert.deepEqual(resetActorCalls, ['profile-b']);
-    await dismissModal();
-    assert.deepEqual(resetActorCalls, ['profile-b']);
-  });
-
-  it('pending 성공은 onDismiss 없이 unmount되어도 한 번만 reset한다', async () => {
-    await renderProfileSwitcher();
-    await openPicker();
-    await startSelection();
-    await completeSelection();
-    const onDismiss = modal().props.onDismiss as () => void;
-
-    await act(async () => {
-      renderer?.unmount();
-      renderer = null;
-    });
-    assert.deepEqual(resetActorCalls, ['profile-b']);
-
-    await act(async () => onDismiss());
-    assert.deepEqual(resetActorCalls, ['profile-b']);
-  });
-
-  it('취소 후 재오픈하고 새 onShow 전 성공해도 새 dismiss까지 reset을 보류한다', async () => {
-    await renderProfileSwitcher();
-    await openPicker();
-    await startSelection();
-
-    await closePicker();
-    await dismissModal();
-    await openPicker({ notifyNativeShow: false });
-
-    await completeSelection();
-    assert.deepEqual(resetActorCalls, []);
-    assert.equal(modal().props.visible, false);
-
-    await dismissModal();
-    assert.deepEqual(resetActorCalls, ['profile-b']);
   });
 
   it('GraphQL/network 실패와 단순 취소는 actor를 reset하지 않는다', async () => {
     await renderProfileSwitcher();
     await openPicker();
     await startSelection();
-    await completeSelection({}, [{ message: 'selection failed' }]);
+    await completeSelection({ selectProfile: { profile: { id: 'profile-b' } } }, [
+      { message: 'selection failed' },
+    ]);
     assert.deepEqual(resetActorCalls, []);
-    await closePicker();
-    await dismissModal();
+    assert.equal(modal().props.visible, true);
 
+    await closePicker();
     await openPicker();
     await startSelection();
     await failSelection();
     assert.deepEqual(resetActorCalls, []);
-    await closePicker();
-    await dismissModal();
-    assert.deepEqual(resetActorCalls, []);
+    assert.equal(modal().props.visible, true);
 
+    await closePicker();
     await openPicker();
     await closePicker();
-    await dismissModal();
     assert.deepEqual(resetActorCalls, []);
+    assert.equal(modal().props.visible, false);
   });
+});
 
-  for (const platformName of ['android', 'web'] as const) {
-    it(`${platformName}는 성공 callback에서 즉시 actor를 reset한다`, async () => {
-      platform.OS = platformName;
-      if (platformName === 'web') {
-        Object.defineProperty(globalThis, 'document', {
-          configurable: true,
-          value: documentMock,
-        });
-      }
-      await renderProfileSwitcher();
-      await openPicker();
-      await startSelection();
-
-      await completeSelection();
-      assert.deepEqual(resetActorCalls, ['profile-b']);
+describe('ProfileSwitcher Relay normalization', () => {
+  it('does not publish an incomplete selectedProfile link before the actor reset', () => {
+    const environment = new Environment({
+      network: Network.create(() => Promise.reject(new Error('network is not used'))),
+      store: new Store(new RecordSource()),
     });
-  }
+    const shell = createOperationDescriptor(getRequest(UniversalShellQueryArtifact), {});
+    environment.commitPayload(shell, queryData);
+    const profileSwitcherSelector = createReaderSelector(
+      getFragment(ProfileSwitcherFragment),
+      'client:root',
+      {},
+      shell.request,
+    );
+
+    const before = environment.lookup(profileSwitcherSelector);
+    const beforeData = before.data as ProfileSwitcher_query$data | null;
+    assert.equal(before.isMissingData, false);
+    assert.equal(beforeData?.currentSession?.selectedProfile?.id, 'profile-a');
+    assert.equal(beforeData?.currentSession?.selectedProfile?.instance?.kind, 'LOCAL');
+    assert.equal(
+      beforeData?.currentSession?.selectedProfile?.viewerState?.membership?.role,
+      'OWNER',
+    );
+
+    const mutation = createOperationDescriptor(getRequest(SelectProfileMutation), {
+      id: 'profile-b',
+    });
+    // Keep the legacy session payload in the fixture: the generated mutation must ignore it.
+    environment.commitPayload(mutation, {
+      selectProfile: {
+        profile: { id: 'profile-b' },
+        session: { id: 'session-1', selectedProfile: { id: 'profile-b' } },
+      },
+    });
+
+    const after = environment.lookup(profileSwitcherSelector);
+    const afterData = after.data as ProfileSwitcher_query$data | null;
+    assert.equal(after.isMissingData, false);
+    assert.equal(afterData?.currentSession?.selectedProfile?.id, 'profile-a');
+    assert.equal(afterData?.currentSession?.selectedProfile?.instance?.kind, 'LOCAL');
+    assert.equal(
+      afterData?.currentSession?.selectedProfile?.viewerState?.membership?.role,
+      'OWNER',
+    );
+  });
 });
 
 function ControlledProfileSwitcher({ surface }: { surface: 'drawer' | 'full' }) {
@@ -327,12 +331,9 @@ async function renderProfileSwitcher({
   assert.ok(renderer);
 }
 
-async function openPicker({ notifyNativeShow = true }: { notifyNativeShow?: boolean } = {}) {
+async function openPicker() {
   const trigger = profileTrigger();
   await act(async () => trigger.props.onPress());
-  if (platform.OS !== 'web' && notifyNativeShow) {
-    await act(async () => modal().props.onShow());
-  }
 }
 
 async function closePicker() {
@@ -348,7 +349,7 @@ async function startSelection() {
 }
 
 async function completeSelection(
-  response: unknown = { selectProfile: { session: { selectedProfile: { id: 'profile-b' } } } },
+  response: unknown = { selectProfile: { profile: { id: 'profile-b' } } },
   errors?: ReadonlyArray<unknown>,
 ) {
   const pending = pendingSelectMutation;
@@ -362,10 +363,6 @@ async function failSelection() {
   assert.ok(pending);
   pendingSelectMutation = null;
   await act(async () => pending.fail(new Error('network failed')));
-}
-
-async function dismissModal() {
-  await act(async () => modal().props.onDismiss());
 }
 
 function profileTrigger(): ReactTestInstance {

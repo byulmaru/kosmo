@@ -2,6 +2,7 @@ import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
 import { ChevronLeftIcon, Menu } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  BackHandler,
   Modal,
   PanResponder,
   Platform,
@@ -10,6 +11,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Drawer } from 'react-native-drawer-layout';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
@@ -91,6 +93,8 @@ const webFixedBottomBar = {
 } as unknown as ViewStyle;
 
 const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
+const MOBILE_DRAWER_MAX_WIDTH_RATIO = 0.85;
+const MOBILE_DRAWER_WIDTH = 320;
 
 export function UniversalShell() {
   return (
@@ -155,6 +159,7 @@ function UniversalShellContent() {
   const timeline = isTimelineRoute(pathname);
   const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
   const routeOwnsMobileHeader = isWebMobileRouteOwnedHeader(web, width, pathname);
+  const drawerWidth = Math.min(MOBILE_DRAWER_WIDTH, width * MOBILE_DRAWER_MAX_WIDTH_RATIO);
   const rootSafeAreaStyle = { paddingLeft: insets.left, paddingRight: insets.right };
   const centerSafeAreaStyle = !mobile
     ? { paddingBottom: insets.bottom, paddingTop: insets.top }
@@ -201,28 +206,44 @@ function UniversalShellContent() {
     reselectHome();
   }, [drawerOpen, reselectHome]);
 
-  const swipeToOpenDrawer = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) =>
-          mobile &&
-          !drawerOpen &&
-          gesture.x0 <= 24 &&
-          gesture.dx > 8 &&
-          Math.abs(gesture.dx) > Math.abs(gesture.dy),
-        onPanResponderRelease: (_event, gesture) => {
-          if (gesture.dx >= 72) {
-            setDrawerOpen(true);
-          }
-        },
-      }),
-    [drawerOpen, mobile],
-  );
-
-  const closeDrawer = () => {
+  const closeDrawer = useCallback(() => {
     setDrawerOpen(false);
     setSwitcherOpen(false);
-  };
+  }, []);
+
+  const swipeToOpenDrawer = useMemo(
+    () =>
+      web
+        ? PanResponder.create({
+            onMoveShouldSetPanResponder: (_event, gesture) =>
+              mobile &&
+              !drawerOpen &&
+              gesture.x0 <= 24 &&
+              gesture.dx > 8 &&
+              Math.abs(gesture.dx) > Math.abs(gesture.dy),
+            onPanResponderRelease: (_event, gesture) => {
+              if (gesture.dx >= 72) {
+                setDrawerOpen(true);
+              }
+            },
+          })
+        : { panHandlers: {} },
+    [drawerOpen, mobile, web],
+  );
+
+  useEffect(() => {
+    if (web || !drawerOpen) {
+      return;
+    }
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeDrawer();
+      return true;
+    });
+
+    return () => subscription.remove();
+  }, [closeDrawer, drawerOpen, web]);
+
   const openProfileSwitcher = () => {
     if (mobile) {
       setDrawerOpen(true);
@@ -266,144 +287,136 @@ function UniversalShellContent() {
     </IconButton>
   );
 
-  return (
-    <ShellChromeProvider
-      navigationDrawerOpen={drawerOpen}
-      navigationDrawerTriggerRef={menuButtonRef}
-      openNavigationDrawer={openNavigationDrawer}
-      openProfileSwitcher={openProfileSwitcher}
-      registerHomeReselection={registerHomeReselection}
-      reselectHome={reselectHome}
+  const shellContent = (
+    <View
+      ref={screenFallbackRef}
+      {...(web ? swipeToOpenDrawer.panHandlers : {})}
+      accessibilityElementsHidden={feedbackOverlayVisible}
+      aria-hidden={feedbackOverlayVisible || undefined}
+      importantForAccessibility={feedbackOverlayVisible ? 'no-hide-descendants' : 'auto'}
+      style={[
+        styles.root,
+        web ? styles.webRoot : styles.nativeRoot,
+        rootSafeAreaStyle,
+        feedbackOverlayVisible ? styles.backgroundBlocked : null,
+        { backgroundColor: theme.backgroundCanvas },
+      ]}
+      {...screenFallbackFocusProps}
+      testID="universal-shell-root"
     >
-      <PrimaryNavigationScrollReset pathname={pathname} />
-      <View
-        ref={screenFallbackRef}
-        {...swipeToOpenDrawer.panHandlers}
-        accessibilityElementsHidden={feedbackOverlayVisible}
-        aria-hidden={feedbackOverlayVisible || undefined}
-        importantForAccessibility={feedbackOverlayVisible ? 'no-hide-descendants' : 'auto'}
-        style={[
-          styles.root,
-          web ? styles.webRoot : styles.nativeRoot,
-          rootSafeAreaStyle,
-          feedbackOverlayVisible ? styles.backgroundBlocked : null,
-          { backgroundColor: theme.backgroundCanvas },
-        ]}
-        {...screenFallbackFocusProps}
-        testID="universal-shell-root"
-      >
-        {!mobile ? (
-          <View
-            style={[
-              styles.sidebar,
-              web && getWebStickyRailStyle(insets),
-              switcherOpen && styles.sidebarWithOverlay,
-              { borderColor: theme.borderSubtle, width: full ? 320 : 80 },
-            ]}
-          >
-            <SidebarNavigation
-              compact={compact}
-              onFeedbackOpen={openFeedbackOverlay}
-              onHomeReselect={web ? reselectHome : undefined}
-              onSwitcherOpenChange={setSwitcherOpen}
-              query={data}
-              switcherOpen={switcherOpen}
-            />
-          </View>
-        ) : null}
-
+      {!mobile ? (
         <View
           style={[
-            styles.center,
-            web && webDocumentColumn,
-            centerSafeAreaStyle,
-            settingsWorkspace && styles.settingsCenter,
-            showRightRail && styles.centerWithRightRail,
+            styles.sidebar,
+            web && getWebStickyRailStyle(insets),
+            switcherOpen && styles.sidebarWithOverlay,
+            { borderColor: theme.borderSubtle, width: full ? 320 : 80 },
+          ]}
+        >
+          <SidebarNavigation
+            compact={compact}
+            onFeedbackOpen={openFeedbackOverlay}
+            onHomeReselect={web ? reselectHome : undefined}
+            onSwitcherOpenChange={setSwitcherOpen}
+            query={data}
+            switcherOpen={switcherOpen}
+          />
+        </View>
+      ) : null}
+
+      <View
+        style={[
+          styles.center,
+          web && webDocumentColumn,
+          centerSafeAreaStyle,
+          settingsWorkspace && styles.settingsCenter,
+          showRightRail && styles.centerWithRightRail,
+          { borderColor: theme.borderSubtle },
+        ]}
+      >
+        {mobile && !routeOwnsMobileHeader ? (
+          <View
+            style={[
+              styles.mobileChrome,
+              web && webStickyHeader,
+              {
+                backgroundColor: theme.backgroundCanvas,
+                paddingTop: insets.top,
+              },
+            ]}
+          >
+            {timeline ? (
+              <PageHeader
+                accessibilityLabel={pathname === '/local' ? '로컬' : '홈'}
+                leading={menuButton}
+                variant="brand"
+                {...(web
+                  ? {
+                      brandAccessibilityLabel: '홈',
+                      brandHref: '/home' as const,
+                      onBrandCurrentNavigate: reselectHome,
+                    }
+                  : {})}
+              />
+            ) : mobileShellHeader ? (
+              <PageHeader
+                leading={mobileShellHeader.leading === 'back' ? backButton : menuButton}
+                title={mobileShellHeader.title}
+                trailing={
+                  mobileShellHeader.title === '알림' ? (
+                    <RelayActorBoundary>
+                      <NotificationReadAllAction />
+                    </RelayActorBoundary>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <View style={[styles.mobileHeader, { borderColor: theme.borderSubtle }]}>
+                {menuButton}
+              </View>
+            )}
+          </View>
+        ) : null}
+        <View
+          style={[
+            styles.route,
+            !web && styles.nativeRoute,
+            mobile && web
+              ? {
+                  ...(routeOwnsMobileHeader ? { paddingTop: insets.top } : {}),
+                  paddingBottom: 56 + insets.bottom,
+                }
+              : null,
+          ]}
+        >
+          <PostMediaViewerScreenFallbackProvider fallbackFocus={screenFallbackRef}>
+            <RelayActorBoundary>
+              <Slot />
+            </RelayActorBoundary>
+          </PostMediaViewerScreenFallbackProvider>
+        </View>
+        {mobile ? (
+          <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
+            <BottomTabBar onHomeReselect={web ? reselectHome : undefined} profile={profile} />
+          </View>
+        ) : null}
+      </View>
+
+      {showRightRail ? (
+        <View
+          style={[
+            styles.rightRail,
+            web && getWebStickyRailStyle(insets),
+            web && webRightRailOverflow,
             { borderColor: theme.borderSubtle },
           ]}
         >
-          {mobile && !routeOwnsMobileHeader ? (
-            <View
-              style={[
-                styles.mobileChrome,
-                web && webStickyHeader,
-                {
-                  backgroundColor: theme.backgroundCanvas,
-                  paddingTop: insets.top,
-                },
-              ]}
-            >
-              {timeline ? (
-                <PageHeader
-                  accessibilityLabel={pathname === '/local' ? '로컬' : '홈'}
-                  leading={menuButton}
-                  variant="brand"
-                  {...(web
-                    ? {
-                        brandAccessibilityLabel: '홈',
-                        brandHref: '/home' as const,
-                        onBrandCurrentNavigate: reselectHome,
-                      }
-                    : {})}
-                />
-              ) : mobileShellHeader ? (
-                <PageHeader
-                  leading={mobileShellHeader.leading === 'back' ? backButton : menuButton}
-                  title={mobileShellHeader.title}
-                  trailing={
-                    mobileShellHeader.title === '알림' ? (
-                      <RelayActorBoundary>
-                        <NotificationReadAllAction />
-                      </RelayActorBoundary>
-                    ) : undefined
-                  }
-                />
-              ) : (
-                <View style={[styles.mobileHeader, { borderColor: theme.borderSubtle }]}>
-                  {menuButton}
-                </View>
-              )}
-            </View>
-          ) : null}
-          <View
-            style={[
-              styles.route,
-              !web && styles.nativeRoute,
-              mobile && web
-                ? {
-                    ...(routeOwnsMobileHeader ? { paddingTop: insets.top } : {}),
-                    paddingBottom: 56 + insets.bottom,
-                  }
-                : null,
-            ]}
-          >
-            <PostMediaViewerScreenFallbackProvider fallbackFocus={screenFallbackRef}>
-              <RelayActorBoundary>
-                <Slot />
-              </RelayActorBoundary>
-            </PostMediaViewerScreenFallbackProvider>
-          </View>
-          {mobile ? (
-            <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
-              <BottomTabBar onHomeReselect={web ? reselectHome : undefined} profile={profile} />
-            </View>
-          ) : null}
+          {profile ? <RightRail profile={profile} /> : null}
+          <RightRailFooter />
         </View>
+      ) : null}
 
-        {showRightRail ? (
-          <View
-            style={[
-              styles.rightRail,
-              web && getWebStickyRailStyle(insets),
-              web && webRightRailOverflow,
-              { borderColor: theme.borderSubtle },
-            ]}
-          >
-            {profile ? <RightRail profile={profile} /> : null}
-            <RightRailFooter />
-          </View>
-        ) : null}
-
+      {web ? (
         <Modal
           accessibilityLabel="메뉴"
           animationType="none"
@@ -447,7 +460,59 @@ function UniversalShellContent() {
             />
           </View>
         </Modal>
-      </View>
+      ) : null}
+    </View>
+  );
+
+  const nativeDrawer =
+    !web && mobile ? (
+      <Drawer
+        drawerPosition="left"
+        drawerStyle={[
+          styles.drawer,
+          elevation.overlay,
+          { backgroundColor: theme.backgroundElevated, width: drawerWidth },
+        ]}
+        drawerType="front"
+        onClose={closeDrawer}
+        onOpen={() => setDrawerOpen(true)}
+        open={drawerOpen}
+        overlayAccessibilityLabel="사이드바 닫기"
+        overlayStyle={{ backgroundColor: theme.overlayScrim }}
+        renderDrawerContent={() => (
+          <View
+            accessibilityViewIsModal
+            nativeID="mobile-sidebar"
+            style={[styles.drawerContent, drawerSafeAreaStyle]}
+          >
+            <SidebarNavigation
+              onFeedbackOpen={openFeedbackOverlay}
+              onNavigate={closeDrawer}
+              onSwitcherOpenChange={setSwitcherOpen}
+              query={data}
+              surface="drawer"
+              switcherOpen={switcherOpen}
+            />
+          </View>
+        )}
+      >
+        {shellContent}
+      </Drawer>
+    ) : (
+      shellContent
+    );
+
+  return (
+    <ShellChromeProvider
+      navigationDrawerOpen={drawerOpen}
+      navigationDrawerTriggerRef={menuButtonRef}
+      openNavigationDrawer={openNavigationDrawer}
+      openProfileSwitcher={openProfileSwitcher}
+      registerHomeReselection={registerHomeReselection}
+      reselectHome={reselectHome}
+    >
+      <PrimaryNavigationScrollReset pathname={pathname} />
+      {nativeDrawer}
       <FeedbackOverlay
         fallbackFocusRef={menuButtonRef}
         onRequestClose={() => setFeedbackOpen(false)}
@@ -505,10 +570,11 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 16,
     borderTopRightRadius: 16,
     height: '100%',
-    maxWidth: '85%',
+    maxWidth: `${MOBILE_DRAWER_MAX_WIDTH_RATIO * 100}%`,
     minHeight: 0,
     overflow: 'hidden',
-    width: 320,
+    width: MOBILE_DRAWER_WIDTH,
   },
+  drawerContent: { flex: 1, minHeight: 0 },
   drawerClose: { flex: 1 },
 });

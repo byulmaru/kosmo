@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { ElementType, PropsWithChildren, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { UniversalShell as UniversalShellComponent } from './UniversalShell';
 
@@ -10,6 +10,7 @@ import type { UniversalShell as UniversalShellComponent } from './UniversalShell
 
 const platform = { OS: 'web' };
 let renderer: ReactTestRenderer | null = null;
+let hardwareBackPressListener: (() => boolean) | null = null;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -28,6 +29,18 @@ mockModule('expo-router', {
 });
 
 mockModule('react-native', {
+  BackHandler: {
+    addEventListener: (_event: string, listener: () => boolean) => {
+      hardwareBackPressListener = listener;
+      return {
+        remove: () => {
+          if (hardwareBackPressListener === listener) {
+            hardwareBackPressListener = null;
+          }
+        },
+      };
+    },
+  },
   Modal: 'Modal',
   PanResponder: { create: () => ({ panHandlers: {} }) },
   Platform: platform,
@@ -36,6 +49,8 @@ mockModule('react-native', {
   View: 'View',
   useWindowDimensions: () => ({ height: 800, width: 390 }),
 });
+
+mockModule('react-native-drawer-layout', { Drawer: 'Drawer' });
 
 mockModule('react-native-safe-area-context', {
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }),
@@ -58,7 +73,9 @@ mockModule('@/components/notification/NotificationReadAllContext', {
   NotificationReadAllAction: () => null,
   NotificationReadAllProvider: PassThrough,
 });
-mockModule('@/components/PageHeader', { PageHeader: () => null });
+mockModule('@/components/PageHeader', {
+  PageHeader: ({ leading }: { leading?: ReactNode }) => leading ?? null,
+});
 mockModule('@/components/post/PostMediaViewerHost', {
   PostMediaViewerScreenFallbackProvider: PassThrough,
 });
@@ -121,6 +138,7 @@ afterEach(async () => {
     renderer = null;
   }
   platform.OS = 'web';
+  hardwareBackPressListener = null;
   mock.restoreAll();
 });
 
@@ -139,6 +157,37 @@ describe('UniversalShell screen fallback focus target', () => {
 
     assert.equal(root.props.focusable, true);
     assert.equal('tabIndex' in root.props, false);
+  });
+
+  it('Native drawer는 메뉴 열기와 Android back으로 controlled 상태를 닫는다', async () => {
+    platform.OS = 'android';
+    await renderShell();
+
+    const drawerType = 'Drawer' as ElementType;
+    const menu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
+    assert.ok(menu);
+    assert.equal(renderer?.root.findByType(drawerType).props.open, false);
+
+    await act(async () => menu.props.onPress());
+    assert.equal(renderer?.root.findByType(drawerType).props.open, true);
+    assert.ok(hardwareBackPressListener);
+
+    let handled = false;
+    await act(async () => {
+      handled = hardwareBackPressListener?.() ?? false;
+    });
+    assert.equal(handled, true);
+    assert.equal(renderer?.root.findByType(drawerType).props.open, false);
+  });
+
+  it('Web은 기존 Modal drawer surface를 유지한다', async () => {
+    platform.OS = 'web';
+    await renderShell();
+
+    const modal = renderer?.root.findByType('Modal' as ElementType);
+    assert.ok(modal);
+    assert.equal(modal.props.visible, false);
+    assert.equal(renderer?.root.findAllByType('Drawer' as ElementType).length, 0);
   });
 });
 
