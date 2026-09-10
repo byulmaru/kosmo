@@ -134,6 +134,7 @@ type LocalRefreshState = {
 };
 
 function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: () => void }>) {
+  const shellChrome = useShellChrome();
   const { width } = useWindowDimensions();
   const routeOwnsHeader = getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
@@ -143,7 +144,10 @@ function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: ()
       <View
         style={
           Platform.OS === 'web'
-            ? [styles.webTimelineTabs, { top: getWebMobileShellHeaderStickyOffset(width) }]
+            ? [
+                styles.webTimelineTabs,
+                { top: shellChrome ? getWebMobileShellHeaderStickyOffset(width) : 0 },
+              ]
             : undefined
         }
       >

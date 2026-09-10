@@ -4,6 +4,7 @@ import baseMeta, {
   PaginationErrorRetry as paginationErrorRetry,
   PaginationFlow as paginationFlow,
   queryRequestObserver,
+  RefreshHardError as refreshHardError,
   Refreshing as refreshing,
 } from './Local.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -55,15 +56,19 @@ export const RefreshPartialResponse: Story = {
 };
 
 export const RefreshHardError: Story = {
-  args: { state: 'refresh-hard-error' },
+  ...refreshHardError,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
+    const localTab = canvas.getByRole('tab', { name: '로컬' });
     await expect(
       canvas.findByText('같은 인스턴스의 소식을 한곳에서 확인해요.'),
     ).resolves.toBeVisible();
+    expect(
+      canvas.getByRole('link', { name: '로컬 기록자 @local-writer' }).getBoundingClientRect().top,
+    ).toBeGreaterThanOrEqual(localTab.getBoundingClientRect().bottom);
 
-    await userEvent.click(canvas.getByRole('tab', { name: '로컬' }));
+    await userEvent.click(localTab);
     await waitFor(() => expect(queryRequestObserver).toHaveBeenCalledTimes(2));
 
     expect(canvas.getByText('같은 인스턴스의 소식을 한곳에서 확인해요.')).toBeVisible();

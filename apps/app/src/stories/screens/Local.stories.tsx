@@ -318,6 +318,17 @@ export const InitialErrorRetry: Story = {
 
 export const RefreshHardError: Story = {
   args: { state: 'refresh-hard-error' },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  name: 'Refresh Hard Error (Reselect Local)',
+  parameters: {
+    controls: { disable: true },
+    docs: {
+      description: {
+        story:
+          '마지막 성공 목록을 유지한 상태에서 로컬 탭을 다시 선택하면 지속되는 오류 Toast가 나타납니다.',
+      },
+    },
+  },
 };
 
 export const PaginationErrorRetry: Story = {
