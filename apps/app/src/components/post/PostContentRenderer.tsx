@@ -59,7 +59,6 @@ export function PostContentRenderer({
 }) {
   const theme = useTheme();
   const document = isPostContentDocumentV1(value) ? value.body : null;
-  const renderableDocument = document && isRenderableNode(document) ? document : null;
   const isProtected = Boolean(contentWarning);
   const { revealed, toggle } = usePostContentWarningReveal(postId, isProtected);
   const forcedRevealed = contentWarningPresentation === 'revealed';
@@ -71,12 +70,12 @@ export function PostContentRenderer({
     { color: theme.text },
   ];
 
-  const body = !contentVisible ? null : !bodyText ? null : !renderableDocument ? (
+  const body = !contentVisible ? null : !bodyText ? null : !document ? (
     <Text numberOfLines={numberOfLines} style={bodyStyle}>
       {bodyText}
     </Text>
   ) : (
-    renderNode(renderableDocument, 'body', {
+    renderNode(document, 'body', {
       bodyStyle,
       interactive,
       linkColor: theme.actionLinkBase,
@@ -145,14 +144,6 @@ export function PostContentRenderer({
 }
 
 type PostContentNode = PostContentBodyDocumentV1 | PostContentBlockNode | PostContentInlineNode;
-
-function isRenderableNode(node: PostContentNode): boolean {
-  return match(node)
-    .with({ type: 'doc' }, (document) => document.content.every(isRenderableNode))
-    .with({ type: 'paragraph' }, (paragraph) => (paragraph.content ?? []).every(isRenderableNode))
-    .with({ type: 'text' }, { type: 'hard_break' }, { type: 'media' }, () => true)
-    .otherwise(() => false);
-}
 
 function renderNode(node: PostContentNode, key: Key, context: RenderContext): ReactNode {
   return match(node)

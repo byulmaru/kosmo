@@ -62,17 +62,17 @@
 - plain text fallback에서 허용된 link 클릭·문단 저하를 확인하고, 글자·Media·Content Warning 손실은 실패로 처리한다.
 - 호환 증거 전후의 storage activation gate와 기존 Post Content V1 additive 경로를 검토 가능한 기록으로 남긴다.
 
-- [x] 2.1 기존 reader와 새 canonicalizer 조합의 body text·Media·Content Warning preservation 검증을 실제 API와 reader 경로로 실행한다.
-- [x] 2.2 기존 `bodyText` fallback이 적용된 plain text reader 결과와 허용된 link/문단 저하를 확인한다.
-- [x] 2.3 호환 증거를 기준으로 기존 Post Content V1 additive 경로에서 Mention 저장 활성화와 rollback 조건을 기록·검증한다. migration은 writer 활성화 전에 적용하고, document schema V2·V1/V2 dual-read·document version 변환·새 feature flag는 도입하지 않는다.
+- [ ] 2.1 기존 reader와 새 canonicalizer 조합의 body text·Media·Content Warning preservation 검증을 실제 API와 reader 경로로 실행한다.
+- [ ] 2.2 기존 `bodyText` fallback이 적용된 plain text reader 결과와 허용된 link/문단 저하를 확인한다.
+- [ ] 2.3 호환 증거를 기준으로 기존 Post Content V1 additive 경로에서 Mention 저장 활성화와 rollback 조건을 기록·검증한다. migration은 writer 활성화 전에 적용하고, document schema V2·V1/V2 dual-read·document version 변환·새 feature flag는 도입하지 않는다.
 
-**2.x 실행 증거 (2026-09-10)**
+**2.x 실행 증거 상태 (2026-09-10, compatibility gate 미완료)**
 
-- 실제 API response에서 `bodyText`는 `앞쪽 @mentioned 뒤쪽`, Content Warning은 `통합 검증 경고`로 확인했다.
-- 같은 response를 compiled query와 mock이 아닌 실제 Relay runtime/useFragment의 `RecordSource`·`Store` 경로에 주입해 `PostBody`와 renderer를 확인했고, current PostBody artifact와 response의 SHA 일치도 확인했다. Content Warning toggle 뒤에도 본문 label·Media·`sensitive=true`가 보존됐다.
-- activation 순서는 design의 Migration Plan처럼 migration 적용 → reader gate 통과 → writer 활성화다. rollback은 신규 Mention 쓰기를 중지하면서 기존 Mention 읽기·본문 파생 지원과 additive DB/data를 유지하며, pre-Mention binary 전체 rollback은 별도 호환·데이터 대응 증거 없이는 안전하다고 주장하지 않는다.
+- 실제 API response에서 `bodyText`는 `앞쪽 @mentioned 뒤쪽`, Content Warning은 `통합 검증 경고`로 확인했다. 이는 서버 파생값 확인이며, Mention 전용 표시를 모르는 구 client 또는 pre-change reader가 body text를 보존한다는 증거가 아니다.
+- 이 PR에서 제거한 document-level fallback을 전제로 한 reader harness 결과는 2.x compatibility evidence로 유지하지 않는다.
+- 따라서 2.1·2.2의 legacy reader preservation과 2.3의 activation gate는 완료로 표시하지 않는다. `PROD-340` 저장 계약의 구현·검증과 별도로 reader compatibility 및 writer 활성화 확인은 이 change의 미완료 범위로 남긴다. 계획된 rollout 순서는 migration 적용 → 독립적인 reader gate 통과 → writer 활성화이며, 이 실행 기록은 그 gate 통과를 주장하지 않는다.
+- rollback은 신규 Mention 쓰기를 중지하면서 기존 Mention 읽기·본문 파생 지원과 additive DB/data를 유지하며, pre-Mention binary 전체 rollback은 별도 호환·데이터 대응 증거 없이는 안전하다고 주장하지 않는다.
 - Gallery 내부 시각 검증과 Live HTTP 동시 수행은 이 task의 증거로 주장하지 않는다.
-- 실행 중 생성한 temporary artifact 경로는 영구 문서에 기록하지 않는다. 재현 경계는 실제 API response → compiled query → real Relay environment/Store → actual PostBody → Content Warning toggle 순서로 고정한다.
 
 ## 3. PROD-910 renderer, Profile 이동 and integration/archive
 
@@ -114,4 +114,4 @@
 - 기존 root-wide TypeScript 로그에서 baseline과 current 모두 6,091 diagnostics를 기록했으며, 이를 이번 change의 원인으로 재분류하지 않는다.
 - Core 범위 filtered 비교는 baseline과 current가 같은 6개 diagnostics를 유지했다.
 - 변경된 Core 구현만 대상으로 한 typecheck는 통과했다.
-- 이 기록은 broad typecheck 재실행을 의미하지 않으며, renderer·통합·archive 검증은 3.x task가 소유한다.
+- 이 기록은 broad typecheck 재실행을 의미하지 않으며, reader compatibility gate·renderer·통합·archive 검증은 2.x·3.x task가 소유한다.
