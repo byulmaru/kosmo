@@ -181,9 +181,9 @@ describe('차단한 프로필 목록', () => {
     assert.equal(pagination.loadNext.mock.callCount(), 1);
 
     await act(async () => onComplete?.(new Error('network')));
-    const retry = find('StateView');
-    assert.equal(retry?.props.actionLabel, '더 불러오기');
-    await act(async () => retry?.props.onAction());
+    const retry = find('PaginationButton');
+    assert.equal(retry?.props.children, '더 불러오기');
+    await act(async () => retry?.props.onPress());
     assert.equal(pagination.loadNext.mock.callCount(), 2);
   });
 
@@ -227,9 +227,9 @@ describe('차단한 프로필 목록', () => {
       );
     });
     assert.equal(findAll('ProfileListItemContent').length, 1);
-    const error = find('StateView');
-    assert.equal(error?.props.title, '프로필을 더 불러오지 못했어요');
-    await act(async () => error?.props.onAction());
+    const error = find('PaginationButton');
+    assert.equal(error?.props.children, '더 불러오기');
+    await act(async () => error?.props.onPress());
     assert.equal(retries, 1);
   });
 
@@ -242,14 +242,13 @@ describe('차단한 프로필 목록', () => {
         }),
       );
     });
-    const error = find('StateView');
-    assert.equal(error?.props.alert, true);
-    assert.equal(error?.props.title, '차단한 프로필을 불러오지 못했어요');
+    const error = find('PaginationButton');
+    assert.equal(error?.props.children, '다시 시도');
     assert.deepEqual(toastCalls, [
       { message: '차단한 프로필을 불러오지 못했어요', tone: 'danger' },
     ]);
     assert.equal(find('Text')?.children.join(''), '차단한 프로필');
-    await act(async () => error?.props.onAction());
+    await act(async () => error?.props.onPress());
     assert.equal(retries, 1);
   });
 
