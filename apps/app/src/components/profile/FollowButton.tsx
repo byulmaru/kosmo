@@ -33,6 +33,7 @@ const followButtonProfileFragment = graphql`
     id
     displayName
     handle
+    relativeHandle
     followPolicy
     followersCount
     viewerState {
@@ -227,7 +228,7 @@ export function FollowButton({
       <>
         <View style={[styles.root, { paddingVertical: hitSlop }, style]}>
           <Button
-            accessibilityLabel={`${data.displayName} 차단 해제`}
+            accessibilityLabel={`${data.displayName} ${data.relativeHandle} 차단 해제`}
             accessibilityState={{ busy: unblockPending, disabled: unblockPending, selected: true }}
             controlRef={(node) => {
               actionRef.current = node;
