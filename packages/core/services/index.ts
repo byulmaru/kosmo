@@ -35,6 +35,19 @@ export {
   loadProfileBlockTransitionBootstrap,
 } from './profile-block';
 export { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';
+export type { ProfileBlockProtocolActivityInput } from './profile-block-protocol';
+export {
+  ensureProfileBlockProtocolActivity,
+  finalizeProfileBlockProtocolUndo,
+  loadProfileBlockProtocolActivity,
+  loadProfileBlockProtocolActivityByProfileBlockId,
+  markProfileBlockProtocolDeliveryPending,
+  markProfileBlockProtocolDeliverySettled,
+  markProfileBlockProtocolUndoPending,
+  markProfileBlockProtocolUndoSettled,
+  prepareProfileBlockProtocolUndo,
+  recordProfileBlockProtocolTombstone,
+} from './profile-block-protocol';
 export { followProfile, unfollowProfile } from './profile-follow';
 export type {
   HydratedProfileFollowPairTransition,

@@ -15,6 +15,7 @@ import type {
   ProfileBlockTransitionResult,
   ProfileUnblockTransitionResult,
 } from '../services/profile-block';
+import type { ProfileBlockProtocolActivityInput } from '../services/profile-block-protocol';
 
 const PROFILE_BLOCK_COMMAND_RPC_TIMEOUT_MS = 5_000;
 
@@ -41,11 +42,14 @@ type ProfileBlockInput = {
   readonly ownerProfileId: string;
   readonly targetProfileId: string;
   readonly origin: ProfileBlockEffectOrigin;
+  readonly protocolActivity?: ProfileBlockProtocolActivityInput;
 };
 
 type ProfileUnblockInput = ProfileBlockInput & {
   /** Stable Profile Block generation targeted by this Unblock command. */
   readonly profileBlockId: string;
+  /** Original protocol Activity being closed, when one exists. */
+  readonly protocolActivityUri?: string;
 };
 
 /**

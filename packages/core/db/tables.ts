@@ -437,6 +437,45 @@ export const ProfileBlocks = pgTable(
   ],
 );
 
+/**
+ * Durable ActivityPub identity for a Profile Block generation.  The optional
+ * Profile Block id is intentionally not a foreign key: an Undo must retain
+ * the original generation after the product relation has been deleted.
+ */
+export const ProfileBlockActivities = pgTable(
+  'profile_block_activity',
+  {
+    id: id(),
+    activityUri: text('activity_uri').notNull().unique(),
+    ownerProfileId: uuid('owner_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    targetProfileId: uuid('target_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    actorUri: text('actor_uri').notNull(),
+    objectUri: text('object_uri').notNull(),
+    origin: Enum.profileBlockActivityOrigin('origin').notNull(),
+    state: Enum.profileBlockActivityState('state').notNull().default('ACTIVE'),
+    deliveryState: Enum.profileBlockDeliveryState('delivery_state').notNull().default('NONE'),
+    undoDeliveryState: Enum.profileBlockDeliveryState('undo_delivery_state')
+      .notNull()
+      .default('NONE'),
+    profileBlockId: uuid('profile_block_id'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    closedAt: datetime('closed_at'),
+  },
+  (table) => [
+    index().on(table.ownerProfileId, table.targetProfileId, table.state),
+    index().on(table.profileBlockId),
+    check(
+      'profile_block_activity_owner_not_target',
+      sql`${table.ownerProfileId} <> ${table.targetProfileId}`,
+    ),
+  ],
+);
+
 export const ProfileFollows = pgTable(
   'profile_follow',
   {

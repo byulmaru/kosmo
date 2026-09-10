@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
 import type {
+  ProfileBlockProtocolActivityInput,
   ProfileBlockTransitionExecution,
   ProfileBlockTransitionResult,
 } from '@kosmo/core/services';
@@ -12,18 +13,30 @@ const profileIdSchema = z
   .string({ error: 'Profile Block requires non-empty profile IDs' })
   .min(1, 'Profile Block requires non-empty profile IDs');
 
+const protocolActivitySchema = z.strictObject({
+  activityUri: profileIdSchema,
+  actorUri: profileIdSchema,
+  objectUri: profileIdSchema,
+  ownerProfileId: profileIdSchema,
+  targetProfileId: profileIdSchema,
+  origin: z.enum(['INBOUND', 'OUTBOUND']),
+  profileBlockId: profileIdSchema.optional(),
+});
+
 const profileBlockInputSchema = z.strictObject({
   ownerProfileId: profileIdSchema,
   targetProfileId: profileIdSchema,
   origin: z.enum(['LOCAL', 'ACTIVITYPUB'], {
     error: 'Profile Block origin is invalid',
   }),
+  protocolActivity: protocolActivitySchema.optional(),
 });
 
 type ProfileBlockWorkflowInput = {
   readonly ownerProfileId: string;
   readonly targetProfileId: string;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+  readonly protocolActivity?: ProfileBlockProtocolActivityInput;
 };
 
 const {
@@ -31,6 +44,7 @@ const {
   deleteFollowRequestNotificationActivity,
   executeProfileBlockTransitionActivity,
   loadProfileBlockTransitionBootstrapActivity,
+  sendProfileBlockActivity,
   sendProfileUnfollowActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
@@ -84,6 +98,16 @@ export async function profileBlockWorkflow(
         : deleteFollowRequestNotificationActivity(effect.input.sourceId),
       ...(effect.input.sendActivityPub === true ? [sendProfileUnfollowActivity(effect.input)] : []),
     ]);
+  }
+
+  if (parsedInput.origin === 'LOCAL' && execution.result.created) {
+    // A local relation is authoritative even when the remote recipient is
+    // unavailable. The Activity records that handoff is pending so an
+    // Unblock can wait for this same stable Block identity before sending its
+    // Undo.
+    await sendProfileBlockActivity(execution.result.profileBlockId, {
+      createIfMissing: true,
+    });
   }
 
   return execution.result;

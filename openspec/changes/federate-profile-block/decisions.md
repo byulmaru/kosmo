@@ -76,7 +76,7 @@
 - Consequences: required cleanup 실패는 action 성공을 막지만 delivery 실패는 확정된 로컬 관계를 rollback하지 않는다.
   transition에서 정한 origin·eligibility·effect plan을 실행 retry가 임의로 바꾸지 않는다. 새 원격 요청 admission은
   기존 정책을 따르며 정책상 제외와 인계 실패를 구분한다. 확정 뒤 unavailable로 제외되면 계획은 보존하고 pending으로 둔다.
-  dispatcher 정상 no-op은 인계 성공이 아니며, 영구 불가를 추론한 자동 terminal skip은 하지 않는다. 구체 Workflow·테이블 선택은 PROD-813 완료 후 확인한다.
+  dispatcher 정상 no-op은 인계 성공이 아니며, 영구 불가를 추론한 자동 terminal skip은 하지 않는다. 구체 Workflow·테이블 선택은 구현 baseline과 이번 change의 검증 증거로 확인하며, D8의 면제는 PROD-813 완료를 주장하지 않는다.
 - Confirmation / Follow-up: DB commit 직후, queue 수락 직후 응답 유실, effect 대기 중 Worker 중단과 Fedify consumer
   재시작을 실제 persistence 경계에서 검증한다. 이전 attempt 종료 증명이나 원격 순서 보장을 정산 조건으로 두지 않는다. 기존 dispatcher caller의 no-op 결과를 보존한다. queue 수락을 상대 정책 적용이나 exactly-once 성공으로 기록하지 않는다.
 
@@ -121,6 +121,17 @@
 - Alternatives Considered: 모든 이전 attempt 종료 증명, fencing, stale-delivery drop과 generation sequencing/supersession은 이번 범위의 필수 구현으로 채택하지 않는다. 기존 queue가 원격 순서를 보장한다고 간주하는 선택도 하지 않는다.
 - Consequences: 실제 queue 수락을 확인·정산하면 후속 Undo를 진행할 수 있다. 이전 attempt 생존 또는 consumer retry 가능성만으로 추가 보류하지 않는다. 기존 identity·로컬 상태 보존·inbound 순서 역전 처리와 ADR 0029의 제품·rollout 결정은 유지한다.
 - Confirmation / Follow-up: task 4는 기존 인계·복구·실패 격리를 검증한다. 원격 최종 순서 보장이나 INSERT barrier race 실험은 필수 완료 조건이 아니다. D7은 Spec Gate blocker에서 해소됐으며 Spec 전체 승인을 뜻하지 않는다.
+
+### D8. PROD-813 선행 조건은 이번 구현 세션에서 명시적으로 면제한다
+
+- Decision Date: 2026-09-10
+- Decision Class: Implementation Handoff
+- Authority / Provenance: 사용자가 이번 구현 세션에서 전달한 `PROD-813은 무시하기로 결정함. 진행해.` 지시.
+- Status: Active
+- Context / Problem: D6은 PROD-813의 local 통합 검증과 archive 책임을 PROD-818의 연합 구현과 분리한다. 그러나 이번 세션에서는 해당 선행 조건을 기다리지 않고 PROD-818 구현을 진행하라는 명시적 지시가 있다.
+- Decision Outcome: PROD-818은 현재 체크인된 local Profile Block action·cleanup·Worker 경계를 기반으로 연합 protocol과 delivery slice를 구현한다. 이 면제는 PROD-813의 완료·병합·통합 검증·archive를 주장하거나 그 책임을 PROD-818이 대신 소유한다는 뜻이 아니다.
+- Consequences: 구현·검증 중 PROD-813을 blocker로 재요청하지 않는다. local 구현의 branch/revision과 PROD-818 연합 변경의 검증 결과를 분리해 기록하고, PROD-818 전체 archive 여부는 여전히 모든 자체 scope와 검증 증거를 기준으로 판단한다.
+- Confirmation / Follow-up: PR/Linear handoff에 이 면제와 사용한 local baseline을 함께 기록한다.
 
 ## Remaining Decisions
 

@@ -1,9 +1,21 @@
 import { and, eq, or, sql } from 'drizzle-orm';
-import { db, first, getDatabaseConnection, ProfileBlocks, Profiles } from '../db';
+import {
+  db,
+  first,
+  getDatabaseConnection,
+  ProfileBlockActivities,
+  ProfileBlocks,
+  Profiles,
+} from '../db';
 import { ConflictError, KosmoError, NotFoundError, ValidationError } from '../error';
+import {
+  ensureProfileBlockProtocolActivityInTransaction,
+  loadProfileBlockProtocolActivity,
+} from './profile-block-protocol';
 import { removeProfileFollowExactSourceWithEffect } from './profile-follow-command';
 import { loadProfileFollowRemovalSourcesBetweenProfiles } from './profile-follow-transaction';
 import type { DatabaseHandle, Transaction } from '../db';
+import type { ProfileBlockProtocolActivityInput } from './profile-block-protocol';
 import type { ProfileFollowPairEffect } from './profile-follow-command';
 import type { ProfileFollowRemovalSource } from './profile-follow-transaction';
 
@@ -26,6 +38,8 @@ export type ProfileBlockTransitionInput = {
   readonly cleanupSources: ProfileBlockCleanupSources;
   /** Stable candidate ID allocated by the bootstrap Activity for this relation. */
   readonly candidateProfileBlockId?: string;
+  /** Verified protocol identity, when this transition came from ActivityPub. */
+  readonly protocolActivity?: ProfileBlockProtocolActivityInput;
 };
 
 export type ProfileBlockTransitionResult = {
@@ -33,6 +47,11 @@ export type ProfileBlockTransitionResult = {
   readonly profileBlockId: string;
   readonly ownerProfileId: string;
   readonly targetProfileId: string;
+  readonly protocol?: {
+    readonly activityUri: string;
+    readonly profileBlockId: string;
+    readonly status: 'ACTIVE' | 'CLOSING' | 'CLOSED';
+  };
 };
 
 export type ProfileBlockEffect = Extract<ProfileFollowPairEffect, { readonly kind: 'DELETE' }>;
@@ -59,6 +78,8 @@ export type ProfileUnblockTransitionInput = {
   readonly origin: ProfileBlockEffectOrigin;
   /** Exact Block generation captured before cleanup is scheduled. */
   readonly expectedProfileBlockId: string;
+  /** Protocol original being closed, when this is an inbound or federated Undo. */
+  readonly protocolActivityUri?: string;
   /** Exact Follow generations captured before this transaction is scheduled. */
   readonly cleanupSources: ProfileBlockCleanupSources;
 };
@@ -185,6 +206,41 @@ export const executeProfileBlockTransitionInTransaction = async (
   const cleanupSources = uniqueCleanupSources(input);
   await loadProfileBlockParticipants(tx, input);
 
+  const existingProtocol = input.protocolActivity
+    ? await loadProfileBlockProtocolActivity(input.protocolActivity.activityUri, tx)
+    : undefined;
+  if (existingProtocol && existingProtocol.state !== 'ACTIVE') {
+    if (existingProtocol.profileBlockId === null) {
+      throw new Error('Closed Profile Block activity is missing its generation identity');
+    }
+    return {
+      ok: true,
+      result: {
+        created: false,
+        profileBlockId: existingProtocol.profileBlockId,
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+        protocol: {
+          activityUri: existingProtocol.activityUri,
+          profileBlockId: existingProtocol.profileBlockId,
+          status: existingProtocol.state,
+        },
+      },
+      effectPlan: [],
+    };
+  }
+  if (input.protocolActivity) {
+    await ensureProfileBlockProtocolActivityInTransaction(
+      {
+        ...input.protocolActivity,
+        ...(input.candidateProfileBlockId === undefined
+          ? {}
+          : { profileBlockId: input.candidateProfileBlockId }),
+      },
+      tx,
+    );
+  }
+
   const inserted = await tx
     .insert(ProfileBlocks)
     .values(
@@ -216,6 +272,13 @@ export const executeProfileBlockTransitionInTransaction = async (
     throw new Error('Profile Block not found after insert conflict');
   }
 
+  if (input.protocolActivity) {
+    await tx
+      .update(ProfileBlockActivities)
+      .set({ profileBlockId: profileBlock.id, updatedAt: sql`now()` })
+      .where(eq(ProfileBlockActivities.activityUri, input.protocolActivity.activityUri));
+  }
+
   const effectPlan: ProfileBlockEffect[] = [];
   for (const source of cleanupSources) {
     effectPlan.push(await removeProfileFollowExactSourceWithEffect(source, input.origin, tx));
@@ -228,6 +291,15 @@ export const executeProfileBlockTransitionInTransaction = async (
       profileBlockId: profileBlock.id,
       ownerProfileId: input.ownerProfileId,
       targetProfileId: input.targetProfileId,
+      ...(input.protocolActivity
+        ? {
+            protocol: {
+              activityUri: input.protocolActivity.activityUri,
+              profileBlockId: profileBlock.id,
+              status: 'ACTIVE' as const,
+            },
+          }
+        : {}),
     },
     effectPlan,
   };

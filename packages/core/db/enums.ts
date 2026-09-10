@@ -25,6 +25,18 @@ export const oauthTokenState = createPgEnum('oauth_token_state', Enum.OAuthToken
 export const postState = createPgEnum('post_state', Enum.PostState);
 export const postVisibility = createPgEnum('post_visibility', Enum.PostVisibility);
 export const profileFollowPolicy = createPgEnum('profile_follow_policy', Enum.ProfileFollowPolicy);
+export const profileBlockActivityOrigin = createPgEnum(
+  'profile_block_activity_origin',
+  Enum.ProfileBlockActivityOrigin,
+);
+export const profileBlockActivityState = createPgEnum(
+  'profile_block_activity_state',
+  Enum.ProfileBlockActivityState,
+);
+export const profileBlockDeliveryState = createPgEnum(
+  'profile_block_delivery_state',
+  Enum.ProfileBlockDeliveryState,
+);
 export const profileMediaKind = createPgEnum('profile_media_kind', Enum.ProfileMediaKind);
 export const profileState = createPgEnum('profile_state', Enum.ProfileState);
 export const pushInstallationPlatform = createPgEnum(

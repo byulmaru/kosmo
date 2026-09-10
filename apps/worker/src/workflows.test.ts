@@ -1496,6 +1496,7 @@ test(
           assert.deepEqual(transition.cleanupSources, cleanupSources);
           return execution;
         },
+        sendProfileBlockActivity: async () => undefined,
         deleteFollowNotificationActivity: async (sourceId: string) => {
           calls.push('delete:' + sourceId);
           notificationStarted();
@@ -1616,6 +1617,7 @@ test(
           }
           return execution;
         },
+        sendProfileBlockActivity: async () => undefined,
         deleteFollowRequestNotificationActivity: async (sourceId: string) => {
           assert.equal(sourceId, followRequestId);
           deleteCalls += 1;
@@ -1706,6 +1708,7 @@ test(
             },
           ],
         }),
+        sendProfileBlockActivity: async () => undefined,
         deleteFollowNotificationActivity: async (sourceId: string) => {
           calls.push('delete:' + sourceId);
           throw ApplicationFailure.nonRetryable('notification cleanup failed');
@@ -1824,6 +1827,7 @@ test(
 
     const worker = await Worker.create({
       activities: {
+        loadProfileBlockProtocolActivityByProfileBlockIdActivity: async () => undefined,
         loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => cleanupSources,
         executeProfileUnblockTransitionActivity: async (value: unknown) => {
           const transition = value as {
@@ -1941,6 +1945,7 @@ test(
 
     const worker = await Worker.create({
       activities: {
+        loadProfileBlockProtocolActivityByProfileBlockIdActivity: async () => undefined,
         loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => cleanupSources,
         executeProfileUnblockTransitionActivity: async () => ({
           ok: true as const,
@@ -2063,6 +2068,7 @@ test(
 
     const worker = await Worker.create({
       activities: {
+        loadProfileBlockProtocolActivityByProfileBlockIdActivity: async () => undefined,
         loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => cleanupSources,
         executeProfileUnblockTransitionActivity: async (value: unknown) => {
           transitionAttempts += 1;
@@ -2151,6 +2157,7 @@ test(
 
     const worker = await Worker.create({
       activities: {
+        loadProfileBlockProtocolActivityByProfileBlockIdActivity: async () => undefined,
         loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => [],
         executeProfileUnblockTransitionActivity: async () => ({
           ok: true as const,

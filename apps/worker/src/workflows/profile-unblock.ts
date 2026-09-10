@@ -1,4 +1,4 @@
-import { ApplicationFailure, proxyActivities } from '@temporalio/workflow';
+import { ApplicationFailure, proxyActivities, sleep } from '@temporalio/workflow';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
@@ -19,6 +19,7 @@ const profileUnblockInputSchema = z.strictObject({
   origin: z.enum(['LOCAL', 'ACTIVITYPUB'], {
     error: 'Profile Unblock origin is invalid',
   }),
+  protocolActivityUri: profileIdSchema.optional(),
 });
 
 type ProfileUnblockWorkflowInput = {
@@ -26,6 +27,7 @@ type ProfileUnblockWorkflowInput = {
   readonly targetProfileId: string;
   readonly profileBlockId: string;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+  readonly protocolActivityUri?: string;
 };
 
 const {
@@ -33,7 +35,12 @@ const {
   deleteFollowRequestNotificationActivity,
   deleteProfileBlockActivity,
   executeProfileUnblockTransitionActivity,
+  finalizeProfileBlockProtocolUndoActivity,
+  loadProfileBlockProtocolActivityByProfileBlockIdActivity,
   loadProfileFollowRemovalSourcesBetweenProfilesActivity,
+  prepareProfileBlockProtocolUndoActivity,
+  sendProfileBlockActivity,
+  sendProfileBlockUndoActivity,
   sendProfileUnfollowActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
@@ -62,6 +69,41 @@ export async function profileUnblockWorkflow(
   input: ProfileUnblockWorkflowInput,
 ): Promise<ProfileUnblockTransitionResult> {
   const parsedInput = parseProfileUnblockInput(input);
+  const storedProtocol = parsedInput.protocolActivityUri
+    ? undefined
+    : await loadProfileBlockProtocolActivityByProfileBlockIdActivity(parsedInput.profileBlockId);
+  const protocolActivityUri = parsedInput.protocolActivityUri ?? storedProtocol?.activityUri;
+
+  if (protocolActivityUri && parsedInput.origin === 'LOCAL') {
+    // A pending Block is the head of this directed pair's effect chain. Keep
+    // this Workflow alive until the same stable identity is accepted; do not
+    // turn an unavailable recipient into an Undo handoff.
+    for (;;) {
+      const delivery = await sendProfileBlockActivity(parsedInput.profileBlockId);
+      if (delivery.status !== 'PENDING') {
+        break;
+      }
+      await sleep('5 seconds');
+    }
+  }
+
+  if (protocolActivityUri) {
+    const preparation = await prepareProfileBlockProtocolUndoActivity({
+      activityUri: protocolActivityUri,
+      expectedProfileBlockId: parsedInput.profileBlockId,
+      ownerProfileId: parsedInput.ownerProfileId,
+      targetProfileId: parsedInput.targetProfileId,
+    });
+    if (preparation.kind !== 'REMOVE') {
+      return {
+        removed: false,
+        profileBlockId: null,
+        ownerProfileId: parsedInput.ownerProfileId,
+        targetProfileId: parsedInput.targetProfileId,
+      };
+    }
+  }
+
   const cleanupSources = await loadProfileFollowRemovalSourcesBetweenProfilesActivity({
     firstProfileId: parsedInput.ownerProfileId,
     secondProfileId: parsedInput.targetProfileId,
@@ -71,6 +113,7 @@ export async function profileUnblockWorkflow(
     targetProfileId: parsedInput.targetProfileId,
     origin: parsedInput.origin,
     expectedProfileBlockId: parsedInput.profileBlockId,
+    ...(protocolActivityUri === undefined ? {} : { protocolActivityUri }),
     cleanupSources,
   });
 
@@ -90,10 +133,37 @@ export async function profileUnblockWorkflow(
     ]);
   }
 
-  await deleteProfileBlockActivity({
-    ownerProfileId: execution.result.ownerProfileId,
-    targetProfileId: execution.result.targetProfileId,
-    profileBlockId: execution.result.profileBlockId,
-  });
+  if (protocolActivityUri === undefined) {
+    await deleteProfileBlockActivity({
+      ownerProfileId: execution.result.ownerProfileId,
+      targetProfileId: execution.result.targetProfileId,
+      profileBlockId: execution.result.profileBlockId,
+    });
+  } else if (parsedInput.origin === 'LOCAL') {
+    for (;;) {
+      const delivery = await sendProfileBlockUndoActivity({
+        ownerProfileId: execution.result.ownerProfileId,
+        targetProfileId: execution.result.targetProfileId,
+        profileBlockId: execution.result.profileBlockId,
+      });
+      if (delivery.status !== 'PENDING') {
+        break;
+      }
+      await sleep('5 seconds');
+    }
+    await finalizeProfileBlockProtocolUndoActivity({
+      activityUri: protocolActivityUri,
+      ownerProfileId: execution.result.ownerProfileId,
+      targetProfileId: execution.result.targetProfileId,
+      profileBlockId: execution.result.profileBlockId,
+    });
+  } else {
+    await finalizeProfileBlockProtocolUndoActivity({
+      activityUri: protocolActivityUri,
+      ownerProfileId: execution.result.ownerProfileId,
+      targetProfileId: execution.result.targetProfileId,
+      profileBlockId: execution.result.profileBlockId,
+    });
+  }
   return execution.result;
 }
