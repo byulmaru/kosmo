@@ -37,6 +37,9 @@ TagChip은 정확한 Hashtag identity에서 관련 Profile 목록을 여는 탐�
   않으며, 원격 조회·refresh·새 materialization은 수행하지 않는다.
 - 탐색 요청은 인증된 Account만 허용한다. 인증되지 않은 요청은 Profile 후보를 조회하기 전에 기존 로그인 정책에
   따라 처리한다.
+- 유효한 Account에 selected Profile이 있으면 그 Profile을 viewer로 사용해 양방향 Active Block 관계인 후보를
+  pagination·cursor·limit 전에 제외한다. selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를
+  유지하며 Profile Block predicate나 selected Local Profile을 새로 요구하지 않는다.
 - 결과는 Profile 목록으로 반환하며 Profile마다 한 번만 나타난다. 관련도·알파벳순 정렬을 도입하지 않고, 안정적인
   immutable Profile cursor와 forward pagination을 사용한다. 한 요청의 페이지 크기는 최대 20개다. Profile Tag
   관계의 무순서·무상한을 표현 순서나 개수 제한으로 바꾸지 않는다.
@@ -58,8 +61,8 @@ TagChip은 정확한 Hashtag identity에서 관련 Profile 목록을 여는 탐�
 ## 결과
 
 - `searchProfiles`의 기존 handle 검색 동작과 Hashtag 관련 Profile 목록 탐색은 서로 다른 진입점과 상태로 유지된다.
-- API와 클라이언트 구현은 Hashtag identity 정확 일치, Profile 공개 조건, Account 인증, 페이지 최대 20개,
-  immutable Profile cursor를 함께 검증해야 한다.
+- API와 클라이언트 구현은 Hashtag identity 정확 일치, Profile 공개 조건, Account 인증, selected Profile 유무에
+  따른 양방향 Active Block 후보 정책, 페이지 최대 20개, immutable Profile cursor를 함께 검증해야 한다.
 - Profile Tag 저장·편집·공개 표시는 [PROD-522](https://linear.app/byulmaru/issue/PROD-522/프로필-태그를-편집-표시할-수-있게-한다)가
   소유한다.
 - 탐색 navigation은 PROD-529, API는 PROD-528, 통합 검증은
@@ -70,6 +73,7 @@ TagChip은 정확한 Hashtag identity에서 관련 Profile 목록을 여는 탐�
 - [PROD-523](https://linear.app/byulmaru/issue/PROD-523/프로필-태그-도메인-계약을-확정한다)
 - [PROD-524](https://linear.app/byulmaru/issue/PROD-524/프로필-태그에서-관련-프로필을-탐색하는-계약을-확정한다)
 - [PROD-504](https://linear.app/byulmaru/issue/PROD-504/사람-검색을-db-부분-일치-검색으로-전환한다)
+- [PROD-822](https://linear.app/byulmaru/issue/PROD-822)
 - [Profile](../objects/profile.md)
 - [Hashtag](../objects/hashtag.md)
 - [ADR 0017: Profile Search Staged Visibility](./0017-profile-search-staged-visibility.md)
