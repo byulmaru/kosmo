@@ -1,6 +1,6 @@
 ## Context
 
-이 결정 기록은 [proposal.md](./proposal.md), 세 capability spec과 [design.md](./design.md)의 authority를 분리해 기록한다. 현재 Linear contract와 handoff는 자체 호스팅 Expo OTA의 행동 결과, 구현 slice, static R2 endpoint/bucket을 정의한다. Vault secret의 실제 path·field와 release 실행 결과는 Kosmo caller의 운영 evidence로 기록하며, common publisher는 `signing-private-key` 입력만 받아 Vault path·field·provider·storage backend를 결정하거나 직접 조회하지 않는다.
+이 결정 기록은 [proposal.md](./proposal.md), 세 capability spec과 [design.md](./design.md)의 authority를 분리해 기록한다. 현재 Linear contract와 handoff는 자체 호스팅 Expo OTA의 행동 결과, 구현 slice, static R2 endpoint/bucket을 정의한다. Vault secret의 실제 path·field와 release 실행 결과는 Kosmo caller의 운영 evidence로 기록하며, common publisher는 caller-provided reusable workflow secret `signing_private_key`만 받아 signing storage path·field·provider·backend를 결정하거나 직접 조회하지 않는다. Vault 보관값을 reusable workflow input으로 연결하는 방법은 아직 검증되지 않았다.
 
 ## Decision Records
 
@@ -11,22 +11,10 @@
 - Authority / Provenance: explicit user approval; `PROD-331`, `PROD-332`, `PROD-334`, `PROD-335`
 - Status: Active
 - Context / Problem: 조직 공용 static R2 delivery와 publisher source를 Kosmo application repository에 함께 두면 delivery와 client/release 권한 및 배포 책임이 섞이고, 어느 repository가 production configuration의 source of truth인지 모호해진다.
-- Decision Outcome: public `byulmaru/expo-ota` repository가 조직 공용 static R2 endpoint 설정과 multipart publisher Action/reusable workflow를 소유한다. Kosmo repository는 Expo client, approved export와 channel별 publish handoff workflow를 소유한다. 현재 handoff의 public base URL은 `https://expo-ota.byulmaru.co`, R2 bucket은 `expo-ota`다. static R2는 이미 서명된 object를 read-only로 제공하며 signing private key를 보유하지 않는다. Kosmo caller가 signing private key를 자기 Vault 설정에서 읽어 common publisher의 `signing-private-key` 입력으로 전달하고, publisher는 Vault path·field·provider·storage backend를 고정하거나 직접 조회하지 않는다. promotion/recovery orchestration은 보류한다.
+- Decision Outcome: public `byulmaru/expo-ota` repository가 조직 공용 static R2 endpoint 설정과 multipart publisher Action/reusable workflow를 소유한다. Kosmo repository는 Expo client, approved export와 channel별 publish handoff workflow를 소유한다. 현재 handoff의 public base URL은 `https://expo-ota.byulmaru.co`, R2 bucket은 `expo-ota`다. static R2는 이미 서명된 object를 read-only로 제공하며 signing private key를 보유하지 않는다. signing private key는 Vault에 보관하고 Kosmo caller는 reusable publisher workflow의 caller secret `signing_private_key`를 제공한다. Vault 보관값을 reusable workflow input으로 연결하는 방법은 미검증 운영 연결로 남기며, publisher는 signing storage path·field·provider·backend를 고정하거나 직접 조회하지 않는다. promotion/recovery orchestration은 보류한다.
 - Alternatives Considered: Kosmo repository에 static R2 source를 추가하거나 delivery runtime에서 signing/publish까지 수행하는 방식은 repository와 권한 경계를 섞으므로 제외한다.
-- Consequences: PROD-334 구현은 `byulmaru/expo-ota`에서 수행하고, PROD-333·PROD-335와 app/device evidence는 Kosmo에서 수행한다. 현재 endpoint/bucket 값은 해당 handoff와 운영 설정에서 대조하고 live response/object 결과를 evidence로 남긴다. Vault path·field·role과 private-key read는 Kosmo caller 운영 evidence로 기록하고, publisher는 전달받은 `signing-private-key`를 release 중에만 사용한다.
+- Consequences: PROD-334 구현은 `byulmaru/expo-ota`에서 수행하고, PROD-333·PROD-335와 app/device evidence는 Kosmo에서 수행한다. 현재 endpoint/bucket 값은 해당 handoff와 운영 설정에서 대조하고 live response/object 결과를 evidence로 남긴다. Vault path·field·role, private-key read와 reusable workflow caller secret `signing_private_key` 연결은 Kosmo caller 운영 evidence로 기록하며, common publisher는 전달된 입력만 사용하고 signing storage를 고정하지 않는다.
 - Confirmation / Follow-up: PROD-332 Gate evidence와 PROD-334/335 handoff에서 두 repository의 artifact와 read-only delivery/Vault signing boundary를 교차 확인한다.
-
-### Kosmo caller owns signing private-key retrieval
-
-- Decision Date: 2026-09-10
-- Decision Class: User-approved Credential Boundary
-- Authority / Provenance: explicit user correction recorded at the top of `PROD-333`; applicable `PROD-335` publisher handoff
-- Status: Active
-- Context / Problem: common publisher가 Vault signing path·field·provider를 직접 조회하도록 하면 Kosmo caller의 release approval·secret permission과 공용 Action의 signing contract가 결합되고, publisher를 다른 secret provider와 함께 사용할 수 없다.
-- Decision Outcome: signing private key의 보관 위치는 Vault로 유지한다. Kosmo caller가 같은 release job에서 자기 Vault 설정으로 private key를 조회하고 common publisher Action에 `signing-private-key` 입력으로 직접 전달한다. Common publisher는 이 입력만으로 서명하며 Vault path·field·provider·storage backend를 선택하거나 직접 조회하지 않는다. private key는 job output·log·artifact로 전달하지 않고 static R2나 client runtime에 배포하지 않는다.
-- Alternatives Considered: common publisher가 고정 Vault 경로·field를 직접 읽는 방식은 caller의 permission·approval 경계를 공용 Action에 강제하므로 제외한다. private key를 repository secret, job output, log 또는 artifact로 우회하는 방식은 key exposure를 만들므로 제외한다.
-- Consequences: PROD-335는 Kosmo caller release workflow의 Vault read permission과 same-job input handoff를 소유하고, common publisher는 storage/provider-agnostic signing input contract를 소유한다. 현재 `secret/data/expo-ota/signing/kosmo-native/2026-09`와 `private_key`는 caller 운영 evidence이며 publisher contract의 고정값이 아니다. key rotation은 새 certificate·runtime·Store binary 경계를 유지한다.
-- Confirmation / Follow-up: PROD-335 publisher handoff에서 input-only signing contract와 caller-owned Vault read evidence를 교차 확인한다. static R2는 계속 private-key-free read-only delivery를 유지한다.
 
 ### Canonical OTA identity is a project/platform/channel/runtime tuple
 
@@ -119,9 +107,9 @@
 - Authority / Provenance: `PROD-331`, `PROD-332`, `PROD-334`, `PROD-335`
 - Status: Active
 - Context / Problem: static R2 origin이 private signing key나 release credential을 가지면 object serving compromise가 임의 update 발행으로 이어질 수 있다.
-- Decision Outcome: static R2는 이미 서명된 multipart manifest와 immutable asset bytes만 제공한다. 서명·publish는 publisher job의 책임이며 Kosmo caller가 Vault에서 job 실행 중에 읽어 `signing-private-key` 입력으로 전달한 private key를 publisher가 사용한다. publisher는 Vault 저장 경로나 provider를 직접 조회하지 않는다. public certificate는 native seed binary에 bundle하고 client가 update 적용 전에 서명을 검증한다.
+- Decision Outcome: static R2는 이미 서명된 multipart manifest와 immutable asset bytes만 제공한다. 서명·publish는 publisher job의 책임이며 reusable workflow의 caller secret `signing_private_key`는 Kosmo caller가 제공한다. Vault 보관값을 reusable workflow input으로 연결하는 방법은 미검증 운영 연결로 남고, publisher는 signing storage 경로나 provider를 직접 조회하지 않는다. public certificate는 native seed binary에 bundle하고 client가 update 적용 전에 서명을 검증한다.
 - Alternatives Considered: delivery origin에서 서명·publish 또는 요청별 manifest verification을 수행하는 방식은 static serving과 release publisher의 권한 경계를 합치므로 제외한다.
-- Consequences: static R2에는 signing private key나 publishing credential을 배포하지 않는다. Kosmo caller의 Vault private-key read와 configured role/path evidence, common publisher의 input-only handoff는 release 운영 결과로 확인한다.
+- Consequences: static R2에는 signing private key나 publishing credential을 배포하지 않는다. Kosmo caller의 Vault 보관/read evidence와 reusable workflow caller secret `signing_private_key` 연결 결과는 release 운영에서 확인할 미검증 항목이며, common publisher는 전달된 input만 사용한다.
 - Confirmation / Follow-up: PROD-334 static object inspection과 PROD-335 publisher credential-boundary evidence를 검토한다.
 
 ### OTA signing certificate has a bounded validity and rotation policy
@@ -131,10 +119,10 @@
 - Authority / Provenance: explicit user approval; `PROD-333`, `PROD-335`
 - Status: Active
 - Context / Problem: OTA publisher는 signing private key와 client trust material을 같은 release lifecycle에서 관리해야 하며, 초기 key/certificate provision 결과와 이후 rotation 경계를 추적해야 한다.
-- Decision Outcome: OTA signing certificate의 validity는 1년으로 하고 6개월마다 rotation한다. `2026-09` 초기 signing private key는 Kosmo caller가 사용하는 Vault KV v2의 `secret/data/expo-ota/signing/kosmo-native/2026-09` 경로에 `private_key` field로 등록되었고 version 1이다. 이 path·field는 caller 운영 설정이며 common publisher contract가 고정하지 않는다. public certificate는 `apps/app/certs/certificate.pem`에 두고 Android/iOS native seed binary에 bundle한다. 현재 certificate validity window는 `2026-09-10`부터 `2027-09-10`까지(KST)이며 첫 rotation 예정일은 `2027-03-10`이다.
+- Decision Outcome: OTA signing certificate의 validity는 1년으로 하고 6개월마다 rotation한다. `2026-09` 초기 signing private key는 Vault KV v2의 `secret/data/expo-ota/signing/kosmo-native/2026-09` 경로에 `private_key` field로 등록된 것으로 기록되었고 version 1이다. 이 path·field는 caller 운영 설정이며 common publisher contract가 고정하지 않는다. reusable workflow의 caller secret `signing_private_key`는 Kosmo caller가 제공하고, Vault 보관값을 해당 input으로 연결하는 방법은 미검증 운영 연결로 남긴다. public certificate는 `apps/app/certs/certificate.pem`에 두고 Android/iOS native seed binary에 bundle한다. 현재 certificate validity window는 `2026-09-10`부터 `2027-09-10`까지(KST)이며 첫 rotation 예정일은 `2027-03-10`이다.
 - Alternatives Considered: signing private key를 GitHub repository/environment secret 또는 static R2에 두는 방식은 승인된 Vault credential boundary와 client/server trust 분리를 깨므로 제외한다.
-- Consequences: PROD-333 task 2.1의 client bootstrap/build metadata와 public certificate source evidence는 연결되었지만 seed binary 배포 및 device proof는 아직 남아 있다. rotation마다 새 certificate를 포함한 새 runtime·Store binary를 배포하고, 구 runtime은 구 certificate를 계속 사용하며 dual trust를 추가하지 않는다. PROD-335 caller release workflow는 Vault read·`signing-private-key` 전달·1년/6개월 rotation evidence를 기록한다.
-- Confirmation / Follow-up: 초기 key/certificate provision과 client config evidence는 2026-09-10 KST에 기록되었다. caller private-key read, input handoff, signed release, 새 runtime·Store binary, 구 runtime certificate 유지 및 실기기 결과는 아직 확인해야 한다.
+- Consequences: PROD-333 task 2.1의 client bootstrap/build metadata와 public certificate source evidence는 연결되었지만 seed binary 배포 및 device proof는 아직 남아 있다. rotation마다 새 certificate를 포함한 새 runtime·Store binary를 배포하고, 구 runtime은 구 certificate를 계속 사용하며 dual trust를 추가하지 않는다. PROD-335는 caller-provided reusable workflow secret `signing_private_key`, Vault 보관값 연결과 1년/6개월 rotation evidence를 기록하며, 해당 연결은 아직 검증되지 않았다.
+- Confirmation / Follow-up: 초기 key/certificate provision과 client config evidence는 2026-09-10 KST에 기록되었다. caller private-key read, reusable workflow input linkage, signed release, 새 runtime·Store binary, 구 runtime certificate 유지 및 실기기 결과는 아직 확인해야 한다.
 
 ### 2026-09-09 handoff revision
 
@@ -175,7 +163,7 @@
 ## Operational Evidence
 
 - 현재 static R2 endpoint `https://expo-ota.byulmaru.co`와 bucket `expo-ota`가 configured host/object와 일치하고 positive multipart response를 제공하는지 기록한다.
-- Kosmo caller가 사용하는 Vault secret path·role·fixed field와 private-key read, common publisher의 `signing-private-key` input handoff 결과를 기록한다. common publisher는 해당 storage/provider를 고정하지 않는다.
+- Kosmo caller가 사용하는 Vault secret path·role·fixed field와 private-key read, reusable workflow caller secret `signing_private_key` input linkage 결과를 기록한다. Vault 보관값을 workflow input으로 연결하는 방법과 실제 handoff는 미검증 상태이며, common publisher는 해당 signing storage/provider를 고정하지 않는다.
 - 초기 OTA key/certificate provision은 Vault path·field·version과 public certificate validity evidence로 기록되었다. rotation마다 새 certificate·runtime·Store binary를 배포하고, 구 runtime은 구 certificate를 유지함을 기록한다.
 - PROD-886/PROD-876 seed binary의 고정 OTA consumer channel `prod`와 evidence 보존 위치를 기록한다.
 - PROD-336의 archive 승인자와 cross-slice evidence retention 기간을 기록한다.
