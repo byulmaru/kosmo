@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import {
@@ -37,6 +38,7 @@ const initialFormState: ContentReportFormState = { dirty: false, submitting: fal
 export function ContentReportOverlay({ onRequestClose, target, visible }: Props) {
   const theme = useTheme();
   const elevation = useElevation();
+  const { showToast } = useToast();
   const { height, width } = useWindowDimensions();
   const [formState, setFormState] = useState(initialFormState);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
@@ -58,6 +60,13 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
     formStateRef.current = nextState;
     setFormState(nextState);
   }, []);
+
+  const handleDelivered = useCallback(() => {
+    formStateRef.current = initialFormState;
+    setFormState(initialFormState);
+    onRequestClose();
+    showToast('신고를 전달했습니다.', { tone: 'success' });
+  }, [onRequestClose, showToast]);
 
   const restoreFocus = useCallback(() => {
     if (Platform.OS !== 'web') {
@@ -300,6 +309,7 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
               >
                 <ContentReportForm
                   key={formRevision}
+                  onDelivered={handleDelivered}
                   onStateChange={handleFormStateChange}
                   target={target}
                 />
@@ -378,7 +388,7 @@ const styles = StyleSheet.create({
     height: '85dvh' as never,
     width: '100%',
   },
-  main: { minHeight: 0 },
+  main: { flex: 1, minHeight: 0 },
   mobileMain: { flex: 1 },
   header: {
     alignItems: 'center',
@@ -397,9 +407,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 36,
   },
-  scroll: { minHeight: 0 },
+  scroll: { flex: 1, minHeight: 0 },
   mobileScroll: { flex: 1 },
-  body: { padding: spacing.xl },
+  body: { padding: spacing.lg },
   confirmBackdrop: {
     alignItems: 'center',
     bottom: 0,
