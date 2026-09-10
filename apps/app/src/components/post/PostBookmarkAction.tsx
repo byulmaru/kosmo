@@ -136,7 +136,20 @@ export function usePostBookmarkAction(
         ? ConnectionHandler.getConnectionID(selectedProfileId, bookmarkConnectionKey)
         : null;
       commitDelete({
-        ...callbacks,
+        onCompleted: (response, errors) => {
+          if (response?.deleteBookmark?.requestedBookmarkId === activeBookmarkId) {
+            finish();
+            return;
+          }
+
+          finishWithError(
+            new Error(
+              errors?.[0]?.message ??
+                'Bookmark delete response did not confirm the requested Bookmark.',
+            ),
+          );
+        },
+        onError: finishWithError,
         variables: {
           connections: bookmarkConnectionId ? [bookmarkConnectionId] : [],
           input: { id: activeBookmarkId },

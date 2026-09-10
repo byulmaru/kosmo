@@ -189,7 +189,7 @@ export function ProfileSwitcher({
     active?.instance.kind === 'LOCAL' && active.viewerState?.membership?.role === 'OWNER';
   const profiles = data.me?.profiles ?? [];
   const otherHasUnread = profiles.some(
-    (profile) => profile.id !== active?.id && profile.unreadNotificationCount > 0,
+    (profile) => profile.id !== active?.id && (profile.unreadNotificationCount ?? 0) > 0,
   );
   const busy = selecting || creatingProfile;
   const compact = surface === 'compact';
