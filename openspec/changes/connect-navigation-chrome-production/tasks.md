@@ -110,3 +110,5 @@ Production navigation chrome의 문서·Storybook·코드가 같은 계약을 �
 - [x] 4.1 Storybook·디자인 인벤토리를 Production 연결 결과와 정렬한다.
 - [x] 4.2 OpenSpec·typecheck·관련 unit·Storybook 검증을 통과시킨다.
 - [x] 4.3 반응형 Light/Dark 브라우저 QA와 독립 구현 리뷰를 완료한다.
+- [x] 4.4 full·drawer Sidebar utility의 chevron·nested inset·footer geometry 계약과 compact rail 범위를 정렬한다.
+- [x] 4.5 `/settings` full·drawer disclosure 고정과 compact ActionMenu Link 행 geometry를 Figma·문서·코드·검증에서 정렬한다.

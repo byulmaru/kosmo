@@ -9,6 +9,13 @@
 - **WHEN** full Web sidebar, compact Web rail 또는 mobile drawer가 렌더링된다
 - **THEN** 시스템은 해당 presentation의 공용 `SidebarNavigation` geometry, icon, selected·pressed·focus와 Light/Dark 상태를 표시한다
 - **AND** 기존 ProfileSwitcher, 주요 route, feedback surface와 drawer close·focus 동작을 유지한다
+- **AND** full·drawer 행은 `272×45px` target, `space/8` 좌우 visual inset, `20px` icon과 `space/16` label 간격을 사용한다
+- **AND** full·drawer의 `설정 및 기타`는 `Settings` icon과 상태에 따른 `24px` `ChevronDown`·`ChevronUp`을 행 오른쪽 `24px` 안쪽에 표시하고, 열린 하위 `설정`·`로그아웃` 행은 `space/32` content inset을 사용한다
+- **AND** 열린 utility의 하위 `설정`·`로그아웃` 행은 trigger 직후부터 `45px` 단위로 연속 배치한다
+- **AND** full·drawer의 닫힌 utility footer는 첫 행을 divider 뒤 `4px`, 두 번째 행을 `49px`에 배치해 행 사이 간격을 두지 않는다
+- **AND** compact utility는 기존 `Ellipsis` icon-only presentation과 `44×44px` target을 유지한다
+- **AND** `/settings` 화면군의 full·drawer utility는 항상 펼쳐지고 하위 `설정` 행만 current로 표시되며, 다른 route로 이탈하면 닫힌다
+- **AND** compact ActionMenu는 선택 후 dismiss되는 transient popover를 유지하고, `NavigationLink`로 감싼 `설정` 행도 `36px` 한 줄 target·padding·정렬을 보존한다
 
 #### Scenario: Bottom tab presentation을 Production에 표시
 

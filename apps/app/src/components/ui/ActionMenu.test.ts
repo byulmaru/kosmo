@@ -3,7 +3,7 @@ import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import { semanticColors } from '../../theme/tokens';
-import type { ElementType } from 'react';
+import type { ElementType, ReactElement } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type * as ActionMenuModule from './ActionMenu';
 
@@ -34,7 +34,11 @@ mockModule('react-native', {
     },
   },
   Pressable: PressableHost,
-  StyleSheet: { absoluteFill: {}, create: <T>(styles: T) => styles },
+  StyleSheet: {
+    absoluteFill: {},
+    create: <T>(styles: T) => styles,
+    flatten: (style: unknown) => flattenStyle(style),
+  },
   Text: TextHost,
   View: 'View',
 });
@@ -322,6 +326,43 @@ test('Web ActionMenu stays mounted through exit motion before unmounting', async
   assert.equal(renderer?.root.findByType(TextHost).props.children, '더 길어진 다음 메뉴 항목');
   await act(async () => renderer?.unmount());
   platformOS = 'ios';
+});
+
+test('Web ActionMenu exposes static item geometry to asChild renderers', async () => {
+  assert.ok(actionMenuModule);
+  platformOS = 'web';
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { addEventListener() {}, removeEventListener() {} },
+  });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { addEventListener() {}, removeEventListener() {} },
+  });
+  let itemStyle: unknown;
+  const props = {
+    accessibilityLabel: '메뉴',
+    items: [{ key: 'settings', label: '설정', onSelect() {} }],
+    renderItem: ({ children }: { children: ReactElement }) => {
+      itemStyle = (children.props as { style?: unknown }).style;
+      return children;
+    },
+    renderTrigger: ({ onPress }: { onPress: () => void }) =>
+      createElement(PressableHost, { onPress, testID: 'trigger' }),
+  };
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(actionMenuModule!.ActionMenu, props));
+  });
+  await act(async () => renderer?.root.findByProps({ testID: 'trigger' }).props.onPress());
+
+  assert.equal(typeof itemStyle, 'object');
+  const mergedStyle = { ...(itemStyle as Record<string, unknown>) };
+  assert.equal(mergedStyle.height, 36);
+  assert.equal(mergedStyle.minHeight, 36);
+  assert.equal(mergedStyle.paddingHorizontal, 8);
+  assert.equal(mergedStyle.position, 'relative');
+  await act(async () => renderer?.unmount());
 });
 
 test('danger menu items use a readable semantic foreground in both themes', async () => {

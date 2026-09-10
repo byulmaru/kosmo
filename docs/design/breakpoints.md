@@ -81,6 +81,23 @@ drawer에는 정책 링크를 추가하지 않는다.
   한 화면씩 표시하며, 내부 destination의 back navigation은 [설정 페이지](./settings.md)에 정의된 명시적인
   parent를 연다.
 
+## 사이드바 내비게이션 geometry
+
+공용 `SidebarNavigation`의 `full`·`drawer` 행은 `272×45px` target을 유지한다. 행 visual은 좌우 `space/8`을
+사용하고 `20px` 아이콘과 label 사이에 `space/16`을 둔다. `설정 및 기타` utility는 `Settings` 아이콘과 label을
+표시하며 닫힌 상태에서는 아래 방향, 열린 상태에서는 위 방향 `Chevron`을 trailing에 표시한다. Chevron은
+`24px` visual로 행 오른쪽 `24px` 안쪽에 배치한다. 별도 focus target이 아니며 trigger의 `aria-expanded` 상태와
+동기화한다.
+
+Utility를 연 뒤 표시하는 `설정`·`로그아웃` 하위 행은 같은 target과 `space/32` content inset을 사용해
+아이콘을 안쪽으로 정렬한다. Footer가 닫힌 상태에서는 divider 뒤 첫 행을 `4px`, 두 번째 행을 `49px`에 배치해
+행 사이 간격을 두지 않으며, 열린 utility의 하위 행도 trigger 직후부터 `45px` 단위로 연속 배치한다. `compact`
+rail의 `44×44px` icon-only target과 `Ellipsis` utility 표현은 이 행 geometry 변경의 대상이 아니다.
+
+`/settings` 화면군의 `full`·`drawer`에서는 utility를 항상 펼치고 부모 trigger가 아닌 하위 `설정` 행을 current로
+표시한다. 다른 route로 이탈하면 disclosure를 닫는다. `compact` ActionMenu는 transient popover와 선택 후 dismiss를
+유지하며, `NavigationLink`로 감싼 `설정` 행도 공용 메뉴의 `36px` 한 줄 target과 padding·정렬을 보존한다.
+
 ## 프로필 편집 진입
 
 인증된 사용자의 selected Profile이 서버 권한 계약상 편집 가능할 때만 sidebar의 selected Profile 요약에

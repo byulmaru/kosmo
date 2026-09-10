@@ -186,6 +186,8 @@ const meta = {
     'PresentationTransitionContract',
     'ProfileUnavailableContract',
     'ReducedMotionContract',
+    'SettingsNavigationDisclosure',
+    'SettingsNavigationDisclosureDrawer',
   ],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Sidebar Navigation',
@@ -235,7 +237,9 @@ async function expectNavigationBasics(
   if (currentIsRendered) {
     const selected =
       currentDestination === 'settings'
-        ? within(navigation).getByRole('button', { name: '설정 및 기타' })
+        ? presentation === 'compact'
+          ? within(navigation).getByRole('button', { name: '설정 및 기타' })
+          : within(navigation).getByRole('button', { name: labels.settings })
         : getButton(navigation, currentDestination);
     expect(selected).toHaveAttribute('aria-current', 'page');
     expect(currentControls).toHaveLength(1);
@@ -409,6 +413,9 @@ export const Compact: Story = {
       );
       expectRect(feedback, 44, 44);
       expectRect(utility, 44, 44);
+      expect(
+        within(utility).getByTestId('sidebar-control-visual').querySelectorAll('svg'),
+      ).toHaveLength(1);
       for (const destination of [
         'home',
         'search',
@@ -470,6 +477,12 @@ async function playInlineUtility({
   const utility = within(navigation).getByRole('button', { name: '설정 및 기타' });
   const feedback = getButton(navigation, 'feedback');
   const home = getButton(navigation, 'home');
+  const footer = feedback.parentElement;
+  const utilityVisual = within(utility).getByTestId('sidebar-control-visual');
+  const utilityIcons = utilityVisual.querySelectorAll('svg');
+  const utilityIconRect = utilityIcons[0].getBoundingClientRect();
+  const utilityVisualRect = utilityVisual.getBoundingClientRect();
+  const utilityLabel = within(utility).getByText('설정 및 기타');
 
   await expectNavigationBasics(
     canvasElement,
@@ -480,10 +493,24 @@ async function playInlineUtility({
   );
 
   expectRect(navigation, 320, 720);
+  expect(home.getBoundingClientRect().top - navigation.getBoundingClientRect().top).toBe(24);
   expectRect(home, 272, 45);
   expectRect(utility, 272, 45);
   expectRect(feedback, 272, 45);
+  expect(footer).not.toBeNull();
+  expectRect(footer!, 272, 94);
+  expect(feedback.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(4);
+  expect(utility.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(49);
   expect(feedback.closest('[role="menu"]')).toBeNull();
+  expect(utility).toHaveAttribute('aria-expanded', 'false');
+  expect(utilityIcons).toHaveLength(2);
+  expect(utilityIcons[0]).toHaveAttribute('width', '20');
+  expect(utilityIcons[0]).toHaveAttribute('height', '20');
+  expect(utilityIconRect.left - utilityVisualRect.left).toBe(8);
+  expect(utilityLabel.getBoundingClientRect().left - utilityVisualRect.left).toBe(44);
+  expect(utilityIcons[1].querySelector('path')).toHaveAttribute('d', 'm6 9 6 6 6-6');
+  expect(utilityIcons[1].getBoundingClientRect().left - utilityVisualRect.left).toBe(224);
+  expect(utilityVisualRect.right - utilityIcons[1].getBoundingClientRect().right).toBe(24);
 
   await userEvent.click(utility);
   expect(onMenuOpenChange).toHaveBeenLastCalledWith(true);
@@ -493,14 +520,74 @@ async function playInlineUtility({
   expect(logout).toBeVisible();
   expectRect(settings, 272, 45);
   expectRect(logout, 272, 45);
+  expect(settings.getBoundingClientRect().top).toBe(utility.getBoundingClientRect().bottom);
+  expect(logout.getBoundingClientRect().top).toBe(settings.getBoundingClientRect().bottom);
   expect(feedback.closest('[role="menu"]')).toBeNull();
+  expect(utility).toHaveAttribute('aria-expanded', 'true');
+  expect(utilityVisual.querySelectorAll('svg')).toHaveLength(2);
+  expect(utilityVisual.querySelectorAll('svg')[1].querySelector('path')).toHaveAttribute(
+    'd',
+    'm18 15-6-6-6 6',
+  );
+
+  for (const control of [settings, logout]) {
+    const visual = within(control).getByTestId('sidebar-control-visual');
+    const icon = visual.querySelector('svg');
+    const label = within(control).getByText(control === settings ? labels.settings : '로그아웃');
+    expect(icon).not.toBeNull();
+    expect(icon!.getBoundingClientRect().left - visual.getBoundingClientRect().left).toBeCloseTo(
+      32,
+      0,
+    );
+    expect(label.getBoundingClientRect().left - visual.getBoundingClientRect().left).toBeCloseTo(
+      68,
+      0,
+    );
+  }
 
   await userEvent.click(settings);
   expect(onNavigate).toHaveBeenLastCalledWith('settings');
   await waitFor(() => expect(onMenuOpenChange).toHaveBeenLastCalledWith(false));
+  expect(within(navigation).getByRole('button', { name: labels.settings })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  expect(within(navigation).getByRole('button', { name: '로그아웃' })).toBeVisible();
+
+  await userEvent.click(home);
+  expect(onNavigate).toHaveBeenLastCalledWith('home');
+  await waitFor(() => expect(utility).toHaveAttribute('aria-expanded', 'false'));
   expect(within(navigation).queryByRole('button', { name: labels.settings })).toBeNull();
   expect(within(navigation).queryByRole('button', { name: '로그아웃' })).toBeNull();
 }
+
+export const SettingsNavigationDisclosure: Story = {
+  args: { currentDestination: 'settings', presentation: 'full' },
+  parameters: { controls: { disable: true } },
+  play: async ({ canvasElement }) => {
+    const navigation = getNavigation(canvasElement);
+    const utility = within(navigation).getByRole('button', { name: '설정 및 기타' });
+    const settings = within(navigation).getByRole('button', { name: labels.settings });
+
+    expect(utility).toHaveAttribute('aria-expanded', 'true');
+    expect(utility).not.toHaveAttribute('aria-current');
+    expect(settings).toHaveAttribute('aria-current', 'page');
+    expect(settings).toBeVisible();
+
+    await userEvent.click(within(navigation).getByRole('button', { name: labels.home }));
+    await waitFor(() => expect(utility).toHaveAttribute('aria-expanded', 'false'));
+    expect(within(navigation).queryByRole('button', { name: labels.settings })).toBeNull();
+    expect(within(navigation).getByRole('button', { name: labels.home })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  },
+};
+
+export const SettingsNavigationDisclosureDrawer: Story = {
+  ...SettingsNavigationDisclosure,
+  args: { currentDestination: 'settings', presentation: 'drawer' },
+};
 
 export const Drawer: Story = {
   args: { presentation: 'drawer', unreadNotificationCount: 10 },

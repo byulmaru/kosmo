@@ -12,6 +12,8 @@ import baseMeta, {
   PresentationTransitionContract as presentationTransitionContract,
   ProfileUnavailableContract as profileUnavailableContract,
   ReducedMotionContract as reducedMotionContract,
+  SettingsNavigationDisclosure as settingsNavigationDisclosure,
+  SettingsNavigationDisclosureDrawer as settingsNavigationDisclosureDrawer,
 } from './SidebarNavigation.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -37,3 +39,5 @@ export const LogoutErrorContract: Story = logoutErrorContract;
 export const LogoutLifecycleContract: Story = logoutLifecycleContract;
 export const ProfileUnavailableContract: Story = profileUnavailableContract;
 export const PresentationTransitionContract: Story = presentationTransitionContract;
+export const SettingsNavigationDisclosure: Story = settingsNavigationDisclosure;
+export const SettingsNavigationDisclosureDrawer: Story = settingsNavigationDisclosureDrawer;

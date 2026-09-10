@@ -120,7 +120,7 @@ export function SearchToolbar({
         );
       }}
       onPress={onBackPress}
-      style={() => controlStyle('leading')}
+      style={StyleSheet.flatten(controlStyle('leading'))}
       targetSize={targetSize}
       visualSize={targetSize}
       visualStyle={(state) => controlVisualStyle(leadingDisabled, state)}
@@ -159,7 +159,7 @@ export function SearchToolbar({
             );
           }}
           onPress={onMenuPress}
-          style={() => controlStyle('leading')}
+          style={StyleSheet.flatten(controlStyle('leading'))}
           targetSize={targetSize}
           visualSize={targetSize}
           visualStyle={(state) => controlVisualStyle(leadingDisabled, state)}
@@ -234,7 +234,7 @@ export function SearchToolbar({
               resolvedInputRef.current?.focus();
             }}
             onPressIn={() => resolvedInputRef.current?.focus()}
-            style={() => controlStyle('clear')}
+            style={StyleSheet.flatten(controlStyle('clear'))}
             targetSize={targetSize}
             visualSize={targetSize}
             visualStyle={(state) => controlVisualStyle(disabled, state)}

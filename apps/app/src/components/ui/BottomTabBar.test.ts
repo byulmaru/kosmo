@@ -24,7 +24,11 @@ const PressableHost = ({ children, ...props }: PressableProps) =>
 
 mockModule('react-native', {
   Pressable: PressableHost,
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: {
+    create: <T>(styles: T) => styles,
+    flatten: (style: unknown) =>
+      Object.assign({}, ...(Array.isArray(style) ? style.flat(Infinity).filter(Boolean) : [style])),
+  },
   Text: 'Text',
   View: 'View',
 });

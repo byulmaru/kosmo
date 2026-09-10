@@ -84,7 +84,7 @@ function BottomTabBarItem({
         setFocusVisible(Boolean(target.matches?.(':focus-visible')));
       }}
       onPress={renderControl ? undefined : () => onNavigate(destination)}
-      style={[
+      style={StyleSheet.flatten([
         styles.item,
         { height: contentHeight, opacity: disabled ? 0.45 : 1 },
         web
@@ -95,7 +95,7 @@ function BottomTabBarItem({
               outlineWidth: focusVisible ? borderWidths[2] : borderWidths[0],
             } as ViewStyle)
           : undefined,
-      ]}
+      ])}
     >
       {(state) => {
         const hovered = web && Boolean((state as { hovered?: boolean }).hovered);
