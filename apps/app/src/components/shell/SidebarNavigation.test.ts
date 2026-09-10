@@ -58,10 +58,6 @@ mockModule(new URL('./shellLayout.ts', import.meta.url), {
   isSettingsRoute: () => false,
   isTimelineRoute: () => true,
 });
-mockModule(new URL('./UnreadNotificationBadgeController.tsx', import.meta.url), {
-  useUnreadNotificationCount: () => 3,
-});
-
 let SidebarNavigation: typeof SidebarNavigationExport;
 
 before(async () => {
@@ -75,6 +71,7 @@ beforeEach(() => {
       displayName: '테스트 프로필',
       id: 'profile-test',
       relativeHandle: '@test',
+      unreadNotificationCount: 3,
     },
   };
   logoutError = '로그아웃하지 못했습니다.';
@@ -103,6 +100,7 @@ test('Production adapter owns logout state and guard composition', async () => {
   assert.equal(props.logoutError, logoutError);
   assert.equal(props.logoutPending, true);
   assert.equal(props.showFeedback, true);
+  assert.equal(props.unreadNotificationCount, 3);
 
   props.onLogout();
   assert.equal(requestNavigation.mock.callCount(), 1);
