@@ -86,7 +86,6 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     relativeHandle: '@kosmo',
     tags: [],
     unreadNotificationCount: 0,
-    viewerState,
     ...overrides,
     defaultPostVisibility,
     private:
@@ -95,6 +94,7 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
         : defaultPostVisibility === null
           ? null
           : { defaultPostVisibility },
+    viewerState,
   };
 }
 
