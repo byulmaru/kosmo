@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import type { ImperativeRouter } from 'expo-router';
+import type { returnToSettingsParent as ReturnToSettingsParent } from './settingsNavigation';
 
-type SettingsNavigationRouter = Pick<ImperativeRouter, 'back'>;
-
-let returnToSettingsRoot: (router: SettingsNavigationRouter) => void;
+let returnToSettingsParent: typeof ReturnToSettingsParent;
 let platform: 'ios' | 'web' = 'web';
 const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
 
@@ -19,7 +17,7 @@ mock.module('react-native', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 before(async () => {
-  ({ returnToSettingsRoot } = await import('./settingsNavigation'));
+  ({ returnToSettingsParent } = await import('./settingsNavigation'));
 });
 
 afterEach(() => {
@@ -33,7 +31,6 @@ afterEach(() => {
 
 describe('Settings detail back navigation', () => {
   it('Web은 document location을 Settings root로 replace한다', () => {
-    let backCalls = 0;
     const replaced: string[] = [];
 
     Object.defineProperty(globalThis, 'location', {
@@ -41,18 +38,47 @@ describe('Settings detail back navigation', () => {
       value: { replace: (href: string) => replaced.push(href) },
     });
 
-    returnToSettingsRoot({ back: () => (backCalls += 1) });
+    returnToSettingsParent('/settings/mute-and-block', {
+      replace: () => {},
+    });
 
-    assert.equal(backCalls, 0);
     assert.deepEqual(replaced, ['/settings']);
   });
 
-  it('Native는 router back으로 route-owned stack을 닫는다', () => {
+  it('Native는 이전 history와 무관하게 Settings root를 연다', () => {
     platform = 'ios';
-    let backCalls = 0;
+    const replaced: string[] = [];
 
-    returnToSettingsRoot({ back: () => (backCalls += 1) });
+    returnToSettingsParent('/settings/default-post-visibility', {
+      replace: (href) => replaced.push(String(href)),
+    });
 
-    assert.equal(backCalls, 1);
+    assert.deepEqual(replaced, ['/settings']);
+  });
+
+  it('중첩된 Native detail은 바로 위 mute category를 명시적으로 연다', () => {
+    platform = 'ios';
+    const replaced: string[] = [];
+
+    returnToSettingsParent('/settings/muted-profiles', {
+      replace: (href) => replaced.push(String(href)),
+    });
+
+    assert.deepEqual(replaced, ['/settings/mute-and-block']);
+  });
+
+  it('Muted profiles의 shell back은 바로 위 mute category를 연다', () => {
+    const replaced: string[] = [];
+
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { replace: (href: string) => replaced.push(href) },
+    });
+
+    returnToSettingsParent('/settings/muted-profiles', {
+      replace: (href) => replaced.push(String(href)),
+    });
+
+    assert.deepEqual(replaced, ['/settings/mute-and-block']);
   });
 });

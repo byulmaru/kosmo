@@ -54,7 +54,9 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-let SettingsNavigationList: ComponentType<{ selected?: 'default-post-visibility' }>;
+let SettingsNavigationList: ComponentType<{
+  selected?: 'default-post-visibility';
+}>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
@@ -69,7 +71,7 @@ afterEach(async () => {
 });
 
 describe('SettingsNavigationList', () => {
-  it('승인된 외부 Account와 내부 Profile entry만 이 순서로 제공한다', async () => {
+  it('실제 데이터가 연결된 설정 진입점만 제공한다', async () => {
     await render();
 
     const links = rendered('Pressable');

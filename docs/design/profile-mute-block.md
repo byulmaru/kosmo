@@ -198,7 +198,9 @@ viewer 방향별 콘텐츠 정책은 위 계약을 따르며, 실제 route의 �
 `ProfileMuteAction`은 Profile/Post의 메뉴와 관리용 확인 처리를 소유하며 기존
 ModalSheet·ConfirmationContent·ToastProvider를 재사용한다. 메뉴 표시에는 요청을 모르는 `ProfileMoreMenu`를 사용한다.
 확인과 pending/dismiss, 오류 피드백은 공용 UI 경계에서 제공하며 실제 요청은 callback으로 전달한다.
-관리 목록은 `MutedProfileList`, 행 표시는 기존 Relay `ProfileListItem`과 공유하는 `ProfileListItemContent`를 사용한다.
+관리 목록은 본문·상태·행·pagination을 소유하는 `MutedProfileList`, 행 표시는 기존 Relay `ProfileListItem`과
+공유하는 `ProfileListItemContent`를 사용한다. 화면과 Storybook은 목록 밖의 heading·scroll container와
+해제 성공 후 heading focus를 소유한다.
 Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목록은 이름·핸들 기본 표시를 사용한다.
 행의 action은 `children`으로 합성하며, FollowButton의 Web·Native 크기 선택은 Relay wrapper가 유지한다.
 `ProfileHero.mute.muted`에는 서버 확정 상태를 전달하고, loading에서는 메뉴·상태행을 표시하지 않는다.
