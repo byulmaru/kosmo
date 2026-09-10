@@ -135,7 +135,12 @@ function localRelayForState(state: LocalState) {
       return {
         operationResponses: {
           LocalPageQuery: {
-            sequence: [{ data: localPageData() }, { error: 'Local timeline hard refresh failure' }],
+            sequence: [
+              { data: localPageData() },
+              { error: 'Local timeline hard refresh failure' },
+              { error: 'Local timeline hard refresh failure again' },
+              { data: localPageData(localConnection([refreshedPost])) },
+            ],
           },
         },
       };

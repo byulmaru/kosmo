@@ -1,7 +1,8 @@
 import { UserRoundPlus } from 'lucide-react-native';
 import { useCallback, useEffect, useRef } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
+import { fetchQuery } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -18,6 +19,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
 import type { MutableRefObject, PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
+import type { Subscription } from 'relay-runtime';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { LocalPageQuery } from './__generated__/LocalPageQuery.graphql';
 
@@ -41,9 +43,64 @@ const LocalQuery = graphql`
 `;
 
 export default function LocalScreen() {
+  const environment = useRelayEnvironment();
+  const { showToast } = useToast();
   const hasSuccessfulLocalRef = useRef(false);
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const refresh = useCallback(() => routeBoundaryRef.current?.refetch(), []);
+  const refreshStateRef = useRef<LocalRefreshState>({ request: null, toastCleanup: null });
+  const refreshRef = useRef<() => void>(() => undefined);
+  const refresh = useCallback(() => {
+    if (!hasSuccessfulLocalRef.current) {
+      routeBoundaryRef.current?.refetch();
+      return;
+    }
+
+    const refreshState = refreshStateRef.current;
+    if (refreshState.request) {
+      return;
+    }
+
+    refreshState.toastCleanup?.();
+    refreshState.toastCleanup = null;
+    fetchQuery<LocalPageQuery>(
+      environment,
+      LocalQuery,
+      {},
+      { fetchPolicy: 'network-only' },
+    ).subscribe({
+      start: (request) => {
+        refreshState.request = request;
+      },
+      next: () => {
+        refreshState.toastCleanup?.();
+        refreshState.toastCleanup = null;
+      },
+      complete: () => {
+        refreshState.request = null;
+        refreshState.toastCleanup?.();
+        refreshState.toastCleanup = null;
+      },
+      error: () => {
+        refreshState.request = null;
+        refreshState.toastCleanup?.();
+        refreshState.toastCleanup = showToast('로컬 타임라인을 불러오지 못했어요', {
+          action: { label: '다시 시도', onPress: () => refreshRef.current() },
+          persistent: true,
+          tone: 'danger',
+        });
+      },
+    });
+  }, [environment, showToast]);
+  refreshRef.current = refresh;
+
+  useEffect(() => {
+    return () => {
+      refreshStateRef.current.request?.unsubscribe();
+      refreshStateRef.current.request = null;
+      refreshStateRef.current.toastCleanup?.();
+      refreshStateRef.current.toastCleanup = null;
+    };
+  }, [environment]);
 
   return (
     <LocalFrame onReselect={refresh}>
@@ -70,6 +127,11 @@ export default function LocalScreen() {
     </LocalFrame>
   );
 }
+
+type LocalRefreshState = {
+  request: Subscription | null;
+  toastCleanup: (() => void) | null;
+};
 
 function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: () => void }>) {
   const { width } = useWindowDimensions();

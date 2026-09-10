@@ -67,8 +67,23 @@ export const RefreshHardError: Story = {
     await waitFor(() => expect(queryRequestObserver).toHaveBeenCalledTimes(2));
 
     expect(canvas.getByText('같은 인스턴스의 소식을 한곳에서 확인해요.')).toBeVisible();
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
-    expect(body.queryByRole('alert')).not.toBeInTheDocument();
+    const firstAlert = body.getByRole('alert');
+    expect(firstAlert).toHaveTextContent('로컬 타임라인을 불러오지 못했어요');
+    expect(within(firstAlert).getByRole('button', { name: '다시 시도' })).toBeVisible();
+
+    await userEvent.click(within(firstAlert).getByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(queryRequestObserver).toHaveBeenCalledTimes(3));
+    expect(canvas.getByText('같은 인스턴스의 소식을 한곳에서 확인해요.')).toBeVisible();
+    const secondAlert = body.getByRole('alert');
+    expect(secondAlert).toHaveTextContent('로컬 타임라인을 불러오지 못했어요');
+    expect(within(secondAlert).getByRole('button', { name: '다시 시도' })).toBeVisible();
+
+    await userEvent.click(within(secondAlert).getByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(queryRequestObserver).toHaveBeenCalledTimes(4));
+    await expect(
+      canvas.findByText('새로고침에 성공한 뒤 다시 표시된 로컬 게시글입니다.'),
+    ).resolves.toBeVisible();
+    await waitFor(() => expect(body.queryByRole('alert')).not.toBeInTheDocument());
   },
 };
 
