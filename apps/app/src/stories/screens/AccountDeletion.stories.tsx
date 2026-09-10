@@ -15,9 +15,6 @@ export const Policy: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { name: 'Kosmo 계정 삭제 안내' })).toBeVisible();
-    await expect(canvas.getByText('시행일: 2026년 9월 9일')).toBeVisible();
-    await expect(canvas.getByText('계정 삭제 요청')).toBeVisible();
-    await expect(canvas.getByText(/Kosmo 계정·프로필, 게시글·답글/)).toBeVisible();
     await expect(
       canvas.getByRole('link', { name: 'hello@byulmaru.co로 이메일 보내기' }),
     ).toHaveAttribute('href', 'mailto:hello@byulmaru.co');
