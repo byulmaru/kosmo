@@ -98,6 +98,7 @@ const longProfileEditCopyQuery = {
     selectedProfile: selectedProfileWithLongDisplayName,
   }),
 };
+const selectedProfileWithoutUnread = { ...selectedProfile, unreadNotificationCount: 0 };
 const selectedProfileWithUnread = { ...selectedProfile, unreadNotificationCount: 1 };
 const secondProfileWithLargeUnread = { ...secondProfile, unreadNotificationCount: 127 };
 const profileWithoutUnread = profile({
@@ -110,7 +111,14 @@ const profileWithoutUnread = profile({
 const profileSwitcherUnreadQuery = {
   ...query,
   ...shellQuery({
-    profiles: [selectedProfileWithUnread, secondProfileWithLargeUnread, profileWithoutUnread],
+    profiles: [selectedProfileWithoutUnread, secondProfileWithLargeUnread, profileWithoutUnread],
+    selectedProfile: selectedProfileWithoutUnread,
+  }),
+};
+const profileSwitcherSelectedOnlyUnreadQuery = {
+  ...query,
+  ...shellQuery({
+    profiles: [selectedProfileWithUnread, secondProfile],
     selectedProfile: selectedProfileWithUnread,
   }),
 };
@@ -236,6 +244,28 @@ function ProfileSwitcherStory() {
     <SessionProvider>
       <View style={{ maxWidth: 360 }}>
         <ProfileSwitcher query={data.query} surface="full" />
+      </View>
+    </SessionProvider>
+  );
+}
+
+function CompactProfileSwitcherStory() {
+  const data = useShellStoryData();
+  return (
+    <SessionProvider>
+      <View style={{ width: 80 }}>
+        <ProfileSwitcher query={data.query} surface="compact" />
+      </View>
+    </SessionProvider>
+  );
+}
+
+function DrawerProfileSwitcherStory() {
+  const data = useShellStoryData();
+  return (
+    <SessionProvider>
+      <View style={{ width: 280 }}>
+        <ProfileSwitcher query={data.query} surface="drawer" />
       </View>
     </SessionProvider>
   );
@@ -1004,10 +1034,29 @@ export const ProfileSwitcherUnreadPresence: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const trigger = canvas.getByRole('button', {
+      name: '프로필 목록, 읽지 않은 알림 있음',
+    });
+    const closedIndicator = canvas.getByTestId('profile-switcher-closed-unread');
+    const chevron = trigger.querySelector('svg');
+
+    expect(chevron).not.toBeNull();
+    expect(closedIndicator).toHaveAttribute('aria-hidden', 'true');
+    expect(closedIndicator.getBoundingClientRect().width).toBe(8);
+    expect(closedIndicator.getBoundingClientRect().height).toBe(8);
+    expect(chevron!.getBoundingClientRect().width).toBe(20);
+    expect(chevron!.getBoundingClientRect().height).toBe(20);
+    expect(closedIndicator.getBoundingClientRect().left).toBe(
+      chevron!.getBoundingClientRect().right + 1,
+    );
+    expect(closedIndicator.getBoundingClientRect().top).toBe(
+      chevron!.getBoundingClientRect().top - 4,
+    );
+
+    await userEvent.click(trigger);
     const list = await canvas.findByLabelText('전환할 프로필 목록');
     const selectedOption = within(list).getByRole('button', {
-      name: `${selectedProfile.displayName}, ${selectedProfile.relativeHandle}, 읽지 않은 알림 있음`,
+      name: `${selectedProfile.displayName}, ${selectedProfile.relativeHandle}`,
     });
     const unreadOption = await within(list).findByRole('button', {
       name: `${secondProfile.displayName}, ${secondProfile.relativeHandle}, 읽지 않은 알림 있음`,
@@ -1015,24 +1064,96 @@ export const ProfileSwitcherUnreadPresence: Story = {
     const noUnreadOption = within(list).getByRole('button', {
       name: `${profileWithoutUnread.displayName}, ${profileWithoutUnread.relativeHandle}`,
     });
-    const selectedDot = within(selectedOption).getByTestId('profile-switcher-unread-dot');
-    const unreadDot = within(unreadOption).getByTestId('profile-switcher-unread-dot');
+    const unreadCount = within(unreadOption).getByTestId('profile-switcher-unread-count');
 
     expect(selectedOption).toHaveAttribute('aria-pressed', 'true');
     expect(unreadOption).toHaveAttribute('aria-pressed', 'false');
     expect(noUnreadOption).toHaveAttribute('aria-pressed', 'false');
-    expect(within(noUnreadOption).queryByTestId('profile-switcher-unread-dot')).toBeNull();
+    expect(within(selectedOption).queryByTestId('profile-switcher-unread-count')).toBeNull();
+    expect(within(noUnreadOption).queryByTestId('profile-switcher-unread-count')).toBeNull();
     expect(noUnreadOption).not.toHaveAccessibleName(/읽지 않은 알림 있음/);
-    expect(selectedDot).toHaveAttribute('aria-hidden', 'true');
-    expect(unreadDot).toHaveAttribute('aria-hidden', 'true');
-    expect(selectedDot).toHaveStyle({ height: '12px', width: '12px' });
-    expect(unreadDot).toHaveStyle({ height: '12px', width: '12px' });
-    expect(selectedOption).not.toHaveAccessibleName(/1/);
+    expect(unreadCount).toHaveAttribute('aria-hidden', 'true');
+    expect(unreadCount).toHaveTextContent('9+');
+    expect(unreadCount).toHaveStyle({ height: '24px', width: '24px' });
     expect(unreadOption).not.toHaveAccessibleName(/127/);
     expect(unreadOption.getBoundingClientRect().height).toBe(60);
-    expect(unreadDot.getBoundingClientRect().right).toBeLessThanOrEqual(
+    expect(unreadCount.getBoundingClientRect().right).toBeLessThanOrEqual(
       unreadOption.getBoundingClientRect().right,
     );
+    expect(canvas.queryByTestId('profile-switcher-closed-unread')).toBeNull();
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherCompactUnreadPresence: Story = {
+  parameters: {
+    relay: { data: profileSwitcherUnreadQuery },
+  },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', {
+      name: '프로필 목록, 읽지 않은 알림 있음',
+    });
+    const avatar = within(trigger).getByLabelText(`${selectedProfile.displayName} 프로필 이미지`);
+    const indicator = within(trigger).getByTestId('profile-switcher-closed-unread');
+    const avatarBounds = avatar.getBoundingClientRect();
+    const indicatorBounds = indicator.getBoundingClientRect();
+
+    expect(indicator).toHaveAttribute('aria-hidden', 'true');
+    expect(indicatorBounds.width).toBe(12);
+    expect(indicatorBounds.height).toBe(12);
+    expect(indicatorBounds.left).toBe(avatarBounds.left + 28);
+    expect(indicatorBounds.top).toBe(avatarBounds.top);
+    expect(getComputedStyle(indicator).borderTopWidth).toBe('1px');
+    expect(getComputedStyle(indicator).borderTopColor).toBe('rgb(255, 255, 255)');
+  },
+  render: () => <CompactProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherDrawerUnreadPresence: Story = {
+  parameters: {
+    relay: { data: profileSwitcherUnreadQuery },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', {
+      name: '프로필 목록, 읽지 않은 알림 있음',
+    });
+    const indicator = canvas.getByTestId('profile-switcher-closed-unread');
+
+    expect(indicator.getBoundingClientRect().width).toBe(8);
+    expect(indicator.getBoundingClientRect().height).toBe(8);
+    await userEvent.click(trigger);
+
+    const list = await canvas.findByLabelText('전환할 프로필 목록');
+    const unreadOption = within(list).getByRole('menuitemradio', {
+      name: `${secondProfile.displayName}, ${secondProfile.relativeHandle}, 읽지 않은 알림 있음`,
+    });
+    expect(within(unreadOption).getByTestId('profile-switcher-unread-count')).toHaveTextContent(
+      '9+',
+    );
+    expect(canvas.queryByTestId('profile-switcher-closed-unread')).toBeNull();
+  },
+  render: () => <DrawerProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherSelectedOnlyUnread: Story = {
+  parameters: {
+    relay: { data: profileSwitcherSelectedOnlyUnreadQuery },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+
+    expect(canvas.queryByTestId('profile-switcher-closed-unread')).toBeNull();
+    await userEvent.click(trigger);
+
+    const list = await canvas.findByLabelText('전환할 프로필 목록');
+    const selectedOption = within(list).getByRole('button', {
+      name: `${selectedProfile.displayName}, ${selectedProfile.relativeHandle}, 읽지 않은 알림 있음`,
+    });
+    expect(selectedOption.querySelector('svg')).not.toBeNull();
+    expect(within(selectedOption).queryByTestId('profile-switcher-unread-count')).toBeNull();
   },
   render: () => <ProfileSwitcherStory />,
 };

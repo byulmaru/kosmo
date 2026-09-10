@@ -6,6 +6,7 @@ import { Image, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
+import { ProfileSwitcherUnreadIndicator } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
@@ -13,6 +14,7 @@ import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
   fontFamilies,
+  iconSizes,
   layoutRecipes,
   radii,
   spacing,
@@ -186,6 +188,9 @@ export function ProfileSwitcher({
   const canEditSelectedProfile =
     active?.instance.kind === 'LOCAL' && active.viewerState?.membership?.role === 'OWNER';
   const profiles = data.me?.profiles ?? [];
+  const otherHasUnread = profiles.some(
+    (profile) => profile.id !== active?.id && profile.unreadNotificationCount > 0,
+  );
   const busy = selecting || creatingProfile;
   const compact = surface === 'compact';
   const fullWeb = Platform.OS === 'web' && surface === 'full';
@@ -451,18 +456,23 @@ export function ProfileSwitcher({
       <Text numberOfLines={1} style={[styles.triggerName, { color: theme.text }]}>
         {active?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
       </Text>
-      {webExpandedChevron ? (
-        <ChevronUpIcon color={theme.textSecondary} size={16} />
-      ) : (
-        <ChevronDownIcon color={theme.textSecondary} size={16} />
-      )}
+      <View style={styles.chevron}>
+        <ProfileSwitcherUnreadIndicator compact={false} visible={!open && otherHasUnread} />
+        {webExpandedChevron ? (
+          <ChevronUpIcon color={theme.textSecondary} size={iconSizes[20]} />
+        ) : (
+          <ChevronDownIcon color={theme.textSecondary} size={iconSizes[20]} />
+        )}
+      </View>
     </>
   ) : null;
   const trigger = (
     <Pressable
       ref={triggerRef}
       aria-expanded={open}
-      accessibilityLabel="프로필 목록"
+      accessibilityLabel={
+        !open && otherHasUnread ? '프로필 목록, 읽지 않은 알림 있음' : '프로필 목록'
+      }
       accessibilityRole="button"
       accessibilityState={{ expanded: open }}
       onPress={() => (open ? dismissPicker() : setOpen(true))}
@@ -474,7 +484,10 @@ export function ProfileSwitcher({
       ]}
     >
       {compact ? (
-        <Avatar imageUri={active?.avatar?.url} label={active?.displayName ?? '?'} size={40} />
+        <View style={styles.compactAvatar}>
+          <Avatar imageUri={active?.avatar?.url} label={active?.displayName ?? '?'} size={40} />
+          <ProfileSwitcherUnreadIndicator compact visible={!open && otherHasUnread} />
+        </View>
       ) : null}
       {fullWeb || mobileWebDrawer ? (
         <View style={styles.webTriggerContent}>{triggerCopy}</View>
@@ -661,6 +674,7 @@ const styles = StyleSheet.create({
   fullRoot: { alignSelf: 'stretch' },
   trigger: { alignItems: 'center', flexDirection: 'row' },
   compactTrigger: { height: 44, justifyContent: 'center', width: 44 },
+  compactAvatar: { position: 'relative' },
   fullTrigger: { alignSelf: 'flex-start', gap: spacing.sm, height: 42, maxWidth: '100%' },
   webProfileTrigger: { marginBottom: -spacing.sm },
   webTriggerContent: {
@@ -676,6 +690,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     ...typography.xl,
   },
+  chevron: { height: iconSizes[20], position: 'relative', width: iconSizes[20] },
   webMenu: { position: 'absolute', width: 280, zIndex: 30 },
   compactMenuPosition: { left: 72, top: 0 },
   drawerMenuPosition: { left: 0, top: 190 },

@@ -1,6 +1,6 @@
 import { CheckIcon } from 'lucide-react-native';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { UnreadDot } from '@/components/shell/UnreadDot';
+import { ProfileSwitcherUnreadBadge } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
@@ -87,16 +87,11 @@ export function ProfilePicker({
           },
         ]}
       >
-        <View style={styles.profileAvatar}>
-          <Avatar
-            imageUri={profile.avatar?.url}
-            label={profile.displayName}
-            size={selected ? 48 : 32}
-          />
-          {hasUnread ? (
-            <UnreadDot style={styles.profileUnreadDot} testID="profile-switcher-unread-dot" />
-          ) : null}
-        </View>
+        <Avatar
+          imageUri={profile.avatar?.url}
+          label={profile.displayName}
+          size={selected ? 48 : 32}
+        />
         <View style={styles.profileLabel}>
           <Text numberOfLines={1} style={[styles.displayName, { color: theme.text }]}>
             {profile.displayName}
@@ -105,7 +100,11 @@ export function ProfilePicker({
             {profile.relativeHandle}
           </Text>
         </View>
-        {selected ? <CheckIcon color={theme.text} size={16} /> : null}
+        {selected ? (
+          <CheckIcon color={theme.text} size={16} />
+        ) : (
+          <ProfileSwitcherUnreadBadge count={profile.unreadNotificationCount} />
+        )}
       </Pressable>
     );
   });
@@ -174,15 +173,6 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   unselectedProfile: { paddingVertical: space[8] },
-  profileAvatar: { position: 'relative' },
-  profileUnreadDot: {
-    height: 12,
-    position: 'absolute',
-    right: -2,
-    top: -2,
-    width: 12,
-    zIndex: 1,
-  },
   profileLabel: { flex: 1, minWidth: 0 },
   displayName: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md },
   handle: { fontFamily: fontFamilies.ui, ...typography.sm },
