@@ -72,9 +72,9 @@
 - 오류 후 allow/deny 재시도, 삭제·terminal source, duplicate, 이미 Read인 Notification의 값 보존을 검증한다.
 - 영구 Mute 해제·마지막 Block 해제 뒤 새 행동, mutual 한쪽 해제의 지속 억제, Mute 생성 전 Read/Unread 보존을 검증한다.
 
-- [ ] 3.1 다섯 source의 정책 평가 실패에서 Notification 미생성과 source commit 보존·오류 전파를 검증한다.
-- [ ] 3.2 기존 Activity retry·sibling settlement와 source 삭제/terminal·duplicate 멱등성 회귀를 검증한다.
-- [ ] 3.3 Mute·Block 해제 뒤 새 행동, mutual 일부 해제와 기존 Read/Unread 보존을 검증한다.
+- [x] 3.1 다섯 source의 정책 평가 실패에서 Notification 미생성과 source commit 보존·오류 전파를 검증한다.
+- [x] 3.2 기존 Activity retry·sibling settlement와 source 삭제/terminal·duplicate 멱등성 회귀를 검증한다.
+- [x] 3.3 Mute·Block 해제 뒤 새 행동, mutual 일부 해제와 기존 Read/Unread 보존을 검증한다.
 
 ## 4. PROD-327 전체 통합 검증·명세 동기화·완료
 
