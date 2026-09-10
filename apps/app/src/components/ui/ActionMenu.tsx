@@ -118,6 +118,7 @@ export function ActionMenu({
   const itemsRef = useRef(items);
   const pendingSelectionRef = useRef<(() => void) | null>(null);
   const triggerRef = useRef<View>(null);
+  const [pressedWebItemKey, setPressedWebItemKey] = useState<string | null>(null);
   const [hoveredWebItemKey, setHoveredWebItemKey] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [closingItems, setClosingItems] = useState(items);
@@ -206,6 +207,7 @@ export function ActionMenu({
       if (disabled) {
         return;
       }
+      setPressedWebItemKey(null);
       setHoveredWebItemKey(null);
       setClosingItems(itemsRef.current);
       setOpen(false);
@@ -217,6 +219,7 @@ export function ActionMenu({
   );
   const toggle = useCallback(() => {
     if (!disabled) {
+      setPressedWebItemKey(null);
       setHoveredWebItemKey(null);
       if (open) {
         setClosingItems(items);
@@ -445,6 +448,24 @@ export function ActionMenu({
                       item.tone === 'danger'
                         ? theme.feedbackDangerOnSubtle
                         : theme.foregroundPrimary;
+                    const backgroundColor = item.disabled
+                      ? undefined
+                      : pressedWebItemKey === item.key
+                        ? theme.statePressed
+                        : hoveredWebItemKey === item.key
+                          ? theme.stateHover
+                          : undefined;
+                    const itemStyle = StyleSheet.flatten([
+                      styles.item,
+                      styles.webItem,
+                      index > 0
+                        ? {
+                            borderTopColor: theme.borderSubtle,
+                            borderTopWidth: borderWidths[1],
+                          }
+                        : undefined,
+                      item.disabled ? { opacity: 0.45 } : undefined,
+                    ]);
                     const control = (
                       <Pressable
                         accessibilityLabel={item.accessibilityLabel ?? item.label}
@@ -456,25 +477,16 @@ export function ActionMenu({
                         onHoverOut={() =>
                           setHoveredWebItemKey((current) => (current === item.key ? null : current))
                         }
+                        onPressIn={() => setPressedWebItemKey(item.key)}
+                        onPressOut={() =>
+                          setPressedWebItemKey((current) => (current === item.key ? null : current))
+                        }
                         onPress={() => select(item)}
                         role="menuitem"
-                        style={({ pressed }) => [
-                          styles.item,
-                          styles.webItem,
-                          index > 0
-                            ? {
-                                borderTopColor: theme.borderSubtle,
-                                borderTopWidth: borderWidths[1],
-                              }
-                            : undefined,
-                          item.disabled
-                            ? { opacity: 0.45 }
-                            : pressed
-                              ? { backgroundColor: theme.statePressed }
-                              : hoveredWebItemKey === item.key
-                                ? { backgroundColor: theme.stateHover }
-                                : undefined,
-                        ]}
+                        style={StyleSheet.flatten([
+                          itemStyle,
+                          backgroundColor ? { backgroundColor } : undefined,
+                        ])}
                       >
                         {index === 0 ? (
                           <View accessible={false} aria-hidden style={styles.webFirstItemHitArea} />
@@ -508,7 +520,7 @@ export function ActionMenu({
                     style={[
                       styles.error,
                       styles.webError,
-                      elevation.floating,
+                      { boxShadow: elevation.floating.boxShadow as string },
                       {
                         backgroundColor: theme.backgroundElevated,
                         borderColor: theme.borderDefault,

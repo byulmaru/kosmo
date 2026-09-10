@@ -381,6 +381,10 @@ export const SharedNavigation: Story = {
     const profileEditVisual = within(profileEdit).getByTestId('profile-edit-action-visual');
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
     const searchVisual = within(search).getByTestId('sidebar-control-visual');
+    const utility = canvas.getByRole('button', { name: '설정 및 기타' });
+    const utilityVisual = within(utility).getByTestId('sidebar-control-visual');
+    const utilityIcons = utilityVisual.querySelectorAll('svg');
+    const utilityVisualRect = utilityVisual.getBoundingClientRect();
     const activeProfileRect = activeProfile.getBoundingClientRect();
     const profileEditRect = profileEdit.getBoundingClientRect();
     expect(bookmarks).toHaveAttribute('href', '/bookmarks');
@@ -400,9 +404,34 @@ export const SharedNavigation: Story = {
       width: '72px',
     });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
-    await userEvent.click(canvas.getByRole('button', { name: '설정 및 기타' }));
+    expect(utility).toHaveAttribute('aria-expanded', 'false');
+    expect(utilityIcons).toHaveLength(2);
+    expect(utilityIcons[0]).toHaveAttribute('width', '20');
+    expect(utilityIcons[0].getBoundingClientRect().left - utilityVisualRect.left).toBe(8);
+    expect(
+      within(utility).getByText('설정 및 기타').getBoundingClientRect().left -
+        utilityVisualRect.left,
+    ).toBe(44);
+    expect(utilityIcons[1]).toHaveAttribute('width', '24');
+    expect(utilityIcons[1].getBoundingClientRect().left - utilityVisualRect.left).toBe(224);
+    expect(utilityVisualRect.right - utilityIcons[1].getBoundingClientRect().right).toBe(24);
+    await userEvent.click(utility);
     const settings = canvas.getByRole('link', { name: '설정' });
+    const logout = canvas.getByRole('button', { name: '로그아웃' });
     expect(settings).toHaveAttribute('href', '/settings');
+    expect(utility).toHaveAttribute('aria-expanded', 'true');
+    expect(utilityVisual.querySelectorAll('svg')[1].querySelector('path')).toHaveAttribute(
+      'd',
+      'm18 15-6-6-6 6',
+    );
+    for (const control of [settings, logout]) {
+      const visual = within(control).getByTestId('sidebar-control-visual');
+      const icon = visual.querySelector('svg');
+      const label = within(control).getByText(control === settings ? '설정' : '로그아웃');
+      expect(icon).not.toBeNull();
+      expect(icon!.getBoundingClientRect().left - visual.getBoundingClientRect().left).toBe(32);
+      expect(label.getBoundingClientRect().left - visual.getBoundingClientRect().left).toBe(68);
+    }
     expect(
       followRequests.compareDocumentPosition(bookmarks) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
@@ -498,8 +527,9 @@ export const SettingsNavigationCurrentState: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const utility = canvas.getByRole('button', { name: '설정 및 기타' });
-    await userEvent.click(utility);
     const settings = canvas.getByRole('link', { name: '설정' });
+    expect(utility).toHaveAttribute('aria-expanded', 'true');
+    expect(utility).not.toHaveAttribute('aria-current');
     expect(settings).toHaveAttribute('href', '/settings');
     expect(settings).toHaveAttribute('aria-current', 'page');
   },

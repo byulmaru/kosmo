@@ -1,6 +1,8 @@
 import {
   Bell,
   Bookmark,
+  ChevronDown,
+  ChevronUp,
   Ellipsis,
   House,
   LogOut,
@@ -74,6 +76,8 @@ type SidebarControlProps = {
   profile?: NavigationProfile;
   renderControl?: (props: SidebarNavigationRenderControlProps) => ReactElement;
   selected?: boolean;
+  nested?: boolean;
+  trailingIcon?: LucideIcon;
   tone?: 'default' | 'primary';
   unreadCount?: number | null;
 };
@@ -93,6 +97,8 @@ function SidebarControl({
   profile,
   renderControl,
   selected = false,
+  nested = false,
+  trailingIcon: TrailingIcon,
   tone = 'default',
   unreadCount = null,
 }: SidebarControlProps) {
@@ -138,21 +144,19 @@ function SidebarControl({
       }}
       onPress={renderControl && destination ? undefined : onPress}
       ref={controlRef}
-      style={() => {
-        return [
-          styles.control,
-          compact ? styles.compactControl : styles.wideControl,
-          tone === 'primary' ? styles.primaryControl : undefined,
-          Platform.OS === 'web'
-            ? ({
-                outlineColor: focusVisible ? theme.stateFocusRing : undefined,
-                outlineOffset: -2,
-                outlineStyle: focusVisible ? 'solid' : 'none',
-                outlineWidth: focusVisible ? borderWidths[2] : borderWidths[0],
-              } as ViewStyle)
-            : undefined,
-        ];
-      }}
+      style={StyleSheet.flatten([
+        styles.control,
+        compact ? styles.compactControl : styles.wideControl,
+        tone === 'primary' ? styles.primaryControl : undefined,
+        Platform.OS === 'web'
+          ? ({
+              outlineColor: focusVisible ? theme.stateFocusRing : undefined,
+              outlineOffset: -2,
+              outlineStyle: focusVisible ? 'solid' : 'none',
+              outlineWidth: focusVisible ? borderWidths[2] : borderWidths[0],
+            } as ViewStyle)
+          : undefined,
+      ])}
     >
       {(state) => {
         const webState = state as PressableStateCallbackType & {
@@ -180,6 +184,7 @@ function SidebarControl({
             style={[
               styles.visual,
               compact ? styles.compactVisual : styles.wideVisual,
+              !compact && nested ? styles.nestedVisual : undefined,
               tone === 'primary' ? styles.primaryControl : undefined,
               Platform.OS === 'web'
                 ? ({
@@ -237,6 +242,17 @@ function SidebarControl({
                 ) : null}
               </>
             )}
+            {TrailingIcon ? (
+              <View
+                accessible={false}
+                accessibilityElementsHidden
+                aria-hidden
+                importantForAccessibility="no-hide-descendants"
+                style={styles.trailingIcon}
+              >
+                <TrailingIcon color={color} size={iconSizes[24]} strokeWidth={2} />
+              </View>
+            ) : null}
           </View>
         );
       }}
@@ -273,10 +289,15 @@ export function SidebarNavigation({
   const theme = useTheme();
   const compact = presentation === 'compact';
   const [utilityState, setUtilityState] = useState({ open: false, presentation });
-  const utilityOpen = utilityState.open && utilityState.presentation === presentation;
+  const transientUtilityOpen = utilityState.open && utilityState.presentation === presentation;
+  const settingsPinned = !compact && currentDestination === 'settings';
+  const utilityOpen = settingsPinned || transientUtilityOpen;
 
   const changeUtilityOpen = (open: boolean) => {
-    if (open === utilityOpen) {
+    if (settingsPinned) {
+      return;
+    }
+    if (open === transientUtilityOpen) {
       return;
     }
     setUtilityState({ open, presentation });
@@ -288,12 +309,18 @@ export function SidebarNavigation({
   };
 
   useEffect(() => {
+    if (settingsPinned) {
+      if (utilityState.open || utilityState.presentation !== presentation) {
+        setUtilityState({ open: false, presentation });
+      }
+      return;
+    }
     if (!utilityState.open || utilityState.presentation === presentation) {
       return;
     }
     setUtilityState({ open: false, presentation });
     onMenuOpenChange?.(false);
-  }, [onMenuOpenChange, presentation, utilityState]);
+  }, [onMenuOpenChange, presentation, settingsPinned, utilityState]);
 
   return (
     <View
@@ -422,10 +449,15 @@ export function SidebarNavigation({
             <SidebarControl
               compact={false}
               expanded={utilityOpen}
-              Icon={Ellipsis}
+              Icon={SettingsIcon}
               label="설정 및 기타"
-              onPress={() => changeUtilityOpen(!utilityOpen)}
-              selected={currentDestination === 'settings' && !utilityOpen}
+              onPress={() => {
+                if (currentDestination !== 'settings') {
+                  changeUtilityOpen(!utilityOpen);
+                }
+              }}
+              selected={false}
+              trailingIcon={utilityOpen ? ChevronUp : ChevronDown}
             />
             {utilityOpen ? (
               <View style={styles.inlineUtility}>
@@ -441,6 +473,7 @@ export function SidebarNavigation({
                   }
                   renderControl={renderControl}
                   selected={currentDestination === 'settings'}
+                  nested
                 />
                 <SidebarControl
                   compact={false}
@@ -448,6 +481,7 @@ export function SidebarNavigation({
                   Icon={LogOut}
                   label="로그아웃"
                   onPress={onLogout}
+                  nested
                 />
               </View>
             ) : null}
@@ -474,7 +508,7 @@ const styles = StyleSheet.create({
     paddingVertical: space[16],
   },
   compactRoot: { alignItems: 'center', width: 80 },
-  wideRoot: { paddingHorizontal: space[24], width: 320 },
+  wideRoot: { paddingHorizontal: space[24], paddingVertical: space[24], width: 320 },
   group: { gap: space[4] },
   compactGroup: { alignItems: 'center', gap: 0, width: 48 },
   control: {
@@ -489,14 +523,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius[8],
     flexDirection: 'row',
-    gap: space[12],
+    gap: space[16],
     height: '100%',
     width: '100%',
   },
   compactVisual: { justifyContent: 'center' },
-  wideVisual: { justifyContent: 'flex-start', paddingHorizontal: space[16] },
+  wideVisual: { justifyContent: 'flex-start', paddingHorizontal: space[8] },
   primaryControl: { borderRadius: radius.full },
   iconFrame: { position: 'relative' },
+  trailingIcon: { marginLeft: 'auto', marginRight: space[16] },
   unread: {
     borderRadius: radius.full,
     height: 8,
@@ -520,7 +555,12 @@ const styles = StyleSheet.create({
     paddingTop: space[8],
   },
   compactFooter: { alignItems: 'center', gap: 0, width: 48 },
-  wideFooter: { width: 272 },
-  inlineUtility: { gap: space[4] },
+  wideFooter: {
+    gap: space[0],
+    paddingTop: space[4] - borderWidths[1],
+    width: 272,
+  },
+  inlineUtility: { gap: space[0] },
+  nestedVisual: { paddingLeft: space[32] },
   error: { marginTop: space[8], ...textStyles.uiCopyS },
 });
