@@ -857,7 +857,8 @@ test('Active Block rejects new local Reply, Reaction, and Repost in either direc
         replyParentId: sourcePostId,
         visibility: PostVisibility.PUBLIC,
       }),
-      ProfilePairBlockedError,
+      (error: unknown) =>
+        error instanceof ProfilePairBlockedError && error.message === 'Post not found',
     );
     await assert.rejects(
       addReaction({
@@ -866,11 +867,13 @@ test('Active Block rejects new local Reply, Reaction, and Repost in either direc
         postId: sourcePostId,
         type: '🎉',
       }),
-      ProfilePairBlockedError,
+      (error: unknown) =>
+        error instanceof ProfilePairBlockedError && error.message === 'Post not found',
     );
     await assert.rejects(
       repostPost({ actorProfileId, origin: 'LOCAL', sourcePostId }),
-      ProfilePairBlockedError,
+      (error: unknown) =>
+        error instanceof ProfilePairBlockedError && error.message === 'Post not found',
     );
   };
 

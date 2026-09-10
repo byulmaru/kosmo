@@ -279,6 +279,7 @@ const createOrFindRepost = async (
     throw new NotFoundError('Post not found');
   }
   await assertProfilePairIsNotBlocked(tx, {
+    notFoundMessage: 'Post not found',
     firstProfileId: actorProfileId,
     secondProfileId: source.profileId,
   });
@@ -649,6 +650,7 @@ export async function createPost(
           throw new NotFoundError('Post not found');
         }
         await assertProfilePairIsNotBlocked(tx, {
+          notFoundMessage: 'Post not found',
           firstProfileId: input.profileId,
           secondProfileId: parent.profileId,
         });
