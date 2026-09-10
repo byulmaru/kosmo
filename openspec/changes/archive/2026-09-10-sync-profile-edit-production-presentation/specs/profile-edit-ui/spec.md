@@ -75,6 +75,24 @@
 - **AND** 순서 변경 control이나 drag gesture를 표시하지 않는다
 - **AND** 자동완성·추천·trend·검색 link를 표시하지 않는다
 
+### Requirement: Header image editing surface preserves a 3:1 aspect ratio
+
+**Authority / Provenance:** `docs/design/profile-edit.md`, `PROD-491`, `PROD-941` — header 이미지 변경 영역은 Web·Android·iOS의 모든 지원 폭에서 가로:세로 `3:1`을 유지해야 하며(MUST), avatar overlap과 편집 action을 담는 hero wrapper나 고정 높이가 preview 비율을 왜곡해서는 안 된다(MUST NOT). 이미지와 아래 surface 경계에는 current theme의 `border/default` 1px 하단선을 표시해야 한다(MUST). 원본 이미지 비율이 다르면 `3:1` 경계 안에서 중앙 기준 cover crop해야 한다(MUST).
+
+#### Scenario: Resize the header preview responsively
+
+- **WHEN** Profile edit surface의 가로 폭이 `W`로 바뀐다
+- **THEN** header 이미지 변경 영역은 가로 `W`, 세로 `W / 3`으로 렌더된다
+- **AND** `390px` mobile에서는 `390×130`, `600px` 중앙 surface에서는 `600×200`을 유지한다
+- **AND** 이미지와 아래 surface 경계에는 current theme의 `border/default` 1px 하단선이 유지된다
+- **AND** avatar와 image action을 배치하는 hero wrapper 높이는 preview 비율 계산에 포함되지 않는다
+
+#### Scenario: Preview a source image with another aspect ratio
+
+- **WHEN** 현재 또는 교체 대상으로 선택한 header 원본 이미지가 `3:1`이 아니다
+- **THEN** preview는 `3:1` container를 유지한 채 중앙 기준 cover crop으로 이미지를 표시한다
+- **AND** 선택·업로드 대기·오류 state 사이에서 container 비율을 바꾸지 않는다
+
 ### Requirement: Responsive accessible Profile edit layout
 
 **Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `docs/design/accessibility.md`, `docs/design/icons.md`, `docs/design/typography.md`, DSN-45, PROD-491, PROD-941 — Profile edit presentation은 Web shell 중앙 최대 `600px` surface와 mobile/native 정보 구조를 공유해야 한다(MUST). safe-area를 제외한 상단 navigation header는 정확히 `64px` 높이와 `16px` horizontal inset을 사용해야 하며(MUST), 제목은 `uiHeadingS` `20/26/700`으로 표시해야 한다(MUST). 뒤로가기 action은 `44×44` layout target 안의 `ArrowLeft` `24px`를 사용하되 Android에서는 hit slop을 포함한 실제 입력 target을 최소 `48×48dp`로 제공해야 한다(MUST). 저장 action은 Web에서 `64×40` visual을 사용하고 iOS·Android에서는 각각 최소 `44pt`, `48dp` 실제 입력 높이를 제공해야 한다(MUST). Profile Tag 제거 action은 시각 크기 `32×32`와 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`를 분리하고, 다른 text action은 최소 높이 `36`과 대상·상태를 설명하는 accessibility label/state를 제공해야 한다(MUST).

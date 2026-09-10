@@ -103,13 +103,14 @@ Web·Android·iOS 클라이언트 계약을 문서화한다.
 
 ### Requirement: Header image editing surface preserves a 3:1 aspect ratio
 
-**Authority / Provenance:** `docs/design/profile-edit.md`, `PROD-491` — header 이미지 변경 영역은 Web·Android·iOS의 모든 지원 폭에서 가로:세로 `3:1`을 유지해야 하며(MUST), avatar overlap과 편집 action을 담는 hero wrapper나 고정 높이가 preview 비율을 왜곡해서는 안 된다(MUST NOT). 원본 이미지 비율이 다르면 `3:1` 경계 안에서 중앙 기준 cover crop해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-edit.md`, `PROD-491`, `PROD-941` — header 이미지 변경 영역은 Web·Android·iOS의 모든 지원 폭에서 가로:세로 `3:1`을 유지해야 하며(MUST), avatar overlap과 편집 action을 담는 hero wrapper나 고정 높이가 preview 비율을 왜곡해서는 안 된다(MUST NOT). 이미지와 아래 surface 경계에는 current theme의 `border/default` 1px 하단선을 표시해야 한다(MUST). 원본 이미지 비율이 다르면 `3:1` 경계 안에서 중앙 기준 cover crop해야 한다(MUST).
 
 #### Scenario: Resize the header preview responsively
 
 - **WHEN** Profile edit surface의 가로 폭이 `W`로 바뀐다
 - **THEN** header 이미지 변경 영역은 가로 `W`, 세로 `W / 3`으로 렌더된다
 - **AND** `390px` mobile에서는 `390×130`, `600px` 중앙 surface에서는 `600×200`을 유지한다
+- **AND** 이미지와 아래 surface 경계에는 current theme의 `border/default` 1px 하단선이 유지된다
 - **AND** avatar와 image action을 배치하는 hero wrapper 높이는 preview 비율 계산에 포함되지 않는다
 
 #### Scenario: Preview a source image with another aspect ratio

@@ -27,13 +27,13 @@
 
 **Verification**
 
-- Mobile `390`, Compact `1024`, Full `1440`에서 header·back/save target, `3:1` preview, avatar frame/content/overlap/row와 field spacing을 실행 결과로 검증한다.
+- Mobile `390`, Compact `1024`, Full `1440`에서 header·back/save target, `3:1` preview와 `border/default` 1px 하단선, avatar frame/content/overlap/row와 field spacing을 실행 결과로 검증한다.
 - Light/Dark, 긴 입력, validation, saving, image uploading/error와 failure 뒤 draft 보존의 기존 Storybook 동작을 실행한다.
 - Profile Edit 관련 unit·Storybook·type/lint/build check와 `openspec validate sync-profile-edit-production-presentation --strict`를 통과시킨다.
 - Web browser에서 scroll·focus·Back과 responsive visual을 확인하고 Android/iOS에서 실행한 항목과 미실행 항목을 분리해 기록한다.
 
 - [x] 1.1 safe-area 밖 경계를 유지한 `64px` header, title·back·save geometry와 platform별 실제 입력 target을 구현한다.
-- [x] 1.2 `3:1` header preview를 보존하면서 Mobile과 Compact·Full의 avatar frame·content·overlap·row 및 camera geometry를 동기화한다.
+- [x] 1.2 `3:1` header preview와 `border/default` 1px 하단선을 보존하면서 Mobile과 Compact·Full의 avatar frame·content·overlap·row 및 camera geometry를 동기화한다.
 - [x] 1.3 displayName·bio·Profile Tags의 `Label/L`, label-control `8px`와 field section `16px` 위계를 적용하고 기존 input·validation 동작을 보존한다.
 - [x] 1.4 기존 Production component를 사용하는 대표 visual story와 Controls-disabled 자동 계약을 Mobile·Compact·Full, Light/Dark와 영향받는 상태에 맞게 갱신한다.
 - [x] 1.5 기존 저장·validation·image menu/upload/retry·draft·Follow Approval·navigation 회귀와 관련 정적 check를 실행한다.
@@ -48,6 +48,8 @@
 - Web browser: `390` Light clean, `1024` Light clean, `1440` Dark dirty에서 header·image·field 위계와
   Save disabled/active를 확인했다. `390`에서 입력 변경, keyboard focus, avatar menu open, `Escape` dismiss와
   trigger focus 복귀를 확인했고 긴 상태는 별도 internal scroller 없이 document가 `844 → 980px`로 스크롤됐다.
+- Figma: `ProfileEditImageFields` source의 Center `600×200`, Mobile `390×130` header에 `border/default`와
+  `border-width/1`을 binding한 하단선을 readback과 screenshot으로 확인했다.
 - Native: Android/iOS 실제 기기·simulator는 실행하지 않았다. 공용 `IconButton`·`Button` unit이 iOS `44pt`와
   Android `48dp` mapping을 검증하지만 safe area, touch·focus boundary, font scaling, keyboard, hardware Back,
   VoiceOver·TalkBack runtime 완료 증거로 사용하지 않는다.
