@@ -158,9 +158,11 @@ test('상대만 나를 차단한 Profile은 관계 버튼을 숨긴다', async (
 });
 
 test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유한다', async () => {
+  let unblockSuccesses = 0;
   await act(async () => {
     renderer = create(
       createElement(FollowButton, {
+        onUnblockSuccess: () => (unblockSuccesses += 1),
         profile: profile as never,
         profileBlockStatus: {
           blockedBy: true,
@@ -192,6 +194,7 @@ test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유
     },
   ]);
   assert.deepEqual(toastCalls, [{ message: '차단을 해제했어요', tone: 'success' }]);
+  assert.equal(unblockSuccesses, 1);
 });
 
 test('관리 관계 fragment도 같은 차단 해제 action을 사용한다', async () => {
