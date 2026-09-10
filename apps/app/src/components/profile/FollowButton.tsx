@@ -19,6 +19,7 @@ import type { FollowButtonFollowProfileMutation } from './__generated__/FollowBu
 import type { FollowButtonUnfollowProfileMutation } from './__generated__/FollowButtonUnfollowProfileMutation.graphql';
 
 type FollowButtonProps = {
+  onUnblockSuccess?: () => void;
   profile: FollowButton_profile$key;
   profileBlock?: FollowButton_profileBlock$key | null;
   profileBlockStatus?: FollowButton_profileBlockStatus$key | null;
@@ -125,6 +126,7 @@ const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
 export function FollowButton({
+  onUnblockSuccess,
   profile,
   profileBlock = null,
   profileBlockStatus = null,
@@ -196,6 +198,7 @@ export function FollowButton({
       if (!mounted.current) {
         return;
       }
+      onUnblockSuccess?.();
       setUnblockOpen(false);
       showToast('차단을 해제했어요', { tone: 'success' });
     } catch (error) {
