@@ -151,8 +151,6 @@ export function FollowButton({
     useMutation<FollowButtonUnfollowProfileMutation>(unfollowProfileMutation);
   const [unblockOpen, setUnblockOpen] = useState(false);
   const [unblockPending, setUnblockPending] = useState(false);
-  const [blockedHovered, setBlockedHovered] = useState(false);
-  const [blockedFocused, setBlockedFocused] = useState(false);
   const mounted = useRef(true);
   const unblockInFlight = useRef(false);
   const cancelRef = useRef<View>(null);
@@ -208,7 +206,11 @@ export function FollowButton({
       setUnblockOpen(false);
       showToast('차단을 해제했어요', { tone: 'success' });
     } catch (error) {
-      if (!mounted.current || error instanceof StaleProfileBlockRequestError) {
+      if (!mounted.current) {
+        return;
+      }
+      setUnblockOpen(false);
+      if (error instanceof StaleProfileBlockRequestError) {
         return;
       }
       showToast('차단을 해제하지 못했어요. 다시 시도해 주세요.', { tone: 'danger' });
@@ -225,30 +227,24 @@ export function FollowButton({
   }
 
   if (blocking) {
-    const label =
-      Platform.OS === 'web' && (blockedHovered || blockedFocused) ? '차단 해제' : '차단됨';
     return (
       <>
-        <View style={[styles.root, { paddingVertical: hitSlop }, style]}>
+        <View style={[styles.root, style]}>
           <Button
             accessibilityLabel={`${data.displayName} ${data.relativeHandle} 차단 해제`}
-            accessibilityState={{ busy: unblockPending, disabled: unblockPending, selected: true }}
+            accessibilityState={{ busy: unblockPending, disabled: unblockPending }}
             controlRef={(node) => {
               actionRef.current = node;
               onActionRef?.(node);
             }}
             disabled={unblockPending}
             hitSlop={hitSlop}
-            onBlur={Platform.OS === 'web' ? () => setBlockedFocused(false) : undefined}
-            onFocus={Platform.OS === 'web' ? () => setBlockedFocused(true) : undefined}
-            onHoverIn={Platform.OS === 'web' ? () => setBlockedHovered(true) : undefined}
-            onHoverOut={Platform.OS === 'web' ? () => setBlockedHovered(false) : undefined}
             onPress={() => setUnblockOpen(true)}
             size={size === 'compact' ? 'compact' : 'default'}
             style={size === 'compact' ? styles.compactButton : styles.mediumButton}
             tone="secondary"
           >
-            {label}
+            차단 해제
           </Button>
         </View>
         <ModalSheet
@@ -267,7 +263,7 @@ export function FollowButton({
             onCancel={closeUnblock}
             onConfirm={() => void requestUnblock()}
             pending={unblockPending}
-            tone="primary"
+            tone="danger"
           />
         </ModalSheet>
       </>

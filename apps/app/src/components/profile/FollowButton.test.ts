@@ -16,6 +16,7 @@ const changeBlockedCalls: Array<{
   nextBlocked: boolean;
 }> = [];
 const toastCalls: Array<{ message: string; tone: string }> = [];
+let changeBlockedError: Error | null = null;
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -77,6 +78,7 @@ mockModule(new URL('./ProfileBlockController.tsx', import.meta.url), {
       nextBlocked: boolean,
     ) => {
       changeBlockedCalls.push({ change, nextBlocked });
+      if (changeBlockedError) throw changeBlockedError;
     },
   }),
 });
@@ -97,6 +99,7 @@ afterEach(async () => {
   platform.OS = 'web';
   windowWidth = 1280;
   changeBlockedCalls.length = 0;
+  changeBlockedError = null;
   toastCalls.length = 0;
 });
 
@@ -110,7 +113,7 @@ const profile = {
   viewerState: { follow: null, followRequest: null, isSelf: false },
 };
 
-test('내가 차단한 Profile은 기본 차단됨, hover와 keyboard focus에서는 차단 해제를 표시한다', async () => {
+test('내가 차단한 Profile은 고정된 차단 해제 action을 표시한다', async () => {
   await act(async () => {
     renderer = create(
       createElement(FollowButton, {
@@ -124,22 +127,11 @@ test('내가 차단한 Profile은 기본 차단됨, hover와 keyboard focus에�
     );
   });
   const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
-  assert.equal(button?.props.children, '차단됨');
+  assert.equal(button?.props.children, '차단 해제');
   assert.equal(button?.props.accessibilityLabel, '코스모 @kosmo 차단 해제');
-
-  await act(async () => button?.props.onHoverIn());
-  assert.equal(
-    renderer?.root.find((node) => (node.type as unknown) === 'Button').props.children,
-    '차단 해제',
-  );
-  await act(async () => button?.props.onHoverOut());
-  await act(async () => button?.props.onFocus());
-  await act(async () => button?.props.onHoverIn());
-  await act(async () => button?.props.onHoverOut());
-  assert.equal(
-    renderer?.root.find((node) => (node.type as unknown) === 'Button').props.children,
-    '차단 해제',
-  );
+  assert.equal(button?.props.accessibilityState.selected, undefined);
+  assert.equal(button?.props.onHoverIn, undefined);
+  assert.equal(button?.props.onFocus, undefined);
 });
 
 test('상대만 나를 차단한 Profile은 관계 버튼을 숨긴다', async () => {
@@ -174,7 +166,7 @@ test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유
     );
   });
   const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
-  assert.equal(button?.props.children, '차단됨');
+  assert.equal(button?.props.children, '차단 해제');
   await act(async () => button?.props.onPress());
   const modal = renderer?.root.find((node) => (node.type as unknown) === 'ModalSheet');
   const confirmation = renderer?.root.find(
@@ -182,6 +174,7 @@ test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유
   );
   assert.equal(modal?.props.visible, true);
   assert.equal(confirmation?.props.message, '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.');
+  assert.equal(confirmation?.props.tone, 'danger');
 
   await act(async () => confirmation?.props.onConfirm());
   assert.deepEqual(changeBlockedCalls, [
@@ -198,6 +191,40 @@ test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유
   assert.equal(unblockSuccesses, 1);
 });
 
+test('차단 해제 실패 시 확인창을 닫고 action으로 focus를 복귀한다', async () => {
+  changeBlockedError = new Error('unblock failed');
+  let focusCalls = 0;
+  await act(async () => {
+    renderer = create(
+      createElement(FollowButton, {
+        profile: profile as never,
+        profileBlockStatus: {
+          blockedBy: false,
+          blocking: true,
+          profileBlockId: 'profile-block-a',
+        } as never,
+      }),
+    );
+  });
+  const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
+  button?.props.controlRef({ focus: () => (focusCalls += 1) });
+  await act(async () => button?.props.onPress());
+  const confirmation = renderer?.root.find(
+    (node) => (node.type as unknown) === 'ConfirmationContent',
+  );
+  await act(async () => {
+    confirmation?.props.onConfirm();
+    await Promise.resolve();
+  });
+  const modal = renderer?.root.find((node) => (node.type as unknown) === 'ModalSheet');
+  assert.equal(modal?.props.visible, false);
+  modal?.props.onDismiss();
+  assert.equal(focusCalls, 1);
+  assert.deepEqual(toastCalls, [
+    { message: '차단을 해제하지 못했어요. 다시 시도해 주세요.', tone: 'danger' },
+  ]);
+});
+
 test('관리 관계 fragment도 같은 차단 해제 action을 사용한다', async () => {
   await act(async () => {
     renderer = create(
@@ -209,7 +236,7 @@ test('관리 관계 fragment도 같은 차단 해제 action을 사용한다', as
     );
   });
   const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
-  assert.equal(button?.props.children, '차단됨');
+  assert.equal(button?.props.children, '차단 해제');
   await act(async () => button?.props.onPress());
   await act(async () =>
     renderer?.root
@@ -232,6 +259,26 @@ for (const size of [undefined, 'compact'] as const) {
     assert.equal(button.props.hitSlop, undefined);
   });
 }
+
+test('Native 차단 action은 Button hitSlop만 사용해 wrapper 높이를 늘리지 않는다', async () => {
+  platform.OS = 'ios';
+  await act(async () => {
+    renderer = create(
+      createElement(FollowButton, {
+        profile: profile as never,
+        profileBlockStatus: {
+          blockedBy: false,
+          blocking: true,
+          profileBlockId: 'profile-block-a',
+        } as never,
+      }),
+    );
+  });
+  const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
+  const wrapperStyle = Object.assign({}, ...button!.parent!.props.style.flat());
+  assert.equal(wrapperStyle.paddingVertical, undefined);
+  assert.equal(button?.props.hitSlop, 2);
+});
 
 for (const [os, width, expectedWidth, marginVertical] of [
   ['web', 767, 96, 0],
