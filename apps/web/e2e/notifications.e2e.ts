@@ -192,7 +192,7 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
   }
 });
 
-test('Reply 알림 링크는 새 탭에서도 Read하고 본문 이동은 한 번만 Read한다', async ({
+test('Reply 알림 작성자 Ctrl/Cmd 새 탭과 본문 이동은 각각 한 번만 Read한다', async ({
   context,
   page,
 }) => {
@@ -263,28 +263,9 @@ test('Reply 알림 링크는 새 탭에서도 Read하고 본문 이동은 한 �
   await expect.poll(() => markReadRequestCount).toBe(1);
   await expect.poll(() => notificationReadAt(notification.id)).not.toBeNull();
 
-  const timePagePromise = context.waitForEvent('page');
-  await replyRow.getByTestId('notification-post-time').click({ button: 'middle' });
-  const timePage = await timePagePromise;
-  await expect(timePage).toHaveURL(
-    `/@${replyAuthor.profile.handle}/${toGlobalId('Post', reply.id)}`,
-  );
-  await expect(page).toHaveURL('/notifications');
-  await expect.poll(() => markReadRequestCount).toBe(2);
   await authorPage.close();
-  await timePage.close();
-  await page.unroute('**/graphql');
 
   markReadRequestCount = 0;
-  await page.route('**/graphql', async (route) => {
-    if (
-      readGraphQLOperation(route.request().postData())?.operationName ===
-      'NotificationListItemMarkReadMutation'
-    ) {
-      markReadRequestCount += 1;
-    }
-    await route.fallback();
-  });
   await replyRow.getByTestId('post-list-row-body').click();
   await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${toGlobalId('Post', reply.id)}`);
   await expect.poll(() => markReadRequestCount).toBe(1);
