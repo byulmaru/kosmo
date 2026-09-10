@@ -107,6 +107,18 @@
 - Consequences: `PROD-823`은 서버 결과 수렴과 actor switch 회귀를, `PROD-813`은 cross-slice UI/API 결과를 검증한다. `PROD-917`은 후속 UI 교체에서도 같은 actor·content policy 경계를 유지한다. client 상태를 갱신하는 구체 mechanism은 영향 범위에 맞춰 구현 시 정한다.
 - Confirmation / Follow-up: `PROD-823`에서 success/failure·A/B actor·Unblock no-restore 뒤 client 상태 수렴을 확인하고, `PROD-813`에서 Profile switch와 cross-slice actor 상태 격리를 E2E로 확인한다.
 
+### 공통 관계 action과 surface 조합을 같은 이슈의 두 PR로 분리한다
+
+- Decision Date: 2026-09-10
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/profile-mute-block.md`, `PROD-823`, PR #772 review `5163335465`
+- Status: Active
+- Context / Problem: Profile route와 차단 관리 목록이 각각 해제 mutation·확인창·pending·실패·Relay 갱신을 조립하면 Follow 관계 action과 차단 상태가 surface마다 달라지고 회귀 검증이 중복된다.
+- Decision Outcome: 새 이슈를 만들지 않고 `PROD-823` 하나에 두 Stack PR을 연결한다. 부모 PR은 기존 `FollowButton`의 Block 관계 fragment·해제 lifecycle과 공통 회귀를 소유한다. 자식 #772는 Profile route와 관리 목록에서 그 action의 노출 여부, 목록 조회·pagination과 focus fallback을 조합한다. identity-free route의 해제 fallback은 Profile fragment가 없으므로 #772에 유지한다.
+- Alternatives Considered: surface별 해제 action 유지는 상태·오류·cache 책임을 중복한다. 별도 Linear 이슈 생성은 이미 승인된 `PROD-823` 행동 범위를 불필요하게 나눈다.
+- Consequences: 양방향 Block에서도 자신의 해제 action을 유지하고, 해제 뒤 서버 결과가 `blockedBy`만 남으면 부모 surface가 action을 숨긴다. 공통 action은 이전 Follow를 복구하지 않는다.
+- Confirmation / Follow-up: 부모 PR에서 공통 상태·hover/focus·Native tap·mutation·actor 회귀를, #772에서 Profile/Settings 연결·pagination·focus와 상대 Block 잔존 수렴을 검증한다.
+
 ### 저장 schema는 additive 확장과 no-backfill rollout을 따른다
 
 - Decision Date: 2026-09-02

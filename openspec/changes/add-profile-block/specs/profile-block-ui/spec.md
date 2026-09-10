@@ -27,6 +27,8 @@
 
 **Authority / Provenance:** `docs/design/profile-mute-block.md`의 Profile action과 완료 피드백, `PROD-823`의 2026-09-06 차단 해제 확인 방식 결정과 2026-09-08 기존 UI 구현 범위. Profile 메뉴, identity-free `blocking` 상태와 차단 관리 목록에서 차단을 해제할 때는 확인창을 거쳐야 한다(MUST). 확인창은 `이 프로필의 차단을 해제할까요?`, `차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.`, `취소`와 Primary `차단 해제`를 제공해야 하며(MUST), 확정하기 전에는 해제 요청을 실행해서는 안 된다(MUST NOT). identity-free 상태의 확인창에서 Target identity를 표시해서는 안 된다(MUST NOT).
 
+조회 가능한 Profile의 공통 `FollowButton`은 자신의 Block 관계 fragment·해제 mutation·pending·실패·Relay 갱신을 소유해야 한다(MUST). 내가 차단한 경우 기본 `차단됨`, Web hover·keyboard focus에서 `차단 해제`를 표시하고 Web click·Native tap으로 같은 확인창을 열어야 한다(MUST). 상대만 나를 차단한 경우 부모 surface는 관계 action을 숨겨야 하며(MUST), 양방향 Block에서는 내 해제 action을 유지하고 해제 후 서버 결과가 `blockedBy`만 남으면 action을 숨겨야 한다(MUST). 해제 시 이전 Follow 상태를 복구해서는 안 된다(MUST NOT).
+
 #### Scenario: 해제 확인을 취소한다
 
 - **WHEN** 사용자가 Profile 메뉴, `blocking` 상태 또는 차단 목록에서 해제 확인창을 열고 취소하거나 dismiss한다
@@ -37,6 +39,13 @@
 - **WHEN** 사용자가 확인창의 `차단 해제`를 확정한다
 - **THEN** 해제를 요청하고 pending 동안 중복 입력과 dismiss를 차단하며 busy 상태를 전달한다
 - **AND** 성공은 서버 확정 결과로 반영하고 실패하면 기존 상태와 공용 오류 피드백, 재시도 경로를 유지한다
+
+#### Scenario: 공통 관계 action이 단방향과 양방향 Block을 표시한다
+
+- **WHEN** 조회 가능한 Profile에 자신의 Block 관계가 있다
+- **THEN** 공통 관계 action은 기본 `차단됨`과 Web hover·keyboard focus의 `차단 해제`를 표시한다
+- **AND** 상대의 Block도 함께 있더라도 자신의 해제 action을 유지한다
+- **AND** 자신의 관계 해제 뒤 서버 결과에 상대의 Block만 남으면 부모 surface는 관계 action을 숨긴다
 
 ### Requirement: Separate Profile Block management destination
 

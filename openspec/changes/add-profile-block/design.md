@@ -213,16 +213,19 @@ ESLint·Prettier를 실행한다. 기존 Mute·Follow·Post visibility·Notifica
 
 ### PROD-823 Recommended Approach
 
-1. `PROD-822`와 `PROD-861`의 완료 증거를 대조한 뒤 현재 Profile route의 query와 colocated fragment에 서버 계약을 연결한다.
+1. 같은 `PROD-823` 이슈에서 공통 관계 action 부모 PR과 Profile·Settings 조합 자식 PR을 분리한다. 부모는 기존
+   `FollowButton`의 Block 관계 fragment·해제 mutation·pending·실패·Relay 수렴과 회귀를 소유하고, 자식 #772는
+   Profile route와 차단 관리 목록의 노출 판단·목록 조회·pagination·focus fallback을 연결한다.
+2. `PROD-822`와 `PROD-861`의 완료 증거를 대조한 뒤 현재 Profile route의 query와 colocated fragment에 서버 계약을 연결한다.
    직접 링크·새로고침·actor 전환에서도 서버 결과에 따라 일반 Profile 또는 공용 identity-free 상태를 표시한다.
-2. Profile action과 Block 목록은 생성·해제 모두 확인창에서 확정한 뒤 요청하고, 공용 presentation에 실제 mutation pending·성공·오류 상태를 전달한다. identity-free 해제 확인창에는 Target identity를 전달하지 않는다. 관계 생성·제거 응답의
+3. Profile action과 Block 목록은 생성·해제 모두 확인창에서 확정한 뒤 요청하고, 공용 presentation에 실제 mutation pending·성공·오류 상태를 전달한다. identity-free 해제 확인창에는 Target identity를 전달하지 않는다. 관계 생성·제거 응답의
    Node ID와 변경 필드를 선택하고, 기존 Profile target과 ProfileBlock 관계 ID를 구분해 삭제된 관계 ID로 해당 Owner 목록의 membership을 갱신한다.
    성공한 해제 뒤에는 제거된 행 대신 목록 heading 또는 안전한 fallback으로 focus를 복원한다.
-3. 기존 actor Environment 경계 안에서 이미 표시 중인 Profile·Post·Notification이 서버 정책으로 수렴하게 한다. normalized field 갱신만으로
+4. 기존 actor Environment 경계 안에서 이미 표시 중인 Profile·Post·Notification이 서버 정책으로 수렴하게 한다. normalized field 갱신만으로
    목록 membership이 바뀐다고 가정하지 않는다. 현재 연결 구조를 확인해 필요한 connection 갱신과 서버 재조회를 조합한다.
-4. 요청을 시작한 actor의 결과가 새 actor의 목록·route·오류·완료 피드백을 바꾸지 않게 한다. Unblock 뒤에는 현재 서버 결과를 다시
+5. 요청을 시작한 actor의 결과가 새 actor의 목록·route·오류·완료 피드백을 바꾸지 않게 한다. Unblock 뒤에는 현재 서버 결과를 다시
    확인하며, 양방향 Block에서 상대의 관계가 남아 있으면 `blockedBy`를 유지한다. 이전 Profile cache나 Follow 관계를 복원하지 않는다.
-5. Block destination의 목록·action·검증이 완료되면 기존 Settings source에 연결한다. 공용 presentation의 Storybook 결과와 실제
+6. Block destination의 목록·action·검증이 완료되면 기존 Settings source에 연결한다. 공용 presentation의 Storybook 결과와 실제
    route·data/cache integration, 해제 성공·미제거·오류/partial 결과의 상태 수렴, Web·iOS·Android 접근성 결과를 각각 기록한다.
 
 ### PROD-823 Allowed Alternatives and Verification

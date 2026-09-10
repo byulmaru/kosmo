@@ -64,6 +64,13 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   사용한다. 2026-09-09 [현재 Block 정책](../domain/objects/profile-block.md)에 맞춰
   Figma [`4595:6482`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4595-6482)의
   설명도 같은 문구로 갱신했다. 기존 리액션은 삭제하지 않는다. 현재 Storybook은 메뉴·목록 presentation을 검증하며 차단·해제 요청과 관계·리액션 정리를 구현하지 않는다.
+- 조회 가능한 Profile의 공통 관계 action은 기존 `FollowButton`이 소유한다. 내가 차단한 경우 기본 label은
+  `차단됨`이고 Web hover·keyboard focus에서는 `차단 해제`로 바뀌며, Web click과 Native tap은 같은 해제
+  확인창을 연다. 상대만 나를 차단한 경우 부모 surface는 관계 action을 숨긴다. 서로 차단한 경우에는 내
+  `차단됨` action을 유지하고, 내 관계를 해제한 뒤 서버의 현재 결과가 `blockedBy`만 남기면 action을 숨긴다.
+  이 action은 Profile·ProfileBlock 상태 fragment, mutation, pending·실패와 Relay 수렴을 소유한다. Profile
+  route와 차단 관리 목록은 노출 여부, 목록 조회·pagination, 성공 뒤 안전한 focus fallback만 조합하며 이전
+  Follow 상태를 복구하지 않는다.
 - pending에는 같은 action의 중복 입력과 dismiss를 막고 busy 상태를 전달한다. 실패하면 기존 서버 확정 상태를
   유지하고 제품의 기존 오류 피드백을 사용한다.
 
