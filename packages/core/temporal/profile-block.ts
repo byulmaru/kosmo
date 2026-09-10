@@ -1,3 +1,8 @@
+import '../polyfill';
+
+import { ApplicationFailure } from '@temporalio/client';
+import { ConflictError, NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import { runWorkflow } from './client';
 import type { WorkflowUpdateDefinition } from './client';
 
 export const PROFILE_BLOCK_WORKFLOW_TYPE = 'profileBlockWorkflow';
@@ -73,4 +78,69 @@ export const profileUnblockWorkflow: WorkflowUpdateDefinition<
   workflow: PROFILE_UNBLOCK_WORKFLOW_TYPE,
   update: PROFILE_UNBLOCK_UPDATE_NAME,
   workflowIdFromArgs: (input) => profileUnblockWorkflowId(input),
+};
+
+const rehydrateProfileBlockWorkflowFailure = (error: unknown): unknown => {
+  let failure: unknown = error;
+  while (failure instanceof Error && !(failure instanceof ApplicationFailure)) {
+    failure = failure.cause;
+  }
+  if (!(failure instanceof ApplicationFailure)) {
+    return error;
+  }
+
+  switch (failure.type) {
+    case 'CONFLICT':
+      return new ConflictError({ message: failure.message });
+    case 'NOT_FOUND':
+      return new NotFoundError(failure.message);
+    case 'PERMISSION_DENIED':
+      return new PermissionDeniedError(failure.message);
+    case 'VALIDATION':
+      return new ValidationError(failure.message);
+    default:
+      return error;
+  }
+};
+
+/**
+ * Starts or joins the directed Profile Block Workflow and submits its
+ * transaction through the committed Update-with-Start contract.
+ */
+export const executeProfileBlock = async (
+  input: ProfileBlockInput,
+): Promise<ProfileBlockTransitionResult> => {
+  try {
+    return await runWorkflow(profileBlockWorkflow, {
+      args: [input],
+      updateArgs: [input],
+      updateId: PROFILE_BLOCK_UPDATE_ID,
+      mode: 'update-with-start',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    });
+  } catch (error) {
+    throw rehydrateProfileBlockWorkflowFailure(error);
+  }
+};
+
+/**
+ * Starts or joins the exact Profile Block generation targeted by this
+ * Unblock command through the committed Update-with-Start contract.
+ */
+export const executeProfileUnblock = async (
+  input: ProfileUnblockInput,
+): Promise<ProfileUnblockTransitionResult> => {
+  try {
+    return await runWorkflow(profileUnblockWorkflow, {
+      args: [input],
+      updateArgs: [input],
+      updateId: profileUnblockUpdateId(input),
+      mode: 'update-with-start',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    });
+  } catch (error) {
+    throw rehydrateProfileBlockWorkflowFailure(error);
+  }
 };
