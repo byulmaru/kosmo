@@ -4,8 +4,8 @@ import { profileBlockPairWhere } from '../visibility/profile-block';
 import type { Transaction } from '../db';
 
 export class ProfilePairBlockedError extends NotFoundError {
-  constructor() {
-    super('Profile not found');
+  constructor(message = 'Profile not found') {
+    super(message);
   }
 }
 
@@ -14,9 +14,11 @@ export const assertProfilePairIsNotBlocked = async (
   {
     firstProfileId,
     secondProfileId,
+    notFoundMessage,
   }: {
     readonly firstProfileId: string;
     readonly secondProfileId: string;
+    readonly notFoundMessage?: string;
   },
 ): Promise<void> => {
   const block = await tx
@@ -27,6 +29,6 @@ export const assertProfilePairIsNotBlocked = async (
     .then(first);
 
   if (block) {
-    throw new ProfilePairBlockedError();
+    throw new ProfilePairBlockedError(notFoundMessage);
   }
 };

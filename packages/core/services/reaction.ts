@@ -49,6 +49,7 @@ export const addReaction = async ({
       throw new NotFoundError('Post not found');
     }
     await assertProfilePairIsNotBlocked(tx, {
+      notFoundMessage: 'Post not found',
       firstProfileId: actorProfileId,
       secondProfileId: post.profileId,
     });
