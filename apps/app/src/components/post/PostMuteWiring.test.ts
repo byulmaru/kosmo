@@ -65,6 +65,15 @@ mock.module('@/components/profile/ProfileMuteController', {
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/components/content-report/ContentReportContext', {
+  exports: {
+    useContentReportMenuItem: () => ({
+      key: 'report-post',
+      label: '신고',
+      onSelect: () => undefined,
+    }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/session/SessionProvider', {
   exports: { useSession: () => ({ selectedProfileId: 'profile:viewer' }) },
 } as unknown as Parameters<typeof mock.module>[1]);
