@@ -4,26 +4,40 @@ import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type { BlockedProfilesView as BlockedProfilesViewExport } from './SettingsBlockedProfiles';
+import type {
+  BlockedProfilesView as BlockedProfilesViewExport,
+  SettingsBlockedProfiles as SettingsBlockedProfilesExport,
+} from './SettingsBlockedProfiles';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 const actionFocusCalls = new Map<string, ReturnType<typeof mock.fn>>();
+const toastCalls: Array<{ message: string; tone: string }> = [];
+const loadNext = mock.fn();
+let selectedProfile: object | null = { id: 'owner', instance: { kind: 'LOCAL' } };
+let pagination = {
+  data: { profileBlocks: { edges: [] as Array<{ node: object }> } },
+  hasNext: false,
+  isLoadingNext: false,
+  loadNext,
+};
 
 mockModule('react-native', {
   ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('ScrollView', props, children),
   StyleSheet: { create: <T>(styles: T) => styles },
+  Text: ({ children, ...props }: { children?: ReactNode }) =>
+    createElement('Text', props, children),
   View: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('View', props, children),
 });
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => parts.join(''),
   useFragment: (_fragment: unknown, reference: unknown) => reference,
-  useLazyLoadQuery: () => ({}),
-  usePaginationFragment: () => ({}),
+  useLazyLoadQuery: () => ({ currentSession: { selectedProfile } }),
+  usePaginationFragment: () => pagination,
 });
 mockModule(new URL('../profile/FollowButton.tsx', import.meta.url), {
   FollowButton: ({
@@ -60,6 +74,9 @@ mockModule(new URL('../RouteBoundary.tsx', import.meta.url), {
   RouteBoundary: ({ children }: { children?: ReactNode }) => children,
   useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined }),
 });
+mockModule(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
+  useShellChrome: () => null,
+});
 mockModule(new URL('../ui/Button.tsx', import.meta.url), {
   Button: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('PaginationButton', props, children),
@@ -67,7 +84,22 @@ mockModule(new URL('../ui/Button.tsx', import.meta.url), {
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
 });
-mockModule('../../theme/tokens', { space: { 16: 16 } });
+mockModule(new URL('../ui/ToastProvider.tsx', import.meta.url), {
+  useToast: () => ({
+    showToast: (message: string, options: { tone: string }) => {
+      toastCalls.push({ message, tone: options.tone });
+      return () => undefined;
+    },
+  }),
+});
+mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
+  useTheme: () => ({ borderDefault: 'border', foregroundPrimary: 'foreground' }),
+});
+mockModule('../../theme/tokens', {
+  borderWidths: { 1: 1 },
+  space: { 16: 16 },
+  textStyles: { uiHeadingM: {} },
+});
 mockModule('../../relay/RelayActorProvider', {
   useRelayActorLifecycleKey: () => 'actor-a',
 });
@@ -80,16 +112,26 @@ type BlockedProfile = {
   relativeHandle: string;
 };
 let BlockedProfilesView: typeof BlockedProfilesViewExport;
+let SettingsBlockedProfiles: typeof SettingsBlockedProfilesExport;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
-  ({ BlockedProfilesView } = await import('./SettingsBlockedProfiles'));
+  ({ BlockedProfilesView, SettingsBlockedProfiles } = await import('./SettingsBlockedProfiles'));
 });
 
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = null;
   actionFocusCalls.clear();
+  toastCalls.length = 0;
+  loadNext.mock.resetCalls();
+  selectedProfile = { id: 'owner', instance: { kind: 'LOCAL' } };
+  pagination = {
+    data: { profileBlocks: { edges: [] } },
+    hasNext: false,
+    isLoadingNext: false,
+    loadNext,
+  };
 });
 
 const profile = (id: string, displayName = '별마루'): BlockedProfile => ({
@@ -104,6 +146,57 @@ describe('차단한 프로필 목록', () => {
   const find = (type: string) => renderer?.root.find((node) => (node.type as unknown) === type);
   const findAll = (type: string) =>
     renderer?.root.findAll((node) => (node.type as unknown) === type) ?? [];
+
+  it('Relay connection을 목록 행에 연결하고 추가 조회 실패를 같은 pagination action으로 재시도한다', async () => {
+    let onComplete: ((error?: Error | null) => void) | undefined;
+    pagination = {
+      data: {
+        profileBlocks: {
+          edges: [
+            {
+              node: {
+                id: 'block-star',
+                targetProfile: { displayName: '별마루', relativeHandle: '@star' },
+              },
+            },
+          ],
+        },
+      },
+      hasNext: true,
+      isLoadingNext: false,
+      loadNext: mock.fn(
+        (_count: number, options: { onComplete: (error?: Error | null) => void }) => {
+          onComplete = options.onComplete;
+        },
+      ),
+    };
+
+    await act(async () => {
+      renderer = create(createElement(SettingsBlockedProfiles));
+    });
+
+    assert.equal(find('ProfileListItemContent')?.props.relativeHandle, '@star');
+    assert.equal(find('Button')?.props.profileBlockId, 'block-star');
+    await act(async () => find('PaginationButton')?.props.onPress());
+    assert.equal(pagination.loadNext.mock.callCount(), 1);
+
+    await act(async () => onComplete?.(new Error('network')));
+    const retry = find('StateView');
+    assert.equal(retry?.props.actionLabel, '더 불러오기');
+    await act(async () => retry?.props.onAction());
+    assert.equal(pagination.loadNext.mock.callCount(), 2);
+  });
+
+  it('selected Local Profile이 없으면 빈 목록 대신 Profile-required 상태를 표시한다', async () => {
+    selectedProfile = null;
+
+    await act(async () => {
+      renderer = create(createElement(SettingsBlockedProfiles));
+    });
+
+    assert.equal(find('StateView')?.props.title, '설정할 Profile이 없어요');
+    assert.equal(findAll('ProfileListItemContent').length, 0);
+  });
 
   it('목록 행이 공통 FollowButton에 Profile과 차단 관계 fragment를 전달한다', async () => {
     await act(async () => {
@@ -152,6 +245,10 @@ describe('차단한 프로필 목록', () => {
     const error = find('StateView');
     assert.equal(error?.props.alert, true);
     assert.equal(error?.props.title, '차단한 프로필을 불러오지 못했어요');
+    assert.deepEqual(toastCalls, [
+      { message: '차단한 프로필을 불러오지 못했어요', tone: 'danger' },
+    ]);
+    assert.equal(find('Text')?.children.join(''), '차단한 프로필');
     await act(async () => error?.props.onAction());
     assert.equal(retries, 1);
   });
@@ -167,8 +264,7 @@ describe('차단한 프로필 목록', () => {
       renderer = create(createElement(BlockedProfilesView, { state: loaded }), {
         createNodeMock: (element) =>
           element.type === 'View' &&
-          (element.props as { accessibilityLabel?: string }).accessibilityLabel ===
-            '차단한 프로필 목록'
+          (element.props as { accessibilityRole?: string }).accessibilityRole === 'header'
             ? { focus }
             : {},
       });

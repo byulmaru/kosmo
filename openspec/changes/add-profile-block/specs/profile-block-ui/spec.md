@@ -2,7 +2,7 @@
 
 ### Requirement: Profile Block action confirmation and state lifecycle
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `DSN-53`; 책임 이슈는 `PROD-823`. Profile surface의 Block action은 Mute와 구분되는 공용 ConfirmationContent를 사용하고 Danger tone의 확인 제목·`기존 팔로우 관계와 요청이 삭제되고, 서로 팔로우하거나 게시물에 반응할 수 없어요.`라는 결과 설명·확정 action을 제공해야 한다(MUST). 기본 Profile 정보와 viewer 방향 정책이 허용한 콘텐츠까지 숨긴다고 설명해서는 안 된다(MUST NOT). pending 동안 같은 action의 중복 입력과 dismiss를 차단하고 busy 상태를 전달해야 하며(MUST), 성공 상태는 서버 확정 결과를 사용하고 실패 시 기존 서버 상태와 제품의 공용 오류 피드백을 유지해야 한다(MUST).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `DSN-53`; 책임 이슈는 `PROD-823`. Profile surface의 Block action은 Mute와 구분되는 공용 ConfirmationContent를 사용하고 Danger tone의 확인 제목·`상대방은 내 게시물을 볼 수 없고, 타임라인과 검색에서 서로의 게시물이 숨겨져요. 팔로우 관계와 요청은 삭제돼요.`라는 결과 설명·확정 action을 제공해야 한다(MUST). 기본 Profile 정보와 viewer 방향 정책이 허용한 콘텐츠까지 숨긴다고 설명해서는 안 된다(MUST NOT). pending 동안 같은 action의 중복 입력과 dismiss를 차단하고 busy 상태를 전달해야 하며(MUST), 성공 상태는 서버 확정 결과를 사용하고 실패 시 기존 서버 상태와 제품의 공용 오류 피드백을 유지해야 한다(MUST).
 
 #### Scenario: Block 확인을 취소하면 상태를 바꾸지 않는다
 
@@ -25,7 +25,7 @@
 
 ### Requirement: Profile Block removal confirmation
 
-**Authority / Provenance:** `docs/design/profile-mute-block.md`의 Profile action과 완료 피드백, `PROD-823`의 2026-09-06 차단 해제 확인 방식 결정과 2026-09-08 기존 UI 구현 범위. Profile 메뉴, identity-free `blocking` 상태와 차단 관리 목록에서 차단을 해제할 때는 확인창을 거쳐야 한다(MUST). 확인창은 `이 프로필의 차단을 해제할까요?`, `차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.`, `취소`와 Primary `차단 해제`를 제공해야 하며(MUST), 확정하기 전에는 해제 요청을 실행해서는 안 된다(MUST NOT). identity-free 상태의 확인창에서 Target identity를 표시해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/profile-mute-block.md`의 Profile action과 완료 피드백, `PROD-823`의 2026-09-06 차단 해제 확인 방식 결정과 2026-09-08 기존 UI 구현 범위. Profile 메뉴, identity-free `blocking` 상태와 차단 관리 목록에서 차단을 해제할 때는 확인창을 거쳐야 한다(MUST). 확인창은 `이 프로필의 차단을 해제할까요?`, `차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.`, `취소`와 Danger `차단 해제`를 제공해야 하며(MUST), 확정하기 전에는 해제 요청을 실행해서는 안 된다(MUST NOT). identity-free 상태의 확인창에서 Target identity를 표시해서는 안 된다(MUST NOT).
 
 조회 가능한 Profile의 공통 `FollowButton`은 자신의 Block 관계 fragment·해제 mutation·pending·실패·Relay 갱신을 소유해야 한다(MUST). 내가 차단한 경우 기본 `차단됨`, Web hover·keyboard focus에서 `차단 해제`를 표시하고 Web click·Native tap으로 같은 확인창을 열어야 한다(MUST). 상대만 나를 차단한 경우 부모 surface는 관계 action을 숨겨야 하며(MUST), 양방향 Block에서는 내 해제 action을 유지하고 해제 후 서버 결과가 `blockedBy`만 남으면 action을 숨겨야 한다(MUST). 해제 시 이전 Follow 상태를 복구해서는 안 된다(MUST NOT).
 
