@@ -1,7 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash, verify as verifySignature, X509Certificate } from 'node:crypto';
 import {
-  appendFileSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -35,15 +34,6 @@ interface Provenance {
   metadataSha256: string;
   files: ExportFile[];
   exportedAt: string;
-  verification?: {
-    status: 'verified';
-    channel: Channel;
-    manifestUrl: string;
-    manifestId: string;
-    manifestSha256: string;
-    assetCount: number;
-    verifiedAt: string;
-  };
 }
 
 const platformSchema = z.enum(['android', 'ios']);
@@ -70,17 +60,6 @@ const provenanceSchema = z.object({
   metadataSha256: z.string().regex(/^[a-f0-9]{64}$/u),
   files: z.array(exportFileSchema).min(1),
   exportedAt: z.string().min(1),
-  verification: z
-    .object({
-      status: z.literal('verified'),
-      channel: channelSchema,
-      manifestUrl: z.string().url(),
-      manifestId: z.string().min(1),
-      manifestSha256: z.string().regex(/^[a-f0-9]{64}$/u),
-      assetCount: z.number().int().positive(),
-      verifiedAt: z.string().min(1),
-    })
-    .optional(),
 });
 const metadataSchema = z.object({
   version: z.literal(0),
@@ -295,16 +274,6 @@ function resolveRuntimeVersion(appRoot: string, selectedPlatform: Platform): str
   return parsedRuntimeVersion.data.runtimeVersion;
 }
 
-function writeOutput(name: string, value: string): void {
-  if (/[\r\n]/u.test(value)) {
-    error(`Cannot write multiline GitHub output: ${name}.`);
-  }
-  const outputPath = process.env.GITHUB_OUTPUT;
-  if (outputPath) {
-    appendFileSync(outputPath, `${name}=${value}\n`, { encoding: 'utf8', mode: 0o600 });
-  }
-}
-
 function writeProvenance(root: string, value: Provenance): void {
   writeFileSync(resolve(root, 'provenance.json'), `${JSON.stringify(value, null, 2)}\n`, {
     encoding: 'utf8',
@@ -447,7 +416,7 @@ async function verifyRemote(
   runtimeVersion: string,
   publicBaseUrl: string,
   local: ReturnType<typeof inventory>,
-): Promise<NonNullable<Provenance['verification']>> {
+): Promise<{ manifestId: string }> {
   const url = manifestUrl(publicBaseUrl, selectedPlatform, selectedChannel, runtimeVersion);
   const response = await fetch(url, { redirect: 'error' });
   if (!response.ok) {
@@ -519,15 +488,7 @@ async function verifyRemote(
       error(`OTA asset ${index} hash verification failed.`);
     }
   }
-  return {
-    status: 'verified',
-    channel: selectedChannel,
-    manifestUrl: url,
-    manifestId: manifest.id,
-    manifestSha256: sha256(body),
-    assetCount: remoteAssets.length,
-    verifiedAt: new Date().toISOString(),
-  };
+  return { manifestId: manifest.id };
 }
 
 async function verifyCommand(values: Map<string, string>, appRoot: string): Promise<void> {
@@ -549,10 +510,6 @@ async function verifyCommand(values: Map<string, string>, appRoot: string): Prom
     required(values, 'public-base-url'),
     local,
   );
-  writeProvenance(root, { ...provenance, verification });
-  writeOutput('runtime_version', provenance.runtimeVersion);
-  writeOutput('manifest_id', verification.manifestId);
-  writeOutput('manifest_url', verification.manifestUrl);
   console.log(`Verified ${selectedChannel} OTA manifest ${verification.manifestId}.`);
 }
 
@@ -606,7 +563,6 @@ function exportCommand(values: Map<string, string>, appRoot: string): void {
     files: result.files,
     exportedAt: new Date().toISOString(),
   });
-  writeOutput('runtime_version', runtimeVersion);
   console.log(`Exported ${selectedPlatform} OTA artifact for ${PROJECT} (${runtimeVersion}).`);
 }
 

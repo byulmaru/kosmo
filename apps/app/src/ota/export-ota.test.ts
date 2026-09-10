@@ -32,7 +32,6 @@ interface ExportFixture {
   artifactDir: string;
   bundle: { hash: string; hex: string; bytes: Buffer };
   assets: { hash: string; hex: string; bytes: Buffer; path: string }[];
-  files: { path: string; size: number; sha256: string }[];
 }
 
 function sha256(bytes: Buffer): string {
@@ -108,7 +107,6 @@ function createExportFixture(
       hex: sha256(bytes),
       bytes,
     })),
-    files: inventory,
   };
 }
 
@@ -270,17 +268,13 @@ function close(server: ReturnType<typeof createServer>): Promise<void> {
 
 async function runHelper(
   appRoot: string,
-  artifactDir: string,
   certificatePath: string,
   args: string[],
-): Promise<{ status: number | null; stdout: string; stderr: string; output: string }> {
-  const outputPath = join(artifactDir, 'github-output');
-  writeFileSync(outputPath, '');
+): Promise<{ status: number | null; stdout: string; stderr: string }> {
   const child = spawn(process.execPath, ['--import', tsxLoaderPath, helperPath, ...args], {
     cwd: appRoot,
     env: {
       ...process.env,
-      GITHUB_OUTPUT: outputPath,
       NODE_EXTRA_CA_CERTS: certificatePath,
     },
   });
@@ -293,7 +287,7 @@ async function runHelper(
     child.once('error', rejectStatus);
     child.once('close', resolveStatus);
   });
-  return { ...chunks, status, output: readFileSync(outputPath, 'utf8') };
+  return { ...chunks, status };
 }
 
 function verifyArgs(
@@ -336,49 +330,22 @@ test('verifies signed OTA manifests for deployment and preview channels', async 
       setMode('valid');
       const verification = await runHelper(
         appRoot,
-        channelFixture.artifactDir,
         certificatePath,
         verifyArgs(channel, channelFixture.artifactDir, baseUrl),
       );
       assert.equal(verification.status, 0, verification.stderr);
-      const verifiedProvenance = JSON.parse(
-        readFileSync(join(channelFixture.artifactDir, 'provenance.json'), 'utf8'),
-      ) as {
-        platform: Platform;
-        files: ExportFixture['files'];
-        verification: { channel: Channel; manifestId: string; assetCount: number };
-      };
-      assert.equal(verifiedProvenance.platform, 'android');
-      assert.deepEqual(verifiedProvenance.files, channelFixture.files);
-      assert.equal(verifiedProvenance.verification.channel, channel);
-      assert.equal(verifiedProvenance.verification.manifestId, `${channel}-manifest-1`);
-      assert.equal(verifiedProvenance.verification.assetCount, 3);
-      assert.match(verification.output, new RegExp(`runtime_version=${runtimeVersion}`));
+      assert.match(verification.stdout, new RegExp(`Verified ${channel} OTA manifest`));
     }
 
     const iosFixture = createExportFixture(join(root, 'ios'), 'dev', 'ios');
     setMode('valid');
     const iosVerification = await runHelper(
       appRoot,
-      iosFixture.artifactDir,
       certificatePath,
       verifyArgs('dev', iosFixture.artifactDir, baseUrl, 'ios'),
     );
     assert.equal(iosVerification.status, 0, iosVerification.stderr);
-    const iosProvenance = JSON.parse(
-      readFileSync(join(iosFixture.artifactDir, 'provenance.json'), 'utf8'),
-    ) as {
-      platform: Platform;
-      verification: { channel: Channel; manifestUrl: string; assetCount: number };
-    };
-    assert.equal(iosProvenance.platform, 'ios');
-    assert.equal(iosProvenance.verification.channel, 'dev');
-    assert.equal(
-      iosProvenance.verification.manifestUrl,
-      `${baseUrl}/releases/kosmo-native/ios/dev/${runtimeVersion}/manifest.json`,
-    );
-    assert.equal(iosProvenance.verification.assetCount, 3);
-    assert.match(iosVerification.output, new RegExp(`runtime_version=${runtimeVersion}`));
+    assert.match(iosVerification.stdout, /Verified dev OTA manifest/u);
 
     for (const invalidChannel of ['', 'preview/123', '.', '..']) {
       const invalidFixture = createExportFixture(
@@ -387,7 +354,6 @@ test('verifies signed OTA manifests for deployment and preview channels', async 
       setMode('valid');
       const result = await runHelper(
         appRoot,
-        invalidFixture.artifactDir,
         certificatePath,
         verifyArgs(invalidChannel, invalidFixture.artifactDir, baseUrl),
       );
@@ -410,20 +376,15 @@ test('verifies signed OTA manifests for deployment and preview channels', async 
       setMode(mode);
       const result = await runHelper(
         appRoot,
-        invalidFixture.artifactDir,
         certificatePath,
         verifyArgs('dev', invalidFixture.artifactDir, baseUrl),
       );
       assert.notEqual(result.status, 0, mode);
       assert.match(`${result.stdout}\n${result.stderr}`, new RegExp(expectedMessage));
-      const failedProvenance = JSON.parse(
-        readFileSync(join(invalidFixture.artifactDir, 'provenance.json'), 'utf8'),
-      ) as { verification?: unknown };
-      assert.equal(failedProvenance.verification, undefined, mode);
     }
 
     const sourceMismatchDir = mkdtempSync(join(root, 'source-sha-mismatch-'));
-    const sourceMismatch = await runHelper(repositoryAppRoot, sourceMismatchDir, certificatePath, [
+    const sourceMismatch = await runHelper(repositoryAppRoot, certificatePath, [
       'export',
       '--platform',
       'android',

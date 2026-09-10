@@ -100,7 +100,7 @@ jobs:
           for platform in android ios; do
             output_dir="${RUNNER_TEMP}/kosmo-expo-ota-${platform}"
             rm -rf "${output_dir}"
-            GITHUB_OUTPUT=/dev/null node --import tsx scripts/export-ota.ts export \
+            node --import tsx scripts/export-ota.ts export \
               --platform "${platform}" \
               --channel "${CHANNEL}" \
               --source-sha "${SOURCE_SHA}" \

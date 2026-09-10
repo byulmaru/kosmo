@@ -38,7 +38,7 @@ Manifest는 Expo protocol headers를 포함한 `multipart/mixed` 응답으로 �
 
 ## 자동 release 경로
 
-정상 OTA publish는 수동 release/stage/promote 입력으로 시작하지 않는다.
+정상 OTA publish는 두 배포 caller가 성공한 뒤 자동으로 시작한다.
 `.github/workflows/deploy-dev.yml`과 `.github/workflows/production-release.yml`이
 배포 성공 뒤 reusable workflow인 `.github/workflows/expo-ota.yml`을 호출한다.
 
@@ -70,8 +70,8 @@ artifact를 다시 내려 받아 `export-ota.ts verify`로 다음을 확인한�
 - launch asset과 모든 asset hash 및 immutable URL이 export bytes와 일치하는지
 - 각 asset을 실제로 읽어 SHA-256이 manifest hash와 일치하는지
 
-검증이 실패하면 workflow가 성공하지 않으며 provenance에는 성공한 verification evidence를
-기록하지 않는다. Local helper와 actionlint 검증은 실제 R2 publication, Vault read, Store
+검증이 실패하면 workflow가 성공하지 않으며, 성공 여부는 verify job 로그와 publisher 결과로
+확인한다. Local helper와 actionlint 검증은 실제 R2 publication, Vault read, Store
 binary 설치와 device update/rejection evidence를 대신하지 않는다.
 
 ## 사전 조건과 credential 경계
@@ -105,7 +105,7 @@ trust를 추가하지 않는다.
 
 ## Evidence checklist
 
-자동 release 완료를 기록할 때 workflow summary와 artifact에서 다음 값을 교차 확인한다.
+자동 release 완료를 기록할 때 workflow 로그와 export artifact에서 다음 값을 교차 확인한다.
 
 - workflow run ID, caller workflow ref와 source SHA
 - project, platform, OTA channel, runtimeVersion과 keyid
