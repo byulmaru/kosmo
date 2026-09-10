@@ -403,17 +403,9 @@ export const SharedNavigation: Story = {
       'stroke-width',
       '2',
     );
-    const privacyLinks = canvas.getAllByRole('link', { name: '개인정보 처리방침' });
-    expect(privacyLinks).toHaveLength(2);
-    expect(privacyLinks[0]).toHaveAttribute('href', '/privacy');
-    expect(privacyLinks[1]).toHaveAttribute('href', '/privacy');
-    expect(canvas.getByRole('link', { name: '계정 삭제 안내' })).toHaveAttribute(
+    expect(canvas.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute(
       'href',
-      '/account-deletion',
-    );
-    expect(canvas.getByRole('link', { name: '아동 안전 정책' })).toHaveAttribute(
-      'href',
-      '/child-safety',
+      '/privacy',
     );
     expect(canvas.queryByRole('link', { name: '프로필 설정' })).not.toBeInTheDocument();
   },
@@ -472,18 +464,7 @@ export const CompactSidebar: Story = {
       0,
     );
     expect(canvas.getByRole('link', { name: '글쓰기' })).toHaveAttribute('href', '/compose');
-    expect(canvas.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute(
-      'href',
-      '/privacy',
-    );
-    expect(canvas.getByRole('link', { name: '계정 삭제 안내' })).toHaveAttribute(
-      'href',
-      '/account-deletion',
-    );
-    expect(canvas.getByRole('link', { name: '아동 안전 정책' })).toHaveAttribute(
-      'href',
-      '/child-safety',
-    );
+    expect(canvas.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('link', { name: '프로필 설정' })).not.toBeInTheDocument();
   },
   render: () => <CompactSidebarStory />,
@@ -510,9 +491,7 @@ export const FeedbackNavigationCurrentState: Story = {
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(255, 249, 230)' });
-    expect(link.compareDocumentPosition(logout) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
+    expect(link.nextElementSibling).toContainElement(logout);
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
     expect(feedbackLabel).toHaveStyle({ fontSize: '14px', lineHeight: '20px' });
     expect(logoutLabel).toHaveStyle({ fontSize: '14px', lineHeight: '20px' });
@@ -579,9 +558,7 @@ export const FeedbackNavigationCompactCurrentState: Story = {
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(255, 249, 230)' });
-    expect(link.compareDocumentPosition(logout) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
+    expect(link.nextElementSibling).toContainElement(logout);
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '0px' });
   },
   render: () => <CompactSidebarStory />,
@@ -599,11 +576,10 @@ export const FeedbackNavigationDrawerCurrentState: Story = {
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(255, 249, 230)' });
-    expect(link.compareDocumentPosition(logout) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
+    expect(link.nextElementSibling).toContainElement(logout);
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
     expect(canvas.queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
+    expect(canvas.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
     expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
     expect(profileEdit).toHaveAttribute('href', '/profile-edit');
     expect(within(profileEdit).getByText('편집', { exact: true })).toBeVisible();
@@ -1818,18 +1794,7 @@ export const UniversalMobile: Story = {
     expect(within(drawer).getByRole('link', { name: '설정' })).toHaveAttribute('href', '/settings');
     expect(page.getByRole('button', { name: '피드백 보내기' })).toBeInTheDocument();
     expect(within(drawer).queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
-    expect(page.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute(
-      'href',
-      '/privacy',
-    );
-    expect(page.getByRole('link', { name: '계정 삭제 안내' })).toHaveAttribute(
-      'href',
-      '/account-deletion',
-    );
-    expect(page.getByRole('link', { name: '아동 안전 정책' })).toHaveAttribute(
-      'href',
-      '/child-safety',
-    );
+    expect(page.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
     const logout = page.getByRole('button', { name: '로그아웃' });
     expect(logout).toBeInTheDocument();
     expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
@@ -2461,7 +2426,7 @@ export const UniversalFull: Story = {
     const rightRail = canvas.getByLabelText('새 게시글 작성').parentElement;
     const rightRailStyle = rightRail ? view?.getComputedStyle(rightRail) : undefined;
     expect(rightRail).not.toBeNull();
-    const privacyLink = within(rightRail!).getByRole('link', { name: '개인정보 처리방침' });
+    const privacyLink = canvas.getByRole('link', { name: '개인정보 처리방침' });
     const rightRailRect = rightRail?.getBoundingClientRect();
     const privacyLinkRect = privacyLink.getBoundingClientRect();
 

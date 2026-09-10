@@ -50,20 +50,21 @@ PostComposer presentation은 `Rail`과 `Overlay`만 사용한다. 중앙 timelin
 
 ## 공개 정책 문서 진입
 
-공개 `/privacy`, `/account-deletion`, `/child-safety` route와 비로그인 landing의 링크를 제공한다. 인증 후
-셸에서는 `SidebarNavigation` footer에서 세 문서에 접근할 수 있으며, 기존 full Web 우측 레일의 개인정보
-처리방침 footer도 유지한다.
+공개 `/privacy`, `/account-deletion`, `/child-safety` route와 정책 문서 간 cross-link는 유지한다. 비로그인
+landing은 기존 개인정보 처리방침 링크만 제공하며, 인증 후 세 문서의 추가 진입점은 Settings의
+`/settings/info`에 둔다. 기존 full Web 우측 레일의 개인정보 처리방침 footer도 유지하고, Sidebar·mobile
+drawer에는 정책 링크를 추가하지 않는다.
 
 - `≥ full`: 우측 레일 최하단에 `textSecondary` 색의 개인정보 처리방침 footer를 둔다. Production branch
   전환 중에는 표시 tag 공급 방식이 정해지지 않았으므로 기존 `· 버전: <Git tag>` 정적 텍스트를 렌더링하지
   않는다. 선택한 Profile이 없어 컴포저가 표시되지 않아도 개인정보 처리방침 링크는 유지하며, 기존 위치보다
   viewport 하단에 가깝게 배치한다. 표시 tag 공급과 version label 재활성화는 후속 변경에서 결정한다.
-- `compact`~`full`: Sidebar footer에서 개인정보 처리방침·계정 삭제 안내·아동 안전 정책 링크를 제공한다.
-  compact icon rail은 아이콘과 accessible name을 사용하고, full sidebar는 텍스트 label을 함께 표시한다.
-- `< compact` mobile Web과 Android/iOS: mobile drawer footer에서 같은 세 문서 링크를 제공한다. 링크 자체는
-  shell이 소유하지만 문서 내용과 이메일 요청 처리는 각 public route가 소유한다.
-- 가입·로그인 온보딩에서는 landing의 public route 링크를 유지한다. 준비되지 않은 Account form, 자동 삭제,
-  공통 신고 navigation은 추가하지 않는다.
+- `compact`~`full`: Sidebar footer에는 정책 링크를 추가하지 않는다. Settings navigation의 `정보`가
+  `/settings/info`를 열고, 그 detail이 세 public policy route로 이동하는 링크를 제공한다.
+- `< compact` mobile Web과 Android/iOS: mobile drawer footer에는 정책 링크를 추가하지 않는다. Settings의
+  one-pane `정보` detail은 같은 세 링크와 accessible name·keyboard/focus 순서를 제공한다.
+- 가입·로그인 온보딩에서는 기존 landing 개인정보 처리방침 링크만 유지한다. 준비되지 않은 Account form,
+  자동 삭제, 공통 신고 navigation은 추가하지 않는다.
 
 ## 설정 진입
 

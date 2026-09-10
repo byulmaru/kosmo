@@ -153,41 +153,13 @@ export default function IndexScreen() {
               {error}
             </Text>
           ) : null}
-          <View style={styles.policyLinks}>
-            <NavigationLink href={'/privacy' as Href}>
-              <Pressable
-                accessibilityLabel="개인정보 처리방침"
-                accessibilityRole="link"
-                style={styles.policyLinkControl}
-              >
-                <Text style={[styles.privacyLink, { color: theme.textSecondary }]}>
-                  개인정보 처리방침
-                </Text>
-              </Pressable>
-            </NavigationLink>
-            <NavigationLink href={'/account-deletion' as Href}>
-              <Pressable
-                accessibilityLabel="계정 삭제 안내"
-                accessibilityRole="link"
-                style={styles.policyLinkControl}
-              >
-                <Text style={[styles.privacyLink, { color: theme.textSecondary }]}>
-                  계정 삭제 안내
-                </Text>
-              </Pressable>
-            </NavigationLink>
-            <NavigationLink href={'/child-safety' as Href}>
-              <Pressable
-                accessibilityLabel="아동 안전 정책"
-                accessibilityRole="link"
-                style={styles.policyLinkControl}
-              >
-                <Text style={[styles.privacyLink, { color: theme.textSecondary }]}>
-                  아동 안전 정책
-                </Text>
-              </Pressable>
-            </NavigationLink>
-          </View>
+          <NavigationLink href={'/privacy' as Href}>
+            <Pressable accessibilityRole="link">
+              <Text style={[styles.privacyLink, { color: theme.textSecondary }]}>
+                개인정보 처리방침
+              </Text>
+            </Pressable>
+          </NavigationLink>
         </View>
       </View>
     </ScrollView>
@@ -217,7 +189,5 @@ const styles = StyleSheet.create({
   startButton: { borderRadius: radii.sm, height: 48, width: 200 },
   hint: { fontFamily: fontFamilies.ui, ...typography.xsm },
   error: { fontFamily: fontFamilies.ui, ...typography.sm },
-  policyLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.lg },
-  policyLinkControl: { justifyContent: 'center', minHeight: 48 },
-  privacyLink: { fontFamily: fontFamilies.ui, textDecorationLine: 'underline', ...typography.sm },
+  privacyLink: { fontFamily: fontFamilies.ui, marginTop: spacing.lg, ...typography.sm },
 });

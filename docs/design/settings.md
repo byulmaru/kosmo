@@ -11,12 +11,21 @@ Profile의 `프로필 설정`과 `뮤트 및 차단`, 클라이언트 로컬의 
 label·이동 동작과 접근성 이름에서 서비스와 소유 단위를 명확히 구분한다.
 DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 기기 로컬 persistence를 소유한다.
 
+2026-09-10 PROD-889 결정으로 `정보`를 Settings root의 추가 direct destination으로 두고
+`/settings/info` detail에서 공개 정책 문서 진입점을 제공한다. `정보`는 기존 Settings 목록·detail·back·header
+조합을 사용하며, `개인정보 처리방침`·`계정 삭제 안내`·`아동 안전 정책`의 public route로 이동하는 링크만
+포함한다. 이 추가 진입점은 Byulmaru ID가 소유하는 기존 `계정 설정` 외부 진입점과 결합하지 않는다.
+비로그인 landing의 기존 개인정보 처리방침 링크와 full Web 우측 레일의 기존 개인정보 처리방침 링크는
+유지하고, Sidebar·mobile drawer에 정책 링크를 추가하지 않는다.
+
 ## Route와 진입점
 
 - Kosmo 설정 hub의 canonical route는 `/settings`다. 내부 설정 detail은 이 route 아래에서 열 수 있지만,
   Byulmaru ID Account 설정을 위한 Kosmo 내부 route나 form은 만들지 않는다.
 - Target의 Profile detail canonical route는 `/settings/profile`이다. 현재 runtime에 남은
   `/settings/default-post-visibility`는 이 Target으로 이관할 구현 경로이지 별도 Target destination이 아니다.
+- 공개 정책 문서 진입점의 canonical Settings detail route는 `/settings/info`다. 이 route는 준비된 public
+  `/privacy`, `/account-deletion`, `/child-safety`로 이동하는 링크를 제공하며 정책 문서 내용을 복제하지 않는다.
 - Mobile Target evidence는 [`Default`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9409)와
   [`Profile required`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9415) `390×844`
   consumer다. 이 조립 화면은 Product migration이나 실제 선택·저장 동작의 완료 증거가 아니다.
@@ -35,9 +44,13 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 - Settings는 모든 control을 한 화면에 쌓는 긴 form이 아니라, 진입점 목록에서 category·하위 목록·detail로
   점진적으로 이동하는 탐색 구조를 사용한다.
-- Target root 목록은 `계정 설정 → 프로필 설정 → 뮤트 및 차단 → 테마` 순서다. `계정 설정`은 Byulmaru ID
+- Target root 목록은 `계정 설정 → 프로필 설정 → 뮤트 및 차단 → 테마 → 정보` 순서다. `계정 설정`은 Byulmaru ID
   외부 진입점이고 나머지는 내부 진입점이다. `테마`는 현재 선택값을 함께 표시한다. `게시물 기본 공개 범위`를
   root에 중복 노출하거나 항목 하나만 가진 `계정`·`화면 설정` 대분류를 만들지 않는다.
+- `정보`는 별도 category나 generic policy registry가 아닌 Settings root의 direct destination이다. `/settings/info`
+  detail은 `개인정보 처리방침`, `계정 삭제 안내`, `아동 안전 정책`을 각각 public route로 여는 기존 Settings
+  link-row 문법을 사용한다. 정책 문서의 본문·시행일·이메일 처리와 public route 간 cross-link는 각 정책 문서가
+  소유한다.
 - `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 하위 목록을 연다.
   두 상태를 하나의 혼합 목록으로 표시하지 않는다. 세부 action과 Profile 상태는
   [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다.
@@ -187,8 +200,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   destination heading을 programmatic하게 노출한다. 시각적으로 없는 category heading을 screen reader 전용으로
   반복하지 않는다.
 - Target root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 →
-  `프로필 설정` → `뮤트 및 차단` → `테마`와 현재 선택값이다. full Web에서는 이어서 detail heading과 현재
-  선택된 content를 읽는다.
+  `프로필 설정` → `뮤트 및 차단` → `테마`와 현재 선택값 → `정보`다. full Web에서는 이어서 detail heading과
+  현재 선택된 content를 읽는다. `/settings/info`에서는 `정보` heading 다음에 세 public policy link를 문서
+  순서대로 읽는다.
 - Account 진입점은 시각 label `계정 설정`과 link accessible name·canonical destination에서 Byulmaru ID 외부
   Account Settings로 이동한다는 사실을 전달한다. 내부 진입점은 선택·현재 상태와 destination을, Profile
   control은 Kosmo 내부 기능과 현재 대상을 전달한다.
@@ -224,6 +238,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   검증을 소유한다.
 - PROD-685의 통합 검증은 자식 기능의 세부 테스트를 반복하지 않는다. 지원 navigation surface, root/category/detail
   전환, full workspace, 외부/내부 소유 경계, 반응형 heading·focus·reflow가 함께 동작하는지 확인한다.
+- PROD-889는 `/settings/info` direct destination과 세 public policy route link의 배치, 기존 landing·RightRail
+  개인정보 처리방침 보존, Sidebar·mobile drawer 정책 링크 비노출을 소유한다. `/settings/info`는 새 정책 내용이나
+  Account 관리 기능을 구현하지 않는다.
 - PROD-685는 구현과 검증 증거를 PROD-684에 인계하고, PROD-684가 최종 Settings 통합·OpenSpec 정합성 확인과
   archive를 소유한다.
 - 자동화·source/unit 결과는 실제 Web keyboard·screen reader·zoom 또는 Android·iOS runtime 접근성·
