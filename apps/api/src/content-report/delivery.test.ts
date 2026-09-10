@@ -5,7 +5,7 @@ import {
   ContentReportReason,
   ContentReportTargetType,
 } from '@kosmo/core/enums';
-import { deliverContentReport } from './delivery';
+import { CONTENT_REPORT_DELIVERY_TIMEOUT_MS, deliverContentReport } from './delivery';
 import type { ContentReportTarget } from './target';
 
 const target: ContentReportTarget = {
@@ -133,7 +133,40 @@ test('Content Report delivery requires HTTP 200 and an ok ACK', async () => {
   assert.equal(calls, 2);
 });
 
-test('Content Report delivery classifies timeout or response loss as unknown', async () => {
+test('Content Report delivery aborts a pending Slack request after the five-second timeout', async (t) => {
+  process.env.SLACK_FEEDBACK_WEBHOOK_URL = 'https://hooks.slack.com/services/a/b/c';
+  let signal: AbortSignal | null | undefined;
+  let abortObserved = false;
+  globalThis.fetch = async (_input, init) => {
+    signal = init?.signal;
+    return await new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener(
+        'abort',
+        () => {
+          abortObserved = true;
+          reject(new Error('request aborted'));
+        },
+        { once: true },
+      );
+    });
+  };
+
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const delivery = deliverContentReport({
+    reason: ContentReportReason.HARMFUL_CONTENT,
+    target,
+  });
+
+  t.mock.timers.tick(CONTENT_REPORT_DELIVERY_TIMEOUT_MS);
+  const status = await delivery;
+
+  assert.equal(status, ContentReportDeliveryStatus.UNKNOWN);
+  assert.ok(signal instanceof AbortSignal);
+  assert.equal(signal?.aborted, true);
+  assert.equal(abortObserved, true);
+});
+
+test('Content Report delivery classifies response loss as unknown', async () => {
   process.env.SLACK_FEEDBACK_WEBHOOK_URL = 'https://hooks.slack.com/services/a/b/c';
   globalThis.fetch = async () => {
     throw new TypeError('network unavailable');
@@ -145,6 +178,34 @@ test('Content Report delivery classifies timeout or response loss as unknown', a
   });
 
   assert.equal(status, ContentReportDeliveryStatus.UNKNOWN);
+});
+
+test('Content Report delivery cancels Slack response streams for 429 and 5xx failures', async () => {
+  process.env.SLACK_FEEDBACK_WEBHOOK_URL = 'https://hooks.slack.com/services/a/b/c';
+
+  for (const statusCode of [429, 503]) {
+    let cancelCalls = 0;
+    globalThis.fetch = async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('failure details'));
+          },
+          cancel() {
+            cancelCalls += 1;
+          },
+        }),
+        { status: statusCode },
+      );
+
+    const status = await deliverContentReport({
+      reason: ContentReportReason.HARMFUL_CONTENT,
+      target,
+    });
+
+    assert.equal(status, ContentReportDeliveryStatus.REJECTED);
+    assert.equal(cancelCalls, 1);
+  }
 });
 
 test('Content Report delivery classifies response body read failures as unknown without retry', async () => {

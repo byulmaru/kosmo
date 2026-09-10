@@ -138,7 +138,7 @@
 
 ### Requirement: 신고 form의 presentation과 draft lifecycle
 
-**Authority / Provenance:** `docs/design/content-reporting.md`, `docs/design/feedback.md`, [PROD-915](https://linear.app/byulmaru/issue/PROD-915). Web은 반응형 dialog/sheet, Android/iOS는 현재 대상 화면 위 modal/sheet로 신고 form을 제공해야 한다(SHALL). dirty 상태의 명시적 닫기는 폐기 확인을 거치며 취소하면 입력을 유지해야 한다(SHALL). 제출 중 명시적 닫기를 막고 지원하는 dismissal 경로에도 같은 경계를 적용해야 한다(SHALL). 실패·확인 불가에서는 입력을 유지하고 성공하면 입력을 초기화하되 성공 결과를 화면에 남겨야 한다(SHALL). 폐기 후 재열기는 새 draft이며 durable 복원은 제공하지 않는다.
+**Authority / Provenance:** `docs/design/content-reporting.md`, `docs/design/feedback.md`, [PROD-915](https://linear.app/byulmaru/issue/PROD-915). Web은 반응형 dialog/sheet, Android/iOS는 현재 대상 화면 위 modal/sheet로 신고 form을 제공해야 한다(SHALL). dirty 상태의 명시적 닫기는 폐기 확인을 거치며 취소하면 입력을 유지해야 한다(SHALL). 제출 중 명시적 닫기를 막고 지원하는 dismissal 경로에도 같은 경계를 적용해야 한다(SHALL). 실패·확인 불가에서는 입력을 유지하고 정상 성공에서는 입력을 초기화한 뒤 overlay를 종료하며 기존 공용 성공 toast를 남겨야 한다(SHALL). 폐기 후 재열기는 새 draft이며 durable 복원은 제공하지 않는다.
 
 #### Scenario: draft 폐기 취소와 재열기
 
@@ -154,7 +154,8 @@
 #### Scenario: 성공과 실패의 입력 처리
 
 - **WHEN** 정상 ACK 결과를 받는다
-- **THEN** 입력을 초기화하고 열린 form에 성공 결과를 남긴다
+- **THEN** 입력을 초기화한 뒤 신고 overlay를 종료한다
+- **AND** 기존 공용 성공 toast `신고를 전달했습니다.`를 화면에 남긴다
 - **AND** 실패 또는 확인 불가 결과에는 입력을 지우지 않는다
 
 ### Requirement: 플랫폼별 접근성과 실행 검증
