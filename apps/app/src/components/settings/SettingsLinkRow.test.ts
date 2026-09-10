@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { cloneElement, createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import type { Href } from 'expo-router';
 import type { ComponentType, ReactElement } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
@@ -77,7 +78,7 @@ type Props = {
   accessibilityLabel: string;
   description?: string;
   external?: boolean;
-  href: string;
+  href: Href;
   label: string;
   onNavigate?: () => void;
   primary?: boolean;
