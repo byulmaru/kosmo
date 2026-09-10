@@ -64,7 +64,9 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
 - 공개 Profile Home은 Web·Android·iOS에서 route가 공용 `PageHeader`를 소유한다. 프로필이 있으면 뒤로가기와
   전체 `displayName` heading을 표시하고, 제목은 가용 폭에서 한 줄 tail ellipsis로 줄인다. 없는 프로필도 같은
   위치의 빈 제목 PageHeader와 뒤로가기를 유지하고 그 아래에 상태 본문만 표시한다. ProfileHero와 게시물 본문,
-  loading·query error 계약은 그대로 유지한다. 모바일 Web에서는 셸의 메뉴 전용 헤더를 중복 렌더링하지 않는다.
+  loading·query error에서도 같은 위치의 빈 제목 PageHeader와 뒤로가기를 유지하며, 기존 ProfileHero skeleton과
+  StateView retry 본문·query lifecycle은 그대로 유지한다. 모바일 Web에서는 셸의 메뉴 전용 헤더를 중복 렌더링하지
+  않는다.
   더보기는 모든 레이아웃에서 Hero의 Follow 왼쪽 `16px` 간격에 `40×40` 원형 버튼으로 배치한다. 자세한 메뉴
   배치는 `profile-hero.md`를 따른다.
 

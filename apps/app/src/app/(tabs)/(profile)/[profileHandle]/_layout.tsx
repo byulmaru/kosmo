@@ -51,41 +51,8 @@ export default function ProfileLayout() {
     pathSegments.length === 1 &&
     (pathSegments[0]?.length ?? 0) > 1 &&
     pathSegments[0]?.startsWith('@');
-
-  return (
-    <RouteBoundary
-      key={handle}
-      loading={
-        <ProfileRouteContainer scrollKey={scrollKey}>
-          <ProfileHero loading />
-        </ProfileRouteContainer>
-      }
-      title="프로필을 불러오지 못했어요"
-    >
-      <ProfileLayoutContent handle={handle} scrollKey={scrollKey} showPageHeader={isProfileHome} />
-    </RouteBoundary>
-  );
-}
-
-function ProfileLayoutContent({
-  handle,
-  scrollKey,
-  showPageHeader,
-}: {
-  handle: string;
-  scrollKey: string;
-  showPageHeader: boolean;
-}) {
-  const { fetchKey } = useRouteBoundary();
   const router = useRouter();
   const theme = useTheme();
-  const data = useLazyLoadQuery<ProfileLayoutQueryType>(
-    ProfileLayoutQuery,
-    { handle },
-    { fetchKey, fetchPolicy: 'store-and-network' },
-  );
-  const profile = data.profileByHandle;
-  const { selectedProfileId } = useSession();
   const backButton = (
     <IconButton
       accessibilityLabel="뒤로 가기"
@@ -98,6 +65,62 @@ function ProfileLayoutContent({
     </IconButton>
   );
 
+  return (
+    <RouteBoundary
+      key={handle}
+      error={
+        isProfileHome
+          ? (retry) => (
+              <ProfileRouteContainer scrollKey={scrollKey}>
+                <PageHeader leading={backButton} title="" />
+                <StateView
+                  actionLabel="다시 시도"
+                  alert
+                  description="잠시 후 다시 시도해주세요."
+                  onAction={retry}
+                  title="프로필을 불러오지 못했어요"
+                />
+              </ProfileRouteContainer>
+            )
+          : undefined
+      }
+      loading={
+        <ProfileRouteContainer scrollKey={scrollKey}>
+          {isProfileHome ? <PageHeader leading={backButton} title="" /> : null}
+          <ProfileHero loading />
+        </ProfileRouteContainer>
+      }
+      title="프로필을 불러오지 못했어요"
+    >
+      <ProfileLayoutContent
+        backButton={backButton}
+        handle={handle}
+        scrollKey={scrollKey}
+        showPageHeader={isProfileHome}
+      />
+    </RouteBoundary>
+  );
+}
+
+function ProfileLayoutContent({
+  backButton,
+  handle,
+  scrollKey,
+  showPageHeader,
+}: {
+  backButton: ReactNode;
+  handle: string;
+  scrollKey: string;
+  showPageHeader: boolean;
+}) {
+  const { fetchKey } = useRouteBoundary();
+  const { selectedProfileId } = useSession();
+  const data = useLazyLoadQuery<ProfileLayoutQueryType>(
+    ProfileLayoutQuery,
+    { handle },
+    { fetchKey, fetchPolicy: 'store-and-network' },
+  );
+  const profile = data.profileByHandle;
   if (!profile) {
     const missingState = (
       <StateView

@@ -9,11 +9,11 @@
 
 **Deliverable**
 
-공개 Profile Home의 PageHeader, 긴 표시 이름, missing 상태와 소유권 계약이 canonical 문서와 OpenSpec에서 일치한다.
+공개 Profile Home의 PageHeader, 긴 표시 이름, missing·loading·query error 상태와 소유권 계약이 canonical 문서와 OpenSpec에서 일치한다.
 
 **Guardrails**
 
-- ProfileHero·게시물·loading·query error·관계 목록과 일반 PageHeader reflow의 제외 범위를 유지한다.
+- ProfileHero·게시물·관계 목록과 일반 PageHeader reflow의 제외 범위를 유지하고, loading·query error는 기존 fallback 본문·query lifecycle을 유지한 채 route chrome만 추가한다.
 - Figma target을 Production·Native runtime 완료 증거로 일반화하지 않는다.
 
 **Verification**
@@ -60,23 +60,24 @@ Profile Home의 동적 표시 이름은 공용 PageHeader에서 한 줄 tail ell
 
 **Deliverable**
 
-resolved Profile Home은 표시 이름 PageHeader, Hero와 게시물을 순서대로 표시하고, missing 상태는 빈 제목 PageHeader와 기존 상태 본문만 표시한다. 모바일 Web은 route PageHeader 하나만 표시한다.
+resolved Profile Home은 표시 이름 PageHeader, Hero와 게시물을 순서대로 표시하고, loading·query error·missing 상태는 빈 제목 PageHeader와 기존 fallback 본문을 표시한다. 모바일 Web은 route PageHeader 하나만 표시한다.
 
 **Guardrails**
 
 - 뒤로가기는 기존 route history 동작을 사용한다.
-- loading·query error, Profile action, Hero·게시물 identity와 관계 route를 바꾸지 않는다.
+- loading·query error의 기존 fallback 본문·query lifecycle, Profile action, Hero·게시물 identity와 관계 route를 바꾸지 않는다.
 - Native에서는 기존 Profile layout scroll owner 안에 PageHeader와 본문을 함께 둔다.
 
 **Verification**
 
-- Profile route 행동 테스트에서 resolved title·Hero·게시물 identity, missing chrome·본문 배타성, 기존 loading·error를 확인한다.
+- Profile route 행동 테스트에서 resolved title·Hero·게시물 identity, missing chrome·본문 배타성, loading skeleton·query-error retry와 각 상태의 back action을 확인한다.
 - shell layout 행동 테스트에서 모바일 Web 최상위 `@` Profile Home만 route-owned header로 분류하는지 확인한다.
 - Relay artifact와 타입 검사를 갱신·실행한다.
 
 - [x] 3.1 resolved·missing Profile Home에 승인된 PageHeader와 기존 본문을 조립한다.
 - [x] 3.2 모바일 Web에서 Profile Home의 셸 헤더 중복을 막고 nested·비Profile route를 보존한다.
 - [x] 3.3 route·shell·Relay 행동 검증을 추가하고 관련 check를 통과시킨다.
+- [x] 3.4 최상위 Profile Home의 loading·query error에 빈 제목 PageHeader를 추가하고 기존 fallback·retry 동작을 행동 테스트로 검증한다.
 
 ## 4. PROD-949 통합 검증과 완료
 
@@ -120,3 +121,8 @@ resolved Profile Home은 표시 이름 PageHeader, Hero와 게시물을 순서�
   ellipsis로 줄었으며 missing 상태에는 Hero·목록·메뉴 header가 없었다.
 - 독립 구현 재리뷰는 확정 finding 없이 통과했다. 이 PR의 scope는 리뷰 가능한 상태지만 Android/iOS,
   VoiceOver·TalkBack runtime은 실행하지 않아 4.3과 전체 OpenSpec archive gate는 남긴다.
+
+**Verification Record (P1, 2026-09-10)**
+
+- Profile route 행동 테스트 9/9를 통과해 canonical loading·query error의 `PageHeader → 기존 fallback body`
+  순서, 빈 제목, back callback과 query retry를 확인했다.

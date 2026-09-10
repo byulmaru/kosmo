@@ -454,13 +454,26 @@ describe('profile route parameter lifecycle', () => {
     await renderRoute('@local');
 
     queryModes.ProfileLayoutQuery = 'loading';
-    await renderRoute('@remote@activitypub.example');
+    await renderRoute('@remote@activitypub.example', '/@remote@activitypub.example');
+    assert.equal(requireRendered('PageHeader').props.title, '');
     assert.deepEqual(identities('ProfileHero'), ['loading']);
     assert.deepEqual(identities('PostList'), []);
+    const loadingRoute = renderer?.toJSON();
+    assert.ok(loadingRoute && !Array.isArray(loadingRoute));
+    assert.deepEqual(
+      loadingRoute.children?.map((child) => (typeof child === 'string' ? child : child.type)),
+      ['PageHeader', 'ProfileHero'],
+    );
+
+    const loadingLeading = requireRendered('PageHeader').props.leading;
+    assert.ok(loadingLeading);
+    await act(async () => loadingLeading.props.onPress());
+    assert.equal(routerBackCount, 1);
 
     queryModes.ProfileLayoutQuery = 'success';
     queryModes.ProfilePostListPageQuery = 'loading';
-    await renderRoute('@remote@activitypub.example');
+    await renderRoute('@remote@activitypub.example', '/@remote@activitypub.example');
+    assert.equal(requireRendered('PageHeader').props.title, 'Display remote@activitypub.example');
     assert.deepEqual(identities('ProfileHero'), ['remote@activitypub.example']);
     assert.deepEqual(identities('PostList'), ['loading']);
   });
@@ -470,8 +483,23 @@ describe('profile route parameter lifecycle', () => {
     console.error = () => undefined;
     try {
       queryModes.ProfileLayoutQuery = 'error';
-      await renderRoute('@remote@activitypub.example');
+      await renderRoute('@remote@activitypub.example', '/@remote@activitypub.example');
+      assert.equal(requireRendered('PageHeader').props.title, '');
       assert.equal(requireRendered('StateView').props.title, '프로필을 불러오지 못했어요');
+      assert.equal(requireRendered('StateView').props.actionLabel, '다시 시도');
+      assert.equal(requireRendered('StateView').props.alert, true);
+      assert.equal(requireRendered('StateView').props.description, '잠시 후 다시 시도해주세요.');
+      const errorRoute = renderer?.toJSON();
+      assert.ok(errorRoute && !Array.isArray(errorRoute));
+      assert.deepEqual(
+        errorRoute.children?.map((child) => (typeof child === 'string' ? child : child.type)),
+        ['PageHeader', 'StateView'],
+      );
+
+      const errorLeading = requireRendered('PageHeader').props.leading;
+      assert.ok(errorLeading);
+      await act(async () => errorLeading.props.onPress());
+      assert.equal(routerBackCount, 1);
 
       queryModes.ProfileLayoutQuery = 'success';
       await act(async () => requireRendered('StateView').props.onAction());
