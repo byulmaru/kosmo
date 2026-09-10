@@ -8,16 +8,15 @@
 
 ### Requirement: Composer Local Media 직접 업로드
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/decisions/0013-media-storage-service-boundary.md`, `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`, `docs/design/media-upload-errors.md`, PROD-461, PROD-553, PROD-657, PROD-881, [PROD-935](https://linear.app/byulmaru/issue/PROD-935/webp-미지원-브라우저에서-이미지-업로드-png-fallback을-지원한다) — 유니버설 앱은 Post Composer의 picker와 Web clipboard에서 받은 각 이미지를 공통 업로드 경계에서 긴 변 최대 `2048px`와 품질 `0.8`의 WebP byte로 정규화해 사용해야 하며(MUST), WebP encoding을 지원하지 않아 변환 결과가 PNG인 경우에는 PNG byte를 `image/png`로 정규화해 사용해야 한다(MUST). 앱은 Kosmo가 발급한 제한된 URL로 결과 byte를 Media Storage Service에 직접 전송해 같은 Media를 Ready로 완료해야 하며(MUST), Kosmo API를 byte proxy로 사용하면 안 된다(MUST NOT). 실패하면 공통 이미지 업로드 오류 정책으로 단계·원인을 분류하고 해당 항목에만 안전한 안내와 재시도를 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/decisions/0013-media-storage-service-boundary.md`, `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`, `docs/design/media-upload-errors.md`, PROD-461, PROD-553, PROD-657, PROD-881 — 유니버설 앱은 Post Composer의 picker와 Web clipboard에서 받은 각 이미지를 공통 업로드 경계에서 긴 변 최대 `2048px`와 품질 `0.8`의 WebP byte로 정규화하고 Kosmo가 발급한 제한된 URL로 Media Storage Service에 직접 전송해 같은 Media를 Ready로 완료해야 하며(MUST), Kosmo API를 byte proxy로 사용하면 안 된다(MUST NOT). 실패하면 공통 이미지 업로드 오류 정책으로 단계·원인을 분류하고 해당 항목에만 안전한 안내와 재시도를 제공해야 한다(MUST).
 
 #### Scenario: 선택 즉시 업로드 성공
 
 - **WHEN** 사용자가 picker에서 이미지를 선택하거나 Web clipboard 이미지를 붙여넣는다
 - **THEN** 앱은 `issueMediaUploadUrl`로 Uploading Media와 제한된 upload URL을 받는다
-- **AND** 공통 이미지 업로드 경계가 선택 이미지를 긴 변 최대 `2048px`로 축소하고 WebP encoding 지원 환경에서는 품질 `0.8` WebP로, 미지원 환경에서는 PNG로 정규화한다
-- **AND** signed PUT body와 Content-Type은 결과 byte와 일치하는 `image/webp` 또는 `image/png`를 사용한다
-- **AND** signed PUT은 결과 이미지 byte를 upload URL에 직접 전송한다
-- **AND** PUT 성공 뒤 같은 Media global ID로 `completeMediaUpload`를 호출한다
+- **AND** 공통 이미지 업로드 경계가 선택 이미지를 크기와 WebP 형식으로 정규화한다
+- **AND** 정규화한 이미지 byte를 `image/webp` Content-Type으로 upload URL에 직접 `PUT`한다
+- **AND** PUT 성공 뒤 같은 Media global ID로 `completeMediaUpload`을 호출한다
 - **AND** Ready 응답을 받은 항목만 Post 작성 후보로 표시한다
 
 #### Scenario: 업로드 실패와 재시도

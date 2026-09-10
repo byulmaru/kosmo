@@ -1,3 +1,5 @@
+> **2026-09-10 문서 정정:** 실제 Safari Web 앱 빌드에서 PNG fallback → `image/png` signed PUT → `complete` 성공을 확인하는 것은 선택적 evidence가 아니라 완료 조건이다. 이는 2026-09-09 승인된 PNG fallback 제품 정책이나 범위를 변경하지 않는다.
+
 ## Why
 
 Safari와 같이 WebP canvas encoding을 지원하지 않는 브라우저에서는 공통 이미지 정규화가 `image/png` 결과를 돌려받은 뒤 실패하고 signed PUT 전에 업로드가 중단된다. WebP를 생성할 수 있는 환경의 기존 계약은 유지하면서, 인코딩 미지원 환경에서도 이미지 크기 축소와 업로드 완료를 보장한다.
@@ -9,6 +11,7 @@ Safari와 같이 WebP canvas encoding을 지원하지 않는 브라우저에서�
 - WebP 지원 환경의 품질 `0.8` WebP, 긴 변 최대 `2048px`, 비율 유지와 no-upscale 계약을 유지한다.
 - Post Composer picker/clipboard와 Profile avatar/header가 같은 fallback 경계를 사용하도록 정밀화한다.
 - 일반 변환·read·PUT·complete 실패, HEIC/HEIF decoder, Native Blob 문제와 서버 계약은 변경하지 않는다.
+- 실제 Safari Web 앱 빌드에서 fallback → PNG byte → `image/png` signed PUT → `complete` 성공을 실행 검증하고 결과를 기록한다. WebKit smoke는 보조 evidence로 기록한다.
 
 ## Authority / Provenance
 
@@ -33,5 +36,5 @@ Safari와 같이 WebP canvas encoding을 지원하지 않는 브라우저에서�
 
 - `apps/app/src/components/media/imageUpload.ts`의 공통 변환·byte·signed PUT 경계와 관련 실행 테스트
 - Post Composer 및 Profile 편집의 기존 공통 업로드 호출 경로
-- WebKit/Safari 유사 환경 검증과 실제 Safari evidence 여부 기록, 기존 WebP 지원 환경 회귀 검증
+- WebKit/Safari 유사 환경의 보조 smoke와 실제 Safari Web 앱 빌드 fallback → PNG signed PUT → `complete` 실행 검증, 기존 WebP 지원 환경 회귀 검증
 - GraphQL, persistence, Media Storage Service API, dependency에는 변경 없음
