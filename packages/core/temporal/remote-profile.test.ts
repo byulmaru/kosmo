@@ -6,9 +6,11 @@ process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
 
 const { temporalClient } = await import('./client');
-const { startRemoteProfileMaterialization } = await import('./remote-profile');
-const { REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE, remoteProfileMaterializationWorkflowId } =
-  await import('./remote-profile-contract');
+const {
+  REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE,
+  remoteProfileMaterializationWorkflowId,
+  startRemoteProfileMaterialization,
+} = await import('./remote-profile');
 
 const input = {
   handle: 'alice@remote.example',

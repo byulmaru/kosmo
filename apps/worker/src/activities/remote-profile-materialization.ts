@@ -13,7 +13,7 @@ import {
 } from '@kosmo/fedify';
 import { ApplicationFailure } from '@temporalio/activity';
 import { eq } from 'drizzle-orm';
-import type { RemoteProfileMaterializationInput } from '@kosmo/core/temporal/remote-profile-contract';
+import type { RemoteProfileMaterializationInput } from '@kosmo/core/temporal/remote-profile';
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
 

@@ -10,14 +10,13 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
-import { REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE } from '@kosmo/core/temporal/remote-profile-contract';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { and, eq } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type { RemoteProfileMaterializationInput } from '@kosmo/core/temporal/remote-profile-contract';
+import type { RemoteProfileMaterializationInput } from '@kosmo/core/temporal/remote-profile';
 import type * as Fedify from '@kosmo/fedify';
 import type * as WorkerActivities from './activities';
 
@@ -30,6 +29,9 @@ process.env.DATABASE_URL = databaseUrl;
 process.env.PUBLIC_ORIGIN = publicOrigin;
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
+
+const { REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE } =
+  await import('@kosmo/core/temporal/remote-profile');
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;

@@ -1,15 +1,25 @@
 import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { temporalClient } from './client';
-import {
-  REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE,
-  remoteProfileMaterializationWorkflowId,
-} from './remote-profile-contract';
 import { KOSMO_TASK_QUEUE } from './task-queue';
-import type {
-  RemoteProfileMaterializationAcknowledgement,
-  RemoteProfileMaterializationInput,
-  RemoteProfileMaterializationMode,
-} from './remote-profile-contract';
+
+export const REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE = 'remoteProfileMaterializationWorkflow';
+
+export type RemoteProfileMaterializationInput = {
+  readonly handle: string;
+  readonly profileId?: string;
+};
+
+export type RemoteProfileMaterializationAcknowledgement = {
+  readonly kind: 'started';
+};
+
+export type RemoteProfileMaterializationMode = 'sync' | 'async';
+
+export const remoteProfileMaterializationWorkflowId = ({
+  handle,
+  profileId,
+}: RemoteProfileMaterializationInput): string =>
+  `remote-profile-materialization:${handle}:${profileId ?? 'configured-local'}`;
 
 const remoteProfileMaterializationRpcTimeoutMs = 5_000;
 

@@ -1,8 +1,4 @@
 import {
-  REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE,
-  remoteProfileMaterializationWorkflowId,
-} from '@kosmo/core/temporal/remote-profile-contract';
-import {
   ChildWorkflowCancellationType,
   ParentClosePolicy,
   proxyActivities,
@@ -12,7 +8,7 @@ import { workflowActivityOptions } from './activity-options';
 import type {
   RemoteProfileMaterializationAcknowledgement,
   RemoteProfileMaterializationInput,
-} from '@kosmo/core/temporal/remote-profile-contract';
+} from '@kosmo/core/temporal/remote-profile';
 import type * as activities from '../activities';
 
 const { materializeRemoteProfileActorActivity } =
@@ -32,9 +28,9 @@ export async function remoteProfileMaterializationWorkflow(
 export const startRemoteProfileMaterializationChild = async (
   input: RemoteProfileMaterializationInput,
 ): Promise<RemoteProfileMaterializationAcknowledgement> => {
-  await startChild(REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE, {
+  await startChild(remoteProfileMaterializationWorkflow, {
     args: [input],
-    workflowId: remoteProfileMaterializationWorkflowId(input),
+    workflowId: `remote-profile-materialization:${input.handle}:${input.profileId ?? 'configured-local'}`,
     parentClosePolicy: ParentClosePolicy.ABANDON,
     cancellationType: ChildWorkflowCancellationType.ABANDON,
   });

@@ -38,7 +38,7 @@ import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import type { Context } from '@fedify/fedify';
 import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
-import type { RemoteProfileMaterializationAcknowledgement } from '@kosmo/core/temporal/remote-profile-contract';
+import type { RemoteProfileMaterializationAcknowledgement } from '@kosmo/core/temporal/remote-profile';
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
 
