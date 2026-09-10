@@ -22,16 +22,17 @@ TagChip은 정확한 Hashtag identity에서 관련 Profile 목록을 여는 탐�
 순서를 가지지 않고 개수 상한도 없으므로, 이미 알고 있는 Hashtag를 출발점으로 관계된 Profile을 탐색할 때의
 공개 조건·인증·페이지 비용·실패 격리를 별도로 정해야 한다.
 
-기존 사람 검색은 handle 입력과 `searchProfiles` 계약을 유지한다. 검색창에서 Hashtag 또는 Hashtag Name을 찾는
-기능은 별도 계약이며 이 ADR에서 구현하거나 확정하지 않는다.
+기존 사람 검색은 handle 입력·검색 진입점·pagination 문법을 유지하되 후보 eligibility에 Profile Block 정책을
+추가한다. 검색창에서 Hashtag 또는 Hashtag Name을 찾는 기능은 별도 계약이며 이 ADR에서 구현하거나 확정하지 않는다.
 
 ## 결정
 
 - 공개 Profile의 TagChip은 이미 확인한 정확한 Hashtag identity를 전달하는 탐색 진입점이다. 선택하면 해당
   Hashtag와 Profile Tag 관계가 있는 공개 Profile 목록을 연다. 임의 입력의 `#` 접두사를 사람 검색의 별도 모드로
   해석하지 않는다.
-- 기존 사람 검색의 handle 입력·결과·pagination과 `searchProfiles` 동작은 변경하지 않는다. 검색창에서 Hashtag
-  또는 Hashtag Name 결과를 반환하는 기능은 별도 계약으로 보류하며 이 ADR의 범위가 아니다.
+- 기존 사람 검색의 handle 입력·검색 진입점·pagination 문법은 유지한다. 다만 `searchProfiles` 후보 eligibility에는
+  selected Profile과 양방향 Active Block 관계인 Profile을 제외하는 정책을 추가한다. 검색창에서 Hashtag 또는
+  Hashtag Name 결과를 반환하는 기능은 별도 계약으로 보류하며 이 ADR의 범위가 아니다.
 - Profile 목록 후보는 TagChip이 전달한 Hashtag identity와 정확히 관계되고, 공개 Profile 조회 조건을 통과한
   이미 저장된 Local·Remote Active·Normal Profile로 한정한다. Hashtag 자체·Hashtag Name 목록은 반환하지
   않으며, 원격 조회·refresh·새 materialization은 수행하지 않는다.
@@ -60,7 +61,8 @@ TagChip은 정확한 Hashtag identity에서 관련 Profile 목록을 여는 탐�
 
 ## 결과
 
-- `searchProfiles`의 기존 handle 검색 동작과 Hashtag 관련 Profile 목록 탐색은 서로 다른 진입점과 상태로 유지된다.
+- `searchProfiles`의 handle 입력·검색 진입점·pagination 구조와 Hashtag 관련 Profile 목록 탐색은 서로 다른 상태로
+  유지되며, 두 탐색 후보에는 selected Profile 기준의 Profile Block 정책이 적용된다.
 - API와 클라이언트 구현은 Hashtag identity 정확 일치, Profile 공개 조건, Account 인증, selected Profile 유무에
   따른 양방향 Active Block 후보 정책, 페이지 최대 20개, immutable Profile cursor를 함께 검증해야 한다.
 - Profile Tag 저장·편집·공개 표시는 [PROD-522](https://linear.app/byulmaru/issue/PROD-522/프로필-태그를-편집-표시할-수-있게-한다)가

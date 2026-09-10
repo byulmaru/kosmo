@@ -65,8 +65,6 @@ Block과 Notification이 남는다. 같은 pair를 다시 차단할 때 새 실�
 - `docs/domain/objects/media.md`
 - `docs/domain/objects/follow-relationship.md`
 - `docs/domain/objects/follow-request.md`
-- `docs/domain/objects/post.md`
-- `docs/domain/objects/media.md`
 - `docs/domain/objects/bookmark.md`
 - `docs/domain/objects/reaction.md`
 - `docs/domain/objects/notification.md`
