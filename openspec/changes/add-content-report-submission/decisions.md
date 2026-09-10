@@ -88,6 +88,18 @@
 - Consequences: 부분 PR 완료는 전체 change 완료가 아니다. ADR 0002/0008의 제출 제외만 ADR 0030이 부분 대체하고 durable 처리 객체 제외는 유지한다.
 - Confirmation / Follow-up: 모든 구현·검증 증거와 최신 authority를 대조한 뒤에만 전체 완료·archive를 수행한다.
 
+### D8. Feedback Slack 연결 재사용
+
+- Decision Date: 2026-09-10
+- Decision Class: User Decision
+- Authority / Provenance: 사용자 “Feedback과 동일한 슬랙봇을 사용할 거임” 및 재사용 방향 수정 승인, `docs/design/content-reporting.md`, PROD-915.
+- Status: Active
+- Context / Problem: 신고 전용 환경 변수는 별도 설정이 필요하며 사용자는 기존 Feedback 봇 사용을 선택했다.
+- Decision Outcome: `SLACK_FEEDBACK_WEBHOOK_URL`과 공용 `env` Secret을 재사용해 같은 채널로 보낸다. 신고 전송은 API가 수행하며 `text`와 `plain_text` Block Kit을 사용하고 unfurl을 끈다.
+- Alternatives Considered: 신고 전용 환경 변수와 별도 Secret은 채택하지 않는다.
+- Consequences: API·Web 서버의 기존 공용 주입 경로를 유지한다. Web application·client bundle은 credential을 소비·노출하지 않으며 신고자 정보·ACK·비영속 계약은 유지한다.
+- Confirmation / Follow-up: 공유 환경 변수와 Slack 메시지 형식을 테스트하고 실제 채널 수신은 최종 통합 검증에서 확인한다.
+
 ## Remaining Decisions
 
 현재 사용자 제품 미결정과 Blocked decision은 없다. 내부 helper·파일명·timeout·문자 수 계산 등은 승인된 계약을 보존하는 구현 선택으로 위임한다. 분산 제한 후속 이슈의 정책은 이 change에서 결정하지 않는다.

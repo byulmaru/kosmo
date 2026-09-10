@@ -62,3 +62,7 @@ DB migration은 없다. 구현 단계에서 additive API와 안전한 서버 설
 ## Open Questions
 
 남은 사용자 제품 결정은 없다. GraphQL 구체 타입·오류 표현, timeout 값, 문자 수 계산, component 배치와 실제 Slack 설정 가용성은 구현 단계에서 위 계약에 맞춰 확인한다. 공통 Block 결과의 main 반영과 Native 실행 환경은 최종 통합·검증 시 확인할 의존성이다. 새로운 제품·보안·호환성 선택이 발견되면 canonical·Linear부터 갱신한다.
+
+## Slack 연결 보완 · 2026-09-10
+
+사용자 결정에 따라 Feedback과 같은 Slack 봇·채널 및 기존 `SLACK_FEEDBACK_WEBHOOK_URL`을 재사용한다. 공용 `env` Secret의 API·Web 서버 주입 경로를 유지하고 신고 전송은 API에서만 수행한다. Web application·browser·native bundle에는 credential을 노출하지 않는다. 신고 전용 환경 변수·Secret이나 DB 저장은 추가하지 않는다. 메시지는 고정 `text`와 `plain_text` Block Kit으로 구성하고 링크·media unfurl을 끈다. 기존 신고 payload 필드와 ACK·확인 불가·자동 재전송 금지 계약은 유지한다.

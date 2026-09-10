@@ -79,6 +79,13 @@
 - **WHEN** client가 신고 ID와 함께 임의 링크·표시 이름·신고자 정보를 보낸다
 - **THEN** 서버가 확인한 대상 정보만으로 payload를 만들며 추가 신고자 필드는 Slack에 전달하지 않는다
 
+#### Scenario: Feedback과 같은 Slack 연결 사용
+
+- **WHEN** 유효한 신고를 Slack으로 전송한다
+- **THEN** 기존 `SLACK_FEEDBACK_WEBHOOK_URL`과 공용 Secret 주입 경로를 재사용해 Feedback과 같은 봇·채널로 전송한다
+- **AND** API가 고정 `text`와 `plain_text` Block Kit으로 메시지를 구성하고 링크·media unfurl을 끈다
+- **AND** 신고 전용 환경 변수·Secret을 추가하거나 credential을 Web application·client bundle에 노출하지 않는다
+
 #### Scenario: 민감한 설명과 credential
 
 - **WHEN** 설명에 개인정보가 포함된 신고를 처리하거나 Slack 호출이 실패한다

@@ -55,3 +55,9 @@
 Account별 `N회 / 시간 구간`, 모든 API replica의 공유 rate limit, Redis/Valkey 등 공유 제한 인프라,
 장기 중복·반복 신고·다계정 탐지와 신고 이력 기반 제한은 제외한다. Server-side distributed abuse/rate
 limiting은 별도 후속 이슈 책임이며 PROD-915 완료 조건이 아니다. 후속 이슈는 생성 승인 전이다.
+
+## Slack 연결 결정 · 2026-09-10
+
+사용자 결정에 따라 Feedback과 같은 Slack 봇·채널을 사용한다. 기존 공용 `env` Secret의 `SLACK_FEEDBACK_WEBHOOK_URL`을 재사용하며 신고 전용 환경 변수나 Secret은 추가하지 않는다. 공용 Secret은 API·Web 서버에 전달될 수 있지만 신고 전송은 API만 수행하며 Web application·browser·native bundle에서 credential을 소비하거나 노출하지 않는다.
+
+신고 메시지는 고정된 `text`와 `plain_text` Block Kit으로 구분하고 대상·사유·상세 설명을 표시한다. 링크·media unfurl은 끈다. Feedback의 신고자 식별정보나 전달 성공 판정은 재사용하지 않으며 기존 신고 ACK·확인 불가·비영속 계약을 유지한다.
