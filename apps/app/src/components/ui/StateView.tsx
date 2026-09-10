@@ -36,6 +36,7 @@ export function StateView({
       accessibilityRole={alert ? 'alert' : undefined}
       ref={controlRef}
       style={[styles.root, ...(style ? [style] : [])]}
+      tabIndex={controlRef ? -1 : undefined}
     >
       {loading ? (
         reducedMotion ? (
