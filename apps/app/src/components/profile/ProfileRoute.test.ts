@@ -989,9 +989,6 @@ describe('profile route parameter lifecycle', () => {
     await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
     await renderRoute('@target');
 
-    assert.equal(menuTriggerFocus.mock.callCount(), 0);
-    assert.equal(stateActionFocus.mock.callCount(), 0);
-
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 
     assert.equal(menuTriggerFocus.mock.callCount(), 0);
@@ -1017,9 +1014,6 @@ describe('profile route parameter lifecycle', () => {
     await act(async () => action.props.onPress());
     await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
     await renderRoute('@target');
-
-    assert.equal(menuTriggerFocus.mock.callCount(), 0);
-    assert.equal(stateActionFocus.mock.callCount(), 0);
 
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 
