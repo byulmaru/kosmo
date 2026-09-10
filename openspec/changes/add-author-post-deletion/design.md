@@ -38,7 +38,7 @@ PROD-937은 PROD-598의 삭제 API·eligibility·target·Relay/cache lifecycle�
 
 - Repost action과 같은 post-module private child로 More menu를 구성한다. child는 target Post fragment에서 ID, lifecycle/content 존재와 Author ID를 읽고 `useSession()`의 selected Profile ID와 비교해 `삭제` item을 파생한다. `PostActionBar`는 고정 순서와 control 조립만 유지한다.
 - 공용 `ActionMenuItem`에는 기존 item을 깨뜨리지 않는 optional destructive tone·accessible name을 추가한다. default item은 현재 색과 semantics를 유지하고 삭제 item만 `Trash2`와 theme `danger`를 사용한다.
-- 확인 UI는 현재 한 곳에서만 필요하므로 post feature 안의 작은 modal component로 시작한다. Web `alertdialog`, Native modal semantics, 안전한 초기 focus, pending 전 dismiss와 focus return을 한 경계에서 처리하고 실제 재사용 요구가 생길 때만 공용 primitive로 승격한다.
+- 확인 UI는 PROD-937에서 공용 `ModalSheet`와 `ConfirmationContent tone="danger"`를 재사용한다. Web의 `alertdialog` 경로는 native `<dialog>` 하나가 role과 `aria-modal`을 소유하고, 기본 `dialog` 경로는 기존 React Native Web `Modal` 하나가 이를 소유하며 두 경로 모두 inner surface에는 중복 modal semantics를 두지 않는다. Native는 기존 modal semantics, 안전한 초기 focus, pending 전 dismiss와 focus return 경계를 유지한다.
 - 삭제 mutation에는 optimistic response/updater를 두지 않는다. 요청 시작 environment와 현재 environment를 비교하는 guard와 별도 in-flight ref를 사용해 actor 전환 뒤 이전 callback이 새 UI state나 Store를 바꾸지 않게 한다.
 - 성공 updater는 payload의 `postId`를 source of truth로 사용해 현재 actor Store의 target record와 표시 surface를 정리한다. default는 target record 제거와 함께 Home·Profile 목록, 상세 thread 및 pure Repost의 nested Source가 현재 render에서 남지 않는지 실제 Relay payload test로 확인하고 필요한 edge/reference 정리를 같은 updater 또는 surface reader에 추가하는 방식이다. 구현 세부 방식보다 모든 관련 surface가 Active content를 더 이상 표시하지 않는 결과를 우선한다.
 - 실패는 mutation state만 복구하고 확인 dialog를 유지한 채 기존 toast host로 error callback을 전달한다. GraphQL `onCompleted`의 `errors`와 transport `onError`를 모두 동일한 실패 경계로 처리한다.
@@ -47,7 +47,6 @@ PROD-937은 PROD-598의 삭제 API·eligibility·target·Relay/cache lifecycle�
 ### Allowed Alternatives
 
 - Relay 성공 동기화는 declarative `@deleteRecord`와 explicit connection cleanup, feature-local updater, 또는 성공 뒤 현재 surface refetch 중 하나를 사용할 수 있다. 서버 성공 전 cache를 바꾸지 않고 현재 actor Store만 갱신하며 목록·상세·pure Repost Source 시나리오가 독립 테스트로 증명되면 허용한다.
-- 확인 UI는 기존 공용 `ModalSheet`와 `ConfirmationContent`를 재사용하고, `ModalSheet`가 Web에서 하나의 role·`aria-modal` surface만 소유하도록 한다. Post feature-local portal, native `Modal`, focus trap과 전용 shell은 두지 않는다.
 
 ### Known Traps
 

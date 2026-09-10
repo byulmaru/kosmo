@@ -1176,6 +1176,7 @@ export const AuthorPostDeletion: Story = {
     await userEvent.click(within(menu).getByRole('menuitem', { name: '게시글 삭제' }));
 
     const dialog = await screen.findByRole('alertdialog', { name: '게시글을 삭제할까요?' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(dialog).toHaveAttribute('closedby', 'closerequest');
     expect(dialog).toHaveTextContent('게시글을 삭제할까요?');
     expect(dialog).toHaveTextContent('삭제한 게시글은 복구할 수 없습니다.');

@@ -109,9 +109,10 @@ library에 종속하지 않고 icon, glyph, 짧은 기호 문자 또는 loading 
 
 ### ModalSheet
 
-- Web `ModalSheet`는 native `<dialog>` 하나만 modal role과 `aria-modal`을 소유한다. `alertdialog`를 선택한
-  경우에도 inner React Native surface에 중복 role이나 modal semantics를 만들지 않는다. Android·iOS는 기존
-  Native Modal과 inner dialog semantics를 유지한다.
+- Web `ModalSheet`의 `alertdialog` 경로는 native `<dialog>` 하나만 `alertdialog` role과 `aria-modal`을
+  소유하고, 기본 `dialog` 경로는 기존 React Native Web `Modal` 하나가 이를 소유한다. 두 경로 모두 inner
+  React Native surface에는 중복 role이나 modal semantics를 만들지 않는다. Android·iOS는 기존 Native Modal과
+  inner dialog semantics를 유지한다.
 - `onAccessibilityEscape`는 `dismissDisabled`가 false일 때만 `onClose`로 이어진다. backdrop, 닫기 button과
   platform back도 같은 dismiss 경계를 사용하며 pending 중에는 닫히지 않는다.
 
