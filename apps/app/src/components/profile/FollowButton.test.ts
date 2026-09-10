@@ -125,6 +125,7 @@ test('내가 차단한 Profile은 기본 차단됨, hover와 keyboard focus에�
   });
   const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
   assert.equal(button?.props.children, '차단됨');
+  assert.equal(button?.props.accessibilityLabel, '코스모 @kosmo 차단 해제');
 
   await act(async () => button?.props.onHoverIn());
   assert.equal(
