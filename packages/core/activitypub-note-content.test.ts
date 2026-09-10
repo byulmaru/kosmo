@@ -292,12 +292,18 @@ describe('projectRemoteNoteContent', () => {
   it('projects typed Mention candidates only onto matching safe anchor labels', () => {
     const result = projectRemoteNoteContent({
       content:
-        '<p>Hello <a href="https://remote.example/@alice">@alice</a> and ' +
+        '<p>Hello <a class="h-card" href="https://remote.example/@alice">@alice</a> and ' +
+        '<span class="h-card"><a class="u-url mention" href="https://remote.example/@bob">' +
+        '<span class="p-name">@bob</span></a></span> and ' +
         '<a href="https://example.com/guide">guide</a></p>',
       mentions: [
         {
           label: '@alice',
           targetHref: 'https://remote.example/@alice',
+        },
+        {
+          label: '@bob',
+          targetHref: 'https://remote.example/@bob',
         },
       ],
       summary: null,
@@ -319,9 +325,49 @@ describe('projectRemoteNoteContent', () => {
           },
           { type: 'text', text: ' and ' },
           {
+            type: 'mention',
+            attrs: {
+              href: 'https://remote.example/@bob',
+              label: '@bob',
+              target: 'https://remote.example/@bob',
+            },
+          },
+          { type: 'text', text: ' and ' },
+          {
             type: 'text',
             text: 'guide',
             marks: [{ type: 'link', attrs: { href: 'https://example.com/guide' } }],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('keeps microformats h-card anchors as ordinary links without typed candidates', () => {
+    const result = projectRemoteNoteContent({
+      content:
+        '<p><a class="h-card" href="https://remote.example/@alice">@alice</a> ' +
+        '<span class="h-card"><a class="u-url mention" href="https://remote.example/@bob">' +
+        '<span class="p-name">@bob</span></a></span></p>',
+      mentions: [],
+      summary: null,
+      mediaType: 'text/html',
+    });
+
+    assert.deepEqual(result.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            type: 'text',
+            text: '@alice',
+            marks: [{ type: 'link', attrs: { href: 'https://remote.example/@alice' } }],
+          },
+          { type: 'text', text: ' ' },
+          {
+            type: 'text',
+            text: '@bob',
+            marks: [{ type: 'link', attrs: { href: 'https://remote.example/@bob' } }],
           },
         ],
       },

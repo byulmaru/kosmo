@@ -28,10 +28,6 @@ export interface RemoteNoteMentionCandidate {
 }
 
 const schemaDOMParser = ProseMirrorDOMParser.fromSchema(postContentSchema);
-const remoteNoteDOMParser = new ProseMirrorDOMParser(postContentSchema, [
-  { tag: 'pre', node: 'paragraph', preserveWhitespace: 'full' },
-  ...schemaDOMParser.rules,
-]);
 
 export const remoteNoteContentMaxLength = 10_000;
 
@@ -52,20 +48,7 @@ function htmlToBodyDocument(
     element.remove();
   }
 
-  for (const element of fragment.querySelectorAll('kosmo-mention')) {
-    element.replaceWith(fragment.ownerDocument.createTextNode(element.textContent ?? ''));
-  }
-
-  annotateMentionAnchors(fragment, mentions);
-
-  return remoteNoteDOMParser.parse(fragment).toJSON() as PostContentBodyDocumentV1;
-}
-
-function annotateMentionAnchors(
-  fragment: DocumentFragment,
-  candidates: readonly RemoteNoteMentionCandidate[],
-): void {
-  const normalizedCandidates = candidates.flatMap((candidate) => {
+  const normalizedCandidates = mentions.flatMap((candidate) => {
     const label = normalizeMentionLabel(candidate.label);
     if (label === null) {
       return [];
@@ -81,31 +64,38 @@ function annotateMentionAnchors(
     return [{ label, targetHref }];
   });
 
-  for (const anchor of fragment.querySelectorAll('a[href]')) {
-    let href: string;
-    try {
-      href = normalizeLinkHref(anchor.getAttribute('href'));
-    } catch {
-      continue;
-    }
+  const remoteNoteDOMParser = new ProseMirrorDOMParser(postContentSchema, [
+    { tag: 'pre', node: 'paragraph', preserveWhitespace: 'full' },
+    {
+      tag: 'a[href]',
+      node: 'mention',
+      getAttrs(element) {
+        let href: string;
+        try {
+          href = normalizeLinkHref(element.getAttribute('href'));
+        } catch {
+          return false;
+        }
 
-    const label = normalizeMentionLabel(anchor.textContent ?? '');
-    if (label === null) {
-      continue;
-    }
+        const label = normalizeMentionLabel(element.textContent ?? '');
+        if (label === null) {
+          return false;
+        }
 
-    const candidate = normalizedCandidates.find(
-      (item) => item.label === label && item.targetHref === href,
-    );
-    if (!candidate) {
-      continue;
-    }
-    const mention = fragment.ownerDocument.createElement('kosmo-mention');
-    mention.setAttribute('data-target', candidate.targetHref);
-    mention.setAttribute('data-href', href);
-    mention.setAttribute('data-label', label);
-    anchor.replaceWith(mention);
-  }
+        const candidate = normalizedCandidates.find(
+          (item) => item.label === label && item.targetHref === href,
+        );
+        if (!candidate) {
+          return false;
+        }
+
+        return { href, label, target: candidate.targetHref };
+      },
+    },
+    ...schemaDOMParser.rules,
+  ]);
+
+  return remoteNoteDOMParser.parse(fragment).toJSON() as PostContentBodyDocumentV1;
 }
 
 function normalizeMentionLabel(value: string | null): string | null {
