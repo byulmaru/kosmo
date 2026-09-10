@@ -1,0 +1,17 @@
+services:
+  temporal:
+    image: temporalio/temporal@sha256:cea463d98a8d6def4420f903ea5c3fcd0d85c8d10fbcc2770a50c12fff2eb26d
+    command:
+      - server
+      - start-dev
+      - --ip
+      - 0.0.0.0
+    ports:
+      - '127.0.0.1:7233:7233'
+      - '127.0.0.1:8233:8233'
+    healthcheck:
+      test: ['CMD', 'temporal', 'operator', 'cluster', 'health', '--address', '127.0.0.1:7233']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
