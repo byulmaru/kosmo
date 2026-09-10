@@ -129,6 +129,26 @@ type HydratedRemoteNoteMaterializationResult =
       status: 'rejected';
     };
 
+type RemoteNoteMaterializationSource =
+  | {
+      kind: 'create';
+      actorUri: string;
+      recipient?: string | null;
+      storedActor: StoredRemoteProfileActor;
+    }
+  | { kind: 'hydrated' };
+
+type RemoteNoteMaterializationRejectionReason =
+  | 'empty_note'
+  | 'followers_visibility_without_follow'
+  | 'note_attribution_mismatch'
+  | 'note_content_length_exceeded'
+  | 'note_identity_mismatch'
+  | 'note_media_projection_rejected'
+  | 'note_media_validation_rejected'
+  | 'unsupported_note_visibility'
+  | 'unusable_author';
+
 type RemoteNotePostMaterializationResult =
   | {
       postId?: string;
@@ -214,99 +234,6 @@ const createRemoteNotePost = async ({
   }
 };
 
-export const materializeHydratedRemoteNote = async ({
-  context,
-  note,
-  objectUri,
-  receivedAt,
-}: {
-  context: RemoteNoteMaterializationContext;
-  note: Note;
-  objectUri: URL;
-  receivedAt: Temporal.Instant;
-}): Promise<HydratedRemoteNoteMaterializationResult> => {
-  if (!isHttpUri(objectUri) || note.id?.href !== objectUri.href) {
-    return { reason: 'invalid_note', status: 'rejected' };
-  }
-
-  const attributionHref = uniqueHref(note.attributionIds);
-  if (!attributionHref) {
-    return { reason: 'invalid_note', status: 'rejected' };
-  }
-  const attributionUri = new URL(attributionHref);
-  if (!isHttpUri(attributionUri)) {
-    return { reason: 'invalid_note', status: 'rejected' };
-  }
-
-  const visibility = resolveNoteVisibility(note);
-  if (!visibility) {
-    return { reason: 'unsupported_note', status: 'rejected' };
-  }
-
-  let projection;
-  try {
-    projection = await projectRemoteNote(note);
-  } catch (error) {
-    if (error instanceof RemoteNoteContentLengthExceededError) {
-      return { reason: 'note_content_length_exceeded', status: 'rejected' };
-    }
-    if (error instanceof TypeError) {
-      return { reason: 'invalid_note', status: 'rejected' };
-    }
-    throw error;
-  }
-
-  if (
-    postContentDocumentToText(projection.document).length === 0 &&
-    projection.media.length === 0
-  ) {
-    return { reason: 'unsupported_note', status: 'rejected' };
-  }
-
-  let storedActor;
-  try {
-    storedActor =
-      (await findUsableStoredRemoteProfileActorByUri(attributionUri)) ??
-      (await findOrMaterializeRemoteProfileActorByUri({
-        actorUri: attributionUri,
-        context,
-        now: receivedAt,
-      }));
-  } catch (error) {
-    if (
-      error instanceof RemoteActorMaterializationError ||
-      error instanceof ConflictError ||
-      error instanceof NotFoundError
-    ) {
-      return { reason: 'unusable_author', status: 'rejected' };
-    }
-    throw error;
-  }
-
-  const result = await createRemoteNotePost({
-    context,
-    document: projection.document,
-    media: projection.media,
-    note,
-    objectUri: objectUri.href,
-    profileId: storedActor.profile.id,
-    receivedAt,
-    visibility,
-  });
-  if (result.status === 'rejected') {
-    return result;
-  }
-  if (result.status === 'created') {
-    return { postId: result.postId!, status: result.status };
-  }
-
-  const postId = await findPostByActivityPubUri(context, objectUri);
-  if (!postId) {
-    throw new Error('Remote Note Post not found after duplicate materialization');
-  }
-  return { postId, status: result.status };
-};
-
 const hasEstablishedFollower = async ({
   followerProfileId,
   followeeProfileId,
@@ -336,6 +263,155 @@ const hasEstablishedFollower = async ({
   return row !== undefined;
 };
 
+type RemoteNoteMaterializationResult =
+  | RemoteNotePostMaterialized
+  | { reason: RemoteNoteMaterializationRejectionReason; status: 'rejected' };
+
+const materializeRemoteNote = async ({
+  context,
+  note,
+  objectUri,
+  receivedAt,
+  source,
+}: {
+  context: RemoteNoteMaterializationContext;
+  note: Note;
+  objectUri: URL;
+  receivedAt: Temporal.Instant;
+  source: RemoteNoteMaterializationSource;
+}): Promise<RemoteNoteMaterializationResult> => {
+  if ((source.kind === 'hydrated' && !isHttpUri(objectUri)) || note.id?.href !== objectUri.href) {
+    return { reason: 'note_identity_mismatch', status: 'rejected' };
+  }
+
+  const attributionHref = uniqueHref(note.attributionIds);
+  if (!attributionHref || (source.kind === 'create' && attributionHref !== source.actorUri)) {
+    return { reason: 'note_attribution_mismatch', status: 'rejected' };
+  }
+  const attributionUri = new URL(attributionHref);
+  if (source.kind === 'hydrated' && !isHttpUri(attributionUri)) {
+    return { reason: 'note_attribution_mismatch', status: 'rejected' };
+  }
+
+  const visibility = resolveNoteVisibility(
+    note,
+    source.kind === 'create' ? source.storedActor.actor.followersUri : undefined,
+  );
+  if (!visibility) {
+    return { reason: 'unsupported_note_visibility', status: 'rejected' };
+  }
+  if (
+    source.kind === 'create' &&
+    visibility === PostVisibility.FOLLOWERS &&
+    !(await hasEstablishedFollower({
+      followerProfileId: source.recipient,
+      followeeProfileId: source.storedActor.profile.id,
+    }))
+  ) {
+    return { reason: 'followers_visibility_without_follow', status: 'rejected' };
+  }
+
+  let projection;
+  try {
+    projection = await projectRemoteNote(note);
+  } catch (error) {
+    if (error instanceof RemoteNoteContentLengthExceededError) {
+      return { reason: 'note_content_length_exceeded', status: 'rejected' };
+    }
+    if (error instanceof TypeError) {
+      return { reason: 'note_media_projection_rejected', status: 'rejected' };
+    }
+    throw error;
+  }
+
+  if (
+    source.kind === 'hydrated' &&
+    postContentDocumentToText(projection.document).length === 0 &&
+    projection.media.length === 0
+  ) {
+    return { reason: 'empty_note', status: 'rejected' };
+  }
+
+  let storedActor;
+  if (source.kind === 'create') {
+    storedActor = source.storedActor;
+  } else {
+    try {
+      storedActor =
+        (await findUsableStoredRemoteProfileActorByUri(attributionUri)) ??
+        (await findOrMaterializeRemoteProfileActorByUri({
+          actorUri: attributionUri,
+          context,
+          now: receivedAt,
+        }));
+    } catch (error) {
+      if (
+        error instanceof RemoteActorMaterializationError ||
+        error instanceof ConflictError ||
+        error instanceof NotFoundError
+      ) {
+        return { reason: 'unusable_author', status: 'rejected' };
+      }
+      throw error;
+    }
+  }
+
+  const result = await createRemoteNotePost({
+    context,
+    document: projection.document,
+    media: projection.media,
+    note,
+    objectUri: objectUri.href,
+    profileId: storedActor.profile.id,
+    receivedAt,
+    visibility,
+  });
+  return result.status === 'rejected'
+    ? { reason: 'note_media_validation_rejected', status: 'rejected' }
+    : result;
+};
+
+export const materializeHydratedRemoteNote = async ({
+  context,
+  note,
+  objectUri,
+  receivedAt,
+}: {
+  context: RemoteNoteMaterializationContext;
+  note: Note;
+  objectUri: URL;
+  receivedAt: Temporal.Instant;
+}): Promise<HydratedRemoteNoteMaterializationResult> => {
+  const result = await materializeRemoteNote({
+    context,
+    note,
+    objectUri,
+    receivedAt,
+    source: { kind: 'hydrated' },
+  });
+  if (result.status === 'rejected') {
+    if (result.reason === 'note_content_length_exceeded') {
+      return { reason: 'note_content_length_exceeded', status: 'rejected' };
+    }
+    if (result.reason === 'empty_note' || result.reason === 'unsupported_note_visibility') {
+      return { reason: 'unsupported_note', status: 'rejected' };
+    }
+    if (result.reason === 'unusable_author') {
+      return { reason: 'unusable_author', status: 'rejected' };
+    }
+    return { reason: 'invalid_note', status: 'rejected' };
+  }
+  if (result.status === 'created') {
+    return { postId: result.postId!, status: result.status };
+  }
+
+  const postId = await findPostByActivityPubUri(context, objectUri);
+  if (!postId) {
+    throw new Error('Remote Note Post not found after duplicate materialization');
+  }
+  return { postId, status: result.status };
+};
+
 export const handleInboundCreateNote = async ({
   actorUri,
   context,
@@ -351,127 +427,29 @@ export const handleInboundCreateNote = async ({
   storedActor: StoredRemoteProfileActor;
   receivedAt: Temporal.Instant;
 }): Promise<void> => {
-  if (note.id?.href !== objectUri) {
-    observeInbound({
-      outcome: 'rejected',
-      activityType: 'Create',
-      actorOrigin: actorUri,
-      handler: 'create',
-      objectOrigin: objectUri,
-      phase: 'validation',
-      reasonCode: 'note_identity_mismatch',
-    });
-    return;
-  }
-
-  const attributionUri = uniqueHref(note.attributionIds);
-  if (attributionUri !== actorUri) {
-    observeInbound({
-      outcome: 'rejected',
-      activityType: 'Create',
-      actorOrigin: actorUri,
-      handler: 'create',
-      objectOrigin: objectUri,
-      phase: 'validation',
-      reasonCode: 'note_attribution_mismatch',
-    });
-    return;
-  }
-
-  const visibility = resolveNoteVisibility(note, storedActor.actor.followersUri);
-  if (!visibility) {
-    observeInbound({
-      outcome: 'rejected',
-      activityType: 'Create',
-      actorOrigin: actorUri,
-      handler: 'create',
-      objectOrigin: objectUri,
-      phase: 'validation',
-      reasonCode: 'unsupported_note_visibility',
-    });
-    return;
-  }
-
-  if (
-    visibility === PostVisibility.FOLLOWERS &&
-    !(await hasEstablishedFollower({
-      followerProfileId: context.recipient,
-      followeeProfileId: storedActor.profile.id,
-    }))
-  ) {
-    observeInbound({
-      outcome: 'rejected',
-      activityType: 'Create',
-      actorOrigin: actorUri,
-      handler: 'create',
-      objectOrigin: objectUri,
-      phase: 'validation',
-      reasonCode: 'followers_visibility_without_follow',
-    });
-    return;
-  }
-
-  let projection;
-  try {
-    projection = await projectRemoteNote(note);
-  } catch (error) {
-    if (error instanceof RemoteNoteContentLengthExceededError) {
-      observeInbound({
-        outcome: 'rejected',
-        activityType: 'Create',
-        actorOrigin: actorUri,
-        handler: 'create',
-        objectOrigin: objectUri,
-        phase: 'projection',
-        reasonCode: 'note_content_length_exceeded',
-      });
-      return;
-    }
-    if (error instanceof TypeError) {
-      observeInbound({
-        outcome: 'rejected',
-        activityType: 'Create',
-        actorOrigin: actorUri,
-        handler: 'create',
-        objectOrigin: objectUri,
-        phase: 'projection',
-        reasonCode: 'note_media_projection_rejected',
-      });
-      return;
-    }
-    throw error;
-  }
-
-  const observeDuplicateCreate = () =>
-    observeInbound({
-      outcome: 'noop',
-      activityType: 'Create',
-      actorOrigin: actorUri,
-      handler: 'create',
-      objectOrigin: objectUri,
-      phase: 'projection',
-      reasonCode: 'duplicate_create_noop',
-    });
-
-  const result = await createRemoteNotePost({
+  const result = await materializeRemoteNote({
     context,
-    document: projection.document,
-    media: projection.media,
     note,
-    objectUri,
-    profileId: storedActor.profile.id,
+    objectUri: new URL(objectUri),
     receivedAt,
-    visibility,
+    source: { actorUri, kind: 'create', recipient: context.recipient, storedActor },
   });
   if (result.status === 'rejected') {
+    const phase =
+      result.reason === 'note_identity_mismatch' ||
+      result.reason === 'note_attribution_mismatch' ||
+      result.reason === 'unsupported_note_visibility' ||
+      result.reason === 'followers_visibility_without_follow'
+        ? 'validation'
+        : 'projection';
     observeInbound({
       outcome: 'rejected',
       activityType: 'Create',
       actorOrigin: actorUri,
       handler: 'create',
       objectOrigin: objectUri,
-      phase: 'projection',
-      reasonCode: 'note_media_validation_rejected',
+      phase,
+      reasonCode: result.reason,
     });
     return;
   }
@@ -487,6 +465,14 @@ export const handleInboundCreateNote = async ({
     });
   }
   if (result.status === 'duplicate') {
-    observeDuplicateCreate();
+    observeInbound({
+      outcome: 'noop',
+      activityType: 'Create',
+      actorOrigin: actorUri,
+      handler: 'create',
+      objectOrigin: objectUri,
+      phase: 'projection',
+      reasonCode: 'duplicate_create_noop',
+    });
   }
 };
