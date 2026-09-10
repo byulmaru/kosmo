@@ -143,7 +143,7 @@ jobs:
       actions: read
       contents: read
       id-token: write
-    uses: byulmaru/expo-ota/.github/workflows/publish.yml@refs/heads/main
+    uses: byulmaru/expo-ota/.github/workflows/publish.yml@main
     with:
       artifact_name: ${{ needs.export_android.outputs.android_artifact_name }}
       channel: ${{ inputs.channel }}
@@ -161,7 +161,7 @@ jobs:
       actions: read
       contents: read
       id-token: write
-    uses: byulmaru/expo-ota/.github/workflows/publish.yml@refs/heads/main
+    uses: byulmaru/expo-ota/.github/workflows/publish.yml@main
     with:
       artifact_name: ${{ needs.export_ios.outputs.ios_artifact_name }}
       channel: ${{ inputs.channel }}
