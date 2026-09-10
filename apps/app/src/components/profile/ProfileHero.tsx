@@ -30,6 +30,8 @@ import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profil
 type ProfileHeroProps = {
   action?: ReactNode;
   heading?: boolean;
+  menuItems?: readonly ActionMenuItem[];
+  onMenuTriggerReady?: (focusTrigger: () => void) => void;
   showMuteAction?: boolean;
   moreItems?: readonly ActionMenuItem[];
   loading?: boolean;
@@ -75,6 +77,8 @@ const countFormatter = new Intl.NumberFormat('en', {
 export function ProfileHero({
   action,
   heading = true,
+  menuItems = [],
+  onMenuTriggerReady,
   showMuteAction = false,
   moreItems,
   loading = false,
@@ -194,6 +198,7 @@ export function ProfileHero({
                   <ProfileMoreMenu
                     disabled={disabled}
                     focusTriggerRef={focusTriggerRef}
+                    onTriggerReady={onMenuTriggerReady}
                     items={[
                       {
                         key: 'copy-profile-link',
@@ -217,6 +222,7 @@ export function ProfileHero({
                         },
                       },
                       ...(moreItems ?? []),
+                      ...menuItems,
                       item,
                     ]}
                   />
