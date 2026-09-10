@@ -1,7 +1,7 @@
 import { parseSearchTab, SearchTab } from '@kosmo/core/search';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, History, Menu, Search as SearchIcon, X } from 'lucide-react-native';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { cloneElement, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -22,12 +22,15 @@ import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { SearchToolbar } from '@/components/ui/SearchToolbar';
 import { StateView } from '@/components/ui/StateView';
 import { Tab, TabList } from '@/components/ui/Tabs';
 import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/recentSearches';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
-import type { Href } from 'expo-router';
+import type { Href, LinkProps } from 'expo-router';
+import type { ReactElement } from 'react';
+import type { SearchToolbarRenderLeadingControlProps } from '@/components/ui/SearchToolbar';
 import type { SearchPeopleByHandlePageQuery } from './__generated__/SearchPeopleByHandlePageQuery.graphql';
 import type { SearchPeopleResults_query$key } from './__generated__/SearchPeopleResults_query.graphql';
 import type { SearchPeopleResultsNextPageQuery } from './__generated__/SearchPeopleResultsNextPageQuery.graphql';
@@ -392,6 +395,16 @@ export default function SearchScreen() {
   };
 
   const phase = focused ? 'input' : query ? 'results' : 'before';
+  const renderLeadingControl = ({ children }: SearchToolbarRenderLeadingControlProps) => {
+    const linkControl = cloneElement(
+      children as ReactElement<{
+        accessibilityRole?: 'button' | 'link';
+        onPress?: NonNullable<LinkProps['onPress']>;
+      }>,
+      { accessibilityRole: 'link' },
+    );
+    return <NavigationLink href={searchHref('', activeTab)}>{linkControl}</NavigationLink>;
+  };
 
   return (
     <ScrollView
@@ -399,82 +412,102 @@ export default function SearchScreen() {
       keyboardShouldPersistTaps="handled"
     >
       <View onBlur={leaveSearchFocus} onFocus={keepSearchFocused}>
-        <View
-          accessibilityLabel="검색"
-          style={[
-            styles.searchBar,
-            web && styles.webSearchBar,
-            { backgroundColor: theme.card, borderColor: theme.border },
-          ]}
-        >
-          {phase === 'before' && mobileWeb ? (
-            <IconButton
-              aria-controls={shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined}
-              accessibilityLabel="메뉴 열기"
-              accessibilityState={{ expanded: shellChrome?.navigationDrawerOpen ?? false }}
-              controlRef={shellChrome?.navigationDrawerTriggerRef}
-              feedback="opacity"
-              onFocus={(event) => event.stopPropagation()}
-              onPress={shellChrome?.openNavigationDrawer}
-              style={styles.iconButton}
-              targetSize={44}
-              visualSize={44}
-            >
-              <Menu color={theme.text} size={24} strokeWidth={2} />
-            </IconButton>
-          ) : phase !== 'before' ? (
-            <NavigationLink href={searchHref('', activeTab)}>
-              <Pressable
-                accessibilityLabel="뒤로"
-                accessibilityRole="link"
-                onPress={() => {
-                  preserveQueryNavigationPosition(false);
-                  setInput('');
-                  setFocused(false);
-                }}
-                onPressIn={keepSearchFocused}
-                style={styles.iconButton}
-              >
-                <ArrowLeft color={theme.textSecondary} size={20} strokeWidth={2} />
-              </Pressable>
-            </NavigationLink>
-          ) : null}
+        {web ? (
+          <SearchToolbar
+            inputRef={inputRef}
+            leadingAction={phase === 'before' ? (mobileWeb ? 'menu' : 'none') : 'back'}
+            leadingControlAriaControls={
+              mobileWeb && shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined
+            }
+            leadingControlExpanded={shellChrome?.navigationDrawerOpen ?? false}
+            leadingControlRef={shellChrome?.navigationDrawerTriggerRef}
+            onBackPress={() => {
+              preserveQueryNavigationPosition(false);
+              setInput('');
+              setFocused(false);
+            }}
+            onChangeText={setInput}
+            onClear={clearSearch}
+            onMenuPress={shellChrome?.openNavigationDrawer}
+            onSubmit={navigate}
+            platform="web"
+            renderLeadingControl={renderLeadingControl}
+            value={input}
+          />
+        ) : (
           <View
-            style={[
-              styles.inputShell,
-              web && styles.webInputShell,
-              { backgroundColor: theme.surface },
-            ]}
-            testID="search-input-shell"
+            accessibilityLabel="검색"
+            style={[styles.searchBar, { backgroundColor: theme.card, borderColor: theme.border }]}
           >
-            <SearchIcon color={theme.textSecondary} size={20} strokeWidth={2} />
-            <TextInput
-              ref={inputRef}
-              accessibilityLabel="검색어"
-              autoCapitalize="none"
-              autoCorrect={false}
-              onChangeText={setInput}
-              onSubmitEditing={() => navigate(input)}
-              placeholder="검색어를 입력하세요"
-              placeholderTextColor={theme.textSecondary}
-              returnKeyType="search"
-              style={[styles.input, { color: theme.text }]}
-              value={input}
-            />
-            {input ? (
+            {phase === 'before' && mobileWeb ? (
               <IconButton
-                accessibilityLabel="검색 지우기"
-                onPress={clearSearch}
-                onPressIn={keepSearchFocused}
-                style={styles.clearButton}
+                aria-controls={shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined}
+                accessibilityLabel="메뉴 열기"
+                accessibilityState={{ expanded: shellChrome?.navigationDrawerOpen ?? false }}
+                controlRef={shellChrome?.navigationDrawerTriggerRef}
+                feedback="opacity"
+                onFocus={(event) => event.stopPropagation()}
+                onPress={shellChrome?.openNavigationDrawer}
+                style={styles.iconButton}
                 targetSize={44}
                 visualSize={44}
               >
-                <X color={theme.textSecondary} size={18} strokeWidth={2} />
+                <Menu color={theme.text} size={24} strokeWidth={2} />
               </IconButton>
+            ) : phase !== 'before' ? (
+              <NavigationLink href={searchHref('', activeTab)}>
+                <Pressable
+                  accessibilityLabel="뒤로"
+                  accessibilityRole="link"
+                  onPress={() => {
+                    preserveQueryNavigationPosition(false);
+                    setInput('');
+                    setFocused(false);
+                  }}
+                  onPressIn={keepSearchFocused}
+                  style={styles.iconButton}
+                >
+                  <ArrowLeft color={theme.textSecondary} size={20} strokeWidth={2} />
+                </Pressable>
+              </NavigationLink>
             ) : null}
+            <View
+              style={[
+                styles.inputShell,
+                web && styles.webInputShell,
+                { backgroundColor: theme.surface },
+              ]}
+              testID="search-input-shell"
+            >
+              <SearchIcon color={theme.textSecondary} size={20} strokeWidth={2} />
+              <TextInput
+                ref={inputRef}
+                accessibilityLabel="검색어"
+                autoCapitalize="none"
+                autoCorrect={false}
+                onChangeText={setInput}
+                onSubmitEditing={() => navigate(input)}
+                placeholder="검색어를 입력하세요"
+                placeholderTextColor={theme.textSecondary}
+                returnKeyType="search"
+                style={[styles.input, { color: theme.text }]}
+                value={input}
+              />
+              {input ? (
+                <IconButton
+                  accessibilityLabel="검색 지우기"
+                  onPress={clearSearch}
+                  onPressIn={keepSearchFocused}
+                  style={styles.clearButton}
+                  targetSize={44}
+                  visualSize={44}
+                >
+                  <X color={theme.textSecondary} size={18} strokeWidth={2} />
+                </IconButton>
+              ) : null}
+            </View>
           </View>
-        </View>
+        )}
 
         {phase === 'input' ? (
           <View style={[styles.recent, web && styles.webContent]}>
