@@ -422,11 +422,6 @@ const materializeRemoteMedia = async (
   return materialized;
 };
 
-type StoredMentionIdentity = {
-  readonly actorUri: string;
-  readonly profileId: string;
-};
-
 type MentionProjection = {
   readonly document: PostContentDocumentV1;
   readonly profileIds: readonly string[];
@@ -484,31 +479,8 @@ const projectRemoteMentions = async (
     .from(ActivityPubActors)
     .where(inArray(ActivityPubActors.uri, identities));
 
-  const profileIdByActorUri = new Map(
-    (rows satisfies StoredMentionIdentity[]).map(({ actorUri, profileId }) => [
-      actorUri,
-      profileId,
-    ]),
-  );
-  const profileIdByNode = new Map<string, string>();
-  const nodeKey = (node: PostContentMentionNode) =>
-    `${node.attrs.target}\u0000${node.attrs.href}\u0000${node.attrs.label}`;
-
-  for (const node of mentionNodes) {
-    const target = canonicalMentionUri(node.attrs.target);
-    const href = canonicalMentionUri(node.attrs.href);
-    if (!target || !href) {
-      continue;
-    }
-
-    const targetProfileId = profileIdByActorUri.get(target);
-    const hrefProfileId = profileIdByActorUri.get(href);
-    if (targetProfileId !== undefined && targetProfileId === hrefProfileId) {
-      profileIdByNode.set(nodeKey(node), targetProfileId);
-    }
-  }
-
-  const profileIds = [...new Set(profileIdByNode.values())];
+  const profileIdByActorUri = new Map(rows.map(({ actorUri, profileId }) => [actorUri, profileId]));
+  const profileIds = new Set<string>();
   const projectedDocument = canonicalizePostContentDocument({
     ...document,
     body: {
@@ -517,11 +489,19 @@ const projectRemoteMentions = async (
         block.type === 'paragraph'
           ? {
               ...block,
-              content: (block.content ?? []).flatMap((node) => {
-                if (node.type !== 'mention' || profileIdByNode.has(nodeKey(node))) {
-                  return [node];
+              content: (block.content ?? []).map((node) => {
+                if (node.type !== 'mention') {
+                  return node;
                 }
-                return [fallbackMention(node)];
+                const target = canonicalMentionUri(node.attrs.target);
+                const href = canonicalMentionUri(node.attrs.href);
+                const targetProfileId = target ? profileIdByActorUri.get(target) : undefined;
+                const hrefProfileId = href ? profileIdByActorUri.get(href) : undefined;
+                if (targetProfileId !== undefined && targetProfileId === hrefProfileId) {
+                  profileIds.add(targetProfileId);
+                  return node;
+                }
+                return fallbackMention(node);
               }),
             }
           : block,
@@ -529,7 +509,7 @@ const projectRemoteMentions = async (
     },
   });
 
-  return { document: projectedDocument, profileIds };
+  return { document: projectedDocument, profileIds: [...profileIds] };
 };
 
 export const deletePost = async ({

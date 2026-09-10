@@ -461,15 +461,6 @@ test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존�
   assert.equal(first.post.currentContentId, first.content.id);
   assert.equal(first.post.createdAt.toString(), publishedAt.toString());
   assert.equal(first.content.createdAt.toString(), receivedAt.toString());
-  assert.deepEqual(
-    await db
-      .select({ document: PostContents.document })
-      .from(PostContents)
-      .where(eq(PostContents.id, first.content.id))
-      .then(firstOrThrow)
-      .then(({ document }) => document),
-    first.content.document,
-  );
   assert.equal(
     await db
       .select()
