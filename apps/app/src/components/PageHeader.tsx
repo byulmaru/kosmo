@@ -17,6 +17,7 @@ type PageHeaderProps =
   | {
       accessibilityLabel: string;
       brandAccessibilityLabel?: string;
+      brandCurrent?: boolean;
       brandHref?: Href;
       leading?: ReactNode;
       onBrandCurrentNavigate?: () => void;
@@ -50,6 +51,7 @@ export function PageHeader(props: PageHeaderProps) {
           <View style={[styles.brand, props.brandHref ? null : styles.staticBrand]}>
             {props.brandHref ? (
               <NavigationLink
+                current={props.brandCurrent}
                 href={props.brandHref}
                 onCurrentNavigate={props.onBrandCurrentNavigate}
               >

@@ -670,7 +670,7 @@ export function ProfileSwitcher({
 
 const styles = StyleSheet.create({
   root: { position: 'relative' },
-  compactRoot: { height: 44, width: 64 },
+  compactRoot: { alignItems: 'center', height: 44, width: 64 },
   fullRoot: { alignSelf: 'stretch' },
   trigger: { alignItems: 'center', flexDirection: 'row' },
   compactTrigger: { height: 44, justifyContent: 'center', width: 44 },

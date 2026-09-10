@@ -13,6 +13,7 @@ type ChildProps = {
 type Props = Omit<LinkProps, 'asChild' | 'children' | 'href' | 'onPress'> & {
   children: ReactElement<ChildProps>;
   href: Href;
+  current?: boolean;
   onCurrentNavigate?: () => void;
   onNavigate?: () => void;
   primary?: boolean;
@@ -20,6 +21,7 @@ type Props = Omit<LinkProps, 'asChild' | 'children' | 'href' | 'onPress'> & {
 
 export function NavigationLink({
   children,
+  current = false,
   href,
   onCurrentNavigate,
   onNavigate,
@@ -46,7 +48,7 @@ export function NavigationLink({
       return;
     }
     const targetPathname = getHrefPathname(href);
-    if (onCurrentNavigate && targetPathname === pathname) {
+    if (onCurrentNavigate && (current || targetPathname === pathname)) {
       event.preventDefault();
       onNavigate?.();
       onCurrentNavigate();
