@@ -330,6 +330,7 @@ describe('ProfileHero media presentation', () => {
 describe('ProfileHero 관리 메뉴 조립', () => {
   it('showMuteAction이 링크 복사와 호출자 항목을 ProfileMuteAction에 위임한다', async () => {
     fragmentData = baseProfile;
+    let receivedFocus: (() => void) | undefined;
     await act(async () => {
       renderer = create(
         createElement(ProfileHero, {
@@ -342,6 +343,9 @@ describe('ProfileHero 관리 메뉴 조립', () => {
               tone: 'danger',
             },
           ],
+          onMenuTriggerReady: (focusTrigger: () => void) => {
+            receivedFocus = focusTrigger;
+          },
           profile: {} as never,
           showMuteAction: true,
         }),
@@ -352,13 +356,16 @@ describe('ProfileHero 관리 메뉴 조립', () => {
     const menu = renderer.root.find((node) => (node.type as unknown) === 'ProfileMuteAction');
     const actionMenu = menu.props.renderMenuItem({
       disabled: false,
+      focusTriggerRef: { current: () => undefined },
       item: { key: 'mute' },
-      registerTriggerFocus: () => undefined,
     });
     assert.deepEqual(
       actionMenu.props.items.map((item: { key: string }) => item.key),
       ['copy-profile-link', 'block', 'mute'],
     );
+    const focusTrigger = () => undefined;
+    actionMenu.props.onTriggerReady(focusTrigger);
+    assert.equal(receivedFocus, focusTrigger);
   });
 });
 
