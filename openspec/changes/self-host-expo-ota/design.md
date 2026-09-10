@@ -19,7 +19,7 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 - 기존 `apps/worker` Temporal workflow를 OTA delivery로 변환
 - Kosmo repository에 조직 공용 정적 R2 source 또는 deploy config를 추가
 - native-store-distribution의 binary upload를 OTA publisher 호출 지점으로 재사용하거나 channel 선택 input을 추가
-- 실제 host/bucket provisioning, Vault secret 생성과 publish 실행 자체. 현재 handoff의 public base URL `https://expo-ota.byulmaru.co`와 R2 bucket `expo-ota`는 handoff context로 기록하며, publish 실행은 각 owner의 운영 범위에서 다룬다.
+- 실제 host/bucket provisioning, Vault와 Kosmo repository secret 등록 및 publish 실행 자체. 현재 handoff의 public base URL `https://expo-ota.byulmaru.co`와 R2 bucket `expo-ota`는 handoff context로 기록하며, publish 실행은 각 owner의 운영 범위에서 다룬다.
 
 ## Implementation Guidance
 
@@ -33,7 +33,7 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 - 이번 구현에서는 release promotion과 known-good recovery reissue를 active scope에 포함하지 않는다. 해당 계약과 장기 운영 맥락은 decisions와 migration notes에 보존하며, publisher contract가 준비된 뒤 별도로 재개한다.
 - 정적 R2 manifest는 `multipart/mixed` 응답이며 첫 JSON part의 정확한 바이트에 `expo-signature`를 붙인다. publisher는 bundle과 asset을 SHA-256 content-addressed object로 먼저 업로드하고 read-back 검증한 뒤 tuple의 `manifest.json` object를 쓴다. manifest는 `private, no-store`, asset은 `public, max-age=31536000, immutable`이며 static host는 multipart bytes와 Expo protocol headers를 변형하지 않아야 한다.
 - 정적 endpoint는 요청별 negotiation이나 signing을 하지 않는다. 서명·asset hash 검증은 public certificate를 포함한 client가 update 적용 전에 수행한다.
-- signing private key는 Vault에 보관하고 Kosmo caller는 reusable publisher workflow의 caller secret `signing_private_key` input을 제공한다. Vault에서 보관된 값을 reusable workflow input으로 연결하는 방법과 실제 read·handoff는 아직 검증되지 않았다. common publisher는 signing storage 경로·field·provider·backend를 고정하거나 직접 조회하지 않으며, native seed binary에는 public certificate를 포함한다. `2026-09` 초기 private key는 Vault KV v2 `secret/data/expo-ota/signing/kosmo-native/2026-09`의 `private_key` field, version 1에 등록된 것으로 기록되었다. certificate validity는 `2026-09-10`부터 `2027-09-10`까지(KST)이며 첫 rotation은 `2027-03-10`에 예정되어 있다. 초기 provision과 public certificate source evidence는 기록되었고 caller read·reusable workflow input linkage·rotation·seed binary·device evidence는 남은 검증으로 관리한다.
+- signing private key는 Vault 원본과 Kosmo repository secret `EXPO_OTA_SIGNING_PRIVATE_KEY`에 함께 보관한다. Deploy Dev/Production caller는 이를 local reusable workflow의 required `signing_private_key` input으로 전달하고, local workflow는 같은 이름의 secret을 public publisher에 전달한다. 두 저장소는 rotation 때 함께 갱신한다. 실제 secret 등록·동기화와 publish 결과는 운영 evidence로 확인하며, common publisher는 signing storage 경로·field·provider·backend를 고정하거나 직접 조회하지 않는다. public `byulmaru/expo-ota` repository와 static R2에는 private key를 저장하지 않는다. native seed binary에는 public certificate를 포함한다. `2026-09` 초기 private key는 Vault KV v2 `secret/data/expo-ota/signing/kosmo-native/2026-09`의 `private_key` field, version 1에 등록된 것으로 기록되었다. certificate validity는 `2026-09-10`부터 `2027-09-10`까지(KST)이며 첫 rotation은 `2027-03-10`에 예정되어 있다. 초기 provision과 public certificate source evidence는 기록되었고 repository secret registration·caller forwarding·rotation·seed binary·device evidence는 남은 운영 evidence로 관리한다.
 - 조직 공용 정적 R2 source와 publisher workflow는 public `byulmaru/expo-ota`에서 관리한다. Kosmo에서는 delivery runtime을 복제하지 않고 client와 approved export/publish handoff만 연결한다.
 
 ### Recommended Approach
@@ -49,14 +49,14 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 
 - Expo 공식 config plugin 또는 package가 제공하는 동등한 bootstrap hook을 사용할 수 있다. 단, 결과가 동일한 runtime/project/channel 선택, 안전한 channel path segment 검증, code-signing 검증, fallback을 증명해야 한다. Store binary consumer channel은 `prod`로 고정하고, deploy workflow의 논리 channel mapping과 혼동하지 않는다.
 - 현재 static R2 public base URL은 `https://expo-ota.byulmaru.co`, bucket은 `expo-ota`다. Host와 object layout은 PROD-334 delivery context로 기록하며, PROD-335 caller handoff에는 별도 public-edge verification 단계를 추가하지 않는다.
-- CI release runner나 별도 release service가 publish를 수행할 수 있다. 단, Kosmo caller는 reusable publisher workflow의 caller secret `signing_private_key`를 제공하고, Vault 보관값을 해당 workflow 입력으로 연결하는 방법과 실제 handoff는 검증되지 않은 운영 연결로 남긴다. private key는 client·static R2 runtime에 두지 않으며, publisher가 signing storage 경로·field·provider·backend를 고정하지 않고 protected production approval과 immutable complete-release 계약을 보존해야 한다. promotion/recovery는 보류한다.
+- CI release runner나 별도 release service가 publish를 수행할 수 있다. 단, Kosmo caller는 repository secret `EXPO_OTA_SIGNING_PRIVATE_KEY`를 local reusable workflow의 required `signing_private_key` input으로 제공하고, local workflow는 이를 public publisher에 전달한다. Vault 원본과 Kosmo repository secret의 실제 등록·동기화, publish handoff 결과는 검증되지 않은 운영 evidence로 남긴다. private key는 client·static R2 runtime에 두지 않으며, publisher가 signing storage 경로·field·provider·backend를 고정하지 않고 protected production approval과 immutable complete-release 계약을 보존해야 한다. promotion/recovery는 보류한다.
 
 ### Known Traps
 
 - Deploy workflow의 논리 `dev`/`prod` mapping과 Native public-config는 서로의 값을 자동 재사용하지 않는다. OTA channel은 별도 generic 값으로 전달하되 안전한 단일 path segment여야 한다. Store binary는 OTA consumer와 public-config 두 축 모두 `prod`다.
 - runtimeVersion만 비교하거나 project/platform/channel을 생략하면 서로 다른 binary가 잘못된 JavaScript/native API 조합을 받을 수 있다.
 - manifest object를 먼저 바꾸거나 이미 공개한 asset을 덮어쓰면 partial release와 client별 다른 bytes가 발생한다.
-- static R2 origin에 signing private key, Play/TestFlight credential 또는 publish token을 넣거나 Kosmo repository에 static R2 source를 복제하면 read-only delivery와 repository 경계가 깨진다.
+- static R2 origin 또는 public `byulmaru/expo-ota` repository에 signing private key, Play/TestFlight credential 또는 publish token을 넣으면 read-only delivery와 repository 경계가 깨진다. Kosmo repository secret `EXPO_OTA_SIGNING_PRIVATE_KEY`는 caller 전달용으로만 사용한다.
 - certificate rotation은 새 public certificate를 포함한 새 runtime과 새 Store binary를 배포하는 경계다. 구 runtime은 구 certificate를 계속 사용하며, 기존 binary에 새 certificate를 주입하거나 dual trust를 추가하지 않는다.
 - Firebase App Distribution 또는 과거 PROD-285 Internal 경로를 현재 Android seed binary evidence로 재사용하면 current path인 PROD-886과 검증 결과가 불일치한다.
 - PROD-287의 store-native automation을 OTA 전용 device verification의 blocker로 취급하면 독립적으로 완료 가능한 PROD-336 결과를 막게 된다.
@@ -80,6 +80,6 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 ## Open Questions
 
 - current static R2 endpoint `https://expo-ota.byulmaru.co`와 bucket `expo-ota`가 configured host/object와 일치하고 positive multipart response를 제공하는지 어떤 운영 evidence로 기록하는가?
-- 초기 key/certificate provision과 public certificate bundle evidence는 기록되었다. 새 runtime·Store binary rotation evidence와 publisher/device 결과를 어디에 보존할지는 PROD-335/336 runbook에서 확정한다.
+- 초기 key/certificate provision과 public certificate bundle evidence는 기록되었다. Kosmo repository secret 등록·Vault 동기화와 새 runtime·Store binary rotation evidence, publisher/device 결과를 어디에 보존할지는 PROD-335/336 runbook에서 확정한다.
 - PROD-886/PROD-876 seed binary의 OTA consumer channel을 `prod`로 고정하고 release metadata를 어떤 binary workflow evidence로 기록하는가?
 - failure/recovery evidence의 보존 위치와 PROD-336의 archive 승인자는 무엇인가? recovery evidence는 promotion/recovery 범위를 재개할 때 확정한다.
