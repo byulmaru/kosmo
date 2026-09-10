@@ -129,3 +129,9 @@ function rendered(type: string): ReactTestInstance[] {
   assert.ok(renderer);
   return renderer.root.findAll((node) => node.type === type);
 }
+
+function texts(): string[] {
+  return rendered('Text').flatMap((node) =>
+    typeof node.props.children === 'string' ? [node.props.children] : [],
+  );
+}

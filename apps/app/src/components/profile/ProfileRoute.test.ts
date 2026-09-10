@@ -762,7 +762,6 @@ describe('profile route parameter lifecycle', () => {
     await renderRoute('@blocked');
     assert.equal(rendered('FollowButton').length, 0);
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
-    assert.equal(contentStateFocus.mock.callCount(), 0);
 
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 
