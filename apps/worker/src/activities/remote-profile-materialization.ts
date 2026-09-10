@@ -16,110 +16,90 @@ import type { RemoteProfileMaterializationInput } from '@kosmo/core/temporal/rem
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
 
-const isStale = (lastFetchedAt: Temporal.Instant | null, now: Temporal.Instant) =>
-  lastFetchedAt === null ||
-  lastFetchedAt.add(remoteActorRefreshTtl).epochNanoseconds <= now.epochNanoseconds;
-
-const profileOriginError = (message: string) =>
-  new RemoteActorMaterializationError(`Unable to determine materialization origin: ${message}`);
-
-const resolveRemoteProfileMaterializationOrigin = async (profileId?: string) => {
-  if (!profileId) {
-    return (await resolveConfiguredLocalInstance()).canonicalOrigin;
-  }
-
-  const selected = await db
-    .select({ actor: ActivityPubActors, instance: Instances })
-    .from(Profiles)
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-    .where(eq(Profiles.id, profileId))
-    .limit(1)
-    .then(first);
-
-  if (!selected) {
-    throw profileOriginError('Profile was not found.');
-  }
-
-  if (selected.instance.kind === InstanceKind.LOCAL) {
-    const origin = selected.instance.canonicalOrigin;
-    if (!origin) {
-      throw profileOriginError('Local Profile instance has no canonical origin.');
-    }
-    return origin;
-  }
-
-  if (selected.instance.kind !== InstanceKind.ACTIVITYPUB || !selected.actor) {
-    throw profileOriginError('Remote Profile actor metadata is missing.');
-  }
-
-  let actorUri: URL;
-  try {
-    actorUri = new URL(selected.actor.uri);
-  } catch {
-    throw profileOriginError('Remote Profile actor URI is invalid.');
-  }
-
-  if ((actorUri.protocol !== 'http:' && actorUri.protocol !== 'https:') || !actorUri.hostname) {
-    throw profileOriginError('Remote Profile actor URI must use HTTP(S) with a hostname.');
-  }
-
-  return actorUri.origin;
-};
-
-const skipRemoteLookupIfCurrent = async (
-  input: RemoteProfileMaterializationInput,
-  now: Temporal.Instant,
-) => {
-  const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
-
-  if (!stored) {
-    return undefined;
-  }
-
-  if (stored.profile.state !== ProfileState.ACTIVE) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  if (stored.instance.state === InstanceState.SUSPENDED) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  if (
-    stored.instance.state === InstanceState.UNRESPONSIVE ||
-    !isStale(stored.actor.lastFetchedAt, now)
-  ) {
-    return stored.profile.id;
-  }
-
-  return undefined;
-};
-
-const expectedFailureType = (error: unknown): string | undefined => {
-  if (error instanceof RemoteActorMaterializationError) {
-    return 'RemoteActorMaterializationError';
-  }
-  if (error instanceof ConflictError) {
-    return 'ConflictError';
-  }
-  if (error instanceof NotFoundError) {
-    return 'NotFoundError';
-  }
-  return undefined;
-};
-
 export const materializeRemoteProfileActorActivity = async (
   input: RemoteProfileMaterializationInput,
 ): Promise<string> => {
   const now = Temporal.Now.instant();
 
   try {
-    const existingProfileId = await skipRemoteLookupIfCurrent(input, now);
-    if (existingProfileId) {
-      return existingProfileId;
+    const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
+
+    if (stored) {
+      if (stored.profile.state !== ProfileState.ACTIVE) {
+        throw new NotFoundError('Profile not found');
+      }
+
+      if (stored.instance.state === InstanceState.SUSPENDED) {
+        throw new NotFoundError('Profile not found');
+      }
+
+      if (
+        stored.instance.state === InstanceState.UNRESPONSIVE ||
+        (stored.actor.lastFetchedAt !== null &&
+          stored.actor.lastFetchedAt.add(remoteActorRefreshTtl).epochNanoseconds >
+            now.epochNanoseconds)
+      ) {
+        return stored.profile.id;
+      }
     }
 
-    const origin = await resolveRemoteProfileMaterializationOrigin(input.profileId);
+    let origin: string;
+
+    if (!input.profileId) {
+      origin = (await resolveConfiguredLocalInstance()).canonicalOrigin;
+    } else {
+      const selected = await db
+        .select({ actor: ActivityPubActors, instance: Instances })
+        .from(Profiles)
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+        .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+        .where(eq(Profiles.id, input.profileId))
+        .limit(1)
+        .then(first);
+
+      if (!selected) {
+        throw new RemoteActorMaterializationError(
+          'Unable to determine materialization origin: Profile was not found.',
+        );
+      }
+
+      if (selected.instance.kind === InstanceKind.LOCAL) {
+        const localOrigin = selected.instance.canonicalOrigin;
+        if (!localOrigin) {
+          throw new RemoteActorMaterializationError(
+            'Unable to determine materialization origin: Local Profile instance has no canonical origin.',
+          );
+        }
+        origin = localOrigin;
+      } else {
+        if (selected.instance.kind !== InstanceKind.ACTIVITYPUB || !selected.actor) {
+          throw new RemoteActorMaterializationError(
+            'Unable to determine materialization origin: Remote Profile actor metadata is missing.',
+          );
+        }
+
+        let actorUri: URL;
+        try {
+          actorUri = new URL(selected.actor.uri);
+        } catch {
+          throw new RemoteActorMaterializationError(
+            'Unable to determine materialization origin: Remote Profile actor URI is invalid.',
+          );
+        }
+
+        if (
+          (actorUri.protocol !== 'http:' && actorUri.protocol !== 'https:') ||
+          !actorUri.hostname
+        ) {
+          throw new RemoteActorMaterializationError(
+            'Unable to determine materialization origin: Remote Profile actor URI must use HTTP(S) with a hostname.',
+          );
+        }
+
+        origin = actorUri.origin;
+      }
+    }
+
     const context = federation.createContext(new URL(origin), undefined);
     const profile = await materializeRemoteProfileActor({
       context,
@@ -129,12 +109,16 @@ export const materializeRemoteProfileActorActivity = async (
 
     return profile.id;
   } catch (error) {
-    const type = expectedFailureType(error);
-    if (type) {
-      throw ApplicationFailure.nonRetryable(
-        error instanceof Error ? error.message : String(error),
-        type,
-      );
+    if (error instanceof RemoteActorMaterializationError) {
+      throw ApplicationFailure.nonRetryable(error.message, 'RemoteActorMaterializationError');
+    }
+
+    if (error instanceof ConflictError) {
+      throw ApplicationFailure.nonRetryable(error.message, 'ConflictError');
+    }
+
+    if (error instanceof NotFoundError) {
+      throw ApplicationFailure.nonRetryable(error.message, 'NotFoundError');
     }
 
     throw error;

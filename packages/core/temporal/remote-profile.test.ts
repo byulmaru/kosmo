@@ -6,11 +6,8 @@ process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
 
 const { temporalClient } = await import('./client');
-const {
-  REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE,
-  remoteProfileMaterializationWorkflowId,
-  startRemoteProfileMaterialization,
-} = await import('./remote-profile');
+const { REMOTE_PROFILE_MATERIALIZATION_WORKFLOW_TYPE, startRemoteProfileMaterialization } =
+  await import('./remote-profile');
 
 const input = {
   actorUri: 'https://remote.example/users/alice',
@@ -34,7 +31,10 @@ test('sync caller waits for the Profile identity using one stable Workflow ID', 
     const options = call.arguments[1];
     assert.ok(options);
     assert.deepEqual(options.args, [input]);
-    assert.equal(options.workflowId, remoteProfileMaterializationWorkflowId(input));
+    assert.equal(
+      options.workflowId,
+      `remote-profile-materialization:${input.actorUri}:${input.profileId}`,
+    );
     assert.equal(options.workflowIdConflictPolicy, 'USE_EXISTING');
     assert.equal(options.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
     assert.equal(options.taskQueue, 'kosmo');
@@ -92,7 +92,10 @@ test('async caller returns durable start acknowledgement without waiting for the
     const options = call.arguments[1];
     assert.ok(options);
     assert.deepEqual(options.args, [input]);
-    assert.equal(options.workflowId, remoteProfileMaterializationWorkflowId(input));
+    assert.equal(
+      options.workflowId,
+      `remote-profile-materialization:${input.actorUri}:${input.profileId}`,
+    );
     assert.equal(options.workflowIdConflictPolicy, 'USE_EXISTING');
     assert.equal(options.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
     assert.equal(deadline.mock.calls.length, 1);
@@ -104,24 +107,41 @@ test('async caller returns durable start acknowledgement without waiting for the
   }
 });
 
-test('Workflow identity keeps actor URIs and origin selection profiles separate', () => {
+test('Workflow identity keeps actor URIs and origin selection profiles separate', async () => {
   const actorUriInput = { actorUri: 'https://remote.example/users/alice' };
   const otherActorUriInput = { actorUri: 'https://remote.example/users/bob' };
+  const execute = mock.method(temporalClient.workflow, 'execute', async () => 'profile-1' as never);
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
 
-  assert.notEqual(
-    remoteProfileMaterializationWorkflowId(input),
-    remoteProfileMaterializationWorkflowId(otherActorUriInput),
-  );
-  assert.equal(
-    remoteProfileMaterializationWorkflowId(actorUriInput),
-    remoteProfileMaterializationWorkflowId(actorUriInput),
-  );
-  assert.notEqual(
-    remoteProfileMaterializationWorkflowId(actorUriInput),
-    remoteProfileMaterializationWorkflowId(otherActorUriInput),
-  );
-  assert.notEqual(
-    remoteProfileMaterializationWorkflowId(actorUriInput),
-    remoteProfileMaterializationWorkflowId({ ...actorUriInput, profileId: input.profileId }),
-  );
+  try {
+    await startRemoteProfileMaterialization(input, 'sync');
+    await startRemoteProfileMaterialization(otherActorUriInput, 'sync');
+    await startRemoteProfileMaterialization(actorUriInput, 'sync');
+    await startRemoteProfileMaterialization(
+      { ...actorUriInput, profileId: input.profileId },
+      'sync',
+    );
+
+    const workflowIds = execute.mock.calls.map((call) => {
+      const options = call.arguments[1];
+      assert.ok(options);
+      return options.workflowId;
+    });
+
+    assert.deepEqual(workflowIds, [
+      `remote-profile-materialization:${input.actorUri}:${input.profileId}`,
+      'remote-profile-materialization:https://remote.example/users/bob:configured-local',
+      'remote-profile-materialization:https://remote.example/users/alice:configured-local',
+      `remote-profile-materialization:${input.actorUri}:${input.profileId}`,
+    ]);
+    assert.notEqual(workflowIds[0], workflowIds[1]);
+    assert.notEqual(workflowIds[2], workflowIds[3]);
+  } finally {
+    deadline.mock.restore();
+    execute.mock.restore();
+  }
 });

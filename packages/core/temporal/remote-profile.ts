@@ -15,11 +15,6 @@ export type RemoteProfileMaterializationAcknowledgement = {
 
 export type RemoteProfileMaterializationMode = 'sync' | 'async';
 
-export const remoteProfileMaterializationWorkflowId = (
-  input: RemoteProfileMaterializationInput,
-): string =>
-  `remote-profile-materialization:${input.actorUri}:${input.profileId ?? 'configured-local'}`;
-
 const remoteProfileMaterializationRpcTimeoutMs = 5_000;
 
 /**
@@ -34,7 +29,7 @@ export const startRemoteProfileMaterialization = async (
   const options = {
     args: [input] as [RemoteProfileMaterializationInput],
     taskQueue: KOSMO_TASK_QUEUE,
-    workflowId: remoteProfileMaterializationWorkflowId(input),
+    workflowId: `remote-profile-materialization:${input.actorUri}:${input.profileId ?? 'configured-local'}`,
     workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
     workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
   };
