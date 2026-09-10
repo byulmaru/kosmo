@@ -3517,7 +3517,7 @@ export const ProductionPostDeletionListEdgeSafety: Story = {
       within(menu)
         .getAllByRole('menuitem')
         .map((item) => item.getAttribute('aria-label')),
-    ).toEqual(['링크 복사', '게시글 삭제']);
+    ).toEqual(['링크 복사', '게시물 신고', '게시글 삭제']);
     await userEvent.click(
       within(menu).getByRole('menuitem', {
         name: '게시글 삭제',
@@ -3970,7 +3970,7 @@ export const ProductionMoreShareReferences: Story = {
         within(menu)
           .getAllByRole('menuitem')
           .map((item) => item.getAttribute('aria-label')),
-      ).toEqual(['링크 복사', '뮤트']);
+      ).toEqual(['링크 복사', '게시물 신고', '뮤트']);
       await userEvent.click(within(menu).getByRole('menuitem', { name: '링크 복사' }));
       await waitFor(() => expect(more).toHaveAttribute('aria-expanded', 'false'));
       await waitFor(() => expect(getCopiedStrings()[index]).toBe(reference));

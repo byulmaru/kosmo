@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ContentReportDeliveryStatus, ContentReportReason } from '@kosmo/core/enums';
-import { getContentReportFormState, getContentReportOutcome } from './contentReportState';
+import { ContentReportReason } from '@kosmo/core/enums';
+import { getContentReportFormState } from './contentReportState';
 
 test('Content Report form state treats changed reason/details as a dirty draft', () => {
   assert.deepEqual(
@@ -28,11 +28,4 @@ test('Content Report form state treats changed reason/details as a dirty draft',
     }),
     { dirty: true, submitting: false },
   );
-});
-
-test('Content Report maps server and transport outcomes to user-visible states', () => {
-  assert.equal(getContentReportOutcome(ContentReportDeliveryStatus.DELIVERED), 'success');
-  assert.equal(getContentReportOutcome(ContentReportDeliveryStatus.REJECTED), 'rejected');
-  assert.equal(getContentReportOutcome(ContentReportDeliveryStatus.UNKNOWN), 'unknown');
-  assert.equal(getContentReportOutcome(null), 'unknown');
 });

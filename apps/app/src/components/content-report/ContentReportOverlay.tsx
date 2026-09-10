@@ -37,7 +37,7 @@ const initialFormState: ContentReportFormState = { dirty: false, submitting: fal
 export function ContentReportOverlay({ onRequestClose, target, visible }: Props) {
   const theme = useTheme();
   const elevation = useElevation();
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const [formState, setFormState] = useState(initialFormState);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const [formRevision, setFormRevision] = useState(0);
@@ -49,6 +49,7 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
   const surfaceRef = useRef<NativeView>(null);
   const wasVisibleRef = useRef(visible);
   const mobile = width < breakpoints.compact;
+  const nativeMaxHeight = Platform.OS === 'web' ? null : height * 0.85;
   const safeAreaStyle = useSafeAreaPadding(mobile ? 0 : spacing.lg);
   const title = target?.kind === 'PROFILE' ? '프로필 신고' : '게시물 신고';
   formStateRef.current = formState;
@@ -88,6 +89,10 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
 
   const continueEditing = useCallback(() => {
     setDiscardConfirmOpen(false);
+    if (Platform.OS !== 'web') {
+      return;
+    }
+
     requestAnimationFrame(() => {
       const surface = surfaceRef.current as unknown as HTMLElement | null;
       surface?.querySelector<HTMLElement>('textarea, [role="radio"]')?.focus();
@@ -252,7 +257,9 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
           style={[
             styles.surface,
             elevation.overlay,
+            nativeMaxHeight === null ? null : { maxHeight: nativeMaxHeight },
             mobile ? styles.mobileSurface : null,
+            mobile && nativeMaxHeight !== null ? { height: nativeMaxHeight } : null,
             { backgroundColor: theme.card, borderColor: theme.border },
           ]}
           testID="content-report-overlay-surface"
