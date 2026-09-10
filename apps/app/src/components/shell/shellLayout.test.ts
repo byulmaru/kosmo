@@ -133,9 +133,13 @@ describe('getShellLayout', () => {
     });
   });
 
-  it('assigns only mobile Web search to a route-owned header', () => {
+  it('assigns mobile Web search and canonical Profile Home to route-owned headers', () => {
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/search'), true);
+    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer'), true);
+    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer/followers'), false);
+    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer/post-id'), false);
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/notifications'), false);
+    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@'), false);
     assert.equal(isWebMobileRouteOwnedHeader(true, 768, '/search'), false);
     assert.equal(isWebMobileRouteOwnedHeader(true, 1_280, '/search'), false);
     assert.equal(isWebMobileRouteOwnedHeader(false, 390, '/search'), false);

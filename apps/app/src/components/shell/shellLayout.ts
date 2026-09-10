@@ -104,7 +104,13 @@ export function getWebMobileShellHeader(
 }
 
 export function isWebMobileRouteOwnedHeader(web: boolean, width: number, pathname: string) {
-  return web && getShellLayout(web, width) === 'mobile' && pathname === '/search';
+  const segments = pathname.split('/').filter(Boolean);
+  const isProfileHome =
+    segments.length === 1 && (segments[0]?.length ?? 0) > 1 && segments[0]?.startsWith('@');
+
+  return (
+    web && getShellLayout(web, width) === 'mobile' && (pathname === '/search' || isProfileHome)
+  );
 }
 
 export function getWebMobileShellHeaderStickyOffset(width: number) {

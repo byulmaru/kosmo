@@ -131,16 +131,16 @@ Full·Compact·Mobile 인벤토리에서 소유 overlay 계약은 유지하되, 
 
 사용자 검토에서 확정한 Target 및 readback 교정은 다음과 같다.
 
-| 영역                  | 확정한 Compact/공통 계약                                                                                                                                                  |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Profile required      | `PageHeader`는 상단에 유지하고 상태 본문만 남은 영역에서 중앙 정렬한다.                                                                                                   |
-| Recoverable error     | cache가 있으면 마지막 성공 content와 persistent retry Toast를 유지하고, cache가 없으면 skeleton과 Toast를 사용한다. spinner는 실제 retry 중에만 표시한다.                 |
-| Followers / Following | Profile detail에 붙이지 않고 `~님의 팔로워`·`~님의 팔로잉` PageHeader와 `팔로워`·`팔로잉` tab을 가진 독립 route로 표시한다. Compact와 Full의 기존 URL frame을 재사용한다. |
-| Post thread           | row는 vertical Auto Layout/Hug으로 쌓고 인접한 N개 row 사이 N-1 divider만 실제 row 경계에 둔다.                                                                           |
-| Reply                 | Compact Post 상세의 기본 frame은 closed thread다. Reply action은 기존 600×720 modal pattern을 사용하며 inline Composer나 별도 Reply route frame을 만들지 않는다.          |
-| Settings              | Target root는 `계정 설정 → 프로필 설정 → 뮤트 및 차단 → 테마` 순서다. `게시물 기본 공개 범위`는 `/settings/profile` 내부 field이며 별도 Target frame을 두지 않는다.       |
-| Pinned attribution    | Center/Pinned source에만 `paddingTop=4px`을 적용한다. Repost source는 `paddingTop=0`, 높이 20px을 유지한다.                                                               |
-| Bookmarks             | Compact와 Full 모두 Bookmark action을 data-derived `Selected`로 표시하고 같은 `itemSpacing=0` PostListItem stack을 사용한다.                                              |
+| 영역                  | 확정한 Compact/공통 계약                                                                                                                                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Profile Home          | resolved 상태는 뒤로가기와 `displayName`을 가진 `TextEllipsis` PageHeader를 Hero 위에 표시하고, 긴 이름은 한 줄 tail ellipsis로 줄인다. missing 상태는 빈 제목 PageHeader를 유지하고 상태 본문만 중앙 정렬한다. |
+| Recoverable error     | cache가 있으면 마지막 성공 content와 persistent retry Toast를 유지하고, cache가 없으면 skeleton과 Toast를 사용한다. spinner는 실제 retry 중에만 표시한다.                                                       |
+| Followers / Following | Profile detail에 붙이지 않고 `~님의 팔로워`·`~님의 팔로잉` PageHeader와 `팔로워`·`팔로잉` tab을 가진 독립 route로 표시한다. Compact와 Full의 기존 URL frame을 재사용한다.                                       |
+| Post thread           | row는 vertical Auto Layout/Hug으로 쌓고 인접한 N개 row 사이 N-1 divider만 실제 row 경계에 둔다.                                                                                                                 |
+| Reply                 | Compact Post 상세의 기본 frame은 closed thread다. Reply action은 기존 600×720 modal pattern을 사용하며 inline Composer나 별도 Reply route frame을 만들지 않는다.                                                |
+| Settings              | Target root는 `계정 설정 → 프로필 설정 → 뮤트 및 차단 → 테마` 순서다. `게시물 기본 공개 범위`는 `/settings/profile` 내부 field이며 별도 Target frame을 두지 않는다.                                             |
+| Pinned attribution    | Center/Pinned source에만 `paddingTop=4px`을 적용한다. Repost source는 `paddingTop=0`, 높이 20px을 유지한다.                                                                                                     |
+| Bookmarks             | Compact와 Full 모두 Bookmark action을 data-derived `Selected`로 표시하고 같은 `itemSpacing=0` PostListItem stack을 사용한다.                                                                                    |
 
 ### DSN-51 Mobile 390 Local error targets (2026-08-30)
 

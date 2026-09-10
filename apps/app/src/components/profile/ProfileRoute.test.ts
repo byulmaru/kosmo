@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createContext, createElement, useContext } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -37,6 +38,7 @@ let SlotContent: ComponentType | null = null;
 let profileAvailable = true;
 let profileInstanceKind: 'ACTIVITYPUB' | 'LOCAL' = 'LOCAL';
 let routeProbeEnabled = false;
+let routerBackCount = 0;
 let usePaginationScrollRegistration: (props: NativeScrollProps | null) => void = () => undefined;
 let routeMetrics = {
   contentHeight: 0,
@@ -85,6 +87,16 @@ mockModule('expo-router', {
   useGlobalSearchParams: () => globalParams,
   useLocalSearchParams: () => useContext(LocalParamsContext),
   usePathname: () => pathname,
+  useRouter: () => ({ back: () => (routerBackCount += 1) }),
+});
+mockModule('lucide-react-native', {
+  ChevronLeftIcon: 'ChevronLeftIcon',
+});
+mockModule(createRequire(import.meta.url).resolve('lucide-react-native'), {
+  ChevronLeftIcon: 'ChevronLeftIcon',
+});
+mockModule(new URL('../PageHeader.tsx', import.meta.url), {
+  PageHeader: (props: Record<string, unknown>) => createElement('PageHeader', props),
 });
 mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   NavigationLink: ({
@@ -126,6 +138,7 @@ mockModule('react-relay', {
     return {
       profileByHandle: profileAvailable
         ? {
+            displayName: `Display ${variables.handle}`,
             handle: variables.handle,
             id: `profile:${variables.handle}`,
             instance: { kind: profileInstanceKind },
@@ -159,6 +172,13 @@ mockModule(new URL('./ProfileMuteController.tsx', import.meta.url), {
 mockModule(new URL('../ui/Button.tsx', import.meta.url), {
   Button: ({ children, ...props }: { children: string }) =>
     createElement('Button', props, children),
+});
+mockModule(new URL('../ui/IconButton.tsx', import.meta.url), {
+  IconButton: ({ children, ...props }: { children: ReactNode }) =>
+    createElement('IconButton', props, children),
+});
+mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
+  useTheme: () => ({ foregroundPrimary: '#111111' }),
 });
 mockModule(new URL('../post/PostList.tsx', import.meta.url), {
   PostList: ({
@@ -214,6 +234,7 @@ afterEach(async () => {
   pathname = '/profile/';
   platform.OS = 'web';
   routeProbeEnabled = false;
+  routerBackCount = 0;
   routeMetrics = { contentHeight: 0, layoutHeight: 0, scrollOffset: 0 };
   queryModes.ProfileLayoutQuery = 'success';
   queryModes.ProfilePostListPageQuery = 'success';
@@ -268,6 +289,58 @@ function requireRendered(type: string) {
 }
 
 describe('profile route parameter lifecycle', () => {
+  it('canonical Profile Home places the full display name header before the existing content', async () => {
+    await renderRoute('@local', '/@local');
+
+    const header = requireRendered('PageHeader');
+    assert.equal(header.props.title, 'Display local');
+    assert.equal(header.props.titleLines, 1);
+    assert.equal(rendered('ProfileHero').length, 1);
+    assert.equal(rendered('PostList').length, 1);
+    assert.equal(rendered('StateView').length, 0);
+    const route = renderer?.toJSON();
+    assert.ok(route && !Array.isArray(route));
+    assert.deepEqual(
+      route.children?.map((child) => (typeof child === 'string' ? child : child.type)),
+      ['PageHeader', 'ProfileHero', 'PostList'],
+    );
+
+    const leading = header.props.leading;
+    assert.ok(leading);
+    assert.equal(leading?.props.accessibilityLabel, '뒤로 가기');
+    await act(async () => leading?.props.onPress());
+    assert.equal(routerBackCount, 1);
+  });
+
+  it('canonical missing Profile Home keeps route chrome with only the missing state', async () => {
+    profileAvailable = false;
+    await renderRoute('@missing', '/@missing');
+
+    assert.equal(requireRendered('PageHeader').props.title, '');
+    assert.equal(requireRendered('StateView').props.title, '프로필을 찾을 수 없어요');
+    assert.equal(rendered('ProfileHero').length, 0);
+    assert.equal(rendered('PostList').length, 0);
+    const route = renderer?.toJSON();
+    assert.ok(route && !Array.isArray(route));
+    assert.deepEqual(
+      route.children?.map((child) => (typeof child === 'string' ? child : child.type)),
+      ['PageHeader', 'StateView'],
+    );
+
+    const leading = requireRendered('PageHeader').props.leading;
+    assert.ok(leading);
+    await act(async () => leading.props.onPress());
+    assert.equal(routerBackCount, 1);
+  });
+
+  it('keeps the shared Profile layout header out of nested relationship routes', async () => {
+    await renderRoute('@local', '/@local/followers');
+
+    assert.equal(rendered('PageHeader').length, 0);
+    assert.equal(rendered('ProfileHero').length, 1);
+    assert.equal(rendered('PostList').length, 1);
+  });
+
   it('표시 중인 selected Local Owner Profile에만 편집 Link를 노출한다', async () => {
     profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
     await renderRoute('@local');

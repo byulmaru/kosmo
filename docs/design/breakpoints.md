@@ -15,7 +15,7 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
 - **`compact`(768px, 기존 `md`)** = 모바일 ↔ 데스크톱 경계. 미만은 하단 탭 바 + 드로어 사이드바, 이상은 사이드바가 항상 보인다.
 - **`full`(1280px, 기존 `xl`)** = 좌측 풀 사이드바(프로필 헤더 + 라벨)와 우측 컴포저(우측 레일)가 함께 등장해 풀 3분할이 된다. `compact`~`full`는 좌측이 아이콘 전용 레일이고 우측 레일이 없다.
 
-모바일 셸의 화면 헤더 높이는 `64px`이며 Android/iOS safe-area inset은 이 높이 바깥에서 셸이 추가한다. `< compact` Web에서 `/home`은 메뉴 버튼과 중앙 브랜드 마크를, `/compose`와 `/notifications`는 메뉴 버튼과 화면 제목을 같은 app bar에 표시한다. 게시글 상세는 같은 위치에서 메뉴 대신 뒤로가기를 표시하고 `게시글` 제목을 함께 렌더링한다. 이 네 화면의 route 본문은 모바일 Web 헤더를 중복 렌더링하지 않는다. 북마크 등 다른 route의 PageHeader 정책은 유지한다. Android/iOS에서는 `/home`만 셸이 헤더를 소유하고 다른 route는 기존 헤더를 유지한다. `compact`와 `full` Web에서는 모바일 셸 헤더가 없으므로 각 route가 기존 브랜드·텍스트·뒤로가기 헤더를 소유한다.
+모바일 셸의 화면 헤더 높이는 `64px`이며 Android/iOS safe-area inset은 이 높이 바깥에서 셸이 추가한다. `< compact` Web에서 `/home`은 메뉴 버튼과 중앙 브랜드 마크를, `/compose`와 `/notifications`는 메뉴 버튼과 화면 제목을 같은 app bar에 표시한다. 게시글 상세는 같은 위치에서 메뉴 대신 뒤로가기를 표시하고 `게시글` 제목을 함께 렌더링한다. 공개 Profile Home은 route가 표시 이름 또는 없는 프로필의 빈 제목을 가진 공용 PageHeader를 소유하므로 셸 헤더를 중복 렌더링하지 않는다. 북마크 등 다른 route의 PageHeader 정책은 유지한다. Android/iOS에서는 `/home`만 셸이 헤더를 소유하고 다른 route는 기존 헤더를 유지한다. `compact`와 `full` Web에서는 모바일 셸 헤더가 없으므로 각 route가 기존 브랜드·텍스트·뒤로가기 헤더를 소유한다.
 
 각 컬럼 폭(풀 사이드바 `320px` / 아이콘 레일 `80px`, 중앙 최대 `600px`, 우측 `290~350px`)을 더하면 `full`(1280px) 경계에서 풀 3분할(`320`+`600`+`350` ≈ `1270px`)이 눌리지 않고 중앙 피드를 `600px`로 확보한 채 들어맞는다. 풀 3분할 등장을 1024px가 아닌 1280px로 둬, 1024~1279px 구간에서는 중앙 피드를 비좁게 누르는 대신 아이콘 레일 단계로 폭을 확보한다.
 
@@ -198,8 +198,9 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
 - Web 하단 탭, mobile drawer, compact 아이콘 레일과 full sidebar에서 현재와 다른 shell-level 주요 route를
   여는 forward navigation은 대상 route가 준비된 뒤 document 최상단에서 표시한다. 로딩·빈 상태에서도 이전
   route의 document scroll offset을 대상 route에 노출하지 않는다.
-- 프로필 게시물·팔로워·팔로잉 화면은 프로필 레이아웃이 Hero와 Slot의 바깥 scroll 구성을 함께 소유한다. Native에서는
-  하나의 `PaginationScrollView`가 ProfileHero와 leaf 목록 body를 함께 스크롤하고, 게시물 `InfiniteList`는
+- 프로필 Home 게시물 화면은 프로필 레이아웃이 PageHeader, Hero와 Slot의 바깥 scroll 구성을 함께 소유한다.
+  PageHeader는 표시 이름을 한 줄 tail ellipsis로 표시하며 없는 프로필에서도 빈 제목 chrome을 유지한다. Native에서는
+  하나의 `PaginationScrollView`가 PageHeader, ProfileHero와 leaf 목록 body를 함께 스크롤하고, 게시물 `InfiniteList`는
   outer metric에 등록해 목록 body를 비스크롤 `View`로 렌더링한다. 팔로워·팔로잉 leaf는 기존 `더 불러오기`와
   실패 후 수동 재시도를 유지한다. Web에서는 leaf 목록이 document/window scroll 계약을 유지한다.
 - 브라우저 뒤로/앞으로 history traversal은 browser scroll restoration을 유지한다. 검색 화면의 query-only
