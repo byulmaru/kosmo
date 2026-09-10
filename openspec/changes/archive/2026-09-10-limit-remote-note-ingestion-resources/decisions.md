@@ -40,7 +40,7 @@
 
 ## Remaining Decisions
 
-현재 범위에 남은 미결정은 없다. 최종 Spec Gate 승인은 별도이며 D1의 수치 승인으로 대체하지 않는다.
+현재 범위에 남은 미결정은 없다. 최종 Spec Gate는 2026-09-10 사용자 승인으로 완료됐으며 남은 미결정은 없다.
 
 ## Superseded Decisions
 

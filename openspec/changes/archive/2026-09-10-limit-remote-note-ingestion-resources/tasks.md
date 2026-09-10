@@ -1,4 +1,4 @@
-이 체크리스트는 Spec Gate 최종 승인 후 별도 구현 세션에서 수행하며, 현재 3.2 최종 동기화·archive·validation만 남아 있다.
+이 체크리스트는 2026-09-10 Spec Gate 승인 후 전체 항목과 3.2의 spec 동기화·archive·validation까지 완료됐다.
 
 ## 1. PROD-465 길이 계약 적용
 
@@ -64,4 +64,4 @@ PROD-931의 byte·HTML·JSON·hydration 보호를 현재 완료 조건에 넣지
 정상 visibility·Reply·Media-only·attachment 순서·first-write-wins 및 관련 core/Fedify 테스트를 검증한다. 최신 canonical·Linear 대조와 strict validation, archive 이후 validation을 확인한다.
 
 - [x] 3.1 관련 통합 회귀 검증과 PROD-509 handoff를 완료한다.
-- [ ] 3.2 전체 완료 증거를 확인한 뒤 spec 동기화·archive와 validation을 수행한다.
+- [x] 3.2 전체 완료 증거를 확인한 뒤 spec 동기화·archive와 validation을 수행한다.
