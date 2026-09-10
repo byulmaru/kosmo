@@ -793,49 +793,146 @@ describe('GraphQL Profile Block', () => {
 
     const blockedResult = await blockProfile(blocked.id, owner.token);
     assertNoGraphQLErrors(blockedResult);
+    const blockId = blockedResult.data?.blockProfile.profileBlock.id;
+    assert.ok(blockId);
 
-    await db.insert(ProfileFollows).values([
-      { followerProfileId: owner.profile.id, followeeProfileId: blocked.id },
-      { followerProfileId: blocked.id, followeeProfileId: owner.profile.id },
-      { followerProfileId: owner.profile.id, followeeProfileId: control.id },
-    ]);
-    await db
+    const [, , , controlFollower, controlFollowing] = await db
+      .insert(ProfileFollows)
+      .values([
+        { followerProfileId: owner.profile.id, followeeProfileId: blocked.id },
+        { followerProfileId: blocked.id, followeeProfileId: owner.profile.id },
+        { followerProfileId: owner.profile.id, followeeProfileId: control.id },
+        { followerProfileId: control.id, followeeProfileId: blocked.id },
+        { followerProfileId: blocked.id, followeeProfileId: control.id },
+      ])
+      .returning();
+    assert.ok(controlFollower);
+    assert.ok(controlFollowing);
+    const [
+      blockedOutgoingRequest,
+      blockedIncomingRequest,
+      controlOutgoingRequest,
+      controlIncomingRequest,
+    ] = await db
       .insert(ProfileFollowRequests)
-      .values([{ followerProfileId: owner.profile.id, followeeProfileId: blocked.id }]);
+      .values([
+        { followerProfileId: owner.profile.id, followeeProfileId: blocked.id },
+        { followerProfileId: blocked.id, followeeProfileId: owner.profile.id },
+        { followerProfileId: owner.profile.id, followeeProfileId: control.id },
+        { followerProfileId: control.id, followeeProfileId: owner.profile.id },
+      ])
+      .returning();
 
-    const result = await requestGraphQL<{
-      profileByHandle: {
-        followers: { edges: Array<{ node: { id: string } }> };
-        following: { edges: Array<{ node: { id: string } }> };
-        viewerState: {
-          isSelf: boolean;
-          follow: { id: string } | null;
-          followRequest: { id: string } | null;
+    assert.ok(blockedOutgoingRequest);
+    assert.ok(blockedIncomingRequest);
+    assert.ok(controlOutgoingRequest);
+    assert.ok(controlIncomingRequest);
+
+    const assertBlockedRelations = async () => {
+      const observerView = await requestGraphQL<{
+        profileByHandle: {
+          followers: { edges: Array<{ node: { id: string } }> };
+          following: { edges: Array<{ node: { id: string } }> };
         } | null;
-      } | null;
-      homeTimeline: { edges: Array<{ node: { id: string } }> } | null;
-    }>(
-      `query ResidualBlockedRelations($handle: String!) {
-        profileByHandle(handle: $handle) {
-          followers(first: 10) { edges { node { id } } }
-          following(first: 10) { edges { node { id } } }
-          viewerState { isSelf follow { id } followRequest { id } }
-        }
-        homeTimeline(first: 10) { edges { node { id } } }
-      }`,
-      { handle: blocked.handle },
-      observer.token,
-    );
+      }>(
+        `query ResidualBlockedFollows($handle: String!) {
+          profileByHandle(handle: $handle) {
+            followers(first: 10) { edges { node { id } } }
+            following(first: 10) { edges { node { id } } }
+          }
+        }`,
+        { handle: blocked.handle },
+        observer.token,
+      );
+      assertNoGraphQLErrors(observerView);
+      assert.deepEqual(observerView.data?.profileByHandle, {
+        followers: { edges: [{ node: { id: globalId('ProfileFollow', controlFollower.id) } }] },
+        following: { edges: [{ node: { id: globalId('ProfileFollow', controlFollowing.id) } }] },
+      });
 
-    assertNoGraphQLErrors(result);
-    assert.deepEqual(result.data?.profileByHandle?.followers.edges, []);
-    assert.deepEqual(result.data?.profileByHandle?.following.edges, []);
-    assert.deepEqual(result.data?.profileByHandle?.viewerState, {
-      isSelf: false,
-      follow: null,
-      followRequest: null,
+      const ownerView = await requestGraphQL<{
+        nodes: Array<{
+          id: string;
+          follower: { id: string } | null;
+          followee: { id: string } | null;
+        } | null>;
+        owner: {
+          incomingProfileFollowRequests: { edges: Array<{ node: { id: string } }> } | null;
+          outgoingProfileFollowRequests: { edges: Array<{ node: { id: string } }> } | null;
+        } | null;
+        profileByHandle: {
+          viewerState: {
+            isSelf: boolean;
+            follow: { id: string } | null;
+            followRequest: { id: string } | null;
+          } | null;
+        } | null;
+      }>(
+        `query ResidualBlockedRelations($handle: String!, $ownerId: ID!, $requestIds: [ID!]!) {
+          profileByHandle(handle: $handle) {
+            viewerState { isSelf follow { id } followRequest { id } }
+          }
+          owner: node(id: $ownerId) {
+            ... on Profile {
+              incomingProfileFollowRequests(first: 10) { edges { node { id } } }
+              outgoingProfileFollowRequests(first: 10) { edges { node { id } } }
+            }
+          }
+          nodes(ids: $requestIds) {
+            ... on ProfileFollowRequest { id follower { id } followee { id } }
+          }
+        }`,
+        {
+          handle: blocked.handle,
+          ownerId: globalId('Profile', owner.profile.id),
+          requestIds: [
+            globalId('ProfileFollowRequest', blockedOutgoingRequest.id),
+            globalId('ProfileFollowRequest', blockedIncomingRequest.id),
+            globalId('ProfileFollowRequest', controlOutgoingRequest.id),
+            globalId('ProfileFollowRequest', controlIncomingRequest.id),
+          ],
+        },
+        owner.token,
+      );
+
+      assertNoGraphQLErrors(ownerView);
+      assert.deepEqual(ownerView.data?.profileByHandle?.viewerState, {
+        isSelf: false,
+        follow: null,
+        followRequest: null,
+      });
+      assert.deepEqual(ownerView.data?.owner, {
+        incomingProfileFollowRequests: {
+          edges: [{ node: { id: globalId('ProfileFollowRequest', controlIncomingRequest.id) } }],
+        },
+        outgoingProfileFollowRequests: {
+          edges: [{ node: { id: globalId('ProfileFollowRequest', controlOutgoingRequest.id) } }],
+        },
+      });
+      assert.deepEqual(ownerView.data?.nodes, [
+        null,
+        null,
+        {
+          id: globalId('ProfileFollowRequest', controlOutgoingRequest.id),
+          follower: { id: globalId('Profile', owner.profile.id) },
+          followee: { id: globalId('Profile', control.id) },
+        },
+        {
+          id: globalId('ProfileFollowRequest', controlIncomingRequest.id),
+          follower: { id: globalId('Profile', control.id) },
+          followee: { id: globalId('Profile', owner.profile.id) },
+        },
+      ]);
+    };
+
+    await assertBlockedRelations();
+
+    await db.delete(ProfileBlocks).where(eq(ProfileBlocks.id, decodeGlobalId(blockId).id));
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: blocked.id,
+      targetProfileId: owner.profile.id,
     });
-    assert.deepEqual(result.data?.homeTimeline?.edges, []);
+    await assertBlockedRelations();
 
     const ownerHome = await requestGraphQL<{
       homeTimeline: { edges: Array<{ node: { id: string } }> } | null;
