@@ -218,7 +218,9 @@ resource "google_iam_workload_identity_pool_provider" "terraform" {
   }
   attribute_condition = join(" && ", [
     "assertion.repository_id == '${local.github_repository_id}'",
-    "(assertion.ref == 'refs/heads/main' || (assertion.event_name == 'pull_request' && assertion.base_ref == 'main'))",
+    "assertion.repository_owner_id == '${local.github_owner_id}'",
+    "assertion.workflow_ref.startsWith('${local.github_owner}/${local.github_repository}/.github/workflows/terraform.yml@')",
+    "((assertion.event_name == 'pull_request' && assertion.base_ref == 'main') || ((assertion.event_name == 'push' || assertion.event_name == 'workflow_dispatch') && assertion.ref == 'refs/heads/main' && assertion.environment == '${local.terraform_apply_environment}'))",
   ])
 
   oidc {

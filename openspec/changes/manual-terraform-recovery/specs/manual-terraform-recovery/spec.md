@@ -16,37 +16,52 @@
 
 ### Requirement: 수동 Apply의 cloud credential 경계
 
-**Authority / Provenance:** 적용 canonical domain/design 없음; 운영 context `apps/terraform/README.md`; [PROD-898](https://linear.app/byulmaru/issue/PROD-898/최신-main-terraform-계획을-수동-실행으로-적용한다) — 수동 Apply job은 기존 `terraform-apply` Environment를 사용해야 하며(MUST), credential 주입 전에 main-only 조건을 확인해야 한다(MUST). Terraform CI용 `kosmo-terraform` GCP Workload Identity provider 조건은 `assertion.repository_id == '${local.github_repository_id}' && (assertion.ref == 'refs/heads/main' || (assertion.event_name == 'pull_request' && assertion.base_ref == 'main'))`이어야 한다(MUST). owner ID, `workflow_ref`, `environment`와 main 경로의 event 이름은 GCP 조건에서 제한해서는 안 된다(MUST NOT). AWS는 기존 `repo:byulmaru/kosmo:environment:terraform-apply` subject를 재사용해야 하며(MUST); 이는 GCP WIF 조건과 별도다. GitHub issuer/provider와 service account IAM 연결, Firebase/native-distribution WIF provider 및 Firebase resource의 trust·상태·삭제 정책은 변경해서는 안 된다(MUST NOT). PR 예외는 read-only 권한을 보장하지 않는다.
+**Authority / Provenance:** 적용 canonical domain/design 없음; 운영 context `apps/terraform/README.md`; [PROD-946](https://linear.app/byulmaru/issue/PROD-946/security-terraform-gcp-wif를-terraformyml-실행으로-제한한다) — Terraform CI용 `kosmo-terraform` GCP Workload Identity provider는 `repository_id`, `repository_owner_id`, 정확한 `byulmaru/kosmo/.github/workflows/terraform.yml@` workflow ref prefix를 공통으로 요구해야 하며(MUST), `pull_request` + `base_ref == main` 또는 `push`/`workflow_dispatch` + `refs/heads/main` + `terraform-apply` Environment만 허용해야 한다(MUST). [PROD-898](https://linear.app/byulmaru/issue/PROD-898/최신-main-terraform-계획을-수동-실행으로-적용한다)는 manual Apply의 기존 `terraform-apply` Environment와 credential 순서를 유지한다. AWS는 기존 `repo:byulmaru/kosmo:environment:terraform-apply` subject를 재사용해야 하며(MUST); 이는 GCP WIF 조건과 별도다. GitHub issuer/provider와 service account IAM 연결, Firebase/native-distribution WIF provider 및 Firebase resource의 trust·상태·삭제 정책은 변경해서는 안 된다(MUST NOT). PR 예외는 read-only 권한을 보장하지 않는다.
 
 #### Scenario: 수동 Apply 인증
 
 - **WHEN** main dispatch의 Apply job이 cloud credential을 요청한다
-- **THEN** 기존 `terraform-apply` Environment subject 경계 안에서 실행되고, GCP는 repository ID와 main ref 조건을 사용한다
+- **THEN** 기존 `terraform-apply` Environment subject 경계 안에서 실행되고, GCP는 repository ID·owner ID·정확한 Terraform workflow ref와 `workflow_dispatch` + `refs/heads/main` 조건을 사용한다
 
 #### Scenario: 기존 자동 Terraform 인증
 
 - **WHEN** pull request Plan 또는 main push Apply가 실행된다
-- **THEN** PR의 `pull_request` + `base_ref == main` 조건과 main push의 repository ID + main ref 조건이 계속 허용되고, 수동 경로를 위해 PR 조건을 완화하지 않는다
+- **THEN** PR의 `pull_request` + `base_ref == main` 또는 main push의 `push` + `refs/heads/main` + `terraform-apply` Environment 경로가 repository ID·owner ID·정확한 Terraform workflow ref와 함께 허용되고, 수동 경로를 위해 PR 조건을 완화하지 않는다
 
 #### Scenario: 다른 repository
 
 - **WHEN** 다른 repository의 OIDC token이 main ref 또는 main 대상 pull request에서 GCP credential을 요청한다
 - **THEN** `repository_id`가 일치하지 않으므로 GCP credential을 거부한다
 
+#### Scenario: 다른 repository owner
+
+- **WHEN** 다른 repository owner의 OIDC token이 허용된 event/ref에서 GCP credential을 요청한다
+- **THEN** `repository_owner_id`가 일치하지 않으므로 GCP credential을 거부한다
+
+#### Scenario: 다른 workflow
+
+- **WHEN** 같은 repository의 다른 workflow가 허용된 event/ref에서 GCP credential을 요청한다
+- **THEN** 정확한 `byulmaru/kosmo/.github/workflows/terraform.yml@` workflow ref prefix가 일치하지 않으므로 GCP credential을 거부한다
+
 #### Scenario: main tag 또는 feature ref의 non-PR 실행
 
 - **WHEN** 같은 repository의 non-PR workflow가 tag 또는 feature branch ref에서 GCP credential을 요청한다
 - **THEN** `ref == refs/heads/main`이 아니므로 GCP credential을 거부한다
 
-#### Scenario: main의 Environment 없는 실행 또는 다른 workflow
+#### Scenario: main의 Environment 없는 실행
 
-- **WHEN** 같은 repository의 workflow가 `refs/heads/main`에서 실행되고 `terraform-apply` Environment를 사용하지 않거나 Terraform workflow가 아니다
-- **THEN** GCP WIF는 Environment 또는 workflow ref를 확인하지 않으므로 credential 요청을 허용하고, AWS credential은 기존 subject로 별도 판단한다
+- **WHEN** 같은 repository의 Terraform workflow가 `push` 또는 `workflow_dispatch`로 `refs/heads/main`에서 실행되고 `terraform-apply` Environment를 사용하지 않는다
+- **THEN** main Apply 경로의 Environment 조건을 만족하지 않으므로 GCP credential을 거부한다
+
+#### Scenario: workflow_run 실행
+
+- **WHEN** 같은 repository의 workflow가 `workflow_run` event로 GCP credential을 요청한다
+- **THEN** 허용 event가 아니므로 GCP credential을 거부한다
 
 #### Scenario: main 대상 pull request 예외
 
 - **WHEN** 같은 repository의 pull request workflow가 `base_ref == main`으로 GCP credential을 요청한다
-- **THEN** `ref`가 `refs/heads/main`이 아니어도 pull request 예외로 credential 요청을 허용하며, 이 예외는 read-only 권한을 보장하지 않는다
+- **THEN** 정확한 Terraform workflow ref와 `pull_request` + `base_ref == main` 조건을 만족하면 `ref`가 `refs/heads/main`이 아니어도 credential 요청을 허용하며, 이 예외는 read-only 권한을 보장하지 않는다
 
 ### Requirement: 수동 Apply는 Terraform 직접 계획을 한 번 실행한다
 

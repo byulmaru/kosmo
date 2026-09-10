@@ -64,7 +64,13 @@ Terraform workflow는 `main`에서만 `workflow_dispatch` 수동 recovery를 허
 
 외부 기여자의 PR workflow는 기여 이력과 무관하게 저장소 관리자의 실행 승인을 받아야 한다. Repository의 Actions 설정에서 fork pull request 승인 정책을 `all_external_contributors`로 직접 관리하며, 조직 구성원의 PR만 자동 실행한다.
 
-Terraform CI용 `kosmo-terraform` WIF provider는 숫자 `repository_id`와 `refs/heads/main`, 또는 `pull_request`의 `base_ref == main`만 신뢰한다. 따라서 같은 repository의 main/PR workflow는 공통 provider를 사용할 수 있고, owner ID·workflow ref·Environment와 main 경로의 event 이름은 GCP condition으로 제한하지 않는다. PR 예외는 읽기 전용으로 간주하지 않으며, 이 조건 변경은 기존 main push Apply로 먼저 반영한 뒤 수동 recovery를 사용한다. AWS trust, `terraform-apply` Environment, Firebase/native-distribution provider와 다른 repository의 실행은 이 설정으로 변경되지 않는다.
+Terraform CI용 `kosmo-terraform` WIF provider는 `repository_id`, `repository_owner_id`와 정확한 `byulmaru/kosmo/.github/workflows/terraform.yml@` workflow ref prefix를 공통으로 요구하며, 다음 세 경로만 허용한다.
+
+- PR Plan: `pull_request`이고 `base_ref == main`
+- main push Apply: `push`이고 `refs/heads/main`이며 `terraform-apply` Environment
+- main manual Apply: `workflow_dispatch`이고 `refs/heads/main`이며 `terraform-apply` Environment
+
+따라서 다른 workflow, `workflow_run`, Environment 없는 main job, 다른 repository/owner, tag·feature ref의 non-PR 실행은 거부한다. main 대상 PR 예외는 read-only 권한을 보장하지 않는다. 이 조건 변경은 기존 main push Apply로 먼저 반영한 뒤 수동 recovery를 사용한다. AWS trust와 `terraform-apply` Environment, Firebase/native-distribution provider·IAM 역할과 다른 provider는 이 설정으로 변경하지 않는다.
 
 로컬 bootstrap 또는 복구가 필요할 때는 아래 순서로 실행한다.
 
@@ -96,6 +102,6 @@ bucket은 `byulmaru-terraform-state`, state key는 `kosmo/terraform.tfstate`이�
 
 ## Rotation과 revocation
 
-정적 Google credential은 없으므로 정기 key rotation은 필요하지 않다. repository, workflow, branch 또는 environment가 바뀌면 WIF provider의 숫자 ID 기반 trust condition을 먼저 수정하고 저장한 plan을 적용한다. Android Play provider는 `main`의 `.github/workflows/native-store-distribution.yml`과 기존 `prod` Environment만 허용한다. Firebase App Distribution provider는 disabled 상태이고 해당 service account의 GitHub Actions binding은 제거됐으며, 두 리소스는 `PREVENT` 삭제 정책의 후속 state 정리 전까지 deprecated 상태로 유지한다.
+정적 Google credential은 없으므로 정기 key rotation은 필요하지 않다. repository, owner, workflow, branch 또는 environment가 바뀌면 WIF provider의 ID·정확한 workflow ref·event/ref/Environment trust condition을 먼저 수정하고 저장한 plan을 적용한다. Android Play provider는 `main`의 `.github/workflows/native-store-distribution.yml`과 기존 `prod` Environment만 허용한다. Firebase App Distribution provider는 disabled 상태이고 해당 service account의 GitHub Actions binding은 제거됐으며, 두 리소스는 `PREVENT` 삭제 정책의 후속 state 정리 전까지 deprecated 상태로 유지한다.
 
 긴급 차단은 WIF provider에 `disabled = true`를 추가해 적용한다. 현재 Firebase App Distribution provider는 이 상태이며 GitHub Actions와 project IAM binding도 제거되어 있다. 영구 폐기는 외부 사용 중단을 확인한 뒤 별도 검토로 보호된 provider·service account·API 리소스를 state에서 제거한다.
