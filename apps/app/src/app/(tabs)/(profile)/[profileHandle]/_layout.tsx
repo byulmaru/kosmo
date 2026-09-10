@@ -374,7 +374,7 @@ function ProfileLayoutContent({
     profile.instance.kind === 'LOCAL' &&
     profile.viewerState?.isSelf === true &&
     profile.viewerState.membership?.role === 'OWNER';
-  const canMute = Boolean(selectedProfileId && profile.viewerState && !profile.viewerState.isSelf);
+  const canMute = Boolean(selectedProfileId && !profile.viewerState?.isSelf);
   const relationshipAction = canEdit ? (
     <NavigationLink href={'/profile-edit' as Href}>
       <Button accessibilityLabel="프로필 편집" tone="secondary">
@@ -423,8 +423,30 @@ function ProfileLayoutContent({
           key={selectedProfileId}
           action={profileAction}
           heading={!showPageHeader}
+          menuItems={
+            selectedProfileId &&
+            profile.viewerState?.isSelf !== true &&
+            !blockStatus?.blocking &&
+            !blockStatus?.blockedBy
+              ? [
+                  {
+                    icon: Ban,
+                    key: 'block',
+                    label: '차단',
+                    onSelect: () => {
+                      dismissFocusRef.current = 'menu';
+                      setConfirmation('block');
+                    },
+                    tone: 'danger' as const,
+                  },
+                ]
+              : undefined
+          }
+          onMenuTriggerReady={(focusTrigger) => {
+            focusMenuTrigger.current = focusTrigger;
+          }}
           profile={profile}
-          showMuteAction={canMute}
+          showMuteAction={canMute && !blockStatus?.blockedBy}
         />
         {profileContent}
       </ProfileRouteContainer>

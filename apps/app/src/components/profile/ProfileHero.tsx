@@ -24,11 +24,14 @@ import { ProfileNameBlock } from './ProfileNameBlock';
 import { ProfileTagChip } from './ProfileTagChip';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
 
 type ProfileHeroProps = {
   action?: ReactNode;
   heading?: boolean;
+  menuItems?: readonly ActionMenuItem[];
+  onMenuTriggerReady?: (focusTrigger: () => void) => void;
   showMuteAction?: boolean;
   loading?: boolean;
   profile?: ProfileHero_profile$key | null;
@@ -73,6 +76,8 @@ const countFormatter = new Intl.NumberFormat('en', {
 export function ProfileHero({
   action,
   heading = true,
+  menuItems = [],
+  onMenuTriggerReady,
   showMuteAction = false,
   loading = false,
   profile = null,
@@ -191,6 +196,7 @@ export function ProfileHero({
                   <ProfileMoreMenu
                     disabled={disabled}
                     focusTriggerRef={focusTriggerRef}
+                    onTriggerReady={onMenuTriggerReady}
                     items={[
                       {
                         key: 'copy-profile-link',
@@ -213,6 +219,7 @@ export function ProfileHero({
                           })();
                         },
                       },
+                      ...menuItems,
                       item,
                     ]}
                   />

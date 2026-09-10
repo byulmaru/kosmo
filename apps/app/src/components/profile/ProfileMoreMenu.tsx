@@ -8,6 +8,7 @@ type Props = {
   disabled?: boolean;
   items: readonly ActionMenuItem[];
   focusTriggerRef?: RefObject<() => void>;
+  onTriggerReady?: (focusTrigger: () => void) => void;
   renderTrigger?: ComponentProps<typeof ActionMenu>['renderTrigger'];
 };
 
@@ -17,6 +18,7 @@ export function ProfileMoreMenu({
   disabled = false,
   items,
   focusTriggerRef,
+  onTriggerReady,
   renderTrigger,
 }: Props) {
   return (
@@ -32,6 +34,7 @@ export function ProfileMoreMenu({
         if (focusTriggerRef) {
           focusTriggerRef.current = trigger.focusTrigger;
         }
+        onTriggerReady?.(trigger.focusTrigger);
         return renderTrigger ? (
           renderTrigger(trigger)
         ) : (
