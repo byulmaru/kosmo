@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import { getBottomTabBarContentHeight } from './navigationChrome';
 import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type * as BottomTabBarModule from './BottomTabBar';
@@ -86,6 +87,43 @@ test('Native BottomTabBar exposes selected state on selected and unselected cont
   assert.ok(unselected);
   assert.deepEqual(selected.props.accessibilityState, { disabled: false, selected: true });
   assert.deepEqual(unselected.props.accessibilityState, { disabled: false, selected: false });
+
+  await act(async () => renderer?.unmount());
+});
+
+test('BottomTabBar content height matches the rendered platform contract', () => {
+  assert.equal(getBottomTabBarContentHeight('web'), 80);
+  assert.equal(getBottomTabBarContentHeight('ios'), 56);
+  assert.equal(getBottomTabBarContentHeight('android'), 56);
+});
+
+test('BottomTabBar render seam leaves navigation ownership to the adapter', async () => {
+  assert.ok(bottomTabBarModule);
+  const renderedDestinations: string[] = [];
+  let renderer: ReactTestRenderer | undefined;
+
+  await act(async () => {
+    renderer = create(
+      createElement(bottomTabBarModule!.BottomTabBar, {
+        currentDestination: 'home',
+        onNavigate: () => undefined,
+        platform: 'web',
+        profile: { label: '프로필' },
+        renderControl: ({ children, destination }) => {
+          renderedDestinations.push(destination);
+          return children;
+        },
+      }),
+    );
+  });
+
+  assert.deepEqual(renderedDestinations, ['home', 'search', 'compose', 'notifications', 'profile']);
+  assert.ok(renderer);
+  const home = renderer.root
+    .findAllByType(PressableHost)
+    .find((control) => control.props.accessibilityLabel === '홈');
+  assert.ok(home);
+  assert.equal(home.props.onPress, undefined);
 
   await act(async () => renderer?.unmount());
 });

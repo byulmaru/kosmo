@@ -4,10 +4,15 @@ import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, motion, radius, space, textStyles } from '@/theme/tokens';
 import { Avatar } from './Avatar';
 import { BottomTabBarIcon } from './BottomTabBarIcon';
-import { getUnreadNotificationAccessibilityLabel } from './navigationChrome';
+import {
+  getBottomTabBarContentHeight,
+  getUnreadNotificationAccessibilityLabel,
+} from './navigationChrome';
+import type { ReactElement } from 'react';
 import type { ViewStyle } from 'react-native';
 import type {
   BottomTabBarProps,
+  BottomTabBarRenderControlProps,
   BottomTabDestination,
   NavigationChromePlatform,
   NavigationProfile,
@@ -28,6 +33,7 @@ type BottomTabBarItemProps = {
   onNavigate: (destination: BottomTabDestination) => void;
   platform: NavigationChromePlatform;
   profile: NavigationProfile | null;
+  renderControl?: (props: BottomTabBarRenderControlProps) => ReactElement;
   selected: boolean;
   unreadNotificationCount: number | null;
 };
@@ -39,6 +45,7 @@ function BottomTabBarItem({
   onNavigate,
   platform,
   profile,
+  renderControl,
   selected,
   unreadNotificationCount,
 }: BottomTabBarItemProps) {
@@ -59,7 +66,7 @@ function BottomTabBarItem({
       : label;
   const hasUnreadNotifications = Boolean(unreadNotificationCount && unreadNotificationCount > 0);
 
-  return (
+  const control = (
     <Pressable
       aria-current={active ? 'page' : undefined}
       accessibilityLabel={accessibilityLabel}
@@ -76,7 +83,7 @@ function BottomTabBarItem({
         };
         setFocusVisible(Boolean(target.matches?.(':focus-visible')));
       }}
-      onPress={() => onNavigate(destination)}
+      onPress={renderControl ? undefined : () => onNavigate(destination)}
       style={[
         styles.item,
         { height: contentHeight, opacity: disabled ? 0.45 : 1 },
@@ -150,6 +157,10 @@ function BottomTabBarItem({
       }}
     </Pressable>
   );
+
+  return renderControl
+    ? renderControl({ children: control, destination, disabled, selected: active })
+    : control;
 }
 
 export function BottomTabBar({
@@ -157,11 +168,12 @@ export function BottomTabBar({
   onNavigate,
   platform = 'web',
   profile = null,
+  renderControl,
   safeAreaBottom = 0,
   unreadNotificationCount = null,
 }: BottomTabBarProps) {
   const theme = useTheme();
-  const contentHeight = platform === 'web' ? 80 : 56;
+  const contentHeight = getBottomTabBarContentHeight(platform);
   const height = contentHeight + (platform === 'web' ? 0 : Math.max(0, safeAreaBottom));
 
   return (
@@ -186,6 +198,7 @@ export function BottomTabBar({
           onNavigate={onNavigate}
           platform={platform}
           profile={profile}
+          renderControl={renderControl}
           selected={currentDestination === destination}
           unreadNotificationCount={unreadNotificationCount}
         />
