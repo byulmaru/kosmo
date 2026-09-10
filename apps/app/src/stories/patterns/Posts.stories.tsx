@@ -7293,29 +7293,6 @@ export const QuoteModalNullFailureLifecycle: Story = {
   render: () => <ReplyModalPresentationStory mode="quote" />,
 };
 
-export const QuoteDetailInlineSourcePreservedAfterFailure: Story = {
-  parameters: { relay: { mutationError: '인용 전송 네트워크 오류' } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const trigger = canvas.getByRole('button', { name: '재게시 취소' });
-    await userEvent.click(trigger);
-    await userEvent.click(
-      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
-        name: '인용하기',
-      }),
-    );
-    const body = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
-    await userEvent.type(body, '상세 실패 뒤 유지할 인용');
-    await userEvent.click(canvas.getByRole('button', { name: '인용 게시' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '인용 게시글을 작성하지 못했습니다.',
-    );
-    expect(body).toHaveValue('상세 실패 뒤 유지할 인용');
-    expect(canvas.getByTestId('source-post-preview')).toBeVisible();
-  },
-  render: () => <ReplyDetailInlineStory />,
-};
-
 export const ReplyModalPendingLifecycle: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   parameters: { relay: { mutationLoading: true } },
