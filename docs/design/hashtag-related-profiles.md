@@ -21,6 +21,9 @@ Web·Android·iOS에서 같은 정보 구조와 상태로 탐색한다.
   처리한다.
 - 결과는 Hashtag와 Profile Tag 관계가 있고 공개 Profile 조회 조건을 통과한 Active·Normal Profile이다.
   원격 조회·refresh·materialization은 포함하지 않는다.
+- 유효한 Account에 selected Profile이 있으면 그 Profile과 양방향 Active Block 관계인 후보를 목록의
+  pagination·cursor·limit 전에 제외한다. selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를
+  유지하며 selected Local Profile을 새로 요구하지 않는다.
 - Profile은 결과에 한 번만 나타나며, 관련도나 알파벳순을 표시하지 않는다. 목록은 안정적인 immutable Profile
   cursor를 사용하고 한 페이지는 최대 20개다.
 - Profile Tag 관계는 무순서·무상한이므로 관계의 표현 방식이나 개수 제한을 결과 계약으로 사용하지 않는다.
