@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import {
+  AccountProfiles,
+  Accounts,
   db,
   firstOrThrow,
   Instances,
@@ -17,6 +19,8 @@ import {
   Reactions,
 } from '../db';
 import {
+  AccountProfileRole,
+  AccountState,
   InstanceKind,
   InstanceState,
   NotificationKind,
@@ -25,6 +29,7 @@ import {
   ProfileFollowPolicy,
 } from '../enums';
 import { postContentDocumentFromText } from '../post-content/server';
+import { createReplyNotification } from './create-reply-notification';
 import {
   createFollowNotification,
   createFollowRequestNotification,
@@ -35,9 +40,11 @@ import {
 } from './notification';
 import { createPost, repostPost } from './post';
 import { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow.test-helpers';
+import { muteProfile, unmuteProfile } from './profile-mute';
 
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
+const accountIds: string[] = [];
 
 const createProfile = async (kind: InstanceKind = InstanceKind.LOCAL) => {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -70,7 +77,7 @@ const createProfile = async (kind: InstanceKind = InstanceKind.LOCAL) => {
 const readNotifications = (sourceId: string) =>
   db.select().from(Notifications).where(eq(Notifications.sourceId, sourceId));
 
-const createReaction = async (authorProfileId: string, recipientProfileId: string) => {
+const createReaction = async (authorProfileId: string, recipientProfileId: string, type = '🎉') => {
   const post = await db
     .insert(Posts)
     .values({
@@ -83,7 +90,7 @@ const createReaction = async (authorProfileId: string, recipientProfileId: strin
 
   return db
     .insert(Reactions)
-    .values({ postId: post.id, profileId: authorProfileId, type: '🎉' })
+    .values({ postId: post.id, profileId: authorProfileId, type })
     .returning()
     .then(firstOrThrow);
 };
@@ -274,6 +281,9 @@ after(async () => {
       );
     await db.delete(Profiles).where(inArray(Profiles.id, profileIds));
   }
+  if (accountIds.length > 0) {
+    await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
+  }
   if (instanceIds.length > 0) {
     await db.delete(Instances).where(inArray(Instances.id, instanceIds));
   }
@@ -455,6 +465,257 @@ test('Follow·Follow Request 알림은 Recipient Mute와 양방향 Block을 반�
   await createFollowRequestNotification(request.id);
   assert.equal((await readNotifications(profileFollow.id)).length, 1);
   assert.equal((await readNotifications(request.id)).length, 1);
+});
+
+test('다섯 source는 실제 정책 SELECT 실패를 전파하고 commit된 source를 보존한다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  const profileFollow = getEstablishedFollow(
+    await followProfile({
+      followerProfileId: follower.id,
+      followeeProfileId: followee.id,
+    }),
+  );
+  const followRequest = await db
+    .insert(ProfileFollowRequests)
+    .values({ followerProfileId: follower.id, followeeProfileId: followee.id })
+    .returning()
+    .then(firstOrThrow);
+  const replyParent = await createContentPost(followee.id);
+  const reply = await createPost({
+    document: postContentDocumentFromText('policy failure reply'),
+    origin: 'LOCAL',
+    profileId: follower.id,
+    replyParentId: replyParent.id,
+    visibility: PostVisibility.PUBLIC,
+  }).then(({ post }) => post);
+  const reaction = await createReaction(follower.id, followee.id);
+  const repostSource = await createContentPost(followee.id);
+  const { repost } = await repostPost({
+    actorProfileId: follower.id,
+    origin: 'LOCAL',
+    sourcePostId: repostSource.id,
+  });
+
+  const cases = [
+    {
+      name: 'Follow',
+      kind: NotificationKind.FOLLOW,
+      id: profileFollow.id,
+      create: () => createFollowNotification(profileFollow.id),
+      assertSource: async () =>
+        assert.equal(await db.$count(ProfileFollows, eq(ProfileFollows.id, profileFollow.id)), 1),
+    },
+    {
+      name: 'Follow Request',
+      kind: NotificationKind.FOLLOW_REQUEST,
+      id: followRequest.id,
+      create: () => createFollowRequestNotification(followRequest.id),
+      assertSource: async () =>
+        assert.equal(
+          await db.$count(ProfileFollowRequests, eq(ProfileFollowRequests.id, followRequest.id)),
+          1,
+        ),
+    },
+    {
+      name: 'Reply',
+      kind: NotificationKind.REPLY,
+      id: reply.id,
+      create: () => createReplyNotification(reply.id),
+      assertSource: async () => assert.equal(await db.$count(Posts, eq(Posts.id, reply.id)), 1),
+    },
+    {
+      name: 'Reaction',
+      kind: NotificationKind.REACTION,
+      id: reaction.id,
+      create: () => createReactionNotification(reaction.id),
+      assertSource: async () =>
+        assert.equal(await db.$count(Reactions, eq(Reactions.id, reaction.id)), 1),
+    },
+    {
+      name: 'Repost',
+      kind: NotificationKind.REPOST,
+      id: repost.id,
+      create: () => createRepostNotification(repost.id),
+      assertSource: async () => assert.equal(await db.$count(Posts, eq(Posts.id, repost.id)), 1),
+    },
+  ] as const;
+
+  await pg.unsafe('ALTER TABLE profile_block RENAME TO profile_block_policy_failure');
+  try {
+    for (const source of cases) {
+      await assert.rejects(
+        source.create(),
+        (error: unknown) => {
+          assert.match(String(error), /profile_block/);
+          return true;
+        },
+        `${source.name} policy SELECT failure should propagate`,
+      );
+      await source.assertSource();
+      assert.deepEqual(await readNotifications(source.id), []);
+    }
+  } finally {
+    await pg.unsafe('ALTER TABLE profile_block_policy_failure RENAME TO profile_block');
+  }
+
+  for (const source of cases) {
+    await source.create();
+    const notifications = await readNotifications(source.id);
+    assert.equal(
+      notifications.length,
+      1,
+      `${source.name} policy should be reevaluated after recovery`,
+    );
+    assert.equal(notifications[0]?.kind, source.kind);
+    assert.equal(notifications[0]?.recipientProfileId, followee.id);
+  }
+
+  const mutePolicyFailureReaction = await createReaction(follower.id, followee.id, '🧪');
+  await pg.unsafe('ALTER TABLE profile_mute RENAME TO profile_mute_policy_failure');
+  try {
+    await assert.rejects(
+      createReactionNotification(mutePolicyFailureReaction.id),
+      (error: unknown) => {
+        assert.match(String(error), /profile_mute/);
+        return true;
+      },
+      'Reaction mute policy SELECT failure should propagate',
+    );
+    assert.equal(await db.$count(Reactions, eq(Reactions.id, mutePolicyFailureReaction.id)), 1);
+    assert.deepEqual(await readNotifications(mutePolicyFailureReaction.id), []);
+  } finally {
+    await pg.unsafe('ALTER TABLE profile_mute_policy_failure RENAME TO profile_mute');
+  }
+
+  await createReactionNotification(mutePolicyFailureReaction.id);
+  assert.equal((await readNotifications(mutePolicyFailureReaction.id)).length, 1);
+});
+
+test('같은 Account의 A1만 적용한 Mute는 A2 Recipient를 격리한다', async () => {
+  const account = await db
+    .insert(Accounts)
+    .values({
+      displayName: crypto.randomUUID(),
+      oidcSubject: crypto.randomUUID(),
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.push(account.id);
+  const [recipientA1, recipientA2, related] = await Promise.all([
+    createProfile(),
+    createProfile(),
+    createProfile(),
+  ]);
+  await db.insert(AccountProfiles).values([
+    { accountId: account.id, profileId: recipientA1.id, role: AccountProfileRole.OWNER },
+    { accountId: account.id, profileId: recipientA2.id, role: AccountProfileRole.MEMBER },
+  ]);
+  const followA1 = getEstablishedFollow(
+    await followProfile({
+      followerProfileId: related.id,
+      followeeProfileId: recipientA1.id,
+    }),
+  );
+  const followA2 = getEstablishedFollow(
+    await followProfile({
+      followerProfileId: related.id,
+      followeeProfileId: recipientA2.id,
+    }),
+  );
+
+  await muteProfile({ ownerProfileId: recipientA1.id, targetProfileId: related.id });
+  await createFollowNotification(followA1.id);
+  await createFollowNotification(followA2.id);
+
+  assert.deepEqual(await readNotifications(followA1.id), []);
+  const [a2Notification] = await readNotifications(followA2.id);
+  assert.ok(a2Notification);
+  assert.equal(a2Notification.recipientProfileId, recipientA2.id);
+  assert.equal(a2Notification.sourceId, followA2.id);
+});
+
+test('Mute·mutual Block 관계 변경은 기존 Read/Unread를 보존하고 해제 후 새 source를 재평가한다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const readReaction = await createReaction(author.id, recipient.id, '🎉');
+  const unreadReaction = await createReaction(author.id, recipient.id, '❤️');
+  await createReactionNotification(readReaction.id);
+  await createReactionNotification(unreadReaction.id);
+  const [readNotification] = await readNotifications(readReaction.id);
+  const [unreadNotification] = await readNotifications(unreadReaction.id);
+  assert.ok(readNotification);
+  assert.ok(unreadNotification);
+  const readAt = Temporal.Instant.from('2026-09-10T00:00:00Z');
+  await db.update(Notifications).set({ readAt }).where(eq(Notifications.id, readNotification.id));
+
+  const beforeMute = await db
+    .select({
+      id: Notifications.id,
+      readAt: Notifications.readAt,
+      sourceId: Notifications.sourceId,
+    })
+    .from(Notifications)
+    .where(inArray(Notifications.id, [readNotification.id, unreadNotification.id]));
+  const mute = await muteProfile({
+    ownerProfileId: recipient.id,
+    targetProfileId: author.id,
+  });
+  const afterMute = await db
+    .select({
+      id: Notifications.id,
+      readAt: Notifications.readAt,
+      sourceId: Notifications.sourceId,
+    })
+    .from(Notifications)
+    .where(inArray(Notifications.id, [readNotification.id, unreadNotification.id]));
+  assert.deepEqual(
+    [...afterMute].sort(({ id: left }, { id: right }) => left.localeCompare(right)),
+    [...beforeMute].sort(({ id: left }, { id: right }) => left.localeCompare(right)),
+  );
+  assert.equal(
+    afterMute.find(({ id }) => id === readNotification.id)?.readAt?.toString(),
+    readAt.toString(),
+  );
+  assert.equal(afterMute.find(({ id }) => id === unreadNotification.id)?.readAt, null);
+  await unmuteProfile({ ownerProfileId: recipient.id, profileMuteId: mute.id });
+
+  const unmutedReaction = await createReaction(author.id, recipient.id, '🫧');
+  await createReactionNotification(unmutedReaction.id);
+  assert.equal((await readNotifications(unmutedReaction.id)).length, 1);
+
+  const blockedReaction = await createReaction(author.id, recipient.id, '🥳');
+  await db.insert(ProfileBlocks).values([
+    { ownerProfileId: recipient.id, targetProfileId: author.id },
+    { ownerProfileId: author.id, targetProfileId: recipient.id },
+  ]);
+  await createReactionNotification(blockedReaction.id);
+  assert.deepEqual(await readNotifications(blockedReaction.id), []);
+
+  await db
+    .delete(ProfileBlocks)
+    .where(
+      and(
+        eq(ProfileBlocks.ownerProfileId, recipient.id),
+        eq(ProfileBlocks.targetProfileId, author.id),
+      ),
+    );
+  await createReactionNotification(blockedReaction.id);
+  assert.deepEqual(await readNotifications(blockedReaction.id), []);
+
+  await db
+    .delete(ProfileBlocks)
+    .where(
+      and(
+        eq(ProfileBlocks.ownerProfileId, author.id),
+        eq(ProfileBlocks.targetProfileId, recipient.id),
+      ),
+    );
+  const releasedReaction = await createReaction(author.id, recipient.id, '🤩');
+  await createReactionNotification(releasedReaction.id);
+  assert.equal((await readNotifications(releasedReaction.id)).length, 1);
+  assert.deepEqual(await readNotifications(blockedReaction.id), []);
 });
 
 test('Follow Notification create/delete race does not lock the source row', async () => {
