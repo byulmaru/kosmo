@@ -69,7 +69,7 @@ type BlockedProfilesState =
   | { status: 'error'; onRetry: () => void }
   | { status: 'loaded'; profiles: readonly BlockedProfile[]; pagination: Pagination };
 
-type FocusIntent = Readonly<{ index: number; ownerProfileId: string; profileBlockId: string }>;
+type FocusIntent = Readonly<{ ownerProfileId: string; profileBlockId: string }>;
 
 let pendingFocusIntent: FocusIntent | null = null;
 
@@ -151,8 +151,7 @@ export function BlockedProfilesView({
   state: BlockedProfilesState;
 }) {
   const headingRef = useRef<View>(null);
-  const actionRefs = useRef(new Map<string, View>());
-  const removedFocus = useRef<{ index: number; profileBlockId: string } | null>(null);
+  const removedFocus = useRef<{ profileBlockId: string } | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -170,12 +169,7 @@ export function BlockedProfilesView({
       if (pending?.profileBlockId === removed.profileBlockId) {
         pendingFocusIntent = null;
       }
-      const next = state.profiles[Math.min(removed.index, state.profiles.length - 1)];
-      if (next) {
-        actionRefs.current.get(next.profileBlockId)?.focus();
-      } else {
-        headingRef.current?.focus();
-      }
+      headingRef.current?.focus();
     }, 0);
     return () => clearTimeout(timer);
   }, [state]);
@@ -184,12 +178,7 @@ export function BlockedProfilesView({
     if (state.status !== 'loaded') {
       return;
     }
-    const intent = {
-      index: state.profiles.findIndex(
-        (candidate) => candidate.profileBlockId === profile.profileBlockId,
-      ),
-      profileBlockId: profile.profileBlockId,
-    };
+    const intent = { profileBlockId: profile.profileBlockId };
     removedFocus.current = intent;
     if (ownerProfileId) {
       pendingFocusIntent = { ...intent, ownerProfileId };
@@ -207,13 +196,6 @@ export function BlockedProfilesView({
             style={styles.row}
           >
             <FollowButton
-              onActionRef={(node) => {
-                if (node) {
-                  actionRefs.current.set(profile.profileBlockId, node);
-                } else {
-                  actionRefs.current.delete(profile.profileBlockId);
-                }
-              }}
               onUnblockSuccess={() => rememberRemovedProfile(profile)}
               profile={profile.profile}
               profileBlock={profile.profileBlock}

@@ -282,16 +282,22 @@ describe('차단한 프로필 목록', () => {
     assert.equal(focus.mock.callCount(), 1);
   });
 
-  it('중간 항목 해제 뒤 다음 공통 action으로 포커스를 복원한다', async () => {
-    const nextFocus = mock.fn();
+  it('중간 항목 해제 뒤에도 목록 제목으로 포커스를 복원한다', async () => {
+    const focus = mock.fn();
     const first = profile('first');
     const second = profile('second');
-    actionFocusCalls.set(second.profileBlockId, nextFocus);
     await act(async () => {
       renderer = create(
         createElement(BlockedProfilesView, {
           state: { pagination: { status: 'end' }, profiles: [first, second], status: 'loaded' },
         }),
+        {
+          createNodeMock: (element) =>
+            element.type === 'View' &&
+            (element.props as { accessibilityRole?: string }).accessibilityRole === 'header'
+              ? { focus }
+              : {},
+        },
       );
     });
     await act(async () => findAll('Button')[0]?.props.onPress());
@@ -305,7 +311,7 @@ describe('차단한 프로필 목록', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    assert.equal(nextFocus.mock.callCount(), 1);
+    assert.equal(focus.mock.callCount(), 1);
   });
 
   it('다른 actor는 이전 Profile의 해제 포커스 intent를 소비하지 않는다', async () => {

@@ -262,7 +262,7 @@ function ProfileLayoutContent({
       rememberPostRefreshFocus(
         focusIntentKey(selectedProfileId, handle),
         actorLifecycleKey,
-        nextBlocked ? 'state' : 'menu',
+        nextBlocked ? 'state' : blockStatus?.blockedBy ? 'content' : 'menu',
       );
       setConfirmation(null);
       showToast(nextBlocked ? '프로필을 차단했어요' : '차단을 해제했어요', {
