@@ -3,6 +3,7 @@ import type { InboxContext } from '@fedify/fedify';
 export type InboundActivityType =
   | 'Accept'
   | 'Announce'
+  | 'Block'
   | 'Create'
   | 'Delete'
   | 'Follow'
@@ -16,6 +17,7 @@ export type InboundActivityType =
 export type InboundHandler =
   | 'accept'
   | 'announce'
+  | 'block'
   | 'create'
   | 'delete'
   | 'follow'
@@ -65,6 +67,7 @@ export type InboundObservabilityReporter = {
 const activityTypes = new Set<InboundActivityType>([
   'Accept',
   'Announce',
+  'Block',
   'Create',
   'Delete',
   'Follow',
