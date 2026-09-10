@@ -8,6 +8,7 @@ import {
   PermissionDeniedError,
   ValidationError,
 } from '../error';
+import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 import {
   acceptProfileFollowRequestInTransaction,
   approveProfileFollowRequestInTransaction,
@@ -376,6 +377,11 @@ const executeApproveOrAccept = async (
   if (command.kind !== 'APPROVE' && command.kind !== 'ACCEPT') {
     throw new Error('Invalid approval command');
   }
+
+  await assertProfilePairIsNotBlocked(tx, {
+    firstProfileId: input.pair.followerProfileId,
+    secondProfileId: input.pair.followeeProfileId,
+  });
 
   const expectedRowId = command.expectedRowId;
   const existingFollow = await tx

@@ -1,5 +1,5 @@
 import { db, first, Instances, Profiles } from '@kosmo/core/db';
-import { InstanceKind, ProfileState } from '@kosmo/core/enums';
+import { InstanceKind } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
 import { runWorkflow } from '@kosmo/core/temporal/client';
@@ -66,11 +66,12 @@ builder.queryField('profileByHandle', (t) =>
       return db
         .select(getColumns(Profiles))
         .from(Profiles)
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .where(
           and(
-            eq(Profiles.state, ProfileState.ACTIVE),
             eq(Profiles.instanceId, localInstance.id),
             eq(Profiles.normalizedHandle, parsed.normalizedHandle),
+            visibleProfileWhere({ profile: Profiles, instance: Instances }),
           ),
         )
         .limit(1)
@@ -173,12 +174,13 @@ builder.queryField('searchProfiles', (t) =>
             return db
               .select(getColumns(Profiles))
               .from(Profiles)
+              .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
               .where(
                 and(
-                  eq(Profiles.state, ProfileState.ACTIVE),
                   eq(Profiles.instanceId, localInstance.id),
                   normalizedHandleLike,
                   cursorWhere,
+                  visibleProfileWhere({ profile: Profiles, instance: Instances }),
                 ),
               )
               .orderBy(inverted ? desc(Profiles.id) : asc(Profiles.id))

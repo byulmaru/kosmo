@@ -12,6 +12,7 @@ import {
 } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { ConflictError, NotFoundError, PermissionDeniedError } from '../error';
+import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 import { ensureProfileFollow } from './profile-follow-relation';
 import type { Transaction } from '../db';
 import type { ProfileFollowPair } from './profile-follow-relation';
@@ -104,6 +105,10 @@ export const followProfileInTransaction = async (
   const { sendActivityPub, target } = await loadProfileFollowParticipants(tx, {
     followerProfileId,
     followeeProfileId,
+  });
+  await assertProfilePairIsNotBlocked(tx, {
+    firstProfileId: followerProfileId,
+    secondProfileId: followeeProfileId,
   });
 
   let created: boolean;
@@ -422,6 +427,10 @@ export const acceptProfileFollowRequestInTransaction = async (
   tx: Transaction,
 ): Promise<AcceptProfileFollowRequestTransactionResult> => {
   const pair = { followeeProfileId, followerProfileId };
+  await assertProfilePairIsNotBlocked(tx, {
+    firstProfileId: followerProfileId,
+    secondProfileId: followeeProfileId,
+  });
   const established = await tx
     .select({ id: ProfileFollows.id })
     .from(ProfileFollows)
@@ -549,6 +558,10 @@ export const approveProfileFollowRequestInTransaction = async (
   if (participants.length !== 2) {
     throw new NotFoundError('Profile not found');
   }
+  await assertProfilePairIsNotBlocked(tx, {
+    firstProfileId: request.followerProfileId,
+    secondProfileId: request.followeeProfileId,
+  });
 
   const { created, profileFollow } = await ensureProfileFollow(
     {

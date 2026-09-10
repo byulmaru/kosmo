@@ -34,6 +34,7 @@ export {
   executeProfileUnblockTransition,
   loadProfileBlockTransitionBootstrap,
 } from './profile-block';
+export { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';
 export { followProfile, unfollowProfile } from './profile-follow';
 export type {
   HydratedProfileFollowPairTransition,
