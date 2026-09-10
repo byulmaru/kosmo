@@ -130,6 +130,9 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 - Reply, Reaction, Repost, Quote의 Recipient Profile과 원인 행동의 Related Profile이 같으면 새 Notification을
   생성하지 않는다.
 - Recipient의 Profile Mute, Profile Block, Profile Domain Block을 적용한다.
+- Profile Mute는 Recipient가 Owner이고 Related Profile이 Target인 관계 중 만료 시각이 없거나
+  DB 현재 시각보다 미래인 관계를 적용한다. 만료 시각이 DB 현재 시각과 같거나 과거이면 그 Mute로
+  새 Notification을 억제하지 않는다. 만료만으로 과거에 억제한 Notification을 소급 생성하지 않는다.
 - Notification Scope를 포함한 Word Mute Rule과 Hashtag Mute Rule이 일치하면 새 Notification을
   생성하지 않는다.
 - Post Notification Mute의 Root Post thread에 속한 Reply, Reaction, Repost Notification은 생성하지

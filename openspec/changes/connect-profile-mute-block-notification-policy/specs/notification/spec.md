@@ -2,7 +2,7 @@
 
 ### Requirement: Profile Notification 공통 생성 정책
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`의 Type별 생성 관계·조회 정책; [PROD-327](https://linear.app/byulmaru/issue/PROD-327)의 전달 결과·적용 source kind·포함 범위 및 `Domain / Issue Gate 승인 — 2026-09-10`. — 시스템은 Follow, Follow Request, Reply, Reaction, Repost의 새 Notification을 저장하기 전에 하나의 공통 정책 경계에서 source로부터 파생한 Recipient Profile과 Related Profile에 영구 Profile Mute·양방향 Profile Block을 적용해야 한다(MUST). 각 source의 기존 생성 조건과 원인 객체 조회 조건을 통과했다는 사실만으로 이 판정을 생략해서는 안 된다(MUST NOT). 관계·정책을 별도 저장소에 복제하거나 capability 대신 테스트 전용 evaluator/callback을 production 계약으로 제공해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/notification.md`의 Type별 생성 관계·조회 정책; [PROD-327](https://linear.app/byulmaru/issue/PROD-327)의 전달 결과·적용 source kind·포함 범위 및 `Domain / Issue Gate 승인 — 2026-09-10`. — 시스템은 Follow, Follow Request, Reply, Reaction, Repost의 새 Notification을 저장하기 전에 하나의 공통 정책 경계에서 source로부터 파생한 Recipient Profile과 Related Profile에 활성 Profile Mute·양방향 Profile Block을 적용해야 한다(MUST). 각 source의 기존 생성 조건과 원인 객체 조회 조건을 통과했다는 사실만으로 이 판정을 생략해서는 안 된다(MUST NOT). 관계·정책을 별도 저장소에 복제하거나 capability 대신 테스트 전용 evaluator/callback을 production 계약으로 제공해서는 안 된다(MUST NOT).
 
 | Source         | Recipient Profile              | Related Profile |
 | -------------- | ------------------------------ | --------------- |
@@ -14,7 +14,7 @@
 
 #### Scenario: 다섯 source의 허용된 생성
 
-- **WHEN** 각 source의 기존 생성·조회 조건이 충족되고 파생된 Recipient·Related Profile 사이에 적용 중인 영구 Mute 또는 Block이 없다
+- **WHEN** 각 source의 기존 생성·조회 조건이 충족되고 파생된 Recipient·Related Profile 사이에 적용 중인 Mute 또는 Block이 없다
 - **THEN** 각 source는 동일한 공통 정책 경계를 통과해 기존 source identity와 Recipient를 가진 Notification을 멱등 생성한다
 - **AND** 기존 self-notification, Local Recipient, source lifecycle·조회 제한을 완화하지 않는다
 
@@ -30,13 +30,13 @@
 - **THEN** 새 source도 자신의 생성 계약과 함께 공통 Mute·Block 경계를 소비한다
 - **AND** 이번 change 자체가 Quote·Mention source 생성 또는 그 중복 제거·승인 lifecycle을 구현하지 않는다
 
-### Requirement: Recipient 방향의 영구 Profile Mute 판정
+### Requirement: Recipient 방향의 활성 Profile Mute 판정
 
-**Authority / Provenance:** `docs/domain/objects/profile-mute.md`의 상태·관계·조회 정책·제외/보류; `docs/domain/objects/notification.md`의 조회 정책; [PROD-327](https://linear.app/byulmaru/issue/PROD-327)의 영구 Mute 범위·selected Recipient Profile 격리·완료 조건 및 `Domain / Issue Gate 승인 — 2026-09-10`. — 시스템은 Recipient가 Owner이고 Related Profile이 Target인 `expires_at IS NULL` Profile Mute가 존재하면 다섯 source의 새 Notification을 생성하지 않아야 한다(MUST). 관계 방향을 뒤집거나 같은 Account의 다른 Profile에 이 판정을 확장해서는 안 된다(MUST NOT). non-null 만료 시각의 활성·만료 의미를 새로 도입해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-mute.md`의 상태·관계·조회 정책·제외/보류; `docs/domain/objects/notification.md`의 조회 정책; [PROD-327](https://linear.app/byulmaru/issue/PROD-327)의 활성 Mute 범위·selected Recipient Profile 격리·완료 조건 및 `Domain / Issue Gate 승인 — 2026-09-10`; 2026-09-10 사용자 결정과 [PR #842 리뷰](https://github.com/byulmaru/kosmo/pull/842#discussion_r3979149987). — 시스템은 Recipient가 Owner이고 Related Profile이 Target인 `expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP` Profile Mute가 존재하면 다섯 source의 새 Notification을 생성하지 않아야 한다(MUST). 비교 시각은 정책을 평가하는 DB transaction의 `CURRENT_TIMESTAMP`를 사용하며, 만료 시각이 DB 현재 시각과 같거나 과거인 관계는 Mute에 의한 deny로 취급하지 않는다. 관계 방향을 뒤집거나 같은 Account의 다른 Profile에 이 판정을 확장해서는 안 된다(MUST NOT). 기간 preset·생성·변경 action/UI와 Post List 기간 적용·만료 관계 정리는 [PROD-826](https://linear.app/byulmaru/issue/PROD-826)의 범위로 남긴다.
 
-#### Scenario: 수신자의 영구 Mute
+#### Scenario: 수신자의 활성 Mute
 
-- **WHEN** Recipient A가 Related Profile B를 영구 Mute한 상태에서 각 source의 Notification 생성이 시도된다
+- **WHEN** Recipient A가 Related Profile B를 Mute했고 `expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP`인 상태에서 각 source의 Notification 생성이 시도된다
 - **THEN** A에게 해당 Notification을 저장하지 않는다
 - **AND** source action의 결과와 Mute 관계는 바뀌지 않는다
 
@@ -51,11 +51,13 @@
 - **THEN** A1의 Notification은 억제하고 A2에는 A2 자신의 정책을 적용한다
 - **AND** 세션의 selected Profile 변경으로 저장 대상이나 정책 Owner가 바뀌지 않는다
 
-#### Scenario: non-null 만료 값의 v1 경계
+#### Scenario: Mute 만료 시각 경계
 
-- **WHEN** 정책 조회에서 Owner·Target이 일치하더라도 `expires_at`이 non-null인 관계만 존재한다
-- **THEN** 그 관계를 v1의 적용 중인 영구 Mute로 취급하지 않는다
-- **AND** 기간·만료 정책이나 시간 기반 정리를 이번 change에서 추가하지 않는다
+- **WHEN** 정책 조회에서 Owner·Target이 일치하는 Profile Mute의 `expires_at`이 `CURRENT_TIMESTAMP`보다 미래다
+- **THEN** 그 관계를 활성 Mute로 취급해 새 Notification을 생성하지 않는다
+- **AND** `expires_at`이 `CURRENT_TIMESTAMP`와 같거나 과거면 그 관계를 Mute deny로 취급하지 않는다
+- **AND** 비교는 sleep이나 애플리케이션 시계가 아니라 정책을 평가하는 DB transaction의 `CURRENT_TIMESTAMP`를 사용한다
+- **AND** 기간 preset·생성·변경 action/UI, Post List 기간 적용과 만료 관계 정리는 이번 change에서 추가하지 않는다
 
 ### Requirement: 콘텐츠 직접 조회와 독립된 Notification Block pair 판정
 
@@ -113,11 +115,11 @@
 
 ### Requirement: 최신 관계 적용과 기존 Notification 보존
 
-**Authority / Provenance:** `docs/domain/objects/profile-mute.md`의 조회 정책; `docs/domain/objects/profile-block.md`의 행동·조회 정책; `docs/domain/objects/notification.md`의 기존 Notification 보존·정리 정책; [PROD-327](https://linear.app/byulmaru/issue/PROD-327)의 해제 후 최신 정책·기존 Read State 보존·cleanup 제외 범위. — 시스템은 영구 Mute 해제 또는 마지막 Block 해제 뒤 새 source action의 Notification에 최신 관계를 적용해야 한다(MUST). 생성 정책 연결만을 이유로 기존 Notification을 삭제·읽음 처리하거나 기존에 억제된 source를 찾아 소급 생성해서는 안 된다(MUST NOT). 기존 source retry는 앞선 실패 격리 계약을 그대로 따른다.
+**Authority / Provenance:** `docs/domain/objects/profile-mute.md`의 조회 정책; `docs/domain/objects/profile-block.md`의 행동·조회 정책; `docs/domain/objects/notification.md`의 기존 Notification 보존·정리 정책; [PROD-327](https://linear.app/byulmaru/issue/PROD-327)의 해제 후 최신 정책·기존 Read State 보존·cleanup 제외 범위. — 시스템은 Mute 해제 또는 마지막 Block 해제 뒤 새 source action의 Notification에 최신 관계를 적용해야 한다(MUST). 생성 정책 연결만을 이유로 기존 Notification을 삭제·읽음 처리하거나 기존에 억제된 source를 찾아 소급 생성해서는 안 된다(MUST NOT). 기존 source retry는 앞선 실패 격리 계약을 그대로 따른다.
 
 #### Scenario: Mute 해제 뒤 새 행동
 
-- **WHEN** Recipient가 영구 Mute를 해제한 뒤 새 유효한 source action이 발생하고 다른 억제 조건이 없다
+- **WHEN** Recipient가 Mute를 해제한 뒤 새 유효한 source action이 발생하고 다른 억제 조건이 없다
 - **THEN** 새 Notification을 기존 생성 계약대로 제공한다
 - **AND** 해제 action이 과거에 억제된 source를 재생하지 않는다
 
