@@ -33,6 +33,11 @@ post가 다시 나타나지 않는 RED가 관찰됐다. 실패 지점은
 "unmute 성공 → 이미 로드된 Home feed 갱신"이었다. 이후 production의 shell revision/fetch key를
 수정하고 동일 SPA 경로를 재실행해 Home·Local feed 복원을 확인했다. 최종 대상 실행은 8/8 PASS(1.3분)다.
 
+위 내용은 2026-09-06 당시의 실행 기록이다. 이후 구현에서는 뮤트 전용 shell revision/fetch key와
+강제 재조회 경로를 제거하고, 이미 로드된 Home·Local 목록은 mutation 직후 복원을 보장하지 않으며
+다음 조회에서 서버 정책에 수렴하도록 결정했다. 현재 E2E는 Settings에서 해제한 뒤 Home과 Local에
+각각 진입해 `page.reload()`로 새 조회를 발생시키고 feed 복원을 확인한다.
+
 ## 6.4 Target Profile Web·Native와 접근성
 
 Web에서는 390·1024·1440 viewport에서 직접 Profile의 정상 post, Mute 상태, direct unmute,
@@ -70,6 +75,10 @@ POSTGRES_PORT=54344 DATABASE_URL=postgres://kosmo:kosmo@localhost:54344/kosmo_te
 초기 실패는 위 6.2와 동일한 [Home feed 복원 assertion (line 415)](../../../../apps/web/e2e/profile-mute.e2e.ts)이었으며,
 revision/fetch key 수정 후 해소됐다.
 
+이 8/8 통과 기록 역시 당시의 SPA 복원 구현에 대한 결과다. 이후 현재 계약에 맞춰 같은 selected
+Profile 시나리오를 새로고침 후 복원 검증으로 변경했으므로, 과거 결과를 현재 구현의 즉시 복원
+근거로 사용하지 않는다.
+
 ## 보조 검증과 미완료 범위
 
 - API integration: 237 pass, 0 fail, 기존 skip 1건(총 238건).
@@ -103,3 +112,14 @@ PR #767의 고유 커밋 9개를 최신 `prod-858` (`a38bcffc`) 위로 다시 �
 위 API integration 237건과 전체 Web E2E 130건은 9월 6일의 검증 기록이며 이번에 재실행하지 않았다.
 부모 PR #763은 아직 미병합 상태이므로 머지 후 main 기준 동기화는 PROD-814 담당자의 후속 작업으로 남는다.
 Native 검증과 기존 리뷰의 미해결 사항도 유지하며, 이번 재검증만으로 PR Ready나 머지를 판정하지 않는다.
+
+## 2026-09-10 현재 구현과 CI 확인
+
+뮤트 전용 강제 재조회 제거 후의 검증 계약은 "mutation 직후 이미 로드된 타임라인 복원"이 아니라
+"다음 조회에서 서버 정책에 수렴"이다. 현재 Profile Mute E2E는 Home과 Local에서 각각 새로고침한 뒤
+해제한 Profile의 post가 복원되는지 확인한다.
+
+리뷰 대응 전 PR HEAD `00e1cf168368e98834c59f4db62e38523e0e9aea`에서 GitHub CI의 Lint,
+Semgrep, Root·Admin·Admin Helm·Admin Image·Core·Fedify·API·App·Web·Worker 테스트와 Web E2E
+3개 shard가 모두 통과했다. 이는 위 2026-09-06·2026-09-07 로컬 실행 기록과 구분한 현재 구현의
+원격 검증 결과다.
