@@ -7133,34 +7133,175 @@ export const ReplyDetailInlineIntegration: Story = {
     expect(replyButton).toHaveAttribute('aria-expanded', 'false');
 
     const quoteTrigger = canvas.getByRole('button', { name: '재게시 취소' });
+    await userEvent.click(replyButton);
+    const replyBody = canvas.getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(replyBody, '전환 전에 보존할 답글');
     await userEvent.click(quoteTrigger);
     await userEvent.click(
       within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '인용하기',
       }),
     );
+    const replyDiscardConfirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    expect(canvas.queryByRole('textbox', { name: '인용 게시글 본문' })).toBeNull();
+    await userEvent.click(within(replyDiscardConfirm).getByRole('button', { name: '계속 작성' }));
+    expect(replyBody).toHaveValue('전환 전에 보존할 답글');
+    expect(canvas.queryByRole('textbox', { name: '인용 게시글 본문' })).toBeNull();
+
+    await userEvent.click(quoteTrigger);
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '인용하기',
+      }),
+    );
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
+        'button',
+        { name: '작성 취소' },
+      ),
+    );
+    await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
     const quoteBody = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
+    expect(canvas.getAllByRole('textbox')).toHaveLength(1);
     await userEvent.type(quoteBody, '상세에서 작성 중인 인용');
-    await userEvent.click(canvas.getByRole('button', { name: '인용 게시글 닫기' }));
+
+    await userEvent.click(replyButton);
     const quoteConfirm = await screen.findByRole('alertdialog', {
       name: '인용 게시글 작성을 취소할까요?',
     });
-    await userEvent.click(within(quoteConfirm).getByRole('button', { name: '계속 작성' }));
-    expect(quoteBody).toHaveValue('상세에서 작성 중인 인용');
-    await waitFor(() => expect(quoteBody).toHaveFocus());
-
-    await userEvent.click(canvas.getByRole('button', { name: '인용 게시글 닫기' }));
-    await userEvent.click(
-      within(
-        await screen.findByRole('alertdialog', {
-          name: '인용 게시글 작성을 취소할까요?',
-        }),
-      ).getByRole('button', { name: '작성 취소' }),
-    );
+    expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+    await userEvent.click(within(quoteConfirm).getByRole('button', { name: '작성 취소' }));
     await waitFor(() =>
       expect(canvas.queryByRole('textbox', { name: '인용 게시글 본문' })).toBeNull(),
     );
-    expect(quoteTrigger).toHaveFocus();
+    const reopenedReplyBody = canvas.getByRole('textbox', { name: '답글 본문' });
+    expect(canvas.getAllByRole('textbox')).toHaveLength(1);
+    expect(reopenedReplyBody).toHaveValue('');
+    await waitFor(() => expect(reopenedReplyBody).toHaveFocus());
+
+    await userEvent.click(replyButton);
+    const reopenedReplyConfirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    await userEvent.click(within(reopenedReplyConfirm).getByRole('button', { name: '작성 취소' }));
+    await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
+    expect(replyButton).toHaveAttribute('aria-expanded', 'false');
+    expect(replyButton).toHaveFocus();
+  },
+  render: () => <ReplyDetailInlineStory />,
+};
+
+export const QuoteDetailInlinePendingLifecycle: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '재게시 취소' }));
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '인용하기',
+      }),
+    );
+    const body = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
+    await userEvent.type(body, '제출 중인 인용');
+    await userEvent.click(canvas.getByRole('button', { name: '인용 게시' }));
+
+    expect(canvas.getByRole('button', { name: '게시 중' })).toBeDisabled();
+    expect(canvas.getByLabelText('게시 중 처리 중')).toBeVisible();
+    expect(body).toHaveAttribute('readonly');
+    expect(canvas.getByRole('button', { name: '인용 게시글 닫기' })).toBeDisabled();
+    await userEvent.keyboard('{Escape}');
+    expect(body).toHaveValue('제출 중인 인용');
+    expect(canvas.queryByRole('alertdialog')).toBeNull();
+  },
+  render: () => <ReplyDetailInlineStory />,
+};
+
+export const QuoteModalFailureLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: { relay: { mutationError: '인용 전송 네트워크 오류' } },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
+    const source = within(dialog).getByTestId('source-post-preview');
+    const body = within(dialog).getByRole('textbox', { name: '인용 게시글 본문' });
+    await userEvent.type(body, '실패 뒤 유지할 인용');
+    await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
+
+    await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
+      '인용 게시글을 작성하지 못했습니다.',
+    );
+    expect(body).toHaveValue('실패 뒤 유지할 인용');
+    expect(source).toBeVisible();
+    expect(within(source).getByText('짧은 본문 한 줄.')).toBeVisible();
+    const retry = within(dialog).getByRole('button', { name: '인용 게시' });
+    expect(retry).toBeEnabled();
+    await userEvent.click(retry);
+    await waitFor(() =>
+      expect(within(dialog).getByRole('alert')).toHaveTextContent(
+        '인용 게시글을 작성하지 못했습니다.',
+      ),
+    );
+    expect(body).toHaveValue('실패 뒤 유지할 인용');
+    expect(source).toBeVisible();
+  },
+  render: () => <ReplyModalPresentationStory mode="quote" />,
+};
+
+export const QuoteModalNullFailureLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['인용 본문 형식이 올바르지 않습니다.'],
+      mutationResponse: { createPost: null },
+    },
+  },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
+    const source = within(dialog).getByTestId('source-post-preview');
+    const body = within(dialog).getByRole('textbox', { name: '인용 게시글 본문' });
+    await userEvent.type(body, 'null 응답 뒤 유지할 인용');
+    await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
+
+    await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
+      '인용 게시글을 작성하지 못했습니다.',
+    );
+    expect(body).toHaveValue('null 응답 뒤 유지할 인용');
+    expect(source).toBeVisible();
+    expect(within(source).getByText('짧은 본문 한 줄.')).toBeVisible();
+    const retry = within(dialog).getByRole('button', { name: '인용 게시' });
+    expect(retry).toBeEnabled();
+    await userEvent.click(retry);
+    await waitFor(() =>
+      expect(within(dialog).getByRole('alert')).toHaveTextContent(
+        '인용 게시글을 작성하지 못했습니다.',
+      ),
+    );
+    expect(body).toHaveValue('null 응답 뒤 유지할 인용');
+    expect(source).toBeVisible();
+  },
+  render: () => <ReplyModalPresentationStory mode="quote" />,
+};
+
+export const QuoteDetailInlineSourcePreservedAfterFailure: Story = {
+  parameters: { relay: { mutationError: '인용 전송 네트워크 오류' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '재게시 취소' });
+    await userEvent.click(trigger);
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '인용하기',
+      }),
+    );
+    const body = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
+    await userEvent.type(body, '상세 실패 뒤 유지할 인용');
+    await userEvent.click(canvas.getByRole('button', { name: '인용 게시' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '인용 게시글을 작성하지 못했습니다.',
+    );
+    expect(body).toHaveValue('상세 실패 뒤 유지할 인용');
+    expect(canvas.getByTestId('source-post-preview')).toBeVisible();
   },
   render: () => <ReplyDetailInlineStory />,
 };
