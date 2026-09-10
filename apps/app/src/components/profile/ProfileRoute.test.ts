@@ -875,4 +875,28 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(menuTriggerFocus.mock.callCount(), 1);
     assert.equal(stateActionFocus.mock.callCount(), 0);
   });
+
+  it('identity-free 양방향 차단 해제 후 남은 차단 콘텐츠 상태로 포커스를 복원한다', async () => {
+    selectedProfileId = 'owner';
+    profileAvailable = false;
+    profileBlockStatus = { blockedBy: true, blocking: true, profileBlockId: 'block-1' };
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    changeBlockedImpl = async (_change, nextBlocked) => {
+      if (!nextBlocked) {
+        profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
+        relayActorLifecycleKey = 'actor-b';
+      }
+    };
+    await renderRoute('@target');
+
+    const action = rendered('Button').find((node) => node.props.accessibilityLabel === '차단 해제');
+    assert.ok(action);
+    await act(async () => action.props.onPress());
+    await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
+    await renderRoute('@target');
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+    assert.equal(contentStateFocus.mock.callCount(), 1);
+    assert.equal(menuTriggerFocus.mock.callCount(), 0);
+  });
 });
