@@ -56,7 +56,7 @@ export function MutedProfileList({ onFeedback, onUnmute, state }: Props) {
     }
   }, [errorMessage, showToast]);
   return (
-    <View accessibilityLabel="뮤트한 프로필" style={styles.root} testID="muted-profile-list">
+    <View accessibilityLabel="뮤트한 프로필" style={styles.root}>
       {state.status === 'loading' ? (
         <StateView loading title="뮤트한 프로필을 불러오는 중입니다." />
       ) : state.status === 'error' ? (
