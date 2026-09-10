@@ -2,7 +2,7 @@
 
 ### Requirement: Profile Block action confirmation and state lifecycle
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `DSN-53`; 책임 이슈는 `PROD-823`. Profile surface의 Block action은 Mute와 구분되는 공용 ConfirmationContent를 사용하고 Danger tone의 확인 제목·결과 설명·확정 action을 제공해야 한다(MUST). pending 동안 같은 action의 중복 입력과 dismiss를 차단하고 busy 상태를 전달해야 하며(MUST), 성공 상태는 서버 확정 결과를 사용하고 실패 시 기존 서버 상태와 제품의 공용 오류 피드백을 유지해야 한다(MUST).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `DSN-53`; 책임 이슈는 `PROD-823`. Profile surface의 Block action은 Mute와 구분되는 공용 ConfirmationContent를 사용하고 Danger tone의 확인 제목·`기존 팔로우 관계와 요청이 삭제되고, 서로 팔로우하거나 게시물에 반응할 수 없어요.`라는 결과 설명·확정 action을 제공해야 한다(MUST). 기본 Profile 정보와 viewer 방향 정책이 허용한 콘텐츠까지 숨긴다고 설명해서는 안 된다(MUST NOT). pending 동안 같은 action의 중복 입력과 dismiss를 차단하고 busy 상태를 전달해야 하며(MUST), 성공 상태는 서버 확정 결과를 사용하고 실패 시 기존 서버 상태와 제품의 공용 오류 피드백을 유지해야 한다(MUST).
 
 #### Scenario: Block 확인을 취소하면 상태를 바꾸지 않는다
 
