@@ -9,7 +9,7 @@ archive 조건이 아니며, 공통 정책 검증 결과와 실제 endpoint 검�
 
 ### Requirement: Profile Block applies directional Post and Media access
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/post.md`, `docs/domain/objects/media.md`, `docs/domain/objects/bookmark.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `PROD-822`. Post object·Post detail·Media relation과 Profile Post List는 Block 방향에 따른 콘텐츠 정책을 적용해야 한다(MUST). Owner → Target Block에서 Owner는 Target의 Post·PostContent·첨부 Media를 기존 Post Visibility·Eligibility와 Media 정책에 따라 조회할 수 있고(MUST), Target은 Owner의 해당 콘텐츠를 조회할 수 없어야 한다(MUST NOT). 서로 Block한 경우에는 양쪽 직접 조회를 모두 제한해야 한다(MUST). Home·Local·Hashtag Post List·Post 검색·Bookmark·Reaction Profile 목록은 상대 Profile의 콘텐츠를 양방향으로 Exclude해야 하며(MUST), Repost는 Repost Author와 Source Post Author에 해당 surface의 방향별 또는 양방향 정책을 각각 적용해야 한다(MUST). 어느 경우에도 기존 Post Visibility·Eligibility보다 접근 범위를 넓혀서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/post.md`, `docs/domain/objects/media.md`, `docs/domain/objects/bookmark.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `PROD-822`. Post object·Post detail·Media relation, Profile Post List와 Bookmark의 대상 Post projection은 Block 방향에 따른 콘텐츠 정책을 적용해야 한다(MUST). Owner → Target Block에서 Owner는 Target의 Post·PostContent·첨부 Media를 기존 Post Visibility·Eligibility와 Media 정책에 따라 조회할 수 있고(MUST), Target은 Owner의 해당 콘텐츠를 조회할 수 없어야 한다(MUST NOT). 서로 Block한 경우에는 양쪽 직접 조회를 모두 제한해야 한다(MUST). Home·Local·Hashtag Post List·Post 검색·Reaction Profile 목록은 상대 Profile의 콘텐츠를 양방향으로 Exclude해야 하며(MUST), Repost는 Repost Author와 Source Post Author에 해당 surface의 방향별 또는 양방향 정책을 각각 적용해야 한다(MUST). Bookmark row·Owner 권한·삭제 동작은 Block과 무관하게 유지하고(MUST), `Bookmark.post`와 `Profile.bookmarks` edge에만 저장한 Profile의 현재 방향별 Post 조회 정책을 적용해야 한다(MUST). 어느 경우에도 기존 Post Visibility·Eligibility보다 접근 범위를 넓혀서는 안 된다(MUST NOT).
 
 #### Scenario: Owner와 Target의 직접 Post·Media·Profile Post List 조회 방향을 구분한다
 
@@ -49,11 +49,12 @@ archive 조건이 아니며, 공통 정책 검증 결과와 실제 endpoint 검�
 - **AND** 조회 가능한 후속 후보와 pageInfo를 차단된 row에 대한 사후 필터링으로 누락하지 않는다
 - **AND** 기존 Local PUBLIC eligibility와 다른 Post Visibility 제한은 계속 적용한다
 
-#### Scenario: 보존된 Bookmark의 Post가 차단되어 있으면 표시하지 않는다
+#### Scenario: Bookmark 관계와 방향별 대상 Post projection을 구분한다
 
-- **WHEN** Owner의 기존 Bookmark가 Block 관계의 상대 Author 또는 Source Author를 가리킨다
-- **THEN** Bookmark 표면은 현재 Post 조회 정책을 적용해 보호된 Post와 내용을 표시하지 않는다
-- **AND** Block 정책을 적용하기 위해 Bookmark 관계 자체를 삭제하지 않는다
+- **WHEN** 저장한 Profile의 기존 Bookmark가 Profile Block 상대 Author 또는 Source Author의 Post를 가리킨다
+- **THEN** `Bookmark.post`와 `Profile.bookmarks` edge는 저장한 Profile의 현재 방향별 Post 조회 정책을 적용한다
+- **AND** 대상 Post가 조회 불가하면 `Bookmark.post`와 delete payload의 `post`는 기존 계약에 따라 `null`일 수 있고 connection edge는 제외한다
+- **AND** Bookmark row·Owner 권한·Node·삭제 동작은 유지하고 다른 Profile에게 노출하지 않는다
 
 ### Requirement: Profile Block Post interaction boundary
 
