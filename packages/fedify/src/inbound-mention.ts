@@ -1,11 +1,11 @@
 import { Mention } from '@fedify/vocab';
-import { ActivityPubActors, db } from '@kosmo/core/db';
-import { inArray } from 'drizzle-orm';
+import { ActivityPubActors, db, Instances, Profiles } from '@kosmo/core/db';
+import { InstanceKind, InstanceState } from '@kosmo/core/enums';
+import { eq, inArray } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import type { Note } from '@fedify/vocab';
 
 export type InboundMentionCandidate = {
-  readonly label: string | null;
   readonly profileId: string;
   readonly targetHref: string;
 };
@@ -17,7 +17,7 @@ const noNetworkDocumentLoader = async (): Promise<never> => {
 export const collectInboundMentionCandidates = async (
   note: Note,
 ): Promise<InboundMentionCandidate[]> => {
-  const candidates: Array<{ label: string | null; targetHref: string }> = [];
+  const targetHrefs = new Set<string>();
 
   for await (const tag of note.getTags({
     contextLoader: noNetworkDocumentLoader,
@@ -29,31 +29,50 @@ export const collectInboundMentionCandidates = async (
       continue;
     }
 
-    candidates.push({
-      label: tag.name?.toString() ?? null,
-      targetHref: tag.href.href,
-    });
+    targetHrefs.add(tag.href.href);
   }
 
-  if (candidates.length === 0) {
+  if (targetHrefs.size === 0) {
     return [];
   }
 
   const profileRows = await db
     .select({
+      handle: Profiles.handle,
+      instanceCanonicalOrigin: Instances.canonicalOrigin,
+      instanceKind: Instances.kind,
+      instanceState: Instances.state,
       profileId: ActivityPubActors.profileId,
-      targetHref: ActivityPubActors.uri,
+      actorHref: ActivityPubActors.uri,
     })
     .from(ActivityPubActors)
-    .where(
-      inArray(ActivityPubActors.uri, [...new Set(candidates.map(({ targetHref }) => targetHref))]),
-    );
-  const profileIdByTargetHref = new Map(
-    profileRows.map(({ profileId, targetHref }) => [targetHref, profileId]),
-  );
+    .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(inArray(ActivityPubActors.uri, [...targetHrefs]));
 
-  return candidates.flatMap((candidate) => {
-    const profileId = profileIdByTargetHref.get(candidate.targetHref);
-    return profileId === undefined ? [] : [{ ...candidate, profileId }];
+  return profileRows.flatMap((profile) => {
+    const verifiedHrefs = [profile.actorHref];
+    if (
+      profile.instanceKind === InstanceKind.LOCAL &&
+      profile.instanceState === InstanceState.ACTIVE &&
+      profile.instanceCanonicalOrigin !== null
+    ) {
+      try {
+        const humanProfileHref = new URL(
+          `/@${encodeURIComponent(profile.handle)}`,
+          profile.instanceCanonicalOrigin,
+        );
+        if (isHttpUri(humanProfileHref)) {
+          verifiedHrefs.push(humanProfileHref.href);
+        }
+      } catch {
+        // A malformed stored origin cannot be used as a trusted human URL.
+      }
+    }
+
+    return [...new Set(verifiedHrefs)].map((verifiedHref) => ({
+      profileId: profile.profileId,
+      targetHref: verifiedHref,
+    }));
   });
 };

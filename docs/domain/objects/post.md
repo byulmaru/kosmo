@@ -397,7 +397,10 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   있는 새 Post 작성과 독립된 후속 계약이다. Post Visibility 변경도 현재 지원하지 않는다.
 - 본문의 canonical 표현은 schema version이 식별된 document다. Plain Text는 작성 입력과 읽기·검색·접근성 projection이며 별도 canonical 저장값이 아니다.
 - 현재 document V1은 paragraph, text, hard break, 안전한 HTTP(S) link와 Media node를 지원하며, 검증된 inbound
-  typed Mention은 V1에 additive한 node로 보존한다. `pre`와 일반 rich-text editor는 지원하지 않는다.
+  typed Mention은 V1에 additive한 node로 보존한다. inbound Mention은 tag actor URI와 본문 anchor URI가 이미 저장된
+  같은 Profile stable identity의 허용 URI에 대응할 때만 인정한다. Local Profile은 active Local Instance의 trusted canonical origin과
+  기존 Profile URL 규칙으로 만든 human URL을 함께 사용할 수 있고, Remote Profile은 저장된 actor URI anchor만 사용한다. tag
+  `name`·handle과 본문 visible label의 문자열 일치는 identity 조건이 아니다. `pre`와 일반 rich-text editor는 지원하지 않는다.
 - Mentioned Profiles audience와 ActivityPub outbound Mention projection·custom emoji는 후속
   계약에서 정의한다. inbound Note의 typed Mention 보존은 별도 수신 계약을 따른다.
 - Quote 정책은 [ADR 0029](../decisions/0029-quote-consent-and-federation.md)과

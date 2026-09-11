@@ -15,7 +15,7 @@ schema V2 전환이나 V1/V2 dual-read 또는 document version 변환은 도입�
 **Goals:**
 
 - 검증된 inbound typed `Mention`을 canonical Post Content node와 immutable revision-owned Profile 관계로 원자적으로 저장한다.
-- inbound target·anchor identity 증거가 기존 Profile stable identity로 확인되지 않거나 표시 label이 안전한 표시·구조 검증을 통과하지 못한 tag를 안전한 link 또는 text로 보존하고 신규 원격 Profile lookup/materialization을 피한다. 확인된 candidate만 `{ targetHref, label, profileId }`로 core에 전달하며 canonical node에는 `{ profileId, label }`만 저장한다. 표시 label이 Profile 이름·handle과 같다는 사실만으로 identity를 확정하지 않는다.
+- inbound typed tag의 actor URI와 본문 anchor URI가 기존 Profile stable identity의 허용 URI로 확인되지 않거나 표시 label이 안전한 표시·구조 검증을 통과하지 못한 tag를 안전한 link 또는 text로 보존하고 신규 원격 Profile lookup/materialization을 피한다. Local Profile은 active Local Instance의 trusted canonical origin과 기존 Profile URL 규칙으로 human URL을 확인할 수 있고, Remote Profile은 저장된 actor URI anchor만 허용한다. 확인된 허용 href와 `profileId`만 공통 parser 경계에 전달하고 parser가 원문 HTML에서 본문 visible label을 읽어 안전하게 정규화하며 canonical node에는 `{ profileId, label }`만 저장한다. tag `name`·handle과 본문 label의 문자열 일치만으로 identity를 확정하지 않는다.
 - duplicate `Create`의 first-write-wins no-op, remote `Update(Note)` 제외, 과거 revision 보존을 기존 동작과 함께 검증한다.
 - 구 reader의 body preservation을 증명한 뒤 Mention 저장을 활성화하고, `PROD-910` renderer·Profile 이동 및 통합/archive까지 연결한다.
 
@@ -32,13 +32,13 @@ schema V2 전환이나 V1/V2 dual-read 또는 document version 변환은 도입�
 - `packages/core/post-content`의 schema와 canonicalizer는 V1 document의 허용 node와 exact canonical form을 관리한다. Mention은 기존 V1 document와 node 의미를 바꾸지 않는 additive 확장으로 허용하되, 구 reader가 알 수 없는 node를 버리거나 canonicalization 결과를 달리할 수 있으므로 bodyText fallback을 먼저 검증해야 한다.
 - `packages/core/activitypub-note-content.ts`는 원격 HTML/plain text를 동일한 안전한 schema로 투영한다. 이 경계 밖에서 다시 HTML을 만들거나 raw tag를 저장하면 기존 안전성·본문 보존 계약을 우회하게 된다.
 - `packages/fedify/src/local-post-note.ts`도 canonical content에서 local ActivityPub Note의 평문·HTML을 파생하는 경로이므로, 공통 primitive projection을 바꿀 때 label text와 기존 safe link 보존을 함께 회귀 검증해야 한다. 이 change는 outbound typed Mention federation을 추가하지 않는다.
-- `packages/fedify/src/inbound-create-note.ts`는 Note identity·visibility와 content/media projection을 호출한다. Fedify inbound adapter는 typed Mention의 target URI를 기존 Profile identity로 확인한 뒤 `{ targetHref, label, profileId }` candidate를 전달하며, 이 확인에서 새 원격 lookup/materialization을 수행하지 않는다. `to`/`cc` actor URI는 audience이고 `tag` Mention은 별도 입력이므로, 두 경로를 합쳐서 Mention을 추론하면 안 된다.
+- `packages/fedify/src/inbound-create-note.ts`는 Note identity·visibility와 content/media projection을 호출한다. Fedify inbound adapter는 typed Mention의 actor URI를 기존 `ActivityPubActor`·Profile identity로 확인하고, Local Profile이면 active Local Instance의 trusted canonical origin과 기존 Profile URL 규칙에서 허용 href를 만들며, Remote Profile이면 저장된 actor URI만 허용 href로 전달한다. 이 확인에서 새 원격 lookup/materialization을 수행하지 않는다. `to`/`cc` actor URI는 audience이고 `tag` Mention은 별도 입력이므로, 두 경로를 합쳐서 Mention을 추론하면 안 된다.
 - `packages/core/services/post.ts`는 duplicate remote object URI를 먼저 판별하고, 최초 Create의 Post·Content·media·Current Content pointer를 transaction으로 만든다. Mention 관계를 별도 후처리로 쓰면 partial relation 또는 duplicate revision이 남을 수 있다.
 - 현재 구현은 `post_mentions(post_content_id, profile_id)`를 immutable Post Content revision과 Profile을 잇는 persisted membership projection으로 사용한다. 두 column의 composite primary key와 Profile index, Post Content/Profile foreign key가 referential integrity를 보장하며, Post 하나에만 두거나 read-time JSON parsing만으로 대체하면 과거 revision의 의미가 사라진다. GraphQL read projection은 `PROD-910` 범위의 후속 구현 선택으로 남긴다.
 
 ### Recommended Approach
 
-1. inbound adapter는 Fedify vocabulary에서 typed `Mention`의 target URI를 기존 Profile identity로 확인한 뒤 `{ targetHref, label, profileId }` candidate를 core에 전달한다. `projectRemoteNoteContent`의 순수 HTML/plain-text parser는 candidate의 normalized targetHref와 본문의 safe anchor href·label을 대조해 `{ profileId, label }` Mention 또는 link/text를 만들며 DB·stored Profile identity를 조회하지 않는다. `createPost` transaction은 canonical document의 `profileId` 집합을 `post_mentions`에 저장하고 별도 ActivityPub actor lookup이나 fallback 재검증을 수행하지 않는다. Profile domain·handle이나 추측한 remote URL을 조합하지 않으며, 일반 anchor와 audience는 기존 의미를 둔다.
+1. inbound adapter는 Fedify vocabulary에서 typed `Mention`의 actor URI를 기존 Profile stable identity로 확인하고, Local Profile이면 trusted local human URL을 허용 href에 추가하며 Remote Profile이면 저장된 actor URI만 허용 href로 전달한다. `projectRemoteNoteContent`의 순수 HTML/plain-text parser는 전달받은 허용 href와 본문의 safe anchor href를 대조해 `{ profileId, label }` Mention 또는 link/text를 만들며, Local actor URI와 human URL이 서로 다르다는 이유로 mismatch 처리하지 않는다. 본문 visible label은 안전하게 정규화해 저장하고 tag `name`·handle을 identity나 exact-match 조건으로 사용하지 않는다. parser는 DB·stored Profile identity를 조회하지 않는다. `createPost` transaction은 canonical document의 `profileId` 집합을 `post_mentions`에 저장하고 별도 ActivityPub actor lookup이나 fallback 재검증을 수행하지 않는다. Profile domain·handle에서 remote URL을 추측하지 않으며, 일반 anchor와 audience는 기존 의미를 둔다.
 2. 해결 실패·malformed·identity mismatch는 기존 안전 parser가 만드는 link/text fallback으로 투영한다. 이 분기에서 remote actor/profile fetch나 신규 materialization을 호출하지 않으며, 나머지 Note가 통과하면 전체 본문을 저장한다.
 3. 기존 Post 생성 transaction의 저장 경계 안에서 canonical document, `post_mentions`의 persisted revision-owned 관계 projection, Current Content pointer를 함께 만든다. 현재 구현은 `post_content_id`와 `profile_id`를 composite primary key로 묶고 각각 Post Content revision과 Profile foreign key로 연결하며 Profile index를 둔다. 관계는 canonical node에서 다시 계산할 수 있는 파생값으로 두고, 같은 revision과 Profile의 관계는 하나의 set entry로 만든다. document 안의 반복 Mention occurrence와 순서는 보존하되 relation을 중복 생성하지 않으며, 새 revision을 만들 때 이전 document와 관계를 건드리지 않는다. duplicate URI의 early no-op은 Mention projection보다 앞에 둔다. Local Post Content validator는 Mention node를 거부한다.
 4. 먼저 서버의 본문 파생값에서 구 reader 표시까지 body text, Media와 Content Warning이 보존되는지 matrix를 실행한다. 구 reader는 기존 `bodyText` fallback을 재사용한 plain text 표시를 사용할 수 있으며, link 클릭 동작과 문단 구조의 일시적 저하는 허용한다. 호환 증거가 통과하면 기존 Post Content V1 additive 경로에서 Mention 저장을 활성화한다. document schema V2, V1/V2 dual-read 또는 document version 변환은 도입하지 않는다.
@@ -52,7 +52,8 @@ schema V2 전환이나 V1/V2 dual-read 또는 document version 변환은 도입�
 
 ### Known Traps
 
-- HTML anchor나 `to`/`cc` actor URI만으로 Mention을 추론하지 않는다.
+- HTML anchor나 `to`/`cc` actor URI만으로 Mention을 추론하지 않는다. typed tag의 actor URI가 기존 Profile identity로 확인되어도 본문 anchor가 허용 href에 대응하지 않으면 fallback으로 낮춘다.
+- Local actor URI와 trusted human Profile URL의 표현이 다를 수 있음을 전제로 하며, Remote human URL alias는 저장·추측하지 않는다. tag `name`·handle과 본문 visible label의 exact match를 요구하지 않는다.
 - 해결되지 않은 target을 위해 WebFinger, actor fetch 또는 원격 Profile materialization을 호출하지 않는다.
 - Current Post에만 관계를 저장하거나 새 revision에서 과거 관계를 재작성하지 않는다.
 - duplicate `Create`를 body가 바뀌었다는 이유로 Update처럼 처리하거나 timestamp·relation을 갱신하지 않는다.
@@ -62,7 +63,7 @@ schema V2 전환이나 V1/V2 dual-read 또는 document version 변환은 도입�
 ## Risks / Trade-offs
 
 - [구 reader가 unknown node를 제거함] → 저장 활성화 전에 서버 본문 파생값부터 구 reader 표시까지 body text·Media·Content Warning을 검증하고, 기존 bodyText plain text fallback을 사용한다. document schema version은 V1 additive로 유지하며, 필요한 relation persistence DB migration은 별도 additive migration으로 검증한다.
-- [stable identity 검증이 너무 느슨해 다른 Profile을 연결함] → inbound adapter에서 target URI를 저장 Profile stable identity로 확인하고 core parser에서 normalized target href·anchor href·label을 일치시키며, 실패 시 link/text fallback으로 낮춘다.
+- [stable identity 검증이 너무 느슨해 다른 Profile을 연결함] → inbound adapter에서 actor URI를 저장 Profile stable identity로 확인하고 Local은 trusted human Profile URL을 함께, Remote는 stored actor URI만 허용 href로 전달해 core parser에서 anchor href와 대조한다. tag `name`·handle은 identity에서 제외하고, 실패 시 link/text fallback으로 낮춘다.
 - [relation과 Current pointer가 부분 저장됨] → 기존 Post transaction에 포함하고 relation 저장 실패를 전체 rollback으로 검증한다.
 - [renderer가 document와 relation을 서로 다르게 해석함] → `PROD-910` 통합 검증에서 현재 revision, 과거 revision, unresolved fallback을 함께 확인한다.
 - [Mention 저장 뒤 pre-Mention 서버 binary로 전체 rollback함] → 구 binary의 기존 `bodyText` 파생기가 Mention label을 보존하지 못할 수 있으므로, 호환·데이터 대응 증거 없이 전체 rollback을 안전하다고 간주하지 않는다. 기본 rollback은 신규 Mention 쓰기를 중지하면서 기존 Mention 읽기·본문 파생 지원과 additive DB/data를 유지하는 운영 절차로 기록한다.

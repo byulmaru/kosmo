@@ -44,6 +44,7 @@ import type * as CoreServices from '@kosmo/core/services';
 import type { findPostByActivityPubUri as findPostByActivityPubUriType } from './activitypub-post-uri';
 import type { handleInboundCreate as handleInboundCreateType } from './inbound-create';
 import type { materializeHydratedRemoteNote as materializeHydratedRemoteNoteType } from './inbound-create-note';
+import type { ensureDrizzleLocalProfileActor as ensureDrizzleLocalProfileActorType } from './local-actor-store';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -75,6 +76,7 @@ let createPost: typeof CoreServices.createPost;
 let findPostByActivityPubUri: typeof findPostByActivityPubUriType;
 let handleInboundCreate: typeof handleInboundCreateType;
 let materializeHydratedRemoteNote: typeof materializeHydratedRemoteNoteType;
+let ensureDrizzleLocalProfileActor: typeof ensureDrizzleLocalProfileActorType;
 let localInstanceId: string;
 
 describe('inbound Create dispatch', () => {
@@ -102,6 +104,7 @@ describe('inbound Create dispatch', () => {
     ({ findPostByActivityPubUri } = await import('./activitypub-post-uri'));
     ({ handleInboundCreate } = await import('./inbound-create'));
     ({ materializeHydratedRemoteNote } = await import('./inbound-create-note'));
+    ({ ensureDrizzleLocalProfileActor } = await import('./local-actor-store'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
@@ -199,9 +202,61 @@ describe('inbound Create dispatch', () => {
     ]);
   });
 
+  test('projects a local Profile Mention when the actor URI and human URL use different forms', async () => {
+    await createStoredRemoteActor();
+    const target = await createLocalFollowerProfile('test');
+    const localActorUri = new URL(`/ap/actor/${target.id}`, publicOrigin);
+    await ensureDrizzleLocalProfileActor({
+      actorUri: localActorUri,
+      localInstanceId,
+      profileId: target.id,
+    });
+
+    const objectUri = new URL('https://remote.example/notes/local-mention');
+    const note = new Note({
+      attribution: remoteActorUri,
+      content:
+        `<p><span class="h-card"><a href="${publicOrigin}/@test" class="u-url mention">` +
+        '@<span>test</span></a></span> gdgd</p>',
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [
+        new Mention({
+          href: localActorUri,
+          name: '@test@dev.kos.moe',
+        }),
+      ],
+      to: PUBLIC_COLLECTION,
+    });
+
+    await handleInboundCreate(
+      createContext(),
+      new Create({ actor: remoteActorUri, object: note }),
+      receivedAt,
+    );
+
+    const { content } = await getMaterializedPost(objectUri);
+    assert.deepEqual(content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            attrs: { label: '@test', profileId: target.id },
+            type: 'mention',
+          },
+          { text: ' gdgd', type: 'text' },
+        ],
+      },
+    ]);
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: content.id, profileId: target.id },
+    ]);
+  });
+
   test('preserves unresolved, mismatched, or malformed typed Mentions as safe links', async () => {
     await createStoredRemoteActor();
-    const mismatchedTarget = new URL('https://remote.example/users/alice-mismatch');
+    const mismatchedTarget = new URL('https://remote-b.example/users/bob');
+    await createStoredRemoteActor({ actorUri: mismatchedTarget, handle: 'bob' });
     const unresolvedTarget = new URL('https://unknown.example/users/bob');
     const malformedLabelTarget = remoteActorUri;
     const objectUri = new URL('https://remote.example/notes/unresolved-mention');
@@ -210,7 +265,8 @@ describe('inbound Create dispatch', () => {
       content:
         `<p><a href="${mismatchedTarget.href}">@alice</a> ` +
         `<a href="${unresolvedTarget.href}">@bob</a> ` +
-        `<a href="${malformedLabelTarget.href}">@bad</a></p>`,
+        `<a href="${remoteActorUri.origin}/@alice">@alice</a> ` +
+        `<a href="${malformedLabelTarget.href}">\u0001</a></p>`,
       id: objectUri,
       mediaType: 'text/html',
       tags: [
@@ -224,7 +280,7 @@ describe('inbound Create dispatch', () => {
         }),
         new Mention({
           href: malformedLabelTarget,
-          name: '\u0001',
+          name: '@bad',
         }),
       ],
       to: PUBLIC_COLLECTION,
@@ -264,8 +320,14 @@ describe('inbound Create dispatch', () => {
           },
           { text: ' ', type: 'text' },
           {
+            marks: [{ attrs: { href: `${remoteActorUri.origin}/@alice` }, type: 'link' }],
+            text: '@alice',
+            type: 'text',
+          },
+          { text: ' ', type: 'text' },
+          {
             marks: [{ attrs: { href: malformedLabelTarget.href }, type: 'link' }],
-            text: '@bad',
+            text: '\u0001',
             type: 'text',
           },
         ],
@@ -2544,10 +2606,14 @@ const createRemoteCreate = ({ objectUri, replyTarget }: { objectUri: URL; replyT
   });
 
 const createStoredRemoteActor = async ({
+  actorUri = remoteActorUri,
+  handle = 'alice',
   instanceKind = InstanceKind.ACTIVITYPUB,
   instanceState = InstanceState.ACTIVE,
   profileState = ProfileState.ACTIVE,
 }: {
+  actorUri?: URL;
+  handle?: string;
   instanceKind?: InstanceKind;
   instanceState?: InstanceState;
   profileState?: ProfileState;
@@ -2555,8 +2621,8 @@ const createStoredRemoteActor = async ({
   const instance = await db
     .insert(Instances)
     .values({
-      canonicalOrigin: 'https://remote.example',
-      domain: 'remote.example',
+      canonicalOrigin: actorUri.origin,
+      domain: actorUri.hostname,
       kind: instanceKind,
       state: instanceState,
     })
@@ -2565,11 +2631,11 @@ const createStoredRemoteActor = async ({
   const profile = await db
     .insert(Profiles)
     .values({
-      displayName: 'alice',
+      displayName: handle,
       followPolicy: ProfileFollowPolicy.OPEN,
-      handle: 'alice',
+      handle,
       instanceId: instance.id,
-      normalizedHandle: 'alice',
+      normalizedHandle: handle,
       state: profileState,
     })
     .returning()
@@ -2578,8 +2644,8 @@ const createStoredRemoteActor = async ({
   await db.insert(ActivityPubActors).values({
     profileId: profile.id,
     type: ActivityPubActorType.PERSON,
-    uri: remoteActorUri.href,
-    followersUri: `${remoteActorUri.href}/followers`,
+    uri: actorUri.href,
+    followersUri: `${actorUri.href}/followers`,
   });
 
   return profile;

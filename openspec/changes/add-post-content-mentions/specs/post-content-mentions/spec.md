@@ -5,23 +5,24 @@
 ### Requirement: typed Mention identity boundary
 
 시스템은 검증된 inbound typed `Mention`만 canonical Mention projection의 입력으로 인정해야 한다 (MUST).
-inbound adapter는 target URI를 저장된 Local/Remote Profile의 stable identity로 확인하고 `{ targetHref, label, profileId }`
-candidate를 전달해야 한다. Core parser는 candidate의 normalized `targetHref`가 원문 anchor href와 같고 label이 안전하게
-정규화될 때만 `profileId`와 `label`을 가진 canonical Mention node를 만든다. 표시 label이 Profile 이름·handle과 같다는
-사실만으로 identity를 확정해서는 안 되며 (MUST NOT), 일반 anchor와 `to`/`cc` audience actor URI를 Mention identity와
-같은 의미로 취급하지 않아야 한다 (MUST NOT).
+inbound adapter는 typed tag의 actor URI를 저장된 Local/Remote Profile의 stable identity로 확인하고, Local Profile이면 trusted
+human Profile URL을, Remote Profile이면 저장된 actor URI를 허용 href로 core parser 경계에 전달해야 한다. Core parser는 원문
+anchor href가 전달된 허용 href에 대응하고 label이 안전하게 정규화될 때만 `profileId`와 본문 visible `label`을 가진 canonical
+Mention node를 만든다. Local actor URI와 human Profile URL은 서로 다른 URI 형식일 수 있으며, Remote human URL alias는 저장·추측하지
+않는다. tag `name`·handle과 본문 visible label의 문자열 일치는 identity 조건이 아니다. 일반 anchor와 `to`/`cc` audience actor URI를
+Mention identity와 같은 의미로 취급하지 않아야 한다 (MUST NOT).
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `PROD-340`
 
 #### Scenario: Accept a verified typed Mention
 
-- **WHEN** inbound Note의 typed `Mention`이 기존 Profile stable identity로 확인되고 candidate의 normalized target href와 원문 anchor href 및 표시 label이 일치한다
+- **WHEN** inbound Note의 typed `Mention` actor URI가 기존 Profile stable identity로 확인되고 원문 anchor href가 그 Profile에 전달된 허용 href에 대응하며 본문 label이 안전하게 정규화된다
 - **THEN** 시스템은 해당 Mention을 canonical Post Content Mention projection의 입력으로 전달한다
 - **AND** 동일 Note의 일반 link와 `to`/`cc` audience 값은 별도 의미로 유지한다
 
 #### Scenario: Accept independently verified targets
 
-- **WHEN** 하나의 Note에 서로 다른 Profile identity를 가진 typed Mention candidate들이 있고 각 candidate의 target href와 anchor 및 label이 독립적으로 일치한다
+- **WHEN** 하나의 Note에 서로 다른 Profile identity를 가진 typed Mention들이 있고 각 actor URI와 본문 anchor URI가 해당 Profile에 전달된 허용 href에 독립적으로 대응한다
 - **THEN** 시스템은 Profile identity가 서로 다르다는 사실만으로 Mention을 mismatch로 처리하지 않는다
 - **AND** 각 Mention occurrence를 검증된 canonical projection 입력으로 전달한다
 
@@ -84,7 +85,7 @@ shape는 이 requirement가 고정하지 않는다.
 
 #### Scenario: Preserve a mismatched Mention as safe content
 
-- **WHEN** typed `Mention`의 target·anchor identity 증거가 저장된 Profile과 일치하지 않거나 표시 label이 안전한 표시·구조 검증을 통과하지 못한다
+- **WHEN** typed `Mention` actor URI가 기존 Profile stable identity로 확인되지 않거나 본문 anchor URI가 그 Profile에 전달된 허용 href에 대응하지 않거나 표시 label이 안전한 표시·구조 검증을 통과하지 못한다
 - **THEN** 시스템은 해당 부분을 안전한 일반 link 또는 표시 text로 보존한다
 - **AND** Mention node, Mentioned Profile 관계와 신규 원격 Profile은 생성하지 않는다
 - **AND** 나머지 Note가 기존 수신 검증을 통과하면 Post Content를 저장한다

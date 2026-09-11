@@ -24,7 +24,6 @@ export interface RemoteNoteContentInput {
 }
 
 export interface RemoteNoteMentionCandidate {
-  readonly label: string | null;
   readonly targetHref: string;
   readonly profileId: string;
 }
@@ -51,11 +50,6 @@ function htmlToBodyDocument(
   }
 
   const normalizedCandidates = mentions.flatMap((candidate) => {
-    const label = normalizeMentionLabel(candidate.label);
-    if (label === null) {
-      return [];
-    }
-
     let targetHref: string;
     try {
       targetHref = normalizeLinkHref(candidate.targetHref);
@@ -70,7 +64,7 @@ function htmlToBodyDocument(
       return [];
     }
 
-    return [{ label, targetHref, profileId }];
+    return [{ targetHref, profileId }];
   });
 
   const remoteNoteDOMParser = new ProseMirrorDOMParser(postContentSchema, [
@@ -91,9 +85,7 @@ function htmlToBodyDocument(
           return false;
         }
 
-        const candidate = normalizedCandidates.find(
-          (item) => item.label === label && item.targetHref === href,
-        );
+        const candidate = normalizedCandidates.find((item) => item.targetHref === href);
         if (!candidate) {
           return false;
         }

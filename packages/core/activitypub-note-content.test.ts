@@ -207,10 +207,10 @@ describe('projectRemoteNoteContent', () => {
   it('counts a typed Mention label in the remote Note length limit', () => {
     const nearLimit = 'a'.repeat(remoteNoteContentMaxLength - '@alice'.length + 1);
     const mention = {
-      label: '@alice',
       profileId: aliceProfileId,
       targetHref: 'https://remote.example/@alice',
     };
+    const label = '@alice';
 
     assert.doesNotThrow(() =>
       projectRemoteNoteContent({
@@ -222,7 +222,7 @@ describe('projectRemoteNoteContent', () => {
     assert.throws(
       () =>
         projectRemoteNoteContent({
-          content: `<p>${nearLimit}<a href="${mention.targetHref}">${mention.label}</a></p>`,
+          content: `<p>${nearLimit}<a href="${mention.targetHref}">${label}</a></p>`,
           mentions: [mention],
           summary: null,
           mediaType: 'text/html',
@@ -293,7 +293,7 @@ describe('projectRemoteNoteContent', () => {
     assert.deepEqual(formatted, compact);
   });
 
-  it('projects typed Mention candidates only onto matching safe anchor labels', () => {
+  it('projects typed Mention candidates onto safe anchor labels without using tag labels', () => {
     const result = projectRemoteNoteContent({
       content:
         '<p>Hello <a class="h-card" href="https://remote.example/@alice">@alice</a> and ' +
@@ -302,12 +302,10 @@ describe('projectRemoteNoteContent', () => {
         '<a href="https://example.com/guide">guide</a></p>',
       mentions: [
         {
-          label: '@alice',
           profileId: aliceProfileId,
           targetHref: 'https://remote.example/@alice',
         },
         {
-          label: '@bob',
           profileId: bobProfileId,
           targetHref: 'https://remote.example/@bob',
         },
@@ -378,7 +376,7 @@ describe('projectRemoteNoteContent', () => {
     ]);
   });
 
-  it('does not use another same-label candidate when an anchor href is unmatched', () => {
+  it('does not use another candidate when an anchor href is unmatched', () => {
     const result = projectRemoteNoteContent({
       content:
         '<p><a href="https://remote.example/users/alice">@alice</a> ' +
@@ -386,12 +384,10 @@ describe('projectRemoteNoteContent', () => {
         '<a href="https://remote.example/users/unknown">@alice</a></p>',
       mentions: [
         {
-          label: '@alice',
           profileId: aliceProfileId,
           targetHref: 'https://remote.example/users/alice',
         },
         {
-          label: '@alice',
           profileId: bobProfileId,
           targetHref: 'https://remote.example/users/bob',
         },
@@ -435,18 +431,14 @@ describe('projectRemoteNoteContent', () => {
     ]);
   });
 
-  it('keeps malformed or label-mismatched typed Mention candidates as safe links', () => {
+  it('keeps malformed candidates and unsafe visible labels as safe links', () => {
     const result = projectRemoteNoteContent({
       content:
-        '<p><a href="https://remote.example/users/alice">not-alice</a> ' +
+        '<p><a href="https://remote.example/users/alice"></a> ' +
         '<a href="javascript:steal()">@alice</a></p>',
       mentions: [
-        { label: '@alice', profileId: aliceProfileId, targetHref: 'not a URI' },
-        {
-          label: '@alice',
-          profileId: aliceProfileId,
-          targetHref: 'https://remote.example/users/alice',
-        },
+        { profileId: aliceProfileId, targetHref: 'not a URI' },
+        { profileId: aliceProfileId, targetHref: 'https://remote.example/users/alice' },
       ],
       summary: null,
       mediaType: 'text/html',
@@ -457,11 +449,9 @@ describe('projectRemoteNoteContent', () => {
         type: 'paragraph',
         content: [
           {
-            marks: [{ type: 'link', attrs: { href: 'https://remote.example/users/alice' } }],
-            text: 'not-alice',
+            text: '@alice',
             type: 'text',
           },
-          { type: 'text', text: ' @alice' },
         ],
       },
     ]);

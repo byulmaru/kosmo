@@ -61,10 +61,13 @@ Source=Local, State=Ready와 Upload Account 조건을 검증한다. Media row의
 
 Mentioned Profile은 Content Document의 검증된 typed Mention node에서 재구축할 수 있는 revision 관계이며 `post_mentions`
 DB table에 persisted projection으로 저장한다. canonical Mention node는 저장된 Profile identity인 `profileId`와
-정규화된 표시 label인 `label`만 attr로 가지며, inbound ActivityPub target·anchor URI는 이 identity를 검증하는
-입력일 뿐 Content Document에 저장하지 않는다. `post_mentions` row는 Post Content revision과 Profile을 foreign keys로
-가리키며 독립적인 Post-level source of truth가 아니다. column, index와 primary key의 구체 shape는 이 문서에서
-고정하지 않는다. 새 revision은
+본문에서 안전하게 정규화한 표시 label인 `label`만 attr로 가진다. inbound typed tag의 actor URI와 본문 anchor URI는
+기존 `ActivityPubActor`·Profile mapping이 같은 stable Profile을 가리키는지 검증하는 입력이다. Local Profile은 `Instances.kind=LOCAL`인
+active Instance의 trusted `canonicalOrigin`과 기존 `createLocalProfilePerson`의 `/@{encodedHandle}` 규칙으로 만든 human Profile URL을
+같은 identity의 허용 URI로 대응할 수 있다. Remote Profile은 저장된 actor URI만 허용하며 저장되지 않은 human URL을 handle·domain으로
+추측하거나 새로 fetch하지 않는다. tag `name`·handle과 본문 label의 문자열 일치는 identity 조건이 아니다. 이 URI와 tag metadata는 Content Document에 저장하지 않는다. `post_mentions` row는
+Post Content revision과 Profile을 foreign keys로 가리키며 독립적인 Post-level source of truth가 아니다. column, index와
+primary key의 구체 shape는 이 문서에서 고정하지 않는다. 새 revision은
 새 Mentioned Profile 관계 집합을 가지며, immutable한 과거 revision과 그 관계는 보존한다. Current Post의
 Mentioned Profile은 현재 Post Content 관계에서 투영한다. document와 관계 또는 Current Content 포인터 중 하나라도
 저장되지 않으면 같은 transaction을 rollback해 partial relation을 남기지 않는다.
@@ -79,11 +82,13 @@ Mentioned Profile은 현재 Post Content 관계에서 투영한다. document와 
 바뀌면 새 Post Content를 만든다. 이미지 교체는 먼저 새 Local Media를 Ready로 만든 다음 그 Media를 참조하는 새
 revision을 만드는 행동이다. 이전 revision은 이전 Media 참조를 그대로 보존한다.
 
-ActivityPub `tag`의 typed `Mention`은 inbound target·anchor URI가 연결 대상 Profile의 stable identity와
-검증될 때만 `profileId`와 label을 가진 typed Mention node를 저장하고, 그 node에서 Mentioned Profile 관계를
-재구축한다. inbound URI는 저장 전에만 사용한다. unresolved, malformed 또는 identity mismatch는
-Mention node와 Profile 관계를 만들지 않고, 그 Note가 다른 검증을 통과하면 안전한 일반 link 또는 표시 text로
-보존한다. 이 fallback은 원격 Profile을 새로 탐색하거나 materialize하지 않는다.
+ActivityPub `tag`의 typed `Mention`은 tag의 actor URI가 이미 저장된 Local/Remote Profile의 stable identity로
+검증되고, 본문 anchor URI가 그 Profile의 허용된 URI에 대응할 때만 `profileId`와 본문 visible label을 가진 typed Mention node를
+저장하고, 그 node에서 Mentioned Profile 관계를 재구축한다. Local Profile에서는 actor URI와 trusted human Profile URL이 서로 같을
+필요가 없지만, Remote Profile에서는 저장된 actor URI anchor만 허용한다. tag `name`·handle은 identity 증거가 아니며 본문 visible
+label과 exact match할 필요가 없다. inbound URI와 tag metadata는 저장 전에만 사용한다. unresolved, malformed 또는 identity mismatch는 Mention
+node와 Profile 관계를 만들지 않고, 그 Note가 다른 검증을 통과하면 안전한 일반 link 또는 표시 text로 보존한다. 이
+fallback은 원격 Profile을 새로 탐색하거나 materialize하지 않는다.
 
 Alt Text 변경은 Media metadata 갱신이며 새 Post Content revision을 만들지 않는다. 같은 Media를 여러 Post
 Content가 참조한 상태에서 Alt Text를 다시 입력하는 것은 정상적인 작성 흐름은 아니지만 금지하지 않는다. 발생하면

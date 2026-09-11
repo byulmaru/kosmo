@@ -9,6 +9,10 @@
 
 - 검증된 ActivityPub `tag`의 typed `Mention`만 canonical Post Content node와 해당 immutable revision의
   Mentioned Profile 관계로 저장한다.
+- typed tag의 actor URI는 이미 저장된 Local/Remote Profile stable identity로 확인하고, 본문 anchor URI는 같은
+  Profile의 허용 href에 대응하는지 검증한다. Local Profile은 trusted canonical origin과 기존 Profile URL 규칙의 human URL을
+  actor URI와 함께 사용할 수 있고, Remote Profile은 저장된 actor URI anchor만 사용한다. actor URI와 local human URL은 서로 다른
+  URI 형식일 수 있으며 tag `name`·handle과 본문 visible label의 문자열 일치는 identity 조건으로 사용하지 않는다.
 - Mention node와 `post_mentions` revision-owned Profile 관계는 Post Content revision과 Profile을 가리키는 foreign
   keys와 함께 같은 저장 경계에서 생성하고, Current Post는 현재 Content의 관계를 투영한다. 과거 revision과 그
   관계는 보존한다.
