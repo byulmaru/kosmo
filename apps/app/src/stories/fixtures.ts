@@ -127,6 +127,7 @@ export type StoryPost = {
     };
     id: string;
     media: StoryMedia[] | null;
+    mentionedProfiles: StoryProfile[];
   } | null;
   createdAt: string;
   id: string;
@@ -186,6 +187,7 @@ export function post({
             contentWarning,
             id: `content-${id}`,
             media,
+            mentionedProfiles: [],
           },
     createdAt,
     id,
