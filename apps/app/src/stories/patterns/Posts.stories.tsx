@@ -3073,6 +3073,11 @@ export const BodyTimeAndLayoutStates: Story = {
         name: '재게시 취소',
       }),
     ).toBeVisible();
+    expect(
+      within(screen.getByRole('menu', { name: '재게시 메뉴' })).queryByRole('menuitem', {
+        name: '인용하기',
+      }),
+    ).toBeNull();
   },
 };
 
@@ -4189,6 +4194,8 @@ export const Quote: Story = {
 
 export const QuoteComposerListIntegration: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  // PROD-959: Retain this entry-driven lifecycle for restoration while the Quote entry is hidden.
+  tags: ['!test'],
   parameters: {
     relay: {
       mutationResponse: {
@@ -4229,6 +4236,8 @@ export const QuoteComposerListIntegration: Story = {
 
 export const QuoteReplyListCoordinatorIntegration: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  // PROD-959: Retain this entry-driven lifecycle for restoration while the Quote entry is hidden.
+  tags: ['!test'],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const replyButton = canvas.getByRole('button', { name: '답글' });
@@ -7170,6 +7179,8 @@ export const ReplyListSurfaceIntegration: Story = {
 };
 
 export const ReplyDetailInlineIntegration: Story = {
+  // PROD-959: Retain this entry-driven lifecycle for restoration while the Quote entry is hidden.
+  tags: ['!test'],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const replyButton = canvas.getByRole('button', { name: '답글' });
@@ -7273,6 +7284,8 @@ export const ReplyDetailInlineIntegration: Story = {
 };
 
 export const QuoteDetailInlinePendingLifecycle: Story = {
+  // PROD-959: Retain this entry-driven lifecycle for restoration while the Quote entry is hidden.
+  tags: ['!test'],
   parameters: { relay: { mutationLoading: true } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

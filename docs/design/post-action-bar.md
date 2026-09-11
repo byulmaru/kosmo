@@ -165,8 +165,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Repost trigger는 선택 여부와 관계없이 mutation을 즉시 실행하지 않고 action menu를 연다.
 - 현재 Profile이 Source를 Repost하지 않았으면 메뉴에 `재게시하기`, 이미 Repost했으면 `재게시 취소`를
   표시한다. 항목을 선택하고 메뉴가 닫힌 뒤 해당 mutation을 시작한다.
-- 향후 `인용하기`는 Quote 작성 계약이 완료될 때 같은 메뉴의 별도 항목으로 추가한다. 구현 전에는 disabled나
-  placeholder 항목도 표시하지 않는다.
+- PROD-959 (2026-09-11): frontend `PostActionSurface`는 `onQuote`를 임시로 전달하지 않아 Repost 메뉴의
+  `인용하기` 진입점을 숨긴다. Quote Composer·기존 Quote 표시·API/schema/backend 계약은 유지하며, 기존
+  eligibility 계산과 `onQuote` 전달을 복원해 다시 노출한다.
 - Web은 scroll container 밖의 overlay layer에 trigger 근처의 anchored menu를 렌더링한다. 첫 action item은
   trigger의 pointer 지점을 덮어 첫 활성화로 menu를 연 뒤 포인터를 움직이지 않은 두 번째 활성화가 실제
   menu item을 선택하게 한다. trigger 자체는 두 번째 입력에서도 mutation을 직접 실행하지 않는다.
