@@ -1,12 +1,12 @@
 ## Purpose
 
-검증된 ActivityPub `Move`를 Profile 단위의 준비 관계와 기존 Follow lifecycle에 연결해, 원격 source Profile을 Local 또는 Remote target으로 안전하게 전환한다.
+검증된 ActivityPub `Move`를 Profile 단위의 준비 관계와 기존 Follow lifecycle에 연결해, 원격 source의 Local follower를 검증된 Local 또는 Remote target으로 안전하게 이전한다.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Profile Migration 준비 관계
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `docs/design/settings.md`, `PROD-743`. 시스템은 `Account.Active`와 현재 선택된 Profile의 `Profile.Owner` 권한을 통과한 사용자가 현재 선택된 Profile을 target으로 source qualified handle을 지정해 Profile Migration을 준비할 수 있게 해야 한다(MUST). 별도 target Profile ID를 받지 않는 공개 GraphQL `registerProfileMigrationSource` mutation은 `RegisterProfileMigrationSourceInput`으로 source qualified handle만 받고 요청의 현재 선택된 Profile을 target으로 사용해야 한다(MUST). 이 mutation은 `RegisterProfileMigrationSourcePayload`를 반환해야 한다(MUST). 시스템은 source를 Remote Profile로 materialize한 뒤 현재 선택된 target Profile에서 Remote source로 향하는 준비 관계를 저장해야 하며(MUST), 하나의 target Profile과 하나의 Remote source가 각각 하나의 준비 관계만 갖도록 해야 한다(MUST). 이 관계와 source 등록 성공은 inbound Move 처리 이력이나 전체 Profile 이전 이력을 의미해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `docs/design/settings.md`, `PROD-743`. 시스템은 `Account.Active`와 현재 선택된 Profile의 `Profile.Owner` 권한을 통과한 사용자가 현재 선택된 Profile을 target으로 source qualified handle을 지정해 Profile Migration을 준비할 수 있게 해야 한다(MUST). 공개 GraphQL `registerProfileMigrationSource` mutation은 `RegisterProfileMigrationSourceInput`으로 source qualified handle만 받고 별도 target Profile ID를 받지 않으며, 요청의 현재 선택된 Profile을 target으로 사용해야 한다(MUST). 이 mutation은 `RegisterProfileMigrationSourcePayload`를 반환해야 한다(MUST). 시스템은 source를 Remote Profile로 materialize한 뒤 현재 선택된 target Profile에서 Remote source로 향하는 준비 관계를 저장해야 하며(MUST), 하나의 target Profile과 하나의 Remote source가 각각 하나의 준비 관계만 갖도록 해야 한다(MUST). 이 관계와 source 등록 성공은 inbound Move 처리 이력이나 전체 Profile 이전 이력을 의미해서는 안 된다(MUST NOT).
 
 #### Scenario: 권한 있는 selected target에 source를 준비한다
 
