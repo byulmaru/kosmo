@@ -89,7 +89,8 @@ drawer에는 정책 링크를 추가하지 않는다.
 사용하고 `20px` 아이콘과 label 사이에 `space/16`을 둔다. `설정 및 기타` utility는 `Settings` 아이콘과 label을
 표시하며 닫힌 상태에서는 아래 방향, 열린 상태에서는 위 방향 `Chevron`을 trailing에 표시한다. Chevron은
 `24px` visual로 행 오른쪽 `24px` 안쪽에 배치한다. 별도 focus target이 아니며 trigger의 `aria-expanded` 상태와
-동기화한다.
+동기화한다. Native drawer가 화면 폭의 85%로 줄어 `320px`보다 좁아질 때는 좌우 `space/24`를 유지한 채 행 폭만
+가용 폭에 맞춰 줄여 잘리지 않게 한다.
 
 Utility를 연 뒤 표시하는 `설정`·`로그아웃` 하위 행은 같은 target과 `space/32` content inset을 사용해
 아이콘을 안쪽으로 정렬한다. Footer가 닫힌 상태에서는 divider 뒤 첫 행을 `4px`, 두 번째 행을 `49px`에 배치해

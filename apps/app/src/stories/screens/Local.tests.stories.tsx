@@ -187,6 +187,21 @@ export const RefreshQuery: Story = {
         { timeout: 5_000 },
       ),
     ).resolves.toBeVisible();
+
+    const storyWindow = canvasElement.ownerDocument.defaultView!;
+    const home = canvas.getByRole('link', { name: '홈' });
+    const requestCountBeforeShellReselection = queryRequestObserver.mock.calls.length;
+    canvasElement.style.minHeight = '200vh';
+    storyWindow.scrollTo(0, 240);
+    expect(storyWindow.scrollY).toBe(240);
+    await userEvent.click(home);
+    await waitFor(() =>
+      expect(queryRequestObserver.mock.calls.length).toBeGreaterThan(
+        requestCountBeforeShellReselection,
+      ),
+    );
+    expect(storyWindow.scrollY).toBe(0);
+    canvasElement.style.minHeight = '';
   },
 };
 

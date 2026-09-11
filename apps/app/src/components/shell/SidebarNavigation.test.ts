@@ -20,9 +20,11 @@ let logoutPending: boolean;
 let presentationProps: PresentationProps | undefined;
 let renderer: ReactTestRenderer | undefined;
 const logout = mock.fn();
+let pendingNavigationAction: (() => void) | undefined;
+let shouldDeferNavigation: boolean;
 const requestNavigation = mock.fn((action: () => void) => {
-  void action;
-  return false;
+  pendingNavigationAction = action;
+  return shouldDeferNavigation;
 });
 
 mockModule('expo-router', { usePathname: () => '/home' });
@@ -78,7 +80,9 @@ beforeEach(() => {
   logoutPending = true;
   presentationProps = undefined;
   logout.mock.resetCalls();
+  pendingNavigationAction = undefined;
   requestNavigation.mock.resetCalls();
+  shouldDeferNavigation = true;
 });
 
 afterEach(async () => {
@@ -94,7 +98,7 @@ async function renderSidebar() {
   return presentationProps;
 }
 
-test('Production adapter owns logout state and guard composition', async () => {
+test('Production adapter defers guarded logout until the captured action runs', async () => {
   const props = await renderSidebar();
 
   assert.equal(props.logoutError, logoutError);
@@ -104,7 +108,17 @@ test('Production adapter owns logout state and guard composition', async () => {
 
   props.onLogout();
   assert.equal(requestNavigation.mock.callCount(), 1);
-  assert.equal(requestNavigation.mock.calls[0]?.arguments[0], logout);
+  assert.equal(logout.mock.callCount(), 0);
+  assert.equal(pendingNavigationAction, logout);
+  pendingNavigationAction?.();
+  assert.equal(logout.mock.callCount(), 1);
+});
+
+test('Production adapter logs out immediately when the guard does not defer', async () => {
+  shouldDeferNavigation = false;
+  const props = await renderSidebar();
+
+  props.onLogout();
   assert.equal(logout.mock.callCount(), 1);
 });
 

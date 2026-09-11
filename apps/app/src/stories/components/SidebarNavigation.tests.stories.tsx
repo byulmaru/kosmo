@@ -9,6 +9,7 @@ import baseMeta, {
   LogoutErrorContract as logoutErrorContract,
   LogoutLifecycleContract as logoutLifecycleContract,
   LogoutPendingContract as logoutPendingContract,
+  NarrowDrawerLayoutContract as narrowDrawerLayoutContract,
   PresentationTransitionContract as presentationTransitionContract,
   ProfileUnavailableContract as profileUnavailableContract,
   ReducedMotionContract as reducedMotionContract,
@@ -37,6 +38,7 @@ export const FeedbackUnavailableContract: Story = feedbackUnavailableContract;
 export const LogoutPendingContract: Story = logoutPendingContract;
 export const LogoutErrorContract: Story = logoutErrorContract;
 export const LogoutLifecycleContract: Story = logoutLifecycleContract;
+export const NarrowDrawerLayoutContract: Story = narrowDrawerLayoutContract;
 export const ProfileUnavailableContract: Story = profileUnavailableContract;
 export const PresentationTransitionContract: Story = presentationTransitionContract;
 export const SettingsNavigationDisclosure: Story = settingsNavigationDisclosure;

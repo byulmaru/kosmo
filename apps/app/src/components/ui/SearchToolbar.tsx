@@ -176,6 +176,7 @@ export function SearchToolbar({
         : null}
 
       <View
+        testID="search-input-shell"
         style={[
           styles.inputShell,
           {

@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { fn } from 'storybook/test';
 import LocalScreen from '@/app/(tabs)/(protected)/local';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
+import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { RelayStoryProvider } from '../../../.storybook/mocks/react-relay';
 import { post, profile, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -235,6 +236,16 @@ function localRelayForState(state: LocalState) {
 }
 
 function LocalPlayground({ actorBoundary = false, showActorReset = false, state }: LocalStoryArgs) {
+  const homeReselectionRef = useRef<(() => void) | null>(null);
+  const registerHomeReselection = useCallback((handler: () => void) => {
+    homeReselectionRef.current = handler;
+    return () => {
+      if (homeReselectionRef.current === handler) {
+        homeReselectionRef.current = null;
+      }
+    };
+  }, []);
+  const reselectHome = useCallback(() => homeReselectionRef.current?.(), []);
   const relay = useMemo(() => localRelayForState(state), [state]);
 
   return (
@@ -247,7 +258,15 @@ function LocalPlayground({ actorBoundary = false, showActorReset = false, state 
       paginationResponses={relay.paginationResponses}
       queryRequestObserver={queryRequestObserver}
     >
-      {showActorReset ? <LocalActorResetScreen /> : <LocalScreen />}
+      <ShellChromeProvider
+        navigationDrawerOpen={false}
+        openNavigationDrawer={() => undefined}
+        openProfileSwitcher={() => undefined}
+        registerHomeReselection={registerHomeReselection}
+        reselectHome={reselectHome}
+      >
+        {showActorReset ? <LocalActorResetScreen /> : <LocalScreen />}
+      </ShellChromeProvider>
     </RelayStoryProvider>
   );
 }

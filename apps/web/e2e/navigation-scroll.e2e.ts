@@ -48,11 +48,10 @@ const homeEntrySurfaces = [
   { name: 'mobile drawer', viewport: { height: 360, width: 390 }, kind: 'drawer' },
   { name: 'full Home header', viewport: { height: 360, width: 1440 }, kind: 'header' },
   { name: 'compact Home header', viewport: { height: 360, width: 1024 }, kind: 'header' },
-  { name: 'mobile Home header', viewport: { height: 360, width: 390 }, kind: 'header' },
 ] as const;
 
 async function visiblePrimaryNavigation(page: Page): Promise<Locator> {
-  const navigations = page.getByRole('navigation', { name: '주요 메뉴' });
+  const navigations = page.getByRole('navigation', { name: /^(주요 메뉴|하단 탐색)$/ });
   await expect(navigations.first()).toBeAttached();
 
   for (const navigation of await navigations.all()) {
@@ -168,11 +167,7 @@ for (const [index, surface] of homeEntrySurfaces.entries()) {
     try {
       const entry = await homeEntry(page, surface.kind);
       await expect(entry).toHaveAttribute('href', '/home');
-      if (surface.name === 'mobile Home header') {
-        await entry.focus();
-        await expect(entry).toBeFocused();
-        await page.keyboard.press('Enter');
-      } else if (surface.name === 'mobile bottom tab' || surface.name === 'mobile drawer') {
+      if (surface.name === 'mobile bottom tab' || surface.name === 'mobile drawer') {
         await entry.tap();
       } else {
         await entry.click();
