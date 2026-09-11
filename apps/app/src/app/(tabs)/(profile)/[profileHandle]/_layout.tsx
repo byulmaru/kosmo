@@ -491,7 +491,7 @@ function ProfileLayoutContent({
             selectedProfileId &&
             hasSelectedLocalProfile &&
             profile.viewerState?.isSelf !== true &&
-            !blockStatus?.blockedBy
+            (!blockStatus?.blockedBy || blockStatus.blocking)
               ? [
                   {
                     icon: Ban,

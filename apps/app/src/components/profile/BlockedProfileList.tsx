@@ -20,8 +20,7 @@ export type BlockedProfileListState =
 type Props = { headingRef?: RefObject<NativeView | null>; state: BlockedProfileListState };
 
 /** The action owner composes rows; this list does not execute relationship mutations. */
-export function BlockedProfileList({ headingRef: suppliedHeadingRef, state }: Props) {
-  const headingRef = suppliedHeadingRef;
+export function BlockedProfileList({ headingRef, state }: Props) {
   const { showToast } = useToast();
   const loadError =
     state.status === 'error'
