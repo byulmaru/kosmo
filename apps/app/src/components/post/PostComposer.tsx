@@ -510,7 +510,7 @@ function PostComposerContents({
         <View
           style={[
             styles.webVisibilityMenu,
-            surface ? styles.webVisibilityMenuAbove : styles.webVisibilityMenuBelow,
+            replyMode ? styles.webVisibilityMenuAbove : styles.webVisibilityMenuBelow,
             { left: webVisibilityMenuLeft },
           ]}
         >
@@ -521,7 +521,7 @@ function PostComposerContents({
   );
 
   const submitActions = (
-    <View style={styles.submit}>
+    <View style={[styles.submit, quoteMode ? styles.quoteSubmit : null]}>
       {Platform.OS === 'web' ? (
         <Text nativeID={remainingDescriptionId} style={styles.screenReaderOnly}>
           {remainingDescription}
@@ -647,7 +647,7 @@ function PostComposerContents({
             surface ? { borderColor: theme.border } : null,
           ]}
         >
-          {visibilitySelector}
+          {replyMode ? visibilitySelector : null}
           {submitActions}
         </View>
       ) : null}
@@ -753,6 +753,7 @@ const styles = StyleSheet.create({
   webVisibilityMenuAbove: { bottom: 44 },
   webVisibilityMenuBelow: { top: 44 },
   submit: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
+  quoteSubmit: { marginLeft: 'auto' },
   remaining: { fontFamily: fontFamilies.ui, ...typography.xsm },
   screenReaderOnly: {
     height: 1,
