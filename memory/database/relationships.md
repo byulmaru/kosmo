@@ -5,8 +5,10 @@
 - Use explicit join tables when an N:N relationship has role, state, order, timestamp, or permissions.
 - Put relationship-context values on the join table.
 - For ordinary N:N relationships, post-specific context belongs on the relationship. Post Content Media is an explicit
-  exception defined by canonical ADR 0022: revision-specific Media references, order, alt text and sensitivity live in
-  the versioned `post_content.document` Media nodes without a duplicate join table.
+  exception defined by canonical [ADR 0022](../../docs/domain/decisions/0022-post-content-revision-media-nodes.md):
+  versioned `post_content.document` Media nodes own each revision's `mediaId` reference and document order; the
+  referenced `media` row owns nullable `alt_text`; document-root `sensitiveMedia` applies to all Media nodes and
+  defaults to `false`. There is no duplicate join table.
 - Avoid polymorphic foreign keys in the initial schema. Prefer explicit relationship tables.
 - Add ActivityPub actor details, inbox/outbox queues, and AT Protocol record/cache tables after the implementation path is concrete.
 

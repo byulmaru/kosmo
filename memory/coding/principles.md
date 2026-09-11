@@ -10,5 +10,6 @@
 - 불필요한 abstraction, wrapper, reactive alias를 만들지 않는다. 실제 책임 분리나 reactive dependency가 있을 때만 분리한다.
 - 구조적으로 재사용될 책임이나 경계가 없다면 한 번만 쓰이는 값, helper, component, wrapper는 추출하지 말고 호출 위치에 인라인한다.
 - 도메인/모듈 경계상 추후 재사용 가능성이 분명하면 미리 이름을 줄 수 있지만, "언젠가 쓸 수도 있음"만으로 one-off 코드를 분리하지 않는다.
+- 새 state/API/helper는 실제 호출 경로와 기존 책임 소유자, SDK/프레임워크 수명주기를 확인한 뒤 필요한 경우에만 추가하고 표준 수단을 우선 사용한다. 현재 요구나 실패 근거 없이 retry/quarantine/recovery 상태 기계를 선제 도입하지 않되 필요한 실패·재시도 계약은 유지한다.
 - 미래 정책을 미리 조금 구현해야 한다면 현재 도달 가능한 상태와 미래 상태를 분리해 `TODO:` 또는 후속 이슈로 남긴다.
 - "돌아갈 것 같다"를 근거로 삼지 않는다. 실행 스크립트, CI runner, Storybook, platform-specific 동작은 실제 target workflow에서 확인한다.
