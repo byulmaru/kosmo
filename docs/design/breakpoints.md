@@ -26,12 +26,14 @@ Settings master pane은 약 `320px`, detail pane은 남은 폭을 사용한다. 
 
 ## 글쓰기 진입
 
-PostComposer presentation은 `Rail`과 `Overlay`만 사용한다. 중앙 timeline inline composer나 별도 `/compose` route를 canonical presentation으로 두지 않는다. `Overlay` 폭과 화면 바깥 gutter는 parent surface가 소유하고 PostComposer는 내부 spacing·state를 소유한다. 현행 `/compose` route와 header ownership은 Product migration 전까지의 호환 계약이다.
+PostComposer presentation은 `Rail`과 `Overlay`만 사용한다. 중앙 timeline inline composer나 별도 `/compose` route를 canonical presentation으로 두지 않는다. `Overlay` 폭과 화면 바깥 gutter는 parent surface가 소유하고 PostComposer는 내부 spacing·state를 소유한다. `/compose`는 별도 작성 state를 만들지 않고 shell의 같은 Production composer host를 여는 호환 route다.
 
 - `< compact`: 하단 탭 바의 글쓰기가 유일한 shell-level 진입점이며 mobile fullscreen Overlay를 연다. 게시 성공 뒤에는 timeline으로 돌아간다. mobile drawer에는 중복 글쓰기 버튼을 표시하지 않는다.
 - `compact`~`full`: 우측 레일이 없으므로 아이콘 레일의 글쓰기 버튼이 desktop modal Overlay를 연다.
 - `≥ full`: 우측 레일의 embedded PostComposer가 기본 작성 surface다. 별도 큰 글쓰기 CTA를 추가하지 않고 composer header의 Expand action으로 desktop modal Overlay를 연다. 사이드바와 mobile drawer에는 중복 글쓰기 버튼을 표시하지 않는다.
 - `Surface=Overlay`에서는 composer-level Expand를 숨기고 `Surface=Rail`에서만 표시한다. Modal의 close·focus·Escape·backdrop, mobile keyboard avoidance와 게시 후 복귀는 consumer/runtime가 소유한다.
+
+PROD-797에서 Full Rail·compact Overlay·mobile fullscreen과 `/compose` 위임을 Production shell에 연결했다. Web component·Storybook interaction으로 진입, draft 보존, 닫기와 focus 복귀를 확인했으며 Android/iOS의 keyboard·back·safe area·touch/focus는 실제 runtime 검증 전이다.
 
 ## Web 검색 상단바
 

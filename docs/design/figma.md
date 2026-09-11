@@ -536,6 +536,10 @@ documentation·state specimen을 두 번째 행에 둔다.
   계약이 생기기 전까지 line-height를 기계적으로 bind하지 않는다. `ComposerMediaEditor`가 직접 소유한 text는
   Typography의 `MCP Preview` mode에서 family·size·weight를 bind하고, 중첩 공용 component의 text는 해당 source의
   variable binding을 상속해 로컬 override를 만들지 않는다.
+- PROD-797 Production adapter는 기존 일반 Post controller와 upload lifecycle을 유지한 채 공용 Rail·Overlay·모바일
+  presentation, Media gallery/editor와 shell 진입점을 연결한다. Poll·Emoji와 `Image Edit`는 숨기며 `/compose`는 같은
+  shell host에 위임한다. Web component·Storybook interaction 검증은 완료했고 Android/iOS 실제 keyboard·back·safe
+  area·touch/focus 검증은 별도로 남아 있다.
 
 #### DSN-61 모바일 Composer·공용 Confirmation 배치 계약
 

@@ -2,7 +2,6 @@ import { usePathname, useRouter, useSegments } from 'expo-router';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
-import { PostComposer } from '@/components/post/PostComposer';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
@@ -17,7 +16,6 @@ const ComposeQuery = graphql`
       id
       selectedProfile {
         id
-        ...PostComposer_profile
       }
     }
   }
@@ -62,11 +60,7 @@ function ComposeContent({ onGoHome }: { onGoHome: () => void }) {
     {},
     { fetchKey, fetchPolicy: 'store-or-network' },
   );
-  const profile = data.currentSession?.selectedProfile ?? null;
-
-  return profile ? (
-    <PostComposer profile={profile} />
-  ) : (
+  return data.currentSession?.selectedProfile ? null : (
     <ComposeStateCard
       description="홈에서 프로필을 만들거나 선택한 뒤 글을 쓸 수 있어요."
       onAction={onGoHome}
