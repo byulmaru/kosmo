@@ -264,7 +264,7 @@ jobs:
             echo '## Android Google Play internal and closed testing (Alpha)'
             echo
             echo '- Package: moe.kos'
-            echo '- Distribution: Internal upload followed by Alpha promotion'
+            echo '- Distribution: One AAB upload assigned to both Internal and Alpha tracks'
             echo "- Release status: \`${ANDROID_PLAY_RELEASE_STATUS}\`"
             echo "- Version code: \`${KOSMO_ANDROID_VERSION_CODE}\`"
             echo "- OTA channel: \`${KOSMO_OTA_CHANNEL}\`"
