@@ -248,6 +248,14 @@ async function expectNavigationBasics(
   }
   expectRect(home, presentation === 'compact' ? 44 : 272, presentation === 'compact' ? 44 : 45);
 
+  if (profileAvailable) {
+    const profileAvatar = getButton(navigation, 'profile').querySelector<HTMLElement>(
+      '[aria-label="사샤 프로필 이미지"]',
+    );
+    expect(profileAvatar).not.toBeNull();
+    expectRect(profileAvatar!, 28, 28);
+  }
+
   if (presentation === 'compact') {
     expectRect(navigation, 80, 720);
   } else {

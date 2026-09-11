@@ -305,10 +305,11 @@ function UniversalShellContent() {
             switcherOpen && styles.sidebarWithOverlay,
             { borderColor: theme.borderSubtle, width: full ? 320 : 80 },
           ]}
-        >
-          <SidebarNavigation
-            compact={compact}
-            onFeedbackOpen={openFeedbackOverlay}
+          >
+            <SidebarNavigation
+              compact={compact}
+              feedbackActive={feedbackOverlayVisible}
+              onFeedbackOpen={openFeedbackOverlay}
             onHomeReselect={web ? reselectHome : undefined}
             onSwitcherOpenChange={setSwitcherOpen}
             query={data}
@@ -406,6 +407,7 @@ function UniversalShellContent() {
       {web ? (
         <WebNavigationDrawer
           drawerOpen={drawerOpen}
+          feedbackActive={feedbackOverlayVisible}
           onFeedbackOpen={openFeedbackOverlay}
           onClose={closeDrawer}
           onHomeReselect={queueDrawerHomeReselection}

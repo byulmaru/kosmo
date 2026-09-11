@@ -19,6 +19,7 @@ type SharedProps = {
 };
 
 type WebProps = SharedProps & {
+  feedbackActive?: boolean;
   onHomeReselect?: () => void;
 };
 
@@ -29,6 +30,7 @@ type NativeProps = SharedProps & {
 
 export function WebNavigationDrawer({
   drawerOpen,
+  feedbackActive,
   onFeedbackOpen,
   onClose,
   onHomeReselect,
@@ -63,6 +65,7 @@ export function WebNavigationDrawer({
           style={[styles.drawer, elevation.overlay, { backgroundColor: theme.backgroundElevated }]}
         >
           <SidebarNavigation
+            feedbackActive={feedbackActive}
             onFeedbackOpen={onFeedbackOpen}
             onHomeReselect={onHomeReselect}
             onNavigate={onClose}
