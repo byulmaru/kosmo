@@ -1,165 +1,52 @@
 # Database Migration Workflow
 
+The workflow is split by operational phase and runner boundary so each document can be read independently. The section links below preserve the headings and anchors from the former single document.
+
+## Topic files
+
+- [Migration phases, compatibility, and review](database/migrations/workflow.md) — use before classifying a migration or planning expand, transition, and contract work.
+- [Current Drizzle runner boundary](database/migrations/runner.md) — use when changing or verifying Drizzle migration execution, history, or owner credentials.
+
 ## Purpose
 
-PostgreSQL/Drizzle schema를 변경하거나 리뷰할 때 이 문서를 사용한다. 특히 column/table/enum/constraint를
-rename, drop, rewrite하거나 기존 row의 의미를 바꾸는 변경은 구현 전에 이 절차로 전달 단위를 나눈다.
-
-이 문서는 repository 작업 순서를 정의한다. 현재 dev migration runner의 사용법은 `memory/script.md`, schema
-shape와 naming은 `memory/database-design.md`, Issue와 OpenSpec 경계는 `memory/issue-openspec-workflow.md`를
-함께 따른다.
+Moved to [Database Migration Workflow: Phases](database/migrations/workflow.md#purpose).
 
 ## Classify Before Generating SQL
 
-새 migration을 만들기 전에 구버전과 신버전 workload가 같은 DB를 동시에 사용해도 되는지 판단한다. 확실하지
-않으면 breaking으로 분류한다.
-
-Safe/additive 후보:
-
-- 구버전이 모르는 nullable column이나 독립 table 추가.
-- 구버전 query와 write를 바꾸지 않는 index 또는 constraint 준비.
-- 기존 row와 API 의미를 바꾸지 않고 old/new workload가 모두 동작하는 변경.
-
-Additive SQL이라고 자동으로 안전한 것은 아니다. table rewrite, 장시간 lock, transaction 안에서 실행할 수 없는
-index 작업과 즉시 검증되는 constraint는 별도로 실행 계획을 검토한다.
-
-Breaking/destructive 후보:
-
-- column, table, enum value, index 또는 constraint의 rename/drop.
-- column type rewrite, 의미 변경 또는 기존 값의 재해석.
-- 기존 nullable column을 즉시 `NOT NULL`로 변경.
-- 구버전 read/write가 실패하거나 rollback 대상 workload를 깨뜨리는 변경.
+Moved to [Database Migration Workflow: Phases](database/migrations/workflow.md#classify-before-generating-sql).
 
 ## Standard Breaking-Change Sequence
 
-```text
-Expand / pre-migrate
-  -> Transition application
-  -> Backfill and verify
-  -> Drain old workloads and close rollback window
-  -> Approved Contract / post-migrate
-```
-
-각 단계는 독립 Linear 구현 이슈, PR과 release로 전달한다. 여러 단계가 하나의 행동 계약을 공유하면 하나의
-OpenSpec change를 공유할 수 있지만, 각 PR의 merge와 배포 gate는 분리한다.
+Moved to [Database Migration Workflow: Phases](database/migrations/workflow.md#standard-breaking-change-sequence).
 
 ### 1. Expand / pre-migrate
 
-- 새 nullable column/table처럼 구버전과 신버전이 모두 사용할 수 있는 schema만 추가한다.
-- expand migration 적용 후에도 현재 active/preview workload와 rollback 대상 version이 정상 동작해야 한다.
-- transition 또는 contract code를 이 단계의 완료 조건으로 숨기지 않는다.
-- contract SQL은 이 PR이나 runtime image에 포함하지 않는다.
-- 적용 후 schema, lock duration과 구버전 read/write 호환을 확인한다.
+Moved to [Database Migration Workflow: Phases](database/migrations/workflow.md#1-expand--pre-migrate).
 
 ### 2. Transition application and backfill
 
-- 별도 PR에서 애플리케이션을 새 schema로 전환한다.
-- 전환 기간에 필요하면 dual write, `COALESCE(new_column, old_column)` read 또는 같은 수준의 compatibility
-  adapter를 사용한다.
-- data backfill은 재실행 가능하고 중단 후 이어갈 수 있어야 한다. 큰 backfill은 단일 DDL transaction에
-  숨기지 않고 batch, progress와 실패 관측 경계를 둔다.
-- API/web active와 preview를 포함한 모든 workload가 전환됐는지 image identity와 runtime 상태로 확인한다.
-- production에서는 migration Job과 workload가 같은 immutable release를 사용해야 한다. 이 장치는 PROD-564가
-  소유한다.
+Moved to [Database Migration Workflow: Phases](database/migrations/workflow.md#2-transition-application-and-backfill).
 
 ### 3. Contract gate
 
-다음을 모두 근거로 확인하기 전에는 contract 이슈나 PR을 merge하지 않는다.
-
-- backfill이 완료됐고 null, mismatch와 legacy write가 허용 기준 안에 있다.
-- 구버전 active/preview Pod와 rollback 대상 ReplicaSet이 drain됐다.
-- 합의한 rollback 보장 기간이 끝났다.
-- backup/restore와 rollback 절차가 준비됐다.
-- production contract 실행에 필요한 명시적 승인을 받았다.
-
-Argo CD `PostSync` 성공만으로 이 gate를 대체하지 않는다. `PostSync` 시점에는 구버전 ReplicaSet이나 rollback
-경로가 남아 있을 수 있다.
+Moved to [Database Migration Workflow: Phases](database/migrations/workflow.md#3-contract-gate).
 
 ### 4. Contract / post-migrate
 
-- gate를 통과한 뒤 별도 PR과 release에서 legacy column/table/constraint를 제거한다.
-- contract는 승인된 별도 Job으로 실행하거나, 나중 release에 처음 포함해 그 release의 migration-gated
-  `Sync` wave 1에서 실행할 수 있다. 어느 방식이든 구버전이 다시 실행될 가능성이 없어야 한다.
-- contract 실행 후 schema, application error, mismatch와 rollback 가능 범위를 다시 확인한다.
-- contract와 함께 compatibility code를 제거할 수 있지만, 독립적으로 rollback해야 한다면 cleanup PR을 한 번 더
-  분리한다.
+Moved to [Database Migration Workflow: Phases](database/migrations/workflow.md#4-contract--post-migrate).
 
 ## Current Drizzle Runner Boundary
 
-현재 `migrate` command는 runtime image의 `drizzle/` 아래에서 공개 Drizzle migration reader로 파일을
-version-control 순서대로 읽는다. `drizzle.__drizzle_migrations` history의 각 적용 name이 local migration에
-존재하고 hash가 같은지 검증한 뒤, 이미 적용된 name을 제외한 pending 파일을 version-control 순서로 파일마다
-독립 transaction으로 적용한다. 병렬 branch가 timestamp와 다른 순서로 merge·배포되어 DB 적용 순서가 local
-정렬과 달라도 같은 name/hash 집합이면 유효하다. Local에 없는 history, 같은 name의 hash 변경과 중복
-name/history는 새 SQL 실행 전에 거부한다.
-각 파일의 모든 statement와 history insert가 같은 transaction에 있으므로 파일 성공은 함께 commit되고 파일
-실패는 함께 rollback된다. PostgreSQL advisory lock은 동시 runner를 막지만 migration phase를 선택하지 않는다.
-Dev와 production은 PostgreSQL Cluster가 생성한 `<cluster>-app` Secret의 `password`로 schema/database owner
-`kosmo`에 직접 로그인해 migration을 실행한다. Production Cluster `kosmo-postgres`의 Secret은
-`kosmo-postgres-app`이며 `PGUSER=kosmo`를 고정한다. Runtime은 `kosmo_runtime` credential을 사용하고,
-별도 `kosmo_migration` login, Vault/VSO migration source, `DATABASE_MIGRATION_ROLE` 또는 `SET ROLE` 경계를
-사용하지 않는다. Owner `kosmo`의 LOGIN, CNPG-managed password와 기존 database/schema/table ownership은
-유지한다.
-
-Production 전환 전에는 latest backup/WAL, active owner connection drain, current workload readiness와 owner Secret
-consumer를 read-only로 확인하고 별도 `prod` Environment 승인을 받은 뒤에만 credential consumer와 database role을
-변경한다. 전환 후에는 migration 성공, CNPG/catalog 상태, active workload principal과 obsolete identity 부재를
-postflight로 검증한다. replicas=0인 controller-retained historical owner ReplicaSet은 삭제하거나 revision history를
-축소하지 않으며, 지원되는 rollback 대상에서 제외하고 재활성화 시 owner credential을 다시 소비할 수 있는 잔여
-위험을 기록한다.
-
-따라서 다음 규칙을 지킨다.
-
-- Drizzle history에 기록된 migration의 directory name이나 SQL을 수정, 이동 또는 재생성하지 않는다. 이미 적용된
-  migration의 오류는 새 forward migration으로 수정한다.
-- 중간 파일이 실패해도 앞서 성공한 파일과 history는 유지한다. 실패한 파일 뒤의 파일은 실행하지 않으며, 원인을
-  수정한 새 release는 이미 적용된 name/hash를 건너뛰고 아직 적용되지 않은 파일만 version-control 순서로 재시도한다.
-- 적용 순서가 local timestamp 정렬과 다르다는 이유로 history row를 재정렬하거나 다시 기록하지 않는다.
-- expand와 contract migration을 같은 transition image에 포함하지 않는다.
-- 아직 실행하면 안 되는 contract SQL을 미리 commit한 뒤 현재 runner가 알아서 건너뛸 것이라고 기대하지 않는다.
-- 단순한 breaking change는 phase-aware custom runner보다 PR/release 분리를 우선한다.
-- Production migration은 owner 직접 로그인과 immutable release의 preflight → 승인 → migration success barrier →
-  workload activation → postflight 순서를 유지한다. Preflight/postflight evidence만으로 사람 승인을 대체하지 않는다.
-- 별도 pre/post folder, history table 또는 phase selector는 반복되는 운영 필요와 recovery 계약이 확인된 뒤
-  PROD-269 범위에서 설계한다.
-- dev의 mutable `latest`와 downtime 허용 예외를 production migration의 선례로 사용하지 않는다.
+Moved to [Database Migration Workflow: Drizzle Runner](database/migrations/runner.md#current-drizzle-runner-boundary).
 
 ## Issue, OpenSpec And PR Shape
 
-권장 이슈 구조:
-
-```text
-Breaking-change contract issue
-  -> Expand implementation issue / PR / release
-  -> Transition and backfill implementation issue / PR / release
-  -> Contract implementation issue / PR / release
-```
-
-- 계약 이슈는 전체 호환성 목표, rollback window와 contract 완료 조건을 소유한다.
-- 구현 이슈는 한 단계의 독립 결과와 검증만 소유한다.
-- PR 본문에는 선행 PR, 현재 단계, 다음 단계와 아직 merge하면 안 되는 contract dependency를 명시한다.
-- 단계가 여러 PR에 걸쳐 하나의 계약을 공유하면 OpenSpec을 마지막 contract와 검증이 끝날 때까지 active로
-  유지한다. 중간 PR 하나가 끝났다는 이유로 archive하지 않는다.
-- contract SQL이 필요한 사실을 발견했지만 gate가 준비되지 않았다면 현재 PR에 넣지 않고 후속 Linear 이슈로
-  만든다.
+Moved to [Database Migration Workflow: Phases](database/migrations/workflow.md#issue-openspec-and-pr-shape).
 
 ## Example: Rename A Column
 
-물리 column rename을 한 release에서 처리하지 않는다.
-
-1. **Expand:** 새 column을 nullable로 추가한다. 구버전은 기존 column을 계속 사용한다.
-2. **Transition:** 새 코드는 필요한 기간 두 column에 write하고 새 값 우선으로 read한다.
-3. **Backfill:** 기존 row를 idempotent하게 채우고 mismatch와 legacy write를 관측한다.
-4. **Gate:** 모든 workload 전환, 구버전 drain, rollback window 종료와 승인을 확인한다.
-5. **Contract:** legacy column과 compatibility code를 제거한다.
+Moved to [Database Migration Workflow: Phases](database/migrations/workflow.md#example-rename-a-column).
 
 ## Review Checklist
 
-- 이 변경은 구버전과 신버전이 같은 DB를 사용할 때 안전한가?
-- breaking이면 expand, transition/backfill과 contract가 독립 이슈와 release로 나뉘었는가?
-- transition image에 contract SQL이 미리 포함되지 않았는가?
-- backfill은 idempotent하고 진행률과 실패를 확인할 수 있는가?
-- active/preview와 rollback 대상 구버전이 모두 drain됐는가?
-- rollback window, backup/restore와 승인이 확인됐는가?
-- migration Job과 workload가 같은 immutable release를 사용하는가?
-- PR과 OpenSpec 완료 상태가 전체 계약의 실제 진행 상태를 반영하는가?
+Moved to [Database Migration Workflow: Phases](database/migrations/workflow.md#review-checklist).

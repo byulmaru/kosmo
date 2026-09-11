@@ -1,65 +1,42 @@
 # Frontend React Native Memory
 
+The guidance is split by route/platform boundaries, Relay operations and actor cache, UI composition, and Storybook. Read the entire applicable topic file; the section links below preserve the headings and anchors from the former single document.
+
+## Topic files
+
+- [Route and platform boundaries](frontend/route-platform.md)
+- [Relay operation, environment, and cache](frontend/relay-operation-env-cache.md)
+- [UI composition and styles](frontend/ui-composition.md)
+- [Storybook](frontend/storybook.md)
+
 ## Purpose
 
-- `apps/app`의 Expo Router, React Native/React Native Web, React Relay, Storybook 컴포넌트를 구현하거나 리뷰할 때 이 메모를 적용한다.
-- `apps/app`은 Android/iOS/Web에서 공유하는 유일한 UI와 route tree를 소유한다. `apps/web`은 Expo web asset, 로그인, GraphQL proxy, ActivityPub을 제공하는 Hono BFF이며 UI를 소유하지 않는다.
-- fragment colocation, actor별 Relay cache, universal UI semantics와 상태 카탈로그를 플랫폼 간에 일관되게 유지한다.
+Moved to [Frontend: Route And Platform](frontend/route-platform.md#purpose).
 
 ## Route And Platform Boundaries
 
-- canonical route는 `apps/app/src/app`의 Expo Router file route로 정의한다. 같은 화면을 web 전용 route tree에 다시 만들지 않는다.
-- 공용 화면과 컴포넌트는 React Native primitive로 작성한다. 실제 platform API나 DOM 동작이 다른 경우에만 `.web.tsx`, `.native.tsx` 같은 platform file을 사용한다.
-- route component는 URL parameter와 top-level query를 소유한다. 표시 컴포넌트는 Expo Router parameter나 navigation singleton을 직접 읽지 않고 필요한 callback 또는 fragment ref를 받는다.
-- 프로필 route에는 표시용 `relativeHandle`과 lookup용 bare/federated handle을 혼동하지 않는다. URL을 만들 때는 `relativeHandle`, GraphQL lookup/validation에는 정규화한 route parameter를 사용한다.
-- web shell은 `768px`와 `1280px` breakpoint를 사용한다. native shell은 화면 폭과 무관하게 mobile layout을 유지하고 safe area를 기준으로 한다. 값은 `apps/app/src/theme/tokens.ts`의 `breakpoints`를 사용하며 컴포넌트마다 같은 숫자를 다시 쓰지 않는다.
-- web 링크가 새 탭 열기, 주소 복사, 키보드 활성화 같은 browser 의미를 가져야 하면 Expo Router `Link`를 사용한다. local action은 `Pressable`/`Button`을 사용하고 접근성 role, label, state를 함께 지정한다.
+Moved to [Frontend: Route And Platform](frontend/route-platform.md#route-and-platform-boundaries).
 
 ## Relay Colocation
 
-- GraphQL query, mutation, fragment document는 실제로 사용하는 `.tsx` 파일에 `graphql` tag로 둔다.
-- route는 `useLazyLoadQuery`로 화면 query를 소유하고, GraphQL entity를 소비하는 자식은 자신의 fragment를 선언해 generated `{FragmentName}$key`를 prop으로 받는다.
-- 부모는 자식 fragment를 spread하고 fragment ref를 그대로 넘긴다. `id`, `handle`, `displayName` 같은 field subset을 수동 scalar prop으로 복제하지 않는다.
-- 한 컴포넌트가 여러 부모 query에서 재사용되더라도 document를 공용 query helper로 빼지 않는다. 재사용 경계는 query가 아니라 fragment다.
-- operation name은 화면/컴포넌트 책임을 드러내는 기존 이름을 유지한다. Relay network request body는 `operationName`, persisted text가 아닌 `request.params.text`, `variables`를 포함해 API와 E2E interception 계약을 지킨다.
-- generated `__generated__` artifact는 commit하지 않는다. schema 또는 document가 바뀌면 `pnpm --filter @kosmo/app relay`를 실행하고 `check`/build에서도 compiler를 선행한다.
-- `DateTime` 같은 custom scalar는 `apps/app/relay.config.json`에서 native-safe TypeScript type으로 매핑한다. DOM 기반 editor type을 scalar boundary에 넣지 않는다.
+Moved to [Frontend: Relay Operation, Environment And Cache](frontend/relay-operation-env-cache.md#relay-colocation).
 
 ## Relay Environment And Mutations
 
-- web request는 same-origin BFF `/graphql`과 HttpOnly cookie를 사용한다. Native request는 channel-configured API `/graphql`에 SecureStore에서 복원한 session token을 Bearer로 보내고 `credentials: 'omit'`을 사용한다. Native AuthSession은 Web과 공유하는 confidential OIDC application의 client ID로 authorization code, PKCE verifier와 exact `kosmo://login/callback` redirect URI만 반환하고, 로그인 화면에 colocate한 Relay `exchangeNativeOidcSession` mutation이 token 없는 native Environment를 통해 같은 API `/graphql`에서 session을 교환한다. API는 server-held client secret으로 code를 교환하며 secret은 Native bundle/request에 포함하지 않는다. BFF REST route, ad hoc GraphQL `fetch`, raw ID/access token 교환을 사용하지 않는다. Native SecureStore 값은 validated API origin, shared OIDC issuer, shared client ID와 token을 함께 저장하며 하나라도 현재 설정과 다르면 삭제해 채널 또는 OIDC application 전환 뒤 이전 bearer를 보내지 않는다. UI code가 web cookie를 직접 읽거나 native token을 URL에 넣지 않는다.
-- `Session.selectedProfile.id`가 바뀌면 Relay Environment와 Store를 새로 만든 뒤 현재 route query를 새 actor 기준으로 실행한다. `homeTimeline`과 canonical viewer-relative 상태인 `Profile.viewerState`를 수동 필드 목록으로 invalidate하지 않는다.
-- mutation 응답은 영향받는 Node의 `id`와 변경된 필드를 선택해 Relay normalized store가 갱신되게 한다. connection membership 변경이 필요할 때만 Relay connection directive 또는 좁은 updater를 사용한다.
-- 새 게시글의 현재 actor Home 목록은 producer별로 별도 갱신한다. 현재 actor가 호출한 `createPost` 성공 결과의 normalized `post`만 요청 actor Store의 이미 로드된 Home managed connection에 Relay `@prependNode` directive로 최신순·중복 없이 반영하고, Post List 후보·정책 필드·cursor를 클라이언트에서 합성하거나 광범위하게 refetch하지 않는다. 로드되지 않은 Home connection은 Relay가 만들지 않는다. 다른 producer의 membership 전달은 이 흐름의 계약이 아니다. actor Environment가 전환된 뒤 늦게 완료된 이전 요청은 이전 Store에만 적용하고 새 actor UI를 변경하지 않는다.
-- profile 선택 mutation은 payload UI 갱신과 actor environment reset을 모두 수행한다. 이전 actor Store를 새 profile에 재사용하지 않는다.
-- Route와 독립 surface의 GraphQL/network 오류는 가장 가까운 error boundary가 소유하고, 해당 query만 새 `fetchKey` 또는 query reference로 재시도한다. 루트까지 전파된 오류는 특정 query를 추측해 재시도하지 않고 Relay·Session provider runtime 전체를 다시 생성한다. backend `message` 원문 노출 정책이 확정되지 않은 흐름에서는 컴포넌트마다 ad hoc 분기를 만들지 않는다.
+Moved to [Frontend: Relay Operation, Environment And Cache](frontend/relay-operation-env-cache.md#relay-environment-and-mutations).
 
 ## Relay Connections
 
-- followers/following처럼 다음 페이지가 필요한 fragment는 `@argumentDefinitions`, `@refetchable`, `@connection`을 선언하고 `usePaginationFragment`로 읽는다.
-- route state에서 edge를 수동 concat하거나 cursor 중복 제거 helper를 만들지 않는다. Relay connection identity와 `loadNext`가 누적을 소유한다.
-- 다음 페이지 로딩 중에는 중복 요청을 막고, 실패해도 기존 edge를 유지하며 같은 위치에서 재시도할 수 있게 한다. `hasNext`가 false면 load-more action을 숨긴다.
-- connection key는 component와 관계가 드러나는 안정적인 이름을 사용한다. filter argument가 생기면 `filters`를 명시해 서로 다른 목록이 같은 connection으로 합쳐지지 않게 한다.
+Moved to [Frontend: Relay Operation, Environment And Cache](frontend/relay-operation-env-cache.md#relay-connections).
 
 ## React Native Components And Styles
 
-- `View`, `Text`, `TextInput`, `Pressable`, `Modal`, `ScrollView` 등 React Native primitive를 기본으로 사용한다. browser-only element나 DOM API는 platform 경계 밖의 공용 컴포넌트에 넣지 않는다.
-- system bar·viewport edge까지 backdrop을 확장하는 Web·iOS·Android overlay는 바깥 backdrop이 네 방향 safe area를 한 번만 소유한다. scrim은 끝까지 칠하고 interactive surface만 inset 안에 두며, fullscreen·centered·drawer 같은 presentation 분기는 기본 여백과 배치만 결정한다. Native `Modal`은 system bar 아래까지 backdrop을 확장한 뒤 같은 경계에서 inset을 소비하고, surface 안에 `SafeAreaView`를 중첩해 다시 소비하지 않는다.
-- 색상, spacing, radius, typography, breakpoint는 `apps/app/src/theme` token을 사용한다. 일회성 raw hex/숫자로 Foundation 값을 복제하지 않는다.
-- UI 텍스트는 `fontFamilies.ui`(`SUIT Variable`), 포스트 본문과 긴 입력은 `fontFamilies.content`(`Pretendard Variable`)를 사용한다. React Native에는 CSS 상속이 없으므로 공용 primitive 또는 각 `Text`/`TextInput` style에서 family를 명시한다. `apps/app/src/app/_layout.tsx`는 Variable TTF를 모든 플랫폼에서 번들 로드하며 iOS 등록 key(`SUIT`, `Pretendard`)는 consumer family name과 분리한다.
-- 접근성 목표와 target은 [`docs/design/accessibility.md`](../docs/design/accessibility.md)를 따른다. Web은 적용 가능한 WCAG 2.2 A·AA와 24×24 CSS px 최소 target·공식 예외를 사용하고, iOS는 기본 44×44 pt hit region, Android는 48×48 dp touch target을 사용한다. 기존 component-specific 강화 계약은 전역 기준보다 우선한다. Profile Tag 제거 action은 시각 크기 32×32, 실제 입력 target Web 32×32 CSS px, iOS 44×44pt, Android 48×48dp를 사용한다. `accessibilityRole`, `accessibilityLabel`, `accessibilityState`를 실제 동작과 맞추고 선택 tab, disabled/loading button, modal/drawer 상태를 시각 표현만으로 전달하지 않는다.
-- `useWindowDimensions`로 layout 단계를 고르되 product breakpoint 값은 token에서 읽는다. render 중 플랫폼 전역 `window`를 직접 읽지 않는다.
-- 게시글 canonical read 계약은 schema version이 식별된 ProseMirror document JSON이다. composer는 trim된 Plain Text를 `CreatePostInput.bodyText`로 계속 제출하고 서버 공통 경계가 document로 변환한다. PostContent V1 Media block node는 Media global ID projection과 문서 순서를 제공하고, 실제 Media GraphQL Node가 URL, Media Type과 nullable Alt Text를 소유하며 document root의 optional Sensitive Media attr는 생략 시 false다. 현재 Composer 이미지 업로드는 ordered Media item을 create input에 함께 제출하되 앱에서 ProseMirror document를 만들지 않는다. 앱은 native-safe JSON 타입과 제한된 paragraph/text/hard-break/link renderer를 사용하며 Media 목록·상세 렌더링이 별도 계약인 동안 Media node가 있는 document의 텍스트는 파생 `bodyText` fallback으로 표시할 수 있다. `prosemirror-model` 검증/canonicalization은 server-only subpath에 두고 앱 bundle에는 TipTap, ProseMirror runtime/editor/view 또는 WebView editor를 포함하지 않는다.
+Moved to [Frontend: UI Composition And Styles](frontend/ui-composition.md#react-native-components-and-styles).
 
 ## Storybook
 
-- 상태 카탈로그는 `apps/app`의 React Native Web Storybook을 사용한다. Svelte story나 UI package를 병행하지 않는다.
-- Relay fragment component story는 production fragment ref 계약을 유지하는 Relay mock environment/payload를 사용한다. raw object를 `$key`로 cast해 runtime contract를 우회하지 않는다.
-- loading, error, empty, long display name/handle/content, selected/disabled, pagination retry와 platform width 상태를 포함한다.
-- interactive element에는 접근성 metadata를 넣고 Storybook a11y 검증과 web static build를 함께 통과시킨다.
+Moved to [Frontend: Storybook](frontend/storybook.md#storybook).
 
 ## UI And Copy
 
-- 프로필 표시 문자열은 `Profile.relativeHandle`을 사용하고 `Profile.handle`은 lookup, validation, route parameter 정규화에만 사용한다.
-- backend error `message`를 그대로 노출할지 error code로 분기할지는 공용 정책에서 결정한다. 정책이 없으면 안전한 한국어 fallback을 우선한다.
-- Figma/OpenSpec 수치와 theme token이 다르면 같은 변경에서 정렬한다. 긴 문자열, 빈 값, RTL/줄바꿈처럼 layout을 깨뜨릴 수 있는 상태는 story 또는 test에 포함한다.
+Moved to [Frontend: UI Composition And Styles](frontend/ui-composition.md#ui-and-copy).
