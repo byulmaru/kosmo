@@ -42,6 +42,10 @@ function MockSidebarNavigation(props: typeof sidebarNavigationProps) {
   }
   return null;
 }
+let timeline = true;
+let mobileShellHeader: { leading: 'back' | 'menu'; title: string } | null = null;
+let pageHeaderProps: Record<string, unknown> | null = null;
+let shellChromeProviderProps: Record<string, unknown> | null = null;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -107,7 +111,10 @@ mockModule('@/components/notification/NotificationReadAllContext', {
   NotificationReadAllProvider: PassThrough,
 });
 mockModule('@/components/PageHeader', {
-  PageHeader: ({ leading }: { leading?: ReactNode }) => leading ?? null,
+  PageHeader: (props: { leading?: ReactNode; [key: string]: unknown }) => {
+    pageHeaderProps = props;
+    return props.leading ?? null;
+  },
 });
 mockModule('@/components/post/PostMediaViewerHost', {
   PostMediaViewerScreenFallbackProvider: PassThrough,
@@ -152,19 +159,24 @@ mockModule('./RightRail', {
     return null;
   },
 });
-mockModule('./ShellChromeContext', { ShellChromeProvider: PassThrough });
+mockModule('./ShellChromeContext', {
+  ShellChromeProvider: ({ children, ...props }: PropsWithChildren<Record<string, unknown>>) => {
+    shellChromeProviderProps = props;
+    return children;
+  },
+});
 mockModule('./SidebarNavigation', {
   SidebarNavigation: MockSidebarNavigation,
 });
 mockModule('./shellLayout', {
-  getWebMobileShellHeader: () => null,
+  getWebMobileShellHeader: () => mobileShellHeader,
   getShellRoutePresentation: () => ({
     layout,
     settingsWorkspace: false,
     showRightRail,
   }),
   isSettingsRoute: () => false,
-  isTimelineRoute: () => true,
+  isTimelineRoute: () => timeline,
   isWebMobileRouteOwnedHeader: () => false,
   webMobileShellHeaderHeight: 64,
 });
@@ -193,10 +205,23 @@ afterEach(async () => {
   router.push.mock.resetCalls();
   router.replace.mock.resetCalls();
   hardwareBackPressListener = null;
+  timeline = true;
+  mobileShellHeader = null;
+  pageHeaderProps = null;
+  shellChromeProviderProps = null;
   mock.restoreAll();
 });
 
 describe('UniversalShell screen fallback focus target', () => {
+  it('mobile detail heading과 shell context가 같은 focus ref를 공유한다', async () => {
+    timeline = false;
+    mobileShellHeader = { leading: 'back', title: '차단한 프로필' };
+    await renderShell();
+
+    assert.ok(pageHeaderProps?.headingRef);
+    assert.equal(shellChromeProviderProps?.pageHeadingRef, pageHeaderProps?.headingRef);
+  });
+
   it('Web에서는 shell root를 tab 순서에서 제외한다', async () => {
     platform.OS = 'web';
     const root = await renderShell();

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { fn } from 'storybook/test';
+import { PageHeader } from '@/components/PageHeader';
 import { BlockedProfileList } from '@/components/profile/BlockedProfileList';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { Button } from '@/components/ui/Button';
@@ -23,6 +24,7 @@ type Props = {
 
 function Fixture({ state, displayName, onSelectAction, onRetry, onLoadMore }: Props) {
   const [loaded, setLoaded] = useState(false);
+  const headingRef = useRef<View>(null);
   useEffect(() => setLoaded(false), [state]);
   const theme = useTheme();
   const visibleState = loaded ? 'loaded' : state;
@@ -32,7 +34,9 @@ function Fixture({ state, displayName, onSelectAction, onRetry, onLoadMore }: Pr
   };
   return (
     <View style={{ width: '100%', maxWidth: 640 }}>
+      <PageHeader headingRef={headingRef} title="차단한 프로필" />
       <BlockedProfileList
+        headingRef={headingRef}
         state={
           visibleState === 'loading' || visibleState === 'empty'
             ? { status: visibleState }

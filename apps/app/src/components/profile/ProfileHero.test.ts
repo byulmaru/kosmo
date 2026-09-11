@@ -361,10 +361,48 @@ describe('ProfileHero 관리 메뉴 조립', () => {
     });
     assert.deepEqual(
       actionMenu.props.items.map((item: { key: string }) => item.key),
-      ['copy-profile-link', 'block', 'mute'],
+      ['copy-profile-link', 'mute', 'block'],
     );
     const focusTrigger = () => undefined;
     actionMenu.props.onTriggerReady(focusTrigger);
+    assert.equal(receivedFocus, focusTrigger);
+  });
+
+  it('mute action이 없는 차단 상태에서도 링크 복사와 차단 해제 메뉴를 렌더한다', async () => {
+    fragmentData = baseProfile;
+    const onUnblock = mock.fn();
+    let receivedFocus: (() => void) | undefined;
+    await act(async () => {
+      renderer = create(
+        createElement(ProfileHero, {
+          menuItems: [
+            {
+              icon: BlockIcon,
+              key: 'unblock',
+              label: '차단 해제',
+              onSelect: onUnblock,
+              tone: 'danger',
+            },
+          ],
+          onMenuTriggerReady: (focusTrigger: () => void) => {
+            receivedFocus = focusTrigger;
+          },
+          profile: {} as never,
+          showMuteAction: false,
+        }),
+      );
+    });
+    assert.ok(renderer);
+
+    const menu = renderer.root.find((node) => (node.type as unknown) === 'ProfileMoreMenu');
+    assert.deepEqual(
+      menu.props.items.map((item: { key: string }) => item.key),
+      ['copy-profile-link', 'unblock'],
+    );
+    menu.props.items[1].onSelect();
+    assert.equal(onUnblock.mock.callCount(), 1);
+    const focusTrigger = () => undefined;
+    menu.props.onTriggerReady(focusTrigger);
     assert.equal(receivedFocus, focusTrigger);
   });
 });

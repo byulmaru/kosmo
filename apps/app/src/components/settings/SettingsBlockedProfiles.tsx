@@ -8,6 +8,8 @@ import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
+import { useSession } from '@/session/SessionProvider';
+import type { RefObject } from 'react';
 import type { View } from 'react-native';
 import type { FollowButton_profile$key } from '@/components/profile/__generated__/FollowButton_profile.graphql';
 import type { FollowButton_profileBlock$key } from '@/components/profile/__generated__/FollowButton_profileBlock.graphql';
@@ -16,14 +18,17 @@ import type { SettingsBlockedProfilesNextPageQuery } from './__generated__/Setti
 import type { SettingsBlockedProfilesQuery } from './__generated__/SettingsBlockedProfilesQuery.graphql';
 
 const SettingsBlockedProfilesQuery = graphql`
-  query SettingsBlockedProfilesQuery {
+  query SettingsBlockedProfilesQuery($withProfileBlocks: Boolean!) {
     currentSession {
       selectedProfile {
         id
         instance {
           kind
         }
-        ...SettingsBlockedProfiles_profile @arguments(count: 20)
+        ...SettingsBlockedProfiles_profile
+          @arguments(count: 20)
+          @alias(as: "profileBlocksFragment")
+          @include(if: $withProfileBlocks)
       }
     }
   }
@@ -73,33 +78,40 @@ type FocusIntent = Readonly<{ ownerProfileId: string; profileBlockId: string }>;
 
 let pendingFocusIntent: FocusIntent | null = null;
 
-export function SettingsBlockedProfiles() {
+export function SettingsBlockedProfiles({ headingRef }: { headingRef?: RefObject<View | null> }) {
   const actorLifecycleKey = useRelayActorLifecycleKey();
   return (
     <RouteBoundary
-      error={(retry) => <BlockedProfilesView state={{ onRetry: retry, status: 'error' }} />}
+      error={(retry) => (
+        <BlockedProfilesView headingRef={headingRef} state={{ onRetry: retry, status: 'error' }} />
+      )}
       key={actorLifecycleKey}
-      loading={<BlockedProfilesView state={{ status: 'loading' }} />}
+      loading={<BlockedProfilesView headingRef={headingRef} state={{ status: 'loading' }} />}
       title="차단한 프로필을 불러오지 못했어요"
     >
-      <SettingsBlockedProfilesContent />
+      <SettingsBlockedProfilesContent headingRef={headingRef} />
     </RouteBoundary>
   );
 }
 
-function SettingsBlockedProfilesContent() {
+function SettingsBlockedProfilesContent({ headingRef }: { headingRef?: RefObject<View | null> }) {
   const shellChrome = useShellChrome();
+  const { selectedProfileKind } = useSession();
+  const withProfileBlocks = selectedProfileKind === 'LOCAL';
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<SettingsBlockedProfilesQuery>(
     SettingsBlockedProfilesQuery,
-    {},
+    { withProfileBlocks },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const profile = data.currentSession?.selectedProfile;
   const pagination = usePaginationFragment<
     SettingsBlockedProfilesNextPageQuery,
     SettingsBlockedProfiles_profile$key
-  >(SettingsBlockedProfilesFragment, profile ?? null);
+  >(
+    SettingsBlockedProfilesFragment,
+    withProfileBlocks ? (profile?.profileBlocksFragment ?? null) : null,
+  );
   const [loadError, setLoadError] = useState(false);
   const edges = pagination.data?.profileBlocks.edges ?? [];
   const loadMore = useCallback(() => {
@@ -110,7 +122,7 @@ function SettingsBlockedProfilesContent() {
     pagination.loadNext(20, { onComplete: (error) => setLoadError(Boolean(error)) });
   }, [pagination.hasNext, pagination.isLoadingNext, pagination.loadNext]);
 
-  if (!profile || profile.instance.kind !== 'LOCAL') {
+  if (!withProfileBlocks || !profile || profile.instance.kind !== 'LOCAL') {
     return (
       <StateView
         actionLabel={shellChrome ? 'Profile 선택하기' : undefined}
@@ -121,6 +133,7 @@ function SettingsBlockedProfilesContent() {
   }
   return (
     <BlockedProfilesView
+      headingRef={headingRef}
       ownerProfileId={profile.id}
       state={{
         pagination: loadError
@@ -144,13 +157,14 @@ function SettingsBlockedProfilesContent() {
 }
 
 export function BlockedProfilesView({
+  headingRef,
   ownerProfileId,
   state,
 }: {
+  headingRef?: RefObject<View | null>;
   ownerProfileId?: string;
   state: BlockedProfilesState;
 }) {
-  const headingRef = useRef<View>(null);
   const removedFocus = useRef<{ profileBlockId: string } | null>(null);
 
   useEffect(() => {
@@ -169,10 +183,10 @@ export function BlockedProfilesView({
       if (pending?.profileBlockId === removed.profileBlockId) {
         pendingFocusIntent = null;
       }
-      headingRef.current?.focus();
+      headingRef?.current?.focus();
     }, 0);
     return () => clearTimeout(timer);
-  }, [state]);
+  }, [headingRef, ownerProfileId, state]);
 
   const rememberRemovedProfile = (profile: BlockedProfile) => {
     if (state.status !== 'loaded') {
