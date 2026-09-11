@@ -2,23 +2,21 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { SettingsMutedProfiles as SettingsMutedProfilesExport } from './SettingsMutedProfiles';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const focus = mock.fn();
 let profiles = [{ id: 'target-a', displayName: '별마루', relativeHandle: '@star' }];
-let platform = 'web';
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', {
   Platform: {
-    get OS() {
-      return platform;
-    },
+    OS: 'web',
   },
   StyleSheet: { create: <T>(styles: T) => styles },
   View: 'View',
@@ -61,7 +59,7 @@ mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
 });
 
-let SettingsMutedProfiles: ComponentType;
+let SettingsMutedProfiles: typeof SettingsMutedProfilesExport;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
@@ -70,7 +68,6 @@ before(async () => {
 
 afterEach(async () => {
   profiles = [{ id: 'target-a', displayName: '별마루', relativeHandle: '@star' }];
-  platform = 'web';
   focus.mock.resetCalls();
   if (renderer) {
     await act(async () => renderer?.unmount());
@@ -79,27 +76,10 @@ afterEach(async () => {
 });
 
 describe('뮤트한 프로필 설정 화면', () => {
-  it('Native 목록 fallback은 programmatic focus target을 제공한다', async () => {
-    platform = 'android';
+  it('뮤트 해제 성공으로 행이 사라진 뒤 semantic heading에 포커스를 옮긴다', async () => {
+    const headingRef = { current: { focus } } as never;
     await act(async () => {
-      renderer = create(createElement(SettingsMutedProfiles));
-    });
-
-    const list = renderer?.root.findByProps({ accessibilityLabel: '뮤트한 프로필 목록' });
-    assert.equal(list?.props.focusable, true);
-    assert.equal('tabIndex' in list!.props, false);
-  });
-
-  it('뮤트 해제 성공으로 행이 사라진 뒤 목록 fallback에 포커스를 옮긴다', async () => {
-    await act(async () => {
-      renderer = create(createElement(SettingsMutedProfiles), {
-        createNodeMock: (element) => {
-          const props = element.props as { accessibilityLabel?: string };
-          return element.type === 'View' && props.accessibilityLabel === '뮤트한 프로필 목록'
-            ? { focus }
-            : {};
-        },
-      });
+      renderer = create(createElement(SettingsMutedProfiles, { headingRef }));
     });
 
     const activeRenderer = renderer;
@@ -120,8 +100,12 @@ describe('뮤트한 프로필 설정 화면', () => {
     assert.equal(focus.mock.callCount(), 0);
 
     profiles = [];
-    await act(async () => renderer?.update(createElement(SettingsMutedProfiles)));
+    await act(async () => renderer?.update(createElement(SettingsMutedProfiles, { headingRef })));
 
     assert.equal(focus.mock.callCount(), 1);
+    assert.equal(
+      renderer?.root.findAllByProps({ accessibilityLabel: '뮤트한 프로필 목록' }).length,
+      0,
+    );
   });
 });
