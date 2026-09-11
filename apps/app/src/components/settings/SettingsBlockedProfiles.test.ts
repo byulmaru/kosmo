@@ -13,7 +13,6 @@ import type {
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
-const actionFocusCalls = new Map<string, ReturnType<typeof mock.fn>>();
 const toastCalls: Array<{ message: string; tone: string }> = [];
 const loadNext = mock.fn();
 let selectedProfile: object | null = { id: 'owner', instance: { kind: 'LOCAL' } };
@@ -31,8 +30,6 @@ mockModule('react-native', {
   ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('ScrollView', props, children),
   StyleSheet: { create: <T>(styles: T) => styles },
-  Text: ({ children, ...props }: { children?: ReactNode }) =>
-    createElement('Text', props, children),
   View: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('View', props, children),
 });
@@ -53,20 +50,17 @@ mockModule('react-relay', {
 });
 mockModule(new URL('../profile/FollowButton.tsx', import.meta.url), {
   FollowButton: ({
-    onActionRef,
     onUnblockSuccess,
     profile,
     profileBlock,
     size,
   }: {
-    onActionRef?: (node: unknown) => void;
     onUnblockSuccess?: () => void;
     profile: { relativeHandle: string };
     profileBlock: { id: string };
     size: string;
-  }) => {
-    onActionRef?.({ focus: () => actionFocusCalls.get(profileBlock.id)?.() });
-    return createElement(
+  }) =>
+    createElement(
       'Button',
       {
         onPress: onUnblockSuccess,
@@ -75,8 +69,7 @@ mockModule(new URL('../profile/FollowButton.tsx', import.meta.url), {
         size,
       },
       '차단 해제',
-    );
-  },
+    ),
 });
 mockModule(new URL('../profile/ProfileListItemContent.tsx', import.meta.url), {
   ProfileListItemContent: ({ children, ...props }: { children?: ReactNode }) =>
@@ -137,7 +130,6 @@ before(async () => {
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = null;
-  actionFocusCalls.clear();
   toastCalls.length = 0;
   loadNext.mock.resetCalls();
   selectedProfile = { id: 'owner', instance: { kind: 'LOCAL' } };

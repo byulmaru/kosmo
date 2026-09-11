@@ -792,6 +792,10 @@ describe('profile route parameter lifecycle', () => {
     await renderRoute('@blocked');
     assert.deepEqual(requireRendered('FollowButton').props.profileBlockStatus, profileBlockStatus);
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
+    assert.deepEqual(
+      requireRendered('ActionMenu').props.items.map((item: { label: string }) => item.label),
+      ['차단 해제'],
+    );
     await act(async () => requireRendered('FollowButton').props.onUnblockSuccess());
 
     profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };

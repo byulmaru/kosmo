@@ -28,7 +28,7 @@ let SettingsMutedProfiles: ComponentType;
 let renderer: ReactTestRenderer | null = null;
 
 mock.module('react-native', {
-  exports: { View: 'View' },
+  exports: { Platform: { OS: 'web' }, View: 'View' },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-relay', {
   exports: {
