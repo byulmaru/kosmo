@@ -11,7 +11,7 @@ import { ContentReportTargetType, InstanceKind, ProfileState } from '@kosmo/core
 import { decodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, isNotNull } from 'drizzle-orm';
-import { postAccessWhere } from '@/graphql/resolvers/post/access';
+import { directPostAccessWhere } from '@/graphql/resolvers/post/access';
 import { formatRelativeHandle } from '@/profile/identity';
 import { visibleProfileWhere } from '@/profile/visibility';
 import type { ContentReportReason } from '@kosmo/core/enums';
@@ -72,7 +72,7 @@ const resolvePostTarget = async (id: string, ctx: UserContext) => {
       and(
         eq(Posts.id, id),
         isNotNull(Posts.currentContentId),
-        postAccessWhere({ ctx, profileMute: 'ignore' }),
+        directPostAccessWhere({ ctx, profileMute: 'ignore' }),
       ),
     )
     .limit(1)

@@ -36,6 +36,7 @@ let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
@@ -59,8 +60,18 @@ const mutation = `
 `;
 
 before(async () => {
-  ({ AccountProfiles, Accounts, db, firstOrThrow, pg, PostContents, Posts, Profiles, Sessions } =
-    await import('@kosmo/core/db'));
+  ({
+    AccountProfiles,
+    Accounts,
+    db,
+    firstOrThrow,
+    pg,
+    PostContents,
+    ProfileBlocks,
+    Posts,
+    Profiles,
+    Sessions,
+  } = await import('@kosmo/core/db'));
   ({ seedDatabase } = await import('@kosmo/core/db/seed'));
   ({ deriveContext } = await import('../../../src/context'));
   ({ yoga } = await import('../../../src/graphql'));
@@ -266,6 +277,104 @@ test('Post report uses submit-time access and rejects an inaccessible target wit
 
   assert.deepEqual(rejected, { data: { submitContentReport: { status: 'REJECTED' } } });
   assert.equal(calls, 1);
+});
+
+test('A profile can report a Post from a profile it blocked, while the reverse report is rejected before Slack', async (t) => {
+  const blocker = await createAuthenticatedSession();
+  const blocked = await createAuthenticatedSession();
+  const blockedPost = await createPost(blocked.profile.id, PostVisibility.PUBLIC);
+  const blockerPost = await createPost(blocker.profile.id, PostVisibility.PUBLIC);
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: blocker.profile.id,
+    targetProfileId: blocked.profile.id,
+  });
+
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('ok', { status: 200 });
+  });
+
+  const delivered = await requestGraphQL<{
+    submitContentReport: { status: string };
+  }>(
+    mutation,
+    {
+      input: {
+        reason: 'SPAM_FRAUD',
+        targetId: encodeGlobalId('Post', blockedPost.id),
+        targetType: 'POST',
+      },
+    },
+    blocker.token,
+  );
+  assert.deepEqual(delivered, { data: { submitContentReport: { status: 'DELIVERED' } } });
+  assert.equal(calls, 1);
+  calls = 0;
+
+  const rejected = await requestGraphQL<{
+    submitContentReport: { status: string };
+  }>(
+    mutation,
+    {
+      input: {
+        reason: 'SPAM_FRAUD',
+        targetId: encodeGlobalId('Post', blockerPost.id),
+        targetType: 'POST',
+      },
+    },
+    blocked.token,
+  );
+  assert.deepEqual(rejected, { data: { submitContentReport: { status: 'REJECTED' } } });
+  assert.equal(calls, 0);
+});
+
+test('Mutual blocks reject Post reports from both profiles before Slack', async (t) => {
+  const first = await createAuthenticatedSession();
+  const second = await createAuthenticatedSession();
+  const firstPost = await createPost(first.profile.id, PostVisibility.PUBLIC);
+  const secondPost = await createPost(second.profile.id, PostVisibility.PUBLIC);
+  await db.insert(ProfileBlocks).values([
+    { ownerProfileId: first.profile.id, targetProfileId: second.profile.id },
+    { ownerProfileId: second.profile.id, targetProfileId: first.profile.id },
+  ]);
+
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('ok', { status: 200 });
+  });
+
+  const firstReport = await requestGraphQL<{
+    submitContentReport: { status: string };
+  }>(
+    mutation,
+    {
+      input: {
+        reason: 'SPAM_FRAUD',
+        targetId: encodeGlobalId('Post', secondPost.id),
+        targetType: 'POST',
+      },
+    },
+    first.token,
+  );
+  const secondReport = await requestGraphQL<{
+    submitContentReport: { status: string };
+  }>(
+    mutation,
+    {
+      input: {
+        reason: 'SPAM_FRAUD',
+        targetId: encodeGlobalId('Post', firstPost.id),
+        targetType: 'POST',
+      },
+    },
+    second.token,
+  );
+
+  assert.deepEqual(firstReport, { data: { submitContentReport: { status: 'REJECTED' } } });
+  assert.deepEqual(secondReport, { data: { submitContentReport: { status: 'REJECTED' } } });
+  assert.equal(calls, 0);
 });
 
 test('Other without details is rejected before target lookup and Slack', async (t) => {
