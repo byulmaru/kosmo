@@ -210,7 +210,7 @@ function SidebarControl({
               {busy ? (
                 <ActivityIndicator accessibilityLabel="로그아웃 처리 중" color={color} />
               ) : profile ? (
-                <Avatar imageUri={profile.imageUri ?? null} label={profile.label} size={24} />
+                <Avatar imageUri={profile.imageUri ?? null} label={profile.label} size={28} />
               ) : (
                 <Icon color={color} size={iconSizes[20]} strokeWidth={2} />
               )}

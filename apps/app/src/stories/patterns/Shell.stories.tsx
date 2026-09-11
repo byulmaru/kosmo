@@ -374,6 +374,7 @@ export const SharedNavigation: Story = {
     const canvas = within(canvasElement);
     const activeProfile = canvas.getByLabelText('활성 프로필');
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
+    const navigationArea = navigation.parentElement?.parentElement;
     const bookmarks = canvas.getByRole('link', { name: '북마크' });
     const search = canvas.getByRole('link', { name: '검색' });
     const profile = canvas.getByRole('link', { name: '프로필' });
@@ -387,6 +388,9 @@ export const SharedNavigation: Story = {
     const utilityVisualRect = utilityVisual.getBoundingClientRect();
     const activeProfileRect = activeProfile.getBoundingClientRect();
     const profileEditRect = profileEdit.getBoundingClientRect();
+    expect(navigationArea).not.toBeNull();
+    expect(getComputedStyle(navigationArea!).borderTopWidth).toBe('1px');
+    expect(getComputedStyle(navigationArea!).borderTopColor).toBe('rgb(236, 236, 240)');
     expect(bookmarks).toHaveAttribute('href', '/bookmarks');
     expect(window.getComputedStyle(searchVisual).backgroundColor).toBe('rgb(255, 249, 230)');
     expect(profile).toHaveAttribute('href', '/@selected');
@@ -471,6 +475,8 @@ export const BottomNavigation: Story = {
 export const CompactSidebar: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
+    const navigationArea = navigation.parentElement?.parentElement;
     const profile = canvas.getByRole('link', { name: '프로필' });
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
     expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
@@ -492,6 +498,13 @@ export const CompactSidebar: Story = {
     const avatarRect = avatar.getBoundingClientRect();
     const logoutRect = logout.getBoundingClientRect();
     const feedbackRect = feedback.getBoundingClientRect();
+    const sidebarRoot = trigger.parentElement?.parentElement;
+
+    expect(navigationArea).not.toBeNull();
+    expect(sidebarRoot).not.toBeNull();
+    expect(triggerRect.top - sidebarRoot!.getBoundingClientRect().top).toBe(24);
+    expect(navigationArea!.getBoundingClientRect().top - triggerRect.bottom).toBe(8);
+    expect(getComputedStyle(navigationArea!).borderTopWidth).toBe('0px');
 
     expect(settings).toBeInTheDocument();
     expect(settings).toHaveAttribute('href', '/settings');
@@ -2013,6 +2026,8 @@ export const UniversalMobileLongProfilePickerScroll: Story = {
     const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
 
     expect(drawer).toBeVisible();
+    expect(getComputedStyle(drawerScroll).borderTopWidth).toBe('1px');
+    expect(getComputedStyle(drawerScroll).borderTopColor).toBe('rgb(236, 236, 240)');
     expect(getComputedStyle(drawerScroll).overflowY).toBe('auto');
     expect(drawerScroll.scrollHeight).toBeGreaterThan(drawerScroll.clientHeight);
     expect(ownerDocument.body.style.overflow).toBe('hidden');
@@ -2329,8 +2344,13 @@ export const UniversalCompactFeedbackOverlay: Story = {
     const view = ownerDocument.defaultView;
     const page = within(ownerDocument.body);
     const feedbackButton = canvas.getByRole('button', { name: '피드백 보내기' });
+    const home = canvas.getByRole('link', { name: '홈' });
 
-    await userEvent.click(feedbackButton);
+    expect(home).toHaveAttribute('aria-current', 'page');
+    expect(feedbackButton).not.toHaveAttribute('aria-current');
+
+    feedbackButton.focus();
+    await userEvent.keyboard('{Enter}');
     const dialog = await page.findByRole('dialog', { name: '피드백 보내기' });
     const surface = page.getByTestId('feedback-overlay-surface');
     const shellRoot = canvasElement.querySelector('[data-testid="universal-shell-root"]');
@@ -2342,6 +2362,14 @@ export const UniversalCompactFeedbackOverlay: Story = {
 
     expect(canvas.getByText('홈 타임라인')).toBeInTheDocument();
     expect(dialog).toBeVisible();
+    expect(feedbackButton).toHaveAttribute('aria-current', 'page');
+    expect(home).not.toHaveAttribute('aria-current');
+    await waitFor(() =>
+      expect(
+        getComputedStyle(within(feedbackButton).getByTestId('sidebar-control-visual'))
+          .backgroundColor,
+      ).toBe('rgb(255, 249, 230)'),
+    );
     expect(shellRoot).toHaveAttribute('aria-hidden', 'true');
     expect(getComputedStyle(shellRoot).pointerEvents).toBe('none');
     expect(bounds.width).toBeLessThanOrEqual(600);
@@ -2351,6 +2379,8 @@ export const UniversalCompactFeedbackOverlay: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: '피드백 닫기' }));
     await waitFor(() => expect(page.queryByRole('dialog', { name: '피드백 보내기' })).toBeNull());
     expect(canvas.getByText('홈 타임라인')).toBeInTheDocument();
+    expect(home).toHaveAttribute('aria-current', 'page');
+    expect(feedbackButton).not.toHaveAttribute('aria-current');
   },
   render: () => (
     <View style={{ height: 900 }}>

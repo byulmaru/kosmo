@@ -5,6 +5,7 @@ import { graphql, useFragment } from 'react-relay';
 import { SidebarNavigation as SidebarNavigationPresentation } from '@/components/ui/SidebarNavigation';
 import { useLogout } from '@/session/logout';
 import { useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, space } from '@/theme/tokens';
 import { useNavigationGuard } from './NavigationGuardContext';
 import { NavigationLink } from './NavigationLink';
 import { ProfileSwitcher } from './ProfileSwitcher';
@@ -36,6 +37,7 @@ const SidebarNavigationFragment = graphql`
 
 type Props = {
   compact?: boolean;
+  feedbackActive?: boolean;
   onFeedbackOpen?: () => void;
   onHomeReselect?: () => void;
   onNavigate?: () => void;
@@ -58,6 +60,7 @@ const hrefs: Partial<Record<NavigationDestination, Href>> = {
 
 export function SidebarNavigation({
   compact = false,
+  feedbackActive = false,
   onFeedbackOpen,
   onHomeReselect,
   onNavigate,
@@ -74,9 +77,11 @@ export function SidebarNavigation({
   const profile = data.currentSession?.selectedProfile ?? null;
   const unreadNotificationCount = profile?.unreadNotificationCount ?? null;
   const profileHref = profile ? (`/${profile.relativeHandle}` as Href) : undefined;
-  const feedbackActive = pathname === '/feedback';
-  const feedbackUsesOverlay = Platform.OS === 'web' && !feedbackActive;
-  const currentDestination = getCurrentDestination(pathname, profileHref);
+  const feedbackRouteActive = pathname === '/feedback';
+  const feedbackUsesOverlay = Platform.OS === 'web' && !feedbackRouteActive;
+  const currentDestination = feedbackActive
+    ? 'feedback'
+    : getCurrentDestination(pathname, profileHref);
   const handleLogout = () => {
     if (!requestNavigation(logout)) {
       logout();
@@ -157,7 +162,11 @@ export function SidebarNavigation({
       />
       <ScrollView
         contentContainerStyle={styles.navigationContent}
-        style={[styles.navigationArea, { borderColor: 'transparent' }]}
+        style={[
+          styles.navigationArea,
+          compact ? styles.compactNavigationArea : styles.wideNavigationArea,
+          !compact ? { borderColor: theme.borderSubtle } : undefined,
+        ]}
         testID={surface === 'drawer' ? 'mobile-sidebar-scroll' : undefined}
       >
         <SidebarNavigationPresentation
@@ -210,9 +219,11 @@ function getCurrentDestination(
 
 const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0 },
-  compactRoot: { alignItems: 'center', width: 80 },
+  compactRoot: { alignItems: 'center', paddingTop: space[24], width: 80 },
   fullRoot: { width: 320 },
   nativeDrawerRoot: { width: '100%' },
   navigationArea: { flex: 1, minHeight: 0 },
+  compactNavigationArea: { marginTop: space[8] },
+  wideNavigationArea: { borderTopWidth: borderWidths[1] },
   navigationContent: { flexGrow: 1, width: '100%' },
 });
