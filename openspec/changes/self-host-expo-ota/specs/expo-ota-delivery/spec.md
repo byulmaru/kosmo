@@ -24,7 +24,7 @@
 
 ### Requirement: Static R2 serves complete immutable releases
 
-**Authority / Provenance:** `PROD-331`, `PROD-332`, `PROD-334`, `PROD-335`. R2 MUST retain content-addressed assets as immutable content and MUST serve a multipart manifest only after every referenced asset has been uploaded and read-back verified. The fixed tuple `manifest.json` object MAY be replaced only with a complete signed release record; delivery MUST NOT mutate the bytes at an already-published asset identity. A manifest or asset publication failure MUST leave the previously serving complete release available.
+**Authority / Provenance:** `PROD-331`, `PROD-332`, `PROD-334`, `PROD-335`. R2 MUST retain content-addressed assets as immutable content and MUST serve a multipart manifest only after every referenced asset has either been uploaded with its precomputed SHA-256 in standard Base64 supplied to `PutObject` for server-side verification or been reused as an existing immutable object after an `IfNoneMatch: "*"` upload returns HTTP 412. The fixed tuple `manifest.json` object MAY be replaced only with a complete signed release record; delivery MUST NOT mutate the bytes at an already-published asset identity. A manifest or asset publication failure MUST leave the previously serving complete release available.
 
 #### Scenario: Publish a complete fixed manifest
 

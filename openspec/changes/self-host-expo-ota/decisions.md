@@ -95,7 +95,7 @@
 - Authority / Provenance: `PROD-331`, `PROD-332`, `PROD-334`, `PROD-335`, `PROD-336`
 - Status: Active
 - Context / Problem: partial upload 또는 mutable asset URL은 fixed tuple manifest가 존재하지 않는 파일이나 서로 다른 bytes를 가리키게 한다.
-- Decision Outcome: static R2 asset과 multipart manifest를 complete-release gate로 검증한다. content-addressed asset bytes는 immutable로 유지하고, 모든 referenced asset의 upload/read-back 검증이 끝난 뒤에만 fixed tuple `manifest.json` object를 새 signed release record로 교체한다. Deploy workflow는 논리적으로 선택한 `dev` 또는 `prod` mapping을 generic safe channel segment로 전달한다. Promotion/recovery invariants는 장기 계약으로 보존하되 현재 구현에서는 보류한다.
+- Decision Outcome: static R2 asset과 multipart manifest를 complete-release gate로 검증한다. content-addressed asset bytes는 immutable로 유지하고, 새 asset upload에는 사전 계산한 SHA-256 표준 Base64를 R2 `PutObject`에 전달해 서버 검증하며, 이미 존재하는 immutable asset은 `IfNoneMatch: "*"`의 412 응답으로 재사용한다. 모든 asset의 upload 성공 또는 기존 존재 확인 뒤 fixed tuple `manifest.json` object를 새 signed release record로 교체한다. Deploy workflow는 논리적으로 선택한 `dev` 또는 `prod` mapping을 generic safe channel segment로 전달한다. Promotion/recovery invariants는 장기 계약으로 보존하되 현재 구현에서는 보류한다.
 - Alternatives Considered: manifest object를 먼저 변경하거나 published asset을 덮어써서 빠르게 rollback하는 방식은 client별 partial state를 만들 수 있으므로 제외한다.
 - Consequences: release pipeline은 complete-release gate, immutable asset content identity, channel-specific multipart manifest identity evidence를 제공해야 한다. fixed manifest object는 현재 release를 가리키는 serving record이며, 그 교체는 complete signed release로 제한한다. Native Store binary upload은 이 release publication과 별도다.
 - Confirmation / Follow-up: PROD-335 deploy publish 결과와 PROD-336 실기기 fallback 증거를 연결한다. promotion/recovery 결과는 보류 해제 후 연결한다.

@@ -1,17 +1,19 @@
 # Expo OTA 운영
 
-`kosmo-native`의 Expo OTA는 Docker 배포가 성공한 뒤 같은 source SHA를 사용해
-Android와 iOS 업데이트를 export하고 publisher reusable workflow에 전달한다. Native module,
-SDK, entitlement, permission 또는 그 밖의 native 설정이 바뀐 release는 OTA가 아니라 새
-Store binary 경로를 사용한다.
+`kosmo-native`의 Expo OTA는 Docker Build가 성공한 같은 source SHA를 사용해 Android와 iOS
+업데이트를 export하고 publisher reusable workflow에 전달한다. Deploy Dev에서는 두
+platform export가 Argo 배포와 병렬로 시작하고, 각 publish는 Argo 배포와 자신의 export가
+성공한 뒤 시작한다. Native module, SDK, entitlement, permission 또는 그 밖의 native
+설정이 바뀐 release는 OTA가 아니라 새 Store binary 경로를 사용한다.
 
 ## 책임과 release tuple
 
-Kosmo는 승인된 source checkout, Expo CLI export와 artifact handoff를 소유한다.
-`byulmaru/expo-ota` reusable workflow는 artifact를 내려 받아 R2 credential을 읽고 caller가
-제공한 `signing_private_key`를 사용해 static `multipart/mixed` manifest와 immutable asset을
-발행한다. Publisher는 signing key의 저장 경로나 provider를 결정하지 않는다. Client와 static
-delivery에는 private key나 publish credential을 넣지 않는다.
+Kosmo는 승인된 source checkout, Expo CLI export와 artifact handoff를 소유하고, local
+`.github/workflows/expo-ota.yml` reusable workflow는 한 platform의 export와 artifact를
+담당한다. `byulmaru/expo-ota` reusable workflow는 artifact를 내려 받아 R2 credential을 읽고
+caller가 제공한 `signing_private_key`를 사용해 static `multipart/mixed` manifest와 immutable
+asset을 발행한다. Publisher는 signing key의 저장 경로나 provider를 결정하지 않는다. Client와
+static delivery에는 private key나 publish credential을 넣지 않는다.
 
 모든 release는 다음 tuple로 식별한다.
 
@@ -39,13 +41,15 @@ Manifest는 Expo protocol headers를 포함한 `multipart/mixed` 응답으로 �
 
 ## 자동 release 경로
 
-정상 OTA publish는 두 배포 caller가 성공한 뒤 자동으로 시작한다.
-`.github/workflows/deploy-dev.yml`과 `.github/workflows/production-release.yml`이
-배포 성공 뒤 reusable workflow인 `.github/workflows/expo-ota.yml`을 호출한다. Android와
-iOS publish job은 기존 job-level reusable workflow 호출을 유지한다. 두 caller는
-Kosmo repository secret `EXPO_OTA_SIGNING_PRIVATE_KEY`를 local reusable workflow의
-`signing_private_key`로 전달하고, local workflow는 이를 public publisher의 동일한 secret
-이름으로 전달한다. Secret은 2026-09-10 10:06:24 UTC에 등록했다. 실제 publish 실행은 아직 검증하지 않았다.
+Deploy Dev의 Docker Build가 성공하면 Android와 iOS export가 `update_dev` Argo 배포와
+병렬로 시작한다. 각 publish는 `update_dev`와 자신의 platform export가 성공한 뒤 자동으로
+시작한다. Production Release는 기존 `canonical_preflight`와 `production_deploy`가 성공한
+뒤 Android와 iOS export 및 publish를 시작한다. 두 caller는 platform별로 local reusable
+workflow인 `.github/workflows/expo-ota.yml`을 호출하고, 각 publish job은
+`byulmaru/expo-ota` public reusable workflow를 직접 호출한다. Publish job은 Kosmo
+repository secret `EXPO_OTA_SIGNING_PRIVATE_KEY`를 public publisher의 `signing_private_key`
+로 전달한다. Secret은 2026-09-10 10:06:24 UTC에 등록했다. 실제 publish 실행은 아직 검증하지
+않았다.
 
 | 호출 workflow      | 성공한 배포            | OTA channel | source SHA                       |
 | ------------------ | ---------------------- | ----------- | -------------------------------- |
@@ -59,12 +63,12 @@ OTA 호출에 선행한다. OTA에 별도의 두 번째 production approval을 �
 
 Android와 iOS export job은 각각 `pnpm exec expo-updates runtimeversion:resolve`로 해당
 platform의 `runtimeVersion`을 얻고, `pnpm exec expo export --clear`로 artifact를 만든다.
-각 platform publish job은 자신의 export가 성공하면 해당 artifact를 publisher reusable
-workflow에 전달한다. Publisher는 Expo Metro
+각 platform publish job은 자신의 export가 성공하고 caller의 배포 gate를 통과하면 해당
+artifact와 runtimeVersion을 public publisher reusable workflow에 전달한다. Publisher는 Expo Metro
 `metadata.json`과 참조된 파일을 읽어 export를 검증하고, 실제 bundle과 asset bytes를
-hashing한 뒤 signed immutable release를 R2에 기록하고 read-back한다.
+hashing한 뒤 사전 계산한 SHA-256 표준 Base64를 각 R2 `PutObject`에 전달해 서버 검증을 수행하며 signed immutable release를 R2에 기록한다.
 
-Publisher의 prepublish read-back/hash 검증, manifest signing 또는 R2 write가 실패하면
+Publisher의 R2 upload SHA-256 서버 검증, manifest signing 또는 R2 write가 실패하면
 해당 OTA workflow가 실패한다. 이 workflow는 별도의 provenance 파일을 만들거나 publish
 후 public edge를 다시 조회하지 않는다. Static host가 실제로 응답하는지와 Store binary가
 device에서 update, rejection, offline fallback을 수행하는지는 별도 운영 evidence로
@@ -110,7 +114,7 @@ trust를 추가하지 않는다.
 
 - workflow run ID, caller workflow ref와 source SHA
 - project, platform, OTA channel, runtimeVersion과 keyid
-- publisher read-back/hash 결과와 publish job 결과
+- publisher의 R2 upload SHA-256 검증 결과와 publish job 결과
 - production release의 Environment 승인과 동일한 source SHA
 
 Android는 PROD-886 Google Play Alpha, iOS는 PROD-876 TestFlight seed path에서 Store binary와
