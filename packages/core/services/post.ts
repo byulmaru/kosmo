@@ -9,6 +9,7 @@ import {
   isUniqueViolation,
   Media,
   PostContents,
+  PostMentions,
   Posts,
   ProfileBlocks,
   ProfileFollows,
@@ -699,6 +700,24 @@ export async function createPost(
         })
         .returning()
         .then(firstOrThrow);
+
+      const mentionProfileIds = new Set(
+        document.body.content.flatMap((block) =>
+          block.type === 'paragraph'
+            ? (block.content ?? []).flatMap((node) =>
+                node.type === 'mention' ? [node.attrs.profileId] : [],
+              )
+            : [],
+        ),
+      );
+      if (mentionProfileIds.size > 0) {
+        await tx.insert(PostMentions).values(
+          [...mentionProfileIds].map((profileId) => ({
+            postContentId: content.id,
+            profileId,
+          })),
+        );
+      }
 
       validatePostStructure({
         currentContentId: content.id,

@@ -10,6 +10,9 @@ import {
   validateLocalPostContentDocument,
 } from './server';
 
+const aliceProfileId = '019f6678-86fa-709b-984e-1520766b8441';
+const otherProfileId = '019f6678-86fa-709b-984e-1520766b8442';
+
 function serializeJson(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
 }
@@ -364,6 +367,98 @@ test('compares canonical body and summary meaning', () => {
   assert.equal(arePostContentRevisionsEqual(first, { ...second, summary: 'warning' }), false);
 });
 
+test('preserves Mention labels in text and distinguishes Profile identities', () => {
+  const first = canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Hello ' },
+            {
+              type: 'mention',
+              attrs: {
+                label: '@alice',
+                profileId: aliceProfileId,
+              },
+            },
+          ],
+        },
+      ],
+    },
+  });
+  const formattingEquivalent = {
+    ...first,
+    body: {
+      ...first.body,
+      content: [
+        {
+          type: 'paragraph' as const,
+          content: [
+            { type: 'text' as const, text: 'Hello ' },
+            {
+              type: 'mention' as const,
+              attrs: {
+                label: '@alice',
+                profileId: aliceProfileId,
+              },
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  assert.equal(postContentDocumentToText(first), 'Hello @alice');
+  assert.equal(arePostContentRevisionsEqual(first, formattingEquivalent), true);
+  assert.equal(
+    arePostContentRevisionsEqual(first, {
+      ...first,
+      body: {
+        ...first.body,
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Hello ' },
+              {
+                type: 'mention',
+                attrs: {
+                  label: '@alice',
+                  profileId: otherProfileId,
+                },
+              },
+            ],
+          },
+        ],
+      },
+    }),
+    false,
+  );
+});
+
+test('rejects Mention attrs without a valid Profile identity or visible label', () => {
+  for (const attrs of [
+    { label: '@alice', profileId: 'not-a-uuid' },
+    { label: '', profileId: aliceProfileId },
+    { label: '\u0000', profileId: aliceProfileId },
+  ]) {
+    assert.throws(() =>
+      canonicalizePostContentDocument({
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'mention', attrs }] }],
+        },
+      }),
+    );
+  }
+});
+
 test('native-safe guard accepts additive V1 properties while validating consumed values', () => {
   assert.equal(isPostContentDocumentV1(postContentDocumentFromText('body')), true);
   assert.equal(
@@ -469,5 +564,33 @@ test('validates the combined local summary and body length', () => {
         { mediaId: '019f6678-86fa-709b-984e-1520766b8447' },
       ]),
     ),
+  );
+});
+
+test('rejects inbound Mention nodes from the local Post Content validator', () => {
+  assert.throws(
+    () =>
+      validateLocalPostContentDocument({
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'mention',
+                  attrs: {
+                    label: '@alice',
+                    profileId: aliceProfileId,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    /Local PostContent cannot contain Mention nodes/,
   );
 });

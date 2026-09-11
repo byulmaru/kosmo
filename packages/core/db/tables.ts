@@ -5,6 +5,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   unique,
   uniqueIndex,
@@ -376,6 +377,22 @@ export const PostContents = pgTable(
     createdAt: createdAt(),
   },
   (table) => [index().on(table.postId)],
+);
+
+export const PostMentions = pgTable(
+  'post_mentions',
+  {
+    postContentId: uuid('post_content_id')
+      .notNull()
+      .references(() => PostContents.id, { onDelete: 'cascade' }),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.postContentId, table.profileId] }),
+    index().on(table.profileId),
+  ],
 );
 
 export const Profiles = pgTable(

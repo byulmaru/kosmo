@@ -1,8 +1,14 @@
 import { MIMEType } from 'node:util';
 import { JSDOM } from 'jsdom';
 import { DOMParser as ProseMirrorDOMParser } from 'prosemirror-model';
-import { normalizePostContentPlainText, postContentSchemaVersion } from './post-content/index';
+import {
+  normalizePostContentMentionLabel,
+  normalizePostContentPlainText,
+  normalizePostContentProfileId,
+  postContentSchemaVersion,
+} from './post-content/index';
 import { postContentSchema } from './post-content/schema';
+import { normalizeLinkHref } from './post-content/schema/marks/link';
 import {
   canonicalizePostContentDocument,
   postContentDocumentFromText,
@@ -12,15 +18,18 @@ import type { PostContentBodyDocumentV1, PostContentDocumentV1 } from './post-co
 
 export interface RemoteNoteContentInput {
   content: string | null;
+  mentions?: readonly RemoteNoteMentionCandidate[];
   summary: string | null;
   mediaType: string | null;
 }
 
+export interface RemoteNoteMentionCandidate {
+  readonly label: string | null;
+  readonly targetHref: string;
+  readonly profileId: string;
+}
+
 const schemaDOMParser = ProseMirrorDOMParser.fromSchema(postContentSchema);
-const remoteNoteDOMParser = new ProseMirrorDOMParser(postContentSchema, [
-  { tag: 'pre', node: 'paragraph', preserveWhitespace: 'full' },
-  ...schemaDOMParser.rules,
-]);
 
 export const remoteNoteContentMaxLength = 10_000;
 
@@ -31,14 +40,83 @@ export class RemoteNoteContentLengthExceededError extends RangeError {
   }
 }
 
-function htmlToBodyDocument(html: string): PostContentBodyDocumentV1 {
+function htmlToBodyDocument(
+  html: string,
+  mentions: readonly RemoteNoteMentionCandidate[] = [],
+): PostContentBodyDocumentV1 {
   const fragment = JSDOM.fragment(html);
 
   for (const element of fragment.querySelectorAll('[hidden]')) {
     element.remove();
   }
 
+  const normalizedCandidates = mentions.flatMap((candidate) => {
+    const label = normalizeMentionLabel(candidate.label);
+    if (label === null) {
+      return [];
+    }
+
+    let targetHref: string;
+    try {
+      targetHref = normalizeLinkHref(candidate.targetHref);
+    } catch {
+      return [];
+    }
+
+    let profileId: string;
+    try {
+      profileId = normalizePostContentProfileId(candidate.profileId);
+    } catch {
+      return [];
+    }
+
+    return [{ label, targetHref, profileId }];
+  });
+
+  const remoteNoteDOMParser = new ProseMirrorDOMParser(postContentSchema, [
+    { tag: 'pre', node: 'paragraph', preserveWhitespace: 'full' },
+    {
+      tag: 'a[href]',
+      node: 'mention',
+      getAttrs(element) {
+        let href: string;
+        try {
+          href = normalizeLinkHref(element.getAttribute('href'));
+        } catch {
+          return false;
+        }
+
+        const label = normalizeMentionLabel(element.textContent ?? '');
+        if (label === null) {
+          return false;
+        }
+
+        const candidate = normalizedCandidates.find(
+          (item) => item.label === label && item.targetHref === href,
+        );
+        if (!candidate) {
+          return false;
+        }
+
+        return { label, profileId: candidate.profileId };
+      },
+    },
+    ...schemaDOMParser.rules,
+  ]);
+
   return remoteNoteDOMParser.parse(fragment).toJSON() as PostContentBodyDocumentV1;
+}
+
+function normalizeMentionLabel(value: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+
+  try {
+    return normalizePostContentMentionLabel(value);
+  } catch {
+    return null;
+  }
 }
 
 function mediaTypeEssence(mediaType: string | null): string {
@@ -49,7 +127,11 @@ function mediaTypeEssence(mediaType: string | null): string {
   }
 }
 
-function projectBody(value: string | null, mediaType: string | null): PostContentBodyDocumentV1 {
+function projectBody(
+  value: string | null,
+  mediaType: string | null,
+  mentions: readonly RemoteNoteMentionCandidate[],
+): PostContentBodyDocumentV1 {
   if (value === null) {
     return postContentDocumentFromText('').body;
   }
@@ -59,7 +141,7 @@ function projectBody(value: string | null, mediaType: string | null): PostConten
     return postContentDocumentFromText(value).body;
   }
   if (essence === 'text/html') {
-    return htmlToBodyDocument(value);
+    return htmlToBodyDocument(value, mentions);
   }
   throw new TypeError(`Unsupported remote Note media type: ${essence}`);
 }
@@ -84,13 +166,14 @@ function projectSummary(value: string | null): string | null {
 
 export function projectRemoteNoteContent({
   content,
+  mentions = [],
   summary,
   mediaType,
 }: RemoteNoteContentInput): PostContentDocumentV1 {
   const document = canonicalizePostContentDocument({
     version: postContentSchemaVersion,
     summary: projectSummary(summary),
-    body: projectBody(content, mediaType),
+    body: projectBody(content, mediaType, mentions),
   });
 
   const plainTextLength =

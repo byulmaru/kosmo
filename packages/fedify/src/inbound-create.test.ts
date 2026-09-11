@@ -15,6 +15,7 @@ import {
   Document,
   Image,
   LanguageString,
+  Mention,
   Note,
   Person,
   PUBLIC_COLLECTION,
@@ -65,6 +66,7 @@ let Media: typeof CoreDb.Media;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
@@ -89,6 +91,7 @@ describe('inbound Create dispatch', () => {
       Notifications,
       pg,
       PostContents,
+      PostMentions,
       Posts,
       ProfileFollows,
       ProfileMedia,
@@ -149,6 +152,191 @@ describe('inbound Create dispatch', () => {
     assert.equal(post.visibility, 'UNLISTED');
     assert.equal(content.document.summary, 'Content warning');
     assert.equal(postContentDocumentToText(content.document), 'Hello');
+  });
+
+  test('projects a typed Mention through inbound Create into the revision-owned relation', async () => {
+    const profile = await createStoredRemoteActor();
+    const objectUri = new URL('https://remote.example/notes/mention');
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: '<p>Hello <a href="https://remote.example/users/alice">@alice</a></p>',
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [
+        new Mention({
+          href: remoteActorUri,
+          name: '@alice',
+        }),
+      ],
+      to: PUBLIC_COLLECTION,
+    });
+
+    await handleInboundCreate(
+      createContext(),
+      new Create({ actor: remoteActorUri, object: note }),
+      receivedAt,
+    );
+
+    const { content, post } = await getMaterializedPost(objectUri);
+    assert.ok(post.currentContentId);
+    assert.deepEqual(content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          { text: 'Hello ', type: 'text' },
+          {
+            attrs: {
+              label: '@alice',
+              profileId: profile.id,
+            },
+            type: 'mention',
+          },
+        ],
+      },
+    ]);
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: content.id, profileId: profile.id },
+    ]);
+  });
+
+  test('preserves unresolved, mismatched, or malformed typed Mentions as safe links', async () => {
+    await createStoredRemoteActor();
+    const mismatchedTarget = new URL('https://remote.example/users/alice-mismatch');
+    const unresolvedTarget = new URL('https://unknown.example/users/bob');
+    const malformedLabelTarget = remoteActorUri;
+    const objectUri = new URL('https://remote.example/notes/unresolved-mention');
+    const note = new Note({
+      attribution: remoteActorUri,
+      content:
+        `<p><a href="${mismatchedTarget.href}">@alice</a> ` +
+        `<a href="${unresolvedTarget.href}">@bob</a> ` +
+        `<a href="${malformedLabelTarget.href}">@bad</a></p>`,
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [
+        new Mention({
+          href: remoteActorUri,
+          name: '@alice',
+        }),
+        new Mention({
+          href: unresolvedTarget,
+          name: '@bob',
+        }),
+        new Mention({
+          href: malformedLabelTarget,
+          name: '\u0001',
+        }),
+      ],
+      to: PUBLIC_COLLECTION,
+    });
+    const profileCount = (await db.select().from(Profiles)).length;
+    const actorCount = (await db.select().from(ActivityPubActors)).length;
+    const instanceCount = (await db.select().from(Instances)).length;
+    const fetchMock = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Unresolved Mention must not trigger remote lookup');
+    });
+
+    try {
+      await handleInboundCreate(
+        createContext(),
+        new Create({ actor: remoteActorUri, object: note }),
+        receivedAt,
+      );
+    } finally {
+      fetchMock.mock.restore();
+    }
+
+    const { content } = await getMaterializedPost(objectUri);
+    assert.deepEqual(content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            marks: [{ attrs: { href: mismatchedTarget.href }, type: 'link' }],
+            text: '@alice',
+            type: 'text',
+          },
+          { text: ' ', type: 'text' },
+          {
+            marks: [{ attrs: { href: unresolvedTarget.href }, type: 'link' }],
+            text: '@bob',
+            type: 'text',
+          },
+          { text: ' ', type: 'text' },
+          {
+            marks: [{ attrs: { href: malformedLabelTarget.href }, type: 'link' }],
+            text: '@bad',
+            type: 'text',
+          },
+        ],
+      },
+    ]);
+    assert.deepEqual(await db.select().from(PostMentions), []);
+    assert.equal((await db.select().from(Profiles)).length, profileCount);
+    assert.equal((await db.select().from(ActivityPubActors)).length, actorCount);
+    assert.equal((await db.select().from(Instances)).length, instanceCount);
+    assert.equal(fetchMock.mock.callCount(), 0);
+  });
+
+  test('preserves Mention, Content Warning, and an attached Image in one inbound Post', async () => {
+    const profile = await createStoredRemoteActor();
+    const objectUri = new URL('https://remote.example/notes/mention-with-media');
+    const mediaUri = new URL('https://remote.example/media/mention.webp');
+    const note = new Note({
+      attachments: [
+        new Image({
+          mediaType: 'image/webp',
+          name: 'Mention image',
+          url: mediaUri,
+        }),
+      ],
+      attribution: remoteActorUri,
+      content: '<p><a href="https://remote.example/users/alice">@alice</a> body</p>',
+      id: objectUri,
+      mediaType: 'text/html',
+      summary: '<p>Content warning</p>',
+      tags: [
+        new Mention({
+          href: remoteActorUri,
+          name: '@alice',
+        }),
+      ],
+      to: PUBLIC_COLLECTION,
+    });
+
+    await handleInboundCreate(
+      createContext(),
+      new Create({ actor: remoteActorUri, object: note }),
+      receivedAt,
+    );
+
+    const { content } = await getMaterializedPost(objectUri);
+    const media = await db.select().from(Media).then(firstOrThrow);
+    assert.equal(content.document.summary, 'Content warning');
+    assert.deepEqual(content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            attrs: {
+              label: '@alice',
+              profileId: profile.id,
+            },
+            type: 'mention',
+          },
+          { text: ' body', type: 'text' },
+        ],
+      },
+      { attrs: { mediaId: media.id }, type: 'media' },
+    ]);
+    assert.equal(postContentDocumentToText(content.document), '@alice body');
+    assert.deepEqual(
+      { altText: media.altText, mediaType: media.mediaType, url: media.url },
+      { altText: 'Mention image', mediaType: 'image/webp', url: mediaUri.href },
+    );
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: content.id, profileId: profile.id },
+    ]);
   });
 
   test('materializes a public hydrated original from its stored attributed author', async () => {
@@ -2131,15 +2319,17 @@ describe('inbound Create dispatch', () => {
   });
 
   test('keeps the first content, visibility, and timestamps for duplicate Create', async () => {
-    await createStoredRemoteActor();
+    const profile = await createStoredRemoteActor();
+    const mentionLabel = '@alice';
     const publishedAt = Temporal.Instant.from('2026-07-15T12:00:00Z');
     const first = new Note({
       attribution: remoteActorUri,
-      content: '<p>First</p>',
+      content: `<p>First <a href="${remoteActorUri.href}">${mentionLabel}</a></p>`,
       id: remoteObjectUri,
       mediaType: 'text/html',
       published: publishedAt,
       summary: '<p>Content warning</p>',
+      tags: [new Mention({ href: remoteActorUri, name: mentionLabel })],
       to: PUBLIC_COLLECTION,
     });
 
@@ -2161,10 +2351,13 @@ describe('inbound Create dispatch', () => {
           object: new Note({
             attribution: remoteActorUri,
             cc: PUBLIC_COLLECTION,
-            content: 'Changed',
+            content:
+              `<div>\n  <p>First <a class="h-card" href="${remoteActorUri.href}">` +
+              `<span>${mentionLabel}</span></a></p>\n</div>`,
             id: remoteObjectUri,
-            mediaType: 'text/plain',
+            mediaType: 'text/html',
             published: receivedAt.add({ hours: 1 }),
+            tags: [new Mention({ href: remoteActorUri, name: mentionLabel })],
           }),
         }),
         receivedAt.add({ hours: 2 }),
@@ -2193,8 +2386,11 @@ describe('inbound Create dispatch', () => {
     assert.equal(mapping.publishedAt?.toString(), publishedAt.toString());
     assert.equal(content.createdAt.toString(), receivedAt.toString());
     assert.equal(content.document.summary, 'Content warning');
-    assert.equal(postContentDocumentToText(content.document), 'First');
+    assert.equal(postContentDocumentToText(content.document), `First ${mentionLabel}`);
     assert.equal((await db.select().from(PostContents)).length, 1);
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: content.id, profileId: profile.id },
+    ]);
 
     const futureObjectUri = new URL('https://remote.example/notes/future');
     const futurePublishedAt = receivedAt.add({ hours: 24 });

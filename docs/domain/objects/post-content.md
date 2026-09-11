@@ -3,15 +3,15 @@
 ## 정의
 
 Post Content는 Post의 작성 내용을 한 시점에 보존하는 immutable revision이다. Content Warning, 본문,
-Sensitive Media와 순서가 있는 Media 참조를 하나의 canonical Content Document로 소유한다. Post는 현재
-Post Content를 가리키며, 작성 내용을 수정하면 기존 revision을 바꾸지 않고 새 Post Content를 만든다.
+Sensitive Media, typed Mention과 순서가 있는 Media 참조를 하나의 canonical Content Document로 소유한다. Post는
+현재 Post Content를 가리키며, 작성 내용을 수정하면 기존 revision을 바꾸지 않고 새 Post Content를 만든다.
 
 ## 속성
 
-| 속성             | 타입/nullability | 검증 정책                                                                                                                                                                                                                                                                                                                                                               | 존재 조건 | 조회 조건           | 조회 권한 |
-| ---------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------- | --------- |
-| Content Document | Versioned JSON   | `{ version, summary, body }`; `version`은 breaking schema version이며 revision 번호가 아니다. V1 `summary`는 nullable Plain Text Content Warning이고 `body`는 ProseMirror document다. V1은 기존 paragraph/text/hard-break/link와 additive한 Media node를 지원한다. Local Post의 summary와 body Plain Text 합계는 500자 이하이며 Media가 없으면 body가 비어 있을 수 없다 | 항상      | Post 조회 정책 통과 | 없음      |
-| 생성 시각        | 시각, 필수       | revision 생성 결과로 기록하며 변경 불가                                                                                                                                                                                                                                                                                                                                 | 항상      | Post 조회 정책 통과 | 없음      |
+| 속성             | 타입/nullability | 검증 정책                                                                                                                                                                                                                                                                                                                                                                                                                        | 존재 조건 | 조회 조건           | 조회 권한 |
+| ---------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------- | --------- |
+| Content Document | Versioned JSON   | `{ version, summary, body }`; `version`은 breaking schema version이며 revision 번호가 아니다. V1 `summary`는 nullable Plain Text Content Warning이고 `body`는 ProseMirror document다. V1은 기존 paragraph/text/hard-break/link와 additive한 Media node를 지원하며, 검증된 inbound typed Mention은 additive node로 보존한다. Local Post의 summary와 body Plain Text 합계는 500자 이하이며 Media가 없으면 body가 비어 있을 수 없다 | 항상      | Post 조회 정책 통과 | 없음      |
+| 생성 시각        | 시각, 필수       | revision 생성 결과로 기록하며 변경 불가                                                                                                                                                                                                                                                                                                                                                                                          | 항상      | Post 조회 정책 통과 | 없음      |
 
 V1 Media node는 `mediaId`를 attr로 가지며 body 안의 위치가 표시 순서를 결정한다. 하나의
 document는 Media node를 최대 4개 가질 수 있다. V1 document root의 `sensitiveMedia` attr는 모든 Media node의
@@ -33,7 +33,8 @@ UTF-16 길이(`.length`) 합계가 10,000자 이하일 때 수신할 수 있다.
 이 문자 수 정책과 구분한다. 문자 수 검사만으로 파싱이나 네트워크 자원 소비가 제한되지는 않는다.
 
 ActivityPub 표현은 Content Document의 저장 구조를 그대로 직렬화하지 않는다. paragraph, text, hard break와
-link는 Media node를 제외한 안전한 HTML `Note.content`로 투영하고, Media node는 document 순서대로
+link는 Media node를 제외한 안전한 HTML `Note.content`로 투영하고, Mention node는 정규화된 label text만
+투영하며, Media node는 document 순서대로
 `Note.attachment`의 Image로 투영한다. `mediaId`는 외부에 노출하지 않고 조회 시점에 접근 가능한 Media URL과
 MIME type으로 바꾸며 Media의 nullable Alt Text는 Image의 사람이 읽을 수 있는 이름으로 제공한다. document root의
 `sensitiveMedia`는 지원하는 ActivityPub sensitive 속성으로 투영한다. 내부 document의 정확한 Media 삽입
@@ -47,15 +48,26 @@ Media와 같은 순서의 Media node로 투영하고 초과분은 무시한다. 
 
 ## 관계
 
-| 관계             | 대상                | 방향                  | cardinality | 존재 조건                       | 조회 조건           | 조회 권한 |
-| ---------------- | ------------------- | --------------------- | ----------- | ------------------------------- | ------------------- | --------- |
-| Post             | [Post](./post.md)   | Post Content -> Post  | 1 -> 1      | 항상                            | Post 조회 정책 통과 | 없음      |
-| Referenced Media | [Media](./media.md) | Post Content -> Media | 1 -> 0..4   | document에 Media node가 있을 때 | Post 조회 정책 통과 | 없음      |
+| 관계              | 대상                    | 방향                    | cardinality | 존재 조건                                      | 조회 조건           | 조회 권한 |
+| ----------------- | ----------------------- | ----------------------- | ----------- | ---------------------------------------------- | ------------------- | --------- |
+| Post              | [Post](./post.md)       | Post Content -> Post    | 1 -> 1      | 항상                                           | Post 조회 정책 통과 | 없음      |
+| Referenced Media  | [Media](./media.md)     | Post Content -> Media   | 1 -> 0..4   | document에 Media node가 있을 때                | Post 조회 정책 통과 | 없음      |
+| Mentioned Profile | [Profile](./profile.md) | Post Content -> Profile | 1 -> 0..N   | document에 검증된 typed Mention node가 있을 때 | Post 조회 정책 통과 | 없음      |
 
 Referenced Media는 Content Document의 Media node가 소유하는 revision 관계다. 별도 관계 테이블이나 Media ID
 배열을 두 번째 source of truth로 저장하지 않는다. Post Content를 만들 때 서버는 각 Media 참조의 존재,
 Source=Local, State=Ready와 Upload Account 조건을 검증한다. Media row의 물리 삭제는 과거 revision 참조를
 깨뜨리지 않는 별도 lifecycle 계약이 생기기 전까지 제공하지 않는다.
+
+Mentioned Profile은 Content Document의 검증된 typed Mention node에서 재구축할 수 있는 revision 관계이며 `post_mentions`
+DB table에 persisted projection으로 저장한다. canonical Mention node는 저장된 Profile identity인 `profileId`와
+정규화된 표시 label인 `label`만 attr로 가지며, inbound ActivityPub target·anchor URI는 이 identity를 검증하는
+입력일 뿐 Content Document에 저장하지 않는다. `post_mentions` row는 Post Content revision과 Profile을 foreign keys로
+가리키며 독립적인 Post-level source of truth가 아니다. column, index와 primary key의 구체 shape는 이 문서에서
+고정하지 않는다. 새 revision은
+새 Mentioned Profile 관계 집합을 가지며, immutable한 과거 revision과 그 관계는 보존한다. Current Post의
+Mentioned Profile은 현재 Post Content 관계에서 투영한다. document와 관계 또는 Current Content 포인터 중 하나라도
+저장되지 않으면 같은 transaction을 rollback해 partial relation을 남기지 않는다.
 
 ## 행동
 
@@ -67,18 +79,35 @@ Source=Local, State=Ready와 Upload Account 조건을 검증한다. Media row의
 바뀌면 새 Post Content를 만든다. 이미지 교체는 먼저 새 Local Media를 Ready로 만든 다음 그 Media를 참조하는 새
 revision을 만드는 행동이다. 이전 revision은 이전 Media 참조를 그대로 보존한다.
 
+ActivityPub `tag`의 typed `Mention`은 inbound target·anchor URI가 연결 대상 Profile의 stable identity와
+검증될 때만 `profileId`와 label을 가진 typed Mention node를 저장하고, 그 node에서 Mentioned Profile 관계를
+재구축한다. inbound URI는 저장 전에만 사용한다. unresolved, malformed 또는 identity mismatch는
+Mention node와 Profile 관계를 만들지 않고, 그 Note가 다른 검증을 통과하면 안전한 일반 link 또는 표시 text로
+보존한다. 이 fallback은 원격 Profile을 새로 탐색하거나 materialize하지 않는다.
+
 Alt Text 변경은 Media metadata 갱신이며 새 Post Content revision을 만들지 않는다. 같은 Media를 여러 Post
 Content가 참조한 상태에서 Alt Text를 다시 입력하는 것은 정상적인 작성 흐름은 아니지만 금지하지 않는다. 발생하면
 Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인다.
 
 이 수정 행동은 revision 모델이 보존하는 별도 제품 capability이며 현재 Post Composer 이미지 업로드 계약이
 제공하지 않는다. 사용자용 mutation, UI, 동시 수정 정책과 ActivityPub `Update(Note)` delivery는 독립된 Post
-수정 계약에서 전달한다.
+수정 계약에서 전달한다. 구 reader의 본문 text 보존은 기존 `bodyText` fallback을 재사용해 검증하며, link 클릭
+동작과 문단 구조의 일시적 저하를 허용하고 Media와 Content Warning은 유지한다. 서버의 본문 파생값부터 구 reader
+표시까지 글자·Media·Content Warning 보존을 검증한 뒤, 현재 Post Content V1에 additive한 Mention node 저장을
+활성화한다. 이 change에서는 document schema version을 올리거나 V1/V2 dual-read 또는 document version 변환을 도입하지 않으며,
+Mention node는 `profileId`와 정규화된 `label`만 저장하고 inbound target·anchor URI는 저장 전 identity 검증에만 사용한다.
 
 ## 조회 정책
 
 - Post의 일반 조회와 배포는 현재 Post Content만 사용한다.
 - 현재 Post Content의 Referenced Media는 body의 Media node 순서로 제공한다.
+- Current Post의 Mentioned Profile은 현재 Post Content의 revision-owned 관계에서 투영한다. 구 reader가 지원하지
+  않는 Mention을 받아도 본문 text를 보존해 읽을 수 있는 호환 경계를 먼저 검증하며, Mention 저장 활성화는 그
+  검증 뒤에 수행한다. 구 reader에서는 일시적으로 link 클릭 동작과 문단 구조가 저하된 plain text 표시를 허용하고,
+  Media와 Content Warning은 유지한다. 이 경계는 기존 `bodyText` fallback을 재사용하며, 서버의 본문 파생값부터
+  구 reader 표시까지 글자·Media·Content Warning 보존을 검증한 뒤, 현재 Post Content V1에 additive한 Mention node
+  저장을 활성화한다. 이 change에서는 document schema version을 올리거나 V1/V2 dual-read 또는 document version 변환을 도입하지 않는다.
+  Mention의 전용 표시·Profile 이동은 별도 renderer 계약에 둔다.
 - `PostContent.media`는 소유 Post의 조회 정책을 통과한 경로에서 실제 Media Node를 반환하며 Media 표시 필드 조회
   scope를 grant한다. Media의 URL, Media Type과 Alt Text는 이 grant가 있을 때 노출한다.
 - PostContent를 거치지 않는 standalone Media Node가 Referencing Post를 역추적해 권한을 얻는 정책은 후속
