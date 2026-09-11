@@ -67,18 +67,20 @@ describe('Settings detail back navigation', () => {
     assert.deepEqual(replaced, ['/settings/mute-and-block']);
   });
 
-  it('Muted profiles의 shell back은 바로 위 mute category를 연다', () => {
-    const replaced: string[] = [];
+  it('Mute와 Block 관리 shell back은 바로 위 category를 연다', () => {
+    for (const pathname of ['/settings/muted-profiles', '/settings/blocked-profiles']) {
+      const replaced: string[] = [];
 
-    Object.defineProperty(globalThis, 'location', {
-      configurable: true,
-      value: { replace: (href: string) => replaced.push(href) },
-    });
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: { replace: (href: string) => replaced.push(href) },
+      });
 
-    returnToSettingsParent('/settings/muted-profiles', {
-      replace: (href) => replaced.push(String(href)),
-    });
+      returnToSettingsParent(pathname, {
+        replace: (href) => replaced.push(String(href)),
+      });
 
-    assert.deepEqual(replaced, ['/settings/mute-and-block']);
+      assert.deepEqual(replaced, ['/settings/mute-and-block']);
+    }
   });
 });

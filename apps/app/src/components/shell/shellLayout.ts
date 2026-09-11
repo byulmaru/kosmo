@@ -40,6 +40,7 @@ export type WebMobileShellHeader = Readonly<{
     | '글쓰기'
     | '뮤트 및 차단'
     | '뮤트한 프로필'
+    | '차단한 프로필'
     | '설정'
     | '알림'
     | '정보';
@@ -91,6 +92,9 @@ export function getWebMobileShellHeader(
   }
   if (pathname === '/settings/muted-profiles') {
     return { leading: 'back', title: '뮤트한 프로필' };
+  }
+  if (pathname === '/settings/blocked-profiles') {
+    return { leading: 'back', title: '차단한 프로필' };
   }
   if (pathname === '/settings/info') {
     return { leading: 'back', title: '정보' };

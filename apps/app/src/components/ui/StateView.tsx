@@ -1,4 +1,4 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { radius, space, textStyles } from '@/theme/tokens';
 import { Button } from './Button';
@@ -36,7 +36,11 @@ export function StateView({
       accessibilityRole={alert ? 'alert' : undefined}
       ref={controlRef}
       style={[styles.root, ...(style ? [style] : [])]}
-      tabIndex={controlRef ? -1 : undefined}
+      {...(controlRef
+        ? Platform.OS === 'web'
+          ? { tabIndex: -1 as const }
+          : { focusable: true }
+        : {})}
     >
       {loading ? (
         reducedMotion ? (
