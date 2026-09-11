@@ -1,7 +1,6 @@
 import { ConflictError, ValidationError } from '@kosmo/core/error';
+import { parseSlackWebhookUrl, postSlackWebhook } from '@/slack/webhook';
 import type { FeedbackKind } from '@kosmo/core/enums';
-
-export const FEEDBACK_DELIVERY_TIMEOUT_MS = 5_000;
 
 export type FeedbackInput = {
   body: string;
@@ -18,7 +17,6 @@ export type FeedbackIdentity = {
 };
 
 const inFlightFeedbackDeliveries = new Set<string>();
-const slackWebhookPath = /^\/services\/[^/]+\/[^/]+\/[^/]+$/u;
 
 const kindLabels: Record<FeedbackKind, string> = {
   BUG_REPORT: '버그',
@@ -69,46 +67,22 @@ const claimDelivery = (accountId: string) => {
 };
 
 export const deliverFeedback = async (identity: FeedbackIdentity, input: FeedbackInput) => {
-  let webhookUrl: URL;
-  try {
-    webhookUrl = new URL(process.env.SLACK_FEEDBACK_WEBHOOK_URL ?? '');
-  } catch {
-    throw new ValidationError('피드백을 전달할 수 없어요. 잠시 후 다시 시도해주세요.');
-  }
-
-  if (
-    webhookUrl.protocol !== 'https:' ||
-    webhookUrl.origin !== 'https://hooks.slack.com' ||
-    webhookUrl.username ||
-    webhookUrl.password ||
-    !slackWebhookPath.test(webhookUrl.pathname) ||
-    webhookUrl.search ||
-    webhookUrl.hash
-  ) {
+  const webhookUrl = parseSlackWebhookUrl(process.env.SLACK_FEEDBACK_WEBHOOK_URL);
+  if (!webhookUrl) {
     throw new ValidationError('피드백을 전달할 수 없어요. 잠시 후 다시 시도해주세요.');
   }
 
   claimDelivery(identity.accountId);
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FEEDBACK_DELIVERY_TIMEOUT_MS);
-
   try {
-    const response = await globalThis.fetch(webhookUrl, {
-      body: JSON.stringify(createPayload(input, identity)),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-      redirect: 'error',
-      signal: controller.signal,
+    await postSlackWebhook(webhookUrl, createPayload(input, identity), (response) => {
+      if (!response.ok) {
+        throw new Error('Slack feedback delivery failed');
+      }
     });
-
-    if (!response.ok) {
-      throw new Error('Slack feedback delivery failed');
-    }
   } catch {
     throw new ValidationError('피드백을 전달하지 못했어요. 다시 시도해주세요.');
   } finally {
-    clearTimeout(timeout);
     inFlightFeedbackDeliveries.delete(identity.accountId);
   }
 
