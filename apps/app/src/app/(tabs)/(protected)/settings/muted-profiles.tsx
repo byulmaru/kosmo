@@ -1,17 +1,23 @@
 import { useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
+import { useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { SettingsMutedProfiles } from '@/components/settings/SettingsMutedProfiles';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
+import type { View } from 'react-native';
 
 export default function SettingsMutedProfilesRoute() {
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
+  const shellChrome = useShellChrome();
+  const routeHeadingRef = useRef<View>(null);
+  const headingRef = detailHeaderMode === 'hidden' ? shellChrome?.pageHeadingRef : routeHeadingRef;
   const backButton =
     detailHeaderMode === 'back' ? (
       <IconButton
@@ -27,9 +33,9 @@ export default function SettingsMutedProfilesRoute() {
   return (
     <>
       {detailHeaderMode !== 'hidden' ? (
-        <PageHeader leading={backButton} title="뮤트한 프로필" />
+        <PageHeader headingRef={routeHeadingRef} leading={backButton} title="뮤트한 프로필" />
       ) : null}
-      <SettingsMutedProfiles />
+      <SettingsMutedProfiles headingRef={headingRef} />
     </>
   );
 }
