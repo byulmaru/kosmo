@@ -111,6 +111,7 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
 
 - `data-model`: Profile Block 관계의 additive 저장 모델, uniqueness/referential integrity/self-block 불변식과 no-backfill 계약
 - `profile`: GraphQL `node(id:)`·`profileByHandle` 직접 조회의 기존 lifecycle·membership·기본 정보 조건 유지, `searchProfiles` exact-match·partial-match 후보의 양방향 Block 제외와 Follow 후보·새 Follow 입력에 Profile Block 정책 적용
+- `hashtag-related-profile-api`: selected Profile이 있는 `Hashtag.relatedProfiles`에서 양방향 Active Block 후보를 pagination 전에 제외하고, selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를 유지
 - `post`: 방향성 있는 Profile Post·Post/Media 조회, 양방향 Home·Local·Hashtag Post List, Post 검색과 origin-independent Reply/Quote/Reaction/Repost 입력에 Profile Block 정책 적용
 - `notification`: Block으로 제거되는 Follow 객체의 직접 원인 Notification 정리와 조회 불가 기존 Notification 숨김 연결;
   source 신규 생성 suppression은 `PROD-327`에 유보
