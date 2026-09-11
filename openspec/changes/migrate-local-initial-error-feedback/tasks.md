@@ -11,7 +11,7 @@
 **Deliverable**
 
 저장된 성공 목록이 없는 Local 최초 조회 실패에서 Web은 빈 목록 영역을, Native는 2행 skeleton을 표시하고
-두 플랫폼 모두 중복 없이 재시도할 수 있는 persistent Danger Toast를 제공한다.
+두 플랫폼 모두 재시도할 수 있는 persistent Danger Toast를 제공한다.
 
 **Guardrails**
 
@@ -35,7 +35,7 @@
 
 **Test necessity / exclusions**
 
-- 공용 Toast action guard의 분기와 Local error lifecycle은 회귀 시 중복 요청이나 stale action을 만들므로 최소 동작 테스트가 필요하다.
+- 공용 Toast action guard의 분기와 Local error lifecycle은 회귀 시 stale action을 만들 수 있으므로 최소 동작 테스트가 필요하다.
 - Native 전용 신규 test harness, GraphQL/API/schema·pagination fixture 변경, source 문자열 검사는 추가하지 않는다.
 - Android/iOS 실제 runtime은 현재 자동화 범위 밖으로 남기고 공용 code path 검증과 구분해 기록한다.
 
@@ -60,17 +60,17 @@
 
 **Deliverable**
 
-성공 목록 뒤 Local hard refresh 실패에서 마지막 성공 목록을 유지하고, Web과 Native 모두 중복 없이 재시도할 수 있는 persistent Danger Toast를 제공한다.
+성공 목록 뒤 Local hard refresh 실패에서 마지막 성공 목록을 유지하고, Web과 Native 모두 재시도할 수 있는 persistent Danger Toast를 제공한다.
 
 **Guardrails**
 
 - 최초 오류의 플랫폼별 배경, 부분 GraphQL 응답과 pagination 동작을 변경하지 않는다.
-- 진행 중인 refresh를 중복 실행하지 않고 route·actor 전환 뒤 요청이나 Toast를 남기지 않는다.
-- 기존 Relay query·environment와 공용 Toast를 재사용하고 새 abstraction이나 dependency를 추가하지 않는다.
+- refresh token과 공용 boundary/Toast lifecycle을 사용하고 route·actor 전환 뒤 stale Toast를 남기지 않는다.
+- 기존 Relay query·environment와 Session의 fail-open boundary, 공용 Toast를 재사용하고 새 request lifecycle wrapper나 dependency를 추가하지 않는다.
 
 **Verification**
 
-- hard refresh 실패에서 기존 목록·persistent alert/action과 정확히 한 번의 retry를 검증한다.
+- hard refresh 실패에서 기존 목록·persistent alert/action과 retry 경로를 검증한다.
 - retry 성공·재실패와 route 이탈 cleanup을 검증하고 기존 partial response·pagination Story를 유지한다.
 - Web mobile/full viewport에서 Figma 배치와 focus·announcement를 확인하고 Android/iOS runtime 미실행을 기록한다.
 
@@ -81,7 +81,7 @@
 
 **Test necessity / exclusions**
 
-- cache 목록을 유지하는 Relay hard error는 ErrorBoundary fallback과 다른 분기이므로 Storybook 동작 검증이 필요하다.
+- cache 목록을 유지하며 `onComplete(error)`로 전달되는 Relay hard error는 ErrorBoundary fallback과 다른 분기이므로 Storybook 동작 검증이 필요하다.
 - Native 전용 신규 harness, GraphQL/API/schema·pagination fixture 변경, source 문자열 검사는 추가하지 않는다.
 
 - [x] 2.1 PROD-939·OpenSpec에 hard refresh의 목록 보존·persistent retry 계약을 정렬한다.

@@ -8,13 +8,12 @@ import {
   useRef,
   useState,
 } from 'react';
-import { ErrorBoundary } from 'react-error-boundary';
 import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
 import { Splash } from '@/components/Splash';
-import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
 import { useRelayActor, useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { PropsWithChildren } from 'react';
 import type { SessionProviderQuery as SessionProviderQueryType } from './__generated__/SessionProviderQuery.graphql';
 
 type SessionValue = {
@@ -81,7 +80,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   return (
     <SessionContext.Provider value={visibleSession}>
-      <SessionFailOpenBoundary
+      <RelayFailOpenBoundary
         fallback={
           <SessionErrorReporter lifecycleKey={actorLifecycleKey} onError={setSessionError} />
         }
@@ -89,7 +88,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
           <SessionQuery actorLifecycleKey={actorLifecycleKey} onSessionChange={setSession} />
         </Suspense>
-      </SessionFailOpenBoundary>
+      </RelayFailOpenBoundary>
       {sessionState.ready ? children : null}
     </SessionContext.Provider>
   );
@@ -151,23 +150,4 @@ export function useSession(): SessionValue {
 
 export function SessionErrorProvider({ children }: PropsWithChildren) {
   return <SessionContext.Provider value={errorSession}>{children}</SessionContext.Provider>;
-}
-
-export function SessionFailOpenBoundary({
-  children,
-  fallback,
-  resetKey,
-}: PropsWithChildren<{ fallback: ReactNode; resetKey?: number }>) {
-  const reportUnexpectedError = useUnexpectedErrorReporter();
-  const actorLifecycleKey = useRelayActorLifecycleKey();
-
-  return (
-    <ErrorBoundary
-      fallback={fallback}
-      onError={reportUnexpectedError}
-      resetKeys={[actorLifecycleKey, resetKey]}
-    >
-      {children}
-    </ErrorBoundary>
-  );
 }

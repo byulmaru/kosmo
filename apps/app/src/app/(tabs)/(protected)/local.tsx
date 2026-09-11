@@ -1,10 +1,11 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useCallback, useEffect, useRef } from 'react';
-import { ErrorBoundary } from 'react-error-boundary';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useErrorBoundary } from 'react-error-boundary';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, useRefetchableFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
+import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
@@ -20,7 +21,10 @@ import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
 import type { MutableRefObject, PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
-import type { LocalContent_query$key } from './__generated__/LocalContent_query.graphql';
+import type {
+  LocalContent_query$data,
+  LocalContent_query$key,
+} from './__generated__/LocalContent_query.graphql';
 import type { LocalContentRefetchQuery } from './__generated__/LocalContentRefetchQuery.graphql';
 import type { LocalPageQuery } from './__generated__/LocalPageQuery.graphql';
 
@@ -54,13 +58,10 @@ const LocalFragment = graphql`
 export default function LocalScreen() {
   const hasSuccessfulLocalRef = useRef(false);
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const localRefreshRef = useRef<(() => void) | null>(null);
-  const registerLocalRefresh = useCallback((refresh: (() => void) | null) => {
-    localRefreshRef.current = refresh;
-  }, []);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const refresh = useCallback(() => {
-    if (localRefreshRef.current) {
-      localRefreshRef.current();
+    if (hasSuccessfulLocalRef.current) {
+      setRefreshVersion((version) => version + 1);
     } else {
       routeBoundaryRef.current?.refetch();
     }
@@ -88,7 +89,8 @@ export default function LocalScreen() {
       >
         <LocalContent
           hasSuccessfulLocalRef={hasSuccessfulLocalRef}
-          registerLocalRefresh={registerLocalRefresh}
+          onRefresh={refresh}
+          refreshVersion={refreshVersion}
         />
       </RouteBoundary>
     </LocalFrame>
@@ -122,10 +124,12 @@ function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: ()
 
 function LocalContent({
   hasSuccessfulLocalRef,
-  registerLocalRefresh,
+  onRefresh,
+  refreshVersion,
 }: {
   hasSuccessfulLocalRef: MutableRefObject<boolean>;
-  registerLocalRefresh: (refresh: (() => void) | null) => void;
+  onRefresh: () => void;
+  refreshVersion: number;
 }) {
   const { fetchKey } = useRouteBoundary();
   const queryData = useLazyLoadQuery<LocalPageQuery>(
@@ -133,80 +137,81 @@ function LocalContent({
     {},
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
-  const { showToast } = useToast();
-  const refreshRef = useRef<(() => void) | null>(null);
-  const refreshBoundaryRef = useRef<ErrorBoundary>(null);
-  const retryOnMountRef = useRef(false);
-  const toastCleanupRef = useRef<(() => void) | null>(null);
-  const disposedRef = useRef(false);
-  const clearToast = useCallback(() => {
-    toastCleanupRef.current?.();
-    toastCleanupRef.current = null;
-  }, []);
-  const refresh = useCallback(() => {
-    clearToast();
-    if (refreshRef.current) {
-      refreshRef.current();
-      return;
-    }
-
-    retryOnMountRef.current = true;
-    refreshBoundaryRef.current?.resetErrorBoundary();
-  }, [clearToast]);
-  const handleRefreshComplete = useCallback(
-    (error: Error | null) => {
-      if (disposedRef.current) {
-        return;
-      }
-
-      if (error) {
-        clearToast();
-        toastCleanupRef.current = showToast('로컬 타임라인을 불러오지 못했어요', {
-          action: { label: '다시 시도', onPress: refresh },
-          persistent: true,
-          tone: 'danger',
-        });
-      } else {
-        clearToast();
-      }
-    },
-    [clearToast, refresh, showToast],
-  );
-  const registerRefresh = useCallback((nextRefresh: (() => void) | null) => {
-    refreshRef.current = nextRefresh;
-  }, []);
   useEffect(() => {
     hasSuccessfulLocalRef.current = true;
   }, [hasSuccessfulLocalRef]);
-  useEffect(() => {
-    disposedRef.current = false;
-    registerLocalRefresh(refresh);
-    return () => {
-      disposedRef.current = true;
-      registerLocalRefresh(null);
-      clearToast();
-    };
-  }, [clearToast, registerLocalRefresh, refresh]);
 
   return (
-    <>
-      <LocalContentView queryData={queryData} />
-      <ErrorBoundary fallback={null} ref={refreshBoundaryRef}>
-        <LocalRefreshController
-          fragmentRef={queryData}
-          onComplete={handleRefreshComplete}
-          onRegisterRefresh={registerRefresh}
-          retryOnMountRef={retryOnMountRef}
-        />
-      </ErrorBoundary>
-    </>
+    <RelayFailOpenBoundary
+      fallback={<LocalRefreshFallback fragmentRef={queryData} onRetry={onRefresh} />}
+      reportUnexpectedErrors={false}
+      resetKey={refreshVersion}
+    >
+      <LocalRefetchContent fragmentRef={queryData} refreshVersion={refreshVersion} />
+    </RelayFailOpenBoundary>
   );
 }
 
-function LocalContentView({ queryData }: { queryData: LocalContent_query$key }) {
+function LocalRefetchContent({
+  fragmentRef,
+  refreshVersion,
+}: {
+  fragmentRef: LocalContent_query$key;
+  refreshVersion: number;
+}) {
+  const [data, refetch] = useRefetchableFragment<LocalContentRefetchQuery, LocalContent_query$key>(
+    LocalFragment,
+    fragmentRef,
+  );
+  const { showBoundary } = useErrorBoundary();
+
+  useEffect(() => {
+    if (refreshVersion === 0) {
+      return;
+    }
+
+    refetch(
+      {},
+      {
+        fetchPolicy: 'store-and-network',
+        onComplete: (error) => {
+          if (error) {
+            showBoundary(error);
+          }
+        },
+      },
+    );
+  }, [refetch, refreshVersion, showBoundary]);
+
+  return <LocalContentView data={data} />;
+}
+
+function LocalRefreshFallback({
+  fragmentRef,
+  onRetry,
+}: {
+  fragmentRef: LocalContent_query$key;
+  onRetry: () => void;
+}) {
+  const data = useFragment(LocalFragment, fragmentRef);
+  const { showToast } = useToast();
+
+  useEffect(
+    () =>
+      showToast('로컬 타임라인을 불러오지 못했어요', {
+        action: { label: '다시 시도', onPress: onRetry },
+        persistent: true,
+        tone: 'danger',
+      }),
+    [onRetry, showToast],
+  );
+
+  return <LocalContentView data={data} />;
+}
+
+function LocalContentView({ data }: { data: LocalContent_query$data }) {
   const theme = useTheme();
   const shellChrome = useShellChrome();
-  const data = useFragment(LocalFragment, queryData);
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
 
@@ -240,52 +245,6 @@ function LocalContentView({ queryData }: { queryData: LocalContent_query$key }) 
       />
     </View>
   );
-}
-
-function LocalRefreshController({
-  fragmentRef,
-  onComplete,
-  onRegisterRefresh,
-  retryOnMountRef,
-}: {
-  fragmentRef: LocalContent_query$key;
-  onComplete: (error: Error | null) => void;
-  onRegisterRefresh: (refresh: (() => void) | null) => void;
-  retryOnMountRef: MutableRefObject<boolean>;
-}) {
-  const [, refetch] = useRefetchableFragment<LocalContentRefetchQuery, LocalContent_query$key>(
-    LocalFragment,
-    fragmentRef,
-  );
-  const refreshingRef = useRef(false);
-  useEffect(() => {
-    const refresh = () => {
-      if (refreshingRef.current) {
-        return;
-      }
-
-      refreshingRef.current = true;
-      refetch(
-        {},
-        {
-          fetchPolicy: 'store-and-network',
-          onComplete: (error) => {
-            refreshingRef.current = false;
-            onComplete(error);
-          },
-        },
-      );
-    };
-
-    onRegisterRefresh(refresh);
-    if (retryOnMountRef.current) {
-      retryOnMountRef.current = false;
-      refresh();
-    }
-    return () => onRegisterRefresh(null);
-  }, [onComplete, onRegisterRefresh, refetch, retryOnMountRef]);
-
-  return null;
 }
 
 function LocalInitialError({ onRetry }: { onRetry: () => void }) {

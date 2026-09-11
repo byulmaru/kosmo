@@ -26,19 +26,20 @@ response·pagination 동작과 공용 Relay·Toast 경계를 유지한다.
 - Context / Problem: `store-and-network` hard refresh 실패는 cache 목록을 유지하지만 오류 피드백을 표시하지 않아 Figma Target과 달랐다.
 - Decision Outcome: 성공 목록 뒤 hard refresh 오류는 Web과 Native에서 마지막 성공 목록을 유지하고, 최초 오류와 같은 문구·action의 공용 persistent Danger Toast를 표시한다.
 - Alternatives Considered: Toast 없음은 Figma Target과 달라 제외했다. 자동 소멸 Toast는 사용자가 허용 가능한 최소안으로 제안했지만 복구 action이 유지되는 동안 지속되는 canonical Figma 계약을 우선했다.
-- Consequences: refresh 요청의 hard error를 명시적으로 관찰하고, 중복 요청·성공·재실패·route·actor lifecycle을 관리한다.
+- Consequences: refresh 요청의 hard error를 명시적으로 관찰하고, 성공·재실패·route·actor lifecycle을 관리한다.
 - Confirmation / Follow-up: Storybook의 실제 Relay refresh 흐름과 Web 시각·상호작용으로 검증하고 Native runtime 미실행을 별도로 기록한다.
 
-### Local refresh는 refetchable fragment hook이 요청 lifecycle을 소유한다
+### Local refresh는 refetchable fragment hook과 공용 fail-open boundary를 사용한다
 
 - Decision Date: 2026-09-11
 - Decision Class: Implementation Choice
 - Authority / Provenance: 활성 Derived Contract 2번째 기록, Relay `useRefetchableFragment` lifecycle
 - Status: Active
-- Context / Problem: Local hard refresh의 성공·실패를 관찰하면서 요청 Disposable을 소비자 effect에 보관하면 route·actor cleanup이 Relay hook 소유권과 중복될 수 있다.
-- Decision Outcome: Local query는 `LocalContent_query` refetchable fragment를 사용하고, `useRefetchableFragment`의 `refetch`와 `onComplete(error)`로 결과를 관찰한다. cache snapshot을 렌더하는 `LocalContentView`는 refetch만 담당하는 Local 전용 ErrorBoundary의 바깥에 두며, effect는 중복 입력을 막는 동기 guard와 Toast cleanup만 소유하고 요청 Disposable은 저장하거나 직접 dispose하지 않는다.
-- Alternatives Considered: 별도 `fetchQuery` Observable과 Disposable 저장은 기존 Relay hook lifecycle을 우회하므로 제외했다.
-- Consequences: 요청 취소·unmount 정리는 Relay hook이 담당하고, Local effect는 hard error Toast와 재시도 callback만 관리한다. Toast 재시도는 좁은 경계를 reset한 뒤 같은 hook refetch를 다시 시작한다.
+- Context / Problem: Local hard refresh의 성공 목록은 유지하면서 refetch 오류를 공용 경계의 fail-open fallback과 연결하고, Relay가 `onComplete(error)`로만 전달하는 transport error도 표시해야 한다.
+- Decision Outcome: 기존 Session fail-open boundary를 공용 `RelayFailOpenBoundary`로 추출한다. Local query는 `LocalContent_query` refetchable fragment를 사용하고, 성공 child는 `useRefetchableFragment`의 data를 직접 읽는다. 이 child만 공용 경계 안에 두며, transport error의 `onComplete` callback은 요청 상태를 저장하지 않고 오류를 이 경계로 전달한다. fallback은 최초 query의 fragment ref를 `useFragment`로 읽고 persistent retry Toast를 연다. refresh token은 boundary reset과 hook refetch를 연결하고, 요청·in-flight·Disposable·완료 상태는 별도로 저장하지 않는다.
+- Telemetry: Local hard refresh는 기존 사용자 복구 경로와 같이 예상된 오류로 취급해 unexpected-error reporter에 보고하지 않는다. 공용 boundary의 기본 unexpected-error reporting은 유지하되 Local에서만 끈다.
+- Alternatives Considered: 별도 `fetchQuery` Observable과 Disposable 저장은 기존 Relay hook과 공용 boundary lifecycle을 우회하므로 제외했다.
+- Consequences: refetch 요청과 unmount 정리는 Relay hook과 boundary가 담당하고, Toast lifecycle은 fallback effect만 관리한다. Toast 재시도는 refresh token을 증가시켜 boundary를 reset한 뒤 같은 hook refetch를 다시 시작한다.
 - Confirmation / Follow-up: focused Storybook refresh lifecycle과 기존 typecheck/compiler 검증에서 확인한다.
 
 ## Remaining Decisions

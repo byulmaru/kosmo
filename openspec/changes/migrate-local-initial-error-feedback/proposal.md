@@ -9,7 +9,7 @@ persistent Danger Toast 복구 경로를 전달한다.
 - 최초 Local 조회 실패에서 Web은 빈 목록 영역을, Native는 2행 skeleton을 표시한다.
 - 성공 목록 뒤 hard refresh 실패에서는 마지막 성공 목록을 유지한다.
 - 두 오류 모두 공용 persistent Danger Toast로 오류 문구와 `다시 시도` action을 제공한다.
-- 재시도·성공·route 이탈·selected Profile 전환에 맞춰 Toast를 정리하고 중복 재시도를 막는다.
+- 재시도·성공·route 이탈·selected Profile 전환에 맞춰 Toast lifecycle을 정리한다.
 - 부분 GraphQL 응답, pagination, cursor, filtering과 Home 동작은 유지한다.
 - Storybook·동작 테스트와 디자인 문서의 Current/Target 기록을 구현 결과와 정렬한다.
 

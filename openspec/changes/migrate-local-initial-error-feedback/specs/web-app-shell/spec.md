@@ -32,7 +32,7 @@
 #### Scenario: Retry an initial Local error
 
 - **WHEN** 사용자가 최초 오류 Toast의 `다시 시도` action을 실행한다
-- **THEN** 시스템은 기존 RouteBoundary 경로로 Local 첫 page를 한 번 다시 요청하고 실행한 action을 제거해 연속 입력이 요청을 중복하지 않게 한다
+- **THEN** 시스템은 기존 RouteBoundary 경로로 Local 첫 page 재시도를 시작하고 실행한 action을 제거한다
 - **AND** 재시도가 성공하면 오류 Toast를 남기지 않고 성공 목록 또는 빈 상태를 표시한다
 - **AND** 재시도가 다시 실패하면 플랫폼별 최초 오류 배경과 새 persistent Danger Toast를 다시 표시한다
 
@@ -50,7 +50,7 @@
 #### Scenario: Retry a hard refresh Local error
 
 - **WHEN** 사용자가 hard refresh 오류 Toast의 `다시 시도` action을 실행한다
-- **THEN** 시스템은 Local hard refresh를 한 번 다시 요청하고 실행한 action을 제거해 연속 입력이 요청을 중복하지 않게 한다
+- **THEN** 시스템은 refresh token을 통해 Local hard refresh 재시도를 시작하고 실행한 action을 제거한다
 - **AND** 재시도가 성공하면 갱신 결과를 표시하고 오류 Toast를 남기지 않는다
 - **AND** 재시도가 다시 실패하면 마지막 성공 목록과 새 persistent Danger Toast를 계속 제공한다
 

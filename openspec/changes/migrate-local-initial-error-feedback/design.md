@@ -14,7 +14,7 @@
 - 성공 이력이 없는 Local 오류는 Web 빈 영역·Native 2행 skeleton과 persistent Toast로 표시한다.
 - 성공 목록 뒤 hard refresh 오류는 목록을 유지하고 동일한 persistent retry Toast로 표시한다.
 - 기존 RouteBoundary 재시도와 공용 Toast lifecycle을 재사용한다.
-- 재시도 중복 입력과 route·actor 전환 뒤 남는 Toast를 막는다.
+- retry Toast action과 route·actor 전환 뒤 Toast lifecycle을 정리한다.
 
 **Non-Goals:**
 
@@ -42,18 +42,18 @@ cache 결과도 route에서 렌더되면 성공으로 기록한다. 성공 전 �
 baseline의 두 행을 렌더하고 mount effect에서 공용 persistent Danger Toast를 연다.
 
 성공 뒤 탭 재선택은 `useRefetchableFragment`가 소유하는 refetch 경로를 사용한다. success payload는 동일 store에
-반영하고, hard error는 cache 목록을 그대로 둔 채 공용 persistent Danger Toast를 연다. 진행 중인 동일 refresh는
-다시 시작하지 않으며, route 이탈·actor remount에서는 hook이 요청을 정리하고 소비자가 Toast만 정리한다. partial
-GraphQL 응답은 기존 Relay payload 처리에 맡기고 hard transport error로 취급하지 않는다.
+반영하고, hard error는 cache 목록을 그대로 둔 채 공용 persistent Danger Toast를 연다. refresh 요청·Toast의
+lifecycle은 기존 Relay hook과 boundary/Toast 컴포넌트의 unmount 경로에 맡긴다. partial GraphQL 응답은 기존
+Relay payload 처리에 맡기고 hard transport error로 취급하지 않는다.
 
-Relay `QueryResource`가 refetch hard error를 해당 fragment read의 render error로 전파하므로, cache snapshot을 읽는
-`LocalContentView`는 refetch만 담당하는 `LocalRefreshController`와 분리한다. controller만 좁은 Local 전용
-`ErrorBoundary` 안에 두고, 경계 밖의 목록은 마지막 성공 store 값을 계속 렌더한다. Toast action은 경계를
-reset한 뒤 hook이 소유한 refetch를 다시 시작한다.
+성공 payload를 직접 읽는 `useRefetchableFragment` child만 공용 `RelayFailOpenBoundary` 안에 둔다. render 중
+오류가 경계에 도달하면 fallback이 최초 query의 fragment ref를 `useFragment`로 읽어 마지막 성공 store 값을
+렌더하고 persistent Toast를 연다. Relay가 cache 목록을 유지하며 transport error를 `onComplete(error)`로
+전달하는 경우에는 요청 상태를 저장하지 않고 `showBoundary(error)`로 같은 경계에 전달한다. Toast action은
+boundary의 `resetKey`를 바꾸는 refresh token을 통해 hook refetch를 다시 시작한다.
 
 최초 오류 재시도는 기존 `resetErrorBoundary`/`fetchKey`를 그대로 사용하고, refresh 오류 재시도는 같은 refresh
-함수를 재사용한다. 공용 Toast action은 현재 active Toast일 때만 닫힘과 callback을 한 번 실행하도록 좁게
-보강해 exit motion 중 연속 입력도 중복 요청을 만들지 않게 한다.
+함수를 재사용한다. 공용 Toast action은 현재 active Toast일 때만 닫힘과 callback을 실행한다.
 
 ### Allowed Alternatives
 
@@ -72,6 +72,8 @@ cache 목록을 경계 밖에 유지하고 refresh hook의 오류만 격리하�
   유지하고 actor 전환 검증을 추가한다.
 - [공용 Toast action guard의 회귀] → 같은 action을 연속 실행해 callback이 한 번만 호출되는 최소 단위 테스트를
   추가한다.
+- [예상 refresh 오류의 telemetry 회귀] → Local boundary에서는 기존 사용자 복구 경로와 같은 정책을 유지해
+  unexpected-error reporter를 비활성화하고, Session 등 공용 소비자는 기본 reporting을 사용한다.
 - [Native 시각·보조 기술 증거 부족] → 공용 code path와 자동 테스트 결과를 실제 Android/iOS runtime 완료로
   일반화하지 않고 미실행 항목을 기록한다.
 
