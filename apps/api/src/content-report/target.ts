@@ -8,7 +8,7 @@ import {
   Profiles,
 } from '@kosmo/core/db';
 import { ContentReportTargetType, InstanceKind, ProfileState } from '@kosmo/core/enums';
-import { decodeGlobalId } from '@kosmo/core/global-id';
+import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { directPostAccessWhere } from '@/graphql/resolvers/post/access';
@@ -90,7 +90,11 @@ const resolvePostTarget = async (id: string, ctx: UserContext) => {
   return {
     id: post.id,
     kind: ContentReportTargetType.POST,
-    kosmoUrl: createKosmoUrl(configuredLocalInstance.canonicalOrigin, relativeHandle, post.id),
+    kosmoUrl: createKosmoUrl(
+      configuredLocalInstance.canonicalOrigin,
+      relativeHandle,
+      encodeGlobalId('Post', post.id),
+    ),
     remoteUri: post.instanceKind === InstanceKind.ACTIVITYPUB ? post.remoteUri : null,
   } satisfies ContentReportTarget;
 };
