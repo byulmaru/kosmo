@@ -255,11 +255,9 @@ end
 platform :android do
   desc 'Build and distribute the Android Release AAB to the Play Internal and Alpha tracks'
   lane :distribute_alpha do
-    require_environment!('GOOGLE_APPLICATION_CREDENTIALS', 'KOSMO_ANDROID_AAB_PATH', 'KOSMO_ANDROID_VERSION_CODE')
+    require_environment!('GOOGLE_APPLICATION_CREDENTIALS', 'KOSMO_ANDROID_AAB_PATH')
     release_status = ENV.fetch('ANDROID_PLAY_RELEASE_STATUS', 'completed')
     UI.user_error!('ANDROID_PLAY_RELEASE_STATUS must be draft or completed.') unless %w[draft completed].include?(release_status)
-    version_code = ENV.fetch('KOSMO_ANDROID_VERSION_CODE')
-    UI.user_error!('KOSMO_ANDROID_VERSION_CODE must be a positive integer.') unless version_code.match?(/\A[1-9]\d*\z/)
     aab_path = File.expand_path(ENV.fetch('KOSMO_ANDROID_AAB_PATH'))
     credentials_path = File.expand_path(ENV.fetch('GOOGLE_APPLICATION_CREDENTIALS'))
     UI.user_error!("Google credentials were not created at #{credentials_path}.") unless File.file?(credentials_path) && File.size?(credentials_path)
@@ -273,33 +271,33 @@ platform :android do
 
     UI.user_error!("AAB was not created at #{aab_path}.") unless File.file?(aab_path) && File.size?(aab_path)
 
-    # Upload the AAB once to internal testing, then promote that exact version code to Alpha.
-    upload_to_play_store(
-      aab: aab_path,
-      package_name: BUNDLE_IDENTIFIER,
-      json_key: credentials_path,
-      release_status: release_status,
-      skip_upload_changelogs: true,
-      skip_upload_images: true,
-      skip_upload_metadata: true,
-      skip_upload_screenshots: true,
-      track: 'internal',
-    )
+    require 'supply'
 
-    UI.message("Promoting version code #{version_code} from the Play Internal track to Alpha...")
-    upload_to_play_store(
-      package_name: BUNDLE_IDENTIFIER,
-      json_key: credentials_path,
-      skip_upload_aab: true,
-      skip_upload_apk: true,
-      skip_upload_changelogs: true,
-      skip_upload_images: true,
-      skip_upload_metadata: true,
-      skip_upload_screenshots: true,
-      track: 'internal',
-      track_promote_release_status: release_status,
-      track_promote_to: 'alpha',
-      version_code: version_code.to_i,
+    play_config = FastlaneCore::Configuration.create(
+      Supply::Options.available_options,
+      {
+        json_key: credentials_path,
+        package_name: BUNDLE_IDENTIFIER,
+      },
     )
+    Supply.config = play_config
+    play_client = Supply::Client.make_from_config(params: play_config)
+    play_client.begin_edit(package_name: BUNDLE_IDENTIFIER)
+
+    uploaded_version_code = play_client.upload_bundle(aab_path)
+    UI.message("Using uploaded version code #{uploaded_version_code} for Play Internal and Alpha tracks...")
+    track_release = AndroidPublisher::TrackRelease.new(
+      status: release_status,
+      version_codes: [uploaded_version_code.to_s],
+    )
+    %w[internal alpha].each do |track_name|
+      play_client.update_track(
+        track_name,
+        AndroidPublisher::Track.new(track: track_name, releases: [track_release]),
+      )
+    end
+
+    play_client.commit_current_edit!
+    UI.success('Successfully finished the upload to Google Play Internal and Alpha tracks')
   end
 end
