@@ -7,9 +7,10 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 
 ## Profile action과 완료 피드백
 
-- Block 생성·해제와 관리 action은 현재 selected Local Profile이 Owner일 때만 제공한다. Remote Profile이
-  selected된 상태에서는 기존 Profile identity와 viewer 방향 콘텐츠 상태를 표시하되 실행할 수 없는 Block 관리
-  action을 제공하지 않으며, Remote Owner의 Block/Undo ingress는 `PROD-818`이 소유한다.
+- Block 생성·해제·관계 상태 조회와 관리 action은 현재 selected Local Profile이 Owner일 때만 제공한다. Remote
+  Profile이 selected된 상태에서는 Local-only `profileBlockStatus`를 요청하지 않고 기존 Profile identity와 일반
+  콘텐츠를 유지하며 Block 관계 상태나 실행할 수 없는 관리 action을 제공하지 않는다. Remote Owner의 Block/Undo
+  ingress와 관계 projection은 `PROD-818`이 소유한다.
 - Mute는 `이 프로필을 뮤트할까요?` 확인을 거친 뒤 실행한다. 취소하면 Profile과 관계 상태를 바꾸지 않는다.
 - Mute 해제도 `이 프로필을 뮤트 해제할까요?` 확인을 거친다. `{표시 이름} 님의 게시물이 홈과 로컬 타임라인에 다시
 표시돼요. 팔로우 관계는 유지돼요.`를 안내하고 `취소`·`뮤트 해제`를 제공한다.
@@ -64,10 +65,10 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   사용한다. 2026-09-09 [현재 Block 정책](../domain/objects/profile-block.md)에 맞춰
   Figma [`4595:6482`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4595-6482)의
   설명도 같은 문구로 갱신했다. 기존 리액션은 삭제하지 않는다. 현재 Storybook은 메뉴·목록 presentation을 검증하며 차단·해제 요청과 관계·리액션 정리를 구현하지 않는다.
-- 조회 가능한 Profile의 공통 관계 action은 기존 `FollowButton`이 소유한다. 내가 차단한 경우 기본 label은
-  `차단됨`이고 Web hover·keyboard focus에서는 `차단 해제`로 바뀌며, Web click과 Native tap은 같은 해제
-  확인창을 연다. 상대만 나를 차단한 경우 부모 surface는 관계 action을 숨긴다. 서로 차단한 경우에는 내
-  `차단됨` action을 유지하고, 내 관계를 해제한 뒤 서버의 현재 결과가 `blockedBy`만 남기면 action을 숨긴다.
+- 조회 가능한 Profile의 공통 관계 action은 기존 `FollowButton`이 소유한다. 내가 차단한 경우 플랫폼과
+  pointer 상태에 관계없이 고정 `차단 해제` label을 표시하고, Web click과 Native tap은 같은 해제 확인창을
+  연다. 상대만 나를 차단한 경우 부모 surface는 관계 action을 숨긴다. 서로 차단한 경우에는 내 `차단 해제`
+  action을 유지하고, 내 관계를 해제한 뒤 서버의 현재 결과가 `blockedBy`만 남으면 action을 숨긴다.
   이 action은 Profile·ProfileBlock 상태 fragment, mutation, pending·실패와 Relay 수렴을 소유한다. Profile
   route와 차단 관리 목록은 노출 여부, 목록 조회·pagination, 성공 뒤 안전한 focus fallback만 조합하며 이전
   Follow 상태를 복구하지 않는다.

@@ -17,6 +17,9 @@ const actionFocusCalls = new Map<string, ReturnType<typeof mock.fn>>();
 const toastCalls: Array<{ message: string; tone: string }> = [];
 const loadNext = mock.fn();
 let selectedProfile: object | null = { id: 'owner', instance: { kind: 'LOCAL' } };
+let selectedProfileKind: 'ACTIVITYPUB' | 'LOCAL' | null = 'LOCAL';
+const queryVariables: Array<{ withProfileBlocks?: boolean }> = [];
+const paginationReferences: unknown[] = [];
 let pagination = {
   data: { profileBlocks: { edges: [] as Array<{ node: object }> } },
   hasNext: false,
@@ -36,8 +39,17 @@ mockModule('react-native', {
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => parts.join(''),
   useFragment: (_fragment: unknown, reference: unknown) => reference,
-  useLazyLoadQuery: () => ({ currentSession: { selectedProfile } }),
-  usePaginationFragment: () => pagination,
+  useLazyLoadQuery: (_query: unknown, variables: { withProfileBlocks?: boolean }) => {
+    queryVariables.push(variables);
+    if (selectedProfileKind !== 'LOCAL' && variables.withProfileBlocks !== false) {
+      throw new Error('profileBlocks requires a selected Local Profile');
+    }
+    return { currentSession: { selectedProfile } };
+  },
+  usePaginationFragment: (_fragment: unknown, reference: unknown) => {
+    paginationReferences.push(reference);
+    return pagination;
+  },
 });
 mockModule(new URL('../profile/FollowButton.tsx', import.meta.url), {
   FollowButton: ({
@@ -62,7 +74,7 @@ mockModule(new URL('../profile/FollowButton.tsx', import.meta.url), {
         relativeHandle: profile.relativeHandle,
         size,
       },
-      '차단됨',
+      '차단 해제',
     );
   },
 });
@@ -103,6 +115,9 @@ mockModule('../../theme/tokens', {
 mockModule('../../relay/RelayActorProvider', {
   useRelayActorLifecycleKey: () => 'actor-a',
 });
+mockModule('../../session/SessionProvider', {
+  useSession: () => ({ selectedProfileKind }),
+});
 
 type BlockedProfile = {
   displayName: string;
@@ -126,6 +141,9 @@ afterEach(async () => {
   toastCalls.length = 0;
   loadNext.mock.resetCalls();
   selectedProfile = { id: 'owner', instance: { kind: 'LOCAL' } };
+  selectedProfileKind = 'LOCAL';
+  queryVariables.length = 0;
+  paginationReferences.length = 0;
   pagination = {
     data: { profileBlocks: { edges: [] } },
     hasNext: false,
@@ -189,11 +207,26 @@ describe('차단한 프로필 목록', () => {
 
   it('selected Local Profile이 없으면 빈 목록 대신 Profile-required 상태를 표시한다', async () => {
     selectedProfile = null;
+    selectedProfileKind = null;
 
     await act(async () => {
       renderer = create(createElement(SettingsBlockedProfiles));
     });
 
+    assert.equal(find('StateView')?.props.title, '설정할 Profile이 없어요');
+    assert.equal(findAll('ProfileListItemContent').length, 0);
+  });
+
+  it('Remote selected actor는 Local-only Block 목록 조회를 건너뛴다', async () => {
+    selectedProfile = { id: 'remote-owner', instance: { kind: 'ACTIVITYPUB' } };
+    selectedProfileKind = 'ACTIVITYPUB';
+
+    await act(async () => {
+      renderer = create(createElement(SettingsBlockedProfiles));
+    });
+
+    assert.deepEqual(queryVariables, [{ withProfileBlocks: false }]);
+    assert.deepEqual(paginationReferences, [null]);
     assert.equal(find('StateView')?.props.title, '설정할 Profile이 없어요');
     assert.equal(findAll('ProfileListItemContent').length, 0);
   });
@@ -210,7 +243,7 @@ describe('차단한 프로필 목록', () => {
     assert.equal(find('Button')?.props.profileBlockId, 'block-star');
     assert.equal(find('Button')?.props.relativeHandle, '@star');
     assert.equal(find('Button')?.props.size, 'compact');
-    assert.equal(find('Button')?.props.children, '차단됨');
+    assert.equal(find('Button')?.props.children, '차단 해제');
   });
 
   it('페이지네이션 오류에서도 기존 행과 재시도 동작을 유지한다', async () => {
@@ -247,31 +280,27 @@ describe('차단한 프로필 목록', () => {
     assert.deepEqual(toastCalls, [
       { message: '차단한 프로필을 불러오지 못했어요', tone: 'danger' },
     ]);
-    assert.equal(find('Text')?.children.join(''), '차단한 프로필');
+    assert.equal(findAll('ScrollView').length, 0);
     await act(async () => error?.props.onPress());
     assert.equal(retries, 1);
   });
 
   it('마지막 항목 해제 뒤 새 목록 surface가 목록 제목에 포커스를 복원한다', async () => {
     const focus = mock.fn();
+    const headingRef = { current: { focus } } as never;
     const loaded = {
       pagination: { status: 'end' as const },
       profiles: [profile('star')],
       status: 'loaded' as const,
     };
     await act(async () => {
-      renderer = create(createElement(BlockedProfilesView, { state: loaded }), {
-        createNodeMock: (element) =>
-          element.type === 'View' &&
-          (element.props as { accessibilityRole?: string }).accessibilityRole === 'header'
-            ? { focus }
-            : {},
-      });
+      renderer = create(createElement(BlockedProfilesView, { headingRef, state: loaded }));
     });
     await act(async () => find('Button')?.props.onPress());
     await act(async () => {
       renderer?.update(
         createElement(BlockedProfilesView, {
+          headingRef,
           state: { pagination: { status: 'end' }, profiles: [], status: 'loaded' },
         }),
       );
@@ -284,26 +313,22 @@ describe('차단한 프로필 목록', () => {
 
   it('중간 항목 해제 뒤에도 목록 제목으로 포커스를 복원한다', async () => {
     const focus = mock.fn();
+    const headingRef = { current: { focus } } as never;
     const first = profile('first');
     const second = profile('second');
     await act(async () => {
       renderer = create(
         createElement(BlockedProfilesView, {
+          headingRef,
           state: { pagination: { status: 'end' }, profiles: [first, second], status: 'loaded' },
         }),
-        {
-          createNodeMock: (element) =>
-            element.type === 'View' &&
-            (element.props as { accessibilityRole?: string }).accessibilityRole === 'header'
-              ? { focus }
-              : {},
-        },
       );
     });
     await act(async () => findAll('Button')[0]?.props.onPress());
     await act(async () => {
       renderer?.update(
         createElement(BlockedProfilesView, {
+          headingRef,
           state: { pagination: { status: 'end' }, profiles: [second], status: 'loaded' },
         }),
       );
@@ -316,6 +341,7 @@ describe('차단한 프로필 목록', () => {
 
   it('다른 actor는 이전 Profile의 해제 포커스 intent를 소비하지 않는다', async () => {
     const focus = mock.fn();
+    const headingRef = { current: { focus } } as never;
     await act(async () => {
       renderer = create(
         createElement(BlockedProfilesView, {
@@ -335,16 +361,10 @@ describe('차단한 프로필 목록', () => {
       await act(async () => {
         renderer = create(
           createElement(BlockedProfilesView, {
+            headingRef,
             ownerProfileId,
             state: { pagination: { status: 'end' }, profiles: [], status: 'loaded' },
           }),
-          {
-            createNodeMock: (element) =>
-              element.type === 'View' &&
-              (element.props as { accessibilityRole?: string }).accessibilityRole === 'header'
-                ? { focus }
-                : {},
-          },
         );
       });
       await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));

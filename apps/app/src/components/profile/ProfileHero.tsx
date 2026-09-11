@@ -150,6 +150,27 @@ export function ProfileHero({
 
   const followingHref = `/${data.relativeHandle}/following` as Href;
   const followersHref = `/${data.relativeHandle}/followers` as Href;
+  const copyProfileLinkItem: ActionMenuItem = {
+    key: 'copy-profile-link',
+    icon: Link2,
+    label: '프로필 링크 복사',
+    onSelect: () => {
+      void (async () => {
+        try {
+          const copied = await setStringAsync(
+            new URL(`/${data.relativeHandle}`, getPublicWebOrigin()).toString(),
+          );
+          if (!copied) {
+            throw new Error('Clipboard did not confirm the copy.');
+          }
+        } catch {
+          showToast('링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
+            tone: 'danger',
+          });
+        }
+      })();
+    },
+  };
 
   return (
     <View style={styles.root}>
@@ -178,7 +199,7 @@ export function ProfileHero({
             size={avatarSize}
           />
         </View>
-        {action || showMuteAction ? (
+        {action || showMuteAction || menuItems.length > 0 ? (
           <View
             style={[
               actionGeometry,
@@ -197,33 +218,14 @@ export function ProfileHero({
                     disabled={disabled}
                     focusTriggerRef={focusTriggerRef}
                     onTriggerReady={onMenuTriggerReady}
-                    items={[
-                      {
-                        key: 'copy-profile-link',
-                        icon: Link2,
-                        label: '프로필 링크 복사',
-                        onSelect: () => {
-                          void (async () => {
-                            try {
-                              const copied = await setStringAsync(
-                                new URL(`/${data.relativeHandle}`, getPublicWebOrigin()).toString(),
-                              );
-                              if (!copied) {
-                                throw new Error('Clipboard did not confirm the copy.');
-                              }
-                            } catch {
-                              showToast('링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
-                                tone: 'danger',
-                              });
-                            }
-                          })();
-                        },
-                      },
-                      ...menuItems,
-                      item,
-                    ]}
+                    items={[copyProfileLinkItem, item, ...menuItems]}
                   />
                 )}
+              />
+            ) : menuItems.length > 0 ? (
+              <ProfileMoreMenu
+                items={[copyProfileLinkItem, ...menuItems]}
+                onTriggerReady={onMenuTriggerReady}
               />
             ) : null}
             {action ? <View style={styles.action}>{action}</View> : null}

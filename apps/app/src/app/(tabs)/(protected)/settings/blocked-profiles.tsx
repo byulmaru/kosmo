@@ -1,17 +1,23 @@
 import { useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
+import { useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { SettingsBlockedProfiles } from '@/components/settings/SettingsBlockedProfiles';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
+import type { View } from 'react-native';
 
 export default function SettingsBlockedProfilesRoute() {
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
+  const shellChrome = useShellChrome();
+  const routeHeadingRef = useRef<View>(null);
+  const headingRef = detailHeaderMode === 'hidden' ? shellChrome?.pageHeadingRef : routeHeadingRef;
   const backButton =
     detailHeaderMode === 'back' ? (
       <IconButton
@@ -27,9 +33,9 @@ export default function SettingsBlockedProfilesRoute() {
   return (
     <>
       {detailHeaderMode !== 'hidden' ? (
-        <PageHeader leading={backButton} title="차단한 프로필" />
+        <PageHeader headingRef={routeHeadingRef} leading={backButton} title="차단한 프로필" />
       ) : null}
-      <SettingsBlockedProfiles />
+      <SettingsBlockedProfiles headingRef={headingRef} />
     </>
   );
 }

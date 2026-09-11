@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { before, mock, test } from 'node:test';
+import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 
@@ -8,7 +8,10 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+const platform = { OS: 'web' };
+
 mockModule('react-native', {
+  Platform: platform,
   StyleSheet: { create: <T>(styles: T) => styles },
   Pressable: 'Pressable',
   Text: 'Text',
@@ -31,6 +34,7 @@ mockModule(new URL('../theme/ThemeProvider.tsx', import.meta.url), {
 
 type PageHeaderProps =
   | {
+      headingRef?: object;
       leading?: ReactNode;
       title: string;
       titleLines?: 1;
@@ -54,9 +58,11 @@ type TestElementProps = {
   href?: string;
   children?: ReactNode;
   numberOfLines?: number;
+  focusable?: boolean;
   onCurrentNavigate?: () => void;
   style?: unknown;
   ellipsizeMode?: string;
+  tabIndex?: number;
   variant?: string;
   width?: number;
 };
@@ -68,6 +74,10 @@ let PageHeader: PageHeaderComponent | undefined;
 before(async () => {
   const module = await import('./PageHeader').catch(() => null);
   PageHeader = module?.PageHeader as PageHeaderComponent | undefined;
+});
+
+afterEach(() => {
+  platform.OS = 'web';
 });
 
 function renderHeader(props: PageHeaderProps) {
@@ -100,6 +110,29 @@ test('text variant exposes one visible heading in a 64px page bar', () => {
   assert.equal(headings.length, 1);
   assert.equal(headings[0]?.props.children, '알림');
   assert.equal((headings[0]?.props.style as Array<Record<string, unknown>>)[1]?.color, '#1a1a1a');
+});
+
+test('text variant exposes a focusable semantic heading target when requested', () => {
+  const header = renderHeader({ headingRef: { current: null }, title: '차단한 프로필' });
+  const heading = findElements(header, 'View').find(
+    (element) => element.props.accessibilityRole === 'header',
+  );
+
+  assert.ok(heading);
+  assert.equal(heading.props.tabIndex, -1);
+  assert.equal(findElements(heading, 'Text')[0]?.props.children, '차단한 프로필');
+});
+
+test('Native text variant exposes a native-focusable semantic heading target', () => {
+  platform.OS = 'ios';
+  const header = renderHeader({ headingRef: { current: null }, title: '차단한 프로필' });
+  const heading = findElements(header, 'View').find(
+    (element) => element.props.accessibilityRole === 'header',
+  );
+
+  assert.ok(heading);
+  assert.equal(heading.props.focusable, true);
+  assert.equal('tabIndex' in heading.props, false);
 });
 
 test('page bar stays on the route canvas and uses only a subtle boundary', () => {
