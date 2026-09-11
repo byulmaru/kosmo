@@ -171,7 +171,7 @@
 
 - Decision Date: 2026-09-10
 - Decision Class: Implementation Choice
-- Authority / Provenance: 2026-09-10 사용자 결정, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `openspec/specs/hashtag-related-profile-api/spec.md`, `PROD-822`, PR #770 최신 review
+- Authority / Provenance: 2026-09-10 사용자 결정, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `PROD-822`, PR #770 최신 review
 - Status: Active
 - Context / Problem: #770이 관리 GraphQL API, 기존 조회·상호작용 정책과 실행 회귀를 한 diff에 포함해 계약 검토와 런타임 영향 검토를 독립적으로 수행하기 어렵다. 또한 Local 전용 조건과 ActivityPub 유입을 혼동하거나 쓰기 admission과 목록 SQL predicate를 같은 helper 책임으로 합치면 origin별 우회와 정책 drift가 생긴다.
 - Decision Outcome: #770은 canonical 문서와 `add-profile-block` OpenSpec 정책·계약만 소유한다. 후속 `PROD-822-graphql` layer는 selected Local actor의 Block/Unblock mutation, Owner 관리 connection·관계 Node, 정확한 unblock 관계 ID, generated GraphQL schema와 관리 API 테스트를 소유한다. 그 자식 `PROD-822-policy` layer는 GraphQL `node(id:)`·`profileByHandle` 직접 조회, `searchProfiles`와 `Hashtag.relatedProfiles` 후보·콘텐츠·Follow·Notification과 새 상호작용 제한, 공통 admission, Local/ActivityPub 실행 경로와 회귀를 소유한다. 유효한 Account의 현재 selected Profile을 두 Profile 탐색 surface의 viewer로 사용해 양방향 Active Block 후보를 pagination 전에 제외하며, selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를 유지하고 임의 actor·이전 selected Profile·client cache를 재사용하지 않는다. Reply·Quote·Reaction·Repost의 쓰기 admission은 origin과 무관한 공통 assertion을 사용하고 목록용 SQL predicate와 분리한다. 현재 consumer가 없는 Quote는 assertion 단위 검증과 실제 endpoint 미검증을 구분한다. `FOLLOWERS` 권한은 Follow 존재와 양방향 Active Block 부재를 함께 요구한다. Remote Owner의 ActivityPub Block/Undo ingress는 `PROD-818` 범위로 남긴다.

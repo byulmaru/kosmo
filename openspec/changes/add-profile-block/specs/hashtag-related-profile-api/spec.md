@@ -2,7 +2,7 @@
 
 ### Requirement: Hashtag related Profile candidates apply the selected Profile Block policy
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `openspec/specs/hashtag-related-profile-api/spec.md`, `PROD-822`. 유효한 Account에 selected Profile이 있으면 시스템은 그 Profile을 `Hashtag.relatedProfiles`의 viewer로 사용해야 한다(MUST). 시스템은 기존의 정확한 Hashtag 관계와 공개 Profile 조회 조건을 통과한 후보 중 viewer와 어느 방향으로든 Active Profile Block 관계인 Profile을 pagination·cursor·limit 전에 제외해야 한다(MUST). selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를 유지하고 Profile Block predicate나 selected Local Profile을 새로 요구해서는 안 된다(MUST NOT). 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `PROD-822`. 유효한 Account에 selected Profile이 있으면 시스템은 그 Profile을 `Hashtag.relatedProfiles`의 viewer로 사용해야 한다(MUST). 시스템은 기존의 정확한 Hashtag 관계와 공개 Profile 조회 조건을 통과한 후보 중 viewer와 어느 방향으로든 Active Profile Block 관계인 Profile을 pagination·cursor·limit 전에 제외해야 한다(MUST). selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를 유지하고 Profile Block predicate나 selected Local Profile을 새로 요구해서는 안 된다(MUST NOT). 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용해서는 안 된다(MUST NOT).
 
 #### Scenario: selected Profile이 차단한 Profile을 Hashtag 관련 후보에서 제외한다
 
