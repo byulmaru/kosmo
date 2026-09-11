@@ -1,6 +1,7 @@
 export { resolveActivityPubPostUri } from './src/activitypub-post-uri';
 export { federation } from './src/federation';
 export { sendAcceptFollowActivity } from './src/follow-delivery';
+export { materializeHydratedRemoteNote } from './src/inbound-create-note';
 export type {
   InboundCaptureContext,
   InboundObservabilityReporter,

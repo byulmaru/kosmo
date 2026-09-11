@@ -49,6 +49,7 @@ type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'>;
 
 type RemoteActorMaterializationOptions = {
   context: RemoteActorLookupContext;
+  expectedActorUri?: URL;
   handle: string;
   now?: Temporal.Instant;
   reactivateUnresponsive?: boolean;
@@ -405,7 +406,13 @@ export const findOrMaterializeRemoteProfileActorByUri = async ({
   } catch {
     throw new RemoteActorMaterializationError('WebFinger actor identity does not match.');
   }
-  await materializeRemoteProfileActor({ context, handle, now, reactivateUnresponsive: true });
+  await materializeRemoteProfileActor({
+    context,
+    expectedActorUri: actorUri,
+    handle,
+    now,
+    reactivateUnresponsive: true,
+  });
 
   const materialized = await findStoredRemoteProfileActorByUri(actorUri);
 
@@ -469,6 +476,7 @@ export const findOrMaterializeRemoteProfileActor = async ({
 
 export const materializeRemoteProfileActor = async ({
   context,
+  expectedActorUri,
   handle,
   now = getNow(),
   reactivateUnresponsive = false,
@@ -485,6 +493,10 @@ export const materializeRemoteProfileActor = async ({
   });
   const actor = await lookupRemoteActor(context, `${parsed.handle}@${parsed.domain}`);
   const actorId = actor.id!;
+
+  if (expectedActorUri && actorId.href !== expectedActorUri.href) {
+    throw new RemoteActorMaterializationError('Remote actor URI does not match.');
+  }
 
   if ((actorId.protocol !== 'http:' && actorId.protocol !== 'https:') || !actorId.hostname) {
     throw new RemoteActorMaterializationError('Remote actor URI must use HTTP(S) with a hostname.');

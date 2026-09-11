@@ -170,16 +170,14 @@ export const observeInbound = ({ error, message, ...observation }: InboundObserv
   }
 
   if (
-    observation.activityType === 'Create' &&
-    observation.handler === 'create' &&
     observation.outcome === 'rejected' &&
     observation.phase === 'projection' &&
     observation.reasonCode === 'note_content_length_exceeded'
   ) {
     try {
       reporter.countMetric('activitypub.inbound.note_content_length_exceeded', {
-        activity_type: 'Create',
-        handler: 'create',
+        activity_type: observation.activityType,
+        handler: observation.handler,
         outcome: 'rejected',
         phase: 'projection',
         reason_code: 'note_content_length_exceeded',

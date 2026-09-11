@@ -1,10 +1,4 @@
-# activitypub-remote-reply-ingestion Specification
-
-## Purpose
-
-원격 ActivityPub `Create(Note)`의 `inReplyTo`를 저장된 Post identity와 기존 Reply Parent 관계로 materialize하고, 현재 연결할 수 없는 Parent는 향후 lifecycle을 열어 둔 채 top-level Post로 보존하기 위한 요구사항을 정의한다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: 원격 Reply identity 검증
 
@@ -109,12 +103,3 @@
 - **THEN** 시스템은 object URI마다 하나의 Post로 수렴한다
 - **AND** 최초 `replyParentId`가 null이어도 나중 입력으로 갱신하지 않는다
 - **AND** Parent update/backfill은 실행하지 않는다
-
-### Requirement: 기존 GraphQL Post 조회 계약 재사용
-
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, PROD-358, PROD-398. materialize된 원격 Reply는 기존 단일 GraphQL `Post` Node와 nullable `replyParent` field로 조회되어야 하며(MUST), 별도 Post Kind enum이나 Reply concrete type을 요구해서는 안 된다(MUST NOT).
-
-#### Scenario: materialize된 원격 Reply 조회
-
-- **WHEN** viewer가 기존 Post 조회 정책을 통과하는 materialize된 원격 Reply를 조회한다
-- **THEN** GraphQL은 기존 `Post` Node의 Content와 `replyParent` 관계를 반환한다

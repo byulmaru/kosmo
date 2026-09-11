@@ -209,6 +209,40 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 - 인증하지 않은 guest도 조회할 수 있는 Post의 공유 참조를 복사할 수 있다.
 - 공유 참조는 Post Visibility와 Post Eligibility가 허용하지 않은 viewer에게 조회 범위를 넓히지 않는다.
 
+### 원격 Note의 최초 materialization과 Reply Parent
+
+- 검증된 Public/Unlisted 원격 Note는 `inReplyTo` 유무와 관계없이 최초 저장한다. 요청 URI와 Note
+  identity, 단일 attribution과 작성자 검증, 지원되는 Content 및 수신 한계를 통과해야 한다. PUBLIC/UNLISTED 신규 원문 조회 경로는
+  Followers Only/DIRECT Note를 허용하지 않으며, 기존 Create의 Followers Only 수신 계약은 유지한다.
+- Reply Parent는 기존 DB의 Local canonical identity 또는 Remote exact URI mapping으로만 조회한다.
+  Parent identity가 모호하거나 지원되지 않거나, Parent가 없거나 기존 Post 생성 계약상 부적합하면
+  `replyParentId = null`로 Note 자체를 저장한다. DB 장애와 예상하지 못한 오류는 fallback 조건이 아니다.
+- 최초 수신·materialization은 Parent를 원격 fetch하거나 재귀 materialize하지 않는다. 중복 입력은 기존
+  `replyParentId`를 변경하지 않으며, fallback Post의 후속 Parent 연결·update/backfill은 별도 lifecycle이다.
+- Quote Source가 Reply이면 Source Note 자체의 identity·author·audience를 기준으로 처리한다. Parent나 Parent
+  작성자로 대체하지 않는다. Source 저장은 Quote 승인이나 viewer의 Source 조회 권한을 부여하지 않는다.
+- 현재 raw `inReplyTo`를 별도로 보존하지 않으므로 null Parent로 저장된 Reply의 자동 관계 복구를 보장할 수
+  없다. 후속 복구는 대상 식별·검증 근거·재조회 가능성 및 historical backfill 한계를 먼저 확정해야 한다.
+  이 후속 과제는 현재 최초 materialization의 완료 조건이 아니다.
+
+### 원격 원문의 Media와 작성자 저장 경계
+
+- Public/Unlisted 신규 원문 조회는 기존 [원격 Media 계약](./media.md)을 그대로 적용한다. embedded Image와
+  지원되는 image Document 중 원래 순서의 앞 4개 후보만 선택한다. IRI-only·지원하지 않는 attachment와
+  초과분은 추가 fetch 없이 제외한다. 선택된 후보의 필수 URL 검증이 실패하면 Note 전체를 거부하며 본문이나
+  일부 유효 이미지로 축소 저장하지 않는다. nullable Media Type·Alt Text와 attachment별 Media identity를 보존한다.
+- attachment-only Note는 하나 이상의 유효한 이미지가 있으면 허용한다. 신규 원문 조회에서 본문과 유효한
+  이미지가 모두 없는 Note는 저장하지 않는다. 이 조건을 기존 Create에 일괄 적용해 기존 동작을 바꾸지 않는다.
+- Note identity·attribution·Public/Unlisted audience·content/media·수신 한계 검증은 신규 작성자 persistence보다
+  먼저 수행한다. Note의 `attributedTo`와 실제 저장할 Actor의 exact URI 일치는 Actor persistence 전에 검증한다.
+  불일치한 Actor를 저장하거나 기존 Profile을 그 Actor에 재연결한 뒤 실패 처리하지 않는다.
+- Remote Actor/Profile과 Post는 독립된 원자적 저장 경계다. Actor 내부 Profile·Actor metadata·Profile 표현의
+  원자성을 유지한다. 유효한 작성자가 commit된 뒤 Post가 실패하거나 duplicate로 종료돼도 작성자와 그 표현을
+  보상 삭제하지 않는다. Instance 확보도 기존 독립 경계를 유지하며 Note/Post 실패를 이유로 삭제하지 않는다.
+- Post·PostContent·currentContent·ActivityPub mapping·첨부 Media·최초 Reply Parent 관계는 같은 Post
+  transaction에서 commit/rollback한다. DB 장애와 예상하지 못한 오류는 전파한다. Post effects는 성공한 Post
+  commit 뒤에만 실행하고, 실패·duplicate에서는 시작하지 않는다. commit 뒤 effects 실패는 저장 결과를 되돌리지 않는다.
+
 ### ActivityPub Local Note 표현
 
 - Content가 있는 Local Post의 ActivityPub identity는 Author Profile이 연결된 Local Instance의 canonical

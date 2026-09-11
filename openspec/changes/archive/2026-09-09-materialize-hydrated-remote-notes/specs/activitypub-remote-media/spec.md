@@ -1,11 +1,4 @@
-# activitypub-remote-media Specification
-
-## Purpose
-
-원격 ActivityPub Note의 embedded 이미지 attachment를 검증하고, Remote Media와 순서 있는 PostContent Media
-node로 원자적으로 투영하는 수신 계약을 정의한다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: 원격 이미지 attachment 검증
 

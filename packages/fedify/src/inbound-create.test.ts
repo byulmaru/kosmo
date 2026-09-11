@@ -42,6 +42,7 @@ import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
 import type { findPostByActivityPubUri as findPostByActivityPubUriType } from './activitypub-post-uri';
 import type { handleInboundCreate as handleInboundCreateType } from './inbound-create';
+import type { materializeHydratedRemoteNote as materializeHydratedRemoteNoteType } from './inbound-create-note';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -50,6 +51,7 @@ const remoteActorUri = new URL('https://remote.example/users/alice');
 const remoteKeyUri = new URL('#main-key', remoteActorUri);
 const remoteObjectUri = new URL('https://remote.example/notes/1');
 const receivedAt = Temporal.Instant.from('2026-07-16T00:00:00Z');
+const createObservation = { activityType: 'Create', handler: 'create' } as const;
 const uriFederation = createFederation<void>({ kv: new MemoryKvStore() });
 uriFederation.setObjectDispatcher(Note, '/ap/note/{id}', () => null);
 const uriContext = uriFederation.createContext(new URL(publicOrigin), undefined);
@@ -65,10 +67,12 @@ let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
+let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let createPost: typeof CoreServices.createPost;
 let findPostByActivityPubUri: typeof findPostByActivityPubUriType;
 let handleInboundCreate: typeof handleInboundCreateType;
+let materializeHydratedRemoteNote: typeof materializeHydratedRemoteNoteType;
 let localInstanceId: string;
 
 describe('inbound Create dispatch', () => {
@@ -87,12 +91,14 @@ describe('inbound Create dispatch', () => {
       PostContents,
       Posts,
       ProfileFollows,
+      ProfileMedia,
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ createPost } = await import('@kosmo/core/services'));
     ({ findPostByActivityPubUri } = await import('./activitypub-post-uri'));
     ({ handleInboundCreate } = await import('./inbound-create'));
+    ({ materializeHydratedRemoteNote } = await import('./inbound-create-note'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
@@ -102,6 +108,7 @@ describe('inbound Create dispatch', () => {
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
+    await db.delete(ProfileMedia);
     await db.delete(Media);
     await db.delete(Profiles);
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
@@ -112,6 +119,7 @@ describe('inbound Create dispatch', () => {
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
+    await db.delete(ProfileMedia);
     await db.delete(Media);
     await pg.end();
   });
@@ -141,6 +149,556 @@ describe('inbound Create dispatch', () => {
     assert.equal(post.visibility, 'UNLISTED');
     assert.equal(content.document.summary, 'Content warning');
     assert.equal(postContentDocumentToText(content.document), 'Hello');
+  });
+
+  test('materializes a public hydrated original from its stored attributed author', async () => {
+    const profile = await createStoredRemoteActor();
+    const objectUri = new URL('https://objects.example/notes/original');
+    const result = await materializeHydratedRemoteNote({
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'Original',
+        id: objectUri,
+        to: PUBLIC_COLLECTION,
+      }),
+      objectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+
+    const materialized = await getMaterializedPost(objectUri);
+    assert.deepEqual(result, { postId: materialized.post.id, status: 'created' });
+    assert.equal(materialized.post.profileId, profile.id);
+    assert.equal(materialized.post.visibility, PostVisibility.PUBLIC);
+    assert.equal(postContentDocumentToText(materialized.content.document), 'Original');
+  });
+
+  test('rejects a mismatched discovered author without persisting the actor or Post', async () => {
+    const objectUri = new URL('https://objects.example/notes/mismatched-author');
+    const lookupObject = mock.fn(
+      async () =>
+        new Person({
+          id: new URL('https://remote.example/users/mallory'),
+          preferredUsername: 'alice',
+        }),
+    );
+    const fetchMock = mock.method(globalThis, 'fetch', async () =>
+      Response.json(
+        { subject: 'acct:alice@remote.example' },
+        { headers: { 'Content-Type': 'application/jrd+json' } },
+      ),
+    );
+
+    try {
+      const result = await materializeHydratedRemoteNote({
+        context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'Mismatched author',
+          id: objectUri,
+          to: PUBLIC_COLLECTION,
+        }),
+        objectUri,
+        observation: createObservation,
+        receivedAt,
+      });
+
+      assert.deepEqual(result, { reason: 'unusable_author', status: 'rejected' });
+      assert.equal(await db.$count(ActivityPubActors), 0);
+      assert.equal(await db.$count(Profiles), 0);
+      assert.equal(await db.$count(Posts), 0);
+    } finally {
+      fetchMock.mock.restore();
+    }
+  });
+
+  test('rejects unsupported, empty, and invalid originals before author discovery', async () => {
+    const lookupObject = mock.fn(
+      async () => new Person({ id: remoteActorUri, preferredUsername: 'alice' }),
+    );
+    const context = { ...createContext(), lookupObject } as unknown as InboxContext<void>;
+    const cases = [
+      {
+        expected: { reason: 'invalid_note', status: 'rejected' },
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'Mismatched object identity',
+          id: new URL('https://objects.example/notes/actual-id'),
+          to: PUBLIC_COLLECTION,
+        }),
+        objectUri: new URL('https://objects.example/notes/requested-id'),
+      },
+      {
+        expected: { reason: 'invalid_note', status: 'rejected' },
+        note: new Note({
+          content: 'Missing attribution',
+          id: new URL('https://objects.example/notes/missing-attribution'),
+          to: PUBLIC_COLLECTION,
+        }),
+      },
+      {
+        expected: { reason: 'invalid_note', status: 'rejected' },
+        note: new Note({
+          attributions: [remoteActorUri, new URL('https://remote.example/users/mallory')],
+          content: 'Ambiguous attribution',
+          id: new URL('https://objects.example/notes/ambiguous-attribution'),
+          to: PUBLIC_COLLECTION,
+        }),
+      },
+      {
+        expected: { reason: 'invalid_note', status: 'rejected' },
+        note: new Note({
+          attribution: new URL('acct:alice@remote.example'),
+          content: 'Unsupported attribution',
+          id: new URL('https://objects.example/notes/non-http-attribution'),
+          to: PUBLIC_COLLECTION,
+        }),
+      },
+      {
+        expected: { reason: 'unsupported_note', status: 'rejected' },
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'Followers only',
+          id: new URL('https://objects.example/notes/followers-only'),
+          to: new URL('https://remote.example/users/alice/followers'),
+        }),
+      },
+      {
+        expected: { reason: 'unsupported_note', status: 'rejected' },
+        note: new Note({
+          attachments: [new URL('https://remote.example/media/iri-only')],
+          attribution: remoteActorUri,
+          id: new URL('https://objects.example/notes/empty'),
+          to: PUBLIC_COLLECTION,
+        }),
+      },
+      {
+        expected: { reason: 'note_content_length_exceeded', status: 'rejected' },
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'x'.repeat(10_001),
+          id: new URL('https://objects.example/notes/oversized'),
+          to: PUBLIC_COLLECTION,
+        }),
+      },
+      {
+        expected: { reason: 'invalid_note', status: 'rejected' },
+        note: new Note({
+          attachments: [new Image({ url: new URL('data:image/png;base64,AA==') })],
+          attribution: remoteActorUri,
+          content: 'Invalid image',
+          id: new URL('https://objects.example/notes/invalid-media'),
+          to: PUBLIC_COLLECTION,
+        }),
+      },
+    ];
+
+    for (const { expected, note, objectUri } of cases) {
+      assert.ok(note.id);
+      assert.deepEqual(
+        await materializeHydratedRemoteNote({
+          context,
+          note,
+          objectUri: objectUri ?? note.id,
+          observation: createObservation,
+          receivedAt,
+        }),
+        expected,
+      );
+    }
+
+    assert.equal(lookupObject.mock.calls.length, 0);
+    assert.equal(await db.$count(ActivityPubActors), 0);
+    assert.equal(await db.$count(Profiles), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(Media), 0);
+  });
+
+  test('materializes an unknown attributed author before an attachment-only original', async () => {
+    const objectUri = new URL('https://objects.example/notes/attachment-only');
+    const mediaUrl = new URL('https://remote.example/media/attachment-only.png');
+    const lookupObject = mock.fn(
+      async () => new Person({ id: remoteActorUri, preferredUsername: 'alice' }),
+    );
+    const fetchMock = mock.method(globalThis, 'fetch', async () =>
+      Response.json(
+        { subject: 'acct:alice@remote.example' },
+        { headers: { 'Content-Type': 'application/jrd+json' } },
+      ),
+    );
+
+    try {
+      const result = await materializeHydratedRemoteNote({
+        context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
+        note: new Note({
+          attachments: [new Image({ mediaType: null, name: null, url: mediaUrl })],
+          attribution: remoteActorUri,
+          id: objectUri,
+          to: PUBLIC_COLLECTION,
+        }),
+        objectUri,
+        observation: createObservation,
+        receivedAt,
+      });
+      const materialized = await getMaterializedPost(objectUri);
+      const [actor] = await db.select().from(ActivityPubActors);
+      const [media] = await db.select().from(Media);
+
+      assert.deepEqual(result, { postId: materialized.post.id, status: 'created' });
+      assert.equal(actor?.uri, remoteActorUri.href);
+      assert.equal(materialized.post.profileId, actor?.profileId);
+      assert.equal(postContentDocumentToText(materialized.content.document), '');
+      assert.equal(media?.url, mediaUrl.href);
+      assert.equal(media?.mediaType, null);
+      assert.equal(media?.altText, null);
+    } finally {
+      fetchMock.mock.restore();
+    }
+  });
+
+  test('rolls back an unsaved author Profile projection when hydrated materialization fails internally', async () => {
+    const objectUri = new URL('https://objects.example/notes/author-persistence-failure');
+    const actor = new Person({
+      icon: new Image({
+        mediaType: 'image/png',
+        name: 'Avatar',
+        url: new URL('https://remote.example/media/unsaved-avatar.png'),
+      }),
+      id: remoteActorUri,
+      preferredUsername: 'alice',
+    });
+    const lookupObject = mock.fn(async () => actor);
+    const fetchMock = mock.method(globalThis, 'fetch', async () =>
+      Response.json(
+        { subject: 'acct:alice@remote.example' },
+        { headers: { 'Content-Type': 'application/jrd+json' } },
+      ),
+    );
+    await pg`
+      CREATE FUNCTION fail_hydrated_author_profile_media_insert() RETURNS trigger
+      LANGUAGE plpgsql AS $function$
+      BEGIN
+        RAISE EXCEPTION 'intentional hydrated author profile media failure';
+      END
+      $function$
+    `;
+    await pg`
+      CREATE TRIGGER fail_hydrated_author_profile_media_insert
+      BEFORE INSERT ON profile_media
+      FOR EACH ROW EXECUTE FUNCTION fail_hydrated_author_profile_media_insert()
+    `;
+
+    try {
+      await assert.rejects(
+        materializeHydratedRemoteNote({
+          context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
+          note: new Note({
+            attribution: remoteActorUri,
+            content: 'Author persistence failure',
+            id: objectUri,
+            to: PUBLIC_COLLECTION,
+          }),
+          objectUri,
+          observation: createObservation,
+          receivedAt,
+        }),
+      );
+    } finally {
+      await pg`DROP TRIGGER fail_hydrated_author_profile_media_insert ON profile_media`;
+      await pg`DROP FUNCTION fail_hydrated_author_profile_media_insert()`;
+      fetchMock.mock.restore();
+    }
+
+    assert.equal(await db.$count(ActivityPubActors), 0);
+    assert.equal(await db.$count(Profiles), 0);
+    assert.equal(await db.$count(ProfileMedia), 0);
+    assert.equal(await db.$count(Media), 0);
+    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+    assert.equal(await db.$count(Instances), 2);
+  });
+
+  test('preserves a committed discovered author when Post materialization fails', async () => {
+    const objectUri = new URL('https://objects.example/notes/post-failure');
+    const lookupObject = mock.fn(
+      async () => new Person({ id: remoteActorUri, preferredUsername: 'alice' }),
+    );
+    const fetchMock = mock.method(globalThis, 'fetch', async () =>
+      Response.json(
+        { subject: 'acct:alice@remote.example' },
+        { headers: { 'Content-Type': 'application/jrd+json' } },
+      ),
+    );
+    await pg`
+      create function fail_original_post_content() returns trigger
+      language plpgsql as $function$
+      begin
+        raise exception 'intentional original post content failure';
+      end
+      $function$
+    `;
+    await pg`
+      create trigger fail_original_post_content
+      before insert on post_content
+      for each row execute function fail_original_post_content()
+    `;
+
+    try {
+      await assert.rejects(
+        materializeHydratedRemoteNote({
+          context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
+          note: new Note({
+            attachments: [new Image({ url: new URL('https://remote.example/media/rollback.png') })],
+            attribution: remoteActorUri,
+            content: 'Post failure',
+            id: objectUri,
+            to: PUBLIC_COLLECTION,
+          }),
+          objectUri,
+          observation: createObservation,
+          receivedAt,
+        }),
+      );
+    } finally {
+      await pg`drop trigger fail_original_post_content on post_content`;
+      await pg`drop function fail_original_post_content()`;
+      fetchMock.mock.restore();
+    }
+
+    assert.equal(await db.$count(ActivityPubActors), 1);
+    assert.equal(await db.$count(Profiles), 1);
+    assert.equal(await db.$count(Instances), 2);
+    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+    assert.equal(await db.$count(Media), 0);
+  });
+
+  test('returns the existing Post without changing first-write state for duplicate originals', async () => {
+    await createStoredRemoteActor();
+    const objectUri = new URL('https://objects.example/notes/duplicate-original');
+    const first = await materializeHydratedRemoteNote({
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'First',
+        id: objectUri,
+        to: PUBLIC_COLLECTION,
+      }),
+      objectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+    const duplicate = await materializeHydratedRemoteNote({
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        cc: PUBLIC_COLLECTION,
+        content: 'Changed',
+        id: objectUri,
+        replyTarget: new URL('https://remote.example/notes/late-parent'),
+      }),
+      objectUri,
+      observation: createObservation,
+      receivedAt: receivedAt.add({ hours: 1 }),
+    });
+    const materialized = await getMaterializedPost(objectUri);
+
+    assert.equal(first.status, 'created');
+    assert.deepEqual(duplicate, { postId: materialized.post.id, status: 'duplicate' });
+    assert.equal(materialized.post.visibility, PostVisibility.PUBLIC);
+    assert.equal(materialized.post.replyParentId, null);
+    assert.equal(postContentDocumentToText(materialized.content.document), 'First');
+    assert.equal(await db.$count(PostContents), 1);
+  });
+
+  test('materializes public and unlisted originals with DB-only Parent resolution and fallback', async () => {
+    await createStoredRemoteActor();
+    const localAuthor = await createLocalFollowerProfile('local-parent-author');
+    const localParent = await createPost({
+      document: postContentDocumentFromText('Local parent'),
+      origin: 'LOCAL',
+      profileId: localAuthor.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const localParentUri = new URL(`/ap/note/${localParent.post.id}`, publicOrigin);
+    const remoteParentUri = new URL('https://remote.example/notes/original-parent');
+    await handleInboundCreate(
+      createContext(),
+      createRemoteCreate({ objectUri: remoteParentUri }),
+      receivedAt,
+    );
+    const remoteParent = await getMaterializedPost(remoteParentUri);
+    const publicReplyUri = new URL('https://objects.example/notes/public-reply');
+    const unlistedReplyUri = new URL('https://objects.example/notes/unlisted-reply');
+    const fallbackReplyUri = new URL('https://objects.example/notes/fallback-reply');
+
+    await materializeHydratedRemoteNote({
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'Public source reply',
+        id: publicReplyUri,
+        replyTarget: localParentUri,
+        to: PUBLIC_COLLECTION,
+      }),
+      objectUri: publicReplyUri,
+      observation: createObservation,
+      receivedAt,
+    });
+    await materializeHydratedRemoteNote({
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        cc: PUBLIC_COLLECTION,
+        content: 'Unlisted source reply',
+        id: unlistedReplyUri,
+        replyTarget: remoteParentUri,
+      }),
+      objectUri: unlistedReplyUri,
+      observation: createObservation,
+      receivedAt,
+    });
+    await materializeHydratedRemoteNote({
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'Fallback source reply',
+        id: fallbackReplyUri,
+        replyTargets: [
+          new URL('https://remote.example/notes/unknown-1'),
+          new URL('https://remote.example/notes/unknown-2'),
+        ],
+        to: PUBLIC_COLLECTION,
+      }),
+      objectUri: fallbackReplyUri,
+      observation: createObservation,
+      receivedAt,
+    });
+
+    const publicReply = await getMaterializedPost(publicReplyUri);
+    const unlistedReply = await getMaterializedPost(unlistedReplyUri);
+    const fallbackReply = await getMaterializedPost(fallbackReplyUri);
+    assert.equal(publicReply.post.replyParentId, localParent.post.id);
+    assert.equal(publicReply.post.visibility, PostVisibility.PUBLIC);
+    assert.equal(unlistedReply.post.replyParentId, remoteParent.post.id);
+    assert.equal(unlistedReply.post.visibility, PostVisibility.UNLISTED);
+    assert.equal(fallbackReply.post.replyParentId, null);
+  });
+
+  test('propagates Parent lookup failures without falling back or creating a Post', async () => {
+    await createStoredRemoteActor();
+    const databaseFailureUri = new URL('https://objects.example/notes/parent-db-failure');
+
+    await pg`alter table activitypub_post rename to unavailable_activitypub_post`;
+    try {
+      await assert.rejects(
+        materializeHydratedRemoteNote({
+          context: createContext(),
+          note: new Note({
+            attribution: remoteActorUri,
+            content: 'Database failure must propagate',
+            id: databaseFailureUri,
+            replyTarget: new URL('https://remote.example/notes/parent'),
+            to: PUBLIC_COLLECTION,
+          }),
+          objectUri: databaseFailureUri,
+          observation: createObservation,
+          receivedAt,
+        }),
+      );
+    } finally {
+      await pg`alter table unavailable_activitypub_post rename to activitypub_post`;
+    }
+
+    const parserFailureUri = new URL('https://objects.example/notes/parent-parser-failure');
+    await assert.rejects(
+      materializeHydratedRemoteNote({
+        context: {
+          ...createContext(),
+          parseUri: () => {
+            throw new Error('intentional Parent parser failure');
+          },
+        },
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'Parser failure must propagate',
+          id: parserFailureUri,
+          replyTarget: new URL(`/ap/note/${localProfileId}`, publicOrigin),
+          to: PUBLIC_COLLECTION,
+        }),
+        objectUri: parserFailureUri,
+        observation: createObservation,
+        receivedAt,
+      }),
+      /intentional Parent parser failure/,
+    );
+
+    assert.equal(await db.$count(Posts), 0);
+  });
+
+  test('converges an original lookup and Create delivery on one Post identity', async () => {
+    const profile = await createStoredRemoteActor();
+    const objectUri = new URL('https://remote.example/notes/original-create-race');
+    const note = () =>
+      new Note({
+        attribution: remoteActorUri,
+        content: 'Concurrent source',
+        id: objectUri,
+        to: PUBLIC_COLLECTION,
+      });
+
+    const [original] = await Promise.all([
+      materializeHydratedRemoteNote({
+        context: createContext(),
+        note: note(),
+        objectUri,
+        observation: createObservation,
+        receivedAt,
+      }),
+      handleInboundCreate(
+        createContext(),
+        new Create({ actor: remoteActorUri, object: note() }),
+        receivedAt,
+      ),
+    ]);
+    const materialized = await getMaterializedPost(objectUri);
+
+    assert.equal(original.status === 'rejected' ? null : original.postId, materialized.post.id);
+    assert.equal(materialized.post.profileId, profile.id);
+    assert.equal(await db.$count(ActivityPubPosts), 1);
+    assert.equal(await db.$count(Posts), 1);
+    assert.equal(await db.$count(PostContents), 1);
+  });
+
+  test('keeps a committed original when effects start fails', async (t) => {
+    await createStoredRemoteActor();
+    const objectUri = new URL('https://objects.example/notes/effects-failure');
+    const errorLog = mock.method(console, 'error', () => undefined);
+    t.mock.method(temporalClient.workflow, 'start', async () => {
+      throw new Error('Temporal unavailable');
+    });
+
+    try {
+      const result = await materializeHydratedRemoteNote({
+        context: createContext(),
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'Committed before effects',
+          id: objectUri,
+          to: PUBLIC_COLLECTION,
+        }),
+        objectUri,
+        observation: createObservation,
+        receivedAt,
+      });
+      const materialized = await getMaterializedPost(objectUri);
+      assert.deepEqual(result, { postId: materialized.post.id, status: 'created' });
+    } finally {
+      errorLog.mock.restore();
+    }
   });
 
   test('keeps recognized visibility markers with extra actor audience values', async () => {
@@ -1364,6 +1922,212 @@ describe('inbound Create dispatch', () => {
     assert.equal(await db.$count(ActivityPubPosts), 0);
     assert.equal(await db.$count(Posts), 0);
     assert.equal(await db.$count(PostContents), 0);
+  });
+
+  test('preserves the bounded rejection reason for a hydrated action without Create observation', async () => {
+    await createStoredRemoteActor();
+    const objectUri = new URL('https://objects.example/notes/over-limit-action');
+    const logs: unknown[] = [];
+    const metrics: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      countMetric: (name, attributes) => metrics.push({ attributes, name }),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      const result = await materializeHydratedRemoteNote({
+        context: createContext(),
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'a'.repeat(10_001),
+          id: objectUri,
+          mediaType: 'text/plain',
+          to: PUBLIC_COLLECTION,
+        }),
+        objectUri,
+        observation: {
+          activityType: 'Announce',
+          handler: 'announce',
+        },
+        receivedAt,
+      });
+
+      assert.deepEqual(result, {
+        reason: 'note_content_length_exceeded',
+        status: 'rejected',
+      });
+    } finally {
+      restoreReporter();
+    }
+
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Announce',
+        handler: 'announce',
+        objectOrigin: objectUri.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'note_content_length_exceeded',
+      },
+    ]);
+    assert.doesNotMatch(JSON.stringify(logs), /a{100}/u);
+    assert.deepEqual(metrics, [
+      {
+        attributes: {
+          activity_type: 'Announce',
+          handler: 'announce',
+          outcome: 'rejected',
+          phase: 'projection',
+          reason_code: 'note_content_length_exceeded',
+        },
+        name: 'activitypub.inbound.note_content_length_exceeded',
+      },
+    ]);
+    assert.doesNotMatch(JSON.stringify(metrics), /a{100}|objects\.example|over-limit-action/u);
+    assert.equal(await db.$count(Media), 0);
+    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+  });
+
+  test('applies the content budget at the embedded Create and hydrated action boundaries', async () => {
+    await createStoredRemoteActor();
+    const embeddedCases = [
+      { expected: 'created', length: 9_999 },
+      { expected: 'created', length: 10_000 },
+      { expected: 'rejected', length: 10_001 },
+    ] as const;
+    const hydratedCases = [
+      { expected: 'created', length: 9_999 },
+      { expected: 'created', length: 10_000 },
+      { expected: 'rejected', length: 10_001 },
+    ] as const;
+
+    for (const { expected, length } of embeddedCases) {
+      const objectUri = new URL(`https://remote.example/notes/budget-embedded-${length}`);
+      await handleInboundCreate(
+        createContext(),
+        new Create({
+          actor: remoteActorUri,
+          object: new Note({
+            attribution: remoteActorUri,
+            content: 'a'.repeat(length),
+            id: objectUri,
+            mediaType: 'text/plain',
+            to: PUBLIC_COLLECTION,
+          }),
+        }),
+        receivedAt,
+      );
+
+      if (expected === 'created') {
+        assert.equal((await getMaterializedPost(objectUri)).post.visibility, PostVisibility.PUBLIC);
+      } else {
+        assert.equal(await db.$count(Posts), 2);
+      }
+    }
+
+    for (const { expected, length } of hydratedCases) {
+      const objectUri = new URL(`https://objects.example/notes/budget-hydrated-${length}`);
+      const result = await materializeHydratedRemoteNote({
+        context: createContext(),
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'a'.repeat(length),
+          id: objectUri,
+          mediaType: 'text/plain',
+          to: PUBLIC_COLLECTION,
+        }),
+        objectUri,
+        observation: createObservation,
+        receivedAt,
+      });
+
+      if (expected === 'created') {
+        assert.equal(result.status, 'created');
+        assert.equal((await getMaterializedPost(objectUri)).post.visibility, PostVisibility.PUBLIC);
+      } else {
+        assert.deepEqual(result, {
+          reason: 'note_content_length_exceeded',
+          status: 'rejected',
+        });
+      }
+    }
+
+    assert.equal(await db.$count(Posts), 4);
+    assert.equal(await db.$count(PostContents), 4);
+    assert.equal(await db.$count(ActivityPubPosts), 4);
+  });
+
+  test('converges unsaved Actor and Post identity for concurrent hydrated materialization without loser Media', async () => {
+    const objectUri = new URL('https://objects.example/notes/concurrent-new-materialization');
+    const mediaUrl = new URL('https://remote.example/media/concurrent-new-materialization.webp');
+    const actor = new Person({ id: remoteActorUri, preferredUsername: 'alice' });
+    let lookupCount = 0;
+    let releaseLookups!: () => void;
+    const bothLookupsStarted = new Promise<void>((resolve) => {
+      releaseLookups = resolve;
+    });
+    const lookupObject = mock.fn(async () => {
+      lookupCount += 1;
+      if (lookupCount === 2) {
+        releaseLookups();
+      }
+      await bothLookupsStarted;
+      return actor;
+    });
+    const fetchMock = mock.method(globalThis, 'fetch', async () =>
+      Response.json(
+        { subject: 'acct:alice@remote.example' },
+        { headers: { 'Content-Type': 'application/jrd+json' } },
+      ),
+    );
+    const note = () =>
+      new Note({
+        attachments: [new Image({ mediaType: 'image/webp', url: mediaUrl })],
+        attribution: remoteActorUri,
+        content: 'Concurrent new materialization',
+        id: objectUri,
+        mediaType: 'text/plain',
+        to: PUBLIC_COLLECTION,
+      });
+
+    try {
+      const results = await Promise.all([
+        materializeHydratedRemoteNote({
+          context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
+          note: note(),
+          objectUri,
+          observation: createObservation,
+          receivedAt,
+        }),
+        materializeHydratedRemoteNote({
+          context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
+          note: note(),
+          objectUri,
+          observation: createObservation,
+          receivedAt,
+        }),
+      ]);
+
+      assert.deepEqual(results.map((result) => result.status).sort(), ['created', 'duplicate']);
+      const materialized = await getMaterializedPost(objectUri);
+      assert.equal(await db.$count(ActivityPubActors), 1);
+      assert.equal(await db.$count(Profiles), 1);
+      assert.equal(await db.$count(Posts), 1);
+      assert.equal(await db.$count(PostContents), 1);
+      assert.equal(await db.$count(ActivityPubPosts), 1);
+      assert.equal(await db.$count(Media), 1);
+      assert.equal(materialized.post.profileId, (await db.select().from(Profiles))[0]?.id);
+      assert.deepEqual(
+        materialized.content.document.body.content
+          .filter((block) => block.type === 'media')
+          .map((block) => block.attrs.mediaId),
+        [(await db.select().from(Media))[0]?.id],
+      );
+    } finally {
+      fetchMock.mock.restore();
+    }
   });
 
   test('keeps the first content, visibility, and timestamps for duplicate Create', async () => {
