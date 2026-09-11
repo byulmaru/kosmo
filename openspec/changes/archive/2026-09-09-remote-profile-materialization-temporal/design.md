@@ -152,8 +152,7 @@ native args로 ID를 만들고 native `startChild`/`executeChild`의 handle·res
 
 ## Migration Plan
 
-이 change는 public `remoteProfileLookupWorkflow`와 그 handle/domain/profileId ID 규칙을 사용해 caller와 Worker를
-Coordinator 구조로 전환하는 1-layer 범위다. Worker에 URI lookup·materialize·refresh Activity를 연결하고
+이 change는 `main → PROD-808-temporal-runtime (공용 definition/client/child와 공용 테스트) → PR #829 (원격 전용 통합과 전체 change 검증/archive)`의 2-layer 범위다. 공용 layer는 `WorkflowDefinition`·client/child 실행 경계와 공용 테스트를 담당하고, PR #829는 public `remoteProfileLookupWorkflow`와 그 handle/domain/profileId ID 규칙을 사용해 원격 caller와 Worker를 Coordinator 구조로 전환한다. Worker에 URI lookup·materialize·refresh Activity를 연결하고
 `materializeRemoteProfileActorActivity`가 missing에서, Workflow의 refresh child가 stale에서 `refreshRemoteProfileActorActivity`를
 재사용한 뒤, caller가 공용 `runWorkflow`로 하나의
 public lookup Workflow를 dispatch하도록 전환한다. stale child는 별도 refresh ID prefix와 명시적인 두 `ABANDON` 옵션을 사용한다. 이 change는

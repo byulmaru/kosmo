@@ -79,7 +79,7 @@
 
 **Deliverable**
 
-최신 `main`에서 독립적으로 검증 가능한 1-layer 구현과 정합성 증거를 완성하고, 이후 migration Stack이 이 layer 위에서 호출부를 재배치할 수 있는 상태를 만든다.
+`main`에서 시작한 `PROD-808-temporal-runtime` 공용 layer(WorkflowDefinition/client/child와 공용 테스트) 위에 PR #829의 원격 전용 통합을 검증하고, 두 layer를 포함한 이 change 전체의 정합성 증거와 archive 조건을 완성하며, 이후 migration Stack이 PR #829 위에서 호출부를 재배치할 수 있는 상태를 만든다.
 
 **Guardrails**
 
