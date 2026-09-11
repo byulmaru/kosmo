@@ -556,7 +556,6 @@ export const PushInstallations = pgTable(
   'push_installation',
   {
     id: id(),
-    installationId: text('installation_id').notNull(),
     accountId: uuid('account_id')
       .notNull()
       .references(() => Accounts.id, { onDelete: 'cascade' }),
@@ -572,7 +571,6 @@ export const PushInstallations = pgTable(
     updatedAt: updatedAt(),
   },
   (table) => [
-    unique().on(table.installationId),
     // Escape backslashes before PostgreSQL's text-to-bytea cast so opaque strings stay distinct.
     uniqueIndex('push_installation_token_hash_unique').using(
       'btree',

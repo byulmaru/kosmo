@@ -18,7 +18,7 @@ import { KosmoError } from '../error';
  */
 export const invalidatePushInstallation = async (input: {
   readonly accountId: string;
-  readonly installationId: string;
+  readonly id: string;
   readonly token: string;
 }): Promise<void> => {
   try {
@@ -27,7 +27,7 @@ export const invalidatePushInstallation = async (input: {
       .where(
         and(
           eq(PushInstallations.accountId, input.accountId),
-          eq(PushInstallations.installationId, input.installationId),
+          eq(PushInstallations.id, input.id),
           eq(PushInstallations.token, input.token),
         ),
       );
@@ -62,7 +62,6 @@ export const findEligiblePushInstallations = async ({
     .select({
       accountId: PushInstallations.accountId,
       id: PushInstallations.id,
-      installationId: PushInstallations.installationId,
       notificationCreatedAt: Notifications.createdAt,
       platform: PushInstallations.platform,
       sessionId: PushInstallations.sessionId,

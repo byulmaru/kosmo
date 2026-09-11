@@ -34,15 +34,24 @@ lifecycle·권한·표시·탭 이동·실패 경계를 기존 Notification 권�
 
 ### Requirement: 설치 registration과 신규 Notification 경계
 
-**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/domain/objects/notification.md`, `PROD-875`, `PROD-912`, `PROD-914` — 인증된 Account는 자신이 소유한 Android·iOS 앱 설치와 FCM registration token을 등록·갱신·해제할 수 있어야 하며(MUST), 시스템은 설치별 소유권과 token lifecycle을 관리해야 한다(MUST). active installation row만 token을 보관해야 하며(MUST), logout·account switch·Account deletion·명시적 해제·일치하는 invalid/unregistered 결과로 폐기된 설치 registration과 token은 즉시 삭제되어 이후 신규 전달 eligible target이 아니어야 한다(MUST). stale old-token 결과는 갱신된 현재 token을 삭제해서는 안 된다(MUST NOT). 같은 Account의 다른 installation ID가 active token을 재등록하면 기존 중복 row를 원자적으로 삭제하고 새 registration epoch로 등록해야 하며(MUST), 다른 Account의 active token은 거부해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/domain/objects/notification.md`, `PROD-875`, `PROD-912`, `PROD-914` — 인증된 Account는 자신이 소유한 Android·iOS 앱 설치와 FCM registration token을 등록·갱신·해제할 수 있어야 하며(MUST), 시스템은 서버가 발급한 installation row ID와 설치별 소유권·token lifecycle을 관리해야 한다(MUST). 최초 `registerPushInstallation(input: { platform, token })`은 외부 installation ID 없이 새 row를 만들고 `PushInstallation` GlobalID인 `id: ID!`를 반환해야 하며(MUST). `updatePushInstallation(input: { id: ID!, platform, token })`은 반환된 ID와 현재 Account·Session이 일치하는 row만 갱신해야 하고(MUST), 알 수 없거나 삭제된 ID를 새 row로 재생성해서는 안 된다(MUST NOT). `unregisterPushInstallation(input: { id: ID! })`은 현재 Account·Session의 해당 ID만 삭제해야 하며(MUST), 없는 ID는 이미 해제된 것으로 멱등 완료해야 한다(MUST). active installation row만 token을 보관해야 하며(MUST), logout·account switch·Account deletion·명시적 해제·일치하는 invalid/unregistered 결과로 폐기된 설치 registration과 token은 즉시 삭제되어 이후 신규 전달 eligible target이 아니어야 한다(MUST). stale old-token 결과는 갱신된 현재 token을 삭제해서는 안 된다(MUST NOT). 같은 Account가 새 registration으로 현재 active token을 다시 등록하면 기존 중복 row를 원자적으로 삭제하고 새 row ID와 새 registration epoch로 등록해야 하며(MUST), 다른 Account의 active token은 거부해야 한다(MUST).
 
 대상 registration을 받은 시점을 경계로 그 이후 생성된 Notification만 해당 설치에 전달해야 한다(MUST). 새 설치, 새 device 또는 OS 권한 허용 시점에 이미 생성된 unread Notification을 backlog로 재생해서는 안 된다(MUST NOT). OS 상태 변화의 정확한 감지 시점은 이 capability가 고정하지 않으며, client는 관찰 가능한 OS 상태를 동기화한다.
 
 #### Scenario: 자신의 설치만 등록
 
-- **WHEN** 인증된 Account가 자신의 Android·iOS 앱 설치와 native FCM token을 등록·갱신·해제한다
-- **THEN** 시스템은 해당 Account가 소유한 설치의 token lifecycle만 저장·변경한다
+- **WHEN** 인증된 Account가 `registerPushInstallation`으로 platform·native FCM token을 등록한다
+- **THEN** 시스템은 외부 installation ID 없이 새 row를 만들고 `PushInstallation` GlobalID인 `id`를 반환한다
+- **AND** 인증된 Account가 `id: ID!`로 `updatePushInstallation`을 호출하면 현재 Account·Session의 row만 platform·token과 함께 갱신한다
+- **AND** 인증된 Account가 `id: ID!`로 `unregisterPushInstallation`을 호출하면 해당 row와 token만 삭제한다
 - **AND** 다른 Account의 설치나 token을 등록·삭제하지 못하게 한다
+
+#### Scenario: 삭제된 ID는 재생성하지 않고 늦은 해제를 무시한다
+
+- **WHEN** registration이 반환한 `id`가 해제된 뒤 같은 Account가 다시 `registerPushInstallation`을 호출한다
+- **THEN** 시스템은 새 `id`를 반환하고 새 registration epoch를 기록하며 이전 `id`를 재사용하지 않는다
+- **AND** 이전 `id`를 사용하는 늦은 `unregisterPushInstallation`은 새 registration row를 삭제하지 않는다
+- **AND** 이미 없는 `id`의 unregister는 멱등 완료를 반환한다
 
 #### Scenario: registration 이후 생성된 Notification만 전달
 
@@ -59,9 +68,9 @@ lifecycle·권한·표시·탭 이동·실패 경계를 기존 Notification 권�
 
 #### Scenario: old token 무효화와 재설치 중복 정리
 
-- **WHEN** Provider가 갱신 전 old token을 invalid 또는 unregistered로 응답하거나, 같은 Account가 다른 installation ID로 현재 active token을 재등록한다
-- **THEN** old token 결과는 현재 row의 token이 일치하지 않으면 아무 row도 삭제하지 않고, 같은 Account의 active duplicate는 기존 row를 원자적으로 삭제한 뒤 새 installation을 등록한다
-- **AND** 새 registration은 새 수신 시작 시각을 사용하며 registration 이전 Notification을 backlog로 전달하지 않는다
+- **WHEN** Provider가 갱신 전 old token을 invalid 또는 unregistered로 응답하거나, 같은 Account가 새 registration으로 현재 active token을 다시 등록한다
+- **THEN** old token 결과는 Account·row ID·현재 token이 모두 일치하지 않으면 아무 row도 삭제하지 않고, 같은 Account의 active duplicate는 기존 row를 원자적으로 삭제한 뒤 새 row ID로 등록한다
+- **AND** 새 registration은 새 수신 시작 시각과 epoch를 사용하며 registration 이전 Notification을 backlog로 전달하지 않는다
 - **AND** 다른 Account가 소유한 active token은 삭제하거나 등록하지 않는다
 
 ### Requirement: 네이티브 권한 안내와 OS 표시

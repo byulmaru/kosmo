@@ -42,14 +42,19 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
   알림인지 식별할 수 있어야 한다. selected Profile만을 기준으로 Push 수신 범위를 줄이지 않는다.
 - 현재 Account에 로그인되어 있고 OS 알림을 허용한 모든 앱 설치를 Push 대상으로 한다. 가장 최근 설치 하나만
   대상으로 선택하지 않는다.
-- Active installation만 opaque FCM token을 보관한다. 사용자가 설치를 해제하거나 해당 Session이 로그아웃·
-  폐기되거나 Account가 삭제되면 installation row와 token을 즉시 삭제한다. Provider의 invalid·unregistered
-  결과는 Account, installation ID와 현재 token이 모두 일치할 때만 row와 token을 즉시 삭제하며, 늦은 이전
-  token 결과는 갱신된 token을 삭제하지 않는다.
-- 삭제 뒤 재등록은 새 수신 시작 시각을 기록하고 삭제 전 registration epoch나 unread Notification을 재사용하지
-  않는다. 새 registration 시각 이전에 생성된 Notification은 Push backlog로 전달하지 않는다.
-- 같은 Account의 다른 installation ID가 active token을 재등록하면 기존 중복 row를 원자적으로 정리한 뒤 새
-  installation을 등록한다. 다른 Account가 소유한 active token은 등록하거나 삭제하지 않는다.
+- Active installation만 opaque FCM token을 보관한다. 최초 등록은 외부 installation ID를 받지 않고 서버가 새
+  installation row ID를 발급해 반환한다. 갱신은 반환된 row ID와 현재 Account·Session이 모두 일치하는 row만
+  수정하며, 존재하지 않거나 삭제된 ID를 새 row로 재생성하지 않는다. 명시적 해제는 반환된 row ID와 현재
+  Account·Session을 확인한 뒤 해당 row만 삭제하고, 없는 ID는 이미 해제된 것으로 멱등 처리한다. 사용자가
+  설치를 해제하거나 해당 Session이 로그아웃·폐기되거나 Account가 삭제되면 installation row와 token을 즉시
+  삭제한다. Provider의 invalid·unregistered 결과는 Account, row ID와 현재 token이 모두 일치할 때만 row와
+  token을 즉시 삭제하며, 늦은 이전 token 결과는 갱신된 token을 삭제하지 않는다.
+- 삭제 뒤 재등록은 이전에 반환된 ID를 재사용하지 않고 새 row ID와 새 수신 시작 시각을 기록한다. 늦게 도착한
+  이전 ID의 unregister가 새 registration row를 삭제하지 않으며, 삭제 전 registration epoch나 unread
+  Notification을 재사용하지 않는다. 새 registration 시각 이전에 생성된 Notification은 Push backlog로 전달하지
+  않는다.
+- 같은 Account가 새 registration으로 현재 active token을 다시 등록하면 기존 중복 row를 원자적으로 정리한 뒤
+  새 row ID와 새 registration epoch로 등록한다. 다른 Account가 소유한 active token은 등록하거나 삭제하지 않는다.
 - 첫 릴리스에는 전역·알림 유형별·Profile별 in-app Push enable/disable control이나 preference API를
   두지 않는다. Push 수신 여부는 OS 알림 설정만으로 제어하며, 기존 Notification의 Mute·Block·visibility
   억제 정책은 계속 적용한다.

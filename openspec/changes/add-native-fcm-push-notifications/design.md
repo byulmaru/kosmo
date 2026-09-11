@@ -72,12 +72,13 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
 수 있다.
 
 1. **서버 registration 경계:** 인증된 API mutation이 설치 소유권 검증과 platform·token의 등록·갱신·해제 lifecycle을 직접 처리한다.
-   권장 모델은 앱 설치마다 stable installation identity를 두고 현재
-   authenticated session에 binding하며, token refresh는 같은 installation을 갱신하고 logout·revoke·account
-   switch는 기존 auth/revoke semantics로 소유권을 폐기하는 것이다. 이 모델은 비규범적 권장사항이며 새 API
-   shape나 preference registry를 추가하지 않는다. Recipient Profile과 eligible installation을 현재 Account
-   membership, OS 허용 상태와 기존 Notification visibility 정책에서 계산하고, token은 서버 저장 경계에서만
-   Provider 전달에 사용한다. operation 이름과 저장 schema는 고정하지 않는다. 동시 logout·re-register,
+   최초 `registerPushInstallation`은 외부 installation ID를 받지 않고 서버가 새 installation row ID를 발급해
+   반환한다. `updatePushInstallation`은 반환된 ID로 현재 Account·Session에 속한 row만 갱신하고, 삭제되었거나
+   알 수 없는 ID를 재생성하지 않는다. `unregisterPushInstallation`은 해당 ID만 삭제하며 없는 ID는 멱등
+   완료로 처리한다. 이전 ID는 재사용하지 않으므로 늦은 unregister가 새 registration row에 영향을 주지 않는다.
+   Recipient Profile과 eligible installation을 현재 Account membership, OS 허용 상태와 기존 Notification
+   visibility 정책에서 계산하고, token은 서버 저장 경계에서만 Provider 전달에 사용한다. DB UUID PK를
+   `PushInstallation` GlobalID로 인코딩하며 Node/query/registry를 추가하지 않는다. 동시 logout·re-register,
    account switch, token refresh에서 다른 Account가 token을 소유하지 않는지 security/concurrency를 검증한다.
 2. **native 권한과 표시:** 로그인된 첫 실행에서 installation-local 안내 상태를 관찰하고 `알림 받기` CTA에서만
    OS 권한 요청을 시작한다. 권한 상태가 허용된 뒤 native FCM token을 등록·갱신하고, OS native notification

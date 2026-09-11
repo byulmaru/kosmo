@@ -260,6 +260,7 @@ type Mutation {
   unmuteProfile(input: UnmuteProfileInput!): UnmuteProfilePayload!
   unregisterPushInstallation(input: UnregisterPushInstallationInput!): UnregisterPushInstallationPayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
+  updatePushInstallation(input: UpdatePushInstallationInput!): UpdatePushInstallationPayload!
 }
 
 input MuteProfileInput {
@@ -523,13 +524,12 @@ type ReactionNotification implements Node & Notification {
 }
 
 input RegisterPushInstallationInput {
-  installationId: String!
   platform: PushInstallationPlatform!
   token: String!
 }
 
 type RegisterPushInstallationPayload {
-  completed: Boolean!
+  id: ID!
 }
 
 input RejectProfileFollowRequestInput {
@@ -613,7 +613,7 @@ type UnmuteProfilePayload {
 }
 
 input UnregisterPushInstallationInput {
-  installationId: String!
+  id: ID!
 }
 
 type UnregisterPushInstallationPayload {
@@ -632,4 +632,14 @@ input UpdateProfileInput {
 
 type UpdateProfilePayload {
   profile: Profile!
+}
+
+input UpdatePushInstallationInput {
+  id: ID!
+  platform: PushInstallationPlatform!
+  token: String!
+}
+
+type UpdatePushInstallationPayload {
+  completed: Boolean!
 }

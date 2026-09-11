@@ -4,7 +4,9 @@
 `docs/design/notifications.md`에 반영된 PROD-875 제품 결정, `docs/domain/objects/notification.md`의 기존
 Recipient·visibility·Read State 계약, 그리고 2026-09-10 현재 PROD-875/912/913/914 본문·관계를 하나의
 native FCM Push capability에 적용한 결과다. 모든 기록은 현재 상위 authority에서 파생한 계약이며, endpoint,
-DB schema, FCM SDK와 retry 수치 같은 구현 선택은 이 문서에서 결정하지 않는다.
+DB schema, FCM SDK와 retry 수치 같은 구현 선택은 이 문서에서 결정하지 않는다. 단, PROD-912의 승인된
+server-issued installation row ID와 GraphQL mutation surface는 sibling 구현이 공유해야 하는 lifecycle 계약으로
+기록한다.
 
 ## Decision Records
 
@@ -208,6 +210,30 @@ DB schema, FCM SDK와 retry 수치 같은 구현 선택은 이 문서에서 결�
 - Alternatives Considered: `INVALID`·`UNREGISTERED` tombstone과 token 보관은 수신 eligibility를 조회에서만 제외하면서 민감정보 retention과 stale-token 경계를 남긴다. 오래된 token 결과를 installation ID만으로 삭제하면 token refresh 이후의 새 token을 지울 수 있다.
 - Consequences: Push installation table에는 active registration만 남고 invalidation·logout·account deletion은 실제 `DELETE`를 수행한다. Provider invalidation은 Account·installation ID·token을 함께 조건으로 사용한다. 기존 Session revoke와 Account 삭제 lifecycle을 재설계하지 않고 해당 경로에서 installation cleanup을 호출한다.
 - Confirmation / Follow-up: Session `REVOKED`·`EXPIRED`, Account 삭제의 기존 sessions-first 정리와 FK cascade, explicit unregister, matching·stale Provider invalidation과 same-Account reinstall을 실제 DB에서 검증했다. Account 비활성은 기존 auth·eligibility semantics를 유지하며 별도 물리삭제 lifecycle을 추가하지 않는다. Provider SDK와 retry 수치는 PROD-914가 소유한다.
+
+### PROD-912 registration ID는 서버가 발급하고 재사용하지 않는다
+
+- Decision Date: 2026-09-11
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `PROD-912`
+- Status: Active
+- Context / Problem: 외부 installation ID를 등록 입력으로 재사용하면 늦은 unregister가 같은 식별자를 가진 새 registration row에 영향을 줄 수 있다.
+- Decision Outcome: 최초 registration은 외부 installation ID 없이 서버가 새 installation row ID를 발급한다. update·unregister는 반환된 ID와 현재 Account·Session이 일치하는 row에만 적용하며, 삭제된 ID는 재생성하지 않고 없는 unregister는 멱등 완료로 처리한다. 재등록은 항상 새 row ID와 새 registration epoch를 사용하므로 늦은 이전 ID의 unregister가 새 row를 삭제하지 않는다.
+- Alternatives Considered: client가 발급한 stable installation ID를 재사용하거나 unregister에서 token·ID 없이 Account의 설치를 추측하는 방식은 늦은 해제의 대상 경계를 보장하지 못하므로 선택하지 않는다.
+- Consequences: client는 최초 register 응답의 row ID를 저장해 이후 update·unregister에 사용한다. 같은 Account의 active token 중복은 기존 row를 원자적으로 삭제한 뒤 새 row ID로 등록하며, Provider invalidation은 row ID와 현재 token을 함께 확인한다.
+- Confirmation / Follow-up: register→unregister→register 순서에서 ID 비재사용, stale unregister 격리와 no-backlog·새 epoch를 API/DB에서 검증한다. GraphQL field shape와 GlobalID 인코딩은 별도 Implementation Choice로 기록한다.
+
+### PROD-912 GraphQL mutation은 server-issued ID를 `PushInstallation` GlobalID로 노출한다
+
+- Decision Date: 2026-09-11
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-912`, `packages/core/db`, repository GraphQL GlobalID conventions
+- Status: Active
+- Context / Problem: server-issued row ID lifecycle을 GraphQL client가 사용할 공개 ID와 mutation surface로 연결해야 한다.
+- Decision Outcome: `registerPushInstallation(input: { platform, token })`은 `{ id: ID! }`를 반환한다. `updatePushInstallation(input: { id: ID!, platform, token })`과 `unregisterPushInstallation(input: { id: ID! })`은 반환된 `PushInstallation` GlobalID를 입력으로 사용하며, 별도 Node/query/registry는 추가하지 않는다.
+- Alternatives Considered: 외부 installation ID를 입력으로 유지하거나 PushInstallation Node/query/registry를 추가하는 방식은 server-issued ID lifecycle의 최소 경계와 현재 사용 사례를 확장하므로 선택하지 않는다.
+- Consequences: register 응답은 후속 update·unregister의 cacheable public ID를 제공하고, 알 수 없거나 삭제된 update ID는 실패하며 없는 unregister ID는 `{ completed: true }`로 멱등 처리한다. GraphQL scalar·typename 검증은 API boundary가 소유하고 core token lifecycle은 transport-neutral 상태를 유지한다.
+- Confirmation / Follow-up: repository의 `field.globalID`와 `t.input.globalID()` 관행, `PushInstallation` typename 인코딩, register/update/unregister의 unknown/deleted ID 결과를 API integration에서 확인한다.
 
 ## Remaining Decisions
 

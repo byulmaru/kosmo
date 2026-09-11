@@ -1,7 +1,6 @@
 import { db, first, PushInstallations } from '@kosmo/core/db';
-import { PermissionDeniedError } from '@kosmo/core/error';
+import { PermissionDeniedError, ValidationError } from '@kosmo/core/error';
 import { eq } from 'drizzle-orm';
-import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 
 builder.mutationField('unregisterPushInstallation', (t) =>
@@ -12,17 +11,24 @@ builder.mutationField('unregisterPushInstallation', (t) =>
       }),
     }),
     input: {
-      installationId: t.input.string({ validate: z.uuid() }),
+      id: t.input.globalID(),
     },
     resolve: async (_, { input }, ctx) => {
       ctx.c.header('Cache-Control', 'no-store');
       ctx.c.header('Pragma', 'no-cache');
 
+      if (input.id.typename !== 'PushInstallation') {
+        throw new ValidationError('Invalid Push Installation ID', { field: 'id' });
+      }
+
       await db.transaction(async (tx) => {
         const existing = await tx
-          .select()
+          .select({
+            accountId: PushInstallations.accountId,
+            sessionId: PushInstallations.sessionId,
+          })
           .from(PushInstallations)
-          .where(eq(PushInstallations.installationId, input.installationId))
+          .where(eq(PushInstallations.id, input.id.id))
           .then(first);
 
         if (!existing) {
@@ -37,7 +43,7 @@ builder.mutationField('unregisterPushInstallation', (t) =>
           throw new PermissionDeniedError('Push installation is bound to another Session.');
         }
 
-        await tx.delete(PushInstallations).where(eq(PushInstallations.id, existing.id));
+        await tx.delete(PushInstallations).where(eq(PushInstallations.id, input.id.id));
       });
 
       return { completed: true };
