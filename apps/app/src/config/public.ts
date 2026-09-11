@@ -1,3 +1,5 @@
+import { getNativeDeploymentChannel } from './nativeChannel';
+
 export type DeploymentChannel = 'dev' | 'prod';
 
 export type PublicConfig = {
@@ -55,6 +57,11 @@ function getCurrentChannel(): DeploymentChannel {
     }
 
     return channel;
+  }
+
+  const nativeChannel = getNativeDeploymentChannel();
+  if (nativeChannel !== null) {
+    return nativeChannel;
   }
 
   return isNativeDevelopment() ? 'dev' : 'prod';

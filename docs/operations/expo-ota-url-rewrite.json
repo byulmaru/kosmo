@@ -1,0 +1,14 @@
+{
+  "ref": "expo_ota_manifest_header_route",
+  "description": "Route a generic project manifest request to its existing tuple manifest",
+  "enabled": true,
+  "expression": "( http.host eq \"expo-ota.byulmaru.co\" and http.request.method eq \"GET\" and starts_with(http.request.uri.path, \"/releases/\") and substring(http.request.uri.path, 10) ne \"\" and substring(http.request.uri.path, 10) ne \".\" and substring(http.request.uri.path, 10) ne \"..\" and not (substring(http.request.uri.path, 10) contains \"/\") and not (substring(http.request.uri.path, 10) contains \"\\\\\") and not (substring(http.request.uri.path, 10) contains \"?\") and not (substring(http.request.uri.path, 10) contains \"#\") and not (substring(http.request.uri.path, 10) contains \"%\") and http.request.headers[\"expo-protocol-version\"][0] eq \"1\" and (http.request.headers[\"expo-platform\"][0] eq \"ios\" or http.request.headers[\"expo-platform\"][0] eq \"android\") and http.request.headers[\"expo-channel-name\"][0] ne \"\" and http.request.headers[\"expo-channel-name\"][0] ne \".\" and http.request.headers[\"expo-channel-name\"][0] ne \"..\" and not (http.request.headers[\"expo-channel-name\"][0] contains \"/\") and not (http.request.headers[\"expo-channel-name\"][0] contains \"\\\\\") and not (http.request.headers[\"expo-channel-name\"][0] contains \"?\") and not (http.request.headers[\"expo-channel-name\"][0] contains \"#\") and not (http.request.headers[\"expo-channel-name\"][0] contains \"%\") and http.request.headers[\"expo-runtime-version\"][0] ne \"\" and http.request.headers[\"expo-runtime-version\"][0] ne \".\" and http.request.headers[\"expo-runtime-version\"][0] ne \"..\" and not (http.request.headers[\"expo-runtime-version\"][0] contains \"/\") and not (http.request.headers[\"expo-runtime-version\"][0] contains \"\\\\\") and not (http.request.headers[\"expo-runtime-version\"][0] contains \"?\") and not (http.request.headers[\"expo-runtime-version\"][0] contains \"#\") and not (http.request.headers[\"expo-runtime-version\"][0] contains \"%\") )",
+  "action": "rewrite",
+  "action_parameters": {
+    "uri": {
+      "path": {
+        "expression": "concat( http.request.uri.path, \"/\", http.request.headers[\"expo-platform\"][0], \"/\", http.request.headers[\"expo-channel-name\"][0], \"/\", http.request.headers[\"expo-runtime-version\"][0], \"/manifest.json\" )"
+      }
+    }
+  }
+}

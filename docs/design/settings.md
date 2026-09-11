@@ -49,8 +49,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   root에 중복 노출하거나 항목 하나만 가진 `계정`·`화면 설정` 대분류를 만들지 않는다.
 - `정보`는 별도 category나 generic policy registry가 아닌 Settings root의 direct destination이다. `/settings/info`
   detail은 `개인정보 처리방침`, `계정 삭제 안내`, `아동 안전 정책`을 각각 public route로 여는 기존 Settings
-  link-row 문법을 사용한다. 정책 문서의 본문·시행일·이메일 처리와 public route 간 cross-link는 각 정책 문서가
-  소유한다.
+  link-row 문법을 사용한다. Web의 `/settings/info`는 세 policy link만 유지한다. Native channel row/selector와
+  사전 로그인 복구 진입점은 아래 Native channel 전환 계약을 따른다. 정책 문서의
+  본문·시행일·이메일 처리와 public route 간 cross-link는 각 정책 문서가 소유한다.
 - `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 하위 목록을 연다.
   두 상태를 하나의 혼합 목록으로 표시하지 않는다. 세부 action과 Profile 상태는
   [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다.
@@ -111,6 +112,16 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - chevron이나 현재 값 같은 trailing content는 실제 동작과 정보에 맞을 때만 사용한다. 내부 detail과 외부
   destination은 이동을 전달할 수 있지만, 현재 화면에서 값을 바꾸는 control에는 장식용 chevron을 붙이지
   않는다.
+
+## Native channel 전환
+
+- Android/iOS Native `정보`와 사전 로그인 복구는 `dev`·`prod`만 제공하며, Web 정보·channel UI는 유지한다.
+- 선택한 값은 API·Web·OIDC·Sentry·OTA의 하나의 environment로 해석한다. 고정 OTA URL과 persistent header는
+  [Expo OTA 운영](../operations/expo-ota.md)의 계약을 따른다.
+- 취소·현재 값 재선택은 no-op이다. 다른 값은 호환 signed update의 확인·download가 성공한 뒤 login 삭제와
+  reload를 수행하고, 404·검증·download 실패에서는 원래 channel과 실행 가능한 fallback을 유지한다.
+- runtime/project/platform 호환성, signature·asset hash 검증을 유지하며 native code·module·SDK·permission
+  변경은 새 Android/iOS Store binary로 전달한다.
 
 ## 테마 설정
 
@@ -201,8 +212,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   반복하지 않는다.
 - Target root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 →
   `프로필 설정` → `뮤트 및 차단` → `테마`와 현재 선택값 → `정보`다. full Web에서는 이어서 detail heading과
-  현재 선택된 content를 읽는다. `/settings/info`에서는 `정보` heading 다음에 세 public policy link를 문서
-  순서대로 읽는다.
+  현재 선택된 content를 읽는다. Web `/settings/info`에서는 `정보` heading 다음에 세 public policy link를
+  문서 순서대로 읽는다. Native `/settings/info`에서는 policy link와 함께 `채널`의 현재 `dev`·`prod` 값을
+  읽는다.
 - Account 진입점은 시각 label `계정 설정`과 link accessible name·canonical destination에서 Byulmaru ID 외부
   Account Settings로 이동한다는 사실을 전달한다. 내부 진입점은 선택·현재 상태와 destination을, Profile
   control은 Kosmo 내부 기능과 현재 대상을 전달한다.
@@ -211,6 +223,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - navigation과 page action은 실제 동작에 맞는 role, accessible name, current·disabled·busy 상태를 제공한다.
   외부 이동 결과 announcement는 Kosmo가 소유하지 않으며 Profile 조회·저장 결과 announcement는 PROD-667이
   중복 없이 소유한다.
+- Native channel selector와 사전 로그인 복구 진입점은 선택된 `dev`·`prod`와 busy/error 상태를 보조기술에
+  전달한다. 확인·download 중에는 selector를 중복 실행할 수 없고, 취소·현재 channel 재선택은 별도
+  announcement나 상태 변경을 만들지 않는다. Web `/settings/info`는 기존 세 policy link 순서를 유지한다.
 - Web target은 [accessibility.md](./accessibility.md)의 24×24 CSS px minimum과 공식 예외를 따르고, iOS는
   기본 44×44pt, Android는 48×48dp touch target을 사용한다.
 - Web 자동화 결과를 Android·iOS screen reader, font scaling과 touch target 검증의 대체 증거로 사용하지

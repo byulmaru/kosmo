@@ -6,6 +6,10 @@ platform export가 Argo 배포와 병렬로 시작하고, 각 publish는 Argo �
 성공한 뒤 시작한다. Native module, SDK, entitlement, permission 또는 그 밖의 native
 설정이 바뀐 release는 OTA가 아니라 새 Store binary 경로를 사용한다.
 
+Native Store binary의 기본 OTA channel은 `prod`다. Native Settings의 `정보`와 인증 전 복구 진입점은
+`dev`·`prod`를 선택해 API origin·OIDC 로그인 환경과 OTA channel을 함께 전환한다. Web channel과
+`/settings/info` policy link는 이 전환의 대상이 아니다.
+
 ## 책임과 release tuple
 
 Kosmo는 승인된 source checkout, Expo CLI export와 artifact handoff를 소유하고, local
@@ -27,8 +31,8 @@ static delivery에는 private key나 publish credential을 넣지 않는다.
 
 채널은 비어 있지 않고 영문 대소문자, 숫자, `.`, `_`, `-`만 포함하는 단일 path segment여야
 한다. `.`과 `..`은 사용할 수 없다. 현재 자동 caller는 Native public-config 의미에 맞춰
-Deploy Dev에 `dev`, Production Release에 `prod`를 전달한다. Publisher와 delivery의 fixed
-path는 다음 형태다.
+Deploy Dev에 `dev`, Production Release에 `prod`를 전달한다. Publisher와 delivery의 existing
+tuple object path는 다음 형태를 유지한다.
 
 ```text
 releases/{project}/{platform}/{channel}/{runtimeVersion}/manifest.json
@@ -39,6 +43,31 @@ Manifest는 Expo protocol headers를 포함한 `multipart/mixed` 응답으로 �
 `private, no-store`로 캐시한다. Asset은 SHA-256 hex 이름의 immutable object이며
 `public, max-age=31536000, immutable`로 캐시한다.
 
+Native channel 조회는 기존 R2 custom-domain 경로를 유지한 채 Cloudflare URL Rewrite Rule로 제공한다.
+Client의 URL은 `https://expo-ota.byulmaru.co/releases/kosmo-native`로 고정하고
+`expo-protocol-version: 1`, `expo-platform`, `expo-runtime-version`, `expo-channel-name` header를 보낸다. Rule은 host의
+`/releases/{project}` 단일 safe project path와 required header를 검사해 project를 보존한 기존
+`manifest.json` tuple로 URI path만 rewrite하며, generic safe channel contract와 기존 static
+manifest·asset, publisher, Cache/Response Header Rule을 유지한다. 새 Worker나 public path는 만들지 않는다.
+
+Rule artifact는 [`expo-ota-url-rewrite.json`](./expo-ota-url-rewrite.json)이며, [`PROD-334`](https://linear.app/byulmaru/issue/PROD-334)에서
+2026-09-11에 `expo_ota_manifest_header_route`를 배포했다. Active Rule ID는
+`a8d13899b9884eeb9cc4088d22942701`이고 기존 Cache/Response Header Rule은 변경하지 않았다.
+
+## Cloudflare URL Rewrite Rule live evidence
+
+Deploy Dev run `34583000701`에서 확인한 runtime tuple을 2026-09-11 09:24 UTC에 live edge에서 조회했다.
+Query 없는 `kosmo-native` dev manifest는 iOS 10,242 bytes와 Android 11,685 bytes로 각각 200이었고, 해당
+live response는 direct tuple과 signed multipart body bytes, ETag, `cache-control: private, no-store`,
+`expo-protocol-version: 1`, `expo-sfv-version: 0`이 일치했다. Manifest launch asset도 두 platform 모두
+200과 `application/javascript`, `public, max-age=31536000, immutable`을 유지했다. Exact runtime/update
+IDs와 SHA-256은 [`PROD-334`](https://linear.app/byulmaru/issue/PROD-334)의 live snapshot에 기록한다.
+
+Missing protocol header, `windows` platform, unsafe runtime/path, nested project path, safe but missing
+`example-project`/`staging` tuple은 404였고 synthetic response는 없었다. Query를 붙인 probe는 body만
+동일한 200이었지만 기존 edge 동작으로 Expo protocol/SFV header가 없어 query 없는 고정 Native URL만
+이번 지원 계약으로 취급한다.
+
 ## 자동 release 경로
 
 Deploy Dev의 Docker Build가 성공하면 Android와 iOS export가 `update_dev` Argo 배포와
@@ -48,8 +77,8 @@ Deploy Dev의 Docker Build가 성공하면 Android와 iOS export가 `update_dev`
 workflow인 `.github/workflows/expo-ota.yml`을 호출하고, 각 publish job은
 `byulmaru/expo-ota` public reusable workflow를 직접 호출한다. Publish job은 Kosmo
 repository secret `EXPO_OTA_SIGNING_PRIVATE_KEY`를 public publisher의 `signing_private_key`
-로 전달한다. Secret은 2026-09-10 10:06:24 UTC에 등록했다. 실제 publish 실행은 아직 검증하지
-않았다.
+로 전달한다. Secret은 2026-09-10 10:06:24 UTC에 등록했다. Production `prod` publish 및 Native
+Store/device 적용은 별도 evidence로 남긴다.
 
 | 호출 workflow      | 성공한 배포            | OTA channel | source SHA                       |
 | ------------------ | ---------------------- | ----------- | -------------------------------- |
@@ -73,6 +102,14 @@ Publisher의 R2 upload SHA-256 서버 검증, manifest signing 또는 R2 write�
 후 public edge를 다시 조회하지 않는다. Static host가 실제로 응답하는지와 Store binary가
 device에서 update, rejection, offline fallback을 수행하는지는 별도 운영 evidence로
 확인한다.
+
+## Native에서 channel 전환
+
+Native는 `Updates.channel`을 현재 channel source로 읽고 `expo-updates` persistent `expo-channel-name` header를
+사용한다. 별도 client-local channel 값은 저장하지 않는다. 다른 channel은 호환 signed update 확인·download가
+성공한 뒤에만 login 삭제와 reload를 수행하며, 취소·현재 값·404·검증 실패에서는 원래 channel과
+last-known-good 또는 embedded fallback을 유지한다. Native code·module·SDK·permission 변경은 새 Store
+binary로 전달한다.
 
 ## 사전 조건과 credential 경계
 

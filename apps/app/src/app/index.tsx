@@ -12,6 +12,7 @@ import {
 import { graphql, useMutation } from 'react-relay';
 import { startNativeAuthorization, startWebLoginFromPress } from '@/auth/login';
 import { BrandLogo } from '@/components/BrandLogo';
+import { NativeChannelSettings } from '@/components/settings/NativeChannelSettings';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -153,6 +154,7 @@ export default function IndexScreen() {
               {error}
             </Text>
           ) : null}
+          <NativeChannelSettings />
           <NavigationLink href={'/privacy' as Href}>
             <Pressable accessibilityRole="link">
               <Text style={[styles.privacyLink, { color: theme.textSecondary }]}>

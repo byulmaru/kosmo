@@ -62,7 +62,9 @@ drawer에는 정책 링크를 추가하지 않는다.
 - `compact`~`full`: Sidebar footer에는 정책 링크를 추가하지 않는다. Settings navigation의 `정보`가
   `/settings/info`를 열고, 그 detail이 세 public policy route로 이동하는 링크를 제공한다.
 - `< compact` mobile Web과 Android/iOS: mobile drawer footer에는 정책 링크를 추가하지 않는다. Settings의
-  one-pane `정보` detail은 같은 세 링크와 accessible name·keyboard/focus 순서를 제공한다.
+  one-pane `정보` detail은 같은 세 링크와 accessible name·keyboard/focus 순서를 제공한다. Native channel
+  row/selector와 사전 로그인 복구 진입점은 [settings.md](./settings.md)의 Native channel 계약을 따른다.
+  Web `정보` detail은 세 policy link만 유지한다.
 - 가입·로그인 온보딩에서는 기존 landing 개인정보 처리방침 링크만 유지한다. 준비되지 않은 Account form,
   자동 삭제, 공통 신고 navigation은 추가하지 않는다.
 

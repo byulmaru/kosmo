@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
+import { NativeChannelSettings } from '@/components/settings/NativeChannelSettings';
 import { SettingsLinkRow } from '@/components/settings/SettingsLinkRow';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
@@ -29,6 +30,7 @@ export default function SettingsInfoRoute() {
     <>
       {detailHeaderMode !== 'hidden' ? <PageHeader leading={backButton} title="정보" /> : null}
       <View style={[layoutRecipes.listStack, styles.root]}>
+        <NativeChannelSettings />
         <SettingsLinkRow
           accessibilityLabel="개인정보 처리방침"
           href="/privacy"
