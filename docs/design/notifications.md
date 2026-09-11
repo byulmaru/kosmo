@@ -20,6 +20,74 @@ Reply다. Mention은 Future 표본이므로 public props와 Playground에 노출
 Reply 계약은 로컬 코드·Storybook에 반영했으며 Tailnet은 이전 빌드를 유지한다. Mention의 디자인 승인은
 API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는다.
 
+## Native FCM push 권한 요청과 잠금 화면 미리보기 · PROD-875
+
+- Android·iOS native 앱은 로그인된 상태의 첫 앱 실행에서 Push 알림 권한 안내를 표시한다. 새 로그인
+  완료 직후 또는 이미 로그인된 상태에서 앱을 실행하는 경우를 포함할 수 있으며, 안내를 위해
+  로그아웃·재로그인을 요구하지 않는다. 안내를 표시하는 것과 OS 권한 대화상자를 여는 것은 별개의
+  단계다.
+- OS 권한 요청은 앱 시작·로그인 완료 시 자동으로 실행하지 않고, 사용자가 안내의 `알림 받기` action을
+  명시적으로 활성화한 경우에만 시작한다.
+- 기본 잠금 화면 FCM Push에는 발신자, 알림 유형과 게시글 본문 미리보기를 포함한다.
+- Follow와 FollowRequest처럼 게시글 본문이 없는 알림은 본문 미리보기를 생략한다.
+- Push transport는 canonical Notification이 저장 성공한 결과를 받는 공통 전달 flow를 소유한다. 현재
+  Notification runtime의 Follow, FollowRequest, Reaction, Repost, Reply는 이 flow의 현재 integration inventory로
+  같은 수신 대상 fan-out, 권한·visibility 억제, preview privacy, 24시간 expiry, no-backlog, retry·dedup와
+  원본 실패 격리를 적용한다. 이 inventory는 닫힌 type whitelist가 아니다.
+- 향후 canonical Notification type도 해당 도메인 owner가 생성 권한·source semantics·유형별 표시와 필요한
+  target 정보를 공통 flow에 연결한 저장 성공 결과로 같은 공통 Push flow를 거치며, 새 type 추가 때 Push
+  transport 전체나 source workflow별 전달 lifecycle을 복제하지 않는다. 미래 generator 자체의 구현·통합은 이
+  문서 범위가 아니다.
+- 현재 Account는 자신에게 속한 모든 Profile의 Push를 받으며, 각 Push는 어느 Recipient Profile의
+  알림인지 식별할 수 있어야 한다. selected Profile만을 기준으로 Push 수신 범위를 줄이지 않는다.
+- 현재 Account에 로그인되어 있고 OS 알림을 허용한 모든 앱 설치를 Push 대상으로 한다. 가장 최근 설치 하나만
+  대상으로 선택하지 않는다.
+- Active installation만 opaque FCM token을 보관한다. 최초 등록은 외부 installation ID를 받지 않고 서버가 새
+  installation row ID를 발급해 반환한다. 갱신은 반환된 row ID와 현재 Account·Session이 모두 일치하는 row만
+  수정하며, 존재하지 않거나 삭제된 ID를 새 row로 재생성하지 않는다. 명시적 해제는 반환된 row ID와 현재
+  Account·Session을 확인한 뒤 해당 row만 삭제하고, 없는 ID는 이미 해제된 것으로 멱등 처리한다. 사용자가
+  설치를 해제하거나 해당 Session이 로그아웃·폐기되거나 Account가 삭제되면 installation row와 token을 즉시
+  삭제한다. Provider의 invalid·unregistered 결과는 Account, row ID와 현재 token이 모두 일치할 때만 row와
+  token을 즉시 삭제하며, 늦은 이전 token 결과는 갱신된 token을 삭제하지 않는다.
+- 삭제 뒤 재등록은 이전에 반환된 ID를 재사용하지 않고 새 row ID와 새 수신 시작 시각을 기록한다. 늦게 도착한
+  이전 ID의 unregister가 새 registration row를 삭제하지 않으며, 삭제 전 registration epoch나 unread
+  Notification을 재사용하지 않는다. 새 registration 시각 이전에 생성된 Notification은 Push backlog로 전달하지
+  않는다.
+- 같은 Account가 새 registration으로 현재 active token을 다시 등록하면 기존 중복 row를 원자적으로 정리한 뒤
+  새 row ID와 새 registration epoch로 등록한다. 다른 Account가 소유한 active token은 등록하거나 삭제하지 않는다.
+- 첫 릴리스에는 전역·알림 유형별·Profile별 in-app Push enable/disable control이나 preference API를
+  두지 않는다. Push 수신 여부는 OS 알림 설정만으로 제어하며, 기존 Notification의 Mute·Block·visibility
+  억제 정책은 계속 적용한다.
+- 잠금 화면 본문 미리보기는 sensitive 또는 Content Warning인 경우 가린다. 이 예외는 본문에만 적용하며,
+  발신자·알림 유형·Recipient Profile 식별은 유지한다. 그 외에는 Recipient가 조회 권한을 가진 비공개
+  본문을 미리보기에 포함한다.
+- 앱이 foreground인 경우에도 OS 알림 배너를 표시한다. 별도의 custom in-app Push banner를 추가하지
+  않는다.
+- 같은 설치에서 안내를 닫거나 OS 권한을 거부한 뒤에는 안내를 자동으로 다시 표시하지 않는다. 일반적인 앱
+  업데이트 뒤에도 안내를 자동으로 다시 표시하지 않는다.
+- 앱 설정에서 OS 알림 설정으로 이동하는 action을 제공한다. Push 탭 시에는 현재 Account가 Recipient Profile에
+  접근할 수 있는지 다시 확인한 뒤,
+  접근할 수 있으면 해당 Profile로 전환해 target을 연다. target이 삭제되었거나 접근할 수 없으면 접근 가능한
+  알림 목록만 열고 별도 toast·message를 표시하지 않는다. 로그인되지 않은 상태에서 Push를 탭하면 원래
+  target을 버리고 일반 로그인 흐름을 따르며, 로그인 뒤 Push target으로 자동 복귀하지 않는다.
+- Notification 생성 시각부터 24시간이 지나면 해당 Push의 전달을 시도하지 않는다. 이 24시간은 최초
+  Notification 생성 시각을 기준으로 하며, 재시도나 token refresh로 연장하거나 다시 시작하지 않는다. 이
+  만료는 원래 인앱 Notification lifecycle을 변경하지 않는다.
+- 최초 registration·새 device·OS 권한 허용으로 전달 대상을 등록할 때 registration을 받은 시점 이후에
+  생성된 Notification만 전달한다. 이미 생성된 unread Notification을 새 설치나 권한 허용 뒤에 backlog로
+  재생하지 않는다. OS 상태 변화의 정확한 감지 시점은 이 문서에서 고정하지 않으며, client는 관찰 가능한
+  OS 상태를 동기화한다.
+- Notification이 현재 읽음 상태라는 이유만으로 Push 전송·재시도를 제외하거나 취소하지 않는다. 다른 표면에서
+  읽어도 Push를 취소하지 않으며, 최초 Notification 생성 시각부터 24시간인 만료는 그대로 유지한다. Push
+  전달 자체는 canonical read state를 변경하지 않는다.
+- Provider의 accepted 응답은 기기 도착을 증명하지 않으며, Provider에 큐잉된 Push를 절대적으로 회수할 수
+  있다는 보장도 없다. 이는 Provider·플랫폼의 관찰 가능한 경계다.
+- 이 결정은 공통 Push flow가 canonical Notification 저장 성공 결과부터 수신 대상 fan-out과 전달 lifecycle을
+  소유한다는 경계와, 권한 안내 시점, 현재 integration inventory, 기본 표시 구성과 foreground OS 배너, 안내
+  반복 억제, OS 설정 이동, cross-profile target 처리, Push 만료와 read state 독립성을 확정한다. 미리보기
+  excerpt 길이와 PROD-911이 소유하는 향후 Mention 생성·통합 및 유형별 source·표시 계약은 별도 범위로 남지만,
+  해당 type이 canonical Notification으로 저장되면 같은 공통 Push flow를 사용한다.
+
 ## 표시와 합성
 
 - Follow/FollowRequest/Reaction/Repost는 48px kind rail 안에 32px 아이콘을 표시한다. 원형 배경을

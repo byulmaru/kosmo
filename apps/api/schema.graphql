@@ -251,6 +251,7 @@ type Mutation {
   issueMediaUploadUrl: IssueMediaUploadUrlPayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   muteProfile(input: MuteProfileInput!): MuteProfilePayload!
+  registerPushInstallation(input: RegisterPushInstallationInput!): RegisterPushInstallationPayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
   repostPost(input: RepostPostInput!): RepostPostPayload!
   revokeCurrentSession: RevokeCurrentSessionPayload!
@@ -258,7 +259,9 @@ type Mutation {
   submitFeedback(input: SubmitFeedbackInput!): SubmitFeedbackPayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   unmuteProfile(input: UnmuteProfileInput!): UnmuteProfilePayload!
+  unregisterPushInstallation(input: UnregisterPushInstallationInput!): UnregisterPushInstallationPayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
+  updatePushInstallation(input: UpdatePushInstallationInput!): UpdatePushInstallationPayload!
 }
 
 input MuteProfileInput {
@@ -485,6 +488,11 @@ type ProfileViewerState {
   profileMute: ProfileMute
 }
 
+enum PushInstallationPlatform {
+  ANDROID
+  IOS
+}
+
 type Query {
   currentSession: Session
   homeTimeline(after: String, before: String, first: Int, last: Int): PostConnection
@@ -514,6 +522,15 @@ type ReactionNotification implements Node & Notification {
   profile: Profile!
   readAt: DateTime
   type: String!
+}
+
+input RegisterPushInstallationInput {
+  platform: PushInstallationPlatform!
+  token: String!
+}
+
+type RegisterPushInstallationPayload {
+  id: ID!
 }
 
 input RejectProfileFollowRequestInput {
@@ -596,6 +613,14 @@ type UnmuteProfilePayload {
   targetProfile: Profile
 }
 
+input UnregisterPushInstallationInput {
+  id: ID!
+}
+
+type UnregisterPushInstallationPayload {
+  completed: Boolean!
+}
+
 input UpdateProfileInput {
   avatarId: ID
   bio: String
@@ -608,4 +633,14 @@ input UpdateProfileInput {
 
 type UpdateProfilePayload {
   profile: Profile!
+}
+
+input UpdatePushInstallationInput {
+  id: ID!
+  platform: PushInstallationPlatform!
+  token: String!
+}
+
+type UpdatePushInstallationPayload {
+  completed: Boolean!
 }

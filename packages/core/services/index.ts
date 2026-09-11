@@ -50,6 +50,7 @@ export {
 export type { AcceptProfileFollowRequestResult } from './profile-follow-transaction';
 export { muteProfile, unmuteProfile } from './profile-mute';
 export { updateProfile } from './profile-update';
+export { findEligiblePushInstallations, invalidatePushInstallation } from './push-installation';
 export { addReaction, deleteReaction } from './reaction';
 export type { RevokeCurrentSessionResult } from './session';
 export { createOidcSession, revokeCurrentSession } from './session';

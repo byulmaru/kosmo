@@ -6,6 +6,7 @@ import {
   firstOrThrow,
   getDatabaseConnection,
   Profiles,
+  PushInstallations,
   Sessions,
 } from '../db';
 import { AccountState, ProfileState, SessionState } from '../enums';
@@ -64,11 +65,18 @@ export const revokeCurrentSession = async (
 
   return getDatabaseConnection(tx).transaction(async (transaction) => {
     const current = await loadCurrentSession(token, transaction);
-    if (
-      !current ||
-      current.accountState === AccountState.DISABLED ||
-      current.state !== SessionState.ACTIVE
-    ) {
+    if (!current) {
+      return { status: 'ALREADY_UNAUTHENTICATED' } as const;
+    }
+
+    if (current.accountState === AccountState.DISABLED) {
+      return { status: 'ALREADY_UNAUTHENTICATED' } as const;
+    }
+
+    if (current.state !== SessionState.ACTIVE) {
+      await transaction
+        .delete(PushInstallations)
+        .where(eq(PushInstallations.sessionId, current.id));
       return { status: 'ALREADY_UNAUTHENTICATED' } as const;
     }
 
@@ -80,6 +88,10 @@ export const revokeCurrentSession = async (
       .then((rows) => rows[0]);
 
     if (revoked) {
+      await transaction
+        .delete(PushInstallations)
+        .where(eq(PushInstallations.sessionId, current.id));
+
       return { status: 'REVOKED' } as const;
     }
 
