@@ -27,6 +27,7 @@ const BottomTabBarFragment = graphql`
 `;
 
 type Props = {
+  onComposeOpen?: () => void;
   onHomeReselect?: () => void;
   profile?: BottomTabBar_profile$key | null;
 };
@@ -39,7 +40,7 @@ const hrefs: Record<BottomTabDestination, Href | undefined> = {
   search: '/search',
 };
 
-export function BottomTabBar({ onHomeReselect, profile: profileKey }: Props) {
+export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKey }: Props) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const profile = useFragment(BottomTabBarFragment, profileKey ?? null);
@@ -51,6 +52,16 @@ export function BottomTabBar({ onHomeReselect, profile: profileKey }: Props) {
     destination,
     selected,
   }: BottomTabBarRenderControlProps): ReactElement => {
+    if (destination === 'compose' && onComposeOpen) {
+      return cloneElement(
+        children as ReactElement<{ accessibilityRole?: 'button'; onPress?: () => void }>,
+        {
+          accessibilityRole: 'button',
+          onPress: onComposeOpen,
+        },
+      );
+    }
+
     const href = destination === 'profile' ? profileHref : hrefs[destination];
     if (!href) {
       return children;

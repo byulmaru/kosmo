@@ -14,6 +14,7 @@ import { TextArea, TextField } from '@/components/ui/TextField';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
+import { ComposerMediaEditor } from './ComposerMediaEditor';
 import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
@@ -24,6 +25,7 @@ import {
   isPostComposerVisibilityAllowed,
   resolvePostComposerVisibility,
 } from './postComposerState';
+import { MobileFullscreenComposerShellCandidate, PostComposerTarget } from './PostComposerTarget';
 import { postVisibilityPresentation } from './postVisibilityPresentation';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
@@ -33,6 +35,7 @@ import type {
 } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
+import type { PostComposerTargetVisibility } from './PostComposerTarget';
 
 // TODO(PROD-462): Mentioned Profile recipient 입력·저장과 DIRECT 조회 권한이 구현되면
 // PostVisibility.DIRECT를 Composer 허용 목록에 복원한다.
@@ -79,11 +82,16 @@ type PostComposerBaseProps = {
   beforeEditor?: ReactNode;
   contextGuard?: RefObject<number>;
   editorRef?: RefObject<TextInput | null>;
+  expandControlRef?: RefObject<View | null>;
   focusOnMount?: boolean;
   initialContentWarning?: string | null;
+  onMediaEditorOpenChange?: (open: boolean) => void;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
+  onRequestClose?: () => void;
   onSubmittingChange?: (submitting: boolean) => void;
+  onExpand?: () => void;
   profile: PostComposer_profile$key;
+  presentation?: 'mobile' | 'overlay' | 'rail';
   scrollable?: boolean;
   surface?: boolean;
 };
@@ -147,11 +155,16 @@ function PostComposerContents({
   contextGuard,
   contextGenerationRef,
   editorRef,
+  expandControlRef,
   environmentGenerationRef,
   focusOnMount = false,
   initialContentWarning,
+  onMediaEditorOpenChange,
   onPostCreated,
+  onRequestClose,
   onSubmittingChange,
+  onExpand,
+  presentation,
   profile,
   replyParentId,
   repostSourceId,
@@ -165,10 +178,14 @@ function PostComposerContents({
   const visibilityControl = useRef<View>(null);
   const visibilityMenuRef = useRef<View>(null);
   const visibilityTrigger = useRef<View>(null);
+  const mediaEditorTriggerRef = useRef<HTMLElement | null>(null);
   const remainingDescriptionId = useId();
   const [body, setBody] = useState('');
   const [contentWarning, setContentWarning] = useState(() =>
     normalizePostContentPlainText(initialContentWarning ?? ''),
+  );
+  const [contentWarningExpanded, setContentWarningExpanded] = useState(
+    () => initialContentWarning !== null && initialContentWarning !== undefined,
   );
   const [editorFocused, setEditorFocused] = useState(false);
   const [visibility, setVisibility] = useState<Visibility>(() =>
@@ -178,6 +195,10 @@ function PostComposerContents({
   const [webVisibilityMenuLeft, setWebVisibilityMenuLeft] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
+  const [mediaEditor, setMediaEditor] = useState<{
+    key: string;
+    tool: 'alt' | 'sensitive';
+  } | null>(null);
   const [mediaGeneration, setMediaGeneration] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [commit] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
@@ -202,6 +223,22 @@ function PostComposerContents({
     availableVisibilityOptions.find((option) => option.value === visibility) ??
     visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
+
+  useLayoutEffect(() => {
+    onMediaEditorOpenChange?.(mediaEditor !== null);
+  }, [mediaEditor, onMediaEditorOpenChange]);
+
+  const closeMediaEditor = () => {
+    setMediaEditor(null);
+    if (Platform.OS === 'web') {
+      requestAnimationFrame(() => {
+        const trigger = mediaEditorTriggerRef.current;
+        if (trigger?.ownerDocument.contains(trigger)) {
+          trigger.focus();
+        }
+      });
+    }
+  };
 
   const submit = () => {
     if (disabled) {
@@ -261,6 +298,7 @@ function PostComposerContents({
         setBody('');
         if (!submissionReplyMode) {
           setContentWarning('');
+          setContentWarningExpanded(false);
         }
         setMedia(emptyPostComposerMediaValue);
         setMediaGeneration((generation) => generation + 1);
@@ -413,6 +451,125 @@ function PostComposerContents({
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [visibilityOpen]);
+
+  if (presentation) {
+    const productionSurface: PostComposerTargetVisibility = visibility;
+    const productionAuthor = (
+      <View style={styles.productionAuthor}>
+        <Avatar imageUri={profile.avatar?.url} label={profile.displayName} size={40} />
+        <ProfileNameBlock profile={profile} />
+      </View>
+    );
+
+    return (
+      <Form
+        accessibilityLabel="게시글 작성"
+        onSubmit={submit}
+        style={styles.productionForm}
+        submitOnModEnter
+      >
+        <PostComposerMediaControls
+          actions={null}
+          disabled={submitting}
+          editorRef={editor}
+          key={mediaGeneration}
+          onValueChange={setMedia}
+          render={({
+            error: mediaError,
+            items,
+            onAltTextChange,
+            onMediaAction,
+            onMediaRemove,
+            onMediaRetry,
+            onSensitiveMediaChange,
+            sensitiveMedia,
+          }) => {
+            if (mediaEditor) {
+              return (
+                <ComposerMediaEditor
+                  media={items}
+                  mobileState={mediaEditor.tool === 'alt' ? 'alt' : 'sensitive'}
+                  onAltTextChange={onAltTextChange}
+                  onBack={closeMediaEditor}
+                  onClose={() => {
+                    setMediaEditor(null);
+                    if (onRequestClose) {
+                      onRequestClose();
+                    }
+                  }}
+                  onDone={closeMediaEditor}
+                  onSelectMedia={(key) => setMediaEditor({ key, tool: mediaEditor.tool })}
+                  onSensitiveMediaChange={onSensitiveMediaChange}
+                  onToolChange={(tool) => setMediaEditor({ key: mediaEditor.key, tool })}
+                  presentation={presentation === 'mobile' ? 'mobile' : 'web'}
+                  selectedKey={mediaEditor.key}
+                  sensitiveMedia={sensitiveMedia}
+                  tool={mediaEditor.tool}
+                />
+              );
+            }
+
+            const openMediaEditor = (key: string, tool: 'alt' | 'sensitive') => {
+              if (Platform.OS === 'web' && typeof document !== 'undefined') {
+                mediaEditorTriggerRef.current = document.activeElement as HTMLElement | null;
+              }
+              setMediaEditor({ key, tool });
+              if (presentation === 'rail') {
+                onExpand?.();
+              }
+            };
+            const sharedProductionProps = {
+              author: productionAuthor,
+              body,
+              bodyRef: editor,
+              contentWarning,
+              contentWarningExpanded,
+              error: error ?? mediaError ?? undefined,
+              expandControlRef,
+              items,
+              onBodyChange: setBody,
+              onContentWarningChange: setContentWarning,
+              onContentWarningToggle: () => setContentWarningExpanded((expanded) => !expanded),
+              onEmojiAction: () => undefined,
+              onMediaAction,
+              onMediaEdit: openMediaEditor,
+              onMediaRemove,
+              onMediaRetry: (key: string) => {
+                const item = items.find((candidate) => candidate.key === key);
+                if (item) {
+                  onMediaRetry(item);
+                }
+              },
+              onPollAction: () => undefined,
+              onSubmit: submit,
+              onVisibilityChange: setVisibility,
+              remaining,
+              sensitiveMedia,
+              showEmojiAction: false,
+              showMediaAction: items.length < 4,
+              showPollAction: false,
+              submitting,
+              visibility: productionSurface,
+            };
+
+            return presentation === 'mobile' ? (
+              <MobileFullscreenComposerShellCandidate
+                {...sharedProductionProps}
+                fillContainer
+                onOverlayClose={onRequestClose ?? (() => undefined)}
+              />
+            ) : (
+              <PostComposerTarget
+                {...sharedProductionProps}
+                onExpand={onExpand ?? (() => undefined)}
+                surface={presentation === 'rail' ? 'rail' : 'overlay'}
+              />
+            );
+          }}
+        />
+      </Form>
+    );
+  }
 
   const visibilityMenu = (
     <View
@@ -696,6 +853,8 @@ function PostComposerContents({
 
 const styles = StyleSheet.create({
   root: { gap: spacing.lg, padding: spacing.lg },
+  productionForm: { width: '100%' },
+  productionAuthor: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
   replyRoot: { borderRadius: radii.md, borderWidth: 1 },
   surfaceRoot: { flex: 1, minHeight: 0 },
   editorScroll: { flex: 1, minHeight: 0 },

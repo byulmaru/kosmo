@@ -37,6 +37,8 @@ Desktop Rail·Overlay의 본문 입력은 텍스트 줄 수에 따라 자동으�
 
 PROD-797에서 Full Rail·compact Overlay·mobile fullscreen의 shell 진입을 Production에 연결했다. Web component·Storybook interaction으로 진입, draft 보존, 닫기와 focus 복귀를 확인했으며 Android/iOS의 keyboard·back·safe area·touch/focus는 실제 runtime 검증 전이다.
 
+PROD-797에서 Full Rail·compact Overlay·mobile fullscreen과 `/compose` 위임을 Production shell에 연결했다. Web component·Storybook interaction으로 진입, draft 보존, 닫기와 focus 복귀를 확인했으며 Android/iOS의 keyboard·back·safe area·touch/focus는 실제 runtime 검증 전이다.
+
 ## Web 검색 상단바
 
 - Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px`의 검색 도구막대를 표시한다. 그 안의
