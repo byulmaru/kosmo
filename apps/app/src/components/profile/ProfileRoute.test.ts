@@ -33,6 +33,11 @@ const pending = new Promise<never>(() => undefined);
 
 type RouteParams = { profileHandle?: string | string[] };
 type NativeScrollProps = UseAutomaticPaginationResult['nativeScrollProps'];
+type ReportMenuInput = {
+  id: string;
+  kind: 'PROFILE';
+  label: string;
+};
 
 const LocalParamsContext = createContext<RouteParams>({});
 const platform: { OS: 'web' | 'ios' } = { OS: 'web' };
@@ -58,6 +63,7 @@ let profileViewerState: {
   isSelf: boolean;
   membership: { role: 'MEMBER' | 'OWNER' } | null;
 } | null = null;
+const capturedReport = { value: null as ReportMenuInput | null };
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -183,12 +189,15 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     ),
 });
 mockModule(new URL('../content-report/ContentReportContext.tsx', import.meta.url), {
-  useContentReportMenuItem: () => ({
-    key: 'report-profile',
-    label: '신고',
-    onSelect: () => undefined,
-    tone: 'danger',
-  }),
+  useContentReportMenuItem: (input: ReportMenuInput) => {
+    capturedReport.value = input;
+    return {
+      key: 'report-profile',
+      label: '신고',
+      onSelect: () => undefined,
+      tone: 'danger',
+    };
+  },
 });
 mockModule(new URL('./FollowButton.tsx', import.meta.url), {
   FollowButton: ({ profile }: { profile: { handle: string } }) =>
@@ -297,6 +306,7 @@ afterEach(async () => {
   profileInstanceKind = 'LOCAL';
   profileViewerState = null;
   SlotContent = ProfilePostListPage;
+  capturedReport.value = null;
 });
 
 async function renderRoute(profileHandle: string, routePath = `/profile/${profileHandle}`) {
@@ -398,6 +408,12 @@ describe('profile route parameter lifecycle', () => {
   it('표시 중인 selected Local Owner Profile에만 편집 Link를 노출한다', async () => {
     profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
     await renderRoute('@local');
+
+    assert.deepEqual(capturedReport.value, {
+      id: 'profile:local',
+      kind: 'PROFILE',
+      label: '@local',
+    });
 
     assert.deepEqual(
       rendered('NavigationLink').map((node) => node.props.href),

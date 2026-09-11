@@ -37,6 +37,7 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
@@ -68,6 +69,7 @@ before(async () => {
     pg,
     PostContents,
     ProfileBlocks,
+    ProfileFollows,
     Posts,
     Profiles,
     Sessions,
@@ -326,6 +328,43 @@ test('A profile can report a Post from a profile it blocked, while the reverse r
     blocked.token,
   );
   assert.deepEqual(rejected, { data: { submitContentReport: { status: 'REJECTED' } } });
+  assert.equal(calls, 0);
+});
+
+test('A residual Follow cannot expose a blocked FOLLOWERS Post report target', async (t) => {
+  const blocker = await createAuthenticatedSession();
+  const blocked = await createAuthenticatedSession();
+  const post = await createPost(blocked.profile.id, PostVisibility.FOLLOWERS);
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: blocker.profile.id,
+    targetProfileId: blocked.profile.id,
+  });
+  await db.insert(ProfileFollows).values({
+    followerProfileId: blocker.profile.id,
+    followeeProfileId: blocked.profile.id,
+  });
+
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('ok', { status: 200 });
+  });
+
+  const result = await requestGraphQL<{
+    submitContentReport: { status: string };
+  }>(
+    mutation,
+    {
+      input: {
+        reason: 'SPAM_FRAUD',
+        targetId: encodeGlobalId('Post', post.id),
+        targetType: 'POST',
+      },
+    },
+    blocker.token,
+  );
+
+  assert.deepEqual(result, { data: { submitContentReport: { status: 'REJECTED' } } });
   assert.equal(calls, 0);
 });
 
