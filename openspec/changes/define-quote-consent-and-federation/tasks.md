@@ -60,10 +60,10 @@ field·mutation 이름, payload와 오류 shape는 이 공개 행동을 지키�
 - Media-only·Content Warning·Sensitive Media·독립 Visibility와 commit 뒤 effect 실패의 게시 결과 보존을 확인한다.
 - ActivityPub Source는 승인 저장 구현 없이 정상 Source로 노출되지 않고 명시적으로 거부되는지 확인한다.
 
-- [ ] 2.1 기존 작성 입력에 Source를 연결하고 기본 Quote와 기존 Post·Reply의 입력 범위를 구분한다.
-- [ ] 2.2 Local Source 조건·접근·차단을 검증하고 Content·인용 대상 정보·Media의 원자적 작성을 연결한다.
-- [ ] 2.3 승인 lifecycle이 없는 ActivityPub Source 작성을 안전하게 거부하고 클라이언트가 Source를 낙관 표시하지 않는 seam을 고정한다.
-- [ ] 2.4 core/API의 거부·rollback·readback·입력 호환과 기존 작성 효과 회귀를 검증한다.
+- [x] 2.1 기존 작성 입력에 Source를 연결하고 기본 Quote와 기존 Post·Reply의 입력 범위를 구분한다.
+- [x] 2.2 Local Source 조건·접근·차단을 검증하고 Content·인용 대상 정보·Media의 원자적 작성을 연결한다.
+- [x] 2.3 승인 lifecycle이 없는 ActivityPub Source 작성을 안전하게 거부하고 클라이언트가 Source를 낙관 표시하지 않는 seam을 고정한다.
+- [x] 2.4 core/API의 거부·rollback·readback·입력 호환과 기존 작성 효과 회귀를 검증한다.
 
 ## 3. PROD-431 Composer와 기본 Post 조회
 
@@ -93,10 +93,10 @@ field·mutation 이름, payload와 오류 shape는 이 공개 행동을 지키�
 - Web 실제 Quote 작성 E2E와 keyboard/focus/dismiss/accessibility를 확인한다. Native runtime은 별도 release gate다.
 - PROD-431은 작성 cross-layer 증거를 제공하고 PROD-924는 이를 실제 연합 lifecycle과 연결해 전체 change를 검증한다.
 
-- [ ] 3.1 인용 메뉴와 direct Source를 가진 공용 Composer의 기본 작성·취소·제출·오류 복구를 연결한다.
-- [ ] 3.2 viewer 접근을 Source 조회에 적용하고 같은 Post identity의 본문·Source 표시를 검증한다.
-- [ ] 3.3 요청 actor의 작성 성공 cache와 늦은 응답 격리·기존 presentation 회귀를 검증한다.
-- [ ] 3.4 Web 작성 E2E·접근성 증거와 API 선배포·접근 보호 rollback 및 Native 미검증 범위를 기록한다.
+- [x] 3.1 인용 메뉴와 direct Source를 가진 공용 Composer의 기본 작성·취소·제출·오류 복구를 연결한다.
+- [x] 3.2 viewer 접근을 Source 조회에 적용하고 같은 Post identity의 본문·Source 표시를 검증한다.
+- [x] 3.3 요청 actor의 작성 성공 cache와 늦은 응답 격리·기존 presentation 회귀를 검증한다.
+- [x] 3.4 Web 작성 E2E·접근성 증거와 API 선배포·접근 보호 rollback 및 Native 미검증 범위를 기록한다.
 
 ### PROD-431 완료 게이트
 

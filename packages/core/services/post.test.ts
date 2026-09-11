@@ -12,6 +12,8 @@ import {
   pg,
   PostContents,
   Posts,
+  ProfileBlocks,
+  ProfileFollows,
   Profiles,
 } from '../db';
 import {
@@ -35,13 +37,13 @@ import { createPost } from './post';
 
 after(async () => pg.end());
 
-const createProfile = async () => {
+const createProfile = async (kind = InstanceKind.LOCAL) => {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const instance = await db
     .insert(Instances)
     .values({
       domain: `${suffix}.example`,
-      kind: InstanceKind.LOCAL,
+      kind,
       state: InstanceState.ACTIVE,
     })
     .returning()
@@ -122,6 +124,175 @@ test('createPost는 local Post와 최초 content 연결을 하나의 transaction
       .where(eq(ActivityPubPosts.postId, result.post.id))
       .then((rows) => rows.length),
     0,
+  );
+});
+
+test('createPost는 Source와 자체 Content를 원자적으로 연결하고 Reply Parent와의 조합을 거부한다', async () => {
+  const sourceAuthor = await createProfile();
+  const quoteAuthor = await createProfile();
+  const source = await createPost({
+    document: postContentDocumentFromText('source'),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  const quote = await createPost({
+    document: postContentDocumentFromText('quoted content'),
+    origin: 'LOCAL',
+    profileId: quoteAuthor.id,
+    repostSourceId: source.post.id,
+    visibility: PostVisibility.UNLISTED,
+  });
+
+  assert.equal(quote.post.currentContentId, quote.content.id);
+  assert.equal(quote.post.repostSourceId, source.post.id);
+  assert.equal(quote.post.replyParentId, null);
+
+  await assert.rejects(
+    createPost({
+      document: postContentDocumentFromText('invalid combined relation'),
+      origin: 'LOCAL',
+      profileId: quoteAuthor.id,
+      replyParentId: source.post.id,
+      repostSourceId: source.post.id,
+      visibility: PostVisibility.UNLISTED,
+    }),
+    (error) => error instanceof ValidationError && error.field === 'repostSourceId',
+  );
+});
+
+test('createPost는 승인 경계가 없는 ActivityPub Source Quote를 거부한다', async () => {
+  const sourceAuthor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const quoteAuthor = await createProfile();
+  const source = await createPost({
+    document: postContentDocumentFromText('remote source'),
+    objectUri: `https://remote.example/notes/${sourceAuthor.id}`,
+    origin: 'ACTIVITYPUB',
+    profileId: sourceAuthor.id,
+    publishedAt: null,
+    receivedAt: Temporal.Now.instant(),
+    visibility: PostVisibility.PUBLIC,
+  });
+  const postCount = await db.$count(Posts);
+
+  await assert.rejects(
+    createPost({
+      document: postContentDocumentFromText('quoted content'),
+      origin: 'LOCAL',
+      profileId: quoteAuthor.id,
+      repostSourceId: source.post.id,
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error) =>
+      error instanceof ValidationError &&
+      error.field === 'repostSourceId' &&
+      error.message === 'Quote approval is not available',
+  );
+
+  assert.equal(await db.$count(Posts), postCount);
+});
+
+test('createPost는 타인의 Followers Only Source를 거부하고 자기 Source는 접근 범위를 넓히지 않는다', async () => {
+  const sourceAuthor = await createProfile();
+  const otherAuthor = await createProfile();
+  const source = await createPost({
+    document: postContentDocumentFromText('followers source'),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    visibility: PostVisibility.FOLLOWERS,
+  });
+
+  await db.insert(ProfileFollows).values({
+    followerProfileId: otherAuthor.id,
+    followeeProfileId: sourceAuthor.id,
+  });
+
+  await assert.rejects(
+    createPost({
+      document: postContentDocumentFromText('not allowed quote'),
+      origin: 'LOCAL',
+      profileId: otherAuthor.id,
+      repostSourceId: source.post.id,
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error) => error instanceof ValidationError && error.field === 'repostSourceId',
+  );
+
+  const ownSource = await createPost({
+    document: postContentDocumentFromText('own followers source'),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    visibility: PostVisibility.FOLLOWERS,
+  });
+  const ownQuote = await createPost({
+    document: postContentDocumentFromText('own quote'),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    repostSourceId: ownSource.post.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  assert.equal(ownQuote.post.repostSourceId, ownSource.post.id);
+  assert.equal(ownQuote.post.visibility, PostVisibility.PUBLIC);
+});
+
+test('createPost는 Source 작성자와 행동 Profile 사이의 Block을 새 Quote에서 우선한다', async () => {
+  const sourceAuthor = await createProfile();
+  const quoteAuthor = await createProfile();
+  const source = await createPost({
+    document: postContentDocumentFromText('blocked source'),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: sourceAuthor.id,
+    targetProfileId: quoteAuthor.id,
+  });
+
+  await assert.rejects(
+    createPost({
+      document: postContentDocumentFromText('blocked quote'),
+      origin: 'LOCAL',
+      profileId: quoteAuthor.id,
+      repostSourceId: source.post.id,
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error) => error instanceof NotFoundError && error.message === 'Post not found',
+  );
+});
+
+test('createPost는 Quote Source 검증 실패 시 Media metadata와 작성 결과를 함께 rollback한다', async () => {
+  const account = await createAccount();
+  const author = await createProfile();
+  const media = await createMedia({ accountId: account.id, profileId: author.id });
+  const initialPostCount = await db.$count(Posts);
+  const initialContentCount = await db.$count(PostContents);
+
+  await assert.rejects(
+    createPost({
+      accountId: account.id,
+      document: postContentDocumentFromTextAndMedia('invalid quote', [{ mediaId: media.id }]),
+      media: [{ altText: 'should rollback', mediaId: media.id }],
+      origin: 'LOCAL',
+      profileId: author.id,
+      repostSourceId: crypto.randomUUID(),
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error) => error instanceof NotFoundError && error.message === 'Post not found',
+  );
+
+  assert.equal(await db.$count(Posts), initialPostCount);
+  assert.equal(await db.$count(PostContents), initialContentCount);
+  assert.equal(
+    await db
+      .select({ altText: Media.altText })
+      .from(Media)
+      .where(eq(Media.id, media.id))
+      .then(firstOrThrow)
+      .then(({ altText }) => altText),
+    null,
   );
 });
 

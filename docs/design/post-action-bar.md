@@ -425,14 +425,22 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   별도 승인 철회다.
 - PROD-431은 인용 작성과 Composer를, PROD-924는 게시글별 정책·철회 조작과 승인 lifecycle 연동을 소유한다.
   후속 설계에서는 이 조작의 진입점·오류 복구·접근성을 기존 공용 UI 계약에 맞춰 구체화한다.
+- PROD-431은 승인 경계가 없는 ActivityPub Source를 정상 인용으로 표시하지 않고 작성 오류로 안전하게
+  종료한다. PROD-924가 이를 pending·승인·거절·철회 상태로 연결하며, 그 미완료는 PROD-431의 기본 작성
+  UI와 담당 회귀 검증 완료를 막지 않는다.
 
 ## 인용 작성 범위
 
 - `인용하기`는 현재 action 대상 Post를 direct Source로 선택해 공용 Composer를 연다. Source 자체가 Quote여도
   그 Source의 Source로 대상을 바꾸지 않는다. 작성 중 preview는 한 단계만 표시한다.
+- 상세 화면의 inline Quote Composer는 자체 닫기 control을 제공하고, 기존 폐기 확인을 거쳐 닫힌 뒤
+  `인용하기`를 선택한 Repost trigger로 keyboard focus를 복귀한다.
+- PROD-924의 pending·QuoteRequest lifecycle이 연결되기 전에는 현재 core가 거부하는 ActivityPub Source에
+  `인용하기`를 노출하지 않는다. Local Source 작성 경로는 유지한다.
 - 본문·Visibility·Content Warning·Sensitive Media·Media, pending·폐기·실패 복구는 기존 Composer를 재사용한다.
   Source preview만으로 유효한 작성 Content를 만들지 않는다.
 - 로컬 Quote 작성에는 Reply Parent를 추가하지 않는다. Reply+Quote 작성 UI·API와 본문 링크의 인용 카드
   전환은 2026-09-09 PROD-431 사용자 지시로 제외했다. 기존 Reply 작성과 저장된 관계의 표시 계약은 유지한다.
 - 게시 전의 Source preview와 게시 후 승인에 따른 Source 표시는 구분한다. 작성 성공은 요청한 selected Profile의
-  Relay Environment에 반영하며, 승인 대기 성공을 작성 실패로 처리하거나 Source를 낙관적으로 노출하지 않는다.
+  Relay Environment에 반영한다. 클라이언트는 서버 payload에 없는 Source를 낙관적으로 노출하지 않는다.
+  승인 대기를 성공으로 반환하는 서버 lifecycle과 이후 Source 갱신은 PROD-924가 담당한다.

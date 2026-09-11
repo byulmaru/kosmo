@@ -19,6 +19,8 @@ Kosmo에는 Quote 저장·표시 기반이 있지만, 로컬 작성과 원문 �
 - 차단의 당사자 간 접근 제한과 제3자에게도 Source를 숨기는 명시적 승인 철회를 구분한다.
 - PROD-902가 계약과 이 OpenSpec을 소유한다. PROD-431은 작성·Composer, PROD-924는 게시글별 정책과
   federation 구현·연합 통합 검증을 맡는다. 전체 선언 task 완료 후 archive는 PROD-924가 수행한다.
+- PROD-431은 안전한 Source 경계를 포함한 tasks 2~3으로 독립 완료한다. PROD-924는 `interactionPolicy`의
+  유무나 해석 결과와 관계없이 타인의 Remote Source를 pending 게시하고 QuoteRequest를 보내는 lifecycle을 구현한다.
 
 ## Authority / Provenance
 

@@ -7,9 +7,9 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { PostActionAuthenticationProvider } from './PostActionAuthentication';
+import { PostComposerCoordinatorProvider } from './PostComposerCoordinator';
 import { PostListItem } from './PostListItem';
 import { PostMediaViewerHostProvider } from './PostMediaViewerHost';
-import { PostReplyCoordinatorProvider } from './PostReplyCoordinator';
 import type { PostList_home$key } from './__generated__/PostList_home.graphql';
 import type { PostList_local$key } from './__generated__/PostList_local.graphql';
 import type { PostList_profile$key } from './__generated__/PostList_profile.graphql';
@@ -184,7 +184,7 @@ export function PostList({
 
   return (
     <PostActionAuthenticationProvider>
-      <PostReplyCoordinatorProvider owner="list" profile={replyProfile ?? null}>
+      <PostComposerCoordinatorProvider owner="list" profile={replyProfile ?? null}>
         <PostMediaViewerHostProvider>
           <InfiniteList
             data={visibleEdges}
@@ -213,7 +213,7 @@ export function PostList({
             style={styles.root}
           />
         </PostMediaViewerHostProvider>
-      </PostReplyCoordinatorProvider>
+      </PostComposerCoordinatorProvider>
     </PostActionAuthenticationProvider>
   );
 }

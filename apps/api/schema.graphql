@@ -89,6 +89,7 @@ input CreatePostInput {
   contentWarning: String
   media: [CreatePostMediaInput!]
   replyParentId: ID
+  repostSourceId: ID
   sensitiveMedia: Boolean
   visibility: PostVisibility!
 }

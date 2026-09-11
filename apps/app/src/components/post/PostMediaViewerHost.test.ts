@@ -124,8 +124,8 @@ mock.module('./PostMediaViewerThread', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-mock.module('./PostReplyCoordinator', {
-  exports: { usePostReplyBinding: () => null },
+mock.module('./PostComposerCoordinator', {
+  exports: { usePostComposerBinding: () => null },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('./replySurface', {

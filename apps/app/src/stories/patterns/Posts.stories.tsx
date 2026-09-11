@@ -24,6 +24,7 @@ import { PostActionAuthenticationProvider } from '@/components/post/PostActionAu
 import { PostActionSurface } from '@/components/post/PostActionSurface';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
+import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostComposerMediaItems } from '@/components/post/PostComposerMediaControls';
 import { PostContentRenderer } from '@/components/post/PostContentRenderer';
 import { PostDetailThread } from '@/components/post/PostDetailThread';
@@ -32,7 +33,6 @@ import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewer, PostMediaViewerContent } from '@/components/post/PostMediaViewer';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
-import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import {
   PostSourcePresentationView,
   PostSourcePreview,
@@ -97,6 +97,7 @@ function getColorContrastRatio(foreground: string, background: string) {
 const postMediaImageUri = ogDefaultUrl;
 
 const storyShareOrigin = () => window.location.origin;
+const quoteFailureMutationRequestObserver = fn().mockName('Quote failure mutation');
 
 const shortPost = {
   ...post({
@@ -1697,14 +1698,14 @@ function ProductionBookmarkMutationContents() {
   const data = usePostsStoryData();
 
   return (
-    <PostReplyCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
+    <PostComposerCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
       <PostLayout
         post={requireFragment(
           requirePostById(data.posts, shortPost.id).layout,
           'production Bookmark detail',
         )}
       />
-    </PostReplyCoordinatorProvider>
+    </PostComposerCoordinatorProvider>
   );
 }
 
@@ -1820,7 +1821,7 @@ function ProductionPostActionSessionBoundaryStory({
   const [profileResolutionCount, setProfileResolutionCount] = useState(0);
   const contents = (
     <PostActionAuthenticationProvider>
-      <PostReplyCoordinatorProvider owner="list" profile={null}>
+      <PostComposerCoordinatorProvider owner="list" profile={null}>
         <View testID="production-session-action-post">
           <PostListItem
             post={requireFragment(
@@ -1829,7 +1830,7 @@ function ProductionPostActionSessionBoundaryStory({
             )}
           />
         </View>
-      </PostReplyCoordinatorProvider>
+      </PostComposerCoordinatorProvider>
       <Text testID="profile-resolution-count">{profileResolutionCount}</Text>
     </PostActionAuthenticationProvider>
   );
@@ -1933,7 +1934,13 @@ function ComposerPickerUnmountStory() {
   );
 }
 
-function ReplyModalPresentationStory({ parentId = shortPost.id }: { parentId?: string }) {
+function ReplyModalPresentationStory({
+  mode = 'reply',
+  parentId = shortPost.id,
+}: {
+  mode?: 'quote' | 'reply';
+  parentId?: string;
+}) {
   const [open, setOpen] = useState(true);
   const triggerRef = useRef<View>(null);
   const data = usePostsStoryData();
@@ -1953,6 +1960,7 @@ function ReplyModalPresentationStory({ parentId = shortPost.id }: { parentId?: s
         <Text>Reply modal 다시 열기</Text>
       </Pressable>
       <ReplyComposerSurface
+        mode={mode}
         onRequestClose={() => setOpen(false)}
         open={open}
         owner="list"
@@ -2066,11 +2074,11 @@ function ReplyDetailInlineStory() {
   );
 
   return (
-    <PostReplyCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
+    <PostComposerCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
       <Catalog>
         <PostLayout post={post} />
       </Catalog>
-    </PostReplyCoordinatorProvider>
+    </PostComposerCoordinatorProvider>
   );
 }
 
@@ -2478,6 +2486,22 @@ function ProductionPostListItemStory({ postId }: { postId: string }) {
   );
 }
 
+function QuoteListSurfaceStory() {
+  const data = usePostsStoryData();
+  const post = requireFragment(
+    requirePostById(data.posts, shortPost.id).listItem,
+    'Quote list surface Post',
+  );
+
+  return (
+    <PostComposerCoordinatorProvider owner="list" profile={data.replyComposerProfile}>
+      <Catalog>
+        <PostListItem post={post} />
+      </Catalog>
+    </PostComposerCoordinatorProvider>
+  );
+}
+
 function PostMediaViewerRevisionStory() {
   const environment = useRelayEnvironment();
   const phase = useRef(0);
@@ -2792,6 +2816,7 @@ const meta = {
     mocked(trackAnalytics).mockClear();
     mocked(startWebLogin).mockReset();
     mocked(startWebLogin).mockImplementation(() => undefined);
+    quoteFailureMutationRequestObserver.mockClear();
     resetClipboardMock();
     resetImagePickerMock();
   },
@@ -2801,11 +2826,11 @@ const meta = {
     (Story) => (
       <SessionProvider>
         <PostActionAuthenticationProvider>
-          <PostReplyCoordinatorProvider owner="list" profile={null}>
+          <PostComposerCoordinatorProvider owner="list" profile={null}>
             <PostMediaViewerHostProvider>
               <Story />
             </PostMediaViewerHostProvider>
-          </PostReplyCoordinatorProvider>
+          </PostComposerCoordinatorProvider>
         </PostActionAuthenticationProvider>
       </SessionProvider>
     ),
@@ -4160,6 +4185,111 @@ export const Quote: Story = {
     );
   },
   render: () => <RepostQuotePresentationStory postId="post-quote" />,
+};
+
+export const QuoteComposerListIntegration: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      mutationResponse: {
+        createPost: {
+          post: withReactionViewerState(
+            post({
+              bodyText: '실제 메뉴에서 작성한 인용입니다.',
+              id: 'quote-created-in-story',
+              profile: composerProfile,
+              repostSource: shortPost,
+            }),
+          ),
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '재게시 취소' });
+    await userEvent.click(trigger);
+    const menu = await screen.findByRole('menu', { name: '재게시 메뉴' });
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '인용하기' }));
+
+    const dialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
+    expect(within(dialog).getByTestId('source-post-preview')).toHaveTextContent('짧은 본문 한 줄.');
+    const body = within(dialog).getByRole('textbox', { name: '인용 게시글 본문' });
+    await userEvent.type(body, '실제 메뉴에서 작성한 인용입니다.');
+    await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '인용 게시글 쓰기' })).toBeNull(),
+    );
+    expect(trigger).toHaveFocus();
+    expect(await screen.findByRole('alert')).toHaveTextContent('인용 게시글을 게시했어요');
+  },
+  render: () => <QuoteListSurfaceStory />,
+};
+
+export const QuoteReplyListCoordinatorIntegration: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const replyButton = canvas.getByRole('button', { name: '답글' });
+    const quoteTrigger = canvas.getByRole('button', { name: '재게시 취소' });
+
+    await userEvent.click(replyButton);
+    const replyDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const replyBody = within(replyDialog).getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(replyBody, '목록에서 작성 중인 답글');
+
+    quoteTrigger.click();
+    within(await screen.findByRole('menu', { name: '재게시 메뉴' }))
+      .getByRole('menuitem', { name: '인용하기' })
+      .click();
+    const replyDiscardConfirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    expect(screen.queryByRole('dialog', { name: '인용 게시글 쓰기' })).toBeNull();
+    await userEvent.click(within(replyDiscardConfirm).getByRole('button', { name: '계속 작성' }));
+    expect(replyBody).toHaveValue('목록에서 작성 중인 답글');
+
+    quoteTrigger.click();
+    within(await screen.findByRole('menu', { name: '재게시 메뉴' }))
+      .getByRole('menuitem', { name: '인용하기' })
+      .click();
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
+        'button',
+        { name: '작성 취소' },
+      ),
+    );
+    const quoteDialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
+    const quoteBody = within(quoteDialog).getByRole('textbox', { name: '인용 게시글 본문' });
+    await waitFor(() => expect(quoteBody).toHaveFocus());
+    await userEvent.type(quoteBody, '목록에서 작성 중인 인용');
+    expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
+
+    replyButton.click();
+    const quoteDiscardConfirm = await screen.findByRole('alertdialog', {
+      name: '인용 게시글 작성을 취소할까요?',
+    });
+    expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
+    await userEvent.click(within(quoteDiscardConfirm).getByRole('button', { name: '작성 취소' }));
+    const reopenedReplyDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    expect(within(reopenedReplyDialog).getByRole('textbox', { name: '답글 본문' })).toHaveValue('');
+    await waitFor(() =>
+      expect(within(reopenedReplyDialog).getByRole('textbox', { name: '답글 본문' })).toHaveFocus(),
+    );
+    expect(screen.queryByRole('dialog', { name: '인용 게시글 쓰기' })).toBeNull();
+
+    await userEvent.click(within(reopenedReplyDialog).getByRole('button', { name: '닫기' }));
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
+        'button',
+        { name: '작성 취소' },
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
+    expect(replyButton).toHaveFocus();
+  },
+  render: () => <QuoteListSurfaceStory />,
 };
 
 export const QuoteListItemAvatars: Story = {
@@ -7068,8 +7198,165 @@ export const ReplyDetailInlineIntegration: Story = {
     await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
     await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
     expect(replyButton).toHaveAttribute('aria-expanded', 'false');
+
+    const quoteTrigger = canvas.getByRole('button', { name: '재게시 취소' });
+    await userEvent.click(replyButton);
+    const replyBody = canvas.getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(replyBody, '전환 전에 보존할 답글');
+    await userEvent.click(quoteTrigger);
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '인용하기',
+      }),
+    );
+    const replyDiscardConfirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    expect(canvas.queryByRole('textbox', { name: '인용 게시글 본문' })).toBeNull();
+    await userEvent.click(within(replyDiscardConfirm).getByRole('button', { name: '계속 작성' }));
+    expect(replyBody).toHaveValue('전환 전에 보존할 답글');
+    expect(canvas.queryByRole('textbox', { name: '인용 게시글 본문' })).toBeNull();
+
+    await userEvent.click(quoteTrigger);
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '인용하기',
+      }),
+    );
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
+        'button',
+        { name: '작성 취소' },
+      ),
+    );
+    await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
+    const quoteBody = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
+    await waitFor(() => expect(quoteBody).toHaveFocus());
+    await userEvent.type(quoteBody, '상세에서 작성 중인 인용');
+
+    await userEvent.click(replyButton);
+    const quoteConfirm = await screen.findByRole('alertdialog', {
+      name: '인용 게시글 작성을 취소할까요?',
+    });
+    expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+    await userEvent.click(within(quoteConfirm).getByRole('button', { name: '작성 취소' }));
+    await waitFor(() =>
+      expect(canvas.queryByRole('textbox', { name: '인용 게시글 본문' })).toBeNull(),
+    );
+    const reopenedReplyBody = canvas.getByRole('textbox', { name: '답글 본문' });
+    expect(reopenedReplyBody).toHaveValue('');
+    await waitFor(() => expect(reopenedReplyBody).toHaveFocus());
+
+    await userEvent.click(replyButton);
+    const reopenedReplyConfirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    await userEvent.click(within(reopenedReplyConfirm).getByRole('button', { name: '작성 취소' }));
+    await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
+    expect(replyButton).toHaveAttribute('aria-expanded', 'false');
+    expect(replyButton).toHaveFocus();
   },
   render: () => <ReplyDetailInlineStory />,
+};
+
+export const QuoteDetailInlinePendingLifecycle: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '재게시 취소' }));
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '인용하기',
+      }),
+    );
+    const body = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
+    await userEvent.type(body, '제출 중인 인용');
+    await userEvent.click(canvas.getByRole('button', { name: '인용 게시' }));
+
+    expect(canvas.getByRole('button', { name: '게시 중' })).toBeDisabled();
+    expect(canvas.getByLabelText('게시 중 처리 중')).toBeVisible();
+    expect(body).toHaveAttribute('readonly');
+    expect(canvas.getByRole('button', { name: '인용 게시글 닫기' })).toBeDisabled();
+    await userEvent.keyboard('{Escape}');
+    expect(body).toHaveValue('제출 중인 인용');
+    expect(canvas.queryByRole('alertdialog')).toBeNull();
+  },
+  render: () => <ReplyDetailInlineStory />,
+};
+
+export const QuoteModalFailureLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      mutationError: '인용 전송 네트워크 오류',
+      mutationRequestObserver: quoteFailureMutationRequestObserver,
+    },
+  },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
+    const source = within(dialog).getByTestId('source-post-preview');
+    const body = within(dialog).getByRole('textbox', { name: '인용 게시글 본문' });
+    await userEvent.type(body, '실패 뒤 유지할 인용');
+    await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
+
+    await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
+      '인용 게시글을 작성하지 못했습니다.',
+    );
+    expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(1);
+    expect(body).toHaveValue('실패 뒤 유지할 인용');
+    expect(source).toBeVisible();
+    expect(within(source).getByText('짧은 본문 한 줄.')).toBeVisible();
+    const retry = within(dialog).getByRole('button', { name: '인용 게시' });
+    expect(retry).toBeEnabled();
+    await userEvent.click(retry);
+    await waitFor(() => expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(within(dialog).getByRole('alert')).toHaveTextContent(
+        '인용 게시글을 작성하지 못했습니다.',
+      ),
+    );
+    expect(body).toHaveValue('실패 뒤 유지할 인용');
+    expect(source).toBeVisible();
+  },
+  render: () => <ReplyModalPresentationStory mode="quote" />,
+};
+
+export const QuoteModalNullFailureLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['인용 본문 형식이 올바르지 않습니다.'],
+      mutationResponse: { createPost: null },
+      mutationRequestObserver: quoteFailureMutationRequestObserver,
+    },
+  },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
+    const source = within(dialog).getByTestId('source-post-preview');
+    const body = within(dialog).getByRole('textbox', { name: '인용 게시글 본문' });
+    await userEvent.type(body, 'null 응답 뒤 유지할 인용');
+    await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
+
+    await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
+      '인용 게시글을 작성하지 못했습니다.',
+    );
+    expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(1);
+    expect(body).toHaveValue('null 응답 뒤 유지할 인용');
+    expect(source).toBeVisible();
+    expect(within(source).getByText('짧은 본문 한 줄.')).toBeVisible();
+    const retry = within(dialog).getByRole('button', { name: '인용 게시' });
+    expect(retry).toBeEnabled();
+    await userEvent.click(retry);
+    await waitFor(() => expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(within(dialog).getByRole('alert')).toHaveTextContent(
+        '인용 게시글을 작성하지 못했습니다.',
+      ),
+    );
+    expect(body).toHaveValue('null 응답 뒤 유지할 인용');
+    expect(source).toBeVisible();
+  },
+  render: () => <ReplyModalPresentationStory mode="quote" />,
 };
 
 export const ReplyModalPendingLifecycle: Story = {
@@ -7238,6 +7525,22 @@ export const ReplyQuoteParentPresentation: Story = {
     expect(getComputedStyle(source).borderStyle).toBe('solid');
   },
   render: () => <ReplyModalPresentationStory parentId={linkedSourceQuote.id} />,
+};
+
+export const QuoteComposerKeepsSourceWarningSeparate: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
+    const source = within(dialog).getByTestId('source-post-preview');
+
+    expect(within(source).getByText('원문 프리뷰 경고')).toBeVisible();
+    expect(within(source).queryByText('가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.')).toBeNull();
+    expect(within(dialog).getByRole('textbox', { name: '인용 게시글 내용 경고' })).toHaveValue('');
+    expect(within(dialog).getByRole('button', { name: '인용 게시' })).toBeDisabled();
+  },
+  render: () => (
+    <ReplyModalPresentationStory mode="quote" parentId={contentWarningSourcePreviewPost.id} />
+  ),
 };
 
 export const ReplyMediaParentPresentation: Story = {

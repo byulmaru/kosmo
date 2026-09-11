@@ -75,7 +75,7 @@ const CreatePostMutation = graphql`
   }
 `;
 
-type PostComposerProps = {
+type PostComposerBaseProps = {
   beforeEditor?: ReactNode;
   contextGuard?: RefObject<number>;
   editorRef?: RefObject<TextInput | null>;
@@ -84,12 +84,23 @@ type PostComposerProps = {
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
-  replyParentId?: string;
   scrollable?: boolean;
   surface?: boolean;
 };
 
-export function PostComposer({ profile: profileKey, replyParentId, ...props }: PostComposerProps) {
+type PostComposerRelationshipProps =
+  | { replyParentId: string; repostSourceId?: never }
+  | { replyParentId?: never; repostSourceId: string }
+  | { replyParentId?: never; repostSourceId?: never };
+
+export type PostComposerProps = PostComposerBaseProps & PostComposerRelationshipProps;
+
+export function PostComposer({
+  profile: profileKey,
+  replyParentId,
+  repostSourceId,
+  ...props
+}: PostComposerProps) {
   const environment = useRelayEnvironment();
   const environmentGenerationRef = useRelayEnvironmentGeneration();
   const environmentRef = useRef(environment);
@@ -100,30 +111,36 @@ export function PostComposer({ profile: profileKey, replyParentId, ...props }: P
   }
 
   const profile = useFragment(PostComposerFragment, profileKey);
-  const contextKey = createPostComposerContextKey(profile.id, replyParentId);
+  const contextKey = createPostComposerContextKey(profile.id, replyParentId, repostSourceId);
   const contextKeyRef = useRef(contextKey);
   if (contextKeyRef.current !== contextKey) {
     contextKeyRef.current = contextKey;
     contextGenerationRef.current += 1;
   }
+  const relationshipProps: PostComposerRelationshipProps = replyParentId
+    ? { replyParentId }
+    : repostSourceId
+      ? { repostSourceId }
+      : {};
 
   return (
     <PostComposerContents
       {...props}
+      {...relationshipProps}
       contextGenerationRef={contextGenerationRef}
       environmentGenerationRef={environmentGenerationRef}
       key={`${contextGenerationRef.current}:${environmentGenerationRef?.current ?? 0}`}
       profile={profile}
-      replyParentId={replyParentId}
     />
   );
 }
 
-type PostComposerContentsProps = Omit<PostComposerProps, 'profile'> & {
-  contextGenerationRef: RefObject<number>;
-  environmentGenerationRef: RefObject<number> | null;
-  profile: PostComposer_profile$data;
-};
+type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
+  PostComposerRelationshipProps & {
+    contextGenerationRef: RefObject<number>;
+    environmentGenerationRef: RefObject<number> | null;
+    profile: PostComposer_profile$data;
+  };
 
 function PostComposerContents({
   beforeEditor,
@@ -137,6 +154,7 @@ function PostComposerContents({
   onSubmittingChange,
   profile,
   replyParentId,
+  repostSourceId,
   scrollable = false,
   surface = false,
 }: PostComposerContentsProps) {
@@ -164,7 +182,9 @@ function PostComposerContents({
   const [submitting, setSubmitting] = useState(false);
   const [commit] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
   const replyMode = Boolean(replyParentId);
-  const contextKey = createPostComposerContextKey(profile.id, replyParentId);
+  const quoteMode = Boolean(repostSourceId);
+  const surfaceMode = replyMode || quoteMode;
+  const contextKey = createPostComposerContextKey(profile.id, replyParentId, repostSourceId);
   const mountedRef = useRef(true);
   const availableVisibilityOptions = visibilityOptions.filter((option) =>
     isPostComposerVisibilityAllowed(option.value, replyParentId),
@@ -195,6 +215,8 @@ function PostComposerContents({
     const submissionGuardGeneration = contextGuard?.current;
     const submittedCallback = onPostCreated;
     const submissionReplyMode = replyMode;
+    const submissionSurfaceMode = surfaceMode;
+    const submissionQuoteMode = quoteMode;
     commit({
       variables: {
         connections: [ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')],
@@ -204,6 +226,7 @@ function PostComposerContents({
             visibility,
             replyParentId,
             contentWarningText,
+            repostSourceId,
           ),
           media: media.items,
           sensitiveMedia: media.sensitiveMedia,
@@ -222,7 +245,11 @@ function PostComposerContents({
         const createdPost = response.createPost?.post;
         if (!createdPost) {
           setError(
-            submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.',
+            submissionQuoteMode
+              ? '인용 게시글을 작성하지 못했습니다.'
+              : submissionSurfaceMode
+                ? '답글을 작성하지 못했습니다.'
+                : '게시글을 작성하지 못했습니다.',
           );
           return;
         }
@@ -252,7 +279,11 @@ function PostComposerContents({
         }
         setSubmitting(false);
         setError(
-          submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.',
+          submissionQuoteMode
+            ? '인용 게시글을 작성하지 못했습니다.'
+            : submissionSurfaceMode
+              ? '답글을 작성하지 못했습니다.'
+              : '게시글을 작성하지 못했습니다.',
         );
       },
     });
@@ -506,10 +537,16 @@ function PostComposerContents({
       <Button
         disabled={disabled}
         loading={submitting}
-        loadingText={replyMode ? '게시 중' : undefined}
+        loadingText={surfaceMode ? '게시 중' : undefined}
         onPress={submit}
       >
-        {submitting && replyMode ? '게시 중' : replyMode ? '답글 게시' : '게시'}
+        {submitting && surfaceMode
+          ? '게시 중'
+          : replyMode
+            ? '답글 게시'
+            : quoteMode
+              ? '인용 게시'
+              : '게시'}
       </Button>
     </View>
   );
@@ -543,12 +580,20 @@ function PostComposerContents({
           aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
           aria-invalid={Boolean(error) || remaining < 0}
           accessibilityHint={Platform.OS === 'web' ? undefined : remainingDescription}
-          accessibilityLabel={replyMode ? '답글 본문' : '게시글 본문'}
+          accessibilityLabel={
+            replyMode ? '답글 본문' : quoteMode ? '인용 게시글 본문' : '게시글 본문'
+          }
           editable={!submitting}
           onBlur={() => setEditorFocused(false)}
           onChangeText={setBody}
           onFocus={() => setEditorFocused(true)}
-          placeholder={replyMode ? '답글을 입력하세요…' : '무슨 일이 일어나고 있나요?'}
+          placeholder={
+            replyMode
+              ? '답글을 입력하세요…'
+              : quoteMode
+                ? '인용할 내용을 입력하세요…'
+                : '무슨 일이 일어나고 있나요?'
+          }
           style={[styles.editor, Platform.OS === 'web' && replyMode ? styles.webEditor : null]}
           value={body}
         />
@@ -556,7 +601,9 @@ function PostComposerContents({
           aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
           aria-invalid={remaining < 0}
           accessibilityHint={Platform.OS === 'web' ? undefined : remainingDescription}
-          accessibilityLabel={replyMode ? '답글 내용 경고' : '게시글 내용 경고'}
+          accessibilityLabel={
+            replyMode ? '답글 내용 경고' : quoteMode ? '인용 게시글 내용 경고' : '게시글 내용 경고'
+          }
           editable={!submitting}
           onChangeText={setContentWarning}
           placeholder="내용 경고 (선택)"
@@ -568,7 +615,7 @@ function PostComposerContents({
           </Text>
         ) : null}
         <PostComposerMediaControls
-          actions={replyMode ? null : submitActions}
+          actions={surfaceMode ? null : submitActions}
           disabled={submitting}
           editorRef={editor}
           key={mediaGeneration}
@@ -592,7 +639,7 @@ function PostComposerContents({
       ) : (
         editorContent
       )}
-      {replyMode ? (
+      {surfaceMode ? (
         <View
           style={[
             styles.footer,
@@ -631,11 +678,13 @@ function PostComposerContents({
 
   return (
     <Form
-      accessibilityLabel={replyMode ? '답글 작성' : '새 게시글 작성'}
+      accessibilityLabel={
+        replyMode ? '답글 작성' : quoteMode ? '인용 게시글 작성' : '새 게시글 작성'
+      }
       onSubmit={submit}
       style={[
         surface ? styles.surfaceRoot : styles.root,
-        !surface && replyMode ? styles.replyRoot : null,
+        !surface && surfaceMode ? styles.replyRoot : null,
         { backgroundColor: theme.card, borderColor: theme.border },
       ]}
       submitOnModEnter

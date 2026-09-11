@@ -20,6 +20,7 @@ export function createPostComposerMutationInput(
   visibility: PostVisibility,
   replyParentId?: string,
   contentWarning?: string | null,
+  repostSourceId?: string,
 ) {
   const normalizedContentWarning = normalizePostContentPlainText(contentWarning ?? '');
 
@@ -27,6 +28,7 @@ export function createPostComposerMutationInput(
     bodyText,
     ...(normalizedContentWarning ? { contentWarning: normalizedContentWarning } : {}),
     ...(replyParentId ? { replyParentId } : {}),
+    ...(repostSourceId ? { repostSourceId } : {}),
     visibility,
   };
 }
@@ -41,6 +43,7 @@ export function isPostComposerVisibilityAllowed(
 export function createPostComposerContextKey(
   selectedProfileId: string,
   replyParentId?: string,
+  repostSourceId?: string,
 ): string {
-  return `${selectedProfileId}:${replyParentId ?? 'post'}`;
+  return `${selectedProfileId}:${replyParentId ?? 'post'}:${repostSourceId ?? 'source-none'}`;
 }

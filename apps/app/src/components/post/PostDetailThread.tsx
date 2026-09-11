@@ -2,10 +2,10 @@ import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } fro
 import { graphql, usePaginationFragment } from 'react-relay';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
+import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
-import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
@@ -230,7 +230,7 @@ function PostDetailThreadContent({
 
   return (
     <PostActionAuthenticationProvider>
-      <PostReplyCoordinatorProvider
+      <PostComposerCoordinatorProvider
         onPostCreated={onReplyCreated}
         owner="detail"
         profile={replyProfile ?? null}
@@ -250,7 +250,7 @@ function PostDetailThreadContent({
             </PostDetailFrame>
           )}
         </PostMediaViewerHostProvider>
-      </PostReplyCoordinatorProvider>
+      </PostComposerCoordinatorProvider>
     </PostActionAuthenticationProvider>
   );
 }

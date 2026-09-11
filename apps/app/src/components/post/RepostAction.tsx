@@ -1,4 +1,4 @@
-import { Repeat2 } from 'lucide-react-native';
+import { Quote, Repeat2 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { ActionMenu } from '@/components/ui/ActionMenu';
@@ -19,12 +19,16 @@ export type RepostActionFailure = Readonly<{
 type Props = {
   execution?: PostActionExecution;
   onError?: (failure: RepostActionFailure) => void;
+  onQuote?: (restoreFocus: () => void) => void;
   onResolutionRequired?: (reason: PostActionResolutionReason) => void;
   post: RepostAction_post$key;
 };
 
 const repostActionPostFragment = graphql`
   fragment RepostAction_post on Post {
+    content {
+      id
+    }
     id
     repostCount
     viewerRepost {
@@ -68,6 +72,7 @@ const deletePostMutation = graphql`
 export function RepostAction({
   execution = { kind: 'enabled' },
   onError,
+  onQuote,
   onResolutionRequired,
   post,
 }: Props) {
@@ -80,6 +85,7 @@ export function RepostAction({
     useMutation<RepostActionDeletePostMutation>(deletePostMutation);
   const inFlight = useRef(false);
   const currentEnvironment = useRef(environment);
+  const restoreFocusRef = useRef<() => void>(() => undefined);
   const processing = isReposting || isDeleting;
 
   currentEnvironment.current = environment;
@@ -151,13 +157,27 @@ export function RepostAction({
 
   const action: RepostActionKind = data.viewerRepost ? 'cancel' : 'create';
   const label = action === 'cancel' ? '재게시 취소' : '재게시하기';
+  const items = [
+    { icon: Repeat2, key: action, label, onSelect: () => runMutation(action) },
+    ...(data.content && onQuote
+      ? [
+          {
+            icon: Quote,
+            key: 'quote',
+            label: '인용하기',
+            onSelect: () => onQuote(restoreFocusRef.current),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <ActionMenu
       accessibilityLabel="재게시 메뉴"
       disabled={processing || execution.kind !== 'enabled'}
-      items={[{ icon: Repeat2, key: action, label, onSelect: () => runMutation(action) }]}
-      renderTrigger={({ expanded: menuExpanded, onPress, ref }) => {
+      items={items}
+      renderTrigger={({ expanded: menuExpanded, focusTrigger, onPress, ref }) => {
+        restoreFocusRef.current = focusTrigger;
         const triggerPress =
           execution.kind === 'resolution-required'
             ? () => onResolutionRequired?.(execution.reason)

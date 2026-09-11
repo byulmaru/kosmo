@@ -1,5 +1,21 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import type { PostComposerProps } from './PostComposer';
+
+const typecheckPostComposerRelationships = () => {
+  const profile = {} as PostComposerProps['profile'];
+  void ({ profile, replyParentId: 'post-parent' } satisfies PostComposerProps);
+  void ({ profile, repostSourceId: 'post-source' } satisfies PostComposerProps);
+  // @ts-expect-error Reply와 Quote 관계 입력은 동시에 제공할 수 없다.
+  const invalidRelationships: PostComposerProps = {
+    profile,
+    replyParentId: 'post-parent',
+    repostSourceId: 'post-source',
+  };
+  void invalidRelationships;
+};
+
+void typecheckPostComposerRelationships;
 
 describe('PostComposer Reply context contract', () => {
   it('includes the concrete Parent only for Reply mutation input', async () => {
@@ -27,6 +43,15 @@ describe('PostComposer Reply context contract', () => {
       bodyText: '본문',
       visibility: 'UNLISTED',
     });
+    assert.deepEqual(
+      createPostComposerMutationInput('인용 본문', 'PUBLIC', undefined, '경고', 'post-source'),
+      {
+        bodyText: '인용 본문',
+        contentWarning: '경고',
+        repostSourceId: 'post-source',
+        visibility: 'PUBLIC',
+      },
+    );
   });
 
   it('excludes DIRECT only while composing a Reply', async () => {
@@ -53,6 +78,10 @@ describe('PostComposer Reply context contract', () => {
     assert.notEqual(
       createPostComposerContextKey('profile-a'),
       createPostComposerContextKey('profile-a', 'post-parent'),
+    );
+    assert.notEqual(
+      createPostComposerContextKey('profile-a', undefined, 'post-source'),
+      createPostComposerContextKey('profile-a', undefined, 'post-other-source'),
     );
   });
 

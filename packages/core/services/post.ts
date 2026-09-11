@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, notExists, or, sql } from 'drizzle-orm';
 import {
   ActivityPubPosts,
   db,
@@ -10,10 +10,12 @@ import {
   Media,
   PostContents,
   Posts,
+  ProfileBlocks,
   ProfileFollows,
   Profiles,
 } from '../db';
 import {
+  InstanceKind,
   InstanceState,
   MediaSource,
   MediaState,
@@ -43,6 +45,7 @@ type LocalPostInput = {
   origin: 'LOCAL';
   profileId: string;
   replyParentId?: string;
+  repostSourceId?: string;
   visibility: PostVisibility;
 };
 
@@ -151,6 +154,91 @@ const findVisiblePost = async (
     )
     .limit(1)
     .then(first);
+
+const findVisibleQuoteSource = async (
+  tx: Transaction,
+  { actorProfileId, postId }: { actorProfileId: string; postId: string },
+) =>
+  tx
+    .select({
+      currentContentId: Posts.currentContentId,
+      id: Posts.id,
+      instanceKind: Instances.kind,
+      profileId: Posts.profileId,
+      visibility: Posts.visibility,
+    })
+    .from(Posts)
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .leftJoin(
+      ProfileFollows,
+      and(
+        eq(ProfileFollows.followerProfileId, actorProfileId),
+        eq(ProfileFollows.followeeProfileId, Posts.profileId),
+      ),
+    )
+    .where(
+      and(
+        eq(Posts.id, postId),
+        notExists(
+          tx
+            .select({ id: ProfileBlocks.id })
+            .from(ProfileBlocks)
+            .where(
+              or(
+                and(
+                  eq(ProfileBlocks.ownerProfileId, actorProfileId),
+                  eq(ProfileBlocks.targetProfileId, Posts.profileId),
+                ),
+                and(
+                  eq(ProfileBlocks.ownerProfileId, Posts.profileId),
+                  eq(ProfileBlocks.targetProfileId, actorProfileId),
+                ),
+              ),
+            ),
+        ),
+        postVisibilityCondition({
+          columns: {
+            authorProfileId: Posts.profileId,
+            authorVisible: and(
+              eq(Profiles.state, ProfileState.ACTIVE),
+              ne(Instances.state, InstanceState.SUSPENDED),
+            )!,
+            postState: Posts.state,
+            postVisibility: Posts.visibility,
+          },
+          viewerFollowsAuthor: isNotNull(ProfileFollows.id),
+          viewerProfileId: actorProfileId,
+        }),
+      ),
+    )
+    .limit(1)
+    .then(first);
+
+const validateQuoteSource = async (
+  tx: Transaction,
+  { actorProfileId, postId }: { actorProfileId: string; postId: string },
+) => {
+  const source = await findVisibleQuoteSource(tx, { actorProfileId, postId });
+  if (!source) {
+    throw new NotFoundError('Post not found');
+  }
+  if (source.currentContentId === null) {
+    throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
+  }
+  if (source.profileId !== actorProfileId && source.visibility === PostVisibility.FOLLOWERS) {
+    throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
+  }
+  if (source.visibility === PostVisibility.DIRECT) {
+    throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
+  }
+  if (source.instanceKind === InstanceKind.ACTIVITYPUB) {
+    throw new ValidationError('Quote approval is not available', {
+      field: 'repostSourceId',
+    });
+  }
+  return source;
+};
 
 const resolveRepostVisibility = (
   source: {
@@ -483,6 +571,16 @@ export async function createPost(
           ? validateLocalPostContentDocument(input.document)
           : input.document;
 
+      if (
+        input.origin === 'LOCAL' &&
+        input.replyParentId !== undefined &&
+        input.repostSourceId !== undefined
+      ) {
+        throw new ValidationError('Post cannot have a Reply Parent and Quote Source', {
+          field: 'repostSourceId',
+        });
+      }
+
       if (input.origin === 'LOCAL') {
         const mediaIds = document.body.content.flatMap((block) =>
           block.type === 'media' ? [block.attrs.mediaId] : [],
@@ -536,6 +634,13 @@ export async function createPost(
         }
       }
 
+      if (input.origin === 'LOCAL' && input.repostSourceId !== undefined) {
+        await validateQuoteSource(tx, {
+          actorProfileId: input.profileId,
+          postId: input.repostSourceId,
+        });
+      }
+
       const createdAt =
         input.origin === 'ACTIVITYPUB' &&
         input.publishedAt &&
@@ -549,6 +654,7 @@ export async function createPost(
         .values({
           createdAt,
           profileId: input.profileId,
+          repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
           state: PostState.ACTIVE,
           visibility: input.visibility,
         })

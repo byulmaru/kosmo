@@ -13,6 +13,7 @@ import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
+import { usePostComposerBinding } from './PostComposerCoordinator';
 import {
   PostMediaViewer,
   PostMediaViewerContent,
@@ -20,7 +21,6 @@ import {
 } from './PostMediaViewer';
 import { focusPostMediaViewerTarget } from './postMediaViewerSession';
 import { PostMediaViewerThread } from './PostMediaViewerThread';
-import { usePostReplyBinding } from './PostReplyCoordinator';
 import { getReplyProcessingState } from './replySurface';
 import type { PropsWithChildren, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
@@ -186,7 +186,7 @@ function PostMediaViewerHostContent({
           surface.repostSource.state !== 'DELETED'
         ? surface.repostSource
         : null;
-  const replyBinding = usePostReplyBinding(session.surfacePostId);
+  const replyBinding = usePostComposerBinding(session.surfacePostId);
   const replyAuthentication = usePostActionAuthentication(Boolean(surface?.content));
   const reply: PostActionBarProps['reply'] = replyBinding
     ? {

@@ -5,8 +5,8 @@ import { expect, fireEvent, fn, screen, userEvent, waitFor, within } from 'story
 import { NotificationListItemView } from '@/components/notification/NotificationListItemView';
 import { ReplyNotificationPost } from '@/components/notification/ReplyNotificationPost';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
+import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
-import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { SessionProvider } from '@/session/SessionProvider';
 import { getCopiedStrings, resetClipboardMock } from '../../../.storybook/mocks/postClipboard';
 import { post, profile } from '../fixtures';
@@ -87,11 +87,11 @@ function ReplyPost() {
   return (
     <SessionProvider>
       <PostActionAuthenticationProvider>
-        <PostReplyCoordinatorProvider owner="list" profile={data.composer?.replyProfile ?? null}>
+        <PostComposerCoordinatorProvider owner="list" profile={data.composer?.replyProfile ?? null}>
           <PostMediaViewerHostProvider>
             <ReplyNotificationPost post={data.node.post} />
           </PostMediaViewerHostProvider>
-        </PostReplyCoordinatorProvider>
+        </PostComposerCoordinatorProvider>
       </PostActionAuthenticationProvider>
     </SessionProvider>
   );

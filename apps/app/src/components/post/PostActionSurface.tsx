@@ -4,7 +4,7 @@ import { ProfileMoreMenu } from '@/components/profile/ProfileMoreMenu';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { usePostActionAuthentication } from './PostActionAuthentication';
-import { isRepostTargetEligible } from './postActionAvailability';
+import { isQuoteTargetEligible, isRepostTargetEligible } from './postActionAvailability';
 import { PostActionBar } from './PostActionBar';
 import { useBookmarkFailureToast } from './PostBookmarkAction';
 import { usePostMoreMenuItem } from './PostMoreMenu';
@@ -17,6 +17,7 @@ import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
 type Props = Readonly<{
   actionBarStyle?: StyleProp<ViewStyle>;
   onDeleted?: () => void;
+  onQuote?: (restoreFocus: () => void) => void;
   reactionSummaryStyle?: StyleProp<ViewStyle>;
   reply?: PostActionBarProps['reply'];
   socialActionTarget: PostActionSurface_post$key;
@@ -24,12 +25,18 @@ type Props = Readonly<{
 
 const postActionSurfaceFragment = graphql`
   fragment PostActionSurface_post on Post {
+    content {
+      id
+    }
     id
     visibility
     profile {
       id
       relativeHandle
       ...ProfileMuteAction_profile
+      instance {
+        kind
+      }
     }
     ...PostActionBar_post @alias(as: "actionBar")
     ...PostReactionController_post @alias(as: "reactionController")
@@ -39,6 +46,7 @@ const postActionSurfaceFragment = graphql`
 export function PostActionSurface({
   actionBarStyle,
   onDeleted,
+  onQuote,
   reactionSummaryStyle,
   reply,
   socialActionTarget,
@@ -52,6 +60,13 @@ export function PostActionSurface({
       visibility: target.visibility,
     }),
   );
+  const quoteEnabled = isQuoteTargetEligible({
+    authorProfileId: target.profile.id,
+    hasContent: Boolean(target.content),
+    selectedProfileId: authentication.selectedProfileId,
+    sourceInstanceKind: target.profile.instance.kind,
+    visibility: target.visibility,
+  });
   const reactionController = usePostReactionController(
     target.reactionController!,
     authentication.execution.kind === 'enabled',
@@ -74,6 +89,7 @@ export function PostActionSurface({
         moreItems={[copyLinkItem]}
         onBookmarkError={onBookmarkError}
         onDeleted={onDeleted}
+        onQuote={quoteEnabled ? onQuote : undefined}
         onRepostError={onRepostError}
         onResolutionRequired={authentication.resolve}
         post={target.actionBar}
