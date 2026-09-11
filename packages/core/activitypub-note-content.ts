@@ -66,6 +66,12 @@ function htmlToBodyDocument(
 
     return [{ targetHref, profileId }];
   });
+  const profileIdsByTargetHref = new Map<string, Set<string>>();
+  for (const candidate of normalizedCandidates) {
+    const profileIds = profileIdsByTargetHref.get(candidate.targetHref) ?? new Set<string>();
+    profileIds.add(candidate.profileId);
+    profileIdsByTargetHref.set(candidate.targetHref, profileIds);
+  }
 
   const remoteNoteDOMParser = new ProseMirrorDOMParser(postContentSchema, [
     { tag: 'pre', node: 'paragraph', preserveWhitespace: 'full' },
@@ -85,12 +91,12 @@ function htmlToBodyDocument(
           return false;
         }
 
-        const candidate = normalizedCandidates.find((item) => item.targetHref === href);
-        if (!candidate) {
+        const profileIds = profileIdsByTargetHref.get(href);
+        if (!profileIds || profileIds.size !== 1) {
           return false;
         }
 
-        return { label, profileId: candidate.profileId };
+        return { label, profileId: profileIds.values().next().value };
       },
     },
     ...schemaDOMParser.rules,

@@ -431,6 +431,31 @@ describe('projectRemoteNoteContent', () => {
     ]);
   });
 
+  it('keeps an anchor with ambiguous Profile candidates as a safe link', () => {
+    const result = projectRemoteNoteContent({
+      content: '<p><a href="https://profile.example/@same">@same</a></p>',
+      mentions: [
+        { profileId: aliceProfileId, targetHref: 'https://profile.example/@same' },
+        { profileId: bobProfileId, targetHref: 'https://PROFILE.EXAMPLE:443/@same' },
+      ],
+      summary: null,
+      mediaType: 'text/html',
+    });
+
+    assert.deepEqual(result.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            type: 'text',
+            text: '@same',
+            marks: [{ type: 'link', attrs: { href: 'https://profile.example/@same' } }],
+          },
+        ],
+      },
+    ]);
+  });
+
   it('keeps malformed candidates and unsafe visible labels as safe links', () => {
     const result = projectRemoteNoteContent({
       content:

@@ -44,6 +44,7 @@ export const collectInboundMentionCandidates = async (
       instanceState: Instances.state,
       profileId: ActivityPubActors.profileId,
       actorHref: ActivityPubActors.uri,
+      profileUrl: ActivityPubActors.profileUrl,
     })
     .from(ActivityPubActors)
     .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
@@ -52,6 +53,16 @@ export const collectInboundMentionCandidates = async (
 
   return profileRows.flatMap((profile) => {
     const verifiedHrefs = [profile.actorHref];
+    if (profile.profileUrl !== null) {
+      try {
+        const profileUrl = new URL(profile.profileUrl);
+        if (isHttpUri(profileUrl) && profileUrl.hostname) {
+          verifiedHrefs.push(profileUrl.href);
+        }
+      } catch {
+        // A malformed stored URL cannot be used as a trusted profile URL.
+      }
+    }
     if (
       profile.instanceKind === InstanceKind.LOCAL &&
       profile.instanceState === InstanceState.ACTIVE &&

@@ -158,11 +158,12 @@ describe('inbound Create dispatch', () => {
   });
 
   test('projects a typed Mention through inbound Create into the revision-owned relation', async () => {
-    const profile = await createStoredRemoteActor();
+    const profileUrl = 'https://profile.example/@alice';
+    const profile = await createStoredRemoteActor({ profileUrl });
     const objectUri = new URL('https://remote.example/notes/mention');
     const note = new Note({
       attribution: remoteActorUri,
-      content: '<p>Hello <a href="https://remote.example/users/alice">@alice</a></p>',
+      content: `<p>Hello <a href="${profileUrl}">@alice</a></p>`,
       id: objectUri,
       mediaType: 'text/html',
       tags: [
@@ -200,6 +201,103 @@ describe('inbound Create dispatch', () => {
     assert.deepEqual(await db.select().from(PostMentions), [
       { postContentId: content.id, profileId: profile.id },
     ]);
+  });
+
+  test('falls back to the actor URI when a stored profile URL alias is malformed', async () => {
+    const profile = await createStoredRemoteActor({ profileUrl: 'not a URL' });
+    const objectUri = new URL('https://remote.example/notes/malformed-profile-url');
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: `<p>Hello <a href="${remoteActorUri.href}">@alice</a></p>`,
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [
+        new Mention({
+          href: remoteActorUri,
+          name: '@different-label',
+        }),
+      ],
+      to: PUBLIC_COLLECTION,
+    });
+
+    await handleInboundCreate(
+      createContext(),
+      new Create({ actor: remoteActorUri, object: note }),
+      receivedAt,
+    );
+
+    const { content } = await getMaterializedPost(objectUri);
+    assert.deepEqual(content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          { text: 'Hello ', type: 'text' },
+          { attrs: { label: '@alice', profileId: profile.id }, type: 'mention' },
+        ],
+      },
+    ]);
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: content.id, profileId: profile.id },
+    ]);
+  });
+
+  test('keeps an actor URL alias ambiguous when multiple Profiles advertise it', async () => {
+    const sharedProfileUrl = 'https://profile.example/@same';
+    const alice = await createStoredRemoteActor({ profileUrl: sharedProfileUrl });
+    const bobActorUri = new URL('https://remote-b.example/users/bob');
+    const bob = await createStoredRemoteActor({
+      actorUri: bobActorUri,
+      handle: 'bob',
+      profileUrl: sharedProfileUrl,
+    });
+    const objectUri = new URL('https://remote.example/notes/ambiguous-mention');
+    const note = new Note({
+      attribution: remoteActorUri,
+      content:
+        `<p><a href="${sharedProfileUrl}">@same</a> ` +
+        `<a href="${remoteActorUri.href}">@alice</a> ` +
+        `<a href="${bobActorUri.href}">@bob</a></p>`,
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [
+        new Mention({ href: remoteActorUri, name: '@alice' }),
+        new Mention({ href: bobActorUri, name: '@bob' }),
+      ],
+      to: PUBLIC_COLLECTION,
+    });
+
+    await handleInboundCreate(
+      createContext(),
+      new Create({ actor: remoteActorUri, object: note }),
+      receivedAt,
+    );
+
+    const { content } = await getMaterializedPost(objectUri);
+    assert.deepEqual(content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            marks: [{ attrs: { href: sharedProfileUrl }, type: 'link' }],
+            text: '@same',
+            type: 'text',
+          },
+          { text: ' ', type: 'text' },
+          { attrs: { label: '@alice', profileId: alice.id }, type: 'mention' },
+          { text: ' ', type: 'text' },
+          { attrs: { label: '@bob', profileId: bob.id }, type: 'mention' },
+        ],
+      },
+    ]);
+    assert.deepEqual(
+      (await db.select().from(PostMentions)).sort((left, right) =>
+        left.profileId.localeCompare(right.profileId),
+      ),
+      [
+        { postContentId: content.id, profileId: alice.id },
+        { postContentId: content.id, profileId: bob.id },
+      ].sort((left, right) => left.profileId.localeCompare(right.profileId)),
+    );
   });
 
   test('projects a local Profile Mention when the actor URI and human URL use different forms', async () => {
@@ -254,7 +352,7 @@ describe('inbound Create dispatch', () => {
   });
 
   test('preserves unresolved, mismatched, or malformed typed Mentions as safe links', async () => {
-    await createStoredRemoteActor();
+    await createStoredRemoteActor({ profileUrl: 'not a URL' });
     const mismatchedTarget = new URL('https://remote-b.example/users/bob');
     await createStoredRemoteActor({ actorUri: mismatchedTarget, handle: 'bob' });
     const unresolvedTarget = new URL('https://unknown.example/users/bob');
@@ -2610,12 +2708,14 @@ const createStoredRemoteActor = async ({
   handle = 'alice',
   instanceKind = InstanceKind.ACTIVITYPUB,
   instanceState = InstanceState.ACTIVE,
+  profileUrl,
   profileState = ProfileState.ACTIVE,
 }: {
   actorUri?: URL;
   handle?: string;
   instanceKind?: InstanceKind;
   instanceState?: InstanceState;
+  profileUrl?: string | null;
   profileState?: ProfileState;
 } = {}) => {
   const instance = await db
@@ -2643,6 +2743,7 @@ const createStoredRemoteActor = async ({
 
   await db.insert(ActivityPubActors).values({
     profileId: profile.id,
+    ...(profileUrl === undefined ? {} : { profileUrl }),
     type: ActivityPubActorType.PERSON,
     uri: actorUri.href,
     followersUri: `${actorUri.href}/followers`,

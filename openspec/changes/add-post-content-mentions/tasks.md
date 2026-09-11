@@ -15,8 +15,9 @@
 **Guardrails**
 
 - 일반 HTML anchor와 `to`/`cc` audience actor URI를 Mention으로 추론하지 않는다.
-- inbound adapter가 typed tag의 actor URI를 기존 Local/Remote Profile stable identity로 확인하고 전달한 허용 href와 `profileId`만 관계 입력으로 인정한다. Local은 trusted canonical origin과 기존 Profile URL 규칙의 human URL을 함께 허용하고, Remote는 저장된 actor URI anchor만 허용한다. core parser는 본문 anchor href가 허용 href에 대응하는지 확인하며, tag `name`·handle과 본문 visible label의 exact match만으로 Profile을 연결하거나 거부하지 않는다.
-- canonical document에는 external URI를 저장하지 않으며 core 저장 경계에서 별도 ActivityPub actor lookup·remote lookup·fallback 재검증을 수행하지 않는다. Local Post Content validator는 Mention node를 write 전에 거부한다.
+- actor materialization·refresh가 같은 Actor document의 `url`에서 hostname이 있는 HTTP(S)로 검증한 nullable profile URL alias를 기존 Actor identity에 연결해 저장하고, Actor URI와 다른 hostname이어도 직접 광고된 URL이면 허용한다. inbound adapter가 typed tag의 actor URI를 기존 Local/Remote Profile stable identity로 확인한다. 전달한 허용 href와 `profileId`만 관계 입력으로 인정한다. Local은 trusted canonical origin과 기존 Profile URL 규칙의 human URL을 함께 허용하고, Remote는 저장된 Actor URL alias가 있으면 actor URI와 함께 허용하며 없으면 actor URI만 사용한다. core parser는 본문 anchor href가 허용 href에 대응하는지 확인하며, tag `name`·handle과 본문 visible label의 exact match만으로 Profile을 연결하거나 거부하지 않는다.
+- 서로 다른 `profileId` 후보가 동일한 허용 href를 공유할 때 core parser의 normalized href matching 경계에서 ambiguous로 처리해 first match로 하나를 선택하지 않고 안전 fallback으로 낮춘다.
+- canonical document에는 external URI를 저장하지 않으며 core 저장 경계에서 별도 ActivityPub actor lookup·remote lookup·fallback 재검증을 수행하지 않는다. Actor URL alias는 actor materialization·refresh metadata에만 저장하고 Mention 수신 중 fetch하지 않는다. Local Post Content validator는 Mention node를 write 전에 거부한다.
 - document, `post_mentions` persisted revision-to-Profile 관계와 Current Content pointer는 같은 저장 경계에서 원자적으로 처리하며 과거 revision을 변경하지 않는다. `post_mentions` row는 해당 Post Content revision과 Profile을 foreign key로 가리킨다.
 - duplicate remote `Create`는 first-write-wins no-op으로 유지하고 `Update(Note)`로 승격하지 않는다.
 - unresolved·malformed·identity mismatch는 안전한 link 또는 표시 text로 낮추고 신규 원격 Profile lookup/materialization을 수행하지 않는다.
@@ -24,16 +25,17 @@
 **Verification**
 
 - 검증된 단일·다중 Mention, 같은 Profile의 반복 occurrence, 서로 다른 Profile의 occurrence 순서와 relation set 결과를 실행 검증한다.
+- Actor document의 `id`와 `url`이 다른 Remote actor fixture에서 materialization·refresh가 hostname이 있는 HTTP(S) URL alias를 저장하고 collector가 actor URI와 alias를 허용 href로 전달하는지 검증한다. refresh document에서 `url`이 빠지거나 malformed이면 기존 alias를 제거하고 actor URI만 남기는지 확인한다. alias가 null·malformed인 기존 row는 actor URI만 사용하고 Mention 수신 중 fetch하지 않는지 검증한다. 서로 다른 Profile에 같은 alias가 나타나면 collector/parser가 first match를 선택하지 않고 안전 fallback으로 낮추는지 검증한다.
 - `post_mentions` row가 해당 Post Content revision과 Profile foreign key를 가리키고, 같은 revision/Profile 중복을 만들지 않는지 검증한다.
-- 일반 link·audience-only·identity resolution 실패·허용 href에 대응하지 않는 anchor·안전하지 않은 label 입력이 relation을 만들지 않고 안전 fallback으로 저장되는지 검증한다. Local actor URI와 human Profile URL 표현이 다른 Mastodon fixture와 tag name/본문 label이 다른 fixture, Remote actor URI-only fixture에서 같은 Profile identity가 올바르게 보존되거나 alias 한계로 fallback되는지, 서로 다른 Profile identity가 각기 독립적으로 검증되는지 함께 확인한다.
+- 일반 link·audience-only·identity resolution 실패·허용 href에 대응하지 않는 anchor·안전하지 않은 label 입력·ambiguous href가 relation을 만들지 않고 안전 fallback으로 저장되는지 검증한다. Local actor URI와 human Profile URL 표현이 다른 Mastodon fixture와 tag name/본문 label이 다른 fixture, Remote actor URI와 actor가 광고한 profile URL이 다른 fixture, alias가 없는 Remote fixture에서 같은 Profile identity가 올바르게 보존되거나 actor URI-only fallback되는지, 서로 다른 Profile identity가 각기 독립적으로 검증되는지 함께 확인한다.
 - local Note의 plain text/HTML 파생이 label text와 기존 safe link를 보존하고 outbound typed Mention federation을 추가하지 않는지 회귀 검증한다.
 - `post_mentions` relation 또는 Current Content pointer 저장 실패가 새 Post/Content와 함께 rollback되는지 검증한다.
 - 동일 remote object URI의 동일·변경된 duplicate Create가 기존 document, relation, timestamp를 유지하는지 검증한다.
 - HTML formatting만 달라지고 canonical body·Mention identity가 같은 duplicate Create도 새 revision을 만들지 않는지 검증한다.
 
-- [x] 1.1 inbound `tag`에서 typed Mention의 actor URI를 기존 Profile stable identity와 확인하고, Local의 trusted human URL 또는 Remote의 stored actor URI 허용 href와 `profileId`만 core parser 경계에 전달한다. parser는 원문 HTML에서 본문 visible label을 읽어 안전하게 정규화한다. audience·일반 link와 분리하며 core HTML/plain-text parser에는 Fedify vocabulary나 DB/remote lookup을 주입하지 않는다.
+- [x] 1.1 actor materialization·refresh에서 Actor가 광고한 HTTP(S) profile URL alias를 기존 Actor identity에 nullable metadata로 저장하고, inbound `tag`의 typed Mention actor URI를 기존 Profile stable identity와 확인한다. Local의 trusted human URL 또는 Remote의 stored Actor URL alias와 actor URI 허용 href 및 `profileId`만 core parser 경계에 전달하고, alias가 없으면 actor URI만 전달한다. parser는 원문 HTML에서 본문 visible label을 읽어 안전하게 정규화한다. audience·일반 link와 분리하며 core HTML/plain-text parser에는 Fedify vocabulary나 DB/remote lookup을 주입하지 않는다.
 - [x] 1.2 검증된 Mention occurrence와 Profile membership을 canonical document·`post_mentions` revision 저장 결과에 반영하고 반복 occurrence와 relation deduplication을 보장한다. 현재 구현 선택은 `{ profileId, label }` node attrs와 `(post_content_id, profile_id)` composite primary key·foreign key relation이다.
-- [x] 1.3 mismatch·malformed·unresolved fallback, duplicate Create no-op과 원자적 rollback의 행동 검증을 추가하고 통과시킨다.
+- [ ] 1.3 actor URL alias 유무·malformed·identity mismatch·unresolved fallback, duplicate Create no-op과 원자적 rollback의 행동 검증을 추가하고 통과시킨다. alias가 이후 materialization·refresh에서 채워져도 이미 저장된 기존 글을 자동 보정하지 않는다.
 
 ## 2. PROD-340 legacy reader compatibility and activation gate
 

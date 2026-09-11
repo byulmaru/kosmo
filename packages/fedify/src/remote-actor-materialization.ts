@@ -33,6 +33,7 @@ import {
   profileHandleSchema,
 } from '@kosmo/core/validation';
 import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
+import { isHttpUri } from './activitypub-uri';
 import type { Context } from '@fedify/fedify';
 import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
 
@@ -67,6 +68,7 @@ type ActorProjection = {
   handle: string;
   header: RemoteProfileMediaCandidate | null;
   normalizedHandle: string;
+  profileUrl: string | null;
   published: Temporal.Instant | null;
 };
 
@@ -164,6 +166,17 @@ const projectActorImage = async (
   };
 };
 
+const projectActorProfileUrl = (actor: ActorWithKosmoFields): string | null => {
+  const representation = actor.url;
+  const url = representation instanceof Link ? representation.href : representation;
+
+  if (!url || !isHttpUri(url) || !url.hostname) {
+    return null;
+  }
+
+  return url.href;
+};
+
 const projectActor = async (actor: ActorWithKosmoFields, requestedNormalizedHandle: string) => {
   const preferredUsername = actor.preferredUsername?.toString();
 
@@ -205,6 +218,7 @@ const projectActor = async (actor: ActorWithKosmoFields, requestedNormalizedHand
     handle: handle.data,
     header,
     normalizedHandle,
+    profileUrl: projectActorProfileUrl(actor),
     published: actor.published ?? null,
   } satisfies ActorProjection;
 };
@@ -732,6 +746,7 @@ export const materializeRemoteProfileActor = async ({
           .set({
             ...endpoints,
             lastFetchedAt: now,
+            profileUrl: projection.profileUrl,
             type: actorType,
             updatedAt: now,
           })
@@ -780,6 +795,7 @@ export const materializeRemoteProfileActor = async ({
           ...endpoints,
           lastFetchedAt: now,
           profileId: profile.id,
+          profileUrl: projection.profileUrl,
           type: actorType,
           uri: actorUri,
         })
