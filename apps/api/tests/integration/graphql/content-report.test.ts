@@ -193,9 +193,10 @@ test('Report without the shared Feedback webhook configuration is rejected befor
 test('Account without a selected Profile can report a public Post', async (t) => {
   const auth = await createAuthenticatedSession({ selectProfile: false });
   const post = await createPost(auth.profile.id, PostVisibility.PUBLIC);
-  let calls = 0;
-  t.mock.method(globalThis, 'fetch', async () => {
-    calls += 1;
+  const targetId = encodeGlobalId('Post', post.id);
+  const requests: Request[] = [];
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push(new Request(input, init));
     return new Response('ok', { status: 200 });
   });
 
@@ -206,7 +207,7 @@ test('Account without a selected Profile can report a public Post', async (t) =>
     {
       input: {
         reason: 'HARMFUL_CONTENT',
-        targetId: encodeGlobalId('Post', post.id),
+        targetId,
         targetType: 'POST',
       },
     },
@@ -214,7 +215,47 @@ test('Account without a selected Profile can report a public Post', async (t) =>
   );
 
   assert.deepEqual(result, { data: { submitContentReport: { status: 'DELIVERED' } } });
-  assert.equal(calls, 1);
+  assert.equal(requests.length, 1);
+
+  const payload = (await requests[0]?.json()) as {
+    blocks: Array<{ fields?: Array<{ text: string }> }>;
+  };
+  const targetFields = payload.blocks[1]?.fields;
+  assert.ok(targetFields);
+  assert.ok(targetFields.some(({ text }) => text === `대상 ID: ${post.id}`));
+  const kosmoUrlText = targetFields.find(({ text }) => text.startsWith('Kosmo URL: '))?.text;
+  assert.ok(kosmoUrlText);
+  const pathSegment = new URL(kosmoUrlText.slice('Kosmo URL: '.length)).pathname.split('/').at(-1);
+  assert.ok(pathSegment);
+  assert.equal(pathSegment, targetId);
+});
+
+test('Nullable details are accepted by a valid GraphQL report', async (t) => {
+  const auth = await createAuthenticatedSession();
+  const requests: Request[] = [];
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push(new Request(input, init));
+    return new Response('ok', { status: 200 });
+  });
+
+  const result = await requestGraphQL<{
+    submitContentReport: { status: string };
+  }>(
+    mutation,
+    {
+      input: {
+        details: null,
+        reason: 'SPAM_FRAUD',
+        targetId: encodeGlobalId('Profile', auth.profile.id),
+        targetType: 'PROFILE',
+      },
+    },
+    auth.token,
+  );
+
+  assert.deepEqual(result, { data: { submitContentReport: { status: 'DELIVERED' } } });
+  assert.equal(requests.length, 1);
+  assert.equal(JSON.stringify(await requests[0]?.json()).includes('상세 내용: 없음'), true);
 });
 
 test('Anonymous report requests are rejected before target lookup or Slack', async (t) => {

@@ -24,7 +24,7 @@ builder.mutationField('submitContentReport', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const parsedInput = contentReportInputSchema.safeParse({
-        details: input.details,
+        details: input.details ?? undefined,
         reason: input.reason,
       });
       if (!parsedInput.success) {
