@@ -46,18 +46,18 @@ function createEnvironment() {
 }
 
 function variables() {
-  return { id: requestId };
+  return { connections: [connectionId], id: requestId };
 }
 
-function assertRequestPresent(environment: Environment) {
-  assert.ok(environment.getStore().getSource().get(requestId));
+function assertRequestRemoved(environment: Environment) {
+  assert.equal(environment.getStore().getSource().get(requestId), null);
   assert.deepEqual(environment.getStore().getSource().get(connectionId)?.edges, {
-    __refs: [edgeId],
+    __refs: [],
   });
 }
 
 describe('follow request mutation connection contract', () => {
-  it('keeps an approved request until completion handles the successful payload', () => {
+  it('removes an approved request edge and record after successful normalization', () => {
     const environment = createEnvironment();
     const operation = createOperationDescriptor(getRequest(approveMutation), variables());
     environment.commitPayload(operation, {
@@ -82,10 +82,10 @@ describe('follow request mutation connection contract', () => {
       },
     });
 
-    assertRequestPresent(environment);
+    assertRequestRemoved(environment);
   });
 
-  it('keeps a rejected request until completion handles the successful payload', () => {
+  it('removes a rejected request edge and record after successful normalization', () => {
     const environment = createEnvironment();
     const operation = createOperationDescriptor(getRequest(rejectMutation), variables());
     environment.commitPayload(operation, {
@@ -95,6 +95,6 @@ describe('follow request mutation connection contract', () => {
       },
     });
 
-    assertRequestPresent(environment);
+    assertRequestRemoved(environment);
   });
 });

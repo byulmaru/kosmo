@@ -18,12 +18,6 @@ const approveRetryResponse = {
     profileFollowRequestId: 'follow-request-story-other',
   },
 };
-const approvePartialResponse = {
-  approveProfileFollowRequest: {
-    ...approveRetryResponse.approveProfileFollowRequest,
-    profileFollowRequestId: 'follow-request-story-available',
-  },
-};
 const rejectRetryResponse = {
   rejectProfileFollowRequest: {
     followeeProfile: { id: 'follow-request-story-followee' },
@@ -113,10 +107,7 @@ export const ApproveFailureAndRetry: Story = {
       mutationRequestObserver,
       operationResponses: {
         FollowRequestListItemApproveMutation: {
-          sequence: [
-            { data: approvePartialResponse, errors: [{ message: '승인 mutation 실패' }] },
-            { data: approveRetryResponse },
-          ],
+          sequence: [{ error: '승인 mutation 실패' }, { data: approveRetryResponse }],
         },
       },
     },

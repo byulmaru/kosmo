@@ -1,8 +1,7 @@
 import { CheckIcon, XIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
-import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
-import { ConnectionHandler } from 'relay-runtime';
+import { graphql, useFragment, useMutation } from 'react-relay';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { getIconButtonTargetSize, IconButton } from '@/components/ui/IconButton';
@@ -40,9 +39,10 @@ const followRequestListItemFragment = graphql`
 `;
 
 const approveFollowRequestMutation = graphql`
-  mutation FollowRequestListItemApproveMutation($id: ID!) {
+  mutation FollowRequestListItemApproveMutation($connections: [ID!]!, $id: ID!) {
     approveProfileFollowRequest(input: { id: $id }) {
-      profileFollowRequestId
+      profileFollowRequestId @deleteEdge(connections: $connections)
+      profileFollowRequestId @deleteRecord
       followerProfile {
         id
         followingCount
@@ -65,9 +65,10 @@ const approveFollowRequestMutation = graphql`
 `;
 
 const rejectFollowRequestMutation = graphql`
-  mutation FollowRequestListItemRejectMutation($id: ID!) {
+  mutation FollowRequestListItemRejectMutation($connections: [ID!]!, $id: ID!) {
     rejectProfileFollowRequest(input: { id: $id }) {
-      profileFollowRequestId
+      profileFollowRequestId @deleteEdge(connections: $connections)
+      profileFollowRequestId @deleteRecord
       followeeProfile {
         id
       }
@@ -77,7 +78,6 @@ const rejectFollowRequestMutation = graphql`
 
 export function FollowRequestListItem({ connectionId, request }: FollowRequestListItemProps) {
   const { showToast } = useToast();
-  const environment = useRelayEnvironment();
   const environmentGenerationRef = useRelayEnvironmentGeneration();
   const data = useFragment(followRequestListItemFragment, request);
   const [commitApprove] = useMutation<FollowRequestListItemApproveMutation>(
@@ -99,17 +99,6 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
     );
   };
 
-  const handleCompleted = (requestId: string) => {
-    environment.commitUpdate((store) => {
-      const connection = store.get(connectionId);
-      if (connection) {
-        ConnectionHandler.deleteNode(connection, requestId);
-      }
-      store.delete(requestId);
-    });
-    setPendingAction(null);
-  };
-
   const commit = (action: FollowRequestAction) => {
     if (busy) {
       return;
@@ -120,7 +109,7 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
 
     if (action === 'approve') {
       commitApprove({
-        onCompleted: (response, errors) => {
+        onCompleted: (_response, errors) => {
           if (environmentGenerationRef?.current !== mutationGeneration) {
             return;
           }
@@ -128,7 +117,7 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
             handleFailure(action);
             return;
           }
-          handleCompleted(response.approveProfileFollowRequest.profileFollowRequestId);
+          setPendingAction(null);
         },
         onError: () => {
           if (environmentGenerationRef?.current !== mutationGeneration) {
@@ -136,13 +125,13 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
           }
           handleFailure(action);
         },
-        variables: { id: data.id },
+        variables: { connections: [connectionId], id: data.id },
       });
       return;
     }
 
     commitReject({
-      onCompleted: (response, errors) => {
+      onCompleted: (_response, errors) => {
         if (environmentGenerationRef?.current !== mutationGeneration) {
           return;
         }
@@ -150,7 +139,7 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
           handleFailure(action);
           return;
         }
-        handleCompleted(response.rejectProfileFollowRequest.profileFollowRequestId);
+        setPendingAction(null);
       },
       onError: () => {
         if (environmentGenerationRef?.current !== mutationGeneration) {
@@ -158,7 +147,7 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
         }
         handleFailure(action);
       },
-      variables: { id: data.id },
+      variables: { connections: [connectionId], id: data.id },
     });
   };
 

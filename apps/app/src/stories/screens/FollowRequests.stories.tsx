@@ -415,11 +415,7 @@ export const LatePreviousActorMutationIsIsolated: Story = {
     relay: {
       operationResponses: {
         FollowRequestListItemApproveMutation: [
-          {
-            data: approveMutationResponse,
-            delayMs: 100,
-            errors: [{ message: '승인 mutation 실패' }],
-          },
+          { error: '승인 mutation 실패', delayMs: 100 },
           { data: approveMutationResponse },
         ],
         FollowRequestsPageQuery: [
