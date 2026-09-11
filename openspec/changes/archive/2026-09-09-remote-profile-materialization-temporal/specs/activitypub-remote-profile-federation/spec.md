@@ -2,49 +2,46 @@
 
 ### Requirement: Remote actor materialization through Fedify lookup
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md`, `PROD-808`, `PROD-248`. 시스템은 federation 내부 actor materialization 흐름에서 검색·발견 경계가 제공한 canonical `actorUri`로 remote ActivityPub actor를 kosmo `Profile`로 materialize해야 하며(MUST), 명시적인 qualified handle을 actor URI로 해석하는 단계는 materialization 경계 전에 검색·발견 경계에서 수행해야 한다(MUST). 신규 materialization과 stale refresh는 동일한 public Temporal Workflow dispatch와 durable orchestration 경로를 사용해야 하며(MUST), Workflow가 stored-state Activity의 결과에 따라 missing·갱신 불필요·stale를 분기해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md`, `PROD-808`, `PROD-248`. 시스템은 명시적인 qualified handle 검색을 `RemoteProfileLookupInput { domain, handle, profileId? }`로 public `remoteProfileLookupWorkflow`에 dispatch하고, Workflow가 URI lookup Activity에서 받은 canonical `actorUri`를 `materializeRemoteProfileActorActivity`에 전달해 remote ActivityPub actor를 kosmo `Profile`로 materialize해야 한다(MUST). Materialize Activity가 stored/missing 판정, 현재 state·TTL 확인과 missing fetch 경계를 소유하고, 반환된 `needsRefresh`가 true일 때만 Workflow가 stale refresh child를 시작해야 한다(MUST).
 
-#### Scenario: Materialize remote actor from canonical actor URI
+#### Scenario: Look up and materialize remote actor from a qualified handle
 
-- **WHEN** 검색·발견 경계에서 확보한 canonical `actorUri`로 materialization을 요청하고 caller가 공용 `runWorkflow`의 native `execute` 또는 `start` mode를 선택한다
-- **THEN** Temporal Workflow와 Activity wire input은 canonical `actorUri`와 선택적인 `profileId`만 가진다
-- **AND** materialization caller는 상태·TTL을 직접 판단하거나 Profile row를 다시 읽는 wrapper 없이 canonical `actorUri`와 선택적인 acting `profileId`를 args로 공용 `runWorkflow(remoteProfileMaterializationWorkflow, ...)`에 전달하고, native conflict/reuse policy를 caller에서 정하며, `execute`의 Workflow 결과(Profile ID) 또는 `start`의 native start acknowledgement를 사용한다
-- **AND** Workflow는 Activity에서 `{ profileId, needsRefresh } | null` 최소 JSON-safe stored-state DTO만 받는다. `null`은 missing, `needsRefresh: false`는 갱신이 불필요하거나 허용되지 않는 상태(fresh 또는 `UNRESPONSIVE`), `needsRefresh: true`는 갱신 가능한 stale을 나타낸다. DTO의 `profileId`는 조회 대상인 cached Remote Profile ID이고, input의 선택적인 `profileId`는 origin 선택용 행동 Profile ID다
-- **AND** 전달된 `actorUri`에 저장된 remote Profile 또는 actor metadata가 없어도 새 remote `Profile`을 materialize할 수 있다
-- **AND** `profileId`가 없으면 configured Local Instance의 canonical origin을 사용하고, 있으면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용한다
-- **AND** 전달된 `profileId`가 필요한 Remote actor 정보를 제공하지 않으면 origin을 추측하지 않고 materialization을 실패 처리한다
+- **WHEN** 인증된 caller가 명시적인 qualified handle을 `mode: 'execute'` 또는 `mode: 'start'`로 조회한다
+- **THEN** caller는 `RemoteProfileLookupInput { domain, handle, profileId? }`로 `runWorkflow(remoteProfileLookupWorkflow, ...)`를 호출하고 native conflict/reuse policy를 선택한다
+- **AND** `lookupRemoteActorUriActivity`는 저장된 canonical actor URI를 먼저 재사용하고, 없을 때만 WebFinger의 ActivityPub self link에서 canonical actor URI를 확인한다
+- **AND** Workflow는 URI lookup Activity에서 받은 canonical `actorUri`와 선택적인 acting `profileId`를 `materializeRemoteProfileActorActivity`에 전달하며, 이 materialization boundary에는 handle lookup input을 전달하지 않는다
+- **AND** `materializeRemoteProfileActorActivity`는 stored/missing 판정과 현재 Profile/Instance 상태·actor TTL 확인을 소유하며 `{ profileId, needsRefresh }` non-null 최소 JSON-safe DTO를 반환한다. Activity 모듈의 private stored-state query에서 missing을 `null`로 관찰할 수 있지만, missing이면 materialize Activity가 `refreshRemoteProfileActorActivity`의 fetch·persist를 ordinary call로 수행한 뒤 새 target ID를 `{ profileId: id, needsRefresh: false }` 의미로 반환한다. DTO의 `profileId`는 cached 또는 새로 생성한 target Remote Profile ID이고 input의 선택적인 `profileId`는 origin 선택용 행동 Profile ID다
+- **AND** 전달된 actor URI에 저장된 remote Profile 또는 actor metadata가 없어도 새 remote `Profile`을 materialize할 수 있다
+- **AND** `profileId`가 없으면 configured Local Instance의 canonical origin을 사용하고, 있으면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용하며, 필요한 actor 정보가 없으면 origin을 추측하지 않고 실패 처리한다
 - **AND** `profileId`는 기존 unsigned lookup의 권한을 대신하지 않는다
-- **AND** 저장된 canonical actor URI가 있으면 이를 재사용하고, 없으면 검색·발견 경계가 WebFinger의 ActivityPub self link에서 canonical actor URI를 확인한다
-- **AND** WebFinger discovery는 Actor Instance 상태 판정 전에 수행할 수 있으며 WebFinger 응답만으로 Instance를 추출하거나 상태를 판정하지 않는다
-- **AND** canonical actor URI의 현재 Profile/Instance 상태와 actor TTL은 public Workflow 실행 경로에서 판정하고, 기존 `SUSPENDED`/`UNRESPONSIVE` 대상의 Actor document fetch 제한을 유지한다
-- **AND** 기존 instance가 없으면 `actorUri` host의 normalized domain에 ActivityPub instance를 생성한다
-- **AND** missing 분기에서는 기존 materialization Activity가 하나의 실행 경로에서 Fedify lookup API로 `actorUri`를 직접 해석한다
+- **AND** WebFinger discovery는 Actor Instance 상태 판정 전에 수행할 수 있지만 WebFinger 응답만으로 Instance를 추출하거나 상태를 판정하지 않는다
+- **AND** 기존 instance가 없으면 canonical actor URI host의 normalized domain에 ActivityPub instance를 생성한다
 - **AND** Fedify가 ActivityPub actor 객체를 반환하면 해당 actor의 canonical actor URI를 remote identity로 처리한다
-- **AND** 시스템은 actor URI가 기존 ActivityPub remote profile actor metadata에 연결되어 있으면 해당 remote profile을 갱신하고, 없으면 새 `Profile`을 생성한다
-- **AND** `needsRefresh: false` 분기의 Workflow는 외부 lookup이나 refresh child 없이 cached Profile identity를 반환한다
-- **AND** stale 분기의 Workflow는 state DTO의 `profileId`를 cached target identity로 반환하는 데만 사용하고, refresh child에는 Workflow가 원래 받은 input(`actorUri`와 선택적인 `profileId`)을 그대로 전달한다. child는 별도 refresh ID prefix에서 기존 materialization Activity를 실행하도록 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`으로 시작한 뒤 child start acknowledgement를 받고 cached Profile identity를 반환한다
-- **AND** 이미 실행 중인 같은 refresh child는 정상 coalescing으로 처리하고, 그 밖의 child start failure는 관측한 뒤 cached Profile identity를 반환한다
-- **AND** `mode: 'execute'` caller는 missing 분기의 materialization 완료 또는 갱신 불필요/stale 분기의 Profile identity를 받을 때까지 기다리고, `mode: 'start'` caller는 모든 분기에서 public Workflow의 native start acknowledgement만 받은 뒤 반환한다
-- **AND** 두 mode의 caller는 같은 Workflow 종류와 실행 경로를 사용한다
+- **AND** actor URI가 기존 ActivityPub remote profile actor metadata에 연결되어 있으면 해당 remote profile을 갱신하고, 없으면 새 `Profile`을 생성한다
+- **AND** `needsRefresh: false` 분기의 Workflow는 외부 fetch나 refresh child 없이 cached 또는 새로 생성한 Profile identity를 반환한다
+- **AND** `needsRefresh: true`이면 Workflow는 DTO의 `profileId`를 cached target identity로만 사용하고 URI lookup Activity에서 받은 `actorUri`와 Workflow input의 optional `profileId`를 별도 refresh ID prefix child에 그대로 전달한다. Child는 `refreshRemoteProfileActorActivity`를 실행하도록 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`으로 시작한 뒤 child start acknowledgement를 받고 cached Profile identity를 반환한다
+- **AND** 이미 실행 중인 같은 refresh child는 정상 coalescing으로 처리하고, 그 밖의 child start·execution failure는 관측한 뒤 cached Profile identity를 반환한다
+- **AND** `mode: 'execute'` caller는 materialize Activity의 결과와 missing fetch·persist 완료를 기다리고, `needsRefresh: true`이면 refresh child start acknowledgement 뒤 cached Profile identity를 받으며, `mode: 'start'` caller는 모든 결과에서 public lookup Workflow의 native start acknowledgement만 받은 뒤 반환한다
+- **AND** 두 mode의 caller는 같은 `remoteProfileLookupWorkflow` 종류와 실행 경로를 사용한다
 
 #### Scenario: Keep a stale refresh child after coordinator closure
 
-- **WHEN** public materialization Workflow가 stale 상태를 확인하고 refresh child의 실행 시작 확인을 기록한다
+- **WHEN** public lookup Workflow가 stale 상태를 확인하고 refresh child의 실행 시작 확인을 기록한다
 - **THEN** public Workflow는 child 완료를 기다리지 않고 cached Profile identity를 반환할 수 있다
 - **AND** refresh child는 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`에 따라 public Workflow의 완료·실패·취소 뒤에도 필요한 Activity와 Profile 저장을 계속할 수 있다
 - **AND** 이미 실행 중인 같은 child는 정상 coalescing으로 처리하며, 그 밖의 child start failure는 관측하고 cached Profile identity를 유지한다
 
-#### Scenario: Keep a public materialization child after parent closure
+#### Scenario: Keep a public lookup child after parent closure
 
-- **WHEN** 다른 Workflow가 public materialization Workflow를 비동기 child로 시작하고 child 실행 시작 확인이 parent 종료 전에 기록된다
+- **WHEN** 다른 Workflow가 public lookup Workflow를 비동기 child로 시작하고 child 실행 시작 확인이 parent 종료 전에 기록된다
 - **THEN** parent는 child 완료를 기다리지 않고 child start acknowledgement 뒤 종료할 수 있다
-- **AND** child caller가 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`을 명시하면 parent의 완료·실패·취소 뒤에도 child Workflow가 필요한 Activity와 Profile 저장을 계속할 수 있다
+- **AND** child caller가 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`을 명시하면 parent의 완료·실패·취소 뒤에도 child Workflow가 URI lookup과 Profile 저장을 계속할 수 있다
 - **AND** parent 취소는 시작 확인 이후 child Workflow에 전파되지 않는다
 
 #### Scenario: Refresh a stored remote actor by canonical URI
 
-- **WHEN** stale remote actor materialization이 저장된 canonical actor URI와 선택적인 `profileId`를 가진 `actorUri` refresh input으로 실행된다
-- **THEN** 시스템은 저장된 `actorUri`를 Fedify lookup target으로 사용하고 `acct:{handle}@{domain}` lookup을 다시 수행하지 않는다
+- **WHEN** stale remote actor materialization이 저장된 canonical actor URI와 선택적인 `profileId`를 가진 refresh child로 실행된다
+- **THEN** `refreshRemoteProfileActorActivity`는 저장된 `actorUri`를 Fedify lookup target으로 사용하고 `acct:{handle}@{domain}` lookup을 다시 수행하지 않는다
 - **AND** Fedify가 반환한 actor의 canonical URI가 예상한 `actorUri`와 일치하는지 확인하기 전에는 Profile 또는 actor metadata를 저장하지 않는다
 - **AND** URI가 일치하면 기존 actor identity에 연결된 같은 `Profile`을 갱신한다
 - **AND** 같은 canonical URI에서 actor `preferredUsername`이 바뀌어도 새 Profile을 만들지 않고 같은 Profile의 handle, normalized handle과 qualified handle을 갱신한다
@@ -97,7 +94,6 @@
 - **WHEN** 저장된 remote actor의 `lastFetchedAt`이 없거나 7일을 초과했고 federation 내부 service가 해당 remote actor를 사용해야 한다
 - **THEN** 시스템은 저장된 active profile을 refresh 완료 전에도 반환한다
 - **AND** 시스템은 신규 materialization과 같은 Temporal Workflow 경로의 refresh를 시작한다
-- **AND** refresh input은 저장된 canonical actor URI를 `actorUri`로 재사용하고 qualified handle lookup을 다시 수행하지 않는다
 - **AND** refresh가 성공하면 기존 `createdAt` 보존 정책을 지키면서 `Profile` projection과 actor metadata를 갱신한다
 
 #### Scenario: Keep stale actor when the follow-up refresh child fails
@@ -108,14 +104,14 @@
 
 #### Scenario: Do not synthesize a database fallback when the public Workflow is unavailable
 
-- **WHEN** caller가 public materialization Workflow를 start 또는 execute할 수 없다
+- **WHEN** caller가 public lookup Workflow를 start 또는 execute할 수 없다
 - **THEN** caller는 cached Profile을 만들기 위해 stored row, actor metadata 또는 TTL을 직접 조회하지 않는다
 - **AND** caller는 public Workflow start failure를 기존 materialization 또는 explicit-search 오류 경계로 전달한다
 
 #### Scenario: Recheck freshness and instance state before refresh execution
 
-- **WHEN** stored-state Activity가 stale actor를 확인해 refresh child를 시작했지만 materialization Activity가 그 이후 시점에 실행된다
-- **THEN** materialization Activity는 외부 lookup 전에 현재 저장된 Profile, actor metadata, TTL과 Instance 상태를 다시 확인한다
+- **WHEN** private stored-state query가 stale actor를 확인해 refresh child를 시작했지만 refresh Activity가 그 이후 시점에 실행된다
+- **THEN** refresh Activity는 외부 lookup 전에 현재 저장된 Profile, actor metadata, TTL과 Instance 상태를 다시 확인한다
 - **AND** 현재 actor가 fresh하거나 Profile이 inactive이거나 Instance가 `SUSPENDED` 또는 `UNRESPONSIVE`이면 remote lookup과 refresh를 수행하지 않는다
 - **AND** 현재 저장된 Profile은 기존 lifecycle·visibility 규칙을 따른다
 

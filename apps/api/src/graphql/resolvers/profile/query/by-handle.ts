@@ -1,12 +1,10 @@
-import { ActivityPubActors, db, first, Instances, Profiles } from '@kosmo/core/db';
+import { db, first, Instances, Profiles } from '@kosmo/core/db';
 import { InstanceKind, ProfileState } from '@kosmo/core/enums';
-import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
 import { runWorkflow } from '@kosmo/core/temporal/client';
-import { remoteProfileMaterializationWorkflow } from '@kosmo/core/temporal/remote-profile';
+import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/remote-profile';
 import { profileHandleSchema } from '@kosmo/core/validation';
-import { federation as remoteFederation, RemoteActorMaterializationError } from '@kosmo/fedify';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import {
   ApplicationFailure,
@@ -40,43 +38,6 @@ const isExplicitRemoteHandle = (
   parsed?.kind === 'remote' &&
   profileHandleSchema.safeParse(parsed.handle).success &&
   parsed.handle === parsed.handle.trim();
-
-const lookupRemoteActorUri = async (
-  handle: RemoteProfileHandle,
-  canonicalOrigin: string,
-): Promise<string> => {
-  const context = remoteFederation.createContext(new URL(canonicalOrigin), undefined);
-  const descriptor = await context.lookupWebFinger(`acct:${handle.handle}@${handle.domain}`);
-
-  for (const link of descriptor?.links ?? []) {
-    if (
-      link.rel !== 'self' ||
-      (link.type !== 'application/activity+json' &&
-        !link.type?.match(
-          /application\/ld\+json;\s*profile="https:\/\/www\.w3\.org\/ns\/activitystreams"/,
-        )) ||
-      link.href == null
-    ) {
-      continue;
-    }
-
-    try {
-      const candidate = new URL(link.href);
-      if (
-        (candidate.protocol === 'http:' || candidate.protocol === 'https:') &&
-        candidate.hostname
-      ) {
-        return candidate.href;
-      }
-    } catch {
-      // Try another ActivityPub self link before reporting an invalid response.
-    }
-  }
-
-  throw new RemoteActorMaterializationError(
-    'Remote WebFinger response is missing a valid ActivityPub self link.',
-  );
-};
 
 builder.queryField('profileByHandle', (t) =>
   t.field({
@@ -152,31 +113,11 @@ builder.queryField('searchProfiles', (t) =>
 
         if (isExplicitRemoteHandle(args.query, parsed)) {
           try {
-            const cached = await db
-              .select({
-                actorUri: ActivityPubActors.uri,
-              })
-              .from(Profiles)
-              .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-              .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-              .where(
-                and(
-                  eq(Instances.domain, parsed.domain),
-                  eq(Instances.kind, InstanceKind.ACTIVITYPUB),
-                  eq(Profiles.normalizedHandle, parsed.normalizedHandle),
-                ),
-              )
-              .limit(1)
-              .then(first);
-
-            const actorUri =
-              cached?.actorUri ??
-              (await lookupRemoteActorUri(parsed, localInstance.canonicalOrigin));
-
-            materializedProfileId = await runWorkflow(remoteProfileMaterializationWorkflow, {
+            materializedProfileId = await runWorkflow(remoteProfileLookupWorkflow, {
               args: [
                 {
-                  actorUri,
+                  domain: parsed.domain,
+                  handle: parsed.handle,
                   ...(ctx.session.profile?.id ? { profileId: ctx.session.profile.id } : {}),
                 },
               ],
@@ -188,22 +129,16 @@ builder.queryField('searchProfiles', (t) =>
             let materializationError: unknown = error;
             while (
               materializationError instanceof Error &&
-              !(materializationError instanceof ApplicationFailure) &&
-              !(materializationError instanceof RemoteActorMaterializationError) &&
-              !(materializationError instanceof ConflictError) &&
-              !(materializationError instanceof NotFoundError)
+              !(materializationError instanceof ApplicationFailure)
             ) {
               materializationError = materializationError.cause;
             }
 
             const isExpectedMaterializationError =
-              materializationError instanceof RemoteActorMaterializationError ||
-              materializationError instanceof ConflictError ||
-              materializationError instanceof NotFoundError ||
-              (materializationError instanceof ApplicationFailure &&
-                (materializationError.type === 'RemoteActorMaterializationError' ||
-                  materializationError.type === 'ConflictError' ||
-                  materializationError.type === 'NotFoundError'));
+              materializationError instanceof ApplicationFailure &&
+              (materializationError.type === 'RemoteActorMaterializationError' ||
+                materializationError.type === 'ConflictError' ||
+                materializationError.type === 'NotFoundError');
 
             if (!isExpectedMaterializationError) {
               remoteProfileSearchErrorReporter.capture(error);

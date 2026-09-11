@@ -3,11 +3,11 @@ import { workflowActivityOptions } from './activity-options';
 import type { RemoteProfileMaterializationInput } from '@kosmo/core/temporal/remote-profile';
 import type * as activities from '../activities';
 
-const { materializeRemoteProfileActorActivity } =
+const { refreshRemoteProfileActorActivity } =
   proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function remoteProfileRefreshWorkflow(
   input: RemoteProfileMaterializationInput,
 ): Promise<string> {
-  return materializeRemoteProfileActorActivity(input);
+  return refreshRemoteProfileActorActivity(input);
 }

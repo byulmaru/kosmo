@@ -9,7 +9,7 @@
 - Decision Date: 2026-09-09
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md`, `docs/architecture/core-services.md`, `PROD-808`
-- Status: Active
+- Status: Superseded in public discovery dispatch by the 2026-09-11 `Handle lookup Workflow and materialize/refresh Activity boundary` decision
 - Context / Problem: 검색 경계의 qualified handle lookup은 호출자가 context와 origin을 조합하게 하고 있으며, 새 Temporal 경로에서도 기존 unsigned lookup과 origin 선택 조건을 잃으면 안 된다.
 - Decision Outcome: public materialization caller는 canonical `actorUri`와 선택적인 `profileId`를 받는다. `profileId`를 생략하면 configured Local Instance canonical origin을 사용하고, 전달하면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용한다. 필요한 Remote actor 정보가 없으면 origin을 추측하지 않고 실패한다. `profileId`는 권한을 대신하지 않으며 unsigned lookup은 유지한다. 신규 materialization에 대해 동기 caller는 결과를 기다리고 비동기 caller는 Workflow 시작 확인만 받는다.
 - Alternatives Considered: origin을 `actorUri`에서 추측하거나 `profileId`를 필수로 만들면 Remote identity 증거가 약해지거나 기존 호출자를 깨뜨리므로 선택하지 않았다. unsigned lookup을 제거하면 기존 contract가 불필요하게 축소된다.
@@ -45,7 +45,7 @@
 - Decision Date: 2026-09-10
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808` user decision
-- Status: Active
+- Status: Superseded only in public discovery dispatch and Activity boundary by the 2026-09-11 `Handle lookup Workflow and materialize/refresh Activity boundary` decision
 - Context / Problem: 기존 `One short-lived Workflow and one Activity` 결정으로 public Workflow와 materialization
   Activity의 durable path는 이미 정해졌지만, caller가 stored row·actor metadata·TTL을 먼저 읽고 fresh/stale를
   판단하는 구조와 cached return·refresh child lifetime의 소유권은 남아 있었다. 그 결과 public Workflow가 상태 routing을
@@ -107,7 +107,7 @@
 - Decision Date: 2026-09-10
 - Decision Class: Corrective Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`, `PROD-808` final review correction
-- Status: Active
+- Status: Superseded by the 2026-09-11 `Handle lookup Workflow and materialize/refresh Activity boundary` decision
 - Context / Problem: 앞선 corrective record도 초기 materialization의 wire input에 qualified handle과 actorUri union을 남겨 검색·발견 경계와 materialization 경계를 혼동하게 했다.
 - Decision Outcome: public materialization API, low-level materializer와 Temporal Workflow/Activity wire input은 canonical `actorUri`와 선택적인 `profileId`만 받는다. qualified handle을 canonical actor URI로 해석하는 작업은 materialization 전에 검색·발견 경계에서 수행한다. actorUri에 저장된 Profile이나 actor metadata가 없어도 새 remote Profile을 materialize할 수 있으며, Activity는 actorUri를 직접 Fedify lookup target으로 사용하고 acct handle lookup을 수행하지 않는다. 반환 actor URI가 예상한 actorUri와 일치하는지 확인한 뒤에만 저장하며, 불일치는 Profile 또는 actor metadata 변경 없이 실패한다. 같은 URI에서 `preferredUsername`이 바뀌면 새 Profile을 만들지 않고 기존 Profile의 handle, normalized handle과 qualified handle을 갱신한다. `profileId`가 없으면 configured Local Instance canonical origin을 사용하고, 있으면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용하며, 필요한 actor 정보가 없으면 origin을 추측하지 않고 실패한다. 기존 unsigned lookup, caller-only sync/async 선택과 child `ABANDON` 경계는 유지한다.
 - Alternatives Considered: materialization input에 qualified handle을 추가하거나 stale refresh에서 handle을 다시 조회하는 방식은 검색과 materialization 경계를 섞고 canonical actor identity를 안전하게 보존하지 못하므로 선택하지 않았다. actorUri에 저장된 Profile이 있어야만 생성하도록 제한하면 신규 actor materialization을 막으므로 선택하지 않았다.
@@ -119,7 +119,7 @@
 - Decision Date: 2026-09-11
 - Decision Class: Corrective Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `PROD-808` user decision
-- Status: Active
+- Status: Superseded only in discovery dispatch and Activity responsibility by the 2026-09-11 `Handle lookup Workflow and materialize/refresh Activity boundary` decision
 - Context / Problem: qualified handle discovery, durable state routing과 API 결과 visibility의 책임이 서로 섞이면 WebFinger 응답만으로 Instance를 판단하거나 caller가 stale state를 재현할 수 있다.
 - Decision Outcome: API 검색 caller는 저장된 canonical `actorUri`를 재사용하고, 없으면 WebFinger의 ActivityPub self link에서 canonical URI를 확인한 뒤 하나의 public materialization Workflow를 호출한다. WebFinger 응답만으로 Instance를 추출하거나 상태를 판단하지 않는다. 현재 Profile/Instance state와 actor TTL 판정 및 refresh 여부는 Workflow 실행 경로가 소유하고, API는 Workflow 결과 뒤 기존 connection·staged visibility를 최종 적용한다.
 - Alternatives Considered: caller precheck 또는 WebFinger host만으로 state를 판정하면 durable Workflow와 API의 책임이 갈라지고 canonical Actor와 다른 Instance의 상태를 적용할 수 있으므로 선택하지 않았다.
@@ -155,7 +155,7 @@
 - Decision Date: 2026-09-10
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808` user decision
-- Status: Active
+- Status: Active except for the remote public input and identity clause superseded by the 2026-09-11 `Handle lookup Workflow and materialize/refresh Activity boundary` decision
 - Context / Problem: `runWorkflow`에 Workflow name/function과 ID callback을 각각 전달하면 caller가 같은 Workflow 정의를 반복하고, Workflow 함수·ID 규칙·native args의 generic 관계를 호출 위치에서 다시 적게 된다. 사용자가 요청한 plain interface/object 형태로 이 정의를 하나의 입력으로 묶어도 기존 transport와 identity 의미는 유지해야 한다.
 - Decision Outcome: `packages/core/temporal/client.ts`에 `WorkflowDefinition<T extends Workflow>` plain interface를 둔다. 이 객체는 `workflow: string | T`와 `workflowIdFromArgs: (...args: Parameters<T>) => string`를 함께 정의한다. 공용 `runWorkflow(definition, { args, mode, ...native Workflow options })`는 definition에서 Workflow와 ID 규칙을 받고 native args를 callback에 한 번 전달해 기존 ID 문자열을 계산한 뒤 KOSMO task queue와 5초 bounded deadline으로 native `start` 또는 `execute`만 호출한다. Native args, mode별 result/handle type, start 반환값·error와 conflict/reuse policy는 그대로 전달·추론하고 domain 오류 정책은 호출부에 남긴다. `packages/core/temporal/remote-profile.ts`의 `remoteProfileMaterializationWorkflow` 정의 객체는 기존 remote Workflow와 ID callback을 함께 보유하며, 세 caller가 이를 공유한다. 기존 ID 문자열, sync/async, stale, origin, actorUri identity와 URI mismatch 저장 거부 계약은 변경하지 않는다.
 - Alternatives Considered: Workflow name/function과 ID callback을 별도 인자로 계속 전달하면 세 caller의 동일 설정과 local Workflow function type이 반복된다. 새 registry, runtime factory, fake Workflow function, contracts file, decorator 또는 다른 Workflow의 일괄 migration은 현재 plain object 입력 계약에 필요하지 않으며 scope와 runtime surface를 넓힌다.
@@ -197,6 +197,18 @@
 - Alternatives Considered: caller마다 `startChild`와 `executeChild`를 직접 호출하면 ID 계산·mode별 반환·options 전달 경계가 반복된다. 새 child 전용 type file, registry, runtime factory, fake Workflow function, decorator 또는 framework를 추가하면 plain `WorkflowDefinition<T>`와 native API로 충분한 범위를 넓힌다. Helper가 `ABANDON`이나 client queue/deadline을 자동 적용하면 native defaults와 caller-owned remote contract를 덮는다.
 - Consequences: Helper는 명시적으로 사용하는 native child caller의 runtime behavior만 보조하며, 현재 Coordinator 내부 refresh child가 실제 사용 경계를 제공한다. Generic helper 사용자는 native child start/execute lifecycle과 기본 queue/options/error semantics를 받고, Coordinator와 향후 external public caller는 각자의 명시적인 `ABANDON` 정책을 소유한다. 다른 domain의 Workflow ID와 UWS, public materialization Workflow를 외부 parent에서 호출하는 별도 production caller의 부재는 변경하지 않는다.
 - Confirmation / Follow-up: 2026-09-10 실제 helper를 import한 Temporal bundle/integration 3/3이 통과했다. Typed string definition의 `execute` mode에서 args·생성된 Workflow ID·result를 확인했고, function definition의 `start` mode에서 native handle과 `handle.signal`을 사용해 명시적인 `parentClosePolicy: ABANDON`·`cancellationType: ABANDON` child가 parent 완료 뒤에도 `RUNNING`으로 남아 외부 signal/result 완료까지 진행하는 것을 확인했다. Child failure는 native cause chain으로 전달됐다. `/private/tmp/child-helper-real-typecheck.ts`를 실제 helper import 상태로 `tsc` 실행해 exit 0을 확인했고, generic 생략 args/result/`ChildWorkflowHandle` 추론과 wrong args/result·unsupported `workflowIdConflictPolicy`에 대한 `@ts-expect-error` 3개를 검증했다. Worker build, ESLint와 Prettier도 통과했다. 이 evidence는 현재 Coordinator 내부 refresh child와 generic helper의 native 실행·type inference·명시적 option 전달을 확인하지만, 별도 external public child caller, Worker restart, caller timeout continuation과 전체 parent-close/cancellation matrix는 검증하지 않는다. public materialization Workflow를 외부 parent에서 호출하는 별도 child caller가 추가되면 그 호출부의 두 `ABANDON` 옵션과 no-result-wait 경계를 별도로 검증한다.
+
+### Handle lookup Workflow and materialize/refresh Activity boundary
+
+- Decision Date: 2026-09-11
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `PROD-808` user decision
+- Status: Active
+- Context / Problem: URI-only public materialization Workflow 서술은 qualified handle discovery와 canonical URI materialization을 한 API 경계로 묶고, state Activity의 nullable 결과와 실제 fetch Activity의 책임을 혼동하게 했다.
+- Decision Outcome: API는 qualified handle을 파싱해 `RemoteProfileLookupInput { domain, handle, profileId? }`로 public `remoteProfileLookupWorkflow`를 호출한다. Workflow ID는 기존 pure handle normalization, domain과 acting `profileId`에서 계산하며 normalized handle을 wire input에 중복하지 않는다. Workflow는 `lookupRemoteActorUriActivity`에서 저장된 canonical actor URI를 먼저 재사용하고, 없을 때만 WebFinger의 ActivityPub self link에서 canonical `actorUri`를 확인한다. URI lookup Activity에서 받은 `actorUri`와 Workflow input의 optional acting `profileId`를 `materializeRemoteProfileActorActivity`에 전달한다. Materialize Activity가 stored/missing 판정과 현재 Profile/Instance state·actor TTL을 소유하고 `{ profileId, needsRefresh }` non-null DTO를 반환한다. Activity 모듈의 private stored-state query에서만 missing을 `null`로 표현할 수 있으며, missing fetch·persist 뒤에는 새 target ID를 `{ profileId: id, needsRefresh: false }`로 반환한다. 실제 fetch는 `refreshRemoteProfileActorActivity`가 ordinary call과 stale refresh child에서 공유한다. `needsRefresh: false`이면 외부 fetch와 child 없이 cached 또는 새 Profile identity를 반환하고, `needsRefresh: true`이면 Workflow가 lookup Activity의 `actorUri`와 original input의 optional `profileId`로 refresh child를 시작한다. Child는 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`을 명시하고 start acknowledgement 뒤 cached identity를 반환한다. Alias domain의 최초 perfect coalescing은 보장하지 않지만 DB actor URI identity와 refresh URI coalescing은 유지한다. 별도 URI public Workflow나 그 child를 추가하지 않는다. Caller의 bounded 5초 대기 deadline에는 discovery가 포함되며 이미 시작된 Workflow는 계속 실행한다.
+- Alternatives Considered: URI-only public Workflow를 유지하거나 handle/actorUri union input을 추가하면 discovery와 materialization 책임이 다시 섞인다. nullable materialize result에 missing 의미를 넣는 방식을 배제하고, 기존 URI public Workflow를 handle Workflow의 child로 감싸는 불필요한 계층 추가를 기각한다.
+- Consequences: 명시적 qualified search는 하나의 lookup Workflow에서 URI lookup과 materialize Activity를 순서대로 사용한다. Missing fetch와 stale refresh는 같은 refresh Activity body를 ordinary call 또는 child로 공유하며, API의 기존 connection·visibility와 fallback 경계는 유지한다.
+- Confirmation / Follow-up: lookup Activity cached URI/WebFinger miss, materialize non-null DTO와 missing `{ id, false }`, needsRefresh child start/acknowledgement와 URI identity/coalescing, caller의 5초 bounded wait 설정 및 새 Activity 조합의 결과·오류를 실행 검증한다. Workflow timeout continuation과 Worker restart recovery 자체는 Temporal native 계약으로 둔다.
 
 ## Remaining Decisions
 
