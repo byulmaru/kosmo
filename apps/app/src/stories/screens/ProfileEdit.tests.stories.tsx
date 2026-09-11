@@ -240,6 +240,7 @@ function expectResponsiveSurface(
   });
   expect(Math.round(header.bottom - avatarFrame.top)).toBe(expectedAvatarFrameSize / 2);
   expect(Math.round(avatarRow.height)).toBe(expectedAvatarRowHeight);
+  expect(Math.round(displayNameLabel.getBoundingClientRect().top - avatarFrame.bottom)).toBe(24);
   expect(cameraAffordances).toHaveLength(2);
   for (const affordance of cameraAffordances) {
     const rect = affordance.getBoundingClientRect();
@@ -799,7 +800,16 @@ export const UploadingImageBlocksSubmit: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    expect(canvas.getByText('헤더 이미지 업로드를 기다리고 있어요.')).toBeVisible();
+    const status = canvas.getByText('헤더 이미지 업로드를 기다리고 있어요.');
+    const displayNameLabel = canvas.getByText('표시 이름');
+
+    expect(status).toBeVisible();
+    expect(
+      Math.round(
+        displayNameLabel.getBoundingClientRect().top -
+          status.parentElement!.getBoundingClientRect().bottom,
+      ),
+    ).toBe(24);
     expect(canvas.getByRole('button', { name: '저장' })).toBeDisabled();
   },
 };

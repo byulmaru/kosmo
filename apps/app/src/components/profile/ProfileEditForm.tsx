@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     ...layoutRecipes.formStack,
     ...layoutRecipes.formPageInset,
     paddingBottom: space[48],
-    paddingTop: space[24],
+    paddingTop: space[8],
   },
   field: { gap: space[8] },
   fieldControlSupport: {

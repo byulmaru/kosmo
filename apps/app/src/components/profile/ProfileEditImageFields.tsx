@@ -245,6 +245,8 @@ export function ProfileEditImageFields({
   const { width } = useWindowDimensions();
   const mobile = Platform.OS !== 'web' || width < breakpoints.compact;
   const avatarFrameSize = mobile ? 96 : 128;
+  const headerStatus = getImageFieldStatus('헤더 이미지', header);
+  const avatarStatus = getImageFieldStatus('아바타 이미지', avatar);
 
   return (
     <View style={styles.root}>
@@ -285,17 +287,9 @@ export function ProfileEditImageFields({
         />
       </View>
 
-      <View style={styles.statuses}>
-        <ImageStatus
-          subject="헤더 이미지"
-          onRetry={onHeaderRetry}
-          status={getImageFieldStatus('헤더 이미지', header)}
-        />
-        <ImageStatus
-          subject="아바타 이미지"
-          onRetry={onAvatarRetry}
-          status={getImageFieldStatus('아바타 이미지', avatar)}
-        />
+      <View style={[styles.statuses, (headerStatus || avatarStatus) && styles.statusesWithStatus]}>
+        <ImageStatus subject="헤더 이미지" onRetry={onHeaderRetry} status={headerStatus} />
+        <ImageStatus subject="아바타 이미지" onRetry={onAvatarRetry} status={avatarStatus} />
       </View>
     </View>
   );
@@ -353,6 +347,9 @@ const styles = StyleSheet.create({
   statuses: {
     gap: space[4],
     paddingHorizontal: space[16],
+  },
+  statusesWithStatus: {
+    paddingBottom: space[16],
   },
   status: {
     flex: 1,

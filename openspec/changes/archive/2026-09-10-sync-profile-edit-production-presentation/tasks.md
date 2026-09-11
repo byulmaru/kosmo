@@ -27,14 +27,14 @@
 
 **Verification**
 
-- Mobile `390`, Compact `1024`, Full `1440`에서 header·back/save target, `3:1` preview와 `border/default` 1px 하단선, avatar frame/content/overlap/row와 field spacing을 실행 결과로 검증한다.
+- Mobile `390`, Compact `1024`, Full `1440`의 clean/default representative geometry에서 header·back/save target, `3:1` preview와 `border/default` 1px 하단선, avatar frame/content/overlap/row, avatar visual 하단→첫 표시 이름 label 상단 `24px`와 field spacing을 실행 결과로 검증한다. upload·removed·error status가 표시되는 상태는 기존 안내와 spacing 보존을 별도로 검증한다.
 - Light/Dark, 긴 입력, validation, saving, image uploading/error와 failure 뒤 draft 보존의 기존 Storybook 동작을 실행한다.
 - Profile Edit 관련 unit·Storybook·type/lint/build check와 active `profile-edit-ui` spec strict validation을 통과시킨다.
 - Web browser에서 scroll·focus·Back과 responsive visual을 확인하고 Android/iOS에서 실행한 항목과 미실행 항목을 분리해 기록한다.
 
 - [x] 1.1 safe-area 밖 경계를 유지한 `64px` header, title·back·save geometry와 platform별 실제 입력 target을 구현한다.
 - [x] 1.2 `3:1` header preview와 `border/default` 1px 하단선을 보존하면서 Mobile과 Compact·Full의 avatar frame·content·overlap·row 및 camera geometry를 동기화한다.
-- [x] 1.3 displayName·bio·Profile Tags의 `Label/L`, displayName·bio label-control·control-counter `8px`, Profile Tag root `12px`·내부 row와 chip 좌측 inset `8px`, field section `16px` 위계를 적용하고 기존 input·validation·disabled 동작을 보존한다.
+- [x] 1.3 clean/default representative 상태에서 displayName·bio·Profile Tags의 `Label/L`, displayName·bio label-control·control-counter `8px`, Profile Tag root `12px`·내부 row와 chip 좌측 inset `8px`, avatar visual→첫 label `24px`, field section `16px` 위계를 적용하고 기존 input·validation·disabled 동작을 보존한다. upload·removed·error status 상태의 기존 안내와 spacing은 보존한다.
 - [x] 1.4 기존 Production component를 사용하는 대표 visual story와 Controls-disabled 자동 계약을 Mobile·Compact·Full, Light/Dark와 영향받는 상태에 맞게 갱신한다.
 - [x] 1.5 기존 저장·validation·image menu/upload/retry·draft·Follow Approval·navigation 회귀와 관련 정적 check를 실행한다.
 - [x] 1.6 Web browser visual·interaction QA와 가능한 Native 검증을 수행하고 미실행 runtime 증거를 명시한다.
@@ -62,3 +62,12 @@
 - `pnpm --filter @kosmo/app check`가 Relay compiler와 TypeScript를 통과했고,
   `pnpm exec openspec validate --all --strict`가 120/120을 통과했다. 첫 sandbox 실행의 Watchman `fchmod`
   권한 오류는 sandbox 밖 동일 명령 재실행으로 해소했다.
+
+### Avatar-to-label spacing correction verification · 2026-09-11
+
+- `pnpm --filter @kosmo/app exec vitest run --project=storybook src/stories/screens/ProfileEdit.tests.stories.tsx`가
+  30/30을 통과했고, clean/default representative 상태에서 Mobile·Center responsive helper가 avatar visual 하단과
+  첫 표시 이름 label 상단의 `24px`를 실제 render geometry로 확인했다. status 표시 상태의 기존 안내와 spacing은
+  별도 상태 story 회귀로 보존한다.
+- `pnpm --filter @kosmo/app exec tsc --noEmit`, `pnpm exec openspec validate profile-edit-ui --strict --type spec`,
+  Prettier check와 `git diff --check`가 통과했다.

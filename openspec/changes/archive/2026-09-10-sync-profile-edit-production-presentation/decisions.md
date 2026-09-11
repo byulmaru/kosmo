@@ -47,7 +47,7 @@
 - Authority / Provenance: `docs/design/profile-edit.md`, DSN-45, PROD-941
 - Status: Active
 - Context / Problem: Center/Mobile source 재대조에서 이전 artifact의 `UI/Heading/S` `20/26/700`, Profile Tag root의 일반화된 `8px`, displayName·bio support의 `4px`와 legacy color alias가 현재 Figma semantic binding과 달랐다.
-- Decision Outcome: title은 `UI/Heading/M` `24/27.6/700`으로 좌우 `80px` side slot 안에 정중앙으로 배치한다. Profile Tag root child 간격은 `12px`, chip/input row 내부와 removable chip 좌측 inset은 `8px`, displayName·bio label-control과 control-counter는 `8px`로 둔다. header/screen, input/avatar, action, border, text, scrim/icon은 승인된 semantic role을 사용하되 input disabled foreground와 scrim alpha를 중복 override하지 않는다.
+- Decision Outcome: title은 `UI/Heading/M` `24/27.6/700`으로 좌우 `80px` side slot 안에 정중앙으로 배치한다. Profile Tag root child 간격은 `12px`, chip/input row 내부와 removable chip 좌측 inset은 `8px`, displayName·bio label-control과 control-counter는 `8px`로 둔다. image status가 없는 기본 상태에서 Avatar visual 하단과 첫 `표시 이름` label 상단 간격은 `24px`이며 Mobile·Center overlap row `64px`·`80px`는 보존한다. upload·removed·error status가 표시될 때는 기존 상태 안내와 spacing을 보존한다. header/screen, input/avatar, action, border, text, scrim/icon은 승인된 semantic role을 사용하되 input disabled foreground와 scrim alpha를 중복 override하지 않는다.
 - Alternatives Considered: 공용 TextField/layout recipe를 전역 변경하거나 title을 별도 header abstraction으로 옮기는 방식은 영향 범위가 커 제외한다.
 - Consequences: Profile Edit 전용 composition에 필요한 작은 spacing/title 조정은 남기되 Follow Approval draft/save와 route·Relay·Media lifecycle은 변경하지 않는다.
 - Confirmation / Follow-up: 기존 Profile Edit Tests story의 rendered geometry/style assertion으로 Web contract를 검증하고 Native runtime 미실행은 별도로 기록한다.

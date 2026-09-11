@@ -219,6 +219,9 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
 - Web `< compact`와 Android/iOS는 avatar frame/content/overlap/row를 `96/88/48/64`, compact·full Web은
   `128/120/64/80`으로 사용한다. frame은 왼쪽 `16px` inset에 두고 preview 중앙의 camera affordance는
   `40×40` surface 안의 `20px` glyph를 사용한다.
+- image status가 없는 기본 상태에서 avatar visual 하단과 첫 `표시 이름` label 상단 사이에는 `24px`를 둔다.
+  이 간격은 Mobile·Center에서 avatar overlap row의 `64px`·`80px` 높이를 보존한 뒤 form 상단 inset으로
+  맞춘다. upload·removed·error status가 표시될 때는 기존 상태 안내와 해당 status spacing을 보존한다.
 - `1440px`에서는 full sidebar와 우측 rail 사이 중앙 컬럼에, `1024px`에서는 icon rail 다음 중앙 컬럼에,
   `390px`에서는 mobile shell 안에 배치한다. 일반 shell breakpoint는 [breakpoints.md](./breakpoints.md)를
   따른다.

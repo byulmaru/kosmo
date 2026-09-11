@@ -6,6 +6,7 @@ DSN-45에서 확정한 Profile Edit의 header, field 위계와 반응형 이미�
 
 - safe area를 제외한 Profile Edit header를 `64px`로 맞추고 `UI/Heading/M` `24/27.6/700` 제목을 좌우 `80px` side slot 안에 정중앙으로 배치하며 `44×44` visual target의 `ArrowLeft` `24px`와 `border/default` divider를 사용하되 Android의 최소 `48dp` 입력 target을 유지한다.
 - header preview의 기존 `3:1` 비율을 유지하면서 avatar frame을 Mobile `96px`, Compact·Full `128px`로 반응형 배치하고 camera affordance를 canonical `20px` glyph와 `40px` surface에 맞춘다.
+- image status가 없는 기본 상태에서 기존 avatar overlap row의 Mobile `64px`·Center `80px` 높이를 보존하면서 avatar visual 하단과 첫 `표시 이름` label 상단 간격을 `24px`로 맞춘다. upload·removed·error status가 표시될 때는 기존 상태 안내와 spacing을 보존한다.
 - displayName, bio와 Profile Tags의 외부 label을 `Label/L`로 맞추고 displayName·bio label-control과 control-counter `8px`, Profile Tag root `12px`·내부 row와 chip 좌측 inset `8px`, field section `16px` 위계를 적용한다.
 - header/screen과 image/avatar field에 `background/canvas`, `background/surface`, `action/primary/subtle`, `border/default`, `foreground/primary`, `foreground/muted`, `overlay/scrim`, `fixed/white` semantic color roles를 적용한다.
 - 기존 저장·validation·image menu/upload·failure recovery·draft/navigation 동작과 `600px` 중앙 surface를 유지하며 Mobile `390`, Compact `1024`, Full `1440`의 Light/Dark·상태 Storybook 증거를 갱신한다.
