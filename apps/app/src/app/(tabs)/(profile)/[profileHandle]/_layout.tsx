@@ -206,10 +206,11 @@ function ProfileLayoutContent({
   showPageHeader: boolean;
 }) {
   const { fetchKey } = useRouteBoundary();
-  const { selectedProfileId, sessionId } = useSession();
+  const { selectedProfileId, selectedProfileKind, sessionId } = useSession();
+  const hasSelectedLocalProfile = selectedProfileKind === 'LOCAL';
   const data = useLazyLoadQuery<ProfileLayoutQueryType>(
     ProfileLayoutQuery,
-    { handle, withProfileBlockStatus: Boolean(selectedProfileId) },
+    { handle, withProfileBlockStatus: Boolean(selectedProfileId && hasSelectedLocalProfile) },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const profile = data.profileByHandle;
@@ -282,7 +283,7 @@ function ProfileLayoutContent({
     }
   };
   const requestChange = async () => {
-    if (inFlight.current || !confirmation || !selectedProfileId) {
+    if (inFlight.current || !confirmation || !selectedProfileId || !hasSelectedLocalProfile) {
       return;
     }
     const nextBlocked = confirmation === 'block';
@@ -434,7 +435,9 @@ function ProfileLayoutContent({
     profile.instance.kind === 'LOCAL' &&
     profile.viewerState?.isSelf === true &&
     profile.viewerState.membership?.role === 'OWNER';
-  const canMute = Boolean(selectedProfileId && !profile.viewerState?.isSelf);
+  const canMute = Boolean(
+    selectedProfileId && hasSelectedLocalProfile && !profile.viewerState?.isSelf,
+  );
   const relationshipAction = canEdit ? (
     <NavigationLink href={'/profile-edit' as Href}>
       <Button accessibilityLabel="프로필 편집" tone="secondary">
@@ -486,17 +489,17 @@ function ProfileLayoutContent({
           moreItems={sessionId ? [reportItem] : undefined}
           menuItems={
             selectedProfileId &&
+            hasSelectedLocalProfile &&
             profile.viewerState?.isSelf !== true &&
-            !blockStatus?.blocking &&
             !blockStatus?.blockedBy
               ? [
                   {
                     icon: Ban,
-                    key: 'block',
-                    label: '차단',
+                    key: blockStatus?.blocking ? 'unblock' : 'block',
+                    label: blockStatus?.blocking ? '차단 해제' : '차단',
                     onSelect: () => {
                       dismissFocusRef.current = 'menu';
-                      setConfirmation('block');
+                      setConfirmation(blockStatus?.blocking ? 'unblock' : 'block');
                     },
                     tone: 'danger' as const,
                   },
@@ -507,7 +510,7 @@ function ProfileLayoutContent({
             focusMenuTrigger.current = focusTrigger;
           }}
           profile={profile}
-          showMuteAction={canMute && !blockStatus?.blockedBy}
+          showMuteAction={canMute && !blockStatus?.blocking && !blockStatus?.blockedBy}
         />
         {profileContent}
       </ProfileRouteContainer>
