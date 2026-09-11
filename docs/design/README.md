@@ -22,6 +22,7 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 - [post-media-viewer.md](./post-media-viewer.md) — 선택한 Post 이미지의 modal 탐색, 원문 panel과 Action Bar 배치 계약
 - [reply-composer.md](./reply-composer.md) — Web modal·Full thread rail·좁은 화면 전체 작성기의 Reply Composer 계약
 - [post-thread.md](./post-thread.md) — Post 상세 thread의 renderer·connector·row boundary 소유권과 geometry
+- [post-content-mentions.md](./post-content-mentions.md) — canonical Mention 표시, 기존 Profile route 이동, fallback과 플랫폼 접근성 계약
 - [media-upload-errors.md](./media-upload-errors.md) — Post Composer·Profile 편집의 공통 이미지 업로드 오류 분류와 복구 안내
 - [reactions.md](./reactions.md) — Reaction Quick·Full Picker, 요약 token toggle과 Reaction People route의 형태·상태·대상 Post 계약
 - [profile-edit.md](./profile-edit.md) — Local Profile 편집 화면의 필드, 상태와 route 연결 경계

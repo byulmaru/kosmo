@@ -51,23 +51,7 @@ PostContent.implement({
   fields: (t) => ({
     document: t.field({
       type: 'PostContentDocument',
-      resolve: (content) => ({
-        ...content.document,
-        body: {
-          ...content.document.body,
-          content: content.document.body.content.map((block) =>
-            block.type === 'media'
-              ? {
-                  ...block,
-                  attrs: {
-                    ...block.attrs,
-                    mediaId: encodeGlobalId('Media', block.attrs.mediaId),
-                  },
-                }
-              : block,
-          ),
-        },
-      }),
+      resolve: (content) => projectPostContentDocument(content.document),
     }),
     bodyText: t.string({
       resolve: (content) => postContentDocumentToText(content.document),
@@ -105,3 +89,40 @@ PostContent.implement({
     createdAt: t.expose('createdAt', { type: 'DateTime' }),
   }),
 });
+
+function projectPostContentDocument(
+  document: typeof PostContents.$inferSelect.document,
+): typeof PostContents.$inferSelect.document {
+  return {
+    ...document,
+    body: {
+      ...document.body,
+      content: document.body.content.map((block) => {
+        if (block.type === 'media') {
+          return {
+            ...block,
+            attrs: {
+              ...block.attrs,
+              mediaId: encodeGlobalId('Media', block.attrs.mediaId),
+            },
+          };
+        }
+
+        return {
+          ...block,
+          content: block.content?.map((node) =>
+            node.type === 'mention'
+              ? {
+                  ...node,
+                  attrs: {
+                    ...node.attrs,
+                    profileId: encodeGlobalId('Profile', node.attrs.profileId),
+                  },
+                }
+              : node,
+          ),
+        };
+      }),
+    },
+  };
+}

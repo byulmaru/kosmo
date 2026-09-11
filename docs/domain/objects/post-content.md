@@ -119,7 +119,14 @@ Mention node는 `profileId`와 정규화된 `label`만 저장하고 inbound targ
   Media와 Content Warning은 유지한다. 이 경계는 기존 `bodyText` fallback을 재사용하며, 서버의 본문 파생값부터
   구 reader 표시까지 글자·Media·Content Warning 보존을 검증한 뒤, 현재 Post Content V1에 additive한 Mention node
   저장을 활성화한다. 이 change에서는 document schema version을 올리거나 V1/V2 dual-read 또는 document version 변환을 도입하지 않는다.
-  Mention의 전용 표시·Profile 이동은 별도 renderer 계약에 둔다.
+  Mention의 전용 표시·Profile 이동은 [Post Content Mention renderer](../../design/post-content-mentions.md) 계약에 둔다.
+  renderer는 현재 revision의 Mention node와 같은 revision의 Profile 관계만 소비하며, 조회 가능한 Profile은 기존 KOSMO
+  Profile route로 이동시킨다. 저장 후 Profile이 unavailable 또는 deleted가 되면 원래 label을 유지하고 link만 비활성화하며,
+  Mention 관계가 Post Visibility·Post Eligibility를 넓히지 않는다. GraphQL `mentionedProfiles`는 기존 Profile visibility
+  predicate(Profile이 `ACTIVE`이고 소속 Instance가 `SUSPENDED`가 아님)를 사용하며, viewer별 Profile Domain Block 정책을
+  이 관계에서 새로 조합하지 않는다. 기존 Post body의 `onBodyPress` callback과 부모 Post navigation은 유지하되, 활성
+  Mention link의 press는 event propagation을 막아 부모 callback이 함께 실행되지 않게 한다.
+  구 reader 2.x 호환성 증거는 별도 deferred gate로 기록하고 renderer 완료를 막는 조건으로 사용하지 않는다.
 - `PostContent.media`는 소유 Post의 조회 정책을 통과한 경로에서 실제 Media Node를 반환하며 Media 표시 필드 조회
   scope를 grant한다. Media의 URL, Media Type과 Alt Text는 이 grant가 있을 때 노출한다.
 - PostContent를 거치지 않는 standalone Media Node가 Referencing Post를 역추적해 권한을 얻는 정책은 후속

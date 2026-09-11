@@ -57,7 +57,7 @@
 - Decision Date: 2026-09-10
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/post-content.md`, `docs/domain/objects/post.md`, `PROD-340` (2026-09-10 schema version decision), 2026-09-10 사용자 선택
-- Status: Active
+- Status: Active (2.x gate execution Deferred)
 - Context / Problem: Mention 전용 표시를 모르는 구 reader에서도 저장 활성화 뒤 본문을 읽을 수 있어야 하지만, link 동작과 문단 구조를 완전히 보존하는 호환 경계는 현재 보장되지 않는다.
 - Decision Outcome: 구 reader는 기존 `bodyText` fallback을 재사용한 plain text 표시를 허용한다. 글자·Media·Content Warning은 보존하고 link 클릭 동작과 문단 구조의 일시적 저하는 허용한다. 서버의 본문 파생값부터 구 reader 표시까지 이 보존을 검증한 뒤 Mention 저장을 활성화한다.
 - Alternatives Considered: 구 reader에서 link 동작과 문단 구조까지 반드시 보존하도록 schema와 reader를 동시에 고정하는 방식은 현재 사용자 선택 범위를 넘어가므로 기본 계약으로 삼지 않는다.
@@ -113,9 +113,35 @@
 - Consequences: 구현자는 기존 안전 parser와 duplicate early no-op을 재사용해야 하며, JSON-only read-time parsing으로 persisted relation을 대체하지 않는다. GraphQL read shape는 `PROD-910`에서 검증한다.
 - Confirmation / Follow-up: inbound valid/fallback/duplicate/rollback 통합 검증과 기존 content canonicalization check로 확인한다.
 
+### `PROD-910`은 global ID와 visible Profile relation으로 Mention을 읽음
+
+- Decision Date: 2026-09-11
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/post-content-mentions.md`, `PROD-910`, `PROD-340`, existing Media GraphQL projection contract
+- Status: Active
+- Context / Problem: canonical document는 DB UUID를 엄격하게 보존하지만 client renderer가 positional relation 배열이나 client-side ID 변환에 의존하면 반복 occurrence·relation 필터링·Profile identity가 어긋날 수 있다.
+- Decision Outcome: `PostContent.document`의 Mention `profileId`는 서버에서 canonical UUID로 검증·저장한다. GraphQL은 기존 Media처럼 UUID를 client-facing global ID로 projection하고, `PostContent.mentionedProfiles: [Profile!]!`에는 기존 Profile visibility predicate(Profile이 `ACTIVE`이고 소속 Instance가 `SUSPENDED`가 아님)를 통과한 같은 revision의 Profile을 deduplicate해 제공한다. Post visibility·eligibility는 PostContent 조회의 기존 정책을 따르며 viewer별 Profile Domain Block 정책은 이 field에서 새로 조합하지 않는다. renderer는 node global ID와 `mentionedProfiles[].id`를 exact match하고 document occurrence 순서와 원래 `label`을 유지한다. client-side encode/decode와 positional/parallel response zip은 사용하지 않는다. matched Profile은 기존 KOSMO `/${relativeHandle}` route로 이동하며, match가 없거나 Profile이 unavailable/deleted면 원래 label을 link 없이 표시한다. 활성 Mention link는 기존 Profile text-link의 의미·타이포그래피 강조 계약을 재사용하고 accessible name에 `displayName`과 `relativeHandle`을 포함한다.
+- Alternatives Considered: document UUID를 client에 직접 노출하거나, client에서 ID를 encode/decode하거나, relation 배열과 document occurrence를 positional zip하는 방식은 transport identity·조회 순서에 renderer를 결속하므로 사용하지 않는다. 새 Mention route나 external Actor URL navigation도 추가하지 않는다.
+- Consequences: GraphQL read projection은 기존 Profile visibility predicate와 Post visibility·eligibility로 relation을 제한해야 하며 viewer별 Profile Domain Block 정책을 이 field에서 새로 조합하지 않는다. renderer는 raw ActivityPub tag를 재해석하거나 missing target을 원격 fetch할 수 없다. API field/ID shape는 이 consumer contract에서 고정하고 resolver·fragment의 파일 배치는 구현 선택으로 남긴다.
+- Confirmation / Follow-up: current revision, repeated occurrence, relation deduplication, hidden/deleted target, global ID exact matching, 기존 Profile route와 Web/Native accessibility 통합 검증으로 확인한다.
+
+### 2.x legacy reader compatibility는 renderer와 분리된 deferred gate
+
+- Decision Date: 2026-09-11
+- Decision Class: Rollout Boundary
+- Authority / Provenance: `openspec/changes/add-post-content-mentions/tasks.md`, `PROD-340`, `PROD-910`, 2026-09-11 사용자 결정
+- Status: Deferred
+- Context / Problem: 기존 reader의 bodyText·Media·Content Warning 보존 증거가 아직 완성되지 않았지만, 사용자는 `PROD-910` renderer·Profile 이동 구현을 먼저 진행하기로 결정했다.
+- Decision Outcome: 2.x compatibility evidence는 `PROD-340` activation/rollout의 후속 gate로 남긴다. `PROD-910`은 이 증거를 완료로 주장하지 않고도 canonical Mention read projection, renderer, Profile route와 접근성 통합을 구현·검증할 수 있다. 다만 compatibility gate와 writer activation 완료는 별도 증거가 생길 때까지 미완료로 표시하며 전체 OpenSpec change archive를 수행하지 않는다.
+- Alternatives Considered: reader evidence가 없다는 이유로 renderer 구현을 중단하거나, 미실행 evidence를 완료로 표시하는 방식은 사용자의 순서 결정과 검증 경계를 훼손하므로 선택하지 않는다.
+- Consequences: 3.x renderer task와 2.x reader task의 상태·완료 조건을 분리해 기록하고, PR/Linear 보고에서 renderer proof와 legacy reader proof를 합쳐 주장하지 않는다.
+- Confirmation / Follow-up: 실제 API → GraphQL `bodyText` → legacy renderer의 end-to-end preservation matrix를 독립적으로 실행한 뒤 2.x tasks와 activation 상태를 갱신한다.
+
 ## Remaining Implementation Choices
 
-- GraphQL read projection과 UI route는 `PROD-910`에서 정한다. 선택 결과는 기존 V1 document 의미, canonical equality, identity 검증, revision ownership과 legacy reader compatibility gate를 약화해서는 안 된다.
+- GraphQL resolver·fragment의 코드 파일 배치와 component boundary는 구현자가 정한다. 외부 read contract는 `PostContent.mentionedProfiles: [Profile!]!`,
+  기존 Profile visibility predicate와 PostContent 조회 정책, canonical UUID의 global ID projection, node global ID와 Profile ID의 exact matching 및 기존
+  `/${relativeHandle}` route로 닫혀 있다.
 
 ## Superseded Decisions
 

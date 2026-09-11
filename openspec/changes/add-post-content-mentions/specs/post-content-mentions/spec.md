@@ -180,6 +180,12 @@ timestamp를 만들거나 기존 저장값을 갱신해서는 안 된다 (MUST N
 
 ### Requirement: verify reader compatibility before storage activation
 
+The activation gate MUST remain separate from renderer implementation.
+
+**Status:** Deferred follow-up evidence (2026-09-11). This requirement remains an activation and rollout contract owned by
+`PROD-340`; the activation gate remains a MUST, while its incomplete 2.x evidence does not block `PROD-910` renderer implementation
+or renderer integration verification.
+
 시스템은 기존 Post Content V1에 additive한 Mention node와 관계를 저장하기 전에 기존 reader의 body text·Media·Content Warning 보존 호환 처리를 확보하고 검증해야 한다 (MUST).
 기존 reader에서는 기존
 `bodyText` fallback을 재사용한 plain text 표시를 허용하며, link 클릭 동작과 문단 구조의 일시적 저하는 허용한다.
@@ -204,6 +210,16 @@ raw ActivityPub tag를 다시 해석하거나 새 원격 Profile lookup/material
 안 된다 (MUST NOT). renderer는 기존 Post 조회 정책, visibility·eligibility와 접근성 계약을 유지해야 하며 (MUST),
 Mention 관계만으로 viewer의 접근 범위를 넓혀서는 안 된다 (MUST NOT). 해결되지 않은 Mention은 저장된 안전한 link 또는
 표시 text로 표시하고 Profile 이동 대상으로 만들지 않아야 한다 (MUST).
+GraphQL `PostContent.mentionedProfiles: [Profile!]!`는 기존 Profile visibility predicate(Profile이 `ACTIVE`이고 소속 Instance가
+`SUSPENDED`가 아님)를 통과한 같은 revision의 Profile만 deduplicate해 제공해야 하며 (MUST), Post visibility·eligibility는
+PostContent 조회의 기존 정책을 따라야 한다 (MUST). 이 field는 viewer별 Profile Domain Block 정책을 새로 조합하지 않는다.
+document에 저장된 canonical Profile UUID는 기존 Media와 같은 client-facing global ID로 projection해야 한다 (MUST). renderer는 Mention
+node의 global ID와 `mentionedProfiles[].id`를 exact match해 target을 결정해야 하며 (MUST), client-side ID encode/decode나
+document/relation positional zip을 사용해서는 안 된다 (MUST NOT). 매칭된 Profile의 이동 target은 기존 KOSMO Profile route
+`/${relativeHandle}`이어야 한다 (MUST). 활성 Mention link는 기존 Profile text-link의 의미·타이포그래피 강조 계약을 재사용하고
+accessible name에 `displayName`과 `relativeHandle`을 포함해야 한다 (MUST). 기존 Post body의 `onBodyPress` callback과 부모 Post
+navigation은 유지해야 하며 (MUST), 활성 Mention link의 press는 event propagation을 막아 부모 callback이 함께 실행되지 않게
+해야 한다 (MUST).
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `PROD-340`, `PROD-910`
 
@@ -212,6 +228,23 @@ Mention 관계만으로 viewer의 접근 범위를 넓혀서는 안 된다 (MUST
 - **WHEN** 현재 Post Content에 검증된 Mention node와 같은 revision의 `post_mentions` Profile 관계가 있다
 - **THEN** renderer는 해당 Profile을 표시하고 기존 Profile 이동·접근성 계약을 적용한다
 - **AND** Post visibility와 eligibility 판정은 Mention display나 `to`/`cc` audience를 새 권한으로 취급하지 않는다
+- **AND** 기존 Post body의 `onBodyPress` callback은 유지하고, Mention link press는 event propagation을 막아 부모 callback을 함께 실행하지 않는다
+
+#### Scenario: Project only visible revision Profiles to the renderer
+
+- **WHEN** 현재 Post Content document에 여러 Mention occurrence가 있고 그중 일부 Profile이 기존 Profile visibility predicate를
+  통과하지 않거나 unavailable 또는 deleted 상태다
+- **THEN** GraphQL은 기존 Profile visibility predicate를 통과한 같은 revision의 Profile만 `mentionedProfiles`에 한 번씩 반환한다
+- **AND** 각 Profile ID는 client-facing global ID로 projection한다
+- **AND** renderer는 각 Mention node global ID와 Profile ID를 exact match해 기존 `/${relativeHandle}` route를 만든다
+- **AND** document 순서·원래 `label`은 유지하며 relation 배열 순서나 positional zip을 사용하지 않는다
+
+#### Scenario: Preserve a label when the Profile target disappears
+
+- **WHEN** 저장 후 canonical Mention의 Profile이 unavailable 또는 deleted가 되어 `mentionedProfiles` exact match가 없다
+- **THEN** renderer는 canonical Mention의 원래 `label`을 그대로 표시한다
+- **AND** 해당 label은 link, focus target 또는 navigation affordance 없이 비활성 text로 표시한다
+- **AND** actor URI, external URL 또는 임의의 대체 문구로 우회하지 않는다
 
 #### Scenario: Render fallback without re-resolution
 

@@ -168,6 +168,11 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   viewer별 Source Visibility·Eligibility·Profile Block 검사를 대신하지 않는다.
 - Reply Parent가 Tombstone이거나 조회 정책을 통과하지 못해도 Reply 자체의 Post Eligibility는 바뀌지 않는다.
 - Post Eligibility는 Post Visibility가 허용하지 않은 viewer에게 접근 범위를 넓히지 않는다.
+- 본문의 canonical Mention은 [Post Content Mention renderer](../../design/post-content-mentions.md)가 현재 revision의
+  Profile 관계와 기존 KOSMO Profile route를 사용해 표시·이동한다. Profile이 저장 후 unavailable 또는 deleted가 되면
+  원래 Mention label을 유지하고 link만 비활성화하며, actor URI·외부 Profile URL로 우회하지 않는다. unresolved·malformed·
+  identity mismatch가 안전한 link/text fallback으로 저장된 경우 Profile 이동 affordance를 만들지 않는다. GraphQL relation은
+  기존 Profile visibility predicate와 Post 조회 정책을 사용하며 viewer별 Profile Domain Block 정책을 이 renderer에서 새로 조합하지 않는다.
 
 ### Post 상세
 
