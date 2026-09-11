@@ -1,0 +1,1 @@
+ALTER TABLE "activitypub_actor" ADD COLUMN "profile_url" text;

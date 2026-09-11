@@ -70,6 +70,7 @@ export const ActivityPubActors = pgTable(
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
     uri: text('uri').unique().notNull(),
+    profileUrl: text('profile_url'),
     type: Enum.activityPubActorType('type').notNull(),
     inboxUri: text('inbox_uri'),
     outboxUri: text('outbox_uri'),

@@ -5,23 +5,52 @@
 ### Requirement: typed Mention identity boundary
 
 시스템은 검증된 inbound typed `Mention`만 canonical Mention projection의 입력으로 인정해야 한다 (MUST).
-inbound adapter는 target URI를 저장된 Local/Remote Profile의 stable identity로 확인하고 `{ targetHref, label, profileId }`
-candidate를 전달해야 한다. Core parser는 candidate의 normalized `targetHref`가 원문 anchor href와 같고 label이 안전하게
-정규화될 때만 `profileId`와 `label`을 가진 canonical Mention node를 만든다. 표시 label이 Profile 이름·handle과 같다는
-사실만으로 identity를 확정해서는 안 되며 (MUST NOT), 일반 anchor와 `to`/`cc` audience actor URI를 Mention identity와
-같은 의미로 취급하지 않아야 한다 (MUST NOT).
+inbound adapter는 typed tag의 actor URI를 저장된 Local/Remote Profile의 stable identity로 확인하고, Local Profile이면 trusted
+human Profile URL을, Remote Profile이면 actor materialization·refresh에서 같은 Actor document의 `url`로 광고하고 hostname이 있는 HTTP(S)로 검증해
+저장한 nullable profile URL alias가 있을 때 그 alias와 actor URI를 허용 href로 core parser 경계에 전달해야 한다. alias는 Actor URI와 다른
+hostname이어도 같은 Actor document가 직접 광고한 URL이면 허용한다. alias가 없거나
+검증되지 않으면 Remote Profile은 저장된 actor URI만 허용한다. Core parser는 원문 anchor href가 전달된 허용 href에 대응하고 label이
+안전하게 정규화될 때만 `profileId`와 본문 visible `label`을 가진 canonical Mention node를 만든다. Local actor URI와 human Profile URL은
+서로 다른 URI 형식일 수 있으며, Remote human URL은 Actor가 광고한 검증 URL 외에 저장·추측하지 않는다. tag `name`·handle과 본문
+visible label의 문자열 일치는 identity 조건이 아니다. 일반 anchor와 `to`/`cc` audience actor URI를 Mention identity와 같은 의미로
+취급하지 않아야 한다 (MUST NOT).
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `PROD-340`
 
 #### Scenario: Accept a verified typed Mention
 
-- **WHEN** inbound Note의 typed `Mention`이 기존 Profile stable identity로 확인되고 candidate의 normalized target href와 원문 anchor href 및 표시 label이 일치한다
+- **WHEN** inbound Note의 typed `Mention` actor URI가 기존 Profile stable identity로 확인되고 원문 anchor href가 그 Profile에 전달된 허용 href에 대응하며 본문 label이 안전하게 정규화된다
 - **THEN** 시스템은 해당 Mention을 canonical Post Content Mention projection의 입력으로 전달한다
 - **AND** 동일 Note의 일반 link와 `to`/`cc` audience 값은 별도 의미로 유지한다
 
+#### Scenario: Accept a verified Remote actor profile URL
+
+- **WHEN** inbound Note의 typed `Mention` actor URI가 기존 Remote Profile stable identity로 확인되고, 같은 Actor document의 `url`로 광고된 HTTP(S) profile URL alias가 materialization·refresh에서 해당 Actor identity에 저장되어 있으며, 원문 anchor href가 actor URI 또는 저장된 alias에 대응하고 본문 label이 안전하게 정규화된다
+- **THEN** 시스템은 해당 anchor를 같은 `profileId`를 가진 canonical Mention projection의 입력으로 전달한다
+- **AND** actor URI와 alias는 canonical document의 node attrs에 저장하지 않는다
+- **AND** Mention 수신 중 actor/profile fetch나 새 materialization을 수행하지 않는다
+
+#### Scenario: Use actor URI when a Remote profile URL alias is unavailable
+
+- **WHEN** inbound Note의 typed `Mention` actor URI가 기존 Remote Profile stable identity로 확인되지만 저장된 Actor URL alias가 null이거나 HTTP(S)로 검증되지 않았고, 원문 anchor href가 저장된 actor URI에 대응한다
+- **THEN** 시스템은 actor URI를 검증된 허용 href로 사용해 Mention projection을 수행한다
+- **AND** 저장되지 않은 human URL을 handle·domain에서 추측하지 않는다
+
+#### Scenario: Clear a stale Remote profile URL alias on refresh
+
+- **WHEN** 저장된 Remote Actor URL alias가 있지만 이후 Actor materialization·refresh document가 `url`을 제공하지 않거나 hostname이 있는 HTTP(S)로 검증되지 않는다
+- **THEN** 시스템은 해당 Actor identity의 nullable URL alias를 제거하고 actor URI만 허용 href로 남긴다
+- **AND** 이미 저장된 Post Content를 자동으로 다시 해석하거나 수정하지 않는다
+
+#### Scenario: Reject an ambiguous allowed href safely
+
+- **WHEN** 하나의 본문 anchor href가 서로 다른 `profileId`에 대한 허용 href 후보로 동시에 전달된다
+- **THEN** 시스템은 후보 순서나 first match로 하나의 Profile을 선택하지 않는다
+- **AND** 해당 anchor를 안전한 일반 link 또는 표시 text로 보존하고 Mention relation을 만들지 않는다
+
 #### Scenario: Accept independently verified targets
 
-- **WHEN** 하나의 Note에 서로 다른 Profile identity를 가진 typed Mention candidate들이 있고 각 candidate의 target href와 anchor 및 label이 독립적으로 일치한다
+- **WHEN** 하나의 Note에 서로 다른 Profile identity를 가진 typed Mention들이 있고 각 actor URI와 본문 anchor URI가 해당 Profile에 전달된 허용 href에 독립적으로 대응한다
 - **THEN** 시스템은 Profile identity가 서로 다르다는 사실만으로 Mention을 mismatch로 처리하지 않는다
 - **AND** 각 Mention occurrence를 검증된 canonical projection 입력으로 전달한다
 
@@ -77,17 +106,24 @@ shape는 이 requirement가 고정하지 않는다.
 
 시스템은 unresolved, malformed 또는 identity mismatch인 typed `Mention`에 대해 Mention node와 Profile 관계를 생성해서는 안 된다 (MUST NOT).
 해당 Note가 기존 수신 검증을 통과하면 시스템은 실패한 부분을 안전한 일반 link 또는
-표시 text로 보존하고 나머지 본문과 Note를 저장해야 한다 (MUST). 이 fallback은 해당 Mention을 해결하기 위한 신규
-원격 Profile lookup 또는 materialization을 수행해서는 안 된다 (MUST NOT).
+표시 text로 보존하고 나머지 본문과 Note를 저장해야 한다 (MUST). 이 fallback은 해당 Mention을 해결하기 위한 Mention 수신 중
+신규 원격 Profile lookup 또는 materialization을 수행해서는 안 된다 (MUST NOT). Actor URL alias의 materialization·refresh는
+별도 경계에서만 수행한다.
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `PROD-340`
 
 #### Scenario: Preserve a mismatched Mention as safe content
 
-- **WHEN** typed `Mention`의 target·anchor identity 증거가 저장된 Profile과 일치하지 않거나 표시 label이 안전한 표시·구조 검증을 통과하지 못한다
+- **WHEN** typed `Mention` actor URI가 기존 Profile stable identity로 확인되지 않거나 본문 anchor URI가 그 Profile에 전달된 허용 href에 대응하지 않거나 표시 label이 안전한 표시·구조 검증을 통과하지 못한다
 - **THEN** 시스템은 해당 부분을 안전한 일반 link 또는 표시 text로 보존한다
 - **AND** Mention node, Mentioned Profile 관계와 신규 원격 Profile은 생성하지 않는다
 - **AND** 나머지 Note가 기존 수신 검증을 통과하면 Post Content를 저장한다
+
+#### Scenario: Do not repair an earlier fallback when an alias is learned later
+
+- **WHEN** 기존 Note가 Actor URL alias가 없거나 검증되지 않아 일반 link 또는 표시 text로 저장된 뒤, 같은 Actor의 materialization·refresh에서 유효한 HTTP(S) `url` alias가 저장된다
+- **THEN** 시스템은 이미 저장된 Post Content, canonical document, `post_mentions` 관계와 timestamp를 변경하지 않는다
+- **AND** 기존 글을 자동으로 다시 해석하거나 새 Mention relation을 생성하지 않는다
 
 #### Scenario: Skip an unresolved or malformed Mention without a remote lookup
 
@@ -98,7 +134,7 @@ shape는 이 requirement가 고정하지 않는다.
 
 ### Requirement: canonical Mention equality preserves semantic identity
 
-시스템은 기존 canonical Post Content document equality를 유지해야 한다 (MUST). HTML formatting-only 차이는 canonicalization으로 흡수해 같은 의미로 비교하고 (MUST), 표시 label·summary·body의 실제 내용 변경은 기존 equality 규칙에 따라 반영해야 하며 (MUST), 표시 label이 같아도 서로 다른 `profileId`를 가진 Profile stable identity를 가리키면 다른 document 의미로 비교해야 한다 (MUST). inbound URI 표현 차이는 canonical document에 저장되지 않으므로 equality 기준이 아니다. 이 requirement는 document equality invariant만 정의하며 remote `Update(Note)` mutation API를 추가하거나 정의하지 않는다 (MUST NOT).
+시스템은 기존 canonical Post Content document equality를 유지해야 한다 (MUST). HTML formatting-only 차이는 canonicalization으로 흡수해 같은 의미로 비교하고 (MUST), 표시 label·summary·body의 실제 내용 변경은 기존 equality 규칙에 따라 반영해야 하며 (MUST), 표시 label이 같아도 서로 다른 `profileId`를 가진 Profile stable identity를 가리키면 다른 document 의미로 비교해야 한다 (MUST). inbound actor URI와 Actor URL alias 표현은 canonical document에 저장되지 않으므로 equality 기준이 아니다. 이 requirement는 document equality invariant만 정의하며 remote `Update(Note)` mutation API를 추가하거나 정의하지 않는다 (MUST NOT).
 
 **Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/post.md`, `PROD-340`
 

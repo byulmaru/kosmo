@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
-import { Endpoints, Image, LanguageString, Note, Person } from '@fedify/vocab';
+import { Endpoints, Image, LanguageString, Link, Note, Person } from '@fedify/vocab';
 import {
   ActivityPubActorType,
   InstanceKind,
@@ -116,6 +116,81 @@ describe('remote actor materialization', () => {
     assert.equal(stored.actor.followingUri, `https://${remoteDomain}/users/alice/following`);
     assert.equal(stored.actor.sharedInboxUri, `https://${remoteDomain}/inbox`);
     assert.equal(stored.actor.lastFetchedAt?.toString(), now.toString());
+  });
+
+  test('stores the first validated actor profile URL and clears it on refresh', async () => {
+    const firstUrl = new URL('https://profile.example/@alice');
+    const secondUrl = new URL('https://profile.example/@alice-second');
+    const firstNow = Temporal.Instant.from('2026-07-10T00:00:00Z');
+    const profile = await materializeRemoteProfileActor({
+      context: createLookupContext(async () => createActor({ urls: [firstUrl, secondUrl] }))
+        .context,
+      handle: `alice@${remoteDomain}`,
+      now: firstNow,
+    });
+
+    const firstStored = await db
+      .select({ profileUrl: ActivityPubActors.profileUrl })
+      .from(ActivityPubActors)
+      .where(eq(ActivityPubActors.profileId, profile.id))
+      .then(firstOrThrow);
+    assert.equal(firstStored.profileUrl, firstUrl.href);
+
+    const linkUrl = new URL('https://profile.example/@alice-link');
+    await materializeRemoteProfileActor({
+      context: createLookupContext(async () => createActor({ url: new Link({ href: linkUrl }) }))
+        .context,
+      handle: `alice@${remoteDomain}`,
+      now: firstNow.add({ seconds: 1 }),
+    });
+
+    const linkStored = await db
+      .select({ profileUrl: ActivityPubActors.profileUrl })
+      .from(ActivityPubActors)
+      .where(eq(ActivityPubActors.profileId, profile.id))
+      .then(firstOrThrow);
+    assert.equal(linkStored.profileUrl, linkUrl.href);
+
+    await materializeRemoteProfileActor({
+      context: createLookupContext(async () =>
+        createActor({ url: new URL('ftp://profile.example/@alice') }),
+      ).context,
+      handle: `alice@${remoteDomain}`,
+      now: firstNow.add({ seconds: 2 }),
+    });
+
+    const invalidStored = await db
+      .select({ profileUrl: ActivityPubActors.profileUrl })
+      .from(ActivityPubActors)
+      .where(eq(ActivityPubActors.profileId, profile.id))
+      .then(firstOrThrow);
+    assert.equal(invalidStored.profileUrl, null);
+
+    await materializeRemoteProfileActor({
+      context: createLookupContext(async () => createActor({ url: secondUrl })).context,
+      handle: `alice@${remoteDomain}`,
+      now: firstNow.add({ seconds: 3 }),
+    });
+
+    const restoredStored = await db
+      .select({ profileUrl: ActivityPubActors.profileUrl })
+      .from(ActivityPubActors)
+      .where(eq(ActivityPubActors.profileId, profile.id))
+      .then(firstOrThrow);
+    assert.equal(restoredStored.profileUrl, secondUrl.href);
+
+    await materializeRemoteProfileActor({
+      context: createLookupContext(async () => createActor()).context,
+      handle: `alice@${remoteDomain}`,
+      now: firstNow.add({ seconds: 4 }),
+    });
+
+    const missingStored = await db
+      .select({ profileUrl: ActivityPubActors.profileUrl })
+      .from(ActivityPubActors)
+      .where(eq(ActivityPubActors.profileId, profile.id))
+      .then(firstOrThrow);
+    assert.equal(missingStored.profileUrl, null);
   });
 
   test('materializes, replaces, and removes embedded actor avatar and header Media', async () => {
@@ -1213,7 +1288,8 @@ describe('remote actor materialization', () => {
           'followers_uri',
           'following_uri',
           'shared_inbox_uri',
-          'last_fetched_at'
+          'last_fetched_at',
+          'profile_url'
         )
       ORDER BY column_name`;
 
@@ -1225,6 +1301,7 @@ describe('remote actor materialization', () => {
         ['inbox_uri', 'YES'],
         ['last_fetched_at', 'YES'],
         ['outbox_uri', 'YES'],
+        ['profile_url', 'YES'],
         ['shared_inbox_uri', 'YES'],
       ],
     );

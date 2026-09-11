@@ -296,7 +296,6 @@ describe('Post Reply GraphQL 경계', () => {
       content: '<p>앞쪽 <a href="https://remote.example/users/mentioned">@mentioned</a> 뒤쪽</p>',
       mentions: [
         {
-          label: '@mentioned',
           profileId: auth.profile.id,
           targetHref: 'https://remote.example/users/mentioned',
         },
