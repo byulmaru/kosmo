@@ -114,7 +114,7 @@ Local/ActivityPub 실행 경로를 소유한다. 부모 PR이 Draft여도 자식
 2. GraphQL `node(id:)`·`profileByHandle` 직접 조회에는 기존 lifecycle·membership·공개 조회 조건을 유지한다. selected Profile이 있으면 그 Profile을
    `searchProfiles` viewer로 사용해 exact-match·partial-match 후보의 양방향 Active Block 후보를 pagination·cursor·limit 전에 제외한다. selected Profile이 없으면 기존 Account
    인증·공개 후보 결과를 유지하며 Block predicate나 selected Local Profile을 요구하지 않는다. `Hashtag.relatedProfiles`에도 같은 viewer 선택과 양방향 Active Block 후보 제외를 pagination 전에 적용한다. direct Post·PostContent·첨부 Media와 Profile Post List에는
-   Author → viewer 방향의 Block 조건을 합성한다. Home·Local·Hashtag Post List·Post 검색·Bookmark 등 양방향 surface는 pair 조건을 유지한다. Repost는 Author와 Source Author를 모두 확인한다.
+   Author → viewer 방향의 Block 조건을 합성한다. Bookmark는 저장한 Profile의 방향별 Post 조회 정책을 따르고, Home·Local·Hashtag Post List·Post 검색 등 양방향 surface는 pair 조건을 유지한다. Repost는 Author와 Source Author를 모두 확인한다.
    Follow 후보는 viewer와 후보 Profile의 차단뿐 아니라 저장된 Follow/Request 참여자 사이의 Active Block도 확인한다.
    잔존 Follow를 Home 또는 `FOLLOWERS` 가시성의 근거로 사용하지 않는다. Reaction Profile 목록은 필터링하되 기존 Reaction count는 유지한다.
 3. 기존 Follow transaction의 생성·승인 경로가 새 관계를 쓰거나 잔존 관계를 성공으로 반환하기 전에 현재 pair 정책을 평가한다.

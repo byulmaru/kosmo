@@ -113,6 +113,7 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
 - `profile`: GraphQL `node(id:)`·`profileByHandle` 직접 조회의 기존 lifecycle·membership·기본 정보 조건 유지, `searchProfiles` exact-match·partial-match 후보의 양방향 Block 제외와 Follow 후보·새 Follow 입력에 Profile Block 정책 적용
 - `hashtag-related-profile-api`: selected Profile이 있는 `Hashtag.relatedProfiles`에서 양방향 Active Block 후보를 pagination 전에 제외하고, selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를 유지
 - `post`: 방향성 있는 Profile Post·Post/Media 조회, 양방향 Home·Local·Hashtag Post List, Post 검색과 origin-independent Reply/Quote/Reaction/Repost 입력에 Profile Block 정책 적용
+- `activitypub-remote-follow`: Active Block 중 기존 ActivityPub inbound Follow·Accept가 새 Follow Request·Relationship을 만들지 않고 예상 가능한 정책 거절로 처리되는 경계
 - `notification`: Block으로 제거되는 Follow 객체의 직접 원인 Notification 정리와 조회 불가 기존 Notification 숨김 연결;
   source 신규 생성 suppression은 `PROD-327`에 유보
 
@@ -125,4 +126,4 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
 - App: Profile action/confirmation, Settings의 분리된 Block 목록과 selected Profile별 상태·cache 수렴이 영향받는다.
   기존 Profile 정보와 viewer 방향 콘텐츠 상태를 표시하고 각 surface의 서버 정책으로 수렴한다.
 - Verification: `PROD-821` 저장·cleanup(#726) → `PROD-822` 정책·스펙(#770) → `PROD-822-graphql` 관리 GraphQL 구현·테스트 → `PROD-822-policy` 정책·Local/ActivityPub 실행 회귀 → `PROD-823` → `PROD-813` 순서의 slice 검증과 cross-slice E2E가 필요하다.
-  federation·source suppression·async cleanup runtime은 이 change에 포함하지 않는다.
+  ActivityPub Block/Undo ingress·source suppression·async cleanup runtime은 이 change에 포함하지 않는다.
