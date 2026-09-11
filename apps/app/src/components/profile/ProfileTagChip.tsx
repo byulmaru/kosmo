@@ -2,7 +2,7 @@ import { XIcon } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { ICON_BUTTON_TARGET_SIZE, IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, iconSizes, radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, iconSizes, radii, space, typography } from '@/theme/tokens';
 
 export const PROFILE_TAG_CHIP_VISUAL_SIZE = 32;
 
@@ -30,7 +30,7 @@ export function ProfileTagChip(props: ProfileTagChipProps) {
     <View
       style={[
         styles.root,
-        { backgroundColor: theme.surface, borderColor: theme.border },
+        { backgroundColor: theme.backgroundSurface, borderColor: theme.borderDefault },
         removable && styles.removableChip,
       ]}
       testID="profile-tag-chip"
@@ -39,7 +39,7 @@ export function ProfileTagChip(props: ProfileTagChipProps) {
         accessibilityLabel={displayLabel}
         ellipsizeMode="tail"
         numberOfLines={1}
-        style={[styles.text, { color: theme.text }]}
+        style={[styles.text, { color: theme.foregroundPrimary }]}
       >
         {displayLabel}
       </Text>
@@ -71,7 +71,7 @@ export function ProfileTagChip(props: ProfileTagChipProps) {
         testID="profile-tag-remove-button"
         visualSize={PROFILE_TAG_CHIP_VISUAL_SIZE}
       >
-        <XIcon color={theme.textSecondary} size={iconSizes[20]} strokeWidth={2} />
+        <XIcon color={theme.foregroundPrimary} size={iconSizes[20]} strokeWidth={2} />
       </IconButton>
     </View>
   );
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: PROFILE_TAG_CHIP_VISUAL_SIZE,
     maxWidth: '100%',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: space[8],
   },
   removableChip: {
     paddingRight: PROFILE_TAG_CHIP_VISUAL_SIZE,

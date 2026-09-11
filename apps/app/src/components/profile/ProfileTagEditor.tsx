@@ -33,7 +33,7 @@ export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTa
 
   return (
     <View style={styles.root}>
-      <Text style={[styles.label, { color: theme.text }]}>프로필 태그</Text>
+      <Text style={[styles.label, { color: theme.foregroundPrimary }]}>프로필 태그</Text>
 
       {tags.length > 0 ? (
         <View style={styles.chips}>
@@ -82,7 +82,7 @@ export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTa
 
 const styles = StyleSheet.create({
   root: {
-    gap: space[8],
+    gap: space[12],
   },
   label: textStyles.uiLabelL,
   chips: {

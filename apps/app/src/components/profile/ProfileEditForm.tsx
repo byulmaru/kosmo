@@ -37,7 +37,7 @@ function FieldError({ message }: { message?: string }) {
   }
 
   return (
-    <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+    <Text accessibilityRole="alert" style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}>
       {message}
     </Text>
   );
@@ -82,39 +82,41 @@ export function ProfileEditForm({
 
       <View style={styles.fields}>
         <View style={styles.field}>
-          <Text style={[styles.label, { color: theme.text }]}>표시 이름</Text>
-          <View style={styles.controlSupport}>
+          <Text style={[styles.label, { color: theme.foregroundPrimary }]}>표시 이름</Text>
+          <View style={styles.fieldControlSupport}>
             <TextField
               accessibilityLabel="표시 이름"
               editable={!disabled}
               error={displayNameError}
               onChangeText={(displayName) => onChange({ ...value, displayName })}
+              style={[styles.value, !disabled && { color: theme.foregroundMuted }]}
               value={value.displayName}
             />
-            <Text style={[styles.counter, { color: theme.textSecondary }]}>
+            <Text style={[styles.counter, { color: theme.foregroundSecondary }]}>
               {countCodePoints(value.displayName.trim())}/40
             </Text>
           </View>
         </View>
 
         <View style={styles.field}>
-          <Text style={[styles.label, { color: theme.text }]}>소개</Text>
-          <View style={styles.controlSupport}>
+          <Text style={[styles.label, { color: theme.foregroundPrimary }]}>소개</Text>
+          <View style={styles.fieldControlSupport}>
             <TextArea
               accessibilityLabel="소개"
               editable={!disabled}
               error={bioError}
               onChangeText={(bio) => onChange({ ...value, bio })}
+              style={[styles.value, !disabled && { color: theme.foregroundMuted }]}
               value={value.bio}
             />
-            <Text style={[styles.counter, { color: theme.textSecondary }]}>
+            <Text style={[styles.counter, { color: theme.foregroundSecondary }]}>
               {value.bio.trim().length}/500
             </Text>
           </View>
         </View>
 
         <View style={styles.followPolicyRow}>
-          <Text style={[styles.followPolicyLabel, { color: theme.text }]}>
+          <Text style={[styles.followPolicyLabel, { color: theme.foregroundPrimary }]}>
             팔로우 요청 자동 승인
           </Text>
           <Switch
@@ -158,6 +160,10 @@ const styles = StyleSheet.create({
     paddingTop: space[24],
   },
   field: { gap: space[8] },
+  fieldControlSupport: {
+    flexDirection: 'column',
+    gap: space[8],
+  },
   controlSupport: { ...layoutRecipes.labelSupportStack },
   label: textStyles.uiLabelL,
   followPolicyRow: {
@@ -166,9 +172,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   followPolicyLabel: textStyles.uiLabelL,
+  value: {
+    ...textStyles.uiCopyL,
+  },
   counter: {
     alignSelf: 'flex-end',
     ...textStyles.uiCopyS,
+    lineHeight: 16,
   },
   error: textStyles.uiCopyS,
 });

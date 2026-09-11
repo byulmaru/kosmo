@@ -39,10 +39,9 @@ mockModule('@/components/ui/IconButton', {
 });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
-    border: 'border',
-    surface: 'surface',
-    text: 'text',
-    textSecondary: 'secondary',
+    backgroundSurface: 'surface',
+    borderDefault: 'border',
+    foregroundPrimary: 'text',
   }),
 });
 let profileTagChipModule: typeof ProfileTagChipModule | undefined;

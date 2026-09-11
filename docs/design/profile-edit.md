@@ -43,9 +43,10 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
 - Follow Approval Policy를 바꿔도 기존 Pending Follow Request의 상태나 존재는 바뀌지 않는다.
 - 프로필 태그는 [Profile Tag 디자인](./profile-tags.md)의 Hashtag Name 정규화·중복·접근성
   계약을 따른다. 개수 상한과 순서·재정렬 계약은 두지 않는다.
-- 표시 이름·소개·프로필 태그의 외부 label은 `UI/Label/L`(`16/24/600`)을 사용한다. label과 첫 control
-  사이는 `8px`, 인접 field section 사이는 `16px`를 유지하며 실제 입력은 기존 `TextField`·`TextArea`의
-  focus·validation·support text 계약을 재사용한다.
+- 표시 이름·소개·프로필 태그의 외부 label은 `UI/Label/L`(`16/24/600`)을 사용한다. displayName·bio의
+  label-control과 control-counter 사이는 각각 `8px`, 인접 field section 사이는 `16px`를 유지하며 실제 입력은
+  기존 `TextField`·`TextArea`의 focus·validation·disabled·support text 계약을 재사용한다.
+- Profile Tag editor의 root child 간격은 `12px`이며, chip row와 tag input row 내부 간격은 `8px`를 사용한다.
 - form은 avatar와 header의 현재 이미지를 각각 초기 draft로 표시하며 별도의 `유지` action을 두지 않는다.
   header preview 전체와 avatar preview 전체를 각 field의 단일 편집 button으로 사용하고, 별도의 연필·편집
   button은 두지 않는다. 한쪽을 편집해도 건드리지 않은 다른 쪽의 draft는 현재 값으로 남긴다. 각 field의 편집
@@ -207,9 +208,11 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
 - 중앙 편집 surface는 최대 `600px`를 유지한다.
 - DSN-45 Figma source와 이를 이관한 current Production의 상단 navigation header는 shell이 소유하는 safe-area
   inset을 제외한 content 높이를 정확히 `64px`로 유지한다. 뒤로가기 action은 `44×44` layout target 안의
-  canonical `ArrowLeft` `24px`를 사용하고 제목은 `UI/Heading/S`(`20/26/700`), Web 저장 action은 `64×40`으로
+  canonical `ArrowLeft` `24px`를 사용하고 제목은 `UI/Heading/M`(`24/27.6/700`)으로 좌우 `80px` side slot
+  안에서 정중앙에 두며, Web 저장 action은 `64×40`으로
   같은 행 안에서 정렬한다. iOS·Android의 실제 입력 target은 공용 `IconButton`·`Button`의 `44pt`·`48dp`
-  보정을 유지한다.
+  보정을 유지한다. navigation divider는 `border/default` `1px`을 사용한다.
+- navigation header와 screen fill은 `background/canvas`, title과 back icon은 `foreground/primary`를 사용한다.
 - header 이미지 변경 영역은 surface 폭을 기준으로 `aspect-ratio: 3 / 1`을 적용한다. 따라서 `600px`
   중앙 surface에서는 `600×200`, `390px` mobile에서는 `390×130`이며 임의 폭 `W`에서는 높이가
   `W / 3`이 된다. 이미지와 아래 surface의 경계에는 `border/default` 1px 하단선을 표시한다.
@@ -253,6 +256,12 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
 - `05 Screens - Web`의 Profile 영역에는 `1440px` Full과 `1024px` Compact 대표 프레임을 유지한다.
 - Mobile/Web 모두 상단 navigation header의 safe area 제외 높이를 `64px`로 고정하고 뒤로가기 action에
   `44×44` target과 `24px` `ArrowLeft`를 사용한다.
+- Center/Mobile Profile Edit source의 title은 `UI/Heading/M` `24/27.6/700`이며 back/save의 `64px` side slot
+  안에서 좌우 `80px` 경계를 기준으로 정중앙에 둔다. displayName·bio counter는 `12/16`이고 enabled input value는
+  `UI` `16/24` `foreground/muted`를 사용한다.
+- 빈 header target은 `action/primary/subtle`, avatar content는 `background/surface`, avatar outer ring은
+  `background/canvas`, avatar inner border와 header divider는 `border/default`를 사용한다. camera scrim은 추가
+  opacity 없이 `overlay/scrim`, camera glyph는 `fixed/white`를 사용한다.
 - 실제 `Header image preview` layer에 `3:1` ratio lock을 적용하고, avatar overlap을 배치하는 hero wrapper와
   preview layer를 분리한다. header preview 전체와 avatar preview 전체를 각각 단일 button으로 사용하며 중앙
   camera affordance와 pressed veil을 표현한다.
@@ -264,6 +273,15 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
   이미지 replacement·deletion·uploading·error를 별도 Figma 상태 카탈로그로 추가하지 않는다.
 - Figma 작업 환경에서는 [typography.md](./typography.md)의 대치 폰트와 Foundation variable, `02 Components`의
   현행 primitive를 사용한다.
+
+## 정정 기록
+
+- 2026-09-11 Figma `ProfileEditSurface` Center/Mobile 재대조: 기존 `UI/Heading/S` `20/26/700`은
+  `UI/Heading/M` `24/27.6/700`으로 대체했다.
+- 기존 Profile Tag root의 일반화된 `8px` item spacing은 `12px`로 대체했으며, chip row·tag input row 내부
+  간격은 `8px`로 유지한다.
+- displayName·bio support stack의 기존 `4px` control-counter 간격은 `8px`로 대체했다. field section
+  간격 `16px`와 Follow Approval draft/save 소유권은 변경하지 않는다.
 
 ## 전달 경계
 

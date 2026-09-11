@@ -177,7 +177,10 @@ function expectResponsiveSurface(
   const surface = canvas.getByTestId('profile-edit-screen').getBoundingClientRect();
   const headerPreview = canvas.getByTestId('profile-edit-header-preview');
   const header = headerPreview.getBoundingClientRect();
-  const navigationHeader = canvas.getByTestId('profile-edit-screen-header').getBoundingClientRect();
+  const navigationHeaderElement = canvas.getByTestId('profile-edit-screen-header');
+  const navigationHeader = navigationHeaderElement.getBoundingClientRect();
+  const title = canvas.getByRole('heading', { name: '프로필 수정' });
+  const titleBounds = title.getBoundingClientRect();
   const backButton = canvas.getByRole('button', { name: '프로필 편집 닫기' });
   const backAction = backButton.getBoundingClientRect();
   const saveAction = canvas.getByRole('button', { name: '저장' }).getBoundingClientRect();
@@ -190,10 +193,13 @@ function expectResponsiveSurface(
   const cameraAffordances = canvas.getAllByTestId('profile-edit-camera-affordance');
   const displayNameLabel = canvas.getByText('표시 이름');
   const displayNameInput = canvas.getByRole('textbox', { name: '표시 이름' });
+  const displayNameCounter = canvas.getByText('3/40');
   const bioLabel = canvas.getByText('소개');
   const bioInput = canvas.getByRole('textbox', { name: '소개' });
+  const bioCounter = canvas.getByText(`${initialDraft.bio.length}/500`);
   const tagLabel = canvas.getByText('프로필 태그');
   const firstTag = canvas.getAllByTestId('profile-tag-chip')[0]!;
+  const tagInput = canvas.getByRole('textbox', { name: '프로필 태그' });
   const tagRemoveButton = canvas.getByRole('button', { name: '#공예 제거' });
   const tagRemoveAction = tagRemoveButton.getBoundingClientRect();
   const tagRemoveLayout = tagRemoveButton.parentElement;
@@ -207,6 +213,17 @@ function expectResponsiveSurface(
     borderColor: colors.light.borderDefault,
   });
   expect(Math.round(navigationHeader.height)).toBe(64);
+  expect(Math.round(titleBounds.left - surface.left)).toBe(80);
+  expect(Math.round(surface.right - titleBounds.right)).toBe(80);
+  expect(getComputedStyle(title).fontSize).toBe('24px');
+  expect(getComputedStyle(title).lineHeight).toBe('27.6px');
+  expect(getComputedStyle(title).fontWeight).toBe('700');
+  expect(title).toHaveStyle({ color: colors.light.foregroundPrimary });
+  expect(navigationHeaderElement).toHaveStyle({
+    backgroundColor: colors.light.backgroundCanvas,
+    borderColor: colors.light.borderDefault,
+    borderBottomWidth: 1,
+  });
   expect(Math.round(backAction.width)).toBe(44);
   expect(Math.round(backAction.height)).toBe(44);
   expect(backButton.querySelector('svg')).toHaveAttribute('width', '24');
@@ -226,15 +243,18 @@ function expectResponsiveSurface(
   expect(cameraAffordances).toHaveLength(2);
   for (const affordance of cameraAffordances) {
     const rect = affordance.getBoundingClientRect();
+    const scrim = affordance.firstElementChild;
     expect(Math.round(rect.width)).toBe(40);
     expect(Math.round(rect.height)).toBe(40);
+    expect(scrim).not.toBeNull();
+    expect(scrim).toHaveStyle({ backgroundColor: colors.light.overlayScrim });
+    expect(getComputedStyle(scrim!).opacity).toBe('1');
     expect(affordance.querySelector('svg')).toHaveAttribute('width', '20');
     expect(affordance.querySelector('svg')).toHaveAttribute('height', '20');
   }
   for (const [label, control] of [
     [displayNameLabel, displayNameInput],
     [bioLabel, bioInput],
-    [tagLabel, firstTag],
   ] as const) {
     const labelRect = label.getBoundingClientRect();
     const controlRect = control.getBoundingClientRect();
@@ -244,6 +264,39 @@ function expectResponsiveSurface(
     expect(labelStyle.lineHeight).toBe('24px');
     expect(labelStyle.fontWeight).toBe('600');
   }
+  expect(
+    Math.round(
+      displayNameCounter.getBoundingClientRect().top -
+        displayNameInput.getBoundingClientRect().bottom,
+    ),
+  ).toBe(8);
+  expect(
+    Math.round(bioCounter.getBoundingClientRect().top - bioInput.getBoundingClientRect().bottom),
+  ).toBe(8);
+  expect(getComputedStyle(displayNameInput).fontSize).toBe('16px');
+  expect(getComputedStyle(displayNameInput).lineHeight).toBe('24px');
+  expect(displayNameInput).toHaveStyle({ color: colors.light.foregroundMuted });
+  expect(getComputedStyle(bioInput).fontSize).toBe('16px');
+  expect(getComputedStyle(bioInput).lineHeight).toBe('24px');
+  expect(bioInput).toHaveStyle({ color: colors.light.foregroundMuted });
+  expect(getComputedStyle(displayNameCounter).fontSize).toBe('12px');
+  expect(getComputedStyle(displayNameCounter).lineHeight).toBe('16px');
+  expect(displayNameCounter).toHaveStyle({ color: colors.light.foregroundSecondary });
+  expect(getComputedStyle(bioCounter).fontSize).toBe('12px');
+  expect(getComputedStyle(bioCounter).lineHeight).toBe('16px');
+  expect(bioCounter).toHaveStyle({ color: colors.light.foregroundSecondary });
+  expect(
+    Math.round(firstTag.getBoundingClientRect().top - tagLabel.getBoundingClientRect().bottom),
+  ).toBe(12);
+  expect(
+    Math.round(tagInput.getBoundingClientRect().top - firstTag.getBoundingClientRect().bottom),
+  ).toBe(12);
+  expect(firstTag).toHaveStyle({
+    backgroundColor: colors.light.backgroundSurface,
+    borderColor: colors.light.borderDefault,
+    paddingLeft: 8,
+  });
+  expect(canvas.getByText('#공예')).toHaveStyle({ color: colors.light.foregroundPrimary });
   expect(
     Math.round(
       bioLabel.parentElement!.getBoundingClientRect().top -
@@ -289,8 +342,15 @@ export const ImageFields: Story = {
     const avatarButton = canvas.getByRole('button', { name: '아바타 이미지 편집' });
 
     expect(headerButton).toBe(canvas.getByTestId('profile-edit-header-preview'));
-    expect(headerButton).toHaveStyle({ backgroundColor: colors.light.primary });
+    expect(headerButton).toHaveStyle({
+      backgroundColor: colors.light.actionPrimarySubtle,
+      borderColor: colors.light.borderDefault,
+    });
     expect(avatarButton).toBe(canvas.getByTestId('profile-edit-avatar-preview'));
+    expect(avatarButton).toHaveStyle({
+      backgroundColor: colors.light.backgroundSurface,
+      borderColor: colors.light.backgroundCanvas,
+    });
     expect(canvas.queryByText(/현재.*유지/)).not.toBeInTheDocument();
     expect(canvas.queryByRole('button', { name: '교체' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('button', { name: '제거' })).not.toBeInTheDocument();
@@ -555,7 +615,7 @@ export const TagAddDuplicateAndRemove: Story = {
 
     expect(
       Math.round(input.getBoundingClientRect().top - label.getBoundingClientRect().bottom),
-    ).toBe(8);
+    ).toBe(12);
 
     const inputBounds = input.getBoundingClientRect();
     const addBounds = add.getBoundingClientRect();
@@ -758,6 +818,12 @@ export const DisabledFormBlocksEveryAction: Story = {
     for (const input of canvas.getAllByRole('textbox')) {
       expect(input).toHaveAttribute('readonly');
     }
+    expect(canvas.getByRole('textbox', { name: '표시 이름' })).toHaveStyle({
+      color: colors.light.stateDisabledForeground,
+    });
+    expect(canvas.getByRole('textbox', { name: '소개' })).toHaveStyle({
+      color: colors.light.stateDisabledForeground,
+    });
   },
 };
 

@@ -70,7 +70,7 @@ Web·Android·iOS 클라이언트 계약을 문서화한다.
 
 ### Requirement: Profile edit fields and Profile Tag interaction
 
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `docs/design/typography.md`, `docs/design/foundations.md`, `docs/domain/objects/hashtag.md`, DSN-45, PROD-491, PROD-522, PROD-526, PROD-941 — Profile edit presentation은 새로 입력하거나 변경한 값에 Unicode code point 기준 1~40 displayName, 앞뒤 공백을 제거한 뒤 500자 이하 bio와 avatar/header별 controlled 편집 control을 제공해야 한다(MUST). displayName·bio·Profile Tag section의 외부 label은 `Label/L` `16/24/600`, label-control 간격은 `8px`, field section 간격은 `16px`를 사용해야 한다(MUST). 개수 상한 없이 Profile Tag를 inline chip으로 추가·제거할 수 있어야 하고(MUST), 순서·재정렬 control을 제공해서는 안 되며(MUST NOT), 승인되지 않은 field를 표시해서는 안 된다(MUST NOT). Profile Tag의 canonical identity는 Hashtag의 NFKC·locale 비종속 `toLowerCase()` 규칙을 사용하되 chip은 최초 입력의 NFKC 표기를 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `docs/design/typography.md`, `docs/design/foundations.md`, `docs/domain/objects/hashtag.md`, DSN-45, PROD-491, PROD-522, PROD-526, PROD-941 — Profile edit presentation은 새로 입력하거나 변경한 값에 Unicode code point 기준 1~40 displayName, 앞뒤 공백을 제거한 뒤 500자 이하 bio와 avatar/header별 controlled 편집 control을 제공해야 한다(MUST). displayName·bio·Profile Tag section의 외부 label은 `Label/L` `16/24/600`을 사용해야 한다(MUST). displayName·bio의 label-control과 control-counter 간격은 각각 `8px`, field section 간격은 `16px`를 사용해야 한다(MUST). Profile Tag editor root child 간격은 `12px`, chip row·tag input row 내부 간격과 removable chip의 좌측 inset은 `8px`여야 한다(MUST). enabled displayName·bio input value는 `UI` `16/24`와 `foreground/muted`, counter는 `12/16`과 `foreground/secondary`, label과 Profile Tag chip label/remove icon은 `foreground/primary`를 사용해야 한다(MUST). 개수 상한 없이 Profile Tag를 inline chip으로 추가·제거할 수 있어야 하고(MUST), 순서·재정렬 control을 제공해서는 안 되며(MUST NOT), 승인되지 않은 field를 표시해서는 안 된다(MUST NOT). Profile Tag의 canonical identity는 Hashtag의 NFKC·locale 비종속 `toLowerCase()` 규칙을 사용하되 chip은 최초 입력의 NFKC 표기를 유지해야 한다(MUST).
 
 #### Scenario: Edit approved text and image fields
 
@@ -83,7 +83,9 @@ Web·Android·iOS 클라이언트 계약을 문서화한다.
 
 - **WHEN** form이 displayName, bio와 Profile Tags를 렌더한다
 - **THEN** 각 section의 외부 label은 `Label/L` `16/24/600`으로 표시된다
-- **AND** label과 첫 control 사이에는 `8px`, 인접 field section 사이에는 `16px` 간격이 유지된다
+- **AND** displayName·bio의 label과 control, control과 counter 사이에는 각각 `8px`, 인접 field section 사이에는 `16px` 간격이 유지된다
+- **AND** Profile Tag editor root child 사이에는 `12px`, chip row·tag input row 내부와 removable chip label 왼쪽에는 `8px` 간격이 유지된다
+- **AND** enabled input value는 `UI` `16/24` `foreground/muted`, counter는 `12/16` `foreground/secondary`, label과 Profile Tag chip label/remove icon은 `foreground/primary`를 사용한다
 - **AND** 기존 TextField·TextArea의 focus, validation, disabled와 support text 동작을 유지한다
 
 #### Scenario: Preserve an unchanged legacy display name
@@ -121,7 +123,7 @@ Web·Android·iOS 클라이언트 계약을 문서화한다.
 
 ### Requirement: Responsive accessible Profile edit layout
 
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `docs/design/accessibility.md`, `docs/design/icons.md`, `docs/design/typography.md`, DSN-45, PROD-491, PROD-941 — Profile edit presentation은 Web shell 중앙 최대 `600px` surface와 mobile/native 정보 구조를 공유해야 한다(MUST). safe-area를 제외한 상단 navigation header는 정확히 `64px` 높이와 `16px` horizontal inset을 사용해야 하며(MUST), 제목은 `uiHeadingS` `20/26/700`으로 표시해야 한다(MUST). 뒤로가기 action은 `44×44` layout target 안의 `ArrowLeft` `24px`를 사용하되 Android에서는 hit slop을 포함한 실제 입력 target을 최소 `48×48dp`로 제공해야 한다(MUST). 저장 action은 Web에서 `64×40` visual을 사용하고 iOS·Android에서는 각각 최소 `44pt`, `48dp` 실제 입력 높이를 제공해야 한다(MUST). Profile Tag 제거 action은 시각 크기 `32×32`와 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`를 분리하고, 다른 text action은 최소 높이 `36`과 대상·상태를 설명하는 accessibility label/state를 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `docs/design/accessibility.md`, `docs/design/icons.md`, `docs/design/typography.md`, DSN-45, PROD-491, PROD-941 — Profile edit presentation은 Web shell 중앙 최대 `600px` surface와 mobile/native 정보 구조를 공유해야 한다(MUST). safe-area를 제외한 상단 navigation header는 정확히 `64px` 높이와 `16px` horizontal inset을 사용해야 하며(MUST), 제목은 `uiHeadingM` `24/27.6/700`으로 좌우 `80px` side slot 안에서 정중앙에 표시해야 한다(MUST). navigation divider는 `border/default` 1px, header와 screen fill은 `background/canvas`, title과 back icon은 `foreground/primary`를 사용해야 한다(MUST). 빈 header target은 `action/primary/subtle`, avatar content는 `background/surface`, avatar outer ring은 `background/canvas`, avatar inner border와 header divider는 `border/default`, camera scrim은 추가 opacity 없는 `overlay/scrim`, camera glyph는 `fixed/white`를 사용해야 한다(MUST). 뒤로가기 action은 `44×44` layout target 안의 `ArrowLeft` `24px`를 사용하되 Android에서는 hit slop을 포함한 실제 입력 target을 최소 `48×48dp`로 제공해야 한다(MUST). 저장 action은 Web에서 `64×40` visual을 사용하고 iOS·Android에서는 각각 최소 `44pt`, `48dp` 실제 입력 높이를 제공해야 한다(MUST). Profile Tag 제거 action은 시각 크기 `32×32`와 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`를 분리하고, 다른 text action은 최소 높이 `36`과 대상·상태를 설명하는 accessibility label/state를 제공해야 한다(MUST).
 
 #### Scenario: Render desktop shell layouts
 
@@ -135,7 +137,7 @@ Web·Android·iOS 클라이언트 계약을 문서화한다.
 - **THEN** form은 각 action의 대상·동작·disabled 상태를 accessibility label/state로 전달한다
 - **AND** safe-area를 제외한 상단 navigation header content는 `64px`, 뒤로가기 layout target은 `44×44`이고 glyph는 `ArrowLeft` `24px`이다
 - **AND** Android의 뒤로가기 실제 입력 target은 layout을 늘리지 않는 hit slop을 포함해 최소 `48×48dp`이다
-- **AND** 제목은 `uiHeadingS` `20/26/700`으로 표시되고 Web 저장 action은 `64×40`이다
+- **AND** 제목은 `uiHeadingM` `24/27.6/700`으로 좌우 `80px` side slot 안에 정중앙으로 표시되고 Web 저장 action은 `64×40`이다
 - **AND** header·avatar의 camera icon은 접근성 tree에서 숨기고 각 preview button 하나만 focus target으로 제공한다
 - **AND** Profile Tag 제거 action은 `32×32` visual과 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp` 실제 입력 target을 제공한다
 - **AND** 색만으로 validation·disabled·saving·failure 상태를 구분하지 않는다

@@ -48,7 +48,10 @@ function SubmitStatus({ state }: { state: ProfileEditSubmitState }) {
   }
 
   return (
-    <Text accessibilityRole="alert" style={[styles.submitStatus, { color: theme.danger }]}>
+    <Text
+      accessibilityRole="alert"
+      style={[styles.submitStatus, { color: theme.feedbackDangerOnSubtle }]}
+    >
       {state.message}
     </Text>
   );
@@ -108,7 +111,7 @@ export function ProfileEditScreen({
       style={[
         styles.root,
         {
-          backgroundColor: theme.background,
+          backgroundColor: theme.backgroundCanvas,
         },
       ]}
     >
@@ -117,37 +120,39 @@ export function ProfileEditScreen({
         style={[
           styles.header,
           Platform.OS === 'web' && webStickyHeader,
-          { backgroundColor: theme.background, borderColor: theme.border },
+          { backgroundColor: theme.backgroundCanvas, borderColor: theme.borderDefault },
         ]}
       >
-        {onBack ? (
-          <IconButton
-            accessibilityLabel="프로필 편집 닫기"
-            disabled={saving}
-            feedback="opacity"
-            onPress={onBack}
-            style={styles.backAction}
-          >
-            <ArrowLeft color={theme.text} size={iconSizes[24]} strokeWidth={2} />
-          </IconButton>
-        ) : (
-          <View style={styles.backAction} />
-        )}
+        <View style={styles.actionSlot}>
+          {onBack ? (
+            <IconButton
+              accessibilityLabel="프로필 편집 닫기"
+              disabled={saving}
+              feedback="opacity"
+              onPress={onBack}
+              style={styles.backAction}
+            >
+              <ArrowLeft color={theme.foregroundPrimary} size={iconSizes[24]} strokeWidth={2} />
+            </IconButton>
+          ) : null}
+        </View>
 
-        <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+        <Text accessibilityRole="header" style={[styles.title, { color: theme.foregroundPrimary }]}>
           프로필 수정
         </Text>
 
-        <Button
-          accessibilityLabel="저장"
-          accessibilityState={{ busy: saving, disabled: !canSubmit }}
-          disabled={!canSubmit}
-          loading={saving}
-          onPress={() => onSubmit?.(value)}
-          style={styles.saveAction}
-        >
-          저장
-        </Button>
+        <View style={[styles.actionSlot, styles.trailingActionSlot]}>
+          <Button
+            accessibilityLabel="저장"
+            accessibilityState={{ busy: saving, disabled: !canSubmit }}
+            disabled={!canSubmit}
+            loading={saving}
+            onPress={() => onSubmit?.(value)}
+            style={styles.saveAction}
+          >
+            저장
+          </Button>
+        </View>
       </View>
 
       {Platform.OS === 'web' ? (
@@ -179,16 +184,25 @@ const styles = StyleSheet.create({
     height: 64,
     paddingHorizontal: space[16],
   },
+  actionSlot: {
+    alignItems: 'flex-start',
+    height: 64,
+    justifyContent: 'center',
+    width: 64,
+  },
   backAction: {
     alignItems: 'center',
     height: 44,
     justifyContent: 'center',
     width: 44,
   },
+  trailingActionSlot: {
+    alignItems: 'flex-end',
+  },
   title: {
     flex: 1,
     textAlign: 'center',
-    ...textStyles.uiHeadingS,
+    ...textStyles.uiHeadingM,
   },
   saveAction: {
     minWidth: 64,

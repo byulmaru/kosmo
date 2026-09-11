@@ -14,15 +14,7 @@ import {
 } from '@/components/media/imageUploadErrors';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { useTheme } from '@/theme/ThemeProvider';
-import {
-  borderWidths,
-  breakpoints,
-  colors,
-  iconSizes,
-  radius,
-  space,
-  textStyles,
-} from '@/theme/tokens';
+import { borderWidths, breakpoints, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import type { Ref } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { ProfileEditImageDraft } from './profileEditState';
@@ -95,7 +87,10 @@ function ImageStatus({
         accessibilityRole={status.kind === 'error' ? 'alert' : undefined}
         style={[
           styles.status,
-          { color: status.kind === 'error' ? theme.danger : theme.textSecondary },
+          {
+            color:
+              status.kind === 'error' ? theme.feedbackDangerOnSubtle : theme.feedbackInfoOnSubtle,
+          },
         ]}
       >
         {status.message}
@@ -107,7 +102,7 @@ function ImageStatus({
           onPress={onRetry}
           style={({ pressed }) => [styles.retry, { opacity: pressed ? 0.7 : 1 }]}
         >
-          <Text style={[styles.retryLabel, { color: theme.text }]}>다시 시도</Text>
+          <Text style={[styles.retryLabel, { color: theme.foregroundPrimary }]}>다시 시도</Text>
         </Pressable>
       ) : null}
     </View>
@@ -115,6 +110,8 @@ function ImageStatus({
 }
 
 function CameraAffordance({ disabled }: { disabled: boolean }) {
+  const theme = useTheme();
+
   return (
     <View
       accessibilityElementsHidden
@@ -122,8 +119,14 @@ function CameraAffordance({ disabled }: { disabled: boolean }) {
       style={[styles.cameraAffordance, { opacity: disabled ? 0.45 : 1 }]}
       testID="profile-edit-camera-affordance"
     >
-      <View style={[StyleSheet.absoluteFill, styles.cameraScrim]} />
-      <Camera color={colors.light.background} size={iconSizes[20]} strokeWidth={2} />
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          styles.cameraScrim,
+          { backgroundColor: theme.overlayScrim },
+        ]}
+      />
+      <Camera color={theme.fixedWhite} size={iconSizes[20]} strokeWidth={2} />
     </View>
   );
 }
@@ -179,7 +182,7 @@ function ImageEditControl({
             />
           ) : (
             <View
-              style={[styles.imagePlaceholder, { backgroundColor: theme.primary }]}
+              style={[styles.imagePlaceholder, { backgroundColor: theme.actionPrimarySubtle }]}
               testID={`${testID}-content`}
             />
           )}
@@ -194,7 +197,15 @@ function ImageEditControl({
               testID={`${testID}-inner-border`}
             />
           ) : null}
-          {pressed ? <View style={[StyleSheet.absoluteFill, styles.pressedVeil]} /> : null}
+          {pressed ? (
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                styles.pressedVeil,
+                { backgroundColor: theme.overlayScrim },
+              ]}
+            />
+          ) : null}
           <CameraAffordance disabled={disabled} />
         </>
       )}
@@ -245,7 +256,7 @@ export function ProfileEditImageFields({
         onRemove={onHeaderRemove}
         style={[
           styles.headerPreview,
-          { backgroundColor: theme.primary, borderColor: theme.borderDefault },
+          { backgroundColor: theme.actionPrimarySubtle, borderColor: theme.borderDefault },
         ]}
         testID="profile-edit-header-preview"
       />
@@ -268,7 +279,7 @@ export function ProfileEditImageFields({
               marginTop: -avatarFrameSize / 2,
               width: avatarFrameSize,
             },
-            { backgroundColor: theme.surface, borderColor: theme.background },
+            { backgroundColor: theme.backgroundSurface, borderColor: theme.backgroundCanvas },
           ]}
           testID="profile-edit-avatar-preview"
         />
@@ -324,12 +335,9 @@ const styles = StyleSheet.create({
     width: 40,
   },
   cameraScrim: {
-    backgroundColor: colors.dark.background,
     borderRadius: radius.full,
-    opacity: 0.56,
   },
   pressedVeil: {
-    backgroundColor: colors.dark.background,
     opacity: 0.16,
     pointerEvents: 'none',
   },
