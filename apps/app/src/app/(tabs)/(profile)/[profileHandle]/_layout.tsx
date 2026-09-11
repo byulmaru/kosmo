@@ -1,6 +1,8 @@
-import { Slot, useGlobalSearchParams, usePathname } from 'expo-router';
+import { Slot, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
+import { ChevronLeftIcon } from 'lucide-react-native';
 import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
@@ -8,8 +10,11 @@ import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
 import { useSession } from '@/session/SessionProvider';
+import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileLayoutQuery as ProfileLayoutQueryType } from './__generated__/ProfileLayoutQuery.graphql';
@@ -41,38 +46,96 @@ export default function ProfileLayout() {
   const handle = normalizeProfileHandle(profileHandle);
   const pathname = usePathname();
   const scrollKey = pathname;
+  const pathSegments = pathname.split('/').filter(Boolean);
+  const isProfileHome =
+    pathSegments.length === 1 &&
+    (pathSegments[0]?.length ?? 0) > 1 &&
+    pathSegments[0]?.startsWith('@');
+  const router = useRouter();
+  const theme = useTheme();
+  const backButton = (
+    <IconButton
+      accessibilityLabel="뒤로 가기"
+      onPress={() => router.back()}
+      style={styles.back}
+      targetSize={44}
+      visualSize={44}
+    >
+      <ChevronLeftIcon color={theme.foregroundPrimary} size={20} />
+    </IconButton>
+  );
 
   return (
     <RouteBoundary
       key={handle}
+      error={
+        isProfileHome
+          ? (retry) => (
+              <ProfileRouteContainer scrollKey={scrollKey}>
+                <PageHeader leading={backButton} title="" />
+                <StateView
+                  actionLabel="다시 시도"
+                  alert
+                  description="잠시 후 다시 시도해주세요."
+                  onAction={retry}
+                  title="프로필을 불러오지 못했어요"
+                />
+              </ProfileRouteContainer>
+            )
+          : undefined
+      }
       loading={
         <ProfileRouteContainer scrollKey={scrollKey}>
+          {isProfileHome ? <PageHeader leading={backButton} title="" /> : null}
           <ProfileHero loading />
         </ProfileRouteContainer>
       }
       title="프로필을 불러오지 못했어요"
     >
-      <ProfileLayoutContent handle={handle} scrollKey={scrollKey} />
+      <ProfileLayoutContent
+        backButton={backButton}
+        handle={handle}
+        scrollKey={scrollKey}
+        showPageHeader={isProfileHome}
+      />
     </RouteBoundary>
   );
 }
 
-function ProfileLayoutContent({ handle, scrollKey }: { handle: string; scrollKey: string }) {
+function ProfileLayoutContent({
+  backButton,
+  handle,
+  scrollKey,
+  showPageHeader,
+}: {
+  backButton: ReactNode;
+  handle: string;
+  scrollKey: string;
+  showPageHeader: boolean;
+}) {
   const { fetchKey } = useRouteBoundary();
+  const { selectedProfileId } = useSession();
   const data = useLazyLoadQuery<ProfileLayoutQueryType>(
     ProfileLayoutQuery,
     { handle },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const profile = data.profileByHandle;
-  const { selectedProfileId } = useSession();
-
   if (!profile) {
-    return (
+    const missingState = (
       <StateView
         description={`@${handle} 프로필이 존재하지 않아요.`}
         title="프로필을 찾을 수 없어요"
       />
+    );
+
+    return showPageHeader ? (
+      <ProfileRouteContainer scrollKey={scrollKey}>
+        <PageHeader leading={backButton} title="" />
+        {missingState}
+      </ProfileRouteContainer>
+    ) : (
+      missingState
     );
   }
 
@@ -93,9 +156,13 @@ function ProfileLayoutContent({ handle, scrollKey }: { handle: string; scrollKey
 
   return (
     <ProfileRouteContainer scrollKey={scrollKey}>
+      {showPageHeader ? (
+        <PageHeader leading={backButton} title={profile.displayName} titleLines={1} />
+      ) : null}
       <ProfileHero
         key={selectedProfileId}
         action={relationshipAction}
+        heading={!showPageHeader}
         profile={profile}
         showMuteAction={canMute}
       />
@@ -121,6 +188,13 @@ function ProfileRouteContainer({
 }
 
 const styles = StyleSheet.create({
+  back: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    marginLeft: -spacing.sm,
+    width: 44,
+  },
   nativeRoot: { flex: 1 },
   webRoot: { width: '100%' },
 });

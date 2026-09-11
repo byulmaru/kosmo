@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createContext, createElement, useContext } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -37,6 +38,7 @@ let SlotContent: ComponentType | null = null;
 let profileAvailable = true;
 let profileInstanceKind: 'ACTIVITYPUB' | 'LOCAL' = 'LOCAL';
 let routeProbeEnabled = false;
+let routerBackCount = 0;
 let usePaginationScrollRegistration: (props: NativeScrollProps | null) => void = () => undefined;
 let routeMetrics = {
   contentHeight: 0,
@@ -85,6 +87,16 @@ mockModule('expo-router', {
   useGlobalSearchParams: () => globalParams,
   useLocalSearchParams: () => useContext(LocalParamsContext),
   usePathname: () => pathname,
+  useRouter: () => ({ back: () => (routerBackCount += 1) }),
+});
+mockModule('lucide-react-native', {
+  ChevronLeftIcon: 'ChevronLeftIcon',
+});
+mockModule(createRequire(import.meta.url).resolve('lucide-react-native'), {
+  ChevronLeftIcon: 'ChevronLeftIcon',
+});
+mockModule(new URL('../PageHeader.tsx', import.meta.url), {
+  PageHeader: (props: Record<string, unknown>) => createElement('PageHeader', props),
 });
 mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   NavigationLink: ({
@@ -126,6 +138,7 @@ mockModule('react-relay', {
     return {
       profileByHandle: profileAvailable
         ? {
+            displayName: `Display ${variables.handle}`,
             handle: variables.handle,
             id: `profile:${variables.handle}`,
             instance: { kind: profileInstanceKind },
@@ -138,13 +151,20 @@ mockModule('react-relay', {
 mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
   ProfileHero: ({
     action,
+    heading,
     loading,
     profile,
   }: {
     action?: ReturnType<typeof createElement>;
+    heading?: boolean;
     loading?: boolean;
     profile?: { handle: string };
-  }) => createElement('ProfileHero', { identity: loading ? 'loading' : profile?.handle }, action),
+  }) =>
+    createElement(
+      'ProfileHero',
+      { heading, identity: loading ? 'loading' : profile?.handle },
+      action,
+    ),
 });
 mockModule(new URL('./FollowButton.tsx', import.meta.url), {
   FollowButton: ({ profile }: { profile: { handle: string } }) =>
@@ -159,6 +179,13 @@ mockModule(new URL('./ProfileMuteController.tsx', import.meta.url), {
 mockModule(new URL('../ui/Button.tsx', import.meta.url), {
   Button: ({ children, ...props }: { children: string }) =>
     createElement('Button', props, children),
+});
+mockModule(new URL('../ui/IconButton.tsx', import.meta.url), {
+  IconButton: ({ children, ...props }: { children: ReactNode }) =>
+    createElement('IconButton', props, children),
+});
+mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
+  useTheme: () => ({ foregroundPrimary: '#111111' }),
 });
 mockModule(new URL('../post/PostList.tsx', import.meta.url), {
   PostList: ({
@@ -214,6 +241,7 @@ afterEach(async () => {
   pathname = '/profile/';
   platform.OS = 'web';
   routeProbeEnabled = false;
+  routerBackCount = 0;
   routeMetrics = { contentHeight: 0, layoutHeight: 0, scrollOffset: 0 };
   queryModes.ProfileLayoutQuery = 'success';
   queryModes.ProfilePostListPageQuery = 'success';
@@ -268,6 +296,63 @@ function requireRendered(type: string) {
 }
 
 describe('profile route parameter lifecycle', () => {
+  it('canonical Profile Home places the full display name header before the existing content', async () => {
+    await renderRoute('@local', '/@local');
+
+    const header = requireRendered('PageHeader');
+    assert.equal(header.props.title, 'Display local');
+    assert.equal(header.props.titleLines, 1);
+    const hero = requireRendered('ProfileHero');
+    assert.equal(hero.props.heading, false);
+    assert.equal(rendered('ProfileHero').length, 1);
+    assert.equal(rendered('PostList').length, 1);
+    assert.equal(rendered('StateView').length, 0);
+    const route = renderer?.toJSON();
+    assert.ok(route && !Array.isArray(route));
+    assert.deepEqual(
+      route.children?.map((child) => (typeof child === 'string' ? child : child.type)),
+      ['PageHeader', 'ProfileHero', 'PostList'],
+    );
+
+    const leading = header.props.leading;
+    assert.ok(leading);
+    assert.equal(leading?.props.accessibilityLabel, '뒤로 가기');
+    await act(async () => leading?.props.onPress());
+    assert.equal(routerBackCount, 1);
+  });
+
+  it('canonical missing Profile Home keeps route chrome with only the missing state', async () => {
+    profileAvailable = false;
+    await renderRoute('@missing', '/@missing');
+
+    assert.equal(requireRendered('PageHeader').props.title, '');
+    assert.equal(requireRendered('StateView').props.title, '프로필을 찾을 수 없어요');
+    assert.equal(rendered('ProfileHero').length, 0);
+    assert.equal(rendered('PostList').length, 0);
+    const route = renderer?.toJSON();
+    assert.ok(route && !Array.isArray(route));
+    assert.deepEqual(
+      route.children?.map((child) => (typeof child === 'string' ? child : child.type)),
+      ['PageHeader', 'StateView'],
+    );
+
+    const leading = requireRendered('PageHeader').props.leading;
+    assert.ok(leading);
+    await act(async () => leading.props.onPress());
+    assert.equal(routerBackCount, 1);
+  });
+
+  it('keeps the shared Profile layout header out of nested relationship routes', async () => {
+    for (const relation of ['followers', 'following']) {
+      await renderRoute('@local', `/@local/${relation}`);
+
+      assert.equal(rendered('PageHeader').length, 0);
+      assert.equal(requireRendered('ProfileHero').props.heading, true);
+      assert.equal(rendered('ProfileHero').length, 1);
+      assert.equal(rendered('PostList').length, 1);
+    }
+  });
+
   it('표시 중인 selected Local Owner Profile에만 편집 Link를 노출한다', async () => {
     profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
     await renderRoute('@local');
@@ -381,13 +466,26 @@ describe('profile route parameter lifecycle', () => {
     await renderRoute('@local');
 
     queryModes.ProfileLayoutQuery = 'loading';
-    await renderRoute('@remote@activitypub.example');
+    await renderRoute('@remote@activitypub.example', '/@remote@activitypub.example');
+    assert.equal(requireRendered('PageHeader').props.title, '');
     assert.deepEqual(identities('ProfileHero'), ['loading']);
     assert.deepEqual(identities('PostList'), []);
+    const loadingRoute = renderer?.toJSON();
+    assert.ok(loadingRoute && !Array.isArray(loadingRoute));
+    assert.deepEqual(
+      loadingRoute.children?.map((child) => (typeof child === 'string' ? child : child.type)),
+      ['PageHeader', 'ProfileHero'],
+    );
+
+    const loadingLeading = requireRendered('PageHeader').props.leading;
+    assert.ok(loadingLeading);
+    await act(async () => loadingLeading.props.onPress());
+    assert.equal(routerBackCount, 1);
 
     queryModes.ProfileLayoutQuery = 'success';
     queryModes.ProfilePostListPageQuery = 'loading';
-    await renderRoute('@remote@activitypub.example');
+    await renderRoute('@remote@activitypub.example', '/@remote@activitypub.example');
+    assert.equal(requireRendered('PageHeader').props.title, 'Display remote@activitypub.example');
     assert.deepEqual(identities('ProfileHero'), ['remote@activitypub.example']);
     assert.deepEqual(identities('PostList'), ['loading']);
   });
@@ -397,8 +495,23 @@ describe('profile route parameter lifecycle', () => {
     console.error = () => undefined;
     try {
       queryModes.ProfileLayoutQuery = 'error';
-      await renderRoute('@remote@activitypub.example');
+      await renderRoute('@remote@activitypub.example', '/@remote@activitypub.example');
+      assert.equal(requireRendered('PageHeader').props.title, '');
       assert.equal(requireRendered('StateView').props.title, '프로필을 불러오지 못했어요');
+      assert.equal(requireRendered('StateView').props.actionLabel, '다시 시도');
+      assert.equal(requireRendered('StateView').props.alert, true);
+      assert.equal(requireRendered('StateView').props.description, '잠시 후 다시 시도해주세요.');
+      const errorRoute = renderer?.toJSON();
+      assert.ok(errorRoute && !Array.isArray(errorRoute));
+      assert.deepEqual(
+        errorRoute.children?.map((child) => (typeof child === 'string' ? child : child.type)),
+        ['PageHeader', 'StateView'],
+      );
+
+      const errorLeading = requireRendered('PageHeader').props.leading;
+      assert.ok(errorLeading);
+      await act(async () => errorLeading.props.onPress());
+      assert.equal(routerBackCount, 1);
 
       queryModes.ProfileLayoutQuery = 'success';
       await act(async () => requireRendered('StateView').props.onAction());

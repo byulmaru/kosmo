@@ -7,6 +7,9 @@
 - `text`: `알림`, `북마크`, `글쓰기`, `게시글`처럼 현재 화면을 설명하는 텍스트 제목을 표시한다. 제목은 하나의 heading으로 노출한다.
 - `text` 제목은 leading action 다음의 가용 폭 안에서 줄어들고 여러 줄로 reflow한다. `64px`은 고정 높이가
   아니라 최소 높이이므로, 좁은 화면이나 font scaling에서 제목을 한 줄로 자르거나 header 밖으로 넘기지 않는다.
+- 동적 Profile 표시 이름처럼 화면 chrome 높이를 한 줄로 유지해야 하는 소비처는 Figma `TextEllipsis`와 같은
+  one-line tail ellipsis 정책을 명시적으로 선택한다. 이 예외는 전체 접근성 제목을 바꾸지 않으며 일반 `text`
+  제목의 기본 여러 줄 reflow를 바꾸지 않는다.
 - `brand`: 홈에서 투명 브랜드 마크를 너비 `38px`로 가로 중앙에 표시한다. 좌우에 같은 `44×44px` action slot을 두는 대칭 Auto Layout을 사용해 한쪽 action만 있어도 마크의 중심이 헤더 전체 중심과 일치하게 한다. 비어 있는 우측 slot은 향후 홈 action 위치로 유지한다. 마크 이미지는 접근성 트리에서 숨기고 `홈` heading 하나만 노출한다.
 
 ## Action slot
@@ -58,9 +61,16 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
 
 ## 소유권
 
-- 공개 Profile의 Figma Target에서는 Mobile 공통 상단 바를 메뉴 전용으로 유지한다. 더보기는 모든
-  레이아웃에서 Hero의 Follow 왼쪽 `16px` 간격에 `40×40` 원형 버튼으로 배치한다. Compact·Full Web에
-  공통 상단 바를 추가하지 않는다. 자세한 메뉴 배치는 `profile-hero.md`를 따른다.
+- 공개 Profile Home은 Web·Android·iOS에서 route가 공용 `PageHeader`를 소유한다. 프로필이 있으면 뒤로가기와
+  전체 `displayName` heading을 표시하고, 제목은 가용 폭에서 한 줄 tail ellipsis로 줄인다. 없는 프로필도 같은
+  위치의 빈 제목 PageHeader와 뒤로가기를 유지하고 그 아래에 상태 본문만 표시한다. ProfileHero와 게시물 본문,
+  loading·query error에서도 같은 위치의 빈 제목 PageHeader와 뒤로가기를 유지하며, 기존 ProfileHero skeleton과
+  StateView retry 본문·query lifecycle은 그대로 유지한다. 최상위 Profile Home에서는 PageHeader만
+  `displayName`의 semantic heading이 되고 ProfileHero는 같은 시각 typography를 유지하되 heading을 제공하지
+  않는다. PageHeader가 없는 현재 followers/following 관계 route에서는 ProfileHero의 기존 heading을 유지한다.
+  모바일 Web에서는 셸의 메뉴 전용 헤더를 중복 렌더링하지 않는다.
+  더보기는 모든 레이아웃에서 Hero의 Follow 왼쪽 `16px` 간격에 `40×40` 원형 버튼으로 배치한다. 자세한 메뉴
+  배치는 `profile-hero.md`를 따른다.
 
 - 모바일 Web과 Android/iOS `/home`: `UniversalShell`이 메뉴 버튼, 브랜드 마크와 native safe-area를 소유한다. 홈 route는 헤더를 렌더링하지 않는다.
 - Web `/search`: 검색 route가 모든 breakpoint의 `64px` 검색 도구막대와 검색 상태를 소유한다. 모바일 Web

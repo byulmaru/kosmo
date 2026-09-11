@@ -28,6 +28,7 @@ import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profil
 
 type ProfileHeroProps = {
   action?: ReactNode;
+  heading?: boolean;
   showMuteAction?: boolean;
   loading?: boolean;
   profile?: ProfileHero_profile$key | null;
@@ -71,6 +72,7 @@ const countFormatter = new Intl.NumberFormat('en', {
 
 export function ProfileHero({
   action,
+  heading = true,
   showMuteAction = false,
   loading = false,
   profile = null,
@@ -222,7 +224,7 @@ export function ProfileHero({
         ) : null}
       </View>
       <View style={styles.body}>
-        <ProfileNameBlock profile={data} style={styles.identity} variant="hero" />
+        <ProfileNameBlock heading={heading} profile={data} style={styles.identity} variant="hero" />
         {data.bio ? (
           <Text style={[styles.bio, { color: theme.foregroundPrimary }]}>{data.bio}</Text>
         ) : null}

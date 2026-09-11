@@ -10,7 +10,10 @@ import type { ProfileNameBlock_profile$key } from './__generated__/ProfileNameBl
 type ProfileNameBlockProps = {
   profile: ProfileNameBlock_profile$key;
   style?: StyleProp<ViewStyle>;
-} & ({ href?: Href; variant?: 'default' | 'compact' } | { href?: never; variant: 'hero' });
+} & (
+  | { heading?: never; href?: Href; variant?: 'default' | 'compact' }
+  | { heading?: boolean; href?: never; variant: 'hero' }
+);
 
 const profileNameBlockFragment = graphql`
   fragment ProfileNameBlock_profile on Profile {
@@ -21,6 +24,7 @@ const profileNameBlockFragment = graphql`
 
 export function ProfileNameBlock({
   href,
+  heading = true,
   profile,
   style,
   variant = 'default',
@@ -38,7 +42,7 @@ export function ProfileNameBlock({
   const content = (
     <>
       <Text
-        accessibilityRole={hero ? 'header' : undefined}
+        accessibilityRole={hero && heading ? 'header' : undefined}
         numberOfLines={hero ? undefined : 1}
         style={[displayNameStyle, { color: theme.foregroundPrimary }]}
       >

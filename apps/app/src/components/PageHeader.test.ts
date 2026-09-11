@@ -30,7 +30,13 @@ mockModule(new URL('../theme/ThemeProvider.tsx', import.meta.url), {
 });
 
 type PageHeaderProps =
-  | { leading?: ReactNode; title: string; trailing?: ReactNode; variant?: 'text' }
+  | {
+      leading?: ReactNode;
+      title: string;
+      titleLines?: 1;
+      trailing?: ReactNode;
+      variant?: 'text';
+    }
   | {
       accessibilityLabel: string;
       brandAccessibilityLabel?: string;
@@ -50,6 +56,7 @@ type TestElementProps = {
   numberOfLines?: number;
   onCurrentNavigate?: () => void;
   style?: unknown;
+  ellipsizeMode?: string;
   variant?: string;
   width?: number;
 };
@@ -115,6 +122,20 @@ test('text title shrinks and wraps within the available width beside a leading a
   assert.equal(titleStyle?.flexShrink, 1);
   assert.equal(titleStyle?.minWidth, 0);
   assert.equal(heading.props.numberOfLines, undefined);
+  assert.equal(heading.props.ellipsizeMode, undefined);
+});
+
+test('text title can opt into one-line tail ellipsis without changing its accessible value', () => {
+  const title = '아주 긴 프로필 표시 이름';
+  const header = renderHeader({ title, titleLines: 1 });
+  const heading = findElements(header, 'Text').find(
+    (element) => element.props.accessibilityRole === 'header',
+  );
+
+  assert.ok(heading);
+  assert.equal(heading.props.children, title);
+  assert.equal(heading.props.numberOfLines, 1);
+  assert.equal(heading.props.ellipsizeMode, 'tail');
 });
 
 test('text variant renders its optional trailing action beside the heading', () => {
