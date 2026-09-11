@@ -89,10 +89,10 @@
 - Authority / Provenance: 정본 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/design/accessibility.md`, `DSN-51`, `DSN-53`; 책임 이슈 `PROD-823`; 후속 UI 교체 `PROD-917`
 - Status: Active
 - Context / Problem: 공용 presentation 이관 결과를 Block runtime 계약으로 오인하거나 Mute와 Block을 하나의 목록으로 합치면 Profile Block 책임이 바뀐다.
-- Decision Outcome: `PROD-823`은 기존 레거시 Profile·Settings UI를 사용해 `DSN-51`·`DSN-53`과 최신 canonical이 정한 direct Profile route 계약을 구현·통합한다. 양쪽 route는 기존 Profile 조회 정책에 따른 기본 Profile 정보를 표시하고, `blocking` route는 Target의 허용된 Post·Media를 표시하기 전에 frontend 콘텐츠 경고를 제공하며, `blockedBy` route는 상대의 기본 Profile 정보와 콘텐츠 차단 상태를 표시한다. 양방향 Block에서는 양쪽 route에 콘텐츠 차단 상태를 적용하고 `blocking` route의 `차단 해제` action을 유지한다. 경고 문구와 표시 기간은 후속 디자인 계약에서 정한다. 공용 presentation 이관·Storybook 확정은 `PROD-861`의 별도 후속 범위로 관리하고, `PROD-917`의 신규 UI 교체도 후속 범위로 유지한다. Block confirmation은 Mute와 분리된 Danger·pending·실패·retry 상태를 사용하고, Settings에는 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 둔다. 2026-09-05 canonical `docs/design/profile-mute-block.md`에 반영한 승인에 따라 Unblock도 같은 공용 확인창을 거치고, 2026-09-08 사용자 검토에 따라 Danger action으로 확정한 뒤 실행하며, 취소·pending·실패 lifecycle을 유지한다.
+- Decision Outcome: `PROD-823`은 기존 레거시 Profile·Settings UI를 사용해 `DSN-51`·`DSN-53`과 최신 canonical이 정한 direct Profile route 계약을 구현·통합한다. 양쪽 route는 기존 Profile 조회 정책에 따른 기본 Profile 정보를 표시하고, `blocking` route는 Target의 허용된 Post·Media를 표시하기 전에 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 제공한다. 경고는 현재 Profile handle과 selected actor lifecycle마다 다시 적용하고, 사용자가 action을 실행하기 전에는 시간 경과만으로 콘텐츠를 표시하지 않는다. `blockedBy` route는 상대의 기본 Profile 정보와 콘텐츠 차단 상태를 표시한다. 양방향 Block에서는 양쪽 route에 콘텐츠 차단 상태를 적용하고 `blocking` route의 `차단 해제` action을 유지한다. `PROD-861`의 공용 presentation 이관·Storybook 확정은 완료된 선행 구현 증거로 사용하고, `PROD-917`의 신규 UI 교체만 후속 범위로 유지한다. Block confirmation은 Mute와 분리된 Danger·pending·실패·retry 상태를 사용하고, Settings에는 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 둔다. 2026-09-05 canonical `docs/design/profile-mute-block.md`에 반영한 승인에 따라 Unblock도 같은 공용 확인창을 거치고, 2026-09-08 사용자 검토에 따라 Danger action으로 확정한 뒤 실행하며, 취소·pending·실패 lifecycle을 유지한다.
 - Alternatives Considered: 공용 presentation 이관이나 신규 UI 교체를 현재 lifecycle에 결합하면 기존 레거시 UI의 구현·통합 검증과 runtime 책임이 지연된다. Mute/Block 혼합 목록은 별도 관리 계약과 destination 상태를 잃는다. 경고와 콘텐츠 상태를 별도 route 계약으로 관리하지 않으면 API 조회 정책과 presentation 책임이 섞인다.
-- Consequences: `PROD-823`은 기존 레거시 UI의 실제 mutation·management·접근성 runtime과 서버 정책에 따른 direct route 상태 수렴을 완성하고, `PROD-813`은 그 통합 결과를 검증한다. `PROD-861`과 `PROD-917`의 presentation 작업은 별도 후속 책임으로 유지하며, 새 범용 safety component나 Settings shell을 현재 change에 추가하지 않는다.
-- Confirmation / Follow-up: `PROD-823`과 `PROD-813`은 기존 레거시 UI의 구현·통합을 기준으로 confirmation·별도 list·accessibility·viewport·selected actor UI와 플랫폼별 실제 runtime evidence를 검증한다. `PROD-861`·`PROD-917`의 presentation 작업은 별도 후속 일정으로 기록한다.
+- Consequences: `PROD-823`은 완료된 `PROD-861`의 공용 presentation·Storybook 결과를 선행 증거로 사용해 기존 레거시 UI의 실제 mutation·management·접근성 runtime과 서버 정책에 따른 direct route 상태 수렴을 완성하고, `PROD-813`은 그 통합 결과를 검증한다. `PROD-917`의 신규 UI 교체는 별도 후속 책임으로 유지하며, 새 범용 safety component나 Settings shell을 현재 change에 추가하지 않는다.
+- Confirmation / Follow-up: `PROD-823`과 `PROD-813`은 `PROD-861` 결과를 포함한 기존 레거시 UI의 구현·통합을 기준으로 confirmation·별도 list·accessibility·viewport·selected actor UI와 플랫폼별 실제 runtime evidence를 검증한다. `PROD-861` 완료만으로 API·cache·Native runtime 검증까지 완료됐다고 일반화하지 않고, `PROD-917`의 신규 UI 교체만 별도 후속 일정으로 기록한다.
 - 추가 경계: 현재 서버 정책을 다시 평가하는 refetch는 상태 수렴에 필요하며, 금지 대상은 이전 client cache나 grant만으로 각 surface에서 unavailable한 detail을 복구하는 경우다.
 
 ### Client 상태는 selected actor 경계 안에서 서버 결과로 수렴한다
@@ -143,17 +143,17 @@
 - Consequences: 읽음 처리의 중복 ID·없는 ID·숨겨진 ID는 기존 no-op·멱등성 계약을 유지한다. `PROD-327` source suppression과 `PROD-328` 물리 cleanup은 이 검증 결과에 포함하지 않는다.
 - Confirmation / Follow-up: Recipient A/B와 같은 Account, 현재 source별 unavailable item, 혼합 ID 읽음 처리와 보존 row·Read State를 함께 검증한다.
 
-### 미구현 Post List·검색과 Quote ingress는 공통 정책 검증으로 완료한다
+### 미구현 Post List·검색은 공통 정책, 현재 Quote ingress는 실제 경로로 검증한다
 
 - Decision Date: 2026-09-06
 - Decision Class: Derived Contract
 - Authority / Provenance: `PROD-822`·`PROD-813` 본문 `미구현 Post List·검색의 완료 기준 (2026-09-06 사용자 결정)`, `docs/domain/policies/post-list.md`, `docs/domain/objects/post.md`, `openspec/changes/add-profile-block/specs/post/spec.md`, `memory/issue-openspec-workflow.md`, PR #770 review.
 - Status: Active
-- Context / Problem: Hashtag Post List·Post 검색 endpoint와 Quote source를 받는 Post 작성 ingress가 없는데 실제 endpoint E2E를 전체 change의 archive 조건으로 요구하면 독립 기능의 구현까지 기다려야 한다.
-- Decision Outcome: 아직 없는 Post List·검색 endpoint는 공통 Block 후보 정책을, Quote ingress는 canonical의 양방향 Block admission을 사용하는 공통 assertion 단위로 검증한다. 신규 consumer 구현·실제 E2E를 archive 조건으로 두지 않고, 공통 정책 검증과 실제 API 검증의 미실행을 구분해 기록한다. 현재 consumer와 검증 시점에 이미 제공되는 endpoint는 실제 공개 결과로 검증한다.
+- Context / Problem: Hashtag Post List·Post 검색 endpoint는 아직 없지만, 현재 base에는 `CreatePostInput.repostSourceId`와 GraphQL `createPost` 저장 경로가 있어 Local Quote가 실제 consumer다. 없는 endpoint와 존재하는 Quote ingress를 모두 공통 정책 단위 검증으로 분류하면 Local Quote의 우회를 실제 요청에서 발견하지 못한다.
+- Decision Outcome: 아직 없는 Post List·검색 endpoint는 공통 Block 후보 정책으로 검증한다. Local Quote는 `CreatePostInput.repostSourceId`를 사용한 GraphQL `createPost`를 차단 양방향에서 각각 실행해 요청 거부와 새 Post row 부재를 검증한다. Quote ingress가 없는 origin은 그 origin에 한해 공통 assertion 검증과 실제 ingress 미검증을 구분한다.
 - Alternatives Considered: consumer 구현·E2E까지 완료해야 archive하는 대안과 공통 정책 검증으로 완료하는 대안을 비교했다. 모든 Post List·검색 Exclude와 Quote admission에 적용되는 canonical 정책은 두 대안 모두 유지한다.
-- Consequences: `PROD-822`의 공통 정책 검증과 `PROD-813`의 완료·archive 조건을 같은 범위로 맞춘다. archive 이후 추가되는 endpoint나 Quote ingress의 정책 연결·실제 E2E는 해당 consumer를 도입하는 기능 이슈가 소유하며 이 change를 미완료로 유지하거나 다시 열지 않는다.
-- Confirmation / Follow-up: 2.5·2.10에서 공통 assertion 결과와 실제 Quote endpoint 미실행을, 4.1·4.2·4.3에서 이 경계에 맞는 통합 증거와 archive 조건을 확인한다.
+- Consequences: `PROD-822`의 공통 정책·실제 Local Quote ingress 검증과 `PROD-813`의 완료·archive 조건을 같은 범위로 맞춘다. archive 이후 추가되는 endpoint나 아직 없는 Quote origin ingress의 정책 연결·실제 E2E는 해당 consumer를 도입하는 기능 이슈가 소유하고 이 change를 미완료로 유지하거나 다시 열지 않는다.
+- Confirmation / Follow-up: 2.5·2.10에서 Local Quote의 양방향 GraphQL 거부·새 Post row 부재와 ingress가 없는 origin의 공통 assertion·미실행 구분을, 4.1·4.2·4.3에서 이 경계에 맞는 통합 증거와 archive 조건을 확인한다.
 
 ### PROD-822는 cleanup PR 위에 독립 책임의 Stack layer로 구현한다
 
@@ -174,14 +174,26 @@
 - Authority / Provenance: 2026-09-10 사용자 결정, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `PROD-822`, PR #770 최신 review
 - Status: Active
 - Context / Problem: #770이 관리 GraphQL API, 기존 조회·상호작용 정책과 실행 회귀를 한 diff에 포함해 계약 검토와 런타임 영향 검토를 독립적으로 수행하기 어렵다. 또한 Local 전용 조건과 ActivityPub 유입을 혼동하거나 쓰기 admission과 목록 SQL predicate를 같은 helper 책임으로 합치면 origin별 우회와 정책 drift가 생긴다.
-- Decision Outcome: #770은 canonical 문서와 `add-profile-block` OpenSpec 정책·계약만 소유한다. 후속 `PROD-822-graphql` layer는 selected Local actor의 Block/Unblock mutation, Owner 관리 connection·관계 Node, 정확한 unblock 관계 ID, generated GraphQL schema와 관리 API 테스트를 소유한다. 그 자식 `PROD-822-policy` layer는 GraphQL `node(id:)`·`profileByHandle` 직접 조회, `searchProfiles`와 `Hashtag.relatedProfiles` 후보·콘텐츠·Follow·Notification과 새 상호작용 제한, 공통 admission, Local/ActivityPub 실행 경로와 회귀를 소유한다. 유효한 Account의 현재 selected Profile을 두 Profile 탐색 surface의 viewer로 사용해 양방향 Active Block 후보를 pagination 전에 제외하며, selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를 유지하고 임의 actor·이전 selected Profile·client cache를 재사용하지 않는다. Reply·Quote·Reaction·Repost의 쓰기 admission은 origin과 무관한 공통 assertion을 사용하고 목록용 SQL predicate와 분리한다. 현재 consumer가 없는 Quote는 assertion 단위 검증과 실제 endpoint 미검증을 구분한다. `FOLLOWERS` 권한은 Follow 존재와 양방향 Active Block 부재를 함께 요구한다. Remote Owner의 ActivityPub Block/Undo ingress는 `PROD-818` 범위로 남긴다.
+- Decision Outcome: #770은 canonical 문서와 `add-profile-block` OpenSpec 정책·계약만 소유한다. 후속 `PROD-822-graphql` layer는 selected Local actor의 Block/Unblock mutation, Owner 관리 connection·관계 Node, 정확한 unblock 관계 ID, generated GraphQL schema와 관리 API 테스트를 소유한다. 그 자식 `PROD-822-policy` layer는 GraphQL `node(id:)`·`profileByHandle` 직접 조회, `searchProfiles`와 `Hashtag.relatedProfiles` 후보·콘텐츠·Follow·Notification과 새 상호작용 제한, 공통 admission, Local/ActivityPub 실행 경로와 회귀를 소유한다. 유효한 Account의 현재 selected Profile을 두 Profile 탐색 surface의 viewer로 사용해 양방향 Active Block 후보를 pagination 전에 제외하며, selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를 유지하고 임의 actor·이전 selected Profile·client cache를 재사용하지 않는다. Reply·Quote·Reaction·Repost의 쓰기 admission은 origin과 무관한 공통 assertion을 사용하고 목록용 SQL predicate와 분리한다. Local Quote는 `CreatePostInput.repostSourceId`를 사용한 GraphQL `createPost`를 차단 양방향에서 실행해 요청 거부와 새 Post row 부재를 검증하고, ingress가 없는 Quote origin만 assertion 단위 검증과 실제 ingress 미검증을 구분한다. `FOLLOWERS` 권한은 Follow 존재와 양방향 Active Block 부재를 함께 요구한다. Remote Owner의 ActivityPub Block/Undo ingress는 `PROD-818` 범위로 남긴다.
 - Alternatives Considered: 모든 구현을 #770에 유지하면 계약·GraphQL 관리 API·기존 실행 경로를 한 번에 검토해야 한다. origin별 admission 또는 목록 predicate 재사용은 요구 결과를 누락하거나 pagination 책임을 섞는다. `Hashtag.relatedProfiles`를 Block-filter하지 않는 기존 계약은 직접 Profile 조회와 탐색 후보를 같은 정책으로 취급하므로 채택하지 않는다.
 - Consequences: #770 final diff에는 `docs/**`와 `openspec/changes/add-profile-block/**`만 남고, `PROD-822-graphql`은 관리 GraphQL API와 generated schema를, `PROD-822-policy`는 GraphQL `node(id:)`·`profileByHandle`·`searchProfiles`를 포함한 apps/packages policy consumer와 Local/ActivityPub 실행 회귀를 수정·검증한다. 이 분리는 전체 OpenSpec 완료나 archive를 뜻하지 않으며 task 2 구현·검증은 두 후속 PR 완료 전까지 미완료다.
-- Confirmation / Follow-up: #770에서 strict OpenSpec validation과 diff 경계를 확인한다. `PROD-822-graphql`에서 selected Local actor 관리 API·정확한 unblock ID·관리 API 테스트를, `PROD-822-policy`에서 Local/ActivityPub Reply·Reaction·Repost 저장 거부와 Quote 공통 admission assertion, 잔존 Follow의 `FOLLOWERS` 접근 거부, `Hashtag.relatedProfiles`의 selected/no-selected Profile·양쪽 Block 방향·pagination 회귀와 policy consumer 회귀를 실행한다.
+- Confirmation / Follow-up: #770에서 strict OpenSpec validation과 diff 경계를 확인한다. `PROD-822-graphql`에서 selected Local actor 관리 API·정확한 unblock ID·관리 API 테스트를, `PROD-822-policy`에서 Local/ActivityPub Reply·Reaction·Repost 저장 거부와 Local Quote GraphQL의 양방향 거부·새 Post row 부재, ingress가 없는 Quote origin의 공통 admission assertion, 잔존 Follow의 `FOLLOWERS` 접근 거부, `Hashtag.relatedProfiles`의 selected/no-selected Profile·양쪽 Block 방향·pagination 회귀와 policy consumer 회귀를 실행한다.
+
+### Direct blocking route의 경고 최소 계약을 현행 동작으로 확정한다
+
+- Decision Date: 2026-09-11
+- Decision Class: User Decision
+- Authority / Provenance: 2026-09-11 사용자 결정 “현행 계약 확정”, `DSN-53`, `PROD-823`, 완료된 선행 구현 증거 `PROD-861`, 후속 신규 UI 교체 `PROD-917`, `docs/design/profile-mute-block.md`, PR #770 review.
+- Status: Active
+- Context / Problem: 기존 계약은 direct `blocking` Profile route의 콘텐츠 경고를 필수로 요구하면서도 안내 문구와 유지 기간을 후속 결정으로 남겨, 현재 `PROD-823` 구현과 검증의 완료 기준을 확정할 수 없었다.
+- Decision Outcome: direct `blocking` Profile route는 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 제공한다. 사용자가 action을 실행하기 전에는 시간 경과만으로 Post·Media 콘텐츠를 표시하지 않는다. Profile handle 또는 selected actor lifecycle이 바뀌면 새 route lifecycle에 경고를 다시 적용한다.
+- Alternatives Considered: 별도 디자인 이슈를 새로 만들거나 완료된 `DSN-53`을 재개하는 대신, 사용자가 현재 구현과 canonical에 맞춘 최소 행동 계약을 확정했다.
+- Consequences: `PROD-823`은 기존 UI에서 위 상태 전이를 구현·검증하고 `PROD-813`에 통합 증거를 인계한다. 완료된 `PROD-861`은 재개하지 않으며, `PROD-917`은 이 동작을 재결정하지 않고 신규 UI 교체 후 회귀를 검증한다.
+- Confirmation / Follow-up: component 또는 E2E에서 최초 경고·action, 명시적 action 전 비노출과 action 후 허용 콘텐츠 표시, 임의 시간 경과 후 비노출 유지, Profile handle·selected actor lifecycle 전환 후 경고 재적용을 검증한다.
 
 ## Remaining Decisions
 
-없음. 미구현 endpoint 완료 경계, #726 위 Stack 책임 분리와 #770 → `PROD-822-graphql` → `PROD-822-policy` 소유 경계는 사용자 결정으로 확정했다.
+없음. direct `blocking` route 경고의 최소 행동 계약, 미구현 endpoint 완료 경계, #726 위 Stack 책임 분리와 #770 → `PROD-822-graphql` → `PROD-822-policy` 소유 경계는 사용자 결정으로 확정했다.
 
 ## Superseded Decisions
 

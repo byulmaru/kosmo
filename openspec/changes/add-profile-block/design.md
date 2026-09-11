@@ -31,18 +31,18 @@ canonical `profile-block.md`는 이 결과와 durable 경계만 정하며, 각 �
   Home·Local·Hashtag Post List·Post 검색·Follow 후보·새 Local/ActivityPub 상호작용·Notification은 양방향 보호 정책을 적용한다.
 - selected Local Profile을 actor로 사용하는 현재 GraphQL ingress와 Owner-only management connection을 제공한다.
 - Confirmation·관리 목록·접근성 등 기존 레거시 Profile·Settings UI와 최신 canonical이 정한 GraphQL `node(id:)`·`profileByHandle` direct Profile route 계약을 구현·통합하는 흐름을 제공한다.
-  양쪽 route는 기본 Profile 정보를 표시하고, `blocking` route는 frontend 콘텐츠 경고 뒤 허용된 콘텐츠와 `차단 해제` action을 제공하며,
-  `blockedBy` route는 콘텐츠 차단 상태를 표시한다. 경고 문구·표시 기간은 후속 디자인 계약으로 남기고, `PROD-917` 신규 UI 교체는 이 change와 분리한다.
+  양쪽 route는 기본 Profile 정보를 표시하고, `blocking` route는 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action 뒤 허용된 콘텐츠와 `차단 해제` action을 제공하며,
+  `blockedBy` route는 콘텐츠 차단 상태를 표시한다. 경고는 현재 Profile handle과 selected actor lifecycle마다 다시 적용하고 사용자가 명시적으로 확인하기 전에는 시간 경과만으로 콘텐츠를 표시하지 않는다. `PROD-917` 신규 UI 교체는 이 change와 분리한다.
 - `PROD-813`에서 Local·Remote pair와 주요 surface의 cross-slice 결과를 검증하고 canonical·Linear·OpenSpec sync 뒤 archive한다.
 
 **Non-Goals:**
 
-- 공용 presentation·Storybook 이관은 `PROD-861`의 별도 후속 범위로 관리한다.
+- 완료된 `PROD-861` 공용 presentation·Storybook 결과는 선행 구현 증거로 사용하되, API·cache·Native runtime 완료 증거로 일반화하지 않는다.
 - 모든 Follow·Follow Request·Reply·Reaction·Repost Notification source에 신규 생성 suppression을 연결하는 `PROD-327` 작업.
 - ActivityPub Block/Undo 발신·수신과 remote delivery(`PROD-818`). Remote Owner의 Block/Undo ingress는 제외하지만, 원격 actor의 기존 Reply·Reaction·Repost ingress에는 Local과 같은 admission을 적용한다.
 - 조회 불가 Notification의 schedule/event/queue/worker/scan 물리 cleanup(`PROD-328`).
 - Block 생성 시 기존 Reaction cleanup. 이 범위는 현재 action에서 정하지 않으며, 필요하면 별도 후속 계약에서 결정한다.
-- Profile Mute, Profile Domain Block, 신고·커뮤니티 관리, 차단된 Profile presentation의 결정·이관과 `PROD-917` 신규 UI 교체.
+- Profile Mute, Profile Domain Block, 신고·커뮤니티 관리, 위에서 명시한 최소 경고 계약을 넘어서는 차단 Profile presentation의 신규 결정·이관과 `PROD-917` 신규 UI 교체.
 - 아직 없는 Hashtag Post List·Post 검색 endpoint의 신규 구현과 실제 endpoint E2E. 해당 경로는 공통 후보 정책 검증으로 이번 change의 완료 조건을 충족한다.
 
 ## Implementation Guidance
@@ -67,7 +67,7 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
   양방향 보호 정책을 적용하고 pagination/page limit 뒤 client filter가 policy를 대신하지 않게 한다.
 - `Hashtag.relatedProfiles`는 accepted ADR 0021과 active `hashtag-related-profile-api`가 정한 정확한 Hashtag 관계·공개 Profile 후보를 유지하면서,
   selected Profile이 있으면 양방향 Active Block 후보를 pagination 전에 제외하고 selected Profile이 없으면 기존 공개 후보 결과를 유지한다.
-- Reply·Quote·Reaction·Repost의 공통 assertion은 origin과 무관한 쓰기 admission만 담당한다. 현재 source 입력 ingress가 없는 Quote는 assertion 단위 검증과 실제 endpoint 미검증을 구분한다. 목록·검색 후보의 SQL predicate는 pagination 전에 별도로 적용한다.
+- Reply·Quote·Reaction·Repost의 공통 assertion은 origin과 무관한 쓰기 admission만 담당한다. `CreatePostInput.repostSourceId`를 사용하는 Local Quote는 GraphQL `createPost`에서 차단 양방향의 요청 거부와 새 Post row 부재를 검증한다. ingress가 없는 Quote origin만 assertion 단위 검증과 실제 ingress 미검증을 구분한다. 목록·검색 후보의 SQL predicate는 pagination 전에 별도로 적용한다.
 - `FOLLOWERS` 권한은 Follow 존재와 양방향 Active Block 부재를 함께 요구하며, 잔존 Follow를 접근 근거로 사용하지 않는다.
 - GraphQL은 selected Local Profile actor와 Owner scope를 사용하고 중앙 application policy를 호출해야 한다. ADR 0024의 경계에 따라 request-specific DB actor
   state(GUC 등)나 client-only filter로 권한·가시성을 대체하지 않는다.
@@ -119,7 +119,7 @@ Local/ActivityPub 실행 경로를 소유한다. 부모 PR이 Draft여도 자식
    잔존 Follow를 Home 또는 `FOLLOWERS` 가시성의 근거로 사용하지 않는다. Reaction Profile 목록은 필터링하되 기존 Reaction count는 유지한다.
 3. 기존 Follow transaction의 생성·승인 경로가 새 관계를 쓰거나 잔존 관계를 성공으로 반환하기 전에 현재 pair 정책을 평가한다.
    Reply·Quote·Reaction·Repost는 origin과 무관한 공통 admission assertion을 사용한다. 현재 실제 Local/ActivityPub 쓰기 consumer가 있는 Reply·Reaction·Repost는 실행 경계까지 검증하고,
-   Quote는 source 입력 ingress가 없으므로 공통 assertion 단위 결과와 실제 endpoint 미검증을 구분한다. 목록용 SQL predicate와 assertion을 분리한다. 이미 진행 중이던 Follow와 cleanup의 overlap은 허용하고
+   `CreatePostInput.repostSourceId`를 사용하는 Local Quote는 GraphQL `createPost`에서 차단 양방향의 요청 거부와 새 Post row 부재를 검증한다. ingress가 없는 Quote origin은 공통 assertion 단위 결과와 실제 ingress 미검증을 구분한다. 목록용 SQL predicate와 assertion을 분리한다. 이미 진행 중이던 Follow와 cleanup의 overlap은 허용하고
    새 pair lock이나 전체 lifecycle 직렬화로 계약을 강화하지 않는다. 자동화 검증은 Block 이후 새 admission과 기존 in-flight 잔존 row를 구분한다.
 4. 기존 Notification availability에 Recipient별 Block 조건을 합성한다. read 목록·count·Node·mark-read에 같은 결과를 적용하고,
    source 신규 생성 함수에 일괄 suppression을 연결하는 `PROD-327` 작업과 섞지 않는다. shared helper 변경이 source 생성 의미까지 바꾸는지 확인한다.
@@ -151,10 +151,9 @@ Local/ActivityPub 실행 경로를 소유한다. 부모 PR이 Draft여도 자식
 
 ### Delivery Boundary — PROD-822 / PROD-813
 
-2026-09-06 사용자 결정과 `PROD-822`·`PROD-813` 최신 본문에 따라, 아직 없는 Hashtag Post List·Post 검색은 공통 Block 후보 정책,
-아직 source 입력 ingress가 없는 Quote는 공통 Block admission assertion 검증까지만 이 shared change의 완료 기준으로 삼는다. 신규 consumer 구현이나 실제 endpoint E2E는 archive 조건이 아니다.
-공통 정책의 실행 결과와 실제 API 검증의 미실행을 구분해 기록한다. 현재 consumer와 검증 시점에 이미 제공되는 endpoint는 실제 공개 결과로
-검증하며, archive 이후 추가되는 endpoint 또는 Quote ingress의 연결·실제 E2E는 해당 consumer를 도입하는 기능 이슈가 소유한다. 이 경계는 canonical의 모든 Post List·검색 Exclude와 Quote admission 정책을 바꾸지 않는다.
+2026-09-06 사용자 결정과 `PROD-822`·`PROD-813` 최신 본문에 따라, 아직 없는 Hashtag Post List·Post 검색은 공통 Block 후보 정책 검증까지만 이 shared change의 완료 기준으로 삼는다.
+`CreatePostInput.repostSourceId`를 사용하는 Local Quote는 현재 존재하는 consumer이므로 GraphQL `createPost`에서 차단 양방향의 요청 거부와 새 Post row 부재를 실제로 검증한다. ingress가 없는 Quote origin만 공통 Block admission assertion 검증과 실제 ingress 미검증을 구분한다.
+신규 consumer 구현이나 존재하지 않는 endpoint의 E2E는 archive 조건이 아니다. 현재 consumer와 검증 시점에 이미 제공되는 endpoint는 실제 공개 결과로 검증하며, archive 이후 추가되는 endpoint 또는 Quote origin ingress의 연결·실제 E2E는 해당 consumer를 도입하는 기능 이슈가 소유한다. 이 경계는 canonical의 모든 Post List·검색 Exclude와 Quote admission 정책을 바꾸지 않는다.
 
 ### Known Traps
 
@@ -165,8 +164,8 @@ Local/ActivityPub 실행 경로를 소유한다. 부모 PR이 Draft여도 자식
 - Block 해제 시 현재 남아 있는 양방향 Follow Request·Follow Relationship과 그 직접 원인 Notification을 먼저 정리한 뒤 Block을 제거하며, 차단 생성 때 제거된
   Follow Request·Follow Relationship을 자동 복구하지 않는다. 기존 Reaction cleanup은 현재 action에서 정하지 않는다.
 - `PROD-327` source 신규 Notification suppression, `PROD-818` federation, `PROD-328` async physical cleanup을 현재 task나 완료 증거로 끌어오지 않는다.
-- 기존 레거시 UI의 구현·통합 결과와 API·cache·Native runtime 결과를 `PROD-813`에서 환경별 실제 evidence로 기록한다. `PROD-861` 공용 presentation 이관·Storybook 확정과
-  `PROD-917` 신규 UI 교체는 이 change의 완료 조건과 별도 후속 범위로 관리한다.
+- 기존 레거시 UI의 구현·통합 결과와 API·cache·Native runtime 결과를 `PROD-813`에서 환경별 실제 evidence로 기록한다. 완료된 `PROD-861` 공용 presentation 이관·Storybook 결과는 선행 구현 증거로 사용하고,
+  `PROD-917` 신규 UI 교체만 이 change의 완료 조건과 별도인 후속 범위로 관리한다.
 - DSN-51·DSN-53/`PROD-861` presentation 결과를 API·cache·Native runtime 완료 증거로 일반화하지 않는다.
 - Block을 일반 Profile loader에 넣지 않는다. Follow Node·viewer 상태·Reaction Profile 목록·PostContent·Bookmark 경로에는 각 surface의 정책을 명시적으로 적용한다.
 - Notification 가시성을 selected Profile 하나로 계산해 같은 Account의 다른 Recipient 알림을 잘못 노출하거나 숨기지 않는다.
@@ -179,8 +178,8 @@ Local/ActivityPub 실행 경로를 소유한다. 부모 PR이 Draft여도 자식
 | 공통 pair 정책       | Local/Remote Owner·Target의 4개 조합, 한 방향·서로 차단·차단 없음, 양쪽 viewer와 제삼자를 검증한다. 한쪽 해제 뒤 반대 Block이 남는 경우도 포함한다.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 잔존 Follow          | Block 뒤 남긴 Follow/Request fixture가 Node·목록·viewer 상태·Home·`FOLLOWERS` 권한에서 비활성·비노출이다. Block 완료 뒤 시작한 FOLLOW·로컬 APPROVE는 새 관계를 남기지 않는다.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | 직접·목록·검색       | GraphQL `node(id:)`·`profileByHandle` 직접 route·refresh는 기본 Profile 정보, viewer 방향별 콘텐츠 상태와 selected Local Owner 범위의 정확한 unblock 관계 ID를 검증한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가하면 API의 기존 null/unavailable 결과와 특수 identity payload 부재를 확인한다. selected Profile이 있으면 그 Profile을 viewer로 사용해 `searchProfiles` exact-match·partial-match와 `Hashtag.relatedProfiles` 후보의 양방향 Block 제외를 pagination·cursor·limit 전에 적용하고, selected Profile이 없으면 두 surface의 기존 Account 인증·공개 후보 결과를 유지하며 Block predicate나 selected Local Profile을 요구하지 않는지 검증한다. |
-| 미구현 consumer      | Hashtag Post List·Post 검색은 Author·Source Author 공통 후보 조건을 DB fixture로 검증한다. Quote는 공통 Block admission assertion을 검증한다. 신규 endpoint나 Quote source 입력 ingress는 생성하지 않으며 실제 API 통합 증거는 미실행으로 남긴다. 구현 착수 때 consumer가 추가돼 있으면 소비 경로와 공개 회귀를 함께 연결한다.                                                                                                                                                                                                                                                                                                                                  |
-| interaction          | 양쪽 방향 및 Local·ActivityPub origin의 Reply·Reaction·Repost와 로컬 Follow 입력 실패 뒤 새 row가 없다. Quote는 공통 admission assertion 단위 거부를 확인한다. 기존 ActivityPub inbound Follow·Accept의 차단 거절도 관계를 만들지 않고 내부 오류로 보고하지 않는다. 기존 Reaction·Repost·Bookmark와 Reaction count는 보존된다.                                                                                                                                                                                                                                                                                                                                  |
+| 미구현 consumer      | Hashtag Post List·Post 검색은 Author·Source Author 공통 후보 조건을 DB fixture로 검증한다. ingress가 없는 Quote origin은 공통 Block admission assertion을 검증하고 실제 ingress 검증은 미실행으로 남긴다. 신규 endpoint나 ingress는 생성하지 않으며, 구현 착수 때 consumer가 추가돼 있으면 소비 경로와 공개 회귀를 함께 연결한다.                                                                                                                                                                                                                                                                                                                               |
+| interaction          | 양쪽 방향 및 Local·ActivityPub origin의 Reply·Reaction·Repost와 로컬 Follow 입력 실패 뒤 새 row가 없다. Local Quote는 `CreatePostInput.repostSourceId`를 사용한 GraphQL `createPost`를 차단 양방향에서 실행해 요청 거부와 새 Post row 부재를 확인한다. 기존 ActivityPub inbound Follow·Accept의 차단 거절도 관계를 만들지 않고 내부 오류로 보고하지 않는다. 기존 Reaction·Repost·Bookmark와 Reaction count는 보존된다.                                                                                                                                                                                                                                          |
 | GraphQL ingress·관리 | guest·invalid Session은 후보 조회 전에 `PERMISSION_DENIED`로 거부하는지 검증한다. 유효한 Account에 selected Profile이 없으면 기존 공개 후보 결과를 유지하고 Block predicate·selected Local Profile을 요구하지 않는지 별도로 검증한다. membership mismatch, Remote selected actor, arbitrary Owner ID, 타인 Block ID와 A/B selected Profile 전환도 검증한다. exact remote materialization 완료 뒤 현재 selected Profile을 viewer로 사용한 `searchProfiles` 후보 filtering 순서와 Owner 관리 성공, 일반 Profile·nested field 우회 실패를 함께 확인한다.                                                                                                           |
 | durable 결과·cache   | cleanup 지연·실패·timeout이 조기 성공을 만들지 않는다. Unblock은 정확한 관계 ID와 no-restore를 지킨다. 같은 Mutation의 후속 field와 다음 요청이 현재 actor·Block 상태를 반영한다.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Notification         | 현재 구현된 Follow·Follow Request·Reply·Reaction·Repost source별 connection·Unread·Node·mark-read의 동일 비노출, A/B Recipient와 중복·숨겨진 ID의 no-op, 비직접 row·Read State 보존을 검증한다.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
