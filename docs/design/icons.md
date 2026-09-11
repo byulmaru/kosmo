@@ -85,6 +85,7 @@ back에 chevron을 사용하지 않는다.
 | Navigation       | 다음 destination | `ChevronRight`                 | Settings rows                                                                           |
 | Post action      | 답글             | `MessageCircle`                | `PostActionBar`, list metadata, reply notification                                      |
 | Post action      | 재게시           | `Repeat2`                      | `RepostAction`, repost notification                                                     |
+| Post action      | 인용             | `Quote`                        | `RepostAction` 인용하기 메뉴                                                            |
 | Post action      | 반응             | `Heart`                        | `PostActionBar`                                                                         |
 | Post action      | 더보기           | `MoreHorizontal`               | `PostActionBar`, deletion menu trigger                                                  |
 | Post action      | 삭제             | `Trash2`                       | `PostDeletionAction`                                                                    |
