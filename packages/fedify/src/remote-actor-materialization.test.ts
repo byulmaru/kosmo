@@ -479,7 +479,6 @@ describe('remote actor materialization', () => {
       id: new URL(`https://${remoteDomain}/users/mallory`),
     });
     const lookupObject = mock.fn(async () => returnedActor);
-    mockWebFinger({ subject: `acct:alice@${remoteDomain}` });
 
     await assert.rejects(
       findOrMaterializeRemoteProfileActorByUri({
