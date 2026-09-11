@@ -49,8 +49,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   root에 중복 노출하거나 항목 하나만 가진 `계정`·`화면 설정` 대분류를 만들지 않는다.
 - `정보`는 별도 category나 generic policy registry가 아닌 Settings root의 direct destination이다. `/settings/info`
   detail은 `개인정보 처리방침`, `계정 삭제 안내`, `아동 안전 정책`을 각각 public route로 여는 기존 Settings
-  link-row 문법을 사용한다. 정책 문서의 본문·시행일·이메일 처리와 public route 간 cross-link는 각 정책 문서가
-  소유한다.
+  link-row 문법을 사용한다. Web의 `/settings/info`는 세 policy link만 유지한다. Native channel row/selector와
+  사전 로그인 복구 진입점은 아래 Native channel 전환 계약을 따른다. 정책 문서의
+  본문·시행일·이메일 처리와 public route 간 cross-link는 각 정책 문서가 소유한다.
 - `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 하위 목록을 연다.
   두 상태를 하나의 혼합 목록으로 표시하지 않는다. 세부 action과 Profile 상태는
   [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다.
@@ -111,6 +112,23 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - chevron이나 현재 값 같은 trailing content는 실제 동작과 정보에 맞을 때만 사용한다. 내부 detail과 외부
   destination은 이동을 전달할 수 있지만, 현재 화면에서 값을 바꾸는 control에는 장식용 chevron을 붙이지
   않는다.
+
+## Native channel 전환
+
+- Native `정보`의 `채널` 행은 현재 `dev` 또는 `prod`를 표시한다. selector도 이 두 값만 제공하며, OTA
+  publisher가 허용하는 일반 channel 이름 목록을 UI 선택지로 확장하지 않는다.
+- 선택한 channel은 코드 설정표의 API origin, Web origin, OIDC 로그인 환경과 OTA channel을 하나의 환경으로
+  해석한다. Native client는 이 값들을 서로 다른 channel에서 조합하지 않으며, Web client의 `/channel.js`와
+  Web `정보` 화면에는 이 Native 전환을 적용하지 않는다. Native update channel의 persistent header와
+  현재 channel source는 [Expo OTA 운영](../operations/expo-ota.md)의 SDK 경계를 따른다.
+- selector에서 취소하거나 현재 channel을 다시 선택하면 아무 동작도 하지 않는다. 다른 channel을 확정하면
+  고정 update URL에서 호환되는 signed update를 확인·download한다. 성공한 경우에만 현재 Native login을
+  삭제한 뒤 앱을 reload해 새 channel을 시작한다.
+- 호환되는 update가 없거나 update 확인·download가 실패하면 시도한 channel 변경을 되돌리고 기존 channel과
+  실행 가능한 update를 유지한다. 다른 channel을 기본값으로 적용하거나 unverified update를 실행하지 않는다.
+- runtimeVersion·project·platform 호환성, manifest signature, asset hash, embedded/last-known-good fallback과
+  anti-bricking guard는 계속 적용한다. Native code·module·SDK·permission 변경은 OTA로 보내지 않고 새
+  Android/iOS Store binary를 만든다.
 
 ## 테마 설정
 
@@ -201,8 +219,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   반복하지 않는다.
 - Target root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 →
   `프로필 설정` → `뮤트 및 차단` → `테마`와 현재 선택값 → `정보`다. full Web에서는 이어서 detail heading과
-  현재 선택된 content를 읽는다. `/settings/info`에서는 `정보` heading 다음에 세 public policy link를 문서
-  순서대로 읽는다.
+  현재 선택된 content를 읽는다. Web `/settings/info`에서는 `정보` heading 다음에 세 public policy link를
+  문서 순서대로 읽는다. Native `/settings/info`에서는 policy link와 함께 `채널`의 현재 `dev`·`prod` 값을
+  읽는다.
 - Account 진입점은 시각 label `계정 설정`과 link accessible name·canonical destination에서 Byulmaru ID 외부
   Account Settings로 이동한다는 사실을 전달한다. 내부 진입점은 선택·현재 상태와 destination을, Profile
   control은 Kosmo 내부 기능과 현재 대상을 전달한다.
@@ -211,6 +230,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - navigation과 page action은 실제 동작에 맞는 role, accessible name, current·disabled·busy 상태를 제공한다.
   외부 이동 결과 announcement는 Kosmo가 소유하지 않으며 Profile 조회·저장 결과 announcement는 PROD-667이
   중복 없이 소유한다.
+- Native channel selector와 사전 로그인 복구 진입점은 선택된 `dev`·`prod`와 busy/error 상태를 보조기술에
+  전달한다. 확인·download 중에는 selector를 중복 실행할 수 없고, 취소·현재 channel 재선택은 별도
+  announcement나 상태 변경을 만들지 않는다. Web `/settings/info`는 기존 세 policy link 순서를 유지한다.
 - Web target은 [accessibility.md](./accessibility.md)의 24×24 CSS px minimum과 공식 예외를 따르고, iOS는
   기본 44×44pt, Android는 48×48dp touch target을 사용한다.
 - Web 자동화 결과를 Android·iOS screen reader, font scaling과 touch target 검증의 대체 증거로 사용하지
@@ -241,6 +263,10 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - PROD-889는 `/settings/info` direct destination과 세 public policy route link의 배치, 기존 landing·RightRail
   개인정보 처리방침 보존, Sidebar·mobile drawer 정책 링크 비노출을 소유한다. `/settings/info`는 새 정책 내용이나
   Account 관리 기능을 구현하지 않는다.
+- 새 Native channel 전환 slice는 Android·iOS `정보`의 `채널` row/selector, 사전 로그인 복구 진입점, API·OIDC·OTA
+  환경 동시 전환, 호환 update 확인·download 성공 뒤 Native login 삭제와 `Updates.reloadAsync()` 실행,
+  실패 시 기존 channel 보존을 소유한다. 이 slice의 Web `정보` 화면과 기존
+  public policy link에는 변경을 적용하지 않는다.
 - PROD-685는 구현과 검증 증거를 PROD-684에 인계하고, PROD-684가 최종 Settings 통합·OpenSpec 정합성 확인과
   archive를 소유한다.
 - 자동화·source/unit 결과는 실제 Web keyboard·screen reader·zoom 또는 Android·iOS runtime 접근성·
@@ -328,4 +354,5 @@ touch·focus, 빠른 연속 입력의 중간 frame은 확인하지 않았으며 
 - Primary Color 변경과 아직 필요하지 않은 `화면 설정`·`테마 설정` 중간 category
 - 알림 설정, Follow Approval Policy와 아직 승인되지 않은 설정 category·placeholder
 - 미래 category 전체를 위한 범용 registry나 현재 승인되지 않은 destination route
+- Web의 channel 선택 UI
 - settings 밖 기존 route의 전역 shell·RightRail 동작 변경

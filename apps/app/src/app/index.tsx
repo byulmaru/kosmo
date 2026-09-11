@@ -12,6 +12,7 @@ import {
 import { graphql, useMutation } from 'react-relay';
 import { startNativeAuthorization, startWebLoginFromPress } from '@/auth/login';
 import { BrandLogo } from '@/components/BrandLogo';
+import { NativeChannelSettings } from '@/components/settings/NativeChannelSettings';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -38,7 +39,7 @@ export default function IndexScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { setNativeSession } = useRelayActor();
+  const { clearNativeSession, setNativeSession } = useRelayActor();
   const { status } = useSession();
   const [commitSessionExchange] = useMutation<IndexScreenExchangeNativeOidcSessionMutation>(
     ExchangeNativeOidcSessionMutation,
@@ -153,6 +154,7 @@ export default function IndexScreen() {
               {error}
             </Text>
           ) : null}
+          <NativeChannelSettings clearSession={clearNativeSession} />
           <NavigationLink href={'/privacy' as Href}>
             <Pressable accessibilityRole="link">
               <Text style={[styles.privacyLink, { color: theme.textSecondary }]}>

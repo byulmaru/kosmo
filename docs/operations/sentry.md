@@ -1,6 +1,6 @@
 # Sentry 오류 수집 운영
 
-Kosmo는 API, Web BFF, Web browser와 Android·iOS Native의 처리되지 않은 오류를 기본적으로 Sentry에 수집한다. 앱은 승인된 처리된 실패도 공통 수집 진입점으로 명시적으로 보고할 수 있으며, 현재 첫 적용 대상은 Post Composer와 Local Profile이 공유하는 이미지 업로드 경계다. BFF에서는 예상된 4xx 인증 거절을 제외하되 설정 누락·upstream 실패 같은 5xx 인증 경로 오류는 수집하고, Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native는 production build의 commit release와 environment를 연결하고 JavaScript source map과 native debug symbol을 업로드한다. Prometheus SLI/SLO, tracing, Session Replay와 사용자 행동 분석도 이 설정의 범위가 아니다.
+Kosmo는 API, Web BFF, Web browser와 Android·iOS Native의 처리되지 않은 오류를 기본적으로 Sentry에 수집한다. 앱은 승인된 처리된 실패도 공통 수집 진입점으로 명시적으로 보고할 수 있으며, 현재 첫 적용 대상은 Post Composer와 Local Profile이 공유하는 이미지 업로드 경계다. BFF에서는 예상된 4xx 인증 거절을 제외하되 설정 누락·upstream 실패 같은 5xx 인증 경로 오류는 수집하고, Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native는 production build의 commit release와 선택된 channel environment를 연결하고 JavaScript source map과 native debug symbol을 업로드한다. Native는 channel 선택값을 release ID로 사용하지 않으며, 각 실행 bundle의 release/source map은 기존 build metadata 규칙을 따른다. Prometheus SLI/SLO, tracing, Session Replay와 사용자 행동 분석도 이 설정의 범위가 아니다.
 
 ## Project와 자격 증명
 
@@ -27,7 +27,7 @@ Vault Secrets Operator는 환경별 Vault 객체 전체를 기존 `env` Kubernet
 1. 코드 공개 설정표에 공용값과 완전한 `dev`·`prod` 채널 설정을 반영하고, 공개값·credential·release metadata의 경계를 review한다.
 2. Helm dev/prod render와 Web rollout에서 `ENVIRONMENT`가 올바른 채널로 전달되고, `/channel.js`가 유효한 채널에는 `public, max-age=300`, invalid/missing 환경에는 500과 `no-store`로 응답하는지 확인한다.
 3. 먼저 `main` canonical Docker Build가 `sha-<full SHA>` tag와 Web bundle의 Sentry release/source map을 생성·검증·업로드하는지 확인한다. Dev는 triggering `head_sha` tag의 digest를 조회한다. 이후 `main`의 `workflow_dispatch`를 target SHA로 실행하고 preflight가 GHCR SHA tag digest를 고정한 뒤 `prod` Environment 승인 후 Web을 그 digest로 배포한다. Production Web build·source map upload·tag/digest 재조회는 수행하지 않는다.
-4. Production browser에서 `/channel.js`, 채널별 origin·OIDC·Sentry 동작을 확인하고, Android/iOS release binary가 `prod` 설정과 native login을 사용하는지 확인한다. 각 Native binary에서 검증 오류를 발생시켜 full `GITHUB_SHA` release와 원본 JavaScript/native 위치가 연결되는지 확인한다.
+4. Production browser에서 `/channel.js`, 채널별 origin·OIDC·Sentry 동작을 확인하고, Android/iOS release binary가 기본 `prod` 설정과 native login을 사용하는지 확인한다. Native Settings channel 전환 뒤에도 API·OIDC·OTA와 Sentry environment가 같은 channel로 수렴하고, 각 실행 bundle의 release/source map metadata가 기존 규칙으로 연결되는지 확인한다. 각 Native binary에서 검증 오류를 발생시켜 full `GITHUB_SHA` release와 원본 JavaScript/native 위치가 연결되는지 확인한다.
 5. 위 증거가 모두 있은 뒤 별도 검토된 cleanup에서 더 이상 사용하지 않는 GitHub `EXPO_PUBLIC_*` variables를 제거한다. API/Web BFF server runtime이 사용하는 기존 `env` Secret의 Sentry DSN은 이 client 설정 정리의 대상이 아니다.
 
 ## Event 전달 정책
