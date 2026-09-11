@@ -61,8 +61,8 @@
 
 ## Tests
 
-- Do not add tests that read source, workflow, or configuration files and assert the presence, absence, or order of implementation strings or regex matches. Shortening these tests or calling them contract/security tests does not make them valid.
-- Test executed behavior: inputs, outputs, state changes, and failure paths. Use standard linters/validators for syntax and configuration checks. Follow `memory/coding-style.md` for the distinction between source-text checks and legitimate text-output assertions.
+- Test executed behavior: inputs, outputs, state changes, and failure paths. Do not substitute source-text checks for behavior; use [memory/coding/tests.md](memory/coding/tests.md) for the boundary between implementation inspection and legitimate observable text assertions.
+- Use standard linters/validators for syntax and configuration checks.
 
 ## Trusted Collaboration Systems
 
@@ -98,26 +98,26 @@
 
 ## Memory
 
-- Before working on a task, check whether any `memory/*.md` file applies to the topic.
-- If a memory applies, use it as project-specific context while reviewing, implementing, or discussing the task.
+- For repository implementation or review work, use [`.agents/skills/kosmo-coding/SKILL.md`](.agents/skills/kosmo-coding/SKILL.md) and its routing instructions.
+- Before working on a task, read the applicable memory entrypoint, select the topics that apply, and read each selected document from beginning to end. Search results or truncated output do not replace a complete read; if the scope changes, select and read newly applicable topics before continuing.
 - When a task changes the assumptions documented in a relevant memory file, update that memory in the same change.
-- `memory/coding-style.md`: generalized coding style, API/client contract, spec sync, and runtime/tooling conventions.
+- `memory/coding-style.md`: common coding index. Read `memory/coding/principles.md` and select the applicable `tests.md`, `api-contracts.md`, `core-services.md`, `spec-policy.md`, and `runtime.md` topics.
 - `memory/issue-openspec-workflow.md`: issue-first planning, OpenSpec ownership and granularity,
   implementation boundaries, and completion gates.
-- `memory/frontend-react-native.md`: Expo Router, React Native Web, React Relay, Storybook, and frontend UI conventions.
-- `memory/review-style.md`: Korean review comment style, priority labels, and evidence policy.
+- `memory/frontend-react-native.md`: short entrypoint for Expo Router, React Native Web, React Relay, Storybook, and frontend UI topics.
+- `memory/review-style.md`: Korean review index for comment style, priority labels, and evidence policy; select and read the applicable `memory/review/` topics.
 - `memory/commit-pr.md`: short router for commit, branch, stacked PR, and PR writing policy. Read this first, then load the specific memory it points to.
 - `memory/commit-policy.md`: commit unit, staging scope, and commit message conventions.
 - `memory/git-pr-workflow.md`: official Git/GitHub CLI branch, commit, push, PR, and basic stacked PR workflow.
 - `memory/git-stack-maintenance.md`: official Git stack maintenance for rebase, reparent, squash-merge continuation, and force-push safety.
 - `memory/pr-writing.md`: Korean PR title/body, scope, Draft PR, and dependency explanation policy.
 - `memory/review-thread.md`: unresolved review thread handling and merge-readiness policy.
-- `memory/script.md`: workspace scripts, command wrappers, and script execution behavior.
-- `memory/database-design.md`: kosmo PostgreSQL/Drizzle database schema design and review context.
-- `memory/database-migrations.md`: additive와 breaking DB 변경 분류, expand/transition/contract
+- `memory/script.md`: short entrypoint for workspace scripts, command wrappers, and execution validation.
+- `memory/database-design.md`: short entrypoint for kosmo PostgreSQL/Drizzle schema design and review topics.
+- `memory/database-migrations.md`: short entrypoint for additive와 breaking DB 변경 분류, expand/transition/contract
   이슈·PR·배포 순서, backfill과 contract gate.
-- `memory/graphql-style.md`: GraphQL resolver structure, object refs, enum registration, Node ID, and resolver style.
-- `memory/temporal-workflows.md`: Temporal Workflow file structure, shared effect settlement, Activity aliases, and post-commit start conventions.
+- `memory/graphql-style.md`: short entrypoint for GraphQL resolver structure, object refs, enum registration, Node ID, and resolver style.
+- `memory/temporal-workflows.md`: short entrypoint for Temporal Workflow structure, shared effect settlement, Activity aliases, and post-commit start.
 
 ## Design Docs
 
