@@ -114,8 +114,8 @@ mock.module('@/components/post/PostMediaViewerHost', {
   exports: { PostMediaViewerHostProvider: ({ children }: PropsWithChildren) => children },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-mock.module('@/components/post/PostReplyCoordinator', {
-  exports: { PostReplyCoordinatorProvider: ({ children }: PropsWithChildren) => children },
+mock.module('@/components/post/PostComposerCoordinator', {
+  exports: { PostComposerCoordinatorProvider: ({ children }: PropsWithChildren) => children },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/components/shell/ShellChromeContext', {

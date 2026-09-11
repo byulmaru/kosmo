@@ -10,8 +10,8 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
+import { usePostComposerBinding } from './PostComposerCoordinator';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
-import { usePostReplyBinding } from './PostReplyCoordinator';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
@@ -117,7 +117,7 @@ export function PostListItem({
     replySurface,
     owner: replyOwner,
   } = usePostReplySurface(post);
-  const quoteBinding = usePostReplyBinding(post.id, 'quote');
+  const quoteBinding = usePostComposerBinding(post.id, 'quote');
   const composerExpandedRef = useRef(false);
   composerExpandedRef.current = Boolean(replyBinding?.expanded || quoteBinding?.expanded);
   const pureRepost = !post.content && !post.replyParent && post.repostSource;

@@ -12,8 +12,8 @@ import {
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
+import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
-import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
@@ -131,7 +131,11 @@ export function NotificationList({ profile }: NotificationListProps) {
 
   return (
     <PostActionAuthenticationProvider>
-      <PostReplyCoordinatorProvider key={pagination.data.id} owner="list" profile={pagination.data}>
+      <PostComposerCoordinatorProvider
+        key={pagination.data.id}
+        owner="list"
+        profile={pagination.data}
+      >
         <PostMediaViewerHostProvider>
           <ScrollView
             contentContainerStyle={styles.root}
@@ -182,7 +186,7 @@ export function NotificationList({ profile }: NotificationListProps) {
             ) : null}
           </ScrollView>
         </PostMediaViewerHostProvider>
-      </PostReplyCoordinatorProvider>
+      </PostComposerCoordinatorProvider>
     </PostActionAuthenticationProvider>
   );
 }

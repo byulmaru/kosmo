@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { graphql, useFragment } from 'react-relay';
 import { usePostActionAuthentication } from './PostActionAuthentication';
-import { usePostReplyBinding } from './PostReplyCoordinator';
+import { usePostComposerBinding } from './PostComposerCoordinator';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
 import type { View } from 'react-native';
@@ -21,7 +21,7 @@ const PostReplySurfaceFragment = graphql`
 /** Share Reply execution and focus lifecycle; each consumer places its own surface. */
 export function usePostReplySurface(postKey: PostReplySurface_post$key) {
   const post = useFragment(PostReplySurfaceFragment, postKey);
-  const binding = usePostReplyBinding(post.id);
+  const binding = usePostComposerBinding(post.id);
   const authentication = usePostActionAuthentication(Boolean(post.content));
   const triggerRef = useRef<View>(null);
   const reply: PostActionBarProps['reply'] = binding

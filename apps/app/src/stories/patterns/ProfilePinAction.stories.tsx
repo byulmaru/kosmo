@@ -6,9 +6,9 @@ import { commitLocalUpdate } from 'relay-runtime';
 import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
+import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
-import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
 import { useToast } from '@/components/ui/ToastProvider';
 import { SessionProvider } from '@/session/SessionProvider';
@@ -209,9 +209,9 @@ function StoryProviders({
     >
       <SessionProvider>
         <PostActionAuthenticationProvider>
-          <PostReplyCoordinatorProvider owner="list" profile={null}>
+          <PostComposerCoordinatorProvider owner="list" profile={null}>
             <PostMediaViewerHostProvider>{children}</PostMediaViewerHostProvider>
-          </PostReplyCoordinatorProvider>
+          </PostComposerCoordinatorProvider>
         </PostActionAuthenticationProvider>
       </SessionProvider>
     </RelayStoryProvider>

@@ -178,9 +178,9 @@ const replyBinding = {
   surfaceRef: { current: null },
 };
 
-mock.module('./PostReplyCoordinator', {
+mock.module('./PostComposerCoordinator', {
   exports: {
-    usePostReplyBinding: (postId: string) => {
+    usePostComposerBinding: (postId: string) => {
       replyPostIds.push(postId);
       return replyBinding;
     },

@@ -24,6 +24,7 @@ import { PostActionAuthenticationProvider } from '@/components/post/PostActionAu
 import { PostActionSurface } from '@/components/post/PostActionSurface';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
+import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostComposerMediaItems } from '@/components/post/PostComposerMediaControls';
 import { PostContentRenderer } from '@/components/post/PostContentRenderer';
 import { PostDetailThread } from '@/components/post/PostDetailThread';
@@ -32,7 +33,6 @@ import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewer, PostMediaViewerContent } from '@/components/post/PostMediaViewer';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
-import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import {
   PostSourcePresentationView,
   PostSourcePreview,
@@ -1698,14 +1698,14 @@ function ProductionBookmarkMutationContents() {
   const data = usePostsStoryData();
 
   return (
-    <PostReplyCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
+    <PostComposerCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
       <PostLayout
         post={requireFragment(
           requirePostById(data.posts, shortPost.id).layout,
           'production Bookmark detail',
         )}
       />
-    </PostReplyCoordinatorProvider>
+    </PostComposerCoordinatorProvider>
   );
 }
 
@@ -1821,7 +1821,7 @@ function ProductionPostActionSessionBoundaryStory({
   const [profileResolutionCount, setProfileResolutionCount] = useState(0);
   const contents = (
     <PostActionAuthenticationProvider>
-      <PostReplyCoordinatorProvider owner="list" profile={null}>
+      <PostComposerCoordinatorProvider owner="list" profile={null}>
         <View testID="production-session-action-post">
           <PostListItem
             post={requireFragment(
@@ -1830,7 +1830,7 @@ function ProductionPostActionSessionBoundaryStory({
             )}
           />
         </View>
-      </PostReplyCoordinatorProvider>
+      </PostComposerCoordinatorProvider>
       <Text testID="profile-resolution-count">{profileResolutionCount}</Text>
     </PostActionAuthenticationProvider>
   );
@@ -2074,11 +2074,11 @@ function ReplyDetailInlineStory() {
   );
 
   return (
-    <PostReplyCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
+    <PostComposerCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
       <Catalog>
         <PostLayout post={post} />
       </Catalog>
-    </PostReplyCoordinatorProvider>
+    </PostComposerCoordinatorProvider>
   );
 }
 
@@ -2494,11 +2494,11 @@ function QuoteListSurfaceStory() {
   );
 
   return (
-    <PostReplyCoordinatorProvider owner="list" profile={data.replyComposerProfile}>
+    <PostComposerCoordinatorProvider owner="list" profile={data.replyComposerProfile}>
       <Catalog>
         <PostListItem post={post} />
       </Catalog>
-    </PostReplyCoordinatorProvider>
+    </PostComposerCoordinatorProvider>
   );
 }
 
@@ -2826,11 +2826,11 @@ const meta = {
     (Story) => (
       <SessionProvider>
         <PostActionAuthenticationProvider>
-          <PostReplyCoordinatorProvider owner="list" profile={null}>
+          <PostComposerCoordinatorProvider owner="list" profile={null}>
             <PostMediaViewerHostProvider>
               <Story />
             </PostMediaViewerHostProvider>
-          </PostReplyCoordinatorProvider>
+          </PostComposerCoordinatorProvider>
         </PostActionAuthenticationProvider>
       </SessionProvider>
     ),

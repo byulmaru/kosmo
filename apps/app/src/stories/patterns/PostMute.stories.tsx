@@ -1,9 +1,9 @@
 import { View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
+import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
-import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { SessionProvider } from '@/session/SessionProvider';
 import { post, profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -43,11 +43,11 @@ const meta = {
     (Story) => (
       <SessionProvider>
         <PostActionAuthenticationProvider>
-          <PostReplyCoordinatorProvider owner="detail" profile={null}>
+          <PostComposerCoordinatorProvider owner="detail" profile={null}>
             <PostMediaViewerHostProvider>
               <Story />
             </PostMediaViewerHostProvider>
-          </PostReplyCoordinatorProvider>
+          </PostComposerCoordinatorProvider>
         </PostActionAuthenticationProvider>
       </SessionProvider>
     ),

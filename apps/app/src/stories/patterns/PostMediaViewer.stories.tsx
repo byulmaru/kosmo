@@ -2,10 +2,10 @@ import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { fn } from 'storybook/test';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
+import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { PostMediaViewerThread } from '@/components/post/PostMediaViewerThread';
-import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
 import { PostMediaViewerSurface } from '@/patterns/post-media-viewer/PostMediaViewerSurface';
 import { SessionProvider } from '@/session/SessionProvider';
@@ -181,7 +181,7 @@ function ViewerCompactDetailFixture({ surfacePostId }: { surfacePostId: string }
 
   return (
     <PostMediaViewerHostProvider>
-      <PostReplyCoordinatorProvider owner="detail" profile={data.viewerProfile.replySurface}>
+      <PostComposerCoordinatorProvider owner="detail" profile={data.viewerProfile.replySurface}>
         <PostLayout
           contentWarningPresentation="revealed"
           mediaPresentation="hidden"
@@ -189,7 +189,7 @@ function ViewerCompactDetailFixture({ surfacePostId }: { surfacePostId: string }
           presentation="compact"
           replyAvailable
         />
-      </PostReplyCoordinatorProvider>
+      </PostComposerCoordinatorProvider>
     </PostMediaViewerHostProvider>
   );
 }

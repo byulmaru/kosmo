@@ -12,7 +12,7 @@ import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComp
 import type { PostComposerCreatedPost } from './PostComposer';
 import type { ReplyComposerSurfaceHandle } from './ReplyComposerSurface';
 
-export type PostReplyOwner = 'detail' | 'list';
+export type PostComposerOwner = 'detail' | 'list';
 export type PostComposerMode = 'quote' | 'reply';
 
 type ActivePostComposer = {
@@ -20,40 +20,42 @@ type ActivePostComposer = {
   postId: string;
 };
 
-export type PostReplyBinding = {
+export type PostComposerBinding = {
   expanded: boolean;
   onPostCreated: ((post: PostComposerCreatedPost) => void) | undefined;
   onPress: () => void;
   onRequestClose: () => void;
-  owner: PostReplyOwner;
+  owner: PostComposerOwner;
   profile: ReplyComposerSurface_profile$key | null;
   surfaceRef?: RefObject<ReplyComposerSurfaceHandle | null>;
 };
 
-type PostReplyCoordinatorValue = {
+type PostComposerCoordinatorValue = {
   activeComposer: ActivePostComposer | null;
   activeSurfaceRef: RefObject<ReplyComposerSurfaceHandle | null>;
   close: () => void;
   onPostCreated: ((post: PostComposerCreatedPost) => void) | undefined;
-  owner: PostReplyOwner;
+  owner: PostComposerOwner;
   press: (postId: string, mode: PostComposerMode) => void;
   profile: ReplyComposerSurface_profile$key | null;
 };
 
-type PostReplyCoordinatorProviderProps = PropsWithChildren<{
+type PostComposerCoordinatorProviderProps = PropsWithChildren<{
   onPostCreated?: (post: PostComposerCreatedPost) => void;
-  owner: PostReplyOwner;
+  owner: PostComposerOwner;
   profile: ReplyComposerSurface_profile$key | null;
 }>;
 
-const PostReplyCoordinatorContext = createContext<PostReplyCoordinatorValue | undefined>(undefined);
+const PostComposerCoordinatorContext = createContext<PostComposerCoordinatorValue | undefined>(
+  undefined,
+);
 
-export function PostReplyCoordinatorProvider({
+export function PostComposerCoordinatorProvider({
   children,
   onPostCreated,
   owner,
   profile,
-}: PostReplyCoordinatorProviderProps) {
+}: PostComposerCoordinatorProviderProps) {
   const [activeComposer, setActiveComposer] = useState<ActivePostComposer | null>(null);
   const activeComposerRef = useRef(activeComposer);
   const activeSurfaceRef = useRef<ReplyComposerSurfaceHandle>(null);
@@ -90,25 +92,25 @@ export function PostReplyCoordinatorProvider({
     },
     [owner],
   );
-  const value = useMemo<PostReplyCoordinatorValue>(
+  const value = useMemo<PostComposerCoordinatorValue>(
     () => ({ activeComposer, activeSurfaceRef, close, onPostCreated, owner, press, profile }),
     [activeComposer, close, onPostCreated, owner, press, profile],
   );
 
   return (
-    <PostReplyCoordinatorContext.Provider value={value}>
+    <PostComposerCoordinatorContext.Provider value={value}>
       {children}
-    </PostReplyCoordinatorContext.Provider>
+    </PostComposerCoordinatorContext.Provider>
   );
 }
 
-export function usePostReplyBinding(
+export function usePostComposerBinding(
   postId: string,
   mode: PostComposerMode = 'reply',
-): PostReplyBinding | null {
-  const coordinator = useContext(PostReplyCoordinatorContext);
+): PostComposerBinding | null {
+  const coordinator = useContext(PostComposerCoordinatorContext);
   if (coordinator === undefined) {
-    throw new Error('Post Reply 표현부에는 PostReplyCoordinatorProvider가 필요합니다.');
+    throw new Error('Post Composer 표현부에는 PostComposerCoordinatorProvider가 필요합니다.');
   }
   const expanded =
     coordinator.activeComposer?.postId === postId && coordinator.activeComposer.mode === mode;
