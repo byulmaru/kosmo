@@ -97,11 +97,11 @@ export function FollowRequestList({ profile }: FollowRequestListProps) {
 }
 
 export function FollowRequestListState({
-  onRetry,
+  loadingAnnouncement = true,
   state,
 }: {
-  onRetry?: () => void;
-  state: 'error' | 'loading' | 'profileRequired';
+  loadingAnnouncement?: boolean;
+  state: 'loading' | 'profileRequired';
 }) {
   const theme = useTheme();
 
@@ -126,19 +126,12 @@ export function FollowRequestListState({
               </View>
             ))}
           </View>
-          <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
-            팔로워 요청을 불러오는 중입니다.
-          </Text>
+          {loadingAnnouncement ? (
+            <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
+              팔로워 요청을 불러오는 중입니다.
+            </Text>
+          ) : null}
         </>
-      ) : state === 'error' ? (
-        <StateView
-          actionLabel={onRetry ? '다시 시도' : undefined}
-          alert
-          description="잠시 후 다시 시도해주세요."
-          onAction={onRetry}
-          style={styles.state}
-          title="팔로워 요청을 불러오지 못했어요"
-        />
       ) : (
         <StateView
           description="팔로워 요청을 보려면 사용할 프로필을 먼저 선택해주세요."
