@@ -58,8 +58,7 @@ Local Profile만 actor로 사용하며, remote ActivityPub ingress와 Block/Undo
   양방향 Active Block 관계인 후보를 pagination·cursor·limit 전에 제외한다. selected Profile이 없으면 기존
   Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate나 selected Local Profile을 새로 요구하지 않는다.
 - 정상적인 direct route 진입·새로고침의 API 결과는 GraphQL `node(id:)`·`profileByHandle` 직접 조회의 기존 기본 Profile
-  정보와 현재 selected Local Owner 범위의 정확한 unblock 관계 ID를 사용한다. Profile 자체가 기존 lifecycle 정책으로 조회
-  불가하면 기존 null/unavailable 결과를 유지하며 Block 전용 identity payload를 만들지 않는다.
+  정보와 현재 selected Local Owner 범위의 정확한 unblock 관계 ID를 사용한다.
 - Owner Profile이 Target Profile의 Post를 직접 조회하는 경우에는 Post Visibility·Post Eligibility와 Media 조회
   정책을 적용한다. Target Profile의 Post List, Post detail과 첨부 Media도 같은 정책을 따른다.
 - Target Profile이 Owner Profile의 Post를 조회하는 경우에는 Post와 첨부 Media를 모든 직접 API 조회 표면에서
@@ -85,10 +84,7 @@ Local Profile만 actor로 사용하며, remote ActivityPub ingress와 Block/Undo
   잔존 Follow는 `FOLLOWERS` Post 접근 권한의 근거가 될 수 없다.
   차단 뒤 모든 Notification source에 신규 생성 억제 정책을 연결하는 일은 `PROD-327`의 후속 범위다. 이 객체의 현재
   cleanup·조회 계약은 해당 source 연결을 전제로 하지 않는다.
-- Active Block은 GraphQL `node(id:)`·`profileByHandle` 직접 조회의 기본 Profile 정보를 숨기지 않는다. Profile identity는
-  기존 lifecycle·membership 정책을 따르며, `searchProfiles` exact-match·partial-match 후보에는 위의 양방향 Active Block
-  후보 제외를 적용한다.
-  Block은 콘텐츠·상호작용·알림 surface와 Mute/Block 관리 관계에 각각 명시된 정책으로 적용된다. Profile Mute와
+- Block은 콘텐츠·상호작용·알림 surface와 Mute/Block 관리 관계에 각각 명시된 정책으로 적용된다. Profile Mute와
   Profile Block은 독립된 관리 관계이므로, 같은 Owner가 이미 가진 Profile Mute 관계를 Mute 관리 connection·관계
   Node·해제 경로에서 제거하거나 숨기는 근거가 아니다.
 

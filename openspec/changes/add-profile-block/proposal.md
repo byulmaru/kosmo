@@ -86,7 +86,7 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
 - Linear implementation slices: [PROD-821](https://linear.app/byulmaru/issue/PROD-821),
   [PROD-822](https://linear.app/byulmaru/issue/PROD-822), [PROD-823](https://linear.app/byulmaru/issue/PROD-823)
 - 현재 slice의 추가 근거: `docs/domain/decisions/0012-post-interaction-followup-clarifications.md`,
-  `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `openspec/specs/hashtag-related-profile-api/spec.md`,
+  `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`,
   `docs/architecture/core-services.md`, `memory/coding-style.md`, `memory/database-design.md`, `memory/graphql-style.md`;
   `PROD-821`의 2026-09-03 concurrency 정정 댓글 `5ceda55c-f3b6-4109-987c-27c12c413ce2`와
   2026-09-02 구현 수단 비규범화 정정 댓글 `88a988b6-4877-476f-8e93-926fcc0f8e10`.
