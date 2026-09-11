@@ -69,14 +69,6 @@ type RemoteProfileMediaCandidate = {
   url: string;
 };
 
-type ActorEndpoints = {
-  followersUri: string | null;
-  followingUri: string | null;
-  inboxUri: string | null;
-  outboxUri: string | null;
-  sharedInboxUri: string | null;
-};
-
 type ActorWithKosmoFields = Actor & {
   endpoints?: { sharedInbox?: URL | null } | null;
   followersId?: URL | null;
@@ -109,22 +101,6 @@ const toActorType = (actor: Actor): ActivityPubActorType => {
     case 'Service':
       return ActivityPubActorType.SERVICE;
   }
-};
-
-const getActorEndpoints = (actor: ActorWithKosmoFields): ActorEndpoints => ({
-  followersUri: actor.followersId?.href ?? null,
-  followingUri: actor.followingId?.href ?? null,
-  inboxUri: actor.inboxId?.href ?? null,
-  outboxUri: actor.outboxId?.href ?? null,
-  sharedInboxUri: actor.endpoints?.sharedInbox?.href ?? null,
-});
-
-const projectActorBio = (summary: string | LanguageString | null | undefined): string | null => {
-  const value = summary?.toString();
-  const plainText = value === undefined ? null : projectRemoteActivityPubHtmlToPlainText(value);
-  const bio = profileBioSchema.safeParse(plainText || null);
-
-  return bio.success ? bio.data : null;
 };
 
 const projectActorImage = async (
@@ -194,10 +170,13 @@ const projectActor = async (actor: ActorWithKosmoFields) => {
     projectActorImage(actor.getIcons(representationOptions)),
     projectActorImage(actor.getImages(representationOptions)),
   ]);
+  const value = actor.summary?.toString();
+  const plainText = value === undefined ? null : projectRemoteActivityPubHtmlToPlainText(value);
+  const bio = profileBioSchema.safeParse(plainText || null);
 
   return {
     avatar,
-    bio: projectActorBio(actor.summary),
+    bio: bio.success ? bio.data : null,
     displayName: displayName.success ? displayName.data : handle.data,
     followPolicy: actor.manuallyApprovesFollowers
       ? ProfileFollowPolicy.APPROVAL_REQUIRED
@@ -283,23 +262,6 @@ const ensureRemoteInstance = async (
 
       return requireAvailableRemoteInstance(concurrent, { allowUnresponsive });
     });
-};
-
-const lookupRemoteActor = async (
-  context: RemoteActorLookupContext,
-  identifier: string | URL,
-): Promise<Actor> => {
-  const object = (await context.lookupObject(identifier)) as ActivityPubObject | null;
-
-  if (!isActor(object)) {
-    throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
-  }
-
-  if (!object.id) {
-    throw new RemoteActorMaterializationError('Remote actor is missing canonical URI.');
-  }
-
-  return object;
 };
 
 export const findStoredRemoteProfileActorByUri = async (actorUri: URL | string) =>
@@ -416,8 +378,17 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
   const existingRequestedRemoteInstance = await findAvailableRemoteInstance(targetActorDomain, {
     allowUnresponsive: reactivateUnresponsive,
   });
-  const actor = await lookupRemoteActor(context, options.actorUri);
-  const actorId = actor.id!;
+  const actor = (await context.lookupObject(options.actorUri)) as ActivityPubObject | null;
+
+  if (!isActor(actor)) {
+    throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
+  }
+
+  if (!actor.id) {
+    throw new RemoteActorMaterializationError('Remote actor is missing canonical URI.');
+  }
+
+  const actorId = actor.id;
 
   if ((actorId.protocol !== 'http:' && actorId.protocol !== 'https:') || !actorId.hostname) {
     throw new RemoteActorMaterializationError('Remote actor URI must use HTTP(S) with a hostname.');
@@ -428,7 +399,13 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
   }
 
   const projection = await projectActor(actor as ActorWithKosmoFields);
-  const endpoints = getActorEndpoints(actor as ActorWithKosmoFields);
+  const endpoints = {
+    followersUri: actor.followersId?.href ?? null,
+    followingUri: actor.followingId?.href ?? null,
+    inboxUri: actor.inboxId?.href ?? null,
+    outboxUri: actor.outboxId?.href ?? null,
+    sharedInboxUri: actor.endpoints?.sharedInbox?.href ?? null,
+  };
   const actorUri = actorId.href;
   const actorType = toActorType(actor);
   const canonicalActorHostname = actorId.hostname.toLowerCase().replace(/\.$/, '');
