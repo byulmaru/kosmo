@@ -186,6 +186,7 @@ export function ProfileSwitcher({
   const compact = surface === 'compact';
   const fullWeb = Platform.OS === 'web' && surface === 'full';
   const mobileWebDrawer = Platform.OS === 'web' && surface === 'drawer';
+  const nativeDrawerSurface = Platform.OS !== 'web' && surface === 'drawer';
   const redesignedWeb = Platform.OS === 'web' && surface !== 'drawer';
   const open = controlledOpen ?? internalOpen;
   const webExpandedChevron = Platform.OS === 'web' && open;
@@ -541,7 +542,10 @@ export function ProfileSwitcher({
       <View style={[styles.webMenu, styles.fullOverlayPosition]}>{pickerContent}</View>
     ) : null;
   const triggerSurface = !compact ? (
-    <View accessibilityLabel="활성 프로필" style={styles.profileHeader}>
+    <View
+      accessibilityLabel="활성 프로필"
+      style={[styles.profileHeader, nativeDrawerSurface && styles.nativeDrawerProfileHeader]}
+    >
       <View
         style={[
           styles.cover,
@@ -570,6 +574,11 @@ export function ProfileSwitcher({
         style={[
           styles.profileCopy,
           canEditSelectedProfile ? styles.profileCopyWithEditAction : undefined,
+          nativeDrawerSurface
+            ? canEditSelectedProfile
+              ? styles.nativeDrawerProfileCopyWithEditAction
+              : styles.nativeDrawerProfileCopy
+            : undefined,
         ]}
       >
         {trigger}
@@ -687,6 +696,7 @@ const styles = StyleSheet.create({
   drawerMenuPosition: { left: 0, top: 190 },
   fullOverlayPosition: { left: -10, top: 50 },
   profileHeader: { height: 260, position: 'relative', width: 320, zIndex: 20 },
+  nativeDrawerProfileHeader: { width: '100%' },
   cover: { height: 104, left: 0, overflow: 'hidden', position: 'absolute', right: 0, top: 0 },
   coverImage: { height: '100%', width: '100%' },
   largeAvatar: { left: 20, position: 'absolute', top: 54 },
@@ -699,6 +709,8 @@ const styles = StyleSheet.create({
     width: 300,
   },
   profileCopyWithEditAction: { width: 210 },
+  nativeDrawerProfileCopy: { right: 10, width: 'auto' },
+  nativeDrawerProfileCopyWithEditAction: { right: 100, width: 'auto' },
   profileEditTarget: {
     alignItems: 'center',
     justifyContent: 'center',

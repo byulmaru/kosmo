@@ -401,14 +401,14 @@ query 오류와 이미 표시 중인 timeline을 새로고침·재검증하는 q
 
 ### Requirement: Sidebar profile switching
 
-유니버설 애플리케이션은 인증된 사용자가 앱 셸에서 접근 가능한 프로필 사이를 전환할 수 있게 해야 한다(MUST). 프로필 전환 성공 후 앱 셸의 활성 프로필 표시는 Relay store의 `Session.selectedProfile` 갱신을 반영해야 하며(MUST), 앱 셸 아래 route는 자기 화면에서 필요한 active profile field를 자기 GraphQL operation으로 선언해야 한다(MUST).
+유니버설 애플리케이션은 인증된 사용자가 앱 셸에서 접근 가능한 프로필 사이를 전환할 수 있게 해야 한다(MUST). 프로필 전환 성공 후 앱 셸의 활성 프로필 표시는 새 actor 환경에서 성공적으로 조회한 `currentSession.selectedProfile` 결과를 반영해야 하며(MUST), 앱 셸 아래 route는 자기 화면에서 필요한 active profile field를 자기 GraphQL operation으로 선언해야 한다(MUST).
 
 #### Scenario: Render accessible profiles
 
 - **WHEN** 인증된 계정에 접근 가능한 활성 프로필이 있다
 - **THEN** 데스크톱 사이드바 또는 모바일 profile switch surface는 활성 프로필 정보를 표시한다
 - **AND** full 데스크톱 사이드바는 260px 높이의 상단 프로필 영역을 유지하고 compact rail은 40px avatar trigger를 사용한다
-- **AND** 활성 프로필 정보는 `currentSession.selectedProfile` 조회 결과를 기반으로 하며, 프로필 전환 성공 후 Relay store 갱신과 actor environment 재생성 결과를 반영한다
+- **AND** 활성 프로필 정보는 `currentSession.selectedProfile` 조회 결과를 기반으로 하며, 프로필 전환 성공 후 새 Relay Environment와 Store에서 실행한 actor query 결과를 반영한다
 - **AND** 현재 활성 프로필을 시각적으로 구분한다
 - **AND** 접근 가능한 다른 프로필을 control로 표시해 전환할 수 있게 한다
 
@@ -416,8 +416,9 @@ query 오류와 이미 표시 중인 timeline을 새로고침·재검증하는 q
 
 - **WHEN** 사용자가 앱 셸에서 다른 접근 가능한 프로필을 선택한다
 - **THEN** 시스템은 즉시 해당 프로필을 활성 프로필로 요청한다
-- **AND** 요청 성공 후 앱 셸은 Relay store의 `Session.selectedProfile` 갱신 결과를 새 활성 프로필로 반영한다
-- **AND** 클라이언트는 새 selected profile ID를 actor key로 사용해 Relay environment를 재생성한다
+- **AND** 요청 성공 응답은 `selectProfile.profile.id`로 새 활성 프로필을 식별한다
+- **AND** 클라이언트는 새 selected profile ID를 actor key로 사용해 Relay Environment와 Store를 새로 만든다
+- **AND** 새 actor query가 준비되기 전에는 이전 actor Store의 부분 `Session.selectedProfile` payload를 새 active profile 결과로 표시하지 않고, query가 성공적으로 준비되면 앱 셸은 새 `currentSession.selectedProfile` 결과를 활성 프로필로 반영한다
 - **AND** 이미 열린 home, compose와 viewer-dependent profile/follow 화면은 새 actor environment에서 route query를 다시 실행한다
 - **AND** 새 environment는 `homeTimeline`과 `Profile.viewerState`가 새 active profile 기준 결과임을 보장한다
 
@@ -426,7 +427,7 @@ query 오류와 이미 표시 중인 timeline을 새로고침·재검증하는 q
 - **WHEN** 인증된 사용자가 앱 셸에서 새 프로필 핸들을 입력하고 생성한다
 - **THEN** 시스템은 새 프로필 생성을 요청한다
 - **AND** 생성 성공 후 시스템은 새 프로필을 즉시 활성 프로필로 선택한다
-- **AND** 앱 셸은 Relay store의 `Session.selectedProfile` 갱신 결과를 새 활성 프로필로 반영한다
+- **AND** 새 프로필 선택 성공 후 앱 셸은 새 actor Environment와 Store에서 조회한 `currentSession.selectedProfile` 결과가 준비되면 이를 새 활성 프로필로 반영한다
 - **AND** 시스템은 접근 가능한 프로필 목록이 새 프로필을 포함하도록 `me.profiles` connection 또는 동등한 Relay record를 갱신한다
 
 #### Scenario: Keep current profile selection
@@ -956,7 +957,7 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 
 ### Requirement: Universal profile switch synchronization
 
-프로필 생성·선택 UI는 모든 플랫폼에서 같은 mutation과 session cache 계약을 사용해야 한다(MUST).
+프로필 생성·선택 UI는 모든 플랫폼에서 같은 mutation 결과 식별자와 actor Environment·Store 재생성 및 query 계약을 사용해야 한다(MUST).
 
 #### Scenario: Create first profile
 
@@ -967,7 +968,9 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 #### Scenario: Switch active profile
 
 - **WHEN** 사용자가 다른 profile을 선택한다
-- **THEN** `selectProfile` mutation 결과의 `Session.selectedProfile`이 즉시 UI에 반영된다
+- **THEN** `selectProfile` mutation 성공 결과는 `profile.id`로 선택된 profile을 식별한다
+- **AND** 클라이언트는 해당 ID를 actor key로 사용해 Relay Environment와 Store를 새로 만든다
+- **AND** 새 Environment의 `currentSession.selectedProfile` query가 준비되면 UI는 새 selected profile을 반영한다
 - **AND** actor profile에 의존하는 route query는 새 actor context로 다시 실행된다
 
 ### Requirement: Universal accessibility semantics

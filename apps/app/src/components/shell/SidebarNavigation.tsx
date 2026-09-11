@@ -110,12 +110,17 @@ export function SidebarNavigation({
   };
 
   const switcherSurface = compact ? 'compact' : surface === 'desktop' ? 'full' : 'drawer';
+  const nativeDrawerSurface = Platform.OS !== 'web' && surface === 'drawer';
 
   return (
     <View
       style={[
         styles.root,
-        compact ? styles.compactRoot : styles.fullRoot,
+        compact
+          ? styles.compactRoot
+          : nativeDrawerSurface
+            ? styles.nativeDrawerRoot
+            : styles.fullRoot,
         {
           backgroundColor: surface === 'drawer' ? theme.backgroundElevated : theme.backgroundCanvas,
         },
@@ -132,6 +137,7 @@ export function SidebarNavigation({
       <ScrollView
         contentContainerStyle={[
           styles.navigationContent,
+          nativeDrawerSurface && styles.nativeDrawerNavigationContent,
           compact && styles.compactNavigationContent,
         ]}
         style={[
@@ -326,6 +332,8 @@ const styles = StyleSheet.create({
     width: 80,
   },
   fullRoot: { width: 320 },
+  nativeDrawerNavigationContent: { width: '100%' },
+  nativeDrawerRoot: { width: '100%' },
   navigationArea: {
     borderTopWidth: 1,
     flex: 1,
