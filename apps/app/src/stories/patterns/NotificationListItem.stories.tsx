@@ -388,6 +388,7 @@ export const CompositionContract: Story = {
     const reaction = within(canvas.getByTestId('reaction-notification'));
     const surface = reaction.getByTestId('notification-item-surface');
     const excerpt = reaction.getByText(args.bodyText);
+    const reactionTime = reaction.getByText(args.timestamp);
     const unreadBackground = getComputedStyle(surface).backgroundColor;
     await expect(unreadBackground).not.toBe('rgba(0, 0, 0, 0)');
     await userEvent.hover(excerpt);
@@ -409,6 +410,14 @@ export const CompositionContract: Story = {
     const reply = within(canvas.getByTestId('reply-notification'));
     const replySurface = reply.getByTestId('notification-item-surface');
     const replyPost = reply.getByTestId('reply-notification-post');
+    const replyTime = reply.getByText('5분 전');
+    await expect(getComputedStyle(reactionTime).fontSize).toBe(
+      getComputedStyle(replyTime).fontSize,
+    );
+    await expect(getComputedStyle(reactionTime).lineHeight).toBe(
+      getComputedStyle(replyTime).lineHeight,
+    );
+    await expect(replyPost).toHaveStyle({ paddingLeft: '12px', paddingRight: '16px' });
     await expect(reply.getByTestId('notification-reason')).toBeVisible();
     await expect(reply.getByTestId('notification-reason')).toHaveTextContent(
       /^회원님의 게시글에 답글을 남겼습니다$/,

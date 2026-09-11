@@ -167,7 +167,8 @@ export function ReplyNotificationPost({
 
 const styles = StyleSheet.create({
   root: {
-    paddingHorizontal: spacing.sm,
+    paddingLeft: Platform.OS === 'web' ? spacing.md : spacing.sm,
+    paddingRight: Platform.OS === 'web' ? spacing.lg : spacing.sm,
     paddingTop: spacing.md,
     paddingBottom: spacing.xs,
     flexDirection: 'row',
