@@ -56,6 +56,17 @@ export type PostComposerMediaValue = {
   readonly sensitiveMedia: boolean;
 };
 
+export type PostComposerMediaControlsRenderProps = {
+  readonly error: string | null;
+  readonly items: readonly ComposerMediaItem[];
+  readonly onAltTextChange: (key: string, altText: string) => void;
+  readonly onMediaAction: () => void;
+  readonly onMediaRemove: (key: string) => void;
+  readonly onMediaRetry: (item: ComposerMediaItem) => void;
+  readonly onSensitiveMediaChange: (value: boolean) => void;
+  readonly sensitiveMedia: boolean;
+};
+
 export const emptyPostComposerMediaValue: PostComposerMediaValue = {
   hasPendingMedia: false,
   items: [],
@@ -76,11 +87,13 @@ export function PostComposerMediaControls({
   disabled,
   editorRef,
   onValueChange,
+  render,
 }: {
   readonly actions: ReactNode;
   readonly disabled: boolean;
   readonly editorRef: RefObject<TextInput | null>;
   readonly onValueChange: (value: PostComposerMediaValue) => void;
+  readonly render?: (props: PostComposerMediaControlsRenderProps) => ReactNode;
 }) {
   const theme = useTheme();
   const [media, setMedia] = useState<ComposerMediaItem[]>([]);
@@ -313,6 +326,22 @@ export function PostComposerMediaControls({
       }
     };
   }, []);
+
+  if (render) {
+    return render({
+      error,
+      items: media,
+      onAltTextChange: (key, altText) =>
+        updateMedia((items) =>
+          items.map((item) => (item.key === key ? { ...item, altText } : item)),
+        ),
+      onMediaAction: () => void selectMedia(),
+      onMediaRemove: removeMedia,
+      onMediaRetry: (item) => void uploadMedia(item.key, item.asset),
+      onSensitiveMediaChange: setSensitiveMedia,
+      sensitiveMedia,
+    });
+  }
 
   return (
     <>

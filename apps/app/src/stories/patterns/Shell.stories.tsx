@@ -364,6 +364,11 @@ const meta = {
     profileCreationRequestObserver.mockClear();
   },
   component: NavigationCatalog,
+  excludeStories: [
+    'UniversalCompactComposerLifecycle',
+    'UniversalFullComposerLifecycle',
+    'UniversalMobileComposerLifecycle',
+  ],
   parameters: {
     relay: { data: query },
     router: { pathname: '/search' },
@@ -2295,19 +2300,12 @@ export const UniversalMobileComposeHeader: Story = {
   },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
+    const dialog = canvas.getByRole('dialog', { name: '글쓰기' });
     const heading = canvas.getByRole('heading', { name: '글쓰기' });
-    const menuIcon = menuButton.querySelector('svg');
 
-    expect(heading.parentElement).toContainElement(menuButton);
-    expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
-    expect(menuIcon).not.toBeNull();
-    expect(
-      heading.getBoundingClientRect().left - menuIcon!.getBoundingClientRect().right,
-    ).toBeGreaterThanOrEqual(24);
-    expect(
-      heading.getBoundingClientRect().left - menuIcon!.getBoundingClientRect().right,
-    ).toBeLessThanOrEqual(28);
+    expect(dialog).toContainElement(heading);
+    expect(within(dialog).getByRole('button', { name: '글쓰기 닫기' })).toBeVisible();
+    expect(canvas.queryByRole('button', { name: '메뉴 열기' })).toBeNull();
   },
   render: () => <UniversalShellStory />,
 };
@@ -2414,6 +2412,59 @@ export const UniversalCompact: Story = {
   parameters: universalParameters,
   render: () => (
     <View style={{ height: 900 }}>
+      <UniversalShellStory />
+    </View>
+  ),
+};
+
+export const UniversalCompactComposerLifecycle: Story = {
+  ...UniversalCompact,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const trigger = canvas.getByRole('button', { name: '글쓰기' });
+
+    await userEvent.click(trigger);
+    const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+    expect(within(dialog).queryByRole('button', { name: '투표 추가' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: '이모지 추가' })).toBeNull();
+    await userEvent.type(
+      within(dialog).getByRole('textbox', { name: '게시물 내용' }),
+      'compact draft',
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
+    await waitFor(() => expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull());
+    await waitFor(() => expect(trigger).toHaveFocus());
+
+    await userEvent.click(trigger);
+    expect(await page.findByRole('textbox', { name: '게시물 내용' })).toHaveValue('compact draft');
+  },
+};
+
+export const UniversalMobileComposerLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: universalParameters,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const trigger = canvas.getByRole('button', { name: '글쓰기' });
+
+    await userEvent.click(trigger);
+    const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+    expect(within(dialog).getAllByRole('heading', { name: '글쓰기' })).toHaveLength(1);
+    expect(within(dialog).queryByTestId('illustrative-system-keyboard')).toBeNull();
+    await userEvent.type(
+      within(dialog).getByRole('textbox', { name: '게시물 내용' }),
+      'mobile draft',
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
+    await waitFor(() => expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull());
+
+    await userEvent.click(trigger);
+    expect(await page.findByRole('textbox', { name: '게시물 내용' })).toHaveValue('mobile draft');
+  },
+  render: () => (
+    <View style={{ height: 844 }}>
       <UniversalShellStory />
     </View>
   ),
@@ -2628,7 +2679,10 @@ export const UniversalFull: Story = {
       leftRail = leftRail.parentElement;
     }
 
-    const rightRail = canvas.getByLabelText('새 게시글 작성').parentElement;
+    let rightRail: HTMLElement | null = canvas.getByTestId('post-composer-rail');
+    while (rightRail && view?.getComputedStyle(rightRail).position !== 'sticky') {
+      rightRail = rightRail.parentElement;
+    }
     const rightRailStyle = rightRail ? view?.getComputedStyle(rightRail) : undefined;
     const privacyLink = canvas.getByRole('link', { name: '개인정보 처리방침' });
     const rightRailRect = rightRail?.getBoundingClientRect();
@@ -2650,4 +2704,28 @@ export const UniversalFull: Story = {
       <UniversalShellStory />
     </View>
   ),
+};
+
+export const UniversalFullComposerLifecycle: Story = {
+  ...UniversalFull,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+
+    await userEvent.type(body, 'rail draft');
+    await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 켜기' }));
+    await userEvent.type(canvas.getByRole('textbox', { name: '콘텐츠 경고' }), 'CW draft');
+    await userEvent.click(canvas.getByRole('button', { name: 'Composer 확장' }));
+
+    const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+    expect(within(dialog).getByRole('textbox', { name: '게시물 내용' })).toHaveValue('rail draft');
+    expect(within(dialog).getByRole('textbox', { name: '콘텐츠 경고' })).toHaveValue('CW draft');
+    await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
+    await waitFor(() => expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull());
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: 'Composer 확장' })).toHaveFocus(),
+    );
+    expect(canvas.getByRole('textbox', { name: '게시물 내용' })).toHaveValue('rail draft');
+  },
 };

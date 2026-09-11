@@ -1,4 +1,5 @@
 import { ArrowLeftIcon, FlagIcon, XIcon } from 'lucide-react-native';
+import { useEffect, useRef } from 'react';
 import {
   Image,
   Pressable,
@@ -15,11 +16,11 @@ import { Tab, TabList } from '@/components/ui/Tabs';
 import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
 
 export type ComposerMediaEditorTool = 'alt' | 'sensitive';
-export type ComposerMediaEditorMobileState = 'altKeyboard' | 'default' | 'sensitive';
+export type ComposerMediaEditorMobileState = 'alt' | 'altKeyboard' | 'default' | 'sensitive';
 
 export type ComposerMediaEditorProps = {
   readonly media: readonly ComposerMediaItem[];
@@ -44,16 +45,24 @@ const altTextLimit = 1000;
 export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
   const theme = useTheme();
   const { height } = useWindowDimensions();
+  const backRef = useRef<View>(null);
   const selectedIndex = Math.max(
     0,
     props.media.findIndex(({ key }) => key === props.selectedKey),
   );
   const selected = props.media[selectedIndex];
   const mobile = props.presentation === 'mobile';
-  const mobileState =
-    props.mobileState ?? (props.tool === 'sensitive' ? 'sensitive' : 'altKeyboard');
+  const mobileState = props.mobileState ?? (props.tool === 'sensitive' ? 'sensitive' : 'alt');
   const mobileTool =
-    mobileState === 'default' ? null : mobileState === 'altKeyboard' ? 'alt' : 'sensitive';
+    mobileState === 'default'
+      ? null
+      : mobileState === 'alt' || mobileState === 'altKeyboard'
+        ? 'alt'
+        : 'sensitive';
+
+  useEffect(() => {
+    backRef.current?.focus();
+  }, []);
 
   return (
     <View
@@ -67,6 +76,7 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
       testID={mobile ? 'mobile-composer-media-editor' : 'web-composer-media-editor'}
     >
       <EditorHeader
+        backRef={backRef}
         mobile={mobile}
         onBack={props.onBack}
         onClose={props.onClose}
@@ -156,11 +166,13 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
 }
 
 function EditorHeader({
+  backRef,
   mobile,
   onBack,
   onClose,
   onDone,
 }: {
+  readonly backRef: RefObject<View | null>;
   readonly mobile: boolean;
   readonly onBack: () => void;
   readonly onClose: () => void;
@@ -172,6 +184,7 @@ function EditorHeader({
     <View style={[styles.header, { borderColor: theme.borderSubtle }]}>
       <IconButton
         accessibilityLabel="미디어 편집에서 뒤로"
+        controlRef={backRef}
         feedback="opacity"
         onPress={onBack}
         targetSize={44}

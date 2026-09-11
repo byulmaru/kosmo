@@ -21,7 +21,7 @@ import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { PostComposerMediaItemsTarget } from './PostComposerMediaItemsTarget';
 import type { LucideIcon } from 'lucide-react-native';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import type { TextStyle } from 'react-native';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
 
@@ -30,9 +30,11 @@ export type PostComposerTargetVisibility = 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
 export type PostComposerTargetProps = Readonly<{
   author: ReactNode;
   body: string;
+  bodyRef?: RefObject<TextInput | null>;
   contentWarning: string;
   contentWarningExpanded: boolean;
   error?: string;
+  expandControlRef?: RefObject<View | null>;
   items: readonly ComposerMediaItem[];
   onBodyChange: (value: string) => void;
   onContentWarningChange: (value: string) => void;
@@ -62,7 +64,7 @@ export type MobileFullscreenComposerShellCandidateProps = Omit<
   PostComposerTargetProps,
   'onExpand' | 'showSubmit' | 'surface'
 > &
-  Readonly<{ keyboard?: boolean; onOverlayClose: () => void }>;
+  Readonly<{ fillContainer?: boolean; keyboard?: boolean; onOverlayClose: () => void }>;
 
 const visibilityOptions: ReadonlyArray<{
   description: string;
@@ -83,9 +85,11 @@ const visibilityOptions: ReadonlyArray<{
 export function PostComposerTarget({
   author,
   body,
+  bodyRef,
   contentWarning,
   contentWarningExpanded,
   error,
+  expandControlRef,
   items,
   onBodyChange,
   onContentWarningChange,
@@ -187,6 +191,7 @@ export function PostComposerTarget({
           {surface === 'rail' ? (
             <IconButton
               accessibilityLabel="Composer 확장"
+              controlRef={expandControlRef}
               disabled={submitting}
               feedback="opacity"
               onPress={onExpand}
@@ -215,6 +220,7 @@ export function PostComposerTarget({
           <TextArea
             accessibilityLabel="게시물 내용"
             editable={!submitting}
+            ref={bodyRef}
             onChangeText={onBodyChange}
             placeholder="무슨 일이 일어나고 있나요?"
             style={[
@@ -323,9 +329,11 @@ export function PostComposerTarget({
 export function MobileFullscreenComposerShellCandidate({
   author,
   body,
+  bodyRef,
   contentWarning,
   contentWarningExpanded,
   error,
+  fillContainer = false,
   items,
   keyboard = false,
   onBodyChange,
@@ -366,8 +374,12 @@ export function MobileFullscreenComposerShellCandidate({
     remaining < 0;
   return (
     <View
-      accessibilityLabel="모바일 글쓰기 Candidate"
-      style={[styles.mobileShell, { backgroundColor: theme.backgroundCanvas }]}
+      accessibilityLabel="모바일 글쓰기"
+      style={[
+        styles.mobileShell,
+        fillContainer ? styles.mobileShellFill : null,
+        { backgroundColor: theme.backgroundCanvas },
+      ]}
       testID="mobile-fullscreen-composer-candidate"
     >
       <View style={[styles.mobileHeader, { borderBottomColor: theme.borderSubtle }]}>
@@ -450,6 +462,7 @@ export function MobileFullscreenComposerShellCandidate({
           />
         ) : null}
         <TextInput
+          ref={bodyRef}
           accessibilityLabel="게시물 내용"
           editable={!submitting}
           multiline
@@ -794,6 +807,7 @@ const styles = StyleSheet.create({
   mobileLeadingSlot: { alignItems: 'flex-start', width: 72 },
   mobileMediaShelf: { height: 164, paddingBottom: space[8], paddingHorizontal: space[16] },
   mobileShell: { height: 844, overflow: 'hidden', width: 390 },
+  mobileShellFill: { flex: 1, height: '100%', width: '100%' },
   mobileSubmitButton: { minWidth: 72, width: 72 },
   mobileTitle: { flex: 1, textAlign: 'center', ...textStyles.uiHeadingS },
   mobileTrailingSlot: { alignItems: 'flex-end', width: 84 },
