@@ -15,6 +15,13 @@ kosmo 프로필 capability의 현재 계약을 문서화한다. 이 스펙은 �
 - **AND** 소속 instance와 정규화된 handle 조합은 중복될 수 없다
 - **AND** 신규 프로필 상태는 `ACTIVE`이다
 
+#### Scenario: Preserve remote identity when actor handle changes
+
+- **WHEN** stale Remote Profile이 저장된 canonical actor URI를 이용해 refresh되고 actor `preferredUsername`이 바뀐다
+- **THEN** 시스템은 같은 canonical actor URI와 같은 `Profile` identity를 유지한다
+- **AND** 시스템은 같은 Profile의 handle, normalized handle과 qualified handle을 새 `preferredUsername`에서 갱신한다
+- **AND** refresh 결과의 actor URI가 저장된 canonical URI와 일치하지 않으면 Profile 또는 actor metadata를 저장하지 않는다
+
 #### Scenario: Find active local profile by bare or local-domain handle
 
 - **WHEN** 클라이언트가 bare handle 또는 configured local domain의 `handle@domain`/`@handle@domain` 형식 handle로 프로필 조회를 요청한다
@@ -42,18 +49,25 @@ kosmo 프로필 capability의 현재 계약을 문서화한다. 이 스펙은 �
 
 ### Requirement: Profile handle partial search
 
-**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/session.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md` (ADR 0017), `PROD-504`, `PROD-517`, `PROD-573`. 시스템은 이 검색 계약을 준수해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/session.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md` (ADR 0017), `PROD-504`, `PROD-517`, `PROD-573`, `PROD-808`. 시스템은 이 검색 계약을 준수해야 한다(MUST).
+
 시스템은 `searchProfiles(query:, first:, after:): ProfileConnection!`을 로그인한 Account의 요청에만 제공해야
 한다(MUST). 요청 credential에서 유효한 현재 Session을 확인할 수 없으면 Profile 후보 DB 조회와 원격 actor
 lookup 전에 GraphQL permission error로 거부해야 한다(MUST). 인증된 요청은 입력 query를 기존 handle 정책으로
 정규화하고 DB에 저장된 Local/Remote Profile을 `Profile.id` cursor connection으로 검색해야 한다(MUST).
-명시적인 `@handle@instance` qualified handle 전체가 remote handle로 파싱되고 저장된 Remote Profile이 없을
-때만 기존 Fedify actor lookup과 materialization을 먼저 수행해야 하며(MUST), 저장된 actor를 검색할 때는 원격
-lookup이나 refresh를 예약해서는 안 된다(MUST NOT). materialization 성공 뒤에는 반환된 Profile identity를
-기준으로 기존 DB connection과 staged visibility를 다시 적용해야 한다(MUST). lookup 실패, unavailable Instance,
-identity 충돌과 그 밖의 materialization 실패는 성공한 빈 connection으로 fallback해야 하며(MUST), 예상하지
-못한 materialization 오류는 fallback 전에 관측해야 한다(MUST). 일반 텍스트, local handle, 불완전한 remote
-handle과 `profileByHandle`은 새 원격 요청을 시작해서는 안 된다(MUST NOT).
+명시적인 `@handle@instance` qualified handle 전체가 remote handle로 파싱되면 저장된 Profile의 유무와 관계없이 하나의
+public handle lookup Workflow를 dispatch해야 한다(MUST). Workflow는 저장된 canonical actor URI를 먼저 재사용하거나
+없을 때 WebFinger의 ActivityPub self link에서 canonical actor URI를 확인한 뒤 materialization 경계를 호출해야 한다(MUST).
+WebFinger discovery는 Actor Instance 상태 판정 전에 수행할 수 있지만 WebFinger 응답만으로 Instance를 추출하거나
+상태를 판정하지 않아야 한다(MUST NOT). API 검색 caller는 cached Profile/Instance state를 precheck하지 않고, Workflow
+실행 경로가 현재 Profile/Instance 상태와 actor TTL을 판정해야 한다(MUST). 저장된 actor가 갱신 불필요 상태(fresh 또는
+`UNRESPONSIVE`)이면 Workflow는 외부 actor fetch나 refresh를 예약·수행하지 않아야 하고(MUST NOT), stale이면 시스템은
+기존 DB connection과 staged visibility를 적용한 Profile identity를 refresh 완료 전에 반환하고 refresh child를 시작해야
+한다(MUST). 저장된 Profile이 없으면 동기 검색은 actor fetch·persist 완료 뒤 Profile identity를 받아야 한다(MUST).
+qualified-handle discovery와 materialization 성공 뒤 Profile connection·staged visibility DB 조회는 기존 검색 경계가
+수행해야 한다(MUST). lookup 실패, unavailable Instance, identity 충돌과 그 밖의 materialization 실패는 성공한 빈
+connection으로 fallback해야 하며(MUST), 예상하지 못한 materialization 오류는 fallback 전에 관측해야 한다(MUST).
+일반 텍스트, local handle, 불완전한 remote handle과 `profileByHandle`은 새 원격 요청을 시작해서는 안 된다(MUST NOT).
 
 connection은 immutable하고 유일한 `Profile.id ASC`를 cursor 순서로 사용해 페이지 사이 중복·누락 없이 결과
 비용을 제한해야 한다(MUST). exact `profileByHandle`과 materialization 이후 `searchProfiles` DB 조회는 configured
@@ -98,16 +112,27 @@ Block 공통 predicate를 선행 조건으로 요구해서는 안 된다(MUST NO
 #### Scenario: Materialize a missing remote profile for an explicit qualified handle
 
 - **WHEN** 로그인한 클라이언트가 명시적인 `@handle@instance` 전체를 검색하고 해당 remote actor와 Profile이 아직 저장되지 않았다
-- **THEN** 시스템은 기존 Fedify context와 actor materialization 경계로 해당 qualified handle을 조회한다
+- **THEN** 검색 경계는 handle과 domain, 선택적인 acting Profile ID를 하나의 public handle lookup Workflow에 전달한다
+- **AND** Workflow는 저장된 canonical actor URI를 재사용하거나 WebFinger의 ActivityPub self link에서 canonical `actorUri`를 확인한다
+- **AND** Workflow는 확인한 canonical actor URI를 materialization 경계에 전달하고, materialization 경계는 handle lookup input을 받지 않는다
+- **AND** materialization 성공 뒤 connection·staged visibility DB 조회는 기존 검색 경계에서 수행한다
+- **AND** 저장된 actor URI나 Profile이 없어도 actor URI를 사용해 새 remote Profile을 materialize할 수 있다
 - **AND** 검증된 actor를 기존 Profile·ActivityPub actor 저장 계약으로 materialize한다
 - **AND** materialized Profile identity를 기준으로 기존 DB connection과 staged visibility를 적용한 Profile edge를 반환한다
 - **AND** GraphQL field와 connection shape는 변경하지 않는다
 
-#### Scenario: Reuse a stored remote profile without network refresh
+#### Scenario: Reuse a fresh remote profile without network refresh
 
-- **WHEN** 로그인한 클라이언트가 명시적인 `@handle@instance` 전체를 검색하고 해당 active Remote Profile과 actor metadata가 이미 저장되어 있다
+- **WHEN** 로그인한 클라이언트가 명시적인 `@handle@instance` 전체를 검색하고 해당 active Remote Profile과 actor metadata가 이미 저장되어 있으며 actor가 stale하지 않다
 - **THEN** 시스템은 저장된 Profile identity를 기존 DB connection에서 반환한다
-- **AND** actor의 `lastFetchedAt`이 stale이어도 WebFinger, actor document fetch 또는 background refresh를 예약하지 않는다
+- **AND** Workflow는 저장된 canonical URI를 사용하고 WebFinger를 호출하지 않으며, 상태가 fresh이면 외부 fetch나 refresh child를 수행하거나 예약하지 않는다
+
+#### Scenario: Return a stale remote profile and start refresh
+
+- **WHEN** 로그인한 클라이언트가 명시적인 `@handle@instance` 전체를 검색하고 해당 active Remote Profile과 actor metadata가 이미 저장되어 있지만 actor가 stale하다
+- **THEN** 시스템은 기존 DB connection과 staged visibility를 적용한 저장 Profile을 refresh 완료 전에 즉시 반환한다
+- **AND** 시스템은 같은 handle lookup Workflow 경로에서 refresh child를 시작한다
+- **AND** 후속 refresh의 시작 또는 실행이 실패해도 기존 Profile과 성공한 검색 결과를 제거하거나 실패로 바꾸지 않는다
 
 #### Scenario: Return a canonical actor found through an alias domain
 
@@ -117,7 +142,7 @@ Block 공통 predicate를 선행 조건으로 요구해서는 안 된다(MUST NO
 
 #### Scenario: Fall back when explicit remote materialization cannot produce a profile
 
-- **WHEN** 명시적인 원격 검색의 lookup이 actor를 찾지 못하거나 Instance가 unavailable이거나 identity 충돌 또는 검증 실패가 발생한다
+- **WHEN** 명시적인 원격 검색에서 저장된 Profile이 없고 lookup이 actor를 찾지 못하거나 Instance가 unavailable이거나 identity 충돌 또는 검증 실패가 발생한다
 - **THEN** 시스템은 GraphQL 요청을 5xx 오류로 끝내지 않는다
 - **AND** 기존 connection shape의 빈 결과를 반환한다
 - **AND** partial search, `profileByHandle` 또는 프로필 route로 materialization을 확대하지 않는다
@@ -156,7 +181,7 @@ Block 공통 predicate를 선행 조건으로 요구해서는 안 된다(MUST NO
 - **WHEN** 프로필 route 또는 기존 소비자가 exact `profileByHandle` 조회를 사용한다
 - **THEN** 시스템은 기존 단건 exact lookup의 입력·출력과 공개 조회 인증 계약을 유지한다
 - **AND** `searchProfiles`의 로그인 요구사항을 `profileByHandle`에 적용하지 않는다
-- **AND** `profileByHandle`, 프로필 GET와 followers·following·post 하위 route는 Remote Profile을 materialize하지 않는다
+- **AND** `profileByHandle`, 프로필 GET와 followers·following·post 하위 route는 Remote Profile을 materialize하거나 refresh하지 않는다
 
 ### Requirement: Profile relative handle
 

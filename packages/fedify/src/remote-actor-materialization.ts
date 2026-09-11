@@ -1,6 +1,6 @@
 import '@kosmo/core/polyfill';
 
-import { getActorHandle, getActorTypeName, isActor, Link } from '@fedify/vocab';
+import { getActorTypeName, isActor, Link } from '@fedify/vocab';
 import { projectRemoteActivityPubHtmlToPlainText } from '@kosmo/core/activitypub-note-content/server';
 import {
   ActivityPubActors,
@@ -25,7 +25,6 @@ import {
 } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { parseProfileHandle } from '@kosmo/core/profile';
 import { normalizeHandle } from '@kosmo/core/utils';
 import {
   profileBioSchema,
@@ -37,8 +36,6 @@ import { isHttpUri } from './activitypub-uri';
 import type { Context } from '@fedify/fedify';
 import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
 
-const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
-
 export class RemoteActorMaterializationError extends Error {
   constructor(message: string) {
     super(message);
@@ -47,17 +44,11 @@ export class RemoteActorMaterializationError extends Error {
 }
 
 type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'>;
-
-type RemoteActorMaterializationOptions = {
+export type RemoteActorMaterializationOptions = {
   context: RemoteActorLookupContext;
-  expectedActorUri?: URL;
-  handle: string;
+  actorUri: URL;
   now?: Temporal.Instant;
   reactivateUnresponsive?: boolean;
-};
-
-type FindOrMaterializeRemoteActorOptions = RemoteActorMaterializationOptions & {
-  scheduleRefresh?: (refresh: () => Promise<void>) => void;
 };
 
 type ActorProjection = {
@@ -76,14 +67,6 @@ type RemoteProfileMediaCandidate = {
   altText: string | null;
   mediaType: string | null;
   url: string;
-};
-
-type ActorEndpoints = {
-  followersUri: string | null;
-  followingUri: string | null;
-  inboxUri: string | null;
-  outboxUri: string | null;
-  sharedInboxUri: string | null;
 };
 
 type ActorWithKosmoFields = Actor & {
@@ -118,22 +101,6 @@ const toActorType = (actor: Actor): ActivityPubActorType => {
     case 'Service':
       return ActivityPubActorType.SERVICE;
   }
-};
-
-const getActorEndpoints = (actor: ActorWithKosmoFields): ActorEndpoints => ({
-  followersUri: actor.followersId?.href ?? null,
-  followingUri: actor.followingId?.href ?? null,
-  inboxUri: actor.inboxId?.href ?? null,
-  outboxUri: actor.outboxId?.href ?? null,
-  sharedInboxUri: actor.endpoints?.sharedInbox?.href ?? null,
-});
-
-const projectActorBio = (summary: string | LanguageString | null | undefined): string | null => {
-  const value = summary?.toString();
-  const plainText = value === undefined ? null : projectRemoteActivityPubHtmlToPlainText(value);
-  const bio = profileBioSchema.safeParse(plainText || null);
-
-  return bio.success ? bio.data : null;
 };
 
 const projectActorImage = async (
@@ -177,7 +144,7 @@ const projectActorProfileUrl = (actor: ActorWithKosmoFields): string | null => {
   return url.href;
 };
 
-const projectActor = async (actor: ActorWithKosmoFields, requestedNormalizedHandle: string) => {
+const projectActor = async (actor: ActorWithKosmoFields) => {
   const preferredUsername = actor.preferredUsername?.toString();
 
   if (!preferredUsername) {
@@ -185,10 +152,6 @@ const projectActor = async (actor: ActorWithKosmoFields, requestedNormalizedHand
   }
 
   const normalizedHandle = normalizeHandle(preferredUsername);
-
-  if (normalizedHandle !== requestedNormalizedHandle) {
-    throw new RemoteActorMaterializationError('Remote actor preferredUsername does not match.');
-  }
 
   const handle = profileHandleSchema.safeParse(preferredUsername);
 
@@ -207,10 +170,13 @@ const projectActor = async (actor: ActorWithKosmoFields, requestedNormalizedHand
     projectActorImage(actor.getIcons(representationOptions)),
     projectActorImage(actor.getImages(representationOptions)),
   ]);
+  const value = actor.summary?.toString();
+  const plainText = value === undefined ? null : projectRemoteActivityPubHtmlToPlainText(value);
+  const bio = profileBioSchema.safeParse(plainText || null);
 
   return {
     avatar,
-    bio: projectActorBio(actor.summary),
+    bio: bio.success ? bio.data : null,
     displayName: displayName.success ? displayName.data : handle.data,
     followPolicy: actor.manuallyApprovesFollowers
       ? ProfileFollowPolicy.APPROVAL_REQUIRED
@@ -298,43 +264,6 @@ const ensureRemoteInstance = async (
     });
 };
 
-const lookupRemoteActor = async (
-  context: RemoteActorLookupContext,
-  handle: string,
-): Promise<Actor> => {
-  const object = (await context.lookupObject(`acct:${handle}`)) as ActivityPubObject | null;
-
-  if (!isActor(object)) {
-    throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
-  }
-
-  if (!object.id) {
-    throw new RemoteActorMaterializationError('Remote actor is missing canonical URI.');
-  }
-
-  return object;
-};
-
-const findStoredRemoteProfile = async (domain: string, normalizedHandle: string) =>
-  db
-    .select({
-      actor: getColumns(ActivityPubActors),
-      instance: getColumns(Instances),
-      profile: getColumns(Profiles),
-    })
-    .from(Profiles)
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-    .where(
-      and(
-        eq(Instances.domain, domain),
-        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
-        eq(Profiles.normalizedHandle, normalizedHandle),
-      ),
-    )
-    .limit(1)
-    .then(first);
-
 export const findStoredRemoteProfileActorByUri = async (actorUri: URL | string) =>
   db
     .select({
@@ -349,7 +278,6 @@ export const findStoredRemoteProfileActorByUri = async (actorUri: URL | string) 
       and(
         eq(ActivityPubActors.uri, actorUri.toString()),
         eq(Instances.kind, InstanceKind.ACTIVITYPUB),
-        eq(Profiles.state, ProfileState.ACTIVE),
       ),
     )
     .limit(1)
@@ -358,6 +286,10 @@ export const findStoredRemoteProfileActorByUri = async (actorUri: URL | string) 
 const requireUsableStoredRemoteActor = async (
   stored: NonNullable<Awaited<ReturnType<typeof findStoredRemoteProfileActorByUri>>>,
 ) => {
+  if (stored.profile.state !== ProfileState.ACTIVE) {
+    throw new NotFoundError('Profile not found');
+  }
+
   if (stored.instance.state === InstanceState.SUSPENDED) {
     throw new NotFoundError('Profile not found');
   }
@@ -414,19 +346,7 @@ export const findOrMaterializeRemoteProfileActorByUri = async ({
     return stored;
   }
 
-  let handle: string;
-  try {
-    handle = await getActorHandle(actorUri, { trimLeadingAt: true });
-  } catch {
-    throw new RemoteActorMaterializationError('WebFinger actor identity does not match.');
-  }
-  await materializeRemoteProfileActor({
-    context,
-    expectedActorUri: actorUri,
-    handle,
-    now,
-    reactivateUnresponsive: true,
-  });
+  await materializeRemoteProfileActor({ context, actorUri, now, reactivateUnresponsive: true });
 
   const materialized = await findStoredRemoteProfileActorByUri(actorUri);
 
@@ -437,91 +357,55 @@ export const findOrMaterializeRemoteProfileActorByUri = async ({
   return requireUsableStoredRemoteActor(materialized);
 };
 
-const isStale = (lastFetchedAt: Temporal.Instant | null, now: Temporal.Instant) =>
-  lastFetchedAt === null ||
-  lastFetchedAt.add(remoteActorRefreshTtl).epochNanoseconds <= now.epochNanoseconds;
-
-const defaultScheduleRefresh = (refresh: () => Promise<void>) => {
-  void refresh().catch(() => undefined);
-};
-
-export const findOrMaterializeRemoteProfileActor = async ({
-  context,
-  handle,
-  now = getNow(),
-  scheduleRefresh = defaultScheduleRefresh,
-}: FindOrMaterializeRemoteActorOptions) => {
+export const materializeRemoteProfileActor = async (options: RemoteActorMaterializationOptions) => {
+  const { context, now = getNow(), reactivateUnresponsive = false } = options;
   const localInstance = await resolveConfiguredLocalInstance();
-  const parsed = parseProfileHandle(handle, { configuredLocalDomain: localInstance.domain });
 
-  if (!parsed || parsed.kind !== 'remote') {
-    throw new RemoteActorMaterializationError('Remote materialization requires a remote handle.');
+  if (
+    (options.actorUri.protocol !== 'http:' && options.actorUri.protocol !== 'https:') ||
+    !options.actorUri.hostname
+  ) {
+    throw new RemoteActorMaterializationError('Remote actor URI must use HTTP(S) with a hostname.');
   }
 
-  const stored = await findStoredRemoteProfile(parsed.domain, parsed.normalizedHandle);
-
-  if (stored) {
-    if (stored.profile.state !== ProfileState.ACTIVE) {
-      throw new NotFoundError('Profile not found');
-    }
-
-    if (stored.instance.state === InstanceState.SUSPENDED) {
-      throw new NotFoundError('Profile not found');
-    }
-
-    if (
-      stored.instance.state !== InstanceState.UNRESPONSIVE &&
-      isStale(stored.actor.lastFetchedAt, now)
-    ) {
-      try {
-        scheduleRefresh(async () => {
-          await materializeRemoteProfileActor({ context, handle, now: getNow() });
-        });
-      } catch {
-        return stored.profile;
-      }
-    }
-
-    return stored.profile;
+  if (options.actorUri.origin === localInstance.canonicalOrigin) {
+    throw new ConflictError({ message: 'Remote actor URI uses the local origin' });
   }
 
-  return materializeRemoteProfileActor({ context, handle, now });
-};
-
-export const materializeRemoteProfileActor = async ({
-  context,
-  expectedActorUri,
-  handle,
-  now = getNow(),
-  reactivateUnresponsive = false,
-}: RemoteActorMaterializationOptions) => {
-  const localInstance = await resolveConfiguredLocalInstance();
-  const parsed = parseProfileHandle(handle, { configuredLocalDomain: localInstance.domain });
-
-  if (!parsed || parsed.kind !== 'remote') {
-    throw new RemoteActorMaterializationError('Remote materialization requires a remote handle.');
-  }
-
-  const existingRequestedRemoteInstance = await findAvailableRemoteInstance(parsed.domain, {
+  const targetActorDomain = `${options.actorUri.hostname.toLowerCase().replace(/\.$/, '')}${
+    options.actorUri.port ? `:${options.actorUri.port}` : ''
+  }`;
+  const existingRequestedRemoteInstance = await findAvailableRemoteInstance(targetActorDomain, {
     allowUnresponsive: reactivateUnresponsive,
   });
-  const actor = await lookupRemoteActor(context, `${parsed.handle}@${parsed.domain}`);
-  const actorId = actor.id!;
+  const actor = (await context.lookupObject(options.actorUri)) as ActivityPubObject | null;
 
-  if (expectedActorUri && actorId.href !== expectedActorUri.href) {
-    throw new RemoteActorMaterializationError('Remote actor URI does not match.');
+  if (!isActor(actor)) {
+    throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
   }
+
+  if (!actor.id) {
+    throw new RemoteActorMaterializationError('Remote actor is missing canonical URI.');
+  }
+
+  const actorId = actor.id;
 
   if ((actorId.protocol !== 'http:' && actorId.protocol !== 'https:') || !actorId.hostname) {
     throw new RemoteActorMaterializationError('Remote actor URI must use HTTP(S) with a hostname.');
   }
 
-  if (actorId.origin === localInstance.canonicalOrigin) {
-    throw new ConflictError({ message: 'Remote actor URI uses the local origin' });
+  if (actorId.href !== options.actorUri.href) {
+    throw new RemoteActorMaterializationError('Remote lookup returned a different actor URI.');
   }
 
-  const projection = await projectActor(actor as ActorWithKosmoFields, parsed.normalizedHandle);
-  const endpoints = getActorEndpoints(actor as ActorWithKosmoFields);
+  const projection = await projectActor(actor as ActorWithKosmoFields);
+  const endpoints = {
+    followersUri: actor.followersId?.href ?? null,
+    followingUri: actor.followingId?.href ?? null,
+    inboxUri: actor.inboxId?.href ?? null,
+    outboxUri: actor.outboxId?.href ?? null,
+    sharedInboxUri: actor.endpoints?.sharedInbox?.href ?? null,
+  };
   const actorUri = actorId.href;
   const actorType = toActorType(actor);
   const canonicalActorHostname = actorId.hostname.toLowerCase().replace(/\.$/, '');
@@ -529,11 +413,7 @@ export const materializeRemoteProfileActor = async ({
     actorId.port ? `${canonicalActorHostname}:${actorId.port}` : canonicalActorHostname,
     { allowUnresponsive: reactivateUnresponsive },
   );
-  const requestedRemoteInstance =
-    existingRequestedRemoteInstance ??
-    (await ensureRemoteInstance(parsed.domain, {
-      allowUnresponsive: reactivateUnresponsive,
-    }));
+  const requestedRemoteInstance = existingRequestedRemoteInstance ?? canonicalRemoteInstance;
 
   const persistActor = () =>
     db.transaction(async (tx) => {

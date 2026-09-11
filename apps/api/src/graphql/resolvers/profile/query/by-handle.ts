@@ -1,28 +1,19 @@
 import { db, first, Instances, Profiles } from '@kosmo/core/db';
 import { InstanceKind, ProfileState } from '@kosmo/core/enums';
-import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/remote-profile';
 import { profileHandleSchema } from '@kosmo/core/validation';
-import {
-  federation,
-  findOrMaterializeRemoteProfileActor,
-  RemoteActorMaterializationError,
-} from '@kosmo/fedify';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
+import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { and, asc, desc, eq, getColumns, gt, lt, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { visibleProfileWhere } from '@/profile/visibility';
-import { captureUnexpectedError } from '@/sentry';
+import { reportError } from '@/sentry';
 import { Profile, ProfileConnection } from '../ref';
 
 type ProfileRow = typeof Profiles.$inferSelect;
-
-// Resolver-local seam keeps error reporting replaceable in focused tests without widening
-// the Fedify or application-wide error-reporting API.
-export const remoteProfileSearchErrorReporter = {
-  capture: captureUnexpectedError,
-};
 
 const escapeLikePattern = (value: string) =>
   value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
@@ -37,11 +28,6 @@ const isExplicitRemoteHandle = (
   parsed?.kind === 'remote' &&
   profileHandleSchema.safeParse(parsed.handle).success &&
   parsed.handle === parsed.handle.trim();
-
-const isExpectedRemoteMaterializationError = (error: unknown) =>
-  error instanceof RemoteActorMaterializationError ||
-  error instanceof ConflictError ||
-  error instanceof NotFoundError;
 
 builder.queryField('profileByHandle', (t) =>
   t.field({
@@ -100,7 +86,7 @@ builder.queryField('searchProfiles', (t) =>
       args: {
         query: t.arg.string({ required: true }),
       },
-      resolve: async (_, args) => {
+      resolve: async (_, args, ctx) => {
         const localInstance = await resolveConfiguredLocalInstance();
         const parsed = parseProfileHandle(args.query, {
           configuredLocalDomain: localInstance.domain,
@@ -113,21 +99,23 @@ builder.queryField('searchProfiles', (t) =>
           );
         }
 
-        let materializedProfileId: string | undefined;
+        let materializedProfileId: string | null | undefined;
 
         if (isExplicitRemoteHandle(args.query, parsed)) {
-          try {
-            const profile = await findOrMaterializeRemoteProfileActor({
-              context: federation.createContext(new URL(localInstance.canonicalOrigin), undefined),
-              handle: `${parsed.handle}@${parsed.domain}`,
-              scheduleRefresh: () => undefined,
-            });
-            materializedProfileId = profile.id;
-          } catch (error) {
-            if (!isExpectedRemoteMaterializationError(error)) {
-              remoteProfileSearchErrorReporter.capture(error);
-            }
+          materializedProfileId = await runWorkflow(remoteProfileLookupWorkflow, {
+            args: [
+              {
+                domain: parsed.domain,
+                handle: parsed.handle,
+                ...(ctx.session.profile?.id ? { profileId: ctx.session.profile.id } : {}),
+              },
+            ],
+            mode: 'execute',
+            workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+            workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+          }).catch(reportError);
 
+          if (materializedProfileId === null) {
             return resolveCursorConnection<Promise<ProfileRow[]>>(
               { args, toCursor: (profile) => profile.id },
               () => Promise.resolve([]),

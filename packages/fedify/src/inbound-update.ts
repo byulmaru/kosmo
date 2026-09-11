@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import { isActor } from '@fedify/vocab';
+import { ProfileState } from '@kosmo/core/enums';
 import { ConflictError } from '@kosmo/core/error';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
@@ -71,7 +72,7 @@ export const handleInboundUpdate = async (
   }
 
   const stored = await findStoredRemoteProfileActorByUri(actorUri);
-  if (!stored) {
+  if (!stored || stored.profile.state !== ProfileState.ACTIVE) {
     observeInbound({
       outcome: 'noop',
       activityType: 'Update',
@@ -89,7 +90,7 @@ export const handleInboundUpdate = async (
       context: {
         lookupObject: async (): Promise<ActivityPubObject> => object,
       },
-      handle: `${stored.profile.handle}@${stored.instance.domain}`,
+      actorUri,
       now: receivedAt,
       reactivateUnresponsive: true,
     });

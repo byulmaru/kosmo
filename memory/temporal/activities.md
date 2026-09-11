@@ -20,6 +20,8 @@
 - adapter는 input 변환, dependency composition, retry 경계에 필요한 validation 또는 Activity 고유 관찰처럼 실제 책임이 있을 때만 둔다.
 - Activity 이름은 Workflow history와 운영 조회에 남는 public runtime identity이므로 rename은 호환성 영향을 검토한다.
 
+- `materializeRemoteProfileActorActivity`는 stored/missing 판정과 현재 Profile/Instance state·actor TTL 확인을 소유하며 `{ profileId, needsRefresh }` non-null 최소 JSON-safe DTO를 반환한다. Activity 모듈의 private stored-state query에서 missing을 `null`로 관찰할 수 있지만, missing이면 refresh Activity의 fetch·persist를 ordinary call로 수행한 뒤 새 target ID를 `{ profileId: id, needsRefresh: false }` 의미로 반환한다. DTO의 `profileId`는 cached 또는 새로 생성한 target Profile ID이고 input의 optional `profileId`는 origin 선택용 행동 Profile ID다. 갱신 불필요 상태는 외부 fetch나 refresh child 없이 cached ID를 반환한다.
+
 ## Inputs And Identity
 
 - Workflow/Update wire input의 strict Zod schema는 해당 Workflow의 trust boundary 가까이에 둔다. Core service는

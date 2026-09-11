@@ -6,5 +6,7 @@ export { profileFollowRemovalWorkflow } from './profile-follow-removal';
 export { profileUpdateEffectsWorkflow } from './profile-update';
 export { reactionCreateEffectsWorkflow } from './reaction-create';
 export { reactionDeleteEffectsWorkflow } from './reaction-delete';
+export { remoteProfileLookupWorkflow } from './remote-profile-lookup';
+export { remoteProfileRefreshWorkflow } from './remote-profile-refresh';
 export { postRepostWorkflow } from './repost';
 export { repostDeleteWorkflow } from './repost-delete';

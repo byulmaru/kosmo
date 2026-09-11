@@ -2,13 +2,23 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import test, { mock } from 'node:test';
 import { setImmediate } from 'node:timers/promises';
+import {
+  ActivityFailure,
+  ApplicationFailure,
+  CancelledFailure,
+  ServiceError,
+  TimeoutFailure,
+  WorkflowFailedError,
+} from '@temporalio/client';
 import type { WorkflowHandleWithStartDetails } from '@temporalio/client';
 import type { WorkflowDefinition } from './client';
+import type { RemoteProfileLookupInput } from './remote-profile';
 
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
 
 const { runWorkflow, temporalClient } = await import('./client');
+const { remoteProfileLookupWorkflow } = await import('./remote-profile');
 
 const importClient = (environment: NodeJS.ProcessEnv) =>
   spawnSync(
@@ -282,6 +292,55 @@ test('서로 다른 Workflow는 각자의 ID callback과 native 결과 타입을
   }
 });
 
+test('remote Profile Workflow builder는 normalized handle과 profileId를 실행 ID에 보존한다', async () => {
+  const domain = 'remote.example';
+  const configuredLocalInput = {
+    domain,
+    handle: ' Alice ',
+  } satisfies RemoteProfileLookupInput;
+  const profileInput = {
+    domain,
+    handle: 'alice',
+    profileId: '00000000-0000-8000-8000-000000000001',
+  } satisfies RemoteProfileLookupInput;
+  const execute = mock.method(temporalClient.workflow, 'execute', async () => 'profile-1' as never);
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+  const workflowName = remoteProfileLookupWorkflow.workflow;
+
+  try {
+    await runWorkflow(remoteProfileLookupWorkflow, {
+      args: [configuredLocalInput],
+      mode: 'execute',
+    });
+    await runWorkflow(remoteProfileLookupWorkflow, {
+      args: [configuredLocalInput],
+      mode: 'execute',
+    });
+    await runWorkflow(remoteProfileLookupWorkflow, {
+      args: [profileInput],
+      mode: 'execute',
+    });
+
+    const workflowIds = execute.mock.calls.map((call) => {
+      const options = call.arguments[1];
+      assert.ok(options);
+      return options.workflowId;
+    });
+    assert.deepEqual(workflowIds, [
+      `${workflowName}:["${domain}","alice","configured-local"]`,
+      `${workflowName}:["${domain}","alice","configured-local"]`,
+      `${workflowName}:["${domain}","alice","00000000-0000-8000-8000-000000000001"]`,
+    ]);
+  } finally {
+    deadline.mock.restore();
+    execute.mock.restore();
+  }
+});
+
 test('공용 task queue와 5초 deadline을 적용한다', async () => {
   const workflow = async (): Promise<string> => 'ok';
   const definition = { workflow, workflowIdFromArgs: () => 'deadline-id' };
@@ -321,34 +380,100 @@ test('공용 task queue와 5초 deadline을 적용한다', async () => {
   }
 });
 
-test('Workflow 실행 오류를 변환하지 않고 그대로 전파한다', async () => {
-  type FailureWorkflow = () => Promise<string>;
-  const definition: WorkflowDefinition<FailureWorkflow> = {
-    workflow: 'profileWorkflow',
-    workflowIdFromArgs: () => 'failure-id',
-  };
-  const failure = new Error('Temporal unavailable');
-  const execute = mock.method(temporalClient.workflow, 'execute', async () => {
-    throw failure;
-  });
-  const deadline = mock.method(
-    temporalClient,
-    'withDeadline',
-    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
-  );
-
-  try {
-    await assert.rejects(
-      runWorkflow(definition, {
-        mode: 'execute',
-      }),
-      (error: unknown) => error === failure,
+for (const mode of ['start', 'execute'] as const) {
+  test(`${mode} mode는 ApplicationFailure를 해석하고 그 외 native 오류는 원본으로 전파한다`, async () => {
+    type FailureWorkflow = () => Promise<string>;
+    const definition: WorkflowDefinition<FailureWorkflow> = {
+      workflow: 'profileWorkflow',
+      workflowIdFromArgs: () => `failure-boundary-${mode}`,
+    };
+    const nestedApplicationFailure = ApplicationFailure.create({
+      message: 'Remote actor could not be materialized',
+      type: 'RemoteActorMaterializationError',
+      nonRetryable: true,
+      details: [{ actorUri: 'https://remote.example/users/alice' }],
+    });
+    const activityFailure = new ActivityFailure(
+      'Activity failed',
+      'materializeRemoteProfileActor',
+      'activity-id',
+      'NON_RETRYABLE_FAILURE',
+      'worker-id',
+      nestedApplicationFailure,
     );
-  } finally {
-    deadline.mock.restore();
-    execute.mock.restore();
-  }
-});
+    const nativeWorkflowFailure = new WorkflowFailedError(
+      'Workflow execution failed',
+      activityFailure,
+      'NON_RETRYABLE_FAILURE',
+    );
+    const directApplicationFailure = ApplicationFailure.nonRetryable(
+      'Remote actor was not found',
+      'NotFoundError',
+      { actorUri: 'https://remote.example/users/alice' },
+    );
+    const timeoutCause = new TimeoutFailure(
+      'Workflow execution timed out',
+      undefined,
+      'START_TO_CLOSE',
+    );
+    const nativeTimeoutFailure = new WorkflowFailedError(
+      'Workflow execution failed',
+      timeoutCause,
+      'TIMEOUT',
+    );
+    const transportFailure = new ServiceError('Temporal transport unavailable');
+    const cancellationCause = new CancelledFailure('Workflow execution cancelled');
+    const nativeCancellationFailure = new WorkflowFailedError(
+      'Workflow execution cancelled',
+      cancellationCause,
+      'NON_RETRYABLE_FAILURE',
+    );
+    const plainFailure = new Error('Temporal unavailable');
+    const failures = [
+      { failure: nativeWorkflowFailure, expected: nestedApplicationFailure },
+      { failure: directApplicationFailure, expected: directApplicationFailure },
+      { failure: nativeTimeoutFailure, expected: nativeTimeoutFailure },
+      { failure: transportFailure, expected: transportFailure },
+      { failure: nativeCancellationFailure, expected: nativeCancellationFailure },
+      { failure: plainFailure, expected: plainFailure },
+    ];
+    let failureIndex = 0;
+    const nativeCall =
+      mode === 'start'
+        ? mock.method(temporalClient.workflow, 'start', async () => {
+            const testCase = failures[failureIndex++];
+            assert.ok(testCase);
+            throw testCase.failure;
+          })
+        : mock.method(temporalClient.workflow, 'execute', async () => {
+            const testCase = failures[failureIndex++];
+            assert.ok(testCase);
+            throw testCase.failure;
+          });
+    const deadline = mock.method(
+      temporalClient,
+      'withDeadline',
+      async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+    );
+
+    try {
+      for (const { expected } of failures) {
+        await assert.rejects(runWorkflow(definition, { mode }), (error: unknown) => {
+          assert.strictEqual(error, expected);
+          return true;
+        });
+      }
+      assert.equal(nestedApplicationFailure.type, 'RemoteActorMaterializationError');
+      assert.deepEqual(nestedApplicationFailure.details, [
+        { actorUri: 'https://remote.example/users/alice' },
+      ]);
+      assert.equal(nativeCall.mock.calls.length, failures.length);
+    } finally {
+      deadline.mock.restore();
+      nativeCall.mock.restore();
+    }
+  });
+}
 
 test('Workflow ID callback 오류는 SDK 실행 전에 그대로 전파한다', async () => {
   type CallbackFailureWorkflow = (profileId: string) => Promise<string>;

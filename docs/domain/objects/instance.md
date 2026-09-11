@@ -83,8 +83,13 @@ Post와 Media의 Instance는 각각 Author Profile과 Media Profile에서 파생
 
 ## 조회 정책
 
-- 새 원격 요청은 Remote Instance의 Safety State가 Domain Block이 아니고 Reachability State가 Reachable이며
-  Service State가 Active일 때만 보낸다.
+- 명시적인 qualified handle의 원격 actor discovery는 WebFinger로 canonical actor URI를 확인하는 단계이며, Actor
+  Instance 상태를 판정하기 전에 수행할 수 있다.
+- WebFinger 응답만으로 Instance를 추출하거나 그 Instance의 상태를 판정하지 않는다. canonical actor URI로 식별한
+  Actor Instance의 Safety State가 Domain Block이 아니고 Reachability State가 Reachable이며 Service State가 Active일
+  때만 Actor document fetch·materialization 같은 실제 원격 요청을 보낸다.
+- 저장된 canonical actor URI가 있으면 WebFinger discovery를 반복하지 않고 그 URI로 식별한 Actor Instance의 상태
+  정책을 적용한다.
 - Domain Limit은 새 원격 요청을 막지 않지만 공개 Post List와 공개 검색 후보에서 해당 Remote Instance 콘텐츠를
   뺀다.
 - Domain Block은 해당 Remote Instance의 Profile, Post, Media와 관계 후보를 viewer에게 없는 것처럼 취급한다.
