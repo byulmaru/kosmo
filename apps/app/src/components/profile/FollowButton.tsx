@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { useProfileBlockMutations } from '@/components/profile/ProfileBlockController';
@@ -162,10 +162,6 @@ export function FollowButton({
   const blocking = Boolean(block || (blockStatus?.blocking && profileBlockId));
   const blockedByOnly = Boolean(blockStatus?.blockedBy && !blocking);
   const loading = following || cancelling || unfollowing || unblockPending;
-  const targetHeight = Platform.OS === 'android' ? 48 : Platform.OS === 'ios' ? 44 : 0;
-  const hitSlop = Math.max(0, (targetHeight - (size === 'compact' ? 32 : 40)) / 2);
-  const blockActionHitSlop = Platform.OS === 'web' ? undefined : hitSlop;
-
   const showFailureToast = () => {
     showToast(followFailureMessage, { tone: 'danger' });
   };
@@ -236,7 +232,6 @@ export function FollowButton({
               onActionRef?.(node);
             }}
             disabled={unblockPending}
-            hitSlop={blockActionHitSlop}
             onPress={() => setUnblockOpen(true)}
             size={size === 'compact' ? 'compact' : 'default'}
             style={size === 'compact' ? styles.compactButton : styles.mediumButton}

@@ -262,25 +262,33 @@ for (const size of [undefined, 'compact'] as const) {
   });
 }
 
-test('Native 차단 action은 Button hitSlop만 사용해 wrapper 높이를 늘리지 않는다', async () => {
-  platform.OS = 'ios';
-  await act(async () => {
-    renderer = create(
-      createElement(FollowButton, {
-        profile: profile as never,
-        profileBlockStatus: {
-          blockedBy: false,
-          blocking: true,
-          profileBlockId: 'profile-block-a',
-        } as never,
-      }),
-    );
+for (const [os, size] of [
+  ['ios', 'medium'],
+  ['ios', 'compact'],
+  ['android', 'medium'],
+  ['android', 'compact'],
+] as const) {
+  test(`${os} ${size} 차단 action은 터치 영역을 공통 Button에 위임한다`, async () => {
+    platform.OS = os;
+    await act(async () => {
+      renderer = create(
+        createElement(FollowButton, {
+          profile: profile as never,
+          profileBlockStatus: {
+            blockedBy: false,
+            blocking: true,
+            profileBlockId: 'profile-block-a',
+          } as never,
+          size,
+        }),
+      );
+    });
+    const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
+    const wrapperStyle = Object.assign({}, ...button!.parent!.props.style.flat());
+    assert.equal(wrapperStyle.paddingVertical, undefined);
+    assert.equal(button?.props.hitSlop, undefined);
   });
-  const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
-  const wrapperStyle = Object.assign({}, ...button!.parent!.props.style.flat());
-  assert.equal(wrapperStyle.paddingVertical, undefined);
-  assert.equal(button?.props.hitSlop, 2);
-});
+}
 
 for (const [os, width, expectedWidth, marginVertical] of [
   ['web', 767, 96, 0],
