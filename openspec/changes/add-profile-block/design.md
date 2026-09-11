@@ -33,10 +33,6 @@ canonical `profile-block.md`는 이 결과와 durable 경계만 정하며, 각 �
 - Confirmation·관리 목록·접근성 등 기존 레거시 Profile·Settings UI와 최신 canonical이 정한 GraphQL `node(id:)`·`profileByHandle` direct Profile route 계약을 구현·통합하는 흐름을 제공한다.
   양쪽 route는 기본 Profile 정보를 표시하고, `blocking` route는 frontend 콘텐츠 경고 뒤 허용된 콘텐츠와 `차단 해제` action을 제공하며,
   `blockedBy` route는 콘텐츠 차단 상태를 표시한다. 경고 문구·표시 기간은 후속 디자인 계약으로 남기고, `PROD-917` 신규 UI 교체는 이 change와 분리한다.
-- Profile·Post·Media·Follow 후보와 Home·Local·Profile·Hashtag Post List·검색 및 새 Local/ActivityPub 상호작용에 각 surface의 Profile Block policy를 적용한다.
-- selected Local Profile을 actor로 사용하는 GraphQL Block 생성·해제와 Owner-only management 조회를 제공한다.
-- Confirmation·관리 목록·접근성 등 기존 presentation contract와 최신 canonical의 기존 Profile 정보·viewer 방향 콘텐츠 상태를 소비하는
-  흐름을 제공한다. 신규 UI 교체는 `PROD-917` 후속 범위다.
 - `PROD-813`에서 Local·Remote pair와 주요 surface의 cross-slice 결과를 검증하고 canonical·Linear·OpenSpec sync 뒤 archive한다.
 
 **Non-Goals:**
@@ -46,8 +42,7 @@ canonical `profile-block.md`는 이 결과와 durable 경계만 정하며, 각 �
 - ActivityPub Block/Undo 발신·수신과 remote delivery(`PROD-818`). Remote Owner의 Block/Undo ingress는 제외하지만, 원격 actor의 기존 Reply·Reaction·Repost ingress에는 Local과 같은 admission을 적용한다.
 - 조회 불가 Notification의 schedule/event/queue/worker/scan 물리 cleanup(`PROD-328`).
 - Block 생성 시 기존 Reaction cleanup. 이 범위는 현재 action에서 정하지 않으며, 필요하면 별도 후속 계약에서 결정한다.
-- Profile Mute, Profile Domain Block, 신고·커뮤니티 관리와 `PROD-917` 신규 UI 교체.
-- Profile Mute, Profile Domain Block, 신고·커뮤니티 관리와 차단된 Profile presentation의 결정·이관 자체.
+- Profile Mute, Profile Domain Block, 신고·커뮤니티 관리, 차단된 Profile presentation의 결정·이관과 `PROD-917` 신규 UI 교체.
 - 아직 없는 Hashtag Post List·Post 검색 endpoint의 신규 구현과 실제 endpoint E2E. 해당 경로는 공통 후보 정책 검증으로 이번 change의 완료 조건을 충족한다.
 
 ## Implementation Guidance
@@ -83,11 +78,6 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
 
 각 owning PR은 현재 코드·배포 조건·검증 결과를 바탕으로 자기 Deliverable을 달성할 구체 구현 방식을 선택한다. 이 선택은
 규범 계약이 아니며, observable behavior나 durable decision을 바꾸면 해당 PR은 같은 change와 상위 authority를 먼저 갱신한다.
-
-#770은 canonical 문서와 이 OpenSpec 정책·계약만 소유한다. 후속 `PROD-822-graphql` layer는 selected Local actor의 Block/Unblock mutation,
-Owner 관리 connection·관계 Node, 정확한 unblock 관계 ID, generated GraphQL schema와 관리 API 테스트를 소유한다. 그 자식
-`PROD-822-policy` layer는 GraphQL `node(id:)`·`profileByHandle` 직접 조회, `searchProfiles` 후보·콘텐츠·Follow·Notification과 새 상호작용 제한, 공통 admission,
-Local/ActivityPub 실행 경로와 회귀를 소유한다.
 
 | 구현 Stack layer         | 책임                                                                                                                                                                     |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

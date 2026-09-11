@@ -251,10 +251,6 @@ E2E를 완료하고, 최신 canonical·Linear·OpenSpec을 동기화한 뒤 모�
   구현·완료 증거가 아니다.
 - 기존 레거시 Profile·Settings UI의 구현·통합 결과를 API·cache·Native runtime 결과와 함께 환경별 실제 evidence로 기록한다. `PROD-917` 신규 UI 교체는
   현재 change와 분리된 후속 범위로 유지한다.
-- Local·Remote Target, GraphQL `node(id:)`·`profileByHandle` 양쪽 직접 조회·현재 구현된 list/search·새 interaction, Follow/직접 원인 Notification cleanup, 기존 Reaction·Repost/Bookmark 보존,
-  Follow 관계 Unblock 비복구와 Profile 전환 isolation을 한 완료 흐름으로 검증한다.
-- `PROD-327`의 현재 Notification source 신규 생성 suppression, `PROD-818`의 ActivityPub Block/Undo, `PROD-328`의 async physical cleanup은 이 change의
-  구현·완료 증거가 아니다.
 - `PROD-861` Storybook/presentation 결과를 API·cache·Native runtime 완료 증거로 일반화하지 않는다. 환경별 실제 증거와 미검증 범위를 분리 기록한다.
 - 미구현 Hashtag Post List·Post 검색은 공통 정책 검증 결과와 실제 API 미실행을 구분해 기록한다. 검증 시점에 endpoint가 이미 제공되면 실제 공개 결과로 검증하며,
   archive 이후 추가되는 endpoint의 연결·검증은 해당 기능 이슈가 소유한다. 미래 endpoint를 기다리기 위해 이 change를 미완료로 유지하거나 다시 열지 않는다.
@@ -264,8 +260,6 @@ E2E를 완료하고, 최신 canonical·Linear·OpenSpec을 동기화한 뒤 모�
 
 - Local/Remote Target 각각의 block·unblock, GraphQL `node(id:)`·`profileByHandle` 기존 Profile identity 조회, Owner → Target과 Target → Owner의 Post/Media direct 정책, Profile Post List viewer
   방향 정책, 양방향 Follow 후보·Home/Local/Hashtag Post list·Post search·새 interaction·Notification과 cleanup/no-restore를 Web/API cross-slice E2E로 검증한다.
-- Local/Remote Target 각각의 block·unblock, 양방향 Profile/Post/Media/Follow 후보, 현재 구현된 Post list/search, 새 interaction rejection과 cleanup/no-restore를
-  Web/API cross-slice E2E로 검증한다.
 - 이전 cache 없는 GraphQL `node(id:)`·`profileByHandle` 기반 직접 Profile 진입·새로고침·actor 전환에서 기존 Profile 정보와 Owner 해제 ID의 API·UI 연결을 확인한다.
 - 아직 없는 Hashtag Post List·Post 검색은 2.10의 공통 후보 정책 실행 결과와 실제 endpoint 미실행 기록을 완료 증거로 확인한다.
 - Web·iOS·Android와 접근성 실행 결과를 플랫폼별로 기록하고, 구현하지 않은 ActivityPub·Notification source·async cleanup 범위를 별도로 확인한다.
