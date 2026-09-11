@@ -5,23 +5,19 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { readGraphQLOperation, toGlobalId, waitForGraphQLOperation } from './graphql';
+import { readGraphQLOperation, waitForGraphQLOperation } from './graphql';
 
 test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
-test('목록의 재게시 메뉴에서 direct Source를 유지한 Quote를 작성한다', async ({
-  context,
-  page,
-}) => {
+test('목록의 재게시 메뉴에서 Quote 작성 진입점을 임시로 숨긴다', async ({ context, page }) => {
   const sourceBody = 'E2E Quote direct source body';
-  const quoteBody = 'E2E Quote composer body';
   const viewer = await createE2ESession({
-    displayName: 'E2E Quote Writer',
-    handle: 'e2e-quote-writer',
+    displayName: 'E2E Quote Entry Viewer',
+    handle: 'e2e-quote-entry-viewer',
   });
-  const source = await createE2EPost({
+  await createE2EPost({
     body: sourceBody,
     profileId: viewer.profile!.id,
   });
@@ -33,46 +29,9 @@ test('목록의 재게시 메뉴에서 direct Source를 유지한 Quote를 작�
   const trigger = sourceRow.getByRole('button', { name: '재게시' });
   await trigger.click();
   const menu = page.getByRole('menu', { name: '재게시 메뉴' });
-  await menu.getByRole('menuitem', { name: '인용하기' }).click();
-
-  const dialog = page.getByRole('dialog', { name: '인용 게시글 쓰기' });
-  const body = dialog.getByRole('textbox', { name: '인용 게시글 본문' });
-  await expect(dialog.getByTestId('source-post-preview')).toContainText(sourceBody);
-  await expect(body).toBeFocused();
-  await body.fill(quoteBody);
-
-  await dialog.getByRole('button', { name: '닫기' }).click();
-  const discard = page.getByRole('alertdialog', { name: '인용 게시글 작성을 취소할까요?' });
-  await discard.getByRole('button', { name: '계속 작성' }).click();
-  await expect(body).toBeFocused();
-  await expect(body).toHaveValue(quoteBody);
-
-  const mutationResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
-  await dialog.getByRole('button', { name: '인용 게시' }).click();
-  const response = await mutationResponse;
-  const operation = readGraphQLOperation(response.request().postData());
-  const responseBody = (await response.json()) as {
-    data?: { createPost?: { post?: { id?: string | null } | null } | null };
-    errors?: unknown[];
-  };
-
-  expect(response.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
-  expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
-  expect(operation?.variables).toMatchObject({
-    input: {
-      bodyText: quoteBody,
-      repostSourceId: toGlobalId('Post', source.id),
-      visibility: 'UNLISTED',
-    },
-  });
-  expect(operation?.variables?.input).not.toHaveProperty('replyParentId');
-  await expect(dialog).toHaveCount(0);
-  await expect(trigger).toBeFocused();
-
-  await page.goto('/@e2e-quote-writer');
-  const quoteRow = page.getByRole('article').filter({ hasText: quoteBody });
-  await expect(quoteRow).toBeVisible();
-  await expect(quoteRow.getByTestId('source-post-preview')).toContainText(sourceBody);
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: '재게시하기' })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: '인용하기' })).toHaveCount(0);
 });
 
 test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 실행한다', async ({
