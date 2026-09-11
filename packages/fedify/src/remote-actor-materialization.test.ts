@@ -2,7 +2,6 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
-import { setImmediate } from 'node:timers/promises';
 import { Endpoints, Image, LanguageString, Link, Note, Person } from '@fedify/vocab';
 import {
   ActivityPubActorType,

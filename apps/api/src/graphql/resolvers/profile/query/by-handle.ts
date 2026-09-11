@@ -126,19 +126,11 @@ builder.queryField('searchProfiles', (t) =>
               workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
             });
           } catch (error) {
-            let materializationError: unknown = error;
-            while (
-              materializationError instanceof Error &&
-              !(materializationError instanceof ApplicationFailure)
-            ) {
-              materializationError = materializationError.cause;
-            }
-
             const isExpectedMaterializationError =
-              materializationError instanceof ApplicationFailure &&
-              (materializationError.type === 'RemoteActorMaterializationError' ||
-                materializationError.type === 'ConflictError' ||
-                materializationError.type === 'NotFoundError');
+              error instanceof ApplicationFailure &&
+              (error.type === 'RemoteActorMaterializationError' ||
+                error.type === 'ConflictError' ||
+                error.type === 'NotFoundError');
 
             if (!isExpectedMaterializationError) {
               remoteProfileSearchErrorReporter.capture(error);

@@ -52,8 +52,9 @@ context와 기존 lookup, inbound Update의 검증된 actor/no-network projectio
   `workflowIdFromArgs: (...args: Parameters<T>) => string` callback을 한 객체로 묶는다. Workflow caller는 Workflow
   종류와 무관한 공용 `runWorkflow(definition, { args, mode, ...native Workflow options })`에 이 객체와 native 정책을
   전달한다. `runWorkflow`는 definition의 callback에 native args를 한 번 전달해 기존 ID 문자열을 계산하고 KOSMO
-  task queue와 5초 bounded deadline으로 native `start` 또는 `execute`만 호출하며, native result·start 반환값·error와
-  conflict·reuse policy를 그대로 전달한다.
+  task queue와 5초 bounded deadline으로 native `start` 또는 `execute`를 호출하며, native result·start 반환값과
+  conflict·reuse policy를 유지한다. Native rejection의 `ApplicationFailure` cause normalization과 domain caller 정책은
+  2026-09-11 `Shared client ApplicationFailure boundary` 결정에 따른다.
 - Activity 모듈의 private stored-state query가 missing을 `null`로 표현하고, `materializeRemoteProfileActorActivity`는 stored/missing
   판정과 현재 Profile/Instance 상태·actor TTL 확인을 소유해 `{ profileId, needsRefresh }` non-null 최소 JSON-safe DTO를 반환한다.
   `needsRefresh: false`는 갱신이 불필요하거나 허용되지 않는 상태(fresh 또는 `UNRESPONSIVE`), `needsRefresh: true`는

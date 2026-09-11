@@ -155,7 +155,7 @@
 - Decision Date: 2026-09-10
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `PROD-808` user decision
-- Status: Active except for the remote public input and identity clause superseded by the 2026-09-11 `Handle lookup Workflow and materialize/refresh Activity boundary` decision
+- Status: Active except for the remote public input and identity clause superseded by the 2026-09-11 `Handle lookup Workflow and materialize/refresh Activity boundary` decision and the native error forwarding clause superseded by the 2026-09-11 `Shared client ApplicationFailure boundary` decision
 - Context / Problem: `runWorkflow`에 Workflow name/function과 ID callback을 각각 전달하면 caller가 같은 Workflow 정의를 반복하고, Workflow 함수·ID 규칙·native args의 generic 관계를 호출 위치에서 다시 적게 된다. 사용자가 요청한 plain interface/object 형태로 이 정의를 하나의 입력으로 묶어도 기존 transport와 identity 의미는 유지해야 한다.
 - Decision Outcome: `packages/core/temporal/client.ts`에 `WorkflowDefinition<T extends Workflow>` plain interface를 둔다. 이 객체는 `workflow: string | T`와 `workflowIdFromArgs: (...args: Parameters<T>) => string`를 함께 정의한다. 공용 `runWorkflow(definition, { args, mode, ...native Workflow options })`는 definition에서 Workflow와 ID 규칙을 받고 native args를 callback에 한 번 전달해 기존 ID 문자열을 계산한 뒤 KOSMO task queue와 5초 bounded deadline으로 native `start` 또는 `execute`만 호출한다. Native args, mode별 result/handle type, start 반환값·error와 conflict/reuse policy는 그대로 전달·추론하고 domain 오류 정책은 호출부에 남긴다. `packages/core/temporal/remote-profile.ts`의 `remoteProfileMaterializationWorkflow` 정의 객체는 기존 remote Workflow와 ID callback을 함께 보유하며, 세 caller가 이를 공유한다. 기존 ID 문자열, sync/async, stale, origin, actorUri identity와 URI mismatch 저장 거부 계약은 변경하지 않는다.
 - Alternatives Considered: Workflow name/function과 ID callback을 별도 인자로 계속 전달하면 세 caller의 동일 설정과 local Workflow function type이 반복된다. 새 registry, runtime factory, fake Workflow function, contracts file, decorator 또는 다른 Workflow의 일괄 migration은 현재 plain object 입력 계약에 필요하지 않으며 scope와 runtime surface를 넓힌다.
@@ -210,6 +210,18 @@
 - Consequences: 명시적 qualified search는 하나의 lookup Workflow에서 URI lookup과 materialize Activity를 순서대로 사용한다. Missing fetch와 stale refresh는 같은 refresh Activity body를 ordinary call 또는 child로 공유하며, API의 기존 connection·visibility와 fallback 경계는 유지한다.
 - Confirmation / Follow-up: 2026-09-11 standalone Worker가 자체 `TestWorkflowEnvironment`에서 test-client preload 없이 16/16 실행되고 cleanup까지 완료됐으며, API profile 73/73, Fedify remote actor 39/39, Core client 10/10과 Core unit 74/74가 통과했다. Caller의 5초 bounded wait 설정, URI lookup→materialize→refresh 조합의 결과·오류, active OpenSpec strict 78/78과 archived proposal/delta Validator issues 0을 확인했으며, timeout continuation과 Worker restart recovery 자체는 Temporal native 계약으로 둔다.
 
+### Shared client ApplicationFailure boundary
+
+- Decision Date: 2026-09-11
+- Decision Class: Implementation Choice
+- Authority / Provenance: [`PROD-808` 2026-09-11 user decision](https://linear.app/byulmaru/issue/PROD-808), `docs/domain/objects/profile.md`
+- Status: Active
+- Context / Problem: native Workflow rejection은 `WorkflowFailedError` 같은 outer wrapper와 wire `ApplicationFailure`의 cause chain으로 전달될 수 있어, API가 Temporal의 중첩 cause 구조를 직접 알아야 한다.
+- Decision Outcome: `runWorkflow`는 callback 오류를 native 호출 전에 원본 그대로 전파한다. Native `start`/`execute` rejection은 `Error.cause` chain에서 첫 `ApplicationFailure`를 찾으면 그 동일 객체를 throw하고, 찾지 못하면 최초 rejection 객체를 그대로 throw한다. Native result·start 반환값·conflict/reuse policy, start handle와 execute result의 mode별 type은 유지한다. Caller는 전달받은 `ApplicationFailure.type`으로 expected domain failure를 분류하고 fallback·reporting을 결정한다. Unknown `ApplicationFailure`도 그대로 전달되어 outer Workflow 오류 wrapper가 Sentry 대표 오류에서 빠질 수 있으며, `ApplicationFailure`가 없는 transport·deadline·cancel 오류는 원래 native wrapper를 유지한다.
+- Alternatives Considered: API caller가 cause chain을 직접 순회하는 경계를 유지하면 Temporal 중첩 오류 구조가 endpoint로 새어 나온다. 모든 오류를 하나의 domain DTO로 바꾸면 native retry/transport metadata와 원인 형태를 잃고, domain type 목록과 fallback/reporting을 공용 client에 넣으면 Workflow별 정책 경계가 섞인다.
+- Consequences: remote profile API는 직접 cause traversal 없이 세 expected `ApplicationFailure.type`만 분류하면서 기존 빈 connection과 unexpected error 관측을 유지한다. Activity의 domain-to-`ApplicationFailure` retry encoding과 `runChildWorkflow`의 native error semantics는 변경하지 않는다.
+- Confirmation / Follow-up: Core client rejection tests와 API profile failure behavior를 실행해 first `ApplicationFailure` identity, no-`ApplicationFailure` original identity, callback failure, native result/start behavior와 existing fallback/reporting을 확인한다.
+
 ## Remaining Decisions
 
 없음.
@@ -224,3 +236,4 @@
 - 이전 remote materialization 전용 start wrapper와 `remote-profile-materialization:${actorUri}:${profileId}` ID 조합 해석은 2026-09-10 `Workflow 종류와 무관한 공용 래퍼 정정` 결정으로 대체됐다. remote Workflow의 actorUri/profileId identity와 conflict/reuse 의미, 다른 domain의 기존 ID와 UWS는 각자의 경계에서 유지된다.
 - 2026-09-10 `Workflow 종류와 무관한 공용 래퍼 정정`의 caller identity keys 및 `${workflowName}:${JSON.stringify(identityKeys)}` generic ID composition은 같은 날 `Workflow별 ID 규칙과 공용 래퍼 책임 정정`으로 대체됐다. 기존 remote Workflow ID 문자열과 native conflict/reuse/error 정책, 다른 domain의 ID와 UWS는 유지한다.
 - 2026-09-10 `Workflow 종류와 무관한 공용 래퍼 정정`의 실제 child caller 없는 child helper 금지 및 child API 부재 해석만 `Workflow-safe generic child lifecycle helper` 결정으로 대체한다. 해당 record의 generic client `runWorkflow` API, native pass-through, remote async child caller가 실제 존재할 때의 명시적 `parentClosePolicy: ABANDON`·`cancellationType: ABANDON` 계약과 다른 domain의 ID/UWS 보존은 유지한다.
+- 2026-09-10 `WorkflowDefinition 인터페이스와 공용 래퍼 입력 정정`의 native error pass-through clause는 2026-09-11 `Shared client ApplicationFailure boundary`로 대체한다. Native result/start 반환값, conflict/reuse policy, callback 오류, no-`ApplicationFailure` transport 오류와 domain caller 정책은 유지한다.

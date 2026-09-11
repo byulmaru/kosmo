@@ -1,4 +1,4 @@
-import { Client, Connection } from '@temporalio/client';
+import { ApplicationFailure, Client, Connection } from '@temporalio/client';
 import { KOSMO_TASK_QUEUE } from './task-queue';
 import type {
   Workflow,
@@ -58,13 +58,24 @@ export async function runWorkflow<T extends Workflow>(
   } as WorkflowStartOptions<T>;
   const deadline = Date.now() + 5_000;
 
-  if (mode === 'start') {
-    return temporalClient.withDeadline(deadline, () =>
-      temporalClient.workflow.start(definition.workflow, options),
-    );
-  }
+  try {
+    if (mode === 'start') {
+      return await temporalClient.withDeadline(deadline, () =>
+        temporalClient.workflow.start(definition.workflow, options),
+      );
+    }
 
-  return temporalClient.withDeadline(deadline, () =>
-    temporalClient.workflow.execute(definition.workflow, options),
-  );
+    return await temporalClient.withDeadline(deadline, () =>
+      temporalClient.workflow.execute(definition.workflow, options),
+    );
+  } catch (error) {
+    let failure: unknown = error;
+    while (failure instanceof Error && !(failure instanceof ApplicationFailure)) {
+      failure = failure.cause;
+    }
+    if (failure instanceof ApplicationFailure) {
+      throw failure;
+    }
+    throw error;
+  }
 }

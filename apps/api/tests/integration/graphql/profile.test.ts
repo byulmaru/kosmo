@@ -594,7 +594,7 @@ describe('GraphQL remote profile boundary', () => {
       'UnexpectedRemoteMaterializationError',
     );
     const execute = t.mock.method(temporalClient.workflow, 'execute', async () => {
-      throw lookupError;
+      throw new Error('Workflow execution failed', { cause: lookupError });
     });
 
     const result = await requestGraphQL<{
