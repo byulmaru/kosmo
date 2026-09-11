@@ -371,9 +371,7 @@ export const PostContents = pgTable(
   'post_content',
   {
     id: id(),
-    postId: uuid('post_id')
-      .notNull()
-      .references((): AnyPgColumn => Posts.id),
+    postId: uuid('post_id').references((): AnyPgColumn => Posts.id),
     document: jsonb('document').$type<PostContentDocumentV1>().notNull(),
     createdAt: createdAt(),
   },
