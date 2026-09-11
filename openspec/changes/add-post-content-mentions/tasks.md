@@ -110,9 +110,15 @@
 - 긴 이름·유사 대상, Light/Dark, Web keyboard·screen reader, Native touch·accessible focus 경계를 포함해 `PROD-910`의 renderer 계약을 실행 검증한다. 실행 환경이 없는 플랫폼은 검증 범위를 완료로 일반화하지 않는다.
 - inbound 저장 결과, reader compatibility gate와 renderer 결과를 함께 확인하고 `PROD-910` 구현·통합 완료 후 delta spec 동기화, archive와 archive 후 validation 증거를 정리한다.
 
-- [ ] 3.1 canonical Mention node와 current revision Profile relation을 소비하는 renderer 표시·Profile 이동·접근성을 구현한다.
+- [x] 3.1 canonical Mention node와 current revision Profile relation을 소비하는 renderer 표시·Profile 이동·접근성을 구현한다.
 - [ ] 3.2 valid, repeated, mismatch/fallback와 visibility·eligibility 입력의 통합 검증을 실행한다.
 - [ ] 3.3 `PROD-340` 저장 결과와 deferred reader gate 상태를 구분해 기록하고, `PROD-910` renderer 결과를 점검한다. 전체 declared scope와 2.x 후속 gate가 완료되기 전에는 delta spec 동기화·`PROD-910` archive·archive 후 validation을 완료로 표시하지 않는다.
+
+**3.1 실행 증거 상태 (2026-09-11)**
+
+- API TypeScript check와 Relay artifact validation, renderer unit 7개, Core 37개가 통과했다.
+- Web renderer 18개와 keyboard Tab focus-visible 및 240px wrapper reflow 검증을 실행했다. Light/Dark와 fallback 동작도 확인했다.
+- API DB integration과 CI는 아직 pending이며, Native 실행 환경 검증은 별도 미실행이다. 따라서 3.2 통합 검증과 3.3 전체 완료·archive는 완료로 표시하지 않는다.
 
 ## Verification Boundary
 
