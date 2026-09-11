@@ -223,7 +223,7 @@ describe('차단한 프로필 목록', () => {
     assert.equal(findAll('ProfileListItemContent').length, 0);
   });
 
-  it('목록 행이 공통 FollowButton에 Profile과 차단 관계 fragment를 전달한다', async () => {
+  it('목록 행이 공통 FollowButton의 관리 목록 크기 계약을 연결한다', async () => {
     await act(async () => {
       renderer = create(
         createElement(BlockedProfilesView, {
@@ -234,7 +234,7 @@ describe('차단한 프로필 목록', () => {
     assert.equal(find('ProfileListItemContent')?.props.relativeHandle, '@star');
     assert.equal(find('Button')?.props.profileBlockId, 'block-star');
     assert.equal(find('Button')?.props.relativeHandle, '@star');
-    assert.equal(find('Button')?.props.size, 'compact');
+    assert.equal(find('Button')?.props.size, 'management');
     assert.equal(find('Button')?.props.children, '차단 해제');
   });
 

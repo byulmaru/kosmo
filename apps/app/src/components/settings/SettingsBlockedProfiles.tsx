@@ -213,7 +213,6 @@ export function BlockedProfilesView({
               onUnblockSuccess={() => rememberRemovedProfile(profile)}
               profile={profile.profile}
               profileBlock={profile.profileBlock}
-              size="compact"
             />
           </ProfileListItemContent>
         ))

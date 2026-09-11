@@ -80,7 +80,8 @@ mock.module(new URL('./SettingsMuteAndBlockNavigation.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsMutedProfiles.tsx', import.meta.url), {
   exports: {
-    SettingsMutedProfiles: () => createElement('SettingsMutedProfiles'),
+    SettingsMutedProfiles: (props: Record<string, unknown>) =>
+      createElement('SettingsMutedProfiles', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsBlockedProfiles.tsx', import.meta.url), {
@@ -217,6 +218,18 @@ describe('Settings routes', () => {
       1,
     );
     assert.equal(rendered('SettingsMutedProfiles').length, 1);
+    assert.equal(
+      rendered('SettingsMutedProfiles')[0].props.headingRef,
+      rendered('PageHeader')[1].props.headingRef,
+    );
+  });
+
+  it('mobile Web muted profile은 shell heading ref를 목록 focus fallback에 전달한다', async () => {
+    width = 390;
+    await renderRoute('/settings/muted-profiles', SettingsMutedProfilesRoute);
+
+    assert.equal(rendered('PageHeader').length, 0);
+    assert.equal(rendered('SettingsMutedProfiles')[0].props.headingRef, shellPageHeadingRef);
   });
 
   it('compact Web muted profile detail은 parent으로 돌아가는 caller label과 navigation을 사용한다', async () => {
