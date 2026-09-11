@@ -23,7 +23,27 @@ typed identity 집합에서 파생하는 `post_mentions` persisted projection으
 
 - `PROD-911`의 Notification·FCM 생성, 표시와 전송.
 - remote `Update(Note)`, local compose, outbound federation, audience(`to`/`cc`) 해석, DIRECT/limited visibility 권한 변경.
-- Mention node의 구체 필드, `post_mentions`의 column/index/primary-key shape, GraphQL payload 또는 UI route를 제품 계약으로 고정하는 일. document version은 기존 Post Content V1 additive 확장으로 이 change에서 확정한다.
+- Mention node의 저장 UUID를 외부에 노출하거나 `post_mentions`의 column/index/primary-key shape를 바꾸는 일. document version은 기존 Post Content V1 additive 확장으로 이 change에서 확정한다.
+
+### `PROD-910` renderer·read projection 결정 (2026-09-11)
+
+- `PostContent.document` Mention node는 서버에서 canonical Profile UUID를 계속 엄격하게 검증·저장한다. GraphQL은 기존 Media처럼
+  document 내부 UUID를 client-facing global ID로 projection하며, Native read guard도 Media와 같은 non-empty opaque ID 계약을 사용한다.
+- `PostContent`는 기존 Profile visibility predicate(Profile이 `ACTIVE`이고 소속 Instance가 `SUSPENDED`가 아님)를 통과한
+  revision-owned 관계를 `mentionedProfiles: [Profile!]!`로 제공한다. 관계는 Profile별로 deduplicate하며 Post visibility·eligibility는
+  PostContent 조회의 기존 정책을 따른다. viewer별 Profile Domain Block 정책은 이 consumer 계약에서 새로 조합하지 않는다.
+- renderer는 Mention node의 client global ID와 `mentionedProfiles[].id`를 정확히 매칭해 target을 정한다. node 문서 순서를
+  유지하고 표시 문자열은 매칭된 Profile의 `relativeHandle`에서 파생하며, client ID encode/decode나 positional/parallel response
+  zip을 사용하지 않는다.
+- 매칭된 Profile은 기존 KOSMO Profile route `/${relativeHandle}`로 이동한다. Profile relation이 없거나 기존 Profile visibility predicate를
+  통과하지 않는 unavailable/deleted target이면 `@알 수 없는 사용자`를 link 없이 표시하고 actor URI·external URL·대체 문구를 사용하지 않는다.
+- 기존 Post body의 `onBodyPress` callback과 부모 Post navigation은 유지한다. 활성 Mention link의 press는 event propagation을
+  막아 부모 `onBodyPress`가 함께 실행되지 않게 한다.
+- 활성 Mention link는 기존 Profile text-link의 의미·타이포그래피 강조 계약과 일반 link semantics를 재사용해 본문 일반 link와
+  구분한다. 새 색상·타이포그래피 token이나 tooltip은 추가하지 않으며, accessible name에는 파생된 `relativeHandle`과 `displayName`을 포함한다.
+- 새 Mention 전용 route, raw ActivityPub tag 재해석, Mention 수신 중 원격 Profile lookup/materialization은 추가하지 않는다.
+- 구 reader 2.x bodyText·Media·Content Warning compatibility gate는 별도 deferred 후속 검증으로 기록한다. 이 gate는 `PROD-910`
+  renderer 구현·통합의 선행 blocker가 아니며, gate 증거가 없을 때 완료로 주장하지 않는다.
 
 ## Implementation Guidance
 
@@ -34,7 +54,7 @@ typed identity 집합에서 파생하는 `post_mentions` persisted projection으
 - `packages/fedify/src/local-post-note.ts`도 canonical content에서 local ActivityPub Note의 평문·HTML을 파생하는 경로이므로, 공통 primitive projection을 바꿀 때 Mention의 저장하지 않는 원문 표시 문자열 처리와 기존 safe link 보존을 함께 회귀 검증해야 한다. 이 change는 outbound typed Mention federation을 추가하지 않는다.
 - `packages/fedify/src/inbound-create-note.ts`는 Note identity·visibility와 content/media projection을 호출한다. Fedify inbound adapter는 typed `Mention.href`를 기존 `ActivityPubActor`·Profile identity로 확인하고, Local Profile이면 trusted local human URL을, Remote Profile이면 기존 actor materialization·refresh에서 저장된 Profile URL alias를 본문 parser에 별도 입력으로 전달할 수 있다. alias가 없으면 이미 알려진 actor URI만 사용한다. Mention 수신 중에는 새 원격 lookup/materialization/backfill을 수행하지 않는다. `to`/`cc` actor URI는 audience이고 `tag` Mention은 별도 입력이므로, 두 경로를 합쳐서 Mention을 추론하면 안 된다.
 - `packages/core/services/post.ts`는 duplicate remote object URI를 먼저 판별하고, 최초 Create의 Post·Content·media·Current Content pointer를 transaction으로 만든다. Mention 관계를 별도 후처리로 쓰면 partial relation 또는 duplicate revision이 남을 수 있다.
-- 현재 구현은 `post_mentions(post_content_id, profile_id)`를 immutable Post Content revision과 Profile을 잇는 persisted membership projection으로 사용한다. 두 column의 composite primary key와 Profile index, Post Content/Profile foreign key가 referential integrity를 보장하며, Post 하나에만 두거나 read-time JSON parsing만으로 대체하면 과거 revision의 의미가 사라진다. GraphQL read projection은 `PROD-910` 범위의 후속 구현 선택으로 남긴다.
+- 현재 구현은 `post_mentions(post_content_id, profile_id)`를 immutable Post Content revision과 Profile을 잇는 persisted membership projection으로 사용한다. 두 column의 composite primary key와 Profile index, Post Content/Profile foreign key가 referential integrity를 보장하며, Post 하나에만 두거나 read-time JSON parsing만으로 대체하면 과거 revision의 의미가 사라진다. GraphQL은 결정된 `mentionedProfiles: [Profile!]!` visible relation과 document UUID의 global ID projection을 사용한다.
 
 ### Recommended Approach
 
@@ -42,12 +62,12 @@ typed identity 집합에서 파생하는 `post_mentions` persisted projection으
 2. 알려진 Profile로 확인되지 않는 typed Mention은 canonical Mention node와 relation을 만들지 않고 기존 안전 parser의 link/text fallback으로 투영한다. 본문 URL 불일치는 typed identity를 실패시키지 않으며 그 anchor만 ordinary link/text로 남긴다. 이 분기에서 remote actor/profile fetch·신규 materialization·backfill/live DB 변경을 수행하지 않으며, 나머지 Note가 통과하면 전체 본문을 저장한다.
 3. 기존 Post 생성 transaction의 저장 경계 안에서 canonical document, typed identity 집합에서 파생한 `post_mentions` revision-owned 관계 projection, Current Content pointer를 함께 만든다. 현재 구현은 `post_content_id`와 `profile_id`를 composite primary key로 묶고 각각 Post Content revision과 Profile foreign key로 연결하며 Profile index를 둔다. 관계는 body node와 독립적으로 typed identity에서 파생하고, 같은 revision과 Profile의 관계는 하나의 set entry로 만든다. document 안의 반복 Mention occurrence와 순서는 보존하되 relation을 중복 생성하지 않으며, body URL mismatch·ordinary link fallback이 relation을 제거하지 않는다. 새 revision을 만들 때 이전 document와 관계를 건드리지 않는다. duplicate URI의 early no-op은 Mention projection보다 앞에 둔다. Local Post Content validator는 Mention node를 거부한다.
 4. 먼저 서버의 본문 파생값에서 구 reader 표시까지 body text, Media와 Content Warning이 보존되는지 matrix를 실행한다. 구 reader는 기존 `bodyText` fallback을 재사용한 plain text 표시를 사용할 수 있으며, link 클릭 동작과 문단 구조의 일시적 저하는 허용한다. 호환 증거가 통과하면 기존 Post Content V1 additive 경로에서 Mention 저장을 활성화한다. document schema V2, V1/V2 dual-read 또는 document version 변환은 도입하지 않는다.
-5. `PROD-910` renderer는 canonical node와 revision/Profile projection만 소비해 표시, Profile 이동과 접근성을 연결하고, 공통 저장·renderer 통합 검증과 archive 완료 증거를 소유한다. Notification/FCM은 `PROD-911` change에서 별도로 연결한다.
+5. `PROD-910` renderer는 canonical node와 revision/Profile projection만 소비해 표시, Profile 이동과 접근성을 연결하고, 공통 저장·renderer 통합 검증과 archive 완료 증거를 소유한다. GraphQL은 `mentionedProfiles` visible relation과 document global ID를 exact matching에 사용한다. Notification/FCM은 `PROD-911` change에서 별도로 연결한다.
 
 ### Allowed Alternatives
 
 - 선택 경로는 구 reader 호환 검증을 통과한 뒤 기존 V1 document에 Mention을 additive하게 보존하는 것이다. 구 reader가 unknown node를 보존하지 못해도 bodyText plain text fallback으로 글자·Media·Content Warning을 보존할 수 있다. document schema version을 올리고 V1/V2 dual-read 또는 document version 변환을 도입하는 대안은 기존 V1 document를 재작성하거나 breaking 의미를 도입할 필요가 없으므로 채택하지 않는다. 2026-09-14 정정 범위는 기존 DB/actor refresh 경계를 재사용하며 새 migration이나 live DB 변경을 포함하지 않는다.
-- 현재 선택한 `post_mentions` shape는 구현 세부이며 제품 계약을 확장하지 않는다. typed `Mention.href`에서 확인한 Profile identity 집합이 relation projection의 source이며, body node와 독립적으로 동일 revision/Profile relation은 set semantics를 가져야 한다. JSON-only read-time parsing을 persisted relation의 동등한 대안으로 사용하지 않는다. GraphQL read projection은 `PROD-910`에서 정한다.
+- 현재 선택한 `post_mentions` shape는 구현 세부이며 제품 계약을 확장하지 않는다. typed `Mention.href`에서 확인한 Profile identity 집합이 relation projection의 source이며, body node와 독립적으로 동일 revision/Profile relation은 set semantics를 가져야 한다. JSON-only read-time parsing을 persisted relation의 동등한 대안으로 사용하지 않는다. GraphQL은 기존 Profile visibility predicate와 PostContent 조회 정책을 통과한 `mentionedProfiles: [Profile!]!` relation을 제공하고 document UUID를 global ID로 projection한다.
 - Mention 후보 추출과 typed `Mention.href`의 known Profile stable identity 검증은 inbound adapter 경계에서 수행한다. core의 공통 projection/parser 경계는 전달된 identity와 body candidates를 사용해 안전한 body conversion·fallback과 best-effort node 표현을 수행해 다른 inbound 경로와 결과를 일치시킨다.
 
 ### Known Traps
@@ -58,7 +78,7 @@ typed identity 집합에서 파생하는 `post_mentions` persisted projection으
 - 해결되지 않은 target을 위해 Mention 수신 중 WebFinger, actor fetch, 원격 Profile materialization 또는 backfill/live DB 변경을 호출하지 않는다. Profile URL alias는 기존 정상 actor materialization·refresh 경계에서만 갱신한다.
 - Current Post에만 관계를 저장하거나 새 revision에서 과거 관계를 재작성하지 않는다.
 - duplicate `Create`를 body가 바뀌었다는 이유로 Update처럼 처리하거나 timestamp·relation을 갱신하지 않는다.
-- 구 reader 호환성 증거 없이 새 node 저장을 활성화하지 않는다.
+- 구 reader 호환성 증거 없이 Mention writer activation을 완료로 주장하지 않는다. 이 deferred gate는 `PROD-910` renderer 구현·통합의 blocker가 아니다.
 - 안전 parser를 우회해 원격 HTML 또는 표시 문자열을 raw HTML로 저장하지 않는다.
 
 ## Risks / Trade-offs
@@ -79,4 +99,5 @@ typed identity 집합에서 파생하는 `post_mentions` persisted projection으
 
 ## Open Questions
 
-- GraphQL read projection과 UI route를 `PROD-910`에서 어떤 형태로 연결할지. 선택 결과는 기존 V1 document 의미와 revision-owned relation contract를 유지해야 한다.
+- GraphQL field/connection 구현의 resolver·fragment 배치는 코드 소유자가 정한다. 외부 계약은 `PostContent.mentionedProfiles: [Profile!]!`,
+  기존 Profile visibility predicate와 PostContent 조회 정책, canonical UUID의 global ID projection, exact global ID matching으로 닫혀 있다.
