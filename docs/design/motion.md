@@ -46,7 +46,7 @@ DSN-18은 현재 구현을 그대로 정본으로 승인하지 않는다. 아래
 | -------------- | ------------------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------- | ----------------------------------------- |
 | Hover·Pressed  | `Button`, `IconButton`, `PostActionControl`의 즉시 opacity·pressed 상태   | 수정      | 상태 의미는 즉시 반영하고 시각 color·opacity·필요한 scale만 `fast` 120ms + `standard`  | DSN-19 shared primitive, DSN-21 domain    |
 | Modal·Sheet    | `ModalSheet`와 여러 overlay의 React Native `Modal` `fade`                 | 수정·예외 | KOSMO 소유 overlay는 enter 360ms/exit 200ms. iOS·Android system sheet timing은 OS 예외 | DSN-19 shared primitive, DSN-21 call-site |
-| Drawer         | `UniversalShell` mobile drawer의 `animationType="none"`                   | 수정      | scrim과 짧은 position·opacity를 enter 360ms/exit 200ms로 설명                          | DSN-21                                    |
+| Drawer         | `UniversalShell` mobile drawer의 Web `Modal`과 Native `Drawer`            | 수정·예외 | Web은 enter 360ms/exit 200ms, Native는 현재 구현 예외를 사용                           | DSN-21                                    |
 | Loading        | React Native `ActivityIndicator` 기본 동작과 custom spinner가 혼재        | 유지·수정 | system indicator는 플랫폼 소유로 유지하고 KOSMO custom spinner만 800ms `linear`에 수렴 | DSN-19 shared helper, DSN-21 consumer     |
 | Reaction       | `ReactionPendingSpinner` 820ms linear loop와 즉시 selected·count feedback | 수정      | pending spinner는 800ms `linear`, 유한 reaction feedback은 300ms `standard`            | DSN-19 helper, DSN-21/Product consumer    |
 | Reduced motion | OS setting adapter와 component별 대체 규칙이 아직 중앙화되지 않음         | 수정      | OS setting을 단일 입력으로 사용하고 아래 대체표대로 비필수 이동을 제거                 | DSN-19 adapter, DSN-21/Product consumer   |
@@ -59,11 +59,13 @@ DSN-18은 현재 구현을 그대로 정본으로 승인하지 않는다. 아래
 | ------------------------ | ------------------------------------------------- |
 | hover·pressed scale      | scale 제거, color·opacity 상태는 즉시 반영        |
 | selected indicator 이동  | 최종 위치·surface·border를 즉시 반영              |
-| modal·drawer slide·scale | 이동 제거, 최종 surface와 scrim을 즉시 표시       |
+| modal·drawer slide·scale | 이동 제거, 최종 surface와 scrim을 즉시 표시※      |
 | toast translate·fade     | 최종 toast를 즉시 표시·제거, 체류시간은 유지      |
 | reaction scale·ripple    | 즉시 color·count·selected 상태로 대체             |
 | spinner rotation loop    | spinner를 숨기고 정적 `···`와 loading 문구를 표시 |
 | skeleton                 | 정적 placeholder 유지                             |
+
+※ 현재 Native shell drawer의 built-in spring 예외는 아래 PROD-952 Native drawer 규칙을 따른다.
 
 motion을 제거해도 focus, loading, success, error, selected와 announcement 의미는 제거하지 않는다.
 
@@ -72,7 +74,8 @@ motion을 제거해도 focus, loading, success, error, selected와 announcement 
 - Web과 KOSMO가 직접 소유한 Native primitive는 위 semantic 역할을 사용한다.
 - iOS system sheet와 Android system bottom sheet처럼 OS presentation API가 소유한 timing·curve는 플랫폼 예외로 유지한다. 임의의 ms 값으로 덮어쓰지 않는다.
 - 위 판정표에 없는 route·shell·domain local motion은 DSN-21/Product가 같은 형식으로 소비처, 목표 token, 플랫폼 예외와 검증 evidence를 기록한다. 새 motion 역할을 임의로 만들지 않는다.
-- PROD-750은 기존 route·shell·domain consumer의 scrim·elevation을 공용 foundation으로 이관한다. 기존 React Native `Modal` fade와 `UniversalShell` drawer motion은 exit 동안 mount를 유지하는 consumer lifecycle 변경 없이 `useOverlayMotion`으로 치환할 수 없으므로, focus restore·dirty confirmation·gesture·Android back 계약을 보존하는 현행 예외로 기록한다. 이 예외의 해소는 해당 lifecycle을 함께 검증하는 후속 범위에서 수행한다.
+- PROD-750은 기존 route·shell·domain consumer의 scrim·elevation을 공용 foundation으로 이관한다. Web `UniversalShell` drawer와 기존 React Native `Modal` fade는 exit 동안 mount를 유지하는 consumer lifecycle 변경 없이 `useOverlayMotion`으로 치환할 수 없으므로, focus restore·dirty confirmation·gesture·Android back 계약을 보존하는 현행 예외로 기록한다. 이 예외의 해소는 해당 lifecycle을 함께 검증하는 후속 범위에서 수행한다.
+- [PROD-952](https://linear.app/byulmaru/issue/PROD-952)는 현재 Native shell drawer(`NativeNavigationDrawer`, `apps/app/src/components/shell/ShellNavigationDrawer.tsx`)가 `react-native-drawer-layout@4.2.10`의 built-in spring presentation을 사용하는 구현 예외를 기록한다. 확인한 `react-native-drawer-layout@4.2.10` 공개 API에는 OS reduced-motion 설정에 따른 motion timing·disable 제어가 없으므로, OS reduced-motion이 켜져도 해당 spring이 실행될 수 있다. 이 예외는 현재 Native shell drawer 경로에만 적용하며, Web과 KOSMO가 직접 소유한 primitive의 일반 reduced-motion 계약과 focus·dismiss·접근성 의미는 완화하지 않는다. library 또는 upstream 동작 변경은 이 이슈의 완료 조건이 아니며, 추후 별도 결정·검증 범위에서 다룬다. 이 기록은 reduced-motion에서 spring 제거를 보장하지 않는 현재 동작의 범위만 정하며, Native 기능·접근성·실기기 검증의 면제를 의미하지 않는다.
 - 기존 Reaction spinner `820ms`는 `loading-cycle` `800ms`로 수렴한다. 제품 근거 없이 `820ms` 예외를 새로 만들지 않는다.
 - 새 duration·easing을 raw 값으로 추가하지 않는다. spinner는 `motion/easing/linear`를 사용한다. 현재 token으로 표현할 수 없으면 component, platform, reduced-motion 대체와 검증 evidence를 함께 제시해 Design owner 승인을 받는다.
 
