@@ -30,6 +30,19 @@ type ReportMenuInput = {
   kind: 'PROFILE';
   label: string;
 };
+type ReportMenuItem = {
+  key: string;
+  label: string;
+  onSelect: () => void;
+  tone: string;
+};
+
+const reportMenuItem: ReportMenuItem = {
+  key: 'report-profile',
+  label: '신고',
+  onSelect: () => undefined,
+  tone: 'danger',
+};
 
 const LocalParamsContext = createContext<RouteParams>({});
 const platform: { OS: 'web' | 'ios' } = { OS: 'web' };
@@ -44,6 +57,8 @@ let profileAvailable = true;
 let profileInstanceKind: 'ACTIVITYPUB' | 'LOCAL' = 'LOCAL';
 let routeProbeEnabled = false;
 let routerBackCount = 0;
+let selectedProfileId: string | null = null;
+let sessionId: string | null = null;
 let usePaginationScrollRegistration: (props: NativeScrollProps | null) => void = () => undefined;
 let routeMetrics = {
   contentHeight: 0,
@@ -160,28 +175,25 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     action,
     heading,
     loading,
+    moreItems,
     profile,
   }: {
     action?: ReturnType<typeof createElement>;
     heading?: boolean;
     loading?: boolean;
+    moreItems?: readonly ReportMenuItem[];
     profile?: { handle: string };
   }) =>
     createElement(
       'ProfileHero',
-      { heading, identity: loading ? 'loading' : profile?.handle },
+      { heading, identity: loading ? 'loading' : profile?.handle, moreItems },
       action,
     ),
 });
 mockModule(new URL('../content-report/ContentReportContext.tsx', import.meta.url), {
   useContentReportMenuItem: (input: ReportMenuInput) => {
     capturedReport.value = input;
-    return {
-      key: 'report-profile',
-      label: '신고',
-      onSelect: () => undefined,
-      tone: 'danger',
-    };
+    return reportMenuItem;
   },
 });
 mockModule(new URL('./FollowButton.tsx', import.meta.url), {
@@ -234,7 +246,7 @@ mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
   useRelayActorLifecycleKey: () => 'actor-a',
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
-  useSession: () => ({ selectedProfileId: 'profile:viewer', sessionId: null }),
+  useSession: () => ({ selectedProfileId, sessionId }),
 });
 
 let ProfileLayout: ComponentType;
@@ -267,6 +279,8 @@ afterEach(async () => {
   profileAvailable = true;
   profileInstanceKind = 'LOCAL';
   profileViewerState = null;
+  selectedProfileId = null;
+  sessionId = null;
   capturedReport.value = null;
 });
 
@@ -370,6 +384,22 @@ describe('profile route parameter lifecycle', () => {
       assert.equal(rendered('ProfileHero').length, 1);
       assert.equal(rendered('PostList').length, 1);
     }
+  });
+
+  it('인증 사용자에게만 프로필 신고 메뉴를 연결한다', async () => {
+    sessionId = 'session:viewer';
+    await renderRoute('@local');
+
+    const authenticatedMoreItems = requireRendered('ProfileHero').props.moreItems as
+      | readonly ReportMenuItem[]
+      | undefined;
+    assert.ok(authenticatedMoreItems);
+    assert.equal(authenticatedMoreItems.length, 1);
+    assert.equal(authenticatedMoreItems[0], reportMenuItem);
+
+    sessionId = null;
+    await renderRoute('@local');
+    assert.equal(requireRendered('ProfileHero').props.moreItems, undefined);
   });
 
   it('표시 중인 selected Local Owner Profile에만 편집 Link를 노출한다', async () => {
