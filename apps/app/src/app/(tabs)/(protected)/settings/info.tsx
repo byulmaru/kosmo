@@ -7,14 +7,12 @@ import { SettingsLinkRow } from '@/components/settings/SettingsLinkRow';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { layoutRecipes } from '@/theme/tokens';
 
 export default function SettingsInfoRoute() {
   const router = useRouter();
   const theme = useTheme();
-  const { clearNativeSession } = useRelayActor();
   const detailHeaderMode = useSettingsDetailHeaderMode();
   const backButton =
     detailHeaderMode === 'back' ? (
@@ -32,7 +30,7 @@ export default function SettingsInfoRoute() {
     <>
       {detailHeaderMode !== 'hidden' ? <PageHeader leading={backButton} title="정보" /> : null}
       <View style={[layoutRecipes.listStack, styles.root]}>
-        <NativeChannelSettings clearSession={clearNativeSession} />
+        <NativeChannelSettings />
         <SettingsLinkRow
           accessibilityLabel="개인정보 처리방침"
           href="/privacy"

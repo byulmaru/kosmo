@@ -115,20 +115,13 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 
 ## Native channel 전환
 
-- Native `정보`의 `채널` 행은 현재 `dev` 또는 `prod`를 표시한다. selector도 이 두 값만 제공하며, OTA
-  publisher가 허용하는 일반 channel 이름 목록을 UI 선택지로 확장하지 않는다.
-- 선택한 channel은 코드 설정표의 API origin, Web origin, OIDC 로그인 환경과 OTA channel을 하나의 환경으로
-  해석한다. Native client는 이 값들을 서로 다른 channel에서 조합하지 않으며, Web client의 `/channel.js`와
-  Web `정보` 화면에는 이 Native 전환을 적용하지 않는다. Native update channel의 persistent header와
-  현재 channel source는 [Expo OTA 운영](../operations/expo-ota.md)의 SDK 경계를 따른다.
-- selector에서 취소하거나 현재 channel을 다시 선택하면 아무 동작도 하지 않는다. 다른 channel을 확정하면
-  고정 update URL에서 호환되는 signed update를 확인·download한다. 성공한 경우에만 현재 Native login을
-  삭제한 뒤 앱을 reload해 새 channel을 시작한다.
-- 호환되는 update가 없거나 update 확인·download가 실패하면 시도한 channel 변경을 되돌리고 기존 channel과
-  실행 가능한 update를 유지한다. 다른 channel을 기본값으로 적용하거나 unverified update를 실행하지 않는다.
-- runtimeVersion·project·platform 호환성, manifest signature, asset hash, embedded/last-known-good fallback과
-  anti-bricking guard는 계속 적용한다. Native code·module·SDK·permission 변경은 OTA로 보내지 않고 새
-  Android/iOS Store binary를 만든다.
+- Android/iOS Native `정보`와 사전 로그인 복구는 `dev`·`prod`만 제공하며, Web 정보·channel UI는 유지한다.
+- 선택한 값은 API·Web·OIDC·Sentry·OTA의 하나의 environment로 해석한다. 고정 OTA URL과 persistent header는
+  [Expo OTA 운영](../operations/expo-ota.md)의 계약을 따른다.
+- 취소·현재 값 재선택은 no-op이다. 다른 값은 호환 signed update의 확인·download가 성공한 뒤 login 삭제와
+  reload를 수행하고, 404·검증·download 실패에서는 원래 channel과 실행 가능한 fallback을 유지한다.
+- runtime/project/platform 호환성, signature·asset hash 검증을 유지하며 native code·module·SDK·permission
+  변경은 새 Android/iOS Store binary로 전달한다.
 
 ## 테마 설정
 
@@ -263,10 +256,6 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - PROD-889는 `/settings/info` direct destination과 세 public policy route link의 배치, 기존 landing·RightRail
   개인정보 처리방침 보존, Sidebar·mobile drawer 정책 링크 비노출을 소유한다. `/settings/info`는 새 정책 내용이나
   Account 관리 기능을 구현하지 않는다.
-- 새 Native channel 전환 slice는 Android·iOS `정보`의 `채널` row/selector, 사전 로그인 복구 진입점, API·OIDC·OTA
-  환경 동시 전환, 호환 update 확인·download 성공 뒤 Native login 삭제와 `Updates.reloadAsync()` 실행,
-  실패 시 기존 channel 보존을 소유한다. 이 slice의 Web `정보` 화면과 기존
-  public policy link에는 변경을 적용하지 않는다.
 - PROD-685는 구현과 검증 증거를 PROD-684에 인계하고, PROD-684가 최종 Settings 통합·OpenSpec 정합성 확인과
   archive를 소유한다.
 - 자동화·source/unit 결과는 실제 Web keyboard·screen reader·zoom 또는 Android·iOS runtime 접근성·
@@ -354,5 +343,4 @@ touch·focus, 빠른 연속 입력의 중간 frame은 확인하지 않았으며 
 - Primary Color 변경과 아직 필요하지 않은 `화면 설정`·`테마 설정` 중간 category
 - 알림 설정, Follow Approval Policy와 아직 승인되지 않은 설정 category·placeholder
 - 미래 category 전체를 위한 범용 registry나 현재 승인되지 않은 destination route
-- Web의 channel 선택 UI
 - settings 밖 기존 route의 전역 shell·RightRail 동작 변경

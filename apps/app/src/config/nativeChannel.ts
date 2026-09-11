@@ -1,6 +1,6 @@
-import type { NativeChannel, NativeChannelSwitchResult } from './nativeChannelCore';
+import type { DeploymentChannel } from './public';
 
-export type { NativeChannel } from './nativeChannelCore';
+export type NativeChannel = DeploymentChannel;
 
 /**
  * Native adapter fallback used by Web and Node tooling. Metro resolves the `.native` adapter for
@@ -13,4 +13,4 @@ export function getNativeDeploymentChannel(): NativeChannel | null {
 export const switchNativeChannel: (
   targetChannel: NativeChannel,
   clearSession: () => Promise<void>,
-) => Promise<NativeChannelSwitchResult> = async () => 'failed';
+) => Promise<'failed'> = async () => 'failed';

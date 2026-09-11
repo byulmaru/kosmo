@@ -39,7 +39,7 @@ export default function IndexScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { clearNativeSession, setNativeSession } = useRelayActor();
+  const { setNativeSession } = useRelayActor();
   const { status } = useSession();
   const [commitSessionExchange] = useMutation<IndexScreenExchangeNativeOidcSessionMutation>(
     ExchangeNativeOidcSessionMutation,
@@ -154,7 +154,7 @@ export default function IndexScreen() {
               {error}
             </Text>
           ) : null}
-          <NativeChannelSettings clearSession={clearNativeSession} />
+          <NativeChannelSettings />
           <NavigationLink href={'/privacy' as Href}>
             <Pressable accessibilityRole="link">
               <Text style={[styles.privacyLink, { color: theme.textSecondary }]}>

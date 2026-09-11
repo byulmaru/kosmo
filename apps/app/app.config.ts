@@ -1,13 +1,6 @@
 import type { ExpoConfig } from 'expo/config';
 
 const otaBaseUrl = 'https://expo-ota.byulmaru.co/releases/kosmo-native';
-const otaRequestHeaders = {
-  // Release binaries start on prod. The native channel selector only changes this declared
-  // header at runtime; the manifest endpoint resolves platform and runtimeVersion from Expo's
-  // standard request headers.
-  'expo-channel-name': 'prod',
-} as const;
-
 function androidVersionCode(): number {
   const configured = process.env.KOSMO_ANDROID_VERSION_CODE;
   if (configured === undefined) {
@@ -77,7 +70,7 @@ const config: ExpoConfig = {
       keyid: '2026-09',
     },
     enabled: true,
-    requestHeaders: otaRequestHeaders,
+    requestHeaders: { 'expo-channel-name': 'prod' },
     url: otaBaseUrl,
   },
   plugins: [

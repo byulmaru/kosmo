@@ -6,10 +6,9 @@ platform export가 Argo 배포와 병렬로 시작하고, 각 publish는 Argo �
 성공한 뒤 시작한다. Native module, SDK, entitlement, permission 또는 그 밖의 native
 설정이 바뀐 release는 OTA가 아니라 새 Store binary 경로를 사용한다.
 
-Native Store binary의 기본 OTA channel은 `prod`다. 인증 후 Native Settings의 `정보`와
-인증 전 복구 진입점에서 `dev` 또는 `prod`를 선택할 수 있으며, 이 선택은 API origin·OIDC 로그인
-환경과 OTA channel을 함께 전환한다. Web의 channel 선택과 `/settings/info` public policy link는
-이 runtime 전환의 대상이 아니다.
+Native Store binary의 기본 OTA channel은 `prod`다. Native Settings의 `정보`와 인증 전 복구 진입점은
+`dev`·`prod`를 선택해 API origin·OIDC 로그인 환경과 OTA channel을 함께 전환한다. Web channel과
+`/settings/info` policy link는 이 전환의 대상이 아니다.
 
 ## 책임과 release tuple
 
@@ -45,49 +44,29 @@ Manifest는 Expo protocol headers를 포함한 `multipart/mixed` 응답으로 �
 `public, max-age=31536000, immutable`로 캐시한다.
 
 Native channel 조회는 기존 R2 custom-domain 경로를 유지한 채 Cloudflare URL Rewrite Rule로 제공한다.
-Native client의 `updates.url`은 `https://expo-ota.byulmaru.co/releases/kosmo-native`로 고정하고,
-`expo-platform`, `expo-runtime-version`, `expo-channel-name` request header를 보낸다. Expo protocol v1을
-포함한 공용 Rule은 host의 `/releases/{project}` 단일 project path와 필수 header를 검사한 뒤 project path
-segment를 보존하면서 URI path만 기존 `/releases/{project}/{platform}/{channel}/{runtimeVersion}/manifest.json`으로
-내부 rewrite한다. Rule의 channel은 Native selector의 `dev`·`prod`에 한정하지 않고 publisher의 generic safe
-channel contract를 유지한다.
-R2 custom domain은 rewritten object에서 signed multipart bytes를 반환한다. Manifest 안의 asset URL은
-기존 R2 asset object를 가리키며, `/releases/*` static manifest·asset과 publisher contract는 그대로
-유지한다. 새 Worker endpoint나 별도 path는 만들지 않는다. 기존 `/releases/*/manifest.json` Cache Rule과
-response-header transform은 rewrite target에도 적용되어야 하며, provider에서 live 확인한다.
+Client의 URL은 `https://expo-ota.byulmaru.co/releases/kosmo-native`로 고정하고
+`expo-protocol-version: 1`, `expo-platform`, `expo-runtime-version`, `expo-channel-name` header를 보낸다. Rule은 host의
+`/releases/{project}` 단일 safe project path와 required header를 검사해 project를 보존한 기존
+`manifest.json` tuple로 URI path만 rewrite하며, generic safe channel contract와 기존 static
+manifest·asset, publisher, Cache/Response Header Rule을 유지한다. 새 Worker나 public path는 만들지 않는다.
 
-검토용 Rule artifact는 [`expo-ota-url-rewrite.json`](./expo-ota-url-rewrite.json)이다. `PROD-334`에서
-2026-09-11에 `expo_ota_manifest_header_route` Rule을 provider에 배포했고, active Rule ID는
-`a8d13899b9884eeb9cc4088d22942701`이다. Rule은 `GET`과 `expo-ota.byulmaru.co`의
-`/releases/{project}` 단일 safe project path, `expo-protocol-version: 1`, `expo-platform`의 `ios|android`,
-generic safe `expo-channel-name`, `expo-runtime-version`을 검사하고, project를 보존한 기존 tuple의
-`manifest.json`으로 URI path만 rewrite한다. 기존 Cache/Response Header Rule은 변경하지 않았다.
+Rule artifact는 [`expo-ota-url-rewrite.json`](./expo-ota-url-rewrite.json)이며, [`PROD-334`](https://linear.app/byulmaru/issue/PROD-334)에서
+2026-09-11에 `expo_ota_manifest_header_route`를 배포했다. Active Rule ID는
+`a8d13899b9884eeb9cc4088d22942701`이고 기존 Cache/Response Header Rule은 변경하지 않았다.
 
 ## Cloudflare URL Rewrite Rule live evidence
 
-고정된 query 없는 Native manifest URL에 대해 Deploy Dev run `34583000701`에서 확인한 runtime tuple을
-2026-09-11 09:24 UTC에 live edge에서 조회했다. 당시 iOS 응답은 runtimeVersion
-`dc51d9bc8b4f2a18b2e23fd34bdecd14f165f24a`, update ID
-`48a06c02-3038-4cbf-a8af-c541db9f52b0`, 10,242 bytes와 SHA-256
-`69b5ca0abac75a768e82ddc55f8afed43dda701fa0277bfc3f0d5df467036a91`을 반환했다. Android는 runtimeVersion
-`c653d26c07552d7a6a5d13718fad8308fa1791f7`, update ID
-`0298ba7d-1974-45f8-a052-43870a432828`, 11,685 bytes와 SHA-256
-`34e7a59c8abea6f795f37332eaf79d7f1746077c9f0f60ea6b9e0b1fb1058a6b`을 반환했다. 각 generic path 응답은
-동일한 direct tuple manifest 응답과 body bytes, `multipart/mixed`, `cache-control: private, no-store`,
-`expo-protocol-version: 1`, `expo-sfv-version: 0`, `ETag`를 유지했으며 `cf-cache-status: DYNAMIC`이었다.
+Deploy Dev run `34583000701`에서 확인한 runtime tuple을 2026-09-11 09:24 UTC에 live edge에서 조회했다.
+Query 없는 `kosmo-native` dev manifest는 iOS 10,242 bytes와 Android 11,685 bytes로 각각 200이었고, 해당
+live response는 direct tuple과 signed multipart body bytes, ETag, `cache-control: private, no-store`,
+`expo-protocol-version: 1`, `expo-sfv-version: 0`이 일치했다. Manifest launch asset도 두 platform 모두
+200과 `application/javascript`, `public, max-age=31536000, immutable`을 유지했다. Exact runtime/update
+IDs와 SHA-256은 [`PROD-334`](https://linear.app/byulmaru/issue/PROD-334)의 live snapshot에 기록한다.
 
-두 manifest의 launch asset direct URL도 각각 200으로 응답했고, iOS 30,049,861 bytes
-(`9d894307d4c3dc984e6c9e97302e17f4fd395921ecea00d7837406b2727b386e`)와 Android 30,352,556 bytes
-(`a4925d4b991d34f311f93b16d67f54512f34cd8a575f6a3ae5b08618ffb080db`) 모두
-`application/javascript`, `public, max-age=31536000, immutable`을 유지했다. 기존 direct tuple은 required
-header 없이도 200이었고, missing protocol header, invalid platform `windows`, unsafe runtime
-`../secret`, nested project path, normalized unsafe project path는 모두 404였다. 안전한 미존재 project
-`example-project`와 channel `staging`도 404로 종료되어 synthetic response를 만들지 않았다.
-
-이 change가 지원하고 검증한 manifest 요청은 query 없는 고정 Native URL이다. query를 붙인 probe는 body는
-동일하게 200이었지만 기존 edge 동작에 따라 `expo-protocol-version`과 `expo-sfv-version`이 없어 지원
-계약의 증거로 사용하지 않는다. Query 지원을 위해 기존 full-URI wildcard, Cache Rule 또는 response-header
-transform을 변경하지 않는다.
+Missing protocol header, `windows` platform, unsafe runtime/path, nested project path, safe but missing
+`example-project`/`staging` tuple은 404였고 synthetic response는 없었다. Query를 붙인 probe는 body만
+동일한 200이었지만 기존 edge 동작으로 Expo protocol/SFV header가 없어 query 없는 고정 Native URL만
+이번 지원 계약으로 취급한다.
 
 ## 자동 release 경로
 
@@ -98,9 +77,8 @@ Deploy Dev의 Docker Build가 성공하면 Android와 iOS export가 `update_dev`
 workflow인 `.github/workflows/expo-ota.yml`을 호출하고, 각 publish job은
 `byulmaru/expo-ota` public reusable workflow를 직접 호출한다. Publish job은 Kosmo
 repository secret `EXPO_OTA_SIGNING_PRIVATE_KEY`를 public publisher의 `signing_private_key`
-로 전달한다. Secret은 2026-09-10 10:06:24 UTC에 등록했다. Deploy Dev run `34583000701`에서 확인한
-Android와 iOS dev tuple을 위 live edge snapshot에서 조회했고, 당시 manifest와 launch asset을 확인했다.
-Production `prod` publish 및 Native Store/device 적용은 별도 evidence로 남긴다.
+로 전달한다. Secret은 2026-09-10 10:06:24 UTC에 등록했다. Production `prod` publish 및 Native
+Store/device 적용은 별도 evidence로 남긴다.
 
 | 호출 workflow      | 성공한 배포            | OTA channel | source SHA                       |
 | ------------------ | ---------------------- | ----------- | -------------------------------- |
@@ -127,21 +105,11 @@ device에서 update, rejection, offline fallback을 수행하는지는 별도 �
 
 ## Native에서 channel 전환
 
-Native channel selector는 공식 `expo-updates`의 persistent request-header override로
-`expo-channel-name`을 설정한다. `Updates.channel`은 reload 뒤 앱이 시작한 현재 channel의 단일
-source로 사용하며, OTA routing을 위해 별도의 client-local channel 값을 저장하지 않는다. 앞의
-Cloudflare URL Rewrite Rule이 이 header와 기존 tuple manifest를 연결한다.
-
-다른 channel을 확정하면 현재 binary의 platform·runtimeVersion과 호환되는 signed update를
-확인하고 download한다. 두 단계가 모두 성공한 경우에만 현재 Native login을 삭제한 뒤
-`Updates.reloadAsync()`를 호출한다. 취소와 현재 channel 재선택은 header, login, update와 reload를
-바꾸지 않는다.
-
-호환 update가 없거나 확인·download가 실패하면 시도한 header override를 되돌리고 기존 channel과
-last-known-good 또는 embedded update를 유지한다. Rewrite target manifest가 없어 static origin이
-404를 반환하는 경우도 같은 update 확인 실패로 처리한다. 다른 channel을 기본값으로 적용하거나
-signature·asset hash 검증을 건너뛰지 않으며, static origin의 404를 custom response로 바꾸지 않는다.
-이 복구 진입점은 인증 전 Native login 화면에서도 제공하며, Web에는 같은 selector를 만들지 않는다.
+Native는 `Updates.channel`을 현재 channel source로 읽고 `expo-updates` persistent `expo-channel-name` header를
+사용한다. 별도 client-local channel 값은 저장하지 않는다. 다른 channel은 호환 signed update 확인·download가
+성공한 뒤에만 login 삭제와 reload를 수행하며, 취소·현재 값·404·검증 실패에서는 원래 channel과
+last-known-good 또는 embedded fallback을 유지한다. Native code·module·SDK·permission 변경은 새 Store
+binary로 전달한다.
 
 ## 사전 조건과 credential 경계
 
@@ -150,9 +118,6 @@ signature·asset hash 검증을 건너뛰지 않으며, static origin의 404를 
 - Production Release는 기존 `canonical_preflight`가 확인한 SHA와 image digest를 사용한다.
 - Publisher reusable workflow는 `EXPO_OTA_PUBLIC_BASE_URL`, `EXPO_OTA_R2_BUCKET`,
   `CLOUDFLARE_ACCOUNT_ID`와 R2 credential을 검증한다.
-- Native Store binary는 `https://expo-ota.byulmaru.co/releases/kosmo-native`를 update URL로
-  빌드하고, 기본 channel `prod`의 `expo-channel-name` header를 포함한다. Settings selector는
-  persistent override로 `dev` 또는 `prod`만 선택한다.
 - reusable publisher는 GitHub OIDC로 Vault에서 R2 credential을 읽고, caller가 전달한
   `signing_private_key`를 publisher input으로 사용한다. Signing key와 R2 credential을
   export artifact, client bundle 또는 job output으로 운반하지 않는다.
@@ -188,8 +153,6 @@ trust를 추가하지 않는다.
 - project, platform, OTA channel, runtimeVersion과 keyid
 - publisher의 R2 upload SHA-256 검증 결과와 publish job 결과
 - production release의 Environment 승인과 동일한 source SHA
-- Native selector의 cancel·same-selection no-op, compatible update 전환과 no compatible/download
-  failure 시 기존 channel·fallback 유지 결과
 
 Android는 PROD-886 Google Play Alpha, iOS는 PROD-876 TestFlight seed path에서 Store binary와
 device update/rejection/offline evidence를 별도로 검증한다.
