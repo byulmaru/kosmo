@@ -1,9 +1,9 @@
 import { and, eq, isNotNull, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { db, Instances, Notifications, Posts, ProfileFollows, Profiles } from '../db';
+import { db, Instances, Posts, ProfileFollows, Profiles } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, ProfileState } from '../enums';
 import { postVisibilityCondition } from '../visibility/post';
-import { isNotificationProfileEligible } from './notification-policy';
+import { materializeNotification } from './notification-policy';
 
 const ReplyParents = alias(Posts, 'reply_notification_parent');
 const ReplyAuthors = alias(Profiles, 'reply_notification_author');
@@ -65,25 +65,11 @@ export const createReplyNotification = async (postId: string): Promise<void> => 
       return;
     }
 
-    if (
-      !(await isNotificationProfileEligible(tx, {
-        recipientProfileId: source.recipientProfileId,
-        relatedProfileId: source.relatedProfileId,
-      }))
-    ) {
-      return;
-    }
-
-    await tx
-      .insert(Notifications)
-      .values({
-        data: {},
-        kind: NotificationKind.REPLY,
-        recipientProfileId: source.recipientProfileId,
-        sourceId: source.id,
-      })
-      .onConflictDoNothing({
-        target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-      });
+    await materializeNotification(tx, {
+      kind: NotificationKind.REPLY,
+      recipientProfileId: source.recipientProfileId,
+      relatedProfileId: source.relatedProfileId,
+      sourceId: source.id,
+    });
   });
 };
