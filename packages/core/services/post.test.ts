@@ -757,7 +757,7 @@ test('createPost는 post_mentions Profile FK 저장 실패 시 Post·Content·po
   );
 });
 
-test('createPost는 Current Content pointer 저장 실패 시 Post·Content·relation을 rollback한다', async () => {
+test('createPost는 PostContent link 저장 실패 시 Post·Content·relation을 rollback한다', async () => {
   const author = await createProfile();
   const mentioned = await createProfile();
   const objectUri = `https://remote.example/notes/${crypto.randomUUID()}`;
@@ -769,20 +769,20 @@ test('createPost는 Current Content pointer 저장 실패 시 Post·Content·rel
   };
 
   await pg`
-    create function fail_post_current_content_update() returns trigger
+    create function fail_post_content_post_link() returns trigger
     language plpgsql as $function$
     begin
-      if old.current_content_id is null and new.current_content_id is not null then
-        raise exception 'intentional current content pointer failure';
+      if old.post_id is null and new.post_id is not null then
+        raise exception 'intentional post content link failure';
       end if;
       return new;
     end
     $function$
   `;
   await pg`
-    create trigger fail_post_current_content_update
-    before update on post
-    for each row execute function fail_post_current_content_update()
+    create trigger fail_post_content_post_link
+    before update on post_content
+    for each row execute function fail_post_content_post_link()
   `;
 
   try {
@@ -815,13 +815,13 @@ test('createPost는 Current Content pointer 저장 실패 시 Post·Content·rel
       }),
       (error: unknown) =>
         error instanceof Error &&
-        (error.message.includes('intentional current content pointer failure') ||
+        (error.message.includes('intentional post content link failure') ||
           (error.cause instanceof Error &&
-            error.cause.message.includes('intentional current content pointer failure'))),
+            error.cause.message.includes('intentional post content link failure'))),
     );
   } finally {
-    await pg`drop trigger fail_post_current_content_update on post`;
-    await pg`drop function fail_post_current_content_update()`;
+    await pg`drop trigger fail_post_content_post_link on post_content`;
+    await pg`drop function fail_post_content_post_link()`;
   }
 
   assert.deepEqual(

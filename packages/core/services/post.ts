@@ -650,26 +650,7 @@ export async function createPost(
           : input.origin === 'ACTIVITYPUB'
             ? input.receivedAt
             : undefined;
-      const post = await tx
-        .insert(Posts)
-        .values({
-          createdAt,
-          profileId: input.profileId,
-          repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
-          state: PostState.ACTIVE,
-          visibility: input.visibility,
-        })
-        .returning()
-        .then(firstOrThrow);
-
       if (input.origin === 'ACTIVITYPUB') {
-        await tx.insert(ActivityPubPosts).values({
-          postId: post.id,
-          publishedAt: input.publishedAt,
-          receivedAt: input.receivedAt,
-          uri: input.objectUri,
-        });
-
         const media = await materializeRemoteMedia(tx, {
           candidates: input.media ?? [],
           profileId: input.profileId,
@@ -696,10 +677,32 @@ export async function createPost(
         .values({
           createdAt: input.origin === 'ACTIVITYPUB' ? input.receivedAt : undefined,
           document,
-          postId: post.id,
+          postId: null,
         })
         .returning()
         .then(firstOrThrow);
+
+      const post = await tx
+        .insert(Posts)
+        .values({
+          createdAt,
+          currentContentId: content.id,
+          profileId: input.profileId,
+          repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
+          state: PostState.ACTIVE,
+          visibility: input.visibility,
+        })
+        .returning()
+        .then(firstOrThrow);
+
+      if (input.origin === 'ACTIVITYPUB') {
+        await tx.insert(ActivityPubPosts).values({
+          postId: post.id,
+          publishedAt: input.publishedAt,
+          receivedAt: input.receivedAt,
+          uri: input.objectUri,
+        });
+      }
 
       const mentionProfileIds = new Set(
         document.body.content.flatMap((block) =>
@@ -720,7 +723,7 @@ export async function createPost(
       }
 
       validatePostStructure({
-        currentContentId: content.id,
+        currentContentId: post.currentContentId,
         id: post.id,
         replyParentId: input.replyParentId ?? null,
         repostSourceId: post.repostSourceId,
@@ -739,14 +742,23 @@ export async function createPost(
         }
       }
 
-      const linkedPost = await tx
-        .update(Posts)
-        .set({ currentContentId: content.id, replyParentId: input.replyParentId ?? null })
-        .where(eq(Posts.id, post.id))
+      const linkedPost =
+        input.replyParentId === undefined
+          ? post
+          : await tx
+              .update(Posts)
+              .set({ replyParentId: input.replyParentId })
+              .where(eq(Posts.id, post.id))
+              .returning()
+              .then(firstOrThrow);
+      const linkedContent = await tx
+        .update(PostContents)
+        .set({ postId: post.id })
+        .where(eq(PostContents.id, content.id))
         .returning()
         .then(firstOrThrow);
 
-      return { content, created: true, post: linkedPost };
+      return { content: linkedContent, created: true, post: linkedPost };
     });
   } catch (error) {
     if (input.origin !== 'ACTIVITYPUB' || !isActivityPubPostUriConflict(error)) {
