@@ -2,7 +2,7 @@
 
 ### Requirement: Profile identity lookup uses the existing Profile policy
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `docs/domain/policies/post-list.md`, `openspec/specs/hashtag-related-profile-api/spec.md`, `PROD-822`. GraphQL `node(id:)`와 `profileByHandle` 직접 조회는 Profile Block과 무관하게 기존 lifecycle·membership·공개 Profile 조회 정책과 기본 Profile 정보 범위를 유지해야 한다(MUST). Profile 자체가 기존 lifecycle 정책으로 조회 불가하면 기존 null/unavailable 결과를 유지하고 Block 전용 identity payload를 만들지 않아야 한다(MUST NOT). 유효한 Account에 selected Profile이 있으면 그 Profile을 `searchProfiles`와 `Hashtag.relatedProfiles`의 viewer로 사용해야 하며(MUST), 두 Profile 탐색 surface가 후보를 반환할 때는 기존 공개 조회 조건을 통과한 후보 중 viewer와 양방향 Active Block 관계인 Profile을 pagination·cursor·limit 전에 제외해야 한다(MUST). selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를 유지하고 Profile Block predicate나 selected Local Profile을 새로 요구해서는 안 된다(MUST NOT). 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용해서는 안 된다(MUST NOT). Profile의 followers/following 후보와 새 Follow 입력은 양방향 Profile Block 관계를 적용해야 하며(MUST), 상대 Profile을 Follow 후보로 반환하거나 새 Follow Request·Relationship을 저장해서는 안 된다(MUST NOT). Owner가 관리하는 차단 목록은 일반 Profile 공개 조회와 구분된 Owner 전용 관계 조회로 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `docs/domain/policies/post-list.md`, `PROD-822`. GraphQL `node(id:)`와 `profileByHandle` 직접 조회는 Profile Block과 무관하게 기존 lifecycle·membership·공개 Profile 조회 정책과 기본 Profile 정보 범위를 유지해야 한다(MUST). Profile 자체가 기존 lifecycle 정책으로 조회 불가하면 기존 null/unavailable 결과를 유지하고 Block 전용 identity payload를 만들지 않아야 한다(MUST NOT). 유효한 Account에 selected Profile이 있으면 그 Profile을 `searchProfiles`의 viewer로 사용해야 하며(MUST), 기존 공개 조회 조건을 통과한 후보 중 viewer와 양방향 Active Block 관계인 Profile을 pagination·cursor·limit 전에 제외해야 한다(MUST). selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를 유지하고 Profile Block predicate나 selected Local Profile을 새로 요구해서는 안 된다(MUST NOT). 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용해서는 안 된다(MUST NOT). Profile의 followers/following 후보와 새 Follow 입력은 양방향 Profile Block 관계를 적용해야 하며(MUST), 상대 Profile을 Follow 후보로 반환하거나 새 Follow Request·Relationship을 저장해서는 안 된다(MUST NOT). Owner가 관리하는 차단 목록은 일반 Profile 공개 조회와 구분된 Owner 전용 관계 조회로 제공해야 한다(MUST).
 
 #### Scenario: Block된 상대 Profile의 직접 기본 정보를 기존 정책으로 조회한다
 
@@ -24,18 +24,6 @@
 - **THEN** 시스템은 기존 Account 인증과 공개 후보 결과를 유지한다
 - **AND** Profile Block predicate를 적용하거나 selected Local Profile을 새로 요구하지 않는다
 - **AND** 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용하지 않는다
-
-#### Scenario: selected Profile 기준으로 Block된 상대 Profile을 Hashtag 관련 후보에서 제외한다
-
-- **WHEN** 유효한 Account에 selected Profile이 있고 그 viewer와 정확한 Hashtag 관계의 공개 Profile 후보 사이에 어느 방향으로든 Active Profile Block이 존재한다
-- **THEN** 시스템은 해당 Profile을 `Hashtag.relatedProfiles` 후보에서 제외한다
-- **AND** 후보 제외를 pagination·cursor·limit 전에 적용해 후속 후보와 pageInfo를 유지한다
-
-#### Scenario: selected Profile이 없으면 기존 Hashtag 관련 공개 결과를 유지한다
-
-- **WHEN** 유효한 Account에 selected Profile이 없고 Account가 `Hashtag.relatedProfiles`를 요청한다
-- **THEN** 시스템은 기존 Account 인증과 정확한 Hashtag 관계·공개 Profile 후보 결과를 유지한다
-- **AND** Profile Block predicate를 적용하거나 selected Local Profile을 새로 요구하지 않는다
 
 ### Requirement: Profile Block preserves the bilateral Follow boundary
 
