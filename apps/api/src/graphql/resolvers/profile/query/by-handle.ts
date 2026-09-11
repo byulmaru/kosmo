@@ -6,24 +6,14 @@ import { runWorkflow } from '@kosmo/core/temporal/client';
 import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/remote-profile';
 import { profileHandleSchema } from '@kosmo/core/validation';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import {
-  ApplicationFailure,
-  WorkflowIdConflictPolicy,
-  WorkflowIdReusePolicy,
-} from '@temporalio/client';
+import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { and, asc, desc, eq, getColumns, gt, lt, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { visibleProfileWhere } from '@/profile/visibility';
-import { captureUnexpectedError } from '@/sentry';
+import { reportError } from '@/sentry';
 import { Profile, ProfileConnection } from '../ref';
 
 type ProfileRow = typeof Profiles.$inferSelect;
-
-// Resolver-local seam keeps error reporting replaceable in focused tests without widening
-// the Fedify or application-wide error-reporting API.
-export const remoteProfileSearchErrorReporter = {
-  capture: captureUnexpectedError,
-};
 
 const escapeLikePattern = (value: string) =>
   value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
@@ -109,33 +99,23 @@ builder.queryField('searchProfiles', (t) =>
           );
         }
 
-        let materializedProfileId: string | undefined;
+        let materializedProfileId: string | null | undefined;
 
         if (isExplicitRemoteHandle(args.query, parsed)) {
-          try {
-            materializedProfileId = await runWorkflow(remoteProfileLookupWorkflow, {
-              args: [
-                {
-                  domain: parsed.domain,
-                  handle: parsed.handle,
-                  ...(ctx.session.profile?.id ? { profileId: ctx.session.profile.id } : {}),
-                },
-              ],
-              mode: 'execute',
-              workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-              workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
-            });
-          } catch (error) {
-            const isExpectedMaterializationError =
-              error instanceof ApplicationFailure &&
-              (error.type === 'RemoteActorMaterializationError' ||
-                error.type === 'ConflictError' ||
-                error.type === 'NotFoundError');
+          materializedProfileId = await runWorkflow(remoteProfileLookupWorkflow, {
+            args: [
+              {
+                domain: parsed.domain,
+                handle: parsed.handle,
+                ...(ctx.session.profile?.id ? { profileId: ctx.session.profile.id } : {}),
+              },
+            ],
+            mode: 'execute',
+            workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+            workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+          }).catch(reportError);
 
-            if (!isExpectedMaterializationError) {
-              remoteProfileSearchErrorReporter.capture(error);
-            }
-
+          if (materializedProfileId === null) {
             return resolveCursorConnection<Promise<ProfileRow[]>>(
               { args, toCursor: (profile) => profile.id },
               () => Promise.resolve([]),

@@ -16,8 +16,10 @@ if (enabled) {
   });
 }
 
-export const captureUnexpectedError = (cause: unknown): void => {
+export const reportError = (cause: unknown): null => {
   if (enabled) {
     Sentry.captureException(cause);
   }
+
+  return null;
 };

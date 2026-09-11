@@ -97,8 +97,8 @@ context와 기존 lookup, inbound Update의 검증된 actor/no-network projectio
    저장 없이 실패하고, 일치하는 canonical URI의 preferredUsername 변경은 같은 Profile identity를 갱신한다.
 6. 동기 caller가 Profile identity를 받으면 기존 검색 경계가 필요한 connection과 staged visibility를 다시 조회한다.
    public Workflow start/execute 자체가 실패하면 caller는 DB fallback을 만들지 않고 기존 materialization 또는 explicit
-   search 오류 경계로 전달한다. 명시적 search의 예상 lookup/domain 실패는 기존 빈 connection mapping과 관측 정책을
-   유지한다.
+   search 오류 경계로 전달한다. 명시적 search는 모든 Workflow rejection을 공용 `reportError`로 보고하고 callback의
+   `null`을 기존 빈 connection으로 매핑한다.
 7. partial/local/malformed search, `profileByHandle`, profile route는 DB-only로 남긴다. inbound Follow는 기존 request
    context와 lookup을, inbound Update는 검증된 actor/no-network projection을 사용한다.
 
@@ -134,9 +134,9 @@ native args로 ID를 만들고 native `startChild`/`executeChild`의 handle·res
 
 ## Risks / Trade-offs
 
-- [Temporal 시작·Worker 가용성 장애] public Workflow start failure와 신규 materialization 실패는 기존
-  materialization 또는 explicit-search 오류 경계로 매핑한다. explicit search는 기존 빈 connection으로 처리하며,
-  caller는 DB fallback을 만들지 않는다.
+- [Temporal 시작·Worker 가용성 장애] public Workflow start failure와 신규 materialization 실패는 explicit-search의
+  공용 `reportError` 관측 경계로 전달한다. `reportError`는 Sentry가 활성화된 경우 오류를 보고하고 `null`을 반환하며,
+  explicit search는 기존 빈 connection으로 처리하고 caller는 DB fallback을 만들지 않는다.
 - [stale child start 또는 execution failure] Coordinator는 child start acknowledgement 뒤 cached identity를
   반환하며 실패를 관측한다. child failure가 cached Profile을 삭제·실패 처리로 바꾸지 않는다.
 - [Activity retry 중 외부 fetch 재실행] 기존 transaction의 actor URI·handle uniqueness와 `lastFetchedAt` ordering으로

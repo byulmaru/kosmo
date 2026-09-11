@@ -56,7 +56,7 @@
 
 - 갱신 불필요 상태(fresh 또는 `UNRESPONSIVE`)의 stored Profile은 원격 작업 없이 반환하고, stale Profile의 refresh 실패나 시작 실패는 기존 row와 성공한 검색 결과를 무효화하지 않는다.
 - 일반 partial/local/malformed 검색, `profileByHandle`, profile route와 하위 route는 원격 materialization·refresh를 시작하지 않는다.
-- `SUSPENDED` Profile/Instance 비노출, `UNRESPONSIVE` Instance refresh 금지, 기존 empty-result와 unexpected-error 관측 매핑을 유지한다.
+- `SUSPENDED` Profile/Instance 비노출, `UNRESPONSIVE` Instance refresh 금지, 기존 empty-result와 공용 `reportError` 관측 매핑을 유지한다.
 - inbound Follow request context와 lookup, 검증된 inbound Update actor/no-network projection은 이 전환에 포함하지 않으며 기존 경계를 유지한다.
 
 **Verification**
@@ -66,7 +66,7 @@
 
 - [x] 2.1 명시적 qualified search가 missing Profile의 기존 synchronous materialization과 canonical identity 결과를 유지하도록 caller를 연결한다.
 - [x] 2.2 명시적 qualified search가 stale Profile을 즉시 반환하고 refresh를 끄지 않으면서 동일한 Temporal 경로를 시작하도록 전환한다.
-- [x] 2.3 partial/local/malformed/profileByHandle/route 및 inbound Update no-network 경계 회귀와 inbound Follow 기존 lookup 경계, expected empty-result·unexpected error 관측을 검증한다.
+- [x] 2.3 partial/local/malformed/profileByHandle/route 및 inbound Update no-network 경계 회귀와 inbound Follow 기존 lookup 경계, empty-result·공용 `reportError` 관측을 검증한다.
 
 ## 3. PROD-808 Integration and completion verification
 
@@ -142,7 +142,7 @@ connection·visibility 결과를 유지한다.
 
 - [x] 4.1 public `remoteProfileLookupWorkflow`가 URI lookup Activity 뒤 materialize Activity를 호출하고, materialize Activity가 stored/missing 판정과 non-null `{ profileId, needsRefresh }` DTO를 반환하도록 구현한다. Missing은 refresh Activity fetch·persist 뒤 `{ profileId: id, needsRefresh: false }`로 반환한다.
 - [x] 4.2 `needsRefresh: true`에서만 별도 refresh child를 시작해 두 `ABANDON` 옵션과 child start acknowledgement 경계를 적용하고, URI lookup Activity 결과의 `actorUri`와 Workflow input의 optional `profileId`를 전달하며, 동일 active child coalescing·failure 관측·cached identity 보존 및 실행 직전 freshness/eligibility 재확인을 구현한다.
-- [x] 4.3 caller가 한 public lookup Workflow dispatch만 사용하도록 전환하고, 5초 bounded 대기 설정이 discovery를 포함하는지와 새 Activity 조합의 결과·오류, sync/async all-state acknowledgement, no-DB-fallback, discovery/visibility DB boundary 및 기존 search error mapping의 행동 검증을 완료한다. Workflow timeout continuation과 Worker restart recovery 자체는 Temporal native 계약으로 둔다.
+- [x] 4.3 caller가 한 public lookup Workflow dispatch만 사용하도록 전환하고, 5초 bounded 대기 설정이 discovery를 포함하는지와 새 Activity 조합의 결과·오류, sync/async all-state acknowledgement, no-DB-fallback, discovery/visibility DB boundary 및 공용 `reportError`와 빈 connection fallback의 행동 검증을 완료한다. Workflow timeout continuation과 Worker restart recovery 자체는 Temporal native 계약으로 둔다.
 
 ## Completion evidence
 

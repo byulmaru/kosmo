@@ -215,12 +215,24 @@
 - Decision Date: 2026-09-11
 - Decision Class: Implementation Choice
 - Authority / Provenance: [`PROD-808` 2026-09-11 user decision](https://linear.app/byulmaru/issue/PROD-808), `docs/domain/objects/profile.md`
-- Status: Active
+- Status: Active; API caller의 expected-type 분류·reporting clause는 아래 `API report-and-null fallback` 결정으로 대체한다.
 - Context / Problem: native Workflow rejection은 `WorkflowFailedError` 같은 outer wrapper와 wire `ApplicationFailure`의 cause chain으로 전달될 수 있어, API가 Temporal의 중첩 cause 구조를 직접 알아야 한다.
 - Decision Outcome: `runWorkflow`는 callback 오류를 native 호출 전에 원본 그대로 전파한다. Native `start`/`execute` rejection은 `Error.cause` chain에서 첫 `ApplicationFailure`를 찾으면 그 동일 객체를 throw하고, 찾지 못하면 최초 rejection 객체를 그대로 throw한다. Native result·start 반환값·conflict/reuse policy, start handle와 execute result의 mode별 type은 유지한다. Caller는 전달받은 `ApplicationFailure.type`으로 expected domain failure를 분류하고 fallback·reporting을 결정한다. Unknown `ApplicationFailure`도 그대로 전달되어 outer Workflow 오류 wrapper가 Sentry 대표 오류에서 빠질 수 있으며, `ApplicationFailure`가 없는 transport·deadline·cancel 오류는 원래 native wrapper를 유지한다.
 - Alternatives Considered: API caller가 cause chain을 직접 순회하는 경계를 유지하면 Temporal 중첩 오류 구조가 endpoint로 새어 나온다. 모든 오류를 하나의 domain DTO로 바꾸면 native retry/transport metadata와 원인 형태를 잃고, domain type 목록과 fallback/reporting을 공용 client에 넣으면 Workflow별 정책 경계가 섞인다.
 - Consequences: remote profile API는 직접 cause traversal 없이 세 expected `ApplicationFailure.type`만 분류하면서 기존 빈 connection과 unexpected error 관측을 유지한다. Activity의 domain-to-`ApplicationFailure` retry encoding과 `runChildWorkflow`의 native error semantics는 변경하지 않는다.
 - Confirmation / Follow-up: Core client rejection tests와 API profile failure behavior를 실행해 first `ApplicationFailure` identity, no-`ApplicationFailure` original identity, callback failure, native result/start behavior와 existing fallback/reporting을 확인한다.
+
+### API report-and-null fallback
+
+- Decision Date: 2026-09-11
+- Decision Class: Implementation Choice
+- Authority / Provenance: [`PROD-808` 2026-09-11 user decision](https://linear.app/byulmaru/issue/PROD-808)
+- Status: Active
+- Context / Problem: 명시적 remote profile search의 expected `ApplicationFailure.type` 분류와 일부 오류 보고 제외는 최신 사용자 결정과 맞지 않는다.
+- Decision Outcome: API caller는 `runWorkflow(...).catch(reportError)`로 모든 rejection을 공용 reporter에 전달하고, `reportError`는 기존 Sentry 활성화 조건을 유지한 채 `null`을 반환한다.
+- Reason / Alternatives: `runWorkflow`의 native error semantics와 domain 분류 정책을 섞지 않고, 별도 wrapper·registry·DB fallback 없이 API resolver 경계에서 처리한다.
+- Consequences: resolver는 `null`을 즉시 기존 빈 connection으로 매핑하고 DB 검색을 계속하지 않으며, caught failure는 Sentry가 활성화된 경우 보고된다.
+- Confirmation / Follow-up: API failure behavior와 static validation에서 공용 report 호출·null short-circuit를 확인하고, runtime test evidence를 별도 기록한다.
 
 ## Remaining Decisions
 

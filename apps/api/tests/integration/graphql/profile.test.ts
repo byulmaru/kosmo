@@ -25,6 +25,7 @@ import { temporalClient } from '@kosmo/core/temporal/client';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
 import { profileTagNormalizationParityCases } from '@kosmo/core/validation/profile-tag-parity-fixture';
+import * as Sentry from '@sentry/node';
 import { ApplicationFailure } from '@temporalio/client';
 import { and, count, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -69,12 +70,16 @@ let handleInboundCreate: typeof HandleInboundCreate;
 let handleInboundDelete: typeof HandleInboundDelete;
 let app: Hono<Env>;
 let localInstanceId: string;
+let restoreSentryTransport: (() => void) | undefined;
 
 describe('GraphQL remote profile boundary', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
+    process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@example.invalid/1';
+    process.env.ENVIRONMENT = 'test';
+    process.env.SENTRY_RELEASE = 'kosmo-test';
 
     ({
       AccountProfiles,
@@ -109,6 +114,11 @@ describe('GraphQL remote profile boundary', () => {
     ({ deriveContext } = await import('../../../src/context'));
     ({ yoga } = await import('../../../src/graphql'));
 
+    const sentryTransport = Sentry.getClient()?.getTransport();
+    assert.ok(sentryTransport);
+    const transportMock = mock.method(sentryTransport, 'send', async () => ({ statusCode: 200 }));
+    restoreSentryTransport = () => transportMock.mock.restore();
+
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
       c.set('context', await deriveContext(c));
@@ -123,6 +133,8 @@ describe('GraphQL remote profile boundary', () => {
 
   after(async () => {
     await pg.end();
+    await Sentry.close(0);
+    restoreSentryTransport?.();
   });
 
   test('does not treat a malformed profile without an instance as local', () => {
@@ -517,56 +529,56 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(await db.$count(ActivityPubActors), 1);
   });
 
-  test('falls back to an empty connection for expected remote materialization failures', async (t) => {
+  test('reports expected remote materialization failures before falling back to an empty connection', async (t) => {
     const auth = await createAuthenticatedSession();
-    const { remoteProfileSearchErrorReporter } =
-      await import('../../../src/graphql/resolvers/profile/query/by-handle');
-    const captureUnexpectedError = t.mock.method(remoteProfileSearchErrorReporter, 'capture');
     const failures = [
-      new Error('Workflow execution failed', {
-        cause: ApplicationFailure.nonRetryable(
-          'Remote lookup did not return an actor.',
-          'RemoteActorMaterializationError',
-        ),
-      }),
-      new Error('Workflow execution failed', {
-        cause: ApplicationFailure.nonRetryable(
-          'Remote actor handle collides with another actor',
-          'ConflictError',
-        ),
-      }),
-      new Error('Workflow execution failed', {
-        cause: ApplicationFailure.nonRetryable('Profile not found', 'NotFoundError'),
-      }),
+      ApplicationFailure.nonRetryable(
+        'Remote lookup did not return an actor.',
+        'RemoteActorMaterializationError',
+      ),
+      ApplicationFailure.nonRetryable(
+        'Remote actor handle collides with another actor',
+        'ConflictError',
+      ),
+      ApplicationFailure.nonRetryable('Profile not found', 'NotFoundError'),
     ];
     let failureIndex = 0;
     const execute = t.mock.method(temporalClient.workflow, 'execute', async () => {
       const failure = failures[failureIndex++];
       assert.ok(failure);
-      throw failure;
+      throw new Error('Workflow execution failed', { cause: failure });
     });
     const instanceCountBefore = await db.$count(Instances);
+    const capturedErrors: unknown[] = [];
 
-    for (let index = 0; index < failures.length; index += 1) {
-      const result = await requestGraphQL<{
-        searchProfiles: { edges: unknown[]; pageInfo: { hasNextPage: boolean } };
-      }>(
-        `query SearchRemoteProfile($query: String!) {
-          searchProfiles(query: $query, first: 20) {
-            edges { node { id } }
-            pageInfo { hasNextPage }
-          }
-        }`,
-        { query: `@missing@${remoteDomain}` },
-        auth.token,
-      );
-
-      assertNoGraphQLErrors(result);
-      assert.deepEqual(result.data?.searchProfiles, {
-        edges: [],
-        pageInfo: { hasNextPage: false },
+    await Sentry.withScope(async (scope) => {
+      scope.addEventProcessor((event, hint) => {
+        capturedErrors.push(hint.originalException);
+        return event;
       });
-    }
+
+      for (let index = 0; index < failures.length; index += 1) {
+        const result = await requestGraphQL<{
+          searchProfiles: { edges: unknown[]; pageInfo: { hasNextPage: boolean } };
+        }>(
+          `query SearchRemoteProfile($query: String!) {
+            searchProfiles(query: $query, first: 20) {
+              edges { node { id } }
+              pageInfo { hasNextPage }
+            }
+          }`,
+          { query: `@missing@${remoteDomain}` },
+          auth.token,
+        );
+
+        assertNoGraphQLErrors(result);
+        assert.deepEqual(result.data?.searchProfiles, {
+          edges: [],
+          pageInfo: { hasNextPage: false },
+        });
+      }
+    });
+    assert.equal(await Sentry.flush(1_000), true);
 
     assert.equal(execute.mock.calls.length, failures.length);
     for (const call of execute.mock.calls) {
@@ -580,15 +592,15 @@ describe('GraphQL remote profile boundary', () => {
         },
       ]);
     }
-    assert.equal(captureUnexpectedError.mock.calls.length, 0);
+    assert.equal(capturedErrors.length, failures.length);
+    for (const [index, failure] of failures.entries()) {
+      assert.strictEqual(capturedErrors[index], failure);
+    }
     assert.equal(await db.$count(Instances), instanceCountBefore);
   });
 
-  test('falls back to an empty connection for unexpected remote materialization failures', async (t) => {
+  test('reports unexpected remote materialization failures before falling back to an empty connection', async (t) => {
     const auth = await createAuthenticatedSession();
-    const { remoteProfileSearchErrorReporter } =
-      await import('../../../src/graphql/resolvers/profile/query/by-handle');
-    const captureUnexpectedError = t.mock.method(remoteProfileSearchErrorReporter, 'capture');
     const lookupError = ApplicationFailure.nonRetryable(
       'remote lookup unavailable',
       'UnexpectedRemoteMaterializationError',
@@ -596,19 +608,28 @@ describe('GraphQL remote profile boundary', () => {
     const execute = t.mock.method(temporalClient.workflow, 'execute', async () => {
       throw new Error('Workflow execution failed', { cause: lookupError });
     });
+    const capturedErrors: unknown[] = [];
 
-    const result = await requestGraphQL<{
-      searchProfiles: { edges: unknown[] };
-    }>(
-      `query SearchRemoteProfile($query: String!) {
-        searchProfiles(query: $query, first: 20) { edges { node { id } } }
-      }`,
-      { query: `@alice@${remoteDomain}` },
-      auth.token,
-    );
+    await Sentry.withScope(async (scope) => {
+      scope.addEventProcessor((event, hint) => {
+        capturedErrors.push(hint.originalException);
+        return event;
+      });
 
-    assertNoGraphQLErrors(result);
-    assert.deepEqual(result.data?.searchProfiles.edges, []);
+      const result = await requestGraphQL<{
+        searchProfiles: { edges: unknown[] };
+      }>(
+        `query SearchRemoteProfile($query: String!) {
+          searchProfiles(query: $query, first: 20) { edges { node { id } } }
+        }`,
+        { query: `@alice@${remoteDomain}` },
+        auth.token,
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.searchProfiles.edges, []);
+    });
+    assert.equal(await Sentry.flush(1_000), true);
     assert.equal(execute.mock.calls.length, 1);
     const options = execute.mock.calls[0]?.arguments[1];
     assert.ok(options);
@@ -619,8 +640,7 @@ describe('GraphQL remote profile boundary', () => {
         profileId: auth.profile.id,
       },
     ]);
-    assert.equal(captureUnexpectedError.mock.calls.length, 1);
-    assert.strictEqual(captureUnexpectedError.mock.calls[0]?.arguments[0], lookupError);
+    assert.deepEqual(capturedErrors, [lookupError]);
   });
 
   test('searches stored profiles by partial handle with literal LIKE metacharacters', async () => {

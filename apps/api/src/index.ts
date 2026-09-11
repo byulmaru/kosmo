@@ -3,7 +3,7 @@ import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { Hono } from 'hono';
 import { deriveContext } from './context';
 import { yoga } from './graphql';
-import { captureUnexpectedError } from './sentry';
+import { reportError } from './sentry';
 import type { Env } from './context';
 
 await resolveConfiguredLocalInstance();
@@ -11,7 +11,7 @@ await resolveConfiguredLocalInstance();
 const app = new Hono<Env>();
 
 app.onError((cause, c) => {
-  captureUnexpectedError(cause);
+  reportError(cause);
   console.error('Unhandled API error');
   return c.text('Internal Server Error', 500);
 });
