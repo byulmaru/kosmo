@@ -1125,6 +1125,84 @@ describe('GraphQL Profile Block', () => {
     assert.deepEqual(mutualView.data?.target?.posts.edges, []);
   });
 
+  test('applies direct Post Block policy when creating a Bookmark', async () => {
+    const owner = await createAuthenticatedSession();
+    const target = await createProfile('bookmark-block-target');
+    const targetSession = await createAuthenticatedSession(target);
+    const targetPost = await createContentPost(target.id);
+    const postId = globalId('Post', targetPost.post.id);
+    const createBookmark = (token: string) =>
+      requestGraphQL<{ createBookmark: { bookmark: { post: { id: string } | null } } }>(
+        `mutation CreateBlockedPairBookmark($input: CreateBookmarkInput!) {
+          createBookmark(input: $input) { bookmark { post { id } } }
+        }`,
+        { input: { postId } },
+        token,
+      );
+
+    const ownerBlock = await blockProfile(target.id, owner.token);
+    assertNoGraphQLErrors(ownerBlock);
+
+    const blockingOwnerResult = await createBookmark(owner.token);
+    assertNoGraphQLErrors(blockingOwnerResult);
+    assert.equal(blockingOwnerResult.data?.createBookmark.bookmark.post?.id, postId);
+
+    await db.delete(ProfileBlocks);
+    const targetBlock = await blockProfile(owner.profile.id, targetSession.token);
+    assertNoGraphQLErrors(targetBlock);
+
+    const blockedTargetResult = await createBookmark(owner.token);
+    assertGraphQLErrorCode(blockedTargetResult, 'NOT_FOUND');
+
+    const mutualBlock = await blockProfile(target.id, owner.token);
+    assertNoGraphQLErrors(mutualBlock);
+
+    const mutualResult = await createBookmark(owner.token);
+    assertGraphQLErrorCode(mutualResult, 'NOT_FOUND');
+  });
+
+  test('filters blocked Posts before limiting Home and Local Timelines', async () => {
+    const owner = await createAuthenticatedSession();
+    const visibleAuthor = await createProfile('timeline-visible-author');
+    const blockedAuthor = await createProfile('timeline-blocked-author');
+    const visiblePost = await createContentPost(
+      visibleAuthor.id,
+      undefined,
+      PostVisibility.PUBLIC,
+      '019f8ed2-0000-7000-8000-000000000100',
+    );
+    await createContentPost(
+      blockedAuthor.id,
+      undefined,
+      PostVisibility.PUBLIC,
+      '019f8ed2-0000-7000-8000-000000000200',
+    );
+
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: owner.profile.id, followeeProfileId: visibleAuthor.id },
+      { followerProfileId: owner.profile.id, followeeProfileId: blockedAuthor.id },
+    ]);
+    const blockResult = await blockProfile(blockedAuthor.id, owner.token);
+    assertNoGraphQLErrors(blockResult);
+
+    const result = await requestGraphQL<{
+      homeTimeline: { edges: Array<{ node: { id: string } }> } | null;
+      localTimeline: { edges: Array<{ node: { id: string } }> } | null;
+    }>(
+      `query BlockedTimelinePagination {
+        homeTimeline(first: 1) { edges { node { id } } }
+        localTimeline(first: 1) { edges { node { id } } }
+      }`,
+      {},
+      owner.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    const expectedEdges = [{ node: { id: globalId('Post', visiblePost.post.id) } }];
+    assert.deepEqual(result.data?.homeTimeline?.edges, expectedEdges);
+    assert.deepEqual(result.data?.localTimeline?.edges, expectedEdges);
+  });
+
   test('keeps blocking Owner direct Repost content while hiding it from relation lists', async () => {
     const viewer = await createAuthenticatedSession();
     const repostAuthor = await createProfile('blocked-repost-author');
@@ -1535,10 +1613,11 @@ const createContentPost = async (
   profileId: string,
   mediaId?: string,
   visibility: PostVisibility = PostVisibility.PUBLIC,
+  id?: string,
 ) => {
   const post = await db
     .insert(Posts)
-    .values({ profileId, state: PostState.ACTIVE, visibility })
+    .values({ ...(id === undefined ? {} : { id }), profileId, state: PostState.ACTIVE, visibility })
     .returning()
     .then(firstOrThrow);
   const content = await db
