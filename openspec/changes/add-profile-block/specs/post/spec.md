@@ -58,7 +58,7 @@ archive 조건이 아니며, 공통 정책 검증 결과와 실제 endpoint 검�
 
 ### Requirement: Profile Block Post interaction boundary
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0012-post-interaction-followup-clarifications.md`, `PROD-822`. Post surface의 새 Reply·Quote·Reaction·Repost 입력은 origin과 무관하게 공통 Profile Block admission assertion을 적용해 차단된 pair를 거부해야 한다(MUST). 이 assertion은 쓰기 admission만 담당하고 목록·검색용 SQL predicate와 분리해야 한다(MUST). 차단으로 거부된 입력은 새 Post·Reaction·Repost 저장 결과를 남겨서는 안 되고(MUST NOT), 기존 Repost Post·Bookmark는 보존해야 한다(MUST). 현재 Quote source 입력 ingress가 없으면 공통 assertion 단위 검증과 실제 endpoint 미검증을 구분해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0012-post-interaction-followup-clarifications.md`, `PROD-822`. Post surface의 새 Reply·Quote·Reaction·Repost 입력은 origin과 무관하게 공통 Profile Block admission assertion을 적용해 차단된 pair를 거부해야 한다(MUST). 이 assertion은 쓰기 admission만 담당하고 목록·검색용 SQL predicate와 분리해야 한다(MUST). 차단으로 거부된 입력은 새 Post·Reaction·Repost 저장 결과를 남겨서는 안 되고(MUST NOT), 기존 Repost Post·Bookmark는 보존해야 한다(MUST). ingress가 있는 Quote origin은 실제 입력 경로에서 거부와 저장 결과 부재를 검증해야 하며(MUST), ingress가 없는 origin에 한해 공통 assertion 단위 검증과 실제 ingress 미검증을 구분해야 한다(MUST).
 
 #### Scenario: 차단된 상대를 향한 새 Post interaction을 거부한다
 
@@ -72,12 +72,18 @@ archive 조건이 아니며, 공통 정책 검증 결과와 실제 endpoint 검�
 - **THEN** 시스템은 두 origin 모두 같은 양방향 Profile Block admission으로 거부한다
 - **AND** Local과 ActivityPub 어느 경로도 새 Post·Reaction·Repost row를 저장하지 않는다
 
-#### Scenario: 아직 없는 Quote ingress는 공통 admission 결과로 검증한다
+#### Scenario: Local Quote ingress에서 차단 양방향의 쓰기를 거부한다
 
-- **WHEN** 현재 Post 작성 API가 Quote source 입력 ingress를 제공하지 않는다
-- **THEN** 시스템은 Quote에도 적용될 양방향 Profile Block admission assertion을 단위 경계에서 검증한다
-- **AND** 실제 Quote endpoint E2E를 실행한 것으로 기록하지 않는다
-- **AND** 이후 Quote ingress의 정책 연결과 실제 E2E는 그 consumer를 도입하는 기능 이슈가 소유한다
+- **WHEN** Active Block 관계의 Owner 또는 Target이 `CreatePostInput.repostSourceId`로 상대 Profile의 Post를 인용한다
+- **THEN** GraphQL `createPost` ingress는 양방향 Profile Block admission으로 요청을 거부한다
+- **AND** 요청한 Profile의 자체 Content와 Quote Source를 갖는 새 Post row를 저장하지 않는다
+
+#### Scenario: ingress가 없는 Quote origin은 공통 admission 결과로 검증한다
+
+- **WHEN** 특정 origin의 Post 작성 경로가 Quote source 입력 ingress를 제공하지 않는다
+- **THEN** 시스템은 그 origin의 Quote에도 적용될 양방향 Profile Block admission assertion을 단위 경계에서 검증한다
+- **AND** 없는 ingress의 실제 E2E를 실행한 것으로 기록하지 않는다
+- **AND** 이후 해당 ingress를 도입하는 기능 이슈가 정책 연결과 실제 E2E를 소유한다
 
 #### Scenario: 차단과 무관한 기존 Post 상태를 보존한다
 
