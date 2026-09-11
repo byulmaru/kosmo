@@ -80,13 +80,19 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
     focusTarget?.focus();
   }, []);
 
+  const closeAndRestoreFocus = useCallback(() => {
+    onRequestClose();
+    if (Platform.OS === 'web') {
+      requestAnimationFrame(restoreFocus);
+    }
+  }, [onRequestClose, restoreFocus]);
+
   const handleDelivered = useCallback(() => {
     formStateRef.current = initialFormState;
     setFormState(initialFormState);
-    restoreFocus();
-    onRequestClose();
+    closeAndRestoreFocus();
     showToast('신고를 전달했습니다.', { tone: 'success' });
-  }, [onRequestClose, restoreFocus, showToast]);
+  }, [closeAndRestoreFocus, showToast]);
 
   const requestClose = useCallback(() => {
     const currentFormState = formStateRef.current;
@@ -97,9 +103,8 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
       setDiscardConfirmOpen(true);
       return;
     }
-    restoreFocus();
-    onRequestClose();
-  }, [discardConfirmOpen, onRequestClose, restoreFocus]);
+    closeAndRestoreFocus();
+  }, [closeAndRestoreFocus, discardConfirmOpen]);
 
   const continueEditing = useCallback(() => {
     setDiscardConfirmOpen(false);
@@ -118,9 +123,8 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
     setFormState(initialFormState);
     setFormRevision((current) => current + 1);
     setDiscardConfirmOpen(false);
-    restoreFocus();
-    onRequestClose();
-  }, [onRequestClose, restoreFocus]);
+    closeAndRestoreFocus();
+  }, [closeAndRestoreFocus]);
 
   const trapFocus = useCallback(
     (event: KeyboardEvent) => {

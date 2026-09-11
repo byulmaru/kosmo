@@ -55,7 +55,7 @@ function ContentReportPreview({ hideTriggerOnOpen = false }: { hideTriggerOnOpen
           <ContentReportTrigger
             onReportOpen={() => {
               if (hideTriggerOnOpen) {
-                setTriggerVisible(false);
+                setTimeout(() => setTriggerVisible(false), 300);
               }
             }}
           />
@@ -218,6 +218,7 @@ export const FallbackFocusAfterTriggerRemoval: Story = {
 
     await userEvent.click(trigger);
     await userEvent.click(page.getByRole('menuitem', { name: '게시물 신고' }));
+    await new Promise((resolve) => setTimeout(resolve, 350));
     await waitFor(() => expect(trigger).not.toBeInTheDocument());
     await userEvent.click(page.getByRole('button', { name: '게시물 신고 닫기' }));
     await waitFor(() => expect(fallback).toHaveFocus());
