@@ -22,7 +22,10 @@
 | `hero`    | `UI/Heading/M` — 24/27.6/700 | `UI/Copy/M` — 14/20/400   | `ProfileHero`                                 |
 
 - `default`와 `compact`는 이름·핸들을 각각 한 줄로 말줄임하며, 필요한 경우 `href`로 identity 전체를 링크로 만든다.
-- `hero`는 이름을 접근성 제목으로 노출하고 이름·핸들의 줄바꿈을 허용한다. identity 자체의 `href`는 받지 않는다.
+- `hero`는 기본적으로 이름을 접근성 제목으로 노출하고 이름·핸들의 줄바꿈을 허용한다. 공개 Profile Home처럼
+  별도 PageHeader가 같은 `displayName` heading을 소유하는 소비처는 이름의 `UI/Heading/M` 시각 typography를
+  유지하면서 Hero의 semantic heading만 끌 수 있다. PageHeader가 없는 관계 route는 기존 Hero heading을 유지한다.
+  identity 자체의 `href`는 받지 않는다.
 - 모든 규격은 이름에 `foregroundPrimary`, 핸들에 `foregroundSecondary`를 사용한다. 게시물·작성기 등
   `default` 소비처와 FollowRequest도 legacy text 색상에서 semantic 색상으로 함께 전환한다.
 - Avatar, bio, Follow action, 목록 전체의 링크 영역과 배치는 소비처가 계속 소유한다. 부모는 자식의 Relay fragment를

@@ -65,8 +65,10 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
   전체 `displayName` heading을 표시하고, 제목은 가용 폭에서 한 줄 tail ellipsis로 줄인다. 없는 프로필도 같은
   위치의 빈 제목 PageHeader와 뒤로가기를 유지하고 그 아래에 상태 본문만 표시한다. ProfileHero와 게시물 본문,
   loading·query error에서도 같은 위치의 빈 제목 PageHeader와 뒤로가기를 유지하며, 기존 ProfileHero skeleton과
-  StateView retry 본문·query lifecycle은 그대로 유지한다. 모바일 Web에서는 셸의 메뉴 전용 헤더를 중복 렌더링하지
-  않는다.
+  StateView retry 본문·query lifecycle은 그대로 유지한다. 최상위 Profile Home에서는 PageHeader만
+  `displayName`의 semantic heading이 되고 ProfileHero는 같은 시각 typography를 유지하되 heading을 제공하지
+  않는다. PageHeader가 없는 현재 followers/following 관계 route에서는 ProfileHero의 기존 heading을 유지한다.
+  모바일 Web에서는 셸의 메뉴 전용 헤더를 중복 렌더링하지 않는다.
   더보기는 모든 레이아웃에서 Hero의 Follow 왼쪽 `16px` 간격에 `40×40` 원형 버튼으로 배치한다. 자세한 메뉴
   배치는 `profile-hero.md`를 따른다.
 

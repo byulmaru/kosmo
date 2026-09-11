@@ -13,6 +13,7 @@
 - Context / Problem: 현재 resolved Profile Home은 Hero부터 시작하고 missing 상태는 본문만 남아, 화면 사이의 navigation 위계와 상태별 chrome이 일치하지 않는다.
 - Decision Outcome: Web·Android·iOS의 최상위 Profile Home route가 모든 layout 상태에서 뒤로가기 PageHeader를 소유한다. resolved 제목은 전체 `displayName`, loading·query error·missing 제목은 빈 문자열이며, 모바일 Web 셸은 메뉴 전용 헤더를 중복하지 않는다. PageHeader는 resolved에서 Hero 위에, loading에서 ProfileHero skeleton 위에, query error·missing에서 기존 상태 본문 위에 놓는다.
 - Alternatives Considered: 모바일 셸이 Profile 제목을 소유하면 breakpoint·Native 간 owner가 갈리고 query data bridge가 필요해 제외했다. missing에서 header를 제거하면 상태 전환 중 chrome 위치가 달라져 제외했다.
+- Resolved 최상위 Profile Home에서는 PageHeader만 `displayName`의 semantic heading이 되고 ProfileHero는 시각 typography만 유지한다. PageHeader가 없는 followers/following 관계 route는 기존 ProfileHero heading을 유지한다.
 - Consequences: route는 Profile 표시 이름을 PageHeader까지 전달하며 resolved·loading·query error·missing 본문이 같은 top-level route chrome ownership을 사용한다. loading skeleton·query retry lifecycle과 관계 route는 기존 계약을 유지한다.
 - Confirmation / Follow-up: resolved·loading·query error·missing route 조립, 모바일 Web 중복 방지와 기존 Hero·본문 보존을 행동 테스트와 Web viewport QA로 확인한다.
 

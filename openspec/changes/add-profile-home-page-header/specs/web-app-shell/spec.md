@@ -9,6 +9,7 @@
 - **WHEN** 사용자가 활성 프로필의 공개 Home을 연다
 - **THEN** route는 ProfileHero 위에 뒤로가기와 전체 `displayName` heading을 가진 PageHeader를 표시한다
 - **AND** 기존 ProfileHero와 게시물 본문을 같은 프로필 identity로 유지한다
+- **AND** ProfileHero의 `displayName`은 시각 typography만 유지하고 semantic heading은 제공하지 않는다
 
 #### Scenario: 긴 표시 이름의 한 줄 생략
 
@@ -29,6 +30,11 @@
 - **WHEN** 사용자가 `compact` 미만 모바일 Web에서 공개 Profile Home을 연다
 - **THEN** 시스템은 route가 소유한 Profile PageHeader 하나만 표시한다
 - **AND** 셸은 메뉴 전용 헤더를 별도로 표시하지 않는다
+
+#### Scenario: PageHeader가 없는 관계 route의 Hero heading 보존
+
+- **WHEN** 사용자가 PageHeader를 소유하지 않는 현재 followers/following 관계 route를 연다
+- **THEN** 기존 ProfileHero는 displayName을 semantic heading으로 표시한다
 
 #### Scenario: Profile Home loading·query error의 route chrome
 

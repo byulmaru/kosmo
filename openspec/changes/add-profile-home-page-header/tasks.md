@@ -9,11 +9,11 @@
 
 **Deliverable**
 
-공개 Profile Home의 PageHeader, 긴 표시 이름, missing·loading·query error 상태와 소유권 계약이 canonical 문서와 OpenSpec에서 일치한다.
+공개 Profile Home의 PageHeader, 단일 semantic displayName heading, 긴 표시 이름, missing·loading·query error 상태와 소유권 계약이 canonical 문서와 OpenSpec에서 일치한다.
 
 **Guardrails**
 
-- ProfileHero·게시물·관계 목록과 일반 PageHeader reflow의 제외 범위를 유지하고, loading·query error는 기존 fallback 본문·query lifecycle을 유지한 채 route chrome만 추가한다.
+- 최상위 Profile Home의 PageHeader만 displayName heading을 소유하고 ProfileHero는 시각 typography를 유지하며, PageHeader가 없는 관계 route는 기존 Hero heading을 유지한다. ProfileHero·게시물·관계 목록과 일반 PageHeader reflow의 제외 범위를 유지하고, loading·query error는 기존 fallback 본문·query lifecycle을 유지한 채 route chrome만 추가한다.
 - Figma target을 Production·Native runtime 완료 증거로 일반화하지 않는다.
 
 **Verification**
@@ -60,7 +60,7 @@ Profile Home의 동적 표시 이름은 공용 PageHeader에서 한 줄 tail ell
 
 **Deliverable**
 
-resolved Profile Home은 표시 이름 PageHeader, Hero와 게시물을 순서대로 표시하고, loading·query error·missing 상태는 빈 제목 PageHeader와 기존 fallback 본문을 표시한다. 모바일 Web은 route PageHeader 하나만 표시한다.
+resolved Profile Home은 표시 이름 PageHeader, heading이 아닌 동일 시각 typography의 Hero와 게시물을 순서대로 표시하고, loading·query error·missing 상태는 빈 제목 PageHeader와 기존 fallback 본문을 표시한다. 모바일 Web은 route PageHeader 하나만 표시한다. PageHeader가 없는 관계 route는 기존 Hero heading을 보존한다.
 
 **Guardrails**
 
@@ -104,7 +104,7 @@ resolved Profile Home은 표시 이름 PageHeader, Hero와 게시물을 순서�
 - 가능한 Android/iOS runtime과 VoiceOver·TalkBack에서 PageHeader 순서·전체 제목·뒤로가기를 확인하고 미실행 항목은 명시한다.
 - 독립 구현 리뷰에서 scope·접근성·route ownership·기존 상태 회귀와 검증 공백을 확인한다.
 
-- [ ] 4.1 targeted automated check와 OpenSpec strict validation을 실행하고 실패를 해소한다.
+- [x] 4.1 targeted automated check와 OpenSpec strict validation을 실행하고 실패를 해소한다.
 - [x] 4.2 Web 390·768·1280px에서 resolved·긴 이름·missing 상태를 시각·상호작용 검증한다.
 - [ ] 4.3 가능한 Android/iOS runtime·VoiceOver·TalkBack QA를 실행하고 미확인 범위를 기록한다.
 - [x] 4.4 독립 구현 리뷰의 finding을 반영하고 PR readiness와 남은 OpenSpec completion gap을 분리해 기록한다.
@@ -126,3 +126,10 @@ resolved Profile Home은 표시 이름 PageHeader, Hero와 게시물을 순서�
 
 - Profile route 행동 테스트 9/9를 통과해 canonical loading·query error의 `PageHeader → 기존 fallback body`
   순서, 빈 제목, back callback과 query retry를 확인했다.
+
+**Verification Record (P1 semantic heading, 2026-09-11)**
+
+- ProfileNameBlock·Profile route 행동 테스트 13/13, Relay compiler, App TypeScript, Prettier,
+  `git diff --check`와 OpenSpec strict validation을 통과했다.
+- 독립 구현 리뷰는 finding 없이 통과했다.
+- Web E2E는 단일 `displayName` heading을 strict locator로 검증하도록 복원했지만 runtime은 다시 실행하지 않았다.

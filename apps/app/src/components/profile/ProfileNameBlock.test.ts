@@ -79,3 +79,18 @@ for (const variant of ['default', 'compact', 'hero'] as const) {
     );
   });
 }
+
+test('hero can keep its typography without exposing a heading', async () => {
+  await act(async () => {
+    renderer = create(
+      createElement(ProfileNameBlock, { heading: false, profile: {} as never, variant: 'hero' }),
+    );
+  });
+
+  assert.ok(renderer);
+  const name = renderer.root.findAll((node) => (node.type as unknown) === 'Text')[0];
+  assert.ok(name);
+  assert.equal(name.props.accessibilityRole, undefined);
+  assert.equal(name.props.numberOfLines, undefined);
+  assert.equal(name.children.join(''), '아주 긴 표시 이름이 한 줄을 넘을 수 있습니다');
+});

@@ -162,6 +162,7 @@ function ProfileLayoutContent({
       <ProfileHero
         key={selectedProfileId}
         action={relationshipAction}
+        heading={!showPageHeader}
         profile={profile}
         showMuteAction={canMute}
       />

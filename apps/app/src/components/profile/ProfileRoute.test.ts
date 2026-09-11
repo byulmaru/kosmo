@@ -151,13 +151,20 @@ mockModule('react-relay', {
 mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
   ProfileHero: ({
     action,
+    heading,
     loading,
     profile,
   }: {
     action?: ReturnType<typeof createElement>;
+    heading?: boolean;
     loading?: boolean;
     profile?: { handle: string };
-  }) => createElement('ProfileHero', { identity: loading ? 'loading' : profile?.handle }, action),
+  }) =>
+    createElement(
+      'ProfileHero',
+      { heading, identity: loading ? 'loading' : profile?.handle },
+      action,
+    ),
 });
 mockModule(new URL('./FollowButton.tsx', import.meta.url), {
   FollowButton: ({ profile }: { profile: { handle: string } }) =>
@@ -295,6 +302,8 @@ describe('profile route parameter lifecycle', () => {
     const header = requireRendered('PageHeader');
     assert.equal(header.props.title, 'Display local');
     assert.equal(header.props.titleLines, 1);
+    const hero = requireRendered('ProfileHero');
+    assert.equal(hero.props.heading, false);
     assert.equal(rendered('ProfileHero').length, 1);
     assert.equal(rendered('PostList').length, 1);
     assert.equal(rendered('StateView').length, 0);
@@ -334,11 +343,14 @@ describe('profile route parameter lifecycle', () => {
   });
 
   it('keeps the shared Profile layout header out of nested relationship routes', async () => {
-    await renderRoute('@local', '/@local/followers');
+    for (const relation of ['followers', 'following']) {
+      await renderRoute('@local', `/@local/${relation}`);
 
-    assert.equal(rendered('PageHeader').length, 0);
-    assert.equal(rendered('ProfileHero').length, 1);
-    assert.equal(rendered('PostList').length, 1);
+      assert.equal(rendered('PageHeader').length, 0);
+      assert.equal(requireRendered('ProfileHero').props.heading, true);
+      assert.equal(rendered('ProfileHero').length, 1);
+      assert.equal(rendered('PostList').length, 1);
+    }
   });
 
   it('표시 중인 selected Local Owner Profile에만 편집 Link를 노출한다', async () => {
