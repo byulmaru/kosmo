@@ -57,7 +57,6 @@ let profileAvailable = true;
 let profileInstanceKind: 'ACTIVITYPUB' | 'LOCAL' = 'LOCAL';
 let routeProbeEnabled = false;
 let routerBackCount = 0;
-let selectedProfileId: string | null = null;
 let sessionId: string | null = null;
 let usePaginationScrollRegistration: (props: NativeScrollProps | null) => void = () => undefined;
 let routeMetrics = {
@@ -246,7 +245,7 @@ mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
   useRelayActorLifecycleKey: () => 'actor-a',
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
-  useSession: () => ({ selectedProfileId, sessionId }),
+  useSession: () => ({ selectedProfileId: null, sessionId }),
 });
 
 let ProfileLayout: ComponentType;
@@ -279,7 +278,6 @@ afterEach(async () => {
   profileAvailable = true;
   profileInstanceKind = 'LOCAL';
   profileViewerState = null;
-  selectedProfileId = null;
   sessionId = null;
   capturedReport.value = null;
 });
