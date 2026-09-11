@@ -21,7 +21,6 @@ import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphq
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostContentWarningPresentation } from './PostContentRenderer';
 import type { PostMediaOpenHandler } from './PostMediaImage';
-import type { ReplyComposerSurfaceHandle } from './ReplyComposerSurface';
 
 const PostLayoutFragment = graphql`
   fragment PostLayout_post on Post {
@@ -91,10 +90,7 @@ export function PostLayout({
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
   const [bodyExpanded, setBodyExpanded] = useState(false);
-  const [quoteOpen, setQuoteOpen] = useState(false);
   const restoreQuoteTriggerFocusRef = useRef<(() => void) | null>(null);
-  const quoteSurfaceRef = useRef<ReplyComposerSurfaceHandle>(null);
-  const replyExpandedRef = useRef(false);
   const bodyMeasurementKey = JSON.stringify([post.content?.id, post.content?.bodyText]);
   const currentBodyMeasurementKey = useRef(bodyMeasurementKey);
   currentBodyMeasurementKey.current = bodyMeasurementKey;
@@ -119,8 +115,11 @@ export function PostLayout({
     }
   }, [post.content?.id]);
   const openViewer = usePostMediaViewerHost();
-  const replyBinding = usePostReplyBinding(replySurfacePostId ?? post.id);
-  replyExpandedRef.current = Boolean(replyBinding?.expanded);
+  const composerPostId = replySurfacePostId ?? post.id;
+  const replyBinding = usePostReplyBinding(composerPostId);
+  const quoteBinding = usePostReplyBinding(composerPostId, 'quote');
+  const composerExpandedRef = useRef(false);
+  composerExpandedRef.current = Boolean(replyBinding?.expanded || quoteBinding?.expanded);
   const replyAuthentication = usePostActionAuthentication(replyAvailable ?? Boolean(post.content));
   const replyTriggerRef = useRef<View>(null);
   const profileHref = `/${post.profile.relativeHandle}` as const;
@@ -134,44 +133,32 @@ export function PostLayout({
         return;
       }
       restoreQuoteTriggerFocusRef.current = restoreFocus;
-      if (replyBinding.expanded) {
-        const replySurface = replyBinding.surfaceRef?.current;
-        if (!replySurface) {
-          restoreQuoteTriggerFocusRef.current = null;
-          return;
-        }
-        replySurface.requestClose(() => setQuoteOpen(true));
-        return;
-      }
-      setQuoteOpen(true);
+      quoteBinding?.onPress();
     },
-    [quoteParent, replyBinding],
+    [quoteBinding, quoteParent, replyBinding?.profile],
   );
-  const closeQuote = useCallback(() => {
-    setQuoteOpen(false);
-    const restoreFocus = restoreQuoteTriggerFocusRef.current;
-    restoreQuoteTriggerFocusRef.current = null;
-    requestAnimationFrame(() => {
-      if (!replyExpandedRef.current) {
-        restoreFocus?.();
+  const closeQuote = useCallback(
+    (willContinue = false) => {
+      quoteBinding?.onRequestClose();
+      if (!willContinue) {
+        const restoreFocus = restoreQuoteTriggerFocusRef.current;
+        restoreQuoteTriggerFocusRef.current = null;
+        requestAnimationFrame(() => {
+          if (!composerExpandedRef.current) {
+            restoreFocus?.();
+          }
+        });
       }
-    });
-  }, []);
+    },
+    [quoteBinding],
+  );
   const handleReplyPress = useCallback(() => {
     if (replyAuthentication.execution.kind === 'resolution-required') {
       replyAuthentication.resolve(replyAuthentication.execution.reason);
     } else if (replyAuthentication.execution.kind === 'enabled') {
-      if (quoteOpen) {
-        const quoteSurface = quoteSurfaceRef.current;
-        if (!quoteSurface) {
-          return;
-        }
-        quoteSurface.requestClose(() => replyBinding?.onPress());
-        return;
-      }
       replyBinding?.onPress();
     }
-  }, [quoteOpen, replyAuthentication, replyBinding]);
+  }, [replyAuthentication, replyBinding]);
   const handleDeleted = useCallback(() => onDeleted?.(), [onDeleted]);
   const handleMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
@@ -332,16 +319,16 @@ export function PostLayout({
             socialActionTarget={socialActionTarget!}
           />
         </View>
-        {quoteOpen && quoteParent && replyBinding?.profile ? (
+        {quoteBinding?.expanded && quoteParent && quoteBinding.profile ? (
           <View style={styles.quoteSurface}>
             <ReplyComposerSurface
-              ref={quoteSurfaceRef}
+              ref={quoteBinding.surfaceRef}
               mode="quote"
               onRequestClose={closeQuote}
               open
-              owner={replyBinding.owner}
+              owner={quoteBinding.owner}
               parent={quoteParent}
-              profile={replyBinding.profile}
+              profile={quoteBinding.profile}
             />
           </View>
         ) : null}

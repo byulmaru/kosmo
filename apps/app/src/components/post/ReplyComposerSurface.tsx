@@ -73,7 +73,7 @@ const ReplyComposerSurfaceProfileFragmentNode = getFragment(ReplyComposerSurface
 type ReplyComposerSurfaceProps = {
   mode?: 'quote' | 'reply';
   onPostCreated?: (post: PostComposerCreatedPost) => void;
-  onRequestClose: () => void;
+  onRequestClose: (willContinue?: boolean) => void;
   open: boolean;
   owner: 'detail' | 'list';
   parent: ReplyComposerSurface_parent$key;
@@ -155,6 +155,7 @@ function ReplyComposerSurfaceContents({
   const discardConfirmRef = useRef<NativeView>(null);
   const editorRef = useRef<TextInput>(null);
   const closeAfterDiscardRef = useRef<(() => void) | undefined>(undefined);
+  const restoreTriggerFocusRef = useRef(true);
   const replyPlatform =
     Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : ('web' as const);
   const presentation = getReplySurfacePresentation(owner, replyPlatform, width);
@@ -173,7 +174,8 @@ function ReplyComposerSurfaceContents({
     (onClosed?: () => void) => {
       setDiscardConfirmOpen(false);
       closeAfterDiscardRef.current = undefined;
-      onRequestClose();
+      restoreTriggerFocusRef.current = onClosed === undefined;
+      onRequestClose(onClosed !== undefined);
       onClosed?.();
     },
     [onRequestClose],
@@ -224,10 +226,12 @@ function ReplyComposerSurfaceContents({
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = previousOverflow;
-      requestAnimationFrame(() => {
-        const trigger = triggerRef?.current as unknown as HTMLElement | null;
-        (trigger ?? previousFocus)?.focus();
-      });
+      if (restoreTriggerFocusRef.current) {
+        requestAnimationFrame(() => {
+          const trigger = triggerRef?.current as unknown as HTMLElement | null;
+          (trigger ?? previousFocus)?.focus();
+        });
+      }
     };
   }, [triggerRef, webOverlayOpen]);
 
@@ -297,10 +301,12 @@ function ReplyComposerSurfaceContents({
       return;
     }
     return () => {
-      requestAnimationFrame(() => {
-        const trigger = triggerRef?.current as unknown as HTMLElement | null;
-        trigger?.focus();
-      });
+      if (restoreTriggerFocusRef.current) {
+        requestAnimationFrame(() => {
+          const trigger = triggerRef?.current as unknown as HTMLElement | null;
+          trigger?.focus();
+        });
+      }
     };
   }, [open, presentation, triggerRef]);
 

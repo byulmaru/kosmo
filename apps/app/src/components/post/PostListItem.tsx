@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -11,6 +11,7 @@ import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
+import { usePostReplyBinding } from './PostReplyCoordinator';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
@@ -107,7 +108,6 @@ export function PostListItem({
   showReplyAttribution?: boolean;
 }) {
   const theme = useTheme();
-  const [quoteOpen, setQuoteOpen] = useState(false);
   const restoreQuoteTriggerFocusRef = useRef<(() => void) | null>(null);
   const post = useFragment(PostListItemFragment, postKey);
   const openViewer = usePostMediaViewerHost();
@@ -117,21 +117,33 @@ export function PostListItem({
     replySurface,
     owner: replyOwner,
   } = usePostReplySurface(post);
+  const quoteBinding = usePostReplyBinding(post.id, 'quote');
+  const composerExpandedRef = useRef(false);
+  composerExpandedRef.current = Boolean(replyBinding?.expanded || quoteBinding?.expanded);
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
   const quoteParent = pureRepost ? post.repostSource?.quoteSurface : post.quoteSurface;
   const openQuote = useCallback(
     (restoreFocus: () => void) => {
       if (replyBinding?.profile && quoteParent) {
         restoreQuoteTriggerFocusRef.current = restoreFocus;
-        setQuoteOpen(true);
+        quoteBinding?.onPress();
       }
     },
-    [quoteParent, replyBinding?.profile],
+    [quoteBinding, quoteParent, replyBinding?.profile],
   );
-  const closeQuote = useCallback(() => {
-    setQuoteOpen(false);
-    requestAnimationFrame(() => restoreQuoteTriggerFocusRef.current?.());
-  }, []);
+  const closeQuote = useCallback(
+    (willContinue = false) => {
+      quoteBinding?.onRequestClose();
+      if (!willContinue) {
+        requestAnimationFrame(() => {
+          if (!composerExpandedRef.current) {
+            restoreQuoteTriggerFocusRef.current?.();
+          }
+        });
+      }
+    },
+    [quoteBinding],
+  );
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const presentedReplySurface =
     replySurface && replyOwner === 'detail' ? (
@@ -140,14 +152,15 @@ export function PostListItem({
       replySurface
     );
   const quoteSurface =
-    quoteOpen && quoteParent && replyBinding?.profile ? (
+    quoteBinding?.expanded && quoteParent && quoteBinding.profile ? (
       <ReplyComposerSurface
+        ref={quoteBinding.surfaceRef}
         mode="quote"
         onRequestClose={closeQuote}
         open
-        owner={replyBinding.owner}
+        owner={quoteBinding.owner}
         parent={quoteParent}
-        profile={replyBinding.profile}
+        profile={quoteBinding.profile}
       />
     ) : null;
   const handleQuoteMediaOpen = useCallback<PostMediaOpenHandler>(

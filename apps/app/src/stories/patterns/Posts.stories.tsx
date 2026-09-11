@@ -4227,6 +4227,71 @@ export const QuoteComposerListIntegration: Story = {
   render: () => <QuoteListSurfaceStory />,
 };
 
+export const QuoteReplyListCoordinatorIntegration: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const replyButton = canvas.getByRole('button', { name: '답글' });
+    const quoteTrigger = canvas.getByRole('button', { name: '재게시 취소' });
+
+    await userEvent.click(replyButton);
+    const replyDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const replyBody = within(replyDialog).getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(replyBody, '목록에서 작성 중인 답글');
+
+    quoteTrigger.click();
+    within(await screen.findByRole('menu', { name: '재게시 메뉴' }))
+      .getByRole('menuitem', { name: '인용하기' })
+      .click();
+    const replyDiscardConfirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    expect(screen.queryByRole('dialog', { name: '인용 게시글 쓰기' })).toBeNull();
+    await userEvent.click(within(replyDiscardConfirm).getByRole('button', { name: '계속 작성' }));
+    expect(replyBody).toHaveValue('목록에서 작성 중인 답글');
+
+    quoteTrigger.click();
+    within(await screen.findByRole('menu', { name: '재게시 메뉴' }))
+      .getByRole('menuitem', { name: '인용하기' })
+      .click();
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
+        'button',
+        { name: '작성 취소' },
+      ),
+    );
+    const quoteDialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
+    const quoteBody = within(quoteDialog).getByRole('textbox', { name: '인용 게시글 본문' });
+    await waitFor(() => expect(quoteBody).toHaveFocus());
+    await userEvent.type(quoteBody, '목록에서 작성 중인 인용');
+    expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
+
+    replyButton.click();
+    const quoteDiscardConfirm = await screen.findByRole('alertdialog', {
+      name: '인용 게시글 작성을 취소할까요?',
+    });
+    expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
+    await userEvent.click(within(quoteDiscardConfirm).getByRole('button', { name: '작성 취소' }));
+    const reopenedReplyDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    expect(within(reopenedReplyDialog).getByRole('textbox', { name: '답글 본문' })).toHaveValue('');
+    await waitFor(() =>
+      expect(within(reopenedReplyDialog).getByRole('textbox', { name: '답글 본문' })).toHaveFocus(),
+    );
+    expect(screen.queryByRole('dialog', { name: '인용 게시글 쓰기' })).toBeNull();
+
+    await userEvent.click(within(reopenedReplyDialog).getByRole('button', { name: '닫기' }));
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
+        'button',
+        { name: '작성 취소' },
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
+    expect(replyButton).toHaveFocus();
+  },
+  render: () => <QuoteListSurfaceStory />,
+};
+
 export const QuoteListItemAvatars: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -7166,6 +7231,7 @@ export const ReplyDetailInlineIntegration: Story = {
     );
     await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
     const quoteBody = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
+    await waitFor(() => expect(quoteBody).toHaveFocus());
     await userEvent.type(quoteBody, '상세에서 작성 중인 인용');
 
     await userEvent.click(replyButton);

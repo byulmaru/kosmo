@@ -13,8 +13,8 @@ const profile = {} as ReplyComposerSurface_profile$key;
 const bindings = new Map<string, PostReplyBinding | null>();
 let renderer: ReactTestRenderer | null = null;
 
-function Probe({ postId }: { postId: string }) {
-  bindings.set(postId, usePostReplyBinding(postId));
+function Probe({ mode = 'reply', postId }: { mode?: 'quote' | 'reply'; postId: string }) {
+  bindings.set(`${postId}:${mode}`, usePostReplyBinding(postId, mode));
   return null;
 }
 
@@ -32,13 +32,14 @@ async function renderCoordinator({
         { owner, profile: replyProfile },
         createElement(Probe, { key: 'a', postId: 'a' }),
         createElement(Probe, { key: 'b', postId: 'b' }),
+        createElement(Probe, { key: 'a-quote', mode: 'quote', postId: 'a' }),
       ),
     );
   });
 }
 
-function binding(postId: string): PostReplyBinding | null {
-  const result = bindings.get(postId);
+function binding(postId: string, mode: 'quote' | 'reply' = 'reply'): PostReplyBinding | null {
+  const result = bindings.get(`${postId}:${mode}`);
   assert.notEqual(result, undefined);
   return result ?? null;
 }
@@ -116,5 +117,48 @@ describe('PostReplyCoordinator', () => {
     await act(async () => binding('a')?.onPress());
     assert.equal(binding('a')?.expanded, false);
     assert.equal(binding('b')?.expanded, true);
+  });
+
+  it('같은 Post의 Reply와 Quote를 하나의 discard lifecycle로 전환한다', async () => {
+    await renderCoordinator({ owner: 'list' });
+    const pressQuote = binding('a', 'quote')?.onPress;
+    assert.ok(pressQuote);
+    await act(async () => binding('a')?.onPress());
+
+    const replySurfaceRef = binding('a')?.surfaceRef;
+    assert.ok(replySurfaceRef);
+    let openQuote: (() => void) | undefined;
+    replySurfaceRef.current = {
+      requestClose: (onClosed) => {
+        openQuote = onClosed;
+      },
+    };
+
+    await act(async () => pressQuote());
+    assert.equal(binding('a')?.expanded, true);
+    assert.equal(binding('a', 'quote')?.expanded, false);
+    assert.ok(openQuote);
+
+    await act(async () => openQuote?.());
+    assert.equal(binding('a')?.expanded, false);
+    assert.equal(binding('a', 'quote')?.expanded, true);
+
+    const quoteSurfaceRef = binding('a', 'quote')?.surfaceRef;
+    assert.ok(quoteSurfaceRef);
+    let openReply: (() => void) | undefined;
+    quoteSurfaceRef.current = {
+      requestClose: (onClosed) => {
+        openReply = onClosed;
+      },
+    };
+
+    await act(async () => binding('a')?.onPress());
+    assert.equal(binding('a')?.expanded, false);
+    assert.equal(binding('a', 'quote')?.expanded, true);
+    assert.ok(openReply);
+
+    await act(async () => openReply?.());
+    assert.equal(binding('a')?.expanded, true);
+    assert.equal(binding('a', 'quote')?.expanded, false);
   });
 });
