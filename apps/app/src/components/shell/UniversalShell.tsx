@@ -3,15 +3,12 @@ import { ChevronLeftIcon, Menu } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
-  Modal,
   PanResponder,
   Platform,
-  Pressable,
   StyleSheet,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Drawer } from 'react-native-drawer-layout';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
@@ -22,9 +19,8 @@ import {
 import { PageHeader } from '@/components/PageHeader';
 import { PostMediaViewerScreenFallbackProvider } from '@/components/post/PostMediaViewerHost';
 import { IconButton } from '@/components/ui/IconButton';
-import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { RelayActorBoundary } from '@/relay/RelayActorProvider';
-import { useElevation, useTheme } from '@/theme/ThemeProvider';
+import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { returnToSettingsParent } from '../settings/settingsNavigation';
 import { BottomTabBar } from './BottomTabBar';
@@ -43,6 +39,7 @@ import {
   isWebMobileRouteOwnedHeader,
   webMobileShellHeaderHeight,
 } from './shellLayout';
+import { NativeNavigationDrawer, WebNavigationDrawer } from './ShellNavigationDrawer';
 import { SidebarNavigation } from './SidebarNavigation';
 import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
@@ -93,8 +90,6 @@ const webFixedBottomBar = {
 } as unknown as ViewStyle;
 
 const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
-const MOBILE_DRAWER_MAX_WIDTH_RATIO = 0.85;
-const MOBILE_DRAWER_WIDTH = 320;
 
 export function UniversalShell() {
   return (
@@ -110,9 +105,7 @@ export function UniversalShell() {
 
 function UniversalShellContent() {
   const theme = useTheme();
-  const elevation = useElevation();
   const insets = useSafeAreaInsets();
-  const drawerSafeAreaStyle = useSafeAreaPadding();
   const pathname = usePathname();
   const routeSegments = useSegments();
   const router = useRouter();
@@ -159,7 +152,6 @@ function UniversalShellContent() {
   const timeline = isTimelineRoute(pathname);
   const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
   const routeOwnsMobileHeader = isWebMobileRouteOwnedHeader(web, width, pathname);
-  const drawerWidth = Math.min(MOBILE_DRAWER_WIDTH, width * MOBILE_DRAWER_MAX_WIDTH_RATIO);
   const rootSafeAreaStyle = { paddingLeft: insets.left, paddingRight: insets.right };
   const centerSafeAreaStyle = !mobile
     ? { paddingBottom: insets.bottom, paddingTop: insets.top }
@@ -417,87 +409,32 @@ function UniversalShellContent() {
       ) : null}
 
       {web ? (
-        <Modal
-          accessibilityLabel="메뉴"
-          animationType="none"
-          navigationBarTranslucent
-          onRequestClose={closeDrawer}
-          role="dialog"
-          statusBarTranslucent
-          transparent
-          visible={drawerOpen}
-        >
-          <View
-            style={[
-              styles.drawerBackdrop,
-              drawerSafeAreaStyle,
-              { backgroundColor: theme.overlayScrim },
-            ]}
-          >
-            <View
-              nativeID="mobile-sidebar"
-              style={[
-                styles.drawer,
-                elevation.overlay,
-                { backgroundColor: theme.backgroundElevated },
-              ]}
-            >
-              <SidebarNavigation
-                onFeedbackOpen={openFeedbackOverlay}
-                onHomeReselect={web ? queueDrawerHomeReselection : undefined}
-                onNavigate={closeDrawer}
-                onSwitcherOpenChange={setSwitcherOpen}
-                query={data}
-                surface="drawer"
-                switcherOpen={switcherOpen}
-              />
-            </View>
-            <Pressable
-              accessibilityLabel="사이드바 닫기"
-              accessibilityRole="button"
-              onPress={closeDrawer}
-              style={styles.drawerClose}
-            />
-          </View>
-        </Modal>
+        <WebNavigationDrawer
+          drawerOpen={drawerOpen}
+          onFeedbackOpen={openFeedbackOverlay}
+          onClose={closeDrawer}
+          onHomeReselect={queueDrawerHomeReselection}
+          onSwitcherOpenChange={setSwitcherOpen}
+          query={data}
+          switcherOpen={switcherOpen}
+        />
       ) : null}
     </View>
   );
 
   const nativeDrawer =
     !web && mobile ? (
-      <Drawer
-        drawerPosition="left"
-        drawerStyle={[
-          styles.drawer,
-          elevation.overlay,
-          { backgroundColor: theme.backgroundElevated, width: drawerWidth },
-        ]}
-        drawerType="front"
+      <NativeNavigationDrawer
+        drawerOpen={drawerOpen}
+        onFeedbackOpen={openFeedbackOverlay}
         onClose={closeDrawer}
-        onOpen={() => setDrawerOpen(true)}
-        open={drawerOpen}
-        overlayAccessibilityLabel="사이드바 닫기"
-        overlayStyle={{ backgroundColor: theme.overlayScrim }}
-        renderDrawerContent={() => (
-          <View
-            accessibilityViewIsModal
-            nativeID="mobile-sidebar"
-            style={[styles.drawerContent, drawerSafeAreaStyle]}
-          >
-            <SidebarNavigation
-              onFeedbackOpen={openFeedbackOverlay}
-              onNavigate={closeDrawer}
-              onSwitcherOpenChange={setSwitcherOpen}
-              query={data}
-              surface="drawer"
-              switcherOpen={switcherOpen}
-            />
-          </View>
-        )}
+        onOpen={openNavigationDrawer}
+        onSwitcherOpenChange={setSwitcherOpen}
+        query={data}
+        switcherOpen={switcherOpen}
       >
         {shellContent}
-      </Drawer>
+      </NativeNavigationDrawer>
     ) : (
       shellContent
     );
@@ -561,20 +498,4 @@ const styles = StyleSheet.create({
     minHeight: 44,
     width: 44,
   },
-  drawerBackdrop: {
-    flex: 1,
-    flexDirection: 'row',
-    minHeight: 0,
-  },
-  drawer: {
-    borderBottomRightRadius: 16,
-    borderTopRightRadius: 16,
-    height: '100%',
-    maxWidth: `${MOBILE_DRAWER_MAX_WIDTH_RATIO * 100}%`,
-    minHeight: 0,
-    overflow: 'hidden',
-    width: MOBILE_DRAWER_WIDTH,
-  },
-  drawerContent: { flex: 1, minHeight: 0 },
-  drawerClose: { flex: 1 },
 });
