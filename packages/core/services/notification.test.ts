@@ -38,7 +38,7 @@ import {
   deleteFollowRequestNotification,
   deleteNotificationBySource,
 } from './notification';
-import { isNotificationProfileEligible } from './notification-policy';
+import { materializeNotification } from './notification-policy';
 import { createPost, repostPost } from './post';
 import { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow.test-helpers';
 import { muteProfile, unmuteProfile } from './profile-mute';
@@ -1039,7 +1039,7 @@ test('다섯 source의 Notification Mute는 DB 현재 시각으로 활성 여부
         ),
       );
 
-    const exactBoundaryEligible = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const [{ current }] = await tx.execute<{ current: string }>(
         sql`SELECT CURRENT_TIMESTAMP AS current`,
       );
@@ -1052,13 +1052,13 @@ test('다섯 source의 Notification Mute는 DB 현재 시각으로 활성 여부
             eq(ProfileMutes.targetProfileId, source.relatedProfileId),
           ),
         );
-      return isNotificationProfileEligible(tx, {
+      await materializeNotification(tx, {
+        kind: source.kind,
         recipientProfileId: source.recipientProfileId,
         relatedProfileId: source.relatedProfileId,
+        sourceId: source.sourceId,
       });
     });
-    assert.equal(exactBoundaryEligible, true, `${source.name} exact DB boundary should allow`);
-    await source.create();
     await assertNotificationCount(1, 'exact boundary');
 
     await db
