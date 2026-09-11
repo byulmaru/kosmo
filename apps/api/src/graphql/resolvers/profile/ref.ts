@@ -17,6 +17,7 @@ import { profileFollowByIdLoader } from './loader/follow';
 import { profileFollowRequestByIdLoader } from './loader/follow-request';
 import { profileInstanceByIdLoader } from './loader/instance';
 import { profileMediaLoader } from './loader/media';
+import { profileMigrationSourceByTargetIdLoader } from './loader/migration';
 import { profileMuteByIdLoader } from './loader/mute';
 import type { ProfileMutes } from '@kosmo/core/db';
 
@@ -76,6 +77,14 @@ Profile.implement({
     }),
     followPolicy: t.expose('followPolicy', {
       type: ProfileFollowPolicy,
+    }),
+    migrationSource: t.field({
+      type: Profile,
+      nullable: true,
+      resolve: (profile, _, ctx) =>
+        profileMigrationSourceByTargetIdLoader(ctx)
+          .load(profile.id)
+          .then((row) => row?.source ?? null),
     }),
     createdAt: t.expose('createdAt', {
       type: 'DateTime',

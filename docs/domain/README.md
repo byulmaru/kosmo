@@ -118,6 +118,7 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 - [ADR 0024: Application Policy and Runtime DB Boundary](./decisions/0024-application-policy-and-runtime-db-boundary.md)
 - [ADR 0025: Admin Console Capability Holder Boundary (Superseded)](./decisions/0025-admin-console-capability-holder-boundary.md)
 - [ADR 0026: Admin Console Tailscale Access Boundary](./decisions/0026-admin-console-tailscale-access-boundary.md)
+- [ADR 0027: Profile Migration과 inbound ActivityPub Move](./decisions/0027-profile-migration-inbound-move.md)
 - [ADR 0028: Quote Notification Policy](./decisions/0028-quote-notification-policy.md)
 - [ADR 0029: Quote Consent and Federation](./decisions/0029-quote-consent-and-federation.md)
 - [2026-06-28 DDD 명세 점검 기록](./records/2026-06-28-ddd-spec-audit.md)
