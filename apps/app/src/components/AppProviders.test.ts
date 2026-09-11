@@ -44,6 +44,7 @@ let useRouteBoundary: () => { fetchKey: number };
 let useRelayActor: () => Pick<MockRelayActorValue, 'nativeToken' | 'setNativeSession'>;
 let useSession: () => {
   selectedProfileId: string | null;
+  selectedProfileKind: string | null;
   sessionId: string | null;
   status: string;
 };
@@ -174,7 +175,10 @@ mockModule('react-relay', {
     }
     if (query === 'SessionProviderQuery') {
       return {
-        currentSession: { id: 'session-1', selectedProfile: { id: 'profile-a' } },
+        currentSession: {
+          id: 'session-1',
+          selectedProfile: { id: 'profile-a', instance: { kind: 'LOCAL' } },
+        },
         me: { id: 'account-1', name: 'Account' },
       };
     }
@@ -342,6 +346,7 @@ function NativeSessionFixture() {
     nativeToken: actor.nativeToken,
     onPress: () => actor.setNativeSession('native-session-token'),
     selectedProfileId: session.selectedProfileId,
+    selectedProfileKind: session.selectedProfileKind,
     sessionId: session.sessionId,
     status: session.status,
   });
@@ -433,10 +438,16 @@ describe('AppProviders runtime composition', () => {
     assert.deepEqual(
       {
         selectedProfileId: initial.props.selectedProfileId,
+        selectedProfileKind: initial.props.selectedProfileKind,
         sessionId: initial.props.sessionId,
         status: initial.props.status,
       },
-      { selectedProfileId: 'profile-a', sessionId: 'session-1', status: 'valid' },
+      {
+        selectedProfileId: 'profile-a',
+        selectedProfileKind: 'LOCAL',
+        sessionId: 'session-1',
+        status: 'valid',
+      },
     );
     queryModes.SessionProviderQuery = 'pending';
 
