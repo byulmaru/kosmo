@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
   avatars: { alignItems: 'center', flexDirection: 'row' },
   overlap: { marginLeft: -space[12] },
   copy: { ...textStyles.uiCopyM, flexShrink: 1, minWidth: 0 },
-  time: { ...textStyles.uiCopyS, flexShrink: 0 },
+  time: { ...textStyles.uiCopyM, flexShrink: 0 },
   preview: {
     flexDirection: 'row',
     gap: space[12],
