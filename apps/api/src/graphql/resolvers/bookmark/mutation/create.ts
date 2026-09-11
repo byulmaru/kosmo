@@ -5,7 +5,7 @@ import { createBookmark } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Post } from '@/graphql/resolvers/post';
-import { postAccessWhere } from '@/graphql/resolvers/post/access';
+import { directPostAccessWhere } from '@/graphql/resolvers/post/access';
 import { Bookmark } from '../ref';
 
 builder.mutationField('createBookmark', (t) =>
@@ -26,7 +26,10 @@ builder.mutationField('createBookmark', (t) =>
           .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
           .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
           .where(
-            and(eq(Posts.id, input.postId.id), postAccessWhere({ ctx, profileMute: 'ignore' })),
+            and(
+              eq(Posts.id, input.postId.id),
+              directPostAccessWhere({ ctx, profileMute: 'ignore' }),
+            ),
           )
           .limit(1)
           .then(first);
