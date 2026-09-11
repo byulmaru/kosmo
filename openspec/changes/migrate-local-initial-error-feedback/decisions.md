@@ -29,6 +29,18 @@ response·pagination 동작과 공용 Relay·Toast 경계를 유지한다.
 - Consequences: refresh 요청의 hard error를 명시적으로 관찰하고, 중복 요청·성공·재실패·route·actor lifecycle을 관리한다.
 - Confirmation / Follow-up: Storybook의 실제 Relay refresh 흐름과 Web 시각·상호작용으로 검증하고 Native runtime 미실행을 별도로 기록한다.
 
+### Local refresh는 refetchable fragment hook이 요청 lifecycle을 소유한다
+
+- Decision Date: 2026-09-11
+- Decision Class: Implementation Choice
+- Authority / Provenance: 활성 Derived Contract 2번째 기록, Relay `useRefetchableFragment` lifecycle
+- Status: Active
+- Context / Problem: Local hard refresh의 성공·실패를 관찰하면서 요청 Disposable을 소비자 effect에 보관하면 route·actor cleanup이 Relay hook 소유권과 중복될 수 있다.
+- Decision Outcome: Local query는 `LocalContent_query` refetchable fragment를 사용하고, `useRefetchableFragment`의 `refetch`와 `onComplete(error)`로 결과를 관찰한다. cache snapshot을 렌더하는 `LocalContentView`는 refetch만 담당하는 Local 전용 ErrorBoundary의 바깥에 두며, effect는 중복 입력을 막는 동기 guard와 Toast cleanup만 소유하고 요청 Disposable은 저장하거나 직접 dispose하지 않는다.
+- Alternatives Considered: 별도 `fetchQuery` Observable과 Disposable 저장은 기존 Relay hook lifecycle을 우회하므로 제외했다.
+- Consequences: 요청 취소·unmount 정리는 Relay hook이 담당하고, Local effect는 hard error Toast와 재시도 callback만 관리한다. Toast 재시도는 좁은 경계를 reset한 뒤 같은 hook refetch를 다시 시작한다.
+- Confirmation / Follow-up: focused Storybook refresh lifecycle과 기존 typecheck/compiler 검증에서 확인한다.
+
 ## Remaining Decisions
 
 - 없음.

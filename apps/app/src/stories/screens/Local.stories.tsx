@@ -6,6 +6,7 @@ import { useRelayActor } from '@/relay/RelayActorProvider';
 import { RelayStoryProvider } from '../../../.storybook/mocks/react-relay';
 import { post, profile, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ComponentProps } from 'react';
 
 const selectedProfile = profile({
   displayName: '로컬 기록자',
@@ -94,6 +95,17 @@ const paginationNextPage = {
 const paginationRequestObserver = fn().mockName('Local pagination request');
 export const queryRequestObserver = fn().mockName('Local query: load / refresh / retry');
 
+type LocalOperationResponses = NonNullable<
+  ComponentProps<typeof RelayStoryProvider>['operationResponses']
+>;
+
+function localOperationResponses(
+  queryResponse: LocalOperationResponses[string],
+  refetchResponse: LocalOperationResponses[string] = queryResponse,
+): LocalOperationResponses {
+  return { LocalPageQuery: queryResponse, LocalContentRefetchQuery: refetchResponse };
+}
+
 type LocalState =
   | 'default'
   | 'loading'
@@ -119,73 +131,64 @@ function localRelayForState(state: LocalState) {
   switch (state) {
     case 'loading':
       return {
-        operationResponses: {
-          LocalPageQuery: { data: localPageData(), delayMs: 60_000 },
-        },
+        operationResponses: localOperationResponses({ data: localPageData(), delayMs: 60_000 }),
       };
     case 'empty':
       return {
-        operationResponses: { LocalPageQuery: { data: localPageData(localConnection([])) } },
+        operationResponses: localOperationResponses({ data: localPageData(localConnection([])) }),
       };
     case 'error':
       return {
-        operationResponses: {
-          LocalPageQuery: {
-            sequence: [
-              { error: '로컬 타임라인을 불러오지 못했습니다.' },
-              { data: localPageData() },
-            ],
-          },
-        },
+        operationResponses: localOperationResponses({
+          sequence: [{ error: '로컬 타임라인을 불러오지 못했습니다.' }, { data: localPageData() }],
+        }),
       };
     case 'refresh-hard-error':
       return {
-        operationResponses: {
-          LocalPageQuery: {
+        operationResponses: localOperationResponses(
+          { data: localPageData() },
+          {
             sequence: [
-              { data: localPageData() },
               { error: 'Local timeline hard refresh failure' },
               { error: 'Local timeline hard refresh failure again' },
-              { data: localPageData(localConnection([refreshedPost])) },
+              { data: localPageData(localConnection([refreshedPost])), delayMs: 500 },
             ],
           },
-        },
+        ),
       };
     case 'refresh-hard-error-lifetime':
       return {
-        operationResponses: {
-          LocalPageQuery: {
+        operationResponses: localOperationResponses(
+          { data: localPageData() },
+          {
             sequence: [
-              { data: localPageData() },
               { error: 'Local timeline hard refresh failure' },
               { delayMs: 500, error: 'Local timeline hard refresh failure after actor reset' },
             ],
           },
-        },
+        ),
       };
     case 'long-content':
       return {
-        operationResponses: {
-          LocalPageQuery: { data: localPageData(localConnection([longPost, secondPost])) },
-        },
+        operationResponses: localOperationResponses({
+          data: localPageData(localConnection([longPost, secondPost])),
+        }),
       };
     case 'refreshing':
       return {
-        operationResponses: {
-          LocalPageQuery: {
-            sequence: [
-              { data: localPageData() },
-              { data: localPageData(localConnection([refreshedPost])), delayMs: 2_000 },
-            ],
+        operationResponses: localOperationResponses(
+          { data: localPageData() },
+          {
+            sequence: [{ data: localPageData(localConnection([refreshedPost])), delayMs: 2_000 }],
           },
-        },
+        ),
       };
     case 'refresh-partial-error':
       return {
-        operationResponses: {
-          LocalPageQuery: {
+        operationResponses: localOperationResponses(
+          { data: localPageData() },
+          {
             sequence: [
-              { data: localPageData() },
               {
                 data: { ...localPageData(), localTimeline: null },
                 errors: [{ message: 'Local timeline resolver failed' }],
@@ -196,38 +199,38 @@ function localRelayForState(state: LocalState) {
               },
             ],
           },
-        },
+        ),
       };
     case 'filtered':
       return {
-        operationResponses: {
-          LocalPageQuery: { data: localPageData(localConnection([firstPost])) },
-        },
+        operationResponses: localOperationResponses({
+          data: localPageData(localConnection([firstPost])),
+        }),
       };
     case 'pagination-flow':
       return {
-        operationResponses: {
-          LocalPageQuery: { data: localPageData(localConnection(scrollPosts, true)) },
-        },
+        operationResponses: localOperationResponses({
+          data: localPageData(localConnection(scrollPosts, true)),
+        }),
         paginationResponses: [
           { data: { localTimeline: localConnection([scrollNextPost]) }, delayMs: 2_000 },
         ],
       };
     case 'pagination-loading':
       return {
-        operationResponses: { LocalPageQuery: { data: paginationData } },
+        operationResponses: localOperationResponses({ data: paginationData }),
         paginationLoading: true,
       };
     case 'pagination-error':
       return {
-        operationResponses: { LocalPageQuery: { data: paginationData } },
+        operationResponses: localOperationResponses({ data: paginationData }),
         paginationResponses: [
           { error: '로컬 타임라인 다음 page를 불러오지 못했습니다.' },
           paginationNextPage,
         ],
       };
     case 'default':
-      return { operationResponses: { LocalPageQuery: { data: localPageData() } } };
+      return { operationResponses: localOperationResponses({ data: localPageData() }) };
   }
 }
 

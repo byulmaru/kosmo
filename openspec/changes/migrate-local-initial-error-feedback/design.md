@@ -41,10 +41,15 @@ cache 결과도 route에서 렌더되면 성공으로 기록한다. 성공 전 �
 최초 오류 fallback은 Web에서 빈 영역을, Android/iOS Native에서 기존 `Skeleton` primitive로 Figma Android
 baseline의 두 행을 렌더하고 mount effect에서 공용 persistent Danger Toast를 연다.
 
-성공 뒤 탭 재선택은 Relay의 기존 query와 environment로 명시적 refresh Observable을 실행한다. success payload는
-동일 store에 반영하고, hard error는 cache 목록을 그대로 둔 채 공용 persistent Danger Toast를 연다. 진행 중인
-동일 refresh는 다시 시작하지 않으며, 성공·route 이탈·actor remount에서는 해당 요청과 Toast만 정리한다. partial
+성공 뒤 탭 재선택은 `useRefetchableFragment`가 소유하는 refetch 경로를 사용한다. success payload는 동일 store에
+반영하고, hard error는 cache 목록을 그대로 둔 채 공용 persistent Danger Toast를 연다. 진행 중인 동일 refresh는
+다시 시작하지 않으며, route 이탈·actor remount에서는 hook이 요청을 정리하고 소비자가 Toast만 정리한다. partial
 GraphQL 응답은 기존 Relay payload 처리에 맡기고 hard transport error로 취급하지 않는다.
+
+Relay `QueryResource`가 refetch hard error를 해당 fragment read의 render error로 전파하므로, cache snapshot을 읽는
+`LocalContentView`는 refetch만 담당하는 `LocalRefreshController`와 분리한다. controller만 좁은 Local 전용
+`ErrorBoundary` 안에 두고, 경계 밖의 목록은 마지막 성공 store 값을 계속 렌더한다. Toast action은 경계를
+reset한 뒤 hook이 소유한 refetch를 다시 시작한다.
 
 최초 오류 재시도는 기존 `resetErrorBoundary`/`fetchKey`를 그대로 사용하고, refresh 오류 재시도는 같은 refresh
 함수를 재사용한다. 공용 Toast action은 현재 active Toast일 때만 닫힘과 callback을 한 번 실행하도록 좁게
@@ -52,8 +57,8 @@ GraphQL 응답은 기존 Relay payload 처리에 맡기고 hard transport error�
 
 ### Allowed Alternatives
 
-동일한 spec과 actor별 Relay Store 격리를 보존한다면 Local 전용 error boundary도 허용되지만, 현재 공용
-RouteBoundary의 error renderer와 cleanup 계약으로 충분하므로 기본 경로로 사용하지 않는다.
+동일한 spec과 actor별 Relay Store 격리를 보존한다면 Local 전용 error boundary의 fallback 표현은 바꿀 수 있지만,
+cache 목록을 경계 밖에 유지하고 refresh hook의 오류만 격리하는 구조는 보존해야 한다.
 
 ### Known Traps
 

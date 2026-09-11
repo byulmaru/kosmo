@@ -1,8 +1,8 @@
 import { UserRoundPlus } from 'lucide-react-native';
 import { useCallback, useEffect, useRef } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
-import { fetchQuery } from 'relay-runtime';
+import { graphql, useFragment, useLazyLoadQuery, useRefetchableFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -19,12 +19,21 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
 import type { MutableRefObject, PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
-import type { Subscription } from 'relay-runtime';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
+import type { LocalContent_query$key } from './__generated__/LocalContent_query.graphql';
+import type { LocalContentRefetchQuery } from './__generated__/LocalContentRefetchQuery.graphql';
 import type { LocalPageQuery } from './__generated__/LocalPageQuery.graphql';
 
 const LocalQuery = graphql`
   query LocalPageQuery {
+    ...LocalContent_query @arguments(count: 20)
+  }
+`;
+
+const LocalFragment = graphql`
+  fragment LocalContent_query on Query
+  @argumentDefinitions(count: { type: "Int", defaultValue: 20 })
+  @refetchable(queryName: "LocalContentRefetchQuery") {
     currentSession {
       id
       selectedProfile {
@@ -38,69 +47,24 @@ const LocalQuery = graphql`
         id
       }
     }
-    ...PostList_local @arguments(count: 20)
+    ...PostList_local @arguments(count: $count)
   }
 `;
 
 export default function LocalScreen() {
-  const environment = useRelayEnvironment();
-  const { showToast } = useToast();
   const hasSuccessfulLocalRef = useRef(false);
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const refreshStateRef = useRef<LocalRefreshState>({ request: null, toastCleanup: null });
-  const refreshRef = useRef<() => void>(() => undefined);
+  const localRefreshRef = useRef<(() => void) | null>(null);
+  const registerLocalRefresh = useCallback((refresh: (() => void) | null) => {
+    localRefreshRef.current = refresh;
+  }, []);
   const refresh = useCallback(() => {
-    if (!hasSuccessfulLocalRef.current) {
+    if (localRefreshRef.current) {
+      localRefreshRef.current();
+    } else {
       routeBoundaryRef.current?.refetch();
-      return;
     }
-
-    const refreshState = refreshStateRef.current;
-    if (refreshState.request) {
-      return;
-    }
-
-    refreshState.toastCleanup?.();
-    refreshState.toastCleanup = null;
-    fetchQuery<LocalPageQuery>(
-      environment,
-      LocalQuery,
-      {},
-      { fetchPolicy: 'network-only' },
-    ).subscribe({
-      start: (request) => {
-        refreshState.request = request;
-      },
-      next: () => {
-        refreshState.toastCleanup?.();
-        refreshState.toastCleanup = null;
-      },
-      complete: () => {
-        refreshState.request = null;
-        refreshState.toastCleanup?.();
-        refreshState.toastCleanup = null;
-      },
-      error: () => {
-        refreshState.request = null;
-        refreshState.toastCleanup?.();
-        refreshState.toastCleanup = showToast('로컬 타임라인을 불러오지 못했어요', {
-          action: { label: '다시 시도', onPress: () => refreshRef.current() },
-          persistent: true,
-          tone: 'danger',
-        });
-      },
-    });
-  }, [environment, showToast]);
-  refreshRef.current = refresh;
-
-  useEffect(() => {
-    return () => {
-      refreshStateRef.current.request?.unsubscribe();
-      refreshStateRef.current.request = null;
-      refreshStateRef.current.toastCleanup?.();
-      refreshStateRef.current.toastCleanup = null;
-    };
-  }, [environment]);
+  }, []);
 
   return (
     <LocalFrame onReselect={refresh}>
@@ -122,16 +86,14 @@ export default function LocalScreen() {
         ref={routeBoundaryRef}
         title="로컬 타임라인을 불러오지 못했어요"
       >
-        <LocalContent hasSuccessfulLocalRef={hasSuccessfulLocalRef} />
+        <LocalContent
+          hasSuccessfulLocalRef={hasSuccessfulLocalRef}
+          registerLocalRefresh={registerLocalRefresh}
+        />
       </RouteBoundary>
     </LocalFrame>
   );
 }
-
-type LocalRefreshState = {
-  request: Subscription | null;
-  toastCleanup: (() => void) | null;
-};
 
 function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: () => void }>) {
   const shellChrome = useShellChrome();
@@ -160,20 +122,91 @@ function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: ()
 
 function LocalContent({
   hasSuccessfulLocalRef,
+  registerLocalRefresh,
 }: {
   hasSuccessfulLocalRef: MutableRefObject<boolean>;
+  registerLocalRefresh: (refresh: (() => void) | null) => void;
 }) {
-  const theme = useTheme();
-  const shellChrome = useShellChrome();
   const { fetchKey } = useRouteBoundary();
-  const data = useLazyLoadQuery<LocalPageQuery>(
+  const queryData = useLazyLoadQuery<LocalPageQuery>(
     LocalQuery,
     {},
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
+  const { showToast } = useToast();
+  const refreshRef = useRef<(() => void) | null>(null);
+  const refreshBoundaryRef = useRef<ErrorBoundary>(null);
+  const retryOnMountRef = useRef(false);
+  const toastCleanupRef = useRef<(() => void) | null>(null);
+  const disposedRef = useRef(false);
+  const clearToast = useCallback(() => {
+    toastCleanupRef.current?.();
+    toastCleanupRef.current = null;
+  }, []);
+  const refresh = useCallback(() => {
+    clearToast();
+    if (refreshRef.current) {
+      refreshRef.current();
+      return;
+    }
+
+    retryOnMountRef.current = true;
+    refreshBoundaryRef.current?.resetErrorBoundary();
+  }, [clearToast]);
+  const handleRefreshComplete = useCallback(
+    (error: Error | null) => {
+      if (disposedRef.current) {
+        return;
+      }
+
+      if (error) {
+        clearToast();
+        toastCleanupRef.current = showToast('로컬 타임라인을 불러오지 못했어요', {
+          action: { label: '다시 시도', onPress: refresh },
+          persistent: true,
+          tone: 'danger',
+        });
+      } else {
+        clearToast();
+      }
+    },
+    [clearToast, refresh, showToast],
+  );
+  const registerRefresh = useCallback((nextRefresh: (() => void) | null) => {
+    refreshRef.current = nextRefresh;
+  }, []);
   useEffect(() => {
     hasSuccessfulLocalRef.current = true;
   }, [hasSuccessfulLocalRef]);
+  useEffect(() => {
+    disposedRef.current = false;
+    registerLocalRefresh(refresh);
+    return () => {
+      disposedRef.current = true;
+      registerLocalRefresh(null);
+      clearToast();
+    };
+  }, [clearToast, registerLocalRefresh, refresh]);
+
+  return (
+    <>
+      <LocalContentView queryData={queryData} />
+      <ErrorBoundary fallback={null} ref={refreshBoundaryRef}>
+        <LocalRefreshController
+          fragmentRef={queryData}
+          onComplete={handleRefreshComplete}
+          onRegisterRefresh={registerRefresh}
+          retryOnMountRef={retryOnMountRef}
+        />
+      </ErrorBoundary>
+    </>
+  );
+}
+
+function LocalContentView({ queryData }: { queryData: LocalContent_query$key }) {
+  const theme = useTheme();
+  const shellChrome = useShellChrome();
+  const data = useFragment(LocalFragment, queryData);
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
 
@@ -209,6 +242,52 @@ function LocalContent({
   );
 }
 
+function LocalRefreshController({
+  fragmentRef,
+  onComplete,
+  onRegisterRefresh,
+  retryOnMountRef,
+}: {
+  fragmentRef: LocalContent_query$key;
+  onComplete: (error: Error | null) => void;
+  onRegisterRefresh: (refresh: (() => void) | null) => void;
+  retryOnMountRef: MutableRefObject<boolean>;
+}) {
+  const [, refetch] = useRefetchableFragment<LocalContentRefetchQuery, LocalContent_query$key>(
+    LocalFragment,
+    fragmentRef,
+  );
+  const refreshingRef = useRef(false);
+  useEffect(() => {
+    const refresh = () => {
+      if (refreshingRef.current) {
+        return;
+      }
+
+      refreshingRef.current = true;
+      refetch(
+        {},
+        {
+          fetchPolicy: 'store-and-network',
+          onComplete: (error) => {
+            refreshingRef.current = false;
+            onComplete(error);
+          },
+        },
+      );
+    };
+
+    onRegisterRefresh(refresh);
+    if (retryOnMountRef.current) {
+      retryOnMountRef.current = false;
+      refresh();
+    }
+    return () => onRegisterRefresh(null);
+  }, [onComplete, onRegisterRefresh, refetch, retryOnMountRef]);
+
+  return null;
+}
+
 function LocalInitialError({ onRetry }: { onRetry: () => void }) {
   const { showToast } = useToast();
 
@@ -232,9 +311,9 @@ function LocalInitialError({ onRetry }: { onRetry: () => void }) {
     >
       {[0, 1].map((row) => (
         <View key={row} style={styles.initialErrorRow}>
-          <Skeleton height={16} width={112} />
-          <Skeleton height={14} width={342} />
-          <Skeleton height={12} width={260} />
+          <Skeleton height={16} width="33%" />
+          <Skeleton height={14} width="100%" />
+          <Skeleton height={12} width="76%" />
         </View>
       ))}
     </View>

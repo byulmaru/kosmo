@@ -110,6 +110,7 @@ test('Local 탭은 configured Local의 공개 top-level Content Post와 Quote만
   page,
 }) => {
   let localQueryCount = 0;
+  let localRefetchCount = 0;
   const viewer = await createE2ESession({
     displayName: 'E2E Local Viewer',
     handle: 'e2e-local-viewer',
@@ -178,6 +179,9 @@ test('Local 탭은 configured Local의 공개 top-level Content Post와 Quote만
     if (isGraphQLOperation(route.request().postData(), 'LocalPageQuery')) {
       localQueryCount += 1;
     }
+    if (isGraphQLOperation(route.request().postData(), 'LocalContentRefetchQuery')) {
+      localRefetchCount += 1;
+    }
     await route.continue();
   });
 
@@ -220,9 +224,9 @@ test('Local 탭은 configured Local의 공개 top-level Content Post와 Quote만
     page.getByRole('navigation', { name: '주요 메뉴' }).getByRole('link', { name: '홈' }),
   ).not.toHaveAttribute('aria-current');
 
-  const previousQueryCount = localQueryCount;
+  expect(localQueryCount).toBe(1);
   await timelineTabs.getByRole('tab', { name: '로컬' }).click();
-  await expect.poll(() => localQueryCount).toBeGreaterThan(previousQueryCount);
+  await expect.poll(() => localRefetchCount).toBe(1);
 
   await page.getByRole('link', { name: 'E2E Local Writer 프로필 보기' }).click();
   await expect(page).toHaveURL(/\/@e2e-local-writer$/);
