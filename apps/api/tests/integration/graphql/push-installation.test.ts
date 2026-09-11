@@ -162,6 +162,15 @@ test('인증된 Session에 Push Installation을 등록하고 해제한다', asyn
 test('같은 Session의 token 갱신은 등록 epoch를 유지하고 다른 Account 접근은 거부한다', async () => {
   const owner = await createSession();
   const other = await createSession();
+  const ownerOtherSession = await db
+    .insert(Sessions)
+    .values({
+      accountId: owner.account.id,
+      state: SessionState.ACTIVE,
+      token: `token-${crypto.randomUUID()}`,
+    })
+    .returning()
+    .then(firstOrThrow);
   const installationId = crypto.randomUUID();
 
   try {
@@ -225,6 +234,13 @@ test('같은 Session의 token 갱신은 등록 epoch를 유지하고 다른 Acco
     assert.equal(deniedUnregister.data, null);
     assert.equal(deniedUnregister.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
 
+    const deniedSameAccountUnregister = await request<unknown>(
+      `mutation { unregisterPushInstallation(input: { installationId: "${installationId}" }) { completed } }`,
+      ownerOtherSession.token,
+    );
+    assert.equal(deniedSameAccountUnregister.data, null);
+    assert.equal(deniedSameAccountUnregister.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+
     const ownerStateAfterDeniedAccess = await db
       .select({
         accountId: PushInstallations.accountId,
@@ -239,10 +255,19 @@ test('같은 Session의 token 갱신은 등록 epoch를 유지하고 다른 Acco
 
     const duplicateInstallationId = crypto.randomUUID();
     const historicalEpoch = Temporal.Instant.from('2000-01-01T00:00:00Z');
+    const existingDuplicateRegistration = await request<{
+      registerPushInstallation: { completed: boolean };
+    }>(
+      `mutation { registerPushInstallation(input: { installationId: "${duplicateInstallationId}", platform: ${PushInstallationPlatform.ANDROID}, token: "existing-target-token" }) { completed } }`,
+      owner.session.token,
+    );
+    assert.deepEqual(existingDuplicateRegistration, {
+      data: { registerPushInstallation: { completed: true } },
+    });
     await db
       .update(PushInstallations)
       .set({ registrationEpoch: historicalEpoch })
-      .where(eq(PushInstallations.installationId, installationId));
+      .where(eq(PushInstallations.installationId, duplicateInstallationId));
 
     const duplicateRegistration = await request<{
       registerPushInstallation: { completed: boolean };
@@ -302,6 +327,31 @@ test('같은 Session의 token 갱신은 등록 epoch를 유지하고 다른 Acco
     assert.deepEqual(ownerStateAfterTokenTheft, ownerCurrentState);
   } finally {
     await cleanup([owner.account.id, other.account.id]);
+  }
+});
+
+test('opaque registration token accepts the maximum supported length', async () => {
+  const { account, session } = await createSession();
+  const installationId = crypto.randomUUID();
+  const token = 't'.repeat(4096);
+
+  try {
+    const registered = await request<{ registerPushInstallation: { completed: boolean } }>(
+      `mutation { registerPushInstallation(input: { installationId: "${installationId}", platform: ${PushInstallationPlatform.ANDROID}, token: "${token}" }) { completed } }`,
+      session.token,
+    );
+    assert.deepEqual(registered, {
+      data: { registerPushInstallation: { completed: true } },
+    });
+
+    const row = await db
+      .select({ token: PushInstallations.token })
+      .from(PushInstallations)
+      .where(eq(PushInstallations.installationId, installationId));
+    assert.equal(row[0]?.token.length, 4096);
+    assert.equal(row[0]?.token, token);
+  } finally {
+    await cleanup([account.id]);
   }
 });
 

@@ -71,8 +71,8 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
 이 안내는 비규범적 기본 경로다. 구현자는 specs와 독립적으로 확인된 decisions를 만족하는 범위에서 조정할
 수 있다.
 
-1. **서버 registration 경계:** 기존 인증된 API와 core service 정책에 설치 소유권, platform, token 상태와
-   등록·갱신·해제 lifecycle을 연결한다. 권장 모델은 앱 설치마다 stable installation identity를 두고 현재
+1. **서버 registration 경계:** 인증된 API mutation이 설치 소유권 검증과 platform·token의 등록·갱신·해제 lifecycle을 직접 처리한다.
+   권장 모델은 앱 설치마다 stable installation identity를 두고 현재
    authenticated session에 binding하며, token refresh는 같은 installation을 갱신하고 logout·revoke·account
    switch는 기존 auth/revoke semantics로 소유권을 폐기하는 것이다. 이 모델은 비규범적 권장사항이며 새 API
    shape나 preference registry를 추가하지 않는다. Recipient Profile과 eligible installation을 현재 Account
@@ -167,10 +167,6 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
 
 ## Open Questions
 
-- 설치 registration의 정확한 API operation과 저장 schema, 그리고 기존 API/core ownership 경계를 구현 전에
-  결정해야 한다. stable installation identity를 현재 session에 binding하고 기존 auth/revoke semantics를
-  재사용하는 권장 모델을 기준으로, 동시 logout·re-register·account switch·token refresh의 소유권 security와
-  concurrency를 검증한다.
 - FCM service credential 주입 위치, provider SDK와 native client SDK 구성 선택, retry/backoff 수치와 운영 관측
   필드는 구현 slice의 security·operations review에서 결정해야 한다. 후보 조합을 채택할 경우 RNFirebase
   Messaging과 Expo Notifications 간 token·foreground presentation·tap 중복 경계를 먼저 확인한다.
