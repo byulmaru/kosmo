@@ -35,7 +35,7 @@
 
 - [x] 1.1 actor materialization·refresh에서 Actor가 광고한 HTTP(S) profile URL alias를 기존 Actor identity에 nullable metadata로 저장하고, inbound `tag`의 typed Mention actor URI를 기존 Profile stable identity와 확인한다. Local의 trusted human URL 또는 Remote의 stored Actor URL alias와 actor URI 허용 href 및 `profileId`만 core parser 경계에 전달하고, alias가 없으면 actor URI만 전달한다. parser는 원문 HTML에서 본문 visible label을 읽어 안전하게 정규화한다. audience·일반 link와 분리하며 core HTML/plain-text parser에는 Fedify vocabulary나 DB/remote lookup을 주입하지 않는다.
 - [x] 1.2 검증된 Mention occurrence와 Profile membership을 canonical document·`post_mentions` revision 저장 결과에 반영하고 반복 occurrence와 relation deduplication을 보장한다. 현재 구현 선택은 `{ profileId, label }` node attrs와 `(post_content_id, profile_id)` composite primary key·foreign key relation이다.
-- [ ] 1.3 actor URL alias 유무·malformed·identity mismatch·unresolved fallback, duplicate Create no-op과 원자적 rollback의 행동 검증을 추가하고 통과시킨다. alias가 이후 materialization·refresh에서 채워져도 이미 저장된 기존 글을 자동 보정하지 않는다.
+- [x] 1.3 actor URL alias 유무·malformed·identity mismatch·unresolved fallback, duplicate Create no-op과 원자적 rollback의 행동 검증을 추가하고 통과시킨다. alias가 이후 materialization·refresh에서 채워져도 이미 저장된 기존 글을 자동 보정하지 않는다.
 
 ## 2. PROD-340 legacy reader compatibility and activation gate
 
