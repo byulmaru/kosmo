@@ -88,6 +88,7 @@ function LocalFrame({
       {routeOwnsHeader ? (
         <PageHeader
           accessibilityLabel="로컬"
+          brandAccessibilityLabel="홈"
           brandCurrent
           brandHref={Platform.OS === 'web' ? '/home' : undefined}
           onBrandCurrentNavigate={Platform.OS === 'web' ? onBrandCurrentNavigate : undefined}

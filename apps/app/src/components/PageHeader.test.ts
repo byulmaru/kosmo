@@ -209,6 +209,7 @@ test('brand variant keeps the route heading while naming its Home navigation lin
 
   assert.equal(heading?.props.children, '로컬');
   assert.ok(brandAction);
+  assert.equal(brandAction?.props.accessibilityLabel, '홈');
   assert.equal(brandAction.props.accessibilityRole, 'link');
 });
 

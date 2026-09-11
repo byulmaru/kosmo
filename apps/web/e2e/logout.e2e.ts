@@ -103,7 +103,7 @@ for (const surface of logoutSurfaces) {
     await expect.poll(() => logoutRequestCount).toBe(1);
     await expect(logout).toBeDisabled();
     await expect(logout).toHaveAttribute('aria-disabled', 'true');
-    await expect(page.getByRole('progressbar', { name: '로그아웃 처리 중' })).toBeVisible();
+    await expect(logout).toHaveAttribute('aria-busy', 'true');
 
     await logout.dispatchEvent('click');
     await expect.poll(() => logoutRequestCount).toBe(1);
@@ -141,7 +141,8 @@ test('화면을 연 뒤 이미 폐기된 Session도 로그아웃 성공으로 �
   await setE2ESessionCookie(context, viewer.token);
   await page.setViewportSize({ height: 800, width: 1440 });
   await page.goto('/home');
-  await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+  const logout = await logoutControl(page, 'full sidebar');
+  await expect(logout).toBeVisible();
   await page.waitForLoadState('networkidle');
   await db
     .update(Sessions)
@@ -152,7 +153,7 @@ test('화면을 연 뒤 이미 폐기된 Session도 로그아웃 성공으로 �
     (response) => new URL(response.url()).pathname === '/logout',
   );
 
-  await page.getByRole('button', { name: '로그아웃' }).click();
+  await logout.click();
 
   expect((await logoutResponse).status()).toBe(204);
   await expect(page).toHaveURL(/\/$/);
@@ -162,13 +163,22 @@ test('화면을 연 뒤 이미 폐기된 Session도 로그아웃 성공으로 �
 });
 
 async function logoutControl(page: Page, surface: (typeof logoutSurfaces)[number]['name']) {
+  const scope =
+    surface === 'mobile drawer'
+      ? page.locator('#mobile-sidebar')
+      : page.getByRole('navigation', { name: '주요 메뉴' });
+
   if (surface === 'mobile drawer') {
     await page.getByRole('button', { name: '메뉴 열기' }).click();
-
-    return page.locator('#mobile-sidebar').getByRole('button', { name: '로그아웃' });
   }
 
-  return page.getByRole('button', { name: '로그아웃' });
+  await scope.getByRole('button', { name: '설정 및 기타' }).click();
+
+  return surface === 'compact rail'
+    ? page
+        .getByRole('menu', { name: '설정 및 기타 메뉴' })
+        .getByRole('menuitem', { name: '로그아웃' })
+    : scope.getByRole('button', { name: '로그아웃' });
 }
 
 async function readSessionState(sessionId: string) {

@@ -196,7 +196,9 @@ test('Local 탭은 configured Local의 공개 top-level Content Post와 Quote만
     'true',
   );
   await expect(page.getByRole('heading', { name: '로컬' })).toBeVisible();
-  await expect(page.getByRole('link', { name: '홈' })).not.toHaveAttribute('aria-current');
+  await expect(
+    page.getByRole('navigation', { name: '주요 메뉴' }).getByRole('link', { name: '홈' }),
+  ).toHaveAttribute('aria-current', 'page');
   await expectPostOrder(page, [
     'E2E timeline local quote body',
     'E2E timeline local ordinary body',
@@ -217,8 +219,8 @@ test('Local 탭은 configured Local의 공개 top-level Content Post와 Quote만
     .filter({ has: page.locator('[aria-hidden="true"]') });
   await expect(mobileBrandLink).toHaveAttribute('href', '/home');
   await expect(
-    page.getByRole('navigation', { name: '주요 메뉴' }).getByRole('link', { name: '홈' }),
-  ).not.toHaveAttribute('aria-current');
+    page.getByRole('navigation', { name: '하단 탐색' }).getByRole('link', { name: '홈' }),
+  ).toHaveAttribute('aria-current', 'page');
 
   const previousQueryCount = localQueryCount;
   await timelineTabs.getByRole('tab', { name: '로컬' }).click();

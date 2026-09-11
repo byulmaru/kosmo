@@ -305,11 +305,11 @@ function UniversalShellContent() {
             switcherOpen && styles.sidebarWithOverlay,
             { borderColor: theme.borderSubtle, width: full ? 320 : 80 },
           ]}
-          >
-            <SidebarNavigation
-              compact={compact}
-              feedbackActive={feedbackOverlayVisible}
-              onFeedbackOpen={openFeedbackOverlay}
+        >
+          <SidebarNavigation
+            compact={compact}
+            feedbackActive={feedbackOverlayVisible}
+            onFeedbackOpen={openFeedbackOverlay}
             onHomeReselect={web ? reselectHome : undefined}
             onSwitcherOpenChange={setSwitcherOpen}
             query={data}
@@ -369,11 +369,11 @@ function UniversalShellContent() {
             styles.route,
             !web && styles.nativeRoute,
             mobile && web
-                ? {
-                    ...(routeOwnsMobileHeader ? { paddingTop: insets.top } : {}),
-                    paddingBottom:
-                      getBottomTabBarContentHeight(Platform.OS) + (web ? 0 : insets.bottom),
-                  }
+              ? {
+                  ...(routeOwnsMobileHeader ? { paddingTop: insets.top } : {}),
+                  paddingBottom:
+                    getBottomTabBarContentHeight(Platform.OS) + (web ? 0 : insets.bottom),
+                }
               : null,
           ]}
         >
@@ -407,7 +407,6 @@ function UniversalShellContent() {
       {web ? (
         <WebNavigationDrawer
           drawerOpen={drawerOpen}
-          feedbackActive={feedbackOverlayVisible}
           onFeedbackOpen={openFeedbackOverlay}
           onClose={closeDrawer}
           onHomeReselect={queueDrawerHomeReselection}

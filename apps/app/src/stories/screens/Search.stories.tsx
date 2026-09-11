@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Text } from 'react-native';
 import {
   createOperationDescriptor,
@@ -12,10 +12,14 @@ import { expect, fn, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
 import SearchPeopleByHandlePageQueryNode from '@/app/(tabs)/(protected)/__generated__/SearchPeopleByHandlePageQuery.graphql';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
+import {
+  PrimaryNavigationScrollProvider,
+  usePrimaryNavigationScroll,
+} from '@/components/shell/PrimaryNavigationScrollContext';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
-import { RouterMockProvider } from '../../../.storybook/mocks/expo-router';
+import { RouterMockProvider, usePathname } from '../../../.storybook/mocks/expo-router';
 import { profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -52,8 +56,41 @@ function SearchShellChromeStory({ children }: { children: ReactNode }) {
       registerHomeReselection={() => () => undefined}
       reselectHome={() => undefined}
     >
-      {children}
+      <PrimaryNavigationScrollProvider>{children}</PrimaryNavigationScrollProvider>
     </ShellChromeProvider>
+  );
+}
+
+function SearchNavigationProbe({ onBackNavigation }: { onBackNavigation: () => void }) {
+  const pathname = usePathname();
+  const { getQueryNavigation } = usePrimaryNavigationScroll();
+  const navigation = getQueryNavigation();
+  useEffect(() => {
+    if (pathname === '/search?tab=people') {
+      onBackNavigation();
+    }
+  }, [onBackNavigation, pathname]);
+  return (
+    <Text testID="search-query-navigation-probe">
+      {navigation ? `restoreFocus:${navigation.restoreFocus}` : 'none'}
+    </Text>
+  );
+}
+
+function SearchResultStory() {
+  const [params, setParams] = useState<Record<string, string | undefined>>({
+    q: 'byulmaru',
+    tab: 'people',
+  });
+  const handleBackNavigation = useCallback(() => setParams({ tab: 'people' }), []);
+
+  return (
+    <RouterMockProvider params={params} pathname="/search">
+      <SearchShellChromeStory>
+        <SearchNavigationProbe onBackNavigation={handleBackNavigation} />
+        <SearchScreen />
+      </SearchShellChromeStory>
+    </RouterMockProvider>
   );
 }
 
@@ -182,7 +219,21 @@ export const Result: Story = {
     expect(trackAnalytics).not.toHaveBeenCalledWith('search_submitted', expect.anything());
     await userEvent.click(canvas.getByRole('link', { name: /@byulmaru / }));
     expect(trackAnalytics).toHaveBeenCalledWith('search_result_selected', { tab: 'people' });
+
+    const input = canvas.getByRole('textbox', { name: '검색어' });
+    await userEvent.click(canvas.getByRole('link', { name: '뒤로' }));
+    await waitFor(() =>
+      expect(canvas.getByTestId('search-query-navigation-probe')).toHaveTextContent(
+        'restoreFocus:false',
+      ),
+    );
+    await waitFor(() =>
+      expect(canvas.queryByRole('link', { name: /@byulmaru / })).not.toBeInTheDocument(),
+    );
+    expect(input).toHaveValue('');
+    expect(input).not.toHaveFocus();
   },
+  render: () => <SearchResultStory />,
 };
 
 export const StoreHitThenNetworkChangedDoesNotDuplicateLoadedEvent: Story = {

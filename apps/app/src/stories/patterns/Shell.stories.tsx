@@ -214,6 +214,11 @@ function BottomNavigationStory() {
   return <BottomTabBar profile={useShellStoryData().profile} />;
 }
 
+function BottomNavigationProfileUnavailableStory() {
+  const data = useLazyLoadQuery<ShellStoriesQueryType>(ShellStoriesQuery, {});
+  return <BottomTabBar profile={data.currentSession?.selectedProfile ?? null} />;
+}
+
 function CompactSidebarStory() {
   return (
     <View style={{ height: 560, width: 80 }}>
@@ -461,15 +466,57 @@ export const BottomNavigation: Story = {
     const canvas = within(canvasElement);
     const navigation = canvas.getByRole('navigation', { name: '하단 탐색' });
     const avatar = canvas.getByLabelText(`${selectedProfile.displayName} 프로필 이미지`);
+    const expectedLinks = [
+      ['홈', '/home'],
+      ['검색', '/search'],
+      ['글쓰기', '/compose'],
+      ['알림', '/notifications'],
+      ['프로필', '/@selected'],
+    ] as const;
+
     expect(window.getComputedStyle(navigation).backgroundColor).toBe('rgb(255, 255, 255)');
     expect(window.getComputedStyle(navigation).borderTopColor).toBe('rgb(236, 236, 240)');
-    expect(canvas.getByRole('link', { name: '글쓰기' })).toHaveAttribute('href', '/compose');
+    for (const [name, href] of expectedLinks) {
+      expect(canvas.getByRole('link', { name })).toHaveAttribute('href', href);
+    }
+    expect(canvas.getByRole('link', { name: '검색' })).toHaveAttribute('aria-current', 'page');
+    for (const name of ['홈', '글쓰기', '알림', '프로필']) {
+      expect(canvas.getByRole('link', { name })).not.toHaveAttribute('aria-current');
+    }
     expect(avatar.querySelector('img')).toHaveAttribute('src', selectedAvatarUrl);
     expect(canvas.queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('link', { name: '프로필 편집' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('link', { name: '설정' })).not.toBeInTheDocument();
   },
   render: () => <BottomNavigationStory />,
+};
+
+export const BottomNavigationLocalCurrent: Story = {
+  parameters: { router: { pathname: '/local' } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const home = canvas.getByRole('link', { name: '홈' });
+
+    expect(home).toHaveAttribute('href', '/home');
+    expect(home).toHaveAttribute('aria-current', 'page');
+  },
+  render: () => <BottomNavigationStory />,
+};
+
+export const BottomNavigationProfileUnavailable: Story = {
+  parameters: {
+    relay: { data: publicQuery },
+    router: { pathname: '/local' },
+  },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const profile = canvas.getByRole('button', { name: '프로필' });
+
+    expect(profile).toBeDisabled();
+    expect(profile).toHaveAttribute('aria-disabled', 'true');
+    expect(canvas.queryByRole('link', { name: '프로필' })).not.toBeInTheDocument();
+  },
+  render: () => <BottomNavigationProfileUnavailableStory />,
 };
 
 export const CompactSidebar: Story = {

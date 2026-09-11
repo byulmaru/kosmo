@@ -508,7 +508,13 @@ const styles = StyleSheet.create({
     paddingVertical: space[16],
   },
   compactRoot: { alignItems: 'center', width: 80 },
-  wideRoot: { paddingHorizontal: space[24], paddingVertical: space[24], width: 320 },
+  wideRoot: {
+    maxWidth: 320,
+    paddingLeft: space[24],
+    paddingRight: space[24] - borderWidths[1],
+    paddingVertical: space[24],
+    width: '100%',
+  },
   group: { gap: space[4] },
   compactGroup: { alignItems: 'center', gap: 0, width: 48 },
   control: {
@@ -518,7 +524,7 @@ const styles = StyleSheet.create({
   },
   compactControl: { height: 44, justifyContent: 'center', width: 44 },
   compactTarget: { alignItems: 'center', height: 48, justifyContent: 'center', width: 48 },
-  wideControl: { height: 45, width: 272 },
+  wideControl: { height: 45, width: '100%' },
   visual: {
     alignItems: 'center',
     borderRadius: radius[8],
@@ -558,7 +564,7 @@ const styles = StyleSheet.create({
   wideFooter: {
     gap: space[0],
     paddingTop: space[4] - borderWidths[1],
-    width: 272,
+    width: '100%',
   },
   inlineUtility: { gap: space[0] },
   nestedVisual: { paddingLeft: space[32] },

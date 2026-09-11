@@ -183,6 +183,7 @@ const meta = {
     'LogoutErrorContract',
     'LogoutLifecycleContract',
     'LogoutPendingContract',
+    'NarrowDrawerLayoutContract',
     'PresentationTransitionContract',
     'ProfileUnavailableContract',
     'ReducedMotionContract',
@@ -605,6 +606,28 @@ export const DrawerInteractionContract: Story = {
   ...Drawer,
   play: async ({ args, canvasElement }) => {
     await playInlineUtility({ args, canvasElement });
+  },
+};
+
+export const NarrowDrawerLayoutContract: Story = {
+  render: (args) => (
+    <View style={{ height: 720, width: 272 }}>
+      <SidebarNavigation
+        currentDestination="home"
+        onLogout={args.onLogout}
+        onNavigate={args.onNavigate}
+        presentation="drawer"
+        profile={profile}
+      />
+    </View>
+  ),
+  parameters: { controls: { disable: true } },
+  play: async ({ canvasElement }) => {
+    const navigation = getNavigation(canvasElement);
+
+    expectRect(navigation, 272, 720);
+    expectRect(getButton(navigation, 'home'), 224, 45);
+    expectRect(getButton(navigation, 'feedback'), 224, 45);
   },
 };
 
