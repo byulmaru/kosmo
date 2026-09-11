@@ -282,8 +282,8 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
 - 같은 section의 Mobile [`blocking 7580:14180`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7580-14180)은
   기존 Android Dark Profile route chrome 안의 identity-free `StateView`와 Secondary `차단 해제` 조립을 물리적 참고
   자료로 유지한다. Full Web [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)도
-  같은 참고 범위다. Profile route의 콘텐츠 경고 문구·기간은 후속 디자인 계약에서 정하며, 차단 해제의 data와
-  lifecycle은 Product 후속 범위다.
+  같은 참고 범위다. Profile route의 콘텐츠 경고는 `차단한 프로필의 게시물입니다`와 `게시물 보기`를 사용하고,
+  현재 Profile handle·selected actor lifecycle에서 사용자가 명시적으로 확인하기 전까지 유지한다. 차단 해제의 data와 lifecycle은 Product 후속 범위다.
 - 같은 section의 Mobile muted direct Profile Target [`7541:14061`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7541-14061)은
   기존 Android baseline Profile shell과 `ProfileHero.Muted=true` 상태·해제 action의 배치 근거로만 사용한다.
   이 Target에 남아 있는 `PostContent.CW=MutedCollapsed`와 Mute disclosure는 [Profile Mute 조회 정책](../domain/objects/profile-mute.md#조회-정책)과
