@@ -102,8 +102,9 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   selected Local Owner 범위의 정확한 unblock 관계 ID를 확인한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가한
   경우에만 조건부 identity-free fallback 문구를 사용한다.
 - `blocking` 화면에서는 Target Profile의 Post List·Post detail·첨부 Media를 기존 Post·Media 조회 정책으로
-  제공한다. Profile route는 콘텐츠 경고를 먼저 표시하고, 사용자가 확인한 뒤 해당 결과를 표시한다. 경고의
-  구체적인 문구와 표시 기간은 후속 디자인 계약에서 정한다.
+  제공한다. Profile route는 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 먼저 표시하고,
+  사용자가 action을 실행한 뒤 해당 결과를 표시한다. 경고는 현재 Profile handle과 selected actor lifecycle마다
+  다시 적용하며, 사용자가 명시적으로 확인하기 전에는 시간 경과만으로 콘텐츠를 표시하지 않는다.
 - `blockedBy` 화면에서는 Owner Profile의 기본 Profile 정보를 유지하면서 Post·Media 콘텐츠 차단 상태를 표시한다.
   양방향 Block이면 양쪽 화면에서 콘텐츠 차단 상태를 적용하며, Profile route와 다른 API 표면은 같은 콘텐츠 정책을
   사용한다. 차단 해제의 data와 lifecycle은 적용 Product/OpenSpec/runtime 범위다.

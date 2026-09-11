@@ -63,14 +63,15 @@
 
 ### Requirement: Profile Block direct route presents basic Profile and content state
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 후속 UI 교체는 `PROD-917`의 범위다. Block 관계의 direct Profile route는 기존 Profile 조회 정책에 따른 기본 Profile 정보를 표시해야 한다(MUST). `blocking` route는 기존 Post·Media 정책으로 허용된 Target 콘텐츠를 표시하기 전에 frontend 콘텐츠 경고를 제공하고, `blockedBy` route는 기본 Profile 정보와 콘텐츠 차단 상태를 표시해야 한다(MUST). 양방향 Block은 양쪽 route에 콘텐츠 차단 상태를 적용해야 한다(MUST). `차단 해제` action은 selected Local Profile이 Owner인 `blocking` route에서만 기존 관계 관리 흐름을 유지해야 하며(MUST), Remote Profile이 selected된 상태에서는 실행할 수 없는 Block 관리 action을 제공해서는 안 된다(MUST NOT). 경고 문구와 표시 기간은 후속 디자인 계약에서 정한다.
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 후속 UI 교체는 `PROD-917`의 범위다. Block 관계의 direct Profile route는 기존 Profile 조회 정책에 따른 기본 Profile 정보를 표시해야 한다(MUST). `blocking` route는 기존 Post·Media 정책으로 허용된 Target 콘텐츠를 표시하기 전에 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 제공해야 한다(MUST). 경고는 현재 Profile handle과 selected actor lifecycle마다 다시 적용해야 하고(MUST), 사용자가 action을 실행하기 전에는 시간 경과만으로 콘텐츠를 표시해서는 안 된다(MUST NOT). `blockedBy` route는 기본 Profile 정보와 콘텐츠 차단 상태를 표시해야 한다(MUST). 양방향 Block은 양쪽 route에 콘텐츠 차단 상태를 적용해야 한다(MUST). `차단 해제` action은 selected Local Profile이 Owner인 `blocking` route에서만 기존 관계 관리 흐름을 유지해야 하며(MUST), Remote Profile이 selected된 상태에서는 실행할 수 없는 Block 관리 action을 제공해서는 안 된다(MUST NOT).
 
 #### Scenario: 역방향 Block이 없을 때 blocking route에서 기본 Profile과 확인 후 콘텐츠를 표시한다
 
 - **WHEN** selected Local Profile이 Owner이고 Target이 Owner를 차단하지 않은 상태에서 차단한 Target의 direct Profile route를 연다
 - **THEN** 시스템은 기존 Profile 조회 정책에 따른 Target의 기본 Profile 정보를 표시한다
-- **AND** frontend는 Target의 Post·Media를 표시하기 전에 콘텐츠 경고를 제공한다
-- **AND** 사용자가 확인하면 기존 Post·Media 정책으로 허용된 Target 콘텐츠를 표시한다
+- **AND** frontend는 Target의 Post·Media를 표시하기 전에 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 제공한다
+- **AND** 사용자가 action을 실행하기 전에는 시간 경과만으로 콘텐츠를 표시하지 않고, 실행한 뒤 기존 Post·Media 정책으로 허용된 Target 콘텐츠를 표시한다
+- **AND** Profile handle 또는 selected actor lifecycle이 바뀌면 새 route lifecycle에 경고를 다시 적용한다
 - **AND** `차단 해제` action은 기존 blocking route 관계 관리 흐름으로 제공한다
 
 #### Scenario: Remote-selected route에는 실행할 수 없는 Block 관리 action을 제공하지 않는다

@@ -23,7 +23,8 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
   제외한다. `Hashtag.relatedProfiles`도 selected Profile이 있으면 그 Profile과 양방향 Active Block 관계인 후보를
   pagination 전에 제외하고, selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를 유지한다. Post·Media 직접 조회와 Profile Post List에는 viewer 방향의 콘텐츠 정책을,
   Home·Local·Hashtag Post List·검색·Follow 후보·새 상호작용·Notification에는 각 surface의 양방향 보호 정책을 적용한다. 새 Reply·Quote·Reaction·Repost는
-  origin과 무관한 같은 admission 정책을 사용한다. 현재 source 입력 ingress가 없는 Quote는 공통 assertion 검증과 실제 endpoint 미검증을 구분한다.
+  origin과 무관한 같은 admission 정책을 사용한다. `CreatePostInput.repostSourceId`를 사용하는 Local Quote는 실제 GraphQL ingress에서
+  양방향 Block 거부와 새 Post row 부재를 검증한다. ingress가 없는 Quote origin은 그 origin에 한해 공통 assertion 검증과 실제 ingress 미검증을 구분한다.
 - 유효한 Account에 selected Profile이 있으면 그 Profile을 `searchProfiles`의 viewer로 사용한다. selected Profile이 없으면 기존 Account 인증과
   공개 후보 결과를 유지하며 Profile Block predicate를 적용하거나 selected Local Profile을 새로 요구하지 않는다. 임의 입력 actor나 이전 selected
   Profile·client cache를 viewer로 재사용하지 않는다.
