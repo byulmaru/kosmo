@@ -163,6 +163,21 @@ jobs:
         with:
           version: '2026.9.2'
 
+      - name: Diagnose Linux fixed-port collision
+        if: matrix.shard == 3
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'runner ip_local_port_range: '
+          cat /proc/sys/net/ipv4/ip_local_port_range
+          sudo unshare --mount --net --mount-proc bash -uec '
+            ip link set lo up
+            printf "34173 34173\n" > /proc/sys/net/ipv4/ip_local_port_range
+            printf "namespace ip_local_port_range: "
+            cat /proc/sys/net/ipv4/ip_local_port_range
+            python3 scripts/test-port-collision-linux.py
+          '
+
       - name: Get pnpm store directory
         id: pnpm-store
         shell: bash
