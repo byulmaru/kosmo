@@ -292,9 +292,12 @@ export function FollowButton({
           ? {
               unfollowProfile: {
                 followeeProfile: {
+                  displayName: data.displayName,
                   followPolicy: data.followPolicy,
                   followersCount: Math.max(data.followersCount - 1, 0),
+                  handle: data.handle,
                   id: data.id,
+                  relativeHandle: data.relativeHandle,
                   viewerState: {
                     follow: null,
                     followRequest: null,
