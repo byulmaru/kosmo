@@ -162,6 +162,10 @@ Full·Compact·Mobile 인벤토리에서 소유 overlay 계약은 유지하되, 
   중앙 `StateView`를 제거하고 skeleton 위에 [`Toast instance 6598:1438`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6598-1438)을
   `x=15`, `y=696`, `360×52`로 배치한다. 문구는 `팔로워 요청을 불러오지 못했어요`, action은 `다시 시도`다.
   pagination과 승인·거절 row 실패는 이번 Figma Target 범위에서 변경하지 않는다.
+- PROD-940 Current 구현은 이 Target을 `/follow-requests` 최초 조회 오류에 연결해 기존 PageHeader와
+  시각 skeleton을 유지하고, loading polite announcement 없이 persistent Danger Toast에서 같은 query를 재시도한다.
+  성공·재실패·route/selected Profile 수명주기 정리는 route와 Storybook Tests에서 별도로 확인하며,
+  실제 Web·iOS·Android runtime 완료 판정은 이 기록에서 대신하지 않는다.
 - [`PostListItem`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1924-1992)의
   `Size=Mobile` 4종은 좌우 padding 16px, `Size=Center` 4종은 기존 8px을 사용한다. Mobile Text·Media의
   Reaction Summary slot은 실제 content column `298px`을 채우며 Action Bar와 같은 좌우 edge에 정렬된다. Home [`4524:3985`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-3985)과 Local [`4524:4139`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-4139) 실제 consumer에서 Mobile 상속을 확인했다.
