@@ -34,7 +34,7 @@ lifecycle·권한·표시·탭 이동·실패 경계를 기존 Notification 권�
 
 ### Requirement: 설치 registration과 신규 Notification 경계
 
-**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/domain/objects/notification.md`, `PROD-875`, `PROD-912`, `PROD-914` — 인증된 Account는 자신이 소유한 Android·iOS 앱 설치와 FCM registration token을 등록·갱신·해제할 수 있어야 하며(MUST), 시스템은 서버가 발급한 installation row ID와 설치별 소유권·token lifecycle을 관리해야 한다(MUST). 최초 `registerPushInstallation(input: { platform, token })`은 외부 installation ID 없이 새 row를 만들고 `PushInstallation` GlobalID인 `id: ID!`를 반환해야 하며(MUST). `updatePushInstallation(input: { id: ID!, platform, token })`은 반환된 ID와 현재 Account·Session이 일치하는 row만 갱신해야 하고(MUST), 알 수 없거나 삭제된 ID를 새 row로 재생성해서는 안 된다(MUST NOT). `unregisterPushInstallation(input: { id: ID! })`은 현재 Account·Session의 해당 ID만 삭제해야 하며(MUST), 없는 ID는 이미 해제된 것으로 멱등 완료해야 한다(MUST). active installation row만 token을 보관해야 하며(MUST), logout·account switch·Account deletion·명시적 해제·일치하는 invalid/unregistered 결과로 폐기된 설치 registration과 token은 즉시 삭제되어 이후 신규 전달 eligible target이 아니어야 한다(MUST). stale old-token 결과는 갱신된 현재 token을 삭제해서는 안 된다(MUST NOT). 같은 Account가 새 registration으로 현재 active token을 다시 등록하면 기존 중복 row를 원자적으로 삭제하고 새 row ID와 새 registration epoch로 등록해야 하며(MUST), 다른 Account의 active token은 거부해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/domain/objects/notification.md`, `PROD-875`, `PROD-912`, `PROD-914` — 인증된 Account는 자신이 소유한 Android·iOS 앱 설치와 FCM registration token을 등록·갱신·해제할 수 있어야 하며(MUST), 시스템은 서버가 발급한 installation row ID와 설치별 소유권·token lifecycle을 관리해야 한다(MUST). 최초 `registerPushInstallation(input: { platform, token })`은 외부 installation ID 없이 새 row를 만들고 `PushInstallation` GlobalID인 `id: ID!`를 반환해야 하며(MUST). `updatePushInstallation(input: { id: ID!, platform, token })`은 반환된 ID와 인증된 현재 Account가 소유한 row만 갱신해야 하며(MUST), 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 드러내지 않는 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패해야 한다(MUST). `unregisterPushInstallation(input: { id: ID! })`은 인증된 현재 Account가 소유한 해당 ID만 삭제해야 하며(MUST), 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 노출하지 않고 `{ completed: true }`로 멱등 완료해야 한다(MUST). 등록 당시 연결된 `sessionId`는 lifecycle association으로 유지하고 현재 인증 Session과 비교하거나 요청 Session으로 재바인딩해서는 안 되며(MUST NOT), 따라서 같은 Account의 다른 Session도 row를 관리할 수 있어야 한다(MUST). 등록 당시 연결된 Session의 logout/revoke와 Account deletion cleanup은 유지해야 한다(MUST). active installation row만 token을 보관해야 하며(MUST), logout·account switch·Account deletion·명시적 해제·일치하는 invalid/unregistered 결과로 폐기된 설치 registration과 token은 즉시 삭제되어 이후 신규 전달 eligible target이 아니어야 한다(MUST). stale old-token 결과는 갱신된 현재 token을 삭제해서는 안 된다(MUST NOT). 같은 Account가 새 registration으로 현재 active token을 다시 등록하면 기존 중복 row를 원자적으로 삭제하고 새 row ID와 새 registration epoch로 등록해야 하며(MUST), 다른 Account의 active token은 거부해야 한다(MUST).
 
 대상 registration을 받은 시점을 경계로 그 이후 생성된 Notification만 해당 설치에 전달해야 한다(MUST). 새 설치, 새 device 또는 OS 권한 허용 시점에 이미 생성된 unread Notification을 backlog로 재생해서는 안 된다(MUST NOT). OS 상태 변화의 정확한 감지 시점은 이 capability가 고정하지 않으며, client는 관찰 가능한 OS 상태를 동기화한다.
 
@@ -42,7 +42,9 @@ lifecycle·권한·표시·탭 이동·실패 경계를 기존 Notification 권�
 
 - **WHEN** 인증된 Account가 `registerPushInstallation`으로 platform·native FCM token을 등록한다
 - **THEN** 시스템은 외부 installation ID 없이 새 row를 만들고 `PushInstallation` GlobalID인 `id`를 반환한다
-- **AND** 인증된 Account가 `id: ID!`로 `updatePushInstallation`을 호출하면 현재 Account·Session의 row만 platform·token과 함께 갱신한다
+- **AND** 인증된 Account가 `id: ID!`로 `updatePushInstallation`을 호출하면 현재 Account가 소유한 row만 platform·token과 함께 갱신한다
+- **AND** 같은 Account의 다른 Session에서 같은 `id`로 update 또는 unregister를 호출해도 Account 소유권만 확인해 성공하며, registration 당시 연결된 `sessionId`는 요청 Session으로 바뀌지 않는다
+- **AND** 알 수 없거나 삭제된 ID와 다른 Account 소유 ID의 update는 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패하고, unregister는 `{ completed: true }`를 반환해 row 존재 여부를 노출하지 않는다
 - **AND** 인증된 Account가 `id: ID!`로 `unregisterPushInstallation`을 호출하면 해당 row와 token만 삭제한다
 - **AND** 다른 Account의 설치나 token을 등록·삭제하지 못하게 한다
 
@@ -61,7 +63,7 @@ lifecycle·권한·표시·탭 이동·실패 경계를 기존 Notification 권�
 
 #### Scenario: 폐기된 설치의 신규 전달 무효화
 
-- **WHEN** 설치가 logout, Account 전환, Account 삭제 또는 명시적 해제로 폐기된다
+- **WHEN** 등록 당시 연결된 Session이 logout/revoke 또는 Account 전환으로 폐기되거나, Account 삭제 또는 명시적 해제로 설치가 폐기된다
 - **THEN** 시스템은 그 설치를 이후 신규 Notification 전달의 eligible target에서 제외한다
 - **AND** 시스템은 설치 row와 opaque token을 즉시 삭제하고 삭제 전 registration epoch를 보존하지 않는다
 - **AND** Provider가 이미 accepted·queued한 Push의 실제 도착 또는 회수는 이 상태 변화로 보장하지 않는다
