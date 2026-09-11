@@ -68,7 +68,7 @@
 
 - Decision Date: 2026-09-10
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/design/content-reporting.md`, `docs/design/feedback.md`, `docs/design/accessibility.md`, [PROD-915](https://linear.app/byulmaru/issue/PROD-915), 2026-09-10 Native modal/sheet 선택 및 Gate 전환 승인.
+- Authority / Provenance: `docs/design/content-reporting.md`, `docs/design/feedback.md`, `docs/design/accessibility.md`, [PROD-915](https://linear.app/byulmaru/issue/PROD-915), 2026-09-10 Native modal/sheet 선택 및 Gate 전환 승인, 사용자 명시적 결정 “신고를 전달했습니다는 기존 팝업으로 띄워야지”.
 - Status: Active
 - Context / Problem: 신고 중 대상 문맥과 입력을 유지하면서 닫기·재시도 결과를 알 수 있어야 한다.
 - Decision Outcome: Web 반응형 dialog/sheet, Native 현재 화면 위 modal/sheet를 사용한다. dirty 폐기 확인·pending 명시적 닫기 차단·실패/확인 불가 입력 유지·정상 성공 시 입력 초기화 후 overlay 종료와 기존 공용 성공 toast `신고를 전달했습니다.`를 적용한다.
