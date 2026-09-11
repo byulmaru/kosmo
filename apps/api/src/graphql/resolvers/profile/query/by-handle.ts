@@ -41,6 +41,43 @@ const isExplicitRemoteHandle = (
   profileHandleSchema.safeParse(parsed.handle).success &&
   parsed.handle === parsed.handle.trim();
 
+const lookupRemoteActorUri = async (
+  handle: RemoteProfileHandle,
+  canonicalOrigin: string,
+): Promise<string> => {
+  const context = remoteFederation.createContext(new URL(canonicalOrigin), undefined);
+  const descriptor = await context.lookupWebFinger(`acct:${handle.handle}@${handle.domain}`);
+
+  for (const link of descriptor?.links ?? []) {
+    if (
+      link.rel !== 'self' ||
+      (link.type !== 'application/activity+json' &&
+        !link.type?.match(
+          /application\/ld\+json;\s*profile="https:\/\/www\.w3\.org\/ns\/activitystreams"/,
+        )) ||
+      link.href == null
+    ) {
+      continue;
+    }
+
+    try {
+      const candidate = new URL(link.href);
+      if (
+        (candidate.protocol === 'http:' || candidate.protocol === 'https:') &&
+        candidate.hostname
+      ) {
+        return candidate.href;
+      }
+    } catch {
+      // Try another ActivityPub self link before reporting an invalid response.
+    }
+  }
+
+  throw new RemoteActorMaterializationError(
+    'Remote WebFinger response is missing a valid ActivityPub self link.',
+  );
+};
+
 builder.queryField('profileByHandle', (t) =>
   t.field({
     type: Profile,
@@ -132,51 +169,9 @@ builder.queryField('searchProfiles', (t) =>
               .limit(1)
               .then(first);
 
-            let actorUri: string | undefined;
-
-            if (cached) {
-              actorUri = cached.actorUri;
-            } else {
-              const context = remoteFederation.createContext(
-                new URL(localInstance.canonicalOrigin),
-                undefined,
-              );
-              const descriptor = await context.lookupWebFinger(
-                `acct:${parsed.handle}@${parsed.domain}`,
-              );
-
-              for (const link of descriptor?.links ?? []) {
-                if (
-                  link.rel !== 'self' ||
-                  (link.type !== 'application/activity+json' &&
-                    !link.type?.match(
-                      /application\/ld\+json;\s*profile="https:\/\/www\.w3\.org\/ns\/activitystreams"/,
-                    )) ||
-                  link.href == null
-                ) {
-                  continue;
-                }
-
-                try {
-                  const candidate = new URL(link.href);
-                  if (
-                    (candidate.protocol === 'http:' || candidate.protocol === 'https:') &&
-                    candidate.hostname
-                  ) {
-                    actorUri = candidate.href;
-                    break;
-                  }
-                } catch {
-                  // Try another ActivityPub self link before reporting an invalid response.
-                }
-              }
-
-              if (!actorUri) {
-                throw new RemoteActorMaterializationError(
-                  'Remote WebFinger response is missing a valid ActivityPub self link.',
-                );
-              }
-            }
+            const actorUri =
+              cached?.actorUri ??
+              (await lookupRemoteActorUri(parsed, localInstance.canonicalOrigin));
 
             materializedProfileId = await runWorkflow(remoteProfileMaterializationWorkflow, {
               args: [
