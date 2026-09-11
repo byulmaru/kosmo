@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { MutedProfileList } from '@/components/profile/MutedProfileList';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
@@ -136,7 +136,11 @@ function SettingsMutedProfilesContent() {
   };
 
   return (
-    <View accessibilityLabel="뮤트한 프로필 목록" ref={listRef} tabIndex={-1}>
+    <View
+      accessibilityLabel="뮤트한 프로필 목록"
+      ref={listRef}
+      {...(Platform.OS === 'web' ? { tabIndex: -1 as const } : { focusable: true })}
+    >
       <MutedProfileList state={listState} />
     </View>
   );
