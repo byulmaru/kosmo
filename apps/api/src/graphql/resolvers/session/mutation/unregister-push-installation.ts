@@ -1,4 +1,3 @@
-import { db } from '@kosmo/core/db';
 import { unregisterPushInstallation } from '@kosmo/core/services';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
@@ -17,14 +16,11 @@ builder.mutationField('unregisterPushInstallation', (t) =>
       ctx.c.header('Cache-Control', 'no-store');
       ctx.c.header('Pragma', 'no-cache');
 
-      await unregisterPushInstallation(
-        {
-          accountId: ctx.session.accountId,
-          installationId: input.installationId,
-          sessionId: ctx.session.id,
-        },
-        db,
-      );
+      await unregisterPushInstallation({
+        accountId: ctx.session.accountId,
+        installationId: input.installationId,
+        sessionId: ctx.session.id,
+      });
 
       return { completed: true };
     },

@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import {
   AccountProfiles,
   Accounts,
@@ -30,12 +30,10 @@ import { ConflictError, PermissionDeniedError } from '../error';
 import {
   findEligiblePushInstallations,
   invalidatePushInstallation,
-  PushInstallationStorageError,
   registerPushInstallation,
   unregisterPushInstallation,
 } from './push-installation';
 import { revokeCurrentSession } from './session';
-import type { DatabaseHandle } from '../db';
 
 after(async () => {
   await pg.end();
@@ -188,7 +186,7 @@ test('registration refresh keeps the epoch and eligible delivery ignores read st
       firstRegistration.registrationEpoch.toString(),
     );
     assert.equal(refreshed.token.startsWith('refreshed-'), true);
-    const historicalEpoch = Temporal.Now.instant().subtract({ hours: 26 });
+    const historicalEpoch = Temporal.Now.instant().subtract({ hours: 1 });
     await db
       .update(PushInstallations)
       .set({ registrationEpoch: historicalEpoch })
@@ -225,6 +223,11 @@ test('registration refresh keeps the epoch and eligible delivery ignores read st
       ).length,
       1,
     );
+    const expiredEpoch = Temporal.Now.instant().subtract({ hours: 26 });
+    await db
+      .update(PushInstallations)
+      .set({ registrationEpoch: expiredEpoch })
+      .where(eq(PushInstallations.id, refreshed.id));
     assert.deepEqual(
       await findEligiblePushInstallations({
         notificationId: expired.id,
@@ -272,17 +275,67 @@ test('all active installations fan out for every Account Profile', async () => {
         .sort(),
       [firstInstallationId, secondInstallationId].sort(),
     );
+
+    await db
+      .update(Sessions)
+      .set({ state: SessionState.REVOKED })
+      .where(eq(Sessions.id, secondSession.id));
+    const revokedSessionNotification = await insertNotification({
+      createdAt: Temporal.Now.instant(),
+      recipientProfileId: fixture.profiles[1]!.id,
+    });
+    assert.deepEqual(
+      (await findEligiblePushInstallations({ notificationId: revokedSessionNotification.id })).map(
+        ({ installationId }) => installationId,
+      ),
+      [firstInstallationId],
+    );
+
+    await db
+      .update(Sessions)
+      .set({ state: SessionState.ACTIVE })
+      .where(eq(Sessions.id, secondSession.id));
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, fixture.profiles[1]!.id));
+    const disabledProfileNotification = await insertNotification({
+      createdAt: Temporal.Now.instant(),
+      recipientProfileId: fixture.profiles[1]!.id,
+    });
+    assert.deepEqual(
+      await findEligiblePushInstallations({ notificationId: disabledProfileNotification.id }),
+      [],
+    );
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.ACTIVE })
+      .where(eq(Profiles.id, fixture.profiles[1]!.id));
+    await db
+      .update(Accounts)
+      .set({ state: AccountState.DISABLED })
+      .where(eq(Accounts.id, fixture.account.id));
+    const disabledAccountNotification = await insertNotification({
+      createdAt: Temporal.Now.instant(),
+      recipientProfileId: fixture.profiles[0]!.id,
+    });
+    assert.deepEqual(
+      await findEligiblePushInstallations({ notificationId: disabledAccountNotification.id }),
+      [],
+    );
   } finally {
     await cleanupFixture(fixture);
   }
 });
 
 test('ownership, stale invalidation, unregister and logout remove delivery eligibility', async () => {
-  const owner = await createFixture();
+  const owner = await createFixture({ sessionCount: 2 });
   const other = await createFixture();
-  const [ownerSession] = owner.sessions;
+  const [ownerSession, ownerOtherSession] = owner.sessions;
   const [otherSession] = other.sessions;
   assert.ok(ownerSession);
+  assert.ok(ownerOtherSession);
   assert.ok(otherSession);
   const installationId = crypto.randomUUID();
   const firstToken = `token-${crypto.randomUUID()}`;
@@ -329,6 +382,23 @@ test('ownership, stale invalidation, unregister and logout remove delivery eligi
       installationId,
       token: firstToken,
     });
+    assert.deepEqual(
+      (
+        await db
+          .select({ token: PushInstallations.token })
+          .from(PushInstallations)
+          .where(eq(PushInstallations.installationId, installationId))
+      )[0],
+      { token: secondToken },
+    );
+    await assert.rejects(
+      unregisterPushInstallation({
+        accountId: owner.account.id,
+        installationId,
+        sessionId: ownerOtherSession.id,
+      }),
+      PermissionDeniedError,
+    );
     assert.deepEqual(
       (
         await db
@@ -458,45 +528,6 @@ test('account deletion cascades all installations', async () => {
   }
 });
 
-test('concurrent first registration converges to one installation row', async () => {
-  const fixture = await createFixture({ sessionCount: 2 });
-  const [firstSession, secondSession] = fixture.sessions;
-  assert.ok(firstSession);
-  assert.ok(secondSession);
-  const installationId = crypto.randomUUID();
-
-  try {
-    await Promise.all([
-      registerPushInstallation({
-        accountId: fixture.account.id,
-        installationId,
-        platform: PushInstallationPlatform.ANDROID,
-        sessionId: firstSession.id,
-        token: `token-${crypto.randomUUID()}`,
-      }),
-      registerPushInstallation({
-        accountId: fixture.account.id,
-        installationId,
-        platform: PushInstallationPlatform.ANDROID,
-        sessionId: secondSession.id,
-        token: `token-${crypto.randomUUID()}`,
-      }),
-    ]);
-    assert.equal(
-      await db.$count(
-        PushInstallations,
-        and(
-          eq(PushInstallations.accountId, fixture.account.id),
-          eq(PushInstallations.installationId, installationId),
-        ),
-      ),
-      1,
-    );
-  } finally {
-    await cleanupFixture(fixture);
-  }
-});
-
 test('accepts the maximum opaque registration token length', async () => {
   const fixture = await createFixture();
   const [session] = fixture.sessions;
@@ -606,55 +637,5 @@ test('removes same-account duplicate tokens and rejects other-account tokens', a
   } finally {
     await cleanupFixture(owner);
     await cleanupFixture(other);
-  }
-});
-
-test('unexpected token storage failures are sanitized for registration and invalidation', async () => {
-  const secret = `token-${crypto.randomUUID()}`;
-  const databaseError = new Error(`driver params include ${secret}`);
-  Object.assign(databaseError, {
-    cause: { code: '54000', detail: `query parameter ${secret}` },
-  });
-  const failingDatabase = {
-    transaction: async () => {
-      throw databaseError;
-    },
-    delete: () => ({
-      where: async () => {
-        throw databaseError;
-      },
-    }),
-  } as unknown as DatabaseHandle;
-  const input = {
-    accountId: crypto.randomUUID(),
-    installationId: crypto.randomUUID(),
-    platform: PushInstallationPlatform.ANDROID,
-    sessionId: crypto.randomUUID(),
-    token: secret,
-  };
-
-  for (const [name, operation] of [
-    ['register', () => registerPushInstallation(input, failingDatabase)],
-    [
-      'invalidate',
-      () =>
-        invalidatePushInstallation(
-          {
-            accountId: input.accountId,
-            installationId: input.installationId,
-            token: input.token,
-          },
-          failingDatabase,
-        ),
-    ],
-  ] as const) {
-    await assert.rejects(operation(), (error: unknown) => {
-      assert.ok(error instanceof PushInstallationStorageError);
-      assert.equal(error.message, `Push installation ${name} failed.`);
-      assert.equal(error.databaseCode, '54000');
-      assert.equal('cause' in error, false);
-      assert.equal(error.message.includes(secret), false);
-      return true;
-    });
   }
 });

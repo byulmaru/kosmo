@@ -38,7 +38,6 @@ const loadCurrentSession = async (token: string, tx: Transaction) =>
     .from(Sessions)
     .innerJoin(Accounts, eq(Accounts.id, Sessions.accountId))
     .where(eq(Sessions.token, token))
-    .for('update')
     .limit(1)
     .then((rows) => rows[0] as CurrentSessionState | undefined);
 
