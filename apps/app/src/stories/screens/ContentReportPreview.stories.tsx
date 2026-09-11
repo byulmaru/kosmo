@@ -1,7 +1,7 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 import {
   ContentReportProvider,
   useContentReportMenuItem,
@@ -55,7 +55,7 @@ function ContentReportPreview({ hideTriggerOnOpen = false }: { hideTriggerOnOpen
           <ContentReportTrigger
             onReportOpen={() => {
               if (hideTriggerOnOpen) {
-                setTimeout(() => setTriggerVisible(false), 300);
+                requestAnimationFrame(() => setTriggerVisible(false));
               }
             }}
           />
@@ -208,6 +208,111 @@ export const SubmissionUnknownKeepsDraftForRetry: Story = {
   },
 };
 
+export const SubmissionRejectedKeepsDraft: Story = {
+  parameters: {
+    relay: {
+      mutationRequestObserver,
+      mutationResponse: { submitContentReport: { status: 'REJECTED' } },
+    },
+  },
+  render: () => <ContentReportPreview />,
+  play: async ({ canvasElement, parameters }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const details = '거부되어도 유지할 신고 내용';
+
+    await userEvent.click(canvas.getByRole('button', { name: '신고 메뉴 열기' }));
+    await userEvent.click(page.getByRole('menuitem', { name: '게시물 신고' }));
+    const spam = page.getByRole('radio', { name: '스팸·사기' });
+    await userEvent.click(spam);
+    await userEvent.type(page.getByRole('textbox', { name: '게시물 신고 상세 내용' }), details);
+    await userEvent.click(page.getByRole('button', { name: '신고하기' }));
+
+    await expect(page.getByRole('alert')).toHaveTextContent(
+      '신고를 전달하지 못했습니다. 입력 내용을 확인한 뒤 다시 시도해주세요.',
+    );
+    expect(page.getByRole('textbox', { name: '게시물 신고 상세 내용' })).toHaveValue(details);
+    expect(spam).toHaveAttribute('aria-checked', 'true');
+    expect(page.getByRole('button', { name: '신고 다시 시도' })).toBeEnabled();
+    await waitFor(() => expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledOnce());
+  },
+};
+
+export const OverlayDirtyCloseCancelDiscardReopenReset: Story = {
+  render: () => <ContentReportPreview />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const trigger = canvas.getByRole('button', { name: '신고 메뉴 열기' });
+    const details = '계속 작성하거나 버릴 수 있는 신고 내용';
+
+    await userEvent.click(trigger);
+    await userEvent.click(page.getByRole('menuitem', { name: '게시물 신고' }));
+    let dialog = await page.findByRole('dialog', { name: '게시물 신고' });
+    const body = within(dialog).getByRole('textbox', { name: '게시물 신고 상세 내용' });
+    const spam = within(dialog).getByRole('radio', { name: '스팸·사기' });
+    await userEvent.click(spam);
+    await userEvent.type(body, details);
+    await userEvent.click(within(dialog).getByRole('button', { name: '게시물 신고 닫기' }));
+
+    const confirm = await page.findByRole('alertdialog', { name: '작성 중인 신고를 버릴까요?' });
+    expect(body).toHaveValue(details);
+    expect(spam).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(within(confirm).getByRole('button', { name: '계속 작성' }));
+    expect(page.queryByRole('alertdialog', { name: '작성 중인 신고를 버릴까요?' })).toBeNull();
+    expect(body).toHaveValue(details);
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '게시물 신고 닫기' }));
+    await userEvent.click(
+      within(
+        await page.findByRole('alertdialog', { name: '작성 중인 신고를 버릴까요?' }),
+      ).getByRole('button', { name: '신고 버리기' }),
+    );
+    await waitFor(() => expect(page.queryByRole('dialog', { name: '게시물 신고' })).toBeNull());
+
+    await userEvent.click(trigger);
+    await userEvent.click(page.getByRole('menuitem', { name: '게시물 신고' }));
+    dialog = await page.findByRole('dialog', { name: '게시물 신고' });
+    expect(within(dialog).getByRole('textbox', { name: '게시물 신고 상세 내용' })).toHaveValue('');
+    expect(
+      within(dialog).getByRole('radio', { name: '유해하거나 부적절한 콘텐츠' }),
+    ).toHaveAttribute('aria-checked', 'true');
+  },
+};
+
+export const OverlaySubmittingSuppressesDuplicateAndClose: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  render: () => <ContentReportPreview />,
+  play: async ({ canvasElement, parameters }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: '신고 메뉴 열기' }));
+    await userEvent.click(page.getByRole('menuitem', { name: '게시물 신고' }));
+    const dialog = await page.findByRole('dialog', { name: '게시물 신고' });
+    await userEvent.type(
+      within(dialog).getByRole('textbox', { name: '게시물 신고 상세 내용' }),
+      '전달 중인 신고',
+    );
+    const submit = within(dialog).getByRole('button', { name: '신고하기' });
+    await userEvent.click(submit);
+    const close = within(dialog).getByRole('button', { name: '게시물 신고 닫기' });
+    await waitFor(() => expect(close).toBeDisabled());
+    await waitFor(() => expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledOnce());
+
+    fireEvent.click(submit);
+    expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledOnce();
+
+    await userEvent.keyboard('{Escape}');
+    expect(page.getByRole('dialog', { name: '게시물 신고' })).toBeVisible();
+    expect(page.queryByRole('alertdialog', { name: '작성 중인 신고를 버릴까요?' })).toBeNull();
+
+    const surface = page.getByTestId('content-report-overlay-surface');
+    fireEvent.click(surface.parentElement!);
+    expect(page.getByRole('dialog', { name: '게시물 신고' })).toBeVisible();
+  },
+};
+
 export const FallbackFocusAfterTriggerRemoval: Story = {
   render: () => <ContentReportPreview hideTriggerOnOpen />,
   play: async ({ canvasElement }) => {
@@ -218,7 +323,6 @@ export const FallbackFocusAfterTriggerRemoval: Story = {
 
     await userEvent.click(trigger);
     await userEvent.click(page.getByRole('menuitem', { name: '게시물 신고' }));
-    await new Promise((resolve) => setTimeout(resolve, 350));
     await waitFor(() => expect(trigger).not.toBeInTheDocument());
     await userEvent.click(page.getByRole('button', { name: '게시물 신고 닫기' }));
     await waitFor(() => expect(fallback).toHaveFocus());
