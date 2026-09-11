@@ -214,10 +214,7 @@ test('Local 탭은 configured Local의 공개 top-level Content Post와 Quote만
   }
   await page.setViewportSize({ height: 844, width: 390 });
   await expect(page.getByRole('heading', { name: '로컬' })).toBeVisible();
-  const mobileBrandLink = page
-    .getByRole('link', { name: '홈' })
-    .filter({ has: page.locator('[aria-hidden="true"]') });
-  await expect(mobileBrandLink).toHaveAttribute('href', '/home');
+  await expect(page.getByRole('link', { name: '홈' })).toHaveCount(1);
   await expect(
     page.getByRole('navigation', { name: '하단 탐색' }).getByRole('link', { name: '홈' }),
   ).toHaveAttribute('aria-current', 'page');
