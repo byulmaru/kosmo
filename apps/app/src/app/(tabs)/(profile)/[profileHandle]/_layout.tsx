@@ -143,6 +143,7 @@ export default function ProfileLayout() {
         actorLifecycleKey={actorLifecycleKey}
         backButton={backButton}
         handle={handle}
+        pathname={pathname}
         scrollKey={scrollKey}
         showPageHeader={isProfileHome}
       />
@@ -154,12 +155,14 @@ function ProfileLayoutContent({
   actorLifecycleKey,
   backButton,
   handle,
+  pathname,
   scrollKey,
   showPageHeader,
 }: {
   actorLifecycleKey: string;
   backButton: ReactNode;
   handle: string;
+  pathname: string;
   scrollKey: string;
   showPageHeader: boolean;
 }) {
@@ -404,7 +407,10 @@ function ProfileLayoutContent({
   );
   const profileAction =
     blockStatus?.blockedBy && !blockStatus.blocking ? undefined : relationshipAction;
-  const profileContent = blockStatus?.blockedBy ? (
+  const relationshipRoute = pathname.endsWith('/followers') || pathname.endsWith('/following');
+  const profileContent = relationshipRoute ? (
+    <Slot />
+  ) : blockStatus?.blockedBy ? (
     <StateView controlRef={contentStateRef} title="게시물을 볼 수 없습니다" />
   ) : blockStatus?.blocking && !blockedContentVisible ? (
     <StateView

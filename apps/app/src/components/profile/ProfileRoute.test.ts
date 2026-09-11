@@ -352,6 +352,7 @@ afterEach(async () => {
   stateActionFocus.mock.resetCalls();
   contentStateFocus.mock.resetCalls();
   changeBlockedImpl = async () => undefined;
+  SlotContent = ProfilePostListPage;
 });
 
 async function renderRoute(profileHandle: string, routePath = `/profile/${profileHandle}`) {
@@ -781,6 +782,25 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(rendered('Button').length, 0);
     assert.equal(rendered('FollowButton').length, 0);
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
+  });
+
+  it('차단 관계에서도 followers와 following route의 관계 목록 Slot을 유지한다', async () => {
+    selectedProfileId = 'owner';
+    selectedProfileKind = 'LOCAL';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    SlotContent = () => createElement('RelationshipList');
+
+    for (const status of [
+      { blockedBy: false, blocking: true, profileBlockId: 'block-1' },
+      { blockedBy: true, blocking: false, profileBlockId: null },
+    ]) {
+      profileBlockStatus = status;
+      for (const relation of ['followers', 'following']) {
+        await renderRoute('@blocked', `/profile/@blocked/${relation}`);
+        assert.equal(rendered('RelationshipList').length, 1);
+        assert.equal(rendered('StateView').length, 0);
+      }
+    }
   });
 
   it('서로 차단한 Profile은 공통 action을 표시하고 내 해제 뒤 상대 차단이 남으면 숨긴다', async () => {
