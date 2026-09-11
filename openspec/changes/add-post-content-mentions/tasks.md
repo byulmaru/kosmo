@@ -41,7 +41,7 @@
 - [x] 1.4 (2026-09-14 contract correction) typed `Mention.href`가 기존 Profile stable identity로 확인되면 body conversion과 독립된 `profileId` 집합으로 `createPost`에 전달하고, body anchor가 URL 불일치·부재·ambiguous여도 `post_mentions` relation을 유지한다. body parser는 대응하는 anchor만 `profileId` 단일 attr의 Mention node로 만들고 나머지는 ordinary link/text로 보존하며, 원문 표시 문자열은 loose resource/length budget 계산 중에만 transient하게 사용하고 저장하지 않는다. 기존 actor materialization·refresh alias 경계와 no-fetch/no-backfill/no-live-DB 계약을 유지한다.
   - 실행 증거 (2026-09-14): 소스 커밋 `186ba5705b97114a8d02be5ed952201047d84738` 기준 [GitHub Actions run 34767026630](https://github.com/byulmaru/kosmo/actions/runs/34767026630)의 required checks 16/16 및 14/14 jobs가 통과했다. [`@kosmo/core` job](https://github.com/byulmaru/kosmo/actions/runs/34767026630/job/103749705963)은 새 typed identity와 body node 분리, deduplication, FK·Current Content pointer rollback, first-write-wins를 포함한 201개를 통과했고, [`@kosmo/fedify` job](https://github.com/byulmaru/kosmo/actions/runs/34767026630/job/103749705844)은 mismatch relation과 `NULL` alias의 valid URL refresh를 포함한 249개 및 standalone 1개를 통과했다. 2.x legacy reader/activation gate(2.1–2.3)와 3.x renderer·integration/archive(3.1–3.3)는 이 change의 후속 미완료 범위로 유지한다.
 
-## 2. PROD-340 legacy reader compatibility and activation gate
+## 2. PROD-340 legacy reader compatibility and activation gate (deferred)
 
 **Authority / Provenance**
 
@@ -52,11 +52,11 @@
 
 **Deliverable**
 
-서버의 본문 파생값에서 GraphQL `bodyText`와 legacy renderer 표시까지 글자·Media·Content Warning 보존을 end-to-end로 증명한 뒤 Mention 저장을 활성화할 수 있다. 구 reader는 기존 `bodyText` fallback의 plain text 표시를 사용하며 link 클릭 동작과 문단 구조의 일시적 저하를 허용한다.
+서버의 본문 파생값에서 GraphQL `bodyText`와 legacy renderer 표시까지 글자·Media·Content Warning 보존을 end-to-end로 증명한 뒤 Mention 저장을 활성화할 수 있다. 구 reader는 기존 `bodyText` fallback의 plain text 표시를 사용하며 link 클릭 동작과 문단 구조의 일시적 저하를 허용한다. 이 reader gate는 2026-09-11 사용자 결정에 따라 deferred 후속 검증으로 남기며 `PROD-910` renderer 구현·통합의 선행 blocker로 사용하지 않는다.
 
 **Guardrails**
 
-- 호환 증거 전에는 Mention node와 관계 저장을 활성화하지 않는다.
+- 호환 증거 전에는 Mention node와 관계 저장을 활성화하지 않는 activation/rollout 계약을 유지한다. 다만 이 gate의 2.x 실행 증거는 현재 deferred이며 `PROD-910` renderer 작업을 막지 않는다.
 - 기존 `bodyText` fallback을 재사용하고, 구 reader에서도 글자·Media·Content Warning을 보존한다.
 - link 클릭 동작·문단 구조 저하는 허용하지만 안전 parser와 Content Warning/Media 표시 보존을 약화시키지 않는다.
 - Mention은 기존 Post Content V1에 additive하게 저장하며, document schema version bump나 V1/V2 dual-read 또는 document version 변환을 도입하지 않는다. 2026-09-14 정정 범위는 기존 relation persistence와 actor refresh 경계를 재사용하고 새 migration·live DB 변경을 포함하지 않는다.
@@ -72,9 +72,9 @@
 - [ ] 2.2 기존 `bodyText` fallback이 적용된 plain text reader 결과와 허용된 link/문단 저하를 확인한다.
 - [ ] 2.3 호환 증거를 기준으로 기존 Post Content V1 additive 경로에서 Mention 저장 활성화와 rollback 조건을 기록·검증한다. 새 migration이나 live DB schema 변경을 만들거나 적용하지 않고, document schema V2·V1/V2 dual-read·document version 변환·새 feature flag도 도입하지 않는다.
 
-**2.x 실행 증거 상태 (2026-09-10, compatibility gate 미완료)**
+**2.x 실행 증거 상태 (2026-09-11, compatibility gate deferred)**
 
-- 실제 API response에서 `bodyText`는 `앞쪽 @mentioned 뒤쪽`, Content Warning은 `통합 검증 경고`로 확인했다. 이는 서버 파생값 확인이며, Mention 전용 표시를 모르는 구 client 또는 pre-change reader가 body text를 보존한다는 증거가 아니다.
+- 실제 API response에서 `bodyText`는 `앞쪽 @알 수 없는 사용자 뒤쪽`, Content Warning은 `통합 검증 경고`로 확인했다. 이는 서버 파생값 확인이며, Mention 전용 표시를 모르는 구 client 또는 pre-change reader가 body text를 보존한다는 증거가 아니다.
 - 이 PR에서 제거한 document-level fallback을 전제로 한 reader harness 결과는 2.x compatibility evidence로 유지하지 않는다.
 - 따라서 2.1·2.2의 legacy reader preservation과 2.3의 activation gate는 완료로 표시하지 않는다. `PROD-340` 저장 계약의 구현·검증과 별도로 reader compatibility 및 writer 활성화 확인은 이 change의 미완료 범위로 남긴다. 계획된 rollout 순서는 기존 persistence/actor-refresh 경계 준비 → 독립적인 reader gate 통과 → writer 활성화이며, 이 실행 기록은 그 gate 통과를 주장하지 않는다.
 - rollback은 신규 Mention 쓰기를 중지하면서 기존 Mention 읽기·본문 파생 지원과 additive DB/data를 유지하며, pre-Mention binary 전체 rollback은 별도 호환·데이터 대응 증거 없이는 안전하다고 주장하지 않는다.
@@ -103,17 +103,19 @@
 - unresolved·malformed·identity mismatch fallback은 Profile 이동 affordance 없이 안전한 link/text로 표시한다.
 - 긴 Profile 이름과 서로 유사한 대상도 stable identity에 따라 구분하고, 표시 문자열은 해당 Profile의 `relativeHandle`에서 파생한다. Profile을 조회할 수 없으면 `@알 수 없는 사용자`를 비링크로 표시해 잘못된 Profile 이동을 만들지 않는다.
 - `PROD-911` Notification·FCM 구현은 이 task group에 포함하지 않는다.
+- `PostContent.mentionedProfiles: [Profile!]!`은 기존 Profile visibility predicate(Profile이 `ACTIVE`이고 소속 Instance가 `SUSPENDED`가 아님)를 통과한 같은 revision의 Profile을 deduplicate해 제공하고, Post visibility·eligibility는 PostContent 조회의 기존 정책을 따른다. 이 field에서 viewer별 Profile Domain Block 정책을 새로 조합하지 않는다. document의 canonical UUID는 기존 Media와 같은 client-facing global ID로 projection한다. renderer는 node global ID와 Profile ID를 exact match하며 positional zip이나 client-side encode/decode를 사용하지 않는다. matched target은 Profile의 `relativeHandle`에서 표시 문자열을 파생해 기존 `/${relativeHandle}` route를 사용하고, match가 없으면 `@알 수 없는 사용자`를 link 없이 표시한다. 활성 Mention link는 기존 Profile text-link 강조 계약을 재사용하며 accessible name에 `displayName`·`relativeHandle`을 포함한다.
 
 **Verification**
 
 - current revision의 valid Mention 표시·Profile 이동, repeated occurrence/deduplicated relation과 unresolved fallback을 renderer에서 실행 검증한다.
-- visibility·eligibility, Profile block/domain safety, keyboard/screen-reader 접근성 회귀를 통합 검증한다.
+- visibility·eligibility, 기존 Profile visibility predicate, keyboard/screen-reader 접근성 회귀를 통합 검증한다. viewer별 Profile Domain Block 정책은 이 task의 완료 증거로 주장하지 않는다.
+- `PostContent.mentionedProfiles` relation의 current revision·visible Profile filter·global ID projection과 node/relation exact matching을 검증하고, relation 배열 순서와 무관하게 반복 occurrence를 문서 순서로 표시하는지 확인한다.
 - 긴 이름·유사 대상, Light/Dark, Web keyboard·screen reader, Native touch·accessible focus 경계를 포함해 `PROD-910`의 renderer 계약을 실행 검증한다. 실행 환경이 없는 플랫폼은 검증 범위를 완료로 일반화하지 않는다.
 - inbound 저장 결과, reader compatibility gate와 renderer 결과를 함께 확인하고 `PROD-910` 구현·통합 완료 후 delta spec 동기화, archive와 archive 후 validation 증거를 정리한다.
 
 - [ ] 3.1 canonical Mention node와 current revision Profile relation을 소비하는 renderer 표시·Profile 이동·접근성을 구현한다.
 - [ ] 3.2 valid, repeated, mismatch/fallback와 visibility·eligibility 입력의 통합 검증을 실행한다.
-- [ ] 3.3 `PROD-340` 저장·reader gate와 `PROD-910` renderer 결과를 함께 점검하고, 전체 완료 후 delta spec 동기화·`PROD-910` archive·archive 후 validation까지 실행한다.
+- [ ] 3.3 `PROD-340` 저장 결과와 deferred reader gate 상태를 구분해 기록하고, `PROD-910` renderer 결과를 점검한다. 전체 declared scope와 2.x 후속 gate가 완료되기 전에는 delta spec 동기화·`PROD-910` archive·archive 후 validation을 완료로 표시하지 않는다.
 
 ## Verification Boundary
 
