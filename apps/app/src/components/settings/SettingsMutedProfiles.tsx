@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { MutedProfileList } from '@/components/profile/MutedProfileList';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
+import type { RefObject } from 'react';
+import type { View } from 'react-native';
 import type { SettingsMutedProfiles_profile$key } from './__generated__/SettingsMutedProfiles_profile.graphql';
 import type { SettingsMutedProfilesNextPageQuery } from './__generated__/SettingsMutedProfilesNextPageQuery.graphql';
 import type { SettingsMutedProfilesQuery } from './__generated__/SettingsMutedProfilesQuery.graphql';
@@ -51,19 +52,19 @@ const SettingsMutedProfilesFragment = graphql`
   }
 `;
 
-export function SettingsMutedProfiles() {
+export function SettingsMutedProfiles({ headingRef }: { headingRef?: RefObject<View | null> }) {
   return (
     <RouteBoundary
       error={(retry) => <MutedProfileList state={{ onRetry: retry, status: 'error' }} />}
       loading={<MutedProfileList state={{ status: 'loading' }} />}
       title="뮤트한 프로필을 불러오지 못했어요"
     >
-      <SettingsMutedProfilesContent />
+      <SettingsMutedProfilesContent headingRef={headingRef} />
     </RouteBoundary>
   );
 }
 
-function SettingsMutedProfilesContent() {
+function SettingsMutedProfilesContent({ headingRef }: { headingRef?: RefObject<View | null> }) {
   const shellChrome = useShellChrome();
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<SettingsMutedProfilesQuery>(
@@ -77,7 +78,6 @@ function SettingsMutedProfilesContent() {
     SettingsMutedProfiles_profile$key
   >(SettingsMutedProfilesFragment, profile ?? null);
   const edges = pagination.data?.profileMutes.edges ?? [];
-  const listRef = useRef<View>(null);
   const [focusAfterUnmuteProfileId, setFocusAfterUnmuteProfileId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
   useEffect(() => {
@@ -87,9 +87,9 @@ function SettingsMutedProfilesContent() {
     ) {
       return;
     }
-    listRef.current?.focus();
+    headingRef?.current?.focus();
     setFocusAfterUnmuteProfileId(null);
-  }, [edges, focusAfterUnmuteProfileId]);
+  }, [edges, focusAfterUnmuteProfileId, headingRef]);
   const loadMore = useCallback(() => {
     if (!pagination.hasNext || pagination.isLoadingNext) {
       return;
@@ -135,13 +135,5 @@ function SettingsMutedProfilesContent() {
     status: 'loaded' as const,
   };
 
-  return (
-    <View
-      accessibilityLabel="뮤트한 프로필 목록"
-      ref={listRef}
-      {...(Platform.OS === 'web' ? { tabIndex: -1 as const } : { focusable: true })}
-    >
-      <MutedProfileList state={listState} />
-    </View>
-  );
+  return <MutedProfileList state={listState} />;
 }
