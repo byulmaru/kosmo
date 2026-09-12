@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Platform, Text, useWindowDimensions, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { fn } from 'storybook/test';
 import { BlockedProfileList } from '@/components/profile/BlockedProfileList';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, textStyles } from '@/theme/tokens';
+import { textStyles } from '@/theme/tokens';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -25,8 +25,6 @@ function Fixture({ state, displayName, onSelectAction, onRetry, onLoadMore }: Pr
   const [loaded, setLoaded] = useState(false);
   useEffect(() => setLoaded(false), [state]);
   const theme = useTheme();
-  const { width } = useWindowDimensions();
-  const mobile = Platform.OS !== 'web' || width < breakpoints.compact;
   const visibleState = loaded ? 'loaded' : state;
   const retry = () => {
     onRetry();
@@ -64,10 +62,9 @@ function Fixture({ state, displayName, onSelectAction, onRetry, onLoadMore }: Pr
                         <Button
                           accessibilityLabel={`${name} 차단 해제`}
                           onPress={() => onSelectAction(profile.id)}
-                          size={mobile ? 'default' : 'compact'}
                           style={{
-                            width: mobile ? 88 : 72,
-                            minWidth: mobile ? 88 : 72,
+                            width: 96,
+                            minWidth: 96,
                             paddingHorizontal: 0,
                           }}
                           tone="secondary"
