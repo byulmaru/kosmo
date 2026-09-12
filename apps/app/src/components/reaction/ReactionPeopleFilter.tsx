@@ -67,6 +67,7 @@ export function ReactionPeopleFilter({
           <TabList
             accessibilityLabel="반응 유형"
             onValueChange={onValueChange}
+            pillInset={false}
             pillWrap={expanded}
             value={value}
             variant="pill"
@@ -128,7 +129,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     height: toggleSize,
     justifyContent: 'center',
-    marginTop: Platform.OS === 'web' ? space[16] : space[8],
     minWidth: toggleSize,
     paddingHorizontal: space[8],
   },

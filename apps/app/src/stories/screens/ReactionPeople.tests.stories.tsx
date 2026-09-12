@@ -28,6 +28,12 @@ export const HeaderFilterAndProfileRows: Story = {
     expect(canvas.getByRole('tablist', { name: '반응 유형' })).toBeVisible();
     expect(canvas.getAllByRole('tab')).toHaveLength(6);
     expect(canvas.getByRole('tab', { name: /❤️/ })).toHaveAttribute('aria-selected', 'true');
+    const canvasRect = canvasElement.getBoundingClientRect();
+    const tablistRect = canvas.getByRole('tablist', { name: '반응 유형' }).getBoundingClientRect();
+    const firstTabRect = canvas.getAllByRole('tab')[0]!.getBoundingClientRect();
+    expect(Math.round(firstTabRect.left - tablistRect.left)).toBe(0);
+    expect(Math.round(firstTabRect.top - tablistRect.top)).toBe(0);
+    expect(Math.round(tablistRect.top - canvasRect.top)).toBe(76);
     expect(await canvas.findByText('별빛 여행자')).toBeVisible();
     expect(canvas.queryByText('People에서는 숨기는 실제 소개입니다.')).not.toBeInTheDocument();
     expect(canvasElement.querySelector('a[href="/@people-starlight"]')).toBeInTheDocument();
