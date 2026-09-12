@@ -1,7 +1,7 @@
 interface:
   display_name: 'Kosmo Coding'
-  short_description: 'Kosmo 코딩 규칙을 작업별로 라우팅'
-  default_prompt: 'Use $kosmo-coding to route the applicable Kosmo coding guidance and read the selected references before working.'
+  short_description: '필요한 Kosmo 코딩 지침만 라우팅'
+  default_prompt: 'Use $kosmo-coding to select only the Kosmo guidance relevant to this code, test, or review task.'
 
 policy:
   allow_implicit_invocation: true

@@ -1,25 +1,22 @@
 ---
 name: relay-best-practices
 description: >-
-  Best practices for writing idiomatic Relay code. ALWAYS use this skill when
-  writing or modifying React components that use Relay for data fetching. Covers
-  fragments, queries, mutations, pagination, and common anti-patterns. Use when
-  you see `useFragment`, `useLazyLoadQuery`, `usePreloadedQuery`, `useMutation`,
-  `usePaginationFragment`, `graphql` template literals, `react-relay` imports,
-  or `__generated__/*.graphql` files. Also use when asked to explain Relay
-  concepts, debug Relay issues, or review Relay code.
+  Apply Relay guidance to React or client modules using Relay for data fetching.
+  Use when changing, reviewing, debugging, or explaining Relay hooks, GraphQL
+  tags, pagination, mutations, or generated artifacts.
 ---
 
 # Relay Best Practices
 
-Relay favors colocated, masked, composable fragments, render-as-you-fetch, and
-an ID-keyed normalized store. Use this skill for Relay implementation, review,
-debugging, and explanations.
+Use this skill for Relay implementation, review, debugging, or explanations.
+Select references from the changed behavior; do not load every topic by default.
 
-When this skill applies, identify the relevant topic reference below and read
-each selected reference in full before writing code. Then read the matching
-Relay LLM documentation page. Keep repository-specific route, environment,
-accessibility, and UI contracts in the repository's frontend memory.
+## Route
+
+- Read the reference that matches the change: [architecture and compiler](references/architecture-compiler.md), [queries and fragments](references/queries-fragments.md), [mutations and errors](references/mutations-errors.md), [pagination and client state](references/pagination-client-state.md), or [anti-patterns](references/anti-patterns.md).
+- For query placement, `@defer`, pagination, fetch policies, caching, or fragment granularity, also select the matching topic in [`relay-performance`](../relay-performance/SKILL.md).
+- Read selected references completely, then the matching Relay LLM documentation page from `node_modules/relay-runtime/llm-docs/` (or the documented older-version source).
+- Keep repository-specific route, environment, accessibility, and UI contracts in the repository's frontend memory.
 
 ## Documentation
 
@@ -35,7 +32,3 @@ Read the page that matches the selected reference before changing code.
 - [Mutations and errors](references/mutations-errors.md): response fragments, optimistic updates, errors, invalidation, staleness, store updates, and subscriptions.
 - [Pagination and client state](references/pagination-client-state.md): pagination directives and Relay Resolvers.
 - [Anti-patterns](references/anti-patterns.md): copied state, broken fragment colocation, and repeated mutation fields.
-
-For query placement, `@defer`, pagination, fetch policies, caching, and
-fragment granularity, also use the companion
-[`relay-performance`](../relay-performance/SKILL.md) skill.

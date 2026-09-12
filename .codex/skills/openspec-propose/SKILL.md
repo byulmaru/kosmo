@@ -1,6 +1,6 @@
 ---
 name: openspec-propose
-description: Propose a new change with all artifacts generated in one step. Use when the user wants to quickly describe what they want to build and get a complete proposal with specs, design, decisions, and tasks ready for implementation.
+description: Create an authority-backed OpenSpec proposal with requirements, design, decisions, and tasks. Use when the user asks to plan a new change.
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
@@ -9,125 +9,19 @@ metadata:
   generatedBy: '1.3.1'
 ---
 
-Propose a new change - create the change and generate all artifacts in one step.
+# Propose an OpenSpec change
 
-I'll create a change with artifacts:
+Create the smallest change that captures a concrete, approved product or system contract and is ready for implementation.
 
-- proposal.md (what & why)
-- `specs/**/*.md` (requirements)
-- design.md (how)
-- decisions.md (active, blocked, and superseded authority-traced decisions)
-- tasks.md (implementation steps)
+## Route
 
-When ready to implement, run /opsx:apply
+1. Resolve a kebab-case change name from the user's concrete request. If the request is too vague to identify the intended result, ask one focused question before creating anything.
+2. Before writing artifacts, read the applicable canonical `docs/domain` and `docs/design` documents and independently verify the current Linear issue bodies, relations, and contract-changing comments. Confirm the Domain and Issue Gates; OpenSpec cannot prove either gate.
+3. Run `openspec new change "<name>"`, then inspect `openspec status --change "<name>" --json` for the active schema, dependencies, and artifacts.
+4. Build artifacts in the schema's dependency order with `openspec instructions <artifact-id> --change "<name>" --json`. Read completed dependencies before each artifact and use the supplied template. Do not copy instruction context or rules into the artifact.
+5. Create all artifacts required by `apply.requires` for the active schema and keep each requirement, decision, and task tied to its upstream authority. If a requirement has no authority, record it as a `Blocked Upstream Change Required` decision instead of adding it to a normative spec or task.
+6. Recheck status and artifact files after each write. Stop when the change is apply-ready; do not implement application code as part of proposal creation.
 
----
+## Scope and completion
 
-**Input**: The user's request should include a change name (kebab-case) OR a description of what they want to build.
-
-**Steps**
-
-1. **If no clear input provided, ask what they want to build**
-
-   Use the **AskUserQuestion tool** (open-ended, no preset options) to ask:
-
-   > "What change do you want to work on? Describe what you want to build or fix."
-
-   From their description, derive a kebab-case name (e.g., "add user authentication" → `add-user-auth`).
-
-   **IMPORTANT**: Do NOT proceed without understanding what the user wants to build.
-
-2. **Create the change directory**
-
-   Before creating it:
-   - Read the applicable canonical `docs/domain` and `docs/design` documents.
-   - Fetch the latest Linear contract and implementation issue bodies, relations,
-     and contract-changing comments independently of any existing OpenSpec.
-   - Confirm the Domain Gate and Issue Gate have been approved. OpenSpec cannot be
-     used as evidence that either upstream gate passed.
-
-   ```bash
-   openspec new change "<name>"
-   ```
-
-   This creates a scaffolded change at `openspec/changes/<name>/` with `.openspec.yaml`.
-
-3. **Get the artifact build order**
-
-   ```bash
-   openspec status --change "<name>" --json
-   ```
-
-   Parse the JSON to get:
-   - `applyRequires`: array of artifact IDs needed before implementation (e.g., `["tasks"]`)
-   - `artifacts`: list of all artifacts with their status and dependencies
-
-4. **Create artifacts in sequence until apply-ready**
-
-   Use the **TodoWrite tool** to track progress through the artifacts.
-
-   Loop through artifacts in dependency order (artifacts with no pending dependencies first):
-
-   a. **For each artifact that is `ready` (dependencies satisfied)**:
-   - Get instructions:
-     ```bash
-     openspec instructions <artifact-id> --change "<name>" --json
-     ```
-   - The instructions JSON includes:
-     - `context`: Project background (constraints for you - do NOT include in output)
-     - `rules`: Artifact-specific rules (constraints for you - do NOT include in output)
-     - `template`: The structure to use for your output file
-     - `instruction`: Schema-specific guidance for this artifact type
-     - `outputPath`: Where to write the artifact
-     - `dependencies`: Completed artifacts to read for context
-   - Read any completed dependency files for context
-   - Create the artifact file using `template` as the structure
-   - Apply `context` and `rules` as constraints - but do NOT copy them into the file
-   - Show brief progress: "Created <artifact-id>"
-
-   b. **Continue until all `applyRequires` artifacts are complete**
-   - After creating each artifact, re-run `openspec status --change "<name>" --json`
-   - Check if every artifact ID in `applyRequires` has `status: "done"` in the artifacts array
-   - Stop when all `applyRequires` artifacts are done
-
-   c. **If an artifact requires user input** (unclear context):
-   - Use **AskUserQuestion tool** to clarify
-   - Then continue with creation
-
-5. **Show final status**
-   ```bash
-   openspec status --change "<name>"
-   ```
-
-**Output**
-
-After completing all artifacts, summarize:
-
-- Change name and location
-- List of artifacts created with brief descriptions
-- What's ready: "All artifacts created! Ready for implementation."
-- Prompt: "Run `/opsx:apply` or ask me to implement to start working on the tasks."
-
-**Artifact Creation Guidelines**
-
-- Follow the `instruction` field from `openspec instructions` for each artifact type
-  - The schema defines what each artifact should contain - follow it
-  - Treat canonical documents and the latest Linear contract as inputs to every
-    artifact. OpenSpec artifacts, PRs, tests, future issues, and excluded scope are
-    not upstream authority.
-- Read dependency artifacts for context before creating new ones
-- Use `template` as the structure for your output file - fill in its sections
-- **IMPORTANT**: `context` and `rules` are constraints for YOU, not content for the file
-  - Do NOT copy `<context>`, `<rules>`, `<project_context>` blocks into the artifact
-  - These guide what you write, but should never appear in the output
-
-**Guardrails**
-
-- Create ALL artifacts needed for implementation (as defined by schema's `apply.requires`)
-- If a product requirement has no current canonical or Linear authority, record it
-  as `Upstream Change Required` with `Status: Blocked`; do not put it in normative
-  specs or implementation tasks until the upstream owner is updated and approved.
-- Always read dependency artifacts before creating a new one
-- If context is critically unclear, ask the user - but prefer making reasonable decisions to keep momentum
-- If a change with that name already exists, ask if user wants to continue it or create a new one
-- Verify each artifact file exists after writing before proceeding to next
+Keep a change around one behavior contract whose approval, implementation, verification, and completion share a lifecycle. Do not create orphan changes or merge independently approvable lifecycles merely to reduce file count. Report the change path, artifacts created, authority and remaining decisions, schema progress, and whether it is ready for apply.

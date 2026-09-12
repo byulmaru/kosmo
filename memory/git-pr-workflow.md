@@ -2,8 +2,9 @@
 
 ## Purpose
 
-- 브랜치 생성, 커밋, push, PR 생성/수정, 기본 stacked PR 작업을 할 때 적용한다.
+- 브랜치 생성, push, PR 생성/수정, 기본 stacked PR 작업을 할 때 적용한다.
 - 기본 운영 규칙은 먼저 `memory/commit-pr.md`를 따른다.
+- 커밋 단위와 staging은 `memory/commit-policy.md`를 따른다.
 - 복잡한 rebase, reparent, squash merge 이후 Stack 유지보수는
   `memory/git-stack-maintenance.md`를 따른다.
 
@@ -73,16 +74,9 @@
 - submit 후에는 각 PR의 base/head/stack과, 2-layer 이상이면 원격 Stack 객체를 다시 확인한다.
   기존 PR base만 맞췄다고 adopt가 끝난 것은 아니다.
 
-## Create A Commit
+## Commit
 
-- 변경 범위를 확인한 뒤 필요한 파일만 staging한다.
-  - `git status --short`
-  - `git diff`
-  - `git add <paths>`
-  - `git diff --cached`
-  - `git commit -m "<message>"`
-- 커밋 메시지는 투기적 체크포인트로 충분히 식별 가능하게 쓴다.
-- 의도하지 않은 사용자 변경이 섞이면 staging하지 않고 남겨둔다.
+- 커밋이 필요하면 `memory/commit-policy.md`의 staging과 메시지 규칙을 적용한다. 이 문서의 브랜치·Stack 절차와 커밋 규칙을 중복해 적지 않는다.
 
 ## Open A PR
 

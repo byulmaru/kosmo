@@ -1,4 +1,4 @@
 interface:
   display_name: 'KOSMO Design Audit'
-  short_description: 'Figma 디자인 시스템의 구조·토큰·상태 누락을 점검합니다'
-  default_prompt: 'Use $kosmo-design-audit to audit this KOSMO Figma target before any edits.'
+  short_description: 'KOSMO Figma 구조·토큰·상태를 감사'
+  default_prompt: 'Use $kosmo-design-audit when this task audits a KOSMO Figma target before a source edit or handoff.'

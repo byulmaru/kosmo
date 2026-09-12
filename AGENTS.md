@@ -4,56 +4,22 @@
 
 - Use `pnpm` for workspace and dependency management.
 - Use CLI commands for `package.json` dependency changes. Non-dependency fields, such as `scripts`, may be edited directly.
-- Use the Question tool when asking the user to decide between implementation options or unresolved requirements.
+- Use the Question tool when an unresolved product, contract, security, rollout, ownership, or other materially different choice needs the user's decision. Treat explicit user instructions and existing canonical contract as settled input; do not repeat a question for routine in-scope choices.
 - Do not add a `Co-authored-by` trailer for the agent in commits or PR descriptions. The author of record is the human running the agent; agent attribution belongs in the PR body or Linear, not in the git trailer.
 
 ## GitHub Stacked Pull Requests
 
-- Create every new pull request, including a standalone pull request, as a GitHub Stack with the
-  official `github/gh-stack` GitHub CLI extension. A standalone pull request is a one-layer Stack.
-- Before branch or pull request work, verify the extension with `gh extension list` and
-  `gh stack --version`. If it is missing, install it for the current user with
-  `gh extension install github/gh-stack`; it is a local CLI extension, not a repository dependency.
-- Start the first layer from the latest trunk with `gh stack init --base main <branch>`.
-  Add each later layer only from the current top with `gh stack add <branch>`.
-- Feature and contract branches use their Linear issue ID. A behavior-preserving simple refactor may use a descriptive branch without creating a Linear issue solely for the pull request.
-- Push tracked layers with `gh stack push` and create or update pull requests with `gh stack submit`.
-  For two or more pull requests, submit must also create or update the remote GitHub Stack object.
-  A one-layer Stack remains locally tracked and its standalone pull request has a null REST `stack`
-  field until another layer is submitted. If `gh stack` is unavailable or fails, do not fall back
-  to `gh pr create` or an ordinary unstacked pull request; report the blocker and observed
-  local/remote state, including partial branch, pull request, Stack, auto-merge, or Draft changes.
-- Do not use `gh stack submit --auto` by default. Use the interactive editor, or a narrower explicit
-  command whose title, body, Draft/Ready transitions, and affected existing pull requests have been
-  reviewed.
-- After submission, verify local Stack state with `gh stack view --json` and GitHub pull request
-  head/base/stack state with the pull request REST API. For multi-layer Stacks, a base retarget or a
-  successful branch push alone does not prove that the remote GitHub Stack object exists.
-- GitHub Stack merge is distinct from pull request auto-merge and merge queue registration. Stacked
-  pull requests currently cannot retain ordinary auto-merge; report any auto-merge removal or queue
-  state change instead of hiding it. A queued Stack may land in separate groups and is not merged
-  until GitHub reports the pull requests as merged.
+- Create every new pull request, including a standalone pull request, as a one-layer-or-larger Stack with the official `github/gh-stack` extension.
+- Before branch or pull request work, verify the extension with `gh extension list` and `gh stack --version`; if it is missing, install it for the current user. Use `gh stack`, never an ordinary unstacked PR fallback.
+- Start the first layer from the latest `main` with `gh stack init --base main <branch>` and add later layers from the current top with `gh stack add <branch>`. Feature and contract branches use their Linear issue ID; behavior-preserving refactors may use a descriptive branch.
+- Push and submit through `gh stack push` and `gh stack submit`. If the extension is unavailable or fails, report the blocker and observed state without switching tools.
+- Detailed branch, Stack, REST verification, Draft/Ready, auto-merge, merge-queue and closeout rules live in [`memory/git-pr-workflow.md`](memory/git-pr-workflow.md); rebase and reparent rules live in [`memory/git-stack-maintenance.md`](memory/git-stack-maintenance.md).
 
 ## CodeGraph In Linked Worktrees
 
 - For this repository, consider CodeGraph initialized only when the current worktree contains
-  `.codegraph/codegraph.db`. A `.codegraph/` directory containing only `.gitignore` is not an
-  initialized index. This rule overrides broader instructions that check only for the directory.
-- Do not run `codegraph init` in a linked worktree without user approval.
-- When the current worktree has no local index, use `git worktree list --porcelain` to find the
-  `main` checkout. If that checkout has `.codegraph/codegraph.db`, pass its absolute path as
-  CodeGraph's `projectPath` and use its graph only as a read-only structural baseline. Do not
-  hard-code a machine-specific checkout path in repository files.
-- Before using the shared baseline, run `codegraph status <main-checkout-path>` to verify that the
-  index is up to date. If freshness cannot be verified or CodeGraph reports a pending or stale
-  state, treat the entire baseline as stale and use current-worktree reads and targeted searches.
-- Before relying on the baseline graph, collect paths that differ between the baseline checkout
-  and the current worktree, plus staged, unstaged, and untracked paths in both checkouts. Treat
-  CodeGraph results for those paths, and relationships that cross them, as hints only; verify the
-  current worktree with direct reads and targeted searches.
-- If graph-shaping configuration differs or the task makes broad structural changes, state that
-  the shared baseline is not branch-exact and ask whether to initialize CodeGraph in the current
-  worktree. Otherwise, do not create a worktree-local index by default.
+  `.codegraph/codegraph.db`; a directory containing only `.gitignore` is not initialized. Use CodeGraph only for read-only structural lookup when it helps the current task, and verify changed paths directly.
+- Do not initialize a linked worktree without approval. Follow [`memory/tooling/worktrees.md`](memory/tooling/worktrees.md#codegraph-in-linked-worktrees) for shared-baseline freshness and changed-path checks; otherwise use current-worktree reads and targeted searches.
 
 ## Review Guidelines
 
@@ -77,6 +43,7 @@
 
 ## Pull Request Completion
 
+- Completion means the scoped implementation, required documentation and focused validation are finished, including repairs for failures caused by the change. Continue through that work before reporting the first working patch as done; keep optional follow-ups separate from required completion.
 - Treat pull request readiness and OpenSpec change completion as separate decisions.
 - When a pull request's own scoped implementation and required verification are complete, mark it Ready for review unless the user explicitly requests that it remain a Draft.
 - Do not archive an OpenSpec change merely because an individual pull request in a split or stacked implementation is complete or merged.
@@ -93,15 +60,15 @@
 - Define the Linear issue scope and dependency structure before creating the OpenSpec change. If
   the spec reveals an independently deliverable scope, update or split the Linear issues first.
 - When creating or updating OpenSpec specs before implementation, explain the resulting spec to the user in Korean.
-- Before implementation, use the Question tool as much as practical to settle unresolved requirements and implementation choices.
-- If additional unresolved requirements or implementation choices appear after an initial question round, ask follow-up questions repeatedly until the relevant decisions are settled.
+- Before implementation, use the Question tool for unresolved requirements or choices that would change observable behavior, public contracts, security, production or rollout, ownership, or the completion boundary. Continue with routine implementation choices that stay within the user's request and existing contract.
+- If such a material decision appears after work has started, stop at that decision boundary, present the alternatives and impact, and continue once it is settled. Do not reopen a settled decision.
 
 ## Memory
 
 - For repository implementation or review work, use [`.agents/skills/kosmo-coding/SKILL.md`](.agents/skills/kosmo-coding/SKILL.md) and its routing instructions.
-- Before working on a task, read the applicable memory entrypoint, select the topics that apply, and read each selected document from beginning to end. Search results or truncated output do not replace a complete read; if the scope changes, select and read newly applicable topics before continuing.
+- For repository implementation or review work, read the applicable memory entrypoint and only the topic documents that shape the current task; read each selected document from beginning to end. Do not read unrelated topics or a full repository map by default. For docs-only or mechanical changes, inspect the affected guidance and validation instructions instead. If the scope changes, select and read newly applicable topics before continuing.
 - When a task changes the assumptions documented in a relevant memory file, update that memory in the same change.
-- `memory/coding-style.md`: common coding index. Read `memory/coding/principles.md` and select the applicable `tests.md`, `api-contracts.md`, `core-services.md`, `spec-policy.md`, and `runtime.md` topics.
+- `memory/coding-style.md`: common coding router; follow its conditions to select directly applicable coding topics.
 - `memory/issue-openspec-workflow.md`: issue-first planning, OpenSpec ownership and granularity,
   implementation boundaries, and completion gates.
 - `memory/frontend-react-native.md`: short entrypoint for Expo Router, React Native Web, React Relay, Storybook, and frontend UI topics.
