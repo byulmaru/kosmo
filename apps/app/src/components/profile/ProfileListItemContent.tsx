@@ -15,6 +15,7 @@ type Props = {
   displayName: string;
   href?: Href;
   identity?: ReactNode;
+  linkAccessibilityLabel?: string;
   onPress?: () => void;
   relativeHandle?: string;
   style?: StyleProp<ViewStyle>;
@@ -29,6 +30,7 @@ export function ProfileListItemContent({
   displayName,
   href,
   identity,
+  linkAccessibilityLabel,
   onPress,
   relativeHandle,
   style,
@@ -70,6 +72,7 @@ export function ProfileListItemContent({
       {href ? (
         <NavigationLink href={href}>
           <Pressable
+            accessibilityLabel={linkAccessibilityLabel}
             accessibilityRole="link"
             onPress={onPress}
             style={StyleSheet.flatten([

@@ -1,13 +1,13 @@
 import { CheckIcon, XIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
-import { NavigationLink } from '@/components/shell/NavigationLink';
-import { Avatar } from '@/components/ui/Avatar';
 import { getIconButtonTargetSize, IconButton } from '@/components/ui/IconButton';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, space, textStyles } from '@/theme/tokens';
+import { iconSizes, space } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { FollowRequestListItem_request$key } from './__generated__/FollowRequestListItem_request.graphql';
 import type { FollowRequestListItemApproveMutation } from './__generated__/FollowRequestListItemApproveMutation.graphql';
@@ -76,7 +76,7 @@ const rejectFollowRequestMutation = graphql`
 `;
 
 export function FollowRequestListItem({ connectionId, request }: FollowRequestListItemProps) {
-  const theme = useTheme();
+  const { showToast } = useToast();
   const data = useFragment(followRequestListItemFragment, request);
   const [commitApprove] = useMutation<FollowRequestListItemApproveMutation>(
     approveFollowRequestMutation,
@@ -85,14 +85,16 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
     rejectFollowRequestMutation,
   );
   const [pendingAction, setPendingAction] = useState<FollowRequestAction | null>(null);
-  const [failedAction, setFailedAction] = useState<FollowRequestAction | null>(null);
   const follower = data.follower;
   const name = follower ? follower.displayName || follower.handle : '확인할 수 없는 프로필';
   const busy = pendingAction !== null;
 
   const handleFailure = (action: FollowRequestAction) => {
     setPendingAction(null);
-    setFailedAction(action);
+    showToast(
+      `팔로우 요청을 ${action === 'approve' ? '승인' : '거절'}하지 못했어요. 다시 시도해주세요.`,
+      { tone: 'danger' },
+    );
   };
 
   const commit = (action: FollowRequestAction) => {
@@ -101,7 +103,6 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
     }
 
     setPendingAction(action);
-    setFailedAction(null);
     const callbacks = {
       onCompleted: (_response: unknown, errors: ReadonlyArray<unknown> | null | undefined) => {
         if (errors?.length) {
@@ -109,7 +110,6 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
           return;
         }
         setPendingAction(null);
-        setFailedAction(null);
       },
       onError: () => handleFailure(action),
     };
@@ -129,88 +129,61 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
   };
 
   return (
-    <View style={[styles.root, { borderColor: theme.borderDefault }]}>
-      <View style={styles.row}>
+    <ProfileListItemContent
+      avatarLabel={name}
+      avatarUri={follower?.avatar?.url}
+      displayName={name}
+      href={follower ? (`/${follower.relativeHandle}` as Href) : undefined}
+      identity={
+        follower ? (
+          <ProfileNameBlock profile={follower} style={{ flex: 0 }} variant="compact" />
+        ) : undefined
+      }
+      linkAccessibilityLabel={follower ? `${name} 프로필로 이동` : undefined}
+    >
+      <View style={styles.actions}>
         {follower ? (
-          <NavigationLink href={`/${follower.relativeHandle}` as Href}>
-            <Pressable
-              accessibilityLabel={`${name} 프로필로 이동`}
-              accessibilityRole="link"
-              style={styles.profile}
-            >
-              <Avatar imageUri={follower.avatar?.url} label={name} size={40} />
-              <ProfileNameBlock profile={follower} style={styles.copy} variant="compact" />
-            </Pressable>
-          </NavigationLink>
-        ) : (
-          <View style={styles.profile}>
-            <Avatar label={name} size={40} />
-            <Text
-              numberOfLines={1}
-              style={[styles.name, styles.copy, { color: theme.foregroundPrimary }]}
-            >
-              {name}
-            </Text>
-          </View>
-        )}
-        <View style={styles.actions}>
-          {follower ? (
-            <FollowRequestActionButton
-              action="approve"
-              busy={busy}
-              failed={failedAction === 'approve'}
-              name={name}
-              onPress={() => commit('approve')}
-              pending={pendingAction === 'approve'}
-            />
-          ) : null}
           <FollowRequestActionButton
-            action="reject"
+            action="approve"
             busy={busy}
-            failed={failedAction === 'reject'}
             name={name}
-            onPress={() => commit('reject')}
-            pending={pendingAction === 'reject'}
+            onPress={() => commit('approve')}
+            pending={pendingAction === 'approve'}
           />
-        </View>
+        ) : null}
+        <FollowRequestActionButton
+          action="reject"
+          busy={busy}
+          name={name}
+          onPress={() => commit('reject')}
+          pending={pendingAction === 'reject'}
+        />
       </View>
-      {failedAction ? (
-        <Text
-          accessibilityRole="alert"
-          style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
-        >
-          팔로우 요청을 {failedAction === 'approve' ? '승인' : '거절'}하지 못했어요. 다시
-          시도해주세요.
-        </Text>
-      ) : null}
-    </View>
+    </ProfileListItemContent>
   );
 }
 
 function FollowRequestActionButton({
   action,
   busy,
-  failed,
   name,
   onPress,
   pending,
 }: {
   action: FollowRequestAction;
   busy: boolean;
-  failed: boolean;
   name: string;
   onPress: () => void;
   pending: boolean;
 }) {
   const theme = useTheme();
   const label = action === 'approve' ? '승인' : '거절';
-  const visibleLabel = failed ? `${label} 다시 시도` : label;
   const iconColor = busy ? theme.stateDisabledForeground : theme.foregroundPrimary;
   const targetSize = getIconButtonTargetSize(Platform.OS);
 
   return (
     <IconButton
-      accessibilityLabel={`${name} 팔로우 요청 ${visibleLabel}`}
+      accessibilityLabel={`${name} 팔로우 요청 ${label}`}
       accessibilityState={{ busy: pending, disabled: busy }}
       disabled={busy}
       feedback="opacity"
@@ -233,27 +206,7 @@ function FollowRequestActionButton({
   );
 }
 
-const rowMinHeight = Platform.select({ android: 48, default: 40, ios: 44 });
-
 const styles = StyleSheet.create({
-  root: {
-    borderBottomWidth: borderWidths[1],
-    gap: space[8],
-    paddingHorizontal: space[16],
-    paddingVertical: space[12],
-  },
-  row: { alignItems: 'center', flexDirection: 'row', gap: space[12] },
-  profile: {
-    alignItems: 'center',
-    flex: 1,
-    flexDirection: 'row',
-    gap: space[12],
-    minHeight: rowMinHeight,
-    minWidth: 0,
-  },
-  copy: { flex: 1, minWidth: 0 },
-  name: textStyles.uiLabelM,
   actions: { flexDirection: 'row', flexShrink: 0, gap: space[8] },
   spinner: { height: iconSizes[16], width: iconSizes[16] },
-  error: { textAlign: 'right', ...textStyles.uiCopyS },
 });

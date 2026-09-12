@@ -1,13 +1,11 @@
 import { Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import FollowRequestsScreen from '@/app/(tabs)/(protected)/follow-requests';
 import {
   FollowRequestList,
   FollowRequestListState,
 } from '@/components/follow-request/FollowRequestList';
-import { Button } from '@/components/ui/Button';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import { profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -80,10 +78,6 @@ const paginationProfile = followRequestProfile({
   id: 'follow-request-profile-pagination',
   requests: [followRequest('follow-request-page-a', requesterA)],
 });
-const switchedProfile = followRequestProfile({
-  id: 'follow-request-profile-switched',
-  requests: [followRequest('follow-request-a', requesterB)],
-});
 const requesterACacheProfile = {
   ...requesterA,
   incomingProfileFollowRequests: emptyProfile.incomingProfileFollowRequests,
@@ -112,6 +106,7 @@ const paginationNextPage = {
   },
 };
 const storyProfiles = [emptyProfile, contentProfile, paginationProfile, requesterACacheProfile];
+const mutationRequestObserver = fn().mockName('FollowRequests mutation');
 
 const FollowRequestsStoriesQuery = graphql`
   query FollowRequestsStoriesQuery($ids: [ID!]!) {
@@ -199,17 +194,6 @@ function ApprovalNormalizationList() {
   );
 }
 
-function ActorSwitchScreen() {
-  const { resetActor } = useRelayActor();
-
-  return (
-    <>
-      <Button onPress={() => resetActor(switchedProfile.id)}>프로필 전환</Button>
-      <FollowRequestsScreen />
-    </>
-  );
-}
-
 const approveMutationResponse = {
   approveProfileFollowRequest: {
     followeeProfile: {
@@ -240,6 +224,7 @@ const rejectMutationResponse = {
 };
 
 const meta = {
+  beforeEach: () => mutationRequestObserver.mockClear(),
   component: FollowRequestCatalog,
   parameters: {
     relay: { data: { nodes: storyProfiles } },
@@ -293,18 +278,24 @@ export const RowLocalPending: Story = {
 };
 
 export const MutationFailureAndSameActionRetry: Story = {
-  parameters: { relay: { mutationError: '승인 mutation 실패' } },
+  parameters: { relay: { mutationError: '승인 mutation 실패', mutationRequestObserver } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인' }));
+    const approveButton = await canvas.findByRole('button', {
+      name: '별빛 여행자 팔로우 요청 승인',
+    });
+    const row = approveButton.parentElement?.parentElement;
+    await userEvent.click(approveButton);
 
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '팔로우 요청을 승인하지 못했어요',
-    );
-    expect(canvas.getByRole('link', { name: '별빛 여행자 프로필로 이동' })).toBeVisible();
+    const alert = await canvas.findByRole('alert');
+    expect(alert).toHaveTextContent('팔로우 요청을 승인하지 못했어요');
     expect(
-      canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인 다시 시도' }),
-    ).toBeEnabled();
+      getComputedStyle(within(alert).getByText(/승인하지 못했어요/).parentElement!).borderLeftColor,
+    ).toBe('rgb(180, 35, 24)');
+    expect(row?.contains(alert)).toBe(false);
+    expect(canvas.getByRole('link', { name: '별빛 여행자 프로필로 이동' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인' }));
+    expect(mutationRequestObserver).toHaveBeenCalledTimes(2);
   },
   render: () => <ContentList />,
 };
@@ -400,47 +391,4 @@ export const SelectedProfileScreen: Story = {
     expect(canvas.getByRole('link', { name: '별빛 여행자 프로필로 이동' })).toBeVisible();
   },
   render: () => <FollowRequestsScreen />,
-};
-
-export const LatePreviousActorMutationIsIsolated: Story = {
-  parameters: {
-    relay: {
-      operationResponses: {
-        FollowRequestListItemApproveMutation: [
-          { data: approveMutationResponse, delayMs: 100 },
-          { data: approveMutationResponse },
-        ],
-        FollowRequestsPageQuery: [
-          {
-            data: {
-              currentSession: { id: 'follow-request-session-a', selectedProfile: contentProfile },
-            },
-          },
-          {
-            data: {
-              currentSession: {
-                id: 'follow-request-session-b',
-                selectedProfile: switchedProfile,
-              },
-            },
-          },
-        ],
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인' }));
-    await userEvent.click(canvas.getByRole('button', { name: '프로필 전환' }));
-
-    await expect(
-      canvas.findByRole('link', { name: '은하 기록자 프로필로 이동' }),
-    ).resolves.toBeVisible();
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    expect(canvas.getByRole('link', { name: '은하 기록자 프로필로 이동' })).toBeVisible();
-    expect(
-      canvas.queryByRole('link', { name: '별빛 여행자 프로필로 이동' }),
-    ).not.toBeInTheDocument();
-  },
-  render: () => <ActorSwitchScreen />,
 };

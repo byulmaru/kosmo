@@ -1,4 +1,5 @@
 import { breakpoints } from '@/theme/tokens';
+import { getProfileConnectionKind } from '../profile/route';
 
 export const webMobileShellHeaderHeight = 64;
 
@@ -109,7 +110,9 @@ export function isWebMobileRouteOwnedHeader(web: boolean, width: number, pathnam
     segments.length === 1 && (segments[0]?.length ?? 0) > 1 && segments[0]?.startsWith('@');
 
   return (
-    web && getShellLayout(web, width) === 'mobile' && (pathname === '/search' || isProfileHome)
+    web &&
+    getShellLayout(web, width) === 'mobile' &&
+    (pathname === '/search' || isProfileHome || getProfileConnectionKind(pathname) !== null)
   );
 }
 

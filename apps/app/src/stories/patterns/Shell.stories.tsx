@@ -1837,6 +1837,8 @@ export const UniversalMobile: Story = {
     await waitFor(() => {
       expect(ownerDocument.getElementById('mobile-sidebar')).toBeNull();
     });
+    expect(canvas.queryByRole('button', { name: '메뉴 열기' })).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('link', { name: '홈' }));
     await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
     await waitFor(() => {
       expect(ownerDocument.getElementById('mobile-sidebar')).not.toBeNull();
@@ -1854,6 +1856,8 @@ export const UniversalMobile: Story = {
       expect(ownerDocument.getElementById('mobile-sidebar')).toBeNull();
     });
 
+    expect(canvas.queryByRole('button', { name: '메뉴 열기' })).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('link', { name: '홈' }));
     await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
     const settingsDrawer = await page.findByRole('navigation', { name: '주요 메뉴' });
     await userEvent.click(within(settingsDrawer).getByRole('link', { name: '설정' }));

@@ -23,12 +23,13 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 
 | 소비처                                                                        | FollowButton 크기 | 시각 영역 |
 | ----------------------------------------------------------------------------- | ----------------- | --------- |
-| Web 프로필 목록: 검색, 해시태그, 팔로워·팔로잉, Post Activity·Reaction People | Compact           | `72×32`   |
+| Web 프로필 목록: 검색, 해시태그, 팔로워·팔로잉, Post Activity·Reaction People | Medium            | `96×40`   |
 | Web Profile Hero 상단 관계 action                                             | Medium            | `96×40`   |
 | Mobile Web·iOS·Android의 Profile Hero와 위 프로필 목록                        | Medium            | `96×40`   |
 
-- 위 Web 목록 기준은 Compact Web 1024와 Full Web 1440에 모두 적용한다. 화면 이름의 Compact와
-  Button variant의 Compact는 별개다. Mobile에서 높이만 32로 줄이거나 웹 목록을 일괄 Medium으로 키우지 않는다.
+- Web 목록 기준은 Compact Web 1024와 Full Web 1440에 모두 적용한다. `72×40` 중간 variant를 추가하지 않고
+  기존 Medium을 재사용하며 목록 행 높이는 `64px`로 유지한다. FollowButton의 Compact variant는 현재
+  ProfileListItem 소비처에서 사용하지 않는다.
 
 ## Profile 더보기 배치
 
@@ -79,6 +80,20 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - Web Storybook에서 bio/no-bio 행과 링크·gap·Follow 키보드 동작을 검증한다. 실제 iOS·Android touch
   target은 Native 출시 QA에서 별도로 확인한다.
 
+## FollowRequestListItem 행 계약
+
+- `FollowRequestListItem`의 loaded 행은 `ProfileListItem`과 같은 `ProfileListItemContent`를 재사용한다.
+  Avatar `40`, 콘텐츠·action 사이 `12`, 좌우 `16`과 상하 `12` padding, fill 없는 배경과 하단 divider를
+  유지한다.
+- 승인·거절 `IconButton`의 입력 target은 Web `32`, iOS `44`, Android `48`이며 행 높이는 divider를 포함해
+  각각 `64`, `68`, `72`가 된다. 요청자 정보를 확인할 수 없으면 승인 action과 프로필 링크는 생략하고 거절
+  action은 유지한다.
+- 프로필 링크는 명시적인 접근 가능한 이름을 가지며 왼쪽·위·아래 padding까지 확장한다. 승인·거절 action은
+  링크 밖의 독립 버튼으로 유지한다.
+- 승인·거절 실패는 공용 danger toast로 알리고 행 내부에 error 문구나 별도 retry 상태를 추가하지 않는다.
+  실패 뒤 원래 이름의 같은 action을 다시 누를 수 있으며, mutation과 Relay connection 제거는
+  `FollowRequestListItem`이 계속 소유한다.
+
 ## Follow action 실패 피드백
 
 - Follow·Unfollow·Cancel의 GraphQL 또는 network 실패는 공용 `ToastProvider`의 danger toast로 표시한다.
@@ -87,9 +102,9 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 
 ## PROD-851 이관 상태와 Figma 정렬
 
-- PROD-851의 공용 source는 Medium `96×40`을 기본으로 사용한다. `ProfileListItem`은 Web의
-  `breakpoints.compact` 이상에서만 Compact `72×32`를 선택하고, 좁은 Web·Native에서는 Medium을 사용한다.
-  소비처별 크기와 Native 입력 여백·부모 공간은 공용 source와 자동 테스트에서 검증한다.
+- 공용 source는 Medium `96×40`을 기본으로 사용한다. `ProfileListItem`도 breakpoint와 관계없이 Medium을
+  사용해 Web·Mobile Web·Native 목록의 시각 크기를 통일한다. 목록 행은 `64px`를 유지하며 Native 입력
+  여백·부모 공간은 공용 source와 자동 테스트에서 검증한다.
 - 2026-09-05 Figma 재점검에서 `04 Screens - Mobile`의 Follow action 44개는 모두 Medium `96×40`이었다.
   대표 근거는 [Mobile Profile Hero](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1943-1708)와
   [Mobile 검색 결과](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1938-1511)다.
@@ -99,9 +114,9 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
   [Post Activity · Mobile Reposts](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=5314-46151)(11개)는
   총 32개 인스턴스도 같은 날 Medium `96×40`으로 정렬했다. Follow·Following·Requested 및 Busy·Error
   속성을 보존했으며, 행 높이 `64`와 간격 `12`를 유지하고 Light·Dark 배치를 시각 확인했다.
-- [FollowButton Source](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1901-1050) 설명도
-  Web 목록은 Compact, Web Profile Hero와 Mobile 소비처는 Medium으로 정렬했다.
-  Native 입력 target은 시각 영역과 별개임을 명시했다.
+- [FollowButton Source](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1901-1050)와
+  `ProfileListItem` source의 Web 목록 action도 Medium으로 정렬했다. Native 입력 target은 시각 영역과
+  별개임을 명시했다.
 - 위 Mobile Screens·Patterns와 Source 설명의 Figma 정렬 및 공용 코드의 소비처별 크기 선택을 반영했다.
   Native 실제 touch·focus 검증은 별도 출시 gate로 남아 있다.
 
