@@ -88,7 +88,10 @@ export function PostMediaViewerHostProvider({ children }: PropsWithChildren) {
   const sessionRef = useRef<ViewerSession | null>(null);
   sessionRef.current = session;
   const openViewer = useCallback<OpenViewer>((nextSession) => setSession(nextSession), []);
-  const closeViewer = useCallback(() => setSession(null), []);
+  const closeViewer = useCallback(() => {
+    sessionRef.current = null;
+    setSession(null);
+  }, []);
   const lifecycleFallbackFocus = screenFallback ?? fallbackFocus;
 
   useLayoutEffect(() => {
@@ -234,6 +237,7 @@ function PostMediaViewerHostContent({
       contentId={contentId}
       mediaOwnerPostId={mediaOwner.id}
       onPostDeleted={onDeleted}
+      onReactionPeopleNavigate={onClose}
       replyAvailable={Boolean(surface?.content)}
       replySurfacePostId={session.surfacePostId}
     />

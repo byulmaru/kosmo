@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef } from 'react';
 import { Platform, ScrollView } from 'react-native';
+import type { Ref } from 'react';
 import type { ScrollViewProps } from 'react-native';
 import type { UseAutomaticPaginationResult } from './useAutomaticPagination';
 
@@ -18,7 +19,7 @@ type LatestEvent =
 
 const PaginationScrollContext = createContext<Register | null>(null);
 
-type PaginationScrollViewProps = ScrollViewProps;
+type PaginationScrollViewProps = ScrollViewProps & { ref?: Ref<ScrollView> };
 
 function recordLatestEvent(events: LatestEvent[], event: LatestEvent) {
   const previousIndex = events.findIndex((previous) => previous.type === event.type);
@@ -42,7 +43,7 @@ function snapshotScrollEvent(event: NativeScrollEvent): NativeScrollEvent {
   };
 }
 
-export function PaginationScrollView({ children, ...props }: PaginationScrollViewProps) {
+export function PaginationScrollView({ children, ref, ...props }: PaginationScrollViewProps) {
   const registrationRef = useRef<Registration | null>(null);
   const latestEventsRef = useRef<LatestEvent[]>([]);
   const onContentSizeChange = useCallback(
@@ -102,7 +103,7 @@ export function PaginationScrollView({ children, ...props }: PaginationScrollVie
 
   return (
     <PaginationScrollContext.Provider value={register}>
-      <ScrollView {...props} {...nativeScrollProps}>
+      <ScrollView ref={ref} {...props} {...nativeScrollProps}>
         {children}
       </ScrollView>
     </PaginationScrollContext.Provider>

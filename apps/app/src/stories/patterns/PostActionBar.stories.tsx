@@ -86,7 +86,7 @@ const unselectedSource = {
   __typename: 'Post',
   content: { __typename: 'PostContent', id: 'content-source' },
   id: sourcePostId,
-  profile: { __typename: 'Profile', id: 'profile-author' },
+  profile: { __typename: 'Profile', id: 'profile-author', relativeHandle: '@author' },
   state: 'ACTIVE',
   repostCount: 12_345,
   reactionCounts: [
@@ -1445,21 +1445,21 @@ export const NoSelectedProfileDisablesReaction: Story = {
     const canvas = within(canvasElement);
     reactionMutationRequest.mockClear();
     const trigger = canvas.getByRole('button', { name: '반응' });
-    const heartSummary = canvas.getByRole('button', { name: '❤️ 반응 12개' });
-    const moreProfiles = canvas.getByRole('button', { name: '반응한 프로필 보기' });
+    const heartSummary = await canvas.findByRole('button', { name: '❤️ 반응 12개' });
+    const moreProfiles = canvas.getByRole('link', { name: '반응한 프로필 보기' });
 
     expect(trigger).toBeDisabled();
     expect(heartSummary).toBeDisabled();
     expect(moreProfiles).toBeEnabled();
+    expect(moreProfiles).toHaveAttribute('href', '/@author/post-source/reactions');
     trigger.click();
     heartSummary.click();
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
     expect(reactionMutationRequest).not.toHaveBeenCalled();
 
     await userEvent.click(moreProfiles);
-    const dialog = await screen.findByRole('dialog', { name: '반응한 프로필' });
-    expect(dialog).toHaveAttribute('aria-modal', 'true');
-    await expect(screen.findByText('아직 이 반응을 남긴 프로필이 없어요')).resolves.toBeVisible();
+    expect(screen.queryByRole('dialog', { name: '반응한 프로필' })).toBeNull();
+    expect(reactionMutationRequest).not.toHaveBeenCalled();
   },
   render: () => (
     <PostActionBarFixture
@@ -1473,7 +1473,7 @@ export const NoSelectedProfileDisablesReaction: Story = {
 export const ReactionSummaryToggleContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const heart = canvas.getByRole('button', { name: '❤️ 반응 12개' });
+    const heart = await canvas.findByRole('button', { name: '❤️ 반응 12개' });
 
     await userEvent.click(heart);
     expect(screen.queryByRole('dialog', { name: '반응한 프로필' })).toBeNull();

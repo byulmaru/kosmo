@@ -94,6 +94,7 @@ export function PostDetailThread({
   identity,
   onReplyCreated,
   onPostDeleted,
+  onReactionPeopleNavigate,
   post: postKey,
   presentation = 'route',
   replyProfile,
@@ -104,6 +105,7 @@ export function PostDetailThread({
   identity: string;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
+  onReactionPeopleNavigate?: () => void;
   post: PostDetailThread_post$key;
   presentation?: 'route' | 'viewer';
   replyProfile?: ReplyComposerSurface_profile$key | null;
@@ -116,6 +118,7 @@ export function PostDetailThread({
       key={identity}
       onReplyCreated={onReplyCreated}
       onPostDeleted={onPostDeleted}
+      onReactionPeopleNavigate={onReactionPeopleNavigate}
       post={postKey}
       presentation={presentation}
       replyProfile={replyProfile}
@@ -129,6 +132,7 @@ function PostDetailThreadContent({
   header,
   onReplyCreated,
   onPostDeleted,
+  onReactionPeopleNavigate,
   post: postKey,
   presentation,
   replyProfile,
@@ -138,6 +142,7 @@ function PostDetailThreadContent({
   header: ReactNode;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
+  onReactionPeopleNavigate?: () => void;
   post: PostDetailThread_post$key;
   presentation: 'route' | 'viewer';
   replyProfile?: ReplyComposerSurface_profile$key | null;
@@ -200,12 +205,14 @@ function PostDetailThreadContent({
                 contentWarningPresentation={presentation === 'viewer' ? 'revealed' : 'default'}
                 mediaPresentation={presentation === 'viewer' ? 'hidden' : 'default'}
                 onDeleted={onPostDeleted}
+                onReactionPeopleNavigate={onReactionPeopleNavigate}
                 post={requireThreadFragment(item.post.detail, 'current detail')}
                 replyAvailable={currentPostReplyAvailable}
                 replySurfacePostId={currentPostReplySurfaceId}
               />
             ) : (
               <PostListItem
+                onReactionPeopleNavigate={onReactionPeopleNavigate}
                 post={requireThreadFragment(item.post.listItem, `${role} list item`)}
                 showDivider={false}
                 showReplyAttribution={false}

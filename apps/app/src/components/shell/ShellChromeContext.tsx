@@ -11,6 +11,7 @@ type ShellChromeActions = {
   openProfileSwitcher: () => void;
   registerHomeReselection: (handler: HomeReselectionHandler) => () => void;
   reselectHome: HomeReselectionHandler;
+  screenFallbackRef?: RefObject<NativeView | null>;
 };
 
 type ShellChromeProviderProps = PropsWithChildren<ShellChromeActions>;
@@ -25,6 +26,7 @@ export function ShellChromeProvider({
   openProfileSwitcher,
   registerHomeReselection,
   reselectHome,
+  screenFallbackRef,
 }: ShellChromeProviderProps) {
   return (
     <ShellChromeContext.Provider
@@ -35,6 +37,7 @@ export function ShellChromeProvider({
         openProfileSwitcher,
         registerHomeReselection,
         reselectHome,
+        screenFallbackRef,
       }}
     >
       {children}
