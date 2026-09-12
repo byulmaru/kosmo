@@ -92,6 +92,15 @@ const visibilityOptions: ReadonlyArray<{
   { description: '팔로워만 볼 수 있어요.', icon: LockIcon, label: '팔로워만', value: 'FOLLOWERS' },
 ];
 
+const composerBodyFocusStyle = {
+  borderWidth: borderWidths[0],
+  outlineWidth: 0,
+} as unknown as TextStyle;
+const composerFieldFocusStyle = {
+  borderWidth: borderWidths[1],
+  outlineWidth: 0,
+} as unknown as TextStyle;
+
 function useVisibilityMenu(
   submitting: boolean,
   onVisibilityChange: PostComposerTargetProps['onVisibilityChange'],
@@ -296,7 +305,7 @@ export function PostComposerTarget({
               editable={!submitting}
               onChangeText={onContentWarningChange}
               placeholder="경고 문구를 입력하세요"
-              style={styles.contentWarningField}
+              style={[styles.contentWarningField, composerFieldFocusStyle]}
               value={contentWarning}
             />
           </View>
@@ -313,6 +322,7 @@ export function PostComposerTarget({
               styles.body,
               items.length > 0 ? styles.mediaBody : styles.textBody,
               { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
+              composerBodyFocusStyle,
             ]}
             value={body}
           />
@@ -444,7 +454,6 @@ export function MobileFullscreenComposerShellCandidate({
   visibility,
 }: MobileFullscreenComposerShellCandidateProps) {
   const theme = useTheme();
-  const [bodyFocused, setBodyFocused] = useState(false);
   const { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen } = useVisibilityMenu(
     submitting,
     onVisibilityChange,
@@ -552,7 +561,7 @@ export function MobileFullscreenComposerShellCandidate({
               editable={!submitting}
               onChangeText={onContentWarningChange}
               placeholder="경고 문구를 입력하세요"
-              style={styles.mobileContentWarning}
+              style={[styles.mobileContentWarning, composerFieldFocusStyle]}
               value={contentWarning}
             />
           ) : null}
@@ -561,9 +570,7 @@ export function MobileFullscreenComposerShellCandidate({
             accessibilityLabel="게시물 내용"
             editable={!submitting}
             multiline
-            onBlur={() => setBodyFocused(false)}
             onChangeText={onBodyChange}
-            onFocus={() => setBodyFocused(true)}
             placeholder="무슨 일이 일어나고 있나요?"
             placeholderTextColor={
               submitting ? theme.stateDisabledForeground : theme.foregroundMuted
@@ -573,14 +580,7 @@ export function MobileFullscreenComposerShellCandidate({
               {
                 backgroundColor: theme.backgroundCanvas,
                 color: theme.foregroundPrimary,
-                ...(bodyFocused
-                  ? ({
-                      outlineColor: theme.stateFocusRing,
-                      outlineOffset: 2,
-                      outlineStyle: 'solid',
-                      outlineWidth: borderWidths[2],
-                    } as unknown as TextStyle)
-                  : undefined),
+                ...composerBodyFocusStyle,
               },
             ]}
             value={body}
