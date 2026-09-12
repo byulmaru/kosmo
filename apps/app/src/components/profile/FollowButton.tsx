@@ -1,29 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
-import { useProfileBlockMutations } from '@/components/profile/ProfileBlockController';
-import { StaleProfileBlockRequestError } from '@/components/profile/profileBlockErrors';
 import { Button } from '@/components/ui/Button';
-import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
-import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { RecordProxy, RecordSourceSelectorProxy } from 'relay-runtime';
 import type { FollowButton_profile$key } from './__generated__/FollowButton_profile.graphql';
-import type { FollowButton_profileBlock$key } from './__generated__/FollowButton_profileBlock.graphql';
-import type { FollowButton_profileBlockStatus$key } from './__generated__/FollowButton_profileBlockStatus.graphql';
 import type { FollowButtonCancelProfileFollowRequestMutation } from './__generated__/FollowButtonCancelProfileFollowRequestMutation.graphql';
 import type { FollowButtonFollowProfileMutation } from './__generated__/FollowButtonFollowProfileMutation.graphql';
 import type { FollowButtonUnfollowProfileMutation } from './__generated__/FollowButtonUnfollowProfileMutation.graphql';
 
 type FollowButtonProps = {
   onActionRef?: (node: View | null) => void;
-  onUnblockSuccess?: () => void;
   profile: FollowButton_profile$key;
-  profileBlock?: FollowButton_profileBlock$key | null;
-  profileBlockStatus?: FollowButton_profileBlockStatus$key | null;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -48,20 +38,6 @@ const followButtonProfileFragment = graphql`
         id
       }
     }
-  }
-`;
-
-const followButtonProfileBlockFragment = graphql`
-  fragment FollowButton_profileBlock on ProfileBlock {
-    id
-  }
-`;
-
-const followButtonProfileBlockStatusFragment = graphql`
-  fragment FollowButton_profileBlockStatus on ProfileBlockStatus {
-    blockedBy
-    blocking
-    profileBlockId
   }
 `;
 
@@ -126,20 +102,10 @@ const updateProfileCount = (
 const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
-export function FollowButton({
-  onActionRef,
-  onUnblockSuccess,
-  profile,
-  profileBlock = null,
-  profileBlockStatus = null,
-  style,
-}: FollowButtonProps) {
+export function FollowButton({ onActionRef, profile, style }: FollowButtonProps) {
   const { selectedProfileId } = useSession();
   const { showToast } = useToast();
   const data = useFragment(followButtonProfileFragment, profile);
-  const block = useFragment(followButtonProfileBlockFragment, profileBlock);
-  const blockStatus = useFragment(followButtonProfileBlockStatusFragment, profileBlockStatus);
-  const { changeBlocked } = useProfileBlockMutations();
   const [commitFollow, following] =
     useMutation<FollowButtonFollowProfileMutation>(followProfileMutation);
   const [commitCancel, cancelling] = useMutation<FollowButtonCancelProfileFollowRequestMutation>(
@@ -147,118 +113,13 @@ export function FollowButton({
   );
   const [commitUnfollow, unfollowing] =
     useMutation<FollowButtonUnfollowProfileMutation>(unfollowProfileMutation);
-  const [unblockOpen, setUnblockOpen] = useState(false);
-  const [unblockPending, setUnblockPending] = useState(false);
-  const mounted = useRef(true);
-  const unblockInFlight = useRef(false);
-  const cancelRef = useRef<View>(null);
-  const actionRef = useRef<View>(null);
   const viewerState = data.viewerState;
   const isFollowing = Boolean(viewerState?.follow);
   const isPending = Boolean(viewerState?.followRequest);
-  const profileBlockId = block?.id ?? blockStatus?.profileBlockId;
-  const blocking = Boolean(block || (blockStatus?.blocking && profileBlockId));
-  const blockedByOnly = Boolean(blockStatus?.blockedBy && !blocking);
-  const loading = following || cancelling || unfollowing || unblockPending;
+  const loading = following || cancelling || unfollowing;
   const showFailureToast = () => {
     showToast(followFailureMessage, { tone: 'danger' });
   };
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  const closeUnblock = () => {
-    if (!unblockInFlight.current) {
-      setUnblockOpen(false);
-    }
-  };
-  const requestUnblock = async () => {
-    if (unblockInFlight.current || !selectedProfileId || !profileBlockId) {
-      return;
-    }
-    unblockInFlight.current = true;
-    setUnblockPending(true);
-    try {
-      await changeBlocked(
-        {
-          handle: data.handle,
-          ownerProfileId: selectedProfileId,
-          profileBlockId,
-        },
-        false,
-      );
-      if (!mounted.current) {
-        return;
-      }
-      onUnblockSuccess?.();
-      setUnblockOpen(false);
-      showToast('차단을 해제했어요', { tone: 'success' });
-    } catch (error) {
-      if (!mounted.current) {
-        return;
-      }
-      setUnblockOpen(false);
-      if (error instanceof StaleProfileBlockRequestError) {
-        return;
-      }
-      showToast('차단을 해제하지 못했어요. 다시 시도해 주세요.', { tone: 'danger' });
-    } finally {
-      if (mounted.current) {
-        unblockInFlight.current = false;
-        setUnblockPending(false);
-      }
-    }
-  };
-
-  if (blockedByOnly) {
-    return null;
-  }
-
-  if (blocking) {
-    return (
-      <>
-        <View style={[styles.root, style]}>
-          <Button
-            accessibilityLabel={`${data.displayName} ${data.relativeHandle} 차단 해제`}
-            accessibilityState={{ busy: unblockPending, disabled: unblockPending }}
-            controlRef={(node) => {
-              actionRef.current = node;
-              onActionRef?.(node);
-            }}
-            disabled={unblockPending}
-            onPress={() => setUnblockOpen(true)}
-            style={styles.relationButton}
-            tone="secondary"
-          >
-            차단 해제
-          </Button>
-        </View>
-        <ModalSheet
-          dismissDisabled={unblockPending}
-          onClose={closeUnblock}
-          onDismiss={() => actionRef.current?.focus()}
-          onShow={() => cancelRef.current?.focus()}
-          title="이 프로필의 차단을 해제할까요?"
-          visible={unblockOpen}
-        >
-          <ConfirmationContent
-            cancelLabel="취소"
-            cancelRef={cancelRef}
-            confirmLabel="차단 해제"
-            message="차단을 해제해도 이전 팔로우 관계는 복구되지 않아요."
-            onCancel={closeUnblock}
-            onConfirm={() => void requestUnblock()}
-            pending={unblockPending}
-            tone="danger"
-          />
-        </ModalSheet>
-      </>
-    );
-  }
 
   if (!viewerState || viewerState.isSelf) {
     return null;
