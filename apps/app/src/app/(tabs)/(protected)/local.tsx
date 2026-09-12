@@ -1,5 +1,5 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useErrorBoundary } from 'react-error-boundary';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, useRefetchableFragment } from 'react-relay';
@@ -141,14 +141,21 @@ function LocalContent({
     hasSuccessfulLocalRef.current = true;
   }, [hasSuccessfulLocalRef]);
 
+  const data = useFragment<LocalContent_query$key>(LocalFragment, queryData);
+
   return (
-    <RelayFailOpenBoundary
-      fallback={<LocalRefreshFallback fragmentRef={queryData} onRetry={onRefresh} />}
-      reportUnexpectedErrors={false}
-      resetKey={refreshVersion}
-    >
-      <LocalRefetchContent fragmentRef={queryData} refreshVersion={refreshVersion} />
-    </RelayFailOpenBoundary>
+    <>
+      <LocalContentView data={data} />
+      <RelayFailOpenBoundary
+        fallback={<LocalRefreshErrorFallback onRetry={onRefresh} />}
+        reportUnexpectedErrors={false}
+        resetKey={refreshVersion}
+      >
+        <Suspense fallback={null}>
+          <LocalRefetchContent fragmentRef={queryData} refreshVersion={refreshVersion} />
+        </Suspense>
+      </RelayFailOpenBoundary>
+    </>
   );
 }
 
@@ -159,7 +166,7 @@ function LocalRefetchContent({
   fragmentRef: LocalContent_query$key;
   refreshVersion: number;
 }) {
-  const [data, refetch] = useRefetchableFragment<LocalContentRefetchQuery, LocalContent_query$key>(
+  const [, refetch] = useRefetchableFragment<LocalContentRefetchQuery, LocalContent_query$key>(
     LocalFragment,
     fragmentRef,
   );
@@ -183,17 +190,10 @@ function LocalRefetchContent({
     );
   }, [refetch, refreshVersion, showBoundary]);
 
-  return <LocalContentView data={data} />;
+  return null;
 }
 
-function LocalRefreshFallback({
-  fragmentRef,
-  onRetry,
-}: {
-  fragmentRef: LocalContent_query$key;
-  onRetry: () => void;
-}) {
-  const data = useFragment(LocalFragment, fragmentRef);
+function LocalRefreshErrorFallback({ onRetry }: { onRetry: () => void }) {
   const { showToast } = useToast();
 
   useEffect(
@@ -206,7 +206,7 @@ function LocalRefreshFallback({
     [onRetry, showToast],
   );
 
-  return <LocalContentView data={data} />;
+  return null;
 }
 
 function LocalContentView({ data }: { data: LocalContent_query$data }) {

@@ -234,6 +234,72 @@ test('Local 탭은 configured Local의 공개 top-level Content Post와 Quote만
   await expect(page).toHaveURL(/\/@e2e-local-writer\/.+$/);
 });
 
+test('Local 재조회 실패에도 열린 답글 작성 상태와 입력 내용을 유지한다', async ({
+  context,
+  page,
+}) => {
+  const draftPostBody = 'E2E local draft retention post';
+  const viewer = await createE2ESession({
+    displayName: 'E2E Local Draft Viewer',
+    handle: 'e2e-local-draft-viewer',
+  });
+  await createE2EPost({
+    body: draftPostBody,
+    profileId: viewer.profile!.id,
+  });
+
+  await setE2ESessionCookie(context, viewer.token);
+
+  let releaseRefetch!: () => void;
+  let resolveRefetchStarted!: () => void;
+  const refetchStarted = new Promise<void>((resolve) => {
+    resolveRefetchStarted = resolve;
+  });
+  const refetchGate = new Promise<void>((resolve) => {
+    releaseRefetch = resolve;
+  });
+
+  await page.route('**/graphql', async (route) => {
+    if (isGraphQLOperation(route.request().postData(), 'LocalContentRefetchQuery')) {
+      resolveRefetchStarted();
+      await refetchGate;
+      await route.abort('failed');
+      return;
+    }
+
+    await route.continue();
+  });
+
+  try {
+    await page.goto('/local');
+    const post = page.getByRole('article').filter({
+      has: page.getByText(draftPostBody, { exact: true }),
+    });
+    await expect(post).toBeVisible();
+
+    await page.getByRole('tab', { name: '로컬' }).click();
+    await refetchStarted;
+
+    await post.getByRole('button', { name: '답글' }).click();
+    const composer = page.getByLabel('답글 작성');
+    const textarea = composer.getByRole('textbox', { name: '답글 본문' });
+    await expect(textarea).toBeVisible();
+
+    const draft = 'E2E unsaved reply draft';
+    await textarea.fill(draft);
+    await expect(textarea).toBeFocused();
+
+    releaseRefetch();
+    await expect(page.getByRole('alert')).toContainText('로컬 타임라인을 불러오지 못했어요');
+    await expect(composer).toBeVisible();
+    await expect(textarea).toHaveValue(draft);
+    await expect(textarea).toBeFocused();
+  } finally {
+    releaseRefetch();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
 test('Local 타임라인은 다음 페이지를 기존 목록에 누적한다', async ({ context, page }) => {
   const viewer = await createE2ESession({ handle: 'e2e-local-page-viewer' });
   const localAuthor = await createE2EProfile({ handle: 'e2e-local-page-writer' });

@@ -47,6 +47,12 @@
 - **THEN** 시스템은 마지막 성공 목록을 유지하고 공용 persistent Danger Toast로 `로컬 타임라인을 불러오지 못했어요`와 `다시 시도` action을 표시한다
 - **AND** 최초 오류 전용 Web 빈 배경이나 Native skeleton으로 목록을 대체하지 않는다
 
+#### Scenario: Preserve a reply draft during a failed Local refresh
+
+- **WHEN** Local hard refresh가 진행되는 동안 사용자가 목록에서 답글 작성창을 열어 입력한 뒤 요청이 실패한다
+- **THEN** 시스템은 기존 목록 인스턴스, 열린 답글 작성창과 입력 내용을 유지하며 오류 Toast를 표시한다
+- **AND** 오류 처리를 위해 작성창을 닫거나 작성 중인 내용을 폐기하지 않는다
+
 #### Scenario: Retry a hard refresh Local error
 
 - **WHEN** 사용자가 hard refresh 오류 Toast의 `다시 시도` action을 실행한다

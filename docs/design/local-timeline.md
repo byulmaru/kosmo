@@ -48,6 +48,9 @@ Local 탭 재선택의 hard refresh는 기존 Relay query·environment를 재사
 hard transport error에서는 마지막 성공 목록과 scroll position을 유지한 채 persistent retry toast를 표시한다.
 refresh token을 사용하고 `onComplete` 오류를 공용 Relay fail-open boundary로 전달해 Toast를 열며, route
 이탈·selected Profile 전환 때 stale toast를 정리한다.
+목록은 refetch 오류 경계 밖에서 동일한 Relay store를 계속 읽는다. 실패·재시도 때 경계는 refetch와 Toast만
+교체하며, 목록과 열린 답글 작성창·입력 내용은 재마운트하지 않는다. 요청 중복 제어·Disposable 저장·명령형
+refetch 등록은 추가하지 않고 요청 lifecycle은 Relay에 맡긴다.
 이 사용자가 다시 시도할 수 있는 hard refresh 오류는 unexpected-error reporter에 별도 보고하지 않는다.
 HTTP 200의 `data + errors`는 Relay가 처리하며 사용 가능한 부분 데이터를 적용한다. `localTimeline: null`이면 목록의
 빈 상태를 표시할 수 있다. query·cursor·filtering 정책과 추가 페이지 로딩 동작은 유지한다.

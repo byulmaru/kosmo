@@ -46,11 +46,12 @@ baseline의 두 행을 렌더하고 mount effect에서 공용 persistent Danger 
 lifecycle은 기존 Relay hook과 boundary/Toast 컴포넌트의 unmount 경로에 맡긴다. partial GraphQL 응답은 기존
 Relay payload 처리에 맡기고 hard transport error로 취급하지 않는다.
 
-성공 payload를 직접 읽는 `useRefetchableFragment` child만 공용 `RelayFailOpenBoundary` 안에 둔다. render 중
-오류가 경계에 도달하면 fallback이 최초 query의 fragment ref를 `useFragment`로 읽어 마지막 성공 store 값을
-렌더하고 persistent Toast를 연다. Relay가 cache 목록을 유지하며 transport error를 `onComplete(error)`로
-전달하는 경우에는 요청 상태를 저장하지 않고 `showBoundary(error)`로 같은 경계에 전달한다. Toast action은
-boundary의 `resetKey`를 바꾸는 refresh token을 통해 hook refetch를 다시 시작한다.
+목록은 최초 query의 fragment ref를 `useFragment`로 읽으며 공용 `RelayFailOpenBoundary` 밖에 유지한다.
+경계 안의 작은 refetch 컴포넌트는 `useRefetchableFragment`와 refresh token만 받아 요청을 시작하고 UI를
+렌더하지 않는다. 성공 payload는 동일 Relay store를 통해 목록에 반영된다. render 오류 또는
+`onComplete(error)`에서 `showBoundary(error)`로 전달된 오류는 경계의 Toast 전용 fallback이 처리한다.
+이 fallback은 목록을 다시 렌더하지 않는다. Toast action은 boundary의 `resetKey`를 바꾸는 refresh token으로
+hook refetch를 다시 시작한다. 요청·in-flight·Disposable·완료 상태와 명령형 refetch 등록은 추가하지 않는다.
 
 최초 오류 재시도는 기존 `resetErrorBoundary`/`fetchKey`를 그대로 사용하고, refresh 오류 재시도는 같은 refresh
 함수를 재사용한다. 공용 Toast action은 현재 active Toast일 때만 닫힘과 callback을 실행한다.
@@ -62,7 +63,10 @@ cache 목록을 경계 밖에 유지하고 refresh hook의 오류만 격리하�
 
 ### Known Traps
 
-- refresh hard error에서 cache 목록을 오류 fallback으로 바꾸면 Figma의 마지막 성공 목록 보존 계약을 깨뜨린다.
+- refresh hard error에서 같은 cache 목록을 fallback으로 다시 렌더해도 목록 인스턴스는 교체되어 답글 초안이나
+  Native FlatList 위치가 사라질 수 있다. 목록 텍스트뿐 아니라 오류 전 DOM과 작성 상태의 보존을 검증한다.
+- `onComplete(error)`에서 Toast 상태만 바꾸거나 `store-only` refetch로 복구해도 동기/replay 오류가 현재 render에서
+  throw될 수 있다. 목록을 해당 오류 경계 안에 둔 채 요청 타이밍에 의존해 보존하지 않는다.
 - route cleanup에서 현재 Toast를 무조건 닫으면 그 뒤 표시된 다른 화면의 최신 Toast를 지울 수 있다.
 - 3행 `PostList` skeleton을 공용 수정하거나 Web에도 skeleton을 표시하면 Figma의 플랫폼별 Target과 다르다.
 

@@ -29,24 +29,37 @@ response·pagination 동작과 공용 Relay·Toast 경계를 유지한다.
 - Consequences: refresh 요청의 hard error를 명시적으로 관찰하고, 성공·재실패·route·actor lifecycle을 관리한다.
 - Confirmation / Follow-up: Storybook의 실제 Relay refresh 흐름과 Web 시각·상호작용으로 검증하고 Native runtime 미실행을 별도로 기록한다.
 
-### Local refresh는 refetchable fragment hook과 공용 fail-open boundary를 사용한다
+### 목록은 유지하고 refetch 오류 경계만 분리한다
 
-- Decision Date: 2026-09-11
+- Decision Date: 2026-09-12
 - Decision Class: Implementation Choice
-- Authority / Provenance: 활성 Derived Contract 2번째 기록, Relay `useRefetchableFragment` lifecycle
+- Authority / Provenance: `docs/design/local-timeline.md`, `PROD-939`, 답글 초안 손실 재현과 사용자 구조 변경 승인
 - Status: Active
-- Context / Problem: Local hard refresh의 성공 목록은 유지하면서 refetch 오류를 공용 경계의 fail-open fallback과 연결하고, Relay가 `onComplete(error)`로만 전달하는 transport error도 표시해야 한다.
-- Decision Outcome: 기존 Session fail-open boundary를 공용 `RelayFailOpenBoundary`로 추출한다. Local query는 `LocalContent_query` refetchable fragment를 사용하고, 성공 child는 `useRefetchableFragment`의 data를 직접 읽는다. 이 child만 공용 경계 안에 두며, transport error의 `onComplete` callback은 요청 상태를 저장하지 않고 오류를 이 경계로 전달한다. fallback은 최초 query의 fragment ref를 `useFragment`로 읽고 persistent retry Toast를 연다. refresh token은 boundary reset과 hook refetch를 연결하고, 요청·in-flight·Disposable·완료 상태는 별도로 저장하지 않는다.
-- Telemetry: Local hard refresh는 기존 사용자 복구 경로와 같이 예상된 오류로 취급해 unexpected-error reporter에 보고하지 않는다. 공용 boundary의 기본 unexpected-error reporting은 유지하되 Local에서만 끈다.
-- Alternatives Considered: 별도 `fetchQuery` Observable과 Disposable 저장은 기존 Relay hook과 공용 boundary lifecycle을 우회하므로 제외했다.
-- Consequences: refetch 요청과 unmount 정리는 Relay hook과 boundary가 담당하고, Toast lifecycle은 fallback effect만 관리한다. Toast 재시도는 refresh token을 증가시켜 boundary를 reset한 뒤 같은 hook refetch를 다시 시작한다.
-- Confirmation / Follow-up: focused Storybook refresh lifecycle과 기존 typecheck/compiler 검증에서 확인한다.
+- Context / Problem: refetch 오류의 fallback이 동일 cache 목록을 다시 렌더해도 목록 subtree는 재마운트되어 작성 중인 답글이 폐기된다. Toast 상태만 바꾸는 안과 `store-only` 복귀안도 모든 오류 타이밍에서 이를 막지 못했다.
+- Decision Outcome: 목록은 경계 밖에서 최초 query의 fragment ref를 `useFragment`로 계속 읽는다. 공용 `RelayFailOpenBoundary` 안에는 refetch hook과 refresh token을 소비하는 작은 컴포넌트만 두고, fallback은 persistent retry Toast만 표시한다. `onComplete(error)`는 공용 경계로 전달하고 재시도는 기존 refresh token으로 경계를 reset한다.
+- Telemetry: 예상된 Local hard refresh 오류의 unexpected-error reporting 비활성화와 공용 경계의 기본 정책은 유지한다.
+- Alternatives Considered: 목록을 포함하는 fallback은 초안 손실을 재현했다. `store-only` 복귀안은 비동기 Web E2E를 통과했지만 동기 Observable 오류에서 DOM 보존에 실패했다. 별도 초안 저장·복원이나 요청 중복 제어·Disposable 저장·명령형 refetch 등록은 필요하지 않아 추가하지 않는다.
+- Consequences: 이전 전용 controller 제거 방향 중 오류를 격리하기 위한 최소 컴포넌트 분리는 허용한다. 요청과 query reference lifecycle은 Relay가, Toast lifetime은 fallback effect가 소유하며 목록은 유지한다.
+- Confirmation / Follow-up: 동기 오류 probe의 DOM 보존, 기존 Storybook retry·actor cleanup과 실제 Web 답글 draft·focus E2E를 재검증한다. Native runtime 미실행은 별도로 기록한다.
 
 ## Remaining Decisions
 
 - 없음.
 
 ## Superseded Decisions
+
+### Local refresh는 refetchable fragment hook과 공용 fail-open boundary를 사용한다
+
+- Decision Date: 2026-09-11
+- Decision Class: Implementation Choice
+- Authority / Provenance: 활성 Derived Contract 2번째 기록, Relay `useRefetchableFragment` lifecycle
+- Status: Superseded
+- Context / Problem: Local hard refresh의 성공 목록은 유지하면서 refetch 오류를 공용 경계의 fail-open fallback과 연결하고, Relay가 `onComplete(error)`로만 전달하는 transport error도 표시해야 한다.
+- Decision Outcome: 기존 Session fail-open boundary를 공용 `RelayFailOpenBoundary`로 추출한다. Local query는 `LocalContent_query` refetchable fragment를 사용하고, 성공 child는 `useRefetchableFragment`의 data를 직접 읽는다. 이 child만 공용 경계 안에 두며, transport error의 `onComplete` callback은 요청 상태를 저장하지 않고 오류를 이 경계로 전달한다. fallback은 최초 query의 fragment ref를 `useFragment`로 읽고 persistent retry Toast를 연다. refresh token은 boundary reset과 hook refetch를 연결하고, 요청·in-flight·Disposable·완료 상태는 별도로 저장하지 않는다.
+- Telemetry: Local hard refresh는 기존 사용자 복구 경로와 같이 예상된 오류로 취급해 unexpected-error reporter에 보고하지 않는다. 공용 boundary의 기본 unexpected-error reporting은 유지하되 Local에서만 끈다.
+- Alternatives Considered: 별도 `fetchQuery` Observable과 Disposable 저장은 기존 Relay hook과 공용 boundary lifecycle을 우회하므로 제외했다.
+- Consequences: refetch 요청과 unmount 정리는 Relay hook과 boundary가 담당하고, Toast lifecycle은 fallback effect만 관리한다. Toast 재시도는 refresh token을 증가시켜 boundary를 reset한 뒤 같은 hook refetch를 다시 시작한다.
+- Confirmation / Follow-up: 2026-09-12 답글 초안 손실을 재현해 위의 목록 보존·refetch 경계 분리 결정으로 대체했다.
 
 ### 최초 오류 이관은 성공 이력 없는 조회에만 적용한다
 

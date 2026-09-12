@@ -67,12 +67,14 @@ export const RefreshHardError: Story = {
     expect(
       canvas.getByRole('link', { name: '로컬 기록자 @local-writer' }).getBoundingClientRect().top,
     ).toBeGreaterThanOrEqual(localTab.getBoundingClientRect().bottom);
+    const retainedPost = canvas.getByText('같은 인스턴스의 소식을 한곳에서 확인해요.');
 
     await userEvent.click(localTab);
 
     expect(canvas.getByText('같은 인스턴스의 소식을 한곳에서 확인해요.')).toBeVisible();
     const firstAlert = await body.findByRole('alert');
     expect(firstAlert).toHaveTextContent('로컬 타임라인을 불러오지 못했어요');
+    expect(retainedPost).toBeInTheDocument();
     await waitFor(() =>
       expect(within(firstAlert).getByRole('button', { name: '다시 시도' })).toBeVisible(),
     );
