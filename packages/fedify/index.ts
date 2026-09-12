@@ -16,8 +16,15 @@ export {
   setInboundObservabilityReporter,
   withInboundObservability,
 } from './src/inbound-observability';
+export { handleInboundBlock, handleInboundUndoBlock } from './src/inbound-profile-block';
 export { sendLocalPostCreate, sendLocalPostDelete } from './src/local-post-delivery';
 export { sendLocalProfileUpdate } from './src/local-profile-update-delivery';
+export {
+  getProfileBlockActivityUri,
+  getProfileBlockOrderingKey,
+  sendProfileBlock,
+  sendProfileBlockUndo,
+} from './src/profile-block-delivery';
 export { sendProfileFollow, sendProfileUnfollow } from './src/profile-follow-delivery';
 export { closeFedifyQueue } from './src/queue';
 export { sendReaction, sendReactionUndo } from './src/reaction-delivery';

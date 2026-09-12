@@ -21,7 +21,12 @@ export {
   deleteProfileBlock as deleteProfileBlockActivity,
   executeProfileBlockTransition as executeProfileBlockTransitionActivity,
   executeProfileUnblockTransition as executeProfileUnblockTransitionActivity,
+  finalizeProfileBlockProtocolUndo as finalizeProfileBlockProtocolUndoActivity,
+  loadPendingProfileBlockCleanupBatches as loadPendingProfileBlockCleanupBatchesActivity,
+  loadProfileBlockProtocolActivityByProfileBlockId as loadProfileBlockProtocolActivityByProfileBlockIdActivity,
   loadProfileBlockTransitionBootstrap as loadProfileBlockTransitionBootstrapActivity,
+  markProfileBlockCleanupBatchSettled as markProfileBlockCleanupBatchSettledActivity,
+  prepareProfileBlockProtocolUndo as prepareProfileBlockProtocolUndoActivity,
 } from '@kosmo/core/services';
 export {
   createFollowNotification as createFollowNotificationActivity,
@@ -41,6 +46,8 @@ export {
 export {
   sendLocalPostCreate as sendLocalPostCreateActivity,
   sendLocalPostDelete as sendLocalPostDeleteActivity,
+  sendProfileBlock as sendProfileBlockActivity,
+  sendProfileBlockUndo as sendProfileBlockUndoActivity,
 } from '@kosmo/fedify';
 export {
   sendRepostAnnounce as sendRepostAnnounceActivity,

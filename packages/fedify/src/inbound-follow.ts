@@ -21,6 +21,7 @@ import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import { observeInbound } from './inbound-observability';
+import { handleInboundUndoBlock } from './inbound-profile-block';
 import {
   findOrMaterializeRemoteProfileActorByUri,
   findStoredRemoteProfileActorByUri,
@@ -355,6 +356,17 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       phase: 'object_lookup',
       reasonCode: 'undo_object_lookup_failed',
     });
+    return;
+  }
+  if (
+    await handleInboundUndoBlock({
+      context,
+      actorUri,
+      embedded,
+      objectUri,
+      remoteActorProfileId: remoteActor.profile.id,
+    })
+  ) {
     return;
   }
   if (embedded instanceof Follow) {

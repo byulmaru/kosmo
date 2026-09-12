@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   index,
   integer,
@@ -14,9 +15,21 @@ import {
 import * as Enum from './enums';
 import { datetime } from './types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import type * as CoreEnum from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
 
 type JsonWebKeyRecord = Record<string, unknown>;
+
+export type ProfileBlockCleanupEffectPlan = readonly {
+  readonly kind: 'DELETE';
+  readonly input: {
+    readonly sourceId: string;
+    readonly sourceKind: 'FOLLOW' | 'FOLLOW_REQUEST';
+    readonly followerProfileId: string;
+    readonly followeeProfileId: string;
+    readonly sendActivityPub?: boolean;
+  };
+}[];
 
 const createdAt = () =>
   datetime('created_at')
@@ -425,6 +438,7 @@ export const ProfileBlocks = pgTable(
     targetProfileId: uuid('target_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
+    closingAt: datetime('closing_at'),
     createdAt: createdAt(),
   },
   (table) => [
@@ -434,6 +448,86 @@ export const ProfileBlocks = pgTable(
       sql`${table.ownerProfileId} <> ${table.targetProfileId}`,
     ),
     index().on(table.targetProfileId),
+  ],
+);
+
+/**
+ * Durable ActivityPub identity for a Profile Block generation.  The optional
+ * Profile Block id is intentionally not a foreign key: an Undo must retain
+ * the original generation after the product relation has been deleted.
+ */
+export const ProfileBlockActivities = pgTable(
+  'profile_block_activity',
+  {
+    id: id(),
+    activityUri: text('activity_uri').notNull().unique(),
+    ownerProfileId: uuid('owner_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    targetProfileId: uuid('target_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    actorUri: text('actor_uri').notNull(),
+    objectUri: text('object_uri').notNull(),
+    origin: Enum.profileBlockActivityOrigin('origin').notNull(),
+    state: Enum.profileBlockActivityState('state').notNull().default('ACTIVE'),
+    deliveryState: Enum.profileBlockDeliveryState('delivery_state').notNull().default('NONE'),
+    undoDeliveryState: Enum.profileBlockDeliveryState('undo_delivery_state')
+      .notNull()
+      .default('NONE'),
+    profileBlockId: uuid('profile_block_id'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    closedAt: datetime('closed_at'),
+  },
+  (table) => [
+    index().on(table.ownerProfileId, table.targetProfileId, table.state),
+    index().on(table.profileBlockId),
+    check(
+      'profile_block_activity_owner_not_target',
+      sql`${table.ownerProfileId} <> ${table.targetProfileId}`,
+    ),
+  ],
+);
+
+/**
+ * Immutable, transaction-owned Follow cleanup receipt for one Block command.
+ * The product generation ID is intentionally not a foreign key so a receipt
+ * can recover effects after the product row has been replaced or deleted.
+ */
+export const ProfileBlockCleanupBatches = pgTable(
+  'profile_block_cleanup_batch',
+  {
+    id: id(),
+    operation: text('operation').$type<CoreEnum.ProfileBlockCleanupOperation>().notNull(),
+    operationId: uuid('operation_id').notNull(),
+    ownerProfileId: uuid('owner_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    targetProfileId: uuid('target_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    profileBlockId: uuid('profile_block_id').notNull(),
+    origin: text('origin').$type<CoreEnum.ProfileBlockCleanupOrigin>().notNull(),
+    protocolActivityUri: text('protocol_activity_uri'),
+    protocolState: text('protocol_state').$type<CoreEnum.ProfileBlockActivityState>(),
+    changed: boolean('changed').notNull(),
+    effectPlan: jsonb('effect_plan').$type<ProfileBlockCleanupEffectPlan>().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    settledAt: datetime('settled_at'),
+  },
+  (table) => [
+    unique().on(table.operation, table.operationId),
+    index().on(table.ownerProfileId, table.targetProfileId, table.settledAt),
+    check(
+      'profile_block_cleanup_batch_operation_check',
+      sql`${table.operation} IN ('BLOCK', 'UNBLOCK')`,
+    ),
+    check(
+      'profile_block_cleanup_batch_origin_check',
+      sql`${table.origin} IN ('LOCAL', 'ACTIVITYPUB')`,
+    ),
   ],
 );
 

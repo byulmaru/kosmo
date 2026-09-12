@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, afterEach, test } from 'node:test';
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import {
   ActivityPubActors,
   Bookmarks,
@@ -11,6 +11,8 @@ import {
   pg,
   PostContents,
   Posts,
+  ProfileBlockActivities,
+  ProfileBlockCleanupBatches,
   ProfileBlocks,
   ProfileFollowRequests,
   ProfileFollows,
@@ -252,7 +254,17 @@ test('Block removes captured Follow generations and preserves existing Reactions
     ownerProfileId: owner.id,
     targetProfileId: target.id,
   });
-  assert.deepEqual(firstExecution.effectPlan, [
+  const firstBatch = await db
+    .select()
+    .from(ProfileBlockCleanupBatches)
+    .where(
+      and(
+        eq(ProfileBlockCleanupBatches.operation, 'BLOCK'),
+        eq(ProfileBlockCleanupBatches.operationId, candidateProfileBlockId),
+      ),
+    )
+    .then(firstOrThrow);
+  assert.deepEqual(firstBatch.effectPlan, [
     {
       kind: 'DELETE',
       input: {
@@ -378,9 +390,22 @@ test('Block removes captured Follow generations and preserves existing Reactions
   if (!retry.ok) {
     return;
   }
-  assert.equal(retry.result.created, false);
-  assert.equal(retry.result.profileBlockId, candidateProfileBlockId);
-  assert.deepEqual(retry.effectPlan, firstExecution.effectPlan);
+  assert.deepEqual(retry.result, firstExecution.result);
+  assert.deepEqual(
+    (
+      await db
+        .select()
+        .from(ProfileBlockCleanupBatches)
+        .where(
+          and(
+            eq(ProfileBlockCleanupBatches.operation, 'BLOCK'),
+            eq(ProfileBlockCleanupBatches.operationId, candidateProfileBlockId),
+          ),
+        )
+        .then(firstOrThrow)
+    ).effectPlan,
+    firstBatch.effectPlan,
+  );
   await assertReactionsAndNotificationPreserved();
 
   const newFollowId = (
@@ -504,6 +529,7 @@ test('Unblock cleans current Follow generations before removing the exact Block'
     targetProfileId: target.id,
     origin: 'LOCAL' as const,
     expectedProfileBlockId: profileBlockId,
+    operationId: crypto.randomUUID(),
     cleanupSources,
   };
   const firstExecution = await executeProfileUnblockTransition(input);
@@ -517,8 +543,18 @@ test('Unblock cleans current Follow generations before removing the exact Block'
     ownerProfileId: owner.id,
     targetProfileId: target.id,
   });
+  const firstBatch = await db
+    .select()
+    .from(ProfileBlockCleanupBatches)
+    .where(
+      and(
+        eq(ProfileBlockCleanupBatches.operation, 'UNBLOCK'),
+        eq(ProfileBlockCleanupBatches.operationId, input.operationId),
+      ),
+    )
+    .then(firstOrThrow);
   assert.deepEqual(
-    firstExecution.effectPlan.map(({ input: effectInput }) => ({
+    firstBatch.effectPlan.map(({ input: effectInput }) => ({
       sourceId: effectInput.sourceId,
       sourceKind: effectInput.sourceKind,
     })),
@@ -576,7 +612,21 @@ test('Unblock cleans current Follow generations before removing the exact Block'
     return;
   }
   assert.deepEqual(retry.result, firstExecution.result);
-  assert.deepEqual(retry.effectPlan, firstExecution.effectPlan);
+  assert.deepEqual(
+    (
+      await db
+        .select()
+        .from(ProfileBlockCleanupBatches)
+        .where(
+          and(
+            eq(ProfileBlockCleanupBatches.operation, 'UNBLOCK'),
+            eq(ProfileBlockCleanupBatches.operationId, input.operationId),
+          ),
+        )
+        .then(firstOrThrow)
+    ).effectPlan,
+    firstBatch.effectPlan,
+  );
   assert.equal(await currentProfileBlockId(owner.id, target.id), profileBlockId);
 
   // A later Unblock run captures and removes a Follow generation created while
@@ -593,8 +643,10 @@ test('Unblock cleans current Follow generations before removing the exact Block'
     firstProfileId: owner.id,
     secondProfileId: target.id,
   });
+  const lateOperationId = crypto.randomUUID();
   const lateExecution = await executeProfileUnblockTransition({
     ...input,
+    operationId: lateOperationId,
     cleanupSources: lateCleanupSources,
   });
   assert.equal(lateExecution.ok, true);
@@ -603,7 +655,18 @@ test('Unblock cleans current Follow generations before removing the exact Block'
   }
   assert.deepEqual(lateExecution.result, firstExecution.result);
   assert.deepEqual(
-    lateExecution.effectPlan.map(({ input: effectInput }) => effectInput.sourceId),
+    (
+      await db
+        .select()
+        .from(ProfileBlockCleanupBatches)
+        .where(
+          and(
+            eq(ProfileBlockCleanupBatches.operation, 'UNBLOCK'),
+            eq(ProfileBlockCleanupBatches.operationId, lateOperationId),
+          ),
+        )
+        .then(firstOrThrow)
+    ).effectPlan.map(({ input: effectInput }) => effectInput.sourceId),
     [lateFollowId],
   );
   assert.equal(
@@ -643,6 +706,7 @@ test('Unblock cleans current Follow generations before removing the exact Block'
 
   const staleUnblock = await executeProfileUnblockTransition({
     ...input,
+    operationId: crypto.randomUUID(),
     cleanupSources: [],
   });
   assert.deepEqual(staleUnblock, {
@@ -653,7 +717,6 @@ test('Unblock cleans current Follow generations before removing the exact Block'
       ownerProfileId: owner.id,
       targetProfileId: target.id,
     },
-    effectPlan: [],
   });
   assert.equal(
     (
@@ -668,6 +731,360 @@ test('Unblock cleans current Follow generations before removing the exact Block'
   assert.equal(await currentProfileBlockId(owner.id, target.id), null);
 });
 
+test('legacy Unblock marks its exact relation while settlement is pending', async () => {
+  const { profile: owner } = await createProfile();
+  const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const profileBlockId = crypto.randomUUID();
+  await db.insert(ProfileBlocks).values({
+    id: profileBlockId,
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+  });
+
+  const execution = await executeProfileUnblockTransition({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    origin: 'LOCAL',
+    expectedProfileBlockId: profileBlockId,
+    operationId: profileBlockId,
+    cleanupSources: [],
+  });
+  assert.deepEqual(execution, {
+    ok: true,
+    result: {
+      removed: true,
+      profileBlockId,
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+    },
+  });
+  const [row] = await db.execute<{ closingAt: string | null }>(sql`
+    SELECT closing_at AS "closingAt"
+    FROM profile_block
+    WHERE id = ${profileBlockId}
+  `);
+  assert.ok(row?.closingAt);
+});
+
+test('legacy Unblock marker protects a replacement Block from stale exact deletion', async () => {
+  const { profile: owner } = await createProfile();
+  const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const oldProfileBlockId = crypto.randomUUID();
+  const newProfileBlockId = crypto.randomUUID();
+  await db.insert(ProfileBlocks).values({
+    id: oldProfileBlockId,
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+  });
+
+  const unblock = await executeProfileUnblockTransition({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    origin: 'LOCAL',
+    expectedProfileBlockId: oldProfileBlockId,
+    operationId: oldProfileBlockId,
+    cleanupSources: [],
+  });
+  assert.equal(unblock.ok, true);
+  if (!unblock.ok) {
+    return;
+  }
+
+  const [reblock, staleDelete] = await Promise.all([
+    executeProfileBlockTransition({
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+      origin: 'LOCAL',
+      cleanupSources: [],
+      candidateProfileBlockId: newProfileBlockId,
+    }),
+    deleteProfileBlock({
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+      profileBlockId: oldProfileBlockId,
+    }),
+  ]);
+  assert.deepEqual(reblock, {
+    ok: true,
+    result: {
+      created: true,
+      profileBlockId: newProfileBlockId,
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+    },
+  });
+  assert.ok(staleDelete === null || staleDelete.id === oldProfileBlockId);
+  assert.equal(await currentProfileBlockId(owner.id, target.id), newProfileBlockId);
+});
+
+test('Block replaces a CLOSING generation before an old exact delete can remove the candidate', async () => {
+  const { profile: owner } = await createProfile();
+  const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const oldProfileBlockId = crypto.randomUUID();
+  const newProfileBlockId = crypto.randomUUID();
+  const oldActivityUri = `https://remote.example/activities/${crypto.randomUUID()}`;
+  const newActivityUri = `https://remote.example/activities/${crypto.randomUUID()}`;
+  await db.insert(ProfileBlocks).values({
+    id: oldProfileBlockId,
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+  });
+  await db.insert(ProfileBlockActivities).values({
+    activityUri: oldActivityUri,
+    actorUri: `https://remote.example/users/${owner.handle}`,
+    objectUri: `https://local.example/ap/actor/${target.id}`,
+    origin: 'INBOUND',
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    profileBlockId: oldProfileBlockId,
+    state: 'CLOSING',
+  });
+
+  let releaseRelation!: () => void;
+  const relationRelease = new Promise<void>((resolve) => {
+    releaseRelation = resolve;
+  });
+  let relationLocked!: () => void;
+  const relationLockedPromise = new Promise<void>((resolve) => {
+    relationLocked = resolve;
+  });
+  const relationLock = db.transaction(async (tx) => {
+    await tx
+      .update(ProfileBlocks)
+      .set({ ownerProfileId: sql`${ProfileBlocks.ownerProfileId}` })
+      .where(eq(ProfileBlocks.id, oldProfileBlockId))
+      .returning({ id: ProfileBlocks.id });
+    relationLocked();
+    await relationRelease;
+  });
+  await relationLockedPromise;
+
+  const input = {
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    origin: 'ACTIVITYPUB' as const,
+    cleanupSources: [],
+    candidateProfileBlockId: newProfileBlockId,
+    protocolActivity: {
+      activityUri: newActivityUri,
+      actorUri: `https://remote.example/users/${owner.handle}`,
+      objectUri: `https://local.example/ap/actor/${target.id}`,
+      origin: 'INBOUND' as const,
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+    },
+  };
+  const executionPromise = executeProfileBlockTransition(input);
+  const oldDeletePromise = db.transaction((tx) =>
+    tx
+      .delete(ProfileBlocks)
+      .where(eq(ProfileBlocks.id, oldProfileBlockId))
+      .returning({ id: ProfileBlocks.id })
+      .then((rows) => rows[0]),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  releaseRelation();
+  const [execution] = await Promise.all([executionPromise, oldDeletePromise, relationLock]);
+
+  assert.deepEqual(execution, {
+    ok: true,
+    result: {
+      created: true,
+      profileBlockId: newProfileBlockId,
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+      protocol: {
+        activityUri: newActivityUri,
+        profileBlockId: newProfileBlockId,
+        status: 'ACTIVE',
+      },
+    },
+  });
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileBlocks)
+      .where(eq(ProfileBlocks.id, oldProfileBlockId))
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileBlocks)
+      .where(eq(ProfileBlocks.id, newProfileBlockId))
+      .then((rows) => rows.length),
+    1,
+  );
+  assert.deepEqual(
+    await db
+      .select({
+        activityUri: ProfileBlockActivities.activityUri,
+        profileBlockId: ProfileBlockActivities.profileBlockId,
+      })
+      .from(ProfileBlockActivities)
+      .where(inArray(ProfileBlockActivities.activityUri, [oldActivityUri, newActivityUri]))
+      .then((rows) =>
+        rows.sort((left, right) => left.activityUri.localeCompare(right.activityUri)),
+      ),
+    [
+      { activityUri: oldActivityUri, profileBlockId: oldProfileBlockId },
+      { activityUri: newActivityUri, profileBlockId: newProfileBlockId },
+    ].sort((left, right) => left.activityUri.localeCompare(right.activityUri)),
+  );
+});
+
+test('Block rechecks the protocol after relation serialization before replaying a closing generation', async () => {
+  const { profile: owner } = await createProfile();
+  const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const profileBlockId = crypto.randomUUID();
+  const activityUri = `https://remote.example/activities/${crypto.randomUUID()}`;
+  await db.insert(ProfileBlocks).values({
+    id: profileBlockId,
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+  });
+  await db.insert(ProfileBlockActivities).values({
+    activityUri,
+    actorUri: `https://remote.example/users/${owner.handle}`,
+    objectUri: `https://local.example/ap/actor/${target.id}`,
+    origin: 'INBOUND',
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    profileBlockId,
+    state: 'ACTIVE',
+  });
+
+  let releaseRelation!: () => void;
+  const relationRelease = new Promise<void>((resolve) => {
+    releaseRelation = resolve;
+  });
+  let relationLocked!: () => void;
+  const relationLockedPromise = new Promise<void>((resolve) => {
+    relationLocked = resolve;
+  });
+  const relationLock = db.transaction(async (tx) => {
+    await tx
+      .update(ProfileBlocks)
+      .set({ ownerProfileId: sql`${ProfileBlocks.ownerProfileId}` })
+      .where(eq(ProfileBlocks.id, profileBlockId))
+      .returning({ id: ProfileBlocks.id });
+    relationLocked();
+    await relationRelease;
+  });
+  await relationLockedPromise;
+
+  const replayPromise = executeProfileBlockTransition({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    origin: 'ACTIVITYPUB',
+    cleanupSources: [],
+    candidateProfileBlockId: profileBlockId,
+    protocolActivity: {
+      activityUri,
+      actorUri: `https://remote.example/users/${owner.handle}`,
+      objectUri: `https://local.example/ap/actor/${target.id}`,
+      origin: 'INBOUND',
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+    },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  await db
+    .update(ProfileBlockActivities)
+    .set({ state: 'CLOSING', updatedAt: sql`now()` })
+    .where(eq(ProfileBlockActivities.activityUri, activityUri));
+  releaseRelation();
+
+  const [replay] = await Promise.all([replayPromise, relationLock]);
+  assert.deepEqual(replay, {
+    ok: true,
+    result: {
+      created: false,
+      profileBlockId,
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+      protocol: {
+        activityUri,
+        profileBlockId,
+        status: 'CLOSING',
+      },
+    },
+  });
+  assert.equal(await currentProfileBlockId(owner.id, target.id), profileBlockId);
+});
+
+test('Block transaction does not recreate a relation when a concurrent Undo tombstone wins', async () => {
+  const { profile: owner } = await createProfile();
+  const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const activityUri = `https://remote.example/activities/${crypto.randomUUID()}`;
+  const candidateProfileBlockId = crypto.randomUUID();
+  let releaseTombstone!: () => void;
+  const tombstoneReleased = new Promise<void>((resolve) => {
+    releaseTombstone = resolve;
+  });
+  let tombstoneInserted!: () => void;
+  const tombstoneInsertedPromise = new Promise<void>((resolve) => {
+    tombstoneInserted = resolve;
+  });
+
+  const tombstoneTransaction = db.transaction(async (tx) => {
+    await tx.insert(ProfileBlockActivities).values({
+      activityUri,
+      actorUri: `https://remote.example/users/${owner.handle}`,
+      objectUri: `https://local.example/ap/actor/${target.id}`,
+      origin: 'INBOUND',
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+      profileBlockId: candidateProfileBlockId,
+      state: 'CLOSED',
+      closedAt: sql`now()`,
+    });
+    tombstoneInserted();
+    await tombstoneReleased;
+  });
+  await tombstoneInsertedPromise;
+
+  const blockTransaction = executeProfileBlockTransition({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    origin: 'ACTIVITYPUB',
+    cleanupSources: [],
+    candidateProfileBlockId,
+    protocolActivity: {
+      activityUri,
+      actorUri: `https://remote.example/users/${owner.handle}`,
+      objectUri: `https://local.example/ap/actor/${target.id}`,
+      origin: 'INBOUND',
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+    },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  releaseTombstone();
+
+  const [tombstoneResult, blockResult] = await Promise.all([
+    tombstoneTransaction,
+    blockTransaction,
+  ]);
+  assert.equal(tombstoneResult, undefined);
+  assert.deepEqual(blockResult, {
+    ok: true,
+    result: {
+      created: false,
+      profileBlockId: candidateProfileBlockId,
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+      protocol: {
+        activityUri,
+        profileBlockId: candidateProfileBlockId,
+        status: 'CLOSED',
+      },
+    },
+  });
+  assert.equal(await currentProfileBlockId(owner.id, target.id), null);
+});
+
 test('Block rejects self-blocking in the service and the database check', async () => {
   const { profile } = await createProfile();
 
@@ -675,6 +1092,7 @@ test('Block rejects self-blocking in the service and the database check', async 
     ownerProfileId: profile.id,
     targetProfileId: profile.id,
     origin: 'LOCAL',
+    candidateProfileBlockId: crypto.randomUUID(),
     cleanupSources: [],
   });
   assert.deepEqual(execution, {
@@ -722,7 +1140,6 @@ test('Active Block rejects new Follow and approval in either direction', async (
 
   const activityPubFollow = await executeProfileFollowPairTransition({
     pair: { followerProfileId: target.id, followeeProfileId: owner.id },
-    candidateRowId: crypto.randomUUID(),
     command: { kind: 'FOLLOW', origin: 'ACTIVITYPUB' },
   });
   assert.deepEqual(activityPubFollow, {
@@ -792,7 +1209,6 @@ test('Active Block rejects new Follow and approval in either direction', async (
   const activityPubAccept = await executeProfileFollowPairTransition({
     pair: { followerProfileId: target.id, followeeProfileId: owner.id },
     pendingRequestId: activityPubPendingRequest.id,
-    followCandidateId: crypto.randomUUID(),
     command: {
       expectedRowId: activityPubPendingRequest.id,
       kind: 'ACCEPT',

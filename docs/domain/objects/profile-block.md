@@ -36,6 +36,19 @@ Profile Block의 도메인 계약은 Owner Profile이 Local인지 Remote인지 �
 요구하지 않는다. 각 ingress는 자체 인증·admission 경계를 검증한다. 현재 GraphQL ingress는 검증된 Session의 selected
 Local Profile만 actor로 사용하며, remote ActivityPub ingress와 Block/Undo 전달은 `PROD-818`의 후속 범위다.
 
+ActivityPub 연합은 [ADR 0029](../decisions/0029-profile-block-federation.md)에 따라 Mastodon 호환 발신·수신을
+지원한다. Local Owner가 Remote Target을 차단하거나 해제하면 `Block` 또는 `Undo(Block)`를 Target의 원격
+서버에 전달한다. 차단 사실은 그 서버에 알려지며, 상대 서버의 표시·알림과 실제 제한 적용은 보장하지 않는다.
+원격 전달 실패는 확정된 로컬 차단·해제를 되돌리지 않는다.
+
+검증된 Remote Owner의 Local Target 차단·해제도 같은 Profile Block 관계와 필수 cleanup을 사용한다. Remote
+Owner는 자기 방향의 관계만 생성·제거하며, 반대 방향 Local Owner의 Block은 변경하지 않는다. 수신한 차단·해제를
+다시 같은 `Block` 또는 `Undo(Block)`로 발신하지 않는다.
+
+연합 기능 도입 전에 존재하던 차단은 로컬에 유지하고 일괄 발신하지 않는다. 도입 후 새로 생성한 차단부터
+발신하며, 발신한 원본이 없는 기존 차단의 해제에는 `Undo(Block)`를 만들지 않는다. 해제 후 다시 차단하면 새
+차단으로 전달한다. 이 rollout은 기존 차단의 조회·상호작용 제한과 Follow 비복구 정책을 바꾸지 않는다.
+
 ## 권한
 
 | 권한                 | 종류      | 성립 조건                                             |

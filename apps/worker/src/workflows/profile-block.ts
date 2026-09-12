@@ -1,8 +1,16 @@
-import { ApplicationFailure, proxyActivities } from '@temporalio/workflow';
+import {
+  ApplicationFailure,
+  ChildWorkflowCancellationType,
+  ParentClosePolicy,
+  proxyActivities,
+} from '@temporalio/workflow';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
+import { runChildWorkflow } from './child';
+import { profileBlockDeliveryWorkflowDefinition } from './profile-block-delivery';
 import { settleEffects } from './settle-effects';
 import type {
+  ProfileBlockProtocolActivityInput,
   ProfileBlockTransitionExecution,
   ProfileBlockTransitionResult,
 } from '@kosmo/core/services';
@@ -12,25 +20,39 @@ const profileIdSchema = z
   .string({ error: 'Profile Block requires non-empty profile IDs' })
   .min(1, 'Profile Block requires non-empty profile IDs');
 
+const protocolActivitySchema = z.strictObject({
+  activityUri: profileIdSchema,
+  actorUri: profileIdSchema,
+  objectUri: profileIdSchema,
+  ownerProfileId: profileIdSchema,
+  targetProfileId: profileIdSchema,
+  origin: z.enum(['INBOUND', 'OUTBOUND']),
+  profileBlockId: profileIdSchema.optional(),
+});
+
 const profileBlockInputSchema = z.strictObject({
   ownerProfileId: profileIdSchema,
   targetProfileId: profileIdSchema,
   origin: z.enum(['LOCAL', 'ACTIVITYPUB'], {
     error: 'Profile Block origin is invalid',
   }),
+  protocolActivity: protocolActivitySchema.optional(),
 });
 
 type ProfileBlockWorkflowInput = {
   readonly ownerProfileId: string;
   readonly targetProfileId: string;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+  readonly protocolActivity?: ProfileBlockProtocolActivityInput;
 };
 
 const {
   deleteFollowNotificationActivity,
   deleteFollowRequestNotificationActivity,
   executeProfileBlockTransitionActivity,
+  loadPendingProfileBlockCleanupBatchesActivity,
   loadProfileBlockTransitionBootstrapActivity,
+  markProfileBlockCleanupBatchSettledActivity,
   sendProfileUnfollowActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
@@ -73,17 +95,43 @@ export async function profileBlockWorkflow(
     throw profileBlockFailure(execution);
   }
 
-  for (const effect of execution.effectPlan) {
-    // The Follow DELETE effect plan carries the exact directed pair and an
-    // optional ActivityPub flag. Keep each plan entry's sibling effects in a
-    // single settlement so the next source cannot start before this source's
-    // notification cleanup and delivery handoff have both settled.
-    await settleEffects([
-      effect.input.sourceKind === 'FOLLOW'
-        ? deleteFollowNotificationActivity(effect.input.sourceId)
-        : deleteFollowRequestNotificationActivity(effect.input.sourceId),
-      ...(effect.input.sendActivityPub === true ? [sendProfileUnfollowActivity(effect.input)] : []),
-    ]);
+  const pendingBatches = await loadPendingProfileBlockCleanupBatchesActivity({
+    ownerProfileId: execution.result.ownerProfileId,
+    targetProfileId: execution.result.targetProfileId,
+  });
+  for (const batch of pendingBatches) {
+    for (const effect of batch.effectPlan) {
+      // The Follow DELETE effect plan carries the exact directed pair and an
+      // optional ActivityPub flag. Keep each plan entry's sibling effects in a
+      // single settlement so the next source cannot start before this source's
+      // notification cleanup and delivery handoff have both settled.
+      await settleEffects([
+        effect.input.sourceKind === 'FOLLOW'
+          ? deleteFollowNotificationActivity(effect.input.sourceId)
+          : deleteFollowRequestNotificationActivity(effect.input.sourceId),
+        ...(effect.input.sendActivityPub === true
+          ? [sendProfileUnfollowActivity(effect.input)]
+          : []),
+      ]);
+    }
+    await markProfileBlockCleanupBatchSettledActivity(batch.id);
+  }
+
+  if (parsedInput.origin === 'LOCAL' && execution.result.created) {
+    // The start acknowledgement durably transfers delivery ownership before
+    // the local command returns. PENDING delivery then outlives this parent.
+    await runChildWorkflow(profileBlockDeliveryWorkflowDefinition, {
+      mode: 'start',
+      args: [
+        {
+          ownerProfileId: execution.result.ownerProfileId,
+          profileBlockId: execution.result.profileBlockId,
+          targetProfileId: execution.result.targetProfileId,
+        },
+      ],
+      cancellationType: ChildWorkflowCancellationType.ABANDON,
+      parentClosePolicy: ParentClosePolicy.ABANDON,
+    });
   }
 
   return execution.result;

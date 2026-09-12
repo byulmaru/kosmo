@@ -2,6 +2,7 @@ export { notificationCleanupWorkflow } from './cleanup-unavailable-notifications
 export { postCreateEffectsWorkflow } from './create';
 export { postDeleteWorkflow } from './delete';
 export { profileBlockWorkflow } from './profile-block';
+export { profileBlockDeliveryWorkflow } from './profile-block-delivery';
 export { profileFollowPairWorkflow } from './profile-follow-pair';
 export { profileFollowRemovalWorkflow } from './profile-follow-removal';
 export { profileUnblockWorkflow } from './profile-unblock';

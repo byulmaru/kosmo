@@ -111,6 +111,29 @@ export const ProfileFollowPolicy = {
 } as const;
 export type ProfileFollowPolicy = keyof typeof ProfileFollowPolicy;
 
+export const ProfileBlockActivityOrigin = {
+  INBOUND: 'INBOUND',
+  OUTBOUND: 'OUTBOUND',
+} as const;
+export type ProfileBlockActivityOrigin = keyof typeof ProfileBlockActivityOrigin;
+
+export const ProfileBlockActivityState = {
+  ACTIVE: 'ACTIVE',
+  CLOSING: 'CLOSING',
+  CLOSED: 'CLOSED',
+} as const;
+export type ProfileBlockActivityState = keyof typeof ProfileBlockActivityState;
+
+export const ProfileBlockDeliveryState = {
+  NONE: 'NONE',
+  PENDING: 'PENDING',
+  SETTLED: 'SETTLED',
+} as const;
+export type ProfileBlockDeliveryState = keyof typeof ProfileBlockDeliveryState;
+
+export type ProfileBlockCleanupOperation = 'BLOCK' | 'UNBLOCK';
+export type ProfileBlockCleanupOrigin = 'LOCAL' | 'ACTIVITYPUB';
+
 export const ProfileMediaKind = {
   AVATAR: 'AVATAR',
   HEADER: 'HEADER',
