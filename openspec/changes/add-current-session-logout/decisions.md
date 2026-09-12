@@ -83,9 +83,9 @@
 - Authority / Provenance: Linear: `PROD-473`, `PROD-475`; PR #389 review thread `PRRT_kwDOR_2JU86Ua8g6`
 - Status: Active
 - Context / Problem: 현재 shell layout은 full sidebar, compact rail, mobile drawer 중 하나만 조작 가능하지만, 상위 `UniversalShell`이 logout state를 만들고 `SidebarNavigation`에 callback bag으로 전달하면 Storybook이나 다른 caller가 필수 server revoke·credential cleanup·Relay reset lifecycle을 no-op으로 교체할 수 있다.
-- Decision Outcome: `SidebarNavigation`이 logout control의 존재와 배치를 소유하고, `LogoutControl`이 production `useLogout()`을 직접 호출한다. 각 현재 surface는 자체 pending/error 상태로 그 surface의 중복 요청을 막고 동일한 접근 가능한 실패·재시도를 제공한다. 별도 confirmation dialog는 추가하지 않는다.
+- Decision Outcome: Production `SidebarNavigation` adapter가 logout control의 존재와 배치 및 `useLogout()` 호출을 직접 소유하고, 공용 Sidebar presentation에 pending/error만 전달한다. 각 현재 surface는 자체 action 상태로 그 surface의 중복 요청을 막고 동일한 접근 가능한 실패·재시도를 제공한다. `UniversalShell` 같은 외부 caller가 logout lifecycle을 callback으로 교체할 수 없으며 별도 confirmation dialog는 추가하지 않는다.
 - Alternatives Considered: 상위 shell의 단일 action state는 여러 surface가 동시에 조작 가능할 때 유효하지만 현재 layout에는 그 근거가 없고 필수 lifecycle을 prop으로 대체할 수 있는 seam을 만든다. 별도 provider는 이 seam을 닫을 수 있지만 동시에 조작 가능한 consumer가 없는 현재 구조에서는 추가 abstraction이므로 채택하지 않았다.
-- Consequences: Storybook도 production logout composition을 렌더링하며 no-op callback fixture를 가질 수 없다. 향후 여러 logout surface가 동시에 조작 가능해지면 공통 provider와 cross-surface 중복 방지를 다시 검토해야 한다.
+- Consequences: Production Shell story는 실제 adapter composition을 렌더링하고, 공용 component story의 callback은 presentation 상태만 검증한다. 향후 여러 logout surface가 동시에 조작 가능해지면 공통 provider와 cross-surface 중복 방지를 다시 검토해야 한다.
 - Confirmation / Follow-up: production `useLogout` composition, full/compact/drawer 각각의 pending·disabled·failure·retry E2E로 확인한다.
 
 ## Remaining Decisions

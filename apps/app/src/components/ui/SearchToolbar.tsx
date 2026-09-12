@@ -4,19 +4,31 @@ import { StyleSheet, TextInput, View } from 'react-native';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, motion, radius, space, textStyles } from '@/theme/tokens';
 import { IconButton } from './IconButton';
-import type { PressableStateCallbackType, ViewStyle } from 'react-native';
+import type { ReactElement, RefObject } from 'react';
+import type { PressableStateCallbackType, View as NativeView, ViewStyle } from 'react-native';
 import type { NavigationChromePlatform } from './navigationChrome';
 
 export type SearchToolbarLeadingAction = 'back' | 'menu' | 'none';
 
+export type SearchToolbarRenderLeadingControlProps = Readonly<{
+  action: 'back';
+  children: ReactElement;
+  disabled: boolean;
+}>;
+
 export type SearchToolbarProps = {
   disabled?: boolean;
   leadingAction?: SearchToolbarLeadingAction;
+  leadingControlAriaControls?: string;
+  leadingControlExpanded?: boolean;
+  leadingControlRef?: RefObject<NativeView | null>;
   onBackPress?: () => void;
   onChangeText: (value: string) => void;
   onClear: () => void;
   onMenuPress?: () => void;
   onSubmit: (value: string) => void;
+  renderLeadingControl?: (props: SearchToolbarRenderLeadingControlProps) => ReactElement;
+  inputRef?: RefObject<TextInput | null>;
   placeholder?: string;
   platform?: NavigationChromePlatform;
   value: string;
@@ -25,18 +37,24 @@ export type SearchToolbarProps = {
 export function SearchToolbar({
   disabled = false,
   leadingAction = 'menu',
+  leadingControlAriaControls,
+  leadingControlExpanded = false,
+  leadingControlRef,
   onBackPress,
   onChangeText,
   onClear,
   onMenuPress,
   onSubmit,
+  renderLeadingControl,
+  inputRef,
   placeholder = '검색어를 입력하세요',
   platform = 'web',
   value,
 }: SearchToolbarProps) {
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
-  const inputRef = useRef<TextInput>(null);
+  const internalInputRef = useRef<TextInput>(null);
+  const resolvedInputRef = inputRef ?? internalInputRef;
   const [inputFocused, setInputFocused] = useState(false);
   const [focusVisibleControl, setFocusVisibleControl] = useState<'clear' | 'leading' | null>(null);
   const targetSize = platform === 'android' ? 48 : 44;
@@ -88,6 +106,28 @@ export function SearchToolbar({
       },
     ];
   };
+  const backControl = showBack ? (
+    <IconButton
+      accessibilityLabel="뒤로"
+      disabled={leadingDisabled}
+      onBlur={() => setFocusVisibleControl(null)}
+      onFocus={(event) => {
+        const target = event.currentTarget as unknown as {
+          matches?: (selector: string) => boolean;
+        };
+        setFocusVisibleControl(
+          platform === 'web' && target.matches?.(':focus-visible') ? 'leading' : null,
+        );
+      }}
+      onPress={onBackPress}
+      style={StyleSheet.flatten(controlStyle('leading'))}
+      targetSize={targetSize}
+      visualSize={targetSize}
+      visualStyle={(state) => controlVisualStyle(leadingDisabled, state)}
+    >
+      <ArrowLeft color={leadingIconColor} size={iconSizes[20]} strokeWidth={2} />
+    </IconButton>
+  ) : null;
 
   return (
     <View
@@ -103,10 +143,14 @@ export function SearchToolbar({
     >
       {showMenu ? (
         <IconButton
+          aria-controls={leadingControlAriaControls}
           accessibilityLabel="메뉴 열기"
+          accessibilityState={{ expanded: leadingControlExpanded }}
+          controlRef={leadingControlRef}
           disabled={leadingDisabled}
           onBlur={() => setFocusVisibleControl(null)}
           onFocus={(event) => {
+            event.stopPropagation();
             const target = event.currentTarget as unknown as {
               matches?: (selector: string) => boolean;
             };
@@ -115,7 +159,7 @@ export function SearchToolbar({
             );
           }}
           onPress={onMenuPress}
-          style={() => controlStyle('leading')}
+          style={StyleSheet.flatten(controlStyle('leading'))}
           targetSize={targetSize}
           visualSize={targetSize}
           visualStyle={(state) => controlVisualStyle(leadingDisabled, state)}
@@ -123,30 +167,16 @@ export function SearchToolbar({
           <Menu color={leadingIconColor} size={iconSizes[24]} strokeWidth={2} />
         </IconButton>
       ) : null}
-      {showBack ? (
-        <IconButton
-          accessibilityLabel="뒤로"
-          disabled={leadingDisabled}
-          onBlur={() => setFocusVisibleControl(null)}
-          onFocus={(event) => {
-            const target = event.currentTarget as unknown as {
-              matches?: (selector: string) => boolean;
-            };
-            setFocusVisibleControl(
-              platform === 'web' && target.matches?.(':focus-visible') ? 'leading' : null,
-            );
-          }}
-          onPress={onBackPress}
-          style={() => controlStyle('leading')}
-          targetSize={targetSize}
-          visualSize={targetSize}
-          visualStyle={(state) => controlVisualStyle(leadingDisabled, state)}
-        >
-          <ArrowLeft color={leadingIconColor} size={iconSizes[20]} strokeWidth={2} />
-        </IconButton>
-      ) : null}
+      {backControl
+        ? (renderLeadingControl?.({
+            action: 'back',
+            children: backControl,
+            disabled: leadingDisabled,
+          }) ?? backControl)
+        : null}
 
       <View
+        testID="search-input-shell"
         style={[
           styles.inputShell,
           {
@@ -165,7 +195,7 @@ export function SearchToolbar({
           autoCapitalize="none"
           autoCorrect={false}
           editable={!disabled}
-          ref={inputRef}
+          ref={resolvedInputRef}
           onBlur={() => setInputFocused(false)}
           onChangeText={(nextValue) => {
             if (!disabled) {
@@ -202,10 +232,10 @@ export function SearchToolbar({
             }}
             onPress={() => {
               onClear();
-              inputRef.current?.focus();
+              resolvedInputRef.current?.focus();
             }}
-            onPressIn={() => inputRef.current?.focus()}
-            style={() => controlStyle('clear')}
+            onPressIn={() => resolvedInputRef.current?.focus()}
+            style={StyleSheet.flatten(controlStyle('clear'))}
             targetSize={targetSize}
             visualSize={targetSize}
             visualStyle={(state) => controlVisualStyle(disabled, state)}

@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { fn } from 'storybook/test';
 import LocalScreen from '@/app/(tabs)/(protected)/local';
+import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { RelayStoryProvider } from '../../../.storybook/mocks/react-relay';
 import { post, profile, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -199,6 +200,16 @@ function localRelayForState(state: LocalState) {
 }
 
 function LocalPlayground({ state }: LocalStoryArgs) {
+  const homeReselectionRef = useRef<(() => void) | null>(null);
+  const registerHomeReselection = useCallback((handler: () => void) => {
+    homeReselectionRef.current = handler;
+    return () => {
+      if (homeReselectionRef.current === handler) {
+        homeReselectionRef.current = null;
+      }
+    };
+  }, []);
+  const reselectHome = useCallback(() => homeReselectionRef.current?.(), []);
   const relay = useMemo(() => localRelayForState(state), [state]);
 
   return (
@@ -210,7 +221,15 @@ function LocalPlayground({ state }: LocalStoryArgs) {
       paginationResponses={relay.paginationResponses}
       queryRequestObserver={queryRequestObserver}
     >
-      <LocalScreen />
+      <ShellChromeProvider
+        navigationDrawerOpen={false}
+        openNavigationDrawer={() => undefined}
+        openProfileSwitcher={() => undefined}
+        registerHomeReselection={registerHomeReselection}
+        reselectHome={reselectHome}
+      >
+        <LocalScreen />
+      </ShellChromeProvider>
     </RelayStoryProvider>
   );
 }
