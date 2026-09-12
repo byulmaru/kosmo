@@ -1,6 +1,7 @@
 import { and, eq, exists, inArray, or, sql } from 'drizzle-orm';
 import { ProfileFollows } from '../db';
 import { PostState, PostVisibility } from '../enums';
+import { profileBlockVisibilityWhere } from './profile-block';
 import type { SQL, SQLWrapper } from 'drizzle-orm';
 import type { DatabaseHandle } from '../db';
 
@@ -58,11 +59,13 @@ export const visiblePostWhere = ({
   profileVisible,
   viewerProfileId,
   db,
+  includeProfileBlock = true,
 }: {
   readonly post: VisiblePost;
   readonly profileVisible: SQL<boolean>;
   readonly viewerProfileId?: SQLWrapper | string | null;
   readonly db: DatabaseHandle;
+  readonly includeProfileBlock?: boolean;
 }): SQL<boolean> => {
   const viewerFollowsAuthor = viewerProfileId
     ? exists(
@@ -73,19 +76,38 @@ export const visiblePostWhere = ({
             and(
               eq(ProfileFollows.followerProfileId, viewerProfileId),
               eq(ProfileFollows.followeeProfileId, post.profileId),
+              profileBlockVisibilityWhere({
+                database: db,
+                ownerProfileId: viewerProfileId,
+                targetProfileId: post.profileId,
+              }),
+              profileBlockVisibilityWhere({
+                database: db,
+                ownerProfileId: post.profileId,
+                targetProfileId: viewerProfileId,
+              }),
             ),
           ),
       )
     : undefined;
 
-  return postVisibilityCondition({
-    columns: {
-      authorProfileId: post.profileId,
-      authorVisible: profileVisible,
-      postState: post.state,
-      postVisibility: post.visibility,
-    },
-    viewerFollowsAuthor,
-    viewerProfileId,
-  });
+  return sql<boolean>`${and(
+    includeProfileBlock && viewerProfileId !== undefined && viewerProfileId !== null
+      ? profileBlockVisibilityWhere({
+          database: db,
+          ownerProfileId: post.profileId,
+          targetProfileId: viewerProfileId,
+        })
+      : undefined,
+    postVisibilityCondition({
+      columns: {
+        authorProfileId: post.profileId,
+        authorVisible: profileVisible,
+        postState: post.state,
+        postVisibility: post.visibility,
+      },
+      viewerFollowsAuthor,
+      viewerProfileId,
+    }),
+  )!}`;
 };

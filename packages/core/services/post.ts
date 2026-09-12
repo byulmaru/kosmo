@@ -4,7 +4,6 @@ import {
   db,
   first,
   firstOrThrow,
-  firstOrThrowWith,
   Instances,
   isUniqueViolation,
   Media,
@@ -33,6 +32,7 @@ import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
 import { validatePostStructure } from './post-structure';
+import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
 
@@ -270,10 +270,18 @@ const createOrFindRepost = async (
     readonly sourcePostId: string;
   },
 ) => {
-  const source = await findVisiblePost(tx, { actorProfileId, postId: sourcePostId });
+  const source = await findVisiblePost(tx, {
+    actorProfileId,
+    postId: sourcePostId,
+  });
   if (!source) {
     throw new NotFoundError('Post not found');
   }
+  await assertProfilePairIsNotBlocked(tx, {
+    notFoundMessage: 'Post not found',
+    firstProfileId: actorProfileId,
+    secondProfileId: source.profileId,
+  });
   if (source.currentContentId === null) {
     throw new ValidationError('Post cannot be reposted', { field: 'sourceId' });
   }
@@ -620,14 +628,31 @@ export async function createPost(
         }
       }
 
-      if (input.origin === 'LOCAL' && input.replyParentId !== undefined) {
-        const parent = await findVisiblePost(tx, {
-          actorProfileId: input.profileId,
-          postId: input.replyParentId,
-        });
+      if (input.replyParentId !== undefined) {
+        const parent =
+          input.origin === 'LOCAL'
+            ? await findVisiblePost(tx, {
+                actorProfileId: input.profileId,
+                postId: input.replyParentId,
+              })
+            : await tx
+                .select({
+                  currentContentId: Posts.currentContentId,
+                  id: Posts.id,
+                  profileId: Posts.profileId,
+                })
+                .from(Posts)
+                .where(and(eq(Posts.id, input.replyParentId), eq(Posts.state, PostState.ACTIVE)))
+                .limit(1)
+                .then(first);
         if (!parent) {
           throw new NotFoundError('Post not found');
         }
+        await assertProfilePairIsNotBlocked(tx, {
+          notFoundMessage: 'Post not found',
+          firstProfileId: input.profileId,
+          secondProfileId: parent.profileId,
+        });
         if (parent.currentContentId === null) {
           throw new ValidationError('Reply Parent must have content', {
             field: 'replyParentId',
@@ -728,19 +753,6 @@ export async function createPost(
         replyParentId: input.replyParentId ?? null,
         repostSourceId: post.repostSourceId,
       });
-
-      if (input.origin === 'ACTIVITYPUB' && input.replyParentId !== undefined) {
-        const replyParent = await tx
-          .select({ currentContentId: Posts.currentContentId })
-          .from(Posts)
-          .where(eq(Posts.id, input.replyParentId))
-          .then(firstOrThrowWith(() => new NotFoundError('Post not found')));
-        if (replyParent.currentContentId === null) {
-          throw new ValidationError('Reply Parent must have content', {
-            field: 'replyParentId',
-          });
-        }
-      }
 
       const linkedPost =
         input.replyParentId === undefined

@@ -1,6 +1,6 @@
 import { db, Instances, Posts, Profiles, Reactions } from '@kosmo/core/db';
 import { and, asc, count, eq, inArray, min } from 'drizzle-orm';
-import { postAccessWhere } from '../access';
+import { directPostAccessWhere } from '../access';
 import type { UserContext } from '@/context';
 
 export type ReactionCountRow = {
@@ -27,7 +27,10 @@ export const reactionCountLoader = (ctx: UserContext) =>
         .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .where(
-          and(inArray(Reactions.postId, postIds), postAccessWhere({ ctx, profileMute: 'ignore' })),
+          and(
+            inArray(Reactions.postId, postIds),
+            directPostAccessWhere({ ctx, profileMute: 'ignore' }),
+          ),
         )
         .groupBy(Reactions.postId, Reactions.type)
         .orderBy(asc(min(Reactions.createdAt)), asc(Reactions.type));

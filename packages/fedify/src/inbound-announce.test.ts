@@ -45,6 +45,7 @@ let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
+let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let Profiles: typeof CoreDb.Profiles;
 let federation: typeof FederationModule.federation;
 let handleInboundAnnounce: typeof HandleInboundAnnounce;
@@ -65,6 +66,7 @@ describe('inbound Announce materialization', () => {
       pg,
       PostContents,
       Posts,
+      ProfileBlocks,
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
@@ -124,6 +126,69 @@ describe('inbound Announce materialization', () => {
 
     const repost = await findReposts(actor.id, source.id).then((rows) => rows[0]);
     assert.equal(repost?.state, PostState.ACTIVE);
+  });
+
+  test('Active Profile Block은 inbound Announce를 양방향 rejected projection으로 관측하고 identity를 만들지 않는다', async () => {
+    const actor = await createRemoteActor(actorUri);
+    const firstLocalAuthor = await createProfile({
+      instanceId: localInstanceId,
+      handle: 'blocked-one',
+    });
+    const secondLocalAuthor = await createProfile({
+      instanceId: localInstanceId,
+      handle: 'blocked-two',
+    });
+    const firstSource = await createLocalSource(firstLocalAuthor.id);
+    const secondSource = await createLocalSource(secondLocalAuthor.id);
+    await db.insert(ProfileBlocks).values([
+      {
+        ownerProfileId: firstLocalAuthor.id,
+        targetProfileId: actor.id,
+      },
+      {
+        ownerProfileId: actor.id,
+        targetProfileId: secondLocalAuthor.id,
+      },
+    ]);
+    const firstObject = new URL(`/ap/note/${firstSource.id}`, publicOrigin);
+    const secondObject = new URL(`/ap/note/${secondSource.id}`, publicOrigin);
+    const firstActivity = announce('blocked-one', firstObject);
+    const secondActivity = announce('blocked-two', secondObject);
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await handleInboundAnnounce(context(), firstActivity, receivedAt);
+      await handleInboundAnnounce(context(), secondActivity, receivedAt);
+    } finally {
+      restoreReporter();
+    }
+
+    assert.equal((await findReposts(actor.id, firstSource.id)).length, 0);
+    assert.equal((await findReposts(actor.id, secondSource.id)).length, 0);
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Announce',
+        actorOrigin: actorUri.origin,
+        handler: 'announce',
+        objectOrigin: firstObject.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'repost_projection_rejected',
+      },
+      {
+        activityType: 'Announce',
+        actorOrigin: actorUri.origin,
+        handler: 'announce',
+        objectOrigin: secondObject.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'repost_projection_rejected',
+      },
+    ]);
   });
 
   test('Announce를 duplicate·generation 교체에서 직접 Notification 없이 materialize한다', async () => {

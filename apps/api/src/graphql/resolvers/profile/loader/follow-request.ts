@@ -21,6 +21,7 @@ export const viewerFollowRequestLoader = (ctx: UserContext) =>
           and(
             eq(ProfileFollowRequests.followerProfileId, ctx.session.profile.id),
             inArray(ProfileFollowRequests.followeeProfileId, ids),
+            profileFollowRequestAccessWhere(ctx),
           ),
         );
     },

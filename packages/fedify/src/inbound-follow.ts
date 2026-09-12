@@ -94,13 +94,30 @@ export const handleInboundFollow = async (
     followeeProfileId: localRecipient.id,
     followerProfileId: remoteActor.profile.id,
   };
-  const result = await executeProfileFollowPairTransition({
-    pair,
-    command: {
-      kind: 'FOLLOW',
-      origin: 'ACTIVITYPUB',
-    },
-  });
+  let result: Awaited<ReturnType<typeof executeProfileFollowPairTransition>>;
+  try {
+    result = await executeProfileFollowPairTransition({
+      pair,
+      command: {
+        kind: 'FOLLOW',
+        origin: 'ACTIVITYPUB',
+      },
+    });
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      observeInbound({
+        outcome: 'rejected',
+        activityType: 'Follow',
+        actorOrigin: actorUri.origin,
+        handler: 'follow',
+        objectOrigin: objectUri.origin,
+        phase: 'projection',
+        reasonCode: 'follow_policy_rejected',
+      });
+      return;
+    }
+    throw error;
+  }
   if (result.result.commandKind !== 'FOLLOW') {
     throw new Error('Unexpected inbound Follow transition result');
   }

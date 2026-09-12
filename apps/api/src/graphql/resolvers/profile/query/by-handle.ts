@@ -1,10 +1,11 @@
 import { db, first, Instances, Profiles } from '@kosmo/core/db';
-import { InstanceKind, ProfileState } from '@kosmo/core/enums';
+import { InstanceKind } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/remote-profile';
 import { profileHandleSchema } from '@kosmo/core/validation';
+import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { and, asc, desc, eq, getColumns, gt, lt, sql } from 'drizzle-orm';
@@ -66,11 +67,12 @@ builder.queryField('profileByHandle', (t) =>
       return db
         .select(getColumns(Profiles))
         .from(Profiles)
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .where(
           and(
-            eq(Profiles.state, ProfileState.ACTIVE),
             eq(Profiles.instanceId, localInstance.id),
             eq(Profiles.normalizedHandle, parsed.normalizedHandle),
+            visibleProfileWhere({ profile: Profiles, instance: Instances }),
           ),
         )
         .limit(1)
@@ -127,6 +129,20 @@ builder.queryField('searchProfiles', (t) =>
         const normalizedHandleLike = sql`
         ${Profiles.normalizedHandle} LIKE ${handlePattern} ESCAPE '\\'
       `;
+        const selectedProfileBlockWhere = ctx.session?.profile?.id
+          ? and(
+              profileBlockVisibilityWhere({
+                database: db,
+                ownerProfileId: ctx.session.profile.id,
+                targetProfileId: Profiles.id,
+              }),
+              profileBlockVisibilityWhere({
+                database: db,
+                ownerProfileId: Profiles.id,
+                targetProfileId: ctx.session.profile.id,
+              }),
+            )
+          : undefined;
 
         return resolveCursorConnection<Promise<ProfileRow[]>>(
           { args, toCursor: (profile) => profile.id },
@@ -146,6 +162,7 @@ builder.queryField('searchProfiles', (t) =>
                     eq(Profiles.id, materializedProfileId),
                     cursorWhere,
                     visibleProfileWhere({ profile: Profiles, instance: Instances }),
+                    selectedProfileBlockWhere,
                   ),
                 )
                 .orderBy(inverted ? desc(Profiles.id) : asc(Profiles.id))
@@ -164,6 +181,7 @@ builder.queryField('searchProfiles', (t) =>
                     normalizedHandleLike,
                     cursorWhere,
                     visibleProfileWhere({ profile: Profiles, instance: Instances }),
+                    selectedProfileBlockWhere,
                   ),
                 )
                 .orderBy(inverted ? desc(Profiles.id) : asc(Profiles.id))
@@ -173,12 +191,14 @@ builder.queryField('searchProfiles', (t) =>
             return db
               .select(getColumns(Profiles))
               .from(Profiles)
+              .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
               .where(
                 and(
-                  eq(Profiles.state, ProfileState.ACTIVE),
                   eq(Profiles.instanceId, localInstance.id),
                   normalizedHandleLike,
                   cursorWhere,
+                  visibleProfileWhere({ profile: Profiles, instance: Instances }),
+                  selectedProfileBlockWhere,
                 ),
               )
               .orderBy(inverted ? desc(Profiles.id) : asc(Profiles.id))

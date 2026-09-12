@@ -69,6 +69,7 @@ let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
+let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
@@ -95,6 +96,7 @@ describe('inbound Create dispatch', () => {
       PostContents,
       PostMentions,
       Posts,
+      ProfileBlocks,
       ProfileFollows,
       ProfileMedia,
       Profiles,
@@ -1742,6 +1744,98 @@ describe('inbound Create dispatch', () => {
         .from(Notifications)
         .then((rows) => rows.length),
       0,
+    );
+  });
+
+  test('Active Profile Block은 inbound Create Reply를 양방향 rejected projection으로 관측하고 fallback하지 않는다', async () => {
+    const remoteProfile = await createStoredRemoteActor();
+    const firstParentProfile = await createLocalFollowerProfile('blocked-parent-owner');
+    const secondParentProfile = await createLocalFollowerProfile('blocked-parent-target');
+    const firstParent = await createPost({
+      document: postContentDocumentFromText('first blocked parent'),
+      origin: 'LOCAL',
+      profileId: firstParentProfile.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    const secondParent = await createPost({
+      document: postContentDocumentFromText('second blocked parent'),
+      origin: 'LOCAL',
+      profileId: secondParentProfile.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    await db.insert(ProfileBlocks).values([
+      {
+        ownerProfileId: firstParentProfile.id,
+        targetProfileId: remoteProfile.id,
+      },
+      {
+        ownerProfileId: remoteProfile.id,
+        targetProfileId: secondParentProfile.id,
+      },
+    ]);
+    const firstReplyUri = new URL('https://remote.example/notes/blocked-reply-one');
+    const secondReplyUri = new URL('https://remote.example/notes/blocked-reply-two');
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await handleInboundCreate(
+        createContext(),
+        createRemoteCreate({
+          objectUri: firstReplyUri,
+          replyTarget: new URL(`/ap/note/${firstParent.post.id}`, publicOrigin),
+        }),
+        receivedAt,
+      );
+      await handleInboundCreate(
+        createContext(),
+        createRemoteCreate({
+          objectUri: secondReplyUri,
+          replyTarget: new URL(`/ap/note/${secondParent.post.id}`, publicOrigin),
+        }),
+        receivedAt,
+      );
+    } finally {
+      restoreReporter();
+    }
+
+    assert.equal(
+      (await db.select().from(Posts).where(eq(Posts.profileId, remoteProfile.id))).length,
+      0,
+    );
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+    assert.equal((await db.select().from(PostContents)).length, 2);
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Create',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'create',
+        objectOrigin: firstReplyUri.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'reply_profile_blocked',
+      },
+      {
+        activityType: 'Create',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'create',
+        objectOrigin: secondReplyUri.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'reply_profile_blocked',
+      },
+    ]);
+    assert.equal(
+      logs.some(
+        (observation) =>
+          typeof observation === 'object' &&
+          observation !== null &&
+          'outcome' in observation &&
+          observation.outcome === 'internal_failure',
+      ),
+      false,
     );
   });
 
