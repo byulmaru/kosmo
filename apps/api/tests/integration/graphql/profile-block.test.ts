@@ -188,6 +188,7 @@ describe('GraphQL Profile Block', () => {
       handle: localTarget.handle,
       displayName: localTarget.displayName,
       instance: { kind: 'LOCAL' },
+      viewerState: { profileBlock: { id: localBlockId } },
     });
     assert.deepEqual(
       decodeGlobalId(localBlock.data?.blockProfile.profileBlock.targetProfile.id ?? ''),
