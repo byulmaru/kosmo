@@ -11,6 +11,7 @@ import baseMeta, {
   MobileMediaFooterGeometryContract as mobileMediaFooterGeometryContract,
   MobilePlayground as mobilePlaygroundStory,
   MobilePlaygroundContract as mobilePlaygroundContract,
+  MobileRuntimeAltEditorContract as mobileRuntimeAltEditorContract,
   OverlayProgressRingContract as overlayProgressRingContract,
   PendingMediaContract as pendingMediaContract,
   Playground as playgroundContract,
@@ -44,6 +45,7 @@ export const MobileKeyboardMediaEditorGeometryContract: Story =
   mobileKeyboardMediaEditorGeometryContract;
 export const MobileMediaFooterGeometryContract: Story = mobileMediaFooterGeometryContract;
 export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
+export const MobileRuntimeAltEditorContract: Story = mobileRuntimeAltEditorContract;
 export const MobileFlexLayoutContract: Story = mobileFlexLayoutContract;
 export const OverlayProgressRingContract: Story = overlayProgressRingContract;
 export const PendingMediaContract: Story = pendingMediaContract;
