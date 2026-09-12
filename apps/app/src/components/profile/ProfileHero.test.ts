@@ -24,7 +24,6 @@ let fragmentData: ProfileData;
 const platformSelections: Array<Record<string, number>> = [];
 let renderer: ReactTestRenderer | null = null;
 let windowWidth = 1280;
-const BlockIcon = () => null;
 const platform = {
   OS: 'web',
   select: (options: Record<string, number>) => {
@@ -90,8 +89,21 @@ const require = createRequire(import.meta.url);
 require.extensions['.png'] = (module, filename) => {
   module.exports = filename;
 };
-mockModule('lucide-react-native', { XIcon: 'XIcon', VolumeOff: 'VolumeOff' });
-mockModule(require.resolve('lucide-react-native'), { XIcon: 'XIcon', VolumeOff: 'VolumeOff' });
+mockModule('lucide-react-native', {
+  Ban: 'Ban',
+  Link2: 'Link2',
+  VolumeOff: 'VolumeOff',
+  XIcon: 'XIcon',
+});
+mockModule(require.resolve('lucide-react-native'), {
+  Ban: 'Ban',
+  Link2: 'Link2',
+  VolumeOff: 'VolumeOff',
+  XIcon: 'XIcon',
+});
+mockModule(new URL('./ProfileBlockAction.tsx', import.meta.url), {
+  ProfileBlockAction: 'ProfileBlockAction',
+});
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
   ProfileMuteAction: 'ProfileMuteAction',
 });
@@ -328,21 +340,13 @@ describe('ProfileHero media presentation', () => {
 });
 
 describe('ProfileHero 관리 메뉴 조립', () => {
-  it('showMuteAction이 링크 복사와 호출자 항목을 ProfileMuteAction에 위임한다', async () => {
+  it('뮤트와 차단 action이 각 lifecycle을 유지한 채 한 메뉴에 합성된다', async () => {
     fragmentData = baseProfile;
     let receivedFocus: (() => void) | undefined;
     await act(async () => {
       renderer = create(
         createElement(ProfileHero, {
-          menuItems: [
-            {
-              icon: BlockIcon,
-              key: 'block',
-              label: '차단',
-              onSelect: () => undefined,
-              tone: 'danger',
-            },
-          ],
+          blockAction: { nextBlocked: true, profile: {} as never },
           onMenuTriggerReady: (focusTrigger: () => void) => {
             receivedFocus = focusTrigger;
           },
@@ -353,11 +357,17 @@ describe('ProfileHero 관리 메뉴 조립', () => {
     });
     assert.ok(renderer);
 
-    const menu = renderer.root.find((node) => (node.type as unknown) === 'ProfileMuteAction');
-    const actionMenu = menu.props.renderMenuItem({
+    const muteAction = renderer.root.find((node) => (node.type as unknown) === 'ProfileMuteAction');
+    const blockAction = muteAction.props.renderMenuItem({
       disabled: false,
       focusTriggerRef: { current: () => undefined },
       item: { key: 'mute' },
+    });
+    assert.equal(blockAction.type, 'ProfileBlockAction');
+    const actionMenu = blockAction.props.renderMenuItem({
+      disabled: false,
+      focusTriggerRef: { current: () => undefined },
+      item: { key: 'block' },
     });
     assert.deepEqual(
       actionMenu.props.items.map((item: { key: string }) => item.key),
@@ -375,15 +385,11 @@ describe('ProfileHero 관리 메뉴 조립', () => {
     await act(async () => {
       renderer = create(
         createElement(ProfileHero, {
-          menuItems: [
-            {
-              icon: BlockIcon,
-              key: 'unblock',
-              label: '차단 해제',
-              onSelect: onUnblock,
-              tone: 'danger',
-            },
-          ],
+          blockAction: {
+            nextBlocked: false,
+            onFeedback: onUnblock,
+            profileBlock: {} as never,
+          },
           onMenuTriggerReady: (focusTrigger: () => void) => {
             receivedFocus = focusTrigger;
           },
@@ -394,7 +400,12 @@ describe('ProfileHero 관리 메뉴 조립', () => {
     });
     assert.ok(renderer);
 
-    const menu = renderer.root.find((node) => (node.type as unknown) === 'ProfileMoreMenu');
+    const action = renderer.root.find((node) => (node.type as unknown) === 'ProfileBlockAction');
+    const menu = action.props.renderMenuItem({
+      disabled: false,
+      focusTriggerRef: { current: () => undefined },
+      item: { key: 'unblock', onSelect: onUnblock },
+    });
     assert.deepEqual(
       menu.props.items.map((item: { key: string }) => item.key),
       ['copy-profile-link', 'unblock'],
