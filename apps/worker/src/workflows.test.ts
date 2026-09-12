@@ -1513,6 +1513,7 @@ test(
     });
     const calls: string[] = [];
     const settledBatchIds: string[] = [];
+    let blockDeliveryAttempts = 0;
     let releaseEffects!: () => void;
     const effectsReleased = new Promise<void>((resolve) => {
       releaseEffects = resolve;
@@ -1548,7 +1549,13 @@ test(
         markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
           settledBatchIds.push(batchIdToSettle);
         },
-        sendProfileBlockActivity: async () => undefined,
+        sendProfileBlockActivity: async (profileBlockId: string) => {
+          assert.equal(profileBlockId, candidateProfileBlockId);
+          blockDeliveryAttempts += 1;
+          return blockDeliveryAttempts === 1
+            ? { status: 'PENDING' as const, reason: 'recipient_unavailable' as const }
+            : { status: 'SETTLED' as const };
+        },
         deleteFollowNotificationActivity: async (sourceId: string) => {
           calls.push('delete:' + sourceId);
           notificationStarted();
@@ -1585,6 +1592,7 @@ test(
         assert.deepEqual(settledBatchIds, []);
         releaseEffects();
         assert.deepEqual(await resultPromise, execution.result);
+        assert.equal(blockDeliveryAttempts, 2);
         assert.deepEqual(settledBatchIds, [batchId]);
         assert.deepEqual(
           [...calls].sort(),

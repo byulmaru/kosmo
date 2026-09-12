@@ -1,4 +1,4 @@
-import { ApplicationFailure, proxyActivities } from '@temporalio/workflow';
+import { ApplicationFailure, proxyActivities, sleep } from '@temporalio/workflow';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
@@ -116,9 +116,15 @@ export async function profileBlockWorkflow(
     // unavailable. The Activity records that handoff is pending so an
     // Unblock can wait for this same stable Block identity before sending its
     // Undo.
-    await sendProfileBlockActivity(execution.result.profileBlockId, {
-      createIfMissing: true,
-    });
+    for (;;) {
+      const delivery = await sendProfileBlockActivity(execution.result.profileBlockId, {
+        createIfMissing: true,
+      });
+      if (delivery.status !== 'PENDING') {
+        break;
+      }
+      await sleep('5 seconds');
+    }
   }
 
   return execution.result;
