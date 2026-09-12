@@ -377,7 +377,14 @@ type Story = StoryObj<typeof meta>;
 export const SharedNavigation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const activeProfile = canvas.getByLabelText('활성 프로필');
+    const activeProfile = await canvas.findByLabelText('활성 프로필');
+    const activeAvatar = within(activeProfile).getByLabelText(
+      `${selectedProfile.displayName} 프로필 이미지`,
+    );
+    const profileTrigger = within(activeProfile).getByRole('button', { name: '프로필 목록' });
+    const profileName = within(profileTrigger).getByText(selectedProfile.displayName);
+    const profileHandle = within(activeProfile).getByLabelText('활성 프로필 핸들');
+    const followingCount = within(activeProfile).getByRole('link', { name: /팔로잉/ });
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
     const navigationArea = navigation.parentElement?.parentElement;
     const bookmarks = canvas.getByRole('link', { name: '북마크' });
@@ -393,6 +400,14 @@ export const SharedNavigation: Story = {
     const utilityVisualRect = utilityVisual.getBoundingClientRect();
     const activeProfileRect = activeProfile.getBoundingClientRect();
     const profileEditRect = profileEdit.getBoundingClientRect();
+    const profileLeft = activeProfileRect.left + 24;
+    const navigationLeft = activeProfileRect.left + 16;
+    const navigationVisuals = [bookmarks, search, profile, followRequests].map((link) =>
+      within(link).getByTestId('sidebar-control-visual'),
+    );
+    const navigationLeadingContent = navigationVisuals.map((visual) =>
+      visual.querySelector<HTMLElement>('[aria-hidden="true"]'),
+    );
     expect(navigationArea).not.toBeNull();
     expect(getComputedStyle(navigationArea!).borderTopWidth).toBe('1px');
     expect(getComputedStyle(navigationArea!).borderTopColor).toBe('rgb(236, 236, 240)');
@@ -404,6 +419,16 @@ export const SharedNavigation: Story = {
     expect(within(navigation).queryByRole('link', { name: '프로필 편집' })).toBeNull();
     expect(profileEditRect.width).toBe(72);
     expect(profileEditRect.height).toBe(32);
+    for (const element of [activeAvatar, profileName, profileHandle, followingCount]) {
+      expect(element.getBoundingClientRect().left).toBe(profileLeft);
+    }
+    for (const visual of navigationVisuals) {
+      expect(visual.getBoundingClientRect().left).toBe(navigationLeft);
+    }
+    for (const leadingContent of navigationLeadingContent) {
+      expect(leadingContent).not.toBeNull();
+      expect(leadingContent!.getBoundingClientRect().left).toBe(profileLeft);
+    }
     expect(profileEditRect.top - activeProfileRect.top).toBe(158);
     expect(activeProfileRect.right - profileEditRect.right).toBe(20);
     expect(profileEditVisual).toHaveStyle({
@@ -422,7 +447,6 @@ export const SharedNavigation: Story = {
         utilityVisualRect.left,
     ).toBe(44);
     expect(utilityIcons[1]).toHaveAttribute('width', '24');
-    expect(utilityIcons[1].getBoundingClientRect().left - utilityVisualRect.left).toBe(224);
     expect(utilityVisualRect.right - utilityIcons[1].getBoundingClientRect().right).toBe(24);
     await userEvent.click(utility);
     const settings = canvas.getByRole('link', { name: '설정' });
@@ -694,10 +718,21 @@ export const FeedbackNavigationDrawerCurrentState: Story = {
   parameters: { router: { pathname: '/feedback' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const activeProfile = canvas.getByLabelText('활성 프로필');
+    const activeProfile = await canvas.findByLabelText('활성 프로필');
+    const activeAvatar = within(activeProfile).getByLabelText(
+      `${selectedProfile.displayName} 프로필 이미지`,
+    );
+    const profileTrigger = within(activeProfile).getByRole('button', { name: '프로필 목록' });
+    const profileName = within(profileTrigger).getByText(selectedProfile.displayName);
+    const profileHandle = within(activeProfile).getByLabelText('활성 프로필 핸들');
+    const followingCount = within(activeProfile).getByRole('link', { name: /팔로잉/ });
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
     const profileEdit = within(activeProfile).getByRole('link', { name: '프로필 편집' });
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    const profileLeft = activeProfile.getBoundingClientRect().left + 24;
+    const navigationVisual = within(link).getByTestId('sidebar-control-visual');
+    const navigationLeadingContent =
+      navigationVisual.querySelector<HTMLElement>('[aria-hidden="true"]');
     await userEvent.click(canvas.getByRole('button', { name: '설정 및 기타' }));
     const logout = canvas.getByRole('button', { name: '로그아웃' });
     expect(link).toHaveAttribute('href', '/feedback');
@@ -714,6 +749,12 @@ export const FeedbackNavigationDrawerCurrentState: Story = {
     expect(within(navigation).queryByRole('link', { name: '프로필 편집' })).toBeNull();
     expect(profileEdit.getBoundingClientRect().height).toBe(32);
     expect(profileEdit.getBoundingClientRect().width).toBe(72);
+    for (const element of [activeAvatar, profileName, profileHandle, followingCount]) {
+      expect(element.getBoundingClientRect().left).toBe(profileLeft);
+    }
+    expect(navigationVisual.getBoundingClientRect().left).toBe(profileLeft - 8);
+    expect(navigationLeadingContent).not.toBeNull();
+    expect(navigationLeadingContent!.getBoundingClientRect().left).toBe(profileLeft);
   },
   render: () => <FeedbackNavigationDrawerStory />,
 };
@@ -757,12 +798,14 @@ export const ResponsiveProfilePickerFull: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const activeProfile = await canvas.findByLabelText('활성 프로필');
     const trigger = canvas.getByRole('button', { name: '프로필 목록' });
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
     const triggerName = within(trigger).getByText('코스모 작가');
     const profileHandle = canvas.getByLabelText('활성 프로필 핸들');
     const triggerIcon = trigger.querySelector('svg')!;
     const triggerRect = trigger.getBoundingClientRect();
+    const activeProfileLeft = activeProfile.getBoundingClientRect().left;
     const closedNavigationTop = navigation.getBoundingClientRect().top;
     const nameRect = triggerName.getBoundingClientRect();
     const handleRect = profileHandle.getBoundingClientRect();
@@ -792,6 +835,7 @@ export const ResponsiveProfilePickerFull: Story = {
     expect(pickerRegion).toBeVisible();
     expect(picker).not.toBeNull();
     expect(picker!.getBoundingClientRect().height).toBeLessThanOrEqual(430);
+    expect(picker!.getBoundingClientRect().left).toBe(activeProfileLeft);
     expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
     expect(footerAction).toBeVisible();
     expect(pickerRect.top).toBeGreaterThanOrEqual(triggerRect.bottom);

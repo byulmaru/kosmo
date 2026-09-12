@@ -9,7 +9,11 @@
 - **WHEN** full Web sidebar, compact Web rail 또는 mobile drawer가 렌더링된다
 - **THEN** 시스템은 해당 presentation의 공용 `SidebarNavigation` geometry, icon, selected·pressed·focus와 Light/Dark 상태를 표시한다
 - **AND** 기존 ProfileSwitcher, 주요 route, feedback surface와 drawer close·focus 동작을 유지한다
-- **AND** full·drawer 행은 `272×45px` target, `space/8` 좌우 visual inset, `20px` icon과 `space/16` label 간격을 사용한다
+- **AND** full·drawer ProfileSwitcher의 아바타, 이름·핸들·팔로우 수 행과 navigation의 leading icon slot은 sidebar 안쪽 `space/24` 기준선에 정렬된다
+- **AND** 이 가로 정렬은 기존 프로필 요약 높이, trigger 크기·수직 배치, 편집 버튼과 열린 picker의 화면상 위치를 유지한다
+- **AND** full·drawer 행은 좌우 `space/16` 바깥 여백과 `space/8` 내부 visual inset을 사용하고, 가용 폭 `320px`에서 `288×45px` target, `20px` 너비의 icon slot과 `space/16` label 간격을 사용한다
+- **AND** full·compact·drawer의 Profile Avatar는 `28×28px` 크기를 유지하며 공통 icon slot 중앙에 배치해 다른 아이콘과 가로 중심선을 맞추고, full·drawer의 label 시작점도 유지한다
+- **AND** 가용 폭이 줄어들 때는 좌우 `space/16` 바깥 여백과 높이 `45px`를 유지한 채 행 폭을 줄인다
 - **AND** full·drawer의 `설정 및 기타`는 `Settings` icon과 상태에 따른 `24px` `ChevronDown`·`ChevronUp`을 행 오른쪽 `24px` 안쪽에 표시하고, 열린 하위 `설정`·`로그아웃` 행은 `space/32` content inset을 사용한다
 - **AND** 열린 utility의 하위 `설정`·`로그아웃` 행은 trigger 직후부터 `45px` 단위로 연속 배치한다
 - **AND** full·drawer의 닫힌 utility footer는 첫 행을 divider 뒤 `4px`, 두 번째 행을 `49px`에 배치해 행 사이 간격을 두지 않는다

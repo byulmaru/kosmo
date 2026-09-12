@@ -510,8 +510,8 @@ const styles = StyleSheet.create({
   compactRoot: { alignItems: 'center', width: 80 },
   wideRoot: {
     maxWidth: 320,
-    paddingLeft: space[24],
-    paddingRight: space[24] - borderWidths[1],
+    paddingLeft: space[16],
+    paddingRight: space[16] - borderWidths[1],
     paddingVertical: space[24],
     width: '100%',
   },
@@ -536,7 +536,7 @@ const styles = StyleSheet.create({
   compactVisual: { justifyContent: 'center' },
   wideVisual: { justifyContent: 'flex-start', paddingHorizontal: space[8] },
   primaryControl: { borderRadius: radius.full },
-  iconFrame: { position: 'relative' },
+  iconFrame: { alignItems: 'center', position: 'relative', width: iconSizes[20] },
   trailingIcon: { marginLeft: 'auto', marginRight: space[16] },
   unread: {
     borderRadius: radius.full,

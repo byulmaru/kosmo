@@ -56,6 +56,18 @@
 
 - 없음.
 
+## full·drawer 행 확장과 Profile Avatar 정렬
+
+- Decision Date: 2026-09-12
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/breakpoints.md`의 2026-09-12 사용자 승인과 후속 Figma 정본 동기화·문서화·commit/push 승인, `PROD-796`의 공용 navigation geometry 범위
+- Status: Active
+- Context / Problem: 프로필과 메뉴 배경은 `24px`에 정렬되어도 메뉴 아이콘은 내부 여백 때문에 `32px`에서 시작해 상단보다 안쪽으로 보인다.
+- Decision Outcome: full·drawer의 바깥 좌우 여백을 `16px`로 줄이고 내부 `8px`를 유지한다. 프로필 요약과 leading icon slot의 시작점은 `24px`로 일치하며 행은 좌우로 `8px`씩 넓어진다. 후속 사용자 정렬 요청에 따라 navigation의 `28px` Profile Avatar는 `20px` slot 중앙에 배치해 다른 아이콘과 가로 중심선 및 label 시작점을 맞춘다.
+- Alternatives Considered: 기존 `24px` 바깥 여백 유지, 행을 sidebar 끝까지 채우는 안. 사용자는 둥근 선택 배경 바깥에 `16px` 여백을 남기는 안의 로컬 구현을 승인했다.
+- Consequences: 높이·radius·내부 icon 간격·nested inset·compact 간격·picker·navigation lifecycle은 유지한다. Figma의 공용 행·primary·utility source 폭과 SidebarNavigation 변형을 동기화했고, 기존 Avatar source를 재사용했다. 새 토큰·공개 prop·component set은 추가하지 않았다. Linear의 기존 기록은 이번에 수정하지 않았으며, commit/push 승인은 merge·배포 승인을 뜻하지 않는다.
+- Confirmation / Follow-up: 로컬 공용 UI와 Production full·drawer에서 배경 `16px`, leading slot `24px`, 좁은 drawer와 기존 focus·disclosure를 검증했다. Figma 51개 변형의 정렬과 Available 27개 Avatar 크기, 기존 Light/Dark 소비처의 상속을 확인했다. Native 실제 runtime과 Figma Unavailable의 기존 interaction 모델 정렬은 이번 geometry 범위 밖이다.
+
 ## Superseded Decisions
 
 - 없음.
