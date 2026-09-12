@@ -39,19 +39,27 @@ Post 상세 thread는 API가 제공한 조상·현재·하위 Post 순서와 직
 
 - connector metadata는 caller가 공급하되 canonical Center thread는 조상 구간과 마지막 조상→현재 경계만
   표시한다. 현재→첫 하위 Reply와 하위 Reply 사이에는 connector를 그리지 않는다.
-- current row는 좌우 8px/12px, 상하 16px/4px padding을 사용한다. 마지막 조상→현재 connector와 current
-  Before connector는 48px Avatar 중심선 x=32에 맞추고 supplied visibility 경계에서 종료한다.
+- current row는 Web 왼쪽 8px·오른쪽 12px, Native 왼쪽 16px·오른쪽 12px, 상하 16px/4px padding을 사용한다.
+  current Before connector는 Web current content의 8px left padding 뒤 x=32, Native 16px left padding 뒤 x=40의
+  48px Avatar 중심선에 맞추고 supplied visibility 경계에서 종료한다.
+- 조상·하위 목록 row의 connector는 `PostListItem` 좌우 inset에 맞춘다. Web은 8px inset으로 x=32, Native는
+  16px inset으로 x=40을 사용한다. 따라서 Web은 list/current 모두 x=32, Native(iOS·Android)는 list/current 모두
+  x=40을 사용한다.
 - 가로 구분선은 connector 오른쪽에서 시작하며 connector와 교차하지 않는다. current row에는 이 generic 구분선을
   추가하지 않고 Action Bar frame의 자체 border와 row 하단 4px padding을 유지한다.
 
 ## 검증과 rollout
 
 - Storybook에서 current·마지막 row 뒤 구분선 생략, 나머지 1px `theme.borderSubtle` 구분선과 64px/8px inset, current row의
-  8px/12px 좌우 padding, 48px Avatar와 full-width Body·Engagement, metadata→Reaction Summary 8px,
+  Web 8px/12px·Native 16px/12px 좌우 padding, 48px Avatar와 full-width Body·Engagement, metadata→Reaction Summary 8px,
   Reaction Summary→Action Bar frame border 4px, Summary가 없을 때 metadata→border 8px, Action Bar만 감싸는
   상·하 border·Web 12px(Native 기존8px) padding, 조상→현재 connector, descendant connector
   생략, connector 비중첩, thread 내부 중복 border 제거와 thread 밖 기본 divider 유지를 검증한다.
 - Reply 대상 attribution이 일반 목록에서는 유지되지만 상세 thread의 조상·현재·하위 모든 행에서는
   표시되지 않는지 검증한다.
-- Web Light·Dark 대표 Storybook에서 구분선 x=64, connector x=32~34, 오른쪽 inset 8px과 비중첩을 확인한다.
-- iOS·Android 실기기 paint와 입력 동작 확인은 출시 gate에 남긴다.
+- Web Light·Dark 대표 Storybook에서 구분선 x=64, 목록·current connector x=32~34를 확인한다.
+- Native renderer에서 목록·current connector x=40~42를 확인한다. 실기기 paint와 입력 동작 확인은
+  출시 gate에 남긴다.
+- Figma `PostThreadLayout · canonical composition` 5개 상태는 목록 48px Avatar와 기존 Mobile `PostLayout`의
+  40px Avatar 중심을 모두 x=40에 두고 connector를 같은 축에 맞춘다. Figma current 표현은 20px+40px/2,
+  production Native는 16px+48px/2로 같은 중심축을 만든다.

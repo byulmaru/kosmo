@@ -358,6 +358,7 @@ Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp targ
 - [x] 9.4 App·Storybook·lint·OpenSpec 검증과 Figma 최종 대조를 완료하고 실제 Native 실행 결과·미검증 항목을 기록한다.
 - [x] 9.5 승인된 Web 목록 위12·아래8과 상세 frame 상하12 여백을 기존 surface 경계에 적용하고 Native 기존 여백·target을 보존한다.
 - [x] 9.6 기존 geometry Storybook·앱 검증과 390/1024/1440 Web 시각·상호작용 QA를 통과시키고, Figma Center 목록4종·상세3종의 승인·동기화 상태를 기록한다.
+- [x] 9.7 Native 목록·current connector를 16px inset의 Avatar 중심선 x=40에, Web 목록·current connector를 x=32에 맞추는 실제 렌더 회귀를 추가한다.
 
 **Web Spacing Verification Record (2026-09-12)**
 
@@ -369,9 +370,15 @@ Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp targ
 **Verification Record (2026-09-12)**
 
 - `pnpm --filter @kosmo/app test` 통과: Relay·TypeScript·전체 unit·정적 Storybook build와 118개 Storybook 파일/773개 interaction test.
-- Native renderer 회귀 6개는 실제 control·Bar·PostListItem의 플랫폼별 style/prop 연결을 검증한다. Yoga layout이나 touch 동작을 모사하지 않는다.
+- Native renderer 회귀 7개는 실제 control·Bar·PostListItem·PostThreadLayout의 플랫폼별 style/prop 연결을 검증한다. Yoga layout이나 touch 동작을 모사하지 않는다.
 - 실제 API·DB·세션·Web build의 `post-detail.e2e.ts`, `post-share-link.e2e.ts`, `timelines.e2e.ts`, `navigation-scroll.e2e.ts` 32개 통과. 삭제 오류만 GraphQL 응답 경계에서 한 번 주입하고 저장·재조회·재시도 삭제는 실제 서버를 사용했다.
 - app/web check, ESLint·Prettier, OpenSpec strict와 diff check 통과. Figma Web28/iOS44/Android48 source와 최종 정적 Storybook의 Bookmarks Light 선택 상태·상세 Dark·More focus 복귀를 대조했다.
 - iOS 26.5 시뮬레이터에서 실제 binary build와 현재 checkout의 Metro bundle 로딩·시작 화면까지 확인했다. 로그인 이후 Post touch·parent clipping·VoiceOver·focus 복귀와 Android runtime·TalkBack은 미검증이며 Native release gate로 남긴다.
 - Expo 개발 서버가 이번 QA에서 생성한 typed-route 선언이 있을 때 기존 `SettingsLinkRow.test.ts:92`의 `href: string` 타입 오류를 확인했다. 해당 test는 변경하지 않았고 QA 생성물을 별도 보관한 뒤 기존 CI와 같은 환경에서 위 앱 검증을 통과했다.
 - 이 기록은 PROD-632 task 5.4·5.5 완료나 공유 change archive를 의미하지 않는다.
+
+**Native thread connector verification record (2026-09-12)**
+
+- `PostThreadLayout` 실제 renderer test가 Web 목록·current connector `left=32`, iOS·Android 목록·current connector `left=40`를 style props로 검증한다.
+- 이 회귀는 `PostListItem`과 current content의 Web 8px·Native 16px left inset 및 list/current connector 축 정렬을 확인하며, Yoga layout·실제 Native touch·VoiceOver·TalkBack은 검증하지 않는다.
+- 사용자 승인 후 Figma `PostThreadLayout` canonical composition 5개 상태의 목록·current Avatar 중심과 connector를 x=40으로 동기화했다. 기존 Mobile `PostLayout`의 40px Avatar는 current inset 20px, production Native의 48px Avatar는 inset 16px을 사용해 같은 중심축을 만들며 readback과 대표 screenshot으로 확인했다.

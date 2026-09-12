@@ -8,6 +8,7 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { PostActionBar as PostActionBarExport } from './PostActionBar';
 import type { PostActionControl as PostActionControlExport } from './PostActionControl';
 import type { PostListItem as PostListItemExport } from './PostListItem';
+import type { PostThreadLayout as PostThreadLayoutExport } from './PostThreadLayout';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -17,6 +18,11 @@ const require = createRequire(import.meta.url);
 const nativePlatforms = [
   ['ios', 44],
   ['android', 48],
+] as const;
+const threadPlatforms = [
+  ['web', 32],
+  ['ios', 40],
+  ['android', 40],
 ] as const;
 
 const StubIcon = (props: { color: string; fill?: string; size: number; strokeWidth?: number }) =>
@@ -87,7 +93,7 @@ mockModule('@/theme/ThemeProvider', { useTheme: () => theme });
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   radii: { full: 999 },
-  spacing: { lg: 16, md: 12, sm: 8, xs: 4, xxl: 32 },
+  spacing: { lg: 16, md: 12, sm: 8, xs: 4, xxl: 32, xxxl: 48 },
   typography: { md: { fontSize: 16 }, sm: { fontSize: 14, lineHeight: 20 } },
 });
 mockModule(new URL('./PostBookmarkAction.tsx', import.meta.url), {
@@ -131,12 +137,14 @@ mockModule('@/lib/date', { formatTimelineTimestamp: () => '방금 전' });
 let PostActionControl: typeof PostActionControlExport;
 let PostActionBar: typeof PostActionBarExport;
 let PostListItem: typeof PostListItemExport;
+let PostThreadLayout: typeof PostThreadLayoutExport;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
   ({ PostActionControl } = await import('./PostActionControl'));
   ({ PostActionBar } = await import('./PostActionBar'));
   ({ PostListItem } = await import('./PostListItem'));
+  ({ PostThreadLayout } = await import('./PostThreadLayout'));
 });
 
 afterEach(async () => {
@@ -184,6 +192,25 @@ async function renderListItem(props: Parameters<typeof PostListItemExport>[0]) {
   await act(async () => {
     renderer?.unmount();
     renderer = create(createElement(PostListItem, props));
+  });
+  assert.ok(renderer);
+  return renderer.root;
+}
+
+async function renderThreadLayout() {
+  await act(async () => {
+    renderer?.unmount();
+    renderer = create(
+      createElement(PostThreadLayout, {
+        ancestors: [
+          { connectedToPrevious: false, id: 'ancestor-root', post: {} },
+          { connectedToPrevious: true, id: 'ancestor-child', post: {} },
+        ],
+        current: { connectedToPrevious: true, id: 'current', post: {} },
+        descendants: [],
+        renderPost: ({ role }) => createElement('Post', { role }),
+      }),
+    );
   });
   assert.ok(renderer);
   return renderer.root;
@@ -337,6 +364,37 @@ test('PostListItem Native production cards use the mobile 16px inset while Web s
     const card = root.findByProps({ role: 'article' });
     assert.equal(flattenStyle(card.props.style).paddingHorizontal, expectedPadding);
     assert.equal(flattenStyle(card.props.style).paddingBottom, expectedBottom);
+  }
+});
+
+test('PostThreadLayout aligns every connector to the platform-specific avatar axis', async () => {
+  for (const [os, expectedConnectorLeft] of threadPlatforms) {
+    platform.OS = os;
+    const root = await renderThreadLayout();
+    const currentPost = findByType(
+      root.findByProps({ testID: 'post-thread-current-current' }),
+      'Post',
+    );
+
+    assert.equal(flattenStyle(currentPost.parent?.props.style).paddingLeft, os === 'web' ? 8 : 16);
+    assert.equal(
+      flattenStyle(
+        findByTestID(root, 'post-thread-connector-ancestor-root-ancestor-child-before').props.style,
+      ).left,
+      expectedConnectorLeft,
+    );
+    assert.equal(
+      flattenStyle(
+        findByTestID(root, 'post-thread-connector-ancestor-child-current-before').props.style,
+      ).left,
+      expectedConnectorLeft,
+    );
+    assert.equal(
+      flattenStyle(
+        findByTestID(root, 'post-thread-connector-ancestor-child-current-after').props.style,
+      ).left,
+      expectedConnectorLeft,
+    );
   }
 });
 
