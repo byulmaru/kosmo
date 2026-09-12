@@ -18,7 +18,8 @@ import { RightRail, RightRailFooter } from '@/components/shell/RightRail';
 import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
 import { UniversalShell } from '@/components/shell/UniversalShell';
 import { SessionProvider } from '@/session/SessionProvider';
-import { colors, elevations, semanticColors, spacing } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, colors, elevations, semanticColors, spacing } from '@/theme/tokens';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import appIconUrl from '../../../public/icon-192.png?url';
 import ogDefaultUrl from '../../../public/og-default.png?url';
@@ -192,11 +193,20 @@ function useShellStoryData() {
 
 function NavigationCatalog() {
   const data = useShellStoryData();
+  const theme = useTheme();
 
   return (
     <Catalog width={760}>
       <Section title="Sidebar · full">
-        <View style={{ height: 620 }}>
+        <View
+          style={{
+            borderColor: theme.borderSubtle,
+            borderRightWidth: borderWidths[1],
+            height: 620,
+            width: 320,
+          }}
+          testID="sidebar-shell-boundary"
+        >
           <SidebarNavigation query={data.query} />
         </View>
       </Section>
@@ -378,6 +388,7 @@ export const SharedNavigation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const activeProfile = await canvas.findByLabelText('활성 프로필');
+    const sidebarBoundary = canvas.getByTestId('sidebar-shell-boundary');
     const activeAvatar = within(activeProfile).getByLabelText(
       `${selectedProfile.displayName} 프로필 이미지`,
     );
@@ -399,6 +410,7 @@ export const SharedNavigation: Story = {
     const utilityIcons = utilityVisual.querySelectorAll('svg');
     const utilityVisualRect = utilityVisual.getBoundingClientRect();
     const activeProfileRect = activeProfile.getBoundingClientRect();
+    const sidebarBoundaryRect = sidebarBoundary.getBoundingClientRect();
     const profileEditRect = profileEdit.getBoundingClientRect();
     const profileLeft = activeProfileRect.left + 24;
     const navigationLeft = activeProfileRect.left + 16;
@@ -409,6 +421,10 @@ export const SharedNavigation: Story = {
       visual.querySelector<HTMLElement>('[aria-hidden="true"]'),
     );
     expect(navigationArea).not.toBeNull();
+    expect(getComputedStyle(sidebarBoundary).borderRightWidth).toBe('1px');
+    expect(getComputedStyle(sidebarBoundary).borderRightColor).toBe('rgb(236, 236, 240)');
+    expect(sidebarBoundaryRect.top).toBe(activeProfileRect.top);
+    expect(sidebarBoundaryRect.right).toBe(activeProfileRect.right);
     expect(getComputedStyle(navigationArea!).borderTopWidth).toBe('1px');
     expect(getComputedStyle(navigationArea!).borderTopColor).toBe('rgb(236, 236, 240)');
     expect(bookmarks).toHaveAttribute('href', '/bookmarks');
