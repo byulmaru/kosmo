@@ -544,6 +544,10 @@ documentation·state specimen을 두 번째 행에 둔다.
   content는 내부에서 scroll한다. 모바일은 header·공개 범위·footer를 고정하고 body와 media shelf가 남은 높이를
   채우되 짧은 viewport에서 함께 scroll한다. Media editor는 같은 제한 높이 안에서 별도 내부 scroll을 사용한다.
   editor 전환 시 composer와 upload owner를 유지해 복귀 focus와 breakpoint 전환 뒤 paste 경로를 보존한다.
+- 2026-09-12 작성 화면 검토 결정으로 Rail·Overlay·모바일 본문, CW와 Media editor의 ALT 입력은 focus 시
+  별도 outline이나 두꺼워지는 border를 사용하지 않는다. 입력 caret·selection으로 현재 입력 위치를 표시하고,
+  외곽 Composer 강조는 추가하지 않는다. 버튼·탭의 keyboard focus와 상위 Overlay의 focus lifecycle은 유지하며,
+  이 예외를 공용 `TextField` 전체나 Reply presentation으로 확대하지 않는다. Figma 원본은 수정하지 않았다.
 
 #### DSN-61 모바일 Composer·공용 Confirmation 배치 계약
 
@@ -565,7 +569,7 @@ documentation·state specimen을 두 번째 행에 둔다.
   rendering은 이 visual geometry를 검증하며, iOS `44pt`·Android `48dp` 실제 입력 영역은 Native runtime에서 별도로
   검증한다.
 - author 또는 CW block과 본문 editor 사이에는 `8px` 간격을 유지한다. editor가 남은 content 높이를 채우고 media
-  shelf는 별도 sibling으로 이어져 focus ring이 shelf 경계에서 잘리지 않는다.
+  shelf는 별도 sibling으로 이어진다. 입력 focus 표시는 위 Composer 입력 예외를 따른다.
 - `04 Screens - Mobile`의 [`Composer state consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6771-10454)는
   Full Media·Poll·CW와 Keyboard Empty·Media·Poll·CW 7개를 연결한다. `14 Mobile composer and overlay consumers`의
   Full Empty Light/Dark까지 합치면 route 호환 FRAME 없이 8개 variant가 모두 실제 Target consumer를 가진다.

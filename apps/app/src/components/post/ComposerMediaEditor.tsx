@@ -18,6 +18,7 @@ import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import type { ReactNode, RefObject } from 'react';
+import type { TextStyle } from 'react-native';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
 
 export type ComposerMediaEditorTool = 'alt' | 'sensitive';
@@ -43,6 +44,10 @@ export type ComposerMediaEditorProps = {
 };
 
 const altTextLimit = 1000;
+const composerFieldFocusStyle = {
+  borderWidth: borderWidths[1],
+  outlineWidth: 0,
+} as unknown as TextStyle;
 
 export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
   const theme = useTheme();
@@ -517,7 +522,7 @@ function AltToolContent({
         maxLength={altTextLimit}
         onChangeText={onAltTextChange}
         placeholder="이미지에서 중요한 내용을 설명해 주세요."
-        style={compact ? styles.mobileTextArea : undefined}
+        style={[composerFieldFocusStyle, compact ? styles.mobileTextArea : undefined]}
         value={altText}
       />
       {!compact ? (

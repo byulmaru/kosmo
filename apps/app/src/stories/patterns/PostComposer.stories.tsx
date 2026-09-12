@@ -747,11 +747,27 @@ export const InteractionContract: Story = {
     expect(args.onBodyChange).toHaveBeenLastCalledWith(
       '오늘의 코스모 이야기를 나눠보세요. 오버레이',
     );
+    const focusedBody = getComputedStyle(body);
+    const bodyBorderWidth = focusedBody.borderWidth;
+    expect(bodyBorderWidth).toBe('0px');
+    expect(focusedBody.outlineWidth).toBe('0px');
 
     await userEvent.click(within(dialog).getByRole('button', { name: '콘텐츠 경고 켜기' }));
+    await waitFor(() => expect(body).not.toHaveFocus());
+    expect(getComputedStyle(body).borderWidth).toBe(bodyBorderWidth);
+    expect(getComputedStyle(body).outlineWidth).toBe('0px');
     expect(args.onContentWarningToggle).toHaveBeenCalledOnce();
-    await userEvent.type(within(dialog).getByRole('textbox', { name: '콘텐츠 경고' }), '스포일러');
+    const contentWarning = within(dialog).getByRole('textbox', { name: '콘텐츠 경고' });
+    await userEvent.type(contentWarning, '스포일러');
     expect(args.onContentWarningChange).toHaveBeenLastCalledWith('스포일러');
+    const focusedContentWarning = getComputedStyle(contentWarning);
+    const contentWarningBorderWidth = focusedContentWarning.borderWidth;
+    expect(contentWarningBorderWidth).toBe('1px');
+    expect(focusedContentWarning.outlineWidth).toBe('0px');
+    await userEvent.click(body);
+    await waitFor(() => expect(contentWarning).not.toHaveFocus());
+    expect(getComputedStyle(contentWarning).borderWidth).toBe(contentWarningBorderWidth);
+    expect(getComputedStyle(contentWarning).outlineWidth).toBe('0px');
 
     await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 2 편집' }));
     expect(args.onMediaEdit).toHaveBeenLastCalledWith('ready', 'alt');
@@ -843,6 +859,20 @@ export const MobileFlexLayoutContract: Story = {
     expect(body).toHaveStyle({ gap: '8px' });
     expect(getComputedStyle(body).overflow).toBe('visible');
     expect(getComputedStyle(editor).flexGrow).toBe('1');
+
+    await userEvent.click(editor);
+    await waitFor(() => expect(editor).toHaveFocus());
+    await userEvent.type(editor, '모바일 입력');
+    const focusedStyle = getComputedStyle(editor);
+    const borderWidth = focusedStyle.borderWidth;
+    expect(borderWidth).toBe('0px');
+    expect(focusedStyle.outlineWidth).toBe('0px');
+
+    await userEvent.click(canvas.getByRole('button', { name: '글쓰기 닫기' }));
+    await waitFor(() => expect(editor).not.toHaveFocus());
+    expect(getComputedStyle(editor).borderWidth).toBe(borderWidth);
+    expect(getComputedStyle(editor).outlineWidth).toBe('0px');
+    expect(editor).toHaveValue('모바일 입력');
   },
 };
 
@@ -1048,6 +1078,21 @@ export const MobileKeyboardCWEditorGeometryContract: Story = {
   },
   play: async ({ canvasElement }) => {
     expectMobileEditorFitsMediaShelf(canvasElement);
+    const canvas = within(canvasElement);
+    const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
+    await userEvent.click(contentWarning);
+    await waitFor(() => expect(contentWarning).toHaveFocus());
+    await userEvent.type(contentWarning, ' 추가');
+    const focusedStyle = getComputedStyle(contentWarning);
+    const borderWidth = focusedStyle.borderWidth;
+    expect(borderWidth).toBe('1px');
+    expect(focusedStyle.outlineWidth).toBe('0px');
+
+    await userEvent.click(canvas.getByRole('textbox', { name: '게시물 내용' }));
+    await waitFor(() => expect(contentWarning).not.toHaveFocus());
+    expect(getComputedStyle(contentWarning).borderWidth).toBe(borderWidth);
+    expect(getComputedStyle(contentWarning).outlineWidth).toBe('0px');
+    expect(contentWarning).toHaveValue('스포일러가 포함되어 있어요. 추가');
   },
 };
 

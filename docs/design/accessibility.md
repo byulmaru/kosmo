@@ -126,6 +126,10 @@ Post Action Bar는 모든 플랫폼에서 28 logical unit visual row를 공유�
 
 ### 기존 컴포넌트 계약
 
+- Post Composer의 Rail·Overlay·모바일 본문, CW와 Media editor ALT는 입력 caret·selection을 focus 표시로
+  사용하고 별도 outline과 focus에 따른 border 두께 변화는 두지 않는다. 실제 keyboard 진입·입력 위치 식별과
+  selection을 검증하고 버튼·탭의 focus 표시, modal focus trap·restore는 유지한다. 이 예외는 일반 `TextField`나
+  Reply presentation에 적용하지 않는다. 구체 범위는 [figma.md](./figma.md)의 Composer 계약을 따른다.
 - `MultiSelectCombobox`의 Web 결과 목록은 `role="listbox"`와 `aria-multiselectable="true"`, 각 `ListboxOption`은 `role="option"`과 `aria-selected`로 복수 선택을 전달한다. Native 결과 컨테이너는 별도 role 없이 자식 항목을 유지하고, 항목은 지원되는 `accessibilityRole="button"`과 `accessibilityState`의 `selected`·`disabled`를 사용한다. Web 전용 `listbox`·`option`을 Native legacy `accessibilityRole`에 강제 캐스팅해 전달하지 않는다. Native prop 검증과 Web 자동화는 TalkBack·VoiceOver의 실제 focus·announcement 검증을 대체하지 않는다.
 - `FollowButton`의 소비처별 geometry와 이관 상태는 [profile-hero.md](./profile-hero.md)가 소유한다.
   Web 목록은 Compact `72×32`, Web Profile Hero 및 Mobile 소비처는 Medium `96×40`을 사용한다.

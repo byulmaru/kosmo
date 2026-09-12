@@ -141,3 +141,15 @@ Production 연결 결과와 실제 검증 범위가 Storybook, 디자인 문서�
   Expo typed route 간 타입 불일치로 실패한다. 이 변경에서는 해당 Settings 테스트를 수정하지 않았다.
 - Web browser에서 Full Light/Dark, compact Dark short viewport, 모바일 Light/Dark의 작성창 배치를 확인했다.
   Android/iOS menu Modal 종료 후 focus 복귀와 ALT 입력 시 IME reveal은 실제 runtime 미검증이다.
+
+### 입력 focus 표시 후속 검증 — 2026-09-12
+
+- 사용자 화면 검토에 따라 본문·CW·ALT의 outline과 focus에 따른 border 두께 변화만 제거했다. 외곽 강조는
+  추가하지 않았고 공용 TextField·Reply, 버튼·탭과 Overlay focus lifecycle은 유지했다.
+- 기존 Composer·Media editor·Shell Tests story 37개가 통과했다. 실제 입력 후 focused/blurred border·outline과
+  값 보존을 검증하며 새 테스트 fixture나 Playground 자동 interaction은 추가하지 않았다.
+- 실제 Metro dev에서 Rail·Overlay·모바일 본문과 CW의 caret·입력·Tab 이동 및 도구 버튼의 keyboard focus
+  표시를 확인했다. ALT는 공용 컴포넌트 Storybook의 Web Light·모바일 Dark에서 확인했으며 실제 storage upload나
+  Native IME 검증으로 간주하지 않는다.
+- Storybook build·문서 Prettier·OpenSpec strict validation이 통과했다. 앱 check는 위의 기존 Settings 테스트
+  타입 오류로 실패하며 Native 관련 미완료 task는 유지한다.
