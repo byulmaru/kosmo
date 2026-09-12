@@ -5,7 +5,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -13,7 +12,7 @@ import {
 import { IconButton } from '@/components/ui/IconButton';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostComposer } from './PostComposer';
 import type { RefObject } from 'react';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
@@ -113,7 +112,7 @@ export function PostComposerHost({
     const dialog = dialogRef.current as unknown as HTMLElement | null;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (dialog?.querySelector('[role="menu"]')) {
+        if (dialog?.querySelector('[role="menu"], [role="radiogroup"]')) {
           return;
         }
         event.preventDefault();
@@ -128,7 +127,7 @@ export function PostComposerHost({
         dialog?.querySelectorAll<HTMLElement>(
           'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
         ) ?? [],
-      ).filter((element) => element.getAttribute('aria-hidden') !== 'true');
+      ).filter((element) => element.getClientRects().length > 0);
       if (focusable.length === 0) {
         return;
       }
@@ -147,8 +146,8 @@ export function PostComposerHost({
       }
     };
 
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [hasWebDocument, overlayVisible, requestClose]);
 
   const composer = (
@@ -167,7 +166,7 @@ export function PostComposerHost({
 
   const header =
     mode === 'overlay' && !editingMedia ? (
-      <View style={[styles.header, { borderColor: theme.border }]}>
+      <View style={[styles.header, { borderColor: theme.borderSubtle }]}>
         <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
           글쓰기
         </Text>
@@ -176,8 +175,8 @@ export function PostComposerHost({
           disabled={submitting}
           feedback="opacity"
           onPress={requestClose}
-          targetSize={Platform.OS === 'ios' ? 44 : Platform.OS === 'android' ? 48 : 36}
-          visualSize={Platform.OS === 'web' ? 32 : undefined}
+          style={styles.closeButton}
+          targetSize={40}
         >
           <XIcon color={theme.text} size={20} strokeWidth={2} />
         </IconButton>
@@ -193,7 +192,7 @@ export function PostComposerHost({
       role={overlayVisible ? 'dialog' : undefined}
       style={[
         styles.dialog,
-        elevation.overlay,
+        mode !== 'rail' && elevation.overlay,
         mode === 'rail'
           ? styles.railDialog
           : mode === 'mobile'
@@ -201,7 +200,7 @@ export function PostComposerHost({
             : editingMedia
               ? styles.mediaEditorDialog
               : styles.overlayDialog,
-        { backgroundColor: theme.card, borderColor: theme.border },
+        { backgroundColor: theme.card },
       ]}
       testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
     >
@@ -210,13 +209,7 @@ export function PostComposerHost({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.composerFrame}
       >
-        <ScrollView
-          contentContainerStyle={styles.composerContent}
-          keyboardShouldPersistTaps="handled"
-          style={styles.composerScroll}
-        >
-          {composer}
-        </ScrollView>
+        {composer}
       </KeyboardAvoidingView>
     </View>
   );
@@ -284,12 +277,11 @@ const styles = StyleSheet.create({
   hiddenHost: { display: 'none' },
   nativeBackdrop: { flex: 1, justifyContent: 'center' },
   nativeDialogWrap: { flex: 1, justifyContent: 'center' },
-  dialog: { borderWidth: 1, minHeight: 0, overflow: 'hidden' },
+  dialog: { minHeight: 0, overflow: 'hidden' },
   railDialog: { borderWidth: 0, width: '100%' },
   overlayDialog: {
     borderRadius: radii.lg,
-    height: 720,
-    maxHeight: 'min(720px, 85dvh)' as never,
+    maxHeight: '85dvh' as never,
     width: 600,
   },
   mobileDialog: { borderRadius: 0, borderWidth: 0, height: '100%', width: '100%' },
@@ -302,14 +294,10 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     borderBottomWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 56,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    height: 64,
+    justifyContent: 'center',
   },
-  title: { fontFamily: fontFamilies.ui, fontWeight: '800', ...typography.lg },
+  closeButton: { position: 'absolute', right: spacing.lg, top: spacing.md },
+  title: textStyles.uiHeadingS,
   composerFrame: { flex: 1, minHeight: 0 },
-  composerScroll: { flex: 1, minHeight: 0 },
-  composerContent: { flexGrow: 1 },
 });

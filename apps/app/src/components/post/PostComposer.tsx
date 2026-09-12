@@ -228,6 +228,12 @@ function PostComposerContents({
     onMediaEditorOpenChange?.(mediaEditor !== null);
   }, [mediaEditor, onMediaEditorOpenChange]);
 
+  useEffect(() => {
+    if (!focusOnMount) {
+      setMediaEditor(null);
+    }
+  }, [focusOnMount]);
+
   const closeMediaEditor = () => {
     setMediaEditor(null);
     if (Platform.OS === 'web') {
@@ -465,7 +471,10 @@ function PostComposerContents({
       <Form
         accessibilityLabel="게시글 작성"
         onSubmit={submit}
-        style={styles.productionForm}
+        style={[
+          styles.productionForm,
+          (presentation === 'mobile' || mediaEditor !== null) && styles.surfaceRoot,
+        ]}
         submitOnModEnter
       >
         <PostComposerMediaControls
@@ -484,34 +493,33 @@ function PostComposerContents({
             onSensitiveMediaChange,
             sensitiveMedia,
           }) => {
-            if (mediaEditor) {
-              return (
-                <ComposerMediaEditor
-                  media={items}
-                  mobileState={mediaEditor.tool === 'alt' ? 'alt' : 'sensitive'}
-                  onAltTextChange={onAltTextChange}
-                  onBack={closeMediaEditor}
-                  onClose={() => {
-                    setMediaEditor(null);
-                    if (onRequestClose) {
-                      onRequestClose();
-                    }
-                  }}
-                  onDone={closeMediaEditor}
-                  onSelectMedia={(key) => setMediaEditor({ key, tool: mediaEditor.tool })}
-                  onSensitiveMediaChange={onSensitiveMediaChange}
-                  onToolChange={(tool) => setMediaEditor({ key: mediaEditor.key, tool })}
-                  presentation={presentation === 'mobile' ? 'mobile' : 'web'}
-                  selectedKey={mediaEditor.key}
-                  sensitiveMedia={sensitiveMedia}
-                  tool={mediaEditor.tool}
-                />
-              );
-            }
+            const mediaEditorContent = mediaEditor ? (
+              <ComposerMediaEditor
+                fillContainer
+                media={items}
+                mobileState={mediaEditor.tool === 'alt' ? 'alt' : 'sensitive'}
+                onAltTextChange={onAltTextChange}
+                onBack={closeMediaEditor}
+                onClose={() => {
+                  setMediaEditor(null);
+                  onRequestClose?.();
+                }}
+                onDone={closeMediaEditor}
+                onSelectMedia={(key) => setMediaEditor({ key, tool: mediaEditor.tool })}
+                onSensitiveMediaChange={onSensitiveMediaChange}
+                onToolChange={(tool) => setMediaEditor({ key: mediaEditor.key, tool })}
+                presentation={presentation === 'mobile' ? 'mobile' : 'web'}
+                selectedKey={mediaEditor.key}
+                sensitiveMedia={sensitiveMedia}
+                tool={mediaEditor.tool}
+              />
+            ) : null;
 
             const openMediaEditor = (key: string, tool: 'alt' | 'sensitive') => {
               if (Platform.OS === 'web' && typeof document !== 'undefined') {
                 mediaEditorTriggerRef.current = document.activeElement as HTMLElement | null;
+              } else {
+                editor.current?.blur();
               }
               setMediaEditor({ key, tool });
               if (presentation === 'rail') {
@@ -552,18 +560,38 @@ function PostComposerContents({
               visibility: productionSurface,
             };
 
-            return presentation === 'mobile' ? (
-              <MobileFullscreenComposerShellCandidate
-                {...sharedProductionProps}
-                fillContainer
-                onOverlayClose={onRequestClose ?? (() => undefined)}
-              />
-            ) : (
-              <PostComposerTarget
-                {...sharedProductionProps}
-                onExpand={onExpand ?? (() => undefined)}
-                surface={presentation === 'rail' ? 'rail' : 'overlay'}
-              />
+            const composerContent =
+              presentation === 'mobile' ? (
+                <MobileFullscreenComposerShellCandidate
+                  {...sharedProductionProps}
+                  fillContainer
+                  onOverlayClose={onRequestClose ?? (() => undefined)}
+                />
+              ) : (
+                <PostComposerTarget
+                  {...sharedProductionProps}
+                  onExpand={onExpand ?? (() => undefined)}
+                  surface={presentation === 'rail' ? 'rail' : 'overlay'}
+                />
+              );
+
+            return (
+              <>
+                <ScrollView
+                  accessibilityElementsHidden={mediaEditor !== null}
+                  aria-hidden={mediaEditor !== null || undefined}
+                  contentContainerStyle={[
+                    styles.productionContent,
+                    presentation === 'mobile' && styles.surfaceRoot,
+                  ]}
+                  keyboardShouldPersistTaps="handled"
+                  scrollEnabled={presentation !== 'mobile'}
+                  style={[styles.editorScroll, mediaEditor !== null && styles.hiddenPresentation]}
+                >
+                  {composerContent}
+                </ScrollView>
+                {mediaEditorContent}
+              </>
             );
           }}
         />
@@ -853,7 +881,9 @@ function PostComposerContents({
 
 const styles = StyleSheet.create({
   root: { gap: spacing.lg, padding: spacing.lg },
-  productionForm: { width: '100%' },
+  productionForm: { flexShrink: 1, minHeight: 0, width: '100%' },
+  productionContent: { flexGrow: 1 },
+  hiddenPresentation: { display: 'none' },
   productionAuthor: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
   replyRoot: { borderRadius: radii.md, borderWidth: 1 },
   surfaceRoot: { flex: 1, minHeight: 0 },

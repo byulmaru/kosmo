@@ -56,6 +56,7 @@ mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   radii: { lg: 16 },
   spacing: { lg: 24, sm: 8 },
+  textStyles: { uiHeadingS: {} },
   typography: { lg: {} },
 });
 

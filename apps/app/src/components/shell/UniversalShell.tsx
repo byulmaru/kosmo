@@ -471,7 +471,11 @@ function UniversalShellContent() {
               triggerFocusRef={composerTriggerFocusRef}
             />
           ) : null}
-          {showRightRail ? <RightRailFooter /> : null}
+          {showRightRail ? (
+            <View {...composerBackgroundA11yProps} style={{ marginTop: 'auto' }}>
+              <RightRailFooter />
+            </View>
+          ) : null}
         </View>
       ) : null}
 

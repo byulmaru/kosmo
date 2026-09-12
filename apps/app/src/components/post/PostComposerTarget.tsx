@@ -11,8 +11,18 @@ import {
   TriangleAlertIcon,
   XIcon,
 } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { Circle, Svg } from 'react-native-svg';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
@@ -82,6 +92,78 @@ const visibilityOptions: ReadonlyArray<{
   { description: '팔로워만 볼 수 있어요.', icon: LockIcon, label: '팔로워만', value: 'FOLLOWERS' },
 ];
 
+function useVisibilityMenu(
+  submitting: boolean,
+  onVisibilityChange: PostComposerTargetProps['onVisibilityChange'],
+) {
+  const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const controlRef = useRef<View>(null);
+  const menuRef = useRef<View>(null);
+  const triggerRef = useRef<View>(null);
+  useEffect(() => {
+    if (submitting) {
+      setVisibilityOpen(false);
+    }
+  }, [submitting]);
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !visibilityOpen) {
+      return;
+    }
+    const control = controlRef.current as unknown as HTMLElement;
+    const menu = menuRef.current as unknown as HTMLElement;
+    const items = Array.from(menu.querySelectorAll<HTMLElement>('[role="radio"]'));
+    (items.find((item) => item.getAttribute('aria-checked') === 'true') ?? items[0])?.focus();
+    const dismissOutside = (event: Event) => {
+      if (!control.contains(event.target as Node)) {
+        setVisibilityOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setVisibilityOpen(false);
+        triggerRef.current?.focus();
+        return;
+      }
+      if (!menu.contains(document.activeElement)) {
+        return;
+      }
+      const index = items.indexOf(document.activeElement as HTMLElement);
+      if ([' ', 'Enter'].includes(event.key) && index >= 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        items[index]?.click();
+        return;
+      }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+        return;
+      }
+      event.preventDefault();
+      const next =
+        event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? items.length - 1
+            : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items[next]?.focus();
+      const option = visibilityOptions[next];
+      if (option) {
+        onVisibilityChange(option.value);
+      }
+    };
+    document.addEventListener('pointerdown', dismissOutside);
+    document.addEventListener('focusin', dismissOutside);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', dismissOutside);
+      document.removeEventListener('focusin', dismissOutside);
+      document.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [onVisibilityChange, visibilityOpen]);
+  return { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen };
+}
+
 export function PostComposerTarget({
   author,
   body,
@@ -115,12 +197,10 @@ export function PostComposerTarget({
   visibility,
 }: PostComposerTargetProps) {
   const theme = useTheme();
-  const [visibilityOpen, setVisibilityOpen] = useState(false);
-  useEffect(() => {
-    if (submitting) {
-      setVisibilityOpen(false);
-    }
-  }, [submitting]);
+  const { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen } = useVisibilityMenu(
+    submitting,
+    onVisibilityChange,
+  );
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
@@ -151,8 +231,10 @@ export function PostComposerTarget({
         ]}
       >
         <View style={styles.header}>
-          <View style={styles.visibilityControl}>
+          <View ref={controlRef} style={styles.visibilityControl}>
             <Pressable
+              ref={triggerRef}
+              aria-expanded={visibilityOpen && !submitting}
               accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
               accessibilityRole="button"
               accessibilityState={{ expanded: visibilityOpen && !submitting }}
@@ -180,9 +262,13 @@ export function PostComposerTarget({
             </Pressable>
             {visibilityOpen && !submitting ? (
               <VisibilityMenu
+                menuRef={menuRef}
+                triggerRef={triggerRef}
+                onDismiss={() => setVisibilityOpen(false)}
                 onChange={(value) => {
                   onVisibilityChange(value);
                   setVisibilityOpen(false);
+                  triggerRef.current?.focus();
                 }}
                 value={visibility}
               />
@@ -359,12 +445,10 @@ export function MobileFullscreenComposerShellCandidate({
 }: MobileFullscreenComposerShellCandidateProps) {
   const theme = useTheme();
   const [bodyFocused, setBodyFocused] = useState(false);
-  const [visibilityOpen, setVisibilityOpen] = useState(false);
-  useEffect(() => {
-    if (submitting) {
-      setVisibilityOpen(false);
-    }
-  }, [submitting]);
+  const { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen } = useVisibilityMenu(
+    submitting,
+    onVisibilityChange,
+  );
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const disabled =
@@ -412,8 +496,10 @@ export function MobileFullscreenComposerShellCandidate({
         </View>
       </View>
 
-      <View style={styles.mobileVisibilityControl}>
+      <View ref={controlRef} style={styles.mobileVisibilityControl}>
         <Pressable
+          ref={triggerRef}
+          aria-expanded={visibilityOpen && !submitting}
           accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
           accessibilityRole="button"
           accessibilityState={{ expanded: visibilityOpen && !submitting }}
@@ -440,76 +526,88 @@ export function MobileFullscreenComposerShellCandidate({
         {visibilityOpen && !submitting ? (
           <VisibilityMenu
             alignRight
+            menuRef={menuRef}
+            triggerRef={triggerRef}
+            onDismiss={() => setVisibilityOpen(false)}
             onChange={(value) => {
               onVisibilityChange(value);
               setVisibilityOpen(false);
+              triggerRef.current?.focus();
             }}
             value={visibility}
           />
         ) : null}
       </View>
 
-      <View style={styles.mobileComposerBody} testID="mobile-composer-body">
-        {author}
-        {contentWarningExpanded ? (
-          <TextField
-            accessibilityLabel="콘텐츠 경고"
+      <ScrollView
+        contentContainerStyle={styles.mobileScrollContent}
+        keyboardShouldPersistTaps="handled"
+        style={styles.mobileScroll}
+      >
+        <View style={styles.mobileComposerBody} testID="mobile-composer-body">
+          {author}
+          {contentWarningExpanded ? (
+            <TextField
+              accessibilityLabel="콘텐츠 경고"
+              editable={!submitting}
+              onChangeText={onContentWarningChange}
+              placeholder="경고 문구를 입력하세요"
+              style={styles.mobileContentWarning}
+              value={contentWarning}
+            />
+          ) : null}
+          <TextInput
+            ref={bodyRef}
+            accessibilityLabel="게시물 내용"
             editable={!submitting}
-            onChangeText={onContentWarningChange}
-            placeholder="경고 문구를 입력하세요"
-            style={styles.mobileContentWarning}
-            value={contentWarning}
+            multiline
+            onBlur={() => setBodyFocused(false)}
+            onChangeText={onBodyChange}
+            onFocus={() => setBodyFocused(true)}
+            placeholder="무슨 일이 일어나고 있나요?"
+            placeholderTextColor={
+              submitting ? theme.stateDisabledForeground : theme.foregroundMuted
+            }
+            style={[
+              styles.mobileBody,
+              {
+                backgroundColor: theme.backgroundCanvas,
+                color: theme.foregroundPrimary,
+                ...(bodyFocused
+                  ? ({
+                      outlineColor: theme.stateFocusRing,
+                      outlineOffset: 2,
+                      outlineStyle: 'solid',
+                      outlineWidth: borderWidths[2],
+                    } as unknown as TextStyle)
+                  : undefined),
+              },
+            ]}
+            value={body}
           />
-        ) : null}
-        <TextInput
-          ref={bodyRef}
-          accessibilityLabel="게시물 내용"
-          editable={!submitting}
-          multiline
-          onBlur={() => setBodyFocused(false)}
-          onChangeText={onBodyChange}
-          onFocus={() => setBodyFocused(true)}
-          placeholder="무슨 일이 일어나고 있나요?"
-          placeholderTextColor={submitting ? theme.stateDisabledForeground : theme.foregroundMuted}
-          style={[
-            styles.mobileBody,
-            {
-              backgroundColor: theme.backgroundCanvas,
-              color: theme.foregroundPrimary,
-              ...(bodyFocused
-                ? ({
-                    outlineColor: theme.stateFocusRing,
-                    outlineOffset: 2,
-                    outlineStyle: 'solid',
-                    outlineWidth: borderWidths[2],
-                  } as unknown as TextStyle)
-                : undefined),
-            },
-          ]}
-          value={body}
-        />
-        {error ? (
-          <Text
-            accessibilityRole="alert"
-            style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
-          >
-            {error}
-          </Text>
-        ) : null}
-      </View>
-
-      {items.length > 0 ? (
-        <View style={styles.mobileMediaShelf} testID="mobile-composer-media-shelf">
-          <PostComposerMediaItemsTarget
-            disabled={submitting}
-            media={items}
-            onEdit={onMediaEdit}
-            onRemove={onMediaRemove}
-            onRetry={(item) => onMediaRetry(item.key)}
-            sensitiveMedia={sensitiveMedia}
-          />
+          {error ? (
+            <Text
+              accessibilityRole="alert"
+              style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
+            >
+              {error}
+            </Text>
+          ) : null}
         </View>
-      ) : null}
+
+        {items.length > 0 ? (
+          <View style={styles.mobileMediaShelf} testID="mobile-composer-media-shelf">
+            <PostComposerMediaItemsTarget
+              disabled={submitting}
+              media={items}
+              onEdit={onMediaEdit}
+              onRemove={onMediaRemove}
+              onRetry={(item) => onMediaRetry(item.key)}
+              sensitiveMedia={sensitiveMedia}
+            />
+          </View>
+        ) : null}
+      </ScrollView>
 
       <View
         style={[styles.mobileFooter, { borderTopColor: theme.borderSubtle }]}
@@ -656,22 +754,50 @@ function IllustrativeKeyboard() {
 
 function VisibilityMenu({
   alignRight = false,
+  menuRef,
   onChange,
+  onDismiss,
+  triggerRef,
   value,
 }: {
   alignRight?: boolean;
+  menuRef: RefObject<View | null>;
   onChange: (value: PostComposerTargetVisibility) => void;
+  onDismiss: () => void;
+  triggerRef: RefObject<View | null>;
   value: PostComposerTargetVisibility;
 }) {
   const theme = useTheme();
   const elevation = useElevation();
-  return (
+  const { height, width } = useWindowDimensions();
+  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
+  const dismiss = () => {
+    onDismiss();
+    triggerRef.current?.focus();
+  };
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+    triggerRef.current?.measureInWindow((x, y, triggerWidth, triggerHeight) => {
+      setAnchor({
+        left: Math.max(0, Math.min(alignRight ? x + triggerWidth - 240 : x, width - 240)),
+        top: Math.max(space[16], Math.min(y + triggerHeight + space[4], height - 64)),
+      });
+    });
+  }, [alignRight, height, triggerRef, width]);
+  const menu = (
     <View
+      ref={menuRef}
       accessibilityLabel="공개 범위 선택"
       accessibilityRole="radiogroup"
       style={[
         styles.visibilityMenu,
-        alignRight ? styles.visibilityMenuRight : styles.visibilityMenuLeft,
+        Platform.OS === 'web'
+          ? alignRight
+            ? styles.visibilityMenuRight
+            : styles.visibilityMenuLeft
+          : styles.nativeVisibilityMenu,
         elevation.floating,
         { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
@@ -681,6 +807,7 @@ function VisibilityMenu({
         const selected = option.value === value;
         return (
           <Pressable
+            aria-checked={selected}
             accessibilityLabel={option.label}
             accessibilityRole="radio"
             accessibilityState={{ checked: selected }}
@@ -710,6 +837,35 @@ function VisibilityMenu({
         );
       })}
     </View>
+  );
+  return Platform.OS === 'web' ? (
+    menu
+  ) : (
+    <Modal
+      transparent
+      visible
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={dismiss}
+    >
+      <View style={styles.visibilityBackdrop}>
+        <Pressable accessible={false} onPress={dismiss} style={StyleSheet.absoluteFill} />
+        {anchor ? (
+          <ScrollView
+            accessibilityViewIsModal
+            onAccessibilityEscape={dismiss}
+            keyboardShouldPersistTaps="handled"
+            style={[
+              styles.nativeVisibilityPosition,
+              anchor,
+              { maxHeight: Math.max(0, height - anchor.top - space[16]) },
+            ]}
+          >
+            {menu}
+          </ScrollView>
+        ) : null}
+      </View>
+    </Modal>
   );
 }
 
@@ -774,13 +930,15 @@ const styles = StyleSheet.create({
     borderRadius: radius[12],
     borderWidth: borderWidths[0],
     flex: 1,
-    minHeight: 0,
+    minHeight: 80,
     padding: space[0],
     textAlignVertical: 'top',
     ...textStyles.contentM,
   },
   mobileComposerBody: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
+    minHeight: 160,
     gap: space[8],
     overflow: 'visible',
     paddingBottom: space[8],
@@ -788,6 +946,8 @@ const styles = StyleSheet.create({
     paddingTop: space[16],
   },
   mobileContentWarning: { borderRadius: radius[0], minHeight: 44 },
+  mobileScroll: { flex: 1, minHeight: 0 },
+  mobileScrollContent: { flexGrow: 1 },
   mobileFooter: {
     alignItems: 'center',
     borderTopWidth: borderWidths[1],
@@ -854,6 +1014,9 @@ const styles = StyleSheet.create({
   },
   visibilityMenuLeft: { left: 0 },
   visibilityMenuRight: { right: 0 },
+  nativeVisibilityMenu: { position: 'relative', top: 0 },
+  nativeVisibilityPosition: { position: 'absolute', width: 240 },
+  visibilityBackdrop: { flex: 1 },
   visibilityOption: {
     alignItems: 'center',
     flexDirection: 'row',

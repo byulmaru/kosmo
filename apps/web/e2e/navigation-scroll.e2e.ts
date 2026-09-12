@@ -121,8 +121,13 @@ test('Web Home forward 진입점은 다른 route에서 /home으로 이동하고 
 
   for (const surface of homeEntrySurfaces.filter(({ kind }) => kind !== 'header')) {
     await page.setViewportSize(surface.viewport);
-    await page.goto('/compose');
-    await expect(page.getByRole('textbox', { name: '게시글 본문' }).first()).toBeVisible();
+    if (surface.kind === 'drawer') {
+      await page.goto('/settings');
+      await expect(page.getByRole('heading', { name: '설정', exact: true })).toBeVisible();
+    } else {
+      await page.goto('/@e2e-home-reselection-forward');
+      await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+    }
     await scrollDocument(page);
 
     const entry = await homeEntry(page, surface.kind);
@@ -563,8 +568,8 @@ test('loading target도 pathname commit 직후 이전 document offset을 노출�
 }) => {
   await signIn(page, 'e2e-navigation-loading');
   await page.setViewportSize({ height: 360, width: 1440 });
-  await page.goto('/compose');
-  await expect(page.getByRole('textbox', { name: '게시글 본문' }).first()).toBeVisible();
+  await page.goto('/settings');
+  await expect(page.getByRole('heading', { name: '설정', exact: true }).first()).toBeVisible();
   await scrollDocument(page);
 
   let releaseHomeQuery!: () => void;

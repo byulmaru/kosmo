@@ -93,6 +93,7 @@ test('selectProfile response identifies the selected profile and recreates the a
   page,
 }) => {
   const graphQLRequests = collectGraphQLRequests(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   await page.goto('/login');
   await page.waitForURL('**/home');
@@ -100,8 +101,7 @@ test('selectProfile response identifies the selected profile and recreates the a
   const alphaProfileId = await createProfileFromSwitcher(page, 'alpha');
   await expect(page.getByText('프로필을 만들어 시작하세요')).toBeHidden();
   await expect(page.getByText('홈', { exact: true }).last()).toBeVisible();
-  await page.goto('/compose');
-  await expect(page.getByText('글쓰기', { exact: true }).last()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Composer 확장' })).toBeVisible();
   await expect(composerProfileHandle(page, 'alpha')).toBeVisible();
   await expect(sidebarProfileHandle(page, 'alpha')).toBeVisible();
 
@@ -115,7 +115,7 @@ test('selectProfile response identifies the selected profile and recreates the a
 
   expect(responseBody.data?.selectProfile?.profile?.id).toBe(alphaProfileId);
   await expect(page.getByRole('progressbar')).toHaveCount(0);
-  await expect(page).toHaveURL(/\/compose$/);
+  await expect(page).toHaveURL(/\/home$/);
   await expect(composerProfileHandle(page, 'alpha')).toBeVisible();
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
@@ -442,9 +442,9 @@ async function createPost(page: Page, body: string) {
   const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
 
   await page.goto('/compose');
-  const composer = page.getByLabel('새 게시글 작성').first();
+  const composer = page.getByLabel('게시글 작성', { exact: true });
 
-  await composer.getByRole('textbox', { name: '게시글 본문' }).fill(body);
+  await composer.getByRole('textbox', { name: '게시물 내용' }).fill(body);
   await composer.getByRole('button', { name: '게시', exact: true }).click();
   await createPostResponse;
 }
@@ -467,7 +467,7 @@ async function failGraphQLOperation(page: Page, operationName: string) {
 }
 
 function composerProfileHandle(page: Page, handle: string) {
-  return page.getByLabel('새 게시글 작성').first().getByText(`@${handle}`);
+  return page.getByLabel('게시글 작성', { exact: true }).getByText(`@${handle}`);
 }
 
 function sidebarProfileHandle(page: Page, handle: string) {

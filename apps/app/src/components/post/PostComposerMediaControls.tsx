@@ -258,7 +258,7 @@ export function PostComposerMediaControls({
 
     editor.addEventListener('paste', onPaste);
     return () => editor.removeEventListener('paste', onPaste);
-  }, [editorRef]);
+  });
 
   const selectMedia = async () => {
     const availableAtOpen = postComposerMediaLimit - mediaRef.current.length;
