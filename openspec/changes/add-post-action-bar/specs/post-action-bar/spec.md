@@ -233,18 +233,19 @@
 - **WHEN** `PostListItem` 또는 `PostLayout`이 일반 Post, 순수 Repost 또는 Quote를 렌더한다
 - **THEN** `PostLayout`의 Engagement는 metadata 뒤 Reaction Summary와 bordered Action Bar frame을 순서대로 렌더링하고, `PostListItem`의 Action Bar는 마지막 presentation 뒤 목록 slot 또는 direct final sibling으로 렌더된다
 - **AND** `PostLayout`의 Reaction Summary는 border 밖에 있으며 위아래 border와 padding 사이에는 Action Bar만 있다
-- **AND** 일반 Text·Media의 목록 전용 slot은 Action Bar만 포함하고 Quote·순수 Repost는 Action Bar를 직접 배치한다
+- **AND** 목록 전용 Action Bar wrapper에는 Action Bar만 포함하고 Reaction Summary와 본문을 포함하지 않는다
 - **AND** 본문·작성자·생성 시각·Source navigation link의 descendant가 아니다
 
 #### Scenario: 목록 Post 카드의 compact spacing
 
 - **WHEN** `PostListItem`이 일반 Text·Media, 순수 Repost 또는 Quote를 렌더한다
-- **THEN** 일반 Text·Media 카드는 상단 12px·하단 4px padding을 사용하고 목록 전용 Action Bar slot은 상단 4px·하단 0px padding을 제공한다
-- **AND** 순수 Repost와 Quote 카드는 상단 8px·하단 1px padding을 사용하고 별도 Action Bar slot을 만들지 않는다
+- **THEN** Web 일반 Text·Media 카드는 상단 12px·하단 8px padding을 사용하고 목록 전용 Action Bar slot은 상단 8px·하단 0px padding을 제공한다
+- **AND** Web 순수 Repost와 Quote 카드는 상단 8px을 유지하고 모든 Web 목록 유형에서 마지막 presentation(본문·미디어·Source preview 또는 Reaction Summary)과 Bar 사이가 12px, Bar 하단과 구분선 안쪽 사이가 8px이다
+- **AND** Native의 기존 세로 여백과 iOS 44pt·Android 48dp target은 변경하지 않는다
 - **AND** 모든 목록 카드의 좌우 padding은 Web 8px, Native 16px이다
 - **AND** 1px 카드 구분선은 입력·메뉴 외곽선용 `border`가 아니라 저강도 semantic `divider` color를 사용한다
 - **AND** 순수 Repost attribution은 20px line box를 사용하고 아래 Source 표준행과의 추가 gap을 두지 않는다
-- **AND** Quote는 Source preview 내부 하단 padding을 4px로 줄이고 Source preview border 밖에서 직접 배치한 Action Bar까지 8px 간격을 제공한다
+- **AND** Quote는 Source preview 내부 하단 padding 4px을 유지하며 Reaction Summary가 없으면 Source preview border부터 Bar까지 Web 12px, Native 기존 8px을 제공한다
 
 #### Scenario: Quote Source preview surface state
 
@@ -265,7 +266,7 @@
 - **WHEN** Post 상세 thread가 조상, 현재 Post와 하위 Reply를 함께 렌더한다
 - **THEN** 현재 `PostLayout`은 48px Avatar와 12px gap의 Header 뒤 8px 간격으로 Body를 full width에 배치하고, metadata 하단부터 8px 뒤에 Reaction Summary를 같은 왼쪽 경계와 너비로 배치한다
 - **AND** Reaction Summary가 있으면 그 아래 4px에 bordered Action Bar frame을 배치하고, Summary가 없으면 metadata 하단부터 frame 상단 border까지 8px을 유지한다
-- **AND** Action Bar frame은 full-width 상·하 1px `borderSubtle`과 상하 8px padding 사이에 Action Bar만 포함하며 이 geometry를 connector gutter로 사용하지 않는다
+- **AND** Action Bar frame은 full-width 상·하 1px `borderSubtle`과 Web 상하 12px(Native 기존 8px) padding 사이에 Action Bar만 포함하며 이 geometry를 connector gutter로 사용하지 않는다
 - **AND** current row는 왼쪽 8px·오른쪽 12px·상단 16px·하단 4px padding을 사용한다
 - **AND** connector는 조상 구간과 마지막 조상→현재 경계에만 표시되고 현재→첫 하위 Reply와 하위 Reply 사이에는 표시되지 않는다
 - **AND** current row 뒤에는 generic thread divider를 렌더링하지 않는다
