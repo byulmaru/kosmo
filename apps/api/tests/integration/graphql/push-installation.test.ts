@@ -246,7 +246,7 @@ test('서버가 발급한 Global ID로 등록·갱신·해제하고 삭제된 ID
   }
 });
 
-test('Account·Session 소유권과 같은 Account token 이동을 검증한다', async () => {
+test('Account 소유권·동일 Account 다른 Session 관리와 token 이동을 검증한다', async () => {
   const owner = await createSession();
   const other = await createSession();
   const ownerOtherSession = await db
@@ -299,7 +299,7 @@ test('Account·Session 소유권과 같은 Account token 이동을 검증한다'
     assert.equal(refreshedRow[0]?.token, 'owner-token-refresh');
     assert.equal(refreshedRow[0]?.registrationEpoch.toString(), historicalEpoch.toString());
 
-    const stateBeforeDeniedUpdates = await db
+    const stateBeforeCrossSessionUpdate = await db
       .select({
         accountId: PushInstallations.accountId,
         id: PushInstallations.id,
@@ -311,7 +311,7 @@ test('Account·Session 소유권과 같은 Account token 이동을 검증한다'
       .from(PushInstallations)
       .where(eq(PushInstallations.id, installationId));
 
-    const deniedAccountUpdate = await request<unknown>(
+    const foreignAccountUpdate = await request<unknown>(
       updateMutation(
         registered.data!.registerPushInstallation.id,
         PushInstallationPlatform.ANDROID,
@@ -319,21 +319,34 @@ test('Account·Session 소유권과 같은 Account token 이동을 검증한다'
       ),
       other.session.token,
     );
-    assert.equal(deniedAccountUpdate.data, null);
-    assert.equal(deniedAccountUpdate.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.deepEqual(
+      await db
+        .select({
+          accountId: PushInstallations.accountId,
+          id: PushInstallations.id,
+          platform: PushInstallations.platform,
+          registrationEpoch: PushInstallations.registrationEpoch,
+          sessionId: PushInstallations.sessionId,
+          token: PushInstallations.token,
+        })
+        .from(PushInstallations)
+        .where(eq(PushInstallations.id, installationId)),
+      stateBeforeCrossSessionUpdate,
+    );
 
-    const deniedSessionUpdate = await request<unknown>(
+    const crossSessionUpdate = await request<{ updatePushInstallation: { completed: boolean } }>(
       updateMutation(
         registered.data!.registerPushInstallation.id,
         PushInstallationPlatform.ANDROID,
-        'other-session-token',
+        'owner-token-refresh',
       ),
       ownerOtherSession.token,
     );
-    assert.equal(deniedSessionUpdate.data, null);
-    assert.equal(deniedSessionUpdate.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.deepEqual(crossSessionUpdate, {
+      data: { updatePushInstallation: { completed: true } },
+    });
 
-    const stateAfterDeniedUpdates = await db
+    const stateAfterCrossSessionUpdate = await db
       .select({
         accountId: PushInstallations.accountId,
         id: PushInstallations.id,
@@ -344,7 +357,19 @@ test('Account·Session 소유권과 같은 Account token 이동을 검증한다'
       })
       .from(PushInstallations)
       .where(eq(PushInstallations.id, installationId));
-    assert.deepEqual(stateAfterDeniedUpdates, stateBeforeDeniedUpdates);
+    assert.equal(stateAfterCrossSessionUpdate.length, 1);
+    assert.equal(stateAfterCrossSessionUpdate[0]?.accountId, owner.account.id);
+    assert.equal(stateAfterCrossSessionUpdate[0]?.id, installationId);
+    assert.equal(stateAfterCrossSessionUpdate[0]?.platform, PushInstallationPlatform.ANDROID);
+    assert.equal(stateAfterCrossSessionUpdate[0]?.token, 'owner-token-refresh');
+    assert.equal(
+      stateAfterCrossSessionUpdate[0]?.sessionId,
+      stateBeforeCrossSessionUpdate[0]?.sessionId,
+    );
+    assert.equal(
+      stateAfterCrossSessionUpdate[0]?.registrationEpoch.toString(),
+      stateBeforeCrossSessionUpdate[0]?.registrationEpoch.toString(),
+    );
 
     const moved = await request<RegisterResult>(
       registerMutation(PushInstallationPlatform.ANDROID, 'owner-token-refresh'),
@@ -387,21 +412,30 @@ test('Account·Session 소유권과 같은 Account token 이동을 검증한다'
     assert.equal(deniedTokenTheft.data, null);
     assert.equal(deniedTokenTheft.errors?.[0]?.extensions?.code, 'CONFLICT');
 
-    const deniedAccountUnregister = await request<unknown>(
+    const unknownInstallationId = encodeGlobalId('PushInstallation', crypto.randomUUID());
+    const unknownUpdate = await request<unknown>(
+      updateMutation(unknownInstallationId, PushInstallationPlatform.IOS, 'other-token'),
+      other.session.token,
+    );
+    assert.deepEqual(foreignAccountUpdate, unknownUpdate);
+    assert.equal(foreignAccountUpdate.data, null);
+    assert.equal(foreignAccountUpdate.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.equal(foreignAccountUpdate.errors?.[0]?.message, 'Push installation is unavailable.');
+
+    const foreignAccountUnregister = await request<unknown>(
       unregisterMutation(moved.data!.registerPushInstallation.id),
       other.session.token,
     );
-    assert.equal(deniedAccountUnregister.data, null);
-    assert.equal(deniedAccountUnregister.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
-
-    const deniedSessionUnregister = await request<unknown>(
-      unregisterMutation(moved.data!.registerPushInstallation.id),
-      owner.session.token,
+    const unknownUnregister = await request<unknown>(
+      unregisterMutation(unknownInstallationId),
+      other.session.token,
     );
-    assert.equal(deniedSessionUnregister.data, null);
-    assert.equal(deniedSessionUnregister.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.deepEqual(foreignAccountUnregister, {
+      data: { unregisterPushInstallation: { completed: true } },
+    });
+    assert.deepEqual(foreignAccountUnregister, unknownUnregister);
 
-    const movedStateAfterDeniedAccess = await db
+    const movedStateAfterForeignAccess = await db
       .select({
         accountId: PushInstallations.accountId,
         id: PushInstallations.id,
@@ -412,7 +446,23 @@ test('Account·Session 소유권과 같은 Account token 이동을 검증한다'
       })
       .from(PushInstallations)
       .where(eq(PushInstallations.id, movedId));
-    assert.deepEqual(movedStateAfterDeniedAccess, movedStateBeforeDeniedAccess);
+    assert.deepEqual(movedStateAfterForeignAccess, movedStateBeforeDeniedAccess);
+
+    const crossSessionUnregister = await request<unknown>(
+      unregisterMutation(moved.data!.registerPushInstallation.id),
+      owner.session.token,
+    );
+    assert.deepEqual(crossSessionUnregister, {
+      data: { unregisterPushInstallation: { completed: true } },
+    });
+
+    assert.deepEqual(
+      await db
+        .select({ id: PushInstallations.id })
+        .from(PushInstallations)
+        .where(eq(PushInstallations.id, movedId)),
+      [],
+    );
   } finally {
     await cleanup([owner.account.id, other.account.id]);
   }

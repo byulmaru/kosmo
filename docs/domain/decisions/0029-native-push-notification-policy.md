@@ -44,12 +44,17 @@ installation token lifecycle을 고정하므로 권한 안내 시점,
 - 현재 Account에 로그인되어 있고 OS 알림을 허용한 모든 앱 설치를 Push 대상으로 한다. 가장 최근 설치 하나만
   대상으로 선택하지 않는다.
 - Active installation row만 opaque FCM token을 보관한다. 최초 등록은 외부 installation ID를 받지 않고 서버가
-  새 installation row ID를 발급해 반환한다. 갱신은 반환된 row ID와 현재 Account·Session이 모두 일치하는
-  row만 수정하며, 존재하지 않거나 삭제된 ID를 새 row로 재생성하지 않는다. 명시적 해제는 반환된 row ID와
-  현재 Account·Session을 확인한 뒤 해당 row만 삭제하고, 없는 ID는 이미 해제된 것으로 멱등 처리한다.
-  사용자가 설치를 해제하거나 해당 Session이 로그아웃·폐기되거나 Account가 삭제되면 해당 row와 token을 즉시
-  삭제한다. Provider가 invalid 또는 unregistered 결과를 반환해도 Account, row ID와 현재 token이 모두
-  일치하는 row만 즉시 삭제한다. 늦게 도착한 이전 token 결과는 갱신된 현재 token을 삭제하지 않는다.
+  새 installation row ID를 발급해 반환한다. 갱신은 반환된 row ID와 인증된 현재 Account 소유권만 확인하며,
+  알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 노출하지 않는 동일한
+  `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패한다. 명시적 해제는 반환된 row ID와
+  인증된 현재 Account 소유권만 확인해 해당 row를 삭제하며, 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는
+  row 존재 여부를 노출하지 않고 `{ completed: true }`로 멱등 완료한다. 등록 당시 연결된 `sessionId`는
+  lifecycle association으로 유지하며 현재 인증 Session과 비교하거나 요청 Session으로 재바인딩하지 않는다.
+  따라서 같은 Account의 다른 Session도 해당 row를 관리할 수 있지만, 등록 당시 연결된 Session의 로그아웃·폐기와
+  Account 삭제에 따른 기존 cleanup은 유지한다. Provider가 invalid 또는 unregistered 결과를 반환해도 Account,
+  row ID와 현재 token이 모두 일치하는 row만 즉시 삭제한다. 늦게 도착한 이전 token 결과는 갱신된 현재 token을
+  삭제하지 않는다.
+- 이전 문서의 `현재 Account·Session` 일치 조건은 이 Account 소유권 및 lifecycle association 규칙으로 대체한다.
 - 삭제된 installation을 다시 등록하면 삭제 전 registration epoch나 unread Notification을 재사용하지 않고,
   새 row ID와 새 수신 시작 시각을 기록한다. 이전에 반환된 ID는 재사용하지 않으며, 늦게 도착한 이전 ID의
   unregister가 새 registration row를 삭제하지 않는다. 새 registration 시각 이전에 생성된 Notification은
