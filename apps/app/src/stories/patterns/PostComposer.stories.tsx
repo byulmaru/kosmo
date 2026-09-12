@@ -866,6 +866,7 @@ export const MobileFlexLayoutContract: Story = {
     const focusedStyle = getComputedStyle(editor);
     const borderWidth = focusedStyle.borderWidth;
     expect(borderWidth).toBe('0px');
+    expect(focusedStyle.outlineStyle).toBe('solid');
     expect(focusedStyle.outlineWidth).toBe('0px');
 
     await userEvent.click(canvas.getByRole('button', { name: '글쓰기 닫기' }));
