@@ -5,11 +5,19 @@ import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
 import { profileFollowAccessWhere } from '../access/follow';
+import { viewerProfileBlockLoader } from '../loader/block';
 import { viewerFollowLoader } from '../loader/follow';
 import { viewerFollowRequestLoader } from '../loader/follow-request';
 import { viewerAccountProfileLoader } from '../loader/membership';
 import { viewerProfileMuteLoader } from '../loader/mute';
-import { AccountProfile, Profile, ProfileFollow, ProfileFollowRequest, ProfileMute } from '../ref';
+import {
+  AccountProfile,
+  Profile,
+  ProfileBlock,
+  ProfileFollow,
+  ProfileFollowRequest,
+  ProfileMute,
+} from '../ref';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 
@@ -24,6 +32,7 @@ const ProfileViewerState = builder.simpleObject('ProfileViewerState', {
     followRequest: field.field({ type: ProfileFollowRequest, nullable: true }),
     membership: field.field({ type: AccountProfile, nullable: true }),
     profileMute: field.field({ type: ProfileMute, nullable: true }),
+    profileBlock: field.field({ type: ProfileBlock, nullable: true }),
   }),
 });
 
@@ -121,10 +130,11 @@ builder.objectFields(Profile, (t) => ({
     unauthorizedResolver: () => null,
     resolve: async (profile, _, ctx) => {
       const viewerProfileId = ctx.session.profile.id;
-      const [follow, followRequest, membership, profileMute] = await Promise.all([
+      const [follow, followRequest, membership, profileBlock, profileMute] = await Promise.all([
         viewerFollowLoader(ctx).load(profile.id),
         viewerFollowRequestLoader(ctx).load(profile.id),
         viewerAccountProfileLoader(ctx).load(profile.id),
+        viewerProfileBlockLoader(ctx).load(profile.id),
         viewerProfileMuteLoader(ctx).load(profile.id),
       ]);
 
@@ -133,6 +143,7 @@ builder.objectFields(Profile, (t) => ({
         follow,
         followRequest: follow ? null : followRequest,
         membership,
+        profileBlock,
         profileMute,
       };
     },

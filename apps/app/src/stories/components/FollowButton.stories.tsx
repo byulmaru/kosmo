@@ -142,18 +142,16 @@ function requireProfile(profiles: ReturnType<typeof useStoryProfiles>, id: strin
 
 function FollowButtonFixture({
   profileId = followable.id,
-  size,
 }: {
   failureResponse?: boolean;
   profileId?: string;
-  size?: 'compact' | 'medium';
 }) {
   const profiles = useStoryProfiles();
   const target = requireProfile(profiles, profileId);
 
   return (
     <SessionProvider>
-      <FollowButton profile={target.followButton} size={size} />
+      <FollowButton profile={target.followButton} />
     </SessionProvider>
   );
 }
@@ -163,24 +161,15 @@ function FollowButtonCatalog() {
 
   return (
     <Catalog>
-      <Section title="Sizes and initial relationship states">
+      <Section title="Initial relationship states">
         <Row>
-          <FollowButton
-            profile={requireProfile(profiles, followable.id).followButton}
-            size="compact"
-          />
-          <FollowButton
-            profile={requireProfile(profiles, following.id).followButton}
-            size="medium"
-          />
-          <FollowButton
-            profile={requireProfile(profiles, requested.id).followButton}
-            size="compact"
-          />
+          <FollowButton profile={requireProfile(profiles, followable.id).followButton} />
+          <FollowButton profile={requireProfile(profiles, following.id).followButton} />
+          <FollowButton profile={requireProfile(profiles, requested.id).followButton} />
         </Row>
       </Section>
       <Section title="Self profile hides the action">
-        <FollowButton profile={requireProfile(profiles, self.id).followButton} size="medium" />
+        <FollowButton profile={requireProfile(profiles, self.id).followButton} />
       </Section>
     </Catalog>
   );
@@ -274,11 +263,10 @@ type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
   render: (args) => <FollowButtonPlayground {...args} />,
-  args: { failureResponse: false, profileId: followable.id, size: 'medium' },
+  args: { failureResponse: false, profileId: followable.id },
   argTypes: {
     failureResponse: { control: 'boolean', name: '실패 응답' },
     profileId: { control: 'select', options: storyProfileIds },
-    size: { control: 'inline-radio', options: ['compact', 'medium'] },
   },
   parameters: {
     relay: { mutationRequestObserver },
@@ -295,7 +283,7 @@ export const RepresentativeStates: Story = {
 };
 
 export const FollowSuccess: Story = {
-  args: { profileId: followable.id, size: 'medium' },
+  args: { profileId: followable.id },
   parameters: { relay: { mutationResponse: followSuccessResponse } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -310,7 +298,7 @@ export const FollowSuccess: Story = {
 };
 
 export const FollowPending: Story = {
-  args: { profileId: followable.id, size: 'medium' },
+  args: { profileId: followable.id },
   parameters: { relay: { mutationLoading: true } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -320,7 +308,7 @@ export const FollowPending: Story = {
 };
 
 export const FollowError: Story = {
-  args: { profileId: followable.id, size: 'medium' },
+  args: { profileId: followable.id },
   parameters: { relay: { mutationGraphQLErrors: ['팔로우 실패'] } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -335,7 +323,7 @@ export const FollowError: Story = {
 };
 
 export const RequestSuccess: Story = {
-  args: { profileId: approvalRequired.id, size: 'medium' },
+  args: { profileId: approvalRequired.id },
   parameters: { relay: { mutationResponse: requestSuccessResponse } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -345,7 +333,7 @@ export const RequestSuccess: Story = {
 };
 
 export const RequestPending: Story = {
-  args: { profileId: approvalRequired.id, size: 'medium' },
+  args: { profileId: approvalRequired.id },
   parameters: { relay: { mutationLoading: true } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -355,7 +343,7 @@ export const RequestPending: Story = {
 };
 
 export const RequestError: Story = {
-  args: { profileId: approvalRequired.id, size: 'medium' },
+  args: { profileId: approvalRequired.id },
   parameters: { relay: { mutationError: '요청 실패' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -368,7 +356,7 @@ export const RequestError: Story = {
 };
 
 export const UnfollowSuccess: Story = {
-  args: { profileId: following.id, size: 'medium' },
+  args: { profileId: following.id },
   parameters: { relay: { mutationResponse: unfollowSuccessResponse } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -378,7 +366,7 @@ export const UnfollowSuccess: Story = {
 };
 
 export const UnfollowPending: Story = {
-  args: { profileId: following.id, size: 'medium' },
+  args: { profileId: following.id },
   parameters: { relay: { mutationLoading: true } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -388,7 +376,7 @@ export const UnfollowPending: Story = {
 };
 
 export const UnfollowError: Story = {
-  args: { profileId: following.id, size: 'medium' },
+  args: { profileId: following.id },
   parameters: { relay: { mutationGraphQLErrors: ['언팔로우 실패'] } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -401,7 +389,7 @@ export const UnfollowError: Story = {
 };
 
 export const CancelSuccess: Story = {
-  args: { profileId: requested.id, size: 'medium' },
+  args: { profileId: requested.id },
   parameters: { relay: { mutationResponse: cancelSuccessResponse } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -411,7 +399,7 @@ export const CancelSuccess: Story = {
 };
 
 export const CancelPending: Story = {
-  args: { profileId: requested.id, size: 'medium' },
+  args: { profileId: requested.id },
   parameters: { relay: { mutationLoading: true } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -421,7 +409,7 @@ export const CancelPending: Story = {
 };
 
 export const CancelError: Story = {
-  args: { profileId: requested.id, size: 'medium' },
+  args: { profileId: requested.id },
   parameters: { relay: { mutationError: '취소 실패' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

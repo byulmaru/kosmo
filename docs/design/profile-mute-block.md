@@ -26,7 +26,7 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   차단 항목의 패턴 합성은 2026-09-08 사용자 검토에 따른다.
   Profile/Post 합성 메뉴는 기존 차단·뮤트 메뉴와 같은 ActionMenu·ProfileMoreButton 및 Web 최소 폭 160px을 사용한다.
   차단 상태에서도 Hero의 기존 액션 영역(차단 해제 버튼 옆)에 더보기 진입점을 유지한다. header로 옮기지 않는다.
-  Hero의 팔로우·차단 해제 버튼은 동일한 size를 사용한다: medium `96×40`, compact `72×32`.
+  Hero의 팔로우·차단 해제 버튼은 동일한 Default `96×40` size를 사용한다.
   같은 ProfileMoreMenu에 링크 복사와 차단 해제를 표시하며, 메뉴와 Hero 버튼 모두 기존 확인 처리를 사용한다.
 - Mute가 성공하면 기존 공용 Toast에 `{표시 이름} 님이 뮤트되었어요`를 표시하고 Mute 관리 action을
   `뮤트 해제`로 전환한다. `ProfileHero` 상단 Action SLOT의 관계 action은 바꾸지 않으며, 성공 전에 상태나
@@ -66,6 +66,10 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   설명도 같은 문구로 갱신했다. 기존 리액션은 삭제하지 않는다. 현재 Storybook은 메뉴·목록 presentation을 검증하며 차단·해제 요청과 관계·리액션 정리를 구현하지 않는다.
 - pending에는 같은 action의 중복 입력과 dismiss를 막고 busy 상태를 전달한다. 실패하면 기존 서버 확정 상태를
   유지하고 제품의 기존 오류 피드백을 사용한다.
+- Block·Unblock action은 각각 Target Profile 또는 실제 `ProfileBlock` 관계 fragment 하나를 입력으로 받고,
+  confirmation·pending·mutation·feedback을 소유한다. 소비자는 현재 viewer 관계에 따라 어느 action을 노출할지만
+  결정한다. mutation payload는 Target Profile의 `viewerState.profileBlock`과 Settings Block connection을 Relay에
+  정규화하며, actor Store 전체 교체나 별도 module-global 관계 cache로 화면을 동기화하지 않는다.
 
 ## 설정 정보 구조
 
@@ -159,9 +163,9 @@ viewer 방향별 콘텐츠 정책은 위 계약을 따르며, 실제 route의 �
 - Button, ActionMenu, ModalSheet, Toast, SettingsItem, SettingsNavigationList, ProfileHero, StateView와
   Profile shell의 기존 production source를 재사용한다. 이 흐름만을 위한 새 Toast나 범용 safety component를
   만들지 않는다.
-- Mobile Muted·Blocked 목록의 loaded action은 `64px` ProfileListItem 안에서 공용 Default Secondary button을
-  `88×40px` visual로 유지하고 투명 `88×48dp` wrapper 가운데 배치한다. 공용 Button source와 Web compact
-  geometry는 변경하지 않는다.
+- Muted·Blocked 관리 목록의 loaded action은 `64px` ProfileListItem 안에서 공용 Default Secondary button을
+  `96×40px` Web visual로 사용한다. 별도 wrapper나 hitSlop을 추가하지 않으며 Native는 공용 Button의
+  iOS `44pt`·Android `48dp` 최소 높이를 그대로 사용한다.
 - 확인은 공용 [`ConfirmationContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5103-15173)를
   사용한다. Mute는 `Tone=Primary`, Block·Unblock은 `Tone=Danger`이며 각 action의 `Idle|Pending`에서 같은 제목·설명·action
   label을 유지한다.
@@ -205,7 +209,7 @@ viewer 방향별 콘텐츠 정책은 위 계약을 따르며, 실제 route의 �
   Profile 상태나 mutation callback은 받지 않는다. 실제 요청과 확인창 lifecycle은 항목을 제공하는 action 소유다.
 - `BlockedProfileList`는 loading·error·empty·pagination과 전달된 행 `children`을 표시한다.
   실제 action을 포함한 행은 기존 `ProfileListItemContent.children`으로 합성하며 목록은 mutation이나 성공 feedback을 받지 않는다.
-- PROD-814·823은 실제 action의 Profile fragment·mutation·pending·실패·Relay/cache 갱신·actor 격리를 구현하고
+- PROD-814·823은 실제 action의 관계별 fragment·mutation·pending·실패·Relay 갱신·actor 격리를 구현하고
   해당 코드·인터페이스·검증 증거를 인계한다. 메뉴·버튼은 같은 요청 처리를 재사용한다.
 - PROD-917은 인계된 실제 action으로 신규 UI를 연결하고 실제 action과 mock Relay 응답으로 조합을 검증한다.
   임시 callback 화면을 보존하기 위해 mutation 구현을 신규 UI 교체 작업으로 넘기지 않는다.
@@ -223,7 +227,7 @@ viewer 방향별 콘텐츠 정책은 위 계약을 따르며, 실제 route의 �
 공유하는 `ProfileListItemContent`를 사용한다. 화면과 Storybook은 목록 밖의 heading·scroll container와
 해제 성공 후 heading focus를 소유한다.
 Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목록은 이름·핸들 기본 표시를 사용한다.
-행의 action은 `children`으로 합성하며, FollowButton의 Web·Native 크기 선택은 Relay wrapper가 유지한다.
+행의 action은 `children`으로 합성하며, FollowButton은 viewport와 무관하게 Default `96×40`을 소유한다.
 `ProfileHero.mute.muted`에는 서버 확정 상태를 전달하고, loading에서는 메뉴·상태행을 표시하지 않는다.
 
 - 요청 callback은 성공할 때 resolve하고 실패할 때 reject한다. 성공 feedback이 전달되기 전에는 낙관적으로
@@ -266,9 +270,9 @@ Web 최소 폭 160px과 키보드·focus 처리를 재사용하고, 목록은 �
 - loaded 대표는 [Mobile 390](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8089),
   [Compact 1024](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25102),
   [Full 1440](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25582)을 참고한다.
-  행은 64px, 표시 이름은 `UI/Label/L`이며 해제 버튼은 Mobile Web `88×40`, Desktop Web `72×32`다.
-  2026-09-09 결정에 따라 Native는 폭 88과 공용 Button 자체의 최소 높이 iOS 44pt·Android 48dp를 사용한다.
-  별도 wrapper·hitSlop 보정은 두지 않는다. Figma의 40px visual 원본은 미수정이다.
+  행은 64px, 표시 이름은 `UI/Label/L`이며 해제 버튼은 모든 Web viewport에서 `96×40`이다.
+  Native는 폭 96과 공용 Button 자체의 최소 높이 iOS 44pt·Android 48dp를 사용한다.
+  별도 wrapper·hitSlop 보정은 두지 않는다. Figma 정렬은 리뷰어가 후속으로 진행한다.
 - `ProfileBlockAction`, Block을 결합한 Hero·Post props와 해당 fixture·Tests, `Screens/Profile Block`은 제거했다.
   실제 action을 전제로 하는 확인·성공·실패·pending·focus lifecycle 검증은 PROD-823의 action 구현과 함께 완료한다.
   Profile·Settings 신규 UI 조립과 교체 회귀는 PROD-917이 소유한다.

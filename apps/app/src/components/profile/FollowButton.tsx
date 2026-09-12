@@ -12,14 +12,17 @@ import type { FollowButtonFollowProfileMutation } from './__generated__/FollowBu
 import type { FollowButtonUnfollowProfileMutation } from './__generated__/FollowButtonUnfollowProfileMutation.graphql';
 
 type FollowButtonProps = {
+  onActionRef?: (node: View | null) => void;
   profile: FollowButton_profile$key;
-  size?: 'compact' | 'medium';
   style?: StyleProp<ViewStyle>;
 };
 
 const followButtonProfileFragment = graphql`
   fragment FollowButton_profile on Profile {
     id
+    displayName
+    handle
+    relativeHandle
     followPolicy
     followersCount
     viewerState {
@@ -99,7 +102,7 @@ const updateProfileCount = (
 const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
-export function FollowButton({ profile, size = 'medium', style }: FollowButtonProps) {
+export function FollowButton({ onActionRef, profile, style }: FollowButtonProps) {
   const { selectedProfileId } = useSession();
   const { showToast } = useToast();
   const data = useFragment(followButtonProfileFragment, profile);
@@ -114,7 +117,6 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
   const isFollowing = Boolean(viewerState?.follow);
   const isPending = Boolean(viewerState?.followRequest);
   const loading = following || cancelling || unfollowing;
-
   const showFailureToast = () => {
     showToast(followFailureMessage, { tone: 'danger' });
   };
@@ -143,9 +145,12 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
           ? {
               unfollowProfile: {
                 followeeProfile: {
+                  displayName: data.displayName,
                   followPolicy: data.followPolicy,
                   followersCount: Math.max(data.followersCount - 1, 0),
+                  handle: data.handle,
                   id: data.id,
+                  relativeHandle: data.relativeHandle,
                   viewerState: {
                     follow: null,
                     followRequest: null,
@@ -235,9 +240,9 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
           selected: isFollowing || isPending,
         }}
         disabled={loading}
+        controlRef={onActionRef}
         onPress={toggleFollow}
-        size={size === 'compact' ? 'compact' : 'default'}
-        style={size === 'compact' ? styles.compactButton : styles.mediumButton}
+        style={styles.relationButton}
         tone={isFollowing || isPending ? 'secondary' : 'primary'}
       >
         {isFollowing ? '팔로잉' : isPending ? '요청됨' : '팔로우'}
@@ -248,6 +253,5 @@ export function FollowButton({ profile, size = 'medium', style }: FollowButtonPr
 
 const styles = StyleSheet.create({
   root: { alignItems: 'flex-end' },
-  compactButton: { width: 72 },
-  mediumButton: { minWidth: 96, width: 96 },
+  relationButton: { minWidth: 96, width: 96 },
 });

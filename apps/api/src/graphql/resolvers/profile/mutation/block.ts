@@ -63,6 +63,10 @@ builder.mutationField('unblockProfile', (t) =>
             return profileBlockId ? { id: profileBlockId, type: ProfileBlock } : null;
           },
         }),
+        targetProfile: field.field({
+          type: Profile,
+          nullable: true,
+        }),
       }),
     }),
     input: {
@@ -82,7 +86,10 @@ builder.mutationField('unblockProfile', (t) =>
         origin: 'LOCAL',
       });
 
-      return { profileBlockId: result.removed ? result.profileBlockId : null };
+      return {
+        profileBlockId: result.removed ? result.profileBlockId : null,
+        targetProfile: result.removed ? profileBlock.targetProfileId : null,
+      };
     },
   }),
 );

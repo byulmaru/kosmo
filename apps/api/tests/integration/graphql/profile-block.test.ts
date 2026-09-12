@@ -188,6 +188,7 @@ describe('GraphQL Profile Block', () => {
       handle: localTarget.handle,
       displayName: localTarget.displayName,
       instance: { kind: 'LOCAL' },
+      viewerState: { profileBlock: { id: localBlockId } },
     });
     assert.deepEqual(
       decodeGlobalId(localBlock.data?.blockProfile.profileBlock.targetProfile.id ?? ''),
@@ -281,6 +282,10 @@ describe('GraphQL Profile Block', () => {
       managed.data?.node?.profileBlocks.edges.map(({ node }) => node.targetProfile.id).sort(),
       [globalId('Profile', localTarget.id), globalId('Profile', remoteTarget.id)].sort(),
     );
+    assert.equal(
+      localBlock.data?.blockProfile.profileBlock.targetProfile.viewerState?.profileBlock?.id,
+      localBlockId,
+    );
 
     const localStatus = await profileBlockStatus(localTarget.handle, owner.token);
     assertNoGraphQLErrors(localStatus);
@@ -290,15 +295,29 @@ describe('GraphQL Profile Block', () => {
       profileBlockId: localBlockId,
     });
 
-    const unblocked = await requestGraphQL<{ unblockProfile: { profileBlockId: string | null } }>(
+    const unblocked = await requestGraphQL<{
+      unblockProfile: {
+        profileBlockId: string | null;
+        targetProfile: { id: string; viewerState: { profileBlock: { id: string } | null } } | null;
+      };
+    }>(
       `mutation UnblockProfile($id: ID!) {
-        unblockProfile(input: { id: $id }) { profileBlockId }
+        unblockProfile(input: { id: $id }) {
+          profileBlockId
+          targetProfile { id viewerState { profileBlock { id } } }
+        }
       }`,
       { id: localBlockId },
       owner.token,
     );
     assertNoGraphQLErrors(unblocked);
-    assert.deepEqual(unblocked.data?.unblockProfile, { profileBlockId: localBlockId });
+    assert.deepEqual(unblocked.data?.unblockProfile, {
+      profileBlockId: localBlockId,
+      targetProfile: {
+        id: globalId('Profile', localTarget.id),
+        viewerState: { profileBlock: null },
+      },
+    });
 
     const restored = await requestGraphQL<{ node: { id: string } | null }>(
       `query RestoredProfile($id: ID!) {
@@ -1489,6 +1508,7 @@ const blockProfile = (profileId: string, token?: string) =>
           handle: string;
           displayName: string;
           instance: { kind: string };
+          viewerState: { profileBlock: { id: string } | null } | null;
         };
       };
     };
@@ -1497,7 +1517,13 @@ const blockProfile = (profileId: string, token?: string) =>
       blockProfile(input: { id: $id }) {
         profileBlock {
           id
-          targetProfile { id handle displayName instance { kind } }
+          targetProfile {
+            id
+            handle
+            displayName
+            instance { kind }
+            viewerState { profileBlock { id } }
+          }
         }
       }
     }`,

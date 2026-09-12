@@ -128,9 +128,8 @@ Post Action Bar는 모든 플랫폼에서 28 logical unit visual row를 공유�
 
 - `MultiSelectCombobox`의 Web 결과 목록은 `role="listbox"`와 `aria-multiselectable="true"`, 각 `ListboxOption`은 `role="option"`과 `aria-selected`로 복수 선택을 전달한다. Native 결과 컨테이너는 별도 role 없이 자식 항목을 유지하고, 항목은 지원되는 `accessibilityRole="button"`과 `accessibilityState`의 `selected`·`disabled`를 사용한다. Web 전용 `listbox`·`option`을 Native legacy `accessibilityRole`에 강제 캐스팅해 전달하지 않는다. Native prop 검증과 Web 자동화는 TalkBack·VoiceOver의 실제 focus·announcement 검증을 대체하지 않는다.
 - `FollowButton`의 소비처별 geometry와 이관 상태는 [profile-hero.md](./profile-hero.md)가 소유한다.
-  Web 목록은 Compact `72×32`, Web Profile Hero 및 Mobile 소비처는 Medium `96×40`을 사용한다.
-  Mobile은 `Size=Compact` `72×32`를 사용하지 않는다. 이 기준을 Profile Hero와 Profile 목록·Post
-  Activity·Reaction People의 Mobile consumer에 이관할 때 iOS·Android의 실제 target은 visual 높이 `40`과
+  Web 목록·Web Profile Hero·Mobile 소비처는 모두 Default `96×40`을 사용한다. 이 기준을 Profile Hero와
+  Profile 목록·Post Activity·Reaction People의 consumer에 적용할 때 iOS·Android의 실제 target은 visual 높이 `40`과
   별개로 각각 최소 `44pt`, `48dp`를 충족하고 인접 action과 겹치지 않아야 한다.
 - Reaction Quick Picker와 Reaction 요약 token은 [reactions.md](./reactions.md)의 Web 32×32 CSS px geometry를 사용한다. 이 값은 SC 2.5.8의 24×24 CSS px minimum을 자체 크기로 충족하며, `apps/app/src/stories/patterns/Reactions.stories.tsx`의 Web exact-size assertion도 32×32로 맞춘다.
 - Reaction selector와 icon+count summary token은 Native에서 기존 44 logical unit을 유지하므로 Android 48×48dp baseline을 충족하지 않는다. 공통 `IconButton` 대상인 More만 visual 44를 유지한 채 Android 부족분을 공용 `hitSlop` mapping으로 보충한다. Native 출시 전 selector·summary token과 Profile tab을 포함한 모든 target을 실제 iOS 44pt·Android 48dp touch/focus boundary와 assistive technology에서 검증한다. Web 검증은 이 출시 gate를 대체하지 않는다.
@@ -169,7 +168,8 @@ PR과 이슈에는 실행한 자동화, 실제 관찰한 platform·viewport·입
 
 - 공용 `Button`은 Web에서 compact 32px·default 40px 최소 높이를 유지한다. Native는 두 size 모두
   iOS 44pt·Android 48dp 최소 높이의 버튼 자체를 제공한다. 투명 wrapper와 개별 hitSlop 대신 이 크기를 사용한다.
-- FollowButton·뮤트/차단 해제·ConfirmationContent는 공용 높이를 사용하고 필요한 폭만 제한한다.
+- FollowButton·뮤트/차단 해제 행 action·ConfirmationContent는 공용 높이를 사용한다. 관계 및 관리 행 action은
+  `96px` 폭으로 통일한다.
   좁은 해제 버튼은 문구가 줄바꿈되지 않게 수평 padding을 제거한다. 공용 Button은 consumer의 더 작은 숫자 minHeight를 플랫폼 최소값으로 올리고 더 큰 값은 유지한다.
 - 이는 기존 32/40 visual box를 유지하던 Native 보정에서 변경한 구현 결정이다. Figma 원본은 변경하지 않았으며
   Native의 실제 parent clipping·VoiceOver·TalkBack 검증은 별도다.
