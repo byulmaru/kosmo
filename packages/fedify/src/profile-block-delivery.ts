@@ -111,7 +111,15 @@ const toPendingResult = (result: ActivityPubDispatchResult): ProfileBlockDeliver
 
 export const sendProfileBlock = async (
   profileBlockId: string,
-  { createIfMissing = false }: { readonly createIfMissing?: boolean } = {},
+  {
+    createIfMissing = false,
+    ownerProfileId,
+    targetProfileId,
+  }: {
+    readonly createIfMissing?: boolean;
+    readonly ownerProfileId?: string;
+    readonly targetProfileId?: string;
+  } = {},
 ): Promise<ProfileBlockDeliveryResult> => {
   const existing = await loadProfileBlockProtocolActivityByProfileBlockId(profileBlockId);
   if (existing?.origin !== undefined && existing.origin !== 'OUTBOUND') {
@@ -127,7 +135,9 @@ export const sendProfileBlock = async (
           ownerProfileId: existing.ownerProfileId,
           targetProfileId: existing.targetProfileId,
         })
-      : undefined);
+      : ownerProfileId && targetProfileId
+        ? await loadOutboundProfileBlockParticipants({ ownerProfileId, targetProfileId })
+        : undefined);
   if (!source) {
     if (existing?.origin === 'OUTBOUND') {
       return { reason: 'recipient_unavailable', status: 'PENDING' };

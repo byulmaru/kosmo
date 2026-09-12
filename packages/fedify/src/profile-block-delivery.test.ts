@@ -148,6 +148,46 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
   assert.equal(settledActivity?.undoDeliveryState, 'SETTLED');
 });
 
+test('삭제된 product row 뒤에도 generation snapshot으로 Block protocol을 복구한다', async () => {
+  const fixture = await createFixture();
+  const profileBlockId = crypto.randomUUID();
+  const contextFixture = createContextFixture();
+  mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
+
+  assert.deepEqual(
+    await sendProfileBlock(profileBlockId, {
+      createIfMissing: true,
+      ownerProfileId: fixture.localProfileId,
+      targetProfileId: fixture.remoteProfileId,
+    }),
+    { status: 'SETTLED' },
+  );
+  assert.equal(contextFixture.calls.length, 1);
+  const storedActivity = await db
+    .select()
+    .from(ProfileBlockActivities)
+    .where(eq(ProfileBlockActivities.profileBlockId, profileBlockId))
+    .then((rows) => rows[0]);
+  assert.equal(storedActivity?.activityUri, `${publicOrigin}/ap/block/${profileBlockId}`);
+  assert.equal(storedActivity?.deliveryState, 'SETTLED');
+});
+
+test('Local target은 generation snapshot이 있어도 outbound Block을 만들지 않는다', async () => {
+  const fixture = await createFixture();
+  const contextFixture = createContextFixture();
+  mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
+
+  assert.deepEqual(
+    await sendProfileBlock(crypto.randomUUID(), {
+      createIfMissing: true,
+      ownerProfileId: fixture.localProfileId,
+      targetProfileId: fixture.localProfileId,
+    }),
+    { status: 'SKIPPED', reason: 'not_remote_target' },
+  );
+  assert.equal(contextFixture.calls.length, 0);
+});
+
 test('기존 outbound protocol의 participant가 unavailable이면 Block과 Undo를 pending으로 보존한다', async () => {
   const fixture = await createFixture();
   const profileBlock = await db
@@ -215,6 +255,7 @@ test('이미 정산된 outbound Block은 participant unavailable에도 정산 �
     .where(eq(Profiles.id, fixture.localProfileId));
 
   assert.deepEqual(await sendProfileBlock(profileBlock.id), { status: 'SETTLED' });
+  assert.equal(contextFixture.calls.length, 1);
 });
 
 type SendActivityCall = {

@@ -93,7 +93,7 @@ export async function profileUnblockWorkflow(
   const storedProtocol = parsedInput.protocolActivityUri
     ? undefined
     : await loadProfileBlockProtocolActivityByProfileBlockIdActivity(parsedInput.profileBlockId);
-  const protocolActivityUri = parsedInput.protocolActivityUri ?? storedProtocol?.activityUri;
+  let protocolActivityUri = parsedInput.protocolActivityUri ?? storedProtocol?.activityUri;
   let protocolUndoPrepared = false;
   if (protocolActivityUri) {
     const preparation = await prepareProfileBlockProtocolUndoActivity({
@@ -149,9 +149,18 @@ export async function profileUnblockWorkflow(
     });
   }
 
-  if (protocolActivityUri && parsedInput.origin === 'LOCAL') {
+  if (parsedInput.origin === 'LOCAL') {
     for (;;) {
-      const delivery = await sendProfileBlockActivity(parsedInput.profileBlockId);
+      const delivery = await sendProfileBlockActivity(
+        parsedInput.profileBlockId,
+        protocolActivityUri
+          ? undefined
+          : {
+              createIfMissing: true,
+              ownerProfileId: parsedInput.ownerProfileId,
+              targetProfileId: parsedInput.targetProfileId,
+            },
+      );
       if (delivery.status !== 'PENDING') {
         break;
       }
@@ -159,7 +168,26 @@ export async function profileUnblockWorkflow(
     }
   }
 
+  if (protocolActivityUri === undefined && parsedInput.origin === 'LOCAL') {
+    const protocol = await loadProfileBlockProtocolActivityByProfileBlockIdActivity(
+      parsedInput.profileBlockId,
+    );
+    protocolActivityUri = protocol?.activityUri;
+    if (protocolActivityUri) {
+      const preparation = await prepareProfileBlockProtocolUndoActivity({
+        activityUri: protocolActivityUri,
+        expectedProfileBlockId: parsedInput.profileBlockId,
+        ownerProfileId: parsedInput.ownerProfileId,
+        targetProfileId: parsedInput.targetProfileId,
+      });
+      protocolUndoPrepared = preparation.kind === 'REMOVE';
+    }
+  }
+
   if (protocolActivityUri === undefined) {
+    return execution.result;
+  }
+  if (!protocolUndoPrepared) {
     return execution.result;
   }
   if (parsedInput.origin === 'LOCAL') {

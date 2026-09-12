@@ -1,6 +1,13 @@
-import { ApplicationFailure, proxyActivities, sleep } from '@temporalio/workflow';
+import {
+  ApplicationFailure,
+  ChildWorkflowCancellationType,
+  ParentClosePolicy,
+  proxyActivities,
+} from '@temporalio/workflow';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
+import { runChildWorkflow } from './child';
+import { profileBlockDeliveryWorkflowDefinition } from './profile-block-delivery';
 import { settleEffects } from './settle-effects';
 import type {
   ProfileBlockProtocolActivityInput,
@@ -46,7 +53,6 @@ const {
   loadPendingProfileBlockCleanupBatchesActivity,
   loadProfileBlockTransitionBootstrapActivity,
   markProfileBlockCleanupBatchSettledActivity,
-  sendProfileBlockActivity,
   sendProfileUnfollowActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
@@ -112,19 +118,20 @@ export async function profileBlockWorkflow(
   }
 
   if (parsedInput.origin === 'LOCAL' && execution.result.created) {
-    // A local relation is authoritative even when the remote recipient is
-    // unavailable. The Activity records that handoff is pending so an
-    // Unblock can wait for this same stable Block identity before sending its
-    // Undo.
-    for (;;) {
-      const delivery = await sendProfileBlockActivity(execution.result.profileBlockId, {
-        createIfMissing: true,
-      });
-      if (delivery.status !== 'PENDING') {
-        break;
-      }
-      await sleep('5 seconds');
-    }
+    // The start acknowledgement durably transfers delivery ownership before
+    // the local command returns. PENDING delivery then outlives this parent.
+    await runChildWorkflow(profileBlockDeliveryWorkflowDefinition, {
+      mode: 'start',
+      args: [
+        {
+          ownerProfileId: execution.result.ownerProfileId,
+          profileBlockId: execution.result.profileBlockId,
+          targetProfileId: execution.result.targetProfileId,
+        },
+      ],
+      cancellationType: ChildWorkflowCancellationType.ABANDON,
+      parentClosePolicy: ParentClosePolicy.ABANDON,
+    });
   }
 
   return execution.result;

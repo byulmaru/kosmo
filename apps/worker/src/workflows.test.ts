@@ -1461,7 +1461,7 @@ test(
 );
 
 test(
-  'Profile Block Workflow는 source bootstrap과 transaction 뒤 모든 Follow effect가 끝날 때 반환한다',
+  'Profile Block Workflow는 required cleanup 뒤 durable delivery child를 남기고 반환한다',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -1513,7 +1513,36 @@ test(
     });
     const calls: string[] = [];
     const settledBatchIds: string[] = [];
+    const activityUri = `https://local.example/ap/block/${candidateProfileBlockId}`;
+    const storedProtocol = {
+      activityUri,
+      actorUri: `https://local.example/ap/actor/${input.ownerProfileId}`,
+      objectUri: `https://remote.example/ap/actor/${input.targetProfileId}`,
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      origin: 'OUTBOUND' as const,
+      state: 'ACTIVE' as const,
+      deliveryState: 'SETTLED' as const,
+      undoDeliveryState: 'NONE' as const,
+      profileBlockId: candidateProfileBlockId,
+    };
+    let cleanupSettled = false;
+    let productDeleted = false;
+    let protocolReady = false;
+    let undoDeliveryAttempts = 0;
+    let protocolLookupStarted!: () => void;
+    const protocolLookupStartedPromise = new Promise<void>((resolve) => {
+      protocolLookupStarted = resolve;
+    });
     let blockDeliveryAttempts = 0;
+    let releaseDelivery!: () => void;
+    const deliveryReleased = new Promise<void>((resolve) => {
+      releaseDelivery = resolve;
+    });
+    let secondDeliveryStarted!: () => void;
+    const secondDeliveryStartedPromise = new Promise<void>((resolve) => {
+      secondDeliveryStarted = resolve;
+    });
     let releaseEffects!: () => void;
     const effectsReleased = new Promise<void>((resolve) => {
       releaseEffects = resolve;
@@ -1544,18 +1573,69 @@ test(
             ownerProfileId: input.ownerProfileId,
             targetProfileId: input.targetProfileId,
           });
-          return [cleanupBatch];
+          return cleanupSettled ? [] : [cleanupBatch];
         },
         markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
           settledBatchIds.push(batchIdToSettle);
+          cleanupSettled = true;
         },
-        sendProfileBlockActivity: async (profileBlockId: string) => {
+        sendProfileBlockActivity: async (profileBlockId: string, options: unknown) => {
           assert.equal(profileBlockId, candidateProfileBlockId);
+          assert.deepEqual(options, {
+            createIfMissing: true,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+          });
           blockDeliveryAttempts += 1;
-          return blockDeliveryAttempts === 1
-            ? { status: 'PENDING' as const, reason: 'recipient_unavailable' as const }
-            : { status: 'SETTLED' as const };
+          if (blockDeliveryAttempts === 1) {
+            return { status: 'PENDING' as const, reason: 'recipient_unavailable' as const };
+          }
+          secondDeliveryStarted();
+          await deliveryReleased;
+          protocolReady = true;
+          calls.push('block-settled');
+          return { status: 'SETTLED' as const };
         },
+        loadProfileBlockProtocolActivityByProfileBlockIdActivity: async () => {
+          protocolLookupStarted();
+          return protocolReady ? storedProtocol : undefined;
+        },
+        prepareProfileBlockProtocolUndoActivity: async (value: unknown) => {
+          assert.equal(protocolReady, true);
+          assert.deepEqual(value, {
+            activityUri,
+            expectedProfileBlockId: candidateProfileBlockId,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+          });
+          return { kind: 'REMOVE' as const, profileBlockId: candidateProfileBlockId };
+        },
+        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => [],
+        executeProfileUnblockTransitionActivity: async () => ({
+          ok: true as const,
+          result: {
+            removed: true,
+            profileBlockId: candidateProfileBlockId,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+          },
+        }),
+        deleteProfileBlockActivity: async () => {
+          productDeleted = true;
+        },
+        sendProfileBlockUndoActivity: async (value: unknown) => {
+          assert.equal(productDeleted, true);
+          assert.equal(protocolReady, true);
+          assert.deepEqual(value, {
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+            profileBlockId: candidateProfileBlockId,
+          });
+          undoDeliveryAttempts += 1;
+          calls.push('block-undo');
+          return { status: 'SETTLED' as const };
+        },
+        finalizeProfileBlockProtocolUndoActivity: async () => true,
         deleteFollowNotificationActivity: async (sourceId: string) => {
           calls.push('delete:' + sourceId);
           notificationStarted();
@@ -1575,23 +1655,23 @@ test(
 
     await worker.runUntil(async () => {
       try {
-        let settled = false;
-        const resultPromise = environment.client.workflow
-          .execute('profileBlockWorkflow', {
-            args: [input],
-            taskQueue,
-            workflowId: 'profile-block-test:' + process.pid + ':success',
-          })
-          .then((result) => {
-            settled = true;
-            return result;
-          });
+        const parentHandle = await environment.client.workflow.start('profileBlockWorkflow', {
+          args: [input],
+          taskQueue,
+          workflowId: 'profile-block-test:' + process.pid + ':success',
+        });
 
         await Promise.all([notificationStartedPromise, undoStartedPromise]);
-        assert.equal(settled, false);
+        assert.equal((await parentHandle.describe()).status.name, 'RUNNING');
         assert.deepEqual(settledBatchIds, []);
         releaseEffects();
-        assert.deepEqual(await resultPromise, execution.result);
+        await secondDeliveryStartedPromise;
+        assert.equal((await parentHandle.describe()).status.name, 'COMPLETED');
+        assert.deepEqual(await parentHandle.result(), execution.result);
+        const deliveryHandle = environment.client.workflow.getHandle(
+          `profile-block-delivery:${candidateProfileBlockId}`,
+        );
+        assert.equal((await deliveryHandle.describe()).status.name, 'RUNNING');
         assert.equal(blockDeliveryAttempts, 2);
         assert.deepEqual(settledBatchIds, [batchId]);
         assert.deepEqual(
@@ -1601,8 +1681,31 @@ test(
             'undo:' + JSON.stringify({ ...cleanupSources[0], sendActivityPub: true }),
           ].sort(),
         );
+        const unblockHandle = await environment.client.workflow.start('profileUnblockWorkflow', {
+          args: [
+            {
+              ...input,
+              profileBlockId: candidateProfileBlockId,
+            },
+          ],
+          taskQueue,
+          workflowId: `profile-unblock-test:${process.pid}:immediate-after-block`,
+        });
+        await protocolLookupStartedPromise;
+        releaseDelivery();
+        await deliveryHandle.result();
+        assert.deepEqual(await unblockHandle.result(), {
+          removed: true,
+          profileBlockId: candidateProfileBlockId,
+          ownerProfileId: input.ownerProfileId,
+          targetProfileId: input.targetProfileId,
+        });
+        assert.equal((await deliveryHandle.describe()).status.name, 'COMPLETED');
+        assert.equal(undoDeliveryAttempts, 1);
+        assert.ok(calls.indexOf('block-settled') < calls.indexOf('block-undo'));
       } finally {
         releaseEffects();
+        releaseDelivery();
       }
     });
   },
@@ -1803,6 +1906,72 @@ test(
 
       assert.deepEqual(result, execution.result);
       assert.deepEqual(settledBatchIds, [batchId]);
+    });
+  },
+);
+
+test(
+  'Profile Block Workflow는 ActivityPub-origin Block에 delivery child를 만들지 않는다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = `${KOSMO_TASK_QUEUE}-profile-block-inbound-${process.pid}`;
+    const profileBlockId = '00000000-0000-7000-8000-000000000726';
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000727',
+      targetProfileId: '00000000-0000-8000-8000-000000000728',
+      origin: 'ACTIVITYPUB' as const,
+      protocolActivity: {
+        activityUri: 'https://remote.example/activities/block-727',
+        actorUri: 'https://remote.example/users/727',
+        objectUri: 'https://local.example/ap/actor/728',
+        ownerProfileId: '00000000-0000-8000-8000-000000000727',
+        targetProfileId: '00000000-0000-8000-8000-000000000728',
+        origin: 'INBOUND' as const,
+      },
+    };
+    const result = {
+      created: true,
+      profileBlockId,
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+    };
+    const worker = await Worker.create({
+      activities: {
+        loadProfileBlockTransitionBootstrapActivity: async () => ({
+          candidateProfileBlockId: profileBlockId,
+          cleanupSources: [],
+        }),
+        executeProfileBlockTransitionActivity: async () => ({ ok: true as const, result }),
+        loadPendingProfileBlockCleanupBatchesActivity: async () => [],
+        sendProfileBlockActivity: async () => {
+          throw new Error('ActivityPub-origin Block must not start outbound delivery');
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      assert.deepEqual(
+        await environment.client.workflow.execute('profileBlockWorkflow', {
+          args: [input],
+          taskQueue,
+          workflowId: `profile-block-test:${process.pid}:inbound`,
+        }),
+        result,
+      );
+      await assert.rejects(
+        environment.client.workflow
+          .getHandle(`profile-block-delivery:${profileBlockId}`)
+          .describe(),
+      );
     });
   },
 );
@@ -2055,6 +2224,15 @@ test(
         },
         deleteProfileBlockActivity: async (value: unknown) => {
           finalDeleteInput = value;
+        },
+        sendProfileBlockActivity: async (profileBlockId: string, options: unknown) => {
+          assert.equal(profileBlockId, input.profileBlockId);
+          assert.deepEqual(options, {
+            createIfMissing: true,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+          });
+          return { status: 'SKIPPED' as const, reason: 'not_remote_target' as const };
         },
       },
       connection: environment.nativeConnection,
@@ -2994,6 +3172,10 @@ test(
             });
           }
         },
+        sendProfileBlockActivity: async () => ({
+          status: 'SKIPPED' as const,
+          reason: 'not_remote_target' as const,
+        }),
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
