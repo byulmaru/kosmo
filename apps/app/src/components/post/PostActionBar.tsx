@@ -1,6 +1,7 @@
 import { Bookmark, HeartPlus, MessageCircle, MoreHorizontal } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { PostActionControl } from './PostActionControl';
@@ -174,6 +175,27 @@ export function PostActionBar({
               sheetIconSize={moreSheetIconSize}
               onDeleted={onDeleted}
               post={data.deletion}
+            />
+          ) : moreItems?.length ? (
+            <ActionMenu
+              accessibilityLabel="더보기"
+              disabled={morePending}
+              items={moreItems}
+              sheetIconSize={moreSheetIconSize}
+              webPlacement="overlap-end"
+              renderTrigger={(trigger) => (
+                <PostActionControl
+                  accessibilityLabel="더보기"
+                  alignToEnd
+                  controlRef={trigger.ref}
+                  icon={MoreHorizontal}
+                  menuExpanded={trigger.expanded}
+                  onPress={trigger.onPress}
+                  popupRole="menu"
+                  processing={morePending ? 'pending' : 'default'}
+                  testID="more"
+                />
+              )}
             />
           ) : null}
         </View>

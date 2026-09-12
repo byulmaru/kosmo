@@ -31,6 +31,12 @@ type MuteProps = {
   }) => ReactElement;
 };
 
+type ReportMenuInput = {
+  id: string;
+  kind: 'POST';
+  label: string;
+};
+
 const target: Target = {
   actionBar: {},
   content: { id: 'content:1' },
@@ -46,6 +52,7 @@ const target: Target = {
   visibility: 'PUBLIC',
 };
 const capturedMute = { value: null as MuteProps | null };
+const capturedReport = { value: null as ReportMenuInput | null };
 let PostActionSurface: ComponentType<{ socialActionTarget: never }>;
 let renderer: ReactTestRenderer | null = null;
 
@@ -62,6 +69,18 @@ mock.module('@/components/profile/ProfileMuteController', {
   exports: {
     useProfileMuteMutations: () => {
       throw new Error('PostActionSurface must not own the profile mute mutation.');
+    },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/components/content-report/ContentReportContext', {
+  exports: {
+    useContentReportMenuItem: (input: ReportMenuInput) => {
+      capturedReport.value = input;
+      return {
+        key: 'report-post',
+        label: '신고',
+        onSelect: () => undefined,
+      };
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -116,6 +135,7 @@ before(async () => {
 describe('PostActionSurface mute wiring', () => {
   it('현재 action target 작성자의 fragment를 mute action에 위임한다', async () => {
     capturedMute.value = null;
+    capturedReport.value = null;
 
     await act(async () => {
       renderer = create(createElement(PostActionSurface, { socialActionTarget: target as never }));
@@ -124,6 +144,11 @@ describe('PostActionSurface mute wiring', () => {
     if (!capturedMute.value) {
       throw new Error('PostActionSurface did not render ProfileMuteAction.');
     }
+    assert.deepEqual(capturedReport.value, {
+      id: target.id,
+      kind: 'POST',
+      label: '@author의 게시물 · post:1',
+    });
     const mute = capturedMute.value as unknown as MuteProps;
     assert.equal(mute.profile, target.profile);
     const muteItem = { key: 'mute', label: '뮤트' };

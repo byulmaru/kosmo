@@ -193,6 +193,9 @@ mockModule(new URL('../components/post/PostContentWarningRevealContext.tsx', imp
 mockModule('@/components/feedback/FeedbackOverlay', {
   FeedbackOverlay: () => null,
 });
+mockModule('@/components/content-report/ContentReportContext', {
+  ContentReportProvider: ({ children }: PropsWithChildren) => children,
+});
 mockModule('@/components/notification/NotificationReadAllContext', {
   NotificationReadAllAction: () => null,
   NotificationReadAllProvider: ({ children }: PropsWithChildren) => children,
