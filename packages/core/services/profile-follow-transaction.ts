@@ -1,6 +1,7 @@
 import { and, eq, inArray, ne, notExists, or, sql } from 'drizzle-orm';
 import {
   ActivityPubActors,
+  db,
   first,
   firstOrThrowWith,
   getDatabaseConnection,
@@ -18,6 +19,13 @@ import type { ProfileFollowPair } from './profile-follow-relation';
 export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
+
+export type ProfileFollowRemovalSource = {
+  readonly sourceId: string;
+  readonly sourceKind: 'FOLLOW' | 'FOLLOW_REQUEST';
+  readonly followerProfileId: string;
+  readonly followeeProfileId: string;
+};
 
 export type FollowProfileResult =
   | { readonly kind: 'ESTABLISHED'; readonly profileFollow: ProfileFollowRow }
@@ -131,6 +139,135 @@ export const profileFollowPairCondition = (
     eq(table.followeeProfileId, followeeProfileId),
   );
 
+/**
+ * Captures exact Follow generations between two Profiles before a durable
+ * cleanup transition. This is intentionally generic so Block and future
+ * cleanup capabilities share the same source identity boundary.
+ */
+export const loadProfileFollowRemovalSourcesBetweenProfiles = async ({
+  firstProfileId,
+  secondProfileId,
+}: {
+  readonly firstProfileId: string;
+  readonly secondProfileId: string;
+}): Promise<readonly ProfileFollowRemovalSource[]> => {
+  const [follows, requests] = await Promise.all([
+    db
+      .select({
+        followeeProfileId: ProfileFollows.followeeProfileId,
+        followerProfileId: ProfileFollows.followerProfileId,
+        sourceId: ProfileFollows.id,
+      })
+      .from(ProfileFollows)
+      .where(
+        or(
+          and(
+            eq(ProfileFollows.followerProfileId, firstProfileId),
+            eq(ProfileFollows.followeeProfileId, secondProfileId),
+          ),
+          and(
+            eq(ProfileFollows.followerProfileId, secondProfileId),
+            eq(ProfileFollows.followeeProfileId, firstProfileId),
+          ),
+        ),
+      ),
+    db
+      .select({
+        followeeProfileId: ProfileFollowRequests.followeeProfileId,
+        followerProfileId: ProfileFollowRequests.followerProfileId,
+        sourceId: ProfileFollowRequests.id,
+      })
+      .from(ProfileFollowRequests)
+      .where(
+        or(
+          and(
+            eq(ProfileFollowRequests.followerProfileId, firstProfileId),
+            eq(ProfileFollowRequests.followeeProfileId, secondProfileId),
+          ),
+          and(
+            eq(ProfileFollowRequests.followerProfileId, secondProfileId),
+            eq(ProfileFollowRequests.followeeProfileId, firstProfileId),
+          ),
+        ),
+      ),
+  ]);
+
+  return [
+    ...follows.map((source) => ({ ...source, sourceKind: 'FOLLOW' as const })),
+    ...requests.map((source) => ({ ...source, sourceKind: 'FOLLOW_REQUEST' as const })),
+  ].sort((left, right) => {
+    const leftDirection = left.followerProfileId === firstProfileId ? 0 : 1;
+    const rightDirection = right.followerProfileId === firstProfileId ? 0 : 1;
+    if (leftDirection !== rightDirection) {
+      return leftDirection - rightDirection;
+    }
+    if (left.sourceKind !== right.sourceKind) {
+      return left.sourceKind === 'FOLLOW' ? -1 : 1;
+    }
+    return left.sourceId.localeCompare(right.sourceId);
+  });
+};
+
+const removeProfileFollowExactSource = async (
+  source: ProfileFollowRemovalSource,
+  tx: Transaction,
+  extraCondition?: ReturnType<typeof and>,
+): Promise<{
+  readonly profileFollow: ProfileFollowRow | undefined;
+  readonly profileFollowRequest: ProfileFollowRequestRow | undefined;
+}> => {
+  if (source.sourceKind === 'FOLLOW') {
+    const profileFollow = await tx
+      .delete(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.id, source.sourceId),
+          profileFollowPairCondition(ProfileFollows, source),
+          extraCondition,
+        ),
+      )
+      .returning()
+      .then(first);
+    if (!profileFollow) {
+      return { profileFollow: undefined, profileFollowRequest: undefined };
+    }
+
+    await tx
+      .update(Profiles)
+      .set({ followingCount: sql`greatest(${Profiles.followingCount} - 1, 0)` })
+      .where(eq(Profiles.id, source.followerProfileId));
+    await tx
+      .update(Profiles)
+      .set({ followersCount: sql`greatest(${Profiles.followersCount} - 1, 0)` })
+      .where(eq(Profiles.id, source.followeeProfileId));
+
+    return { profileFollow, profileFollowRequest: undefined };
+  }
+
+  const profileFollowRequest = await tx
+    .delete(ProfileFollowRequests)
+    .where(
+      and(
+        eq(ProfileFollowRequests.id, source.sourceId),
+        profileFollowPairCondition(ProfileFollowRequests, source),
+        extraCondition,
+      ),
+    )
+    .returning()
+    .then(first);
+  return { profileFollow: undefined, profileFollowRequest };
+};
+
+/**
+ * Removes one exact Follow generation without participant admission checks.
+ * Callers that expose Unfollow keep their own participant guard; durable
+ * cleanup callers provide the source identity captured before the transition.
+ */
+export const removeProfileFollowExactSourceInTransaction = (
+  source: ProfileFollowRemovalSource,
+  tx: Transaction,
+) => removeProfileFollowExactSource(source, tx);
+
 export const removeProfileFollowProjection = async (
   {
     expectedRowId,
@@ -170,25 +307,16 @@ export const removeProfileFollowProjection = async (
       return { profileFollow: undefined, profileFollowRequest: undefined };
     }
 
-    const deleted = await tx
-      .delete(ProfileFollows)
-      .where(and(eq(ProfileFollows.id, profileFollow.id), notExists(unavailableParticipants)))
-      .returning()
-      .then(first);
-    if (!deleted) {
-      return { profileFollow: undefined, profileFollowRequest: undefined };
-    }
-
-    await tx
-      .update(Profiles)
-      .set({ followingCount: sql`greatest(${Profiles.followingCount} - 1, 0)` })
-      .where(eq(Profiles.id, followerProfileId));
-    await tx
-      .update(Profiles)
-      .set({ followersCount: sql`greatest(${Profiles.followersCount} - 1, 0)` })
-      .where(eq(Profiles.id, followeeProfileId));
-
-    return { profileFollow: deleted, profileFollowRequest: undefined };
+    return removeProfileFollowExactSource(
+      {
+        sourceId: profileFollow.id,
+        sourceKind: 'FOLLOW',
+        followerProfileId,
+        followeeProfileId,
+      },
+      tx,
+      notExists(unavailableParticipants),
+    );
   }
 
   if (!removePendingRequest) {
@@ -210,18 +338,16 @@ export const removeProfileFollowProjection = async (
     return { profileFollow: undefined, profileFollowRequest: undefined };
   }
 
-  const deleted = await tx
-    .delete(ProfileFollowRequests)
-    .where(
-      and(
-        eq(ProfileFollowRequests.id, profileFollowRequest.id),
-        notExists(unavailableParticipants),
-      ),
-    )
-    .returning()
-    .then(first);
-
-  return { profileFollow: undefined, profileFollowRequest: deleted };
+  return removeProfileFollowExactSource(
+    {
+      sourceId: profileFollowRequest.id,
+      sourceKind: 'FOLLOW_REQUEST',
+      followerProfileId,
+      followeeProfileId,
+    },
+    tx,
+    notExists(unavailableParticipants),
+  );
 };
 
 export type AcceptProfileFollowRequestResult =
