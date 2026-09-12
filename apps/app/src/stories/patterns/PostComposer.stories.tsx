@@ -976,7 +976,7 @@ export const OverlayGeometryContract: Story = {
     const target = canvas.getByTestId('post-composer-target');
     const visibilityTrigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
     const submit = canvas.getByRole('button', { name: '게시' });
-    const scroll = canvas.getByTestId('post-composer-overlay-scroll');
+    const scroll = canvas.getByTestId('post-composer-scroll');
     const initialTargetTop = target.getBoundingClientRect().top;
     const initialVisibilityTop = visibilityTrigger.getBoundingClientRect().top;
     const initialSubmitTop = submit.getBoundingClientRect().top;
@@ -1005,6 +1005,40 @@ export const OverlayGeometryContract: Story = {
 
     scroll.scrollTop = scroll.scrollHeight;
     expect(scroll.scrollTop).toBeGreaterThan(0);
+  },
+};
+
+export const RailGeometryContract: Story = {
+  ...Playground,
+  args: {
+    body: '레일 외곽 높이를 유지할 본문',
+    contentWarning: '경고 문구',
+    contentWarningExpanded: true,
+    items: readyComposerMedia.slice(0, 1),
+    surface: 'rail',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const target = canvas.getByTestId('post-composer-target');
+    const scroll = canvas.getByTestId('post-composer-scroll');
+    const visibilityTop = canvas
+      .getByRole('button', { name: '공개 범위: 조용한 공개' })
+      .getBoundingClientRect().top;
+    const submitTop = canvas.getByRole('button', { name: '게시' }).getBoundingClientRect().top;
+
+    expect(target.getBoundingClientRect().height).toBe(404);
+    expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
+    await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 끄기' }));
+
+    expect(target.getBoundingClientRect().height).toBe(404);
+    expect(
+      canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }).getBoundingClientRect().top,
+    ).toBe(visibilityTop);
+    expect(canvas.getByRole('button', { name: '게시' }).getBoundingClientRect().top).toBe(
+      submitTop,
+    );
   },
 };
 

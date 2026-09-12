@@ -17,6 +17,7 @@ import baseMeta, {
   PendingMediaContract as pendingMediaContract,
   Playground as playgroundContract,
   ProgressRingToneContract as progressRingToneContract,
+  RailGeometryContract as railGeometryContract,
   RailMedia as railMediaStory,
   RailProgressRingContract as railProgressRingContract,
   SubmitFailure as submitFailureStory,
@@ -52,6 +53,7 @@ export const OverlayGeometryContract: Story = overlayGeometryContract;
 export const OverlayProgressRingContract: Story = overlayProgressRingContract;
 export const PendingMediaContract: Story = pendingMediaContract;
 export const ProgressRingToneContract: Story = progressRingToneContract;
+export const RailGeometryContract: Story = railGeometryContract;
 export const RailProgressRingContract: Story = railProgressRingContract;
 export const SubmittingPickerContract: Story = submittingPickerContract;
 export const SubmittingSpinnerContract: Story = submittingSpinnerContract;
@@ -194,7 +196,7 @@ export const ShortViewportContract: Story = {
 
     const dialog = page.getByRole('dialog', { name: '글쓰기' });
     const outerScroll = within(dialog).getByTestId('composer-overlay-scroll');
-    const scroll = within(dialog).getByTestId('post-composer-overlay-scroll');
+    const scroll = within(dialog).getByTestId('post-composer-scroll');
 
     expect(getComputedStyle(within(dialog).getByTestId('composer-overlay-surface')).overflow).toBe(
       'hidden',

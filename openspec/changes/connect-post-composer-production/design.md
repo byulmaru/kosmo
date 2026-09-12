@@ -26,7 +26,7 @@ PROD-854가 만든 `PostComposerTarget`, `PostComposerMediaItemsTarget`, `Compos
 - `PostComposerTarget`의 Poll·Emoji callback은 public presentation 계약에 존재하지만 Product 기능은 준비되지 않았다. Production adapter는 해당 action을 숨겨야 한다.
 - `MobileFullscreenComposerShellCandidate`의 keyboard는 illustrative UI다. 실제 safe area, keyboard avoidance와 back 처리는 상위 runtime이 제공해야 한다.
 - Storybook `ComposerOverlayFixture`는 Production modal semantics, focus trap/restore 또는 router lifecycle을 제공하지 않는다.
-- desktop Overlay에서 CW나 Media 상태의 자연 높이를 그대로 사용하면 중앙 정렬된 모달의 위·아래 경계와 고정 control이 함께 이동한다.
+- desktop Rail·Overlay에서 CW나 Media 상태의 자연 높이를 그대로 사용하면 외곽 경계와 고정 control이 함께 이동한다.
 
 ### Recommended Approach
 
@@ -34,7 +34,7 @@ PROD-854가 만든 `PostComposerTarget`, `PostComposerMediaItemsTarget`, `Compos
 
 Overlay host는 저장소의 기존 modal/focus 처리 패턴을 재사용해 scrim, Web Escape·backdrop·focus restore, Native back과 safe area/keyboard avoidance를 소유한다. Media editor는 Overlay host 내부 view state로 전환하고 별도 modal을 만들지 않는다. `/compose` route는 기존 query·session/profile 경계를 유지하되 동일 composer host를 열거나 같은 host content를 렌더하는 얇은 호환 adapter로 축소한다.
 
-Desktop Overlay의 `PostComposer`는 가용 높이에서 Empty source의 404px 외곽 높이를 유지하고, 짧은 viewport에서는 Host의 85dvh 안으로 줄어든다. author와 editor header·footer는 고정하고 body·CW·Media만 가운데 `ScrollView`에서 함께 흐르게 하며, Media가 있을 때 body 최소 높이를 줄여 같은 영역을 나눠 쓴다. Rail과 모바일 전체 화면은 기존 높이·scroll 구조를 유지한다.
+Desktop Rail·Overlay의 `PostComposer`는 Empty source의 404px 외곽 높이를 유지하고, Overlay는 짧은 viewport에서 Host의 85dvh 안으로 줄어든다. author와 editor header·footer는 고정하고 body·CW·Media만 가운데 `ScrollView`에서 함께 흐르게 하며, Media가 있을 때 body 최소 높이를 줄여 같은 영역을 나눠 쓴다. 모바일 전체 화면은 기존 높이·scroll 구조를 유지한다.
 
 일반 Post 성공 callback은 기존 state reset 이후 surface별 후속 동작만 위임한다. Web Overlay는 닫고 현재 route를 유지하며, 모바일은 닫은 뒤 Home으로 이동한다. 실패 시 기존 draft와 열린 surface를 유지한다.
 

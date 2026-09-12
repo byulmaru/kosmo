@@ -285,7 +285,7 @@ export function PostComposerTarget({
       <View
         style={[
           styles.editor,
-          surface === 'overlay' ? styles.overlayEditor : null,
+          styles.desktopEditor,
           {
             backgroundColor: theme.backgroundElevated,
             borderColor: error ? theme.feedbackDangerBorder : theme.borderDefault,
@@ -351,18 +351,14 @@ export function PostComposerTarget({
           ) : null}
         </View>
 
-        {surface === 'overlay' ? (
-          <ScrollView
-            contentContainerStyle={styles.overlayScrollContent}
-            keyboardShouldPersistTaps="handled"
-            style={styles.overlayScroll}
-            testID="post-composer-overlay-scroll"
-          >
-            {editorBody}
-          </ScrollView>
-        ) : (
-          editorBody
-        )}
+        <ScrollView
+          contentContainerStyle={styles.desktopScrollContent}
+          keyboardShouldPersistTaps="handled"
+          style={styles.desktopScroll}
+          testID="post-composer-scroll"
+        >
+          {editorBody}
+        </ScrollView>
 
         <View style={styles.footer}>
           <View style={styles.tools}>
@@ -1011,13 +1007,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   keyboardRow: { borderRadius: radius[8], borderWidth: borderWidths[1], height: 44 },
+  desktopEditor: { flex: 1, minHeight: 0 },
+  desktopScroll: { flex: 1, minHeight: 0 },
+  desktopScrollContent: { minHeight: '100%' },
   overlay: { height: 404, maxWidth: 600, width: '100%' },
-  overlayEditor: { flex: 1, minHeight: 0 },
   overlayMediaBody: { minHeight: 80 },
-  overlayScroll: { flex: 1, minHeight: 0 },
-  overlayScrollContent: { minHeight: '100%' },
   progressRing: { height: 20, width: 20 },
-  rail: { width: 326 },
+  rail: { height: 404, width: 326 },
   remaining: { width: 40, ...textStyles.uiCopyS, textAlign: 'right' },
   root: { gap: space[16], padding: space[16] },
   submit: { alignItems: 'center', flexDirection: 'row', gap: space[8] },

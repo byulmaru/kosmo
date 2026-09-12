@@ -64,17 +64,17 @@
 - Consequences: 후속 기능은 각 authority와 capability가 준비된 별도 변경에서 활성화한다.
 - Confirmation / Follow-up: Production render와 접근성 트리에 미구현 action이 없는지 검증한다.
 
-### desktop Overlay 외곽은 상태와 무관하게 유지
+### desktop Rail·Overlay 외곽은 상태와 무관하게 유지
 
 - Decision Date: 2026-09-12
 - Decision Class: Human Decision
 - Authority / Provenance: `docs/design/figma.md`, `docs/design/breakpoints.md`, PROD-797, 2026-09-12 작성 화면 검토
 - Status: Active
-- Context / Problem: CW나 Media 추가로 자연 높이가 늘어나는 중앙 모달은 위·아래 경계와 header·footer가 함께 이동해 작성 흐름이 불안정하게 보인다.
-- Decision Outcome: desktop Overlay의 `PostComposer`는 가용 높이에서 Empty source의 404px 외곽 높이를 유지하고, 짧은 viewport에서는 Host의 85dvh 안으로 줄어든다. author와 editor header·footer는 고정하고 body·CW·Media가 가운데 영역을 나눠 쓰며, 넘치는 내용만 그 영역에서 scroll한다.
+- Context / Problem: CW나 Media 추가로 자연 높이가 늘어나는 desktop Rail·Overlay는 외곽 경계와 header·footer가 함께 이동해 작성 흐름이 불안정하게 보인다.
+- Decision Outcome: desktop Rail·Overlay의 `PostComposer`는 Empty source의 404px 외곽 높이를 유지하고, Overlay는 짧은 viewport에서 Host의 85dvh 안으로 줄어든다. author와 editor header·footer는 고정하고 body·CW·Media가 가운데 영역을 나눠 쓰며, 넘치는 내용만 그 영역에서 scroll한다.
 - Alternatives Considered: 상태에 따라 모달 전체를 키우는 현재 방식과 Mastodon처럼 바깥 작성 패널 자체를 scroll하는 방식은 중앙 modal에서 외곽 이동을 남기므로 선택하지 않는다. 더 큰 고정 높이는 Empty 상태에 불필요한 여백을 추가하므로 사용하지 않는다.
-- Consequences: Media 상태에서는 본문 최소 높이가 줄고 가운데 영역에 scroll이 생길 수 있다. Rail·모바일 전체 화면과 Figma 원본은 변경하지 않는다.
-- Confirmation / Follow-up: Empty·CW·Media 전환 전후 외곽과 고정 영역 geometry, 가운데 overflow scroll을 실제 Web Overlay에서 검증한다.
+- Consequences: Media 상태에서는 본문 최소 높이가 줄고 가운데 영역에 scroll이 생길 수 있다. 모바일 전체 화면과 Figma 원본은 변경하지 않는다.
+- Confirmation / Follow-up: Empty·CW·Media 전환 전후 외곽과 고정 영역 geometry, 가운데 overflow scroll을 실제 Web Rail·Overlay에서 검증한다.
 
 ## Remaining Decisions
 

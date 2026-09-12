@@ -26,7 +26,7 @@ Settings master pane은 약 `320px`, detail pane은 남은 폭을 사용한다. 
 
 ## 글쓰기 진입
 
-PostComposer presentation은 `Rail`과 `Overlay`만 사용한다. 중앙 timeline inline composer나 별도 `/compose` route를 canonical presentation으로 두지 않는다. `Overlay` 폭과 화면 바깥 gutter는 parent surface가 소유하고 PostComposer는 내부 spacing·state를 소유한다. Desktop Overlay의 `PostComposer` 외곽은 가용 높이에서 Empty source의 404px 높이를 유지하고, 짧은 viewport에서는 Host의 85dvh 안으로 줄어든다. CW·Media 추가 시 author와 editor header·footer를 제외한 가운데 영역만 scroll한다. `/compose`는 별도 작성 state를 만들지 않고 shell의 같은 Production composer host를 여는 호환 route다.
+PostComposer presentation은 `Rail`과 `Overlay`만 사용한다. 중앙 timeline inline composer나 별도 `/compose` route를 canonical presentation으로 두지 않는다. `Overlay` 폭과 화면 바깥 gutter는 parent surface가 소유하고 PostComposer는 내부 spacing·state를 소유한다. Desktop Rail·Overlay의 `PostComposer` 외곽은 Empty source의 404px 높이를 유지하고, Overlay는 짧은 viewport에서 Host의 85dvh 안으로 줄어든다. CW·Media 추가 시 author와 editor header·footer를 제외한 가운데 영역만 scroll한다. `/compose`는 별도 작성 state를 만들지 않고 shell의 같은 Production composer host를 여는 호환 route다.
 
 - `< compact`: 하단 탭 바의 글쓰기가 유일한 shell-level 진입점이며 mobile fullscreen Overlay를 연다. 게시 성공 뒤에는 timeline으로 돌아간다. mobile drawer에는 중복 글쓰기 버튼을 표시하지 않는다.
 - `compact`~`full`: 우측 레일이 없으므로 아이콘 레일의 글쓰기 버튼이 desktop modal Overlay를 연다.

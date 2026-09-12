@@ -157,12 +157,15 @@ Production 연결 결과와 실제 검증 범위가 Storybook, 디자인 문서�
   기본 `auto`를 해제한 뒤 같은 본문의 초기 focus와 Tab 재진입 화면에서 링 없이 caret만 남는 것을 확인했다.
   기존 모바일 입력 Tests에 outline 방식 검증을 추가했고 Composer·Media editor·Shell 37개가 다시 통과했다.
 
-### Desktop Overlay 높이 재검증 — 2026-09-12
+### Desktop Composer 높이 재검증 — 2026-09-12
 
 - 사용자 화면 검토에 따라 desktop Overlay는 가용 높이에서 Empty source의 404px 외곽을 유지하고,
-  author와 editor header·footer 사이의 body·CW·Media만 scroll하도록 정리했다. Rail·모바일 구조는 변경하지 않았다.
+  author와 editor header·footer 사이의 body·CW·Media만 scroll하도록 정리했다. 후속 실제 화면 검토에서 Rail도
+  같은 상태 변화로 늘어나는 것을 확인해 Desktop Rail까지 동일한 404px·가운데 scroll 계약을 적용했다. 모바일 구조는 변경하지 않았다.
 - 실제 Metro dev 1280×720에서 Empty·CW·실패 Media 상태 모두 dialog 468px, composer 404px와 고정 control
   좌표가 유지됐다. CW는 가운데 영역의 58px overflow를 keyboard PageDown으로 scroll했고, Media는 실제 파일을
   첨부해 404px overflow와 고정 footer를 확인했다.
 - 1280×380에서는 composer가 Host의 85dvh 안에서 259px로 줄고 37px 가운데 영역만 scroll하며 header·footer가
   모두 viewport 안에 남는 것을 확인했다. Android/iOS 실제 runtime 미검증과 기존 앱 typecheck 실패는 유지한다.
+- 실제 Metro dev 1440×900 Rail의 CW·실패 Media 동시 상태에서 외곽 404px, 가운데 183px와 277px overflow를
+  확인했다. PageDown 뒤 가운데 scrollTop만 159px로 이동했고 footer의 Y 좌표는 355.44px로 유지됐다.
