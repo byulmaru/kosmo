@@ -797,7 +797,13 @@ function VisibilityMenu({
     }
     triggerRef.current?.measureInWindow((x, y, triggerWidth, triggerHeight) => {
       setAnchor({
-        left: Math.max(0, Math.min(alignRight ? x + triggerWidth - 240 : x, width - 240)),
+        left: Math.max(
+          0,
+          Math.min(
+            alignRight ? x + triggerWidth - 240 - space[16] : x,
+            width - 240 - (alignRight ? space[16] : 0),
+          ),
+        ),
         top: Math.max(space[16], Math.min(y + triggerHeight + space[4], height - 64)),
       });
     });
@@ -1010,7 +1016,7 @@ const styles = StyleSheet.create({
   desktopEditor: { flex: 1, minHeight: 0 },
   desktopScroll: { flex: 1, minHeight: 0 },
   desktopScrollContent: { minHeight: '100%' },
-  overlay: { height: 404, maxWidth: 600, width: '100%' },
+  overlay: { height: 624, maxWidth: 600, width: '100%' },
   overlayMediaBody: { minHeight: 80 },
   progressRing: { height: 20, width: 20 },
   rail: { height: 404, width: 326 },
@@ -1033,7 +1039,7 @@ const styles = StyleSheet.create({
     width: 240,
   },
   visibilityMenuLeft: { left: 0 },
-  visibilityMenuRight: { right: 0 },
+  visibilityMenuRight: { right: space[16] },
   webOverlay: { maxHeight: 'calc(85dvh - 64px)' as never },
   nativeVisibilityMenu: { position: 'relative', top: 0 },
   nativeVisibilityPosition: { position: 'absolute', width: 240 },
