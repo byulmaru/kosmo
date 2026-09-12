@@ -10,7 +10,7 @@
 - 동적 Profile 표시 이름처럼 화면 chrome 높이를 한 줄로 유지해야 하는 소비처는 Figma `TextEllipsis`와 같은
   one-line tail ellipsis 정책을 명시적으로 선택한다. 이 예외는 전체 접근성 제목을 바꾸지 않으며 일반 `text`
   제목의 기본 여러 줄 reflow를 바꾸지 않는다.
-- `brand`: 홈에서 투명 브랜드 마크를 너비 `38px`로 가로 중앙에 표시한다. 좌우에 같은 `44×44px` action slot을 두는 대칭 Auto Layout을 사용해 한쪽 action만 있어도 마크의 중심이 헤더 전체 중심과 일치하게 한다. 비어 있는 우측 slot은 향후 홈 action 위치로 유지한다. 마크 이미지는 접근성 트리에서 숨기고 `홈` heading 하나만 노출한다.
+- `brand`: Home/Local 타임라인에서 투명 브랜드 마크를 너비 `38px`로 가로 중앙에 표시한다. 좌우에 같은 `44×44px` action slot을 두는 대칭 Auto Layout을 사용해 한쪽 action만 있어도 마크의 중심이 헤더 전체 중심과 일치하게 한다. 비어 있는 우측 slot은 향후 타임라인 action 위치로 유지한다. 마크 이미지는 접근성 트리에서 숨기고 현재 타임라인 heading 하나만 노출한다.
 
 ## Action slot
 
@@ -72,7 +72,8 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
   더보기는 모든 레이아웃에서 Hero의 Follow 왼쪽 `16px` 간격에 `40×40` 원형 버튼으로 배치한다. 자세한 메뉴
   배치는 `profile-hero.md`를 따른다.
 
-- 모바일 Web과 Android/iOS `/home`: `UniversalShell`이 메뉴 버튼, 브랜드 마크와 native safe-area를 소유한다. 홈 route는 헤더를 렌더링하지 않는다.
+- 모바일 Web과 Android/iOS `/home`·`/local`: `UniversalShell`이 메뉴 버튼, 비상호작용 브랜드 마크와 native
+  safe-area를 소유한다. route는 헤더를 중복 렌더링하지 않는다.
 - Web `/search`: 검색 route가 모든 breakpoint의 `64px` 검색 도구막대와 검색 상태를 소유한다. 모바일 Web
   `< compact`에서 `UniversalShell`은 기본 메뉴 전용 헤더 대신 drawer action과 가장자리 스와이프만 제공한다.
 - `<768px` 모바일 Web `/compose`, `/notifications`와 `/settings` root: `UniversalShell`이 메뉴 버튼과 텍스트 제목을 하나의 app bar로 렌더링한다. `/notifications`에서는 같은 app bar가 `모두 읽음` trailing action도 소유하고, Settings 내부 category·detail destination에서는 같은 위치에 뒤로가기와 현재 destination 제목을 렌더링한다. route의 loading, error, empty와 content 상태는 셸 헤더 아래에서 전환하며 자체 PageHeader를 렌더링하지 않는다.
@@ -86,7 +87,9 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
 - Android/iOS와 compact Web의 `/settings` root·category·detail destination: settings route가 현재 화면의 text header를 scroll content의 첫 heading으로 소유한다. category·detail header는 뒤로가기를 제공하고 Native safe area는 모바일 셸이 바깥에서 소유한다.
 - full Web의 settings route family: Settings master pane이 `설정` heading을, detail pane이 현재 설정 heading을 소유한다. 일반 route `PageHeader`와 `RightRail`을 중복하지 않는다.
 - 북마크 등 이 변경에 포함되지 않은 PageHeader 소비 화면은 기존 route 소유권을 유지한다.
-- compact/full Web `/home`: 모바일 셸 헤더가 없으므로 홈 route가 브랜드 헤더를 소유한다.
+- compact/full Web `/home`·`/local`: 모바일 셸 헤더가 없으므로 각 route가 브랜드 헤더를 소유한다. 브랜드
+  control을 현재 문서에서 실행하면 document top으로 이동하고 현재 선택된 타임라인을 다시 요청한다. 실제
+  link 대상은 `/home`으로 유지해 새 탭·modifier 활성화의 홈 진입 의미를 보존한다.
 
 `PageHeader` 자체는 safe-area, sticky 위치, scroll container 또는 route 상태를 소유하지 않는다. 따라서 새로운 화면도 헤더를 scroll/sticky 구조의 올바른 위치에 배치하고, 화면 상태별로 별도 헤더를 복제하지 않는다.
 

@@ -1,5 +1,5 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
@@ -40,11 +40,27 @@ const LocalQuery = graphql`
 `;
 
 export default function LocalScreen() {
+  const shellChrome = useShellChrome();
+  const registerHomeReselection = shellChrome?.registerHomeReselection;
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
   const refresh = useCallback(() => routeBoundaryRef.current?.refetch(), []);
+  const reselectFromShell = useCallback(() => {
+    if (Platform.OS === 'web') {
+      window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
+    }
+    refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !registerHomeReselection) {
+      return;
+    }
+
+    return registerHomeReselection(reselectFromShell);
+  }, [registerHomeReselection, reselectFromShell]);
 
   return (
-    <LocalFrame onReselect={refresh}>
+    <LocalFrame onReselect={refresh} onBrandCurrentNavigate={shellChrome?.reselectHome}>
       <RouteBoundary
         loading={<StateView loading title="로컬 타임라인을 불러오는 중입니다." />}
         ref={routeBoundaryRef}
@@ -56,13 +72,29 @@ export default function LocalScreen() {
   );
 }
 
-function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: () => void }>) {
+function LocalFrame({
+  children,
+  onBrandCurrentNavigate,
+  onReselect,
+}: PropsWithChildren<{
+  onBrandCurrentNavigate?: () => void;
+  onReselect: () => void;
+}>) {
   const { width } = useWindowDimensions();
   const routeOwnsHeader = getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
   return (
     <View style={styles.root}>
-      {routeOwnsHeader ? <PageHeader accessibilityLabel="로컬" variant="brand" /> : null}
+      {routeOwnsHeader ? (
+        <PageHeader
+          accessibilityLabel="로컬"
+          brandAccessibilityLabel="홈"
+          brandCurrent
+          brandHref={Platform.OS === 'web' ? '/home' : undefined}
+          onBrandCurrentNavigate={Platform.OS === 'web' ? onBrandCurrentNavigate : undefined}
+          variant="brand"
+        />
+      ) : null}
       <View
         style={
           Platform.OS === 'web'

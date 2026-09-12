@@ -33,6 +33,7 @@ type TestElementProps = {
 type TestElement = ReactElement<TestElementProps>;
 type IconButtonProps = {
   accessibilityLabel: string;
+  accessibilityRole?: 'button' | 'link';
   accessibilityState?: { busy?: boolean; expanded?: boolean };
   children: ReactNode | ((state: { pressed: boolean }) => ReactNode);
   controlRef?: unknown;
@@ -337,6 +338,16 @@ test('button semantics and interaction props are forwarded without losing press 
   assert.equal(button.props.ref, controlRef);
   assert.equal(disabledStyle.backgroundColor, 'gray');
   assert.equal(pressedChildren, '눌림');
+});
+
+test('a navigation adapter can preserve link semantics', () => {
+  const link = renderIconButton({
+    accessibilityLabel: '뒤로',
+    accessibilityRole: 'link',
+    children: '←',
+  });
+
+  assert.equal(link.props.accessibilityRole, 'link');
 });
 
 test('visual feedback is opt-in and explicit opacity feedback preserves prior states', () => {
