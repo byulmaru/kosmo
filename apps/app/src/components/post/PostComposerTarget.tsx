@@ -94,6 +94,7 @@ const visibilityOptions: ReadonlyArray<{
 
 const composerBodyFocusStyle = {
   borderWidth: borderWidths[0],
+  outlineStyle: 'solid',
   outlineWidth: 0,
 } as unknown as TextStyle;
 const composerFieldFocusStyle = {

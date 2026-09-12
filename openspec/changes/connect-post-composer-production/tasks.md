@@ -153,3 +153,6 @@ Production 연결 결과와 실제 검증 범위가 Storybook, 디자인 문서�
   Native IME 검증으로 간주하지 않는다.
 - Storybook build·문서 Prettier·OpenSpec strict validation이 통과했다. 앱 check는 위의 기존 Settings 테스트
   타입 오류로 실패하며 Native 관련 미완료 task는 유지한다.
+- 추가 정정: 내장 dev Browser에서 모바일 본문의 `outline: auto 0px`가 파란 링으로 남는 것을 재현했다.
+  기본 `auto`를 해제한 뒤 같은 본문의 초기 focus와 Tab 재진입 화면에서 링 없이 caret만 남는 것을 확인했다.
+  기존 모바일 입력 Tests에 outline 방식 검증을 추가했고 Composer·Media editor·Shell 37개가 다시 통과했다.
