@@ -11,6 +11,7 @@ import {
   Reactions,
 } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, PostState, ProfileState } from '../enums';
+import { materializeNotification } from './notification-policy';
 import type { Database } from '../db';
 
 const NotificationRepostAuthors = alias(Profiles, 'notification_repost_author');
@@ -25,7 +26,11 @@ const NotificationRepostRecipientInstances = alias(
 export const createFollowNotification = async (sourceId: string): Promise<void> => {
   await getDatabaseConnection().transaction(async (tx) => {
     const source = await tx
-      .select({ id: ProfileFollows.id, recipientProfileId: ProfileFollows.followeeProfileId })
+      .select({
+        id: ProfileFollows.id,
+        recipientProfileId: ProfileFollows.followeeProfileId,
+        relatedProfileId: ProfileFollows.followerProfileId,
+      })
       .from(ProfileFollows)
       .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followeeProfileId))
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
@@ -39,17 +44,12 @@ export const createFollowNotification = async (sourceId: string): Promise<void> 
       return;
     }
 
-    await tx
-      .insert(Notifications)
-      .values({
-        data: {},
-        kind: NotificationKind.FOLLOW,
-        recipientProfileId: source.recipientProfileId,
-        sourceId: source.id,
-      })
-      .onConflictDoNothing({
-        target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-      });
+    await materializeNotification(tx, {
+      kind: NotificationKind.FOLLOW,
+      recipientProfileId: source.recipientProfileId,
+      relatedProfileId: source.relatedProfileId,
+      sourceId: source.id,
+    });
   });
 };
 
@@ -59,6 +59,7 @@ export const createFollowRequestNotification = async (sourceId: string): Promise
       .select({
         id: ProfileFollowRequests.id,
         recipientProfileId: ProfileFollowRequests.followeeProfileId,
+        relatedProfileId: ProfileFollowRequests.followerProfileId,
       })
       .from(ProfileFollowRequests)
       .innerJoin(Profiles, eq(Profiles.id, ProfileFollowRequests.followeeProfileId))
@@ -80,17 +81,12 @@ export const createFollowRequestNotification = async (sourceId: string): Promise
       return;
     }
 
-    await tx
-      .insert(Notifications)
-      .values({
-        data: {},
-        kind: NotificationKind.FOLLOW_REQUEST,
-        recipientProfileId: source.recipientProfileId,
-        sourceId: source.id,
-      })
-      .onConflictDoNothing({
-        target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-      });
+    await materializeNotification(tx, {
+      kind: NotificationKind.FOLLOW_REQUEST,
+      recipientProfileId: source.recipientProfileId,
+      relatedProfileId: source.relatedProfileId,
+      sourceId: source.id,
+    });
   });
 };
 
@@ -127,17 +123,12 @@ export const createReactionNotification = async (
       return;
     }
 
-    await tx
-      .insert(Notifications)
-      .values({
-        data: {},
-        kind: NotificationKind.REACTION,
-        recipientProfileId: source.recipientProfileId,
-        sourceId: source.id,
-      })
-      .onConflictDoNothing({
-        target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-      });
+    await materializeNotification(tx, {
+      kind: NotificationKind.REACTION,
+      recipientProfileId: source.recipientProfileId,
+      relatedProfileId: source.actorProfileId,
+      sourceId: source.id,
+    });
   });
 };
 
@@ -202,17 +193,12 @@ export const createRepostNotification = async (
     return;
   }
 
-  await connection
-    .insert(Notifications)
-    .values({
-      data: {},
-      kind: NotificationKind.REPOST,
-      recipientProfileId: source.recipientProfileId,
-      sourceId: source.id,
-    })
-    .onConflictDoNothing({
-      target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-    });
+  await materializeNotification(connection, {
+    kind: NotificationKind.REPOST,
+    recipientProfileId: source.recipientProfileId,
+    relatedProfileId: source.actorProfileId,
+    sourceId: source.id,
+  });
 };
 
 export const deleteNotificationBySource = async (

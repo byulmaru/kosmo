@@ -12,6 +12,7 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import { eq } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
 import type {
   createPost as CreatePost,
@@ -35,7 +36,9 @@ let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
+let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
+let ProfileMutes: typeof CoreDb.ProfileMutes;
 let Profiles: typeof CoreDb.Profiles;
 let Reactions: typeof CoreDb.Reactions;
 let createCorePost: typeof CreatePost;
@@ -56,7 +59,9 @@ before(async () => {
     pg,
     PostContents,
     Posts,
+    ProfileBlocks,
     ProfileFollows,
+    ProfileMutes,
     Profiles,
     Reactions,
   } = await import('@kosmo/core/db'));
@@ -150,6 +155,33 @@ test('자기 Reply는 Notification을 만들지 않는다', async () => {
   await createReplyNotificationActivity(reply.id);
 
   assert.equal(await db.$count(Notifications), 0);
+});
+
+test('Reply 알림은 Recipient Mute와 양방향 Block이 있으면 생성하지 않는다', async () => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const parent = await createPost(recipient.id);
+  const reply = await createPost(author.id, { replyParentId: parent.id });
+
+  await db.insert(ProfileMutes).values({
+    ownerProfileId: recipient.id,
+    targetProfileId: author.id,
+    expiresAt: null,
+  });
+  await createReplyNotificationActivity(reply.id);
+  assert.equal(await db.$count(Notifications), 0);
+
+  await db.delete(ProfileMutes).where(eq(ProfileMutes.ownerProfileId, recipient.id));
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: author.id,
+    targetProfileId: recipient.id,
+  });
+  await createReplyNotificationActivity(reply.id);
+  assert.equal(await db.$count(Notifications), 0);
+
+  await db.delete(ProfileBlocks).where(eq(ProfileBlocks.ownerProfileId, author.id));
+  await createReplyNotificationActivity(reply.id);
+  assert.equal(await db.$count(Notifications), 1);
 });
 
 test('Reaction Notification Activities는 create와 delete retry에 멱등이다', async () => {
