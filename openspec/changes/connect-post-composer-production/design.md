@@ -34,7 +34,7 @@ PROD-854가 만든 `PostComposerTarget`, `PostComposerMediaItemsTarget`, `Compos
 
 Overlay host는 저장소의 기존 modal/focus 처리 패턴을 재사용해 scrim, Web Escape·backdrop·focus restore, Native back과 safe area/keyboard avoidance를 소유한다. Media editor는 Overlay host 내부 view state로 전환하고 별도 modal을 만들지 않는다. `/compose` route는 기존 query·session/profile 경계를 유지하되 동일 composer host를 열거나 같은 host content를 렌더하는 얇은 호환 adapter로 축소한다.
 
-Desktop Rail·Overlay의 `PostComposer`는 Empty source의 404px 외곽 높이를 유지하고, Overlay는 짧은 viewport에서 Host의 85dvh 안으로 줄어든다. author와 editor header·footer는 고정하고 body·CW·Media만 가운데 `ScrollView`에서 함께 흐르게 하며, Media가 있을 때 body 최소 높이를 줄여 같은 영역을 나눠 쓴다. 모바일 전체 화면은 기존 높이·scroll 구조를 유지한다.
+Desktop Rail의 `PostComposer`는 Empty source의 404px, Overlay는 Media specimen의 624px 외곽 높이를 유지하고, Overlay는 짧은 viewport에서 Host의 85dvh 안으로 줄어든다. author와 editor header·footer는 고정하고 body·CW·Media만 가운데 `ScrollView`에서 함께 흐르게 하며, Media가 있을 때 body 최소 높이를 줄여 같은 영역을 나눠 쓴다. 모바일 전체 화면은 기존 높이·scroll 구조를 유지하고 공개 범위 menu의 오른쪽에 16px viewport inset을 둔다.
 
 일반 Post 성공 callback은 기존 state reset 이후 surface별 후속 동작만 위임한다. Web Overlay는 닫고 현재 route를 유지하며, 모바일은 닫은 뒤 Home으로 이동한다. 실패 시 기존 draft와 열린 surface를 유지한다.
 

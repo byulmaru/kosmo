@@ -541,10 +541,10 @@ documentation·state specimen을 두 번째 행에 둔다.
   shell host에 위임한다. Web component·Storybook interaction 검증은 완료했고 Android/iOS 실제 keyboard·back·safe
   area·touch/focus 검증은 별도로 남아 있다.
 - Production Host는 일반 Web Overlay의 600px 폭과 가운데 정렬된 64px header를 유지한다. 2026-09-12 작성 화면
-  검토 결정으로 Desktop Rail·Overlay의 `PostComposer` 외곽은 Empty source의 404px 높이를 유지하고, author와 editor
+  검토 결정으로 Desktop Rail의 `PostComposer` 외곽은 Empty source의 404px, Overlay는 Media specimen의 624px 높이를 유지하고, author와 editor
   header·footer를 제외한 가운데 영역에서 body·CW·media를 함께 scroll한다. CW나 media 추가로 모달 외곽과
   고정 영역이 이동하지 않는다. 짧은 viewport에서는 상위 Host의 85dvh 안으로 외곽을 줄이고 같은 가운데 영역만
-  scroll한다. Figma 원본의 상태별 높이는 이 Product presentation 결정으로 변경하지 않는다. 모바일은 header·공개 범위·footer를 고정하고 body와 media shelf가 남은 높이를
+  scroll한다. 모바일은 header·공개 범위·footer를 고정하고 body와 media shelf가 남은 높이를
   채우되 짧은 viewport에서 함께 scroll한다. Media editor는 같은 제한 높이 안에서 별도 내부 scroll을 사용한다.
   editor 전환 시 composer와 upload owner를 유지해 복귀 focus와 breakpoint 전환 뒤 paste 경로를 보존한다.
 - 2026-09-12 작성 화면 검토 결정으로 Rail·Overlay·모바일 본문, CW와 Media editor의 ALT 입력은 focus 시
@@ -566,7 +566,7 @@ documentation·state specimen을 두 번째 행에 둔다.
   editor는 그 아래 358px 전체 폭을 사용한다. Avatar gutter를 편집영역 전체 높이까지 유지하지 않는다.
 - 모바일 fullscreen header가 제출 action을 소유하므로 8개 조합 모두 공용 `__ComposerFooter`의
   `Show submit=false`, `Show progress ring=true`를 유지한다. footer는 도구를 왼쪽, 남은 글자 수 → ring을 오른쪽
-  그룹으로 정렬한다. 공개 범위 menu는 trigger의 chevron 쪽 우측 edge에 맞춘다. Poll·CW 표본은 배치와 reflow
+  그룹으로 정렬한다. 공개 범위 menu는 390px mobile frame의 오른쪽에서 16px inset을 두어 trigger의 chevron 아래에 배치한다. Poll·CW 표본은 배치와 reflow
   evidence이며 실제 작성 기능·keyboard avoidance·safe area·focus·제출 lifecycle 완료를 뜻하지 않는다.
 - header의 게시 action은 공용 `Button/Default` 높이 `40px`을 유지하고 폭만 `72px`로 제한한다. Candidate의 Web
   rendering은 이 visual geometry를 검증하며, iOS `44pt`·Android `48dp` 실제 입력 영역은 Native runtime에서 별도로
@@ -576,6 +576,8 @@ documentation·state specimen을 두 번째 행에 둔다.
 - `04 Screens - Mobile`의 [`Composer state consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6771-10454)는
   Full Media·Poll·CW와 Keyboard Empty·Media·Poll·CW 7개를 연결한다. `14 Mobile composer and overlay consumers`의
   Full Empty Light/Dark까지 합치면 route 호환 FRAME 없이 8개 variant가 모두 실제 Target consumer를 가진다.
+  [`Visibility open Light`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=8677-14233)는
+  별도 public component를 추가하지 않고 240px menu의 16px 오른쪽 inset과 선택 상태를 보여 준다.
   Keyboard는 illustrative geometry라 Native IME·safe-area reflow는 별도 runtime QA가 필요하다.
 - Media 조합의 attachment shelf는 `164px` 높이와 `space/8` bottom padding을 사용해 마지막 media row와 footer 사이에
   정확히 `8px`을 둔다. Empty·Poll·CW 조합과 Desktop Composer의 spacing은 이 규칙의 영향을 받지 않는다.

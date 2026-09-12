@@ -28,9 +28,15 @@
 
 - **WHEN** desktop Rail 또는 Overlay에서 Content Warning을 열거나 Media를 추가한다
 - **THEN** 시스템은 `PostComposer` 외곽과 author·editor header·footer의 위치를 유지한다
+- **AND** Rail은 404px, Overlay는 624px 외곽 높이를 유지한다
 - **AND** body·Content Warning·Media가 가운데 작성 영역을 함께 사용하고 넘치는 내용만 그 영역에서 scroll한다
 - **AND** 짧은 viewport의 Overlay에서는 Host의 제한 높이 안으로 외곽을 줄이고 author·editor header·footer를 계속 표시한다
 - **AND** 모바일 전체 화면의 기존 높이·scroll 계약을 변경하지 않는다
+
+#### Scenario: 모바일 공개 범위 menu 열기
+
+- **WHEN** 모바일 전체 화면 Composer에서 사용자가 공개 범위 menu를 연다
+- **THEN** 시스템은 menu의 오른쪽 경계를 화면 오른쪽에서 16px 떨어진 위치에 표시한다
 
 #### Scenario: Media editor에서 작성 상태 보존
 

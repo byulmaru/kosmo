@@ -889,7 +889,7 @@ export const MobilePlaygroundContract: Story = {
     const menu = canvas.getByRole('radiogroup', { name: '공개 범위 선택' });
     const trigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
     expect(within(menu).getAllByRole('radio')).toHaveLength(3);
-    expect(menu.getBoundingClientRect().right).toBe(trigger.getBoundingClientRect().right);
+    expect(menu.getBoundingClientRect().right).toBe(trigger.getBoundingClientRect().right - 16);
 
     await userEvent.click(within(menu).getByRole('radio', { name: '공개' }));
     expect(args.onVisibilityChange).toHaveBeenLastCalledWith('PUBLIC');
@@ -981,7 +981,7 @@ export const OverlayGeometryContract: Story = {
     const initialVisibilityTop = visibilityTrigger.getBoundingClientRect().top;
     const initialSubmitTop = submit.getBoundingClientRect().top;
 
-    expect(target.getBoundingClientRect().height).toBe(404);
+    expect(target.getBoundingClientRect().height).toBe(624);
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
 
     scroll.scrollTop = scroll.scrollHeight;
@@ -991,20 +991,16 @@ export const OverlayGeometryContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
 
     expect(target.getBoundingClientRect().top).toBe(initialTargetTop);
-    expect(target.getBoundingClientRect().height).toBe(404);
+    expect(target.getBoundingClientRect().height).toBe(624);
     expect(visibilityTrigger.getBoundingClientRect().top).toBe(initialVisibilityTop);
     expect(submit.getBoundingClientRect().top).toBe(initialSubmitTop);
 
     await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 켜기' }));
 
     expect(target.getBoundingClientRect().top).toBe(initialTargetTop);
-    expect(target.getBoundingClientRect().height).toBe(404);
+    expect(target.getBoundingClientRect().height).toBe(624);
     expect(visibilityTrigger.getBoundingClientRect().top).toBe(initialVisibilityTop);
     expect(submit.getBoundingClientRect().top).toBe(initialSubmitTop);
-    expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
-
-    scroll.scrollTop = scroll.scrollHeight;
-    expect(scroll.scrollTop).toBeGreaterThan(0);
   },
 };
 

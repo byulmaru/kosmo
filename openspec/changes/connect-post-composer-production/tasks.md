@@ -169,3 +169,13 @@ Production 연결 결과와 실제 검증 범위가 Storybook, 디자인 문서�
   모두 viewport 안에 남는 것을 확인했다. Android/iOS 실제 runtime 미검증과 기존 앱 typecheck 실패는 유지한다.
 - 실제 Metro dev 1440×900 Rail의 CW·실패 Media 동시 상태에서 외곽 404px, 가운데 183px와 277px overflow를
   확인했다. PageDown 뒤 가운데 scrollTop만 159px로 이동했고 footer의 Y 좌표는 355.44px로 유지됐다.
+
+### Overlay 높이·모바일 menu inset 재검토 — 2026-09-12
+
+- 후속 사용자 화면 검토에서 desktop Overlay는 작은 Empty 높이 대신 Media specimen의 624px를
+  사용하고, Rail은 제한된 컬럼에 맞는 404px를 유지하도록 계약을 분리했다.
+- 모바일 공개 범위 menu는 Web과 Native 모두 화면 오른쪽에서 16px inset을 두도록 정렬했다.
+- PostComposer Storybook interaction 28개와 OpenSpec strict validation이 통과했다. 실제 Metro dev mobile Web에서
+  240px menu의 viewport·composer shell 오른쪽 inset이 모두 16px임을 확인했다.
+- Figma `04 Screens - Mobile` section에 390×844 `Visibility open Light` consumer를 추가하고 240px menu의
+  `x=134`, 오른쪽 inset 16px, semantic elevated·border variable binding을 screenshot·readback으로 확인했다.
