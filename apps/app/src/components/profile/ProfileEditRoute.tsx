@@ -445,7 +445,6 @@ function EditableProfileRoute({
         onHeaderRetry={() => retryImage('header')}
         onSubmit={submit}
         serverErrors={serverErrors}
-        showTags
         submitState={submitState}
         value={{ ...value, avatar: avatar.presentation, header: header.presentation }}
       />

@@ -1,7 +1,7 @@
 import { ArrowLeft } from 'lucide-react-native';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import { iconSizes, space, textStyles } from '@/theme/tokens';
 import { Button } from '../ui/Button';
 import { IconButton } from '../ui/IconButton';
 import { ProfileEditForm } from './ProfileEditForm';
@@ -48,7 +48,10 @@ function SubmitStatus({ state }: { state: ProfileEditSubmitState }) {
   }
 
   return (
-    <Text accessibilityRole="alert" style={[styles.submitStatus, { color: theme.danger }]}>
+    <Text
+      accessibilityRole="alert"
+      style={[styles.submitStatus, { color: theme.feedbackDangerOnSubtle }]}
+    >
       {state.message}
     </Text>
   );
@@ -68,7 +71,6 @@ export function ProfileEditScreen({
   onSubmit,
   serverErrors,
   submitState = { kind: 'idle' },
-  showTags = true,
   value,
 }: ProfileEditScreenProps) {
   const theme = useTheme();
@@ -96,7 +98,6 @@ export function ProfileEditScreen({
         onHeaderRemove={onHeaderRemove}
         onHeaderRetry={onHeaderRetry}
         serverErrors={serverErrors}
-        showTags={showTags}
         value={value}
       />
 
@@ -110,7 +111,7 @@ export function ProfileEditScreen({
       style={[
         styles.root,
         {
-          backgroundColor: theme.background,
+          backgroundColor: theme.backgroundCanvas,
         },
       ]}
     >
@@ -119,38 +120,39 @@ export function ProfileEditScreen({
         style={[
           styles.header,
           Platform.OS === 'web' && webStickyHeader,
-          { backgroundColor: theme.background, borderColor: theme.border },
+          { backgroundColor: theme.backgroundCanvas, borderColor: theme.borderDefault },
         ]}
       >
-        {onBack ? (
-          <IconButton
-            accessibilityLabel="프로필 편집 닫기"
-            disabled={saving}
-            feedback="opacity"
-            onPress={onBack}
-            style={styles.backAction}
-            targetSize={48}
-          >
-            <ArrowLeft color={theme.text} size={22} strokeWidth={2} />
-          </IconButton>
-        ) : (
-          <View style={styles.backAction} />
-        )}
+        <View style={styles.actionSlot}>
+          {onBack ? (
+            <IconButton
+              accessibilityLabel="프로필 편집 닫기"
+              disabled={saving}
+              feedback="opacity"
+              onPress={onBack}
+              style={styles.backAction}
+            >
+              <ArrowLeft color={theme.foregroundPrimary} size={iconSizes[24]} strokeWidth={2} />
+            </IconButton>
+          ) : null}
+        </View>
 
-        <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+        <Text accessibilityRole="header" style={[styles.title, { color: theme.foregroundPrimary }]}>
           프로필 수정
         </Text>
 
-        <Button
-          accessibilityLabel="저장"
-          accessibilityState={{ busy: saving, disabled: !canSubmit }}
-          disabled={!canSubmit}
-          loading={saving}
-          onPress={() => onSubmit?.(value)}
-          style={styles.saveAction}
-        >
-          저장
-        </Button>
+        <View style={[styles.actionSlot, styles.trailingActionSlot]}>
+          <Button
+            accessibilityLabel="저장"
+            accessibilityState={{ busy: saving, disabled: !canSubmit }}
+            disabled={!canSubmit}
+            loading={saving}
+            onPress={() => onSubmit?.(value)}
+            style={styles.saveAction}
+          >
+            저장
+          </Button>
+        </View>
       </View>
 
       {Platform.OS === 'web' ? (
@@ -179,33 +181,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     flexDirection: 'row',
-    height: 48,
-    paddingHorizontal: spacing.sm,
+    height: 64,
+    paddingHorizontal: space[16],
+  },
+  actionSlot: {
+    alignItems: 'flex-start',
+    height: 64,
+    justifyContent: 'center',
+    width: 64,
   },
   backAction: {
     alignItems: 'center',
-    height: 48,
+    height: 44,
     justifyContent: 'center',
-    width: 48,
+    width: 44,
+  },
+  trailingActionSlot: {
+    alignItems: 'flex-end',
   },
   title: {
     flex: 1,
-    fontFamily: fontFamilies.ui,
-    fontWeight: '700',
     textAlign: 'center',
-    ...typography.lg,
+    ...textStyles.uiHeadingM,
   },
   saveAction: {
-    minHeight: 36,
     minWidth: 64,
   },
   content: { width: '100%' },
   nativeContent: { flexGrow: 1 },
   nativeScroll: { flex: 1 },
   submitStatus: {
-    fontFamily: fontFamilies.ui,
-    marginBottom: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    ...typography.sm,
+    marginBottom: space[24],
+    paddingHorizontal: space[16],
+    ...textStyles.uiCopyM,
   },
 });

@@ -43,6 +43,10 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
 - Follow Approval Policy를 바꿔도 기존 Pending Follow Request의 상태나 존재는 바뀌지 않는다.
 - 프로필 태그는 [Profile Tag 디자인](./profile-tags.md)의 Hashtag Name 정규화·중복·접근성
   계약을 따른다. 개수 상한과 순서·재정렬 계약은 두지 않는다.
+- 표시 이름·소개·프로필 태그의 외부 label은 `UI/Label/L`(`16/24/600`)을 사용한다. displayName·bio의
+  label-control과 control-counter 사이는 각각 `8px`, 인접 field section 사이는 `16px`를 유지하며 실제 입력은
+  기존 `TextField`·`TextArea`의 focus·validation·disabled·support text 계약을 재사용한다.
+- Profile Tag editor의 root child 간격은 `12px`이며, chip row와 tag input row 내부 간격은 `8px`를 사용한다.
 - form은 avatar와 header의 현재 이미지를 각각 초기 draft로 표시하며 별도의 `유지` action을 두지 않는다.
   header preview 전체와 avatar preview 전체를 각 field의 단일 편집 button으로 사용하고, 별도의 연필·편집
   button은 두지 않는다. 한쪽을 편집해도 건드리지 않은 다른 쪽의 draft는 현재 값으로 남긴다. 각 field의 편집
@@ -202,13 +206,22 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
 
 - Web은 기존 KOSMO shell 안의 중앙 route로 제공하며 modal이나 별도 desktop-only route를 만들지 않는다.
 - 중앙 편집 surface는 최대 `600px`를 유지한다.
-- DSN-45 Figma Candidate의 상단 navigation header는 shell이 소유하는 safe-area inset을 제외한 content 높이를
-  정확히 `64px`로 유지한다. 뒤로가기 action은 `44×44` target 안의 canonical `ArrowLeft` `24px`를 사용하고
-  제목·저장 action은 같은 행 안에서 정렬한다. Product 이관 전 production은 기존 `48px` header, `48×48`
-  target과 `22px` icon geometry를 유지한다.
+- DSN-45 Figma source와 이를 이관한 current Production의 상단 navigation header는 shell이 소유하는 safe-area
+  inset을 제외한 content 높이를 정확히 `64px`로 유지한다. 뒤로가기 action은 `44×44` layout target 안의
+  canonical `ArrowLeft` `24px`를 사용하고 제목은 `UI/Heading/M`(`24/27.6/700`)으로 좌우 `80px` side slot
+  안에서 정중앙에 두며, Web 저장 action은 `64×40`으로
+  같은 행 안에서 정렬한다. iOS·Android의 실제 입력 target은 공용 `IconButton`·`Button`의 `44pt`·`48dp`
+  보정을 유지한다. navigation divider는 `border/default` `1px`을 사용한다.
+- navigation header와 screen fill은 `background/canvas`, title과 back icon은 `foreground/primary`를 사용한다.
 - header 이미지 변경 영역은 surface 폭을 기준으로 `aspect-ratio: 3 / 1`을 적용한다. 따라서 `600px`
   중앙 surface에서는 `600×200`, `390px` mobile에서는 `390×130`이며 임의 폭 `W`에서는 높이가
-  `W / 3`이 된다.
+  `W / 3`이 된다. 이미지와 아래 surface의 경계에는 `border/default` 1px 하단선을 표시한다.
+- Web `< compact`와 Android/iOS는 avatar frame/content/overlap/row를 `96/88/48/64`, compact·full Web은
+  `128/120/64/80`으로 사용한다. frame은 왼쪽 `16px` inset에 두고 preview 중앙의 camera affordance는
+  `40×40` surface 안의 `20px` glyph를 사용한다.
+- image status가 없는 기본 상태에서 avatar visual 하단과 첫 `표시 이름` label 상단 사이에는 `24px`를 둔다.
+  이 간격은 Mobile·Center에서 avatar overlap row의 `64px`·`80px` 높이를 보존한 뒤 form 상단 inset으로
+  맞춘다. upload·removed·error status가 표시될 때는 기존 상태 안내와 해당 status spacing을 보존한다.
 - `1440px`에서는 full sidebar와 우측 rail 사이 중앙 컬럼에, `1024px`에서는 icon rail 다음 중앙 컬럼에,
   `390px`에서는 mobile shell 안에 배치한다. 일반 shell breakpoint는 [breakpoints.md](./breakpoints.md)를
   따른다.
@@ -234,15 +247,24 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
   보존한다. production은 text·policy·Tag·Ready image draft를 같은 저장 action으로 다시 제출할 수 있게 한다.
 - 긴 표시 이름·bio, 빈 값, 여러 개·긴 태그, 이미지 없음과 오류, compact/desktop 폭을 상태 카탈로그에서
   확인한다.
+- Storybook `KOSMO/Screens/Profile Edit/Catalog`는 실제 Production component의 수동 Playground와 Mobile
+  `390` Light clean, Compact `1024` Light clean, Full `1440` Dark dirty 대표 상태를 제공한다. 자동
+  interaction·geometry 계약은 Controls를 비활성화한 `KOSMO/Screens/Profile Edit/Tests`에서 실행한다.
 
 ## Figma 대응
 
 - `04 Screens - Mobile`의 기존 Profile Edit 원본은 `07 Archive`에 보관하고 `390px` Mobile 대표 프레임은
-  `Candidate/reference · Product 미구현`으로 유지한다. canonical Mobile Target이나 production 구현 완료로
-  세지 않는다.
+  Candidate/reference provenance를 유지한다. PROD-941은 이 source의 기존 field presentation만 Production에
+  이관하며, Profile 추가 정보와 crop·pan/zoom·alt text Candidate를 구현 완료로 세지 않는다.
 - `05 Screens - Web`의 Profile 영역에는 `1440px` Full과 `1024px` Compact 대표 프레임을 유지한다.
 - Mobile/Web 모두 상단 navigation header의 safe area 제외 높이를 `64px`로 고정하고 뒤로가기 action에
   `44×44` target과 `24px` `ArrowLeft`를 사용한다.
+- Center/Mobile Profile Edit source의 title은 `UI/Heading/M` `24/27.6/700`이며 back/save의 `64px` side slot
+  안에서 좌우 `80px` 경계를 기준으로 정중앙에 둔다. displayName·bio counter는 `12/16`이고 enabled input value는
+  `UI` `16/24` `foreground/muted`를 사용한다.
+- 빈 header target은 `action/primary/subtle`, avatar content는 `background/surface`, avatar outer ring은
+  `background/canvas`, avatar inner border와 header divider는 `border/default`를 사용한다. camera scrim은 추가
+  opacity 없이 `overlay/scrim`, camera glyph는 `fixed/white`를 사용한다.
 - 실제 `Header image preview` layer에 `3:1` ratio lock을 적용하고, avatar overlap을 배치하는 hero wrapper와
   preview layer를 분리한다. header preview 전체와 avatar preview 전체를 각각 단일 button으로 사용하며 중앙
   camera affordance와 pressed veil을 표현한다.
@@ -254,6 +276,15 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
   이미지 replacement·deletion·uploading·error를 별도 Figma 상태 카탈로그로 추가하지 않는다.
 - Figma 작업 환경에서는 [typography.md](./typography.md)의 대치 폰트와 Foundation variable, `02 Components`의
   현행 primitive를 사용한다.
+
+## 정정 기록
+
+- 2026-09-11 Figma `ProfileEditSurface` Center/Mobile 재대조: 기존 `UI/Heading/S` `20/26/700`은
+  `UI/Heading/M` `24/27.6/700`으로 대체했다.
+- 기존 Profile Tag root의 일반화된 `8px` item spacing은 `12px`로 대체했으며, chip row·tag input row 내부
+  간격은 `8px`로 유지한다.
+- displayName·bio support stack의 기존 `4px` control-counter 간격은 `8px`로 대체했다. field section
+  간격 `16px`와 Follow Approval draft/save 소유권은 변경하지 않는다.
 
 ## 전달 경계
 
