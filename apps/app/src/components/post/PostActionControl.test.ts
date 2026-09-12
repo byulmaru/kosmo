@@ -327,15 +327,16 @@ test('Native PostActionBar wiring keeps target sizes and the zero-gap trailing g
 });
 
 test('PostListItem Native production cards use the mobile 16px inset while Web stays at 8px', async () => {
-  for (const [os, expectedPadding] of [
-    ['ios', 16],
-    ['android', 16],
-    ['web', 8],
+  for (const [os, expectedPadding, expectedBottom] of [
+    ['ios', 16, 4],
+    ['android', 16, 4],
+    ['web', 8, 8],
   ] as const) {
     platform.OS = os;
     const root = await renderListItem({ post: {} as never, showDivider: false });
     const card = root.findByProps({ role: 'article' });
     assert.equal(flattenStyle(card.props.style).paddingHorizontal, expectedPadding);
+    assert.equal(flattenStyle(card.props.style).paddingBottom, expectedBottom);
   }
 });
 

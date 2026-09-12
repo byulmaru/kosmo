@@ -177,12 +177,14 @@ export function PostListItem({
   const standardCardStyle = [
     Platform.OS === 'web' ? styles.card : styles.nativeCard,
     styles.standardCard,
+    Platform.OS === 'web' && styles.webCardBottom,
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
   ];
   const compactCardStyle = [
     Platform.OS === 'web' ? styles.card : styles.nativeCard,
     styles.compactCard,
+    Platform.OS === 'web' && styles.webCardBottom,
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
   ];
@@ -241,7 +243,7 @@ export function PostListItem({
         {pinnedAttribution}
         {replyAttribution}
         <PostListRow
-          actionBarStyle={styles.actionBarSlot}
+          actionBarStyle={Platform.OS === 'web' ? styles.webActionBarSlot : styles.actionBarSlot}
           onQuote={openQuote}
           post={post}
           reply={reply}
@@ -278,7 +280,13 @@ export function PostListItem({
             </Pressable>
           </Link>
         </PostAttributionRow>
-        <PostListRow onQuote={openQuote} post={source} reply={reply} surfacePostId={post.id} />
+        <PostListRow
+          actionBarStyle={Platform.OS === 'web' ? styles.webActionBarSlot : undefined}
+          onQuote={openQuote}
+          post={source}
+          reply={reply}
+          surfacePostId={post.id}
+        />
       </View>,
     );
   }
@@ -313,6 +321,7 @@ export function PostListItem({
             sourcePreviewStyle={styles.quoteSourcePreview}
           />
           <PostActionSurface
+            actionBarStyle={Platform.OS === 'web' ? styles.webQuoteActionBar : undefined}
             onQuote={openQuote}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
@@ -423,6 +432,7 @@ const styles = StyleSheet.create({
   },
   standardCard: { paddingBottom: spacing.xs, paddingTop: spacing.md },
   compactCard: { paddingBottom: 1, paddingTop: spacing.sm },
+  webCardBottom: { paddingBottom: spacing.sm },
   cardDivider: { borderBottomWidth: 1 },
   quoteRow: {
     alignItems: 'flex-start',
@@ -473,4 +483,6 @@ const styles = StyleSheet.create({
   attributionLabel: { fontFamily: fontFamilies.ui, ...typography.sm },
   repeat: { fontFamily: fontFamilies.ui, ...typography.sm },
   repostLabelTarget: { minWidth: 0 },
+  webActionBarSlot: { paddingTop: spacing.sm },
+  webQuoteActionBar: { paddingTop: spacing.md },
 });

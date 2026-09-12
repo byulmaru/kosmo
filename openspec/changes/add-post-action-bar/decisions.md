@@ -569,11 +569,25 @@
 - Consequences: 이전 결정의 Native 28pt·28dp 임시 geometry만 대체한다. mutation·cache·Source target·Web theme 정책은 바꾸지 않는다. 실제 Web E2E, platform style 렌더 테스트, 실제 Native touch·focus·보조 기술 관찰을 구분한다. 현재 앱의 Light 고정 정책 때문에 Dark runtime을 OS preference 에뮬레이션으로 대체하지 않는다.
 - Confirmation / Follow-up: PROD-936은 390/1024/1440의 실제 Web route·Bookmark 성공/실패/재시도와 기존 navigation/scroll 회귀를 검증한다. Native 런타임에서 실행하지 못한 항목은 명시하며, PROD-632의 Clipboard 복구·공유 change archive task는 유지한다.
 
+### Web 액션바 주변 여백을 목록과 상세에서 넓힌다
+
+- Decision Date: 2026-09-12
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-936`, 2026-09-12 KST 사용자 승인 “그렇게 해봐” (Web 목록 위12·아래8, 상세 상하12 제안)
+- Status: Active
+- Context / Problem: Web 목록과 상세의 액션바가 본문과 구분선에 가깝게 보여 사용자가 위아래 여백 확대를 요청했다.
+- Decision Outcome: Web 일반 Text·Media·Quote·순수 Repost는 마지막 presentation부터 Bar까지12px, Bar 아래부터 구분선 안쪽까지8px을 둔다. 상세 Action Bar frame의 Web padding은 상하12px이다. Native 기존 세로 여백과 target, Web28px row·36px target·glyph·hover는 유지한다.
+- Alternatives Considered: Bar/control 자체를 키우면 승인된 target과 아이콘 geometry까지 바뀌므로 제외했다. 현재 밀도를 유지하는 대신 일반 목록과 상세가 각각8px 더 높아지는 여백 확대안을 사용자가 선택했다.
+- Consequences: 기존 surface wrapper와 spacing token을 재사용한다. Summary 유무에 관계없이 마지막 presentation부터 측정하며 Quote Source preview 내부4px, 상세 metadata→Summary8px·Summary→border4px·Summary 없는 metadata→border8px과 action 소유권을 보존한다. Figma 공유 원본 수정도 정확한 대상에 대한 2026-09-12 사용자 승인 후 반영했다.
+- Confirmation / Follow-up: PROD-936에서 기존 geometry Storybook과 390/1024/1440 Web 화면, Native 기존 style 연결을 검증했다. Figma Center 목록4종·상세3종도 같은 값으로 readback했으며 공유 change archive는 기존 task에 남긴다.
+
 ## Remaining Decisions
 
 - 없음.
 
 ## Superseded Decisions
+
+- 2026-09-12 `Web 액션바 주변 여백을 목록과 상세에서 넓힌다`는 이전 목록 spacing과 상세 frame 상하8px 결과 중 Web 부분만 대체한다. Native 기존 여백, 상세 metadata·Summary 간격과 thread current row 경계는 유지한다.
 
 - 2026-07-21 `고정된 단일 공개 컴포넌트 API`는 2026-07-26 `Post fragment와 private action을 단일 공개 컴포넌트에 조립한다`로 대체했다.
 - 2026-07-26 `Post fragment와 private action을 단일 공개 컴포넌트에 조립한다`와 `구현된 action은 composite parent fragment와 private child로 조립한다`는 2026-07-27 `Repost child와 최초 production surface를 하나의 전달 slice로 조립한다`로 대체했다.

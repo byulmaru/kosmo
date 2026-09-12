@@ -311,7 +311,11 @@ export function PostLayout({
         ) : null}
         <View style={styles.engagement} testID="post-layout-engagement">
           <PostActionSurface
-            actionBarStyle={[styles.actionBarFrame, { borderColor: theme.borderSubtle }]}
+            actionBarStyle={[
+              styles.actionBarFrame,
+              !compact && Platform.OS === 'web' ? styles.webActionBarFrame : null,
+              { borderColor: theme.borderSubtle },
+            ]}
             onDeleted={handleDeleted}
             onQuote={openQuote}
             reactionSummaryStyle={compact ? styles.compactReactionSummary : undefined}
@@ -388,6 +392,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     width: '100%',
   },
+  webActionBarFrame: { paddingVertical: spacing.md },
   engagement: { gap: spacing.xs, marginTop: spacing.sm, width: '100%' },
   compactReactionSummary: { display: 'none' },
   quoteSurface: { marginTop: spacing.lg },

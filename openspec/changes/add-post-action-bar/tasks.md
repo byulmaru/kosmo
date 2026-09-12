@@ -87,7 +87,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 **Verification**
 
 - 일반 Post·순수 Repost·Quote의 목록 final slot·상세 final Action Bar, link 비중첩과 순수 Repost Source target을 검증한다.
-- PROD-866 production의 일반 Text·Media는 카드 상단 12px·하단 4px과 Action Bar slot 상단 4·하단 0을 사용한다. 순수 Repost와 Quote는 slot 상단 0·하단 4px, 1px semantic divider color, 순수 Repost attribution line box 20과 Source 표준행까지 gap 0, Quote Source preview 내부 하단 padding 4px과 border 밖에서 Action Bar까지 8px을 유지한다.
+- 아래 완료 task의 PROD-866 spacing은 기존 이력이다. 현재 Web surface 여백은 9번 PROD-936의 위12·아래8과 상세 상하12를 우선한다. 기존 attribution·Source preview 내부4px·구분선·Native 여백 계약은 유지한다.
 - Web outside/Escape/focus return·keyboard navigation과 Native backdrop/back/dismiss/safe area·modal semantics를 검증한다.
 - menu label·item 선택 뒤 create/delete identity·pending, exact toast·latest-replace·동일 문구 반복 시 새 alert instance와 dismiss timer 재시작·자동 dismiss·alert semantics·light `#262626` accent·message 2px optical shift, 실패 뒤 상태 유지·menu 재시도를 검증한다.
 
@@ -119,7 +119,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 
 **Deliverable**
 
-canonical Figma Center·Mobile Text·Media `PostListItem` source는 카드 상단 12px·하단 4px, 기존 content gap 4px 뒤 Action Bar slot 상단 4px·하단 0을 사용한다. representative consumer의 Light·Dark·responsive 결과를 같은 target으로 동기화한다.
+이 그룹은 당시 canonical Figma Center·Mobile Text·Media의 카드12/4·slot4/0 동기화 완료 이력을 기록한다. 현재 Web Center surface의 여백은 9번 PROD-936 결정으로 부분 대체하며 Mobile Native 원본 수정은 포함하지 않는다.
 
 **Guardrails**
 
@@ -340,7 +340,7 @@ Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp targ
 
 **Guardrails**
 
-- Web geometry와 기존 action·Relay·navigation·Source target의 소유권을 변경하지 않는다.
+- Web Bar/control geometry와 기존 action·Relay·navigation·Source target의 소유권을 변경하지 않는다. 2026-09-12 추가 승인에 따라 Web surface 여백만 목록 위12·아래8, 상세 상하12로 늘린다.
 - target 높이를 layout에 포함하며 부모 밖 `hitSlop`·인접 target overlap·consumer별 보정과 새 dependency를 추가하지 않는다.
 - Media Viewer·Notification 자체 이관과 Composer·추가 기능은 기존 별도 이슈에 남긴다.
 - 현재 앱의 Light 고정 정책을 변경하지 않으며 OS Dark preference를 Dark runtime 증거로 보고하지 않는다.
@@ -356,6 +356,15 @@ Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp targ
 - [x] 9.2 Native 공용 control·Bar의 target44/48과 목록 inset16을 적용하고 가까운 렌더 회귀를 통과시킨다.
 - [x] 9.3 실제 API·세션을 쓰는 Web consumer·Bookmark 실패/재시도와 기존 navigation·scroll E2E를 통과시킨다.
 - [x] 9.4 App·Storybook·lint·OpenSpec 검증과 Figma 최종 대조를 완료하고 실제 Native 실행 결과·미검증 항목을 기록한다.
+- [x] 9.5 승인된 Web 목록 위12·아래8과 상세 frame 상하12 여백을 기존 surface 경계에 적용하고 Native 기존 여백·target을 보존한다.
+- [x] 9.6 기존 geometry Storybook·앱 검증과 390/1024/1440 Web 시각·상호작용 QA를 통과시키고, Figma Center 목록4종·상세3종의 승인·동기화 상태를 기록한다.
+
+**Web Spacing Verification Record (2026-09-12)**
+
+- 일반·Reply·Quote·순수 Repost의 실제 렌더 bounds와 상세 frame padding을 기존 Posts Storybook에서 검증했다. focused105개와 전체118파일/773개 Storybook 테스트, Native control·Bar·card renderer6개를 통과했다.
+- 앱 Relay·TypeScript check, 전체 ESLint·Prettier, Storybook 정적 build, scoped OpenSpec strict와 diff check를 통과했다. Native와 MediaViewer compact의 기존 여백 및 action·Source target 소유권은 유지했다.
+- 최종 정적 Storybook을 내장 Browser에서 확인했다: 390px Light 목록·인용·재게시, 1024px Dark 상세, 1440px Light 북마크 목록. 상세 More의 첫 항목 focus와 Escape 뒤 trigger 복귀도 확인했다. 이 증거는 실제 API·세션 E2E나 Native runtime 재실행을 뜻하지 않는다.
+- 2026-09-12 사용자 승인 후 Figma Center 목록4종(1924:1927·1924:1947·1924:1969·2187:4091)과 상세3종의 frame(7662:1544·7662:1594·7662:1663)을 동기화했다. 기존 `space/8`·`space/12`를 바인딩하고 Quote·순수 Repost Action slot의 고정32px을 HUG로 바꿔 추가 하단4px을 제거했다. 목록 위12·아래8과 상세 상하12를 readback했으며 Light·Dark ReactionSummary specimen에서도12/8을 확인했다. Mobile Native 원본과 iOS44/Android48 Bar는 그대로다.
 
 **Verification Record (2026-09-12)**
 
