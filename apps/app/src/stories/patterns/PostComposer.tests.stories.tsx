@@ -12,6 +12,7 @@ import baseMeta, {
   MobilePlayground as mobilePlaygroundStory,
   MobilePlaygroundContract as mobilePlaygroundContract,
   MobileRuntimeAltEditorContract as mobileRuntimeAltEditorContract,
+  OverlayGeometryContract as overlayGeometryContract,
   OverlayProgressRingContract as overlayProgressRingContract,
   PendingMediaContract as pendingMediaContract,
   Playground as playgroundContract,
@@ -47,6 +48,7 @@ export const MobileMediaFooterGeometryContract: Story = mobileMediaFooterGeometr
 export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
 export const MobileRuntimeAltEditorContract: Story = mobileRuntimeAltEditorContract;
 export const MobileFlexLayoutContract: Story = mobileFlexLayoutContract;
+export const OverlayGeometryContract: Story = overlayGeometryContract;
 export const OverlayProgressRingContract: Story = overlayProgressRingContract;
 export const PendingMediaContract: Story = pendingMediaContract;
 export const ProgressRingToneContract: Story = progressRingToneContract;
@@ -191,12 +193,14 @@ export const ShortViewportContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Composer 확장' }));
 
     const dialog = page.getByRole('dialog', { name: '글쓰기' });
-    const scroll = within(dialog).getByTestId('composer-overlay-scroll');
+    const outerScroll = within(dialog).getByTestId('composer-overlay-scroll');
+    const scroll = within(dialog).getByTestId('post-composer-overlay-scroll');
 
     expect(getComputedStyle(within(dialog).getByTestId('composer-overlay-surface')).overflow).toBe(
       'hidden',
     );
     expect(getComputedStyle(scroll).overflowY).toBe('auto');
+    expect(outerScroll.scrollHeight).toBe(outerScroll.clientHeight);
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
     scroll.scrollTop = scroll.scrollHeight;
     expect(scroll.scrollTop).toBeGreaterThan(0);
@@ -215,6 +219,6 @@ export const ShortViewportContract: Story = {
 
     await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 2 편집' }));
     expect(within(dialog).getByRole('heading', { name: '미디어 편집' })).toBeVisible();
-    expect(within(dialog).getByTestId('composer-overlay-scroll').scrollTop).toBe(0);
+    expect(outerScroll.scrollTop).toBe(0);
   },
 };

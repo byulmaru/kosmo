@@ -540,8 +540,12 @@ documentation·state specimen을 두 번째 행에 둔다.
   presentation, Media gallery/editor와 shell 진입점을 연결한다. Poll·Emoji와 `Image Edit`는 숨기며 `/compose`는 같은
   shell host에 위임한다. Web component·Storybook interaction 검증은 완료했고 Android/iOS 실제 keyboard·back·safe
   area·touch/focus 검증은 별도로 남아 있다.
-- Production Host는 일반 Web Overlay의 600px 폭과 가운데 정렬된 64px header를 유지하며, 85dvh를 넘는
-  content는 내부에서 scroll한다. 모바일은 header·공개 범위·footer를 고정하고 body와 media shelf가 남은 높이를
+- Production Host는 일반 Web Overlay의 600px 폭과 가운데 정렬된 64px header를 유지한다. 2026-09-12 작성 화면
+  검토 결정으로 Overlay의 `PostComposer` 외곽은 가용 높이에서 Empty source의 404px 높이를 유지하고, author와 editor
+  header·footer를 제외한 가운데 영역에서 body·CW·media를 함께 scroll한다. CW나 media 추가로 모달 외곽과
+  고정 영역이 이동하지 않는다. 짧은 viewport에서는 상위 Host의 85dvh 안으로 외곽을 줄이고 같은 가운데 영역만
+  scroll한다. Rail과 Figma 원본의
+  상태별 높이는 이 Product Overlay 결정으로 변경하지 않는다. 모바일은 header·공개 범위·footer를 고정하고 body와 media shelf가 남은 높이를
   채우되 짧은 viewport에서 함께 scroll한다. Media editor는 같은 제한 높이 안에서 별도 내부 scroll을 사용한다.
   editor 전환 시 composer와 upload owner를 유지해 복귀 focus와 breakpoint 전환 뒤 paste 경로를 보존한다.
 - 2026-09-12 작성 화면 검토 결정으로 Rail·Overlay·모바일 본문, CW와 Media editor의 ALT 입력은 focus 시

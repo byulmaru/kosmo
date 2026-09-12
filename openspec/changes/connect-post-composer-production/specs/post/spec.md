@@ -24,6 +24,14 @@
 - **THEN** 시스템은 작성 중인 Content Warning 문구를 예고 없이 지우지 않고 다시 표시한다
 - **AND** 별도 Content Warning 글자수 제한을 만들지 않고 기존 본문과의 합산 길이 정책을 유지한다
 
+#### Scenario: desktop Overlay에 CW 또는 Media 추가
+
+- **WHEN** desktop Overlay에서 Content Warning을 열거나 Media를 추가한다
+- **THEN** 시스템은 `PostComposer` 외곽과 author·editor header·footer의 위치를 유지한다
+- **AND** body·Content Warning·Media가 가운데 작성 영역을 함께 사용하고 넘치는 내용만 그 영역에서 scroll한다
+- **AND** 짧은 viewport에서는 Host의 제한 높이 안으로 외곽을 줄이고 author·editor header·footer를 계속 표시한다
+- **AND** Rail과 모바일 전체 화면의 기존 높이·scroll 계약을 변경하지 않는다
+
 #### Scenario: Media editor에서 작성 상태 보존
 
 - **WHEN** 사용자가 Ready Media의 thumbnail, ALT·민감 상태 또는 편집 action으로 `ComposerMediaEditor`를 연다

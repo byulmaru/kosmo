@@ -219,6 +219,56 @@ export function PostComposerTarget({
     items.some((item) => item.state !== 'ready') ||
     (body.trim().length === 0 && items.length === 0) ||
     remaining < 0;
+  const editorBody = (
+    <>
+      {contentWarningExpanded ? (
+        <View style={styles.contentWarning}>
+          <TextField
+            accessibilityLabel="콘텐츠 경고"
+            editable={!submitting}
+            onChangeText={onContentWarningChange}
+            placeholder="경고 문구를 입력하세요"
+            style={[styles.contentWarningField, composerFieldFocusStyle]}
+            value={contentWarning}
+          />
+        </View>
+      ) : null}
+
+      <View style={[styles.content, items.length > 0 ? styles.mediaContent : styles.textContent]}>
+        <TextArea
+          accessibilityLabel="게시물 내용"
+          editable={!submitting}
+          ref={bodyRef}
+          onChangeText={onBodyChange}
+          placeholder="무슨 일이 일어나고 있나요?"
+          style={[
+            styles.body,
+            items.length > 0 ? styles.mediaBody : styles.textBody,
+            surface === 'overlay' && items.length > 0 ? styles.overlayMediaBody : null,
+            { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
+            composerBodyFocusStyle,
+          ]}
+          value={body}
+        />
+        <PostComposerMediaItemsTarget
+          disabled={submitting}
+          media={items}
+          onEdit={onMediaEdit}
+          onRemove={onMediaRemove}
+          onRetry={(item) => onMediaRetry(item.key)}
+          sensitiveMedia={sensitiveMedia}
+        />
+        {error ? (
+          <Text
+            accessibilityRole="alert"
+            style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
+          >
+            {error}
+          </Text>
+        ) : null}
+      </View>
+    </>
+  );
 
   return (
     <View
@@ -226,6 +276,7 @@ export function PostComposerTarget({
       style={[
         styles.root,
         surface === 'rail' ? styles.rail : styles.overlay,
+        surface === 'overlay' && Platform.OS === 'web' ? styles.webOverlay : null,
         { backgroundColor: theme.backgroundCanvas },
       ]}
       testID="post-composer-target"
@@ -234,6 +285,7 @@ export function PostComposerTarget({
       <View
         style={[
           styles.editor,
+          surface === 'overlay' ? styles.overlayEditor : null,
           {
             backgroundColor: theme.backgroundElevated,
             borderColor: error ? theme.feedbackDangerBorder : theme.borderDefault,
@@ -299,51 +351,18 @@ export function PostComposerTarget({
           ) : null}
         </View>
 
-        {contentWarningExpanded ? (
-          <View style={styles.contentWarning}>
-            <TextField
-              accessibilityLabel="콘텐츠 경고"
-              editable={!submitting}
-              onChangeText={onContentWarningChange}
-              placeholder="경고 문구를 입력하세요"
-              style={[styles.contentWarningField, composerFieldFocusStyle]}
-              value={contentWarning}
-            />
-          </View>
-        ) : null}
-
-        <View style={[styles.content, items.length > 0 ? styles.mediaContent : styles.textContent]}>
-          <TextArea
-            accessibilityLabel="게시물 내용"
-            editable={!submitting}
-            ref={bodyRef}
-            onChangeText={onBodyChange}
-            placeholder="무슨 일이 일어나고 있나요?"
-            style={[
-              styles.body,
-              items.length > 0 ? styles.mediaBody : styles.textBody,
-              { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
-              composerBodyFocusStyle,
-            ]}
-            value={body}
-          />
-          <PostComposerMediaItemsTarget
-            disabled={submitting}
-            media={items}
-            onEdit={onMediaEdit}
-            onRemove={onMediaRemove}
-            onRetry={(item) => onMediaRetry(item.key)}
-            sensitiveMedia={sensitiveMedia}
-          />
-          {error ? (
-            <Text
-              accessibilityRole="alert"
-              style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
-            >
-              {error}
-            </Text>
-          ) : null}
-        </View>
+        {surface === 'overlay' ? (
+          <ScrollView
+            contentContainerStyle={styles.overlayScrollContent}
+            keyboardShouldPersistTaps="handled"
+            style={styles.overlayScroll}
+            testID="post-composer-overlay-scroll"
+          >
+            {editorBody}
+          </ScrollView>
+        ) : (
+          editorBody
+        )}
 
         <View style={styles.footer}>
           <View style={styles.tools}>
@@ -992,7 +1011,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   keyboardRow: { borderRadius: radius[8], borderWidth: borderWidths[1], height: 44 },
-  overlay: { maxWidth: 600, width: '100%' },
+  overlay: { height: 404, maxWidth: 600, width: '100%' },
+  overlayEditor: { flex: 1, minHeight: 0 },
+  overlayMediaBody: { minHeight: 80 },
+  overlayScroll: { flex: 1, minHeight: 0 },
+  overlayScrollContent: { minHeight: '100%' },
   progressRing: { height: 20, width: 20 },
   rail: { width: 326 },
   remaining: { width: 40, ...textStyles.uiCopyS, textAlign: 'right' },
@@ -1015,6 +1038,7 @@ const styles = StyleSheet.create({
   },
   visibilityMenuLeft: { left: 0 },
   visibilityMenuRight: { right: 0 },
+  webOverlay: { maxHeight: 'calc(85dvh - 64px)' as never },
   nativeVisibilityMenu: { position: 'relative', top: 0 },
   nativeVisibilityPosition: { position: 'absolute', width: 240 },
   visibilityBackdrop: { flex: 1 },
