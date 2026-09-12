@@ -20,7 +20,6 @@ let selectedProfileId: string | null = 'owner-a';
 let blockMutation: MutationOptions | null = null;
 let unblockMutation: MutationOptions | null = null;
 let commitUpdateCalls = 0;
-const resetCalls: string[] = [];
 
 const environment = {
   commitUpdate: (updater: (store: unknown) => void) => {
@@ -29,6 +28,7 @@ const environment = {
   },
   getStore: () => ({
     getSource: () => ({
+      has: () => false,
       getRecordIDs: () => ['block-a'],
     }),
   }),
@@ -60,7 +60,9 @@ mockModule('react-relay', {
   useRelayEnvironment: () => environment,
 });
 mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  useRelayActor: () => ({ resetActor: (profileId: string) => resetCalls.push(profileId) }),
+  useRelayActor: () => ({
+    resetActor: () => assert.fail('관계 mutation은 actor Store를 교체하지 않는다'),
+  }),
 });
 mockModule(new URL('../../relay/RelayEnvironmentBoundary.tsx', import.meta.url), {
   useRelayEnvironmentGeneration: () => generationRef,
@@ -68,12 +70,6 @@ mockModule(new URL('../../relay/RelayEnvironmentBoundary.tsx', import.meta.url),
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => ({ selectedProfileId }),
 });
-mockModule(new URL('./profileBlockCache.ts', import.meta.url), {
-  addProfileBlockToStore: () => undefined,
-  removeProfileBlockFromStore: () => undefined,
-  updateProfileBlockStatus: () => undefined,
-});
-
 type Controller = ReturnType<typeof UseProfileBlockMutations>;
 
 let useProfileBlockMutations: typeof UseProfileBlockMutations;
@@ -99,7 +95,6 @@ afterEach(async () => {
   blockMutation = null;
   unblockMutation = null;
   commitUpdateCalls = 0;
-  resetCalls.length = 0;
   controller = null;
 });
 
@@ -107,7 +102,7 @@ describe('ProfileBlockController', () => {
   it('기존 Profile ID인 생성 응답을 성공으로 처리한다', async () => {
     await renderController();
     const request = controller?.changeBlocked(
-      { handle: '@target', ownerProfileId: 'owner-a', targetProfileId: 'target-a' },
+      { ownerProfileId: 'owner-a', targetProfileId: 'target-a' },
       true,
     );
     assert.ok(request);
@@ -123,13 +118,12 @@ describe('ProfileBlockController', () => {
     );
     await request;
     await flushTasks();
-    assert.deepEqual(resetCalls, ['owner-a']);
   });
 
   it('selected actor 전환 뒤 도착한 이전 actor 응답을 거부한다', async () => {
     await renderController();
     const request = controller?.changeBlocked(
-      { handle: '@target', ownerProfileId: 'owner-a', targetProfileId: 'target-a' },
+      { ownerProfileId: 'owner-a', targetProfileId: 'target-a' },
       true,
     );
     assert.ok(request);
@@ -148,13 +142,12 @@ describe('ProfileBlockController', () => {
       null,
     );
     await assert.rejects(request, /inactive Profile/);
-    assert.deepEqual(resetCalls, []);
   });
 
   it('unblock payload의 제거된 관계 ID가 요청 ID와 같으면 성공한다', async () => {
     await renderController();
     const request = controller?.changeBlocked(
-      { handle: '@target', ownerProfileId: 'owner-a', profileBlockId: 'block-a' },
+      { ownerProfileId: 'owner-a', profileBlockId: 'block-a' },
       false,
     );
     assert.ok(request);
@@ -164,14 +157,12 @@ describe('ProfileBlockController', () => {
 
     await request;
     await flushTasks();
-    assert.equal(commitUpdateCalls, 1);
-    assert.deepEqual(resetCalls, ['owner-a']);
   });
 
   it('selected actor 전환 뒤 도착한 unblock 응답은 cache와 actor를 갱신하지 않는다', async () => {
     await renderController();
     const request = controller?.changeBlocked(
-      { handle: '@target', ownerProfileId: 'owner-a', profileBlockId: 'block-a' },
+      { ownerProfileId: 'owner-a', profileBlockId: 'block-a' },
       false,
     );
     assert.ok(request);
@@ -188,13 +179,12 @@ describe('ProfileBlockController', () => {
     await assert.rejects(request, /inactive Profile/);
     await flushTasks();
     assert.equal(commitUpdateCalls, 0);
-    assert.deepEqual(resetCalls, []);
   });
 
   it('unblock payload가 null이면 cache commit 없이 실패한다', async () => {
     await renderController();
     const request = controller?.changeBlocked(
-      { handle: '@target', ownerProfileId: 'owner-a', profileBlockId: 'block-a' },
+      { ownerProfileId: 'owner-a', profileBlockId: 'block-a' },
       false,
     );
     assert.ok(request);
@@ -204,7 +194,6 @@ describe('ProfileBlockController', () => {
 
     await assert.rejects(request, /did not confirm/);
     assert.equal(commitUpdateCalls, 0);
-    assert.deepEqual(resetCalls, []);
   });
 });
 

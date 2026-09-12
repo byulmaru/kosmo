@@ -4,6 +4,7 @@ import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { FollowButton as FollowButtonExport } from './FollowButton';
+import type { ProfileBlockAction as ProfileBlockActionExport } from './ProfileBlockAction';
 import type { ProfileListItem as ProfileListItemExport } from './ProfileListItem';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -11,7 +12,11 @@ import type { ProfileListItem as ProfileListItemExport } from './ProfileListItem
 const platform = { OS: 'web' };
 let renderer: ReactTestRenderer | null = null;
 const changeBlockedCalls: Array<{
-  change: { handle?: string | null; ownerProfileId: string; profileBlockId?: string | null };
+  change: {
+    ownerProfileId: string;
+    profileBlockId?: string | null;
+    targetProfileId?: string | null;
+  };
   nextBlocked: boolean;
 }> = [];
 const toastCalls: Array<{ message: string; tone: string }> = [];
@@ -32,8 +37,8 @@ mockModule('react-native', {
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => parts.join(''),
   useFragment: (fragment: unknown, reference: Record<string, unknown> | null) =>
-    String(fragment).includes('FollowButton_profileBlock on') ||
-    String(fragment).includes('FollowButton_profileBlockStatus on')
+    String(fragment).includes('ProfileBlockAction_profile on') ||
+    String(fragment).includes('ProfileBlockAction_profileBlock on')
       ? reference
       : reference && Object.keys(reference).length > 0
         ? reference
@@ -72,7 +77,11 @@ mockModule(new URL('./ProfileNameBlock.tsx', import.meta.url), {
 mockModule(new URL('./ProfileBlockController.tsx', import.meta.url), {
   useProfileBlockMutations: () => ({
     changeBlocked: async (
-      change: { handle?: string | null; ownerProfileId: string; profileBlockId?: string | null },
+      change: {
+        ownerProfileId: string;
+        profileBlockId?: string | null;
+        targetProfileId?: string | null;
+      },
       nextBlocked: boolean,
     ) => {
       changeBlockedCalls.push({ change, nextBlocked });
@@ -87,9 +96,11 @@ mockModule(new URL('./profileBlockErrors.ts', import.meta.url), {
 });
 
 let FollowButton: typeof FollowButtonExport;
+let ProfileBlockAction: typeof ProfileBlockActionExport;
 let ProfileListItem: typeof ProfileListItemExport;
 before(async () => {
   ({ FollowButton } = await import('./FollowButton'));
+  ({ ProfileBlockAction } = await import('./ProfileBlockAction'));
   ({ ProfileListItem } = await import('./ProfileListItem'));
 });
 
@@ -115,13 +126,13 @@ const profile = {
 test('내가 차단한 Profile은 고정된 차단 해제 action을 표시한다', async () => {
   await act(async () => {
     renderer = create(
-      createElement(FollowButton, {
-        profile: profile as never,
-        profileBlockStatus: {
-          blockedBy: false,
-          blocking: true,
-          profileBlockId: 'profile-block-a',
+      createElement(ProfileBlockAction, {
+        nextBlocked: false,
+        profileBlock: {
+          id: 'profile-block-a',
+          targetProfile: profile,
         } as never,
+        surface: 'button',
       }),
     );
   });
@@ -133,34 +144,19 @@ test('내가 차단한 Profile은 고정된 차단 해제 action을 표시한다
   assert.equal(button?.props.onFocus, undefined);
 });
 
-test('상대만 나를 차단한 Profile은 관계 버튼을 숨긴다', async () => {
-  await act(async () => {
-    renderer = create(
-      createElement(FollowButton, {
-        profile: profile as never,
-        profileBlockStatus: {
-          blockedBy: true,
-          blocking: false,
-          profileBlockId: null,
-        } as never,
-      }),
-    );
-  });
-  assert.equal(renderer?.toJSON(), null);
-});
-
 test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유한다', async () => {
   let unblockSuccesses = 0;
   await act(async () => {
     renderer = create(
-      createElement(FollowButton, {
-        onUnblockSuccess: () => (unblockSuccesses += 1),
-        profile: profile as never,
-        profileBlockStatus: {
-          blockedBy: true,
-          blocking: true,
-          profileBlockId: 'profile-block-a',
+      createElement(ProfileBlockAction, {
+        nextBlocked: false,
+        onFeedback: ({ status }: { status: string }) =>
+          status === 'success' ? (unblockSuccesses += 1) : undefined,
+        profileBlock: {
+          id: 'profile-block-a',
+          targetProfile: profile,
         } as never,
+        surface: 'button',
       }),
     );
   });
@@ -179,7 +175,6 @@ test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유
   assert.deepEqual(changeBlockedCalls, [
     {
       change: {
-        handle: 'kosmo',
         ownerProfileId: 'viewer',
         profileBlockId: 'profile-block-a',
       },
@@ -195,13 +190,13 @@ test('차단 해제 실패 시 확인창을 닫고 action으로 focus를 복귀�
   let focusCalls = 0;
   await act(async () => {
     renderer = create(
-      createElement(FollowButton, {
-        profile: profile as never,
-        profileBlockStatus: {
-          blockedBy: false,
-          blocking: true,
-          profileBlockId: 'profile-block-a',
+      createElement(ProfileBlockAction, {
+        nextBlocked: false,
+        profileBlock: {
+          id: 'profile-block-a',
+          targetProfile: profile,
         } as never,
+        surface: 'button',
       }),
     );
   });
@@ -227,9 +222,10 @@ test('차단 해제 실패 시 확인창을 닫고 action으로 focus를 복귀�
 test('관리 관계 fragment도 같은 차단 해제 action을 사용한다', async () => {
   await act(async () => {
     renderer = create(
-      createElement(FollowButton, {
-        profile: profile as never,
-        profileBlock: { id: 'profile-block-list' } as never,
+      createElement(ProfileBlockAction, {
+        nextBlocked: false,
+        profileBlock: { id: 'profile-block-list', targetProfile: profile } as never,
+        surface: 'button',
       }),
     );
   });
@@ -261,19 +257,17 @@ for (const os of ['ios', 'android'] as const) {
     platform.OS = os;
     await act(async () => {
       renderer = create(
-        createElement(FollowButton, {
-          profile: profile as never,
-          profileBlockStatus: {
-            blockedBy: false,
-            blocking: true,
-            profileBlockId: 'profile-block-a',
+        createElement(ProfileBlockAction, {
+          nextBlocked: false,
+          profileBlock: {
+            id: 'profile-block-a',
+            targetProfile: profile,
           } as never,
+          surface: 'button',
         }),
       );
     });
     const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
-    const wrapperStyle = Object.assign({}, ...button!.parent!.props.style.flat());
-    assert.equal(wrapperStyle.paddingVertical, undefined);
     assert.equal(button?.props.hitSlop, undefined);
   });
 }

@@ -25,7 +25,7 @@ const targetProfileId = 'target-a';
 const targetHandle = '@target';
 const connectionKey = 'SettingsBlockedProfiles_profileBlocks';
 const connectionId = ConnectionHandler.getConnectionID(ownerProfileId, connectionKey);
-const statusId = 'client:profileBlockStatus:target';
+const viewerStateId = 'client:target-a:viewerState';
 
 type NetworkSink = {
   complete(): void;
@@ -36,7 +36,6 @@ let environment: Environment;
 let sink: NetworkSink | undefined;
 let generation = 1;
 let selectedProfileId: string | null = ownerProfileId;
-const resetCalls: string[] = [];
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -57,7 +56,9 @@ mockModule('react-relay', {
   useRelayEnvironment: () => environment,
 });
 mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  useRelayActor: () => ({ resetActor: (profileId: string) => resetCalls.push(profileId) }),
+  useRelayActor: () => ({
+    resetActor: () => assert.fail('관계 mutation은 actor Store를 교체하지 않는다'),
+  }),
 });
 mockModule(new URL('../../relay/RelayEnvironmentBoundary.tsx', import.meta.url), {
   useRelayEnvironmentGeneration: () => ({ current: generation }),
@@ -90,12 +91,11 @@ afterEach(async () => {
   generation = 1;
   selectedProfileId = ownerProfileId;
   sink = undefined;
-  resetCalls.length = 0;
   controller = null;
 });
 
 describe('ProfileBlockController Relay cache boundary', () => {
-  it('partial GraphQL errors preserve Profile fields and remove the normalized failed relation', async () => {
+  it('partial GraphQL errors reject feedback while preserving the server-confirmed normalized state', async () => {
     environment = createEnvironment();
     const { request } = await beginBlock();
 
@@ -105,7 +105,9 @@ describe('ProfileBlockController Relay cache boundary', () => {
     });
 
     await assert.rejects(request, /partial response/);
-    assertUnchangedAfterFailedBlock('block-partial');
+    assertGeneralProfileUnchanged();
+    assert.deepEqual(connectionNodeIds(), ['block-partial']);
+    assert.equal(viewerProfileBlockId(), 'block-partial');
   });
 
   it('기존 Profile global ID로 relation을 정규화하고 Profile cache를 보존한다', async () => {
@@ -121,11 +123,10 @@ describe('ProfileBlockController Relay cache boundary', () => {
 
     assertGeneralProfileUnchanged();
     assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
-    assert.deepEqual(statusValues(), { blocking: true, profileBlockId: 'block-confirmed' });
-    assert.deepEqual(resetCalls, [ownerProfileId]);
+    assert.equal(viewerProfileBlockId(), 'block-confirmed');
   });
 
-  it('confirmed block updates the connection and status, then refreshes the actor', async () => {
+  it('confirmed block updates the connection and target viewer state without replacing the actor Store', async () => {
     environment = createEnvironment();
     const { request } = await beginBlock();
 
@@ -134,9 +135,7 @@ describe('ProfileBlockController Relay cache boundary', () => {
     await flushTasks();
 
     assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
-    assert.deepEqual(statusValues(), { blocking: true, profileBlockId: 'block-confirmed' });
-    assert.equal(resetCalls.length, 1);
-    assert.equal(resetCalls[0], ownerProfileId);
+    assert.equal(viewerProfileBlockId(), 'block-confirmed');
   });
 
   it('해제 응답의 삭제된 관계 ID가 요청 ID와 같을 때 connection과 status를 갱신한다', async () => {
@@ -144,13 +143,24 @@ describe('ProfileBlockController Relay cache boundary', () => {
     createRelation('block-confirmed');
     const { request } = await beginUnblock('block-confirmed');
 
-    respond({ data: { unblockProfile: { profileBlockId: 'block-confirmed' } } });
+    respond({
+      data: {
+        unblockProfile: {
+          profileBlockId: 'block-confirmed',
+          deletedProfileBlockId: 'block-confirmed',
+          targetProfile: {
+            __typename: 'Profile',
+            id: targetProfileId,
+            viewerState: { __typename: 'ProfileViewerState', profileBlock: null },
+          },
+        },
+      },
+    });
     await request;
     await flushTasks();
 
     assert.deepEqual(connectionNodeIds(), []);
-    assert.deepEqual(statusValues(), { blocking: false, profileBlockId: null });
-    assert.deepEqual(resetCalls, [ownerProfileId]);
+    assert.equal(viewerProfileBlockId(), null);
   });
 
   it('해제 응답이 null이면 기존 connection과 status를 보존한다', async () => {
@@ -158,12 +168,15 @@ describe('ProfileBlockController Relay cache boundary', () => {
     createRelation('block-confirmed');
     const { request } = await beginUnblock('block-confirmed');
 
-    respond({ data: { unblockProfile: { profileBlockId: null } } });
+    respond({
+      data: {
+        unblockProfile: { deletedProfileBlockId: null, profileBlockId: null, targetProfile: null },
+      },
+    });
     await assert.rejects(request, /did not confirm/);
 
     assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
-    assert.deepEqual(statusValues(), { blocking: true, profileBlockId: 'block-confirmed' });
-    assert.deepEqual(resetCalls, []);
+    assert.equal(viewerProfileBlockId(), 'block-confirmed');
   });
 });
 
@@ -176,10 +189,7 @@ async function renderController() {
 
 async function beginBlock() {
   await renderController();
-  const request = controller?.changeBlocked(
-    { handle: targetHandle, ownerProfileId, targetProfileId },
-    true,
-  );
+  const request = controller?.changeBlocked({ ownerProfileId, targetProfileId }, true);
   assert.ok(request);
   assert.ok(sink);
   return { request };
@@ -187,10 +197,7 @@ async function beginBlock() {
 
 async function beginUnblock(profileBlockId: string) {
   await renderController();
-  const request = controller?.changeBlocked(
-    { handle: targetHandle, ownerProfileId, profileBlockId },
-    false,
-  );
+  const request = controller?.changeBlocked({ ownerProfileId, profileBlockId }, false);
   assert.ok(request);
   assert.ok(sink);
   return { request };
@@ -218,16 +225,15 @@ function createEnvironment() {
   nextEnvironment.commitUpdate((store) => {
     const connection = store.create(connectionId, 'ProfileBlockConnection');
     connection.setLinkedRecords([], 'edges');
-    const status = store.create(statusId, 'ProfileBlockStatus');
-    status.setValue(false, 'blocking');
-    status.setValue(null, 'profileBlockId');
-    store.getRoot().setLinkedRecord(status, 'profileBlockStatus', { handle: targetHandle });
     const target = store.create(targetProfileId, 'Profile');
     target.setValue(targetProfileId, 'id');
     target.setValue('Original target', 'displayName');
     target.setValue(targetHandle, 'handle');
     target.setValue('example.com', 'domain');
     target.setValue('LOCAL', 'instanceKind');
+    const viewerState = store.create(viewerStateId, 'ProfileViewerState');
+    viewerState.setValue(null, 'profileBlock');
+    target.setLinkedRecord(viewerState, 'viewerState');
   });
   return nextEnvironment;
 }
@@ -245,9 +251,7 @@ function createRelation(relationId: string) {
       'ProfileBlockConnectionEdge',
     );
     ConnectionHandler.insertEdgeBefore(connection, edge);
-    const status = store.get(statusId);
-    status?.setValue(true, 'blocking');
-    status?.setValue(relationId, 'profileBlockId');
+    store.get(viewerStateId)?.setLinkedRecord(relation, 'profileBlock');
   });
 }
 
@@ -260,18 +264,14 @@ function blockPayload(relationId: string) {
         targetProfile: {
           __typename: 'Profile',
           id: targetProfileId,
+          viewerState: {
+            __typename: 'ProfileViewerState',
+            profileBlock: { __typename: 'ProfileBlock', id: relationId },
+          },
         },
       },
     },
   };
-}
-
-function assertUnchangedAfterFailedBlock(relationId: string) {
-  const source = environment.getStore().getSource();
-  assertGeneralProfileUnchanged();
-  assert.equal(source.get(relationId), null);
-  assert.deepEqual(connectionNodeIds(), []);
-  assert.deepEqual(statusValues(), { blocking: false, profileBlockId: null });
 }
 
 function assertGeneralProfileUnchanged() {
@@ -302,9 +302,9 @@ function connectionNodeIds() {
   });
 }
 
-function statusValues() {
-  const status = environment.getStore().getSource().get(statusId);
-  return { blocking: status?.blocking, profileBlockId: status?.profileBlockId };
+function viewerProfileBlockId() {
+  const viewerState = environment.getStore().getSource().get(viewerStateId);
+  return viewerState?.profileBlock?.__ref ?? null;
 }
 
 async function flushTasks() {

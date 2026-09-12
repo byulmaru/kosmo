@@ -518,6 +518,7 @@ type ProfileViewerState {
   followRequest: ProfileFollowRequest
   isSelf: Boolean!
   membership: AccountProfile
+  profileBlock: ProfileBlock
   profileMute: ProfileMute
 }
 
@@ -634,6 +635,7 @@ input UnblockProfileInput {
 
 type UnblockProfilePayload {
   profileBlockId: ID
+  targetProfile: Profile
 }
 
 input UnfollowProfileInput {
