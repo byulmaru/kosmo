@@ -163,6 +163,7 @@ const meta = {
     'MobilePlaygroundContract',
     'MobileRuntimeAltEditorContract',
     'MobileFlexLayoutContract',
+    'OverlayGeometryContract',
     'OverlayProgressRingContract',
     'PendingMediaContract',
     'ProgressRingToneContract',
@@ -957,6 +958,53 @@ export const OverlayProgressRingContract: Story = {
     expect(ring.querySelectorAll('circle')).toHaveLength(2);
     expect(ring.querySelectorAll('circle')[1]).toHaveAttribute('stroke', '#AE8512');
     expect(ring.parentElement?.lastElementChild).toBe(submit);
+  },
+};
+
+export const OverlayGeometryContract: Story = {
+  ...Playground,
+  args: {
+    body: '오버레이 외곽 높이를 유지할 본문',
+    contentWarning: '',
+    contentWarningExpanded: false,
+    items: readyComposerMedia.slice(0, 1),
+    remaining: 500,
+    surface: 'overlay',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const target = canvas.getByTestId('post-composer-target');
+    const visibilityTrigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
+    const submit = canvas.getByRole('button', { name: '게시' });
+    const scroll = canvas.getByTestId('post-composer-overlay-scroll');
+    const initialTargetTop = target.getBoundingClientRect().top;
+    const initialVisibilityTop = visibilityTrigger.getBoundingClientRect().top;
+    const initialSubmitTop = submit.getBoundingClientRect().top;
+
+    expect(target.getBoundingClientRect().height).toBe(404);
+    expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+
+    scroll.scrollTop = scroll.scrollHeight;
+    expect(scroll.scrollTop).toBeGreaterThan(0);
+    scroll.scrollTop = 0;
+
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
+
+    expect(target.getBoundingClientRect().top).toBe(initialTargetTop);
+    expect(target.getBoundingClientRect().height).toBe(404);
+    expect(visibilityTrigger.getBoundingClientRect().top).toBe(initialVisibilityTop);
+    expect(submit.getBoundingClientRect().top).toBe(initialSubmitTop);
+
+    await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 켜기' }));
+
+    expect(target.getBoundingClientRect().top).toBe(initialTargetTop);
+    expect(target.getBoundingClientRect().height).toBe(404);
+    expect(visibilityTrigger.getBoundingClientRect().top).toBe(initialVisibilityTop);
+    expect(submit.getBoundingClientRect().top).toBe(initialSubmitTop);
+    expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+
+    scroll.scrollTop = scroll.scrollHeight;
+    expect(scroll.scrollTop).toBeGreaterThan(0);
   },
 };
 
