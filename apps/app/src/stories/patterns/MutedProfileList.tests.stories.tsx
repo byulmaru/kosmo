@@ -1,5 +1,4 @@
 import { expect, userEvent, waitFor, within } from 'storybook/test';
-import { breakpoints } from '@/theme/tokens';
 import baseMeta, {
   FailureContract as failure,
   Mobile as mobile,
@@ -26,10 +25,8 @@ export const TargetGeometryContract: Story = {
       const rect = within(canvasElement)
         .getByRole('button', { name: `${args.displayName} 뮤트 해제` })
         .getBoundingClientRect();
-      const mobileViewport =
-        canvasElement.ownerDocument.documentElement.clientWidth < breakpoints.compact;
-      expect(rect.width).toBe(mobileViewport ? 88 : 72);
-      expect(rect.height).toBe(mobileViewport ? 40 : 32);
+      expect(rect.width).toBe(96);
+      expect(rect.height).toBe(40);
     });
   },
 };
