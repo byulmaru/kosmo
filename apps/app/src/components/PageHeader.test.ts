@@ -40,6 +40,7 @@ type PageHeaderProps =
   | {
       accessibilityLabel: string;
       brandAccessibilityLabel?: string;
+      brandCurrent?: boolean;
       brandHref?: string;
       leading?: ReactNode;
       onBrandCurrentNavigate?: () => void;
@@ -53,6 +54,7 @@ type TestElementProps = {
   accessibilityRole?: string;
   href?: string;
   children?: ReactNode;
+  current?: boolean;
   numberOfLines?: number;
   onCurrentNavigate?: () => void;
   style?: unknown;
@@ -207,5 +209,19 @@ test('brand variant keeps the route heading while naming its Home navigation lin
 
   assert.equal(heading?.props.children, '로컬');
   assert.ok(brandAction);
+  assert.equal(brandAction?.props.accessibilityLabel, '홈');
   assert.equal(brandAction.props.accessibilityRole, 'link');
+});
+
+test('Local brand keeps /home href while marking the current timeline', () => {
+  const header = renderHeader({
+    accessibilityLabel: '로컬',
+    brandCurrent: true,
+    brandHref: '/home',
+    variant: 'brand',
+  });
+  const navigationLink = findElements(header, 'NavigationLink')[0];
+
+  assert.equal(navigationLink?.props.href, '/home');
+  assert.equal(navigationLink?.props.current, true);
 });

@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { fn } from 'storybook/test';
 import LocalScreen from '@/app/(tabs)/(protected)/local';
+import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { RelayStoryProvider } from '../../../.storybook/mocks/react-relay';
@@ -123,6 +124,7 @@ type LocalState =
 
 type LocalStoryArgs = {
   actorBoundary?: boolean;
+  shellChrome?: boolean;
   showActorReset?: boolean;
   state: LocalState;
 };
@@ -234,8 +236,24 @@ function localRelayForState(state: LocalState) {
   }
 }
 
-function LocalPlayground({ actorBoundary = false, showActorReset = false, state }: LocalStoryArgs) {
+function LocalPlayground({
+  actorBoundary = false,
+  shellChrome = false,
+  showActorReset = false,
+  state,
+}: LocalStoryArgs) {
+  const homeReselectionRef = useRef<(() => void) | null>(null);
+  const registerHomeReselection = useCallback((handler: () => void) => {
+    homeReselectionRef.current = handler;
+    return () => {
+      if (homeReselectionRef.current === handler) {
+        homeReselectionRef.current = null;
+      }
+    };
+  }, []);
+  const reselectHome = useCallback(() => homeReselectionRef.current?.(), []);
   const relay = useMemo(() => localRelayForState(state), [state]);
+  const screen = showActorReset ? <LocalActorResetScreen /> : <LocalScreen />;
 
   return (
     <RelayStoryProvider
@@ -247,7 +265,19 @@ function LocalPlayground({ actorBoundary = false, showActorReset = false, state 
       paginationResponses={relay.paginationResponses}
       queryRequestObserver={queryRequestObserver}
     >
-      {showActorReset ? <LocalActorResetScreen /> : <LocalScreen />}
+      {shellChrome ? (
+        <ShellChromeProvider
+          navigationDrawerOpen={false}
+          openNavigationDrawer={() => undefined}
+          openProfileSwitcher={() => undefined}
+          registerHomeReselection={registerHomeReselection}
+          reselectHome={reselectHome}
+        >
+          {screen}
+        </ShellChromeProvider>
+      ) : (
+        screen
+      )}
     </RelayStoryProvider>
   );
 }
@@ -326,7 +356,7 @@ export const Full1440: Story = {
 };
 
 export const Refreshing: Story = {
-  args: { state: 'refreshing' },
+  args: { shellChrome: true, state: 'refreshing' },
   parameters: {
     controls: { disable: true },
     docs: {

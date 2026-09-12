@@ -3,7 +3,7 @@ import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import { semanticColors } from '../../theme/tokens';
-import type { ElementType } from 'react';
+import type { ElementType, ReactElement } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type * as ActionMenuModule from './ActionMenu';
 
@@ -34,7 +34,11 @@ mockModule('react-native', {
     },
   },
   Pressable: PressableHost,
-  StyleSheet: { absoluteFill: {}, create: <T>(styles: T) => styles },
+  StyleSheet: {
+    absoluteFill: {},
+    create: <T>(styles: T) => styles,
+    flatten: (style: unknown) => flattenStyle(style),
+  },
   Text: TextHost,
   View: 'View',
 });
@@ -49,6 +53,7 @@ mockModule('@/theme/ThemeProvider', {
     borderDefault: 'border',
     borderStrong: 'strong',
     borderSubtle: 'subtle',
+    danger: 'danger',
     feedbackDangerBase: 'danger',
     feedbackDangerOnSubtle: 'danger-on-subtle',
     foregroundPrimary: 'foreground',
@@ -131,6 +136,73 @@ test('Native ActionMenu runs a selected action after its exit finishes', async (
   await act(async () => renderer?.update(createElement(actionMenuModule!.ActionMenu, props)));
   assert.deepEqual(selected, ['first']);
   await act(async () => renderer?.unmount());
+});
+
+test('Native ActionMenu keeps a non-dismissible busy action and its error visible', async () => {
+  assert.ok(actionMenuModule);
+  const selected: string[] = [];
+  const props = {
+    accessibilityLabel: '메뉴',
+    error: '다시 시도해주세요.',
+    items: [
+      {
+        dismissOnSelect: false,
+        key: 'logout',
+        label: '로그아웃',
+        onSelect: () => selected.push('logout'),
+      },
+    ],
+    renderTrigger: ({ onPress }: { onPress: () => void }) =>
+      createElement(PressableHost, { onPress, testID: 'trigger' }),
+  };
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(actionMenuModule!.ActionMenu, props));
+  });
+
+  await act(async () => renderer?.root.findByProps({ testID: 'trigger' }).props.onPress());
+  const item = renderer?.root
+    .findAllByType(PressableHost)
+    .find((node) => node.props.accessibilityRole === 'menuitem');
+  await act(async () => item?.props.onPress());
+
+  assert.deepEqual(selected, ['logout']);
+  assert.equal(renderer?.root.findByType('Modal' as unknown as ElementType).props.visible, true);
+  assert.equal(
+    renderer?.root.findByProps({ accessibilityRole: 'alert' }).props.children,
+    '다시 시도해주세요.',
+  );
+  await act(async () => renderer?.unmount());
+});
+
+test('ActionMenu cannot be dismissed while disabled', async () => {
+  assert.ok(actionMenuModule);
+  const props = {
+    accessibilityLabel: '메뉴',
+    items: [{ key: 'logout', label: '로그아웃', onSelect() {} }],
+    renderTrigger: ({ onPress }: { onPress: () => void }) =>
+      createElement(PressableHost, { onPress, testID: 'trigger' }),
+  };
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(createElement(actionMenuModule!.ActionMenu, props));
+  });
+  await act(async () => renderer.root.findByProps({ testID: 'trigger' }).props.onPress());
+  await act(async () =>
+    renderer.update(createElement(actionMenuModule!.ActionMenu, { ...props, disabled: true })),
+  );
+
+  const modal = renderer.root.findByType('Modal' as unknown as ElementType);
+  await act(async () => modal.props.onRequestClose());
+  await act(async () =>
+    renderer.root.findByProps({ testID: 'action-menu-backdrop' }).props.onPress(),
+  );
+  await act(async () =>
+    renderer.root.findByProps({ accessibilityViewIsModal: true }).props.onAccessibilityEscape(),
+  );
+  assert.equal(modal.props.visible, true);
+
+  await act(async () => renderer.unmount());
 });
 
 test('Native ActionMenu uses left-aligned inset rows with subtle dividers', async () => {
@@ -256,6 +328,43 @@ test('Web ActionMenu stays mounted through exit motion before unmounting', async
   platformOS = 'ios';
 });
 
+test('Web ActionMenu exposes static item geometry to asChild renderers', async () => {
+  assert.ok(actionMenuModule);
+  platformOS = 'web';
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { addEventListener() {}, removeEventListener() {} },
+  });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { addEventListener() {}, removeEventListener() {} },
+  });
+  let itemStyle: unknown;
+  const props = {
+    accessibilityLabel: '메뉴',
+    items: [{ key: 'settings', label: '설정', onSelect() {} }],
+    renderItem: ({ children }: { children: ReactElement }) => {
+      itemStyle = (children.props as { style?: unknown }).style;
+      return children;
+    },
+    renderTrigger: ({ onPress }: { onPress: () => void }) =>
+      createElement(PressableHost, { onPress, testID: 'trigger' }),
+  };
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(actionMenuModule!.ActionMenu, props));
+  });
+  await act(async () => renderer?.root.findByProps({ testID: 'trigger' }).props.onPress());
+
+  assert.equal(typeof itemStyle, 'object');
+  const mergedStyle = { ...(itemStyle as Record<string, unknown>) };
+  assert.equal(mergedStyle.height, 36);
+  assert.equal(mergedStyle.minHeight, 36);
+  assert.equal(mergedStyle.paddingHorizontal, 8);
+  assert.equal(mergedStyle.position, 'relative');
+  await act(async () => renderer?.unmount());
+});
+
 test('danger menu items use a readable semantic foreground in both themes', async () => {
   assert.ok(actionMenuModule);
   const props = {
@@ -318,8 +427,7 @@ test('Web ActionMenu preserves focus when its parent refreshes equivalent items'
   let renderer: ReactTestRenderer;
   await act(async () => {
     renderer = create(createElement(actionMenuModule!.ActionMenu, props), {
-      createNodeMock: (element) =>
-        (element.props as { role?: string }).role === 'menu' ? menuNode : null,
+      createNodeMock: (element) => (element.type === 'AnimatedView' ? menuNode : null),
     });
   });
   await act(async () => renderer.root.findByProps({ testID: 'trigger' }).props.onPress());

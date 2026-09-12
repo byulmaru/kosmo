@@ -56,6 +56,8 @@ const LocalFragment = graphql`
 `;
 
 export default function LocalScreen() {
+  const shellChrome = useShellChrome();
+  const registerHomeReselection = shellChrome?.registerHomeReselection;
   const hasSuccessfulLocalRef = useRef(false);
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -66,9 +68,23 @@ export default function LocalScreen() {
       routeBoundaryRef.current?.refetch();
     }
   }, []);
+  const reselectFromShell = useCallback(() => {
+    if (Platform.OS === 'web') {
+      window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
+    }
+    refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !registerHomeReselection) {
+      return;
+    }
+
+    return registerHomeReselection(reselectFromShell);
+  }, [registerHomeReselection, reselectFromShell]);
 
   return (
-    <LocalFrame onReselect={refresh}>
+    <LocalFrame onReselect={refresh} onBrandCurrentNavigate={shellChrome?.reselectHome}>
       <RouteBoundary
         loading={<StateView loading title="로컬 타임라인을 불러오는 중입니다." />}
         error={(resetErrorBoundary) =>
@@ -97,14 +113,30 @@ export default function LocalScreen() {
   );
 }
 
-function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: () => void }>) {
+function LocalFrame({
+  children,
+  onBrandCurrentNavigate,
+  onReselect,
+}: PropsWithChildren<{
+  onBrandCurrentNavigate?: () => void;
+  onReselect: () => void;
+}>) {
   const shellChrome = useShellChrome();
   const { width } = useWindowDimensions();
   const routeOwnsHeader = getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
   return (
     <View style={styles.root}>
-      {routeOwnsHeader ? <PageHeader accessibilityLabel="로컬" variant="brand" /> : null}
+      {routeOwnsHeader ? (
+        <PageHeader
+          accessibilityLabel="로컬"
+          brandAccessibilityLabel="홈"
+          brandCurrent
+          brandHref={Platform.OS === 'web' ? '/home' : undefined}
+          onBrandCurrentNavigate={Platform.OS === 'web' ? onBrandCurrentNavigate : undefined}
+          variant="brand"
+        />
+      ) : null}
       <View
         style={
           Platform.OS === 'web'
