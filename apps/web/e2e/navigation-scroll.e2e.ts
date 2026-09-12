@@ -366,6 +366,67 @@ test('팔로워 요청 진입점은 full, compact와 mobile drawer에서 canonic
   await expect(drawer).toHaveCount(0);
 });
 
+test('팔로워 요청 최초 오류는 route 이탈에서 정리되고 같은 query로 재시도한다', async ({
+  page,
+}) => {
+  await signIn(page, 'e2e-follow-request-initial-error');
+  let requestCount = 0;
+
+  await page.route('**/graphql', async (route) => {
+    if (!isGraphQLOperation(route.request().postData(), 'FollowRequestsPageQuery')) {
+      await route.continue();
+      return;
+    }
+
+    requestCount += 1;
+    if (requestCount <= 2) {
+      await route.fulfill({
+        body: JSON.stringify({ errors: [{ message: 'E2E forced follow request error' }] }),
+        contentType: 'application/json',
+        status: 500,
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  try {
+    await page.goto('/follow-requests');
+    await expect(page.getByRole('alert')).toContainText('팔로워 요청을 불러오지 못했어요');
+    await expect(page.getByText('팔로워 요청을 불러오는 중입니다.')).toHaveCount(0);
+
+    await (
+      await visiblePrimaryNavigation(page)
+    )
+      .getByRole('link', {
+        name: '홈',
+        exact: true,
+      })
+      .click();
+    await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+
+    await (
+      await visiblePrimaryNavigation(page)
+    )
+      .getByRole('link', {
+        name: '팔로워 요청',
+        exact: true,
+      })
+      .click();
+    await expect(page.getByRole('alert')).toContainText('팔로워 요청을 불러오지 못했어요');
+    await page.getByRole('button', { name: '다시 시도' }).click();
+    await expect.poll(() => requestCount).toBe(2);
+    await expect(page.getByRole('alert')).toContainText('팔로워 요청을 불러오지 못했어요');
+    await page.getByRole('button', { name: '다시 시도' }).click();
+    await expect.poll(() => requestCount).toBe(3);
+    await expect(page.getByText('받은 팔로우 요청이 없어요')).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  } finally {
+    await page.unroute('**/graphql');
+  }
+});
+
 test('사이드바 Profile 요약의 편집 action은 canonical route를 연다', async ({ page }) => {
   await signIn(page, 'e2e-profile-edit-navigation');
 
