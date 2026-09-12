@@ -1,6 +1,6 @@
 ---
 name: openspec-apply-change
-description: Implement tasks from an OpenSpec change. Use when the user wants to start implementing, continue implementation, or work through tasks.
+description: Apply pending tasks in an existing OpenSpec change. Use when the user asks to implement or continue an existing change.
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
@@ -9,177 +9,24 @@ metadata:
   generatedBy: '1.3.1'
 ---
 
-Implement tasks from an OpenSpec change.
+# Apply an OpenSpec change
 
-**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+Use this skill only when implementation of an existing change is requested.
 
-**Steps**
+## Route
 
-1. **Select the change**
+1. Resolve the target change from the conversation. If it is absent and exactly one active change exists, use it; if several changes are plausible or the target is ambiguous, inspect `openspec list --json` and ask the user to choose. Do not guess.
+2. Read `openspec status --change "<name>" --json`, then `openspec instructions apply --change "<name>" --json`. Use the reported schema, context files, task list, and state rather than assuming artifact names.
+3. Read every file listed by `contextFiles`. Use those artifacts to locate canonical documents and Linear issues, but do not treat OpenSpec text as upstream authority.
+4. Independently re-read the referenced canonical `docs/domain` and `docs/design` documents and the current Linear issue bodies, relations, and contract-changing comments before relying on a requirement or decision.
+5. Implement pending tasks in dependency order, keeping each change within its declared scope. Mark a task complete when its implementation and relevant verification are complete, then continue through all actionable tasks.
 
-   If a name is provided, use it. Otherwise:
-   - Infer from conversation context if the user mentioned a change
-   - Auto-select if only one active change exists
-   - If ambiguous, run `openspec list --json` to get available changes and use the **AskUserQuestion tool** to let the user select
+## Stop conditions
 
-   Always announce: "Using change: <name>" and how to override (e.g., `/opsx:apply <other>`).
+Stop and report the concrete blocker when an artifact is missing, upstream authority is absent or conflicts, a pending requirement or task depends on an unresolved decision (`Blocked` or a non-superseded `Upstream Change Required` decision), a task is materially unclear, or a failure cannot be repaired within the authorized scope. For a recoverable command failure, fix its cause and rerun the affected check. Do not turn an OpenSpec-only product behavior into implementation. Align canonical → Linear → OpenSpec before continuing when upstream changes are needed.
 
-2. **Check status to understand the schema**
+If the change is already `all_done`, report that status and suggest the archive workflow. Otherwise, keep working until the tasks are complete or one of the stop conditions applies.
 
-   ```bash
-   openspec status --change "<name>" --json
-   ```
+## Completion report
 
-   Parse the JSON to understand:
-   - `schemaName`: The workflow being used (e.g., "spec-driven")
-   - Which artifact contains the tasks (typically "tasks" for spec-driven, check status for others)
-
-3. **Get apply instructions**
-
-   ```bash
-   openspec instructions apply --change "<name>" --json
-   ```
-
-   This returns:
-   - `contextFiles`: artifact ID -> array of concrete file paths (varies by schema - could be proposal/specs/design/decisions/tasks or spec/tests/implementation/docs)
-   - Progress (total, complete, remaining)
-   - Task list with status
-   - Dynamic instruction based on current state
-
-   **Handle states:**
-   - If `state: "blocked"` (missing artifacts): show message, suggest using openspec-continue-change
-   - If `state: "all_done"`: congratulate, suggest archive
-   - Otherwise: proceed to implementation
-
-4. **Read context files and discover upstream references**
-
-   Read every file path listed under `contextFiles` from the apply instructions output.
-   Use these artifacts to identify their declared canonical documents, Linear issues,
-   and requirement statements, but do not treat the OpenSpec text as authority yet.
-   The files depend on the schema being used:
-   - **spec-driven-decisions**: proposal, specs, design, decisions, tasks
-   - **spec-driven**: proposal, specs, design, tasks
-   - Other schemas: follow the contextFiles from CLI output
-
-5. **Verify authority independently**
-
-   Before treating any OpenSpec text as binding:
-   - Re-read the referenced canonical `docs/domain` and `docs/design` files from the
-     current branch.
-   - Fetch the referenced Linear issue bodies, relations, and contract-changing
-     comments directly from Linear. Do not rely on summaries copied into OpenSpec.
-   - If an upstream reference is missing or ambiguous, pause instead of guessing.
-
-   OpenSpec, a PR, a test, a future issue, or an excluded scope cannot prove that an
-   upstream product requirement exists. `Status: Active` means only that the
-   authority-traced decision currently applies inside the change. If a decision is
-   `Upstream Change Required` or `Blocked`, do not implement it; update and approve
-   canonical/Linear upstream sources first.
-
-6. **Show current progress**
-
-   Display:
-   - Schema being used
-   - Progress: "N/M tasks complete"
-   - Remaining tasks overview
-   - Dynamic instruction from CLI
-
-7. **Implement tasks (loop until done or blocked)**
-
-   For each pending task:
-   - Show which task is being worked on
-   - Make the code changes required
-   - Keep changes minimal and focused
-   - Mark task complete in the tasks file: `- [ ]` → `- [x]`
-   - Continue to next task
-
-   **Pause if:**
-   - OpenSpec conflicts with current canonical or Linear authority → treat upstream
-     as authoritative, pause implementation, and align artifacts in canonical →
-     Linear → OpenSpec order
-   - A task cites a blocked decision or OpenSpec-only product behavior → pause until
-     the upstream change is approved
-   - Task is unclear → ask for clarification
-   - Implementation reveals a design issue → suggest updating artifacts
-   - Error or blocker encountered → report and wait for guidance
-   - User interrupts
-
-8. **On completion or pause, show status**
-
-   Display:
-   - Tasks completed this session
-   - Overall progress: "N/M tasks complete"
-   - If all done: suggest archive
-   - If paused: explain why and wait for guidance
-
-**Output During Implementation**
-
-```
-## Implementing: <change-name> (schema: <schema-name>)
-
-Working on task 3/7: <task description>
-[...implementation happening...]
-✓ Task complete
-
-Working on task 4/7: <task description>
-[...implementation happening...]
-✓ Task complete
-```
-
-**Output On Completion**
-
-```
-## Implementation Complete
-
-**Change:** <change-name>
-**Schema:** <schema-name>
-**Progress:** 7/7 tasks complete ✓
-
-### Completed This Session
-- [x] Task 1
-- [x] Task 2
-...
-
-All tasks complete! Ready to archive this change.
-```
-
-**Output On Pause (Issue Encountered)**
-
-```
-## Implementation Paused
-
-**Change:** <change-name>
-**Schema:** <schema-name>
-**Progress:** 4/7 tasks complete
-
-### Issue Encountered
-<description of the issue>
-
-**Options:**
-1. <option 1>
-2. <option 2>
-3. Other approach
-
-What would you like to do?
-```
-
-**Guardrails**
-
-- Keep going through tasks until done or blocked
-- Always read context files before starting (from the apply instructions output)
-- Always verify canonical and Linear authority independently before reading OpenSpec
-  as an implementation contract
-- Never cite OpenSpec as evidence for an upstream requirement
-- If task is ambiguous, pause and ask before implementing
-- If implementation reveals issues, pause and suggest artifact updates
-- Keep code changes minimal and scoped to each task
-- Update task checkbox immediately after completing each task
-- Pause on errors, blockers, or unclear requirements - don't guess
-- Use contextFiles from CLI output, don't assume specific file names
-
-**Fluid Workflow Integration**
-
-This skill supports the "actions on a change" model:
-
-- **Can be invoked anytime**: Before all artifacts are done (if tasks exist), after partial implementation, interleaved with other actions
-- **Allows artifact updates**: If implementation reveals design issues, suggest updating artifacts - not phase-locked, work fluidly
+Report the schema, completed and remaining tasks, changed scope, and actual checks run with their results. Include the overall `N/M` progress. When all tasks and required verification are complete, state that the change is ready for archive.

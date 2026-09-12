@@ -1,21 +1,23 @@
 ---
 name: gh-review-coach
-description: Evidence-based coaching for implementation self-review and external GitHub PR review, including review-mode routing, delegated evidence checks, Korean findings, scope decisions, and explicit approval before external writes. Use for re-review, structure or responsibility-separation review, review comment drafting, request-changes decisions, scope-splitting feedback, or review-thread cleanup.
+description: Review owned changes or external GitHub PRs with evidence. Use for findings, review-state decisions, or thread cleanup.
 ---
 
 # GitHub Review Coach
 
+Classify the task as implementation self-review or external PR review, then load only the references for that mode.
+
 ## Route
 
-- Treat the user as the final decision-maker and classify the request as implementation self-review or external PR review before drawing conclusions.
-- Before reviewing, read the repository instructions, applicable `memory/` entrypoints, and the complete references for the selected mode. Do not infer completion from a search result or a truncated read; continue reading until the selected references are complete.
-- Always read [Mode And State](references/mode-and-state.md) and [Evidence](references/evidence.md).
-- For implementation self-review, also read [Implementation Self-Review](references/self-review.md).
-- For external PR review, also read [External Review](references/external-review.md).
-- If the review scope changes, reselect and read the newly applicable references in full.
+- Read repository instructions and applicable memory entrypoints.
+- Read [Mode And State](references/mode-and-state.md). For a new implementation review, changed-head re-review, or unresolved behavior, add [Evidence](references/evidence.md); then add [Implementation Self-Review](references/self-review.md), [External Review](references/external-review.md), [Test Evidence](references/test-evidence.md), or [OpenSpec Authority](references/authority.md) only when that surface is in scope. For an unchanged, already-scoped finding draft or authorized thread action, read only the mode and thread references needed for that action.
+- Establish the exact local snapshot or PR base/head before drawing conclusions. Trace changed behavior through its callers, owners, side effects, and tests.
+- Keep confirmed findings separate from suspicions, scope concerns, and decisions. Use Korean findings when repository guidance calls for it.
+- If the scope or snapshot changes, reread affected evidence.
 
-## Boundaries
+## Write boundary and completion
 
-- External PR review is read-only until the user explicitly authorizes the exact GitHub write. “리뷰해줘” alone does not authorize publishing, replying, resolving, approving, or requesting changes.
-- Inspect and explain before mutation. Delegate bounded evidence checks only after the mode, ownership, exact snapshot, and repository guidance are established; the main agent retains freshness checks, final verification, classification, severity, drafting, and GitHub writes.
-- Keep policy and authority decisions with the user and the applicable canonical or Linear source. OpenSpec, tests, and agreement between code and artifacts do not substitute for upstream authority.
+- External PR review stays read-only until the user authorizes the exact GitHub action. A review request alone does not authorize publishing, replying, resolving, approving, or requesting changes.
+- Self-review may fix authorized in-scope findings but never approves the author's own PR.
+- Keep policy and authority decisions with the user and applicable canonical or Linear source; tests and agreement between code and artifacts do not substitute for upstream authority.
+- Finish the requested review by covering the relevant evidence, presenting the findings and proposed action, and carrying out only the action that is authorized.

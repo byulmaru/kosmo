@@ -2,56 +2,23 @@
 
 ## Purpose
 
-- 커밋, 브랜치, PR, stacked PR 작업을 시작할 때 항상 먼저 읽는 짧은 라우터다.
-- 세부 절차는 작업 상황에 맞는 하위 메모리만 추가로 읽는다.
-- 기본 도구는 Git CLI와 공식 `github/gh-stack` GitHub CLI extension의 `gh stack`이다.
+- 커밋, 브랜치, PR 또는 stacked PR 작업을 할 때 적용하는 짧은 라우터다.
+- 현재 작업에 필요한 세부 문서만 추가로 읽는다. 커밋 정책, GitHub 운영, PR 작성과 Stack 유지보수는 각 canonical 문서가 소유한다.
 
-## Always Apply
+## Routing Rules
 
-- AI로 작업을 시작할 때는 사용자의 의도를 먼저 물어보고, 이미 대화에 명확히 드러난 의도가 있으면 그 의도를 작업 맥락으로 기록한다.
-- 커밋/브랜치/PR 작업 전 `git status --short --branch`로 현재 위치와 변경 범위를 확인한다.
-- 기능·계약 변경 브랜치 이름은 관련 Linear 이슈 ID를 그대로 사용한다.
-- 이미 열린 이슈의 범위 안에서 발견된 작은 후속 수정·hotfix는 별도 이슈를 형식적으로 만들지 않고
-  `<issue-id>-<short-description>` 브랜치를 사용할 수 있다. 독립 전달 결과나 별도 소유권이 생길 때만 새
-  이슈로 분리한다.
-- 행동을 보존하는 단순 리팩터링은 PR을 만들기 위해 Linear 이슈를 별도로 생성하지 않고 설명적인 브랜치 이름을 사용할 수 있다.
-- 이슈가 있는 작업은 하나의 브랜치가 하나의 Linear 이슈에 대응시키는 것을 기본으로 한다.
-- 새 PR은 단일 PR도 1-layer GitHub Stack으로 추적하고 `gh stack submit`으로 생성한다.
-- 후속 PR은 현재 Stack top에서 `gh stack add <branch>`로 추가한다.
-- `gh stack`을 사용할 수 없거나 실패하면 `gh pr create`나 일반 unstacked PR로 우회하지 않고
-  blocker와 관찰한 local/remote 상태를 보고한다.
-- 커밋은 되돌릴 수 있는 작업 체크포인트로 자주 남기되, 의도하지 않은 사용자 변경은 staging하지 않는다.
-- PR은 리뷰어가 독립적으로 이해하고 검증할 수 있는 하나의 기능적 변화만 담는다.
-- stacked PR의 리뷰 순서는 GitHub PR의 `baseRefName`/`headRefName`과 로컬 Git ancestry가 함께 결정한다.
-- Stack 생성·변경의 검증 기준과 1-layer REST 예외는 `memory/git-pr-workflow.md`를 따른다.
-- PR 제목과 본문은 한국어로 작성한다.
-- PR 제목에는 `[codex]` 같은 agent/tool 출처 prefix를 넣지 않는다.
-- PR 제목과 본문은 작업 시작 시 확인한 사용자 의도를 반영한다.
-- PR 본문은 `무엇을 변경했는지`, `왜 변경했는지`, `이번 PR의 주요 결정`, `어떻게 확인할 수 있는지`, `아직 어떤 문제가 남았는지` 순서를 기본으로 한다.
-- AI는 계획·구현 중 사람이 확정한 주요 결정과 이유를 PR 본문으로 정리할 수 있지만, 불명확한 내용을 새
-  결정처럼 추론하지 않는다.
-- unresolved review thread는 merge 전 남기지 않는다.
-- agent `Co-authored-by` trailer는 커밋 메시지나 PR 설명에 쓰지 않는다.
+- 작업 시작 전에 사용자의 명시된 의도와 `git status --short --branch`를 확인한다. 이미 의도가 정해졌다면 다시 묻지 않는다.
+- 이슈·브랜치·PR 범위와 소유권을 바꾸는 선택, 공개 결과·보안·롤아웃·되돌릴 수 없는 원격 상태를 바꾸는 선택만 사람 결정 경계로 올린다. 현재 요청과 기존 canonical contract 안의 routine 선택은 계속 진행한다.
+- 새 PR은 단일 PR이어도 공식 `github/gh-stack`의 1-layer Stack으로 만들고 `gh stack submit`으로 생성·갱신한다. `gh stack`이 실패하면 일반 `gh pr create`나 unstacked PR로 우회하지 않는다.
+- 의도하지 않은 사용자 변경을 staging하지 않는다. 변경의 scoped 결과, 필요한 검증과 수정까지 끝낸 뒤 보고한다.
 
-## Load More When Needed
+## Load By Task
 
-- staging 범위, 커밋 단위, 커밋 메시지를 판단해야 하면 `memory/commit-policy.md`를 읽는다.
-- 새 브랜치, 커밋, push, PR 생성/수정, 기본 stacked PR 작업을 해야 하면 `memory/git-pr-workflow.md`를 읽는다.
-- 부모 브랜치 rewrite, squash merge 이후 자식 PR 이어가기, reparent, force-push가 필요하면 `memory/git-stack-maintenance.md`를 읽는다.
-- PR 제목, 본문, Draft/Ready 전환, 한국어 작성 형식을 다뤄야 하면 `memory/pr-writing.md`를 읽는다.
-- 리뷰 스레드를 처리하거나 merge 전 unresolved thread를 정리해야 하면 `memory/review-thread.md`를 읽는다.
-- 리뷰 코멘트를 작성하는 업무라면 `memory/review-style.md`도 함께 읽는다.
+- 커밋 단위, staging 범위, 메시지: [`commit-policy.md`](commit-policy.md)
+- 브랜치, push, PR 생성·수정, merge와 Stack 상태: [`git-pr-workflow.md`](git-pr-workflow.md)
+- rebase, reparent, squash merge 이후 Stack 유지보수: [`git-stack-maintenance.md`](git-stack-maintenance.md)
+- PR 범위, 한국어 제목·본문, Draft/Ready: [`pr-writing.md`](pr-writing.md)
+- 리뷰 thread 처리: [`review-thread.md`](review-thread.md)
+- 리뷰 코멘트와 결론 형식: [`review-style.md`](review-style.md)
 
-## Minimum Checklist
-
-- 현재 브랜치가 `main`이 아닌 적절한 작업 브랜치인가.
-- `github/gh-stack` extension이 설치되어 있고 `gh stack --version`이 성공하는가.
-- 기능·계약 변경 브랜치는 대응되는 Linear 이슈 ID와 일치하는가. 기존 이슈의 작은 후속 브랜치라면 해당
-  이슈 ID와 짧은 설명을 사용했는가. 이슈 없는 브랜치라면 행동 보존 단순 리팩터링인가.
-- 단일 PR을 포함해 현재 브랜치가 의도한 Stack에 추적되고 있는가.
-- PR이 하나의 기능적 변화로 설명되는가.
-- 독립적으로 테스트하거나 수동 검증할 수 있는가.
-- 제목이 구현 방식이 아니라 PR의 의도와 달성하려는 결과를 설명하는가.
-- 제목과 본문이 한국어로 작성되어 있는가.
-- 본문에 변경 내용, 변경 이유, 사람이 소유한 주요 결정 또는 새 결정이 없다는 명시, 확인 방법, 남은 문제가 정리되어 있는가.
-- Draft가 아니라면 현재 HEAD가 정상 동작하는가.
+세부 문서를 읽을 때는 해당 파일을 처음부터 끝까지 읽는다. PR 본문은 한국어로 쓰며, agent `Co-authored-by` trailer는 커밋이나 설명에 넣지 않는다.
