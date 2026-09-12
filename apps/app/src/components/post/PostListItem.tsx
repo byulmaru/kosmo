@@ -1,7 +1,7 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
 import { useCallback, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -175,13 +175,13 @@ export function PostListItem({
     [openViewer, post.id],
   );
   const standardCardStyle = [
-    styles.card,
+    Platform.OS === 'web' ? styles.card : styles.nativeCard,
     styles.standardCard,
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
   ];
   const compactCardStyle = [
-    styles.card,
+    Platform.OS === 'web' ? styles.card : styles.nativeCard,
     styles.compactCard,
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
@@ -417,6 +417,9 @@ function PostListRow({
 const styles = StyleSheet.create({
   card: {
     paddingHorizontal: spacing.sm,
+  },
+  nativeCard: {
+    paddingHorizontal: spacing.lg,
   },
   standardCard: { paddingBottom: spacing.xs, paddingTop: spacing.md },
   compactCard: { paddingBottom: 1, paddingTop: spacing.sm },

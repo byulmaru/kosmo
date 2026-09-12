@@ -1,13 +1,20 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import {
+  createE2EFollow,
   createE2EPost,
+  createE2EProfile,
   createE2ERemoteProfile,
   createE2ESession,
   resetE2EDatabase,
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { readGraphQLOperation, toGlobalId, waitForGraphQLOperation } from './graphql';
+import {
+  isGraphQLOperation,
+  readGraphQLOperation,
+  toGlobalId,
+  waitForGraphQLOperation,
+} from './graphql';
 import type { Page } from '@playwright/test';
 
 test.beforeEach(async () => {
@@ -23,6 +30,211 @@ const gotoPostDetail = async (page: Page, path: string) => {
   expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
   expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
 };
+
+const expectGraphQLSuccess = async (response: Awaited<ReturnType<Page['waitForResponse']>>) => {
+  const body = (await response.json()) as { errors?: unknown[] };
+  expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
+  expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
+};
+
+const expectNoHorizontalOverflow = async (page: Page) => {
+  const dimensions = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+  }));
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+};
+
+const postArticle = (page: Page, body: string) =>
+  page.getByRole('article').filter({ hasText: body }).first();
+
+const postActionBar = (page: Page, body: string) =>
+  postArticle(page, body).getByRole('toolbar', { name: '액션 바' });
+
+test('현재 Light 정책의 실제 게시글 액션은 Home·Local·Profile·상세와 Web 3폭에서 같은 상태를 유지한다', async ({
+  context,
+  page,
+}) => {
+  test.setTimeout(120_000);
+
+  const body = 'E2E cross-route bookmark body';
+  const viewer = await createE2ESession({
+    displayName: 'E2E Cross Route Viewer',
+    handle: 'e2e-cross-route-viewer',
+  });
+  const author = await createE2EProfile({
+    displayName: 'E2E Cross Route Author',
+    handle: 'e2e-cross-route-author',
+  });
+  const post = await createE2EPost({
+    body,
+    profileId: author.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const postId = toGlobalId('Post', post.id);
+  const relativeHandle = `@${author.handle}`;
+  const detailPath = `/${relativeHandle}/${postId}`;
+
+  await createE2EFollow({
+    followerProfileId: viewer.profile!.id,
+    followeeProfileId: author.id,
+  });
+  await setE2ESessionCookie(context, viewer.token);
+
+  const routes = [
+    { path: '/home', query: 'HomePageQuery' },
+    { path: '/local', query: 'LocalPageQuery' },
+    { path: `/${relativeHandle}`, query: 'ProfilePostListPageQuery' },
+    { path: detailPath, query: 'PostDetailQuery' },
+    { path: '/bookmarks', query: 'BookmarksPageQuery' },
+  ] as const;
+  const widths = [390, 1024, 1440] as const;
+  let bookmarked = false;
+  let checkedMoreMenu = false;
+
+  await page.emulateMedia({ colorScheme: 'light' });
+
+  for (const width of widths) {
+    await page.setViewportSize({ height: 844, width });
+
+    for (const route of routes) {
+      const queryResponse = waitForGraphQLOperation(page, route.query);
+      await page.goto(route.path);
+      await expectGraphQLSuccess(await queryResponse);
+
+      const article = postArticle(page, body);
+      const actionBar = postActionBar(page, body);
+      const bookmark = article.getByRole('button', { name: /북마크/ });
+      await expect(article).toBeVisible();
+      await expect(actionBar).toBeVisible();
+      await expect(bookmark).toHaveAttribute('aria-pressed', String(bookmarked));
+      await expectNoHorizontalOverflow(page);
+
+      if (!checkedMoreMenu) {
+        const url = page.url();
+        await article.getByRole('button', { name: '더 보기' }).focus();
+        await page.keyboard.press('Enter');
+        const menu = page.getByRole('menu', { name: '더 보기 메뉴' });
+        await expect(menu).toBeVisible();
+        await expect(menu.getByRole('menuitem', { name: '링크 복사' })).toBeFocused();
+        await page.keyboard.press('Escape');
+        await expect(article.getByRole('button', { name: '더 보기' })).toBeFocused();
+        expect(page.url()).toBe(url);
+        checkedMoreMenu = true;
+      }
+
+      if (!bookmarked) {
+        const createResponse = waitForGraphQLOperation(
+          page,
+          'PostBookmarkActionCreateBookmarkMutation',
+        );
+        const url = page.url();
+        await bookmark.click();
+        await expectGraphQLSuccess(await createResponse);
+        await expect(bookmark).toHaveAttribute('aria-pressed', 'true');
+        expect(page.url()).toBe(url);
+        bookmarked = true;
+      }
+    }
+  }
+});
+
+test('실제 북마크 목록은 GraphQL 삭제 오류에서 상태를 보존하고 재시도 성공 후 제거한다', async ({
+  context,
+  page,
+}) => {
+  const body = 'E2E bookmark retry body';
+  const viewer = await createE2ESession({
+    displayName: 'E2E Bookmark Retry Viewer',
+    handle: 'e2e-bookmark-retry-viewer',
+  });
+  const author = await createE2EProfile({
+    displayName: 'E2E Bookmark Retry Author',
+    handle: 'e2e-bookmark-retry-author',
+  });
+  await createE2EPost({
+    body,
+    profileId: author.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  await createE2EFollow({
+    followerProfileId: viewer.profile!.id,
+    followeeProfileId: author.id,
+  });
+  await setE2ESessionCookie(context, viewer.token);
+  await page.goto('/home');
+  const homeArticle = postArticle(page, body);
+  const createResponse = waitForGraphQLOperation(page, 'PostBookmarkActionCreateBookmarkMutation');
+  await homeArticle.getByRole('button', { name: '북마크' }).click();
+  await expectGraphQLSuccess(await createResponse);
+  await expect(homeArticle.getByRole('button', { name: '북마크 취소' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+
+  const bookmarksQuery = waitForGraphQLOperation(page, 'BookmarksPageQuery');
+  await page.goto('/bookmarks');
+  await expectGraphQLSuccess(await bookmarksQuery);
+  const savedArticle = postArticle(page, body);
+  await expect(savedArticle).toBeVisible();
+  await expect(savedArticle.getByRole('button', { name: '북마크 취소' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+
+  let failDelete = true;
+  await page.route('**/graphql', async (route) => {
+    if (
+      failDelete &&
+      isGraphQLOperation(route.request().postData(), 'PostBookmarkActionDeleteBookmarkMutation')
+    ) {
+      failDelete = false;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: { deleteBookmark: null },
+          errors: [{ message: 'E2E bookmark delete failed' }],
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  const failedDeleteResponse = waitForGraphQLOperation(
+    page,
+    'PostBookmarkActionDeleteBookmarkMutation',
+  );
+  await savedArticle.getByRole('button', { name: '북마크 취소' }).click();
+  const failedDeleteBody = (await (await failedDeleteResponse).json()) as {
+    errors?: Array<{ message?: string }>;
+  };
+  expect(failedDeleteBody.errors?.[0]?.message).toBe('E2E bookmark delete failed');
+  await expect(page.getByRole('alert')).toContainText('북마크를 취소하지 못했습니다');
+  await expect(savedArticle).toBeVisible();
+  await expect(savedArticle.getByRole('button', { name: '북마크 취소' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+
+  const retryDeleteResponse = waitForGraphQLOperation(
+    page,
+    'PostBookmarkActionDeleteBookmarkMutation',
+  );
+  await savedArticle.getByRole('button', { name: '북마크 취소' }).click();
+  await expectGraphQLSuccess(await retryDeleteResponse);
+  await expect(savedArticle).toHaveCount(0);
+
+  const revisitQuery = waitForGraphQLOperation(page, 'BookmarksPageQuery');
+  await page.goto('/bookmarks');
+  await expectGraphQLSuccess(await revisitQuery);
+  await expect(postArticle(page, body)).toHaveCount(0);
+  await expect(page.getByText('아직 북마크가 없어요')).toBeVisible();
+  await expect(page).toHaveURL(/\/bookmarks$/);
+});
 
 test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link handle을 정규화한다', async ({
   context,

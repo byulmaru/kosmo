@@ -324,3 +324,45 @@ Reaction과 Repost가 전역 feedback 의미와 분리된 presentation semantic�
 - [x] 게시글·프로필 More 최소폭 160px, 다른 메뉴 기본 128px을 적용한다.
 - [x] Web callback 시점을 유지하면서 퇴장 중 항목을 보존하고 다음 open에서 갱신한다.
 - [x] ActionMenu 단위 테스트 5개, Pin·공용 메뉴·관련 More Storybook 147개, 타입 검사와 static build 검증을 완료한다.
+
+## 9. PROD-936 실제 Post consumer 검증과 Native target 적용
+
+**Authority / Provenance**
+
+- `PROD-936`
+- `docs/design/post-action-bar.md`, `docs/design/accessibility.md`, `docs/design/post-thread.md`
+- Figma `PostActionBar` 6604:48270와 2026-09-12 KST 사용자 계속 진행 승인
+
+**Deliverable**
+
+Home·Local·Profile·Bookmarks·상세/스레드의 기존 공용 presentation을 재사용하고 실제 데이터·액션 경로를 검증한다.
+Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp target, 목록 좌우 16px inset을 제공한다.
+
+**Guardrails**
+
+- Web geometry와 기존 action·Relay·navigation·Source target의 소유권을 변경하지 않는다.
+- target 높이를 layout에 포함하며 부모 밖 `hitSlop`·인접 target overlap·consumer별 보정과 새 dependency를 추가하지 않는다.
+- Media Viewer·Notification 자체 이관과 Composer·추가 기능은 기존 별도 이슈에 남긴다.
+- 현재 앱의 Light 고정 정책을 변경하지 않으며 OS Dark preference를 Dark runtime 증거로 보고하지 않는다.
+- Web E2E·Storybook·Native platform style 렌더와 실제 Native touch/보조 기술 검증을 구분한다. PROD-632 task 5.4·5.5는 유지한다.
+
+**Verification**
+
+- 실제 API·세션에서 390/1024/1440의 공통 action 상태, Bookmark 저장·해제, GraphQL 실패 시 row 유지와 실제 재시도 성공을 검증한다.
+- 기존 상세·thread·내부 링크·CW/민감한 미디어·pagination·scroll 회귀와 Web More keyboard·Escape·focus 복귀를 확인한다.
+- Native target44/48·visual28·glyph16·trailing group·접근성 state를 렌더 테스트로 검증하고 실제 Native 실행 결과와 미검증 항목을 별도로 기록한다.
+
+- [x] 9.1 최신 main의 consumer map과 canonical Figma source를 확인하고 기존 공용 presentation을 재사용한다. Bookmarks Storybook의 저장된 일반·Quote fixture와 pressed 상태를 정렬한다.
+- [x] 9.2 Native 공용 control·Bar의 target44/48과 목록 inset16을 적용하고 가까운 렌더 회귀를 통과시킨다.
+- [x] 9.3 실제 API·세션을 쓰는 Web consumer·Bookmark 실패/재시도와 기존 navigation·scroll E2E를 통과시킨다.
+- [x] 9.4 App·Storybook·lint·OpenSpec 검증과 Figma 최종 대조를 완료하고 실제 Native 실행 결과·미검증 항목을 기록한다.
+
+**Verification Record (2026-09-12)**
+
+- `pnpm --filter @kosmo/app test` 통과: Relay·TypeScript·전체 unit·정적 Storybook build와 118개 Storybook 파일/773개 interaction test.
+- Native renderer 회귀 6개는 실제 control·Bar·PostListItem의 플랫폼별 style/prop 연결을 검증한다. Yoga layout이나 touch 동작을 모사하지 않는다.
+- 실제 API·DB·세션·Web build의 `post-detail.e2e.ts`, `post-share-link.e2e.ts`, `timelines.e2e.ts`, `navigation-scroll.e2e.ts` 32개 통과. 삭제 오류만 GraphQL 응답 경계에서 한 번 주입하고 저장·재조회·재시도 삭제는 실제 서버를 사용했다.
+- app/web check, ESLint·Prettier, OpenSpec strict와 diff check 통과. Figma Web28/iOS44/Android48 source와 최종 정적 Storybook의 Bookmarks Light 선택 상태·상세 Dark·More focus 복귀를 대조했다.
+- iOS 26.5 시뮬레이터에서 실제 binary build와 현재 checkout의 Metro bundle 로딩·시작 화면까지 확인했다. 로그인 이후 Post touch·parent clipping·VoiceOver·focus 복귀와 Android runtime·TalkBack은 미검증이며 Native release gate로 남긴다.
+- Expo 개발 서버가 이번 QA에서 생성한 typed-route 선언이 있을 때 기존 `SettingsLinkRow.test.ts:92`의 `href: string` 타입 오류를 확인했다. 해당 test는 변경하지 않았고 QA 생성물을 별도 보관한 뒤 기존 CI와 같은 환경에서 위 앱 검증을 통과했다.
+- 이 기록은 PROD-632 task 5.4·5.5 완료나 공유 change archive를 의미하지 않는다.

@@ -557,6 +557,18 @@
 - Consequences: More consumer가 공용 메뉴의 최소폭을 지정한다. 이 결정은 More 표시만 확장하며 기존 Repost 메뉴의 128px 계약을 대체하지 않는다.
 - Confirmation / Follow-up: 기존 ActionMenu 단위 테스트로 퇴장 중 항목 유지·callback 시점·재열기를 검증하고 Pin Storybook에서 고정 전후 160px 폭을 확인한다. PROD-863이 이 변경의 검증을 소유하며 전체 OpenSpec archive는 기존 통합 책임을 유지한다.
 
+### PROD-936에서 Native target과 실제 Post consumer 검증을 연결한다
+
+- Decision Date: 2026-09-12
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-936`, `docs/design/post-action-bar.md`, `docs/design/accessibility.md`, Figma `PostActionBar` 6604:48270, 2026-09-12 KST 사용자 계속 진행 승인
+- Status: Active
+- Context / Problem: Web·Storybook의 공용 Post presentation 연결은 이미 존재하지만 Native는 이전 28pt·28dp 임시 target을 사용하고, 실제 API·세션을 통과하는 Bookmarks 상태·재시도 검증이 부족했다.
+- Decision Outcome: 기존 `PostActionControl`·`PostActionBar`에서 28px visual을 유지하며 iOS 44pt·Android 48dp target을 실제 layout에 포함한다. social target 너비는 50, More는 44/48이고 Bookmark·More visual은 오른쪽 정렬하며 trailing gap은 0이다. Native `PostListItem` 좌우 inset은 canonical Mobile 16px을 사용하고 Web 8px·28px row·36px target·82px trailing group은 유지한다. 실제 Home·Local·Profile·Bookmarks·상세/스레드는 기존 Relay·action·navigation 소유권을 재사용한다.
+- Alternatives Considered: 이전 Native target 유지는 확정된 Figma·접근성 target을 충족하지 못한다. 부모 밖 `hitSlop` 확장은 clipping·인접 target ownership을 남기므로 target 높이 자체를 layout에 포함한다. consumer별 보정이나 새 toolbar는 기존 공용 경계로 같은 계약을 적용할 수 있어 추가하지 않는다.
+- Consequences: 이전 결정의 Native 28pt·28dp 임시 geometry만 대체한다. mutation·cache·Source target·Web theme 정책은 바꾸지 않는다. 실제 Web E2E, platform style 렌더 테스트, 실제 Native touch·focus·보조 기술 관찰을 구분한다. 현재 앱의 Light 고정 정책 때문에 Dark runtime을 OS preference 에뮬레이션으로 대체하지 않는다.
+- Confirmation / Follow-up: PROD-936은 390/1024/1440의 실제 Web route·Bookmark 성공/실패/재시도와 기존 navigation/scroll 회귀를 검증한다. Native 런타임에서 실행하지 못한 항목은 명시하며, PROD-632의 Clipboard 복구·공유 change archive task는 유지한다.
+
 ## Remaining Decisions
 
 - 없음.

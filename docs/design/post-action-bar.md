@@ -12,7 +12,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `Platform=iOS`는 44pt, `Platform=Android`는 48dp인 Native target variant다. glyph·count·state layer와 내부 visual control은 28px을 유지하고 투명 touch-target wrapper만 세로로 확장한다. 28px visual은 wrapper의 세로 중앙에 두어 iOS는 위·아래 8pt, Android는 위·아래 10dp를 남긴다. More wrapper는 각각 44×44pt, 48×48dp이며 28px visual을 세로 중앙·가로 오른쪽에 맞춰 content column 끝선을 보존한다. 나머지 action slot 너비는 50px을 유지한다. Android canonical Home [`4524:3985`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-3985)·Local [`4524:4139`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-4139), iOS Home [`6619:7918`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6619-7918)과 iOS post-detail [`1943:2837`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-2837)이 해당 source를 소비한다. 이 Figma consumer 연결은 runtime 적용 완료 증거가 아니다.
 - Bar는 가용 너비를 채우고 Reply control slot의 왼쪽 경계와 More control slot의 오른쪽 경계를 PostBody가 사용하는 content column의 양끝에 맞춘다. 나머지 action은 그 사이를 `space-between`으로 분배한다. Figma의 302px frame은 기준 viewport의 측정값이며 production 고정 너비가 아니다.
 - Web의 Reply, Repost, Reaction, Bookmark layout slot은 최소 50px이고 More slot은 28px이다. 실제 target은 count가 있으면 숫자 `0`도 표시값으로 취급해 `왼쪽 6px + glyph 16px + gap 4px + 렌더된 count + 오른쪽 6px`을 HUG하고, count가 없으면 28×36px이다. leading Reply target은 slot 시작점에 맞춰 target·state layer가 content column의 왼쪽 경계에서 시작하고 glyph는 그보다 6px 안쪽에 둔다. Repost·Reaction·Bookmark target은 각 slot 가운데에 유지하며 target이 50px보다 넓을 때만 slot도 함께 늘린다. More glyph는 28px target 가운데에 둔다. action 사이의 분배 여백 전체를 interactive rectangle으로 확장하거나 인접 target과 겹치게 하지 않는다.
-- Native의 Reply, Repost, Reaction, Bookmark target 너비는 각각 50px이다. Bookmark target 안의 28px IconOnly visual과 More의 28px visual을 각각 오른쪽에 맞추고 두 target 사이 gap을 0으로 둔다. 따라서 iOS는 `50 + 44`, Android는 `50 + 48`인 인접 target을 만들며 hit area를 겹치지 않고 More target 오른쪽 경계를 content column 끝에 맞춘다.
+- Native의 Reply, Repost, Reaction, Bookmark target 너비는 각각 50px이다. Reply·Repost·Reaction의 glyph와 count 묶음은 target 가운데에 둔다. Bookmark target 안의 28px IconOnly visual과 More의 28px visual을 각각 오른쪽에 맞추고 두 target 사이 gap을 0으로 둔다. 따라서 iOS는 `50 + 44`, Android는 `50 + 48`인 인접 target을 만들며 hit area를 겹치지 않고 More target 오른쪽 경계를 content column 끝에 맞춘다.
 - 모든 glyph의 visual box는 16×16px, glyph와 count 사이는 4px다. count는 16px 한 줄이며 icon과 시각 중심을 맞춘다.
 - 순서는 `Reply → Repost → Reaction → Bookmark → More`로 고정한다. Reply와 Repost만 count를 표시하고 Reaction·Bookmark·More에는 count slot을 만들지 않는다.
 - Web의 trailing group은 Bookmark 50px, 간격 4px, More 28px을 묶은 exact 82px이며 Bar의 오른쪽 끝에 맞춘다.
@@ -38,9 +38,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   이 폭을 함께 채운다. Reaction Summary에 별도 314px 고정 폭을 두지 않으므로 왼쪽 치우침이나 우측 clipping 없이
   같은 column edge에 정렬되고, 표시 여부가 바뀌면 세로 Auto Layout이 하단 border를 자연스럽게 이동한다.
 - Web production `PostListItem`은 `Size=Center`와 같은 카드 상단 12px·좌우 `spacing.sm` 8px·하단 4px,
-  목록 전용 Action Bar slot 상단 4px·하단 0을 사용한다. Mobile의 좌우 16px과 iOS 44pt·Android 48dp
-  touch-target wrapper는 현재 Figma target이며, Native production 적용은 관련 Product 이슈와 OpenSpec
-  spec·task를 연결한 뒤 구현과 runtime 검증을 함께 진행한다.
+  목록 전용 Action Bar slot 상단 4px·하단 0을 사용한다. PROD-936은 Native의 좌우 `spacing.lg` 16px과
+  iOS 44pt·Android 48dp target을 같은 공용 production 경계에 적용한다. Native Bar와 slot은 target 높이를
+  실제 layout에 포함하며, 부모 밖으로 확장하는 `hitSlop`이나 고정 28px 부모 안의 overlap을 사용하지 않는다.
+  코드·렌더 검증과 실제 Native touch·focus 검증은 별도 증거로 기록한다.
 
 ## Action semantic colors
 
@@ -74,9 +75,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 ## 플랫폼 rollout과 release gate
 
-- 현재 출시 범위는 Web이며, runtime의 Native platform file도 아직 같은 28px geometry를 사용한다. Figma의 iOS 44pt·Android 48dp variant와 위 Target consumer는 구현 전 비교·handoff evidence다.
-- Native 구현은 28px visual을 유지한 채 Figma target wrapper와 같은 최소 hit area를 제공하되, 인접 target overlap과 화면별 action 정렬을 runtime에서 다시 결정·검증한다.
-- Native target 복구, VoiceOver·TalkBack focus boundary, touch 입력과 bottom sheet runtime 관찰은 Native release gate다. 현재 PROD-414 완료나 Web 검증으로 대체하지 않는다.
+- 현재 출시 범위는 Web이다. PROD-936의 Native 구현은 28px visual을 유지하고 iOS 44pt·Android 48dp target을 제공한다.
+- Native target의 실제 layout·인접 target 비중첩·화면별 정렬, VoiceOver·TalkBack focus boundary, touch 입력과
+  bottom sheet runtime 관찰은 Native release gate다. platform style 렌더 테스트나 Web 검증으로 대체하지 않는다.
 
 ## Surface 배치
 
@@ -330,6 +331,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `PROD-809`는 Profile 고정의 최대 수·대상 자격·권한·lifecycle·pagination·persistence/API·ActivityPub과
   교체 mutation·동시성·실패 처리 정책, 실제 Production·runtime 검증을 소유한다.
 - `PROD-425`는 pure Repost Reply의 바깥 contentless Post binding과 disabled 상태를 소유한다.
+- `PROD-936`은 Home·Local·Profile·Bookmarks·상세/스레드의 공용 presentation 재사용 확인, 실제 Web 데이터·액션
+  회귀 검증과 Native target·목록 inset 적용을 소유한다. Media Viewer·Notification 자체 이관과 Clipboard
+  runtime 복구·공유 OpenSpec archive 소유권은 각각 기존 이슈에 유지한다.
 - Reaction, Bookmark, More의 실제 연결과 여러 action의 최종 통합, guest 인증 진입, valid 세션의 Profile
   선택기 진입과 session error 비활성화는 각 구현 이슈와 `PROD-432`가 소유한다.
 
@@ -356,8 +360,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   있어야 한다. selected Profile이 있고 Reply
   surface가 닫힌 기본 상태에서도 빈 wrapper가 남지 않으며 Engagement 아래부터 current row 끝까지 4px이고
   current row 뒤 별도 thread divider가 없는지 exact geometry로 검증한다.
-- 모든 플랫폼 구현에서 Bar와 visual/layout slot 높이 28, Reply·More layout slot endpoint의 content column 양끝 정렬, social layout slot 최소 너비 50, More 너비
-  28, glyph 16, icon-count gap 4와 고정 순서를 검증한다. Web에서는 count가 있으면 숫자 `0`을 포함해 target
+- 모든 플랫폼에서 28px visual, Reply·More target endpoint의 content column 양끝 정렬, glyph 16,
+  icon-count gap 4와 고정 순서를 검증한다. Web의 Bar·slot 높이는 28, social slot 최소 너비는 50,
+  More 너비는 28이다. count가 있으면 숫자 `0`을 포함해 target
   너비가 `6 + 16 + 4 + 렌더된 count 너비 + 6`, count가 없으면 28×36인지 확인한다. social slot은
   `max(50, target 너비)`이고 leading Reply target은 slot 시작에, 나머지 social target은 가운데에 정렬하며,
   Bookmark 50 + gap 4 + More 28 trailing group이 exact
@@ -375,8 +380,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   label·8px 좌우 padding·border·`0 2px 4px` shadow를 제공하는지 검증한다. open/close, focus 복귀와
   키보드 이동도 함께 검증한다.
 - Native bottom action sheet의 backdrop·back dismiss, safe area, modal 접근성과 menu item target을 검증한다.
-- Native 44pt·48dp Action Bar target과 VoiceOver·TalkBack runtime은 출시 전 후속 gate로 남기고, 현재 28px
-  공통 구현의 완료 증거로 보고하지 않는다.
+- Native는 iOS 44pt·Android 48dp Bar·target 높이, social 너비 50, More 너비 44/48, gap 없는 trailing
+  group과 Bookmark·More의 오른쪽 정렬을 검증한다. 실제 touch·VoiceOver·TalkBack runtime 관찰은 출시 전
+  gate로 남기며 platform style 렌더 검증을 runtime 완료로 보고하지 않는다.
 - 순수 Repost에서 Reply는 바깥 contentless Repost identity를 유지해 disabled이고,
   Repost·Reaction·Bookmark·More만 direct Source Post를 대상으로 사용하는지 검증한다.
 - Post 본문과 Quote Source의 클릭 가능한 외부 링크가 Light·Dark `actionLinkBase`를 사용하고 밑줄과
