@@ -25,9 +25,9 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 
 ## Android Google Play internal and closed testing (Alpha)
 
-`Native Store Distribution`의 Android job은 `main`에서 수동 실행하는 protected workflow의 일부다. 하나의 dispatch가 Android와 iOS job을 함께 시작하며 두 job은 서로 독립적으로 실행된다. 매 실행마다 clean CNG Android project를 만들고, Fastlane이 upload key로 서명한 Release AAB를 한 번 빌드·업로드한 뒤 같은 Play edit에서 반환된 versionCode를 Google Play internal track과 closed testing의 Alpha track에 함께 지정한다. Play가 package name, versionCode, upload certificate를 검증한다. versionCode는 고정 기준값 `210579434`에 GitHub Actions `run_number`를 더해 계산하므로 새 workflow run마다 증가하고, 같은 run의 재실행에서는 같은 값을 유지한다. 결과는 양의 정수이며 Android signed 32-bit 범위 안에 있다. 이미 업로드에 성공한 run을 재실행하면 같은 versionCode를 다시 사용하므로 새 AAB를 업로드할 수 없다. 새 versionCode가 필요하면 새 workflow run을 시작한다. Play API를 미리 조회하거나 장기 credential을 저장하지 않는다.
+`Native Store Distribution`의 Android job은 `main`에서 수동 실행하는 protected workflow의 일부다. 하나의 dispatch가 Android와 iOS job을 함께 시작하며 두 job은 서로 독립적으로 실행된다. 매 실행마다 clean CNG Android project를 만들고, Fastlane이 upload key로 서명한 Release AAB를 한 번 빌드·업로드한 뒤 첫 Play edit에서 반환된 versionCode를 Google Play internal track에 지정하고 commit한다. 이어서 새 Play edit에서 같은 versionCode를 closed testing의 Alpha track에 지정하고 commit한다. Play가 package name, versionCode, upload certificate를 검증한다. versionCode는 고정 기준값 `210579434`에 GitHub Actions `run_number`를 더해 계산하므로 새 workflow run마다 증가하고, 같은 run의 재실행에서는 같은 값을 유지한다. 결과는 양의 정수이며 Android signed 32-bit 범위 안에 있다. 이미 업로드에 성공한 run을 재실행하면 같은 versionCode를 다시 사용하므로 새 AAB를 업로드할 수 없다. 새 versionCode가 필요하면 새 workflow run을 시작한다. Play API를 미리 조회하거나 장기 credential을 저장하지 않는다.
 
-이 앱의 Play app, Google 관리 Play App Signing, upload key는 이미 설정되어 있다. workflow는 새 AAB를 한 번 업로드하고, 같은 Play edit에서 반환된 versionCode를 Internal track과 Alpha track의 release에 함께 지정한다. `release_status` 입력은 두 track에 같은 값으로 적용된다. 앱이 아직 draft 상태인 최초 실행에서는 `release_status`를 `draft`로 선택하고, 두 track의 release를 Play Console에서 검토·제출한다. 검토가 끝나 draft 상태를 벗어난 뒤의 실행은 기본값인 `completed`를 사용한다. Play Console에서 다음 Internal/Alpha 설정과 CI 자산을 확인한다.
+이 앱의 Play app, Google 관리 Play App Signing, upload key는 이미 설정되어 있다. workflow는 새 AAB를 한 번 업로드하고, 첫 Play edit에서 반환된 versionCode를 Internal track에 지정해 commit한 뒤 새 edit에서 같은 versionCode를 Alpha track의 release에 지정해 commit한다. `release_status` 입력은 두 track에 같은 값으로 적용된다. `draft`는 두 track에 출시 초안을 저장하며 테스터에게 자동 제공하지 않는다. `completed`는 두 track의 출시를 요청하며 앱·트랙 상태에 따라 commit이 거부될 수 있다. 내부 테스트 출시와 Alpha 심사·제출은 별도 절차다. Play Console에서 다음 Internal/Alpha 설정과 CI 자산을 확인한다.
 
 1. internal testing track의 tester 목록을 유지하고, closed testing의 Alpha track에 Doply tester 목록을 연결하며 출시 국가/지역에 대한민국을 포함한다.
 2. [Terraform outputs](../terraform/README.md)의 `android_play_service_account` service account를 Play Console Users and permissions에 추가하고 `Release apps to testing tracks` 권한만 부여한다.
@@ -49,7 +49,7 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 
 `Native Store Distribution`의 Android job은 조직 수준 `VAULT_ADDR`와 `VAULT_GITHUB_ACTIONS_AUDIENCE`, 저장소 수준 `TAILSCALE_OAUTH_CLIENT_ID`와 `TAILSCALE_AUDIENCE`를 사용한다. Vault tailnet에 접속한 뒤 GitHub OIDC JWT로 `kosmo-native-store-distribution` role을 인증하고 실행 중에만 서명 값을 읽는다. Vault role과 policy는 `prod` Environment의 이 workflow만 해당 경로를 읽도록 제한해야 한다.
 
-Internal과 Alpha track 변경은 AAB 업로드와 같은 Play edit에서 한 번에 commit된다. 업로드가 반환한 versionCode를 두 track에 지정하므로 promote로 원본 track을 비활성화하지 않는다.
+Internal track 변경은 먼저 별도 Play edit에서 commit되고, Alpha track 변경은 새 edit에서 같은 versionCode로 뒤이어 commit된다. Alpha commit이 실패해도 이미 commit된 Internal 변경은 남는다. 업로드가 반환한 versionCode를 두 track에 지정하므로 promote로 원본 track을 비활성화하지 않는다.
 
 upload key 예시는 다음과 같다. password는 명령행이나 저장소에 넣지 말고 `keytool` prompt에서 입력한다.
 
