@@ -411,8 +411,9 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(rendered('ProfileHero').length, 1);
     assert.equal(rendered('PostList').length, 1);
     assert.equal(rendered('StateView').length, 0);
-    const route = renderer?.toJSON();
-    assert.ok(route && !Array.isArray(route));
+    const tree = renderer?.toJSON();
+    const route = Array.isArray(tree) ? tree[0] : tree;
+    assert.ok(route);
     assert.deepEqual(
       route.children?.map((child) => (typeof child === 'string' ? child : child.type)),
       ['PageHeader', 'ProfileHero', 'PostList'],
@@ -705,7 +706,13 @@ describe('profile route parameter lifecycle', () => {
     profileAvailable = false;
     profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
 
-    await renderRoute('@blocked');
+    await renderRoute('@blocked', '/@blocked');
+
+    const header = requireRendered('PageHeader');
+    assert.equal(header.props.title, '');
+    assert.ok(header.props.leading);
+    await act(async () => header.props.leading.props.onPress());
+    assert.equal(routerBackCount, 1);
 
     assert.equal(requireRendered('StateView').props.title, '차단한 프로필입니다');
     assert.equal(rendered('ProfileHero').length, 0);
@@ -734,7 +741,13 @@ describe('profile route parameter lifecycle', () => {
     profileAvailable = false;
     profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
 
-    await renderRoute('@blocked');
+    await renderRoute('@blocked', '/@blocked');
+
+    const header = requireRendered('PageHeader');
+    assert.equal(header.props.title, '');
+    assert.ok(header.props.leading);
+    await act(async () => header.props.leading.props.onPress());
+    assert.equal(routerBackCount, 1);
 
     assert.equal(requireRendered('StateView').props.title, '이 프로필을 볼 수 없습니다');
     assert.equal(rendered('Button').length, 0);

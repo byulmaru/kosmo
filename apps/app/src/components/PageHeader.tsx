@@ -80,8 +80,6 @@ export function PageHeader(props: PageHeaderProps) {
             <View
               accessible
               accessibilityRole="header"
-              ellipsizeMode={props.titleLines === 1 ? 'tail' : undefined}
-              numberOfLines={props.titleLines}
               ref={props.headingRef}
               style={styles.titleFocusTarget}
               {...(Platform.OS === 'web' ? { tabIndex: -1 as const } : { focusable: true })}
