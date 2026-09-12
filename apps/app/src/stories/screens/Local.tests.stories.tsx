@@ -3,6 +3,7 @@ import baseMeta, {
   InitialErrorRetry as initialErrorRetry,
   PaginationErrorRetry as paginationErrorRetry,
   PaginationFlow as paginationFlow,
+  queryRequestObserver,
   RefreshHardError as refreshHardError,
   RefreshHardErrorActorCleanup as refreshHardErrorActorCleanup,
   Refreshing as refreshing,
