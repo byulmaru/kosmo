@@ -13,8 +13,8 @@ import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
+import { IconButton } from '@/components/ui/IconButton';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -340,37 +340,33 @@ function ProfileLayoutContent({
     </Button>
   ) : null;
 
-  if (!profile && blockStatus?.blocking) {
-    return (
-      <>
-        <View style={styles.blockedState}>
-          <StateView title="차단한 프로필입니다" />
-          {unblockAction}
-        </View>
-        {confirmationModal}
-      </>
-    );
-  }
-
-  if (!profile && blockStatus?.blockedBy) {
-    return <StateView controlRef={contentStateRef} title="이 프로필을 볼 수 없습니다" />;
-  }
-
   if (!profile) {
-    const missingState = (
+    const missingState = blockStatus?.blocking ? (
+      <View style={styles.blockedState}>
+        <StateView title="차단한 프로필입니다" />
+        {unblockAction}
+      </View>
+    ) : blockStatus?.blockedBy ? (
+      <StateView controlRef={contentStateRef} title="이 프로필을 볼 수 없습니다" />
+    ) : (
       <StateView
         description={`@${handle} 프로필이 존재하지 않아요.`}
         title="프로필을 찾을 수 없어요"
       />
     );
 
-    return showPageHeader ? (
-      <ProfileRouteContainer scrollKey={scrollKey}>
-        <PageHeader leading={backButton} title="" />
-        {missingState}
-      </ProfileRouteContainer>
-    ) : (
-      missingState
+    return (
+      <>
+        {showPageHeader ? (
+          <ProfileRouteContainer scrollKey={scrollKey}>
+            <PageHeader leading={backButton} title="" />
+            {missingState}
+          </ProfileRouteContainer>
+        ) : (
+          missingState
+        )}
+        {blockStatus?.blocking ? confirmationModal : null}
+      </>
     );
   }
 
