@@ -12,7 +12,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `Platform=iOS`는 44pt, `Platform=Android`는 48dp인 Native target variant다. glyph·count·state layer와 내부 visual control은 28px을 유지하고 투명 touch-target wrapper만 세로로 확장한다. 28px visual은 wrapper의 세로 중앙에 두어 iOS는 위·아래 8pt, Android는 위·아래 10dp를 남긴다. More wrapper는 각각 44×44pt, 48×48dp이며 28px visual을 세로 중앙·가로 오른쪽에 맞춰 content column 끝선을 보존한다. 나머지 action slot 너비는 50px을 유지한다. Android canonical Home [`4524:3985`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-3985)·Local [`4524:4139`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-4139), iOS Home [`6619:7918`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6619-7918)과 iOS post-detail [`1943:2837`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-2837)이 해당 source를 소비한다. 이 Figma consumer 연결은 runtime 적용 완료 증거가 아니다.
 - Bar는 가용 너비를 채우고 Reply control slot의 왼쪽 경계와 More control slot의 오른쪽 경계를 PostBody가 사용하는 content column의 양끝에 맞춘다. 나머지 action은 그 사이를 `space-between`으로 분배한다. Figma의 302px frame은 기준 viewport의 측정값이며 production 고정 너비가 아니다.
 - Web의 Reply, Repost, Reaction, Bookmark layout slot은 최소 50px이고 More slot은 28px이다. 실제 target은 count가 있으면 숫자 `0`도 표시값으로 취급해 `왼쪽 6px + glyph 16px + gap 4px + 렌더된 count + 오른쪽 6px`을 HUG하고, count가 없으면 28×36px이다. leading Reply target은 slot 시작점에 맞춰 target·state layer가 content column의 왼쪽 경계에서 시작하고 glyph는 그보다 6px 안쪽에 둔다. Repost·Reaction·Bookmark target은 각 slot 가운데에 유지하며 target이 50px보다 넓을 때만 slot도 함께 늘린다. More glyph는 28px target 가운데에 둔다. action 사이의 분배 여백 전체를 interactive rectangle으로 확장하거나 인접 target과 겹치게 하지 않는다.
-- Native의 Reply, Repost, Reaction, Bookmark target 너비는 각각 50px이다. Bookmark target 안의 28px IconOnly visual과 More의 28px visual을 각각 오른쪽에 맞추고 두 target 사이 gap을 0으로 둔다. 따라서 iOS는 `50 + 44`, Android는 `50 + 48`인 인접 target을 만들며 hit area를 겹치지 않고 More target 오른쪽 경계를 content column 끝에 맞춘다.
+- Native의 Reply, Repost, Reaction, Bookmark target 너비는 각각 50px이다. Reply·Repost·Reaction의 glyph와 count 묶음은 target 가운데에 둔다. Bookmark target 안의 28px IconOnly visual과 More의 28px visual을 각각 오른쪽에 맞추고 두 target 사이 gap을 0으로 둔다. 따라서 iOS는 `50 + 44`, Android는 `50 + 48`인 인접 target을 만들며 hit area를 겹치지 않고 More target 오른쪽 경계를 content column 끝에 맞춘다.
 - 모든 glyph의 visual box는 16×16px, glyph와 count 사이는 4px다. count는 16px 한 줄이며 icon과 시각 중심을 맞춘다.
 - 순서는 `Reply → Repost → Reaction → Bookmark → More`로 고정한다. Reply와 Repost만 count를 표시하고 Reaction·Bookmark·More에는 count slot을 만들지 않는다.
 - Web의 trailing group은 Bookmark 50px, 간격 4px, More 28px을 묶은 exact 82px이며 Bar의 오른쪽 끝에 맞춘다.
@@ -21,14 +21,15 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Action Bar의 Reply는 외부 Composer가 공급하는 controlled `expanded`와 default·disabled만 표현한다. Reply 제출 중 spinner·입력 차단은 Composer의 `답글 게시` 버튼이 소유하며 Action Bar에 별도 pending 상태로 중복 표현하지 않는다.
 - `/bookmarks` 목록의 Bookmark action은 저장된 상태에서 파생한 `Selected`를 사용한다. Compact와 Full 모두
   같은 `PostListItem` source와 `itemSpacing=0` stack rhythm을 유지하며 선택 상태 때문에 목록 간격을 바꾸지 않는다.
-- Figma Action은 내부 상하 padding 4px을 포함한다. canonical
-  [`PostListItem` Text·Media variants](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1924-1992)는
-  카드 상단 12px·하단 4px을 사용한다. content column의 기존 4px gap 뒤 final slot 상단 4px을 더해 마지막
-  presentation(본문·미디어 또는 Reaction Summary)과 Action Bar 사이를 8px로 만들고, slot 하단은 0으로
-  두어 카드 하단 4px이 구분선 간격을 단독 소유한다. Native visual을 이 Bar의 세로 중앙에 두므로 16px glyph의
+- Figma Action은 내부 상하 padding 4px을 포함한다. 2026-09-12 승인된 Web production target에서
+  일반 Text·Media 카드는 상단 12px·하단 8px을 사용한다. canonical
+  [`PostListItem` variants](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1924-1992)의 Center
+  원본도 같은 여백으로 동기화했다. content column의 기존 4px gap 뒤 final slot 상단 8px을 더해 마지막
+  presentation(본문·미디어 또는 Reaction Summary)과 Action Bar 사이를 12px로 만들고, slot 하단은 0으로
+  두어 카드 하단 8px이 구분선 안쪽 간격을 단독 소유한다. Native visual을 이 Bar의 세로 중앙에 두므로 16px glyph의
   상단은 iOS 14pt, Android 16dp이며, 확대된 target은 visual 위·아래에 같은 여백을 남긴다. 본문과 Bar를
-  overlap하지 않는다. Quote와 순수 Repost는 별도 slot 없이 Action Bar를 직접 배치하고 카드 상단 8px·하단
-  1px을 사용한다.
+  overlap하지 않는다. Web Quote와 순수 Repost도 마지막 presentation부터 Bar까지 12px, Bar 아래부터
+  구분선 안쪽까지 8px을 사용하고 카드 상단 8px은 유지한다. Native의 기존 세로 여백은 변경하지 않는다.
 - Figma `Size=Mobile` Text·Media·PureRepost·Quote와 Post detail의 `PostLayout`은 Action Bar slot을 HUG하고
   Android variant를 `48dp`로 유지한다. Reaction Summary가 나타나거나 instance가 교체되어도 세로 Auto Layout의
   `8px` gap이 Bar를 아래로 밀며, Compact PostMediaViewer tray는 `64px` 안에 같은 `48dp` Bar를 배치한다.
@@ -37,10 +38,11 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Mobile 390 Text·Media의 content column은 Avatar·gap을 제외한 `298px`이며 Reaction Summary와 Action Bar slot이
   이 폭을 함께 채운다. Reaction Summary에 별도 314px 고정 폭을 두지 않으므로 왼쪽 치우침이나 우측 clipping 없이
   같은 column edge에 정렬되고, 표시 여부가 바뀌면 세로 Auto Layout이 하단 border를 자연스럽게 이동한다.
-- Web production `PostListItem`은 `Size=Center`와 같은 카드 상단 12px·좌우 `spacing.sm` 8px·하단 4px,
-  목록 전용 Action Bar slot 상단 4px·하단 0을 사용한다. Mobile의 좌우 16px과 iOS 44pt·Android 48dp
-  touch-target wrapper는 현재 Figma target이며, Native production 적용은 관련 Product 이슈와 OpenSpec
-  spec·task를 연결한 뒤 구현과 runtime 검증을 함께 진행한다.
+- Web production `PostListItem`의 일반 Text·Media는 카드 상단 12px·좌우 `spacing.sm` 8px·하단 8px,
+  목록 전용 Action Bar slot 상단 8px·하단 0을 사용한다. PROD-936은 Native의 좌우 `spacing.lg` 16px과
+  iOS 44pt·Android 48dp target을 같은 공용 production 경계에 적용한다. Native Bar와 slot은 target 높이를
+  실제 layout에 포함하며, 부모 밖으로 확장하는 `hitSlop`이나 고정 28px 부모 안의 overlap을 사용하지 않는다.
+  코드·렌더 검증과 실제 Native touch·focus 검증은 별도 증거로 기록한다.
 
 ## Action semantic colors
 
@@ -74,31 +76,35 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 ## 플랫폼 rollout과 release gate
 
-- 현재 출시 범위는 Web이며, runtime의 Native platform file도 아직 같은 28px geometry를 사용한다. Figma의 iOS 44pt·Android 48dp variant와 위 Target consumer는 구현 전 비교·handoff evidence다.
-- Native 구현은 28px visual을 유지한 채 Figma target wrapper와 같은 최소 hit area를 제공하되, 인접 target overlap과 화면별 action 정렬을 runtime에서 다시 결정·검증한다.
-- Native target 복구, VoiceOver·TalkBack focus boundary, touch 입력과 bottom sheet runtime 관찰은 Native release gate다. 현재 PROD-414 완료나 Web 검증으로 대체하지 않는다.
+- 현재 출시 범위는 Web이다. PROD-936의 Native 구현은 28px visual을 유지하고 iOS 44pt·Android 48dp target을 제공한다.
+- Native target의 실제 layout·인접 target 비중첩·화면별 정렬, VoiceOver·TalkBack focus boundary, touch 입력과
+  bottom sheet runtime 관찰은 Native release gate다. platform style 렌더 테스트나 Web 검증으로 대체하지 않는다.
 
 ## Surface 배치
 
 - `PostLayout`은 metadata 뒤 `Engagement`에 Reaction Summary와 bordered Action Bar frame을 순서대로
-  렌더링한다. 일반 Text·Media `PostListItem`은 카드 상단 12px·하단 4px, 목록 전용
-  Action Bar slot 상단 4px·하단 0을 사용한다.
+  렌더링한다. Web 일반 Text·Media `PostListItem`은 카드 상단 12px·하단 8px, 목록 전용
+  Action Bar slot 상단 8px·하단 0을 사용한다.
   content column의 기존 4px gap과 합쳐 마지막 presentation(본문·미디어 또는 Reaction Summary)에서 Action
-  Bar까지 8px을 만든다. Quote와 순수 Repost는 별도 slot 없이 Action Bar를 직접 배치하고 카드 상단
-  8px·하단 1px을 사용한다.
+  Bar까지 12px을 만든다. Web Quote와 순수 Repost도 마지막 presentation부터 Bar까지 12px,
+  Bar 아래부터 구분선 안쪽까지 8px을 사용하고 카드 상단 8px은 유지한다. Native 기존 여백은 보존한다.
 - 상세 thread의 현재 Post는 metadata 아래 8px에 Reaction Summary를 두고, Summary가 있으면 그 아래 4px부터
   Action Bar frame을 시작한다. Reaction Summary는 border 밖에 있고, Action Bar frame만 full-width 상·하 1px
-  `borderSubtle`과 상하 8px padding 사이에 둔다. Summary가 없으면 metadata 하단부터 Action Bar frame 상단
+  `borderSubtle`과 Web 상하 12px padding 사이에 둔다. Native와 MediaViewer compact presentation의 기존 상하 8px padding은 유지한다.
+  Summary가 없으면 metadata 하단부터 Action Bar frame 상단
   border까지 canonical Figma와 같은 8px을 둔다.
   이 border와 padding은 thread connector용 gutter가 아니다. Reply surface가 닫힌 기본 상태에서는 빈 Composer
   wrapper를 렌더링하지 않고 Engagement 아래부터 current row 끝까지 4px을 둔다. current row 뒤에는 별도
   thread divider를 렌더링하지 않으며 current row 상단의 16px은 유지한다. Action Bar의 28px visual geometry는 바꾸지 않는다.
+- 2026-09-12 사용자 승인 후 Figma `PostListItem` Center 4종과 `PostLayout` Center 3종을 기존 `space/8`·`space/12`
+  토큰으로 동기화했다. 목록 위12·아래8, 상세 frame 상하12와 Native 원본 비변경을 readback했다.
 - Action Bar는 `PostBody` 또는 Source presentation과 같은 content-level sibling이며 본문, 작성자, 생성 시각,
   Source preview의 `Link`나 `Pressable` 안에 중첩하지 않는다.
 - 일반 Post는 본문 뒤, 순수 Repost는 Source presentation 뒤, Quote는 자체 본문과 Source preview 뒤에 Action
   Bar를 둔다. 상세의 metadata가 있으면 metadata 뒤에 둔다.
-- Quote 목록은 Source preview의 내부 하단 padding을 4px로 줄이고 Source preview border 밖에서 직접 배치한
-  Action Bar까지 8px 간격을 둔다. 순수 Repost도 direct Action Bar와 attribution·Source 간격을 유지한다.
+- Quote 목록은 Source preview의 내부 하단 padding 4px을 유지하고 마지막 presentation과 Action Bar 사이를
+  Web 12px로 둔다. Reaction Summary가 없으면 Source preview border부터 측정한다. Native의 기존 8px과
+  순수 Repost attribution·Source 간격은 유지한다.
 - Center·Mobile Quote의 `Quote article` wrapper는 `PostContent` 높이를 Hug한다. 자체 본문이 줄바꿈되면
   Source preview와 Action Bar를 함께 아래로 밀어 Source preview의 하단 1px border와 둥근 모서리를 자르지 않는다.
 - direct Quote Source preview는 기본 fill을 갖지 않고 주변 Post background와 같은 평면을 유지하며 semantic
@@ -330,6 +336,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `PROD-809`는 Profile 고정의 최대 수·대상 자격·권한·lifecycle·pagination·persistence/API·ActivityPub과
   교체 mutation·동시성·실패 처리 정책, 실제 Production·runtime 검증을 소유한다.
 - `PROD-425`는 pure Repost Reply의 바깥 contentless Post binding과 disabled 상태를 소유한다.
+- `PROD-936`은 Home·Local·Profile·Bookmarks·상세/스레드의 공용 presentation 재사용 확인, 실제 Web 데이터·액션
+  회귀 검증과 Native target·목록 inset 적용을 소유한다. Media Viewer·Notification 자체 이관과 Clipboard
+  runtime 복구·공유 OpenSpec archive 소유권은 각각 기존 이슈에 유지한다.
 - Reaction, Bookmark, More의 실제 연결과 여러 action의 최종 통합, guest 인증 진입, valid 세션의 Profile
   선택기 진입과 session error 비활성화는 각 구현 이슈와 `PROD-432`가 소유한다.
 
@@ -337,11 +346,12 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 - 일반 Post, 순수 Repost, Quote 목록에서는 Action Bar slot이, 상세에서는 Action Bar가 content grid의 마지막
   sibling이고 navigation Link/Pressable의 descendant가 아닌지 검증한다.
-- Figma canonical 일반 Text·Media source와 production consumer에서 카드 상단 12px·하단 4px, Action Bar
-  slot 상단 4px·하단 0, 마지막 presentation에서 Action Bar까지 8px인지 검증한다. 순수 Repost와 Quote는
-  direct Action Bar와 카드 상단 8px·하단 1px을 유지하고 1px 구분선은 semantic `divider` color를 사용해야 한다.
+- Web 일반 Text·Media에서 카드 상단 12px·하단 8px, Action Bar slot 상단 8px·하단 0을 검증한다.
+  순수 Repost와 Quote는 카드 상단 8px을 유지하며, 모든 Web 목록 유형은 마지막 presentation에서 Bar까지
+  12px, Bar 하단에서 구분선 안쪽까지 8px이어야 한다. 1px 구분선은 semantic `divider` color를 사용해야 한다.
   순수 Repost는 attribution line box가 20이고 Source 표준행과의 추가 gap이 0인지, Quote는 Source preview
-  내부 하단 padding이 4px이고 border 밖에서 Action Bar까지 8px인지 함께 검증한다. Quote Source preview는
+  내부 하단 padding이 4px인지 함께 검증한다. Reaction Summary 유무와 무관하게 마지막 presentation부터
+  Bar까지 12px인지 확인하고 Native의 기존 세로 여백은 유지한다. Quote Source preview는
   resting fill이 투명하고 border는 유지되며 Web pointer hover에서만 `stateHover` overlay를 사용하는지도 확인한다.
 - 일반 목록의 Reply와 Reply+Quote는 조회 가능한 Parent의 display name을 사용한 Reply attribution을 한 번
   표시하고, 일반 Post와 Parent를 조회할 수 없는 Reply에는 표시하지 않는지 검증한다. Reply attribution은
@@ -352,12 +362,13 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   위쪽 여백 없이 20px인지 확인한다.
 - 상세 thread의 현재 Post에서 current row 상단부터 content까지 16px, metadata 하단부터 Reaction Summary까지
   8px, Reaction Summary 아래부터 Action Bar frame 상단 border까지 4px인지 검증한다. Summary가 없으면
-  metadata 하단부터 border까지 8px이어야 하며, 위아래 1px border와 8px padding 사이에는 Action Bar만
+  metadata 하단부터 border까지 8px이어야 하며, 위아래 1px border와 Web 12px(Native 기존 8px) padding 사이에는 Action Bar만
   있어야 한다. selected Profile이 있고 Reply
   surface가 닫힌 기본 상태에서도 빈 wrapper가 남지 않으며 Engagement 아래부터 current row 끝까지 4px이고
   current row 뒤 별도 thread divider가 없는지 exact geometry로 검증한다.
-- 모든 플랫폼 구현에서 Bar와 visual/layout slot 높이 28, Reply·More layout slot endpoint의 content column 양끝 정렬, social layout slot 최소 너비 50, More 너비
-  28, glyph 16, icon-count gap 4와 고정 순서를 검증한다. Web에서는 count가 있으면 숫자 `0`을 포함해 target
+- 모든 플랫폼에서 28px visual, Reply·More target endpoint의 content column 양끝 정렬, glyph 16,
+  icon-count gap 4와 고정 순서를 검증한다. Web의 Bar·slot 높이는 28, social slot 최소 너비는 50,
+  More 너비는 28이다. count가 있으면 숫자 `0`을 포함해 target
   너비가 `6 + 16 + 4 + 렌더된 count 너비 + 6`, count가 없으면 28×36인지 확인한다. social slot은
   `max(50, target 너비)`이고 leading Reply target은 slot 시작에, 나머지 social target은 가운데에 정렬하며,
   Bookmark 50 + gap 4 + More 28 trailing group이 exact
@@ -375,8 +386,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   label·8px 좌우 padding·border·`0 2px 4px` shadow를 제공하는지 검증한다. open/close, focus 복귀와
   키보드 이동도 함께 검증한다.
 - Native bottom action sheet의 backdrop·back dismiss, safe area, modal 접근성과 menu item target을 검증한다.
-- Native 44pt·48dp Action Bar target과 VoiceOver·TalkBack runtime은 출시 전 후속 gate로 남기고, 현재 28px
-  공통 구현의 완료 증거로 보고하지 않는다.
+- Native는 iOS 44pt·Android 48dp Bar·target 높이, social 너비 50, More 너비 44/48, gap 없는 trailing
+  group과 Bookmark·More의 오른쪽 정렬을 검증한다. 실제 touch·VoiceOver·TalkBack runtime 관찰은 출시 전
+  gate로 남기며 platform style 렌더 검증을 runtime 완료로 보고하지 않는다.
 - 순수 Repost에서 Reply는 바깥 contentless Repost identity를 유지해 disabled이고,
   Repost·Reaction·Bookmark·More만 direct Source Post를 대상으로 사용하는지 검증한다.
 - Post 본문과 Quote Source의 클릭 가능한 외부 링크가 Light·Dark `actionLinkBase`를 사용하고 밑줄과

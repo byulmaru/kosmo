@@ -87,7 +87,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 **Verification**
 
 - 일반 Post·순수 Repost·Quote의 목록 final slot·상세 final Action Bar, link 비중첩과 순수 Repost Source target을 검증한다.
-- PROD-866 production의 일반 Text·Media는 카드 상단 12px·하단 4px과 Action Bar slot 상단 4·하단 0을 사용한다. 순수 Repost와 Quote는 slot 상단 0·하단 4px, 1px semantic divider color, 순수 Repost attribution line box 20과 Source 표준행까지 gap 0, Quote Source preview 내부 하단 padding 4px과 border 밖에서 Action Bar까지 8px을 유지한다.
+- 아래 완료 task의 PROD-866 spacing은 기존 이력이다. 현재 Web surface 여백은 9번 PROD-936의 위12·아래8과 상세 상하12를 우선한다. 기존 attribution·Source preview 내부4px·구분선·Native 여백 계약은 유지한다.
 - Web outside/Escape/focus return·keyboard navigation과 Native backdrop/back/dismiss/safe area·modal semantics를 검증한다.
 - menu label·item 선택 뒤 create/delete identity·pending, exact toast·latest-replace·동일 문구 반복 시 새 alert instance와 dismiss timer 재시작·자동 dismiss·alert semantics·light `#262626` accent·message 2px optical shift, 실패 뒤 상태 유지·menu 재시도를 검증한다.
 
@@ -119,7 +119,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 
 **Deliverable**
 
-canonical Figma Center·Mobile Text·Media `PostListItem` source는 카드 상단 12px·하단 4px, 기존 content gap 4px 뒤 Action Bar slot 상단 4px·하단 0을 사용한다. representative consumer의 Light·Dark·responsive 결과를 같은 target으로 동기화한다.
+이 그룹은 당시 canonical Figma Center·Mobile Text·Media의 카드12/4·slot4/0 동기화 완료 이력을 기록한다. 현재 Web Center surface의 여백은 9번 PROD-936 결정으로 부분 대체하며 Mobile Native 원본 수정은 포함하지 않는다.
 
 **Guardrails**
 
@@ -324,3 +324,61 @@ Reaction과 Repost가 전역 feedback 의미와 분리된 presentation semantic�
 - [x] 게시글·프로필 More 최소폭 160px, 다른 메뉴 기본 128px을 적용한다.
 - [x] Web callback 시점을 유지하면서 퇴장 중 항목을 보존하고 다음 open에서 갱신한다.
 - [x] ActionMenu 단위 테스트 5개, Pin·공용 메뉴·관련 More Storybook 147개, 타입 검사와 static build 검증을 완료한다.
+
+## 9. PROD-936 실제 Post consumer 검증과 Native target 적용
+
+**Authority / Provenance**
+
+- `PROD-936`
+- `docs/design/post-action-bar.md`, `docs/design/accessibility.md`, `docs/design/post-thread.md`
+- Figma `PostActionBar` 6604:48270와 2026-09-12 KST 사용자 계속 진행 승인
+
+**Deliverable**
+
+Home·Local·Profile·Bookmarks·상세/스레드의 기존 공용 presentation을 재사용하고 실제 데이터·액션 경로를 검증한다.
+Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp target, 목록 좌우 16px inset을 제공한다.
+
+**Guardrails**
+
+- Web Bar/control geometry와 기존 action·Relay·navigation·Source target의 소유권을 변경하지 않는다. 2026-09-12 추가 승인에 따라 Web surface 여백만 목록 위12·아래8, 상세 상하12로 늘린다.
+- target 높이를 layout에 포함하며 부모 밖 `hitSlop`·인접 target overlap·consumer별 보정과 새 dependency를 추가하지 않는다.
+- Media Viewer·Notification 자체 이관과 Composer·추가 기능은 기존 별도 이슈에 남긴다.
+- 현재 앱의 Light 고정 정책을 변경하지 않으며 OS Dark preference를 Dark runtime 증거로 보고하지 않는다.
+- Web E2E·Storybook·Native platform style 렌더와 실제 Native touch/보조 기술 검증을 구분한다. PROD-632 task 5.4·5.5는 유지한다.
+
+**Verification**
+
+- 실제 API·세션에서 390/1024/1440의 공통 action 상태, Bookmark 저장·해제, GraphQL 실패 시 row 유지와 실제 재시도 성공을 검증한다.
+- 기존 상세·thread·내부 링크·CW/민감한 미디어·pagination·scroll 회귀와 Web More keyboard·Escape·focus 복귀를 확인한다.
+- Native target44/48·visual28·glyph16·trailing group·접근성 state를 렌더 테스트로 검증하고 실제 Native 실행 결과와 미검증 항목을 별도로 기록한다.
+
+- [x] 9.1 최신 main의 consumer map과 canonical Figma source를 확인하고 기존 공용 presentation을 재사용한다. Bookmarks Storybook의 저장된 일반·Quote fixture와 pressed 상태를 정렬한다.
+- [x] 9.2 Native 공용 control·Bar의 target44/48과 목록 inset16을 적용하고 가까운 렌더 회귀를 통과시킨다.
+- [x] 9.3 실제 API·세션을 쓰는 Web consumer·Bookmark 실패/재시도와 기존 navigation·scroll E2E를 통과시킨다.
+- [x] 9.4 App·Storybook·lint·OpenSpec 검증과 Figma 최종 대조를 완료하고 실제 Native 실행 결과·미검증 항목을 기록한다.
+- [x] 9.5 승인된 Web 목록 위12·아래8과 상세 frame 상하12 여백을 기존 surface 경계에 적용하고 Native 기존 여백·target을 보존한다.
+- [x] 9.6 기존 geometry Storybook·앱 검증과 390/1024/1440 Web 시각·상호작용 QA를 통과시키고, Figma Center 목록4종·상세3종의 승인·동기화 상태를 기록한다.
+- [x] 9.7 Native 목록·current connector를 16px inset의 Avatar 중심선 x=40에, Web 목록·current connector를 x=32에 맞추는 실제 렌더 회귀를 추가한다.
+
+**Web Spacing Verification Record (2026-09-12)**
+
+- 일반·Reply·Quote·순수 Repost의 실제 렌더 bounds와 상세 frame padding을 기존 Posts Storybook에서 검증했다. focused105개와 전체118파일/773개 Storybook 테스트, Native control·Bar·card renderer6개를 통과했다.
+- 앱 Relay·TypeScript check, 전체 ESLint·Prettier, Storybook 정적 build, scoped OpenSpec strict와 diff check를 통과했다. Native와 MediaViewer compact의 기존 여백 및 action·Source target 소유권은 유지했다.
+- 최종 정적 Storybook을 내장 Browser에서 확인했다: 390px Light 목록·인용·재게시, 1024px Dark 상세, 1440px Light 북마크 목록. 상세 More의 첫 항목 focus와 Escape 뒤 trigger 복귀도 확인했다. 이 증거는 실제 API·세션 E2E나 Native runtime 재실행을 뜻하지 않는다.
+- 2026-09-12 사용자 승인 후 Figma Center 목록4종(1924:1927·1924:1947·1924:1969·2187:4091)과 상세3종의 frame(7662:1544·7662:1594·7662:1663)을 동기화했다. 기존 `space/8`·`space/12`를 바인딩하고 Quote·순수 Repost Action slot의 고정32px을 HUG로 바꿔 추가 하단4px을 제거했다. 목록 위12·아래8과 상세 상하12를 readback했으며 Light·Dark ReactionSummary specimen에서도12/8을 확인했다. Mobile Native 원본과 iOS44/Android48 Bar는 그대로다.
+
+**Verification Record (2026-09-12)**
+
+- `pnpm --filter @kosmo/app test` 통과: Relay·TypeScript·전체 unit·정적 Storybook build와 118개 Storybook 파일/773개 interaction test.
+- Native renderer 회귀 7개는 실제 control·Bar·PostListItem·PostThreadLayout의 플랫폼별 style/prop 연결을 검증한다. Yoga layout이나 touch 동작을 모사하지 않는다.
+- 실제 API·DB·세션·Web build의 `post-detail.e2e.ts`, `post-share-link.e2e.ts`, `timelines.e2e.ts`, `navigation-scroll.e2e.ts` 32개 통과. 삭제 오류만 GraphQL 응답 경계에서 한 번 주입하고 저장·재조회·재시도 삭제는 실제 서버를 사용했다.
+- app/web check, ESLint·Prettier, OpenSpec strict와 diff check 통과. Figma Web28/iOS44/Android48 source와 최종 정적 Storybook의 Bookmarks Light 선택 상태·상세 Dark·More focus 복귀를 대조했다.
+- iOS 26.5 시뮬레이터에서 실제 binary build와 현재 checkout의 Metro bundle 로딩·시작 화면까지 확인했다. 로그인 이후 Post touch·parent clipping·VoiceOver·focus 복귀와 Android runtime·TalkBack은 미검증이며 Native release gate로 남긴다.
+- Expo 개발 서버가 이번 QA에서 생성한 typed-route 선언이 있을 때 기존 `SettingsLinkRow.test.ts:92`의 `href: string` 타입 오류를 확인했다. 해당 test는 변경하지 않았고 QA 생성물을 별도 보관한 뒤 기존 CI와 같은 환경에서 위 앱 검증을 통과했다.
+- 이 기록은 PROD-632 task 5.4·5.5 완료나 공유 change archive를 의미하지 않는다.
+
+**Native thread connector verification record (2026-09-12)**
+
+- `PostThreadLayout` 실제 renderer test가 Web 목록·current connector `left=32`, iOS·Android 목록·current connector `left=40`를 style props로 검증한다.
+- 이 회귀는 `PostListItem`과 current content의 Web 8px·Native 16px left inset 및 list/current connector 축 정렬을 확인하며, Yoga layout·실제 Native touch·VoiceOver·TalkBack은 검증하지 않는다.
+- 사용자 승인 후 Figma `PostThreadLayout` canonical composition 5개 상태의 목록·current Avatar 중심과 connector를 x=40으로 동기화했다. 기존 Mobile `PostLayout`의 40px Avatar는 current inset 20px, production Native의 48px Avatar는 inset 16px을 사용해 같은 중심축을 만들며 readback과 대표 screenshot으로 확인했다.

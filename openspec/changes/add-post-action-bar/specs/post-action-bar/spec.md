@@ -138,7 +138,7 @@
 
 ### Requirement: 액션 접근성
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/post-action-bar.md`, `PROD-433`, `PROD-414`, `PROD-432`, `PROD-866` — Action Bar 컨테이너는 toolbar role과 고정된 한국어 접근성 이름 `액션 바`를 노출해야 하며(MUST), 내부 액션을 하나의 접근성 요소로 병합하지 않아야 한다(MUST NOT). 표시되는 각 액션은 button role과 액션별 label을 노출해야 하며(MUST) 시각 icon이나 count에만 의미를 의존하지 않아야 한다(MUST). Action Bar와 각 control의 visual/layout row 높이는 Android·iOS·Web에서 28 logical unit이어야 한다(MUST). Reply·Repost·Reaction·Bookmark layout slot은 최소 너비 50이고 More slot 너비는 28이어야 하며(MUST), Bar는 별도 좌우 inset 없이 Reply slot의 왼쪽 경계와 More slot의 오른쪽 경계를 PostBody content column의 양끝에 맞추고 나머지 action을 그 사이에 분배해야 한다(MUST). Web의 Bookmark와 More는 4px 간격을 둔 82px trailing group이어야 한다(MUST). 각 glyph visual box는 16×16이고 icon과 count 간격은 4여야 한다(MUST). Web leading Reply actual target은 최소 50px slot의 시작에 맞아야 하고 Repost·Reaction·Bookmark actual target은 각 slot 가운데에 있어야 한다(MUST). count가 있으면 숫자 `0`을 포함해 `왼쪽 6px + glyph 16px + gap 4px + 렌더된 count + 오른쪽 6px`을 HUG하고 count가 없으면 28×36px이어야 한다(MUST). social target이 50px보다 넓을 때만 해당 slot도 target 너비로 확장해야 하며(MUST), glyph 왼쪽 경계는 target 왼쪽보다 6px 안쪽이어야 한다(MUST). hover·pressed의 visible state layer는 count를 감싸지 않고 glyph 주위 28×28px 원을 유지해야 하며(MUST), 모든 target은 action 사이 분배 여백이나 인접 target을 덮지 않아야 한다(MUST). Native의 공용 projection은 출시 전 임시 예외이며 iOS 출시 전 최소 44×44pt, Android 출시 전 최소 48×48dp로 복구하고 runtime 검증해야 한다(MUST). Reply의 `expanded`와 disabled, Repost child가 `viewerRepost`에서 파생한 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked` 및 Repost·Reaction·Bookmark의 pending·disabled 상태는 플랫폼에서 지원하는 접근성 state로 노출해야 한다(MUST). Reply 제출 busy 상태는 Composer의 `답글 게시` 버튼에서 노출해야 한다(MUST). Repost policy-disabled 접근성 state는 concrete seam과 actual caller를 설계하는 PROD-432 surface 통합에서 검증해야 한다(MUST). 이 접근성 매핑 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있지만 공개 제품 prop 이름을 바꾸지 않아야 한다(MUST). More는 button role과 label을 제공하되 도메인 상태 또는 처리 상태를 노출하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/post-action-bar.md`, `PROD-433`, `PROD-414`, `PROD-432`, `PROD-866` — Action Bar 컨테이너는 toolbar role과 고정된 한국어 접근성 이름 `액션 바`를 노출해야 하며(MUST), 내부 액션을 하나의 접근성 요소로 병합하지 않아야 한다(MUST NOT). 표시되는 각 액션은 button role과 액션별 label을 노출해야 하며(MUST) 시각 icon이나 count에만 의미를 의존하지 않아야 한다(MUST). 모든 플랫폼의 visual row는 높이 28 logical unit을 유지해야 하며(MUST), Web의 Bar와 layout slot 높이는 28이어야 한다(MUST). Reply·Repost·Reaction·Bookmark layout slot은 최소 너비 50이고 Web More slot 너비는 28이어야 하며(MUST), Bar는 별도 좌우 inset 없이 Reply slot의 왼쪽 경계와 More slot의 오른쪽 경계를 PostBody content column의 양끝에 맞추고 나머지 action을 그 사이에 분배해야 한다(MUST). Web의 Bookmark와 More는 4px 간격을 둔 82px trailing group이어야 한다(MUST). 각 glyph visual box는 16×16이고 icon과 count 간격은 4여야 한다(MUST). Web leading Reply actual target은 최소 50px slot의 시작에 맞아야 하고 Repost·Reaction·Bookmark actual target은 각 slot 가운데에 있어야 한다(MUST). count가 있으면 숫자 `0`을 포함해 `왼쪽 6px + glyph 16px + gap 4px + 렌더된 count + 오른쪽 6px`을 HUG하고 count가 없으면 28×36px이어야 한다(MUST). social target이 50px보다 넓을 때만 해당 slot도 target 너비로 확장해야 하며(MUST), glyph 왼쪽 경계는 target 왼쪽보다 6px 안쪽이어야 한다(MUST). hover·pressed의 visible state layer는 count를 감싸지 않고 glyph 주위 28×28px 원을 유지해야 하며(MUST), 모든 target은 action 사이 분배 여백이나 인접 target을 덮지 않아야 한다(MUST). PROD-936의 Native 적용에서는 Bar와 social target 높이를 iOS 44pt·Android 48dp로 사용하고 social target 너비는 50이어야 한다(MUST). More target은 iOS 44×44pt·Android 48×48dp여야 하며(MUST), Bookmark·More의 28px visual은 각 target의 세로 중앙·가로 오른쪽에 놓고 두 target 사이 gap은 0이어야 한다(MUST). Bar와 slot은 target 높이를 실제 layout에 포함하고 부모 밖 hitSlop이나 인접 target overlap을 사용하지 않아야 한다(MUST NOT). 실제 Native touch·focus·보조 기술 검증은 platform style 렌더 테스트와 구분해야 한다(MUST). Reply의 `expanded`와 disabled, Repost child가 `viewerRepost`에서 파생한 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked` 및 Repost·Reaction·Bookmark의 pending·disabled 상태는 플랫폼에서 지원하는 접근성 state로 노출해야 한다(MUST). Reply 제출 busy 상태는 Composer의 `답글 게시` 버튼에서 노출해야 한다(MUST). Repost policy-disabled 접근성 state는 concrete seam과 actual caller를 설계하는 PROD-432 surface 통합에서 검증해야 한다(MUST). 이 접근성 매핑 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있지만 공개 제품 prop 이름을 바꾸지 않아야 한다(MUST). More는 button role과 label을 제공하되 도메인 상태 또는 처리 상태를 노출하지 않아야 한다(MUST).
 
 #### Scenario: 이름이 있는 툴바 탐색
 
@@ -162,7 +162,7 @@
 
 #### Scenario: Figma 기반 compact geometry
 
-- **WHEN** Action Bar가 지원하는 compact 폭에 렌더된다
+- **WHEN** Action Bar가 지원하는 Web compact 폭에 렌더된다
 - **THEN** Bar와 각 control의 visual/layout row는 높이 28, social layout slot 최소 너비 50, More slot 너비 28, glyph 16×16, icon-count 간격 4를 유지한다
 - **AND** Reply slot의 왼쪽 경계와 More slot의 오른쪽 경계는 PostBody content column의 양끝에 맞고 나머지 action은 그 사이에 균등 분배된다
 - **AND** Web의 Bookmark와 More는 4px 간격을 둔 82px trailing group이다
@@ -170,11 +170,14 @@
 - **AND** count가 있으면 target은 숫자 `0`을 포함해 `6 + 16 + 4 + 렌더된 count 너비 + 6`을 HUG하며 count가 없으면 28×36px이다
 - **AND** social slot은 `max(50, target 너비)`이고 glyph는 target 왼쪽보다 6px 안쪽에 있으며, 28×28 state layer는 glyph만 감싸고 action 사이 분배 여백이나 인접 target을 덮지 않는다
 
-#### Scenario: Native 출시 전 임시 target
+#### Scenario: Native 플랫폼 target
 
 - **WHEN** 같은 Action Bar 구현이 Android 또는 iOS에서 렌더된다
-- **THEN** 현재 Web 우선 slice에서는 28dp·28pt geometry를 사용한다
-- **AND** 이를 Native 접근성 완료 증거로 사용하지 않으며 각 Native 출시 전에 플랫폼 target과 runtime gate를 복구한다
+- **THEN** Bar와 social target은 각각 48dp·44pt 높이를 layout에 포함하고 social target 너비는 50이다
+- **AND** Reply·Repost·Reaction의 glyph와 count 묶음은 target 가운데에 정렬된다
+- **AND** More는 각각 48×48dp·44×44pt이며 Bookmark와 gap 없이 맞닿고 두 28px visual은 세로 중앙·가로 오른쪽에 정렬된다
+- **AND** glyph는 16×16을 유지하고 target은 인접 action이나 본문과 겹치지 않는다
+- **AND** 실제 touch·VoiceOver·TalkBack 검증 없이 Native runtime 완료로 보고하지 않는다
 
 ### Requirement: Compact count 표시
 
@@ -216,7 +219,7 @@
 
 ### Requirement: Production Post surface 배치
 
-**Authority / Provenance:** `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/colors.md`, `docs/design/post-action-bar.md`, `docs/design/post-thread.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`, `PROD-866` — 지원되는 Home Post List, Profile Post List 및 Post 상세 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). `PostLayout`은 metadata 뒤 Engagement에 Reaction Summary와 bordered Action Bar frame을 순서대로 렌더링해야 하며(MUST), Reaction Summary는 frame border 밖에 두고 Action Bar만 상·하 border 사이에 배치해야 한다(MUST). 일반 Text·Media `PostListItem`은 Action Bar만 담은 목록 전용 slot을 사용해야 하며(MUST), Quote와 순수 Repost `PostListItem`은 별도 slot 없이 Action Bar를 직접 배치해야 한다(MUST). Action Bar는 본문·작성자·생성 시각·Source navigation `Link`/`Pressable` 안에 중첩하지 않아야 한다(MUST NOT). direct Quote Source preview는 resting fill 없이 주변 Post background와 같은 평면을 유지하고 semantic border로 경계를 구분해야 하며(MUST), source navigation이 활성인 Web preview는 pointer hover 동안 root 전체에 semantic `stateHover` overlay를 사용해야 한다(MUST). `interactive=false` preview와 Native에는 Web hover fill을 투영하지 않아야 한다(MUST NOT). 공용 Post content renderer가 만드는 클릭 가능한 외부 링크는 mode별 semantic `actionLinkBase`와 밑줄을 사용하고 바깥 Post·Source navigation 입력을 가로채지 않아야 하며(MUST), `interactive=false` content는 링크 입력을 만들지 않아야 한다(MUST NOT). 일반 Post와 Quote는 다섯 액션 모두 바깥 Post를 target으로 공급해야 한다(MUST). 순수 Repost는 Reply에 바깥 contentless Repost binding과 disabled 상태를 유지하고(MUST), Repost·Reaction·Bookmark·More에는 화면에 표시한 direct Source Post를 target으로 공급해야 한다(MUST). surface는 display Post와 action별 target을 구분하면서 canonical 관계 조합, Post Visibility·권한 계약과 각 action 계약에서 target 자체의 적격성과 현재 실행 주체·세션의 실행 권한을 분리해 판단해야 한다(MUST). Action Bar child는 전달받은 policy input을 표현하되 대상 정책, guest 인증 진입 또는 Profile 선택 진입을 자체 판단하지 않아야 한다(MUST NOT). target Post가 적격하지 않거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션은 config 또는 child action을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). target 자체가 적격하면(MUST) `guest`는 기존 플랫폼 인증 진입으로 위임하고, `valid`인데 selected Profile이 없으면 `ShellChromeContext.openProfileSwitcher()`로 기존 Profile 선택기를 열며, `valid`이고 selected Profile이 있으면 action을 실행하고, `error`에서는 disabled로 유지해야 한다(MUST). 인증·Profile 선택 resolution 전에는 child UI나 mutation을 시작하지 않아야 하며(MUST NOT), Profile 선택 뒤 원래 action을 자동 재실행하지 않아야 한다(MUST NOT). `PostList`, route와 외부 caller는 Action Bar subtree나 `actionBar?: ReactNode` seam을 주입하지 않아야 하며(MUST NOT), surface 배치는 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/colors.md`, `docs/design/post-action-bar.md`, `docs/design/post-thread.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`, `PROD-866` — PROD-936이 확인하는 Home·Local·Profile·Bookmarks 목록 및 Post 상세·스레드 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). `PostLayout`은 metadata 뒤 Engagement에 Reaction Summary와 bordered Action Bar frame을 순서대로 렌더링해야 하며(MUST), Reaction Summary는 frame border 밖에 두고 Action Bar만 상·하 border 사이에 배치해야 한다(MUST). 일반 Text·Media `PostListItem`은 Action Bar만 담은 목록 전용 slot을 사용해야 하며(MUST), Quote와 순수 Repost `PostListItem`은 별도 slot 없이 Action Bar를 직접 배치해야 한다(MUST). Action Bar는 본문·작성자·생성 시각·Source navigation `Link`/`Pressable` 안에 중첩하지 않아야 한다(MUST NOT). direct Quote Source preview는 resting fill 없이 주변 Post background와 같은 평면을 유지하고 semantic border로 경계를 구분해야 하며(MUST), source navigation이 활성인 Web preview는 pointer hover 동안 root 전체에 semantic `stateHover` overlay를 사용해야 한다(MUST). `interactive=false` preview와 Native에는 Web hover fill을 투영하지 않아야 한다(MUST NOT). 공용 Post content renderer가 만드는 클릭 가능한 외부 링크는 mode별 semantic `actionLinkBase`와 밑줄을 사용하고 바깥 Post·Source navigation 입력을 가로채지 않아야 하며(MUST), `interactive=false` content는 링크 입력을 만들지 않아야 한다(MUST NOT). 일반 Post와 Quote는 다섯 액션 모두 바깥 Post를 target으로 공급해야 한다(MUST). 순수 Repost는 Reply에 바깥 contentless Repost binding과 disabled 상태를 유지하고(MUST), Repost·Reaction·Bookmark·More에는 화면에 표시한 direct Source Post를 target으로 공급해야 한다(MUST). surface는 display Post와 action별 target을 구분하면서 canonical 관계 조합, Post Visibility·권한 계약과 각 action 계약에서 target 자체의 적격성과 현재 실행 주체·세션의 실행 권한을 분리해 판단해야 한다(MUST). Action Bar child는 전달받은 policy input을 표현하되 대상 정책, guest 인증 진입 또는 Profile 선택 진입을 자체 판단하지 않아야 한다(MUST NOT). target Post가 적격하지 않거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션은 config 또는 child action을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). target 자체가 적격하면(MUST) `guest`는 기존 플랫폼 인증 진입으로 위임하고, `valid`인데 selected Profile이 없으면 `ShellChromeContext.openProfileSwitcher()`로 기존 Profile 선택기를 열며, `valid`이고 selected Profile이 있으면 action을 실행하고, `error`에서는 disabled로 유지해야 한다(MUST). 인증·Profile 선택 resolution 전에는 child UI나 mutation을 시작하지 않아야 하며(MUST NOT), Profile 선택 뒤 원래 action을 자동 재실행하지 않아야 한다(MUST NOT). `PostList`, route와 외부 caller는 Action Bar subtree나 `actionBar?: ReactNode` seam을 주입하지 않아야 하며(MUST NOT), surface 배치는 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
 
 공용 `PostSourcePresentationView`의 생성 시각 Link는 최소 44×44 target을 유지하면서 target 내부의 label을 오른쪽 정렬해야 하며(MUST), outer Post와 nested Source preview에 동일하게 적용해야 한다(MUST). 별도 `PostListItem` timestamp에는 이 정렬을 적용하지 않아야 한다(MUST NOT).
 
@@ -230,17 +233,19 @@
 - **WHEN** `PostListItem` 또는 `PostLayout`이 일반 Post, 순수 Repost 또는 Quote를 렌더한다
 - **THEN** `PostLayout`의 Engagement는 metadata 뒤 Reaction Summary와 bordered Action Bar frame을 순서대로 렌더링하고, `PostListItem`의 Action Bar는 마지막 presentation 뒤 목록 slot 또는 direct final sibling으로 렌더된다
 - **AND** `PostLayout`의 Reaction Summary는 border 밖에 있으며 위아래 border와 padding 사이에는 Action Bar만 있다
-- **AND** 일반 Text·Media의 목록 전용 slot은 Action Bar만 포함하고 Quote·순수 Repost는 Action Bar를 직접 배치한다
+- **AND** 목록 전용 Action Bar wrapper에는 Action Bar만 포함하고 Reaction Summary와 본문을 포함하지 않는다
 - **AND** 본문·작성자·생성 시각·Source navigation link의 descendant가 아니다
 
 #### Scenario: 목록 Post 카드의 compact spacing
 
 - **WHEN** `PostListItem`이 일반 Text·Media, 순수 Repost 또는 Quote를 렌더한다
-- **THEN** 일반 Text·Media 카드는 상단 12px·하단 4px padding을 사용하고 목록 전용 Action Bar slot은 상단 4px·하단 0px padding을 제공한다
-- **AND** 순수 Repost와 Quote 카드는 상단 8px·하단 1px padding을 사용하고 별도 Action Bar slot을 만들지 않는다
+- **THEN** Web 일반 Text·Media 카드는 상단 12px·하단 8px padding을 사용하고 목록 전용 Action Bar slot은 상단 8px·하단 0px padding을 제공한다
+- **AND** Web 순수 Repost와 Quote 카드는 상단 8px을 유지하고 모든 Web 목록 유형에서 마지막 presentation(본문·미디어·Source preview 또는 Reaction Summary)과 Bar 사이가 12px, Bar 하단과 구분선 안쪽 사이가 8px이다
+- **AND** Native의 기존 세로 여백과 iOS 44pt·Android 48dp target은 변경하지 않는다
+- **AND** 모든 목록 카드의 좌우 padding은 Web 8px, Native 16px이다
 - **AND** 1px 카드 구분선은 입력·메뉴 외곽선용 `border`가 아니라 저강도 semantic `divider` color를 사용한다
 - **AND** 순수 Repost attribution은 20px line box를 사용하고 아래 Source 표준행과의 추가 gap을 두지 않는다
-- **AND** Quote는 Source preview 내부 하단 padding을 4px로 줄이고 Source preview border 밖에서 직접 배치한 Action Bar까지 8px 간격을 제공한다
+- **AND** Quote는 Source preview 내부 하단 padding 4px을 유지하며 Reaction Summary가 없으면 Source preview border부터 Bar까지 Web 12px, Native 기존 8px을 제공한다
 
 #### Scenario: Quote Source preview surface state
 
@@ -261,8 +266,10 @@
 - **WHEN** Post 상세 thread가 조상, 현재 Post와 하위 Reply를 함께 렌더한다
 - **THEN** 현재 `PostLayout`은 48px Avatar와 12px gap의 Header 뒤 8px 간격으로 Body를 full width에 배치하고, metadata 하단부터 8px 뒤에 Reaction Summary를 같은 왼쪽 경계와 너비로 배치한다
 - **AND** Reaction Summary가 있으면 그 아래 4px에 bordered Action Bar frame을 배치하고, Summary가 없으면 metadata 하단부터 frame 상단 border까지 8px을 유지한다
-- **AND** Action Bar frame은 full-width 상·하 1px `borderSubtle`과 상하 8px padding 사이에 Action Bar만 포함하며 이 geometry를 connector gutter로 사용하지 않는다
-- **AND** current row는 왼쪽 8px·오른쪽 12px·상단 16px·하단 4px padding을 사용한다
+- **AND** Action Bar frame은 full-width 상·하 1px `borderSubtle`과 Web 상하 12px(Native 기존 8px) padding 사이에 Action Bar만 포함하며 이 geometry를 connector gutter로 사용하지 않는다
+- **AND** current row는 Web 왼쪽 8px·Native 왼쪽 16px·공통 오른쪽 12px·상단 16px·하단 4px padding을 사용한다
+- **AND** 조상·하위 목록 row의 connector left는 Web `PostListItem` 8px inset에 따라 x=32, Native 16px inset에 따라 x=40에 맞춘다
+- **AND** current connector left는 `currentContent`의 Web 8px·Native 16px left padding과 48px Avatar 중심선에 따라 Web x=32, iOS·Android x=40에 맞춘다
 - **AND** connector는 조상 구간과 마지막 조상→현재 경계에만 표시되고 현재→첫 하위 Reply와 하위 Reply 사이에는 표시되지 않는다
 - **AND** current row 뒤에는 generic thread divider를 렌더링하지 않는다
 
@@ -273,7 +280,7 @@
 - **AND** Reaction Summary와 Action Bar frame의 상단 border 사이에는 4px 간격이 있고 Reaction Summary는 border 밖에 있다
 - **AND** selected Profile이 있어도 닫힌 Composer의 빈 wrapper와 margin을 렌더링하지 않는다
 - **AND** Engagement 아래와 current row 끝 사이에는 4px 간격이 있고 current row 뒤 별도 thread divider는 없다
-- **AND** Action Bar 자체의 28px geometry는 유지된다
+- **AND** Action Bar의 28px visual과 플랫폼별 target 높이는 유지된다
 
 #### Scenario: 순수 Repost의 Source action target
 

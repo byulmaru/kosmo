@@ -1,5 +1,5 @@
 import { Bookmark, HeartPlus, MessageCircle, MoreHorizontal } from 'lucide-react-native';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -90,7 +90,14 @@ export function PostActionBar({
   const resolvedBookmark = bookmark ?? bookmarkAction;
 
   return (
-    <View accessibilityLabel="액션 바" accessibilityRole="toolbar" style={styles.root}>
+    <View
+      accessibilityLabel="액션 바"
+      accessibilityRole="toolbar"
+      style={[
+        styles.root,
+        Platform.OS !== 'web' && { height: Platform.OS === 'android' ? 48 : 44 },
+      ]}
+    >
       {reply ? (
         <PostActionControl
           accessibilityLabel={reply.accessibilityLabel}
@@ -141,11 +148,12 @@ export function PostActionBar({
         />
       ) : null}
       {resolvedBookmark || more || data?.deletion ? (
-        <View style={styles.trailing}>
+        <View style={[styles.trailing, Platform.OS !== 'web' ? styles.nativeTrailing : undefined]}>
           {resolvedBookmark ? (
             <PostActionControl
               accessibilityLabel={resolvedBookmark.accessibilityLabel}
               active={resolvedBookmark.hasBookmarked}
+              alignVisualToEnd
               fillActive
               hoverDisabled={execution.kind === 'resolution-required'}
               icon={Bookmark}
@@ -196,4 +204,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs,
   },
+  nativeTrailing: { gap: 0 },
 });
