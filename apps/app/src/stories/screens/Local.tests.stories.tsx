@@ -3,7 +3,8 @@ import baseMeta, {
   InitialErrorRetry as initialErrorRetry,
   PaginationErrorRetry as paginationErrorRetry,
   PaginationFlow as paginationFlow,
-  queryRequestObserver,
+  RefreshHardError as refreshHardError,
+  RefreshHardErrorActorCleanup as refreshHardErrorActorCleanup,
   Refreshing as refreshing,
 } from './Local.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -22,14 +23,16 @@ export const InitialErrorRetry: Story = {
   ...initialErrorRetry,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const alert = await canvas.findByRole('alert');
+    const body = within(canvasElement.ownerDocument.body);
+    const alert = await body.findByRole('alert');
 
     expect(alert).toHaveTextContent('로컬 타임라인을 불러오지 못했어요');
+    expect(canvas.queryByText('아직 게시글이 없어요')).not.toBeInTheDocument();
     await userEvent.click(within(alert).getByRole('button', { name: '다시 시도' }));
     await expect(
       canvas.findByText('같은 인스턴스의 소식을 한곳에서 확인해요.'),
     ).resolves.toBeVisible();
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    expect(body.queryByRole('alert')).not.toBeInTheDocument();
   },
 };
 
@@ -49,6 +52,88 @@ export const RefreshPartialResponse: Story = {
     await expect(
       canvas.findByText('새로고침에 성공한 뒤 다시 표시된 로컬 게시글입니다.'),
     ).resolves.toBeVisible();
+  },
+};
+
+export const RefreshHardError: Story = {
+  ...refreshHardError,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const localTab = canvas.getByRole('tab', { name: '로컬' });
+    await expect(
+      canvas.findByText('같은 인스턴스의 소식을 한곳에서 확인해요.'),
+    ).resolves.toBeVisible();
+    expect(
+      canvas.getByRole('link', { name: '로컬 기록자 @local-writer' }).getBoundingClientRect().top,
+    ).toBeGreaterThanOrEqual(localTab.getBoundingClientRect().bottom);
+    const retainedPost = canvas.getByText('같은 인스턴스의 소식을 한곳에서 확인해요.');
+
+    await userEvent.click(localTab);
+
+    expect(canvas.getByText('같은 인스턴스의 소식을 한곳에서 확인해요.')).toBeVisible();
+    const firstAlert = await body.findByRole('alert');
+    expect(firstAlert).toHaveTextContent('로컬 타임라인을 불러오지 못했어요');
+    expect(retainedPost).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(firstAlert).getByRole('button', { name: '다시 시도' })).toBeVisible(),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 3_600));
+    expect(body.getByRole('alert')).toHaveTextContent('로컬 타임라인을 불러오지 못했어요');
+    expect(
+      within(body.getByRole('alert')).getByRole('button', { name: '다시 시도' }),
+    ).toBeVisible();
+
+    await userEvent.click(within(firstAlert).getByRole('button', { name: '다시 시도' }));
+    expect(canvas.getByText('같은 인스턴스의 소식을 한곳에서 확인해요.')).toBeVisible();
+    await waitFor(() => expect(body.getAllByRole('alert').at(-1)).toBeVisible());
+    const secondAlert = body.getAllByRole('alert').at(-1)!;
+    expect(secondAlert).toHaveTextContent('로컬 타임라인을 불러오지 못했어요');
+    expect(within(secondAlert).getByRole('button', { name: '다시 시도' })).toBeVisible();
+
+    await userEvent.click(within(secondAlert).getByRole('button', { name: '다시 시도' }));
+    await expect(
+      canvas.findByText('새로고침에 성공한 뒤 다시 표시된 로컬 게시글입니다.'),
+    ).resolves.toBeVisible();
+    await waitFor(() => expect(body.queryByRole('alert')).not.toBeInTheDocument());
+  },
+};
+
+export const RefreshHardErrorActorCleanup: Story = {
+  ...refreshHardErrorActorCleanup,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await expect(
+      canvas.findByText('같은 인스턴스의 소식을 한곳에서 확인해요.'),
+    ).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('tab', { name: '로컬' }));
+    await expect(body.findByRole('alert')).resolves.toHaveTextContent(
+      '로컬 타임라인을 불러오지 못했어요',
+    );
+
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 전환' }));
+    await expect(
+      canvas.findByText('같은 인스턴스의 소식을 한곳에서 확인해요.'),
+    ).resolves.toBeVisible();
+    await waitFor(() => expect(body.queryByRole('alert')).not.toBeInTheDocument());
+    expect(canvas.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('tab', { name: '로컬' }));
+    await expect(body.findByRole('alert')).resolves.toHaveTextContent(
+      '로컬 타임라인을 불러오지 못했어요',
+    );
+    await userEvent.click(
+      within(body.getByRole('alert')).getByRole('button', { name: '다시 시도' }),
+    );
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 전환' }));
+    await expect(
+      canvas.findByText('같은 인스턴스의 소식을 한곳에서 확인해요.'),
+    ).resolves.toBeVisible();
+    await new Promise((resolve) => setTimeout(resolve, 550));
+    expect(body.queryByRole('alert')).not.toBeInTheDocument();
+    expect(canvas.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
   },
 };
 
@@ -89,15 +174,12 @@ export const RefreshQuery: Story = {
     await expect(canvas.findByText(retainedPost)).resolves.toBeVisible();
     const tab = canvas.getByRole('tab', { name: '로컬' });
     await userEvent.click(tab);
-    await waitFor(() => expect(queryRequestObserver).toHaveBeenCalledTimes(2));
     expect(
       canvas.queryByText('새로고침에 성공한 뒤 다시 표시된 로컬 게시글입니다.'),
     ).not.toBeInTheDocument();
     expect(
       canvas.queryByRole('progressbar', { name: '로컬 타임라인을 새로고침하는 중' }),
     ).not.toBeInTheDocument();
-    await userEvent.click(tab);
-    expect(queryRequestObserver).toHaveBeenCalledTimes(2);
     await expect(
       canvas.findByText(
         '새로고침에 성공한 뒤 다시 표시된 로컬 게시글입니다.',

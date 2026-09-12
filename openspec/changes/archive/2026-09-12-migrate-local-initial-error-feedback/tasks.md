@@ -1,0 +1,110 @@
+## 1. PROD-939 Local 최초 오류의 플랫폼별 피드백
+
+**Authority / Provenance**
+
+- `docs/design/local-timeline.md`
+- `docs/design/accessibility.md`
+- Figma Mobile `4665:4855`
+- Figma Web `5560:13625`
+- `PROD-939`
+
+**Deliverable**
+
+저장된 성공 목록이 없는 Local 최초 조회 실패에서 Web은 빈 목록 영역을, Native는 2행 skeleton을 표시하고
+두 플랫폼 모두 재시도할 수 있는 persistent Danger Toast를 제공한다.
+
+**Guardrails**
+
+- section 2의 hard refresh 오류를 제외한 부분 GraphQL 응답과 pagination 동작을 변경하지 않는다.
+- route 이탈과 selected Profile 전환 뒤 이전 Toast나 retry action을 남기지 않는다.
+- 공용 RouteBoundary·Toast·Skeleton과 기존 Relay actor/store 격리를 재사용한다.
+- Home과 다른 목록의 오류 presentation, Figma source와 dependency를 변경하지 않는다.
+
+**Verification**
+
+- Web과 Native 오류 배경, persistent alert/action semantics와 성공·재실패를 직접 검증한다.
+- 연속 action 입력이 한 요청만 만들고 route·actor lifetime 종료가 이전 Toast를 제거하는지 검증한다.
+- 기존 Local 부분 응답·pagination 검증과 Home 관련 check가 유지되는지 확인한다.
+- Web의 mobile/full viewport에서 Toast 배치·focus·announcement를 확인하고 Android/iOS runtime 미실행 항목을 구분해 기록한다.
+
+**Test code scope**
+
+- `apps/app/src/components/ui/ToastProvider.test.ts`: exit motion 중 action 연속 실행의 단일 callback 계약
+- `apps/app/src/stories/screens/Local.stories.tsx`, `Local.tests.stories.tsx`: 플랫폼별 최초 오류와 retry lifecycle
+- `apps/web/e2e/timelines.e2e.ts`: Web 최초 오류의 빈 목록·persistent Toast·retry 동작
+
+**Test necessity / exclusions**
+
+- 공용 Toast action guard의 분기와 Local error lifecycle은 회귀 시 stale action을 만들 수 있으므로 최소 동작 테스트가 필요하다.
+- Native 전용 신규 test harness, GraphQL/API/schema·pagination fixture 변경, source 문자열 검사는 추가하지 않는다.
+- Android/iOS 실제 runtime은 현재 자동화 범위 밖으로 남기고 공용 code path 검증과 구분해 기록한다.
+
+**Completion ownership**
+
+- PROD-939 구현 범위가 Web 통합 검증, 미실행 Native 항목 기록과 이 OpenSpec change의 최종 archive 판단을 소유한다.
+
+- [x] 1.1 플랫폼별 최초 오류 배경과 persistent retry Toast lifecycle을 구현한다.
+- [x] 1.2 연속 action 입력이 중복 callback을 만들지 않도록 공용 Toast action 경계를 보강한다.
+- [x] 1.3 최초 오류·재실패·성공·route 이탈·actor 전환과 기존 후속 조회 동작의 최소 회귀 검증을 추가한다.
+- [x] 1.4 관련 test·typecheck·Storybook·OpenSpec strict validation과 Web 시각·상호작용 QA를 수행한다.
+- [x] 1.5 디자인 문서의 Target을 구현·검증 결과에 맞춰 Current와 미실행 상태로 정렬한다.
+
+## 2. PROD-939 Local hard refresh 오류 피드백
+
+**Authority / Provenance**
+
+- `docs/design/local-timeline.md`
+- `docs/design/accessibility.md`
+- Figma Mobile `6576:8485`
+- `PROD-939`
+
+**Deliverable**
+
+성공 목록 뒤 Local hard refresh 실패에서 마지막 성공 목록을 유지하고, Web과 Native 모두 재시도할 수 있는 persistent Danger Toast를 제공한다.
+
+**Guardrails**
+
+- 최초 오류의 플랫폼별 배경, 부분 GraphQL 응답과 pagination 동작을 변경하지 않는다.
+- refresh token과 공용 boundary/Toast lifecycle을 사용하고 route·actor 전환 뒤 stale Toast를 남기지 않는다.
+- 기존 Relay query·environment와 Session의 fail-open boundary, 공용 Toast를 재사용하고 새 request lifecycle wrapper나 dependency를 추가하지 않는다.
+
+**Verification**
+
+- hard refresh 실패에서 기존 목록·persistent alert/action과 retry 경로를 검증한다.
+- 진행 중인 refresh가 실패해도 열린 답글 작성창과 입력 내용이 유지되는지 실제 Web route에서 검증한다.
+- retry 성공·재실패와 route 이탈 cleanup을 검증하고 기존 partial response·pagination Story를 유지한다.
+- Web mobile/full viewport에서 Figma 배치와 focus·announcement를 확인하고 Android/iOS runtime 미실행을 기록한다.
+
+**Test code scope**
+
+- `apps/app/src/stories/screens/Local.stories.tsx`, `Local.tests.stories.tsx`: 실제 Relay refresh hard error·retry lifecycle
+- `apps/web/e2e/timelines.e2e.ts`: 기존 최초 오류 회귀 검증을 유지하고, 제어된 refresh 실패 뒤 답글 작성 상태 보존을 검증한다.
+
+**Test necessity / exclusions**
+
+- Relay hard error에서 목록 텍스트뿐 아니라 오류 전 DOM이 유지되는지 Storybook 동작 검증이 필요하다.
+- 목록 텍스트만으로는 subtree 재마운트에 따른 초안 손실을 검출할 수 없으므로, 기존 인증·게시글 E2E fixture와 네트워크 응답 gate를 재사용한다. 새 Storybook fixture나 공용 mock API는 추가하지 않는다.
+- Native 전용 신규 harness, GraphQL/API/schema·pagination fixture 변경, source 문자열 검사는 추가하지 않는다.
+
+- [x] 2.1 PROD-939·OpenSpec에 hard refresh의 목록 보존·persistent retry 계약을 정렬한다.
+- [x] 2.2 Local hard refresh 요청·Toast·retry·cleanup을 최소 경로로 구현한다.
+- [x] 2.3 Storybook·관련 check와 Web 시각·상호작용 QA로 검증한다.
+- [x] 2.4 디자인 문서·PR 설명과 검증 기록을 최종 동작에 맞춘다.
+
+2026-09-12 로컬 리뷰에서 refresh 오류 fallback이 답글 초안을 폐기하는 결함을 재현해 section 2의 구현·검증을
+다시 열었다. 공개 PR 설명 갱신은 로컬 수정과 구분해 별도 승인된 공개 작업에서 반영했다.
+
+오류를 Toast 상태로만 옮기는 후보는 Web E2E에서 초안 손실을 재현했다. `store-only` refetch로 cache를 다시 읽는
+후보는 Web E2E 9개를 통과했지만, 동기 Observable 오류 probe에서 기존 DOM 보존에 실패해 철회했다. 임시 mock과
+후보 runtime 변경은 제거했다. 이후 사용자가 요청 상태 관리 없이 목록과 refetch 오류 경계를 분리하는 최소
+구조를 승인해 구현·검증을 재개했다. Native runtime은 실행하지 않았다.
+
+승인된 분리 구조의 검증 결과:
+
+- Relay compiler·app TypeScript와 Web E2E TypeScript, Prettier, OpenSpec strict validation, diff check 통과.
+- Local Storybook 7개 통과: 기존 목록 DOM, hard error·재실패·성공·actor cleanup·partial response·pagination 검증 유지.
+- 동일 동기 Observable 오류 probe에서 `Refresh Hard Error` 1개 통과: 기존 DOM과 재시도 sequence 보존. 임시 mock은 원복했다.
+- 실제 Web timeline E2E 9개 통과: refresh 중 연 답글 창의 입력 내용·focus 보존과 기존 Home·Local·Profile 동작 검증.
+- 내장 Browser의 1280×720 Web Light에서 오류 뒤 기존 목록·Local 탭 focus와 하단 retry Toast를 확인했다.
+- 2026-09-12 승인된 공개 작업으로 PR #840 본문을 최종 구현·검증 결과에 맞춰 갱신하고 readback으로 확인했다.
+- Android/iOS 실제 스크롤·focus·보조 기술은 미실행이다. 정본 spec 동기화와 2026-09-12 archive를 완료했다.

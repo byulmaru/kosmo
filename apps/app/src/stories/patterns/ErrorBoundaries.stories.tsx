@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { GraphQLErrorBoundary } from '@/components/GraphQLErrorBoundary';
+import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
-import { SessionFailOpenBoundary } from '@/session/SessionProvider';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const renderError = new Error('production boundary fixture');
@@ -76,9 +76,9 @@ function SessionBoundaryHarness() {
         >
           <Text>세션 갱신</Text>
         </Pressable>
-        <SessionFailOpenBoundary fallback={<Text>세션 오류 상태</Text>} resetKey={resetKey}>
+        <RelayFailOpenBoundary fallback={<Text>세션 오류 상태</Text>} resetKey={resetKey}>
           <ThrowOnRender active={failed} />
-        </SessionFailOpenBoundary>
+        </RelayFailOpenBoundary>
       </View>
     </GraphQLErrorBoundary>
   );

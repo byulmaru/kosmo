@@ -123,6 +123,9 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
                 ? {
                     label: toast.action.label,
                     onPress: () => {
+                      if (activeToastId.current !== toast.id) {
+                        return;
+                      }
                       dismissToast(toast.id);
                       toast.action?.onPress();
                     },

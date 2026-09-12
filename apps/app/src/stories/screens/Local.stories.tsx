@@ -1,9 +1,12 @@
 import { useMemo } from 'react';
 import { fn } from 'storybook/test';
 import LocalScreen from '@/app/(tabs)/(protected)/local';
+import { Button } from '@/components/ui/Button';
+import { useRelayActor } from '@/relay/RelayActorProvider';
 import { RelayStoryProvider } from '../../../.storybook/mocks/react-relay';
 import { post, profile, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ComponentProps } from 'react';
 
 const selectedProfile = profile({
   displayName: '로컬 기록자',
@@ -92,11 +95,24 @@ const paginationNextPage = {
 const paginationRequestObserver = fn().mockName('Local pagination request');
 export const queryRequestObserver = fn().mockName('Local query: load / refresh / retry');
 
+type LocalOperationResponses = NonNullable<
+  ComponentProps<typeof RelayStoryProvider>['operationResponses']
+>;
+
+function localOperationResponses(
+  queryResponse: LocalOperationResponses[string],
+  refetchResponse: LocalOperationResponses[string] = queryResponse,
+): LocalOperationResponses {
+  return { LocalPageQuery: queryResponse, LocalContentRefetchQuery: refetchResponse };
+}
+
 type LocalState =
   | 'default'
   | 'loading'
   | 'empty'
   | 'error'
+  | 'refresh-hard-error'
+  | 'refresh-hard-error-lifetime'
   | 'refresh-partial-error'
   | 'refreshing'
   | 'filtered'
@@ -105,54 +121,74 @@ type LocalState =
   | 'pagination-flow'
   | 'pagination-error';
 
-type LocalStoryArgs = { state: LocalState };
+type LocalStoryArgs = {
+  actorBoundary?: boolean;
+  showActorReset?: boolean;
+  state: LocalState;
+};
 
 function localRelayForState(state: LocalState) {
   switch (state) {
     case 'loading':
       return {
-        operationResponses: {
-          LocalPageQuery: { data: localPageData(), delayMs: 60_000 },
-        },
+        operationResponses: localOperationResponses({ data: localPageData(), delayMs: 60_000 }),
       };
     case 'empty':
       return {
-        operationResponses: { LocalPageQuery: { data: localPageData(localConnection([])) } },
+        operationResponses: localOperationResponses({ data: localPageData(localConnection([])) }),
       };
     case 'error':
       return {
-        operationResponses: {
-          LocalPageQuery: {
+        operationResponses: localOperationResponses({
+          sequence: [{ error: '로컬 타임라인을 불러오지 못했습니다.' }, { data: localPageData() }],
+        }),
+      };
+    case 'refresh-hard-error':
+      return {
+        operationResponses: localOperationResponses(
+          { data: localPageData() },
+          {
             sequence: [
-              { error: '로컬 타임라인을 불러오지 못했습니다.' },
-              { data: localPageData() },
+              { error: 'Local timeline hard refresh failure' },
+              { error: 'Local timeline hard refresh failure again' },
+              { data: localPageData(localConnection([refreshedPost])), delayMs: 500 },
             ],
           },
-        },
+        ),
+      };
+    case 'refresh-hard-error-lifetime':
+      return {
+        operationResponses: localOperationResponses(
+          { data: localPageData() },
+          {
+            sequence: [
+              { error: 'Local timeline hard refresh failure' },
+              { delayMs: 500, error: 'Local timeline hard refresh failure after actor reset' },
+            ],
+          },
+        ),
       };
     case 'long-content':
       return {
-        operationResponses: {
-          LocalPageQuery: { data: localPageData(localConnection([longPost, secondPost])) },
-        },
+        operationResponses: localOperationResponses({
+          data: localPageData(localConnection([longPost, secondPost])),
+        }),
       };
     case 'refreshing':
       return {
-        operationResponses: {
-          LocalPageQuery: {
-            sequence: [
-              { data: localPageData() },
-              { data: localPageData(localConnection([refreshedPost])), delayMs: 2_000 },
-            ],
+        operationResponses: localOperationResponses(
+          { data: localPageData() },
+          {
+            sequence: [{ data: localPageData(localConnection([refreshedPost])), delayMs: 2_000 }],
           },
-        },
+        ),
       };
     case 'refresh-partial-error':
       return {
-        operationResponses: {
-          LocalPageQuery: {
+        operationResponses: localOperationResponses(
+          { data: localPageData() },
+          {
             sequence: [
-              { data: localPageData() },
               {
                 data: { ...localPageData(), localTimeline: null },
                 errors: [{ message: 'Local timeline resolver failed' }],
@@ -163,46 +199,47 @@ function localRelayForState(state: LocalState) {
               },
             ],
           },
-        },
+        ),
       };
     case 'filtered':
       return {
-        operationResponses: {
-          LocalPageQuery: { data: localPageData(localConnection([firstPost])) },
-        },
+        operationResponses: localOperationResponses({
+          data: localPageData(localConnection([firstPost])),
+        }),
       };
     case 'pagination-flow':
       return {
-        operationResponses: {
-          LocalPageQuery: { data: localPageData(localConnection(scrollPosts, true)) },
-        },
+        operationResponses: localOperationResponses({
+          data: localPageData(localConnection(scrollPosts, true)),
+        }),
         paginationResponses: [
           { data: { localTimeline: localConnection([scrollNextPost]) }, delayMs: 2_000 },
         ],
       };
     case 'pagination-loading':
       return {
-        operationResponses: { LocalPageQuery: { data: paginationData } },
+        operationResponses: localOperationResponses({ data: paginationData }),
         paginationLoading: true,
       };
     case 'pagination-error':
       return {
-        operationResponses: { LocalPageQuery: { data: paginationData } },
+        operationResponses: localOperationResponses({ data: paginationData }),
         paginationResponses: [
           { error: '로컬 타임라인 다음 page를 불러오지 못했습니다.' },
           paginationNextPage,
         ],
       };
     case 'default':
-      return { operationResponses: { LocalPageQuery: { data: localPageData() } } };
+      return { operationResponses: localOperationResponses({ data: localPageData() }) };
   }
 }
 
-function LocalPlayground({ state }: LocalStoryArgs) {
+function LocalPlayground({ actorBoundary = false, showActorReset = false, state }: LocalStoryArgs) {
   const relay = useMemo(() => localRelayForState(state), [state]);
 
   return (
     <RelayStoryProvider
+      actorBoundary={actorBoundary}
       key={state}
       operationResponses={relay.operationResponses}
       paginationLoading={relay.paginationLoading}
@@ -210,8 +247,19 @@ function LocalPlayground({ state }: LocalStoryArgs) {
       paginationResponses={relay.paginationResponses}
       queryRequestObserver={queryRequestObserver}
     >
-      <LocalScreen />
+      {showActorReset ? <LocalActorResetScreen /> : <LocalScreen />}
     </RelayStoryProvider>
+  );
+}
+
+function LocalActorResetScreen() {
+  const { resetActor } = useRelayActor();
+
+  return (
+    <>
+      <Button onPress={() => resetActor('local-story-second-profile')}>프로필 전환</Button>
+      <LocalScreen />
+    </>
   );
 }
 
@@ -226,6 +274,7 @@ const meta = {
         'loading',
         'empty',
         'error',
+        'refresh-hard-error',
         'refresh-partial-error',
         'refreshing',
         'filtered',
@@ -237,7 +286,12 @@ const meta = {
     },
   },
   component: LocalPlayground,
-  excludeStories: ['InitialErrorRetry', 'PaginationErrorRetry', 'queryRequestObserver'],
+  excludeStories: [
+    'InitialErrorRetry',
+    'PaginationErrorRetry',
+    'RefreshHardErrorActorCleanup',
+    'queryRequestObserver',
+  ],
   parameters: {
     layout: 'fullscreen',
     router: { pathname: '/local' },
@@ -299,6 +353,28 @@ export const PaginationFlow: Story = {
 
 export const InitialErrorRetry: Story = {
   args: { state: 'error' },
+};
+
+export const RefreshHardError: Story = {
+  args: { state: 'refresh-hard-error' },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  name: 'Refresh Hard Error (Reselect Local)',
+  parameters: {
+    controls: { disable: true },
+    docs: {
+      description: {
+        story:
+          '마지막 성공 목록을 유지한 상태에서 로컬 탭을 다시 선택하면 지속되는 오류 Toast가 나타납니다.',
+      },
+    },
+  },
+};
+
+export const RefreshHardErrorActorCleanup: Story = {
+  args: { actorBoundary: true, showActorReset: true, state: 'refresh-hard-error-lifetime' },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  name: 'Refresh Hard Error Actor Cleanup',
+  parameters: { controls: { disable: true } },
 };
 
 export const PaginationErrorRetry: Story = {

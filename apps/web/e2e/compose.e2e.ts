@@ -216,7 +216,7 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
   );
   await expect(page.getByText(body, { exact: true })).toBeVisible();
 
-  const reselectResponsePromise = waitForGraphQLOperation(page, 'LocalPageQuery');
+  const reselectResponsePromise = waitForGraphQLOperation(page, 'LocalContentRefetchQuery');
   await page.getByRole('tab', { name: '로컬' }).click();
   const reselectResponse = await reselectResponsePromise;
   const reselectBody = (await reselectResponse.json()) as {

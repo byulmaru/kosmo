@@ -1,9 +1,11 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useCallback, useRef } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useErrorBoundary } from 'react-error-boundary';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { graphql, useFragment, useLazyLoadQuery, useRefetchableFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
+import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
@@ -12,16 +14,30 @@ import {
 } from '@/components/shell/shellLayout';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
-import { StateView } from '@/components/ui/StateView';
+import { Skeleton, StateView } from '@/components/ui/StateView';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, spacing, typography } from '@/theme/tokens';
-import type { PropsWithChildren } from 'react';
+import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
+import type { MutableRefObject, PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
+import type {
+  LocalContent_query$data,
+  LocalContent_query$key,
+} from './__generated__/LocalContent_query.graphql';
+import type { LocalContentRefetchQuery } from './__generated__/LocalContentRefetchQuery.graphql';
 import type { LocalPageQuery } from './__generated__/LocalPageQuery.graphql';
 
 const LocalQuery = graphql`
   query LocalPageQuery {
+    ...LocalContent_query @arguments(count: 20)
+  }
+`;
+
+const LocalFragment = graphql`
+  fragment LocalContent_query on Query
+  @argumentDefinitions(count: { type: "Int", defaultValue: 20 })
+  @refetchable(queryName: "LocalContentRefetchQuery") {
     currentSession {
       id
       selectedProfile {
@@ -35,28 +51,54 @@ const LocalQuery = graphql`
         id
       }
     }
-    ...PostList_local @arguments(count: 20)
+    ...PostList_local @arguments(count: $count)
   }
 `;
 
 export default function LocalScreen() {
+  const hasSuccessfulLocalRef = useRef(false);
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const refresh = useCallback(() => routeBoundaryRef.current?.refetch(), []);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const refresh = useCallback(() => {
+    if (hasSuccessfulLocalRef.current) {
+      setRefreshVersion((version) => version + 1);
+    } else {
+      routeBoundaryRef.current?.refetch();
+    }
+  }, []);
 
   return (
     <LocalFrame onReselect={refresh}>
       <RouteBoundary
         loading={<StateView loading title="로컬 타임라인을 불러오는 중입니다." />}
+        error={(resetErrorBoundary) =>
+          hasSuccessfulLocalRef.current ? (
+            <StateView
+              actionLabel="다시 시도"
+              alert
+              description="잠시 후 다시 시도해주세요."
+              onAction={resetErrorBoundary}
+              title="로컬 타임라인을 불러오지 못했어요"
+            />
+          ) : (
+            <LocalInitialError onRetry={resetErrorBoundary} />
+          )
+        }
         ref={routeBoundaryRef}
         title="로컬 타임라인을 불러오지 못했어요"
       >
-        <LocalContent />
+        <LocalContent
+          hasSuccessfulLocalRef={hasSuccessfulLocalRef}
+          onRefresh={refresh}
+          refreshVersion={refreshVersion}
+        />
       </RouteBoundary>
     </LocalFrame>
   );
 }
 
 function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: () => void }>) {
+  const shellChrome = useShellChrome();
   const { width } = useWindowDimensions();
   const routeOwnsHeader = getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
@@ -66,7 +108,10 @@ function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: ()
       <View
         style={
           Platform.OS === 'web'
-            ? [styles.webTimelineTabs, { top: getWebMobileShellHeaderStickyOffset(width) }]
+            ? [
+                styles.webTimelineTabs,
+                { top: shellChrome ? getWebMobileShellHeaderStickyOffset(width) : 0 },
+              ]
             : undefined
         }
       >
@@ -77,15 +122,96 @@ function LocalFrame({ children, onReselect }: PropsWithChildren<{ onReselect: ()
   );
 }
 
-function LocalContent() {
-  const theme = useTheme();
-  const shellChrome = useShellChrome();
+function LocalContent({
+  hasSuccessfulLocalRef,
+  onRefresh,
+  refreshVersion,
+}: {
+  hasSuccessfulLocalRef: MutableRefObject<boolean>;
+  onRefresh: () => void;
+  refreshVersion: number;
+}) {
   const { fetchKey } = useRouteBoundary();
-  const data = useLazyLoadQuery<LocalPageQuery>(
+  const queryData = useLazyLoadQuery<LocalPageQuery>(
     LocalQuery,
     {},
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
+  useEffect(() => {
+    hasSuccessfulLocalRef.current = true;
+  }, [hasSuccessfulLocalRef]);
+
+  const data = useFragment<LocalContent_query$key>(LocalFragment, queryData);
+
+  return (
+    <>
+      <LocalContentView data={data} />
+      <RelayFailOpenBoundary
+        fallback={<LocalRefreshErrorFallback onRetry={onRefresh} />}
+        reportUnexpectedErrors={false}
+        resetKey={refreshVersion}
+      >
+        <Suspense fallback={null}>
+          <LocalRefetchContent fragmentRef={queryData} refreshVersion={refreshVersion} />
+        </Suspense>
+      </RelayFailOpenBoundary>
+    </>
+  );
+}
+
+function LocalRefetchContent({
+  fragmentRef,
+  refreshVersion,
+}: {
+  fragmentRef: LocalContent_query$key;
+  refreshVersion: number;
+}) {
+  const [, refetch] = useRefetchableFragment<LocalContentRefetchQuery, LocalContent_query$key>(
+    LocalFragment,
+    fragmentRef,
+  );
+  const { showBoundary } = useErrorBoundary();
+
+  useEffect(() => {
+    if (refreshVersion === 0) {
+      return;
+    }
+
+    refetch(
+      {},
+      {
+        fetchPolicy: 'store-and-network',
+        onComplete: (error) => {
+          if (error) {
+            showBoundary(error);
+          }
+        },
+      },
+    );
+  }, [refetch, refreshVersion, showBoundary]);
+
+  return null;
+}
+
+function LocalRefreshErrorFallback({ onRetry }: { onRetry: () => void }) {
+  const { showToast } = useToast();
+
+  useEffect(
+    () =>
+      showToast('로컬 타임라인을 불러오지 못했어요', {
+        action: { label: '다시 시도', onPress: onRetry },
+        persistent: true,
+        tone: 'danger',
+      }),
+    [onRetry, showToast],
+  );
+
+  return null;
+}
+
+function LocalContentView({ data }: { data: LocalContent_query$data }) {
+  const theme = useTheme();
+  const shellChrome = useShellChrome();
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
 
@@ -121,10 +247,49 @@ function LocalContent() {
   );
 }
 
+function LocalInitialError({ onRetry }: { onRetry: () => void }) {
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    return showToast('로컬 타임라인을 불러오지 못했어요', {
+      action: { label: '다시 시도', onPress: onRetry },
+      persistent: true,
+      tone: 'danger',
+    });
+  }, [onRetry, showToast]);
+
+  if (Platform.OS === 'web') {
+    return <View style={styles.initialErrorWeb} />;
+  }
+
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={styles.initialErrorNative}
+    >
+      {[0, 1].map((row) => (
+        <View key={row} style={styles.initialErrorRow}>
+          <Skeleton height={16} width="33%" />
+          <Skeleton height={14} width="100%" />
+          <Skeleton height={12} width="76%" />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0 },
   body: { flex: 1, minHeight: 0 },
   timeline: { flex: 1, minHeight: 0, width: '100%' },
+  initialErrorWeb: { flex: 1, minHeight: 0, width: '100%' },
+  initialErrorNative: { flex: 1, width: '100%' },
+  initialErrorRow: {
+    gap: space[8],
+    paddingHorizontal: space[16],
+    paddingVertical: space[12],
+  },
   webTimelineTabs: { position: 'sticky' as never, zIndex: 10 } as ViewStyle,
   onboardingRoot: {
     alignItems: 'center',
