@@ -1694,7 +1694,7 @@ test(
         markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
           settledBatchIds.push(batchIdToSettle);
         },
-        sendProfileBlockActivity: async () => undefined,
+        sendProfileBlockActivity: async () => ({ status: 'SETTLED' as const }),
         deleteFollowRequestNotificationActivity: async (sourceId: string) => {
           assert.equal(sourceId, followRequestId);
           deleteCalls += 1;
@@ -1877,7 +1877,7 @@ test(
         markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
           settledBatchIds.push(batchIdToSettle);
         },
-        sendProfileBlockActivity: async () => undefined,
+        sendProfileBlockActivity: async () => ({ status: 'SETTLED' as const }),
         deleteFollowNotificationActivity: async (sourceId: string) => {
           calls.push('delete:' + sourceId);
           throw ApplicationFailure.nonRetryable('notification cleanup failed');
