@@ -16,7 +16,8 @@ export const RowComposition: Story = {
     args.onSelectAction.mockClear();
     const canvas = within(canvasElement);
     const action = canvas.getByRole('button', { name: `${args.displayName} 차단 해제` });
-    expect(action.getBoundingClientRect().width).toBe(88);
+    expect(action.getBoundingClientRect().width).toBe(96);
+    expect(action.getBoundingClientRect().height).toBe(40);
     await userEvent.click(action);
     expect(args.onSelectAction).toHaveBeenCalledWith('kosmo');
     expect(canvas.getByText(args.displayName)).toBeVisible();
