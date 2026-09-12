@@ -48,25 +48,20 @@ mockModule('react-relay', {
     return pagination;
   },
 });
-mockModule(new URL('../profile/FollowButton.tsx', import.meta.url), {
-  FollowButton: ({
-    onUnblockSuccess,
-    profile,
+mockModule(new URL('../profile/ProfileBlockAction.tsx', import.meta.url), {
+  ProfileBlockAction: ({
+    onFeedback,
     profileBlock,
-    size,
   }: {
-    onUnblockSuccess?: () => void;
-    profile: { relativeHandle: string };
+    onFeedback?: (feedback: { blocked: boolean; status: 'success' | 'error' }) => void;
     profileBlock: { id: string };
-    size: string;
   }) =>
     createElement(
       'Button',
       {
-        onPress: onUnblockSuccess,
+        onFeedback: () => onFeedback?.({ blocked: false, status: 'success' }),
+        onPress: () => onFeedback?.({ blocked: false, status: 'success' }),
         profileBlockId: profileBlock.id,
-        relativeHandle: profile.relativeHandle,
-        size,
       },
       '차단 해제',
     ),
@@ -114,7 +109,6 @@ mockModule('../../session/SessionProvider', {
 
 type BlockedProfile = {
   displayName: string;
-  profile: never;
   profileBlock: never;
   profileBlockId: string;
   relativeHandle: string;
@@ -146,7 +140,6 @@ afterEach(async () => {
 
 const profile = (id: string, displayName = '별마루'): BlockedProfile => ({
   displayName,
-  profile: { relativeHandle: `@${id}` } as never,
   profileBlock: { id: `block-${id}` } as never,
   profileBlockId: `block-${id}`,
   relativeHandle: `@${id}`,
@@ -223,7 +216,7 @@ describe('차단한 프로필 목록', () => {
     assert.equal(findAll('ProfileListItemContent').length, 0);
   });
 
-  it('목록 행이 공통 FollowButton의 관리 목록 크기 계약을 연결한다', async () => {
+  it('목록 행이 실제 ProfileBlock 관계를 공통 해제 action에 연결한다', async () => {
     await act(async () => {
       renderer = create(
         createElement(BlockedProfilesView, {
@@ -233,8 +226,6 @@ describe('차단한 프로필 목록', () => {
     });
     assert.equal(find('ProfileListItemContent')?.props.relativeHandle, '@star');
     assert.equal(find('Button')?.props.profileBlockId, 'block-star');
-    assert.equal(find('Button')?.props.relativeHandle, '@star');
-    assert.equal(find('Button')?.props.size, 'management');
     assert.equal(find('Button')?.props.children, '차단 해제');
   });
 
@@ -297,13 +288,10 @@ describe('차단한 프로필 목록', () => {
         }),
       );
     });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    });
     assert.equal(focus.mock.callCount(), 1);
   });
 
-  it('중간 항목 해제 뒤에도 목록 제목으로 포커스를 복원한다', async () => {
+  it('Relay가 먼저 행을 제거해도 완료 feedback에서 목록 제목으로 포커스를 복원한다', async () => {
     const focus = mock.fn();
     const headingRef = { current: { focus } } as never;
     const first = profile('first');
@@ -316,7 +304,9 @@ describe('차단한 프로필 목록', () => {
         }),
       );
     });
-    await act(async () => findAll('Button')[0]?.props.onPress());
+    const removedAction = findAll('Button')[0];
+    assert.ok(removedAction);
+    const complete = removedAction.props.onFeedback;
     await act(async () => {
       renderer?.update(
         createElement(BlockedProfilesView, {
@@ -325,47 +315,8 @@ describe('차단한 프로필 목록', () => {
         }),
       );
     });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    });
-    assert.equal(focus.mock.callCount(), 1);
-  });
-
-  it('다른 actor는 이전 Profile의 해제 포커스 intent를 소비하지 않는다', async () => {
-    const focus = mock.fn();
-    const headingRef = { current: { focus } } as never;
-    await act(async () => {
-      renderer = create(
-        createElement(BlockedProfilesView, {
-          ownerProfileId: 'owner-a',
-          state: {
-            pagination: { status: 'end' },
-            profiles: [profile('star')],
-            status: 'loaded',
-          },
-        }),
-      );
-    });
-    await act(async () => find('Button')?.props.onPress());
-    await act(async () => renderer?.unmount());
-
-    const renderEmptyOwner = async (ownerProfileId: string) => {
-      await act(async () => {
-        renderer = create(
-          createElement(BlockedProfilesView, {
-            headingRef,
-            ownerProfileId,
-            state: { pagination: { status: 'end' }, profiles: [], status: 'loaded' },
-          }),
-        );
-      });
-      await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
-    };
-
-    await renderEmptyOwner('owner-b');
     assert.equal(focus.mock.callCount(), 0);
-    await act(async () => renderer?.unmount());
-    await renderEmptyOwner('owner-a');
+    await act(async () => complete());
     assert.equal(focus.mock.callCount(), 1);
   });
 });

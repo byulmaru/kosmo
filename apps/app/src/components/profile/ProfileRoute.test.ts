@@ -6,6 +6,11 @@ import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode, Ref } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { UseAutomaticPaginationResult } from '../pagination/useAutomaticPagination';
+import type {
+  ProfileBlockAction as ProfileBlockActionExport,
+  ProfileBlockActionTarget,
+  ProfileBlockFeedback,
+} from './ProfileBlockAction';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -57,12 +62,14 @@ let profileBlockStatus: { blockedBy: boolean; blocking: boolean; profileBlockId:
 let profileViewerState: {
   isSelf: boolean;
   membership: { role: 'MEMBER' | 'OWNER' } | null;
+  profileBlock?: { id: string; targetProfile: object } | null;
 } | null = null;
 const changeBlockedCalls: Array<{ change: object; nextBlocked: boolean }> = [];
 const toastCalls: Array<{ message: string; tone: string }> = [];
-const menuTriggerFocus = mock.fn();
-const stateActionFocus = mock.fn();
-const contentStateFocus = mock.fn();
+const focusHistory: string[] = [];
+const menuTriggerFocus = mock.fn(() => focusHistory.push('menu'));
+const stateActionFocus = mock.fn(() => focusHistory.push('state'));
+const contentStateFocus = mock.fn(() => focusHistory.push('content'));
 let changeBlockedImpl: (change: object, nextBlocked: boolean) => Promise<void> = async () =>
   undefined;
 
@@ -136,9 +143,9 @@ mockModule('react-native', {
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     const query = parts.join('').match(/query (ProfileLayoutQuery|ProfilePostListPageQuery)/)?.[1];
-    assert.ok(query);
-    return query as QueryName;
+    return query ?? parts.join('');
   },
+  useFragment: (_fragment: unknown, reference: unknown) => reference,
   useLazyLoadQuery: (
     query: QueryName,
     variables: { handle: string; withProfileBlockStatus?: boolean },
@@ -177,7 +184,21 @@ mockModule('react-relay', {
             handle: variables.handle,
             id: `profile:${variables.handle}`,
             instance: { kind: profileInstanceKind },
-            viewerState: profileViewerState,
+            viewerState: profileViewerState
+              ? {
+                  ...profileViewerState,
+                  profileBlock: profileBlockStatus.blocking
+                    ? {
+                        id: profileBlockStatus.profileBlockId,
+                        targetProfile: {
+                          displayName: `Display ${variables.handle}`,
+                          id: `profile:${variables.handle}`,
+                          relativeHandle: `@${variables.handle}`,
+                        },
+                      }
+                    : null,
+                }
+              : null,
           }
         : null,
     };
@@ -186,6 +207,7 @@ mockModule('react-relay', {
 mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
   ProfileHero: ({
     action,
+    blockAction,
     heading,
     loading,
     menuItems,
@@ -194,6 +216,9 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     showMuteAction,
   }: {
     action?: ReturnType<typeof createElement>;
+    blockAction?: ProfileBlockActionTarget & {
+      onFeedback?: (feedback: ProfileBlockFeedback) => void;
+    };
     heading?: boolean;
     loading?: boolean;
     menuItems?: readonly object[];
@@ -205,7 +230,26 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     return createElement(
       'ProfileHero',
       { heading, identity: loading ? 'loading' : profile?.handle, showMuteAction },
-      menuItems ? createElement('ActionMenu', { items: menuItems }) : null,
+      blockAction
+        ? createElement(ProfileBlockAction, {
+            ...blockAction,
+            icon: 'Ban' as never,
+            renderMenuItem: ({
+              focusTriggerRef,
+              item,
+            }: {
+              focusTriggerRef: { current: () => void };
+              item: object;
+            }) => {
+              focusTriggerRef.current = () => menuTriggerFocus();
+              onMenuTriggerReady?.(() => menuTriggerFocus());
+              return createElement('ActionMenu', { items: [item] });
+            },
+            surface: 'menu',
+          })
+        : menuItems
+          ? createElement('ActionMenu', { items: menuItems })
+          : null,
       action,
     );
   },
@@ -213,20 +257,14 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
 mockModule(new URL('./FollowButton.tsx', import.meta.url), {
   FollowButton: ({
     onActionRef,
-    onUnblockSuccess,
     profile,
-    profileBlockStatus,
   }: {
     onActionRef?: (node: { focus: () => void }) => void;
-    onUnblockSuccess?: () => void;
     profile: { handle: string };
-    profileBlockStatus?: { blockedBy: boolean; blocking: boolean; profileBlockId: string | null };
   }) => {
     onActionRef?.({ focus: () => stateActionFocus() });
     return createElement('FollowButton', {
       identity: profile.handle,
-      onUnblockSuccess,
-      profileBlockStatus,
     });
   },
 });
@@ -314,8 +352,10 @@ mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
 
 let ProfileLayout: ComponentType;
 let ProfilePostListPage: ComponentType;
+let ProfileBlockAction: typeof ProfileBlockActionExport;
 
 before(async () => {
+  ({ ProfileBlockAction } = await import('./ProfileBlockAction'));
   ({ usePaginationScrollRegistration } = await import('../pagination/PaginationScrollView'));
   ({ default: ProfileLayout } = await import('../../app/(tabs)/(profile)/[profileHandle]/_layout'));
   ({ default: ProfilePostListPage } =
@@ -351,6 +391,7 @@ afterEach(async () => {
   menuTriggerFocus.mock.resetCalls();
   stateActionFocus.mock.resetCalls();
   contentStateFocus.mock.resetCalls();
+  focusHistory.length = 0;
   changeBlockedImpl = async () => undefined;
   SlotContent = ProfilePostListPage;
 });
@@ -700,7 +741,7 @@ describe('profile route parameter lifecycle', () => {
     }
   });
 
-  it('자신의 차단 상태는 target identity 없이 해제 action을 제공한다', async () => {
+  it('Profile 자체가 조회 불가하면 별도 차단 관계 action을 합성하지 않는다', async () => {
     selectedProfileId = 'owner';
     selectedProfileKind = 'LOCAL';
     profileAvailable = false;
@@ -714,24 +755,9 @@ describe('profile route parameter lifecycle', () => {
     await act(async () => header.props.leading.props.onPress());
     assert.equal(routerBackCount, 1);
 
-    assert.equal(requireRendered('StateView').props.title, '차단한 프로필입니다');
+    assert.equal(requireRendered('StateView').props.title, '프로필을 찾을 수 없어요');
     assert.equal(rendered('ProfileHero').length, 0);
-    const action = rendered('Button').find((node) => node.props.accessibilityLabel === '차단 해제');
-    assert.ok(action);
-
-    await act(async () => action.props.onPress());
-    assert.equal(requireRendered('ModalSheet').props.visible, true);
-    assert.equal(requireRendered('ModalSheet').props.title, '이 프로필의 차단을 해제할까요?');
-    assert.equal(
-      requireRendered('ConfirmationContent').props.message,
-      '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.',
-    );
-    assert.equal(requireRendered('ConfirmationContent').props.tone, 'danger');
-
-    await act(async () => requireRendered('ConfirmationContent').props.onCancel());
-    assert.equal(stateActionFocus.mock.callCount(), 0);
-    await act(async () => requireRendered('ModalSheet').props.onDismiss());
-    assert.equal(stateActionFocus.mock.callCount(), 1);
+    assert.equal(rendered('Button').length, 0);
     assert.equal(changeBlockedCalls.length, 0);
   });
 
@@ -767,7 +793,11 @@ describe('profile route parameter lifecycle', () => {
     assert.deepEqual(identities('PostList'), []);
     assert.equal(requireRendered('StateView').props.title, '차단한 프로필의 게시물입니다');
     assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
-    assert.deepEqual(requireRendered('FollowButton').props.profileBlockStatus, profileBlockStatus);
+    assert.equal(rendered('FollowButton').length, 0);
+    assert.equal(
+      rendered('Button').some((node) => node.props.children === '차단 해제'),
+      true,
+    );
     const menu = requireRendered('ActionMenu');
     assert.deepEqual(
       menu.props.items.map((item: { label: string }) => item.label),
@@ -823,22 +853,23 @@ describe('profile route parameter lifecycle', () => {
     profileBlockStatus = { blockedBy: true, blocking: true, profileBlockId: 'block-1' };
 
     await renderRoute('@blocked');
-    assert.deepEqual(requireRendered('FollowButton').props.profileBlockStatus, profileBlockStatus);
+    assert.equal(rendered('FollowButton').length, 0);
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
     assert.deepEqual(
       requireRendered('ActionMenu').props.items.map((item: { label: string }) => item.label),
       ['차단 해제'],
     );
-    await act(async () => requireRendered('FollowButton').props.onUnblockSuccess());
+    const unblock = rendered('Button').find((node) => node.props.children === '차단 해제');
+    assert.ok(unblock);
+    await act(async () => unblock.props.onPress());
+    await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
 
     profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
-    relayActorLifecycleKey = 'actor-b';
     await renderRoute('@blocked');
     assert.equal(rendered('FollowButton').length, 0);
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
 
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
-
+    assert.deepEqual(focusHistory, ['content']);
     assert.equal(contentStateFocus.mock.callCount(), 1);
     assert.equal(menuTriggerFocus.mock.callCount(), 0);
   });
@@ -881,14 +912,17 @@ describe('profile route parameter lifecycle', () => {
     await act(async () => confirmation.props.onConfirm());
     assert.equal(changeBlockedCalls.length, 1);
     assert.equal(requireRendered('ModalSheet').props.visible, false);
-    assert.equal(toastCalls.at(-1)?.tone, 'danger');
+    assert.equal(toastCalls.length, 0);
     await act(async () => requireRendered('ModalSheet').props.onDismiss());
+    assert.equal(toastCalls.at(-1)?.tone, 'danger');
     assert.equal(menuTriggerFocus.mock.callCount(), 1);
 
     await act(async () => requireRendered('ActionMenu').props.items[0].onSelect());
     await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
     assert.equal(changeBlockedCalls.length, 2);
     assert.equal(requireRendered('ModalSheet').props.visible, false);
+    assert.equal(toastCalls.length, 1);
+    await act(async () => requireRendered('ModalSheet').props.onDismiss());
     assert.equal(toastCalls.at(-1)?.tone, 'success');
   });
 
@@ -905,14 +939,13 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(menuTriggerFocus.mock.callCount(), 1);
   });
 
-  it('Profile 메뉴의 차단 성공 후 actor remount를 넘어 결과 action으로 포커스를 복원한다', async () => {
+  it('Profile 메뉴의 차단 성공 후 같은 component lifecycle에서 결과 action으로 포커스를 복원한다', async () => {
     selectedProfileId = 'owner';
     selectedProfileKind = 'LOCAL';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     changeBlockedImpl = async (_change, nextBlocked) => {
       if (nextBlocked) {
         profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
-        relayActorLifecycleKey = 'actor-b';
       }
     };
     await renderRoute('@target');
@@ -920,60 +953,31 @@ describe('profile route parameter lifecycle', () => {
     await act(async () => requireRendered('ActionMenu').props.items[0].onSelect());
     await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
     await renderRoute('@target');
-
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
-
-    assert.equal(menuTriggerFocus.mock.callCount(), 0);
+    assert.deepEqual(focusHistory, []);
+    await act(async () => requireRendered('ModalSheet').props.onDismiss());
+    assert.deepEqual(focusHistory, ['menu', 'state']);
+    assert.equal(menuTriggerFocus.mock.callCount(), 1);
     assert.equal(stateActionFocus.mock.callCount(), 1);
   });
 
-  it('identity-free 차단 해제 성공 후 actor remount를 넘어 다시 나타난 메뉴로 포커스를 복원한다', async () => {
+  it('양방향 차단 해제 후 남은 차단 콘텐츠 상태로 포커스를 복원한다', async () => {
     selectedProfileId = 'owner';
     selectedProfileKind = 'LOCAL';
-    profileAvailable = false;
-    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
-    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
-    changeBlockedImpl = async (_change, nextBlocked) => {
-      if (!nextBlocked) {
-        profileAvailable = true;
-        profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
-        relayActorLifecycleKey = 'actor-b';
-      }
-    };
-    await renderRoute('@target');
-
-    const action = rendered('Button').find((node) => node.props.accessibilityLabel === '차단 해제');
-    assert.ok(action);
-    await act(async () => action.props.onPress());
-    await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
-    await renderRoute('@target');
-
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
-
-    assert.equal(menuTriggerFocus.mock.callCount(), 1);
-    assert.equal(stateActionFocus.mock.callCount(), 0);
-  });
-
-  it('identity-free 양방향 차단 해제 후 남은 차단 콘텐츠 상태로 포커스를 복원한다', async () => {
-    selectedProfileId = 'owner';
-    selectedProfileKind = 'LOCAL';
-    profileAvailable = false;
     profileBlockStatus = { blockedBy: true, blocking: true, profileBlockId: 'block-1' };
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     changeBlockedImpl = async (_change, nextBlocked) => {
       if (!nextBlocked) {
         profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
-        relayActorLifecycleKey = 'actor-b';
       }
     };
     await renderRoute('@target');
 
-    const action = rendered('Button').find((node) => node.props.accessibilityLabel === '차단 해제');
+    const action = rendered('Button').find((node) => node.props.children === '차단 해제');
     assert.ok(action);
     await act(async () => action.props.onPress());
     await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
     await renderRoute('@target');
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.deepEqual(focusHistory, ['content']);
 
     assert.equal(contentStateFocus.mock.callCount(), 1);
     assert.equal(menuTriggerFocus.mock.callCount(), 0);

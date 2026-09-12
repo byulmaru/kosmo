@@ -1,23 +1,19 @@
 import { Slot, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
-import { Ban, ChevronLeftIcon } from 'lucide-react-native';
+import { ChevronLeftIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { FollowButton } from '@/components/profile/FollowButton';
-import { useProfileBlockMutations } from '@/components/profile/ProfileBlockController';
-import { StaleProfileBlockRequestError } from '@/components/profile/profileBlockErrors';
+import { ProfileBlockAction } from '@/components/profile/ProfileBlockAction';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
-import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { IconButton } from '@/components/ui/IconButton';
-import { ModalSheet } from '@/components/ui/ModalSheet';
 import { StateView } from '@/components/ui/StateView';
-import { useToast } from '@/components/ui/ToastProvider';
 import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -30,9 +26,6 @@ const ProfileLayoutQuery = graphql`
   query ProfileLayoutQuery($handle: String!, $withProfileBlockStatus: Boolean!) {
     profileBlockStatus(handle: $handle) @include(if: $withProfileBlockStatus) {
       blockedBy
-      blocking
-      profileBlockId
-      ...FollowButton_profileBlockStatus
     }
     profileByHandle(handle: $handle) {
       id
@@ -45,45 +38,16 @@ const ProfileLayoutQuery = graphql`
         membership {
           role
         }
+        profileBlock {
+          ...ProfileBlockAction_profileBlock
+        }
       }
       ...ProfileHero_profile
       ...FollowButton_profile
+      ...ProfileBlockAction_profile
     }
   }
 `;
-
-type PostRefreshFocusIntent = Readonly<{
-  actorLifecycleKey: string;
-  target: 'content' | 'menu' | 'state';
-  timeout: ReturnType<typeof setTimeout>;
-}>;
-
-const postRefreshFocusIntents = new Map<string, PostRefreshFocusIntent>();
-
-function focusIntentKey(ownerProfileId: string, handle: string) {
-  return `${ownerProfileId}:${handle}`;
-}
-
-function rememberPostRefreshFocus(
-  intentKey: string,
-  actorLifecycleKey: string,
-  target: 'content' | 'menu' | 'state',
-) {
-  const previous = postRefreshFocusIntents.get(intentKey);
-  if (previous) {
-    clearTimeout(previous.timeout);
-  }
-  const intent: PostRefreshFocusIntent = {
-    actorLifecycleKey,
-    target,
-    timeout: setTimeout(() => {
-      if (postRefreshFocusIntents.get(intentKey) === intent) {
-        postRefreshFocusIntents.delete(intentKey);
-      }
-    }, 5_000),
-  };
-  postRefreshFocusIntents.set(intentKey, intent);
-}
 
 export default function ProfileLayout() {
   const { profileHandle } = useGlobalSearchParams<{
@@ -140,7 +104,6 @@ export default function ProfileLayout() {
       title="프로필을 불러오지 못했어요"
     >
       <ProfileLayoutContent
-        actorLifecycleKey={actorLifecycleKey}
         backButton={backButton}
         handle={handle}
         pathname={pathname}
@@ -152,14 +115,12 @@ export default function ProfileLayout() {
 }
 
 function ProfileLayoutContent({
-  actorLifecycleKey,
   backButton,
   handle,
   pathname,
   scrollKey,
   showPageHeader,
 }: {
-  actorLifecycleKey: string;
   backButton: ReactNode;
   handle: string;
   pathname: string;
@@ -176,177 +137,38 @@ function ProfileLayoutContent({
   );
   const profile = data.profileByHandle;
   const blockStatus = data.profileBlockStatus;
-  const { changeBlocked } = useProfileBlockMutations();
-  const { showToast } = useToast();
-  const [confirmation, setConfirmation] = useState<'block' | 'unblock' | null>(null);
   const [blockedContentVisible, setBlockedContentVisible] = useState(false);
-  const [pending, setPending] = useState(false);
-  const mounted = useRef(true);
-  const inFlight = useRef(false);
-  const cancelRef = useRef<View>(null);
-  const dismissFocusRef = useRef<'menu' | 'state' | null>(null);
+  const [focusRevision, setFocusRevision] = useState(0);
+  const focusTargetRef = useRef<'content' | 'menu' | 'state' | null>(null);
   const stateActionRef = useRef<View>(null);
   const contentStateRef = useRef<View>(null);
   const focusMenuTrigger = useRef<() => void>(() => {});
+  const profileBlock = profile?.viewerState?.profileBlock;
+  const blocking = Boolean(profileBlock);
+  const blockedBy = Boolean(blockStatus?.blockedBy);
 
   useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  useEffect(() => {
-    if (!selectedProfileId) {
-      return;
+    const target = focusTargetRef.current;
+    focusTargetRef.current = null;
+    if (target === 'state') {
+      stateActionRef.current?.focus();
+    } else if (target === 'content') {
+      contentStateRef.current?.focus();
+    } else if (target === 'menu') {
+      focusMenuTrigger.current();
     }
-    const intentKey = focusIntentKey(selectedProfileId, handle);
-    const intent = postRefreshFocusIntents.get(intentKey);
-    const target = intent?.target;
-    if (
-      !intent ||
-      intent.actorLifecycleKey === actorLifecycleKey ||
-      !target ||
-      (target === 'state' && !blockStatus?.blocking) ||
-      (target === 'content' && !blockStatus?.blockedBy) ||
-      (target === 'menu' && (blockStatus?.blocking || !profile))
-    ) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      clearTimeout(intent.timeout);
-      postRefreshFocusIntents.delete(intentKey);
-      if (target === 'state') {
-        stateActionRef.current?.focus();
-      } else if (target === 'content') {
-        contentStateRef.current?.focus();
-      } else {
-        focusMenuTrigger.current();
-      }
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [
-    actorLifecycleKey,
-    blockStatus?.blockedBy,
-    blockStatus?.blocking,
-    handle,
-    profile,
-    selectedProfileId,
-  ]);
+  }, [focusRevision]);
 
-  const closeConfirmation = () => {
-    if (!inFlight.current) {
-      setConfirmation(null);
-    }
-  };
-  const requestChange = async () => {
-    if (inFlight.current || !confirmation || !selectedProfileId || !hasSelectedLocalProfile) {
+  const onBlockFeedback = (feedback: { blocked: boolean; status: 'success' | 'error' }) => {
+    if (feedback.status !== 'success') {
       return;
     }
-    const nextBlocked = confirmation === 'block';
-    const profileBlockId = blockStatus?.profileBlockId;
-    if ((nextBlocked && !profile?.id) || (!nextBlocked && !profileBlockId)) {
-      return;
-    }
-    inFlight.current = true;
-    setPending(true);
-    try {
-      await changeBlocked(
-        {
-          handle,
-          ownerProfileId: selectedProfileId,
-          profileBlockId,
-          targetProfileId: profile?.id,
-        },
-        nextBlocked,
-      );
-      if (!mounted.current) {
-        return;
-      }
-      dismissFocusRef.current = null;
-      rememberPostRefreshFocus(
-        focusIntentKey(selectedProfileId, handle),
-        actorLifecycleKey,
-        nextBlocked ? 'state' : blockStatus?.blockedBy ? 'content' : 'menu',
-      );
-      setConfirmation(null);
-      showToast(nextBlocked ? '프로필을 차단했어요' : '차단을 해제했어요', {
-        tone: 'success',
-      });
-    } catch (error) {
-      if (!mounted.current || error instanceof StaleProfileBlockRequestError) {
-        return;
-      }
-      setConfirmation(null);
-      showToast(
-        nextBlocked
-          ? '프로필을 차단하지 못했어요. 다시 시도해 주세요.'
-          : '차단을 해제하지 못했어요. 다시 시도해 주세요.',
-        { tone: 'danger' },
-      );
-    } finally {
-      if (mounted.current) {
-        inFlight.current = false;
-        setPending(false);
-      }
-    }
+    focusTargetRef.current = feedback.blocked ? 'state' : blockedBy ? 'content' : 'menu';
+    setFocusRevision((revision) => revision + 1);
   };
-  const confirmationModal = (
-    <ModalSheet
-      dismissDisabled={pending}
-      onClose={closeConfirmation}
-      onDismiss={() => {
-        const target = dismissFocusRef.current;
-        dismissFocusRef.current = null;
-        if (target === 'state') {
-          stateActionRef.current?.focus();
-        } else if (target === 'menu') {
-          focusMenuTrigger.current();
-        }
-      }}
-      onShow={() => cancelRef.current?.focus()}
-      title={
-        confirmation === 'block' ? '이 프로필을 차단할까요?' : '이 프로필의 차단을 해제할까요?'
-      }
-      visible={confirmation !== null}
-    >
-      <ConfirmationContent
-        cancelLabel="취소"
-        cancelRef={cancelRef}
-        confirmLabel={confirmation === 'block' ? '차단' : '차단 해제'}
-        message={
-          confirmation === 'block'
-            ? '상대방은 내 게시물을 볼 수 없고, 타임라인과 검색에서 서로의 게시물이 숨겨져요. 팔로우 관계와 요청은 삭제돼요.'
-            : '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.'
-        }
-        onCancel={closeConfirmation}
-        onConfirm={() => void requestChange()}
-        pending={pending}
-        tone="danger"
-      />
-    </ModalSheet>
-  );
-
-  const unblockAction = blockStatus?.blocking ? (
-    <Button
-      controlRef={stateActionRef}
-      accessibilityLabel="차단 해제"
-      onPress={() => {
-        dismissFocusRef.current = 'state';
-        setConfirmation('unblock');
-      }}
-      tone="secondary"
-    >
-      차단 해제
-    </Button>
-  ) : null;
 
   if (!profile) {
-    const missingState = blockStatus?.blocking ? (
-      <View style={styles.blockedState}>
-        <StateView title="차단한 프로필입니다" />
-        {unblockAction}
-      </View>
-    ) : blockStatus?.blockedBy ? (
+    const missingState = blockedBy ? (
       <StateView controlRef={contentStateRef} title="이 프로필을 볼 수 없습니다" />
     ) : (
       <StateView
@@ -355,18 +177,13 @@ function ProfileLayoutContent({
       />
     );
 
-    return (
-      <>
-        {showPageHeader ? (
-          <ProfileRouteContainer scrollKey={scrollKey}>
-            <PageHeader leading={backButton} title="" />
-            {missingState}
-          </ProfileRouteContainer>
-        ) : (
-          missingState
-        )}
-        {blockStatus?.blocking ? confirmationModal : null}
-      </>
+    return showPageHeader ? (
+      <ProfileRouteContainer scrollKey={scrollKey}>
+        <PageHeader leading={backButton} title="" />
+        {missingState}
+      </ProfileRouteContainer>
+    ) : (
+      missingState
     );
   }
 
@@ -383,32 +200,31 @@ function ProfileLayoutContent({
         편집
       </Button>
     </NavigationLink>
-  ) : (
+  ) : blocking && profileBlock ? (
+    <ProfileBlockAction
+      nextBlocked={false}
+      onActionRef={(node) => {
+        stateActionRef.current = node;
+      }}
+      onFeedback={onBlockFeedback}
+      profileBlock={profileBlock}
+      surface="button"
+    />
+  ) : blockedBy ? undefined : (
     <FollowButton
       onActionRef={(node) => {
         stateActionRef.current = node;
       }}
-      onUnblockSuccess={() => {
-        if (selectedProfileId) {
-          rememberPostRefreshFocus(
-            focusIntentKey(selectedProfileId, handle),
-            actorLifecycleKey,
-            blockStatus?.blockedBy ? 'content' : 'menu',
-          );
-        }
-      }}
       profile={profile}
-      profileBlockStatus={blockStatus}
     />
   );
-  const profileAction =
-    blockStatus?.blockedBy && !blockStatus.blocking ? undefined : relationshipAction;
+  const profileAction = relationshipAction;
   const relationshipRoute = pathname.endsWith('/followers') || pathname.endsWith('/following');
   const profileContent = relationshipRoute ? (
     <Slot />
-  ) : blockStatus?.blockedBy ? (
+  ) : blockedBy ? (
     <StateView controlRef={contentStateRef} title="게시물을 볼 수 없습니다" />
-  ) : blockStatus?.blocking && !blockedContentVisible ? (
+  ) : blocking && !blockedContentVisible ? (
     <StateView
       actionLabel="게시물 보기"
       onAction={() => setBlockedContentVisible(true)}
@@ -427,35 +243,29 @@ function ProfileLayoutContent({
         <ProfileHero
           key={selectedProfileId}
           action={profileAction}
-          heading={!showPageHeader}
-          menuItems={
+          blockAction={
             selectedProfileId &&
             hasSelectedLocalProfile &&
             profile.viewerState?.isSelf !== true &&
-            (!blockStatus?.blockedBy || blockStatus.blocking)
-              ? [
-                  {
-                    icon: Ban,
-                    key: blockStatus?.blocking ? 'unblock' : 'block',
-                    label: blockStatus?.blocking ? '차단 해제' : '차단',
-                    onSelect: () => {
-                      dismissFocusRef.current = 'menu';
-                      setConfirmation(blockStatus?.blocking ? 'unblock' : 'block');
-                    },
-                    tone: 'danger' as const,
-                  },
-                ]
+            (!blockedBy || blocking)
+              ? blocking && profileBlock
+                ? {
+                    nextBlocked: false,
+                    onFeedback: onBlockFeedback,
+                    profileBlock,
+                  }
+                : { nextBlocked: true, onFeedback: onBlockFeedback, profile }
               : undefined
           }
+          heading={!showPageHeader}
           onMenuTriggerReady={(focusTrigger) => {
             focusMenuTrigger.current = focusTrigger;
           }}
           profile={profile}
-          showMuteAction={canMute && !blockStatus?.blocking && !blockStatus?.blockedBy}
+          showMuteAction={canMute && !blocking && !blockedBy}
         />
         {profileContent}
       </ProfileRouteContainer>
-      {confirmationModal}
     </>
   );
 }
@@ -484,7 +294,6 @@ const styles = StyleSheet.create({
     marginLeft: -spacing.sm,
     width: 44,
   },
-  blockedState: { alignItems: 'center' },
   nativeRoot: { flex: 1 },
   webRoot: { width: '100%' },
 });

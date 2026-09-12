@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { BlockedProfileList } from '@/components/profile/BlockedProfileList';
-import { FollowButton } from '@/components/profile/FollowButton';
+import { ProfileBlockAction } from '@/components/profile/ProfileBlockAction';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
@@ -11,8 +11,7 @@ import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import type { RefObject } from 'react';
 import type { View } from 'react-native';
-import type { FollowButton_profile$key } from '@/components/profile/__generated__/FollowButton_profile.graphql';
-import type { FollowButton_profileBlock$key } from '@/components/profile/__generated__/FollowButton_profileBlock.graphql';
+import type { ProfileBlockAction_profileBlock$key } from '@/components/profile/__generated__/ProfileBlockAction_profileBlock.graphql';
 import type { SettingsBlockedProfiles_profile$key } from './__generated__/SettingsBlockedProfiles_profile.graphql';
 import type { SettingsBlockedProfilesNextPageQuery } from './__generated__/SettingsBlockedProfilesNextPageQuery.graphql';
 import type { SettingsBlockedProfilesQuery } from './__generated__/SettingsBlockedProfilesQuery.graphql';
@@ -45,11 +44,10 @@ const SettingsBlockedProfilesFragment = graphql`
         cursor
         node {
           id
-          ...FollowButton_profileBlock
+          ...ProfileBlockAction_profileBlock
           targetProfile {
             displayName
             relativeHandle
-            ...FollowButton_profile
           }
         }
       }
@@ -59,8 +57,7 @@ const SettingsBlockedProfilesFragment = graphql`
 
 type BlockedProfile = Readonly<{
   displayName: string;
-  profile: FollowButton_profile$key;
-  profileBlock: FollowButton_profileBlock$key;
+  profileBlock: ProfileBlockAction_profileBlock$key;
   profileBlockId: string;
   relativeHandle: string;
 }>;
@@ -73,10 +70,6 @@ type BlockedProfilesState =
   | { status: 'loading' }
   | { status: 'error'; onRetry: () => void }
   | { status: 'loaded'; profiles: readonly BlockedProfile[]; pagination: Pagination };
-
-type FocusIntent = Readonly<{ ownerProfileId: string; profileBlockId: string }>;
-
-let pendingFocusIntent: FocusIntent | null = null;
 
 export function SettingsBlockedProfiles({ headingRef }: { headingRef?: RefObject<View | null> }) {
   const actorLifecycleKey = useRelayActorLifecycleKey();
@@ -134,7 +127,6 @@ function SettingsBlockedProfilesContent({ headingRef }: { headingRef?: RefObject
   return (
     <BlockedProfilesView
       headingRef={headingRef}
-      ownerProfileId={profile.id}
       state={{
         pagination: loadError
           ? { onRetry: loadMore, status: 'error' }
@@ -145,7 +137,6 @@ function SettingsBlockedProfilesContent({ headingRef }: { headingRef?: RefObject
               : { status: 'end' },
         profiles: edges.map((edge) => ({
           displayName: edge.node.targetProfile.displayName,
-          profile: edge.node.targetProfile,
           profileBlock: edge.node,
           profileBlockId: edge.node.id,
           relativeHandle: edge.node.targetProfile.relativeHandle,
@@ -158,47 +149,11 @@ function SettingsBlockedProfilesContent({ headingRef }: { headingRef?: RefObject
 
 export function BlockedProfilesView({
   headingRef,
-  ownerProfileId,
   state,
 }: {
   headingRef?: RefObject<View | null>;
-  ownerProfileId?: string;
   state: BlockedProfilesState;
 }) {
-  const removedFocus = useRef<{ profileBlockId: string } | null>(null);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const pending =
-        pendingFocusIntent?.ownerProfileId === ownerProfileId ? pendingFocusIntent : null;
-      const removed = removedFocus.current ?? pending;
-      if (
-        !removed ||
-        state.status !== 'loaded' ||
-        state.profiles.some((profile) => profile.profileBlockId === removed.profileBlockId)
-      ) {
-        return;
-      }
-      removedFocus.current = null;
-      if (pending?.profileBlockId === removed.profileBlockId) {
-        pendingFocusIntent = null;
-      }
-      headingRef?.current?.focus();
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [headingRef, ownerProfileId, state]);
-
-  const rememberRemovedProfile = (profile: BlockedProfile) => {
-    if (state.status !== 'loaded') {
-      return;
-    }
-    const intent = { profileBlockId: profile.profileBlockId };
-    removedFocus.current = intent;
-    if (ownerProfileId) {
-      pendingFocusIntent = { ...intent, ownerProfileId };
-    }
-  };
-
   const children =
     state.status === 'loaded'
       ? state.profiles.map((profile) => (
@@ -209,10 +164,15 @@ export function BlockedProfilesView({
             relativeHandle={profile.relativeHandle}
             style={styles.row}
           >
-            <FollowButton
-              onUnblockSuccess={() => rememberRemovedProfile(profile)}
-              profile={profile.profile}
+            <ProfileBlockAction
+              nextBlocked={false}
+              onFeedback={(feedback) => {
+                if (feedback.status === 'success') {
+                  headingRef?.current?.focus();
+                }
+              }}
               profileBlock={profile.profileBlock}
+              surface="button"
             />
           </ProfileListItemContent>
         ))
