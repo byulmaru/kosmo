@@ -108,11 +108,16 @@ export function isWebMobileRouteOwnedHeader(web: boolean, width: number, pathnam
   const segments = pathname.split('/').filter(Boolean);
   const isProfileHome =
     segments.length === 1 && (segments[0]?.length ?? 0) > 1 && segments[0]?.startsWith('@');
+  const isReactionPeopleRoute =
+    segments.length === 3 && segments[0]?.startsWith('@') && segments[2] === 'reactions';
 
   return (
     web &&
     getShellLayout(web, width) === 'mobile' &&
-    (pathname === '/search' || isProfileHome || getProfileConnectionKind(pathname) !== null)
+    (pathname === '/search' ||
+      isProfileHome ||
+      isReactionPeopleRoute ||
+      getProfileConnectionKind(pathname) !== null)
   );
 }
 

@@ -74,6 +74,7 @@ export function PostLayout({
   contentWarningPresentation = 'default',
   mediaPresentation = 'default',
   onDeleted,
+  onReactionPeopleNavigate,
   post: postKey,
   presentation = 'default',
   replyAvailable,
@@ -82,6 +83,7 @@ export function PostLayout({
   contentWarningPresentation?: PostContentWarningPresentation;
   mediaPresentation?: 'default' | 'hidden';
   onDeleted?: () => void;
+  onReactionPeopleNavigate?: () => void;
   post: PostLayout_post$key;
   presentation?: 'compact' | 'default';
   replyAvailable?: boolean;
@@ -313,6 +315,7 @@ export function PostLayout({
           <PostActionSurface
             actionBarStyle={[styles.actionBarFrame, { borderColor: theme.borderSubtle }]}
             onDeleted={handleDeleted}
+            onReactionPeopleNavigate={onReactionPeopleNavigate}
             onQuote={openQuote}
             reactionSummaryStyle={compact ? styles.compactReactionSummary : undefined}
             reply={reply}

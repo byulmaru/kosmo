@@ -138,6 +138,7 @@ describe('getShellLayout', () => {
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer'), true);
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer/followers'), true);
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer/following'), true);
+    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer/post-id/reactions'), true);
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer/post-id'), false);
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/notifications'), false);
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@'), false);
