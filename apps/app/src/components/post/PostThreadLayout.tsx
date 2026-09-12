@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { PostThreadConnector } from './PostThreadConnector';
@@ -31,6 +31,7 @@ export function PostThreadLayout<TPost>({
   renderPost,
 }: PostThreadLayoutProps<TPost>): React.ReactElement {
   const theme = useTheme();
+  const connectorLeft = Platform.OS === 'web' ? spacing.xxl : spacing.xxl + spacing.sm;
   const rows = [
     ...ancestors.map((item) => ({ item, role: 'ancestor' as const })),
     { item: current, role: 'current' as const },
@@ -59,20 +60,28 @@ export function PostThreadLayout<TPost>({
           >
             {connectsFromPrevious ? (
               <PostThreadConnector
-                style={
-                  role === 'current' ? styles.currentConnectorBefore : styles.listConnectorBefore
-                }
+                style={[
+                  role === 'current' ? styles.currentConnectorBefore : styles.listConnectorBefore,
+                  { left: connectorLeft },
+                ]}
                 testID={`post-thread-connector-${previous.item.id}-${item.id}-before`}
               />
             ) : null}
             {connectsToNext ? (
               <PostThreadConnector
-                style={styles.listConnectorAfter}
+                style={[styles.listConnectorAfter, { left: connectorLeft }]}
                 testID={`post-thread-connector-${item.id}-${next.item.id}-after`}
               />
             ) : null}
             {role === 'current' ? (
-              <View style={styles.currentContent}>{renderedPost}</View>
+              <View
+                style={[
+                  styles.currentContent,
+                  { paddingLeft: Platform.OS === 'web' ? spacing.sm : spacing.lg },
+                ]}
+              >
+                {renderedPost}
+              </View>
             ) : (
               renderedPost
             )}
@@ -93,7 +102,6 @@ const styles = StyleSheet.create({
   row: { position: 'relative' },
   currentContent: {
     paddingBottom: spacing.xs,
-    paddingLeft: spacing.sm,
     paddingRight: spacing.md,
     paddingTop: spacing.lg,
   },
@@ -102,15 +110,13 @@ const styles = StyleSheet.create({
     marginLeft: spacing.xxl * 2,
     marginRight: spacing.sm,
   },
-  listConnectorBefore: { height: spacing.sm - spacing.xs, left: spacing.xxl, top: 0 },
+  listConnectorBefore: { height: spacing.sm - spacing.xs, top: 0 },
   listConnectorAfter: {
     bottom: 0,
-    left: spacing.xxl,
     top: spacing.sm + spacing.xxxl + spacing.xs,
   },
   currentConnectorBefore: {
     height: spacing.lg - spacing.xs,
-    left: spacing.xxl,
     top: 0,
   },
 });
