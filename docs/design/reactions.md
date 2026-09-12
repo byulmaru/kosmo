@@ -105,7 +105,13 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
 - 같은 Type의 route를 다시 방문할 때 cache된 Profile을 먼저 표시하고 background에서 최신 목록을 조회한다. Profile 전환 뒤에는 이전 actor의 cache를 재사용하지 않는다.
 - token toggle의 mutation 오류와 Profile 조회 오류는 서로 독립적이다. 한쪽 오류가 다른쪽 interaction을 막지 않는다.
 - Figma는 route의 시각 구조만 확정한다. 실제 URL, history가 없는 직접 진입의 Back fallback, sticky·scroll restoration·focus와 empty/error/pagination 동작은 연결된 Production 이슈와 runtime QA가 소유한다.
-- 현재 production code의 `ReactionProfilesModal`은 연결된 Production 이슈에서 이 route로 교체하기 전까지 남아 있다. 이 디자인 결정만으로 runtime 반영이 완료됐다고 보지 않는다.
+- PROD-938의 route는 기존 Post URL 아래 `/:profileHandle/:postId/reactions`를 사용한다. 일반·Quote는 own Post, 순수 Repost는 source Post를 조회하며 작성자 handle이 다르면 canonical Post 경로로 정규화한다.
+- 선택 Type은 `type` query에 기록한다. 진입은 history에 추가하고 필터 변경은 현재 항목을 갱신한다. query가 없거나 현재 양수 count에 없는 Type이면 서버 순서의 첫 Type을 사용하며, 양수 Type이 없으면 필터 없이 빈 목록 상태를 표시한다.
+- 앱 안에서 진입한 화면의 Back은 이전 화면으로 돌아가고, 직접 진입으로 앱의 이전 화면이 없으면 canonical Post 상세로 이동한다. 프로필 방문 후 Back은 같은 Type과 기존 route scroll 위치를 복원한다.
+- 최초 진입은 화면 제목에 focus를 두고, 필터 전환은 선택 tab에 focus를 유지하며 목록 scroll 위치를 초기화한다. Back은 기존 navigation scroll 복원 경계를 사용하고 가능한 경우 People 진입 control로 focus를 돌리며, 해당 control이 없어졌으면 기존 화면 fallback을 사용한다.
+- PROD-938은 목록·상세·답글 알림·Wide Viewer의 기존 People 진입점을 이관한다. Viewer를 떠나는 이동은 열린 Viewer와 focus lifecycle도 정리한다. Compact Viewer의 새로운 People 진입점 노출은 PROD-849에서 정렬한다.
+- 현재 허용 Reaction은 여섯 Type이다. 6종 초과 펼침·접기는 독립 UI Tests에서 디자인 계약으로 검증하며, Production Playground와 서버 통합 검증에는 실제 지원 Type만 사용한다. 이 검증을 이유로 API나 저장 가능한 Type을 확장하지 않는다.
+- PROD-938은 기존 `ReactionProfilesModal`을 전용 route로 교체한다. 구현·자동 검증·Web 관찰 결과와 Native 미실행 항목은 해당 OpenSpec change의 검증 기록으로 구분한다.
 
 ## Mutation과 공유 상태
 

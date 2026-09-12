@@ -447,6 +447,7 @@ function UniversalShellContent() {
       openProfileSwitcher={openProfileSwitcher}
       registerHomeReselection={registerHomeReselection}
       reselectHome={reselectHome}
+      screenFallbackRef={screenFallbackRef}
     >
       <PrimaryNavigationScrollReset pathname={pathname} />
       {nativeDrawer}

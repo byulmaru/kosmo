@@ -3328,7 +3328,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
     ).toBeCloseTo(0, 0);
     const quoteSourcePreview = within(quoteRow!).getByTestId('source-post-preview');
     const quoteSourceBody = within(quoteSourcePreview).getByTestId('source-post-body');
-    const quoteReactionSummary = within(quoteCard).getByRole('button', {
+    const quoteReactionSummary = await within(quoteCard).findByRole('button', {
       name: '🎉 반응 3개',
     });
     expect(pureRepostAttributionLink.getBoundingClientRect().height).toBe(20);
@@ -3566,7 +3566,7 @@ export const ProductionReactionMutationTargets: Story = {
 
     for (const [testId, summaryLabel] of detailTargets) {
       const detail = within(canvas.getByTestId(testId));
-      expect(detail.getByRole('button', { name: summaryLabel })).toBeVisible();
+      await expect(detail.findByRole('button', { name: summaryLabel })).resolves.toBeVisible();
       expect(detail.getByRole('button', { name: '반응' })).toBeEnabled();
     }
     expect(
@@ -3594,7 +3594,7 @@ export const ProductionReactionMutationTargets: Story = {
     ];
 
     for (const [index, { actionBar, root, summaryLabel }] of surfaces.entries()) {
-      const summaryToken = within(root).getByRole('button', { name: summaryLabel });
+      const summaryToken = await within(root).findByRole('button', { name: summaryLabel });
       await userEvent.click(summaryToken);
       expect(screen.queryByRole('dialog', { name: '반응한 프로필' })).toBeNull();
       await waitFor(() => {
@@ -4843,7 +4843,7 @@ export const ProductionPureRepostLongAuthorMobile: Story = {
 export const PostLayoutOwnsReactionSummary: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const reactionSummary = canvas.getByRole('button', { name: '❤️ 반응 2개' });
+    const reactionSummary = await canvas.findByRole('button', { name: '❤️ 반응 2개' });
     const actionBar = canvas.getByRole('toolbar', { name: '액션 바' });
     const engagement = canvas.getByTestId('post-layout-engagement');
     const actionBarFrame = actionBar.parentElement!;
@@ -5098,7 +5098,7 @@ export const PostDetailThreadRoute: Story = {
       ).borderBottomWidth,
     ).toBe('0px');
     expect(canvas.getByText('Reply+Quote 자체 Content')).toBeVisible();
-    const reactionButton = canvas.getByRole('button', { name: '❤️ 반응 2개' });
+    const reactionButton = await canvas.findByRole('button', { name: '❤️ 반응 2개' });
     expect(reactionButton).toBeVisible();
     const currentRow = canvas.getByTestId('post-thread-current-route-current');
     const currentActionBar = within(currentRow).getByRole('toolbar', { name: '액션 바' });

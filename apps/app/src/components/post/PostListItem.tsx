@@ -97,11 +97,13 @@ const PostListItemFragment = graphql`
 `;
 
 export function PostListItem({
+  onReactionPeopleNavigate,
   pinned = false,
   post: postKey,
   showDivider = true,
   showReplyAttribution = true,
 }: {
+  onReactionPeopleNavigate?: () => void;
   pinned?: boolean;
   post: PostListItem_post$key;
   showDivider?: boolean;
@@ -242,6 +244,7 @@ export function PostListItem({
         {replyAttribution}
         <PostListRow
           actionBarStyle={styles.actionBarSlot}
+          onReactionPeopleNavigate={onReactionPeopleNavigate}
           onQuote={openQuote}
           post={post}
           reply={reply}
@@ -278,7 +281,13 @@ export function PostListItem({
             </Pressable>
           </Link>
         </PostAttributionRow>
-        <PostListRow onQuote={openQuote} post={source} reply={reply} surfacePostId={post.id} />
+        <PostListRow
+          onQuote={openQuote}
+          onReactionPeopleNavigate={onReactionPeopleNavigate}
+          post={source}
+          reply={reply}
+          surfacePostId={post.id}
+        />
       </View>,
     );
   }
@@ -314,6 +323,7 @@ export function PostListItem({
           />
           <PostActionSurface
             onQuote={openQuote}
+            onReactionPeopleNavigate={onReactionPeopleNavigate}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
             socialActionTarget={post.actionSurface!}
@@ -336,12 +346,14 @@ function PostAttributionRow({ children, icon }: { children: ReactNode; icon: Rea
 function PostListRow({
   actionBarStyle,
   onQuote,
+  onReactionPeopleNavigate,
   post: postKey,
   reply,
   surfacePostId,
 }: {
   actionBarStyle?: StyleProp<ViewStyle>;
   onQuote?: (restoreFocus: () => void) => void;
+  onReactionPeopleNavigate?: () => void;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
   surfacePostId?: string;
@@ -405,6 +417,7 @@ function PostListRow({
         <PostActionSurface
           actionBarStyle={actionBarStyle}
           onQuote={onQuote}
+          onReactionPeopleNavigate={onReactionPeopleNavigate}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
           socialActionTarget={post.actionSurface!}

@@ -17,6 +17,7 @@ import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
 type Props = Readonly<{
   actionBarStyle?: StyleProp<ViewStyle>;
   onDeleted?: () => void;
+  onReactionPeopleNavigate?: () => void;
   onQuote?: (restoreFocus: () => void) => void;
   reactionSummaryStyle?: StyleProp<ViewStyle>;
   reply?: PostActionBarProps['reply'];
@@ -40,6 +41,7 @@ const postActionSurfaceFragment = graphql`
 export function PostActionSurface({
   actionBarStyle,
   onDeleted,
+  onReactionPeopleNavigate,
   reactionSummaryStyle,
   reply,
   socialActionTarget,
@@ -88,7 +90,11 @@ export function PostActionSurface({
 
   return (
     <>
-      <PostReactionSummary controller={reactionController} style={reactionSummaryStyle} />
+      <PostReactionSummary
+        controller={reactionController}
+        onPeopleNavigate={onReactionPeopleNavigate}
+        style={reactionSummaryStyle}
+      />
       {canMute ? (
         <ProfileMuteAction
           profile={target.profile}

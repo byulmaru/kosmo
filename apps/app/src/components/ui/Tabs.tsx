@@ -18,6 +18,8 @@ export type TabListProps<Value extends string> = {
   accessibilityLabel: string;
   children: ReactElement<TabProps<Value>> | readonly ReactElement<TabProps<Value>>[];
   onValueChange: (value: Value) => void;
+  pillInset?: boolean;
+  pillWrap?: boolean;
   value: Value;
   variant: TabVariant;
 };
@@ -55,6 +57,8 @@ export function TabList<Value extends string>({
   accessibilityLabel,
   children,
   onValueChange,
+  pillInset = true,
+  pillWrap = false,
   value,
   variant,
 }: TabListProps<Value>) {
@@ -80,17 +84,28 @@ export function TabList<Value extends string>({
 
   const content =
     variant === 'pill' ? (
-      <ScrollView
-        accessibilityLabel={accessibilityLabel}
-        accessibilityRole="tablist"
-        contentContainerStyle={styles.pillList}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.pillScroll}
-        {...(web ? ({ role: 'tablist' } as WebTabListProps) : undefined)}
-      >
-        {children}
-      </ScrollView>
+      pillWrap ? (
+        <View
+          accessibilityLabel={accessibilityLabel}
+          accessibilityRole="tablist"
+          style={[styles.pillList, !pillInset && styles.pillFlush, styles.pillWrap]}
+          {...(web ? ({ role: 'tablist' } as WebTabListProps) : undefined)}
+        >
+          {children}
+        </View>
+      ) : (
+        <ScrollView
+          accessibilityLabel={accessibilityLabel}
+          accessibilityRole="tablist"
+          contentContainerStyle={[styles.pillList, !pillInset && styles.pillFlush]}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.pillScroll}
+          {...(web ? ({ role: 'tablist' } as WebTabListProps) : undefined)}
+        >
+          {children}
+        </ScrollView>
+      )
     ) : (
       <View
         accessibilityLabel={accessibilityLabel}
@@ -333,6 +348,8 @@ const styles = StyleSheet.create({
           ? space[8]
           : space[8] + borderWidths[2],
   },
+  pillFlush: { paddingHorizontal: 0, paddingTop: 0 },
+  pillWrap: { flexWrap: 'wrap' },
   pillTab: {
     alignItems: 'center',
     borderRadius: Platform.OS === 'web' ? radius[8] : 0,
