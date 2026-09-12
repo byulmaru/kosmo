@@ -24,7 +24,6 @@ type FollowButtonProps = {
   profile: FollowButton_profile$key;
   profileBlock?: FollowButton_profileBlock$key | null;
   profileBlockStatus?: FollowButton_profileBlockStatus$key | null;
-  size?: 'compact' | 'medium';
   style?: StyleProp<ViewStyle>;
 };
 
@@ -133,7 +132,6 @@ export function FollowButton({
   profile,
   profileBlock = null,
   profileBlockStatus = null,
-  size = 'medium',
   style,
 }: FollowButtonProps) {
   const { selectedProfileId } = useSession();
@@ -233,8 +231,7 @@ export function FollowButton({
             }}
             disabled={unblockPending}
             onPress={() => setUnblockOpen(true)}
-            size={size === 'compact' ? 'compact' : 'default'}
-            style={size === 'compact' ? styles.compactButton : styles.mediumButton}
+            style={styles.relationButton}
             tone="secondary"
           >
             차단 해제
@@ -384,8 +381,7 @@ export function FollowButton({
         disabled={loading}
         controlRef={onActionRef}
         onPress={toggleFollow}
-        size={size === 'compact' ? 'compact' : 'default'}
-        style={size === 'compact' ? styles.compactButton : styles.mediumButton}
+        style={styles.relationButton}
         tone={isFollowing || isPending ? 'secondary' : 'primary'}
       >
         {isFollowing ? '팔로잉' : isPending ? '요청됨' : '팔로우'}
@@ -396,6 +392,5 @@ export function FollowButton({
 
 const styles = StyleSheet.create({
   root: { alignItems: 'flex-end' },
-  compactButton: { width: 72 },
-  mediumButton: { minWidth: 96, width: 96 },
+  relationButton: { minWidth: 96, width: 96 },
 });

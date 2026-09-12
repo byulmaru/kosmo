@@ -9,7 +9,6 @@ import type { ProfileListItem as ProfileListItemExport } from './ProfileListItem
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const platform = { OS: 'web' };
-let windowWidth = 1280;
 let renderer: ReactTestRenderer | null = null;
 const changeBlockedCalls: Array<{
   change: { handle?: string | null; ownerProfileId: string; profileBlockId?: string | null };
@@ -28,7 +27,6 @@ mockModule('react-native', {
     flatten: (styles: ReadonlyArray<object | undefined>) => Object.assign({}, ...styles),
   },
   Text: 'Text',
-  useWindowDimensions: () => ({ width: windowWidth }),
   View: 'View',
 });
 mockModule('react-relay', {
@@ -99,7 +97,6 @@ afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = null;
   platform.OS = 'web';
-  windowWidth = 1280;
   changeBlockedCalls.length = 0;
   changeBlockedError = null;
   toastCalls.length = 0;
@@ -233,7 +230,6 @@ test('관리 관계 fragment도 같은 차단 해제 action을 사용한다', as
       createElement(FollowButton, {
         profile: profile as never,
         profileBlock: { id: 'profile-block-list' } as never,
-        size: 'compact',
       }),
     );
   });
@@ -248,27 +244,20 @@ test('관리 관계 fragment도 같은 차단 해제 action을 사용한다', as
   assert.equal(changeBlockedCalls[0]?.change.profileBlockId, 'profile-block-list');
 });
 
-for (const size of [undefined, 'compact'] as const) {
-  test(`FollowButton ${size ?? 'default'} delegates height to Button and supplies width`, async () => {
-    await act(async () => {
-      renderer = create(createElement(FollowButton, { profile: {} as never, size }));
-    });
-    assert.ok(renderer);
-    const button = renderer.root.find((node) => (node.type as unknown) === 'Button');
-    assert.equal(button.props.size, size === 'compact' ? 'compact' : 'default');
-    assert.equal(button.props.style.width, size === 'compact' ? 72 : 96);
-    assert.equal(button.props.style.height, undefined);
-    assert.equal(button.props.hitSlop, undefined);
+test('FollowButton은 높이를 공용 Button에 위임하고 96px 관계 action 폭을 사용한다', async () => {
+  await act(async () => {
+    renderer = create(createElement(FollowButton, { profile: {} as never }));
   });
-}
+  assert.ok(renderer);
+  const button = renderer.root.find((node) => (node.type as unknown) === 'Button');
+  assert.equal(button.props.size, undefined);
+  assert.equal(button.props.style.width, 96);
+  assert.equal(button.props.style.height, undefined);
+  assert.equal(button.props.hitSlop, undefined);
+});
 
-for (const [os, size] of [
-  ['ios', 'medium'],
-  ['ios', 'compact'],
-  ['android', 'medium'],
-  ['android', 'compact'],
-] as const) {
-  test(`${os} ${size} 차단 action은 터치 영역을 공통 Button에 위임한다`, async () => {
+for (const os of ['ios', 'android'] as const) {
+  test(`${os} 차단 action은 터치 영역을 공통 Button에 위임한다`, async () => {
     platform.OS = os;
     await act(async () => {
       renderer = create(
@@ -279,7 +268,6 @@ for (const [os, size] of [
             blocking: true,
             profileBlockId: 'profile-block-a',
           } as never,
-          size,
         }),
       );
     });
@@ -290,22 +278,20 @@ for (const [os, size] of [
   });
 }
 
-for (const [os, width, expectedWidth, marginVertical] of [
-  ['web', 767, 96, 0],
-  ['web', 768, 72, 0],
-  ['web', 1280, 72, 0],
-  ['ios', 1280, 96, -2],
-  ['android', 1280, 96, -4],
+for (const [os, marginVertical] of [
+  ['web', 0],
+  ['ios', -2],
+  ['android', -4],
 ] as const) {
-  test(`${os} ${width}px ProfileListItem selects the consumer size without increasing row height`, async () => {
+  test(`${os} ProfileListItem uses the 96×40 relation action without increasing row height`, async () => {
     platform.OS = os;
-    windowWidth = width;
     await act(async () => {
       renderer = create(createElement(ProfileListItem, { profile: {} as never }));
     });
     assert.ok(renderer);
     const button = renderer.root.find((node) => (node.type as unknown) === 'Button');
-    assert.equal(button.props.style.width, expectedWidth);
+    assert.equal(button.props.size, undefined);
+    assert.equal(button.props.style.width, 96);
     const parentStyle = Object.assign({}, ...button.parent!.props.style.flat());
     assert.equal(parentStyle.marginVertical, marginVertical);
   });
