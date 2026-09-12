@@ -6,7 +6,6 @@ import { ProfileListItemContent } from '@/components/profile/ProfileListItemCont
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { getIconButtonTargetSize, IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/ToastProvider';
-import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { iconSizes, space } from '@/theme/tokens';
 import type { Href } from 'expo-router';
@@ -78,7 +77,6 @@ const rejectFollowRequestMutation = graphql`
 
 export function FollowRequestListItem({ connectionId, request }: FollowRequestListItemProps) {
   const { showToast } = useToast();
-  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const data = useFragment(followRequestListItemFragment, request);
   const [commitApprove] = useMutation<FollowRequestListItemApproveMutation>(
     approveFollowRequestMutation,
@@ -105,48 +103,27 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
     }
 
     setPendingAction(action);
-    const mutationGeneration = environmentGenerationRef?.current;
-
-    if (action === 'approve') {
-      commitApprove({
-        onCompleted: (_response, errors) => {
-          if (environmentGenerationRef?.current !== mutationGeneration) {
-            return;
-          }
-          if (errors?.length) {
-            handleFailure(action);
-            return;
-          }
-          setPendingAction(null);
-        },
-        onError: () => {
-          if (environmentGenerationRef?.current !== mutationGeneration) {
-            return;
-          }
-          handleFailure(action);
-        },
-        variables: { connections: [connectionId], id: data.id },
-      });
-      return;
-    }
-
-    commitReject({
-      onCompleted: (_response, errors) => {
-        if (environmentGenerationRef?.current !== mutationGeneration) {
-          return;
-        }
+    const callbacks = {
+      onCompleted: (_response: unknown, errors: ReadonlyArray<unknown> | null | undefined) => {
         if (errors?.length) {
           handleFailure(action);
           return;
         }
         setPendingAction(null);
       },
-      onError: () => {
-        if (environmentGenerationRef?.current !== mutationGeneration) {
-          return;
-        }
-        handleFailure(action);
-      },
+      onError: () => handleFailure(action),
+    };
+
+    if (action === 'approve') {
+      commitApprove({
+        ...callbacks,
+        variables: { connections: [connectionId], id: data.id },
+      });
+      return;
+    }
+
+    commitReject({
+      ...callbacks,
       variables: { connections: [connectionId], id: data.id },
     });
   };

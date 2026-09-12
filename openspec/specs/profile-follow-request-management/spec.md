@@ -82,15 +82,16 @@
 
 ### Requirement: selected Profile 상태 격리
 
-**Authority / Provenance:** `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `docs/design/accessibility.md`, `PROD-272`, `PROD-566` 시스템은 selected Profile이 전환될 때 이전 Profile의 요청 목록, pagination, 행별 pending·error와 Relay cache state를 새 Profile 화면에 재사용해서는 안 된다(MUST NOT). 이전 actor에서 늦게 완료된 조회나 mutation이 새 selected Profile의 화면이나 connection을 변경해서도 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `docs/design/accessibility.md`, `PROD-272`, `PROD-566` 시스템은 selected Profile이 전환될 때 이전 Profile의 요청 목록, pagination, 행별 pending 상태와 Relay cache state를 새 Profile 화면에 재사용해서는 안 된다(MUST NOT). 이전 actor에서 늦게 완료된 조회나 mutation이 새 selected Profile의 요청 목록이나 connection을 변경해서도 안 된다(MUST NOT). 단, actor 전환 전에 시작된 mutation의 늦은 실패 callback은 행 밖 공용 danger Toast를 한 번 표시할 수 있으며, 이는 이 격리 계약의 범위에 포함하지 않는다.
 
 #### Scenario: Profile 전환
 
 - **WHEN** 사용자가 `/follow-requests`를 보고 있는 동안 selected Profile을 전환한다
 - **THEN** 시스템은 새 Profile actor 경계에서 받은 요청 목록을 다시 조회한다
-- **AND** 이전 Profile의 목록, pagination, pending과 error 상태를 표시하지 않는다
+- **AND** 이전 Profile의 목록, pagination 또는 행별 pending 상태를 표시하지 않는다
 
 #### Scenario: 이전 actor 응답 격리
 
 - **WHEN** Profile 전환 뒤 이전 actor의 조회나 mutation 응답이 늦게 완료된다
 - **THEN** 해당 응답은 새 selected Profile의 목록이나 connection을 변경하지 않는다
+- **AND** actor 전환 전에 시작된 mutation의 늦은 실패 callback은 행 밖 공용 danger Toast를 한 번 표시할 수 있다

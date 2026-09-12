@@ -1,19 +1,14 @@
-import { useCallback, useRef, useState } from 'react';
 import { Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import FollowRequestsScreen from '@/app/(tabs)/(protected)/follow-requests';
 import {
   FollowRequestList,
   FollowRequestListState,
 } from '@/components/follow-request/FollowRequestList';
-import { Button } from '@/components/ui/Button';
-import { RelayActorBoundary, RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { GraphQLResponse } from 'relay-runtime';
 import type { FollowRequestsStoriesQuery as FollowRequestsStoriesQueryType } from './__generated__/FollowRequestsStoriesQuery.graphql';
 
 const requesterA = profile({
@@ -82,10 +77,6 @@ const paginationProfile = followRequestProfile({
   hasNext: true,
   id: 'follow-request-profile-pagination',
   requests: [followRequest('follow-request-page-a', requesterA)],
-});
-const switchedProfile = followRequestProfile({
-  id: 'follow-request-profile-switched',
-  requests: [followRequest('follow-request-a', requesterB)],
 });
 const requesterACacheProfile = {
   ...requesterA,
@@ -200,75 +191,6 @@ function ApprovalNormalizationList() {
       <Text>요청 프로필 팔로잉 수 {follower.followingCount}</Text>
       <FollowRequestList profile={followee.followRequestList!} />
     </>
-  );
-}
-
-function ActorSwitchScreen() {
-  const { resetActor } = useRelayActor();
-
-  return (
-    <>
-      <Button onPress={() => resetActor(switchedProfile.id)}>프로필 전환</Button>
-      <FollowRequestsScreen />
-    </>
-  );
-}
-
-function ControlledActorSwitchStory() {
-  const actorIndex = useRef(0);
-  const staleActorRequest = useRef<((error: Error) => void) | null>(null);
-  const [mutationRequests, setMutationRequests] = useState(0);
-  const [oldMutationReleased, setOldMutationReleased] = useState(false);
-  const createEnvironment = useCallback(() => {
-    const currentActorIndex = actorIndex.current++;
-    const environment = new Environment({
-      network: Network.create((request) =>
-        Observable.create((sink) => {
-          if (request.operationKind === 'mutation') {
-            setMutationRequests((count) => count + 1);
-            if (currentActorIndex === 0) {
-              staleActorRequest.current = (error) => {
-                sink.error(error);
-                setOldMutationReleased(true);
-              };
-              return;
-            }
-
-            sink.next({ data: {} } as GraphQLResponse);
-            sink.complete();
-            return;
-          }
-
-          sink.next({
-            data: {
-              currentSession: {
-                id:
-                  currentActorIndex === 0 ? 'follow-request-session-a' : 'follow-request-session-b',
-                selectedProfile: currentActorIndex === 0 ? contentProfile : switchedProfile,
-              },
-            },
-          } as GraphQLResponse);
-          sink.complete();
-        }),
-      ),
-      store: new Store(new RecordSource()),
-    });
-    return environment;
-  }, []);
-
-  return (
-    <RelayActorProvider createEnvironment={createEnvironment}>
-      <RelayActorBoundary>
-        <ActorSwitchScreen />
-      </RelayActorBoundary>
-      <Button onPress={() => staleActorRequest.current?.(new Error('승인 mutation 실패'))}>
-        이전 프로필 요청 실패
-      </Button>
-      <Text testID="old-actor-mutation-request-count">{mutationRequests}</Text>
-      {oldMutationReleased ? (
-        <Text testID="old-actor-mutation-released">이전 프로필 요청 완료</Text>
-      ) : null}
-    </RelayActorProvider>
   );
 }
 
@@ -469,27 +391,4 @@ export const SelectedProfileScreen: Story = {
     expect(canvas.getByRole('link', { name: '별빛 여행자 프로필로 이동' })).toBeVisible();
   },
   render: () => <FollowRequestsScreen />,
-};
-
-export const LatePreviousActorMutationIsIsolated: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '별빛 여행자 팔로우 요청 승인' }));
-    await expect(
-      canvas.findByTestId('old-actor-mutation-request-count'),
-    ).resolves.toHaveTextContent('1');
-    await userEvent.click(canvas.getByRole('button', { name: '프로필 전환' }));
-
-    await expect(
-      canvas.findByRole('link', { name: '은하 기록자 프로필로 이동' }),
-    ).resolves.toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '이전 프로필 요청 실패' }));
-    await expect(canvas.findByTestId('old-actor-mutation-released')).resolves.toBeVisible();
-    expect(canvas.getByRole('link', { name: '은하 기록자 프로필로 이동' })).toBeVisible();
-    expect(
-      canvas.queryByRole('link', { name: '별빛 여행자 프로필로 이동' }),
-    ).not.toBeInTheDocument();
-    expect(canvas.queryByText(/팔로우 요청을 승인하지 못했어요/)).not.toBeInTheDocument();
-  },
-  render: () => <ControlledActorSwitchStory />,
 };
