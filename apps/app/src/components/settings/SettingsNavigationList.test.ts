@@ -57,10 +57,33 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
 let SettingsNavigationList: ComponentType<{
   selected?: 'default-post-visibility';
 }>;
+let SettingsMuteAndBlockNavigation: ComponentType<{
+  selected?: 'blocked-profiles' | 'muted-profiles';
+}>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
   ({ SettingsNavigationList } = await import('./SettingsNavigationList'));
+  ({ SettingsMuteAndBlockNavigation } = await import('./SettingsMuteAndBlockNavigation'));
+});
+
+describe('SettingsMuteAndBlockNavigation', () => {
+  it('기존 뮤트와 차단 관리 destination을 이 순서로 직접 연결한다', async () => {
+    await act(async () => {
+      renderer = create(createElement(SettingsMuteAndBlockNavigation));
+    });
+    assert.ok(renderer);
+
+    const links = rendered('Pressable');
+    assert.deepEqual(
+      links.map((link) => ({ label: link.props.accessibilityLabel, href: link.props.href })),
+      [
+        { label: '뮤트한 프로필 관리 열기', href: '/settings/muted-profiles' },
+        { label: '차단한 프로필 관리 열기', href: '/settings/blocked-profiles' },
+      ],
+    );
+    assert.deepEqual(texts(), ['뮤트한 프로필', '차단한 프로필']);
+  });
 });
 
 afterEach(async () => {
@@ -105,4 +128,10 @@ async function render(selected?: 'default-post-visibility') {
 function rendered(type: string): ReactTestInstance[] {
   assert.ok(renderer);
   return renderer.root.findAll((node) => node.type === type);
+}
+
+function texts(): string[] {
+  return rendered('Text').flatMap((node) =>
+    typeof node.props.children === 'string' ? [node.props.children] : [],
+  );
 }

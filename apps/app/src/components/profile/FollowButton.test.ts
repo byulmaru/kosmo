@@ -181,6 +181,8 @@ test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유
       nextBlocked: false,
     },
   ]);
+  assert.deepEqual(toastCalls, []);
+  await act(async () => modal?.props.onDismiss());
   assert.deepEqual(toastCalls, [{ message: '차단을 해제했어요', tone: 'success' }]);
   assert.equal(unblockSuccesses, 1);
 });

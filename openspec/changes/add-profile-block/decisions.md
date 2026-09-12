@@ -107,6 +107,18 @@
 - Consequences: `PROD-823`은 서버 결과 수렴과 actor switch 회귀를, `PROD-813`은 cross-slice UI/API 결과를 검증한다. `PROD-917`은 후속 UI 교체에서도 같은 actor·content policy 경계를 유지한다. client 상태를 갱신하는 구체 mechanism은 영향 범위에 맞춰 구현 시 정한다.
 - Confirmation / Follow-up: `PROD-823`에서 success/failure·A/B actor·Unblock no-restore 뒤 client 상태 수렴을 확인하고, `PROD-813`에서 Profile switch와 cross-slice actor 상태 격리를 E2E로 확인한다.
 
+### 공통 관계 action과 surface 조합을 같은 이슈의 두 PR로 분리한다
+
+- Decision Date: 2026-09-10
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/profile-mute-block.md`, `PROD-823`, PR #772 review `5163335465`
+- Status: Active
+- Context / Problem: Profile route와 차단 관리 목록이 각각 해제 mutation·확인창·pending·실패·Relay 갱신을 조립하면 Follow 관계 action과 차단 상태가 surface마다 달라지고 회귀 검증이 중복된다.
+- Decision Outcome: 새 이슈를 만들지 않고 `PROD-823` 하나에 두 Stack PR을 연결한다. 부모 PR은 기존 `FollowButton`의 Block 관계 fragment·해제 lifecycle과 공통 회귀를 소유한다. 자식 #772는 Profile route와 관리 목록에서 그 action의 노출 여부, 목록 조회·pagination과 focus fallback을 조합한다. identity-free route의 해제 fallback은 Profile fragment가 없으므로 #772에 유지한다.
+- Alternatives Considered: surface별 해제 action 유지는 상태·오류·cache 책임을 중복한다. 별도 Linear 이슈 생성은 이미 승인된 `PROD-823` 행동 범위를 불필요하게 나눈다.
+- Consequences: 양방향 Block에서도 자신의 해제 action을 유지하고, 해제 뒤 서버 결과가 `blockedBy`만 남으면 부모 surface가 action을 숨긴다. 공통 action은 이전 Follow를 복구하지 않는다.
+- Confirmation / Follow-up: 부모 PR에서 공통 상태·hover/focus·Native tap·mutation·actor 회귀를, #772에서 Profile/Settings 연결·pagination·focus와 상대 Block 잔존 수렴을 검증한다.
+
 ### 저장 schema는 additive 확장과 no-backfill rollout을 따른다
 
 - Decision Date: 2026-09-02
@@ -190,6 +202,22 @@
 - Alternatives Considered: 별도 디자인 이슈를 새로 만들거나 완료된 `DSN-53`을 재개하는 대신, 사용자가 현재 구현과 canonical에 맞춘 최소 행동 계약을 확정했다.
 - Consequences: `PROD-823`은 기존 UI에서 위 상태 전이를 구현·검증하고 `PROD-813`에 통합 증거를 인계한다. 완료된 `PROD-861`은 재개하지 않으며, `PROD-917`은 이 동작을 재결정하지 않고 신규 UI 교체 후 회귀를 검증한다.
 - Confirmation / Follow-up: component 또는 E2E에서 최초 경고·action, 명시적 action 전 비노출과 action 후 허용 콘텐츠 표시, 임의 시간 경과 후 비노출 유지, Profile handle·selected actor lifecycle 전환 후 경고 재적용을 검증한다.
+
+### 차단 해제는 확인창에서 확정한 뒤 요청한다
+
+- Decision Date: 2026-09-06
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/profile-mute-block.md`의 Profile action과 완료 피드백, `PROD-823`의 차단 해제 확인 방식
+  (2026-09-06 사용자 결정: “Block은 확인창 방식”).
+- Status: Active
+- Context / Problem: 기존 공용 UI는 해제 확인을 제공하지만 canonical에 확인 여부가 명시되지 않아 runtime 연결 기준을 확인했다.
+- Decision Outcome: Profile 메뉴, identity-free `blocking` 상태와 차단 관리 목록의 해제는 확인창을 거친다. `취소`는 요청하지 않고,
+  Danger `차단 해제` 확정 뒤에만 요청한다. 확인창은 이전 팔로우 관계가 복구되지 않음을 알리며 identity-free 상태에서는 Target identity를 표시하지 않는다.
+- Alternatives Considered: 확인 없이 즉시 요청하는 방식도 검토했지만 사용자가 기존 Block UI의 확인창 방식을 선택했다.
+- Consequences: 해제 확인의 취소·pending 중복 입력 및 dismiss 차단·실패 후 재시도를 runtime 검증에 포함한다. 기존 서버 확정 상태와
+  actor 격리, Unblock no-restore는 유지한다.
+- Confirmation / Follow-up: 사용자 선택을 canonical·Linear에 반영했다. PROD-861의 공용 presentation을 소비하며 전체 Spec 승인과
+  PROD-822·PROD-861의 선행 완료는 별도로 확인한다.
 
 ## Remaining Decisions
 

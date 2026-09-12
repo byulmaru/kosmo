@@ -17,6 +17,7 @@ const profileFragment = graphql`
   fragment ProfileBlockAction_profile on Profile {
     id
     displayName
+    relativeHandle
   }
 `;
 
@@ -39,7 +40,7 @@ export type ProfileBlockMenuItemRenderProps = Readonly<{
   item: ActionMenuItem;
 }>;
 
-type Target =
+export type ProfileBlockActionTarget =
   | { nextBlocked: true; profile: ProfileBlockAction_profile$key; profileBlock?: never }
   | {
       nextBlocked: false;
@@ -47,7 +48,7 @@ type Target =
       profileBlock: ProfileBlockAction_profileBlock$key;
     };
 
-type Props = Target & {
+type Props = ProfileBlockActionTarget & {
   onActionRef?: (node: View | null) => void;
   onFeedback?: (feedback: ProfileBlockFeedback) => void;
 } & (
@@ -82,11 +83,15 @@ export function ProfileBlockAction({
   const cancelRef = useRef<View>(null);
   const actionRef = useRef<View>(null);
   const focusTrigger = useRef<() => void>(() => {});
+  const completed = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      const notify = completed.current;
+      completed.current = null;
+      notify?.();
     };
   }, []);
 
@@ -139,10 +144,9 @@ export function ProfileBlockAction({
       }
       return;
     }
-    inFlight.current = false;
     setPending(false);
+    completed.current = () => notify(status);
     setOpen(false);
-    notify(status);
   };
   const controlRef = (node: View | null) => {
     actionRef.current = node;
@@ -177,11 +181,18 @@ export function ProfileBlockAction({
         dismissDisabled={pending}
         onClose={close}
         onDismiss={() => {
+          if (!mounted.current) {
+            return;
+          }
+          inFlight.current = false;
           if (surface === 'menu') {
             focusTrigger.current();
           } else {
             actionRef.current?.focus();
           }
+          const notify = completed.current;
+          completed.current = null;
+          notify?.();
         }}
         onShow={() => cancelRef.current?.focus()}
         title={nextBlocked ? '이 프로필을 차단할까요?' : '이 프로필의 차단을 해제할까요?'}

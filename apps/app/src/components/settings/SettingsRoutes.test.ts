@@ -19,6 +19,7 @@ let locationReplacements: string[] = [];
 let pathname = '/settings';
 let SlotRoute: ComponentType = () => null;
 let sessionStatus: 'error' | 'guest' | 'valid' = 'guest';
+const shellPageHeadingRef = { current: null };
 
 mock.module('expo-router', {
   exports: {
@@ -79,8 +80,18 @@ mock.module(new URL('./SettingsMuteAndBlockNavigation.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsMutedProfiles.tsx', import.meta.url), {
   exports: {
-    SettingsMutedProfiles: () => createElement('SettingsMutedProfiles'),
+    SettingsMutedProfiles: (props: Record<string, unknown>) =>
+      createElement('SettingsMutedProfiles', props),
   },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('./SettingsBlockedProfiles.tsx', import.meta.url), {
+  exports: {
+    SettingsBlockedProfiles: (props: Record<string, unknown>) =>
+      createElement('SettingsBlockedProfiles', props),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
+  exports: { useShellChrome: () => ({ pageHeadingRef: shellPageHeadingRef }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: { useTheme: () => ({ border: '#333333', text: '#111111' }) },
@@ -97,6 +108,7 @@ mock.module(new URL('../../session/SessionProvider.tsx', import.meta.url), {
 let SettingsDefaultPostVisibilityRoute: ComponentType;
 let SettingsMuteAndBlockRoute: ComponentType;
 let SettingsMutedProfilesRoute: ComponentType;
+let SettingsBlockedProfilesRoute: ComponentType;
 let SettingsLayout: ComponentType;
 let SettingsRoute: ComponentType;
 let ProtectedLayout: ComponentType;
@@ -114,6 +126,8 @@ before(async () => {
     await import('../../app/(tabs)/(protected)/settings/mute-and-block'));
   ({ default: SettingsMutedProfilesRoute } =
     await import('../../app/(tabs)/(protected)/settings/muted-profiles'));
+  ({ default: SettingsBlockedProfilesRoute } =
+    await import('../../app/(tabs)/(protected)/settings/blocked-profiles'));
   ({ default: ProtectedLayout } = await import('../../app/(tabs)/(protected)/_layout'));
 });
 
@@ -204,6 +218,18 @@ describe('Settings routes', () => {
       1,
     );
     assert.equal(rendered('SettingsMutedProfiles').length, 1);
+    assert.equal(
+      rendered('SettingsMutedProfiles')[0].props.headingRef,
+      rendered('PageHeader')[1].props.headingRef,
+    );
+  });
+
+  it('mobile Web muted profile은 shell heading ref를 목록 focus fallback에 전달한다', async () => {
+    width = 390;
+    await renderRoute('/settings/muted-profiles', SettingsMutedProfilesRoute);
+
+    assert.equal(rendered('PageHeader').length, 0);
+    assert.equal(rendered('SettingsMutedProfiles')[0].props.headingRef, shellPageHeadingRef);
   });
 
   it('compact Web muted profile detail은 parent으로 돌아가는 caller label과 navigation을 사용한다', async () => {
@@ -233,6 +259,31 @@ describe('Settings routes', () => {
     await act(async () => back.props.onPress());
     assert.equal(backCalls, 0);
     assert.deepEqual(replacedPaths, ['/settings/mute-and-block']);
+  });
+
+  it('full Web blocked profile deep link도 공통 master의 mute category를 선택한다', async () => {
+    await renderRoute('/settings/blocked-profiles', SettingsBlockedProfilesRoute);
+
+    assert.deepEqual(
+      rendered('PageHeader').map((node) => node.props.title),
+      ['설정', '차단한 프로필'],
+    );
+    assert.equal(rendered('SettingsNavigationList').length, 0);
+    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
+    assert.equal(rendered('SettingsMuteAndBlockNavigation')[0].props.selected, 'blocked-profiles');
+    assert.equal(rendered('SettingsBlockedProfiles').length, 1);
+    assert.equal(
+      rendered('SettingsBlockedProfiles')[0].props.headingRef,
+      rendered('PageHeader')[1].props.headingRef,
+    );
+  });
+
+  it('mobile Web blocked profile은 shell heading ref를 목록 focus fallback에 전달한다', async () => {
+    width = 390;
+    await renderRoute('/settings/blocked-profiles', SettingsBlockedProfilesRoute);
+
+    assert.equal(rendered('PageHeader').length, 0);
+    assert.equal(rendered('SettingsBlockedProfiles')[0].props.headingRef, shellPageHeadingRef);
   });
 
   it('compact Web root는 선택 없는 root 목록부터 표시한다', async () => {

@@ -28,8 +28,14 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
 - 유효한 Account에 selected Profile이 있으면 그 Profile을 `searchProfiles`의 viewer로 사용한다. selected Profile이 없으면 기존 Account 인증과
   공개 후보 결과를 유지하며 Profile Block predicate를 적용하거나 selected Local Profile을 새로 요구하지 않는다. 임의 입력 actor나 이전 selected
   Profile·client cache를 viewer로 재사용하지 않는다.
-- Profile Block 관리 목록과 확인·pending·실패·접근성·selected Profile별 상태/cache 수렴 계약을 추가한다. 기존 Profile 정보를 재사용하고,
-  콘텐츠와 상호작용은 각 surface의 Profile Block 정책을 적용한다.
+- Profile Node·handle route·일반 Profile 검색에는 기존 Profile 조회 정책을 적용한다. Post·Media 직접 조회와 Profile Post List에는 viewer 방향의
+  콘텐츠 정책을, Home·Local·Hashtag Post List·검색·Follow 후보·새 로컬 상호작용·Notification에는 각 surface의 양방향 보호 정책을 적용한다.
+- Profile Block 관리 목록과 확인·pending·실패·접근성·selected Profile별 상태/cache 수렴 계약을 추가한다. 기존 레거시 Profile·Settings UI에
+  최신 canonical의 direct Profile route와 기존 Profile 정보·viewer 방향 콘텐츠 상태를 구현·통합한다. `blocking` route는 콘텐츠 경고 뒤 허용된
+  콘텐츠와 `차단 해제` action을 제공하고, `blockedBy` route는 콘텐츠 차단 상태를 표시한다. 경고 문구와 표시 기간은 후속 디자인 계약으로 남기며,
+  `PROD-861`은 presentation 선행 증거, `PROD-917`의 신규 UI 교체는 후속 범위로 분리한다.
+- `PROD-823`의 직접 링크·새로고침·actor 전환에서는 이전 cache나 관리 목록 선행 로딩에 의존하지 않고 기존 Target Profile 조회 결과와 현재 Owner의 서버 차단 결과, 자기 Block 관계 ID를
+  소비한다. Profile을 조회할 수 없는 경우에만 identity-free fallback을 사용한다. 이전 actor의 늦은 응답 격리와 양방향 Block의 자기 관계 해제 후 결과를 UI slice의 검증에 포함한다.
 - `PROD-813`은 네 slice의 cross-slice E2E, canonical·Linear·OpenSpec 동기화와 최종 archive를 소유한다.
 
 ### Current issue slice — PROD-822
@@ -125,6 +131,7 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
 - Database: 기존 row를 backfill하지 않는 additive Profile Block 관계, Owner/Target uniqueness와 referential integrity가 영향받는다.
   migration/rollback safety는 design과 `PROD-821` 검증 guardrail로 다룬다.
 - App: Profile action/confirmation, Settings의 분리된 Block 목록과 selected Profile별 상태·cache 수렴이 영향받는다.
-  기존 Profile 정보와 viewer 방향 콘텐츠 상태를 표시하고 각 surface의 서버 정책으로 수렴한다.
-- Verification: `PROD-821` 저장·cleanup(#726) → `PROD-822` 정책·스펙(#770) → `PROD-822-graphql` 관리 GraphQL 구현·테스트 → `PROD-822-policy` 정책·Local/ActivityPub 실행 회귀 → `PROD-823` → `PROD-813` 순서의 slice 검증과 cross-slice E2E가 필요하다.
+  기존 Profile 정보와 viewer 방향 콘텐츠 상태를 표시하고 각 surface의 서버 정책으로 수렴한다. direct route·confirmation·관리 목록의 실제 기능·접근성·client 회귀는
+  `PROD-823`이 검증하고, 신규 UI 교체·수신 확인은 이 change의 완료 조건이 아니다.
+- Verification: `PROD-821` 저장·cleanup(#726) → `PROD-822` 정책·스펙(#770) → `PROD-822-graphql` 관리 GraphQL 구현·테스트 → `PROD-822-policy` 정책·Local/ActivityPub 실행 회귀 → `PROD-823` UI·client → `PROD-813` cross-slice E2E 순서의 slice 검증이 필요하다.
   ActivityPub Block/Undo ingress·source suppression·async cleanup runtime은 이 change에 포함하지 않는다.

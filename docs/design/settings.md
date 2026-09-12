@@ -245,6 +245,12 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - `뮤트 및 차단`의 Figma IA·source·대표 consumer는 DSN-53이 소유한다. runtime의 Mute 진입점·목록·통합
   검증은 PROD-814, Block 진입점·목록과 Relay 수렴은 PROD-823, Block의 종단 간 검증·archive는 PROD-813이
   소유한다. 이 범위를 완료된 PROD-685·PROD-684에 소급해 귀속하지 않는다.
+- PROD-814·PROD-823은 기존 UI로 공통 `뮤트 및 차단` 진입점과 각 destination의 실제 기능을 구현·검증한다.
+  먼저 구현한 이슈의 공통 source를 후행 이슈가 재사용하고, 완성된 destination만 공개한다. 두 목록의 순서는
+  `뮤트한 프로필 → 차단한 프로필`이며 미완성 destination의 disabled item·placeholder는 표시하지 않는다.
+  PROD-917은 PROD-858·PROD-861의 Storybook 확정 뒤 신규 UI로 교체하고 회귀를 검증한다. 이 후속 교체는
+  기존 기능의 완료나 PROD-813 archive를 막지 않는다. 상세 행동·인계 범위는
+  [Profile Mute·Block 디자인 계약](./profile-mute-block.md#기존-ui-구현과-후속-교체)을 따른다.
 - DSN-54는 Settings root/master의 테마 현재값 행, `/settings/theme`의 System·Light·Dark 선택 화면,
   Light/Dark 시각 상태와 client-local handoff를 소유한다. PROD-812는 preference 초기값·정규화, 선택값 상태,
   기기 로컬 persistence와 read/write 실패 semantics, 초기 hydration, app-wide ThemeProvider 적용, Native Expo

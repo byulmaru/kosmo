@@ -86,6 +86,10 @@ describe('getShellLayout', () => {
       leading: 'back',
       title: '뮤트한 프로필',
     });
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/blocked-profiles', []), {
+      leading: 'back',
+      title: '차단한 프로필',
+    });
     assert.equal(getWebMobileShellHeader(true, 390, '/bookmarks', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/search', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/@writer/followers', []), null);

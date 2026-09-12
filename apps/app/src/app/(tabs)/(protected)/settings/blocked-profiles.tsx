@@ -3,7 +3,7 @@ import { ChevronLeftIcon } from 'lucide-react-native';
 import { useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
-import { SettingsMutedProfiles } from '@/components/settings/SettingsMutedProfiles';
+import { SettingsBlockedProfiles } from '@/components/settings/SettingsBlockedProfiles';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
@@ -11,7 +11,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { View } from 'react-native';
 
-export default function SettingsMutedProfilesRoute() {
+export default function SettingsBlockedProfilesRoute() {
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
@@ -22,7 +22,7 @@ export default function SettingsMutedProfilesRoute() {
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="뮤트 및 차단으로 돌아가기"
-        onPress={() => returnToSettingsParent('/settings/muted-profiles', router)}
+        onPress={() => returnToSettingsParent('/settings/blocked-profiles', router)}
         style={styles.backButton}
         targetSize={44}
       >
@@ -33,9 +33,9 @@ export default function SettingsMutedProfilesRoute() {
   return (
     <>
       {detailHeaderMode !== 'hidden' ? (
-        <PageHeader headingRef={routeHeadingRef} leading={backButton} title="뮤트한 프로필" />
+        <PageHeader headingRef={routeHeadingRef} leading={backButton} title="차단한 프로필" />
       ) : null}
-      <SettingsMutedProfiles headingRef={headingRef} />
+      <SettingsBlockedProfiles headingRef={headingRef} />
     </>
   );
 }

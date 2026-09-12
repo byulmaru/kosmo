@@ -1,4 +1,4 @@
-import { Link2, VolumeOff } from 'lucide-react-native';
+import { Ban, Link2, VolumeOff } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
   Image,
@@ -18,17 +18,27 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { getPublicWebOrigin } from '@/config/origin';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
+import { ProfileBlockAction } from './ProfileBlockAction';
 import { ProfileMoreMenu } from './ProfileMoreMenu';
 import { ProfileMuteAction } from './ProfileMuteAction';
 import { ProfileNameBlock } from './ProfileNameBlock';
 import { ProfileTagChip } from './ProfileTagChip';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
+import type { ProfileBlockActionTarget, ProfileBlockFeedback } from './ProfileBlockAction';
+
+type ProfileHeroBlockAction = ProfileBlockActionTarget & {
+  onFeedback?: (feedback: ProfileBlockFeedback) => void;
+};
 
 type ProfileHeroProps = {
   action?: ReactNode;
+  blockAction?: ProfileHeroBlockAction;
   heading?: boolean;
+  menuItems?: readonly ActionMenuItem[];
+  onMenuTriggerReady?: (focusTrigger: () => void) => void;
   showMuteAction?: boolean;
   loading?: boolean;
   profile?: ProfileHero_profile$key | null;
@@ -72,7 +82,10 @@ const countFormatter = new Intl.NumberFormat('en', {
 
 export function ProfileHero({
   action,
+  blockAction,
   heading = true,
+  menuItems = [],
+  onMenuTriggerReady,
   showMuteAction = false,
   loading = false,
   profile = null,
@@ -145,6 +158,86 @@ export function ProfileHero({
 
   const followingHref = `/${data.relativeHandle}/following` as Href;
   const followersHref = `/${data.relativeHandle}/followers` as Href;
+  const copyProfileLinkItem: ActionMenuItem = {
+    key: 'copy-profile-link',
+    icon: Link2,
+    label: '프로필 링크 복사',
+    onSelect: () => {
+      void (async () => {
+        try {
+          const copied = await setStringAsync(
+            new URL(`/${data.relativeHandle}`, getPublicWebOrigin()).toString(),
+          );
+          if (!copied) {
+            throw new Error('Clipboard did not confirm the copy.');
+          }
+        } catch {
+          showToast('링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
+            tone: 'danger',
+          });
+        }
+      })();
+    },
+  };
+  const moreMenu = showMuteAction ? (
+    <ProfileMuteAction
+      profile={data}
+      renderMenuItem={({
+        disabled: muteDisabled,
+        focusTriggerRef: muteFocusRef,
+        item: muteItem,
+      }) =>
+        blockAction ? (
+          <ProfileBlockAction
+            {...blockAction}
+            icon={Ban}
+            renderMenuItem={({
+              disabled: blockDisabled,
+              focusTriggerRef: blockFocusRef,
+              item: blockItem,
+            }) => (
+              <ProfileMoreMenu
+                disabled={muteDisabled || blockDisabled}
+                items={[copyProfileLinkItem, muteItem, blockItem, ...menuItems]}
+                onTriggerReady={(focusTrigger) => {
+                  muteFocusRef.current = focusTrigger;
+                  blockFocusRef.current = focusTrigger;
+                  onMenuTriggerReady?.(focusTrigger);
+                }}
+              />
+            )}
+            surface="menu"
+          />
+        ) : (
+          <ProfileMoreMenu
+            disabled={muteDisabled}
+            focusTriggerRef={muteFocusRef}
+            items={[copyProfileLinkItem, muteItem, ...menuItems]}
+            onTriggerReady={onMenuTriggerReady}
+          />
+        )
+      }
+    />
+  ) : blockAction ? (
+    <ProfileBlockAction
+      {...blockAction}
+      icon={Ban}
+      renderMenuItem={({ disabled, focusTriggerRef, item }) => (
+        <ProfileMoreMenu
+          disabled={disabled}
+          focusTriggerRef={focusTriggerRef}
+          items={[copyProfileLinkItem, item, ...menuItems]}
+          onTriggerReady={onMenuTriggerReady}
+        />
+      )}
+      surface="menu"
+    />
+  ) : menuItems.length > 0 ? (
+    <ProfileMoreMenu
+      items={[copyProfileLinkItem, ...menuItems]}
+      onTriggerReady={onMenuTriggerReady}
+    />
+  ) : null;
 
   return (
     <View style={styles.root}>
@@ -173,7 +266,7 @@ export function ProfileHero({
             size={avatarSize}
           />
         </View>
-        {action || showMuteAction ? (
+        {action || showMuteAction || blockAction || menuItems.length > 0 ? (
           <View
             style={[
               actionGeometry,
@@ -184,41 +277,7 @@ export function ProfileHero({
               },
             ]}
           >
-            {showMuteAction ? (
-              <ProfileMuteAction
-                profile={data}
-                renderMenuItem={({ disabled, focusTriggerRef, item }) => (
-                  <ProfileMoreMenu
-                    disabled={disabled}
-                    focusTriggerRef={focusTriggerRef}
-                    items={[
-                      {
-                        key: 'copy-profile-link',
-                        icon: Link2,
-                        label: '프로필 링크 복사',
-                        onSelect: () => {
-                          void (async () => {
-                            try {
-                              const copied = await setStringAsync(
-                                new URL(`/${data.relativeHandle}`, getPublicWebOrigin()).toString(),
-                              );
-                              if (!copied) {
-                                throw new Error('Clipboard did not confirm the copy.');
-                              }
-                            } catch {
-                              showToast('링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
-                                tone: 'danger',
-                              });
-                            }
-                          })();
-                        },
-                      },
-                      item,
-                    ]}
-                  />
-                )}
-              />
-            ) : null}
+            {moreMenu}
             {action ? <View style={styles.action}>{action}</View> : null}
           </View>
         ) : null}

@@ -21,6 +21,7 @@ type SessionValue = {
   accountId: string | null;
   accountName: string | null;
   selectedProfileId: string | null;
+  selectedProfileKind: string | null;
   sessionId: string | null;
   status: 'error' | 'guest' | 'valid';
 };
@@ -35,6 +36,7 @@ const guestSession: SessionValue = {
   accountId: null,
   accountName: null,
   selectedProfileId: null,
+  selectedProfileKind: null,
   sessionId: null,
   status: 'guest',
 };
@@ -47,6 +49,9 @@ const SessionProviderQuery = graphql`
       id
       selectedProfile {
         id
+        instance {
+          kind
+        }
       }
     }
     me {
@@ -114,10 +119,17 @@ function SessionQuery({
       accountId: data.me?.id ?? null,
       accountName: data.me?.name ?? null,
       selectedProfileId: data.currentSession?.selectedProfile?.id ?? null,
+      selectedProfileKind: data.currentSession?.selectedProfile?.instance?.kind ?? null,
       sessionId,
       status: sessionId ? ('valid' as const) : ('guest' as const),
     }),
-    [data.currentSession?.selectedProfile?.id, data.me?.id, data.me?.name, sessionId],
+    [
+      data.currentSession?.selectedProfile?.id,
+      data.currentSession?.selectedProfile?.instance?.kind,
+      data.me?.id,
+      data.me?.name,
+      sessionId,
+    ],
   );
 
   useEffect(() => {
