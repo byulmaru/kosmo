@@ -16,11 +16,14 @@ Reply·Repost·Reaction·Bookmark를 실제 게시글 화면에 일관되게 연
 - PROD-432 완료 뒤 발견된 실제 Clipboard 런타임 회귀는 PROD-632가 후속 조사·복구한다. PROD-432는 기존 구현 완료 이력으로 유지한다. 확인된 production bundle에서는 `EXPO_PUBLIC_WEB_ORIGIN` env가 literal `undefined`로 주입되어 clipboard 호출 전에 URL 생성이 실패했다. 현재 구현 slice는 실제 복사 실패를 정확히 감지해 한국어 안내와 재시도를 제공하지만, 기존 실패 환경의 복사 성공 자체를 보장하지 않는다. PROD-632가 원인 재현을 기록하고, 동일 환경의 변경 전 실패·변경 후 성공 근거 확보, Web·지원 Native 플랫폼 검증, 최종 정합성 확인과 change archive를 계속 소유한다.
 - `docs/domain`·`docs/design`은 제품·디자인의 canonical source, Linear는 범위·소유권·의존성의 source, 이 OpenSpec은 상태·입력·접근성·통합 동작의 규범 계약으로 사용한다. Figma Action 노드는 상태·동작의 시각 참고 자료로 유지하되, DSN-49 범위의 canonical `PostListItem` Text·Media source는 승인된 spacing에 맞춰 동기화한다. 이 Figma·문서 변경은 production 구현 완료 증거가 아니다.
 
+- PROD-936은 기존 Home·Local·Profile·Bookmarks·상세/스레드 consumer와 action 소유권을 재사용하고 실제 Web API·세션으로 상태·실패/재시도·focus·scroll을 검증한다. Native 공용 Bar는 28px visual을 유지하며 iOS 44pt·Android 48dp target과 목록 좌우 16px inset을 적용한다. Native 실제 touch·보조 기술 runtime 증거는 별도로 남긴다.
+
 ## Authority / Provenance
 
 - Canonical: `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/breakpoints.md`, `docs/design/colors.md`, `docs/design/post-action-bar.md`
 - Linear Contract: `PROD-432`; presentation semantic·geometry implementation: `PROD-866`; Repost unselected state correction: `PROD-882`; Figma consumer sync: `DSN-49`
-- Excluded lifecycle: 지원 Native의 44pt·48dp target과 VoiceOver·TalkBack runtime 검증은 platform release gate에 남긴다.
+- Production presentation/verification: `PROD-936`; 기존 Native 28pt·28dp 임시 target은 canonical 44pt·48dp로 대체한다.
+- Excluded lifecycle: Native VoiceOver·TalkBack·touch 전체 runtime 검증은 platform release gate이며, 실행하지 못한 검증은 명시한다. PROD-632의 Clipboard 복구·전체 archive 소유권은 유지한다.
 - Linear Implementations: `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`, presentation semantic `PROD-866`, Repost unselected state correction `PROD-882`, 후속 복구·archive owner `PROD-632`; sibling More action owner: `PROD-598`; canceled ownership record: `PROD-434`
 
 ## Capabilities

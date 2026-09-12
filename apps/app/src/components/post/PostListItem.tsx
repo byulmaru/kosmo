@@ -176,13 +176,13 @@ export function PostListItem({
     [openViewer, post.id],
   );
   const standardCardStyle = [
-    styles.card,
+    Platform.OS === 'web' ? styles.card : styles.nativeCard,
     styles.standardCard,
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
   ];
   const compactCardStyle = [
-    styles.card,
+    Platform.OS === 'web' ? styles.card : styles.nativeCard,
     styles.compactCard,
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
@@ -418,6 +418,9 @@ const styles = StyleSheet.create({
   card: {
     paddingLeft: Platform.OS === 'web' ? spacing.md : spacing.sm,
     paddingRight: Platform.OS === 'web' ? spacing.xl : spacing.sm,
+  },
+  nativeCard: {
+    paddingHorizontal: spacing.lg,
   },
   standardCard: { paddingBottom: spacing.xs, paddingTop: spacing.md },
   compactCard: { paddingBottom: 1, paddingTop: spacing.sm },
