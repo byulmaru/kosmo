@@ -39,3 +39,9 @@ Figma의 Web Compact·Full과 Mobile `Default selected` frame을 다시 대조�
 - correctness·test evidence·복잡성의 독립 검토를 수행했다. Viewer/Back/focus와 갱신 알림, 너비 테스트의 발견사항을 수정했고 미해결 correctness finding은 없다.
 - 기존 fixture의 Relay 경고, React test renderer 경고와 Storybook chunk 크기 경고는 남지만 최종 검증은 모두 통과했다.
 - 위 검증은 커밋 전 동일한 worktree에서 수행했다. 커밋·push·PR 상태는 전달 단계에서 별도로 확인하며, OpenSpec archive는 수행하지 않는다. PROD-938이 남은 Native 검증 기록과 change의 최종 spec 동기화·archive를 소유한다.
+
+## 2026-09-13 최신 main 재적층
+
+- `PROD-785`의 19개 patch를 `origin/main`의 `dfa6328edbd06c69ed0e3edd9ed53bdc854be501` 위로 옮겼고, `range-diff`에서 모두 동일함을 확인했다.
+- `PROD-938`의 네 patch도 유지했다. `PostActionSurface` 충돌은 main의 Quote 진입점 숨김을 유지하면서 People navigation callback만 연결하는 형태로 해소했다.
+- 앱 check, 단위 테스트 565개, Storybook 125개 파일·793개 테스트, `reaction-people.e2e.ts` 3개가 통과했다.
