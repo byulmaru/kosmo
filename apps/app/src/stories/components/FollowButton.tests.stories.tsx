@@ -42,7 +42,7 @@ export const CancelError: Story = cancelError;
 const playgroundCycle = (profileId: string, activeLabel: string): Story => ({
   ...Playground,
   parameters: { ...Playground.parameters, controls: { disable: true } },
-  args: { profileId, size: 'medium' },
+  args: { profileId },
   play: async ({ canvasElement, parameters }) => {
     const canvas = within(canvasElement);
     for (let cycle = 0; cycle < 2; cycle++) {
