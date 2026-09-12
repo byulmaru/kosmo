@@ -7,6 +7,9 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 
 ## Profile action과 완료 피드백
 
+- Block 생성·해제와 관리 action은 현재 selected Local Profile이 Owner일 때만 제공한다. Remote Profile이
+  selected된 상태에서는 기존 Profile identity와 viewer 방향 콘텐츠 상태를 표시하되 실행할 수 없는 Block 관리
+  action을 제공하지 않으며, Remote Owner의 Block/Undo ingress는 `PROD-818`이 소유한다.
 - Mute는 `이 프로필을 뮤트할까요?` 확인을 거친 뒤 실행한다. 취소하면 Profile과 관계 상태를 바꾸지 않는다.
 - Mute 해제도 `이 프로필을 뮤트 해제할까요?` 확인을 거친다. `{표시 이름} 님의 게시물이 홈과 로컬 타임라인에 다시
 표시돼요. 팔로우 관계는 유지돼요.`를 안내하고 `취소`·`뮤트 해제`를 제공한다.
@@ -71,6 +74,10 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   하나의 혼합 목록이나 filter로 만들지 않는다.
 - 각 목록은 자기 heading, loading, error·retry, empty, pagination과 해제 action을 소유한다. 한 목록의 상태나
   action이 다른 목록의 항목을 바꾸지 않는다.
+- 같은 Target에 Mute와 Block이 모두 적용돼도 두 관리 관계는 각각의 목록·관계 Node·해제 경로에 남는다. Active
+  Block은 일반 Profile 조회를 숨기지 않는다. Profile identity는 기존 lifecycle·membership 정책을 따르며, Block은
+  콘텐츠·상호작용·알림 surface와 Mute/Block 관리 관계에 각각 명시된 정책으로 적용된다. 따라서 Block의 콘텐츠 제한을
+  Mute 관리 connection에 적용해 저장된 Mute를 숨기지 않는다.
 - full Web은 기존 Settings master/detail 문법을, compact Web·mobile Web·Android·iOS는 기존 한 화면 이동
   문법을 사용한다. Mute·Block 때문에 새 Settings shell이나 navigation pattern을 만들지 않는다.
 - Target screen evidence는 [`05 Screens - Web`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-16233)의
@@ -83,13 +90,21 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 
 ## 차단 관계의 직접 Profile
 
-- 차단 관계의 direct Profile route는 [Profile Block 조회 정책](../domain/objects/profile-block.md#조회-정책)과
-  [Profile 조회 정책](../domain/objects/profile.md#조회-정책)에 따라 기존 공개 기본 Profile 정보와 콘텐츠 상태를
-  함께 표시한다. `blocking`과 `blockedBy` 모두 Profile Node·handle route·일반 Profile 검색과 같은 기본 Profile
-  정보 범위를 사용한다.
+- 차단 관계의 direct Profile route는 GraphQL `node(id:)`·`profileByHandle` 직접 조회를 통해
+  [Profile Block 조회 정책](../domain/objects/profile-block.md#조회-정책)과 [Profile 조회 정책](../domain/objects/profile.md#조회-정책)에
+  따른 기존 공개 기본 Profile 정보와 콘텐츠 상태를 함께 표시한다. `blocking`과 `blockedBy` 모두 이 두 직접 조회 endpoint와
+  같은 기본 Profile 정보 범위를 사용한다. `searchProfiles`의 exact-match/partial-match 후보는
+  양방향 Active Block 관계인 Profile을 후보에서 제외하며, 이 제외는 pagination·cursor·limit 전에 적용한다.
+- 유효한 Account에 selected Profile이 있으면 그 Profile을 `searchProfiles`의 viewer로 사용한다. selected Profile이
+  없으면 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate나 selected Local Profile을 새로 요구하지
+  않는다. 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용하지 않는다.
+- 정상적인 GraphQL `node(id:)`·`profileByHandle` 직접 route 진입·새로고침은 identity-free 결과가 아니라 기본 Profile 정보, viewer 방향별 콘텐츠 상태와
+  selected Local Owner 범위의 정확한 unblock 관계 ID를 확인한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가한
+  경우에만 조건부 identity-free fallback 문구를 사용한다.
 - `blocking` 화면에서는 Target Profile의 Post List·Post detail·첨부 Media를 기존 Post·Media 조회 정책으로
-  제공한다. Profile route는 콘텐츠 경고를 먼저 표시하고, 사용자가 확인한 뒤 해당 결과를 표시한다. 경고의
-  구체적인 문구와 표시 기간은 후속 디자인 계약에서 정한다.
+  제공한다. Profile route는 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 먼저 표시하고,
+  사용자가 action을 실행한 뒤 해당 결과를 표시한다. 경고는 현재 Profile handle과 selected actor lifecycle마다
+  다시 적용하며, 사용자가 명시적으로 확인하기 전에는 시간 경과만으로 콘텐츠를 표시하지 않는다.
 - `blockedBy` 화면에서는 Owner Profile의 기본 Profile 정보를 유지하면서 Post·Media 콘텐츠 차단 상태를 표시한다.
   양방향 Block이면 양쪽 화면에서 콘텐츠 차단 상태를 적용하며, Profile route와 다른 API 표면은 같은 콘텐츠 정책을
   사용한다. 차단 해제의 data와 lifecycle은 적용 Product/OpenSpec/runtime 범위다.

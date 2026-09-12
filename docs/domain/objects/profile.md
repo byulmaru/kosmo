@@ -183,24 +183,35 @@ Hashtag에는 영향을 주지 않는다.
 ## 조회 정책
 
 - 공개 Profile 정보는 Lifecycle State가 Active이고 Suspension State가 Normal일 때 조회할 수 있다.
-- Profile Node, handle route와 일반 Profile 검색은 위 공개 조회 정책에 따라 기존 공개 기본 Profile 정보 범위를
-  제공한다.
+- GraphQL `node(id:)`와 `profileByHandle` 직접 조회는 위 공개 조회 정책과 기존 lifecycle·membership 정책을 적용해
+  기본 Profile 정보 범위를 제공한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가하면 기존 null/unavailable 결과를
+  유지하며 Block 전용 identity payload를 만들지 않는다.
+- 유효한 Account에 현재 selected Profile이 있으면 그 Profile을 viewer로 사용한다. GraphQL `searchProfiles`가
+  exact-match 또는 partial-match 후보를 반환할 때는 위 공개 조회 조건을 통과한 후보 중 viewer와 양방향 Active Profile
+  Block 관계인 Profile을 pagination·cursor·limit 전에 제외한다.
+- selected Profile이 없는 경우에는 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate를 적용하거나
+  selected Local Profile을 새로 요구하지 않는다. viewer는 임의 입력 actor나 이전 selected Profile·client cache에서
+  재사용하지 않고 현재 요청의 Account 상태에서만 결정한다.
 - Local Profile의 Owner와 운영자 Account는 운영에 필요한 비공개 상태를 조회할 수 있다.
 - Remote Profile은 Instance의 Safety State가 Domain Block이 아니어야 한다.
 - viewer Profile의 Profile Domain Block 대상 Instance에 속한 Remote Profile은 viewer에게 없는 것처럼 취급한다.
 - 공개 검색 후보는 위 조회 조건을 통과해야 하며 Domain Limit Instance의 Remote Profile은 제외한다.
 - Profile Tag는 해당 Profile이 위 공개 조회 조건을 통과할 때만 공개하며 독립적인 공개 범위를 가지지 않는다.
 - Hashtag 관련 Profile 목록 탐색은 [ADR 0021](../decisions/0021-hashtag-related-profile-navigation.md)에 따라
-  공개 조회 가능한 Active·Normal Profile 중 TagChip이 전달한 Hashtag identity 정확 일치만 후보로 사용한다.
+  공개 조회 가능한 Active·Normal Profile 중 TagChip이 전달한 Hashtag identity 정확 일치를 후보로 사용한다. 유효한 Account에 selected
+  Profile이 있으면 그 Profile과 양방향 Active Block 관계인 후보를 pagination 전에 제외하고, selected Profile이 없으면 기존 Account 인증과
+  공개 후보 결과를 유지한다.
 
 위 Domain Limit 및 viewer Profile Domain Block 규칙은 공개 Profile 조회·검색의 최종 canonical moderation
-정책이다. 다만 해당 정책을 exact/partial Profile lookup에 함께 적용할 저장 모델과 공통 predicate가 아직 없는
+정책이다. 다만 해당 정책을 exact `profileByHandle` 직접 조회와 `searchProfiles` partial-match 후보에 함께 적용할 저장 모델과 공통 predicate가 아직 없는
 현재 단계에서는 [ADR 0017](../decisions/0017-profile-search-staged-visibility.md)의 제한된 staged exception을
-적용할 수 있다. 현재 저장된 Profile의 exact `profileByHandle`과 partial `searchProfiles`는 같은 visibility를
+적용할 수 있다. 현재 저장된 Profile의 exact `profileByHandle` 직접 조회와 partial `searchProfiles` 후보는 같은 visibility를
 사용해 configured local Instance의 `Active` Profile과, 입력 domain의 ActivityPub Instance에 저장된 `Active`
 Remote Profile(단, `InstanceState.SUSPENDED` Instance 제외)만 반환한다. 이 예외는 최종 moderation 정책이
 Domain Limit/Profile Domain Block을 허용하거나 생략하도록 바꾸지 않으며, 공통 predicate가 준비되면 exact와
-partial lookup을 함께 전환해야 한다.
+partial lookup을 함께 전환해야 한다. 이 staged exception은 Profile Domain Block에 대한 기존 visibility 단계이며, Profile Block 정책과는
+구별된다. Profile Block은 `node(id:)`·`profileByHandle` 직접 조회의 기존 결과를 바꾸지 않고 `searchProfiles` exact-match·partial-match
+후보에만 양방향 Active Block 필터를 적용한다.
 
 인증된 Account가 `searchProfiles`에 명시적인 `@handle@instance` qualified handle 전체를 입력하고 해당 Remote
 Profile이 아직 저장되지 않은 경우에만, [ADR 0017](../decisions/0017-profile-search-staged-visibility.md)에 따라
