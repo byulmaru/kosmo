@@ -22,8 +22,10 @@ export {
   executeProfileBlockTransition as executeProfileBlockTransitionActivity,
   executeProfileUnblockTransition as executeProfileUnblockTransitionActivity,
   finalizeProfileBlockProtocolUndo as finalizeProfileBlockProtocolUndoActivity,
+  loadPendingProfileBlockCleanupBatches as loadPendingProfileBlockCleanupBatchesActivity,
   loadProfileBlockProtocolActivityByProfileBlockId as loadProfileBlockProtocolActivityByProfileBlockIdActivity,
   loadProfileBlockTransitionBootstrap as loadProfileBlockTransitionBootstrapActivity,
+  markProfileBlockCleanupBatchSettled as markProfileBlockCleanupBatchSettledActivity,
   prepareProfileBlockProtocolUndo as prepareProfileBlockProtocolUndoActivity,
 } from '@kosmo/core/services';
 export {

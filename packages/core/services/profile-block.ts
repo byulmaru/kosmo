@@ -1,9 +1,10 @@
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import {
   db,
   first,
   getDatabaseConnection,
   ProfileBlockActivities,
+  ProfileBlockCleanupBatches,
   ProfileBlocks,
   Profiles,
 } from '../db';
@@ -37,7 +38,7 @@ export type ProfileBlockTransitionInput = {
   /** Exact source IDs captured before this transaction is scheduled. */
   readonly cleanupSources: ProfileBlockCleanupSources;
   /** Stable candidate ID allocated by the bootstrap Activity for this relation. */
-  readonly candidateProfileBlockId?: string;
+  readonly candidateProfileBlockId: string;
   /** Verified protocol identity, when this transition came from ActivityPub. */
   readonly protocolActivity?: ProfileBlockProtocolActivityInput;
 };
@@ -55,7 +56,6 @@ export type ProfileBlockTransitionResult = {
 };
 
 export type ProfileBlockEffect = Extract<ProfileFollowPairEffect, { readonly kind: 'DELETE' }>;
-export type ProfileBlockEffectPlan = readonly ProfileBlockEffect[];
 
 export type ProfileBlockTransitionFailure = {
   readonly code: 'CONFLICT' | 'NOT_FOUND' | 'PERMISSION_DENIED' | 'VALIDATION';
@@ -67,7 +67,6 @@ export type ProfileBlockTransitionExecution =
   | {
       readonly ok: true;
       readonly result: ProfileBlockTransitionResult;
-      readonly effectPlan: ProfileBlockEffectPlan;
     }
   | { readonly ok: false; readonly error: ProfileBlockTransitionFailure };
 
@@ -78,6 +77,8 @@ export type ProfileUnblockTransitionInput = {
   readonly origin: ProfileBlockEffectOrigin;
   /** Exact Block generation captured before cleanup is scheduled. */
   readonly expectedProfileBlockId: string;
+  /** Stable identity for this Workflow run; retries of the same run reuse it. */
+  readonly operationId: string;
   /** Protocol original being closed, when this is an inbound or federated Undo. */
   readonly protocolActivityUri?: string;
   /** Exact Follow generations captured before this transaction is scheduled. */
@@ -95,9 +96,10 @@ export type ProfileUnblockTransitionExecution =
   | {
       readonly ok: true;
       readonly result: ProfileUnblockTransitionResult;
-      readonly effectPlan: ProfileBlockEffectPlan;
     }
   | { readonly ok: false; readonly error: ProfileBlockTransitionFailure };
+
+export type ProfileBlockCleanupBatch = typeof ProfileBlockCleanupBatches.$inferSelect;
 
 /**
  * Captures the Follow sources and allocates the Profile Block ID for one
@@ -165,15 +167,6 @@ const uniqueCleanupSources = (
   return sources;
 };
 
-const profileBlockPairCondition = ({
-  ownerProfileId,
-  targetProfileId,
-}: Pick<ProfileBlockTransitionInput, 'ownerProfileId' | 'targetProfileId'>) =>
-  and(
-    eq(ProfileBlocks.ownerProfileId, ownerProfileId),
-    eq(ProfileBlocks.targetProfileId, targetProfileId),
-  );
-
 const loadProfileBlockParticipants = async (
   tx: Transaction,
   {
@@ -190,11 +183,162 @@ const loadProfileBlockParticipants = async (
   }
 };
 
+const profileBlockCleanupBatchResult = (
+  batch: ProfileBlockCleanupBatch,
+): ProfileBlockTransitionResult => {
+  if (batch.protocolActivityUri !== null && batch.protocolState === null) {
+    throw new Error('Profile Block cleanup batch is missing its protocol state snapshot');
+  }
+  const protocolState = batch.protocolState;
+  return {
+    created: batch.changed,
+    profileBlockId: batch.profileBlockId,
+    ownerProfileId: batch.ownerProfileId,
+    targetProfileId: batch.targetProfileId,
+    ...(batch.protocolActivityUri
+      ? {
+          protocol: {
+            activityUri: batch.protocolActivityUri,
+            profileBlockId: batch.profileBlockId,
+            status: protocolState as 'ACTIVE' | 'CLOSING' | 'CLOSED',
+          },
+        }
+      : {}),
+  };
+};
+
+const profileUnblockCleanupBatchResult = (
+  batch: ProfileBlockCleanupBatch,
+): ProfileUnblockTransitionResult => ({
+  removed: batch.changed,
+  profileBlockId: batch.changed ? batch.profileBlockId : null,
+  ownerProfileId: batch.ownerProfileId,
+  targetProfileId: batch.targetProfileId,
+});
+
+const assertBlockCleanupBatchIdentity = (
+  batch: ProfileBlockCleanupBatch,
+  input: Pick<ProfileBlockTransitionInput, 'ownerProfileId' | 'targetProfileId' | 'origin'> & {
+    readonly protocolActivityUri?: string;
+  },
+) => {
+  if (
+    batch.ownerProfileId !== input.ownerProfileId ||
+    batch.targetProfileId !== input.targetProfileId ||
+    batch.origin !== input.origin ||
+    (batch.protocolActivityUri ?? undefined) !== input.protocolActivityUri
+  ) {
+    throw new ValidationError(
+      'Profile Block cleanup operation conflicts with its first observation',
+    );
+  }
+};
+
+const reserveProfileBlockCleanupBatch = async ({
+  operation,
+  operationId,
+  ownerProfileId,
+  targetProfileId,
+  profileBlockId,
+  origin,
+  protocolActivityUri,
+  tx,
+}: {
+  readonly operation: 'BLOCK' | 'UNBLOCK';
+  readonly operationId: string;
+  readonly ownerProfileId: string;
+  readonly targetProfileId: string;
+  readonly profileBlockId: string;
+  readonly origin: ProfileBlockEffectOrigin;
+  readonly protocolActivityUri?: string;
+  readonly tx: Transaction;
+}): Promise<{ readonly batch: ProfileBlockCleanupBatch; readonly winner: boolean }> => {
+  const inserted = await tx
+    .insert(ProfileBlockCleanupBatches)
+    .values({
+      operation,
+      operationId,
+      ownerProfileId,
+      targetProfileId,
+      profileBlockId,
+      origin,
+      protocolActivityUri,
+      changed: false,
+      effectPlan: [],
+    })
+    .onConflictDoNothing({
+      target: [ProfileBlockCleanupBatches.operation, ProfileBlockCleanupBatches.operationId],
+    })
+    .returning()
+    .then(first);
+  if (inserted) {
+    return { batch: inserted, winner: true };
+  }
+
+  const existing = await tx
+    .select()
+    .from(ProfileBlockCleanupBatches)
+    .where(
+      and(
+        eq(ProfileBlockCleanupBatches.operation, operation),
+        eq(ProfileBlockCleanupBatches.operationId, operationId),
+      ),
+    )
+    .limit(1)
+    .then(first);
+  if (!existing) {
+    throw new Error('Profile Block cleanup batch disappeared after conflict handling');
+  }
+  if (operation === 'BLOCK') {
+    assertBlockCleanupBatchIdentity(existing, {
+      ownerProfileId,
+      targetProfileId,
+      origin,
+      protocolActivityUri,
+    });
+  } else if (
+    existing.ownerProfileId !== ownerProfileId ||
+    existing.targetProfileId !== targetProfileId ||
+    existing.profileBlockId !== profileBlockId
+  ) {
+    throw new ValidationError(
+      'Profile Block Unblock cleanup operation conflicts with its generation',
+    );
+  }
+  return { batch: existing, winner: false };
+};
+
+export const loadPendingProfileBlockCleanupBatches = async ({
+  ownerProfileId,
+  targetProfileId,
+}: {
+  readonly ownerProfileId: string;
+  readonly targetProfileId: string;
+}): Promise<readonly ProfileBlockCleanupBatch[]> =>
+  db
+    .select()
+    .from(ProfileBlockCleanupBatches)
+    .where(
+      and(
+        eq(ProfileBlockCleanupBatches.ownerProfileId, ownerProfileId),
+        eq(ProfileBlockCleanupBatches.targetProfileId, targetProfileId),
+        sql`${ProfileBlockCleanupBatches.settledAt} IS NULL`,
+      ),
+    )
+    .orderBy(ProfileBlockCleanupBatches.createdAt, ProfileBlockCleanupBatches.id);
+
+export const markProfileBlockCleanupBatchSettled = async (batchId: string): Promise<void> => {
+  await db
+    .update(ProfileBlockCleanupBatches)
+    .set({ settledAt: sql`now()`, updatedAt: sql`now()` })
+    .where(eq(ProfileBlockCleanupBatches.id, batchId));
+};
+
 /**
  * Applies the Profile Block relation and its DB-owned Follow cleanup in one
- * Activity transaction. Follow effect plans are returned even when their exact
- * source row was already removed, allowing a retry to reconstruct post-commit
- * effects after lost Activity completion.
+ * Activity transaction. Follow effect plans are persisted even when their exact
+ * source row was already removed, allowing the Worker to reconstruct
+ * post-commit effects after lost Activity completion.
  */
 export const executeProfileBlockTransitionInTransaction = async (
   input: ProfileBlockTransitionInput,
@@ -205,77 +349,143 @@ export const executeProfileBlockTransitionInTransaction = async (
   }
   const cleanupSources = uniqueCleanupSources(input);
   await loadProfileBlockParticipants(tx, input);
+  const operationId = input.candidateProfileBlockId;
+  const reserved = await reserveProfileBlockCleanupBatch({
+    operation: 'BLOCK',
+    operationId,
+    ownerProfileId: input.ownerProfileId,
+    targetProfileId: input.targetProfileId,
+    profileBlockId: operationId,
+    origin: input.origin,
+    protocolActivityUri: input.protocolActivity?.activityUri,
+    tx,
+  });
+  if (!reserved.winner) {
+    return {
+      ok: true,
+      result: profileBlockCleanupBatchResult(reserved.batch),
+    };
+  }
 
   const existingProtocol = input.protocolActivity
     ? await loadProfileBlockProtocolActivity(input.protocolActivity.activityUri, tx)
     : undefined;
   if (existingProtocol && existingProtocol.state !== 'ACTIVE') {
-    if (existingProtocol.profileBlockId === null) {
-      throw new Error('Closed Profile Block activity is missing its generation identity');
+    const protocolProfileBlockId = existingProtocol.profileBlockId ?? operationId;
+    const finalizedBatch = await tx
+      .update(ProfileBlockCleanupBatches)
+      .set({
+        profileBlockId: protocolProfileBlockId,
+        protocolState: existingProtocol.state,
+        changed: false,
+        effectPlan: [],
+        updatedAt: sql`now()`,
+      })
+      .where(eq(ProfileBlockCleanupBatches.id, reserved.batch.id))
+      .returning()
+      .then(first);
+    if (!finalizedBatch) {
+      throw new Error('Profile Block cleanup batch disappeared while finalizing tombstone');
     }
     return {
       ok: true,
-      result: {
-        created: false,
-        profileBlockId: existingProtocol.profileBlockId,
-        ownerProfileId: input.ownerProfileId,
-        targetProfileId: input.targetProfileId,
-        protocol: {
-          activityUri: existingProtocol.activityUri,
-          profileBlockId: existingProtocol.profileBlockId,
-          status: existingProtocol.state,
-        },
-      },
-      effectPlan: [],
+      result: profileBlockCleanupBatchResult(finalizedBatch),
     };
   }
-  if (input.protocolActivity) {
-    await ensureProfileBlockProtocolActivityInTransaction(
-      {
-        ...input.protocolActivity,
-        ...(input.candidateProfileBlockId === undefined
-          ? {}
-          : { profileBlockId: input.candidateProfileBlockId }),
-      },
-      tx,
-    );
+
+  const acquired = await tx
+    .insert(ProfileBlocks)
+    .values({
+      id: operationId,
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+    })
+    .onConflictDoUpdate({
+      target: [ProfileBlocks.ownerProfileId, ProfileBlocks.targetProfileId],
+      set: { ownerProfileId: sql`${ProfileBlocks.ownerProfileId}` },
+    })
+    .returning({
+      id: ProfileBlocks.id,
+      closingAt: ProfileBlocks.closingAt,
+      inserted: sql<boolean>`old.id IS NULL`,
+    })
+    .then(first);
+  if (!acquired) {
+    throw new Error('Profile Block pair acquisition did not return its row');
   }
 
-  const inserted = await tx
-    .insert(ProfileBlocks)
-    .values(
-      input.candidateProfileBlockId === undefined
-        ? {
-            ownerProfileId: input.ownerProfileId,
-            targetProfileId: input.targetProfileId,
-          }
-        : {
-            id: input.candidateProfileBlockId,
-            ownerProfileId: input.ownerProfileId,
-            targetProfileId: input.targetProfileId,
-          },
-    )
-    .onConflictDoNothing({
-      target: [ProfileBlocks.ownerProfileId, ProfileBlocks.targetProfileId],
-    })
-    .returning()
-    .then(first);
-  const profileBlock =
-    inserted ??
-    (await tx
-      .select()
-      .from(ProfileBlocks)
-      .where(profileBlockPairCondition(input))
-      .limit(1)
-      .then(first));
-  if (!profileBlock) {
-    throw new Error('Profile Block not found after insert conflict');
+  const ensuredProtocol = input.protocolActivity
+    ? await ensureProfileBlockProtocolActivityInTransaction(
+        {
+          ...input.protocolActivity,
+          // The candidate is stable across this operation. It is attached to
+          // the actual retained generation only after the pair decision below.
+          profileBlockId: operationId,
+        },
+        tx,
+      )
+    : undefined;
+  if (ensuredProtocol && ensuredProtocol.state !== 'ACTIVE') {
+    if (acquired.inserted) {
+      await tx.delete(ProfileBlocks).where(eq(ProfileBlocks.id, acquired.id));
+    }
+    const finalizedBatch = await tx
+      .update(ProfileBlockCleanupBatches)
+      .set({
+        profileBlockId: ensuredProtocol.profileBlockId ?? operationId,
+        protocolState: ensuredProtocol.state,
+        changed: false,
+        effectPlan: [],
+        updatedAt: sql`now()`,
+      })
+      .where(eq(ProfileBlockCleanupBatches.id, reserved.batch.id))
+      .returning()
+      .then(first);
+    if (!finalizedBatch) {
+      throw new Error('Profile Block cleanup batch disappeared while finalizing tombstone');
+    }
+    return {
+      ok: true,
+      result: profileBlockCleanupBatchResult(finalizedBatch),
+    };
+  }
+
+  let profileBlockId = acquired.id;
+  let created = acquired.inserted;
+  const protocolStates = await tx
+    .select({ state: ProfileBlockActivities.state })
+    .from(ProfileBlockActivities)
+    .where(
+      and(
+        eq(ProfileBlockActivities.profileBlockId, acquired.id),
+        inArray(ProfileBlockActivities.state, ['ACTIVE', 'CLOSING']),
+      ),
+    );
+  if (
+    acquired.closingAt !== null ||
+    (protocolStates.length > 0 && protocolStates.every(({ state }) => state === 'CLOSING'))
+  ) {
+    await tx.delete(ProfileBlocks).where(eq(ProfileBlocks.id, acquired.id));
+    const replacement = await tx
+      .insert(ProfileBlocks)
+      .values({
+        id: operationId,
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+      })
+      .returning({ id: ProfileBlocks.id })
+      .then(first);
+    if (!replacement) {
+      throw new Error('Profile Block closing generation replacement did not return its row');
+    }
+    profileBlockId = replacement.id;
+    created = true;
   }
 
   if (input.protocolActivity) {
     await tx
       .update(ProfileBlockActivities)
-      .set({ profileBlockId: profileBlock.id, updatedAt: sql`now()` })
+      .set({ profileBlockId, updatedAt: sql`now()` })
       .where(eq(ProfileBlockActivities.activityUri, input.protocolActivity.activityUri));
   }
 
@@ -283,25 +493,39 @@ export const executeProfileBlockTransitionInTransaction = async (
   for (const source of cleanupSources) {
     effectPlan.push(await removeProfileFollowExactSourceWithEffect(source, input.origin, tx));
   }
+  const finalizedBatch = await tx
+    .update(ProfileBlockCleanupBatches)
+    .set({
+      profileBlockId,
+      protocolState: input.protocolActivity ? 'ACTIVE' : null,
+      changed: created,
+      effectPlan,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(ProfileBlockCleanupBatches.id, reserved.batch.id))
+    .returning()
+    .then(first);
+  if (!finalizedBatch) {
+    throw new Error('Profile Block cleanup batch disappeared while finalizing');
+  }
 
   return {
     ok: true,
     result: {
-      created: inserted !== undefined,
-      profileBlockId: profileBlock.id,
+      created,
+      profileBlockId,
       ownerProfileId: input.ownerProfileId,
       targetProfileId: input.targetProfileId,
       ...(input.protocolActivity
         ? {
             protocol: {
               activityUri: input.protocolActivity.activityUri,
-              profileBlockId: profileBlock.id,
+              profileBlockId,
               status: 'ACTIVE' as const,
             },
           }
         : {}),
     },
-    effectPlan,
   };
 };
 
@@ -322,7 +546,7 @@ export const executeProfileBlockTransition = async (
 /**
  * Applies the Follow cleanup for an existing Block generation in one
  * transaction. The Block row intentionally remains active until the Worker
- * settles the returned effects and deletes that exact generation.
+ * settles the persisted effects and deletes that exact generation.
  */
 export const executeProfileUnblockTransitionInTransaction = async (
   input: ProfileUnblockTransitionInput,
@@ -332,9 +556,27 @@ export const executeProfileUnblockTransitionInTransaction = async (
     throw new ConflictError({ message: 'Profile cannot unblock itself' });
   }
 
+  const cleanupSources = uniqueCleanupSources(input);
+  const reserved = await reserveProfileBlockCleanupBatch({
+    operation: 'UNBLOCK',
+    operationId: input.operationId,
+    ownerProfileId: input.ownerProfileId,
+    targetProfileId: input.targetProfileId,
+    profileBlockId: input.expectedProfileBlockId,
+    origin: input.origin,
+    protocolActivityUri: input.protocolActivityUri,
+    tx,
+  });
+  if (!reserved.winner) {
+    return {
+      ok: true,
+      result: profileUnblockCleanupBatchResult(reserved.batch),
+    };
+  }
+
   const profileBlock = await tx
-    .select({ id: ProfileBlocks.id })
-    .from(ProfileBlocks)
+    .update(ProfileBlocks)
+    .set({ closingAt: sql`now()` })
     .where(
       and(
         eq(ProfileBlocks.ownerProfileId, input.ownerProfileId),
@@ -342,24 +584,43 @@ export const executeProfileUnblockTransitionInTransaction = async (
         eq(ProfileBlocks.id, input.expectedProfileBlockId),
       ),
     )
-    .limit(1)
+    .returning({ id: ProfileBlocks.id })
     .then(first);
   if (!profileBlock) {
+    const finalizedBatch = await tx
+      .update(ProfileBlockCleanupBatches)
+      .set({ changed: false, effectPlan: [], updatedAt: sql`now()` })
+      .where(eq(ProfileBlockCleanupBatches.id, reserved.batch.id))
+      .returning()
+      .then(first);
+    if (!finalizedBatch) {
+      throw new Error(
+        'Profile Block cleanup batch disappeared while finalizing missing generation',
+      );
+    }
     return {
       ok: true,
-      result: {
-        removed: false,
-        profileBlockId: null,
-        ownerProfileId: input.ownerProfileId,
-        targetProfileId: input.targetProfileId,
-      },
-      effectPlan: [],
+      result: profileUnblockCleanupBatchResult(finalizedBatch),
     };
   }
 
   const effectPlan: ProfileBlockEffect[] = [];
-  for (const source of uniqueCleanupSources(input)) {
+  for (const source of cleanupSources) {
     effectPlan.push(await removeProfileFollowExactSourceWithEffect(source, input.origin, tx));
+  }
+
+  const finalizedBatch = await tx
+    .update(ProfileBlockCleanupBatches)
+    .set({
+      changed: true,
+      effectPlan,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(ProfileBlockCleanupBatches.id, reserved.batch.id))
+    .returning()
+    .then(first);
+  if (!finalizedBatch) {
+    throw new Error('Profile Block cleanup batch disappeared while finalizing');
   }
 
   return {
@@ -370,7 +631,6 @@ export const executeProfileUnblockTransitionInTransaction = async (
       ownerProfileId: input.ownerProfileId,
       targetProfileId: input.targetProfileId,
     },
-    effectPlan,
   };
 };
 

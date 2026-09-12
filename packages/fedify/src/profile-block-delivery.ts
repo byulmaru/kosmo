@@ -24,11 +24,6 @@ export const getProfileBlockActivityUri = (
   profileBlockId: string,
 ): URL => new URL(`/ap/block/${encodeURIComponent(profileBlockId)}`, canonicalOrigin);
 
-export const getProfileBlockUndoActivityUri = (
-  canonicalOrigin: string | URL,
-  profileBlockId: string,
-): URL => new URL(`/ap/block/${encodeURIComponent(profileBlockId)}/undo`, canonicalOrigin);
-
 export const getProfileBlockOrderingKey = (actorUri: URL, objectUri: URL): string =>
   `profile-block:${actorUri.href}\n${objectUri.href}`;
 
@@ -119,6 +114,12 @@ export const sendProfileBlock = async (
   { createIfMissing = false }: { readonly createIfMissing?: boolean } = {},
 ): Promise<ProfileBlockDeliveryResult> => {
   const existing = await loadProfileBlockProtocolActivityByProfileBlockId(profileBlockId);
+  if (existing?.origin !== undefined && existing.origin !== 'OUTBOUND') {
+    return { reason: 'stale_source', status: 'SKIPPED' };
+  }
+  if (existing?.origin === 'OUTBOUND' && existing.deliveryState === 'SETTLED') {
+    return { status: 'SETTLED' };
+  }
   const source =
     (await loadOutboundProfileBlockSource(profileBlockId)) ??
     (existing?.origin === 'OUTBOUND'
@@ -128,9 +129,15 @@ export const sendProfileBlock = async (
         })
       : undefined);
   if (!source) {
+    if (existing?.origin === 'OUTBOUND') {
+      return { reason: 'recipient_unavailable', status: 'PENDING' };
+    }
     return { reason: 'stale_source', status: 'SKIPPED' };
   }
   if (source.targetInstanceKind !== InstanceKind.ACTIVITYPUB) {
+    if (existing?.origin === 'OUTBOUND') {
+      return { reason: 'recipient_unavailable', status: 'PENDING' };
+    }
     return { reason: 'not_remote_target', status: 'SKIPPED' };
   }
   if (!source.canonicalOrigin || !source.targetActorUri) {
@@ -147,14 +154,8 @@ export const sendProfileBlock = async (
   } catch {
     return { reason: 'recipient_unavailable', status: 'PENDING' };
   }
-  if (existing?.origin !== undefined && existing.origin !== 'OUTBOUND') {
-    return { reason: 'stale_source', status: 'SKIPPED' };
-  }
   if (!existing && !createIfMissing) {
     return { reason: 'stale_source', status: 'SKIPPED' };
-  }
-  if (existing?.origin === 'OUTBOUND' && existing.deliveryState === 'SETTLED') {
-    return { status: 'SETTLED' };
   }
 
   const activityUri = existing
@@ -219,10 +220,10 @@ export const sendProfileBlockUndo = async ({
     (await loadOutboundProfileBlockSource(profileBlockId)) ??
     (await loadOutboundProfileBlockParticipants({ ownerProfileId, targetProfileId }));
   if (!source) {
-    return { reason: 'stale_source', status: 'SKIPPED' };
+    return { reason: 'recipient_unavailable', status: 'PENDING' };
   }
   if (source.targetInstanceKind !== InstanceKind.ACTIVITYPUB) {
-    return { reason: 'not_remote_target', status: 'SKIPPED' };
+    return { reason: 'recipient_unavailable', status: 'PENDING' };
   }
   if (protocol.deliveryState !== 'SETTLED') {
     const blockResult = await sendProfileBlock(profileBlockId);
@@ -230,7 +231,7 @@ export const sendProfileBlockUndo = async ({
       return blockResult;
     }
   }
-  if (!source?.canonicalOrigin) {
+  if (!source.canonicalOrigin) {
     return { reason: 'recipient_unavailable', status: 'PENDING' };
   }
 

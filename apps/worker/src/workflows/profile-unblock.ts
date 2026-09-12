@@ -1,4 +1,4 @@
-import { ApplicationFailure, proxyActivities, sleep } from '@temporalio/workflow';
+import { ApplicationFailure, proxyActivities, sleep, workflowInfo } from '@temporalio/workflow';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
@@ -38,6 +38,8 @@ const {
   finalizeProfileBlockProtocolUndoActivity,
   loadProfileBlockProtocolActivityByProfileBlockIdActivity,
   loadProfileFollowRemovalSourcesBetweenProfilesActivity,
+  loadPendingProfileBlockCleanupBatchesActivity,
+  markProfileBlockCleanupBatchSettledActivity,
   prepareProfileBlockProtocolUndoActivity,
   sendProfileBlockActivity,
   sendProfileBlockUndoActivity,
@@ -69,24 +71,30 @@ export async function profileUnblockWorkflow(
   input: ProfileUnblockWorkflowInput,
 ): Promise<ProfileUnblockTransitionResult> {
   const parsedInput = parseProfileUnblockInput(input);
+  const drainPendingCleanupBatches = async () => {
+    const pendingBatches = await loadPendingProfileBlockCleanupBatchesActivity({
+      ownerProfileId: parsedInput.ownerProfileId,
+      targetProfileId: parsedInput.targetProfileId,
+    });
+    for (const batch of pendingBatches) {
+      for (const effect of batch.effectPlan) {
+        await settleEffects([
+          effect.input.sourceKind === 'FOLLOW'
+            ? deleteFollowNotificationActivity(effect.input.sourceId)
+            : deleteFollowRequestNotificationActivity(effect.input.sourceId),
+          ...(effect.input.sendActivityPub === true
+            ? [sendProfileUnfollowActivity(effect.input)]
+            : []),
+        ]);
+      }
+      await markProfileBlockCleanupBatchSettledActivity(batch.id);
+    }
+  };
   const storedProtocol = parsedInput.protocolActivityUri
     ? undefined
     : await loadProfileBlockProtocolActivityByProfileBlockIdActivity(parsedInput.profileBlockId);
   const protocolActivityUri = parsedInput.protocolActivityUri ?? storedProtocol?.activityUri;
-
-  if (protocolActivityUri && parsedInput.origin === 'LOCAL') {
-    // A pending Block is the head of this directed pair's effect chain. Keep
-    // this Workflow alive until the same stable identity is accepted; do not
-    // turn an unavailable recipient into an Undo handoff.
-    for (;;) {
-      const delivery = await sendProfileBlockActivity(parsedInput.profileBlockId);
-      if (delivery.status !== 'PENDING') {
-        break;
-      }
-      await sleep('5 seconds');
-    }
-  }
-
+  let protocolUndoPrepared = false;
   if (protocolActivityUri) {
     const preparation = await prepareProfileBlockProtocolUndoActivity({
       activityUri: protocolActivityUri,
@@ -95,6 +103,7 @@ export async function profileUnblockWorkflow(
       targetProfileId: parsedInput.targetProfileId,
     });
     if (preparation.kind !== 'REMOVE') {
+      await drainPendingCleanupBatches();
       return {
         removed: false,
         profileBlockId: null,
@@ -102,6 +111,7 @@ export async function profileUnblockWorkflow(
         targetProfileId: parsedInput.targetProfileId,
       };
     }
+    protocolUndoPrepared = true;
   }
 
   const cleanupSources = await loadProfileFollowRemovalSourcesBetweenProfilesActivity({
@@ -113,6 +123,7 @@ export async function profileUnblockWorkflow(
     targetProfileId: parsedInput.targetProfileId,
     origin: parsedInput.origin,
     expectedProfileBlockId: parsedInput.profileBlockId,
+    operationId: workflowInfo().runId,
     ...(protocolActivityUri === undefined ? {} : { protocolActivityUri }),
     cleanupSources,
   });
@@ -120,50 +131,55 @@ export async function profileUnblockWorkflow(
   if (!execution.ok) {
     throw profileUnblockFailure(execution);
   }
-  if (!execution.result.removed || execution.result.profileBlockId === null) {
+  await drainPendingCleanupBatches();
+  if (
+    (!execution.result.removed || execution.result.profileBlockId === null) &&
+    !protocolUndoPrepared
+  ) {
     return execution.result;
   }
 
-  for (const effect of execution.effectPlan) {
-    await settleEffects([
-      effect.input.sourceKind === 'FOLLOW'
-        ? deleteFollowNotificationActivity(effect.input.sourceId)
-        : deleteFollowRequestNotificationActivity(effect.input.sourceId),
-      ...(effect.input.sendActivityPub === true ? [sendProfileUnfollowActivity(effect.input)] : []),
-    ]);
-  }
+  const profileBlockId = execution.result.profileBlockId ?? parsedInput.profileBlockId;
 
-  if (protocolActivityUri === undefined) {
+  if (protocolActivityUri === undefined || parsedInput.origin === 'LOCAL') {
     await deleteProfileBlockActivity({
       ownerProfileId: execution.result.ownerProfileId,
       targetProfileId: execution.result.targetProfileId,
-      profileBlockId: execution.result.profileBlockId,
+      profileBlockId,
     });
-  } else if (parsedInput.origin === 'LOCAL') {
+  }
+
+  if (protocolActivityUri && parsedInput.origin === 'LOCAL') {
+    for (;;) {
+      const delivery = await sendProfileBlockActivity(parsedInput.profileBlockId);
+      if (delivery.status !== 'PENDING') {
+        break;
+      }
+      await sleep('5 seconds');
+    }
+  }
+
+  if (protocolActivityUri === undefined) {
+    return execution.result;
+  }
+  if (parsedInput.origin === 'LOCAL') {
     for (;;) {
       const delivery = await sendProfileBlockUndoActivity({
         ownerProfileId: execution.result.ownerProfileId,
         targetProfileId: execution.result.targetProfileId,
-        profileBlockId: execution.result.profileBlockId,
+        profileBlockId,
       });
       if (delivery.status !== 'PENDING') {
         break;
       }
       await sleep('5 seconds');
     }
-    await finalizeProfileBlockProtocolUndoActivity({
-      activityUri: protocolActivityUri,
-      ownerProfileId: execution.result.ownerProfileId,
-      targetProfileId: execution.result.targetProfileId,
-      profileBlockId: execution.result.profileBlockId,
-    });
-  } else {
-    await finalizeProfileBlockProtocolUndoActivity({
-      activityUri: protocolActivityUri,
-      ownerProfileId: execution.result.ownerProfileId,
-      targetProfileId: execution.result.targetProfileId,
-      profileBlockId: execution.result.profileBlockId,
-    });
   }
+  await finalizeProfileBlockProtocolUndoActivity({
+    activityUri: protocolActivityUri,
+    ownerProfileId: execution.result.ownerProfileId,
+    targetProfileId: execution.result.targetProfileId,
+    profileBlockId,
+  });
   return execution.result;
 }

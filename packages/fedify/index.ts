@@ -22,7 +22,6 @@ export { sendLocalProfileUpdate } from './src/local-profile-update-delivery';
 export {
   getProfileBlockActivityUri,
   getProfileBlockOrderingKey,
-  getProfileBlockUndoActivityUri,
   sendProfileBlock,
   sendProfileBlockUndo,
 } from './src/profile-block-delivery';

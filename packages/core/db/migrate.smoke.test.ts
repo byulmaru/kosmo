@@ -149,6 +149,7 @@ try {
             table_name = 'profile_mute'
             AND column_name IN ('created_at', 'expires_at', 'owner_profile_id', 'target_profile_id')
           )
+          OR (table_name = 'profile_block' AND column_name = 'closing_at')
         )
       ORDER BY table_name, column_name
     `,
@@ -166,6 +167,7 @@ try {
       { tableName: 'media', columnName: 'url' },
       { tableName: 'post', columnName: 'reply_parent_id' },
       { tableName: 'post', columnName: 'repost_source_id' },
+      { tableName: 'profile_block', columnName: 'closing_at' },
       { tableName: 'profile_mute', columnName: 'created_at' },
       { tableName: 'profile_mute', columnName: 'expires_at' },
       { tableName: 'profile_mute', columnName: 'owner_profile_id' },

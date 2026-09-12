@@ -66,7 +66,9 @@ PROD-822·PROD-823 In Review다. 이슈 상태와 실제 병합·통합 검증 �
    우선 사용하고, URI-only 원본을 확인할 수 없으면 mutation 없이 관측 가능한 미검증 결과로 처리한다.
 4. **원자성과 복구:** protocol admission·원본 결과와 domain transition의 원자적 경계를 PROD-813 action에 맞춘다.
    외부 orchestration 단계는 exact row와 보존한 effect plan으로 재개한다. commit 뒤 completion loss에도 현재 pair의
-   다른 row를 이번 결과로 추정하지 않는다. 단일 durable pair 조정과 DB uniqueness·exact-row 조건을 조합하고,
+   다른 row를 이번 결과로 추정하지 않는다. pair uniqueness 충돌은 실제 충돌한 현재 행을 반환하는 원자적
+   UPSERT로 처리하고, 그 행의 mutation 잠금을 유지한 채 closing 상태와 같은 generation의 protocol 원본을
+   재확인한다. 이전 행을 기다린 UPDATE가 0건으로 끝난 뒤 잠금 없는 SELECT로 새 행을 재사용하지 않는다.
    별도 advisory lock이나 process-local map으로 무조건 직렬화하지 않는다.
 5. **발신 원본:** 새 local-origin 차단의 immutable row identity에서 Block IRI와 별도 Undo IRI를 안정적으로
    파생한다. local actor URI, remote object URI와 발신 대상 여부를 해당 transition의 효과로 보존한다. required
@@ -82,6 +84,24 @@ PROD-822·PROD-823 In Review다. 이슈 상태와 실제 병합·통합 검증 �
    인계 retry 소진 시 선두 실패와 뒤 효과 대기를 보존하고 자동으로 건너뛰지 않는다. 원격 실패는 확정된 로컬 상태를 되돌리지 않는다.
 8. **Origin:** inbound Block/Undo는 같은 Block/Undo 발신 효과를 만들지 않는다. 기존 Follow cleanup이 소유한
    Notification 정리와 필요한 Follow 효과는 원래 계약대로 실행한다.
+
+### DB commit 이후 cleanup 복구
+
+Block 전용 cleanup batch에 transition의 결과와 immutable DELETE effect plan, 정산 시점을 보존한다.
+batch 예약, 제품 generation 결정, Follow/Request 삭제와 최종 plan 저장은 하나의 DB transaction이다.
+동일 operation의 재시도는 먼저 commit된 batch를 반환하고 제품 관계를 다시 변경하지 않는다. cleanup이
+0건이거나 기존 관계를 재사용한 결과도 저장해야 응답 유실 뒤 생성 여부·원본 generation이 바뀌지 않는다.
+
+Block은 bootstrap이 반환한 candidate UUID를 operation identity로 사용한다. Unblock은 Workflow run UUID를
+사용하므로 Activity retry는 같은 receipt를 읽고 failed-only 새 실행은 새 cleanup source를 추가로 포착할 수 있다.
+제품 삭제 권한은 operation ID와 별개로 항상 expected Profile Block UUID에 한정한다. batch의 generation UUID는
+제품 행 삭제에 연쇄 삭제되지 않는다.
+
+Workflow는 현재 generation뿐 아니라 같은 방향 pair에 남은 과거 pending batch도 읽고 정산한다. 각 batch의
+정확한 Follow/Request source ID와 최초 origin 기반 발신 자격을 유지하며, 모든 필수 cleanup 성공 후에만
+정산 시점을 기록하고 action 성공을 반환한다. 효과 성공 뒤 정산 응답이 유실되면 같은 exact source 효과가
+재실행될 수 있다. 이는 새 Follow generation을 제거하지 않으며 범용 outbox·effect framework나 새로운 원격
+ordering 보장을 도입하지 않는다.
 
 ### Delivery Settlement — HITL P2 해소
 
@@ -169,7 +189,8 @@ INSERT barrier는 race 재현용 테스트 기법일 뿐 production mechanism이
 1. Spec Gate 승인과 PROD-813 완료 증거를 확인한다. 최신 canonical·Linear와 현재 branch를 재검증한 뒤 구현한다.
 2. protocol metadata는 구버전 read/write를 깨뜨리지 않는 additive migration으로 도입한다. 원본 결과와 domain
    mutation의 원자성을 검사하고 기존 migration 파일은 수정하지 않는다. breaking 변경이 필요하면 이슈·release
-   경계를 먼저 다시 정한다.
+   경계를 먼저 다시 정한다. protocol metadata가 없는 legacy Profile Block은 nullable `closing_at`을 외부에
+   노출하지 않는 Unblock handoff 표식으로만 사용하며, null은 기존·미진행 상태를 뜻한다.
 3. 기존 row에는 발신 원본을 backfill하지 않는다. 새 동작이 활성화된 뒤 생성된 차단에만 발신 자격을 보존한다.
    활성화 중 구버전이 만든 row는 발신 자격이 없는 기존 row와 같이 취급하고, 그 해제에는 Undo를 만들지 않는다.
 4. DB 호환 변경과 production Worker의 새 Activity/Workflow 수용을 먼저 준비한 뒤 새 ingress·발신 admission을

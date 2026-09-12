@@ -8,12 +8,14 @@ import {
   InstanceKind,
   InstanceState,
   ProfileFollowPolicy,
+  ProfileState,
 } from '@kosmo/core/enums';
 import { eq, inArray } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
 import type { Activity, Recipient } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type * as CoreServices from '@kosmo/core/services';
 import type { localOutboundFederation as LocalOutboundFederation } from './local-outbound-federation';
 import type * as ProfileBlockDelivery from './profile-block-delivery';
 
@@ -32,6 +34,7 @@ let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let sendProfileBlock: typeof ProfileBlockDelivery.sendProfileBlock;
 let sendProfileBlockUndo: typeof ProfileBlockDelivery.sendProfileBlockUndo;
+let markProfileBlockProtocolDeliveryPending: typeof CoreServices.markProfileBlockProtocolDeliveryPending;
 const testProfileIds = new Set<string>();
 const testInstanceIds = new Set<string>();
 
@@ -52,6 +55,7 @@ before(async () => {
   const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
   ({ localOutboundFederation } = await import('./local-outbound-federation'));
   ({ sendProfileBlock, sendProfileBlockUndo } = await import('./profile-block-delivery'));
+  ({ markProfileBlockProtocolDeliveryPending } = await import('@kosmo/core/services'));
   const { localInstance } = await seedDatabase({ publicOrigin });
   localInstanceId = localInstance.id;
 });
@@ -142,6 +146,75 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
     .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`))
     .then((rows) => rows[0]);
   assert.equal(settledActivity?.undoDeliveryState, 'SETTLED');
+});
+
+test('기존 outbound protocol의 participant가 unavailable이면 Block과 Undo를 pending으로 보존한다', async () => {
+  const fixture = await createFixture();
+  const profileBlock = await db
+    .insert(ProfileBlocks)
+    .values({ ownerProfileId: fixture.localProfileId, targetProfileId: fixture.remoteProfileId })
+    .returning()
+    .then(firstOrThrow);
+  const contextFixture = createContextFixture();
+  mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
+
+  assert.deepEqual(await sendProfileBlock(profileBlock.id, { createIfMissing: true }), {
+    status: 'SETTLED',
+  });
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.DISABLED })
+    .where(eq(Profiles.id, fixture.localProfileId));
+  await markProfileBlockProtocolDeliveryPending(`${publicOrigin}/ap/block/${profileBlock.id}`);
+
+  assert.deepEqual(await sendProfileBlock(profileBlock.id), {
+    status: 'PENDING',
+    reason: 'recipient_unavailable',
+  });
+  await db.delete(ProfileBlocks).where(eq(ProfileBlocks.id, profileBlock.id));
+  assert.deepEqual(
+    await sendProfileBlockUndo({
+      ownerProfileId: fixture.localProfileId,
+      profileBlockId: profileBlock.id,
+      targetProfileId: fixture.remoteProfileId,
+    }),
+    { status: 'PENDING', reason: 'recipient_unavailable' },
+  );
+
+  const staleProfileBlockId = crypto.randomUUID();
+  assert.deepEqual(await sendProfileBlock(staleProfileBlockId), {
+    status: 'SKIPPED',
+    reason: 'stale_source',
+  });
+  assert.deepEqual(
+    await sendProfileBlockUndo({
+      ownerProfileId: fixture.localProfileId,
+      profileBlockId: staleProfileBlockId,
+      targetProfileId: fixture.remoteProfileId,
+    }),
+    { status: 'SKIPPED', reason: 'stale_source' },
+  );
+});
+
+test('이미 정산된 outbound Block은 participant unavailable에도 정산 상태를 유지한다', async () => {
+  const fixture = await createFixture();
+  const profileBlock = await db
+    .insert(ProfileBlocks)
+    .values({ ownerProfileId: fixture.localProfileId, targetProfileId: fixture.remoteProfileId })
+    .returning()
+    .then(firstOrThrow);
+  const contextFixture = createContextFixture();
+  mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
+
+  assert.deepEqual(await sendProfileBlock(profileBlock.id, { createIfMissing: true }), {
+    status: 'SETTLED',
+  });
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.DISABLED })
+    .where(eq(Profiles.id, fixture.localProfileId));
+
+  assert.deepEqual(await sendProfileBlock(profileBlock.id), { status: 'SETTLED' });
 });
 
 type SendActivityCall = {

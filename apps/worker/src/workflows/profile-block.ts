@@ -43,7 +43,9 @@ const {
   deleteFollowNotificationActivity,
   deleteFollowRequestNotificationActivity,
   executeProfileBlockTransitionActivity,
+  loadPendingProfileBlockCleanupBatchesActivity,
   loadProfileBlockTransitionBootstrapActivity,
+  markProfileBlockCleanupBatchSettledActivity,
   sendProfileBlockActivity,
   sendProfileUnfollowActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
@@ -87,17 +89,26 @@ export async function profileBlockWorkflow(
     throw profileBlockFailure(execution);
   }
 
-  for (const effect of execution.effectPlan) {
-    // The Follow DELETE effect plan carries the exact directed pair and an
-    // optional ActivityPub flag. Keep each plan entry's sibling effects in a
-    // single settlement so the next source cannot start before this source's
-    // notification cleanup and delivery handoff have both settled.
-    await settleEffects([
-      effect.input.sourceKind === 'FOLLOW'
-        ? deleteFollowNotificationActivity(effect.input.sourceId)
-        : deleteFollowRequestNotificationActivity(effect.input.sourceId),
-      ...(effect.input.sendActivityPub === true ? [sendProfileUnfollowActivity(effect.input)] : []),
-    ]);
+  const pendingBatches = await loadPendingProfileBlockCleanupBatchesActivity({
+    ownerProfileId: execution.result.ownerProfileId,
+    targetProfileId: execution.result.targetProfileId,
+  });
+  for (const batch of pendingBatches) {
+    for (const effect of batch.effectPlan) {
+      // The Follow DELETE effect plan carries the exact directed pair and an
+      // optional ActivityPub flag. Keep each plan entry's sibling effects in a
+      // single settlement so the next source cannot start before this source's
+      // notification cleanup and delivery handoff have both settled.
+      await settleEffects([
+        effect.input.sourceKind === 'FOLLOW'
+          ? deleteFollowNotificationActivity(effect.input.sourceId)
+          : deleteFollowRequestNotificationActivity(effect.input.sourceId),
+        ...(effect.input.sendActivityPub === true
+          ? [sendProfileUnfollowActivity(effect.input)]
+          : []),
+      ]);
+    }
+    await markProfileBlockCleanupBatchSettledActivity(batch.id);
   }
 
   if (parsedInput.origin === 'LOCAL' && execution.result.created) {

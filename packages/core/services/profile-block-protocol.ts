@@ -144,7 +144,7 @@ export const recordProfileBlockProtocolTombstone = async (
       return existing;
     }
 
-    return tx
+    const inserted = await tx
       .insert(ProfileBlockActivities)
       .values({
         activityUri: input.activityUri,
@@ -157,14 +157,19 @@ export const recordProfileBlockProtocolTombstone = async (
         state: 'CLOSED',
         closedAt: sql`now()`,
       })
+      .onConflictDoNothing({ target: ProfileBlockActivities.activityUri })
       .returning()
-      .then(first)
-      .then((row) => {
-        if (!row) {
-          throw new Error('Profile Block Undo tombstone was not created');
-        }
-        return row;
-      });
+      .then(first);
+    if (inserted) {
+      return inserted;
+    }
+
+    const raced = await loadProtocolActivityInTransaction(input.activityUri, tx);
+    if (!raced) {
+      throw new Error('Profile Block Undo tombstone disappeared after conflict handling');
+    }
+    assertProtocolActivityMatches(raced, input);
+    return raced;
   });
 
 const activeProtocolStates = ['ACTIVE', 'CLOSING'] as const;
@@ -213,8 +218,37 @@ export const prepareProfileBlockProtocolUndo = async ({
         .where(protocolActivityCondition(activityUri));
       return { kind: 'NOOP', profileBlockId: null };
     }
-    if (activity.state === 'CLOSING') {
-      return { kind: 'REMOVE', profileBlockId: activity.profileBlockId };
+    // Serialize competing originals for the same product relation through an
+    // ordinary conditional write. The reload below is required because the
+    // lock holder may have closed another original before this transaction
+    // acquired the row.
+    await tx
+      .update(ProfileBlocks)
+      .set({ ownerProfileId: sql`${ProfileBlocks.ownerProfileId}` })
+      .where(
+        and(
+          eq(ProfileBlocks.id, activity.profileBlockId),
+          eq(ProfileBlocks.ownerProfileId, ownerProfileId),
+          eq(ProfileBlocks.targetProfileId, targetProfileId),
+        ),
+      );
+
+    const currentActivity = await loadProtocolActivityInTransaction(activityUri, tx);
+    if (!currentActivity) {
+      return { kind: 'NOOP', profileBlockId: null };
+    }
+    if (currentActivity.state === 'CLOSED') {
+      return { kind: 'NOOP', profileBlockId: currentActivity.profileBlockId };
+    }
+    if (currentActivity.profileBlockId === null) {
+      await tx
+        .update(ProfileBlockActivities)
+        .set({ closedAt: sql`now()`, state: 'CLOSED', updatedAt: sql`now()` })
+        .where(protocolActivityCondition(activityUri));
+      return { kind: 'NOOP', profileBlockId: null };
+    }
+    if (currentActivity.state === 'CLOSING') {
+      return { kind: 'REMOVE', profileBlockId: currentActivity.profileBlockId };
     }
 
     const otherActive = await tx
@@ -235,14 +269,16 @@ export const prepareProfileBlockProtocolUndo = async ({
         .update(ProfileBlockActivities)
         .set({ closedAt: sql`now()`, state: 'CLOSED', updatedAt: sql`now()` })
         .where(protocolActivityCondition(activityUri));
-      return { kind: 'CLOSE_ONLY', profileBlockId: activity.profileBlockId };
+      return { kind: 'CLOSE_ONLY', profileBlockId: currentActivity.profileBlockId };
     }
 
     await tx
       .update(ProfileBlockActivities)
       .set({ state: 'CLOSING', updatedAt: sql`now()` })
-      .where(protocolActivityCondition(activityUri));
-    return { kind: 'REMOVE', profileBlockId: activity.profileBlockId };
+      .where(
+        and(protocolActivityCondition(activityUri), eq(ProfileBlockActivities.state, 'ACTIVE')),
+      );
+    return { kind: 'REMOVE', profileBlockId: currentActivity.profileBlockId };
   });
 
 /**
@@ -262,6 +298,16 @@ export const finalizeProfileBlockProtocolUndo = async ({
   readonly profileBlockId: string;
 }): Promise<boolean> =>
   db.transaction(async (tx) => {
+    await tx
+      .update(ProfileBlocks)
+      .set({ ownerProfileId: sql`${ProfileBlocks.ownerProfileId}` })
+      .where(
+        and(
+          eq(ProfileBlocks.id, profileBlockId),
+          eq(ProfileBlocks.ownerProfileId, ownerProfileId),
+          eq(ProfileBlocks.targetProfileId, targetProfileId),
+        ),
+      );
     await tx
       .update(ProfileBlockActivities)
       .set({ closedAt: sql`now()`, state: 'CLOSED', updatedAt: sql`now()` })
@@ -287,33 +333,19 @@ export const finalizeProfileBlockProtocolUndo = async ({
       .limit(1)
       .then(first);
 
-    await tx
-      .update(ProfileBlockActivities)
-      .set({ closedAt: sql`now()`, state: 'CLOSED', updatedAt: sql`now()` })
-      .where(
-        and(
-          protocolActivityCondition(activityUri),
-          eq(ProfileBlockActivities.ownerProfileId, ownerProfileId),
-          eq(ProfileBlockActivities.targetProfileId, targetProfileId),
-          eq(ProfileBlockActivities.profileBlockId, profileBlockId),
-        ),
-      );
-
-    if (otherActive) {
-      return false;
-    }
-
-    const deleted = await tx
-      .delete(ProfileBlocks)
-      .where(
-        and(
-          eq(ProfileBlocks.id, profileBlockId),
-          eq(ProfileBlocks.ownerProfileId, ownerProfileId),
-          eq(ProfileBlocks.targetProfileId, targetProfileId),
-        ),
-      )
-      .returning({ id: ProfileBlocks.id })
-      .then(first);
+    const deleted = otherActive
+      ? undefined
+      : await tx
+          .delete(ProfileBlocks)
+          .where(
+            and(
+              eq(ProfileBlocks.id, profileBlockId),
+              eq(ProfileBlocks.ownerProfileId, ownerProfileId),
+              eq(ProfileBlocks.targetProfileId, targetProfileId),
+            ),
+          )
+          .returning({ id: ProfileBlocks.id })
+          .then(first);
     return deleted !== undefined;
   });
 

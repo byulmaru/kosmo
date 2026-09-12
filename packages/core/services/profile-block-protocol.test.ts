@@ -90,7 +90,7 @@ after(async () => {
   await pg.end();
 });
 
-test('동일 pair의 서로 다른 Block 원본은 Undo 대상만 닫고 마지막 원본에서만 관계를 제거한다', async () => {
+test('동일 pair의 서로 다른 Block 원본은 각각 닫고 마지막 finalize에서 관계를 제거한다', async () => {
   const { profile: owner } = await createProfile(InstanceKind.ACTIVITYPUB);
   const { profile: target } = await createProfile(InstanceKind.LOCAL);
   const firstInput = createProtocolInput({
@@ -173,18 +173,121 @@ test('동일 pair의 서로 다른 Block 원본은 Undo 대상만 닫고 마지�
     kind: 'REMOVE',
     profileBlockId: firstExecution.result.profileBlockId,
   });
-  await finalizeProfileBlockProtocolUndo({
-    activityUri: secondInput.activityUri,
-    ownerProfileId: owner.id,
-    targetProfileId: target.id,
-    profileBlockId: firstExecution.result.profileBlockId,
-  });
+  assert.equal(
+    await finalizeProfileBlockProtocolUndo({
+      activityUri: secondInput.activityUri,
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+      profileBlockId: firstExecution.result.profileBlockId,
+    }),
+    true,
+  );
 
   assert.equal(
     await db
       .select()
       .from(ProfileBlocks)
       .where(eq(ProfileBlocks.id, firstExecution.result.profileBlockId))
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.deepEqual(
+    await db
+      .select({
+        activityUri: ProfileBlockActivities.activityUri,
+        state: ProfileBlockActivities.state,
+      })
+      .from(ProfileBlockActivities)
+      .where(
+        inArray(ProfileBlockActivities.activityUri, [
+          firstInput.activityUri,
+          secondInput.activityUri,
+        ]),
+      )
+      .then((rows) =>
+        rows.sort((left, right) => left.activityUri.localeCompare(right.activityUri)),
+      ),
+    [
+      { activityUri: firstInput.activityUri, state: 'CLOSED' },
+      { activityUri: secondInput.activityUri, state: 'CLOSED' },
+    ].sort((left, right) => left.activityUri.localeCompare(right.activityUri)),
+  );
+});
+
+test('서로 다른 Block 원본의 Undo를 동시에 준비해도 모든 원본 종료 후 관계를 제거한다', async () => {
+  const { profile: owner } = await createProfile(InstanceKind.ACTIVITYPUB);
+  const { profile: target } = await createProfile(InstanceKind.LOCAL);
+  const firstInput = createProtocolInput({
+    activityUri: `https://remote.example/activities/${crypto.randomUUID()}`,
+    actorUri: `https://remote.example/users/${owner.handle}`,
+    objectUri: `https://local.example/ap/actor/${target.id}`,
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+  });
+  const secondInput = createProtocolInput({
+    ...firstInput,
+    activityUri: `https://remote.example/activities/${crypto.randomUUID()}`,
+  });
+
+  const firstBootstrap = await loadProfileBlockTransitionBootstrap({
+    firstProfileId: owner.id,
+    secondProfileId: target.id,
+  });
+  const secondBootstrap = await loadProfileBlockTransitionBootstrap({
+    firstProfileId: owner.id,
+    secondProfileId: target.id,
+  });
+  for (const [input, bootstrap] of [
+    [firstInput, firstBootstrap],
+    [secondInput, secondBootstrap],
+  ] as const) {
+    const execution = await executeProfileBlockTransition({
+      cleanupSources: bootstrap.cleanupSources,
+      candidateProfileBlockId: bootstrap.candidateProfileBlockId,
+      origin: 'ACTIVITYPUB',
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+      protocolActivity: input,
+    });
+    assert.equal(execution.ok, true);
+  }
+
+  const preparations = await Promise.all(
+    [firstInput, secondInput].map(({ activityUri }) =>
+      prepareProfileBlockProtocolUndo({
+        activityUri,
+        ownerProfileId: owner.id,
+        targetProfileId: target.id,
+      }),
+    ),
+  );
+
+  assert.deepEqual(preparations.map(({ kind }) => kind).sort(), ['CLOSE_ONLY', 'REMOVE']);
+  assert.ok(
+    preparations.every(
+      ({ profileBlockId }) => profileBlockId === firstBootstrap.candidateProfileBlockId,
+    ),
+  );
+
+  const removeActivityUri = [firstInput.activityUri, secondInput.activityUri][
+    preparations.findIndex(({ kind }) => kind === 'REMOVE')
+  ];
+  assert.ok(removeActivityUri);
+  assert.equal(
+    await finalizeProfileBlockProtocolUndo({
+      activityUri: removeActivityUri,
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+      profileBlockId: firstBootstrap.candidateProfileBlockId,
+    }),
+    true,
+  );
+
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileBlocks)
+      .where(eq(ProfileBlocks.id, firstBootstrap.candidateProfileBlockId))
       .then((rows) => rows.length),
     0,
   );

@@ -68,6 +68,37 @@ const reactionDeleteInput = (id: string, origin: ReactionDeleteEffectsInput['ori
   origin,
 });
 
+type ProfileBlockCleanupBatchFixtureInput = {
+  readonly id: string;
+  readonly operation: 'BLOCK' | 'UNBLOCK';
+  readonly operationId: string;
+  readonly ownerProfileId: string;
+  readonly targetProfileId: string;
+  readonly profileBlockId: string;
+  readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+  readonly effectPlan?: readonly unknown[];
+  readonly changed?: boolean;
+  readonly protocolActivityUri?: string;
+  readonly protocolState?: 'ACTIVE' | 'CLOSING' | 'CLOSED';
+};
+
+const profileBlockCleanupBatch = ({
+  changed = true,
+  effectPlan = [],
+  protocolActivityUri,
+  protocolState,
+  ...input
+}: ProfileBlockCleanupBatchFixtureInput) => ({
+  ...input,
+  changed,
+  effectPlan,
+  protocolActivityUri: protocolActivityUri ?? null,
+  protocolState: protocolState ?? null,
+  createdAt: '2026-09-11T00:00:00.000Z',
+  updatedAt: '2026-09-11T00:00:00.000Z',
+  settledAt: null,
+});
+
 test(
   'Reaction Effects Workflow의 origin 분기와 sibling Activity 격리를 검증한다',
   { timeout: 120_000 },
@@ -1462,15 +1493,26 @@ test(
         ownerProfileId: input.ownerProfileId,
         targetProfileId: input.targetProfileId,
       },
+    };
+    const bootstrap = { candidateProfileBlockId, cleanupSources };
+    const batchId = '00000000-0000-7000-8000-000000000705';
+    const cleanupBatch = profileBlockCleanupBatch({
+      id: batchId,
+      operation: 'BLOCK',
+      operationId: candidateProfileBlockId,
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      profileBlockId: candidateProfileBlockId,
+      origin: input.origin,
       effectPlan: [
         {
           kind: 'DELETE' as const,
           input: { ...cleanupSources[0], sendActivityPub: true },
         },
       ],
-    };
-    const bootstrap = { candidateProfileBlockId, cleanupSources };
+    });
     const calls: string[] = [];
+    const settledBatchIds: string[] = [];
     let releaseEffects!: () => void;
     const effectsReleased = new Promise<void>((resolve) => {
       releaseEffects = resolve;
@@ -1495,6 +1537,16 @@ test(
           assert.equal(transition.candidateProfileBlockId, candidateProfileBlockId);
           assert.deepEqual(transition.cleanupSources, cleanupSources);
           return execution;
+        },
+        loadPendingProfileBlockCleanupBatchesActivity: async (value: unknown) => {
+          assert.deepEqual(value, {
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+          });
+          return [cleanupBatch];
+        },
+        markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
+          settledBatchIds.push(batchIdToSettle);
         },
         sendProfileBlockActivity: async () => undefined,
         deleteFollowNotificationActivity: async (sourceId: string) => {
@@ -1530,8 +1582,10 @@ test(
 
         await Promise.all([notificationStartedPromise, undoStartedPromise]);
         assert.equal(settled, false);
+        assert.deepEqual(settledBatchIds, []);
         releaseEffects();
         assert.deepEqual(await resultPromise, execution.result);
+        assert.deepEqual(settledBatchIds, [batchId]);
         assert.deepEqual(
           [...calls].sort(),
           [
@@ -1578,21 +1632,32 @@ test(
         ownerProfileId: input.ownerProfileId,
         targetProfileId: input.targetProfileId,
       },
+    };
+    const bootstrap = {
+      candidateProfileBlockId: execution.result.profileBlockId,
+      cleanupSources,
+    };
+    const batchId = '00000000-0000-7000-8000-000000000716';
+    const cleanupBatch = profileBlockCleanupBatch({
+      id: batchId,
+      operation: 'BLOCK',
+      operationId: execution.result.profileBlockId,
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      profileBlockId: execution.result.profileBlockId,
+      origin: input.origin,
       effectPlan: [
         {
           kind: 'DELETE' as const,
           input: cleanupSources[0],
         },
       ],
-    };
-    const bootstrap = {
-      candidateProfileBlockId: execution.result.profileBlockId,
-      cleanupSources,
-    };
+    });
     const transitionInputs: unknown[] = [];
     let bootstrapCalls = 0;
     let transitionAttempts = 0;
     let deleteCalls = 0;
+    const settledBatchIds: string[] = [];
 
     const worker = await Worker.create({
       activities: {
@@ -1617,6 +1682,10 @@ test(
           }
           return execution;
         },
+        loadPendingProfileBlockCleanupBatchesActivity: async () => [cleanupBatch],
+        markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
+          settledBatchIds.push(batchIdToSettle);
+        },
         sendProfileBlockActivity: async () => undefined,
         deleteFollowRequestNotificationActivity: async (sourceId: string) => {
           assert.equal(sourceId, followRequestId);
@@ -1640,6 +1709,7 @@ test(
       assert.equal(bootstrapCalls, 1);
       assert.equal(transitionAttempts, 2);
       assert.equal(deleteCalls, 1);
+      assert.deepEqual(settledBatchIds, [batchId]);
       const firstInput = transitionInputs[0] as {
         candidateProfileBlockId: string;
         cleanupSources: typeof cleanupSources;
@@ -1649,6 +1719,82 @@ test(
       assert.equal(secondInput.candidateProfileBlockId, firstInput.candidateProfileBlockId);
       assert.deepEqual(firstInput.cleanupSources, cleanupSources);
       assert.deepEqual(secondInput.cleanupSources, cleanupSources);
+    });
+  },
+);
+
+test(
+  'Profile Block Workflow는 NOOP 전이도 커밋된 빈 cleanup batch를 정산한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-profile-block-noop-' + process.pid;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000717',
+      targetProfileId: '00000000-0000-8000-8000-000000000718',
+      origin: 'LOCAL' as const,
+    };
+    const profileBlockId = '00000000-0000-7000-8000-000000000719';
+    const batchId = '00000000-0000-8000-8000-000000000720';
+    const cleanupBatch = profileBlockCleanupBatch({
+      id: batchId,
+      operation: 'BLOCK',
+      operationId: profileBlockId,
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      profileBlockId,
+      origin: input.origin,
+      changed: false,
+    });
+    const settledBatchIds: string[] = [];
+    const execution = {
+      ok: true as const,
+      result: {
+        created: false,
+        profileBlockId,
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+      },
+    };
+
+    const worker = await Worker.create({
+      activities: {
+        loadProfileBlockTransitionBootstrapActivity: async () => ({
+          candidateProfileBlockId: profileBlockId,
+          cleanupSources: [],
+        }),
+        executeProfileBlockTransitionActivity: async (value: unknown) => {
+          assert.deepEqual(value, {
+            ...input,
+            candidateProfileBlockId: profileBlockId,
+            cleanupSources: [],
+          });
+          return execution;
+        },
+        loadPendingProfileBlockCleanupBatchesActivity: async () => [cleanupBatch],
+        markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
+          settledBatchIds.push(batchIdToSettle);
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const result = await environment.client.workflow.execute('profileBlockWorkflow', {
+        args: [input],
+        taskQueue,
+        workflowId: `profile-block-test:${process.pid}:noop`,
+      });
+
+      assert.deepEqual(result, execution.result);
+      assert.deepEqual(settledBatchIds, [batchId]);
     });
   },
 );
@@ -1678,6 +1824,23 @@ test(
       },
     ];
     const calls: string[] = [];
+    const batchId = '00000000-0000-7000-8000-000000000725';
+    const cleanupBatch = profileBlockCleanupBatch({
+      id: batchId,
+      operation: 'BLOCK',
+      operationId: '00000000-0000-7000-8000-000000000724',
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      profileBlockId: '00000000-0000-7000-8000-000000000724',
+      origin: input.origin,
+      effectPlan: [
+        {
+          kind: 'DELETE' as const,
+          input: { ...cleanupSources[0], sendActivityPub: true },
+        },
+      ],
+    });
+    const settledBatchIds: string[] = [];
     let releaseSibling!: () => void;
     const siblingReleased = new Promise<void>((resolve) => {
       releaseSibling = resolve;
@@ -1701,13 +1864,11 @@ test(
             ownerProfileId: input.ownerProfileId,
             targetProfileId: input.targetProfileId,
           },
-          effectPlan: [
-            {
-              kind: 'DELETE' as const,
-              input: { ...cleanupSources[0], sendActivityPub: true },
-            },
-          ],
         }),
+        loadPendingProfileBlockCleanupBatchesActivity: async () => [cleanupBatch],
+        markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
+          settledBatchIds.push(batchIdToSettle);
+        },
         sendProfileBlockActivity: async () => undefined,
         deleteFollowNotificationActivity: async (sourceId: string) => {
           calls.push('delete:' + sourceId);
@@ -1748,6 +1909,7 @@ test(
         assert.equal(settled, false);
         releaseSibling();
         await assert.rejects(resultPromise);
+        assert.deepEqual(settledBatchIds, []);
         assert.deepEqual(
           [...calls].sort(),
           [
@@ -1802,6 +1964,16 @@ test(
         ownerProfileId: input.ownerProfileId,
         targetProfileId: input.targetProfileId,
       },
+    };
+    const batchId = '00000000-0000-8000-8000-000000000806';
+    const cleanupBatch = profileBlockCleanupBatch({
+      id: batchId,
+      operation: 'UNBLOCK',
+      operationId: '00000000-0000-8000-8000-000000000807',
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      profileBlockId: input.profileBlockId,
+      origin: input.origin,
       effectPlan: [
         {
           kind: 'DELETE' as const,
@@ -1812,8 +1984,9 @@ test(
           input: cleanupSources[1],
         },
       ],
-    };
+    });
     const calls: string[] = [];
+    const settledBatchIds: string[] = [];
     let releaseEffects!: () => void;
     const effectsReleased = new Promise<void>((resolve) => {
       releaseEffects = resolve;
@@ -1833,10 +2006,25 @@ test(
           const transition = value as {
             expectedProfileBlockId: string;
             cleanupSources: typeof cleanupSources;
+            operationId: string;
           };
           assert.equal(transition.expectedProfileBlockId, input.profileBlockId);
           assert.deepEqual(transition.cleanupSources, cleanupSources);
+          assert.match(
+            transition.operationId,
+            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+          );
           return execution;
+        },
+        loadPendingProfileBlockCleanupBatchesActivity: async (value: unknown) => {
+          assert.deepEqual(value, {
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+          });
+          return [cleanupBatch];
+        },
+        markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
+          settledBatchIds.push(batchIdToSettle);
         },
         deleteFollowNotificationActivity: async (sourceId: string) => {
           calls.push('delete:' + sourceId);
@@ -1885,8 +2073,10 @@ test(
         assert.equal(startedEffects, 2);
         assert.equal(settled, false);
         assert.equal(finalDeleteInput, undefined);
+        assert.deepEqual(settledBatchIds, []);
         releaseEffects();
         assert.deepEqual(await resultPromise, execution.result);
+        assert.deepEqual(settledBatchIds, [batchId]);
         assert.deepEqual(
           [...calls].sort(),
           [
@@ -1903,6 +2093,669 @@ test(
       } finally {
         releaseEffects();
       }
+    });
+  },
+);
+
+test(
+  'Profile Unblock Workflow는 Block handoff pending 중 local transition을 먼저 실행하고 Undo를 순서대로 정산한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = `${KOSMO_TASK_QUEUE}-profile-unblock-federated-pending-${process.pid}`;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000841',
+      targetProfileId: '00000000-0000-8000-8000-000000000842',
+      profileBlockId: '00000000-0000-8000-8000-000000000843',
+      origin: 'LOCAL' as const,
+    };
+    const activityUri = 'https://local.example/ap/block/' + input.profileBlockId;
+    const execution = {
+      ok: true as const,
+      result: {
+        removed: true,
+        profileBlockId: input.profileBlockId,
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+      },
+    };
+    const storedProtocol = {
+      activityUri,
+      actorUri: `https://local.example/ap/actor/${input.ownerProfileId}`,
+      objectUri: `https://remote.example/ap/actor/${input.targetProfileId}`,
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      origin: 'OUTBOUND' as const,
+      state: 'ACTIVE' as const,
+      deliveryState: 'PENDING' as const,
+      undoDeliveryState: 'NONE' as const,
+      profileBlockId: input.profileBlockId,
+    };
+    const batchId = '00000000-0000-8000-8000-000000000844';
+    const cleanupBatch = profileBlockCleanupBatch({
+      id: batchId,
+      operation: 'UNBLOCK',
+      operationId: '00000000-0000-8000-8000-000000000845',
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      profileBlockId: input.profileBlockId,
+      origin: input.origin,
+      protocolActivityUri: activityUri,
+      protocolState: 'CLOSING',
+    });
+    const calls: string[] = [];
+    const settledBatchIds: string[] = [];
+    let productDeleted = false;
+    let blockAttempts = 0;
+    let undoAttempts = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        loadProfileBlockProtocolActivityByProfileBlockIdActivity: async (
+          profileBlockId: string,
+        ) => {
+          assert.equal(profileBlockId, input.profileBlockId);
+          calls.push('load-protocol');
+          return storedProtocol;
+        },
+        sendProfileBlockActivity: async (profileBlockId: string) => {
+          assert.equal(profileBlockId, input.profileBlockId);
+          assert.equal(productDeleted, true);
+          blockAttempts += 1;
+          calls.push(`block-${blockAttempts}`);
+          if (blockAttempts === 1) {
+            return { status: 'PENDING' as const, reason: 'recipient_unavailable' as const };
+          }
+          return { status: 'SETTLED' as const };
+        },
+        prepareProfileBlockProtocolUndoActivity: async (value: unknown) => {
+          calls.push('prepare');
+          assert.deepEqual(value, {
+            activityUri,
+            expectedProfileBlockId: input.profileBlockId,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+          });
+          return { kind: 'REMOVE' as const, profileBlockId: input.profileBlockId };
+        },
+        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async (value: unknown) => {
+          calls.push('load-cleanup');
+          assert.deepEqual(value, {
+            firstProfileId: input.ownerProfileId,
+            secondProfileId: input.targetProfileId,
+          });
+          return [];
+        },
+        executeProfileUnblockTransitionActivity: async (value: unknown) => {
+          calls.push('execute');
+          assert.equal(blockAttempts, 0);
+          const transition = value as {
+            ownerProfileId: string;
+            targetProfileId: string;
+            origin: 'LOCAL' | 'ACTIVITYPUB';
+            expectedProfileBlockId: string;
+            protocolActivityUri: string;
+            cleanupSources: readonly unknown[];
+            operationId: string;
+          };
+          assert.deepEqual(transition, {
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+            origin: input.origin,
+            expectedProfileBlockId: input.profileBlockId,
+            protocolActivityUri: activityUri,
+            cleanupSources: [],
+            operationId: transition.operationId,
+          });
+          assert.match(
+            transition.operationId,
+            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+          );
+          return execution;
+        },
+        loadPendingProfileBlockCleanupBatchesActivity: async () => [cleanupBatch],
+        markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
+          settledBatchIds.push(batchIdToSettle);
+        },
+        deleteProfileBlockActivity: async (value: unknown) => {
+          calls.push('delete-product');
+          productDeleted = true;
+          assert.deepEqual(value, {
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+            profileBlockId: input.profileBlockId,
+          });
+        },
+        sendProfileBlockUndoActivity: async (value: unknown) => {
+          assert.deepEqual(value, {
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+            profileBlockId: input.profileBlockId,
+          });
+          undoAttempts += 1;
+          calls.push(`undo-${undoAttempts}`);
+          if (undoAttempts === 1) {
+            return { status: 'PENDING' as const, reason: 'recipient_unavailable' as const };
+          }
+          return { status: 'SETTLED' as const };
+        },
+        finalizeProfileBlockProtocolUndoActivity: async (value: unknown) => {
+          calls.push('finalize');
+          assert.deepEqual(value, {
+            activityUri,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+            profileBlockId: input.profileBlockId,
+          });
+          return true;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const result = await environment.client.workflow.execute('profileUnblockWorkflow', {
+        args: [input],
+        taskQueue,
+        workflowId: `profile-unblock-test:${process.pid}:federated-pending`,
+      });
+
+      assert.deepEqual(result, execution.result);
+      assert.deepEqual(settledBatchIds, [batchId]);
+      assert.deepEqual(calls, [
+        'load-protocol',
+        'prepare',
+        'load-cleanup',
+        'execute',
+        'delete-product',
+        'block-1',
+        'block-2',
+        'undo-1',
+        'undo-2',
+        'finalize',
+      ]);
+    });
+  },
+);
+
+test(
+  'Profile Unblock Workflow는 Block terminal 오류 전에 local product row를 삭제한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = `${KOSMO_TASK_QUEUE}-profile-unblock-block-failure-${process.pid}`;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000871',
+      targetProfileId: '00000000-0000-8000-8000-000000000872',
+      profileBlockId: '00000000-0000-8000-8000-000000000873',
+      origin: 'LOCAL' as const,
+    };
+    const activityUri = 'https://local.example/ap/block/failure-871';
+    const batchId = '00000000-0000-8000-8000-000000000874';
+    const cleanupBatch = profileBlockCleanupBatch({
+      id: batchId,
+      operation: 'UNBLOCK',
+      operationId: '00000000-0000-8000-8000-000000000875',
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      profileBlockId: input.profileBlockId,
+      origin: input.origin,
+      protocolActivityUri: activityUri,
+      protocolState: 'CLOSING',
+    });
+    const calls: string[] = [];
+    let productDeleted = false;
+    const settledBatchIds: string[] = [];
+    const worker = await Worker.create({
+      activities: {
+        loadProfileBlockProtocolActivityByProfileBlockIdActivity: async () => ({
+          activityUri,
+          state: 'ACTIVE' as const,
+          profileBlockId: input.profileBlockId,
+        }),
+        prepareProfileBlockProtocolUndoActivity: async () => {
+          calls.push('prepare');
+          return { kind: 'REMOVE' as const, profileBlockId: input.profileBlockId };
+        },
+        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => {
+          calls.push('load-cleanup');
+          return [];
+        },
+        executeProfileUnblockTransitionActivity: async () => {
+          calls.push('execute');
+          return {
+            ok: true as const,
+            result: {
+              removed: true,
+              profileBlockId: input.profileBlockId,
+              ownerProfileId: input.ownerProfileId,
+              targetProfileId: input.targetProfileId,
+            },
+          };
+        },
+        loadPendingProfileBlockCleanupBatchesActivity: async () => [cleanupBatch],
+        markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
+          settledBatchIds.push(batchIdToSettle);
+        },
+        deleteProfileBlockActivity: async () => {
+          calls.push('delete-product');
+          productDeleted = true;
+        },
+        sendProfileBlockActivity: async () => {
+          calls.push('block');
+          throw ApplicationFailure.nonRetryable('Block queue unavailable');
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await assert.rejects(
+        environment.client.workflow.execute('profileUnblockWorkflow', {
+          args: [input],
+          taskQueue,
+          workflowId: `profile-unblock-test:${process.pid}:block-failure`,
+        }),
+      );
+      assert.equal(productDeleted, true);
+      assert.deepEqual(settledBatchIds, [batchId]);
+      assert.deepEqual(calls, ['prepare', 'load-cleanup', 'execute', 'delete-product', 'block']);
+    });
+  },
+);
+
+test(
+  'Profile Unblock Workflow는 ActivityPub-origin 원본을 outbound Block/Undo 없이 finalize한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = `${KOSMO_TASK_QUEUE}-profile-unblock-inbound-${process.pid}`;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000851',
+      targetProfileId: '00000000-0000-8000-8000-000000000852',
+      profileBlockId: '00000000-0000-8000-8000-000000000853',
+      origin: 'ACTIVITYPUB' as const,
+      protocolActivityUri: 'https://remote.example/activities/block-851',
+    };
+    const batchId = '00000000-0000-8000-8000-000000000854';
+    const cleanupBatch = profileBlockCleanupBatch({
+      id: batchId,
+      operation: 'UNBLOCK',
+      operationId: '00000000-0000-8000-8000-000000000855',
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      profileBlockId: input.profileBlockId,
+      origin: input.origin,
+      protocolActivityUri: input.protocolActivityUri,
+      protocolState: 'CLOSING',
+    });
+    const calls: string[] = [];
+    const settledBatchIds: string[] = [];
+    const worker = await Worker.create({
+      activities: {
+        sendProfileBlockActivity: async () => {
+          throw new Error('inbound unblock must not send Block');
+        },
+        sendProfileBlockUndoActivity: async () => {
+          throw new Error('inbound unblock must not send Undo');
+        },
+        prepareProfileBlockProtocolUndoActivity: async (value: unknown) => {
+          calls.push('prepare');
+          assert.deepEqual(value, {
+            activityUri: input.protocolActivityUri,
+            expectedProfileBlockId: input.profileBlockId,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+          });
+          return { kind: 'REMOVE' as const, profileBlockId: input.profileBlockId };
+        },
+        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => {
+          calls.push('load-cleanup');
+          return [];
+        },
+        executeProfileUnblockTransitionActivity: async (value: unknown) => {
+          calls.push('execute');
+          const transition = value as {
+            ownerProfileId: string;
+            targetProfileId: string;
+            origin: 'LOCAL' | 'ACTIVITYPUB';
+            expectedProfileBlockId: string;
+            protocolActivityUri: string;
+            cleanupSources: readonly unknown[];
+            operationId: string;
+          };
+          assert.deepEqual(transition, {
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+            origin: input.origin,
+            expectedProfileBlockId: input.profileBlockId,
+            protocolActivityUri: input.protocolActivityUri,
+            cleanupSources: [],
+            operationId: transition.operationId,
+          });
+          assert.match(
+            transition.operationId,
+            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+          );
+          return {
+            ok: true as const,
+            result: {
+              removed: true,
+              profileBlockId: input.profileBlockId,
+              ownerProfileId: input.ownerProfileId,
+              targetProfileId: input.targetProfileId,
+            },
+          };
+        },
+        loadPendingProfileBlockCleanupBatchesActivity: async () => [cleanupBatch],
+        markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
+          settledBatchIds.push(batchIdToSettle);
+        },
+        finalizeProfileBlockProtocolUndoActivity: async (value: unknown) => {
+          calls.push('finalize');
+          assert.deepEqual(value, {
+            activityUri: input.protocolActivityUri,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+            profileBlockId: input.profileBlockId,
+          });
+          return true;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const result = await environment.client.workflow.execute('profileUnblockWorkflow', {
+        args: [input],
+        taskQueue,
+        workflowId: `profile-unblock-test:${process.pid}:inbound`,
+      });
+
+      assert.deepEqual(result, {
+        removed: true,
+        profileBlockId: input.profileBlockId,
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+      });
+      assert.deepEqual(settledBatchIds, [batchId]);
+      assert.deepEqual(calls, ['prepare', 'load-cleanup', 'execute', 'finalize']);
+    });
+  },
+);
+
+test(
+  'Profile Unblock Workflow는 CLOSE_ONLY protocol도 빈 cleanup batch를 정산한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-profile-unblock-close-only-' + process.pid;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000856',
+      targetProfileId: '00000000-0000-8000-8000-000000000857',
+      profileBlockId: '00000000-0000-8000-8000-000000000858',
+      origin: 'ACTIVITYPUB' as const,
+      protocolActivityUri: 'https://remote.example/activities/block-856',
+    };
+    const batchId = '00000000-0000-8000-8000-000000000859';
+    const cleanupBatch = profileBlockCleanupBatch({
+      id: batchId,
+      operation: 'UNBLOCK',
+      operationId: '00000000-0000-8000-8000-000000000860',
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      profileBlockId: input.profileBlockId,
+      origin: input.origin,
+      protocolActivityUri: input.protocolActivityUri,
+      protocolState: 'CLOSED',
+      changed: false,
+      effectPlan: [],
+    });
+    const calls: string[] = [];
+    const settledBatchIds: string[] = [];
+
+    const worker = await Worker.create({
+      activities: {
+        prepareProfileBlockProtocolUndoActivity: async (value: unknown) => {
+          calls.push('prepare');
+          assert.deepEqual(value, {
+            activityUri: input.protocolActivityUri,
+            expectedProfileBlockId: input.profileBlockId,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+          });
+          return { kind: 'CLOSE_ONLY' as const, profileBlockId: input.profileBlockId };
+        },
+        executeProfileUnblockTransitionActivity: async () => {
+          throw new Error('CLOSE_ONLY must not execute the unblock transition');
+        },
+        loadPendingProfileBlockCleanupBatchesActivity: async () => [cleanupBatch],
+        markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
+          settledBatchIds.push(batchIdToSettle);
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const result = await environment.client.workflow.execute('profileUnblockWorkflow', {
+        args: [input],
+        taskQueue,
+        workflowId: `profile-unblock-test:${process.pid}:close-only`,
+      });
+
+      assert.deepEqual(result, {
+        removed: false,
+        profileBlockId: null,
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+      });
+      assert.deepEqual(calls, ['prepare']);
+      assert.deepEqual(settledBatchIds, [batchId]);
+    });
+  },
+);
+
+test(
+  'Profile Unblock Workflow는 product row가 사라진 retry에서 pending protocol을 재개한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = `${KOSMO_TASK_QUEUE}-profile-unblock-recovery-${process.pid}`;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000861',
+      targetProfileId: '00000000-0000-8000-8000-000000000862',
+      profileBlockId: '00000000-0000-8000-8000-000000000863',
+      origin: 'LOCAL' as const,
+    };
+    const storedProtocol = {
+      activityUri: 'https://local.example/ap/block/recovery-861',
+      state: 'CLOSING' as const,
+      deliveryState: 'PENDING' as const,
+      profileBlockId: input.profileBlockId,
+    };
+    const execution = {
+      ok: true as const,
+      result: {
+        removed: false,
+        profileBlockId: null,
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+      },
+    };
+    const batchId = '00000000-0000-8000-8000-000000000864';
+    const cleanupBatch = profileBlockCleanupBatch({
+      id: batchId,
+      operation: 'UNBLOCK',
+      operationId: '00000000-0000-8000-8000-000000000865',
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      profileBlockId: input.profileBlockId,
+      origin: input.origin,
+      protocolActivityUri: storedProtocol.activityUri,
+      protocolState: 'CLOSED',
+      changed: false,
+      effectPlan: [],
+    });
+    const calls: string[] = [];
+    const settledBatchIds: string[] = [];
+    let productDeleted = false;
+    let blockAttempts = 0;
+    let undoAttempts = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        loadProfileBlockProtocolActivityByProfileBlockIdActivity: async (
+          profileBlockId: string,
+        ) => {
+          assert.equal(profileBlockId, input.profileBlockId);
+          calls.push('load-protocol');
+          return storedProtocol;
+        },
+        sendProfileBlockActivity: async (profileBlockId: string) => {
+          assert.equal(profileBlockId, input.profileBlockId);
+          assert.equal(productDeleted, true);
+          blockAttempts += 1;
+          calls.push(`block-${blockAttempts}`);
+          return blockAttempts === 1
+            ? { status: 'PENDING' as const, reason: 'recipient_unavailable' as const }
+            : { status: 'SETTLED' as const };
+        },
+        prepareProfileBlockProtocolUndoActivity: async (value: unknown) => {
+          calls.push('prepare');
+          assert.deepEqual(value, {
+            activityUri: storedProtocol.activityUri,
+            expectedProfileBlockId: input.profileBlockId,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+          });
+          return { kind: 'REMOVE' as const, profileBlockId: input.profileBlockId };
+        },
+        loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => {
+          calls.push('load-cleanup');
+          return [];
+        },
+        executeProfileUnblockTransitionActivity: async (value: unknown) => {
+          calls.push('execute');
+          const transition = value as {
+            ownerProfileId: string;
+            targetProfileId: string;
+            origin: 'LOCAL' | 'ACTIVITYPUB';
+            expectedProfileBlockId: string;
+            protocolActivityUri: string;
+            cleanupSources: readonly unknown[];
+            operationId: string;
+          };
+          assert.deepEqual(transition, {
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+            origin: input.origin,
+            expectedProfileBlockId: input.profileBlockId,
+            protocolActivityUri: storedProtocol.activityUri,
+            cleanupSources: [],
+            operationId: transition.operationId,
+          });
+          assert.match(
+            transition.operationId,
+            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+          );
+          return execution;
+        },
+        loadPendingProfileBlockCleanupBatchesActivity: async () => [cleanupBatch],
+        markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
+          settledBatchIds.push(batchIdToSettle);
+        },
+        deleteProfileBlockActivity: async (value: unknown) => {
+          calls.push('delete-product');
+          productDeleted = true;
+          assert.deepEqual(value, {
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+            profileBlockId: input.profileBlockId,
+          });
+        },
+        sendProfileBlockUndoActivity: async (value: unknown) => {
+          assert.deepEqual(value, {
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+            profileBlockId: input.profileBlockId,
+          });
+          undoAttempts += 1;
+          calls.push(`undo-${undoAttempts}`);
+          return undoAttempts === 1
+            ? { status: 'PENDING' as const, reason: 'recipient_unavailable' as const }
+            : { status: 'SETTLED' as const };
+        },
+        finalizeProfileBlockProtocolUndoActivity: async (value: unknown) => {
+          calls.push('finalize');
+          assert.deepEqual(value, {
+            activityUri: storedProtocol.activityUri,
+            ownerProfileId: input.ownerProfileId,
+            targetProfileId: input.targetProfileId,
+            profileBlockId: input.profileBlockId,
+          });
+          return true;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const result = await environment.client.workflow.execute('profileUnblockWorkflow', {
+        args: [input],
+        taskQueue,
+        workflowId: `profile-unblock-test:${process.pid}:recovery`,
+      });
+
+      assert.deepEqual(result, execution.result);
+      assert.deepEqual(settledBatchIds, [batchId]);
+      assert.deepEqual(calls, [
+        'load-protocol',
+        'prepare',
+        'load-cleanup',
+        'execute',
+        'delete-product',
+        'block-1',
+        'block-2',
+        'undo-1',
+        'undo-2',
+        'finalize',
+      ]);
     });
   },
 );
@@ -1932,7 +2785,24 @@ test(
         followeeProfileId: input.targetProfileId,
       },
     ];
+    const batchId = '00000000-0000-8000-8000-000000000815';
+    const cleanupBatch = profileBlockCleanupBatch({
+      id: batchId,
+      operation: 'UNBLOCK',
+      operationId: '00000000-0000-8000-8000-000000000816',
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      profileBlockId: input.profileBlockId,
+      origin: input.origin,
+      effectPlan: [
+        {
+          kind: 'DELETE' as const,
+          input: { ...cleanupSources[0], sendActivityPub: true },
+        },
+      ],
+    });
     const calls: string[] = [];
+    const settledBatchIds: string[] = [];
     let releaseSibling!: () => void;
     const siblingReleased = new Promise<void>((resolve) => {
       releaseSibling = resolve;
@@ -1947,21 +2817,26 @@ test(
       activities: {
         loadProfileBlockProtocolActivityByProfileBlockIdActivity: async () => undefined,
         loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => cleanupSources,
-        executeProfileUnblockTransitionActivity: async () => ({
-          ok: true as const,
-          result: {
-            removed: true,
-            profileBlockId: input.profileBlockId,
-            ownerProfileId: input.ownerProfileId,
-            targetProfileId: input.targetProfileId,
-          },
-          effectPlan: [
-            {
-              kind: 'DELETE' as const,
-              input: { ...cleanupSources[0], sendActivityPub: true },
+        executeProfileUnblockTransitionActivity: async (value: unknown) => {
+          const transition = value as { operationId: string };
+          assert.match(
+            transition.operationId,
+            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+          );
+          return {
+            ok: true as const,
+            result: {
+              removed: true,
+              profileBlockId: input.profileBlockId,
+              ownerProfileId: input.ownerProfileId,
+              targetProfileId: input.targetProfileId,
             },
-          ],
-        }),
+          };
+        },
+        loadPendingProfileBlockCleanupBatchesActivity: async () => [cleanupBatch],
+        markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
+          settledBatchIds.push(batchIdToSettle);
+        },
         deleteFollowNotificationActivity: async (sourceId: string) => {
           calls.push('delete:' + sourceId);
           throw ApplicationFailure.nonRetryable('notification cleanup failed');
@@ -2006,6 +2881,7 @@ test(
         releaseSibling();
         await assert.rejects(resultPromise);
         assert.equal(finalDeleteCalls, 0);
+        assert.deepEqual(settledBatchIds, []);
         assert.deepEqual(
           [...calls].sort(),
           [
@@ -2053,16 +2929,27 @@ test(
         ownerProfileId: input.ownerProfileId,
         targetProfileId: input.targetProfileId,
       },
+    };
+    const batchId = '00000000-0000-8000-8000-000000000825';
+    const cleanupBatch = profileBlockCleanupBatch({
+      id: batchId,
+      operation: 'UNBLOCK',
+      operationId: '00000000-0000-8000-8000-000000000826',
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      profileBlockId: input.profileBlockId,
+      origin: input.origin,
       effectPlan: [
         {
           kind: 'DELETE' as const,
           input: cleanupSources[0],
         },
       ],
-    };
+    });
     const transitionInputs: unknown[] = [];
     let transitionAttempts = 0;
     let notificationCalls = 0;
+    const settledBatchIds: string[] = [];
     const finalDeleteInputs: unknown[] = [];
     let finalDeleteAttempts = 0;
 
@@ -2080,6 +2967,10 @@ test(
             });
           }
           return execution;
+        },
+        loadPendingProfileBlockCleanupBatchesActivity: async () => [cleanupBatch],
+        markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
+          settledBatchIds.push(batchIdToSettle);
         },
         deleteFollowRequestNotificationActivity: async (sourceId: string) => {
           assert.equal(sourceId, requestId);
@@ -2112,6 +3003,7 @@ test(
       assert.deepEqual(result, execution.result);
       assert.equal(transitionAttempts, 2);
       assert.equal(notificationCalls, 1);
+      assert.deepEqual(settledBatchIds, [batchId]);
       assert.equal(finalDeleteAttempts, 2);
       assert.deepEqual(finalDeleteInputs, [
         {
@@ -2126,13 +3018,26 @@ test(
         },
       ]);
       assert.deepEqual(transitionInputs[0], transitionInputs[1]);
-      assert.deepEqual(transitionInputs[0], {
+      const firstTransition = transitionInputs[0] as {
+        ownerProfileId: string;
+        targetProfileId: string;
+        origin: 'LOCAL' | 'ACTIVITYPUB';
+        expectedProfileBlockId: string;
+        cleanupSources: readonly unknown[];
+        operationId: string;
+      };
+      assert.deepEqual(firstTransition, {
         ownerProfileId: input.ownerProfileId,
         targetProfileId: input.targetProfileId,
         origin: input.origin,
         expectedProfileBlockId: input.profileBlockId,
         cleanupSources,
+        operationId: firstTransition.operationId,
       });
+      assert.match(
+        firstTransition.operationId,
+        /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      );
     });
   },
 );
@@ -2153,22 +3058,45 @@ test(
       profileBlockId: '00000000-0000-8000-8000-000000000833',
       origin: 'LOCAL' as const,
     };
+    const batchId = '00000000-0000-8000-8000-000000000834';
+    const cleanupBatch = profileBlockCleanupBatch({
+      id: batchId,
+      operation: 'UNBLOCK',
+      operationId: '00000000-0000-8000-8000-000000000835',
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      profileBlockId: input.profileBlockId,
+      origin: input.origin,
+      changed: false,
+      effectPlan: [],
+    });
+    const settledBatchIds: string[] = [];
     let finalDeleteCalls = 0;
 
     const worker = await Worker.create({
       activities: {
         loadProfileBlockProtocolActivityByProfileBlockIdActivity: async () => undefined,
         loadProfileFollowRemovalSourcesBetweenProfilesActivity: async () => [],
-        executeProfileUnblockTransitionActivity: async () => ({
-          ok: true as const,
-          result: {
-            removed: false,
-            profileBlockId: null,
-            ownerProfileId: input.ownerProfileId,
-            targetProfileId: input.targetProfileId,
-          },
-          effectPlan: [],
-        }),
+        executeProfileUnblockTransitionActivity: async (value: unknown) => {
+          const transition = value as { operationId: string };
+          assert.match(
+            transition.operationId,
+            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+          );
+          return {
+            ok: true as const,
+            result: {
+              removed: false,
+              profileBlockId: null,
+              ownerProfileId: input.ownerProfileId,
+              targetProfileId: input.targetProfileId,
+            },
+          };
+        },
+        loadPendingProfileBlockCleanupBatchesActivity: async () => [cleanupBatch],
+        markProfileBlockCleanupBatchSettledActivity: async (batchIdToSettle: string) => {
+          settledBatchIds.push(batchIdToSettle);
+        },
         deleteProfileBlockActivity: async () => {
           finalDeleteCalls += 1;
         },
@@ -2193,6 +3121,7 @@ test(
         targetProfileId: input.targetProfileId,
       });
       assert.equal(finalDeleteCalls, 0);
+      assert.deepEqual(settledBatchIds, [batchId]);
     });
   },
 );

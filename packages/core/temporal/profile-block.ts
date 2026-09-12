@@ -1,5 +1,6 @@
 import '../polyfill';
 
+import { createHash } from 'node:crypto';
 import {
   ApplicationFailure,
   WorkflowExecutionAlreadyStartedError,
@@ -60,6 +61,11 @@ type ProfileUnblockInput = ProfileBlockInput & {
 export const executeProfileBlock = async (
   input: ProfileBlockInput,
 ): Promise<ProfileBlockTransitionResult> => {
+  const workflowId =
+    `profile-block:${input.ownerProfileId}:${input.targetProfileId}` +
+    (input.protocolActivity === undefined
+      ? ''
+      : `:${createHash('sha256').update(input.protocolActivity.activityUri).digest('hex')}`);
   try {
     return await temporalClient.withDeadline(
       Date.now() + PROFILE_BLOCK_COMMAND_RPC_TIMEOUT_MS,
@@ -67,7 +73,7 @@ export const executeProfileBlock = async (
         temporalClient.workflow.execute('profileBlockWorkflow', {
           args: [input],
           taskQueue: KOSMO_TASK_QUEUE,
-          workflowId: `profile-block:${input.ownerProfileId}:${input.targetProfileId}`,
+          workflowId,
           workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
           workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
         }),
@@ -85,7 +91,11 @@ export const executeProfileBlock = async (
 export const executeProfileUnblock = async (
   input: ProfileUnblockInput,
 ): Promise<ProfileUnblockTransitionResult> => {
-  const workflowId = `profile-unblock:${input.ownerProfileId}:${input.targetProfileId}:${input.profileBlockId}`;
+  const workflowId =
+    `profile-unblock:${input.ownerProfileId}:${input.targetProfileId}:${input.profileBlockId}` +
+    (input.protocolActivityUri === undefined
+      ? ''
+      : `:${createHash('sha256').update(input.protocolActivityUri).digest('hex')}`);
   try {
     return await temporalClient.withDeadline(
       Date.now() + PROFILE_BLOCK_COMMAND_RPC_TIMEOUT_MS,
@@ -96,7 +106,7 @@ export const executeProfileUnblock = async (
             taskQueue: KOSMO_TASK_QUEUE,
             workflowId,
             workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-            workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+            workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE_FAILED_ONLY,
           });
         } catch (error) {
           if (!(error instanceof WorkflowExecutionAlreadyStartedError)) {

@@ -178,7 +178,7 @@ export const handleInboundUndoBlock = async ({
     return false;
   }
 
-  const stored = await loadProfileBlockProtocolActivity(activityUri.href);
+  let stored = await loadProfileBlockProtocolActivity(activityUri.href);
   const originalActorHref = embeddedBlock ? uniqueHref(embeddedBlock.actorIds) : stored?.actorUri;
   const originalActorUri = originalActorHref ? new URL(originalActorHref) : null;
   const originalObjectUri = embeddedBlock?.objectId ?? (stored ? new URL(stored.objectUri) : null);
@@ -272,7 +272,7 @@ export const handleInboundUndoBlock = async ({
       firstProfileId: remoteActorProfileId,
       secondProfileId: localRecipient.id,
     });
-    await recordProfileBlockProtocolTombstone({
+    const recorded = await recordProfileBlockProtocolTombstone({
       activityUri: activityUri.href,
       actorUri: actorUri.href,
       objectUri: originalObjectUri.href,
@@ -281,16 +281,21 @@ export const handleInboundUndoBlock = async ({
       profileBlockId: bootstrap.candidateProfileBlockId,
       targetProfileId: localRecipient.id,
     });
-    observeInbound({
-      activityType: 'Undo',
-      actorOrigin: actorUri.origin,
-      handler: 'undo',
-      objectOrigin: originalObjectUri.origin,
-      outcome: 'noop',
-      phase: 'projection',
-      reasonCode: 'block_undo_before_block_tombstone',
-    });
-    return true;
+    if (recorded.state === 'CLOSED') {
+      observeInbound({
+        activityType: 'Undo',
+        actorOrigin: actorUri.origin,
+        handler: 'undo',
+        objectOrigin: originalObjectUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'block_undo_before_block_tombstone',
+      });
+      return true;
+    }
+    // The concurrent Block committed first. Continue through the regular
+    // Unblock path so the admitted generation is closed and removed.
+    stored = recorded;
   }
 
   if (!stored.profileBlockId) {

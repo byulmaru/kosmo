@@ -16,6 +16,7 @@ export {
 export { createPost, deletePost, repostPost } from './post';
 export { disableProfile } from './profile';
 export type {
+  ProfileBlockCleanupBatch,
   ProfileBlockCleanupSource,
   ProfileBlockCleanupSources,
   ProfileBlockEffectOrigin,
@@ -31,8 +32,12 @@ export type {
 export {
   deleteProfileBlock,
   executeProfileBlockTransition,
+  executeProfileBlockTransitionInTransaction,
   executeProfileUnblockTransition,
+  executeProfileUnblockTransitionInTransaction,
+  loadPendingProfileBlockCleanupBatches,
   loadProfileBlockTransitionBootstrap,
+  markProfileBlockCleanupBatchSettled,
 } from './profile-block';
 export { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';
 export type { ProfileBlockProtocolActivityInput } from './profile-block-protocol';

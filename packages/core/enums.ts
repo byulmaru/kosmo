@@ -131,6 +131,9 @@ export const ProfileBlockDeliveryState = {
 } as const;
 export type ProfileBlockDeliveryState = keyof typeof ProfileBlockDeliveryState;
 
+export type ProfileBlockCleanupOperation = 'BLOCK' | 'UNBLOCK';
+export type ProfileBlockCleanupOrigin = 'LOCAL' | 'ACTIVITYPUB';
+
 export const ProfileMediaKind = {
   AVATAR: 'AVATAR',
   HEADER: 'HEADER',

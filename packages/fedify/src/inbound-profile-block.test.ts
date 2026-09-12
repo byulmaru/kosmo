@@ -9,10 +9,11 @@ import {
   InstanceState,
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type * as CoreServices from '@kosmo/core/services';
 import type * as InboundProfileBlock from './inbound-profile-block';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -27,6 +28,8 @@ let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let Profiles: typeof CoreDb.Profiles;
 let handleInboundBlock: typeof InboundProfileBlock.handleInboundBlock;
 let handleInboundUndoBlock: typeof InboundProfileBlock.handleInboundUndoBlock;
+let executeProfileBlockTransitionInTransaction: typeof CoreServices.executeProfileBlockTransitionInTransaction;
+let loadProfileBlockTransitionBootstrap: typeof CoreServices.loadProfileBlockTransitionBootstrap;
 let localInstanceId: string;
 const testProfileIds = new Set<string>();
 const testInstanceIds = new Set<string>();
@@ -48,6 +51,8 @@ before(async () => {
   const { localInstance } = await seedDatabase({ publicOrigin });
   localInstanceId = localInstance.id;
   ({ handleInboundBlock, handleInboundUndoBlock } = await import('./inbound-profile-block'));
+  ({ executeProfileBlockTransitionInTransaction, loadProfileBlockTransitionBootstrap } =
+    await import('@kosmo/core/services'));
 });
 
 afterEach(async () => {
@@ -144,6 +149,106 @@ test('검증된 embedded Undo가 먼저 오면 tombstone이 늦은 Block을 막�
   assert.equal((await db.select().from(ProfileBlocks)).length, 0);
   assert.deepEqual(
     await db.select({ state: ProfileBlockActivities.state }).from(ProfileBlockActivities),
+    [{ state: 'CLOSED' }],
+  );
+});
+
+test('Block commit wins the Undo tombstone race and is routed through normal Unblock', async () => {
+  const fixture = await createFixture();
+  const block = new Block({
+    actor: fixture.remoteActorUri,
+    id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/block-race`),
+    object: fixture.localActorUri,
+  });
+  const bootstrap = await loadProfileBlockTransitionBootstrap({
+    firstProfileId: fixture.remoteProfile.id,
+    secondProfileId: fixture.localProfile.id,
+  });
+
+  let releaseBlockCommit!: () => void;
+  const blockCommitRelease = new Promise<void>((resolve) => {
+    releaseBlockCommit = resolve;
+  });
+  let blockTransactionReady!: () => void;
+  const blockTransactionReadyPromise = new Promise<void>((resolve) => {
+    blockTransactionReady = resolve;
+  });
+  const blockTransaction = db.transaction(async (tx) => {
+    const execution = await executeProfileBlockTransitionInTransaction(
+      {
+        cleanupSources: bootstrap.cleanupSources,
+        candidateProfileBlockId: bootstrap.candidateProfileBlockId,
+        origin: 'ACTIVITYPUB',
+        ownerProfileId: fixture.remoteProfile.id,
+        protocolActivity: {
+          activityUri: block.id!.href,
+          actorUri: fixture.remoteActorUri.href,
+          objectUri: fixture.localActorUri.href,
+          origin: 'INBOUND',
+          ownerProfileId: fixture.remoteProfile.id,
+          targetProfileId: fixture.localProfile.id,
+        },
+        targetProfileId: fixture.localProfile.id,
+      },
+      tx,
+    );
+    assert.equal(execution.ok, true);
+    blockTransactionReady();
+    await blockCommitRelease;
+  });
+  await blockTransactionReadyPromise;
+
+  const undoPromise = handleInboundUndoBlock({
+    context: createContext(fixture.localProfile.id),
+    actorUri: fixture.remoteActorUri,
+    embedded: block,
+    objectUri: block.id,
+    remoteActorProfileId: fixture.remoteProfile.id,
+  });
+
+  let blocked = false;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const rows = await db.execute<{ count: number }>(sql`
+      SELECT count(*)::int AS "count"
+        FROM pg_stat_activity
+       WHERE wait_event_type = 'Lock'
+         AND query ILIKE ${'%profile_block_activity%'}
+    `);
+    if ((rows[0]?.count ?? 0) > 0) {
+      blocked = true;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal(blocked, true);
+
+  releaseBlockCommit();
+  await blockTransaction;
+  assert.equal(await undoPromise, true);
+
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const profileBlocks = await db
+      .select()
+      .from(ProfileBlocks)
+      .where(eq(ProfileBlocks.ownerProfileId, fixture.remoteProfile.id));
+    if (profileBlocks.length === 0) {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileBlocks)
+      .where(eq(ProfileBlocks.ownerProfileId, fixture.remoteProfile.id))
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.deepEqual(
+    await db
+      .select({ state: ProfileBlockActivities.state })
+      .from(ProfileBlockActivities)
+      .where(eq(ProfileBlockActivities.activityUri, block.id!.href)),
     [{ state: 'CLOSED' }],
   );
 });
