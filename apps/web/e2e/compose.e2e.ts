@@ -6,6 +6,24 @@ import {
 } from './db-fixtures';
 import { expect, test } from './fixtures';
 import { readGraphQLOperation, toGlobalId, waitForGraphQLOperation } from './graphql';
+import type { Locator } from '@playwright/test';
+
+async function pasteComposerImage(input: Locator) {
+  await input.evaluate((element) => {
+    const clipboardData = new DataTransfer();
+    const pngBytes = Uint8Array.from(
+      atob(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      ),
+      (character) => character.charCodeAt(0),
+    );
+    clipboardData.items.add(new File([pngBytes], 'clipboard.png', { type: 'image/png' }));
+    clipboardData.setData('text/plain', '이 텍스트는 본문에 들어가면 안 됩니다.');
+    element.dispatchEvent(
+      new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }),
+    );
+  });
+}
 
 test.beforeEach(async () => {
   await resetE2EDatabase();
@@ -89,9 +107,14 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   await page.setViewportSize({ width: 320, height: 720 });
   await page.goto('/compose');
 
-  const composer = page.getByLabel('새 게시글 작성').first();
-  const input = composer.getByRole('textbox', { name: '게시글 본문' });
+  const composer = page.getByLabel('게시글 작성', { exact: true });
+  const input = composer.getByRole('textbox', { name: '게시물 내용' });
   const submit = composer.getByRole('button', { name: '게시', exact: true });
+
+  await expect(input).toBeVisible();
+  const footer = composer.getByTestId('mobile-composer-footer');
+  await expect.poll(async () => (await footer.boundingBox())?.y).toBe(720 - 64);
+  expect((await input.boundingBox())!.height).toBeGreaterThan(300);
 
   await expect(composer.getByText('@e2e-composer')).toBeVisible();
   await expect(submit).toBeDisabled();
@@ -103,17 +126,17 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   await expect(submit).toBeDisabled();
 
   await input.fill(editorBody);
-  const visibilityTrigger = composer.getByRole('button', { name: '조용한 공개' });
+  const visibilityTrigger = composer.getByRole('button', { name: /^공개 범위:/ });
   const editorBeforeOpen = await input.boundingBox();
   expect(editorBeforeOpen).not.toBeNull();
 
   await visibilityTrigger.click();
-  const visibilityMenu = page.getByRole('menu', { name: '게시글 공개 설정' });
+  const visibilityMenu = page.getByRole('radiogroup', { name: '공개 범위 선택' });
   await expect(visibilityMenu).toBeVisible();
   const visibilityMenuBox = await visibilityMenu.boundingBox();
   const viewport = page.viewportSize();
   expect(visibilityMenuBox).not.toBeNull();
-  expect(visibilityMenuBox?.width).toBe(256);
+  expect(visibilityMenuBox?.width).toBe(240);
   expect(viewport).not.toBeNull();
   expect(visibilityMenuBox?.x).toBeGreaterThanOrEqual(0);
   expect(visibilityMenuBox!.x + visibilityMenuBox!.width).toBeLessThanOrEqual(viewport!.width);
@@ -122,11 +145,11 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   expect(editorAfterOpen).not.toBeNull();
   expect(editorAfterOpen?.y).toBe(editorBeforeOpen?.y);
 
-  await expect(visibilityMenu.getByRole('menuitemradio', { name: /^조용한 공개/ })).toHaveAttribute(
+  await expect(visibilityMenu.getByRole('radio', { name: '조용한 공개' })).toHaveAttribute(
     'aria-checked',
     'true',
   );
-  await composer.getByText('@e2e-composer').click();
+  await composer.getByRole('heading', { name: '글쓰기' }).click();
   await expect(visibilityMenu).toHaveCount(0);
 
   await visibilityTrigger.click();
@@ -136,17 +159,17 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
 
   await visibilityTrigger.click();
   await page.keyboard.press('End');
-  await expect(visibilityMenu.getByRole('menuitemradio', { name: /^팔로워만/ })).toBeFocused();
+  await expect(visibilityMenu.getByRole('radio', { name: '팔로워만' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(visibilityMenu).toHaveCount(0);
 
   await visibilityTrigger.click();
   await page.keyboard.press('Home');
-  const publicOption = visibilityMenu.getByRole('menuitemradio', { name: /^공개/ });
+  const publicOption = visibilityMenu.getByRole('radio', { name: '공개', exact: true });
   await expect(publicOption).toBeFocused();
   await page.keyboard.press('Space');
   await expect(visibilityMenu).toHaveCount(0);
-  await expect(composer.getByRole('button', { name: '공개', exact: true })).toBeFocused();
+  await expect(composer.getByRole('button', { name: '공개 범위: 공개' })).toBeFocused();
 
   const mutationResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await submit.click();
@@ -164,7 +187,8 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
     },
   });
   expect(responseBody.data?.createPost?.post?.id).toEqual(expect.any(String));
-  await expect(input).toHaveValue('');
+  await expect(page.getByRole('dialog', { name: '글쓰기' })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/home$/);
 
   await page.goto('/@e2e-composer');
   await expect(page.getByText(body)).toBeVisible();
@@ -213,11 +237,11 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
 
   const body = 'E2E production wiring local body';
   await page.goto('/compose');
-  const composer = page.getByLabel('새 게시글 작성').first();
-  const input = composer.getByRole('textbox', { name: '게시글 본문' });
+  const composer = page.getByLabel('게시글 작성', { exact: true });
+  const input = composer.getByRole('textbox', { name: '게시물 내용' });
   const submit = composer.getByRole('button', { name: '게시', exact: true });
 
-  await expect(composer.getByRole('button', { name: '공개', exact: true })).toBeVisible();
+  await expect(composer.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
   await input.fill(body);
   const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await submit.click();
@@ -289,16 +313,18 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
   });
   await setE2ESessionCookie(context, viewer.token);
 
-  const mediaId = 'media-clipboard-e2e';
+  let mediaCount = 0;
+  const completedMediaIds: string[] = [];
   let createPostVariables: Record<string, unknown> | null = null;
   await page.route('**/graphql', async (route) => {
     const operation = readGraphQLOperation(route.request().postData());
     if (operation?.operationName === 'PostComposerIssueMediaUploadUrlMutation') {
+      mediaCount += 1;
       await route.fulfill({
         body: JSON.stringify({
           data: {
             issueMediaUploadUrl: {
-              media: { id: mediaId },
+              media: { id: `media-clipboard-e2e-${mediaCount}` },
               uploadUrl: 'https://upload.example/clipboard',
             },
           },
@@ -309,11 +335,12 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
       return;
     }
     if (operation?.operationName === 'PostComposerCompleteMediaUploadMutation') {
+      completedMediaIds.push((operation.variables?.input as { id: string }).id);
       await route.fulfill({
         body: JSON.stringify({
           data: {
             completeMediaUpload: {
-              media: { id: mediaId, state: 'READY' },
+              media: { id: (operation.variables?.input as { id: string }).id, state: 'READY' },
             },
           },
         }),
@@ -338,47 +365,70 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
   });
 
   await page.goto('/compose');
-  const composer = page.getByLabel('새 게시글 작성').first();
-  const input = composer.getByRole('textbox', { name: '게시글 본문' });
+  const composer = page.getByLabel('게시글 작성', { exact: true });
+  const input = composer.getByRole('textbox', { name: '게시물 내용' });
   const submit = composer.getByRole('button', { name: '게시', exact: true });
   await input.fill('기존 본문');
   await input.evaluate((element) => element.setSelectionRange(2, 2));
 
-  await input.evaluate((element) => {
-    const clipboardData = new DataTransfer();
-    const pngBytes = Uint8Array.from(
-      atob(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-      ),
-      (character) => character.charCodeAt(0),
-    );
-    clipboardData.items.add(new File([pngBytes], 'clipboard.png', { type: 'image/png' }));
-    clipboardData.setData('text/plain', '이 텍스트는 본문에 들어가면 안 됩니다.');
-    element.dispatchEvent(
-      new ClipboardEvent('paste', {
-        bubbles: true,
-        cancelable: true,
-        clipboardData,
-      }),
-    );
-  });
+  await pasteComposerImage(input);
 
   await expect(input).toHaveValue('기존 본문');
   await expect(input).toHaveJSProperty('selectionStart', 2);
   await expect(composer.getByLabel('첨부 이미지 1, 업로드 완료')).toBeVisible();
   await expect(submit).toBeEnabled();
 
+  const edit = composer.getByRole('button', { name: '첨부 이미지 1 편집', exact: true });
+  await edit.click();
+  await expect(composer.getByTestId('web-composer-media-editor')).toBeVisible();
+  await composer.getByRole('textbox', { name: '이미지 설명' }).fill('보존할 이미지 설명');
+  await composer.getByRole('tab', { name: '민감도', exact: true }).click();
+  await composer.getByRole('switch', { name: '민감한 이미지' }).check();
+  await composer.getByRole('button', { name: '완료', exact: true }).click();
+  await expect(edit).toBeFocused();
+  await expect(input).toHaveValue('기존 본문');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(composer.getByTestId('mobile-fullscreen-composer-candidate')).toBeVisible();
+  await pasteComposerImage(input);
+  await expect(composer.getByLabel('첨부 이미지 2, 업로드 완료')).toBeVisible();
+  const footer = composer.getByTestId('mobile-composer-footer');
+  await expect.poll(async () => (await footer.boundingBox())?.y).toBe(844 - 64);
+
+  await edit.click();
+  await expect(composer.getByRole('textbox', { name: '이미지 설명' })).toHaveValue(
+    '보존할 이미지 설명',
+  );
+  await page.setViewportSize({ width: 390, height: 320 });
+  const altInput = composer.getByRole('textbox', { name: '이미지 설명' });
+  await altInput.fill('보존할 이미지 설명');
+  await expect(altInput).toBeInViewport();
+  await expect(composer.getByRole('button', { name: '완료', exact: true })).toBeInViewport();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: '글쓰기' })).toHaveCount(0);
+  await page.getByRole('button', { name: '글쓰기', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(composer.getByTestId('mobile-fullscreen-composer-candidate')).toBeVisible();
+  await expect(composer.getByTestId('mobile-composer-media-editor')).toHaveCount(0);
+  await expect(input).toHaveValue('기존 본문');
+  await expect(composer.getByLabel('첨부 이미지 2, 업로드 완료')).toBeVisible();
+
   const createResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await submit.click();
   const response = await createResponse;
   expect(response.status()).toBe(200);
+  expect(completedMediaIds).toEqual(['media-clipboard-e2e-1', 'media-clipboard-e2e-2']);
   expect(createPostVariables).toMatchObject({
     input: {
       bodyText: '기존 본문',
-      media: [{ altText: null, mediaId }],
+      media: [
+        { altText: '보존할 이미지 설명', mediaId: 'media-clipboard-e2e-1' },
+        { altText: null, mediaId: 'media-clipboard-e2e-2' },
+      ],
+      sensitiveMedia: true,
     },
   });
-  await expect(input).toHaveValue('');
+  await expect(page.getByRole('dialog', { name: '글쓰기' })).toHaveCount(0);
 });
 
 test('compose의 touch 취소가 본문 포커스와 편집기 강조 상태를 유지한다', async ({
@@ -393,23 +443,14 @@ test('compose의 touch 취소가 본문 포커스와 편집기 강조 상태를 
   await page.setViewportSize({ width: 280, height: 720 });
   await page.goto('/compose');
 
-  const composer = page.getByLabel('새 게시글 작성').first();
-  const input = composer.getByRole('textbox', { name: '게시글 본문' });
-  const editorSurface = composer.getByTestId('post-composer-editor-surface');
-  const visibilityTrigger = composer.getByRole('button', { name: '조용한 공개' });
-  const unfocusedBorderColor = await editorSurface.evaluate(
-    (element) => getComputedStyle(element).borderColor,
-  );
+  const composer = page.getByLabel('게시글 작성', { exact: true });
+  const input = composer.getByRole('textbox', { name: '게시물 내용' });
+  const visibilityTrigger = composer.getByRole('button', { name: '공개 범위: 조용한 공개' });
 
   await input.fill('touch 취소 뒤에도 포커스를 유지하는 본문입니다.');
   await expect(input).toBeFocused();
-  await expect
-    .poll(() => editorSurface.evaluate((element) => getComputedStyle(element).borderColor))
-    .not.toBe(unfocusedBorderColor);
-  const focusedBorderColor = await editorSurface.evaluate(
-    (element) => getComputedStyle(element).borderColor,
-  );
-  expect(focusedBorderColor).not.toBe(unfocusedBorderColor);
+  const focusedOutline = await input.evaluate((element) => getComputedStyle(element).outline);
+  expect(focusedOutline).toContain('solid 2px');
 
   const triggerBox = await visibilityTrigger.boundingBox();
   expect(triggerBox).not.toBeNull();
@@ -434,12 +475,8 @@ test('compose의 touch 취소가 본문 포커스와 편집기 강조 상태를 
     await page.waitForTimeout(100);
 
     await expect(input).toBeFocused();
-    await expect(page.getByRole('menu', { name: '게시글 공개 설정' })).toHaveCount(0);
-    const borderAfterCancel = await editorSurface.evaluate(
-      (element) => getComputedStyle(element).borderColor,
-    );
-    expect(borderAfterCancel).toBe(focusedBorderColor);
-    expect(borderAfterCancel).not.toBe(unfocusedBorderColor);
+    await expect(page.getByRole('radiogroup', { name: '공개 범위 선택' })).toHaveCount(0);
+    await expect(input).toHaveCSS('outline', focusedOutline);
   } finally {
     await session.detach();
   }

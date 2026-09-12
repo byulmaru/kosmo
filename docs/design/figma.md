@@ -540,6 +540,10 @@ documentation·state specimen을 두 번째 행에 둔다.
   presentation, Media gallery/editor와 shell 진입점을 연결한다. Poll·Emoji와 `Image Edit`는 숨기며 `/compose`는 같은
   shell host에 위임한다. Web component·Storybook interaction 검증은 완료했고 Android/iOS 실제 keyboard·back·safe
   area·touch/focus 검증은 별도로 남아 있다.
+- Production Host는 일반 Web Overlay의 600px 폭과 가운데 정렬된 64px header를 유지하며, 85dvh를 넘는
+  content는 내부에서 scroll한다. 모바일은 header·공개 범위·footer를 고정하고 body와 media shelf가 남은 높이를
+  채우되 짧은 viewport에서 함께 scroll한다. Media editor는 같은 제한 높이 안에서 별도 내부 scroll을 사용한다.
+  editor 전환 시 composer와 upload owner를 유지해 복귀 focus와 breakpoint 전환 뒤 paste 경로를 보존한다.
 
 #### DSN-61 모바일 Composer·공용 Confirmation 배치 계약
 

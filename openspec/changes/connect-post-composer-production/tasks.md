@@ -61,7 +61,7 @@
 - [x] 2.1 기존 Media controller 상태와 action을 공용 gallery presentation에 연결한다.
 - [x] 2.2 Ready Media의 Alt Text와 공유 Sensitive Media editor 전환을 연결한다.
 - [x] 2.3 upload·retry·remove·paste·최대 4개·payload 회귀 검증을 추가한다.
-- [x] 2.4 gallery와 editor의 pointer·touch·keyboard·accessible name 및 target 동작을 검증한다.
+- [ ] 2.4 gallery와 editor의 pointer·touch·keyboard·accessible name 및 target 동작을 검증한다.
 
 ## 3. PROD-797 Shell·Overlay·`/compose` lifecycle
 
@@ -124,5 +124,20 @@ Production 연결 결과와 실제 검증 범위가 Storybook, 디자인 문서�
 
 - [x] 4.1 Production 계약에 맞게 관련 Storybook Tests와 manual Playground를 정렬한다.
 - [x] 4.2 `docs/design/figma.md`와 `docs/design/breakpoints.md`의 Production 이관·검증 상태를 실제 결과에 맞게 갱신한다.
-- [x] 4.3 Relay·typecheck·lint·관련 test·Storybook build·OpenSpec strict validation을 실행한다.
+- [ ] 4.3 Relay·typecheck·lint·관련 test·Storybook build·OpenSpec strict validation을 실행한다.
 - [x] 4.4 Web Light/Dark와 full·compact·mobile browser QA 결과 및 미검증 항목을 기록한다.
+
+### 재검증 상태 — 2026-09-12
+
+- 임시 DB와 새 Web export에서 `compose`, `profile-switcher`, `navigation-scroll`, `auth-routes` E2E 64개가
+  통과했다. 이미지 업로드 E2E는 network mock으로 issue/complete ID와 최종 ALT·Sensitive payload를 검증하며,
+  실제 storage 서비스 업로드를 실행했다는 뜻은 아니다.
+- 앱 unit 570개, 전체 Storybook 119 files/795개(작성기·미디어 editor·Shell interaction 37개 포함), 변경 파일
+  ESLint와 Storybook build, OpenSpec strict validation이 통과했다. 전체 Storybook 중 한 차례 발생한 기존 Toast
+  timer 실패는 단독 실행과 최종 전체 재실행에서 통과했다.
+- 2.4의 Web gallery/editor interaction, ALT·Sensitive payload, editor 복귀 focus와 화면 폭 전환 뒤 paste는
+  확인했다. Native의 실제 target·touch·screen-reader focus는 3.6과 함께 남아 있어 전체 완료로 표시하지 않는다.
+- 4.3에서 Relay compiler는 통과했으나 앱 typecheck는 기존 `SettingsLinkRow.test.ts:92`의 mock `href: string`과
+  Expo typed route 간 타입 불일치로 실패한다. 이 변경에서는 해당 Settings 테스트를 수정하지 않았다.
+- Web browser에서 Full Light/Dark, compact Dark short viewport, 모바일 Light/Dark의 작성창 배치를 확인했다.
+  Android/iOS menu Modal 종료 후 focus 복귀와 ALT 입력 시 IME reveal은 실제 runtime 미검증이다.
