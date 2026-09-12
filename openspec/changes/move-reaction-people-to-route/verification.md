@@ -27,6 +27,8 @@
 
 새 Storybook 빌드를 로컬 HTTP로 제공하고 Codex 내장 Browser에서 실제 Production 화면 컴포넌트를 관찰했다. 390px Mobile, 1024px Compact, 1440px Full의 Light/Dark에서 단일 제목, pill 선택, emoji·Profile·Follow 배치, Bio 숨김과 인접 행 사이 divider를 확인했다. 이 화면 story는 중앙 600px까지의 콘텐츠이며, 전체 shell 보존 증거는 위 실제 route E2E다.
 
+Figma의 Web Compact·Full과 Mobile `Default selected` frame을 다시 대조해 PageHeader 아래 12px, 좌우 16px에서 필터가 시작하고 목록이 필터 아래 12px에서 시작하는 것을 확인했다. 공용 pill의 기본 inset은 다른 consumer를 위해 유지하고 이 화면에서만 해제했다.
+
 필터를 바꾼 뒤 선택 tab에 focus가 유지되고 접근성 tree에 선택 Type의 로딩·표시 인원 안내가 갱신되는 것을 확인했다. Web/Android는 live region, iOS는 queued accessibility announcement를 사용한다. 이는 실제 screen reader 음성 출력 검증과 구분한다.
 
 ## 미실행 항목과 완료 경계

@@ -165,7 +165,11 @@ const styles = StyleSheet.create({
     marginLeft: -spacing.sm,
     width: 44,
   },
-  content: { gap: spacing.md, padding: spacing.lg },
+  content: {
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
   nativeRoot: { flex: 1 },
   header: { width: '100%' },
   webRoot: { width: '100%' },
