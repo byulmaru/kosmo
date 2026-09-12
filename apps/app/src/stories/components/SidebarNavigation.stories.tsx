@@ -247,20 +247,37 @@ async function expectNavigationBasics(
   } else {
     expect(currentControls).toHaveLength(0);
   }
-  expectRect(home, presentation === 'compact' ? 44 : 272, presentation === 'compact' ? 44 : 45);
+  expectRect(home, presentation === 'compact' ? 44 : 288, presentation === 'compact' ? 44 : 45);
 
   if (profileAvailable) {
-    const profileAvatar = getButton(navigation, 'profile').querySelector<HTMLElement>(
+    const profileButton = getButton(navigation, 'profile');
+    const profileAvatar = profileButton.querySelector<HTMLElement>(
       '[aria-label="사샤 프로필 이미지"]',
     );
+    const homeIcon = home.querySelector<SVGElement>('svg');
     expect(profileAvatar).not.toBeNull();
+    expect(homeIcon).not.toBeNull();
     expectRect(profileAvatar!, 28, 28);
+
+    const profileAvatarRect = profileAvatar!.getBoundingClientRect();
+    const homeIconRect = homeIcon!.getBoundingClientRect();
+    expect(profileAvatarRect.left + profileAvatarRect.width / 2).toBe(
+      homeIconRect.left + homeIconRect.width / 2,
+    );
+
+    if (presentation !== 'compact') {
+      const profileLabel = within(profileButton).getByText(labels.profile);
+      const homeLabel = within(home).getByText(labels.home);
+      expect(profileLabel.getBoundingClientRect().left).toBe(
+        homeLabel.getBoundingClientRect().left,
+      );
+    }
   }
 
   if (presentation === 'compact') {
     expectRect(navigation, 80, 720);
   } else {
-    expectRect(home, 272, 45);
+    expectRect(home, 288, 45);
     expect(within(notifications).getByText('알림')).toBeVisible();
   }
 
@@ -320,7 +337,7 @@ export const Playground: Story = {
       );
       expectRect(
         search,
-        presentation === 'compact' ? 44 : 272,
+        presentation === 'compact' ? 44 : 288,
         presentation === 'compact' ? 44 : 45,
       );
       expect(feedback.closest('[role="menu"]')).toBeNull();
@@ -355,7 +372,7 @@ export const InteractionContract: Story = {
       expect(getComputedStyle(visual).transitionDuration).toBe('0.12s');
       expectRect(
         notifications,
-        presentation === 'compact' ? 44 : 272,
+        presentation === 'compact' ? 44 : 288,
         presentation === 'compact' ? 44 : 45,
       );
       await userEvent.pointer({ keys: '[/MouseLeft]', target: notifications });
@@ -400,7 +417,7 @@ export const ReducedMotionContract: Story = {
     await userEvent.pointer({ keys: '[MouseLeft>]', target: notifications });
     expect(getComputedStyle(visual).transform).toBe('none');
     expect(getComputedStyle(visual).transitionDuration).toBe('0s');
-    expectRect(notifications, 272, 45);
+    expectRect(notifications, 288, 45);
     await userEvent.pointer({ keys: '[/MouseLeft]', target: notifications });
   },
 };
@@ -503,11 +520,11 @@ async function playInlineUtility({
 
   expectRect(navigation, 320, 720);
   expect(home.getBoundingClientRect().top - navigation.getBoundingClientRect().top).toBe(24);
-  expectRect(home, 272, 45);
-  expectRect(utility, 272, 45);
-  expectRect(feedback, 272, 45);
+  expectRect(home, 288, 45);
+  expectRect(utility, 288, 45);
+  expectRect(feedback, 288, 45);
   expect(footer).not.toBeNull();
-  expectRect(footer!, 272, 94);
+  expectRect(footer!, 288, 94);
   expect(feedback.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(4);
   expect(utility.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(49);
   expect(feedback.closest('[role="menu"]')).toBeNull();
@@ -518,7 +535,7 @@ async function playInlineUtility({
   expect(utilityIconRect.left - utilityVisualRect.left).toBe(8);
   expect(utilityLabel.getBoundingClientRect().left - utilityVisualRect.left).toBe(44);
   expect(utilityIcons[1].querySelector('path')).toHaveAttribute('d', 'm6 9 6 6 6-6');
-  expect(utilityIcons[1].getBoundingClientRect().left - utilityVisualRect.left).toBe(224);
+  expect(utilityIcons[1].getBoundingClientRect().left - utilityVisualRect.left).toBe(240);
   expect(utilityVisualRect.right - utilityIcons[1].getBoundingClientRect().right).toBe(24);
 
   await userEvent.click(utility);
@@ -527,8 +544,8 @@ async function playInlineUtility({
   const logout = within(navigation).getByRole('button', { name: '로그아웃' });
   expect(settings).toBeVisible();
   expect(logout).toBeVisible();
-  expectRect(settings, 272, 45);
-  expectRect(logout, 272, 45);
+  expectRect(settings, 288, 45);
+  expectRect(logout, 288, 45);
   expect(settings.getBoundingClientRect().top).toBe(utility.getBoundingClientRect().bottom);
   expect(logout.getBoundingClientRect().top).toBe(settings.getBoundingClientRect().bottom);
   expect(feedback.closest('[role="menu"]')).toBeNull();
@@ -626,8 +643,8 @@ export const NarrowDrawerLayoutContract: Story = {
     const navigation = getNavigation(canvasElement);
 
     expectRect(navigation, 272, 720);
-    expectRect(getButton(navigation, 'home'), 224, 45);
-    expectRect(getButton(navigation, 'feedback'), 224, 45);
+    expectRect(getButton(navigation, 'home'), 240, 45);
+    expectRect(getButton(navigation, 'feedback'), 240, 45);
   },
 };
 

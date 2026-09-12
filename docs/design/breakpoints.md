@@ -83,11 +83,22 @@ drawer에는 정책 링크를 추가하지 않는다.
 
 ## 사이드바 내비게이션 geometry
 
-공용 `SidebarNavigation`의 `full`·`drawer` 행은 `272×45px` target을 유지한다. 행 visual은 좌우 `space/8`을
-사용하고 `20px` 아이콘과 label 사이에 `space/16`을 둔다. `설정 및 기타` utility는 `Settings` 아이콘과 label을
+`full`·`drawer`에서는 ProfileSwitcher의 아바타, 이름·핸들·팔로우 수 행과 navigation의 leading icon slot을
+sidebar 안쪽 `space/24` 기준선에 맞춘다. Navigation 행의 visual과 클릭 영역은 좌우 `space/16` 바깥 여백을
+사용하고, 내부 `space/8` inset으로 leading content를 `space/24`에 배치한다. Figma의
+[`Full SidebarNavigation`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1918-1311)과
+[`Drawer ProfileSwitcher`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=2012-835)를 바탕으로 한다.
+Navigation의 좌우 여백은 2026-09-12 사용자 승인으로 `24px`에서 `16px`로 줄였고, Figma의
+`SidebarNavigation`·`SidebarNavigationItem`·primary·utility source에 동기화했다. Linear의 이전 `272px` 기록은
+이번에 수정하지 않았다. 이 가로 정렬 보정은 프로필 요약의 `260px` 높이,
+trigger 크기·수직 배치, 프로필 편집 버튼, 열린 picker의 화면상 위치와 `compact` rail 배치를 변경하지 않는다.
+
+공용 `SidebarNavigation`의 `full`·`drawer` 행은 가용 폭 `320px`에서 `288×45px` target을 사용한다. 행 visual은 좌우 `space/8`을
+사용하고 `20px` 너비의 icon slot과 label 사이에 `space/16`을 둔다. Profile의 `28px` Avatar는 이 slot 중앙에
+배치해 양쪽으로 `4px`씩 확장되며, 다른 아이콘과 가로 중심선 및 label 시작점을 맞춘다. `설정 및 기타` utility는 `Settings` 아이콘과 label을
 표시하며 닫힌 상태에서는 아래 방향, 열린 상태에서는 위 방향 `Chevron`을 trailing에 표시한다. Chevron은
 `24px` visual로 행 오른쪽 `24px` 안쪽에 배치한다. 별도 focus target이 아니며 trigger의 `aria-expanded` 상태와
-동기화한다. Native drawer가 화면 폭의 85%로 줄어 `320px`보다 좁아질 때는 좌우 `space/24`를 유지한 채 행 폭만
+동기화한다. Native drawer가 화면 폭의 85%로 줄어 `320px`보다 좁아질 때는 좌우 `space/16`을 유지한 채 행 폭만
 가용 폭에 맞춰 줄여 잘리지 않게 한다.
 
 Utility를 연 뒤 표시하는 `설정`·`로그아웃` 하위 행은 같은 target과 `space/32` content inset을 사용해
