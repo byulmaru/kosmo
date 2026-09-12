@@ -496,6 +496,43 @@ describe('runtime routing', () => {
     expect(federationFetch).toHaveBeenCalledTimes(4);
   });
 
+  test.each(['/privacy', '/account-deletion', '/child-safety'])(
+    'serves the public policy %s as an SPA document without navigation headers',
+    async (path) => {
+      for (const accept of [undefined, '*/*', 'text/html']) {
+        const headers = accept ? { accept } : undefined;
+        const response = await app.request(path, { headers });
+        const head = await app.request(path, { headers, method: 'HEAD' });
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toContain('text/html');
+        expect(await response.text()).toBe('<html>expo app</html>');
+        expect(head.status).toBe(200);
+        expect(head.headers.get('content-type')).toContain('text/html');
+        expect(await head.text()).toBe('');
+      }
+    },
+  );
+
+  test('keeps non-document policy representations out of the SPA', async () => {
+    const response = await app.request('/child-safety', {
+      headers: { accept: 'application/activity+json' },
+    });
+
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe('404 Not Found');
+  });
+
+  test('keeps unknown paths and missing assets as 404 without navigation headers', async () => {
+    const unknownPath = await app.request('/unknown');
+    const missingAsset = await app.request('/missing.js');
+
+    expect(unknownPath.status).toBe(404);
+    expect(await unknownPath.text()).toBe('404 Not Found');
+    expect(missingAsset.status).toBe(404);
+    expect(await missingAsset.text()).toBe('404 Not Found');
+  });
+
   test('revalidates the SPA shell and caches content-hashed assets immutably', async () => {
     const shell = await app.request('/');
     const etag = shell.headers.get('etag');

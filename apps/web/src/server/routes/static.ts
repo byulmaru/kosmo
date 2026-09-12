@@ -5,10 +5,16 @@ import type { Context } from 'hono';
 
 const HASHED_ASSET = /(?:^|[.-])[a-f\d]{32}(?=[.@]|$)/i;
 const STATIC_ROOT = process.env.EXPO_WEB_ROOT ?? '../app/dist';
+const PUBLIC_POLICY_PATHS = new Set(['/privacy', '/account-deletion', '/child-safety']);
+const acceptsDocument = (c: Context) => {
+  const accept = c.req.header('accept');
+  return !accept || accept === '*/*' || accept.includes('text/html');
+};
 const isSpaRequest = (c: Context) =>
   c.req.path === '/' ||
   c.req.path === '/index.html' ||
-  c.req.header('sec-fetch-mode') === 'navigate';
+  c.req.header('sec-fetch-mode') === 'navigate' ||
+  (PUBLIC_POLICY_PATHS.has(c.req.path) && acceptsDocument(c));
 
 const staticRoutes = new Hono();
 const spaEtag = etag();
