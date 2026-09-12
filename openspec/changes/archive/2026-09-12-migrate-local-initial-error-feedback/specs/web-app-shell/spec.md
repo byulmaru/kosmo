@@ -69,3 +69,32 @@
 
 - **WHEN** Local refresh가 사용 가능한 부분 GraphQL 응답을 반환하거나 pagination 요청이 완료된다
 - **THEN** 시스템은 기존 Relay partial data 처리와 pagination 오류·재시도 계약을 유지한다
+
+### Requirement: Local timeline refresh and pagination
+
+**Authority / Provenance:** `docs/design/local-timeline.md`, `docs/design/accessibility.md`, `PROD-649`, `PROD-939` — The app SHALL 선택된 Local 탭을 다시 선택하면 기존 Relay query·environment와 refetchable fragment를 재사용해 현재 Local 목록의 최신 데이터를 `store-and-network`로 다시 요청한다. 다음 page가 있고 목록 near-end에 도달하면 같은 Local connection에서 최대 20개를 누적해야 하며(MUST), refresh 또는 추가 page의 loading과 실패 중에도 기존 목록과 scroll position을 유지해야 한다(MUST).
+
+#### Scenario: Refresh selected Local tab
+
+- **WHEN** 사용자가 이미 선택된 Local 탭을 다시 선택한다
+- **THEN** 시스템은 refresh token과 refetchable fragment를 통해 현재 selected Profile의 Local 첫 page를 기존 Relay query·environment에서 `store-and-network`로 다시 요청한다
+- **AND** 새로고침 중과 hard transport error 뒤에도 마지막 성공 목록과 scroll position을 유지한다
+- **AND** 새로고침 전용 목록 상태나 별도 상단 spinner를 관리하지 않는다
+- **AND** hard transport error가 발생하면 공용 persistent Danger Toast로 `로컬 타임라인을 불러오지 못했어요`와 `다시 시도` action을 표시하고, 재시도 성공 시 오류 Toast를 제거한다
+
+#### Scenario: Apply partial Local query responses
+
+- **WHEN** Local 조회에 HTTP 200의 `data + errors` 응답이 반환된다
+- **THEN** 시스템은 Relay 기본 조회 경로에서 부분 데이터를 처리한다
+- **AND** Local 화면은 응답 전체 거절이나 이전 목록 복원을 별도로 수행하지 않는다
+- **AND** `localTimeline: null`이면 목록의 빈 상태를 표시할 수 있다
+
+#### Scenario: Append next Local page
+
+- **WHEN** Local connection에 다음 page가 있고 사용자가 목록 near-end에 도달한다
+- **THEN** 시스템은 현재 cursor 이후 Post를 최대 20개 요청해 기존 목록 뒤에 누적한다
+
+#### Scenario: Recover next-page error
+
+- **WHEN** Local 다음 page 요청이 실패한다
+- **THEN** 시스템은 기존 목록과 scroll position을 유지하고 `게시글을 더 불러오지 못했어요.` toast와 `다시 시도` action을 제공한다

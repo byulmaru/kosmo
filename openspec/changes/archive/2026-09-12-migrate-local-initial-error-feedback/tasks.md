@@ -107,4 +107,4 @@
 - 실제 Web timeline E2E 9개 통과: refresh 중 연 답글 창의 입력 내용·focus 보존과 기존 Home·Local·Profile 동작 검증.
 - 내장 Browser의 1280×720 Web Light에서 오류 뒤 기존 목록·Local 탭 focus와 하단 retry Toast를 확인했다.
 - 2026-09-12 승인된 공개 작업으로 PR #840 본문을 최종 구현·검증 결과에 맞춰 갱신하고 readback으로 확인했다.
-- Android/iOS 실제 스크롤·focus·보조 기술은 미실행이다. 이 change의 archive는 별도 완료 절차로 남긴다.
+- Android/iOS 실제 스크롤·focus·보조 기술은 미실행이다. 정본 spec 동기화와 2026-09-12 archive를 완료했다.
