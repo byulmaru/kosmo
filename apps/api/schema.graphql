@@ -251,8 +251,8 @@ type Mutation {
   issueMediaUploadUrl: IssueMediaUploadUrlPayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   muteProfile(input: MuteProfileInput!): MuteProfilePayload!
-  registerPushInstallation(input: RegisterPushInstallationInput!): RegisterPushInstallationPayload!
   registerProfileMigrationSource(input: RegisterProfileMigrationSourceInput!): RegisterProfileMigrationSourcePayload!
+  registerPushInstallation(input: RegisterPushInstallationInput!): RegisterPushInstallationPayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
   repostPost(input: RepostPostInput!): RepostPostPayload!
   revokeCurrentSession: RevokeCurrentSessionPayload!
@@ -526,6 +526,14 @@ type ReactionNotification implements Node & Notification {
   type: String!
 }
 
+input RegisterProfileMigrationSourceInput {
+  sourceHandle: String!
+}
+
+type RegisterProfileMigrationSourcePayload {
+  profile: Profile!
+}
+
 input RegisterPushInstallationInput {
   platform: PushInstallationPlatform!
   token: String!
@@ -533,14 +541,6 @@ input RegisterPushInstallationInput {
 
 type RegisterPushInstallationPayload {
   id: ID!
-}
-
-input RegisterProfileMigrationSourceInput {
-  sourceHandle: String!
-}
-
-type RegisterProfileMigrationSourcePayload {
-  profile: Profile!
 }
 
 input RejectProfileFollowRequestInput {

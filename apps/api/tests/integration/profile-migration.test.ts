@@ -1,8 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, mock, test } from 'node:test';
-import { Endpoints, Person } from '@fedify/vocab';
+import { after, before, beforeEach, describe, test } from 'node:test';
 import {
   AccountProfileRole,
   AccountState,
@@ -13,11 +12,12 @@ import {
 } from '@kosmo/core/enums';
 import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { normalizeHandle } from '@kosmo/core/utils';
+import { temporalClient } from '@kosmo/core/temporal/client';
+import { ApplicationFailure } from '@temporalio/client';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type * as Fedify from '@kosmo/fedify';
 import type { deriveContext as DeriveContext, Env } from '../../src/context';
 import type { yoga as YogaRouter } from '../../src/graphql';
 
@@ -37,7 +37,6 @@ let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let deriveContext: typeof DeriveContext;
-let remoteFederation: typeof Fedify.federation;
 let yoga: typeof YogaRouter;
 let app: Hono<Env>;
 let localInstanceId: string;
@@ -86,7 +85,6 @@ describe('GraphQL profile migration', () => {
       Sessions,
     } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
-    ({ federation: remoteFederation } = await import('@kosmo/fedify'));
 
     await truncateDatabase();
     const { localInstance } = await seedDatabase({ publicOrigin });
@@ -127,7 +125,7 @@ describe('GraphQL profile migration', () => {
       profileId: target.id,
       role: AccountProfileRole.OWNER,
     });
-    const createContext = t.mock.method(remoteFederation, 'createContext');
+    const execute = t.mock.method(temporalClient.workflow, 'execute');
 
     for (const token of [member.token, inactive.token, undefined]) {
       const result = await requestGraphQL(
@@ -143,7 +141,7 @@ describe('GraphQL profile migration', () => {
       assertGraphQLErrorCode(result, 'PERMISSION_DENIED');
     }
 
-    assert.equal(createContext.mock.calls.length, 0);
+    assert.equal(execute.mock.calls.length, 0);
     assert.equal(await countMigrations(), 0);
   });
 
@@ -153,11 +151,11 @@ describe('GraphQL profile migration', () => {
       handle: 'migration-target-approval-required',
     });
     const auth = await createAuthenticatedSession({ profileId: target.id });
-    const lookupObject = mock.fn(async () => createLookupActor());
-    const createContext = t.mock.method(
-      remoteFederation,
-      'createContext',
-      () => ({ lookupObject }) as never,
+    const sourceFixture = await createRemoteSource();
+    const execute = t.mock.method(
+      temporalClient.workflow,
+      'execute',
+      async () => sourceFixture.id as never,
     );
 
     const result = await requestGraphQL(
@@ -167,7 +165,7 @@ describe('GraphQL profile migration', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.equal(createContext.mock.calls.length, 1);
+    assert.equal(execute.mock.calls.length, 1);
     assert.equal(await countMigrations(), 1);
     assert.equal(await countProfiles(), 2);
   });
@@ -176,8 +174,9 @@ describe('GraphQL profile migration', () => {
     const auth = await createAuthenticatedSession({
       profileId: (await createProfile({ handle: 'migration-target' })).id,
     });
-    const lookupObject = mock.fn(async () => null);
-    t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
+    const execute = t.mock.method(temporalClient.workflow, 'execute', async () => {
+      throw ApplicationFailure.nonRetryable('Profile not found', 'NotFoundError');
+    });
 
     const result = await requestGraphQL(
       registerSourceMutation,
@@ -191,7 +190,7 @@ describe('GraphQL profile migration', () => {
 
     assertGraphQLErrorCode(result, 'VALIDATION');
     assert.equal(result.errors?.[0]?.extensions?.field, 'sourceHandle');
-    assert.equal(lookupObject.mock.calls.length, 1);
+    assert.equal(execute.mock.calls.length, 1);
     assert.equal(await countMigrations(), 0);
     assert.equal(await countProfiles(), 1);
   });
@@ -202,8 +201,12 @@ describe('GraphQL profile migration', () => {
         await createProfile({ displayName: 'Migration Target', handle: 'migration-target' })
       ).id,
     });
-    const lookupObject = mock.fn(async () => createLookupActor());
-    t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
+    const sourceFixture = await createRemoteSource();
+    const execute = t.mock.method(
+      temporalClient.workflow,
+      'execute',
+      async () => sourceFixture.id as never,
+    );
 
     const result = await requestGraphQL<{
       registerProfileMigrationSource: {
@@ -225,14 +228,23 @@ describe('GraphQL profile migration', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.equal(lookupObject.mock.calls.length, 1);
+    assert.equal(execute.mock.calls.length, 1);
+    const options = execute.mock.calls[0]?.arguments[1];
+    assert.ok(options);
+    assert.deepEqual(options.args, [
+      {
+        domain: remoteDomain,
+        handle: 'alice',
+        profileId: auth.profile.id,
+      },
+    ]);
 
     const migration = await db
       .select()
       .from(ProfileMigrations)
       .where(eq(ProfileMigrations.targetProfileId, auth.profile.id))
       .then(firstOrThrow);
-    const source = await db
+    const persistedSource = await db
       .select()
       .from(Profiles)
       .where(eq(Profiles.id, migration.sourceProfileId))
@@ -243,7 +255,7 @@ describe('GraphQL profile migration', () => {
       id: globalId('Profile', auth.profile.id),
       migrationSource: {
         displayName: 'Alice Remote',
-        id: globalId('Profile', source.id),
+        id: globalId('Profile', persistedSource.id),
         relativeHandle: `@alice@${remoteDomain}`,
       },
       relativeHandle: '@migration-target',
@@ -262,7 +274,7 @@ describe('GraphQL profile migration', () => {
         }
       }`,
       {
-        sourceId: globalId('Profile', source.id),
+        sourceId: globalId('Profile', persistedSource.id),
         targetId: globalId('Profile', auth.profile.id),
       },
       auth.token,
@@ -270,97 +282,12 @@ describe('GraphQL profile migration', () => {
 
     assertNoGraphQLErrors(read);
     assert.deepEqual(read.data, {
-      source: { id: globalId('Profile', source.id), migrationSource: null },
+      source: { id: globalId('Profile', persistedSource.id), migrationSource: null },
       target: {
         id: globalId('Profile', auth.profile.id),
-        migrationSource: { id: globalId('Profile', source.id) },
+        migrationSource: { id: globalId('Profile', persistedSource.id) },
       },
     });
-  });
-
-  test('uses the acting Local Profile instance origin for remote source materialization', async (t) => {
-    const actingInstance = await db
-      .insert(Instances)
-      .values({
-        canonicalOrigin: 'https://acting-local.example',
-        domain: 'acting-local.example',
-        kind: InstanceKind.LOCAL,
-      })
-      .returning()
-      .then(firstOrThrow);
-    const actingProfile = await createProfile({
-      handle: 'migration-acting-local',
-      instanceId: actingInstance.id,
-    });
-    const auth = await createAuthenticatedSession({ profileId: actingProfile.id });
-
-    const lookupObject = mock.fn(async () => createLookupActor());
-    const createContext = t.mock.method(
-      remoteFederation,
-      'createContext',
-      () => ({ lookupObject }) as never,
-    );
-
-    const result = await requestGraphQL(
-      registerSourceMutation,
-      {
-        input: {
-          sourceHandle: `@alice@${remoteDomain}`,
-        },
-      },
-      auth.token,
-    );
-
-    assertNoGraphQLErrors(result);
-    const origin = createContext.mock.calls[0]?.arguments[0];
-    assert.ok(origin instanceof URL);
-    assert.equal(origin.origin, 'https://acting-local.example');
-  });
-
-  test('uses the acting Remote Profile actor origin for remote source materialization', async (t) => {
-    const actingInstance = await db
-      .insert(Instances)
-      .values({
-        canonicalOrigin: null,
-        domain: 'acting-remote.example',
-        kind: InstanceKind.ACTIVITYPUB,
-      })
-      .returning()
-      .then(firstOrThrow);
-    const actingProfile = await createProfile({
-      handle: 'migration-acting',
-      instanceId: actingInstance.id,
-    });
-    await db.insert(ActivityPubActors).values({
-      inboxUri: 'https://acting-remote.example/users/acting/inbox',
-      profileId: actingProfile.id,
-      sharedInboxUri: 'https://acting-remote.example/inbox',
-      type: 'PERSON',
-      uri: 'https://acting-remote.example/users/acting',
-    });
-    const auth = await createAuthenticatedSession({ profileId: actingProfile.id });
-
-    const lookupObject = mock.fn(async () => createLookupActor());
-    const createContext = t.mock.method(
-      remoteFederation,
-      'createContext',
-      () => ({ lookupObject }) as never,
-    );
-
-    const result = await requestGraphQL(
-      registerSourceMutation,
-      {
-        input: {
-          sourceHandle: `@alice@${remoteDomain}`,
-        },
-      },
-      auth.token,
-    );
-
-    assertNoGraphQLErrors(result);
-    const origin = createContext.mock.calls[0]?.arguments[0];
-    assert.ok(origin instanceof URL);
-    assert.equal(origin.origin, 'https://acting-remote.example');
   });
 });
 
@@ -456,19 +383,30 @@ const createAuthenticatedSession = async ({
   return { account, profile, token };
 };
 
-const createLookupActor = () =>
-  new Person({
-    endpoints: new Endpoints({ sharedInbox: new URL(`https://${remoteDomain}/inbox`) }),
-    followers: new URL(`https://${remoteDomain}/users/alice/followers`),
-    following: new URL(`https://${remoteDomain}/users/alice/following`),
-    id: new URL(`https://${remoteDomain}/users/alice`),
-    inbox: new URL(`https://${remoteDomain}/users/alice/inbox`),
-    name: 'Alice Remote',
-    outbox: new URL(`https://${remoteDomain}/users/alice/outbox`),
-    preferredUsername: 'alice',
-    published: Temporal.Instant.from('2024-01-02T03:04:05Z'),
-    summary: 'Remote bio',
+const createRemoteSource = async () => {
+  const instance = await db
+    .insert(Instances)
+    .values({
+      canonicalOrigin: null,
+      domain: remoteDomain,
+      kind: InstanceKind.ACTIVITYPUB,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const profile = await createProfile({
+    displayName: 'Alice Remote',
+    handle: 'alice',
+    instanceId: instance.id,
   });
+  await db.insert(ActivityPubActors).values({
+    inboxUri: `https://${remoteDomain}/users/alice/inbox`,
+    profileId: profile.id,
+    sharedInboxUri: `https://${remoteDomain}/inbox`,
+    type: 'PERSON',
+    uri: `https://${remoteDomain}/users/alice`,
+  });
+  return profile;
+};
 
 const countMigrations = () => db.$count(ProfileMigrations);
 
