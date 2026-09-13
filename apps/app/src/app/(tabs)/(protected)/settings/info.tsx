@@ -16,12 +16,7 @@ export default function SettingsInfoRoute() {
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
-  const otaUpdateDescription =
-    Platform.OS === 'web'
-      ? null
-      : Updates.isEmbeddedLaunch
-        ? '내장 번들'
-        : (Updates.updateId ?? '식별 불가');
+  const otaUpdateDescription = Platform.OS === 'web' ? null : (Updates.updateId ?? '식별 불가');
   const backButton =
     detailHeaderMode === 'back' ? (
       <IconButton
