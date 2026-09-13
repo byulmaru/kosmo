@@ -118,6 +118,10 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - Android/iOS Native `정보`와 사전 로그인 복구는 `dev`·`prod`만 제공하며, Web 정보·channel UI는 유지한다.
 - 선택한 값은 API·Web·OIDC·Sentry·OTA의 하나의 environment로 해석한다. 고정 OTA URL과 persistent header는
   [Expo OTA 운영](../operations/expo-ota.md)의 계약을 따른다.
+- Android/iOS Native `정보`는 읽기 전용으로 현재 실행 중인 Expo `expo-updates`가 원격 OTA이면 전체 `updateId`를,
+  내장 번들이면 `내장 번들`을 표시한다.
+- `expo-updates` metadata가 없는 local development 또는 disabled 환경에서는 `식별 불가`로 표시하며, 다운로드
+  대기 중인 업데이트 ID를 현재 실행 ID로 표시하지 않는다.
 - 취소·현재 값 재선택은 no-op이다. 다른 값은 호환 signed update의 확인·download가 성공한 뒤 login 삭제와
   reload를 수행하고, 404·검증·download 실패에서는 원래 channel과 실행 가능한 fallback을 유지한다.
 - runtime/project/platform 호환성, signature·asset hash 검증을 유지하며 native code·module·SDK·permission

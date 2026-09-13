@@ -1,8 +1,10 @@
 import { useRouter } from 'expo-router';
+import * as Updates from 'expo-updates';
 import { ChevronLeftIcon } from 'lucide-react-native';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { NativeChannelSettings } from '@/components/settings/NativeChannelSettings';
+import { SettingsItem } from '@/components/settings/SettingsItem';
 import { SettingsLinkRow } from '@/components/settings/SettingsLinkRow';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
@@ -14,6 +16,12 @@ export default function SettingsInfoRoute() {
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
+  const otaUpdateDescription =
+    Platform.OS === 'web'
+      ? null
+      : Updates.isEmbeddedLaunch
+        ? '내장 번들'
+        : (Updates.updateId ?? '식별 불가');
   const backButton =
     detailHeaderMode === 'back' ? (
       <IconButton
@@ -31,6 +39,9 @@ export default function SettingsInfoRoute() {
       {detailHeaderMode !== 'hidden' ? <PageHeader leading={backButton} title="정보" /> : null}
       <View style={[layoutRecipes.listStack, styles.root]}>
         <NativeChannelSettings />
+        {otaUpdateDescription ? (
+          <SettingsItem description={otaUpdateDescription} label="OTA 업데이트" />
+        ) : null}
         <SettingsLinkRow
           accessibilityLabel="개인정보 처리방침"
           href="/privacy"
