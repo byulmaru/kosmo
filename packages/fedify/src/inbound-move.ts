@@ -11,7 +11,8 @@ import {
 } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
-import { startProfileMigration } from '@kosmo/core/temporal/profile-migration';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { profileMigrationMoveWorkflow } from '@kosmo/core/temporal/profile-migration';
 import { and, eq } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
@@ -267,8 +268,15 @@ export const handleInboundMove = async (
     throw error;
   }
 
-  await startProfileMigration({
-    sourceProfileId: source.profile.id,
-    targetProfileId,
+  await runWorkflow(profileMigrationMoveWorkflow, {
+    args: [
+      {
+        sourceProfileId: source.profile.id,
+        targetProfileId,
+      },
+    ],
+    mode: 'start',
+    workflowIdConflictPolicy: 'USE_EXISTING',
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
   });
 };
