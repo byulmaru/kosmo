@@ -1,10 +1,12 @@
 import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Fragment } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { graphql, useFragment } from 'react-relay';
 import { match } from 'ts-pattern';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, fontWeights, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { usePostContentWarningReveal } from './PostContentWarningRevealContext';
 import { PostMediaGallery } from './PostMediaGallery';
@@ -14,17 +16,31 @@ import type {
   PostContentInlineNode,
   PostContentTextNode,
 } from '@kosmo/core/post-content';
+import type { Href } from 'expo-router';
 import type { Key, ReactNode } from 'react';
 import type { StyleProp, TextStyle } from 'react-native';
+import type { PostContentMention_profile$key } from './__generated__/PostContentMention_profile.graphql';
 import type { PostMediaItem } from './PostMediaGallery';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
 type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
 
+type MentionedProfile = PostContentMention_profile$key & {
+  readonly id: string;
+};
+
+const postContentMentionProfileFragment = graphql`
+  fragment PostContentMention_profile on Profile {
+    displayName
+    relativeHandle
+  }
+`;
+
 interface RenderContext {
   readonly bodyStyle: StyleProp<TextStyle>;
   readonly interactive: boolean;
   readonly linkColor: string;
+  readonly mentionedProfiles: ReadonlyMap<string, MentionedProfile>;
   readonly numberOfLines?: number;
 }
 
@@ -38,6 +54,7 @@ export function PostContentRenderer({
   interactive = true,
   media,
   mediaPresentation = 'default',
+  mentionedProfiles = [],
   numberOfLines,
   onBodyPress,
   onMediaOpen,
@@ -51,6 +68,7 @@ export function PostContentRenderer({
   interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
   mediaPresentation?: 'default' | 'hidden';
+  mentionedProfiles?: ReadonlyArray<MentionedProfile>;
   numberOfLines?: number;
   onBodyPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
@@ -69,6 +87,7 @@ export function PostContentRenderer({
     size === 'lg' ? typography.lg : typography.md,
     { color: theme.text },
   ];
+  const mentionedProfilesById = new Map(mentionedProfiles.map((profile) => [profile.id, profile]));
 
   const body = !contentVisible ? null : !bodyText ? null : !document ? (
     <Text numberOfLines={numberOfLines} style={bodyStyle}>
@@ -79,6 +98,7 @@ export function PostContentRenderer({
       bodyStyle,
       interactive,
       linkColor: theme.actionLinkBase,
+      mentionedProfiles: mentionedProfilesById,
       numberOfLines,
     })
   );
@@ -168,7 +188,48 @@ function renderNode(node: PostContentNode, key: Key, context: RenderContext): Re
     ))
     .with({ type: 'text' }, (text) => renderMarks(text, key, context))
     .with({ type: 'hard_break' }, () => '\n')
+    .with({ type: 'mention' }, (mention) => {
+      const profile = context.mentionedProfiles.get(mention.attrs.profileId);
+      if (!context.interactive || !profile) {
+        return <Text key={key}>{mention.attrs.label}</Text>;
+      }
+
+      return (
+        <PostContentMentionLink
+          key={key}
+          label={mention.attrs.label}
+          linkColor={context.linkColor}
+          profile={profile}
+        />
+      );
+    })
     .otherwise(() => null);
+}
+
+function PostContentMentionLink({
+  label,
+  linkColor,
+  profile,
+}: {
+  label: string;
+  linkColor: string;
+  profile: MentionedProfile;
+}) {
+  const data = useFragment(postContentMentionProfileFragment, profile);
+  const href = `/${data.relativeHandle}` as Href;
+
+  return (
+    <NavigationLink href={href}>
+      <Text
+        accessibilityLabel={`${label}, ${data.displayName}, ${data.relativeHandle} 프로필 보기`}
+        accessibilityRole="link"
+        onPress={(event) => event.stopPropagation()}
+        style={[styles.link, styles.mentionLink, { color: linkColor }]}
+      >
+        {label}
+      </Text>
+    </NavigationLink>
+  );
 }
 
 function renderMarks(node: PostContentTextNode, key: Key, context: RenderContext): ReactNode {
@@ -212,6 +273,7 @@ const styles = StyleSheet.create({
   root: { gap: spacing.sm, minWidth: 0 },
   body: { fontFamily: fontFamilies.content },
   link: { textDecorationLine: 'underline' },
+  mentionLink: { fontWeight: fontWeights.semibold },
   warning: {
     alignItems: 'flex-start',
     borderRadius: radii.md,

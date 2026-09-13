@@ -335,6 +335,7 @@ type PostContent implements Node {
   document: PostContentDocument!
   id: ID!
   media: [Media!]
+  mentionedProfiles: [Profile!]!
 }
 
 """Kosmo versioned PostContent document JSON"""

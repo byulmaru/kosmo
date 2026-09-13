@@ -531,6 +531,33 @@ test('native-safe guard accepts additive V1 properties while validating consumed
   );
 });
 
+test('native-safe guard accepts projected Profile global IDs while canonicalization keeps UUID input strict', () => {
+  const projectedDocument = {
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'mention',
+              attrs: { label: '@alice', profileId: 'UHJvZmlsZS0x' },
+            },
+          ],
+        },
+      ],
+    },
+  } as const;
+
+  assert.equal(isPostContentDocumentV1(projectedDocument), true);
+  assert.throws(
+    () => canonicalizePostContentDocument(projectedDocument),
+    /Mention Profile ID must be a UUID/,
+  );
+});
+
 test('normalizes summary as authored revision content', () => {
   const document = postContentDocumentFromText('body', '  warning\r\ntext  ');
 

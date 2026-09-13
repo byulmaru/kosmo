@@ -22,11 +22,19 @@ mockModule('react-native', {
   Text: 'Text',
   View: 'View',
 });
+mockModule('react-relay', {
+  graphql: () => ({}),
+});
+mockModule('@/components/shell/NavigationLink', {
+  NavigationLink: ({ children, href }: { children: ReactNode; href: unknown }) =>
+    createElement('NavigationLink', { href }, children),
+});
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => ({ selectedProfileId: null, sessionId: null }),
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({
+    actionLinkBase: '#00f',
     border: '#ddd',
     primary: '#ff0',
     primaryHover: '#ee0',
@@ -45,6 +53,7 @@ type RendererProps = {
   contentWarningPresentation?: 'default' | 'revealed';
   contentWarning: string | null | undefined;
   document: unknown;
+  interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
   mediaPresentation?: 'default' | 'hidden';
   numberOfLines?: number;
