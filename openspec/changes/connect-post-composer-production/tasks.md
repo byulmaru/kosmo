@@ -63,7 +63,7 @@
 - [ ] 2.3 upload·retry·remove·paste·최대 4개·payload 회귀 검증을 추가한다.
 - [ ] 2.4 gallery와 editor의 pointer·touch·keyboard·accessible name 및 target 동작을 검증한다.
 
-## 3. PROD-797 Shell·Overlay·`/compose` lifecycle
+## 3. PROD-797 Shell·Overlay lifecycle와 direct route 제거
 
 **Authority / Provenance**
 
@@ -71,29 +71,33 @@
 - `docs/design/figma.md`
 - `docs/design/accessibility.md`
 - `docs/design/icons.md`
+- `docs/domain/objects/profile.md`
 - DSN-43
 - PROD-797
 
 **Deliverable**
 
-Full Web Rail, compact Web icon rail, mobile Web·Android·iOS 하단 탭과 `/compose`가 동일한 Production composer 계약을 열고 platform별 dismiss·focus·keyboard·복귀 동작을 제공한다.
+Full Web Rail, compact Web icon rail, mobile Web·Android·iOS 하단 탭이 동일한 Production composer 계약을 열고 platform별 dismiss·focus·keyboard·복귀 동작을 제공하며, direct `/compose` compatibility route는 제공하지 않는다.
 
 **Guardrails**
 
 - navigation chrome의 geometry와 다른 destination 동작을 변경하지 않는다.
 - 이름이 있는 modal semantic surface, Escape·backdrop·Native back, focus trap/restore와 body scroll 경계를 유지한다.
-- `/compose` close는 history가 있으면 back, 없으면 Home이며 모바일 제출 성공은 Home으로 돌아간다.
+- 제출 pending 중에는 기존 공용 composer dismiss boundary로 Web Escape·backdrop·닫기 action과 Native platform back을 모두 차단하고 surface·draft·pending 상태를 유지한다.
+- direct `/compose` 접근은 composer host를 열지 않고 404가 될 수 있으며, bare `compose`는 Local Profile System Reserved Handle로 유지한다. shell이 연 모바일 surface의 제출 성공은 Home으로 돌아간다.
 
 **Verification**
 
-- shell component/E2E에서 Full·compact·mobile 진입, Rail Expand, `/compose` 위임, no-profile 경계와 성공 복귀를 검증한다.
+- shell component/E2E에서 Full·compact·mobile 진입, Rail Expand, no-profile 경계와 shell surface 성공 복귀를 검증한다.
+- route tree와 직접 URL 접근을 확인해 `/compose`가 composer host를 렌더링하지 않고, 기존 Profile creation 계약에서 bare `compose` 예약이 유지되는지 확인한다.
 - Web keyboard/focus/backdrop/Escape/body scroll/short viewport와 Android·iOS keyboard/back/safe area/touch/focus를 각각 runtime에서 검증한다.
+- 제출 pending 중 Web Escape·backdrop·닫기 action과 Native platform back이 같은 dismiss boundary에서 차단되는지 각각 검증한다.
 
 - [ ] 3.1 Full Web Rail과 Expand Overlay가 같은 draft owner를 사용하게 연결한다.
 - [ ] 3.2 compact Web icon rail과 mobile 하단 탭의 compose action을 platform별 Overlay에 연결한다.
 - [ ] 3.3 Overlay dismiss, focus, body scroll과 Native back·keyboard·safe area lifecycle을 연결한다.
-- [ ] 3.4 `/compose`를 같은 composer 계약의 호환 경계로 정리하고 close fallback을 구현한다.
-- [ ] 3.5 shell·route component 및 Web E2E 회귀 검증을 추가한다.
+- [ ] 3.4 direct `/compose` compatibility route를 제거하고, bare `compose` Local Profile 예약을 유지한다.
+- [ ] 3.5 shell component 및 Web E2E 회귀 검증을 추가한다.
 - [ ] 3.6 iOS·Android 실제 runtime에서 진입·닫기·keyboard·back·safe area·touch/focus를 확인하고 결과를 기록한다.
 
 ## 4. PROD-797 통합 검증과 문서 동기화
@@ -126,3 +130,4 @@ Production 연결 결과와 실제 검증 범위가 Storybook, 디자인 문서�
 - [ ] 4.2 `docs/design/figma.md`와 `docs/design/breakpoints.md`의 Production 이관·검증 상태를 실제 결과에 맞게 갱신한다.
 - [ ] 4.3 Relay·typecheck·lint·관련 test·Storybook build·OpenSpec strict validation을 실행한다.
 - [ ] 4.4 Web Light/Dark와 full·compact·mobile browser QA 결과 및 미검증 항목을 기록한다.
+- [ ] 4.5 change의 모든 task와 Web·Native 검증이 완료되면 최신 canonical·Linear를 다시 대조해 구현·OpenSpec 정합성과 delta spec 동기화를 확인한 뒤 change를 archive하고 archive 후 strict validation을 실행한다. **Owner: PROD-797 / PR #878**

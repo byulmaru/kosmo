@@ -13,7 +13,7 @@
 - Context / Problem: Production은 Full Web Right Rail과 독립 `/compose` 화면을 사용하지만 canonical presentation은 Rail과 Overlay만 정의한다.
 - Decision Outcome: Full Web은 Rail과 Expand desktop Overlay, compact Web은 icon rail trigger의 desktop Overlay, mobile Web·Android·iOS는 하단 탭 trigger의 전체 화면 composer를 사용한다.
 - Alternatives Considered: 중앙 timeline inline composer와 독립 `/compose` presentation은 canonical 계약이 아니므로 사용하지 않는다.
-- Consequences: navigation chrome의 시각 계약은 바꾸지 않고 compose destination의 Production 동작만 host open action으로 연결한다.
+- Consequences: navigation chrome의 시각 계약은 바꾸지 않고 shell의 compose action만 host open action으로 연결한다.
 - Confirmation / Follow-up: Full·compact·mobile 진입과 중복 진입점 부재를 component 및 runtime에서 검증한다.
 
 ### 작성 controller를 presentation보다 위에서 한 번만 소유
@@ -40,18 +40,6 @@
 - Consequences: editor 폭은 parent surface가 조정하고, draft·Media 상태·focus dismiss는 하나의 Overlay lifecycle을 공유한다.
 - Confirmation / Follow-up: Web/Native에서 modal semantic surface가 하나인지, Back·Done·Close가 서로 다른 결과를 내는지 검증한다.
 
-### `/compose` 호환과 미완성 draft close 정책
-
-- Decision Date: 2026-09-11
-- Decision Class: Implementation Choice
-- Authority / Provenance: `docs/design/breakpoints.md`, `docs/design/figma.md`, PROD-797
-- Status: Active
-- Context / Problem: `/compose`는 deep link 호환이 필요하지만 별도 composer 구현은 허용되지 않으며, close destination과 미완성 draft 처리의 최소 동작이 필요하다.
-- Decision Outcome: `/compose`는 같은 Production composer host에 위임한다. 제출하지 않고 닫을 때 history가 있으면 back, 없으면 Home으로 이동한다. 같은 Profile lifecycle에서 닫았다 다시 열면 draft를 보존하며 새 discard confirmation은 추가하지 않는다.
-- Alternatives Considered: `/compose` 전용 composer는 상태를 복제하므로 제외한다. 항상 Home 이동은 유효한 이전 화면을 버리고, 새 discard confirmation은 승인된 범위보다 정책과 UI를 늘리므로 선택하지 않는다.
-- Consequences: 기존 URL과 session/profile query 경계를 유지하면서 route는 얇아진다. draft는 게시 성공 또는 기존 actor/session lifecycle이 초기화할 때까지 유지된다.
-- Confirmation / Follow-up: history 유무에 따른 close, close → reopen draft 보존, Web 현재 route 유지와 모바일 성공 후 Home을 E2E/runtime에서 검증한다.
-
 ### 미구현 Composer action은 Production에서 숨김
 
 - Decision Date: 2026-09-11
@@ -63,6 +51,18 @@
 - Alternatives Considered: no-op 또는 disabled control 노출은 준비되지 않은 기능을 제품 기능처럼 보이게 하므로 제외한다.
 - Consequences: 후속 기능은 각 authority와 capability가 준비된 별도 변경에서 활성화한다.
 - Confirmation / Follow-up: Production render와 접근성 트리에 미구현 action이 없는지 검증한다.
+
+### 직접 `/compose` route 제거와 bare `compose` 예약 handle 유지
+
+- Decision Date: 2026-09-13
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/breakpoints.md`, `docs/design/figma.md`, `docs/domain/objects/profile.md`, DSN-43, PROD-797
+- Status: Active
+- Context / Problem: canonical 작성 surface는 shell에서 여는 Rail·Overlay이며 direct `/compose`는 retired route다. route namespace를 반환하면 Local Profile handle과 충돌할 수 있다.
+- Decision Outcome: direct `/compose` compatibility route는 제공하지 않으며 직접 접근은 404가 될 수 있다. Full·compact·mobile shell trigger만 Production composer host를 연다. route 제거 뒤에도 bare `compose`는 앞뒤 공백 제거·소문자 비교 기준의 Local Profile System Reserved Handle로 영구 예약하고, Remote Profile handle에는 이 정책을 적용하지 않는다.
+- Alternatives Considered: direct URL을 host-opening adapter나 redirect로 유지하는 방식은 retired route 계약과 충돌한다. `compose`를 Local Profile에 허용하는 방식은 route namespace 재사용을 허용하므로 제외한다.
+- Consequences: 기존 `/compose` deep link는 404가 될 수 있고 direct URL의 close·success fallback은 계약하지 않는다. shell이 연 surface의 close·success lifecycle과 draft 보존은 별도 composer host 계약을 따른다.
+- Confirmation / Follow-up: route-removal 구현에서 direct 접근이 composer를 렌더링하지 않는지 확인하고, 기존 Local Profile reserved-handle 계약에서 bare `compose` 거부가 유지되는지 대조한다.
 
 ## Remaining Decisions
 

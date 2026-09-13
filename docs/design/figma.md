@@ -90,9 +90,9 @@ Compact·Mobile에서도 route screen으로 중복 생성하지 않고 독립된
 #### Inventory-only canonical overlays
 
 Composer와 Feedback의 Target은 route screen이 아니라 어떤 route에서든 열리는 canonical overlay다.
-Full·Compact·Mobile 인벤토리에서 소유 overlay 계약은 유지하되, 현재 runtime의 `/compose`·`/feedback`
-호환 route를 별도 canonical screen으로 복제하지 않는다. 호환 route의 제거 여부와 runtime migration은
-해당 Product 계약에서 별도로 추적한다.
+Full·Compact·Mobile 인벤토리에서 소유 overlay 계약은 유지하되, `/compose`·`/feedback`를 별도 canonical
+screen으로 복제하지 않는다. `/compose`는 retired되어 직접 접근이 404가 될 수 있으며, `/feedback`의 runtime
+migration은 해당 Product 계약에서 별도로 추적한다.
 
 | Overlay  | Canonical node                                                                                                                             | Inventory contract                                                                                         |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
@@ -232,7 +232,8 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   Composer를 제거하고 이전 Home surface 위에 기존 Danger Toast를 표시한다. [`Profile required 6922:12635`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6922-12635)는
   transient 오류가 아니므로 안내 상태와 Home action을 유지한다. 작성 중 게시·업로드 실패는 이 initial-load
   이탈 계약을 상속하지 않고 draft를 보존한다. 세 상태는 standalone `/compose` route screen이 아니라 Target overlay
-  evidence다. Current runtime·OpenSpec의 `/compose` 호환 route는 유지하되 Figma Target 물리 인벤토리에는 포함하지 않는다.
+  evidence다. `/compose`는 이 canonical overlay를 위한 호환 진입점으로 유지하지 않으며, 해당 경로에 직접 접근하면
+  404가 될 수 있다. Figma Target 물리 인벤토리에는 포함하지 않는다.
   이는 Candidate source의 Current 승격이나 실제 navigation·retry·accessibility runtime 완료를 뜻하지 않는다.
 - [`Mobile route and state consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9407)는
   `/settings/profile` default·Profile required, Post detail deleted, Search 9상태와 Mobile Composer overlay 3상태,
@@ -294,7 +295,7 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   Source Author의 Repost·Quote를 목록에서 제외한다. 과거 Mute disclosure를 직접 Profile의 현재 Target이나
   runtime 근거로 세지 않는다.
 - [`Mobile Screen Inventory`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6653-25532)의
-  `Main route/state contracts · 34`는 canonical route/state 물리 인벤토리만 기록하고 `/compose` 호환 route는 제외한다.
+  `Main route/state contracts · 34`는 canonical route/state 물리 인벤토리만 기록하고 retired `/compose` direct entry는 제외한다.
   Full Empty Light/Dark, Composer 7-state consumer와 overlay lifecycle 3상태는 각각 `14 Mobile composer and overlay consumers`,
   `17 Composer state consumers`, `15 Mobile route and state consumers`의 Target evidence로 유지한다.
   `Assembled Target consumers + contract review · 15`는 Composer state consumer, Post content warning의 Mobile
@@ -366,9 +367,9 @@ Native/direct `/feedback` page는 누락 화면이 아니라 호환 runtime rout
 별도 Product 계약에서 제거 여부와 Native presentation을 결정한다. Inventory의 `Remaining Mobile contract review`
 행은 이 계약·runtime 후속을 Target screen coverage와 분리한다.
 
-runtime route tree와 main 34개를 family 단위로 대조하면 기존 주요 route의 광범위한 누락은 없다. Current `/compose`는
-runtime·OpenSpec의 호환 route로 유지하지만 standalone Target FRAME으로 만들거나 main 물리 인벤토리에 세지 않는다.
-Figma Target은 Full·Compact·Mobile Composer overlay와 그 lifecycle evidence만 유지한다. `/feedback`의 일반 진입 Target은
+runtime route tree와 main 34개를 family 단위로 대조하면 기존 주요 route의 광범위한 누락은 없다. `/compose`는 retired되어
+direct access가 404일 수 있는 entry이므로 canonical route/state나 standalone Target FRAME으로 세지 않는다. Figma Target은
+Full·Compact·Mobile Composer overlay와 그 lifecycle evidence만 유지한다. `/feedback`의 일반 진입 Target은
 overlay로 유지하고 현재 Web direct URL·Native page는 별도 Product migration으로 분리한다.
 standalone default visibility와 Compact detail inline Reply는 Target migration,
 Loading·Empty·Error·Deleted·Pinned는 기존 route의 state coverage다. route 파일 수와 Figma FRAME 수를 같게

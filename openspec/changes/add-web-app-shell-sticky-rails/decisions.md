@@ -29,7 +29,7 @@
 - Decision Outcome: 모바일 bottom tab은 safe-area를 포함한 fixed bottom chrome으로 유지한다. route content 하단은 bottom tab 높이를 고려한 padding 또는 scroll padding으로 겹침을 방지한다.
 - Alternatives Considered: bottom tab을 normal flow row로 넣는 방식은 document scroll 모델에서는 화면 하단 고정성이 약해져 제외한다.
 - Consequences: PROD-220 하단바 겹침은 이 구조 안에서 해소되는지 확인하고, 별도 IA 변경은 하지 않는다.
-- Confirmation / Follow-up: 모바일 `/home`, `/search`, `/compose`, 프로필/게시글 상세에서 하단 content가 bottom tab에 가려지지 않는지 확인한다.
+- Confirmation / Follow-up: 모바일 `/home`, `/search`, shell composer, 프로필/게시글 상세에서 하단 content가 bottom tab에 가려지지 않는지 확인한다.
 
 ### route scroll은 별도 internal restoration helper를 만들지 않는다
 
