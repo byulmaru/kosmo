@@ -410,20 +410,21 @@ test('반복 실행한 Move Workflow는 Local Open target에 Follow를 먼저 �
     sourceProfileId: source.profile.id,
     targetProfileId: target.profile.id,
   } as const;
-  await Promise.all([
+  const handles = await Promise.all([
     runWorkflow(profileMigrationMoveWorkflow, {
       args: [input],
-      mode: 'execute',
+      mode: 'start',
       workflowIdConflictPolicy: 'USE_EXISTING',
       workflowIdReusePolicy: 'ALLOW_DUPLICATE',
     }),
     runWorkflow(profileMigrationMoveWorkflow, {
       args: [input],
-      mode: 'execute',
+      mode: 'start',
       workflowIdConflictPolicy: 'USE_EXISTING',
       workflowIdReusePolicy: 'ALLOW_DUPLICATE',
     }),
   ]);
+  await Promise.all(handles.map((handle) => handle.result()));
 
   assert.equal(
     await db
