@@ -10,3 +10,4 @@
 - 검증하려는 정책이 적용되는 fixture/actor를 사용하고, 그 정책이 잘못되면 assertion에 드러나게 구성한다. 의무적으로 mutation testing 도구를 추가하지 않는다.
 - 구조 테스트가 실패하면 기대 문자열을 먼저 맞추지 말고 유효한 행동을 보장하는지 판단한 뒤 중복을 삭제하거나 최소 행동을 검증한다.
 - Workflow 문법은 actionlint 같은 표준 도구로 검사한다. 실제 환경에서만 확인할 수 있는 동작은 미검증으로 명시하며, 그 공백을 소스 문자열 검사로 채우지 않는다. 테스트를 만들기 위해 불필요한 공통 추상화나 새 의존성을 추가하지 않는다.
+- Relay 관계 action 회귀는 승인된 caller의 실제 mutation 응답이 normalized record·connection에 수렴하고 무관한 normalized record·화면 상태가 유지되는지, actor A→B 전환 뒤 늦은 A 응답에도 B UI·Store가 보존되는지, action 종료 후 실제 trigger·heading ref로 focus가 복원되는지를 실행으로 확인한다.

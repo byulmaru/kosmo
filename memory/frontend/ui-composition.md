@@ -1,6 +1,15 @@
 # Frontend: UI Composition And Styles
 
-Read this entire file when changing shared React Native presentation, layout, accessibility, post content, or UI copy.
+Read this entire file when changing shared React Native presentation, layout, accessibility, post content, UI copy, or action/composition ownership.
+
+## UI Composition And State Ownership
+
+- 개별 action은 대상의 fragment·mutation·pending/error 상태와 Relay/cache 갱신을 소유한다. 같은 관계의 중복 fragment/prop·ID를 받아 합치지 않으며, 메뉴·리스트·화면은 action lifecycle 대신 viewer 방향의 노출·순서·layout·조합을 소유한다.
+- 정상적인 관계 mutation으로 생긴 Environment/Store remount를 보상하려고 module 전역 focus registry/Map, actor lifecycle key, timer를 추가하지 않는다. focus는 현재 React tree의 trigger·heading ref와 modal `onDismiss`로 복원하고, actor A→B 전환 뒤 늦은 응답 격리에 필요한 action-local guard는 유지한다.
+- UI close나 toast 같은 후속 표시 callback과 명시적인 controlled/presentation API는 유효한 조합이다. callback을 전면 금지하지 않으며, callback 때문에 서버 상태 변경 책임을 메뉴·리스트·화면으로 옮기지 않는다.
+- 공용 primitive, `children`, 조합 지점은 공유하되 화면·목록 전체를 재사용하려고 `mode`/`options` prop으로 자식의 세부 상태를 노출하지 않는다.
+- 실제 Storybook-first 계약은 production caller보다 먼저 제공될 수 있다. caller가 아직 없다는 이유만으로 이를 미래 기능으로 일괄 삭제하지 않는다.
+- `open`·`disabled`·`quote`·`reply`처럼 서로 관련된 상태의 유효한 조합은 기존 coordinator·type·정규화로 보장한다. 실제 전이 복잡도나 별도 계약이 생긴 근거 없이 새 state machine을 필수로 도입하지 않는다.
 
 ## React Native Components And Styles
 
@@ -11,14 +20,6 @@ Read this entire file when changing shared React Native presentation, layout, ac
 - 접근성 목표와 target은 [`docs/design/accessibility.md`](../../docs/design/accessibility.md)를 따른다. Web은 적용 가능한 WCAG 2.2 A·AA와 24×24 CSS px 최소 target·공식 예외를 사용하고, iOS는 기본 44×44 pt hit region, Android는 48×48 dp touch target을 사용한다. 기존 component-specific 강화 계약은 전역 기준보다 우선한다. Profile Tag 제거 action은 시각 크기 32×32, 실제 입력 target Web 32×32 CSS px, iOS 44×44pt, Android 48×48dp를 사용한다. `accessibilityRole`, `accessibilityLabel`, `accessibilityState`를 실제 동작과 맞추고 선택 tab, disabled/loading button, modal/drawer 상태를 시각 표현만으로 전달하지 않는다.
 - `useWindowDimensions`로 layout 단계를 고르되 product breakpoint 값은 token에서 읽는다. render 중 플랫폼 전역 `window`를 직접 읽지 않는다.
 - 게시글 canonical read 계약은 schema version이 식별된 ProseMirror document JSON이다. composer는 trim된 Plain Text를 `CreatePostInput.bodyText`로 계속 제출하고 서버 공통 경계가 document로 변환한다. PostContent V1 Media block node는 Media global ID projection과 문서 순서를 제공하고, 실제 Media GraphQL Node가 URL, Media Type과 nullable Alt Text를 소유하며 document root의 optional Sensitive Media attr는 생략 시 false다. 현재 Composer 이미지 업로드는 ordered Media item을 create input에 함께 제출하되 앱에서 ProseMirror document를 만들지 않는다. 앱은 native-safe JSON 타입과 제한된 paragraph/text/hard-break/link renderer를 사용하며 Media 목록·상세 렌더링이 별도 계약인 동안 Media node가 있는 document의 텍스트는 파생 `bodyText` fallback으로 표시할 수 있다. `prosemirror-model` 검증/canonicalization은 server-only subpath에 두고 앱 bundle에는 TipTap, ProseMirror runtime/editor/view 또는 WebView editor를 포함하지 않는다.
-
-## UI Composition And State Ownership
-
-- 서버 상태를 바꾸는 개별 action·기능 경계가 대상의 fragment·mutation·pending/error 상태와 Relay/cache 갱신을 소유한다. 이를 묶는 메뉴·리스트·화면은 action lifecycle을 대신 소유하지 않고 노출 조건·순서·layout과 `children`/공용 primitive 조합을 소유한다.
-- UI close나 toast 같은 후속 표시 callback과 명시적인 controlled/presentation API는 유효한 조합이다. callback을 전면 금지하지 않으며, callback 때문에 서버 상태 변경 책임을 메뉴·리스트·화면으로 옮기지 않는다.
-- 공용 primitive, `children`, 조합 지점은 공유하되 화면·목록 전체를 재사용하려고 `mode`/`options` prop으로 자식의 세부 상태를 노출하지 않는다.
-- 실제 Storybook-first 계약은 production caller보다 먼저 제공될 수 있다. caller가 아직 없다는 이유만으로 이를 미래 기능으로 일괄 삭제하지 않는다.
-- `open`·`disabled`·`quote`·`reply`처럼 서로 관련된 상태의 유효한 조합은 기존 coordinator·type·정규화로 보장한다. 실제 전이 복잡도나 별도 계약이 생긴 근거 없이 새 state machine을 필수로 도입하지 않는다.
 
 ## UI And Copy
 
