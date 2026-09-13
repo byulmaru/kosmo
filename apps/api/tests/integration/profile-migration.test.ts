@@ -11,8 +11,8 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
-import { normalizeHandle } from '@kosmo/core/utils';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { normalizeHandle } from '@kosmo/core/utils';
 import { ApplicationFailure } from '@temporalio/client';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
