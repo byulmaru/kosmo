@@ -9,7 +9,6 @@ import {
 
 const currentStaticAppRouteHandleValues = [
   'bookmarks',
-  'compose',
   'feedback',
   'hashtags',
   'home',
@@ -18,6 +17,8 @@ const currentStaticAppRouteHandleValues = [
   'search',
   'settings',
 ] as const;
+
+const retiredStaticAppRouteHandleValues = ['compose'] as const;
 
 test('Local Profile handle schema rejects every System Reserved value after trim and case folding', () => {
   for (const handle of systemReservedProfileHandleValues) {
@@ -49,8 +50,13 @@ test('Local Profile handle schema prioritizes policy feedback for the short rese
   assert.equal(firstIssue?.message, profileHandlePolicyErrorMessage);
 });
 
-test('System Reserved values include every current static app route that is a valid handle', () => {
+test('System Reserved values include current and retired static app routes that are valid handles', () => {
   for (const handle of currentStaticAppRouteHandleValues) {
+    assert.equal(systemReservedProfileHandleValues.includes(handle), true, handle);
+    assert.equal(profileHandlePolicyViolation(handle), 'system-reserved', handle);
+  }
+
+  for (const handle of retiredStaticAppRouteHandleValues) {
     assert.equal(systemReservedProfileHandleValues.includes(handle), true, handle);
     assert.equal(profileHandlePolicyViolation(handle), 'system-reserved', handle);
   }

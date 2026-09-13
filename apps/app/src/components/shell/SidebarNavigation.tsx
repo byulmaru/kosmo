@@ -50,7 +50,6 @@ type Props = {
 
 const hrefs: Partial<Record<NavigationDestination, Href>> = {
   bookmarks: '/bookmarks',
-  compose: '/compose',
   feedback: '/feedback',
   followRequests: '/follow-requests',
   home: '/home',

@@ -33,7 +33,7 @@ type Props = {
 };
 
 const hrefs: Record<BottomTabDestination, Href | undefined> = {
-  compose: '/compose',
+  compose: undefined,
   home: '/home',
   notifications: '/notifications',
   profile: undefined,
@@ -116,9 +116,6 @@ function getCurrentDestination(
   }
   if (pathname === '/search') {
     return 'search';
-  }
-  if (pathname === '/compose') {
-    return 'compose';
   }
   if (pathname === '/notifications') {
     return 'notifications';

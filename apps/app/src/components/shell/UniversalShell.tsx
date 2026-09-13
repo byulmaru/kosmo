@@ -162,11 +162,8 @@ function UniversalShellContent() {
     : null;
   const feedbackOverlayVisible =
     web && pathname !== '/feedback' && feedbackOpen && data.currentSession != null;
-  const routeComposerOpen = pathname === '/compose';
-  const composerMode =
-    showRightRail && !composerOpen && !routeComposerOpen ? 'rail' : mobile ? 'mobile' : 'overlay';
-  const composerVisible =
-    profile !== null && (composerMode === 'rail' || composerOpen || routeComposerOpen);
+  const composerMode = showRightRail && !composerOpen ? 'rail' : mobile ? 'mobile' : 'overlay';
+  const composerVisible = profile !== null && (composerMode === 'rail' || composerOpen);
   const composerOverlayVisible = composerMode !== 'rail' && composerVisible;
   const composerBackgroundA11yProps = composerOverlayVisible
     ? ({
@@ -238,24 +235,16 @@ function UniversalShellContent() {
     const postCreated = composerPostCreatedRef.current;
     composerPostCreatedRef.current = false;
     setComposerOpen(false);
-    if (routeComposerOpen) {
-      if (!postCreated && router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/home');
-      }
-      return;
-    }
     if (postCreated && composerMode === 'mobile') {
       router.replace('/home');
     }
-  }, [composerMode, routeComposerOpen, router]);
+  }, [composerMode, router]);
 
   const handleComposerPostCreated = useCallback(() => {
-    if (composerMode === 'mobile' || routeComposerOpen) {
+    if (composerMode === 'mobile') {
       composerPostCreatedRef.current = true;
     }
-  }, [composerMode, routeComposerOpen]);
+  }, [composerMode]);
 
   const swipeToOpenDrawer = useMemo(
     () =>
@@ -550,7 +539,6 @@ const styles = StyleSheet.create({
   rightRail: {
     flexShrink: 1,
     minWidth: 290,
-    paddingLeft: spacing.xl,
     paddingTop: spacing.lg,
     width: 350,
   },

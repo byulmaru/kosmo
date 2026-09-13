@@ -60,7 +60,7 @@ export const systemReservedProfileHandleValues = [
   'nodeinfo',
   'outbox',
   'webfinger',
-  // Current top-level static app route segments that are valid Local handles.
+  // Current and retired top-level static app route segments that are valid Local handles.
   'bookmarks',
   'compose',
   'feedback',

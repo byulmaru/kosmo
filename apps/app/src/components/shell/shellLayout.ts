@@ -38,7 +38,6 @@ export type WebMobileShellHeader = Readonly<{
   title:
     | '게시글'
     | '게시물 기본 공개 범위'
-    | '글쓰기'
     | '뮤트 및 차단'
     | '뮤트한 프로필'
     | '설정'
@@ -75,9 +74,6 @@ export function getWebMobileShellHeader(
     return null;
   }
 
-  if (pathname === '/compose') {
-    return { leading: 'menu', title: '글쓰기' };
-  }
   if (pathname === '/notifications') {
     return { leading: 'menu', title: '알림' };
   }

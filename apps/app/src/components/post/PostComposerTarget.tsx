@@ -219,63 +219,13 @@ export function PostComposerTarget({
     items.some((item) => item.state !== 'ready') ||
     (body.trim().length === 0 && items.length === 0) ||
     remaining < 0;
-  const editorBody = (
-    <>
-      {contentWarningExpanded ? (
-        <View style={styles.contentWarning}>
-          <TextField
-            accessibilityLabel="콘텐츠 경고"
-            editable={!submitting}
-            onChangeText={onContentWarningChange}
-            placeholder="경고 문구를 입력하세요"
-            style={[styles.contentWarningField, composerFieldFocusStyle]}
-            value={contentWarning}
-          />
-        </View>
-      ) : null}
-
-      <View style={[styles.content, items.length > 0 ? styles.mediaContent : styles.textContent]}>
-        <TextArea
-          accessibilityLabel="게시물 내용"
-          editable={!submitting}
-          ref={bodyRef}
-          onChangeText={onBodyChange}
-          placeholder="무슨 일이 일어나고 있나요?"
-          style={[
-            styles.body,
-            items.length > 0 ? styles.mediaBody : styles.textBody,
-            surface === 'overlay' && items.length > 0 ? styles.overlayMediaBody : null,
-            { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
-            composerBodyFocusStyle,
-          ]}
-          value={body}
-        />
-        <PostComposerMediaItemsTarget
-          disabled={submitting}
-          media={items}
-          onEdit={onMediaEdit}
-          onRemove={onMediaRemove}
-          onRetry={(item) => onMediaRetry(item.key)}
-          sensitiveMedia={sensitiveMedia}
-        />
-        {error ? (
-          <Text
-            accessibilityRole="alert"
-            style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
-          >
-            {error}
-          </Text>
-        ) : null}
-      </View>
-    </>
-  );
-
   return (
     <View
       accessibilityLabel="게시물 작성"
       style={[
         styles.root,
         surface === 'rail' ? styles.rail : styles.overlay,
+        items.length > 0 ? (surface === 'rail' ? styles.railMedia : styles.overlayMedia) : null,
         surface === 'overlay' && Platform.OS === 'web' ? styles.webOverlay : null,
         { backgroundColor: theme.backgroundCanvas },
       ]}
@@ -344,12 +294,25 @@ export function PostComposerTarget({
               feedback="opacity"
               onPress={onExpand}
               targetSize={40}
-              visualSize={32}
+              visualSize={40}
             >
               <ExpandIcon color={theme.foregroundPrimary} size={iconSizes[20]} strokeWidth={2} />
             </IconButton>
           ) : null}
         </View>
+
+        {contentWarningExpanded ? (
+          <View style={styles.contentWarning}>
+            <TextField
+              accessibilityLabel="콘텐츠 경고"
+              editable={!submitting}
+              onChangeText={onContentWarningChange}
+              placeholder="경고 문구를 입력하세요"
+              style={[styles.contentWarningField, composerFieldFocusStyle]}
+              value={contentWarning}
+            />
+          </View>
+        ) : null}
 
         <ScrollView
           contentContainerStyle={styles.desktopScrollContent}
@@ -357,7 +320,41 @@ export function PostComposerTarget({
           style={styles.desktopScroll}
           testID="post-composer-scroll"
         >
-          {editorBody}
+          <View
+            style={[styles.content, items.length > 0 ? styles.mediaContent : styles.textContent]}
+          >
+            <TextArea
+              accessibilityLabel="게시물 내용"
+              editable={!submitting}
+              ref={bodyRef}
+              onChangeText={onBodyChange}
+              placeholder="무슨 일이 일어나고 있나요?"
+              style={[
+                styles.body,
+                items.length > 0 ? styles.mediaBody : styles.textBody,
+                surface === 'overlay' && items.length > 0 ? styles.overlayMediaBody : null,
+                { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
+                composerBodyFocusStyle,
+              ]}
+              value={body}
+            />
+            <PostComposerMediaItemsTarget
+              disabled={submitting}
+              media={items}
+              onEdit={onMediaEdit}
+              onRemove={onMediaRemove}
+              onRetry={(item) => onMediaRetry(item.key)}
+              sensitiveMedia={sensitiveMedia}
+            />
+            {error ? (
+              <Text
+                accessibilityRole="alert"
+                style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
+              >
+                {error}
+              </Text>
+            ) : null}
+          </View>
         </ScrollView>
 
         <View style={styles.footer}>
@@ -1016,10 +1013,12 @@ const styles = StyleSheet.create({
   desktopEditor: { flex: 1, minHeight: 0 },
   desktopScroll: { flex: 1, minHeight: 0 },
   desktopScrollContent: { minHeight: '100%' },
-  overlay: { height: 624, maxWidth: 600, width: '100%' },
+  overlay: { height: 404, maxWidth: 600, width: '100%' },
+  overlayMedia: { height: 624 },
   overlayMediaBody: { minHeight: 80 },
   progressRing: { height: 20, width: 20 },
-  rail: { height: 404, width: 326 },
+  rail: { height: 404, width: '100%' },
+  railMedia: { height: 512 },
   remaining: { width: 40, ...textStyles.uiCopyS, textAlign: 'right' },
   root: { gap: space[16], padding: space[16] },
   submit: { alignItems: 'center', flexDirection: 'row', gap: space[8] },

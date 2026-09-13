@@ -554,52 +554,54 @@ function InteractiveComposer({
           visibility={visibility}
         />
       ) : (
-        <PostComposerTarget
-          {...composerProps}
-          body={body}
-          contentWarning={contentWarning}
-          contentWarningExpanded={contentWarningExpanded}
-          items={items}
-          remaining={remaining}
-          onBodyChange={(value) => {
-            props.onBodyChange(value);
-            setBody(value);
-          }}
-          onContentWarningChange={(value) => {
-            props.onContentWarningChange(value);
-            setContentWarning(value);
-          }}
-          onContentWarningToggle={() => {
-            props.onContentWarningToggle();
-            setContentWarningExpanded((expanded) => !expanded);
-          }}
-          onEmojiAction={togglePicker}
-          onExpand={() => {
-            props.onExpand();
-            setOverlayOpen(true);
-          }}
-          onMediaEdit={(key, tool) => {
-            props.onMediaEdit(key, tool);
-            setEditor({
-              key,
-              mobileState: tool === 'alt' ? 'altKeyboard' : 'sensitive',
-              tool,
-            });
-            setOverlayOpen(true);
-          }}
-          onMediaRemove={(key) => {
-            props.onMediaRemove(key);
-            setItems((current) => current.filter((item) => item.key !== key));
-          }}
-          onMediaRetry={(key) => props.onMediaRetry(key)}
-          onVisibilityChange={(value) => {
-            props.onVisibilityChange(value);
-            setVisibility(value);
-          }}
-          sensitiveMedia={sensitiveMedia}
-          surface={props.surface}
-          visibility={visibility}
-        />
+        <View style={props.surface === 'rail' ? styles.railTarget : styles.overlayTarget}>
+          <PostComposerTarget
+            {...composerProps}
+            body={body}
+            contentWarning={contentWarning}
+            contentWarningExpanded={contentWarningExpanded}
+            items={items}
+            remaining={remaining}
+            onBodyChange={(value) => {
+              props.onBodyChange(value);
+              setBody(value);
+            }}
+            onContentWarningChange={(value) => {
+              props.onContentWarningChange(value);
+              setContentWarning(value);
+            }}
+            onContentWarningToggle={() => {
+              props.onContentWarningToggle();
+              setContentWarningExpanded((expanded) => !expanded);
+            }}
+            onEmojiAction={togglePicker}
+            onExpand={() => {
+              props.onExpand();
+              setOverlayOpen(true);
+            }}
+            onMediaEdit={(key, tool) => {
+              props.onMediaEdit(key, tool);
+              setEditor({
+                key,
+                mobileState: tool === 'alt' ? 'altKeyboard' : 'sensitive',
+                tool,
+              });
+              setOverlayOpen(true);
+            }}
+            onMediaRemove={(key) => {
+              props.onMediaRemove(key);
+              setItems((current) => current.filter((item) => item.key !== key));
+            }}
+            onMediaRetry={(key) => props.onMediaRetry(key)}
+            onVisibilityChange={(value) => {
+              props.onVisibilityChange(value);
+              setVisibility(value);
+            }}
+            sensitiveMedia={sensitiveMedia}
+            surface={props.surface}
+            visibility={visibility}
+          />
+        </View>
       )}
       {!mobile && overlayOpen ? (
         <ComposerOverlayFixture
@@ -984,23 +986,21 @@ export const OverlayGeometryContract: Story = {
     expect(target.getBoundingClientRect().height).toBe(624);
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
 
+    await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 켜기' }));
+    const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
+    const contentWarningTop = contentWarning.getBoundingClientRect().top;
+
     scroll.scrollTop = scroll.scrollHeight;
     expect(scroll.scrollTop).toBeGreaterThan(0);
+    expect(contentWarning.getBoundingClientRect().top).toBe(contentWarningTop);
     scroll.scrollTop = 0;
 
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
 
     expect(target.getBoundingClientRect().top).toBe(initialTargetTop);
-    expect(target.getBoundingClientRect().height).toBe(624);
+    expect(target.getBoundingClientRect().height).toBe(404);
     expect(visibilityTrigger.getBoundingClientRect().top).toBe(initialVisibilityTop);
-    expect(submit.getBoundingClientRect().top).toBe(initialSubmitTop);
-
-    await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 켜기' }));
-
-    expect(target.getBoundingClientRect().top).toBe(initialTargetTop);
-    expect(target.getBoundingClientRect().height).toBe(624);
-    expect(visibilityTrigger.getBoundingClientRect().top).toBe(initialVisibilityTop);
-    expect(submit.getBoundingClientRect().top).toBe(initialSubmitTop);
+    expect(submit.getBoundingClientRect().top).toBeLessThan(initialSubmitTop);
   },
 };
 
@@ -1017,13 +1017,28 @@ export const RailGeometryContract: Story = {
     const canvas = within(canvasElement);
     const target = canvas.getByTestId('post-composer-target');
     const scroll = canvas.getByTestId('post-composer-scroll');
-    const visibilityTop = canvas
-      .getByRole('button', { name: '공개 범위: 조용한 공개' })
-      .getBoundingClientRect().top;
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const expand = canvas.getByRole('button', { name: 'Composer 확장' });
+    const visibility = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
+    const visibilityTop = visibility.getBoundingClientRect().top;
     const submitTop = canvas.getByRole('button', { name: '게시' }).getBoundingClientRect().top;
 
-    expect(target.getBoundingClientRect().height).toBe(404);
+    expect(target.getBoundingClientRect().height).toBe(512);
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+    expect(visibility.getBoundingClientRect().left).toBeCloseTo(
+      body.getBoundingClientRect().left,
+      0,
+    );
+    expect(expand.firstElementChild?.getBoundingClientRect().right).toBeCloseTo(
+      body.getBoundingClientRect().right,
+      0,
+    );
+    const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
+    const contentWarningTop = contentWarning.getBoundingClientRect().top;
+    scroll.scrollTop = scroll.scrollHeight;
+    expect(scroll.scrollTop).toBeGreaterThan(0);
+    expect(contentWarning.getBoundingClientRect().top).toBe(contentWarningTop);
+    scroll.scrollTop = 0;
 
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
     await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 끄기' }));
@@ -1032,7 +1047,7 @@ export const RailGeometryContract: Story = {
     expect(
       canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }).getBoundingClientRect().top,
     ).toBe(visibilityTop);
-    expect(canvas.getByRole('button', { name: '게시' }).getBoundingClientRect().top).toBe(
+    expect(canvas.getByRole('button', { name: '게시' }).getBoundingClientRect().top).toBeLessThan(
       submitTop,
     );
   },
@@ -1222,7 +1237,9 @@ const styles = StyleSheet.create({
   },
   pickerPanel: { position: 'absolute', zIndex: 1 },
   mobilePickerPanel: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+  railTarget: { maxWidth: 326, width: '100%' },
   railMediaFixture: { maxWidth: 326, width: '100%' },
+  overlayTarget: { maxWidth: 600, width: '100%' },
   overlayContent: { width: '100%' },
   overlayHeader: {
     alignItems: 'center',

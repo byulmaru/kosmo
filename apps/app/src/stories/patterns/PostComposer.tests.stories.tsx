@@ -118,7 +118,7 @@ export const EmojiPickerLifecycleContract: Story = {
       options: {
         postComposerPicker: {
           name: 'Post Composer picker',
-          styles: { height: '1200px', width: '600px' },
+          styles: { height: '1440px', width: '600px' },
           type: 'tablet',
         },
       },

@@ -1,4 +1,5 @@
 import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { spacing } from '@/theme/tokens';
 import baseMeta, {
   UniversalCompactComposerLifecycle as universalCompactComposerLifecycle,
   UniversalFullComposerLifecycle as universalFullComposerLifecycle,
@@ -52,7 +53,15 @@ export const UniversalFullComposerLifecycle: Story = {
   play: async (context) => {
     await universalFullComposerLifecycle.play?.(context);
     const page = within(context.canvasElement.ownerDocument.body);
+    const railComposer = page.getByTestId('post-composer-target');
+    const privacyLink = page.getByRole('link', { name: '개인정보 처리방침' });
+    expect(railComposer.getBoundingClientRect().height).toBe(404);
+    expect(privacyLink.getBoundingClientRect().left).toBeCloseTo(
+      railComposer.getBoundingClientRect().left + spacing.lg,
+      0,
+    );
     await userEvent.click(page.getByRole('button', { name: 'Composer 확장' }));
+    expect(page.getByRole('dialog', { name: '글쓰기' }).getBoundingClientRect().height).toBe(468);
     expect(page.queryByRole('link', { name: '개인정보 처리방침' })).toBeNull();
   },
 };

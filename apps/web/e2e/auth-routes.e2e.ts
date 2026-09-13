@@ -27,7 +27,6 @@ const nativeSessionMutation = `
 `;
 const protectedHeadingRoutes = [
   { heading: '홈', path: '/home' },
-  { heading: '글쓰기', path: '/compose' },
   { heading: '알림', path: '/notifications' },
   { heading: '피드백 보내기', path: '/feedback' },
 ] as const;
@@ -651,16 +650,18 @@ test.describe('로그인 사용자 보호 라우트', () => {
       await page.goto(route.path);
 
       await expect(page).toHaveURL(new RegExp(`${route.path}$`));
-      if (route.path === '/compose') {
-        await expect(page.getByRole('dialog', { name: '글쓰기' })).toBeVisible();
-        await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
-      } else {
-        await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toBeVisible();
-      }
+      await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toBeVisible();
       await expect(page.getByText(route.heading, { exact: true }).last()).toBeVisible();
       await expect(page.getByRole('progressbar')).toHaveCount(0);
     });
   }
+
+  test('retired /compose route does not render a Composer', async ({ page }) => {
+    await page.goto('/compose');
+
+    await expect(page).toHaveURL(/\/compose$/);
+    await expect(page.getByLabel('게시글 작성', { exact: true })).toHaveCount(0);
+  });
 
   test('/search에서 보호 shell과 검색 입력을 본다', async ({ page }) => {
     await page.goto('/search');
@@ -699,20 +700,15 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
   });
 
-  test('mobile 주요 route와 Composer는 각각 64px header에 진입점을 둔다', async ({ page }) => {
+  test('mobile 알림 route는 64px header에 진입점을 둔다', async ({ page }) => {
     await page.setViewportSize({ height: 667, width: 390 });
 
-    for (const route of [
-      { heading: '글쓰기', path: '/compose' },
-      { heading: '알림', path: '/notifications' },
-    ]) {
+    for (const route of [{ heading: '알림', path: '/notifications' }]) {
       await page.goto(route.path);
 
       const heading = page.getByRole('heading', { name: route.heading });
       const header = heading.locator('..');
-      const menuButton = header.getByRole('button', {
-        name: route.path === '/compose' ? '글쓰기 닫기' : '메뉴 열기',
-      });
+      const menuButton = header.getByRole('button', { name: '메뉴 열기' });
 
       await expect(heading).toHaveCount(1);
       await expect(menuButton).toBeVisible();
