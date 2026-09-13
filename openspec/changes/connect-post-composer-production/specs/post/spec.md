@@ -61,7 +61,7 @@
 
 ### Requirement: Post Composer surface 접근성과 viewport lifecycle
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/figma.md`, `docs/design/icons.md`, DSN-43, PROD-797 — Production composer host는 Web modal과 모바일 전체 화면의 dismiss, focus, viewport와 keyboard lifecycle을 MUST 소유한다. 공용 presentation은 모든 플랫폼에서 동등한 role, accessible name, disabled·busy·error state를 MUST 제공하며, Storybook fixture 동작을 Production lifecycle로 사용하지 MUST NOT 한다.
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/figma.md`, `docs/design/icons.md`, DSN-43, PROD-797 — Production composer host는 Web modal과 모바일 전체 화면의 dismiss, focus, viewport와 keyboard lifecycle을 MUST 소유한다. 기존 공용 composer dismiss boundary는 제출 pending 중 Web의 Escape·backdrop·닫기 action과 Native의 platform back을 모두 차단해 열린 surface, draft와 pending 상태를 유지해야 한다(MUST). 공용 presentation은 모든 플랫폼에서 동등한 role, accessible name, disabled·busy·error state를 MUST 제공하며, Storybook fixture 동작을 Production lifecycle로 사용하지 MUST NOT 한다.
 
 #### Scenario: Web Overlay keyboard와 focus lifecycle
 
@@ -70,6 +70,12 @@
 - **AND** focus를 Overlay 안에 유지한다
 - **AND** Escape, backdrop 또는 닫기 action은 같은 dismiss 경계로 Overlay를 닫는다
 - **AND** 닫힌 뒤 Overlay를 연 trigger로 focus를 복귀한다
+
+#### Scenario: 제출 pending 중 모든 composer dismiss 차단
+
+- **WHEN** composer 제출이 pending인 동안 사용자가 Web의 Escape·backdrop·닫기 action 또는 Native의 platform back을 실행한다
+- **THEN** 기존 공용 composer dismiss boundary는 해당 dismiss 입력을 모두 차단하고 composer surface를 닫지 않는다
+- **AND** draft와 pending 제출 상태를 유지한다
 
 #### Scenario: 모바일 back과 keyboard 대응
 
@@ -90,3 +96,45 @@
 - **WHEN** 사용자가 미완성 draft가 있는 composer surface를 닫은 뒤 같은 Profile lifecycle에서 다시 연다
 - **THEN** 시스템은 기존 draft와 진행 중인 upload 상태를 다시 표시한다
 - **AND** 이 변경은 별도 discard confirmation을 추가하지 않는다
+
+## MODIFIED Requirements
+
+### Requirement: Post composer usage boundary
+
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/design/accessibility.md`, `docs/design/breakpoints.md`, PROD-461, PROD-553, DSN-43, PROD-797 — 유니버설 앱은 새 글 작성 컴포넌트 사용처에서 인증과 active profile 부재 상태를 처리해야 한다(MUST). 지원되는 shell composer 사용처는 `currentSession.selectedProfile`과 새 글 작성 컴포넌트가 요구하는 `Profile` fragment를 선언해야 하며(MUST), 이미 열린 composer surface에서 프로필 전환이 성공하면 새 actor의 Relay environment에서 사용처 query를 다시 실행해 작성 프로필을 반영해야 한다(MUST). direct `/compose` route는 작성 사용처나 compatibility entry로 제공하지 않는다(MUST NOT).
+
+#### Scenario: 사용처 로딩 상태
+
+- **WHEN** 새 글 작성 컴포넌트가 놓인 사용처가 현재 session과 active profile 정보를 불러오는 중이다
+- **THEN** 시스템은 로딩 상태를 표시한다
+- **AND** 시스템은 새 글 작성 컴포넌트를 렌더링하지 않는다
+- **AND** 시스템은 `createPost` mutation을 호출하지 않는다
+
+#### Scenario: 인증되지 않은 사용자
+
+- **WHEN** 인증 session이 없는 사용자가 새 글 작성 컴포넌트가 놓인 사용처에 접근한다
+- **THEN** 시스템은 게시글을 작성하려면 로그인이 필요하다는 상태를 표시한다
+- **AND** 시스템은 새 글 작성 컴포넌트를 렌더링하지 않는다
+- **AND** 시스템은 `createPost` mutation을 호출하지 않는다
+
+#### Scenario: 선택 프로필이 없는 사용자
+
+- **WHEN** 로그인했지만 active profile이 선택되지 않은 사용자가 새 글 작성 컴포넌트가 놓인 사용처에 접근한다
+- **THEN** 시스템은 홈(`/home`)으로 이동해 프로필을 만들거나 선택하도록 안내하고, 홈으로 이동하는 링크/버튼을 제공한다
+- **AND** 시스템은 새 글 작성 컴포넌트를 렌더링하지 않는다
+- **AND** 시스템은 `createPost` mutation을 호출하지 않는다
+
+#### Scenario: shell composer 사용처
+
+- **WHEN** 로그인한 사용자의 active profile이 선택된 상태에서 지원되는 shell composer trigger가 실행된다
+- **THEN** composer 사용처 query는 `currentSession.selectedProfile`에서 새 글 작성 컴포넌트가 선언한 `Profile` fragment를 spread한다
+- **AND** composer 사용처는 query 결과의 selected profile fragment ref를 작성 프로필로 사용한다
+- **AND** 시스템은 selected profile이 있을 때만 새 글 작성 컴포넌트에 해당 fragment ref를 전달한다
+- **AND** composer 사용처는 본문 입력, 공개 범위, 글자수, mutation 제출 로직을 직접 소유하지 않는다
+
+#### Scenario: 이미 열린 composer에서 active profile 전환
+
+- **WHEN** 사용자가 composer surface를 열어 둔 상태에서 앱 셸의 프로필 전환을 성공시킨다
+- **THEN** 시스템은 새 selected profile ID를 actor key로 사용해 Relay environment를 재생성한다
+- **AND** composer 사용처 query는 새 environment에서 `currentSession.selectedProfile`을 다시 조회해 새 글 작성 컴포넌트의 작성 프로필로 반영한다
+- **AND** 새 글 작성 컴포넌트가 요구하는 `Profile` fragment 데이터는 프로필 전환 mutation이 아니라 composer 사용처 query가 소유한다

@@ -48,12 +48,12 @@
 
 ### Requirement: Desktop compose entry
 
-`(tabs)` 셸은 모든 단계에서 글쓰기 진입을 제공해야 한다(MUST). `md` 미만에서는 하단 탭 바가, `md` 이상 `xl` 미만 아이콘 레일 단계에서는 사이드바의 글쓰기 버튼이 `/compose` 진입을 제공해야 한다(MUST). `xl` 이상에서는 우측 레일 컴포저가 글쓰기 진입을 제공하므로, 사이드바의 글쓰기 버튼을 표시하지 않아야 한다(MUST).
+`(tabs)` 셸은 모든 단계에서 글쓰기 진입을 제공해야 한다(MUST). `md` 미만에서는 하단 탭 바가, `md` 이상 `xl` 미만 아이콘 레일 단계에서는 사이드바의 글쓰기 버튼이 shell composer를 열어야 한다(MUST). `xl` 이상에서는 우측 레일 컴포저가 글쓰기 진입을 제공하므로, 사이드바의 글쓰기 버튼을 표시하지 않아야 한다(MUST).
 
 #### Scenario: Compose button in icon rail stage
 
 - **WHEN** 사용자가 `md` 이상 `xl` 미만 너비에서 글쓰기를 시작하려 한다
-- **THEN** 시스템은 사이드바 아이콘 레일의 글쓰기 버튼으로 `/compose` 진입을 제공한다
+- **THEN** 시스템은 사이드바 아이콘 레일의 글쓰기 버튼으로 shell composer를 연다
 
 #### Scenario: No sidebar compose button when the right rail is present
 
