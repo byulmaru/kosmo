@@ -28,6 +28,7 @@ import {
   profileFollowPairWorkflowId,
   profileFollowRemovalWorkflowId,
 } from '../temporal/follow-command';
+import { startProfileMigration } from '../temporal/profile-migration';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import {
   executeProfileMigrationMoveFollower,
@@ -395,7 +396,7 @@ const executeMoveWorkflow = async (sourceProfileId: string, targetProfileId: str
     workflowId: `profile-migration-move-integration:${crypto.randomUUID()}`,
   });
 
-test('실제 Move Workflow는 Local Open target에 Follow를 먼저 저장하고 source를 제거한다', async () => {
+test('반복 시작한 Move Workflow는 Local Open target에 Follow를 먼저 저장하고 source를 제거한다', async () => {
   const source = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const target = await createProfile();
   const follower = await createProfile();
@@ -405,7 +406,11 @@ test('실제 Move Workflow는 Local Open target에 Follow를 먼저 저장하고
   });
   const sourceFollow = await createSourceFollow(follower.profile.id, source.profile.id);
 
-  await executeMoveWorkflow(source.profile.id, target.profile.id);
+  const input = {
+    sourceProfileId: source.profile.id,
+    targetProfileId: target.profile.id,
+  } as const;
+  await Promise.all([startProfileMigration(input), startProfileMigration(input)]);
 
   assert.equal(
     await db

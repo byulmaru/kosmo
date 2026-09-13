@@ -11,6 +11,8 @@ import {
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { profileMigrationWorkflowId } from '@kosmo/core/temporal/profile-migration';
+import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { and, eq, inArray, or } from 'drizzle-orm';
 import type { InboxContext } from '@fedify/fedify';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
@@ -113,6 +115,22 @@ describe('inbound Move', () => {
         targetProfileId: fixture.targetProfile.id,
       },
     ]);
+    assert.equal(
+      (options as { workflowId: string }).workflowId,
+      profileMigrationWorkflowId({
+        sourceProfileId: fixture.sourceProfile!.id,
+        targetProfileId: fixture.targetProfile.id,
+      }),
+    );
+    assert.equal((options as { taskQueue: string }).taskQueue, KOSMO_TASK_QUEUE);
+    assert.equal(
+      (options as { workflowIdConflictPolicy: string }).workflowIdConflictPolicy,
+      'USE_EXISTING',
+    );
+    assert.equal(
+      (options as { workflowIdReusePolicy: string }).workflowIdReusePolicy,
+      'ALLOW_DUPLICATE',
+    );
     assert.equal(
       await db
         .select()
