@@ -4,55 +4,62 @@
 
 ### Requirement: typed Mention identity boundary
 
-시스템은 검증된 inbound typed `Mention`만 canonical Mention projection의 입력으로 인정해야 한다 (MUST).
-inbound adapter는 typed tag의 actor URI를 저장된 Local/Remote Profile의 stable identity로 확인하고, Local Profile이면 trusted
-human Profile URL을, Remote Profile이면 actor materialization·refresh에서 같은 Actor document의 `url`로 광고하고 hostname이 있는 HTTP(S)로 검증해
-저장한 nullable profile URL alias가 있을 때 그 alias와 actor URI를 허용 href로 core parser 경계에 전달해야 한다. alias는 Actor URI와 다른
-hostname이어도 같은 Actor document가 직접 광고한 URL이면 허용한다. alias가 없거나
-검증되지 않으면 Remote Profile은 저장된 actor URI만 허용한다. Core parser는 원문 anchor href가 전달된 허용 href에 대응하고 label이
-안전하게 정규화될 때만 `profileId`와 본문 visible `label`을 가진 canonical Mention node를 만든다. Local actor URI와 human Profile URL은
-서로 다른 URI 형식일 수 있으며, Remote human URL은 Actor가 광고한 검증 URL 외에 저장·추측하지 않는다. tag `name`·handle과 본문
-visible label의 문자열 일치는 identity 조건이 아니다. 일반 anchor와 `to`/`cc` audience actor URI를 Mention identity와 같은 의미로
-취급하지 않아야 한다 (MUST NOT).
+시스템은 검증된 inbound typed `Mention`만 Mention projection의 입력으로 인정해야 한다 (MUST).
+inbound adapter는 typed `Mention.href`를 저장된 Local/Remote Profile의 stable identity로 확인해야 하며, 이 identity 확인은
+본문 HTML 변환과 독립적이어야 한다. Local Profile은 trusted human Profile URL을, Remote Profile은 기존 actor
+materialization·refresh에서 같은 Actor document가 직접 광고하고 hostname이 있는 HTTP(S)로 검증해 저장한 nullable profile URL alias가
+있을 때 그 alias를 본문 anchor의 best-effort 허용 URI로 사용할 수 있다. alias가 없거나 malformed이면 알려진 actor URI만 사용한다.
+Core parser는 대응하는 원문 anchor href와 안전하게 정규화된 label이 있을 때 canonical Mention node를 만들 수 있고, URL이 다르거나
+anchor가 없으면 본문을 안전한 일반 link 또는 표시 text로 보존해야 한다. body conversion이 fallback이어도 typed href에서 확인된
+Profile 관계는 유지해야 한다. tag `name`·handle과 본문 visible label의 문자열 일치는 identity 조건이 아니며, 일반 anchor와
+`to`/`cc` audience actor URI를 Mention identity와 같은 의미로 취급하지 않아야 한다 (MUST NOT).
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `PROD-340`
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`,
+`docs/domain/decisions/0030-post-content-mention-identity.md`, `PROD-340`
 
 #### Scenario: Accept a verified typed Mention
 
-- **WHEN** inbound Note의 typed `Mention` actor URI가 기존 Profile stable identity로 확인되고 원문 anchor href가 그 Profile에 전달된 허용 href에 대응하며 본문 label이 안전하게 정규화된다
-- **THEN** 시스템은 해당 Mention을 canonical Post Content Mention projection의 입력으로 전달한다
+- **WHEN** inbound Note의 typed `Mention.href`가 기존 Profile stable identity로 확인되고, 본문 anchor가 없거나 anchor href가 다르더라도 Note의 나머지 본문 검증이 통과한다
+- **THEN** 시스템은 해당 Profile을 revision-owned Mention relation projection의 입력으로 전달한다
+- **AND** 본문 anchor가 대응하고 label이 안전하게 정규화되면 별도의 canonical Mention node로 표현할 수 있다
+- **AND** 대응하지 않는 anchor는 안전한 일반 link 또는 표시 text로 보존한다
 - **AND** 동일 Note의 일반 link와 `to`/`cc` audience 값은 별도 의미로 유지한다
 
 #### Scenario: Accept a verified Remote actor profile URL
 
-- **WHEN** inbound Note의 typed `Mention` actor URI가 기존 Remote Profile stable identity로 확인되고, 같은 Actor document의 `url`로 광고된 HTTP(S) profile URL alias가 materialization·refresh에서 해당 Actor identity에 저장되어 있으며, 원문 anchor href가 actor URI 또는 저장된 alias에 대응하고 본문 label이 안전하게 정규화된다
-- **THEN** 시스템은 해당 anchor를 같은 `profileId`를 가진 canonical Mention projection의 입력으로 전달한다
+- **WHEN** inbound Note의 typed `Mention.href`가 기존 Remote Profile stable identity로 확인되고, 같은 Actor document의 `url`로 광고된 HTTP(S) profile URL alias가 기존 materialization·refresh에서 저장되어 있다
+- **THEN** 시스템은 body anchor가 actor URI 또는 저장된 alias에 대응할 때 그 anchor를 같은 `profileId`의 canonical Mention node로 표현할 수 있다
+- **AND** body anchor가 대응하지 않아도 같은 `profileId`의 revision-owned Mention relation을 저장한다
 - **AND** actor URI와 alias는 canonical document의 node attrs에 저장하지 않는다
 - **AND** Mention 수신 중 actor/profile fetch나 새 materialization을 수행하지 않는다
 
 #### Scenario: Use actor URI when a Remote profile URL alias is unavailable
 
-- **WHEN** inbound Note의 typed `Mention` actor URI가 기존 Remote Profile stable identity로 확인되지만 저장된 Actor URL alias가 null이거나 HTTP(S)로 검증되지 않았고, 원문 anchor href가 저장된 actor URI에 대응한다
-- **THEN** 시스템은 actor URI를 검증된 허용 href로 사용해 Mention projection을 수행한다
+- **WHEN** inbound Note의 typed `Mention.href`가 기존 Remote Profile stable identity로 확인되지만 저장된 Actor URL alias가 null이거나 HTTP(S)로 검증되지 않았다
+- **THEN** 시스템은 actor URI를 typed identity의 입력으로 사용해 body anchor와 독립적으로 Mention relation을 저장한다
+- **AND** body anchor가 actor URI와 다르면 그 anchor는 안전한 일반 link 또는 표시 text로 보존한다
 - **AND** 저장되지 않은 human URL을 handle·domain에서 추측하지 않는다
 
 #### Scenario: Clear a stale Remote profile URL alias on refresh
 
 - **WHEN** 저장된 Remote Actor URL alias가 있지만 이후 Actor materialization·refresh document가 `url`을 제공하지 않거나 hostname이 있는 HTTP(S)로 검증되지 않는다
-- **THEN** 시스템은 해당 Actor identity의 nullable URL alias를 제거하고 actor URI만 허용 href로 남긴다
+- **THEN** 시스템은 기존 Actor identity의 nullable URL alias를 제거하고 actor URI만 typed identity 입력으로 남긴다
 - **AND** 이미 저장된 Post Content를 자동으로 다시 해석하거나 수정하지 않는다
+- **AND** Mention 수신이 refresh를 새로 트리거하지 않는다
 
 #### Scenario: Reject an ambiguous allowed href safely
 
 - **WHEN** 하나의 본문 anchor href가 서로 다른 `profileId`에 대한 허용 href 후보로 동시에 전달된다
 - **THEN** 시스템은 후보 순서나 first match로 하나의 Profile을 선택하지 않는다
-- **AND** 해당 anchor를 안전한 일반 link 또는 표시 text로 보존하고 Mention relation을 만들지 않는다
+- **AND** 해당 anchor를 안전한 일반 link 또는 표시 text로 보존한다
+- **AND** 각 typed `Mention.href`가 독립적으로 알려진 Profile identity라면 그 Mention relation은 유지한다
 
 #### Scenario: Accept independently verified targets
 
-- **WHEN** 하나의 Note에 서로 다른 Profile identity를 가진 typed Mention들이 있고 각 actor URI와 본문 anchor URI가 해당 Profile에 전달된 허용 href에 독립적으로 대응한다
+- **WHEN** 하나의 Note에 서로 다른 Profile identity를 가진 typed Mention들이 있고 각 `Mention.href`가 기존 Profile stable identity로 확인된다
 - **THEN** 시스템은 Profile identity가 서로 다르다는 사실만으로 Mention을 mismatch로 처리하지 않는다
-- **AND** 각 Mention occurrence를 검증된 canonical projection 입력으로 전달한다
+- **AND** 각 typed identity를 독립적인 revision-owned relation 입력으로 전달한다
+- **AND** body anchor 변환은 각 href 대응 여부에 따라 best effort로 처리한다
 
 #### Scenario: Do not infer Mention from a general link or audience
 
@@ -62,15 +69,14 @@ visible label의 문자열 일치는 identity 조건이 아니다. 일반 anchor
 
 ### Requirement: revision-owned Mention projection is atomic
 
-시스템은 검증된 typed `Mention`을 canonical node와 `post_mentions` table의 immutable revision-to-Profile foreign-key 관계로 원자적으로 저장해야 한다 (MUST).
-이는 versioned Post Content inline node와 해당 revision의 `post_mentions` 관계를 같은 저장 경계에서 함께 저장하는 것을 뜻한다. 관계는
-canonical node에서 재구축 가능해야 하며 (MUST), 독립적인
-Post-level source of truth가 되어서는 안 된다 (MUST NOT). Current Post는 현재 Post Content의 관계를 투영하고,
+시스템은 검증된 typed `Mention` identity 집합과 canonical body node를 같은 저장 경계에서 `post_mentions` table의 immutable revision-to-Profile foreign-key 관계와 Post Content document로 원자적으로 저장해야 한다 (MUST). body node는 표시 occurrence의
+canonical projection이며 relation은 body conversion과 독립적인 typed identity projection이다. relation은 Post-level mutable source of
+truth가 되어서는 안 되며 (MUST NOT), Current Post는 현재 Post Content revision의 관계를 투영하고,
 새 revision이 생겨도 과거 revision과 그 관계를 삭제하거나 재작성해서는 안 된다 (MUST NOT).
 
-검증된 Mention occurrence는 canonical document에서 입력 순서를 유지해야 하며 (MUST), 하나의 revision에 같은 Profile을
-여러 번 언급해도 `post_mentions` 관계 집합에는 그 Profile을 한 번만 투영해야 한다 (MUST). 서로 다른 Profile의
-occurrence는 각각의 `post_mentions` 관계로 투영해야 한다 (MUST). `post_mentions`의 column, index와 primary key
+검증된 typed identity는 하나의 revision에 같은 Profile이 여러 번 나타나도 `post_mentions` 관계 집합에는 그 Profile을 한 번만
+투영해야 하며 (MUST). 서로 다른 Profile identity는 각각의 `post_mentions` 관계로 투영해야 한다 (MUST). body node가 URL 불일치로
+일반 link/text가 되어도 typed identity 관계는 제거하지 않는다. `post_mentions`의 column, index와 primary key
 shape는 이 requirement가 고정하지 않는다.
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`,
@@ -98,13 +104,13 @@ shape는 이 requirement가 고정하지 않는다.
 
 #### Scenario: Roll back a partial Mention projection
 
-- **WHEN** Mention node, `post_mentions` revision-owned 관계 또는 Current Content pointer 중 하나의 저장이 실패한다
+- **WHEN** typed Mention identity, canonical body node, `post_mentions` revision-owned 관계 또는 Current Content pointer 중 하나의 저장이 실패한다
 - **THEN** 시스템은 해당 시도의 새 Post, Post Content와 `post_mentions` side effect를 모두 rollback한다
 - **AND** partial relation이나 새 revision만 남기지 않는다
 
 ### Requirement: unresolved Mention has a safe fallback
 
-시스템은 unresolved, malformed 또는 identity mismatch인 typed `Mention`에 대해 Mention node와 Profile 관계를 생성해서는 안 된다 (MUST NOT).
+시스템은 unresolved, malformed 또는 identity mismatch인 typed `Mention.href`에 대해 Mention node와 Profile 관계를 생성해서는 안 된다 (MUST NOT).
 해당 Note가 기존 수신 검증을 통과하면 시스템은 실패한 부분을 안전한 일반 link 또는
 표시 text로 보존하고 나머지 본문과 Note를 저장해야 한다 (MUST). 이 fallback은 해당 Mention을 해결하기 위한 Mention 수신 중
 신규 원격 Profile lookup 또는 materialization을 수행해서는 안 된다 (MUST NOT). Actor URL alias의 materialization·refresh는
@@ -112,22 +118,34 @@ shape는 이 requirement가 고정하지 않는다.
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `PROD-340`
 
-#### Scenario: Preserve a mismatched Mention as safe content
+#### Scenario: Preserve an unresolved or malformed Mention as safe content
 
-- **WHEN** typed `Mention` actor URI가 기존 Profile stable identity로 확인되지 않거나 본문 anchor URI가 그 Profile에 전달된 허용 href에 대응하지 않거나 표시 label이 안전한 표시·구조 검증을 통과하지 못한다
+- **WHEN** typed `Mention.href`가 기존 Profile stable identity로 확인되지 않거나 typed tag 자체가 malformed다
 - **THEN** 시스템은 해당 부분을 안전한 일반 link 또는 표시 text로 보존한다
 - **AND** Mention node, Mentioned Profile 관계와 신규 원격 Profile은 생성하지 않는다
 - **AND** 나머지 Note가 기존 수신 검증을 통과하면 Post Content를 저장한다
 
+#### Scenario: Preserve a known relation when the body label is unsafe
+
+- **WHEN** typed `Mention.href`가 기존 Profile stable identity로 확인되지만 대응하는 body anchor의 label이 안전한 표시·구조 검증을 통과하지 못한다
+- **THEN** 시스템은 해당 anchor를 안전한 일반 link 또는 표시 text로 보존한다
+- **AND** body node를 만들지 않아도 typed identity에서 확인된 revision-owned Profile 관계를 저장한다
+
+#### Scenario: Preserve a known relation when body URL does not match
+
+- **WHEN** typed `Mention.href`가 기존 Profile stable identity로 확인되지만 body anchor href가 actor URI 또는 저장 alias와 대응하지 않는다
+- **THEN** 시스템은 해당 anchor를 안전한 일반 link 또는 표시 text로 보존한다
+- **AND** body conversion이 실패해도 typed identity에서 확인된 revision-owned Profile 관계를 저장한다
+
 #### Scenario: Do not repair an earlier fallback when an alias is learned later
 
-- **WHEN** 기존 Note가 Actor URL alias가 없거나 검증되지 않아 일반 link 또는 표시 text로 저장된 뒤, 같은 Actor의 materialization·refresh에서 유효한 HTTP(S) `url` alias가 저장된다
+- **WHEN** 기존 Note가 Actor URL alias가 없거나 검증되지 않아 body anchor가 일반 link 또는 표시 text로 저장된 뒤, 같은 Actor의 정상 materialization·refresh에서 유효한 HTTP(S) `url` alias가 저장된다
 - **THEN** 시스템은 이미 저장된 Post Content, canonical document, `post_mentions` 관계와 timestamp를 변경하지 않는다
 - **AND** 기존 글을 자동으로 다시 해석하거나 새 Mention relation을 생성하지 않는다
 
 #### Scenario: Skip an unresolved or malformed Mention without a remote lookup
 
-- **WHEN** typed `Mention` target을 해석할 수 없거나 tag 형식이 malformed다
+- **WHEN** typed `Mention.href` target을 기존 Profile stable identity로 해석할 수 없거나 tag 형식이 malformed다
 - **THEN** 시스템은 해당 Mention을 Profile 관계로 materialize하지 않는다
 - **AND** 해당 실패를 해결하기 위한 WebFinger, actor/profile fetch 또는 신규 원격 Profile 생성은 수행하지 않는다
 - **AND** 기존 안전 parser가 안전하게 보존할 수 없는 markup만 그 parser 정책에 따라 낮추거나 제거하고, 표시 text와 나머지 검증된 Note의 저장 가능성을 불필요하게 누락시키거나 실패시키지 않는다

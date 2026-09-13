@@ -351,8 +351,8 @@ describe('inbound Create dispatch', () => {
     ]);
   });
 
-  test('preserves unresolved, mismatched, or malformed typed Mentions as safe links', async () => {
-    await createStoredRemoteActor({ profileUrl: 'not a URL' });
+  test('preserves unresolved, mismatched, or malformed typed Mentions as safe links while retaining known relations', async () => {
+    const knownProfile = await createStoredRemoteActor({ profileUrl: 'not a URL' });
     const mismatchedTarget = new URL('https://remote-b.example/users/bob');
     await createStoredRemoteActor({ actorUri: mismatchedTarget, handle: 'bob' });
     const unresolvedTarget = new URL('https://unknown.example/users/bob');
@@ -431,7 +431,9 @@ describe('inbound Create dispatch', () => {
         ],
       },
     ]);
-    assert.deepEqual(await db.select().from(PostMentions), []);
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: content.id, profileId: knownProfile.id },
+    ]);
     assert.equal((await db.select().from(Profiles)).length, profileCount);
     assert.equal((await db.select().from(ActivityPubActors)).length, actorCount);
     assert.equal((await db.select().from(Instances)).length, instanceCount);

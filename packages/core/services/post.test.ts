@@ -169,6 +169,7 @@ test('createPost는 승인 경계가 없는 ActivityPub Source Quote를 거부�
   const quoteAuthor = await createProfile();
   const source = await createPost({
     document: postContentDocumentFromText('remote source'),
+    mentionProfileIds: [],
     objectUri: `https://remote.example/notes/${sourceAuthor.id}`,
     origin: 'ACTIVITYPUB',
     profileId: sourceAuthor.id,
@@ -437,6 +438,7 @@ test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존�
   const receivedAt = Temporal.Instant.from('2026-07-19T00:00:00Z');
   const first = await createPost({
     document: postContentDocumentFromText('first'),
+    mentionProfileIds: [],
     objectUri,
     origin: 'ACTIVITYPUB',
     profileId: profile.id,
@@ -446,6 +448,7 @@ test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존�
   });
   const duplicate = await createPost({
     document: postContentDocumentFromText('changed'),
+    mentionProfileIds: [],
     objectUri,
     origin: 'ACTIVITYPUB',
     profileId: profile.id,
@@ -507,6 +510,7 @@ test('createPost는 검증된 Mention occurrence를 revision 관계로 한 번�
   });
   const result = await createPost({
     document,
+    mentionProfileIds: [mentioned.id, mentioned.id],
     objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
     origin: 'ACTIVITYPUB',
     profileId: author.id,
@@ -539,6 +543,45 @@ test('createPost는 검증된 Mention occurrence를 revision 관계로 한 번�
   ]);
 });
 
+test('createPost는 ActivityPub relation을 document Mention node가 아닌 verified input ID에서 저장한다', async () => {
+  const author = await createProfile();
+  const nodeOnlyProfile = await createProfile();
+  const verifiedProfile = await createProfile();
+  const result = await createPost({
+    document: canonicalizePostContentDocument({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'mention',
+                attrs: { label: '@node-only', profileId: nodeOnlyProfile.id },
+              },
+            ],
+          },
+        ],
+      },
+    }),
+    mentionProfileIds: [verifiedProfile.id, verifiedProfile.id],
+    objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+    origin: 'ACTIVITYPUB',
+    profileId: author.id,
+    publishedAt: null,
+    receivedAt: Temporal.Instant.from('2026-09-10T00:00:00Z'),
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  assert.ok(result.created);
+  assert.deepEqual(
+    await db.select().from(PostMentions).where(eq(PostMentions.postContentId, result.content.id)),
+    [{ postContentId: result.content.id, profileId: verifiedProfile.id }],
+  );
+});
+
 test('createPost는 변경된 Mention duplicate Create에서도 document·relation·timestamp를 유지한다', async () => {
   const author = await createProfile();
   const firstMention = await createProfile();
@@ -565,6 +608,7 @@ test('createPost는 변경된 Mention duplicate Create에서도 document·relati
         ],
       },
     }),
+    mentionProfileIds: [firstMention.id],
     objectUri,
     origin: 'ACTIVITYPUB',
     profileId: author.id,
@@ -593,6 +637,7 @@ test('createPost는 변경된 Mention duplicate Create에서도 document·relati
         ],
       },
     }),
+    mentionProfileIds: [changedMention.id],
     objectUri,
     origin: 'ACTIVITYPUB',
     profileId: author.id,
@@ -657,6 +702,7 @@ test('createPost는 서로 다른 Profile의 Mention을 occurrence 순서와 함
         ],
       },
     }),
+    mentionProfileIds: [firstMention.id, secondMention.id],
     objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
     origin: 'ACTIVITYPUB',
     profileId: author.id,
@@ -724,6 +770,7 @@ test('createPost는 post_mentions Profile FK 저장 실패 시 Post·Content·po
           ],
         },
       }),
+      mentionProfileIds: [missingProfileId],
       objectUri,
       origin: 'ACTIVITYPUB',
       profileId: author.id,
@@ -806,6 +853,7 @@ test('createPost는 PostContent link 저장 실패 시 Post·Content·relation�
             ],
           },
         }),
+        mentionProfileIds: [mentioned.id],
         objectUri,
         origin: 'ACTIVITYPUB',
         profileId: author.id,
@@ -849,6 +897,7 @@ test('createPost는 ActivityPub Remote Media를 생성하고 document 끝에 원
   const secondUrl = `https://remote.example/media/${crypto.randomUUID()}.webp`;
   const result = await createPost({
     document: postContentDocumentFromText('remote images'),
+    mentionProfileIds: [],
     media: [
       { altText: 'first', mediaType: 'image/png', url: firstUrl },
       { altText: null, mediaType: null, url: secondUrl },
@@ -930,6 +979,7 @@ test('createPost는 같은 Profile과 URL의 Remote Media도 attachment별로 �
   const url = `https://remote.example/media/${crypto.randomUUID()}.png`;
   const first = await createPost({
     document: postContentDocumentFromText('first'),
+    mentionProfileIds: [],
     media: [{ altText: 'first alt', mediaType: 'image/png', url }],
     objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
     origin: 'ACTIVITYPUB',
@@ -940,6 +990,7 @@ test('createPost는 같은 Profile과 URL의 Remote Media도 attachment별로 �
   });
   const second = await createPost({
     document: postContentDocumentFromText('second'),
+    mentionProfileIds: [],
     media: [{ altText: 'second alt', mediaType: 'image/webp', url }],
     objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
     origin: 'ACTIVITYPUB',
@@ -973,6 +1024,7 @@ test('createPost는 다른 Profile의 같은 Remote URL을 각 Profile 소유 Me
   const url = `https://remote.example/media/${crypto.randomUUID()}.png`;
   const ownerPost = await createPost({
     document: postContentDocumentFromText('owner'),
+    mentionProfileIds: [],
     media: [{ altText: null, mediaType: 'image/png', url }],
     objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
     origin: 'ACTIVITYPUB',
@@ -983,6 +1035,7 @@ test('createPost는 다른 Profile의 같은 Remote URL을 각 Profile 소유 Me
   });
   const otherPost = await createPost({
     document: postContentDocumentFromText('other'),
+    mentionProfileIds: [],
     media: [{ altText: null, mediaType: 'image/webp', url }],
     objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
     origin: 'ACTIVITYPUB',
@@ -1022,6 +1075,7 @@ test('createPost는 Local과 ActivityPub Reply Parent를 직접 저장한다', a
   });
   const activityPubReply = await createPost({
     document: postContentDocumentFromText('remote reply'),
+    mentionProfileIds: [],
     objectUri: `https://remote.example/notes/reply-${profile.id}`,
     origin: 'ACTIVITYPUB',
     profileId: profile.id,
@@ -1047,6 +1101,7 @@ test('ActivityPub Reply effects는 duplicate에서 backfill하지 않는다', as
   });
   const input = {
     document: postContentDocumentFromText('remote reply'),
+    mentionProfileIds: [],
     objectUri: `https://remote.example/notes/reply-notification-${author.id}`,
     origin: 'ACTIVITYPUB' as const,
     profileId: author.id,
@@ -1088,6 +1143,7 @@ test('Post effects Workflow start 실패가 Post transaction과 호출을 실패
   try {
     const result = await createPost({
       document: postContentDocumentFromText('remote reply'),
+      mentionProfileIds: [],
       objectUri,
       origin: 'ACTIVITYPUB',
       profileId: author.id,
@@ -1115,6 +1171,7 @@ test('createPost는 존재하지 않는 Reply Parent에서 ActivityPub transacti
   await assert.rejects(
     createPost({
       document: postContentDocumentFromText('orphan reply'),
+      mentionProfileIds: [],
       objectUri,
       origin: 'ACTIVITYPUB',
       profileId: profile.id,
