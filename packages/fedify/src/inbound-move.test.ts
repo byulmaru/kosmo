@@ -178,33 +178,11 @@ describe('inbound Move', () => {
     });
     const sourceActor = createActor(fixture.sourceActorUri);
     const targetActor = createActor(fixture.targetActorUri, fixture.sourceActorUri);
-    const sourceHandle = `${sourceActor.preferredUsername}@${sourceActor.id!.hostname}`;
-    const sourceWebFingerResource = fixture.sourceActorUri.href;
-    const originalFetch = globalThis.fetch;
-    const sourceWebFinger = mock.method(
-      globalThis,
-      'fetch',
-      async (input: string | URL | Request, init?: RequestInit) => {
-        const url = new URL(input instanceof Request ? input.url : input);
-        if (
-          url.origin === fixture.sourceActorUri.origin &&
-          url.pathname === '/.well-known/webfinger' &&
-          url.searchParams.get('resource') === sourceWebFingerResource
-        ) {
-          return Response.json(
-            { subject: `acct:${sourceHandle}` },
-            { headers: { 'Content-Type': 'application/jrd+json' } },
-          );
-        }
-
-        return originalFetch(input, init);
-      },
-    );
     const lookupObject = mock.fn(async (identifier: string | URL) => {
       if (identifier.toString() === fixture.targetActorUri.href) {
         return targetActor;
       }
-      if (identifier.toString() === `acct:${sourceHandle}`) {
+      if (identifier.toString() === fixture.sourceActorUri.href) {
         return sourceActor;
       }
       return null;
@@ -222,7 +200,6 @@ describe('inbound Move', () => {
       );
     } finally {
       start.mock.restore();
-      sourceWebFinger.mock.restore();
     }
 
     const sourceProfile = await db
@@ -235,8 +212,7 @@ describe('inbound Move', () => {
     createdProfileIds.push(sourceProfile.id);
     assert.equal(lookupObject.mock.calls.length, 2);
     assert.equal(lookupObject.mock.calls[0]?.arguments[0]?.toString(), fixture.targetActorUri.href);
-    assert.equal(lookupObject.mock.calls[1]?.arguments[0]?.toString(), `acct:${sourceHandle}`);
-    assert.equal(sourceWebFinger.mock.calls.length, 1);
+    assert.equal(lookupObject.mock.calls[1]?.arguments[0]?.toString(), fixture.sourceActorUri.href);
     assert.equal(start.mock.calls.length, 1);
     const options = start.mock.calls[0]?.arguments[1] as { args: unknown[] };
     assert.deepEqual(options.args, [
