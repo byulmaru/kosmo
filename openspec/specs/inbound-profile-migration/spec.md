@@ -6,7 +6,7 @@
 
 ### Requirement: Profile Migration 준비 관계
 
-**Authority / Provenance:** 제품 계약은 `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`에 근거한다. 시스템은 `Account.Active`와 현재 선택된 Profile의 `Profile.Owner` 권한을 통과한 사용자가 현재 선택된 Profile을 target으로 source qualified handle을 지정해 Profile Migration을 준비할 수 있게 해야 한다(MUST). 공개 GraphQL `registerProfileMigrationSource` mutation은 `RegisterProfileMigrationSourceInput`으로 source qualified handle만 받고 별도 target Profile ID를 받지 않으며, 요청의 현재 선택된 Profile을 target으로 사용해야 한다(MUST). 이 mutation은 `RegisterProfileMigrationSourcePayload`를 반환해야 한다(MUST). 시스템은 source를 Remote Profile로 materialize한 뒤 현재 선택된 target Profile에서 Remote source로 향하는 준비 관계를 저장해야 하며(MUST), 하나의 target Profile과 하나의 Remote source가 각각 하나의 준비 관계만 갖도록 해야 한다(MUST). 이 관계와 source 등록 성공은 inbound Move 처리 이력이나 전체 Profile 이전 이력을 의미해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 제품 계약은 `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`에 근거한다. 시스템은 `Account.Active`와 현재 선택된 Profile의 `Profile.Owner` 권한을 통과한 사용자가 현재 선택된 Profile을 target으로 source qualified handle을 지정해 Profile Migration을 준비할 수 있게 해야 한다(MUST). 별도 target Profile ID를 받지 않는 공개 GraphQL `registerProfileMigrationSource` mutation은 `RegisterProfileMigrationSourceInput`으로 source qualified handle만 받고 요청의 현재 선택된 Profile을 target으로 사용해야 한다(MUST). 이 mutation은 `RegisterProfileMigrationSourcePayload`를 반환해야 한다(MUST). 시스템은 source를 Remote Profile로 materialize한 뒤 현재 선택된 target Profile에서 Remote source로 향하는 준비 관계를 저장해야 하며(MUST), 하나의 target Profile과 하나의 Remote source가 각각 하나의 준비 관계만 갖도록 해야 한다(MUST). 이 관계와 source 등록 성공은 inbound Move 처리 이력이나 전체 Profile 이전 이력을 의미해서는 안 된다(MUST NOT).
 
 #### Scenario: 권한 있는 selected target에 source를 준비한다
 
@@ -91,13 +91,25 @@
 
 ### Requirement: Inbound Move의 Follow 이전 순서와 대상 범위
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`. 시스템은 source Profile을 Followee로 가진 기존 established Follow Relationship 중 Follower가 Local Profile인 관계만 이전해야 한다(MUST). 단, Follower가 Local target Profile 자신인 관계는 target→target 관계를 만들 수 없으므로 이전 대상에서 제외하고 기존 target→source Follow Relationship을 유지해야 한다(MUST). 그 밖의 각 관계는 target의 기존 Follow Approval Policy에 따라 target Follow Relationship 또는 Follow Request를 먼저 성공적으로 저장한 뒤 기존 Follow removal/Unfollow·Undo lifecycle로 source Follow Relationship을 제거해야 하며(MUST), target 저장이 실패한 경우 source 관계를 먼저 제거해서는 안 된다(MUST NOT). Remote target의 Open policy도 기존 Local-to-Remote Follow effect semantics를 사용하며, Move 완료를 원격 HTTP receipt 도착에 묶어서는 안 된다(MUST NOT). 이 순서는 remote-to-local과 remote-to-remote target에 동일하게 적용해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`. 시스템은 source Profile을 Followee로 가진 기존 established Follow Relationship 중 Follower가 Local Profile인 관계만 이전해야 한다(MUST). 단, Follower가 Local target Profile 자신인 관계는 target→target 관계를 만들 수 없으므로 이전 대상에서 제외하고 기존 target→source Follow Relationship을 유지해야 한다(MUST). 실행 시작 시 같은 follower와 target 사이에 Follow Relationship 또는 Pending Follow Request가 있으면 기존 target lifecycle에 수렴시키고 source Follow Relationship을 유지해야 한다(MUST). 그 밖의 각 관계는 target의 기존 Follow Approval Policy에 따라 target Follow Relationship 또는 Follow Request를 먼저 시도하고, 그 transition 결과가 `created: true`일 때만 기존 Follow removal/Unfollow·Undo lifecycle로 source Follow Relationship을 제거해야 한다(MUST). 사전 조회 뒤 concurrent transition이 `created: false`를 반환하거나 target 저장이 실패한 경우 source 관계를 제거해서는 안 된다(MUST NOT). Remote target의 Open policy도 기존 Local-to-Remote Follow effect semantics를 사용하며, Move 완료를 원격 HTTP receipt 도착에 묶어서는 안 된다(MUST NOT). 이 순서는 remote-to-local과 remote-to-remote target에 동일하게 적용해야 한다(MUST).
 
 #### Scenario: Local target의 기존 Follow policy로 Local follower를 이전한다
 
 - **WHEN** 검증된 Move에 source Followee와 established Follow를 가진 Local Follower가 있고 target Local Profile의 policy가 Open이다
 - **THEN** 시스템은 target Follow Relationship을 먼저 저장한다
 - **AND** target 저장이 성공한 뒤 source Follow Relationship을 제거한다
+
+#### Scenario: 이미 존재하는 target Follow는 source 관계를 유지한다
+
+- **WHEN** 같은 follower와 target 사이에 Follow Relationship이 실행 시작 전에 이미 존재한다
+- **THEN** 시스템은 기존 target Follow Relationship을 유지한다
+- **AND** source Follow Relationship을 제거하지 않는다
+
+#### Scenario: 이미 존재하는 Pending Follow Request는 source 관계를 유지한다
+
+- **WHEN** 같은 follower와 target 사이에 Pending Follow Request가 실행 시작 전에 이미 존재한다
+- **THEN** 시스템은 기존 Pending Follow Request를 유지한다
+- **AND** source Follow Relationship을 제거하지 않는다
 
 #### Scenario: Approval Required target에는 Follow Request를 만든다
 
@@ -141,7 +153,13 @@
 
 - **WHEN** 같은 follower와 target 사이에 target Follow Relationship 또는 Pending Follow Request가 이미 존재한 상태로 같은 Move가 반복된다
 - **THEN** 시스템은 기존 Follow·Follow Request lifecycle의 멱등성에 따라 중복 row를 만들지 않는다
-- **AND** target 상태가 확정된 뒤 source 관계 제거를 재개할 수 있다
+- **AND** source Follow Relationship을 제거하지 않는다
+
+#### Scenario: concurrent target admission이 새 row를 만들지 않으면 source 관계를 유지한다
+
+- **WHEN** 사전 조회 시 target Follow Relationship과 Pending Follow Request가 없었지만 concurrent Follow transition이 `created: false`를 반환한다
+- **THEN** 시스템은 source Follow Relationship을 제거하지 않는다
+- **AND** 별도 migration receipt나 ledger를 만들지 않는다
 
 ### Requirement: Inbound Move 재시도와 보장 경계
 
@@ -151,12 +169,14 @@
 
 - **WHEN** 동일한 canonical source와 target을 가리키는 `Move`가 한 번 처리된 뒤 다시 수신된다
 - **THEN** 시스템은 기존 Profile identity와 Follow·Follow Request 상태를 사용해 중복 없이 같은 결과로 수렴한다
-- **AND** target이 이미 저장된 이전에는 source Follow Relationship의 제거 단계를 재실행해도 중복 target row를 만들지 않는다
+- **AND** target Follow Relationship 또는 Pending Follow Request가 이미 있으면 source Follow Relationship을 유지한다
 
 #### Scenario: target 저장 뒤 처리 중단을 재개한다
 
 - **WHEN** target Follow Relationship 또는 Follow Request 저장 뒤 source 제거 전에 이전 실행이 중단된다
-- **THEN** 기존 Temporal 재시도는 target의 확정 상태를 확인해 source 제거 단계를 재개할 수 있다
+- **THEN** 기존 Temporal 재시도는 target의 확정 상태를 중복 없이 확인한다
+- **AND** retry가 existing target을 관찰하면 source Follow Relationship이 남을 수 있다
+- **AND** 별도 migration receipt·ledger 없이 source 제거 완료를 보장하지 않는다
 - **AND** target 저장 실패로 source를 먼저 제거하는 부분 성공을 만들지 않는다
 
 #### Scenario: receipt 순서와 Follow/Unfollow race를 별도 보장으로 승격하지 않는다
