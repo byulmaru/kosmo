@@ -1,8 +1,11 @@
+import { ContentReportTargetType } from '@kosmo/core/enums';
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
 import { ProfileMoreMenu } from '@/components/profile/ProfileMoreMenu';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
+import { useSession } from '@/session/SessionProvider';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { isRepostTargetEligible } from './postActionAvailability';
 import { PostActionBar } from './PostActionBar';
@@ -45,6 +48,7 @@ export function PostActionSurface({
   socialActionTarget,
 }: Props) {
   const target = useFragment(postActionSurfaceFragment, socialActionTarget);
+  const { sessionId } = useSession();
   const authentication = usePostActionAuthentication(true);
   const repostAuthentication = usePostActionAuthentication(
     isRepostTargetEligible({
@@ -63,6 +67,12 @@ export function PostActionSurface({
     postId: target.id,
     relativeHandle: target.profile.relativeHandle,
   });
+  const reportItem = useContentReportMenuItem({
+    id: target.id,
+    kind: ContentReportTargetType.POST,
+    label: `${target.profile.relativeHandle}의 게시물 · ${target.id}`,
+  });
+  const moreItems = sessionId ? [copyLinkItem, reportItem] : [copyLinkItem];
 
   const canMute =
     authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id;
@@ -73,7 +83,7 @@ export function PostActionSurface({
       <PostActionBar
         execution={authentication.execution}
         more={more}
-        moreItems={[copyLinkItem]}
+        moreItems={moreItems}
         onBookmarkError={onBookmarkError}
         onDeleted={onDeleted}
         onRepostError={onRepostError}
@@ -97,7 +107,7 @@ export function PostActionSurface({
               accessibilityLabel="더 보기 메뉴"
               disabled={disabled}
               focusTriggerRef={focusTriggerRef}
-              items={[copyLinkItem, item]}
+              items={[...moreItems, item]}
               renderTrigger={({ expanded, onPress, ref }) =>
                 renderActions({
                   accessibilityLabel: '더 보기',
