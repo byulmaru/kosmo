@@ -421,7 +421,7 @@ export const CompositionContract: Story = {
     await expect(replyPost).toHaveStyle({ paddingTop: '16px', paddingBottom: '8px' });
     await expect(reply.getByTestId('reply-notification-inset')).toHaveStyle({
       paddingLeft: '12px',
-      paddingRight: '16px',
+      paddingRight: '24px',
     });
     await expect(reply.getByTestId('reply-notification-kind')).toHaveStyle({
       height: '48px',

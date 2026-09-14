@@ -417,7 +417,7 @@ function PostListRow({
 const styles = StyleSheet.create({
   card: {
     paddingLeft: Platform.OS === 'web' ? spacing.md : spacing.sm,
-    paddingRight: Platform.OS === 'web' ? spacing.lg : spacing.sm,
+    paddingRight: Platform.OS === 'web' ? spacing.xl : spacing.sm,
   },
   standardCard: { paddingBottom: spacing.xs, paddingTop: spacing.md },
   compactCard: { paddingBottom: 1, paddingTop: spacing.sm },

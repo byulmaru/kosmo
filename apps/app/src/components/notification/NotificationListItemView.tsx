@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   target: { minWidth: 0 },
   replyInset: {
     paddingLeft: Platform.OS === 'web' ? space[12] : space[8],
-    paddingRight: Platform.OS === 'web' ? space[16] : space[8],
+    paddingRight: Platform.OS === 'web' ? space[24] : space[8],
   },
   srOnly: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', left: 0, top: 0 },
   row: {
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     paddingBottom: space[8],
     minHeight: 80,
   },
-  webRow: { paddingLeft: space[12], paddingRight: space[16] },
+  webRow: { paddingLeft: space[12], paddingRight: space[24] },
   kind: { alignItems: 'center', justifyContent: 'center', width: 48, height: 48, flexShrink: 0 },
   summary: { flex: 1, minWidth: 0, gap: space[8] },
   avatarAndTime: {
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     paddingRight: space[8],
     paddingBottom: space[8],
   },
-  webPreview: { paddingLeft: space[12] + 48 + space[12], paddingRight: space[16] },
+  webPreview: { paddingLeft: space[12] + 48 + space[12], paddingRight: space[24] },
   excerpt: { ...textStyles.contentM, flex: 1, minWidth: 0 },
   thumbnail: { height: 64, width: 64, flexShrink: 0, borderRadius: radius[8], overflow: 'hidden' },
   unreadRail: {
