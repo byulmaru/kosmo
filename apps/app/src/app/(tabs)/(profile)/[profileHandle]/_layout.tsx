@@ -1,6 +1,6 @@
 import { Slot, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { ArrowLeft, ChevronLeftIcon } from 'lucide-react-native';
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
@@ -277,10 +277,12 @@ function ProfileRouteContainer({
   children: ReactNode;
   scrollKey: string;
 }) {
-  return Platform.OS === 'web' ? (
-    <View style={styles.webRoot}>{children}</View>
-  ) : (
-    <PaginationScrollView key={scrollKey} style={styles.nativeRoot}>
+  return (
+    <PaginationScrollView
+      key={scrollKey}
+      nativeScrollProps={{ style: styles.nativeRoot }}
+      webStyle={styles.webRoot}
+    >
       {children}
     </PaginationScrollView>
   );
