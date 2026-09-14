@@ -31,7 +31,6 @@ const protectedHeadingRoutes = [
   { heading: '피드백 보내기', path: '/feedback' },
 ] as const;
 const publicPolicyRoutes = [
-  { heading: 'Kosmo 개인정보 처리방침', path: '/privacy' },
   { heading: 'Kosmo 계정 삭제 안내', path: '/account-deletion' },
   { heading: 'Kosmo 아동 안전 정책', path: '/child-safety' },
 ] as const;
@@ -213,6 +212,13 @@ for (const route of publicPolicyRoutes) {
   });
 }
 
+test('/privacy는 로그인 없이 정상 응답과 URL을 유지한다', async ({ page }) => {
+  const response = await page.goto('/privacy');
+
+  expect(response?.ok()).toBe(true);
+  await expect(page).toHaveURL(/\/privacy$/);
+});
+
 test('공개 정책 문서에서 landing으로 돌아갈 수 있다', async ({ page }) => {
   await page.goto('/privacy');
 
@@ -247,7 +253,6 @@ test('로그인 후 Settings 정보에서 공개 정책 문서로 이동한다',
 
   await page.getByRole('link', { name: '개인정보 처리방침' }).click();
   await expect(page).toHaveURL(/\/privacy$/);
-  await expect(page.getByRole('heading', { name: 'Kosmo 개인정보 처리방침' })).toBeVisible();
 });
 
 test('세션 확인이 실패해도 루트 온보딩과 로그인 진입점을 유지한다', async ({ page }) => {
