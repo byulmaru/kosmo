@@ -26,7 +26,7 @@ selected actor의 Local kind만을 증명하던 artificial Remote-selected fixtu
 focused test 결과로 확인한다.
 
 - [x] 1.1 Profile update action에서 selected actor에 대한 중복 `InstanceKind.LOCAL` guard를 제거하고 Owner·상태·transaction 조건을 보존한다.
-- [ ] 1.2 Profile update의 artificial Remote-selected guard 증명 fixture·scenario를 제거하고 membership/visibility 및 Owner·상태 실패 경로를 검증한다.
+- [x] 1.2 Profile update의 artificial Remote-selected guard 증명 fixture·scenario를 제거하고 membership/visibility 및 Owner·상태 실패 경로를 검증한다.
 
 ## 2. PROD-962 Profile mute owner selected-actor guard
 
@@ -54,7 +54,7 @@ profile mute owner의 membership/visibility 성공·실패와 owner 관계·대�
 selected actor의 Local kind만을 증명하던 artificial Remote-selected fixture·scenario가 제거되었는지 확인한다.
 
 - [x] 2.1 Profile mute owner action에서 selected actor에 대한 중복 `InstanceKind.LOCAL` guard를 제거하고 owner 관계·대상 상태 조건을 보존한다.
-- [ ] 2.2 Profile mute의 artificial Remote-selected guard 증명 fixture·scenario를 제거하고 membership/visibility 및 owner 관계·대상 상태 실패 경로를 검증한다.
+- [x] 2.2 Profile mute의 artificial Remote-selected guard 증명 fixture·scenario를 제거하고 membership/visibility 및 owner 관계·대상 상태 실패 경로를 검증한다.
 
 ## 3. PROD-962 Unfollow follower selected-actor guard
 
@@ -82,4 +82,4 @@ unfollow follower의 membership/visibility 성공·실패와 follower 관계·�
 selected actor의 Local kind만을 증명하던 artificial Remote-selected fixture·scenario가 제거되었는지 확인한다.
 
 - [x] 3.1 Unfollow follower action에서 selected actor에 대한 중복 `InstanceKind.LOCAL` guard를 제거하고 follower 관계·대상 상태·idempotent 조건을 보존한다.
-- [ ] 3.2 Unfollow의 artificial Remote-selected guard 증명 fixture·scenario를 제거하고 membership/visibility 및 follower 관계·대상 상태 실패 경로를 검증한다.
+- [x] 3.2 Unfollow의 artificial Remote-selected guard 증명 fixture·scenario를 제거하고 membership/visibility 및 follower 관계·대상 상태 실패 경로를 검증한다.

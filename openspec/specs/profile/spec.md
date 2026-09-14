@@ -371,7 +371,7 @@ handle 재사용 가능 여부는 이 정책에 우선해서는 안 된다(MUST 
 
 #### Scenario: Update profile as owner
 
-- **WHEN** Active Account가 현재 선택한 Lifecycle State `Active`, Suspension State `Normal`의 Profile `OWNER`로 유효한 displayName, bio, followPolicy와 Profile Tag 변경을 요청한다
+- **WHEN** Active Account가 현재 선택한 Lifecycle State `Active`, Suspension State `Normal`의 Profile `OWNER`로 수정을 요청한다
 - **THEN** 시스템은 제공된 displayName, bio, followPolicy 값을 갱신한다
 - **AND** 생략된 displayName, bio, followPolicy 값은 변경하지 않는다
 - **AND** tags가 제공되면 Hashtag identity로 검증·resolve한 전체 목록과 관계를 같은 transaction에서 교체한다
@@ -438,11 +438,11 @@ handle 재사용 가능 여부는 이 정책에 우선해서는 안 된다(MUST 
 
 ### Requirement: Active profile selection
 
-정상 제품 경로에서 `AccountProfile`로 로그인한 계정에 연결되는 profile은 configured local instance에 생성된 local profile이다. 로그인한 계정은 자신과 연결된 profile이 active이고 소속 instance가 `SUSPENDED`가 아닐 때 현재 세션의 active profile로 선택할 수 있어야 한다(MUST). 이 requirement는 제품 경로 밖에서 인위적으로 만든 remote profile membership의 선택 또는 거부 동작을 정의하지 않는다.
+**Authority / Provenance:** `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/objects/account-profile-membership.md`, `docs/architecture/core-services.md`, `PROD-962` — 로그인했고 선택 가능한 Profile이 있는 사용자는 Account와 Profile 사이에 Account-Profile Membership이 존재하고 Profile의 공통 조회 가능 상태를 통과할 때 해당 Profile을 현재 세션의 selected Profile로 선택할 수 있어야 한다(MUST). 선택 자격은 Membership 존재로만 결정하며 Profile Origin 또는 Instance Kind, Account Profile Role, Profile 생성자 여부를 별도 선택 조건으로 검사하면 안 된다(MUST NOT). `selectProfile`과 GraphQL `usingProfile` 경계가 Active Account, Membership과 selected Profile의 공통 조회 가능 상태를 확인한 뒤에는 resolver와 application action이 같은 선택 자격을 다시 만들거나 검사하면 안 된다(MUST NOT). 이 requirement는 Remote Profile 선택을 지원하거나 금지하는 제품 capability를 정의하지 않는다.
 
 #### Scenario: Select accessible active account profile
 
-- **WHEN** 로그인한 계정이 정상 제품 경로에서 자신과 연결된 active profile 선택을 요청하고 소속 instance가 `SUSPENDED`가 아니다
+- **WHEN** 로그인한 계정이 자신과 연결된 Membership을 가진 조회 가능한 active profile 선택을 요청하고 소속 instance가 `SUSPENDED`가 아니다
 - **THEN** 시스템은 현재 세션의 active profile을 해당 프로필로 변경한다
 - **AND** mutation은 `SelectProfilePayload.profile`로 선택된 `Profile`을 반환한다
 - **AND** mutation은 `SelectProfilePayload.session`으로 현재 `Session`을 반환한다
@@ -450,14 +450,14 @@ handle 재사용 가능 여부는 이 정책에 우선해서는 안 된다(MUST 
 
 #### Scenario: Reject profile without membership or visibility
 
-- **WHEN** 로그인한 계정이 자신과 연결되지 않았거나 active가 아니거나 소속 instance가 `SUSPENDED`인 profile 선택을 요청한다
+- **WHEN** 로그인한 계정이 Membership으로 연결되지 않았거나 active가 아니거나 소속 instance가 `SUSPENDED`인 profile 선택을 요청한다
 - **THEN** 시스템은 profile not found 오류를 반환한다
 - **AND** 현재 세션의 active profile을 변경하지 않는다
 
-#### Scenario: Select missing or inaccessible profile
+#### Scenario: Selection does not add origin, role, or creator checks
 
-- **WHEN** 선택 대상 profile이 없거나 활성 상태가 아니거나 현재 계정과 연결되어 있지 않다
-- **THEN** 시스템은 profile not found 오류를 반환한다
+- **WHEN** 선택 대상이 현재 계정의 Account-Profile Membership으로 연결되어 있고 공통 조회 가능 상태를 통과한다
+- **THEN** 시스템은 Profile Origin 또는 Instance Kind, Account Profile Role, Profile 생성자 여부를 추가 선택 조건으로 검사하지 않고 selected Profile을 설정한다
 
 ### Requirement: Profile follow graph
 
