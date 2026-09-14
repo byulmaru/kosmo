@@ -105,7 +105,6 @@ describe('ProfileBlockController Relay cache boundary', () => {
         blockProfile: {
           success: true,
           profileBlockId: 'block-partial',
-          targetProfileId,
           profileBlock: null,
         },
       },
@@ -135,7 +134,6 @@ describe('ProfileBlockController Relay cache boundary', () => {
         blockProfile: {
           success: true,
           profileBlockId: 'block-missing-projection',
-          targetProfileId,
         },
       },
     });
@@ -157,7 +155,6 @@ describe('ProfileBlockController Relay cache boundary', () => {
         blockProfile: {
           success: false,
           profileBlockId: 'unexpected-block',
-          targetProfileId,
           profileBlock: null,
         },
       },
@@ -197,55 +194,6 @@ describe('ProfileBlockController Relay cache boundary', () => {
     assert.equal(viewerProfileBlockId(), 'block-confirmed');
   });
 
-  it('unblock target projection이 null이어도 exact relation만 제거하고 cache를 수렴한다', async () => {
-    environment = createEnvironment();
-    createRelation('block-confirmed');
-    const { request } = await beginUnblock('block-confirmed');
-
-    respond({
-      data: {
-        unblockProfile: {
-          success: true,
-          profileBlockId: 'block-confirmed',
-          targetProfileId,
-          deletedProfileBlockId: 'block-confirmed',
-          targetProfile: null,
-        },
-      },
-      errors: [
-        {
-          message: 'target projection failed',
-          path: ['unblockProfile', 'targetProfile'],
-        },
-      ],
-    });
-    await request;
-    await flushTasks();
-
-    assert.deepEqual(connectionNodeIds(), []);
-    assert.equal(viewerProfileBlockId(), null);
-  });
-
-  it('unblock target projection이 누락되어도 exact relation만 제거한다', async () => {
-    environment = createEnvironment();
-    createRelation('block-missing-target');
-    const { request } = await beginUnblock('block-missing-target');
-
-    respond({
-      data: {
-        unblockProfile: {
-          success: true,
-          profileBlockId: 'block-missing-target',
-          targetProfileId,
-        },
-      },
-    });
-
-    await request;
-    assert.deepEqual(connectionNodeIds(), []);
-    assert.equal(viewerProfileBlockId(), null);
-  });
-
   it('해제 응답이 null이면 기존 connection과 status를 보존한다', async () => {
     environment = createEnvironment();
     createRelation('block-confirmed');
@@ -255,10 +203,7 @@ describe('ProfileBlockController Relay cache boundary', () => {
       data: {
         unblockProfile: {
           success: false,
-          deletedProfileBlockId: null,
           profileBlockId: null,
-          targetProfile: null,
-          targetProfileId: null,
         },
       },
     });
@@ -280,20 +225,32 @@ describe('ProfileBlockController Relay cache boundary', () => {
     assert.equal(viewerProfileBlockId(), 'block-confirmed');
   });
 
-  it('block target ID가 요청과 다르면 cache를 보존하고 실패한다', async () => {
+  it('block 성공은 요청 Target identity를 재사용한다', async () => {
     environment = createEnvironment();
     const { request } = await beginBlock();
 
+    respond({ data: blockPayload('block-confirmed') });
+
+    await request;
+    assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
+    assert.equal(viewerProfileBlockId(), 'block-confirmed');
+  });
+
+  it('unblock 성공은 기존 relation의 Target identity를 재사용한다', async () => {
+    environment = createEnvironment();
+    createRelation('block-confirmed');
+    const { request } = await beginUnblock('block-confirmed');
+
     respond({
       data: {
-        blockProfile: {
-          ...blockPayload('wrong-target').blockProfile,
-          targetProfileId: 'target-b',
+        unblockProfile: {
+          success: true,
+          profileBlockId: 'block-confirmed',
         },
       },
     });
 
-    await assert.rejects(request, /did not confirm/);
+    await request;
     assert.deepEqual(connectionNodeIds(), []);
     assert.equal(viewerProfileBlockId(), null);
   });
@@ -326,8 +283,6 @@ describe('ProfileBlockController Relay cache boundary', () => {
         unblockProfile: {
           success: true,
           profileBlockId: 'block-other',
-          targetProfileId,
-          targetProfile: null,
         },
       },
     });
@@ -348,8 +303,6 @@ describe('ProfileBlockController Relay cache boundary', () => {
         unblockProfile: {
           success: true,
           profileBlockId: 'block-old',
-          targetProfileId,
-          targetProfile: null,
         },
       },
     });
@@ -368,7 +321,6 @@ describe('ProfileBlockController Relay cache boundary', () => {
         blockProfile: {
           success: true,
           profileBlockId: 'block-recovery-failed',
-          targetProfileId,
           profileBlock: null,
         },
       },
@@ -425,8 +377,6 @@ describe('ProfileBlockController Relay cache boundary', () => {
         unblockProfile: {
           success: true,
           profileBlockId: 'block-stale',
-          targetProfileId,
-          targetProfile: null,
         },
       },
     });
@@ -534,7 +484,6 @@ function blockPayload(relationId: string) {
     blockProfile: {
       success: true,
       profileBlockId: relationId,
-      targetProfileId,
       profileBlock: {
         __typename: 'ProfileBlock',
         id: relationId,

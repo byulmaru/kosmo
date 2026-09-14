@@ -14,7 +14,6 @@ const blockProfileMutation = graphql`
     blockProfile(input: { id: $id }) {
       success
       profileBlockId
-      targetProfileId
       profileBlock {
         id
         targetProfile {
@@ -32,10 +31,6 @@ const unblockProfileMutation = graphql`
     unblockProfile(input: { id: $id }) {
       success
       profileBlockId
-      targetProfileId
-      targetProfile {
-        id
-      }
     }
   }
 `;
@@ -233,10 +228,7 @@ export function useProfileBlockMutations() {
                 if (
                   !response.blockProfile?.success ||
                   !profileBlockId ||
-                  response.blockProfile.targetProfileId !== change.targetProfileId ||
-                  (profileBlock != null &&
-                    (profileBlock.id !== profileBlockId ||
-                      profileBlock.targetProfile.id !== change.targetProfileId))
+                  (profileBlock != null && profileBlock.id !== profileBlockId)
                 ) {
                   finish(new Error('Profile block response did not confirm the relation.'));
                   return;
@@ -275,10 +267,7 @@ export function useProfileBlockMutations() {
                 if (
                   !response.unblockProfile?.success ||
                   !responseProfileBlockId ||
-                  responseProfileBlockId !== change.profileBlockId ||
-                  response.unblockProfile.targetProfileId !== change.targetProfileId ||
-                  (response.unblockProfile.targetProfile != null &&
-                    response.unblockProfile.targetProfile.id !== change.targetProfileId)
+                  responseProfileBlockId !== change.profileBlockId
                 ) {
                   finish(new Error('Profile unblock response did not confirm the relation.'));
                   return;
