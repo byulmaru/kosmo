@@ -161,6 +161,25 @@ test('Profile report sends a plain-text confirmed target payload and returns del
   assert.equal(JSON.stringify(payload).includes(auth.account.oidcSubject), false);
 });
 
+test('Stored Profile Block does not change an otherwise eligible Profile report', async (t) => {
+  const reporter = await createAuthenticatedSession();
+  const target = await createAuthenticatedSession();
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: reporter.profile.id,
+    targetProfileId: target.profile.id,
+  });
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('ok', { status: 200 });
+  });
+
+  assert.deepEqual(await submitReport(target.profile.id, 'PROFILE', reporter.token), {
+    data: { submitContentReport: { status: 'DELIVERED' } },
+  });
+  assert.equal(calls, 1);
+});
+
 test('Report without the shared Feedback webhook configuration is rejected before Slack', async (t) => {
   const auth = await createAuthenticatedSession();
   const configuredWebhookUrl = process.env.SLACK_FEEDBACK_WEBHOOK_URL;

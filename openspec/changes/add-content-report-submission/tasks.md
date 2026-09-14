@@ -113,7 +113,7 @@ local/remote Post·Profile, PUBLIC/UNLISTED·FOLLOWERS·현재 DIRECT의 작성�
 
 - 기준 main: `f3011a3a4172b6f8edb74420adf132ee0a0af3b9`. 기존 신고 커밋 16개를 range-diff로 대조했으며 모두 대응한다. 기존 고유 변경 파일 50개가 유지되고 일반 Post/Profile 조회·core visibility·worker 변경은 없다. 기존 Profile UI/Test 충돌 해결을 보존했다.
 - `pnpm --filter @kosmo/api test`: schema·typecheck, 단위 41개와 통합 279개 통과. 외부 Media Storage 연동 1개는 환경 미설정으로 skip. Post/Profile 기존 조회 회귀를 포함한다.
-- Follow 삭제와 visibility 변경의 재시도 거절을 각각 독립 검증하도록 테스트를 보강한 뒤 신고 통합 파일을 재실행: 32개 통과, 실패·skip 0. 실제 DB·GraphQL 경로를 사용하고 Slack만 제어한다.
+- Follow 삭제와 visibility 변경의 재시도 거절 및 Profile Block 독립성을 각각 검증하도록 테스트를 보강한 뒤 신고 통합 파일을 재실행: 33개 통과, 실패·skip 0. 실제 DB·GraphQL 경로를 사용하고 Slack만 제어한다.
 - `pnpm --filter @kosmo/core test:unit`: 89개 통과. `pnpm --filter @kosmo/app check`, `test:unit`(575개), `export:web` 통과. 신고 Storybook Chromium 테스트 7개 통과. 변경 API 코드·테스트 ESLint/Prettier, OpenSpec strict validation 통과.
 - Web 산출물에서 Slack credential 환경 변수·webhook endpoint·서버 전송 구현의 포함 여부를 확인했고 발견되지 않았다. 실제 Slack 전송과 Android/iOS runtime 검증은 이번 분리 검증에 포함하지 않았으며 아래 최종 통합 책임은 유지한다.
 - 원본 backup `backup/PROD-915-before-main-20260914-01a09f16`을 보존한다. 원격 force-push·PR base 변경·병합은 이 검증에서 수행하지 않는다.
