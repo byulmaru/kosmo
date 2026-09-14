@@ -1,5 +1,9 @@
 # 설정 페이지
 
+이 문서는 Settings의 시각 구조, 화면 조립, 상태 표현과 접근성 handoff를 기록한다. 제품 도메인 정책·권한·상태
+전이·서버 행동의 정본은 `docs/domain`, 승인된 ADR과 Linear 이슈에 있으며, 이 문서는 그 계약을 대신 결정하거나
+재정의하지 않는다.
+
 Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route family다. 이 hub는 현재 승인된 설정
 진입점을 명시적으로 구성하고, 선택한 내부 설정을 detail surface에서 단계적으로 보여 준다. 장기적으로
 다양한 설정 category와 detail이 추가될 수 있지만, 승인되지 않은 category·placeholder·범용 registry를
@@ -80,15 +84,11 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - Profile detail은 shell의 selected Local Profile을 기본 대상으로 사용하고 표시 이름과 `relativeHandle`,
   대상 전환 affordance, `게시물 기본 공개 범위`를 포함한 Profile 설정 content를 함께 제공한다. Profile 데이터
   조회·입력·저장은 Kosmo 내부 기능으로만 제공한다.
-- Profile Migration source 준비는 이 Profile detail의 현재 selected Profile을 target으로 사용하며, 별도 target Profile
-  ID 입력을 받지 않는다. 현재 context의 `Account.Active`와 `Profile.Owner` 권한을 재사용하고 별도 target eligibility를
-  적용하지 않는다. feature flag가 켜져 있고 값을 확인할 수 있을 때만 노출한다. flag가 꺼져 있거나
-  사용할 수 없거나 로딩 중이면 준비 control을 렌더링하지 않는다. 이 flag는 UI 노출 조건이며
-  Profile Owner 권한을 대신하지 않는다. 이미 준비된 관계와 그로부터 파생된 alias, inbound Move 처리는 flag 상태로
-  중단하거나 제거하지 않는다. 구체적인 flag key·추가 route·시각 세부는 이 문서에서 고정하지 않는다.
-- source 준비 성공은 Profile Migration 준비 관계와 Local Actor alias를 등록할 뿐, Profile 이전 완료를 의미하지
-  않는다. 성공 안내는 사용자가 기존 Mastodon 계정에서 새 Kosmo handle로 ActivityPub `Move`를 시작하도록 제공하며,
-  Move 이후 완료를 위해 호출하는 Kosmo API나 별도 완료 action은 제공하지 않는다.
+- Profile Migration source 준비 control이 이 detail에 조립되는 경우, 기존 Settings card·field·button과 상태
+  feedback 표현을 재사용한다. source 입력, 준비된 source 요약, 성공·오류 안내와 접근 가능한 상태 표현은 이 문서의
+  시각 handoff 범위이며, control의 노출 조건·선택 target·권한·관계/alias/Move 결과와 완료 의미는
+  [Profile](../domain/objects/profile.md), [ADR 0027](../domain/decisions/0027-profile-migration-inbound-move.md),
+  Linear가 제품 계약으로 확정한다. OpenSpec은 이 계약을 실행 명세로 번역한다.
 - Profile target selector의 Figma lifecycle source는
   [`Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4867-13083),
   [`Compact`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4868-38112),
@@ -255,9 +255,10 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   loading·error·retry·lock은 소유하지 않는다.
 - PROD-667은 Profile 선택 대상, 기본 게시 공개 범위의 저장·권한·상태와 Composer 연결 및 해당 기능 검증을
   소유한다. PROD-648은 Backend DB·GraphQL 계약을 소유한다.
-- PROD-743은 Profile detail의 feature-flagged Profile Migration source 준비 노출과 해당 Settings UI 검증을 소유한다.
-  Profile Owner 권한, Profile Migration 관계, alias와 inbound Move 동작은 [Profile](../domain/objects/profile.md)과
-  [ADR 0027](../domain/decisions/0027-profile-migration-inbound-move.md)의 canonical 계약을 따른다.
+- PROD-743은 위 Profile Migration source control의 Settings 시각 조립과 UI 검증을 소유한다. Profile Owner 권한,
+  Profile Migration 관계, alias와 inbound Move 동작은 [Profile](../domain/objects/profile.md),
+  [ADR 0027](../domain/decisions/0027-profile-migration-inbound-move.md), Linear의 제품 계약을 따른다. OpenSpec은
+  이 상위 계약을 실행 명세로 번역한다.
 - `뮤트 및 차단`의 Figma IA·source·대표 consumer는 DSN-53이 소유한다. runtime의 Mute 진입점·목록·통합
   검증은 PROD-814, Block 진입점·목록과 Relay 수렴은 PROD-823, Block의 종단 간 검증·archive는 PROD-813이
   소유한다. 이 범위를 완료된 PROD-685·PROD-684에 소급해 귀속하지 않는다.
