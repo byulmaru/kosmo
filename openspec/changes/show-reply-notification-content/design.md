@@ -46,7 +46,7 @@ Reaction·Repost adapter는 기존 Post fragment에서 body text, Content Warnin
 
 - 종류별 adapter를 제거하면 fragment colocation, target URL과 Read cache 수렴 책임까지 잃는다.
 - Reply 전체를 Link로 감싸거나 pointer event를 capture하면 Content Warning·media·Action Bar가 item navigation과 Read를 중복 실행한다.
-- `ReplyNotificationPost` 대신 `PostListItem`을 사용하면 Notification reason·배치와 원글 미리보기 제외 계약이 깨진다.
+- `ReplyNotificationPost` 대신 `PostListItem`을 사용하면 kind icon·작성자 inline 배치와 원글 미리보기 제외 계약이 깨진다.
 - client에서 actor를 합치거나 unavailable Post용 generic 행을 만들면 현재 grouping 제외 범위와 서버 visibility 정책을 위반한다.
 - target presentation Storybook만 통과해도 실제 `NotificationList`의 Relay·route·provider 연결은 증명되지 않는다.
 

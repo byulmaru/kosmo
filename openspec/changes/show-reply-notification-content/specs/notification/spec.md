@@ -28,7 +28,8 @@
 #### Scenario: Reply Post presentation
 
 - **WHEN** selected Profile의 connection이 visible Reply Notification과 조회 가능한 결과 Reply Post를 반환한다
-- **THEN** 목록은 Reply Author·상대 시각·알림 이유·본문·허용된 Content Warning과 미디어·Quote·공용 Post Action Bar를 하나의 Notification surface에 표시한다
+- **THEN** 목록은 Reply Author·상대 시각·본문·허용된 Content Warning과 미디어·Quote·공용 Post Action Bar를 하나의 Notification surface에 표시한다
+- **AND** 종류 의미는 kind icon과 접근성 설명으로 제공하며 별도의 알림 이유 문장을 표시하지 않는다
 - **AND** 원글 미리보기, 별도 알림 header 또는 받는 사람 목록을 추가하지 않는다
 - **AND** Reply의 게시글 identity와 내부 link·control은 공용 Reply Post presentation이 소유하고 Notification wrapper는 unread surface와 divider만 소유한다
 
@@ -175,7 +176,8 @@
 #### Scenario: visible Recipient inbox의 Reply content
 
 - **WHEN** membership이 있는 Account가 Recipient Profile의 Notification inbox에서 visible Reply Notification을 조회한다
-- **THEN** item은 결과 Reply Post의 작성자·상대 시각·알림 이유와 조회 가능한 본문·Content Warning·미디어·Quote를 기존 Post 표시 정책으로 제공한다
+- **THEN** item은 결과 Reply Post의 작성자·상대 시각과 조회 가능한 본문·Content Warning·미디어·Quote를 기존 Post 표시 정책으로 제공한다
+- **AND** 종류 의미는 kind icon과 접근성 설명으로 제공하며 별도의 알림 이유 문장을 표시하지 않는다
 - **AND** Content Warning reveal, sensitive media와 media viewer는 공용 Post 정책을 재정의하지 않는다
 - **AND** Reply Notification은 기존 connection 정렬·pagination과 Unread count에 포함된다
 
