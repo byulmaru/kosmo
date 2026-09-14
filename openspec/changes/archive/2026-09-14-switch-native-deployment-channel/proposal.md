@@ -10,13 +10,13 @@ Native에서 API·Web·OIDC·Sentry와 OTA channel을 함께 바꾸고, 호환 u
 - 선택값을 API·Web·OIDC·Sentry·OTA environment에 공통 적용한다.
 - `https://expo-ota.byulmaru.co/releases/kosmo-native`의 request headers를 기존 tuple manifest로 rewrite한다.
 - 호환 signed update 성공 뒤 login 삭제·reload를 수행하고, 실패 시 기존 channel/fallback을 유지한다.
-- Web channel UI, publisher/static tuple, 기존 edge rules와 전체 OTA/device 운영 범위는 유지한다.
+- Web channel UI, publisher/static tuple와 기존 edge rules는 유지한다.
 
 ## Authority / Provenance
 
 - Canonical: `docs/design/settings.md`, `docs/design/breakpoints.md`, `docs/operations/expo-ota.md`, `docs/operations/sentry.md`
 - Contract: [PROD-956](https://linear.app/byulmaru/issue/PROD-956), [PROD-334](https://linear.app/byulmaru/issue/PROD-334)
-- Existing OTA ownership: [PROD-336](https://linear.app/byulmaru/issue/PROD-336)
+- Existing OTA operations and device-verification ownership (outside this change's archive gate): [PROD-336](https://linear.app/byulmaru/issue/PROD-336)
 
 ## Capabilities
 
@@ -34,4 +34,4 @@ Native에서 API·Web·OIDC·Sentry와 OTA channel을 함께 바꾸고, 호환 u
 - `apps/app`: Native selector, shared environment mapping, OTA transition and request headers
 - Cloudflare zone: project-qualified manifest rewrite to existing static R2 tuple
 - Existing publisher, manifest/assets, Web surfaces and `self-host-expo-ota`: unchanged
-- Native Store/device and Cloudflare live evidence: required before completion/archive
+- Existing Cloudflare Rule live evidence and implementation/CI evidence remain available for this change's final cross-slice check

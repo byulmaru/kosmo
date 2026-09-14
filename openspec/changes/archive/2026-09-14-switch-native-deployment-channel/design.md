@@ -52,8 +52,9 @@ adding a delivery service.
 
 ## Risks / Trade-offs
 
-- Live provider state and Native Store/device behavior cannot be proven by local tests; retain separate provider and
-  device evidence and keep the change unarchived until both are cross-checked.
+- Live provider state and Native Store/device behavior cannot be proven by local tests; retain the existing Rule live
+  evidence and separate Native Store/device evidence under PROD-336. The latter is an external OTA operations
+  follow-up, not this change's deliverable or archive gate.
 - A missing tuple returns 404; the client must retain the original channel and executable fallback.
 
 ## Migration Plan
@@ -61,8 +62,8 @@ adding a delivery service.
 1. Ship the Native selector, shared mapping, persistent header and guarded transition.
 2. Keep the deployed generic Rule and existing static delivery available; disable the new selector/Rule if rollout
    fails without adding a synthetic response.
-3. Build/distribute new Android and iOS binaries for the native configuration change, then run device success/failure
-   and offline checks and the final cross-slice review.
+3. Complete this change's final cross-slice review using the existing implementation/CI and Rule live evidence
+   before archive.
 
 ## Open Questions
 
