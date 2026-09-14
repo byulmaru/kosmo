@@ -2,13 +2,9 @@ import { ActivityPubActors, db, firstOrThrowWith, Instances, Profiles } from '@k
 import { AccountProfileRole, InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { unfollowProfile } from '@kosmo/core/services';
-import { and, eq, exists, inArray, isNotNull, ne, or } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import { and, eq, inArray, isNotNull, ne, or } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile, ProfileFollow } from '../ref';
-
-const FollowerProfiles = alias(Profiles, 'unfollow_follower_profile');
-const FollowerInstances = alias(Instances, 'unfollow_follower_instance');
 
 builder.mutationField('unfollowProfile', (t) =>
   t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
@@ -39,20 +35,6 @@ builder.mutationField('unfollowProfile', (t) =>
             eq(Profiles.id, input.id.id),
             eq(Profiles.state, ProfileState.ACTIVE),
             ne(Instances.state, InstanceState.SUSPENDED),
-            exists(
-              db
-                .select({ id: FollowerProfiles.id })
-                .from(FollowerProfiles)
-                .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
-                .where(
-                  and(
-                    eq(FollowerProfiles.id, ctx.session.profile.id),
-                    eq(FollowerProfiles.state, ProfileState.ACTIVE),
-                    eq(FollowerInstances.kind, InstanceKind.LOCAL),
-                    ne(FollowerInstances.state, InstanceState.SUSPENDED),
-                  ),
-                ),
-            ),
             or(
               eq(Instances.kind, InstanceKind.LOCAL),
               and(eq(Instances.kind, InstanceKind.ACTIVITYPUB), isNotNull(ActivityPubActors.uri)),

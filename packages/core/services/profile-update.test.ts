@@ -558,11 +558,10 @@ test('Deactivated Local Profile은 Owner라도 수정할 수 없고 tags를 보�
   assert.deepEqual(await readTags(deactivated.profile.id), [retainedHashtag.name]);
 });
 
-test('Member와 inactive Account는 거부되고 관계없는 Account와 Remote/Suspended Profile은 조회 경계를 따른다', async () => {
+test('Member와 inactive Account는 거부되고 관계없는 Account와 Suspended Profile은 조회 경계를 따른다', async () => {
   const owner = await createProfileFixture();
   const member = await createProfileFixture({ role: AccountProfileRole.MEMBER });
   const unrelated = await createProfileFixture();
-  const remote = await createProfileFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
   const suspended = await createProfileFixture({ profileState: ProfileState.SUSPENDED });
   const inactiveAccount = await createProfileFixture({ accountState: AccountState.DISABLED });
   const retainedHashtag = await db
@@ -587,10 +586,6 @@ test('Member와 inactive Account는 거부되고 관계없는 Account와 Remote/
       profileId: owner.profile.id,
       tags: ['other'],
     }),
-    NotFoundError,
-  );
-  await assert.rejects(
-    updateProfile({ accountId: remote.account.id, profileId: remote.profile.id, tags: ['remote'] }),
     NotFoundError,
   );
   await assert.rejects(

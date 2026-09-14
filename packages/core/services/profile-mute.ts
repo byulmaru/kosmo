@@ -1,6 +1,6 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { db, first, Instances, ProfileMutes, Profiles } from '../db';
-import { InstanceKind, InstanceState, ProfileState } from '../enums';
+import { InstanceState, ProfileState } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
 import { visibleProfileWhere } from '../visibility';
 import type { Transaction } from '../db';
@@ -24,7 +24,6 @@ const ensureOwner = async (tx: Transaction, id: string) => {
       and(
         eq(Profiles.id, id),
         eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Instances.kind, InstanceKind.LOCAL),
         ne(Instances.state, InstanceState.SUSPENDED),
       ),
     )

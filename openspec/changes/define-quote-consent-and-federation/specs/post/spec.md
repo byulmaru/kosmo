@@ -96,7 +96,7 @@ Quote Source는 인용 승인 조건과 viewer별 Source 조회 조건을 모두
 
 ### Requirement: Plain Text post creation
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, `PROD-424`, `PROD-461`, `PROD-554`, `PROD-431`, `PROD-902`, `docs/domain/decisions/0029-quote-consent-and-federation.md` 로그인했고 active profile이 있는 사용자는 Plain Text UX의 `bodyText`, 선택적 Media item과 Sensitive Media, 선택적 concrete `Post` `replyParentId`로 versioned canonical document의 일반 Post 또는 Reply를 작성할 수 있어야 한다(MUST). 기존 입력에 선택적 concrete `Post` global ID인 `repostSourceId`를 추가해 기본 Quote를 작성할 수 있어야 한다(MUST). `repostSourceId` 생략·null은 Source 없음이며, `replyParentId`와 `repostSourceId`를 함께 지정한 작성 요청은 거부해야 한다(MUST). selected Profile은 Local 또는 Remote일 수 있으며(MUST), GraphQL `usingProfile` entry point가 보장한 Active Account, membership과 selected Profile 조회 가능 상태를 resolver가 중복 검증하면 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, `PROD-424`, `PROD-461`, `PROD-554`, `PROD-431`, `PROD-902`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, `PROD-962` 로그인했고 active profile이 있는 사용자는 Plain Text UX의 `bodyText`, 선택적 Media item과 Sensitive Media, 선택적 concrete `Post` `replyParentId`로 versioned canonical document의 일반 Post 또는 Reply를 작성할 수 있어야 한다(MUST). 기존 입력에 선택적 concrete `Post` global ID인 `repostSourceId`를 추가해 기본 Quote를 작성할 수 있어야 한다(MUST). `repostSourceId` 생략·null은 Source 없음이며, `replyParentId`와 `repostSourceId`를 함께 지정한 작성 요청은 거부해야 한다(MUST). GraphQL `usingProfile` entry point가 보장한 Active Account, membership과 selected Profile 조회 가능 상태를 resolver가 중복 검증하면 안 된다(MUST NOT). selected Profile의 선택 자격은 Account-Profile Membership으로만 결정하며, 이 requirement는 Profile Origin 또는 Instance Kind에 따른 selected Profile 지원·금지 capability를 정의하지 않는다.
 
 #### Scenario: Plain Text 게시글 작성 성공
 
@@ -111,13 +111,6 @@ Quote Source는 인용 승인 조건과 viewer별 Source 조회 조건을 모두
 - **AND** Media item은 입력 순서의 V1 Media node가 되고 Sensitive Media는 document root attr가 된다
 - **AND** `post.reply_parent_id`와 `post.repost_source_id`는 `null`이다
 - **AND** mutation은 `CreatePostPayload.post`로 생성된 `Post`를 반환한다
-
-#### Scenario: Remote selected Profile로 게시글 작성
-
-- **WHEN** Active Account의 Member인 Active/Normal Remote Profile이 selected Profile인 상태에서 유효한 입력으로 `createPost`를 호출한다
-- **THEN** 시스템은 selected Profile을 Author로 하는 Post를 생성한다
-- **AND** Media의 Profile이 selected Profile과 달라도 Upload Account가 같으면 허용한다
-- **AND** selected Profile 또는 Media Profile의 Instance Type만으로 요청을 거부하지 않는다
 
 #### Scenario: Plain Text Reply 작성 성공
 

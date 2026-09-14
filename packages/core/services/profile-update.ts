@@ -118,7 +118,11 @@ const normalizeDefaultPostVisibility = (
 export const updateProfile = async (input: UpdateProfileInput): Promise<UpdateProfileResult> => {
   const result = await db.transaction(async (tx) => {
     const profile = await tx
-      .select({ profile: Profiles, actorRole: AccountProfiles.role })
+      .select({
+        profile: Profiles,
+        actorRole: AccountProfiles.role,
+        instanceKind: Instances.kind,
+      })
       .from(Profiles)
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
       .innerJoin(AccountProfiles, eq(AccountProfiles.profileId, Profiles.id))
@@ -128,7 +132,6 @@ export const updateProfile = async (input: UpdateProfileInput): Promise<UpdatePr
           eq(Profiles.id, input.profileId),
           eq(AccountProfiles.accountId, input.accountId),
           eq(Accounts.state, AccountState.ACTIVE),
-          eq(Instances.kind, InstanceKind.LOCAL),
           eq(Profiles.state, ProfileState.ACTIVE),
           ne(Instances.state, InstanceState.SUSPENDED),
         ),
@@ -147,6 +150,9 @@ export const updateProfile = async (input: UpdateProfileInput): Promise<UpdatePr
     const displayName = normalizeDisplayName(input.displayName, profile.profile.displayName);
     const bio = normalizeBio(input.bio);
     const defaultPostVisibility = normalizeDefaultPostVisibility(input.defaultPostVisibility);
+    if (defaultPostVisibility !== undefined && profile.instanceKind !== InstanceKind.LOCAL) {
+      throw new NotFoundError('Profile not found');
+    }
     const normalizedTags = normalizeTags(input.tags);
 
     const requestedMedia = [

@@ -29,10 +29,10 @@ Mute를 뜻한다. non-null 값의 기간·만료 의미는 `PROD-826`에서 결
 
 ## 행동
 
-| 행동              | 행동 주체 Profile | 대상 객체    | 입력값         | 권한                                  | 조건                                                    | 결과                                                 |
-| ----------------- | ----------------- | ------------ | -------------- | ------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------- |
-| Profile Mute 생성 | Owner Profile     | Profile Mute | Target Profile | `Account.Active`, `Profile.Member`    | Owner는 Active/Normal Local Profile이고 Target과 다르다 | `expires_at`이 `null`인 Owner/Target 관계가 생성된다 |
-| Profile Mute 제거 | Owner Profile     | Profile Mute | 없음           | `Account.Active`, `ProfileMute.Owner` | Profile Mute가 존재한다                                 | Profile Mute가 제거된다                              |
+| 행동              | 행동 주체 Profile | 대상 객체    | 입력값         | 권한                                  | 조건                                              | 결과                                                 |
+| ----------------- | ----------------- | ------------ | -------------- | ------------------------------------- | ------------------------------------------------- | ---------------------------------------------------- |
+| Profile Mute 생성 | Owner Profile     | Profile Mute | Target Profile | `Account.Active`, `Profile.Member`    | Owner는 Active/Normal Profile이고 Target과 다르다 | `expires_at`이 `null`인 Owner/Target 관계가 생성된다 |
+| Profile Mute 제거 | Owner Profile     | Profile Mute | 없음           | `Account.Active`, `ProfileMute.Owner` | Profile Mute가 존재한다                           | Profile Mute가 제거된다                              |
 
 ## 권한
 
