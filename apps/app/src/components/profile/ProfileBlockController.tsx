@@ -9,6 +9,7 @@ import type { ProfileBlockControllerUnblockMutation } from './__generated__/Prof
 const blockProfileMutation = graphql`
   mutation ProfileBlockControllerBlockMutation($connections: [ID!]!, $id: ID!) {
     blockProfile(input: { id: $id }) {
+      success
       profileBlock
         @prependNode(connections: $connections, edgeTypeName: "ProfileBlockConnectionEdge") {
         id
@@ -28,6 +29,7 @@ const blockProfileMutation = graphql`
 const unblockProfileMutation = graphql`
   mutation ProfileBlockControllerUnblockMutation($connections: [ID!]!, $id: ID!) {
     unblockProfile(input: { id: $id }) {
+      success
       profileBlockId @deleteEdge(connections: $connections)
       deletedProfileBlockId: profileBlockId @deleteRecord
       targetProfile {
@@ -47,10 +49,6 @@ export type ProfileBlockChange = Readonly<{
   profileBlockId?: string | null;
   targetProfileId?: string | null;
 }>;
-
-function responseError(errors: ReadonlyArray<{ message: string }> | null | undefined) {
-  return errors?.length ? new Error(errors[0]?.message ?? 'Profile block request failed.') : null;
-}
 
 export function useProfileBlockMutations() {
   const environment = useRelayEnvironment();
@@ -101,18 +99,15 @@ export function useProfileBlockMutations() {
         try {
           if (nextBlocked) {
             commitBlock({
-              onCompleted: (response, errors) => {
+              onCompleted: (response) => {
                 const profileBlock = response.blockProfile?.profileBlock;
                 const profileBlockId = profileBlock?.id;
                 if (!mountedRef.current || selectedProfileIdRef.current !== change.ownerProfileId) {
                   finishStale();
                   return;
                 }
-                const error = responseError(errors);
-                if (error || !profileBlockId) {
-                  finish(
-                    error ?? new Error('Profile block response did not confirm the relation.'),
-                  );
+                if (!response.blockProfile?.success || !profileBlockId) {
+                  finish(new Error('Profile block response did not confirm the relation.'));
                   return;
                 }
                 finish();
@@ -128,17 +123,17 @@ export function useProfileBlockMutations() {
             });
           } else {
             commitUnblock({
-              onCompleted: (response, errors) => {
+              onCompleted: (response) => {
                 if (!mountedRef.current || selectedProfileIdRef.current !== change.ownerProfileId) {
                   finishStale();
                   return;
                 }
-                const error = responseError(errors);
                 const responseProfileBlockId = response.unblockProfile?.profileBlockId;
-                if (error || responseProfileBlockId !== change.profileBlockId) {
-                  finish(
-                    error ?? new Error('Profile unblock response did not confirm the relation.'),
-                  );
+                if (
+                  !response.unblockProfile?.success ||
+                  responseProfileBlockId !== change.profileBlockId
+                ) {
+                  finish(new Error('Profile unblock response did not confirm the relation.'));
                   return;
                 }
                 finish();

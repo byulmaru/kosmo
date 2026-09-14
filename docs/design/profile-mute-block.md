@@ -68,10 +68,6 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   설명도 같은 문구로 갱신했다. 기존 리액션은 삭제하지 않는다. 현재 Storybook은 메뉴·목록 presentation을 검증하며 차단·해제 요청과 관계·리액션 정리를 구현하지 않는다.
 - pending에는 같은 action의 중복 입력과 dismiss를 막고 busy 상태를 전달한다. 실패하면 기존 서버 확정 상태를
   유지하고 제품의 기존 오류 피드백을 사용한다.
-- Block·Unblock action은 각각 Target Profile 또는 실제 `ProfileBlock` 관계 fragment 하나를 입력으로 받고,
-  confirmation·pending·mutation·feedback을 소유한다. 소비자는 현재 viewer 관계에 따라 어느 action을 노출할지만
-  결정한다. mutation payload는 Target Profile의 `viewerState.profileBlock`과 Settings Block connection을 Relay에
-  정규화하며, actor Store 전체 교체나 별도 module-global 관계 cache로 화면을 동기화하지 않는다.
 
 ## 설정 정보 구조
 

@@ -34,7 +34,6 @@ type NetworkSink = {
 
 let environment: Environment;
 let sink: NetworkSink | undefined;
-let generation = 1;
 let selectedProfileId: string | null = ownerProfileId;
 
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -54,14 +53,6 @@ mockModule('react-relay', {
     false,
   ],
   useRelayEnvironment: () => environment,
-});
-mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  useRelayActor: () => ({
-    resetActor: () => assert.fail('관계 mutation은 actor Store를 교체하지 않는다'),
-  }),
-});
-mockModule(new URL('../../relay/RelayEnvironmentBoundary.tsx', import.meta.url), {
-  useRelayEnvironmentGeneration: () => ({ current: generation }),
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => ({ selectedProfileId }),
@@ -88,14 +79,13 @@ afterEach(async () => {
     renderer = null;
   }
   environment = undefined as unknown as Environment;
-  generation = 1;
   selectedProfileId = ownerProfileId;
   sink = undefined;
   controller = null;
 });
 
 describe('ProfileBlockController Relay cache boundary', () => {
-  it('partial GraphQL errors reject feedback while preserving the server-confirmed normalized state', async () => {
+  it('서버가 성공을 확정하면 partial GraphQL error와 함께 와도 normalized state를 성공으로 처리한다', async () => {
     environment = createEnvironment();
     const { request } = await beginBlock();
 
@@ -104,10 +94,35 @@ describe('ProfileBlockController Relay cache boundary', () => {
       errors: [{ message: 'partial response' }],
     });
 
-    await assert.rejects(request, /partial response/);
+    await request;
+    await flushTasks();
     assertGeneralProfileUnchanged();
     assert.deepEqual(connectionNodeIds(), ['block-partial']);
     assert.equal(viewerProfileBlockId(), 'block-partial');
+  });
+
+  it('block success가 false이면 기존 상태를 유지하고 실패한다', async () => {
+    environment = createEnvironment();
+    const { request } = await beginBlock();
+
+    respond({ data: { blockProfile: { success: false, profileBlock: null } } });
+
+    await assert.rejects(request, /did not confirm/);
+    assertGeneralProfileUnchanged();
+    assert.deepEqual(connectionNodeIds(), []);
+    assert.equal(viewerProfileBlockId(), null);
+  });
+
+  it('block payload가 없으면 기존 상태를 유지하고 실패한다', async () => {
+    environment = createEnvironment();
+    const { request } = await beginBlock();
+
+    respond({ data: { blockProfile: null } });
+
+    await assert.rejects(request, /did not confirm/);
+    assertGeneralProfileUnchanged();
+    assert.deepEqual(connectionNodeIds(), []);
+    assert.equal(viewerProfileBlockId(), null);
   });
 
   it('기존 Profile global ID로 relation을 정규화하고 Profile cache를 보존한다', async () => {
@@ -126,19 +141,7 @@ describe('ProfileBlockController Relay cache boundary', () => {
     assert.equal(viewerProfileBlockId(), 'block-confirmed');
   });
 
-  it('confirmed block updates the connection and target viewer state without replacing the actor Store', async () => {
-    environment = createEnvironment();
-    const { request } = await beginBlock();
-
-    respond({ data: blockPayload('block-confirmed') });
-    await request;
-    await flushTasks();
-
-    assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
-    assert.equal(viewerProfileBlockId(), 'block-confirmed');
-  });
-
-  it('해제 응답의 삭제된 관계 ID가 요청 ID와 같을 때 connection과 status를 갱신한다', async () => {
+  it('서버가 해제 성공을 확정하면 partial GraphQL error와 함께 와도 connection과 status를 갱신한다', async () => {
     environment = createEnvironment();
     createRelation('block-confirmed');
     const { request } = await beginUnblock('block-confirmed');
@@ -146,6 +149,7 @@ describe('ProfileBlockController Relay cache boundary', () => {
     respond({
       data: {
         unblockProfile: {
+          success: true,
           profileBlockId: 'block-confirmed',
           deletedProfileBlockId: 'block-confirmed',
           targetProfile: {
@@ -155,6 +159,7 @@ describe('ProfileBlockController Relay cache boundary', () => {
           },
         },
       },
+      errors: [{ message: 'optional projection failed' }],
     });
     await request;
     await flushTasks();
@@ -170,11 +175,28 @@ describe('ProfileBlockController Relay cache boundary', () => {
 
     respond({
       data: {
-        unblockProfile: { deletedProfileBlockId: null, profileBlockId: null, targetProfile: null },
+        unblockProfile: {
+          success: false,
+          deletedProfileBlockId: null,
+          profileBlockId: null,
+          targetProfile: null,
+        },
       },
     });
     await assert.rejects(request, /did not confirm/);
 
+    assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
+    assert.equal(viewerProfileBlockId(), 'block-confirmed');
+  });
+
+  it('unblock payload가 없으면 기존 connection과 status를 보존한다', async () => {
+    environment = createEnvironment();
+    createRelation('block-confirmed');
+    const { request } = await beginUnblock('block-confirmed');
+
+    respond({ data: { unblockProfile: null } });
+
+    await assert.rejects(request, /did not confirm/);
     assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
     assert.equal(viewerProfileBlockId(), 'block-confirmed');
   });
@@ -258,6 +280,7 @@ function createRelation(relationId: string) {
 function blockPayload(relationId: string) {
   return {
     blockProfile: {
+      success: true,
       profileBlock: {
         __typename: 'ProfileBlock',
         id: relationId,
