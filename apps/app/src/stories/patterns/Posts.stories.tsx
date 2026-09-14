@@ -1944,6 +1944,7 @@ function ContentWarningRevealStory() {
             url: postMediaImageUri,
           },
         ]}
+        mentionedProfiles={[]}
         postId="content-warning-story-post"
       />
     </Catalog>

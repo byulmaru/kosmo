@@ -1,4 +1,4 @@
-import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
+import { isPostContentDocumentV1, postContentMentionFallbackText } from '@kosmo/core/post-content';
 import { Fragment } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
@@ -54,7 +54,7 @@ export function PostContentRenderer({
   interactive = true,
   media,
   mediaPresentation = 'default',
-  mentionedProfiles = [],
+  mentionedProfiles,
   numberOfLines,
   onBodyPress,
   onMediaOpen,
@@ -68,7 +68,7 @@ export function PostContentRenderer({
   interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
   mediaPresentation?: 'default' | 'hidden';
-  mentionedProfiles?: ReadonlyArray<MentionedProfile>;
+  mentionedProfiles: ReadonlyArray<MentionedProfile>;
   numberOfLines?: number;
   onBodyPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
@@ -190,14 +190,14 @@ function renderNode(node: PostContentNode, key: Key, context: RenderContext): Re
     .with({ type: 'hard_break' }, () => '\n')
     .with({ type: 'mention' }, (mention) => {
       const profile = context.mentionedProfiles.get(mention.attrs.profileId);
-      if (!context.interactive || !profile) {
-        return <Text key={key}>{mention.attrs.label}</Text>;
+      if (!profile) {
+        return <Text key={key}>{postContentMentionFallbackText}</Text>;
       }
 
       return (
-        <PostContentMentionLink
+        <PostContentMention
           key={key}
-          label={mention.attrs.label}
+          interactive={context.interactive}
           linkColor={context.linkColor}
           profile={profile}
         />
@@ -206,27 +206,31 @@ function renderNode(node: PostContentNode, key: Key, context: RenderContext): Re
     .otherwise(() => null);
 }
 
-function PostContentMentionLink({
-  label,
+function PostContentMention({
+  interactive,
   linkColor,
   profile,
 }: {
-  label: string;
+  interactive: boolean;
   linkColor: string;
   profile: MentionedProfile;
 }) {
   const data = useFragment(postContentMentionProfileFragment, profile);
   const href = `/${data.relativeHandle}` as Href;
 
+  if (!interactive) {
+    return <Text>{data.relativeHandle}</Text>;
+  }
+
   return (
     <NavigationLink href={href}>
       <Text
-        accessibilityLabel={`${label}, ${data.displayName}, ${data.relativeHandle} 프로필 보기`}
+        accessibilityLabel={`${data.relativeHandle}, ${data.displayName}, 프로필 보기`}
         accessibilityRole="link"
         onPress={(event) => event.stopPropagation()}
         style={[styles.link, styles.mentionLink, { color: linkColor }]}
       >
-        {label}
+        {data.relativeHandle}
       </Text>
     </NavigationLink>
   );
