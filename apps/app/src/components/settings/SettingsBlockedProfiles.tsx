@@ -8,7 +8,6 @@ import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
-import { useSession } from '@/session/SessionProvider';
 import type { RefObject } from 'react';
 import type { View } from 'react-native';
 import type { ProfileBlockAction_profileBlock$key } from '@/components/profile/__generated__/ProfileBlockAction_profileBlock.graphql';
@@ -17,17 +16,11 @@ import type { SettingsBlockedProfilesNextPageQuery } from './__generated__/Setti
 import type { SettingsBlockedProfilesQuery } from './__generated__/SettingsBlockedProfilesQuery.graphql';
 
 const SettingsBlockedProfilesQuery = graphql`
-  query SettingsBlockedProfilesQuery($withProfileBlocks: Boolean!) {
+  query SettingsBlockedProfilesQuery {
     currentSession {
       selectedProfile {
         id
-        instance {
-          kind
-        }
-        ...SettingsBlockedProfiles_profile
-          @arguments(count: 20)
-          @alias(as: "profileBlocksFragment")
-          @include(if: $withProfileBlocks)
+        ...SettingsBlockedProfiles_profile @arguments(count: 20) @alias(as: "profileBlocksFragment")
       }
     }
   }
@@ -89,24 +82,19 @@ export function SettingsBlockedProfiles({ headingRef }: { headingRef?: RefObject
 
 function SettingsBlockedProfilesContent({ headingRef }: { headingRef?: RefObject<View | null> }) {
   const shellChrome = useShellChrome();
-  const { selectedProfileKind } = useSession();
-  const withProfileBlocks = selectedProfileKind === 'LOCAL';
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<SettingsBlockedProfilesQuery>(
     SettingsBlockedProfilesQuery,
-    { withProfileBlocks },
+    {},
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const profile = data.currentSession?.selectedProfile;
   const pagination = usePaginationFragment<
     SettingsBlockedProfilesNextPageQuery,
     SettingsBlockedProfiles_profile$key
-  >(
-    SettingsBlockedProfilesFragment,
-    withProfileBlocks ? (profile?.profileBlocksFragment ?? null) : null,
-  );
+  >(SettingsBlockedProfilesFragment, profile?.profileBlocksFragment ?? null);
   const [loadError, setLoadError] = useState(false);
-  const edges = pagination.data?.profileBlocks.edges ?? [];
+  const edges = pagination.data?.profileBlocks?.edges ?? [];
   const loadMore = useCallback(() => {
     if (!pagination.hasNext || pagination.isLoadingNext) {
       return;
@@ -115,7 +103,7 @@ function SettingsBlockedProfilesContent({ headingRef }: { headingRef?: RefObject
     pagination.loadNext(20, { onComplete: (error) => setLoadError(Boolean(error)) });
   }, [pagination.hasNext, pagination.isLoadingNext, pagination.loadNext]);
 
-  if (!withProfileBlocks || !profile || profile.instance.kind !== 'LOCAL') {
+  if (!profile || !pagination.data?.profileBlocks) {
     return (
       <StateView
         actionLabel={shellChrome ? 'Profile 선택하기' : undefined}
