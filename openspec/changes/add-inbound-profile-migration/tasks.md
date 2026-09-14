@@ -80,10 +80,11 @@
 
 **Authority / Provenance**
 
-- `docs/design/settings.md`
 - `docs/domain/objects/profile.md`
 - `docs/domain/decisions/0027-profile-migration-inbound-move.md`
 - `PROD-743`
+
+Visual design source: `docs/design/settings.md` (visual presentation and accessibility authority only)
 
 **Deliverable**
 
