@@ -24,13 +24,10 @@ test('canViewPost shares the request-scoped loader with the Post ref', async () 
     }
 
     loaderCreationCount += 1;
-    const loader = new DataLoader(
-      async (ids) => {
-        underlyingLoadCount += 1;
-        return ids.map((id) => rows.get(id as string) ?? null);
-      },
-      { cache: params.cache ?? false },
-    );
+    const loader = new DataLoader(async (ids) => {
+      underlyingLoadCount += 1;
+      return ids.map((id) => rows.get(id as string) ?? null);
+    });
     context.$loaders.set(params.name, loader);
     return loader as never;
   }) as UserContext['loader'];

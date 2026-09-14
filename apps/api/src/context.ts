@@ -20,7 +20,6 @@ type LoaderParams<Key, Result, SortKey, Nullability extends boolean, Many extend
   name: string;
   nullable?: Nullability;
   many?: Many;
-  cache?: boolean;
   key: (
     value: Nullability extends true ? Result | null : Result,
   ) => Nullability extends true ? SortKey | null : SortKey;
@@ -136,36 +135,33 @@ const createContext = (): Context => {
   } as Context;
 
   ctx.loader = (params) => {
-    const { name, nullable, many, cache = false, load, key } = params;
+    const { name, nullable, many, load, key } = params;
     const cached = ctx.$loaders.get(name);
     if (cached) {
       return cached as never;
     }
 
-    const loader = new DataLoader(
-      async (keys) => {
-        const rows = await load(keys as never);
-        const values = R.groupBy(rows, (row) => stringify(key(row as never)));
+    const loader = new DataLoader(async (keys) => {
+      const rows = await load(keys as never);
+      const values = R.groupBy(rows, (row) => stringify(key(row as never)));
 
-        return keys.map((key) => {
-          const value = values[stringify(key)];
-          if (value?.length) {
-            return many ? value : value[0];
-          }
+      return keys.map((key) => {
+        const value = values[stringify(key)];
+        if (value?.length) {
+          return many ? value : value[0];
+        }
 
-          if (nullable) {
-            return null;
-          }
+        if (nullable) {
+          return null;
+        }
 
-          if (many) {
-            return [];
-          }
+        if (many) {
+          return [];
+        }
 
-          return new Error(`DataLoader(${name}): Missing key`);
-        });
-      },
-      { cache },
-    );
+        return new Error(`DataLoader(${name}): Missing key`);
+      });
+    });
 
     ctx.$loaders.set(name, loader);
 

@@ -9,7 +9,6 @@ export const postByIdLoader = (ctx: UserContext) =>
   ctx.loader<string, PostRow, string, true>({
     name: 'post.byId',
     nullable: true,
-    cache: true,
     load: (ids) =>
       db
         .select(getColumns(Posts))
