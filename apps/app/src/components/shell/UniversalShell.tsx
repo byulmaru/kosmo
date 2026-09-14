@@ -19,6 +19,7 @@ import {
 import { PageHeader } from '@/components/PageHeader';
 import { PostMediaViewerScreenFallbackProvider } from '@/components/post/PostMediaViewerHost';
 import { IconButton } from '@/components/ui/IconButton';
+import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
 import { RelayActorBoundary } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -307,6 +308,7 @@ function UniversalShellContent() {
         >
           <SidebarNavigation
             compact={compact}
+            feedbackActive={feedbackOverlayVisible}
             onFeedbackOpen={openFeedbackOverlay}
             onHomeReselect={web ? reselectHome : undefined}
             onSwitcherOpenChange={setSwitcherOpen}
@@ -342,13 +344,6 @@ function UniversalShellContent() {
                 accessibilityLabel={pathname === '/local' ? '로컬' : '홈'}
                 leading={menuButton}
                 variant="brand"
-                {...(web
-                  ? {
-                      brandAccessibilityLabel: '홈',
-                      brandHref: '/home' as const,
-                      onBrandCurrentNavigate: reselectHome,
-                    }
-                  : {})}
               />
             ) : mobileShellHeader ? (
               <PageHeader
@@ -376,7 +371,8 @@ function UniversalShellContent() {
             mobile && web
               ? {
                   ...(routeOwnsMobileHeader ? { paddingTop: insets.top } : {}),
-                  paddingBottom: 56 + insets.bottom,
+                  paddingBottom:
+                    getBottomTabBarContentHeight(Platform.OS) + (web ? 0 : insets.bottom),
                 }
               : null,
           ]}

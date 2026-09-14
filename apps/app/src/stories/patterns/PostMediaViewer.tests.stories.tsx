@@ -249,7 +249,9 @@ export const CompactProductionActionSurfaceContract: Story = {
       await userEvent.click(within(actionBar).getByRole('button', { name: '더 보기' }));
       const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
       expect(menu).toBeVisible();
-      expect(window.getComputedStyle(menu).backgroundColor).toBe('rgb(255, 255, 255)');
+      expect(window.getComputedStyle(menu.parentElement!).backgroundColor).toBe(
+        'rgb(255, 255, 255)',
+      );
       const backdrop = await screen.findByTestId('action-menu-backdrop');
       expect(backdrop).toBeVisible();
       expect(image).toBeVisible();

@@ -104,6 +104,7 @@ export type IconButtonProps = Omit<
   'accessibilityLabel' | 'accessibilityRole' | 'children' | 'role' | 'style'
 > & {
   accessibilityLabel: string;
+  accessibilityRole?: 'button' | 'link';
   children: PressableProps['children'];
   controlRef?: Ref<View>;
   feedback?: 'none' | 'opacity';
@@ -112,6 +113,7 @@ export type IconButtonProps = Omit<
 
 export function IconButton({
   accessibilityLabel,
+  accessibilityRole = 'button',
   accessibilityState,
   children,
   controlRef,
@@ -146,7 +148,7 @@ export function IconButton({
     <Pressable
       {...props}
       accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
+      accessibilityRole={accessibilityRole}
       accessibilityState={{ ...accessibilityState, disabled: buttonDisabled }}
       disabled={buttonDisabled}
       hitSlop={mergeHitSlop(hitSlop, minimumHitSlop)}

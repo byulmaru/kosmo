@@ -813,7 +813,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
       await expect(profileLink).toHaveAttribute('href', canonicalProfilePath);
     }
     expect(await drawer.boundingBox()).toMatchObject({ height: 667, width: 320, x: 0, y: 0 });
-    expect(await home.boundingBox()).toMatchObject({ height: 45, width: 264 });
+    expect(await home.boundingBox()).toMatchObject({ height: 45, width: 288 });
     const iconBox = await homeIcon.boundingBox();
     const labelBox = await homeLabel.boundingBox();
     expect(iconBox).toMatchObject({ height: 20, width: 20 });

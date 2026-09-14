@@ -3,6 +3,7 @@ import { Animated, Platform, StyleSheet, useWindowDimensions } from 'react-nativ
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { breakpoints, space } from '@/theme/tokens';
 import { useToastMotion } from '@/theme/useOverlayMotion';
+import { getBottomTabBarContentHeight } from './navigationChrome';
 import { Toast } from './Toast';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { ViewStyle } from 'react-native';
@@ -35,7 +36,10 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const hasBottomTabBar = Platform.OS !== 'web' || width < breakpoints.compact;
-  const bottom = insets.bottom + (hasBottomTabBar ? 56 : 0) + space[8];
+  const bottom =
+    (Platform.OS === 'web' ? 0 : insets.bottom) +
+    (hasBottomTabBar ? getBottomTabBarContentHeight(Platform.OS) : 0) +
+    space[8];
   const toastMotion = useToastMotion(toastVisible);
 
   const dismissToast = useCallback((id?: number) => {

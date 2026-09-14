@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Text } from 'react-native';
 import {
   createOperationDescriptor,
@@ -8,16 +8,22 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import { expect, mocked, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
 import SearchPeopleByHandlePageQueryNode from '@/app/(tabs)/(protected)/__generated__/SearchPeopleByHandlePageQuery.graphql';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
+import {
+  PrimaryNavigationScrollProvider,
+  usePrimaryNavigationScroll,
+} from '@/components/shell/PrimaryNavigationScrollContext';
+import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
-import { RouterMockProvider } from '../../../.storybook/mocks/expo-router';
+import { RouterMockProvider, usePathname } from '../../../.storybook/mocks/expo-router';
 import { profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ReactNode } from 'react';
 import type { GraphQLResponse, RequestParameters } from 'relay-runtime';
 
 const result = profile({
@@ -39,6 +45,54 @@ const thirdResult = profile({
   id: 'profile-byulmaru-ops',
   relativeHandle: '@byulmaru-ops',
 });
+const openSearchDrawer = fn();
+
+function SearchShellChromeStory({ children }: { children: ReactNode }) {
+  return (
+    <ShellChromeProvider
+      navigationDrawerOpen={false}
+      openNavigationDrawer={openSearchDrawer}
+      openProfileSwitcher={() => undefined}
+      registerHomeReselection={() => () => undefined}
+      reselectHome={() => undefined}
+    >
+      <PrimaryNavigationScrollProvider>{children}</PrimaryNavigationScrollProvider>
+    </ShellChromeProvider>
+  );
+}
+
+function SearchNavigationProbe({ onBackNavigation }: { onBackNavigation: () => void }) {
+  const pathname = usePathname();
+  const { getQueryNavigation } = usePrimaryNavigationScroll();
+  const navigation = getQueryNavigation();
+  useEffect(() => {
+    if (pathname === '/search?tab=people') {
+      onBackNavigation();
+    }
+  }, [onBackNavigation, pathname]);
+  return (
+    <Text testID="search-query-navigation-probe">
+      {navigation ? `restoreFocus:${navigation.restoreFocus}` : 'none'}
+    </Text>
+  );
+}
+
+function SearchResultStory() {
+  const [params, setParams] = useState<Record<string, string | undefined>>({
+    q: 'byulmaru',
+    tab: 'people',
+  });
+  const handleBackNavigation = useCallback(() => setParams({ tab: 'people' }), []);
+
+  return (
+    <RouterMockProvider params={params} pathname="/search">
+      <SearchShellChromeStory>
+        <SearchNavigationProbe onBackNavigation={handleBackNavigation} />
+        <SearchScreen />
+      </SearchShellChromeStory>
+    </RouterMockProvider>
+  );
+}
 
 const searchConnection = (
   profiles: ReadonlyArray<ReturnType<typeof profile>>,
@@ -102,6 +156,7 @@ function StoreAndNetworkSearchStory({ mode }: { mode: SearchRefreshMode }) {
 const meta = {
   beforeEach: () => {
     mocked(trackAnalytics).mockClear();
+    openSearchDrawer.mockClear();
   },
   component: SearchScreen,
   title: 'KOSMO/Screens/Search',
@@ -114,6 +169,23 @@ export const Idle: Story = {
   parameters: { router: { params: {}, pathname: '/search' } },
 };
 
+export const MobileDrawerTrigger: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    router: { params: {}, pathname: '/search' },
+    viewport: { defaultViewport: 'kosmoMobile' },
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(await within(canvasElement).findByRole('button', { name: '메뉴 열기' }));
+    expect(openSearchDrawer).toHaveBeenCalledOnce();
+  },
+  render: () => (
+    <SearchShellChromeStory>
+      <SearchScreen />
+    </SearchShellChromeStory>
+  ),
+};
+
 export const Result: Story = {
   parameters: {
     relay: { data: { searchProfiles: searchConnection([result, secondResult]) } },
@@ -121,6 +193,10 @@ export const Result: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    expect(canvas.getByRole('link', { name: '뒤로' })).toHaveAttribute(
+      'href',
+      '/search?tab=people',
+    );
     await waitFor(() =>
       expect(trackAnalytics).toHaveBeenCalledWith('search_results_loaded', {
         has_results: true,
@@ -143,7 +219,21 @@ export const Result: Story = {
     expect(trackAnalytics).not.toHaveBeenCalledWith('search_submitted', expect.anything());
     await userEvent.click(canvas.getByRole('link', { name: /@byulmaru / }));
     expect(trackAnalytics).toHaveBeenCalledWith('search_result_selected', { tab: 'people' });
+
+    const input = canvas.getByRole('textbox', { name: '검색어' });
+    await userEvent.click(canvas.getByRole('link', { name: '뒤로' }));
+    await waitFor(() =>
+      expect(canvas.getByTestId('search-query-navigation-probe')).toHaveTextContent(
+        'restoreFocus:false',
+      ),
+    );
+    await waitFor(() =>
+      expect(canvas.queryByRole('link', { name: /@byulmaru / })).not.toBeInTheDocument(),
+    );
+    expect(input).toHaveValue('');
+    expect(input).not.toHaveFocus();
   },
+  render: () => <SearchResultStory />,
 };
 
 export const StoreHitThenNetworkChangedDoesNotDuplicateLoadedEvent: Story = {
@@ -180,7 +270,7 @@ export const KeyboardSubmissionTracksAnalytics: Story = {
   parameters: { router: { params: {}, pathname: '/search' } },
   play: async ({ canvasElement }) => {
     const input = within(canvasElement).getByRole('textbox', { name: '검색어' });
-    expect(getComputedStyle(input).fontSize).toBe('16px');
+    expect(getComputedStyle(input).fontSize).toBe('14px');
     await userEvent.type(input, '검색 원문{enter}');
     expect(trackAnalytics).toHaveBeenCalledOnce();
     expect(trackAnalytics).toHaveBeenCalledWith('search_submitted', {

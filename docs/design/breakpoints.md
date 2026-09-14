@@ -83,6 +83,35 @@ drawer에는 정책 링크를 추가하지 않는다.
   한 화면씩 표시하며, 내부 destination의 back navigation은 [설정 페이지](./settings.md)에 정의된 명시적인
   parent를 연다.
 
+## 사이드바 내비게이션 geometry
+
+`full`·`drawer`에서는 ProfileSwitcher의 아바타, 이름·핸들·팔로우 수 행과 navigation의 leading icon slot을
+sidebar 안쪽 `space/24` 기준선에 맞춘다. Navigation 행의 visual과 클릭 영역은 좌우 `space/16` 바깥 여백을
+사용하고, 내부 `space/8` inset으로 leading content를 `space/24`에 배치한다. Figma의
+[`Full SidebarNavigation`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1918-1311)과
+[`Drawer ProfileSwitcher`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=2012-835)를 바탕으로 한다.
+Navigation의 좌우 여백은 2026-09-12 사용자 승인으로 `24px`에서 `16px`로 줄였고, Figma의
+`SidebarNavigation`·`SidebarNavigationItem`·primary·utility source에 동기화했다. Linear의 이전 `272px` 기록은
+이번에 수정하지 않았다. 이 가로 정렬 보정은 프로필 요약의 `260px` 높이,
+trigger 크기·수직 배치, 프로필 편집 버튼, 열린 picker의 화면상 위치와 `compact` rail 배치를 변경하지 않는다.
+
+공용 `SidebarNavigation`의 `full`·`drawer` 행은 가용 폭 `320px`에서 `288×45px` target을 사용한다. 행 visual은 좌우 `space/8`을
+사용하고 `20px` 너비의 icon slot과 label 사이에 `space/16`을 둔다. Profile의 `28px` Avatar는 이 slot 중앙에
+배치해 양쪽으로 `4px`씩 확장되며, 다른 아이콘과 가로 중심선 및 label 시작점을 맞춘다. `설정 및 기타` utility는 `Settings` 아이콘과 label을
+표시하며 닫힌 상태에서는 아래 방향, 열린 상태에서는 위 방향 `Chevron`을 trailing에 표시한다. Chevron은
+`24px` visual로 행 오른쪽 `24px` 안쪽에 배치한다. 별도 focus target이 아니며 trigger의 `aria-expanded` 상태와
+동기화한다. Native drawer가 화면 폭의 85%로 줄어 `320px`보다 좁아질 때는 좌우 `space/16`을 유지한 채 행 폭만
+가용 폭에 맞춰 줄여 잘리지 않게 한다.
+
+Utility를 연 뒤 표시하는 `설정`·`로그아웃` 하위 행은 같은 target과 `space/32` content inset을 사용해
+아이콘을 안쪽으로 정렬한다. Footer가 닫힌 상태에서는 divider 뒤 첫 행을 `4px`, 두 번째 행을 `49px`에 배치해
+행 사이 간격을 두지 않으며, 열린 utility의 하위 행도 trigger 직후부터 `45px` 단위로 연속 배치한다. `compact`
+rail의 `44×44px` icon-only target과 `Ellipsis` utility 표현은 이 행 geometry 변경의 대상이 아니다.
+
+`/settings` 화면군의 `full`·`drawer`에서는 utility를 항상 펼치고 부모 trigger가 아닌 하위 `설정` 행을 current로
+표시한다. 다른 route로 이탈하면 disclosure를 닫는다. `compact` ActionMenu는 transient popover와 선택 후 dismiss를
+유지하며, `NavigationLink`로 감싼 `설정` 행도 공용 메뉴의 `36px` 한 줄 target과 padding·정렬을 보존한다.
+
 ## 프로필 편집 진입
 
 인증된 사용자의 selected Profile이 서버 권한 계약상 편집 가능할 때만 sidebar의 selected Profile 요약에
@@ -169,14 +198,16 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
 
 ## 알림 Unread badge
 
-현재 프로덕션 셸은 selected Profile의 Unread 상태를 기존 알림 아이콘 우상단의 숫자 없는 8px dot으로 표시한다. 이 계약과 `web-app-shell` OpenSpec은 공용 navigation chrome의 프로덕션 교체를 맡는 PROD-796 전까지 유지한다.
+현재 프로덕션 셸은 공용 navigation chrome을 사용한다. selected Profile의 Unread 상태는 `full`·`drawer`
+Sidebar에서 숫자 badge로, `compact` Sidebar와 `BottomTabBar`에서는 숫자 없는 8px dot으로 표시한다.
 
 PROD-852의 공용 `SidebarNavigation` 목표 표면은 presentation에 따라 표시를 나눈다.
 
 - `full`과 `drawer`는 행 오른쪽 끝에 `24px` 숫자 badge를 표시한다. `1`~`9`는 실제 값을, `10` 이상은 `9+`를 표시하며 ProfileSwitcher의 `action/primary/base`와 `action/primary/on-base`, `ui/label/s` 조합을 재사용한다.
 - `compact` icon-only rail은 기존 알림 아이콘 우상단의 숫자 없는 8px dot과 semantic `accent` token을 유지한다. `BottomTabBar`를 포함한 다른 셸 표면도 이 변경 범위에서는 기존 dot 계약을 유지한다.
 - `0`, `null` 또는 count가 없으면 두 표시를 모두 숨긴다. 양수 count의 accessible name은 시각적으로 축약하지 않은 실제 값을 사용해 `알림, 읽지 않은 알림 N개`로 유지하고, badge와 dot 자체는 접근성 트리와 focus 순서에서 숨긴다. 셸은 현재 Profile의 Relay field를 직접 사용하며 다른 Profile count나 별도 last-success snapshot을 재사용하지 않는다.
-- 숫자 badge는 label과 같은 행에 배치하되 기존 row와 pointer·touch target 크기를 바꾸지 않는다. 실제 프로덕션 Sidebar와 drawer로의 교체는 PROD-796에서 별도로 검증한다.
+- 숫자 badge는 label과 같은 행에 배치하되 기존 row와 pointer·touch target 크기를 바꾸지 않는다. 이 표시는
+  PROD-796 Production adapter에 연결되었으며 Android·iOS 실제 runtime 검증은 별도로 남는다.
 
 ## 스크롤 소유권
 
@@ -207,15 +238,20 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
   실패 후 수동 재시도를 유지한다. Web에서는 leaf 목록이 document/window scroll 계약을 유지한다.
 - 브라우저 뒤로/앞으로 history traversal은 browser scroll restoration을 유지한다. 검색 화면의 query-only
   `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존한다.
-- Web의 모바일·compact·full 홈 헤더 브랜드 마크와 shell의 홈 navigation 항목은 모두 홈 진입 control이다.
-  다른 route에서 실행하면 기존처럼 홈으로 이동하고, 이미 홈에서 다시 실행하면 document scroll을 매번
-  최상단으로 이동하면서 현재 Home Relay 데이터를 서버에서 다시 요청한다. 브랜드 마크는 기존 시각 geometry를
-  바꾸지 않고 pointer·keyboard·screen reader에서 같은 결과를 제공하는 navigation control이어야 한다.
+- Web shell의 홈 navigation 항목은 Home/Local 타임라인 화면군의 진입 control이다. 다른 route에서 실행하면
+  기존처럼 `/home`으로 이동한다. `/home` 또는 `/local`에서 다시 실행하면 route를 바꾸지 않고 document
+  scroll을 최상단으로 이동하면서 현재 선택된 타임라인의 Relay 데이터를 다시 요청한다.
+- compact·full Web의 Home/Local 헤더 브랜드 마크도 현재 선택된 타임라인을 재선택하는 navigation control이다.
+  실제 link 대상은 `/home`으로 유지해 새 탭·modifier 활성화의 홈 진입 의미를 보존하고, 현재 문서에서의
+  pointer·keyboard·screen reader 활성화만 같은 타임라인 재선택 결과를 제공한다. 기존 시각 geometry는 바꾸지
+  않는다. 모바일 Web과 Android/iOS 헤더의 브랜드 마크는 비상호작용 요소로 유지한다.
 - 홈 재선택으로 시작한 새로고침이 진행 중이면 추가 실행도 document scroll은 최상단으로 이동하지만 네트워크
   요청을 중복 시작하지 않는다. 요청이 성공하거나 실패해 종료된 뒤의 다음 실행은 새 요청을 한 번 시작하며,
   이전 요청이 실패했어도 현재 timeline 데이터는 유지한다.
-- 이 홈 재선택 정책은 `PROD-610`이 소유한다. 다른 현재 route 재선택, Android/iOS Native 동작, Home 외 Relay
-  데이터 정책에는 최상단 이동이나 데이터 새로고침을 추가하지 않는다.
+- Home 재선택의 중복 요청 방지와 마지막 성공 데이터 보존은 `PROD-610` 계약을 유지한다. Local 재선택은
+  기존 `RouteBoundary.refetch()` 경로를 재사용하며 별도 요청 계층이나 상태 표시를 추가하지 않는다. 이 정책은
+  Web shell navigation과 compact·full Web 브랜드 마크에만 적용하고 Android/iOS Native navigation과 다른
+  현재 route의 재선택 정책은 변경하지 않는다.
 - shell chrome에서 중앙 피드로 wheel 이벤트를 인위적으로 전달하지 않는다.
 
 ## 구현 위치

@@ -656,6 +656,14 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
 }
 
 async function navigatePrimary(page: Page, label: string) {
+  if (label === '홈' && new URL(page.url()).pathname === '/local') {
+    await page
+      .getByRole('tablist', { name: '타임라인' })
+      .getByRole('tab', { name: '홈', exact: true })
+      .click();
+    return;
+  }
+
   const navigations = page.getByRole('navigation', { name: '주요 메뉴' });
 
   if (label === '로컬') {
@@ -671,6 +679,16 @@ async function navigatePrimary(page: Page, label: string) {
     await timelineTabs.getByRole('tab', { name: '로컬', exact: true }).click();
     await expect(page).toHaveURL(/\/local$/u);
     return;
+  }
+
+  if (label === '설정') {
+    for (const navigation of await navigations.all()) {
+      if (await navigation.isVisible()) {
+        await navigation.getByRole('button', { name: '설정 및 기타' }).click();
+        await navigation.getByRole('link', { name: '설정', exact: true }).click();
+        return;
+      }
+    }
   }
 
   for (const navigation of await navigations.all()) {
