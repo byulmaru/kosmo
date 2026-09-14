@@ -220,10 +220,9 @@ surface 조합과 목록 조회·pagination을 소유한다.
 - API의 기존 `Profile` global ID와 `ProfileBlock` 관계 ID 및 해제 payload의 의미를 구분한다.
   `targetProfile`은 별도 typename·ID 없이 기존 Profile cache로 정규화하고, 실제 성공·미제거·오류 응답에 맞춰 상태를 수렴시킨다.
 - 새로고침·직접 링크는 이전 cache나 관리 목록 선행 로딩 없이 기존 Target Profile 조회와 현재 Owner의 서버 차단 결과를 사용한다.
-  Profile이 조회되면 기본 Profile 정보와 방향성 콘텐츠 상태를 유지하고, 조회되지 않을 때만 자신의 Block은 identity-free `blocking`과
-  해당 관계 ID의 해제를, 상대에게 차단된 경우는 actionless `blockedBy`를 표시한다.
-- 해제는 Profile 메뉴·`blocking` 상태·차단 목록 모두 확인창에서 확정한 뒤 요청한다. 취소 시 요청하지 않으며 identity-free 확인창에도
-  Target identity를 표시하지 않는다. 해제 pending의 중복 입력·dismiss 차단과 실패 후 재시도를 검증한다.
+  Profile이 조회되면 기본 Profile 정보와 방향성 콘텐츠 상태를 유지하고, 조회되지 않으면 기존 unavailable 결과를 유지하며 Block 전용 identity·관계 상태·관리 action을 복구하지 않는다.
+- 해제는 Profile 메뉴·조회 가능한 `blocking` 상태·차단 목록 모두 확인창에서 확정한 뒤 요청한다. 취소 시 요청하지 않으며
+  해제 pending의 중복 입력·dismiss 차단과 실패 후 재시도를 검증한다.
 - 공통 Settings source의 최초 owner는 실제 구현 변경 증거로 확인한다. `PROD-814`가 먼저 통합한 경우 그 source를 재사용하고, Block destination의
   route·data·action과 검증을 완료한 뒤 `뮤트한 프로필 → 차단한 프로필` 순서로 공개한다. 미완성 destination을 노출하지 않는다.
 - 저장·정책(`PROD-821`·`PROD-822`)과 전체 E2E/archive(`PROD-813`)의 책임을 이 그룹으로 옮기지 않는다.
@@ -244,12 +243,12 @@ surface 조합과 목록 조회·pagination을 소유한다.
 
 - [x] 3.1 기존 공용 confirmation을 Profile mutation 상태에 연결해 취소·pending·실패·retry와 direct Profile route의 경고·콘텐츠 상태 및 보호된 데이터 비복구를 구현한다.
 - [x] 3.2 Settings에 Mute와 분리된 Block 관리 destination·목록 상태·pagination·unblock action을 연결한다.
-- [x] 3.3 생성 응답의 기존 Profile global ID와 Block 관계 ID, 해제 성공의 관계 ID·미제거 `null`·오류/partial 결과를 client 계약에 맞게 처리하고, selected Local
+- [x] 3.3 생성 응답의 기존 Profile global ID와 Block 관계 ID, 해제 성공의 관계 ID·미제거 `null`·오류/partial 결과를 client 계약에 맞게 처리하고, Membership으로 인증된 selected
       Profile actor 경계 안에서 Block/Unblock 성공·실패 결과에 따라 관리 목록과 표시 중 기본 Profile 정보·viewer 방향
       콘텐츠 상태·Home/Local/Hashtag timeline·Profile Post List·Notification client 상태를 각 surface 서버 정책에 맞게 수렴시킨다.
 - [ ] 3.4 접근성·viewport·Web/Native direct route presentation regression과 actor 전환·Unblock no-restore, 확인창 dismiss 후 Profile 메뉴
       trigger와 Settings 목록의 다음 항목 또는 heading fallback focus 복원을 검증하고 `PROD-917` 후속 UI 교체 경계를 유지한다.
-- [x] 3.5 직접 링크·새로고침·selected Profile 전환에서 현재 Owner의 차단 결과와 조회 가능한 기본 Profile을 소비하고, Profile 미조회 시 identity-free 상태와 자신의 Block 관계 ID 기반 해제를 연결한다.
+- [x] 3.5 직접 링크·새로고침·selected Profile 전환에서 현재 Owner의 차단 결과와 조회 가능한 기본 Profile을 소비하고, Profile 미조회 시 기존 unavailable 결과를 유지한다.
 - [x] 3.6 차단 결과 재조회, 양방향 Block의 자기 관계 해제와 이전 actor의 늦은 응답을 실행하는 data/cache integration 회귀를 통과시킨다.
 - [x] 3.7 선행 API와 실제 공통 Settings source를 통합한 상태에서 표준 `pnpm --filter @kosmo/app relay`,
       `pnpm --filter @kosmo/app check`, `pnpm --filter @kosmo/app test:unit` 및 변경 범위 lint·format 검증을 통과시킨다.

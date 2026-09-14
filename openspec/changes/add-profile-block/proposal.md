@@ -34,7 +34,7 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
   콘텐츠와 `차단 해제` action을 제공하고, `blockedBy` route는 콘텐츠 차단 상태를 표시한다. 경고 문구와 표시 기간은 후속 디자인 계약으로 남기며,
   `PROD-861`은 presentation 선행 증거, `PROD-917`의 신규 UI 교체는 후속 범위로 분리한다.
 - `PROD-823`의 직접 링크·새로고침·actor 전환에서는 이전 cache나 관리 목록 선행 로딩에 의존하지 않고 기존 Target Profile 조회 결과와 현재 Owner의 서버 차단 결과, 자기 Block 관계 ID를
-  소비한다. Profile을 조회할 수 없는 경우에만 identity-free fallback을 사용한다. 이전 actor의 늦은 응답 격리와 양방향 Block의 자기 관계 해제 후 결과를 UI slice의 검증에 포함한다.
+  소비한다. Profile을 조회할 수 없으면 Block 전용 identity나 관계 상태를 복구하지 않고 기존 unavailable 결과를 유지한다. 이전 actor의 늦은 응답 격리와 양방향 Block의 자기 관계 해제 후 결과를 UI slice의 검증에 포함한다.
 - `PROD-813`은 네 slice의 cross-slice E2E, canonical·Linear·OpenSpec 동기화와 최종 archive를 소유한다.
 
 ### Current issue slice — PROD-822

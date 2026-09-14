@@ -126,7 +126,7 @@
 - Authority / Provenance: `docs/design/profile-mute-block.md`, `PROD-823`, PR #772 review `5163335465`
 - Status: Active
 - Context / Problem: Profile route와 차단 관리 목록이 각각 해제 mutation·확인창·pending·실패·Relay 갱신을 조립하면 Follow 관계 action과 차단 상태가 surface마다 달라지고 회귀 검증이 중복된다.
-- Decision Outcome: 새 이슈를 만들지 않고 `PROD-823` 하나에 두 Stack PR을 연결한다. 부모 PR은 기존 `FollowButton`의 Block 관계 fragment·해제 lifecycle과 공통 회귀를 소유한다. 자식 #772는 Profile route와 관리 목록에서 그 action의 노출 여부, 목록 조회·pagination과 focus fallback을 조합한다. identity-free route의 해제 fallback은 Profile fragment가 없으므로 #772에 유지한다.
+- Decision Outcome: 새 이슈를 만들지 않고 `PROD-823` 하나에 두 Stack PR을 연결한다. 부모 PR은 기존 `FollowButton`의 Block 관계 fragment·해제 lifecycle과 공통 회귀를 소유한다. 자식 #772는 조회 가능한 Profile route와 관리 목록에서 그 action의 노출 여부, 목록 조회·pagination과 focus fallback을 조합한다. Profile이 조회되지 않으면 기존 unavailable 결과를 유지한다.
 - Alternatives Considered: surface별 해제 action 유지는 상태·오류·cache 책임을 중복한다. 별도 Linear 이슈 생성은 이미 승인된 `PROD-823` 행동 범위를 불필요하게 나눈다.
 - Consequences: 양방향 Block에서도 자신의 해제 action을 유지하고, 해제 뒤 서버 결과가 `blockedBy`만 남으면 부모 surface가 action을 숨긴다. 공통 action은 이전 Follow를 복구하지 않는다.
 - Confirmation / Follow-up: 부모 PR에서 공통 상태·hover/focus·Native tap·mutation·actor 회귀를, #772에서 Profile/Settings 연결·pagination·focus와 상대 Block 잔존 수렴을 검증한다.
@@ -223,8 +223,8 @@
   (2026-09-06 사용자 결정: “Block은 확인창 방식”).
 - Status: Active
 - Context / Problem: 기존 공용 UI는 해제 확인을 제공하지만 canonical에 확인 여부가 명시되지 않아 runtime 연결 기준을 확인했다.
-- Decision Outcome: Profile 메뉴, identity-free `blocking` 상태와 차단 관리 목록의 해제는 확인창을 거친다. `취소`는 요청하지 않고,
-  Danger `차단 해제` 확정 뒤에만 요청한다. 확인창은 이전 팔로우 관계가 복구되지 않음을 알리며 identity-free 상태에서는 Target identity를 표시하지 않는다.
+- Decision Outcome: Profile 메뉴, 조회 가능한 `blocking` 상태와 차단 관리 목록의 해제는 확인창을 거친다. `취소`는 요청하지 않고,
+  Danger `차단 해제` 확정 뒤에만 요청한다. 확인창은 이전 팔로우 관계가 복구되지 않음을 알린다.
 - Alternatives Considered: 확인 없이 즉시 요청하는 방식도 검토했지만 사용자가 기존 Block UI의 확인창 방식을 선택했다.
 - Consequences: 해제 확인의 취소·pending 중복 입력 및 dismiss 차단·실패 후 재시도를 runtime 검증에 포함한다. 기존 서버 확정 상태와
   actor 격리, Unblock no-restore는 유지한다.
