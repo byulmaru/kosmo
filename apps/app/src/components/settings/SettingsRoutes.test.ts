@@ -19,6 +19,7 @@ let locationReplacements: string[] = [];
 let pathname = '/settings';
 let SlotRoute: ComponentType = () => null;
 let sessionStatus: 'error' | 'guest' | 'valid' = 'guest';
+let otaUpdateId: string | null = null;
 
 mock.module('expo-router', {
   exports: {
@@ -28,6 +29,13 @@ mock.module('expo-router', {
       back: () => (backCalls += 1),
       replace: (href: string) => replacedPaths.push(href),
     }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('expo-updates', {
+  exports: {
+    get updateId() {
+      return otaUpdateId;
+    },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -47,6 +55,7 @@ mock.module('react-native', {
     ScrollView: ({ children, ...props }: Record<string, unknown>) =>
       createElement('ScrollView', props, children as ReactNode),
     StyleSheet: { create: <T>(styles: T) => styles, flatten: flattenStyle },
+    Text: 'Text',
     useWindowDimensions: () => ({ width }),
     View: 'View',
   },
@@ -64,6 +73,14 @@ mock.module(new URL('./SettingsNavigationList.tsx', import.meta.url), {
   exports: {
     SettingsNavigationList: (props: Record<string, unknown>) =>
       createElement('SettingsNavigationList', props),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('./NativeChannelSettings.tsx', import.meta.url), {
+  exports: { NativeChannelSettings: () => null },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('./SettingsLinkRow.tsx', import.meta.url), {
+  exports: {
+    SettingsLinkRow: (props: Record<string, unknown>) => createElement('SettingsLinkRow', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsProfileDetail.tsx', import.meta.url), {
@@ -99,6 +116,7 @@ let SettingsMuteAndBlockRoute: ComponentType;
 let SettingsMutedProfilesRoute: ComponentType;
 let SettingsLayout: ComponentType;
 let SettingsRoute: ComponentType;
+let SettingsInfoRoute: ComponentType;
 let ProtectedLayout: ComponentType;
 let settingsInitialRouteName: string | undefined;
 let renderer: ReactTestRenderer | null = null;
@@ -108,6 +126,7 @@ before(async () => {
   SettingsLayout = settingsLayoutModule.default;
   settingsInitialRouteName = settingsLayoutModule.unstable_settings.initialRouteName;
   ({ default: SettingsRoute } = await import('../../app/(tabs)/(protected)/settings/index'));
+  ({ default: SettingsInfoRoute } = await import('../../app/(tabs)/(protected)/settings/info'));
   ({ default: SettingsDefaultPostVisibilityRoute } =
     await import('../../app/(tabs)/(protected)/settings/default-post-visibility'));
   ({ default: SettingsMuteAndBlockRoute } =
@@ -126,6 +145,7 @@ afterEach(async () => {
   pathname = '/settings';
   SlotRoute = () => null;
   sessionStatus = 'guest';
+  otaUpdateId = null;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -352,6 +372,32 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, undefined);
     assert.equal(rendered('SettingsProfileDetail').length, 0);
   });
+
+  it('Web 정보 화면은 OTA 업데이트 행을 표시하지 않는다', async () => {
+    platform = 'web';
+    const updateId = '123e4567-e89b-12d3-a456-426614174000';
+    otaUpdateId = updateId;
+    await renderRoute('/settings/info', SettingsInfoRoute);
+
+    assert.deepEqual(texts(), []);
+  });
+
+  it('Native 정보 화면은 현재 실행 중인 updateId 전체 UUID를 표시한다', async () => {
+    platform = 'ios';
+    const updateId = '123e4567-e89b-12d3-a456-426614174000';
+    otaUpdateId = updateId;
+    await renderRoute('/settings/info', SettingsInfoRoute);
+
+    assert.deepEqual(texts(), ['OTA 업데이트', updateId]);
+  });
+
+  it('Native 정보 화면은 updateId가 없으면 식별 불가를 표시한다', async () => {
+    platform = 'android';
+    otaUpdateId = null;
+    await renderRoute('/settings/info', SettingsInfoRoute);
+
+    assert.deepEqual(texts(), ['OTA 업데이트', '식별 불가']);
+  });
 });
 
 describe('Protected layout session guard', () => {
@@ -412,6 +458,12 @@ function byTestId(testID: string): ReactTestInstance {
   assert.ok(renderer);
   return renderer.root.find(
     (node) => (node.type as unknown) === 'View' && node.props.testID === testID,
+  );
+}
+
+function texts(): string[] {
+  return rendered('Text').flatMap((node) =>
+    typeof node.props.children === 'string' ? [node.props.children] : [],
   );
 }
 
