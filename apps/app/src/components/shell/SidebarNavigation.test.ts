@@ -34,6 +34,9 @@ mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
   View: 'View',
 });
+mockModule(new URL('./BottomTabBar.tsx', import.meta.url), {
+  isBottomTabDestination: () => false,
+});
 mockModule('react-relay', {
   graphql: () => ({}),
   useFragment: () => ({ currentSession }),

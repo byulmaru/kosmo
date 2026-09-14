@@ -6,6 +6,7 @@ import { SidebarNavigation as SidebarNavigationPresentation } from '@/components
 import { useLogout } from '@/session/logout';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, space } from '@/theme/tokens';
+import { isBottomTabDestination } from './BottomTabBar';
 import { useNavigationGuard } from './NavigationGuardContext';
 import { NavigationLink } from './NavigationLink';
 import { ProfileSwitcher } from './ProfileSwitcher';
@@ -74,7 +75,7 @@ export function SidebarNavigation({
   const { request: requestNavigation } = useNavigationGuard();
   const { error: logoutError, logout, pending: logoutPending } = useLogout();
   const data = useFragment(SidebarNavigationFragment, query);
-  const profile = data.currentSession?.selectedProfile ?? null;
+  const profile = data.currentSession?.selectedProfile;
   const unreadNotificationCount = profile?.unreadNotificationCount ?? null;
   const profileHref = profile ? (`/${profile.relativeHandle}` as Href) : undefined;
   const feedbackRouteActive = pathname === '/feedback';
@@ -127,6 +128,9 @@ export function SidebarNavigation({
         current={destination === 'home' ? selected : undefined}
         href={href}
         key={destination}
+        navigationMode={
+          destination === 'profile' || isBottomTabDestination(href) ? 'switch' : undefined
+        }
         onCurrentNavigate={destination === 'home' ? onHomeReselect : undefined}
         onNavigate={onNavigate}
         primary
@@ -176,7 +180,14 @@ export function SidebarNavigation({
           onLogout={handleLogout}
           onNavigate={() => undefined}
           presentation={surface === 'drawer' ? 'drawer' : compact ? 'compact' : 'full'}
-          profile={profile ? { imageUri: profile.avatar?.url, label: profile.displayName } : null}
+          profile={
+            profile
+              ? {
+                  imageUri: profile.avatar?.url,
+                  label: profile.displayName ?? profile.relativeHandle,
+                }
+              : null
+          }
           renderControl={renderControl}
           showFeedback={data.currentSession !== null}
           unreadNotificationCount={unreadNotificationCount}

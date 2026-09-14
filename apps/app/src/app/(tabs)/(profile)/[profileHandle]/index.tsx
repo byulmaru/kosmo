@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PostList } from '@/components/post/PostList';
+import { ProfileRouteContainer, useProfileRoute } from '@/components/profile/ProfileRouteShell';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import type { ProfilePostListPageQuery as ProfilePostListPageQueryType } from './__generated__/ProfilePostListPageQuery.graphql';
@@ -26,16 +27,20 @@ export default function ProfilePostListPage() {
     profileHandle?: string | string[];
   }>();
   const handle = normalizeProfileHandle(profileHandle);
+  const { chrome, scrollKey } = useProfileRoute();
 
   return (
-    <RouteBoundary
-      error={(retry) => <PostList error onRetry={retry} />}
-      key={handle}
-      loading={<PostList loading />}
-      title="게시글 목록을 불러오지 못했어요"
-    >
-      <ProfilePostListPageContent handle={handle} />
-    </RouteBoundary>
+    <ProfileRouteContainer scrollKey={scrollKey}>
+      {chrome}
+      <RouteBoundary
+        error={(retry) => <PostList error onRetry={retry} />}
+        key={handle}
+        loading={<PostList loading />}
+        title="게시글 목록을 불러오지 못했어요"
+      >
+        <ProfilePostListPageContent handle={handle} />
+      </RouteBoundary>
+    </ProfileRouteContainer>
   );
 }
 

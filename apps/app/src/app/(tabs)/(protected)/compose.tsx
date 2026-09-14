@@ -48,7 +48,15 @@ export default function ComposeScreen() {
           loading={<ComposeLoading />}
           title="글쓰기 정보를 불러오지 못했어요"
         >
-          <ComposeContent onGoHome={() => router.push('/home')} />
+          <ComposeContent
+            onGoHome={() => {
+              if (Platform.OS === 'web') {
+                router.push('/home');
+              } else {
+                router.replace('/home');
+              }
+            }}
+          />
         </RouteBoundary>
       </View>
     </ScrollView>

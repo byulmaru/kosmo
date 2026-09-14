@@ -123,10 +123,6 @@ function MockRelayActorBoundaryContent({
   return createElement('RelayActorBoundary', { actorLifecycleKey }, children);
 }
 
-function MockSlot() {
-  return createElement('Slot', null, createElement(ShellRecoveryRoute));
-}
-
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
     exports,
@@ -142,7 +138,6 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('expo-router', {
-  Slot: MockSlot,
   usePathname: () => '/home',
   useRouter: () => ({ replace: () => undefined }),
   useSegments: () => [],
@@ -480,12 +475,18 @@ describe('AppProviders runtime composition', () => {
     queryModes.ShellRecoveryQuery = 'error';
 
     await act(async () => {
-      renderer = create(createElement(AppProviders, null, createElement(UniversalShell)));
+      renderer = create(
+        createElement(
+          AppProviders,
+          null,
+          createElement(UniversalShell, null, createElement(ShellRecoveryRoute)),
+        ),
+      );
     });
 
     assert.equal(renderer?.root.findAll((node) => String(node.type) === 'Ready').length, 0);
     const actorBoundary = findTag('RelayActorBoundary');
-    assert.ok(actorBoundary.findAll((node) => String(node.type) === 'Slot').length > 0);
+    assert.ok(actorBoundary.findAll((node) => String(node.type) === 'Retry').length > 0);
     assert.ok(queryHistory.some(({ query }) => query === 'UniversalShellQuery'));
     const shellRoot = findByTestId('universal-shell-root');
     const sessionQueryCountBeforeRetry = queryHistory.filter(

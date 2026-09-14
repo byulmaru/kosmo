@@ -6,6 +6,7 @@ import { returnToSettingsParent } from '@/components/settings/settingsNavigation
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
+import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { useTheme } from '@/theme/ThemeProvider';
 
 export default function SettingsDefaultPostVisibilityRoute() {
@@ -25,12 +26,18 @@ export default function SettingsDefaultPostVisibilityRoute() {
     ) : undefined;
 
   return (
-    <>
+    <RouteScrollContainer
+      nativeScrollProps={{
+        contentContainerStyle: styles.nativeContent,
+        style: styles.nativeRoot,
+      }}
+      webStyle={styles.webRoot}
+    >
       {detailHeaderMode !== 'hidden' ? (
         <PageHeader leading={backButton} title="게시물 기본 공개 범위" />
       ) : null}
       <SettingsProfileDetail />
-    </>
+    </RouteScrollContainer>
   );
 }
 
@@ -42,4 +49,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     width: 44,
   },
+  nativeContent: { flexGrow: 1, minWidth: 0, width: '100%' },
+  nativeRoot: { flex: 1, minWidth: 0, width: '100%' },
+  webRoot: { minWidth: 0, width: '100%' },
 });

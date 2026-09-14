@@ -4,6 +4,7 @@ import {
   ProfileConnectionList,
   ProfileConnectionListState,
 } from '@/components/profile/ProfileConnectionList';
+import { ProfileRouteContainer, useProfileRoute } from '@/components/profile/ProfileRouteShell';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import type { ProfileFollowingPageQuery as ProfileFollowingPageQueryType } from './__generated__/ProfileFollowingPageQuery.graphql';
@@ -22,18 +23,22 @@ export default function ProfileFollowingPage() {
     profileHandle?: string | string[];
   }>();
   const handle = normalizeProfileHandle(profileHandle);
+  const { chrome, scrollKey } = useProfileRoute();
 
   return (
-    <RouteBoundary
-      error={(retry) => (
-        <ProfileConnectionListState kind="following" onRetry={retry} state="error" />
-      )}
-      key={handle}
-      loading={<ProfileConnectionListState kind="following" state="loading" />}
-      title="팔로잉 목록을 불러오지 못했어요"
-    >
-      <ProfileFollowingPageContent handle={handle} />
-    </RouteBoundary>
+    <ProfileRouteContainer scrollKey={scrollKey}>
+      {chrome}
+      <RouteBoundary
+        error={(retry) => (
+          <ProfileConnectionListState kind="following" onRetry={retry} state="error" />
+        )}
+        key={handle}
+        loading={<ProfileConnectionListState kind="following" state="loading" />}
+        title="팔로잉 목록을 불러오지 못했어요"
+      >
+        <ProfileFollowingPageContent handle={handle} />
+      </RouteBoundary>
+    </ProfileRouteContainer>
   );
 }
 
