@@ -979,28 +979,52 @@ export const OverlayGeometryContract: Story = {
     const visibilityTrigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
     const submit = canvas.getByRole('button', { name: '게시' });
     const scroll = canvas.getByTestId('post-composer-scroll');
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
+    const galleryShell = gallery.parentElement!;
+    const content = galleryShell.parentElement!;
     const initialTargetTop = target.getBoundingClientRect().top;
     const initialVisibilityTop = visibilityTrigger.getBoundingClientRect().top;
     const initialSubmitTop = submit.getBoundingClientRect().top;
 
-    expect(target.getBoundingClientRect().height).toBe(624);
-    expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+    expect(target.getBoundingClientRect().height).toBe(560);
+    expect(body.getBoundingClientRect().height).toBe(80);
+    expect(gallery.getBoundingClientRect().top).toBeCloseTo(
+      body.getBoundingClientRect().bottom + space[12],
+      0,
+    );
+    expect(content.getBoundingClientRect().height).toBeCloseTo(
+      body.getBoundingClientRect().height + space[12] + galleryShell.getBoundingClientRect().height,
+      0,
+    );
+    expect(scroll.scrollHeight).toBe(scroll.clientHeight);
+    scroll.scrollTop = 1;
+    expect(scroll.scrollTop).toBe(0);
 
     await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 켜기' }));
     const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
     const contentWarningTop = contentWarning.getBoundingClientRect().top;
 
-    scroll.scrollTop = scroll.scrollHeight;
-    expect(scroll.scrollTop).toBeGreaterThan(0);
-    expect(contentWarning.getBoundingClientRect().top).toBe(contentWarningTop);
+    expect(scroll.scrollTop).toBe(0);
+    expect(scroll.scrollHeight).toBe(scroll.clientHeight);
+    expect(contentWarningTop).toBeGreaterThan(visibilityTrigger.getBoundingClientRect().bottom);
+    expect(getComputedStyle(scroll).overflowY).toBe('auto');
     scroll.scrollTop = 0;
 
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
 
     expect(target.getBoundingClientRect().top).toBe(initialTargetTop);
-    expect(target.getBoundingClientRect().height).toBe(404);
+    expect(target.getBoundingClientRect().height).toBe(560);
     expect(visibilityTrigger.getBoundingClientRect().top).toBe(initialVisibilityTop);
-    expect(submit.getBoundingClientRect().top).toBeLessThan(initialSubmitTop);
+    expect(submit.getBoundingClientRect().top).toBeCloseTo(initialSubmitTop, 0);
+    expect(contentWarning.getBoundingClientRect().top).toBe(contentWarningTop);
+    expect(scroll.scrollHeight).toBe(scroll.clientHeight);
+
+    await userEvent.click(body);
+    await userEvent.clear(body);
+    expect(scroll.scrollHeight).toBe(scroll.clientHeight);
+    await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 끄기' }));
+    expect(scroll.scrollHeight).toBe(scroll.clientHeight);
   },
 };
 

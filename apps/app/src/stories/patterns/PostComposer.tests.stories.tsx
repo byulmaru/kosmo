@@ -197,15 +197,40 @@ export const ShortViewportContract: Story = {
     const dialog = page.getByRole('dialog', { name: '글쓰기' });
     const outerScroll = within(dialog).getByTestId('composer-overlay-scroll');
     const scroll = within(dialog).getByTestId('post-composer-scroll');
+    const surface = within(dialog).getByTestId('composer-overlay-surface');
+    const target = within(dialog).getByTestId('post-composer-target');
+    const viewportHeight = canvasElement.ownerDocument.defaultView!.innerHeight;
+    const hostHeight = viewportHeight * 0.85;
+    const headerHeight = 64;
 
     expect(getComputedStyle(within(dialog).getByTestId('composer-overlay-surface')).overflow).toBe(
       'hidden',
+    );
+    expect(surface.getBoundingClientRect().height).toBeCloseTo(hostHeight, 0);
+    expect(target.getBoundingClientRect().height).toBeCloseTo(hostHeight - headerHeight, 0);
+    expect(surface.getBoundingClientRect().height).toBeCloseTo(
+      target.getBoundingClientRect().height + headerHeight,
+      0,
     );
     expect(getComputedStyle(scroll).overflowY).toBe('auto');
     expect(outerScroll.scrollHeight).toBe(outerScroll.clientHeight);
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
     scroll.scrollTop = scroll.scrollHeight;
     expect(scroll.scrollTop).toBeGreaterThan(0);
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '콘텐츠 경고 켜기' }));
+    const visibility = within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' });
+    const contentWarning = within(dialog).getByRole('textbox', { name: '콘텐츠 경고' });
+    const submit = within(dialog).getByRole('button', { name: '게시' });
+    const visibilityTop = visibility.getBoundingClientRect().top;
+    const contentWarningTop = contentWarning.getBoundingClientRect().top;
+    const submitTop = submit.getBoundingClientRect().top;
+
+    scroll.scrollTop = scroll.scrollHeight;
+    expect(scroll.scrollTop).toBeGreaterThan(0);
+    expect(visibility.getBoundingClientRect().top).toBe(visibilityTop);
+    expect(contentWarning.getBoundingClientRect().top).toBe(contentWarningTop);
+    expect(submit.getBoundingClientRect().top).toBe(submitTop);
 
     await userEvent.click(within(dialog).getByRole('button', { name: '이모지 추가' }));
     const picker = page.getByTestId('post-composer-emoji-picker');

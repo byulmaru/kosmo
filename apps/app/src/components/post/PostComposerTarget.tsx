@@ -225,7 +225,7 @@ export function PostComposerTarget({
       style={[
         styles.root,
         surface === 'rail' ? styles.rail : styles.overlay,
-        items.length > 0 ? (surface === 'rail' ? styles.railMedia : styles.overlayMedia) : null,
+        surface === 'rail' && items.length > 0 ? styles.railMedia : null,
         surface === 'overlay' && Platform.OS === 'web' ? styles.webOverlay : null,
         { backgroundColor: theme.backgroundCanvas },
       ]}
@@ -320,9 +320,7 @@ export function PostComposerTarget({
           style={styles.desktopScroll}
           testID="post-composer-scroll"
         >
-          <View
-            style={[styles.content, items.length > 0 ? styles.mediaContent : styles.textContent]}
-          >
+          <View style={[styles.content, items.length === 0 ? styles.textContent : null]}>
             <TextArea
               accessibilityLabel="게시물 내용"
               editable={!submitting}
@@ -944,7 +942,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   mediaBody: { minHeight: 236 },
-  mediaContent: { minHeight: 404 },
   mobileBody: {
     borderRadius: radius[12],
     borderWidth: borderWidths[0],
@@ -1013,8 +1010,7 @@ const styles = StyleSheet.create({
   desktopEditor: { flex: 1, minHeight: 0 },
   desktopScroll: { flex: 1, minHeight: 0 },
   desktopScrollContent: { minHeight: '100%' },
-  overlay: { height: 404, maxWidth: 600, width: '100%' },
-  overlayMedia: { height: 624 },
+  overlay: { height: 560, maxWidth: 600, width: '100%' },
   overlayMediaBody: { minHeight: 80 },
   progressRing: { height: 20, width: 20 },
   rail: { height: 404, width: '100%' },
@@ -1044,7 +1040,7 @@ const styles = StyleSheet.create({
   nativeVisibilityPosition: { position: 'absolute', width: 240 },
   visibilityBackdrop: { flex: 1 },
   visibilityOption: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     gap: space[8],
     padding: space[12],
