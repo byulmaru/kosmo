@@ -78,7 +78,7 @@ Verification을 보존하는 다른 수단을 선택할 수 있다. 그 선택�
   selected Profile이 있으면 양방향 Active Block 후보를 pagination 전에 제외하고 selected Profile이 없으면 기존 공개 후보 결과를 유지한다.
 - Reply·Quote·Reaction·Repost의 공통 assertion은 origin과 무관한 쓰기 admission만 담당한다. `CreatePostInput.repostSourceId`를 사용하는 Local Quote는 GraphQL `createPost`에서 차단 양방향의 요청 거부와 새 Post row 부재를 검증한다. ingress가 없는 Quote origin만 assertion 단위 검증과 실제 ingress 미검증을 구분한다. 목록·검색 후보의 SQL predicate는 pagination 전에 별도로 적용한다.
 - `FOLLOWERS` 권한은 Follow 존재와 양방향 Active Block 부재를 함께 요구하며, 잔존 Follow를 접근 근거로 사용하지 않는다.
-- GraphQL은 Membership으로 인증된 selected Profile actor와 Owner scope를 사용하고 중앙 application policy를 호출해야 한다. ADR 0024의 경계에 따라 request-specific DB actor
+- GraphQL은 Membership으로 인증된 selected Profile actor와 Owner scope를 사용하고 중앙 application policy를 호출해야 한다. selected Profile의 Instance kind를 별도 capability로 다시 검사하지 않으며, ADR 0024의 경계에 따라 request-specific DB actor
   state(GUC 등)나 client-only filter로 권한·가시성을 대체하지 않는다.
 - UI는 canonical design의 기존 Button·ActionMenu·ModalSheet·Toast·SettingsItem과 기존 Profile/Settings 흐름을 재사용하고, 최신 canonical이 정한 direct
   Profile route와 기존 Profile 정보·viewer 방향 콘텐츠 상태를 구현·통합한다. 이 기능만을 위한 새 범용 safety component나 Settings shell을 추가하지 않으며,
@@ -221,7 +221,7 @@ ESLint·Prettier를 실행한다. 기존 Mute·Follow·Post visibility·Notifica
 - 직접 Profile route는 `profileBlockStatus`와 `profileByHandle`을 같은 operation에서 조회하고, selected Profile auth scope를 충족하지 못하면
   API가 nullable `null`을 반환한다. App은 selected Profile kind나 조건부 GraphQL 변수로 권한을 예측하지 않는다. 기존
   `profileByHandle` 조회 결과가 있으면 차단 관계와 함께 기본 Profile 정보·방향성 콘텐츠 상태를 표시하고, Profile 조회 결과가
-  없을 때만 identity-free 상태 화면을 표시한다. 보호된 일반 조회의 null 결과와 별도 차단 상태를 실제 서버·Relay operation에서 함께 검증한다.
+  없으면 기존 unavailable 결과를 유지하고 Block 전용 identity·관계 상태·관리 action을 복구하지 않는다.
 - client는 기존 `Profile` global ID와 `ProfileBlock` 관계 ID 및 해제 payload의 의미를 구분한다. `targetProfile`은 별도 typename·ID 없이
   기존 Profile cache로 정규화하고, 반환된 non-null `profileBlockId`가 요청한 관계 ID와 정확히 같을 때만 해제 성공으로 처리한다.
   `null`·불일치·오류 또는 partial 결과는 실패로 처리하고 기존 상태를 보존한다.
@@ -232,8 +232,8 @@ ESLint·Prettier를 실행한다. 기존 Mute·Follow·Post visibility·Notifica
    `FollowButton`의 Block 관계 fragment·해제 mutation·pending·실패·Relay 수렴과 회귀를 소유하고, 자식 #772는
    Profile route와 차단 관리 목록의 노출 판단·목록 조회·pagination·focus fallback을 연결한다.
 2. `PROD-822`와 `PROD-861`의 완료 증거를 대조한 뒤 현재 Profile route의 query와 colocated fragment에 서버 계약을 연결한다.
-   직접 링크·새로고침·actor 전환에서도 서버 결과에 따라 일반 Profile 또는 공용 identity-free 상태를 표시한다.
-3. Profile action과 Block 목록은 생성·해제 모두 확인창에서 확정한 뒤 요청하고, 공용 presentation에 실제 mutation pending·성공·오류 상태를 전달한다. identity-free 해제 확인창에는 Target identity를 전달하지 않는다. 관계 생성·제거 응답의
+   직접 링크·새로고침·actor 전환에서도 서버 결과에 따라 일반 Profile 또는 기존 unavailable 상태를 표시한다.
+3. Profile action과 Block 목록은 생성·해제 모두 확인창에서 확정한 뒤 요청하고, 공용 presentation에 실제 mutation pending·성공·오류 상태를 전달한다. 관계 생성·제거 응답의
    Node ID와 변경 필드를 선택하고, 기존 Profile target과 ProfileBlock 관계 ID를 구분해 삭제된 관계 ID로 해당 Owner 목록의 membership을 갱신한다.
    성공한 해제 뒤에는 제거된 행 대신 목록 heading 또는 안전한 fallback으로 focus를 복원한다.
 4. 기존 actor Environment 경계 안에서 이미 표시 중인 Profile·Post·Notification이 서버 정책으로 수렴하게 한다. normalized field 갱신만으로
@@ -246,7 +246,7 @@ ESLint·Prettier를 실행한다. 기존 Mute·Follow·Post visibility·Notifica
 ### PROD-823 Allowed Alternatives and Verification
 
 위 접근은 구현을 위한 비규범적 안내다. connection directive, 좁은 updater 또는 필요한 query 재조회 중 실제 서버 payload와 현재 소비자 구조에
-맞는 방식을 구현 시 선택할 수 있다. actor 격리, 서버 결과 수렴과 identity-free 계약은 어느 방식에서도 유지한다. client에서 전체
+맞는 방식을 구현 시 선택할 수 있다. actor 격리, 서버 결과 수렴과 기존 unavailable 계약은 어느 방식에서도 유지한다. client에서 전체
 서버 가시성 정책을 복제하거나 보호된 데이터를 cache로 복구하는 방식은 허용 대안이 아니다.
 
 테스트 코드 범위는 Profile action·제한 route·Block 관리 목록과 actor 전환을 실행하는 component 및 data/cache integration 회귀다.

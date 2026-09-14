@@ -111,9 +111,9 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 - 유효한 Account에 selected Profile이 있으면 그 Profile을 `searchProfiles`의 viewer로 사용한다. selected Profile이
   없으면 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate나 selected Profile을 새로 요구하지
   않는다. 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용하지 않는다.
-- 정상적인 GraphQL `node(id:)`·`profileByHandle` 직접 route 진입·새로고침은 identity-free 결과가 아니라 기본 Profile 정보, viewer 방향별 콘텐츠 상태와
-  인증된 selected Owner 범위의 정확한 unblock 관계 ID를 확인한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가한
-  경우에만 조건부 identity-free fallback 문구를 사용한다.
+- 정상적인 GraphQL `node(id:)`·`profileByHandle` 직접 route 진입·새로고침은 기본 Profile 정보, viewer 방향별 콘텐츠 상태와
+  현재 Owner 범위의 정확한 unblock 관계 ID를 확인한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가하면
+  Block 전용 identity나 관계 상태를 복구하지 않고 기존 unavailable 결과를 유지한다.
 - `blocking` 화면에서는 Target Profile의 Post List·Post detail·첨부 Media를 기존 Post·Media 조회 정책으로
   제공한다. Profile route는 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 먼저 표시하고,
   사용자가 action을 실행한 뒤 해당 결과를 표시한다. 경고는 현재 Profile handle과 selected actor lifecycle마다
