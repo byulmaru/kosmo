@@ -348,12 +348,12 @@ describe('inbound Create dispatch', () => {
     ]);
   });
 
-  test('preserves unresolved, mismatched, or malformed typed Mentions as safe links while retaining known relations', async () => {
+  test('preserves unresolved or mismatched typed Mentions as safe links while retaining known relations independent of anchor text', async () => {
     const knownProfile = await createStoredRemoteActor({ profileUrl: 'not a URL' });
     const mismatchedTarget = new URL('https://remote-b.example/users/bob');
     await createStoredRemoteActor({ actorUri: mismatchedTarget, handle: 'bob' });
     const unresolvedTarget = new URL('https://unknown.example/users/bob');
-    const malformedLabelTarget = remoteActorUri;
+    const unsafeDisplayTarget = remoteActorUri;
     const objectUri = new URL('https://remote.example/notes/unresolved-mention');
     const note = new Note({
       attribution: remoteActorUri,
@@ -361,7 +361,7 @@ describe('inbound Create dispatch', () => {
         `<p><a href="${mismatchedTarget.href}">@alice</a> ` +
         `<a href="${unresolvedTarget.href}">@bob</a> ` +
         `<a href="${remoteActorUri.origin}/@alice">@alice</a> ` +
-        `<a href="${malformedLabelTarget.href}">\u0001</a></p>`,
+        `<a href="${unsafeDisplayTarget.href}">\u0001</a></p>`,
       id: objectUri,
       mediaType: 'text/html',
       tags: [
@@ -374,7 +374,7 @@ describe('inbound Create dispatch', () => {
           name: '@bob',
         }),
         new Mention({
-          href: malformedLabelTarget,
+          href: unsafeDisplayTarget,
           name: '@bad',
         }),
       ],
@@ -420,11 +420,7 @@ describe('inbound Create dispatch', () => {
             type: 'text',
           },
           { text: ' ', type: 'text' },
-          {
-            marks: [{ attrs: { href: malformedLabelTarget.href }, type: 'link' }],
-            text: '\u0001',
-            type: 'text',
-          },
+          { attrs: { profileId: knownProfile.id }, type: 'mention' },
         ],
       },
     ]);
