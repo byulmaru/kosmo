@@ -1,7 +1,7 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
 import { useCallback, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -416,7 +416,8 @@ function PostListRow({
 
 const styles = StyleSheet.create({
   card: {
-    paddingHorizontal: spacing.sm,
+    paddingLeft: Platform.OS === 'web' ? spacing.md : spacing.sm,
+    paddingRight: Platform.OS === 'web' ? spacing.lg : spacing.sm,
   },
   standardCard: { paddingBottom: spacing.xs, paddingTop: spacing.md },
   compactCard: { paddingBottom: 1, paddingTop: spacing.sm },

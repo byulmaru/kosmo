@@ -151,8 +151,8 @@ export function ReplyNotificationPost({
 
 const styles = StyleSheet.create({
   root: {
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,

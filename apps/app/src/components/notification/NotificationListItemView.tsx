@@ -250,7 +250,10 @@ function NotificationTarget(props: GroupedNotificationProps) {
 const styles = StyleSheet.create({
   root: { borderBottomWidth: borderWidths[1], minWidth: 0, width: '100%' },
   target: { minWidth: 0 },
-  replyInset: { paddingHorizontal: space[8] },
+  replyInset: {
+    paddingLeft: Platform.OS === 'web' ? space[12] : space[8],
+    paddingRight: Platform.OS === 'web' ? space[16] : space[8],
+  },
   srOnly: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', left: 0, top: 0 },
   row: {
     flexDirection: 'row',

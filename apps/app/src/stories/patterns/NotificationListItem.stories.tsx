@@ -418,9 +418,10 @@ export const CompositionContract: Story = {
       getComputedStyle(replyTime).lineHeight,
     );
     await expect(replyPost).toHaveStyle({ paddingLeft: '0px', paddingRight: '0px' });
+    await expect(replyPost).toHaveStyle({ paddingTop: '16px', paddingBottom: '8px' });
     await expect(reply.getByTestId('reply-notification-inset')).toHaveStyle({
-      paddingLeft: '8px',
-      paddingRight: '8px',
+      paddingLeft: '12px',
+      paddingRight: '16px',
     });
     await expect(reply.getByTestId('reply-notification-kind')).toHaveStyle({
       height: '48px',

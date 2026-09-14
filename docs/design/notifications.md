@@ -100,8 +100,9 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
 - Follow/FollowRequest/Reaction/Repost 행은 최소 80px이며 긴 이름·문구에 맞춰 높이가 늘어난다.
   Web inset은 좌 12px·우 16px, Native는 좌우 8px, kind/content gap은 12px이다.
   알림 본문은 `UI/Copy/L`(16/24), 날짜는 게시글과 같은 공통 `UI/Copy/M`(14/20)을 사용한다.
-  Reply는 `PostListItem`과 같은 좌우 8px inset을 알림 wrapper가 소유하며 내부 게시글 조합에는 별도
-  좌우 padding을 두지 않는다. 게시글 내부 링크와 action의
+  Reply와 `PostListItem`도 같은 Web 좌 12px·우 16px, Native 좌우 8px inset을 사용한다. Reply의 inset은
+  알림 wrapper가 소유하며 내부 게시글 조합에는 별도 좌우 padding을 두지 않는다. Reply 내부의 세로
+  여백은 위 16px·아래 8px이다. 게시글 내부 링크와 action의
   플랫폼별 접근성 target은 기존 Post 계약을 유지한다.
 - Read 배경은 투명, Unread는 Figma가 사용하는 `actionPrimarySubtle`과 4px
   `actionPrimaryBase` rail이다. 모든 플랫폼에서 이 Read/Unread 기본 표시와 접근 가능한 Unread 상태를
