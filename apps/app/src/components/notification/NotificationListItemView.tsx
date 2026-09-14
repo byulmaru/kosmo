@@ -5,6 +5,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { PostContentPrivacyBoundary } from '@/components/post/PostContentPrivacyBoundary';
 import { PostMediaImage } from '@/components/post/PostMediaImage';
 import { Avatar } from '@/components/ui/Avatar';
+import { TimestampText } from '@/components/ui/TimestampText';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import type { Href } from 'expo-router';
@@ -96,7 +97,9 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
         {props.kind === 'reply' ? (
           <>
             {unread ? <Text style={styles.srOnly}>읽지 않은 알림</Text> : null}
-            {props.children}
+            <View style={styles.replyInset} testID="reply-notification-inset">
+              {props.children}
+            </View>
           </>
         ) : (
           <NotificationTarget {...props} />
@@ -166,7 +169,7 @@ function NotificationTarget(props: GroupedNotificationProps) {
   );
   const copy = (
     <Text style={[styles.copy, { color: theme.foregroundPrimary }]}>
-      <Text style={textStyles.uiLabelM}>
+      <Text style={textStyles.uiLabelL}>
         {actor.name}
         {otherCount > 0 ? ` 외 ${otherCount}명` : ''}
       </Text>
@@ -174,7 +177,7 @@ function NotificationTarget(props: GroupedNotificationProps) {
       {actions[kind]}
     </Text>
   );
-  const time = <Text style={[styles.time, { color: theme.foregroundSecondary }]}>{timestamp}</Text>;
+  const time = <TimestampText style={styles.time}>{timestamp}</TimestampText>;
   const target = (
     <Pressable
       accessibilityLabel={label}
@@ -247,6 +250,7 @@ function NotificationTarget(props: GroupedNotificationProps) {
 const styles = StyleSheet.create({
   root: { borderBottomWidth: borderWidths[1], minWidth: 0, width: '100%' },
   target: { minWidth: 0 },
+  replyInset: { paddingHorizontal: space[8] },
   srOnly: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', left: 0, top: 0 },
   row: {
     flexDirection: 'row',
@@ -269,8 +273,8 @@ const styles = StyleSheet.create({
   },
   avatars: { alignItems: 'center', flexDirection: 'row' },
   overlap: { marginLeft: -space[12] },
-  copy: { ...textStyles.uiCopyM, flexShrink: 1, minWidth: 0 },
-  time: { ...textStyles.uiCopyM, flexShrink: 0 },
+  copy: { ...textStyles.uiCopyL, flexShrink: 1, minWidth: 0 },
+  time: { flexShrink: 0 },
   preview: {
     flexDirection: 'row',
     gap: space[12],

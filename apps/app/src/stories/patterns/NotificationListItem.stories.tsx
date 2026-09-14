@@ -417,11 +417,17 @@ export const CompositionContract: Story = {
     await expect(getComputedStyle(reactionTime).lineHeight).toBe(
       getComputedStyle(replyTime).lineHeight,
     );
-    await expect(replyPost).toHaveStyle({ paddingLeft: '12px', paddingRight: '16px' });
-    await expect(reply.getByTestId('notification-reason')).toBeVisible();
-    await expect(reply.getByTestId('notification-reason')).toHaveTextContent(
-      /^회원님의 게시글에 답글을 남겼습니다$/,
-    );
+    await expect(replyPost).toHaveStyle({ paddingLeft: '0px', paddingRight: '0px' });
+    await expect(reply.getByTestId('reply-notification-inset')).toHaveStyle({
+      paddingLeft: '8px',
+      paddingRight: '8px',
+    });
+    await expect(reply.getByTestId('reply-notification-kind')).toHaveStyle({
+      height: '48px',
+      width: '48px',
+    });
+    await expect(reply.queryByTestId('notification-reason')).not.toBeInTheDocument();
+    await expect(reply.getByText('답글 알림')).toBeInTheDocument();
     await expect(reply.getAllByText('별빛여행자')).toHaveLength(1);
     await expect(reply.queryByText(/원글 작성자/)).not.toBeInTheDocument();
     await expect(reply.queryByRole('link', { name: /답글을 남겼습니다/ })).not.toBeInTheDocument();
@@ -448,12 +454,13 @@ export const ReplyLayoutContract: Story = {
     const author = canvas.getByTestId('notification-post-author');
     const name = within(author).getByText('아주 긴 이름으로 우주를 여행하는 별빛 여행자');
     const handle = within(author).getByText('@starlight');
+    const avatar = within(author).getByTestId('notification-post-avatar');
+    await expect(avatar).toHaveStyle({ height: '24px', width: '24px' });
     await expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
     await expect(handle.getBoundingClientRect().width).toBeLessThanOrEqual(1);
     await expect(name.getBoundingClientRect().right).toBeLessThanOrEqual(
       author.getBoundingClientRect().right,
     );
-    await expect(canvas.getByTestId('notification-reason')).toBeVisible();
     await expect(canvas.getByRole('toolbar', { name: '액션 바' })).toBeVisible();
     await userEvent.tab();
     await expect(author).toHaveFocus();
@@ -492,7 +499,6 @@ export const ReplyQuoteContract: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getAllByTestId('notification-reason')).toHaveLength(1);
     await expect(canvas.getByText('답글이 인용한 게시글 본문입니다.')).toBeVisible();
     await expect(canvas.queryByText(/원글 작성자/)).not.toBeInTheDocument();
     await expect(canvas.getAllByRole('toolbar', { name: '액션 바' })).toHaveLength(1);

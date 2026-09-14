@@ -99,7 +99,9 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
   PROD-811에서 navigation 계약과 spec을 함께 정렬해야 한다.
 - Follow/FollowRequest/Reaction/Repost 행은 최소 80px이며 긴 이름·문구에 맞춰 높이가 늘어난다.
   Web inset은 좌 12px·우 16px, Native는 좌우 8px, kind/content gap은 12px이다.
-  Reply에는 별도 알림 header나 그 header의 최소 높이를 두지 않는다. 게시글 내부 링크와 action의
+  알림 본문은 `UI/Copy/L`(16/24), 날짜는 게시글과 같은 공통 `UI/Copy/M`(14/20)을 사용한다.
+  Reply는 `PostListItem`과 같은 좌우 8px inset을 알림 wrapper가 소유하며 내부 게시글 조합에는 별도
+  좌우 padding을 두지 않는다. 게시글 내부 링크와 action의
   플랫폼별 접근성 target은 기존 Post 계약을 유지한다.
 - Read 배경은 투명, Unread는 Figma가 사용하는 `actionPrimarySubtle`과 4px
   `actionPrimaryBase` rail이다. 모든 플랫폼에서 이 Read/Unread 기본 표시와 접근 가능한 Unread 상태를
@@ -121,23 +123,19 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
   가져오지 않고 프로덕션 UI의 SUIT와 본문의 Pretendard를 유지한다.
 - 미리보기의 하단 여백은 썸네일 유무와 무관하게 일반 행과 같은 8px이다.
   2026-09-07 사용자 결정에 따라 Figma Light/Dark 조합 표본과 구현을 함께 정렬했다.
-- Reply/Mention은 작성자 이름·핸들 → 알림 이유 → 본문·미디어 → Action Bar의 동일한 게시글
-  구성을 사용한다. 작성자 아바타·이름과 시각을 별도 알림 header에 중복 표시하지 않는다.
-  알림 안의 작성자 이름과 핸들은 한 줄에 배치하며 이름을 우선한다. 공간이 부족하면 핸들이 먼저
+- Reply/Mention은 종류 아이콘 → 작성자 이름·핸들·시각 → 본문·미디어 → Action Bar의
+  동일한 게시글 구성을 사용한다. 48px kind rail 안에 32px `MessageCircle`(Reply)·`AtSign`(Future
+  Mention)을 `foregroundSecondary`로 표시한다. 작성자 행은 24px Avatar와 `ProfileNameBlock`의
+  `inline` variant를 사용한다. 이름과 핸들은 한 줄에 배치하며 이름을 우선한다. 공간이 부족하면 핸들이 먼저
   가려지고, 이름도 가용 폭을 넘으면 말줄임한다. 이 계약을 다른 Profile 표시 전체에 확대하지 않는다.
-- 둘째 줄은 답글 대상 목록이 아니라 현재 Recipient가 알림을 받은 이유다. Reply는
-  `회원님의 게시글에 답글을 남겼습니다`, Future Mention은 `회원님을 멘션했습니다`로 표시한다.
-  문장 앞에 16px `MessageCircle`(Reply)·`AtSign`(Future Mention)을 두며 아이콘과 문장 전체를
-  `foregroundSecondary`(Figma `color/foreground/secondary`)로 통일한다. Light `#64646F`, Dark
-  `#A3A3A3`이며 legacy `textSecondary`는 사용하지 않는다. 알림 작성자 이름은 `foregroundPrimary`,
-  핸들과 시각은 `foregroundSecondary`를 사용한다. Info 색상, 단어별 강조나 별도 배경은 두지 않는다.
-  아이콘은 장식이며 알림 종류는 문장으로도 전달한다.
-  여러 Profile을 멘션한 글도 각 Recipient에게 같은 Mention 문구를 사용하며 본문의 멘션은 유지한다.
+- 별도의 알림 이유 문장은 표시하지 않는다. 알림 작성자 이름은 `foregroundPrimary`, 종류 아이콘·핸들·시각은
+  `foregroundSecondary`를 사용한다. Light `#64646F`, Dark `#A3A3A3`이며 legacy `textSecondary`, Info 색상,
+  단어별 강조나 별도 배경은 두지 않는다. 아이콘은 장식으로 숨기고 접근성에는 짧은 알림 종류를 별도로 전달한다.
 - Reply/Mention 알림에는 원글 미리보기나 별도 받는 사람 목록을 추가하지 않는다. 결과 게시글을
   활성화하면 해당 게시글 상세에서 대화 문맥을 확인한다. 이 제한은 Reaction/Repost의 actionless
   미리보기에는 적용하지 않는다. 수신자별 Reply/Mention 중복 정책은
   [Notification 도메인의 Future 계약](../domain/objects/notification.md#replymention-수신자별-분류와-중복-처리-future)을 따른다.
-- Reply 알림은 `ReplyNotificationPost`가 작성자·시각·알림 이유와 게시글 내용을 조립한다.
+- Reply 알림은 `ReplyNotificationPost`가 kind rail·작성자·시각과 게시글 내용을 조립한다.
   `PostBody`·`PostSourcePreview`·`PostActionSurface`를 재사용하고, Reply 버튼·composer·focus 연결은
   `usePostReplySurface`를 게시글 목록과 공유한다. Reply 버튼은 `owner="list"`인 기존 Reply composer의
   popup modal을 열며 Notification 전용 composer나 별도 popup lifecycle을 만들지 않는다. `PostListItem`은
@@ -158,7 +156,7 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
 ## 검증 경계
 
 2026-09-08 Figma에서 Reply의 Light/Dark·긴 이름·읽음/읽지 않음 표본과 Mention의 Light/Dark
-표본을 시각 확인했다. 새 Reply Storybook에서 중복 header 제거, 이름·핸들 overflow, 알림 이유 문구,
+표본을 시각 확인했다. 새 Reply Storybook에서 중복 header와 별도 알림 이유 행 제거, 이름·핸들 overflow,
 Reply Parent 미리보기 부재, Action Bar의 독립 동작과 unread/hover 범위를 다시 검증한다.
 답글 자체가 Quote를 포함하는 경우 기존 인용 내용은 유지하며 Reply Parent 미리보기와 구분한다.
 Web 자동화는 Native 실제 기기의 touch·focus 검증을 대체하지 않는다.
