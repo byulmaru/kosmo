@@ -4,7 +4,7 @@ Profile은 Local·Remote origin과 기존 Follow lifecycle을 제공하지만, t
 
 현재 `SettingsProfileDetail`은 selected Profile과 Owner membership을 조회하고 기존 Profile 설정 control을 배치한다. Fedify의 Local Actor projection은 Profile 표현과 key를 구성하지만 migration alias를 포함하지 않으며, inbound handler에는 Move 처리가 없다. 기존 Follow command는 Follow/Request lifecycle과 재시도를 소유하고, PENDING 또는 terminal 상태에서 같은 command를 무조건 새로 적용하지 않는다.
 
-이 설계는 `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `docs/design/settings.md`와 `PROD-743`의 승인된 결과를 구현자가 사용할 수 있는 비규범적 handoff로 정리한다.
+이 설계는 `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`와 `PROD-743`의 승인된 제품 결과를 구현자가 사용할 수 있는 handoff로 정리한다. `docs/design/settings.md`는 Settings control의 시각 조립·상태 표현을 확정하는 visual design source이며, 그 권위 범위는 시각 표현·접근성에 한정되고 제품 정책은 정하지 않는다.
 
 ## Goals / Non-Goals
 
