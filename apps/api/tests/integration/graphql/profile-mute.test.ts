@@ -487,19 +487,6 @@ describe('GraphQL Profile Mute', () => {
     assert.equal(suspendedResult.errors?.[0]?.extensions?.code, 'NOT_FOUND');
     assert.equal(await db.$count(ProfileMutes), 0);
   });
-
-  test('Remote selected Profile은 Profile Mute Owner로 사용할 수 없다', async () => {
-    const remoteInstance = await createRemoteInstance({ domain: 'remote-owner.example' });
-    const remoteOwner = await createAuthenticatedSession({ instanceId: remoteInstance.id });
-    const target = await createProfile({
-      handle: 'remote-owner-target',
-      instanceId: localInstanceId,
-    });
-
-    const result = await muteProfile(target.id, remoteOwner.token);
-    assert.equal(result.errors?.[0]?.extensions?.code, 'NOT_FOUND');
-    assert.equal(await db.$count(ProfileMutes), 0);
-  });
 });
 
 const muteProfile = (targetProfileId: string, token: string) =>
@@ -612,9 +599,7 @@ const createProfile = async ({
     .returning()
     .then(firstOrThrow);
 
-const createAuthenticatedSession = async ({
-  instanceId = localInstanceId,
-}: { instanceId?: string } = {}) => {
+const createAuthenticatedSession = async () => {
   const account = await db
     .insert(Accounts)
     .values({
@@ -626,7 +611,7 @@ const createAuthenticatedSession = async ({
     .then(firstOrThrow);
   const profile = await createProfile({
     handle: `viewer-${crypto.randomUUID().slice(0, 8)}`,
-    instanceId,
+    instanceId: localInstanceId,
   });
   await db.insert(AccountProfiles).values({
     accountId: account.id,

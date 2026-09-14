@@ -30,6 +30,9 @@ Account-Profile Membership은 Account와 Profile의 역할 기반 관계다. Loc
 같은 Account와 Profile 조합에는 Membership이 하나만 존재한다. Local Profile에는 Owner Role Membership이
 항상 하나 이상 존재한다.
 
+Account가 Profile을 선택할 수 있는 자격은 이 Membership의 존재로만 결정한다. Profile Origin, Membership
+Role 또는 Profile 생성자 여부를 선택 조건으로 추가하지 않는다.
+
 Admin Console의 Membership 조회는 [Admin Console Read Policy](../policies/admin-console-read.md)가 정한
 Admin Console Viewer projection으로만 제공한다. 이는 `Profile.Owner`, `Profile.Member`,
 `Membership.Account`라는 기존 관계 사실이나 해당 관계를 변경하는 행동 권한을 바꾸지 않는다.
@@ -60,5 +63,3 @@ Admin Console Viewer projection으로만 제공한다. 이는 `Profile.Owner`, `
 ## 제외/보류
 
 - 초대 수락 대기나 연결 해제 대기 상태는 현재 범위에서 제외한다.
-- Remote Profile Membership을 만드는 경로는 현재 범위에서 제외한다. 관계가 이미 존재하면 `Profile.Member`와
-  selected Profile 자격은 성립하지만 Local Profile 운영 권한을 부여하지 않는다.

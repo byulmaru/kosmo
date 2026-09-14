@@ -130,7 +130,7 @@ rename·disable·delete하지 않는다.
 | Local Profile 생성            | Account        | Profile             | handle, 선택적 표시 이름, Follow Approval Policy                              | `Account.Active`                     | 같은 Local handle이 없고 handle이 Local handle 생성 정책을 통과한다                                                                                                                             | Origin=Local, Lifecycle=Active, Suspension=Normal인 Profile이 현재 Local Instance와 연결되고 Owner Membership이 생성된다. 표시 이름은 입력값이 없으면 handle이 되며 표시/qualified handle은 handle과 Instance에서 파생한다 |
 | Remote Profile 등록           | 시스템         | Profile             | Instance, 원격 표현 속성, Follow Approval Policy                              | `System.RemoteProfileSource`         | Instance Type이 Remote이고 새 원격 요청 허용 상태이며 입력 qualified handle의 Profile이 없다                                                                                                    | Origin=Remote, Lifecycle=Active, Suspension=Normal인 Profile이 입력 Instance와 연결되고 원격 표현 속성/Policy가 생성된다                                                                                                   |
 | Remote Profile 갱신           | 시스템         | Profile             | 원격 표현 속성, Follow Approval Policy                                        | `System.RemoteProfileSource`         | 대상 Origin이 Remote이고 Lifecycle State가 Deleted가 아니다                                                                                                                                     | 원격 표현 속성과 Policy가 바뀌며 Lifecycle/Suspension State는 유지된다                                                                                                                                                     |
-| Profile 편집                  | Account        | 현재 선택된 Profile | 표시 이름, bio, avatar/header, 링크, Follow Approval Policy, Profile Tag 목록 | `Account.Active`, `Profile.Owner`    | Origin이 Local이고 Lifecycle State가 Active이며 Suspension State가 Normal이다                                                                                                                   | Profile 표현 속성, Policy, 선택된 Media 관계와 Profile Tag 목록이 원자적으로 바뀐다                                                                                                                                        |
+| Profile 편집                  | Account        | 현재 선택된 Profile | 표시 이름, bio, avatar/header, 링크, Follow Approval Policy, Profile Tag 목록 | `Account.Active`, `Profile.Owner`    | Lifecycle State가 Active이며 Suspension State가 Normal이다                                                                                                                                       | Profile 표현 속성, Policy, 선택된 Media 관계와 Profile Tag 목록이 원자적으로 바뀐다                                                                                                                                        |
 | 기본 Post Visibility 변경     | Account        | Local Profile       | Public, Unlisted 또는 Followers Only                                          | `Account.Active`, `Profile.Owner`    | Origin이 Local이고 Lifecycle State가 Active이며 Suspension State가 Normal이다                                                                                                                   | 이후 새 Post·Reply·Quote Composer가 사용할 Profile 기본값이 바뀐다. 이미 작성된 Post와 열려 있는 Composer의 개별 Visibility는 바뀌지 않는다                                                                                |
 | Profile 비활성화              | Account        | Profile             | 없음                                                                          | `Account.Active`, `Profile.Owner`    | Origin이 Local이고 Lifecycle State가 Active이며 Suspension State가 Normal이다                                                                                                                   | Lifecycle State가 Deactivated가 된다                                                                                                                                                                                       |
 | Profile 재활성화              | Account        | Profile             | 없음                                                                          | `Account.Active`, `Profile.Owner`    | Origin이 Local이고 Lifecycle State가 Deactivated이며 Suspension State가 Normal이다                                                                                                              | Lifecycle State가 Active가 된다                                                                                                                                                                                            |
@@ -142,6 +142,11 @@ rename·disable·delete하지 않는다.
 
 Profile Origin은 연결된 Instance Type과 같아야 한다. Follow Approval Policy 변경은 이미 존재하는 Pending Follow
 Request의 상태나 존재를 바꾸지 않는다.
+
+Profile 편집의 전체 자격은 Account.Active, Profile.Owner와 대상 Profile의 Active/Normal lifecycle로 정한다.
+기본 Post Visibility는 Local Profile에만 적용·변경하며, 다른 편집 field는 selected Profile의 Origin 또는
+Instance Type을 공통 조건으로 사용하지 않는다. avatar/header 관계는 별도의 Local Media source·소유권·Ready
+조건을 따른다.
 
 ActivityPub Remote Profile 검색 경계는 qualified handle을 canonical actor URI로 먼저 해석한다. Remote Profile
 materialization 경계는 canonical actor URI와 선택적인 Profile ID를 입력으로 받아 actor metadata나 Profile이 아직
@@ -198,7 +203,7 @@ Hashtag에는 영향을 주지 않는다.
 | 권한                         | 종류      | 성립 조건                                                 |
 | ---------------------------- | --------- | --------------------------------------------------------- |
 | `Profile.Member`             | 객체 종속 | Account가 Profile의 Owner 또는 Member Membership을 가진다 |
-| `Profile.Owner`              | 객체 종속 | Account가 Local Profile의 Owner Membership을 가진다       |
+| `Profile.Owner`              | 객체 종속 | Account가 Profile의 Owner Membership을 가진다             |
 | `System.RemoteProfileSource` | 독립      | 시스템이 Remote Profile 원본 정보를 반영하는 주체다       |
 
 ## 조회 정책

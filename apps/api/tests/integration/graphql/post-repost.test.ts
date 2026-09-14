@@ -162,20 +162,6 @@ describe('GraphQL Repost', () => {
     }
   });
 
-  test('Remote Unresponsive selected Profile도 Repost할 수 있다', async () => {
-    const sourceAuthor = await createProfile('remote-selected-source-author');
-    const source = await createContentPost(sourceAuthor.id);
-    const auth = await createAuthenticatedSession({
-      instanceKind: InstanceKind.ACTIVITYPUB,
-      instanceState: InstanceState.UNRESPONSIVE,
-    });
-
-    const result = await requestRepost(source.id, auth.token);
-
-    assertNoGraphQLErrors(result);
-    assert.ok(result.data?.repostPost.repost.id);
-  });
-
   test('조회 가능한 허용 불가 Source는 VALIDATION sourceId로 거부한다', async () => {
     const auth = await createAuthenticatedSession();
     const contentSource = await createContentPost(auth.profile.id);

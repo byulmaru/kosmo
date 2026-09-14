@@ -146,7 +146,7 @@ test('Owner 또는 Target Profile 삭제 시 Profile Mute 관계가 cascade 정�
   }
 });
 
-test('유효한 Local Owner는 Local·Remote Target을 영구 Mute한다', async () => {
+test('유효한 Owner는 Local·Remote Target을 영구 Mute한다', async () => {
   const owner = await createProfile();
   const localTarget = await createProfile();
   const remoteTarget = await createProfile({ kind: InstanceKind.ACTIVITYPUB });
@@ -188,20 +188,17 @@ test('유효한 Local Owner는 Local·Remote Target을 영구 Mute한다', async
 
 test('Mute action은 self-target·존재하지 않는 Target·자격 없는 Owner를 거부한다', async () => {
   const owner = await createProfile();
-  const remoteOwner = await createProfile({ kind: InstanceKind.ACTIVITYPUB });
   const disabledOwner = await createProfile({ profileState: ProfileState.DISABLED });
   const suspendedOwner = await createProfile({ instanceState: InstanceState.SUSPENDED });
   const target = await createProfile();
   const profileIds = [
     owner.profile.id,
-    remoteOwner.profile.id,
     disabledOwner.profile.id,
     suspendedOwner.profile.id,
     target.profile.id,
   ];
   const instanceIds = [
     owner.instance.id,
-    remoteOwner.instance.id,
     disabledOwner.instance.id,
     suspendedOwner.instance.id,
     target.instance.id,
@@ -216,7 +213,7 @@ test('Mute action은 self-target·존재하지 않는 Target·자격 없는 Owne
       muteProfile({ ownerProfileId: owner.profile.id, targetProfileId: crypto.randomUUID() }),
       NotFoundError,
     );
-    for (const invalidOwner of [remoteOwner, disabledOwner, suspendedOwner]) {
+    for (const invalidOwner of [disabledOwner, suspendedOwner]) {
       await assert.rejects(
         muteProfile({
           ownerProfileId: invalidOwner.profile.id,

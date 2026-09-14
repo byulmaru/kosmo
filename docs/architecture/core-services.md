@@ -44,7 +44,8 @@ Session credential 확인과 조건부 revoke를 함께 소유한다. 이 예외
 ## Actor와 caller별 조건
 
 기본 소셜 actor는 `Profile`이다. `Account`는 GraphQL caller의 인증 identity이며 selected Profile은
-Account–Profile membership으로 정한다. selected Profile은 Local 또는 Remote일 수 있다. `Account`와
+Account–Profile membership으로 정한다. selected Profile의 선택 자격은 Membership 존재로만 결정하며,
+Profile Origin, Account Profile Role 또는 Profile 생성자 여부를 선택 조건으로 검사하지 않는다. `Account`와
 `InstanceKind.LOCAL`은 모든 소셜 action의 공통 조건이 아니며, Account 자체가 domain participant이거나
 Locality가 action의 의미일 때만 core contract에 포함한다. 결과 객체의 Local/Remote 구분이나 저장 위치를
 actor Profile의 Instance Type 조건으로 확장하지 않는다.

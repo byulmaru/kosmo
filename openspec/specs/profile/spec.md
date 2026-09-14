@@ -367,13 +367,13 @@ handle 재사용 가능 여부는 이 정책에 우선해서는 안 된다(MUST 
 
 ### Requirement: Profile updates
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/architecture/core-services.md`, `PROD-489` 확정 결정 기록, `PROD-490`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`, `PROD-648`, `PROD-665` — Active Account가 현재 선택한 Profile의 Owner이고 대상 Origin이 Local이며 Lifecycle State가 `Active`, Suspension State가 `Normal`일 때만 표시 이름, bio, 팔로우 정책, 기본 Post Visibility와 전체 Profile Tag 목록을 수정할 수 있어야 한다(MUST). Profile update input은 대상 Profile ID를 받지 않고 검증된 세션의 selected Profile identity를 사용해야 한다(MUST). Member, selected Profile 없음, Deactivated Profile과 Remote Profile은 수정할 수 없어야 한다(MUST NOT). 선택적 `tags: [String!]` input에 목록이 제공되면 기존 Profile Tag 전체 목록을 같은 Profile update transaction에서 교체해야 하며(MUST), input을 생략하거나 `null`로 보내면 기존 목록을 유지해야 한다(MUST). 기본 Post Visibility는 `PUBLIC`, `UNLISTED`, `FOLLOWERS`만 허용해야 한다(MUST). Core Profile action은 수정 transaction을 직접 소유하고 실제 actor-visible 변경 commit 뒤의 Effects Workflow start를 직접 시도해야 하며(MUST), caller database handle이나 caller-side post-commit lifecycle을 공개해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/architecture/core-services.md`, `PROD-489` 확정 결정 기록, `PROD-490`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`, `PROD-648`, `PROD-665`, `PROD-962` — Active Account가 현재 선택한 Profile의 Owner이고 Lifecycle State가 `Active`, Suspension State가 `Normal`일 때 표시 이름, bio, 팔로우 정책과 전체 Profile Tag 목록을 수정할 수 있어야 한다(MUST). `defaultPostVisibility`는 Local Profile에만 적용·변경할 수 있고 `PUBLIC`, `UNLISTED`, `FOLLOWERS`만 허용해야 한다(MUST). Profile update input은 대상 Profile ID를 받지 않고 검증된 세션의 selected Profile identity를 사용해야 한다(MUST). Member, selected Profile 없음, Deactivated Profile은 수정할 수 없어야 한다(MUST NOT). 선택적 `tags: [String!]` input에 목록이 제공되면 기존 Profile Tag 전체 목록을 같은 Profile update transaction에서 교체해야 하며(MUST), input을 생략하거나 `null`로 보내면 기존 목록을 유지해야 한다(MUST). Profile Origin 또는 Instance Kind는 `defaultPostVisibility`를 제외한 update field의 selected actor 조건이 아니다. Core Profile action은 수정 transaction을 직접 소유하고 실제 actor-visible 변경 commit 뒤의 Effects Workflow start를 직접 시도해야 하며(MUST), caller database handle이나 caller-side post-commit lifecycle을 공개해서는 안 된다(MUST NOT).
 
 #### Scenario: Update profile as owner
 
-- **WHEN** Active Account가 현재 선택한 Lifecycle State `Active`, Suspension State `Normal`의 Local Profile `OWNER`로 수정을 요청한다
-- **THEN** 시스템은 제공된 displayName, bio, followPolicy, defaultPostVisibility 값을 갱신한다
-- **AND** 생략된 displayName, bio, followPolicy, defaultPostVisibility 값은 변경하지 않는다
+- **WHEN** Active Account가 현재 선택한 Lifecycle State `Active`, Suspension State `Normal`의 Profile `OWNER`로 유효한 displayName, bio, followPolicy와 Profile Tag 변경을 요청한다
+- **THEN** 시스템은 제공된 displayName, bio, followPolicy 값을 갱신한다
+- **AND** 생략된 displayName, bio, followPolicy 값은 변경하지 않는다
 - **AND** tags가 제공되면 Hashtag identity로 검증·resolve한 전체 목록과 관계를 같은 transaction에서 교체한다
 - **AND** tags가 생략되거나 `null`이면 기존 Profile Tag 관계를 유지한다
 - **AND** mutation은 `UpdateProfilePayload.profile`로 갱신된 `Profile`과 tags를 반환하며 배열 순서는 계약하지 않는다
@@ -381,7 +381,7 @@ handle 재사용 가능 여부는 이 정책에 우선해서는 안 된다(MUST 
 
 #### Scenario: Clear Profile Tags as owner
 
-- **WHEN** Active Account가 현재 선택한 Active Local Profile의 `OWNER`로 tags 빈 목록을 명시해 수정을 요청한다
+- **WHEN** Active Account가 현재 선택한 Active Profile의 `OWNER`로 tags 빈 목록을 명시해 수정을 요청한다
 - **THEN** 시스템은 해당 Profile의 Profile Tag 관계를 모두 제거한다
 - **AND** 다른 제공 값과 빈 tags를 포함한 갱신된 Profile을 반환한다
 
@@ -389,7 +389,7 @@ handle 재사용 가능 여부는 이 정책에 우선해서는 안 된다(MUST 
 
 - **WHEN** Profile update의 tags가 Hashtag Name syntax·정규화·문자·길이 또는 canonical identity 중복 검증을 통과하지 않는다
 - **THEN** 시스템은 tags field와 연결된 validation 오류를 반환한다
-- **AND** 같은 요청의 displayName, bio, followPolicy, defaultPostVisibility와 기존 Profile Tag 관계를 어느 것도 변경하지 않는다
+- **AND** 같은 요청의 displayName, bio, followPolicy와 기존 Profile Tag 관계를 어느 것도 변경하지 않는다
 
 #### Scenario: Reject unsupported default visibility
 
@@ -402,13 +402,6 @@ handle 재사용 가능 여부는 이 정책에 우선해서는 안 된다(MUST 
 - **WHEN** selected Profile이 없거나 Deactivated·Suspended 상태이거나 현재 Account가 inactive이거나 selected Profile membership이 유효하지 않다
 - **THEN** 시스템은 selected Profile authorization 오류로 요청을 거부한다
 - **AND** Profile Tag 관계를 변경하지 않는다
-
-#### Scenario: Reject a selected Remote Profile update
-
-- **WHEN** Active Account가 현재 선택한 Remote Profile의 수정을 요청한다
-- **THEN** 시스템은 profile not found 오류를 반환한다
-- **AND** Profile Tag 관계를 변경하지 않는다
-- **AND** Remote Profile의 기본 Post Visibility 설정을 만들거나 변경하지 않는다
 
 #### Scenario: Reject profile update without owner role
 
@@ -455,7 +448,7 @@ handle 재사용 가능 여부는 이 정책에 우선해서는 안 된다(MUST 
 - **AND** mutation은 `SelectProfilePayload.session`으로 현재 `Session`을 반환한다
 - **AND** 반환된 `Session.selectedProfile`은 선택된 프로필을 가리켜 클라이언트 캐시가 active profile 변경을 동기화할 수 있다
 
-#### Scenario: Reject unowned or invisible profile selection
+#### Scenario: Reject profile without membership or visibility
 
 - **WHEN** 로그인한 계정이 자신과 연결되지 않았거나 active가 아니거나 소속 instance가 `SUSPENDED`인 profile 선택을 요청한다
 - **THEN** 시스템은 profile not found 오류를 반환한다
@@ -806,20 +799,20 @@ API는 현재 active profile이 참여하는 pending follow request를 해당 `P
 - **WHEN** 현재 Account가 대상 Local Profile의 Owner 또는 Member가 아니다
 - **THEN** API는 대상 Profile의 `private` projection을 `null`로 반환해 기본 Post Visibility를 노출하지 않는다
 
-### Requirement: Selected Local Owner Profile representation update
+### Requirement: Selected Owner Profile representation update
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `PROD-490`, `PROD-492` — Profile edit 저장은 GraphQL usingProfile 경계를 통과한 selected Active/Normal Local Profile과 Owner Membership을 대상으로 displayName, bio, `followPolicy`와 avatar/header Media 관계를 변경해야 한다(MUST). 임의 Profile id, Member 또는 Admin role로 편집을 허용해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `PROD-490`, `PROD-492`, `PROD-962` — Profile edit 저장은 GraphQL usingProfile 경계를 통과한 selected Active/Normal Profile과 Owner Membership을 대상으로 displayName, bio, `followPolicy`와 avatar/header Media 관계를 변경해야 한다(MUST). selected Profile의 Origin 또는 Instance Kind는 공통 편집 조건이 아니며, avatar/header Media 관계는 허용된 Local Media source·소유권·Ready 조건을 따라야 한다. 임의 Profile id, Member 또는 Admin role로 편집을 허용해서는 안 된다(MUST NOT).
 
-#### Scenario: Update selected Local Profile as Owner
+#### Scenario: Update selected Profile as Owner
 
-- **WHEN** Active Account의 selected Profile이 Active/Normal Local이고 Membership Role이 Owner이며 유효한
-  displayName, bio, `followPolicy`와 Media 관계로 수정을 요청한다
+- **WHEN** Active Account의 selected Profile이 Active/Normal이고 Membership Role이 Owner이며 유효한
+  displayName, bio, `followPolicy`와 허용된 Media 관계로 수정을 요청한다
 - **THEN** 시스템은 selected Profile의 표현 값, `followPolicy`와 avatar/header 관계를 원자적으로 변경한다
 - **AND** payload는 갱신된 Profile을 반환해 Relay normalized record를 동기화할 수 있게 한다
 
 #### Scenario: Validate authorization when the update starts
 
-- **WHEN** 저장 action을 시작할 때 selected Profile·Owner Membership·Account·Local Profile eligibility 중 하나가
+- **WHEN** 저장 action을 시작할 때 selected Profile·Owner Membership·Account·Profile lifecycle eligibility 중 하나가
   유효하지 않다
 - **THEN** 시스템은 현재 상태를 server-authoritative하게 확인해 수정을 거부한다
 - **AND** displayName, bio, `followPolicy`와 avatar/header 관계를 모두 저장 전 상태로 유지한다
@@ -882,7 +875,7 @@ Projection은 현재 session Account로 scope되어야 하고(MUST), 다른 Acco
 
 #### Scenario: Preserve Pending Follow Requests after a policy change
 
-- **WHEN** selected Local Profile Owner가 Follow Approval Policy를 변경해 저장한다
+- **WHEN** selected Profile Owner가 Follow Approval Policy를 변경해 저장한다
 - **THEN** 기존 Pending Follow Request의 상태와 존재는 저장 전과 동일하게 유지된다
 - **AND** 정책 변경은 이미 생성된 Follow Request를 승인·거절·삭제하지 않는다
 
@@ -894,7 +887,7 @@ Projection은 현재 session Account로 scope되어야 하고(MUST), 다른 Acco
 
 #### Scenario: Reject ineligible selected Profile
 
-- **WHEN** selected Profile이 Remote이거나 Active/Normal 조건을 통과하지 않는다
+- **WHEN** selected Profile이 Active/Normal 조건을 통과하지 않는다
 - **THEN** 시스템은 Profile 수정을 거부한다
 - **AND** client용 Owner capability는 편집 가능 상태를 반환하지 않는다
 
