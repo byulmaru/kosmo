@@ -81,14 +81,14 @@ for (const size of [undefined, 'compact'] as const) {
   });
 }
 
-for (const [os, width, expectedWidth, marginVertical] of [
-  ['web', 767, 96, 0],
-  ['web', 768, 72, 0],
-  ['web', 1280, 72, 0],
-  ['ios', 1280, 96, -2],
-  ['android', 1280, 96, -4],
+for (const [os, width, marginVertical] of [
+  ['web', 767, 0],
+  ['web', 768, 0],
+  ['web', 1280, 0],
+  ['ios', 1280, -2],
+  ['android', 1280, -4],
 ] as const) {
-  test(`${os} ${width}px ProfileListItem selects the consumer size without increasing row height`, async () => {
+  test(`${os} ${width}px ProfileListItem uses Medium without increasing row height`, async () => {
     platform.OS = os;
     windowWidth = width;
     await act(async () => {
@@ -96,7 +96,7 @@ for (const [os, width, expectedWidth, marginVertical] of [
     });
     assert.ok(renderer);
     const button = renderer.root.find((node) => (node.type as unknown) === 'Button');
-    assert.equal(button.props.style.width, expectedWidth);
+    assert.equal(button.props.style.width, 96);
     const parentStyle = Object.assign({}, ...button.parent!.props.style.flat());
     assert.equal(parentStyle.marginVertical, marginVertical);
   });

@@ -58,7 +58,7 @@ Density는 별도 runtime mode나 새 token collection이 아니라 `space/*`를
 | `formStack`         | vertical flow, gap `16`                                                         | `FeedbackForm`, `ProfileEditForm`                                                                                                                                                             |
 | `formPageInset`     | horizontal padding `16`                                                         | Web `FeedbackPage`, Profile Edit field 영역                                                                                                                                                   |
 | `listStack`         | vertical flow, gap `0`, padding `0`                                             | `SettingsNavigationList` 부모                                                                                                                                                                 |
-| `listRow`           | horizontal flow, center, gap `12`, padding `12 16`, min-height `64`, radius `0` | `SettingsItem`, `ProfileListItem`, `ProfileConnectionList` skeleton                                                                                                                           |
+| `listRow`           | horizontal flow, center, gap `12`, padding `12 16`, min-height `64`, radius `0` | `SettingsItem`, `ProfileListItem`, `FollowRequestListItem`, `ProfileConnectionList` skeleton                                                                                                  |
 | `actionMenuSurface` | vertical flow, gap `0`, padding `4`, radius `12`                                | Web `ActionMenu` 외곽 surface                                                                                                                                                                 |
 | `dialogActions`     | horizontal flow, gap `8`, end-aligned                                           | `FeedbackOverlay`, `PostDeletionAction`, `ReplyComposerSurface`, `ProfileEditDiscardDialog`, `ConfirmationContent`                                                                            |
 | `labelSupportStack` | vertical flow, gap `4`                                                          | `TextField`, `RadioGroup`, `SettingsItem`, `ProfileEditForm`, `PostComposer` visibility copy, `PostComposerMediaControls` sensitive-media copy, `FollowButton`, `ProfileSwitcher` create form |
@@ -71,7 +71,7 @@ Density는 별도 runtime mode나 새 token collection이 아니라 `space/*`를
 - `dialogActions`는 actions row의 방향·간격·정렬만 소유한다. Button 크기와 child별 flex, 외부 margin, dialog surface의 padding·radius·border·typography는 consumer 또는 Button이 계속 소유한다.
 - `labelSupportStack`은 label과 control·description·error 사이의 내부 vertical rhythm만 소유한다. typography, padding, radius, input geometry와 flex·min-width는 consumer가 계속 소유한다.
 - `PostContentRenderer` warning은 action까지 포함한 surface이므로 `labelSupportStack`과 분리된 component-owned spacing을 유지한다.
-- `FollowRequestList` skeleton은 loaded row의 compound row·error geometry와 대응하므로 `listRow`와 분리된 component-owned spacing을 유지한다.
+- `FollowRequestList` skeleton은 loaded row와 달리 실제 identity·action을 렌더하지 않는 placeholder geometry를 소유하므로 `listRow`와 분리된 component-owned spacing을 유지한다.
 
 ## Elevation과 shadow
 

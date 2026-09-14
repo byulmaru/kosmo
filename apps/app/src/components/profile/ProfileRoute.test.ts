@@ -9,10 +9,18 @@ import type { UseAutomaticPaginationResult } from '../pagination/useAutomaticPag
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const require = createRequire(import.meta.url);
+
 type QueryMode = 'error' | 'loading' | 'success';
-type QueryName = 'ProfileLayoutQuery' | 'ProfilePostListPageQuery';
+type QueryName =
+  | 'ProfileFollowersPageQuery'
+  | 'ProfileFollowingPageQuery'
+  | 'ProfileLayoutQuery'
+  | 'ProfilePostListPageQuery';
 
 const queryModes: Record<QueryName, QueryMode> = {
+  ProfileFollowersPageQuery: 'success',
+  ProfileFollowingPageQuery: 'success',
   ProfileLayoutQuery: 'success',
   ProfilePostListPageQuery: 'success',
 };
@@ -37,6 +45,7 @@ let renderer: ReactTestRenderer | null = null;
 let SlotContent: ComponentType | null = null;
 let profileAvailable = true;
 let profileInstanceKind: 'ACTIVITYPUB' | 'LOCAL' = 'LOCAL';
+const routerHistory: string[] = [];
 let routeProbeEnabled = false;
 let routerBackCount = 0;
 let usePaginationScrollRegistration: (props: NativeScrollProps | null) => void = () => undefined;
@@ -87,16 +96,18 @@ mockModule('expo-router', {
   useGlobalSearchParams: () => globalParams,
   useLocalSearchParams: () => useContext(LocalParamsContext),
   usePathname: () => pathname,
-  useRouter: () => ({ back: () => (routerBackCount += 1) }),
+  useRouter: () => ({
+    back: () => (routerBackCount += 1),
+    replace: (href: string) => routerHistory.push(href),
+  }),
 });
 mockModule('lucide-react-native', {
+  ArrowLeft: 'ArrowLeft',
   ChevronLeftIcon: 'ChevronLeftIcon',
 });
-mockModule(createRequire(import.meta.url).resolve('lucide-react-native'), {
+mockModule(require.resolve('lucide-react-native'), {
+  ArrowLeft: 'ArrowLeft',
   ChevronLeftIcon: 'ChevronLeftIcon',
-});
-mockModule(new URL('../PageHeader.tsx', import.meta.url), {
-  PageHeader: (props: Record<string, unknown>) => createElement('PageHeader', props),
 });
 mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   NavigationLink: ({
@@ -117,7 +128,11 @@ mockModule('react-native', {
 });
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
-    const query = parts.join('').match(/query (ProfileLayoutQuery|ProfilePostListPageQuery)/)?.[1];
+    const query = parts
+      .join('')
+      .match(
+        /query (ProfileFollowersPageQuery|ProfileFollowingPageQuery|ProfileLayoutQuery|ProfilePostListPageQuery)/,
+      )?.[1];
     assert.ok(query);
     return query as QueryName;
   },
@@ -142,6 +157,7 @@ mockModule('react-relay', {
             handle: variables.handle,
             id: `profile:${variables.handle}`,
             instance: { kind: profileInstanceKind },
+            relativeHandle: `@${variables.handle}`,
             viewerState: profileViewerState,
           }
         : null,
@@ -176,6 +192,15 @@ mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
 mockModule(new URL('./ProfileMuteController.tsx', import.meta.url), {
   useProfileMuteMutations: () => ({ changeMuted: () => Promise.resolve() }),
 });
+mockModule(new URL('./ProfileConnectionList.tsx', import.meta.url), {
+  ProfileConnectionList: ({ kind, profile }: { kind: string; profile: { handle: string } }) =>
+    createElement('ProfileConnectionList', { identity: profile.handle, kind }),
+  ProfileConnectionListState: (props: object) => createElement('ProfileConnectionListState', props),
+});
+mockModule(new URL('../PageHeader.tsx', import.meta.url), {
+  PageHeader: ({ leading, ...props }: { leading?: ReactNode }) =>
+    createElement('PageHeader', { ...props, leading }, leading),
+});
 mockModule(new URL('../ui/Button.tsx', import.meta.url), {
   Button: ({ children, ...props }: { children: string }) =>
     createElement('Button', props, children),
@@ -184,8 +209,10 @@ mockModule(new URL('../ui/IconButton.tsx', import.meta.url), {
   IconButton: ({ children, ...props }: { children: ReactNode }) =>
     createElement('IconButton', props, children),
 });
-mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
-  useTheme: () => ({ foregroundPrimary: '#111111' }),
+mockModule(new URL('../ui/Tabs.tsx', import.meta.url), {
+  Tab: ({ option }: { option: { label: string; value: string } }) => createElement('Tab', option),
+  TabList: ({ children, ...props }: { children: ReactNode }) =>
+    createElement('TabList', props, children),
 });
 mockModule(new URL('../post/PostList.tsx', import.meta.url), {
   PostList: ({
@@ -218,12 +245,21 @@ mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => ({ selectedProfileId: 'profile:viewer' }),
 });
+mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
+  useTheme: () => ({ foregroundPrimary: '#111111' }),
+});
 
+let ProfileFollowersPage: ComponentType;
+let ProfileFollowingPage: ComponentType;
 let ProfileLayout: ComponentType;
 let ProfilePostListPage: ComponentType;
 
 before(async () => {
   ({ usePaginationScrollRegistration } = await import('../pagination/PaginationScrollView'));
+  ({ default: ProfileFollowersPage } =
+    await import('../../app/(tabs)/(profile)/[profileHandle]/followers'));
+  ({ default: ProfileFollowingPage } =
+    await import('../../app/(tabs)/(profile)/[profileHandle]/following'));
   ({ default: ProfileLayout } = await import('../../app/(tabs)/(profile)/[profileHandle]/_layout'));
   ({ default: ProfilePostListPage } =
     await import('../../app/(tabs)/(profile)/[profileHandle]/index'));
@@ -242,19 +278,28 @@ afterEach(async () => {
   platform.OS = 'web';
   routeProbeEnabled = false;
   routerBackCount = 0;
+  routerHistory.length = 0;
   routeMetrics = { contentHeight: 0, layoutHeight: 0, scrollOffset: 0 };
+  queryModes.ProfileFollowersPageQuery = 'success';
+  queryModes.ProfileFollowingPageQuery = 'success';
   queryModes.ProfileLayoutQuery = 'success';
   queryModes.ProfilePostListPageQuery = 'success';
   queryHistory.length = 0;
   profileAvailable = true;
   profileInstanceKind = 'LOCAL';
   profileViewerState = null;
+  SlotContent = ProfilePostListPage;
 });
 
 async function renderRoute(profileHandle: string, routePath = `/profile/${profileHandle}`) {
   globalParams = { profileHandle };
   screenLocalParams = { profileHandle };
   pathname = routePath;
+  SlotContent = routePath.endsWith('/followers')
+    ? ProfileFollowersPage
+    : routePath.endsWith('/following')
+      ? ProfileFollowingPage
+      : ProfilePostListPage;
   if (!renderer) {
     layoutLocalParams = { profileHandle };
   }
@@ -342,17 +387,6 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(routerBackCount, 1);
   });
 
-  it('keeps the shared Profile layout header out of nested relationship routes', async () => {
-    for (const relation of ['followers', 'following']) {
-      await renderRoute('@local', `/@local/${relation}`);
-
-      assert.equal(rendered('PageHeader').length, 0);
-      assert.equal(requireRendered('ProfileHero').props.heading, true);
-      assert.equal(rendered('ProfileHero').length, 1);
-      assert.equal(rendered('PostList').length, 1);
-    }
-  });
-
   it('표시 중인 selected Local Owner Profile에만 편집 Link를 노출한다', async () => {
     profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
     await renderRoute('@local');
@@ -409,6 +443,38 @@ describe('profile route parameter lifecycle', () => {
     assert.deepEqual(identities('PostList'), ['local']);
   });
 
+  it('followers와 following을 독립 heading과 관계 tab으로 전환한다', async () => {
+    await renderRoute('@local', '/@local/followers');
+
+    assert.deepEqual(identities('ProfileHero'), []);
+    assert.deepEqual(identities('FollowButton'), []);
+    assert.deepEqual(identities('ProfileConnectionList'), ['local']);
+    assert.equal(requireRendered('ProfileConnectionList').props.kind, 'followers');
+    assert.equal(requireRendered('PageHeader').props.title, 'Display local님의 팔로워');
+    assert.equal(requireRendered('TabList').props.value, 'followers');
+    assert.deepEqual(
+      rendered('Tab').map(({ props }) => [props.label, props.value]),
+      [
+        ['팔로워', 'followers'],
+        ['팔로잉', 'following'],
+      ],
+    );
+
+    await act(async () => requireRendered('TabList').props.onValueChange('following'));
+    await act(async () => requireRendered('IconButton').props.onPress());
+    assert.deepEqual(routerHistory, ['/@local/following', '/@local']);
+    assert.equal(requireRendered('IconButton').props.accessibilityLabel, '프로필로 돌아가기');
+    assert.equal(requireRendered('IconButton').props.targetSize, 44);
+    assert.equal(requireRendered('IconButton').props.visualSize, 44);
+
+    await renderRoute('@local', '/@local/following');
+    assert.deepEqual(identities('ProfileHero'), []);
+    assert.deepEqual(identities('ProfileConnectionList'), ['local']);
+    assert.equal(requireRendered('ProfileConnectionList').props.kind, 'following');
+    assert.equal(requireRendered('PageHeader').props.title, 'Display local님의 팔로잉');
+    assert.equal(requireRendered('TabList').props.value, 'following');
+  });
+
   it('native layout은 같은 handle의 pathname 전환에서 이전 scroll metric을 재생하지 않는다', async () => {
     platform.OS = 'ios';
     routeProbeEnabled = true;
@@ -437,17 +503,26 @@ describe('profile route parameter lifecycle', () => {
     assert.deepEqual(routeMetrics, { contentHeight: 480, layoutHeight: 240, scrollOffset: 240 });
 
     routeMetrics = { contentHeight: 0, layoutHeight: 0, scrollOffset: 0 };
-    await renderRoute('@local', '/profile/@local/followers');
+    await renderRoute('@local', '/@local/followers');
 
     scrollViews = rendered('ScrollView');
     assert.equal(scrollViews.length, 1);
     assert.notEqual(scrollViews[0], firstScrollView);
     assert.equal(
       scrollViews[0]?.findAll((node) => (node.type as unknown) === 'ProfileHero').length,
-      1,
+      0,
     );
     assert.equal(
       scrollViews[0]?.findAll((node) => (node.type as unknown) === 'PostList').length,
+      0,
+    );
+    assert.equal(
+      scrollViews[0]?.findAll((node) => (node.type as unknown) === 'PageHeader').length,
+      1,
+    );
+    assert.equal(scrollViews[0]?.findAll((node) => (node.type as unknown) === 'TabList').length, 1);
+    assert.equal(
+      scrollViews[0]?.findAll((node) => (node.type as unknown) === 'ProfileConnectionList').length,
       1,
     );
     assert.deepEqual(routeMetrics, { contentHeight: 0, layoutHeight: 0, scrollOffset: 0 });
@@ -459,7 +534,7 @@ describe('profile route parameter lifecycle', () => {
         layoutMeasurement: { height: 320 },
       },
     });
-    assert.deepEqual(routeMetrics, { contentHeight: 960, layoutHeight: 320, scrollOffset: 24 });
+    assert.deepEqual(routeMetrics, { contentHeight: 0, layoutHeight: 0, scrollOffset: 0 });
   });
 
   it('handle 전환 중 layout과 nested query의 기존 loading fallback을 유지한다', async () => {
@@ -526,6 +601,57 @@ describe('profile route parameter lifecycle', () => {
       console.error = originalConsoleError;
     }
   });
+
+  it('같은 handle의 관계 route layout error를 route mode 전환에서 초기화한다', async () => {
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+    try {
+      queryModes.ProfileLayoutQuery = 'error';
+      await renderRoute('@local', '/@local/followers');
+      assert.equal(requireRendered('ProfileConnectionListState').props.state, 'error');
+
+      queryModes.ProfileLayoutQuery = 'success';
+      await renderRoute('@local', '/@local/following');
+      assert.equal(requireRendered('ProfileConnectionList').props.kind, 'following');
+
+      queryModes.ProfileLayoutQuery = 'error';
+      await renderRoute('@local', '/@local/following');
+      assert.equal(requireRendered('ProfileConnectionListState').props.state, 'error');
+
+      queryModes.ProfileLayoutQuery = 'success';
+      await renderRoute('@local');
+      assert.deepEqual(identities('ProfileHero'), ['local']);
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
+
+  for (const [kind, path, query] of [
+    ['followers', '/@local/followers', 'ProfileFollowersPageQuery'],
+    ['following', '/@local/following', 'ProfileFollowingPageQuery'],
+  ] as const) {
+    it(`${kind} leaf query error를 표시하고 retry에서 같은 query를 다시 실행한다`, async () => {
+      const originalConsoleError = console.error;
+      console.error = () => undefined;
+      try {
+        queryModes[query] = 'error';
+        await renderRoute('@local', path);
+        const errorState = requireRendered('ProfileConnectionListState');
+        assert.equal(errorState.props.kind, kind);
+        assert.equal(errorState.props.state, 'error');
+
+        queryModes[query] = 'success';
+        await act(async () => errorState.props.onRetry());
+
+        assert.equal(requireRendered('ProfileConnectionList').props.kind, kind);
+        const latestQuery = queryHistory.findLast(({ query: current }) => current === query);
+        assert.equal(latestQuery?.handle, 'local');
+        assert.equal(latestQuery?.fetchKey, 1);
+      } finally {
+        console.error = originalConsoleError;
+      }
+    });
+  }
 
   it('현재 handle의 nested error와 retry 동작을 유지한다', async () => {
     const originalConsoleError = console.error;

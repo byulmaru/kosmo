@@ -4,7 +4,7 @@ import { graphql, usePaginationFragment } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, layoutRecipes, spacing, typography } from '@/theme/tokens';
+import { layoutRecipes, spacing } from '@/theme/tokens';
 import { ProfileListItem } from './ProfileListItem';
 import type { ProfileConnectionList_followersProfile$key } from './__generated__/ProfileConnectionList_followersProfile.graphql';
 import type { ProfileConnectionList_followingProfile$key } from './__generated__/ProfileConnectionList_followingProfile.graphql';
@@ -63,7 +63,6 @@ const copy = {
     loadError: '팔로워를 더 불러오지 못했어요',
     loadingLabel: '팔로워 목록을 불러오는 중입니다.',
     loadingNextLabel: '팔로워를 더 불러오는 중입니다.',
-    title: '팔로워',
   },
   following: {
     emptyDescription: '이 프로필이 팔로우하는 사람이 생기면 여기에 표시돼요.',
@@ -72,7 +71,6 @@ const copy = {
     loadError: '팔로잉을 더 불러오지 못했어요',
     loadingLabel: '팔로잉 목록을 불러오는 중입니다.',
     loadingNextLabel: '팔로잉을 더 불러오는 중입니다.',
-    title: '팔로잉',
   },
 } as const;
 
@@ -98,7 +96,6 @@ export function ProfileConnectionListState({
 
   return (
     <View>
-      <ConnectionTitle kind={kind} />
       {state === 'loading' ? (
         <>
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -201,7 +198,6 @@ function ConnectionList({ hasNext, isLoadingNext, kind, loadNext, profiles }: Co
 
   return (
     <View>
-      <ConnectionTitle kind={kind} />
       {profiles.length ? (
         profiles.map((item) => <ProfileListItem key={item.cursor} linked profile={item.profile} />)
       ) : (
@@ -244,29 +240,7 @@ function ConnectionList({ hasNext, isLoadingNext, kind, loadNext, profiles }: Co
   );
 }
 
-function ConnectionTitle({ kind }: { kind: ConnectionKind }) {
-  const theme = useTheme();
-
-  return (
-    <Text
-      accessibilityRole="header"
-      style={[styles.title, { borderColor: theme.border, color: theme.text }]}
-    >
-      {copy[kind].title}
-    </Text>
-  );
-}
-
 const styles = StyleSheet.create({
-  title: {
-    borderBottomWidth: 1,
-    fontFamily: fontFamilies.ui,
-    fontWeight: '700',
-    paddingBottom: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    ...typography.md,
-  },
   state: {
     alignItems: 'center',
     paddingHorizontal: spacing.lg,

@@ -1,6 +1,5 @@
-import { Platform, useWindowDimensions } from 'react-native';
+import { Platform } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { breakpoints } from '@/theme/tokens';
 import { FollowButton } from './FollowButton';
 import { ProfileListItemContent } from './ProfileListItemContent';
 import { ProfileNameBlock } from './ProfileNameBlock';
@@ -31,7 +30,6 @@ const profileListItemFragment = graphql`
 `;
 
 export function ProfileListItem({ linked = false, onPress, profile, style }: ProfileListItemProps) {
-  const { width } = useWindowDimensions();
   const data = useFragment(profileListItemFragment, profile);
   return (
     <ProfileListItemContent
@@ -47,7 +45,6 @@ export function ProfileListItem({ linked = false, onPress, profile, style }: Pro
     >
       <FollowButton
         profile={data}
-        size={Platform.OS === 'web' && width >= breakpoints.compact ? 'compact' : 'medium'}
         style={{
           flexShrink: 0,
           marginVertical: Platform.OS === 'android' ? -4 : Platform.OS === 'ios' ? -2 : 0,
