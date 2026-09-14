@@ -57,7 +57,7 @@
 
 - 인증된 actor와 object의 canonical source URI가 같고 target canonical Actor에 exact source alias가 있을 때만 처리한다.
 - source가 Remote Profile이어야 하며 기존 지원 Actor 종류를 유지한다. remote-to-remote는 Local 준비 관계를 요구하지 않고, remote-to-local은 준비된 Local target을 사용한다.
-- source Followee의 established Follow 중 Local Follower만 대상이며 target policy에 따라 Follow 또는 Request를 먼저 저장한다.
+- source Followee의 established Follow 중 Local Follower만 대상이며, Follower가 Local target Profile 자신인 self-follow 관계는 target→target으로 만들 수 없으므로 이전하지 않고 기존 target→source 관계를 유지한다. 그 밖의 관계는 target policy에 따라 Follow 또는 Request를 먼저 저장한다.
 - target 저장이 확정되기 전 source 관계를 제거하지 않는다. 기존 target row/request가 있는 재시도는 중복 없이 source cleanup을 재개한다.
 - Remote target의 Open policy는 기존 Local-to-Remote Follow effect, Approval Required는 기존 Request lifecycle을 사용하고, source removal은 기존 Unfollow·Undo lifecycle을 따른다. HTTP receipt은 별도 완료 조건이 아니다.
 - 기존 Profile·Follow eligibility와 Temporal lifecycle을 우회하지 않으며, outgoing Move·전체 데이터 이전을 구현하지 않는다.
@@ -67,6 +67,7 @@
 - actor/object mismatch, missing exact alias, source/target identity 불일치와 검증되지 않은 actor의 no-change 결과를 확인한다.
 - unknown source materialization, 준비된 Local target, Remote target의 기존 policy, 지원 Actor 종류를 검증한다.
 - Local established follower만 선택하고 remote/non-established/pending 관계를 제외하는지 확인한다.
+- Local target 자신이 follower인 self-follow 관계에서 target→target Follow/Request가 생성되지 않고 기존 target→source Follow와 성공 Workflow가 유지되는지 실제 DB·Temporal 실행으로 확인한다.
 - Open Follow·Approval Required Request의 target-first 순서, target 실패 시 source 보존을 실행 검증한다.
 - Remote target의 Open/Approval Required effect·Request lifecycle과 source removal/Undo 경계를 기존 계약대로 검증한다. HTTP receipt 도착을 source removal 조건으로 삼지 않는지 확인한다.
 - 반복 Move, target 저장 뒤 중단·재시작, 기존 target Follow/Request에서 source cleanup 재개를 검증한다. command sequence를 바꿀 때만 Workflow history replay와 배포 호환성을 추가 확인한다.
