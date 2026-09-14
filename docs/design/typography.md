@@ -19,9 +19,12 @@
 | --------- | ---------------------------- | ------------------------- | --------------------------------------------- |
 | `default` | `UI/Label/L` — 16/24/600     | `UI/Copy/M` — 14/20/400   | 게시물·작성기·원문 출처·프로필 공개 범위 설정 |
 | `compact` | `UI/Label/M` — 14/20/600     | `UI/Copy/S` — 12/15.6/400 | `ProfileListItem`, `FollowRequestListItem`    |
+| `inline`  | `UI/Label/L` — 16/24/600     | `UI/Copy/M` — 14/20/400   | Reply/Mention 알림 작성자 한 줄               |
 | `hero`    | `UI/Heading/M` — 24/27.6/700 | `UI/Copy/M` — 14/20/400   | `ProfileHero`                                 |
 
 - `default`와 `compact`는 이름·핸들을 각각 한 줄로 말줄임하며, 필요한 경우 `href`로 identity 전체를 링크로 만든다.
+- `inline`은 이름과 핸들을 같은 줄에 두고 이름을 우선한다. 폭이 부족하면 핸들이 먼저 줄어들고 이름도
+  가용 폭을 넘으면 말줄임한다.
 - `hero`는 기본적으로 이름을 접근성 제목으로 노출하고 이름·핸들의 줄바꿈을 허용한다. 공개 Profile Home처럼
   별도 PageHeader가 같은 `displayName` heading을 소유하는 소비처는 이름의 `UI/Heading/M` 시각 typography를
   유지하면서 Hero의 semantic heading만 끌 수 있다. PageHeader가 없는 관계 route는 기존 Hero heading을 유지한다.

@@ -49,7 +49,7 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-for (const variant of ['default', 'compact', 'hero'] as const) {
+for (const variant of ['default', 'compact', 'inline', 'hero'] as const) {
   test(`ProfileNameBlock ${variant} preserves text and heading semantics`, async () => {
     await act(async () => {
       renderer = create(createElement(ProfileNameBlock, { profile: {} as never, variant }));
@@ -79,6 +79,17 @@ for (const variant of ['default', 'compact', 'hero'] as const) {
     );
   });
 }
+
+test('inline keeps the name and handle in one row', async () => {
+  await act(async () => {
+    renderer = create(createElement(ProfileNameBlock, { profile: {} as never, variant: 'inline' }));
+  });
+
+  assert.ok(renderer);
+  const root = renderer.root.find((node) => (node.type as unknown) === 'View');
+  assert.equal(root.props.style[1].flexDirection, 'row');
+  assert.equal(root.props.style[1].alignItems, 'baseline');
+});
 
 test('hero can keep its typography without exposing a heading', async () => {
   await act(async () => {
