@@ -462,7 +462,8 @@ PR이 merge된 뒤에만 완료한다.
 ## 예외
 
 - **기존 계약 복구 버그:** active spec에 이미 정의된 행동만 복구하면 기존 requirement를 참조해
-  Issue -> Implementation으로 진행하고 회귀 테스트를 추가한다.
+  Issue -> Implementation으로 진행하고 회귀 테스트를 추가한다. 기존 구현·계약의 잘못을 정정하는 후속 작업은
+  새 이슈·새 OpenSpec을 만들지 않고 기존 이슈와 아직 활성인 OpenSpec을 정정해 이어간다.
 - **행동 변화 없음:** 기계적 refactor, test-only 보강, 오탈자 수정, dependency와 tooling 정리는 관찰 가능한
   행동을 유지할 때 새 OpenSpec이 필요하지 않다.
 - **작은 변경:** 단일 PR이라는 이유만으로 OpenSpec을 만들거나 생략하지 않는다. 새 행동 계약이나 durable

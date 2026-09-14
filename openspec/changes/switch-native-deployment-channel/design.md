@@ -1,6 +1,7 @@
 ## Context
 
-Native Settings and pre-login recovery need one bounded `dev`/`prod` choice for API, Web, OIDC, Sentry and OTA.
+Authenticated Native Settings `정보` needs one bounded `dev`/`prod` choice for API, Web, OIDC, Sentry and OTA. The login
+screen has no channel selector or recovery entry, and users who cannot authenticate cannot roll back the channel in-app.
 The existing publisher stores signed manifests and immutable assets under
 `releases/{project}/{platform}/{channel}/{runtimeVersion}/...`; the fixed Native URL must reach that tuple without
 adding a delivery service.

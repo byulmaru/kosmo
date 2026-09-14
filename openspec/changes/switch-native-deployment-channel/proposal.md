@@ -5,7 +5,8 @@ Native에서 API·Web·OIDC·Sentry와 OTA channel을 함께 바꾸고, 호환 u
 
 ## What Changes
 
-- Native `정보`와 사전 로그인 복구에 `dev`·`prod` channel selector를 추가한다.
+- 인증된 Native `정보`에만 `dev`·`prod` channel selector를 제공한다. 로그인 화면에는 selector를 두지 않으며,
+  로그인하지 못한 사용자는 앱 내부에서 channel을 되돌릴 수 없다.
 - 선택값을 API·Web·OIDC·Sentry·OTA environment에 공통 적용한다.
 - `https://expo-ota.byulmaru.co/releases/kosmo-native`의 request headers를 기존 tuple manifest로 rewrite한다.
 - 호환 signed update 성공 뒤 login 삭제·reload를 수행하고, 실패 시 기존 channel/fallback을 유지한다.

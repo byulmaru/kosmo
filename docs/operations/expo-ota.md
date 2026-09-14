@@ -6,9 +6,10 @@ platform export가 Argo 배포와 병렬로 시작하고, 각 publish는 Argo �
 성공한 뒤 시작한다. Native module, SDK, entitlement, permission 또는 그 밖의 native
 설정이 바뀐 release는 OTA가 아니라 새 Store binary 경로를 사용한다.
 
-Native Store binary의 기본 OTA channel은 `prod`다. Native Settings의 `정보`와 인증 전 복구 진입점은
-`dev`·`prod`를 선택해 API origin·OIDC 로그인 환경과 OTA channel을 함께 전환한다. Web channel과
-`/settings/info` policy link는 이 전환의 대상이 아니다.
+Native Store binary의 기본 OTA channel은 `prod`다. 인증된 Native Settings의 `정보`에서만 `dev`·`prod`를 선택해
+API origin·OIDC 로그인 환경과 OTA channel을 함께 전환한다. 로그인 화면에는 channel selector나 복구 진입점을 두지 않으며,
+로그인하지 못한 사용자는 앱 내부에서 channel을 되돌릴 수 없다. Web channel과 `/settings/info` policy link는 이 전환의
+대상이 아니다.
 
 ## 책임과 release tuple
 

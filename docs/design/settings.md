@@ -49,8 +49,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   root에 중복 노출하거나 항목 하나만 가진 `계정`·`화면 설정` 대분류를 만들지 않는다.
 - `정보`는 별도 category나 generic policy registry가 아닌 Settings root의 direct destination이다. `/settings/info`
   detail은 `개인정보 처리방침`, `계정 삭제 안내`, `아동 안전 정책`을 각각 public route로 여는 기존 Settings
-  link-row 문법을 사용한다. Web의 `/settings/info`는 세 policy link만 유지한다. Native channel row/selector와
-  사전 로그인 복구 진입점은 아래 Native channel 전환 계약을 따른다. 정책 문서의
+  link-row 문법을 사용한다. Web의 `/settings/info`는 세 policy link만 유지한다. Native channel row/selector는
+  아래 Native channel 전환 계약을 따른다. 정책 문서의
   본문·시행일·이메일 처리와 public route 간 cross-link는 각 정책 문서가 소유한다.
 - `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 하위 목록을 연다.
   두 상태를 하나의 혼합 목록으로 표시하지 않는다. 세부 action과 Profile 상태는
@@ -124,7 +124,8 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 
 ## Native channel 전환
 
-- Android/iOS Native `정보`와 사전 로그인 복구는 `dev`·`prod`만 제공하며, Web 정보·channel UI는 유지한다.
+- 인증된 Android/iOS Native `설정 → 정보`에서만 `dev`·`prod` channel selector를 제공한다. 로그인 화면에는 채널
+  선택기를 두지 않으며, 로그인하지 못한 사용자는 앱 내부에서 채널을 되돌릴 수 없다. Web 정보·channel UI는 유지한다.
 - 선택한 값은 API·Web·OIDC·Sentry·OTA의 하나의 environment로 해석한다. 고정 OTA URL과 persistent header는
   [Expo OTA 운영](../operations/expo-ota.md)의 계약을 따른다.
 - Android/iOS Native `정보`는 읽기 전용으로 현재 실행 중인 Expo `expo-updates`의 전체 `updateId`를 표시한다.
@@ -236,7 +237,7 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - navigation과 page action은 실제 동작에 맞는 role, accessible name, current·disabled·busy 상태를 제공한다.
   외부 이동 결과 announcement는 Kosmo가 소유하지 않으며 Profile 조회·저장 결과 announcement는 PROD-667이
   중복 없이 소유한다.
-- Native channel selector와 사전 로그인 복구 진입점은 선택된 `dev`·`prod`와 busy/error 상태를 보조기술에
+- Native channel selector는 선택된 `dev`·`prod`와 busy/error 상태를 보조기술에
   전달한다. 확인·download 중에는 selector를 중복 실행할 수 없고, 취소·현재 channel 재선택은 별도
   announcement나 상태 변경을 만들지 않는다. Web `/settings/info`는 기존 세 policy link 순서를 유지한다.
 - Web target은 [accessibility.md](./accessibility.md)의 24×24 CSS px minimum과 공식 예외를 따르고, iOS는

@@ -15,10 +15,10 @@ This log records the approved Native channel contract and the Cloudflare deliver
 - Authority / Provenance: `docs/design/settings.md`, `docs/operations/expo-ota.md`, `docs/operations/sentry.md`, PROD-956
 - Status: Active
 - Context / Problem: Native must move its environment and OTA channel together without changing Web behavior or losing a working executable.
-- Decision Outcome: Native Settings and pre-login recovery expose only `dev`/`prod`; the selected value drives API, Web, OIDC, Sentry and OTA. A different value is applied only after a compatible signed update is verified and downloaded, then login is deleted and the app reloads. Cancel and same-value selection are no-ops; 404 and other failures restore the original channel and fallback.
+- Decision Outcome: Authenticated Native Settings `정보` exposes only `dev`/`prod`; the login screen has no channel selector or recovery entry, and users who cannot authenticate cannot change the channel in-app. The selected value drives API, Web, OIDC, Sentry and OTA. A different value is applied only after a compatible signed update is verified and downloaded, then login is deleted and the app reloads. Cancel and same-value selection are no-ops; 404 and other failures restore the original channel and fallback.
 - Alternatives Considered: Exposing arbitrary publisher channels or changing the channel before update success would widen scope or weaken recovery.
 - Consequences: Native code/module/SDK/permission changes require new Store binaries, and device evidence remains a separate completion gate.
-- Confirmation / Follow-up: Verify Native Store/device success, rollback, signature rejection and offline behavior under PROD-956.
+- Confirmation / Follow-up: The 2026-09-14 PROD-956 correction supersedes the prior recovery surface; verify Native Store/device success, rollback, signature rejection and offline behavior under PROD-956.
 
 ### Project-qualified requests use Cloudflare URL Rewrite over existing R2
 

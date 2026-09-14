@@ -7,23 +7,25 @@
 
 **Deliverable**
 
-Native `정보`와 사전 로그인 복구에서 `dev`·`prod`를 선택하고, API·Web·OIDC·Sentry·OTA를 함께 전환한다.
+인증된 Native `정보`에서만 `dev`·`prod`를 선택하고, API·Web·OIDC·Sentry·OTA를 함께 전환한다.
 
 **Guardrails**
 
 - Web channel/info UI와 policy links는 변경하지 않는다.
 - Store 기본값은 `prod`; fixed URL/header와 generic publisher contract를 유지한다.
+- 로그인 화면에는 channel selector나 복구 진입점을 두지 않으며, 로그인하지 못하면 앱 내부에서 channel을 되돌릴 수 없다.
 - Update 확인·download 성공 뒤에만 login 삭제/reload하고, 실패 시 원래 channel/fallback을 유지한다.
 
 **Verification**
 
-Focused Native/app checks와 접근성·환경 mapping을 검증한다. Native compile, 새 Android/iOS Store binary와
+Focused Native/app checks와 로그인 route 실제 렌더링, 접근성·환경 mapping을 검증한다. Native compile, 새 Android/iOS Store binary와
 device success/rollback/signature/offline evidence는 별도로 연결한다.
 
-- [x] 1.1 Native `정보`와 pre-login recovery selector 및 current/busy/error/no-op 동작을 연결한다.
+- [x] 1.1 Native authenticated `정보` selector 및 current/busy/error/no-op 동작을 연결한다.
 - [x] 1.2 shared environment mapping과 fixed OTA URL/request headers를 연결한다.
 - [x] 1.3 compatible signed update 성공 뒤 login 삭제/reload를 수행하고 실패 시 원래 상태를 복원한다.
-- [ ] 1.4 focused checks와 Native Store/device verification을 `PROD-956` integration evidence에 연결한다.
+- [x] 1.4 로그인 route에서 Native channel selector/recovery entry 미노출을 실제 렌더링으로 검증하고, 인증 실패 시 앱 내부 channel rollback 부재를 기록한다.
+- [ ] 1.5 focused checks와 Native Store/device verification을 `PROD-956` integration evidence에 연결한다.
 
 ## 2. PROD-334 — Cloudflare Rewrite Rule delivery
 
