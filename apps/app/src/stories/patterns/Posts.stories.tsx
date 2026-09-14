@@ -2698,6 +2698,7 @@ function PostMediaViewerRevisionStory() {
               );
               contentRecord.setValue('content-post-media-viewer-quote-revision', 'id');
               contentRecord.setValue(longBody, 'bodyText');
+              contentRecord.setLinkedRecords([], 'mentionedProfiles');
               contentRecord.setLinkedRecords(
                 originalContent.media!.map((media, index) => {
                   const mediaRecord = store.create(`viewer-revision-media-${index}`, 'Media');
