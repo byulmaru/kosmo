@@ -117,11 +117,11 @@
 - [ ] 3.2 valid, repeated, mismatch/fallback와 visibility·eligibility 입력의 통합 검증을 실행한다.
 - [ ] 3.3 `PROD-340` 저장 결과와 deferred reader gate 상태를 구분해 기록하고, `PROD-910` renderer 결과를 점검한다. 전체 declared scope와 2.x 후속 gate가 완료되기 전에는 delta spec 동기화·`PROD-910` archive·archive 후 validation을 완료로 표시하지 않는다.
 
-**3.1 실행 증거 상태 (2026-09-11)**
+**3.1 실행 증거 상태 (2026-09-14 correction)**
 
-- API TypeScript check와 Relay artifact validation, renderer unit 7개, Core 37개가 통과했다.
-- Web renderer 18개와 keyboard Tab focus-visible 및 240px wrapper reflow 검증을 실행했다. Light/Dark와 fallback 동작도 확인했다.
-- API DB integration과 CI는 아직 pending이며, Native 실행 환경 검증은 별도 미실행이다. 따라서 3.2 통합 검증과 3.3 전체 완료·archive는 완료로 표시하지 않는다.
+- 이번 correction에서 PostContentRenderer 9개와 PostSourcePresentationView source wiring 2개를 포함한 renderer focused test 11/11, Core unit 87/87이 통과했다.
+- App TypeScript check, Relay compiler(`--noWatchman`), targeted ESLint·Prettier와 `openspec validate --all --strict`(128/128)가 통과했다.
+- Storybook/manual Web와 Native runtime 검증은 이번 correction에서 다시 실행하지 않았다. 따라서 3.2와 3.3은 계속 미완료이며, 전체 integration·delta spec sync·`PROD-910` archive와 archive 후 validation은 blocked/deferred 상태로 둔다.
 
 ## Verification Boundary
 

@@ -134,7 +134,7 @@ Mention node는 `profileId`만 저장하고 inbound target·anchor URI는 저장
   저장을 활성화한다. 이 change에서는 document schema version을 올리거나 V1/V2 dual-read 또는 document version 변환을 도입하지 않는다.
   Mention의 전용 표시·Profile 이동은 [Post Content Mention renderer](../../design/post-content-mentions.md) 계약에 둔다.
   renderer는 현재 revision의 Mention node와 같은 revision의 Profile 관계만 소비하며, 조회 가능한 Profile은 기존 KOSMO
-  Profile route로 이동시킨다. 저장 후 Profile이 unavailable 또는 deleted가 되면 원래 label을 유지하고 link만 비활성화하며,
+  Profile route로 이동시킨다. 저장 후 Profile이 unavailable 또는 deleted가 되면 `@알 수 없는 사용자`를 표시하고 link 없이 유지하며,
   Mention 관계가 Post Visibility·Post Eligibility를 넓히지 않는다. GraphQL `mentionedProfiles`는 기존 Profile visibility
   predicate(Profile이 `ACTIVE`이고 소속 Instance가 `SUSPENDED`가 아님)를 사용하며, viewer별 Profile Domain Block 정책을
   이 관계에서 새로 조합하지 않는다. 기존 Post body의 `onBodyPress` callback과 부모 Post navigation은 유지하되, 활성
