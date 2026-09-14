@@ -14,15 +14,19 @@ type Props = Omit<LinkProps, 'asChild' | 'children' | 'href' | 'onPress'> & {
   children: ReactElement<ChildProps>;
   href: Href;
   current?: boolean;
+  navigationMode?: 'push' | 'switch';
   onCurrentNavigate?: () => void;
   onNavigate?: () => void;
   primary?: boolean;
 };
 
+type NavigationMode = 'navigate' | 'push' | 'replace';
+
 export function NavigationLink({
   children,
   current = false,
   href,
+  navigationMode: requestedNavigationMode = 'push',
   onCurrentNavigate,
   onNavigate,
   primary = false,
@@ -30,6 +34,7 @@ export function NavigationLink({
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
+  const navigationMode = getNavigationMode(requestedNavigationMode, props);
   const { request } = useNavigationGuard();
   const { record } = usePrimaryNavigationScroll();
   const recordPrimaryNavigation = () => {
@@ -57,7 +62,13 @@ export function NavigationLink({
     const navigate = () => {
       recordPrimaryNavigation();
       onNavigate?.();
-      router.navigate(href);
+      if (navigationMode === 'push') {
+        router.push(href);
+      } else if (navigationMode === 'replace') {
+        router.replace(href);
+      } else {
+        router.navigate(href);
+      }
     };
     if (request(navigate)) {
       event.preventDefault();
@@ -68,18 +79,52 @@ export function NavigationLink({
   };
 
   return (
-    <Link {...props} asChild href={href}>
+    <Link
+      {...props}
+      {...(navigationMode === 'push'
+        ? { push: true }
+        : navigationMode === 'replace'
+          ? { replace: true }
+          : {})}
+      asChild
+      href={href}
+    >
       {cloneElement(children, { onPress: handlePress })}
     </Link>
   );
 }
 
-function getHrefPathname(href: Href): string | null {
-  if (typeof href === 'string') {
-    return href.split(/[?#]/, 1)[0] || '/';
+function getNavigationMode(
+  requestedNavigationMode: NonNullable<Props['navigationMode']>,
+  props: Pick<Props, 'push' | 'replace'>,
+): NavigationMode {
+  if (Platform.OS === 'web') {
+    if (props.replace) {
+      return 'replace';
+    }
+    return props.push ? 'push' : 'navigate';
   }
 
-  return typeof href.pathname === 'string' ? href.pathname : null;
+  if (props.replace) {
+    return 'replace';
+  }
+  if (props.push) {
+    return 'push';
+  }
+
+  return requestedNavigationMode === 'switch' ? 'replace' : 'push';
+}
+
+function getHrefPathname(href: Href): string | null {
+  if (typeof href === 'string') {
+    return normalizePathname(href.split(/[?#]/, 1)[0] || '/');
+  }
+
+  return typeof href.pathname === 'string' ? normalizePathname(href.pathname) : null;
+}
+
+function normalizePathname(pathname: string) {
+  return pathname.replace(/\/+$/, '') || '/';
 }
 
 function shouldHandleNavigation(event: Parameters<NonNullable<LinkProps['onPress']>>[0]) {

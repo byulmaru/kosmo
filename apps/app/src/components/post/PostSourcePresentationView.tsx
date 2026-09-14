@@ -290,7 +290,7 @@ function PresentationLink({
   href: Href;
 }) {
   return (
-    <Link asChild href={href}>
+    <Link asChild href={href} push={Platform.OS !== 'web'}>
       <Pressable
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="link"

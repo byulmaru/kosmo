@@ -39,6 +39,10 @@ const hrefs: Record<BottomTabDestination, Href | undefined> = {
   search: '/search',
 };
 
+export function isBottomTabDestination(href: Href) {
+  return typeof href === 'string' && Object.values(hrefs).some((tabHref) => tabHref === href);
+}
+
 export function BottomTabBar({ onHomeReselect, profile: profileKey }: Props) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
@@ -68,6 +72,7 @@ export function BottomTabBar({ onHomeReselect, profile: profileKey }: Props) {
       <NavigationLink
         current={destination === 'home' ? selected : undefined}
         href={href}
+        navigationMode="switch"
         onCurrentNavigate={destination === 'home' ? onHomeReselect : undefined}
         primary
       >
