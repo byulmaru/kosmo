@@ -29,7 +29,7 @@ function PolicyTable({
 }: PropsWithChildren<{ headers: readonly string[]; minWidth: number }>) {
   const theme = useTheme();
   return (
-    <ScrollView horizontal contentContainerStyle={styles.tableContent}>
+    <ScrollView contentContainerStyle={styles.tableContent} horizontal tabIndex={0}>
       <View style={[styles.table, { borderColor: theme.border, minWidth }]}>
         <TableRow cells={headers} header />
         {children}
