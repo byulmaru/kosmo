@@ -4,6 +4,9 @@
 
 Kosmo의 지속되는 권위는 제품이 지켜야 할 비즈니스 요구사항에만 둔다.
 
+제품 정책·권한·상태 전이·서버 행동의 canonical은 `docs/domain`과 accepted ADR이다. `docs/design`은 시각
+구조·상태 표현·접근성·상호작용 presentation만 다루는 design source이며 제품 정책을 결정하거나 재정의하지 않는다.
+
 ```text
 Canonical 비즈니스 요구사항
   -> Linear의 문제·가치·범위·완료 결과
