@@ -142,7 +142,7 @@ pagination·cursor·limit 전에 제외한다.
   자신의 Block이 없으면 다른 Owner의 관계 ID를 반환하지 않는다.
 - Unblock 성공은 실제 삭제한 관계 ID를 반환하고 관계를 제거하지
   않은 결과만 `null`이다. Durable `success` 결과는 optional relation·Target·viewer-state projection 오류와 분리하고,
-  payload 누락·`success: false`·필수 identity 누락 또는 불일치만 action 완료로 확정하지 않는다.
+  payload 누락·`success: false`·정확한 관계 ID 누락 또는 불일치만 action 완료로 확정하지 않는다.
 - Mute와 Block 관리 관계는 독립적이다. 같은 Target의 Active Block에서도 기존 Mute 관계는 Owner connection·관계 Node·해제 경로에 남아야 한다.
 - 저장·durable cleanup(`PROD-821`), UI/Relay(`PROD-823`)와 최종 cross-slice E2E/archive(`PROD-813`)를 이 그룹에서 재구현하지 않는다.
 
