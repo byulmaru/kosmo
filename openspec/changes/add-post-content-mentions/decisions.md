@@ -4,14 +4,27 @@
 
 ## Decision Records
 
+### Typed href identity와 body conversion은 독립적으로 처리함
+
+- Decision Date: 2026-09-14
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/domain/decisions/0030-post-content-mention-identity.md`, `PROD-340` 사용자 승인
+- Status: Active
+- Context / Problem: typed ActivityPub `Mention.href`가 기존 Profile stable identity를 가리켜도 본문 anchor URL이 actor URI·저장 alias와 다르거나 없을 수 있다. body conversion 결과를 relation의 전제나 source로 삼으면 확인된 Profile 관계를 일반 link fallback과 함께 잃는다. 반대로 본문 anchor를 relation source로 삼으면 일반 link와 audience를 잘못 연결할 수 있다.
+- Decision Outcome: 기존 ActivityPub actor/Profile mapping으로 확인된 typed `Mention.href`의 `profileId` 집합을 body conversion과 독립된 `post_mentions` relation 입력으로 전달한다. body anchor가 typed href 또는 기존 정상 actor materialization·refresh에서 저장된 Profile URL alias에 대응하면 `profileId`만 가진 canonical Mention node로 표현할 수 있다. URL 불일치·anchor 부재·body href ambiguity는 해당 node만 ordinary safe link/text로 낮추며, 독립적으로 확인된 typed Profile relation은 유지한다. 일반 anchor, `to`/`cc` audience, tag `name`·handle·본문 표시 문자열은 identity source가 아니다. 원문 anchor의 표시 문자열은 loose resource/length budget 계산 중에만 transient하게 사용하고 저장하지 않는다.
+- Alias / Fetch Boundary: Remote Profile URL alias는 기존 정상 actor materialization·refresh가 저장하거나 제거하는 metadata만 사용한다. Mention 수신은 alias가 없거나 malformed일 때 새 remote fetch·materialization·backfill·live DB 변경을 수행하거나 refresh를 새로 트리거하지 않으며, 이후 alias가 학습되어도 이미 저장된 글을 자동 보정하지 않는다.
+- Persistence Consequences: typed identity set, canonical body document, revision-owned `post_mentions` relation과 Current Content pointer는 기존 Post 저장 경계에서 원자적으로 처리한다. 같은 revision/Profile은 deduplicate하고 과거 revision은 재작성하지 않는다. 이 정정은 새 migration이나 live DB schema 변경을 추가하지 않는다.
+- Supersedes: 2026-09-11의 “body anchor가 actor URI 또는 저장 alias에 대응해야 Mention node와 관계가 성립한다”는 coupling과 “relation은 canonical node에서 재구축한다”는 source 결정을 대체한다. `profileId` 단일 node attr, alias ambiguity safe fallback, cross-host 직접 광고 alias 허용, malformed/missing alias clear, first-write-wins, legacy reader gate와 `PROD-910`/`PROD-911` 책임 경계는 유지한다.
+
 ### 검증된 typed Mention만 canonical projection으로 인정
 
 - Decision Date: 2026-09-10
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `PROD-340`
-- Status: Active
+- Status: Superseded
+- Historical note: 2026-09-14 정정이 identity/body coupling을 대체했으며, typed-only 경계는 현재 계약에서 유지된다.
 - Context / Problem: inbound Note에는 일반 anchor, audience actor URI와 typed `Mention`이 함께 나타날 수 있어 이를 같은 의미로 취급하면 Profile 관계와 권한 의미가 오염된다.
-- Decision Outcome: target·anchor에 담긴 identity 증거가 저장된 Profile stable identity와 일치하고 표시 label이 안전한 표시·구조 검증을 통과한 typed `Mention`만 canonical Mention projection의 입력으로 인정한다. 표시 label이 Profile 이름·handle과 같다는 사실만으로 identity를 확정하지 않으며, 일반 anchor와 `to`/`cc`는 Mention으로 추론하지 않는다.
+- Decision Outcome: target에 담긴 identity 증거가 저장된 Profile stable identity와 일치하는 typed `Mention`만 Profile 관계 projection의 입력으로 인정한다. 본문 표시 문자열이나 Profile 이름·handle과의 일치는 identity 조건이 아니며, 일반 anchor와 `to`/`cc`는 Mention으로 추론하지 않는다. 본문 anchor가 대응하지 않으면 node만 안전한 일반 link/text로 낮추고 확인된 typed Profile 관계는 유지한다.
 - Alternatives Considered: anchor나 audience actor URI를 편의상 Mention으로 추론하거나 표시 label exact match만으로 Profile을 연결하는 방식은 현재 authority가 허용하지 않는 의미 변경이므로 선택하지 않는다.
 - Consequences: 검증되지 않은 tag는 관계를 만들 수 없고, downstream renderer와 별도 Notification consumer는 같은 검증된 identity 경계를 사용한다.
 - Confirmation / Follow-up: valid typed Mention, 일반 link, audience-only 입력을 분리하는 수신·저장 검증으로 확인한다.
@@ -21,9 +34,10 @@
 - Decision Date: 2026-09-10
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, `PROD-259`, `PROD-340`
-- Status: Active
+- Status: Superseded
+- Historical note: 2026-09-14 정정이 node-derived relation source를 대체했으며, revision ownership과 atomicity는 현재 계약에서 유지된다.
 - Context / Problem: Current Post에만 관계를 두거나 relation write를 별도 후처리하면 immutable revision의 의미와 rollback 보장이 깨진다.
-- Decision Outcome: canonical versioned Post Content node와 그 immutable revision의 Mentioned Profile 관계를 `post_mentions` table에서 Post Content revision과 Profile을 가리키는 foreign-key persisted projection으로 저장하고, Current Content pointer와 함께 저장한다. relation은 canonical node에서 파생되고 Current Post는 현재 revision을 투영하며, 과거 revision과 관계는 변경하지 않는다.
+- Decision Outcome: canonical versioned Post Content node와 그 immutable revision의 Mentioned Profile 관계를 `post_mentions` table에서 Post Content revision과 Profile을 가리키는 foreign-key persisted projection으로 저장하고, Current Content pointer와 함께 저장한다. relation은 typed identity 집합에서 body conversion과 독립적으로 파생되고 Current Post는 현재 revision을 투영하며, 과거 revision과 관계는 변경하지 않는다.
 - Alternatives Considered: Post-level mutable source를 별도로 두거나 새 revision마다 과거 relation을 재작성하는 방식은 canonical revision ownership과 충돌하므로 배제한다.
 - Consequences: relation 저장 실패는 새 Post/Content/pointer와 함께 rollback해야 하고, renderer는 current 또는 historical revision의 일관된 projection을 읽어야 한다.
 - Confirmation / Follow-up: 최초 Create, 새 revision, 저장 중간 실패를 포함한 transaction 검증으로 확인한다.
@@ -59,7 +73,7 @@
 - Authority / Provenance: `docs/domain/objects/post-content.md`, `docs/domain/objects/post.md`, `PROD-340` (2026-09-10 schema version decision), 2026-09-10 사용자 선택
 - Status: Active
 - Context / Problem: Mention 전용 표시를 모르는 구 reader에서도 저장 활성화 뒤 본문을 읽을 수 있어야 하지만, link 동작과 문단 구조를 완전히 보존하는 호환 경계는 현재 보장되지 않는다.
-- Decision Outcome: 구 reader는 기존 `bodyText` fallback을 재사용한 plain text 표시를 허용한다. 글자·Media·Content Warning은 보존하고 link 클릭 동작과 문단 구조의 일시적 저하는 허용한다. 서버의 본문 파생값부터 구 reader 표시까지 이 보존을 검증한 뒤 Mention 저장을 활성화한다.
+- Decision Outcome: 구 reader는 기존 `bodyText` fallback을 재사용한 plain text 표시를 허용한다. 본문은 저장된 Mention `profileId`만으로 Profile을 재조회하지 않고 안전한 고정 fallback으로 투영하며, Media·Content Warning은 보존하고 link 클릭 동작과 문단 구조의 일시적 저하는 허용한다. 서버의 본문 파생값부터 구 reader 표시까지 이 보존을 검증한 뒤 Mention 저장을 활성화한다.
 - Alternatives Considered: 구 reader에서 link 동작과 문단 구조까지 반드시 보존하도록 schema와 reader를 동시에 고정하는 방식은 현재 사용자 선택 범위를 넘어가므로 기본 계약으로 삼지 않는다.
 - Consequences: rollout 검증은 full rich rendering이 아니라 body text·Media·Content Warning 보존을 증명해야 하며, 이 change는 기존 Post Content V1에 additive한 Mention node를 저장한다. document schema version bump나 V1/V2 dual-read 또는 document version 변환은 도입하지 않지만, revision 관계 persistence를 위한 additive DB migration은 허용한다.
 - Confirmation / Follow-up: 서버 canonicalizer → GraphQL `bodyText` → legacy renderer 경로의 end-to-end 검증으로 확인한다.
@@ -71,7 +85,7 @@
 - Authority / Provenance: `docs/domain/objects/post-content.md`, `docs/domain/objects/post.md`, `PROD-340` (2026-09-10 schema version decision), 2026-09-10 사용자 선택
 - Status: Active
 - Context / Problem: 현재 Post Content V1은 기존 document와 의미를 보존하는 additive 확장을 허용하며, Mention 저장에는 typed node와 revision-owned 관계가 필요하다. 이 의미 변경은 document version migration을 요구하지 않지만, 구 reader compatibility gate는 별도로 필요하다.
-- Decision Outcome: 검증된 typed Mention은 기존 Post Content V1에 additive한 node로 보존하고, revision-owned Profile 관계는 `post_mentions` table에서 Post Content revision과 Profile을 가리키는 foreign-key persisted projection으로 저장한다. 기존 V1 document와 기존 node 의미는 유지하고, document schema version을 올리거나 V1/V2 dual-read 또는 document version 변환을 이 change에 도입하지 않는다. exact Mention node와 relation shape는 제품 요구사항이 아닌 구현 선택으로 아래 기록에 확정하며, 관계 persistence에 필요한 additive DB migration은 허용한다.
+- Decision Outcome: 검증된 typed Mention은 기존 Post Content V1에 `profileId`만 가진 additive node로 보존하고, revision-owned Profile 관계는 `post_mentions` table에서 Post Content revision과 Profile을 가리키는 foreign-key persisted projection으로 저장한다. 원문 anchor 표시 문자열은 resource budget 계산 중에만 사용하고 canonical document에 저장하지 않는다. 기존 V1 document와 기존 node 의미는 유지하고, document schema version을 올리거나 V1/V2 dual-read 또는 document version 변환을 이 change에 도입하지 않는다. exact relation shape는 제품 요구사항이 아닌 구현 선택으로 아래 기록에 확정하며, 2026-09-14 정정은 새 migration이나 live DB 변경을 추가하지 않는다.
 - Alternatives Considered: document schema V2와 V1/V2 dual-read 또는 document version 변환은 기존 V1 document를 재작성하거나 breaking 의미를 도입할 필요가 없고 reader bodyText fallback gate로 호환을 검증할 수 있으므로 채택하지 않는다. `post_mentions` 외에 Post-level mutable relation을 두거나 relation persistence를 위한 additive DB migration을 금지하는 것은 이 결정의 범위가 아니다.
 - Consequences: V1 canonicalizer와 기존 document equality 경계를 유지하면서 Mention projection을 `post_mentions`에 추가하고, 저장 활성화 전 legacy body text·Media·Content Warning 보존 증거를 요구한다.
 - Confirmation / Follow-up: 기존 V1 document, V1 additive Mention document, unknown version과 unsupported node 방어 및 GraphQL `bodyText` → legacy renderer compatibility matrix를 실행 검증한다.
@@ -82,12 +96,13 @@
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `PROD-340` (구체 shape는 위임된 구현 선택)
 - Implementation Evidence: `packages/core/post-content/schema/nodes/mention.ts`, `packages/core/services/post.ts`, `packages/core/post-content/server.ts`, `packages/core/db/tables.ts`, `drizzle/20260910073222_sleepy_justin_hammer/migration.sql`
-- Status: Active
+- Status: Superseded
+- Historical note: the detailed outcome below records the superseded 2026-09-11 contract. It is retained only as history; the current contract is the 2026-09-14 `profileId`-only node with no stored display string described above. The current contract retains the alias validation boundary.
 - Context / Problem: 2026-09-11 실제 Mastodon Note에서 typed tag의 actor URI와 `name`은 `https://dev.kos.moe/ap/actor/{profileId}`·`@test@dev.kos.moe`였지만 본문 anchor는 `https://dev.kos.moe/@test`·`@test`였다. 같은 이미 저장된 Local Profile stable identity를 가리켜도 target href·anchor href·label exact match를 요구하면 typed Mention이 일반 link fallback으로 낮아진다. 같은 표현 차이는 Remote Actor에서도 Actor `url`과 `id`가 다를 때 발생할 수 있다.
-- Decision Outcome: 사용자 승인으로 기존 `{ target, href, label }` 저장 및 target href·anchor href·label exact match 결정을 대체한다. 현재 canonical `mention` node attrs는 정확히 `{ profileId, label }`이다. inbound typed tag의 actor URI는 기존 `ActivityPubActor`·Profile mapping으로 stable `profileId`에 검증하고, 본문 anchor URI는 그 Profile의 허용된 URI에 대응하는지 확인한다. Local Profile은 `Instances.kind=LOCAL`인 active Instance의 trusted `canonicalOrigin`과 기존 `createLocalProfilePerson`의 `/@{encodedHandle}` 규칙으로 만든 human Profile URL을 actor URI와 함께 허용한다. Remote Profile은 actor materialization·refresh에서 같은 Actor document의 `url`로 광고하고 HTTP(S)와 hostname 검증을 통과한 nullable profile URL alias를 Actor identity에 저장한 경우 actor URI와 함께 허용한다. alias는 Actor URI와 다른 hostname이어도 같은 Actor document가 직접 광고한 URL이면 허용한다. alias가 없거나 검증되지 않으면 actor URI만 허용하며, human URL을 handle·domain으로 추측하거나 Mention 수신 중 새로 fetch하지 않는다. 서로 다른 Profile 후보가 같은 허용 href를 공유하면 first match로 연결하지 않고 해당 href를 안전한 fallback으로 낮춘다. tag `name`·handle과 본문 visible label은 identity 증거가 아니고 exact match할 필요도 없다. `label`은 안전하게 정규화한 본문 visible label을 사용한다. target/anchor external URI, Actor alias와 tag metadata는 canonical document에 저장하지 않는다. 기존 mapping으로 확인할 수 없는 local/remote Profile은 새 원격 lookup·materialization 없이 안전 fallback으로 낮춘다. Core Post 저장은 document의 `profileId`를 common relation input으로 수집하고 같은 transaction에서 `post_mentions`를 저장하며, 별도 fallback 재검증을 수행하지 않는다. `post_mentions`는 `post_content_id`와 `profile_id` column, `(post_content_id, profile_id)` composite primary key, `profile_id` index와 Post Content/Profile foreign key(`ON DELETE CASCADE`)를 유지한다. Local Post Content validator는 Mention node를 write 전에 거부한다.
+- Decision Outcome: 사용자 승인으로 기존 `{ target, href, label }` 저장 및 target href·anchor href·label exact match 결정을 대체한다. 당시 canonical `mention` node attrs는 `{ profileId, label }`였다. inbound typed tag의 actor URI는 기존 `ActivityPubActor`·Profile mapping으로 stable `profileId`에 검증하고, 본문 anchor URI는 그 Profile의 허용된 URI에 대응하는지 확인한다. Local Profile은 `Instances.kind=LOCAL`인 active Instance의 trusted `canonicalOrigin`과 기존 `createLocalProfilePerson`의 `/@{encodedHandle}` 규칙으로 만든 human Profile URL을 actor URI와 함께 허용한다. Remote Profile은 actor materialization·refresh에서 같은 Actor document의 `url`로 광고하고 HTTP(S)와 hostname 검증을 통과한 nullable profile URL alias를 Actor identity에 저장한 경우 actor URI와 함께 허용한다. alias는 Actor URI와 다른 hostname이어도 같은 Actor document가 직접 광고한 URL이면 허용한다. alias가 없거나 검증되지 않으면 actor URI만 허용하며, human URL을 handle·domain으로 추측하거나 Mention 수신 중 새로 fetch하지 않는다. 서로 다른 Profile 후보가 같은 허용 href를 공유하면 first match로 연결하지 않고 해당 href를 안전한 fallback으로 낮춘다. tag `name`·handle과 본문 visible label은 identity 증거가 아니고 exact match할 필요도 없다. 당시 구현은 본문 visible label을 `label` attr로 안전하게 정규화했다. target/anchor external URI, Actor alias와 tag metadata는 canonical document에 저장하지 않는다. 기존 mapping으로 확인할 수 없는 local/remote Profile은 새 원격 lookup·materialization 없이 안전 fallback으로 낮춘다. Core Post 저장은 document의 `profileId`를 common relation input으로 수집하고 같은 transaction에서 `post_mentions`를 저장하며, 별도 fallback 재검증을 수행하지 않는다. `post_mentions`는 `post_content_id`와 `profile_id` column, `(post_content_id, profile_id)` composite primary key, `profile_id` index와 Post Content/Profile foreign key(`ON DELETE CASCADE`)를 유지한다. Local Post Content validator는 Mention node를 write 전에 거부한다.
 - Alternatives Considered: `{ target, href, label }`를 canonical document에 저장하거나 Profile domain·handle에서 remote URL을 추정하는 방식은 저장 JSON에 transport identity를 결합하고 renderer가 외부 URI를 재해석하게 하므로 사용하지 않는다. actor URI·local human URL 대응 대신 target href·anchor href·label exact match를 강제하는 방식은 Mastodon 표현 차이에서 같은 Profile을 놓치므로 사용하지 않는다. Actor가 광고하지 않은 Remote human URL alias를 추측하거나 Mention 수신 중 원격 fetch하는 방식, label·handle exact match만으로 Profile을 연결하는 방식도 stable identity 경계를 약화하므로 사용하지 않는다.
-- Consequences: canonical document와 renderer는 Profile identity와 본문 label만 소비하고 outbound HTML은 label text만 생성한다. Actor alias는 materialization·refresh metadata에만 nullable하게 저장하며 refresh에서 광고 URL이 없거나 검증에 실패하면 제거한다. 기존 글을 자동 보정하지 않는다. `post_mentions` shape와 transaction/revision ownership은 변경하지 않으며, `PROD-910`은 이 projection을 소비할 read shape와 renderer를 별도로 검증한다.
-- Confirmation / Follow-up: local actor URI·trusted human Profile URL이 같은 Profile로 확인되는 Mastodon fixture, Remote Actor `id`와 다른 hostname의 광고된 `url`이 다른 fixture, alias가 없거나 malformed인 기존 Actor row, URI mismatch·unresolved fallback, valid/fallback/duplicate/rollback 저장 검증, canonical document equality, local validator와 label-only HTML serialization을 실행 검증한다. Actor `url` alias는 Actor가 직접 광고한 hostname 보유 HTTP(S) URL이면 cross-origin도 허용한다.
+- Consequences: 당시 canonical document와 renderer는 Profile identity와 본문 `label`을 소비하고 outbound HTML은 `label` text만 생성했다. Actor alias는 materialization·refresh metadata에만 nullable하게 저장하며 refresh에서 광고 URL이 없거나 검증에 실패하면 제거한다. 기존 글을 자동 보정하지 않는다. `post_mentions` shape와 transaction/revision ownership은 변경하지 않으며, `PROD-910`은 이 projection을 소비할 read shape와 renderer를 별도로 검증한다.
+- Confirmation / Follow-up: local actor URI·trusted human Profile URL이 같은 Profile로 확인되는 Mastodon fixture, Remote Actor `id`와 다른 hostname의 광고된 `url`이 다른 fixture, alias가 없거나 malformed인 기존 Actor row, URI mismatch·unresolved fallback, valid/fallback/duplicate/rollback 저장 검증, canonical document equality, local validator와 당시 `label`-only HTML serialization을 실행 검증한다. Actor `url` alias는 Actor가 직접 광고한 hostname 보유 HTTP(S) URL이면 cross-origin도 허용한다.
 
 ### 공통 저장 계약은 `PROD-340`과 `PROD-910`이 함께 완료하고 Notification은 분리함
 
@@ -108,10 +123,22 @@
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, `PROD-259`, `PROD-340`
 - Status: Active
 - Context / Problem: Fedify adapter, core content canonicalizer와 Post 저장이 따로 Mention을 해석하면 inbound 경로별 결과가 달라지거나 relation이 partial write가 될 수 있다.
-- Decision Outcome: tag 후보 수집은 inbound adapter에서 전달하되 identity 검증·fallback·canonicalization은 공통 content projection 경계에서 수행하고, document·`post_mentions` persisted revision-to-Profile relation·Current pointer write는 기존 Post 생성 transaction의 저장 경계에 포함한다. 같은 revision/Profile relation은 set semantics를 가지며, 구체 파일·helper 이름은 제품 계약으로 고정하지 않는다.
+- Decision Outcome: inbound adapter가 typed `Mention.href`를 알려진 Profile stable identity로 확인하고 body conversion과 독립된 `profileId` 집합과 body candidates를 전달한다. 공통 content projection/parser 경계는 전달된 identity를 다시 원격 해석하지 않고 body의 안전한 변환과 대응 anchor의 best-effort canonical node 표현을 수행한다. document·`post_mentions` persisted revision-to-Profile relation·Current pointer write는 기존 Post 생성 transaction의 저장 경계에 포함하며, 같은 revision/Profile relation은 set semantics를 가진다. 구체 파일·helper 이름은 제품 계약으로 고정하지 않는다.
 - Alternatives Considered: adapter마다 독립 canonicalization을 두거나 transaction 이후 별도 relation job으로 저장하는 방식은 결과 일관성과 원자성을 약화하므로 기본 경로로 채택하지 않는다.
 - Consequences: 구현자는 기존 안전 parser와 duplicate early no-op을 재사용해야 하며, JSON-only read-time parsing으로 persisted relation을 대체하지 않는다. GraphQL read shape는 `PROD-910`에서 검증한다.
 - Confirmation / Follow-up: inbound valid/fallback/duplicate/rollback 통합 검증과 기존 content canonicalization check로 확인한다.
+
+### Mention 표시 문자열은 Profile에서 파생하고 저장하지 않음
+
+- Decision Date: 2026-09-14
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/domain/decisions/0030-post-content-mention-identity.md`, `PROD-340` 사용자 승인
+- Status: Active
+- Context / Problem: inbound Note의 anchor 표시 문자열을 canonical Mention attr로 저장하면 표시가 수신 시점의 원문 표현에 결속되고 Profile의 현재 표시 handle과 달라질 수 있다. 실제 renderer 표시에는 저장된 원문 문자열이 필요하지 않다.
+- Decision Outcome: canonical Mention node의 attrs는 `profileId` 하나만 사용한다. inbound anchor 표시 문자열은 loose resource/length budget 계산을 위한 transient 입력으로만 사용하고 document, `post_mentions`, GraphQL 또는 renderer 입력에 저장하지 않는다. renderer는 같은 revision에서 조회한 Profile의 `relativeHandle`로 표시 문자열을 만들며, 관계가 없거나 Profile을 조회할 수 없으면 Profile 이동 없는 `@알 수 없는 사용자`를 표시한다.
+- Alternatives Considered: 원문 anchor 문자열을 `label` attr로 저장하거나 tag `name`·handle을 대체 표시로 저장하는 방식은 transport 표현을 durable document에 결속하고 Profile 표시 변경을 반영하지 못하므로 선택하지 않는다. Mention 수신 중 Profile을 다시 조회해 표시 문자열을 저장하는 방식은 no-fetch 경계와 revision의 독립성을 약화하므로 선택하지 않는다.
+- Consequences: 동일 `profileId`의 document equality는 원문 표시 문자열 변화에 좌우되지 않으며, 구 reader의 `bodyText`는 Profile 재조회 없이 고정 fallback을 사용한다. typed identity relation과 body anchor fallback의 독립성, no-fetch/no-backfill/no-live-DB 계약을 유지한다.
+- Confirmation / Follow-up: `profileId`-only canonical serialization, remote anchor text discard, Profile `relativeHandle` 표시, unavailable Profile의 non-link fallback과 loose resource budget 계산을 구현·검증한다.
 
 ## Remaining Implementation Choices
 
@@ -119,4 +146,7 @@
 
 ## Superseded Decisions
 
-- 2026-09-10의 `targetHref`와 본문 anchor href 및 표시 label을 모두 exact match해야 Mention을 인정한다는 결정은 2026-09-11 Mastodon 표현 차이 증거에 따라 위 stable Profile identity 대응 결정으로 대체했다. `{ profileId, label }` canonical attrs, Local human URL 규칙, Actor가 광고한 검증 URL이 없는 Remote의 actor URI-only fallback, revision ownership, first-write-wins, 2.x compatibility gate와 `PROD-910`/`PROD-911` 책임 범위는 유지한다. 기존 글을 alias 학습 후 자동 보정하지 않는다.
+The historical records in this section are superseded. The current contract uses only `{ profileId }`; the inbound anchor display string is transient and the renderer derives visible text from `Profile.relativeHandle`, with fixed non-link `@알 수 없는 사용자` when unavailable.
+
+- 2026-09-10의 `targetHref`와 본문 anchor href 및 표시 label을 모두 exact match해야 Mention을 인정한다는 결정은 2026-09-11 Mastodon 표현 차이 증거에 따라 위 stable Profile identity 대응 결정으로 대체했다. Local human URL 규칙, Actor가 광고한 검증 URL이 없는 Remote의 actor URI-only fallback, revision ownership, first-write-wins, 2.x compatibility gate와 `PROD-910`/`PROD-911` 책임 범위는 유지한다. 당시 `{ profileId, label }` canonical attrs를 포함한 세부 저장 방식은 2026-09-14 `profileId`-only 계약으로 대체했으며, 기존 글을 alias 학습 후 자동 보정하지 않는다.
+- 2026-09-11의 body anchor 대응을 Mention node·관계의 전제로 삼고 canonical node에서 `post_mentions`를 재구축한다는 결정은 2026-09-14 사용자 승인 계약으로 대체했다. 이후 typed `Mention.href`가 알려진 Profile이면 body URL 불일치·anchor 부재·원문 표시 문자열의 loose resource/length budget 입력·body href ambiguity와 무관하게 revision-owned relation을 유지하고, body parser는 node 표시만 ordinary safe link/text로 낮출 수 있다.

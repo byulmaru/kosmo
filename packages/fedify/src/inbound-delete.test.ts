@@ -564,6 +564,7 @@ const createProfile = async (
 const materializeRemotePost = async (profileId: string, objectUri: URL) => {
   const created = await createPost({
     document: postContentDocumentFromText(objectUri.href),
+    mentionProfileIds: [],
     objectUri: objectUri.href,
     origin: 'ACTIVITYPUB',
     profileId,

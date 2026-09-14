@@ -53,6 +53,7 @@ type LocalPostInput = {
 type ActivityPubPostInput = {
   document: PostContentDocumentV1;
   media?: readonly RemoteMediaCandidate[];
+  mentionProfileIds: readonly string[];
   objectUri: string;
   origin: 'ACTIVITYPUB';
   profileId: string;
@@ -705,13 +706,15 @@ export async function createPost(
       }
 
       const mentionProfileIds = new Set(
-        document.body.content.flatMap((block) =>
-          block.type === 'paragraph'
-            ? (block.content ?? []).flatMap((node) =>
-                node.type === 'mention' ? [node.attrs.profileId] : [],
-              )
-            : [],
-        ),
+        input.origin === 'ACTIVITYPUB'
+          ? input.mentionProfileIds
+          : document.body.content.flatMap((block) =>
+              block.type === 'paragraph'
+                ? (block.content ?? []).flatMap((node) =>
+                    node.type === 'mention' ? [node.attrs.profileId] : [],
+                  )
+                : [],
+            ),
       );
       if (mentionProfileIds.size > 0) {
         await tx.insert(PostMentions).values(

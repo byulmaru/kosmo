@@ -329,7 +329,7 @@ describe('Post Reply GraphQL 경계', () => {
     assertNoGraphQLErrors(result);
     const content = result.data?.node?.content;
     assert.ok(content);
-    assert.equal(content.bodyText, '앞쪽 @mentioned 뒤쪽');
+    assert.equal(content.bodyText, '앞쪽 @알 수 없는 사용자 뒤쪽');
     assert.equal(content.contentWarning, '통합 검증 경고');
     const returnedDocument = content.document as {
       body: {
@@ -337,7 +337,7 @@ describe('Post Reply GraphQL 경계', () => {
         content: Array<{
           attrs?: { mediaId?: string };
           content?: Array<{
-            attrs?: { label?: string; profileId?: string };
+            attrs?: { profileId?: string };
             text?: string;
             type: string;
           }>;
@@ -352,7 +352,6 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(returnedDocument.body.attrs?.sensitiveMedia, true);
     assert.equal(returnedDocument.body.content[0]?.content?.[1]?.type, 'mention');
     assert.deepEqual(returnedDocument.body.content[0]?.content?.[1]?.attrs, {
-      label: '@mentioned',
       profileId: auth.profile.id,
     });
     assert.deepEqual(returnedDocument.body.content[1]?.attrs, {

@@ -149,6 +149,7 @@ describe('inbound Announce materialization', () => {
     const actor = await createRemoteActor(actorUri);
     const source = await createPost({
       document: postContentDocumentFromText('self source'),
+      mentionProfileIds: [],
       objectUri: sourceUri.href,
       origin: 'ACTIVITYPUB',
       profileId: actor.id,
@@ -261,6 +262,7 @@ describe('inbound Announce materialization', () => {
     const activity = announce('uri-collision', sourceUri);
     const collision = await createPost({
       document: postContentDocumentFromText('collision'),
+      mentionProfileIds: [],
       objectUri: activity.id!.href,
       origin: 'ACTIVITYPUB',
       profileId: source.profileId,
@@ -564,6 +566,7 @@ const createRemoteSource = async () => {
   const author = await createProfile({ instanceId: instance.id, handle: 'source-author' });
   const result = await createPost({
     document: postContentDocumentFromText('source'),
+    mentionProfileIds: [],
     objectUri: sourceUri.href,
     origin: 'ACTIVITYPUB',
     profileId: author.id,

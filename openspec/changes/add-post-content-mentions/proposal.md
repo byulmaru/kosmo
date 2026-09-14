@@ -7,28 +7,30 @@
 
 ## What Changes
 
-- 검증된 ActivityPub `tag`의 typed `Mention`만 canonical Post Content node와 해당 immutable revision의
-  Mentioned Profile 관계로 저장한다.
-- typed tag의 actor URI는 이미 저장된 Local/Remote Profile stable identity로 확인하고, 본문 anchor URI는 같은
-  Profile의 허용 href에 대응하는지 검증한다. Local Profile은 trusted canonical origin과 기존 Profile URL 규칙의 human URL을
-  actor URI와 함께 사용할 수 있다. Remote Profile은 actor materialization·refresh에서 해당 Actor가 `url`로 광고하고 hostname이 있는 HTTP(S)로
-  검증해 저장한 nullable profile URL alias를 actor URI와 함께 사용할 수 있다. alias는 Actor URI와 다른 hostname이어도 Actor가 직접
-  광고한 URL이면 허용한다. alias가 없거나 검증되지 않으면 저장된 actor URI만 사용한다. actor URI와 human URL은 서로 다른 URI 형식일
-  수 있으며 tag `name`·handle과 본문 visible label의 문자열 일치는 identity
-  조건으로 사용하지 않는다.
-- Mention node와 `post_mentions` revision-owned Profile 관계는 Post Content revision과 Profile을 가리키는 foreign
-  keys와 함께 같은 저장 경계에서 생성하고, Current Post는 현재 Content의 관계를 투영한다. 과거 revision과 그
-  관계는 보존한다.
-- unresolved, malformed 또는 identity mismatch Mention은 Mention node·Profile 관계를 만들지 않고, Note가
-  나머지 수신 검증을 통과하면 안전한 일반 link 또는 표시 text로 본문을 보존한다. 이 경로에서 신규 원격
-  Profile lookup/materialization은 수행하지 않는다.
+- 검증된 ActivityPub `tag`의 typed `Mention.href`가 이미 알려진 Profile stable identity로 해석될 때만 canonical Mention
+  projection 후보로 인정한다. 이 identity 확인은 본문 HTML 변환과 독립적이다. 본문 anchor URI가 typed href 또는 기존 정상
+  actor materialization·refresh로 저장된 Profile URL alias에 대응하면 canonical node로 표현할 수 있고, URL이 다르거나 anchor가
+  없으면 안전한 일반 link 또는 표시 text로 보존한다. 일반 link/text는 Mention 관계를 만들지 않는다.
+- Local Profile은 trusted canonical origin과 기존 Profile URL 규칙의 human URL을 actor URI와 함께 사용할 수 있다. Remote
+  Profile URL alias가 없으면 이미 알려진 actor URI만 사용하며 Mention 수신 중 URL fetch·신규 Profile materialization·backfill을
+  수행하지 않는다. 누락 alias는 기존 정상 actor materialization·refresh에서만 채우며, 새 migration이나 live DB 변경을 이
+  계약에 추가하지 않는다. tag `name`·handle과 본문 visible label의 문자열 일치로 identity를 확정하거나 거부하지 않는다.
+- typed `Mention.href`에서 확인한 Profile identity 집합과 body Mention node는 독립적으로 Post Content revision에 투영한다.
+  `post_mentions` revision-owned Profile 관계와 Current Content pointer는 같은 저장 경계에서 생성하고, 본문 anchor URL이 다르거나
+  없어 ordinary link/text가 되어도 확인된 typed Profile 관계는 보존한다. 과거 revision과 그 관계는 보존한다.
+- unresolved, malformed 또는 identity를 확인할 수 없는 typed Mention은 Mention node·Profile 관계를 만들지 않고, Note가
+  나머지 수신 검증을 통과하면 안전한 일반 link 또는 표시 text로 본문을 보존한다. 알려진 typed identity의 본문 URL 불일치는
+  identity 실패가 아니며 해당 anchor만 fallback으로 낮춘다. 이 경로에서 신규 원격 Profile lookup/materialization은 수행하지 않는다.
+- canonical Mention node에는 `profileId`만 저장한다. 원문 anchor의 표시 문자열은 수신 중 loose resource/length budget 계산에만
+  transient하게 사용하고 저장하지 않는다. body conversion은 기존 안전 parser 경계를 따르며, renderer는 같은 revision의 Profile `relativeHandle`에서
+  표시 문자열을 파생하며, Profile을 조회할 수 없으면 Profile 이동 없는 `@알 수 없는 사용자`를 표시한다.
 - 기존 duplicate `Create`의 first-write-wins no-op과 remote `Update(Note)` 제외 범위를 유지한다.
 - 구 reader가 Mention을 포함한 본문을 보존할 수 있는 호환 처리를 먼저 확보·검증한 뒤 현재 Post Content V1에
   additive한 Mention node 저장을 활성화한다. 구 reader는 기존 `bodyText` fallback을 재사용한 plain text 표시를
   허용하며, link 클릭 동작과 문단 구조의 일시적 저하를 허용한다. 이 change에서는 document schema version을
   올리거나 V1/V2 dual-read 또는 document version 변환을 도입하지 않으며, Mention node의 exact attr/field와
-  `post_mentions`의 column/index/primary-key shape는 구현 선택으로 남긴다. `post_mentions` persistence를 위한
-  additive DB migration은 허용한다.
+  `post_mentions`의 column/index/primary-key shape는 구현 선택으로 남긴다. 2026-09-14 정정 범위에는 새 migration이나 live DB
+  변경을 포함하지 않는다.
 - `PROD-340`의 공통 계약·구현 gate와 `PROD-910`의 renderer·Profile 이동·접근성·통합 및 archive를 이
   change의 구현·완료 범위로 함께 추적한다. `PROD-911`의 Notification·FCM은 이 capability를 소비하는
   별도 change의 범위로 남긴다. local compose, outbound federation, `to`/`cc` audience와 DIRECT visibility도
@@ -37,7 +39,8 @@
 ## Authority / Provenance
 
 - Canonical: `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`,
-  `docs/domain/decisions/0022-post-content-revision-media-nodes.md`
+  `docs/domain/decisions/0022-post-content-revision-media-nodes.md`,
+  `docs/domain/decisions/0030-post-content-mention-identity.md`
 - Linear Contract / Common implementation gate: [`PROD-340`](https://linear.app/byulmaru/issue/PROD-340/원격-note-mention을-pm-node와-profile-관계로-보존한다)
 - Linear Implementation / integration and archive: [`PROD-910`](https://linear.app/byulmaru/issue/PROD-910/본문-mention을-표시하고-profile로-이동한다)
 - Separate consumer change: [`PROD-911`](https://linear.app/byulmaru/issue/PROD-911/activitypub-수신-mention을-인앱-알림으로-생성표시하고-fcm과-연결한다)
@@ -60,10 +63,10 @@
 ## Impact
 
 - `packages/core`: 기존 V1 Post Content canonicalizer/validator와 Post 생성 transaction에 typed Mention projection,
-  relation 재구축과 호환 검증을 연결한다.
-- `packages/fedify`: actor materialization·refresh에서 Actor가 광고한 검증된 HTTP(S) profile URL alias를 기존 Actor identity에
-  연결해 보존하고, inbound Note의 typed `tag`에 그 alias를 허용 href로 전달하며 `to`/`cc` audience와 분리한다. Mention 수신 중
-  새 actor/profile fetch는 수행하지 않는다.
+  body node와 독립적인 relation persistence와 호환 검증을 연결한다.
+- `packages/fedify`: 기존 actor materialization·refresh가 보유한 Profile URL metadata를 재사용하고, inbound Note의 typed
+  `Mention.href`를 이미 알려진 Profile identity와 확인해 `to`/`cc` audience와 분리한다. Mention 수신 중 새 actor/profile fetch,
+  materialization 또는 backfill은 수행하지 않는다.
 - PostgreSQL/Drizzle 및 GraphQL read projection: immutable revision 관계를 `post_mentions` table에 저장·조회하되
   column/index/primary-key shape는 구현 전 검토한다.
 - `packages/core`, `packages/fedify`의 unit/integration 검증: valid, duplicate, unresolved, malformed,

@@ -94,15 +94,20 @@ export const projectRemoteNoteMedia = async (note: Note) => {
   return candidates;
 };
 
-const projectRemoteNote = async (note: Note) => ({
-  document: projectRemoteNoteContent({
-    content: note.content?.toString() ?? null,
-    mediaType: note.mediaType,
-    mentions: await collectInboundMentionCandidates(note),
-    summary: note.summary?.toString() ?? null,
-  }),
-  media: await projectRemoteNoteMedia(note),
-});
+const projectRemoteNote = async (note: Note) => {
+  const mentionCandidates = await collectInboundMentionCandidates(note);
+
+  return {
+    document: projectRemoteNoteContent({
+      content: note.content?.toString() ?? null,
+      mediaType: note.mediaType,
+      mentions: mentionCandidates,
+      summary: note.summary?.toString() ?? null,
+    }),
+    media: await projectRemoteNoteMedia(note),
+    mentionProfileIds: [...new Set(mentionCandidates.map(({ profileId }) => profileId))],
+  };
+};
 
 const resolveReplyParentId = async (
   context: RemoteNoteMaterializationContext,
@@ -181,6 +186,7 @@ const createRemoteNotePost = async ({
   context,
   document,
   media,
+  mentionProfileIds,
   note,
   objectUri,
   profileId,
@@ -190,6 +196,7 @@ const createRemoteNotePost = async ({
   context: RemoteNoteMaterializationContext;
   document: ReturnType<typeof projectRemoteNoteContent>;
   media: Awaited<ReturnType<typeof projectRemoteNoteMedia>>;
+  mentionProfileIds: readonly string[];
   note: Note;
   objectUri: string;
   profileId: string;
@@ -200,6 +207,7 @@ const createRemoteNotePost = async ({
   const input = {
     document,
     media,
+    mentionProfileIds,
     objectUri,
     origin: 'ACTIVITYPUB',
     profileId,
@@ -363,6 +371,7 @@ const materializeRemoteNote = async ({
     context,
     document: projection.document,
     media: projection.media,
+    mentionProfileIds: projection.mentionProfileIds,
     note,
     objectUri: objectUri.href,
     profileId: storedActor.profile.id,

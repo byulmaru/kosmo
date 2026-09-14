@@ -193,6 +193,37 @@ describe('remote actor materialization', () => {
     assert.equal(missingStored.profileUrl, null);
   });
 
+  test('refreshes a legacy null actor profile URL from a valid advertised URL', async () => {
+    const actorUri = new URL(`https://${remoteDomain}/users/alice`);
+    const firstNow = Temporal.Instant.from('2026-07-10T00:00:00Z');
+    const profile = await materializeRemoteProfileActor({
+      context: createLookupContext(async () => createActor()).context,
+      actorUri,
+      now: firstNow,
+    });
+
+    const legacyStored = await db
+      .select({ profileUrl: ActivityPubActors.profileUrl })
+      .from(ActivityPubActors)
+      .where(eq(ActivityPubActors.profileId, profile.id))
+      .then(firstOrThrow);
+    assert.equal(legacyStored.profileUrl, null);
+
+    const advertisedUrl = new URL('https://profile.example/@alice-restored');
+    await materializeRemoteProfileActor({
+      context: createLookupContext(async () => createActor({ url: advertisedUrl })).context,
+      actorUri,
+      now: firstNow.add({ seconds: 1 }),
+    });
+
+    const refreshedStored = await db
+      .select({ profileUrl: ActivityPubActors.profileUrl })
+      .from(ActivityPubActors)
+      .where(eq(ActivityPubActors.profileId, profile.id))
+      .then(firstOrThrow);
+    assert.equal(refreshedStored.profileUrl, advertisedUrl.href);
+  });
+
   test('materializes, replaces, and removes embedded actor avatar and header Media', async () => {
     const avatarUrl = new URL(`https://${remoteDomain}/media/avatar.png`);
     const headerUrl = new URL(`https://${remoteDomain}/media/header.png`);

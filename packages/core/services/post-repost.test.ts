@@ -527,6 +527,7 @@ test('deletePost는 pure Repost 구조가 아니면 Repost Notification cleanup�
   const recipient = await createProfile();
   const created = await createPost({
     document: postContentDocumentFromText('remote post'),
+    mentionProfileIds: [],
     objectUri: `https://${author.instance.domain}/notes/${crypto.randomUUID()}`,
     origin: 'ACTIVITYPUB',
     profileId: author.profile.id,

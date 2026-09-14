@@ -2,7 +2,6 @@ import { MIMEType } from 'node:util';
 import { JSDOM } from 'jsdom';
 import { DOMParser as ProseMirrorDOMParser } from 'prosemirror-model';
 import {
-  normalizePostContentMentionLabel,
   normalizePostContentPlainText,
   normalizePostContentProfileId,
   postContentSchemaVersion,
@@ -86,35 +85,18 @@ function htmlToBodyDocument(
           return false;
         }
 
-        const label = normalizeMentionLabel(element.textContent ?? '');
-        if (label === null) {
-          return false;
-        }
-
         const profileIds = profileIdsByTargetHref.get(href);
         if (!profileIds || profileIds.size !== 1) {
           return false;
         }
 
-        return { label, profileId: profileIds.values().next().value };
+        return { profileId: profileIds.values().next().value };
       },
     },
     ...schemaDOMParser.rules,
   ]);
 
   return remoteNoteDOMParser.parse(fragment).toJSON() as PostContentBodyDocumentV1;
-}
-
-function normalizeMentionLabel(value: string | null): string | null {
-  if (value === null) {
-    return null;
-  }
-
-  try {
-    return normalizePostContentMentionLabel(value);
-  } catch {
-    return null;
-  }
 }
 
 function mediaTypeEssence(mediaType: string | null): string {
@@ -168,14 +150,19 @@ export function projectRemoteNoteContent({
   summary,
   mediaType,
 }: RemoteNoteContentInput): PostContentDocumentV1 {
+  const projectedSummary = projectSummary(summary);
   const document = canonicalizePostContentDocument({
     version: postContentSchemaVersion,
-    summary: projectSummary(summary),
+    summary: projectedSummary,
     body: projectBody(content, mediaType, mentions),
   });
 
-  const plainTextLength =
-    (document.summary?.length ?? 0) + postContentDocumentToText(document).length;
+  // Count the visible source text before Mention nodes replace remote anchor text.
+  const sourceBodyText =
+    content !== null && mediaTypeEssence(mediaType) === 'text/html'
+      ? projectRemoteActivityPubHtmlToPlainText(content)
+      : postContentDocumentToText(document);
+  const plainTextLength = (projectedSummary?.length ?? 0) + sourceBodyText.length;
   if (plainTextLength > remoteNoteContentMaxLength) {
     throw new RemoteNoteContentLengthExceededError();
   }

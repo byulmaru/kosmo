@@ -88,6 +88,7 @@ const createRemotePost = async (
   createPost({
     document: postContentDocumentFromText(crypto.randomUUID()),
     objectUri,
+    mentionProfileIds: [],
     origin: 'ACTIVITYPUB',
     profileId,
     publishedAt: null,

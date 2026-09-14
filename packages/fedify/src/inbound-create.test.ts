@@ -189,10 +189,7 @@ describe('inbound Create dispatch', () => {
         content: [
           { text: 'Hello ', type: 'text' },
           {
-            attrs: {
-              label: '@alice',
-              profileId: profile.id,
-            },
+            attrs: { profileId: profile.id },
             type: 'mention',
           },
         ],
@@ -232,7 +229,7 @@ describe('inbound Create dispatch', () => {
         type: 'paragraph',
         content: [
           { text: 'Hello ', type: 'text' },
-          { attrs: { label: '@alice', profileId: profile.id }, type: 'mention' },
+          { attrs: { profileId: profile.id }, type: 'mention' },
         ],
       },
     ]);
@@ -283,9 +280,9 @@ describe('inbound Create dispatch', () => {
             type: 'text',
           },
           { text: ' ', type: 'text' },
-          { attrs: { label: '@alice', profileId: alice.id }, type: 'mention' },
+          { attrs: { profileId: alice.id }, type: 'mention' },
           { text: ' ', type: 'text' },
-          { attrs: { label: '@bob', profileId: bob.id }, type: 'mention' },
+          { attrs: { profileId: bob.id }, type: 'mention' },
         ],
       },
     ]);
@@ -339,7 +336,7 @@ describe('inbound Create dispatch', () => {
         type: 'paragraph',
         content: [
           {
-            attrs: { label: '@test', profileId: target.id },
+            attrs: { profileId: target.id },
             type: 'mention',
           },
           { text: ' gdgd', type: 'text' },
@@ -351,12 +348,12 @@ describe('inbound Create dispatch', () => {
     ]);
   });
 
-  test('preserves unresolved, mismatched, or malformed typed Mentions as safe links', async () => {
-    await createStoredRemoteActor({ profileUrl: 'not a URL' });
+  test('preserves unresolved or mismatched typed Mentions as safe links while retaining known relations independent of anchor text', async () => {
+    const knownProfile = await createStoredRemoteActor({ profileUrl: 'not a URL' });
     const mismatchedTarget = new URL('https://remote-b.example/users/bob');
     await createStoredRemoteActor({ actorUri: mismatchedTarget, handle: 'bob' });
     const unresolvedTarget = new URL('https://unknown.example/users/bob');
-    const malformedLabelTarget = remoteActorUri;
+    const unsafeDisplayTarget = remoteActorUri;
     const objectUri = new URL('https://remote.example/notes/unresolved-mention');
     const note = new Note({
       attribution: remoteActorUri,
@@ -364,7 +361,7 @@ describe('inbound Create dispatch', () => {
         `<p><a href="${mismatchedTarget.href}">@alice</a> ` +
         `<a href="${unresolvedTarget.href}">@bob</a> ` +
         `<a href="${remoteActorUri.origin}/@alice">@alice</a> ` +
-        `<a href="${malformedLabelTarget.href}">\u0001</a></p>`,
+        `<a href="${unsafeDisplayTarget.href}">\u0001</a></p>`,
       id: objectUri,
       mediaType: 'text/html',
       tags: [
@@ -377,7 +374,7 @@ describe('inbound Create dispatch', () => {
           name: '@bob',
         }),
         new Mention({
-          href: malformedLabelTarget,
+          href: unsafeDisplayTarget,
           name: '@bad',
         }),
       ],
@@ -423,15 +420,13 @@ describe('inbound Create dispatch', () => {
             type: 'text',
           },
           { text: ' ', type: 'text' },
-          {
-            marks: [{ attrs: { href: malformedLabelTarget.href }, type: 'link' }],
-            text: '\u0001',
-            type: 'text',
-          },
+          { attrs: { profileId: knownProfile.id }, type: 'mention' },
         ],
       },
     ]);
-    assert.deepEqual(await db.select().from(PostMentions), []);
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: content.id, profileId: knownProfile.id },
+    ]);
     assert.equal((await db.select().from(Profiles)).length, profileCount);
     assert.equal((await db.select().from(ActivityPubActors)).length, actorCount);
     assert.equal((await db.select().from(Instances)).length, instanceCount);
@@ -478,10 +473,7 @@ describe('inbound Create dispatch', () => {
         type: 'paragraph',
         content: [
           {
-            attrs: {
-              label: '@alice',
-              profileId: profile.id,
-            },
+            attrs: { profileId: profile.id },
             type: 'mention',
           },
           { text: ' body', type: 'text' },
@@ -489,7 +481,7 @@ describe('inbound Create dispatch', () => {
       },
       { attrs: { mediaId: media.id }, type: 'media' },
     ]);
-    assert.equal(postContentDocumentToText(content.document), '@alice body');
+    assert.equal(postContentDocumentToText(content.document), '@알 수 없는 사용자 body');
     assert.deepEqual(
       { altText: media.altText, mediaType: media.mediaType, url: media.url },
       { altText: 'Mention image', mediaType: 'image/webp', url: mediaUri.href },
@@ -2546,7 +2538,7 @@ describe('inbound Create dispatch', () => {
     assert.equal(mapping.publishedAt?.toString(), publishedAt.toString());
     assert.equal(content.createdAt.toString(), receivedAt.toString());
     assert.equal(content.document.summary, 'Content warning');
-    assert.equal(postContentDocumentToText(content.document), `First ${mentionLabel}`);
+    assert.equal(postContentDocumentToText(content.document), 'First @알 수 없는 사용자');
     assert.equal((await db.select().from(PostContents)).length, 1);
     assert.deepEqual(await db.select().from(PostMentions), [
       { postContentId: content.id, profileId: profile.id },
