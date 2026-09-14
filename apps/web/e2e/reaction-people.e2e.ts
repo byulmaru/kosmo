@@ -55,7 +55,7 @@ test('목록에서 People로 이동하고 Type과 프로필 방문 후 원래 �
   await expect(heading).toBeVisible();
   await expect(heading).toBeFocused();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('navigation', { name: '주요 메뉴', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: '하단 탐색', exact: true })).toBeVisible();
   await expect(page.getByRole('tab', { name: /❤️/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('하트 사용자', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: /🎉/ }).click();
