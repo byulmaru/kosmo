@@ -48,6 +48,9 @@ export const createLocalProfilePerson = <TContextData>({
   const outboxUri = new URL(`${actorPathname}/outbox`, actorUri);
   const sharedInboxUri = new URL('/inbox', context.canonicalOrigin);
   const profileUri = new URL(`/@${encodeURIComponent(profile.handle)}`, context.canonicalOrigin);
+  const migrationSourceAliases = profile.migrationSourceUri
+    ? [new URL(profile.migrationSourceUri)]
+    : [];
 
   return new Person({
     id: actorUri,
@@ -65,6 +68,7 @@ export const createLocalProfilePerson = <TContextData>({
     publicKey: rsaKeyPair.cryptographicKey,
     assertionMethods: ed25519KeyPairs.map((keyPair) => keyPair.multikey),
     manuallyApprovesFollowers: profile.followPolicy === ProfileFollowPolicy.APPROVAL_REQUIRED,
+    aliases: migrationSourceAliases,
     endpoints: new Endpoints({ sharedInbox: sharedInboxUri }),
   });
 };

@@ -13,6 +13,7 @@ import {
   pg,
   ProfileFollows,
   ProfileMedia,
+  ProfileMigrations,
   Profiles,
 } from '@kosmo/core/db';
 import {
@@ -97,6 +98,35 @@ test('Update(Person)는 canonical actor 표현과 안정적인 activity identity
     [active.actorUri],
   );
   assert.equal(first.recipients[0]?.endpoints?.sharedInbox?.href, active.sharedInboxUri);
+});
+
+test('Update(Person)는 준비된 Profile Migration source를 exact alsoKnownAs alias로 표현한다', async () => {
+  const local = await createLocalProfile();
+  const remote = await createRemoteActor({});
+  await db.insert(ProfileFollows).values({
+    followeeProfileId: local.profile.id,
+    followerProfileId: remote.profileId,
+  });
+  await db.insert(ProfileMigrations).values({
+    sourceProfileId: remote.profileId,
+    targetProfileId: local.profile.id,
+  });
+  const fixture = await createContextFixture(local);
+  mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+  await sendLocalProfileUpdate({
+    profileId: local.profile.id,
+    updateId: '00000000-0000-8000-8000-000000000004',
+  });
+
+  const activity = fixture.calls[0]?.activity;
+  assert.ok(activity instanceof Update);
+  const object = await activity.getObject();
+  assert.ok(object instanceof Person);
+  assert.deepEqual(
+    object.aliasIds.map((alias) => alias.href),
+    [remote.actorUri],
+  );
 });
 
 test('remote follower가 없으면 HTTP delivery를 시작하지 않는다', async () => {

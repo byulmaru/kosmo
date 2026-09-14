@@ -7,6 +7,7 @@ import {
   first,
   Media,
   ProfileMedia,
+  ProfileMigrations,
   Profiles,
 } from '@kosmo/core/db';
 import {
@@ -38,6 +39,7 @@ const AvatarProfileMedia = alias(ProfileMedia, 'avatar_profile_media');
 const AvatarMedia = alias(Media, 'avatar_media');
 const HeaderProfileMedia = alias(ProfileMedia, 'header_profile_media');
 const HeaderMedia = alias(Media, 'header_media');
+const MigrationSourceActors = alias(ActivityPubActors, 'profile_migration_source_actor');
 const toLocalProfileActorMedia = (
   media: { mediaType: string | null; url: string | null } | null,
 ): LocalProfileActorMedia | null =>
@@ -47,10 +49,12 @@ const toLocalProfileActorProfile = (
   profile: typeof Profiles.$inferSelect,
   avatar: LocalProfileActorMedia | null,
   header: LocalProfileActorMedia | null,
+  migrationSourceUri: string | null,
 ): LocalProfileActorProfile => ({
   avatar,
   id: profile.id,
   handle: profile.handle,
+  migrationSourceUri,
   name: profile.displayName,
   bio: profile.bio,
   createdAt: profile.createdAt,
@@ -125,6 +129,7 @@ export const createDrizzleLocalActorStore = (client: LocalActorDbClient = db): L
           mediaType: HeaderMedia.mediaType,
           url: HeaderMedia.url,
         },
+        migrationSourceUri: MigrationSourceActors.uri,
         profile: Profiles,
       })
       .from(Profiles)
@@ -164,6 +169,11 @@ export const createDrizzleLocalActorStore = (client: LocalActorDbClient = db): L
           isNotNull(HeaderMedia.mediaType),
         ),
       )
+      .leftJoin(ProfileMigrations, eq(ProfileMigrations.targetProfileId, Profiles.id))
+      .leftJoin(
+        MigrationSourceActors,
+        eq(MigrationSourceActors.profileId, ProfileMigrations.sourceProfileId),
+      )
       .where(
         and(
           eq(Profiles.id, profileId),
@@ -182,6 +192,7 @@ export const createDrizzleLocalActorStore = (client: LocalActorDbClient = db): L
       row.profile,
       toLocalProfileActorMedia(row.avatar),
       toLocalProfileActorMedia(row.header),
+      row.migrationSourceUri,
     );
   },
 

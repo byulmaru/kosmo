@@ -17,6 +17,7 @@ export interface LocalProfileActorProfile {
   readonly avatar: LocalProfileActorMedia | null;
   readonly id: string;
   readonly handle: string;
+  readonly migrationSourceUri: string | null;
   readonly name: string;
   readonly bio: string | null;
   readonly createdAt: Temporal.Instant;
