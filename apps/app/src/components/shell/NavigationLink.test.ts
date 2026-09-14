@@ -39,6 +39,8 @@ type RenderedLinkProps = {
 };
 
 const navigations: string[] = [];
+const routerActions: Array<{ href: string; mode: 'navigate' | 'push' | 'replace' }> = [];
+const platform: { OS: 'web' | 'ios' } = { OS: 'web' };
 let currentPathname = '/home';
 let consumeIntent: ((pathname: string) => boolean) | undefined;
 let linkPress: LinkPress | undefined;
@@ -66,12 +68,17 @@ mockModule('expo-router', {
     return createElement('Link', props, props.children);
   },
   useRouter: () => ({
-    navigate: (href: string) => navigations.push(href),
+    navigate: (href: string) => {
+      routerActions.push({ href, mode: 'navigate' });
+      navigations.push(href);
+    },
+    push: (href: string) => routerActions.push({ href, mode: 'push' }),
+    replace: (href: string) => routerActions.push({ href, mode: 'replace' }),
   }),
   usePathname: () => currentPathname,
 });
 mockModule('react-native', {
-  Platform: { OS: 'web' },
+  Platform: platform,
 });
 
 let NavigationLink: typeof NavigationLinkExport;
@@ -98,6 +105,8 @@ afterEach(async () => {
   consumeIntent = undefined;
   currentPathname = '/home';
   navigations.length = 0;
+  routerActions.length = 0;
+  platform.OS = 'web';
   mock.restoreAll();
 });
 
@@ -144,6 +153,7 @@ const renderLink = async (
   options: {
     current?: boolean;
     href?: Href;
+    navigationMode?: 'push' | 'switch';
     onCurrentNavigate?: () => void;
     primary?: boolean;
   } = {},
@@ -162,6 +172,7 @@ const renderLink = async (
             current: options.current,
             children: createElement(TestPressable),
             href: options.href ?? '/timeline',
+            navigationMode: options.navigationMode,
             onNavigate,
             onCurrentNavigate: options.onCurrentNavigate,
             primary: options.primary,
@@ -207,6 +218,47 @@ describe('NavigationLink', () => {
     assert.equal(event.preventDefault.mock.callCount(), 1);
     assert.equal(onNavigate.mock.callCount(), 1);
     assert.deepEqual(navigations, ['/timeline']);
+  });
+
+  it('Native 최상위 전환은 router.replace를 실행한다', async () => {
+    let pendingAction: GuardedNavigationAction | null = null;
+    platform.OS = 'ios';
+    await renderLink(
+      (action) => {
+        pendingAction = action;
+        return true;
+      },
+      undefined,
+      {
+        href: '/search',
+        navigationMode: 'switch',
+      },
+    );
+
+    await act(async () => linkPress?.(createPressEvent() as unknown as Parameters<LinkPress>[0]));
+    assert.ok(pendingAction);
+    await act(async () => pendingAction?.());
+
+    assert.deepEqual(routerActions, [{ href: '/search', mode: 'replace' }]);
+  });
+
+  it('Native 계층 이동은 기본 router.push를 실행한다', async () => {
+    let pendingAction: GuardedNavigationAction | null = null;
+    platform.OS = 'ios';
+    await renderLink(
+      (action) => {
+        pendingAction = action;
+        return true;
+      },
+      undefined,
+      { href: '/post/1' },
+    );
+
+    await act(async () => linkPress?.(createPressEvent() as unknown as Parameters<LinkPress>[0]));
+    assert.ok(pendingAction);
+    await act(async () => pendingAction?.());
+
+    assert.deepEqual(routerActions, [{ href: '/post/1', mode: 'push' }]);
   });
 
   it('실제 무guard primary navigation에서만 scroll intent를 기록한다', async () => {

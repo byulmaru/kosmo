@@ -1,4 +1,4 @@
-import { Slot, usePathname } from 'expo-router';
+import { Slot, Stack, usePathname } from 'expo-router';
 import { Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { SettingsMuteAndBlockNavigation } from '@/components/settings/SettingsMuteAndBlockNavigation';
@@ -16,7 +16,7 @@ export const unstable_settings = {
 export default function SettingsLayout() {
   return (
     <SettingsRouteLayout>
-      <Slot />
+      {Platform.OS === 'web' ? <Slot /> : <Stack screenOptions={{ headerShown: false }} />}
     </SettingsRouteLayout>
   );
 }
@@ -74,13 +74,15 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
     <SettingsRouteProvider detailHeaderMode={detailHeaderMode}>
       {web ? (
         <View style={styles.onePane}>{content}</View>
-      ) : (
+      ) : root ? (
         <ScrollView
           contentContainerStyle={styles.nativeOnePaneContent}
           style={styles.nativeOnePaneScroll}
         >
           {content}
         </ScrollView>
+      ) : (
+        <View style={styles.nativeOnePane}>{content}</View>
       )}
     </SettingsRouteProvider>
   );
@@ -91,6 +93,7 @@ const styles = StyleSheet.create({
   masterPane: { borderRightWidth: 1, flexShrink: 0, minWidth: 0, width: 320 },
   detailPane: { flex: 1, minWidth: 0 },
   onePane: { minHeight: '100%', minWidth: 0, width: '100%' },
+  nativeOnePane: { flex: 1, minWidth: 0, width: '100%' },
   nativeOnePaneScroll: { flex: 1, minWidth: 0, width: '100%' },
   nativeOnePaneContent: { flexGrow: 1, minWidth: 0, width: '100%' },
 });

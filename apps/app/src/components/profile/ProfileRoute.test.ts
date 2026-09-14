@@ -5,7 +5,6 @@ import { createContext, createElement, useContext } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type { UseAutomaticPaginationResult } from '../pagination/useAutomaticPagination';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -32,7 +31,6 @@ const queryHistory: Array<{
 const pending = new Promise<never>(() => undefined);
 
 type RouteParams = { profileHandle?: string | string[] };
-type NativeScrollProps = UseAutomaticPaginationResult['nativeScrollProps'];
 type ReportMenuInput = {
   id: string;
   kind: 'PROFILE';
@@ -64,15 +62,8 @@ let SlotContent: ComponentType | null = null;
 let profileAvailable = true;
 let profileInstanceKind: 'ACTIVITYPUB' | 'LOCAL' = 'LOCAL';
 const routerHistory: string[] = [];
-let routeProbeEnabled = false;
 let routerBackCount = 0;
 let sessionId: string | null = null;
-let usePaginationScrollRegistration: (props: NativeScrollProps | null) => void = () => undefined;
-let routeMetrics = {
-  contentHeight: 0,
-  layoutHeight: 0,
-  scrollOffset: 0,
-};
 let profileViewerState: {
   isSelf: boolean;
   membership: { role: 'MEMBER' | 'OWNER' } | null;
@@ -84,26 +75,6 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
-const routePaginationHandlers: NativeScrollProps = {
-  onContentSizeChange: (_width, height) => {
-    routeMetrics.contentHeight = height;
-  },
-  onLayout: (event) => {
-    routeMetrics.layoutHeight = event.nativeEvent.layout.height;
-  },
-  onScroll: (event) => {
-    routeMetrics.contentHeight = event.nativeEvent.contentSize.height;
-    routeMetrics.layoutHeight = event.nativeEvent.layoutMeasurement.height;
-    routeMetrics.scrollOffset = event.nativeEvent.contentOffset.y;
-  },
-  scrollEventThrottle: 16,
-};
-
-function RoutePaginationProbe({ children }: { children: ReactNode }) {
-  usePaginationScrollRegistration(routePaginationHandlers);
-  return children;
-}
-
 mockModule('expo-router', {
   Slot: () =>
     SlotContent
@@ -113,6 +84,18 @@ mockModule('expo-router', {
           createElement(SlotContent),
         )
       : null,
+  Stack: () =>
+    createElement(
+      'Stack',
+      null,
+      SlotContent
+        ? createElement(
+            LocalParamsContext.Provider,
+            { value: screenLocalParams },
+            createElement(SlotContent),
+          )
+        : null,
+    ),
   useGlobalSearchParams: () => globalParams,
   useLocalSearchParams: () => useContext(LocalParamsContext),
   usePathname: () => pathname,
@@ -254,11 +237,15 @@ mockModule(new URL('../post/PostList.tsx', import.meta.url), {
     onRetry?: () => void;
     profile?: { handle: string };
   }) => {
-    const postList = createElement('PostList', {
-      identity: error ? 'error' : loading ? 'loading' : profile?.handle,
-      onRetry,
-    });
-    return routeProbeEnabled ? createElement(RoutePaginationProbe, null, postList) : postList;
+    const postList = createElement(
+      'PostList',
+      {
+        identity: error ? 'error' : loading ? 'loading' : profile?.handle,
+        onRetry,
+      },
+      platform.OS === 'web' ? undefined : createElement('FlatList'),
+    );
+    return postList;
   },
 });
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
@@ -283,7 +270,6 @@ let ProfileLayout: ComponentType;
 let ProfilePostListPage: ComponentType;
 
 before(async () => {
-  ({ usePaginationScrollRegistration } = await import('../pagination/PaginationScrollView'));
   ({ default: ProfileFollowersPage } =
     await import('../../app/(tabs)/(profile)/[profileHandle]/followers'));
   ({ default: ProfileFollowingPage } =
@@ -304,10 +290,8 @@ afterEach(async () => {
   screenLocalParams = {};
   pathname = '/profile/';
   platform.OS = 'web';
-  routeProbeEnabled = false;
   routerBackCount = 0;
   routerHistory.length = 0;
-  routeMetrics = { contentHeight: 0, layoutHeight: 0, scrollOffset: 0 };
   queryModes.ProfileFollowersPageQuery = 'success';
   queryModes.ProfileFollowingPageQuery = 'success';
   queryModes.ProfileLayoutQuery = 'success';
@@ -527,66 +511,36 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('TabList').props.value, 'following');
   });
 
-  it('native layout은 같은 handle의 pathname 전환에서 이전 scroll metric을 재생하지 않는다', async () => {
+  it('native layout은 route별 Stack과 screen-owned scroll owner를 교체한다', async () => {
     platform.OS = 'ios';
-    routeProbeEnabled = true;
 
     await renderRoute('@local', '/profile/@local');
-    let scrollViews = rendered('ScrollView');
-    assert.equal(scrollViews.length, 1);
-    const firstScrollView = scrollViews[0];
-    assert.ok(firstScrollView);
+    assert.equal(rendered('Stack').length, 1);
+    assert.equal(rendered('PostList').length, 1);
+    assert.equal(rendered('FlatList').length, 1);
+    const homeScrollViews = rendered('ScrollView');
+    assert.equal(homeScrollViews.length, 1);
     assert.equal(
-      firstScrollView.findAll((node) => (node.type as unknown) === 'ProfileHero').length,
+      homeScrollViews[0]?.findAll((node) => (node.type as unknown) === 'ProfileHero').length,
       1,
     );
     assert.equal(
-      firstScrollView.findAll((node) => (node.type as unknown) === 'PostList').length,
+      homeScrollViews[0]?.findAll((node) => (node.type as unknown) === 'PostList').length,
       1,
     );
 
-    firstScrollView.props.onScroll({
-      nativeEvent: {
-        contentOffset: { y: 240 },
-        contentSize: { height: 480 },
-        layoutMeasurement: { height: 240 },
-      },
-    });
-    assert.deepEqual(routeMetrics, { contentHeight: 480, layoutHeight: 240, scrollOffset: 240 });
-
-    routeMetrics = { contentHeight: 0, layoutHeight: 0, scrollOffset: 0 };
     await renderRoute('@local', '/@local/followers');
 
-    scrollViews = rendered('ScrollView');
+    const scrollViews = rendered('ScrollView');
     assert.equal(scrollViews.length, 1);
-    assert.notEqual(scrollViews[0], firstScrollView);
-    assert.equal(
-      scrollViews[0]?.findAll((node) => (node.type as unknown) === 'ProfileHero').length,
-      0,
-    );
-    assert.equal(
-      scrollViews[0]?.findAll((node) => (node.type as unknown) === 'PostList').length,
-      0,
-    );
-    assert.equal(
-      scrollViews[0]?.findAll((node) => (node.type as unknown) === 'PageHeader').length,
-      1,
-    );
-    assert.equal(scrollViews[0]?.findAll((node) => (node.type as unknown) === 'TabList').length, 1);
+    assert.equal(rendered('Stack').length, 1);
+    assert.equal(rendered('FlatList').length, 0);
+    assert.equal(rendered('PageHeader').length, 1);
+    assert.equal(rendered('TabList').length, 1);
     assert.equal(
       scrollViews[0]?.findAll((node) => (node.type as unknown) === 'ProfileConnectionList').length,
       1,
     );
-    assert.deepEqual(routeMetrics, { contentHeight: 0, layoutHeight: 0, scrollOffset: 0 });
-
-    scrollViews[0]?.props.onScroll({
-      nativeEvent: {
-        contentOffset: { y: 24 },
-        contentSize: { height: 960 },
-        layoutMeasurement: { height: 320 },
-      },
-    });
-    assert.deepEqual(routeMetrics, { contentHeight: 0, layoutHeight: 0, scrollOffset: 0 });
   });
 
   it('handle 전환 중 layout과 nested query의 기존 loading fallback을 유지한다', async () => {

@@ -241,7 +241,7 @@ function NotificationTarget(props: GroupedNotificationProps) {
   return blocked ? (
     target
   ) : (
-    <Link asChild href={href}>
+    <Link asChild href={href} push={Platform.OS !== 'web'}>
       {target}
     </Link>
   );
