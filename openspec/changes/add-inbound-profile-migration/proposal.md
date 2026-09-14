@@ -15,7 +15,8 @@
 
 ## Authority / Provenance
 
-- Canonical: `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `docs/design/settings.md`
+- Product canonical: `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`
+- Visual design source: `docs/design/settings.md` (visual structure, state presentation, and accessibility authority only)
 - Linear Contract: `PROD-743`
 - Linear Implementations: `PROD-743` (새 이슈 없이 3-layer 전체 계약·완료 책임을 유지한다.)
 

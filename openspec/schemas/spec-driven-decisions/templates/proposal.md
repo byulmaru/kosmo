@@ -8,7 +8,8 @@
 
 ## Authority / Provenance
 
-- Canonical: <!-- exact applicable docs/domain and docs/design paths -->
+- Product canonical: <!-- exact applicable docs/domain and accepted ADR paths -->
+- Visual design source: <!-- exact applicable docs/design paths, or 없음. Its authority is limited to visual structure, state presentation, accessibility, and interaction presentation. -->
 - Linear Contract: <!-- current contract issue -->
 - Linear Implementations: <!-- current implementation issues, or 없음. -->
 

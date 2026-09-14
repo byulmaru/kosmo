@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 `PROD-743`이 승인한 Profile Migration과 inbound ActivityPub `Move` 범위를 하나의 구현·검증 결과로 연결한다. 정본 Profile·Follow 계약, ADR 0027과 Settings 디자인이 정한 source 준비, identity 검증, Follow 이전 순서, feature flag 경계를 구현 전에 확인 가능한 결정으로 정리한다.
+이 기록은 `PROD-743`이 승인한 Profile Migration과 inbound ActivityPub `Move` 범위를 하나의 구현·검증 결과로 연결한다. 정본 Profile·Follow 계약, ADR 0027과 Linear가 정한 source 준비, identity 검증, Follow 이전 순서, feature flag 경계를 구현 전에 확인 가능한 결정으로 정리한다. Settings 디자인은 control의 시각 조립과 상태 표현만 참고한다.
 
 ## Decision Records
 
@@ -8,7 +8,7 @@
 
 - Decision Date: 2026-09-07
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/design/settings.md`, `PROD-743`
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `PROD-743`
 - Status: Active
 - Context / Problem: Settings 준비 UI, Actor 표현, inbound Move와 Follow 이전을 계층별로 분리하면 어느 slice가 전체 Profile 이전 결과와 archive를 증명하는지 불명확해질 수 있다.
 - Decision Outcome: `add-inbound-profile-migration` 하나가 이 행동 계약을 소유하고, `PROD-743`이 구현·단위/통합 검증·최종 정합성 확인과 archive를 소유한다. tasks는 구현 의존 순서를 보이되 별도 issue나 독립 OpenSpec lifecycle을 만들지 않는다.
@@ -32,7 +32,7 @@
 
 - Decision Date: 2026-09-08
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/design/settings.md`, `PROD-743`, 승인 정정 comment `b326d91f-0736-4aff-a465-5b7ba4124723`
+- Authority / Provenance: `PROD-743`, 승인 정정 comment `b326d91f-0736-4aff-a465-5b7ba4124723`
 - Status: Active
 - Context / Problem: 공개 source 등록 action이 무엇을 등록하는지와 등록 성공 뒤 사용자의 다음 행동을 충분히 드러내지 못해 공개 경계를 명확히 해야 한다.
 - Decision Outcome: 공개 GraphQL mutation은 `registerProfileMigrationSource`이며 `RegisterProfileMigrationSourceInput`을 받고 `RegisterProfileMigrationSourcePayload`를 반환한다. 이 public rename은 Core 내부 `prepareProfileMigration` 서비스명을 변경하지 않는다. 성공은 Profile Migration 준비 관계와 Local Actor alias의 등록 결과일 뿐 Profile 이전 완료가 아니다. 성공 안내는 기존 Mastodon 계정에서 새 Kosmo handle로 ActivityPub `Move`를 시작하도록 제공하며, Move 이후 완료를 위한 별도 Kosmo API나 action은 제공하지 않는다.
@@ -44,7 +44,7 @@
 
 - Decision Date: 2026-09-09
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `docs/design/settings.md`, Linear `c9707aa3c`, `PROD-743`
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, Linear `c9707aa3c`, `PROD-743`
 - Status: Superseded by 2026-09-09 correction; retained as historical decision ledger
 - Context / Problem: client가 target Profile ID를 보내거나 Core service가 Account·membership authorization을 다시 수행하면 selected Profile identity와 API authorization 경계가 분리되고, remote source materialization 전에 target 검증이 보장되지 않는다.
 - Decision Outcome: 공개 `registerProfileMigrationSource` mutation은 source qualified handle만 받고 `ctx.session.profile.id`를 target Profile ID로 사용한다. GraphQL resolver는 기존 `withAuth({ profileRole: OWNER })` 경계에서 Account.Active와 selected Profile의 Profile.Owner 권한을 확인하고, remote source materialization 전에 selected target의 domain eligibility를 확인한다. Core의 `assertProfileMigrationTarget`와 `prepareProfileMigration`은 target/source Profile ID만 받아 Profile lifecycle·origin·Follow Approval Policy·InstanceState.SUSPENDED와 source/pair 조건을 검증하며 Account·AccountProfiles authorization을 다시 수행하지 않는다. `InstanceState.UNRESPONSIVE`는 이 target eligibility 계약의 거부 조건으로 추가하지 않는다.
@@ -56,7 +56,7 @@
 
 - Decision Date: 2026-09-09
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `docs/design/settings.md`, `PROD-743`, 사용자 정정 comment `3ccf48b5-b38a-49aa-8f12-f4496064d09b`
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`, 사용자 정정 comment `3ccf48b5-b38a-49aa-8f12-f4496064d09b`
 - Status: Active
 - Decision Outcome: 공개 `registerProfileMigrationSource` mutation은 source qualified handle만 받고 현재 선택된 Profile을 target으로 사용한다. GraphQL `withAuth({ profileRole: OWNER })`가 Account.Active와 selected Profile Owner 권한을 확인하며, 별도 target Profile ID·Local/Open/Active/Normal eligibility gate와 Core의 target 재검증을 추가하지 않는다. source validation, target/source 1:1 uniqueness와 same-pair idempotency/conflict는 기존 경계를 유지한다.
 - Consequences: API는 selected context와 Owner authorization을 단일 target 증거로 사용하고, Core는 전달된 target/source identity의 source·pair 결과만 소유한다. 기존 inbound Move identity, remote-to-local 준비 관계, target-first Follow/Request와 feature flag 경계는 변경하지 않는다.
@@ -113,7 +113,7 @@
 
 - Decision Date: 2026-09-07
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/design/settings.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`
 - Status: Active
 - Context / Problem: source 준비 UI의 점진적 rollout 조건을 Profile 권한이나 이미 준비된 federation 동작의 runtime gate로 사용하면 flag 상태가 기능 보안 경계와 lifecycle을 오염시킨다.
 - Decision Outcome: Profile detail은 해당 flag가 켜져 있고 값이 확인된 경우에만 source 준비 control을 노출한다. flag가 꺼져 있거나 확인 불가·로딩이면 control을 숨긴다. 실제 action은 기존 `Account.Active`·`Profile.Owner`를 검증하며, flag 상태로 준비 관계·alias·inbound Move를 제거하거나 중단하지 않는다. 구체 flag key와 시각 세부는 고정하지 않는다.
