@@ -91,7 +91,7 @@
 
 ### Requirement: Inbound Move의 Follow 이전 순서와 대상 범위
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`. 시스템은 source Profile을 Followee로 가진 기존 established Follow Relationship 중 Follower가 Local Profile인 관계만 이전해야 한다(MUST). 각 관계는 target의 기존 Follow Approval Policy에 따라 target Follow Relationship 또는 Follow Request를 먼저 성공적으로 저장한 뒤 기존 Follow removal/Unfollow·Undo lifecycle로 source Follow Relationship을 제거해야 하며(MUST), target 저장이 실패한 경우 source 관계를 먼저 제거해서는 안 된다(MUST NOT). Remote target의 Open policy도 기존 Local-to-Remote Follow effect semantics를 사용하며, Move 완료를 원격 HTTP receipt 도착에 묶어서는 안 된다(MUST NOT). 이 순서는 remote-to-local과 remote-to-remote target에 동일하게 적용해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`. 시스템은 source Profile을 Followee로 가진 기존 established Follow Relationship 중 Follower가 Local Profile인 관계만 이전해야 한다(MUST). 단, Follower가 Local target Profile 자신인 관계는 target→target 관계를 만들 수 없으므로 이전 대상에서 제외하고 기존 target→source Follow Relationship을 유지해야 한다(MUST). 그 밖의 각 관계는 target의 기존 Follow Approval Policy에 따라 target Follow Relationship 또는 Follow Request를 먼저 성공적으로 저장한 뒤 기존 Follow removal/Unfollow·Undo lifecycle로 source Follow Relationship을 제거해야 하며(MUST), target 저장이 실패한 경우 source 관계를 먼저 제거해서는 안 된다(MUST NOT). Remote target의 Open policy도 기존 Local-to-Remote Follow effect semantics를 사용하며, Move 완료를 원격 HTTP receipt 도착에 묶어서는 안 된다(MUST NOT). 이 순서는 remote-to-local과 remote-to-remote target에 동일하게 적용해야 한다(MUST).
 
 #### Scenario: Local target의 기존 Follow policy로 Local follower를 이전한다
 
@@ -104,6 +104,13 @@
 - **WHEN** 검증된 Move에 source Followee와 established Follow를 가진 Local Follower가 있고 target Profile의 policy가 Approval Required이다
 - **THEN** 시스템은 target Follow Request를 먼저 저장한다
 - **AND** target Request 저장이 성공한 뒤 source Follow Relationship을 제거한다
+
+#### Scenario: Local target 자신이 follower인 관계는 이전하지 않는다
+
+- **WHEN** 검증된 Move에 source Followee와 established Follow를 가진 Local Follower가 있고 그 Follower가 Local target Profile 자신이다
+- **THEN** 시스템은 target→target Follow Relationship 또는 Follow Request를 만들지 않는다
+- **AND** 기존 target→source Follow Relationship을 유지한다
+- **AND** Workflow는 성공적으로 완료된다
 
 #### Scenario: Remote target의 기존 Follow effect lifecycle을 사용한다
 

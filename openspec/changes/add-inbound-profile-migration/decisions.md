@@ -92,10 +92,10 @@
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`
 - Status: Active
 - Context / Problem: source Follow Relationship을 먼저 제거하면 target 저장 실패나 처리 중단에서 Local follower를 잃을 수 있다.
-- Decision Outcome: source를 Followee로 가진 established Follow 중 Local Profile Follower만 대상에 포함한다. target policy가 Open이면 기존 Follow Relationship과 그 Local-to-Remote effect semantics를, Approval Required이면 기존 Follow Request lifecycle을 먼저 성공시킨 뒤 source 관계를 기존 removal/Unfollow·Undo lifecycle로 제거한다. target 저장이 실패하면 source 관계를 유지한다. 이 순서는 remote-to-local과 remote-to-remote에 같고 Move 완료를 HTTP receipt 도착에 묶지 않는다.
+- Decision Outcome: source를 Followee로 가진 established Follow 중 Local Profile Follower만 대상에 포함한다. 단, Follower가 Local target Profile 자신인 관계는 target→target 관계를 만들 수 없으므로 이전 대상에서 제외하고 기존 target→source Follow Relationship을 유지한다. 그 밖의 관계는 target policy가 Open이면 기존 Follow Relationship과 그 Local-to-Remote effect semantics를, Approval Required이면 기존 Follow Request lifecycle을 먼저 성공시킨 뒤 source 관계를 기존 removal/Unfollow·Undo lifecycle로 제거한다. target 저장이 실패하면 source 관계를 유지한다. 이 순서는 remote-to-local과 remote-to-remote에 같고 Move 완료를 HTTP receipt 도착에 묶지 않는다.
 - Alternatives Considered: source를 먼저 삭제하는 방식은 실패 시 follower 손실을 허용한다. 모든 Follow/Request 또는 remote follower까지 이전하는 방식은 canonical의 Local established follower 범위를 확장한다. target과 source를 하나의 전역 transaction으로 강제하는 방식은 승인된 보장보다 구현 경계를 넓힌다.
-- Consequences: target 저장과 source 제거는 재시작 가능한 순서를 가져야 한다. Remote target의 Open policy도 기존 Local-to-Remote Follow effect를 사용하며 HTTP receipt은 source 제거의 별도 조건이 아니다. 이미 존재하는 target Follow/Request는 기존 lifecycle의 멱등성으로 처리하고, Local이 아닌 follower와 pending/non-established 관계는 이전하지 않는다.
-- Confirmation / Follow-up: Open·Approval Required target, non-Local/non-established 제외, target failure source 보존, 기존 target row 재실행과 source 제거 재개를 통합 검증한다.
+- Consequences: target 저장과 source 제거는 재시작 가능한 순서를 가져야 한다. Remote target의 Open policy도 기존 Local-to-Remote Follow effect를 사용하며 HTTP receipt은 source 제거의 별도 조건이 아니다. 이미 존재하는 target Follow/Request는 기존 lifecycle의 멱등성으로 처리하고, Local이 아닌 follower와 pending/non-established 관계는 이전하지 않는다. Follower가 Local target Profile 자신인 self-follow 관계는 target→target으로 표현할 수 없으므로 source 관계를 보존한다.
+- Confirmation / Follow-up: Open·Approval Required target, self-follow 이전 제외와 source 보존, non-Local/non-established 제외, target failure source 보존, 기존 target row 재실행과 source 제거 재개를 통합 검증한다.
 
 ### 반복·중단은 기존 Follow lifecycle과 Temporal 재시도로 수렴한다
 
