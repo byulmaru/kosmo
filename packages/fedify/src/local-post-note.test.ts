@@ -277,7 +277,7 @@ describe('ActivityPub Local Post Note', () => {
     assert.equal(json.includes(secondMedia.id), false);
   });
 
-  test('serializes a stored Mention node as label text without emitting an outbound tag', async () => {
+  test('serializes a stored Mention node with the unavailable Profile fallback without emitting an outbound tag', async () => {
     const author = await createProfile({ handle: 'mention-author', kind: InstanceKind.LOCAL });
     const post = await createPost(author.id);
     assert.ok(post.currentContentId);
@@ -292,10 +292,7 @@ describe('ActivityPub Local Post Note', () => {
                 content: [
                   { text: 'Hello ', type: 'text' },
                   {
-                    attrs: {
-                      label: '@alice',
-                      profileId: author.id,
-                    },
+                    attrs: { profileId: author.id },
                     type: 'mention',
                   },
                 ],
@@ -312,7 +309,7 @@ describe('ActivityPub Local Post Note', () => {
 
     const note = await dispatchLocalPostNote(createContext(), { id: post.id });
     assert.ok(note);
-    assert.equal(note.content?.toString(), '<p>Hello <span>@alice</span></p>');
+    assert.equal(note.content?.toString(), '<p>Hello <span>@알 수 없는 사용자</span></p>');
     assert.deepEqual(note.tagIds, []);
   });
 

@@ -65,7 +65,7 @@ test('omits Media nodes from HTML projection', () => {
   );
 });
 
-test('serializes Mention labels without exposing identity URIs', () => {
+test('serializes Mention identities with the unavailable Profile fallback', () => {
   assert.equal(
     postContentDocumentToHtml({
       version: 1,
@@ -79,17 +79,14 @@ test('serializes Mention labels without exposing identity URIs', () => {
               { type: 'text', text: 'Hello ' },
               {
                 type: 'mention',
-                attrs: {
-                  label: '@alice',
-                  profileId: '019f6678-86fa-709b-984e-1520766b8441',
-                },
+                attrs: { profileId: '019f6678-86fa-709b-984e-1520766b8441' },
               },
             ],
           },
         ],
       },
     }),
-    '<p>Hello <span>@alice</span></p>',
+    '<p>Hello <span>@알 수 없는 사용자</span></p>',
   );
 });
 

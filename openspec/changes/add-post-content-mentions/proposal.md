@@ -21,6 +21,9 @@
 - unresolved, malformed 또는 identity를 확인할 수 없는 typed Mention은 Mention node·Profile 관계를 만들지 않고, Note가
   나머지 수신 검증을 통과하면 안전한 일반 link 또는 표시 text로 본문을 보존한다. 알려진 typed identity의 본문 URL 불일치는
   identity 실패가 아니며 해당 anchor만 fallback으로 낮춘다. 이 경로에서 신규 원격 Profile lookup/materialization은 수행하지 않는다.
+- canonical Mention node에는 `profileId`만 저장한다. 원문 anchor의 표시 문자열은 수신 중 loose resource/length budget 계산에만
+  transient하게 사용하고 저장하지 않는다. body conversion은 기존 안전 parser 경계를 따르며, renderer는 같은 revision의 Profile `relativeHandle`에서
+  표시 문자열을 파생하며, Profile을 조회할 수 없으면 Profile 이동 없는 `@알 수 없는 사용자`를 표시한다.
 - 기존 duplicate `Create`의 first-write-wins no-op과 remote `Update(Note)` 제외 범위를 유지한다.
 - 구 reader가 Mention을 포함한 본문을 보존할 수 있는 호환 처리를 먼저 확보·검증한 뒤 현재 Post Content V1에
   additive한 Mention node 저장을 활성화한다. 구 reader는 기존 `bodyText` fallback을 재사용한 plain text 표시를

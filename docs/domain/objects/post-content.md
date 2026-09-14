@@ -33,8 +33,7 @@ UTF-16 길이(`.length`) 합계가 10,000자 이하일 때 수신할 수 있다.
 이 문자 수 정책과 구분한다. 문자 수 검사만으로 파싱이나 네트워크 자원 소비가 제한되지는 않는다.
 
 ActivityPub 표현은 Content Document의 저장 구조를 그대로 직렬화하지 않는다. paragraph, text, hard break와
-link는 Media node를 제외한 안전한 HTML `Note.content`로 투영하고, Mention node는 정규화된 label text만
-투영하며, Media node는 document 순서대로
+link는 Media node를 제외한 안전한 HTML `Note.content`로 투영하고, Media node는 document 순서대로
 `Note.attachment`의 Image로 투영한다. `mediaId`는 외부에 노출하지 않고 조회 시점에 접근 가능한 Media URL과
 MIME type으로 바꾸며 Media의 nullable Alt Text는 Image의 사람이 읽을 수 있는 이름으로 제공한다. document root의
 `sensitiveMedia`는 지원하는 ActivityPub sensitive 속성으로 투영한다. 내부 document의 정확한 Media 삽입
@@ -61,24 +60,31 @@ Source=Local, State=Ready와 Upload Account 조건을 검증한다. Media row의
 
 Mentioned Profile은 inbound typed `Mention.href`가 알려진 Profile stable identity로 확인된 결과를 immutable revision에
 저장하는 관계이며 `post_mentions` DB table에 persisted projection으로 저장한다. 관계 입력은 body conversion과 독립된
-typed identity 집합이고, canonical Mention node는 저장된 Profile identity인 `profileId`와
-본문에서 안전하게 정규화한 표시 label인 `label`만 attr로 가진다. inbound typed `Mention.href`는 기존
-`ActivityPubActor`·Profile mapping으로 알려진 stable Profile identity인지 먼저 확인하며, 이 identity 확인은 본문 HTML 변환과
-독립적이다. Local Profile은 `Instances.kind=LOCAL`인 active Instance의 trusted `canonicalOrigin`과 기존
-`createLocalProfilePerson`의 `/@{encodedHandle}` 규칙으로 만든 human Profile URL을 사용할 수 있다. Remote Profile은 기존 actor
-materialization·refresh가 같은 Actor document의 `url`에서 저장한 hostname 보유 HTTP(S) `profileUrl` alias가 있을 때만 그 alias를
-추가 허용 URI로 사용한다. alias가 없으면 이미 알려진 actor URI만 사용하며 Mention 수신 중 URL을 fetch하거나 새 Profile을
-materialize하지 않는다. actor Profile URL이 빠지거나 malformed인 경우에는 기존 정상 materialization·refresh가 기존 alias를
-제거하고, Mention receipt가 refresh를 새로 트리거하지 않는다. tag `name`·handle과 본문 label의 문자열 일치로 identity를 확정하거나
-거부하지 않으며, 기존 Profile/Post를 backfill하거나 이미 저장된 글을 자동 보정하지 않는다.
-본문 parser는 알려진 typed identity와 HTML anchor를 best effort로 결합한다. anchor href가 대응하면 canonical Mention node를 만들 수
-있지만, href가 다르거나 anchor가 없으면 해당 본문은 안전한 일반 link 또는 표시 text로 보존한다. 이 본문 fallback만으로 Mention
-관계를 만들지 않는다. body conversion이 fallback이 되어도 이미 확인된 typed identity의 Mentioned Profile 관계는 유지한다. actor URI·저장된
-alias와 tag metadata는 Content Document에 저장하지 않는다. `post_mentions` row는 Post Content revision과 Profile을 foreign keys로
-가리키며 body node와 별도로 typed identity 집합에서 투영한다. column, index와 primary key의 구체 shape는 이 문서에서 고정하지
-않는다. 새 revision은 새 Mentioned Profile 관계 집합을 가지며, immutable한 과거 revision과 그 관계는
-보존한다. Current Post의 Mentioned Profile은 현재 Post Content 관계에서 투영한다. document와 관계 또는 Current Content 포인터 중
-하나라도 저장되지 않으면 같은 transaction을 rollback해 partial relation을 남기지 않는다.
+typed identity 집합이고, canonical Mention node는 저장된 Profile identity인 `profileId`만 attr로 가진다. 원문 anchor의
+표시 문자열은 수신 중 loose resource/length budget을 계산하는 동안만 사용할 수 있고 canonical document, 관계, GraphQL 응답 또는
+renderer 입력으로 저장하지 않는다. renderer는 같은 revision의 관계에서 조회한 Profile의 `relativeHandle`로 표시 문자열을
+독립적으로 만든다. 관계가 없거나 Profile이 조회 정책을 통과하지 못해 반환되지 않으면 renderer는 Profile 이동 없는
+`@알 수 없는 사용자`를 표시한다.
+
+inbound typed `Mention.href`는 기존 `ActivityPubActor`·Profile mapping으로 알려진 stable Profile identity인지 먼저 확인하며,
+이 identity 확인은 본문 HTML 변환과 독립적이다. Local Profile은 `Instances.kind=LOCAL`인 active Instance의 trusted
+`canonicalOrigin`과 기존 `createLocalProfilePerson`의 `/@{encodedHandle}` 규칙으로 만든 human Profile URL을 사용할 수 있다.
+Remote Profile은 기존 actor materialization·refresh가 같은 Actor document의 `url`에서 저장한 hostname 보유 HTTP(S) `profileUrl`
+alias가 있을 때만 그 alias를 추가 허용 URI로 사용한다. alias가 없으면 이미 알려진 actor URI만 사용하며 Mention 수신 중 URL을
+fetch하거나 새 Profile을 materialize하지 않는다. actor Profile URL이 빠지거나 malformed인 경우에는 기존 정상
+materialization·refresh가 기존 alias를 제거하고, Mention receipt가 refresh를 새로 트리거하지 않는다. tag `name`·handle과
+본문 표시 문자열의 일치로 identity를 확정하거나 거부하지 않으며, 기존 Profile/Post를 backfill하거나 이미 저장된 글을 자동
+보정하지 않는다.
+
+본문 parser는 알려진 typed identity와 HTML anchor를 best effort로 결합한다. anchor href가 대응하면 `profileId`만 가진
+canonical Mention node를 만들 수 있지만, href가 다르거나 anchor가 없으면 해당 본문은 안전한 일반 link 또는 표시 text로 보존한다.
+이 본문 fallback만으로 Mention 관계를 만들지 않는다. body conversion이 fallback이 되어도 이미 확인된 typed identity의
+Mentioned Profile 관계는 유지한다. actor URI·저장된 alias와 tag metadata 또는 원문 표시 문자열은 Content Document에 저장하지
+않는다. `post_mentions` row는 Post Content revision과 Profile을 foreign keys로 가리키며 body node와 별도로 typed identity 집합에서
+투영한다. column, index와 primary key의 구체 shape는 이 문서에서 고정하지 않는다. 새 revision은 새 Mentioned Profile 관계 집합을
+가지며, immutable한 과거 revision과 그 관계는 보존한다. Current Post의 Mentioned Profile은 현재 Post Content 관계에서 투영한다.
+document와 관계 또는 Current Content 포인터 중 하나라도 저장되지 않으면 같은 transaction을 rollback해 partial relation을 남기지
+않는다.
 
 ## 행동
 
@@ -92,15 +98,17 @@ revision을 만드는 행동이다. 이전 revision은 이전 Media 참조를 �
 
 ActivityPub `tag`의 typed `Mention`은 `Mention.href`가 이미 저장된 Local/Remote Profile의 stable identity로 검증될 때
 Mentioned Profile 관계의 입력이 된다. 이 검증은 본문 anchor URL이나 body parser 결과와 독립적이다. 본문 anchor href가 actor URI 또는
-기존에 정상 refresh로 저장된 Profile URL alias에 대응하면 `profileId`와 본문 visible label을 가진 canonical Mention node로
-표현할 수 있고, 대응하지 않거나 본문 anchor가 없으면 그 부분은 안전한 일반 link 또는 표시 text로 보존한다. 그 일반 link/text와
-`to`/`cc` audience는 Mention 관계 입력이 아니다. body anchor가 일치하지 않아도 typed identity에서 확인한 Profile 관계는 저장한다. Local Profile의 trusted human Profile URL은 actor URI와 다른 표현으로 허용할
-수 있다. Remote Profile의 alias는 기존 actor materialization·refresh가 직접 광고된 hostname 보유 HTTP(S) URL을 저장한 경우에만
-사용하며, alias가 없으면 actor URI만 사용한다. tag `name`·handle은 identity 증거가 아니고 본문 visible label과 exact match할 필요가
-없다. 서로 다른 Profile이 같은 alias를 광고하면 해당 body anchor는 first match 없이 안전한 일반 link/text로 낮추지만 각 typed href의 알려진
-Profile 관계는 유지한다. inbound URI와 actor alias는 저장 전에만 사용하고 canonical document에는 보존하지 않는다. unresolved 또는 malformed typed
-Mention은 관계를 만들지 않으며, 본문 URL 불일치만으로 알려진 typed identity를 unresolved로 낮추지 않는다.
-Mention 수신 중 원격 Profile을 새로 탐색하거나 materialize하지 않고, 이미 저장된 기존 글을 자동으로 보정하지 않는다.
+기존에 정상 refresh로 저장된 Profile URL alias에 대응하면 `profileId`만 가진 canonical Mention node로 표현할 수 있고, 대응하지
+않거나 본문 anchor가 없으면 그 부분은 안전한 일반 link 또는 표시 text로 보존한다. 그 일반 link/text와 `to`/`cc` audience는 Mention
+관계 입력이 아니다. body anchor가 일치하지 않아도 typed identity에서 확인한 Profile 관계는 저장한다. Local Profile의 trusted
+human Profile URL은 actor URI와 다른 표현으로 허용할 수 있다. Remote Profile의 alias는 기존 actor materialization·refresh가 직접
+광고된 hostname 보유 HTTP(S) URL을 저장한 경우에만 사용하며, alias가 없으면 actor URI만 사용한다. tag `name`·handle은 identity
+증거가 아니고 본문 표시 문자열과 exact match할 필요가 없다. 서로 다른 Profile이 같은 alias를 광고하면 해당 body anchor는 first
+match 없이 안전한 일반 link/text로 낮추지만 각 typed href의 알려진 Profile 관계는 유지한다. inbound URI, actor alias, tag metadata와
+원문 표시 문자열은 저장 전에만 사용하고 canonical document에는 보존하지 않는다. unresolved 또는 malformed typed Mention은 관계를
+만들지 않으며, 본문 URL 불일치만으로 알려진 typed identity를 unresolved로 낮추지 않는다. Mention 수신 중 원격 Profile을 새로
+탐색하거나 materialize하지 않고, 이미 저장된 기존 글을 자동으로 보정하지 않는다. renderer의 표시 문자열은 같은 revision의
+Profile `relativeHandle`에서 파생하며, Profile을 조회할 수 없으면 비링크 `@알 수 없는 사용자`를 표시한다.
 
 Alt Text 변경은 Media metadata 갱신이며 새 Post Content revision을 만들지 않는다. 같은 Media를 여러 Post
 Content가 참조한 상태에서 Alt Text를 다시 입력하는 것은 정상적인 작성 흐름은 아니지만 금지하지 않는다. 발생하면
@@ -112,7 +120,7 @@ Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인�
 동작과 문단 구조의 일시적 저하를 허용하고 Media와 Content Warning은 유지한다. 서버의 본문 파생값부터 구 reader
 표시까지 글자·Media·Content Warning 보존을 검증한 뒤, 현재 Post Content V1에 additive한 Mention node 저장을
 활성화한다. 이 change에서는 document schema version을 올리거나 V1/V2 dual-read 또는 document version 변환을 도입하지 않으며,
-Mention node는 `profileId`와 정규화된 `label`만 저장하고 inbound target·anchor URI는 저장 전 identity 검증에만 사용한다.
+Mention node는 `profileId`만 저장하고 inbound target·anchor URI는 저장 전 검증에, 원문 표시 문자열은 loose resource/length budget 계산에만 사용한다.
 
 ## 조회 정책
 

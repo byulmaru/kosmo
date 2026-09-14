@@ -367,7 +367,7 @@ test('compares canonical body and summary meaning', () => {
   assert.equal(arePostContentRevisionsEqual(first, { ...second, summary: 'warning' }), false);
 });
 
-test('preserves Mention labels in text and distinguishes Profile identities', () => {
+test('canonicalizes Mention identities and uses the unavailable Profile fallback in text', () => {
   const first = canonicalizePostContentDocument({
     version: 1,
     summary: null,
@@ -380,10 +380,7 @@ test('preserves Mention labels in text and distinguishes Profile identities', ()
             { type: 'text', text: 'Hello ' },
             {
               type: 'mention',
-              attrs: {
-                label: '@alice',
-                profileId: aliceProfileId,
-              },
+              attrs: { profileId: aliceProfileId },
             },
           ],
         },
@@ -401,10 +398,7 @@ test('preserves Mention labels in text and distinguishes Profile identities', ()
             { type: 'text' as const, text: 'Hello ' },
             {
               type: 'mention' as const,
-              attrs: {
-                label: '@alice',
-                profileId: aliceProfileId,
-              },
+              attrs: { profileId: aliceProfileId },
             },
           ],
         },
@@ -412,7 +406,7 @@ test('preserves Mention labels in text and distinguishes Profile identities', ()
     },
   };
 
-  assert.equal(postContentDocumentToText(first), 'Hello @alice');
+  assert.equal(postContentDocumentToText(first), 'Hello @알 수 없는 사용자');
   assert.equal(arePostContentRevisionsEqual(first, formattingEquivalent), true);
   assert.equal(
     arePostContentRevisionsEqual(first, {
@@ -426,10 +420,7 @@ test('preserves Mention labels in text and distinguishes Profile identities', ()
               { type: 'text', text: 'Hello ' },
               {
                 type: 'mention',
-                attrs: {
-                  label: '@alice',
-                  profileId: otherProfileId,
-                },
+                attrs: { profileId: otherProfileId },
               },
             ],
           },
@@ -438,14 +429,44 @@ test('preserves Mention labels in text and distinguishes Profile identities', ()
     }),
     false,
   );
+
+  assert.deepEqual(
+    canonicalizePostContentDocument({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'mention',
+                attrs: { label: '@legacy', profileId: aliceProfileId },
+              },
+            ],
+          },
+        ],
+      },
+    }),
+    canonicalizePostContentDocument({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'mention', attrs: { profileId: aliceProfileId } }],
+          },
+        ],
+      },
+    }),
+  );
 });
 
-test('rejects Mention attrs without a valid Profile identity or visible label', () => {
-  for (const attrs of [
-    { label: '@alice', profileId: 'not-a-uuid' },
-    { label: '', profileId: aliceProfileId },
-    { label: '\u0000', profileId: aliceProfileId },
-  ]) {
+test('rejects Mention attrs without a valid Profile identity or with a malformed legacy label', () => {
+  for (const attrs of [{ profileId: 'not-a-uuid' }, { label: 123, profileId: aliceProfileId }]) {
     assert.throws(() =>
       canonicalizePostContentDocument({
         version: 1,
@@ -581,10 +602,7 @@ test('rejects inbound Mention nodes from the local Post Content validator', () =
               content: [
                 {
                   type: 'mention',
-                  attrs: {
-                    label: '@alice',
-                    profileId: aliceProfileId,
-                  },
+                  attrs: { profileId: aliceProfileId },
                 },
               ],
             },

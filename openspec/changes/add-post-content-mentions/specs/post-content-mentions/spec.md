@@ -9,9 +9,10 @@ inbound adapter는 typed `Mention.href`를 저장된 Local/Remote Profile의 sta
 본문 HTML 변환과 독립적이어야 한다. Local Profile은 trusted human Profile URL을, Remote Profile은 기존 actor
 materialization·refresh에서 같은 Actor document가 직접 광고하고 hostname이 있는 HTTP(S)로 검증해 저장한 nullable profile URL alias가
 있을 때 그 alias를 본문 anchor의 best-effort 허용 URI로 사용할 수 있다. alias가 없거나 malformed이면 알려진 actor URI만 사용한다.
-Core parser는 대응하는 원문 anchor href와 안전하게 정규화된 label이 있을 때 canonical Mention node를 만들 수 있고, URL이 다르거나
-anchor가 없으면 본문을 안전한 일반 link 또는 표시 text로 보존해야 한다. body conversion이 fallback이어도 typed href에서 확인된
-Profile 관계는 유지해야 한다. tag `name`·handle과 본문 visible label의 문자열 일치는 identity 조건이 아니며, 일반 anchor와
+Core parser는 대응하는 원문 anchor href가 있을 때 `profileId`만 가진 canonical Mention node를 만들 수 있고, URL이 다르거나
+anchor가 없으면 본문을 안전한 일반 link 또는 표시 text로 보존해야 한다. 원문 anchor 표시 문자열은 loose resource/length budget
+계산 중에만 transient하게 사용하고 canonical node, 관계, GraphQL 또는 renderer 입력으로 저장하지 않는다. body
+conversion이 fallback이어도 typed href에서 확인된 Profile 관계는 유지해야 한다. tag `name`·handle과 본문 표시 문자열의 일치는 identity 조건이 아니며, 일반 anchor와
 `to`/`cc` audience actor URI를 Mention identity와 같은 의미로 취급하지 않아야 한다 (MUST NOT).
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`,
@@ -21,7 +22,7 @@ Profile 관계는 유지해야 한다. tag `name`·handle과 본문 visible labe
 
 - **WHEN** inbound Note의 typed `Mention.href`가 기존 Profile stable identity로 확인되고, 본문 anchor가 없거나 anchor href가 다르더라도 Note의 나머지 본문 검증이 통과한다
 - **THEN** 시스템은 해당 Profile을 revision-owned Mention relation projection의 입력으로 전달한다
-- **AND** 본문 anchor가 대응하고 label이 안전하게 정규화되면 별도의 canonical Mention node로 표현할 수 있다
+- **AND** 본문 anchor가 대응하면 원문 표시 문자열의 내용과 무관하게 `profileId`만 가진 별도의 canonical Mention node로 표현할 수 있다
 - **AND** 대응하지 않는 anchor는 안전한 일반 link 또는 표시 text로 보존한다
 - **AND** 동일 Note의 일반 link와 `to`/`cc` audience 값은 별도 의미로 유지한다
 
@@ -30,7 +31,7 @@ Profile 관계는 유지해야 한다. tag `name`·handle과 본문 visible labe
 - **WHEN** inbound Note의 typed `Mention.href`가 기존 Remote Profile stable identity로 확인되고, 같은 Actor document의 `url`로 광고된 HTTP(S) profile URL alias가 기존 materialization·refresh에서 저장되어 있다
 - **THEN** 시스템은 body anchor가 actor URI 또는 저장된 alias에 대응할 때 그 anchor를 같은 `profileId`의 canonical Mention node로 표현할 수 있다
 - **AND** body anchor가 대응하지 않아도 같은 `profileId`의 revision-owned Mention relation을 저장한다
-- **AND** actor URI와 alias는 canonical document의 node attrs에 저장하지 않는다
+- **AND** actor URI, alias와 원문 표시 문자열은 canonical document의 node attrs에 저장하지 않는다
 - **AND** Mention 수신 중 actor/profile fetch나 새 materialization을 수행하지 않는다
 
 #### Scenario: Use actor URI when a Remote profile URL alias is unavailable
@@ -125,11 +126,12 @@ shape는 이 requirement가 고정하지 않는다.
 - **AND** Mention node, Mentioned Profile 관계와 신규 원격 Profile은 생성하지 않는다
 - **AND** 나머지 Note가 기존 수신 검증을 통과하면 Post Content를 저장한다
 
-#### Scenario: Preserve a known relation when the body label is unsafe
+#### Scenario: Preserve a known relation when the body display string exceeds the loose resource budget
 
-- **WHEN** typed `Mention.href`가 기존 Profile stable identity로 확인되지만 대응하는 body anchor의 label이 안전한 표시·구조 검증을 통과하지 못한다
-- **THEN** 시스템은 해당 anchor를 안전한 일반 link 또는 표시 text로 보존한다
-- **AND** body node를 만들지 않아도 typed identity에서 확인된 revision-owned Profile 관계를 저장한다
+- **WHEN** typed `Mention.href`가 기존 Profile stable identity로 확인되고 대응하는 body anchor의 원문 표시 문자열이 loose resource/length budget 경계를 넘는다
+- **THEN** 시스템은 원문 표시 문자열을 canonical document에 저장하지 않는다
+- **AND** 대응하는 anchor는 `profileId`만 가진 canonical Mention node로 표현할 수 있고 typed identity에서 확인된 revision-owned Profile 관계를 저장한다
+- **AND** anchor를 node로 표현하지 않는 경우에도 기존 안전 parser의 일반 link 또는 표시 text fallback을 사용한다
 
 #### Scenario: Preserve a known relation when body URL does not match
 
@@ -152,21 +154,21 @@ shape는 이 requirement가 고정하지 않는다.
 
 ### Requirement: canonical Mention equality preserves semantic identity
 
-시스템은 기존 canonical Post Content document equality를 유지해야 한다 (MUST). HTML formatting-only 차이는 canonicalization으로 흡수해 같은 의미로 비교하고 (MUST), 표시 label·summary·body의 실제 내용 변경은 기존 equality 규칙에 따라 반영해야 하며 (MUST), 표시 label이 같아도 서로 다른 `profileId`를 가진 Profile stable identity를 가리키면 다른 document 의미로 비교해야 한다 (MUST). inbound actor URI와 Actor URL alias 표현은 canonical document에 저장되지 않으므로 equality 기준이 아니다. 이 requirement는 document equality invariant만 정의하며 remote `Update(Note)` mutation API를 추가하거나 정의하지 않는다 (MUST NOT).
+시스템은 기존 canonical Post Content document equality를 유지해야 한다 (MUST). HTML formatting-only 차이는 canonicalization으로 흡수해 같은 의미로 비교하고 (MUST), `profileId`·summary·body의 실제 내용 변경은 기존 equality 규칙에 따라 반영해야 하며 (MUST). 원문 anchor 표시 문자열의 변경은 canonical document에 저장되지 않으므로 document equality 기준이 아니며, 서로 다른 `profileId`를 가진 Profile stable identity는 다른 document 의미로 비교해야 한다 (MUST). inbound actor URI와 Actor URL alias 표현도 canonical document에 저장되지 않으므로 equality 기준이 아니다. 이 requirement는 document equality invariant만 정의하며 remote `Update(Note)` mutation API를 추가하거나 정의하지 않는다 (MUST NOT).
 
 **Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/post.md`, `PROD-340`
 
 #### Scenario: Formatting-only canonical-equivalent Mention remains equal
 
-- **WHEN** 두 typed `Mention` 입력이 동일한 `profileId`와 동일한 표시 label을 가지며, 표시 label·summary·body의 실제 내용은 같고 차이는 HTML 서식뿐이다
+- **WHEN** 두 typed `Mention` 입력이 동일한 `profileId`를 가지며 summary·body의 실제 내용은 같고 HTML 서식과 원문 anchor 표시 문자열만 다르다
 - **THEN** 시스템은 두 Mention을 같은 canonical 의미로 비교한다
-- **AND** equality 판단은 서식 차이만으로 다른 Mention identity나 다른 의미를 만들지 않는다
+- **AND** equality 판단은 서식 또는 저장하지 않는 원문 표시 문자열 차이만으로 다른 Mention identity나 다른 의미를 만들지 않는다
 
 #### Scenario: Independently verified Profile identity change is distinct meaning
 
-- **WHEN** 두 typed `Mention` 입력의 표시 label이 같더라도 `profileId`가 서로 다른 Profile stable identity를 가리킨다
+- **WHEN** 두 typed `Mention` 입력의 원문 표시 문자열이 같더라도 `profileId`가 서로 다른 Profile stable identity를 가리킨다
 - **THEN** 시스템은 두 Mention을 서로 다른 canonical 의미로 비교한다
-- **AND** label equality만으로 두 Profile identity를 합치거나 같은 Mention 의미로 판정하지 않는다
+- **AND** 원문 표시 문자열 equality만으로 두 Profile identity를 합치거나 같은 Mention 의미로 판정하지 않는다
 
 ### Requirement: duplicate Create keeps first-write-wins
 
@@ -202,8 +204,9 @@ timestamp를 만들거나 기존 저장값을 갱신해서는 안 된다 (MUST N
 기존 reader에서는 기존
 `bodyText` fallback을 재사용한 plain text 표시를 허용하며, link 클릭 동작과 문단 구조의 일시적 저하는 허용한다.
 서버 canonicalizer에서 GraphQL `bodyText`와 legacy renderer까지의 end-to-end 호환 검증 증거 없이 Mention node
-저장을 활성화해서는 안 된다 (MUST NOT). 이 change에서는 document schema version을 올리거나 V1/V2 dual-read 또는
-document version 변환을 도입하지 않으며 (MUST NOT), 이 reader compatibility requirement는 별도로 정한 `{ profileId, label }` canonical Mention attrs를 변경하지 않는다.
+저장을 활성화해서는 안 된다 (MUST NOT). `bodyText` fallback은 저장된 `profileId`로 Profile을 재조회하지 않고
+`@알 수 없는 사용자`를 사용한다. 이 change에서는 document schema version을 올리거나 V1/V2 dual-read 또는 document
+version 변환을 도입하지 않으며 (MUST NOT), Mention node의 canonical attrs는 `{ profileId }`다.
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `PROD-340`
 
@@ -221,18 +224,20 @@ document version 변환을 도입하지 않으며 (MUST NOT), 이 reader compati
 raw ActivityPub tag를 다시 해석하거나 새 원격 Profile lookup/materialization을 수행해서는
 안 된다 (MUST NOT). renderer는 기존 Post 조회 정책, visibility·eligibility와 접근성 계약을 유지해야 하며 (MUST),
 Mention 관계만으로 viewer의 접근 범위를 넓혀서는 안 된다 (MUST NOT). 해결되지 않은 Mention은 저장된 안전한 link 또는
-표시 text로 표시하고 Profile 이동 대상으로 만들지 않아야 한다 (MUST).
+표시 text로 표시하고 Profile 이동 대상으로 만들지 않아야 한다 (MUST). 검증된 Mention은 같은 revision에서 조회한 Profile의
+`relativeHandle`을 표시 문자열로 사용하고, Profile 관계가 없거나 조회할 수 없으면 `@알 수 없는 사용자`를 Profile 이동 없는
+fallback으로 표시해야 한다 (MUST).
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `PROD-340`, `PROD-910`
 
 #### Scenario: Navigate only from a verified current Mention
 
 - **WHEN** 현재 Post Content에 검증된 Mention node와 같은 revision의 `post_mentions` Profile 관계가 있다
-- **THEN** renderer는 해당 Profile을 표시하고 기존 Profile 이동·접근성 계약을 적용한다
+- **THEN** renderer는 해당 Profile의 `relativeHandle`을 표시 문자열로 사용하고 기존 Profile 이동·접근성 계약을 적용한다
 - **AND** Post visibility와 eligibility 판정은 Mention display나 `to`/`cc` audience를 새 권한으로 취급하지 않는다
 
 #### Scenario: Render fallback without re-resolution
 
-- **WHEN** Mention이 unresolved, malformed 또는 identity mismatch로 안전한 link/text fallback이 되었다
-- **THEN** renderer는 저장된 fallback을 표시하고 Profile 이동 affordance를 만들지 않는다
+- **WHEN** Mention이 unresolved, malformed 또는 identity mismatch로 안전한 link/text fallback이 되었거나 revision의 Profile을 조회할 수 없다
+- **THEN** renderer는 저장된 fallback 또는 `@알 수 없는 사용자`를 표시하고 Profile 이동 affordance를 만들지 않는다
 - **AND** raw tag 재해석이나 원격 Profile lookup/materialization을 수행하지 않는다

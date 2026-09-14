@@ -15,28 +15,30 @@
 **Guardrails**
 
 - 일반 HTML anchor와 `to`/`cc` audience actor URI를 Mention으로 추론하지 않는다.
-- inbound adapter가 typed `Mention.href`를 기존 Local/Remote Profile stable identity로 확인한다. 이 identity 확인은 body conversion과 독립적이며, 확인된 `profileId` 집합을 canonical document와 별도로 relation 입력으로 전달한다. Local은 trusted canonical origin과 기존 Profile URL 규칙의 human URL을 함께 허용하고, Remote는 기존 actor materialization·refresh가 저장한 Actor URL alias가 있으면 본문 anchor best-effort matching에 사용하며 없으면 actor URI만 사용한다. core parser는 대응하는 본문 anchor만 Mention node로 표현하고 URL이 다르거나 anchor가 없으면 ordinary link/text로 보존한다. tag `name`·handle과 본문 visible label의 exact match만으로 Profile을 연결하거나 거부하지 않는다.
+- inbound adapter가 typed `Mention.href`를 기존 Local/Remote Profile stable identity로 확인한다. 이 identity 확인은 body conversion과 독립적이며, 확인된 `profileId` 집합을 canonical document와 별도로 relation 입력으로 전달한다. Local은 trusted canonical origin과 기존 Profile URL 규칙의 human URL을 함께 허용하고, Remote는 기존 actor materialization·refresh가 저장한 Actor URL alias가 있으면 본문 anchor best-effort matching에 사용하며 없으면 actor URI만 사용한다. core parser는 대응하는 본문 anchor만 `profileId` 단일 attr의 Mention node로 표현하고 URL이 다르거나 anchor가 없으면 ordinary link/text로 보존한다. 원문 anchor 표시 문자열은 loose resource/length budget 계산을 위해 transient하게 사용하고 저장하지 않는다. tag `name`·handle과 본문 표시 문자열의 exact match만으로 Profile을 연결하거나 거부하지 않는다.
 - 서로 다른 `profileId` 후보가 동일한 본문 anchor href를 공유할 때 core parser는 ambiguous ordinary link/text로 낮추고 first match를 선택하지 않는다. 각 typed href가 알려진 Profile이면 그 relation은 유지하며 body node에서 relation을 재구축하지 않는다.
 - canonical document에는 external URI를 저장하지 않으며 core 저장 경계에서 별도 ActivityPub actor lookup·remote lookup·fallback 재검증을 수행하지 않는다. Profile URL alias가 없거나 malformed일 때 Mention 수신 중 fetch·신규 materialization·backfill/live DB 변경을 수행하지 않고, alias는 기존 정상 actor materialization·refresh에서만 갱신·제거한다. Local Post Content validator는 Mention node를 write 전에 거부한다.
 - document, `post_mentions` persisted revision-to-Profile 관계와 Current Content pointer는 같은 저장 경계에서 원자적으로 처리하며 과거 revision을 변경하지 않는다. `post_mentions` row는 해당 Post Content revision과 Profile을 foreign key로 가리킨다.
 - duplicate remote `Create`는 first-write-wins no-op으로 유지하고 `Update(Note)`로 승격하지 않는다.
 - unresolved·malformed·identity mismatch는 안전한 link 또는 표시 text로 낮추고 신규 원격 Profile lookup/materialization을 수행하지 않는다.
 
+- 2026-09-14 correction clarifies that the historical “원문 표시 문자열 resource budget 초과” case below concerns only transient input accounting and fallback rendering. It never adds a `label` attribute or removes an independently verified typed `profileId` relation; the current node contract remains `{ profileId }`.
+
 **Verification**
 
 - 검증된 단일·다중 Mention, 같은 Profile의 반복 occurrence, 서로 다른 Profile의 occurrence 순서와 relation set 결과를 실행 검증한다.
 - 기존 actor materialization·refresh가 제공하는 Profile URL alias가 있을 때 body anchor를 best effort로 Mention node에 연결하고, alias가 없거나 malformed일 때도 typed href가 known Profile relation으로 유지되는지 검증한다. refresh에서 `url`이 빠지거나 malformed이면 기존 alias를 제거하고 actor URI만 남기는지 확인하며, Mention 수신이 refresh를 새로 트리거하지 않는지 검증한다. 서로 다른 Profile에 같은 body anchor href가 나타나면 parser가 first match를 선택하지 않고 ordinary link/text로 낮추는 동시에 typed relations는 유지하는지 확인한다.
 - `post_mentions` row가 해당 Post Content revision과 Profile foreign key를 가리키고, 같은 revision/Profile 중복을 만들지 않는지 검증한다.
-- 일반 link·audience-only·identity resolution 실패가 relation을 만들지 않고 안전 fallback으로 저장되는지 검증한다. ambiguous body href는 first match로 node나 Profile을 선택하지 않으면서, 각 typed href가 known Profile이면 typed relation을 유지하는지 검증한다. typed `Mention.href`가 known Profile로 확인되는 fixture에서 body anchor가 대응하면 Mention node를 만들고, URL 불일치·anchor 부재·label 안전성 실패이면 node만 ordinary link/text로 낮추면서 typed relation은 유지하는지 확인한다. Local actor URI와 human Profile URL 표현이 다른 Mastodon fixture, tag name/본문 label이 다른 fixture, Remote actor URI와 광고 profile URL이 다른 fixture, alias가 없는 Remote fixture에서 name/label matching 없이 같은 Profile identity가 올바르게 보존되는지 함께 확인한다.
-- local Note의 plain text/HTML 파생이 label text와 기존 safe link를 보존하고 outbound typed Mention federation을 추가하지 않는지 회귀 검증한다.
+- 일반 link·audience-only·identity resolution 실패가 relation을 만들지 않고 안전 fallback으로 저장되는지 검증한다. ambiguous body href는 first match로 node나 Profile을 선택하지 않으면서, 각 typed href가 known Profile이면 typed relation을 유지하는지 검증한다. typed `Mention.href`가 known Profile로 확인되는 fixture에서 body anchor가 대응하면 Mention node를 만들고, URL 불일치·anchor 부재·ambiguous여도 typed relation을 유지하는지 확인한다. 원문 표시 문자열은 loose resource/length budget 계산 중 transient하게만 사용한다. Local actor URI와 human Profile URL 표현이 다른 Mastodon fixture, tag name/본문 표시 문자열이 다른 fixture, Remote actor URI와 광고 profile URL이 다른 fixture, alias가 없는 Remote fixture에서 name/표시 문자열 matching 없이 같은 Profile identity가 올바르게 보존되는지 함께 확인한다.
+- local Note의 plain text/HTML 파생이 저장하지 않는 Mention 표시 문자열 정책과 기존 safe link를 보존하고 outbound typed Mention federation을 추가하지 않는지 회귀 검증한다.
 - `post_mentions` relation 또는 Current Content pointer 저장 실패가 새 Post/Content와 함께 rollback되는지 검증한다.
 - 동일 remote object URI의 동일·변경된 duplicate Create가 기존 document, relation, timestamp를 유지하는지 검증한다.
 - HTML formatting만 달라지고 canonical body·Mention identity가 같은 duplicate Create도 새 revision을 만들지 않는지 검증한다.
 
-- [x] 1.1 actor materialization·refresh에서 Actor가 광고한 HTTP(S) profile URL alias를 기존 Actor identity에 nullable metadata로 저장하고, inbound `tag`의 typed Mention actor URI를 기존 Profile stable identity와 확인한다. Local의 trusted human URL 또는 Remote의 stored Actor URL alias와 actor URI 허용 href 및 `profileId`만 core parser 경계에 전달하고, alias가 없으면 actor URI만 전달한다. parser는 원문 HTML에서 본문 visible label을 읽어 안전하게 정규화한다. audience·일반 link와 분리하며 core HTML/plain-text parser에는 Fedify vocabulary나 DB/remote lookup을 주입하지 않는다.
-- [x] 1.2 검증된 Mention occurrence와 Profile membership을 canonical document·`post_mentions` revision 저장 결과에 반영하고 반복 occurrence와 relation deduplication을 보장한다. 현재 구현 선택은 `{ profileId, label }` node attrs와 `(post_content_id, profile_id)` composite primary key·foreign key relation이다.
+- [x] 1.1 actor materialization·refresh에서 Actor가 광고한 HTTP(S) profile URL alias를 기존 Actor identity에 nullable metadata로 저장하고, inbound `tag`의 typed Mention actor URI를 기존 Profile stable identity와 확인한다. Local의 trusted human URL 또는 Remote의 stored Actor URL alias와 actor URI 허용 href 및 `profileId`만 core parser 경계에 전달하고, alias가 없으면 actor URI만 전달한다. parser는 원문 HTML에서 anchor 표시 문자열을 loose resource/length budget 계산 중 transient하게 사용하고 저장하지 않는다. audience·일반 link와 분리하며 core HTML/plain-text parser에는 Fedify vocabulary나 DB/remote lookup을 주입하지 않는다.
+- [x] 1.2 검증된 Mention occurrence와 Profile membership을 canonical document·`post_mentions` revision 저장 결과에 반영하고 반복 occurrence와 relation deduplication을 보장한다. 현재 구현 선택은 `profileId` 단일 attr와 `(post_content_id, profile_id)` composite primary key·foreign key relation이다.
 - [x] 1.3 actor URL alias 유무·malformed·identity mismatch·unresolved fallback, duplicate Create no-op과 원자적 rollback의 행동 검증을 추가하고 통과시킨다. alias가 이후 materialization·refresh에서 채워져도 이미 저장된 기존 글을 자동 보정하지 않는다.
-- [x] 1.4 (2026-09-14 contract correction) typed `Mention.href`가 기존 Profile stable identity로 확인되면 body conversion과 독립된 `profileId` 집합으로 `createPost`에 전달하고, body anchor가 URL 불일치·부재·label 안전성 실패·ambiguous여도 `post_mentions` relation을 유지한다. body parser는 대응하는 anchor만 Mention node로 만들고 나머지는 ordinary link/text로 보존하며, 기존 actor materialization·refresh alias 경계와 no-fetch/no-backfill/no-live-DB 계약을 유지한다.
+- [x] 1.4 (2026-09-14 contract correction) typed `Mention.href`가 기존 Profile stable identity로 확인되면 body conversion과 독립된 `profileId` 집합으로 `createPost`에 전달하고, body anchor가 URL 불일치·부재·ambiguous여도 `post_mentions` relation을 유지한다. body parser는 대응하는 anchor만 `profileId` 단일 attr의 Mention node로 만들고 나머지는 ordinary link/text로 보존하며, 원문 표시 문자열은 loose resource/length budget 계산 중에만 transient하게 사용하고 저장하지 않는다. 기존 actor materialization·refresh alias 경계와 no-fetch/no-backfill/no-live-DB 계약을 유지한다.
   - 실행 증거 (2026-09-14): 소스 커밋 `186ba5705b97114a8d02be5ed952201047d84738` 기준 [GitHub Actions run 34767026630](https://github.com/byulmaru/kosmo/actions/runs/34767026630)의 required checks 16/16 및 14/14 jobs가 통과했다. [`@kosmo/core` job](https://github.com/byulmaru/kosmo/actions/runs/34767026630/job/103749705963)은 새 typed identity와 body node 분리, deduplication, FK·Current Content pointer rollback, first-write-wins를 포함한 201개를 통과했고, [`@kosmo/fedify` job](https://github.com/byulmaru/kosmo/actions/runs/34767026630/job/103749705844)은 mismatch relation과 `NULL` alias의 valid URL refresh를 포함한 249개 및 standalone 1개를 통과했다. 2.x legacy reader/activation gate(2.1–2.3)와 3.x renderer·integration/archive(3.1–3.3)는 이 change의 후속 미완료 범위로 유지한다.
 
 ## 2. PROD-340 legacy reader compatibility and activation gate
@@ -99,7 +101,7 @@
 - renderer는 raw ActivityPub tag를 다시 해석하거나 신규 원격 Profile lookup/materialization을 수행하지 않는다.
 - Post visibility·eligibility와 기존 접근성 계약을 유지하며 Mention 표시나 `to`/`cc` 값으로 viewer 접근 범위를 넓히지 않는다.
 - unresolved·malformed·identity mismatch fallback은 Profile 이동 affordance 없이 안전한 link/text로 표시한다.
-- 긴 Profile 이름과 서로 유사한 대상도 stable identity에 따라 구분하고 label이 겹쳐도 잘못된 Profile 이동을 만들지 않는다.
+- 긴 Profile 이름과 서로 유사한 대상도 stable identity에 따라 구분하고, 표시 문자열은 해당 Profile의 `relativeHandle`에서 파생한다. Profile을 조회할 수 없으면 `@알 수 없는 사용자`를 비링크로 표시해 잘못된 Profile 이동을 만들지 않는다.
 - `PROD-911` Notification·FCM 구현은 이 task group에 포함하지 않는다.
 
 **Verification**

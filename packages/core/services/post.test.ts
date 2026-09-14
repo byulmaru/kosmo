@@ -496,12 +496,12 @@ test('createPost는 검증된 Mention occurrence를 revision 관계로 한 번�
             { type: 'text', text: 'Hi ' },
             {
               type: 'mention',
-              attrs: { label: `@${mentioned.handle}`, profileId: mentioned.id },
+              attrs: { profileId: mentioned.id },
             },
             { type: 'text', text: ' and again ' },
             {
               type: 'mention',
-              attrs: { label: `@${mentioned.handle}`, profileId: mentioned.id },
+              attrs: { profileId: mentioned.id },
             },
           ],
         },
@@ -531,12 +531,12 @@ test('createPost는 검증된 Mention occurrence를 revision 관계로 한 번�
         { type: 'text', text: 'Hi ' },
         {
           type: 'mention',
-          attrs: { label: `@${mentioned.handle}`, profileId: mentioned.id },
+          attrs: { profileId: mentioned.id },
         },
         { type: 'text', text: ' and again ' },
         {
           type: 'mention',
-          attrs: { label: `@${mentioned.handle}`, profileId: mentioned.id },
+          attrs: { profileId: mentioned.id },
         },
       ],
     },
@@ -559,7 +559,7 @@ test('createPost는 ActivityPub relation을 document Mention node가 아닌 veri
             content: [
               {
                 type: 'mention',
-                attrs: { label: '@node-only', profileId: nodeOnlyProfile.id },
+                attrs: { profileId: nodeOnlyProfile.id },
               },
             ],
           },
@@ -601,7 +601,7 @@ test('createPost는 변경된 Mention duplicate Create에서도 document·relati
             content: [
               {
                 type: 'mention',
-                attrs: { label: '@first', profileId: firstMention.id },
+                attrs: { profileId: firstMention.id },
               },
             ],
           },
@@ -630,7 +630,7 @@ test('createPost는 변경된 Mention duplicate Create에서도 document·relati
             content: [
               {
                 type: 'mention',
-                attrs: { label: '@changed', profileId: changedMention.id },
+                attrs: { profileId: changedMention.id },
               },
             ],
           },
@@ -690,12 +690,12 @@ test('createPost는 서로 다른 Profile의 Mention을 occurrence 순서와 함
             content: [
               {
                 type: 'mention',
-                attrs: { label: '@first', profileId: firstMention.id },
+                attrs: { profileId: firstMention.id },
               },
               { type: 'text', text: ' then ' },
               {
                 type: 'mention',
-                attrs: { label: '@second', profileId: secondMention.id },
+                attrs: { profileId: secondMention.id },
               },
             ],
           },
@@ -727,12 +727,12 @@ test('createPost는 서로 다른 Profile의 Mention을 occurrence 순서와 함
       content: [
         {
           type: 'mention',
-          attrs: { label: '@first', profileId: firstMention.id },
+          attrs: { profileId: firstMention.id },
         },
         { type: 'text', text: ' then ' },
         {
           type: 'mention',
-          attrs: { label: '@second', profileId: secondMention.id },
+          attrs: { profileId: secondMention.id },
         },
       ],
     },
@@ -763,7 +763,7 @@ test('createPost는 post_mentions Profile FK 저장 실패 시 Post·Content·po
               content: [
                 {
                   type: 'mention',
-                  attrs: { label: '@mentioned', profileId: missingProfileId },
+                  attrs: { profileId: missingProfileId },
                 },
               ],
             },
@@ -846,7 +846,7 @@ test('createPost는 PostContent link 저장 실패 시 Post·Content·relation�
                 content: [
                   {
                     type: 'mention',
-                    attrs: { label: '@mentioned', profileId: mentioned.id },
+                    attrs: { profileId: mentioned.id },
                   },
                 ],
               },

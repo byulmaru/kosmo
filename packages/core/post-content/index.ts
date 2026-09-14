@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 export const postContentSchemaVersion = 1 as const;
 
+export const postContentMentionFallbackText = '@알 수 없는 사용자';
+
 export type PostContentSchemaVersion = typeof postContentSchemaVersion;
 
 export interface PostContentLinkMark {
@@ -26,8 +28,6 @@ export interface PostContentMentionNode {
   readonly attrs: {
     /** The stable Profile identity verified at the inbound boundary. */
     readonly profileId: string;
-    /** The normalized visible label rendered for this occurrence. */
-    readonly label: string;
   };
 }
 
@@ -68,14 +68,6 @@ export function normalizePostContentPlainText(bodyText: string): string {
   return bodyText.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
 }
 
-export function normalizePostContentMentionLabel(value: string): string {
-  const normalized = normalizePostContentPlainText(value);
-  if (normalized.length === 0 || normalized.length > 256 || hasControlCharacter(normalized)) {
-    throw new TypeError('Mention label must be a visible string');
-  }
-  return normalized;
-}
-
 const postContentProfileIdSchema = z.uuid();
 
 export function normalizePostContentProfileId(value: unknown): string {
@@ -84,16 +76,6 @@ export function normalizePostContentProfileId(value: unknown): string {
     throw new TypeError('Mention Profile ID must be a UUID');
   }
   return result.data;
-}
-
-function hasControlCharacter(value: string): boolean {
-  for (const character of value) {
-    const code = character.charCodeAt(0);
-    if (code <= 0x1f || code === 0x7f) {
-      return true;
-    }
-  }
-  return false;
 }
 
 export function isPostContentDocumentV1(value: unknown): value is PostContentDocumentV1 {
@@ -181,11 +163,9 @@ function isInlineNode(value: unknown): value is PostContentInlineNode {
 
 function isMentionAttrs(value: unknown): value is PostContentMentionNode['attrs'] {
   return (
-    isRecordWithKeys(value, ['profileId', 'label']) &&
+    isRecordWithKeys(value, ['profileId']) &&
     typeof value.profileId === 'string' &&
-    typeof value.label === 'string' &&
-    postContentProfileIdSchema.safeParse(value.profileId).success &&
-    value.label.length > 0
+    postContentProfileIdSchema.safeParse(value.profileId).success
   );
 }
 

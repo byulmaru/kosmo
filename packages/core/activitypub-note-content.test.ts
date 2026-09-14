@@ -204,7 +204,7 @@ describe('projectRemoteNoteContent', () => {
     );
   });
 
-  it('counts a typed Mention label in the remote Note length limit', () => {
+  it('counts a typed Mention anchor text in the remote Note length limit', () => {
     const nearLimit = 'a'.repeat(remoteNoteContentMaxLength - '@alice'.length + 1);
     const mention = {
       profileId: aliceProfileId,
@@ -293,7 +293,7 @@ describe('projectRemoteNoteContent', () => {
     assert.deepEqual(formatted, compact);
   });
 
-  it('projects typed Mention candidates onto safe anchor labels without using tag labels', () => {
+  it('projects typed Mention candidates onto matching anchor identities without storing anchor text', () => {
     const result = projectRemoteNoteContent({
       content:
         '<p>Hello <a class="h-card" href="https://remote.example/@alice">@alice</a> and ' +
@@ -321,18 +321,12 @@ describe('projectRemoteNoteContent', () => {
           { type: 'text', text: 'Hello ' },
           {
             type: 'mention',
-            attrs: {
-              label: '@alice',
-              profileId: aliceProfileId,
-            },
+            attrs: { profileId: aliceProfileId },
           },
           { type: 'text', text: ' and ' },
           {
             type: 'mention',
-            attrs: {
-              label: '@bob',
-              profileId: bobProfileId,
-            },
+            attrs: { profileId: bobProfileId },
           },
           { type: 'text', text: ' and ' },
           {
@@ -402,18 +396,12 @@ describe('projectRemoteNoteContent', () => {
         content: [
           {
             type: 'mention',
-            attrs: {
-              label: '@alice',
-              profileId: aliceProfileId,
-            },
+            attrs: { profileId: aliceProfileId },
           },
           { type: 'text', text: ' ' },
           {
             type: 'mention',
-            attrs: {
-              label: '@alice',
-              profileId: bobProfileId,
-            },
+            attrs: { profileId: bobProfileId },
           },
           { type: 'text', text: ' ' },
           {
@@ -456,7 +444,7 @@ describe('projectRemoteNoteContent', () => {
     ]);
   });
 
-  it('keeps malformed candidates and unsafe visible labels as safe links', () => {
+  it('keeps malformed candidates safe and does not use verified Mention anchor text', () => {
     const result = projectRemoteNoteContent({
       content:
         '<p><a href="https://remote.example/users/alice"></a> ' +
@@ -473,10 +461,8 @@ describe('projectRemoteNoteContent', () => {
       {
         type: 'paragraph',
         content: [
-          {
-            text: '@alice',
-            type: 'text',
-          },
+          { attrs: { profileId: aliceProfileId }, type: 'mention' },
+          { text: ' @alice', type: 'text' },
         ],
       },
     ]);

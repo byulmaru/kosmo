@@ -189,10 +189,7 @@ describe('inbound Create dispatch', () => {
         content: [
           { text: 'Hello ', type: 'text' },
           {
-            attrs: {
-              label: '@alice',
-              profileId: profile.id,
-            },
+            attrs: { profileId: profile.id },
             type: 'mention',
           },
         ],
@@ -232,7 +229,7 @@ describe('inbound Create dispatch', () => {
         type: 'paragraph',
         content: [
           { text: 'Hello ', type: 'text' },
-          { attrs: { label: '@alice', profileId: profile.id }, type: 'mention' },
+          { attrs: { profileId: profile.id }, type: 'mention' },
         ],
       },
     ]);
@@ -283,9 +280,9 @@ describe('inbound Create dispatch', () => {
             type: 'text',
           },
           { text: ' ', type: 'text' },
-          { attrs: { label: '@alice', profileId: alice.id }, type: 'mention' },
+          { attrs: { profileId: alice.id }, type: 'mention' },
           { text: ' ', type: 'text' },
-          { attrs: { label: '@bob', profileId: bob.id }, type: 'mention' },
+          { attrs: { profileId: bob.id }, type: 'mention' },
         ],
       },
     ]);
@@ -339,7 +336,7 @@ describe('inbound Create dispatch', () => {
         type: 'paragraph',
         content: [
           {
-            attrs: { label: '@test', profileId: target.id },
+            attrs: { profileId: target.id },
             type: 'mention',
           },
           { text: ' gdgd', type: 'text' },
@@ -480,10 +477,7 @@ describe('inbound Create dispatch', () => {
         type: 'paragraph',
         content: [
           {
-            attrs: {
-              label: '@alice',
-              profileId: profile.id,
-            },
+            attrs: { profileId: profile.id },
             type: 'mention',
           },
           { text: ' body', type: 'text' },
@@ -491,7 +485,7 @@ describe('inbound Create dispatch', () => {
       },
       { attrs: { mediaId: media.id }, type: 'media' },
     ]);
-    assert.equal(postContentDocumentToText(content.document), '@alice body');
+    assert.equal(postContentDocumentToText(content.document), '@알 수 없는 사용자 body');
     assert.deepEqual(
       { altText: media.altText, mediaType: media.mediaType, url: media.url },
       { altText: 'Mention image', mediaType: 'image/webp', url: mediaUri.href },
@@ -2548,7 +2542,7 @@ describe('inbound Create dispatch', () => {
     assert.equal(mapping.publishedAt?.toString(), publishedAt.toString());
     assert.equal(content.createdAt.toString(), receivedAt.toString());
     assert.equal(content.document.summary, 'Content warning');
-    assert.equal(postContentDocumentToText(content.document), `First ${mentionLabel}`);
+    assert.equal(postContentDocumentToText(content.document), 'First @알 수 없는 사용자');
     assert.equal((await db.select().from(PostContents)).length, 1);
     assert.deepEqual(await db.select().from(PostMentions), [
       { postContentId: content.id, profileId: profile.id },

@@ -3,9 +3,9 @@ import { JSDOM } from 'jsdom';
 import { DOMSerializer } from 'prosemirror-model';
 import { postBodyMaxLength } from '../validation/post-policy';
 import {
-  normalizePostContentMentionLabel,
   normalizePostContentPlainText,
   normalizePostContentProfileId,
+  postContentMentionFallbackText,
   postContentSchemaVersion,
 } from './index';
 import { postContentSchema } from './schema';
@@ -77,7 +77,6 @@ function canonicalizePostContentBody(
       } else if (node.type === postContentSchema.nodes.mention) {
         inline.push(
           postContentSchema.nodes.mention.create({
-            label: normalizePostContentMentionLabel(node.attrs.label),
             profileId: normalizePostContentProfileId(node.attrs.profileId),
           }),
         );
@@ -201,7 +200,7 @@ function postContentBodyToText(document: PostContentBodyDocumentV1): string {
             return node.text;
           }
           if (node.type === 'mention') {
-            return node.attrs.label;
+            return postContentMentionFallbackText;
           }
           return '\n';
         })
@@ -325,10 +324,9 @@ function assertPostContentJsonKeys(value: unknown): void {
     }
     assertOnlyKeys(value.attrs, ['profileId', 'label']);
     normalizePostContentProfileId(value.attrs.profileId);
-    if (typeof value.attrs.label !== 'string') {
-      throw new TypeError('Mention label must be a visible string');
+    if (value.attrs.label !== undefined && typeof value.attrs.label !== 'string') {
+      throw new TypeError('Legacy Mention label must be a string');
     }
-    normalizePostContentMentionLabel(value.attrs.label);
   }
 }
 
