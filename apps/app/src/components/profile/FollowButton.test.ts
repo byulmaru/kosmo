@@ -177,6 +177,7 @@ test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유
       change: {
         ownerProfileId: 'viewer',
         profileBlockId: 'profile-block-a',
+        targetProfileId: 'profile-kosmo',
       },
       nextBlocked: false,
     },
