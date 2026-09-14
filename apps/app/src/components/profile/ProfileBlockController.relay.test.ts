@@ -12,7 +12,9 @@ import {
   Store,
 } from 'relay-runtime';
 import blockMutation from './__generated__/ProfileBlockControllerBlockMutation.graphql';
+import recoveryQuery from './__generated__/ProfileBlockControllerRecoveryQuery.graphql';
 import unblockMutation from './__generated__/ProfileBlockControllerUnblockMutation.graphql';
+import { StaleProfileBlockRequestError } from './profileBlockErrors';
 import type { ComponentType } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
@@ -29,12 +31,14 @@ const viewerStateId = 'client:target-a:viewerState';
 
 type NetworkSink = {
   complete(): void;
+  error(error: Error): void;
   next(payload: GraphQLResponse): void;
 };
 
 let environment: Environment;
 let sink: NetworkSink | undefined;
 let selectedProfileId: string | null = ownerProfileId;
+const environmentGenerationRef = { current: 0 };
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -42,7 +46,10 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-relay', {
-  graphql: (parts: TemplateStringsArray) => parts.join(''),
+  graphql: (parts: TemplateStringsArray) => {
+    const operation = parts.join('');
+    return operation.includes('RecoveryQuery') ? recoveryQuery : operation;
+  },
   useMutation: (operation: string) => [
     (options: Record<string, unknown>) => {
       commitMutation(environment, {
@@ -56,6 +63,9 @@ mockModule('react-relay', {
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => ({ selectedProfileId }),
+});
+mockModule(new URL('../../relay/RelayEnvironmentBoundary.tsx', import.meta.url), {
+  useRelayEnvironmentGeneration: () => environmentGenerationRef,
 });
 
 type Controller = ReturnType<typeof UseProfileBlockMutations>;
@@ -80,19 +90,34 @@ afterEach(async () => {
   }
   environment = undefined as unknown as Environment;
   selectedProfileId = ownerProfileId;
+  environmentGenerationRef.current = 0;
   sink = undefined;
   controller = null;
 });
 
 describe('ProfileBlockController Relay cache boundary', () => {
-  it('서버가 성공을 확정하면 partial GraphQL error와 함께 와도 normalized state를 성공으로 처리한다', async () => {
+  it('block relation projection이 null이어도 durable 성공을 유지하고 cache를 수렴한다', async () => {
     environment = createEnvironment();
     const { request } = await beginBlock();
 
     respond({
-      data: blockPayload('block-partial'),
-      errors: [{ message: 'partial response' }],
+      data: {
+        blockProfile: {
+          success: true,
+          profileBlockId: 'block-partial',
+          targetProfileId,
+          profileBlock: null,
+        },
+      },
+      errors: [
+        {
+          message: 'target projection failed',
+          path: ['blockProfile', 'profileBlock', 'targetProfile'],
+        },
+      ],
     });
+    await flushTasks();
+    respond({ data: recoveryPayload('block-partial') });
 
     await request;
     await flushTasks();
@@ -101,11 +126,42 @@ describe('ProfileBlockController Relay cache boundary', () => {
     assert.equal(viewerProfileBlockId(), 'block-partial');
   });
 
+  it('block relation projection이 누락되어도 recovery로 cache를 수렴한다', async () => {
+    environment = createEnvironment();
+    const { request } = await beginBlock();
+
+    respond({
+      data: {
+        blockProfile: {
+          success: true,
+          profileBlockId: 'block-missing-projection',
+          targetProfileId,
+        },
+      },
+    });
+    await flushTasks();
+    respond({ data: recoveryPayload('block-missing-projection') });
+
+    await request;
+    await flushTasks();
+    assert.deepEqual(connectionNodeIds(), ['block-missing-projection']);
+    assert.equal(viewerProfileBlockId(), 'block-missing-projection');
+  });
+
   it('block success가 false이면 기존 상태를 유지하고 실패한다', async () => {
     environment = createEnvironment();
     const { request } = await beginBlock();
 
-    respond({ data: { blockProfile: { success: false, profileBlock: null } } });
+    respond({
+      data: {
+        blockProfile: {
+          success: false,
+          profileBlockId: 'unexpected-block',
+          targetProfileId,
+          profileBlock: null,
+        },
+      },
+    });
 
     await assert.rejects(request, /did not confirm/);
     assertGeneralProfileUnchanged();
@@ -141,7 +197,7 @@ describe('ProfileBlockController Relay cache boundary', () => {
     assert.equal(viewerProfileBlockId(), 'block-confirmed');
   });
 
-  it('서버가 해제 성공을 확정하면 partial GraphQL error와 함께 와도 connection과 status를 갱신한다', async () => {
+  it('unblock target projection이 null이어도 exact relation만 제거하고 cache를 수렴한다', async () => {
     environment = createEnvironment();
     createRelation('block-confirmed');
     const { request } = await beginUnblock('block-confirmed');
@@ -151,19 +207,41 @@ describe('ProfileBlockController Relay cache boundary', () => {
         unblockProfile: {
           success: true,
           profileBlockId: 'block-confirmed',
+          targetProfileId,
           deletedProfileBlockId: 'block-confirmed',
-          targetProfile: {
-            __typename: 'Profile',
-            id: targetProfileId,
-            viewerState: { __typename: 'ProfileViewerState', profileBlock: null },
-          },
+          targetProfile: null,
         },
       },
-      errors: [{ message: 'optional projection failed' }],
+      errors: [
+        {
+          message: 'target projection failed',
+          path: ['unblockProfile', 'targetProfile'],
+        },
+      ],
     });
     await request;
     await flushTasks();
 
+    assert.deepEqual(connectionNodeIds(), []);
+    assert.equal(viewerProfileBlockId(), null);
+  });
+
+  it('unblock target projection이 누락되어도 exact relation만 제거한다', async () => {
+    environment = createEnvironment();
+    createRelation('block-missing-target');
+    const { request } = await beginUnblock('block-missing-target');
+
+    respond({
+      data: {
+        unblockProfile: {
+          success: true,
+          profileBlockId: 'block-missing-target',
+          targetProfileId,
+        },
+      },
+    });
+
+    await request;
     assert.deepEqual(connectionNodeIds(), []);
     assert.equal(viewerProfileBlockId(), null);
   });
@@ -180,6 +258,7 @@ describe('ProfileBlockController Relay cache boundary', () => {
           deletedProfileBlockId: null,
           profileBlockId: null,
           targetProfile: null,
+          targetProfileId: null,
         },
       },
     });
@@ -200,6 +279,163 @@ describe('ProfileBlockController Relay cache boundary', () => {
     assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
     assert.equal(viewerProfileBlockId(), 'block-confirmed');
   });
+
+  it('block target ID가 요청과 다르면 cache를 보존하고 실패한다', async () => {
+    environment = createEnvironment();
+    const { request } = await beginBlock();
+
+    respond({
+      data: {
+        blockProfile: {
+          ...blockPayload('wrong-target').blockProfile,
+          targetProfileId: 'target-b',
+        },
+      },
+    });
+
+    await assert.rejects(request, /did not confirm/);
+    assert.deepEqual(connectionNodeIds(), []);
+    assert.equal(viewerProfileBlockId(), null);
+  });
+
+  it('block relation projection ID가 durable ID와 다르면 실패한다', async () => {
+    environment = createEnvironment();
+    const { request } = await beginBlock();
+
+    respond({
+      data: {
+        blockProfile: {
+          ...blockPayload('projected-block').blockProfile,
+          profileBlockId: 'durable-block',
+        },
+      },
+    });
+
+    await assert.rejects(request, /did not confirm/);
+    assert.deepEqual(connectionNodeIds(), []);
+    assert.equal(viewerProfileBlockId(), null);
+  });
+
+  it('unblock relation ID가 요청과 다르면 기존 relation을 보존한다', async () => {
+    environment = createEnvironment();
+    createRelation('block-confirmed');
+    const { request } = await beginUnblock('block-confirmed');
+
+    respond({
+      data: {
+        unblockProfile: {
+          success: true,
+          profileBlockId: 'block-other',
+          targetProfileId,
+          targetProfile: null,
+        },
+      },
+    });
+
+    await assert.rejects(request, /did not confirm/);
+    assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
+    assert.equal(viewerProfileBlockId(), 'block-confirmed');
+  });
+
+  it('느린 unblock 응답이 더 새로운 Block relation을 지우지 않는다', async () => {
+    environment = createEnvironment();
+    createRelation('block-old');
+    const { request } = await beginUnblock('block-old');
+    createRelation('block-new');
+
+    respond({
+      data: {
+        unblockProfile: {
+          success: true,
+          profileBlockId: 'block-old',
+          targetProfileId,
+          targetProfile: null,
+        },
+      },
+    });
+
+    await request;
+    assert.deepEqual(connectionNodeIds(), ['block-new']);
+    assert.equal(viewerProfileBlockId(), 'block-new');
+  });
+
+  it('block recovery가 실패해도 durable 성공을 유지하고 정확한 cache만 stale로 남긴다', async () => {
+    environment = createEnvironment();
+    const { request } = await beginBlock();
+
+    respond({
+      data: {
+        blockProfile: {
+          success: true,
+          profileBlockId: 'block-recovery-failed',
+          targetProfileId,
+          profileBlock: null,
+        },
+      },
+      errors: [
+        {
+          message: 'target projection failed',
+          path: ['blockProfile', 'profileBlock'],
+        },
+      ],
+    });
+    fail(new Error('recovery unavailable'));
+
+    await request;
+    assert.equal(isRecordInvalidated(targetProfileId), true);
+    assert.equal(isRecordInvalidated(connectionId), true);
+    assertGeneralProfileUnchanged();
+  });
+
+  it('actor A 응답이 A→B→A 전환 뒤의 새 A Store를 변경하지 않는다', async () => {
+    environment = createEnvironment();
+    const { request } = await beginBlock();
+
+    selectedProfileId = 'owner-b';
+    environmentGenerationRef.current += 1;
+    environment = createEnvironment();
+    await rerenderController();
+    selectedProfileId = ownerProfileId;
+    environmentGenerationRef.current += 1;
+    environment = createEnvironment();
+    const currentEnvironment = environment;
+    await rerenderController();
+
+    respond({ data: blockPayload('block-stale') });
+
+    await assert.rejects(request, StaleProfileBlockRequestError);
+    environment = currentEnvironment;
+    assert.deepEqual(connectionNodeIds(), []);
+    assert.equal(viewerProfileBlockId(), null);
+  });
+
+  it('actor A unblock 응답이 actor B Store를 변경하지 않는다', async () => {
+    environment = createEnvironment();
+    createRelation('block-stale');
+    const { request } = await beginUnblock('block-stale');
+
+    selectedProfileId = 'owner-b';
+    environmentGenerationRef.current += 1;
+    environment = createEnvironment();
+    const currentEnvironment = environment;
+    await rerenderController();
+
+    respond({
+      data: {
+        unblockProfile: {
+          success: true,
+          profileBlockId: 'block-stale',
+          targetProfileId,
+          targetProfile: null,
+        },
+      },
+    });
+
+    await assert.rejects(request, StaleProfileBlockRequestError);
+    environment = currentEnvironment;
+    assert.deepEqual(connectionNodeIds(), []);
+    assert.equal(viewerProfileBlockId(), null);
+  });
 });
 
 async function renderController() {
@@ -207,6 +443,12 @@ async function renderController() {
     renderer = create(createElement(Harness, { onReady: (value) => (controller = value) }));
   });
   assert.ok(controller);
+}
+
+async function rerenderController() {
+  await act(async () => {
+    renderer?.update(createElement(Harness, { onReady: (value) => (controller = value) }));
+  });
 }
 
 async function beginBlock() {
@@ -219,7 +461,10 @@ async function beginBlock() {
 
 async function beginUnblock(profileBlockId: string) {
   await renderController();
-  const request = controller?.changeBlocked({ ownerProfileId, profileBlockId }, false);
+  const request = controller?.changeBlocked(
+    { ownerProfileId, profileBlockId, targetProfileId },
+    false,
+  );
   assert.ok(request);
   assert.ok(sink);
   return { request };
@@ -231,6 +476,13 @@ function respond(payload: GraphQLResponse) {
   sink = undefined;
   activeSink.next(payload);
   activeSink.complete();
+}
+
+function fail(error: Error) {
+  assert.ok(sink);
+  const activeSink = sink;
+  sink = undefined;
+  activeSink.error(error);
 }
 
 function createEnvironment() {
@@ -281,15 +533,37 @@ function blockPayload(relationId: string) {
   return {
     blockProfile: {
       success: true,
+      profileBlockId: relationId,
+      targetProfileId,
       profileBlock: {
         __typename: 'ProfileBlock',
         id: relationId,
         targetProfile: {
           __typename: 'Profile',
+          displayName: 'Original target',
           id: targetProfileId,
-          viewerState: {
-            __typename: 'ProfileViewerState',
-            profileBlock: { __typename: 'ProfileBlock', id: relationId },
+          relativeHandle: targetHandle,
+        },
+      },
+    },
+  };
+}
+
+function recoveryPayload(relationId: string) {
+  return {
+    node: {
+      __typename: 'Profile',
+      id: targetProfileId,
+      viewerState: {
+        __typename: 'ProfileViewerState',
+        profileBlock: {
+          __typename: 'ProfileBlock',
+          id: relationId,
+          targetProfile: {
+            __typename: 'Profile',
+            id: targetProfileId,
+            displayName: 'Original target',
+            relativeHandle: targetHandle,
           },
         },
       },
@@ -328,6 +602,10 @@ function connectionNodeIds() {
 function viewerProfileBlockId() {
   const viewerState = environment.getStore().getSource().get(viewerStateId);
   return viewerState?.profileBlock?.__ref ?? null;
+}
+
+function isRecordInvalidated(dataId: string) {
+  return typeof environment.getStore().getSource().get(dataId)?.__invalidated_at === 'number';
 }
 
 async function flushTasks() {

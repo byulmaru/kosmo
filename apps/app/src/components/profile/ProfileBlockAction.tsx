@@ -93,6 +93,7 @@ export function ProfileBlockAction({
   if (!selectedProfileId || !targetProfile) {
     return null;
   }
+  const targetProfileId = targetProfile.id;
 
   const label = nextBlocked ? '차단' : '차단 해제';
   const close = () => {
@@ -123,8 +124,12 @@ export function ProfileBlockAction({
     try {
       await changeBlocked(
         nextBlocked
-          ? { ownerProfileId: selectedProfileId, targetProfileId: profileData?.id }
-          : { ownerProfileId: selectedProfileId, profileBlockId: profileBlockData?.id },
+          ? { ownerProfileId: selectedProfileId, targetProfileId }
+          : {
+              ownerProfileId: selectedProfileId,
+              profileBlockId: profileBlockData?.id,
+              targetProfileId,
+            },
         nextBlocked,
       );
     } catch (error) {
