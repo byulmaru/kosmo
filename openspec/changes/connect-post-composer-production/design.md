@@ -26,12 +26,17 @@ PROD-854가 만든 `PostComposerTarget`, `PostComposerMediaItemsTarget`, `Compos
 - `PostComposerTarget`의 Poll·Emoji callback은 public presentation 계약에 존재하지만 Product 기능은 준비되지 않았다. Production adapter는 해당 action을 숨겨야 한다.
 - `MobileFullscreenComposerShellCandidate`의 keyboard는 illustrative UI다. 실제 safe area, keyboard avoidance와 back 처리는 상위 runtime이 제공해야 한다.
 - Storybook `ComposerOverlayFixture`는 Production modal semantics, focus trap/restore 또는 router lifecycle을 제공하지 않는다.
+- desktop Rail·Overlay에서 CW나 Media 상태의 자연 높이를 그대로 사용하면 외곽 경계와 고정 control이 함께 이동한다.
 
 ### Recommended Approach
 
 기존 `PostComposer`를 작성 상태·upload·mutation owner로 유지하고, 그 render layer만 공용 target과 editor에 연결한다. shell에 composer open 상태와 trigger ref를 두어 Full Web에서는 같은 composer owner가 Rail을 표시하고, Expand 시 동일 owner의 Overlay view로 전환한다. compact/mobile navigation adapter는 compose trigger를 route link 대신 이 open callback에 연결한다.
 
 Overlay host는 저장소의 기존 modal/focus 처리 패턴을 재사용해 scrim, Web Escape·backdrop·focus restore, Native back과 safe area/keyboard avoidance를 소유한다. Media editor는 Overlay host 내부 view state로 전환하고 별도 modal을 만들지 않는다. shell trigger만 같은 host를 열며, direct `/compose` route adapter나 같은 URL content는 제공하지 않는다. bare `compose`는 canonical Local Profile System Reserved Handle로 유지한다.
+
+Desktop `PostComposer`는 고정 외곽 높이를 사용하지 않는다. Rail은 풀 사이드바와 같은 `320px` 우측 column에서 본문, Media gallery와 footer를 순서대로 HUG한다. Media가 있으면 본문은 최소 `100px`만 확보하고 gallery를 바로 다음에 배치하며 Media용 빈 공간을 예약하지 않는다. Overlay는 `640px` 폭으로 viewport 상단 `48px`에 배치하고 content를 HUG하다가 상·하 `48px` gutter를 제외한 높이에 도달하면 body·Media만 가운데 `ScrollView`에서 scroll한다. author와 editor header·CW·footer는 그 상한 안에 유지한다. Rail의 editor outline과 개인정보 처리방침 footer는 우측 column 왼쪽에서 16px인 같은 기준선에 맞추고, editor header의 공개 범위와 Expand control은 본문 작성 영역의 좌우 기준선에 맞춘다. 모바일 전체 화면은 기존 높이·scroll 구조를 유지하고 공개 범위 menu의 오른쪽에 16px viewport inset을 둔다.
+
+Desktop Rail·Overlay의 본문 입력은 텍스트 content height를 따라 자동으로 늘어나고 Media·CW도 같은 content-flow에 합류한다. Rail은 `420px`, Overlay는 viewport 상·하 `48px` gutter를 외곽 최대 높이로 사용하며, 각 상한에 닿으면 외곽을 고정하고 body·Media만 가운데 `ScrollView`에서 scroll한다.
 
 일반 Post 성공 callback은 기존 state reset 이후 surface별 후속 동작만 위임한다. Web Overlay는 닫고 현재 route를 유지하며, 모바일은 닫은 뒤 Home으로 이동한다. 실패 시 기존 draft와 열린 surface를 유지한다.
 
@@ -48,6 +53,9 @@ Overlay host는 저장소의 기존 modal/focus 처리 패턴을 재사용해 sc
 - retired direct `/compose` route를 compatibility redirect나 host-opening adapter로 되살리지 않는다. bare `compose` 예약 handle은 해제하지 않는다.
 - Poll·Emoji action에 no-op callback을 연결해 활성 control로 노출하지 않는다.
 - 일반 Post 연결을 `ReplyComposerSurface` 변경으로 확장하지 않는다.
+- 본문·CW·ALT 입력은 `docs/design/figma.md`의 2026-09-12 검토 결정에 따라 caret·selection으로 focus를
+  표시한다. 공용 `TextField`의 outline·focused border 두께는 해당 consumer에서만 해제하고 외곽 강조는
+  추가하지 않는다. 버튼·탭의 focus 표시와 상위 host의 focus 이동·trap·restore는 유지한다.
 
 ## Risks / Trade-offs
 

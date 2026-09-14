@@ -64,10 +64,60 @@
 - Consequences: 기존 `/compose` deep link는 404가 될 수 있고 direct URL의 close·success fallback은 계약하지 않는다. shell이 연 surface의 close·success lifecycle과 draft 보존은 별도 composer host 계약을 따른다.
 - Confirmation / Follow-up: route-removal 구현에서 direct 접근이 composer를 렌더링하지 않는지 확인하고, 기존 Local Profile reserved-handle 계약에서 bare `compose` 거부가 유지되는지 대조한다.
 
+### desktop Composer는 내용만큼 늘어나고 surface별 최대 높이에서 내부 scroll
+
+- Decision Date: 2026-09-14
+- Decision Class: Human Decision
+- Authority / Provenance: `docs/design/figma.md`, `docs/design/breakpoints.md`, PROD-797, 2026-09-14 사용자 화면 피드백
+- Status: Active
+- Supersedes: 2026-09-14 Human Decision `desktop Overlay는 Media 전후 560px로 고정하고 Rail만 Media 상태에 따라 확장` (아래 `Superseded Decisions`)
+- Context / Problem: 공통 flex-fill wrapper가 빈 desktop Overlay도 최대 높이까지 늘리고, 고정 외곽 높이는 짧은 내용과 Media 전환에서 불필요한 여백을 만든다. Rail과 Overlay는 draft owner를 공유하지만 geometry까지 공유할 필요는 없다.
+- Decision Outcome: desktop Rail·Overlay는 본문·Media·CW content를 따라 늘어난다. Rail은 `420px`, Overlay는 viewport 상·하 `48px` gutter를 제외한 높이를 각각 독립적인 외곽 상한으로 사용하고, 상한 이후 body·Media만 가운데 scroller에서 scroll한다. Overlay는 `640px` 폭으로 상단 `48px`에 배치한다. 모바일 전체 화면과 Media editor의 fill 구조는 유지한다.
+- Alternatives Considered: Overlay `560px` 고정은 빈 상태도 최대 크기로 보여 제외한다. Rail과 Overlay에 같은 flex-fill을 유지하는 방식은 compact Overlay의 HUG 동작을 막으므로 제외한다.
+- Consequences: 빈 Overlay는 내용 높이로 렌더되고, 긴 글·Media·CW가 추가될 때만 최대 높이까지 늘어난다. Rail은 별도의 `420px` 상한을 유지하므로 한 surface의 크기 변경이 다른 surface를 고정 높이로 만들지 않는다.
+- Confirmation / Follow-up: compact Overlay가 빈 상태에서 최대 높이보다 작고, 긴 본문에서만 viewport 상한에 도달해 내부 scroll로 전환되는지 검증한다. Rail은 짧은 내용에서 상한보다 작고 `420px`에서 내부 scroll로 전환되는지 별도로 검증한다. Native 실제 runtime과 전체 검증은 해당 미완료 task에서 유지한다.
+
 ## Remaining Decisions
 
 - 없음.
 
 ## Superseded Decisions
 
-- 없음.
+### desktop Overlay는 Media 전후 560px로 고정하고 Rail만 Media 상태에 따라 확장
+
+- Decision Date: 2026-09-14
+- Decision Class: Human Decision
+- Authority / Provenance: `docs/design/figma.md`, `docs/design/breakpoints.md`, PROD-797, 2026-09-14 사용자 화면 피드백
+- Status: Superseded
+- Superseded By: 2026-09-14 Human Decision `desktop Composer는 내용만큼 늘어나고 surface별 최대 높이에서 내부 scroll` (위 Decision Records의 Active decision)
+- Context / Problem: Overlay의 404px 고정은 Media 전후 control 좌표는 보존하지만 승인된 desktop 작성 surface의 기본 높이보다 작았다.
+- Decision Outcome: desktop Overlay 외곽을 Media 삽입·제거 전후 560px로 고정하고 Rail은 Media 없음 404px, Media 있음 512px을 사용한다.
+- Alternatives Considered: Overlay를 Media 상태에 따라 확장하거나 Media용 min-height를 예약하는 방식은 삽입 전후 geometry 변화를 만든다고 판단했다.
+- Consequences: Overlay의 고정 높이가 짧은 내용에도 큰 빈 공간을 만들어 후속 사용자 검토에서 폐기했다.
+- Confirmation / Follow-up: 후속 content-flow 결정과 검증 기록으로 대체한다.
+
+### desktop Overlay는 Media 전후 404px로 고정하고 Rail만 Media 상태에 따라 확장
+
+- Decision Date: 2026-09-14
+- Decision Class: Human Decision
+- Authority / Provenance: `docs/design/figma.md`, `docs/design/breakpoints.md`, PROD-797, 2026-09-14 사용자 화면 피드백
+- Status: Superseded
+- Superseded By: 2026-09-14 Human Decision `desktop Overlay는 Media 전후 560px로 고정하고 Rail만 Media 상태에 따라 확장` (위 Decision Records의 Active decision)
+- Context / Problem: Media가 있을 때 content가 실제보다 404px로 예약되어 삽입·제거 전후 surface geometry와 빈 공간이 어긋난다. CW가 가운데 scroller에 포함되면 긴 본문을 읽을 때 경고 문구도 함께 사라진다.
+- Decision Outcome: desktop Overlay `PostComposer`는 Media 삽입·제거 전후 외곽을 404px로 고정한다. author와 editor header·CW·footer는 고정하고 body·Media만 가운데 scroller에서 실제 content 높이로 흐르게 하며 Media용 min-height를 예약하지 않는다. Rail은 기존대로 Media가 없을 때 404px, Media가 있을 때 512px을 사용한다. 짧은 viewport의 Overlay는 Host의 85dvh 안으로 줄어든다. Rail의 editor outline과 개인정보 처리방침 footer는 우측 column 왼쪽에서 16px인 같은 기준선을 사용하고, editor header의 공개 범위와 Expand control은 본문 작성 영역의 좌우 기준선에 맞춘다. 모바일 전체 화면의 높이·scroll 계약은 변경하지 않는다.
+- Alternatives Considered: Overlay를 Media 상태에서 더 크게 확장하거나 Media용 min-height를 예약하는 방식은 삽입 전후 불필요한 빈 공간과 geometry 변화를 만든다. Rail까지 고정하면 기존 Media 상태의 제한된 column 높이 계약을 바꾸므로 선택하지 않는다.
+- Consequences: Overlay는 Media 삽입·제거 전후 control 위치와 외곽 높이를 유지하고, 실제 body·Media content만 가운데에서 흐른다. Rail은 첨부 전후 404px·512px의 기존 상태별 확장을 유지하며 CW는 본문 scroll과 무관하게 계속 보인다. 모바일 전체 화면의 높이 계약은 변경하지 않는다.
+- Confirmation / Follow-up: Web Overlay의 Media 삽입·제거 후 404px 고정, body·Media 실제 content scroll과 min-height 미예약, 짧은 viewport 85dvh 및 고정 author·header·CW·footer를 재검증한다. Native 실제 runtime과 전체 검증은 해당 미완료 task에서 별도로 유지한다.
+
+### desktop 외곽 높이는 Media가 있을 때만 확장
+
+- Decision Date: 2026-09-12
+- Decision Class: Human Decision
+- Authority / Provenance: `docs/design/figma.md`, `docs/design/breakpoints.md`, PROD-797, 2026-09-12 작성 화면 검토
+- Status: Superseded
+- Superseded By: 2026-09-14 Human Decision `desktop Overlay는 Media 전후 404px로 고정하고 Rail만 Media 상태에 따라 확장` (위 Superseded Decisions의 404px 기록)
+- Context / Problem: Media가 없는 상태도 Rail 512px·Overlay 624px를 유지하면 아직 없는 gallery 공간을 미리 확보한 것처럼 footer 위가 비어 보인다. CW가 가운데 scroller에 포함되면 긴 본문을 읽을 때 경고 문구도 함께 사라진다.
+- Decision Outcome: desktop `PostComposer`는 Media가 없을 때 Rail·Overlay 모두 404px이며, Media가 있을 때만 Rail은 512px, Overlay는 624px를 사용한다. Overlay는 짧은 viewport에서 Host의 85dvh 안으로 줄어든다. author와 editor header·CW·footer는 고정하고 body·Media만 가운데 영역에서 scroll한다. Rail의 editor outline과 개인정보 처리방침 footer는 우측 column 왼쪽에서 16px인 같은 기준선을 사용하고, editor header의 공개 범위와 Expand control은 본문 작성 영역의 좌우 기준선에 맞춘다.
+- Alternatives Considered: Media가 없어도 큰 높이를 고정하는 방식은 빈 공간을 만든다. 완전한 자연 높이는 상태마다 control 위치 변화를 제한하지 못하므로 Empty source의 404px와 Media 상태별 상한을 유지한다.
+- Consequences: 첨부 전에는 불필요한 gallery 여백이 없고, 첨부하면 각 surface의 작성 공간이 확장된다. CW는 본문 scroll과 무관하게 계속 보인다. 모바일 전체 화면의 높이 계약은 변경하지 않는다.
+- Confirmation / Follow-up: Empty·CW·Media 전환의 조건부 외곽 높이, CW 고정과 body·Media overflow scroll을 실제 Web Rail·Overlay에서 검증한다.

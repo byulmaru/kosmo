@@ -485,6 +485,9 @@ documentation·state specimen을 두 번째 행에 둔다.
   사용하지 않는다. attachment별 민감도는 별도 domain/API 계약이 추가될 때 도입한다.
 - gallery card는 `156×156`을 유지하고 scrollbar는 시각적으로 숨긴다. Web에서 attachment가 3개 이상이고 실제
   overflow가 생기면 이전·다음 control로 card 단위 이동을 제공하며, Native는 기존 horizontal swipe를 사용한다.
+- Production Web Composer의 vertical scroller는 semantic `borderStrong` thumb, 투명 track과 stable gutter를
+  사용해 scrollbar가 gallery와 본문 오른쪽을 덮지 않게 한다. 이 규칙은 gallery의 숨겨진 horizontal scrollbar와
+  이전·다음 control 계약을 바꾸지 않는다.
 - Ready attachment의 우측 상단 편집 action은 canonical `Pen`을 `20×20`으로 사용하고 `Show edit action`으로
   노출을 제어한다. Rail·Overlay gallery에서는 editor 진입점을 표시하고 `ComposerMediaEditor` 내부 preview에서는
   `false`로 숨긴다. `Expand`는 Composer Rail을 Overlay로 확장하는 별도 semantic action으로 유지한다.
@@ -539,6 +542,26 @@ documentation·state specimen을 두 번째 행에 둔다.
   계약이 생기기 전까지 line-height를 기계적으로 bind하지 않는다. `ComposerMediaEditor`가 직접 소유한 text는
   Typography의 `MCP Preview` mode에서 family·size·weight를 bind하고, 중첩 공용 component의 text는 해당 source의
   variable binding을 상속해 로컬 override를 만들지 않는다.
+- PROD-797 Production adapter는 기존 일반 Post controller와 upload lifecycle을 유지한 채 공용 Rail·Overlay·모바일
+  presentation, Media gallery/editor와 shell 진입점을 연결한다. Poll·Emoji와 `Image Edit`는 숨기며 Composer 진입은
+  shell의 Rail·Overlay·Mobile action만 사용한다. Web component·Storybook interaction 검증은 완료했고 Android/iOS 실제 keyboard·back·safe
+  area·touch/focus 검증은 별도로 남아 있다.
+- Production Host의 일반 Web Overlay는 `640px` 폭으로 viewport 상단 `48px`에 배치한다. 2026-09-14 사용자 화면
+  피드백에 따라 Desktop Rail·Overlay 외곽은 본문·Media·CW content를 따라 늘어나고, Rail은 `420px`, Overlay는
+  상·하 `48px` gutter를 제외한 viewport 높이를 각각 독립적인 상한으로 사용한다. 상한 이후 author·editor header·CW·footer를
+  유지하고 body·Media만 가운데 영역에서 scroll하며 Media용 min-height를 예약하지 않는다. 모바일은 header·공개 범위·footer를
+  고정하고 body와 media shelf가 남은 높이를 채우되 짧은 viewport에서 함께 scroll한다. Media editor는 같은 제한 높이 안에서
+  별도 내부 scroll을 사용한다.
+  editor 전환 시 composer와 upload owner를 유지해 복귀 focus와 breakpoint 전환 뒤 paste 경로를 보존한다.
+  Figma `RightRail` source의 Composer editor outline과 개인정보 처리방침은 Rail 왼쪽에서 16px인 같은 기준선을
+  사용한다. Production도 부모 Rail에 별도 왼쪽 inset을 중첩하지 않고 이 정렬을 유지한다. editor header의 공개
+  범위와 Expand control은 본문 작성 영역의 좌우 기준선에 맞춘다. 현재 Figma Rail variant의 고정 높이는
+  Production 결정과 아직 동기화되지 않았다. 이번 변경은 Figma source를 수정하지 않고 runtime·canonical 문서 정렬만
+  기록하며, source 수정·readback은 별도 승인 뒤 수행한다.
+- 2026-09-12 작성 화면 검토 결정으로 Rail·Overlay·모바일 본문, CW와 Media editor의 ALT 입력은 focus 시
+  별도 outline이나 두꺼워지는 border를 사용하지 않는다. 입력 caret·selection으로 현재 입력 위치를 표시하고,
+  외곽 Composer 강조는 추가하지 않는다. 버튼·탭의 keyboard focus와 상위 Overlay의 focus lifecycle은 유지하며,
+  이 예외를 공용 `TextField` 전체나 Reply presentation으로 확대하지 않는다. Figma 원본은 수정하지 않았다.
 
 #### DSN-61 모바일 Composer·공용 Confirmation 배치 계약
 
@@ -554,16 +577,18 @@ documentation·state specimen을 두 번째 행에 둔다.
   editor는 그 아래 358px 전체 폭을 사용한다. Avatar gutter를 편집영역 전체 높이까지 유지하지 않는다.
 - 모바일 fullscreen header가 제출 action을 소유하므로 8개 조합 모두 공용 `__ComposerFooter`의
   `Show submit=false`, `Show progress ring=true`를 유지한다. footer는 도구를 왼쪽, 남은 글자 수 → ring을 오른쪽
-  그룹으로 정렬한다. 공개 범위 menu는 trigger의 chevron 쪽 우측 edge에 맞춘다. Poll·CW 표본은 배치와 reflow
+  그룹으로 정렬한다. 공개 범위 menu는 390px mobile frame의 오른쪽에서 16px inset을 두어 trigger의 chevron 아래에 배치한다. Poll·CW 표본은 배치와 reflow
   evidence이며 실제 작성 기능·keyboard avoidance·safe area·focus·제출 lifecycle 완료를 뜻하지 않는다.
 - header의 게시 action은 공용 `Button/Default` 높이 `40px`을 유지하고 폭만 `72px`로 제한한다. Candidate의 Web
   rendering은 이 visual geometry를 검증하며, iOS `44pt`·Android `48dp` 실제 입력 영역은 Native runtime에서 별도로
   검증한다.
 - author 또는 CW block과 본문 editor 사이에는 `8px` 간격을 유지한다. editor가 남은 content 높이를 채우고 media
-  shelf는 별도 sibling으로 이어져 focus ring이 shelf 경계에서 잘리지 않는다.
+  shelf는 별도 sibling으로 이어진다. 입력 focus 표시는 위 Composer 입력 예외를 따른다.
 - `04 Screens - Mobile`의 [`Composer state consumers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6771-10454)는
   Full Media·Poll·CW와 Keyboard Empty·Media·Poll·CW 7개를 연결한다. `14 Mobile composer and overlay consumers`의
   Full Empty Light/Dark까지 합치면 route 호환 FRAME 없이 8개 variant가 모두 실제 Target consumer를 가진다.
+  [`Visibility open Light`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=8677-14233)는
+  별도 public component를 추가하지 않고 240px menu의 16px 오른쪽 inset과 선택 상태를 보여 준다.
   Keyboard는 illustrative geometry라 Native IME·safe-area reflow는 별도 runtime QA가 필요하다.
 - Media 조합의 attachment shelf는 `164px` 높이와 `space/8` bottom padding을 사용해 마지막 media row와 footer 사이에
   정확히 `8px`을 둔다. Empty·Poll·CW 조합과 Desktop Composer의 spacing은 이 규칙의 영향을 받지 않는다.

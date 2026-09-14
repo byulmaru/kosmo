@@ -24,6 +24,25 @@
 - **THEN** 시스템은 작성 중인 Content Warning 문구를 예고 없이 지우지 않고 다시 표시한다
 - **AND** 별도 Content Warning 글자수 제한을 만들지 않고 기존 본문과의 합산 길이 정책을 유지한다
 
+#### Scenario: desktop Rail 또는 Overlay에 CW 또는 Media 추가
+
+- **WHEN** desktop Rail 또는 Overlay에서 Content Warning을 열거나 Media를 추가한다
+- **THEN** Rail은 풀 사이드바와 같은 `320px` 우측 column에서 본문, Media gallery와 footer를 순서대로 HUG한다
+- **AND** Media가 있으면 본문은 최소 `100px`만 확보하고 gallery를 바로 다음에 배치하며 별도 빈 공간을 예약하지 않는다
+- **AND** Overlay는 `640px` 폭으로 viewport 상단 `48px`에 배치하고 내용과 함께 늘어난다
+- **AND** Rail·Overlay의 본문 입력은 텍스트 줄 수에 따라 늘어나며 Media·CW도 같은 content-flow에 합류한다
+- **AND** Rail은 `420px`에 닿으면 외곽을 더 늘리지 않고 body·Media만 가운데 scroller에서 scroll한다
+- **AND** Overlay가 상·하 `48px` gutter를 제외한 최대 높이에 도달하면 author·editor header·CW·footer를 유지하고 body·Media만 가운데 scroller에서 scroll한다
+- **AND** Rail의 editor outline과 개인정보 처리방침 footer는 우측 column 왼쪽에서 16px인 같은 기준선에 맞춘다
+- **AND** Rail editor header의 공개 범위와 Expand control은 본문 작성 영역의 좌우 기준선에 맞춘다
+- **AND** Content Warning은 editor header 다음에 표시하고 Media gallery보다 앞에 둔다
+- **AND** 모바일 전체 화면의 기존 높이·scroll 계약을 변경하지 않는다
+
+#### Scenario: 모바일 공개 범위 menu 열기
+
+- **WHEN** 모바일 전체 화면 Composer에서 사용자가 공개 범위 menu를 연다
+- **THEN** 시스템은 menu의 오른쪽 경계를 화면 오른쪽에서 16px 떨어진 위치에 표시한다
+
 #### Scenario: Media editor에서 작성 상태 보존
 
 - **WHEN** 사용자가 Ready Media의 thumbnail, ALT·민감 상태 또는 편집 action으로 `ComposerMediaEditor`를 연다

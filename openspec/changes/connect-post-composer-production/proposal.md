@@ -27,8 +27,9 @@
 ### Modified Capabilities
 
 - `post`: 공용 Post Composer presentation을 기존 draft, upload, Relay, mutation 상태와 연결하고 surface별 close·focus·success lifecycle을 추가한다.
-- `web-app-shell`: breakpoint와 platform별 글쓰기 진입점이 같은 Production composer를 Rail, desktop Overlay 또는 모바일 전체 화면으로 여는 계약을 추가한다.
+- `web-app-shell`: 기존 `/compose` 화면·link 계약을 shell action 계약으로 교체하고, breakpoint와 platform별 글쓰기 진입점이 같은 Production composer를 Rail, desktop Overlay 또는 모바일 전체 화면으로 열게 한다.
 - `universal-expo-client`: direct `/compose` route를 universal route parity 대상에서 제거하고 shell composer entry만 유지한다.
+- `profile`: retired `compose` segment를 현재 정적 route와 구분해 Local Profile System Reserved Handle로 영구 예약한다.
 
 ## Impact
 
