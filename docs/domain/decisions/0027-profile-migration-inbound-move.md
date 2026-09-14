@@ -37,6 +37,8 @@ identity, `alsoKnownAs` 표현, Local·Remote Follow 정책과 기존 follower �
 - source Profile을 Followee로 가진 기존 established Follow Relationship 중 Follower가 Local Profile인 관계는 target
   Follow Relationship 또는 Follow Request를 먼저 저장한 뒤 source 관계를 제거한다. target의 policy에 따라 두 결과
   중 하나를 선택하며, 저장 실패 시 source 관계를 먼저 제거하지 않는다.
+- 단, Follower가 Local target Profile 자신인 관계는 target→target 관계를 만들 수 없으므로 inbound Move 이전 대상에서
+  제외하고 기존 target→source Follow Relationship을 유지한다.
 - 반복 수신은 이미 존재하는 source·target identity와 기존 Follow/Follow Request lifecycle의 멱등성·재시도로
   수렴한다. 중단된 이전은 기존 Temporal 재시도로 재개하며, 서버 간 receipt 도착 순서는 보장하지 않고 Follow와
   Unfollow의 동시 race를 허용한다.
@@ -50,8 +52,9 @@ source를 Remote Profile로 materialize하면 inbound Move가 아직 알려지�
 갈라지지 않는다.
 
 target Follow 또는 Request를 먼저 저장하면 이전 도중 새 target 관계를 만들지 못해 기존 follower를 잃는 결과를
-피할 수 있다. 기존 Follow lifecycle의 재시도와 멱등성을 사용하면서 cross-server 순서와 드문 Follow/Unfollow
-race는 제품 보장으로 승격하지 않아 구현 복잡도를 제한한다.
+피할 수 있다. Self-follow는 서로 다른 두 Profile을 요구하는 Follow Relationship 생성 불변식으로 표현할 수 없으므로,
+해당 관계를 이전 대상에서 제외하고 기존 target→source 관계를 보존한다. 기존 Follow lifecycle의 재시도와 멱등성을
+사용하면서 cross-server 순서와 드문 Follow/Unfollow race는 제품 보장으로 승격하지 않아 구현 복잡도를 제한한다.
 
 ## 결과
 
@@ -75,4 +78,4 @@ race는 제품 보장으로 승격하지 않아 구현 복잡도를 제한한다
 - [Profile](../objects/profile.md)은 Profile Migration source/target 관계와 inbound ActivityPub Move 결과를
   정의한다.
 - [Follow Relationship](../objects/follow-relationship.md)은 target 관계 또는 요청 선저장 후 source 관계를
-  제거하는 Follow 이전을 정의한다.
+  제거하는 Follow 이전과 self-follow 관계의 이전 제외 경계를 정의한다.

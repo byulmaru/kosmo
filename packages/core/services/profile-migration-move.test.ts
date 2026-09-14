@@ -462,6 +462,49 @@ test('반복 실행한 Move Workflow는 Local Open target에 Follow를 먼저 �
   );
 });
 
+test('실제 Move Workflow는 Local target 자신의 source Follow를 이전하지 않고 보존한다', async () => {
+  const source = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const target = await createProfile();
+  await db.insert(ProfileMigrations).values({
+    sourceProfileId: source.profile.id,
+    targetProfileId: target.profile.id,
+  });
+  const sourceFollow = await createSourceFollow(target.profile.id, source.profile.id);
+
+  await executeMoveWorkflow(source.profile.id, target.profile.id);
+
+  assert.deepEqual(
+    await db.select().from(ProfileFollows).where(eq(ProfileFollows.id, sourceFollow.id)),
+    [sourceFollow],
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, target.profile.id),
+          eq(ProfileFollows.followeeProfileId, target.profile.id),
+        ),
+      )
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollowRequests)
+      .where(
+        and(
+          eq(ProfileFollowRequests.followerProfileId, target.profile.id),
+          eq(ProfileFollowRequests.followeeProfileId, target.profile.id),
+        ),
+      )
+      .then((rows) => rows.length),
+    0,
+  );
+});
+
 test('실제 Move Workflow는 준비된 Local Approval target에 Follow Request를 저장하고 source를 제거한다', async () => {
   const source = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const target = await createProfile({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
