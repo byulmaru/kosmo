@@ -128,8 +128,9 @@ export const loadProfileMigrationMoveFollowerBatch = async (
 };
 
 /**
- * Performs target-first admission for one source Follow and then delegates
- * source cleanup to the existing exact-row Temporal removal lifecycle.
+ * Performs target-first admission for one source Follow. Existing target
+ * state and a transition that did not create a row preserve the source; only
+ * a newly created target delegates cleanup to the exact-row removal lifecycle.
  */
 export const executeProfileMigrationMoveFollower = async (
   input: ProfileMigrationMoveFollowerInput,
@@ -171,14 +172,19 @@ export const executeProfileMigrationMoveFollower = async (
         .limit(1)
         .then(first);
 
-  if (!targetFollow && !targetRequest) {
-    const transition = await executeProfileFollowPairTransition({
-      pair: targetPair,
-      command: { kind: 'FOLLOW', origin: 'LOCAL' },
-    });
-    if (transition.result.commandKind !== 'FOLLOW') {
-      throw new Error('Unexpected target Profile Follow transition result');
-    }
+  if (targetFollow || targetRequest) {
+    return;
+  }
+
+  const transition = await executeProfileFollowPairTransition({
+    pair: targetPair,
+    command: { kind: 'FOLLOW', origin: 'LOCAL' },
+  });
+  if (transition.result.commandKind !== 'FOLLOW') {
+    throw new Error('Unexpected target Profile Follow transition result');
+  }
+  if (!transition.result.created) {
+    return;
   }
 
   const removal = await executeProfileFollowRemoval({

@@ -85,29 +85,29 @@
 - Consequences: invalid Move는 기존 준비 관계와 Follow state를 변경하지 않고, target origin별 policy admission만 분기한다. outbound Kosmo Move는 이 change의 결과가 아니다.
 - Confirmation / Follow-up: actor/object mismatch, missing exact alias, valid local/remote targets, non-Person supported Actor type와 unknown-source materialization을 실행 검증한다.
 
-### Local follower의 source 관계는 target 상태를 먼저 확정한 뒤 제거한다
+### Local follower의 source 관계는 새 target 상태가 생성된 경우에만 제거한다
 
 - Decision Date: 2026-09-07
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`
 - Status: Active
-- Context / Problem: source Follow Relationship을 먼저 제거하면 target 저장 실패나 처리 중단에서 Local follower를 잃을 수 있다.
-- Decision Outcome: source를 Followee로 가진 established Follow 중 Local Profile Follower만 대상에 포함한다. 단, Follower가 Local target Profile 자신인 관계는 target→target 관계를 만들 수 없으므로 이전 대상에서 제외하고 기존 target→source Follow Relationship을 유지한다. 그 밖의 관계는 target policy가 Open이면 기존 Follow Relationship과 그 Local-to-Remote effect semantics를, Approval Required이면 기존 Follow Request lifecycle을 먼저 성공시킨 뒤 source 관계를 기존 removal/Unfollow·Undo lifecycle로 제거한다. target 저장이 실패하면 source 관계를 유지한다. 이 순서는 remote-to-local과 remote-to-remote에 같고 Move 완료를 HTTP receipt 도착에 묶지 않는다.
+- Context / Problem: source Follow Relationship을 먼저 제거하면 target 저장 실패나 처리 중단에서 Local follower를 잃을 수 있고, 이미 target 상태가 있는 재시도에서 source를 제거하면 사용자가 명시한 Mastodon식 current-state 분기와 달라진다.
+- Decision Outcome: source를 Followee로 가진 established Follow 중 Local Profile Follower만 대상에 포함한다. 단, Follower가 Local target Profile 자신인 관계는 target→target 관계를 만들 수 없으므로 이전 대상에서 제외하고 기존 target→source Follow Relationship을 유지한다. 그 밖의 관계는 실행 시작 시 target Follow/Request가 없고 기존 Follow lifecycle transition이 `created: true`를 반환한 경우에만 target policy에 따라 target Follow Relationship 또는 Follow Request를 저장한 뒤 source 관계를 기존 removal/Unfollow·Undo lifecycle로 제거한다. 실행 시작 시 target 관계/Request가 있거나 concurrent transition이 `created: false`를 반환하면 source 관계를 유지한다. target 저장이 실패하면 source 관계를 유지한다. 이 순서는 remote-to-local과 remote-to-remote에 같고 Move 완료를 HTTP receipt 도착에 묶지 않는다.
 - Alternatives Considered: source를 먼저 삭제하는 방식은 실패 시 follower 손실을 허용한다. 모든 Follow/Request 또는 remote follower까지 이전하는 방식은 canonical의 Local established follower 범위를 확장한다. target과 source를 하나의 전역 transaction으로 강제하는 방식은 승인된 보장보다 구현 경계를 넓힌다.
-- Consequences: target 저장과 source 제거는 재시작 가능한 순서를 가져야 한다. Remote target의 Open policy도 기존 Local-to-Remote Follow effect를 사용하며 HTTP receipt은 source 제거의 별도 조건이 아니다. 이미 존재하는 target Follow/Request는 기존 lifecycle의 멱등성으로 처리하고, Local이 아닌 follower와 pending/non-established 관계는 이전하지 않는다. Follower가 Local target Profile 자신인 self-follow 관계는 target→target으로 표현할 수 없으므로 source 관계를 보존한다.
-- Confirmation / Follow-up: Open·Approval Required target, self-follow 이전 제외와 source 보존, non-Local/non-established 제외, target failure source 보존, 기존 target row 재실행과 source 제거 재개를 통합 검증한다.
+- Consequences: target 저장과 source 제거의 순서는 유지하되 source removal은 같은 실행에서 target transition이 `created: true`인 경우에만 호출한다. Remote target의 Open policy도 기존 Local-to-Remote Follow effect를 사용하며 HTTP receipt은 source 제거의 별도 조건이 아니다. 이미 존재하는 target Follow/Request와 concurrent `created: false`는 기존 lifecycle의 멱등성으로 처리하고 source 관계를 보존한다. Local이 아닌 follower와 pending/non-established 관계는 이전하지 않는다. Follower가 Local target Profile 자신인 self-follow 관계는 target→target으로 표현할 수 없으므로 source 관계를 보존한다.
+- Confirmation / Follow-up: Open·Approval Required target, self-follow 이전 제외와 source 보존, non-Local/non-established 제외, target failure source 보존, 기존 target Follow/Request source 보존과 concurrent `created: false` source 보존을 통합 검증한다.
 
-### 반복·중단은 기존 Follow lifecycle과 Temporal 재시도로 수렴한다
+### 반복·중단은 기존 Follow lifecycle과 Temporal 재시도로 target 중복 없이 수렴한다
 
-- Decision Date: 2026-09-07
+- Decision Date: 2026-09-14
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `PROD-743`
 - Status: Active
-- Context / Problem: 현재 Follow pair Workflow의 PENDING·terminal command는 새 동일 command를 무조건 성공시키지 않으므로, 재시도 시 기존 target 상태를 확인하고 source 제거를 재개하는 경계가 필요하다.
-- Decision Outcome: 같은 Move의 반복과 target 저장 뒤 중단은 기존 Profile identity와 Follow/Follow Request lifecycle의 idempotency 및 Temporal retry로 수렴한다. 기존 target Follow/Request가 이미 확정됐으면 중복 row를 만들지 않고 source 제거 재개를 허용한다. 서버 간 receipt 순서와 동시 Follow/Unfollow race는 보장하지 않는다.
+- Context / Problem: 현재 Follow pair Workflow의 PENDING·terminal command는 새 동일 command를 무조건 성공시키지 않으므로, 반복·재시도에서 target 중복을 막으면서 source cleanup을 언제 실행할지 경계를 정해야 한다.
+- Decision Outcome: 같은 Move의 반복과 target 저장 뒤 중단은 기존 Profile identity와 Follow/Follow Request lifecycle의 idempotency 및 Temporal retry로 target 중복 없이 수렴한다. 실행 시작 시 target Follow/Request가 있거나 transition이 `created: false`를 반환하면 source 관계를 유지한다. 같은 실행에서 transition이 `created: true`를 반환한 경우에만 source removal을 호출한다. target 생성 뒤 source 제거 전에 중단된 실행의 retry가 existing target을 관찰하면 source 관계가 남을 수 있으며, source cleanup 완료를 보장하거나 복원하는 migration receipt·ledger는 두지 않는다. 서버 간 receipt 순서와 동시 Follow/Unfollow race는 보장하지 않는다.
 - Alternatives Considered: 새 operation receipt, migration ledger, 전역 receipt 정렬 또는 race 잠금은 현재 승인된 보장보다 넓은 구현 선택이므로 채택하지 않는다. PENDING·terminal 재시도에서 source를 먼저 삭제하는 방식은 target-first 계약을 깨뜨린다.
-- Consequences: 구현은 existing target state를 확인한 뒤 source cleanup을 재개해야 하고, 기존 Follow pair command sequence를 변경하는 경우 replay·배포 호환성 검증이 필요하다. out-of-order receipt와 Follow/Unfollow race 결과는 제품 보장으로 해석하지 않는다.
-- Confirmation / Follow-up: PENDING/terminal 재실행, target-first 중단·재개, duplicate Move와 기존 target state를 확인한다. command sequence를 바꾸는 경우에만 history replay·배포 호환성을 검증한다.
+- Consequences: 구현은 existing target state와 `created: false`를 source 보존으로 처리하고, `created: true`인 동일 실행에서만 source cleanup을 호출해야 한다. target 생성 뒤 source 제거 전에 중단된 실행은 retry에서 source가 남을 수 있다. 기존 Follow pair command sequence를 변경하는 경우 replay·배포 호환성 검증이 필요하다. out-of-order receipt와 Follow/Unfollow race 결과는 제품 보장으로 해석하지 않는다.
+- Confirmation / Follow-up: PENDING/terminal 재실행, target-first 중단·재시작의 source 보존 경계, duplicate Move, 기존 target state와 concurrent `created: false`의 source 보존을 확인한다. command sequence를 바꾸는 경우에만 history replay·배포 호환성을 검증한다.
 
 ### Settings feature flag는 source 준비 UI만 제어한다
 

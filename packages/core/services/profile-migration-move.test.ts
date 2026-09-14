@@ -282,7 +282,7 @@ test('Move follower target 저장 실패는 source Follow를 보존한다', asyn
   );
 });
 
-test('Move follower는 Remote source의 target 저장 뒤 cleanup RPC 실패를 재시도한다', async () => {
+test('Move follower는 기존 target Follow가 있으면 source Follow를 보존한다', async () => {
   const source = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const target = await createProfile();
   const follower = await createProfile();
@@ -317,48 +317,6 @@ test('Move follower는 Remote source의 target 저장 뒤 cleanup RPC 실패를 
     1,
   );
 
-  // The target Follow is already committed. Fail only the cleanup RPC before
-  // it reaches Temporal, then restore the real client for the retry.
-  const removalRpc = mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
-    throw new Error('temporary source removal RPC failure');
-  });
-  try {
-    await assert.rejects(
-      executeProfileMigrationMoveFollower({
-        sourceProfileId: source.profile.id,
-        targetProfileId: target.profile.id,
-        followerProfileId: follower.profile.id,
-        sourceFollowId: sourceFollow.id,
-      }),
-      /temporary source removal RPC failure/,
-    );
-    assert.equal(removalRpc.mock.calls.length, 1);
-  } finally {
-    removalRpc.mock.restore();
-  }
-
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(eq(ProfileFollows.id, sourceFollow.id))
-      .then((rows) => rows.length),
-    1,
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, follower.profile.id),
-          eq(ProfileFollows.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    1,
-  );
-
   await executeProfileMigrationMoveFollower({
     sourceProfileId: source.profile.id,
     targetProfileId: target.profile.id,
@@ -372,7 +330,7 @@ test('Move follower는 Remote source의 target 저장 뒤 cleanup RPC 실패를 
       .from(ProfileFollows)
       .where(eq(ProfileFollows.id, sourceFollow.id))
       .then((rows) => rows.length),
-    0,
+    1,
   );
   assert.equal(
     await db
@@ -387,6 +345,48 @@ test('Move follower는 Remote source의 target 저장 뒤 cleanup RPC 실패를 
       .then((rows) => rows.length),
     1,
   );
+});
+
+test('Move follower는 concurrent target transition의 created false에서 source Follow를 보존한다', async () => {
+  const source = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const target = await createProfile();
+  const follower = await createProfile();
+  await db.insert(ProfileMigrations).values({
+    sourceProfileId: source.profile.id,
+    targetProfileId: target.profile.id,
+  });
+  const sourceFollow = await createSourceFollow(follower.profile.id, source.profile.id);
+
+  const transitionRpc = mock.method(
+    temporalClient.workflow,
+    'executeUpdateWithStart',
+    async () => ({
+      ok: true as const,
+      result: {
+        commandKind: 'FOLLOW' as const,
+        created: false,
+        kind: 'ESTABLISHED' as const,
+        followerProfileId: follower.profile.id,
+        followeeProfileId: target.profile.id,
+      },
+    }),
+  );
+  try {
+    await executeProfileMigrationMoveFollower({
+      sourceProfileId: source.profile.id,
+      targetProfileId: target.profile.id,
+      followerProfileId: follower.profile.id,
+      sourceFollowId: sourceFollow.id,
+    });
+
+    assert.equal(transitionRpc.mock.callCount(), 1);
+    assert.deepEqual(
+      await db.select().from(ProfileFollows).where(eq(ProfileFollows.id, sourceFollow.id)),
+      [sourceFollow],
+    );
+  } finally {
+    transitionRpc.mock.restore();
+  }
 });
 
 const executeMoveWorkflow = async (sourceProfileId: string, targetProfileId: string) =>
@@ -678,7 +678,7 @@ test('실제 Move Workflow는 Remote Approval target에 Follow Request를 저장
   );
 });
 
-test('실제 Move Workflow는 기존 target Follow Request에서 source removal로 수렴한다', async () => {
+test('실제 Move Workflow는 기존 target Follow Request에서 source Follow를 보존한다', async () => {
   const source = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const target = await createProfile({
     actorInboxUri: null,
@@ -704,7 +704,7 @@ test('실제 Move Workflow는 기존 target Follow Request에서 source removal�
       .from(ProfileFollows)
       .where(eq(ProfileFollows.id, sourceFollow.id))
       .then((rows) => rows.length),
-    0,
+    1,
   );
   assert.equal(
     await db
