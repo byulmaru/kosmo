@@ -18,6 +18,7 @@ const theme = {
   primary: 'primary',
   stateHover: 'hover',
   statePressed: 'pressed',
+  statePressedSubtle: 'pressed-subtle',
   textSecondary: 'secondary',
 };
 const require = createRequire(import.meta.url);
@@ -386,7 +387,7 @@ test('PostListItem uses Web hover and cross-platform pressed surface feedback', 
     );
 
     await act(async () => card.props.onPointerDown());
-    assert.equal(flattenStyle(card.props.style).backgroundColor, 'pressed');
+    assert.equal(flattenStyle(card.props.style).backgroundColor, 'pressed-subtle');
 
     await act(async () => card.props.onPointerUp());
     assert.equal(

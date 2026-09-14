@@ -388,4 +388,4 @@ Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp targ
 
 - Text·Media·PureRepost·Quote의 공용 root `View`에 Web hover와 Web·iOS·Android pressed surface를 연결하고, 새 navigation target이나 accessibility role 없이 기존 nested action·navigation을 유지했다.
 - focused unit 8개와 Posts Storybook interaction 105개, app check, scoped ESLint·Prettier, OpenSpec strict와 diff check를 통과했다.
-- Figma `PostListItem` component set `1924:1992`를 Default·Hover·Pressed 24개 variant로 동기화하고 기존 hover·pressed color variable binding과 component properties를 readback했다. 실제 Native touch·VoiceOver·TalkBack은 release gate로 남긴다.
+- Figma `PostListItem` component set `1924:1992`를 Default·Hover·Pressed 24개 variant로 동기화하고 hover와 넓은 surface용 pressed-subtle color variable binding, component properties를 readback했다. 실제 Native touch·VoiceOver·TalkBack은 release gate로 남긴다.

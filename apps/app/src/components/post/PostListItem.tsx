@@ -359,7 +359,13 @@ function PostListItemCard({
       role={article ? 'article' : undefined}
       style={[
         style,
-        { backgroundColor: pressed ? theme.statePressed : hovered ? theme.stateHover : undefined },
+        {
+          backgroundColor: pressed
+            ? theme.statePressedSubtle
+            : hovered
+              ? theme.stateHover
+              : undefined,
+        },
       ]}
       testID="post-list-item-card"
     >

@@ -588,9 +588,9 @@
 - Authority / Provenance: `PROD-936`, `docs/design/colors.md`, `docs/design/post-action-bar.md`, 2026-09-14 KST 사용자 승인 “플랫폼 가리지 않고” 및 Phase 0 범위 승인
 - Status: Active
 - Context / Problem: production `PostListItem`은 내부 본문과 개별 action에만 입력 feedback이 있어 Web에서 카드 경계가 반응하지 않고 Native touch에서도 목록 행 전체의 pressed feedback이 없다.
-- Decision Outcome: Text·Media·PureRepost·Quote의 카드 root는 resting fill 없이 feed canvas를 유지한다. Web pointer hover에서는 `stateHover`, Web·Android·iOS pointer 또는 touch press에서는 `statePressed` overlay를 카드 전체에 적용하며 pressed가 hover보다 우선한다. release·cancel·leave 뒤에는 남은 입력 상태 또는 resting fill로 돌아간다. 행 자체에 새 navigation, Pressable, role이나 focus target을 추가하지 않고 작성자·시간·본문·미디어·Action Bar의 기존 입력을 유지한다.
+- Decision Outcome: Text·Media·PureRepost·Quote의 카드 root는 resting fill 없이 feed canvas를 유지한다. Web pointer hover에서는 `stateHover`, Web·Android·iOS pointer 또는 touch press에서는 넓은 surface용 `statePressedSubtle` overlay를 카드 전체에 적용하며 pressed가 hover보다 우선한다. `statePressedSubtle`은 Light black 6%, Dark white 10%로 공용 `statePressed`보다 완화한다. release·cancel·leave 뒤에는 남은 입력 상태 또는 resting fill로 돌아간다. 행 자체에 새 navigation, Pressable, role이나 focus target을 추가하지 않고 작성자·시간·본문·미디어·Action Bar의 기존 입력을 유지한다.
 - Alternatives Considered: 카드 root를 새 Pressable이나 Link로 만들면 내부 링크·미디어·Action Bar와 입력·접근성 target이 중첩되므로 제외했다. Web hover만 추가하면 사용자가 지적한 Native feedback 부재가 남아 제외했다. 화면별 wrapper 수정은 공용 `PostListItem` 한 곳에서 해결할 수 있어 제외했다.
-- Consequences: 기존 semantic state token과 공용 PostListItem root를 재사용하며 새 공개 API·dependency·consumer 보정을 추가하지 않는다. Figma `PostListItem`은 `State=Default|Hover|Pressed` 축을 추가해 기존 8개 Size×Kind 조합을 24개로 확장한다. renderer 검증은 state 연결을 증명하지만 실제 iOS·Android touch·VoiceOver·TalkBack 관찰을 대체하지 않는다.
+- Consequences: 기존 semantic state 체계와 공용 PostListItem root를 재사용하며 새 공개 API·dependency·consumer 보정을 추가하지 않는다. 작은 control의 기존 `statePressed`는 변경하지 않고 넓은 목록 행만 `statePressedSubtle`을 사용한다. Figma `PostListItem`은 `State=Default|Hover|Pressed` 축을 추가해 기존 8개 Size×Kind 조합을 24개로 확장한다. renderer 검증은 state 연결을 증명하지만 실제 iOS·Android touch·VoiceOver·TalkBack 관찰을 대체하지 않는다.
 - Confirmation / Follow-up: Web hover·press·leave와 iOS·Android press·release·cancel을 component test로 확인하고 기존 navigation·Storybook 회귀를 실행한다. Figma component set의 24개 variant, state token binding과 대표 screenshot을 readback한다.
 
 ## Remaining Decisions
