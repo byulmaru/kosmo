@@ -16,17 +16,17 @@
 - Consequences: 로그인·Account 상태와 optional viewer 검증을 구분한다. 신고자 식별정보를 Slack으로 전달할 근거가 되지 않는다.
 - Confirmation / Follow-up: 미선택 공개 조회와 selected viewer 전환·권한 실패를 실행 검증한다.
 
-### D2. 저장된 대상과 공통 직접 조회 결과
+### D2. 저장된 대상의 신고 eligibility — 2026-09-14 정정
 
-- Decision Date: 2026-09-10
+- Decision Date: 2026-09-14
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/decisions/0030-content-report-submission.md`, `docs/domain/objects/post.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, [PROD-915](https://linear.app/byulmaru/issue/PROD-915), [PROD-822](https://linear.app/byulmaru/issue/PROD-822).
+- Authority / Provenance: 2026-09-14 사용자 명시적 정책 정정, 정정된 `docs/domain/decisions/0030-content-report-submission.md`, `docs/design/content-reporting.md`, [PROD-915](https://linear.app/byulmaru/issue/PROD-915).
 - Status: Active
-- Context / Problem: 조회 가능성과 검색 후보·상호작용 자격은 같지 않다. 현재 저장된 Block을 빠뜨린 기존 predicate도 존재한다.
-- Decision Outcome: 제출 시점의 저장된 local/remote 대상에 공통 직접 조회 authorization을 적용한다. 필요한 방향별 Block 결과는 통합·회귀·완료 전에 준비한다.
-- Alternatives Considered: local 전용 또는 임의 URL 제보 대신 승인된 local/remote 저장 대상을 유지한다. 신고 전용 predicate와 불완전한 공통 결과를 그대로 소비하는 방식으로는 완료 조건을 충족하지 못한다.
-- Consequences: 전체 신고 구현 시작이나 Spec 승인을 막지 않는다. 특정 branch·PROD-822 전체·Block UI와 결합하지 않는다. 미래 Domain Block·Mention·DIRECT recipient를 새로 구현하지 않는다.
-- Confirmation / Follow-up: PROD-915가 실제 공통 결과로 방향별 Block·잔존 Follow·대상 소멸 회귀를 검증한다. Linear blockedBy와 두 기능 간 Git Stack은 추가하지 않는다.
+- Context / Problem: 일반 canonical direct-read authorization과 신고 eligibility의 결합이 PROD-822 branch 의존성을 만들었다.
+- Decision Outcome: 현재 Post/Profile 화면의 신고 진입점에서 시작하며 Profile Block 방향별 authorization을 신고 조건으로 적용하지 않는다. 차단으로 UI에서 접근 불가한 대상을 과거 ID로 신고하는 흐름의 지원·방어는 요구하지 않는다. 서버 인증·입력·대상 존재/유효성·Slack payload/credential 경계와 기존 비-Block visibility는 유지한다.
+- Alternatives Considered: 차단 전체 Stack 병합, 신고 전용 Block predicate, 모든 visibility 제거는 채택하지 않는다. PUBLIC/UNLISTED·FOLLOWERS·현재 DIRECT의 작성자 경로와 Active Post·Current Content·Active Profile·Instance 비정지 조건을 공통 구성 요소로 유지한다.
+- Consequences: 2026-09-10 D2의 canonical direct-read 동등성 및 방향별 Block 통합 선행 조건을 대체한다. `main → PROD-915 (#857)`로 독립 전달하며 일반 조회·Block cleanup·관리 API·UI는 변경하지 않는다. 이 정정은 client 신뢰 원칙이나 새 remote fetch 권한이 아니다.
+- Confirmation / Follow-up: 기존 viewer·visibility·대상 소멸과 서버/Slack 회귀 및 Block 독립성을 실행 검증한다. 기존 rebase·Profile UI/Test 충돌 해결·backup을 보존하고 검증 전 원격 force-push/PR base 변경을 하지 않는다.
 
 ### D3. 사유와 Privacy 최소화
 
@@ -106,4 +106,4 @@
 
 ## Superseded Decisions
 
-이 change 안에서 대체된 decision은 없다. 공유 Account 제한 제안은 OpenSpec 작성 전에 미채택되었으므로 Active decision으로 기록하지 않는다. 과거 ADR의 부분 대체 근거는 ADR 0030을 따른다.
+2026-09-10 D2의 canonical direct-read authorization 동등성과 PROD-822 방향별 Block 결과 선행 조건은 2026-09-14 사용자 정정 및 위 Active D2로 Superseded되었다. 다른 제출자·visibility·입력·Privacy·Slack 결정은 유지한다. 공유 Account 제한 제안은 OpenSpec 작성 전에 미채택되었으므로 Active decision으로 기록하지 않는다. 과거 ADR의 부분 대체 근거는 ADR 0030을 따른다.

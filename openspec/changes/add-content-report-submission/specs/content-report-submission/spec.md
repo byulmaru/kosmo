@@ -19,30 +19,32 @@
 - **WHEN** 선택한 유효 Profile은 대상을 볼 수 없지만 같은 Account의 다른 Profile은 볼 수 있다
 - **THEN** 다른 Profile의 권한을 빌려 신고를 허용하지 않는다
 
-### Requirement: 저장된 대상의 제출 시점 직접 조회 권한
+### Requirement: 저장된 대상의 제출 시점 신고 eligibility
 
-**Authority / Provenance:** `docs/domain/decisions/0030-content-report-submission.md`, `docs/domain/objects/post.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, [PROD-915](https://linear.app/byulmaru/issue/PROD-915), [PROD-822](https://linear.app/byulmaru/issue/PROD-822). 서버는 저장된 local/remote Post·Profile을 해석하고 발송 전에 현재 viewer의 공통 직접 조회 authorization을 다시 적용해야 한다(SHALL). 메뉴 표시·client cache·검색 후보성은 제출 권한의 근거가 아니며, 신고 전용 Block predicate나 우회 경로를 만들어서는 안 된다(MUST NOT). 현재 저장 capability가 표현하는 제한 상태를 누락해서는 안 된다(MUST NOT). 아직 없는 Domain Block·Mention·DIRECT recipient capability를 이 기능에서 새로 구현할 의무는 없다.
+**Authority / Provenance:** 2026-09-14 사용자 정책 정정, `docs/domain/decisions/0030-content-report-submission.md`, `docs/design/content-reporting.md`, [PROD-915](https://linear.app/byulmaru/issue/PROD-915). 신고는 현재 Post/Profile 화면의 신고 진입점에서 시작한다. 서버는 저장된 local/remote 대상의 존재/유효성과 기존 비-Block visibility를 발송 전에 검증해야 한다(SHALL). 신고 eligibility를 일반 canonical direct-read authorization과 동일시하거나 Profile Block 방향별 predicate를 적용·복제해서는 안 된다(MUST NOT). PROD-822 결과·branch·Block UI는 완료 조건이 아니다. 차단으로 UI에서 접근 불가한 대상을 과거 ID로 신고하는 흐름의 지원·방어는 요구하지 않는다. 이는 client 신뢰 원칙이 아니며 인증·입력·대상 검증 및 Slack 보안 경계는 유지해야 한다(SHALL).
 
-#### Scenario: 작성 도중 대상 삭제 또는 권한 상실
+Post는 Active이고 Current Content가 있어야 하며 작성자 Profile은 Active, Instance는 Suspended가 아니어야 한다(SHALL). PUBLIC/UNLISTED는 공개 범위, FOLLOWERS는 작성자 또는 실제 선택된 viewer의 저장된 Follow, 현재 DIRECT는 작성자만 허용해야 한다(SHALL). SELF_ONLY enum이나 아직 없는 Mention·DIRECT recipient 권한을 새로 만들지 않는다. Profile 대상에는 기존 Active·Instance 비정지 조건을 적용해야 한다(SHALL). 본문 없는 Repost는 기존대로 제외하며 Quote·Reply는 자체 조건을 사용한다.
 
-- **WHEN** form을 연 뒤 대상이 삭제되거나 제출 시점의 직접 조회 권한을 잃는다
+#### Scenario: 작성 도중 대상 삭제 또는 비-Block visibility 자격 상실
+
+- **WHEN** form을 연 뒤 대상이 삭제되거나 FOLLOWERS 관계·Post visibility·Profile/Instance 상태가 바뀌어 신고 조건을 잃는다
 - **THEN** 서버가 Slack 발송 전에 거절하고 client는 실패와 기존 입력을 유지한다
 
-#### Scenario: 방향별 Profile Block과 Post 신고
+#### Scenario: Profile Block과 독립적인 신고 조건
 
-- **WHEN** A가 B를 차단한 상태에서 A 또는 B가 서로의 Post를 신고한다
-- **THEN** 공통 직접 조회 정책에 따라 A의 B Post 접근은 다른 조회 조건을 통과하면 허용하고 B의 A Post 접근은 거절한다
-- **AND** mutual Block이면 양쪽의 상대 Post 신고를 거절하며 잔존 Follow만으로 제한을 우회하지 않는다
+- **WHEN** 동일한 신고 요청의 인증·입력·비-Block visibility·대상 유효성은 같고 Profile Block 저장 상태만 다르다
+- **THEN** 신고 조건은 달라지지 않으며 방향별 Block 또는 Block 때문에 무효화한 Follow 조건을 적용하지 않는다
+- **AND** 이 서버 회귀는 UI에서 접근 불가한 Post의 별도 신고 진입점을 제공한다는 뜻이 아니다
 
 #### Scenario: Block pair의 Profile 기본정보
 
-- **WHEN** Block 관계가 있는 상대 Profile의 기본정보가 공통 Profile 직접 조회 정책을 통과한다
+- **WHEN** Block 관계가 있는 상대 Profile이 Active·Instance 비정지 조건을 통과한다
 - **THEN** Post 제한이나 양방향 검색 필터를 Profile 신고 자격에 대신 적용하지 않는다
 
 #### Scenario: FOLLOWERS와 미선택 viewer
 
 - **WHEN** FOLLOWERS Post에 대한 신고가 도착한다
-- **THEN** 현재 지원되는 공통 직접 조회 권한을 적용하며 미선택 viewer에게 다른 소유 Profile의 Follow를 부여하지 않는다
+- **THEN** 작성자 또는 실제 선택된 viewer의 저장된 Follow만 적용하며 미선택 viewer에게 다른 소유 Profile의 Follow를 부여하지 않는다
 - **AND** 아직 지원하지 않는 Mention 또는 DIRECT recipient 권한을 새로 추론하지 않는다
 
 #### Scenario: 저장되지 않은 remote 대상

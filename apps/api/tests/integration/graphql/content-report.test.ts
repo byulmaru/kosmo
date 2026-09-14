@@ -5,6 +5,9 @@ import { after, before, test } from 'node:test';
 import {
   AccountProfileRole,
   AccountState,
+  ActivityPubActorType,
+  InstanceKind,
+  InstanceState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -32,8 +35,11 @@ process.env.SLACK_FEEDBACK_WEBHOOK_URL = webhookUrl;
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
+let ActivityPubActors: typeof CoreDb.ActivityPubActors;
+let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
@@ -64,8 +70,11 @@ before(async () => {
   ({
     AccountProfiles,
     Accounts,
+    ActivityPubActors,
+    ActivityPubPosts,
     db,
     firstOrThrow,
+    Instances,
     pg,
     PostContents,
     ProfileBlocks,
@@ -322,7 +331,7 @@ test('Post report uses submit-time access and rejects an inaccessible target wit
   assert.equal(calls, 1);
 });
 
-test('A profile can report a Post from a profile it blocked, while the reverse report is rejected before Slack', async (t) => {
+test('Stored Block direction does not change otherwise eligible Post reports', async (t) => {
   const blocker = await createAuthenticatedSession();
   const blocked = await createAuthenticatedSession();
   const blockedPost = await createPost(blocked.profile.id, PostVisibility.PUBLIC);
@@ -355,7 +364,7 @@ test('A profile can report a Post from a profile it blocked, while the reverse r
   assert.equal(calls, 1);
   calls = 0;
 
-  const rejected = await requestGraphQL<{
+  const reverse = await requestGraphQL<{
     submitContentReport: { status: string };
   }>(
     mutation,
@@ -368,11 +377,11 @@ test('A profile can report a Post from a profile it blocked, while the reverse r
     },
     blocked.token,
   );
-  assert.deepEqual(rejected, { data: { submitContentReport: { status: 'REJECTED' } } });
-  assert.equal(calls, 0);
+  assert.deepEqual(reverse, { data: { submitContentReport: { status: 'DELIVERED' } } });
+  assert.equal(calls, 1);
 });
 
-test('A residual Follow cannot expose a blocked FOLLOWERS Post report target', async (t) => {
+test('Report FOLLOWERS eligibility uses the stored Follow independently of Block', async (t) => {
   const blocker = await createAuthenticatedSession();
   const blocked = await createAuthenticatedSession();
   const post = await createPost(blocked.profile.id, PostVisibility.FOLLOWERS);
@@ -405,11 +414,11 @@ test('A residual Follow cannot expose a blocked FOLLOWERS Post report target', a
     blocker.token,
   );
 
-  assert.deepEqual(result, { data: { submitContentReport: { status: 'REJECTED' } } });
-  assert.equal(calls, 0);
+  assert.deepEqual(result, { data: { submitContentReport: { status: 'DELIVERED' } } });
+  assert.equal(calls, 1);
 });
 
-test('Mutual blocks reject Post reports from both profiles before Slack', async (t) => {
+test('Mutual Blocks do not add a report eligibility condition', async (t) => {
   const first = await createAuthenticatedSession();
   const second = await createAuthenticatedSession();
   const firstPost = await createPost(first.profile.id, PostVisibility.PUBLIC);
@@ -452,9 +461,9 @@ test('Mutual blocks reject Post reports from both profiles before Slack', async 
     second.token,
   );
 
-  assert.deepEqual(firstReport, { data: { submitContentReport: { status: 'REJECTED' } } });
-  assert.deepEqual(secondReport, { data: { submitContentReport: { status: 'REJECTED' } } });
-  assert.equal(calls, 0);
+  assert.deepEqual(firstReport, { data: { submitContentReport: { status: 'DELIVERED' } } });
+  assert.deepEqual(secondReport, { data: { submitContentReport: { status: 'DELIVERED' } } });
+  assert.equal(calls, 2);
 });
 
 test('Other without details is rejected before target lookup and Slack', async (t) => {
@@ -484,10 +493,279 @@ test('Other without details is rejected before target lookup and Slack', async (
   assert.equal(calls, 0);
 });
 
+test('Report eligibility preserves each stored Post visibility and the selected viewer boundary', async (t) => {
+  const author = await createAuthenticatedSession();
+  const follower = await createAuthenticatedSession();
+  const stranger = await createAuthenticatedSession();
+  const unselected = await createAuthenticatedSession({ selectProfile: false });
+  await db.insert(ProfileFollows).values([
+    { followerProfileId: follower.profile.id, followeeProfileId: author.profile.id },
+    { followerProfileId: unselected.profile.id, followeeProfileId: author.profile.id },
+  ]);
+  // Owning another Profile with access must not lend that Profile's permissions.
+  await db.insert(AccountProfiles).values({
+    accountId: stranger.account.id,
+    profileId: follower.profile.id,
+    role: AccountProfileRole.OWNER,
+  });
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('ok', { status: 200 });
+  });
+  const cases = [
+    { visibility: PostVisibility.PUBLIC, allowed: [true, true, true, true] },
+    { visibility: PostVisibility.UNLISTED, allowed: [true, true, true, true] },
+    { visibility: PostVisibility.FOLLOWERS, allowed: [true, true, false, false] },
+    { visibility: PostVisibility.DIRECT, allowed: [true, false, false, false] },
+  ];
+  for (const { visibility, allowed } of cases) {
+    const post = await createPost(author.profile.id, visibility);
+    for (const [index, viewer] of [author, follower, stranger, unselected].entries()) {
+      await t.test(`${visibility}, viewer ${index}`, async () => {
+        const beforeCalls = calls;
+        const result = await submitReport(post.id, 'POST', viewer.token);
+        assert.deepEqual(result, {
+          data: { submitContentReport: { status: allowed[index] ? 'DELIVERED' : 'REJECTED' } },
+        });
+        assert.equal(calls - beforeCalls, allowed[index] ? 1 : 0);
+      });
+    }
+  }
+});
+
+test('Report retries recheck Follow and visibility without borrowing stale access', async (t) => {
+  const author = await createAuthenticatedSession();
+  const viewer = await createAuthenticatedSession();
+  const post = await createPost(author.profile.id, PostVisibility.FOLLOWERS);
+  const follow = await db
+    .insert(ProfileFollows)
+    .values({
+      followerProfileId: viewer.profile.id,
+      followeeProfileId: author.profile.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('ok', { status: 200 });
+  });
+  assert.deepEqual(await submitReport(post.id, 'POST', viewer.token), {
+    data: { submitContentReport: { status: 'DELIVERED' } },
+  });
+  await db.update(Posts).set({ visibility: PostVisibility.DIRECT }).where(eq(Posts.id, post.id));
+  assert.deepEqual(await submitReport(post.id, 'POST', viewer.token), {
+    data: { submitContentReport: { status: 'REJECTED' } },
+  });
+  assert.equal(calls, 1);
+  await db.update(Posts).set({ visibility: PostVisibility.FOLLOWERS }).where(eq(Posts.id, post.id));
+  assert.deepEqual(await submitReport(post.id, 'POST', viewer.token), {
+    data: { submitContentReport: { status: 'DELIVERED' } },
+  });
+  await db.delete(ProfileFollows).where(eq(ProfileFollows.id, follow.id));
+  assert.deepEqual(await submitReport(post.id, 'POST', viewer.token), {
+    data: { submitContentReport: { status: 'REJECTED' } },
+  });
+  assert.equal(calls, 2);
+});
+
+test('Inactive accounts and revoked sessions cannot submit reports', async (t) => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('ok', { status: 200 });
+  });
+  for (const state of [AccountState.DISABLED, AccountState.SUSPENDED]) {
+    const auth = await createAuthenticatedSession();
+    await db.update(Accounts).set({ state }).where(eq(Accounts.id, auth.account.id));
+    const result = await submitReport(auth.profile.id, 'PROFILE', auth.token);
+    assert.equal(result.data, null);
+    assert.equal(result.errors?.length, 1);
+  }
+  const auth = await createAuthenticatedSession();
+  await db
+    .update(Sessions)
+    .set({ state: SessionState.REVOKED })
+    .where(eq(Sessions.token, auth.token));
+  const result = await submitReport(auth.profile.id, 'PROFILE', auth.token);
+  assert.equal(result.data, null);
+  assert.equal(result.errors?.length, 1);
+  assert.equal(calls, 0);
+});
+
+test('Report targets retain Profile, Instance, content and identity validity checks', async (t) => {
+  const reporter = await createAuthenticatedSession();
+  const author = await createAuthenticatedSession();
+  const post = await createPost(author.profile.id, PostVisibility.PUBLIC);
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('ok', { status: 200 });
+  });
+  for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
+    await db.update(Profiles).set({ state }).where(eq(Profiles.id, author.profile.id));
+    for (const [id, kind] of [
+      [author.profile.id, 'PROFILE'],
+      [post.id, 'POST'],
+    ] as const) {
+      assert.deepEqual(await submitReport(id, kind, reporter.token), {
+        data: { submitContentReport: { status: 'REJECTED' } },
+      });
+    }
+  }
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.ACTIVE })
+    .where(eq(Profiles.id, author.profile.id));
+  const originalInstance = await db
+    .select()
+    .from(Instances)
+    .where(eq(Instances.id, localInstanceId))
+    .then(firstOrThrow);
+  try {
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, localInstanceId));
+    for (const [id, kind] of [
+      [author.profile.id, 'PROFILE'],
+      [post.id, 'POST'],
+    ] as const) {
+      assert.deepEqual(await submitReport(id, kind, reporter.token), {
+        data: { submitContentReport: { status: 'REJECTED' } },
+      });
+    }
+  } finally {
+    await db
+      .update(Instances)
+      .set({ state: originalInstance.state })
+      .where(eq(Instances.id, localInstanceId));
+  }
+  await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, post.id));
+  assert.deepEqual(await submitReport(post.id, 'POST', reporter.token), {
+    data: { submitContentReport: { status: 'REJECTED' } },
+  });
+  for (const targetId of [
+    'invalid',
+    encodeGlobalId('Profile', author.profile.id),
+    encodeGlobalId('Post', crypto.randomUUID()),
+  ]) {
+    const result = await requestGraphQL(
+      mutation,
+      {
+        input: { targetId, targetType: 'POST', reason: 'SPAM_FRAUD' },
+      },
+      reporter.token,
+    );
+    assert.deepEqual(result, { data: { submitContentReport: { status: 'REJECTED' } } });
+  }
+  assert.equal(calls, 0);
+});
+
+test('Stored remote Post and Profile reports use server-resolved identity without remote fetch', async (t) => {
+  const reporter = await createAuthenticatedSession();
+  const domain = `report-${crypto.randomUUID()}.example`;
+  const instance = await db
+    .insert(Instances)
+    .values({
+      domain,
+      kind: InstanceKind.ACTIVITYPUB,
+      state: InstanceState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const profile = await db
+    .insert(Profiles)
+    .values({
+      displayName: 'Remote report target',
+      followPolicy: ProfileFollowPolicy.OPEN,
+      handle: 'remote',
+      instanceId: instance.id,
+      normalizedHandle: 'remote',
+      state: ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const actorUri = `https://${domain}/users/remote`;
+  await db.insert(ActivityPubActors).values({
+    profileId: profile.id,
+    type: ActivityPubActorType.PERSON,
+    uri: actorUri,
+  });
+  const post = await createPost(profile.id, PostVisibility.UNLISTED);
+  const postUri = `https://${domain}/posts/1`;
+  await db.insert(ActivityPubPosts).values({
+    postId: post.id,
+    receivedAt: Temporal.Now.instant(),
+    uri: postUri,
+  });
+  const requests: Request[] = [];
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push(new Request(input, init));
+    return new Response('ok', { status: 200 });
+  });
+  for (const [id, kind, uri] of [
+    [profile.id, 'PROFILE', actorUri],
+    [post.id, 'POST', postUri],
+  ] as const) {
+    assert.deepEqual(await submitReport(id, kind, reporter.token), {
+      data: { submitContentReport: { status: 'DELIVERED' } },
+    });
+    const request = requests.at(-1);
+    assert.ok(request);
+    assert.equal(request.url, webhookUrl);
+    const payload = (await request.json()) as {
+      blocks: Array<{ fields?: Array<{ text: string }> }>;
+    };
+    assert.ok(payload.blocks[1]?.fields?.some(({ text }) => text === `Remote URI: ${uri}`));
+    assert.ok(payload.blocks[1]?.fields?.some(({ text }) => text.includes(`/@remote@${domain}`)));
+  }
+  assert.equal(requests.length, 2);
+});
+
+test('GraphQL rejects invalid report input before Slack', async (t) => {
+  const auth = await createAuthenticatedSession();
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('ok', { status: 200 });
+  });
+  const valid = {
+    targetId: encodeGlobalId('Profile', auth.profile.id),
+    targetType: 'PROFILE',
+    reason: 'SPAM_FRAUD',
+  };
+  for (const [input, expectedStatus] of [
+    [{ ...valid, reason: 'INVALID_REASON' }, 400],
+    [{ ...valid, details: 'x'.repeat(2001) }, 200],
+    [{ ...valid, targetType: 'INVALID_TARGET' }, 400],
+    [{ ...valid, reporterAccountId: auth.account.id, kosmoUrl: 'https://attacker.example' }, 400],
+  ] as const) {
+    const result = await requestGraphQL(mutation, { input }, auth.token, expectedStatus);
+    assert.ok(result.errors?.length);
+  }
+  assert.equal(calls, 0);
+});
+
+const submitReport = (id: string, kind: 'POST' | 'PROFILE', token: string) =>
+  requestGraphQL(
+    mutation,
+    {
+      input: {
+        reason: 'SPAM_FRAUD',
+        targetId: encodeGlobalId(kind === 'POST' ? 'Post' : 'Profile', id),
+        targetType: kind,
+      },
+    },
+    token,
+  );
+
 const requestGraphQL = async <TData = Record<string, unknown>>(
   query: string,
   variables: Record<string, unknown>,
   token?: string,
+  expectedStatus = 200,
 ): Promise<GraphQLResult<TData>> => {
   const headers = new Headers({ 'content-type': 'application/json' });
   if (token) {
@@ -498,7 +776,7 @@ const requestGraphQL = async <TData = Record<string, unknown>>(
     headers,
     method: 'POST',
   });
-  assert.equal(response.status, 200);
+  assert.equal(response.status, expectedStatus);
   return (await response.json()) as GraphQLResult<TData>;
 };
 

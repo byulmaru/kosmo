@@ -10,13 +10,13 @@
 
 **Guardrails**
 
-Selected Profile을 강제하지 않는다. 제출 때 대상 권한을 다시 확인하며 신고 전용 policy·remote fetch를 만들지 않는다. 공통 Block 결과의 완전한 통합 증거는 5번에서 확인하고 불완전한 main predicate를 완료 근거로 삼지 않는다.
+Selected Profile을 강제하지 않는다. 제출 때 대상 유효성과 기존 비-Block visibility를 다시 확인하며 Block predicate·remote fetch를 만들지 않는다. 일반 canonical direct-read 권한과 신고 eligibility를 동일시하지 않는다.
 
 **Verification**
 
 인증 실패·비활성 Account·미선택 공개 범위·viewer 전환·다른 소유 Profile 권한 비대여·잘못된 대상·사유·빈 기타 설명·2,000자 경계를 실제 API 입력과 발송 여부로 검증한다.
 
-- [x] 1.1 인증·optional viewer·저장 대상 해석과 공통 직접 조회 검증을 연결한 additive 신고 API를 제공한다. (`content-report.test.ts`: selected/no-selected viewer, stored Post/Profile, submit-time target check)
+- [x] 1.1 인증·optional viewer·저장 대상 해석과 기존 비-Block visibility 검증을 연결한 additive 신고 API를 제공한다. (`content-report.test.ts`: selected/no-selected viewer, stored Post/Profile, submit-time target check)
 - [x] 1.2 승인된 5개 사유와 설명 검증을 client/server가 일치시킬 수 있도록 제공하고 경계 동작을 검증한다. (공유 Zod schema와 2,000자·`OTHER` 경계 테스트)
 - [x] 1.3 권한·대상·입력 오류에서 Slack을 호출하지 않는 API 회귀와 기존 호출자 호환성을 확인한다. (anonymous, deleted target, invalid `OTHER`, additive GraphQL schema)
 
@@ -91,23 +91,32 @@ Android·iOS 각각에서 대상 화면 위 신고 form으로 공통 제출 계�
 
 **Authority / Provenance**
 
-`docs/domain/decisions/0030-content-report-submission.md`, `docs/domain/objects/post.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/profile-block.md`, [PROD-915](https://linear.app/byulmaru/issue/PROD-915), [PROD-822](https://linear.app/byulmaru/issue/PROD-822)의 공통 policy 결과.
+`docs/domain/decisions/0030-content-report-submission.md`, `docs/domain/objects/post.md`, `docs/domain/objects/profile.md`, [PROD-915](https://linear.app/byulmaru/issue/PROD-915), 2026-09-14 사용자 신고 eligibility 정정.
 
 **Deliverable**
 
-실제 공통 직접 조회 결과를 신고 API가 우회 없이 소비하며 현재 저장 가능한 제한 상태를 누락하지 않는다.
+신고 API가 기존 비-Block visibility와 서버 보안·대상 유효성 경계를 유지하면서 PROD-822 없이 독립 실행된다.
 
 **Guardrails**
 
-이 그룹의 완료에는 방향별 공통 Post Block 결과가 필요하다. PROD-822 전체·특정 branch·Block UI·미래 capability 완료를 요구하지 않는다. PROD-915가 Block policy를 복제하지 않으며 relatedTo를 자동 blockedBy나 교차 기능 Git Stack으로 바꾸지 않는다.
+Profile Block 방향별 authorization은 신고 조건이나 완료 의존성이 아니다. 기존 main rebase·Profile UI/Test·backup을 보존하고 `main → PROD-915`로 유지한다. PROD-822 고유 코드와 Block predicate를 가져오지 않으며 일반 Post/Profile 조회 정책을 변경하지 않는다.
 
 **Verification**
 
-local/remote Post·Profile, public/unlisted·FOLLOWERS·현재 저장 DIRECT의 기존 작성자 경로, 미선택/selected viewer, A→B·B→A·mutual Block·잔존 Follow, lifecycle·Instance 제한을 실제 DB와 API 결과로 검증한다. 조회 가능한 Profile 기본정보와 Post 콘텐츠 제한, Repost/Quote 자체·Source의 기존 직접 조회 정책을 구분한다.
+local/remote Post·Profile, PUBLIC/UNLISTED·FOLLOWERS·현재 DIRECT의 작성자 경로, 미선택/selected viewer, lifecycle·Instance 제한을 실제 DB와 API로 검증한다. Block 유무가 신고 조건을 바꾸지 않는지 확인하되 UI에서 접근 불가한 대상의 별도 신고 흐름을 지원한다고 주장하지 않는다. 본문 없는 Repost는 제외하고 Quote·Reply 자체 조건을 유지한다.
 
-- [ ] 5.1 최신 canonical·main·PROD-822 결과를 대조하고 공통 직접 조회 경계를 신고 API에 최종 연결한다.
-- [ ] 5.2 방향별 Block·잔존 Follow·viewer·local/remote·lifecycle·Instance·현재 visibility 회귀를 실제 authorization 결과로 검증한다.
-- [ ] 5.3 작성 후 대상 삭제/권한 상실과 수동 재시도 전 상태 변경에서 발송을 거절하는 통합 회귀를 확인한다.
+- [x] 5.1 정정된 canonical·Linear·OpenSpec과 main을 대조하고 PROD-822 helper 의존성 없이 신고 eligibility를 연결한다.
+- [x] 5.2 Block 독립성과 기존 viewer·local/remote·lifecycle·Instance·visibility, 인증·입력·Slack 경계 및 기존 조회 regression을 검증한다.
+- [x] 5.3 작성 후 대상 삭제/비-Block visibility 자격 상실과 수동 재시도 전 상태 변경에서 발송을 거절하는 통합 회귀를 확인한다.
+
+### 2026-09-14 main 분리 검증
+
+- 기준 main: `f3011a3a4172b6f8edb74420adf132ee0a0af3b9`. 기존 신고 커밋 16개를 range-diff로 대조했으며 모두 대응한다. 기존 고유 변경 파일 50개가 유지되고 일반 Post/Profile 조회·core visibility·worker 변경은 없다. 기존 Profile UI/Test 충돌 해결을 보존했다.
+- `pnpm --filter @kosmo/api test`: schema·typecheck, 단위 41개와 통합 279개 통과. 외부 Media Storage 연동 1개는 환경 미설정으로 skip. Post/Profile 기존 조회 회귀를 포함한다.
+- Follow 삭제와 visibility 변경의 재시도 거절을 각각 독립 검증하도록 테스트를 보강한 뒤 신고 통합 파일을 재실행: 32개 통과, 실패·skip 0. 실제 DB·GraphQL 경로를 사용하고 Slack만 제어한다.
+- `pnpm --filter @kosmo/core test:unit`: 89개 통과. `pnpm --filter @kosmo/app check`, `test:unit`(575개), `export:web` 통과. 신고 Storybook Chromium 테스트 7개 통과. 변경 API 코드·테스트 ESLint/Prettier, OpenSpec strict validation 통과.
+- Web 산출물에서 Slack credential 환경 변수·webhook endpoint·서버 전송 구현의 포함 여부를 확인했고 발견되지 않았다. 실제 Slack 전송과 Android/iOS runtime 검증은 이번 분리 검증에 포함하지 않았으며 아래 최종 통합 책임은 유지한다.
+- 원본 backup `backup/PROD-915-before-main-20260914-01a09f16`을 보존한다. 원격 force-push·PR base 변경·병합은 이 검증에서 수행하지 않는다.
 
 ## 6. PROD-915 최종 통합·완료·archive
 

@@ -5,13 +5,14 @@ import {
   first,
   Instances,
   Posts,
+  ProfileFollows,
   Profiles,
 } from '@kosmo/core/db';
 import { ContentReportTargetType, InstanceKind, ProfileState } from '@kosmo/core/enums';
 import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { and, eq, isNotNull } from 'drizzle-orm';
-import { directPostAccessWhere } from '@/graphql/resolvers/post/access';
+import { postVisibilityCondition } from '@kosmo/core/visibility';
+import { and, eq, exists, isNotNull } from 'drizzle-orm';
 import { formatRelativeHandle } from '@/profile/identity';
 import { visibleProfileWhere } from '@/profile/visibility';
 import type { ContentReportReason } from '@kosmo/core/enums';
@@ -54,6 +55,7 @@ const resolveRelativeHandle = async ({
 };
 
 const resolvePostTarget = async (id: string, ctx: UserContext) => {
+  const viewerProfileId = ctx.session?.profile?.id;
   const post = await db
     .select({
       id: Posts.id,
@@ -72,7 +74,29 @@ const resolvePostTarget = async (id: string, ctx: UserContext) => {
       and(
         eq(Posts.id, id),
         isNotNull(Posts.currentContentId),
-        directPostAccessWhere({ ctx, profileMute: 'ignore' }),
+        // Report eligibility retains visibility without inheriting direct-read Block policy.
+        postVisibilityCondition({
+          columns: {
+            authorProfileId: Posts.profileId,
+            authorVisible: visibleProfileWhere({ profile: Profiles, instance: Instances }),
+            postState: Posts.state,
+            postVisibility: Posts.visibility,
+          },
+          viewerProfileId,
+          viewerFollowsAuthor: viewerProfileId
+            ? exists(
+                db
+                  .select({ id: ProfileFollows.id })
+                  .from(ProfileFollows)
+                  .where(
+                    and(
+                      eq(ProfileFollows.followerProfileId, viewerProfileId),
+                      eq(ProfileFollows.followeeProfileId, Posts.profileId),
+                    ),
+                  ),
+              )
+            : undefined,
+        }),
       ),
     )
     .limit(1)
