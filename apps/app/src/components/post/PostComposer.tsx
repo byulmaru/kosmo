@@ -586,7 +586,11 @@ function PostComposerContents({
                   ]}
                   keyboardShouldPersistTaps="handled"
                   scrollEnabled={presentation !== 'mobile'}
-                  style={[styles.editorScroll, mediaEditor !== null && styles.hiddenPresentation]}
+                  style={[
+                    styles.editorScroll,
+                    presentation === 'mobile' && styles.surfaceRoot,
+                    mediaEditor !== null && styles.hiddenPresentation,
+                  ]}
                 >
                   {composerContent}
                 </ScrollView>
@@ -887,7 +891,7 @@ const styles = StyleSheet.create({
   productionAuthor: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
   replyRoot: { borderRadius: radii.md, borderWidth: 1 },
   surfaceRoot: { flex: 1, minHeight: 0 },
-  editorScroll: { flex: 1, minHeight: 0 },
+  editorScroll: { flexShrink: 1, minHeight: 0 },
   surfaceEditor: { flexGrow: 1, gap: spacing.lg, padding: spacing.lg },
   author: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
   editorSurface: {

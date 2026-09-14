@@ -28,7 +28,14 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import {
+  borderWidths,
+  iconSizes,
+  radius,
+  space,
+  textStyles,
+  webScrollbarStyle,
+} from '@/theme/tokens';
 import { PostComposerMediaItemsTarget } from './PostComposerMediaItemsTarget';
 import type { LucideIcon } from 'lucide-react-native';
 import type { ReactNode, RefObject } from 'react';
@@ -207,6 +214,7 @@ export function PostComposerTarget({
   visibility,
 }: PostComposerTargetProps) {
   const theme = useTheme();
+  const [bodyContentHeight, setBodyContentHeight] = useState(0);
   const { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen } = useVisibilityMenu(
     submitting,
     onVisibilityChange,
@@ -225,7 +233,6 @@ export function PostComposerTarget({
       style={[
         styles.root,
         surface === 'rail' ? styles.rail : styles.overlay,
-        surface === 'rail' && items.length > 0 ? styles.railMedia : null,
         surface === 'overlay' && Platform.OS === 'web' ? styles.webOverlay : null,
         { backgroundColor: theme.backgroundCanvas },
       ]}
@@ -315,9 +322,13 @@ export function PostComposerTarget({
         ) : null}
 
         <ScrollView
-          contentContainerStyle={styles.desktopScrollContent}
           keyboardShouldPersistTaps="handled"
-          style={styles.desktopScroll}
+          style={[
+            styles.desktopScroll,
+            Platform.OS === 'web'
+              ? webScrollbarStyle(theme.borderStrong, surface === 'overlay')
+              : null,
+          ]}
           testID="post-composer-scroll"
         >
           <View style={[styles.content, items.length === 0 ? styles.textContent : null]}>
@@ -325,12 +336,25 @@ export function PostComposerTarget({
               accessibilityLabel="게시물 내용"
               editable={!submitting}
               ref={bodyRef}
+              onChange={(event) => {
+                if (Platform.OS === 'web') {
+                  const input = event.currentTarget as unknown as HTMLTextAreaElement;
+                  input.style.height = '0px';
+                  const height = input.scrollHeight;
+                  input.style.height = `${height}px`;
+                  setBodyContentHeight(height);
+                }
+              }}
               onChangeText={onBodyChange}
+              onContentSizeChange={(event) =>
+                setBodyContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
+              }
               placeholder="무슨 일이 일어나고 있나요?"
+              scrollEnabled={false}
               style={[
                 styles.body,
                 items.length > 0 ? styles.mediaBody : styles.textBody,
-                surface === 'overlay' && items.length > 0 ? styles.overlayMediaBody : null,
+                bodyContentHeight > 0 ? { height: bodyContentHeight } : null,
                 { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
                 composerBodyFocusStyle,
               ]}
@@ -941,7 +965,7 @@ const styles = StyleSheet.create({
     padding: space[12],
     zIndex: 10,
   },
-  mediaBody: { minHeight: 236 },
+  mediaBody: { minHeight: 100 },
   mobileBody: {
     borderRadius: radius[12],
     borderWidth: borderWidths[0],
@@ -1007,14 +1031,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   keyboardRow: { borderRadius: radius[8], borderWidth: borderWidths[1], height: 44 },
-  desktopEditor: { flex: 1, minHeight: 0 },
-  desktopScroll: { flex: 1, minHeight: 0 },
-  desktopScrollContent: { minHeight: '100%' },
-  overlay: { height: 560, maxWidth: 600, width: '100%' },
-  overlayMediaBody: { minHeight: 80 },
+  desktopEditor: { flexShrink: 1, minHeight: 0 },
+  desktopScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
+  overlay: { maxWidth: 640, width: '100%' },
   progressRing: { height: 20, width: 20 },
-  rail: { height: 404, width: '100%' },
-  railMedia: { height: 512 },
+  rail: { maxHeight: 420, width: '100%' },
   remaining: { width: 40, ...textStyles.uiCopyS, textAlign: 'right' },
   root: { gap: space[16], padding: space[16] },
   submit: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
@@ -1035,7 +1056,7 @@ const styles = StyleSheet.create({
   },
   visibilityMenuLeft: { left: 0 },
   visibilityMenuRight: { right: space[16] },
-  webOverlay: { maxHeight: 'calc(85dvh - 64px)' as never },
+  webOverlay: { maxHeight: 'calc(100dvh - 160px)' as never },
   nativeVisibilityMenu: { position: 'relative', top: 0 },
   nativeVisibilityPosition: { position: 'absolute', width: 240 },
   visibilityBackdrop: { flex: 1 },

@@ -113,6 +113,7 @@ function UniversalShellContent() {
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [composerMounted, setComposerMounted] = useState(false);
   const composerPostCreatedRef = useRef(false);
   const composerTriggerFocusRef = useRef<HTMLElement | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -174,6 +175,12 @@ function UniversalShellContent() {
     : {};
 
   useEffect(() => {
+    if (profile && showRightRail) {
+      setComposerMounted(true);
+    }
+  }, [profile, showRightRail]);
+
+  useEffect(() => {
     if (Platform.OS !== 'web' || !drawerOpen) {
       return;
     }
@@ -226,6 +233,7 @@ function UniversalShellContent() {
       composerTriggerFocusRef.current = document.activeElement as HTMLElement | null;
     }
     composerPostCreatedRef.current = false;
+    setComposerMounted(true);
     setComposerOpen(true);
     setDrawerOpen(false);
     setSwitcherOpen(false);
@@ -439,7 +447,7 @@ function UniversalShellContent() {
         ) : null}
       </View>
 
-      {composerVisible || showRightRail ? (
+      {pathname !== '/compose' && (composerMounted || showRightRail) ? (
         <View
           style={[
             styles.rightRail,
@@ -537,10 +545,10 @@ const styles = StyleSheet.create({
   route: { minHeight: 0 },
   nativeRoute: { flex: 1 },
   rightRail: {
-    flexShrink: 1,
-    minWidth: 290,
+    flexShrink: 0,
+    minWidth: 320,
     paddingTop: spacing.lg,
-    width: 350,
+    width: 320,
   },
   composerHostSlot: {
     height: 0,

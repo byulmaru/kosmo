@@ -200,7 +200,7 @@ export const ShortViewportContract: Story = {
     const surface = within(dialog).getByTestId('composer-overlay-surface');
     const target = within(dialog).getByTestId('post-composer-target');
     const viewportHeight = canvasElement.ownerDocument.defaultView!.innerHeight;
-    const hostHeight = viewportHeight * 0.85;
+    const hostHeight = viewportHeight - 96;
     const headerHeight = 64;
 
     expect(getComputedStyle(within(dialog).getByTestId('composer-overlay-surface')).overflow).toBe(

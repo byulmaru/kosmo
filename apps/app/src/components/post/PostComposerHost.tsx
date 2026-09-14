@@ -207,7 +207,10 @@ export function PostComposerHost({
       {header}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.composerFrame}
+        style={[
+          styles.composerFrame,
+          mode === 'mobile' || editingMedia ? styles.composerFrameFill : null,
+        ]}
       >
         {composer}
       </KeyboardAvoidingView>
@@ -248,6 +251,7 @@ export function PostComposerHost({
       style={[
         mode === 'rail' ? styles.railHost : styles.webOverlayHost,
         mode === 'mobile' ? styles.webMobileHost : null,
+        editingMedia ? styles.webMediaEditorHost : null,
         mode !== 'rail' ? safeAreaStyle : null,
         !active ? styles.hiddenHost : null,
         mode !== 'rail' ? { backgroundColor: theme.overlayScrim } : null,
@@ -264,7 +268,7 @@ const styles = StyleSheet.create({
   webOverlayHost: {
     alignItems: 'center',
     bottom: 0,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     left: 0,
     padding: spacing.lg,
     position: 'fixed' as never,
@@ -273,6 +277,7 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   webMobileHost: { padding: 0 },
+  webMediaEditorHost: { justifyContent: 'center' },
   webBackdrop: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
   hiddenHost: { display: 'none' },
   nativeBackdrop: { flex: 1, justifyContent: 'center' },
@@ -281,8 +286,10 @@ const styles = StyleSheet.create({
   railDialog: { borderWidth: 0, width: '100%' },
   overlayDialog: {
     borderRadius: radii.lg,
-    maxHeight: '85dvh' as never,
-    width: 600,
+    marginTop: spacing.xxl,
+    maxWidth: 640,
+    maxHeight: 'calc(100dvh - 96px)' as never,
+    width: '100%',
   },
   mobileDialog: { borderRadius: 0, borderWidth: 0, height: '100%', width: '100%' },
   mediaEditorDialog: {
@@ -299,5 +306,6 @@ const styles = StyleSheet.create({
   },
   closeButton: { position: 'absolute', right: spacing.lg, top: spacing.md },
   title: textStyles.uiHeadingS,
-  composerFrame: { flex: 1, minHeight: 0 },
+  composerFrame: { flexShrink: 1, minHeight: 0 },
+  composerFrameFill: { flex: 1 },
 });

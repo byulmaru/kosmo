@@ -983,12 +983,13 @@ export const OverlayGeometryContract: Story = {
     const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
     const galleryShell = gallery.parentElement!;
     const content = galleryShell.parentElement!;
+    const initialTargetHeight = target.getBoundingClientRect().height;
     const initialTargetTop = target.getBoundingClientRect().top;
     const initialVisibilityTop = visibilityTrigger.getBoundingClientRect().top;
     const initialSubmitTop = submit.getBoundingClientRect().top;
 
-    expect(target.getBoundingClientRect().height).toBe(560);
-    expect(body.getBoundingClientRect().height).toBe(80);
+    expect(initialTargetHeight).toBeLessThan(560);
+    expect(body.getBoundingClientRect().height).toBe(100);
     expect(gallery.getBoundingClientRect().top).toBeCloseTo(
       body.getBoundingClientRect().bottom + space[12],
       0,
@@ -1005,6 +1006,7 @@ export const OverlayGeometryContract: Story = {
     const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
     const contentWarningTop = contentWarning.getBoundingClientRect().top;
 
+    expect(target.getBoundingClientRect().height).toBeGreaterThan(initialTargetHeight);
     expect(scroll.scrollTop).toBe(0);
     expect(scroll.scrollHeight).toBe(scroll.clientHeight);
     expect(contentWarningTop).toBeGreaterThan(visibilityTrigger.getBoundingClientRect().bottom);
@@ -1014,9 +1016,9 @@ export const OverlayGeometryContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
 
     expect(target.getBoundingClientRect().top).toBe(initialTargetTop);
-    expect(target.getBoundingClientRect().height).toBe(560);
+    expect(target.getBoundingClientRect().height).toBeLessThan(initialTargetHeight);
     expect(visibilityTrigger.getBoundingClientRect().top).toBe(initialVisibilityTop);
-    expect(submit.getBoundingClientRect().top).toBeCloseTo(initialSubmitTop, 0);
+    expect(submit.getBoundingClientRect().top).toBeLessThan(initialSubmitTop);
     expect(contentWarning.getBoundingClientRect().top).toBe(contentWarningTop);
     expect(scroll.scrollHeight).toBe(scroll.clientHeight);
 
@@ -1044,11 +1046,23 @@ export const RailGeometryContract: Story = {
     const body = canvas.getByRole('textbox', { name: '게시물 내용' });
     const expand = canvas.getByRole('button', { name: 'Composer 확장' });
     const visibility = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
+    const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
+    const initialTargetHeight = target.getBoundingClientRect().height;
     const visibilityTop = visibility.getBoundingClientRect().top;
     const submitTop = canvas.getByRole('button', { name: '게시' }).getBoundingClientRect().top;
 
-    expect(target.getBoundingClientRect().height).toBe(512);
+    expect(body.getBoundingClientRect().height).toBe(100);
+    expect(initialTargetHeight).toBe(420);
+    expect(gallery.getBoundingClientRect().top).toBeCloseTo(
+      body.getBoundingClientRect().bottom + space[12],
+      0,
+    );
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+    scroll.scrollTop = scroll.scrollHeight;
+    expect(scroll.scrollTop).toBeGreaterThan(0);
+    expect(gallery.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      scroll.getBoundingClientRect().bottom,
+    );
     expect(visibility.getBoundingClientRect().left).toBeCloseTo(
       body.getBoundingClientRect().left,
       0,
@@ -1059,7 +1073,7 @@ export const RailGeometryContract: Story = {
     );
     const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
     const contentWarningTop = contentWarning.getBoundingClientRect().top;
-    scroll.scrollTop = scroll.scrollHeight;
+    scroll.scrollTop = 1;
     expect(scroll.scrollTop).toBeGreaterThan(0);
     expect(contentWarning.getBoundingClientRect().top).toBe(contentWarningTop);
     scroll.scrollTop = 0;
@@ -1067,7 +1081,7 @@ export const RailGeometryContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
     await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 끄기' }));
 
-    expect(target.getBoundingClientRect().height).toBe(404);
+    expect(target.getBoundingClientRect().height).toBeLessThan(initialTargetHeight);
     expect(
       canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }).getBoundingClientRect().top,
     ).toBe(visibilityTop);
