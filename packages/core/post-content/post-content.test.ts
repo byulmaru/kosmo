@@ -564,7 +564,7 @@ test('native-safe guard accepts projected Profile global IDs while canonicalizat
           content: [
             {
               type: 'mention',
-              attrs: { label: '@alice', profileId: 'UHJvZmlsZS0x' },
+              attrs: { profileId: 'UHJvZmlsZS0x' },
             },
           ],
         },

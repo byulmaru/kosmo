@@ -6,11 +6,11 @@ import { PostBody } from '@/components/post/PostBody';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { PostContentMentionStoryQuery } from './__generated__/PostContentMentionStoryQuery.graphql';
 
-const sameLabelPostId = 'post-content-mention-story';
+const repeatedMentionPostId = 'post-content-mention-story';
 const firstProfileId = 'profile-content-mention-first';
 const secondProfileId = 'profile-content-mention-second';
 const missingProfileId = 'profile-content-mention-missing';
-const longMentionLabel = '@this-is-a-deliberately-long-canonical-mention-label-for-reflow';
+const longMentionHandle = '@a-profile-handle-that-is-long-enough-to-wrap';
 
 const PostContentMentionStoryQuery = graphql`
   query PostContentMentionStoryQuery {
@@ -23,7 +23,7 @@ const PostContentMentionStoryQuery = graphql`
   }
 `;
 
-const sameLabelDocument = {
+const repeatedMentionDocument = {
   version: 1,
   summary: null,
   body: {
@@ -32,26 +32,26 @@ const sameLabelDocument = {
       {
         type: 'paragraph',
         content: [
-          { type: 'mention', attrs: { label: '@same', profileId: secondProfileId } },
+          { type: 'mention', attrs: { profileId: secondProfileId } },
           { type: 'text', text: ' ' },
-          { type: 'mention', attrs: { label: '@same', profileId: firstProfileId } },
+          { type: 'mention', attrs: { profileId: firstProfileId } },
           { type: 'hard_break' },
-          { type: 'mention', attrs: { label: '@same', profileId: secondProfileId } },
+          { type: 'mention', attrs: { profileId: secondProfileId } },
         ],
       },
     ],
   },
 };
 
-const sameLabelStoryData = {
+const repeatedMentionStoryData = {
   node: {
     __typename: 'Post',
-    id: sameLabelPostId,
+    id: repeatedMentionPostId,
     content: {
       id: 'content-content-mention-story',
-      bodyText: '@same @same @same',
+      bodyText: '@second-profile @first-profile @second-profile',
       contentWarning: null,
-      document: sameLabelDocument,
+      document: repeatedMentionDocument,
       media: [],
       // The relation order intentionally differs from the document occurrence order.
       mentionedProfiles: [
@@ -75,10 +75,10 @@ const sameLabelStoryData = {
 const unavailableAndLongStoryData = {
   node: {
     __typename: 'Post',
-    id: sameLabelPostId,
+    id: repeatedMentionPostId,
     content: {
       id: 'content-content-mention-unavailable-story',
-      bodyText: `@gone ${longMentionLabel}`,
+      bodyText: `@알 수 없는 사용자 ${longMentionHandle}`,
       contentWarning: null,
       document: {
         version: 1,
@@ -89,11 +89,11 @@ const unavailableAndLongStoryData = {
             {
               type: 'paragraph',
               content: [
-                { type: 'mention', attrs: { label: '@gone', profileId: missingProfileId } },
+                { type: 'mention', attrs: { profileId: missingProfileId } },
                 { type: 'text', text: ' ' },
                 {
                   type: 'mention',
-                  attrs: { label: longMentionLabel, profileId: firstProfileId },
+                  attrs: { profileId: firstProfileId },
                 },
               ],
             },
@@ -106,7 +106,7 @@ const unavailableAndLongStoryData = {
           __typename: 'Profile',
           displayName: 'A profile with a deliberately long display name for reflow',
           id: firstProfileId,
-          relativeHandle: '@a-profile-handle-that-is-long-enough-to-wrap',
+          relativeHandle: longMentionHandle,
         },
       ],
     },
@@ -140,9 +140,9 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const SameLabelTargetsLight: Story = {
+export const RepeatedTargetsLight: Story = {
   globals: { theme: 'light' },
-  parameters: { relay: { data: sameLabelStoryData } },
+  parameters: { relay: { data: repeatedMentionStoryData } },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const route = canvas.getByTestId('post-content-mention-route');
@@ -154,8 +154,8 @@ export const SameLabelTargetsLight: Story = {
       '/@first-profile',
       '/@second-profile',
     ]);
-    expect(links[0]).toHaveAccessibleName('@same, Second Profile, @second-profile 프로필 보기');
-    expect(links[1]).toHaveAccessibleName('@same, First Profile, @first-profile 프로필 보기');
+    expect(links[0]).toHaveAccessibleName('@second-profile, Second Profile, 프로필 보기');
+    expect(links[1]).toHaveAccessibleName('@first-profile, First Profile, 프로필 보기');
 
     await userEvent.click(links[0]);
     expect(route).toHaveTextContent('/@second-profile');
@@ -163,9 +163,9 @@ export const SameLabelTargetsLight: Story = {
   },
 };
 
-export const SameLabelTargetsDark: Story = {
+export const RepeatedTargetsDark: Story = {
   globals: { theme: 'dark' },
-  parameters: { relay: { data: sameLabelStoryData } },
+  parameters: { relay: { data: repeatedMentionStoryData } },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const route = canvas.getByTestId('post-content-mention-route');
@@ -183,15 +183,15 @@ export const UnavailableAndLongProfileFallback: Story = {
   parameters: { relay: { data: unavailableAndLongStoryData } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByText('@gone', { exact: true })).toBeVisible();
+    expect(canvas.getByText('@알 수 없는 사용자', { exact: true })).toBeVisible();
     const links = canvas.getAllByRole('link');
     expect(links).toHaveLength(1);
-    expect(canvas.getByText('@gone', { exact: true }).closest('a')).toBeNull();
+    expect(canvas.getByText('@알 수 없는 사용자', { exact: true }).closest('a')).toBeNull();
     expect(
       canvas.getByRole('link', {
-        name: `${longMentionLabel}, A profile with a deliberately long display name for reflow, @a-profile-handle-that-is-long-enough-to-wrap 프로필 보기`,
+        name: `${longMentionHandle}, A profile with a deliberately long display name for reflow, 프로필 보기`,
       }),
     ).toBeVisible();
-    expect(canvas.getByText(longMentionLabel, { exact: true })).toBeVisible();
+    expect(canvas.getByText(longMentionHandle, { exact: true })).toBeVisible();
   },
 };
