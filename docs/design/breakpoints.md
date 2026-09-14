@@ -17,7 +17,7 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
 
 모바일 셸의 화면 헤더 높이는 `64px`이며 Android/iOS safe-area inset은 이 높이 바깥에서 셸이 추가한다. `< compact` Web에서 `/home`은 메뉴 버튼과 중앙 브랜드 마크를, `/notifications`는 메뉴 버튼과 화면 제목을 같은 app bar에 표시한다. 게시글 상세는 같은 위치에서 메뉴 대신 뒤로가기를 표시하고 `게시글` 제목을 함께 렌더링한다. 공개 Profile Home은 resolved·loading·query error·missing 상태 모두 route가 표시 이름 또는 빈 제목을 가진 공용 PageHeader를 소유하므로 셸 헤더를 중복 렌더링하지 않는다. 북마크 등 다른 route의 PageHeader 정책은 유지한다. Android/iOS에서는 `/home`만 셸이 헤더를 소유하고 다른 route는 기존 헤더를 유지한다. `compact`와 `full` Web에서는 모바일 셸 헤더가 없으므로 각 route가 기존 브랜드·텍스트·뒤로가기 헤더를 소유한다.
 
-각 컬럼 폭(풀 사이드바 `320px` / 아이콘 레일 `80px`, 중앙 최대 `600px`, 우측 `290~350px`)을 더하면 `full`(1280px) 경계에서 풀 3분할(`320`+`600`+`350` ≈ `1270px`)이 눌리지 않고 중앙 피드를 `600px`로 확보한 채 들어맞는다. 풀 3분할 등장을 1024px가 아닌 1280px로 둬, 1024~1279px 구간에서는 중앙 피드를 비좁게 누르는 대신 아이콘 레일 단계로 폭을 확보한다.
+각 컬럼 폭(풀 사이드바 `320px` / 아이콘 레일 `80px`, 중앙 최대 `600px`, 우측 `320px`)을 더하면 `full`(1280px) 경계에서 풀 3분할(`320`+`600`+`320` = `1240px`)이 중앙 피드를 `600px`로 확보한 채 들어맞는다. 풀 3분할 등장을 1024px가 아닌 1280px로 둬, 1024~1279px 구간에서는 중앙 피드를 비좁게 누르는 대신 아이콘 레일 단계로 폭을 확보한다.
 
 `/settings` route family는 full Web의 예외 workspace를 사용한다. 전역 풀 사이드바 `320px`는 유지하되 일반
 우측 레일을 숨기고, 중앙 column과 우측 레일이 사용하던 나머지 폭을 Settings master-detail에 제공한다.
@@ -26,12 +26,16 @@ Settings master pane은 약 `320px`, detail pane은 남은 폭을 사용한다. 
 
 ## 글쓰기 진입
 
-PostComposer presentation은 `Rail`과 `Overlay`만 사용한다. 중앙 timeline inline composer나 직접 접근용 `/compose` 진입점은 두지 않으며, 해당 경로에 직접 접근하면 404가 될 수 있다. `Overlay` 폭과 화면 바깥 gutter는 parent surface가 소유하고 PostComposer는 내부 spacing·state를 소유한다.
+PostComposer presentation은 `Rail`과 `Overlay`만 사용한다. 중앙 timeline inline composer나 직접 접근용 `/compose` 진입점은 두지 않으며, 해당 경로에 직접 접근하면 404가 될 수 있다. Desktop Rail은 풀 사이드바와 같은 `320px` 우측 column에서 본문, Media gallery와 footer를 순서대로 HUG한다. Media가 있으면 본문은 최소 `100px`만 확보하고 gallery를 바로 다음에 배치하며, 별도 고정 외곽 높이나 Media용 빈 공간을 예약하지 않는다. Desktop Overlay는 `640px` 폭으로 viewport 상단 `48px`에 배치하고 content를 HUG하다가 상·하 `48px` gutter를 제외한 높이에 도달하면 body·Media만 가운데 scroller에서 scroll한다. author·editor header·CW·footer는 그 상한 안에 유지한다. Rail의 editor outline과 개인정보 처리방침 footer는 우측 column 왼쪽에서 16px인 같은 기준선에 맞추고, editor header의 공개 범위와 Expand control은 본문 작성 영역의 좌우 기준선에 맞춘다. 모바일 공개 범위 menu는 화면 오른쪽에서 16px inset을 유지한다.
+
+Desktop Rail·Overlay의 본문 입력은 텍스트 줄 수에 따라 자동으로 늘어나고 Media·CW도 같은 content-flow에 합류한다. Rail은 `420px`, Overlay는 viewport 상·하 `48px` gutter를 외곽 최대 높이로 사용하며, 각 상한에 닿으면 외곽은 더 늘어나지 않고 body·Media 영역만 scroll한다.
 
 - `< compact`: 하단 탭 바의 글쓰기가 유일한 shell-level 진입점이며 mobile fullscreen Overlay를 연다. 게시 성공 뒤에는 timeline으로 돌아간다. mobile drawer에는 중복 글쓰기 버튼을 표시하지 않는다.
 - `compact`~`full`: 우측 레일이 없으므로 아이콘 레일의 글쓰기 버튼이 desktop modal Overlay를 연다.
 - `≥ full`: 우측 레일의 embedded PostComposer가 기본 작성 surface다. 별도 큰 글쓰기 CTA를 추가하지 않고 composer header의 Expand action으로 desktop modal Overlay를 연다. 사이드바와 mobile drawer에는 중복 글쓰기 버튼을 표시하지 않는다.
-- `Surface=Overlay`에서는 composer-level Expand를 숨기고 `Surface=Rail`에서만 표시한다. Modal의 close·focus·Escape·backdrop, mobile keyboard avoidance와 게시 후 복귀는 consumer/runtime가 소유한다.
+- `Surface=Overlay`에서는 composer-level Expand를 숨기고 `Surface=Rail`에서만 표시한다. Modal의 close·focus·Escape·backdrop, desktop 가운데 content scroll, mobile keyboard avoidance와 게시 후 복귀는 consumer/runtime가 소유한다.
+
+PROD-797에서 Full Rail·compact Overlay·mobile fullscreen의 shell 진입을 Production에 연결했다. Web component·Storybook interaction으로 진입, draft 보존, 닫기와 focus 복귀를 확인했으며 Android/iOS의 keyboard·back·safe area·touch/focus는 실제 runtime 검증 전이다.
 
 ## Web 검색 상단바
 
@@ -213,6 +217,8 @@ PROD-852의 공용 `SidebarNavigation` 목표 표면은 presentation에 따라 �
 ## 스크롤 소유권
 
 React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owner로 둔다. 중앙 피드만 별도 internal scroller가 되는 앱형 shell은 이 기준의 목표가 아니다. 사용자가 피드 바깥의 비스크롤 sidebar, 우측 rail, 빈 레이아웃 영역에서 wheel/trackpad를 사용해도 브라우저 기본 document scroll 흐름으로 페이지가 움직여야 한다. Android/iOS 화면은 화면 유형에 맞는 platform scroll container(`ScrollView` 또는 `FlatList`)를 사용하되 이 Web scroll 계약을 바꾸지 않는다.
+
+KOSMO가 직접 소유하는 Web vertical scroller는 semantic `borderStrong` thumb와 투명 track을 사용하는 얇은 scrollbar를 기본으로 한다. Overlay 내부 scroller는 stable gutter도 예약해 scrollbar가 content 위를 덮지 않게 한다. Rail은 header와 본문의 좌우 기준선을 유지하도록 gutter를 추가하지 않는다. document와 sticky rail 같은 바깥 scroll owner에도 gutter를 추가하지 않는다. 기능별로 시각적 scrollbar를 숨기는 horizontal gallery·tab scroller는 기존 navigation·swipe·keyboard 도달 계약과 함께 예외로 유지한다.
 
 - `< compact`에서는 64px 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
 - Current `< compact` mobile drawer는 `mobile-sidebar-scroll` 하나가 primary navigation과 `피드백 보내기`·로그아웃
