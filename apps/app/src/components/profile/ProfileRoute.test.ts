@@ -33,7 +33,6 @@ const queryHistory: Array<{
   fetchKey: number;
   handle: string;
   query: QueryName;
-  withProfileBlockStatus?: boolean;
 }> = [];
 const pending = new Promise<never>(() => undefined);
 
@@ -81,8 +80,11 @@ let routeMetrics = {
 };
 let relayActorLifecycleKey = 'actor-a';
 let selectedProfileId: string | null = null;
-let selectedProfileKind: 'ACTIVITYPUB' | 'LOCAL' | null = null;
-let profileBlockStatus: { blockedBy: boolean; blocking: boolean; profileBlockId: string | null } = {
+let profileBlockStatus: {
+  blockedBy: boolean;
+  blocking: boolean;
+  profileBlockId: string | null;
+} | null = {
   blockedBy: false,
   blocking: false,
   profileBlockId: null,
@@ -178,29 +180,19 @@ mockModule('react-relay', {
       .match(
         /query (ProfileFollowersPageQuery|ProfileFollowingPageQuery|ProfileLayoutQuery|ProfilePostListPageQuery)/,
       )?.[1];
-    assert.ok(query);
-    return query as QueryName;
+    return (query ?? parts.join('')) as QueryName;
   },
   useFragment: (_fragment: unknown, reference: unknown) => reference,
   useLazyLoadQuery: (
     query: QueryName,
-    variables: { handle: string; withProfileBlockStatus?: boolean },
+    variables: { handle: string },
     options: { fetchKey: number },
   ) => {
     queryHistory.push({
       fetchKey: options.fetchKey,
       handle: variables.handle,
       query,
-      withProfileBlockStatus:
-        'withProfileBlockStatus' in variables ? variables.withProfileBlockStatus : undefined,
     });
-    if (
-      query === 'ProfileLayoutQuery' &&
-      (!selectedProfileId || selectedProfileKind !== 'LOCAL') &&
-      variables.withProfileBlockStatus !== false
-    ) {
-      throw new Error('profileBlockStatus requires a selected Local Profile');
-    }
     const mode = queryModes[query];
     if (mode === 'loading') {
       throw pending;
@@ -213,7 +205,7 @@ mockModule('react-relay', {
       currentSession: selectedProfileId
         ? { selectedProfile: { id: selectedProfileId } }
         : { selectedProfile: null },
-      profileBlockStatus: variables.withProfileBlockStatus === false ? null : profileBlockStatus,
+      profileBlockStatus: selectedProfileId ? profileBlockStatus : null,
       profileByHandle: profileAvailable
         ? {
             displayName: `Display ${variables.handle}`,
@@ -224,7 +216,7 @@ mockModule('react-relay', {
             viewerState: profileViewerState
               ? {
                   ...profileViewerState,
-                  profileBlock: profileBlockStatus.blocking
+                  profileBlock: profileBlockStatus?.blocking
                     ? {
                         id: profileBlockStatus.profileBlockId,
                         targetProfile: {
@@ -406,7 +398,7 @@ mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
   useRelayActorLifecycleKey: () => relayActorLifecycleKey,
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
-  useSession: () => ({ selectedProfileId, selectedProfileKind, sessionId }),
+  useSession: () => ({ selectedProfileId, sessionId }),
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({ foregroundPrimary: '#111111' }),
@@ -454,7 +446,6 @@ afterEach(async () => {
   profileInstanceKind = 'LOCAL';
   relayActorLifecycleKey = 'actor-a';
   selectedProfileId = null;
-  selectedProfileKind = null;
   profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
   profileViewerState = null;
   SlotContent = ProfilePostListPage;
@@ -583,40 +574,24 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('ProfileHero').props.moreItems, undefined);
   });
 
-  it('selected Profile이 없는 공개 Profile은 auth-required block status 없이 사용할 수 있다', async () => {
+  it('selected Profile이 없는 공개 Profile은 nullable block status와 함께 사용할 수 있다', async () => {
     await renderRoute('@public');
 
     assert.deepEqual(identities('ProfileHero'), ['public']);
-    assert.deepEqual(
-      queryHistory
-        .filter(({ query }) => query === 'ProfileLayoutQuery')
-        .map(({ withProfileBlockStatus }) => withProfileBlockStatus),
-      [false],
-    );
   });
-  it('Remote selected actor는 Local-only Block 조회와 action 없이 Profile을 유지한다', async () => {
-    selectedProfileId = 'remote-owner';
-    selectedProfileKind = 'ACTIVITYPUB';
-    profileViewerState = { isSelf: false, membership: { role: 'OWNER' } };
+
+  it('인증됐지만 Block 읽기 권한이 없으면 Block 관리 action을 표시하지 않는다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = null;
 
     await renderRoute('@target');
 
     assert.deepEqual(identities('ProfileHero'), ['target']);
-    assert.deepEqual(
-      queryHistory
-        .filter(({ query }) => query === 'ProfileLayoutQuery')
-        .map(({ withProfileBlockStatus }) => withProfileBlockStatus),
-      [false],
-    );
-    assert.equal(
-      queryHistory.some(({ query }) => query === 'ProfilePostListPageQuery'),
-      true,
-    );
     assert.equal(rendered('ActionMenu').length, 0);
   });
   it('인증된 Profile의 viewerState가 한 렌더 동안 없어도 뮤트 메뉴를 유지한다', async () => {
     selectedProfileId = 'owner';
-    selectedProfileKind = 'LOCAL';
     profileViewerState = null;
 
     await renderRoute('@target');
@@ -922,7 +897,6 @@ describe('profile route parameter lifecycle', () => {
 
   it('Profile 자체가 조회 불가하면 별도 차단 관계 action을 합성하지 않는다', async () => {
     selectedProfileId = 'owner';
-    selectedProfileKind = 'LOCAL';
     profileAvailable = false;
     profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
 
@@ -942,7 +916,6 @@ describe('profile route parameter lifecycle', () => {
 
   it('상대에게 차단된 Profile은 actionless StateView만 표시한다', async () => {
     selectedProfileId = 'owner';
-    selectedProfileKind = 'LOCAL';
     profileAvailable = false;
     profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
 
@@ -962,7 +935,6 @@ describe('profile route parameter lifecycle', () => {
 
   it('조회 가능한 blocking Profile은 ProfileHero와 확인 전 경고 뒤 Slot 콘텐츠를 유지한다', async () => {
     selectedProfileId = 'owner';
-    selectedProfileKind = 'LOCAL';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
 
@@ -992,7 +964,6 @@ describe('profile route parameter lifecycle', () => {
 
   it('조회 가능한 blockedBy Profile은 ProfileHero와 콘텐츠 차단 상태를 유지한다', async () => {
     selectedProfileId = 'owner';
-    selectedProfileKind = 'LOCAL';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
 
@@ -1008,9 +979,7 @@ describe('profile route parameter lifecycle', () => {
 
   it('차단 관계에서도 followers와 following route의 관계 목록 Slot을 유지한다', async () => {
     selectedProfileId = 'owner';
-    selectedProfileKind = 'LOCAL';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
-    SlotContent = () => createElement('RelationshipList');
 
     for (const status of [
       { blockedBy: false, blocking: true, profileBlockId: 'block-1' },
@@ -1019,7 +988,8 @@ describe('profile route parameter lifecycle', () => {
       profileBlockStatus = status;
       for (const relation of ['followers', 'following']) {
         await renderRoute('@blocked', `/profile/@blocked/${relation}`);
-        assert.equal(rendered('RelationshipList').length, 1);
+        assert.deepEqual(identities('ProfileConnectionList'), ['blocked']);
+        assert.equal(requireRendered('ProfileConnectionList').props.kind, relation);
         assert.equal(rendered('StateView').length, 0);
       }
     }
@@ -1027,7 +997,6 @@ describe('profile route parameter lifecycle', () => {
 
   it('서로 차단한 Profile은 공통 action을 표시하고 내 해제 뒤 상대 차단이 남으면 숨긴다', async () => {
     selectedProfileId = 'owner';
-    selectedProfileKind = 'LOCAL';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     profileBlockStatus = { blockedBy: true, blocking: true, profileBlockId: 'block-1' };
 
@@ -1055,7 +1024,6 @@ describe('profile route parameter lifecycle', () => {
 
   it('selected Profile 자기 자신에게는 차단 action을 표시하지 않는다', async () => {
     selectedProfileId = 'owner';
-    selectedProfileKind = 'LOCAL';
     profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
     await renderRoute('@local');
     assert.equal(rendered('ActionMenu').length, 0);
@@ -1068,7 +1036,6 @@ describe('profile route parameter lifecycle', () => {
 
   it('Profile 메뉴의 차단 실패는 확인창을 닫고 trigger로 복귀한 뒤 다시 열어 재시도한다', async () => {
     selectedProfileId = 'owner';
-    selectedProfileKind = 'LOCAL';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     let attempts = 0;
     changeBlockedImpl = async () => {
@@ -1107,7 +1074,6 @@ describe('profile route parameter lifecycle', () => {
 
   it('Profile 메뉴의 차단 확인을 취소하면 더보기 trigger로 포커스를 복원한다', async () => {
     selectedProfileId = 'owner';
-    selectedProfileKind = 'LOCAL';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     await renderRoute('@target');
 
@@ -1120,7 +1086,6 @@ describe('profile route parameter lifecycle', () => {
 
   it('Profile 메뉴의 차단 성공 후 같은 component lifecycle에서 결과 action으로 포커스를 복원한다', async () => {
     selectedProfileId = 'owner';
-    selectedProfileKind = 'LOCAL';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     changeBlockedImpl = async (_change, nextBlocked) => {
       if (nextBlocked) {
@@ -1141,7 +1106,6 @@ describe('profile route parameter lifecycle', () => {
 
   it('양방향 차단 해제 후 남은 차단 콘텐츠 상태로 포커스를 복원한다', async () => {
     selectedProfileId = 'owner';
-    selectedProfileKind = 'LOCAL';
     profileBlockStatus = { blockedBy: true, blocking: true, profileBlockId: 'block-1' };
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     changeBlockedImpl = async (_change, nextBlocked) => {

@@ -208,9 +208,9 @@ surface 조합과 목록 조회·pagination을 소유한다.
 
 - 기존 레거시 Profile·Settings UI에 최신 canonical의 direct Profile route와 기존 Profile 정보·viewer 방향 콘텐츠 상태를 구현·통합한다. `blocking` route의
   frontend 콘텐츠 경고와 `blockedBy` route의 콘텐츠 차단 상태를 표시하며, `PROD-861`은 공용 presentation 선행 구현 증거로, `PROD-917`의 신규 UI 교체는
-  후속 범위로 관리한다. 이 관계 상태는 selected Local Profile viewer에 한정한다. Remote Profile이 selected되면 Local-only Block 상태를 요청하지 않고 기존
-  Profile identity와 일반 콘텐츠를 유지하며, Remote Owner의 Block/Undo ingress와 관계 projection은 `PROD-818`이 소유한다. 기존 화면의 기능·접근성·client
-  회귀와 검증 결과 인계는 `PROD-823`이 소유하며, 신규 UI 교체·수신 확인은 완료 조건으로 삼지 않는다.
+  후속 범위로 관리한다. selected Profile auth scope 부재는 API Block 읽기 필드의 nullable `null` 결과로 처리하고 App Session에 Profile kind capability나 조건부 GraphQL 변수를
+  추가하지 않는다. Remote Owner의 Block/Undo ingress와 관계 projection은 `PROD-818`이 소유한다. 기존 화면의 기능·접근성·client 회귀와 검증 결과 인계는
+  `PROD-823`이 소유하며, 신규 UI 교체·수신 확인은 완료 조건으로 삼지 않는다.
 - Block과 Mute는 별도 Settings destination으로 유지하고, Block 목록의 loading/error·retry/empty/pagination·unblock 상태를 소유한다. 차단된 상세
   데이터는 각 viewer 방향 콘텐츠 정책에 따라 표시한다.
 - 기존 Button·ActionMenu·ModalSheet·Toast·SettingsItem과 canonical 접근성·viewport 계약을 재사용하고 새 범용 safety component·Settings shell을

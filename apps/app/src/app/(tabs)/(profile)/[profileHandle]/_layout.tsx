@@ -8,8 +8,8 @@ import { useContentReportMenuItem } from '@/components/content-report/ContentRep
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { FollowButton } from '@/components/profile/FollowButton';
-import { ProfileConnectionListState } from '@/components/profile/ProfileConnectionList';
 import { ProfileBlockAction } from '@/components/profile/ProfileBlockAction';
+import { ProfileConnectionListState } from '@/components/profile/ProfileConnectionList';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { getProfileConnectionKind, normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -34,8 +34,8 @@ const connectionOptions: readonly TabOption<ProfileConnectionKind>[] = [
 ];
 
 const ProfileLayoutQuery = graphql`
-  query ProfileLayoutQuery($handle: String!, $withProfileBlockStatus: Boolean!) {
-    profileBlockStatus(handle: $handle) @include(if: $withProfileBlockStatus) {
+  query ProfileLayoutQuery($handle: String!) {
+    profileBlockStatus(handle: $handle) {
       blockedBy
     }
     profileByHandle(handle: $handle) {
@@ -170,11 +170,10 @@ function ProfileLayoutContent({
   showPageHeader: boolean;
 }) {
   const { fetchKey } = useRouteBoundary();
-  const { selectedProfileId, selectedProfileKind, sessionId } = useSession();
-  const hasSelectedLocalProfile = selectedProfileKind === 'LOCAL';
+  const { selectedProfileId, sessionId } = useSession();
   const data = useLazyLoadQuery<ProfileLayoutQueryType>(
     ProfileLayoutQuery,
-    { handle, withProfileBlockStatus: Boolean(selectedProfileId && hasSelectedLocalProfile) },
+    { handle },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const profile = data.profileByHandle;
@@ -251,9 +250,7 @@ function ProfileLayoutContent({
     profile.instance.kind === 'LOCAL' &&
     profile.viewerState?.isSelf === true &&
     profile.viewerState.membership?.role === 'OWNER';
-  const canMute = Boolean(
-    selectedProfileId && hasSelectedLocalProfile && !profile.viewerState?.isSelf,
-  );
+  const canMute = Boolean(selectedProfileId && !profile.viewerState?.isSelf);
   const relationshipAction = canEdit ? (
     <NavigationLink href={'/profile-edit' as Href}>
       <Button accessibilityLabel="프로필 편집" tone="secondary">
@@ -306,7 +303,7 @@ function ProfileLayoutContent({
           moreItems={sessionId ? [reportItem] : undefined}
           blockAction={
             selectedProfileId &&
-            hasSelectedLocalProfile &&
+            blockStatus &&
             profile.viewerState?.isSelf !== true &&
             (!blockedBy || blocking)
               ? blocking && profileBlock

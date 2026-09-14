@@ -204,10 +204,10 @@ ESLint·Prettier를 실행한다. 기존 Mute·Follow·Post visibility·Notifica
   route가 있다는 사실을 Block destination의 data·action 완료 증거로 사용하지 않는다.
 - `memory/frontend-react-native.md`는 selected Profile 전환 시 새 Relay Environment·Store와 현재 route 재실행을 요구한다.
   이 경계를 유지하며 Block 전용 actor cache나 별도 route tree를 만들지 않는다.
-- 직접 Profile route는 현재 Owner가 있을 때 `profileBlockStatus`를 조건부로 조회하고, 기존 `profileByHandle` 조회 결과가 있으면
-  차단 관계와 함께 기본 Profile 정보·방향성 콘텐츠 상태를 표시한다. `profileByHandle`이 없는 경우에만 identity-free 상태 화면을
-  표시한다. 두 조회를 한 operation에 넣는 방식 자체는 일반 Profile 조회 성공에 의존한다는 뜻이 아니며, 보호된 일반 조회의 null 결과와
-  별도 차단 상태를 실제 서버·Relay operation에서 함께 검증한다.
+- 직접 Profile route는 `profileBlockStatus`와 `profileByHandle`을 같은 operation에서 조회하고, selected Profile auth scope를 충족하지 못하면
+  API가 nullable `null`을 반환한다. App은 selected Profile kind나 조건부 GraphQL 변수로 권한을 예측하지 않는다. 기존
+  `profileByHandle` 조회 결과가 있으면 차단 관계와 함께 기본 Profile 정보·방향성 콘텐츠 상태를 표시하고, Profile 조회 결과가
+  없을 때만 identity-free 상태 화면을 표시한다. 보호된 일반 조회의 null 결과와 별도 차단 상태를 실제 서버·Relay operation에서 함께 검증한다.
 - client는 기존 `Profile` global ID와 `ProfileBlock` 관계 ID 및 해제 payload의 의미를 구분한다. `targetProfile`은 별도 typename·ID 없이
   기존 Profile cache로 정규화하고, 반환된 non-null `profileBlockId`가 요청한 관계 ID와 정확히 같을 때만 해제 성공으로 처리한다.
   `null`·불일치·오류 또는 partial 결과는 실패로 처리하고 기존 상태를 보존한다.

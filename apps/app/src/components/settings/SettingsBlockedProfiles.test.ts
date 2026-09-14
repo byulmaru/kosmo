@@ -15,11 +15,14 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 const toastCalls: Array<{ message: string; tone: string }> = [];
 const loadNext = mock.fn();
-let selectedProfile: object | null = { id: 'owner', instance: { kind: 'LOCAL' } };
-let selectedProfileKind: 'ACTIVITYPUB' | 'LOCAL' | null = 'LOCAL';
-const queryVariables: Array<{ withProfileBlocks?: boolean }> = [];
-const paginationReferences: unknown[] = [];
-let pagination = {
+let selectedProfile: object | null = { id: 'owner' };
+type PaginationState = {
+  data: { profileBlocks: { edges: Array<{ node: object }> } | null };
+  hasNext: boolean;
+  isLoadingNext: boolean;
+  loadNext: ReturnType<typeof mock.fn>;
+};
+let pagination: PaginationState = {
   data: { profileBlocks: { edges: [] as Array<{ node: object }> } },
   hasNext: false,
   isLoadingNext: false,
@@ -36,17 +39,8 @@ mockModule('react-native', {
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => parts.join(''),
   useFragment: (_fragment: unknown, reference: unknown) => reference,
-  useLazyLoadQuery: (_query: unknown, variables: { withProfileBlocks?: boolean }) => {
-    queryVariables.push(variables);
-    if (selectedProfileKind !== 'LOCAL' && variables.withProfileBlocks !== false) {
-      throw new Error('profileBlocks requires a selected Local Profile');
-    }
-    return { currentSession: { selectedProfile } };
-  },
-  usePaginationFragment: (_fragment: unknown, reference: unknown) => {
-    paginationReferences.push(reference);
-    return pagination;
-  },
+  useLazyLoadQuery: () => ({ currentSession: { selectedProfile } }),
+  usePaginationFragment: () => pagination,
 });
 mockModule(new URL('../profile/ProfileBlockAction.tsx', import.meta.url), {
   ProfileBlockAction: ({
@@ -103,10 +97,6 @@ mockModule('../../theme/tokens', {
 mockModule('../../relay/RelayActorProvider', {
   useRelayActorLifecycleKey: () => 'actor-a',
 });
-mockModule('../../session/SessionProvider', {
-  useSession: () => ({ selectedProfileKind }),
-});
-
 type BlockedProfile = {
   displayName: string;
   profileBlock: never;
@@ -126,10 +116,7 @@ afterEach(async () => {
   renderer = null;
   toastCalls.length = 0;
   loadNext.mock.resetCalls();
-  selectedProfile = { id: 'owner', instance: { kind: 'LOCAL' } };
-  selectedProfileKind = 'LOCAL';
-  queryVariables.length = 0;
-  paginationReferences.length = 0;
+  selectedProfile = { id: 'owner' };
   pagination = {
     data: { profileBlocks: { edges: [] } },
     hasNext: false,
@@ -192,7 +179,6 @@ describe('차단한 프로필 목록', () => {
 
   it('selected Local Profile이 없으면 빈 목록 대신 Profile-required 상태를 표시한다', async () => {
     selectedProfile = null;
-    selectedProfileKind = null;
 
     await act(async () => {
       renderer = create(createElement(SettingsBlockedProfiles));
@@ -202,16 +188,13 @@ describe('차단한 프로필 목록', () => {
     assert.equal(findAll('ProfileListItemContent').length, 0);
   });
 
-  it('Remote selected actor는 Local-only Block 목록 조회를 건너뛴다', async () => {
-    selectedProfile = { id: 'remote-owner', instance: { kind: 'ACTIVITYPUB' } };
-    selectedProfileKind = 'ACTIVITYPUB';
+  it('권한이 없는 nullable Block 목록은 Profile-required 상태로 표시한다', async () => {
+    pagination = { ...pagination, data: { profileBlocks: null } };
 
     await act(async () => {
       renderer = create(createElement(SettingsBlockedProfiles));
     });
 
-    assert.deepEqual(queryVariables, [{ withProfileBlocks: false }]);
-    assert.deepEqual(paginationReferences, [null]);
     assert.equal(find('StateView')?.props.title, '설정할 Profile이 없어요');
     assert.equal(findAll('ProfileListItemContent').length, 0);
   });
