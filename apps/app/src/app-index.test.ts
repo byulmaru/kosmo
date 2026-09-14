@@ -74,7 +74,7 @@ mockModule('@/theme/ThemeProvider', {
 });
 
 before(async () => {
-  ({ default: IndexScreen } = await import('./index'));
+  ({ default: IndexScreen } = await import('./app/index'));
 });
 
 afterEach(async () => {
