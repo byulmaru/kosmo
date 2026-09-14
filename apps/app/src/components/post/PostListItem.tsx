@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -239,7 +239,7 @@ export function PostListItem({
       return renderWithReplySurface(null);
     }
     return renderWithReplySurface(
-      <View role="article" style={standardCardStyle}>
+      <PostListItemCard article style={standardCardStyle}>
         {pinnedAttribution}
         {replyAttribution}
         <PostListRow
@@ -248,7 +248,7 @@ export function PostListItem({
           post={post}
           reply={reply}
         />
-      </View>,
+      </PostListItemCard>,
     );
   }
 
@@ -260,7 +260,7 @@ export function PostListItem({
 
   if (!post.content) {
     return renderWithReplySurface(
-      <View role="article" style={compactCardStyle}>
+      <PostListItemCard article style={compactCardStyle}>
         {pinnedAttribution}
         <PostAttributionRow
           icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
@@ -287,12 +287,12 @@ export function PostListItem({
           reply={reply}
           surfacePostId={post.id}
         />
-      </View>,
+      </PostListItemCard>,
     );
   }
 
   return renderWithReplySurface(
-    <View style={compactCardStyle}>
+    <PostListItemCard style={compactCardStyle}>
       {pinnedAttribution}
       {replyAttribution}
       <View style={styles.quoteRow}>
@@ -329,7 +329,42 @@ export function PostListItem({
           />
         </View>
       </View>
-    </View>,
+    </PostListItemCard>,
+  );
+}
+
+function PostListItemCard({
+  article = false,
+  children,
+  style,
+}: {
+  article?: boolean;
+  children: ReactNode;
+  style: StyleProp<ViewStyle>;
+}) {
+  const theme = useTheme();
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+
+  return (
+    <View
+      onPointerCancel={() => setPressed(false)}
+      onPointerDown={() => setPressed(true)}
+      onPointerEnter={Platform.OS === 'web' ? () => setHovered(true) : undefined}
+      onPointerLeave={() => {
+        setHovered(false);
+        setPressed(false);
+      }}
+      onPointerUp={() => setPressed(false)}
+      role={article ? 'article' : undefined}
+      style={[
+        style,
+        { backgroundColor: pressed ? theme.statePressed : hovered ? theme.stateHover : undefined },
+      ]}
+      testID="post-list-item-card"
+    >
+      {children}
+    </View>
   );
 }
 

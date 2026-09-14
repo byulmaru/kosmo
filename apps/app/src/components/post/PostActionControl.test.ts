@@ -13,7 +13,13 @@ import type { PostThreadLayout as PostThreadLayoutExport } from './PostThreadLay
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const platform = { OS: 'web' };
-const theme = { borderSubtle: 'border', primary: 'primary', textSecondary: 'secondary' };
+const theme = {
+  borderSubtle: 'border',
+  primary: 'primary',
+  stateHover: 'hover',
+  statePressed: 'pressed',
+  textSecondary: 'secondary',
+};
 const require = createRequire(import.meta.url);
 const nativePlatforms = [
   ['ios', 44],
@@ -364,6 +370,32 @@ test('PostListItem Native production cards use the mobile 16px inset while Web s
     const card = root.findByProps({ role: 'article' });
     assert.equal(flattenStyle(card.props.style).paddingHorizontal, expectedPadding);
     assert.equal(flattenStyle(card.props.style).paddingBottom, expectedBottom);
+  }
+});
+
+test('PostListItem uses Web hover and cross-platform pressed surface feedback', async () => {
+  for (const os of ['web', 'ios', 'android'] as const) {
+    platform.OS = os;
+    const root = await renderListItem({ post: {} as never, showDivider: false });
+    const card = findByTestID(root, 'post-list-item-card');
+
+    await act(async () => card.props.onPointerEnter?.());
+    assert.equal(
+      flattenStyle(card.props.style).backgroundColor,
+      os === 'web' ? 'hover' : undefined,
+    );
+
+    await act(async () => card.props.onPointerDown());
+    assert.equal(flattenStyle(card.props.style).backgroundColor, 'pressed');
+
+    await act(async () => card.props.onPointerUp());
+    assert.equal(
+      flattenStyle(card.props.style).backgroundColor,
+      os === 'web' ? 'hover' : undefined,
+    );
+
+    await act(async () => card.props.onPointerLeave());
+    assert.equal(flattenStyle(card.props.style).backgroundColor, undefined);
   }
 });
 

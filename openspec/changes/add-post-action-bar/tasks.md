@@ -359,6 +359,7 @@ Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp targ
 - [x] 9.5 승인된 Web 목록 위12·아래8과 상세 frame 상하12 여백을 기존 surface 경계에 적용하고 Native 기존 여백·target을 보존한다.
 - [x] 9.6 기존 geometry Storybook·앱 검증과 390/1024/1440 Web 시각·상호작용 QA를 통과시키고, Figma Center 목록4종·상세3종의 승인·동기화 상태를 기록한다.
 - [x] 9.7 Native 목록·current connector를 16px inset의 Avatar 중심선 x=40에, Web 목록·current connector를 x=32에 맞추는 실제 렌더 회귀를 추가한다.
+- [x] 9.8 `PostListItem` Text·Media·PureRepost·Quote root에 Web hover와 전 플랫폼 pressed state overlay를 적용하고 기존 nested action·navigation을 보존한 채 코드·Figma·검증 기록을 동기화한다.
 
 **Web Spacing Verification Record (2026-09-12)**
 
@@ -382,3 +383,9 @@ Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp targ
 - `PostThreadLayout` 실제 renderer test가 Web 목록·current connector `left=32`, iOS·Android 목록·current connector `left=40`를 style props로 검증한다.
 - 이 회귀는 `PostListItem`과 current content의 Web 8px·Native 16px left inset 및 list/current connector 축 정렬을 확인하며, Yoga layout·실제 Native touch·VoiceOver·TalkBack은 검증하지 않는다.
 - 사용자 승인 후 Figma `PostThreadLayout` canonical composition 5개 상태의 목록·current Avatar 중심과 connector를 x=40으로 동기화했다. 기존 Mobile `PostLayout`의 40px Avatar는 current inset 20px, production Native의 48px Avatar는 inset 16px을 사용해 같은 중심축을 만들며 readback과 대표 screenshot으로 확인했다.
+
+**PostListItem surface feedback verification record (2026-09-14)**
+
+- Text·Media·PureRepost·Quote의 공용 root `View`에 Web hover와 Web·iOS·Android pressed surface를 연결하고, 새 navigation target이나 accessibility role 없이 기존 nested action·navigation을 유지했다.
+- focused unit 8개와 Posts Storybook interaction 105개, app check, scoped ESLint·Prettier, OpenSpec strict와 diff check를 통과했다.
+- Figma `PostListItem` component set `1924:1992`를 Default·Hover·Pressed 24개 variant로 동기화하고 기존 hover·pressed color variable binding과 component properties를 readback했다. 실제 Native touch·VoiceOver·TalkBack은 release gate로 남긴다.

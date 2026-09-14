@@ -80,6 +80,15 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Native target의 실제 layout·인접 target 비중첩·화면별 정렬, VoiceOver·TalkBack focus boundary, touch 입력과
   bottom sheet runtime 관찰은 Native release gate다. platform style 렌더 테스트나 Web 검증으로 대체하지 않는다.
 
+## PostListItem surface feedback
+
+- `PostListItem`의 Text·Media·PureRepost·Quote는 resting fill 없이 연속 feed의 canvas 평면을 유지한다.
+- Web pointer hover에서는 카드 root 전체에 `color/state/hover`, pointer press와 Android·iOS touch press에서는
+  `color/state/pressed` overlay를 적용한다. pressed가 hover보다 우선하며 release·cancel·leave 뒤에는 남은 입력
+  상태 또는 resting fill로 돌아간다.
+- 이 feedback은 새 navigation target이나 접근성 role을 만들지 않는다. 작성자·시간·본문·미디어·Action Bar의
+  기존 입력과 이벤트 분리, 구분선 및 Light·Dark token mapping을 그대로 유지한다.
+
 ## Surface 배치
 
 - `PostLayout`은 metadata 뒤 `Engagement`에 Reaction Summary와 bordered Action Bar frame을 순서대로
