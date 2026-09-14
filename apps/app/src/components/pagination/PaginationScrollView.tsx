@@ -1,6 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useRef } from 'react';
-import { Platform, ScrollView } from 'react-native';
+import { Platform } from 'react-native';
+import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import type { ScrollViewProps } from 'react-native';
+import type {
+  RouteScrollContainerNativeProps,
+  RouteScrollContainerProps,
+} from '@/components/ui/RouteScrollContainer';
 import type { UseAutomaticPaginationResult } from './useAutomaticPagination';
 
 type NativeScrollProps = UseAutomaticPaginationResult['nativeScrollProps'];
@@ -18,7 +23,11 @@ type LatestEvent =
 
 const PaginationScrollContext = createContext<Register | null>(null);
 
-type PaginationScrollViewProps = ScrollViewProps;
+type PaginationScrollViewProps = {
+  children?: ScrollViewProps['children'];
+  nativeScrollProps?: Pick<ScrollViewProps, 'contentContainerStyle' | 'style'>;
+  webStyle?: RouteScrollContainerProps['webStyle'];
+};
 
 function recordLatestEvent(events: LatestEvent[], event: LatestEvent) {
   const previousIndex = events.findIndex((previous) => previous.type === event.type);
@@ -42,7 +51,11 @@ function snapshotScrollEvent(event: NativeScrollEvent): NativeScrollEvent {
   };
 }
 
-export function PaginationScrollView({ children, ...props }: PaginationScrollViewProps) {
+export function PaginationScrollView({
+  children,
+  nativeScrollProps: callerNativeScrollProps,
+  webStyle,
+}: PaginationScrollViewProps) {
   const registrationRef = useRef<Registration | null>(null);
   const latestEventsRef = useRef<LatestEvent[]>([]);
   const onContentSizeChange = useCallback(
@@ -95,16 +108,19 @@ export function PaginationScrollView({ children, ...props }: PaginationScrollVie
       }
     };
   }, []);
-  const nativeScrollProps =
-    Platform.OS === 'web'
-      ? {}
-      : { onContentSizeChange, onLayout, onScroll, scrollEventThrottle: 16 as const };
+  const nativeScrollProps: RouteScrollContainerNativeProps = {
+    ...callerNativeScrollProps,
+    onContentSizeChange,
+    onLayout,
+    onScroll,
+    scrollEventThrottle: 16 as const,
+  };
 
   return (
     <PaginationScrollContext.Provider value={register}>
-      <ScrollView {...props} {...nativeScrollProps}>
+      <RouteScrollContainer nativeScrollProps={nativeScrollProps} webStyle={webStyle}>
         {children}
-      </ScrollView>
+      </RouteScrollContainer>
     </PaginationScrollContext.Provider>
   );
 }
