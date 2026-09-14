@@ -657,9 +657,11 @@ test.describe('로그인 사용자 보호 라우트', () => {
   }
 
   test('retired /compose route does not render a Composer', async ({ page }) => {
+    await page.setViewportSize({ height: 900, width: 1440 });
     await page.goto('/compose');
 
     await expect(page).toHaveURL(/\/compose$/);
+    await expect(page.getByText('프로필을 찾을 수 없어요', { exact: true })).toBeVisible();
     await expect(page.getByLabel('게시글 작성', { exact: true })).toHaveCount(0);
   });
 

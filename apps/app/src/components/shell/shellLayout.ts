@@ -56,11 +56,12 @@ export function isTimelineRoute(pathname: string) {
 export function getShellRoutePresentation(web: boolean, width: number, pathname: string) {
   const layout = getShellLayout(web, width);
   const settingsWorkspace = layout === 'full' && isSettingsRoute(pathname);
+  const retiredComposeRoute = pathname === '/compose';
 
   return {
     layout,
     settingsWorkspace,
-    showRightRail: layout === 'full' && !settingsWorkspace,
+    showRightRail: layout === 'full' && !settingsWorkspace && !retiredComposeRoute,
   } as const;
 }
 

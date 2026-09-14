@@ -439,7 +439,7 @@ function UniversalShellContent() {
         ) : null}
       </View>
 
-      {profile || showRightRail ? (
+      {composerVisible || showRightRail ? (
         <View
           style={[
             styles.rightRail,

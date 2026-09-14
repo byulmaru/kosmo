@@ -118,6 +118,11 @@ describe('getShellLayout', () => {
       settingsWorkspace: false,
       showRightRail: true,
     });
+    assert.deepEqual(getShellRoutePresentation(true, 1_280, '/compose'), {
+      layout: 'full',
+      settingsWorkspace: false,
+      showRightRail: false,
+    });
     assert.deepEqual(getShellRoutePresentation(true, 768, '/settings/default-post-visibility'), {
       layout: 'compact',
       settingsWorkspace: false,

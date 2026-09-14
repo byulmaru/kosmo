@@ -150,4 +150,79 @@ describe('PostComposerHost', () => {
 
     assert.equal(closeCount, 0);
   });
+
+  it('Web pending은 Escape·backdrop·닫기 버튼을 공용 dismiss guard에서 차단한다', async () => {
+    platform.OS = 'web';
+    let closeCount = 0;
+    let escapeListener: ((event: KeyboardEvent) => void) | undefined;
+    const previousDocument = globalThis.document;
+    const documentMock = {
+      activeElement: null,
+      addEventListener: (type: string, listener: (event: KeyboardEvent) => void) => {
+        if (type === 'keydown') {
+          escapeListener = listener;
+        }
+      },
+      body: { style: { overflow: '' } },
+      contains: () => false,
+      removeEventListener: (type: string, listener: (event: KeyboardEvent) => void) => {
+        if (type === 'keydown' && escapeListener === listener) {
+          escapeListener = undefined;
+        }
+      },
+    };
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: documentMock,
+    });
+
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(PostComposerHost, {
+            mode: 'overlay',
+            onRequestClose: () => closeCount++,
+            open: true,
+            profile: {} as never,
+          }),
+        );
+      });
+      await act(async () => composerProps?.onSubmittingChange?.(true));
+
+      let prevented = 0;
+      escapeListener?.({
+        key: 'Escape',
+        preventDefault: () => prevented++,
+      } as unknown as KeyboardEvent);
+      assert.equal(prevented, 1);
+      assert.equal(closeCount, 0);
+
+      const backdrop = renderer?.root
+        .findAllByType('Pressable' as ElementType)
+        .find((pressable) => {
+          const styles = Array.isArray(pressable.props.style)
+            ? pressable.props.style
+            : [pressable.props.style];
+          return styles.some(
+            (style: { position?: string } | null) => style?.position === 'absolute',
+          );
+        });
+      assert.ok(backdrop);
+      await act(async () => backdrop?.props.onPress());
+
+      const closeButton = renderer?.root.findByProps({ accessibilityLabel: '글쓰기 닫기' });
+      await act(async () => closeButton?.props.onPress());
+
+      assert.equal(closeCount, 0);
+    } finally {
+      if (renderer) {
+        await act(async () => renderer?.unmount());
+        renderer = null;
+      }
+      Object.defineProperty(globalThis, 'document', {
+        configurable: true,
+        value: previousDocument,
+      });
+    }
+  });
 });

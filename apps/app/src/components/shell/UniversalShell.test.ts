@@ -262,6 +262,16 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.equal(rightRailProps?.open, true);
   });
 
+  it('retired /compose는 Full Web RightRail과 Composer Host를 렌더링하지 않는다', async () => {
+    layout = 'full';
+    pathname = '/compose';
+    sessionProfile = { id: 'profile-1' };
+    await renderShell();
+
+    assert.equal(rightRailProps, undefined);
+    assert.equal(rightRailFooterCount, 0);
+  });
+
   it('셸에서 연 Composer를 닫아도 route history fallback을 실행하지 않는다', async () => {
     layout = 'mobile';
     sessionProfile = { id: 'profile-1' };
