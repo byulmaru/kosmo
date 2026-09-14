@@ -20,6 +20,7 @@ type LoaderParams<Key, Result, SortKey, Nullability extends boolean, Many extend
   name: string;
   nullable?: Nullability;
   many?: Many;
+  cache?: boolean;
   key: (
     value: Nullability extends true ? Result | null : Result,
   ) => Nullability extends true ? SortKey | null : SortKey;
@@ -135,7 +136,7 @@ const createContext = (): Context => {
   } as Context;
 
   ctx.loader = (params) => {
-    const { name, nullable, many, load, key } = params;
+    const { name, nullable, many, cache = false, load, key } = params;
     const cached = ctx.$loaders.get(name);
     if (cached) {
       return cached as never;
@@ -163,7 +164,7 @@ const createContext = (): Context => {
           return new Error(`DataLoader(${name}): Missing key`);
         });
       },
-      { cache: false },
+      { cache },
     );
 
     ctx.$loaders.set(name, loader);
