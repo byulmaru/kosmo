@@ -30,6 +30,8 @@ const reactionPeopleScreenQuery = graphql`
   }
 `;
 
+const focusedReactionPeopleRouteEntries = new WeakSet<() => void>();
+
 export type ReactionPeopleScreenProps = Readonly<{
   onBack: () => void;
   onTypeChange: (reactionType: string) => void;
@@ -90,6 +92,11 @@ export function ReactionPeopleHeader({ onBack }: { onBack: () => void }): ReactE
   const headingRef = useRef<Text>(null);
 
   useEffect(() => {
+    if (focusedReactionPeopleRouteEntries.has(onBack)) {
+      return;
+    }
+    focusedReactionPeopleRouteEntries.add(onBack);
+
     if (Platform.OS !== 'web') {
       if (headingRef.current) {
         AccessibilityInfo.sendAccessibilityEvent(headingRef.current, 'focus');
@@ -105,7 +112,7 @@ export function ReactionPeopleHeader({ onBack }: { onBack: () => void }): ReactE
       heading.tabIndex = -1;
       heading.focus();
     }
-  }, []);
+  }, [onBack]);
 
   return (
     <View ref={headerRef} style={styles.header}>

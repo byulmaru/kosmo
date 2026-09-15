@@ -137,6 +137,41 @@ test('Web mount keeps DOM heading focus behavior', async () => {
   assert.deepEqual(accessibilityEvents, []);
 });
 
+test('route state header remounts consume focus once per route entry', async () => {
+  for (const currentPlatform of ['ios', 'web'] as const) {
+    platform.OS = currentPlatform;
+    accessibilityEvents.length = 0;
+    webFocusCount = 0;
+    const onBack = () => undefined;
+
+    for (let stateIndex = 0; stateIndex < 5; stateIndex += 1) {
+      if (renderer) {
+        await act(async () => renderer?.unmount());
+        renderer = null;
+      }
+      await act(async () => {
+        renderer = create(createElement(ReactionPeopleHeader, { onBack }), {
+          createNodeMock: (element) => {
+            if (element.type === ViewHost) {
+              return nativeHeader;
+            }
+            if (element.type === TextHost) {
+              return nativeTitle;
+            }
+            return null;
+          },
+        });
+      });
+    }
+
+    if (currentPlatform === 'ios') {
+      assert.deepEqual(accessibilityEvents, [{ target: nativeTitle, event: 'focus' }]);
+    } else {
+      assert.equal(webFocusCount, 1);
+    }
+  }
+});
+
 test('Native Type change resets the forwarded ScrollView ref', async () => {
   const props: ReactionPeopleScreenProps = {
     onBack: () => undefined,

@@ -63,3 +63,9 @@ Figma의 Web Compact·Full과 Mobile `Default selected` frame을 다시 대조�
 - People A에서 프로필을 거쳐 People B로 이동한 뒤 B Back과 A Back을 순서대로 실행하는 복귀 정보를 route entry별로 보존한다. Native 단위 검증은 B의 closing transition과 focus 복귀 후 A의 pop·focus intent가 남는 것을 확인하고, Web 단위 검증은 browser history entry ID로 A와 B의 복귀 정보를 다시 선택하는 것을 확인한다.
 - `pnpm --filter @kosmo/app test:unit`에서 595개가 통과했고, `node scripts/test-db.mjs run -- pnpm test:e2e:database -- reaction-people.e2e.ts`에서 기존 Web route E2E 4개가 통과했다.
 - 실제 iOS·Android 중첩 navigation runtime과 Web의 중첩 A→B browser history 경로는 실행하지 않았다. 해당 경로는 이번 focused 단위 검증으로 확인했다.
+
+## 2026-09-16 최초 제목 focus 후속 검증
+
+- 같은 route entry에서 최초 loading, 조회 성공, 오류와 재시도 상태가 Header를 다시 mount해도 Web·Native 제목 focus를 최초 한 번만 실행하는 단위 검증을 추가했다.
+- `pnpm --filter @kosmo/app test:unit`에서 596개가 통과했고, `node scripts/test-db.mjs run -- pnpm test:e2e:database -- reaction-people.e2e.ts`에서 기존 Web route E2E 4개가 통과했다.
+- 실제 느린 Web 조회 중 사용자 focus 이동과 iOS·Android screen reader runtime은 실행하지 않았다. 상태별 remount 경로는 focused 단위 검증으로 확인했다.
