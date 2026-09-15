@@ -4,8 +4,8 @@ import { graphql, useLazyLoadQuery } from 'react-relay';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import {
   bindReactionPeopleReturnEntry,
-  clearReactionPeopleReturnState,
   consumeReactionPeopleReturnToOrigin,
+  discardReactionPeopleReturnEntry,
   getReactionPeopleHref,
   hasReactionPeopleReturnToOrigin,
   resolveReactionPeopleType,
@@ -88,7 +88,7 @@ export default function ReactionPeopleRoute() {
         return;
       }
 
-      clearReactionPeopleReturnState();
+      discardReactionPeopleReturnEntry();
     });
     const removeTransitionEndListener = (
       navigation as unknown as {

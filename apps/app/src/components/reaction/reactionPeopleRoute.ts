@@ -1,12 +1,17 @@
 import type { Href } from 'expo-router';
 import type { ReactionSummaryEntry } from './ReactionSummary';
 
-let pendingReturnFocusPath: string | null = null;
-let pendingReturnFocusId: string | null = null;
-let pendingReturnFocusFallback: (() => void) | null = null;
-let pendingReturnNativeFocus: (() => boolean) | null = null;
-let pendingReturnEntryId: string | null = null;
-let pendingReturnToOrigin = false;
+type ReactionPeopleReturnFocusRecord = {
+  entryId: string | null;
+  fallbackFocus: (() => void) | null;
+  focusId: string | null;
+  focusPath: string | null;
+  nativeFocus: (() => boolean) | null;
+  pending: boolean;
+};
+
+const returnFocusRecords: ReactionPeopleReturnFocusRecord[] = [];
+let activeReturnFocusIndex = -1;
 let removeReactionPeoplePopStateListener: (() => void) | null = null;
 
 export function resolveReactionPeopleType(
@@ -40,35 +45,53 @@ export function rememberReactionPeopleReturnFocus(
     return;
   }
 
-  pendingReturnToOrigin = true;
-  pendingReturnEntryId = null;
+  while (
+    returnFocusRecords.length > 0 &&
+    !returnFocusRecords[returnFocusRecords.length - 1]!.pending
+  ) {
+    returnFocusRecords.pop();
+  }
+  returnFocusRecords.push({
+    entryId: null,
+    fallbackFocus: fallbackFocus ?? null,
+    focusId: focusId ?? null,
+    focusPath: typeof document === 'undefined' ? null : (href.split(/[?#]/, 1)[0] ?? null),
+    nativeFocus: nativeFocus ?? null,
+    pending: true,
+  });
+  activeReturnFocusIndex = returnFocusRecords.length - 1;
   removeReactionPeoplePopStateListener?.();
   removeReactionPeoplePopStateListener = null;
-  pendingReturnFocusId = focusId ?? null;
-  pendingReturnFocusFallback = fallbackFocus ?? null;
-  pendingReturnNativeFocus = nativeFocus ?? null;
-  if (typeof document === 'undefined') {
-    return;
-  }
-
-  pendingReturnFocusPath = href.split(/[?#]/, 1)[0] ?? null;
 }
 
 export function consumeReactionPeopleReturnToOrigin() {
-  const value = pendingReturnToOrigin;
-  pendingReturnToOrigin = false;
+  const record = getActiveReturnFocusRecord();
+  const value = record?.pending ?? false;
+  if (record) {
+    record.pending = false;
+  }
   return value;
 }
 
 export function clearReactionPeopleReturnState() {
-  pendingReturnToOrigin = false;
-  pendingReturnEntryId = null;
+  returnFocusRecords.length = 0;
+  activeReturnFocusIndex = -1;
   removeReactionPeoplePopStateListener?.();
   removeReactionPeoplePopStateListener = null;
-  pendingReturnFocusPath = null;
-  pendingReturnFocusId = null;
-  pendingReturnFocusFallback = null;
-  pendingReturnNativeFocus = null;
+}
+
+export function discardReactionPeopleReturnEntry() {
+  if (activeReturnFocusIndex < 0) {
+    return;
+  }
+
+  returnFocusRecords.splice(activeReturnFocusIndex, 1);
+  activeReturnFocusIndex = Math.min(activeReturnFocusIndex, returnFocusRecords.length - 1);
+  if (returnFocusRecords.length === 0) {
+    activeReturnFocusIndex = -1;
+    removeReactionPeoplePopStateListener?.();
+    removeReactionPeoplePopStateListener = null;
+  }
 }
 
 export function bindReactionPeopleReturnEntry() {
@@ -76,50 +99,67 @@ export function bindReactionPeopleReturnEntry() {
     typeof window === 'undefined' ||
     typeof window.addEventListener !== 'function' ||
     typeof window.requestAnimationFrame !== 'function' ||
-    !window.history ||
-    !pendingReturnToOrigin
+    !window.history
   ) {
+    return false;
+  }
+
+  const currentEntryId = getReactionPeopleEntryId(window.history.state);
+  const matchingRecordIndex = currentEntryId
+    ? returnFocusRecords.findIndex((record) => record.entryId === currentEntryId)
+    : -1;
+  if (matchingRecordIndex >= 0) {
+    activeReturnFocusIndex = matchingRecordIndex;
+    returnFocusRecords[matchingRecordIndex]!.pending = true;
+  }
+  const activeRecord = getActiveReturnFocusRecord();
+  if (!activeRecord?.pending) {
     return false;
   }
 
   installReactionPeoplePopStateListener();
   window.requestAnimationFrame(() => {
-    if (pendingReturnToOrigin) {
-      pendingReturnEntryId = getReactionPeopleEntryId(window.history.state);
+    if (activeRecord === getActiveReturnFocusRecord() && activeRecord.entryId === null) {
+      activeRecord.entryId = getReactionPeopleEntryId(window.history.state);
     }
   });
   return true;
 }
 
 export function hasReactionPeopleReturnToOrigin() {
-  return pendingReturnToOrigin;
+  return getActiveReturnFocusRecord()?.pending ?? false;
 }
 
 export function restoreReactionPeopleReturnFocus(preserveForHistory = false) {
-  if (typeof document === 'undefined' || !pendingReturnFocusPath) {
-    const nativeFocus = pendingReturnNativeFocus;
-    const fallbackFocus = pendingReturnFocusFallback;
-    if (!preserveForHistory) {
-      pendingReturnFocusPath = null;
-      pendingReturnFocusId = null;
-      pendingReturnFocusFallback = null;
-      pendingReturnNativeFocus = null;
-    }
-    if (typeof document === 'undefined' && nativeFocus?.()) {
-      return;
-    }
-    fallbackFocus?.();
+  const record = getActiveReturnFocusRecord();
+  if (!record) {
     return;
   }
 
-  const targetPath = pendingReturnFocusPath;
-  const targetId = pendingReturnFocusId;
-  const fallbackFocus = pendingReturnFocusFallback;
+  if (typeof document === 'undefined') {
+    const didNativeFocus = record.nativeFocus?.() ?? false;
+    if (!didNativeFocus) {
+      record.fallbackFocus?.();
+    }
+    if (!preserveForHistory) {
+      discardReactionPeopleReturnEntry();
+    }
+    return;
+  }
+
+  if (!record.focusPath) {
+    record.fallbackFocus?.();
+    return;
+  }
+
+  const targetPath = record.focusPath;
+  const targetId = record.focusId;
+  const fallbackFocus = record.fallbackFocus;
   if (!preserveForHistory) {
-    pendingReturnFocusPath = null;
-    pendingReturnFocusId = null;
-    pendingReturnFocusFallback = null;
-    pendingReturnNativeFocus = null;
+    record.focusPath = null;
+    record.focusId = null;
+    record.fallbackFocus = null;
+    record.nativeFocus = null;
   }
   let attempts = 0;
   const focus = () => {
@@ -162,18 +202,27 @@ function installReactionPeoplePopStateListener() {
   }
 
   const onPopState = (event: PopStateEvent) => {
-    if (getReactionPeopleEntryId(event.state) === pendingReturnEntryId) {
-      pendingReturnToOrigin = true;
+    const entryId = getReactionPeopleEntryId(event.state);
+    const matchingRecordIndex = entryId
+      ? returnFocusRecords.findIndex((record) => record.entryId === entryId)
+      : -1;
+    if (matchingRecordIndex >= 0) {
+      activeReturnFocusIndex = matchingRecordIndex;
+      returnFocusRecords[matchingRecordIndex]!.pending = true;
       return;
     }
 
-    if (pendingReturnToOrigin) {
+    if (hasReactionPeopleReturnToOrigin()) {
       consumeReactionPeopleReturnToOrigin();
       restoreReactionPeopleReturnFocus(true);
     }
   };
   window.addEventListener('popstate', onPopState);
   removeReactionPeoplePopStateListener = () => window.removeEventListener('popstate', onPopState);
+}
+
+function getActiveReturnFocusRecord() {
+  return activeReturnFocusIndex >= 0 ? (returnFocusRecords[activeReturnFocusIndex] ?? null) : null;
 }
 
 function getReactionPeopleEntryId(state: unknown) {

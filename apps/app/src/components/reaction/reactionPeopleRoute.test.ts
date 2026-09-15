@@ -244,6 +244,64 @@ describe('reaction people route helpers', () => {
     assert.equal(fallbackFocusCount, 0);
   });
 
+  it('discards only the active nested record when a People route is removed', async () => {
+    let firstNativeFocusCount = 0;
+    let secondNativeFocusCount = 0;
+    rememberReactionPeopleReturnFocus('/@first/post-1/reactions', undefined, undefined, () => {
+      firstNativeFocusCount += 1;
+      return true;
+    });
+    rememberReactionPeopleReturnFocus('/@second/post-2/reactions', undefined, undefined, () => {
+      secondNativeFocusCount += 1;
+      return true;
+    });
+    await renderRoute();
+
+    for (const listener of navigationListeners) {
+      listener({ data: { action: { type: 'REPLACE', payload: {} } }, type: 'beforeRemove' });
+    }
+
+    assert.equal(hasReactionPeopleReturnToOrigin(), true);
+    assert.equal(consumeReactionPeopleReturnToOrigin(), true);
+    restoreReactionPeopleReturnFocus();
+    assert.equal(firstNativeFocusCount, 1);
+    assert.equal(secondNativeFocusCount, 0);
+  });
+
+  it('keeps the earlier Native route origin available to the next People header Back', async () => {
+    let firstNativeFocusCount = 0;
+    let secondNativeFocusCount = 0;
+    rememberReactionPeopleReturnFocus('/@first/post-1/reactions', undefined, undefined, () => {
+      firstNativeFocusCount += 1;
+      return true;
+    });
+    await renderRoute();
+    rememberReactionPeopleReturnFocus('/@second/post-2/reactions', undefined, undefined, () => {
+      secondNativeFocusCount += 1;
+      return true;
+    });
+
+    for (const listener of navigationListeners) {
+      listener({ data: { action: { type: 'GO_BACK' } }, type: 'beforeRemove' });
+    }
+    for (const listener of transitionEndListeners) {
+      listener({ data: { closing: true }, type: 'transitionEnd' });
+    }
+    assert.equal(secondNativeFocusCount, 1);
+    assert.equal(hasReactionPeopleReturnToOrigin(), true);
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    await renderRoute();
+    assert.ok(reactionPeopleScreenProps);
+    reactionPeopleScreenProps.onBack();
+    assert.deepEqual(routerReplacements, []);
+    for (const listener of transitionEndListeners) {
+      listener({ data: { closing: true }, type: 'transitionEnd' });
+    }
+    assert.equal(firstNativeFocusCount, 1);
+  });
+
   it('rearms the same browser history entry after Back and Forward', () => {
     const global = globalThis as unknown as { window?: unknown };
     const previousWindow = global.window;
@@ -284,6 +342,75 @@ describe('reaction people route helpers', () => {
       assert.equal(hasReactionPeopleReturnToOrigin(), true);
     } finally {
       clearReactionPeopleReturnState();
+      global.window = previousWindow;
+    }
+  });
+
+  it('drops consumed Web history records before a new entry', () => {
+    const global = globalThis as unknown as {
+      document?: unknown;
+      requestAnimationFrame?: (callback: FrameRequestCallback) => number;
+      window?: unknown;
+    };
+    const previousDocument = global.document;
+    const previousAnimationFrame = global.requestAnimationFrame;
+    const previousWindow = global.window;
+    const listeners = new Set<(event: { state: unknown }) => void>();
+    const state: Record<string, unknown> = { id: 'people-a' };
+    let firstFallbackFocusCount = 0;
+    let secondFallbackFocusCount = 0;
+    global.document = {
+      getElementById: () => null,
+      querySelectorAll: () => [],
+    };
+    global.requestAnimationFrame = (callback) => {
+      callback(0);
+      return 0;
+    };
+    global.window = {
+      addEventListener: (type: string, listener: (event: { state: unknown }) => void) => {
+        assert.equal(type, 'popstate');
+        listeners.add(listener);
+      },
+      history: { state },
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        callback(0);
+        return 0;
+      },
+      removeEventListener: (type: string, listener: (event: { state: unknown }) => void) => {
+        assert.equal(type, 'popstate');
+        listeners.delete(listener);
+      },
+    };
+
+    try {
+      rememberReactionPeopleReturnFocus('/@first/post-1/reactions', undefined, () => {
+        firstFallbackFocusCount += 1;
+      });
+      bindReactionPeopleReturnEntry();
+      state.id = 'origin';
+      for (const listener of listeners) {
+        listener({ state: { id: 'origin' } });
+      }
+      assert.equal(firstFallbackFocusCount, 1);
+
+      state.id = 'people-b';
+      rememberReactionPeopleReturnFocus('/@second/post-2/reactions', undefined, () => {
+        secondFallbackFocusCount += 1;
+      });
+      bindReactionPeopleReturnEntry();
+
+      for (const listener of listeners) {
+        listener({ state: { id: 'people-a' } });
+        listener({ state: { id: 'origin' } });
+      }
+
+      assert.equal(firstFallbackFocusCount, 1);
+      assert.equal(secondFallbackFocusCount, 1);
+    } finally {
+      clearReactionPeopleReturnState();
+      global.document = previousDocument;
+      global.requestAnimationFrame = previousAnimationFrame;
       global.window = previousWindow;
     }
   });
@@ -355,5 +482,81 @@ describe('reaction people route helpers', () => {
     restoreReactionPeopleReturnFocus();
 
     assert.equal(fallbackFocusCount, 1);
+  });
+
+  it('keeps earlier Native return focus records beneath a nested People entry', () => {
+    let firstNativeFocusCount = 0;
+    let secondNativeFocusCount = 0;
+    rememberReactionPeopleReturnFocus('/@first/post-1/reactions', undefined, undefined, () => {
+      firstNativeFocusCount += 1;
+      return true;
+    });
+    rememberReactionPeopleReturnFocus('/@second/post-2/reactions', undefined, undefined, () => {
+      secondNativeFocusCount += 1;
+      return true;
+    });
+
+    restoreReactionPeopleReturnFocus();
+    assert.equal(secondNativeFocusCount, 1);
+    assert.equal(firstNativeFocusCount, 0);
+    assert.equal(hasReactionPeopleReturnToOrigin(), true);
+
+    restoreReactionPeopleReturnFocus();
+    assert.equal(firstNativeFocusCount, 1);
+    assert.equal(hasReactionPeopleReturnToOrigin(), false);
+  });
+
+  it('reactivates the matching earlier Web entry after a nested People entry', () => {
+    const global = globalThis as unknown as {
+      document?: unknown;
+      requestAnimationFrame?: (callback: FrameRequestCallback) => number;
+      window?: unknown;
+    };
+    const previousDocument = global.document;
+    const previousAnimationFrame = global.requestAnimationFrame;
+    const previousWindow = global.window;
+    const listeners = new Set<(event: { state: unknown }) => void>();
+    const state: Record<string, unknown> = { id: 'people-a' };
+    global.document = {};
+    global.requestAnimationFrame = (callback) => {
+      callback(0);
+      return 0;
+    };
+    global.window = {
+      addEventListener: (type: string, listener: (event: { state: unknown }) => void) => {
+        assert.equal(type, 'popstate');
+        listeners.add(listener);
+      },
+      history: { state },
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        callback(0);
+        return 0;
+      },
+      removeEventListener: (type: string, listener: (event: { state: unknown }) => void) => {
+        assert.equal(type, 'popstate');
+        listeners.delete(listener);
+      },
+    };
+
+    try {
+      rememberReactionPeopleReturnFocus('/@first/post-1/reactions');
+      bindReactionPeopleReturnEntry();
+      state.id = 'people-b';
+      rememberReactionPeopleReturnFocus('/@second/post-2/reactions');
+      bindReactionPeopleReturnEntry();
+      assert.equal(consumeReactionPeopleReturnToOrigin(), true);
+
+      for (const listener of listeners) {
+        listener({ state: { id: 'people-a' } });
+      }
+
+      assert.equal(hasReactionPeopleReturnToOrigin(), true);
+      assert.equal(consumeReactionPeopleReturnToOrigin(), true);
+    } finally {
+      clearReactionPeopleReturnState();
+      global.document = previousDocument;
+      global.requestAnimationFrame = previousAnimationFrame;
+      global.window = previousWindow;
+    }
   });
 });
