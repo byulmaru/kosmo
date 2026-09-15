@@ -4,15 +4,18 @@ import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
+import { ProfileBlockAction } from './ProfileBlockAction';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { RecordProxy, RecordSourceSelectorProxy } from 'relay-runtime';
 import type { FollowButton_profile$key } from './__generated__/FollowButton_profile.graphql';
 import type { FollowButtonCancelProfileFollowRequestMutation } from './__generated__/FollowButtonCancelProfileFollowRequestMutation.graphql';
 import type { FollowButtonFollowProfileMutation } from './__generated__/FollowButtonFollowProfileMutation.graphql';
 import type { FollowButtonUnfollowProfileMutation } from './__generated__/FollowButtonUnfollowProfileMutation.graphql';
+import type { ProfileBlockFeedback } from './ProfileBlockAction';
 
 type FollowButtonProps = {
   onActionRef?: (node: View | null) => void;
+  onBlockFeedback?: (feedback: ProfileBlockFeedback) => void;
   profile: FollowButton_profile$key;
   style?: StyleProp<ViewStyle>;
 };
@@ -36,6 +39,9 @@ const followButtonProfileFragment = graphql`
       }
       followRequest {
         id
+      }
+      profileBlock {
+        ...ProfileBlockAction_profileBlock
       }
     }
   }
@@ -102,7 +108,7 @@ const updateProfileCount = (
 const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
-export function FollowButton({ onActionRef, profile, style }: FollowButtonProps) {
+export function FollowButton({ onActionRef, onBlockFeedback, profile, style }: FollowButtonProps) {
   const { selectedProfileId } = useSession();
   const { showToast } = useToast();
   const data = useFragment(followButtonProfileFragment, profile);
@@ -123,6 +129,18 @@ export function FollowButton({ onActionRef, profile, style }: FollowButtonProps)
 
   if (!viewerState || viewerState.isSelf) {
     return null;
+  }
+
+  if (viewerState.profileBlock) {
+    return (
+      <ProfileBlockAction
+        nextBlocked={false}
+        onActionRef={onActionRef}
+        onFeedback={onBlockFeedback}
+        profileBlock={viewerState.profileBlock}
+        surface="button"
+      />
+    );
   }
 
   const toggleFollow = () => {
@@ -155,6 +173,7 @@ export function FollowButton({ onActionRef, profile, style }: FollowButtonProps)
                     follow: null,
                     followRequest: null,
                     isSelf: viewerState.isSelf,
+                    profileBlock: null,
                   },
                 },
                 followerProfile: {
