@@ -105,6 +105,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('expo-router', {
+  Navigator: ({ children }: { children: ReactNode }) => children,
   Slot: () =>
     SlotContent
       ? createElement(
