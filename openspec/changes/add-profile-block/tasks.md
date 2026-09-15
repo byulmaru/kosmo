@@ -268,7 +268,7 @@ surface 조합과 목록 조회·pagination을 소유한다.
 - [x] 3.8 기존 UI의 코드·PR·진입점, 데이터와 loading·empty·error·pending 인터페이스, action 입력·결과·오류·재시도·pagination,
       실제 기능·접근성·cache·프로필 전환 증거와 남은 제약을 PROD-917에 인계하고 PROD-813의 통합 검증에 제공한다.
 - [x] 3.9 공통 `FollowButton`이 자신의 Block 관계 fragment·해제 mutation·pending·실패·Relay 수렴과 플랫폼·pointer 상태에 관계없는
-      고정 `차단 해제` label을 소유하도록 부모 PR로 분리하고, #772가 Profile route와 Block 목록에서 이를 재사용하도록 Stack을 구성한다.
+      고정 `차단 해제` label을 소유하도록 부모 PR로 분리한다. #772의 Profile route는 `FollowButton`을 소비하고, Block 목록은 자신의 관계 fragment로 `ProfileBlockAction`을 소비해 같은 해제 lifecycle을 재사용한다.
 
 ## 4. PROD-813 — Profile Block cross-slice E2E·canonical sync·archive
 
