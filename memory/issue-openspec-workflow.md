@@ -5,7 +5,7 @@
 Kosmo 기능 개발은 다음 순서를 기본으로 한다.
 
 ```text
-Canonical 도메인·디자인 요구사항 확정
+Canonical 도메인 정책과 시각 디자인 요구사항 확정
   -> Linear 이슈 구조
   -> 필요한 행동 계약에 OpenSpec
   -> 구현
@@ -13,16 +13,19 @@ Canonical 도메인·디자인 요구사항 확정
   -> 해당 change가 완료되면 명시된 담당자가 archive
 ```
 
-- `docs/domain`과 `docs/design`은 이슈를 만들기 전에 제품 요구사항과 durable decision을 확정하는 canonical
-  source다.
+- `docs/domain`과 accepted ADR은 이슈를 만들기 전에 제품 행동·공개 계약·durable decision을 확정하는 제품
+  canonical source다. `docs/design`은 시각 구조·상태 표현·접근성·상호작용 presentation을 확정하는 design
+  source이며 제품 정책·권한·상태 전이·서버 행동을 결정하거나 재정의하지 않는다.
 - Linear는 작업이 필요한 이유, 전달 결과, 우선순위, 범위, 소유권과 의존성을 정의한다.
 - OpenSpec은 명세가 필요한 행동 계약을 요구사항, 설계, 결정과 검증 가능한 구현 작업으로 구체화한다. 모든
   이슈에 OpenSpec을 요구하지 않는다.
 - 구현은 이슈와 적용되는 OpenSpec을 실행하고, 구현에서 확인한 계약 문제를 canonical 문서부터 정식 순서로
   다시 반영한다. OpenSpec을 backlog 작업이나 제품 요구사항이 처음 발견되는 장소로 사용하지 않는다.
 
-적용되는 `docs/domain`과 `docs/design` 문서는 해당 영역의 canonical source다. Linear와 OpenSpec은 이를
-재정의하지 않고 참조한다.
+적용되는 `docs/domain`·accepted ADR은 제품 계약의 canonical source이고, 적용되는 `docs/design` 문서는 시각
+계약의 source다. Linear는 제품 전달 범위와 책임을 정의하고 OpenSpec은 이 upstream 계약을 실행 가능한
+행동 명세로 번역한다. Linear와 OpenSpec은 domain 정책을 재정의하지 않으며, design 문서도 제품 정책의 근거로
+사용하지 않는다.
 
 ## 적용 범위와 진행 원칙
 
@@ -176,9 +179,9 @@ Project / Milestone
 
 ## 1. Domain Gate
 
-기능 이슈가 새 제품 행동이나 계약을 담는다면 적용되는 canonical 도메인·디자인 문서를 먼저 확인하고 요구사항을
-견고하게 만든다. 이 단계는 이슈가 제품 요구사항을 처음 발견하거나 OpenSpec이 제품 계약을 대신 결정하지 않게
-하는 gate다.
+기능 이슈가 새 제품 행동이나 계약을 담는다면 적용되는 domain canonical을, 시각 결과가 포함되면 design
+source를 먼저 확인하고 요구사항을 견고하게 만든다. 이 단계는 이슈가 제품 요구사항을 처음 발견하거나
+OpenSpec이 제품 계약을 대신 결정하지 않게 하는 gate다.
 
 다음 내용을 canonical 문서에서 확인하거나 확정한다.
 
@@ -188,7 +191,7 @@ Project / Milestone
 - 다른 객체·정책과의 연결, 생명주기와 실패 시 유지하거나 제거할 관계
 - 이슈 경계, rollout, 보안 또는 호환성을 바꿀 수 있는 제품 결정
 
-다음 조건이면 이슈 생성을 멈추고 도메인·디자인 문서를 먼저 갱신한다.
+다음 조건이면 이슈 생성을 멈추고 제품 정책은 domain canonical을, 시각 표현은 design source를 먼저 갱신한다.
 
 - 같은 행동을 서로 다르게 해석할 수 있다.
 - 객체 소유권, 상태 전이, 권한 또는 조회 결과가 정해지지 않았다.
@@ -224,7 +227,7 @@ OpenSpec change가 필요한 경우 이를 만들기 전에 적용되는 Linear 
 - 현재 문제와 근거
 - 전달할 사용자 또는 시스템 결과
 - 포함 범위와 제외 범위
-- 적용되는 canonical 도메인·디자인 문서
+- 적용되는 canonical 도메인 문서와, 시각 결과가 있으면 별도의 design source
 - 변경할 수 없는 제품, 보안, 호환성 제약
 - blocker, 후속 작업과 병렬 작업 경계
 - 개발자 관점의 전달 순서와 단계별 검증 gate
@@ -269,7 +272,7 @@ OpenSpec decision은 다음 세 종류로 구분한다.
 Native 또는 다른 플랫폼이 현재 배포되지 않았거나 실행 가능한 QA 환경이 없다는 사실은 지원·검증 상태다.
 이를 `현재 Web 출시·검증 범위`, `Native runtime 증거 미실행`처럼 시점과 증거 범위로 기록하고, 공용
 코드·route·API가 이미 존재하는 경우 해당 플랫폼에 행동이 영구히 적용되지 않는 제품 계약으로 쓰지 않는다.
-`Native에는 적용하지 않는다`, `지원하지 않는다`와 같은 영구적 비적용은 canonical domain/design 또는 Linear
+`Native에는 적용하지 않는다`, `지원하지 않는다`와 같은 영구적 비적용은 canonical domain 또는 Linear
 authority가 제품 결정을 명시한 경우에만 normative requirement/decision으로 기록한다. 검증하지 않은 플랫폼을
 완료로 일반화하지 않으며, Native 지원 작업이 현재 canonical·Linear authority에 의해 계획되었거나 요구된 경우에만
 후속 owner와 gate를 기록한다. 그 외에는 현재 Native 상태를 미검증으로 기록하고, 지원이 재개될 때 범위와 검증

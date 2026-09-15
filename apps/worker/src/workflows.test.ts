@@ -1428,3 +1428,70 @@ test(
     assert.equal(activityCalls, 1);
   },
 );
+
+test(
+  'Profile Migration Move Workflow는 self-follow를 건너뛰고 batch cursor로 재개한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = KOSMO_TASK_QUEUE + '-profile-migration-' + process.pid;
+    const sourceProfileId = '00000000-0000-8000-8000-000000000701';
+    const targetProfileId = '00000000-0000-8000-8000-000000000702';
+    const selfFollow = {
+      followerProfileId: targetProfileId,
+      sourceFollowId: '00000000-0000-8000-8000-000000000703',
+    };
+    const regularFollow = {
+      followerProfileId: '00000000-0000-8000-8000-000000000704',
+      sourceFollowId: '00000000-0000-8000-8000-000000000705',
+    };
+    const loadedCursors: (string | undefined)[] = [];
+    const processed: string[] = [];
+    let regularAttempts = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        loadProfileMigrationMoveFollowerBatchActivity: async (input: {
+          afterSourceFollowId?: string;
+        }) => {
+          loadedCursors.push(input.afterSourceFollowId);
+          return input.afterSourceFollowId === undefined ? [selfFollow, regularFollow] : [];
+        },
+        executeProfileMigrationMoveFollowerActivity: async (input: {
+          followerProfileId: string;
+        }) => {
+          processed.push(input.followerProfileId);
+          if (
+            input.followerProfileId === regularFollow.followerProfileId &&
+            regularAttempts++ === 0
+          ) {
+            throw new Error('temporary move follower failure');
+          }
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await environment.client.workflow.execute('profileMigrationMoveWorkflow', {
+        args: [{ sourceProfileId, targetProfileId }],
+        taskQueue,
+        workflowId: `profile-migration-move-test:${sourceProfileId}:${targetProfileId}`,
+      });
+    });
+
+    assert.deepEqual(processed, [
+      targetProfileId,
+      regularFollow.followerProfileId,
+      regularFollow.followerProfileId,
+    ]);
+    assert.equal(regularAttempts, 2);
+    assert.deepEqual(loadedCursors, [undefined, regularFollow.sourceFollowId]);
+  },
+);
