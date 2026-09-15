@@ -68,15 +68,28 @@ App/API 전체 회귀 뒤 production source를 바꾸지 않고 Core 미완료 �
 - #854: 제3자 followers/following 목록이 viewer와 차단 관계인 후보를 노출하던 문제를 cursor/limit 전 공통 후보 predicate로 수정했다. 후보 방향·pagination·guest/no-selected·row 보존 회귀를 추가했다.
 - #848은 관리 API·인증·공개 payload, #844는 공통 action·Relay, #772는 화면 조립·route lifetime을 각각 소유한다. 이 PR은 그 production 코드를 중복 변경하지 않는다.
 
+## Native runtime 확인
+
+- iOS 17.5의 기존 iPhone 15 Pro Simulator는 부팅됐고 기존 `moe.kos` 앱의 launch·딥링크 명령도 성공했다. 화면은 흰색이며 설치 앱은 이전 SwiftUI/WKWebView 빌드로 확인됐다. 이를 현재 Expo source의 Block QA 증거로 사용하지 않는다. 확인 후 Simulator는 원래 Shutdown 상태로 복원했다.
+- 현재 source는 최종 #772 `d4e03e0e562132eef9cba7cd9f68310c0f35ed34`의 임시 사본으로 확인했다. 기존 Expo 56.0.14·React Native 0.85.3을 재사용하고 `EXPO_OFFLINE=1`, `CI=1`에서 Expo CLI의 `run:ios --no-install --no-bundler --device <Simulator ID>`를 실행했다.
+- CNG prebuild는 성공했고 `package.json` 변경은 없었다. 이어진 `xcodebuild`는 요청한 Simulator destination을 찾지 못해 code 70으로 종료했다. ineligible destination 목록에는 `iOS 26.5 is not installed`가 표시됐다. Simulator SDK를 명시한 `-showdestinations`에서도 같은 결과였다.
+- `xcodebuild -showsdks`에는 iOS 26.5 SDK가 있고, available Simulator runtime은 17.5뿐이었다. 생성된 deployment target은 16.4다. 따라서 SDK 파일 부재나 앱의 최소 iOS 요구 위반으로 단정하지 않는다. 관찰된 실패는 현재 Xcode의 destination/platform 조건을 충족하지 못한 것이다.
+- 현재 source의 `.app` build·설치·launch·Block 화면 QA에는 도달하지 못했다. Pods 설치는 `--no-install`로 생략했으며, 이후 Pods 통합·compilation의 성공 여부와 Metro·테스트 API 연결도 미검증이다. 새 SDK·도구 업그레이드나 의존성 설치는 수행하지 않았다.
+- Android는 기존 Pixel 8a AVD가 가리키는 `~/Library/Android/sdk`와 emulator·kernel·system image가 없었다. `emulator -list-avds`는 exit 127, ADB 연결 기기는 0이었다. 현재 source의 Android build·설치·Block QA는 실행하지 않았다.
+- Native 개발 채널은 기존 설정의 `https://dev-api.kos.moe`를 사용한다. 로컬 Web E2E의 임시 DB fixture가 Native 앱에 자동 연결되지 않으므로, 실제 QA에는 같은 구현과 검증할 관계 데이터가 준비된 기존 채널의 backend가 필요하다. 새로운 채널·localhost override·actor capability는 추가하지 않았다.
+
+후속 owner는 사용 가능한 Xcode Simulator destination과 Android 실행 환경을 준비하고 현재 source의 Native build·설치를 완료한 뒤,
+해당 채널의 테스트 backend·계정·데이터로 실제 Block 화면·confirmation·actor 전환·no-restore·VoiceOver/TalkBack을 검증해야 한다.
+
 ## 미완료 항목과 후속 owner
 
-| 항목                    | 증거와 다음 단계                                                                                                                                                                                                                                                                         | Owner                         |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| Core 재호출 성공 gate   | 실제 DB·공개 executeProfileBlock·Worker에서 직접 원인 Notification 삭제를 영구 실패시켰다. 첫 호출이 Follow를 지운 뒤 실패하고, 두 번째 호출은 기존 Block을 성공 반환하지만 Notification은 남는다. 정상 중복 성공을 보존할 완료 근거 저장 방식 결정 후 수정·재검증이 필요하다.           | PROD-821 / #726               |
-| Native·보조기술         | 기존 iOS 17.5·iPhone 15 Pro Simulator를 확인해 부팅을 시도했으며 후속 도구 승인 대기 중이다. Android 연결 기기는 없고 기존 AVD의 SDK·이미지 경로를 확인 중이다. 실제 Native runtime QA는 아직 실행하지 않았다. Web 1024px·Light/Dark 전체 조합과 실제 보조기술도 이 E2E의 증거가 아니다. | PROD-823, 결과 통합 PROD-813  |
-| 전체 consumer 완료 대조 | 이 다섯 시나리오와 선행 API/Core/Fedify 회귀를 task 4.1 전체 요구에 대조하고 Core 수정 뒤 재검증해야 한다.                                                                                                                                                                               | PROD-813                      |
-| 미구현 endpoint         | Hashtag Post List·Post 검색 endpoint는 만들지 않았다. 해당 부분은 공통 후보 정책 검증과 실제 endpoint 미실행을 구분하며, 이후 endpoint 도입 이슈가 연결·E2E를 소유한다.                                                                                                                  | PROD-813 / 향후 consumer 이슈 |
-| 정본 동기화·archive     | 최신 Linear의 Membership 인증 정정은 반영했다. 모든 선언 task와 required validation이 완료된 뒤 active delta의 canonical sync와 archive gate를 진행한다.                                                                                                                                 | PROD-813                      |
+| 항목                    | 증거와 다음 단계                                                                                                                                                                                                                                                               | Owner                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
+| Core 재호출 성공 gate   | 실제 DB·공개 executeProfileBlock·Worker에서 직접 원인 Notification 삭제를 영구 실패시켰다. 첫 호출이 Follow를 지운 뒤 실패하고, 두 번째 호출은 기존 Block을 성공 반환하지만 Notification은 남는다. 정상 중복 성공을 보존할 완료 근거 저장 방식 결정 후 수정·재검증이 필요하다. | PROD-821 / #726               |
+| Native·보조기술         | 위 Native runtime 확인처럼 기존 iOS 앱 실행과 현재 source의 build 시도를 수행했지만 Block 화면 QA는 미실행이다. Android 실행 환경도 갖춰져 있지 않다. Web 1024px·Light/Dark 전체 조합과 실제 보조기술 역시 이 E2E의 증거가 아니다.                                             | PROD-823, 결과 통합 PROD-813  |
+| 전체 consumer 완료 대조 | 이 다섯 시나리오와 선행 API/Core/Fedify 회귀를 task 4.1 전체 요구에 대조하고 Core 수정 뒤 재검증해야 한다.                                                                                                                                                                     | PROD-813                      |
+| 미구현 endpoint         | Hashtag Post List·Post 검색 endpoint는 만들지 않았다. 해당 부분은 공통 후보 정책 검증과 실제 endpoint 미실행을 구분하며, 이후 endpoint 도입 이슈가 연결·E2E를 소유한다.                                                                                                        | PROD-813 / 향후 consumer 이슈 |
+| 정본 동기화·archive     | 최신 Linear의 Membership 인증 정정은 반영했다. 모든 선언 task와 required validation이 완료된 뒤 active delta의 canonical sync와 archive gate를 진행한다.                                                                                                                       | PROD-813                      |
 
 #842의 목표 부모는 이 Web E2E PR #900이다. 공식 CLI의 기존 Stack 중간 삽입 제한으로 현재 원격 Stack #899는 7-layer이고 #842 base는 #772로 남아 있다. PR·커밋을 보존하는 Stack 재생성 승인 전에는 원격 연결 완료로 간주하지 않는다. #852는 ActivityPub Block/Undo의 별도 Draft이며,
 Spec Gate와 PROD-813 선행조건을 완료로 간주하지 않는다. PR Ready 상태는 해당 PR 범위의 리뷰 가능성을 뜻하며 전체 change 완료를 뜻하지 않는다.
