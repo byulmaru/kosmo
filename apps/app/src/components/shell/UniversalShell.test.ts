@@ -11,6 +11,38 @@ import type { UniversalShell as UniversalShellComponent } from './UniversalShell
 const platform = { OS: 'web' };
 let renderer: ReactTestRenderer | null = null;
 let hardwareBackPressListener: (() => boolean) | null = null;
+let layout: 'compact' | 'full' | 'mobile' = 'mobile';
+let pathname = '/home';
+let sessionProfile: Record<string, unknown> | null = null;
+let showRightRail = false;
+const router = {
+  back: mock.fn(),
+  push: mock.fn(),
+  replace: mock.fn(),
+};
+type RightRailProps = {
+  mode?: string;
+  onExpand?: () => void;
+  onPostCreated?: (post: { id: string }) => void;
+  onRequestClose?: () => void;
+  open?: boolean;
+};
+let rightRailProps: RightRailProps | undefined;
+let bottomTabBarProps: { onComposeOpen?: () => void } | undefined;
+let sidebarNavigationProps: { onComposeOpen?: () => void } | undefined;
+let rightRailFooterCount = 0;
+
+function MockBottomTabBar(props: typeof bottomTabBarProps) {
+  bottomTabBarProps = props;
+  return null;
+}
+
+function MockSidebarNavigation(props: typeof sidebarNavigationProps) {
+  if (props?.onComposeOpen) {
+    sidebarNavigationProps = props;
+  }
+  return null;
+}
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -23,8 +55,8 @@ function PassThrough({ children }: PropsWithChildren): ReactNode {
 
 mockModule('expo-router', {
   Slot: () => null,
-  usePathname: () => '/home',
-  useRouter: () => ({ back: () => undefined }),
+  usePathname: () => pathname,
+  useRouter: () => router,
   useSegments: () => [],
 });
 
@@ -58,7 +90,9 @@ mockModule('react-native-safe-area-context', {
 
 mockModule('react-relay', {
   graphql: () => ({}),
-  useLazyLoadQuery: () => ({ currentSession: null }),
+  useLazyLoadQuery: () => ({
+    currentSession: sessionProfile ? { selectedProfile: sessionProfile } : null,
+  }),
 });
 
 mockModule(require.resolve('lucide-react-native'), {
@@ -101,24 +135,34 @@ mockModule('@/theme/tokens', {
   spacing: { lg: 24, xl: 32 },
 });
 
-mockModule('./BottomTabBar', { BottomTabBar: () => null });
+mockModule('./BottomTabBar', {
+  BottomTabBar: MockBottomTabBar,
+});
 mockModule('./NavigationGuardContext', { NavigationGuardProvider: PassThrough });
 mockModule('./PrimaryNavigationScrollContext', {
   PrimaryNavigationScrollProvider: PassThrough,
   PrimaryNavigationScrollReset: () => null,
 });
 mockModule('./RightRail', {
-  RightRail: () => null,
-  RightRailFooter: () => null,
+  RightRail: (props: typeof rightRailProps) => {
+    rightRailProps = props;
+    return null;
+  },
+  RightRailFooter: () => {
+    rightRailFooterCount++;
+    return null;
+  },
 });
 mockModule('./ShellChromeContext', { ShellChromeProvider: PassThrough });
-mockModule('./SidebarNavigation', { SidebarNavigation: () => null });
+mockModule('./SidebarNavigation', {
+  SidebarNavigation: MockSidebarNavigation,
+});
 mockModule('./shellLayout', {
   getWebMobileShellHeader: () => null,
   getShellRoutePresentation: () => ({
-    layout: 'mobile',
+    layout,
     settingsWorkspace: false,
-    showRightRail: false,
+    showRightRail,
   }),
   isSettingsRoute: () => false,
   isTimelineRoute: () => true,
@@ -138,6 +182,17 @@ afterEach(async () => {
     renderer = null;
   }
   platform.OS = 'web';
+  layout = 'mobile';
+  pathname = '/home';
+  sessionProfile = null;
+  showRightRail = false;
+  bottomTabBarProps = undefined;
+  rightRailProps = undefined;
+  sidebarNavigationProps = undefined;
+  rightRailFooterCount = 0;
+  router.back.mock.resetCalls();
+  router.push.mock.resetCalls();
+  router.replace.mock.resetCalls();
   hardwareBackPressListener = null;
   mock.restoreAll();
 });
@@ -188,6 +243,92 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.ok(modal);
     assert.equal(modal.props.visible, false);
     assert.equal(renderer?.root.findAllByType('Drawer' as ElementType).length, 0);
+  });
+
+  it('Full Rail의 Expand는 같은 Host를 Overlay로 전환한다', async () => {
+    layout = 'full';
+    showRightRail = true;
+    sessionProfile = { id: 'profile-1' };
+    await renderShell();
+
+    assert.equal(rightRailProps?.mode, 'rail');
+    assert.equal(rightRailProps?.open, true);
+    await act(async () => rightRailProps?.onRequestClose?.());
+    assert.equal(rightRailProps?.mode, 'rail');
+
+    await act(async () => rightRailProps?.onExpand?.());
+
+    assert.equal(rightRailProps?.mode, 'overlay');
+    assert.equal(rightRailProps?.open, true);
+  });
+
+  it('retired /compose는 Full Web RightRail과 Composer Host를 렌더링하지 않는다', async () => {
+    layout = 'full';
+    pathname = '/compose';
+    sessionProfile = { id: 'profile-1' };
+    await renderShell();
+
+    assert.equal(rightRailProps, undefined);
+    assert.equal(rightRailFooterCount, 0);
+  });
+
+  it('셸에서 연 Composer를 닫아도 route history fallback을 실행하지 않는다', async () => {
+    layout = 'mobile';
+    sessionProfile = { id: 'profile-1' };
+    await renderShell();
+
+    await act(async () => bottomTabBarProps?.onComposeOpen?.());
+    await act(async () => rightRailProps?.onRequestClose?.());
+
+    assert.equal(router.back.mock.callCount(), 0);
+    assert.equal(router.replace.mock.callCount(), 0);
+  });
+
+  it('모바일 Composer 제출 성공은 Home으로 한 번만 이동한다', async () => {
+    layout = 'mobile';
+    sessionProfile = { id: 'profile-1' };
+    await renderShell();
+
+    await act(async () => bottomTabBarProps?.onComposeOpen?.());
+    rightRailProps?.onPostCreated?.({ id: 'post-1' });
+    await act(async () => rightRailProps?.onRequestClose?.());
+
+    assert.equal(router.back.mock.callCount(), 0);
+    assert.equal(router.replace.mock.callCount(), 1);
+  });
+
+  it('프로필이 없어도 표시 대상인 Right Rail footer는 유지한다', async () => {
+    layout = 'full';
+    showRightRail = true;
+    await renderShell();
+
+    assert.equal(rightRailProps, undefined);
+    assert.equal(rightRailFooterCount, 1);
+  });
+
+  it('compact와 mobile compose control은 route 이동 없이 같은 Host를 연다', async () => {
+    layout = 'compact';
+    sessionProfile = { id: 'profile-1' };
+    await renderShell();
+
+    assert.ok(sidebarNavigationProps?.onComposeOpen);
+    await act(async () => sidebarNavigationProps?.onComposeOpen?.());
+    assert.equal(rightRailProps?.mode, 'overlay');
+    assert.equal(rightRailProps?.open, true);
+    assert.equal(router.push.mock.callCount(), 0);
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    layout = 'mobile';
+    rightRailProps = undefined;
+    await renderShell();
+
+    assert.ok(bottomTabBarProps?.onComposeOpen);
+    await act(async () => bottomTabBarProps?.onComposeOpen?.());
+    const mobileHost = rightRailProps as RightRailProps | undefined;
+    assert.equal(mobileHost?.mode, 'mobile');
+    assert.equal(mobileHost?.open, true);
+    assert.equal(router.push.mock.callCount(), 0);
   });
 });
 

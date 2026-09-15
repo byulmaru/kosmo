@@ -37,6 +37,7 @@ const SidebarNavigationFragment = graphql`
 
 type Props = {
   compact?: boolean;
+  onComposeOpen?: () => void;
   feedbackActive?: boolean;
   onFeedbackOpen?: () => void;
   onHomeReselect?: () => void;
@@ -49,7 +50,6 @@ type Props = {
 
 const hrefs: Partial<Record<NavigationDestination, Href>> = {
   bookmarks: '/bookmarks',
-  compose: '/compose',
   feedback: '/feedback',
   followRequests: '/follow-requests',
   home: '/home',
@@ -60,6 +60,7 @@ const hrefs: Partial<Record<NavigationDestination, Href>> = {
 
 export function SidebarNavigation({
   compact = false,
+  onComposeOpen,
   feedbackActive = false,
   onFeedbackOpen,
   onHomeReselect,
@@ -99,6 +100,16 @@ export function SidebarNavigation({
         {
           accessibilityRole: 'button',
           onPress: onFeedbackOpen,
+        },
+      );
+    }
+
+    if (destination === 'compose' && onComposeOpen) {
+      return cloneElement(
+        children as ReactElement<{ accessibilityRole?: 'button'; onPress?: () => void }>,
+        {
+          accessibilityRole: 'button',
+          onPress: onComposeOpen,
         },
       );
     }

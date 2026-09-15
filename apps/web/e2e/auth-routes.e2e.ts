@@ -2,7 +2,12 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Accounts, db, Sessions } from '@kosmo/core/db';
 import { AccountState, SessionState } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
-import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
+import {
+  createE2EPost,
+  createE2ESession,
+  resetE2EDatabase,
+  setE2ESessionCookie,
+} from './db-fixtures';
 import { expect, test } from './fixtures';
 import { isGraphQLOperation } from './graphql';
 import type { APIRequestContext } from '@playwright/test';
@@ -22,7 +27,6 @@ const nativeSessionMutation = `
 `;
 const protectedHeadingRoutes = [
   { heading: '홈', path: '/home' },
-  { heading: '글쓰기', path: '/compose' },
   { heading: '알림', path: '/notifications' },
   { heading: '피드백 보내기', path: '/feedback' },
 ] as const;
@@ -652,6 +656,15 @@ test.describe('로그인 사용자 보호 라우트', () => {
     });
   }
 
+  test('retired /compose route does not render a Composer', async ({ page }) => {
+    await page.setViewportSize({ height: 900, width: 1440 });
+    await page.goto('/compose');
+
+    await expect(page).toHaveURL(/\/compose$/);
+    await expect(page.getByText('프로필을 찾을 수 없어요', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('게시글 작성', { exact: true })).toHaveCount(0);
+  });
+
   test('/search에서 보호 shell과 검색 입력을 본다', async ({ page }) => {
     await page.goto('/search');
 
@@ -661,11 +674,19 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await expect(page.getByRole('progressbar')).toHaveCount(0);
   });
 
-  test('web shell은 document scroll을 유지한다', async ({ page }) => {
+  test('web shell은 document scroll을 유지한다', async ({ context, page }) => {
+    const viewer = await createE2ESession({ handle: 'e2e-shell-scroll' });
+    await setE2ESessionCookie(context, viewer.token);
+    for (let index = 0; index < 8; index += 1) {
+      await createE2EPost({
+        body: `shell scroll post ${index} ${'긴 본문 '.repeat(20)}`,
+        profileId: viewer.profile!.id,
+      });
+    }
     await page.setViewportSize({ height: 360, width: 1440 });
-    await page.goto('/compose');
+    await page.goto('/local');
 
-    await expect(page.getByRole('textbox', { name: '게시글 본문' }).first()).toBeVisible();
+    await expect(page.getByText('shell scroll post 0')).toBeVisible();
 
     const scrollState = await page.evaluate(() => ({
       clientHeight: document.documentElement.clientHeight,
@@ -681,13 +702,10 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
   });
 
-  test('mobile 주요 route는 메뉴와 제목을 하나의 64px header에 둔다', async ({ page }) => {
+  test('mobile 알림 route는 64px header에 진입점을 둔다', async ({ page }) => {
     await page.setViewportSize({ height: 667, width: 390 });
 
-    for (const route of [
-      { heading: '글쓰기', path: '/compose' },
-      { heading: '알림', path: '/notifications' },
-    ]) {
+    for (const route of [{ heading: '알림', path: '/notifications' }]) {
       await page.goto(route.path);
 
       const heading = page.getByRole('heading', { name: route.heading });
