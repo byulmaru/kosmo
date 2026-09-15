@@ -1,6 +1,6 @@
 import { Volume2, VolumeOff } from 'lucide-react-native';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
 import { Button } from '@/components/ui/Button';
@@ -9,7 +9,7 @@ import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, breakpoints, textStyles } from '@/theme/tokens';
+import { borderWidths, textStyles } from '@/theme/tokens';
 import type { ReactNode, RefObject } from 'react';
 import type { View } from 'react-native';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
@@ -153,9 +153,6 @@ function ProfileMuteActionContent({
   renderMenuItem,
 }: Props & { committedTargetRef: CommittedProfileTargetRef }) {
   const theme = useTheme();
-  const { width } = useWindowDimensions();
-  const mobile = Platform.OS !== 'web' || width < breakpoints.compact;
-  const buttonWidth = mobile ? 88 : 72;
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -307,8 +304,7 @@ function ProfileMuteActionContent({
           aria-busy={pending || undefined}
           loading={pending}
           onPress={activate}
-          size={mobile ? 'default' : 'compact'}
-          style={{ minWidth: buttonWidth, width: buttonWidth, paddingHorizontal: 0 }}
+          style={{ minWidth: 96, width: 96, paddingHorizontal: 0 }}
           tone="secondary"
         >
           {label}

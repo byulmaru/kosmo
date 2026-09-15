@@ -87,7 +87,7 @@
 
 ### Requirement: Profile Block actor and client-state isolation
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-51`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block UI는 selected Profile별 actor 상태 격리를 유지해야 하며(MUST), 기존 Profile 정보를 유지하면서 viewer 방향 콘텐츠 상태와 각 surface의 정책을 표시해야 한다(MUST). Block·Unblock 성공 결과는 현재 화면, Block 목록과 이미 표시 중인 표면의 상태를 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 이전 Owner의 Block 상태를 새 actor에 재사용해서는 안 된다(MUST NOT).
+**Authority / Provenance:** UI 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `DSN-51`, `DSN-53`; actor·client 상태 권위는 `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-823`, `PROD-813`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block UI는 selected Profile별 actor 상태 격리를 유지해야 하며(MUST), 기존 Profile 정보를 유지하면서 viewer 방향 콘텐츠 상태와 각 surface의 정책을 표시해야 한다(MUST). Block·Unblock 성공 결과는 현재 화면, Block 목록과 이미 표시 중인 표면의 상태를 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 이전 Owner의 Block 상태를 새 actor에 재사용해서는 안 된다(MUST NOT).
 
 #### Scenario: Block 성공 뒤 표시 중인 결과가 정책에 수렴한다
 

@@ -37,7 +37,6 @@ export const MobileFollowError: Story = {
 const maxLengthTag = '가'.repeat(20);
 
 export const CenterGeometryContract: Story = {
-  args: { actionSize: 'medium' },
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -91,7 +90,7 @@ export const MobileGeometryContract: Story = {
 };
 
 export const LoadingGeometryContract: Story = {
-  args: { actionSize: 'medium', loading: true, showAction: true },
+  args: { loading: true, showAction: true },
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -183,7 +182,6 @@ export const MenuMuteContract: Story = {
 };
 
 export const MoreButtonInteraction: Story = {
-  args: { actionSize: 'medium' },
   globals: { theme: 'light', viewport: { isRotated: false, value: 'kosmoFull' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -217,7 +215,6 @@ export const MoreButtonInteraction: Story = {
 };
 
 export const CompactMenuViewportCollision: Story = {
-  args: { actionSize: 'medium' },
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
