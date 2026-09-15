@@ -340,13 +340,14 @@ describe('ProfileHero media presentation', () => {
 });
 
 describe('ProfileHero 관리 메뉴 조립', () => {
-  it('뮤트와 차단 action이 각 lifecycle을 유지한 채 한 메뉴에 합성된다', async () => {
+  it('뮤트·차단·신고 action을 한 메뉴에 합성하고 포커스 연결을 유지한다', async () => {
     fragmentData = baseProfile;
     let receivedFocus: (() => void) | undefined;
     await act(async () => {
       renderer = create(
         createElement(ProfileHero, {
           blockAction: { nextBlocked: true, profile: {} as never },
+          moreItems: [{ key: 'report', label: '신고하기', onSelect: () => undefined }],
           onMenuTriggerReady: (focusTrigger: () => void) => {
             receivedFocus = focusTrigger;
           },
@@ -371,16 +372,17 @@ describe('ProfileHero 관리 메뉴 조립', () => {
     });
     assert.deepEqual(
       actionMenu.props.items.map((item: { key: string }) => item.key),
-      ['copy-profile-link', 'mute', 'block'],
+      ['copy-profile-link', 'mute', 'block', 'report'],
     );
     const focusTrigger = () => undefined;
     actionMenu.props.onTriggerReady(focusTrigger);
     assert.equal(receivedFocus, focusTrigger);
   });
 
-  it('mute action이 없는 차단 상태에서도 링크 복사와 차단 해제 메뉴를 렌더한다', async () => {
+  it('차단 해제와 신고 항목을 별도 더보기 없이 같은 메뉴에 표시한다', async () => {
     fragmentData = baseProfile;
     const onUnblock = mock.fn();
+    const onReport = mock.fn();
     let receivedFocus: (() => void) | undefined;
     await act(async () => {
       renderer = create(
@@ -390,6 +392,7 @@ describe('ProfileHero 관리 메뉴 조립', () => {
             onFeedback: onUnblock,
             profileBlock: {} as never,
           },
+          moreItems: [{ key: 'report', label: '신고하기', onSelect: onReport }],
           onMenuTriggerReady: (focusTrigger: () => void) => {
             receivedFocus = focusTrigger;
           },
@@ -400,6 +403,10 @@ describe('ProfileHero 관리 메뉴 조립', () => {
     });
     assert.ok(renderer);
 
+    assert.equal(
+      renderer.root.findAll((node) => (node.type as unknown) === 'ProfileMoreMenu').length,
+      0,
+    );
     const action = renderer.root.find((node) => (node.type as unknown) === 'ProfileBlockAction');
     const menu = action.props.renderMenuItem({
       disabled: false,
@@ -408,10 +415,12 @@ describe('ProfileHero 관리 메뉴 조립', () => {
     });
     assert.deepEqual(
       menu.props.items.map((item: { key: string }) => item.key),
-      ['copy-profile-link', 'unblock'],
+      ['copy-profile-link', 'unblock', 'report'],
     );
     menu.props.items[1].onSelect();
     assert.equal(onUnblock.mock.callCount(), 1);
+    menu.props.items[2].onSelect();
+    assert.equal(onReport.mock.callCount(), 1);
     const focusTrigger = () => undefined;
     menu.props.onTriggerReady(focusTrigger);
     assert.equal(receivedFocus, focusTrigger);
