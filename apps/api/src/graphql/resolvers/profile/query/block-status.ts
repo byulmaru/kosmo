@@ -6,7 +6,6 @@ import { profileBlockPairWhere } from '@kosmo/core/visibility';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { visibleProfileWhere } from '@/profile/visibility';
-import { requireSelectedLocalProfile } from '../access/block';
 import { ProfileBlock } from '../ref';
 
 type ProfileBlockStatusRow = {
@@ -38,11 +37,13 @@ const emptyStatus = (): ProfileBlockStatusRow => ({
 builder.queryField('profileBlockStatus', (t) =>
   t.withAuth({ profileRole: AccountProfileRole.MEMBER }).field({
     type: ProfileBlockStatus,
+    nullable: true,
+    unauthorizedResolver: () => null,
     args: {
       handle: t.arg.string({ required: true }),
     },
     resolve: async (_, args, ctx) => {
-      const selected = await requireSelectedLocalProfile(ctx);
+      const selectedProfileId = ctx.session.profile.id;
       const localInstance = await resolveConfiguredLocalInstance();
       const parsed = parseProfileHandle(args.handle, {
         configuredLocalDomain: localInstance.domain,
@@ -69,7 +70,7 @@ builder.queryField('profileBlockStatus', (t) =>
         )
         .limit(1)
         .then(first);
-      if (!target || target.id === selected.id) {
+      if (!target || target.id === selectedProfileId) {
         return emptyStatus();
       }
 
@@ -79,8 +80,8 @@ builder.queryField('profileBlockStatus', (t) =>
           ownerProfileId: ProfileBlocks.ownerProfileId,
         })
         .from(ProfileBlocks)
-        .where(profileBlockPairWhere(selected.id, target.id));
-      const ownBlock = relations.find(({ ownerProfileId }) => ownerProfileId === selected.id);
+        .where(profileBlockPairWhere(selectedProfileId, target.id));
+      const ownBlock = relations.find(({ ownerProfileId }) => ownerProfileId === selectedProfileId);
       const otherBlock = relations.find(({ ownerProfileId }) => ownerProfileId === target.id);
 
       return {

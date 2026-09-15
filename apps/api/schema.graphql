@@ -48,6 +48,7 @@ input BlockProfileInput {
 
 type BlockProfilePayload {
   profileBlock: ProfileBlock!
+  success: Boolean!
 }
 
 type Bookmark implements Node {
@@ -409,7 +410,7 @@ type Profile implements Node {
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   private: ProfilePrivate
-  profileBlocks(after: String, before: String, first: Int, last: Int): ProfileBlockConnection!
+  profileBlocks(after: String, before: String, first: Int, last: Int): ProfileBlockConnection
   profileMutes(after: String, before: String, first: Int, last: Int): ProfileMuteConnection!
   relativeHandle: String!
   tags: [Hashtag!]!
@@ -545,6 +546,7 @@ type ProfileViewerState {
   followRequest: ProfileFollowRequest
   isSelf: Boolean!
   membership: AccountProfile
+  profileBlock: ProfileBlock
   profileMute: ProfileMute
 }
 
@@ -560,7 +562,7 @@ type Query {
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
-  profileBlockStatus(handle: String!): ProfileBlockStatus!
+  profileBlockStatus(handle: String!): ProfileBlockStatus
   profileByHandle(handle: String!): Profile
   searchProfiles(after: String, before: String, first: Int, last: Int, query: String!): ProfileConnection!
 }
@@ -680,6 +682,7 @@ input UnblockProfileInput {
 
 type UnblockProfilePayload {
   profileBlockId: ID
+  success: Boolean!
 }
 
 input UnfollowProfileInput {
