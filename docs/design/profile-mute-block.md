@@ -112,7 +112,7 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   같은 기본 Profile 정보 범위를 사용한다. `searchProfiles`의 exact-match/partial-match 후보는
   양방향 Active Block 관계인 Profile을 후보에서 제외하며, 이 제외는 pagination·cursor·limit 전에 적용한다.
 - 유효한 Account에 selected Profile이 있으면 그 Profile을 `searchProfiles`의 viewer로 사용한다. selected Profile이
-  없으면 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate나 selected Profile을 새로 요구하지
+  없으면 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate나 selected Profile의 Instance 종류 조건을 새로 요구하지
   않는다. 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용하지 않는다.
 - 정상적인 GraphQL `node(id:)`·`profileByHandle` 직접 route 진입·새로고침은 기본 Profile 정보, viewer 방향별 콘텐츠 상태와
   현재 Owner 범위의 정확한 unblock 관계 ID를 확인한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가하면
