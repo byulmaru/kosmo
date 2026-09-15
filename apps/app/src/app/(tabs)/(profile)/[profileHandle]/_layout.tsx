@@ -7,7 +7,6 @@ import { graphql, useLazyLoadQuery } from 'react-relay';
 import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
 import { PageHeader } from '@/components/PageHeader';
 import { FollowButton } from '@/components/profile/FollowButton';
-import { ProfileBlockAction } from '@/components/profile/ProfileBlockAction';
 import { ProfileConnectionListState } from '@/components/profile/ProfileConnectionList';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import {
@@ -217,9 +216,7 @@ function ProfileLayoutContent({
   };
 
   if (!profile) {
-    const missingState = blockedBy ? (
-      <StateView controlRef={contentStateRef} title="이 프로필을 볼 수 없습니다" />
-    ) : (
+    const missingState = (
       <StateView
         description={`@${handle} 프로필이 존재하지 않아요.`}
         title="프로필을 찾을 수 없어요"
@@ -269,21 +266,12 @@ function ProfileLayoutContent({
         편집
       </Button>
     </NavigationLink>
-  ) : blocking && profileBlock ? (
-    <ProfileBlockAction
-      nextBlocked={false}
-      onActionRef={(node) => {
-        stateActionRef.current = node;
-      }}
-      onFeedback={onBlockFeedback}
-      profileBlock={profileBlock}
-      surface="button"
-    />
-  ) : blockedBy ? undefined : (
+  ) : blockedBy && !blocking ? undefined : (
     <FollowButton
       onActionRef={(node) => {
         stateActionRef.current = node;
       }}
+      onBlockFeedback={onBlockFeedback}
       profile={profile}
     />
   );
@@ -323,7 +311,7 @@ function ProfileLayoutContent({
 
   const relationshipRoute = pathname.endsWith('/followers') || pathname.endsWith('/following');
   const blockedProfileContent = relationshipRoute ? null : blockedBy ? (
-    <StateView controlRef={contentStateRef} title="게시물을 볼 수 없습니다" />
+    <StateView controlRef={contentStateRef} title="이 프로필을 볼 수 없습니다" />
   ) : blocking && !blockedContentVisible ? (
     <StateView
       actionLabel="게시물 보기"
