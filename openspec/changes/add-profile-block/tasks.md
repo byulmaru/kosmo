@@ -119,7 +119,7 @@ pagination·cursor·limit 전에 제외한다.
   `searchProfiles`가 exact-match 또는 partial-match 후보를 반환할 때는 양방향 Active Block 후보를 pagination·cursor·limit 전에 제외한다. direct Post·Media와 Profile Post List는 Owner → Target과
   Target → Owner 방향을 구분하고, 후보·Home·Local·Hashtag list/search·interaction은 양방향으로 후보 반환 전에 Exclude한다. Repost는 Author와 Source Post Author를 모두 검사한다.
 - 유효한 Account에 selected Profile이 있으면 현재 selected Profile을 `searchProfiles` viewer로 사용한다. selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를 유지하며
-  Profile Block predicate나 selected Profile의 Instance 종류 조건을 새로 요구하지 않는다. 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용하지 않는다.
+  Profile Block predicate나 selected Profile을 새로 요구하지 않는다. 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용하지 않는다.
 - Active Block은 cleanup 뒤 남은 Follow Request·Follow Relationship의 물리적 존재보다 우선하며, Follow와 Reply·Quote·Reaction·Repost의 새 입력은 양쪽에서
   거부한다. 쓰기 admission assertion은 origin과 무관하게 공유하고 목록용 SQL predicate와 분리하며, page limit 뒤 client filter나 resolver별 정책 복제를 보안 경계로 사용하지 않는다.
 - Profile Block pair의 기존 Notification은 connection·Unread count·Node·read 처리에서 숨기되, `PROD-821`의 직접 원인 삭제 이외의 기존 Notification을
@@ -159,7 +159,7 @@ pagination·cursor·limit 전에 제외한다.
   `CreatePostInput.repostSourceId`를 사용하는 Local Quote는 차단 양방향에서 GraphQL 요청 거부와 새 Post row 부재를 확인한다.
   ingress가 없는 Quote origin은 공통 assertion 단위 결과와 실제 ingress 미검증을 구분한다.
 - `PROD-822-graphql`은 Membership으로 인증된 selected Profile A/B, guest·membership mismatch와 arbitrary actor ID를 GraphQL mutation·Owner connection·Node/loader에서 검증한다.
-- `PROD-822-graphql`은 이전 client cache 없이 GraphQL `node(id:)`·`profileByHandle` 기반 직접 route 진입·새로고침에서 정상 결과가 기본 Profile 정보와 현재 selected Profile Owner 범위의 정확한 unblock 관계 ID를 제공하는지 확인하고,
+- `PROD-822-graphql`은 이전 client cache 없이 GraphQL `node(id:)`·`profileByHandle` 기반 직접 route 진입·새로고침에서 정상 결과가 기본 Profile 정보와 현재 인증된 selected Owner 범위의 정확한 unblock 관계 ID를 제공하는지 확인하고,
   `PROD-822-policy`는 viewer 방향별 콘텐츠 상태를 검증한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가하면 API의 기존 null/unavailable 결과와 Block 전용 identity payload 부재를 확인한다.
   자신의 Block이 없을 때 다른 Owner의 관계 ID를 반환하지 않고 Post·Media에는 각 surface 정책을 적용하는지 함께 검증한다.
 - `PROD-822-policy`는 차단으로 unavailable인 기존 Notification의 connection·Unread count·Node·read 숨김과 직접 원인 Follow Notification 정리 경계를 검증한다.
@@ -171,7 +171,7 @@ pagination·cursor·limit 전에 제외한다.
   자세한 현재 경로와 검증 묶음은 `design.md`의 비규범적 guidance를 참고한다.
 
 - [ ] 2.1 [PROD-822-policy] Local/Remote Owner·Target과 양쪽 viewer에 적용할 공통 pair 정책을 제공하고, Active Block이 잔존 Follow/Request보다 우선함을 검증한다.
-- [ ] 2.2 [PROD-822-policy] GraphQL `node(id:)`·`profileByHandle` 직접 조회는 기존 lifecycle·membership·공개 Profile 조회 조건과 기본 Profile 정보를 유지하고, 유효한 Account의 current selected Profile을 viewer로 사용하는 `searchProfiles`와 `Hashtag.relatedProfiles`가 후보를 반환할 때 양방향 Active Block 후보를 pagination·cursor·limit 전에 제외한다. selected Profile이 없으면 두 surface의 기존 Account 인증·공개 후보 결과를 유지하고 selected Profile의 Instance 종류 조건을 새로 요구하지 않는다. 관련 Follow 후보에도 양방향 차단을 적용한다.
+- [ ] 2.2 [PROD-822-policy] GraphQL `node(id:)`·`profileByHandle` 직접 조회는 기존 lifecycle·membership·공개 Profile 조회 조건과 기본 Profile 정보를 유지하고, 유효한 Account의 current selected Profile을 viewer로 사용하는 `searchProfiles`와 `Hashtag.relatedProfiles`가 후보를 반환할 때 양방향 Active Block 후보를 pagination·cursor·limit 전에 제외한다. selected Profile이 없으면 두 surface의 기존 Account 인증·공개 후보 결과를 유지하고 selected Profile을 새로 요구하지 않는다. 관련 Follow 후보에도 양방향 차단을 적용한다.
 - [ ] 2.3 [PROD-822-policy] Follow/Request Node·followers/following·요청 목록·viewer 상태와 Home·`FOLLOWERS` 권한이 차단 중 잔존 관계를 유효하게 사용하지 않도록 한다.
 - [ ] 2.4 [PROD-822-policy] Post·PostContent·Media relation·Profile Post List와 Bookmark의 대상 Post projection에는 방향별 정책을, 현재 존재하는 Home·Local·Reaction Profile 목록에는 양방향 정책을 연결하고 Author·Source Author의 후보 제외와 cursor/pageInfo를 검증한다. Hashtag Post List·Post 검색은 endpoint가 구현 시점에 존재할 때만 같은 정책 연결·공개 회귀를 요구하고, 없으면 공통 Author·Source Author 후보 정책을 검증한다. Bookmark row·Owner 권한·Node·삭제는 보존하고 `Bookmark.post`의 nullable 결과와 `Profile.bookmarks` edge만 현재 Post 조회 정책에 맞추는 기존 계약을 유지한다.
 - [ ] 2.5 [PROD-822-policy] Block 적용 뒤 시작한 로컬 Follow·Follow Request 승인과 Local/ActivityPub Reply·Reaction·Repost 및 기존 ActivityPub inbound Follow·Accept가 새 관계나 상호작용을 저장하지 않도록 쓰기 경계를 검증한다. Reply·Quote·Reaction·Repost는 origin과 무관한 공통 admission assertion을 사용하고 목록용 SQL predicate와 분리한다. Local Quote는 `CreatePostInput.repostSourceId`를 사용한 GraphQL 요청을 차단 양방향에서 각각 거부하고 새 Post row가 없음을 검증한다. ingress가 없는 Quote origin은 공통 assertion 단위 결과와 실제 ingress 미검증을 구분한다. 실제 consumer의 각 origin 거부 뒤 새 row가 없고 inbound 예상 거절이 내부 오류로 보고되지 않는지 확인한다.
@@ -305,5 +305,5 @@ E2E를 완료하고, 최신 canonical·Linear·OpenSpec을 동기화한 뒤 모�
       bilateral Home/Local list·`searchProfiles`·`Hashtag.relatedProfiles`·interaction·Notification·cleanup의 현재 구현된 consumer cross-slice E2E를 실행한다. 미구현 Hashtag Post List·Post 검색은 실제 endpoint E2E가 아니라 공통 후보 정책 검증 결과와 endpoint 미실행 기록을 확인한다.
 - [ ] 4.2 cross-slice UI/API 결과와 selected Profile actor 상태 격리, 기본 Profile 정보·viewer 방향 콘텐츠 상태, 보존·비복구 및 `PROD-917` 후속
       범위 경계를 플랫폼별 evidence로 기록한다. 정상적인 GraphQL `node(id:)`·`profileByHandle` 직접 route 진입·새로고침은 기본 Profile 정보, viewer 방향별 콘텐츠 상태와
-      현재 selected Profile Owner 범위의 정확한 unblock 관계 ID를 검증한다. API의 lifecycle상 null/unavailable 결과와 UI의 조건부 fallback 표시를 구분해 기록한다.
+      현재 인증된 selected Owner 범위의 정확한 unblock 관계 ID를 검증한다. API의 lifecycle상 null/unavailable 결과와 UI의 조건부 fallback 표시를 구분해 기록한다.
 - [ ] 4.3 최신 canonical·Linear·OpenSpec 정합성을 확인하고 strict validation·Prettier·diff 검증과 모든 task 완료 뒤 `add-profile-block`을 archive한다.
