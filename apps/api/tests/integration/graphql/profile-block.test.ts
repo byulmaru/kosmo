@@ -95,12 +95,138 @@ describe('GraphQL Profile Block', () => {
     await pg.end();
   });
 
-  test('selected Local owner receives a domain error for a missing target', async () => {
+  test('authenticated selected owner receives a domain error for a missing target', async () => {
     const owner = await createAuthenticatedSession();
 
     const result = await blockProfile(crypto.randomUUID(), owner.token);
 
     assertGraphQLErrorCode(result, 'NOT_FOUND');
+  });
+
+  test('selected Profile이 없으면 Block 읽기 필드를 nullable null로 반환한다', async () => {
+    const owner = await createAuthenticatedSession();
+    const target = await createProfile('nullable-block-read-target');
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: null })
+      .where(eq(Sessions.id, owner.session.id));
+
+    const result = await requestGraphQL<{
+      node: { profileBlocks: null } | null;
+      profileBlockStatus: null;
+    }>(
+      `query NullableBlockReads($id: ID!, $handle: String!) {
+        profileBlockStatus(handle: $handle) { blocking }
+        node(id: $id) {
+          ... on Profile { profileBlocks(first: 10) { edges { node { id } } } }
+        }
+      }`,
+      { handle: target.handle, id: globalId('Profile', owner.profile.id) },
+      owner.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data, {
+      node: { profileBlocks: null },
+      profileBlockStatus: null,
+    });
+  });
+
+  test('Membership으로 인증된 Owner의 Block loader와 관리 결과를 격리한다', async () => {
+    const owner = await createAuthenticatedSession();
+    const target = await createProfile('member-owner-block-target');
+    const other = await createAuthenticatedSession();
+    await db
+      .update(AccountProfiles)
+      .set({ role: AccountProfileRole.MEMBER })
+      .where(eq(AccountProfiles.accountId, owner.account.id));
+
+    const created = await blockProfile(target.id, owner.token);
+    assertNoGraphQLErrors(created);
+    const blockId = created.data?.blockProfile.profileBlock.id;
+    assert.ok(blockId);
+
+    const ownerView = await requestGraphQL<{
+      owner: {
+        profileBlocks: { edges: Array<{ node: { id: string } }> };
+      } | null;
+      relation: { id: string } | null;
+      target: { viewerState: { profileBlock: { id: string } | null } | null } | null;
+    }>(
+      `query SelectedOwnerBlock($ownerId: ID!, $targetId: ID!, $blockId: ID!) {
+        owner: node(id: $ownerId) {
+          ... on Profile { profileBlocks(first: 10) { edges { node { id } } } }
+        }
+        target: node(id: $targetId) {
+          ... on Profile { viewerState { profileBlock { id } } }
+        }
+        relation: node(id: $blockId) { ... on ProfileBlock { id } }
+      }`,
+      {
+        blockId,
+        ownerId: globalId('Profile', owner.profile.id),
+        targetId: globalId('Profile', target.id),
+      },
+      owner.token,
+    );
+
+    assertNoGraphQLErrors(ownerView);
+    assert.deepEqual(ownerView.data, {
+      owner: { profileBlocks: { edges: [{ node: { id: blockId } }] } },
+      relation: { id: blockId },
+      target: { viewerState: { profileBlock: { id: blockId } } },
+    });
+
+    const otherView = await requestGraphQL<{
+      relation: { id: string } | null;
+      target: { viewerState: { profileBlock: { id: string } | null } | null } | null;
+    }>(
+      `query OtherOwnerBlock($targetId: ID!, $blockId: ID!) {
+        target: node(id: $targetId) {
+          ... on Profile { viewerState { profileBlock { id } } }
+        }
+        relation: node(id: $blockId) { ... on ProfileBlock { id } }
+      }`,
+      { blockId, targetId: globalId('Profile', target.id) },
+      other.token,
+    );
+
+    assertNoGraphQLErrors(otherView);
+    assert.deepEqual(otherView.data, {
+      relation: null,
+      target: { viewerState: { profileBlock: null } },
+    });
+
+    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, owner.account.id));
+    const revoked = await requestGraphQL<{
+      node: { id: string } | null;
+      profileBlockStatus: null;
+    }>(
+      `query RevokedBlockOwner($blockId: ID!, $handle: String!) {
+        node(id: $blockId) { ... on ProfileBlock { id } }
+        profileBlockStatus(handle: $handle) { blocking }
+      }`,
+      { blockId, handle: target.handle },
+      owner.token,
+    );
+    assertNoGraphQLErrors(revoked);
+    assert.deepEqual(revoked.data, { node: null, profileBlockStatus: null });
+    const unauthorized = await requestGraphQL(
+      `mutation UnblockAfterMembershipRevoked($id: ID!) {
+        unblockProfile(input: { id: $id }) { success profileBlockId }
+      }`,
+      { id: blockId },
+      owner.token,
+    );
+    assertGraphQLErrorCode(unauthorized, 'PERMISSION_DENIED');
+    assert.equal(
+      await db
+        .select()
+        .from(ProfileBlocks)
+        .where(eq(ProfileBlocks.id, decodeGlobalId(blockId).id))
+        .then((rows) => rows.length),
+      1,
+    );
   });
 
   test('rejects unavailable targets before durable Block cleanup', async () => {
@@ -149,22 +275,25 @@ describe('GraphQL Profile Block', () => {
     );
   });
 
-  test('selected Local owner can block Local and Remote targets and manage exact IDs', async () => {
+  test('authenticated selected owner can block Local and Remote targets and manage exact IDs', async () => {
     const owner = await createAuthenticatedSession();
     const localTarget = await createProfile('blocked-local');
     const remoteInstance = await createRemoteInstance();
     const remoteTarget = await createProfile('blocked-remote', remoteInstance.id);
     const thirdParty = await createAuthenticatedSession();
+    await createFollowNotification(localTarget.id, owner.profile.id);
 
     const localBlock = await blockProfile(localTarget.id, owner.token);
     assertNoGraphQLErrors(localBlock);
     const localBlockId = localBlock.data?.blockProfile.profileBlock.id;
     assert.ok(localBlockId);
+    assert.equal(localBlock.data?.blockProfile.success, true);
     assert.deepEqual(localBlock.data?.blockProfile.profileBlock.targetProfile, {
       id: globalId('Profile', localTarget.id),
       handle: localTarget.handle,
       displayName: localTarget.displayName,
       instance: { kind: 'LOCAL' },
+      viewerState: { follow: null, followRequest: null, profileBlock: { id: localBlockId } },
     });
     assert.deepEqual(
       decodeGlobalId(localBlock.data?.blockProfile.profileBlock.targetProfile.id ?? ''),
@@ -406,9 +535,6 @@ describe('GraphQL Profile Block', () => {
     const target = await createProfile('blocked-target');
     const targetSession = await createAuthenticatedSession(target);
     const other = await createAuthenticatedSession();
-    const remoteInstance = await createRemoteInstance('remote-selected.example');
-    const remoteSelected = await createProfile('remote-selected', remoteInstance.id);
-    const remoteSession = await createAuthenticatedSession(remoteSelected);
 
     const created = await blockProfile(target.id, owner.token);
     assertNoGraphQLErrors(created);
@@ -455,9 +581,6 @@ describe('GraphQL Profile Block', () => {
 
     const anonymousBlock = await blockProfile(target.id);
     assertGraphQLErrorCode(anonymousBlock, 'PERMISSION_DENIED');
-
-    const remoteBlock = await blockProfile(owner.profile.id, remoteSession.token);
-    assertGraphQLErrorCode(remoteBlock, 'PERMISSION_DENIED');
 
     assert.equal(
       await db
@@ -536,6 +659,7 @@ describe('GraphQL Profile Block', () => {
 const blockProfile = (profileId: string, token?: string) =>
   requestGraphQL<{
     blockProfile: {
+      success: boolean;
       profileBlock: {
         id: string;
         targetProfile: {
@@ -543,15 +667,27 @@ const blockProfile = (profileId: string, token?: string) =>
           handle: string;
           displayName: string;
           instance: { kind: string };
+          viewerState: {
+            follow: { id: string } | null;
+            followRequest: { id: string } | null;
+            profileBlock: { id: string } | null;
+          } | null;
         };
       };
     };
   }>(
     `mutation BlockProfile($id: ID!) {
       blockProfile(input: { id: $id }) {
+        success
         profileBlock {
           id
-          targetProfile { id handle displayName instance { kind } }
+          targetProfile {
+            id
+            handle
+            displayName
+            instance { kind }
+            viewerState { follow { id } followRequest { id } profileBlock { id } }
+          }
         }
       }
     }`,

@@ -5,7 +5,6 @@ import { executeProfileBlock, executeProfileUnblock } from '@kosmo/core/temporal
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { visibleProfileWhere } from '@/profile/visibility';
-import { requireSelectedLocalProfile } from '../access/block';
 import { profileBlockByIdLoader } from '../loader/block';
 import { Profile, ProfileBlock } from '../ref';
 
@@ -14,13 +13,14 @@ builder.mutationField('blockProfile', (t) =>
     type: builder.simpleObject('BlockProfilePayload', {
       fields: (field) => ({
         profileBlock: field.field({ type: ProfileBlock }),
+        success: field.boolean(),
       }),
     }),
     input: {
       id: t.input.globalID({ for: Profile }),
     },
     resolve: async (_, { input }, ctx) => {
-      const selected = await requireSelectedLocalProfile(ctx);
+      const selectedProfileId = ctx.session.profile.id;
       const target = await db
         .select({ id: Profiles.id })
         .from(Profiles)
@@ -38,16 +38,15 @@ builder.mutationField('blockProfile', (t) =>
       }
 
       const result = await executeProfileBlock({
-        ownerProfileId: selected.id,
+        ownerProfileId: selectedProfileId,
         targetProfileId: target.id,
         origin: 'LOCAL',
       });
-      const profileBlock = await profileBlockByIdLoader(ctx).load(result.profileBlockId);
-      if (!profileBlock) {
-        throw new Error('Profile Block is missing after durable action');
-      }
 
-      return { profileBlock };
+      return {
+        profileBlock: result.profileBlockId,
+        success: true,
+      };
     },
   }),
 );
@@ -63,26 +62,30 @@ builder.mutationField('unblockProfile', (t) =>
             return profileBlockId ? { id: profileBlockId, type: ProfileBlock } : null;
           },
         }),
+        success: field.boolean(),
       }),
     }),
     input: {
       id: t.input.globalID({ for: ProfileBlock }),
     },
     resolve: async (_, { input }, ctx) => {
-      const selected = await requireSelectedLocalProfile(ctx);
+      const selectedProfileId = ctx.session.profile.id;
       const profileBlock = await profileBlockByIdLoader(ctx).load(input.id.id);
       if (!profileBlock) {
         throw new NotFoundError('Profile Block not found');
       }
 
       const result = await executeProfileUnblock({
-        ownerProfileId: selected.id,
+        ownerProfileId: selectedProfileId,
         targetProfileId: profileBlock.targetProfileId,
         profileBlockId: profileBlock.id,
         origin: 'LOCAL',
       });
 
-      return { profileBlockId: result.removed ? result.profileBlockId : null };
+      return {
+        profileBlockId: result.removed ? result.profileBlockId : null,
+        success: result.removed,
+      };
     },
   }),
 );

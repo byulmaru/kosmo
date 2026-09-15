@@ -5,7 +5,6 @@ import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { visibleProfileWhere } from '@/profile/visibility';
-import { requireSelectedLocalProfile } from '../access/block';
 import { Profile, ProfileBlock, ProfileBlockConnection } from '../ref';
 import type { ProfileBlockRow } from '../loader/block';
 
@@ -20,9 +19,10 @@ builder.objectField(Profile, 'profileBlocks', (t) =>
   t.withAuth({ profileRole: AccountProfileRole.MEMBER }).connection(
     {
       type: ProfileBlock,
+      nullable: true,
+      unauthorizedResolver: () => null,
       resolve: async (profile, args, ctx) => {
-        const selected = await requireSelectedLocalProfile(ctx);
-        if (selected.id !== profile.id) {
+        if (ctx.session.profile.id !== profile.id) {
           throw new PermissionDeniedError('Profile Block owner is required');
         }
 
