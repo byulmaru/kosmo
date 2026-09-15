@@ -294,14 +294,17 @@ mockModule(new URL('../content-report/ContentReportContext.tsx', import.meta.url
 mockModule(new URL('./FollowButton.tsx', import.meta.url), {
   FollowButton: ({
     onActionRef,
+    onBlockFeedback,
     profile,
   }: {
     onActionRef?: (node: { focus: () => void }) => void;
+    onBlockFeedback?: (feedback: ProfileBlockFeedback) => void;
     profile: { handle: string };
   }) => {
     onActionRef?.({ focus: () => stateActionFocus() });
     return createElement('FollowButton', {
       identity: profile.handle,
+      onBlockFeedback,
     });
   },
 });
@@ -914,25 +917,6 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(changeBlockedCalls.length, 0);
   });
 
-  it('상대에게 차단된 Profile은 actionless StateView만 표시한다', async () => {
-    selectedProfileId = 'owner';
-    profileAvailable = false;
-    profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
-
-    await renderRoute('@blocked', '/@blocked');
-
-    const header = requireRendered('PageHeader');
-    assert.equal(header.props.title, '');
-    assert.ok(header.props.leading);
-    await act(async () => header.props.leading.props.onPress());
-    assert.equal(routerBackCount, 1);
-
-    assert.equal(requireRendered('StateView').props.title, '이 프로필을 볼 수 없습니다');
-    assert.equal(rendered('Button').length, 0);
-    assert.equal(rendered('ActionMenu').length, 0);
-    assert.equal(rendered('ProfileHero').length, 0);
-  });
-
   it('조회 가능한 blocking Profile은 ProfileHero와 확인 전 경고 뒤 Slot 콘텐츠를 유지한다', async () => {
     selectedProfileId = 'owner';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
@@ -944,11 +928,7 @@ describe('profile route parameter lifecycle', () => {
     assert.deepEqual(identities('PostList'), []);
     assert.equal(requireRendered('StateView').props.title, '차단한 프로필의 게시물입니다');
     assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
-    assert.equal(rendered('FollowButton').length, 0);
-    assert.equal(
-      rendered('Button').some((node) => node.props.children === '차단 해제'),
-      true,
-    );
+    assert.deepEqual(identities('FollowButton'), ['blocked']);
     const menu = requireRendered('ActionMenu');
     assert.deepEqual(
       menu.props.items.map((item: { label: string }) => item.label),
@@ -971,7 +951,7 @@ describe('profile route parameter lifecycle', () => {
 
     assert.deepEqual(identities('ProfileHero'), ['blocked']);
     assert.deepEqual(identities('PostList'), []);
-    assert.equal(requireRendered('StateView').props.title, '게시물을 볼 수 없습니다');
+    assert.equal(requireRendered('StateView').props.title, '이 프로필을 볼 수 없습니다');
     assert.equal(rendered('Button').length, 0);
     assert.equal(rendered('FollowButton').length, 0);
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
@@ -1001,18 +981,19 @@ describe('profile route parameter lifecycle', () => {
     profileBlockStatus = { blockedBy: true, blocking: true, profileBlockId: 'block-1' };
 
     await renderRoute('@blocked');
-    assert.equal(rendered('FollowButton').length, 0);
+    assert.deepEqual(identities('FollowButton'), ['blocked']);
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
     assert.deepEqual(
       requireRendered('ActionMenu').props.items.map((item: { label: string }) => item.label),
       ['차단 해제'],
     );
-    const unblock = rendered('Button').find((node) => node.props.children === '차단 해제');
-    assert.ok(unblock);
-    await act(async () => unblock.props.onPress());
-    await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
-
     profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
+    await act(async () =>
+      requireRendered('FollowButton').props.onBlockFeedback({
+        blocked: false,
+        status: 'success',
+      }),
+    );
     await renderRoute('@blocked');
     assert.equal(rendered('FollowButton').length, 0);
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
@@ -1102,27 +1083,5 @@ describe('profile route parameter lifecycle', () => {
     assert.deepEqual(focusHistory, ['menu', 'state']);
     assert.equal(menuTriggerFocus.mock.callCount(), 1);
     assert.equal(stateActionFocus.mock.callCount(), 1);
-  });
-
-  it('양방향 차단 해제 후 남은 차단 콘텐츠 상태로 포커스를 복원한다', async () => {
-    selectedProfileId = 'owner';
-    profileBlockStatus = { blockedBy: true, blocking: true, profileBlockId: 'block-1' };
-    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
-    changeBlockedImpl = async (_change, nextBlocked) => {
-      if (!nextBlocked) {
-        profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
-      }
-    };
-    await renderRoute('@target');
-
-    const action = rendered('Button').find((node) => node.props.children === '차단 해제');
-    assert.ok(action);
-    await act(async () => action.props.onPress());
-    await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
-    await renderRoute('@target');
-    assert.deepEqual(focusHistory, ['content']);
-
-    assert.equal(contentStateFocus.mock.callCount(), 1);
-    assert.equal(menuTriggerFocus.mock.callCount(), 0);
   });
 });

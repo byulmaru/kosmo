@@ -8,7 +8,6 @@ import { useContentReportMenuItem } from '@/components/content-report/ContentRep
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { FollowButton } from '@/components/profile/FollowButton';
-import { ProfileBlockAction } from '@/components/profile/ProfileBlockAction';
 import { ProfileConnectionListState } from '@/components/profile/ProfileConnectionList';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { getProfileConnectionKind, normalizeProfileHandle } from '@/components/profile/route';
@@ -214,9 +213,7 @@ function ProfileLayoutContent({
   };
 
   if (!profile) {
-    const missingState = blockedBy ? (
-      <StateView controlRef={contentStateRef} title="이 프로필을 볼 수 없습니다" />
-    ) : (
+    const missingState = (
       <StateView
         description={`@${handle} 프로필이 존재하지 않아요.`}
         title="프로필을 찾을 수 없어요"
@@ -257,21 +254,12 @@ function ProfileLayoutContent({
         편집
       </Button>
     </NavigationLink>
-  ) : blocking && profileBlock ? (
-    <ProfileBlockAction
-      nextBlocked={false}
-      onActionRef={(node) => {
-        stateActionRef.current = node;
-      }}
-      onFeedback={onBlockFeedback}
-      profileBlock={profileBlock}
-      surface="button"
-    />
-  ) : blockedBy ? undefined : (
+  ) : blockedBy && !blocking ? undefined : (
     <FollowButton
       onActionRef={(node) => {
         stateActionRef.current = node;
       }}
+      onBlockFeedback={onBlockFeedback}
       profile={profile}
     />
   );
@@ -280,7 +268,7 @@ function ProfileLayoutContent({
   const profileContent = relationshipRoute ? (
     <Slot />
   ) : blockedBy ? (
-    <StateView controlRef={contentStateRef} title="게시물을 볼 수 없습니다" />
+    <StateView controlRef={contentStateRef} title="이 프로필을 볼 수 없습니다" />
   ) : blocking && !blockedContentVisible ? (
     <StateView
       actionLabel="게시물 보기"
