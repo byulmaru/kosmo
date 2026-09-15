@@ -4,6 +4,7 @@ import type { ReactionSummaryEntry } from './ReactionSummary';
 let pendingReturnFocusPath: string | null = null;
 let pendingReturnFocusId: string | null = null;
 let pendingReturnFocusFallback: (() => void) | null = null;
+let pendingReturnNativeFocus: (() => boolean) | null = null;
 let pendingReturnEntryId: string | null = null;
 let pendingReturnToOrigin = false;
 let removeReactionPeoplePopStateListener: (() => void) | null = null;
@@ -33,6 +34,7 @@ export function rememberReactionPeopleReturnFocus(
   href: Href,
   focusId?: string,
   fallbackFocus?: () => void,
+  nativeFocus?: () => boolean,
 ) {
   if (typeof href !== 'string') {
     return;
@@ -44,6 +46,7 @@ export function rememberReactionPeopleReturnFocus(
   removeReactionPeoplePopStateListener = null;
   pendingReturnFocusId = focusId ?? null;
   pendingReturnFocusFallback = fallbackFocus ?? null;
+  pendingReturnNativeFocus = nativeFocus ?? null;
   if (typeof document === 'undefined') {
     return;
   }
@@ -65,6 +68,7 @@ export function clearReactionPeopleReturnState() {
   pendingReturnFocusPath = null;
   pendingReturnFocusId = null;
   pendingReturnFocusFallback = null;
+  pendingReturnNativeFocus = null;
 }
 
 export function bindReactionPeopleReturnEntry() {
@@ -93,11 +97,16 @@ export function hasReactionPeopleReturnToOrigin() {
 
 export function restoreReactionPeopleReturnFocus(preserveForHistory = false) {
   if (typeof document === 'undefined' || !pendingReturnFocusPath) {
+    const nativeFocus = pendingReturnNativeFocus;
     const fallbackFocus = pendingReturnFocusFallback;
     if (!preserveForHistory) {
       pendingReturnFocusPath = null;
       pendingReturnFocusId = null;
       pendingReturnFocusFallback = null;
+      pendingReturnNativeFocus = null;
+    }
+    if (typeof document === 'undefined' && nativeFocus?.()) {
+      return;
     }
     fallbackFocus?.();
     return;
@@ -110,6 +119,7 @@ export function restoreReactionPeopleReturnFocus(preserveForHistory = false) {
     pendingReturnFocusPath = null;
     pendingReturnFocusId = null;
     pendingReturnFocusFallback = null;
+    pendingReturnNativeFocus = null;
   }
   let attempts = 0;
   const focus = () => {

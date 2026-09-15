@@ -48,6 +48,12 @@ test('목록에서 People로 이동하고 Type과 프로필 방문 후 원래 �
       createdAt: Temporal.Instant.from('2026-09-01T00:00:01Z'),
       postId: post.id,
       profileId: profile.id,
+      type: '❤️' as const,
+    })),
+    ...partyReactors.map((profile) => ({
+      createdAt: Temporal.Instant.from('2026-09-01T00:00:01Z'),
+      postId: post.id,
+      profileId: profile.id,
       type: '🎉' as const,
     })),
   ]);
@@ -72,8 +78,13 @@ test('목록에서 People로 이동하고 Type과 프로필 방문 후 원래 �
   await expect(page.getByRole('navigation', { name: '하단 탐색', exact: true })).toBeVisible();
   await expect(page.getByRole('tab', { name: /❤️/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('하트 사용자', { exact: true })).toBeVisible();
+  const heartLink = page.locator('a[href="/@e2e-heart"]');
+  await heartLink.scrollIntoViewIfNeeded();
+  const initialPeopleScroll = await page.evaluate(() => window.scrollY);
+  expect(initialPeopleScroll).toBeGreaterThan(0);
   await page.getByRole('tab', { name: /🎉/ }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('type')).toBe('🎉');
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page.getByRole('tab', { name: /🎉/ })).toBeFocused();
   await expect(page.getByText('하트 사용자', { exact: true })).toHaveCount(0);
   const partyLink = page.locator('a[href="/@e2e-party"]');

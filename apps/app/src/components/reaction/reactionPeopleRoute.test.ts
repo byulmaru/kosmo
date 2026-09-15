@@ -18,6 +18,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const navigationListeners = new Set<(event: unknown) => void>();
+const transitionEndListeners = new Set<(event: unknown) => void>();
 const routerReplacements: string[] = [];
 let renderer: ReactTestRenderer | null = null;
 let route: ComponentType | null = null;
@@ -32,9 +33,10 @@ mockModule('expo-router', {
   useLocalSearchParams: () => ({ profileHandle: '@writer', postId: 'post-1' }),
   useNavigation: () => ({
     addListener: (event: string, listener: (payload: unknown) => void) => {
-      assert.equal(event, 'beforeRemove');
-      navigationListeners.add(listener);
-      return () => navigationListeners.delete(listener);
+      const listeners = event === 'beforeRemove' ? navigationListeners : transitionEndListeners;
+      assert.ok(event === 'beforeRemove' || event === 'transitionEnd');
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
   }),
   useRouter: () => ({
@@ -88,6 +90,7 @@ afterEach(async () => {
     renderer = null;
   }
   navigationListeners.clear();
+  transitionEndListeners.clear();
   reactionPeopleScreenProps = null;
   routerReplacements.length = 0;
   clearReactionPeopleReturnState();
@@ -160,6 +163,10 @@ describe('reaction people route helpers', () => {
       listener({ data: { action: { type: 'GO_BACK' } }, type: 'beforeRemove' });
     }
     assert.equal(hasReactionPeopleReturnToOrigin(), false);
+    assert.equal(fallbackFocusCount, 0);
+    for (const listener of transitionEndListeners) {
+      listener({ data: { closing: true }, type: 'transitionEnd' });
+    }
     assert.equal(fallbackFocusCount, 1);
     for (const listener of navigationListeners) {
       listener({ data: { action: { type: 'GO_BACK' } }, type: 'beforeRemove' });
@@ -201,6 +208,40 @@ describe('reaction people route helpers', () => {
     }
 
     assert.equal(hasReactionPeopleReturnToOrigin(), true);
+  });
+
+  it('waits for the Native closing transition before restoring the retained control focus', async () => {
+    let nativeFocusCount = 0;
+    let fallbackFocusCount = 0;
+    rememberReactionPeopleReturnFocus(
+      '/@writer/post-1/reactions',
+      undefined,
+      () => {
+        fallbackFocusCount += 1;
+      },
+      () => {
+        nativeFocusCount += 1;
+        return true;
+      },
+    );
+    await renderRoute();
+
+    for (const listener of navigationListeners) {
+      listener({ data: { action: { type: 'GO_BACK' } }, type: 'beforeRemove' });
+    }
+    assert.equal(nativeFocusCount, 0);
+    assert.equal(fallbackFocusCount, 0);
+
+    for (const listener of transitionEndListeners) {
+      listener({ data: { closing: false }, type: 'transitionEnd' });
+    }
+    assert.equal(nativeFocusCount, 0);
+
+    for (const listener of transitionEndListeners) {
+      listener({ data: { closing: true }, type: 'transitionEnd' });
+    }
+    assert.equal(nativeFocusCount, 1);
+    assert.equal(fallbackFocusCount, 0);
   });
 
   it('rearms the same browser history entry after Back and Forward', () => {
@@ -277,5 +318,42 @@ describe('reaction people route helpers', () => {
       global.document = previousDocument;
       global.requestAnimationFrame = previousAnimationFrame;
     }
+  });
+
+  it('prefers the retained Native control focus before the shell fallback', () => {
+    let nativeFocusCount = 0;
+    let fallbackFocusCount = 0;
+    rememberReactionPeopleReturnFocus(
+      '/@writer/post-1/reactions',
+      undefined,
+      () => {
+        fallbackFocusCount += 1;
+      },
+      () => {
+        nativeFocusCount += 1;
+        return true;
+      },
+    );
+
+    restoreReactionPeopleReturnFocus();
+
+    assert.equal(nativeFocusCount, 1);
+    assert.equal(fallbackFocusCount, 0);
+  });
+
+  it('uses the shell fallback when the retained Native control is gone', () => {
+    let fallbackFocusCount = 0;
+    rememberReactionPeopleReturnFocus(
+      '/@writer/post-1/reactions',
+      undefined,
+      () => {
+        fallbackFocusCount += 1;
+      },
+      () => false,
+    );
+
+    restoreReactionPeopleReturnFocus();
+
+    assert.equal(fallbackFocusCount, 1);
   });
 });

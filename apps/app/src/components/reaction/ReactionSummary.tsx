@@ -8,7 +8,8 @@ import { fontFamilies, radii, spacing } from '@/theme/tokens';
 import { getReactionSummaryLayout } from './reactionSummaryLayout';
 import type { Href } from 'expo-router';
 import type React from 'react';
-import type { LayoutChangeEvent } from 'react-native';
+import type { RefObject } from 'react';
+import type { LayoutChangeEvent, View as NativeView } from 'react-native';
 import type { ReactionToggleIntent } from './ReactionSelector';
 
 export type ReactionSummaryEntry = Readonly<{ count: number; type: string }>;
@@ -23,6 +24,7 @@ export type ReactionSummaryProps = {
   onRetry?: () => void;
   onToggle?: (intent: ReactionToggleIntent) => void;
   peopleControlId?: string;
+  peopleControlRef?: RefObject<NativeView | null>;
   pendingTypeIds?: ReadonlyArray<string>;
   peopleHref?: Href;
   selectedTypeIds?: ReadonlyArray<string>;
@@ -46,6 +48,7 @@ export function ReactionSummary({
   onRetry,
   onToggle,
   peopleControlId,
+  peopleControlRef,
   pendingTypeIds = [],
   peopleHref,
   selectedTypeIds = [],
@@ -133,6 +136,7 @@ export function ReactionSummary({
         accessibilityRole={peopleHref ? 'link' : 'button'}
         nativeID={peopleControlId}
         onPress={peopleHref ? undefined : onMore}
+        ref={peopleControlRef}
         style={({ pressed }) => [
           styles.moreControl,
           !overflow && styles.ellipsisControl,

@@ -51,3 +51,9 @@ Figma의 Web Compact·Full과 Mobile `Default selected` frame을 다시 대조�
 - `PROD-938`의 `c6078a40496c9812ccc263248863b838dd01f2e2`에서 `node scripts/test-db.mjs run -- pnpm test:e2e:database -- reaction-people.e2e.ts`를 실행해 4개가 통과했다.
 - 추가된 E2E는 브라우저 Forward로 People에 다시 진입한 뒤 Header Back이 원래 목록으로 돌아가는 경로와, People 목록의 실제 non-zero scroll 위치에서 프로필을 방문한 뒤 browser Back으로 Type·행·scroll 위치가 복원되는 경로를 포함한다.
 - 같은 head의 GitHub CI는 Lint, Semgrep, Web E2E 3개 shard와 종합 Test를 포함한 16개 check가 모두 통과했다.
+
+## 2026-09-16 Back focus·Type scroll 후속 검증
+
+- 후속 리뷰 반영 worktree에서 `pnpm --filter @kosmo/app test:unit`을 실행해 590개가 통과했다. Native route 단위 검증은 Back의 closing transition이 끝난 뒤 기존 People control ref를 우선 focus하고, control이 사라진 경우에만 shell fallback을 사용하는 순서를 확인한다.
+- 같은 worktree에서 `node scripts/test-db.mjs run -- pnpm test:e2e:database -- reaction-people.e2e.ts`를 다시 실행해 4개가 통과했다. 첫 Type의 20개 행으로 만든 non-zero People scroll 위치에서 Type을 바꾼 뒤 Web scroll이 0으로 초기화되는 경로를 포함한다.
+- Native Type 변경은 전달된 scroll ref가 `scrollTo({ animated: false, x: 0, y: 0 })`를 한 번 호출하는 단위 검증으로 확인했다. 실제 iOS·Android navigation transition과 VoiceOver·TalkBack 동작은 여전히 미실행 항목이다.

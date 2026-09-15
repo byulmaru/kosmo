@@ -5,6 +5,7 @@ import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ElementType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { ReactionPeopleScreenProps } from './ReactionPeopleScreen';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -24,6 +25,12 @@ const webHeading = { focus: () => (webFocusCount += 1), tabIndex: 0 };
 const nativeTitle = {};
 const nativeHeader = {
   querySelector: () => webHeading,
+};
+const scrollToCalls: Array<{ animated: boolean; x: number; y: number }> = [];
+const nativeScrollView = {
+  scrollTo: (options: { animated: boolean; x: number; y: number }) => {
+    scrollToCalls.push(options);
+  },
 };
 
 mockModule('react-native', {
@@ -71,15 +78,17 @@ mockModule('lucide-react-native', { ChevronLeftIcon: 'ChevronLeftIcon' });
 mockModule(require.resolve('lucide-react-native'), { ChevronLeftIcon: 'ChevronLeftIcon' });
 
 let ReactionPeopleHeader: ComponentType<{ onBack: () => void }>;
+let ReactionPeopleScreen: ComponentType<ReactionPeopleScreenProps>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
-  ({ ReactionPeopleHeader } = await import('./ReactionPeopleScreen'));
+  ({ ReactionPeopleHeader, ReactionPeopleScreen } = await import('./ReactionPeopleScreen'));
 });
 
 beforeEach(() => {
   platform.OS = 'ios';
   accessibilityEvents.length = 0;
+  scrollToCalls.length = 0;
   webFocusCount = 0;
 });
 
@@ -126,4 +135,45 @@ test('Web mount keeps DOM heading focus behavior', async () => {
   assert.equal(webHeading.tabIndex, -1);
   assert.equal(webFocusCount, 1);
   assert.deepEqual(accessibilityEvents, []);
+});
+
+test('Native Type change resets the forwarded ScrollView ref', async () => {
+  const props: ReactionPeopleScreenProps = {
+    onBack: () => undefined,
+    onTypeChange: () => undefined,
+    postId: 'people-post',
+    reactionCounts: [
+      { count: 1, type: '❤️' },
+      { count: 1, type: '🎉' },
+    ],
+    reactionType: '❤️',
+  };
+
+  await act(async () => {
+    renderer = create(createElement(ReactionPeopleScreen, props), {
+      createNodeMock: (element) => {
+        if (element.type === 'PaginationScrollView') {
+          return nativeScrollView;
+        }
+        if (element.type === ViewHost) {
+          return nativeHeader;
+        }
+        if (element.type === TextHost) {
+          return nativeTitle;
+        }
+        return null;
+      },
+    });
+  });
+
+  await act(async () => {
+    renderer?.update(
+      createElement(ReactionPeopleScreen, {
+        ...props,
+        reactionType: '🎉',
+      }),
+    );
+  });
+
+  assert.deepEqual(scrollToCalls, [{ animated: false, x: 0, y: 0 }]);
 });

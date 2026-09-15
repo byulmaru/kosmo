@@ -69,25 +69,49 @@ export default function ReactionPeopleRoute() {
     : `@${rawProfileHandle}`;
   const fallbackPostHref = `/${routeRelativeHandle}/${postId}` as Href;
 
-  useEffect(
-    () =>
-      navigation.addListener('beforeRemove', (event) => {
-        if (isCanonicalReactionPeopleReplace(event)) {
-          bindReactionPeopleReturnEntry();
-          return;
-        }
+  useEffect(() => {
+    let nativeReturnFocusPending = false;
+    const removeBeforeRemoveListener = navigation.addListener('beforeRemove', (event) => {
+      if (isCanonicalReactionPeopleReplace(event)) {
+        bindReactionPeopleReturnEntry();
+        return;
+      }
 
-        if (isReactionPeopleBackAction(event)) {
-          if (consumeReactionPeopleReturnToOrigin()) {
+      if (isReactionPeopleBackAction(event)) {
+        if (consumeReactionPeopleReturnToOrigin()) {
+          if (typeof document === 'undefined') {
+            nativeReturnFocusPending = true;
+          } else {
             restoreReactionPeopleReturnFocus(true);
           }
-          return;
         }
+        return;
+      }
 
-        clearReactionPeopleReturnState();
-      }),
-    [navigation],
-  );
+      clearReactionPeopleReturnState();
+    });
+    const removeTransitionEndListener = (
+      navigation as unknown as {
+        addListener: (
+          event: 'transitionEnd',
+          listener: (event: { data?: { closing?: boolean } }) => void,
+        ) => () => void;
+      }
+    ).addListener('transitionEnd', (event) => {
+      if (!nativeReturnFocusPending || !event.data?.closing) {
+        return;
+      }
+
+      nativeReturnFocusPending = false;
+      restoreReactionPeopleReturnFocus();
+    });
+
+    return () => {
+      nativeReturnFocusPending = false;
+      removeBeforeRemoveListener();
+      removeTransitionEndListener();
+    };
+  }, [navigation]);
 
   useEffect(() => {
     bindReactionPeopleReturnEntry();
