@@ -244,7 +244,7 @@ Hashtag에는 영향을 주지 않는다.
   exact-match 또는 partial-match 후보를 반환할 때는 위 공개 조회 조건을 통과한 후보 중 viewer와 양방향 Active Profile
   Block 관계인 Profile을 pagination·cursor·limit 전에 제외한다.
 - selected Profile이 없는 경우에는 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate를 적용하거나
-  selected Local Profile을 새로 요구하지 않는다. viewer는 임의 입력 actor나 이전 selected Profile·client cache에서
+  selected Profile을 새로 요구하지 않는다. viewer는 임의 입력 actor나 이전 selected Profile·client cache에서
   재사용하지 않고 현재 요청의 Account 상태에서만 결정한다.
 - Local Profile의 Owner와 운영자 Account는 운영에 필요한 비공개 상태를 조회할 수 있다.
 - Remote Profile은 Instance의 Safety State가 Domain Block이 아니어야 한다.
