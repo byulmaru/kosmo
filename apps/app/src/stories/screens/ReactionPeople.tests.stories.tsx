@@ -179,18 +179,20 @@ export const ActorSwitchDoesNotReusePreviousRows: Story = {
       actorBoundary: true,
       operationResponses: {
         ReactionPeopleScreenQuery: [
-          { data: peopleQueryData() },
-          { data: peopleQueryData(otherPeopleProfiles), delayMs: 400 },
+          { data: peopleQueryData(), delayMs: 2_000 },
+          { data: peopleQueryData(otherPeopleProfiles) },
         ],
       },
     },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(await canvas.findByText('별빛 여행자')).toBeVisible();
+    expect(canvas.getByText('반응한 프로필을 불러오는 중입니다.')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '활성 프로필 전환' }));
-    await waitFor(() => expect(canvas.queryByText('별빛 여행자')).not.toBeInTheDocument());
     expect(await canvas.findByText('축하하는 혜성')).toBeVisible();
+    expect(canvas.queryByText('별빛 여행자')).not.toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 2_100));
+    expect(canvas.getByText('축하하는 혜성')).toBeVisible();
     expect(canvas.queryByText('별빛 여행자')).not.toBeInTheDocument();
   },
   render: (args) => <ActorSwitchPeople {...args} />,

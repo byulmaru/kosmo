@@ -22,6 +22,14 @@ test('목록에서 People로 이동하고 Type과 프로필 방문 후 원래 �
   const viewer = await createE2ESession({ handle: 'e2e-people-viewer' });
   const heartProfile = await createE2EProfile({ handle: 'e2e-heart', displayName: '하트 사용자' });
   const partyProfile = await createE2EProfile({ handle: 'e2e-party', displayName: '축하 사용자' });
+  const partyReactors = await Promise.all(
+    Array.from({ length: 19 }, (_, index) =>
+      createE2EProfile({
+        displayName: `축하 사용자 ${index + 1}`,
+        handle: `e2e-party-${index + 1}`,
+      }),
+    ),
+  );
   const post = await createE2EPost({ body: '반응 목록 복귀 대상', profileId: viewer.profile!.id });
   await db.insert(Reactions).values([
     {
@@ -31,11 +39,17 @@ test('목록에서 People로 이동하고 Type과 프로필 방문 후 원래 �
       type: '❤️',
     },
     {
-      createdAt: Temporal.Instant.from('2026-09-01T00:00:01Z'),
+      createdAt: Temporal.Instant.from('2026-09-01T00:00:00Z'),
       postId: post.id,
       profileId: partyProfile.id,
       type: '🎉',
     },
+    ...partyReactors.map((profile) => ({
+      createdAt: Temporal.Instant.from('2026-09-01T00:00:01Z'),
+      postId: post.id,
+      profileId: profile.id,
+      type: '🎉' as const,
+    })),
   ]);
   for (let index = 0; index < 6; index += 1) {
     await createE2EPost({ body: `목록 스크롤용 게시글 ${index}`, profileId: viewer.profile!.id });
@@ -62,12 +76,17 @@ test('목록에서 People로 이동하고 Type과 프로필 방문 후 원래 �
   await expect.poll(() => new URL(page.url()).searchParams.get('type')).toBe('🎉');
   await expect(page.getByRole('tab', { name: /🎉/ })).toBeFocused();
   await expect(page.getByText('하트 사용자', { exact: true })).toHaveCount(0);
-  await page.locator('a[href="/@e2e-party"]').click();
+  const partyLink = page.locator('a[href="/@e2e-party"]');
+  await partyLink.scrollIntoViewIfNeeded();
+  const peopleScroll = await page.evaluate(() => window.scrollY);
+  expect(peopleScroll).toBeGreaterThan(0);
+  await partyLink.click();
   await expect.poll(() => decodeURIComponent(new URL(page.url()).pathname)).toBe('/@e2e-party');
   await page.goBack();
   await expect(heading).toBeVisible();
   await expect(page.getByRole('tab', { name: /🎉/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('축하 사용자', { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(peopleScroll, 0);
 
   await page.getByRole('button', { name: '뒤로 가기' }).click();
   await expect(page).toHaveURL(/\/home$/);

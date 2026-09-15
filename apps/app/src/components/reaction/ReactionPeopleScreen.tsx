@@ -1,6 +1,6 @@
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { forwardRef, useEffect, useRef } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
@@ -13,7 +13,7 @@ import { ReactionPeopleFilter } from './ReactionPeopleFilter';
 import { ReactionProfileConnection } from './ReactionProfileConnection';
 import { ReactionProfileList } from './ReactionProfileList';
 import type { ReactElement } from 'react';
-import type { ScrollView, View as NativeView } from 'react-native';
+import type { ScrollView, Text, View as NativeView } from 'react-native';
 import type { ReactionPeopleScreenQuery } from './__generated__/ReactionPeopleScreenQuery.graphql';
 import type { ReactionSummaryEntry } from './ReactionSummary';
 
@@ -87,9 +87,13 @@ export function ReactionPeopleScreen({
 export function ReactionPeopleHeader({ onBack }: { onBack: () => void }): ReactElement {
   const theme = useTheme();
   const headerRef = useRef<NativeView>(null);
+  const headingRef = useRef<Text>(null);
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
+      if (headingRef.current) {
+        AccessibilityInfo.sendAccessibilityEvent(headingRef.current, 'focus');
+      }
       return;
     }
 
@@ -117,6 +121,7 @@ export function ReactionPeopleHeader({ onBack }: { onBack: () => void }): ReactE
             <ChevronLeftIcon color={theme.foregroundPrimary} size={20} />
           </IconButton>
         }
+        titleRef={headingRef}
         title="반응한 사람"
       />
     </View>
