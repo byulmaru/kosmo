@@ -34,6 +34,7 @@ type Props = Readonly<{
   contentId: string;
   mediaOwnerPostId: string;
   onPostDeleted?: () => void;
+  onReactionPeopleNavigate?: () => void;
   replyAvailable: boolean;
   replySurfacePostId: string;
 }>;
@@ -54,6 +55,7 @@ function PostMediaViewerThreadContent({
   contentId,
   mediaOwnerPostId,
   onPostDeleted,
+  onReactionPeopleNavigate,
   replyAvailable,
   replySurfacePostId,
 }: Props) {
@@ -75,6 +77,7 @@ function PostMediaViewerThreadContent({
       currentPostReplyAvailable={replyAvailable}
       currentPostReplySurfaceId={replySurfacePostId}
       onPostDeleted={onPostDeleted}
+      onReactionPeopleNavigate={onReactionPeopleNavigate}
       onReplyCreated={refetch}
       post={thread}
       presentation="viewer"

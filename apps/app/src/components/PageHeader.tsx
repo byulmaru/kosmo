@@ -4,12 +4,13 @@ import { fontFamilies, spacing, typography } from '../theme/tokens';
 import { BrandLogo } from './BrandLogo';
 import { NavigationLink } from './shell/NavigationLink';
 import type { Href } from 'expo-router';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 
 type PageHeaderProps =
   | {
       leading?: ReactNode;
       title: string;
+      titleRef?: Ref<Text>;
       titleLines?: 1;
       trailing?: ReactNode;
       variant?: 'text';
@@ -78,9 +79,11 @@ export function PageHeader(props: PageHeaderProps) {
         <>
           {props.leading ? <View style={styles.leading}>{props.leading}</View> : null}
           <Text
+            accessible={props.titleRef ? true : undefined}
             accessibilityRole="header"
             ellipsizeMode={props.titleLines === 1 ? 'tail' : undefined}
             numberOfLines={props.titleLines}
+            ref={props.titleRef}
             style={[styles.title, { color: theme.foregroundPrimary }]}
           >
             {props.title}

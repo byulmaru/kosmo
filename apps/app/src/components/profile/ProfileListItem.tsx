@@ -11,6 +11,7 @@ type ProfileListItemProps = {
   linked?: boolean;
   onPress?: () => void;
   profile: ProfileListItem_profile$key;
+  showBio?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -29,13 +30,19 @@ const profileListItemFragment = graphql`
   }
 `;
 
-export function ProfileListItem({ linked = false, onPress, profile, style }: ProfileListItemProps) {
+export function ProfileListItem({
+  linked = false,
+  onPress,
+  profile,
+  showBio = true,
+  style,
+}: ProfileListItemProps) {
   const data = useFragment(profileListItemFragment, profile);
   return (
     <ProfileListItemContent
       avatarUri={data.avatar?.url}
       avatarLabel={data.displayName || data.handle}
-      bio={data.bio}
+      bio={showBio ? data.bio : undefined}
       displayName={data.displayName}
       href={linked ? (`/${data.relativeHandle}` as Href) : undefined}
       identity={<ProfileNameBlock profile={data} style={{ flex: 0 }} variant="compact" />}
