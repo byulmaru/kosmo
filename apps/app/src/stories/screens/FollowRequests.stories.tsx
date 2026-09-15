@@ -1,11 +1,13 @@
 import { Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, spyOn, userEvent, within } from 'storybook/test';
 import FollowRequestsScreen from '@/app/(tabs)/(protected)/follow-requests';
 import {
   FollowRequestList,
   FollowRequestListState,
 } from '@/components/follow-request/FollowRequestList';
+import { Button } from '@/components/ui/Button';
+import { useRelayActor } from '@/relay/RelayActorProvider';
 import { profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -77,6 +79,10 @@ const paginationProfile = followRequestProfile({
   hasNext: true,
   id: 'follow-request-profile-pagination',
   requests: [followRequest('follow-request-page-a', requesterA)],
+});
+const switchedProfile = followRequestProfile({
+  id: 'follow-request-profile-switched',
+  requests: [followRequest('follow-request-a', requesterB)],
 });
 const requesterACacheProfile = {
   ...requesterA,
@@ -156,9 +162,6 @@ function FollowRequestCatalog() {
       <Section title="Loading">
         <FollowRequestListState state="loading" />
       </Section>
-      <Section title="Error and retry">
-        <FollowRequestListState onRetry={() => undefined} state="error" />
-      </Section>
       <Section title="Profile required">
         <FollowRequestListState state="profileRequired" />
       </Section>
@@ -194,6 +197,17 @@ function ApprovalNormalizationList() {
   );
 }
 
+function ActorSwitchScreen() {
+  const { resetActor } = useRelayActor();
+
+  return (
+    <>
+      <Button onPress={() => resetActor(switchedProfile.id)}>프로필 전환</Button>
+      <FollowRequestsScreen />
+    </>
+  );
+}
+
 const approveMutationResponse = {
   approveProfileFollowRequest: {
     followeeProfile: {
@@ -223,9 +237,12 @@ const rejectMutationResponse = {
   },
 };
 
+export const queryRequestObserver = fn().mockName('Follow Requests query: load / retry');
+
 const meta = {
   beforeEach: () => mutationRequestObserver.mockClear(),
   component: FollowRequestCatalog,
+  excludeStories: ['InitialErrorActorCleanup', 'InitialErrorRetry', 'queryRequestObserver'],
   parameters: {
     relay: { data: { nodes: storyProfiles } },
     router: { pathname: '/follow-requests' },
@@ -240,7 +257,7 @@ export const StatesAndRequesterRows: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    expect(canvas.getAllByRole('heading', { name: '팔로워 요청' })).toHaveLength(5);
+    expect(canvas.getAllByRole('heading', { name: '팔로워 요청' })).toHaveLength(4);
     expect(canvas.getByText('받은 팔로우 요청이 없어요')).toBeVisible();
     expect(canvas.getByRole('link', { name: '별빛 여행자 프로필로 이동' })).toHaveAttribute(
       'href',
@@ -260,6 +277,74 @@ export const StatesAndRequesterRows: Story = {
     ).toBeEnabled();
     expect(canvasElement.textContent).not.toMatch(/2026-|분 전|시간 전/);
   },
+};
+
+export const InitialErrorRetry: Story = {
+  beforeEach: () => {
+    queryRequestObserver.mockClear();
+    const originalError = console.error;
+    const errorSpy = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      if (!args.some((argument) => String(argument).includes('팔로워 요청'))) {
+        originalError(...args);
+      }
+    });
+
+    return () => errorSpy.mockRestore();
+  },
+  parameters: {
+    relay: {
+      operationResponses: {
+        FollowRequestsPageQuery: {
+          sequence: [
+            { error: '팔로워 요청을 불러오지 못했습니다.' },
+            { error: '팔로워 요청을 다시 불러오지 못했습니다.' },
+            {
+              data: {
+                currentSession: {
+                  id: 'follow-request-initial-error-session',
+                  selectedProfile: contentProfile,
+                },
+              },
+            },
+          ],
+        },
+      },
+      queryRequestObserver,
+    },
+  },
+  render: () => <FollowRequestsScreen />,
+};
+
+export const InitialErrorActorCleanup: Story = {
+  beforeEach: () => {
+    const originalError = console.error;
+    const errorSpy = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      if (!args.some((argument) => String(argument).includes('팔로워 요청'))) {
+        originalError(...args);
+      }
+    });
+
+    return () => errorSpy.mockRestore();
+  },
+  parameters: {
+    relay: {
+      actorBoundary: true,
+      operationResponses: {
+        FollowRequestsPageQuery: [
+          { error: '팔로워 요청을 불러오지 못했습니다.' },
+          {
+            data: {
+              currentSession: {
+                id: 'follow-request-actor-cleanup-session',
+                selectedProfile: switchedProfile,
+              },
+            },
+          },
+        ],
+      },
+    },
+  },
+  render: () => <ActorSwitchScreen />,
 };
 
 export const RowLocalPending: Story = {

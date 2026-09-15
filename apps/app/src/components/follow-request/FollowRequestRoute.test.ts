@@ -14,6 +14,14 @@ const queryHistory: Array<{ fetchKey: number }> = [];
 let queryMode: QueryMode = 'success';
 let renderer: ReactTestRenderer | null = null;
 let selectedProfileId: string | null = 'profile-a';
+let toastCleanupCount = 0;
+let latestToastAction: (() => void) | null = null;
+let latestToast: {
+  actionLabel?: string;
+  message: string;
+  persistent?: boolean;
+  tone?: string;
+} | null = null;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -52,8 +60,36 @@ mockModule('react-relay', {
 mockModule(new URL('./FollowRequestList.tsx', import.meta.url), {
   FollowRequestList: ({ profile }: { profile: { id: string } }) =>
     createElement('FollowRequestList', { identity: profile.id }),
-  FollowRequestListState: ({ onRetry, state }: { onRetry?: () => void; state: string }) =>
-    createElement('FollowRequestListState', { onRetry, state }),
+  FollowRequestListState: ({
+    loadingAnnouncement,
+    state,
+  }: {
+    loadingAnnouncement?: boolean;
+    state: string;
+  }) => createElement('FollowRequestListState', { loadingAnnouncement, state }),
+});
+mockModule(new URL('../ui/ToastProvider.tsx', import.meta.url), {
+  useToast: () => ({
+    showToast: (
+      message: string,
+      options: {
+        action?: { label: string; onPress: () => void };
+        persistent?: boolean;
+        tone?: string;
+      },
+    ) => {
+      latestToastAction = options.action?.onPress ?? null;
+      latestToast = {
+        actionLabel: options.action?.label,
+        message,
+        persistent: options.persistent,
+        tone: options.tone,
+      };
+      return () => {
+        toastCleanupCount += 1;
+      };
+    },
+  }),
 });
 mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
   useUnexpectedErrorReporter: () => undefined,
@@ -80,6 +116,9 @@ afterEach(async () => {
   queryHistory.length = 0;
   queryMode = 'success';
   selectedProfileId = 'profile-a';
+  toastCleanupCount = 0;
+  latestToastAction = null;
+  latestToast = null;
 });
 
 async function renderScreen() {
@@ -126,23 +165,32 @@ describe('follow requests route actor lifecycle', () => {
     assert.deepEqual(rendered('FollowRequestList'), []);
   });
 
-  it('현재 actor query error를 재시도한다', async () => {
+  it('최초 query error는 initial error surface에서 같은 query를 재시도한다', async () => {
     const originalConsoleError = console.error;
     console.error = () => undefined;
     try {
       queryMode = 'error';
       await renderScreen();
-      const error = requireRendered('FollowRequestListState');
-      assert.equal(error.props.state, 'error');
+      const loading = requireRendered('FollowRequestListState');
+      assert.equal(loading.props.state, 'loading');
+      assert.equal(loading.props.loadingAnnouncement, false);
+      assert.deepEqual(latestToast, {
+        actionLabel: '다시 시도',
+        message: '팔로워 요청을 불러오지 못했어요',
+        persistent: true,
+        tone: 'danger',
+      });
+      assert.ok(latestToastAction);
 
       queryMode = 'success';
-      await act(async () => error.props.onRetry());
+      await act(async () => latestToastAction?.());
 
       assert.deepEqual(
         rendered('FollowRequestList').map((node) => node.props.identity),
         ['profile-a'],
       );
       assert.equal(queryHistory.at(-1)?.fetchKey, 1);
+      assert.equal(toastCleanupCount, 1);
     } finally {
       console.error = originalConsoleError;
     }
@@ -155,7 +203,7 @@ describe('follow requests route actor lifecycle', () => {
       queryMode = 'error';
       await renderScreen();
       queryMode = 'success';
-      await act(async () => requireRendered('FollowRequestListState').props.onRetry());
+      await act(async () => latestToastAction?.());
       assert.equal(queryHistory.at(-1)?.fetchKey, 1);
 
       selectedProfileId = 'profile-b';
