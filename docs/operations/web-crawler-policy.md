@@ -27,7 +27,6 @@
 
 ```text
 /bookmarks
-/compose
 /feedback
 /follow-requests
 /hashtags/
