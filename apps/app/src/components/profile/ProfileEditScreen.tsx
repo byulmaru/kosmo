@@ -1,9 +1,10 @@
 import { ArrowLeft } from 'lucide-react-native';
-import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { iconSizes, space, textStyles } from '@/theme/tokens';
 import { Button } from '../ui/Button';
 import { IconButton } from '../ui/IconButton';
+import { RouteScrollContainer } from '../ui/RouteScrollContainer';
 import { ProfileEditForm } from './ProfileEditForm';
 import { canSubmitProfileEdit, validateProfileEditDraft } from './profileEditState';
 import type { ViewStyle } from 'react-native';
@@ -155,17 +156,16 @@ export function ProfileEditScreen({
         </View>
       </View>
 
-      {Platform.OS === 'web' ? (
-        <View style={styles.content}>{content}</View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.nativeContent}
-          keyboardShouldPersistTaps="handled"
-          style={styles.nativeScroll}
-        >
-          {content}
-        </ScrollView>
-      )}
+      <RouteScrollContainer
+        nativeScrollProps={{
+          contentContainerStyle: styles.nativeContent,
+          keyboardShouldPersistTaps: 'handled',
+          style: styles.nativeScroll,
+        }}
+        webStyle={styles.content}
+      >
+        {content}
+      </RouteScrollContainer>
     </View>
   );
 }
