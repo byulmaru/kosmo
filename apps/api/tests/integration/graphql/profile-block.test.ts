@@ -1351,6 +1351,152 @@ describe('GraphQL Profile Block', () => {
     assertGraphQLErrorCode(mutualResult, 'NOT_FOUND');
   });
 
+  for (const targetKind of ['Local', 'Remote'] as const) {
+    test(`${targetKind} Bookmark 목록과 Node가 방향별 Post·Repost 정책과 pagination을 유지한다`, async () => {
+      const owner = await createAuthenticatedSession();
+      const target = await createProfile(
+        'bookmark-direction-target',
+        targetKind === 'Remote' ? (await createRemoteInstance()).id : localInstanceId,
+      );
+      const other = await createProfile('bookmark-direction-other');
+      const targetPost = await createContentPost(target.id);
+      const followersPost = await createContentPost(target.id, undefined, PostVisibility.FOLLOWERS);
+      const control = await createContentPost(other.id);
+      const reposts = await db
+        .insert(Posts)
+        .values([
+          {
+            profileId: other.id,
+            repostSourceId: targetPost.post.id,
+            state: PostState.ACTIVE,
+            visibility: PostVisibility.PUBLIC,
+          },
+          {
+            profileId: target.id,
+            repostSourceId: control.post.id,
+            state: PostState.ACTIVE,
+            visibility: PostVisibility.PUBLIC,
+          },
+        ])
+        .returning();
+      const postIds = [
+        followersPost.post.id,
+        targetPost.post.id,
+        reposts[0]!.id,
+        reposts[1]!.id,
+        control.post.id,
+      ];
+      const bookmarks = await db
+        .insert(Bookmarks)
+        .values(
+          postIds.map((postId, index) => ({
+            id: `019f8ed2-0000-7000-8000-00000000000${9 - index}`,
+            postId,
+            profileId: owner.profile.id,
+          })),
+        )
+        .returning();
+      const bookmarkIds = bookmarks.map(({ id }) => globalId('Bookmark', id));
+      const read = async (after?: string) => {
+        const result = await requestGraphQL<{
+          owner: {
+            bookmarks: {
+              edges: Array<{ node: { id: string; post: { id: string } } }>;
+              pageInfo: { endCursor: string | null; hasNextPage: boolean };
+            };
+          };
+          nodes: Array<{ id: string; post: { id: string } | null }>;
+        }>(
+          `query DirectionalBookmarks($ownerId: ID!, $bookmarkIds: [ID!]!, $after: String) {
+            owner: node(id: $ownerId) {
+              ... on Profile {
+                bookmarks(first: 2, after: $after) {
+                  edges { node { id post { id } } }
+                  pageInfo { endCursor hasNextPage }
+                }
+              }
+            }
+            nodes(ids: $bookmarkIds) { ... on Bookmark { id post { id } } }
+          }`,
+          { ownerId: globalId('Profile', owner.profile.id), bookmarkIds, after },
+          owner.token,
+        );
+        assertNoGraphQLErrors(result);
+        assert.ok(result.data);
+        return result.data;
+      };
+      const postRef = (postId: string) => ({ id: globalId('Post', postId) });
+      const edgePostIds = (result: Awaited<ReturnType<typeof read>>) =>
+        result.owner.bookmarks.edges.map(({ node }) => node.post.id);
+      if (targetKind === 'Local') {
+        await db.insert(ProfileFollows).values({
+          followerProfileId: owner.profile.id,
+          followeeProfileId: target.id,
+        });
+      }
+      const before = await read();
+      const beforePosts = targetKind === 'Local' ? postIds : postIds.slice(1);
+      assert.deepEqual(
+        before.nodes.map(({ post }) => post),
+        targetKind === 'Local' ? postIds.map(postRef) : [null, ...beforePosts.map(postRef)],
+      );
+      assert.deepEqual(
+        edgePostIds(before),
+        beforePosts.slice(0, 2).map((id) => globalId('Post', id)),
+      );
+
+      assertNoGraphQLErrors(await blockProfile(target.id, owner.token));
+      const blocking = await read();
+      assert.deepEqual(
+        blocking.nodes.map(({ post }) => post),
+        [null, ...postIds.slice(1).map(postRef)],
+      );
+      assert.deepEqual(
+        edgePostIds(blocking),
+        postIds.slice(1, 3).map((id) => globalId('Post', id)),
+      );
+      assert.equal(blocking.owner.bookmarks.pageInfo.hasNextPage, true);
+      const next = await read(blocking.owner.bookmarks.pageInfo.endCursor!);
+      assert.deepEqual(
+        edgePostIds(next),
+        postIds.slice(3).map((id) => globalId('Post', id)),
+      );
+      assert.equal(next.owner.bookmarks.pageInfo.hasNextPage, false);
+
+      // Stored reverse relation tests read policy without creating a Remote-selected session.
+      await db
+        .insert(ProfileBlocks)
+        .values({ ownerProfileId: target.id, targetProfileId: owner.profile.id });
+      for (const direction of ['mutual', 'incoming']) {
+        if (direction === 'incoming') {
+          await db.delete(ProfileBlocks).where(eq(ProfileBlocks.ownerProfileId, owner.profile.id));
+        }
+        const hidden = await read();
+        assert.deepEqual(
+          hidden.nodes.map(({ id }) => id),
+          bookmarkIds,
+        );
+        assert.deepEqual(
+          hidden.nodes.map(({ post }) => post),
+          [null, null, null, null, postRef(control.post.id)],
+        );
+        assert.deepEqual(edgePostIds(hidden), [globalId('Post', control.post.id)]);
+        assert.equal(hidden.owner.bookmarks.pageInfo.hasNextPage, false);
+        assert.equal(await db.$count(Bookmarks, eq(Bookmarks.profileId, owner.profile.id)), 5);
+      }
+      await db.delete(ProfileBlocks);
+      const unblocked = await read();
+      assert.deepEqual(
+        unblocked.nodes.map(({ post }) => post),
+        [null, ...postIds.slice(1).map(postRef)],
+      );
+      assert.deepEqual(
+        edgePostIds(unblocked),
+        postIds.slice(1, 3).map((id) => globalId('Post', id)),
+      );
+    });
+  }
+
   test('filters blocked Posts before limiting Home and Local Timelines', async () => {
     const owner = await createAuthenticatedSession();
     const visibleAuthor = await createProfile('timeline-visible-author');
@@ -1393,7 +1539,7 @@ describe('GraphQL Profile Block', () => {
     assert.deepEqual(result.data?.localTimeline?.edges, expectedEdges);
   });
 
-  test('keeps blocking Owner direct Repost content while hiding it from relation lists', async () => {
+  test('keeps blocking Owner Repost Bookmarks while hiding blocked Reaction profiles', async () => {
     const viewer = await createAuthenticatedSession();
     const repostAuthor = await createProfile('blocked-repost-author');
     const sourceAuthor = await createProfile('blocked-repost-source');
@@ -1488,8 +1634,8 @@ describe('GraphQL Profile Block', () => {
       null,
     ]);
     assert.deepEqual(
-      result.data?.viewer?.bookmarks.edges.map(({ node }) => node.post.id),
-      [globalId('Post', visible.post.id)],
+      result.data?.viewer?.bookmarks.edges.map(({ node }) => node.post.id).sort(),
+      [globalId('Post', repost.id), globalId('Post', visible.post.id)].sort(),
     );
     assert.deepEqual(
       result.data?.reactionProfiles?.reactionProfiles.edges.map(({ node }) => node.id),
