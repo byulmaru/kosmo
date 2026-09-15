@@ -177,7 +177,7 @@ describe('차단한 프로필 목록', () => {
     assert.equal(pagination.loadNext.mock.callCount(), 2);
   });
 
-  it('selected Local Profile이 없으면 빈 목록 대신 Profile-required 상태를 표시한다', async () => {
+  it('selected Profile이 없으면 빈 목록 대신 Profile-required 상태를 표시한다', async () => {
     selectedProfile = null;
 
     await act(async () => {
