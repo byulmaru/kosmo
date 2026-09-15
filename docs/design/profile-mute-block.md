@@ -7,9 +7,11 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 
 ## Profile action과 완료 피드백
 
-- Block 생성·해제와 관리 action은 현재 selected Local Profile이 Owner일 때만 제공한다. Remote Profile이
-  selected된 상태에서는 기존 Profile identity와 viewer 방향 콘텐츠 상태를 표시하되 실행할 수 없는 Block 관리
-  action을 제공하지 않으며, Remote Owner의 Block/Undo ingress는 `PROD-818`이 소유한다.
+- Block 생성·해제와 관리 action은 [ADR 0019](../domain/decisions/0019-selected-profile-authorization-boundary.md)에 따라
+  Membership으로 인증된 selected Profile이 Owner일 때만 제공한다. Block 읽기 필드는 selected Profile auth scope를
+  충족하지 못하면 nullable `null`을 반환하며, App은 Profile kind를 Session capability나 조건부 GraphQL 변수로
+  중복 검사하지 않고 서버 결과에 따라 관계 상태와 action을 표시한다. Remote Owner의 Block/Undo ingress는
+  `PROD-818`이 소유한다.
 - Mute는 `이 프로필을 뮤트할까요?` 확인을 거친 뒤 실행한다. 취소하면 Profile과 관계 상태를 바꾸지 않는다.
 - Mute 해제도 `이 프로필을 뮤트 해제할까요?` 확인을 거친다. `{표시 이름} 님의 게시물이 홈과 로컬 타임라인에 다시
 표시돼요. 팔로우 관계는 유지돼요.`를 안내하고 `취소`·`뮤트 해제`를 제공한다.
@@ -96,10 +98,10 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   같은 기본 Profile 정보 범위를 사용한다. `searchProfiles`의 exact-match/partial-match 후보는
   양방향 Active Block 관계인 Profile을 후보에서 제외하며, 이 제외는 pagination·cursor·limit 전에 적용한다.
 - 유효한 Account에 selected Profile이 있으면 그 Profile을 `searchProfiles`의 viewer로 사용한다. selected Profile이
-  없으면 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate나 selected Local Profile을 새로 요구하지
+  없으면 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate나 selected Profile을 새로 요구하지
   않는다. 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용하지 않는다.
 - 정상적인 GraphQL `node(id:)`·`profileByHandle` 직접 route 진입·새로고침은 identity-free 결과가 아니라 기본 Profile 정보, viewer 방향별 콘텐츠 상태와
-  selected Local Owner 범위의 정확한 unblock 관계 ID를 확인한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가한
+  인증된 selected Owner 범위의 정확한 unblock 관계 ID를 확인한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가한
   경우에만 조건부 identity-free fallback 문구를 사용한다.
 - `blocking` 화면에서는 Target Profile의 Post List·Post detail·첨부 Media를 기존 Post·Media 조회 정책으로
   제공한다. Profile route는 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 먼저 표시하고,

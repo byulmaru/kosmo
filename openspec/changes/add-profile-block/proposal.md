@@ -8,8 +8,7 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
 
 - Owner/Target 방향성과 조합 유일성을 가진 Profile Block 저장 관계와 생성·해제 mutation 계약을 추가한다. Owner는
   Local 또는 Remote일 수 있고, 도메인 capability에 특정 Account·Membership·Local 상태를 일반 조건으로 고정하지 않는다.
-  현재 GraphQL ingress가 사용하는 selected Local Profile 경계는 GraphQL slice에만 적용하며 remote ingress는 `PROD-818`에
-  남긴다.
+  현재 GraphQL ingress는 Membership으로 인증된 selected Profile을 사용하며 remote ingress는 `PROD-818`에 남긴다.
 - Block policy/admission을 통과한 생성은 durable cleanup orchestration을 시작한다. 이번 실행이 포착한 양방향 Follow Request·Follow
   Relationship과 제거된 Follow 객체의 직접 원인 Follow Notification을 정리하고, 필수 cleanup 완료 전에는 Block action을 성공으로 확정하지 않는다.
   이미 진입한 Follow transition이 cleanup 뒤 남긴 Follow/Request 또는 그 직접 원인 Notification은 남을 수 있지만 Active Block 동안 공통 정책에서
@@ -26,7 +25,7 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
   origin과 무관한 같은 admission 정책을 사용한다. `CreatePostInput.repostSourceId`를 사용하는 Local Quote는 실제 GraphQL ingress에서
   양방향 Block 거부와 새 Post row 부재를 검증한다. ingress가 없는 Quote origin은 그 origin에 한해 공통 assertion 검증과 실제 ingress 미검증을 구분한다.
 - 유효한 Account에 selected Profile이 있으면 그 Profile을 `searchProfiles`의 viewer로 사용한다. selected Profile이 없으면 기존 Account 인증과
-  공개 후보 결과를 유지하며 Profile Block predicate를 적용하거나 selected Local Profile을 새로 요구하지 않는다. 임의 입력 actor나 이전 selected
+  공개 후보 결과를 유지하며 Profile Block predicate를 적용하거나 selected Profile을 새로 요구하지 않는다. 임의 입력 actor나 이전 selected
   Profile·client cache를 viewer로 재사용하지 않는다.
 - Profile Block 관리 목록과 확인·pending·실패·접근성·selected Profile별 상태/cache 수렴 계약을 추가한다. 기존 Profile 정보를 재사용하고,
   콘텐츠와 상호작용은 각 surface의 Profile Block 정책을 적용한다.
@@ -38,7 +37,7 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
 소유한다. 후속 Stack은 `PROD-822-graphql`과 그 자식 `PROD-822-policy`의 두 구현 layer로 나눈다. `PROD-821`의 저장·cleanup,
 `PROD-823`의 UI·client 상태와 `PROD-813`의 통합·archive 책임은 유지한다.
 
-- `PROD-822-graphql`은 selected Local actor의 Block/Unblock mutation, Owner 관리 connection·관계 Node, 정확한 unblock 관계 ID,
+- `PROD-822-graphql`은 Membership으로 인증된 selected Profile actor의 Block/Unblock mutation, Owner 관리 connection·관계 Node, 정확한 unblock 관계 ID,
   generated schema와 관리 API 테스트를 소유한다.
 - 그 자식 `PROD-822-policy`는 GraphQL `node(id:)`·`profileByHandle` 직접 조회, `searchProfiles` 후보·콘텐츠·Follow·Notification과 새 상호작용 제한, 공통 admission,
   Local/ActivityPub 실행 경로와 회귀를 소유한다.
@@ -56,13 +55,14 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
 - `FOLLOWERS` Post 권한은 Follow 존재와 양방향 Active Block 부재를 함께 요구한다. `Hashtag.relatedProfiles`는
   selected Profile 유무에 따라 `searchProfiles`와 같은 탐색 후보 Block 정책을 적용한다.
 - GraphQL 생성·해제는 선행 durable action의 완료를 기다리며, Owner 관리 관계는 일반 Profile 조회 권한과 독립적으로 격리한다.
-  selected Local Profile과 request-scoped loader의 actor 격리를 함께 검증한다.
-- Block·Mute 관계의 `targetProfile`은 기존 `Profile`과 같은 global ID를 사용한다. Unblock 성공은 실제 삭제한 `ProfileBlock` ID를 반환하고,
-  관계를 제거하지 않은 결과만 `null`이며 오류·partial 결과를 성공으로 취급하지 않는다.
+  Membership으로 인증된 selected Profile과 request-scoped loader의 actor 격리를 함께 검증한다.
+- Block·Mute 관계의 `targetProfile`은 기존 `Profile`과 같은 global ID를 사용한다. Block 성공은 생성한 non-null `ProfileBlock`
+  관계를 반환하고 client는 그 관계의 ID를 사용한다. Unblock 성공은 실제 삭제한 `ProfileBlock` ID를 반환하며, 관계를 제거하지
+  않은 결과만 `null`이다. Payload 누락·GraphQL 오류·`success: false` 또는 Unblock 관계 ID 불일치는 action 완료로 취급하지 않는다.
 - Mute와 Block 관리 관계는 독립적으로 유지한다. 같은 Target을 Mute한 뒤 Block해도 Mute Owner connection·관계 Node·해제
   경로는 유지하되, 이를 일반 Target Profile 조회 권한으로 사용하지 않는다.
 - GraphQL `node(id:)`·`profileByHandle`로 직접 Profile route에 새로고침·링크로 진입해도 정상 결과는 기본 Profile 정보, viewer 방향별 콘텐츠 상태와 현재
-  selected Local Owner 범위의 정확한 unblock 관계 ID를 함께 얻을 수 있게 한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가하면 API는 기존 null/unavailable
+  인증된 selected Owner 범위의 정확한 unblock 관계 ID를 함께 얻을 수 있게 한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가하면 API는 기존 null/unavailable
   결과를 유지하고 Block 전용 identity payload를 만들지 않는다.
 - 기존 consumer의 공개 결과와 공통 후보 정책을 검증한다. 아직 없는 Hashtag Post List·Post 검색 endpoint를 새로 만드는 일은
   이번 shared change에 포함하지 않는다. `PROD-822`와 `PROD-813`은 해당 경로의 공통 후보 정책 검증까지만 완료 기준으로 삼으며,
@@ -70,6 +70,11 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
   검증 시점에 이미 구현된 consumer는 실제 API 검증 대상이며, archive 이후 추가되는 endpoint는 해당 기능 이슈가 연결·검증을 소유한다.
 
 ## Authority / Provenance
+
+- 2026-09-15 인증 계약 보완: [PROD-962](https://linear.app/byulmaru/issue/PROD-962)의 2026-09-14 완료된
+  Membership-only 결정과 ADR 0019의 같은 날짜 보완을 적용한다. 선택 경계는 Active Account·Membership·Profile 조회 가능 상태를
+  검증하며 후속 resolver·loader는 selected Profile의 Origin·Role·생성자 조건을 추가하지 않는다. Remote Profile Membership 생성이나
+  Remote 선택 지원·금지 capability, 이를 위한 별도 선택 시나리오는 이 보완의 범위가 아니다.
 
 - Canonical: `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`,
   `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`,
