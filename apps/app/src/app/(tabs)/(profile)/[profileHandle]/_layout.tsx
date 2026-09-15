@@ -1,5 +1,5 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
-import { Slot, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
+import { Navigator, Slot, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { ArrowLeft, ChevronLeftIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
@@ -93,66 +93,69 @@ export default function ProfileLayout() {
     </IconButton>
   );
 
+  // 경고나 로딩 화면이 Slot을 숨겨도 route params를 소유한 navigator는 유지한다.
   return (
-    <RouteBoundary
-      error={
-        connectionKind
-          ? (retry) => (
-              <ProfileRouteContainer scrollKey={scrollKey}>
+    <Navigator>
+      <RouteBoundary
+        error={
+          connectionKind
+            ? (retry) => (
+                <ProfileRouteContainer scrollKey={scrollKey}>
+                  <ProfileConnectionChrome
+                    displayName={fallbackRelativeHandle}
+                    kind={connectionKind}
+                    relativeHandle={fallbackRelativeHandle}
+                  />
+                  <ProfileConnectionListState kind={connectionKind} onRetry={retry} state="error" />
+                </ProfileRouteContainer>
+              )
+            : isProfileHome
+              ? (retry) => (
+                  <ProfileRouteContainer scrollKey={scrollKey}>
+                    <PageHeader leading={backButton} title="" />
+                    <StateView
+                      actionLabel="다시 시도"
+                      alert
+                      description="잠시 후 다시 시도해주세요."
+                      onAction={retry}
+                      title="프로필을 불러오지 못했어요"
+                    />
+                  </ProfileRouteContainer>
+                )
+              : undefined
+        }
+        key={`${actorLifecycleKey}:${handle}:${connectionKind ?? 'profile'}`}
+        loading={
+          <ProfileRouteContainer scrollKey={scrollKey}>
+            {connectionKind ? (
+              <>
                 <ProfileConnectionChrome
                   displayName={fallbackRelativeHandle}
                   kind={connectionKind}
                   relativeHandle={fallbackRelativeHandle}
                 />
-                <ProfileConnectionListState kind={connectionKind} onRetry={retry} state="error" />
-              </ProfileRouteContainer>
-            )
-          : isProfileHome
-            ? (retry) => (
-                <ProfileRouteContainer scrollKey={scrollKey}>
-                  <PageHeader leading={backButton} title="" />
-                  <StateView
-                    actionLabel="다시 시도"
-                    alert
-                    description="잠시 후 다시 시도해주세요."
-                    onAction={retry}
-                    title="프로필을 불러오지 못했어요"
-                  />
-                </ProfileRouteContainer>
-              )
-            : undefined
-      }
-      key={`${actorLifecycleKey}:${handle}:${connectionKind ?? 'profile'}`}
-      loading={
-        <ProfileRouteContainer scrollKey={scrollKey}>
-          {connectionKind ? (
-            <>
-              <ProfileConnectionChrome
-                displayName={fallbackRelativeHandle}
-                kind={connectionKind}
-                relativeHandle={fallbackRelativeHandle}
-              />
-              <ProfileConnectionListState kind={connectionKind} state="loading" />
-            </>
-          ) : (
-            <>
-              {isProfileHome ? <PageHeader leading={backButton} title="" /> : null}
-              <ProfileHero loading />
-            </>
-          )}
-        </ProfileRouteContainer>
-      }
-      title="프로필을 불러오지 못했어요"
-    >
-      <ProfileLayoutContent
-        backButton={backButton}
-        connectionKind={connectionKind}
-        handle={handle}
-        pathname={pathname}
-        scrollKey={scrollKey}
-        showPageHeader={isProfileHome}
-      />
-    </RouteBoundary>
+                <ProfileConnectionListState kind={connectionKind} state="loading" />
+              </>
+            ) : (
+              <>
+                {isProfileHome ? <PageHeader leading={backButton} title="" /> : null}
+                <ProfileHero loading />
+              </>
+            )}
+          </ProfileRouteContainer>
+        }
+        title="프로필을 불러오지 못했어요"
+      >
+        <ProfileLayoutContent
+          backButton={backButton}
+          connectionKind={connectionKind}
+          handle={handle}
+          pathname={pathname}
+          scrollKey={scrollKey}
+          showPageHeader={isProfileHome}
+        />
+      </RouteBoundary>
+    </Navigator>
   );
 }
 
