@@ -5,6 +5,8 @@ import { createContext, createElement, useContext } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode, Ref } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { UseAutomaticPaginationResult } from '../pagination/useAutomaticPagination';
+import type { FollowButton as FollowButtonExport } from './FollowButton';
 import type {
   ProfileBlockAction as ProfileBlockActionExport,
   ProfileBlockActionTarget,
@@ -167,6 +169,10 @@ mockModule('react-relay', {
     return (query ?? parts.join('')) as QueryName;
   },
   useFragment: (_fragment: unknown, reference: unknown) => reference,
+  useMutation: () => [
+    () => assert.fail('Block consumer must not execute a Follow mutation'),
+    false,
+  ],
   useLazyLoadQuery: (
     query: QueryName,
     variables: { handle: string },
@@ -273,22 +279,8 @@ mockModule(new URL('../content-report/ContentReportContext.tsx', import.meta.url
     return reportMenuItem;
   },
 });
-mockModule(new URL('./FollowButton.tsx', import.meta.url), {
-  FollowButton: ({
-    onActionRef,
-    onBlockFeedback,
-    profile,
-  }: {
-    onActionRef?: (node: { focus: () => void }) => void;
-    onBlockFeedback?: (feedback: ProfileBlockFeedback) => void;
-    profile: { handle: string };
-  }) => {
-    onActionRef?.({ focus: () => stateActionFocus() });
-    return createElement('FollowButton', {
-      identity: profile.handle,
-      onBlockFeedback,
-    });
-  },
+mockModule(new URL('../../analytics/client.ts', import.meta.url), {
+  trackAnalytics: () => undefined,
 });
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
   ProfileMuteAction: 'ProfileMuteAction',
@@ -334,7 +326,9 @@ mockModule(new URL('./profileBlockErrors.ts', import.meta.url), {
 });
 mockModule(new URL('../ui/Button.tsx', import.meta.url), {
   Button: ({ children, controlRef, ...props }: { children: string; controlRef?: Ref<unknown> }) => {
-    if (controlRef && typeof controlRef === 'object' && 'current' in controlRef) {
+    if (typeof controlRef === 'function') {
+      controlRef({ focus: () => stateActionFocus() });
+    } else if (controlRef && typeof controlRef === 'object' && 'current' in controlRef) {
       controlRef.current = { focus: () => stateActionFocus() };
     }
     return createElement('Button', props, children);
@@ -398,9 +392,12 @@ let ProfileFollowingPage: ComponentType;
 let ProfileLayout: ComponentType;
 let ProfilePostListPage: ComponentType;
 let ProfileBlockAction: typeof ProfileBlockActionExport;
+let FollowButton: typeof FollowButtonExport;
 
 before(async () => {
   ({ ProfileBlockAction } = await import('./ProfileBlockAction'));
+  ({ FollowButton } = await import('./FollowButton'));
+  ({ usePaginationScrollRegistration } = await import('../pagination/PaginationScrollView'));
   ({ default: ProfileFollowersPage } =
     await import('../../app/(tabs)/(profile)/[profileHandle]/followers'));
   ({ default: ProfileFollowingPage } =
@@ -466,7 +463,7 @@ async function renderRoute(profileHandle: string, routePath = `/profile/${profil
         createElement(
           LocalParamsContext.Provider,
           { value: layoutLocalParams },
-          createElement(ProfileLayout, { key: relayActorLifecycleKey }),
+          createElement(ProfileLayout),
         ),
       );
     } else {
@@ -474,7 +471,7 @@ async function renderRoute(profileHandle: string, routePath = `/profile/${profil
         createElement(
           LocalParamsContext.Provider,
           { value: layoutLocalParams },
-          createElement(ProfileLayout, { key: relayActorLifecycleKey }),
+          createElement(ProfileLayout),
         ),
       );
     }
@@ -483,12 +480,18 @@ async function renderRoute(profileHandle: string, routePath = `/profile/${profil
 }
 
 function identities(type: string) {
-  return rendered(type).map((node) => node.props.identity as string);
+  return rendered(type).map((node) =>
+    type === 'FollowButton'
+      ? (node.props.profile.handle as string)
+      : (node.props.identity as string),
+  );
 }
 
 function rendered(type: string) {
   assert.ok(renderer);
-  return renderer.root.findAll((node) => node.type === type);
+  return renderer.root.findAll(
+    (node) => node.type === (type === 'FollowButton' ? FollowButton : type),
+  );
 }
 
 function requireRendered(type: string) {
@@ -880,7 +883,7 @@ describe('profile route parameter lifecycle', () => {
   it('Profile 자체가 조회 불가하면 별도 차단 관계 action을 합성하지 않는다', async () => {
     selectedProfileId = 'owner';
     profileAvailable = false;
-    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+    profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
 
     await renderRoute('@blocked', '/@blocked');
 
@@ -936,6 +939,110 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
   });
 
+  it('경고는 시간 경과로 사라지지 않고 handle과 actor lifecycle마다 다시 적용된다', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+
+    await renderRoute('@blocked', '/@blocked');
+    await act(async () => t.mock.timers.tick(86_400_000));
+    assert.deepEqual(identities('PostList'), []);
+    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+
+    await act(async () => requireRendered('StateView').props.onAction());
+    await renderRoute('@blocked', '/@blocked');
+    assert.deepEqual(identities('PostList'), ['blocked']);
+
+    await renderRoute('@other', '/@other');
+    assert.deepEqual(identities('PostList'), []);
+    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+    await act(async () => requireRendered('StateView').props.onAction());
+    assert.deepEqual(identities('PostList'), ['other']);
+
+    selectedProfileId = 'owner-b';
+    relayActorLifecycleKey = 'actor-b';
+    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-b' };
+    await renderRoute('@other', '/@other');
+    assert.deepEqual(identities('PostList'), []);
+    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+    await act(async () => requireRendered('StateView').props.onAction());
+
+    relayActorLifecycleKey = 'actor-b-new-session';
+    await renderRoute('@other', '/@other');
+    assert.deepEqual(identities('PostList'), []);
+    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+  });
+
+  it('Profile 공통 FollowButton의 해제는 확인·취소·pending·실패·재시도를 거친다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+    let rejectRequest: ((error: Error) => void) | undefined;
+    changeBlockedImpl = () =>
+      new Promise<void>((_resolve, reject) => {
+        rejectRequest = reject;
+      });
+    await renderRoute('@blocked', '/@blocked');
+    const relation = requireRendered('FollowButton');
+    const button = () => relation.findByType('Button' as never);
+    const modal = () => relation.findByType('ModalSheet' as never);
+    const confirmation = () => relation.findByType('ConfirmationContent' as never);
+
+    assert.equal(button().props.children, '차단 해제');
+    await act(async () => button().props.onPress());
+    assert.equal(modal().props.title, '이 프로필의 차단을 해제할까요?');
+    assert.equal(
+      confirmation().props.message,
+      '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.',
+    );
+    await act(async () => confirmation().props.onCancel());
+    await act(async () => modal().props.onDismiss());
+    assert.equal(changeBlockedCalls.length, 0);
+    assert.equal(stateActionFocus.mock.callCount(), 1);
+
+    await act(async () => button().props.onPress());
+    await act(async () => confirmation().props.onConfirm());
+    await act(async () => {
+      confirmation().props.onConfirm();
+      modal().props.onClose();
+    });
+    assert.deepEqual(changeBlockedCalls, [
+      {
+        change: {
+          ownerProfileId: 'owner',
+          profileBlockId: 'block-1',
+          targetProfileId: 'profile:blocked',
+        },
+        nextBlocked: false,
+      },
+    ]);
+    assert.equal(confirmation().props.pending, true);
+    assert.equal(modal().props.dismissDisabled, true);
+    assert.equal(modal().props.visible, true);
+    assert.deepEqual(button().props.accessibilityState, { busy: true, disabled: true });
+
+    await act(async () => rejectRequest?.(new Error('network')));
+    await act(async () => modal().props.onDismiss());
+    assert.equal(toastCalls.at(-1)?.tone, 'danger');
+    assert.equal(button().props.children, '차단 해제');
+    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+
+    changeBlockedImpl = async () => {
+      profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
+    };
+    await act(async () => button().props.onPress());
+    await act(async () => confirmation().props.onConfirm());
+    await renderRoute('@blocked', '/@blocked');
+    assert.equal(changeBlockedCalls.length, 2);
+    assert.equal(
+      requireRendered('FollowButton').findByType('Button' as never).props.children,
+      '팔로우',
+    );
+    assert.deepEqual(identities('PostList'), ['blocked']);
+    assert.equal(toastCalls.at(-1)?.tone, 'success');
+  });
+
   it('차단 관계에서도 followers와 following route의 관계 목록 Slot을 유지한다', async () => {
     selectedProfileId = 'owner';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
@@ -966,13 +1073,12 @@ describe('profile route parameter lifecycle', () => {
       requireRendered('ActionMenu').props.items.map((item: { label: string }) => item.label),
       ['차단 해제'],
     );
-    profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
-    await act(async () =>
-      requireRendered('FollowButton').props.onBlockFeedback({
-        blocked: false,
-        status: 'success',
-      }),
-    );
+    changeBlockedImpl = async () => {
+      profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
+    };
+    const action = requireRendered('FollowButton');
+    await act(async () => action.findByType('Button' as never).props.onPress());
+    await act(async () => action.findByType('ConfirmationContent' as never).props.onConfirm());
     await renderRoute('@blocked');
     assert.equal(rendered('FollowButton').length, 0);
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
