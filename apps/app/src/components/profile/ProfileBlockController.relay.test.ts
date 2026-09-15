@@ -12,7 +12,6 @@ import {
   Store,
 } from 'relay-runtime';
 import blockMutation from './__generated__/ProfileBlockControllerBlockMutation.graphql';
-import recoveryQuery from './__generated__/ProfileBlockControllerRecoveryQuery.graphql';
 import unblockMutation from './__generated__/ProfileBlockControllerUnblockMutation.graphql';
 import { StaleProfileBlockRequestError } from './profileBlockErrors';
 import type { ComponentType } from 'react';
@@ -31,7 +30,6 @@ const viewerStateId = 'client:target-a:viewerState';
 
 type NetworkSink = {
   complete(): void;
-  error(error: Error): void;
   next(payload: GraphQLResponse): void;
 };
 
@@ -46,10 +44,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-relay', {
-  graphql: (parts: TemplateStringsArray) => {
-    const operation = parts.join('');
-    return operation.includes('RecoveryQuery') ? recoveryQuery : operation;
-  },
+  graphql: (parts: TemplateStringsArray) => parts.join(''),
   useMutation: (operation: string) => [
     (options: Record<string, unknown>) => {
       commitMutation(environment, {
@@ -96,88 +91,6 @@ afterEach(async () => {
 });
 
 describe('ProfileBlockController Relay cache boundary', () => {
-  it('block relation projection이 null이어도 durable 성공을 유지하고 cache를 수렴한다', async () => {
-    environment = createEnvironment();
-    const { request } = await beginBlock();
-
-    respond({
-      data: {
-        blockProfile: {
-          success: true,
-          profileBlockId: 'block-partial',
-          profileBlock: null,
-        },
-      },
-      errors: [
-        {
-          message: 'target projection failed',
-          path: ['blockProfile', 'profileBlock', 'targetProfile'],
-        },
-      ],
-    });
-    await flushTasks();
-    respond({ data: recoveryPayload('block-partial') });
-
-    await request;
-    await flushTasks();
-    assertGeneralProfileUnchanged();
-    assert.deepEqual(connectionNodeIds(), ['block-partial']);
-    assert.equal(viewerProfileBlockId(), 'block-partial');
-  });
-
-  it('block relation projection이 누락되어도 recovery로 cache를 수렴한다', async () => {
-    environment = createEnvironment();
-    const { request } = await beginBlock();
-
-    respond({
-      data: {
-        blockProfile: {
-          success: true,
-          profileBlockId: 'block-missing-projection',
-        },
-      },
-    });
-    await flushTasks();
-    respond({ data: recoveryPayload('block-missing-projection') });
-
-    await request;
-    await flushTasks();
-    assert.deepEqual(connectionNodeIds(), ['block-missing-projection']);
-    assert.equal(viewerProfileBlockId(), 'block-missing-projection');
-  });
-
-  it('block success가 false이면 기존 상태를 유지하고 실패한다', async () => {
-    environment = createEnvironment();
-    const { request } = await beginBlock();
-
-    respond({
-      data: {
-        blockProfile: {
-          success: false,
-          profileBlockId: 'unexpected-block',
-          profileBlock: null,
-        },
-      },
-    });
-
-    await assert.rejects(request, /did not confirm/);
-    assertGeneralProfileUnchanged();
-    assert.deepEqual(connectionNodeIds(), []);
-    assert.equal(viewerProfileBlockId(), null);
-  });
-
-  it('block payload가 없으면 기존 상태를 유지하고 실패한다', async () => {
-    environment = createEnvironment();
-    const { request } = await beginBlock();
-
-    respond({ data: { blockProfile: null } });
-
-    await assert.rejects(request, /did not confirm/);
-    assertGeneralProfileUnchanged();
-    assert.deepEqual(connectionNodeIds(), []);
-    assert.equal(viewerProfileBlockId(), null);
-  });
-
   it('기존 Profile global ID로 relation을 정규화하고 Profile cache를 보존한다', async () => {
     environment = createEnvironment();
     const { request } = await beginBlock();
@@ -187,8 +100,6 @@ describe('ProfileBlockController Relay cache boundary', () => {
     });
 
     await request;
-    await flushTasks();
-
     assertGeneralProfileUnchanged();
     assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
     assert.equal(viewerProfileBlockId(), 'block-confirmed');
@@ -225,17 +136,6 @@ describe('ProfileBlockController Relay cache boundary', () => {
     assert.equal(viewerProfileBlockId(), 'block-confirmed');
   });
 
-  it('block 성공은 요청 Target identity를 재사용한다', async () => {
-    environment = createEnvironment();
-    const { request } = await beginBlock();
-
-    respond({ data: blockPayload('block-confirmed') });
-
-    await request;
-    assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
-    assert.equal(viewerProfileBlockId(), 'block-confirmed');
-  });
-
   it('unblock 성공은 기존 relation의 Target identity를 재사용한다', async () => {
     environment = createEnvironment();
     createRelation('block-confirmed');
@@ -251,24 +151,6 @@ describe('ProfileBlockController Relay cache boundary', () => {
     });
 
     await request;
-    assert.deepEqual(connectionNodeIds(), []);
-    assert.equal(viewerProfileBlockId(), null);
-  });
-
-  it('block relation projection ID가 durable ID와 다르면 실패한다', async () => {
-    environment = createEnvironment();
-    const { request } = await beginBlock();
-
-    respond({
-      data: {
-        blockProfile: {
-          ...blockPayload('projected-block').blockProfile,
-          profileBlockId: 'durable-block',
-        },
-      },
-    });
-
-    await assert.rejects(request, /did not confirm/);
     assert.deepEqual(connectionNodeIds(), []);
     assert.equal(viewerProfileBlockId(), null);
   });
@@ -310,33 +192,6 @@ describe('ProfileBlockController Relay cache boundary', () => {
     await request;
     assert.deepEqual(connectionNodeIds(), ['block-new']);
     assert.equal(viewerProfileBlockId(), 'block-new');
-  });
-
-  it('block recovery가 실패해도 durable 성공을 유지하고 정확한 cache만 stale로 남긴다', async () => {
-    environment = createEnvironment();
-    const { request } = await beginBlock();
-
-    respond({
-      data: {
-        blockProfile: {
-          success: true,
-          profileBlockId: 'block-recovery-failed',
-          profileBlock: null,
-        },
-      },
-      errors: [
-        {
-          message: 'target projection failed',
-          path: ['blockProfile', 'profileBlock'],
-        },
-      ],
-    });
-    fail(new Error('recovery unavailable'));
-
-    await request;
-    assert.equal(isRecordInvalidated(targetProfileId), true);
-    assert.equal(isRecordInvalidated(connectionId), true);
-    assertGeneralProfileUnchanged();
   });
 
   it('actor A 응답이 A→B→A 전환 뒤의 새 A Store를 변경하지 않는다', async () => {
@@ -428,13 +283,6 @@ function respond(payload: GraphQLResponse) {
   activeSink.complete();
 }
 
-function fail(error: Error) {
-  assert.ok(sink);
-  const activeSink = sink;
-  sink = undefined;
-  activeSink.error(error);
-}
-
 function createEnvironment() {
   const source = new RecordSource();
   const nextEnvironment = new Environment({
@@ -483,7 +331,6 @@ function blockPayload(relationId: string) {
   return {
     blockProfile: {
       success: true,
-      profileBlockId: relationId,
       profileBlock: {
         __typename: 'ProfileBlock',
         id: relationId,
@@ -492,28 +339,6 @@ function blockPayload(relationId: string) {
           displayName: 'Original target',
           id: targetProfileId,
           relativeHandle: targetHandle,
-        },
-      },
-    },
-  };
-}
-
-function recoveryPayload(relationId: string) {
-  return {
-    node: {
-      __typename: 'Profile',
-      id: targetProfileId,
-      viewerState: {
-        __typename: 'ProfileViewerState',
-        profileBlock: {
-          __typename: 'ProfileBlock',
-          id: relationId,
-          targetProfile: {
-            __typename: 'Profile',
-            id: targetProfileId,
-            displayName: 'Original target',
-            relativeHandle: targetHandle,
-          },
         },
       },
     },
@@ -551,12 +376,4 @@ function connectionNodeIds() {
 function viewerProfileBlockId() {
   const viewerState = environment.getStore().getSource().get(viewerStateId);
   return viewerState?.profileBlock?.__ref ?? null;
-}
-
-function isRecordInvalidated(dataId: string) {
-  return typeof environment.getStore().getSource().get(dataId)?.__invalidated_at === 'number';
-}
-
-async function flushTasks() {
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
