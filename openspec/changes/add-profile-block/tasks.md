@@ -47,8 +47,15 @@ transition이 cleanup 뒤 관계를 남길 수 있으므로, Unblock은 현재 �
 
 - [x] 1.1 OpenSpec Gate 승인 후 Profile Block의 additive 저장 관계와 Owner/Target·생성 시각·uniqueness·referential integrity·self-block 불변식을 구현한다.
 - [x] 1.2 Block policy/admission 뒤 durable cleanup orchestration을 시작하고 양방향 Follow Request·Follow Relationship과 직접 원인 Follow Notification의 required cleanup을 연결한다.
-- [x] 1.3 profile-block requirement의 durable cleanup·success gate·Reaction 보존·Unblock no-restore를 구현한다.
-- [x] 1.4 migration·관계 불변식·restart/retry·성공 gate·보존·Owner scope를 검증하는 자동화 회귀와 공개 계약 정합성 검증을 추가한다.
+- [ ] 1.3 profile-block requirement의 durable cleanup·success gate·Reaction 보존·Unblock no-restore를 구현한다.
+- [ ] 1.4 migration·관계 불변식·restart/retry·성공 gate·보존·Owner scope를 검증하는 자동화 회귀와 공개 계약 정합성 검증을 추가한다.
+
+**2026-09-15 재검증 — #726 P1 미해결**
+
+실제 DB·Temporal Worker와 공개 `executeProfileBlock` 호출에서, 첫 실행이 Follow를 삭제한 뒤 직접 원인 Notification 삭제에 영구 실패하면
+Block과 Notification이 남는다. 같은 pair를 다시 차단할 때 새 실행은 삭제된 Follow를 포착하지 못하고 기존 Block을 성공으로 반환해,
+미완료 required cleanup이 성공 gate를 통과하는 문제가 재현됐다. Worker 교체·history replay 회귀는 통과했지만 이 재호출 경로는 해결되지 않아
+1.3·1.4를 다시 연다. 정상 완료된 중복 호출의 성공 계약을 유지할 완료 근거의 저장 방식은 결정 대기 중이며, #726은 Draft로 유지한다.
 
 ## 2. PROD-822 — Profile Block 정책과 GraphQL 경계
 
