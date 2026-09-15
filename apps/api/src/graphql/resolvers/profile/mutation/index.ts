@@ -1,4 +1,5 @@
 import './create';
+import './block';
 import './delete';
 import './follow';
 import './follow-request';
