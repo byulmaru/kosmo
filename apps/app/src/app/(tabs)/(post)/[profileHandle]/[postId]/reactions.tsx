@@ -3,6 +3,7 @@ import { useCallback, useEffect } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import {
+  bindReactionPeopleReturnEntry,
   clearReactionPeopleReturnState,
   consumeReactionPeopleReturnToOrigin,
   getReactionPeopleHref,
@@ -61,6 +62,7 @@ export default function ReactionPeopleRoute() {
   const navigation = useNavigation();
   const postId = firstParam(params.postId);
   const rawProfileHandle = firstParam(params.profileHandle);
+  const requestedType = firstParam(params.type);
   const handle = normalizeProfileHandle(rawProfileHandle);
   const routeRelativeHandle = rawProfileHandle.startsWith('@')
     ? rawProfileHandle
@@ -71,11 +73,14 @@ export default function ReactionPeopleRoute() {
     () =>
       navigation.addListener('beforeRemove', (event) => {
         if (isCanonicalReactionPeopleReplace(event)) {
+          bindReactionPeopleReturnEntry();
           return;
         }
 
-        if (isReactionPeopleBackAction(event) && consumeReactionPeopleReturnToOrigin()) {
-          restoreReactionPeopleReturnFocus();
+        if (isReactionPeopleBackAction(event)) {
+          if (consumeReactionPeopleReturnToOrigin()) {
+            restoreReactionPeopleReturnFocus(true);
+          }
           return;
         }
 
@@ -84,11 +89,12 @@ export default function ReactionPeopleRoute() {
     [navigation],
   );
 
+  useEffect(() => {
+    bindReactionPeopleReturnEntry();
+  }, [requestedType]);
+
   const onBack = useCallback(() => {
-    const returnToOrigin = hasReactionPeopleReturnToOrigin();
-    consumeReactionPeopleReturnToOrigin();
-    if (returnToOrigin && router.canGoBack()) {
-      restoreReactionPeopleReturnFocus();
+    if (hasReactionPeopleReturnToOrigin() && router.canGoBack()) {
       router.back();
     } else {
       router.replace(fallbackPostHref);
@@ -105,7 +111,7 @@ export default function ReactionPeopleRoute() {
       <ReactionPeopleRouteContent
         onBack={onBack}
         postId={postId}
-        requestedType={firstParam(params.type)}
+        requestedType={requestedType}
         routeRelativeHandle={routeRelativeHandle}
       />
     </RouteBoundary>
@@ -253,7 +259,7 @@ function isCanonicalReactionPeopleReplace(event: {
 
 function isReactionPeopleBackAction(event: { data?: { action?: { type?: unknown } } }) {
   const type = event.data?.action?.type;
-  return type === 'GO_BACK' || type === 'POP';
+  return type === 'GO_BACK' || type === 'POP' || type === 'RESET';
 }
 
 function hasReactionPeopleRoute(value: unknown): boolean {

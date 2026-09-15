@@ -80,6 +80,33 @@ test('목록에서 People로 이동하고 Type과 프로필 방문 후 원래 �
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(previousScroll, 0);
 });
 
+test('브라우저 Forward로 People에 다시 들어온 뒤 Header Back은 원래 목록으로 돌아간다', async ({
+  context,
+  page,
+}) => {
+  await page.setViewportSize({ height: 844, width: 390 });
+  const viewer = await createE2ESession({ handle: 'e2e-people-forward' });
+  const reactor = await createE2EProfile({ handle: 'e2e-forward-reactor' });
+  const post = await createE2EPost({ body: 'Forward 복귀 대상', profileId: viewer.profile!.id });
+  await db.insert(Reactions).values({ postId: post.id, profileId: reactor.id, type: '❤️' });
+  await setE2ESessionCookie(context, viewer.token);
+  await page.goto('/home');
+
+  const peoplePath = `/@${viewer.profile!.handle}/${toGlobalId('Post', post.id)}/reactions`;
+  await page.locator(`a[href="${peoplePath}"]`).click();
+  const heading = page.getByRole('heading', { name: '반응한 사람', exact: true });
+  await expect(heading).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/home$/);
+  await page.goForward();
+  await expect(heading).toBeVisible();
+  await page.getByRole('button', { name: '뒤로 가기' }).click();
+
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(page.getByText('Forward 복귀 대상', { exact: true })).toBeVisible();
+});
+
 test('guest 직접 진입은 순수 Repost 원문과 Type을 정규화하고 Back으로 원문을 연다', async ({
   page,
 }) => {

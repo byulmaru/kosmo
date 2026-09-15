@@ -3,6 +3,8 @@ import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import {
+  bindReactionPeopleReturnEntry,
+  clearReactionPeopleReturnState,
   consumeReactionPeopleReturnToOrigin,
   getReactionPeopleHref,
   hasReactionPeopleReturnToOrigin,
@@ -36,6 +38,11 @@ mockModule('expo-router', {
     },
   }),
   useRouter: () => ({
+    back: () => {
+      for (const listener of navigationListeners) {
+        listener({ data: { action: { type: 'GO_BACK' } }, type: 'beforeRemove' });
+      }
+    },
     canGoBack: () => true,
     replace: (href: string) => routerReplacements.push(href),
     setParams: () => undefined,
@@ -83,7 +90,7 @@ afterEach(async () => {
   navigationListeners.clear();
   reactionPeopleScreenProps = null;
   routerReplacements.length = 0;
-  consumeReactionPeopleReturnToOrigin();
+  clearReactionPeopleReturnState();
 });
 
 async function renderRoute() {
@@ -127,6 +134,20 @@ describe('reaction people route helpers', () => {
     assert.equal(consumeReactionPeopleReturnToOrigin(), false);
   });
 
+  it('does not treat the React Native window alias as browser history', () => {
+    const global = globalThis as unknown as { window?: unknown };
+    const previousWindow = global.window;
+    global.window = globalThis;
+
+    try {
+      rememberReactionPeopleReturnFocus('/@writer/post-1/reactions');
+      assert.equal(bindReactionPeopleReturnEntry(), false);
+      assert.equal(hasReactionPeopleReturnToOrigin(), true);
+    } finally {
+      global.window = previousWindow;
+    }
+  });
+
   it('clears the in-app origin when navigation removes the route before direct re-entry', async () => {
     let fallbackFocusCount = 0;
     rememberReactionPeopleReturnFocus('/@writer/post-1/reactions', undefined, () => {
@@ -139,6 +160,10 @@ describe('reaction people route helpers', () => {
       listener({ data: { action: { type: 'GO_BACK' } }, type: 'beforeRemove' });
     }
     assert.equal(hasReactionPeopleReturnToOrigin(), false);
+    assert.equal(fallbackFocusCount, 1);
+    for (const listener of navigationListeners) {
+      listener({ data: { action: { type: 'GO_BACK' } }, type: 'beforeRemove' });
+    }
     assert.equal(fallbackFocusCount, 1);
 
     await act(async () => renderer?.unmount());
@@ -176,6 +201,50 @@ describe('reaction people route helpers', () => {
     }
 
     assert.equal(hasReactionPeopleReturnToOrigin(), true);
+  });
+
+  it('rearms the same browser history entry after Back and Forward', () => {
+    const global = globalThis as unknown as { window?: unknown };
+    const previousWindow = global.window;
+    const listeners = new Set<(event: { state: unknown }) => void>();
+    const state: Record<string, unknown> = { id: 'people' };
+    let fallbackFocusCount = 0;
+    global.window = {
+      addEventListener: (type: string, listener: (event: { state: unknown }) => void) => {
+        assert.equal(type, 'popstate');
+        listeners.add(listener);
+      },
+      history: { state },
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        callback(0);
+        return 0;
+      },
+      removeEventListener: (type: string, listener: (event: { state: unknown }) => void) => {
+        assert.equal(type, 'popstate');
+        listeners.delete(listener);
+      },
+    };
+    try {
+      rememberReactionPeopleReturnFocus('/@writer/post-1/reactions', undefined, () => {
+        fallbackFocusCount += 1;
+      });
+      bindReactionPeopleReturnEntry();
+      const peopleState = state;
+
+      for (const listener of listeners) {
+        listener({ state: { id: 'origin' } });
+      }
+      assert.equal(hasReactionPeopleReturnToOrigin(), false);
+      assert.equal(fallbackFocusCount, 1);
+
+      for (const listener of listeners) {
+        listener({ state: peopleState });
+      }
+      assert.equal(hasReactionPeopleReturnToOrigin(), true);
+    } finally {
+      clearReactionPeopleReturnState();
+      global.window = previousWindow;
+    }
   });
 
   it('falls back to the shell target when the original control is gone', () => {

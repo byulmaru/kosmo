@@ -4,7 +4,9 @@ import type { ReactionSummaryEntry } from './ReactionSummary';
 let pendingReturnFocusPath: string | null = null;
 let pendingReturnFocusId: string | null = null;
 let pendingReturnFocusFallback: (() => void) | null = null;
+let pendingReturnEntryId: string | null = null;
 let pendingReturnToOrigin = false;
+let removeReactionPeoplePopStateListener: (() => void) | null = null;
 
 export function resolveReactionPeopleType(
   entries: ReadonlyArray<ReactionSummaryEntry>,
@@ -37,6 +39,9 @@ export function rememberReactionPeopleReturnFocus(
   }
 
   pendingReturnToOrigin = true;
+  pendingReturnEntryId = null;
+  removeReactionPeoplePopStateListener?.();
+  removeReactionPeoplePopStateListener = null;
   pendingReturnFocusId = focusId ?? null;
   pendingReturnFocusFallback = fallbackFocus ?? null;
   if (typeof document === 'undefined') {
@@ -54,21 +59,46 @@ export function consumeReactionPeopleReturnToOrigin() {
 
 export function clearReactionPeopleReturnState() {
   pendingReturnToOrigin = false;
+  pendingReturnEntryId = null;
+  removeReactionPeoplePopStateListener?.();
+  removeReactionPeoplePopStateListener = null;
   pendingReturnFocusPath = null;
   pendingReturnFocusId = null;
   pendingReturnFocusFallback = null;
+}
+
+export function bindReactionPeopleReturnEntry() {
+  if (
+    typeof window === 'undefined' ||
+    typeof window.addEventListener !== 'function' ||
+    typeof window.requestAnimationFrame !== 'function' ||
+    !window.history ||
+    !pendingReturnToOrigin
+  ) {
+    return false;
+  }
+
+  installReactionPeoplePopStateListener();
+  window.requestAnimationFrame(() => {
+    if (pendingReturnToOrigin) {
+      pendingReturnEntryId = getReactionPeopleEntryId(window.history.state);
+    }
+  });
+  return true;
 }
 
 export function hasReactionPeopleReturnToOrigin() {
   return pendingReturnToOrigin;
 }
 
-export function restoreReactionPeopleReturnFocus() {
+export function restoreReactionPeopleReturnFocus(preserveForHistory = false) {
   if (typeof document === 'undefined' || !pendingReturnFocusPath) {
     const fallbackFocus = pendingReturnFocusFallback;
-    pendingReturnFocusPath = null;
-    pendingReturnFocusId = null;
-    pendingReturnFocusFallback = null;
+    if (!preserveForHistory) {
+      pendingReturnFocusPath = null;
+      pendingReturnFocusId = null;
+      pendingReturnFocusFallback = null;
+    }
     fallbackFocus?.();
     return;
   }
@@ -76,9 +106,11 @@ export function restoreReactionPeopleReturnFocus() {
   const targetPath = pendingReturnFocusPath;
   const targetId = pendingReturnFocusId;
   const fallbackFocus = pendingReturnFocusFallback;
-  pendingReturnFocusPath = null;
-  pendingReturnFocusId = null;
-  pendingReturnFocusFallback = null;
+  if (!preserveForHistory) {
+    pendingReturnFocusPath = null;
+    pendingReturnFocusId = null;
+    pendingReturnFocusFallback = null;
+  }
   let attempts = 0;
   const focus = () => {
     const identifiedTarget = targetId ? document.getElementById(targetId) : null;
@@ -112,4 +144,33 @@ export function restoreReactionPeopleReturnFocus() {
   } else {
     focus();
   }
+}
+
+function installReactionPeoplePopStateListener() {
+  if (typeof window === 'undefined' || removeReactionPeoplePopStateListener) {
+    return;
+  }
+
+  const onPopState = (event: PopStateEvent) => {
+    if (getReactionPeopleEntryId(event.state) === pendingReturnEntryId) {
+      pendingReturnToOrigin = true;
+      return;
+    }
+
+    if (pendingReturnToOrigin) {
+      consumeReactionPeopleReturnToOrigin();
+      restoreReactionPeopleReturnFocus(true);
+    }
+  };
+  window.addEventListener('popstate', onPopState);
+  removeReactionPeoplePopStateListener = () => window.removeEventListener('popstate', onPopState);
+}
+
+function getReactionPeopleEntryId(state: unknown) {
+  if (!state || typeof state !== 'object') {
+    return null;
+  }
+
+  const id = (state as Record<string, unknown>).id;
+  return typeof id === 'string' ? id : null;
 }
