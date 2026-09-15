@@ -53,14 +53,14 @@ remote ActivityPub ingress와 Block/Undo 전달은 `PROD-818`의 후속 범위�
   exact-match 또는 partial-match 후보를 반환할 때는 [Profile](./profile.md)의 기존 공개 조회 조건을 통과한 후보 중
   viewer와 양방향 Active Block 관계인 Profile을 제외한다. 이 제외는 pagination·cursor·limit보다 먼저 적용한다.
 - selected Profile이 없는 경우에는 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate를 적용하거나
-  selected Profile의 Instance 종류 조건을 새로 요구하지 않는다. viewer는 임의 입력 actor나 이전 selected Profile·client cache에서
+  selected Profile을 새로 요구하지 않는다. viewer는 임의 입력 actor나 이전 selected Profile·client cache에서
   재사용하지 않고 현재 요청의 Account 상태에서만 결정한다.
 - `Hashtag.relatedProfiles`는 active ADR 0021과 `hashtag-related-profile-api` spec의 정확한 Hashtag 관계·공개
   Profile 후보 계약을 유지한다. 유효한 Account에 현재 selected Profile이 있으면 그 Profile을 viewer로 사용해
   양방향 Active Block 관계인 후보를 pagination·cursor·limit 전에 제외한다. selected Profile이 없으면 기존
-  Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate나 selected Profile의 Instance 종류 조건을 새로 요구하지 않는다.
+  Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate나 selected Profile을 새로 요구하지 않는다.
 - 정상적인 direct route 진입·새로고침의 API 결과는 GraphQL `node(id:)`·`profileByHandle` 직접 조회의 기존 기본 Profile
-  정보와 현재 selected Profile Owner 범위의 정확한 unblock 관계 ID를 사용한다.
+  정보와 현재 인증된 selected Owner 범위의 정확한 unblock 관계 ID를 사용한다.
 - Owner Profile이 Target Profile의 Post를 직접 조회하는 경우에는 Post Visibility·Post Eligibility와 Media 조회
   정책을 적용한다. Target Profile의 Post List, Post detail과 첨부 Media도 같은 정책을 따른다.
 - Target Profile이 Owner Profile의 Post를 조회하는 경우에는 Post와 첨부 Media를 모든 직접 API 조회 표면에서
