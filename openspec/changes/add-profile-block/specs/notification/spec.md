@@ -16,6 +16,20 @@
 - **THEN** 시스템은 Notification pair policy에 따라 해당 item을 숨긴다
 - **AND** Related Post·Media 직접 조회 결과는 Post·Media의 viewer 방향 정책으로 별도 판정한다
 
+#### Scenario: 여러 Profile의 알림은 각 Recipient 기준으로 차단을 판정한다
+
+- **WHEN** 한 Account가 membership을 가진 Recipient A·B의 Notification을 조회하거나 한 번에 읽음 처리하고 A만 Related Profile과 Block 관계다
+- **THEN** 각 Notification의 가시성은 해당 Recipient와 Related Profile·Post 사이의 정책으로 판정한다
+- **AND** 현재 selected Profile을 모든 Notification의 Recipient로 대체하지 않는다
+- **AND** 조회 불가인 A의 item은 읽음 처리에서 조용히 제외하고 B의 조회 가능한 item만 기존 계약대로 처리한다
+
+#### Scenario: 조회로 숨긴 기존 알림의 저장 상태를 바꾸지 않는다
+
+- **WHEN** Block 때문에 조회할 수 없는 비직접 원인 Notification ID를 목록·Node·읽음 처리에서 사용한다
+- **THEN** 시스템은 존재 여부나 제외 이유를 노출하지 않고 해당 item을 제외한다
+- **AND** 조회나 읽음 처리만으로 해당 row를 삭제하거나 Read State를 변경하지 않는다
+- **AND** 차단 해제 뒤에는 그 시점의 공통 정책을 다시 평가하며 과거 Notification의 재노출을 별도 복구 작업으로 보장하지 않는다
+
 ### Requirement: Follow-cause Notification cleanup follows durable Profile Block cleanup
 
 **Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`. Profile Block의 durable cleanup orchestration이 이번 실행에서 포착해 제거하는 Follow Request 또는 Follow Relationship을 직접 원인으로 가진 Notification은 required cleanup에서 제거해야 한다(MUST). 제거된 Follow 객체가 직접 원인이 아닌 다른 기존 Notification과 Repost·Reaction·Bookmark 관계의 Notification은 이 action에서 동기적으로 삭제하거나 Read State를 바꾸지 않아야 한다(MUST NOT).
