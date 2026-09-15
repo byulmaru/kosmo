@@ -240,7 +240,6 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     heading,
     loading,
     moreItems,
-    menuItems,
     onMenuTriggerReady,
     profile,
     showMuteAction,
@@ -252,7 +251,6 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     heading?: boolean;
     loading?: boolean;
     moreItems?: readonly ReportMenuItem[];
-    menuItems?: readonly object[];
     onMenuTriggerReady?: (focusTrigger: () => void) => void;
     profile?: { handle: string };
     showMuteAction?: boolean;
@@ -274,12 +272,12 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
             }) => {
               focusTriggerRef.current = () => menuTriggerFocus();
               onMenuTriggerReady?.(() => menuTriggerFocus());
-              return createElement('ActionMenu', { items: [item] });
+              return createElement('ActionMenu', { items: [item, ...(moreItems ?? [])] });
             },
             surface: 'menu',
           })
-        : menuItems
-          ? createElement('ActionMenu', { items: menuItems })
+        : moreItems
+          ? createElement('ActionMenu', { items: moreItems })
           : null,
       action,
     );
@@ -575,6 +573,21 @@ describe('profile route parameter lifecycle', () => {
     sessionId = null;
     await renderRoute('@local');
     assert.equal(requireRendered('ProfileHero').props.moreItems, undefined);
+  });
+
+  it('신고 메뉴는 selected Profile과 차단 방향에 관계없이 로그인 상태를 따른다', async () => {
+    sessionId = 'session:viewer';
+    profileBlockStatus = null;
+    await renderRoute('@target');
+    assert.deepEqual(requireRendered('ActionMenu').props.items, [reportMenuItem]);
+
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
+    await renderRoute('@target');
+    assert.deepEqual(requireRendered('ActionMenu').props.items, [reportMenuItem]);
+    assert.equal(rendered('FollowButton').length, 0);
+    assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
   });
 
   it('selected Profile이 없는 공개 Profile은 nullable block status와 함께 사용할 수 있다', async () => {
