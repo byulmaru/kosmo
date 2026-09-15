@@ -52,6 +52,13 @@ export function consumeReactionPeopleReturnToOrigin() {
   return value;
 }
 
+export function clearReactionPeopleReturnState() {
+  pendingReturnToOrigin = false;
+  pendingReturnFocusPath = null;
+  pendingReturnFocusId = null;
+  pendingReturnFocusFallback = null;
+}
+
 export function hasReactionPeopleReturnToOrigin() {
   return pendingReturnToOrigin;
 }

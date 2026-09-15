@@ -1,8 +1,9 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import {
+  clearReactionPeopleReturnState,
   consumeReactionPeopleReturnToOrigin,
   getReactionPeopleHref,
   hasReactionPeopleReturnToOrigin,
@@ -57,6 +58,7 @@ export default function ReactionPeopleRoute() {
     type?: string | string[];
   }>();
   const router = useRouter();
+  const navigation = useNavigation();
   const postId = firstParam(params.postId);
   const rawProfileHandle = firstParam(params.profileHandle);
   const handle = normalizeProfileHandle(rawProfileHandle);
@@ -64,6 +66,17 @@ export default function ReactionPeopleRoute() {
     ? rawProfileHandle
     : `@${rawProfileHandle}`;
   const fallbackPostHref = `/${routeRelativeHandle}/${postId}` as Href;
+
+  useEffect(
+    () =>
+      navigation.addListener('beforeRemove', (event) => {
+        if (!isCanonicalReactionPeopleReplace(event)) {
+          clearReactionPeopleReturnState();
+        }
+      }),
+    [navigation],
+  );
+
   const onBack = useCallback(() => {
     const returnToOrigin = hasReactionPeopleReturnToOrigin();
     consumeReactionPeopleReturnToOrigin();
@@ -221,6 +234,31 @@ function ReactionPeopleRouteChrome({
       {children}
     </>
   );
+}
+
+function isCanonicalReactionPeopleReplace(event: {
+  data?: { action?: { payload?: unknown; type?: unknown } };
+}) {
+  return (
+    event.data?.action?.type === 'REPLACE' && hasReactionPeopleRoute(event.data.action.payload)
+  );
+}
+
+function hasReactionPeopleRoute(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  return Object.entries(value).some(([key, nested]) => {
+    if (
+      (key === 'name' || key === 'screen') &&
+      typeof nested === 'string' &&
+      (nested === 'reactions' || nested.endsWith('/reactions'))
+    ) {
+      return true;
+    }
+    return key === 'params' && hasReactionPeopleRoute(nested);
+  });
 }
 
 function firstParam(value?: string | string[]) {
