@@ -1,18 +1,24 @@
-## ADDED Requirements
+# native-deployment-channel Specification
+
+## Purpose
+
+TBD - created by archiving change switch-native-deployment-channel. Update Purpose after archive.
+
+## Requirements
 
 ### Requirement: Native exposes a bounded deployment channel selector
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/design/breakpoints.md`, PROD-956. Android/iOS Native MUST expose a `채널` row in `정보` and pre-login recovery with only `dev` and `prod`; Web `정보` and Web channel UI MUST remain unchanged.
+**Authority / Provenance:** `docs/design/settings.md`, `docs/design/breakpoints.md`, PROD-956. Authenticated Android/iOS Native MUST expose a `채널` row in `정보` with only `dev` and `prod`; the login screen MUST NOT expose a channel selector or recovery entry; Web `정보` and Web channel UI MUST remain unchanged.
 
 #### Scenario: Show the current channel after login
 
 - **WHEN** an authenticated Native user opens `정보`
 - **THEN** the row shows the active `dev` or `prod` value and the selector offers only those values
 
-#### Scenario: Recover the channel before login
+#### Scenario: Keep the login screen without channel recovery
 
-- **WHEN** a Native user opens the pre-login recovery entry point
-- **THEN** the same `dev`/`prod` selector is available without Web Settings controls
+- **WHEN** a Native user opens the login screen or cannot complete authentication
+- **THEN** no channel selector or recovery entry is available, and the user cannot change the channel inside the app
 
 #### Scenario: Keep Web channel selection unchanged
 
