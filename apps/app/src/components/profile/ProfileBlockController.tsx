@@ -14,11 +14,7 @@ const blockProfileMutation = graphql`
       success
       profileBlock {
         id
-        targetProfile {
-          id
-          displayName
-          relativeHandle
-        }
+        ...ProfileBlockAction_profileBlock
       }
     }
   }
@@ -54,7 +50,11 @@ function updateLoadedBlockState(
   }
 
   profileBlock.setLinkedRecord(targetProfile, 'targetProfile');
-  targetProfile.getLinkedRecord('viewerState')?.setLinkedRecord(profileBlock, 'profileBlock');
+  const viewerState = targetProfile.getLinkedRecord('viewerState');
+  // Confirmed Block completion includes durable Follow/Request cleanup.
+  viewerState?.setValue(null, 'follow');
+  viewerState?.setValue(null, 'followRequest');
+  viewerState?.setLinkedRecord(profileBlock, 'profileBlock');
 
   const connection = store.get(connectionId);
   const alreadyConnected = connection
@@ -145,13 +145,13 @@ export function useProfileBlockMutations() {
         try {
           if (nextBlocked) {
             commitBlock({
-              onCompleted: (response) => {
+              onCompleted: (response, errors) => {
                 const profileBlock = response.blockProfile?.profileBlock;
                 if (!isCurrent()) {
                   finishStale();
                   return;
                 }
-                if (!response.blockProfile?.success || !profileBlock) {
+                if (errors?.length || !response.blockProfile?.success || !profileBlock) {
                   finish(new Error('Profile block response did not confirm the relation.'));
                   return;
                 }
@@ -176,13 +176,14 @@ export function useProfileBlockMutations() {
             });
           } else {
             commitUnblock({
-              onCompleted: (response) => {
+              onCompleted: (response, errors) => {
                 if (!isCurrent()) {
                   finishStale();
                   return;
                 }
                 const responseProfileBlockId = response.unblockProfile?.profileBlockId;
                 if (
+                  errors?.length ||
                   !response.unblockProfile?.success ||
                   !responseProfileBlockId ||
                   responseProfileBlockId !== change.profileBlockId
