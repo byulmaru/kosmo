@@ -1,4 +1,3 @@
-import { AccountProfileRoleOrder } from '@kosmo/core/enums';
 import { PermissionDeniedError, ValidationError } from '@kosmo/core/error';
 import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
 import SchemaBuilder from '@pothos/core';
@@ -9,19 +8,17 @@ import SimpleObjectsPlugin from '@pothos/plugin-simple-objects';
 import ValidationPlugin from '@pothos/plugin-validation';
 import WithInputPlugin from '@pothos/plugin-with-input';
 import * as R from 'remeda';
-import type { AccountProfileRole } from '@kosmo/core/enums';
+import { createAuthScopes } from './auth-scopes';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
+import type { AuthScopes } from './auth-scopes';
 
 export const builder = new SchemaBuilder<{
   AuthContexts: {
     login: UserContext & SessionContext;
     profileRole: UserContext & SessionWithProfileContext;
   };
-  AuthScopes: {
-    login: boolean;
-    profileRole: AccountProfileRole;
-  };
+  AuthScopes: AuthScopes;
   Context: UserContext;
   DefaultAuthStrategy: 'all';
   DefaultFieldNullability: false;
@@ -63,20 +60,7 @@ export const builder = new SchemaBuilder<{
     encodeGlobalID: encodeGlobalId,
   },
   scopeAuth: {
-    authScopes: async (ctx) => ({
-      login: !!ctx.session,
-      profileRole: (minimumRole) => {
-        const currentProfile = ctx.session?.profile;
-        if (!currentProfile) {
-          return false;
-        }
-
-        return (
-          AccountProfileRoleOrder.indexOf(currentProfile.role) >=
-          AccountProfileRoleOrder.indexOf(minimumRole)
-        );
-      },
-    }),
+    authScopes: createAuthScopes,
     defaultStrategy: 'all',
     runScopesOnType: true,
     unauthorizedError: (_parent, _context, _info, result) =>

@@ -141,30 +141,27 @@ const createContext = (): Context => {
       return cached as never;
     }
 
-    const loader = new DataLoader(
-      async (keys) => {
-        const rows = await load(keys as never);
-        const values = R.groupBy(rows, (row) => stringify(key(row as never)));
+    const loader = new DataLoader(async (keys) => {
+      const rows = await load(keys as never);
+      const values = R.groupBy(rows, (row) => stringify(key(row as never)));
 
-        return keys.map((key) => {
-          const value = values[stringify(key)];
-          if (value?.length) {
-            return many ? value : value[0];
-          }
+      return keys.map((key) => {
+        const value = values[stringify(key)];
+        if (value?.length) {
+          return many ? value : value[0];
+        }
 
-          if (nullable) {
-            return null;
-          }
+        if (nullable) {
+          return null;
+        }
 
-          if (many) {
-            return [];
-          }
+        if (many) {
+          return [];
+        }
 
-          return new Error(`DataLoader(${name}): Missing key`);
-        });
-      },
-      { cache: false },
-    );
+        return new Error(`DataLoader(${name}): Missing key`);
+      });
+    });
 
     ctx.$loaders.set(name, loader);
 
