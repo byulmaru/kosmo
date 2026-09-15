@@ -123,6 +123,43 @@ const profile = {
   viewerState: { follow: null, followRequest: null, isSelf: false },
 };
 
+test('내가 차단한 Profile은 FollowButton이 차단 해제 lifecycle을 사용한다', async () => {
+  let unblockSuccesses = 0;
+  await act(async () => {
+    renderer = create(
+      createElement(FollowButton, {
+        onBlockFeedback: ({ status }: { status: string }) =>
+          status === 'success' ? (unblockSuccesses += 1) : undefined,
+        profile: {
+          ...profile,
+          viewerState: {
+            ...profile.viewerState,
+            profileBlock: {
+              id: 'profile-block-a',
+              targetProfile: profile,
+            },
+          },
+        } as never,
+      }),
+    );
+  });
+
+  const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
+  assert.equal(button?.props.children, '차단 해제');
+  await act(async () => button?.props.onPress());
+  const confirmation = renderer?.root.find(
+    (node) => (node.type as unknown) === 'ConfirmationContent',
+  );
+  assert.equal(confirmation?.props.confirmLabel, '차단 해제');
+
+  await act(async () => confirmation?.props.onConfirm());
+  assert.equal(changeBlockedCalls[0]?.change.profileBlockId, 'profile-block-a');
+  await act(async () =>
+    renderer?.root.find((node) => (node.type as unknown) === 'ModalSheet').props.onDismiss(),
+  );
+  assert.equal(unblockSuccesses, 1);
+});
+
 test('내가 차단한 Profile은 고정된 차단 해제 action을 표시한다', async () => {
   await act(async () => {
     renderer = create(
@@ -182,6 +219,8 @@ test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유
       nextBlocked: false,
     },
   ]);
+  assert.deepEqual(toastCalls, []);
+  await act(async () => modal?.props.onDismiss());
   assert.deepEqual(toastCalls, [{ message: '차단을 해제했어요', tone: 'success' }]);
   assert.equal(unblockSuccesses, 1);
 });

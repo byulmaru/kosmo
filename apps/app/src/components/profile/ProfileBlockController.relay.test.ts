@@ -91,6 +91,75 @@ afterEach(async () => {
 });
 
 describe('ProfileBlockController Relay cache boundary', () => {
+  it('GraphQL 오류가 함께 온 Block 결과를 성공으로 적용하지 않고 재시도한다', async () => {
+    environment = createEnvironment();
+    environment.commitUpdate((store) => {
+      const follow = store.create('follow-before-error', 'ProfileFollow');
+      const request = store.create('request-before-error', 'ProfileFollowRequest');
+      store.get(viewerStateId)?.setLinkedRecord(follow, 'follow');
+      store.get(viewerStateId)?.setLinkedRecord(request, 'followRequest');
+    });
+    const { request } = await beginBlock();
+    const partial = blockPayload('block-partial');
+
+    respond({
+      data: {
+        blockProfile: {
+          ...partial.blockProfile,
+          profileBlock: {
+            ...partial.blockProfile.profileBlock,
+            targetProfile: {
+              ...partial.blockProfile.profileBlock.targetProfile,
+              viewerState: null,
+            },
+          },
+        },
+      },
+      errors: [
+        {
+          message: 'Viewer state failed',
+          path: ['blockProfile', 'profileBlock', 'targetProfile', 'viewerState'],
+        },
+      ],
+    });
+
+    await assert.rejects(request, /did not confirm/);
+    assert.deepEqual(connectionNodeIds(), []);
+    assert.deepEqual(environment.getStore().getSource().get(targetProfileId)?.viewerState, {
+      __ref: viewerStateId,
+    });
+    assert.equal(viewerProfileBlockId(), null);
+    assert.deepEqual(environment.getStore().getSource().get(viewerStateId)?.follow, {
+      __ref: 'follow-before-error',
+    });
+    assert.deepEqual(environment.getStore().getSource().get(viewerStateId)?.followRequest, {
+      __ref: 'request-before-error',
+    });
+    const retry = controller?.changeBlocked({ ownerProfileId, targetProfileId }, true);
+    assert.ok(retry);
+    respond({ data: blockPayload('block-confirmed') });
+    await retry;
+    assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
+    assert.equal(viewerProfileBlockId(), 'block-confirmed');
+    assert.equal(environment.getStore().getSource().get(viewerStateId)?.follow, null);
+    assert.equal(environment.getStore().getSource().get(viewerStateId)?.followRequest, null);
+  });
+
+  it('GraphQL 오류가 함께 온 Unblock 결과는 기존 exact relation을 유지한다', async () => {
+    environment = createEnvironment();
+    createRelation('block-confirmed');
+    const { request } = await beginUnblock('block-confirmed');
+
+    respond({
+      data: { unblockProfile: { success: true, profileBlockId: 'block-confirmed' } },
+      errors: [{ message: 'Unblock response failed', path: ['unblockProfile'] }],
+    });
+
+    await assert.rejects(request, /did not confirm/);
+    assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
+    assert.equal(viewerProfileBlockId(), 'block-confirmed');
+  });
+
   it('기존 Profile global ID로 relation을 정규화하고 Profile cache를 보존한다', async () => {
     environment = createEnvironment();
     const { request } = await beginBlock();
@@ -103,6 +172,35 @@ describe('ProfileBlockController Relay cache boundary', () => {
     assertGeneralProfileUnchanged();
     assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
     assert.equal(viewerProfileBlockId(), 'block-confirmed');
+  });
+
+  it('Block 뒤 Unblock이 이전 Follow cache를 다시 표시하지 않는다', async () => {
+    environment = createEnvironment();
+    environment.commitUpdate((store) => {
+      const follow = store.create('follow-before-block', 'ProfileFollow');
+      const request = store.create('request-before-block', 'ProfileFollowRequest');
+      store.get(viewerStateId)?.setLinkedRecord(follow, 'follow');
+      store.get(viewerStateId)?.setLinkedRecord(request, 'followRequest');
+    });
+    const { request } = await beginBlock();
+    respond({ data: blockPayload('block-confirmed') });
+    await request;
+
+    const unblock = controller?.changeBlocked(
+      { ownerProfileId, targetProfileId, profileBlockId: 'block-confirmed' },
+      false,
+    );
+    assert.ok(unblock);
+    respond({
+      data: { unblockProfile: { success: true, profileBlockId: 'block-confirmed' } },
+    });
+    await unblock;
+
+    const viewerState = environment.getStore().getSource().get(viewerStateId);
+    assert.equal(viewerState?.follow, null);
+    assert.equal(viewerState?.followRequest, null);
+    assert.equal(viewerProfileBlockId(), null);
+    assertGeneralProfileUnchanged();
   });
 
   it('해제 응답이 null이면 기존 connection과 status를 보존한다', async () => {
@@ -339,6 +437,22 @@ function blockPayload(relationId: string) {
           displayName: 'Original target',
           id: targetProfileId,
           relativeHandle: targetHandle,
+          handle: targetHandle,
+          followPolicy: 'OPEN',
+          followersCount: 0,
+          viewerState: {
+            isSelf: false,
+            follow: null,
+            followRequest: null,
+            profileBlock: {
+              id: relationId,
+              targetProfile: {
+                id: targetProfileId,
+                displayName: 'Original target',
+                relativeHandle: targetHandle,
+              },
+            },
+          },
         },
       },
     },

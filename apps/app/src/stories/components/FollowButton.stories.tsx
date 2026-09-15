@@ -13,11 +13,12 @@ import type { FollowButtonStoriesQuery as FollowButtonStoriesQueryType } from '.
 const followable = profile({
   avatar: { id: 'follow-button-avatar', url: '/profile-followable-avatar.png' },
   id: 'follow-button-followable',
-  viewerState: { follow: null, followRequest: null, isSelf: false },
+  viewerState: { profileBlock: null, follow: null, followRequest: null, isSelf: false },
 });
 const following = profile({
   id: 'follow-button-following',
   viewerState: {
+    profileBlock: null,
     follow: {
       follower: { followingCount: 42, id: 'profile-viewer' },
       id: 'follow-button-following-edge',
@@ -29,6 +30,7 @@ const following = profile({
 const requested = profile({
   id: 'follow-button-requested',
   viewerState: {
+    profileBlock: null,
     follow: null,
     followRequest: { id: 'follow-button-request' },
     isSelf: false,
@@ -37,12 +39,12 @@ const requested = profile({
 const approvalRequired = profile({
   followPolicy: 'APPROVAL_REQUIRED',
   id: 'follow-button-approval-required',
-  viewerState: { follow: null, followRequest: null, isSelf: false },
+  viewerState: { profileBlock: null, follow: null, followRequest: null, isSelf: false },
 });
 const self = profile({
   displayName: '내 프로필',
   id: 'follow-button-self',
-  viewerState: { follow: null, followRequest: null, isSelf: true },
+  viewerState: { profileBlock: null, follow: null, followRequest: null, isSelf: true },
 });
 
 const storyProfiles = [followable, following, requested, approvalRequired, self];
@@ -64,6 +66,7 @@ function FollowButtonPlayground(args: Parameters<typeof FollowButtonFixture>[0])
             followeeProfile: {
               ...target,
               viewerState: {
+                profileBlock: null,
                 isSelf: false,
                 follow: requiresApproval ? null : follow,
                 followRequest: requiresApproval ? followRequest : null,
@@ -81,7 +84,7 @@ function FollowButtonPlayground(args: Parameters<typeof FollowButtonFixture>[0])
           unfollowProfile: {
             followeeProfile: {
               ...target,
-              viewerState: { isSelf: false, follow: null, followRequest: null },
+              viewerState: { profileBlock: null, isSelf: false, follow: null, followRequest: null },
             },
             followerProfile: { ...follower, followingCount: 42 },
           },
@@ -180,6 +183,7 @@ const followSuccessResponse = {
     followeeProfile: {
       ...followable,
       viewerState: {
+        profileBlock: null,
         follow: {
           follower: { followingCount: followable.followingCount + 1, id: 'profile-viewer' },
           id: 'follow-button-success-edge',
@@ -198,6 +202,7 @@ const requestSuccessResponse = {
     followeeProfile: {
       ...approvalRequired,
       viewerState: {
+        profileBlock: null,
         follow: null,
         followRequest: { id: 'follow-button-request-success' },
         isSelf: false,
@@ -213,7 +218,7 @@ const unfollowSuccessResponse = {
     followeeProfile: {
       ...following,
       followersCount: Math.max(following.followersCount - 1, 0),
-      viewerState: { follow: null, followRequest: null, isSelf: false },
+      viewerState: { profileBlock: null, follow: null, followRequest: null, isSelf: false },
     },
     followerProfile: { id: 'profile-viewer', followingCount: 41 },
   },
