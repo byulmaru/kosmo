@@ -9,6 +9,7 @@ import {
   Notifications,
   pg,
   Posts,
+  ProfileBlocks,
   ProfileFollows,
   Profiles,
 } from '../db';
@@ -24,6 +25,7 @@ import {
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { postContentDocumentFromText } from '../post-content/server';
 import { createPost, deletePost as deletePostAction, repostPost as repostPostAction } from './post';
+import { ProfilePairBlockedError } from './profile-block-policy';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 process.env.PUBLIC_ORIGIN = publicOrigin;
@@ -160,6 +162,74 @@ test('repostPost는 조회 가능한 허용 불가 Source를 sourceId VALIDATION
         error.code === 'VALIDATION' &&
         error.field === 'sourceId',
     );
+  }
+});
+
+test('Active Profile Block은 Local과 ActivityPub Repost를 양방향으로 거부한다', async () => {
+  const actor = await createProfile();
+  const author = await createProfile();
+  const source = await createContentPost(author.profile.id);
+
+  for (const [ownerProfileId, targetProfileId] of [
+    [actor.profile.id, author.profile.id],
+    [author.profile.id, actor.profile.id],
+  ] as const) {
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId,
+      targetProfileId,
+    });
+
+    for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
+      const activityUri = `https://remote.example/activities/${crypto.randomUUID()}`;
+      const promise =
+        origin === 'LOCAL'
+          ? repostPostAction({
+              actorProfileId: actor.profile.id,
+              origin,
+              sourcePostId: source.id,
+            })
+          : repostPostAction({
+              activityUri,
+              actorProfileId: actor.profile.id,
+              origin,
+              publishedAt: null,
+              receivedAt: Temporal.Now.instant(),
+              sourcePostId: source.id,
+            });
+      await assert.rejects(promise, ProfilePairBlockedError);
+      assert.equal(
+        await db
+          .select()
+          .from(Posts)
+          .where(
+            and(
+              eq(Posts.profileId, actor.profile.id),
+              eq(Posts.repostSourceId, source.id),
+              eq(Posts.state, PostState.ACTIVE),
+              isNull(Posts.currentContentId),
+            ),
+          )
+          .then((rows) => rows.length),
+        0,
+      );
+      assert.equal(
+        await db
+          .select()
+          .from(ActivityPubPosts)
+          .where(eq(ActivityPubPosts.uri, activityUri))
+          .then((rows) => rows.length),
+        0,
+      );
+    }
+
+    await db
+      .delete(ProfileBlocks)
+      .where(
+        and(
+          eq(ProfileBlocks.ownerProfileId, ownerProfileId),
+          eq(ProfileBlocks.targetProfileId, targetProfileId),
+        ),
+      );
   }
 });
 
