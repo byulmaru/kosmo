@@ -20,6 +20,10 @@ Reply다. Mention은 Future 표본이므로 public props와 Playground에 노출
 Reply 계약은 로컬 코드·Storybook에 반영했으며 Tailnet은 이전 빌드를 유지한다. Mention의 디자인 승인은
 API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는다.
 
+2026-09-14 PROD-951 사용자 결정으로 Reply는 별도의 알림 이유 문장을 제거하고 24px Avatar와 inline
+작성자 행을 사용하며, Web의 Notification·PostListItem inset을 왼쪽 12px·오른쪽 24px로 정렬했다.
+이 후속 변경은 기존 알림 이유 행을 전제로 한 PROD-950을 대체한다.
+
 ## Native FCM push 권한 요청과 잠금 화면 미리보기 · PROD-875
 
 - Android·iOS native 앱은 로그인된 상태의 첫 앱 실행에서 Push 알림 권한 안내를 표시한다. 새 로그인

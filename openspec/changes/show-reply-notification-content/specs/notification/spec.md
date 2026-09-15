@@ -2,7 +2,7 @@
 
 ### Requirement: Selected Profile Follow Notification 목록 UI
 
-**Authority / Provenance:** `docs/design/notifications.md`, `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/colors.md`, `PROD-277`, `PROD-372`, `PROD-541`, `PROD-680`, `PROD-703`, `PROD-811`, `PROD-884`, `PROD-930`, `DSN-42` — 클라이언트는 selected Profile의 visible Notification을 모든 지원 플랫폼에서 같은 단일 목록과 승인된 공용 Notification presentation으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST).
+**Authority / Provenance:** `docs/design/notifications.md`, `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/colors.md`, `PROD-277`, `PROD-372`, `PROD-541`, `PROD-680`, `PROD-703`, `PROD-811`, `PROD-884`, `PROD-930`, `PROD-951`, `DSN-42` — 클라이언트는 selected Profile의 visible Notification을 모든 지원 플랫폼에서 같은 단일 목록과 승인된 공용 Notification presentation으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST).
 
 #### Scenario: 단일 Follow item 표시와 Profile link
 
@@ -164,7 +164,7 @@
 
 ### Requirement: Reply Notification GraphQL과 inbox 통합
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/design/notifications.md`, `docs/design/accessibility.md`, `docs/domain/objects/post.md`, `PROD-426`, `PROD-703`, `PROD-811`, `PROD-884`, `DSN-42` — API와 클라이언트는 visible Reply Notification을 기존 Notification interface·connection·Unread count·Read·badge/cache·inbox 계약에 통합하고, Recipient가 조회할 수 있는 결과 Reply의 공용 Post presentation을 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/design/notifications.md`, `docs/design/accessibility.md`, `docs/domain/objects/post.md`, `PROD-426`, `PROD-703`, `PROD-811`, `PROD-884`, `PROD-951`, `DSN-42` — API와 클라이언트는 visible Reply Notification을 기존 Notification interface·connection·Unread count·Read·badge/cache·inbox 계약에 통합하고, Recipient가 조회할 수 있는 결과 Reply의 공용 Post presentation을 제공해야 한다(MUST).
 
 #### Scenario: Reply Notification concrete object·Node
 

@@ -1,6 +1,6 @@
 ## Context
 
-PROD-884는 표시 전용 `NotificationListItemView`와 Relay 기반 `ReplyNotificationPost` 및 Storybook 계약을 만들었지만 Production 목록은 종류별 Relay adapter가 private legacy 행을 렌더링한다. Production 연결은 기존 Notification pagination·Read mutation·actor Store, Post content/privacy 정책과 Post action/reply/media provider 수명을 유지해야 한다.
+PROD-884는 표시 전용 `NotificationListItemView`와 Relay 기반 `ReplyNotificationPost` 및 Storybook 계약을 만들었지만 Production 목록은 종류별 Relay adapter가 private legacy 행을 렌더링한다. Production 연결은 기존 Notification pagination·Read mutation·actor Store, Post content/privacy 정책과 Post action/reply/media provider 수명을 유지해야 한다. PROD-951은 연결 이후 실제 목록에서 확인한 날짜 typography, Reply 작성자 밀도와 Web inset을 후속 정렬한다.
 
 ## Goals / Non-Goals
 
@@ -10,6 +10,7 @@ PROD-884는 표시 전용 `NotificationListItemView`와 Relay 기반 `ReplyNotif
 - Reply Post의 본문·Content Warning·미디어·Quote·Action Bar와 목록용 popup Reply composer를 기존 Post 경계로 재사용한다.
 - navigation/media open과 Best Effort Read를 결속하고 내부 control의 중복 navigation·Read를 막는다.
 - loading과 실제 Production Storybook을 새 동적 행 구조에 맞춘다.
+- Reply의 종류 의미는 kind icon과 접근성 설명으로 제공하고, 24px Avatar·inline 작성자 행과 공통 날짜 typography를 사용하며 별도의 알림 이유 문장은 제거한다.
 
 **Non-Goals:**
 
@@ -32,6 +33,8 @@ PROD-884는 표시 전용 `NotificationListItemView`와 Relay 기반 `ReplyNotif
 종류별 Relay adapter와 list dispatcher는 유지하고 각 adapter가 공용 presentation에 필요한 한 명의 actor, target과 Post preview를 투영하게 한다. 단건 Read commit은 같은 connected 경계에 남겨 non-Reply의 단일 target callback과 Reply의 명시적인 Profile/detail/body/media activation callback에서 호출한다.
 
 Reply adapter는 `NotificationListItemView kind="reply"` 안에 `ReplyNotificationPost`를 합성한다. Reply Post에는 현재 consumer가 필요한 하나의 activation callback만 추가하고 Profile/detail/body/media open에서 호출하되 Content Warning·Action Bar·composer에는 연결하지 않는다. 바깥 event capture나 Notification Link wrapper는 추가하지 않는다.
+
+PROD-951 후속 표시에서는 48px kind rail의 32px icon 옆에 24px Avatar와 `ProfileNameBlock`의 `inline` variant를 한 행으로 배치한다. 별도의 알림 이유 문장은 렌더링하지 않고 kind의 접근성 설명은 유지한다. 날짜는 공용 `TimestampText`의 `UI/Copy/M`을 사용하며 Web의 Notification·PostListItem inset은 왼쪽 12px·오른쪽 24px로 맞춘다.
 
 Notification 목록의 selected Profile fragment에 기존 Reply composer Profile fragment를 spread하고, Post 목록이 사용하는 action authentication, `owner="list"` Reply coordinator와 media viewer host 조합을 목록 수명에 둔다. 이 조합은 Reply action을 기존 popup modal로 연결하므로 새 composer 구현이 필요 없다.
 

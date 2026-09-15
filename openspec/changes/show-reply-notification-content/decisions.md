@@ -40,6 +40,18 @@
 - Consequences: connected Notification 경계는 명시적인 activation seam으로 단건 Read를 전달해야 하며 반복 activation의 최종 상태는 기존 서버 멱등성에 맡긴다.
 - Confirmation / Follow-up: Profile/detail/body/media target은 activation당 Read 한 번과 원래 동작을, Content Warning·Action Bar·composer는 Read와 item navigation이 없음을 검증한다.
 
+### Reply는 kind icon과 compact inline 작성자 행으로 표시한다
+
+- Decision Date: 2026-09-14
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/notifications.md`, [PROD-951](https://linear.app/byulmaru/issue/PROD-951/공통-알림-날짜와-답글-표시-밀도를-통일한다)
+- Status: Active
+- Context / Problem: 실제 알림 목록에서 Reply만 별도의 알림 이유 문장과 큰 작성자 header를 사용해 다른 Notification·PostListItem보다 밀도가 튀고, Web의 오른쪽 inset도 서로 달랐다. 기존 PROD-950은 알림 이유 행을 유지한 채 Native 공백만 줄이는 전제였다.
+- Decision Outcome: Reply는 48px kind rail의 32px kind icon, 24px Avatar와 `ProfileNameBlock`의 `inline` 작성자 행을 사용하고 별도의 알림 이유 문장을 표시하지 않는다. 날짜는 다른 Notification·PostListItem과 같은 `UI/Copy/M` 역할을 사용한다. Web의 Notification·PostListItem inset은 왼쪽 12px·오른쪽 24px, Native Notification·PostListItem inset은 좌우 8px을 사용하며 Reply 내부 세로 여백은 위 16px·아래 8px이다.
+- Alternatives Considered: 기존 40px Avatar와 두 줄 작성자 block을 유지하면 Reply 높이가 다시 커진다. 알림 이유 문장을 남기고 간격만 줄이면 종류 의미가 icon과 문장으로 중복되고 PROD-950의 오래된 전제를 유지한다. PostListItem 전체를 재사용하면 kind rail과 Notification wrapper 소유권이 깨진다.
+- Consequences: PROD-951이 Figma·공용 presentation·Production consumer·Storybook·canonical 문서와 이 OpenSpec 후속 정렬을 소유하고, PROD-950은 별도 구현 없이 대체된다. kind icon은 장식으로 숨기되 접근성에는 짧은 종류 설명을 별도로 제공한다.
+- Confirmation / Follow-up: Storybook에서 24px Avatar, inline 이름·핸들 overflow, 별도 알림 이유 부재, 공통 날짜 typography와 Web inset을 검증하고 Native 실제 기기 검증은 미검증으로 기록한다.
+
 ## Remaining Decisions
 
 - 없음.

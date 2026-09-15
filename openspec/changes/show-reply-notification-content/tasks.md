@@ -13,7 +13,7 @@
 
 Selected Profile의 실제 Notification 목록이 승인된 공용 presentation으로 Follow·FollowRequest·Reaction·Repost를 표시하고, Reply의 조회 가능한 본문·Content Warning·미디어·Quote·Action Bar와 기존 목록용 popup Reply composer를 제공한다. 승인된 이동·열기는 Best Effort Read와 독립적으로 함께 시작하고 내부 control은 item navigation·Read를 중복 실행하지 않는다.
 
-PROD-811 구현 PR이 이 change의 client 구현, GraphQL/Relay·Web E2E·지원 플랫폼 통합 검증, canonical·active spec 최종 동기화와 archive를 소유한다.
+PROD-811 구현 PR은 최초 client 연결과 GraphQL/Relay·Web E2E 검증을 소유한다. PROD-951 후속 PR은 날짜 typography, Reply 표시 밀도·inset, Figma·Storybook·canonical·Linear·delta spec 정렬을 소유한다. 전체 지원 플랫폼 검증, active spec 최종 동기화와 archive는 아래 미완료 task가 충족된 뒤 PROD-951에서 마무리한다.
 
 **Guardrails**
 
@@ -37,10 +37,49 @@ PROD-811 구현 PR이 이 change의 client 구현, GraphQL/Relay·Web E2E·지�
 - [x] 1.3 loading/error/empty와 selected Profile 전환 상태가 새 동적 Notification 행과 provider 수명에 맞게 동작하도록 정렬한다.
 - [x] 1.4 기존 Production Notification Storybook과 Web E2E의 최소 interaction을 갱신해 Deliverable과 Guardrails를 직접 검증한다.
 - [ ] 1.5 기존 GraphQL integration, Relay compiler, app check/test, Storybook static build와 Web browser 시각·상호작용 검증을 통과하고 iOS·Android의 dynamic height·접근성·popup·목록 성능 결과와 미검증 항목을 플랫폼별로 기록한다.
-- [ ] 1.6 PROD-811 구현 PR에서 canonical 문서·Linear·delta spec과 구현 결과를 최종 대조하고 전체 완료 증거가 충족되면 active Notification spec 동기화와 change archive를 수행한다.
+- [ ] 1.6 PROD-951 구현 PR에서 PROD-811 결과와 후속 표시 변경의 canonical 문서·Linear·delta spec을 최종 대조하고 전체 완료 증거가 충족되면 active Notification spec 동기화와 change archive를 수행한다.
 
 ### 검증 기록 (2026-09-10)
 
 - Web: Notification Story 27개, Notification Relay normalization unit 6개, 실제 Notifications E2E 3개, Notification GraphQL integration 28개, Relay compiler, app TypeScript, Storybook static build를 통과했다. Light/Dark wide와 390×844 compact에서 동적 행·CW·Reply popup·취소 후 focus 복귀를 실제 브라우저로 확인했다.
 - iOS: 현재 환경에서 실제 `/notifications`를 실행하지 못했다. dynamic height·Unread 접근성·popup focus/dismiss·첫 20개 scroll/단일 query는 미검증이다.
 - Android: 현재 환경에서 실제 `/notifications`를 실행하지 못했다. dynamic height·Unread 접근성·popup focus/dismiss·첫 20개 scroll/단일 query는 미검증이다.
+
+## 2. PROD-951 날짜 typography와 Reply 표시 밀도 정렬
+
+**Authority / Provenance**
+
+- `docs/design/notifications.md`
+- `docs/design/post-action-bar.md`
+- `docs/design/typography.md`
+- [PROD-951](https://linear.app/byulmaru/issue/PROD-951/공통-알림-날짜와-답글-표시-밀도를-통일한다)
+
+**Deliverable**
+
+Notification 날짜를 PostListItem과 같은 역할 typography로 통일하고, Reply를 kind icon·24px Avatar·inline 작성자 행으로 표시하며 별도의 알림 이유 문장을 제거한다. Web Notification·PostListItem은 왼쪽 12px·오른쪽 24px inset을 공유한다.
+
+**Guardrails**
+
+- 날짜 포맷, secondary 색상, 링크·Read·Post action과 접근성 입력 영역을 변경하지 않는다.
+- Native Notification·PostListItem의 좌우 8px inset과 플랫폼별 44pt·48dp 입력 영역을 유지한다.
+- `PostListItem`을 Reply Notification renderer로 사용하거나 Mention runtime을 추가하지 않는다.
+
+**Verification**
+
+- 기존 ProfileNameBlock 단위 테스트는 variant별 텍스트·heading semantics만 검증한다. inline row geometry는 실제 React Native Web `ReplyLayoutContract` Storybook에서 검증하며 StyleSheet 배열 순서 assertion을 중복 유지하지 않는다.
+- Notification Storybook에서 날짜 14/20, kind icon, 24px Avatar, inline 이름·핸들 overflow, 별도 알림 이유 부재와 Web inset을 검증한다. PostListItem Storybook에서 같은 Web inset을 검증한다.
+- Figma source·Light/Dark 조합과 실제 Web `/notifications`를 대조한다. iOS·Android 실제 기기 검증은 실행하지 못하면 미검증으로 남긴다.
+
+- [x] 2.1 공용 날짜 typography, Reply 표시 조합과 Notification·PostListItem inset을 코드·Figma·canonical 문서에 반영한다.
+- [x] 2.2 ProfileNameBlock·Notification·PostListItem의 최소 단위/Storybook 검증과 Web 시각 확인을 수행하고 미검증 플랫폼을 기록한다.
+
+### 검증 기록 (2026-09-14)
+
+- Web: ProfileNameBlock 단위 5개, ProfileNameBlock·Notification focused Storybook 10개와 Production Notification·Post Storybook 29개를 통과했다. 실제 `/notifications`에서 6종 알림의 날짜·Reply 높이·오른쪽 inset을 확인했다.
+- Figma: NotificationListItem 조합, `__NotificationRow`, `PostListItem` source의 Light/Dark 표본과 동적 높이를 정렬했다.
+- iOS·Android: 실제 기기·시뮬레이터에서 typography, touch target과 dynamic height를 실행하지 못해 미검증이다.
+
+### 리뷰 후속 검증 (2026-09-15)
+
+- ProfileNameBlock 단위 테스트 5개와 Notification `ReplyLayoutContract`를 포함한 Storybook 7개를 통과했다.
+- `pnpm exec openspec validate show-reply-notification-content --strict`를 통과했다.
