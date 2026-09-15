@@ -73,9 +73,14 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
 
 1. **서버 registration 경계:** 인증된 API mutation이 설치 소유권 검증과 platform·token의 등록·갱신·해제 lifecycle을 직접 처리한다.
    최초 `registerPushInstallation`은 외부 installation ID를 받지 않고 서버가 새 installation row ID를 발급해
-   반환한다. `updatePushInstallation`은 반환된 ID로 현재 Account·Session에 속한 row만 갱신하고, 삭제되었거나
-   알 수 없는 ID를 재생성하지 않는다. `unregisterPushInstallation`은 해당 ID만 삭제하며 없는 ID는 멱등
-   완료로 처리한다. 이전 ID는 재사용하지 않으므로 늦은 unregister가 새 registration row에 영향을 주지 않는다.
+   반환한다. `updatePushInstallation`은 반환된 ID와 인증된 현재 Account 소유권만으로 row를 갱신하고, 알 수
+   없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 노출하지 않는 동일한 `PERMISSION_DENIED`
+   (`Push installation is unavailable.`)로 실패한다. `unregisterPushInstallation`은 인증된 현재 Account가
+   소유한 해당 ID만 삭제하며, 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 `{ completed: true }`로
+   멱등 완료한다. 등록 당시 연결된 `sessionId`는 lifecycle association으로 유지하고 요청 Session으로
+   재바인딩하지 않으므로 같은 Account의 다른 Session도 row를 관리할 수 있다. 이전 ID는 재사용하지 않으므로
+   늦은 unregister가 새 registration row에 영향을 주지 않는다. 등록 Session의 logout/revoke와 Account 삭제 cleanup은
+   기존 lifecycle을 따른다.
    Recipient Profile과 eligible installation을 현재 Account membership, OS 허용 상태와 기존 Notification
    visibility 정책에서 계산하고, token은 서버 저장 경계에서만 Provider 전달에 사용한다. DB UUID PK를
    `PushInstallation` GlobalID로 인코딩하며 Node/query/registry를 추가하지 않는다. 동시 logout·re-register,
