@@ -131,6 +131,7 @@ function RoutePaginationProbe({ children }: { children: ReactNode }) {
 }
 
 mockModule('expo-router', {
+  Navigator: ({ children }: { children: ReactNode }) => children,
   Slot: () =>
     SlotContent
       ? createElement(
