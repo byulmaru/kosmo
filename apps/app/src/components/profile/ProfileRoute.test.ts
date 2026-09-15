@@ -3,9 +3,15 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createContext, createElement, useContext } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType, ReactNode, Ref } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { UseAutomaticPaginationResult } from '../pagination/useAutomaticPagination';
+import type { FollowButton as FollowButtonExport } from './FollowButton';
+import type {
+  ProfileBlockAction as ProfileBlockActionExport,
+  ProfileBlockActionTarget,
+  ProfileBlockFeedback,
+} from './ProfileBlockAction';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -73,11 +79,31 @@ let routeMetrics = {
   layoutHeight: 0,
   scrollOffset: 0,
 };
+let relayActorLifecycleKey = 'actor-a';
+let selectedProfileId: string | null = null;
+let profileBlockStatus: {
+  blockedBy: boolean;
+  blocking: boolean;
+  profileBlockId: string | null;
+} | null = {
+  blockedBy: false,
+  blocking: false,
+  profileBlockId: null,
+};
 let profileViewerState: {
   isSelf: boolean;
   membership: { role: 'MEMBER' | 'OWNER' } | null;
+  profileBlock?: { id: string; targetProfile: object } | null;
 } | null = null;
 const capturedReport = { value: null as ReportMenuInput | null };
+const changeBlockedCalls: Array<{ change: object; nextBlocked: boolean }> = [];
+const toastCalls: Array<{ message: string; tone: string }> = [];
+const focusHistory: string[] = [];
+const menuTriggerFocus = mock.fn(() => focusHistory.push('menu'));
+const stateActionFocus = mock.fn(() => focusHistory.push('state'));
+const contentStateFocus = mock.fn(() => focusHistory.push('content'));
+let changeBlockedImpl: (change: object, nextBlocked: boolean) => Promise<void> = async () =>
+  undefined;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -105,6 +131,7 @@ function RoutePaginationProbe({ children }: { children: ReactNode }) {
 }
 
 mockModule('expo-router', {
+  Navigator: ({ children }: { children: ReactNode }) => children,
   Slot: () =>
     SlotContent
       ? createElement(
@@ -123,10 +150,12 @@ mockModule('expo-router', {
 });
 mockModule('lucide-react-native', {
   ArrowLeft: 'ArrowLeft',
+  Ban: 'Ban',
   ChevronLeftIcon: 'ChevronLeftIcon',
 });
 mockModule(require.resolve('lucide-react-native'), {
   ArrowLeft: 'ArrowLeft',
+  Ban: 'Ban',
   ChevronLeftIcon: 'ChevronLeftIcon',
 });
 mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
@@ -153,15 +182,23 @@ mockModule('react-relay', {
       .match(
         /query (ProfileFollowersPageQuery|ProfileFollowingPageQuery|ProfileLayoutQuery|ProfilePostListPageQuery)/,
       )?.[1];
-    assert.ok(query);
-    return query as QueryName;
+    return (query ?? parts.join('')) as QueryName;
   },
+  useFragment: (_fragment: unknown, reference: unknown) => reference,
+  useMutation: () => [
+    () => assert.fail('Block consumer must not execute a Follow mutation'),
+    false,
+  ],
   useLazyLoadQuery: (
     query: QueryName,
     variables: { handle: string },
     options: { fetchKey: number },
   ) => {
-    queryHistory.push({ fetchKey: options.fetchKey, handle: variables.handle, query });
+    queryHistory.push({
+      fetchKey: options.fetchKey,
+      handle: variables.handle,
+      query,
+    });
     const mode = queryModes[query];
     if (mode === 'loading') {
       throw pending;
@@ -171,6 +208,10 @@ mockModule('react-relay', {
     }
 
     return {
+      currentSession: selectedProfileId
+        ? { selectedProfile: { id: selectedProfileId } }
+        : { selectedProfile: null },
+      profileBlockStatus: selectedProfileId ? profileBlockStatus : null,
       profileByHandle: profileAvailable
         ? {
             displayName: `Display ${variables.handle}`,
@@ -178,7 +219,21 @@ mockModule('react-relay', {
             id: `profile:${variables.handle}`,
             instance: { kind: profileInstanceKind },
             relativeHandle: `@${variables.handle}`,
-            viewerState: profileViewerState,
+            viewerState: profileViewerState
+              ? {
+                  ...profileViewerState,
+                  profileBlock: profileBlockStatus?.blocking
+                    ? {
+                        id: profileBlockStatus.profileBlockId,
+                        targetProfile: {
+                          displayName: `Display ${variables.handle}`,
+                          id: `profile:${variables.handle}`,
+                          relativeHandle: `@${variables.handle}`,
+                        },
+                      }
+                    : null,
+                }
+              : null,
           }
         : null,
     };
@@ -187,22 +242,52 @@ mockModule('react-relay', {
 mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
   ProfileHero: ({
     action,
+    blockAction,
     heading,
     loading,
     moreItems,
+    onMenuTriggerReady,
     profile,
+    showMuteAction,
   }: {
     action?: ReturnType<typeof createElement>;
+    blockAction?: ProfileBlockActionTarget & {
+      onFeedback?: (feedback: ProfileBlockFeedback) => void;
+    };
     heading?: boolean;
     loading?: boolean;
     moreItems?: readonly ReportMenuItem[];
+    onMenuTriggerReady?: (focusTrigger: () => void) => void;
     profile?: { handle: string };
-  }) =>
-    createElement(
+    showMuteAction?: boolean;
+  }) => {
+    onMenuTriggerReady?.(() => menuTriggerFocus());
+    return createElement(
       'ProfileHero',
-      { heading, identity: loading ? 'loading' : profile?.handle, moreItems },
+      { heading, identity: loading ? 'loading' : profile?.handle, moreItems, showMuteAction },
+      blockAction
+        ? createElement(ProfileBlockAction, {
+            ...blockAction,
+            icon: 'Ban' as never,
+            renderMenuItem: ({
+              focusTriggerRef,
+              item,
+            }: {
+              focusTriggerRef: { current: () => void };
+              item: object;
+            }) => {
+              focusTriggerRef.current = () => menuTriggerFocus();
+              onMenuTriggerReady?.(() => menuTriggerFocus());
+              return createElement('ActionMenu', { items: [item, ...(moreItems ?? [])] });
+            },
+            surface: 'menu',
+          })
+        : moreItems
+          ? createElement('ActionMenu', { items: moreItems })
+          : null,
       action,
-    ),
+    );
+  },
 });
 mockModule(new URL('../content-report/ContentReportContext.tsx', import.meta.url), {
   useContentReportMenuItem: (input: ReportMenuInput) => {
@@ -210,9 +295,8 @@ mockModule(new URL('../content-report/ContentReportContext.tsx', import.meta.url
     return reportMenuItem;
   },
 });
-mockModule(new URL('./FollowButton.tsx', import.meta.url), {
-  FollowButton: ({ profile }: { profile: { handle: string } }) =>
-    createElement('FollowButton', { identity: profile.handle }),
+mockModule(new URL('../../analytics/client.ts', import.meta.url), {
+  trackAnalytics: () => undefined,
 });
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
   ProfileMuteAction: 'ProfileMuteAction',
@@ -229,9 +313,42 @@ mockModule(new URL('../PageHeader.tsx', import.meta.url), {
   PageHeader: ({ leading, ...props }: { leading?: ReactNode }) =>
     createElement('PageHeader', { ...props, leading }, leading),
 });
+mockModule(new URL('../ui/ActionMenu.tsx', import.meta.url), {
+  ActionMenu: (props: object) => createElement('ActionMenu', props),
+});
+mockModule(new URL('../ui/ConfirmationContent.tsx', import.meta.url), {
+  ConfirmationContent: (props: object) => createElement('ConfirmationContent', props),
+});
+mockModule(new URL('../ui/ModalSheet.tsx', import.meta.url), {
+  ModalSheet: ({ children, ...props }: { children?: ReturnType<typeof createElement> }) =>
+    createElement('ModalSheet', props, children),
+});
+mockModule(new URL('../ui/ToastProvider.tsx', import.meta.url), {
+  useToast: () => ({
+    showToast: (message: string, options: { tone: string }) =>
+      toastCalls.push({ message, tone: options.tone }),
+  }),
+});
+mockModule(new URL('./ProfileBlockController.tsx', import.meta.url), {
+  useProfileBlockMutations: () => ({
+    changeBlocked: (change: object, nextBlocked: boolean) => {
+      changeBlockedCalls.push({ change, nextBlocked });
+      return changeBlockedImpl(change, nextBlocked);
+    },
+  }),
+});
+mockModule(new URL('./profileBlockErrors.ts', import.meta.url), {
+  StaleProfileBlockRequestError: class StaleProfileBlockRequestError extends Error {},
+});
 mockModule(new URL('../ui/Button.tsx', import.meta.url), {
-  Button: ({ children, ...props }: { children: string }) =>
-    createElement('Button', props, children),
+  Button: ({ children, controlRef, ...props }: { children: string; controlRef?: Ref<unknown> }) => {
+    if (typeof controlRef === 'function') {
+      controlRef({ focus: () => stateActionFocus() });
+    } else if (controlRef && typeof controlRef === 'object' && 'current' in controlRef) {
+      controlRef.current = { focus: () => stateActionFocus() };
+    }
+    return createElement('Button', props, children);
+  },
 });
 mockModule(new URL('../ui/IconButton.tsx', import.meta.url), {
   IconButton: ({ children, ...props }: { children: ReactNode }) =>
@@ -262,16 +379,21 @@ mockModule(new URL('../post/PostList.tsx', import.meta.url), {
   },
 });
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
-  StateView: (props: object) => createElement('StateView', props),
+  StateView: ({ controlRef, ...props }: { controlRef?: Ref<unknown> }) => {
+    if (controlRef && typeof controlRef === 'object' && 'current' in controlRef) {
+      controlRef.current = { focus: () => contentStateFocus() };
+    }
+    return createElement('StateView', props);
+  },
 });
 mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
   useUnexpectedErrorReporter: () => undefined,
 });
 mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  useRelayActorLifecycleKey: () => 'actor-a',
+  useRelayActorLifecycleKey: () => relayActorLifecycleKey,
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
-  useSession: () => ({ selectedProfileId: null, sessionId }),
+  useSession: () => ({ selectedProfileId, sessionId }),
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({ foregroundPrimary: '#111111' }),
@@ -281,8 +403,12 @@ let ProfileFollowersPage: ComponentType;
 let ProfileFollowingPage: ComponentType;
 let ProfileLayout: ComponentType;
 let ProfilePostListPage: ComponentType;
+let ProfileBlockAction: typeof ProfileBlockActionExport;
+let FollowButton: typeof FollowButtonExport;
 
 before(async () => {
+  ({ ProfileBlockAction } = await import('./ProfileBlockAction'));
+  ({ FollowButton } = await import('./FollowButton'));
   ({ usePaginationScrollRegistration } = await import('../pagination/PaginationScrollView'));
   ({ default: ProfileFollowersPage } =
     await import('../../app/(tabs)/(profile)/[profileHandle]/followers'));
@@ -315,10 +441,21 @@ afterEach(async () => {
   queryHistory.length = 0;
   profileAvailable = true;
   profileInstanceKind = 'LOCAL';
+  relayActorLifecycleKey = 'actor-a';
+  selectedProfileId = null;
+  profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
   profileViewerState = null;
   SlotContent = ProfilePostListPage;
   sessionId = null;
   capturedReport.value = null;
+  changeBlockedCalls.length = 0;
+  toastCalls.length = 0;
+  menuTriggerFocus.mock.resetCalls();
+  stateActionFocus.mock.resetCalls();
+  contentStateFocus.mock.resetCalls();
+  focusHistory.length = 0;
+  changeBlockedImpl = async () => undefined;
+  SlotContent = ProfilePostListPage;
 });
 
 async function renderRoute(profileHandle: string, routePath = `/profile/${profileHandle}`) {
@@ -356,12 +493,18 @@ async function renderRoute(profileHandle: string, routePath = `/profile/${profil
 }
 
 function identities(type: string) {
-  return rendered(type).map((node) => node.props.identity as string);
+  return rendered(type).map((node) =>
+    type === 'FollowButton'
+      ? (node.props.profile.handle as string)
+      : (node.props.identity as string),
+  );
 }
 
 function rendered(type: string) {
   assert.ok(renderer);
-  return renderer.root.findAll((node) => node.type === type);
+  return renderer.root.findAll(
+    (node) => node.type === (type === 'FollowButton' ? FollowButton : type),
+  );
 }
 
 function requireRendered(type: string) {
@@ -382,8 +525,9 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(rendered('ProfileHero').length, 1);
     assert.equal(rendered('PostList').length, 1);
     assert.equal(rendered('StateView').length, 0);
-    const route = renderer?.toJSON();
-    assert.ok(route && !Array.isArray(route));
+    const tree = renderer?.toJSON();
+    const route = Array.isArray(tree) ? tree[0] : tree;
+    assert.ok(route);
     assert.deepEqual(
       route.children?.map((child) => (typeof child === 'string' ? child : child.type)),
       ['PageHeader', 'ProfileHero', 'PostList'],
@@ -433,6 +577,45 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('ProfileHero').props.moreItems, undefined);
   });
 
+  it('신고 메뉴는 selected Profile과 차단 방향에 관계없이 로그인 상태를 따른다', async () => {
+    sessionId = 'session:viewer';
+    profileBlockStatus = null;
+    await renderRoute('@target');
+    assert.deepEqual(requireRendered('ActionMenu').props.items, [reportMenuItem]);
+
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
+    await renderRoute('@target');
+    assert.deepEqual(requireRendered('ActionMenu').props.items, [reportMenuItem]);
+    assert.equal(rendered('FollowButton').length, 0);
+    assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
+  });
+
+  it('selected Profile이 없는 공개 Profile은 nullable block status와 함께 사용할 수 있다', async () => {
+    await renderRoute('@public');
+
+    assert.deepEqual(identities('ProfileHero'), ['public']);
+  });
+
+  it('인증됐지만 Block 읽기 권한이 없으면 Block 관리 action을 표시하지 않는다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = null;
+
+    await renderRoute('@target');
+
+    assert.deepEqual(identities('ProfileHero'), ['target']);
+    assert.equal(rendered('ActionMenu').length, 0);
+  });
+  it('인증된 Profile의 viewerState가 한 렌더 동안 없어도 뮤트 메뉴를 유지한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = null;
+
+    await renderRoute('@target');
+
+    assert.equal(requireRendered('ProfileHero').props.showMuteAction, true);
+  });
   it('표시 중인 selected Local Owner Profile에만 편집 Link를 노출한다', async () => {
     profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
     await renderRoute('@local');
@@ -728,5 +911,295 @@ describe('profile route parameter lifecycle', () => {
     } finally {
       console.error = originalConsoleError;
     }
+  });
+
+  it('Profile 자체가 조회 불가하면 별도 차단 관계 action을 합성하지 않는다', async () => {
+    selectedProfileId = 'owner';
+    profileAvailable = false;
+    profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
+
+    await renderRoute('@blocked', '/@blocked');
+
+    const header = requireRendered('PageHeader');
+    assert.equal(header.props.title, '');
+    assert.ok(header.props.leading);
+    await act(async () => header.props.leading.props.onPress());
+    assert.equal(routerBackCount, 1);
+
+    assert.equal(requireRendered('StateView').props.title, '프로필을 찾을 수 없어요');
+    assert.equal(rendered('ProfileHero').length, 0);
+    assert.equal(rendered('Button').length, 0);
+    assert.equal(changeBlockedCalls.length, 0);
+  });
+
+  it('조회 가능한 blocking Profile은 ProfileHero와 확인 전 경고 뒤 Slot 콘텐츠를 유지한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+
+    await renderRoute('@blocked');
+
+    assert.deepEqual(identities('ProfileHero'), ['blocked']);
+    assert.deepEqual(identities('PostList'), []);
+    assert.equal(requireRendered('StateView').props.title, '차단한 프로필의 게시물입니다');
+    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+    assert.deepEqual(identities('FollowButton'), ['blocked']);
+    const menu = requireRendered('ActionMenu');
+    assert.deepEqual(
+      menu.props.items.map((item: { label: string }) => item.label),
+      ['차단 해제'],
+    );
+
+    await act(async () => menu.props.items[0].onSelect());
+    assert.equal(requireRendered('ConfirmationContent').props.confirmLabel, '차단 해제');
+
+    await act(async () => requireRendered('StateView').props.onAction());
+    assert.deepEqual(identities('PostList'), ['blocked']);
+  });
+
+  it('조회 가능한 blockedBy Profile은 ProfileHero와 콘텐츠 차단 상태를 유지한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
+
+    await renderRoute('@blocked');
+
+    assert.deepEqual(identities('ProfileHero'), ['blocked']);
+    assert.deepEqual(identities('PostList'), []);
+    assert.equal(requireRendered('StateView').props.title, '이 프로필을 볼 수 없습니다');
+    assert.equal(rendered('Button').length, 0);
+    assert.equal(rendered('FollowButton').length, 0);
+    assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
+  });
+
+  it('경고는 시간 경과로 사라지지 않고 handle과 actor lifecycle마다 다시 적용된다', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+
+    await renderRoute('@blocked', '/@blocked');
+    await act(async () => t.mock.timers.tick(86_400_000));
+    assert.deepEqual(identities('PostList'), []);
+    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+
+    await act(async () => requireRendered('StateView').props.onAction());
+    await renderRoute('@blocked', '/@blocked');
+    assert.deepEqual(identities('PostList'), ['blocked']);
+
+    await renderRoute('@other', '/@other');
+    assert.deepEqual(identities('PostList'), []);
+    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+    await act(async () => requireRendered('StateView').props.onAction());
+    assert.deepEqual(identities('PostList'), ['other']);
+
+    selectedProfileId = 'owner-b';
+    relayActorLifecycleKey = 'actor-b';
+    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-b' };
+    await renderRoute('@other', '/@other');
+    assert.deepEqual(identities('PostList'), []);
+    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+    await act(async () => requireRendered('StateView').props.onAction());
+
+    relayActorLifecycleKey = 'actor-b-new-session';
+    await renderRoute('@other', '/@other');
+    assert.deepEqual(identities('PostList'), []);
+    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+  });
+
+  it('Profile 공통 FollowButton의 해제는 확인·취소·pending·실패·재시도를 거친다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+    let rejectRequest: ((error: Error) => void) | undefined;
+    changeBlockedImpl = () =>
+      new Promise<void>((_resolve, reject) => {
+        rejectRequest = reject;
+      });
+    await renderRoute('@blocked', '/@blocked');
+    const relation = requireRendered('FollowButton');
+    const button = () => relation.findByType('Button' as never);
+    const modal = () => relation.findByType('ModalSheet' as never);
+    const confirmation = () => relation.findByType('ConfirmationContent' as never);
+
+    assert.equal(button().props.children, '차단 해제');
+    await act(async () => button().props.onPress());
+    assert.equal(modal().props.title, '이 프로필의 차단을 해제할까요?');
+    assert.equal(
+      confirmation().props.message,
+      '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.',
+    );
+    await act(async () => confirmation().props.onCancel());
+    await act(async () => modal().props.onDismiss());
+    assert.equal(changeBlockedCalls.length, 0);
+    assert.equal(stateActionFocus.mock.callCount(), 1);
+
+    await act(async () => button().props.onPress());
+    await act(async () => confirmation().props.onConfirm());
+    await act(async () => {
+      confirmation().props.onConfirm();
+      modal().props.onClose();
+    });
+    assert.deepEqual(changeBlockedCalls, [
+      {
+        change: {
+          ownerProfileId: 'owner',
+          profileBlockId: 'block-1',
+          targetProfileId: 'profile:blocked',
+        },
+        nextBlocked: false,
+      },
+    ]);
+    assert.equal(confirmation().props.pending, true);
+    assert.equal(modal().props.dismissDisabled, true);
+    assert.equal(modal().props.visible, true);
+    assert.deepEqual(button().props.accessibilityState, { busy: true, disabled: true });
+
+    await act(async () => rejectRequest?.(new Error('network')));
+    await act(async () => modal().props.onDismiss());
+    assert.equal(toastCalls.at(-1)?.tone, 'danger');
+    assert.equal(button().props.children, '차단 해제');
+    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+
+    changeBlockedImpl = async () => {
+      profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
+    };
+    await act(async () => button().props.onPress());
+    await act(async () => confirmation().props.onConfirm());
+    await renderRoute('@blocked', '/@blocked');
+    assert.equal(changeBlockedCalls.length, 2);
+    assert.equal(
+      requireRendered('FollowButton').findByType('Button' as never).props.children,
+      '팔로우',
+    );
+    assert.deepEqual(identities('PostList'), ['blocked']);
+    assert.equal(toastCalls.at(-1)?.tone, 'success');
+  });
+
+  it('차단 관계에서도 followers와 following route의 관계 목록 Slot을 유지한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+
+    for (const status of [
+      { blockedBy: false, blocking: true, profileBlockId: 'block-1' },
+      { blockedBy: true, blocking: false, profileBlockId: null },
+    ]) {
+      profileBlockStatus = status;
+      for (const relation of ['followers', 'following']) {
+        await renderRoute('@blocked', `/profile/@blocked/${relation}`);
+        assert.deepEqual(identities('ProfileConnectionList'), ['blocked']);
+        assert.equal(requireRendered('ProfileConnectionList').props.kind, relation);
+        assert.equal(rendered('StateView').length, 0);
+      }
+    }
+  });
+
+  it('서로 차단한 Profile은 공통 action을 표시하고 내 해제 뒤 상대 차단이 남으면 숨긴다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = { blockedBy: true, blocking: true, profileBlockId: 'block-1' };
+
+    await renderRoute('@blocked');
+    assert.deepEqual(identities('FollowButton'), ['blocked']);
+    assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
+    assert.deepEqual(
+      requireRendered('ActionMenu').props.items.map((item: { label: string }) => item.label),
+      ['차단 해제'],
+    );
+    changeBlockedImpl = async () => {
+      profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
+    };
+    const action = requireRendered('FollowButton');
+    await act(async () => action.findByType('Button' as never).props.onPress());
+    await act(async () => action.findByType('ConfirmationContent' as never).props.onConfirm());
+    await renderRoute('@blocked');
+    assert.equal(rendered('FollowButton').length, 0);
+    assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
+
+    assert.deepEqual(focusHistory, ['content']);
+    assert.equal(contentStateFocus.mock.callCount(), 1);
+    assert.equal(menuTriggerFocus.mock.callCount(), 0);
+  });
+
+  it('selected Profile 자기 자신에게는 차단 action을 표시하지 않는다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
+    await renderRoute('@local');
+    assert.equal(rendered('ActionMenu').length, 0);
+
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    await renderRoute('@target');
+    const menu = requireRendered('ActionMenu');
+    assert.equal(menu.props.items[0].label, '차단');
+  });
+
+  it('Profile 메뉴의 차단 실패는 확인창을 닫고 trigger로 복귀한 뒤 다시 열어 재시도한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    let attempts = 0;
+    changeBlockedImpl = async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error('network');
+      }
+    };
+    await renderRoute('@target');
+
+    await act(async () => requireRendered('ActionMenu').props.items[0].onSelect());
+    const confirmation = requireRendered('ConfirmationContent');
+    assert.equal(confirmation.props.confirmLabel, '차단');
+    assert.equal(
+      confirmation.props.message,
+      '상대방은 내 게시물을 볼 수 없고, 타임라인과 검색에서 서로의 게시물이 숨겨져요. 팔로우 관계와 요청은 삭제돼요.',
+    );
+    assert.equal(confirmation.props.tone, 'danger');
+
+    await act(async () => confirmation.props.onConfirm());
+    assert.equal(changeBlockedCalls.length, 1);
+    assert.equal(requireRendered('ModalSheet').props.visible, false);
+    assert.equal(toastCalls.length, 0);
+    await act(async () => requireRendered('ModalSheet').props.onDismiss());
+    assert.equal(toastCalls.at(-1)?.tone, 'danger');
+    assert.equal(menuTriggerFocus.mock.callCount(), 1);
+
+    await act(async () => requireRendered('ActionMenu').props.items[0].onSelect());
+    await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
+    assert.equal(changeBlockedCalls.length, 2);
+    assert.equal(requireRendered('ModalSheet').props.visible, false);
+    assert.equal(toastCalls.length, 1);
+    await act(async () => requireRendered('ModalSheet').props.onDismiss());
+    assert.equal(toastCalls.at(-1)?.tone, 'success');
+  });
+
+  it('Profile 메뉴의 차단 확인을 취소하면 더보기 trigger로 포커스를 복원한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    await renderRoute('@target');
+
+    await act(async () => requireRendered('ActionMenu').props.items[0].onSelect());
+    await act(async () => requireRendered('ConfirmationContent').props.onCancel());
+    await act(async () => requireRendered('ModalSheet').props.onDismiss());
+
+    assert.equal(menuTriggerFocus.mock.callCount(), 1);
+  });
+
+  it('Profile 메뉴의 차단 성공 후 같은 component lifecycle에서 결과 action으로 포커스를 복원한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    changeBlockedImpl = async (_change, nextBlocked) => {
+      if (nextBlocked) {
+        profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+      }
+    };
+    await renderRoute('@target');
+
+    await act(async () => requireRendered('ActionMenu').props.items[0].onSelect());
+    await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
+    await renderRoute('@target');
+    assert.deepEqual(focusHistory, []);
+    await act(async () => requireRendered('ModalSheet').props.onDismiss());
+    assert.deepEqual(focusHistory, ['menu', 'state']);
+    assert.equal(menuTriggerFocus.mock.callCount(), 1);
+    assert.equal(stateActionFocus.mock.callCount(), 1);
   });
 });

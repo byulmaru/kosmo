@@ -1,10 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { MutedProfileList } from '@/components/profile/MutedProfileList';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
+import type { RefObject } from 'react';
+import type { View } from 'react-native';
 import type { SettingsMutedProfiles_profile$key } from './__generated__/SettingsMutedProfiles_profile.graphql';
 import type { SettingsMutedProfilesNextPageQuery } from './__generated__/SettingsMutedProfilesNextPageQuery.graphql';
 import type { SettingsMutedProfilesQuery } from './__generated__/SettingsMutedProfilesQuery.graphql';
@@ -50,19 +52,19 @@ const SettingsMutedProfilesFragment = graphql`
   }
 `;
 
-export function SettingsMutedProfiles() {
+export function SettingsMutedProfiles({ headingRef }: { headingRef?: RefObject<View | null> }) {
   return (
     <RouteBoundary
       error={(retry) => <MutedProfileList state={{ onRetry: retry, status: 'error' }} />}
       loading={<MutedProfileList state={{ status: 'loading' }} />}
       title="뮤트한 프로필을 불러오지 못했어요"
     >
-      <SettingsMutedProfilesContent />
+      <SettingsMutedProfilesContent headingRef={headingRef} />
     </RouteBoundary>
   );
 }
 
-function SettingsMutedProfilesContent() {
+function SettingsMutedProfilesContent({ headingRef }: { headingRef?: RefObject<View | null> }) {
   const shellChrome = useShellChrome();
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<SettingsMutedProfilesQuery>(
@@ -76,7 +78,18 @@ function SettingsMutedProfilesContent() {
     SettingsMutedProfiles_profile$key
   >(SettingsMutedProfilesFragment, profile ?? null);
   const edges = pagination.data?.profileMutes.edges ?? [];
+  const [focusAfterUnmuteProfileId, setFocusAfterUnmuteProfileId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
+  useEffect(() => {
+    if (
+      !focusAfterUnmuteProfileId ||
+      edges.some((edge) => edge.node.targetProfile.id === focusAfterUnmuteProfileId)
+    ) {
+      return;
+    }
+    headingRef?.current?.focus();
+    setFocusAfterUnmuteProfileId(null);
+  }, [edges, focusAfterUnmuteProfileId, headingRef]);
   const loadMore = useCallback(() => {
     if (!pagination.hasNext || pagination.isLoadingNext) {
       return;
@@ -103,7 +116,17 @@ function SettingsMutedProfilesContent() {
           ? { onLoadMore: loadMore, status: 'more' as const }
           : { status: 'end' as const },
     profiles: edges.map((edge) => ({
-      action: <ProfileMuteAction profile={edge.node.targetProfile} surface="button" />,
+      action: (
+        <ProfileMuteAction
+          onFeedback={(feedback) => {
+            if (feedback.status === 'success') {
+              setFocusAfterUnmuteProfileId(edge.node.targetProfile.id);
+            }
+          }}
+          profile={edge.node.targetProfile}
+          surface="button"
+        />
+      ),
       avatarUri: edge.node.targetProfile.avatar?.url,
       displayName: edge.node.targetProfile.displayName,
       id: edge.node.targetProfile.id,

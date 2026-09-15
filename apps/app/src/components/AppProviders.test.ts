@@ -174,7 +174,10 @@ mockModule('react-relay', {
     }
     if (query === 'SessionProviderQuery') {
       return {
-        currentSession: { id: 'session-1', selectedProfile: { id: 'profile-a' } },
+        currentSession: {
+          id: 'session-1',
+          selectedProfile: { id: 'profile-a' },
+        },
         me: { id: 'account-1', name: 'Account' },
       };
     }
@@ -439,7 +442,11 @@ describe('AppProviders runtime composition', () => {
         sessionId: initial.props.sessionId,
         status: initial.props.status,
       },
-      { selectedProfileId: 'profile-a', sessionId: 'session-1', status: 'valid' },
+      {
+        selectedProfileId: 'profile-a',
+        sessionId: 'session-1',
+        status: 'valid',
+      },
     );
     queryModes.SessionProviderQuery = 'pending';
 

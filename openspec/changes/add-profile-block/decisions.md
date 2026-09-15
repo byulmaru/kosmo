@@ -41,7 +41,7 @@
 - Authority / Provenance: `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, `PROD-821`, `PROD-822`
 - Status: Active
 - Context / Problem: 저장 방향과 ingress별 actor 경계를 혼동하면 Target이 관계를 관리하거나 Local·Remote 조합마다 별도 모델을 만들게 된다.
-- Decision Outcome: Profile Block은 Owner Profile → Target Profile 방향의 존재 관계로 저장하고 `createdAt`과 Owner/Target 조합 unique 불변식만 보존한다. Owner는 Local 또는 Remote일 수 있고, 도메인 capability는 Account·Membership·Local 상태를 일반 생성 조건으로 고정하지 않는다. 관계 조회와 관리 목록은 Owner scope에 한정한다. 현재 GraphQL ingress는 Membership으로 인증된 selected Profile actor를 사용하며 remote ActivityPub ingress는 `PROD-818`에 남긴다.
+- Decision Outcome: Profile Block은 Owner Profile → Target Profile 방향의 존재 관계로 저장하고 `createdAt`과 Owner/Target 조합 unique 불변식만 보존한다. Owner는 Local 또는 Remote일 수 있고, 도메인 capability는 Account·Membership·Instance 종류를 일반 생성 조건으로 고정하지 않는다. 관계 조회와 관리 목록은 Owner scope에 한정한다. 현재 GraphQL ingress는 Membership으로 인증된 selected Profile actor를 사용하며 remote ActivityPub ingress는 `PROD-818`에 남긴다.
 - Alternatives Considered: 양방향 row를 두 개 저장하면 실제 행위 주체와 중복 lifecycle이 생긴다. Target도 해제할 수 있게 하면 `ProfileBlock.Owner` 권한이 무너진다. 관계 상태·expiry를 추가하면 존재 자체가 active 차단이라는 canonical 계약을 확장한다.
 - Consequences: 같은 Owner/Target pair는 하나의 row로 식별되고 차단 적용의 양방향성은 저장 중복이 아니라 공통 policy에서 계산한다. Remote ingress·delivery의 구체 계약은 이 change가 결정하지 않는다.
 - Confirmation / Follow-up: `PROD-821`에서 Local·Remote pair, duplicate/self 및 Owner scope를 확인하고, `PROD-822`에서 Membership으로 인증된 selected Profile actor와 Owner-only connection을 검증한다.
@@ -76,10 +76,10 @@
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/domain/objects/profile-block.md`, `PROD-822`, `PROD-823`
 - Status: Active
-- Context / Problem: GraphQL resolver가 입력 Profile ID를 actor로 신뢰하거나 resolver·loader마다 차단 조건을 복제하면 selected Profile 격리와 중앙 정책이 무너진다.
-- Decision Outcome: `PROD-822-graphql`의 GraphQL Block 생성·해제 mutation과 Owner 관리 조회의 connection·관계 Node/loader는 검증된 Session의 Membership으로 인증된 selected Profile actor를 사용하고, 정확한 unblock 관계 ID와 generated schema·관리 API 테스트를 제공한다. `PROD-822-policy`는 공통 core/application policy를 호출해 GraphQL `node(id:)`·`profileByHandle` 직접 조회, `searchProfiles` 후보·콘텐츠·Follow·Notification·새 상호작용 제한과 Local/ActivityPub 실행 경로를 연결·검증한다. resolver·loader와 policy consumer는 요청별 DB actor state(GUC 등)·client 전용 filter를 권한 또는 visibility의 대체 수단으로 사용하지 않는다. Block·Mute 관계의 Target은 기존 `Profile` ref와 global ID를 사용한다. Unblock은 실제 제거한 관계 ID를 반환하며 관계를 제거하지 않은 결과만 `null`로 나타낸다. concrete helper와 field/payload 이름, resolver·loader 배치는 기존 naming·generated schema에 맞춘 구현 선택으로 남긴다.
-- Alternatives Considered: 입력된 arbitrary Profile ID를 actor로 사용하면 다른 Owner의 관계를 변경할 수 있다. resolver-local predicate나 client-only filter는 policy drift와 visibility 우회를 만든다. 요청별 DB actor state를 권한 경계로 사용하면 현재 application policy와 runtime 경계를 확장한다.
-- Consequences: Membership으로 인증된 selected Profile이 없는 Block 생성·해제 mutation은 기존 auth 경계에서 거부되고, `profileBlockStatus`와 `Profile.profileBlocks`는 selected Profile auth scope가 없으면 nullable `null`로 완료된다. 다른 Owner의 관리 목록 접근은 기존 권한 오류를 유지하며, Block 목록은 해당 actor가 Owner인 관계만 반환한다. 일반 GraphQL 조회와 Notification의 Account membership 권한을 이 제한으로 바꾸지 않는다. 같은 Target의 Mute 관계는 Block과 별개이므로 Mute Owner connection·관계 Node·해제 경로에서 유지한다. remote ActivityPub ingress는 이 decision의 consumer가 아니다.
+- Context / Problem: GraphQL resolver가 입력 Profile ID를 actor로 신뢰하거나 resolver·loader마다 차단 조건을 복제하면 selected Profile 격리와 중앙 정책이 무너진다. App이 selected Profile의 Instance kind로 읽기 권한을 예측해도 같은 인증 경계를 client capability로 중복한다.
+- Decision Outcome: `PROD-822-graphql`의 GraphQL Block 생성·해제 mutation과 Owner 관리 조회의 connection·관계 Node/loader는 Membership으로 인증된 Session의 selected Profile actor를 사용하고, 정확한 unblock 관계 ID와 generated schema·관리 API 테스트를 제공한다. `profileBlockStatus`와 `Profile.profileBlocks`는 selected Profile auth scope를 충족하지 못하면 nullable `null`을 반환하고, resolver와 App은 selected Profile kind를 별도 capability로 검사하거나 조건부 GraphQL 변수로 권한을 예측하지 않는다. `PROD-822-policy`는 공통 core/application policy를 호출해 GraphQL `node(id:)`·`profileByHandle` 직접 조회, `searchProfiles` 후보·콘텐츠·Follow·Notification·새 상호작용 제한과 Local/ActivityPub 실행 경로를 연결·검증한다. resolver·loader와 policy consumer는 요청별 DB actor state(GUC 등)·client 전용 filter를 권한 또는 visibility의 대체 수단으로 사용하지 않는다. Block·Mute 관계의 Target은 기존 `Profile` ref와 global ID를 사용한다. Unblock은 실제 제거한 관계 ID를 반환하며 관계를 제거하지 않은 결과만 `null`로 나타낸다. field/payload 이름과 resolver·loader 배치는 기존 naming·generated schema에 맞춘 구현 선택으로 남긴다.
+- Alternatives Considered: 입력된 arbitrary Profile ID를 actor로 사용하면 다른 Owner의 관계를 변경할 수 있다. resolver-local predicate, client-only filter나 Session Profile kind 조건은 policy drift와 visibility 우회를 만든다. 요청별 DB actor state를 권한 경계로 사용하면 현재 application policy와 runtime 경계를 확장한다.
+- Consequences: Membership으로 인증된 selected Profile이 없는 Block 생성·해제 mutation은 기존 auth 경계에서 거부되고, selected Profile auth scope가 없는 읽기 필드는 GraphQL 오류 대신 `null`로 완료된다. 다른 Owner의 관리 목록 접근 같은 resolver 내부 권한 검사는 기존 오류를 유지한다. Block 목록은 권한이 있는 actor가 Owner인 관계만 반환하며 App은 nullable 결과에 따라 관계 상태와 관리 action을 표시한다. 일반 GraphQL 조회와 Notification의 Account membership 권한을 이 제한으로 바꾸지 않는다. 같은 Target의 Mute 관계는 Block과 별개이므로 Mute Owner connection·관계 Node·해제 경로에서 유지한다. remote ActivityPub ingress는 이 decision의 consumer가 아니다.
 - Confirmation / Follow-up: `PROD-822-graphql`에서 Owner A/B·guest·membership mismatch와 관리 connection·Node 경계를 검증하고, `PROD-822-policy`에서 GraphQL `node(id:)`·`profileByHandle`·`searchProfiles`와 정책 consumer를 검증하며, `PROD-823`에서 selected Profile별 client 상태 결과를 확인한다.
 
 ### 기존 Notification은 가시성으로 숨기고 source 생성 연결은 후속으로 둔다
@@ -118,6 +118,18 @@
 - Alternatives Considered: actor 간 상태를 공유하면 selected Profile 격리를 깨뜨린다. 모든 상태를 무조건 초기화하면 unrelated state까지 버리고 actor 경계를 과도하게 넓힐 수 있다. client-only hide는 서버 payload와 direct query 누수를 막지 못한다.
 - Consequences: `PROD-823`은 서버 결과 수렴과 actor switch 회귀를, `PROD-813`은 cross-slice UI/API 결과를 검증한다. `PROD-917`은 후속 UI 교체에서도 같은 actor·content policy 경계를 유지한다. client 상태를 갱신하는 구체 mechanism은 영향 범위에 맞춰 구현 시 정한다.
 - Confirmation / Follow-up: `PROD-823`에서 success/failure·A/B actor·Unblock no-restore 뒤 client 상태 수렴을 확인하고, `PROD-813`에서 Profile switch와 cross-slice actor 상태 격리를 E2E로 확인한다.
+
+### 공통 관계 action과 surface 조합을 같은 이슈의 두 PR로 분리한다
+
+- Decision Date: 2026-09-10
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/profile-mute-block.md`, `PROD-823`, PR #772 review `5163335465`
+- Status: Active
+- Context / Problem: Profile route와 차단 관리 목록이 각각 해제 mutation·확인창·pending·실패·Relay 갱신을 조립하면 Follow 관계 action과 차단 상태가 surface마다 달라지고 회귀 검증이 중복된다.
+- Decision Outcome: 새 이슈를 만들지 않고 `PROD-823` 하나에 두 Stack PR을 연결한다. 부모 PR은 기존 `FollowButton`의 Block 관계 fragment·해제 lifecycle과 공통 회귀를 소유한다. 자식 #772는 조회 가능한 Profile route와 관리 목록에서 그 action의 노출 여부, 목록 조회·pagination과 focus fallback을 조합한다. Profile이 조회되지 않으면 기존 unavailable 결과를 유지한다.
+- Alternatives Considered: surface별 해제 action 유지는 상태·오류·cache 책임을 중복한다. 별도 Linear 이슈 생성은 이미 승인된 `PROD-823` 행동 범위를 불필요하게 나눈다.
+- Consequences: 양방향 Block에서도 자신의 해제 action을 유지하고, 해제 뒤 서버 결과가 `blockedBy`만 남으면 부모 surface가 action을 숨긴다. 공통 action은 이전 Follow를 복구하지 않는다.
+- Confirmation / Follow-up: 부모 PR에서 공통 상태·hover/focus·Native tap·mutation·actor 회귀를, #772에서 Profile/Settings 연결·pagination·focus와 상대 Block 잔존 수렴을 검증한다.
 
 ### 저장 schema는 additive 확장과 no-backfill rollout을 따른다
 
@@ -202,6 +214,22 @@
 - Alternatives Considered: 별도 디자인 이슈를 새로 만들거나 완료된 `DSN-53`을 재개하는 대신, 사용자가 현재 구현과 canonical에 맞춘 최소 행동 계약을 확정했다.
 - Consequences: `PROD-823`은 기존 UI에서 위 상태 전이를 구현·검증하고 `PROD-813`에 통합 증거를 인계한다. 완료된 `PROD-861`은 재개하지 않으며, `PROD-917`은 이 동작을 재결정하지 않고 신규 UI 교체 후 회귀를 검증한다.
 - Confirmation / Follow-up: component 또는 E2E에서 최초 경고·action, 명시적 action 전 비노출과 action 후 허용 콘텐츠 표시, 임의 시간 경과 후 비노출 유지, Profile handle·selected actor lifecycle 전환 후 경고 재적용을 검증한다.
+
+### 차단 해제는 확인창에서 확정한 뒤 요청한다
+
+- Decision Date: 2026-09-06
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/profile-mute-block.md`의 Profile action과 완료 피드백, `PROD-823`의 차단 해제 확인 방식
+  (2026-09-06 사용자 결정: “Block은 확인창 방식”).
+- Status: Active
+- Context / Problem: 기존 공용 UI는 해제 확인을 제공하지만 canonical에 확인 여부가 명시되지 않아 runtime 연결 기준을 확인했다.
+- Decision Outcome: Profile 메뉴, 조회 가능한 `blocking` 상태와 차단 관리 목록의 해제는 확인창을 거친다. `취소`는 요청하지 않고,
+  Danger `차단 해제` 확정 뒤에만 요청한다. 확인창은 이전 팔로우 관계가 복구되지 않음을 알린다.
+- Alternatives Considered: 확인 없이 즉시 요청하는 방식도 검토했지만 사용자가 기존 Block UI의 확인창 방식을 선택했다.
+- Consequences: 해제 확인의 취소·pending 중복 입력 및 dismiss 차단·실패 후 재시도를 runtime 검증에 포함한다. 기존 서버 확정 상태와
+  actor 격리, Unblock no-restore는 유지한다.
+- Confirmation / Follow-up: 사용자 선택을 canonical·Linear에 반영했다. PROD-861의 공용 presentation을 소비하며 전체 Spec 승인과
+  PROD-822·PROD-861의 선행 완료는 별도로 확인한다.
 
 ## Remaining Decisions
 
