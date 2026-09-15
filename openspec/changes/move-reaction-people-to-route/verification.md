@@ -45,3 +45,9 @@ Figma의 Web Compact·Full과 Mobile `Default selected` frame을 다시 대조�
 - `PROD-785`의 19개 patch를 `origin/main`의 `dfa6328edbd06c69ed0e3edd9ed53bdc854be501` 위로 옮겼고, `range-diff`에서 모두 동일함을 확인했다.
 - `PROD-938`의 네 patch도 유지했다. `PostActionSurface` 충돌은 main의 Quote 진입점 숨김을 유지하면서 People navigation callback만 연결하는 형태로 해소했다.
 - 앱 check, 단위 테스트 565개, Storybook 125개 파일·793개 테스트, `reaction-people.e2e.ts` 3개가 통과했다.
+
+## 2026-09-16 최종 PR head 검증
+
+- `PROD-938`의 `c6078a40496c9812ccc263248863b838dd01f2e2`에서 `node scripts/test-db.mjs run -- pnpm test:e2e:database -- reaction-people.e2e.ts`를 실행해 4개가 통과했다.
+- 추가된 E2E는 브라우저 Forward로 People에 다시 진입한 뒤 Header Back이 원래 목록으로 돌아가는 경로와, People 목록의 실제 non-zero scroll 위치에서 프로필을 방문한 뒤 browser Back으로 Type·행·scroll 위치가 복원되는 경로를 포함한다.
+- 같은 head의 GitHub CI는 Lint, Semgrep, Web E2E 3개 shard와 종합 Test를 포함한 16개 check가 모두 통과했다.
