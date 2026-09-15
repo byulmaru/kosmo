@@ -109,7 +109,7 @@ test('UI Block 성공은 양방향 Follow·Request cleanup을 완료하고 보�
   await expect(page.getByText('E2E target revealed content', { exact: true })).toBeVisible();
   await blockFromProfile(page);
 
-  // The response and UI success must already imply completed required cleanup.
+  // Inspect captured cleanup and preserved rows after confirmed UI success.
   expect(
     await db.$count(
       ProfileFollows,
@@ -444,6 +444,19 @@ for (const targetKind of ['Local', 'Remote'] as const) {
       expect(before.homeTimeline.edges).toContainEqual({
         node: { id: toGlobalId('Post', actor.otherPost.id) },
       });
+      expect(before.localTimeline.edges).toContainEqual({
+        node: { id: toGlobalId('Post', controlPost.id) },
+      });
+      if (targetKind === 'Local') {
+        expect(before.localTimeline.edges).toContainEqual({
+          node: { id: toGlobalId('Post', actor.otherPost.id) },
+        });
+      } else {
+        // Remote posts are outside the Local timeline even before Block.
+        expect(before.localTimeline.edges).not.toContainEqual({
+          node: { id: toGlobalId('Post', actor.otherPost.id) },
+        });
+      }
       expect(before.viewer.bookmarks.edges).toHaveLength(1);
       expect(before.viewer.unreadNotificationCount).toBe(2);
       expect(before.notification?.id).toBe(toGlobalId('ReactionNotification', actor.hidden.id));
