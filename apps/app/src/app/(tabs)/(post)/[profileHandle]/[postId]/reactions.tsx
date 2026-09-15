@@ -70,9 +70,16 @@ export default function ReactionPeopleRoute() {
   useEffect(
     () =>
       navigation.addListener('beforeRemove', (event) => {
-        if (!isCanonicalReactionPeopleReplace(event)) {
-          clearReactionPeopleReturnState();
+        if (isCanonicalReactionPeopleReplace(event)) {
+          return;
         }
+
+        if (isReactionPeopleBackAction(event) && consumeReactionPeopleReturnToOrigin()) {
+          restoreReactionPeopleReturnFocus();
+          return;
+        }
+
+        clearReactionPeopleReturnState();
       }),
     [navigation],
   );
@@ -242,6 +249,11 @@ function isCanonicalReactionPeopleReplace(event: {
   return (
     event.data?.action?.type === 'REPLACE' && hasReactionPeopleRoute(event.data.action.payload)
   );
+}
+
+function isReactionPeopleBackAction(event: { data?: { action?: { type?: unknown } } }) {
+  const type = event.data?.action?.type;
+  return type === 'GO_BACK' || type === 'POP';
 }
 
 function hasReactionPeopleRoute(value: unknown): boolean {

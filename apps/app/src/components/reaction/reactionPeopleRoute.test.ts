@@ -128,7 +128,10 @@ describe('reaction people route helpers', () => {
   });
 
   it('clears the in-app origin when navigation removes the route before direct re-entry', async () => {
-    rememberReactionPeopleReturnFocus('/@writer/post-1/reactions');
+    let fallbackFocusCount = 0;
+    rememberReactionPeopleReturnFocus('/@writer/post-1/reactions', undefined, () => {
+      fallbackFocusCount += 1;
+    });
     await renderRoute();
 
     assert.equal(hasReactionPeopleReturnToOrigin(), true);
@@ -136,6 +139,7 @@ describe('reaction people route helpers', () => {
       listener({ data: { action: { type: 'GO_BACK' } }, type: 'beforeRemove' });
     }
     assert.equal(hasReactionPeopleReturnToOrigin(), false);
+    assert.equal(fallbackFocusCount, 1);
 
     await act(async () => renderer?.unmount());
     renderer = null;
