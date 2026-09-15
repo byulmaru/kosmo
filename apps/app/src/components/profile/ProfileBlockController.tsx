@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { graphql, useMutation, useRelayEnvironment } from 'react-relay';
-import { ConnectionHandler, fetchQuery } from 'relay-runtime';
+import { ConnectionHandler } from 'relay-runtime';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
 import { StaleProfileBlockRequestError } from './profileBlockErrors';
 import type { RecordSourceProxy } from 'relay-runtime';
 import type { ProfileBlockControllerBlockMutation } from './__generated__/ProfileBlockControllerBlockMutation.graphql';
-import type { ProfileBlockControllerRecoveryQuery } from './__generated__/ProfileBlockControllerRecoveryQuery.graphql';
 import type { ProfileBlockControllerUnblockMutation } from './__generated__/ProfileBlockControllerUnblockMutation.graphql';
 
 const blockProfileMutation = graphql`
   mutation ProfileBlockControllerBlockMutation($id: ID!) {
     blockProfile(input: { id: $id }) {
       success
-      profileBlockId
       profileBlock {
         id
         targetProfile {
@@ -31,26 +29,6 @@ const unblockProfileMutation = graphql`
     unblockProfile(input: { id: $id }) {
       success
       profileBlockId
-    }
-  }
-`;
-
-const profileBlockRecoveryQuery = graphql`
-  query ProfileBlockControllerRecoveryQuery($id: ID!) {
-    node(id: $id) {
-      ... on Profile {
-        id
-        viewerState {
-          profileBlock {
-            id
-            targetProfile {
-              id
-              displayName
-              relativeHandle
-            }
-          }
-        }
-      }
     }
   }
 `;
@@ -164,84 +142,24 @@ export function useProfileBlockMutations() {
           currentEnvironmentRef.current === requestEnvironment &&
           environmentGenerationRef?.current === requestGeneration &&
           selectedProfileIdRef.current === change.ownerProfileId;
-        const invalidateRecoveryBoundary = () =>
-          requestEnvironment.commitUpdate((store) => {
-            store.get(change.targetProfileId)?.invalidateRecord();
-            store.get(connectionId)?.invalidateRecord();
-          });
-        const recoverBlockProjection = (expectedProfileBlockId: string) => {
-          let recovered = false;
-          fetchQuery<ProfileBlockControllerRecoveryQuery>(
-            requestEnvironment,
-            profileBlockRecoveryQuery,
-            { id: change.targetProfileId },
-            { fetchPolicy: 'network-only' },
-          ).subscribe({
-            complete: () => {
-              if (!isCurrent()) {
-                finishStale();
-                return;
-              }
-              if (!recovered) {
-                invalidateRecoveryBoundary();
-              }
-              finish();
-            },
-            error: () => {
-              if (!isCurrent()) {
-                finishStale();
-                return;
-              }
-              invalidateRecoveryBoundary();
-              finish();
-            },
-            next: (data) => {
-              if (!isCurrent()) {
-                return;
-              }
-              const currentProfileBlockId = data.node?.viewerState?.profileBlock?.id;
-              if (currentProfileBlockId !== expectedProfileBlockId) {
-                return;
-              }
-              requestEnvironment.commitUpdate((store) => {
-                recovered = updateLoadedBlockState(
-                  store,
-                  connectionId,
-                  expectedProfileBlockId,
-                  change.targetProfileId,
-                );
-              });
-            },
-          });
-        };
-
         try {
           if (nextBlocked) {
             commitBlock({
               onCompleted: (response) => {
                 const profileBlock = response.blockProfile?.profileBlock;
-                const profileBlockId = response.blockProfile?.profileBlockId;
                 if (!isCurrent()) {
                   finishStale();
                   return;
                 }
-                if (
-                  !response.blockProfile?.success ||
-                  !profileBlockId ||
-                  (profileBlock != null && profileBlock.id !== profileBlockId)
-                ) {
+                if (!response.blockProfile?.success || !profileBlock) {
                   finish(new Error('Profile block response did not confirm the relation.'));
-                  return;
-                }
-                if (!profileBlock) {
-                  recoverBlockProjection(profileBlockId);
                   return;
                 }
                 requestEnvironment.commitUpdate((store) => {
                   updateLoadedBlockState(
                     store,
                     connectionId,
-                    profileBlockId,
+                    profileBlock.id,
                     change.targetProfileId,
                   );
                 });
