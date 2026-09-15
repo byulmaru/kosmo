@@ -44,6 +44,7 @@ let localInstanceId: string;
 type GraphQLErrorResult = {
   extensions?: { code?: string };
   message: string;
+  path?: ReadonlyArray<number | string>;
 };
 
 type GraphQLResult<TData = Record<string, unknown>> = {
@@ -363,6 +364,10 @@ describe('GraphQL Profile Block', () => {
       managed.data?.node?.profileBlocks.edges.map(({ node }) => node.targetProfile.id).sort(),
       [globalId('Profile', localTarget.id), globalId('Profile', remoteTarget.id)].sort(),
     );
+    assert.equal(
+      localBlock.data?.blockProfile.profileBlock.targetProfile.viewerState?.profileBlock?.id,
+      localBlockId,
+    );
 
     const localStatus = await profileBlockStatus(localTarget.handle, owner.token);
     assertNoGraphQLErrors(localStatus);
@@ -372,15 +377,26 @@ describe('GraphQL Profile Block', () => {
       profileBlockId: localBlockId,
     });
 
-    const unblocked = await requestGraphQL<{ unblockProfile: { profileBlockId: string | null } }>(
+    const unblocked = await requestGraphQL<{
+      unblockProfile: {
+        profileBlockId: string | null;
+        success: boolean;
+      };
+    }>(
       `mutation UnblockProfile($id: ID!) {
-        unblockProfile(input: { id: $id }) { profileBlockId }
+        unblockProfile(input: { id: $id }) {
+          profileBlockId
+          success
+        }
       }`,
       { id: localBlockId },
       owner.token,
     );
     assertNoGraphQLErrors(unblocked);
-    assert.deepEqual(unblocked.data?.unblockProfile, { profileBlockId: localBlockId });
+    assert.deepEqual(unblocked.data?.unblockProfile, {
+      profileBlockId: localBlockId,
+      success: true,
+    });
 
     const restored = await requestGraphQL<{ node: { id: string } | null }>(
       `query RestoredProfile($id: ID!) {
