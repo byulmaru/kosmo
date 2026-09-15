@@ -3308,6 +3308,9 @@ export const ProductionRepostQuoteListIntegration: Story = {
     const pureRepostActionBar = within(pureRepostRow!).getByRole('toolbar', {
       name: '액션 바',
     });
+    const pureRepostNoSummaryActionBar = within(repostOfQuoteRow!).getByRole('toolbar', {
+      name: '액션 바',
+    });
     const quoteActionBar = within(quoteRow!.parentElement!).getByRole('toolbar', {
       name: '액션 바',
     });
@@ -3331,6 +3334,11 @@ export const ProductionRepostQuoteListIntegration: Story = {
     const quoteReactionSummary = within(quoteCard).getByRole('button', {
       name: '🎉 반응 3개',
     });
+    const ordinaryReactionSummary = within(ordinaryCard).getByRole('button', {
+      name: '❤️ 반응 2개',
+    });
+    const replyActionBar = within(replyRow!).getByRole('toolbar', { name: '액션 바' });
+    const replyBody = within(replyRow!).getByTestId('post-list-row-body');
     expect(pureRepostAttributionLink.getBoundingClientRect().height).toBe(20);
     expect(
       pureRepostSourceRow.getBoundingClientRect().top -
@@ -3343,7 +3351,18 @@ export const ProductionRepostQuoteListIntegration: Story = {
     expect(
       quoteActionBar.getBoundingClientRect().top -
         quoteReactionSummary.getBoundingClientRect().bottom,
-    ).toBeCloseTo(0, 0);
+    ).toBeCloseTo(12, 0);
+    expect(
+      ordinaryActionBar.getBoundingClientRect().top -
+        ordinaryReactionSummary.getBoundingClientRect().bottom,
+    ).toBeCloseTo(12, 0);
+    expect(
+      replyActionBar.getBoundingClientRect().top - replyBody.getBoundingClientRect().bottom,
+    ).toBeCloseTo(12, 0);
+    expect(
+      pureRepostNoSummaryActionBar.getBoundingClientRect().top -
+        within(repostOfQuoteRow!).getByTestId('post-list-row-body').getBoundingClientRect().bottom,
+    ).toBeCloseTo(12, 0);
     expect(
       quoteSourcePreview.getBoundingClientRect().bottom -
         Number.parseFloat(getComputedStyle(quoteSourcePreview).borderBottomWidth) -
@@ -3353,17 +3372,22 @@ export const ProductionRepostQuoteListIntegration: Story = {
       {
         actionBar: ordinaryActionBar,
         card: ordinaryCard,
-        geometry: { cardBottom: 4, cardTop: '12px', slotBottom: '0px', slotTop: '4px' },
+        geometry: { cardBottom: 8, cardTop: '12px', slotBottom: '0px', slotTop: '8px' },
       },
       {
         actionBar: quoteActionBar,
         card: quoteCard,
-        geometry: { cardBottom: 1, cardTop: '8px', slotBottom: '0px', slotTop: '0px' },
+        geometry: { cardBottom: 8, cardTop: '8px', slotBottom: '0px', slotTop: '12px' },
       },
       {
         actionBar: pureRepostActionBar,
         card: pureRepostRow!,
-        geometry: { cardBottom: 1, cardTop: '8px', slotBottom: '0px', slotTop: '0px' },
+        geometry: { cardBottom: 8, cardTop: '8px', slotBottom: '0px', slotTop: '8px' },
+      },
+      {
+        actionBar: pureRepostNoSummaryActionBar,
+        card: repostOfQuoteRow!,
+        geometry: { cardBottom: 8, cardTop: '8px', slotBottom: '0px', slotTop: '8px' },
       },
     ] as const) {
       const cardBounds = card.getBoundingClientRect();
@@ -3381,7 +3405,12 @@ export const ProductionRepostQuoteListIntegration: Story = {
       );
       expect(getComputedStyle(card).borderBottomColor).toBe('rgb(236, 236, 240)');
     }
-    for (const actionBar of [ordinaryActionBar, quoteActionBar, pureRepostActionBar]) {
+    for (const actionBar of [
+      ordinaryActionBar,
+      quoteActionBar,
+      pureRepostActionBar,
+      pureRepostNoSummaryActionBar,
+    ]) {
       expect(
         within(actionBar)
           .getAllByRole('button')
@@ -4860,8 +4889,8 @@ export const PostLayoutOwnsReactionSummary: Story = {
     expect(actionBarFrame.contains(reactionSummary)).toBe(false);
     expect(getComputedStyle(actionBarFrame).borderTopWidth).toBe('1px');
     expect(getComputedStyle(actionBarFrame).borderBottomWidth).toBe('1px');
-    expect(getComputedStyle(actionBarFrame).paddingTop).toBe('8px');
-    expect(getComputedStyle(actionBarFrame).paddingBottom).toBe('8px');
+    expect(getComputedStyle(actionBarFrame).paddingTop).toBe('12px');
+    expect(getComputedStyle(actionBarFrame).paddingBottom).toBe('12px');
   },
   render: () => <PostLayoutReactionSummaryStory />,
 };

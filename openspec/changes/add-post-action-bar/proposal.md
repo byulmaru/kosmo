@@ -4,6 +4,8 @@ Reply·Repost·Reaction·Bookmark를 실제 게시글 화면에 일관되게 연
 
 ## What Changes
 
+PROD-866·DSN-49 spacing의 이전 완료 결과는 아래 PROD-936의 2026-09-12 Web 여백 결정으로 부분 대체한다. Bar/control 자체와 Native·MediaViewer compact 여백은 이 변경에서 유지한다.
+
 - 고정 순서 Reply → Repost → Reaction → Bookmark → More를 표시하는 공통 `PostActionBar`를 추가한다.
 - Reply는 명시적 config로 default·disabled, 선택적 count, callback과 외부 Composer의 controlled `expanded`를 받고, Reply 제출 pending·spinner는 Composer의 `답글 게시` 버튼이 소유한다. Reaction·Bookmark는 default·pending·disabled 처리 상태, callback과 접근성 metadata를 받는다. 구현된 Repost는 `PostActionBar`의 composite Post fragment 아래 private child fragment·mutation·pending을 소유하고 `viewerRepost`에서 도메인 상태와 정확한 mutation identity를 함께 파생한다. 범용 `selected` prop을 노출하지 않는다. More는 독립 UI에서 callback-only config를 지원하고, production에서는 composite Post fragment 아래 private `PostDeletionAction`이 surface가 공급한 menu item과 PROD-598 삭제 action을 하나의 menu로 조립한다.
 - action 요청 실패는 Action Bar의 지속 `error` 상태로 표시하지 않는다. child action은 요청 직전의 확정된 도메인 상태와 count를 유지하고 surface error callback으로 실패를 전달한다. PROD-414는 Repost의 정확한 action별 한국어 transient toast를 최초 production surface에 연결하고, 나머지 action의 실패 안내와 최종 공통 검증은 PROD-432가 소유한다. 별도의 retry 상태나 toast 버튼 없이 같은 액션을 다시 활성화하면 재시도한다.
@@ -12,15 +14,18 @@ Reply·Repost·Reaction·Bookmark를 실제 게시글 화면에 일관되게 연
 - production Post surface는 composite Post fragment와 나머지 action config로 다섯 액션을 유지하고 대상 Post 자체의 액션 적격성과 현재 실행 주체·세션의 실행 권한을 분리한다. PROD-414는 `PostLayout`과 `PostListItem`의 final presentation에 Action Bar를 처음 배치하고 Repost menu·toast를 연결했으며, PROD-866 이후 `PostLayout`은 metadata 뒤 Engagement에 Reaction Summary와 bordered Action Bar frame을 순서대로 렌더링한다. 순수 Repost의 Reply는 바깥 contentless Repost binding을 유지해 disabled로 표시하고, Repost·Reaction·Bookmark·More는 direct Source를 대상으로 동작한다. 대상 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못한 액션은 disabled로 표시한다. target 자체가 적격할 때 guest는 기존 인증 진입으로 위임하고, valid 세션에서 selected Profile이 없으면 기존 Profile 선택기를 열며, session error에서는 비활성화한다. resolution 전에 child UI나 mutation을 시작하지 않고 Profile 선택 뒤 원래 action을 자동 재실행하지 않는다.
 - More의 공개 API는 독립 UI용 callback config와 production용 menu item·삭제 완료 callback 입력을 구분한다. production의 private `PostDeletionAction`은 PROD-432가 소유한 ADR 0015 `링크 복사`와 완료된 PROD-598의 작성자 `삭제` action을 하나의 팝업에 조합한다. `링크 복사`는 항상 첫 항목이고 삭제 자격이 있는 경우에만 destructive `삭제`를 마지막에 추가한다. Content 없는 Repost에서는 독립 상세 참조를 노출하지 않고 조회 가능한 direct Repost Source의 공유 참조와 삭제 자격을 사용한다. 삭제 확인·mutation·cache·실패 계약은 PROD-598 소유권을 유지한다.
 - 공통 컴포넌트는 PROD-433, 최초 production 배치와 Repost menu·toast는 PROD-414, 준비된 나머지 action 연결과 최종 통합 검증은 각 action 이슈와 PROD-432가 소유하도록 공유 구현 순서를 정의한다. 취소된 PROD-434의 독립 surface task는 실행하지 않는다.
-- canonical Figma Text·Media `PostListItem`은 카드 상단 12px·하단 4px, 기존 content gap 4px 뒤 Action Bar slot 상단 4px·하단 0을 사용한다. Quote와 순수 Repost의 별도 spacing은 유지하며 PROD-866이 이 공용 presentation target을 production과 기존 규범 spec에 적용한다.
+- PROD-936의 2026-09-12 승인으로 기존 PROD-866 Web surface spacing을 대체한다. 일반 Text·Media·Quote·순수 Repost 목록은 마지막 presentation부터 Bar까지12px, Bar 아래부터 구분선 안쪽까지8px을 둔다. 일반 카드 상단12px·Quote와 순수 Repost 상단8px을 유지하며 상세 frame만 Web 상하12px로 넓힌다. Native와 MediaViewer compact presentation의 기존 spacing, 상세 metadata·Summary 리듬과 Bar/control geometry는 유지한다.
 - PROD-432 완료 뒤 발견된 실제 Clipboard 런타임 회귀는 PROD-632가 후속 조사·복구한다. PROD-432는 기존 구현 완료 이력으로 유지한다. 확인된 production bundle에서는 `EXPO_PUBLIC_WEB_ORIGIN` env가 literal `undefined`로 주입되어 clipboard 호출 전에 URL 생성이 실패했다. 현재 구현 slice는 실제 복사 실패를 정확히 감지해 한국어 안내와 재시도를 제공하지만, 기존 실패 환경의 복사 성공 자체를 보장하지 않는다. PROD-632가 원인 재현을 기록하고, 동일 환경의 변경 전 실패·변경 후 성공 근거 확보, Web·지원 Native 플랫폼 검증, 최종 정합성 확인과 change archive를 계속 소유한다.
 - `docs/domain`·`docs/design`은 제품·디자인의 canonical source, Linear는 범위·소유권·의존성의 source, 이 OpenSpec은 상태·입력·접근성·통합 동작의 규범 계약으로 사용한다. Figma Action 노드는 상태·동작의 시각 참고 자료로 유지하되, DSN-49 범위의 canonical `PostListItem` Text·Media source는 승인된 spacing에 맞춰 동기화한다. 이 Figma·문서 변경은 production 구현 완료 증거가 아니다.
+
+- PROD-936은 기존 Home·Local·Profile·Bookmarks·상세/스레드 consumer와 action 소유권을 재사용하고 실제 Web API·세션으로 상태·실패/재시도·focus·scroll을 검증한다. Native 공용 Bar는 28px visual을 유지하며 iOS 44pt·Android 48dp target과 목록 좌우 16px inset을 적용한다. Native 실제 touch·보조 기술 runtime 증거는 별도로 남긴다.
 
 ## Authority / Provenance
 
 - Canonical: `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/breakpoints.md`, `docs/design/colors.md`, `docs/design/post-action-bar.md`
 - Linear Contract: `PROD-432`; presentation semantic·geometry implementation: `PROD-866`; Repost unselected state correction: `PROD-882`; Figma consumer sync: `DSN-49`
-- Excluded lifecycle: 지원 Native의 44pt·48dp target과 VoiceOver·TalkBack runtime 검증은 platform release gate에 남긴다.
+- Production presentation/verification: `PROD-936`; 기존 Native 28pt·28dp 임시 target은 canonical 44pt·48dp로 대체한다.
+- Excluded lifecycle: Native VoiceOver·TalkBack·touch 전체 runtime 검증은 platform release gate이며, 실행하지 못한 검증은 명시한다. PROD-632의 Clipboard 복구·전체 archive 소유권은 유지한다.
 - Linear Implementations: `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`, presentation semantic `PROD-866`, Repost unselected state correction `PROD-882`, 후속 복구·archive owner `PROD-632`; sibling More action owner: `PROD-598`; canceled ownership record: `PROD-434`
 
 ## Capabilities
