@@ -19,7 +19,11 @@ const selectedProfile = profile({
   },
 });
 const ownerData = {
-  currentSession: { id: 'settings-session', selectedProfile },
+  currentSession: {
+    account: { featureFlags: ['profile-migration'] },
+    id: 'settings-session',
+    selectedProfile,
+  },
 };
 
 const meta = {

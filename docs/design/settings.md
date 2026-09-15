@@ -80,15 +80,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - Profile detail은 shell의 selected Local Profile을 기본 대상으로 사용하고 표시 이름과 `relativeHandle`,
   대상 전환 affordance, `게시물 기본 공개 범위`를 포함한 Profile 설정 content를 함께 제공한다. Profile 데이터
   조회·입력·저장은 Kosmo 내부 기능으로만 제공한다.
-- Profile Migration source 준비는 이 Profile detail의 현재 selected Profile을 target으로 사용하며, 별도 target Profile
-  ID 입력을 받지 않는다. 현재 context의 `Account.Active`와 `Profile.Owner` 권한을 재사용하고 별도 target eligibility를
-  적용하지 않는다. feature flag가 켜져 있고 값을 확인할 수 있을 때만 노출한다. flag가 꺼져 있거나
-  사용할 수 없거나 로딩 중이면 준비 control을 렌더링하지 않는다. 이 flag는 UI 노출 조건이며
-  Profile Owner 권한을 대신하지 않는다. 이미 준비된 관계와 그로부터 파생된 alias, inbound Move 처리는 flag 상태로
-  중단하거나 제거하지 않는다. 구체적인 flag key·추가 route·시각 세부는 이 문서에서 고정하지 않는다.
-- source 준비 성공은 Profile Migration 준비 관계와 Local Actor alias를 등록할 뿐, Profile 이전 완료를 의미하지
-  않는다. 성공 안내는 사용자가 기존 Mastodon 계정에서 새 Kosmo handle로 ActivityPub `Move`를 시작하도록 제공하며,
-  Move 이후 완료를 위해 호출하는 Kosmo API나 별도 완료 action은 제공하지 않는다.
+- Profile Migration source 준비 control이 이 detail에 조립되는 경우, 기존 Settings card·field·button과 상태
+  feedback 표현을 재사용한다. source 입력, 준비된 source 요약, 성공·오류 안내와 접근 가능한 상태 표현은 이 문서의
+  시각 handoff 범위다.
 - Profile target selector의 Figma lifecycle source는
   [`Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4867-13083),
   [`Compact`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4868-38112),
@@ -256,9 +250,7 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   loading·error·retry·lock은 소유하지 않는다.
 - PROD-667은 Profile 선택 대상, 기본 게시 공개 범위의 저장·권한·상태와 Composer 연결 및 해당 기능 검증을
   소유한다. PROD-648은 Backend DB·GraphQL 계약을 소유한다.
-- PROD-743은 Profile detail의 feature-flagged Profile Migration source 준비 노출과 해당 Settings UI 검증을 소유한다.
-  Profile Owner 권한, Profile Migration 관계, alias와 inbound Move 동작은 [Profile](../domain/objects/profile.md)과
-  [ADR 0027](../domain/decisions/0027-profile-migration-inbound-move.md)의 canonical 계약을 따른다.
+- PROD-743은 위 Profile Migration source control의 Settings 시각 조립과 UI 검증을 소유한다.
 - `뮤트 및 차단`의 Figma IA·source·대표 consumer는 DSN-53이 소유한다. runtime의 Mute 진입점·목록·통합
   검증은 PROD-814, Block 진입점·목록과 Relay 수렴은 PROD-823, Block의 종단 간 검증·archive는 PROD-813이
   소유한다. 이 범위를 완료된 PROD-685·PROD-684에 소급해 귀속하지 않는다.
@@ -273,8 +265,6 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - PROD-889는 `/settings/info` direct destination과 세 public policy route link의 배치, 기존 landing·RightRail
   개인정보 처리방침 보존, Sidebar·mobile drawer 정책 링크 비노출을 소유한다. `/settings/info`는 새 정책 내용이나
   Account 관리 기능을 구현하지 않는다.
-- PROD-685는 구현과 검증 증거를 PROD-684에 인계하고, PROD-684가 최종 Settings 통합·OpenSpec 정합성 확인과
-  archive를 소유한다.
 - 자동화·source/unit 결과는 실제 Web keyboard·screen reader·zoom 또는 Android·iOS runtime 접근성·
   navigation 통과 증거로 일반화하지 않는다.
 
@@ -312,8 +302,7 @@ main/Tests 파일 4개에서 8개 테스트와 위 표의 기존 consumer 테스
 Relay mock의 누락 field 경고가 남는다.
 
 Storybook의 자동 a11y 검사는 `color-contrast`를 제외하며 실제 screen reader나 Android/iOS runtime QA를
-의미하지 않는다. 해당 Settings runtime QA 소유자는 PROD-727이다. 이번에는 새 public API나 행동 계약을
-도입하지 않고 기존 계약을 검증하므로 새 OpenSpec은 만들지 않는다. Tailnet serve는 범위에서 제외한다.
+의미하지 않는다. 해당 Settings runtime QA 소유자는 PROD-727이다. Tailnet serve는 범위에서 제외한다.
 
 ## Checkbox·SegmentedControl 매핑 (PROD-893)
 
@@ -341,8 +330,6 @@ Checkbox와 SegmentedControl은 실제 Settings route나 저장 정책에 연결
 - Light/Dark는 semantic theme token과 Storybook toolbar를 사용한다. Storybook 자동화와 Web 시각 검토는
   실제 screen reader, iOS·Android touch/focus 또는 Settings runtime 완료 증거가 아니며 PROD-727이 해당
   runtime QA를 계속 소유한다.
-- 새 제품 정책이나 route 계약을 만들지 않고 승인된 Figma·Linear 계약을 코드로 이관하므로 별도 OpenSpec은
-  만들지 않는다.
 
 2026-09-09 검증: `pnpm --filter @kosmo/app test`로 Relay·TypeScript 검사, 단위 테스트 498개,
 Storybook static build와 Storybook 테스트 707개가 통과했다. 내장 Browser에서 SegmentedControl의 320×48
