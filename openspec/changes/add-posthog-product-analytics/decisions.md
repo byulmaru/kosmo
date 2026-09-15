@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 기존 Linear `PROD-819`, `PROD-820`, `PROD-795`, `PROD-741`, `PROD-575` 결정과 2026-09-02 `PROD-819`·`PROD-820`의 검색·캠페인 metadata 비마스킹 결정을 반영하며, `docs/design/breakpoints.md`의 Web/Native 경계를 따른다. 2026-08-31 마스킹 승인은 Superseded 상태로 보존한다. 제품 동작의 authority는 Linear 결정이며, 리뷰 의견은 구현 보완의 계기일 뿐 제품 계약의 근거가 아니다.
+이 기록은 기존 Linear `PROD-819`, `PROD-820`, `PROD-795`, `PROD-741`, `PROD-575` 결정과 2026-09-02 `PROD-819`·`PROD-820`의 검색·캠페인 metadata 비마스킹 결정을 반영하며, `docs/design/breakpoints.md`의 Web/Native 경계를 따른다. PROD-820/PR #685와 PROD-819/PR #653는 각각 merge commit `47fb36f52`와 `2176b7e38`로 `main`에 반영됐다. 2026-08-31 마스킹 승인은 Superseded 상태로 보존한다. 제품 동작의 authority는 Linear 결정이며, PR과 리뷰 의견은 구현·병합 증거와 구현 보완의 계기일 뿐 제품 계약의 근거가 아니다.
 
 ## Decision Records
 
@@ -14,7 +14,7 @@
 - Decision Outcome: `PROD-820` / PR #685가 이 승인된 shared spec 전체와 Cloud·build/deployment slice를 소유한다. `PROD-819` / PR #653는 shared spec을 소비하는 Web runtime slice를 소유한다. PROD-795는 개인정보·운영 통합, PROD-741은 replay acceptance, PROD-575는 production acceptance와 archive를 소유한다. 이 change는 이 세 downstream 결과를 대신 완료하거나 archive하지 않는다.
 - Alternatives Considered: 부모 이슈나 마지막 PR에 모든 책임을 결합하는 방식은 독립 배포·검증 경계와 맞지 않아 제외했다.
 - Consequences: 각 PR은 자체 범위를 Ready로 만들 수 있지만 개별 완료를 shared change archive로 해석하지 않는다.
-- Confirmation / Follow-up: tasks와 PR 본문이 각 owner와 남은 gate를 명시한다.
+- Confirmation / Follow-up: PROD-820/PR #685와 PROD-819/PR #653는 각각 merge commit `47fb36f52`와 `2176b7e38`로 `main`에 반영됐다. tasks와 PR 본문은 PROD-795·741·575의 남은 gate와 owner를 계속 구분한다.
 
 ### OpenPanel dual-write 없이 PostHog로 교체한다
 
@@ -148,9 +148,29 @@
 - Consequences: Native analytics는 계속 비활성이고 PROD-537가 별도로 소유한다.
 - Confirmation / Follow-up: Native export/dependency graph에서 PostHog runtime 부재를 확인한다.
 
+### PROD-795는 수집 표면별 증거로 개인정보·운영 문서를 정렬한다
+
+- Decision Date: 2026-08-31
+- Decision Class: Derived Contract
+- Authority / Provenance: [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 포함 범위·완료 조건과 `2026-08-31 명세 구체화 범위 확인`; `docs/design/breakpoints.md`의 공개 `/privacy` 진입 계약
+- Status: Active
+- Context / Problem: `/e/`의 검색·캠페인 metadata 원문 수집 검증과 Replay 보호 설정만으로 모든 PostHog 수집·보존 조건을 설명하면 실제 동작보다 강한 공개 고지가 된다.
+- Decision Outcome: 개인정보 화면과 운영 문서는 표준 이벤트, `/flags` 등 원격 설정, persistence와 Replay 수집·보호를 구분하고 실제 확인한 내용만 설명한다. PROD-795는 해당 통합 검증과 고지·운영 안내를 소유하며 SDK·Cloud/build 변경, 실제 Replay 품질 인수와 production acceptance/archive는 기존 owner가 맡는다.
+- Alternatives Considered: 현재 `/e/` 테스트만으로 모든 요청을 보호한다고 설명하거나 범용 sanitizer를 추가하는 방식은 기존 PROD-795/819/820 계약을 벗어나므로 적용하지 않는다. 이 결정에 새로운 제품 선택을 추가하지 않는다.
+- Consequences: 미확인 표면과 고지 조건은 검증 공백으로 남고, 확인 없이 완료를 선언하지 않는다. 공개 route와 기존 Account·Session 계약은 유지한다.
+- Confirmation / Follow-up: 그룹 6의 고지·runbook·통합 증거와 PROD-741/575 handoff를 대조한다.
+
 ## Remaining Decisions
 
-- 없음.
+### PROD-795 공개 고지 조건의 미확정 항목
+
+이 항목은 새 수집·보존 정책을 승인하는 decision이 아니다. 다음 조건은 아직 선택하거나 확정하지 않았다.
+
+- 개정 시행일과 사전 고지 일정.
+- 일반 이벤트의 실제 보존·삭제 운영 기준. Replay 30일 또는 API의 `event_retention_months=12`를 전체 이벤트의 자동 삭제 보장으로 사용하지 않는다.
+- 미국 처리에 관한 실제 계약·이전 고지 조건과 적용할 법적 근거.
+
+소유자는 PROD-795다. 기존 metadata 수집·Replay 보호 계약과 사실 확인을 넘어 새 제품·보존 정책을 선택해야 한다면 canonical·Linear에 결정과 승인을 먼저 기록한 뒤 이 명세를 갱신한다. 그 전에는 후보 정책을 Active decision이나 구현 근거로 사용하지 않는다.
 
 ## Superseded Decisions
 
