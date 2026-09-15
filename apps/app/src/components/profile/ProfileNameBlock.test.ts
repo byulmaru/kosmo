@@ -49,7 +49,7 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-for (const variant of ['default', 'compact', 'hero'] as const) {
+for (const variant of ['default', 'compact', 'inline', 'hero'] as const) {
   test(`ProfileNameBlock ${variant} preserves text and heading semantics`, async () => {
     await act(async () => {
       renderer = create(createElement(ProfileNameBlock, { profile: {} as never, variant }));

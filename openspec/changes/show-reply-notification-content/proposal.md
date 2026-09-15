@@ -1,11 +1,12 @@
 ## Why
 
-공용 Notification presentation과 Storybook 계약은 현재 지원하는 Follow·FollowRequest·Reaction·Reply·Repost 5종을 정의하지만 실제 알림 목록은 아직 legacy 행을 사용한다. PROD-811은 이 5종을 기존 Relay·Read·권한 경계에 연결하고 Reply 본문·미디어·Action Bar까지 제공한다.
+공용 Notification presentation과 Storybook 계약은 현재 지원하는 Follow·FollowRequest·Reaction·Reply·Repost 5종을 정의하지만 실제 알림 목록은 아직 legacy 행을 사용한다. PROD-811은 이 5종을 기존 Relay·Read·권한 경계에 연결하고 Reply 본문·미디어·Action Bar까지 제공한다. PROD-951은 실제 목록 검토에서 확인한 날짜 typography와 Reply 표시 밀도·inset을 후속 정렬한다.
 
 ## What Changes
 
 - Production Notification 목록이 Follow·FollowRequest·Reaction·Repost에 공용 `NotificationListItemView`를 사용하고 Reply에 `ReplyNotificationPost`를 합성한다.
 - Reply는 허용된 본문·Content Warning·미디어·Quote·공용 Post Action Bar를 표시하고, Reply action은 기존 목록용 popup composer를 재사용한다.
+- Reply는 48px kind rail의 32px kind icon, 24px Avatar와 inline 작성자 행을 사용하고 별도의 알림 이유 문장을 표시하지 않는다. 날짜는 다른 Notification·PostListItem과 같은 역할 typography를 사용하며 Web inset은 왼쪽 12px·오른쪽 24px로 정렬한다.
 - FollowRequest target을 `/follow-requests`로 정렬하고 Reaction·Repost는 기존 Post 표시 정책에 따른 한 줄 미리보기와 첫 미디어를 표시한다.
 - Notification 이동·열기와 Best Effort Read를 결속하되 Read 응답이 navigation을 막지 않게 하고, Reply의 Content Warning·Action Bar·composer control은 item navigation·Read와 독립적으로 실행한다.
 - 기존 unavailable filtering, Relay pagination·actor cache, 모두 읽음, loading/error/empty 상태를 유지하면서 loading skeleton과 실제 Production Storybook 계약을 새 행에 맞춘다.
@@ -14,8 +15,8 @@
 ## Authority / Provenance
 
 - Canonical: `docs/domain/objects/notification.md`, `docs/design/notifications.md`, `docs/design/accessibility.md`, `docs/design/breakpoints.md`
-- Linear Contract: [PROD-811](https://linear.app/byulmaru/issue/PROD-811/답글-알림에서-답글-본문을-미리-볼-수-있게-한다), [DSN-42](https://linear.app/byulmaru/issue/DSN-42/figma-notificationpost-presentation을-시각-리디자인한다)
-- Linear Implementations: [PROD-811](https://linear.app/byulmaru/issue/PROD-811/답글-알림에서-답글-본문을-미리-볼-수-있게-한다); 선행 공용 UI [PROD-884](https://linear.app/byulmaru/issue/PROD-884/dsn-42-notification-presentation을-공용-ui와-storybook으로-이관한다)
+- Linear Contract: [PROD-811](https://linear.app/byulmaru/issue/PROD-811/답글-알림에서-답글-본문을-미리-볼-수-있게-한다), [PROD-951](https://linear.app/byulmaru/issue/PROD-951/공통-알림-날짜와-답글-표시-밀도를-통일한다), [DSN-42](https://linear.app/byulmaru/issue/DSN-42/figma-notificationpost-presentation을-시각-리디자인한다)
+- Linear Implementations: [PROD-811](https://linear.app/byulmaru/issue/PROD-811/답글-알림에서-답글-본문을-미리-볼-수-있게-한다), 후속 표시 정렬 [PROD-951](https://linear.app/byulmaru/issue/PROD-951/공통-알림-날짜와-답글-표시-밀도를-통일한다); 선행 공용 UI [PROD-884](https://linear.app/byulmaru/issue/PROD-884/dsn-42-notification-presentation을-공용-ui와-storybook으로-이관한다)
 
 ## Capabilities
 
