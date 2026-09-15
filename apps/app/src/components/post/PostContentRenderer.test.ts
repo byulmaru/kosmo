@@ -22,11 +22,20 @@ mockModule('react-native', {
   Text: 'Text',
   View: 'View',
 });
+mockModule('react-relay', {
+  graphql: () => ({}),
+  useFragment: (_fragment: unknown, key: unknown) => key,
+});
+mockModule('@/components/shell/NavigationLink', {
+  NavigationLink: ({ children, href }: { children: ReactNode; href: unknown }) =>
+    createElement('NavigationLink', { href }, children),
+});
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => ({ selectedProfileId: null, sessionId: null }),
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({
+    actionLinkBase: '#00f',
     border: '#ddd',
     primary: '#ff0',
     primaryHover: '#ee0',
@@ -45,9 +54,16 @@ type RendererProps = {
   contentWarningPresentation?: 'default' | 'revealed';
   contentWarning: string | null | undefined;
   document: unknown;
+  interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
   mediaPresentation?: 'default' | 'hidden';
+  mentionedProfiles: ReadonlyArray<{
+    readonly displayName: string;
+    readonly id: string;
+    readonly relativeHandle: string;
+  }>;
   numberOfLines?: number;
+  onBodyPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
   postId: string;
 };
@@ -58,7 +74,8 @@ let Button: ComponentType<Record<string, unknown>>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
-  ({ PostContentRenderer } = await import('./PostContentRenderer'));
+  const imported = await import('./PostContentRenderer');
+  PostContentRenderer = imported.PostContentRenderer as unknown as ComponentType<RendererProps>;
   ({ PostContentWarningRevealProvider } = await import('./PostContentWarningRevealContext'));
   ({ Button } = await import('@/components/ui/Button'));
 });
@@ -78,6 +95,7 @@ describe('PostContentRenderer', () => {
       contentWarning: '민감한 내용',
       document: null,
       media: [],
+      mentionedProfiles: [],
       postId: 'post-warning-button',
     });
 
@@ -104,6 +122,7 @@ describe('PostContentRenderer', () => {
       contentWarning: null,
       document: null,
       media: [{ altText: null, id: 'media-1', url: 'https://media.example/1.webp' }],
+      mentionedProfiles: [],
       onMediaOpen,
       postId: 'post-viewer-callbacks',
     });
@@ -121,6 +140,7 @@ describe('PostContentRenderer', () => {
       document: null,
       media: null,
       mediaPresentation: 'hidden',
+      mentionedProfiles: [],
       postId: 'post-viewer-hidden',
     });
 
@@ -136,6 +156,7 @@ describe('PostContentRenderer', () => {
       contentWarning: '민감한 내용',
       document: null,
       media,
+      mentionedProfiles: [],
       postId: 'post-1',
     });
 
@@ -177,6 +198,7 @@ describe('PostContentRenderer', () => {
       document: null,
       media: [],
       mediaPresentation: 'hidden',
+      mentionedProfiles: [],
       postId: 'post-viewer-warning',
     });
 
@@ -198,6 +220,7 @@ describe('PostContentRenderer', () => {
       document: null,
       media: [],
       numberOfLines: 3,
+      mentionedProfiles: [],
       postId: 'post-line-limit',
     });
 
@@ -220,6 +243,7 @@ describe('PostContentRenderer', () => {
       },
       media: [],
       numberOfLines: 3,
+      mentionedProfiles: [],
       postId: 'post-document-line-limit',
     });
 
@@ -235,6 +259,7 @@ describe('PostContentRenderer', () => {
       contentWarning: '민감한 내용',
       document: null,
       media: [],
+      mentionedProfiles: [],
       postId: 'post-2',
     });
 
@@ -260,6 +285,114 @@ describe('PostContentRenderer', () => {
     assert.equal(galleries.length, 1);
     assert.equal(
       contentRoot.findAll((node) => (node.type as unknown) === 'PostMediaGallery').length,
+      1,
+    );
+  });
+
+  it('matches Mention nodes by projected Profile ID and renders the Profile relative handle', async () => {
+    const firstProfileId = 'UHJvZmlsZS0x';
+    const secondProfileId = 'UHJvZmlsZS0y';
+    const onBodyPress = () => undefined;
+    await render({
+      bodyText: '@first-profile @second-profile @알 수 없는 사용자',
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'mention', attrs: { profileId: firstProfileId } },
+                { type: 'text', text: ' ' },
+                { type: 'mention', attrs: { profileId: secondProfileId } },
+                { type: 'text', text: ' ' },
+                { type: 'mention', attrs: { profileId: 'UHJvZmlsZS1taXNzaW5n' } },
+              ],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [
+        {
+          displayName: 'Second Profile',
+          id: secondProfileId,
+          relativeHandle: '@second-profile',
+        },
+        {
+          displayName: 'First Profile',
+          id: firstProfileId,
+          relativeHandle: '@first-profile',
+        },
+      ],
+      onBodyPress,
+      postId: 'post-mention-id-match',
+    });
+
+    assert.deepEqual(
+      rendered('NavigationLink').map(({ props }) => props.href),
+      ['/@first-profile', '/@second-profile'],
+    );
+    assert.equal(
+      rendered('Text').filter(({ props }) => props.children === '@first-profile').length,
+      1,
+    );
+    assert.equal(
+      rendered('Text').filter(({ props }) => props.children === '@second-profile').length,
+      1,
+    );
+    assert.equal(
+      rendered('Text').filter(({ props }) => props.children === '@알 수 없는 사용자').length,
+      1,
+    );
+    assert.equal(
+      rendered('Text').some(({ props }) => props.children === '@missing'),
+      false,
+    );
+
+    const linkText = rendered('Text').find(({ props }) => props.accessibilityRole === 'link');
+    assert.ok(linkText);
+    let propagationStopped = false;
+    linkText.props.onPress({ stopPropagation: () => (propagationStopped = true) });
+    assert.equal(propagationStopped, true);
+  });
+
+  it('renders a matched relative handle as plain text when interactive is false', async () => {
+    const profileId = '019f6678-86fa-709b-984e-1520766b8450';
+    await render({
+      bodyText: '@quiet-profile',
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'mention', attrs: { profileId } }],
+            },
+          ],
+        },
+      },
+      interactive: false,
+      media: [],
+      mentionedProfiles: [
+        {
+          displayName: 'Quiet Profile',
+          id: profileId,
+          relativeHandle: '@quiet-profile',
+        },
+      ],
+      postId: 'post-mention-static',
+    });
+
+    assert.equal(rendered('NavigationLink').length, 0);
+    assert.equal(
+      rendered('Text').filter(({ props }) => props.children === '@quiet-profile').length,
       1,
     );
   });
