@@ -10,16 +10,14 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 
 const require = createRequire(import.meta.url);
 
-type EligibilityData = {
-  accountDeletionEligibility: {
-    activeProfileCount: number;
-    canDelete: boolean;
-  };
+type QueryData = {
+  me: {
+    profiles: ReadonlyArray<{ id: string }>;
+  } | null;
 };
 
 type MutationResponse = {
   deleteAccount: {
-    activeProfileCount: number;
     completed: boolean;
   };
 };
@@ -41,9 +39,7 @@ type ScreenProps = {
   };
 };
 
-let queryData: EligibilityData = {
-  accountDeletionEligibility: { activeProfileCount: 0, canDelete: true },
-};
+let queryData: QueryData = { me: { profiles: [] } };
 let mutationCalls: MutationConfig[] = [];
 let cleanupCalls = 0;
 let screenProps: ScreenProps | null = null;
@@ -128,7 +124,7 @@ before(async () => {
 });
 
 afterEach(async () => {
-  queryData = { accountDeletionEligibility: { activeProfileCount: 0, canDelete: true } };
+  queryData = { me: { profiles: [] } };
   mutationCalls = [];
   cleanupCalls = 0;
   screenProps = null;
@@ -153,28 +149,12 @@ describe('Settings account deletion wiring', () => {
 
     await act(async () =>
       mutationCalls[0]?.onCompleted({
-        deleteAccount: { activeProfileCount: 0, completed: true },
+        deleteAccount: { completed: true },
       }),
     );
 
     assert.equal(screen().state.phase, 'success');
     assert.equal(cleanupCalls, 1);
-  });
-
-  it('탈퇴 mutation 결과가 active Profile을 반환하면 blocker와 acknowledgement 초기화로 돌아간다', async () => {
-    await renderRoute();
-    await act(async () => screen().onAcknowledgementChange(true));
-    await act(async () => screen().onConfirm());
-
-    await act(async () =>
-      mutationCalls[0]?.onCompleted({
-        deleteAccount: { activeProfileCount: 2, completed: false },
-      }),
-    );
-
-    assert.equal(screen().state.phase, 'blocked');
-    assert.equal(screen().state.activeProfileCount, 2);
-    assert.equal(cleanupCalls, 0);
   });
 
   it('결과 불명 오류에서 acknowledgement를 유지하고 같은 mutation을 재시도한다', async () => {
@@ -192,8 +172,10 @@ describe('Settings account deletion wiring', () => {
     assert.equal(cleanupCalls, 0);
   });
 
-  it('eligibility blocker는 query의 active Profile 개수만 presentation에 전달한다', async () => {
-    queryData = { accountDeletionEligibility: { activeProfileCount: 3, canDelete: false } };
+  it('eligibility blocker는 me의 Profile 개수만 presentation에 전달한다', async () => {
+    queryData = {
+      me: { profiles: [{ id: 'profile-1' }, { id: 'profile-2' }, { id: 'profile-3' }] },
+    };
 
     await renderRoute();
 
