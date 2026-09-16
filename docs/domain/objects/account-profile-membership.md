@@ -33,6 +33,10 @@ Account-Profile Membership은 Account와 Profile의 역할 기반 관계다. Loc
 Account가 Profile을 선택할 수 있는 자격은 이 Membership의 존재로만 결정한다. Profile Origin, Membership
 Role 또는 Profile 생성자 여부를 선택 조건으로 추가하지 않는다.
 
+Account 삭제는 Membership을 제거하거나 Role을 변경하지 않는다. Account가 연결된 모든 Profile의 Profile
+Lifecycle State가 Deactivated인 경우에만 Account 삭제가 가능하며, 삭제 후에도 Membership과 Profile은
+보존된다.
+
 Admin Console의 Membership 조회는 [Admin Console Read Policy](../policies/admin-console-read.md)가 정한
 Admin Console Viewer projection으로만 제공한다. 이는 `Profile.Owner`, `Profile.Member`,
 `Membership.Account`라는 기존 관계 사실이나 해당 관계를 변경하는 행동 권한을 바꾸지 않는다.

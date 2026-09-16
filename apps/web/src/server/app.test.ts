@@ -18,24 +18,36 @@ const {
   captureUnexpectedError,
   countMetric,
   createSession,
+  DeletedAccountLoginError,
   discovery,
   federationFetch,
   revokeSession,
   setInboundObservabilityReporter,
-} = vi.hoisted(() => ({
-  authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
-  captureUnexpectedError: vi.fn<(cause: unknown) => void>(),
-  countMetric: vi.fn<(name: string, attributes: Record<string, string>) => void>(),
-  createSession:
-    vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
-  discovery: vi.fn<typeof oidcDiscovery>(),
-  federationFetch: vi.fn<typeof federation.fetch>(),
-  revokeSession:
-    vi.fn<
-      (input: { token?: string }) => Promise<{ status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED' }>
-    >(),
-  setInboundObservabilityReporter: vi.fn(),
-}));
+} = vi.hoisted(() => {
+  class MockDeletedAccountLoginError extends Error {
+    constructor() {
+      super(
+        '탈퇴한 Kosmo 계정은 현재 재가입할 수 없습니다. 도움이 필요하면 hello@byulmaru.co로 문의해 주세요.',
+      );
+    }
+  }
+
+  return {
+    authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
+    captureUnexpectedError: vi.fn<(cause: unknown) => void>(),
+    countMetric: vi.fn<(name: string, attributes: Record<string, string>) => void>(),
+    createSession:
+      vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
+    DeletedAccountLoginError: MockDeletedAccountLoginError,
+    discovery: vi.fn<typeof oidcDiscovery>(),
+    federationFetch: vi.fn<typeof federation.fetch>(),
+    revokeSession:
+      vi.fn<
+        (input: { token?: string }) => Promise<{ status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED' }>
+      >(),
+    setInboundObservabilityReporter: vi.fn(),
+  };
+});
 
 vi.mock('openid-client', async (importOriginal) => ({
   ...((await importOriginal()) as object),
@@ -45,6 +57,7 @@ vi.mock('openid-client', async (importOriginal) => ({
 
 vi.mock('@kosmo/core/services', () => ({
   createOidcSession: createSession,
+  DeletedAccountLoginError,
   revokeCurrentSession: revokeSession,
 }));
 
@@ -258,6 +271,20 @@ describe('browser login', () => {
     expect(setCookie).toContain('HttpOnly');
     expect(setCookie).toContain('SameSite=Lax');
     expect(setCookie).toContain('Secure');
+  });
+
+  test('blocks a deleted account with support guidance and does not set a session cookie', async () => {
+    createSession.mockRejectedValueOnce(new DeletedAccountLoginError());
+    const login = await app.request('https://kos.moe/login');
+    const cookies = responseCookies(login.headers);
+    const response = await app.request(
+      `https://kos.moe/login/callback?code=oidc-code&state=${cookies.kosmo_oidc_state}`,
+      { headers: { cookie: cookieHeader(cookies) } },
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain('hello@byulmaru.co');
+    expect(response.headers.get('set-cookie')).toBeNull();
   });
 
   test('does not capture an expected OIDC client error', async () => {

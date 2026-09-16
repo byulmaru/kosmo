@@ -314,7 +314,7 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
   await expect(page).toHaveURL(/\/home$/);
 });
 
-test('Deleted Account의 Web OIDC callback은 Session 없이 일반 오류로 거부된다', async ({
+test('Deleted Account의 Web OIDC callback은 Session 없이 임시 재가입 차단 안내로 거부된다', async ({
   context,
   page,
 }) => {
@@ -326,8 +326,10 @@ test('Deleted Account의 Web OIDC callback은 Session 없이 일반 오류로 �
 
   const response = await page.goto('/login');
 
-  expect(response?.status()).toBe(500);
-  expect(await response?.text()).toBe('Internal Server Error');
+  expect(response?.status()).toBe(403);
+  expect(await response?.text()).toBe(
+    '탈퇴한 Kosmo 계정은 현재 재가입할 수 없습니다. 도움이 필요하면 hello@byulmaru.co로 문의해 주세요.',
+  );
   expect(await db.select().from(Sessions)).toEqual([]);
   expect((await context.cookies()).some(({ name }) => name === 'kosmo_session')).toBe(false);
   expect(await page.textContent('body')).not.toContain('oidc-mock-e2e-user');

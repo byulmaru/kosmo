@@ -25,6 +25,11 @@ import type { IndexScreenExchangeNativeOidcSessionMutation } from './__generated
 type WebTextStyle = TextStyle & { wordBreak?: 'keep-all' };
 
 const mobileWebTitleStyle: WebTextStyle = { wordBreak: 'keep-all' };
+const LOGIN_ERROR_FALLBACK = '네이티브 세션을 만들지 못했습니다.';
+const SUPPORT_EMAIL = 'hello@byulmaru.co';
+
+const safeLoginError = (message: string | undefined) =>
+  message?.includes(SUPPORT_EMAIL) ? message : LOGIN_ERROR_FALLBACK;
 
 const ExchangeNativeOidcSessionMutation = graphql`
   mutation IndexScreenExchangeNativeOidcSessionMutation($input: ExchangeNativeOidcSessionInput!) {
@@ -66,7 +71,7 @@ export default function IndexScreen() {
         variables: { input },
         onCompleted: (response, errors) => {
           if (errors?.length) {
-            setError('네이티브 세션을 만들지 못했습니다.');
+            setError(safeLoginError(errors.map(({ message }) => message).find(Boolean)));
             setLoggingIn(false);
             return;
           }
@@ -76,8 +81,8 @@ export default function IndexScreen() {
             .catch(() => setError('네이티브 세션을 저장하지 못했습니다.'))
             .finally(() => setLoggingIn(false));
         },
-        onError: () => {
-          setError('네이티브 세션을 만들지 못했습니다.');
+        onError: (cause) => {
+          setError(safeLoginError(cause.message));
           setLoggingIn(false);
         },
       });

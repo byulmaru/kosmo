@@ -7,7 +7,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { AccountProfiles, Accounts, db, firstOrThrow, pg, Sessions } from '../db';
 import { AccountState, SessionState } from '../enums';
 import { PermissionDeniedError } from '../error';
-import { createOidcSession, revokeCurrentSession } from './session';
+import { createOidcSession, DeletedAccountLoginError, revokeCurrentSession } from './session';
 
 after(async () => {
   await pg.end();
@@ -76,7 +76,12 @@ for (const state of [AccountState.SUSPENDED, AccountState.DISABLED]) {
       .returning()
       .then(firstOrThrow);
 
-    await assert.rejects(createOidcSession(identity), PermissionDeniedError);
+    await assert.rejects(
+      createOidcSession(identity),
+      state === AccountState.DISABLED
+        ? (cause) => cause instanceof DeletedAccountLoginError
+        : PermissionDeniedError,
+    );
 
     const persistedAccount = await loadAccount(identity.oidcSubject);
     assert.equal(persistedAccount.displayName, 'preserved display name');
