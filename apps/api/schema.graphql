@@ -567,6 +567,14 @@ type Query {
   searchProfiles(after: String, before: String, first: Int, last: Int, query: String!): ProfileConnection!
 }
 
+type QuoteNotification implements Node & Notification {
+  createdAt: DateTime!
+  id: ID!
+  post: Post!
+  profile: Profile!
+  readAt: DateTime
+}
+
 type Reaction implements Node {
   createdAt: DateTime!
   id: ID!

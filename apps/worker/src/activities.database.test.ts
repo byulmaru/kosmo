@@ -27,6 +27,7 @@ import type {
   repostPost as RepostPost,
 } from '@kosmo/core/services';
 import type {
+  createQuoteNotificationActivity as CreateQuoteNotificationActivity,
   createReactionNotificationActivity as CreateReactionNotificationActivity,
   createReplyNotificationActivity as CreateReplyNotificationActivity,
   createRepostNotificationActivity as CreateRepostNotificationActivity,
@@ -44,6 +45,8 @@ let Accounts: typeof CoreDb.Accounts;
 let ApplicationAuthorizations: typeof CoreDb.ApplicationAuthorizations;
 let Applications: typeof CoreDb.Applications;
 let Instances: typeof CoreDb.Instances;
+let NotificationQuoteJudgments: typeof CoreDb.NotificationQuoteJudgments;
+let NotificationRollouts: typeof CoreDb.NotificationRollouts;
 let Notifications: typeof CoreDb.Notifications;
 let OAuthAuthorizationCodes: typeof CoreDb.OAuthAuthorizationCodes;
 let OAuthTokens: typeof CoreDb.OAuthTokens;
@@ -61,6 +64,7 @@ let createCorePost: typeof CreatePost;
 let deleteAccountActivity: typeof DeleteAccountActivity;
 let deletePost: typeof DeletePost;
 let createReactionNotificationActivity: typeof CreateReactionNotificationActivity;
+let createQuoteNotificationActivity: typeof CreateQuoteNotificationActivity;
 let deleteReactionNotificationActivity: typeof DeleteReactionNotificationActivity;
 let createReplyNotificationActivity: typeof CreateReplyNotificationActivity;
 let createRepostNotificationActivity: typeof CreateRepostNotificationActivity;
@@ -76,6 +80,8 @@ before(async () => {
     db,
     firstOrThrow,
     Instances,
+    NotificationQuoteJudgments,
+    NotificationRollouts,
     Notifications,
     OAuthAuthorizationCodes,
     OAuthTokens,
@@ -92,6 +98,7 @@ before(async () => {
   } = await import('@kosmo/core/db'));
   ({
     createReactionNotificationActivity,
+    createQuoteNotificationActivity,
     createReplyNotificationActivity,
     createRepostNotificationActivity,
     deleteAccountActivity,
@@ -99,9 +106,14 @@ before(async () => {
     deleteRepostNotificationActivity,
   } = await import('./activities'));
   ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
+  await db
+    .insert(NotificationRollouts)
+    .values({ key: 'QUOTE_NOTIFICATION', activatedAt: Temporal.Now.instant() })
+    .onConflictDoNothing();
 });
 
 beforeEach(async () => {
+  await db.delete(NotificationQuoteJudgments);
   await db.delete(Notifications);
   await db.delete(ProfileFollows);
   await db.update(Posts).set({ currentContentId: null });
@@ -490,6 +502,60 @@ test('Reply 알림은 Recipient Mute와 양방향 Block이 있으면 생성하�
   assert.equal(await db.$count(Notifications), 1);
 });
 
+test('Quote Notification Activity는 source author에게 한 건만 생성한다', async () => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const { post: source } = await createCorePost({
+    document: postContentDocumentFromText('Quote source'),
+    origin: 'LOCAL',
+    profileId: recipient.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const { post: quote } = await createCorePost({
+    document: postContentDocumentFromText('Quote body'),
+    origin: 'LOCAL',
+    profileId: author.id,
+    repostSourceId: source.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  await createQuoteNotificationActivity(quote.id);
+  await createQuoteNotificationActivity(quote.id);
+
+  const notifications = await db.select().from(Notifications);
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0]?.kind, NotificationKind.QUOTE);
+  assert.equal(notifications[0]?.recipientProfileId, recipient.id);
+  assert.equal(notifications[0]?.sourceId, quote.id);
+});
+
+test('Quote가 Reply 관계도 가진 경우 먼저 확정된 Quote 대표를 Reply가 바꾸지 않는다', async () => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const { post: source } = await createCorePost({
+    document: postContentDocumentFromText('Combined source'),
+    origin: 'LOCAL',
+    profileId: recipient.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const { post: quote } = await createCorePost({
+    document: postContentDocumentFromText('Combined quote'),
+    origin: 'LOCAL',
+    profileId: author.id,
+    repostSourceId: source.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  await db.update(Posts).set({ replyParentId: source.id }).where(eq(Posts.id, quote.id));
+
+  await createQuoteNotificationActivity(quote.id);
+  await createReplyNotificationActivity(quote.id);
+
+  const notifications = await db.select().from(Notifications);
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0]?.kind, NotificationKind.QUOTE);
+  assert.equal(notifications[0]?.sourceId, quote.id);
+});
+
 test('Reaction Notification Activities는 create와 delete retry에 멱등이다', async () => {
   const recipient = await createProfile();
   const actor = await createProfile();
@@ -753,14 +819,16 @@ const createPost = (
   profileId: string,
   {
     replyParentId,
+    repostSourceId,
     visibility = PostVisibility.PUBLIC,
-  }: { replyParentId?: string; visibility?: PostVisibility } = {},
+  }: { replyParentId?: string; repostSourceId?: string; visibility?: PostVisibility } = {},
 ) =>
   db
     .insert(Posts)
     .values({
       profileId,
       replyParentId,
+      repostSourceId,
       state: PostState.ACTIVE,
       visibility,
     })

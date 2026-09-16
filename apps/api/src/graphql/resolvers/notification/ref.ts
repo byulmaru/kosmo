@@ -32,6 +32,7 @@ export type FollowRequestNotificationRow = NotificationRow;
 export type ReactionNotificationRow = NotificationRow;
 export type RepostNotificationRow = NotificationRow;
 export type ReplyNotificationRow = NotificationRow;
+export type QuoteNotificationRow = NotificationRow;
 
 type NotificationSource = {
   followRequest?: typeof ProfileFollowRequests.$inferSelect;
@@ -112,7 +113,14 @@ type ReplyNotificationSourceRow = {
   profileId: string;
 };
 
+type QuoteNotificationSourceRow = {
+  id: string;
+  post: typeof Posts.$inferSelect;
+  profileId: string;
+};
+
 const ReplyNotificationParents = alias(Posts, 'reply_notification_parent');
+const QuoteNotificationSources = alias(Posts, 'quote_notification_source');
 
 const followNotificationSourceLoader = (ctx: UserContext) =>
   ctx.loader<string, FollowNotificationSourceRow, string, true>({
@@ -205,6 +213,32 @@ const replyNotificationSourceLoader = (ctx: UserContext) =>
     key: (source) => source?.id ?? null,
   });
 
+const quoteNotificationSourceLoader = (ctx: UserContext) =>
+  ctx.loader<string, QuoteNotificationSourceRow, string, true>({
+    name: 'notification.quoteSource',
+    nullable: true,
+    load: (ids) =>
+      db
+        .select({
+          id: Posts.id,
+          post: getColumns(Posts),
+          profileId: Posts.profileId,
+        })
+        .from(Posts)
+        .innerJoin(QuoteNotificationSources, eq(QuoteNotificationSources.id, Posts.repostSourceId))
+        .innerJoin(
+          Notifications,
+          and(
+            eq(Notifications.kind, NotificationKind.QUOTE),
+            eq(Notifications.sourceId, Posts.id),
+            eq(Notifications.recipientProfileId, QuoteNotificationSources.profileId),
+            visibleNotificationWhere({ ctx }),
+          ),
+        )
+        .where(inArray(Posts.id, ids)),
+    key: (source) => source?.id ?? null,
+  });
+
 export const getNotificationSource = async (
   notification: NotificationRow,
   ctx: UserContext,
@@ -218,9 +252,11 @@ export const getNotificationSource = async (
           : await followRequestNotificationSourceLoader(ctx).load(notification.sourceId)
         : notification.kind === NotificationKind.REACTION
           ? await reactionNotificationSourceLoader(ctx).load(notification.sourceId)
-          : notification.kind === NotificationKind.REPLY
-            ? await replyNotificationSourceLoader(ctx).load(notification.sourceId)
-            : await repostNotificationSourceLoader(ctx).load(notification.sourceId);
+          : notification.kind === NotificationKind.QUOTE
+            ? await quoteNotificationSourceLoader(ctx).load(notification.sourceId)
+            : notification.kind === NotificationKind.REPLY
+              ? await replyNotificationSourceLoader(ctx).load(notification.sourceId)
+              : await repostNotificationSourceLoader(ctx).load(notification.sourceId);
 
   if (!source) {
     throw new Error('Notification source not found');
@@ -238,9 +274,11 @@ export const notificationNodeType = (kind: string) =>
         ? ('ReactionNotification' as const)
         : kind === NotificationKind.REPOST
           ? ('RepostNotification' as const)
-          : kind === NotificationKind.REPLY
-            ? ('ReplyNotification' as const)
-            : null;
+          : kind === NotificationKind.QUOTE
+            ? ('QuoteNotification' as const)
+            : kind === NotificationKind.REPLY
+              ? ('ReplyNotification' as const)
+              : null;
 
 export const notificationKindForNodeType = (typename: string) =>
   typename === 'FollowNotification'
@@ -251,9 +289,11 @@ export const notificationKindForNodeType = (typename: string) =>
         ? NotificationKind.REACTION
         : typename === 'RepostNotification'
           ? NotificationKind.REPOST
-          : typename === 'ReplyNotification'
-            ? NotificationKind.REPLY
-            : null;
+          : typename === 'QuoteNotification'
+            ? NotificationKind.QUOTE
+            : typename === 'ReplyNotification'
+              ? NotificationKind.REPLY
+              : null;
 
 export const Notification = builder.interfaceRef<NotificationRow>('Notification');
 
@@ -397,6 +437,29 @@ export const ReplyNotification = createObjectRef<ReplyNotificationRow>(
 );
 
 ReplyNotification.implement({
+  interfaces: [Notification],
+  fields: (t) => ({
+    createdAt: t.expose('createdAt', { type: 'DateTime' }),
+    readAt: t.expose('readAt', { type: 'DateTime', nullable: true }),
+  }),
+});
+
+export const QuoteNotification = createObjectRef<QuoteNotificationRow>(
+  'QuoteNotification',
+  (ids, ctx) =>
+    db
+      .select(getColumns(Notifications))
+      .from(Notifications)
+      .where(
+        and(
+          inArray(Notifications.id, ids),
+          eq(Notifications.kind, NotificationKind.QUOTE),
+          visibleNotificationWhere({ ctx }),
+        ),
+      ),
+);
+
+QuoteNotification.implement({
   interfaces: [Notification],
   fields: (t) => ({
     createdAt: t.expose('createdAt', { type: 'DateTime' }),

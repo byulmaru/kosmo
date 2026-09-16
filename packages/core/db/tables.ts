@@ -277,6 +277,11 @@ export const Notifications = pgTable(
   ],
 );
 
+export const NotificationRollouts = pgTable('notification_rollout', {
+  key: text('key').primaryKey(),
+  activatedAt: datetime('activated_at').notNull(),
+});
+
 export const OAuthAuthorizationCodes = pgTable(
   'oauth_authorization_code',
   {
@@ -391,6 +396,32 @@ export const PostMentions = pgTable(
   (table) => [
     primaryKey({ columns: [table.postContentId, table.profileId] }),
     index().on(table.profileId),
+  ],
+);
+
+export const NotificationQuoteJudgments = pgTable(
+  'notification_quote_judgment',
+  {
+    quotePostId: uuid('quote_post_id')
+      .notNull()
+      .references(() => Posts.id, { onDelete: 'cascade' }),
+    recipientProfileId: uuid('recipient_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    outcome: text('outcome').notNull(),
+    representativeKind: text('representative_kind'),
+    representativeNotificationId: uuid('representative_notification_id'),
+    decidedAt: datetime('decided_at')
+      .notNull()
+      .default(sql`now()`),
+  },
+  (table) => [
+    primaryKey({ columns: [table.quotePostId, table.recipientProfileId] }),
+    index().on(table.recipientProfileId, table.quotePostId),
+    check(
+      'notification_quote_judgment_outcome_check',
+      sql`${table.outcome} IN ('EMITTED', 'SUPPRESSED', 'REPRESENTED_BY_EXISTING', 'EXCLUDED_PRELAUNCH')`,
+    ),
   ],
 );
 

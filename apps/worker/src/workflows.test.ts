@@ -193,6 +193,44 @@ test(
 );
 
 test(
+  'Post Create Effects Workflow는 Reply와 Quote Notification effect를 함께 실행한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-post-create-effects-test-${process.pid}`;
+    const postId = '00000000-0000-8000-8000-000000000301';
+    const calls: string[] = [];
+
+    const worker = await Worker.create({
+      activities: {
+        createQuoteNotificationActivity: async (id: string) => calls.push(`quote:${id}`),
+        createReplyNotificationActivity: async (id: string) => calls.push(`reply:${id}`),
+        sendLocalPostCreateActivity: async (id: string) => calls.push(`send:${id}`),
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await environment.client.workflow.execute('postCreateEffectsWorkflow', {
+        args: [{ postId, origin: 'LOCAL' }],
+        taskQueue,
+        workflowId: `post-create-effects-test:${postId}`,
+      });
+      assert.deepEqual(
+        new Set(calls),
+        new Set([`quote:${postId}`, `reply:${postId}`, `send:${postId}`]),
+      );
+    });
+  },
+);
+
+test(
   'Profile Update Effects Workflow는 production registry에서 stable input으로 Activity를 재시도한다',
   { timeout: 120_000 },
   async (t) => {
