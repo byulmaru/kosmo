@@ -162,11 +162,8 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     : null;
   const feedbackOverlayVisible =
     web && pathname !== '/feedback' && feedbackOpen && data.currentSession != null;
-  const routeComposerOpen = pathname === '/compose';
-  const composerMode =
-    showRightRail && !composerOpen && !routeComposerOpen ? 'rail' : mobile ? 'mobile' : 'overlay';
-  const composerVisible =
-    profile !== null && (composerMode === 'rail' || composerOpen || routeComposerOpen);
+  const composerMode = showRightRail && !composerOpen ? 'rail' : mobile ? 'mobile' : 'overlay';
+  const composerVisible = profile !== null && (composerMode === 'rail' || composerOpen);
   const composerOverlayVisible = composerMode !== 'rail' && composerVisible;
   const composerBackgroundA11yProps = composerOverlayVisible
     ? ({
@@ -236,19 +233,11 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const closeComposer = useCallback(
     (reason: 'created' | 'dismiss' = 'dismiss') => {
       setComposerOpen(false);
-      if (routeComposerOpen) {
-        if (reason === 'dismiss' && router.canGoBack()) {
-          router.back();
-        } else {
-          router.replace('/home');
-        }
-        return;
-      }
       if (reason === 'created' && composerMode === 'mobile') {
         router.replace('/home');
       }
     },
-    [composerMode, routeComposerOpen, router],
+    [composerMode, router],
   );
 
   const swipeToOpenDrawer = useMemo(
@@ -442,7 +431,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         ) : null}
       </View>
 
-      {profile || showRightRail ? (
+      {pathname !== '/compose' && (profile !== null || showRightRail) ? (
         <View
           style={[
             styles.rightRail,

@@ -3,7 +3,6 @@
 # Cloudflare Managed robots.txt owns AI content-signal directives; AI Crawl Control/WAF owns edge enforcement.
 User-agent: *
 Disallow: /bookmarks
-Disallow: /compose
 Disallow: /feedback
 Disallow: /follow-requests
 Disallow: /hashtags/

@@ -38,7 +38,6 @@ export type WebMobileShellHeader = Readonly<{
   title:
     | '게시글'
     | '게시물 기본 공개 범위'
-    | '글쓰기'
     | '뮤트 및 차단'
     | '뮤트한 프로필'
     | '설정'
@@ -58,11 +57,12 @@ export function isTimelineRoute(pathname: string) {
 export function getShellRoutePresentation(web: boolean, width: number, pathname: string) {
   const layout = getShellLayout(web, width);
   const settingsWorkspace = layout === 'full' && isSettingsRoute(pathname);
+  const retiredComposeRoute = pathname === '/compose';
 
   return {
     layout,
     settingsWorkspace,
-    showRightRail: layout === 'full' && !settingsWorkspace,
+    showRightRail: layout === 'full' && !settingsWorkspace && !retiredComposeRoute,
   } as const;
 }
 
@@ -76,9 +76,6 @@ export function getWebMobileShellHeader(
     return null;
   }
 
-  if (pathname === '/compose') {
-    return { leading: 'menu', title: '글쓰기' };
-  }
   if (pathname === '/notifications') {
     return { leading: 'menu', title: '알림' };
   }
