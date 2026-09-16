@@ -240,7 +240,6 @@ function ProfileLayoutContent({
   ) : blockedBy && !blocking ? undefined : (
     <FollowButton profile={profile} />
   );
-  const profileAction = relationshipAction;
   const chrome = (
     <>
       {showPageHeader ? (
@@ -248,7 +247,7 @@ function ProfileLayoutContent({
       ) : null}
       <ProfileHero
         key={selectedProfileId}
-        action={profileAction}
+        action={relationshipAction}
         heading={!showPageHeader}
         moreItems={sessionId ? [reportItem] : undefined}
         blockAction={

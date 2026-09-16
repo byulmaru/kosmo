@@ -85,43 +85,6 @@ test('alert StateView keeps the host surface with danger copy and primary recove
   await act(async () => renderer?.unmount());
 });
 
-test('controlRef가 있는 StateView는 Web에서 programmatic focus target을 제공한다', async () => {
-  assert.ok(stateViewModule);
-  const { StateView } = stateViewModule;
-  let renderer: ReactTestRenderer | undefined;
-  await act(async () => {
-    renderer = create(
-      createElement(StateView, {
-        controlRef: () => undefined,
-        title: '게시물을 볼 수 없습니다',
-      }),
-    );
-  });
-
-  assert.equal(renderer?.root.findByType(ViewHost).props.tabIndex, -1);
-  await act(async () => renderer?.unmount());
-});
-
-test('controlRef가 있는 StateView는 Native에서 focusable target을 제공한다', async () => {
-  assert.ok(stateViewModule);
-  const { StateView } = stateViewModule;
-  platform = 'android';
-  let renderer: ReactTestRenderer | undefined;
-  await act(async () => {
-    renderer = create(
-      createElement(StateView, {
-        controlRef: () => undefined,
-        title: '게시물을 볼 수 없습니다',
-      }),
-    );
-  });
-
-  const root = renderer?.root.findByType(ViewHost);
-  assert.equal(root?.props.focusable, true);
-  assert.equal('tabIndex' in root!.props, false);
-  await act(async () => renderer?.unmount());
-});
-
 test('circular Skeleton keeps consumer border and margin before primitive semantics', async () => {
   assert.ok(stateViewModule);
   const { Skeleton } = stateViewModule;

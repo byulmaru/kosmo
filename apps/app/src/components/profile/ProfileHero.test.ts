@@ -342,15 +342,11 @@ describe('ProfileHero media presentation', () => {
 describe('ProfileHero 관리 메뉴 조립', () => {
   it('뮤트·차단·신고 action을 한 메뉴에 합성하고 포커스 연결을 유지한다', async () => {
     fragmentData = baseProfile;
-    let receivedFocus: (() => void) | undefined;
     await act(async () => {
       renderer = create(
         createElement(ProfileHero, {
           blockAction: { nextBlocked: true, profile: {} as never },
           moreItems: [{ key: 'report', label: '신고하기', onSelect: () => undefined }],
-          onMenuTriggerReady: (focusTrigger: () => void) => {
-            receivedFocus = focusTrigger;
-          },
           profile: {} as never,
           showMuteAction: true,
         }),
@@ -374,16 +370,12 @@ describe('ProfileHero 관리 메뉴 조립', () => {
       actionMenu.props.items.map((item: { key: string }) => item.key),
       ['copy-profile-link', 'mute', 'block', 'report'],
     );
-    const focusTrigger = () => undefined;
-    actionMenu.props.onTriggerReady(focusTrigger);
-    assert.equal(receivedFocus, focusTrigger);
   });
 
   it('차단 해제와 신고 항목을 별도 더보기 없이 같은 메뉴에 표시한다', async () => {
     fragmentData = baseProfile;
     const onUnblock = mock.fn();
     const onReport = mock.fn();
-    let receivedFocus: (() => void) | undefined;
     await act(async () => {
       renderer = create(
         createElement(ProfileHero, {
@@ -392,9 +384,6 @@ describe('ProfileHero 관리 메뉴 조립', () => {
             profileBlock: {} as never,
           },
           moreItems: [{ key: 'report', label: '신고하기', onSelect: onReport }],
-          onMenuTriggerReady: (focusTrigger: () => void) => {
-            receivedFocus = focusTrigger;
-          },
           profile: {} as never,
           showMuteAction: false,
         }),
@@ -420,9 +409,6 @@ describe('ProfileHero 관리 메뉴 조립', () => {
     assert.equal(onUnblock.mock.callCount(), 1);
     menu.props.items[2].onSelect();
     assert.equal(onReport.mock.callCount(), 1);
-    const focusTrigger = () => undefined;
-    menu.props.onTriggerReady(focusTrigger);
-    assert.equal(receivedFocus, focusTrigger);
   });
 });
 

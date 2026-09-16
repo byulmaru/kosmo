@@ -236,7 +236,6 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     heading,
     loading,
     moreItems,
-    onMenuTriggerReady,
     profile,
     showMuteAction,
   }: {
@@ -245,11 +244,9 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     heading?: boolean;
     loading?: boolean;
     moreItems?: readonly ReportMenuItem[];
-    onMenuTriggerReady?: (focusTrigger: () => void) => void;
     profile?: { handle: string };
     showMuteAction?: boolean;
   }) => {
-    onMenuTriggerReady?.(() => menuTriggerFocus());
     return createElement(
       'ProfileHero',
       { heading, identity: loading ? 'loading' : profile?.handle, moreItems, showMuteAction },
@@ -265,7 +262,6 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
               item: object;
             }) => {
               focusTriggerRef.current = () => menuTriggerFocus();
-              onMenuTriggerReady?.(() => menuTriggerFocus());
               return createElement('ActionMenu', { items: [item, ...(moreItems ?? [])] });
             },
             surface: 'menu',

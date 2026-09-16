@@ -112,7 +112,7 @@
 
 ### Requirement: Profile Block actor and client-state isolation
 
-**Authority / Provenance:** UI 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `DSN-51`, `DSN-53`; actor·client 상태 권위는 `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-823`, `PROD-813`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block UI는 selected Profile별 actor 상태 격리를 유지해야 하며(MUST), 기존 Profile 정보를 유지하면서 direct Profile route의 viewer 방향 콘텐츠 상태와 Block 관리 목록을 현재 서버 결과에 맞춰야 한다(MUST). Block·Unblock 성공 결과는 현재 Profile 화면과 Block 목록을 서버 정책과 일치하도록 수렴시켜야 하며(MUST), selected Profile 또는 Session 전환 시 이전 Owner의 Block 상태를 새 actor에 재사용해서는 안 된다(MUST NOT). Home·Local·Hashtag timeline, Profile Post List와 Notification을 연결한 cross-slice 상태 수렴은 `PROD-813`의 통합 검증 범위다.
+**Authority / Provenance:** UI 정본은 `docs/design/profile-mute-block.md`, `docs/design/settings.md`, `DSN-51`, `DSN-53`; actor·client 상태 권위는 `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-823`, `PROD-813`; 선행 presentation 구현 증거는 `PROD-861` (정본 아님). Block UI는 selected Profile별 actor 상태 격리를 유지해야 하며(MUST), 기존 Profile 정보를 유지하면서 direct Profile route의 viewer 방향 콘텐츠 상태와 Block 관리 action을 현재 서버 결과에 맞춰야 한다(MUST). Block·Unblock 성공 결과는 현재 Profile 화면과 각 Target Profile의 action 상태를 서버 정책과 일치하도록 수렴시켜야 한다(MUST). 단, 이미 조회한 Block 관리 connection은 pagination snapshot으로 유지하고 화면 이탈이나 재조회 때 서버 membership으로 교체해야 한다(MUST). selected Profile 또는 Session 전환 시 이전 Owner의 Block 상태를 새 actor에 재사용해서는 안 된다(MUST NOT). Home·Local·Hashtag timeline, Profile Post List와 Notification을 연결한 cross-slice 상태 수렴은 `PROD-813`의 통합 검증 범위다.
 
 #### Scenario: Block 성공 뒤 표시 중인 결과가 정책에 수렴한다
 
@@ -150,7 +150,8 @@
 #### Scenario: Unblock 뒤 제거된 관계를 UI가 복구하지 않는다
 
 - **WHEN** Owner가 Block 목록에서 Target의 차단을 해제한다
-- **THEN** 시스템은 최신 Block 상태에 맞게 목록과 Profile surface를 갱신한다
+- **THEN** 시스템은 Target Profile의 최신 Block 상태에 맞게 현재 행의 action과 Profile surface를 갱신한다
+- **AND** 현재 조회한 목록 행은 유지하고 화면 이탈이나 재조회 뒤 서버 connection membership으로 교체한다
 - **AND** 차단 생성 때 제거된 Follow 관계를 client optimistic 상태로 복구하지 않는다
 - **AND** 기본 Profile 정보는 기존 Profile 조회 정책에 따라 계속 표시할 수 있고, Post·상호작용은 이후 새 요청에서 서버가 허용한 경우에만 다시 나타날 수 있다
 
