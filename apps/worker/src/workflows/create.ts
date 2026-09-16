@@ -9,8 +9,11 @@ type PostCreateEffectsInput = {
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
 };
 
-const { createReplyNotificationActivity, sendLocalPostCreateActivity } =
-  proxyActivities<typeof activities>(workflowActivityOptions);
+const {
+  createQuoteNotificationActivity,
+  createReplyNotificationActivity,
+  sendLocalPostCreateActivity,
+} = proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function postCreateEffectsWorkflow({
   postId,
@@ -18,6 +21,7 @@ export async function postCreateEffectsWorkflow({
 }: PostCreateEffectsInput): Promise<void> {
   await settleEffects([
     createReplyNotificationActivity(postId),
+    createQuoteNotificationActivity(postId),
     ...match(origin)
       .with('LOCAL', () => [sendLocalPostCreateActivity(postId)])
       .with('ACTIVITYPUB', () => [])

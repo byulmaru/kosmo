@@ -4,6 +4,7 @@ import { db, Instances, Posts, ProfileFollows, Profiles } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, ProfileState } from '../enums';
 import { postVisibilityCondition } from '../visibility/post';
 import { materializeNotification } from './notification-policy';
+import { materializeCoordinatedNotification } from './quote-notification';
 
 const ReplyParents = alias(Posts, 'reply_notification_parent');
 const ReplyAuthors = alias(Profiles, 'reply_notification_author');
@@ -22,6 +23,7 @@ export const createReplyNotification = async (postId: string): Promise<void> => 
         id: Posts.id,
         recipientProfileId: ReplyParents.profileId,
         relatedProfileId: Posts.profileId,
+        repostSourceId: Posts.repostSourceId,
       })
       .from(Posts)
       .innerJoin(ReplyParents, eq(ReplyParents.id, Posts.replyParentId))
@@ -62,6 +64,18 @@ export const createReplyNotification = async (postId: string): Promise<void> => 
       .then((rows) => rows[0]);
 
     if (!source) {
+      return;
+    }
+
+    if (source.repostSourceId !== null) {
+      await materializeCoordinatedNotification(tx, {
+        eligible: true,
+        kind: NotificationKind.REPLY,
+        quotePostId: source.id,
+        recipientProfileId: source.recipientProfileId,
+        relatedProfileId: source.relatedProfileId,
+        sourceId: source.id,
+      });
       return;
     }
 
