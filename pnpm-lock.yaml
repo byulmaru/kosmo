@@ -28,6 +28,10 @@ patchedDependencies:
 importers:
 
   .:
+    dependencies:
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
     devDependencies:
       '@eslint-react/eslint-plugin':
         specifier: 5.11.3

@@ -20,10 +20,10 @@
 
 - Compose validator, 빈 volume 최초 준비, role/catalog/ACL/object owner 검사, PostgreSQL restart 전후 data 확인
 
-- [ ] 1.1 Local PostgreSQL의 영속 service lifecycle과 안전한 target 검증을 구현한다.
-- [ ] 1.2 Owner/runtime/queue role과 database를 idempotent하게 준비하고 credential 값이 출력되지 않게 한다.
-- [ ] 1.3 Owner migration, runtime Local Instance bootstrap과 official Fedify queue 연결 준비를 구현한다.
-- [ ] 1.4 빈 volume과 반복 준비에 대한 동작 검증을 추가하고 통과시킨다.
+- [x] 1.1 Local PostgreSQL의 영속 service lifecycle과 안전한 target 검증을 구현한다.
+- [x] 1.2 Owner/runtime/queue role과 database를 idempotent하게 준비하고 credential 값이 출력되지 않게 한다.
+- [x] 1.3 Owner migration, runtime Local Instance bootstrap과 official Fedify queue 연결 준비를 구현한다.
+- [x] 1.4 빈 volume과 반복 준비에 대한 동작 검증을 추가하고 통과시킨다.
 
 ## 2. PROD-897 반복 개발 runtime
 
@@ -49,9 +49,9 @@
 
 - Runtime 구성 오류 동작 test, 실제 API GraphQL/Web health/Worker readiness/Temporal/consumer readiness/queue connection, dev 재실행 전후 data 확인
 
-- [ ] 2.1 Runtime 및 queue target/key 검증과 privileged environment 제거를 동작 test로 먼저 정의한다.
-- [ ] 2.2 전체 workspace service와 독립 health port를 기본 dev 실행에 연결한다.
-- [ ] 2.3 일반 dev 경로가 destructive 초기화를 호출하지 않고 data를 보존하는지 실제 process로 검증한다.
+- [x] 2.1 Runtime 및 queue target/key 검증과 privileged environment 제거를 동작 test로 먼저 정의한다.
+- [x] 2.2 전체 workspace service와 독립 health port를 기본 dev 실행에 연결한다.
+- [x] 2.3 일반 dev 경로가 destructive 초기화를 호출하지 않고 data를 보존하는지 실제 process로 검증한다.
 
 ## 3. PROD-897 운영 지침과 최종 검증
 
@@ -75,8 +75,8 @@
 
 - OpenSpec strict validation, README/script guidance review, repository required checks, latest merge tree integration test, unresolved review thread와 final correctness/over-engineering review
 
-- [ ] 3.1 두 Vault path의 정확한 key와 목적, 최초 준비와 평상시 실행, credential/storage 경계를 문서화한다.
-- [ ] 3.2 최신 main과 안전하게 동기화하고 conflict에서 main 및 PROD-897 의도를 모두 보존한다.
-- [ ] 3.3 최종 merge tree에서 required validation과 PROD-897 통합 검증을 실행한다.
+- [x] 3.1 두 Vault path의 정확한 key와 목적, 최초 준비와 평상시 실행, credential/storage 경계를 문서화한다.
+- [x] 3.2 최신 main과 안전하게 동기화하고 conflict에서 main 및 PROD-897 의도를 모두 보존한다.
+- [x] 3.3 최종 merge tree에서 required validation과 PROD-897 통합 검증을 실행한다.
 - [ ] 3.4 Correctness 및 over-engineering review finding을 수정하고 unresolved thread를 확인한다.
 - [ ] 3.5 완료 증거에 맞춰 Linear, PR 본문과 Draft/Ready 상태를 정리한다.
