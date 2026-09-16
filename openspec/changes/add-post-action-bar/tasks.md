@@ -358,7 +358,8 @@ Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp targ
 - [x] 9.4 App·Storybook·lint·OpenSpec 검증과 Figma 최종 대조를 완료하고 실제 Native 실행 결과·미검증 항목을 기록한다.
 - [x] 9.5 승인된 Web 목록 위12·아래8과 상세 frame 상하12 여백을 기존 surface 경계에 적용하고 Native 기존 여백·target을 보존한다.
 - [x] 9.6 기존 geometry Storybook·앱 검증과 390/1024/1440 Web 시각·상호작용 QA를 통과시키고, Figma Center 목록4종·상세3종의 승인·동기화 상태를 기록한다.
-- [x] 9.7 Native 목록·current connector를 16px inset의 Avatar 중심선 x=40에, Web 목록·current connector를 x=32에 맞추는 실제 렌더 회귀를 추가한다.
+- [x] 9.7 목록·current connector를 당시 Web x=32·Native x=40 계약에 맞추는 실제 렌더 회귀를 추가한다. 이후 9.9에서 shell presentation 공용 metric으로 대체한다.
+- [x] 9.9 Post list inset·thread connector를 shell presentation 기반 공용 metric으로 정렬한다.
 
 **Web Spacing Verification Record (2026-09-12)**
 
@@ -379,6 +380,7 @@ Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp targ
 
 **Native thread connector verification record (2026-09-12)**
 
-- `PostThreadLayout` 실제 renderer test가 Web 목록·current connector `left=32`, iOS·Android 목록·current connector `left=40`를 style props로 검증한다.
-- 이 회귀는 `PostListItem`과 current content의 Web 8px·Native 16px left inset 및 list/current connector 축 정렬을 확인하며, Yoga layout·실제 Native touch·VoiceOver·TalkBack은 검증하지 않는다.
+- `PostThreadLayout` 실제 renderer test가 당시 Web 목록·current connector `left=32`, iOS·Android 목록·current connector `left=40`를 style props로 검증했다. 2026-09-16 후속 검증은 Web mobile을 `left=40`으로 정렬한다.
+- 후속 회귀는 `PostListItem`과 current content의 shell presentation별 left inset 및 list/current connector 축 정렬을 확인하며, Yoga layout·실제 Native touch·VoiceOver·TalkBack은 검증하지 않는다.
 - 사용자 승인 후 Figma `PostThreadLayout` canonical composition 5개 상태의 목록·current Avatar 중심과 connector를 x=40으로 동기화했다. 기존 Mobile `PostLayout`의 40px Avatar는 current inset 20px, production Native의 48px Avatar는 inset 16px을 사용해 같은 중심축을 만들며 readback과 대표 screenshot으로 확인했다.
+- shell `mobile`은 Web 390/767과 Native tablet까지 inset16·connector x40을 사용하고, Web 768/900/1400의 `compact`·`full`은 inset8·connector x32를 사용하는 회귀를 추가했다.

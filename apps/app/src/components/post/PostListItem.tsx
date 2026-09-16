@@ -12,6 +12,7 @@ import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
 import { usePostComposerBinding } from './PostComposerCoordinator';
+import { usePostListMetrics } from './postListMetrics';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
@@ -109,6 +110,7 @@ export function PostListItem({
   showReplyAttribution?: boolean;
 }) {
   const theme = useTheme();
+  const postListMetrics = usePostListMetrics();
   const restoreQuoteTriggerFocusRef = useRef<(() => void) | null>(null);
   const post = useFragment(PostListItemFragment, postKey);
   const openViewer = usePostMediaViewerHost();
@@ -176,14 +178,14 @@ export function PostListItem({
     [openViewer, post.id],
   );
   const standardCardStyle = [
-    Platform.OS === 'web' ? styles.card : styles.nativeCard,
+    { paddingHorizontal: postListMetrics.inset },
     styles.standardCard,
     Platform.OS === 'web' && styles.webCardBottom,
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
   ];
   const compactCardStyle = [
-    Platform.OS === 'web' ? styles.card : styles.nativeCard,
+    { paddingHorizontal: postListMetrics.inset },
     styles.compactCard,
     Platform.OS === 'web' && styles.webCardBottom,
     showDivider && styles.cardDivider,
@@ -424,13 +426,6 @@ function PostListRow({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    paddingLeft: Platform.OS === 'web' ? spacing.md : spacing.sm,
-    paddingRight: Platform.OS === 'web' ? spacing.xl : spacing.sm,
-  },
-  nativeCard: {
-    paddingHorizontal: spacing.lg,
-  },
   standardCard: { paddingBottom: spacing.xs, paddingTop: spacing.md },
   compactCard: { paddingBottom: 1, paddingTop: spacing.sm },
   webCardBottom: { paddingBottom: spacing.sm },

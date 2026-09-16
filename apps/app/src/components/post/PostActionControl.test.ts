@@ -13,18 +13,17 @@ import type { PostThreadLayout as PostThreadLayoutExport } from './PostThreadLay
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const platform = { OS: 'web' };
-const theme = { borderSubtle: 'border', primary: 'primary', textSecondary: 'secondary' };
+let windowWidth = 1_024;
+const theme = {
+  borderSubtle: 'border',
+  primary: 'primary',
+  textSecondary: 'secondary',
+};
 const require = createRequire(import.meta.url);
 const nativePlatforms = [
   ['ios', 44],
   ['android', 48],
 ] as const;
-const threadPlatforms = [
-  ['web', 32],
-  ['ios', 40],
-  ['android', 40],
-] as const;
-
 const StubIcon = (props: { color: string; fill?: string; size: number; strokeWidth?: number }) =>
   createElement('Icon', props);
 
@@ -73,6 +72,7 @@ mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
   View: 'View',
+  useWindowDimensions: () => ({ height: 800, width: windowWidth }),
 });
 mockModule('react-relay', {
   graphql: () => ({}),
@@ -92,6 +92,7 @@ mockModule(require.resolve('lucide-react-native'), {
 mockModule('@/theme/ThemeProvider', { useTheme: () => theme });
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
+  breakpoints: { compact: 768, full: 1_280 },
   radii: { full: 999 },
   spacing: { lg: 16, md: 12, sm: 8, xs: 4, xxl: 32, xxxl: 48 },
   typography: { md: { fontSize: 16 }, sm: { fontSize: 14, lineHeight: 20 } },
@@ -107,7 +108,9 @@ mockModule(new URL('./RepostAction.tsx', import.meta.url), { RepostAction: 'Repo
 mockModule('@/components/profile/ProfileNameBlock', {
   ProfileNameBlock: 'ProfileNameBlock',
 });
+mockModule('@/components/ui/ActionMenu', { ActionMenu: 'ActionMenu' });
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
+mockModule('@/components/ui/TimestampText', { TimestampText: 'Text' });
 mockModule(new URL('./PostActionSurface.tsx', import.meta.url), {
   PostActionSurface: 'PostActionSurface',
 });
@@ -151,6 +154,7 @@ afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = null;
   platform.OS = 'web';
+  windowWidth = 1_024;
 });
 
 function flattenStyle(style: unknown): Record<string, unknown> {
@@ -353,13 +357,18 @@ test('Native PostActionBar wiring keeps target sizes and the zero-gap trailing g
   }
 });
 
-test('PostListItem Native production cards use the mobile 16px inset while Web stays at 8px', async () => {
-  for (const [os, expectedPadding, expectedBottom] of [
-    ['ios', 16, 4],
-    ['android', 16, 4],
-    ['web', 8, 8],
+test('PostListItem derives its inset from the shell presentation', async () => {
+  for (const [os, width, expectedPadding, expectedBottom] of [
+    ['ios', 1_024, 16, 4],
+    ['android', 1_024, 16, 4],
+    ['web', 390, 16, 8],
+    ['web', 767, 16, 8],
+    ['web', 768, 8, 8],
+    ['web', 900, 8, 8],
+    ['web', 1_400, 8, 8],
   ] as const) {
     platform.OS = os;
+    windowWidth = width;
     const root = await renderListItem({ post: {} as never, showDivider: false });
     const card = root.findByProps({ role: 'article' });
     assert.equal(flattenStyle(card.props.style).paddingHorizontal, expectedPadding);
@@ -367,16 +376,25 @@ test('PostListItem Native production cards use the mobile 16px inset while Web s
   }
 });
 
-test('PostThreadLayout aligns every connector to the platform-specific avatar axis', async () => {
-  for (const [os, expectedConnectorLeft] of threadPlatforms) {
+test('PostThreadLayout derives current inset and connector axis from the shell presentation', async () => {
+  for (const [os, width, expectedInset, expectedConnectorLeft] of [
+    ['ios', 1_024, 16, 40],
+    ['android', 1_024, 16, 40],
+    ['web', 390, 16, 40],
+    ['web', 767, 16, 40],
+    ['web', 768, 8, 32],
+    ['web', 900, 8, 32],
+    ['web', 1_400, 8, 32],
+  ] as const) {
     platform.OS = os;
+    windowWidth = width;
     const root = await renderThreadLayout();
     const currentPost = findByType(
       root.findByProps({ testID: 'post-thread-current-current' }),
       'Post',
     );
 
-    assert.equal(flattenStyle(currentPost.parent?.props.style).paddingLeft, os === 'web' ? 8 : 16);
+    assert.equal(flattenStyle(currentPost.parent?.props.style).paddingLeft, expectedInset);
     assert.equal(
       flattenStyle(
         findByTestID(root, 'post-thread-connector-ancestor-root-ancestor-child-before').props.style,

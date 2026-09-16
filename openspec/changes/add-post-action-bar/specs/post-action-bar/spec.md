@@ -242,7 +242,7 @@
 - **THEN** Web 일반 Text·Media 카드는 상단 12px·하단 8px padding을 사용하고 목록 전용 Action Bar slot은 상단 8px·하단 0px padding을 제공한다
 - **AND** Web 순수 Repost와 Quote 카드는 상단 8px을 유지하고 모든 Web 목록 유형에서 마지막 presentation(본문·미디어·Source preview 또는 Reaction Summary)과 Bar 사이가 12px, Bar 하단과 구분선 안쪽 사이가 8px이다
 - **AND** Native의 기존 세로 여백과 iOS 44pt·Android 48dp target은 변경하지 않는다
-- **AND** 모든 목록 카드의 좌우 padding은 Web 8px, Native 16px이다
+- **AND** 모든 목록 카드의 좌우 padding은 shell `mobile` presentation에서 16px, `compact`·`full` presentation에서 8px이다
 - **AND** 1px 카드 구분선은 입력·메뉴 외곽선용 `border`가 아니라 저강도 semantic `divider` color를 사용한다
 - **AND** 순수 Repost attribution은 20px line box를 사용하고 아래 Source 표준행과의 추가 gap을 두지 않는다
 - **AND** Quote는 Source preview 내부 하단 padding 4px을 유지하며 Reaction Summary가 없으면 Source preview border부터 Bar까지 Web 12px, Native 기존 8px을 제공한다
@@ -267,9 +267,9 @@
 - **THEN** 현재 `PostLayout`은 48px Avatar와 12px gap의 Header 뒤 8px 간격으로 Body를 full width에 배치하고, metadata 하단부터 8px 뒤에 Reaction Summary를 같은 왼쪽 경계와 너비로 배치한다
 - **AND** Reaction Summary가 있으면 그 아래 4px에 bordered Action Bar frame을 배치하고, Summary가 없으면 metadata 하단부터 frame 상단 border까지 8px을 유지한다
 - **AND** Action Bar frame은 full-width 상·하 1px `borderSubtle`과 Web 상하 12px(Native 기존 8px) padding 사이에 Action Bar만 포함하며 이 geometry를 connector gutter로 사용하지 않는다
-- **AND** current row는 Web 왼쪽 8px·Native 왼쪽 16px·공통 오른쪽 12px·상단 16px·하단 4px padding을 사용한다
-- **AND** 조상·하위 목록 row의 connector left는 Web `PostListItem` 8px inset에 따라 x=32, Native 16px inset에 따라 x=40에 맞춘다
-- **AND** current connector left는 `currentContent`의 Web 8px·Native 16px left padding과 48px Avatar 중심선에 따라 Web x=32, iOS·Android x=40에 맞춘다
+- **AND** current row는 shell `mobile` presentation에서 왼쪽 16px, `compact`·`full` presentation에서 왼쪽 8px을 사용하고 공통 오른쪽 12px·상단 16px·하단 4px padding을 사용한다
+- **AND** 조상·하위 목록 row의 connector left는 공용 Post list inset과 48px Avatar 반지름에서 파생해 `mobile` x=40, `compact`·`full` x=32에 맞춘다
+- **AND** current connector left도 같은 공용 metric을 사용해 `mobile` x=40, `compact`·`full` x=32에 맞춘다
 - **AND** connector는 조상 구간과 마지막 조상→현재 경계에만 표시되고 현재→첫 하위 Reply와 하위 Reply 사이에는 표시되지 않는다
 - **AND** current row 뒤에는 generic thread divider를 렌더링하지 않는다
 

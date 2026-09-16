@@ -1,6 +1,7 @@
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { usePostListMetrics } from './postListMetrics';
 import { PostThreadConnector } from './PostThreadConnector';
 import type React from 'react';
 
@@ -31,7 +32,7 @@ export function PostThreadLayout<TPost>({
   renderPost,
 }: PostThreadLayoutProps<TPost>): React.ReactElement {
   const theme = useTheme();
-  const connectorLeft = Platform.OS === 'web' ? spacing.xxl : spacing.xxl + spacing.sm;
+  const postListMetrics = usePostListMetrics();
   const rows = [
     ...ancestors.map((item) => ({ item, role: 'ancestor' as const })),
     { item: current, role: 'current' as const },
@@ -62,24 +63,19 @@ export function PostThreadLayout<TPost>({
               <PostThreadConnector
                 style={[
                   role === 'current' ? styles.currentConnectorBefore : styles.listConnectorBefore,
-                  { left: connectorLeft },
+                  { left: postListMetrics.connectorLeft },
                 ]}
                 testID={`post-thread-connector-${previous.item.id}-${item.id}-before`}
               />
             ) : null}
             {connectsToNext ? (
               <PostThreadConnector
-                style={[styles.listConnectorAfter, { left: connectorLeft }]}
+                style={[styles.listConnectorAfter, { left: postListMetrics.connectorLeft }]}
                 testID={`post-thread-connector-${item.id}-${next.item.id}-after`}
               />
             ) : null}
             {role === 'current' ? (
-              <View
-                style={[
-                  styles.currentContent,
-                  { paddingLeft: Platform.OS === 'web' ? spacing.sm : spacing.lg },
-                ]}
-              >
+              <View style={[styles.currentContent, { paddingLeft: postListMetrics.inset }]}>
                 {renderedPost}
               </View>
             ) : (

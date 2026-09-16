@@ -4410,7 +4410,7 @@ export const OrdinaryPost: Story = {
     );
     expect(canvas.queryByTestId('source-post-preview')).not.toBeInTheDocument();
     expect(article.querySelectorAll('[data-testid="post-list-standard-row"]')).toHaveLength(1);
-    expect(article).toHaveStyle({ paddingLeft: '12px', paddingRight: '24px' });
+    expect(article).toHaveStyle({ paddingLeft: '8px', paddingRight: '8px' });
     expect(bodyShortcut).not.toHaveAttribute('role', 'link');
     expect(bodyShortcut.closest('[role="link"]')).toBeNull();
     const timestampLink = standardRow.querySelector<HTMLAnchorElement>('a[href="/@kosmo/short"]');

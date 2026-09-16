@@ -135,6 +135,7 @@ mock.module('@/theme/ThemeProvider', {
 
 mock.module('@/theme/tokens', {
   exports: {
+    breakpoints: { compact: 768, full: 1_280 },
     radii: { full: 9999 },
     spacing: { lg: 24, md: 16, sm: 12, xs: 8, xxl: 32, xxxl: 48 },
   },
