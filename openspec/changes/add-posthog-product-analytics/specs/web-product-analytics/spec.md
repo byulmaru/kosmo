@@ -212,7 +212,7 @@
 
 ### Requirement: 개인정보 고지와 실제 수집의 일치
 
-**Authority / Provenance:** [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 포함 범위·완료 조건과 `2026-08-31 명세 구체화 범위 확인`; [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정`; `docs/design/breakpoints.md`의 개인정보 처리방침 진입 계약 — 공개 개인정보 처리방침은 실제 PostHog 제공자와 처리 위치, 표준 자동 이벤트, URL·referrer·session metadata, 브라우저 저장, 원격 설정과 Session Replay 보호를 설명해야 한다(MUST). 표준 이벤트의 `q`·SDK 기본 click ID·referrer·session에서 파생되는 검색·캠페인 metadata와 `utm_*` 원문 수집을 Replay masking과 구분해야 한다(MUST). 검색 입력은 자유 형식이므로 예상하지 못한 개인정보 입력 가능성과 현재 공개 Profile handle 검색이라는 판단 근거를 함께 다뤄야 하며(MUST), 게시물·본문·전문 검색 또는 더 넓은 검색 의미를 도입하기 전에 이 수집 결정을 재검토해야 한다(MUST). 기존 공개 `/privacy` 접근과 canonical 진입 위치를 유지해야 한다(MUST).
+**Authority / Provenance:** [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 포함 범위·완료 조건과 `2026-08-31 명세 구체화 범위 확인`; [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 `2026-09-16 PostHog 국외 처리 고지 방식 결정` 댓글(`fe9c8467-3ebb-4a15-bdbf-872810de964a`); [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정`; `docs/design/breakpoints.md`의 개인정보 처리방침 진입 계약 — 공개 개인정보 처리방침은 실제 PostHog 제공자와 처리 위치, 표준 자동 이벤트, URL·referrer·session metadata, 브라우저 저장, 원격 설정과 Session Replay 보호를 설명해야 한다(MUST). 표준 이벤트의 `q`·SDK 기본 click ID·referrer·session에서 파생되는 검색·캠페인 metadata와 `utm_*` 원문 수집을 Replay masking과 구분해야 한다(MUST). 검색 입력은 자유 형식이므로 예상하지 못한 개인정보 입력 가능성과 현재 공개 Profile handle 검색이라는 판단 근거를 함께 다뤄야 하며(MUST), 게시물·본문·전문 검색 또는 더 넓은 검색 의미를 도입하기 전에 이 수집 결정을 재검토해야 한다(MUST). 기존 공개 `/privacy` 접근과 canonical 진입 위치를 유지해야 한다(MUST).
 
 #### Scenario: 사용자가 개인정보 처리방침을 확인한다
 
@@ -229,10 +229,18 @@
 
 #### Scenario: 보존기간 또는 처리 조건이 확인되지 않았다
 
-- **WHEN** 일반 이벤트의 실제 보존·삭제 조건, 국외 처리 고지 조건 또는 개정 시행일이 확정되지 않았다
-- **THEN** 확인되지 않은 조건을 공개 방침에 확정된 사실로 넣거나 개인정보 고지 작업을 완료로 처리하지 않는다
+- **WHEN** 일반 이벤트의 실제 보존·삭제 조건 또는 개정 시행일이 확정되지 않았다
+- **THEN** 확인되지 않은 조건을 공개 방침에 확정된 사실로 넣거나 과거 날짜를 새 PostHog 처리의 시행일로 사용하지 않는다
+- **AND** PostHog Cloud US 국외 이전에는 별도 동의가 아니라 제28조의8 제1항 제3호 가목의 계약 체결·이행에 필요한 처리위탁·보관 및 이 방침 공개 경로를 적용한다고 고지한다
 - **AND** Replay의 30일 retention을 전체 분석 데이터의 보존기간으로 사용하지 않는다
 - **AND** 미구현 Account 분석 데이터 자동 삭제나 opt-out UI를 제공한다고 고지하지 않는다
+
+#### Scenario: PostHog Cloud US 국외 이전을 고지한다
+
+- **WHEN** 공개 개인정보 처리방침이 PostHog Cloud US로의 제품 분석·Session Replay 이전을 설명한다
+- **THEN** PostHog, Inc.와 연락처, 미국, 이전 항목·목적, 서비스 이용 시 암호화된 네트워크 전송, 보유 조건을 확인할 수 있다
+- **AND** 제28조의8 제1항 제3호 가목의 계약 체결·이행에 필요한 처리위탁·보관 및 이 방침 공개를 적용한다고 확인할 수 있다
+- **AND** 이용자는 hello@byulmaru.co로 거부·제한을 요청하거나 브라우저 추적 방지 기능으로 전송을 제한할 수 있고, 거부·제한 시 분석·Replay만 제한되며 핵심 기능은 계속 이용할 수 있음을 확인할 수 있다
 
 ### Requirement: PostHog 운영 전환과 장애 대응 안내
 

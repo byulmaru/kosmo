@@ -184,7 +184,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 
 **Authority / Provenance**
 
-- [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 개인정보 처리방침·runbook·cross-slice 검증 계약과 `2026-08-31 명세 구체화 범위 확인`
+- [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 개인정보 처리방침·runbook·cross-slice 검증 계약과 `2026-08-31 명세 구체화 범위 확인`, `2026-09-16 PostHog 국외 처리 고지 방식 결정` 댓글(`fe9c8467-3ebb-4a15-bdbf-872810de964a`)
 - `docs/design/breakpoints.md`의 공개 `/privacy`와 진입 위치, `docs/domain/objects/account.md`·`docs/domain/objects/session.md`의 기존 Account·Session 경계
 - `PROD-819`의 Web runtime과 `PROD-820`의 Cloud·build 계약. 그룹 1~5의 handoff는 구현·검증 증거로 대조하되 제품 authority를 대신하지 않는다.
 - `PROD-839`의 OpenPanel build/deployment·외부 설정 cleanup 계약
@@ -202,7 +202,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 - PROD-741 replay acceptance가 시작되기 전에 이 cross-slice gate를 완료한다.
 - `/e/`, `/flags`, Replay·performance·heatmap·console과 브라우저 저장소의 관측 범위를 구분한다. 미확인 payload까지 보호된다고 주장하거나 범용 sanitizer를 새로 구현하지 않는다.
 - Replay 30일 retention과 일반 이벤트 보존·삭제 조건을 구분한다. 일반 이벤트 설정 숫자만으로 자동 삭제를 단정하거나 미구현 삭제 자동화·opt-out UI를 고지하지 않는다.
-- 공개 고지의 시행일·보존·국외 처리 조건은 확인·확정한 내용만 반영한다. 현재 미확정 항목은 design의 Open Questions에 기록하며 새 수집·보존 정책을 임의로 선택하지 않는다.
+- 공개 고지의 시행일·일반 이벤트 보존·삭제는 확인·확정한 내용만 반영하고, 현재 미확정 항목은 design의 Open Questions에 기록한다. 국외 이전은 2026-09-16 결정의 제28조의8 제1항 제3호 가목 경로와 필수 고지 항목을 반영하며 별도 동의나 12개월 자동 삭제를 임의로 추가하지 않는다.
 - SDK·Cloud/build·외부 설정 삭제를 이 그룹으로 가져오지 않는다. 실제 사용자 데이터·project key·credential을 검증 문서에 복제하지 않는다.
 
 **Verification**
@@ -214,7 +214,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 - 공개 `/privacy`와 기존 진입 위치, provider·브라우저 저장·보존·삭제 설명을 확인한다. 기존 OpenPanel 문구와 provider에 맞지 않는 삭제·장애 대응 안내가 활성 문서에 남지 않는지 검사한다.
 - 각 기록에서 source commit 또는 build, 관측일·설정/요청 표면, 합성 데이터 사용 여부, 결과·미검증 범위를 구분한다. 병합된 선행 PR의 테스트 숫자를 현재 결과로 재사용하지 않는다.
 
-- [ ] 6.1 표준 automatic event, URL/referrer/session metadata, persistence, remote config와 Replay 보호를 실제 개인정보 처리방침에 반영한다.
+- [x] 6.1 표준 automatic event, URL/referrer/session metadata, persistence, remote config와 Replay 보호를 실제 개인정보 처리방침에 반영한다.
 - [ ] 6.2 Cloud 설정·배포·장애 대응·수집 확인 runbook을 작성하고 OpenPanel 운영 계약을 제거한다.
 - [ ] 6.3 PR #685의 merge commit `47fb36f52`와 PR #653의 merge commit `2176b7e38`을 모두 포함한 production-equivalent Web flow에서 PROD-819와 PROD-820 결과를 cross-slice 검증한다.
 - [ ] 6.4 `/flags`를 포함한 원격 설정, persistence와 performance·heatmap·console·Replay의 실제 수집 상태 및 보호 범위를 표면별로 대조하고 검증 공백을 기록한다.

@@ -172,6 +172,18 @@
 - Consequences: 미확인 표면과 고지 조건은 검증 공백으로 남고, 확인 없이 완료를 선언하지 않는다. 공개 route와 기존 Account·Session 계약은 유지한다.
 - Confirmation / Follow-up: 그룹 6의 고지·runbook·통합 증거와 PROD-741/575 handoff를 대조한다.
 
+### PostHog Cloud US 국외 처리는 개인정보처리방침 개정·공개 경로로 고지한다
+
+- Decision Date: 2026-09-16
+- Decision Class: Derived Contract
+- Authority / Provenance: [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 `2026-09-16 PostHog 국외 처리 고지 방식 결정` 댓글(`fe9c8467-3ebb-4a15-bdbf-872810de964a`); 사용자 정혜주(HJSmiley)의 결정
+- Status: Active
+- Context / Problem: 베타 단계에서 별도 동의 UI·개별 체크박스를 추가하지 않고 PostHog Cloud US의 제품 분석·Session Replay 국외 처리를 공개 개인정보처리방침 개정과 사전 공지로 고지해야 한다.
+- Decision Outcome: 국외 이전 근거는 개인정보 보호법 제28조의8 제1항 제1호의 별도 동의가 아니라, 같은 항 제3호 가목의 계약 체결·이행에 필요한 처리위탁·보관 및 개인정보처리방침 공개 경로로 적용한다. 공개 방침에는 이전받는 자와 연락처, 국가, 이전 항목·목적, 시기·방법, 보유 조건, 거부 방법·절차·효과를 실제 동작에 맞춰 기재한다. 거부·제한 시 PostHog 제품 분석·Session Replay만 제한되고 Kosmo 핵심 기능은 계속 이용할 수 있음을 고지한다.
+- Alternatives Considered: 별도 동의 UI·개별 체크박스를 추가하는 경로는 베타 단계의 코스트와 현재 전달 범위를 넘어 선택하지 않았다. 별도 동의 경로를 제28조의8 제1항 제1호로 고지하는 방식은 현재 사용자의 결정과 달라 적용하지 않는다.
+- Consequences: 처리방침 개정·사전 공지로 고지하되 실제 시행일은 별도 공지로 확정하고, 일반 이벤트에 12개월 자동 삭제를 약속하지 않는다. 선택적 제품 분석을 제3호 가목의 계약 이행에 필요한 처리위탁으로 보는 법적 판단의 잔여 위험을 인지하며, 이 결정은 실제 계약·DPA 체결 사실을 대신 증명하지 않는다. Session Replay 10%·30일과 기존 masking 경계는 유지한다.
+- Confirmation / Follow-up: privacy 화면 검증 뒤 task 6.1만 해당 범위에서 완료할 수 있다. 정확한 시행일과 일반 이벤트 보존·삭제 조건은 Remaining Decisions로 남기며, 실제 계약·DPA 및 운영 증거는 기존 owner의 확인 범위에서 다룬다.
+
 ## Remaining Decisions
 
 ### PROD-795 공개 고지 조건의 미확정 항목
@@ -180,9 +192,8 @@
 
 - 개정 시행일과 사전 고지 일정.
 - 일반 이벤트의 실제 보존·삭제 운영 기준. Replay 30일 또는 API의 `event_retention_months=12`를 전체 이벤트의 자동 삭제 보장으로 사용하지 않는다.
-- 미국 처리에 관한 실제 계약·이전 고지 조건과 적용할 법적 근거.
 
-소유자는 PROD-795다. 기존 metadata 수집·Replay 보호 계약과 사실 확인을 넘어 새 제품·보존 정책을 선택해야 한다면 canonical·Linear에 결정과 승인을 먼저 기록한 뒤 이 명세를 갱신한다. 그 전에는 후보 정책을 Active decision이나 구현 근거로 사용하지 않는다.
+소유자는 PROD-795다. 위 두 항목을 확정해야 할 때 canonical·Linear에 결정과 승인을 먼저 기록한 뒤 이 명세를 갱신한다. 국외 처리 경로는 위 Active decision에 따라 적용하며, 별도 동의나 12개월 자동 삭제를 구현 근거로 추가하지 않는다.
 
 ## Superseded Decisions
 
