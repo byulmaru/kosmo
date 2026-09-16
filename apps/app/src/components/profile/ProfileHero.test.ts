@@ -389,7 +389,6 @@ describe('ProfileHero 관리 메뉴 조립', () => {
         createElement(ProfileHero, {
           blockAction: {
             nextBlocked: false,
-            onFeedback: onUnblock,
             profileBlock: {} as never,
           },
           moreItems: [{ key: 'report', label: '신고하기', onSelect: onReport }],

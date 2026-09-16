@@ -27,15 +27,11 @@ import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
-import type { ProfileBlockActionTarget, ProfileBlockFeedback } from './ProfileBlockAction';
-
-type ProfileHeroBlockAction = ProfileBlockActionTarget & {
-  onFeedback?: (feedback: ProfileBlockFeedback) => void;
-};
+import type { ProfileBlockActionTarget } from './ProfileBlockAction';
 
 type ProfileHeroProps = {
   action?: ReactNode;
-  blockAction?: ProfileHeroBlockAction;
+  blockAction?: ProfileBlockActionTarget;
   heading?: boolean;
   moreItems?: readonly ActionMenuItem[];
   onMenuTriggerReady?: (focusTrigger: () => void) => void;
