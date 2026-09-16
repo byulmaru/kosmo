@@ -4,11 +4,11 @@ Read this entire file when changing shared React Native presentation, layout, ac
 
 ## UI Composition And State Ownership
 
-- 개별 action은 대상의 fragment·mutation·pending/error 상태와 Relay/cache 갱신을 소유한다. 같은 관계의 중복 fragment/prop·ID를 받아 합치지 않으며, 메뉴·리스트·화면은 action lifecycle 대신 viewer 방향의 노출·순서·layout·조합을 소유한다.
-- 정상적인 관계 mutation으로 생긴 Environment/Store remount를 보상하려고 module 전역 focus registry/Map, actor lifecycle key, timer를 추가하지 않는다. focus는 현재 React tree의 trigger·heading ref와 modal `onDismiss`로 복원하고, actor A→B 전환 뒤 늦은 응답 격리에 필요한 action-local guard는 유지한다.
-- UI close나 toast 같은 후속 표시 callback과 명시적인 controlled/presentation API는 유효한 조합이다. callback을 전면 금지하지 않으며, callback 때문에 서버 상태 변경 책임을 메뉴·리스트·화면으로 옮기지 않는다.
+- 개별 action은 자신의 실행과 그에 필요한 데이터·상태·상호작용(fragment·mutation·pending/error·Relay/cache 갱신 등)을 소유한다. 같은 관계의 중복 fragment/prop·ID를 받아 합치지 않는다. 여러 행동의 노출·순서·배치는 해당 조합의 의미와 정책을 소유하는 경계에서 결정한다. 그 경계를 메뉴·화면 같은 컴포넌트 종류나 단순한 부모·자식 위치로 고정하지 않는다.
+- 정상적인 관계 mutation으로 생긴 Environment/Store remount를 보상하려고 module 전역 focus registry/Map, actor lifecycle key, timer를 추가하지 않는다. 상위 RelayActorBoundary가 이미 remount하는 route에 opaque actor key를 중복 배선하지 않는다. focus는 현재 React tree의 trigger·heading ref와 modal `onDismiss`로 복원하고, actor A→B 전환 뒤 늦은 응답 격리에 필요한 action-local guard는 유지하되 일시적인 toast 순서만 맞추려고 generation harness를 만들지 않는다.
+- 공개 callback은 실제 production 조정이 필요하거나 명시적인 controlled/presentation 계약일 때만 둔다. UI close나 toast 같은 후속 표시 callback은 허용하지만, 테스트 계측용 lifecycle callback이나 아직 production caller가 없는 미래 mutation callback을 공개 API로 올리지 않는다. callback 때문에 action이 소유할 서버 상태 변경 책임을 조합 경계로 떠넘기지 않는다.
 - 공용 primitive, `children`, 조합 지점은 공유하되 화면·목록 전체를 재사용하려고 `mode`/`options` prop으로 자식의 세부 상태를 노출하지 않는다.
-- 실제 Storybook-first 계약은 production caller보다 먼저 제공될 수 있다. caller가 아직 없다는 이유만으로 이를 미래 기능으로 일괄 삭제하지 않는다.
+- Storybook-first presentation은 production caller보다 먼저 제공할 수 있다. caller가 없다는 이유만으로 표시 UI를 삭제하지 않는다.
 - `open`·`disabled`·`quote`·`reply`처럼 서로 관련된 상태의 유효한 조합은 기존 coordinator·type·정규화로 보장한다. 실제 전이 복잡도나 별도 계약이 생긴 근거 없이 새 state machine을 필수로 도입하지 않는다.
 
 ## React Native Components And Styles
