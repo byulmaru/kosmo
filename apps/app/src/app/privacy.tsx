@@ -220,10 +220,12 @@ export default function PrivacyScreen() {
           />
         </PolicyTable>
         <PolicyParagraph>
-          이용자는 hello@byulmaru.co로 PostHog 관련 국외 이전의 거부 또는 제한을 요청할 수 있고,
-          브라우저 추적 방지 기능으로 분석 정보 전송을 제한할 수도 있습니다. 요청 시 본인 확인 후
-          PostHog 제품 분석 및 Session Replay 전송을 제한하고 처리 결과를 안내합니다. 거부·제한 시
-          분석 및 Replay만 제한되며, Kosmo의 핵심 기능 이용에는 영향을 주지 않습니다.
+          이용자는 hello@byulmaru.co로 국외 이전의 거부 또는 제한을 요청할 수 있습니다. Cloudflare
+          국외 이전을 거부하면 네트워크·보안·콘텐츠 제공이 제한되어 Kosmo의 전부 또는 일부를
+          이용하기 어려울 수 있습니다. PostHog 관련 이전은 같은 연락처로 거부 또는 제한을 요청할 수
+          있고, 브라우저 추적 방지 기능으로 분석 정보 전송을 제한할 수도 있습니다. 요청 시 본인 확인
+          후 PostHog 제품 분석 및 Session Replay 전송을 제한하고 처리 결과를 안내합니다. PostHog
+          거부·제한 시 분석 및 Replay만 제한되며, Kosmo의 핵심 기능 이용에는 영향을 주지 않습니다.
         </PolicyParagraph>
       </PolicySection>
 
