@@ -188,7 +188,8 @@
 - **WHEN** 인증된 selected Owner의 Block이 required cleanup과 관계 생성을 완료한다
 - **THEN** mutation은 `success: true`와 생성한 non-null Profile Block 관계를 함께 반환한다
 - **AND** client는 별도 Block 관계 ID나 nullable projection 복구 경로를 만들지 않고 반환된 관계의 ID와 요청 Target identity로 이미 로드된 관계·connection·viewer state를 수렴시킨다
-- **AND** payload가 없거나 GraphQL 오류가 발생하면 action 완료로 취급하지 않고 기존 client 상태를 보존한다
+- **AND** `success: true`와 non-null Profile Block 관계가 확인되면 다른 GraphQL field 오류만으로 완료 결과를 실패로 뒤집지 않는다
+- **AND** payload가 없거나 `success: false`이거나 필수 Profile Block 관계를 확인할 수 없으면 action 완료로 취급하지 않고 기존 client 상태를 보존한다
 
 #### Scenario: 해제 성공은 삭제한 Owner 관계의 식별자를 반환한다
 
