@@ -34,7 +34,9 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
       ? 'default-post-visibility'
       : pathname === '/settings/info' || pathname === '/settings/developer'
         ? 'info'
-        : undefined;
+        : pathname === '/settings/account-deletion'
+          ? 'account-deletion'
+          : undefined;
   const detailHeaderMode: SettingsDetailHeaderMode =
     layout === 'full' ? 'plain' : web && layout === 'mobile' ? 'hidden' : 'back';
 

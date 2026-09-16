@@ -20,6 +20,11 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 비로그인 landing의 기존 개인정보 처리방침 링크와 full Web 우측 레일의 기존 개인정보 처리방침 링크는
 유지하고, Sidebar·mobile drawer에 정책 링크를 추가하지 않는다.
 
+2026-09-16 PROD-970 결정으로 Kosmo Account 탈퇴를 `/settings/account-deletion` 내부 detail에서 제공한다.
+`코스모 탈퇴`는 Settings root/master의 마지막 행으로 항상 표시하며, Byulmaru ID의 외부 `계정 설정` 진입점과
+분리한다. 탈퇴가 완료되면 Kosmo login으로 이동하고, 같은 Byulmaru ID의 Kosmo 재가입은 후속 정책이 정해질
+때까지 임시로 막는다.
+
 ## Route와 진입점
 
 - Kosmo 설정 hub의 canonical route는 `/settings`다. 내부 설정 detail은 이 route 아래에서 열 수 있지만,
@@ -28,6 +33,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   `/settings/default-post-visibility`는 이 Target으로 이관할 구현 경로이지 별도 Target destination이 아니다.
 - 공개 정책 문서 진입점의 canonical Settings detail route는 `/settings/info`다. 이 route는 준비된 public
   `/privacy`, `/account-deletion`, `/child-safety`로 이동하는 링크를 제공하며 정책 문서 내용을 복제하지 않는다.
+- Kosmo Account 탈퇴 action의 canonical 내부 route는 `/settings/account-deletion`이다. `/settings/info`의
+  `계정 삭제 안내` public link는 안내 문서로 이동하는 기존 진입점이며 이 action route를 대체하지 않는다.
 - Mobile Target evidence는 [`Default`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9409)와
   [`Profile required`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9415) `390×844`
   consumer다. 이 조립 화면은 Product migration이나 실제 선택·저장 동작의 완료 증거가 아니다.
@@ -46,9 +53,10 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 - Settings는 모든 control을 한 화면에 쌓는 긴 form이 아니라, 진입점 목록에서 category·하위 목록·detail로
   점진적으로 이동하는 탐색 구조를 사용한다.
-- Target root 목록은 `계정 설정 → 프로필 설정 → 뮤트 및 차단 → 테마 → 정보` 순서다. `계정 설정`은 Byulmaru ID
-  외부 진입점이고 나머지는 내부 진입점이다. `테마`는 현재 선택값을 함께 표시한다. `게시물 기본 공개 범위`를
-  root에 중복 노출하거나 항목 하나만 가진 `계정`·`화면 설정` 대분류를 만들지 않는다.
+- Target root/master 목록은 `계정 설정 → 프로필 설정 → 뮤트 및 차단 → 테마 → 정보 → 코스모 탈퇴` 순서다.
+  `계정 설정`은 Byulmaru ID 외부 진입점이고 나머지는 내부 진입점이다. `테마`는 현재 선택값을 함께 표시하며,
+  `코스모 탈퇴`는 연결된 Profile 상태와 무관하게 항상 표시한다. `게시물 기본 공개 범위`를 root에 중복
+  노출하거나 항목 하나만 가진 `계정`·`화면 설정` 대분류를 만들지 않는다.
 - `정보`는 별도 category나 generic policy registry가 아닌 Settings root의 direct destination이다. `/settings/info`
   detail은 `개인정보 처리방침`, `계정 삭제 안내`, `아동 안전 정책`을 각각 public route로 여는 기존 Settings
   link-row 문법을 사용한다. 모든 플랫폼의 `/settings/info`는 세 policy link와 `개발 정보` link row를
@@ -88,6 +96,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - Profile detail은 shell의 selected Local Profile을 기본 대상으로 사용하고 표시 이름과 `relativeHandle`,
   대상 전환 affordance, `게시물 기본 공개 범위`를 포함한 Profile 설정 content를 함께 제공한다. Profile 데이터
   조회·입력·저장은 Kosmo 내부 기능으로만 제공한다.
+- `코스모 탈퇴`는 Byulmaru ID의 Account Settings를 수정하지 않고 Kosmo Account만 대상으로 하는 별도 내부
+  action이다. 이 행은 `/settings/account-deletion`으로 이동하며, 외부 `계정 설정` 행을 바꾸거나 대체하지 않는다.
 - Profile Migration source 준비는 이 Profile detail의 현재 selected Profile을 target으로 사용하며, 별도 target Profile
   ID 입력을 받지 않는다. 현재 context의 `Account.Active`와 `Profile.Owner` 권한을 재사용하고 별도 target eligibility를
   적용하지 않는다. feature flag가 켜져 있고 값을 확인할 수 있을 때만 노출한다. flag가 꺼져 있거나
@@ -114,6 +124,26 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 `WithLifecycle`에서 도입 후 구성을 검토한다. 비활성화는 Web·Native 모두 내용 전체를 교체하며,
 재활성화·영구 삭제는 확인 팝업을 사용한다. 자세한 계약은 [Profile lifecycle](./profile-lifecycle.md)을 따른다.
 이 Target presentation은 현재 `SettingsProfileDetail`과 Profile Edit의 저장·route를 교체하거나 기능을 활성화하지 않는다.
+
+## Kosmo Account 탈퇴
+
+`/settings/account-deletion`은 현재 인증된 Kosmo Account의 탈퇴를 처리하는 내부 detail이다. Web과 Android·iOS는
+같은 eligibility·확인·결과 계약을 사용하고, root/master 또는 one-pane route의 기존 Settings shell·header·back
+규칙을 재사용한다. 이 action은 별도 Figma source나 범용 Settings registry를 추가하지 않고 기존 Settings와
+[Profile lifecycle](./profile-lifecycle.md)의 확인·상태·접근성 패턴을 따른다.
+
+- 탈퇴 조건은 Account에 연결된 모든 Profile이 기존 프로필 삭제 흐름의 `DISABLED` 상태인 것이다. 화면에 표시한
+  eligibility와 별개로 탈퇴 확정 시 서버가 현재 Profile 목록으로 다시 확인하며, 하나라도 `ACTIVE` Profile이
+  남아 있으면 탈퇴할 수 없다. 이 확인은 Profile 또는 Membership을 삭제하거나 연결 해제하지 않는다.
+- 조건을 충족하지 못하면 detail에는 `ACTIVE` Profile의 개수와 탈퇴할 수 없는 이유만 표시한다. Profile 목록,
+  Profile action, Profile 관리 화면으로 가는 보조 진입점은 추가하지 않는다.
+- 조건을 충족하면 되돌릴 수 없는 Account 탈퇴 안내와 acknowledgement `checkbox`를 표시한다. 체크 전에는
+  확정 action을 disabled로 두며, 재인증·유예기간·탈퇴 사유 입력을 요구하지 않는다.
+- 기존 Profile 삭제 흐름과 같은 lifecycle을 사용한다. `pending`에서는 확인·checkbox·dismiss·navigation의
+  중복 조작을 막고, `error`에서는 확인 내용과 acknowledgement를 유지한 채 안전한 오류와 `다시 시도`를
+  제공한다. 성공은 서버가 Account를 `Deleted`로 확정한 뒤에만 표시하며, 완료 후 login route로 이동한다.
+- 탈퇴 성공 뒤 동일 Byulmaru ID의 Kosmo 재가입은 허용하지 않는다. 이 차단은 현재 임시 조치이며, 영구 재가입
+  정책이나 Byulmaru ID 자체의 상태 전이는 이 계약에 포함하지 않는다.
 
 ## SettingsItem
 
@@ -222,6 +252,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - Account 외부 진입점에는 Kosmo가 조회할 Account 값이나 외부 navigation 상태가 없으므로 Account 데이터 및
   외부 이동 loading·empty·save·error·retry·lock 상태를 만들지 않는다. 브라우저·OS가 소유하는 외부 이동을
   Kosmo Account 데이터 오류로 표현하지 않는다.
+- `/settings/account-deletion`은 확인된 Profile 상태를 기준으로 eligibility를 표시한다. 조회 중에는 미확인
+  상태를 탈퇴 가능으로 표시하지 않으며, 오류는 안전한 한국어 설명과 `다시 시도`를 제공한다. 성공·Deleted
+  상태를 추측하거나 optimistic하게 표시하지 않는다.
 - Profile detail은 자기 Profile identity·loading·error·empty·content와 재시도 상태를 소유한다. shell이나
   Account 진입점이 Profile 오류 종류를 해석하거나 Profile 저장 상태를 공통 상태로 끌어올리지 않는다.
 - Profile 조회 중에는 확인되지 않은 값을 확정된 것처럼 표시하지 않고, 오류에는 backend 원문이 아닌 안전한
@@ -239,7 +272,7 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   destination heading을 programmatic하게 노출한다. 시각적으로 없는 category heading을 screen reader 전용으로
   반복하지 않는다.
 - Target root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 →
-  `프로필 설정` → `뮤트 및 차단` → `테마`와 현재 선택값 → `정보`다. full Web에서는 이어서 detail heading과
+  `프로필 설정` → `뮤트 및 차단` → `테마`와 현재 선택값 → `정보` → `코스모 탈퇴`다. full Web에서는 이어서 detail heading과
   현재 선택된 content를 읽는다. 모든 플랫폼의 `/settings/info`에서는 `정보` heading 다음에 세 public policy
   link를 문서 순서대로 읽고, 이어서 `개발 정보` link를 읽는다.
   `/settings/developer`에서는 `개발 정보` heading 다음에 Web은 `채널`의 현재 `dev`·`prod` 값을, Native는
@@ -247,6 +280,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - Account 진입점은 시각 label `계정 설정`과 link accessible name·canonical destination에서 Byulmaru ID 외부
   Account Settings로 이동한다는 사실을 전달한다. 내부 진입점은 선택·현재 상태와 destination을, Profile
   control은 Kosmo 내부 기능과 현재 대상을 전달한다.
+- `코스모 탈퇴`는 Kosmo 내부 action임을 accessible name과 destination에서 전달한다. 탈퇴 detail은 blocker의
+  `ACTIVE` Profile 개수와 이유, acknowledgement checkbox의 checked·disabled 상태, 확정 action의 busy·disabled
+  상태, 오류의 `다시 시도`와 완료 후 login 이동을 Web·Android·iOS에서 보조기술이 확인할 수 있게 한다.
 - Web keyboard focus는 현재 보이는 pane의 문서 순서를 따르며, full Web에서는 master의 interactive row 다음
   detail의 interactive control로 이동한다. heading과 비상호작용 identity는 tab stop이 아니다.
 - navigation과 page action은 실제 동작에 맞는 role, accessible name, current·disabled·busy 상태를 제공한다.
@@ -292,6 +328,12 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - 인증된 `/settings/info`의 `개발 정보` nested entrypoint와 `/settings/developer`의 channel·Native OTA 진단
   계약은 위 정보 구조와 Native channel과 OTA 진단 절에서 정의한다. 이 문서에서는 해당 계약에 별도
   issue 또는 OpenSpec owner를 추론해 부여하지 않는다.
+- PROD-970은 Settings root/master 마지막의 `코스모 탈퇴` 행과 `/settings/account-deletion` detail의
+  기존 Profile 목록 기반 eligibility·authoritative server recheck·`ACTIVE` blocker 개수와 이유,
+  acknowledgement·pending/error/retry·서버 확정 success·완료 후 login 이동, Kosmo Account의 `Deleted` 전이,
+  접근성 이름·상태·root 읽기 순서 계약을 소유한다. public `/account-deletion`의 in-app-only 탈퇴 안내 정합화도
+  이 이슈의 범위다. Byulmaru ID 외부 `계정 설정`, 재인증·유예기간·탈퇴 사유 입력, Profile 목록·관리 action과
+  Profile/Membership 삭제 흐름은 이 이슈의 범위가 아니다.
 - PROD-685는 구현과 검증 증거를 PROD-684에 인계하고, PROD-684가 최종 Settings 통합·OpenSpec 정합성 확인과
   archive를 소유한다.
 - 자동화·source/unit 결과는 실제 Web keyboard·screen reader·zoom 또는 Android·iOS runtime 접근성·
@@ -370,8 +412,11 @@ touch·focus, 빠른 연속 입력의 중간 frame은 확인하지 않았으며 
 
 ## 제외 범위
 
-- Byulmaru ID Account Settings 페이지 자체와 Account 데이터 조회·입력·저장·관리 기능
+- Byulmaru ID Account Settings 페이지 자체와 Byulmaru ID Account 데이터 조회·입력·저장·관리 기능
 - 브라우저·OS가 소유하는 외부 navigation 결과와 URL 지원 확인·loading·error·retry·lock 상태
+- Profile 목록·Profile action·Membership 정리 또는 Profile 삭제 흐름의 변경
+- `/settings/account-deletion`과 별도인 public `/account-deletion` page의 layout·design·action 및 Settings UI와
+  무관한 public route 구현
 - Profile 기본 게시 공개 범위의 DB, GraphQL, Relay와 Composer 계약
 - 공개 범위 control의 구체적인 선택·저장 UI
 - 홈 또는 다른 주요 route의 테마 toggle과 임시 진입점

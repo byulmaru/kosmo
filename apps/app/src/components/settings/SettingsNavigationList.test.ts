@@ -55,7 +55,7 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let SettingsNavigationList: ComponentType<{
-  selected?: 'default-post-visibility';
+  selected?: 'default-post-visibility' | 'account-deletion';
 }>;
 let renderer: ReactTestRenderer | null = null;
 
@@ -84,6 +84,10 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[1].props.href, '/settings/default-post-visibility');
     assert.equal(links[2].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
     assert.equal(links[2].props.href, '/settings/mute-and-block');
+    assert.equal(links[3].props.accessibilityLabel, '정보 설정 열기');
+    assert.equal(links[3].props.href, '/settings/info');
+    assert.equal(links[4].props.accessibilityLabel, '코스모 탈퇴 설정 열기');
+    assert.equal(links[4].props.href, '/settings/account-deletion');
   });
 
   it('full master가 표시한 내부 detail만 current destination으로 전달한다', async () => {
@@ -93,9 +97,17 @@ describe('SettingsNavigationList', () => {
     assert.equal(internal.props['aria-current'], 'page');
     assert.deepEqual(internal.props.accessibilityState, { selected: true });
   });
+
+  it('코스모 탈퇴는 항상 마지막 root destination으로 current 상태를 전달한다', async () => {
+    await render('account-deletion');
+
+    const deletion = rendered('Pressable')[4];
+    assert.equal(deletion.props['aria-current'], 'page');
+    assert.deepEqual(deletion.props.accessibilityState, { selected: true });
+  });
 });
 
-async function render(selected?: 'default-post-visibility') {
+async function render(selected?: 'default-post-visibility' | 'account-deletion') {
   await act(async () => {
     renderer = create(createElement(SettingsNavigationList, { selected }));
   });
