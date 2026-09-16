@@ -78,5 +78,5 @@
 - [x] 3.1 두 Vault path의 정확한 key와 목적, 최초 준비와 평상시 실행, credential/storage 경계를 문서화한다.
 - [x] 3.2 최신 main과 안전하게 동기화하고 conflict에서 main 및 PROD-897 의도를 모두 보존한다.
 - [x] 3.3 최종 merge tree에서 required validation과 PROD-897 통합 검증을 실행한다.
-- [ ] 3.4 Correctness 및 over-engineering review finding을 수정하고 unresolved thread를 확인한다.
+- [x] 3.4 Correctness 및 over-engineering review finding을 수정하고 unresolved thread를 확인한다.
 - [ ] 3.5 완료 증거에 맞춰 Linear, PR 본문과 Draft/Ready 상태를 정리한다.
