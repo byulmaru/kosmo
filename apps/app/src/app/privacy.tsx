@@ -120,7 +120,7 @@ export default function PrivacyScreen() {
               '아래 7절의 PostHog 자동 수집 정보, opaque Account ID와 선택 Profile ID, 행동 이벤트와 Session Replay',
               '기능 이용 현황 파악, 사용자 흐름 개선, 품질 문제 확인과 제품 우선순위 결정',
               '일반 이벤트의 보유·삭제 조건은 확인된 PostHog 정책과 적용 법령에 따릅니다. Session Replay는 수집일부터 30일입니다.',
-              '개인정보 보호법 제15조 제1항 제6호(서비스 개선을 위한 정당한 이익). 국외 이전의 법적 근거와는 별개입니다.',
+              '개인정보 보호법 제15조 제1항 제6호(서비스 개선을 위한 정당한 이익). 국외 이전은 제28조의8 제1항 제3호 가목에 따른 계약 체결·이행에 필요한 처리위탁·보관으로 처리하며, 이 방침에 공개합니다.',
             ]}
           />
           <TableRow
@@ -187,7 +187,8 @@ export default function PrivacyScreen() {
           별마루는 서비스 제공을 위해 다음과 같이 개인정보를 국외로 이전합니다. Cloudflare의 글로벌
           네트워크 이용 과정에서 접속·전송 정보가 미국 및 유럽경제지역으로 이전될 수 있습니다.
           Cloudflare에 대한 국외 이전은 개인정보 보호법 제28조의8 제1항 제3호 가목에 따른 계약 이행
-          목적의 처리위탁으로 처리합니다.
+          목적의 처리위탁으로 처리합니다. PostHog Cloud에 대한 국외 이전도 같은 조항에 따른 계약
+          체결·이행에 필요한 처리위탁·보관으로 처리하며, 이 방침에 공개합니다.
         </PolicyParagraph>
         <PolicyTable
           headers={[
@@ -219,8 +220,10 @@ export default function PrivacyScreen() {
           />
         </PolicyTable>
         <PolicyParagraph>
-          이용자는 hello@byulmaru.co로 국외 이전 거부를 요청할 수 있습니다. 이전을 거부하면 Kosmo의
-          전부 또는 일부를 이용하기 어려울 수 있습니다.
+          이용자는 hello@byulmaru.co로 PostHog 관련 국외 이전의 거부 또는 제한을 요청할 수 있고,
+          브라우저 추적 방지 기능으로 분석 정보 전송을 제한할 수도 있습니다. 요청 시 본인 확인 후
+          PostHog 제품 분석 및 Session Replay 전송을 제한하고 처리 결과를 안내합니다. 거부·제한 시
+          분석 및 Replay만 제한되며, Kosmo의 핵심 기능 이용에는 영향을 주지 않습니다.
         </PolicyParagraph>
       </PolicySection>
 
