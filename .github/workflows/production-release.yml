@@ -148,8 +148,8 @@ jobs:
 
   export_android:
     name: Export Production Android OTA
-    needs: [canonical_preflight, production_deploy]
-    if: needs.production_deploy.result == 'success'
+    needs: canonical_preflight
+    if: needs.canonical_preflight.result == 'success'
     permissions:
       actions: read
       contents: read
@@ -161,8 +161,8 @@ jobs:
 
   export_ios:
     name: Export Production iOS OTA
-    needs: [canonical_preflight, production_deploy]
-    if: needs.production_deploy.result == 'success'
+    needs: canonical_preflight
+    if: needs.canonical_preflight.result == 'success'
     permissions:
       actions: read
       contents: read
