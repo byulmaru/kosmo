@@ -223,7 +223,7 @@
 
 **Surface feedback authority:** `PROD-977`, `docs/design/colors.md`, `docs/design/post-action-bar.md`, 2026-09-16 KST 사용자 PR 분리 승인.
 
-`PostListItem`의 Text·Media·PureRepost·Quote root는 resting fill 없이 feed canvas를 유지해야 하며(MUST), touch가 아닌 pointer hover에서는 semantic `stateHover`, Web pointer press와 Android·iOS touch press에서는 넓은 surface용 semantic `statePressedSubtle` overlay를 카드 전체에 표시해야 한다(MUST). 이 overlay는 `radius/md`를 사용해야 하고(MUST) row divider는 직선으로 유지해야 한다(MUST). pressed는 hover보다 우선해야 하며(MUST), release·cancel·leave 뒤에는 남은 입력 상태 또는 resting fill로 돌아가야 한다(MUST). 이 시각 feedback은 새 navigation target이나 접근성 role을 만들거나 기존 nested action의 입력을 가로채지 않아야 한다(MUST NOT).
+`PostListItem`의 Text·Media·PureRepost·Quote root는 resting fill 없이 feed canvas를 유지해야 하며(MUST), Web의 touch가 아닌 pointer hover에서는 semantic `stateHover`, Web pointer press와 Android·iOS touch press에서는 넓은 surface용 semantic `statePressedSubtle` overlay를 카드 전체에 표시해야 한다(MUST). 이 overlay는 `radius/md`를 사용해야 하고(MUST) row divider는 직선으로 유지해야 한다(MUST). pressed는 hover보다 우선해야 하며(MUST), release·cancel·leave 뒤에는 남은 입력 상태 또는 resting fill로 돌아가야 한다(MUST). 이 시각 feedback은 새 navigation target이나 접근성 role을 만들거나 기존 nested action의 입력을 가로채지 않아야 한다(MUST NOT).
 
 공용 `PostSourcePresentationView`의 생성 시각 Link는 최소 44×44 target을 유지하면서 target 내부의 label을 오른쪽 정렬해야 하며(MUST), outer Post와 nested Source preview에 동일하게 적용해야 한다(MUST). 별도 `PostListItem` timestamp에는 이 정렬을 적용하지 않아야 한다(MUST NOT).
 
@@ -253,7 +253,7 @@
 
 #### Scenario: 목록 Post 카드의 surface feedback
 
-- **WHEN** 사용자가 touch가 아닌 mouse 또는 pen pointer를 `PostListItem` 위에 올린다
+- **WHEN** 사용자가 Web에서 touch가 아닌 mouse 또는 pen pointer를 `PostListItem` 위에 올린다
 - **THEN** Text·Media·PureRepost·Quote 카드 전체에 semantic `stateHover` overlay가 표시되고 leave 뒤 resting fill로 돌아간다
 - **WHEN** 사용자가 Web·Android·iOS의 같은 카드 surface를 누른다
 - **THEN** semantic `statePressedSubtle` overlay가 hover보다 우선해 표시되고 release·cancel·leave 뒤 남은 상태 또는 resting fill로 돌아간다

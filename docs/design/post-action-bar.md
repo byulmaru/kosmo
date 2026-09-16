@@ -85,7 +85,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 - `PROD-977`은 이 surface feedback과 Figma `State=Default|Hover|Pressed` variant를 소유한다.
 - `PostListItem`의 Text·Media·PureRepost·Quote는 resting fill 없이 연속 feed의 canvas 평면을 유지한다.
-- touch가 아닌 mouse·pen pointer hover에서는 카드 root 전체에 `color/state/hover`, Web pointer press와 Android·iOS touch press에서는
+- Web의 touch가 아닌 mouse·pen pointer hover에서는 카드 root 전체에 `color/state/hover`, Web pointer press와 Android·iOS touch press에서는
   넓은 surface용 `color/state/pressed-subtle` overlay를 적용한다. overlay는 `radius/md`로 둥글게 처리하고 row divider는 직선으로 유지한다.
   pressed가 hover보다 우선하며 release·cancel·leave 뒤에는 남은 입력
   상태 또는 resting fill로 돌아간다.

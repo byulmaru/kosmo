@@ -376,7 +376,7 @@ test('PostListItem uses the supplied list presentation', async () => {
   }
 });
 
-test('PostListItem uses pointer capability for hover and Native touch for pressed feedback', async () => {
+test('PostListItem uses Web pointer hover and Native touch pressed feedback', async () => {
   platform.OS = 'web';
   let root = await renderListItem({ post: {} as never, showDivider: false });
   let card = findByTestID(root, 'post-list-item-card');
@@ -418,9 +418,8 @@ test('PostListItem uses pointer capability for hover and Native touch for presse
     card = findByTestID(root, 'post-list-item-card');
     feedback = findByTestID(root, 'post-list-item-feedback');
 
-    await act(async () => card.props.onPointerEnter({ nativeEvent: { pointerType: 'pen' } }));
-    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
-    await act(async () => card.props.onPointerLeave());
+    assert.equal(card.props.onPointerEnter, undefined);
+    assert.equal(card.props.onPointerLeave, undefined);
 
     await act(async () => card.props.onTouchStart());
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'pressed-subtle');
@@ -430,10 +429,6 @@ test('PostListItem uses pointer capability for hover and Native touch for presse
 
     await act(async () => card.props.onTouchStart());
     await act(async () => card.props.onTouchCancel());
-    assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
-
-    await act(async () => card.props.onTouchStart());
-    await act(async () => card.props.onPointerLeave());
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
   }
 });

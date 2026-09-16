@@ -350,7 +350,10 @@ function PostListItemCard({
   style: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
-  const { handlers, hovered, pressed } = usePostSurfaceFeedback({ hover: true, press: true });
+  const { handlers, hovered, pressed } = usePostSurfaceFeedback({
+    hover: Platform.OS === 'web',
+    press: true,
+  });
 
   return (
     <View

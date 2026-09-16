@@ -403,6 +403,6 @@ Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp targ
 
 **Review follow-up verification record (2026-09-16)**
 
-- mouse·pen hover와 touch hover 제외, Web pointer release·cancel·leave, iOS·Android touch start·end·cancel을 공용 raw-surface hook의 실제 consumer renderer로 검증했다.
+- Web mouse·pen hover와 touch hover 제외, Web pointer release·cancel·leave, iOS·Android touch start·end·cancel을 공용 raw-surface hook의 실제 consumer renderer로 검증했다.
 - feedback fill은 `radius/md`인 pointer-inert overlay로 분리해 둥글게 처리하고 기존 직선 row divider와 nested action 입력을 유지했다.
 - 새 `Pressable`·navigation target·접근성 role은 추가하지 않았다. 실제 iOS·Android touch 및 보조 기술 관찰은 release gate에 유지한다.
