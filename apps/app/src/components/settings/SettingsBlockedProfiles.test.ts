@@ -94,9 +94,6 @@ mockModule('../../theme/tokens', {
   space: { 16: 16 },
   textStyles: { uiHeadingM: {} },
 });
-mockModule('../../relay/RelayActorProvider', {
-  useRelayActorLifecycleKey: () => 'actor-a',
-});
 type BlockedProfile = {
   displayName: string;
   profileBlock: never;

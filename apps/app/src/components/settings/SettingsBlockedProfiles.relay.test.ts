@@ -92,9 +92,6 @@ mockModule(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => ({ selectedProfileId }),
 });
-mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  useRelayActorLifecycleKey: () => `${selectedProfileId}:${generation.current}`,
-});
 mockModule(new URL('../../relay/RelayEnvironmentBoundary.tsx', import.meta.url), {
   useRelayEnvironmentGeneration: () => generation,
 });
@@ -136,6 +133,7 @@ function createEnvironment() {
 async function render(environment: Environment) {
   await act(async () => {
     const tree = createElement(ReactRelay.RelayEnvironmentProvider, {
+      key: selectedProfileId,
       environment,
       children: createElement(SettingsBlockedProfiles, { headingRef }),
     });

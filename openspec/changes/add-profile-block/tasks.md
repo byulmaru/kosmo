@@ -245,8 +245,8 @@ surface 조합과 목록 조회·pagination을 소유한다.
 - confirmation 취소, pending 중복/dismiss, 성공·실패·retry와 기존 레거시 Profile·Settings UI의 action/state를 app component 또는 E2E로 검증한다.
 - direct `blocking` Profile route에서 `차단한 프로필의 게시물입니다`와 `게시물 보기`를 표시하고, action 전에는 시간 경과만으로 Post·Media를 노출하지 않으며 action 뒤 허용된 콘텐츠를 표시하는지 검증한다. Profile handle·selected actor lifecycle 전환 뒤에는 경고가 다시 적용되는지 component 또는 E2E로 실행한다.
 - Settings의 분리된 Block 목록에서 loading/error·retry/empty/pagination·unblock과 다른 Target 상태 보존을 검증한다.
-- selected Profile A/B와 Session 전환에서 actor별 상태 격리·서버 결과 수렴·optimistic state isolation 및 Block 성공 후 기본 Profile 정보,
-  viewer 방향 콘텐츠 상태와 이미 표시 중인 Home·Local·Hashtag timeline·Profile Post List·Notification client 상태의 surface별 갱신을 검증한다.
+- selected Profile A/B와 Session 전환에서 actor별 상태 격리·서버 결과 수렴·optimistic state isolation 및 Block 성공 후 direct Profile의 기본 정보,
+  viewer 방향 콘텐츠 상태와 Block 관리 목록의 갱신을 검증한다. Home·Local·Hashtag timeline·Profile Post List·Notification을 연결한 상태 수렴은 `PROD-813`의 cross-slice 검증에서 확인한다.
 - cache 없는 직접 링크·새로고침에서 자신의 Block 관계 ID로 해제하는 경로, 상대에게만 차단된 actionless 경로와 양방향 Block 해제 후
   `blockedBy`로 수렴하는 경로를 검증한다. A의 요청 중 B로 전환한 뒤 도착하는 응답이 B의 화면·목록·피드백을 바꾸지 않는지도 확인한다.
 - 실제 공개 응답의 기존 `Profile` global ID를 사용하는 생성 성공·오류·partial response와 해제된 관계 ID·미제거 `null`·오류 응답을
@@ -258,7 +258,7 @@ surface 조합과 목록 조회·pagination을 소유한다.
 - [x] 3.2 Settings에 Mute와 분리된 Block 관리 destination·목록 상태·pagination·unblock action을 연결한다.
 - [x] 3.3 생성 응답의 기존 Profile global ID와 Block 관계 ID, 해제 성공의 관계 ID·미제거 `null`·오류/partial 결과를 client 계약에 맞게 처리하고, Membership으로 인증된 selected
       Profile actor 경계 안에서 Block/Unblock 성공·실패 결과에 따라 관리 목록과 표시 중 기본 Profile 정보·viewer 방향
-      콘텐츠 상태·Home/Local/Hashtag timeline·Profile Post List·Notification client 상태를 각 surface 서버 정책에 맞게 수렴시킨다.
+      콘텐츠 상태를 서버 정책에 맞게 수렴시킨다. cross-slice surface 수렴과 통합 검증은 `PROD-813` task 4.1·4.2가 소유한다.
 - [ ] 3.4 접근성·viewport·Web/Native direct route presentation regression과 actor 전환·Unblock no-restore, 확인창 dismiss 후 Profile 메뉴
       trigger와 Settings 목록의 다음 항목 또는 heading fallback focus 복원을 검증하고 `PROD-917` 후속 UI 교체 경계를 유지한다.
 - [x] 3.5 직접 링크·새로고침·selected Profile 전환에서 현재 Owner의 차단 결과와 조회 가능한 기본 Profile을 소비하고, Profile 미조회 시 기존 unavailable 결과를 유지한다.

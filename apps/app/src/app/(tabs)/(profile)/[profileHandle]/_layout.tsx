@@ -20,7 +20,6 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
 import { Tab, TabList } from '@/components/ui/Tabs';
-import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { iconSizes, spacing } from '@/theme/tokens';
@@ -72,7 +71,6 @@ export default function ProfileLayout() {
   const pathname = usePathname();
   const connectionKind = getProfileConnectionKind(pathname);
   const scrollKey = pathname;
-  const actorLifecycleKey = useRelayActorLifecycleKey();
   const pathSegments = pathname.split('/').filter(Boolean);
   const isProfileHome =
     pathSegments.length === 1 &&
@@ -124,7 +122,7 @@ export default function ProfileLayout() {
                 )
               : undefined
         }
-        key={`${actorLifecycleKey}:${handle}:${connectionKind ?? 'profile'}`}
+        key={`${handle}:${connectionKind ?? 'profile'}`}
         loading={
           <ProfileRouteContainer scrollKey={scrollKey}>
             {connectionKind ? (
