@@ -56,6 +56,9 @@ mock.module('expo-updates', {
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('react-relay', {
+  exports: { graphql: () => ({}) },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('react-native', {
   exports: {
@@ -121,6 +124,24 @@ mock.module(new URL('./SettingsProfileDetail.tsx', import.meta.url), {
     SettingsProfileDetail: () => createElement('SettingsProfileDetail'),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('./AccountDeletionScreen.tsx', import.meta.url), {
+  exports: {
+    AccountDeletionScreen: (props: Record<string, unknown>) =>
+      createElement('AccountDeletionScreen', props),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../RouteBoundary.tsx', import.meta.url), {
+  exports: {
+    RouteBoundary: ({ loading }: { loading: ReactNode }) => loading,
+    useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../../session/logout.tsx', import.meta.url), {
+  exports: {
+    useAccountDeletionCleanup: () => ({ error: null, logout: () => undefined, pending: false }),
+    useLogout: () => ({ error: null, logout: () => undefined, pending: false }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsMuteAndBlockNavigation.tsx', import.meta.url), {
   exports: {
     SettingsMuteAndBlockNavigation: (props: Record<string, unknown>) =>
@@ -161,6 +182,7 @@ let SettingsDefaultPostVisibilityRoute: ComponentType;
 let SettingsMuteAndBlockRoute: ComponentType;
 let SettingsMutedProfilesRoute: ComponentType;
 let SettingsBlockedProfilesRoute: ComponentType;
+let SettingsAccountDeletionRoute: ComponentType;
 let SettingsLayout: ComponentType;
 let SettingsRoute: ComponentType;
 let SettingsInfoRoute: ComponentType;
@@ -188,6 +210,8 @@ before(async () => {
     await import('../../app/(tabs)/(protected)/settings/muted-profiles'));
   ({ default: SettingsBlockedProfilesRoute } =
     await import('../../app/(tabs)/(protected)/settings/blocked-profiles'));
+  ({ default: SettingsAccountDeletionRoute } =
+    await import('../../app/(tabs)/(protected)/settings/account-deletion'));
   ({ default: ProtectedLayout } = await import('../../app/(tabs)/(protected)/_layout'));
 });
 
@@ -292,6 +316,18 @@ describe('Settings routes', () => {
       rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
       '설정으로 돌아가기',
     );
+  });
+
+  it('full Web 코스모 탈퇴 detail은 마지막 master entry와 route heading을 선택한다', async () => {
+    await renderRoute('/settings/account-deletion', SettingsAccountDeletionRoute);
+
+    assert.deepEqual(
+      rendered('PageHeader').map((node) => node.props.title),
+      ['설정', '코스모 탈퇴'],
+    );
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'account-deletion');
+    assert.equal(rendered('AccountDeletionScreen').length, 1);
+    assert.equal(rendered('Pressable').length, 0);
   });
 
   it('full Web muted profile detail은 공통 master의 mute category를 선택한다', async () => {
@@ -475,6 +511,37 @@ describe('Settings routes', () => {
     const back = header.props.leading;
     assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
     await act(async () => back.props.onPress());
+    assert.deepEqual(dismissedToPaths, ['/settings']);
+  });
+
+  it('compact Web 코스모 탈퇴 detail은 route-owned back header로 Settings root를 연다', async () => {
+    width = 768;
+    await renderRoute('/settings/account-deletion', SettingsAccountDeletionRoute);
+
+    const header = rendered('PageHeader')[0];
+    assert.equal(header.props.title, '코스모 탈퇴');
+    const back = header.props.leading;
+    assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
+    await act(async () => back.props.onPress());
+    assert.deepEqual(dismissedToPaths, ['/settings']);
+  });
+
+  it('Native 코스모 탈퇴 detail은 heading과 content를 하나의 ScrollView에 표시한다', async () => {
+    platform = 'ios';
+    width = 390;
+    await renderRoute('/settings/account-deletion', SettingsAccountDeletionRoute);
+
+    const scrollView = rendered('ScrollView')[0];
+    assert.ok(scrollView);
+    const header = scrollView.findAll((node) => (node.type as unknown) === 'PageHeader')[0];
+    assert.equal(header.props.title, '코스모 탈퇴');
+    assert.equal(header.props.leading.props.accessibilityLabel, '설정으로 돌아가기');
+    assert.equal(
+      scrollView.findAll((node) => (node.type as unknown) === 'AccountDeletionScreen').length,
+      1,
+    );
+
+    await act(async () => header.props.leading.props.onPress());
     assert.deepEqual(dismissedToPaths, ['/settings']);
   });
 
