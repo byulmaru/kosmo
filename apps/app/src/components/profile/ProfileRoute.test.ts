@@ -990,6 +990,25 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
   });
 
+  it('같은 Profile을 해제한 뒤 재차단하면 게시물 경고를 다시 확인한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+
+    await renderRoute('@blocked', '/@blocked');
+    await act(async () => requireRendered('StateView').props.onAction());
+    assert.deepEqual(identities('PostList'), ['blocked']);
+
+    profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
+    await renderRoute('@blocked', '/@blocked');
+    assert.deepEqual(identities('PostList'), ['blocked']);
+
+    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-2' };
+    await renderRoute('@blocked', '/@blocked');
+    assert.deepEqual(identities('PostList'), []);
+    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+  });
+
   it('Profile 공통 FollowButton의 해제는 확인·취소·pending·실패·재시도를 거친다', async () => {
     selectedProfileId = 'owner';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
