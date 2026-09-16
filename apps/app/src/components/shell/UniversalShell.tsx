@@ -113,6 +113,9 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const composerPostCreatedRef = useRef(false);
+  const composerTriggerFocusRef = useRef<HTMLElement | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const menuButtonRef = useRef<NativeView>(null);
@@ -160,6 +163,19 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     : null;
   const feedbackOverlayVisible =
     web && pathname !== '/feedback' && feedbackOpen && data.currentSession != null;
+  const routeComposerOpen = pathname === '/compose';
+  const composerMode =
+    showRightRail && !composerOpen && !routeComposerOpen ? 'rail' : mobile ? 'mobile' : 'overlay';
+  const composerVisible =
+    profile !== null && (composerMode === 'rail' || composerOpen || routeComposerOpen);
+  const composerOverlayVisible = composerMode !== 'rail' && composerVisible;
+  const composerBackgroundA11yProps = composerOverlayVisible
+    ? ({
+        accessibilityElementsHidden: true,
+        'aria-hidden': true,
+        importantForAccessibility: 'no-hide-descendants',
+      } as const)
+    : {};
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !drawerOpen) {
@@ -204,6 +220,43 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     setDrawerOpen(false);
     setSwitcherOpen(false);
   }, []);
+
+  const openComposer = useCallback(() => {
+    if (!profile) {
+      router.push('/home');
+      return;
+    }
+    if (web && typeof document !== 'undefined') {
+      composerTriggerFocusRef.current = document.activeElement as HTMLElement | null;
+    }
+    composerPostCreatedRef.current = false;
+    setComposerOpen(true);
+    setDrawerOpen(false);
+    setSwitcherOpen(false);
+  }, [profile, router, web]);
+
+  const closeComposer = useCallback(() => {
+    const postCreated = composerPostCreatedRef.current;
+    composerPostCreatedRef.current = false;
+    setComposerOpen(false);
+    if (routeComposerOpen) {
+      if (!postCreated && router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/home');
+      }
+      return;
+    }
+    if (postCreated && composerMode === 'mobile') {
+      router.replace('/home');
+    }
+  }, [composerMode, routeComposerOpen, router]);
+
+  const handleComposerPostCreated = useCallback(() => {
+    if (composerMode === 'mobile' || routeComposerOpen) {
+      composerPostCreatedRef.current = true;
+    }
+  }, [composerMode, routeComposerOpen]);
 
   const swipeToOpenDrawer = useMemo(
     () =>
@@ -300,6 +353,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     >
       {!mobile ? (
         <View
+          {...composerBackgroundA11yProps}
           style={[
             styles.sidebar,
             web && getWebStickyRailStyle(insets),
@@ -310,6 +364,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           <SidebarNavigation
             compact={compact}
             feedbackActive={feedbackOverlayVisible}
+            onComposeOpen={layout === 'compact' ? openComposer : undefined}
             onFeedbackOpen={openFeedbackOverlay}
             onHomeReselect={web ? reselectHome : undefined}
             onSwitcherOpenChange={setSwitcherOpen}
@@ -320,6 +375,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
       ) : null}
 
       <View
+        {...composerBackgroundA11yProps}
         style={[
           styles.center,
           web && webDocumentColumn,
@@ -384,22 +440,41 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         </View>
         {mobile ? (
           <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
-            <BottomTabBar onHomeReselect={web ? reselectHome : undefined} profile={profile} />
+            <BottomTabBar
+              onComposeOpen={openComposer}
+              onHomeReselect={web ? reselectHome : undefined}
+              profile={profile}
+            />
           </View>
         ) : null}
       </View>
 
-      {showRightRail ? (
+      {profile || showRightRail ? (
         <View
           style={[
             styles.rightRail,
             web && getWebStickyRailStyle(insets),
             web && webRightRailOverflow,
+            !showRightRail ? styles.composerHostSlot : null,
             { borderColor: theme.borderSubtle },
           ]}
         >
-          {profile ? <RightRail profile={profile} /> : null}
-          <RightRailFooter />
+          {profile ? (
+            <RightRail
+              mode={composerMode}
+              onExpand={openComposer}
+              onPostCreated={handleComposerPostCreated}
+              onRequestClose={closeComposer}
+              open={composerVisible}
+              profile={profile}
+              triggerFocusRef={composerTriggerFocusRef}
+            />
+          ) : null}
+          {showRightRail ? (
+            <View {...composerBackgroundA11yProps} style={{ marginTop: 'auto' }}>
+              <RightRailFooter />
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -472,11 +547,18 @@ const styles = StyleSheet.create({
   route: { minHeight: 0 },
   nativeRoute: { flex: 1 },
   rightRail: {
-    flexShrink: 1,
-    minWidth: 290,
-    paddingLeft: spacing.xl,
+    flexShrink: 0,
+    minWidth: 320,
     paddingTop: spacing.lg,
-    width: 350,
+    width: 320,
+  },
+  composerHostSlot: {
+    height: 0,
+    overflow: 'visible',
+    paddingLeft: 0,
+    paddingTop: 0,
+    position: 'absolute',
+    width: 0,
   },
   mobileChrome: { width: '100%' },
   mobileHeader: {
