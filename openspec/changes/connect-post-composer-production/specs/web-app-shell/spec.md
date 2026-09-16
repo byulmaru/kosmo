@@ -45,6 +45,76 @@
 
 ## MODIFIED Requirements
 
+### Requirement: Protected app routes require a valid session
+
+**Authority / Provenance:** `PROD-148`, `PROD-161`, `PROD-541`; `docs/design/settings.md`, `PROD-685`; 선행 정보 구조 `PROD-653` — `(tabs)` 앱 셸 아래의 내부 화면(`/home`·`/search`·`/notifications`·`/settings`와 지원되는 Settings 내부 detail)은 유효한 세션(로그인)을 전제로 해야 한다(MUST). 유효한 세션이 없는 사용자가 이 route에 접근하면 루트 온보딩(`/`)으로 이동해야 한다(MUST). 세션 유효성은 클라이언트가 `currentSession` GraphQL query로 확인해야 하며(MUST), 만료·폐기된 세션은 `null`로 반환되어야 하고(MUST), 쿠키 존재만으로 판정해서는 안 된다(MUST NOT). 공개 Profile route(`/${relativeHandle}` 및 그 하위 Post 상세)는 비로그인 조회를 유지해야 하며 이 guard에서 제외되어야 한다(MUST). 세션 확인이 진행 중이거나 조회가 실패한 동안에는 redirect해서는 안 된다(MUST NOT).
+
+#### Scenario: Redirect guest from protected route to onboarding
+
+- **WHEN** 유효한 세션이 없는 사용자가 `/home`·`/search`·`/notifications`·`/settings` 중 하나에 접근한다
+- **THEN** 시스템은 `currentSession`이 `null`임을 확인하고 루트 온보딩(`/`)으로 이동한다
+
+#### Scenario: Invalid or expired session is treated as guest
+
+- **WHEN** 만료·폐기된 세션 쿠키를 가진 사용자가 보호 route에 접근한다
+- **THEN** `currentSession`이 `null`이므로 시스템은 비로그인과 동일하게 루트 온보딩(`/`)으로 이동한다
+
+#### Scenario: Public profile remains accessible without login
+
+- **WHEN** 비로그인 사용자가 `/${relativeHandle}` 또는 `/${relativeHandle}/{postId}`에 접근한다
+- **THEN** 시스템은 redirect하지 않고 공개 Profile·Post를 표시한다
+
+#### Scenario: Signed-in user reaches protected route
+
+- **WHEN** 유효한 세션을 가진 사용자가 보호 route에 접근한다
+- **THEN** 시스템은 redirect 없이 해당 화면을 표시한다
+
+#### Scenario: Redirect guest from Settings detail
+
+- **WHEN** 유효한 세션이 없는 사용자가 지원되는 Settings 내부 detail route에 접근한다
+- **THEN** 시스템은 `currentSession`이 `null`임을 확인하고 루트 온보딩(`/`)으로 이동한다
+
+#### Scenario: Hold redirect while session is loading
+
+- **WHEN** `currentSession` 확인이 진행 중이거나 조회가 오류로 실패했다
+- **THEN** 시스템은 판단을 보류하고 redirect하지 않는다
+
+### Requirement: Sidebar profile switching
+
+유니버설 애플리케이션은 인증된 사용자가 앱 셸에서 접근 가능한 프로필 사이를 전환할 수 있게 해야 한다(MUST). 프로필 전환 성공 후 앱 셸의 활성 프로필 표시는 새 actor 환경에서 성공적으로 조회한 `currentSession.selectedProfile` 결과를 반영해야 하며(MUST), 앱 셸 아래 route는 자기 화면에서 필요한 active profile field를 자기 GraphQL operation으로 선언해야 한다(MUST).
+
+#### Scenario: Render accessible profiles
+
+- **WHEN** 인증된 계정에 접근 가능한 활성 프로필이 있다
+- **THEN** 데스크톱 사이드바 또는 모바일 profile switch surface는 활성 프로필 정보를 표시한다
+- **AND** full 데스크톱 사이드바는 260px 높이의 상단 프로필 영역을 유지하고 compact rail은 40px avatar trigger를 사용한다
+- **AND** 활성 프로필 정보는 `currentSession.selectedProfile` 조회 결과를 기반으로 하며, 프로필 전환 성공 후 새 Relay Environment와 Store에서 실행한 actor query 결과를 반영한다
+- **AND** 현재 활성 프로필을 시각적으로 구분한다
+- **AND** 접근 가능한 다른 프로필을 control로 표시해 전환할 수 있게 한다
+
+#### Scenario: Switch active profile
+
+- **WHEN** 사용자가 앱 셸에서 다른 접근 가능한 프로필을 선택한다
+- **THEN** 시스템은 즉시 해당 프로필을 활성 프로필로 요청한다
+- **AND** 요청 성공 응답은 `selectProfile.profile.id`로 새 활성 프로필을 식별한다
+- **AND** 클라이언트는 새 selected profile ID를 actor key로 사용해 Relay Environment와 Store를 새로 만든다
+- **AND** 새 actor query가 준비되기 전에는 이전 actor Store의 부분 `Session.selectedProfile` payload를 새 active profile 결과로 표시하지 않고, query가 성공적으로 준비되면 앱 셸은 새 `currentSession.selectedProfile` 결과를 활성 프로필로 반영한다
+- **AND** 이미 열린 route-backed home 및 viewer-dependent profile/follow 화면은 새 actor environment에서 route query를 다시 실행한다
+- **AND** 새 environment는 `homeTimeline`과 `Profile.viewerState`가 새 active profile 기준 결과임을 보장한다
+
+#### Scenario: Create and switch to a new profile
+
+- **WHEN** 인증된 사용자가 앱 셸에서 새 프로필 핸들을 입력하고 생성한다
+- **THEN** 시스템은 새 프로필 생성을 요청한다
+- **AND** 생성 성공 후 시스템은 새 프로필을 즉시 활성 프로필로 선택한다
+- **AND** 새 프로필 선택 성공 후 앱 셸은 새 actor Environment와 Store에서 조회한 `currentSession.selectedProfile` 결과가 준비되면 이를 새 활성 프로필로 반영한다
+- **AND** 시스템은 접근 가능한 프로필 목록이 새 프로필을 포함하도록 `me.profiles` connection 또는 동등한 Relay record를 갱신한다
+
+#### Scenario: Keep current profile selection
+
+- **WHEN** 사용자가 이미 활성화된 프로필을 선택한다
+- **THEN** 시스템은 현재 활성 프로필을 그대로 유지한다
+
 ### Requirement: Universal app shell rendering
 
 **Authority / Provenance:** `docs/design/breakpoints.md`, archived `migrate-frontend-to-expo-relay`, PR #217, `PROD-541`, PROD-797 — 앱 shell은 Expo Router route group에서 Android, iOS, Web 공용으로 렌더되어야 한다(MUST). 기존 웹 route와 사용자 동작을 유지하면서 native safe area와 web breakpoint를 적용해야 한다(MUST). Retired `/compose` direct route는 app shell screen으로 등록하지 않아야 한다(MUST NOT).

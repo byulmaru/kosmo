@@ -26,7 +26,7 @@ PROD-854가 만든 `PostComposerTarget`, `PostComposerMediaItemsTarget`, `Compos
 - `PostComposerTarget`의 Poll·Emoji callback은 public presentation 계약에 존재하지만 Product 기능은 준비되지 않았다. Production adapter는 해당 action을 숨겨야 한다.
 - `MobileFullscreenComposerShellCandidate`의 keyboard는 illustrative UI다. 실제 safe area, keyboard avoidance와 back 처리는 상위 runtime이 제공해야 한다.
 - Storybook `ComposerOverlayFixture`는 Production modal semantics, focus trap/restore 또는 router lifecycle을 제공하지 않는다.
-- desktop Rail·Overlay에서 CW나 Media 상태의 자연 높이를 그대로 사용하면 외곽 경계와 고정 control이 함께 이동한다.
+- desktop Overlay에서 CW나 Media 상태의 자연 높이를 그대로 사용하면 외곽 경계와 고정 control이 함께 이동한다.
 
 ### Recommended Approach
 
@@ -36,9 +36,11 @@ Overlay host는 저장소의 기존 modal/focus 처리 패턴을 재사용해 sc
 
 Desktop `PostComposer`는 고정 외곽 높이를 사용하지 않는다. Rail은 풀 사이드바와 같은 `320px` 우측 column에서 본문, Media gallery와 footer를 순서대로 HUG한다. Media가 있으면 본문은 최소 `100px`만 확보하고 gallery를 바로 다음에 배치하며 Media용 빈 공간을 예약하지 않는다. Overlay는 `640px` 폭으로 viewport 상단 `48px`에 배치하고 content를 HUG하다가 상·하 `48px` gutter를 제외한 높이에 도달하면 body·Media만 가운데 `ScrollView`에서 scroll한다. author와 editor header·CW·footer는 그 상한 안에 유지한다. Rail의 editor outline과 개인정보 처리방침 footer는 우측 column 왼쪽에서 16px인 같은 기준선에 맞추고, editor header의 공개 범위와 Expand control은 본문 작성 영역의 좌우 기준선에 맞춘다. 모바일 전체 화면은 기존 높이·scroll 구조를 유지하고 공개 범위 menu의 오른쪽에 16px viewport inset을 둔다.
 
-Desktop Rail·Overlay의 본문 입력은 텍스트 content height를 따라 자동으로 늘어나고 Media·CW도 같은 content-flow에 합류한다. Rail은 `420px`, Overlay는 viewport 상·하 `48px` gutter를 외곽 최대 높이로 사용하며, 각 상한에 닿으면 외곽을 고정하고 body·Media만 가운데 `ScrollView`에서 scroll한다.
+Desktop Rail·Overlay의 본문 입력은 텍스트 content height를 따라 자동으로 늘어나고 Media·CW도 같은 content-flow에 합류한다. Rail은 외곽에 고정 최대 높이를 두지 않고 content를 HUG하며, 본문 TextInput만 `300px`에서 내부 scroll로 전환한다. Rail의 `112px` Media gallery는 본문 scroller 밖 별도 영역에 두고 footer는 항상 표시한다. Overlay는 viewport 상·하 `48px` gutter를 외곽 최대 높이로 사용하며, 상한에 닿으면 외곽을 고정하고 body·Media만 가운데 `ScrollView`에서 scroll한다.
 
 일반 Post 성공 callback은 기존 state reset 이후 surface별 후속 동작만 위임한다. Web Overlay는 닫고 현재 route를 유지하며, 모바일은 닫은 뒤 Home으로 이동한다. 실패 시 기존 draft와 열린 surface를 유지한다.
+
+Composer surface의 내부 close는 같은 Profile lifecycle의 local draft owner를 유지하므로 별도 discard confirmation을 표시하지 않는다. Web Production Composer는 본문·CW·Media 또는 기본값과 다른 공개 범위가 남아 있을 때만 `beforeunload` listener를 연결하고 clean 전환에서 제거한다. 브라우저가 unload event를 제공하는 새로고침·탭 닫기 경로에는 브라우저 기본 확인을 사용하며 커스텀 문구나 별도 Product dialog를 만들지 않는다. Android·iOS 강제 종료 전 확인과 종료 후 draft 영속화는 이번 변경에서 구현하지 않는다.
 
 ### Allowed Alternatives
 

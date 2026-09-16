@@ -2,7 +2,7 @@
 
 ### Requirement: Web 주요 route 이동의 document scroll 정책
 
-**Authority / Provenance:** `docs/design/breakpoints.md`, `PROD-619`; 경계 근거 `PROD-219`, `PROD-610` — Web 앱 셸은 하단 탭, mobile drawer, compact 아이콘 레일 또는 full sidebar에서 현재 pathname과 다른 shell-level 주요 route를 선택한 forward navigation이 대상 route에 반영된 뒤 document scroll을 최상단으로 초기화해야 한다(MUST). 이 정책은 해당 breakpoint에서 제공되는 홈, 검색, 알림, 북마크, 선택 Profile과 글쓰기 진입점에 동일하게 적용해야 한다(MUST). 대상 route의 Relay 데이터가 loading·empty 상태여도 이전 route의 document scroll offset을 노출해서는 안 된다(MUST NOT). 브라우저 뒤로/앞으로 history traversal은 browser scroll restoration을 유지해야 하고(MUST), 검색 화면의 query-only `router.push`/`setParams`는 현재 document scroll과 입력 focus를 보존해야 한다(MUST). 현재 pathname을 다시 선택한 동작에는 이 route-change 초기화를 적용해서는 안 되며(MUST NOT), 현재 홈 재선택의 최상단 이동과 단일 refetch는 `PROD-610` 계약에 남겨야 한다(MUST). 이 요구사항은 Relay 데이터 새로고침 또는 Android/iOS Native navigation scroll 정책을 변경해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/breakpoints.md`, `PROD-619`; 경계 근거 `PROD-219`, `PROD-610` — Web 앱 셸은 하단 탭, mobile drawer, compact 아이콘 레일 또는 full sidebar에서 현재 pathname과 다른 shell-level 주요 route를 선택한 forward navigation이 대상 route에 반영된 뒤 document scroll을 최상단으로 초기화해야 한다(MUST). 이 정책은 해당 breakpoint에서 제공되는 route-backed 홈, 검색, 알림, 북마크, 선택 Profile에만 적용해야 한다(MUST). 대상 route의 Relay 데이터가 loading·empty 상태여도 이전 route의 document scroll offset을 노출해서는 안 된다(MUST NOT). 브라우저 뒤로/앞으로 history traversal은 browser scroll restoration을 유지해야 하고(MUST), 검색 화면의 query-only `router.push`/`setParams`는 현재 document scroll과 입력 focus를 보존해야 한다(MUST). 현재 pathname을 다시 선택한 동작에는 이 route-change 초기화를 적용해서는 안 되며(MUST NOT), 현재 홈 재선택의 최상단 이동과 단일 refetch는 `PROD-610` 계약에 남겨야 한다(MUST). 이 요구사항은 Relay 데이터 새로고침 또는 Android/iOS Native navigation scroll 정책을 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: 다른 주요 route를 document 최상단에서 연다
 
@@ -16,6 +16,12 @@
 - **WHEN** 사용자가 스크롤된 Web route에서 Relay 데이터가 loading 또는 empty 상태인 다른 주요 route로 이동한다
 - **THEN** 대상 상태는 document 최상단에서 표시된다
 - **AND** 이전 route의 scroll offset 때문에 header나 첫 상태 surface가 viewport 위로 벗어나지 않는다
+
+#### Scenario: Route를 바꾸지 않는 글쓰기 action은 document scroll을 보존한다
+
+- **WHEN** 사용자가 스크롤된 Web route에서 현재 route 위에 composer surface만 여는 글쓰기 action을 실행한다
+- **THEN** underlying document scroll은 기존 offset을 유지한다
+- **AND** 이 요구사항의 scroll reset은 pathname-changing route-backed navigation에만 적용된다
 
 #### Scenario: 연속 route 전환은 마지막 대상 route에 수렴한다
 

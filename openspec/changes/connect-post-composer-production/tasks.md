@@ -99,6 +99,7 @@ Full Web Rail, compact Web icon rail, mobile Web·Android·iOS 하단 탭이 동
 - [x] 3.4 direct `/compose` compatibility route를 제거하고, bare `compose` Local Profile 예약을 유지한다.
 - [x] 3.5 shell component 및 Web E2E 회귀 검증을 추가한다.
 - [ ] 3.6 iOS·Android 실제 runtime에서 진입·닫기·keyboard·back·safe area·touch/focus를 확인하고 결과를 기록한다.
+- [x] 3.7 내부 close의 draft 보존은 유지하고 dirty Production Composer에만 Web 문서 unload 확인을 연결하며 clean 전환에서 해제되는지 browser interaction으로 검증한다.
 
 ## 4. PROD-797 통합 검증과 문서 동기화
 
@@ -125,6 +126,7 @@ Production 연결 결과와 실제 검증 범위가 Storybook, 디자인 문서�
 
 - Relay compiler, 앱 check/typecheck, 관련 unit/integration/Storybook interaction, static Storybook build와 OpenSpec strict validation을 통과시킨다.
 - Web Light/Dark full·compact·mobile 시각/interaction QA와 Native 실제 검증을 구분해 기록한다.
+- focused Storybook/browser에서 Web Composer Rail·Overlay의 thin scrollbar, `borderStrong` thumb, 투명 track, Overlay 전용 stable gutter, Rail no-gutter와 horizontal gallery 예외를 확인한다.
 
 - [x] 4.1 Production 계약에 맞게 관련 Storybook Tests와 manual Playground를 정렬한다.
 - [x] 4.2 `docs/design/figma.md`와 `docs/design/breakpoints.md`의 Production 이관·검증 상태를 실제 결과에 맞게 갱신한다.
@@ -260,10 +262,19 @@ Production 연결 결과와 실제 검증 범위가 Storybook, 디자인 문서�
 - 로컬 브라우저에서 짧은 글 `470px`, 10줄 `542px`, 40줄 viewport 상한 `624px`를 확인했고,
   Full Web Shell contract 1개와 PostComposer contract 28개가 통과했다.
 - 후속 화면 검토에서 Rail도 자동 높이를 유지하되 스크린샷 수준의 `420px`를 외곽 상한으로 확정했다.
-  텍스트·Media·CW가 이 상한을 넘으면 Rail의 body·Media 영역만 scroll한다.
+  텍스트·Media·CW가 이 상한을 넘으면 Rail의 body·Media 영역만 scroll한다. 이 결정은 2026-09-16 Derived Contract
+  `Rail 외곽 상한을 폐기하고 본문·Media 영역을 분리`로 Superseded 되었다.
 - 로컬 브라우저에서 Rail은 짧은 글 `406px`에서 20줄 `420px`까지만 늘어났고, body·Media 영역은
   `198px` viewport에 `496px` content를 보유해 내부 scroll로 전환된 것을 확인했다. PostComposer contract 28개와
   Full Web Shell contract 1개가 통과했다.
 - compact Overlay geometry contract 1개에서 빈 dialog가 viewport 상한보다 작고, 본문 추가 시에만 늘어나며,
   긴 본문에서는 상·하 `48px` gutter 상한에 도달한 뒤 내부 scroll로 전환되는 것을 확인했다. 본문을 모두 지우면
   다시 빈 dialog 높이로 줄어드는 회귀도 함께 검증했다.
+
+### Rail 외곽 상한 폐기·본문 scroll 영역 정렬 — 2026-09-16
+
+- 사용자 승인에 따라 Rail의 외곽 `420px` 상한과 정확 높이 계약을 폐기하고 전체 content HUG를 canonical로 정렬했다.
+- Rail 본문 TextInput은 `300px`에서 입력 내부 scroll을 소유하고, `112px` Media gallery는 본문 scroller 밖 별도
+  영역에 두며 footer는 항상 가시 상태를 유지한다. Overlay의 viewport 상·하 `48px` gutter 상한은 유지한다.
+- `Shell.tests`의 구식 Rail exact height assertion을 제거했으며, 기존 `RailBodyMaxHeightContract`의 본문 `300px`
+  실동작·본문 scroller 비스크롤 검증은 유지한다. OpenSpec 완료 체크박스는 새로 완료 처리하지 않았다.

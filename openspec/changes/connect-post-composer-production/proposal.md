@@ -10,6 +10,7 @@
 - `/compose` route를 제거해도 bare `compose`는 Local Profile의 System Reserved Handle로 계속 예약한다.
 - 기존 본문, Content Warning, 공개 범위, 최대 4개 Media, Alt Text, Sensitive Media, upload 진행·실패·재시도·제거·편집, 제출 상태와 `createPost` mutation을 보존한다.
 - Overlay의 Escape·backdrop·닫기, 모바일 back, keyboard/짧은 viewport scroll, 닫힌 뒤 trigger focus 복귀를 Production host가 소유한다.
+- 내부 close는 같은 Profile lifecycle의 draft를 보존하고, dirty Web Production Composer는 새로고침·탭 닫기 같은 문서 unload에서만 브라우저 기본 확인을 요청한다.
 - 일반 Post 작성 성공 시 shell이 연 surface를 닫되 Web은 현재 route를 유지하고 모바일은 Home으로 돌아간다.
 
 ## Authority / Provenance

@@ -31,12 +31,22 @@
 - **AND** Media가 있으면 본문은 최소 `100px`만 확보하고 gallery를 바로 다음에 배치하며 별도 빈 공간을 예약하지 않는다
 - **AND** Overlay는 `640px` 폭으로 viewport 상단 `48px`에 배치하고 내용과 함께 늘어난다
 - **AND** Rail·Overlay의 본문 입력은 텍스트 줄 수에 따라 늘어나며 Media·CW도 같은 content-flow에 합류한다
-- **AND** Rail은 `420px`에 닿으면 외곽을 더 늘리지 않고 body·Media만 가운데 scroller에서 scroll한다
+- **AND** Rail은 외곽에 고정 최대 높이를 두지 않고 content를 HUG한다
+- **AND** Rail의 본문 TextInput만 `300px`에서 내부 scroll로 전환한다
+- **AND** Rail의 `112px` Media gallery는 본문 scroller 밖 별도 영역에 표시하고 footer는 항상 가시 상태로 유지한다
 - **AND** Overlay가 상·하 `48px` gutter를 제외한 최대 높이에 도달하면 author·editor header·CW·footer를 유지하고 body·Media만 가운데 scroller에서 scroll한다
 - **AND** Rail의 editor outline과 개인정보 처리방침 footer는 우측 column 왼쪽에서 16px인 같은 기준선에 맞춘다
 - **AND** Rail editor header의 공개 범위와 Expand control은 본문 작성 영역의 좌우 기준선에 맞춘다
 - **AND** Content Warning은 editor header 다음에 표시하고 Media gallery보다 앞에 둔다
 - **AND** 모바일 전체 화면의 기존 높이·scroll 계약을 변경하지 않는다
+
+#### Scenario: Web Composer scrollbar contract
+
+- **WHEN** Web Post Composer가 Rail 또는 Overlay에서 KOSMO-owned vertical scroller를 표시한다
+- **THEN** vertical scrollbar는 `borderStrong` thumb와 투명 track을 사용하는 얇은 스타일로 표시된다
+- **AND** Overlay만 stable gutter를 예약해 scrollbar가 content 위를 덮지 않는다
+- **AND** Rail은 scrollbar gutter를 추가하지 않는다
+- **AND** horizontal gallery 또는 tab scroller처럼 시각적 scrollbar를 숨기는 기능별 예외는 기존 navigation·swipe·keyboard 도달 계약과 함께 유지한다
 
 #### Scenario: 모바일 공개 범위 menu 열기
 
@@ -115,6 +125,14 @@
 - **WHEN** 사용자가 미완성 draft가 있는 composer surface를 닫은 뒤 같은 Profile lifecycle에서 다시 연다
 - **THEN** 시스템은 기존 draft와 진행 중인 upload 상태를 다시 표시한다
 - **AND** 이 변경은 별도 discard confirmation을 추가하지 않는다
+
+#### Scenario: Web 문서 unload에서 미완성 draft 보호
+
+- **WHEN** Production Post Composer의 본문, Content Warning, Media(업로드 중·실패 상태 포함) 또는 기본값과 다른 공개 범위가 남아 있는 동안 Web 문서를 새로고침하거나 탭을 닫는다
+- **THEN** 시스템은 브라우저 기본 unload 확인을 요청한다
+- **AND** draft가 clean 상태가 되면 unload 확인 listener를 제거한다
+- **AND** Composer surface의 내부 close에는 unload 확인을 표시하지 않고 같은 Profile lifecycle의 draft를 유지한다
+- **AND** Android·iOS 강제 종료 전 확인이나 종료 후 draft 영속화를 이 동작의 완료 증거로 주장하지 않는다
 
 ## MODIFIED Requirements
 
