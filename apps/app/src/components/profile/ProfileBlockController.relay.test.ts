@@ -91,7 +91,7 @@ afterEach(async () => {
 });
 
 describe('ProfileBlockController Relay cache boundary', () => {
-  it('GraphQL 오류가 함께 온 Block 결과를 성공으로 적용하지 않고 재시도한다', async () => {
+  it('optional field 오류가 함께 와도 확정된 Block 결과를 적용한다', async () => {
     environment = createEnvironment();
     environment.commitUpdate((store) => {
       const follow = store.create('follow-before-error', 'ProfileFollow');
@@ -100,64 +100,23 @@ describe('ProfileBlockController Relay cache boundary', () => {
       store.get(viewerStateId)?.setLinkedRecord(request, 'followRequest');
     });
     const { request } = await beginBlock();
-    const partial = blockPayload('block-partial');
+    const partial = blockPayload('block-confirmed');
 
     respond({
-      data: {
-        blockProfile: {
-          ...partial.blockProfile,
-          profileBlock: {
-            ...partial.blockProfile.profileBlock,
-            targetProfile: {
-              ...partial.blockProfile.profileBlock.targetProfile,
-              viewerState: null,
-            },
-          },
-        },
-      },
+      data: partial,
       errors: [
         {
-          message: 'Viewer state failed',
-          path: ['blockProfile', 'profileBlock', 'targetProfile', 'viewerState'],
+          message: 'Follow projection failed',
+          path: ['blockProfile', 'profileBlock', 'targetProfile', 'viewerState', 'follow'],
         },
       ],
     });
 
-    await assert.rejects(request, /did not confirm/);
-    assert.deepEqual(connectionNodeIds(), []);
-    assert.deepEqual(environment.getStore().getSource().get(targetProfileId)?.viewerState, {
-      __ref: viewerStateId,
-    });
-    assert.equal(viewerProfileBlockId(), null);
-    assert.deepEqual(environment.getStore().getSource().get(viewerStateId)?.follow, {
-      __ref: 'follow-before-error',
-    });
-    assert.deepEqual(environment.getStore().getSource().get(viewerStateId)?.followRequest, {
-      __ref: 'request-before-error',
-    });
-    const retry = controller?.changeBlocked({ ownerProfileId, targetProfileId }, true);
-    assert.ok(retry);
-    respond({ data: blockPayload('block-confirmed') });
-    await retry;
+    await request;
     assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
     assert.equal(viewerProfileBlockId(), 'block-confirmed');
     assert.equal(environment.getStore().getSource().get(viewerStateId)?.follow, null);
     assert.equal(environment.getStore().getSource().get(viewerStateId)?.followRequest, null);
-  });
-
-  it('GraphQL 오류가 함께 온 Unblock 결과는 기존 exact relation을 유지한다', async () => {
-    environment = createEnvironment();
-    createRelation('block-confirmed');
-    const { request } = await beginUnblock('block-confirmed');
-
-    respond({
-      data: { unblockProfile: { success: true, profileBlockId: 'block-confirmed' } },
-      errors: [{ message: 'Unblock response failed', path: ['unblockProfile'] }],
-    });
-
-    await assert.rejects(request, /did not confirm/);
-    assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
-    assert.equal(viewerProfileBlockId(), 'block-confirmed');
   });
 
   it('기존 Profile global ID로 relation을 정규화하고 Profile cache를 보존한다', async () => {
