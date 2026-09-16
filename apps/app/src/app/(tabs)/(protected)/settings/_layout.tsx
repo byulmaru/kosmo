@@ -32,7 +32,7 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   const selected =
     root || pathname === '/settings/default-post-visibility'
       ? 'default-post-visibility'
-      : pathname === '/settings/info'
+      : pathname === '/settings/info' || pathname === '/settings/developer'
         ? 'info'
         : undefined;
   const detailHeaderMode: SettingsDetailHeaderMode =

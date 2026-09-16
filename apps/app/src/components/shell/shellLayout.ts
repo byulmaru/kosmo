@@ -42,6 +42,7 @@ export type WebMobileShellHeader = Readonly<{
     | '뮤트 및 차단'
     | '뮤트한 프로필'
     | '설정'
+    | '개발 정보'
     | '알림'
     | '정보';
 }>;
@@ -95,6 +96,9 @@ export function getWebMobileShellHeader(
   }
   if (pathname === '/settings/info') {
     return { leading: 'back', title: '정보' };
+  }
+  if (pathname === '/settings/developer') {
+    return { leading: 'back', title: '개발 정보' };
   }
 
   if (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]') {

@@ -5,7 +5,11 @@ type SettingsNavigationRouter = Pick<ImperativeRouter, 'replace'>;
 
 export function returnToSettingsParent(pathname: string, router: SettingsNavigationRouter) {
   const parentPath =
-    pathname === '/settings/muted-profiles' ? '/settings/mute-and-block' : '/settings';
+    pathname === '/settings/muted-profiles'
+      ? '/settings/mute-and-block'
+      : pathname === '/settings/developer'
+        ? '/settings/info'
+        : '/settings';
 
   if (Platform.OS === 'web') {
     globalThis.location.replace(parentPath);

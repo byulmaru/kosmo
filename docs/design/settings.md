@@ -13,8 +13,10 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 2026-09-10 PROD-889 결정으로 `정보`를 Settings root의 추가 direct destination으로 두고
 `/settings/info` detail에서 공개 정책 문서 진입점을 제공한다. `정보`는 기존 Settings 목록·detail·back·header
-조합을 사용하며, `개인정보 처리방침`·`계정 삭제 안내`·`아동 안전 정책`의 public route로 이동하는 링크만
-포함한다. 이 추가 진입점은 Byulmaru ID가 소유하는 기존 `계정 설정` 외부 진입점과 결합하지 않는다.
+조합을 사용하며, `개인정보 처리방침`·`계정 삭제 안내`·`아동 안전 정책`의 public route로 이동하는 링크를
+포함한다. 이 정책 링크 범위와 별개로, 인증된 모든 플랫폼에서는 이 detail에 `개발 정보`의 nested destination을
+하나 더 제공하며 채널과 OTA 진단은 `/settings/developer`에서만 표시한다. 이 추가 진입점은 Byulmaru ID가
+소유하는 기존 `계정 설정` 외부 진입점과 결합하지 않는다.
 비로그인 landing의 기존 개인정보 처리방침 링크와 full Web 우측 레일의 기존 개인정보 처리방침 링크는
 유지하고, Sidebar·mobile drawer에 정책 링크를 추가하지 않는다.
 
@@ -49,9 +51,15 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   root에 중복 노출하거나 항목 하나만 가진 `계정`·`화면 설정` 대분류를 만들지 않는다.
 - `정보`는 별도 category나 generic policy registry가 아닌 Settings root의 direct destination이다. `/settings/info`
   detail은 `개인정보 처리방침`, `계정 삭제 안내`, `아동 안전 정책`을 각각 public route로 여는 기존 Settings
-  link-row 문법을 사용한다. Web의 `/settings/info`는 세 policy link만 유지한다. Native channel row/selector는
-  아래 Native channel 전환 계약을 따른다. 정책 문서의
-  본문·시행일·이메일 처리와 public route 간 cross-link는 각 정책 문서가 소유한다.
+  link-row 문법을 사용한다. 모든 플랫폼의 `/settings/info`는 세 policy link와 `개발 정보` link row를
+  제공하며 channel selector나 OTA 진단을 inline으로 표시하지 않는다. 정책 문서의 본문·시행일·이메일 처리와
+  public route 간 cross-link는 각 정책 문서가 소유한다.
+- `/settings/developer`는 `/settings/info`를 명시적 parent로 갖는 nested detail destination이다. Web에서는
+  `getPublicConfig('channel')`로 확인한 channel을 읽기 전용 행으로 표시한다. Android/iOS Native에서는 기존
+  `NativeChannelSettings`를 사용해 `dev`·`prod` channel selector를 제공하고, 현재 실행에 대한 `현재 updateId`,
+  `runtimeVersion`, `실행 유형`, `생성 시각`, `업데이트 상태`를 읽기 전용 진단 행으로 표시한다.
+  `checkError`와 `downloadError`는 실제 값이 있을 때만 각각 optional 진단 행으로 표시하며 Web에서 Expo OTA
+  값을 임의로 채우지 않는다.
 - `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 하위 목록을 연다.
   두 상태를 하나의 혼합 목록으로 표시하지 않는다. 세부 action과 Profile 상태는
   [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다.
@@ -122,16 +130,22 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   destination은 이동을 전달할 수 있지만, 현재 화면에서 값을 바꾸는 control에는 장식용 chevron을 붙이지
   않는다.
 
-## Native channel 전환
+## Native channel과 OTA 진단
 
-- 인증된 Android/iOS Native `설정 → 정보`에서만 `dev`·`prod` channel selector를 제공한다. 로그인 화면에는 채널
-  선택기를 두지 않으며, 로그인하지 못한 사용자는 앱 내부에서 채널을 되돌릴 수 없다. Web 정보·channel UI는 유지한다.
+- 인증된 Android/iOS Native `설정 → 정보 → 개발 정보`에서만 `dev`·`prod` channel selector를 제공한다. 로그인
+  화면에는 채널 선택기를 두지 않으며, 로그인하지 못한 사용자는 앱 내부에서 채널을 되돌릴 수 없다. Web의
+  `설정 → 정보 → 개발 정보`는 `getPublicConfig('channel')`의 현재 channel을 읽기 전용으로 표시한다.
 - 선택한 값은 API·Web·OIDC·Sentry·OTA의 하나의 environment로 해석한다. 고정 OTA URL과 persistent header는
   [Expo OTA 운영](../operations/expo-ota.md)의 계약을 따른다.
-- Android/iOS Native `정보`는 읽기 전용으로 현재 실행 중인 Expo `expo-updates`의 전체 `updateId`를 표시한다.
-  내장 번들도 `updateId`가 있으면 같은 식별자를 표시한다.
-- `expo-updates` `updateId`가 없는 local development 또는 disabled 환경에서는 `식별 불가`로 표시하며, 다운로드
-  대기 중인 업데이트 ID를 현재 실행 ID로 표시하지 않는다.
+- Android/iOS Native `개발 정보`는 읽기 전용으로 현재 실행 중인 Expo `expo-updates`의 전체 `updateId`,
+  `runtimeVersion`, 실행 유형(내장 번들 또는 OTA), `createdAt`, 업데이트 상태를 표시한다. 현재 실행 중인
+  값을 기준으로 하며 다운로드 대기 중인 업데이트 ID를 현재 실행 ID로 표시하지 않는다. Web에는 이 OTA
+  전용 행을 표시하지 않는다.
+- `checkError`와 `downloadError`는 각 오류가 존재할 때만 진단 행으로 표시하고, 오류가 없는 정상 상태에는
+  빈 오류 행이나 placeholder를 만들지 않는다. 값이 없는 `updateId`·`runtimeVersion`·`createdAt`은
+  `식별 불가`로 표시한다.
+- `expo-updates` `updateId`가 없는 Native local development 또는 disabled 환경에서는 `식별 불가`로 표시하며,
+  다운로드 대기 중인 업데이트 ID를 현재 실행 ID로 표시하지 않는다.
 - 취소·현재 값 재선택은 no-op이다. 다른 값은 호환 signed update의 확인·download가 성공한 뒤 login 삭제와
   reload를 수행하고, 404·검증·download 실패에서는 원래 channel과 실행 가능한 fallback을 유지한다.
 - runtime/project/platform 호환성, signature·asset hash 검증을 유지하며 native code·module·SDK·permission
@@ -188,8 +202,8 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   동시에 나누어 표시하지 않고 한 화면씩 보여 준다.
 - 모든 내부 category·detail destination은 명시적인 parent를 가진다. back action은 이전 navigation stack의
   화면과 무관하게 해당 parent를 명시적으로 연다. root의 직접 진입점이 여는 1단계 destination의 parent는
-  `/settings` root이고, 중첩 destination의 parent는 바로 위 category다. direct·deep link로 연 경우에도 같은
-  parent를 사용한다.
+  `/settings` root이고, 중첩 destination의 parent는 바로 위 category다. 따라서 `/settings/developer`의
+  parent는 `/settings/info`다. direct·deep link로 연 경우에도 같은 parent를 사용한다.
 - `< compact` mobile Web의 root에서는 `UniversalShell`이 메뉴 action과 `설정` heading을 가진 공용
   [PageHeader](./page-header.md)를 렌더링한다. 내부 category·detail destination에서는 shell이 back action과
   현재 destination heading을 렌더링하고 route 본문은 같은 heading을 복제하지 않는다.
@@ -226,9 +240,10 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   반복하지 않는다.
 - Target root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 →
   `프로필 설정` → `뮤트 및 차단` → `테마`와 현재 선택값 → `정보`다. full Web에서는 이어서 detail heading과
-  현재 선택된 content를 읽는다. Web `/settings/info`에서는 `정보` heading 다음에 세 public policy link를
-  문서 순서대로 읽는다. Native `/settings/info`에서는 policy link와 함께 `채널`의 현재 `dev`·`prod` 값을
-  읽는다.
+  현재 선택된 content를 읽는다. 모든 플랫폼의 `/settings/info`에서는 `정보` heading 다음에 세 public policy
+  link를 문서 순서대로 읽고, 이어서 `개발 정보` link를 읽는다.
+  `/settings/developer`에서는 `개발 정보` heading 다음에 Web은 `채널`의 현재 `dev`·`prod` 값을, Native는
+  `채널` selector를 읽는다. Native에서는 이어서 OTA 진단 행을 읽으며, Web에는 OTA 전용 행을 만들지 않는다.
 - Account 진입점은 시각 label `계정 설정`과 link accessible name·canonical destination에서 Byulmaru ID 외부
   Account Settings로 이동한다는 사실을 전달한다. 내부 진입점은 선택·현재 상태와 destination을, Profile
   control은 Kosmo 내부 기능과 현재 대상을 전달한다.
@@ -239,7 +254,8 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   중복 없이 소유한다.
 - Native channel selector는 선택된 `dev`·`prod`와 busy/error 상태를 보조기술에
   전달한다. 확인·download 중에는 selector를 중복 실행할 수 없고, 취소·현재 channel 재선택은 별도
-  announcement나 상태 변경을 만들지 않는다. Web `/settings/info`는 기존 세 policy link 순서를 유지한다.
+  announcement나 상태 변경을 만들지 않는다. Web `/settings/info`는 기존 세 policy link 순서와 `개발 정보`
+  entrypoint를 유지한다. Native `/settings/developer`의 optional 오류 행은 오류가 있을 때만 읽힌다.
 - Web target은 [accessibility.md](./accessibility.md)의 24×24 CSS px minimum과 공식 예외를 따르고, iOS는
   기본 44×44pt, Android는 48×48dp touch target을 사용한다.
 - Web 자동화 결과를 Android·iOS screen reader, font scaling과 touch target 검증의 대체 증거로 사용하지
@@ -271,8 +287,11 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - PROD-685의 통합 검증은 자식 기능의 세부 테스트를 반복하지 않는다. 지원 navigation surface, root/category/detail
   전환, full workspace, 외부/내부 소유 경계, 반응형 heading·focus·reflow가 함께 동작하는지 확인한다.
 - PROD-889는 `/settings/info` direct destination과 세 public policy route link의 배치, 기존 landing·RightRail
-  개인정보 처리방침 보존, Sidebar·mobile drawer 정책 링크 비노출을 소유한다. `/settings/info`는 새 정책 내용이나
-  Account 관리 기능을 구현하지 않는다.
+  개인정보 처리방침 보존, Sidebar·mobile drawer 정책 링크 비노출을 소유한다. `/settings/info`는 새 정책
+  내용이나 Account 관리 기능을 구현하지 않는다.
+- 인증된 `/settings/info`의 `개발 정보` nested entrypoint와 `/settings/developer`의 channel·Native OTA 진단
+  계약은 위 정보 구조와 Native channel과 OTA 진단 절에서 정의한다. 이 문서에서는 해당 계약에 별도
+  issue 또는 OpenSpec owner를 추론해 부여하지 않는다.
 - PROD-685는 구현과 검증 증거를 PROD-684에 인계하고, PROD-684가 최종 Settings 통합·OpenSpec 정합성 확인과
   archive를 소유한다.
 - 자동화·source/unit 결과는 실제 Web keyboard·screen reader·zoom 또는 Android·iOS runtime 접근성·
