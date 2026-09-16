@@ -151,8 +151,8 @@ rename·disable·delete하지 않는다.
 Profile Origin은 연결된 Instance Type과 같아야 한다. Follow Approval Policy 변경은 이미 존재하는 Pending Follow
 Request의 상태나 존재를 바꾸지 않는다.
 
-Account 삭제는 연결된 모든 Profile의 Deactivated 상태를 전제로 하지만 Profile을 삭제하거나 비활성화하지
-않는다. 따라서 Profile의 상태·속성·관계는 삭제 후에도 보존된다.
+Account 삭제는 Active Account에 연결된 모든 Profile의 Deactivated 상태를 전제로 하지만 Profile을 삭제하거나
+비활성화하지 않는다. 따라서 Profile의 상태·속성·관계는 삭제 후에도 보존된다.
 
 Profile 편집의 전체 자격은 Account.Active, Profile.Owner와 대상 Profile의 Active/Normal lifecycle로 정한다.
 기본 Post Visibility는 Local Profile에만 적용·변경하며, 다른 편집 field는 selected Profile의 Origin 또는

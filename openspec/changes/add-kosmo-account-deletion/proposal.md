@@ -6,9 +6,10 @@
 
 ## What Changes
 
-- Profile이 없거나 모두 storage `DISABLED`(domain `Deactivated`)인 경우에만 탈퇴를 허용하고, 실패 시 활성
-  Profile 개수와 이유를 표시한다. 성공은 기존 Account storage `DISABLED`를 canonical `Deleted`로 사용하며
-  Profile·Membership·Account 속성을 보존하고, 명세된 인증·인가·토큰·코드·Push 관계를 원자적으로 정리한다.
+- 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 이유를 사전 표시한다. 별도 eligibility API 없이
+  서버 mutation이 Active Account의 Profile이 없거나 모두 storage `DISABLED`(domain `Deactivated`)인지 원자적으로 재확인한다.
+  성공은 기존 Account storage `DISABLED`를 canonical `Deleted`로 사용하며 Profile·Membership·Account 속성을
+  보존하고, 명세된 인증·인가·토큰·코드·Push 관계를 정리한다. mutation payload는 `completed`만 반환한다.
 - Settings root/master에 항상 보이는 마지막 `코스모 탈퇴` 행과 `/settings/account-deletion` detail을
   Web·Android·iOS에 제공한다. acknowledgement checkbox만 요구하고 재인증·유예기간·이유 입력은 추가하지
   않으며, pending·error·retry·success와 login 이동을 서버 확정 결과에 맞춘다.
@@ -38,8 +39,8 @@
 
 ## Impact
 
-- Account/Profile/Membership/Session 도메인과 명시된 인증·인가·토큰·코드·Push 관계, API/GraphQL transport가
-  영향을 받는다.
+- Account/Profile/Membership/Session 도메인과 명시된 인증·인가·토큰·코드·Push 관계가 영향을 받는다. GraphQL은
+  인증된 `deleteAccount` mutation과 `completed` payload만 제공하며 별도 eligibility query나 count payload는 없다.
 - Web·Android·iOS Settings가 공통 lifecycle과 login 전환을 소비하고, 공개 안내와 iOS device evidence가
   추가된다.
 - 새 `DELETED` enum·schema migration, Profile/Post/Media 정책 변경, Byulmaru ID 변경, OpenPanel 분석,

@@ -15,7 +15,8 @@
 
 **Guardrails**
 
-- Account State가 Active 또는 Suspended이고 연결 Profile이 없거나 모두 storage `DISABLED`일 때만 허용한다.
+- Account State가 Active이고 연결 Profile이 없거나 모두 storage `DISABLED`일 때만 허용한다. 클라이언트
+  precheck는 `me.profiles`에서 파생하고, 서버 mutation은 transaction 안에서 다시 확인한다.
 - Account storage `DISABLED`를 canonical Deleted로 사용하며 새 `DELETED` enum이나 schema migration을 추가하지 않는다.
 - Profile·Membership·Account 속성을 삭제·변경하지 않는다.
 - 모든 Active Session(현재 Session 포함)을 `REVOKED`로 전환하고, `ApplicationAuthorization.revokedAt`을
@@ -63,8 +64,8 @@ Web·Android·iOS Settings lifecycle, 성공 후 login 전환, public in-app-onl
 
 - Settings root/master 마지막 행을 항상 노출하고 `/settings/account-deletion`으로 이동한다. Byulmaru ID 외부
   `계정 설정`과 Profile action을 변경하거나 대체하지 않는다.
-- eligibility 실패 시 Active Profile 개수와 이유만 표시하고 Profile 목록·action·Membership cleanup 진입점을
-  제공하지 않는다.
+- eligibility 실패 시 `me.profiles`에서 계산한 Active Profile 개수와 이유만 표시하고 Profile 목록·action·Membership
+  cleanup 진입점을 제공하지 않는다. 이 값은 서버 mutation의 원자적 재확인을 대체하지 않는다.
 - acknowledgement checkbox만 사용하고 재인증·유예기간·이유 입력·이유 설문을 추가하지 않는다. checkbox 전 확정
   action은 disabled다.
 - pending 중 중복 실행·checkbox 변경·dismiss·navigation을 막고, error에서는 확인 내용과 checkbox를 유지한 채

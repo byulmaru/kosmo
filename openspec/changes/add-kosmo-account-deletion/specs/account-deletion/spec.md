@@ -2,17 +2,17 @@
 
 ### Requirement: Kosmo Account 탈퇴 eligibility
 
-**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/design/settings.md`, `PROD-970` — 인증된 사용자는 자기 Kosmo Account에 대해서만 탈퇴를 요청할 수 있어야 하며(MUST), Account State가 Active 또는 Suspended이고 연결된 Profile이 없거나 모든 연결 Profile의 storage state가 `DISABLED`(domain Profile Lifecycle State `Deactivated`)인 경우에만 탈퇴를 허용해야 한다(MUST). 조건을 만족하지 않으면 Account, Profile, Membership, Session, `ApplicationAuthorization`, `OAuthTokens`, `OAuthAuthorizationCodes` 또는 `PushInstallation`을 변경해서는 안 된다(MUST NOT). 탈퇴 eligibility 확인은 Profile이나 Membership을 삭제·비활성화·연결 해제해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/design/settings.md`, `PROD-970` — 인증된 사용자는 자기 Kosmo Account에 대해서만 탈퇴를 요청할 수 있어야 하며(MUST), Account State가 Active이고 연결된 Profile이 없거나 모든 연결 Profile의 storage state가 `DISABLED`(domain Profile Lifecycle State `Deactivated`)인 경우에만 탈퇴를 허용해야 한다(MUST). 조건을 만족하지 않으면 Account, Profile, Membership, Session, `ApplicationAuthorization`, `OAuthTokens`, `OAuthAuthorizationCodes` 또는 `PushInstallation`을 변경해서는 안 된다(MUST NOT). 탈퇴 eligibility 확인은 Profile이나 Membership을 삭제·비활성화·연결 해제해서는 안 된다(MUST NOT). 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 차단 이유를 사전 표시할 수 있지만(MAY), 이는 참고용이며 별도 eligibility API를 제공하지 않는다(MUST NOT). 실제 탈퇴 mutation은 검증된 Account ID를 대상으로 서버가 같은 transaction에서 연결 Profile State를 다시 확인해야 한다(MUST).
 
 #### Scenario: 연결된 Profile이 없는 Account의 탈퇴
 
-- **WHEN** Active 또는 Suspended Account에 연결된 Profile이 없다
+- **WHEN** Active Account에 연결된 Profile이 없다
 - **THEN** 시스템은 해당 Account의 탈퇴 eligibility를 허용한다
 - **AND** 탈퇴 확인 전에 Profile 또는 Membership을 생성하거나 변경하지 않는다
 
 #### Scenario: 모든 연결 Profile이 비활성화된 Account의 탈퇴
 
-- **WHEN** Active 또는 Suspended Account에 연결된 모든 Profile의 storage state가 `DISABLED`이다
+- **WHEN** Active Account에 연결된 모든 Profile의 storage state가 `DISABLED`이다
 - **THEN** 시스템은 해당 Account의 탈퇴 eligibility를 허용한다
 - **AND** 연결된 Profile과 Membership은 그대로 보존한다
 
@@ -27,11 +27,11 @@
 
 - **WHEN** 요청 Account가 이미 Deleted 상태이다
 - **THEN** 시스템은 새로운 탈퇴 전이를 시작하지 않는다
-- **AND** Account를 Active 또는 Suspended로 되돌리지 않는다
+- **AND** Account를 Active로 되돌리지 않는다
 
 ### Requirement: 원자적 Account terminal 전환과 인증·기기 정리
 
-**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/session.md`, `PROD-970` — eligibility가 확정된 탈퇴는 하나의 원자적 결과로 처리해야 한다(MUST). 확정된 결과는 기존 storage `AccountState.DISABLED`를 canonical Account State `Deleted`로 전환하고(MUST), Profile·Membership·Account 속성을 보존해야 한다(MUST). 같은 결과 안에서 해당 Account의 모든 Active Session(현재 요청 Session 포함)을 `REVOKED`로 전환하고(MUST), `ApplicationAuthorization.revokedAt`을 설정하며(MUST), `OAuthTokens`를 `REVOKED` 상태와 `revokedAt`으로 전환하고(MUST), `OAuthAuthorizationCodes`와 `PushInstallation`을 물리적으로 삭제해야 한다(MUST). 일반적인 한 Session 로그아웃처럼 현재 Session만 폐기하는 동작으로 축소해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/session.md`, `PROD-970` — eligibility가 확정된 탈퇴는 하나의 원자적 결과로 처리해야 한다(MUST). 확정된 결과는 기존 storage `AccountState.DISABLED`를 canonical Account State `Deleted`로 전환하고(MUST), Profile·Membership·Account 속성을 보존해야 한다(MUST). 같은 결과 안에서 해당 Account의 모든 Active Session(현재 요청 Session 포함)을 `REVOKED`로 전환하고(MUST), `ApplicationAuthorization.revokedAt`을 설정하며(MUST), `OAuthTokens`를 `REVOKED` 상태와 `revokedAt`으로 전환하고(MUST), `OAuthAuthorizationCodes`와 `PushInstallation`을 물리적으로 삭제해야 한다(MUST). 일반적인 한 Session 로그아웃처럼 현재 Session만 폐기하는 동작으로 축소해서는 안 된다(MUST NOT). 서버 탈퇴 mutation payload는 `completed`만 포함해야 하며(MUST), 원자적 재확인에서 조건이 충족되지 않은 `BLOCKED` 결과는 `completed: false`로 반환해야 한다(MUST).
 
 #### Scenario: 탈퇴 결과를 성공으로 확정한다
 
@@ -57,7 +57,7 @@
 
 ### Requirement: Settings의 Kosmo 탈퇴 확인 lifecycle
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/design/profile-lifecycle.md`, `docs/domain/objects/account.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/session.md`, `PROD-970` — 인증된 Web·Android·iOS Settings는 `/settings/account-deletion` 내부 detail에서 같은 Account 탈퇴 eligibility, 확인, pending, error 및 success 계약을 제공해야 한다(MUST). Settings root/master는 `코스모 탈퇴` 행을 항상 노출해야 하며(MUST), 이 행은 Byulmaru ID의 외부 `계정 설정`과 분리되어야 한다(MUST). eligibility가 충족되지 않으면 활성 Profile 개수와 이유를 표시해야 하며(MUST), Profile 목록·Profile action·Profile 관리 화면으로의 보조 진입점을 추가해서는 안 된다(MUST NOT). eligibility가 충족되면 되돌릴 수 없는 탈퇴 안내와 acknowledgement checkbox를 표시하고(MUST), checkbox를 선택하기 전 확정 action을 비활성화해야 하며(MUST). 재인증, 유예기간, 탈퇴 이유 입력 또는 이유 설문을 요구해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/settings.md`, `docs/design/profile-lifecycle.md`, `docs/domain/objects/account.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/session.md`, `PROD-970` — 인증된 Web·Android·iOS Settings는 `/settings/account-deletion` 내부 detail에서 같은 Account 탈퇴 eligibility, 확인, pending, error 및 success 계약을 제공해야 한다(MUST). Settings root/master는 `코스모 탈퇴` 행을 항상 노출해야 하며(MUST), 이 행은 Byulmaru ID의 외부 `계정 설정`과 분리되어야 한다(MUST). 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 이유를 사전 표시할 수 있지만(MAY), 이 precheck는 참고용이며 서버 mutation의 원자적 재확인을 대체하지 않는다(MUST NOT). eligibility가 충족되지 않으면 활성 Profile 개수와 이유를 표시해야 하며(MUST), Profile 목록·Profile action·Profile 관리 화면으로의 보조 진입점을 추가해서는 안 된다(MUST NOT). eligibility가 충족되면 되돌릴 수 없는 탈퇴 안내와 acknowledgement checkbox를 표시하고(MUST), checkbox를 선택하기 전 확정 action을 비활성화해야 하며(MUST). 재인증, 유예기간, 탈퇴 이유 입력 또는 이유 설문을 요구해서는 안 된다(MUST NOT).
 
 #### Scenario: 탈퇴 행을 항상 표시한다
 

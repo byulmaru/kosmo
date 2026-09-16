@@ -5,11 +5,6 @@ type Account implements Node {
   profiles: [Profile!]!
 }
 
-type AccountDeletionEligibility {
-  activeProfileCount: Int!
-  canDelete: Boolean!
-}
-
 type AccountProfile implements Node {
   id: ID!
   role: AccountProfileRole!
@@ -140,7 +135,6 @@ type CreateProfilePayload {
 scalar DateTime
 
 type DeleteAccountPayload {
-  activeProfileCount: Int!
   completed: Boolean!
 }
 
@@ -527,7 +521,6 @@ enum PushInstallationPlatform {
 }
 
 type Query {
-  accountDeletionEligibility: AccountDeletionEligibility!
   currentSession: Session
   homeTimeline(after: String, before: String, first: Int, last: Int): PostConnection
   localTimeline(after: String, before: String, first: Int, last: Int): PostConnection

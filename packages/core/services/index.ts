@@ -1,5 +1,5 @@
-export type { AccountDeletionEligibility, AccountDeletionResult } from './account-deletion';
-export { deleteAccount, getAccountDeletionEligibility } from './account-deletion';
+export type { AccountDeletionResult } from './account-deletion';
+export { deleteAccount } from './account-deletion';
 export { materializeInboundReaction, undoInboundReaction } from './activitypub-reaction';
 export { createBookmark, deleteBookmark } from './bookmark';
 export { createReplyNotification } from './create-reply-notification';

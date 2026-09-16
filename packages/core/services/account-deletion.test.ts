@@ -31,7 +31,7 @@ import {
   PushInstallationPlatform,
   SessionState,
 } from '../enums';
-import { deleteAccount, getAccountDeletionEligibility } from './account-deletion';
+import { deleteAccount } from './account-deletion';
 
 after(async () => {
   await pg.end();
@@ -208,17 +208,11 @@ const cleanup = async (fixture: Awaited<ReturnType<typeof createFixture>>) => {
   await db.delete(Instances).where(eq(Instances.id, fixture.instance.id));
 };
 
-test('Profile이 없으면 탈퇴 eligibility를 허용한다', async () => {
+test('Profile이 없으면 탈퇴한다', async () => {
   const fixture = await createFixture();
 
   try {
-    const currentToken = fixture.sessions.find(({ token }) => token.startsWith('current-'))!.token;
-    assert.deepEqual(await getAccountDeletionEligibility({ token: currentToken }), {
-      activeProfileCount: 0,
-      canDelete: true,
-    });
-    assert.deepEqual(await deleteAccount({ token: currentToken }), {
-      activeProfileCount: 0,
+    assert.deepEqual(await deleteAccount({ accountId: fixture.account.id }), {
       status: 'DELETED',
     });
     assert.equal(
@@ -242,13 +236,7 @@ test('Active Profile이 남아 있으면 모든 탈퇴 변경을 거부한다', 
   });
 
   try {
-    const currentToken = fixture.sessions.find(({ token }) => token.startsWith('current-'))!.token;
-    assert.deepEqual(await getAccountDeletionEligibility({ token: currentToken }), {
-      activeProfileCount: 1,
-      canDelete: false,
-    });
-    assert.deepEqual(await deleteAccount({ token: currentToken }), {
-      activeProfileCount: 1,
+    assert.deepEqual(await deleteAccount({ accountId: fixture.account.id }), {
       status: 'BLOCKED',
     });
     assert.equal(
@@ -284,34 +272,26 @@ test('Active Profile이 남아 있으면 모든 탈퇴 변경을 거부한다', 
   }
 });
 
-test('DISABLED가 아닌 Profile은 탈퇴 eligibility를 충족하지 못한다', async () => {
+test('DISABLED가 아닌 Profile이면 탈퇴를 차단한다', async () => {
   const fixture = await createFixture({ profileStates: [ProfileState.SUSPENDED] });
 
   try {
-    assert.deepEqual(await getAccountDeletionEligibility({ token: fixture.sessions[0]!.token }), {
-      activeProfileCount: 1,
-      canDelete: false,
+    assert.deepEqual(await deleteAccount({ accountId: fixture.account.id }), {
+      status: 'BLOCKED',
     });
   } finally {
     await cleanup(fixture);
   }
 });
 
-test('모든 Profile이 비활성화된 Suspended Account를 원자적으로 탈퇴하고 속성을 보존한다', async () => {
+test('모든 Profile이 비활성화된 Account를 원자적으로 탈퇴하고 속성을 보존한다', async () => {
   const fixture = await createFixture({
-    accountState: AccountState.SUSPENDED,
     profileStates: [ProfileState.DISABLED],
     withAuthorizations: true,
   });
-  const currentToken = fixture.sessions.find(({ token }) => token.startsWith('current-'))!.token;
 
   try {
-    assert.deepEqual(await getAccountDeletionEligibility({ token: currentToken }), {
-      activeProfileCount: 0,
-      canDelete: true,
-    });
-    assert.deepEqual(await deleteAccount({ token: currentToken }), {
-      activeProfileCount: 0,
+    assert.deepEqual(await deleteAccount({ accountId: fixture.account.id }), {
       status: 'DELETED',
     });
 
@@ -390,10 +370,6 @@ test('모든 Profile이 비활성화된 Suspended Account를 원자적으로 탈
       await db.$count(PushInstallations, eq(PushInstallations.accountId, fixture.account.id)),
       0,
     );
-    assert.deepEqual(await deleteAccount({ token: currentToken }), {
-      activeProfileCount: 0,
-      status: 'ALREADY_DELETED',
-    });
   } finally {
     await cleanup(fixture);
   }
@@ -408,11 +384,7 @@ test('호출 transaction이 rollback되면 Account 탈퇴 결과도 함께 rollb
   try {
     await assert.rejects(
       db.transaction(async (tx) => {
-        const currentToken = fixture.sessions.find(({ token }) =>
-          token.startsWith('current-'),
-        )!.token;
-        assert.deepEqual(await deleteAccount({ token: currentToken }, tx), {
-          activeProfileCount: 0,
+        assert.deepEqual(await deleteAccount({ accountId: fixture.account.id }, tx), {
           status: 'DELETED',
         });
         throw new Error('rollback');

@@ -1,7 +1,7 @@
 ## Context
 
-Account storage는 `ACTIVE`, `SUSPENDED`, `DISABLED`를 사용하며 `DISABLED`가 이미 terminal 상태다. 도메인에서는
-이를 Account `Deleted`로 해석하고 Profile은 별도 lifecycle로 보존한다. Profile 비활성화와 current-session
+Account storage의 기존 `DISABLED`가 이미 terminal 상태다. 도메인에서는 이를 Account `Deleted`로 해석하고 Profile은
+별도 lifecycle로 보존한다. Profile 비활성화와 current-session
 logout은 각각 Profile과 한 Session만 다루므로 Account 탈퇴의 전체 Active Session 및 명시된 인증·인가·토큰·코드·
 Push 정리를 대신할 수 없다.
 
@@ -34,17 +34,18 @@ Settings에는 기존 route family와 confirmation 상태 패턴이 있고, publ
   정리해야 한다.
 - `ApplicationAuthorizations`는 `revokedAt`, `OAuthTokens`는 `state`·`revokedAt`을 사용하고,
   `OAuthAuthorizationCodes`·`PushInstallations`는 Account를 참조한다. 기존 상태·삭제 방식을 유지한다.
-- Profile lifecycle은 Profile·Membership을 보존한다. eligibility 확인에서 Profile/Membership mutation을
-  호출하지 않는다.
+- Profile lifecycle은 Profile·Membership을 보존한다. 클라이언트는 이미 조회한 `me.profiles`로 blocker를 사전
+  표시할 수 있지만 별도 eligibility query를 호출하지 않으며, 서버 mutation이 권위 있는 판단을 수행한다.
 - 기존 public `/account-deletion`의 이메일·보관 안내는 in-app-only 계약과 섞이지 않게 교체한다.
 
 ### Recommended Approach
 
-1. caller의 현재 Session과 Account를 식별하고 Active/Suspended 및 Profile 0개 또는 전체 storage `DISABLED`
-   eligibility를 같은 transaction 경계에서 판정한다.
+1. 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 blocker를 사전 표시한다. 서버 mutation은
+   인증 경계가 확인한 `accountId`를 받아 Active 및 Profile 0개 또는 전체 storage `DISABLED`
+   조건을 같은 transaction 경계에서 다시 판정한다. 이 precheck는 서버 판정을 대체하지 않는다.
 2. 허용되면 Account를 storage `DISABLED`로 전환하고 모든 Active Session, `ApplicationAuthorization`,
-   `OAuthTokens`, `OAuthAuthorizationCodes`, `PushInstallation`을 명세된 방식으로 정리한다. Profile·
-   Membership·Account 속성에는 쓰지 않는다.
+   `OAuthTokens`, `OAuthAuthorizationCodes`, `PushInstallation`을 명세된 방식으로 정리한다. 조건이 바뀌어
+   `BLOCKED`가 되면 `completed: false`만 반환하며 Profile·Membership·Account 속성에는 쓰지 않는다.
 3. Web·Native transport는 동일 결과를 노출하며, 성공 확정 뒤에만 client credential·viewer를 비우고 login으로
    이동한다. 결과 불명 상태에서 성공을 반환하지 않는다.
 4. Settings root 마지막 행과 기존 route/header/back·접근성 패턴을 재사용한다. blocker에는 Active Profile 개수와

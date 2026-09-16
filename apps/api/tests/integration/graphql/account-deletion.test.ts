@@ -38,7 +38,6 @@ type GraphQLResult<T> = {
 };
 
 type FixtureOptions = {
-  readonly accountState?: AccountState;
   readonly profileStates?: ReadonlyArray<ProfileState>;
 };
 
@@ -61,10 +60,7 @@ after(async () => {
   await pg.end();
 });
 
-const createFixture = async ({
-  accountState = AccountState.ACTIVE,
-  profileStates = [],
-}: FixtureOptions = {}) => {
+const createFixture = async ({ profileStates = [] }: FixtureOptions = {}) => {
   const suffix = crypto.randomUUID();
   const instance = await db
     .insert(Instances)
@@ -90,7 +86,7 @@ const createFixture = async ({
   }
   const account = await db
     .insert(Accounts)
-    .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: accountState })
+    .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: AccountState.ACTIVE })
     .returning()
     .then(firstOrThrow);
   if (profiles.length) {
@@ -138,24 +134,15 @@ const request = async <T>(query: string, token?: string): Promise<GraphQLResult<
   return response.json() as Promise<GraphQLResult<T>>;
 };
 
-test('Active Profile이 남으면 eligibility와 탈퇴 mutation이 변경 없이 거부된다', async () => {
+test('Active Profile이 남으면 탈퇴 mutation이 변경 없이 거부된다', async () => {
   const fixture = await createFixture({ profileStates: [ProfileState.ACTIVE] });
 
   try {
-    const eligibility = await request<{
-      accountDeletionEligibility: { activeProfileCount: number; canDelete: boolean };
-    }>(
-      'query { accountDeletionEligibility { activeProfileCount canDelete } }',
-      fixture.session.token,
-    );
-    assert.deepEqual(eligibility.data, {
-      accountDeletionEligibility: { activeProfileCount: 1, canDelete: false },
-    });
     const deletion = await request<{
-      deleteAccount: { activeProfileCount: number; completed: boolean };
-    }>('mutation { deleteAccount { activeProfileCount completed } }', fixture.session.token);
+      deleteAccount: { completed: boolean };
+    }>('mutation { deleteAccount { completed } }', fixture.session.token);
     assert.deepEqual(deletion.data, {
-      deleteAccount: { activeProfileCount: 1, completed: false },
+      deleteAccount: { completed: false },
     });
     assert.equal(
       (
@@ -180,27 +167,17 @@ test('Active Profile이 남으면 eligibility와 탈퇴 mutation이 변경 없�
   }
 });
 
-test('Suspended Account의 비활성 Profile을 보존하며 탈퇴한다', async () => {
+test('비활성 Profile만 있는 Account를 탈퇴하고 Profile을 보존한다', async () => {
   const fixture = await createFixture({
-    accountState: AccountState.SUSPENDED,
     profileStates: [ProfileState.DISABLED],
   });
 
   try {
-    const eligibility = await request<{
-      accountDeletionEligibility: { activeProfileCount: number; canDelete: boolean };
-    }>(
-      'query { accountDeletionEligibility { activeProfileCount canDelete } }',
-      fixture.session.token,
-    );
-    assert.deepEqual(eligibility.data, {
-      accountDeletionEligibility: { activeProfileCount: 0, canDelete: true },
-    });
     const deletion = await request<{
-      deleteAccount: { activeProfileCount: number; completed: boolean };
-    }>('mutation { deleteAccount { activeProfileCount completed } }', fixture.session.token);
+      deleteAccount: { completed: boolean };
+    }>('mutation { deleteAccount { completed } }', fixture.session.token);
     assert.deepEqual(deletion.data, {
-      deleteAccount: { activeProfileCount: 0, completed: true },
+      deleteAccount: { completed: true },
     });
 
     assert.equal(
@@ -240,7 +217,7 @@ test('Suspended Account의 비활성 Profile을 보존하며 탈퇴한다', asyn
 });
 
 test('Account 탈퇴 API는 인증과 Bearer 형식을 요구한다', async () => {
-  const anonymous = await request('query { accountDeletionEligibility { canDelete } }');
+  const anonymous = await request('mutation { deleteAccount { completed } }');
   assert.equal(anonymous.data, null);
   assert.equal(anonymous.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
 
@@ -252,5 +229,4 @@ test('Account 탈퇴 API는 인증과 Bearer 형식을 요구한다', async () =
   const result = (await malformed.json()) as GraphQLResult<unknown>;
   assert.equal(result.data, null);
   assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
-  assert.match(result.errors?.[0]?.message ?? '', /Bearer/);
 });

@@ -12,7 +12,7 @@
 - Authority / Provenance: `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/design/settings.md`, `PROD-970`
 - Status: Active
 - Context / Problem: Byulmaru ID, Kosmo Account, Profile은 서로 다른 lifecycle을 소유하므로 Profile·Membership을 부수적으로 정리하면 안 된다.
-- Decision Outcome: 자기 Account가 Active 또는 Suspended이고 연결 Profile이 없거나 모두 storage `DISABLED`(domain `Deactivated`)일 때만 탈퇴를 허용한다. 성공 시 기존 storage `AccountState.DISABLED`를 canonical Account State `Deleted`로 사용하고, 연결 Profile·Membership·Account 속성을 보존한다. eligibility 확인이나 Account 탈퇴는 Profile·Membership을 삭제·비활성화·연결 해제하지 않는다.
+- Decision Outcome: 자기 Account가 Active이고 연결 Profile이 없거나 모두 storage `DISABLED`(domain `Deactivated`)일 때만 탈퇴를 허용한다. 클라이언트는 이미 조회한 `me.profiles`로 사전 표시할 수 있지만 별도 eligibility API는 제공하지 않으며, 서버 mutation이 연결 Profile State를 원자적으로 재확인한다. 성공 시 기존 storage `AccountState.DISABLED`를 canonical Account State `Deleted`로 사용하고, 연결 Profile·Membership·Account 속성을 보존한다. eligibility 확인이나 Account 탈퇴는 Profile·Membership을 삭제·비활성화·연결 해제하지 않는다.
 - Alternatives Considered: Active Profile 허용, Profile·Membership 삭제, 새 `DELETED` enum은 각각 계약·소유권·no-migration 원칙을 위반한다.
 - Consequences: 탈퇴 전 Profile lifecycle 완료가 필요하고 Account는 비가역 terminal 상태가 되며 새 enum·migration은 없다.
 - Confirmation / Follow-up: Profile 0개·전부 `DISABLED` 허용과 Active Profile 거부에서 DB row·Membership·Account 상태를 검증한다.
@@ -36,7 +36,7 @@
 - Authority / Provenance: `docs/design/settings.md`, `docs/design/profile-lifecycle.md`, `docs/domain/objects/account.md`, `docs/domain/objects/profile.md`, `PROD-970`
 - Status: Active
 - Context / Problem: iOS 심사와 Web·Native 공통 경험에는 Settings 접근성이 필요하지만 Profile action·외부 Byulmaru ID 설정과 섞으면 소유 경계가 흐려진다.
-- Decision Outcome: Settings root/master 마지막에 `코스모 탈퇴`를 항상 표시하고 `/settings/account-deletion` detail을 연다. 조건 미충족 시 Active Profile 개수와 이유만 보여 준다. 조건 충족 시 irreversibility 안내와 acknowledgement checkbox를 제공하고, checkbox 전 확정 action을 비활성화한다. 재인증·유예기간·이유 입력·이유 설문은 요구하지 않는다. pending 중 중복·dismiss·navigation을 막고, 결과 불명 error에서는 확인 내용과 checkbox를 유지해 재시도하며, server 확정 뒤에만 success와 login 이동을 표시한다.
+- Decision Outcome: Settings root/master 마지막에 `코스모 탈퇴`를 항상 표시하고 `/settings/account-deletion` detail을 연다. 클라이언트는 이미 조회한 `me.profiles`로 조건 미충족 시 Active Profile 개수와 이유를 사전 표시하되, 서버 mutation의 원자적 재확인을 전제로 한다. 조건 충족 시 irreversibility 안내와 acknowledgement checkbox를 제공하고, checkbox 전 확정 action을 비활성화한다. 재인증·유예기간·이유 입력·이유 설문은 요구하지 않는다. pending 중 중복·dismiss·navigation을 막고, 결과 불명 error에서는 확인 내용과 checkbox를 유지해 재시도하며, server 확정 뒤에만 success와 login 이동을 표시한다.
 - Alternatives Considered: 조건부 행, Profile 관리 action, 이메일·외부 Settings 위임은 항상 노출·소유 경계·in-app-only 계약과 다르다.
 - Consequences: 세 플랫폼은 기존 Settings shell·header·back·confirmation 문법을 공유하고 Profile/Membership mutation을 호출하지 않는다. public route는 안내 문서다.
 - Confirmation / Follow-up: Web·Android·iOS에서 root row, blocker, checkbox, pending, error/retry, success/login, 접근성과 public route를 검증한다.
