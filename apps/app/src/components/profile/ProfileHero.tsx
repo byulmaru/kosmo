@@ -34,7 +34,6 @@ type ProfileHeroProps = {
   blockAction?: ProfileBlockActionTarget;
   heading?: boolean;
   moreItems?: readonly ActionMenuItem[];
-  onMenuTriggerReady?: (focusTrigger: () => void) => void;
   showMuteAction?: boolean;
   loading?: boolean;
   profile?: ProfileHero_profile$key | null;
@@ -81,7 +80,6 @@ export function ProfileHero({
   blockAction,
   heading = true,
   moreItems = [],
-  onMenuTriggerReady,
   showMuteAction = false,
   loading = false,
   profile = null,
@@ -198,7 +196,6 @@ export function ProfileHero({
                 onTriggerReady={(focusTrigger) => {
                   muteFocusRef.current = focusTrigger;
                   blockFocusRef.current = focusTrigger;
-                  onMenuTriggerReady?.(focusTrigger);
                 }}
               />
             )}
@@ -209,7 +206,6 @@ export function ProfileHero({
             disabled={muteDisabled}
             focusTriggerRef={muteFocusRef}
             items={[copyProfileLinkItem, muteItem, ...moreItems]}
-            onTriggerReady={onMenuTriggerReady}
           />
         )
       }
@@ -223,16 +219,12 @@ export function ProfileHero({
           disabled={disabled}
           focusTriggerRef={focusTriggerRef}
           items={[copyProfileLinkItem, item, ...moreItems]}
-          onTriggerReady={onMenuTriggerReady}
         />
       )}
       surface="menu"
     />
   ) : moreItems.length > 0 ? (
-    <ProfileMoreMenu
-      items={[copyProfileLinkItem, ...moreItems]}
-      onTriggerReady={onMenuTriggerReady}
-    />
+    <ProfileMoreMenu items={[copyProfileLinkItem, ...moreItems]} />
   ) : null;
 
   return (

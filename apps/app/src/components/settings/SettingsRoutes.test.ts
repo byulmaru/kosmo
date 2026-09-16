@@ -139,7 +139,7 @@ mock.module(new URL('./SettingsBlockedProfiles.tsx', import.meta.url), {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
-  exports: { useShellChrome: () => ({ pageHeadingRef: { current: null } }) },
+  exports: { useShellChrome: () => ({}) },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: { useTheme: () => ({ border: '#333333', text: '#111111' }) },

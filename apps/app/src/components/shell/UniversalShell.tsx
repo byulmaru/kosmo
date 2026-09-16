@@ -498,7 +498,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     <ShellChromeProvider
       navigationDrawerOpen={drawerOpen}
       navigationDrawerTriggerRef={menuButtonRef}
-      pageHeadingRef={pageHeadingRef}
       openNavigationDrawer={openNavigationDrawer}
       openProfileSwitcher={openProfileSwitcher}
       registerHomeReselection={registerHomeReselection}
