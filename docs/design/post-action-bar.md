@@ -81,6 +81,17 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Native target의 실제 layout·인접 target 비중첩·화면별 정렬, VoiceOver·TalkBack focus boundary, touch 입력과
   bottom sheet runtime 관찰은 Native release gate다. platform style 렌더 테스트나 Web 검증으로 대체하지 않는다.
 
+## PostListItem surface feedback
+
+- `PROD-977`은 이 surface feedback과 Figma `State=Default|Hover|Pressed` variant를 소유한다.
+- `PostListItem`의 Text·Media·PureRepost·Quote는 resting fill 없이 연속 feed의 canvas 평면을 유지한다.
+- touch가 아닌 mouse·pen pointer hover에서는 카드 root 전체에 `color/state/hover`, Web pointer press와 Android·iOS touch press에서는
+  넓은 surface용 `color/state/pressed-subtle` overlay를 적용한다. overlay는 `radius/md`로 둥글게 처리하고 row divider는 직선으로 유지한다.
+  pressed가 hover보다 우선하며 release·cancel·leave 뒤에는 남은 입력
+  상태 또는 resting fill로 돌아간다.
+- 이 feedback은 새 navigation target이나 접근성 role을 만들지 않는다. 작성자·시간·본문·미디어·Action Bar의
+  기존 입력과 이벤트 분리, 구분선 및 Light·Dark token mapping을 그대로 유지한다.
+
 ## Surface 배치
 
 - `PostLayout`은 metadata 뒤 `Engagement`에 Reaction Summary와 bordered Action Bar frame을 순서대로
@@ -109,8 +120,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Center·Mobile Quote의 `Quote article` wrapper는 `PostContent` 높이를 Hug한다. 자체 본문이 줄바꿈되면
   Source preview와 Action Bar를 함께 아래로 밀어 Source preview의 하단 1px border와 둥근 모서리를 자르지 않는다.
 - direct Quote Source preview는 기본 fill을 갖지 않고 주변 Post background와 같은 평면을 유지하며 semantic
-  border로만 경계를 구분한다. Web에서 source navigation이 활성인 preview는 pointer hover 동안 root 전체에
-  semantic `stateHover` overlay를 적용한다. `interactive=false`인 Composer preview와 Native에는 hover fill을
+  border로만 경계를 구분한다. source navigation이 활성인 preview는 mouse·pen pointer hover 동안 root 전체에
+  semantic `stateHover` overlay를 적용한다. `interactive=false`인 Composer preview와 touch 또는 알 수 없는 pointer에는 hover fill을
   적용하지 않는다. 본문과 Source preview 안의 클릭 가능한 외부 링크는 mode별 semantic `actionLinkBase`와
   기존 밑줄을 사용하며 Post·Source navigation과 입력을 분리한다.
 - 순수 Repost의 본문·생성 시각 affordance는 Repost 자체가 아니라 Source detail로 이동한다. Repost Author와
@@ -348,6 +359,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `PROD-936`은 Home·Local·Profile·Bookmarks·상세/스레드의 공용 presentation 재사용 확인, 실제 Web 데이터·액션
   회귀 검증과 Native target·목록 inset 적용을 소유한다. Media Viewer·Notification 자체 이관과 Clipboard
   runtime 복구·공유 OpenSpec archive 소유권은 각각 기존 이슈에 유지한다.
+- `PROD-977`은 `PostListItem` 전체의 Web hover·전 플랫폼 pressed feedback, semantic token과 Figma variant를 소유한다.
 - Reaction, Bookmark, More의 실제 연결과 여러 action의 최종 통합, guest 인증 진입, valid 세션의 Profile
   선택기 진입과 session error 비활성화는 각 구현 이슈와 `PROD-432`가 소유한다.
 
@@ -361,7 +373,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   순수 Repost는 attribution line box가 20이고 Source 표준행과의 추가 gap이 0인지, Quote는 Source preview
   내부 하단 padding이 4px인지 함께 검증한다. Reaction Summary 유무와 무관하게 마지막 presentation부터
   Bar까지 12px인지 확인하고 Native의 기존 세로 여백은 유지한다. Quote Source preview는
-  resting fill이 투명하고 border는 유지되며 Web pointer hover에서만 `stateHover` overlay를 사용하는지도 확인한다.
+  resting fill이 투명하고 border는 유지되며 touch가 아닌 pointer hover에서만 `stateHover` overlay를 사용하는지도 확인한다.
 - 일반 목록의 Reply와 Reply+Quote는 조회 가능한 Parent의 display name을 사용한 Reply attribution을 한 번
   표시하고, 일반 Post와 Parent를 조회할 수 없는 Reply에는 표시하지 않는지 검증한다. Reply attribution은
   클릭 가능한 요소가 아니며 장식 icon과 문구를 중복 announce하지 않아야 한다.

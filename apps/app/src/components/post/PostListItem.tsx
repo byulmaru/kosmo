@@ -17,6 +17,7 @@ import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
+import { usePostSurfaceFeedback } from './usePostSurfaceFeedback';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
@@ -245,7 +246,7 @@ export function PostListItem({
       return renderWithReplySurface(null);
     }
     return renderWithReplySurface(
-      <View role="article" style={standardCardStyle}>
+      <PostListItemCard article style={standardCardStyle}>
         {pinnedAttribution}
         {replyAttribution}
         <PostListRow
@@ -254,7 +255,7 @@ export function PostListItem({
           post={post}
           reply={reply}
         />
-      </View>,
+      </PostListItemCard>,
     );
   }
 
@@ -266,7 +267,7 @@ export function PostListItem({
 
   if (!post.content) {
     return renderWithReplySurface(
-      <View role="article" style={compactCardStyle}>
+      <PostListItemCard article style={compactCardStyle}>
         {pinnedAttribution}
         <PostAttributionRow
           icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
@@ -293,12 +294,12 @@ export function PostListItem({
           reply={reply}
           surfacePostId={post.id}
         />
-      </View>,
+      </PostListItemCard>,
     );
   }
 
   return renderWithReplySurface(
-    <View style={compactCardStyle}>
+    <PostListItemCard style={compactCardStyle}>
       {pinnedAttribution}
       {replyAttribution}
       <View style={styles.quoteRow}>
@@ -335,7 +336,46 @@ export function PostListItem({
           />
         </View>
       </View>
-    </View>,
+    </PostListItemCard>,
+  );
+}
+
+function PostListItemCard({
+  article = false,
+  children,
+  style,
+}: {
+  article?: boolean;
+  children: ReactNode;
+  style: StyleProp<ViewStyle>;
+}) {
+  const theme = useTheme();
+  const { handlers, hovered, pressed } = usePostSurfaceFeedback({ hover: true, press: true });
+
+  return (
+    <View
+      {...handlers}
+      role={article ? 'article' : undefined}
+      style={style}
+      testID="post-list-item-card"
+    >
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={[
+          styles.surfaceFeedback,
+          {
+            backgroundColor: pressed
+              ? theme.statePressedSubtle
+              : hovered
+                ? theme.stateHover
+                : undefined,
+          },
+        ]}
+        testID="post-list-item-feedback"
+      />
+      {children}
+    </View>
   );
 }
 
@@ -433,6 +473,15 @@ const styles = StyleSheet.create({
   compactCard: { paddingBottom: 1, paddingTop: spacing.sm },
   webCardBottom: { paddingBottom: spacing.sm },
   cardDivider: { borderBottomWidth: 1 },
+  surfaceFeedback: {
+    borderRadius: radii.md,
+    bottom: 0,
+    left: 0,
+    pointerEvents: 'none',
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
   quoteRow: {
     alignItems: 'flex-start',
     flexDirection: 'row',

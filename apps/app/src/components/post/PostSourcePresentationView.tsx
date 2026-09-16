@@ -1,6 +1,5 @@
 import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -8,6 +7,7 @@ import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
+import { usePostSurfaceFeedback } from './usePostSurfaceFeedback';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -205,9 +205,8 @@ export function PostSourcePreview({
   style?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
-  const [hovered, setHovered] = useState(false);
+  const { handlers, hovered } = usePostSurfaceFeedback({ hover: interactive, press: false });
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
-  const webInteractive = interactive && Platform.OS === 'web';
   const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
   const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
   const content = (
@@ -263,13 +262,12 @@ export function PostSourcePreview({
 
   return (
     <View
-      onPointerEnter={webInteractive ? () => setHovered(true) : undefined}
-      onPointerLeave={webInteractive ? () => setHovered(false) : undefined}
+      {...handlers}
       style={[
         styles.preview,
         style,
         {
-          backgroundColor: webInteractive && hovered ? theme.stateHover : undefined,
+          backgroundColor: hovered ? theme.stateHover : undefined,
           borderColor: theme.borderDefault,
         },
       ]}

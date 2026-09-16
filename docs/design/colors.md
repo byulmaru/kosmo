@@ -141,6 +141,7 @@ Light Info와 Warning border는 base 색을 그대로 재사용하지 않는다.
 | --------------------------------- | --------- | --------- | ------------------------------------------------- |
 | `color/state/hover`               | black 4%  | white 8%  | 중립 surface 위에 얹는 공용 hover overlay layer   |
 | `color/state/pressed`             | black 8%  | white 12% | 중립 surface 위에 얹는 공용 pressed overlay layer |
+| `color/state/pressed-subtle`      | black 6%  | white 10% | 넓은 목록 행의 완화된 pressed overlay layer       |
 | `color/state/selected-surface`    | `#FFF9E6` | `#3A331A` | 선택된 행과 option 표면                           |
 | `color/state/selected-border`     | `#AE8512` | `#FFE597` | 선택 상태 경계                                    |
 | `color/state/focus-ring`          | `#4F46E5` | `#A5B4FC` | keyboard focus ring                               |
