@@ -313,6 +313,21 @@ function expectResponsiveSurface(
   expect(canvas.queryByText(/현재.*유지/)).not.toBeInTheDocument();
 }
 
+function expectProfileEditScreenToUseDocumentScroll(canvasElement: HTMLElement) {
+  const screen = within(canvasElement).getByTestId('profile-edit-screen');
+  const scrollOwner = [screen, ...Array.from(screen.querySelectorAll('*'))].find((element) => {
+    if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+      return false;
+    }
+    const style = getComputedStyle(element);
+    return (
+      ['auto', 'scroll'].includes(style.overflow) || ['auto', 'scroll'].includes(style.overflowY)
+    );
+  });
+
+  expect(scrollOwner).toBeUndefined();
+}
+
 const meta = {
   args: {
     avatar: currentAvatar,
@@ -450,6 +465,7 @@ export const TextFieldsAndSubmitGate: Story = {
   render: () => <ProfileEditScreenHarness />,
   play: async ({ canvasElement, userEvent }) => {
     const canvas = within(canvasElement);
+    expectProfileEditScreenToUseDocumentScroll(canvasElement);
     const displayName = canvas.getByRole('textbox', { name: '표시 이름' });
     const save = canvas.getByRole('button', { name: '저장' });
 
