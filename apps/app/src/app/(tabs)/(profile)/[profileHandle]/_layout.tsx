@@ -199,6 +199,12 @@ function ProfileLayoutContent({
   const blockedBy = Boolean(blockStatus?.blockedBy);
 
   useEffect(() => {
+    if (!blocking) {
+      setBlockedContentVisible(false);
+    }
+  }, [blocking]);
+
+  useEffect(() => {
     const target = focusTargetRef.current;
     focusTargetRef.current = null;
     if (target === 'state') {
