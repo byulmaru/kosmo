@@ -34,7 +34,7 @@ lifecycle·권한·표시·탭 이동·실패 경계를 기존 Notification 권�
 
 ### Requirement: 설치 registration과 신규 Notification 경계
 
-**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/domain/objects/notification.md`, `PROD-875`, `PROD-912`, `PROD-914` — 인증된 Account는 자신이 소유한 Android·iOS 앱 설치와 FCM registration token을 등록·갱신·해제할 수 있어야 하며(MUST), 시스템은 서버가 발급한 installation row ID와 설치별 소유권·token lifecycle을 관리해야 한다(MUST). 최초 `registerPushInstallation(input: { platform, token })`은 외부 installation ID 없이 새 row를 만들고 `PushInstallation` GlobalID인 `id: ID!`를 반환해야 하며(MUST). `updatePushInstallation(input: { id: ID!, platform, token })`은 반환된 ID와 인증된 현재 Account가 소유한 row만 갱신해야 하며(MUST), 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 드러내지 않는 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패해야 한다(MUST). `unregisterPushInstallation(input: { id: ID! })`은 인증된 현재 Account가 소유한 해당 ID만 삭제해야 하며(MUST), 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 노출하지 않고 `{ completed: true }`로 멱등 완료해야 한다(MUST). 등록 당시 연결된 `sessionId`는 lifecycle association으로 유지하고 현재 인증 Session과 비교하거나 요청 Session으로 재바인딩해서는 안 되며(MUST NOT), 따라서 같은 Account의 다른 Session도 row를 관리할 수 있어야 한다(MUST). 등록 당시 연결된 Session의 logout/revoke와 Account deletion cleanup은 유지해야 한다(MUST). active installation row만 token을 보관해야 하며(MUST), logout·account switch·Account deletion·명시적 해제·일치하는 invalid/unregistered 결과로 폐기된 설치 registration과 token은 즉시 삭제되어 이후 신규 전달 eligible target이 아니어야 한다(MUST). stale old-token 결과는 갱신된 현재 token을 삭제해서는 안 된다(MUST NOT). 같은 Account가 새 registration으로 현재 active token을 다시 등록하면 기존 중복 row를 원자적으로 삭제하고 새 row ID와 새 registration epoch로 등록해야 하며(MUST), 다른 Account의 active token은 거부해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/domain/objects/notification.md`, `PROD-875`, `PROD-912`, `PROD-914` — 인증된 Account는 자신이 소유한 Android·iOS 앱 설치와 FCM registration token을 등록·갱신·해제할 수 있어야 하며(MUST), 시스템은 서버가 발급한 installation row ID와 설치별 소유권·token lifecycle을 관리해야 한다(MUST). 최초 `registerPushInstallation(input: { platform, token })`은 외부 installation ID 없이 새 row를 만들고 `PushInstallation` GlobalID인 `id: ID!`를 반환해야 하며(MUST). `updatePushInstallation(input: { id: ID!, platform, token })`은 반환된 ID와 인증된 현재 Account가 소유한 row만 갱신해야 하며(MUST), 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 드러내지 않는 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패해야 한다(MUST). `unregisterPushInstallation(input: { id: ID! })`은 인증된 현재 Account가 소유한 해당 ID만 삭제해야 하며(MUST), 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 노출하지 않고 `{ completed: true }`로 멱등 완료해야 한다(MUST). 등록 당시 연결된 `sessionId`는 lifecycle association으로 유지하고 현재 인증 Session과 비교하거나 요청 Session으로 재바인딩해서는 안 되며(MUST NOT), 따라서 같은 Account의 다른 Session도 row를 관리할 수 있어야 한다(MUST). 등록 당시 연결된 Session의 logout/revoke와 Account deletion cleanup은 유지해야 한다(MUST). active installation row만 token을 보관해야 하며(MUST), logout·account switch·Account deletion·명시적 해제·일치하는 invalid/unregistered 결과로 폐기된 설치 registration과 token은 즉시 삭제되어 이후 신규 전달 eligible target이 아니어야 한다(MUST). stale old-token 결과는 갱신된 현재 token을 삭제해서는 안 된다(MUST NOT). 같은 Account가 새 registration으로 현재 active token을 다시 등록하면 기존 중복 row를 원자적으로 삭제하고 새 row ID와 새 registration epoch로 등록해야 하며(MUST), 다른 Account의 active token은 거부해야 한다(MUST). Client는 관찰된 OS permission이 revoked이고 저장된 server-issued installation ID가 있을 때에만 `unregisterPushInstallation`을 호출해야 하며(MUST), unregister 성공 뒤에만 local installation ID를 삭제해야 한다(MUST). logout 시 installation row cleanup의 권위는 server session revocation이어야 하며(MUST), client permission 동기화 unregister가 이를 대체하거나 선행해서는 안 된다(MUST NOT).
 
 대상 registration을 받은 시점을 경계로 그 이후 생성된 Notification만 해당 설치에 전달해야 한다(MUST). 새 설치, 새 device 또는 OS 권한 허용 시점에 이미 생성된 unread Notification을 backlog로 재생해서는 안 된다(MUST NOT). OS 상태 변화의 정확한 감지 시점은 이 capability가 고정하지 않으며, client는 관찰 가능한 OS 상태를 동기화한다.
 
@@ -75,9 +75,18 @@ lifecycle·권한·표시·탭 이동·실패 경계를 기존 Notification 권�
 - **AND** 새 registration은 새 수신 시작 시각과 epoch를 사용하며 registration 이전 Notification을 backlog로 전달하지 않는다
 - **AND** 다른 Account가 소유한 active token은 삭제하거나 등록하지 않는다
 
+#### Scenario: revoked permission과 저장 ID가 있는 경우에만 client unregister
+
+- **WHEN** client가 OS permission revoked를 관찰하고 local storage에서 server-issued installation ID를 읽는다
+- **THEN** 저장된 ID가 있을 때에만 `unregisterPushInstallation`을 호출한다
+- **AND** 저장된 ID가 없으면 unregister를 호출하지 않는다
+- **AND** OS permission이 revoked가 아니면 저장된 ID가 있어도 unregister를 호출하지 않는다
+- **AND** unregister가 성공한 뒤에만 local installation ID를 삭제하고, 실패한 경우에는 재시도를 위해 ID를 보존한다
+- **AND** logout 시 installation row cleanup은 client permission 동기화가 아니라 server session revocation으로 수행한다
+
 ### Requirement: 네이티브 권한 안내와 OS 표시
 
-**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `PROD-875`, `PROD-912`, `PROD-913` — Android·iOS native 앱은 로그인된 상태의 첫 앱 실행에서 권한 안내를 표시해야 하며(MUST), 새 로그인 완료 직후와 이미 로그인된 상태의 실행을 포함할 수 있고 안내를 위해 logout·relogin을 요구해서는 안 된다(MUST NOT). OS 권한 요청은 사용자가 안내의 `알림 받기` action을 명시적으로 활성화한 경우에만 시작해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `PROD-875`, `PROD-912`, `PROD-913` — Android·iOS native 앱은 로그인된 상태의 첫 앱 실행에서 권한 안내를 표시해야 하며(MUST), 새 로그인 완료 직후와 이미 로그인된 상태의 실행을 포함할 수 있고 안내를 위해 logout·relogin을 요구해서는 안 된다(MUST NOT). OS 권한 요청은 사용자가 안내의 `알림 받기` action을 명시적으로 활성화한 경우에만 시작해야 한다(MUST). React Native Firebase Messaging(`@react-native-firebase/messaging`)은 FCM token과 `onTokenRefresh`를 소유해야 하며(MUST), Expo Notifications(`expo-notifications`)는 OS permission 요청·상태, foreground OS presentation과 notification response/tap callback을 소유해야 한다(MUST). Notifee를 추가하거나 사용해서는 안 된다(MUST NOT). Prompt 완료 상태는 AsyncStorage app-local marker 하나로 보존해야 하며(MUST), uninstall/reinstall·backup/restore 동작이 physical installation identity 또는 backup 복원까지의 strict install-level once를 증명한다고 해석해서는 안 된다(MUST NOT).
 
 같은 설치에서 안내를 닫거나 OS 권한을 거부한 뒤와 일반적인 앱 업데이트 뒤에는 안내를 자동으로 다시 표시해서는 안 된다(MUST NOT). Push 수신 제어는 OS 알림 설정이 소유하며, 첫 릴리스는 전역·유형별·Profile별 in-app Push switch 또는 preference API를 제공해서는 안 된다(MUST NOT). 앱 설정은 OS 알림 설정으로 이동하는 action을 제공해야 한다(MUST). Foreground에서도 OS 알림 banner를 표시해야 하며 별도 custom in-app Push banner를 추가해서는 안 된다(MUST NOT).
 
@@ -130,15 +139,23 @@ FCM registration token, Provider service credential과 authorized private body�
 
 ### Requirement: Push tap의 Profile·target 수렴
 
-**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `docs/domain/objects/notification.md`, `PROD-875`, `PROD-913` — Push tap은 현재 Account가 Recipient Profile에 접근할 수 있는지 다시 확인한 뒤, 접근 가능하면 해당 Profile로 전환해 target을 열어야 한다(MUST). target이 삭제되었거나 접근할 수 없으면 접근 가능한 알림 목록만 열고 별도 toast·message를 표시해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `docs/domain/objects/notification.md`, `PROD-875`, `PROD-913` — 로그인된 Push tap은 exact envelope를 먼저 검증한 뒤 Notification Node를 네트워크에서 재검증하고, 검증된 target에 대해 `selectProfile` → `resetActor` → derived route/fallback 순서를 따라야 한다(MUST). target이 삭제되었거나 접근할 수 없으면 접근 가능한 알림 목록만 여는 derived fallback을 사용하고 별도 toast·message를 표시해서는 안 된다(MUST NOT). Push payload의 `recipientProfileId`는 Profile Relay Global ID를 사용해야 한다(MUST).
 
 로그인되지 않은 상태에서 Push를 탭하면 원래 target을 버리고 일반 로그인 흐름을 따라야 하며(MUST), 로그인 뒤 Push target으로 자동 복귀해서는 안 된다(MUST NOT). 삭제·접근 불가 외의 target 처리에 대해 임의의 old-valid 또는 duplicate 자동 목록 fallback을 추가하지 않는다.
 
 #### Scenario: 다른 Recipient Profile로 cross-profile 이동
 
-- **WHEN** 현재 selected Profile과 Push의 Recipient Profile이 다르고 현재 Account가 Recipient Profile membership을 가진 상태에서 사용자가 Push를 탭한다
-- **THEN** 시스템은 현재 Account의 Recipient Profile 접근 권한을 다시 확인한다
-- **AND** 권한이 있으면 Recipient Profile로 전환한 뒤 target을 연다
+- **WHEN** 로그인된 상태에서 현재 selected Profile과 Push의 Recipient Profile이 다르고 exact Push envelope를 가진 사용자가 Push를 탭한다
+- **THEN** 시스템은 `logged-in/exact envelope`를 먼저 검증하고 Notification Node를 네트워크에서 재검증한다
+- **AND** Node와 Recipient Profile 접근 권한이 유효하면 `selectProfile`을 호출하고 성공 뒤 `resetActor`를 실행한다
+- **AND** 그 다음 derived route를 계산해 target을 연다
+
+#### Scenario: exact envelope 검증 또는 Node 재검증 후 fallback
+
+- **WHEN** 로그인된 상태에서 Push tap envelope가 exact contract를 충족하지만 Notification Node가 삭제되었거나 현재 Account가 접근할 수 없다
+- **THEN** 시스템은 `logged-in/exact envelope` 검증 뒤 Notification Node network revalidation을 수행한다
+- **AND** 시스템은 `selectProfile` 또는 `resetActor`를 실행하지 않고 접근 가능한 Notification 목록을 derived fallback으로 연다
+- **AND** 별도 toast·message를 표시하지 않는다
 
 #### Scenario: 삭제·접근 불가 target
 

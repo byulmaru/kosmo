@@ -20,7 +20,7 @@ server 계약과 lifecycle을 제공한다.
 
 - 다른 Account의 설치·token을 등록하거나 변경하지 않는다.
 - selected Profile 또는 most-recent installation으로 수신 범위를 줄이지 않는다.
-- logout·account switch·Account deletion·명시적 해제·일치하는 invalid/unregistered token은 installation row와 token을 즉시 삭제해 이후 신규 전달의 eligibility를 정리한다.
+- server-side logout·account switch·Account deletion·명시적 해제·일치하는 invalid/unregistered token은 installation row와 token을 즉시 삭제해 이후 신규 전달의 eligibility를 정리한다.
 - 최초 registration은 새 row ID를 반환하고, update는 반환된 ID와 인증된 현재 Account 소유권만 확인해 row를 갱신한다. 알 수 없거나 삭제된 ID와 다른 Account 소유 ID의 update는 row 존재 여부를 노출하지 않는 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패하며, unregister는 현재 Account 소유 ID만 삭제하고 unknown·foreign ID는 `{ completed: true }`로 멱등 완료한다. 같은 Account의 다른 Session도 row를 관리할 수 있고, 등록 당시 연결된 Session의 lifecycle cleanup은 유지한다.
 - 같은 Account의 새 registration이 active token을 재등록하면 기존 duplicate row를 원자적으로 삭제하고 새 row ID와 registration epoch를 만든다. 다른 Account의 active token은 거부한다.
 - DB UUID PK를 `PushInstallation` GlobalID로 인코딩하고 별도 Node/query/registry를 추가하지 않는다.
@@ -37,7 +37,7 @@ server 계약과 lifecycle을 제공한다.
 
 - [x] 1.1 shared Domain/OpenSpec Gate에서 Account·Profile·installation·token ownership과 신규 전달 eligibility를 승인된 계약으로 연결한다.
 - [x] 1.2 인증된 Account의 server-issued ID registration·refresh·unregister lifecycle을 구현하고 다른 Account 접근은 거부하되 같은 Account의 다른 Session 관리는 허용한다. 등록 당시 연결된 Session의 lifecycle cleanup은 유지한다.
-- [x] 1.3 logout·account switch·Account deletion·provider invalid/unregistered 결과를 이후 신규 전달 자격 정리와 연결한다.
+- [x] 1.3 server-side logout·account switch·Account deletion·provider invalid/unregistered 결과를 이후 신규 전달 자격 정리와 연결한다.
 - [x] 1.4 registration 이후 생성된 Notification만 대상이 되도록 no-backlog 경계를 구현하고, expiry·Read State와 충돌하지 않음을 검증한다.
 - [x] 1.5 token·credential·private body 저장·관측 경계를 확인하고 PROD-913/914가 사용할 shared Gate evidence를 남긴다.
 
@@ -62,7 +62,19 @@ banner·background/terminated 수신·Push tap navigation을 shared server 계�
 - OS 권한 대화상자는 `알림 받기` action에서만 시작하고 앱 시작·로그인 완료에서 자동으로 열지 않는다.
 - 같은 설치에서 안내 close·permission deny·일반 update 뒤 자동 안내를 반복하지 않으며, in-app Push switch/preference API를 만들지 않는다.
 - foreground에서도 OS banner를 사용하고 custom in-app Push banner를 추가하지 않는다.
+- React Native Firebase Messaging(`@react-native-firebase/messaging`)은 FCM token과 `onTokenRefresh`를
+  소유하고, Expo Notifications(`expo-notifications`)는 OS permission 요청·상태, foreground OS presentation과
+  notification response/tap callback을 소유한다. Notifee는 추가하거나 사용하지 않는다.
+- prompt 완료 상태는 AsyncStorage app-local marker 하나로 보존한다. marker는 close 또는 `알림 받기` action의
+  permission 결과가 끝난 뒤 기록하며 Account·Profile별 상태, 서버 preference 또는 Push installation 데이터로
+  복제하지 않는다. AsyncStorage uninstall/reinstall·backup/restore 동작과 strict install-level once는 signed
+  physical device에서 별도로 검증한다.
+- client unregister는 OS permission이 revoked이고 저장된 installation ID가 있을 때에만 호출하며, 성공 뒤에만
+  local installation ID를 삭제한다. logout 시 installation row cleanup의 권위는 server session revocation이다.
 - cross-profile tap은 현재 Account의 Recipient Profile 접근을 재검증한 뒤 Profile 전환·target 이동을 수행한다.
+- Push payload의 `recipientProfileId`는 Profile Relay Global ID를 사용하고, tap 순서는 기존
+  logged-in/exact envelope → Notification Node network revalidation → `selectProfile` → `resetActor` → derived
+  route/fallback을 따른다. 별도 tap API, Node/query/registry를 추가하지 않는다.
 - 삭제·접근 불가 target은 접근 가능한 Notification 목록만 열고 toast·message를 표시하지 않는다.
 - logged-out tap은 target을 버리고 일반 login으로 수렴하며 login 뒤 target을 자동 복귀하지 않는다.
 - Provider handoff 뒤 OS 표시를 보장하기 위한 receive-time permission check나 terminated iOS data-only fetch를 전제로 하지 않는다.
@@ -70,14 +82,26 @@ banner·background/terminated 수신·Push tap navigation을 shared server 계�
 **Verification**
 
 - Android·iOS signed build에서 신규 login·이미 로그인된 첫 실행, CTA close·deny·update와 OS Settings 이동을 확인한다.
-- foreground·background·terminated 수신과 OS banner, native token registration·refresh·unregister를 실제 기기에서 확인한다.
+- foreground·background·terminated 수신과 OS banner, native token registration·refresh를 실제 기기에서 확인하고,
+  OS permission revoked·stored installation ID 조건에서만 unregister가 호출되며 성공 뒤에만 local ID가 삭제되는지
+  확인한다. logout cleanup은 server session revocation evidence로 별도 확인한다.
 - cross-profile valid target, deleted/inaccessible target, logged-out tap을 각각 실제 기기에서 확인한다.
+- logged-in/exact envelope → Notification Node network revalidation → `selectProfile` → `resetActor` → derived
+  route/fallback tap 순서와 logged-out target 폐기를 각각 실제 기기에서 확인한다.
+- AsyncStorage marker 하나가 close·deny·update 이후 자동 안내를 억제하는지와 uninstall/reinstall·backup/restore에서의
+  실제 보존 동작을 signed device에서 확인한다. backup 복원 결과를 strict install-level once의 보장으로 일반화하지 않는다.
+- iOS FCM–APNs provisioning/entitlement와 실제 device arrival은 별도 evidence로 기록하며, 현재 signed Android·iOS
+  device evidence와 함께 아직 확인하지 않았다.
 - Provider accepted·workflow success와 실제 device arrival evidence를 별도로 기록한다.
 
 - [ ] 2.1 로그인된 첫 앱 실행의 안내, 명시적 `알림 받기` CTA, close·deny·update 반복 억제와 OS Settings 이동을 구현한다.
-- [ ] 2.2 OS permission 상태에 따라 native FCM token registration·refresh·unregister를 PROD-912 lifecycle에 연결한다.
+- [ ] 2.2 OS permission 상태에 따라 native FCM token registration·refresh를 PROD-912 lifecycle에 연결하고,
+      revoked permission과 stored installation ID가 함께 있을 때만 unregister를 호출하며 성공 뒤에만 local ID를
+      삭제한다. logout cleanup은 server session revocation authority를 유지한다.
 - [ ] 2.3 foreground OS banner와 background·terminated 수신을 연결하고 custom in-app Push banner를 추가하지 않는다.
-- [ ] 2.4 Push tap의 Account/Recipient Profile 권한 재검증, cross-profile 전환·target 이동, deleted/inaccessible 목록 fallback을 구현한다.
+- [ ] 2.4 logged-in/exact envelope → Notification Node network revalidation → `selectProfile` → `resetActor` →
+      derived route/fallback 순서로 Push tap의 Account/Recipient Profile 권한 재검증, cross-profile 전환·target 이동,
+      deleted/inaccessible 목록 fallback을 구현한다.
 - [ ] 2.5 logged-out tap의 일반 login 수렴과 target 폐기를 구현하고 Android·iOS signed device evidence를 수집한다.
 
 ## 3. PROD-914 canonical Notification FCM 전달

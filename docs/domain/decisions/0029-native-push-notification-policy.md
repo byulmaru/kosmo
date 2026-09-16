@@ -6,7 +6,9 @@ Accepted — PROD-875 요구사항 정리에서 사용자가 권한 안내 시�
 표시와 본문 예외, foreground OS 배너, Account의 Profile 수신 범위, 안내 반복 억제, Push 탭의
 cross-profile 처리, 다중 설치 fan-out, Push 만료와 첫 릴리스의 in-app 설정 부재를 확정했다. PROD-912에서
 사용자가 해제·로그아웃·무효화된 installation row와 token의 즉시 삭제, 삭제 뒤 재등록의 신규 수신 시작
-시각과 동일 Account의 재설치 중복 정리를 확정했다.
+시각과 동일 Account의 재설치 중복 정리를 확정했다. 2026-09-16 PROD-913에서 native SDK ownership,
+prompt 완료 marker와 기존 Profile 전환·Notification 재검증 경계를 구현 선택으로 확정했으며, signed
+Android·iOS device evidence는 아직 남아 있다.
 
 ## 날짜
 
@@ -20,6 +22,31 @@ Notification 계약에 포함되어 있지 않다. PROD-875에서 FCM native pus
 installation token lifecycle을 고정하므로 권한 안내 시점,
 잠금 화면 기본 정보, Account의 Profile 수신 범위와 첫 릴리스의 preference 경계를 별도의 제품 계약으로
 고정해야 한다.
+
+## 2026-09-16 PROD-913 구현 보완
+
+아래 항목은 위 제품 정책을 native client에 적용하기 위한 구현 경계다. Provider SDK, server credential,
+retry와 운영 관측은 PROD-914의 책임으로 남긴다.
+
+- React Native Firebase Messaging(`@react-native-firebase/messaging`)은 FCM token 발급과
+  `onTokenRefresh`를 단독으로 소유한다. Expo Notifications(`expo-notifications`)는 OS permission 요청·상태
+  조회, foreground OS presentation과 notification response/tap callback을 단독으로 소유한다. Notifee는
+  추가하거나 사용하지 않는다.
+- client는 관찰된 OS permission이 revoked이고 저장된 server-issued installation ID가 있을 때에만
+  `unregisterPushInstallation`을 호출한다. unregister 성공 뒤에만 local installation ID를 삭제하며, logout 시
+  installation row cleanup의 권위는 server session revocation lifecycle에 있다.
+- prompt 완료 사실은 AsyncStorage app-local marker 하나로 보존한다. marker는 close 또는 `알림 받기` action의
+  permission 결과가 끝난 뒤 기록하고, Account·Profile별 상태나 서버 preference로 복제하지 않는다. AsyncStorage의
+  uninstall/reinstall·backup/restore 보존 동작은 플랫폼과 설정에 따라 달라질 수 있으므로 physical installation
+  identity 또는 backup 복원까지의 strict install-level once를 증명하는 근거로 사용하지 않는다.
+- Push payload의 `recipientProfileId`는 Profile Relay Global ID를 사용한다. 로그인된 tap은 exact Push envelope를
+  먼저 검증하고 `logged-in/exact envelope` → Notification Node network revalidation → `selectProfile` →
+  `resetActor` → derived route/fallback 순서를 따른다. Node가 삭제되었거나 접근할 수 없으면 기존 Notification
+  목록 fallback으로 수렴하며, 별도 tap API·Node/query/registry를 추가하지 않는다. logged-out tap은 원래 target을
+  버리고 일반 login 흐름으로 수렴한다.
+- 위 구현 선택은 signed Android·iOS build에서 token refresh, permission status, foreground OS banner, cross-profile
+  tap, uninstall/reinstall·backup/restore를 실행해 확인해야 한다. iOS FCM–APNs provisioning/entitlement와 실제
+  device arrival evidence도 아직 확인하지 않았다.
 
 ## 결정
 
@@ -54,6 +81,8 @@ installation token lifecycle을 고정하므로 권한 안내 시점,
   Account 삭제에 따른 기존 cleanup은 유지한다. Provider가 invalid 또는 unregistered 결과를 반환해도 Account,
   row ID와 현재 token이 모두 일치하는 row만 즉시 삭제한다. 늦게 도착한 이전 token 결과는 갱신된 현재 token을
   삭제하지 않는다.
+- client-side unregister는 OS permission revoked와 저장된 installation ID가 모두 있을 때만 실행하며, 성공 전에
+  local ID를 삭제하지 않는다. logout에 따른 installation cleanup은 server session revocation이 계속 소유한다.
 - 이전 문서의 `현재 Account·Session` 일치 조건은 이 Account 소유권 및 lifecycle association 규칙으로 대체한다.
 - 삭제된 installation을 다시 등록하면 삭제 전 registration epoch나 unread Notification을 재사용하지 않고,
   새 row ID와 새 수신 시작 시각을 기록한다. 이전에 반환된 ID는 재사용하지 않으며, 늦게 도착한 이전 ID의
@@ -72,10 +101,11 @@ installation token lifecycle을 고정하므로 권한 안내 시점,
   않는다.
 - 같은 설치에서 안내를 닫거나 OS 권한을 거부한 뒤에는 안내를 자동으로 다시 표시하지 않는다. 일반적인
   앱 업데이트 뒤에도 안내를 자동으로 다시 표시하지 않는다.
-- Push를 탭하면 현재 Account가 Recipient Profile에 접근할 수 있는지 다시 확인한다. 접근할 수 있으면
-  해당 Profile로 전환한 뒤 target을 열고, target이 삭제되었거나 접근할 수 없으면 접근 가능한 알림 목록만
-  연다. 이 fallback에서는 별도 toast·message를 표시하지 않는다. 로그인되지 않은 상태에서 Push를 탭하면
-  원래 target을 버리고 일반 로그인 흐름을 따르며, 로그인 뒤 Push target으로 자동 복귀하지 않는다.
+- Push를 탭하면 로그인 상태와 exact envelope를 먼저 확인한 뒤 Notification Node를 네트워크에서 재검증한다.
+  검증된 Node에 접근할 수 있으면 `selectProfile`을 호출하고 성공 뒤 `resetActor`를 실행한 다음 derived route를
+  계산해 target을 연다. Node가 삭제되었거나 접근할 수 없으면 접근 가능한 알림 목록만 여는 derived fallback을
+  따르며 별도 toast·message를 표시하지 않는다. 로그인되지 않은 상태에서 Push를 탭하면 원래 target을 버리고
+  일반 로그인 흐름을 따르며, 로그인 뒤 Push target으로 자동 복귀하지 않는다.
 - Notification 생성 시각부터 24시간이 지나면 해당 Push의 전달을 시도하지 않는다. 이 24시간은 최초
   Notification 생성 시각을 기준으로 하며, 재시도나 token refresh로 연장하거나 다시 시작하지 않는다. 이
   만료는 원래 인앱 Notification lifecycle을 변경하지 않는다.
@@ -93,7 +123,8 @@ installation token lifecycle을 고정하므로 권한 안내 시점,
   배너, 안내 반복 억제, OS 설정 이동, cross-profile target 처리, 다중 설치 fan-out, Push 만료와 read state
   독립성을 고정한다.
   PROD-912가 소유하는 installation token의 저장·폐기 lifecycle은 위와 같이 정한다. Provider SDK,
-  전송 재시도·실패 처리와 payload의 정확한 필드 구조는 이 ADR에서 정하지 않는다.
+  전송 재시도·실패 처리와 payload의 정확한 필드 구조는 이 ADR에서 정하지 않으며, native client SDK ownership은
+  위 `2026-09-16 PROD-913 구현 보완`에서 정한다.
 
 ## 남은 결정
 
@@ -104,6 +135,7 @@ installation token lifecycle을 고정하므로 권한 안내 시점,
 ## 문서 반영
 
 - [Notification presentation](../../design/notifications.md#native-fcm-push-권한-요청과-잠금-화면-미리보기--prod-875)은
-  native 안내, 알림 대상 범위, 잠금 화면과 foreground OS 표시를 정의한다.
+  native 안내, AsyncStorage prompt marker, SDK ownership, client unregister 조건, 알림 대상 범위, 잠금 화면과
+  foreground OS 표시를 정의한다.
 - [Notification 객체](../objects/notification.md)는 Recipient와 인앱 Notification lifecycle을 계속 소유하며,
   native transport와 device token은 이 결정의 후속 구현 범위에서 별도로 다룬다.

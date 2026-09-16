@@ -32,6 +32,13 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
   단계다.
 - OS 권한 요청은 앱 시작·로그인 완료 시 자동으로 실행하지 않고, 사용자가 안내의 `알림 받기` action을
   명시적으로 활성화한 경우에만 시작한다.
+- Native SDK ownership은 React Native Firebase Messaging(`@react-native-firebase/messaging`)이 FCM token 발급과
+  `onTokenRefresh`를 맡고, Expo Notifications(`expo-notifications`)가 OS permission 요청·상태 조회, foreground
+  OS presentation과 notification response/tap callback을 맡는 방식으로 분리한다. Notifee는 사용하지 않는다.
+- 안내가 완료된 사실은 AsyncStorage app-local marker 하나로 기록한다. marker는 close 또는 `알림 받기` action의
+  permission 결과가 끝난 뒤 설정하고, 일반 로그인·앱 실행·업데이트에서 자동 안내를 반복하지 않도록 사용한다.
+  AsyncStorage의 uninstall/reinstall·backup/restore 보존 동작은 플랫폼과 설정에 따라 달라질 수 있으므로 signed
+  physical device에서 확인해야 하며, backup 복원까지 strict install-level once를 보장한다고 해석하지 않는다.
 - 기본 잠금 화면 FCM Push에는 발신자, 알림 유형과 게시글 본문 미리보기를 포함한다.
 - Follow와 FollowRequest처럼 게시글 본문이 없는 알림은 본문 미리보기를 생략한다.
 - Push transport는 canonical Notification이 저장 성공한 결과를 받는 공통 전달 flow를 소유한다. 현재
@@ -56,6 +63,9 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
   Session도 해당 row를 관리할 수 있지만, 등록 당시 연결된 Session의 로그아웃·폐기와 Account 삭제에 따른 기존
   cleanup은 유지한다. Provider의 invalid·unregistered 결과는 Account, row ID와 현재 token이 모두 일치할 때만 row와
   token을 즉시 삭제하며, 늦은 이전 token 결과는 갱신된 token을 삭제하지 않는다.
+- client는 관찰된 OS permission이 revoked이고 저장된 server-issued installation ID가 있을 때에만
+  `unregisterPushInstallation`을 호출한다. unregister 성공 뒤에만 local installation ID를 삭제하며, logout 시
+  installation row cleanup의 권위는 server session revocation lifecycle에 있다.
 - 삭제 뒤 재등록은 이전에 반환된 ID를 재사용하지 않고 새 row ID와 새 수신 시작 시각을 기록한다. 늦게 도착한
   이전 ID의 unregister가 새 registration row를 삭제하지 않으며, 삭제 전 registration epoch나 unread
   Notification을 재사용하지 않는다. 새 registration 시각 이전에 생성된 Notification은 Push backlog로 전달하지
@@ -72,11 +82,12 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
   않는다.
 - 같은 설치에서 안내를 닫거나 OS 권한을 거부한 뒤에는 안내를 자동으로 다시 표시하지 않는다. 일반적인 앱
   업데이트 뒤에도 안내를 자동으로 다시 표시하지 않는다.
-- 앱 설정에서 OS 알림 설정으로 이동하는 action을 제공한다. Push 탭 시에는 현재 Account가 Recipient Profile에
-  접근할 수 있는지 다시 확인한 뒤,
-  접근할 수 있으면 해당 Profile로 전환해 target을 연다. target이 삭제되었거나 접근할 수 없으면 접근 가능한
-  알림 목록만 열고 별도 toast·message를 표시하지 않는다. 로그인되지 않은 상태에서 Push를 탭하면 원래
-  target을 버리고 일반 로그인 흐름을 따르며, 로그인 뒤 Push target으로 자동 복귀하지 않는다.
+- 앱 설정에서 OS 알림 설정으로 이동하는 action을 제공한다. 로그인된 Push tap은 exact envelope를 먼저 확인하고,
+  `logged-in/exact envelope` → Notification Node network revalidation → `selectProfile` → `resetActor` → derived
+  route/fallback 순서를 따른다. `recipientProfileId`는 Profile Relay Global ID로 식별하며, Node가 삭제되었거나
+  접근할 수 없으면 접근 가능한 알림 목록만 여는 derived fallback으로 수렴한다. 별도 tap API·Node/query/registry는
+  추가하지 않으며, fallback에서 별도 toast·message를 표시하지 않는다. 로그인되지 않은 상태에서 Push를 탭하면
+  원래 target을 버리고 일반 로그인 흐름을 따르며, 로그인 뒤 Push target으로 자동 복귀하지 않는다.
 - Notification 생성 시각부터 24시간이 지나면 해당 Push의 전달을 시도하지 않는다. 이 24시간은 최초
   Notification 생성 시각을 기준으로 하며, 재시도나 token refresh로 연장하거나 다시 시작하지 않는다. 이
   만료는 원래 인앱 Notification lifecycle을 변경하지 않는다.
@@ -90,8 +101,9 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
 - Provider의 accepted 응답은 기기 도착을 증명하지 않으며, Provider에 큐잉된 Push를 절대적으로 회수할 수
   있다는 보장도 없다. 이는 Provider·플랫폼의 관찰 가능한 경계다.
 - 이 결정은 공통 Push flow가 canonical Notification 저장 성공 결과부터 수신 대상 fan-out과 전달 lifecycle을
-  소유한다는 경계와, 권한 안내 시점, 현재 integration inventory, 기본 표시 구성과 foreground OS 배너, 안내
-  반복 억제, OS 설정 이동, cross-profile target 처리, Push 만료와 read state 독립성을 확정한다. 미리보기
+  소유한다는 경계와, 권한 안내 시점, AsyncStorage prompt marker, native SDK ownership, client unregister 조건,
+  현재 integration inventory, 기본 표시 구성과 foreground OS 배너, 안내 반복 억제, OS 설정 이동, cross-profile target
+  처리, Push 만료와 read state 독립성을 확정한다. 미리보기
   excerpt 길이와 PROD-911이 소유하는 향후 Mention 생성·통합 및 유형별 source·표시 계약은 별도 범위로 남지만,
   해당 type이 canonical Notification으로 저장되면 같은 공통 Push flow를 사용한다.
 

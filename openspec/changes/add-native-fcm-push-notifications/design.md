@@ -26,8 +26,8 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
 - Web Push, 마케팅 broadcast, in-app Push preference UI/API와 custom in-app foreground banner
 - 미래 Notification generator·PROD-911 Mention 생성·통합 자체의 구현
 - 기존 Notification Type, Read State, Mute·Block·visibility 정책의 재설계
-- 정확한 GraphQL operation 이름, REST endpoint, DB table/field, FCM SDK, retry 수치 또는 provider workflow
-  설정을 이 OpenSpec에서 고정하는 것
+- 정확한 GraphQL operation 이름, REST endpoint, DB table/field, Provider SDK, retry 수치 또는 provider
+  workflow 설정을 이 OpenSpec에서 고정하는 것. PROD-913의 native client SDK ownership은 아래 결정으로 고정한다.
 - 과거 Notification unread backlog의 replay나 provider accepted를 실제 기기 도착으로 해석하는 것
 
 ## Implementation Guidance
@@ -62,9 +62,19 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
 - iOS silent/data-only background delivery는 terminated 상태에서 보장되지 않으므로, OS 표시 전에 앱이 서버에서
   body를 fetch해야 한다는 설계를 전제할 수 없다([FCM iOS receive messages](https://firebase.google.com/docs/cloud-messaging/ios/receive-messages)).
 - 현재 Expo Notifications 문서는 Android의 FCM과 iOS의 APNs 연동을 모두 안내한다([Expo Notifications](https://docs.expo.dev/versions/latest/sdk/notifications/)).
-  두 플랫폼의 FCM registration·event 경계를 직접 다뤄야 하는 경우의 구현 후보는 React Native Firebase Messaging과
-  Expo Notifications의 조합이지만, 정확한 SDK 선택·구성은 이 change에서 고정하지 않는다. 두 계층이 token을
-  중복 등록하거나 foreground notification을 이중 표시하지 않는지 통합 검증이 필요하다.
+  PROD-913은 React Native Firebase Messaging(`@react-native-firebase/messaging`)을 FCM token 발급과
+  `onTokenRefresh`의 단독 소유자로 사용하고, Expo Notifications(`expo-notifications`)를 OS permission
+  요청·상태 조회, foreground OS presentation과 notification response/tap callback의 단독 소유자로 사용한다.
+  Notifee는 사용하지 않는다. 두 계층이 token을 중복 등록하거나 foreground notification·tap event를 이중
+  처리하지 않는지 signed build에서 확인해야 한다.
+- prompt 완료 상태는 AsyncStorage의 app-local marker 하나로 보존한다. marker는 close 또는 `알림 받기` action의
+  permission 결과가 끝난 뒤 기록하고 일반 로그인·앱 실행·업데이트에서 자동 안내를 억제한다. AsyncStorage의
+  uninstall/reinstall 및 backup/restore 보존 동작은 플랫폼과 설정에 따라 달라질 수 있어 signed physical
+  installation identity를 증명하지 않는다. 따라서 uninstall/reinstall과 backup/restore의 실제 동작을 별도로
+  검증하고, backup 복원까지 strict install-level once를 보장한다고 주장하지 않는다.
+- client는 관찰한 OS permission이 revoked이고 저장된 server-issued installation ID가 있을 때에만
+  `unregisterPushInstallation`을 호출한다. unregister 성공 뒤에만 local installation ID를 삭제하며, logout 시
+  installation row cleanup의 권위는 server session revocation lifecycle에 둔다.
 
 ### Recommended Approach
 
@@ -85,14 +95,19 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
    visibility 정책에서 계산하고, token은 서버 저장 경계에서만 Provider 전달에 사용한다. DB UUID PK를
    `PushInstallation` GlobalID로 인코딩하며 Node/query/registry를 추가하지 않는다. 동시 logout·re-register,
    account switch, token refresh에서 다른 Account가 token을 소유하지 않는지 security/concurrency를 검증한다.
-2. **native 권한과 표시:** 로그인된 첫 실행에서 installation-local 안내 상태를 관찰하고 `알림 받기` CTA에서만
-   OS 권한 요청을 시작한다. 권한 상태가 허용된 뒤 native FCM token을 등록·갱신하고, OS native notification
-   surface가 foreground banner와 background·terminated 수신을 담당하도록 한다. 일반 앱 lifecycle과 logout/
-   account switch를 registration lifecycle에 연결한다.
-3. **tap routing:** Push payload에는 Recipient Profile과 target을 다시 조회할 수 있는 최소 식별 정보를 둔다.
-   앱은 현재 Account 권한을 서버에서 재검증한 뒤 Profile 전환과 route 이동을 수행하고, 삭제·접근 불가 target은
-   접근 가능한 Notification 목록으로 수렴한다. logged-out tap은 일반 login으로 수렴하고 원래 target을 보존하지
-   않는다.
+2. **native 권한과 표시:** 로그인된 첫 실행에서 AsyncStorage의 단일 app-local prompt marker를 관찰하고,
+   marker가 없을 때만 안내를 표시한다. `알림 받기` CTA에서 Expo Notifications로 OS permission 요청을 시작하고
+   permission status를 읽는다. React Native Firebase Messaging이 native FCM token과 `onTokenRefresh`를
+   등록·갱신하며, Expo Notifications가 foreground OS presentation과 background·terminated notification
+   response/tap callback을 담당한다. Notifee는 추가하지 않는다. client는 관찰된 OS permission이 revoked이고
+   저장된 installation ID가 있을 때에만 `unregisterPushInstallation`을 호출하고, 성공 뒤에만 local ID를 삭제한다.
+   logout 시 installation row cleanup은 server session revocation이 소유한다.
+3. **tap routing:** Push payload의 `recipientProfileId`는 Profile Relay Global ID로 전달하고 target을 다시
+   조회할 최소 식별 정보와 함께 사용한다. 로그인된 tap은 exact Push envelope를 먼저 검증한 뒤
+   `logged-in/exact envelope` → Notification Node network revalidation → `selectProfile` → `resetActor` →
+   derived route/fallback 순서를 따른다. Node가 삭제되었거나 접근할 수 없으면 접근 가능한 Notification 목록으로
+   수렴한다. logged-out tap은 일반 login으로 수렴하고 원래 target을 보존하지 않는다. 별도 tap API·Node/query/registry를
+   추가하지 않는다.
 4. **공통 post-commit delivery flow:** canonical Notification materialization이 성공한 결과를 하나의 공통
    전달 lifecycle 경계로 넘겨 installation별 target 계산과 Provider 전달을 수행한다. 현재 source Workflow가 이
    flow를 호출할 수 있고, 향후 generator도 domain owner가 연결한 저장 성공 결과를 같은 flow로 넘긴다. 어떤
@@ -120,14 +135,13 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
   원본 실패 격리를 보존해야 한다.
 - FCM payload는 OS 표시용 notification/data 조합을 사용할 수 있다. 선택한 메시지 형태는 sender·type·body
   redaction·Recipient Profile·tap routing을 만족해야 한다.
-- Native client는 React Native Firebase Messaging, Expo Notifications 또는 기존 앱의 동등한 native 경계를
-  조합할 수 있다. Expo Notifications가 안내하는 iOS APNs token만으로는 이 capability가 요구하는 direct FCM
-  registration/token 계약을 충족하지 않으므로, Expo Notifications를 OS presentation·permission·tap에 사용하면
-  RNFirebase Messaging 같은 Firebase Messaging bridge(또는 동등한 bridge)가 FCM token·event 경계를 소유해야
-  한다. 선택한 경로는 권한·token·foreground 표시·tap ownership을 하나의 경계로 정하고, 이중 표시가 없음을
-  실제 signed Android·iOS build에서 확인해야 한다.
-- installation-local 안내 상태는 현재 native storage 관례에 맞는 durable client storage를 사용할 수 있다.
-  구현은 same-install close/deny/update 반복 억제와 OS Settings 이동을 보존해야 한다.
+- Native client는 React Native Firebase Messaging이 FCM token·`onTokenRefresh`를 소유하고 Expo Notifications가
+  OS permission/status·foreground presentation·tap callback을 소유하는 조합을 사용한다. Notifee를 대체
+  presentation·tap 계층으로 추가하지 않으며, token·foreground event·tap event의 이중 처리를 허용하지 않는다.
+  이 경계가 실제 signed Android·iOS build에서 동작하는지 확인해야 한다.
+- installation-local 안내 상태는 AsyncStorage marker 하나로 보존한다. marker의 uninstall/reinstall·backup/restore
+  보존 동작은 signed physical device에서 확인하되, 플랫폼별 backup 복원 결과까지 strict install-level once를
+  보장하는 근거로 사용하지 않는다.
 
 ### Known Traps
 
@@ -145,6 +159,13 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
 - retry가 최초 Notification 생성 후 24시간을 넘기거나 Provider 호출을 원본 Notification transaction에 결합하는 것
 - 현재 runtime type 목록을 별도 whitelist로 복제하거나 PROD-911 Mention generator를 선행 구현하는 것
 - 삭제·접근 불가 target 외의 상태에서 임의의 old-valid/duplicate 자동 목록 fallback을 추가하는 것
+- OS permission revoked가 아니거나 저장된 installation ID가 없는데 client unregister를 호출하거나, unregister 성공 전에 local ID를 삭제하는 것
+- React Native Firebase Messaging과 Expo Notifications가 token·foreground·tap ownership을 함께 처리하거나
+  Notifee를 추가해 OS notification event를 중복 표시·처리하는 것
+- AsyncStorage marker의 backup 복원·재설치 동작을 확인하지 않고 물리 installation identity 또는 strict once를
+  보장한다고 주장하는 것
+- `recipientProfileId`를 raw UUID로 전달하거나 logged-in/exact envelope → Notification Node network revalidation →
+  `selectProfile` → `resetActor` → derived route/fallback 순서를 우회하는 것
 
 ## Risks / Trade-offs
 
@@ -158,13 +179,17 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
   redaction, Recipient 권한 확인과 로그·analytics 비기록을 함께 검증한다.
 - [no backlog 선택] 새 설치가 과거 unread를 받지 않는다 → registration 이후 생성 시각 경계를 명시적으로
   관측하고 인앱 Notification lifecycle은 그대로 보존한다.
+- [prompt marker 보존 한계] AsyncStorage는 uninstall/reinstall·backup/restore에서 동일한 물리 설치를
+  증명하는 저장소가 아니다 → signed device에서 동작을 기록하고 backup 복원까지의 strict once는 보장 범위에서
+  제외한다.
 
 ## Migration Plan
 
 1. Account-owned installation/token registration과 Provider credential의 server-only 경계를 additive하게
    도입하고, 기존 Notification과 인앱 조회·Read에는 영향을 주지 않는다.
 2. Android·iOS client를 signed build에 연결해 권한 안내, CTA, OS Settings 이동, token registration과 tap
-   routing을 먼저 검증한다. 기존 session/logout/account switch 경계를 함께 확인한다.
+   routing을 먼저 검증한다. revoked permission·stored installation ID 조건과 logout의 server session revocation
+   cleanup 경계를 함께 확인한다.
 3. Provider delivery와 retry/cleanup을 commit 이후 경계에 연결하고, provider fake·integration 검증 뒤 실제
    Android·iOS 설치에서 foreground/background/terminated와 cross-profile flow를 확인한다.
 4. 실패 시 Provider delivery/registration 경계를 중지하거나 이전 client build로 되돌릴 수 있어야 하며,
@@ -173,12 +198,13 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
 
 ## Open Questions
 
-- FCM service credential 주입 위치, provider SDK와 native client SDK 구성 선택, retry/backoff 수치와 운영 관측
-  필드는 구현 slice의 security·operations review에서 결정해야 한다. 후보 조합을 채택할 경우 RNFirebase
-  Messaging과 Expo Notifications 간 token·foreground presentation·tap 중복 경계를 먼저 확인한다.
+- FCM service credential 주입 위치, provider SDK, retry/backoff 수치와 운영 관측 필드는 구현 slice의
+  security·operations review에서 결정해야 한다. Native client SDK ownership은 RNFirebase Messaging의 FCM
+  token/`onTokenRefresh`와 Expo Notifications의 permission/status·foreground presentation·tap으로 이미
+  정했으며, Notifee는 사용하지 않는다.
 - 기존 source Workflow가 Notification materialization 전에 시작 실패하는 경계는 현재 관측 방식으로 유지한다.
   전역 repair/reconciliation은 범위 밖으로 두고, 공통 전달 flow가 materialization 뒤 복구 불가능한 추가
   post-commit 외부 start window 없이 실행되는지 확인한다.
-- Android·iOS의 OS permission 상태 읽기·설정 이동 API와 signed-build evidence 수집 방식은 native slice에서
-  결정해야 한다.
+- Android·iOS signed-build evidence, AsyncStorage uninstall/reinstall·backup/restore 동작, iOS FCM–APNs
+  provisioning/entitlement와 실제 device arrival은 아직 확인해야 한다.
 - 게시글 body excerpt의 길이·자르기 규칙은 ADR 0029의 남은 결정이며 현재 Push contract의 blocker가 아니다.

@@ -2,11 +2,11 @@
 
 이 기록은 `docs/domain/decisions/0029-native-push-notification-policy.md`와
 `docs/design/notifications.md`에 반영된 PROD-875 제품 결정, `docs/domain/objects/notification.md`의 기존
-Recipient·visibility·Read State 계약, 그리고 2026-09-10 현재 PROD-875/912/913/914 본문·관계를 하나의
-native FCM Push capability에 적용한 결과다. 모든 기록은 현재 상위 authority에서 파생한 계약이며, endpoint,
-DB schema, FCM SDK와 retry 수치 같은 구현 선택은 이 문서에서 결정하지 않는다. 단, PROD-912의 승인된
-server-issued installation row ID와 GraphQL mutation surface는 sibling 구현이 공유해야 하는 lifecycle 계약으로
-기록한다.
+Recipient·visibility·Read State 계약, 그리고 PROD-875/912/913/914 본문·관계를 하나의 native FCM Push
+capability에 적용한 결과다. 모든 기록은 현재 상위 authority에서 파생한 계약이며, 아래에 기록한 PROD-913
+native client 경계를 제외한 Provider SDK·endpoint·DB schema·retry 수치 같은 구현 선택은 이 문서에서 결정하지
+않는다. PROD-912의 승인된 server-issued installation row ID와 GraphQL mutation surface는 sibling 구현이
+공유해야 하는 lifecycle 계약으로 기록한다.
 
 ## Decision Records
 
@@ -146,9 +146,9 @@ server-issued installation row ID와 GraphQL mutation surface는 sibling 구현�
 - Authority / Provenance: `docs/domain/objects/notification.md`, `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `PROD-875`, `PROD-913`
 - Status: Active
 - Context / Problem: Push가 생성된 뒤 Account membership 또는 target visibility가 바뀔 수 있어 탭 payload만 신뢰할 수 없다.
-- Decision Outcome: tap 시 현재 Account가 Recipient Profile에 접근할 수 있는지 다시 확인하고, 접근 가능하면 해당 Profile로 전환해 target을 연다. target이 삭제되었거나 접근할 수 없으면 접근 가능한 Notification 목록만 열고 toast·message를 표시하지 않는다.
+- Decision Outcome: 로그인된 tap은 exact Push envelope를 먼저 검증하고, `logged-in/exact envelope` → Notification Node network revalidation → `selectProfile` → `resetActor` → derived route/fallback 순서를 따른다. `recipientProfileId`는 Profile Relay Global ID이며, Node가 삭제되었거나 접근할 수 없으면 접근 가능한 Notification 목록으로 수렴하고 toast·message를 표시하지 않는다.
 - Alternatives Considered: stale payload를 바로 열거나 old-valid/duplicate 상태에도 자동 목록 fallback을 적용하면 현재 권한과 다른 navigation을 만들므로 선택하지 않는다.
-- Consequences: native tap handler는 server revalidation과 Profile switch를 route 이동보다 먼저 수행해야 한다.
+- Consequences: native tap handler는 exact envelope와 현재 로그인 상태를 확인한 뒤 Notification Node를 네트워크에서 재검증하고, 그 성공 결과로 Profile 전환과 actor reset을 거쳐 derived route를 계산해야 한다. logged-out tap은 별도 결정처럼 일반 login으로 수렴한다.
 - Confirmation / Follow-up: cross-profile valid target, deleted target, inaccessible target의 signed build evidence를 분리한다.
 
 ### logged-out tap은 target을 버리고 일반 login으로 수렴한다
@@ -235,13 +235,62 @@ server-issued installation row ID와 GraphQL mutation surface는 sibling 구현�
 - Consequences: register 응답은 후속 update·unregister의 cacheable public ID를 제공하고, 알 수 없거나 삭제된 ID와 다른 Account 소유 ID의 update는 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패하며, 알 수 없거나 삭제된 ID와 다른 Account 소유 ID의 unregister는 `{ completed: true }`로 멱등 처리한다. GraphQL scalar·typename 검증은 API boundary가 소유하고 core token lifecycle은 transport-neutral 상태를 유지한다.
 - Confirmation / Follow-up: repository의 `field.globalID`와 `t.input.globalID()` 관행, `PushInstallation` typename 인코딩, register/update/unregister의 unknown/deleted ID 결과를 API integration에서 확인한다.
 
+### PROD-913 native SDK ownership을 분리한다
+
+- Decision Date: 2026-09-16
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `PROD-913`
+- Status: Active
+- Context / Problem: FCM token lifecycle과 OS 권한·표시·tap callback을 여러 native SDK가 함께 소유하면 같은 token 등록, foreground 이중 표시 또는 중복 tap 처리가 발생할 수 있다.
+- Decision Outcome: React Native Firebase Messaging(`@react-native-firebase/messaging`)이 FCM token 발급과 `onTokenRefresh`를 단독으로 소유한다. Expo Notifications(`expo-notifications`)가 OS permission 요청·상태 조회, foreground OS presentation과 notification response/tap callback을 단독으로 소유한다. Notifee는 추가하거나 사용하지 않는다. 각 SDK가 같은 token, foreground event 또는 tap event를 중복 등록·처리하지 않는다.
+- Alternatives Considered: Expo Notifications만으로 direct FCM token lifecycle을 소유하거나 Notifee를 presentation·tap 계층에 추가하는 방식은 이 capability가 요구하는 FCM token 경계 또는 단일 OS presentation/tap ownership을 흐리므로 선택하지 않는다.
+- Consequences: native client의 token lifecycle과 permission/status·foreground/tap lifecycle은 서로 다른 명확한 경계를 가지며, Provider SDK·credential·retry는 PROD-914의 책임으로 남는다.
+- Confirmation / Follow-up: SDK 설정과 callback 연결은 implementation slice에서 확인한다. signed Android·iOS build에서 token refresh, permission 상태, foreground OS banner와 tap callback의 중복 없는 실행 및 iOS FCM–APNs device arrival은 아직 검증하지 않았다.
+
+### PROD-913 client unregister는 OS 해제와 저장 ID가 함께 있을 때만 수행한다
+
+- Decision Date: 2026-09-16
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `PROD-912`, `PROD-913`
+- Status: Active
+- Context / Problem: OS 설정에서 권한이 해제된 경우에만 client가 해당 installation을 해제해야 하며, 저장된 server-issued installation ID가 없으면 해제 대상을 추측할 수 없다. logout cleanup은 client permission 동기화와 분리된 server session lifecycle의 권위로 남아야 한다.
+- Decision Outcome: client는 관찰된 OS permission이 revoked이고 저장된 installation ID가 있을 때에만 `unregisterPushInstallation`을 호출한다. unregister가 성공한 뒤에만 local installation ID를 삭제한다. logout 시 installation row cleanup의 권위는 server session revocation이며, client permission 동기화 unregister가 logout cleanup을 대체하거나 선행하지 않는다.
+- Alternatives Considered: logout·앱 시작·ID 부재 때마다 unregister를 호출하거나 mutation 전에 local ID를 지우는 방식은 server session cleanup 경계 또는 실패 후 재시도 가능성을 훼손하므로 선택하지 않는다.
+- Consequences: OS permission drift를 관찰한 client만 저장된 대상에 대해 idempotent unregister를 시도하고, 성공하지 않은 호출 뒤에는 ID를 보존해 재시도할 수 있다. server session revocation은 client 상태와 무관하게 기존 logout cleanup을 수행한다.
+- Confirmation / Follow-up: revoked permission과 stored/missing installation ID 조합, 성공·실패 unregister 뒤 local ID 보존·삭제, logout의 server session revocation cleanup을 signed Android·iOS와 API integration에서 확인해야 하며 현재 signed device 검증은 실행하지 않았다.
+
+### PROD-913 prompt 완료 상태는 AsyncStorage marker 하나로 보존한다
+
+- Decision Date: 2026-09-16
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `PROD-913`
+- Status: Active
+- Context / Problem: 로그인·업데이트마다 권한 안내를 다시 표시하면 close·deny 이후 자동 반복 억제 계약을 지키기 어렵고, Account·Profile·서버에 prompt UI 상태를 추가하면 설치 로컬 정책이 흐려진다.
+- Decision Outcome: 앱은 prompt가 완료된 사실을 나타내는 app-local AsyncStorage marker 하나만 기록한다. marker는 prompt의 close 또는 `알림 받기` action에서 permission 요청 결과가 끝난 뒤 설정하며, Account·Profile별 상태나 서버 API·Push installation 데이터로 복제하지 않는다. marker가 있으면 일반 로그인·앱 실행·업데이트에서 안내를 자동으로 다시 표시하지 않는다.
+- Alternatives Considered: SecureStore·서버 preference·Account/Profile별 marker를 사용하는 방식은 설치 로컬 prompt 완료 경계를 바꾸거나 이미 확정된 in-app Push preference 상태를 추가하므로 선택하지 않는다.
+- Consequences: marker는 OS permission status나 FCM token eligibility를 대신하지 않으며, 앱은 매 native lifecycle에서 Expo Notifications로 관찰한 OS 상태를 별도로 처리한다. AsyncStorage의 플랫폼별 uninstall/reinstall 및 backup/restore 동작은 signed physical installation identity를 보장하지 않을 수 있으므로, strict install-level once를 backup 복원까지 일반화하지 않는다.
+- Confirmation / Follow-up: signed Android·iOS build에서 신규 로그인·기존 로그인 설치의 첫 실행, close·deny·CTA, 일반 update, uninstall/reinstall과 backup/restore를 확인해야 한다. 현재 이 검증은 실행하지 않았다.
+
+### PROD-913 Push tap은 Profile Relay GID와 기존 전환·재검증 경계를 사용한다
+
+- Decision Date: 2026-09-16
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `PROD-913`
+- Status: Active
+- Context / Problem: Push payload의 Recipient Profile을 임의의 local ID로 해석하거나 별도 tap API를 추가하면 Relay actor와 기존 Notification 권한·route 재검증이 분리된다.
+- Decision Outcome: Push payload의 `recipientProfileId`는 Profile Relay Global ID를 사용한다. 로그인된 tap은 exact Push envelope를 먼저 검증하고 `logged-in/exact envelope` → Notification Node network revalidation → `selectProfile` → `resetActor` → derived route/fallback 순서를 따른다. Node가 삭제되었거나 접근할 수 없으면 기존 Notification 목록 fallback으로 수렴한다. 새로운 tap resolver, Node/query/registry 또는 다른 API surface를 추가하지 않는다.
+- Alternatives Considered: raw database UUID 또는 client-local Profile ID를 payload에 넣거나 tap 전용 API·navigation queue를 추가하는 방식은 Relay identity·기존 authorization boundary를 복제하고 logged-out/cross-profile 처리 경계를 넓히므로 선택하지 않는다.
+- Consequences: native tap handler는 payload의 Recipient Profile identity를 Relay 경계에서 사용하고 로그인 상태·exact envelope를 확인한 뒤 Notification Node를 네트워크에서 재검증한다. 그 다음 `selectProfile` → `resetActor`를 수행하고 derived route 또는 기존 목록 fallback을 선택한다. logged-out tap은 기존 일반 login 수렴을 따르며 target을 보존하지 않는다.
+- Confirmation / Follow-up: cross-profile valid target, deleted/inaccessible target, logged-out tap을 signed Android·iOS build에서 확인해야 하며 현재 이 검증은 실행하지 않았다.
+
 ## Remaining Decisions
 
 - Provider SDK·service credential 주입·secret rotation, retry/backoff 수치, deduplication key와 운영 관측 field.
 - 기존 source Workflow가 Notification materialization 전에 시작 실패하는 관측 경계와, canonical Notification
   저장 성공 결과를 공통 전달 flow로 넘긴 뒤 복구 불가능한 추가 post-commit 외부 start window 없이 Provider
   전달을 실행할 수 있는지.
-- Android·iOS OS permission 상태 조회·OS Settings 이동 API와 signed-build evidence 수집 방식.
+- Android·iOS signed-build evidence와 uninstall/reinstall·backup/restore에서 AsyncStorage marker의 실제 보존 동작.
+- iOS FCM–APNs provisioning/entitlement와 실제 device arrival evidence.
 - 게시글 body excerpt의 길이·자르기 규칙(ADR 0029의 남은 결정). 현재 Push 범위와 no-body 계약의 blocker가 아니다.
 
 ## Superseded Decisions
