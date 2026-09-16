@@ -145,13 +145,13 @@ export function useProfileBlockMutations() {
         try {
           if (nextBlocked) {
             commitBlock({
-              onCompleted: (response, errors) => {
+              onCompleted: (response) => {
                 const profileBlock = response.blockProfile?.profileBlock;
                 if (!isCurrent()) {
                   finishStale();
                   return;
                 }
-                if (errors?.length || !response.blockProfile?.success || !profileBlock) {
+                if (!response.blockProfile?.success || !profileBlock) {
                   finish(new Error('Profile block response did not confirm the relation.'));
                   return;
                 }
@@ -176,14 +176,13 @@ export function useProfileBlockMutations() {
             });
           } else {
             commitUnblock({
-              onCompleted: (response, errors) => {
+              onCompleted: (response) => {
                 if (!isCurrent()) {
                   finishStale();
                   return;
                 }
                 const responseProfileBlockId = response.unblockProfile?.profileBlockId;
                 if (
-                  errors?.length ||
                   !response.unblockProfile?.success ||
                   !responseProfileBlockId ||
                   responseProfileBlockId !== change.profileBlockId
