@@ -260,7 +260,7 @@ surface 조합과 목록 조회·pagination을 소유한다.
       Profile actor 경계 안에서 Block/Unblock 성공·실패 결과에 따라 관리 목록과 표시 중 기본 Profile 정보·viewer 방향
       콘텐츠 상태를 서버 정책에 맞게 수렴시킨다. cross-slice surface 수렴과 통합 검증은 `PROD-813` task 4.1·4.2가 소유한다.
 - [ ] 3.4 접근성·viewport·Web/Native direct route presentation regression과 actor 전환·Unblock no-restore, 확인창 dismiss 후 Profile 메뉴
-      trigger와 Settings 목록의 다음 항목 또는 heading fallback focus 복원을 검증하고 `PROD-917` 후속 UI 교체 경계를 유지한다.
+      trigger와 Settings 목록의 같은 행 현재 action focus 복원을 검증하고 `PROD-917` 후속 UI 교체 경계를 유지한다.
 - [x] 3.5 직접 링크·새로고침·selected Profile 전환에서 현재 Owner의 차단 결과와 조회 가능한 기본 Profile을 소비하고, Profile 미조회 시 기존 unavailable 결과를 유지한다.
 - [x] 3.6 차단 결과 재조회, 양방향 Block의 자기 관계 해제와 이전 actor의 늦은 응답을 실행하는 data/cache integration 회귀를 통과시킨다.
 - [x] 3.7 선행 API와 실제 공통 Settings source를 통합한 상태에서 표준 `pnpm --filter @kosmo/app relay`,
@@ -268,7 +268,7 @@ surface 조합과 목록 조회·pagination을 소유한다.
 - [x] 3.8 기존 UI의 코드·PR·진입점, 데이터와 loading·empty·error·pending 인터페이스, action 입력·결과·오류·재시도·pagination,
       실제 기능·접근성·cache·프로필 전환 증거와 남은 제약을 PROD-917에 인계하고 PROD-813의 통합 검증에 제공한다.
 - [x] 3.9 공통 `FollowButton`이 자신의 Block 관계 fragment·해제 mutation·pending·실패·Relay 수렴과 플랫폼·pointer 상태에 관계없는
-      고정 `차단 해제` label을 소유하도록 부모 PR로 분리한다. #772의 Profile route는 `FollowButton`을 소비하고, Block 목록은 자신의 관계 fragment로 `ProfileBlockAction`을 소비해 같은 해제 lifecycle을 재사용한다.
+      고정 `차단 해제` label을 소유하도록 부모 PR로 분리한다. #772의 Profile route는 `FollowButton`을 소비하고, Block 목록은 Target Profile 최신 `viewerState.profileBlock`에 따라 `ProfileBlockAction`의 해제·차단 target을 선택해 같은 lifecycle을 재사용한다.
 
 ## 4. PROD-813 — Profile Block cross-slice E2E·canonical sync·archive
 

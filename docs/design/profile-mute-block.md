@@ -71,8 +71,8 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   연다. 상대만 나를 차단한 경우 부모 surface는 관계 action을 숨긴다. 서로 차단한 경우에는 내 `차단 해제`
   action을 유지하고, 내 관계를 해제한 뒤 서버의 현재 결과가 `blockedBy`만 남으면 action을 숨긴다.
   이 action은 Profile·ProfileBlock 상태 fragment, mutation, pending·실패와 Relay 수렴을 소유한다. Profile
-  route와 차단 관리 목록은 노출 여부, 목록 조회·pagination, 성공 뒤 안전한 focus fallback만 조합하며 이전
-  Follow 상태를 복구하지 않는다.
+  route와 차단 관리 목록은 노출 여부와 목록 조회·pagination을 조합한다. 관리 목록은 해제 성공 뒤 현재 행을
+  유지하고 Target Profile의 최신 Block 상태에 따라 action과 focus target을 `차단`으로 전환하며 이전 Follow 상태를 복구하지 않는다.
 - pending에는 같은 action의 중복 입력과 dismiss를 막고 busy 상태를 전달한다. 실패하면 기존 서버 확정 상태를
   유지하고 제품의 기존 오류 피드백을 사용한다.
 
@@ -115,9 +115,10 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   현재 Owner 범위의 정확한 unblock 관계 ID를 확인한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가하면
   Block 전용 identity나 관계 상태를 복구하지 않고 기존 unavailable 결과를 유지한다.
 - `blocking` 화면에서는 Target Profile의 Post List·Post detail·첨부 Media를 기존 Post·Media 조회 정책으로
-  제공한다. Profile route는 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 먼저 표시하고,
+  제공한다. Profile Post List page는 자신의 query 결과에 따라 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 먼저 표시하고,
   사용자가 action을 실행한 뒤 해당 결과를 표시한다. 경고는 현재 Profile handle과 selected actor lifecycle마다
-  다시 적용하며, 사용자가 명시적으로 확인하기 전에는 시간 경과만으로 콘텐츠를 표시하지 않는다.
+  다시 적용하며, 사용자가 명시적으로 확인하기 전에는 시간 경과만으로 콘텐츠를 표시하지 않는다. 상위 Profile layout은
+  이 경고 상태를 소유하지 않고 nested route의 `Slot`을 유지한다.
 - `blockedBy` 화면에서는 Owner Profile의 기본 Profile 정보를 유지하면서 Post·Media 콘텐츠 차단 상태를 표시한다.
   양방향 Block이면 양쪽 화면에서 콘텐츠 차단 상태를 적용하며, Profile route와 다른 API 표면은 같은 콘텐츠 정책을
   사용한다. 차단 해제의 data와 lifecycle은 적용 Product/OpenSpec/runtime 범위다.

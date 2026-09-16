@@ -171,7 +171,7 @@ Local/ActivityPub 실행 경로를 소유한다. 부모 PR이 Draft여도 자식
   Follow Request·Follow Relationship을 자동 복구하지 않는다. 기존 Reaction cleanup은 현재 action에서 정하지 않는다.
 - `ProfileBlock.targetProfile`을 기존 `Profile`과 다른 typename·ID로 만들거나, 기존 Profile global ID와 ProfileBlock 관계 ID를 혼동해
   client가 opaque ID를 decode·재조합하지 않는다.
-- 해제 성공 뒤 남은 상대 Block과 no-restore를 확인하지 않고 과거 Profile·Follow cache를 복구하지 않으며, 관리 행 제거 뒤 focus fallback을 생략하지 않는다.
+- 해제 성공 뒤 남은 상대 Block과 no-restore를 확인하지 않고 과거 Profile·Follow cache를 복구하지 않는다. 관리 목록은 현재 connection의 행을 유지하고 Target Profile의 최신 `viewerState.profileBlock`을 정규화해 같은 행의 action과 focus target을 `차단`으로 전환한다.
 - `PROD-327` source 신규 Notification suppression, `PROD-818` federation, `PROD-328` async physical cleanup을 현재 task나 완료 증거로 끌어오지 않는다.
 - 기존 레거시 UI의 구현·통합 결과와 API·cache·Native runtime 결과를 `PROD-813`에서 환경별 실제 evidence로 기록한다. 완료된 `PROD-861` 공용 presentation 이관·Storybook 결과는 선행 구현 증거로 사용하고,
   `PROD-917` 신규 UI 교체만 이 change의 완료 조건과 별도인 후속 범위로 관리한다.
@@ -219,14 +219,14 @@ ESLint·Prettier를 실행한다. 기존 Mute·Follow·Post visibility·Notifica
 
 1. 같은 `PROD-823` 이슈에서 공통 관계 action 부모 PR과 Profile·Settings 조합 자식 PR을 분리한다. 부모는 기존
    `FollowButton`의 Block 관계 fragment·해제 mutation·pending·실패·Relay 수렴과 회귀를 소유하고, 자식 #772는
-   Profile route와 차단 관리 목록의 노출 판단·목록 조회·pagination·focus fallback을 연결한다.
+   Profile route와 차단 관리 목록의 노출 판단·목록 조회·pagination을 연결한다.
 2. `PROD-822`와 `PROD-861`의 완료 증거를 대조한 뒤 현재 Profile route의 query와 colocated fragment에 서버 계약을 연결한다.
    직접 링크·새로고침·actor 전환에서도 서버 결과에 따라 일반 Profile 또는 기존 unavailable 상태를 표시한다.
 3. Profile action과 Block 목록은 생성·해제 모두 확인창에서 확정한 뒤 요청하고, 공용 presentation에 실제 mutation pending·성공·오류 상태를 전달한다. 관계 생성·제거 응답의
-   Node ID와 변경 필드를 선택하고, 기존 Profile target과 ProfileBlock 관계 ID를 구분해 삭제된 관계 ID로 해당 Owner 목록의 membership을 갱신한다.
-   성공한 해제 뒤에는 제거된 행 대신 목록 heading 또는 안전한 fallback으로 focus를 복원한다.
-4. 기존 actor Environment 경계 안에서 이미 표시 중인 Profile·Post·Notification이 서버 정책으로 수렴하게 한다. normalized field 갱신만으로
-   목록 membership이 바뀐다고 가정하지 않는다. 현재 연결 구조를 확인해 필요한 connection 갱신과 서버 재조회를 조합한다.
+   Node ID와 변경 필드를 선택하고, 기존 Profile target과 ProfileBlock 관계 ID를 구분한다. 해제 payload의 Target Profile 최신 `viewerState.profileBlock`을 정규화해
+   현재 connection의 행을 유지한 채 action을 `차단`으로 바꾸고, 확인창 dismiss 뒤 같은 행의 현재 action으로 focus를 복원한다.
+4. 기존 actor Environment 경계 안에서 이미 표시 중인 Profile·Post·Notification이 서버 정책으로 수렴하게 한다. 해제 응답은
+   Target Profile의 normalized field를 갱신하되 현재 관리 connection membership은 화면 이탈이나 재조회 전까지 유지한다.
 5. 요청을 시작한 actor의 결과가 새 actor의 목록·route·오류·완료 피드백을 바꾸지 않게 한다. Unblock 뒤에는 현재 서버 결과를 다시
    확인하며, 양방향 Block에서 상대의 관계가 남아 있으면 `blockedBy`를 유지한다. 이전 Profile cache나 Follow 관계를 복원하지 않는다.
 6. Block destination의 목록·action·검증이 완료되면 기존 Settings source에 연결한다. 공용 presentation의 Storybook 결과와 실제
@@ -240,7 +240,7 @@ ESLint·Prettier를 실행한다. 기존 Mute·Follow·Post visibility·Notifica
 
 테스트 코드 범위는 Profile action·제한 route·Block 관리 목록과 actor 전환을 실행하는 component 및 data/cache integration 회귀다.
 승인 근거는 `PROD-823`의 접근성·component·data/cache integration 완료 조건이다. 입력, mutation 결과, 늦은 응답과 표시 상태를
-검증하며, 기존 Profile global ID와 ProfileBlock 관계 ID, 삭제된 관계 ID·미제거 `null`·오류/partial 결과 및 관리 행 제거 뒤 heading fallback focus도 실행한다.
+검증하며, 기존 Profile global ID와 ProfileBlock 관계 ID, 삭제된 관계 ID·미제거 `null`·오류/partial 결과 및 관리 행 유지·action 전환 뒤 focus도 실행한다.
 소스 문자열 검사는 추가하지 않는다. 서버 정책·durable cleanup 테스트와 전체 cross-slice E2E·archive는 각 소유 이슈에 남긴다.
 
 ## Risks / Trade-offs

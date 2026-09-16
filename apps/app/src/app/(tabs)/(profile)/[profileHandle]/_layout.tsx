@@ -1,7 +1,6 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
-import { Navigator, Slot, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
+import { Slot, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { ArrowLeft, ChevronLeftIcon } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
@@ -91,69 +90,66 @@ export default function ProfileLayout() {
     </IconButton>
   );
 
-  // 경고나 로딩 화면이 Slot을 숨겨도 route params를 소유한 navigator는 유지한다.
   return (
-    <Navigator>
-      <RouteBoundary
-        error={
-          connectionKind
-            ? (retry) => (
-                <ProfileRouteContainer scrollKey={scrollKey}>
-                  <ProfileConnectionChrome
-                    displayName={fallbackRelativeHandle}
-                    kind={connectionKind}
-                    relativeHandle={fallbackRelativeHandle}
-                  />
-                  <ProfileConnectionListState kind={connectionKind} onRetry={retry} state="error" />
-                </ProfileRouteContainer>
-              )
-            : isProfileHome
-              ? (retry) => (
-                  <ProfileRouteContainer scrollKey={scrollKey}>
-                    <PageHeader leading={backButton} title="" />
-                    <StateView
-                      actionLabel="다시 시도"
-                      alert
-                      description="잠시 후 다시 시도해주세요."
-                      onAction={retry}
-                      title="프로필을 불러오지 못했어요"
-                    />
-                  </ProfileRouteContainer>
-                )
-              : undefined
-        }
-        key={`${handle}:${connectionKind ?? 'profile'}`}
-        loading={
-          <ProfileRouteContainer scrollKey={scrollKey}>
-            {connectionKind ? (
-              <>
+    <RouteBoundary
+      error={
+        connectionKind
+          ? (retry) => (
+              <ProfileRouteContainer scrollKey={scrollKey}>
                 <ProfileConnectionChrome
                   displayName={fallbackRelativeHandle}
                   kind={connectionKind}
                   relativeHandle={fallbackRelativeHandle}
                 />
-                <ProfileConnectionListState kind={connectionKind} state="loading" />
-              </>
-            ) : (
-              <>
-                {isProfileHome ? <PageHeader leading={backButton} title="" /> : null}
-                <ProfileHero loading />
-              </>
-            )}
-          </ProfileRouteContainer>
-        }
-        title="프로필을 불러오지 못했어요"
-      >
-        <ProfileLayoutContent
-          backButton={backButton}
-          connectionKind={connectionKind}
-          handle={handle}
-          pathname={pathname}
-          scrollKey={scrollKey}
-          showPageHeader={isProfileHome}
-        />
-      </RouteBoundary>
-    </Navigator>
+                <ProfileConnectionListState kind={connectionKind} onRetry={retry} state="error" />
+              </ProfileRouteContainer>
+            )
+          : isProfileHome
+            ? (retry) => (
+                <ProfileRouteContainer scrollKey={scrollKey}>
+                  <PageHeader leading={backButton} title="" />
+                  <StateView
+                    actionLabel="다시 시도"
+                    alert
+                    description="잠시 후 다시 시도해주세요."
+                    onAction={retry}
+                    title="프로필을 불러오지 못했어요"
+                  />
+                </ProfileRouteContainer>
+              )
+            : undefined
+      }
+      key={`${handle}:${connectionKind ?? 'profile'}`}
+      loading={
+        <ProfileRouteContainer scrollKey={scrollKey}>
+          {connectionKind ? (
+            <>
+              <ProfileConnectionChrome
+                displayName={fallbackRelativeHandle}
+                kind={connectionKind}
+                relativeHandle={fallbackRelativeHandle}
+              />
+              <ProfileConnectionListState kind={connectionKind} state="loading" />
+            </>
+          ) : (
+            <>
+              {isProfileHome ? <PageHeader leading={backButton} title="" /> : null}
+              <ProfileHero loading />
+            </>
+          )}
+        </ProfileRouteContainer>
+      }
+      title="프로필을 불러오지 못했어요"
+    >
+      <ProfileLayoutContent
+        backButton={backButton}
+        connectionKind={connectionKind}
+        handle={handle}
+        pathname={pathname}
+        scrollKey={scrollKey}
+        showPageHeader={isProfileHome}
+      />
+    </RouteBoundary>
   );
 }
 
@@ -186,41 +182,9 @@ function ProfileLayoutContent({
     label: profile?.relativeHandle ?? '',
   });
   const blockStatus = data.profileBlockStatus;
-  const [blockedContentVisible, setBlockedContentVisible] = useState(false);
-  const [focusRevision, setFocusRevision] = useState(0);
-  const focusTargetRef = useRef<'content' | 'menu' | 'state' | null>(null);
-  const stateActionRef = useRef<View>(null);
-  const contentStateRef = useRef<View>(null);
-  const focusMenuTrigger = useRef<() => void>(() => {});
   const profileBlock = profile?.viewerState?.profileBlock;
   const blocking = Boolean(profileBlock);
   const blockedBy = Boolean(blockStatus?.blockedBy);
-
-  useEffect(() => {
-    if (!blocking) {
-      setBlockedContentVisible(false);
-    }
-  }, [blocking]);
-
-  useEffect(() => {
-    const target = focusTargetRef.current;
-    focusTargetRef.current = null;
-    if (target === 'state') {
-      stateActionRef.current?.focus();
-    } else if (target === 'content') {
-      contentStateRef.current?.focus();
-    } else if (target === 'menu') {
-      focusMenuTrigger.current();
-    }
-  }, [focusRevision]);
-
-  const onBlockFeedback = (feedback: { blocked: boolean; status: 'success' | 'error' }) => {
-    if (feedback.status !== 'success') {
-      return;
-    }
-    focusTargetRef.current = feedback.blocked ? 'state' : blockedBy ? 'content' : 'menu';
-    setFocusRevision((revision) => revision + 1);
-  };
 
   if (!profile) {
     const missingState = (
@@ -274,13 +238,7 @@ function ProfileLayoutContent({
       </Button>
     </NavigationLink>
   ) : blockedBy && !blocking ? undefined : (
-    <FollowButton
-      onActionRef={(node) => {
-        stateActionRef.current = node;
-      }}
-      onBlockFeedback={onBlockFeedback}
-      profile={profile}
-    />
+    <FollowButton profile={profile} />
   );
   const profileAction = relationshipAction;
   const chrome = (
@@ -301,15 +259,11 @@ function ProfileLayoutContent({
             ? blocking && profileBlock
               ? {
                   nextBlocked: false,
-                  onFeedback: onBlockFeedback,
                   profileBlock,
                 }
-              : { nextBlocked: true, onFeedback: onBlockFeedback, profile }
+              : { nextBlocked: true, profile }
             : undefined
         }
-        onMenuTriggerReady={(focusTrigger) => {
-          focusMenuTrigger.current = focusTrigger;
-        }}
         profile={profile}
         showMuteAction={canMute && !blocking && !blockedBy}
       />
@@ -317,15 +271,9 @@ function ProfileLayoutContent({
   );
 
   const relationshipRoute = pathname.endsWith('/followers') || pathname.endsWith('/following');
-  const blockedProfileContent = relationshipRoute ? null : blockedBy ? (
-    <StateView controlRef={contentStateRef} title="이 프로필을 볼 수 없습니다" />
-  ) : blocking && !blockedContentVisible ? (
-    <StateView
-      actionLabel="게시물 보기"
-      onAction={() => setBlockedContentVisible(true)}
-      title="차단한 프로필의 게시물입니다"
-    />
-  ) : null;
+  const blockedProfileContent = relationshipRoute || !blockedBy ? null : (
+    <StateView title="이 프로필을 볼 수 없습니다" />
+  );
   const blockedProfileRoute = blockedProfileContent ? (
     <ProfileRouteContainer scrollKey={scrollKey}>
       {chrome}
