@@ -42,7 +42,6 @@ builder.mutationField('updatePushInstallation', (t) =>
             and(
               eq(PushInstallations.id, input.id.id),
               eq(PushInstallations.accountId, ctx.session.accountId),
-              eq(PushInstallations.sessionId, ctx.session.id),
             ),
           )
           .returning({ id: PushInstallations.id });

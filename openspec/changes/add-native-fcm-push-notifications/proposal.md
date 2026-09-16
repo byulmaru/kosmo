@@ -20,8 +20,12 @@ FCM을 통한 OS Push 전달 경계가 없다. PROD-875와 세 child의 공통 �
 - 설치 registration 이후 생성된 Notification만 전달하고, 최초 생성 시각 기준 24시간 expiry·retry 독립성·no
   backlog·read state 독립성·Provider accepted와 실제 도착의 증거 분리를 정의한다.
 - 최초 `registerPushInstallation`은 외부 installation ID 없이 서버가 새 installation row ID를 발급해 반환하고,
-  `updatePushInstallation`은 반환된 ID로 현재 Account·Session row만 갱신하며, `unregisterPushInstallation`은
-  해당 ID만 해제한다. 삭제된 ID는 재생성하지 않고, 없는 unregister는 멱등 완료로 처리해 늦은 이전 unregister가
+  `updatePushInstallation`은 반환된 ID로 인증된 현재 Account가 소유한 row만 갱신하며,
+  `unregisterPushInstallation`은 현재 Account가 소유한 해당 ID만 해제한다. 알 수 없거나 삭제된 ID와 다른
+  Account 소유 ID의 update는 row 존재 여부를 노출하지 않는 동일한 `PERMISSION_DENIED`
+  (`Push installation is unavailable.`)로 실패하고, unknown·foreign unregister는 `{ completed: true }`로
+  멱등 완료한다. 등록 당시 연결된 `sessionId`는 lifecycle association으로 유지하고 요청 Session으로 재바인딩하지
+  않으므로 같은 Account의 다른 Session도 row를 관리할 수 있다. 삭제된 ID는 재생성하지 않아 늦은 이전 unregister가
   새 registration row에 영향을 주지 않도록 한다.
 - Account·Profile·설치·device·FCM token 등록 lifecycle, 비동기 Provider 전달, retry·dedup·invalid token
   cleanup과 원본 Notification commit 이후 실패 격리를 세 구현 slice의 책임으로 나누고, PROD-875가 Android·iOS

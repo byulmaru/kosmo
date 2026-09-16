@@ -11,7 +11,8 @@
 **Deliverable**
 
 인증된 Account가 외부 installation ID 없이 새 registration row를 발급하고 반환된 server-issued
-`PushInstallation` GlobalID로 현재 Account·Session의 FCM token을 갱신·해제하며, 모든 Profile·eligible
+`PushInstallation` GlobalID로 현재 Account가 소유한 FCM token을 갱신·해제하며, 등록 당시 연결된 `sessionId`는
+lifecycle association으로 유지하고 요청 Session으로 재바인딩하지 않는다. 모든 Profile·eligible
 installation·Recipient Profile·privacy·expiry·no-backlog·Read State 경계를 sibling 구현이 공유할 수 있는
 server 계약과 lifecycle을 제공한다.
 
@@ -20,7 +21,7 @@ server 계약과 lifecycle을 제공한다.
 - 다른 Account의 설치·token을 등록하거나 변경하지 않는다.
 - selected Profile 또는 most-recent installation으로 수신 범위를 줄이지 않는다.
 - logout·account switch·Account deletion·명시적 해제·일치하는 invalid/unregistered token은 installation row와 token을 즉시 삭제해 이후 신규 전달의 eligibility를 정리한다.
-- 최초 registration은 새 row ID를 반환하고, update는 반환된 ID와 현재 Account·Session row만 갱신한다. 삭제된 ID는 재생성하지 않고, unregister는 해당 ID만 삭제하며 없는 ID는 멱등 완료로 처리한다.
+- 최초 registration은 새 row ID를 반환하고, update는 반환된 ID와 인증된 현재 Account 소유권만 확인해 row를 갱신한다. 알 수 없거나 삭제된 ID와 다른 Account 소유 ID의 update는 row 존재 여부를 노출하지 않는 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패하며, unregister는 현재 Account 소유 ID만 삭제하고 unknown·foreign ID는 `{ completed: true }`로 멱등 완료한다. 같은 Account의 다른 Session도 row를 관리할 수 있고, 등록 당시 연결된 Session의 lifecycle cleanup은 유지한다.
 - 같은 Account의 새 registration이 active token을 재등록하면 기존 duplicate row를 원자적으로 삭제하고 새 row ID와 registration epoch를 만든다. 다른 Account의 active token은 거부한다.
 - DB UUID PK를 `PushInstallation` GlobalID로 인코딩하고 별도 Node/query/registry를 추가하지 않는다.
 - registration 이후 생성된 Notification만 전달하고 기존 unread backlog를 replay하지 않는다.
@@ -29,13 +30,13 @@ server 계약과 lifecycle을 제공한다.
 
 **Verification**
 
-- Account ownership·다중 Profile·다중 installation의 등록·갱신·해제 동작 및 권한 실패를 실행 검증한다. register의 server-issued ID 반환, update의 현재 Account·Session 제한, 삭제 ID의 비재생성과 late unregister 무효화를 포함한다.
+- Account ownership·다중 Profile·다중 installation의 등록·갱신·해제 동작 및 권한 실패를 실행 검증한다. register의 server-issued ID 반환, update의 Account-only 제한과 same-Account 다른 Session 허용, unknown·deleted·foreign ID에 대한 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`), unregister의 unknown·foreign ID `{ completed: true }`와 삭제 ID의 비재생성·late unregister 무효화를 포함한다.
 - Session `REVOKED`·`EXPIRED`, Account 삭제의 기존 정리 순서와 Account 비활성의 auth·eligibility exclusion, explicit unregister와 matching/stale invalid-unregistered token 뒤 실제 row 삭제 및 신규 delivery eligibility를 확인한다.
 - registration 시점 전후 Notification과 Read State를 사용해 no-backlog·expiry·read independence 경계를 검증한다.
 - 인증·payload·token 개인정보가 로그와 analytics에 남지 않는지 관측 결과를 확인한다.
 
 - [x] 1.1 shared Domain/OpenSpec Gate에서 Account·Profile·installation·token ownership과 신규 전달 eligibility를 승인된 계약으로 연결한다.
-- [x] 1.2 인증된 Account의 server-issued ID registration·refresh·unregister lifecycle을 구현하고 다른 Account·Session 접근을 거부한다.
+- [x] 1.2 인증된 Account의 server-issued ID registration·refresh·unregister lifecycle을 구현하고 다른 Account 접근은 거부하되 같은 Account의 다른 Session 관리는 허용한다. 등록 당시 연결된 Session의 lifecycle cleanup은 유지한다.
 - [x] 1.3 logout·account switch·Account deletion·provider invalid/unregistered 결과를 이후 신규 전달 자격 정리와 연결한다.
 - [x] 1.4 registration 이후 생성된 Notification만 대상이 되도록 no-backlog 경계를 구현하고, expiry·Read State와 충돌하지 않음을 검증한다.
 - [x] 1.5 token·credential·private body 저장·관측 경계를 확인하고 PROD-913/914가 사용할 shared Gate evidence를 남긴다.
