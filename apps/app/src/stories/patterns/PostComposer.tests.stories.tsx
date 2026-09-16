@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { PostComposerTarget } from '@/components/post/PostComposerTarget';
 import baseMeta, {
   ActionSemanticsContract as actionSemanticsContract,
   Error as errorStory,
@@ -13,10 +15,14 @@ import baseMeta, {
   MobilePlayground as mobilePlaygroundStory,
   MobilePlaygroundContract as mobilePlaygroundContract,
   MobileRuntimeAltEditorContract as mobileRuntimeAltEditorContract,
+  OverlayGeometryContract as overlayGeometryContract,
   OverlayProgressRingContract as overlayProgressRingContract,
   PendingMediaContract as pendingMediaContract,
   Playground as playgroundContract,
   ProgressRingToneContract as progressRingToneContract,
+  RailBodyMaxHeightContract as railBodyMaxHeightContract,
+  RailFocusBoundaryContract as railFocusBoundaryContract,
+  RailGeometryContract as railGeometryContract,
   RailMedia as railMediaStory,
   RailProgressRingContract as railProgressRingContract,
   SubmitFailure as submitFailureStory,
@@ -48,10 +54,48 @@ export const MobileMediaFooterGeometryContract: Story = mobileMediaFooterGeometr
 export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
 export const MobileRuntimeAltEditorContract: Story = mobileRuntimeAltEditorContract;
 export const MobileFlexLayoutContract: Story = mobileFlexLayoutContract;
+export const OverlayGeometryContract: Story = overlayGeometryContract;
 export const OverlayProgressRingContract: Story = overlayProgressRingContract;
 export const PendingMediaContract: Story = pendingMediaContract;
 export const ProgressRingToneContract: Story = progressRingToneContract;
+export const RailGeometryContract: Story = railGeometryContract;
+export const RailBodyMaxHeightContract: Story = railBodyMaxHeightContract;
+export const RailFocusBoundaryContract: Story = railFocusBoundaryContract;
 export const RailProgressRingContract: Story = railProgressRingContract;
+
+export const ProgrammaticBodyResetHeightContract: Story = {
+  ...playgroundContract,
+  args: {
+    ...playgroundContract.args,
+    body: '긴 본문\n'.repeat(40),
+    items: [],
+    remaining: 500,
+    surface: 'rail',
+  },
+  render: (args) => {
+    const [body, setBody] = useState(args.body);
+    return (
+      <PostComposerTarget
+        {...args}
+        body={body}
+        onBodyChange={setBody}
+        onSubmit={() => {
+          args.onSubmit();
+          setBody('');
+        }}
+      />
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    await waitFor(() => expect(body.getBoundingClientRect().height).toBe(300));
+
+    await userEvent.click(canvas.getByRole('button', { name: '게시' }));
+    await waitFor(() => expect(body).toHaveValue(''));
+    await waitFor(() => expect(body.getBoundingClientRect().height).toBeLessThan(300));
+  },
+};
 export const SubmittingPickerContract: Story = submittingPickerContract;
 export const SubmittingSpinnerContract: Story = submittingSpinnerContract;
 export const SubmittingVisibilityContract: Story = submittingVisibilityContract;
@@ -126,7 +170,7 @@ export const EmojiPickerLifecycleContract: Story = {
       options: {
         postComposerPicker: {
           name: 'Post Composer picker',
-          styles: { height: '1200px', width: '600px' },
+          styles: { height: '1440px', width: '600px' },
           type: 'tablet',
         },
       },
@@ -203,15 +247,42 @@ export const ShortViewportContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Composer 확장' }));
 
     const dialog = page.getByRole('dialog', { name: '글쓰기' });
-    const scroll = within(dialog).getByTestId('composer-overlay-scroll');
+    const outerScroll = within(dialog).getByTestId('composer-overlay-scroll');
+    const scroll = within(dialog).getByTestId('post-composer-scroll');
+    const surface = within(dialog).getByTestId('composer-overlay-surface');
+    const target = within(dialog).getByTestId('post-composer-target');
+    const viewportHeight = canvasElement.ownerDocument.defaultView!.innerHeight;
+    const hostHeight = viewportHeight - 96;
+    const headerHeight = 64;
 
     expect(getComputedStyle(within(dialog).getByTestId('composer-overlay-surface')).overflow).toBe(
       'hidden',
     );
+    expect(surface.getBoundingClientRect().height).toBeCloseTo(hostHeight, 0);
+    expect(target.getBoundingClientRect().height).toBeCloseTo(hostHeight - headerHeight, 0);
+    expect(surface.getBoundingClientRect().height).toBeCloseTo(
+      target.getBoundingClientRect().height + headerHeight,
+      0,
+    );
     expect(getComputedStyle(scroll).overflowY).toBe('auto');
+    expect(outerScroll.scrollHeight).toBe(outerScroll.clientHeight);
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
     scroll.scrollTop = scroll.scrollHeight;
     expect(scroll.scrollTop).toBeGreaterThan(0);
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '콘텐츠 경고 켜기' }));
+    const visibility = within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' });
+    const contentWarning = within(dialog).getByRole('textbox', { name: '콘텐츠 경고' });
+    const submit = within(dialog).getByRole('button', { name: '게시' });
+    const visibilityTop = visibility.getBoundingClientRect().top;
+    const contentWarningTop = contentWarning.getBoundingClientRect().top;
+    const submitTop = submit.getBoundingClientRect().top;
+
+    scroll.scrollTop = scroll.scrollHeight;
+    expect(scroll.scrollTop).toBeGreaterThan(0);
+    expect(visibility.getBoundingClientRect().top).toBe(visibilityTop);
+    expect(contentWarning.getBoundingClientRect().top).toBe(contentWarningTop);
+    expect(submit.getBoundingClientRect().top).toBe(submitTop);
 
     await userEvent.click(within(dialog).getByRole('button', { name: '이모지 추가' }));
     const picker = page.getByTestId('post-composer-emoji-picker');
@@ -227,6 +298,6 @@ export const ShortViewportContract: Story = {
 
     await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 2 편집' }));
     expect(within(dialog).getByRole('heading', { name: '미디어 편집' })).toBeVisible();
-    expect(within(dialog).getByTestId('composer-overlay-scroll').scrollTop).toBe(0);
+    expect(outerScroll.scrollTop).toBe(0);
   },
 };

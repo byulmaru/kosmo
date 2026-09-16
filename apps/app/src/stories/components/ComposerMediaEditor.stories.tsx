@@ -246,6 +246,19 @@ export const InteractionContract: Story = {
 
     await userEvent.type(canvas.getByRole('textbox', { name: '이미지 설명' }), '두 번째 이미지');
     expect(args.onAltTextChange).toHaveBeenLastCalledWith('media-2', '두 번째 이미지');
+    const altText = canvas.getByRole('textbox', { name: '이미지 설명' });
+    const focusedAltText = getComputedStyle(altText);
+    const altTextBorderWidth = focusedAltText.borderWidth;
+    expect(altTextBorderWidth).toBe('1px');
+    expect(focusedAltText.outlineWidth).toBe('0px');
+    altText.blur();
+    await waitFor(() => expect(altText).not.toHaveFocus());
+    expect(getComputedStyle(altText).borderWidth).toBe(altTextBorderWidth);
+    expect(getComputedStyle(altText).outlineWidth).toBe('0px');
+    expect(altText).toHaveValue('두 번째 이미지');
+    const sensitiveTab = canvas.getByRole('tab', { name: '민감도' });
+    sensitiveTab.focus();
+    expect(sensitiveTab).toHaveFocus();
 
     await userEvent.click(canvas.getByRole('tab', { name: '민감도' }));
     expect(args.onToolChange).toHaveBeenLastCalledWith('sensitive');

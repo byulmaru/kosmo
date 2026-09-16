@@ -1,12 +1,10 @@
+import { PostVisibility } from '@kosmo/core/enums';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import {
   ChartNoAxesColumnIncreasingIcon,
   ChevronDownIcon,
   ExpandIcon,
-  GlobeIcon,
   ImagePlusIcon,
-  LockIcon,
-  MoonIcon,
   SmileIcon,
   TriangleAlertIcon,
   XIcon,
@@ -29,14 +27,27 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import {
+  borderWidths,
+  iconSizes,
+  radius,
+  space,
+  textStyles,
+  webScrollbarStyle,
+} from '@/theme/tokens';
 import { PostComposerMediaItemsTarget } from './PostComposerMediaItemsTarget';
-import type { LucideIcon } from 'lucide-react-native';
+import { postVisibilityPresentation } from './postVisibilityPresentation';
 import type { ReactNode, RefObject } from 'react';
 import type { TextStyle } from 'react-native';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
 
-export type PostComposerTargetVisibility = 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
+const postComposerTargetVisibilityValues = [
+  PostVisibility.PUBLIC,
+  PostVisibility.UNLISTED,
+  PostVisibility.FOLLOWERS,
+] as const;
+
+export type PostComposerTargetVisibility = (typeof postComposerTargetVisibilityValues)[number];
 
 export type PostComposerTargetProps = Readonly<{
   author: ReactNode;
@@ -77,21 +88,21 @@ export type MobileFullscreenComposerShellCandidateProps = Omit<
 > &
   Readonly<{ fillContainer?: boolean; keyboard?: boolean; onOverlayClose: () => void }>;
 
-const visibilityOptions: ReadonlyArray<{
-  description: string;
-  icon: LucideIcon;
-  label: string;
-  value: PostComposerTargetVisibility;
-}> = [
-  { description: '모두가 볼 수 있어요.', icon: GlobeIcon, label: '공개', value: 'PUBLIC' },
-  {
-    description: '모두가 볼 수 있지만 검색되지 않아요.',
-    icon: MoonIcon,
-    label: '조용한 공개',
-    value: 'UNLISTED',
-  },
-  { description: '팔로워만 볼 수 있어요.', icon: LockIcon, label: '팔로워만', value: 'FOLLOWERS' },
-];
+const visibilityOptions = postComposerTargetVisibilityValues.map((value) => ({
+  ...postVisibilityPresentation[value],
+  value,
+}));
+
+const composerBodyFocusStyle = {
+  borderWidth: borderWidths[0],
+  outlineStyle: 'solid',
+  outlineWidth: 0,
+} as unknown as TextStyle;
+const composerFieldFocusStyle = {
+  borderWidth: borderWidths[1],
+  outlineWidth: 0,
+} as unknown as TextStyle;
+const railBodyMaxHeight = 300;
 
 function useVisibilityMenu(
   submitting: boolean,
@@ -212,10 +223,26 @@ export function PostComposerTarget({
   visibility,
 }: PostComposerTargetProps) {
   const theme = useTheme();
+  const bodyInputRef = useRef<TextInput>(null);
+  const [bodyContentHeight, setBodyContentHeight] = useState(0);
+  const [bodyFocused, setBodyFocused] = useState(false);
   const { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen } = useVisibilityMenu(
     submitting,
     onVisibilityChange,
   );
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+    const input = (bodyRef ?? bodyInputRef).current as unknown as HTMLTextAreaElement | null;
+    if (!input) {
+      return;
+    }
+    input.style.height = '0px';
+    const height = input.scrollHeight;
+    input.style.height = `${height}px`;
+    setBodyContentHeight(height);
+  }, [body, bodyRef]);
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
@@ -225,13 +252,24 @@ export function PostComposerTarget({
     items.some((item) => item.state !== 'ready') ||
     (body.trim().length === 0 && items.length === 0) ||
     remaining < 0;
-
+  const mediaGallery = (
+    <PostComposerMediaItemsTarget
+      compact={surface === 'rail'}
+      disabled={submitting}
+      media={items}
+      onEdit={onMediaEdit}
+      onRemove={onMediaRemove}
+      onRetry={(item) => onMediaRetry(item.key)}
+      sensitiveMedia={sensitiveMedia}
+    />
+  );
   return (
     <View
       accessibilityLabel="게시물 작성"
       style={[
         styles.root,
         surface === 'rail' ? styles.rail : styles.overlay,
+        surface === 'overlay' && Platform.OS === 'web' ? styles.webOverlay : null,
         { backgroundColor: theme.backgroundCanvas },
       ]}
       testID="post-composer-target"
@@ -240,11 +278,17 @@ export function PostComposerTarget({
       <View
         style={[
           styles.editor,
+          styles.desktopEditor,
           {
             backgroundColor: theme.backgroundElevated,
-            borderColor: error ? theme.feedbackDangerBorder : theme.borderDefault,
+            borderColor: error
+              ? theme.feedbackDangerBorder
+              : surface === 'rail' && bodyFocused
+                ? theme.primary
+                : theme.borderDefault,
           },
         ]}
+        testID="post-composer-editor"
       >
         <View style={styles.header}>
           <View ref={controlRef} style={styles.visibilityControl}>
@@ -298,7 +342,7 @@ export function PostComposerTarget({
               feedback="opacity"
               onPress={onExpand}
               targetSize={40}
-              visualSize={32}
+              visualSize={40}
             >
               <ExpandIcon color={theme.foregroundPrimary} size={iconSizes[20]} strokeWidth={2} />
             </IconButton>
@@ -312,43 +356,70 @@ export function PostComposerTarget({
               editable={!submitting}
               onChangeText={onContentWarningChange}
               placeholder="경고 문구를 입력하세요"
-              style={styles.contentWarningField}
+              style={[styles.contentWarningField, composerFieldFocusStyle]}
               value={contentWarning}
             />
           </View>
         ) : null}
 
-        <View style={[styles.content, items.length > 0 ? styles.mediaContent : styles.textContent]}>
-          <TextArea
-            accessibilityLabel="게시물 내용"
-            editable={!submitting}
-            ref={bodyRef}
-            onChangeText={onBodyChange}
-            placeholder="무슨 일이 일어나고 있나요?"
-            style={[
-              styles.body,
-              items.length > 0 ? styles.mediaBody : styles.textBody,
-              { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
-            ]}
-            value={body}
-          />
-          <PostComposerMediaItemsTarget
-            disabled={submitting}
-            media={items}
-            onEdit={onMediaEdit}
-            onRemove={onMediaRemove}
-            onRetry={(item) => onMediaRetry(item.key)}
-            sensitiveMedia={sensitiveMedia}
-          />
-          {displayedError ? (
-            <Text
-              accessibilityRole="alert"
-              style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
-            >
-              {displayedError}
-            </Text>
-          ) : null}
-        </View>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          scrollEnabled={surface === 'overlay'}
+          style={[
+            styles.desktopScroll,
+            Platform.OS === 'web'
+              ? webScrollbarStyle(theme.borderStrong, surface === 'overlay')
+              : null,
+          ]}
+          testID="post-composer-scroll"
+        >
+          <View style={[styles.content, items.length === 0 ? styles.textContent : null]}>
+            <TextArea
+              accessibilityLabel="게시물 내용"
+              editable={!submitting}
+              ref={bodyRef ?? bodyInputRef}
+              onBlur={() => setBodyFocused(false)}
+              onChange={(event) => {
+                if (Platform.OS === 'web') {
+                  const input = event.currentTarget as unknown as HTMLTextAreaElement;
+                  input.style.height = '0px';
+                  const height = input.scrollHeight;
+                  input.style.height = `${height}px`;
+                  setBodyContentHeight(height);
+                }
+              }}
+              onChangeText={onBodyChange}
+              onContentSizeChange={(event) =>
+                setBodyContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
+              }
+              onFocus={() => setBodyFocused(true)}
+              placeholder="무슨 일이 일어나고 있나요?"
+              scrollEnabled={surface === 'rail' && bodyContentHeight > railBodyMaxHeight}
+              style={[
+                styles.body,
+                items.length > 0 ? styles.mediaBody : styles.textBody,
+                surface === 'rail' ? styles.railBody : null,
+                bodyContentHeight > 0 ? { height: bodyContentHeight } : null,
+                { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
+                composerBodyFocusStyle,
+              ]}
+              value={body}
+            />
+            {surface === 'overlay' ? mediaGallery : null}
+            {displayedError ? (
+              <Text
+                accessibilityRole="alert"
+                style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
+              >
+                {displayedError}
+              </Text>
+            ) : null}
+          </View>
+        </ScrollView>
+
+        {surface === 'rail' && items.length > 0 ? (
+          <View style={styles.railMedia}>{mediaGallery}</View>
+        ) : null}
 
         <View style={styles.footer}>
           <View style={styles.tools}>
@@ -460,7 +531,6 @@ export function MobileFullscreenComposerShellCandidate({
   visibility,
 }: MobileFullscreenComposerShellCandidateProps) {
   const theme = useTheme();
-  const [bodyFocused, setBodyFocused] = useState(false);
   const { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen } = useVisibilityMenu(
     submitting,
     onVisibilityChange,
@@ -569,7 +639,7 @@ export function MobileFullscreenComposerShellCandidate({
               editable={!submitting}
               onChangeText={onContentWarningChange}
               placeholder="경고 문구를 입력하세요"
-              style={styles.mobileContentWarning}
+              style={[styles.mobileContentWarning, composerFieldFocusStyle]}
               value={contentWarning}
             />
           ) : null}
@@ -578,9 +648,7 @@ export function MobileFullscreenComposerShellCandidate({
             accessibilityLabel="게시물 내용"
             editable={!submitting}
             multiline
-            onBlur={() => setBodyFocused(false)}
             onChangeText={onBodyChange}
-            onFocus={() => setBodyFocused(true)}
             placeholder="무슨 일이 일어나고 있나요?"
             placeholderTextColor={
               submitting ? theme.stateDisabledForeground : theme.foregroundMuted
@@ -590,14 +658,7 @@ export function MobileFullscreenComposerShellCandidate({
               {
                 backgroundColor: theme.backgroundCanvas,
                 color: theme.foregroundPrimary,
-                ...(bodyFocused
-                  ? ({
-                      outlineColor: theme.stateFocusRing,
-                      outlineOffset: 2,
-                      outlineStyle: 'solid',
-                      outlineWidth: borderWidths[2],
-                    } as unknown as TextStyle)
-                  : undefined),
+                ...composerBodyFocusStyle,
               },
             ]}
             value={body}
@@ -798,7 +859,13 @@ function VisibilityMenu({
     }
     triggerRef.current?.measureInWindow((x, y, triggerWidth, triggerHeight) => {
       setAnchor({
-        left: Math.max(0, Math.min(alignRight ? x + triggerWidth - 240 : x, width - 240)),
+        left: Math.max(
+          0,
+          Math.min(
+            alignRight ? x + triggerWidth - 240 - space[16] : x,
+            width - 240 - (alignRight ? space[16] : 0),
+          ),
+        ),
         top: Math.max(space[16], Math.min(y + triggerHeight + space[4], height - 64)),
       });
     });
@@ -941,8 +1008,7 @@ const styles = StyleSheet.create({
     padding: space[12],
     zIndex: 10,
   },
-  mediaBody: { minHeight: 236 },
-  mediaContent: { minHeight: 404 },
+  mediaBody: { minHeight: 100 },
   mobileBody: {
     borderRadius: radius[12],
     borderWidth: borderWidths[0],
@@ -1008,9 +1074,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   keyboardRow: { borderRadius: radius[8], borderWidth: borderWidths[1], height: 44 },
-  overlay: { maxWidth: 600, width: '100%' },
+  desktopEditor: { flexShrink: 1, minHeight: 0 },
+  desktopScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
+  overlay: { maxWidth: 640, width: '100%' },
   progressRing: { height: 20, width: 20 },
-  rail: { width: 326 },
+  rail: { width: '100%' },
+  railBody: { maxHeight: railBodyMaxHeight },
+  railMedia: { paddingBottom: space[12], paddingHorizontal: space[12], paddingTop: space[12] },
   remaining: { width: 40, ...textStyles.uiCopyS, textAlign: 'right' },
   root: { gap: space[16], padding: space[16] },
   submit: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
@@ -1030,12 +1100,13 @@ const styles = StyleSheet.create({
     width: 240,
   },
   visibilityMenuLeft: { left: 0 },
-  visibilityMenuRight: { right: 0 },
+  visibilityMenuRight: { right: space[16] },
+  webOverlay: { maxHeight: 'calc(100dvh - 160px)' as never },
   nativeVisibilityMenu: { position: 'relative', top: 0 },
   nativeVisibilityPosition: { position: 'absolute', width: 240 },
   visibilityBackdrop: { flex: 1 },
   visibilityOption: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     gap: space[8],
     padding: space[12],

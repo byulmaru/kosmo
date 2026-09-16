@@ -206,9 +206,8 @@ function PostComposerContents({
     () => initialContentWarning !== null && initialContentWarning !== undefined,
   );
   const [editorFocused, setEditorFocused] = useState(false);
-  const [visibility, setVisibility] = useState<Visibility>(() =>
-    resolvePostComposerVisibility(profile.private?.defaultPostVisibility),
-  );
+  const defaultVisibility = resolvePostComposerVisibility(profile.private?.defaultPostVisibility);
+  const [visibility, setVisibility] = useState<Visibility>(() => defaultVisibility);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [webVisibilityMenuLeft, setWebVisibilityMenuLeft] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -230,6 +229,12 @@ function PostComposerContents({
   );
   const bodyText = normalizePostContentPlainText(body);
   const contentWarningText = normalizePostContentPlainText(contentWarning);
+  const hasUnsavedDraft =
+    bodyText.length > 0 ||
+    contentWarningText.length > 0 ||
+    media.items.length > 0 ||
+    media.hasPendingMedia ||
+    visibility !== defaultVisibility;
   const remaining = postBodyMaxLength - bodyText.length - contentWarningText.length;
   const remainingDescription = `남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`;
   const disabled =
@@ -241,6 +246,24 @@ function PostComposerContents({
     availableVisibilityOptions.find((option) => option.value === visibility) ??
     visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
+
+  useEffect(() => {
+    if (
+      Platform.OS !== 'web' ||
+      presentation === undefined ||
+      !hasUnsavedDraft ||
+      typeof window === 'undefined'
+    ) {
+      return;
+    }
+
+    const preventDraftLoss = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = true;
+    };
+    window.addEventListener('beforeunload', preventDraftLoss);
+    return () => window.removeEventListener('beforeunload', preventDraftLoss);
+  }, [hasUnsavedDraft, presentation]);
 
   const closeMediaEditor = useCallback(() => {
     setMediaEditor(null);
@@ -590,7 +613,11 @@ function PostComposerContents({
                   ]}
                   keyboardShouldPersistTaps="handled"
                   scrollEnabled={presentation !== 'mobile'}
-                  style={[styles.editorScroll, mediaEditor !== null && styles.hiddenPresentation]}
+                  style={[
+                    styles.editorScroll,
+                    presentation === 'mobile' && styles.surfaceRoot,
+                    mediaEditor !== null && styles.hiddenPresentation,
+                  ]}
                 >
                   {composerContent}
                 </ScrollView>
@@ -891,7 +918,7 @@ const styles = StyleSheet.create({
   productionAuthor: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
   replyRoot: { borderRadius: radii.md, borderWidth: 1 },
   surfaceRoot: { flex: 1, minHeight: 0 },
-  editorScroll: { flex: 1, minHeight: 0 },
+  editorScroll: { flexShrink: 1, minHeight: 0 },
   surfaceEditor: { flexGrow: 1, gap: spacing.lg, padding: spacing.lg },
   author: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
   editorSurface: {
