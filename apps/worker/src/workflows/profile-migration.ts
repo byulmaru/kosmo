@@ -4,7 +4,7 @@ import { workflowActivityOptions } from './activity-options';
 import type { ProfileMigrationMoveWorkflowInput } from '@kosmo/core/temporal/profile-migration';
 import type * as activities from '../activities';
 
-export const PROFILE_MIGRATION_MOVE_BATCH_SIZE = 50;
+const PROFILE_MIGRATION_MOVE_BATCH_SIZE = 50;
 
 type ProfileMigrationMoveWorkflowState = ProfileMigrationMoveWorkflowInput & {
   readonly afterSourceFollowId?: string;
@@ -40,7 +40,8 @@ export async function profileMigrationMoveWorkflow(input: ProfileMigrationMoveWo
     ...parsed.data,
     limit: PROFILE_MIGRATION_MOVE_BATCH_SIZE,
   });
-  if (followers.length === 0) {
+  const lastFollower = followers.at(-1);
+  if (lastFollower === undefined) {
     return;
   }
 
@@ -51,13 +52,8 @@ export async function profileMigrationMoveWorkflow(input: ProfileMigrationMoveWo
     });
   }
 
-  const afterSourceFollowId = followers.at(-1)?.sourceFollowId;
-  if (afterSourceFollowId === undefined) {
-    return;
-  }
-
   await continueAsNew<typeof profileMigrationMoveWorkflow>({
     ...parsed.data,
-    afterSourceFollowId,
+    afterSourceFollowId: lastFollower.sourceFollowId,
   });
 }
