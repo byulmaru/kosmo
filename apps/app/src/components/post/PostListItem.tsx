@@ -1,10 +1,11 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
 import { useCallback, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
+import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
@@ -347,7 +348,6 @@ function PostListRow({
   surfacePostId?: string;
 }) {
   const router = useRouter();
-  const theme = useTheme();
   const post = useFragment(PostListRowFragment, postKey);
   const openViewer = usePostMediaViewerHost();
   const profileHref = `/${post.profile.relativeHandle}` as const;
@@ -387,9 +387,9 @@ function PostListRow({
           <ProfileNameBlock href={profileHref} profile={post.profile} />
           <Link asChild href={detailHref}>
             <Pressable accessibilityRole="link" style={styles.timeLink}>
-              <Text style={[styles.time, { color: theme.textSecondary }]}>
+              <TimestampText style={styles.time}>
                 {formatTimelineTimestamp(post.createdAt)}
-              </Text>
+              </TimestampText>
             </Pressable>
           </Link>
         </View>
@@ -416,7 +416,8 @@ function PostListRow({
 
 const styles = StyleSheet.create({
   card: {
-    paddingHorizontal: spacing.sm,
+    paddingLeft: Platform.OS === 'web' ? spacing.md : spacing.sm,
+    paddingRight: Platform.OS === 'web' ? spacing.xl : spacing.sm,
   },
   standardCard: { paddingBottom: spacing.xs, paddingTop: spacing.md },
   compactCard: { paddingBottom: 1, paddingTop: spacing.sm },
@@ -450,11 +451,9 @@ const styles = StyleSheet.create({
   },
   timeLink: { borderRadius: radii.sm, flexShrink: 0 },
   time: {
-    fontFamily: fontFamilies.ui,
     minHeight: 44,
     minWidth: 44,
     paddingTop: 12,
-    ...typography.sm,
   },
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
   sourcePresentation: { flex: 1, minWidth: 0 },

@@ -8,11 +8,13 @@ import { PostBody } from '@/components/post/PostBody';
 import { usePostMediaViewerHost } from '@/components/post/PostMediaViewerHost';
 import { usePostReplySurface } from '@/components/post/PostReplySurface';
 import { PostSourcePreview } from '@/components/post/PostSourcePresentationView';
+import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
+import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
 import type { PostMediaOpenHandler } from '@/components/post/PostMediaImage';
 import type { ReplyNotificationPost_post$key } from './__generated__/ReplyNotificationPost_post.graphql';
 
@@ -30,6 +32,7 @@ const ReplyNotificationPostFragment = graphql`
       handle
       relativeHandle
       displayName
+      ...ProfileNameBlock_profile
     }
     ...PostBody_post
     ...PostActionSurface_post @alias(as: "actionSurface")
@@ -75,24 +78,16 @@ export function ReplyNotificationPost({
   return (
     <>
       <View role="article" style={styles.root} testID="reply-notification-post">
-        <NavigationLink href={profileHref}>
-          <Pressable
-            aria-hidden
-            accessibilityElementsHidden
-            accessible={false}
-            focusable={false}
-            importantForAccessibility="no-hide-descendants"
-            onPress={onActivate}
-            style={styles.avatar}
-            tabIndex={-1}
-          >
-            <Avatar
-              imageUri={post.profile.avatar?.url}
-              label={post.profile.displayName || post.profile.handle}
-              size={48}
-            />
-          </Pressable>
-        </NavigationLink>
+        <Text style={styles.srOnly}>답글 알림</Text>
+        <View
+          aria-hidden
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={styles.kind}
+          testID="reply-notification-kind"
+        >
+          <MessageCircle color={theme.foregroundSecondary} size={32} />
+        </View>
         <View style={styles.content}>
           <View style={styles.header}>
             <NavigationLink href={profileHref}>
@@ -102,40 +97,29 @@ export function ReplyNotificationPost({
                 style={styles.author}
                 testID="notification-post-author"
               >
-                <Text numberOfLines={1} style={[styles.name, { color: theme.foregroundPrimary }]}>
-                  {post.profile.displayName}
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  style={[styles.handle, { color: theme.foregroundSecondary }]}
+                <View
+                  aria-hidden
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                  style={styles.authorAvatar}
+                  testID="notification-post-avatar"
                 >
-                  {post.profile.relativeHandle}
-                </Text>
+                  <Avatar
+                    imageUri={post.profile.avatar?.url}
+                    label={post.profile.displayName || post.profile.handle}
+                    size={24}
+                  />
+                </View>
+                <ProfileNameBlock profile={post.profile} variant="inline" />
               </Pressable>
             </NavigationLink>
             <NavigationLink href={detailHref}>
               <Pressable accessibilityRole="link" onPress={onActivate} style={styles.timeLink}>
-                <Text style={[styles.time, { color: theme.foregroundSecondary }]}>
+                <TimestampText style={styles.time}>
                   {formatTimelineTimestamp(post.createdAt)}
-                </Text>
+                </TimestampText>
               </Pressable>
             </NavigationLink>
-          </View>
-          <View style={styles.reasonRow}>
-            <View
-              aria-hidden
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-              style={styles.reasonIcon}
-            >
-              <MessageCircle color={theme.foregroundSecondary} size={16} />
-            </View>
-            <Text
-              testID="notification-reason"
-              style={[styles.reason, { color: theme.foregroundSecondary }]}
-            >
-              회원님의 게시글에 답글을 남겼습니다
-            </Text>
           </View>
           <View style={styles.bodyLink}>
             <PostBody
@@ -167,19 +151,18 @@ export function ReplyNotificationPost({
 
 const styles = StyleSheet.create({
   root: {
-    paddingLeft: Platform.OS === 'web' ? spacing.md : spacing.sm,
-    paddingRight: Platform.OS === 'web' ? spacing.lg : spacing.sm,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
     minWidth: 0,
   },
-  avatar: { borderRadius: radii.full },
+  kind: { alignItems: 'center', flexShrink: 0, height: 48, justifyContent: 'center', width: 48 },
+  srOnly: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', left: 0, top: 0 },
   content: { flex: 1, gap: spacing.xs, minWidth: 0 },
   header: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.sm,
     justifyContent: 'space-between',
@@ -188,23 +171,23 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: spacing.xs,
     minHeight: Platform.OS === 'web' ? 24 : Platform.OS === 'android' ? 48 : 44,
     overflow: 'hidden',
   },
-  name: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md, flexShrink: 1 },
-  handle: { fontFamily: fontFamilies.ui, ...typography.sm, flex: 1, minWidth: 0 },
-  timeLink: { borderRadius: radii.sm, flexShrink: 0 },
-  time: {
-    fontFamily: fontFamilies.ui,
-    ...typography.sm,
+  authorAvatar: { flexShrink: 0, height: 24, width: 24 },
+  timeLink: {
+    alignItems: 'flex-end',
+    borderRadius: radii.sm,
+    flexShrink: 0,
+    justifyContent: 'center',
     minHeight: Platform.OS === 'web' ? 24 : Platform.OS === 'android' ? 48 : 44,
     minWidth: Platform.OS === 'web' ? 24 : Platform.OS === 'android' ? 48 : 44,
   },
-  reasonRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
-  reasonIcon: { height: 20, justifyContent: 'center' },
-  reason: { fontFamily: fontFamilies.ui, ...typography.sm, flex: 1, minWidth: 0 },
+  time: {
+    textAlign: 'right',
+  },
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
   actionBar: { paddingTop: spacing.xs },
   reactionSummary: { marginTop: spacing.xs },

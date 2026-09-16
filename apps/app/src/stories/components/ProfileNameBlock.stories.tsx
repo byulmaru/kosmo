@@ -81,7 +81,7 @@ function ProfileNameBlockFixture({
   containerWidth?: number;
   linked?: boolean;
   profileId?: string;
-  variant?: 'compact' | 'default' | 'hero';
+  variant?: 'compact' | 'default' | 'hero' | 'inline';
 }) {
   const profileNode = requireProfile(useStoryProfiles(), profileId);
 
@@ -116,6 +116,9 @@ function ProfileNameBlockCatalog() {
           />
         </View>
         <View style={{ width: 240 }}>
+          <ProfileNameBlock profile={long.nameBlock} variant="inline" />
+        </View>
+        <View style={{ width: 240 }}>
           <ProfileNameBlock profile={long.nameBlock} style={{ flex: 0 }} variant="hero" />
         </View>
       </Section>
@@ -134,7 +137,7 @@ const meta = {
     containerWidth: { control: 'inline-radio', options: [120, 240, 360] },
     linked: { control: 'boolean', if: { arg: 'variant', neq: 'hero' } },
     profileId: { control: 'select', options: storyProfileIds },
-    variant: { control: 'select', options: ['default', 'compact', 'hero'] },
+    variant: { control: 'select', options: ['default', 'compact', 'inline', 'hero'] },
   },
   component: ProfileNameBlockFixture,
   parameters: {

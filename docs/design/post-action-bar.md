@@ -33,11 +33,11 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   Android variant를 `48dp`로 유지한다. Reaction Summary가 나타나거나 instance가 교체되어도 세로 Auto Layout의
   `8px` gap이 Bar를 아래로 밀며, Compact PostMediaViewer tray는 `64px` 안에 같은 `48dp` Bar를 배치한다.
 - 같은 `PostListItem` source의 `Size=Mobile` Text·Media·PureRepost·Quote는 좌우 padding 16px을 사용하고,
-  Web surface가 사용하는 `Size=Center` 4종은 기존 8px을 유지한다. Mobile Home [`4524:3985`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-3985)과 Local [`4524:4139`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-4139) consumer에서 같은 source 상속을 확인한다.
+  Web surface가 사용하는 `Size=Center` 4종은 왼쪽 12px·오른쪽 24px을 사용한다. Mobile Home [`4524:3985`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-3985)과 Local [`4524:4139`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4524-4139) consumer에서 같은 source 상속을 확인한다.
 - Mobile 390 Text·Media의 content column은 Avatar·gap을 제외한 `298px`이며 Reaction Summary와 Action Bar slot이
   이 폭을 함께 채운다. Reaction Summary에 별도 314px 고정 폭을 두지 않으므로 왼쪽 치우침이나 우측 clipping 없이
   같은 column edge에 정렬되고, 표시 여부가 바뀌면 세로 Auto Layout이 하단 border를 자연스럽게 이동한다.
-- Web production `PostListItem`은 `Size=Center`와 같은 카드 상단 12px·좌우 `spacing.sm` 8px·하단 4px,
+- Web production `PostListItem`은 `Size=Center`와 같은 카드 상단 12px·왼쪽 12px·오른쪽 24px·하단 4px,
   목록 전용 Action Bar slot 상단 4px·하단 0을 사용한다. Mobile의 좌우 16px과 iOS 44pt·Android 48dp
   touch-target wrapper는 현재 Figma target이며, Native production 적용은 관련 Product 이슈와 OpenSpec
   spec·task를 연결한 뒤 구현과 runtime 검증을 함께 진행한다.

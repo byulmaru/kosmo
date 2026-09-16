@@ -1,6 +1,6 @@
 ## Context
 
-PROD-884는 표시 전용 `NotificationListItemView`와 Relay 기반 `ReplyNotificationPost` 및 Storybook 계약을 만들었지만 Production 목록은 종류별 Relay adapter가 private legacy 행을 렌더링한다. Production 연결은 기존 Notification pagination·Read mutation·actor Store, Post content/privacy 정책과 Post action/reply/media provider 수명을 유지해야 한다.
+PROD-884는 표시 전용 `NotificationListItemView`와 Relay 기반 `ReplyNotificationPost` 및 Storybook 계약을 만들었지만 Production 목록은 종류별 Relay adapter가 private legacy 행을 렌더링한다. Production 연결은 기존 Notification pagination·Read mutation·actor Store, Post content/privacy 정책과 Post action/reply/media provider 수명을 유지해야 한다. PROD-951은 연결 이후 실제 목록에서 확인한 날짜 typography, Reply 작성자 밀도와 Web inset을 후속 정렬한다.
 
 ## Goals / Non-Goals
 
@@ -10,6 +10,7 @@ PROD-884는 표시 전용 `NotificationListItemView`와 Relay 기반 `ReplyNotif
 - Reply Post의 본문·Content Warning·미디어·Quote·Action Bar와 목록용 popup Reply composer를 기존 Post 경계로 재사용한다.
 - navigation/media open과 Best Effort Read를 결속하고 내부 control의 중복 navigation·Read를 막는다.
 - loading과 실제 Production Storybook을 새 동적 행 구조에 맞춘다.
+- Reply의 종류 의미는 kind icon과 접근성 설명으로 제공하고, 24px Avatar·inline 작성자 행과 공통 날짜 typography를 사용하며 별도의 알림 이유 문장은 제거한다.
 
 **Non-Goals:**
 
@@ -33,6 +34,8 @@ PROD-884는 표시 전용 `NotificationListItemView`와 Relay 기반 `ReplyNotif
 
 Reply adapter는 `NotificationListItemView kind="reply"` 안에 `ReplyNotificationPost`를 합성한다. Reply Post에는 현재 consumer가 필요한 하나의 activation callback만 추가하고 Profile/detail/body/media open에서 호출하되 Content Warning·Action Bar·composer에는 연결하지 않는다. 바깥 event capture나 Notification Link wrapper는 추가하지 않는다.
 
+PROD-951 후속 표시에서는 48px kind rail의 32px icon 옆에 24px Avatar와 `ProfileNameBlock`의 `inline` variant를 한 행으로 배치한다. 별도의 알림 이유 문장은 렌더링하지 않고 kind의 접근성 설명은 유지한다. 날짜는 공용 `TimestampText`의 `UI/Copy/M`을 사용하며 Web의 Notification·PostListItem inset은 왼쪽 12px·오른쪽 24px로 맞춘다.
+
 Notification 목록의 selected Profile fragment에 기존 Reply composer Profile fragment를 spread하고, Post 목록이 사용하는 action authentication, `owner="list"` Reply coordinator와 media viewer host 조합을 목록 수명에 둔다. 이 조합은 Reply action을 기존 popup modal로 연결하므로 새 composer 구현이 필요 없다.
 
 Reaction·Repost adapter는 기존 Post fragment에서 body text, Content Warning document와 media를 조회해 공용 preview 입력으로 전달한다. grouping은 서버 입력이 없으므로 각 item에 한 actor만 전달한다. loading skeleton과 `KOSMO/Screens/Notifications/Catalog`의 실제 Relay fixture·interaction assertion을 새 geometry와 observable behavior에 맞춘다.
@@ -46,7 +49,7 @@ Reaction·Repost adapter는 기존 Post fragment에서 body text, Content Warnin
 
 - 종류별 adapter를 제거하면 fragment colocation, target URL과 Read cache 수렴 책임까지 잃는다.
 - Reply 전체를 Link로 감싸거나 pointer event를 capture하면 Content Warning·media·Action Bar가 item navigation과 Read를 중복 실행한다.
-- `ReplyNotificationPost` 대신 `PostListItem`을 사용하면 Notification reason·배치와 원글 미리보기 제외 계약이 깨진다.
+- `ReplyNotificationPost` 대신 `PostListItem`을 사용하면 kind icon·작성자 inline 배치와 원글 미리보기 제외 계약이 깨진다.
 - client에서 actor를 합치거나 unavailable Post용 generic 행을 만들면 현재 grouping 제외 범위와 서버 visibility 정책을 위반한다.
 - target presentation Storybook만 통과해도 실제 `NotificationList`의 Relay·route·provider 연결은 증명되지 않는다.
 
