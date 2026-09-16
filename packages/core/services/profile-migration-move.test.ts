@@ -37,12 +37,8 @@ import {
 
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
-const followIds: string[] = [];
 
 after(async () => {
-  if (followIds.length > 0) {
-    await db.delete(ProfileFollows).where(inArray(ProfileFollows.id, followIds));
-  }
   if (profileIds.length > 0) {
     await db
       .delete(ProfileFollowRequests)
@@ -138,7 +134,6 @@ const createSourceFollow = async (followerProfileId: string, sourceProfileId: st
     .values({ followerProfileId, followeeProfileId: sourceProfileId })
     .returning()
     .then(firstOrThrow);
-  followIds.push(follow.id);
   return follow;
 };
 
@@ -174,7 +169,6 @@ test('Move follower batch는 active Local established Follow만 keyset으로 읽
     limit: 1,
   });
   assert.equal(secondBatch.length, 1);
-  assert.notEqual(secondBatch[0]?.sourceFollowId, firstBatch[0].sourceFollowId);
   assert.deepEqual(
     new Set([firstBatch[0].sourceFollowId, secondBatch[0]?.sourceFollowId]),
     new Set([firstFollow.id, secondFollow.id]),

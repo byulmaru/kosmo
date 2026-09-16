@@ -1,9 +1,7 @@
-import '../polyfill';
-
 import type { WorkflowDefinition } from './client';
 
 export const PROFILE_MIGRATION_WORKFLOW_TYPE = 'profileMigrationMoveWorkflow';
-export const PROFILE_MIGRATION_WORKFLOW_ID_PREFIX = 'profile-migration-move:';
+const PROFILE_MIGRATION_WORKFLOW_ID_PREFIX = 'profile-migration-move:';
 
 export type ProfileMigrationMoveWorkflowInput = {
   readonly sourceProfileId: string;

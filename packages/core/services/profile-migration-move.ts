@@ -10,10 +10,9 @@ import {
   Profiles,
 } from '../db';
 import { InstanceKind, InstanceState, ProfileState } from '../enums';
-import {
-  executeProfileFollowPairTransition,
-  executeProfileFollowRemoval,
-} from '../temporal/follow-command';
+import { executeProfileFollowRemoval } from '../temporal/follow-command';
+import { followProfile } from './profile-follow';
+import { profileFollowPairCondition } from './profile-follow-transaction';
 
 const PROFILE_MIGRATION_MOVE_BATCH_SIZE = 50;
 
@@ -27,15 +26,13 @@ export type ProfileMigrationMoveFollower = {
   readonly sourceFollowId: string;
 };
 
-export type ProfileMigrationMoveFollowerInput = ProfileMigrationMoveInput & {
-  readonly followerProfileId: string;
-  readonly sourceFollowId: string;
-};
+export type ProfileMigrationMoveFollowerInput = ProfileMigrationMoveInput &
+  ProfileMigrationMoveFollower;
 
 const findEligibleTarget = async ({
   sourceProfileId,
   targetProfileId,
-}: ProfileMigrationMoveInput) => {
+}: ProfileMigrationMoveInput): Promise<boolean> => {
   const target = await db
     .select({
       instanceKind: Instances.kind,
@@ -53,7 +50,7 @@ const findEligibleTarget = async ({
     target.profileState !== ProfileState.ACTIVE ||
     target.instanceState === InstanceState.SUSPENDED
   ) {
-    return undefined;
+    return false;
   }
 
   if (target.instanceKind === InstanceKind.LOCAL) {
@@ -69,10 +66,10 @@ const findEligibleTarget = async ({
       .limit(1)
       .then(first);
     if (!migration) {
-      return undefined;
+      return false;
     }
   } else if (target.instanceKind !== InstanceKind.ACTIVITYPUB) {
-    return undefined;
+    return false;
   } else if (
     !(await db
       .select({ id: ActivityPubActors.id })
@@ -81,10 +78,10 @@ const findEligibleTarget = async ({
       .limit(1)
       .then(first))
   ) {
-    return undefined;
+    return false;
   }
 
-  return target;
+  return true;
 };
 
 /**
@@ -150,12 +147,7 @@ export const executeProfileMigrationMoveFollower = async (
   const targetFollow = await db
     .select({ id: ProfileFollows.id })
     .from(ProfileFollows)
-    .where(
-      and(
-        eq(ProfileFollows.followerProfileId, targetPair.followerProfileId),
-        eq(ProfileFollows.followeeProfileId, targetPair.followeeProfileId),
-      ),
-    )
+    .where(profileFollowPairCondition(ProfileFollows, targetPair))
     .limit(1)
     .then(first);
   const targetRequest = targetFollow
@@ -163,12 +155,7 @@ export const executeProfileMigrationMoveFollower = async (
     : await db
         .select({ id: ProfileFollowRequests.id })
         .from(ProfileFollowRequests)
-        .where(
-          and(
-            eq(ProfileFollowRequests.followerProfileId, targetPair.followerProfileId),
-            eq(ProfileFollowRequests.followeeProfileId, targetPair.followeeProfileId),
-          ),
-        )
+        .where(profileFollowPairCondition(ProfileFollowRequests, targetPair))
         .limit(1)
         .then(first);
 
@@ -176,14 +163,8 @@ export const executeProfileMigrationMoveFollower = async (
     return;
   }
 
-  const transition = await executeProfileFollowPairTransition({
-    pair: targetPair,
-    command: { kind: 'FOLLOW', origin: 'LOCAL' },
-  });
-  if (transition.result.commandKind !== 'FOLLOW') {
-    throw new Error('Unexpected target Profile Follow transition result');
-  }
-  if (!transition.result.created) {
+  const { created } = await followProfile(targetPair);
+  if (!created) {
     return;
   }
 
