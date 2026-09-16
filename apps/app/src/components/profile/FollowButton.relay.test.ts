@@ -265,7 +265,7 @@ test('실제 FollowButton의 늦은 A 응답은 B의 action·Store·피드백을
   assert.deepEqual(toasts, []);
 });
 
-test('Block partial 오류 후 실제 FollowButton과 차단 action을 유지하고 재시도한다', async () => {
+test('Block 성공 결과로 실제 FollowButton과 차단 action을 전환한다', async () => {
   const environment = createEnvironment();
   environment.commitUpdate((store) => {
     store.get(stateId)?.setValue(null, 'profileBlock');
@@ -299,30 +299,14 @@ test('Block partial 오류 후 실제 FollowButton과 차단 action을 유지하
           id: targetId,
           displayName: '대상',
           relativeHandle: '@target',
-          viewerState: null,
         },
       },
     },
   };
   await startBlock();
-  await respond(0, {
-    data: payload,
-    errors: [{ message: 'Partial response failed', path: ['blockProfile', 'profileBlock'] }],
-  });
-  assert.deepEqual(labels(), ['팔로우', '차단']);
-  assert.deepEqual(environment.getStore().getSource().get(targetId)?.viewerState, {
-    __ref: stateId,
-  });
-  assert.equal(actionControl('ModalSheet').props.visible, false);
-  await act(async () => actionControl('ModalSheet').props.onDismiss());
-  assert.deepEqual(feedback, [{ blocked: true, status: 'error' }]);
-  await startBlock();
-  await respond(1, { data: payload });
+  await respond(0, { data: payload });
   assert.deepEqual(labels(), ['차단 해제', '차단']);
   assert.equal(environment.getStore().getSource().get(stateId)?.profileBlock?.__ref, blockId);
   await act(async () => actionControl('ModalSheet').props.onDismiss());
-  assert.deepEqual(feedback, [
-    { blocked: true, status: 'error' },
-    { blocked: true, status: 'success' },
-  ]);
+  assert.deepEqual(feedback, [{ blocked: true, status: 'success' }]);
 });

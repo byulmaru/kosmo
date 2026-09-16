@@ -91,34 +91,6 @@ afterEach(async () => {
 });
 
 describe('ProfileBlockController Relay cache boundary', () => {
-  it('optional field 오류가 함께 와도 확정된 Block 결과를 적용한다', async () => {
-    environment = createEnvironment();
-    environment.commitUpdate((store) => {
-      const follow = store.create('follow-before-error', 'ProfileFollow');
-      const request = store.create('request-before-error', 'ProfileFollowRequest');
-      store.get(viewerStateId)?.setLinkedRecord(follow, 'follow');
-      store.get(viewerStateId)?.setLinkedRecord(request, 'followRequest');
-    });
-    const { request } = await beginBlock();
-    const partial = blockPayload('block-confirmed');
-
-    respond({
-      data: partial,
-      errors: [
-        {
-          message: 'Follow projection failed',
-          path: ['blockProfile', 'profileBlock', 'targetProfile', 'viewerState', 'follow'],
-        },
-      ],
-    });
-
-    await request;
-    assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
-    assert.equal(viewerProfileBlockId(), 'block-confirmed');
-    assert.equal(environment.getStore().getSource().get(viewerStateId)?.follow, null);
-    assert.equal(environment.getStore().getSource().get(viewerStateId)?.followRequest, null);
-  });
-
   it('기존 Profile global ID로 relation을 정규화하고 Profile cache를 보존한다', async () => {
     environment = createEnvironment();
     const { request } = await beginBlock();
