@@ -142,8 +142,7 @@ describe('ProfileBlockController Relay cache boundary', () => {
         unblockProfile: {
           success: false,
           profileBlockId: null,
-          targetProfile: unblockPayload('block-confirmed', 'block-confirmed').unblockProfile
-            .targetProfile,
+          targetProfile: null,
         },
       },
     });
