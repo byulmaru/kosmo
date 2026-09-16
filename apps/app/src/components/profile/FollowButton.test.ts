@@ -124,12 +124,9 @@ const profile = {
 };
 
 test('내가 차단한 Profile은 FollowButton이 차단 해제 lifecycle을 사용한다', async () => {
-  let unblockSuccesses = 0;
   await act(async () => {
     renderer = create(
       createElement(FollowButton, {
-        onBlockFeedback: ({ status }: { status: string }) =>
-          status === 'success' ? (unblockSuccesses += 1) : undefined,
         profile: {
           ...profile,
           viewerState: {
@@ -157,7 +154,7 @@ test('내가 차단한 Profile은 FollowButton이 차단 해제 lifecycle을 사
   await act(async () =>
     renderer?.root.find((node) => (node.type as unknown) === 'ModalSheet').props.onDismiss(),
   );
-  assert.equal(unblockSuccesses, 1);
+  assert.deepEqual(toastCalls, [{ message: '차단을 해제했어요', tone: 'success' }]);
 });
 
 test('내가 차단한 Profile은 고정된 차단 해제 action을 표시한다', async () => {
@@ -182,13 +179,10 @@ test('내가 차단한 Profile은 고정된 차단 해제 action을 표시한다
 });
 
 test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유한다', async () => {
-  let unblockSuccesses = 0;
   await act(async () => {
     renderer = create(
       createElement(ProfileBlockAction, {
         nextBlocked: false,
-        onFeedback: ({ status }: { status: string }) =>
-          status === 'success' ? (unblockSuccesses += 1) : undefined,
         profileBlock: {
           id: 'profile-block-a',
           targetProfile: profile,
@@ -222,7 +216,6 @@ test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유
   assert.deepEqual(toastCalls, []);
   await act(async () => modal?.props.onDismiss());
   assert.deepEqual(toastCalls, [{ message: '차단을 해제했어요', tone: 'success' }]);
-  assert.equal(unblockSuccesses, 1);
 });
 
 test('차단 해제 실패 시 확인창을 닫고 action으로 focus를 복귀한다', async () => {
@@ -241,7 +234,7 @@ test('차단 해제 실패 시 확인창을 닫고 action으로 focus를 복귀�
     );
   });
   const button = renderer?.root.find((node) => (node.type as unknown) === 'Button');
-  button?.props.controlRef({ focus: () => (focusCalls += 1) });
+  button!.props.controlRef.current = { focus: () => (focusCalls += 1) };
   await act(async () => button?.props.onPress());
   const confirmation = renderer?.root.find(
     (node) => (node.type as unknown) === 'ConfirmationContent',

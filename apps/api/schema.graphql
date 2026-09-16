@@ -683,6 +683,7 @@ input UnblockProfileInput {
 type UnblockProfilePayload {
   profileBlockId: ID
   success: Boolean!
+  targetProfile: Profile!
 }
 
 input UnfollowProfileInput {

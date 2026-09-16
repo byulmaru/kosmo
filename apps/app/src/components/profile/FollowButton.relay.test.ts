@@ -24,10 +24,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
 import type { RelayEnvironmentBoundary as BoundaryExport } from '../../relay/RelayEnvironmentBoundary';
 import type { FollowButton as FollowButtonExport } from './FollowButton';
-import type {
-  ProfileBlockAction as BlockActionExport,
-  ProfileBlockFeedback,
-} from './ProfileBlockAction';
+import type { ProfileBlockAction as BlockActionExport } from './ProfileBlockAction';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -69,7 +66,6 @@ const targetId = 'target-a';
 const blockId = 'block-a';
 const stateId = 'client:target-a:viewerState';
 const generationRef = { current: 0 };
-const feedback: ProfileBlockFeedback[] = [];
 const requests: Array<{
   name: string;
   variables: unknown;
@@ -95,7 +91,6 @@ afterEach(async () => {
   renderer = null;
   requests.length = 0;
   toasts.length = 0;
-  feedback.length = 0;
   selectedProfileId = 'owner-a';
   generationRef.current = 0;
   focusCount = 0;
@@ -159,12 +154,6 @@ async function render(environment: Environment, showBlockAction = false) {
         __fragments: { FollowButton_profile: {} },
         __fragmentOwner: owner,
       } as never,
-      onActionRef: (node) => {
-        if (node) {
-          assert.equal(node, control);
-        }
-      },
-      onBlockFeedback: (result) => feedback.push(result),
     }),
     showBlockAction
       ? createElement(ProfileBlockAction, {
@@ -175,7 +164,6 @@ async function render(environment: Environment, showBlockAction = false) {
             __fragmentOwner: owner,
           } as never,
           surface: 'button',
-          onFeedback: (result) => feedback.push(result),
         })
       : null,
   );
@@ -188,7 +176,17 @@ async function render(environment: Environment, showBlockAction = false) {
   });
   renderer!.root
     .findAll((node) => (node.type as unknown) === 'Button')
-    .forEach((node) => node.props.controlRef?.(control));
+    .forEach((node) => {
+      const controlRef = node.props.controlRef as
+        | { current: typeof control | null }
+        | ((value: typeof control) => void)
+        | undefined;
+      if (typeof controlRef === 'function') {
+        controlRef(control);
+      } else if (controlRef) {
+        controlRef.current = control;
+      }
+    });
 }
 function button() {
   return renderer!.root.find((node) => (node.type as unknown) === 'Button');
@@ -228,22 +226,18 @@ test('실제 FollowButton·Relay는 pending 중 중복과 닫기를 막고 실�
   await act(async () => requests[0]!.sink.error(new Error('offline')));
   assert.equal(button().props.children, '차단 해제');
   assert.equal(modal().props.visible, false);
-  assert.deepEqual(feedback, []);
   await act(async () => modal().props.onDismiss());
   assert.equal(focusCount, 1);
-  assert.deepEqual(feedback, [{ blocked: false, status: 'error' }]);
+  assert.deepEqual(toasts, ['차단을 해제하지 못했어요. 다시 시도해 주세요.']);
   assert.ok(store.getSource().get(blockId));
   await confirm();
-  await respond(1, { data: { unblockProfile: { success: true, profileBlockId: blockId } } });
+  await respond(1, { data: unblockPayload(blockId) });
   assert.equal(button().props.children, '팔로우');
   assert.equal(environment.getStore(), store);
-  assert.equal(store.getSource().get(blockId), null);
+  assert.ok(store.getSource().get(blockId));
   assert.equal(store.getSource().get(stateId)?.profileBlock, null);
   assert.equal(store.getSource().get('unrelated')?.displayName, '보존');
-  assert.deepEqual(feedback, [
-    { blocked: false, status: 'error' },
-    { blocked: false, status: 'success' },
-  ]);
+  assert.deepEqual(toasts, ['차단을 해제하지 못했어요. 다시 시도해 주세요.', '차단을 해제했어요']);
 });
 
 test('실제 FollowButton의 늦은 A 응답은 B의 action·Store·피드백을 바꾸지 않는다', async () => {
@@ -257,11 +251,10 @@ test('실제 FollowButton의 늦은 A 응답은 B의 action·Store·피드백을
   assert.equal(button().props.disabled, false);
   assert.equal(modal().props.visible, false);
   const before = actorB.getStore().getSource().toJSON();
-  await respond(0, { data: { unblockProfile: { success: true, profileBlockId: blockId } } });
+  await respond(0, { data: unblockPayload(blockId) });
   assert.equal(button().props.children, '차단 해제');
   assert.equal(button().props.disabled, false);
   assert.deepEqual(actorB.getStore().getSource().toJSON(), before);
-  assert.deepEqual(feedback, []);
   assert.deepEqual(toasts, []);
 });
 
@@ -296,9 +289,25 @@ test('Block 성공 결과로 실제 FollowButton과 차단 action을 전환한�
       profileBlock: {
         id: blockId,
         targetProfile: {
-          id: targetId,
           displayName: '대상',
+          followPolicy: 'OPEN',
+          followersCount: 0,
+          handle: 'target',
+          id: targetId,
           relativeHandle: '@target',
+          viewerState: {
+            follow: null,
+            followRequest: null,
+            isSelf: false,
+            profileBlock: {
+              id: blockId,
+              targetProfile: {
+                displayName: '대상',
+                id: targetId,
+                relativeHandle: '@target',
+              },
+            },
+          },
         },
       },
     },
@@ -308,5 +317,28 @@ test('Block 성공 결과로 실제 FollowButton과 차단 action을 전환한�
   assert.deepEqual(labels(), ['차단 해제', '차단']);
   assert.equal(environment.getStore().getSource().get(stateId)?.profileBlock?.__ref, blockId);
   await act(async () => actionControl('ModalSheet').props.onDismiss());
-  assert.deepEqual(feedback, [{ blocked: true, status: 'success' }]);
+  assert.deepEqual(toasts, ['프로필을 차단했어요']);
 });
+
+function unblockPayload(profileBlockId: string) {
+  return {
+    unblockProfile: {
+      profileBlockId,
+      success: true,
+      targetProfile: {
+        displayName: '대상',
+        followPolicy: 'OPEN',
+        followersCount: 0,
+        handle: 'target',
+        id: targetId,
+        relativeHandle: '@target',
+        viewerState: {
+          follow: null,
+          followRequest: null,
+          isSelf: false,
+          profileBlock: null,
+        },
+      },
+    },
+  };
+}

@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { graphql, useMutation, useRelayEnvironment } from 'react-relay';
-import { ConnectionHandler } from 'relay-runtime';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
 import { StaleProfileBlockRequestError } from './profileBlockErrors';
-import type { RecordSourceProxy } from 'relay-runtime';
 import type { ProfileBlockControllerBlockMutation } from './__generated__/ProfileBlockControllerBlockMutation.graphql';
 import type { ProfileBlockControllerUnblockMutation } from './__generated__/ProfileBlockControllerUnblockMutation.graphql';
 
@@ -15,6 +13,9 @@ const blockProfileMutation = graphql`
       profileBlock {
         id
         ...ProfileBlockAction_profileBlock
+        targetProfile {
+          ...FollowButton_profile
+        }
       }
     }
   }
@@ -25,70 +26,18 @@ const unblockProfileMutation = graphql`
     unblockProfile(input: { id: $id }) {
       success
       profileBlockId
+      targetProfile {
+        ...FollowButton_profile
+      }
     }
   }
 `;
-
-const profileBlockConnectionKey = 'SettingsBlockedProfiles_profileBlocks';
 
 export type ProfileBlockChange = Readonly<{
   ownerProfileId: string;
   profileBlockId?: string | null;
   targetProfileId: string;
 }>;
-
-function updateLoadedBlockState(
-  store: RecordSourceProxy,
-  connectionId: string,
-  profileBlockId: string,
-  targetProfileId: string,
-) {
-  const profileBlock = store.get(profileBlockId);
-  const targetProfile = store.get(targetProfileId);
-  if (!profileBlock || !targetProfile) {
-    return false;
-  }
-
-  profileBlock.setLinkedRecord(targetProfile, 'targetProfile');
-  const viewerState = targetProfile.getLinkedRecord('viewerState');
-  // Confirmed Block completion includes durable Follow/Request cleanup.
-  viewerState?.setValue(null, 'follow');
-  viewerState?.setValue(null, 'followRequest');
-  viewerState?.setLinkedRecord(profileBlock, 'profileBlock');
-
-  const connection = store.get(connectionId);
-  const alreadyConnected = connection
-    ?.getLinkedRecords('edges')
-    ?.some((edge) => edge.getLinkedRecord('node')?.getDataID() === profileBlockId);
-  if (connection && !alreadyConnected) {
-    const edge = ConnectionHandler.createEdge(
-      store,
-      connection,
-      profileBlock,
-      'ProfileBlockConnectionEdge',
-    );
-    ConnectionHandler.insertEdgeBefore(connection, edge);
-  }
-  return true;
-}
-
-function updateLoadedUnblockState(
-  store: RecordSourceProxy,
-  connectionId: string,
-  profileBlockId: string,
-  targetProfileId: string,
-) {
-  const connection = store.get(connectionId);
-  if (connection) {
-    ConnectionHandler.deleteNode(connection, profileBlockId);
-  }
-
-  const viewerState = store.get(targetProfileId)?.getLinkedRecord('viewerState');
-  if (viewerState?.getLinkedRecord('profileBlock')?.getDataID() === profileBlockId) {
-    viewerState.setValue(null, 'profileBlock');
-  }
-  store.delete(profileBlockId);
-}
 
 export function useProfileBlockMutations() {
   const environment = useRelayEnvironment();
@@ -114,11 +63,6 @@ export function useProfileBlockMutations() {
     (change: ProfileBlockChange, nextBlocked: boolean) => {
       const requestEnvironment = environment;
       const requestGeneration = environmentGenerationRef?.current;
-      const connectionId = ConnectionHandler.getConnectionID(
-        change.ownerProfileId,
-        profileBlockConnectionKey,
-      );
-
       return new Promise<void>((resolve, reject) => {
         if (
           !selectedProfileId ||
@@ -155,14 +99,6 @@ export function useProfileBlockMutations() {
                   finish(new Error('Profile block response did not confirm the relation.'));
                   return;
                 }
-                requestEnvironment.commitUpdate((store) => {
-                  updateLoadedBlockState(
-                    store,
-                    connectionId,
-                    profileBlock.id,
-                    change.targetProfileId,
-                  );
-                });
                 finish();
               },
               onError: (error) => {
@@ -190,14 +126,6 @@ export function useProfileBlockMutations() {
                   finish(new Error('Profile unblock response did not confirm the relation.'));
                   return;
                 }
-                requestEnvironment.commitUpdate((store) => {
-                  updateLoadedUnblockState(
-                    store,
-                    connectionId,
-                    responseProfileBlockId,
-                    change.targetProfileId,
-                  );
-                });
                 finish();
               },
               onError: (error) => {

@@ -11,11 +11,8 @@ import type { FollowButton_profile$key } from './__generated__/FollowButton_prof
 import type { FollowButtonCancelProfileFollowRequestMutation } from './__generated__/FollowButtonCancelProfileFollowRequestMutation.graphql';
 import type { FollowButtonFollowProfileMutation } from './__generated__/FollowButtonFollowProfileMutation.graphql';
 import type { FollowButtonUnfollowProfileMutation } from './__generated__/FollowButtonUnfollowProfileMutation.graphql';
-import type { ProfileBlockFeedback } from './ProfileBlockAction';
 
 type FollowButtonProps = {
-  onActionRef?: (node: View | null) => void;
-  onBlockFeedback?: (feedback: ProfileBlockFeedback) => void;
   profile: FollowButton_profile$key;
   style?: StyleProp<ViewStyle>;
 };
@@ -108,7 +105,7 @@ const updateProfileCount = (
 const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
-export function FollowButton({ onActionRef, onBlockFeedback, profile, style }: FollowButtonProps) {
+export function FollowButton({ profile, style }: FollowButtonProps) {
   const { selectedProfileId } = useSession();
   const { showToast } = useToast();
   const data = useFragment(followButtonProfileFragment, profile);
@@ -135,8 +132,6 @@ export function FollowButton({ onActionRef, onBlockFeedback, profile, style }: F
     return (
       <ProfileBlockAction
         nextBlocked={false}
-        onActionRef={onActionRef}
-        onFeedback={onBlockFeedback}
         profileBlock={viewerState.profileBlock}
         surface="button"
       />
@@ -259,7 +254,6 @@ export function FollowButton({ onActionRef, onBlockFeedback, profile, style }: F
           selected: isFollowing || isPending,
         }}
         disabled={loading}
-        controlRef={onActionRef}
         onPress={toggleFollow}
         style={styles.relationButton}
         tone={isFollowing || isPending ? 'secondary' : 'primary'}

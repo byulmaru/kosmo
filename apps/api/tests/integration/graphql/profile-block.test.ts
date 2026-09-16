@@ -444,12 +444,20 @@ describe('GraphQL Profile Block', () => {
       unblockProfile: {
         profileBlockId: string | null;
         success: boolean;
+        targetProfile: {
+          id: string;
+          viewerState: { profileBlock: { id: string } | null } | null;
+        };
       };
     }>(
       `mutation UnblockProfile($id: ID!) {
         unblockProfile(input: { id: $id }) {
           profileBlockId
           success
+          targetProfile {
+            id
+            viewerState { profileBlock { id } }
+          }
         }
       }`,
       { id: localBlockId },
@@ -459,6 +467,10 @@ describe('GraphQL Profile Block', () => {
     assert.deepEqual(unblocked.data?.unblockProfile, {
       profileBlockId: localBlockId,
       success: true,
+      targetProfile: {
+        id: globalId('Profile', localTarget.id),
+        viewerState: { profileBlock: null },
+      },
     });
 
     const restored = await requestGraphQL<{ node: { id: string } | null }>(
