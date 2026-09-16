@@ -1445,7 +1445,7 @@ export const NoSelectedProfileDisablesReaction: Story = {
     const canvas = within(canvasElement);
     reactionMutationRequest.mockClear();
     const trigger = canvas.getByRole('button', { name: '반응' });
-    const heartSummary = canvas.getByRole('button', { name: '❤️ 반응 12개' });
+    const heartSummary = await canvas.findByRole('button', { name: '❤️ 반응 12개' });
     const moreProfiles = canvas.getByRole('button', { name: '반응한 프로필 보기' });
 
     expect(trigger).toBeDisabled();
@@ -1473,7 +1473,7 @@ export const NoSelectedProfileDisablesReaction: Story = {
 export const ReactionSummaryToggleContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const heart = canvas.getByRole('button', { name: '❤️ 반응 12개' });
+    const heart = await canvas.findByRole('button', { name: '❤️ 반응 12개' });
 
     await userEvent.click(heart);
     expect(screen.queryByRole('dialog', { name: '반응한 프로필' })).toBeNull();
