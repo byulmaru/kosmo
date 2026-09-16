@@ -1,6 +1,8 @@
 import type { ExpoConfig } from 'expo/config';
 
 const otaBaseUrl = 'https://expo-ota.byulmaru.co/releases/kosmo-native';
+const googleServicesJson = process.env.KOSMO_ANDROID_GOOGLE_SERVICES_FILE;
+const googleServiceInfoPlist = process.env.KOSMO_IOS_GOOGLE_SERVICES_FILE;
 function androidVersionCode(): number {
   const configured = process.env.KOSMO_ANDROID_VERSION_CODE;
   if (configured === undefined) {
@@ -45,6 +47,7 @@ const config: ExpoConfig = {
     infoPlist: {
       LSApplicationCategoryType: 'public.app-category.social-networking',
     },
+    ...(googleServiceInfoPlist ? { googleServicesFile: googleServiceInfoPlist } : {}),
   },
   android: {
     adaptiveIcon: {
@@ -54,6 +57,7 @@ const config: ExpoConfig = {
     package: 'moe.kos',
     versionCode: androidVersionCode(),
     predictiveBackGestureEnabled: true,
+    ...(googleServicesJson ? { googleServicesFile: googleServicesJson } : {}),
   },
   web: {
     favicon: './public/favicon-32x32.png',
@@ -74,6 +78,9 @@ const config: ExpoConfig = {
   plugins: [
     'expo-router',
     'expo-secure-store',
+    'expo-notifications',
+    '@react-native-firebase/app',
+    '@react-native-firebase/messaging',
     [
       '@sentry/react-native/expo',
       {
