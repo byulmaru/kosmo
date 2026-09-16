@@ -14,13 +14,14 @@ import { StateView } from '@/components/ui/StateView';
 import { useAccountDeletionCleanup } from '@/session/logout';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { SettingsAccountDeletionDeleteAccountMutation } from './__generated__/SettingsAccountDeletionDeleteAccountMutation.graphql';
-import type { SettingsAccountDeletionEligibilityQuery } from './__generated__/SettingsAccountDeletionEligibilityQuery.graphql';
+import type { SettingsAccountDeletionQuery } from './__generated__/SettingsAccountDeletionQuery.graphql';
 
-const AccountDeletionEligibilityQuery = graphql`
-  query SettingsAccountDeletionEligibilityQuery {
-    accountDeletionEligibility {
-      activeProfileCount
-      canDelete
+const AccountDeletionQuery = graphql`
+  query SettingsAccountDeletionQuery {
+    me {
+      profiles {
+        id
+      }
     }
   }
 `;
@@ -28,7 +29,6 @@ const AccountDeletionEligibilityQuery = graphql`
 const DeleteAccountMutation = graphql`
   mutation SettingsAccountDeletionDeleteAccountMutation {
     deleteAccount {
-      activeProfileCount
       completed
     }
   }
@@ -87,35 +87,28 @@ function SettingsAccountDeletionContent({
   onPendingChange: (pending: boolean) => void;
 }) {
   const { fetchKey, refetch } = useRouteBoundary();
-  const data = useLazyLoadQuery<SettingsAccountDeletionEligibilityQuery>(
-    AccountDeletionEligibilityQuery,
+  const data = useLazyLoadQuery<SettingsAccountDeletionQuery>(
+    AccountDeletionQuery,
     {},
-    { fetchKey, fetchPolicy: 'store-and-network' },
+    {
+      fetchKey,
+      fetchPolicy: 'store-and-network',
+    },
   );
   const [commitDeleteAccount] =
     useMutation<SettingsAccountDeletionDeleteAccountMutation>(DeleteAccountMutation);
   const { error: logoutError, logout, pending: logoutPending } = useAccountDeletionCleanup();
   const [acknowledged, setAcknowledged] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'pending' | 'error' | 'success'>('idle');
-  const [blockedCount, setBlockedCount] = useState<number | null>(null);
-  const eligibility = data.accountDeletionEligibility;
+  const profiles = data.me?.profiles;
   const pending = phase === 'pending' || logoutPending;
-  const eligibilityComplete =
-    typeof eligibility.canDelete === 'boolean' &&
-    typeof eligibility.activeProfileCount === 'number';
-  const canDelete = eligibilityComplete && eligibility.canDelete === true;
-  const activeProfileCount = eligibilityComplete ? eligibility.activeProfileCount : 0;
+  const activeProfileCount = profiles?.length ?? 0;
+  const canDelete = profiles?.length === 0;
 
   useEffect(() => onPendingChange(pending), [onPendingChange, pending]);
 
   const confirm = useCallback(() => {
-    if (
-      (phase !== 'idle' && phase !== 'error') ||
-      blockedCount !== null ||
-      !eligibilityComplete ||
-      !canDelete ||
-      !acknowledged
-    ) {
+    if ((phase !== 'idle' && phase !== 'error') || !canDelete || !acknowledged) {
       return;
     }
 
@@ -127,19 +120,7 @@ function SettingsAccountDeletionContent({
         const payload = response.deleteAccount;
         if (errors?.length || !payload || payload.completed !== true) {
           onPendingChange(false);
-          if (
-            !errors?.length &&
-            payload &&
-            payload.completed === false &&
-            typeof payload.activeProfileCount === 'number' &&
-            payload.activeProfileCount > 0
-          ) {
-            setBlockedCount(payload.activeProfileCount);
-            setAcknowledged(false);
-            setPhase('idle');
-          } else {
-            setPhase('error');
-          }
+          setPhase('error');
           return;
         }
 
@@ -152,16 +133,7 @@ function SettingsAccountDeletionContent({
         setPhase('error');
       },
     });
-  }, [
-    acknowledged,
-    blockedCount,
-    canDelete,
-    commitDeleteAccount,
-    eligibilityComplete,
-    logout,
-    onPendingChange,
-    phase,
-  ]);
+  }, [acknowledged, canDelete, commitDeleteAccount, logout, onPendingChange, phase]);
 
   const state =
     phase === 'pending'
@@ -170,11 +142,9 @@ function SettingsAccountDeletionContent({
         ? ({ acknowledged, phase: 'error' } as const)
         : phase === 'success'
           ? ({ phase: 'success' } as const)
-          : blockedCount !== null
-            ? ({ activeProfileCount: blockedCount, phase: 'blocked' } as const)
-            : canDelete
-              ? ({ acknowledged, phase: 'idle' } as const)
-              : ({ activeProfileCount, phase: 'blocked' } as const);
+          : canDelete
+            ? ({ acknowledged, phase: 'idle' } as const)
+            : ({ activeProfileCount, phase: 'blocked' } as const);
 
   if (logoutError) {
     return (
@@ -188,7 +158,7 @@ function SettingsAccountDeletionContent({
     );
   }
 
-  if (!eligibilityComplete) {
+  if (profiles === null || profiles === undefined) {
     return <AccountDeletionScreen onRetry={refetch} state={{ phase: 'load-error' }} />;
   }
 
