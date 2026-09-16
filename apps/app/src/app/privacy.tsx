@@ -273,7 +273,7 @@ export default function PrivacyScreen() {
           <TableRow
             cells={[
               '수집 항목',
-              'pageview·pageleave·autocapture 등 표준 event, 페이지 URL·query·referrer·session metadata, 기기·OS·브라우저 정보, 접속 일시, 익명 device/session ID',
+              'pageview·pageleave·autocapture 등 표준 event, 페이지 URL·query·referrer·session metadata, 기기·OS·브라우저 정보, 접속 일시, 분석용 device/session ID',
             ]}
           />
           <TableRow
