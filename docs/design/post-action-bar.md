@@ -222,11 +222,14 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 고정·해제에는 같은 `Pin` glyph를 사용하고 `PinOff`는 사용하지 않는다. attribution은 `16`/`secondary`,
   Web menu는 `18`/`primary`, Native menu는 `24`/`primary`를 사용하며 삭제의 `danger` 색은 유지한다.
 - 고정 Post는 Profile 목록에만 우선 표시하고 Home timeline 순서는 변경하지 않는다.
-- 고정 수·대상 자격·권한·교체·lifecycle 정책은 PROD-809에서 아직 확정되지 않았다. 기존 DSN-55의 교체 확인과
-  empty·removed·unavailable 대표 화면만으로 제품 정책을 확정하지 않는다. 필요한 추가 UI는 PROD-809의
-  canonical 계약 확정 후 범위를 정한다.
-- 단순 고정·해제는 확인 없이 실행한다. 실제 호출 가능 여부는 consumer가 판단하며 공용 UI가 자격·권한을
-  계산하지 않는다. persistence/API·ActivityPub·pagination·mutation·동시성은 PROD-809가 소유한다.
+- Local Profile은 최대 하나의 고정 Post를 가지며, 같은 Post 재고정과 이미 해제된 Post 해제는 안전한 no-op으로
+  처리한다. 다른 Post로 교체할 때는 기존 canonical `ModalSheet`의 confirmation content 교체를 사용하고, 단순
+  고정·해제에는 확인을 표시하지 않는다.
+- 고정 action은 현재 Local Profile이 작성한 Active Content Post·Reply·Quote 중 Public·Unlisted·Followers Only인
+  대상에만 연결한다. Mentioned Profiles, Content 없는 pure Repost와 다른 Profile 작성 Post는 제외한다. Remote Profile의
+  `featured` 수신 결과는 검증된 Featured collection 순서로 표시하며 Local mutation action의 최대 1개 정책을 적용하지 않는다.
+- persistence/API·ActivityPub·pagination·mutation·동시성은 PROD-809 구현이 소유한다. Storybook fixture의 모의
+  요청은 이 서버 계약이나 stale confirmation 보호를 증명하지 않는다.
 
 ### Storybook 이관 · PROD-863
 
@@ -250,8 +253,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `KOSMO/Patterns/Profile/Pin Action`의 Playground는 수동 Controls·Actions용이며 자동 조작은 Controls가
   비활성화된 `Tests`에 둔다. Controls는 owner/visitor, pin/unpin, 본문과 요청 success/pending/error를 제공한다.
 - 2026-09-08 PROD-863 범위 확정에 따라 empty·removed·unavailable·loading·error 전용 상태 카드와
-  presentation Control, 교체 확인과 replace/confirm/cancel 공개 API는 이 이관에서 제외한다. 고정·해제 요청의
-  pending·실패 피드백은 유지한다. ConfirmationContent는 이 이슈의 선행 조건이 아니다.
+  presentation Control은 이 이관에서 제외한다. PROD-809의 canonical 교체 확인은 기존 ModalSheet content swap을
+  사용하며, 이 이관은 해당 공개 API나 persistence 계약을 선점하지 않는다.
 - 2026-09-09 리뷰 답변과 사용자 승인에 따라 기존 callback 기반 실행 계약을 위의 fixture 기반 표시
   검증으로 변경했다. `ProfilePinAction` production controller를 제거하며 요청 수명과 결과 반영은
   실제 mutation 구현 시 다시 검증한다.

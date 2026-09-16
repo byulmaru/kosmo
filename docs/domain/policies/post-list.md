@@ -40,8 +40,12 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ### Profile Post List
 
-- Target Profile이 작성한 eligible Post 중 Reply Parent가 없는 Content Post와 Repost를 포함한다.
-- Reply Parent가 있는 Post는 Quote이기도 하더라도 포함하지 않는다.
+- Target Profile의 조회 가능한 pinned Post를 고정 순서(Local 0..1, Remote는 원격 collection 순서)로 먼저 표시한다. pinned Post는 Reply Parent가
+  있어도 포함하며 Reply·Quote도 같은 pinned segment에 표시한다.
+- pinned Post 뒤에는 Target Profile이 작성한 eligible Post를 기존 chronology로 이어 표시한다. 일반 segment는 pinned
+  Post를 cursor와 page limit 적용 전에 제외해 같은 Post가 두 번 나타나거나 page 사이에서 누락되지 않게 한다.
+- pinned segment와 일반 segment의 합친 순서·cursor와 page limit은 서버가 관찰 가능한 목록 계약으로 소유한다. 현재
+  단일 PostList/Relay pagination을 client concat으로 조합하지 않는다.
 
 ### Local Post List
 
@@ -90,6 +94,9 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 - Profile Mute에 따른 제외는 cursor와 page limit 전에 끝낸다. Bookmark 목록과 Post 직접
   조회·상호작용에는 Mute를 적용하지 않으며 기존 Visibility·Eligibility를 유지한다.
 - Post List 제어는 Post Visibility가 허용하지 않은 viewer에게 접근 범위를 넓히지 않는다.
+- pinned segment에도 기존 Post Visibility, Post Eligibility, Profile lifecycle, Post lifecycle, block·domain 정책을
+  적용한다. 조회할 수 없거나 unavailable인 pinned Post는 목록과 pinned count에 포함하지 않는다.
+- 위 pinned ordering은 Profile 목록에만 적용한다. Home·Local·Hashtag의 후보 순서와 일반 chronology는 변경하지 않는다.
 
 ## 제외/보류
 
