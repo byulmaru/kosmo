@@ -38,6 +38,7 @@ const queryHistory: Array<{
 const pending = new Promise<never>(() => undefined);
 
 type RouteParams = { profileHandle?: string | string[] };
+type NativeScrollProps = UseAutomaticPaginationResult['nativeScrollProps'];
 type ReportMenuInput = {
   id: string;
   kind: 'PROFILE';
@@ -72,7 +73,12 @@ let profileInstanceKind: 'ACTIVITYPUB' | 'LOCAL' = 'LOCAL';
 const routerHistory: string[] = [];
 let routerBackCount = 0;
 let sessionId: string | null = null;
-let relayActorLifecycleKey = 'actor-a';
+let usePaginationScrollRegistration: (props: NativeScrollProps | null) => void = () => undefined;
+let routeMetrics = {
+  contentHeight: 0,
+  layoutHeight: 0,
+  scrollOffset: 0,
+};
 let selectedProfileId: string | null = null;
 let profileBlockStatus: {
   blockedBy: boolean;
@@ -378,9 +384,6 @@ mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
 mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
   useUnexpectedErrorReporter: () => undefined,
 });
-mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  useRelayActorLifecycleKey: () => relayActorLifecycleKey,
-});
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => ({ selectedProfileId, sessionId }),
 });
@@ -429,7 +432,6 @@ afterEach(async () => {
   profileAvailable = true;
   profileDisplayName = null;
   profileInstanceKind = 'LOCAL';
-  relayActorLifecycleKey = 'actor-a';
   selectedProfileId = null;
   profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
   profileViewerState = null;
@@ -940,7 +942,7 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
   });
 
-  it('경고는 시간 경과로 사라지지 않고 handle과 actor lifecycle마다 다시 적용된다', async (t) => {
+  it('경고는 시간 경과로 사라지지 않고 handle과 상위 actor boundary remount마다 다시 적용된다', async (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     selectedProfileId = 'owner';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
@@ -962,14 +964,16 @@ describe('profile route parameter lifecycle', () => {
     assert.deepEqual(identities('PostList'), ['other']);
 
     selectedProfileId = 'owner-b';
-    relayActorLifecycleKey = 'actor-b';
     profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-b' };
+    await act(async () => renderer?.unmount());
+    renderer = null;
     await renderRoute('@other', '/@other');
     assert.deepEqual(identities('PostList'), []);
     assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
     await act(async () => requireRendered('StateView').props.onAction());
 
-    relayActorLifecycleKey = 'actor-b-new-session';
+    await act(async () => renderer?.unmount());
+    renderer = null;
     await renderRoute('@other', '/@other');
     assert.deepEqual(identities('PostList'), []);
     assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');

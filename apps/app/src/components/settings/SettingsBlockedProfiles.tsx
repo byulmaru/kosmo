@@ -7,7 +7,6 @@ import { ProfileListItemContent } from '@/components/profile/ProfileListItemCont
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
-import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
 import type { RefObject } from 'react';
 import type { View } from 'react-native';
 import type { ProfileBlockAction_profileBlock$key } from '@/components/profile/__generated__/ProfileBlockAction_profileBlock.graphql';
@@ -65,13 +64,11 @@ type BlockedProfilesState =
   | { status: 'loaded'; profiles: readonly BlockedProfile[]; pagination: Pagination };
 
 export function SettingsBlockedProfiles({ headingRef }: { headingRef?: RefObject<View | null> }) {
-  const actorLifecycleKey = useRelayActorLifecycleKey();
   return (
     <RouteBoundary
       error={(retry) => (
         <BlockedProfilesView headingRef={headingRef} state={{ onRetry: retry, status: 'error' }} />
       )}
-      key={actorLifecycleKey}
       loading={<BlockedProfilesView headingRef={headingRef} state={{ status: 'loading' }} />}
       title="차단한 프로필을 불러오지 못했어요"
     >
