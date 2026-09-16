@@ -28,7 +28,6 @@ let otaIsUpdatePending = false;
 let otaCheckError: Error | null = null;
 let otaDownloadError: Error | null = null;
 let publicChannel: 'dev' | 'prod' = 'prod';
-const shellPageHeadingRef = { current: null };
 
 mock.module('expo-router', {
   exports: {
@@ -140,7 +139,7 @@ mock.module(new URL('./SettingsBlockedProfiles.tsx', import.meta.url), {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
-  exports: { useShellChrome: () => ({ pageHeadingRef: shellPageHeadingRef }) },
+  exports: { useShellChrome: () => ({ pageHeadingRef: { current: null } }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: { useTheme: () => ({ border: '#333333', text: '#111111' }) },
@@ -323,18 +322,15 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
     assert.equal(rendered('SettingsMuteAndBlockNavigation')[0].props.selected, 'blocked-profiles');
     assert.equal(rendered('SettingsBlockedProfiles').length, 1);
-    assert.equal(
-      rendered('SettingsBlockedProfiles')[0].props.headingRef,
-      rendered('PageHeader')[1].props.headingRef,
-    );
+    assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
   });
 
-  it('mobile Web blocked profile은 shell heading ref를 목록 focus fallback에 전달한다', async () => {
+  it('mobile Web blocked profile은 별도 heading focus 계약 없이 목록을 표시한다', async () => {
     width = 390;
     await renderRoute('/settings/blocked-profiles', SettingsBlockedProfilesRoute);
 
     assert.equal(rendered('PageHeader').length, 0);
-    assert.equal(rendered('SettingsBlockedProfiles')[0].props.headingRef, shellPageHeadingRef);
+    assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
   });
 
   it('compact Web root는 선택 없는 root 목록부터 표시한다', async () => {

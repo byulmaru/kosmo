@@ -7,8 +7,7 @@ import { ProfileListItemContent } from '@/components/profile/ProfileListItemCont
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
-import type { RefObject } from 'react';
-import type { View } from 'react-native';
+import type { ProfileBlockAction_profile$key } from '@/components/profile/__generated__/ProfileBlockAction_profile.graphql';
 import type { ProfileBlockAction_profileBlock$key } from '@/components/profile/__generated__/ProfileBlockAction_profileBlock.graphql';
 import type { SettingsBlockedProfiles_profile$key } from './__generated__/SettingsBlockedProfiles_profile.graphql';
 import type { SettingsBlockedProfilesNextPageQuery } from './__generated__/SettingsBlockedProfilesNextPageQuery.graphql';
@@ -40,6 +39,12 @@ const SettingsBlockedProfilesFragment = graphql`
           targetProfile {
             displayName
             relativeHandle
+            ...ProfileBlockAction_profile
+            viewerState {
+              profileBlock {
+                ...ProfileBlockAction_profileBlock
+              }
+            }
           }
         }
       }
@@ -49,7 +54,8 @@ const SettingsBlockedProfilesFragment = graphql`
 
 type BlockedProfile = Readonly<{
   displayName: string;
-  profileBlock: ProfileBlockAction_profileBlock$key;
+  profile: ProfileBlockAction_profile$key;
+  profileBlock: ProfileBlockAction_profileBlock$key | null;
   profileBlockId: string;
   relativeHandle: string;
 }>;
@@ -63,21 +69,19 @@ type BlockedProfilesState =
   | { status: 'error'; onRetry: () => void }
   | { status: 'loaded'; profiles: readonly BlockedProfile[]; pagination: Pagination };
 
-export function SettingsBlockedProfiles({ headingRef }: { headingRef?: RefObject<View | null> }) {
+export function SettingsBlockedProfiles() {
   return (
     <RouteBoundary
-      error={(retry) => (
-        <BlockedProfilesView headingRef={headingRef} state={{ onRetry: retry, status: 'error' }} />
-      )}
-      loading={<BlockedProfilesView headingRef={headingRef} state={{ status: 'loading' }} />}
+      error={(retry) => <BlockedProfilesView state={{ onRetry: retry, status: 'error' }} />}
+      loading={<BlockedProfilesView state={{ status: 'loading' }} />}
       title="차단한 프로필을 불러오지 못했어요"
     >
-      <SettingsBlockedProfilesContent headingRef={headingRef} />
+      <SettingsBlockedProfilesContent />
     </RouteBoundary>
   );
 }
 
-function SettingsBlockedProfilesContent({ headingRef }: { headingRef?: RefObject<View | null> }) {
+function SettingsBlockedProfilesContent() {
   const shellChrome = useShellChrome();
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<SettingsBlockedProfilesQuery>(
@@ -111,7 +115,6 @@ function SettingsBlockedProfilesContent({ headingRef }: { headingRef?: RefObject
   }
   return (
     <BlockedProfilesView
-      headingRef={headingRef}
       state={{
         pagination: loadError
           ? { onRetry: loadMore, status: 'error' }
@@ -122,7 +125,8 @@ function SettingsBlockedProfilesContent({ headingRef }: { headingRef?: RefObject
               : { status: 'end' },
         profiles: edges.map((edge) => ({
           displayName: edge.node.targetProfile.displayName,
-          profileBlock: edge.node,
+          profile: edge.node.targetProfile,
+          profileBlock: edge.node.targetProfile.viewerState?.profileBlock ?? null,
           profileBlockId: edge.node.id,
           relativeHandle: edge.node.targetProfile.relativeHandle,
         })),
@@ -132,13 +136,7 @@ function SettingsBlockedProfilesContent({ headingRef }: { headingRef?: RefObject
   );
 }
 
-export function BlockedProfilesView({
-  headingRef,
-  state,
-}: {
-  headingRef?: RefObject<View | null>;
-  state: BlockedProfilesState;
-}) {
+export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) {
   const children =
     state.status === 'loaded'
       ? state.profiles.map((profile) => (
@@ -150,13 +148,9 @@ export function BlockedProfilesView({
             style={styles.row}
           >
             <ProfileBlockAction
-              nextBlocked={false}
-              onFeedback={(feedback) => {
-                if (feedback.status === 'success') {
-                  headingRef?.current?.focus();
-                }
-              }}
-              profileBlock={profile.profileBlock}
+              {...(profile.profileBlock
+                ? { nextBlocked: false as const, profileBlock: profile.profileBlock }
+                : { nextBlocked: true as const, profile: profile.profile })}
               surface="button"
             />
           </ProfileListItemContent>
@@ -171,7 +165,7 @@ export function BlockedProfilesView({
           ? ({ status: 'empty' } as const)
           : ({ children, pagination: state.pagination, status: 'loaded' } as const);
 
-  return <BlockedProfileList headingRef={headingRef} state={listState} />;
+  return <BlockedProfileList state={listState} />;
 }
 
 const styles = StyleSheet.create({

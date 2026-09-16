@@ -10,7 +10,6 @@ import type { FollowButton as FollowButtonExport } from './FollowButton';
 import type {
   ProfileBlockAction as ProfileBlockActionExport,
   ProfileBlockActionTarget,
-  ProfileBlockFeedback,
 } from './ProfileBlockAction';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -101,7 +100,6 @@ const toastCalls: Array<{ message: string; tone: string }> = [];
 const focusHistory: string[] = [];
 const menuTriggerFocus = mock.fn(() => focusHistory.push('menu'));
 const stateActionFocus = mock.fn(() => focusHistory.push('state'));
-const contentStateFocus = mock.fn(() => focusHistory.push('content'));
 let changeBlockedImpl: (change: object, nextBlocked: boolean) => Promise<void> = async () =>
   undefined;
 
@@ -111,7 +109,6 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('expo-router', {
-  Navigator: ({ children }: { children: ReactNode }) => children,
   Slot: () =>
     SlotContent
       ? createElement(
@@ -244,9 +241,7 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     showMuteAction,
   }: {
     action?: ReturnType<typeof createElement>;
-    blockAction?: ProfileBlockActionTarget & {
-      onFeedback?: (feedback: ProfileBlockFeedback) => void;
-    };
+    blockAction?: ProfileBlockActionTarget;
     heading?: boolean;
     loading?: boolean;
     moreItems?: readonly ReportMenuItem[];
@@ -376,12 +371,7 @@ mockModule(new URL('../post/PostList.tsx', import.meta.url), {
   },
 });
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
-  StateView: ({ controlRef, ...props }: { controlRef?: Ref<unknown> }) => {
-    if (controlRef && typeof controlRef === 'object' && 'current' in controlRef) {
-      controlRef.current = { focus: () => contentStateFocus() };
-    }
-    return createElement('StateView', props);
-  },
+  StateView: (props: object) => createElement('StateView', props),
 });
 mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
   useUnexpectedErrorReporter: () => undefined,
@@ -445,7 +435,6 @@ afterEach(async () => {
   toastCalls.length = 0;
   menuTriggerFocus.mock.resetCalls();
   stateActionFocus.mock.resetCalls();
-  contentStateFocus.mock.resetCalls();
   focusHistory.length = 0;
   changeBlockedImpl = async () => undefined;
   SlotContent = ProfilePostListPage;
@@ -1122,8 +1111,6 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(rendered('FollowButton').length, 0);
     assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
 
-    assert.deepEqual(focusHistory, ['content']);
-    assert.equal(contentStateFocus.mock.callCount(), 1);
     assert.equal(menuTriggerFocus.mock.callCount(), 0);
   });
 
@@ -1204,8 +1191,8 @@ describe('profile route parameter lifecycle', () => {
     await renderRoute('@target');
     assert.deepEqual(focusHistory, []);
     await act(async () => requireRendered('ModalSheet').props.onDismiss());
-    assert.deepEqual(focusHistory, ['menu', 'state']);
+    assert.deepEqual(focusHistory, ['menu']);
     assert.equal(menuTriggerFocus.mock.callCount(), 1);
-    assert.equal(stateActionFocus.mock.callCount(), 1);
+    assert.equal(stateActionFocus.mock.callCount(), 0);
   });
 });

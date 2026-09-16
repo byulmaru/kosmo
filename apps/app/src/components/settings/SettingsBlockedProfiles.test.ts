@@ -44,20 +44,21 @@ mockModule('react-relay', {
 });
 mockModule(new URL('../profile/ProfileBlockAction.tsx', import.meta.url), {
   ProfileBlockAction: ({
-    onFeedback,
+    nextBlocked,
+    profile,
     profileBlock,
   }: {
-    onFeedback?: (feedback: { blocked: boolean; status: 'success' | 'error' }) => void;
-    profileBlock: { id: string };
+    nextBlocked: boolean;
+    profile?: { id: string };
+    profileBlock?: { id: string };
   }) =>
     createElement(
       'Button',
       {
-        onFeedback: () => onFeedback?.({ blocked: false, status: 'success' }),
-        onPress: () => onFeedback?.({ blocked: false, status: 'success' }),
-        profileBlockId: profileBlock.id,
+        profileBlockId: profileBlock?.id,
+        profileId: profile?.id,
       },
-      '차단 해제',
+      nextBlocked ? '차단' : '차단 해제',
     ),
 });
 mockModule(new URL('../profile/ProfileListItemContent.tsx', import.meta.url), {
@@ -96,6 +97,7 @@ mockModule('../../theme/tokens', {
 });
 type BlockedProfile = {
   displayName: string;
+  profile: never;
   profileBlock: never;
   profileBlockId: string;
   relativeHandle: string;
@@ -124,6 +126,7 @@ afterEach(async () => {
 
 const profile = (id: string, displayName = '별마루'): BlockedProfile => ({
   displayName,
+  profile: { id: `profile-${id}` } as never,
   profileBlock: { id: `block-${id}` } as never,
   profileBlockId: `block-${id}`,
   relativeHandle: `@${id}`,
@@ -143,7 +146,12 @@ describe('차단한 프로필 목록', () => {
             {
               node: {
                 id: 'block-star',
-                targetProfile: { displayName: '별마루', relativeHandle: '@star' },
+                targetProfile: {
+                  displayName: '별마루',
+                  id: 'profile-star',
+                  relativeHandle: '@star',
+                  viewerState: { profileBlock: { id: 'block-star' } },
+                },
               },
             },
           ],
@@ -248,55 +256,21 @@ describe('차단한 프로필 목록', () => {
     assert.equal(retries, 1);
   });
 
-  it('마지막 항목 해제 뒤 새 목록 surface가 목록 제목에 포커스를 복원한다', async () => {
-    const focus = mock.fn();
-    const headingRef = { current: { focus } } as never;
-    const loaded = {
-      pagination: { status: 'end' as const },
-      profiles: [profile('star')],
-      status: 'loaded' as const,
-    };
-    await act(async () => {
-      renderer = create(createElement(BlockedProfilesView, { headingRef, state: loaded }));
-    });
-    await act(async () => find('Button')?.props.onPress());
-    await act(async () => {
-      renderer?.update(
-        createElement(BlockedProfilesView, {
-          headingRef,
-          state: { pagination: { status: 'end' }, profiles: [], status: 'loaded' },
-        }),
-      );
-    });
-    assert.equal(focus.mock.callCount(), 1);
-  });
-
-  it('Relay가 먼저 행을 제거해도 완료 feedback에서 목록 제목으로 포커스를 복원한다', async () => {
-    const focus = mock.fn();
-    const headingRef = { current: { focus } } as never;
-    const first = profile('first');
-    const second = profile('second');
+  it('해제 뒤 같은 행에서 차단 action으로 전환한다', async () => {
+    const unblocked = { ...profile('star'), profileBlock: null };
     await act(async () => {
       renderer = create(
         createElement(BlockedProfilesView, {
-          headingRef,
-          state: { pagination: { status: 'end' }, profiles: [first, second], status: 'loaded' },
+          state: {
+            pagination: { status: 'end' },
+            profiles: [unblocked],
+            status: 'loaded',
+          },
         }),
       );
     });
-    const removedAction = findAll('Button')[0];
-    assert.ok(removedAction);
-    const complete = removedAction.props.onFeedback;
-    await act(async () => {
-      renderer?.update(
-        createElement(BlockedProfilesView, {
-          headingRef,
-          state: { pagination: { status: 'end' }, profiles: [second], status: 'loaded' },
-        }),
-      );
-    });
-    assert.equal(focus.mock.callCount(), 0);
-    await act(async () => complete());
-    assert.equal(focus.mock.callCount(), 1);
+    assert.equal(findAll('ProfileListItemContent').length, 1);
+    assert.equal(find('Button')?.props.children, '차단');
+    assert.equal(find('Button')?.props.profileId, 'profile-star');
   });
 });

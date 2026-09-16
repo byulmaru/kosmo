@@ -1,9 +1,11 @@
 import { useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PostList } from '@/components/post/PostList';
 import { ProfileRouteContainer, useProfileRoute } from '@/components/profile/ProfileRouteShell';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { StateView } from '@/components/ui/StateView';
 import type { ProfilePostListPageQuery as ProfilePostListPageQueryType } from './__generated__/ProfilePostListPageQuery.graphql';
 
 const ProfilePostListPageQuery = graphql`
@@ -17,6 +19,11 @@ const ProfilePostListPageQuery = graphql`
     }
     profileByHandle(handle: $handle) {
       id
+      viewerState {
+        profileBlock {
+          id
+        }
+      }
       ...PostList_profile @arguments(count: 20)
     }
   }
@@ -46,11 +53,23 @@ export default function ProfilePostListPage() {
 
 function ProfilePostListPageContent({ handle }: { handle: string }) {
   const { fetchKey } = useRouteBoundary();
+  const [acknowledgedProfileBlockId, setAcknowledgedProfileBlockId] = useState<string | null>(null);
   const data = useLazyLoadQuery<ProfilePostListPageQueryType>(
     ProfilePostListPageQuery,
     { handle },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
+  const profileBlockId = data.profileByHandle?.viewerState?.profileBlock?.id ?? null;
+
+  if (profileBlockId && profileBlockId !== acknowledgedProfileBlockId) {
+    return (
+      <StateView
+        actionLabel="게시물 보기"
+        onAction={() => setAcknowledgedProfileBlockId(profileBlockId)}
+        title="차단한 프로필의 게시물입니다"
+      />
+    );
+  }
 
   return (
     <PostList

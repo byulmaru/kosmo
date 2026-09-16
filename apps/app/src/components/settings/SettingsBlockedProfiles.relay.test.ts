@@ -24,9 +24,7 @@ type Request = {
 
 const require = createRequire(import.meta.url);
 const generation = { current: 0 };
-const headingFocus = mock.fn();
 const triggerFocus = mock.fn();
-const headingRef = { current: { focus: headingFocus } } as never;
 const toastCalls: Array<{ message: string; tone: string }> = [];
 const showToast = (message: string, options: { tone: string }) => {
   toastCalls.push({ message, tone: options.tone });
@@ -69,6 +67,8 @@ mockModule(new URL('../ui/Button.tsx', import.meta.url), {
   }) => {
     if (typeof controlRef === 'function') {
       controlRef({ focus: triggerFocus });
+    } else if (controlRef && typeof controlRef === 'object' && 'current' in controlRef) {
+      controlRef.current = { focus: triggerFocus };
     }
     return createElement('Button', props, children);
   },
@@ -114,7 +114,6 @@ afterEach(async () => {
   requests = [];
   selectedProfileId = 'owner-a';
   generation.current = 0;
-  headingFocus.mock.resetCalls();
   triggerFocus.mock.resetCalls();
   toastCalls.length = 0;
 });
@@ -135,7 +134,7 @@ async function render(environment: Environment) {
     const tree = createElement(ReactRelay.RelayEnvironmentProvider, {
       key: selectedProfileId,
       environment,
-      children: createElement(SettingsBlockedProfiles, { headingRef }),
+      children: createElement(SettingsBlockedProfiles),
     });
     if (renderer) {
       renderer.update(tree);
@@ -180,6 +179,18 @@ function connection(ids: string[], hasNextPage = false) {
           id: `profile-${id}`,
           displayName: '별마루',
           relativeHandle: `@${id}`,
+          viewerState: {
+            profileBlock: {
+              __typename: 'ProfileBlock',
+              id: `block-${id}`,
+              targetProfile: {
+                __typename: 'Profile',
+                id: `profile-${id}`,
+                displayName: '별마루',
+                relativeHandle: `@${id}`,
+              },
+            },
+          },
         },
       },
     })),
@@ -200,6 +211,24 @@ function firstPage(ids: string[], hasNext = false, ownerId = selectedProfileId) 
         id: ownerId,
         profileBlocks: connection(ids, hasNext),
       },
+    },
+  };
+}
+
+function unblockedTargetProfile(id: string) {
+  return {
+    __typename: 'Profile',
+    id: `profile-${id}`,
+    displayName: '별마루',
+    handle: id,
+    relativeHandle: `@${id}`,
+    followPolicy: 'PUBLIC',
+    followersCount: 0,
+    viewerState: {
+      isSelf: false,
+      follow: null,
+      followRequest: null,
+      profileBlock: null,
     },
   };
 }
@@ -256,7 +285,7 @@ describe('Settings Block consumer with real Relay', () => {
     assert.equal(all('Button').filter((node) => node.props.children === '더 불러오기').length, 0);
   });
 
-  it('실제 해제 action은 취소·pending·실패 후 재시도를 거쳐 정확한 행만 제거한다', async () => {
+  it('실제 해제 action은 취소·pending·실패 후 재시도를 거쳐 같은 행을 차단 action으로 전환한다', async () => {
     await render(createEnvironment());
     await respond(latestRequest('SettingsBlockedProfilesQuery'), firstPage(['one', 'two']));
     const row = all('ProfileRow')[0]!;
@@ -292,10 +321,18 @@ describe('Settings Block consumer with real Relay', () => {
     await act(async () => one('Button', row).props.onPress());
     await act(async () => one('ConfirmationContent', row).props.onConfirm());
     await respond(latestRequest('ProfileBlockControllerUnblockMutation'), {
-      unblockProfile: { success: true, profileBlockId: 'block-one' },
+      unblockProfile: {
+        success: true,
+        profileBlockId: 'block-one',
+        targetProfile: unblockedTargetProfile('one'),
+      },
     });
-    assert.deepEqual(handles(), ['@two']);
-    assert.equal(headingFocus.mock.callCount(), 1);
+    await act(async () => Promise.resolve());
+    assert.deepEqual(handles(), ['@one', '@two']);
+    const updatedRow = all('ProfileRow')[0]!;
+    assert.equal(one('Button', updatedRow).props.children, '차단');
+    await act(async () => one('ModalSheet', updatedRow).props.onDismiss());
+    assert.equal(triggerFocus.mock.callCount(), 3);
     assert.equal(toastCalls.at(-1)?.tone, 'success');
     assert.equal(requests.length, 3);
   });
@@ -340,11 +377,16 @@ describe('Settings Block consumer with real Relay', () => {
     await render(environmentB);
     await respond(latestRequest('SettingsBlockedProfilesQuery'), firstPage(['other']));
     const before = environmentB.getStore().getSource().toJSON();
-    await respond(pendingA, { unblockProfile: { success: true, profileBlockId: 'block-one' } });
+    await respond(pendingA, {
+      unblockProfile: {
+        success: true,
+        profileBlockId: 'block-one',
+        targetProfile: unblockedTargetProfile('one'),
+      },
+    });
     assert.deepEqual(handles(), ['@other']);
     assert.deepEqual(environmentB.getStore().getSource().toJSON(), before);
     assert.deepEqual(toastCalls, []);
-    assert.equal(headingFocus.mock.callCount(), 0);
     assert.equal(one('Button').props.accessibilityState.busy, false);
   });
 });

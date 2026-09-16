@@ -65,7 +65,8 @@
 - **AND** 확인창에서 해제를 확정하기 전에는 해제 mutation을 실행하지 않는다
 - **WHEN** Owner가 확인창의 `차단 해제`를 확정한다
 - **THEN** 시스템은 해당 Target의 정확한 Profile Block ID를 사용해 해제 mutation을 실행한다
-- **AND** 성공 시 해당 Target의 서버 확정 차단 상태를 반영하고 다른 목록 항목의 상태는 바꾸지 않는다
+- **AND** 성공한 Target의 최신 `viewerState.profileBlock`은 `null`로 정규화되어 같은 행의 action이 `차단`으로 바뀐다
+- **AND** 현재 조회한 connection의 행은 화면을 이탈하거나 다시 조회하기 전까지 유지되고 다른 목록 항목의 상태는 바꾸지 않는다
 
 #### Scenario: 차단 해제 확인을 취소하거나 요청에 실패한다
 
@@ -77,15 +78,17 @@
 - **AND** 실패하면 기존 차단 상태와 목록을 유지하고 확인창을 닫은 뒤 원래 trigger focus를 복원하고 공용 오류 Toast를 표시한다
 - **AND** 같은 해제 action을 다시 열어 재시도할 수 있다
 
-#### Scenario: 관리 목록 조회 실패 후 재시도
+#### Scenario: 관리 목록 조회 실패와 성공 상태 전환
 
 - **WHEN** 최초 또는 추가 목록 조회가 실패한다
 - **THEN** 시스템은 공용 danger Toast와 `다시 시도` action을 제공한다
 - **AND** Toast가 사라져도 본문에 최초 `다시 시도` 또는 추가 `더 불러오기`를 유지한다
+- **WHEN** 차단 해제 성공으로 같은 목록 행의 action이 `차단`으로 바뀐다
+- **THEN** 확인창이 닫힌 뒤 해당 행의 현재 action으로 focus를 복원한다
 
 ### Requirement: Profile Block direct route presents basic Profile and content state
 
-**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 후속 UI 교체는 `PROD-917`의 범위다. Membership으로 인증된 selected Profile을 viewer로 사용하는 Block 관계의 direct Profile route는 기존 Profile 조회 정책에 따른 기본 Profile 정보를 표시해야 한다(MUST). `blocking` route는 기존 Post·Media 정책으로 허용된 Target 콘텐츠를 표시하기 전에 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 제공해야 한다(MUST). 경고는 현재 Profile handle과 selected actor lifecycle마다 다시 적용해야 하고(MUST), 사용자가 action을 실행하기 전에는 시간 경과만으로 콘텐츠를 표시해서는 안 된다(MUST NOT). `blockedBy` route는 기본 Profile 정보와 콘텐츠 차단 상태를 표시해야 한다(MUST). 양방향 Block은 양쪽 route에 콘텐츠 차단 상태를 적용해야 한다(MUST). `차단 해제` action은 인증된 selected Profile이 Owner인 `blocking` route에서만 기존 관계 관리 흐름을 유지해야 한다(MUST). selected Profile auth scope를 충족하지 못하면 API는 Block 읽기 필드에 nullable `null`을 반환해야 하며(MUST), App은 selected Profile kind나 조건부 GraphQL 변수로 이 권한을 예측해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 정본은 `docs/design/profile-mute-block.md`, `docs/domain/objects/profile-block.md`, `docs/domain/objects/profile.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `DSN-53`; 책임 이슈는 `PROD-823`, `PROD-813`; 후속 UI 교체는 `PROD-917`의 범위다. Membership으로 인증된 selected Profile을 viewer로 사용하는 Block 관계의 direct Profile route는 기존 Profile 조회 정책에 따른 기본 Profile 정보를 표시해야 한다(MUST). `blocking` route의 Profile Post List page는 기존 Post·Media 정책으로 허용된 Target 콘텐츠를 표시하기 전에 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 제공해야 한다(MUST). 상위 Profile layout은 이 경고를 소유하지 않고 nested route를 유지해야 한다(MUST). 경고는 현재 Profile handle과 selected actor lifecycle마다 다시 적용해야 하고(MUST), 사용자가 action을 실행하기 전에는 시간 경과만으로 콘텐츠를 표시해서는 안 된다(MUST NOT). `blockedBy` route는 기본 Profile 정보와 콘텐츠 차단 상태를 표시해야 한다(MUST). 양방향 Block은 양쪽 route에 콘텐츠 차단 상태를 적용해야 한다(MUST). `차단 해제` action은 인증된 selected Profile이 Owner인 `blocking` route에서만 기존 관계 관리 흐름을 유지해야 한다(MUST). selected Profile auth scope를 충족하지 못하면 API는 Block 읽기 필드에 nullable `null`을 반환해야 하며(MUST), App은 selected Profile kind나 조건부 GraphQL 변수로 이 권한을 예측해서는 안 된다(MUST NOT).
 
 #### Scenario: 역방향 Block이 없을 때 blocking route에서 기본 Profile과 확인 후 콘텐츠를 표시한다
 
