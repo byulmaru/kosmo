@@ -91,7 +91,7 @@ afterEach(async () => {
 });
 
 describe('ProfileBlockController Relay cache boundary', () => {
-  it('기존 Profile global ID로 relation을 정규화하고 Profile cache를 보존한다', async () => {
+  it('기존 Profile global ID로 viewer 상태를 정규화하고 Profile cache를 보존한다', async () => {
     environment = createEnvironment();
     const { request } = await beginBlock();
 
@@ -101,7 +101,7 @@ describe('ProfileBlockController Relay cache boundary', () => {
 
     await request;
     assertGeneralProfileUnchanged();
-    assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
+    assert.deepEqual(connectionNodeIds(), []);
     assert.equal(viewerProfileBlockId(), 'block-confirmed');
   });
 
@@ -122,9 +122,7 @@ describe('ProfileBlockController Relay cache boundary', () => {
       false,
     );
     assert.ok(unblock);
-    respond({
-      data: { unblockProfile: { success: true, profileBlockId: 'block-confirmed' } },
-    });
+    respond({ data: unblockPayload('block-confirmed') });
     await unblock;
 
     const viewerState = environment.getStore().getSource().get(viewerStateId);
@@ -144,6 +142,8 @@ describe('ProfileBlockController Relay cache boundary', () => {
         unblockProfile: {
           success: false,
           profileBlockId: null,
+          targetProfile: unblockPayload('block-confirmed', 'block-confirmed').unblockProfile
+            .targetProfile,
         },
       },
     });
@@ -170,18 +170,12 @@ describe('ProfileBlockController Relay cache boundary', () => {
     createRelation('block-confirmed');
     const { request } = await beginUnblock('block-confirmed');
 
-    respond({
-      data: {
-        unblockProfile: {
-          success: true,
-          profileBlockId: 'block-confirmed',
-        },
-      },
-    });
+    respond({ data: unblockPayload('block-confirmed') });
 
     await request;
-    assert.deepEqual(connectionNodeIds(), []);
+    assert.deepEqual(connectionNodeIds(), ['block-confirmed']);
     assert.equal(viewerProfileBlockId(), null);
+    assert.ok(environment.getStore().getSource().get('block-confirmed'));
   });
 
   it('unblock relation ID가 요청과 다르면 기존 relation을 보존한다', async () => {
@@ -194,6 +188,8 @@ describe('ProfileBlockController Relay cache boundary', () => {
         unblockProfile: {
           success: true,
           profileBlockId: 'block-other',
+          targetProfile: unblockPayload('block-confirmed', 'block-confirmed').unblockProfile
+            .targetProfile,
         },
       },
     });
@@ -209,17 +205,10 @@ describe('ProfileBlockController Relay cache boundary', () => {
     const { request } = await beginUnblock('block-old');
     createRelation('block-new');
 
-    respond({
-      data: {
-        unblockProfile: {
-          success: true,
-          profileBlockId: 'block-old',
-        },
-      },
-    });
+    respond({ data: unblockPayload('block-old', 'block-new') });
 
     await request;
-    assert.deepEqual(connectionNodeIds(), ['block-new']);
+    assert.deepEqual(connectionNodeIds(), ['block-new', 'block-old']);
     assert.equal(viewerProfileBlockId(), 'block-new');
   });
 
@@ -256,14 +245,7 @@ describe('ProfileBlockController Relay cache boundary', () => {
     const currentEnvironment = environment;
     await rerenderController();
 
-    respond({
-      data: {
-        unblockProfile: {
-          success: true,
-          profileBlockId: 'block-stale',
-        },
-      },
-    });
+    respond({ data: unblockPayload('block-stale') });
 
     await assert.rejects(request, StaleProfileBlockRequestError);
     environment = currentEnvironment;
@@ -384,6 +366,39 @@ function blockPayload(relationId: string) {
               },
             },
           },
+        },
+      },
+    },
+  };
+}
+
+function unblockPayload(profileBlockId: string, currentProfileBlockId: string | null = null) {
+  return {
+    unblockProfile: {
+      profileBlockId,
+      success: true,
+      targetProfile: {
+        __typename: 'Profile',
+        displayName: 'Original target',
+        followPolicy: 'OPEN',
+        followersCount: 0,
+        handle: targetHandle,
+        id: targetProfileId,
+        relativeHandle: targetHandle,
+        viewerState: {
+          follow: null,
+          followRequest: null,
+          isSelf: false,
+          profileBlock: currentProfileBlockId
+            ? {
+                id: currentProfileBlockId,
+                targetProfile: {
+                  displayName: 'Original target',
+                  id: targetProfileId,
+                  relativeHandle: targetHandle,
+                },
+              }
+            : null,
         },
       },
     },

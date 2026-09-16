@@ -32,8 +32,6 @@ const profileBlockFragment = graphql`
   }
 `;
 
-export type ProfileBlockFeedback = { blocked: boolean; status: 'success' | 'error' };
-
 export type ProfileBlockMenuItemRenderProps = Readonly<{
   disabled: boolean;
   focusTriggerRef: RefObject<() => void>;
@@ -48,10 +46,8 @@ export type ProfileBlockActionTarget =
       profileBlock: ProfileBlockAction_profileBlock$key;
     };
 
-type Props = ProfileBlockActionTarget & {
-  onActionRef?: (node: View | null) => void;
-  onFeedback?: (feedback: ProfileBlockFeedback) => void;
-} & (
+type Props = ProfileBlockActionTarget &
+  (
     | {
         icon: ActionMenuItem['icon'];
         renderMenuItem: (props: ProfileBlockMenuItemRenderProps) => ReactNode;
@@ -63,8 +59,6 @@ type Props = ProfileBlockActionTarget & {
 export function ProfileBlockAction({
   icon,
   nextBlocked,
-  onActionRef,
-  onFeedback,
   profile,
   profileBlock,
   renderMenuItem,
@@ -117,7 +111,6 @@ export function ProfileBlockAction({
           : '차단을 해제하지 못했어요. 다시 시도해 주세요.',
       { tone: status === 'success' ? 'success' : 'danger' },
     );
-    onFeedback?.({ blocked: nextBlocked, status });
   };
   const request = async () => {
     if (inFlight.current) {
@@ -153,10 +146,6 @@ export function ProfileBlockAction({
     completed.current = () => notify(status);
     setOpen(false);
   };
-  const controlRef = (node: View | null) => {
-    actionRef.current = node;
-    onActionRef?.(node);
-  };
   const activate = () => setOpen(true);
 
   return (
@@ -173,7 +162,7 @@ export function ProfileBlockAction({
             'relativeHandle' in targetProfile ? targetProfile.relativeHandle : ''
           } ${label}`.replace(/\s+/g, ' ')}
           accessibilityState={{ busy: pending, disabled: pending }}
-          controlRef={controlRef}
+          controlRef={actionRef}
           disabled={pending}
           onPress={activate}
           style={{ minWidth: 96, width: 96 }}
