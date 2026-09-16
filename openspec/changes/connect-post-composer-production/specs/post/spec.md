@@ -36,6 +36,7 @@
 - **AND** Rail의 `112px` Media gallery는 본문 scroller 밖 별도 영역에 표시하고 footer는 항상 가시 상태로 유지한다
 - **AND** Overlay가 상·하 `48px` gutter를 제외한 최대 높이에 도달하면 author·editor header·CW·footer를 유지하고 body·Media만 가운데 scroller에서 scroll한다
 - **AND** Rail의 editor outline과 개인정보 처리방침 footer는 우측 column 왼쪽에서 16px인 같은 기준선에 맞춘다
+- **AND** Rail 본문에 focus가 있으면 TextInput 자체가 아니라 editor outline 전체를 primary 색으로 표시하고, Overlay·모바일 본문과 CW·ALT에는 이 외곽 강조를 적용하지 않는다
 - **AND** Rail editor header의 공개 범위와 Expand control은 본문 작성 영역의 좌우 기준선에 맞춘다
 - **AND** Content Warning은 editor header 다음에 표시하고 Media gallery보다 앞에 둔다
 - **AND** 모바일 전체 화면의 기존 높이·scroll 계약을 변경하지 않는다

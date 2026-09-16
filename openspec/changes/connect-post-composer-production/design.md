@@ -55,9 +55,10 @@ Composer surface의 내부 close는 같은 Profile lifecycle의 local draft owne
 - retired direct `/compose` route를 compatibility redirect나 host-opening adapter로 되살리지 않는다. bare `compose` 예약 handle은 해제하지 않는다.
 - Poll·Emoji action에 no-op callback을 연결해 활성 control로 노출하지 않는다.
 - 일반 Post 연결을 `ReplyComposerSurface` 변경으로 확장하지 않는다.
-- 본문·CW·ALT 입력은 `docs/design/figma.md`의 2026-09-12 검토 결정에 따라 caret·selection으로 focus를
-  표시한다. 공용 `TextField`의 outline·focused border 두께는 해당 consumer에서만 해제하고 외곽 강조는
-  추가하지 않는다. 버튼·탭의 focus 표시와 상위 host의 focus 이동·trap·restore는 유지한다.
+- 본문·CW·ALT 입력은 `docs/design/figma.md`의 검토 결정에 따라 caret·selection으로 focus를 표시한다. 공용
+  `TextField`의 outline·focused border 두께는 해당 consumer에서만 해제하고, Rail 본문 focus는 TextInput 대신
+  editor outline 전체를 primary 색으로 표시한다. Overlay·모바일 본문과 CW·ALT에는 이 외곽 강조를 적용하지 않는다.
+  버튼·탭의 focus 표시와 상위 host의 focus 이동·trap·restore는 유지한다.
 
 ## Risks / Trade-offs
 

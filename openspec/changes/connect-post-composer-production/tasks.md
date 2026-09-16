@@ -149,12 +149,13 @@ Production 연결 결과와 실제 검증 범위가 Storybook, 디자인 문서�
 - Web browser에서 Full Light/Dark, compact Dark short viewport, 모바일 Light/Dark의 작성창 배치를 확인했다.
   Android/iOS menu Modal 종료 후 focus 복귀와 ALT 입력 시 IME reveal은 실제 runtime 미검증이다.
 
-### 입력 focus 표시 후속 검증 — 2026-09-12
+### 입력 focus 표시 후속 검증 — 2026-09-12, 2026-09-16 정정
 
-- 사용자 화면 검토에 따라 본문·CW·ALT의 outline과 focus에 따른 border 두께 변화만 제거했다. 외곽 강조는
-  추가하지 않았고 공용 TextField·Reply, 버튼·탭과 Overlay focus lifecycle은 유지했다.
-- 기존 Composer·Media editor·Shell Tests story 37개가 통과했다. 실제 입력 후 focused/blurred border·outline과
-  값 보존을 검증하며 새 테스트 fixture나 Playground 자동 interaction은 추가하지 않았다.
+- 본문·CW·ALT 입력 자체의 outline과 focus에 따른 border 두께 변화는 제거했다. 2026-09-16 사용자 화면 검토로
+  Rail 본문 focus는 TextInput 대신 editor outline 전체를 primary 색으로 표시하고, Overlay·모바일 본문과 CW·ALT에는
+  이 외곽 강조를 적용하지 않도록 정정했다. 공용 TextField·Reply, 버튼·탭과 Overlay focus lifecycle은 유지했다.
+- 기존 Composer·Media editor·Shell Tests story와 `RailFocusBoundaryContract`가 실제 입력의 focused/blurred
+  border·outline, Rail editor 외곽 primary 표시와 값 보존을 검증한다. Playground 자동 interaction은 추가하지 않았다.
 - 실제 Metro dev에서 Rail·Overlay·모바일 본문과 CW의 caret·입력·Tab 이동 및 도구 버튼의 keyboard focus
   표시를 확인했다. ALT는 공용 컴포넌트 Storybook의 Web Light·모바일 Dark에서 확인했으며 실제 storage upload나
   Native IME 검증으로 간주하지 않는다.
