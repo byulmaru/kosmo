@@ -1,5 +1,5 @@
 import { Link, useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -205,7 +205,10 @@ export function PostSourcePreview({
   style?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
-  const { handlers, hovered } = usePostSurfaceFeedback({ hover: interactive, press: false });
+  const { handlers, hovered } = usePostSurfaceFeedback({
+    hover: interactive && Platform.OS === 'web',
+    press: false,
+  });
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
   const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
   const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
