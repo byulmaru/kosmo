@@ -5,6 +5,7 @@ import { cloneElement, createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactElement } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { SettingsLinkRowProps } from './SettingsLinkRow';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -73,19 +74,7 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
-type Props = {
-  accessibilityLabel: string;
-  description?: string;
-  external?: boolean;
-  href: string;
-  label: string;
-  onNavigate?: () => void;
-  primary?: boolean;
-  selected?: boolean;
-  testID?: string;
-};
-
-let SettingsLinkRow: ComponentType<Props>;
+let SettingsLinkRow: ComponentType<SettingsLinkRowProps>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
@@ -307,7 +296,7 @@ describe('SettingsLinkRow', () => {
   });
 });
 
-async function render(props: Props) {
+async function render(props: SettingsLinkRowProps) {
   await act(async () => {
     renderer = create(createElement(SettingsLinkRow, props));
   });

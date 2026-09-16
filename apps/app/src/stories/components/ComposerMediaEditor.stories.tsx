@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ComposerMediaEditor } from '@/components/post/ComposerMediaEditor';
 import ogImage from '../../../public/og-default.png?url';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -46,7 +46,7 @@ const meta = {
     media: { control: 'object' },
     mobileState: {
       control: 'select',
-      options: ['default', 'altKeyboard', 'sensitive'],
+      options: ['default', 'alt', 'altKeyboard', 'sensitive'],
     },
     onAltTextChange: { action: 'altTextChange', control: false },
     onBack: { action: 'back', control: false },
@@ -225,6 +225,9 @@ export const InteractionContract: Story = {
     const canvas = within(canvasElement);
 
     expect(canvas.getByRole('heading', { name: '미디어 편집' })).toBeVisible();
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '미디어 편집에서 뒤로' })).toHaveFocus(),
+    );
     expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toHaveValue(
       '노을빛 밤하늘 아래 모인 사람들',
     );

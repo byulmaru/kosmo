@@ -161,6 +161,7 @@ const meta = {
     'MobileKeyboardMediaEditorGeometryContract',
     'MobileMediaFooterGeometryContract',
     'MobilePlaygroundContract',
+    'MobileRuntimeAltEditorContract',
     'MobileFlexLayoutContract',
     'OverlayProgressRingContract',
     'PendingMediaContract',
@@ -828,6 +829,7 @@ export const MobileCandidateContract: Story = {
     expect(canvas.getByLabelText('남은 글자 수 500자')).toBeVisible();
     expect(canvas.getByTestId('post-composer-progress-ring')).toBeVisible();
     expect(canvas.queryByRole('button', { name: 'Composer 확장' })).not.toBeInTheDocument();
+    expect(canvas.queryByTestId('illustrative-system-keyboard')).toBeNull();
   },
 };
 
@@ -869,6 +871,35 @@ export const MobilePlaygroundContract: Story = {
     expect(canvas.queryByTestId('mobile-composer-media-editor-keyboard')).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '완료' }));
     expect(canvas.getByRole('heading', { name: '글쓰기' })).toBeVisible();
+  },
+};
+
+export const MobileRuntimeAltEditorContract: Story = {
+  render: () => (
+    <ComposerMediaEditor
+      media={readyComposerMedia}
+      mobileState="alt"
+      onAltTextChange={fn()}
+      onBack={fn()}
+      onClose={fn()}
+      onDone={fn()}
+      onSelectMedia={fn()}
+      onSensitiveMediaChange={fn()}
+      onToolChange={fn()}
+      presentation="mobile"
+      selectedKey="ready"
+      sensitiveMedia={false}
+      tool="alt"
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '미디어 편집에서 뒤로' })).toHaveFocus(),
+    );
+    expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toBeVisible();
+    expect(canvas.queryByTestId('mobile-composer-media-editor-keyboard')).toBeNull();
+    expect(canvas.queryByTestId('illustrative-system-keyboard')).toBeNull();
   },
 };
 
