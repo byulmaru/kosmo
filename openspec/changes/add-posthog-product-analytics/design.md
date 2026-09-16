@@ -93,7 +93,7 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮겼고, PROD-820은 PostHog Clou
 ### 권장 작업 순서
 
 1. 병합된 runtime·build commit `2176b7e38`·`47fb36f52`와 PROD-839 cleanup이 함께 적용되는 release·rebuild·rollback 범위를 식별한다. 두 선행 PR의 병합만으로 cleanup·통합 완료를 선언하지 않는다.
-2. 수집 표면별 관측 결과를 먼저 정리한 다음 개인정보 화면을 수정한다. 기존 `apps/app/src/app/privacy.tsx`의 분석·위탁·국외 이전·권리 행사 절을 대상으로 하며, 시행일과 일반 이벤트 보존·삭제 및 국외 처리 조건은 아래 미확정 항목을 해결한 뒤 공개 문구로 확정한다.
+2. 수집 표면별 관측 결과를 먼저 정리한 다음 개인정보 화면을 수정한다. 기존 `apps/app/src/app/privacy.tsx`의 분석·위탁·국외 이전·권리 행사 절을 대상으로 하며, 2026-09-16 결정의 국외 처리 경로와 필수 고지 항목을 반영하고 시행일과 일반 이벤트 보존·삭제는 아래 미확정 항목으로 남긴다.
 3. 기존 `docs/operations/openpanel.md`의 provider 전용 안내와 `production-release.md` 링크를 PostHog 운영 안내로 전환한다. 실제 삭제·장애 대응 절차를 대조하고, PROD-839 gate 전에는 지원 중인 OpenPanel 경로 안내를 제거하지 않는다. 이전 안내는 Git 이력에서 추적할 수 있게 한다.
 4. 기존 unit·browser 검증은 같은 build와 source를 기준으로 재사용한다. 이미 PROD-819에서 확인한 helper 동작을 반복하기보다는 `/flags` 등 빠진 표면과 문서·운영 설정이 맞물리는 경계를 보완한다. 테스트 편의를 위해 production adapter를 바꾸지 않는다.
 5. PROD-795 자체 검증 결과를 모으고, 실제 Replay 품질은 PROD-741에, production 수집 인수와 archive는 PROD-575에 인계한다. source·artifact가 바뀌면 영향을 받는 검증을 다시 확인한다.
@@ -117,7 +117,7 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮겼고, PROD-820은 PostHog Clou
 - [Replay retention](https://github.com/PostHog/posthog.com/blob/master/contents/docs/session-replay/recording-retention.mdx)은 새 보존 설정이 이후 수집분에 적용된다고 설명한다. 플랜 상한, 실제 프로젝트 설정, 과거 녹화에 적용되는 기간과 삭제 완료 시점을 구분한다.
 - [JS persistence](https://posthog.com/docs/libraries/js/persistence)는 기본 cookie·localStorage 저장을 설명한다. 실제 Kosmo SDK 설정과 대조해 고지하고, 브라우저 cookie 수명을 서버 분석 데이터 보존기간으로 쓰지 않는다.
 - 설정 필드의 의미는 [공식 Team model](https://github.com/PostHog/posthog/blob/master/posthog/models/team/team.py)을 참고하되, 조회 시점의 API·플랜·실제 처리 증거를 우선한다. 이 자료는 기술적 사실의 근거이며 한국 개인정보 처리·국외 이전의 법적 근거를 대신 결정하지 않는다.
-- 국외 이전 고지는 [개인정보보호위원회 안내](https://www.pipc.go.kr/np/default/page.do?mCode=D060040010)를 대조해 적용 가능한 근거와 필요한 고지·보호 조치를 확인한다. PostHog를 사용한다는 사실만으로 특정 예외에 해당한다고 판단하지 않는다.
+- 국외 이전 고지는 [개인정보보호위원회 안내](https://www.pipc.go.kr/np/default/page.do?mCode=D060040010)를 대조해 필요한 고지·보호 조치를 확인한다. 2026-09-16 [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 국외 처리 고지 방식 결정에 따라 제28조의8 제1항 제3호 가목의 계약 체결·이행에 필요한 처리위탁·보관 및 이 방침 공개 경로를 적용하되, 이 결정이 실제 계약·DPA 체결 사실을 대신 증명하지는 않는다.
 
 ## Migration Plan
 
@@ -133,5 +133,4 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮겼고, PROD-820은 PostHog Clou
 
 - 공개 개인정보 처리방침의 개정 시행일과 사전 고지 일정은 미확정이다. 과거 시행일을 그대로 둔 채 새 PostHog 처리가 그때부터 적용된 것처럼 쓰지 않는다.
 - 일반 이벤트의 보존·삭제 운영 기준과 실제 제공자 적용 조건을 확인해야 한다. `event_retention_months=12`만으로 자동 삭제를 약속하지 않으며, 새로운 고정 보존기간을 이 명세에서 선택하지 않는다.
-- 미국 처리의 실제 계약·이전 항목·시점·방법·보유 조건과 적용할 법적 근거를 개인정보 고지 책임자와 확인해야 한다. 제공자 공개 문서만으로 국내법상 근거를 확정하지 않는다.
-- 위 공개 고지 조건은 PROD-795가 확인·결정 기록을 소유한다. 확정된 부분의 문서·검증 준비와 별개로, 미확정 조건을 사용한 공개 문구 확정 및 6.1 완료는 보류한다. PROD-795 Spec Gate 최종 승인도 미확정 항목과 처리 방침을 검토한 뒤 받는다.
+- 위 공개 고지 조건 중 시행일과 일반 이벤트 보존·삭제는 PROD-795가 확인·결정 기록을 소유한다. 국외 처리 경로는 2026-09-16 결정에 따라 반영하되 선택적 분석을 계약 이행에 필요한 처리위탁으로 보는 법적 판단의 잔여 위험은 인지된 전제다. 미확정 조건은 확정된 사실처럼 공개하지 않는다.
