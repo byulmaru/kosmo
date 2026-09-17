@@ -120,9 +120,7 @@ describe('SettingsNavigationList', () => {
     const notificationIndex = rows.findIndex(
       (node) => node.props.testID === 'native-notification-settings',
     );
-    const infoIndex = rows.findIndex(
-      (node) => node.props.accessibilityLabel === '정보 설정 열기',
-    );
+    const infoIndex = rows.findIndex((node) => node.props.accessibilityLabel === '정보 설정 열기');
     const notification = rows[notificationIndex];
 
     assert.equal(notificationIndex, muteIndex + 1);
