@@ -433,15 +433,25 @@ test(
 test('Remote Profile Activity는 profileId 증거에 따라 origin을 선택하고 actor metadata 결손을 거부한다', async (t) => {
   const origins: string[] = [];
   const lookupUris: Array<string | URL> = [];
+  const lookupDocumentLoaders: unknown[] = [];
+  const documentLoaderIdentifiers: string[] = [];
+  const documentLoaders: unknown[] = [];
   let lookupCalls = 0;
   const actorDomains = ['omitted-target.example', 'local-target.example', 'remote-target.example'];
   t.mock.method(federation, 'createContext', (origin: URL) => {
     origins.push(origin.origin);
     const actorDomain = actorDomains[origins.length - 1]!;
     return {
-      lookupObject: async (identifier: string | URL) => {
+      getDocumentLoader: async ({ identifier }: { identifier: string }) => {
+        documentLoaderIdentifiers.push(identifier);
+        const documentLoader = async () => ({}) as never;
+        documentLoaders.push(documentLoader);
+        return documentLoader;
+      },
+      lookupObject: async (identifier: string | URL, options?: { documentLoader?: unknown }) => {
         lookupCalls += 1;
         lookupUris.push(identifier);
+        lookupDocumentLoaders.push(options?.documentLoader);
         return createActor({ id: new URL(`https://${actorDomain}/users/alice`) });
       },
     } as never;
@@ -480,6 +490,10 @@ test('Remote Profile Activity는 profileId 증거에 따라 origin을 선택하�
     'https://remote-target.example/users/alice',
   ]);
   assert.equal(lookupCalls, 3);
+  assert.deepEqual(documentLoaderIdentifiers, [localProfile.id]);
+  assert.equal(lookupDocumentLoaders[0], undefined);
+  assert.equal(lookupDocumentLoaders[1], documentLoaders[0]);
+  assert.equal(lookupDocumentLoaders[2], undefined);
   for (const profileId of [omittedProfileId, localProfileId, remoteProfileId]) {
     const stored = await readStoredProfile(profileId);
     assert.equal(stored.profile.id, profileId);

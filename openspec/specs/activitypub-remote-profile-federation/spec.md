@@ -24,7 +24,7 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 
 ### Requirement: Remote actor materialization through Fedify lookup
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md`, `PROD-808`, `PROD-248`. 시스템은 명시적인 qualified handle 검색을 `RemoteProfileLookupInput { domain, handle, profileId? }`로 public `remoteProfileLookupWorkflow`에 dispatch하고, Workflow가 URI lookup Activity에서 받은 canonical `actorUri`를 `materializeRemoteProfileActorActivity`에 전달해 remote ActivityPub actor를 kosmo `Profile`로 materialize해야 한다(MUST). Materialize Activity가 stored/missing 판정, 현재 state·TTL 확인과 missing fetch 경계를 소유하고, 반환된 `needsRefresh`가 true일 때만 Workflow가 stale refresh child를 시작해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md`, `PROD-808`, `PROD-248`, `PROD-981`. 시스템은 명시적인 qualified handle 검색을 `RemoteProfileLookupInput { domain, handle, profileId? }`로 public `remoteProfileLookupWorkflow`에 dispatch하고, Workflow가 URI lookup Activity에서 받은 canonical `actorUri`를 `materializeRemoteProfileActorActivity`에 전달해 remote ActivityPub actor를 kosmo `Profile`로 materialize해야 한다(MUST). Materialize Activity가 stored/missing 판정, 현재 state·TTL 확인과 missing fetch 경계를 소유하고, 반환된 `needsRefresh`가 true일 때만 Workflow가 stale refresh child를 시작해야 한다(MUST).
 
 #### Scenario: Look up and materialize remote actor from a qualified handle
 
@@ -32,10 +32,11 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 - **THEN** caller는 `RemoteProfileLookupInput { domain, handle, profileId? }`로 `runWorkflow(remoteProfileLookupWorkflow, ...)`를 호출하고 native conflict/reuse policy를 선택한다
 - **AND** `lookupRemoteActorUriActivity`는 저장된 canonical actor URI를 먼저 재사용하고, 없을 때만 WebFinger의 ActivityPub self link에서 canonical actor URI를 확인한다
 - **AND** Workflow는 URI lookup Activity에서 받은 canonical `actorUri`와 선택적인 acting `profileId`를 `materializeRemoteProfileActorActivity`에 전달하며, 이 materialization boundary에는 handle lookup input을 전달하지 않는다
-- **AND** `materializeRemoteProfileActorActivity`는 stored/missing 판정과 현재 Profile/Instance 상태·actor TTL 확인을 소유하며 `{ profileId, needsRefresh }` non-null 최소 JSON-safe DTO를 반환한다. Activity 모듈의 private stored-state query에서 missing을 `null`로 관찰할 수 있지만, missing이면 materialize Activity가 `refreshRemoteProfileActorActivity`의 fetch·persist를 ordinary call로 수행한 뒤 새 target ID를 `{ profileId: id, needsRefresh: false }` 의미로 반환한다. DTO의 `profileId`는 cached 또는 새로 생성한 target Remote Profile ID이고 input의 선택적인 `profileId`는 origin 선택용 행동 Profile ID다
+- **AND** `materializeRemoteProfileActorActivity`는 stored/missing 판정과 현재 Profile/Instance 상태·actor TTL 확인을 소유하며 `{ profileId, needsRefresh }` non-null 최소 JSON-safe DTO를 반환한다. Activity 모듈의 private stored-state query에서 missing을 `null`로 관찰할 수 있지만, missing이면 materialize Activity가 `refreshRemoteProfileActorActivity`의 fetch·persist를 ordinary call로 수행한 뒤 새 target ID를 `{ profileId: id, needsRefresh: false }` 의미로 반환한다. DTO의 `profileId`는 cached 또는 새로 생성한 target Remote Profile ID이고 input의 선택적인 `profileId`는 origin 선택용 행동 Profile ID이며, 선택된 Profile이 Local instance에 속할 때만 actor-document 인증 loader를 선택하는 데 사용한다
 - **AND** 전달된 actor URI에 저장된 remote Profile 또는 actor metadata가 없어도 새 remote `Profile`을 materialize할 수 있다
 - **AND** `profileId`가 없으면 configured Local Instance의 canonical origin을 사용하고, 있으면 해당 Profile의 Local Instance canonical origin 또는 Remote actor URI origin을 사용하며, 필요한 actor 정보가 없으면 origin을 추측하지 않고 실패 처리한다
-- **AND** `profileId`는 기존 unsigned lookup의 권한을 대신하지 않는다
+- **AND** input에 `profileId`가 있고 선택된 행동 Profile의 instance kind가 `LOCAL`이면 actor-document lookup은 context의 `getDocumentLoader({ identifier: profileId })`가 반환한 document loader를 사용한다. profileId가 없거나 선택된 행동 Profile이 remote ActivityPub instance에 속하면 context의 기본 unsigned document loader를 사용한다
+- **AND** WebFinger discovery는 actor-document 인증 loader를 적용하지 않으며, actor-document lookup에서 선택한 loader를 사용한 요청이 실패해도 별도 unsigned fallback retry를 수행하지 않는다
 - **AND** WebFinger discovery는 Actor Instance 상태 판정 전에 수행할 수 있지만 WebFinger 응답만으로 Instance를 추출하거나 상태를 판정하지 않는다
 - **AND** 기존 instance가 없으면 canonical actor URI host의 normalized domain에 ActivityPub instance를 생성한다
 - **AND** Fedify가 ActivityPub actor 객체를 반환하면 해당 actor의 canonical actor URI를 remote identity로 처리한다

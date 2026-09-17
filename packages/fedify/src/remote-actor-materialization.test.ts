@@ -14,7 +14,7 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { count, eq, ne } from 'drizzle-orm';
-import type { Context } from '@fedify/fedify';
+import type { Context, DocumentLoader } from '@fedify/fedify';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -115,6 +115,26 @@ describe('remote actor materialization', () => {
     assert.equal(stored.actor.followingUri, `https://${remoteDomain}/users/alice/following`);
     assert.equal(stored.actor.sharedInboxUri, `https://${remoteDomain}/inbox`);
     assert.equal(stored.actor.lastFetchedAt?.toString(), now.toString());
+  });
+
+  test('passes an optional document loader to actor lookup', async () => {
+    const documentLoader: DocumentLoader = async (url) => ({
+      contextUrl: null,
+      document: {},
+      documentUrl: url,
+    });
+    const { context, lookupObject } = createLookupContext(async () => createActor());
+
+    await materializeRemoteProfileActor({
+      context,
+      actorUri: remoteActorUri,
+      documentLoader,
+    });
+
+    const lookupOptions = (lookupObject.mock.calls[0]?.arguments[1] ?? {}) as {
+      documentLoader?: DocumentLoader;
+    };
+    assert.equal(lookupOptions.documentLoader, documentLoader);
   });
 
   test('stores the first validated actor profile URL and clears it on refresh', async () => {
