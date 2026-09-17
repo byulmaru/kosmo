@@ -9,22 +9,71 @@
 
 AWS Terraform root is documented in [apps/terraform/README.md](apps/terraform/README.md).
 
-## Development Secrets
+## Local Development
 
-Dev scripts load environment variables from Vault through `scripts/vault-run.mjs`.
-Install the Vault CLI and set `VAULT_ADDR`; if needed, the wrapper runs
-`vault login -method=oidc` before reading secrets. Use normal workspace scripts
-such as `pnpm dev`. The default secret path is
-`secret/kubernetes/kosmo/local`; use
-`node scripts/vault-run.mjs --env dev -- pnpm --recursive --parallel --if-present dev`
-or `node scripts/vault-run.mjs --secret-path secret/kubernetes/kosmo/dev -- <command>`
-to point at another path.
+Install Docker and the Vault CLI, set `VAULT_ADDR`, and authenticate with Vault.
+The wrapper runs `vault login -method=oidc` when the current token is unavailable.
+An operator must set the following local-only values; repository scripts never
+create, update, delete, copy, or print these credentials.
 
-Application processes read their PostgreSQL connection only from `PGHOST`,
-`PGPORT`, `PGUSER`, `PGDATABASE`, and `PGPASSWORD`. Vault environments used by
-`pnpm dev` must provide those keys. The Fedify queue keeps its separate database
-URL and role boundary. The target connection boundary is documented in
-[ADR 0024](docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md).
+`secret/kubernetes/kosmo/local`:
+
+- `PGHOST=127.0.0.1`
+- `PGPORT=54328`
+- `PGDATABASE=kosmo`
+- `PGUSER=kosmo_runtime`
+- `PGPASSWORD`: local application runtime password
+- `FEDIFY_QUEUE_DATABASE_URL=postgres://kosmo_fedify_queue@127.0.0.1:54328/kosmo_fedify_queue`
+- `FEDIFY_QUEUE_DATABASE_PASSWORD`: local Fedify queue role password
+- `PUBLIC_ORIGIN`: existing local public origin, normally `http://localhost:5173`
+- the existing local application keys required by API, Web, and App
+
+`secret/kubernetes/kosmo/local/postgres-bootstrap`:
+
+- `LOCAL_POSTGRES_ADMIN_PASSWORD`: local container administrator password
+- `LOCAL_POSTGRES_OWNER_PASSWORD`: local migration owner `kosmo` password
+
+Do not copy dev or production database credentials into either path. Application
+processes use only canonical `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and
+`PGPASSWORD`; they do not use `DATABASE_URL`. The migration owner, non-owner
+`kosmo_runtime`, and `kosmo_fedify_queue` database/role remain separate as defined
+by [ADR 0024](docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md).
+
+For a new or empty PostgreSQL volume, run the explicit one-time preparation:
+
+```sh
+pnpm local:prepare
+```
+
+This starts local PostgreSQL, prepares the roles and databases, applies
+immutable migrations as owner `kosmo`, and creates the configured Local
+Instance as `kosmo_runtime`. The command is idempotent, but it is not part of the
+normal service startup path.
+
+For everyday development, run:
+
+```sh
+pnpm dev
+```
+
+This starts the prepared PostgreSQL, reuses the repository's existing ephemeral
+Temporal development server, then runs API, Web, App, Worker, and the Fedify
+queue consumer. It does not run migrations, bootstrap the Local Instance, reset,
+seed, or delete database data. Run `pnpm local:down` to stop PostgreSQL while
+preserving its named volume. Temporal stops with the development process.
+Removing the PostgreSQL volume is an explicit destructive operation and is not
+part of the normal local commands.
+
+Before starting application processes, the command validates the fixed local
+PostgreSQL and queue targets and required credential keys. Authentication and
+connection errors are reported by the API, Worker, or Fedify consumer that owns
+the connection. Role, ownership, and ACL invariants are established by
+`pnpm local:prepare` and covered by focused integration tests; normal `pnpm dev`
+does not repeat that privileged probe.
+Only database-using services receive runtime credentials; the Expo App and
+Temporal helper processes receive neither PostgreSQL nor queue credentials.
+pnpm owns the child process lifecycle and one interrupt stops the development
+processes.
 
 The API uses `MEDIA_STORAGE_SERVICE_ORIGIN` and `MEDIA_STORAGE_SERVICE_API_KEY`
 to issue browser upload URLs and persist the completed public representation
@@ -35,6 +84,19 @@ Run `pnpm dev`, then open `http://localhost:5173`. Local development uses Expo/M
 on public port `5173`, the Hono web BFF on internal port `5174`, and the API on
 `3000`. Metro proxies the BFF routes so the browser keeps the production same-origin
 contract. Server deployments and tests override these defaults with `PORT`.
+
+### Local Runtime Ports And Storage
+
+PostgreSQL listens only on `127.0.0.1:54328` and stores data in the
+`kosmo-local-postgres_postgres-data` named volume. Worker health/readiness uses
+`127.0.0.1:8081`; Fedify consumer health/readiness uses `127.0.0.1:8082`.
+
+Temporal listens on `127.0.0.1:7233`; its coordinator-only health endpoint uses
+`127.0.0.1:8083`. `pnpm dev` reuses
+`apps/worker/src/temporal-test-server.ts`, which starts the existing ephemeral
+local server without a UI or persistent storage and stops with the development
+process. `pnpm dev:worker` starts that server and only the Worker, so do not run
+it alongside `pnpm dev`.
 
 ## Test Postgres
 

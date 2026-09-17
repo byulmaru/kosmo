@@ -8,7 +8,7 @@
     "build": "pnpm export:web",
     "build-storybook": "storybook build --disable-telemetry",
     "check": "pnpm relay && tsc --noEmit",
-    "dev": "pnpm relay && expo start --port 5173",
+    "dev": "env -u DATABASE_URL -u FEDIFY_QUEUE_DATABASE_PASSWORD -u FEDIFY_QUEUE_DATABASE_URL -u LOCAL_POSTGRES_ADMIN_PASSWORD -u LOCAL_POSTGRES_OWNER_PASSWORD -u PGDATABASE -u PGHOST -u PGPASSWORD -u PGPORT -u PGUSER sh -c 'pnpm relay && expo start --port 5173'",
     "export:web": "pnpm relay && expo export --clear --platform web",
     "ios": "expo run:ios",
     "lint:relay": "relay-compiler",
