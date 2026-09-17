@@ -119,6 +119,22 @@ test('인증된 inbound Block과 embedded Undo는 같은 원본으로 기존 관
     await db.select({ state: ProfileBlockActivities.state }).from(ProfileBlockActivities),
     [{ state: 'CLOSED' }],
   );
+
+  assert.equal(
+    await handleInboundUndoBlock({
+      context: createContext(fixture.localProfile.id),
+      actorUri: fixture.remoteActorUri,
+      embedded: new Block({
+        actor: fixture.remoteActorUri,
+        id: block.id,
+        object: fixture.localActorUri,
+      }),
+      objectUri: block.id,
+      remoteActorProfileId: fixture.remoteProfile.id,
+    }),
+    true,
+  );
+  assert.equal((await db.select().from(ProfileBlocks)).length, 0);
 });
 
 test('Block URI를 재사용한 다른 타입의 embedded Undo는 Block 해제로 소비하지 않는다', async () => {

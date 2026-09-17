@@ -202,16 +202,19 @@ export const sendProfileBlockUndo = async ({
   readonly profileBlockId: string;
   readonly targetProfileId: string;
 }): Promise<ProfileBlockDeliveryResult> => {
-  const protocol = await loadProfileBlockProtocolActivityByProfileBlockId(profileBlockId);
-  if (!protocol || protocol.origin !== 'OUTBOUND') {
+  let protocol = await loadProfileBlockProtocolActivityByProfileBlockId(profileBlockId);
+  if (protocol?.origin !== undefined && protocol.origin !== 'OUTBOUND') {
     return { reason: 'stale_source', status: 'SKIPPED' };
   }
-  if (protocol.state === 'CLOSING' || protocol.state === 'CLOSED') {
+  if (protocol?.state === 'CLOSING' || protocol?.state === 'CLOSED') {
     if (protocol.state === 'CLOSED' || protocol.undoDeliveryState === 'SETTLED') {
       return { status: 'SETTLED' };
     }
   }
-  if (protocol.ownerProfileId !== ownerProfileId || protocol.targetProfileId !== targetProfileId) {
+  if (
+    protocol !== undefined &&
+    (protocol.ownerProfileId !== ownerProfileId || protocol.targetProfileId !== targetProfileId)
+  ) {
     return { reason: 'stale_source', status: 'SKIPPED' };
   }
 
@@ -221,14 +224,11 @@ export const sendProfileBlockUndo = async ({
   if (!source) {
     return { reason: 'stale_source', status: 'SKIPPED' };
   }
+  if (source.ownerProfileId !== ownerProfileId || source.targetProfileId !== targetProfileId) {
+    return { reason: 'stale_source', status: 'SKIPPED' };
+  }
   if (source.targetInstanceKind !== InstanceKind.ACTIVITYPUB) {
     return { reason: 'not_remote_target', status: 'SKIPPED' };
-  }
-  if (protocol.deliveryState !== 'SETTLED') {
-    const blockResult = await sendProfileBlock(profileBlockId);
-    if (blockResult.status !== 'SETTLED') {
-      return blockResult;
-    }
   }
   if (!source?.canonicalOrigin) {
     return { reason: 'recipient_unavailable', status: 'PENDING' };
@@ -237,6 +237,21 @@ export const sendProfileBlockUndo = async ({
   const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
     localInstanceId: source.localInstanceId,
   });
+  const defaultActorUri = context.getActorUri(ownerProfileId);
+  if (protocol === undefined) {
+    if (!source.targetActorUri) {
+      return { reason: 'recipient_unavailable', status: 'PENDING' };
+    }
+    protocol = await ensureProfileBlockProtocolActivity({
+      activityUri: getProfileBlockActivityUri(context.canonicalOrigin, profileBlockId).href,
+      actorUri: defaultActorUri.href,
+      objectUri: source.targetActorUri,
+      origin: 'OUTBOUND',
+      ownerProfileId,
+      profileBlockId,
+      targetProfileId,
+    });
+  }
   const actorUri = new URL(protocol.actorUri);
   const objectUri = new URL(protocol.objectUri);
   const blockUri = new URL(protocol.activityUri);

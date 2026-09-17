@@ -162,7 +162,7 @@ export const handleInboundBlock = async (
     throw error;
   }
 
-  if (!result.created || existingProtocol?.state === 'CLOSED') {
+  if (!result.created) {
     observeInbound({
       activityType: 'Block',
       actorOrigin: actorUri.origin,
@@ -310,7 +310,7 @@ export const handleInboundUndoBlock = async ({
     return true;
   }
 
-  if (!stored.profileBlockId) {
+  if (stored.state === 'CLOSED' || !stored.profileBlockId) {
     observeInbound({
       activityType: 'Undo',
       actorOrigin: actorUri.origin,

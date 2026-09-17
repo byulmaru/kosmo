@@ -2,8 +2,8 @@ import '../polyfill';
 
 import { ApplicationFailure } from '@temporalio/client';
 import { ConflictError, NotFoundError, PermissionDeniedError, ValidationError } from '../error';
-import type { ProfileBlockProtocolActivityInput } from '../services/profile-block-protocol';
 import { runWorkflow } from './client';
+import type { ProfileBlockProtocolActivityInput } from '../services/profile-block-protocol';
 import type { WorkflowUpdateDefinition } from './client';
 
 export const PROFILE_BLOCK_WORKFLOW_TYPE = 'profileBlockWorkflow';
