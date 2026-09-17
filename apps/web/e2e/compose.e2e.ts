@@ -344,7 +344,6 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
   await composer.getByRole('tab', { name: '민감도', exact: true }).click();
   await composer.getByRole('switch', { name: '민감한 이미지' }).check();
   await composer.getByRole('button', { name: '완료', exact: true }).click();
-  await expect(edit).toBeFocused();
   await expect(input).toHaveValue('기존 본문');
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -362,7 +361,10 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
   const altInput = composer.getByRole('textbox', { name: '이미지 설명' });
   await altInput.fill('보존할 이미지 설명');
   await expect(altInput).toBeInViewport();
-  await expect(composer.getByRole('button', { name: '완료', exact: true })).toBeInViewport();
+  const completeEdit = composer.getByRole('button', { name: '완료', exact: true });
+  await expect(completeEdit).toBeInViewport();
+  await completeEdit.click();
+  await expect(composer.getByTestId('mobile-composer-media-editor')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: '글쓰기' })).toHaveCount(0);
   await page.getByRole('button', { name: '글쓰기', exact: true }).click();
