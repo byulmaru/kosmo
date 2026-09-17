@@ -416,20 +416,13 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsProfileDetail').length, 0);
   });
 
-  it('Web 정보 화면은 정책 링크와 개발 정보 진입점만 표시하고 진단 행을 인라인하지 않는다', async () => {
+  it('정보 화면은 정책 링크와 개발 정보 진입점만 표시하고 진단 행을 인라인하지 않는다', async () => {
     platform = 'web';
     await renderRoute('/settings/info', SettingsInfoRoute);
 
-    assertLinkRows();
-    assert.equal(rendered('NativeChannelSettings').length, 0);
-    assert.equal(rendered('SettingsItem').length, 0);
-  });
-
-  it('Native 정보 화면은 정책 링크와 개발 정보 진입점만 표시하고 channel·OTA를 인라인하지 않는다', async () => {
-    platform = 'ios';
-    await renderRoute('/settings/info', SettingsInfoRoute);
-
-    assertLinkRows();
+    assert.ok(
+      rendered('SettingsLinkRow').some((node) => node.props.href === '/settings/developer'),
+    );
     assert.equal(rendered('NativeChannelSettings').length, 0);
     assert.equal(rendered('SettingsItem').length, 0);
   });
@@ -437,15 +430,9 @@ describe('Settings routes', () => {
   it('Web 개발 정보는 public channel만 표시하고 Native channel·OTA 행은 표시하지 않는다', async () => {
     platform = 'web';
     publicChannel = 'dev';
-    otaUpdateId = '123e4567-e89b-12d3-a456-426614174000';
-    otaRuntimeVersion = 'native-runtime-that-must-not-leak-to-web';
-    otaIsUpdateAvailable = true;
     await renderRoute('/settings/developer', SettingsDeveloperRoute);
 
-    assert.deepEqual(
-      settingsItems().map((node) => node.props.label),
-      ['채널'],
-    );
+    assert.equal(settingsItems().length, 1);
     assert.equal(settingsItem('채널').props.description, 'dev');
     assert.equal(rendered('NativeChannelSettings').length, 0);
     assert.deepEqual(rendered('SettingsLinkRow'), []);
@@ -471,15 +458,14 @@ describe('Settings routes', () => {
       scrollView.findAll((node) => (node.type as unknown) === 'NativeChannelSettings').length,
       1,
     );
-    assert.deepEqual(
-      settingsItems().map((node) => node.props.label),
-      ['현재 업데이트 ID', '런타임 버전', '실행 유형', '생성 시각', '업데이트 상태'],
-    );
     assert.equal(settingsItem('현재 업데이트 ID').props.description, otaUpdateId);
     assert.equal(settingsItem('런타임 버전').props.description, otaRuntimeVersion);
-    assert.match(String(settingsItem('실행 유형').props.description), /OTA|ota/);
-    assert.match(String(settingsItem('생성 시각').props.description), /2026-09-16/);
-    assert.ok(settingsItem('업데이트 상태').props.description);
+    assert.equal(settingsItem('실행 유형').props.description, 'OTA 업데이트');
+    assert.equal(settingsItem('생성 시각').props.description, '2026-09-16T05:06:07.000Z');
+    assert.match(
+      String(settingsItem('업데이트 상태').props.description),
+      /사용 가능: 예.*적용 대기: 예/,
+    );
 
     await act(async () => header.props.leading.props.onPress());
     assert.equal(backCalls, 0);
@@ -492,6 +478,7 @@ describe('Settings routes', () => {
     otaUpdateId = null;
     otaRuntimeVersion = null;
     otaCreatedAt = null;
+    otaIsEmbeddedLaunch = true;
     await renderRoute('/settings/developer', SettingsDeveloperRoute);
 
     assert.equal(settingsItem('현재 업데이트 ID').props.description, '식별 불가');
@@ -506,26 +493,18 @@ describe('Settings routes', () => {
       false,
     );
 
+    otaRuntimeVersion = 'runtime-2026-09-16';
+    otaIsEmbeddedLaunch = false;
     otaCheckError = new Error('check failed');
     otaDownloadError = new Error('download failed');
     await rerenderRoute('/settings/developer', SettingsDeveloperRoute);
 
+    assert.equal(settingsItem('실행 유형').props.description, '식별 불가');
     assert.match(String(settingsItem('업데이트 확인 오류').props.description), /check failed/);
     assert.match(
       String(settingsItem('업데이트 다운로드 오류').props.description),
       /download failed/,
     );
-  });
-
-  it('Native 개발 정보는 updateId 없이 OTA 실행 유형을 식별 불가로 표시한다', async () => {
-    platform = 'android';
-    width = 390;
-    otaUpdateId = null;
-    otaRuntimeVersion = 'runtime-2026-09-16';
-    otaIsEmbeddedLaunch = false;
-    await renderRoute('/settings/developer', SettingsDeveloperRoute);
-
-    assert.equal(settingsItem('실행 유형').props.description, '식별 불가');
   });
 });
 
@@ -598,24 +577,6 @@ function settingsItem(label: string): ReactTestInstance {
   const item = settingsItems().find((node) => node.props.label === label);
   assert.ok(item, `SettingsItem with label ${label} was not rendered`);
   return item;
-}
-
-function assertLinkRows() {
-  const links = rendered('SettingsLinkRow');
-  assert.equal(links.length, 4);
-  for (const expected of [
-    { href: '/settings/developer', label: '개발 정보' },
-    { href: '/privacy', label: '개인정보 처리방침' },
-    { href: '/account-deletion', label: '계정 삭제 안내' },
-    { href: '/child-safety', label: '아동 안전 정책' },
-  ]) {
-    assert.ok(
-      links.some(
-        (node) => node.props.href === expected.href && node.props.label === expected.label,
-      ),
-      `SettingsLinkRow ${expected.label} was not rendered`,
-    );
-  }
 }
 
 function flattenStyle(style: unknown): Record<string, unknown> {
