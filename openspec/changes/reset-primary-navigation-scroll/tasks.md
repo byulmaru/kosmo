@@ -28,6 +28,7 @@ scroll offset이 남지 않는다.
 - 무guard 이동, guard 승인·취소, current route 재선택, 마지막 target이 다른 연속 navigation에서 scroll intent의
   생성·소비·취소를 자동화한다.
 - 각 breakpoint의 shell surface가 같은 route-scroll 정책을 사용하고 Native에서는 no-op임을 검증한다.
+- route-backed 홈·검색·알림·북마크·선택 Profile의 pathname-changing 이동만 reset하고, route를 바꾸지 않는 글쓰기 action은 underlying document scroll을 보존하는지 검증한다.
 
 - [x] 1.1 하단 탭, mobile drawer, compact 아이콘 레일과 full sidebar의 실제 navigation action이 current와 다른
       target pathname intent를 동일한 경계로 전달하게 한다.

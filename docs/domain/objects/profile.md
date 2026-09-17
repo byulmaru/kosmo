@@ -62,7 +62,8 @@ Remote Profile의 원격 handle에는 적용하지 않으며 원격 원본 값�
 
 시스템 예약 식별자는 앞뒤 공백을 제거하고 소문자로 바꾼 Local handle 전체가 아래 값 중 하나와 정확히 일치할
 때 사용을 거부한다. 현재 앱의 최상위 정적 route namespace 중 Local handle 문자 형식으로 생성할 수 있는 값도
-시스템 예약 식별자로 관리한다. 부분 문자열만 일치하는 `supporter`, `cybersecurity`,
+시스템 예약 식별자로 관리한다. 이미 retired된 `/compose`의 `compose` segment도 namespace 재사용을 막기 위해
+영구 예약하며, 이를 현재 정적 route로 해석하지 않는다. 부분 문자열만 일치하는 `supporter`, `cybersecurity`,
 `administrator_dev`는 이 정책만으로 거부하지 않는다.
 
 - 운영 권한·공식 계정: `abuse`, `adm`, `admin`, `admins`, `administration`, `administrator`,
@@ -73,15 +74,17 @@ Remote Profile의 원격 handle에는 적용하지 않으며 원격 원본 값�
   `registration`, `report`, `reports`, `status`, `terms`, `tos`, `webmaster`
 - Kosmo·연합·시스템 endpoint: `activitypub`, `actor`, `actors`, `ap`, `byulmaru`, `federation`, `fediverse`,
   `graphql`, `health`, `inbox`, `kosmo`, `nodeinfo`, `outbox`, `webfinger`
-- 앱 최상위 정적 route namespace: `bookmarks`, `compose`, `feedback`, `hashtags`, `home`, `local`,
+- 앱 최상위 정적 route namespace: `bookmarks`, `feedback`, `hashtags`, `home`, `local`,
   `notifications`, `search`, `settings`
+- retired되어 namespace 재사용을 막기 위해 영구 예약된 route segment: `compose`
 - 공식 계정으로 오인하기 쉬운 조합: `kosmo_admin`, `kosmo_moderator`, `kosmo_official`, `kosmo_security`,
   `kosmo_support`
 
 `login`과 `privacy`는 현재 앱 route이면서 위 인증·고객지원·정책 목록에 이미 포함된다. `follow-requests`와
 `profile-edit`처럼 하이픈을 포함한 route는 Local handle 문자 형식에서 먼저 거부되므로 예약 목록에 중복해서
 넣지 않는다. 최상위 정적 route를 추가하거나 이름을 바꿀 때 새 segment가 Local handle 문자 형식으로 생성
-가능하면 route 변경과 같은 배포 단위에서 이 목록과 공용 검증을 함께 갱신한다.
+가능하면 route 변경과 같은 배포 단위에서 이 목록과 공용 검증을 함께 갱신한다. Route를 retired할 때도 해당
+segment의 영구 예약 여부를 함께 유지해 namespace를 재사용하지 않는다.
 
 예약 식별자 목록은 Bluesky atproto의
 [`reserved.ts`](https://github.com/bluesky-social/atproto/blob/main/packages/pds/src/handle/reserved.ts)를

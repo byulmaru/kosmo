@@ -16,7 +16,7 @@
 
 ### Requirement: 공개 탐색과 보호 경로를 구분한다
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md`, `PROD-736` (Linear Contract). 저장소가 소유하는 일반 크롤러 정책은 공개 조회 가능한 Active·Normal Profile과 Public Post의 canonical Web 경로 및 그 렌더링에 필요한 공개 정적 자산을 차단해서는 안 된다(MUST NOT). 같은 정책은 현재 인증·개인화·작성·설정 화면인 `/bookmarks`, `/compose`, `/feedback`, `/follow-requests`, `/hashtags/`, `/local`, `/home`, `/notifications`, `/profile-edit`, `/search`, `/settings`와 인증·내부 HTTP 경계인 `/login`, `/logout`, `/graphql`, `/health`를 일반 크롤러 수집 대상에서 제외해야 한다(SHALL). robots 지시문은 Profile Lifecycle·Suspension, Post Visibility·Eligibility 또는 서버 인가를 대신해서는 안 된다(MUST NOT). 공개 조회 자격이 없는 Profile과 Post는 크롤러가 지시문을 무시하더라도 기존 조회 정책으로 보호되어야 한다(SHALL).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md`, `PROD-736` (Linear Contract). 저장소가 소유하는 일반 크롤러 정책은 공개 조회 가능한 Active·Normal Profile과 Public Post의 canonical Web 경로 및 그 렌더링에 필요한 공개 정적 자산을 차단해서는 안 된다(MUST NOT). 같은 정책은 현재 인증·개인화·작성·설정 화면인 `/bookmarks`, `/feedback`, `/follow-requests`, `/hashtags/`, `/local`, `/home`, `/notifications`, `/profile-edit`, `/search`, `/settings`와 인증·내부 HTTP 경계인 `/login`, `/logout`, `/graphql`, `/health`를 일반 크롤러 수집 대상에서 제외해야 한다(SHALL). robots 지시문은 Profile Lifecycle·Suspension, Post Visibility·Eligibility 또는 서버 인가를 대신해서는 안 된다(MUST NOT). 공개 조회 자격이 없는 Profile과 Post는 크롤러가 지시문을 무시하더라도 기존 조회 정책으로 보호되어야 한다(SHALL).
 
 #### Scenario: 공개 Profile 탐색
 

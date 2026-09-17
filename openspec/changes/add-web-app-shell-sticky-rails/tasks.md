@@ -25,7 +25,7 @@
 
 ## 4. Route 호환성과 bottom tab
 
-- [ ] 4.1 `/home`, `/search`, `/notifications`, `/menu`, `/compose`가 document scroll + sticky rails 구조에서 기존 폭과 정렬을 유지하는지 확인한다. Fresh browser context에서는 보호 route가 `/`로 리다이렉트되어, 로그인 세션 smoke가 남아 있다.
+- [ ] 4.1 `/home`, `/search`, `/notifications`, `/menu`와 shell composer가 document scroll + sticky rails 구조에서 기존 폭과 정렬을 유지하는지 확인한다. Fresh browser context에서는 보호 route가 `/`로 리다이렉트되어, 로그인 세션 smoke가 남아 있다.
 - [x] 4.2 `/@{handle}`, `/@{handle}/followers`, `/@{handle}/following`, `/@{handle}/{postId}`가 document scroll + sticky rails 구조에서 레이아웃 깨짐 없이 렌더링되는지 확인한다.
 - [x] 4.3 프로필/게시글 상세의 `-mx-6 -mt-8` padding 상쇄 결합은 유지 우선으로 확인하고, 깨지는 경우에만 route wrapper를 최소 보정한다.
 - [x] 4.4 모바일 bottom tab은 fixed chrome으로 유지하고, content 하단이 tab/safe-area에 가려지지 않도록 padding 또는 scroll padding을 확인한다.
@@ -43,7 +43,7 @@
 - [x] 6.1 `pnpm exec openspec validate add-web-app-shell-sticky-rails --strict`를 통과시킨다.
 - [x] 6.2 구현 PR에서 `pnpm -F @kosmo/web check`를 통과시킨다.
 - [x] 6.3 구현 PR에서 모바일 1개, `md`~`xl` 1개, `xl+` 1개 viewport를 smoke로 확인한다.
-- [ ] 6.4 구현 PR에서 `/home`, `/search`, `/notifications`, `/menu`, `/compose`, 프로필/팔로우 목록/게시글 상세 route를 smoke로 확인한다. 현재 fresh browser route smoke는 보호 route 리다이렉트와 공개 프로필 계열 렌더링까지만 확인했다.
+- [ ] 6.4 구현 PR에서 `/home`, `/search`, `/notifications`, `/menu`, 프로필/팔로우 목록/게시글 상세 route와 shell composer action을 smoke로 확인한다. 현재 fresh browser route smoke는 보호 route 리다이렉트와 공개 프로필 계열 렌더링까지만 확인했다.
 - [ ] 6.5 구현 PR에서 drawer open/close, bottom tab, icon rail/full sidebar, RightRail 위치, 검색 `noScroll`, 게시글 상세 sticky header를 확인한다. 현재 viewport smoke는 document scroll, bottom tab fixed, icon rail/full sidebar, RightRail 위치까지 확인했다.
 - [x] 6.6 반응형 앱 내비게이션 E2E suite 전체는 구현하지 않고, 필요 검증은 `PROD-233` 후속 범위로 남긴다.
 - [x] 6.7 `PROD-454`: `UniversalFull` Storybook browser test와 Chrome `xl+` smoke에서 짧은 RightRail의 조건부 overflow, 가로 overflow 부재와 sticky 배치를 확인한다.
