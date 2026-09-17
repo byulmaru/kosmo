@@ -2469,8 +2469,9 @@ export const UniversalCompactComposerLifecycle: Story = {
   },
 };
 
-export const UniversalCompactComposerBreakpointFocusFallback: Story = {
+export const UniversalMobileComposerBreakpointFocusFallback: Story = {
   ...UniversalCompact,
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
@@ -2481,20 +2482,17 @@ export const UniversalCompactComposerBreakpointFocusFallback: Story = {
     const widthDescriptor = Object.getOwnPropertyDescriptor(viewport, 'width');
 
     try {
-      await userEvent.click(canvas.getByRole('button', { name: '글쓰기' }));
+      const trigger = canvas.getByRole('button', { name: '글쓰기' });
+      await userEvent.click(trigger);
       const dialog = await page.findByRole('dialog', { name: '글쓰기' });
 
-      Object.defineProperty(viewport, 'width', { configurable: true, value: 1400 });
+      Object.defineProperty(viewport, 'width', { configurable: true, value: 900 });
       viewport.dispatchEvent(new Event('resize'));
-      await waitFor(() =>
-        expect(canvas.queryByRole('button', { name: '글쓰기' })).not.toBeInTheDocument(),
-      );
+      await waitFor(() => expect(trigger).not.toBeInTheDocument());
 
       await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
       await waitFor(() => expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull());
-      await waitFor(() =>
-        expect(canvas.getByRole('button', { name: 'Composer 확장' })).toHaveFocus(),
-      );
+      await waitFor(() => expect(canvas.getByTestId('universal-shell-root')).toHaveFocus());
     } finally {
       if (widthDescriptor) {
         Object.defineProperty(viewport, 'width', widthDescriptor);
