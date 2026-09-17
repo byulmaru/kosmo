@@ -19,7 +19,8 @@ Local pin API가 승인된 Post를 ordered set에 추가하고 지정한 Post만
 - 기본 pin은 기존 관계를 지우지 않고 추가하며 unpin은 지정한 관계만 제거한다.
 - 새 pin은 기존 pin의 상대 순서를 보존한 한 위치에 저장하고 관계 변경·idempotent no-op이 없으면 order를 유지한다.
 - 현재 first-party UI는 slot 교체 전에 ModalSheet 확인을 수행하고, 서버는 이 UI event를 신뢰하거나 검증하지 않은 채 일반
-  pin과 같은 Profile·대상 자격과 전달받은 current expected value를 같은 transaction에서 검증한 원자적 결과를 만든다.
+  pin과 같은 Profile·대상 자격과 전달받은 current expected value를 교체와 함께 검증한 원자적 결과를 만든다. 내부 수단은
+  transaction, conditional write 또는 compare-and-swap 중 기존 persistence 경계에 맞게 선택한다.
 - 교체 대상이 이미 다른 위치에 pinned면 대상 관계를 current slot으로 이동하고 기존 current 관계를 제거하되 중복 없이 나머지
   관계의 상대 순서를 보존한다.
 - replacement expected-current 불일치는 저장 상태를 보존한 stale/conflict 결과여야 한다.

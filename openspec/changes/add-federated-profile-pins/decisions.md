@@ -17,7 +17,8 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
 - Decision Outcome: pin 저장·API projection은 ordered 0..N additive collection으로 두고, eligible한 자기 작성 Active Content
   Post·Reply·Quote를 pin하면 ordered set에 추가하며 unpin은 지정한 Post만 제거한다. 현재 Local first-party UI는 server-authoritative
   order의 첫 visible 항목만 렌더·관리한다. UI slot 교체에는 일반 pin과 같은 Profile·대상 자격과 확인 당시 current pin 기대값을
-  같은 transaction에서 검증한 원자적 replace를 적용하며, 이 rollout 정책은 API·저장 cardinality를 제한하지 않는다. 같은 pin과 이미 없는 unpin은 idempotent success no-op이고,
+  교체와 함께 검증한 원자적 replace를 적용하며, 이 rollout 정책은 API·저장 cardinality를 제한하지 않는다. 내부 저장 수단은
+  transaction, conditional write 또는 compare-and-swap 중 기존 persistence 경계에 맞는 방식을 선택한다. 같은 pin과 이미 없는 unpin은 idempotent success no-op이고,
   UI slot expected-current 불일치는 저장 상태를 바꾸지 않는 stale/conflict 결과다. 교체 대상이 다른 위치에 이미 pinned면 그
   관계를 current slot으로 이동하고 기존 current 관계를 제거하며, 중복 없이 나머지 관계의 상대 순서를 보존한다. 새 pin에는 기존 pin의 상대 순서를 보존한 한
   위치를 원자적으로 부여하고 관계 변경이 없으면 같은 authoritative order를 반환한다. 새 pin의 앞·뒤 배치와 별도 재정렬 UX는
