@@ -138,7 +138,6 @@ mock.module(new URL('../RouteBoundary.tsx', import.meta.url), {
 mock.module(new URL('../../session/logout.tsx', import.meta.url), {
   exports: {
     useAccountDeletionCleanup: () => ({ error: null, logout: () => undefined, pending: false }),
-    useLogout: () => ({ error: null, logout: () => undefined, pending: false }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsMuteAndBlockNavigation.tsx', import.meta.url), {
