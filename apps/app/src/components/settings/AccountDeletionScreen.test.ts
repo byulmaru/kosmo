@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -9,18 +8,12 @@ import type { AccountDeletionScreenProps, AccountDeletionState } from './Account
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const require = createRequire(import.meta.url);
-
 mock.module('react-native', {
   exports: {
-    Platform: { OS: 'web' },
     StyleSheet: { create: <T>(styles: T) => styles },
     Text: 'Text',
     View: 'View',
   },
-} as unknown as Parameters<typeof mock.module>[1]);
-mock.module(require.resolve('lucide-react-native'), {
-  exports: { Check: 'Check' },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../ui/ConfirmationContent.tsx', import.meta.url), {
   exports: {
