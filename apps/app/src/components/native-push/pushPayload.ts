@@ -72,6 +72,10 @@ export function markNativePushRoute(href: Href): Href {
     return href;
   }
 
+  if (/(?:[?&])fromPush=1(?:&|$)/.test(href)) {
+    return href as Href;
+  }
+
   return `${href}${href.includes('?') ? '&' : '?'}fromPush=1` as Href;
 }
 

@@ -1,4 +1,5 @@
 import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useToast } from '@/components/ui/ToastProvider';
 import { layoutRecipes } from '@/theme/tokens';
 import { ByulmaruIdAccountSettingsEntry } from './ByulmaruIdAccountSettingsEntry';
 import { SettingsItem } from './SettingsItem';
@@ -13,6 +14,8 @@ export function SettingsNavigationList({
   pathname?: string;
   selected?: SettingsDestination;
 }) {
+  const { showToast } = useToast();
+  const current = selected === 'default-post-visibility';
   return (
     <View
       accessibilityLabel="설정 목록"
@@ -26,7 +29,7 @@ export function SettingsNavigationList({
         label="게시물 기본 공개 범위"
         primary
         currentPage={pathname === '/settings/default-post-visibility'}
-        selected={selected === 'default-post-visibility'}
+        selected={current}
       />
       <SettingsLinkRow
         accessibilityLabel="뮤트 및 차단 설정 열기"
@@ -40,7 +43,13 @@ export function SettingsNavigationList({
         <Pressable
           accessibilityLabel="OS 알림 설정 열기"
           accessibilityRole="button"
-          onPress={() => void Linking.openSettings()}
+          onPress={() => {
+            void Linking.openSettings().catch(() => {
+              showToast('기기의 알림 설정을 열지 못했어요. 잠시 후 다시 시도해 주세요.', {
+                tone: 'danger',
+              });
+            });
+          }}
           testID="native-notification-settings"
         >
           <SettingsItem
