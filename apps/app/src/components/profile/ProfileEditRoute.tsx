@@ -329,16 +329,13 @@ function EditableProfileRoute({
         void uploadImage(field, next);
       } catch {
         if (mounted.current) {
-          setServerErrors((current) => ({
-            ...current,
-            [field]: '이미지를 선택하지 못했습니다.',
-          }));
+          showToast('이미지를 선택하지 못했습니다.', { tone: 'danger' });
         }
       } finally {
         selecting.current = false;
       }
     },
-    [updateImage, uploadImage],
+    [showToast, updateImage, uploadImage],
   );
 
   const removeImage = useCallback(

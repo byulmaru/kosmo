@@ -54,6 +54,10 @@ const mutationHandlers = new Map<string, (config: MutationConfig) => void>();
 const navigationDispatches: NavigationAction[] = [];
 const routerReplacements: string[] = [];
 const toastMessages: string[] = [];
+const toastCalls: Array<{
+  message: string;
+  options: { tone: 'danger' | 'info' | 'success' | 'warning' };
+}> = [];
 let preventRemoveCallback: ((options: { data: { action: NavigationAction } }) => void) | null =
   null;
 let preventRemoveEnabled = false;
@@ -213,7 +217,12 @@ mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
 });
 mockModule(new URL('../ui/ToastProvider.tsx', import.meta.url), {
-  useToast: () => ({ showToast: (message: string) => toastMessages.push(message) }),
+  useToast: () => ({
+    showToast: (message: string, options: { tone: 'danger' | 'info' | 'success' | 'warning' }) => {
+      toastMessages.push(message);
+      toastCalls.push({ message, options });
+    },
+  }),
 });
 
 let ProfileEditRoute: typeof ProfileEditRouteExport;
@@ -244,6 +253,7 @@ afterEach(async () => {
   routerCanGoBack = true;
   screenProps = null;
   toastMessages.length = 0;
+  toastCalls.length = 0;
   triggerBeforeRemoveOnReplace = false;
   deferBeforeRemoveOnReplace = false;
   pendingReplaceCompletion = null;
@@ -400,7 +410,7 @@ describe('ProfileEditRoute', () => {
     assert.equal(typeof props.onHeaderRetry, 'function');
   });
 
-  it('picker reject를 field별 선택 오류로 표시하고 호출부로 전파하지 않는다', async () => {
+  it('picker reject를 danger Toast로 알리고 server 오류와 draft를 바꾸지 않는다', async () => {
     pickerLaunch = async () => {
       throw new Error('picker failed');
     };
@@ -413,9 +423,10 @@ describe('ProfileEditRoute', () => {
     await act(async () => requireScreenProps().onAvatarEdit());
 
     assert.deepEqual(requireScreenProps().value, draftBeforeReject);
-    assert.deepEqual(requireScreenProps().serverErrors, {
-      avatar: '이미지를 선택하지 못했습니다.',
-    });
+    assert.equal(requireScreenProps().serverErrors, undefined);
+    assert.deepEqual(toastCalls, [
+      { message: '이미지를 선택하지 못했습니다.', options: { tone: 'danger' } },
+    ]);
   });
 
   it('picker cancel은 image와 text draft를 보존하고 오류를 만들지 않는다', async () => {
@@ -428,9 +439,10 @@ describe('ProfileEditRoute', () => {
 
     assert.deepEqual(requireScreenProps().value, draft);
     assert.equal(requireScreenProps().serverErrors, undefined);
+    assert.deepEqual(toastCalls, []);
   });
 
-  it('picker reject 뒤 재선택은 해당 오류만 지우고 기존 upload flow를 사용한다', async () => {
+  it('picker reject 뒤 재선택은 Toast만 남기고 기존 upload flow를 사용한다', async () => {
     let issued = 0;
     mutationHandlers.set('ProfileEditRouteIssueMediaUploadUrlMutation', (config) => {
       issued += 1;
@@ -455,10 +467,11 @@ describe('ProfileEditRoute', () => {
       throw new Error('header picker failed');
     };
     await act(async () => requireScreenProps().onHeaderEdit());
-    assert.deepEqual(requireScreenProps().serverErrors, {
-      avatar: '이미지를 선택하지 못했습니다.',
-      header: '이미지를 선택하지 못했습니다.',
-    });
+    assert.equal(requireScreenProps().serverErrors, undefined);
+    assert.deepEqual(toastCalls, [
+      { message: '이미지를 선택하지 못했습니다.', options: { tone: 'danger' } },
+      { message: '이미지를 선택하지 못했습니다.', options: { tone: 'danger' } },
+    ]);
 
     pickerLaunch = async () => ({
       canceled: false,
@@ -467,10 +480,7 @@ describe('ProfileEditRoute', () => {
     await act(async () => requireScreenProps().onAvatarEdit());
     await flush();
 
-    assert.deepEqual(requireScreenProps().serverErrors, {
-      avatar: undefined,
-      header: '이미지를 선택하지 못했습니다.',
-    });
+    assert.equal(requireScreenProps().serverErrors, undefined);
     assert.equal(requireScreenProps().value.avatar.uploadState, 'ready');
     assert.equal(issued, 1);
     assert.equal(fetchMock.mock.callCount(), 2);
@@ -495,6 +505,7 @@ describe('ProfileEditRoute', () => {
     await act(async () => renderer?.unmount());
     rejectPicker!(new Error('late picker failure'));
     await pendingHeader;
+    assert.deepEqual(toastCalls, []);
   });
 
   it('부분 upload와 저장 실패를 field별로 재시도하며 Ready Media를 재업로드하지 않는다', async () => {
