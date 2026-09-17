@@ -222,11 +222,19 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 고정·해제에는 같은 `Pin` glyph를 사용하고 `PinOff`는 사용하지 않는다. attribution은 `16`/`secondary`,
   Web menu는 `18`/`primary`, Native menu는 `24`/`primary`를 사용하며 삭제의 `danger` 색은 유지한다.
 - 고정 Post는 Profile 목록에만 우선 표시하고 Home timeline 순서는 변경하지 않는다.
-- 고정 수·대상 자격·권한·교체·lifecycle 정책은 PROD-809에서 아직 확정되지 않았다. 기존 DSN-55의 교체 확인과
-  empty·removed·unavailable 대표 화면만으로 제품 정책을 확정하지 않는다. 필요한 추가 UI는 PROD-809의
-  canonical 계약 확정 후 범위를 정한다.
-- 단순 고정·해제는 확인 없이 실행한다. 실제 호출 가능 여부는 consumer가 판단하며 공용 UI가 자격·권한을
-  계산하지 않는다. persistence/API·ActivityPub·pagination·mutation·동시성은 PROD-809가 소유한다.
+- 저장·API projection은 ordered 0..N collection이다. 현재 Local first-party UI는 server-authoritative order의 첫 visible
+  pinned Post만 렌더하고 관리한다. 기본 Local pin mutation은 ordered set에 추가하고 지정한 Post만 해제하며, 현재 UI가 관리하는
+  slot을 다른 Post로 교체할 때만 canonical `ModalSheet`의 confirmation과 expected-current 보호를 사용한다. 교체 대상에도 아래
+  일반 고정 action과 같은 Profile 상태·작성자·Post lifecycle·Content·Visibility 자격을 적용한다. 같은 Post 재고정과 이미 해제된
+  Post 해제는 안전한 no-op으로 처리하며, 단순 고정·해제에는 확인을 표시하지 않는다.
+- 추가 Local pin은 현재 UI에서 고정 attribution이나 관리 대상으로 렌더하지 않는다. pin 관계는 기존 Profile chronology의
+  후보·순서·pagination을 바꾸지 않으므로, 첫 visible pin도 기존 chronology 후보라면 pinned segment와 원래 위치에 모두 표시된다.
+- 고정 action은 현재 Local Profile이 작성한 Active Content Post·Reply·Quote 중 Public·Unlisted·Followers Only인
+  대상에만 연결한다. Mentioned Profiles, Content 없는 pure Repost와 다른 Profile 작성 Post는 제외한다. Remote Profile의
+  `featured` 수신 결과는 검증된 Featured collection 전체를 순서대로 표시하며 Local first-visible UI 제한을 적용하지 않는다.
+- persistence/API·pagination·mutation·동시성은 PROD-973, ActivityPub federation은 PROD-974가 소유하고 PROD-809는
+  cross-slice 통합·archive를 소유한다. Storybook fixture의 모의
+  요청은 이 서버 계약이나 stale confirmation 보호를 증명하지 않는다.
 
 ### Storybook 이관 · PROD-863
 
@@ -235,13 +243,13 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   [Mobile Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12988) source다.
 - `PostListItem`의 `pinned`는 표시만 소유한다. 정렬·자격을 계산하거나 Home에 고정을 적용하지 않는다.
   실제 Pin mutation과 production 호출자가 없으므로 `profilePin`·`onAction` 공개 API와 가짜 요청 함수를
-  미리 만들지 않는다. 실제 요청 실행은 PROD-809에서 mutation을 연결할 때 개별 액션 내부에 둔다.
+  미리 만들지 않는다. 실제 요청 실행은 PROD-975가 PROD-973 mutation을 연결할 때 개별 액션 내부에 둔다.
 - 고정·해제 메뉴 조립과 요청·상태 전환 모의는 Storybook fixture가 소유한다. Storybook 전용 adapter가
   실제 `PostActionBar`에 메뉴 항목·pending 표시·focus 복귀 연결·sheet 아이콘 크기를 공급한다.
   fixture 밖에서는 원래 props를 그대로 전달하며 production `PostActionSurface`는 고정 항목을 조립하지 않는다.
 - 기존 `usePostMoreMenuItem`이 복사 URL·클립보드 실패 처리를 유지하고, `PostDeletionAction`이 삭제
   eligibility·확인창·mutation·cache·실패 처리를 유지한다. fixture는 owner의 복사·고정·삭제 순서와
-  visitor의 링크 복사만 있는 메뉴를 보여준다. 실제 고정 자격·정책은 후속 Profile consumer가 확정한다.
+  visitor의 링크 복사만 있는 메뉴를 보여준다. 실제 고정 자격·정책은 PROD-809의 Profile consumer와 서버 계약을 따른다.
 - 이 메뉴의 sheet 아이콘은 DSN-55 source에 맞춰 24px을 사용한다. 공용 `ActionMenu`의 다른 소비자는
   기존 20px을 유지한다. Web 메뉴는 기존 18px을 유지한다.
 - fixture의 모의 요청 중 실제 More trigger의 busy·disabled 표시를 검증한다. 모의 완료 뒤 More trigger로
@@ -250,8 +258,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `KOSMO/Patterns/Profile/Pin Action`의 Playground는 수동 Controls·Actions용이며 자동 조작은 Controls가
   비활성화된 `Tests`에 둔다. Controls는 owner/visitor, pin/unpin, 본문과 요청 success/pending/error를 제공한다.
 - 2026-09-08 PROD-863 범위 확정에 따라 empty·removed·unavailable·loading·error 전용 상태 카드와
-  presentation Control, 교체 확인과 replace/confirm/cancel 공개 API는 이 이관에서 제외한다. 고정·해제 요청의
-  pending·실패 피드백은 유지한다. ConfirmationContent는 이 이슈의 선행 조건이 아니다.
+  presentation Control은 이 이관에서 제외한다. PROD-809의 canonical 교체 확인은 기존 ModalSheet content swap을
+  사용하며, 이 이관은 해당 공개 API나 persistence 계약을 선점하지 않는다.
 - 2026-09-09 리뷰 답변과 사용자 승인에 따라 기존 callback 기반 실행 계약을 위의 fixture 기반 표시
   검증으로 변경했다. `ProfilePinAction` production controller를 제거하며 요청 수명과 결과 반영은
   실제 mutation 구현 시 다시 검증한다.
@@ -397,12 +405,12 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 성공 뒤 Home·Profile 목록 제거와 상세의 삭제됨·접근 불가 상태, selected Profile별 actor Store 격리, 실패
   뒤 cache 유지·dialog 재시도와 접근 가능한 한국어 toast를 검증한다.
 - Profile 고정의 Mobile `390`, Web `1024`·`1440` Light/Dark 화면, ProfileHero·PostListItem·PostAttributionRow
-  source 상속, 메뉴 label·순서·color, 장식 Pin의 중복 announce 방지를 검증한다. 실제 runtime 접근성은 PROD-809에서
+  source 상속, 메뉴 label·순서·color, 장식 Pin의 중복 announce 방지를 검증한다. 실제 runtime 접근성은 PROD-975에서
   검증한다.
 - Storybook에서 고정·해제 모의 상태에 따른 표시 전환, pending의 busy·disabled UI, 실패 표시 유지·한국어
   toast·재시도와 메뉴 keyboard·dismiss·trigger focus return을 검증한다. fixture 없는 production 메뉴에
   고정 action이 추가되지 않는지도 검증한다. 실제 요청 수명·결과 반영과 교체 확인·전용 상태 화면은
-  PROD-809의 mutation·정책 구현 범위에서 검증한다.
+  PROD-973의 mutation·정책 구현과 PROD-975의 Production UI 연결 범위에서 검증한다.
 
 ## 인용 동의와 원문 표시
 

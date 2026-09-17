@@ -73,6 +73,14 @@ Content와 Repost Source가 모두 없는 Post, 또는 Content 없이 Reply Pare
 Author Profile/Repost Source 조합에는 Lifecycle State가 Active이고 Content와 Reply Parent가 없는 Repost가
 하나만 존재한다.
 
+### Profile 고정 대상 자격
+
+- Local Profile pin mutation이 소비하는 Post state는 해당 Post가 Active이고 Current Content가 있으며 Visibility가
+  Public, Unlisted 또는 Followers Only인지와 Author Profile 관계를 제공한다.
+- Mentioned Profiles Visibility, Content 없는 pure Repost와 다른 Profile이 작성한 Post는 Local Profile 고정 대상이
+  아니다. 고정 cardinality·Owner 권한·expected-current·mutation 결과는 [Profile 객체](./profile.md)의 행동 표가
+  소유하며, 이 문서는 Post eligibility 사실만 정의한다.
+
 ## 행동
 
 | 행동                                | 행동 주체 Profile     | 대상 객체   | 입력값                                                                           | 권한                               | 조건                                                                                                                                                                                                                                                                                                                                           | 결과                                                                                                                                                                                                                    |
@@ -294,7 +302,7 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   collection을 분류하려고 network dereference하거나 `/followers` 경로 휴리스틱을 사용하지 않고 추가 addressee로
   무시한다. raw malformed audience syntax는 기존 ActivityPub vocabulary hydration과 top-level Note 기본 검증에서
   처리하며, 이 무시 규칙은 구문상 유효하게 파싱된 extra IRI에만 적용한다.
-- Public marker와 author canonical followers marker가 모두 없으면 actor-only DIRECT/limited audience와 foreign
+- Public marker와 author canonical followers marker가 모두 없으면 actor-only ActivityPub Direct/limited audience와 foreign
   followers-looking URI만 있는 audience는 지원하지 않으며 Post side effect 없이 건너뛴다. 이런 추가 actor URI와
   spoofed-looking URI 자체로 Mentioned Profile 관계, Notification, DIRECT/limited recipient authorization 또는
   viewer access를 만들지 않는다. body/tag Mention 보존과 파싱은 이 수신 계약에 포함하지 않는다.
@@ -327,6 +335,32 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   존재를 노출하지 않는다.
 - Local Note의 ActivityPub Tombstone, `Delete`, `Create`, `Announce`, `Like`, `EmojiReact`, `Undo` delivery와
   `emojiReactions` collection projection은 각 lifecycle과 delivery 계약이 소유한다.
+
+### ActivityPub Profile Featured collection
+
+- Local ActivityPub Profile은 자신의 canonical 표현에 `featured` URI를 광고한다. Featured collection은
+  ordered 0..N projection이며 기존 Local Note projection과 Note 역참조 authorization을 재사용한다. 현재 Local
+  first-party UI는 server-authoritative order의 첫 visible pinned Post만 렌더하지만, API·저장 관계는 이 cardinality에 고정되지 않는다.
+  새 pin은 기존 pin의 상대 순서를 보존한 한 위치에 저장하고, 관계 변경이 없으면 같은 order를 반환한다. 새 pin의 앞·뒤 배치와
+  별도 재정렬 UX는 현재 계약에서 고정하지 않는다.
+- Public와 Unlisted Post는 공개 Featured collection과 Note 역참조에서 제공한다. Followers Only Post는 Author 또는
+  established Follower의 signed fetch에서만 collection membership과 Note를 제공하며, 인증되지 않은 요청·비팔로워
+  요청·Mentioned Profiles Post(ActivityPub Direct projection)는 제공하지 않는다. Post의 존재나 private membership을 URI, count 또는 빈 collection 외의 오류로
+  추론할 수 있게 해서는 안 된다.
+- Local pin/unpin/replacement commit 뒤에는 최신 `featured` 표현을 반영하는 Profile Update(Person) delivery를 예약한다.
+  연속된 commit은 최신 current representation delivery로 병합할 수 있으며 commit별 1:1 delivery나 완료 시간 SLA를
+  요구하지 않는다. delivery 수단은 이 계약에서 고정하지 않으며, 실패가 이미 commit된 Local 고정 상태를 되돌리지는 않는다.
+- Remote Featured collection은 원격 ActivityPub Profile이 광고한 collection을 page traversal로 동기화한다. 각 Note의 canonical
+  `attributedTo`는 해당 collection을 광고하는 Actor의 canonical URI와 정확히 일치해야 한다. Public/Unlisted는 기존
+  Note 검증을 사용하고, Followers Only는 한 sync 시도 동안 동일한 Active/Normal이며 사용 가능한 Local Instance에 속한
+  local follower identity로 collection의 모든 page와 각 Note를 authenticated fetch해 author, audience와 Follow 관계를
+  검증한다. 성공한 authoritative sync만 remote
+  ordered pin set을 교체한다. 각 시도는 취소 가능하고 next page 순환 검출과 구현이 정한 page·item·byte·시간 예산을 적용하며,
+  fetch·parse·검증·취소·순환·예산 초과 실패는 마지막 성공 상태를 보존한다. 실패는 관측·재시도할 수 있어야 하며, 이후
+  성공한 retry만 snapshot을 원자적으로 교체한다. 더 최신 trigger 뒤에 완료된 이전 시도의 성공 결과는 폐기한다.
+  retry timing·backoff·횟수·SLA와 최신성 판별 수단은 고정하지 않는다. Remote unpin, Delete/Tombstone 또는
+  visibility·author eligibility 상실은 다음 성공 sync나 기존 lifecycle에서 노출에서 제거한다. 검증된 최신 Profile 표현에서
+  `featured` URI가 제거되면 이전 URI의 진행 중인 sync와 예약된 retry가 이후 결과를 덮지 못하게 하고 empty snapshot을 저장한다.
 
 ### Quote federation 정책
 

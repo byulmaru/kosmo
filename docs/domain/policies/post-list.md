@@ -40,8 +40,14 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ### Profile Post List
 
-- Target Profile이 작성한 eligible Post 중 Reply Parent가 없는 Content Post와 Repost를 포함한다.
-- Reply Parent가 있는 Post는 Quote이기도 하더라도 포함하지 않는다.
+- 저장·API projection은 조회 가능한 pinned Post의 server-authoritative ordered 0..N collection이다. 현재 Local first-party
+  UI는 이 순서의 첫 visible pinned Post만 별도 pinned segment와 고정 표시로 렌더한다. Remote inbound UI는 검증된 Featured
+  collection 전체를 원격 순서의 pinned segment로 표시한다.
+- pin 관계가 바뀌지 않으면 서버는 같은 authoritative order를 유지한다. visibility filtering은 남은 visible pin의 상대 순서를
+  바꾸지 않는다.
+- 기존 chronology는 Target Profile이 작성한 eligible Post 중 Reply Parent가 없는 Content Post와 Repost를 포함하며, pin 관계로
+  후보·순서·cursor·page limit을 바꾸지 않는다. 따라서 chronology 후보인 Post는 pinned segment와 원래 chronology 위치에
+  모두 표시될 수 있다. Reply Parent가 있는 Post는 Quote이기도 하더라도 기존 chronology에는 포함하지 않는다.
 
 ### Local Post List
 
@@ -58,18 +64,18 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ## 제어 정책
 
-| Control              | Home                           | Local                      | Profile                    | Hashtag                    |
-| -------------------- | ------------------------------ | -------------------------- | -------------------------- | -------------------------- |
-| Profile Block        | 상대 콘텐츠 양방향 Exclude     | 상대 콘텐츠 양방향 Exclude | 방향별 Post 조회 정책 적용 | 상대 콘텐츠 양방향 Exclude |
-| Profile Mute         | Exclude                        | Exclude                    | 방문한 Profile만 예외      | Exclude                    |
-| Word Mute Rule       | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 |
-| Hashtag Mute Rule    | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 |
-| Profile Domain Block | Exclude                        | Exclude                    | Exclude                    | Exclude                    |
-| Domain Limit         | Include                        | Include                    | Include                    | Exclude                    |
-| Sensitive Media      | Collapse                       | Collapse                   | Collapse                   | Collapse                   |
-| 조회할 수 없는 Media | Exclude                        | Exclude                    | Exclude                    | Exclude                    |
-| Reply Parent 있음    | Home 후보 정책 통과 시 Include | Exclude                    | Exclude                    | Exclude                    |
-| Content 없는 Repost  | Home 후보 정책 통과 시 Include | Exclude                    | Target 작성 시 Include     | Exclude                    |
+| Control              | Home                           | Local                      | Profile                                                   | Hashtag                    |
+| -------------------- | ------------------------------ | -------------------------- | --------------------------------------------------------- | -------------------------- |
+| Profile Block        | 상대 콘텐츠 양방향 Exclude     | 상대 콘텐츠 양방향 Exclude | 방향별 Post 조회 정책 적용                                | 상대 콘텐츠 양방향 Exclude |
+| Profile Mute         | Exclude                        | Exclude                    | 방문한 Profile만 예외                                     | Exclude                    |
+| Word Mute Rule       | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용                                | Scope와 Mute Decision 적용 |
+| Hashtag Mute Rule    | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용                                | Scope와 Mute Decision 적용 |
+| Profile Domain Block | Exclude                        | Exclude                    | Exclude                                                   | Exclude                    |
+| Domain Limit         | Include                        | Include                    | Include                                                   | Exclude                    |
+| Sensitive Media      | Collapse                       | Collapse                   | Collapse                                                  | Collapse                   |
+| 조회할 수 없는 Media | Exclude                        | Exclude                    | Exclude                                                   | Exclude                    |
+| Reply Parent 있음    | Home 후보 정책 통과 시 Include | Exclude                    | pinned segment이면 Include, 기존 chronology에서는 Exclude | Exclude                    |
+| Content 없는 Repost  | Home 후보 정책 통과 시 Include | Exclude                    | Target 작성 시 Include                                    | Exclude                    |
 
 - 모든 후보는 먼저 Post Visibility와 Post Eligibility를 통과해야 한다.
 - Followers Only 후보는 Author/Mentioned Profile이 아닌 viewer에게 viewer Profile과 Author Profile 사이의
@@ -90,6 +96,9 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 - Profile Mute에 따른 제외는 cursor와 page limit 전에 끝낸다. Bookmark 목록과 Post 직접
   조회·상호작용에는 Mute를 적용하지 않으며 기존 Visibility·Eligibility를 유지한다.
 - Post List 제어는 Post Visibility가 허용하지 않은 viewer에게 접근 범위를 넓히지 않는다.
+- pinned segment에도 기존 Post Visibility, Post Eligibility, Profile lifecycle, Post lifecycle, block·domain 정책을
+  적용한다. 조회할 수 없거나 unavailable인 pinned Post는 목록과 pinned count에 포함하지 않는다.
+- 위 pinned ordering은 Profile 목록에만 적용한다. Home·Local·Hashtag의 후보 순서와 일반 chronology는 변경하지 않는다.
 
 ## 제외/보류
 
