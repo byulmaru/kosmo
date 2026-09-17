@@ -259,7 +259,12 @@ describe('Post Media Viewer Host production wiring', () => {
     const ordinary = storyPost('ordinary', 'ordinary-content');
     queryPosts.set(ordinary.id, hostPost(ordinary));
 
-    await renderHost(createElement(PostListItem, { post: asListItemKey(ordinary) }));
+    await renderHost(
+      createElement(PostListItem, {
+        post: asListItemKey(ordinary),
+        presentation: viewportWidth < 768 ? 'mobile' : 'wide',
+      }),
+    );
     await openFromBody(originControl, 1);
     assert.equal(queriedSurfacePostId, 'ordinary');
     assert.equal(currentImage().props.source.uri, 'https://media.example/ordinary-content-2.webp');
@@ -268,7 +273,12 @@ describe('Post Media Viewer Host production wiring', () => {
     const source = storyPost('source', 'source-content');
     const quote = { ...storyPost('quote', 'quote-content'), repostSource: source };
     queryPosts.set(quote.id, hostPost(storyPost('quote', 'quote-content')));
-    await updateHost(createElement(PostListItem, { post: asListItemKey(quote) }));
+    await updateHost(
+      createElement(PostListItem, {
+        post: asListItemKey(quote),
+        presentation: viewportWidth < 768 ? 'mobile' : 'wide',
+      }),
+    );
     await act(async () => byTestId('post-source-presentation').props.onMediaOpen(0, originControl));
     assert.equal(queriedSurfacePostId, 'quote');
     await closeViewer();
@@ -276,7 +286,12 @@ describe('Post Media Viewer Host production wiring', () => {
     const pureRepost = { ...storyPost('repost', null), repostSource: source };
     queryPosts.set(pureRepost.id, hostPost(pureRepost));
     queryPosts.set(source.id, hostPost(source));
-    await updateHost(createElement(PostListItem, { post: asListItemKey(pureRepost) }));
+    await updateHost(
+      createElement(PostListItem, {
+        post: asListItemKey(pureRepost),
+        presentation: viewportWidth < 768 ? 'mobile' : 'wide',
+      }),
+    );
     await openFromBody(originControl);
     assert.equal(queriedSurfacePostId, 'repost');
     assert.equal(currentImage().props.source.uri, 'https://media.example/source-content-1.webp');
@@ -288,7 +303,12 @@ describe('Post Media Viewer Host production wiring', () => {
     assert.equal(replyPostIds.at(-1), 'repost');
 
     viewportWidth = 1024;
-    await updateHost(createElement(PostListItem, { post: asListItemKey(pureRepost) }));
+    await updateHost(
+      createElement(PostListItem, {
+        post: asListItemKey(pureRepost),
+        presentation: viewportWidth < 768 ? 'mobile' : 'wide',
+      }),
+    );
     const viewerThread = byTestId('post-media-viewer-thread');
     assert.equal(viewerThread.props.mediaOwnerPostId, 'source');
     assert.equal(viewerThread.props.replyAvailable, false);

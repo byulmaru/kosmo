@@ -23,7 +23,7 @@ export type PostThreadLayoutProps<TPost> = Readonly<{
   ancestors: ReadonlyArray<PostThreadItem<TPost>>;
   current: PostThreadItem<TPost>;
   descendants: ReadonlyArray<PostThreadItem<TPost>>;
-  presentation?: PostListPresentation;
+  presentation: PostListPresentation;
   renderPost: (args: PostThreadRenderArgs<TPost>) => React.ReactNode;
 }>;
 
@@ -31,7 +31,7 @@ export function PostThreadLayout<TPost>({
   ancestors,
   current,
   descendants,
-  presentation = 'wide',
+  presentation,
   renderPost,
 }: PostThreadLayoutProps<TPost>): React.ReactElement {
   const theme = useTheme();

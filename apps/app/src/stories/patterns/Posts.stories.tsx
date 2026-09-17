@@ -1181,6 +1181,7 @@ function PostCatalog(_args: PostsStoryArgs) {
               requirePostById(posts, mediaTextPost.id).listItem,
               'media post list item',
             )}
+            presentation="mobile"
           />
         </View>
         <View testID="media-only-list">
@@ -1189,6 +1190,7 @@ function PostCatalog(_args: PostsStoryArgs) {
               requirePostById(posts, mediaOnlyPost.id).listItem,
               'media-only post list item',
             )}
+            presentation="mobile"
           />
         </View>
         <View testID="media-load-error-list">
@@ -1197,6 +1199,7 @@ function PostCatalog(_args: PostsStoryArgs) {
               requirePostById(posts, loadErrorMediaPost.id).listItem,
               'load-error media post list item',
             )}
+            presentation="mobile"
           />
         </View>
         <View testID="media-load-error-three-list">
@@ -1205,6 +1208,7 @@ function PostCatalog(_args: PostsStoryArgs) {
               requirePostById(posts, loadErrorThreeMediaPost.id).listItem,
               'three-image load-error media post list item',
             )}
+            presentation="mobile"
           />
         </View>
         <View testID="media-detail">
@@ -1218,25 +1222,44 @@ function PostCatalog(_args: PostsStoryArgs) {
       </Section>
 
       <Section title="List items · body states">
-        <PostListItem post={requireFragment(requirePost(posts, 0).listItem, 'short post item')} />
-        <PostListItem post={requireFragment(requirePost(posts, 1).listItem, 'long post item')} />
+        <PostListItem
+          post={requireFragment(requirePost(posts, 0).listItem, 'short post item')}
+          presentation="mobile"
+        />
+        <PostListItem
+          post={requireFragment(requirePost(posts, 1).listItem, 'long post item')}
+          presentation="mobile"
+        />
         <PostListItem
           post={requireFragment(requirePost(posts, 4).listItem, 'many-lines post item')}
+          presentation="mobile"
         />
-        <PostListItem post={requireFragment(requirePost(posts, 3).listItem, 'empty post item')} />
+        <PostListItem
+          post={requireFragment(requirePost(posts, 3).listItem, 'empty post item')}
+          presentation="mobile"
+        />
       </Section>
 
       <Section title="List items · time states">
-        <PostListItem post={requireFragment(requirePost(posts, 5).listItem, 'new post item')} />
+        <PostListItem
+          post={requireFragment(requirePost(posts, 5).listItem, 'new post item')}
+          presentation="mobile"
+        />
         <PostListItem
           post={requireFragment(requirePost(posts, 6).listItem, 'seconds-old post item')}
+          presentation="mobile"
         />
         <PostListItem
           post={requireFragment(requirePost(posts, 7).listItem, 'hours-old post item')}
+          presentation="mobile"
         />
-        <PostListItem post={requireFragment(requirePost(posts, 8).listItem, 'old post item')} />
+        <PostListItem
+          post={requireFragment(requirePost(posts, 8).listItem, 'old post item')}
+          presentation="mobile"
+        />
         <PostListItem
           post={requireFragment(requirePost(posts, 13).listItem, 'remote author post item')}
+          presentation="mobile"
         />
       </Section>
 
@@ -1828,6 +1851,7 @@ function ProductionPostActionSessionBoundaryStory({
               requirePostById(data.posts, postId).listItem,
               'session action boundary Post',
             )}
+            presentation="wide"
           />
         </View>
       </PostComposerCoordinatorProvider>
@@ -1907,7 +1931,10 @@ function ContentWarningConsumerIntegrationStory() {
   return (
     <Catalog>
       <View testID="content-warning-list-surface">
-        <PostListItem post={requireFragment(post.listItem, 'Content Warning list item consumer')} />
+        <PostListItem
+          post={requireFragment(post.listItem, 'Content Warning list item consumer')}
+          presentation="wide"
+        />
       </View>
       <View testID="content-warning-body-surface">
         <PostBody post={requireFragment(post.body, 'Content Warning body consumer')} size="lg" />
@@ -2450,7 +2477,10 @@ function LinkedPostListItemStory() {
   return (
     <Catalog>
       <StoryPathname testID="current-story-pathname" />
-      <PostListItem post={requireFragment(requirePost(posts, 14).listItem, 'linked post item')} />
+      <PostListItem
+        post={requireFragment(requirePost(posts, 14).listItem, 'linked post item')}
+        presentation="wide"
+      />
     </Catalog>
   );
 }
@@ -2465,12 +2495,19 @@ function LongPureRepostListItemStory() {
           requirePostById(posts, longPureRepost.id).listItem,
           'long pure repost list item',
         )}
+        presentation="mobile"
       />
     </Catalog>
   );
 }
 
-function ProductionPostListItemStory({ postId }: { postId: string }) {
+function ProductionPostListItemStory({
+  postId,
+  presentation,
+}: {
+  postId: string;
+  presentation: 'mobile' | 'wide';
+}) {
   const { posts } = usePostsStoryData();
 
   return (
@@ -2481,6 +2518,7 @@ function ProductionPostListItemStory({ postId }: { postId: string }) {
           requirePostById(posts, postId).listItem,
           `production post list item ${postId}`,
         )}
+        presentation={presentation}
       />
     </Catalog>
   );
@@ -2496,7 +2534,7 @@ function QuoteListSurfaceStory() {
   return (
     <PostComposerCoordinatorProvider owner="list" profile={data.replyComposerProfile}>
       <Catalog>
-        <PostListItem post={post} />
+        <PostListItem post={post} presentation="wide" />
       </Catalog>
     </PostComposerCoordinatorProvider>
   );
@@ -2509,7 +2547,7 @@ function PostMediaViewerRevisionStory() {
 
   return (
     <>
-      <ProductionPostListItemStory postId={mediaViewerThreadCurrentPost.id} />
+      <ProductionPostListItemStory postId={mediaViewerThreadCurrentPost.id} presentation="mobile" />
       <Pressable
         accessibilityLabel="Viewer Content 상태 전환"
         accessibilityRole="button"
@@ -2646,6 +2684,7 @@ function ThreadCatalog() {
             ...item,
             post: requirePostById(posts, item.id),
           }))}
+          presentation="wide"
           renderPost={({ item, role }) => (
             <View>
               {role === 'current' ? (
@@ -2656,6 +2695,7 @@ function ThreadCatalog() {
                 <View testID={`post-thread-renderer-list-${item.id}`}>
                   <PostListItem
                     post={requireFragment(item.post.listItem, 'thread list item')}
+                    presentation="wide"
                     showDivider={false}
                     showReplyAttribution={false}
                   />
@@ -2685,6 +2725,7 @@ function ThreadNavigationCatalog() {
         ancestors={[]}
         current={items[0]}
         descendants={[items[1]]}
+        presentation="wide"
         renderPost={({ item }) => (
           <Pressable
             accessibilityLabel={`${item.post} 상세 선택`}
@@ -4142,7 +4183,7 @@ export const PureRepost: Story = {
       '/@source@remote.example/post-source',
     );
   },
-  render: () => <ProductionPostListItemStory postId="post-repost" />,
+  render: () => <ProductionPostListItemStory postId="post-repost" presentation="wide" />,
 };
 
 export const PureRepostOfQuote: Story = {
@@ -4167,7 +4208,7 @@ export const PureRepostOfQuote: Story = {
       '/@source@remote.example/post-source-quote',
     );
   },
-  render: () => <ProductionPostListItemStory postId="post-repost-of-quote" />,
+  render: () => <ProductionPostListItemStory postId="post-repost-of-quote" presentation="wide" />,
 };
 
 export const Quote: Story = {
@@ -4345,7 +4386,7 @@ export const QuoteListItemAvatars: Story = {
     expect(sourceAvatar.getBoundingClientRect().width).toBe(40);
     expect(sourceAvatar.getBoundingClientRect().height).toBe(40);
   },
-  render: () => <ProductionPostListItemStory postId="post-quote" />,
+  render: () => <ProductionPostListItemStory postId="post-quote" presentation="wide" />,
 };
 
 export const QuoteOfQuote: Story = {
@@ -4420,7 +4461,7 @@ export const OrdinaryPost: Story = {
     await userEvent.click(bodyShortcut);
     expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent('/@kosmo/short');
   },
-  render: () => <ProductionPostListItemStory postId="short" />,
+  render: () => <ProductionPostListItemStory postId="short" presentation="wide" />,
 };
 
 export const PostMediaViewerCompact: Story = {
@@ -4470,7 +4511,9 @@ export const PostMediaViewerCompact: Story = {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(origin).toHaveFocus();
   },
-  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+  render: () => (
+    <ProductionPostListItemStory postId="post-media-viewer-quote" presentation="mobile" />
+  ),
 };
 
 export const PostMediaViewerWide: Story = {
@@ -4570,7 +4613,9 @@ export const PostMediaViewerWide: Story = {
     expect(screen.getByRole('dialog')).toBe(dialog);
     expect(nestedOrigin).toHaveFocus();
   },
-  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+  render: () => (
+    <ProductionPostListItemStory postId="post-media-viewer-quote" presentation="wide" />
+  ),
 };
 
 export const PostMediaViewerWideThreadLoading: Story = {
@@ -4597,7 +4642,9 @@ export const PostMediaViewerWideThreadLoading: Story = {
     expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
     expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeEnabled();
   },
-  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+  render: () => (
+    <ProductionPostListItemStory postId="post-media-viewer-quote" presentation="wide" />
+  ),
 };
 
 export const PostMediaViewerWideThreadErrorRetry: Story = {
@@ -4628,7 +4675,9 @@ export const PostMediaViewerWideThreadErrorRetry: Story = {
     await expect(viewer.findByTestId('post-thread')).resolves.toBeVisible();
     expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
   },
-  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+  render: () => (
+    <ProductionPostListItemStory postId="post-media-viewer-quote" presentation="wide" />
+  ),
 };
 
 export const PostMediaViewerHostLoading: Story = {
@@ -4652,7 +4701,9 @@ export const PostMediaViewerHostLoading: Story = {
     expect(await viewer.findByText('게시글을 불러오는 중입니다.')).toBeVisible();
     expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeEnabled();
   },
-  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+  render: () => (
+    <ProductionPostListItemStory postId="post-media-viewer-quote" presentation="mobile" />
+  ),
 };
 
 export const PostMediaViewerHostErrorRetry: Story = {
@@ -4679,7 +4730,9 @@ export const PostMediaViewerHostErrorRetry: Story = {
     await userEvent.click(viewer.getByRole('button', { name: '게시글 다시 불러오기' }));
     await expect(viewer.findByTestId('post-media-viewer-image')).resolves.toBeVisible();
   },
-  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+  render: () => (
+    <ProductionPostListItemStory postId="post-media-viewer-quote" presentation="mobile" />
+  ),
 };
 
 export const PostMediaViewerHostUnavailable: Story = {
@@ -4700,7 +4753,9 @@ export const PostMediaViewerHostUnavailable: Story = {
     expect(await viewer.findByText('이미지를 더 이상 표시할 수 없습니다.')).toBeVisible();
     expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeEnabled();
   },
-  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+  render: () => (
+    <ProductionPostListItemStory postId="post-media-viewer-quote" presentation="mobile" />
+  ),
 };
 
 export const PostMediaViewerHostContentRevision: Story = {
@@ -4768,7 +4823,7 @@ export const PostMediaViewerSingle: Story = {
     expect(viewer.queryByRole('button', { name: '다음 이미지' })).toBeNull();
     expect(viewer.getByTestId('post-media-viewer-position')).toHaveTextContent('1 / 1');
   },
-  render: () => <ProductionPostListItemStory postId="media-text" />,
+  render: () => <ProductionPostListItemStory postId="media-text" presentation="mobile" />,
 };
 
 export const PostMediaViewerLoadingAndError: Story = {

@@ -31,6 +31,7 @@ type StoryArgs = {
   onPin: () => Promise<void>;
   onUnpin: () => Promise<void>;
   outcome: Outcome;
+  presentation: 'mobile' | 'wide';
   viewer: 'owner' | 'visitor';
 };
 
@@ -75,6 +76,7 @@ function Fixture({
   onResult,
   onUnpin,
   outcome,
+  presentation,
   viewer,
 }: StoryArgs & { onResult?: (action: ProfilePinOperation) => void }) {
   const postNode = useStoryPost();
@@ -159,7 +161,7 @@ function Fixture({
           },
         }}
       >
-        <PostListItem pinned={pinned} post={postNode} />
+        <PostListItem pinned={pinned} post={postNode} presentation={presentation} />
       </ProfilePinStoryContext>
     </View>
   );
@@ -226,6 +228,7 @@ const meta = {
     onPin: fn<() => Promise<void>>().mockResolvedValue(undefined),
     onUnpin: fn<() => Promise<void>>().mockResolvedValue(undefined),
     outcome: 'success',
+    presentation: 'wide',
     viewer: 'owner',
   },
   argTypes: {
@@ -285,7 +288,7 @@ export const Playground: Story = {
 export const OwnerPinned: Story = { args: { action: 'unpin' } };
 export const VisitorPinned: Story = { args: { viewer: 'visitor' } };
 export const Mobile: Story = {
-  args: { action: 'unpin' },
+  args: { action: 'unpin', presentation: 'mobile' },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   parameters: { layout: 'fullscreen' },
 };
@@ -464,7 +467,7 @@ export const ExistingDeletionFlow: Story = {
 export const ProductionWithoutPinFixture: Story = {
   render: function ProductionPost() {
     const postNode = useStoryPost();
-    return postNode ? <PostListItem pinned post={postNode} /> : <></>;
+    return postNode ? <PostListItem pinned post={postNode} presentation="wide" /> : <></>;
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

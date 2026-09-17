@@ -102,13 +102,13 @@ const PostListItemFragment = graphql`
 export function PostListItem({
   pinned = false,
   post: postKey,
-  presentation = 'wide',
+  presentation,
   showDivider = true,
   showReplyAttribution = true,
 }: {
   pinned?: boolean;
   post: PostListItem_post$key;
-  presentation?: PostListPresentation;
+  presentation: PostListPresentation;
   showDivider?: boolean;
   showReplyAttribution?: boolean;
 }) {
