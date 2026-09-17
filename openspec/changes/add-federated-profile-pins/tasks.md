@@ -18,14 +18,16 @@ Local pin API가 승인된 Post를 ordered set에 추가하고 지정한 Post만
 - Mentioned Profiles, Content 없는 pure Repost와 타인 작성 Post는 거부한다.
 - 기본 pin은 기존 관계를 지우지 않고 추가하며 unpin은 지정한 관계만 제거한다.
 - 새 pin은 기존 pin의 상대 순서를 보존한 한 위치에 저장하고 관계 변경·idempotent no-op이 없으면 order를 유지한다.
-- 현재 first-party UI slot 교체만 ModalSheet 확인 후 current expected value를 검증한 원자적 결과여야 한다.
+- 현재 first-party UI slot 교체만 ModalSheet 확인 후 일반 pin과 같은 Profile·대상 자격과 current expected value를 같은
+  transaction에서 검증한 원자적 결과여야 한다.
 - replacement expected-current 불일치는 저장 상태를 보존한 stale/conflict 결과여야 한다.
 - 동일 pin과 이미 없는 target unpin은 idempotent no-op이어야 하며 다른 pin을 제거하지 않는다.
 
 **Verification**
 
-- DB/core/API 테스트로 권한·자격, additive ordered collection projection, 지정 항목 unpin, current UI slot atomic replacement, stale concurrent request, same-pin/unpin no-op을
-  입력·결과·저장 상태로 검증한다. replacement stale/conflict 결과가 idempotent success와 구별되고 저장 상태를 보존하는지도 검증한다.
+- DB/core/API 테스트로 권한·자격, additive ordered collection projection, 지정 항목 unpin, current UI slot atomic replacement,
+  ineligible replacement 거부, stale concurrent request, same-pin/unpin no-op을 입력·결과·저장 상태로 검증한다. replacement
+  stale/conflict 결과가 idempotent success와 구별되고 저장 상태를 보존하는지도 검증한다.
 
 - [ ] 1.1 Local Profile pin/unpin의 eligibility, Owner 권한과 ordered add/remove semantics를 구현한다.
 - [ ] 1.2 current first-party UI slot 교체에서만 expected value를 검증하고 원자성·idempotent no-op을 보장한다.

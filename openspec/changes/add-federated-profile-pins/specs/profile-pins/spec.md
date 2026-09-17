@@ -44,7 +44,9 @@ The system MUST satisfy this contract.
 
 현재 Local first-party UI가 관리하는 첫 visible pin을 교체할 때는 기존 canonical ModalSheet의 confirmation content 교체 후
 수행해야 하며(MUST), 서버는 해당 UI slot mutation이 적용되는 transaction 안에서 호출자가 확인한 현재 pinned Post 기대값을
-검증해야 한다(MUST). 이 정책은 ordered pin collection의 다른 항목을 삭제하거나 API cardinality를 제한해서는 안 된다(MUST NOT).
+검증해야 한다(MUST). 서버는 같은 transaction에서 일반 pin과 동일한 Local Profile의 Active/Normal 상태, 대상의 동일 작성자,
+Active Current Content와 Public·Unlisted·Followers Only 자격을 재검증해야 하며(MUST), Mentioned Profiles, Content 없는 pure
+Repost와 다른 Profile 작성 Post로 교체해서는 안 된다(MUST NOT). 이 정책은 ordered pin collection의 다른 항목을 삭제하거나 API cardinality를 제한해서는 안 된다(MUST NOT).
 기대값이
 현재 상태와 다르면 stale confirmation이 새 pinned Post를 제거하거나 교체해서는 안 된다(MUST NOT). 이 stale/conflict
 결과는 idempotent success와 구별할 수 있는 결과여야 하지만 내부 GraphQL/HTTP shape를 고정하지 않는다.
@@ -62,6 +64,12 @@ The system MUST satisfy this contract.
 - **WHEN** 교체 확인이 열린 동안 다른 요청이 current pinned Post를 변경한 뒤 이전 확인 요청이 도착한다
 - **THEN** 시스템은 기대값 불일치로 저장 상태를 변경하지 않고 stale/conflict 결과를 반환한다
 - **AND** 현재 pinned Post를 제거하거나 이전 대상과 교체하지 않는다
+
+#### Scenario: Reject an ineligible replacement target
+
+- **WHEN** current pin 교체 대상이나 Local Profile 상태가 일반 pin 자격을 통과하지 않는다
+- **THEN** 시스템은 current pin과 다른 ordered pinned 관계를 변경하지 않는다
+- **AND** confirmation과 expected-current 일치만으로 자격 검증을 우회하지 않는다
 
 ### Requirement: Idempotent pin and unpin normalization
 

@@ -224,8 +224,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 고정 Post는 Profile 목록에만 우선 표시하고 Home timeline 순서는 변경하지 않는다.
 - 저장·API projection은 ordered 0..N collection이다. 현재 Local first-party UI는 server-authoritative order의 첫 visible
   pinned Post만 렌더하고 관리한다. 기본 Local pin mutation은 ordered set에 추가하고 지정한 Post만 해제하며, 현재 UI가 관리하는
-  slot을 다른 Post로 교체할 때만 canonical `ModalSheet`의 confirmation과 expected-current 보호를 사용한다. 같은 Post 재고정과
-  이미 해제된 Post 해제는 안전한 no-op으로 처리하며, 단순 고정·해제에는 확인을 표시하지 않는다.
+  slot을 다른 Post로 교체할 때만 canonical `ModalSheet`의 confirmation과 expected-current 보호를 사용한다. 교체 대상에도 아래
+  일반 고정 action과 같은 Profile 상태·작성자·Post lifecycle·Content·Visibility 자격을 적용한다. 같은 Post 재고정과 이미 해제된
+  Post 해제는 안전한 no-op으로 처리하며, 단순 고정·해제에는 확인을 표시하지 않는다.
 - 추가 Local pin은 현재 UI에서 고정 attribution이나 관리 대상으로 렌더하지 않지만 Profile chronology의 기존 위치에 일반
   Post로 남는다. 실제 pinned segment에 표시한 첫 visible pin만 chronology에서 제외한다.
 - 고정 action은 현재 Local Profile이 작성한 Active Content Post·Reply·Quote 중 Public·Unlisted·Followers Only인

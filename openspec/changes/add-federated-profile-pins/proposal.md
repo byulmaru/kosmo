@@ -9,8 +9,9 @@ ActivityPub `featured` 동기화가 일관되게 구현될 수 없다. PROD-809�
 - Profile pin 저장·API projection은 ordered 0..N collection으로 정의한다. Local pin은 ordered set에 추가하고 unpin은 지정한
   Post만 제거한다. 현재 Local first-party frontend는 server-authoritative order의 첫 visible Post만 관리·렌더한다.
 - 현재 UI가 관리하는 Post를 다른 Post로 교체할 때만 canonical ModalSheet confirmation과 expected-current 검증을 사용해
-  해당 UI slot을 원자적으로 교체한다. 이 rollout 정책은 저장·API cardinality를 제한하지 않으며, expected-current 불일치는
-  저장 상태를 보존한 stale/conflict 결과로 반환한다. 같은 Post 재고정과 이미 없는 Post 해제는 idempotent no-op으로 정규화한다.
+  일반 pin과 같은 Profile·대상 자격을 재검증하고 해당 UI slot을 원자적으로 교체한다. 이 rollout 정책은 저장·API cardinality를
+  제한하지 않으며, expected-current 불일치는 저장 상태를 보존한 stale/conflict 결과로 반환한다. 같은 Post 재고정과 이미 없는
+  Post 해제는 idempotent no-op으로 정규화한다.
 - Remote Profile은 검증된 ActivityPub `featured` collection의 지원 Post 전체를 원격 순서로 보존·표시하며 Local
   first-visible UI 제한을 적용하지 않는다.
 - Outbound Actor의 `featured` advertisement, Public/Unlisted 공개와 Followers Only signed fetch authorization, 기존

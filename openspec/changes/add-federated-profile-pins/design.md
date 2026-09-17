@@ -44,9 +44,9 @@ expected-current atomic replacement는 rollout 정책으로만 둔다. Followers
 
 1. 기존 core/domain action 경계에서 Local pin 후보를 검증하고, pin은 ordered set에 추가하고 unpin은 지정한 항목만 제거한다.
    같은 대상과 이미 없는 해제는 현재 상태를 유지하는 idempotent 결과로 정규화한다. 현재 first-party UI slot 교체에만 current
-   expected value 검사와 원자적 replace를 적용하며, 이 rollout 정책은 API·저장 cardinality를 제한하지 않는다. 새 pin에는 기존
-   pin의 상대 순서를 보존한 한 위치를 원자적으로 부여하고 관계 변경이 없으면 같은 order를 반환한다. 앞·뒤 배치와 별도 재정렬
-   UX는 고정하지 않는다.
+   expected value 검사와 원자적 replace를 적용하되 같은 transaction에서 일반 pin과 동일한 Profile·대상 자격을 재검증한다.
+   이 rollout 정책은 API·저장 cardinality를 제한하지 않는다. 새 pin에는 기존 pin의 상대 순서를 보존한 한 위치를 원자적으로
+   부여하고 관계 변경이 없으면 같은 order를 반환한다. 앞·뒤 배치와 별도 재정렬 UX는 고정하지 않는다.
 2. Profile 목록을 계산하는 서버 경계에서 visible pinned segment와 일반 chronology segment를 결합한다. Local은 첫 visible
    pin만 pinned segment에 두고 추가 Local pin은 Reply·Quote를 포함해 기존 chronology 위치의 일반 Post로 유지한다. Remote는
    검증된 visible pin 전체를 pinned segment에 둔다. 실제 pinned segment의 ID만 일반 후보에서 cursor/page limit 전에 제외하며,
