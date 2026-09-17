@@ -2452,6 +2452,34 @@ export const UniversalCompactComposerLifecycle: Story = {
   },
 };
 
+export const UniversalCompactRetiredComposeComposerLifecycle: Story = {
+  ...UniversalCompact,
+  parameters: {
+    ...universalParameters,
+    router: { pathname: '/compose', slotLabel: '존재하지 않는 화면' },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const trigger = canvas.getByRole('button', { name: '글쓰기' });
+
+    expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull();
+    await userEvent.click(trigger);
+    const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+    await userEvent.type(
+      within(dialog).getByRole('textbox', { name: '게시물 내용' }),
+      'retired route draft',
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
+    await waitFor(() => expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull());
+
+    await userEvent.click(trigger);
+    expect(await page.findByRole('textbox', { name: '게시물 내용' })).toHaveValue(
+      'retired route draft',
+    );
+  },
+};
+
 export const UniversalMobileComposerBreakpointFocusFallback: Story = {
   ...UniversalCompact,
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },

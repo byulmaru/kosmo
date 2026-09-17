@@ -114,6 +114,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const composerMountedRef = useRef(pathname !== '/compose');
   const composerTriggerFocusRef = useRef<HTMLElement | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -225,6 +226,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     if (web && typeof document !== 'undefined') {
       composerTriggerFocusRef.current = document.activeElement as HTMLElement | null;
     }
+    composerMountedRef.current = true;
     setComposerOpen(true);
     setDrawerOpen(false);
     setSwitcherOpen(false);
@@ -431,7 +433,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         ) : null}
       </View>
 
-      {(pathname !== '/compose' || composerOpen) && (profile !== null || showRightRail) ? (
+      {composerMountedRef.current && (profile !== null || showRightRail) ? (
         <View
           style={[
             styles.rightRail,
