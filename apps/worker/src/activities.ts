@@ -16,9 +16,9 @@ export {
   sendProfileUnfollowActivity,
 } from './profile-follow-activities';
 export {
-  executeProfileMigrationMoveFollower as executeProfileMigrationMoveFollowerActivity,
-  loadProfileMigrationMoveFollowerBatch as loadProfileMigrationMoveFollowerBatchActivity,
-} from '@kosmo/core/services';
+  executeProfileMigrationMoveFollowerActivity,
+  loadProfileMigrationMoveFollowerBatchActivity,
+} from './profile-migration-activities';
 export {
   executeProfileFollowPairTransition as executeProfileFollowPairTransitionActivity,
   executeProfileFollowRemoval as executeProfileFollowRemovalActivity,
