@@ -351,7 +351,7 @@ function PostListItemCard({
 }) {
   const theme = useTheme();
   const { handlers, hovered, pressed } = usePostSurfaceFeedback({
-    hover: Platform.OS === 'web',
+    hover: true,
     press: true,
   });
 

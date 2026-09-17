@@ -22,14 +22,15 @@ type SurfaceFeedbackHandlers = Pick<
 export function usePostSurfaceFeedback({ hover, press }: SurfaceFeedbackOptions) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
+  const hoverEnabled = hover && Platform.OS === 'web';
   const handlers: SurfaceFeedbackHandlers = {
-    onPointerEnter: hover
+    onPointerEnter: hoverEnabled
       ? (event: PointerEvent) =>
           setHovered(
             event.nativeEvent.pointerType === 'mouse' || event.nativeEvent.pointerType === 'pen',
           )
       : undefined,
-    onPointerLeave: hover
+    onPointerLeave: hoverEnabled
       ? () => {
           setHovered(false);
           setPressed(false);
