@@ -348,7 +348,16 @@ test('Account deletion Activity transaction은 정리 중 실패하면 모든 �
 
     await assert.rejects(
       deleteAccountActivity({ accountId: fixture.account.id }),
-      /account deletion rollback/,
+      (error: unknown) => {
+        let current: unknown = error;
+        while (current instanceof Error) {
+          if (current.message.includes('account deletion rollback')) {
+            return true;
+          }
+          current = current.cause;
+        }
+        return false;
+      },
     );
     assert.equal(
       (
