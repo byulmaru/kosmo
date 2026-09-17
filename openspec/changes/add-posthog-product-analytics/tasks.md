@@ -134,6 +134,8 @@ PostHog의 `defaults: '2026-05-30'` 표준 pageview·pageleave·autocapture·met
 
 ## 5. PROD-820 build/deployment 공개 설정 주입
 
+이 그룹은 완료된 전환기 구현·검증 이력이다. 현재 주입 경로의 authority는 PROD-839의 2026-09-08 정렬 승인과 PROD-891·833이다. 아래 완료 checkbox는 당시 결과를 보존하며 현재 build-time 주입을 복구하는 작업이 아니다. 최신 cleanup 검증은 그룹 9가 소유한다.
+
 **Authority / Provenance**
 
 - `PROD-820`의 Cloud/build 공개 설정 계약
@@ -165,35 +167,37 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 
 **Authority / Provenance**
 
-- [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 설정 정리 범위·선행 관계·완료 조건
-- `PROD-819`의 Web runtime 전환과 `PROD-820`의 공개 build-time 설정·전환기 OpenPanel 주입 계약
-- `PROD-795`의 정리 결과 인계와 `PROD-575`의 최종 acceptance·archive 계약
+- [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 포함·제외 범위, 선행·후행 관계, 완료 조건과 2026-09-08 Issue Gate 정렬 승인
+- `PROD-819`의 runtime 전환, `PROD-820`의 Cloud·전환기 공개 설정 결과
+- [PROD-891](https://linear.app/byulmaru/issue/PROD-891)의 현재 채널 설정, [PROD-833](https://linear.app/byulmaru/issue/PROD-833)과 `docs/operations/production-release.md`의 SHA 이미지 승격·rollback 계약
+- `PROD-795`의 cleanup 인계, `PROD-741`의 Replay acceptance와 `PROD-575`의 최종 acceptance·archive 책임
 
 **Deliverable**
 
-지원되는 Web build·수동 SHA rebuild·rollback 경로가 OpenPanel 없이 동작하고, 저장소 build·deployment 경계와 외부 설정에 불필요한 OpenPanel 전용 항목이 남지 않는다. 제거 전후 목록과 검증 결과를 실제 값 없이 PROD-795에 인계한다.
+지원 canonical build·수동 SHA release·rollback 경로가 OpenPanel 없이 동작하고, 저장소와 외부 활성 설정에 불필요한 OpenPanel 전용 항목이 남지 않는다. 이미 제거된 참조의 근거와 실제 제거 전후 결과를 값 없이 PROD-795에 인계하고 PROD-575가 사용할 cleanup 근거를 식별한다.
 
 **Guardrails**
 
-- PROD-819·PROD-820이 같은 지원 release line에 병합되고 OpenPanel을 사용하는 지원 대상이 없음을 확인하기 전에는 설정을 제거하지 않는다. PR 순서·CI 통과만으로 이 조건을 대신하지 않는다.
-- GitHub repository와 현재 배포에 쓰는 environment, 활성 runtime configuration source·운영 설정 저장소를 확인한다. 조회하지 못한 범위를 설정 부재로 처리하지 않는다.
-- PostHog 공개 key·host의 build-time 주입, local·development 기본 비활성화, 설정 누락 no-op과 선행 승인된 runtime·privacy·Replay 계약을 유지한다.
-- runtime·패키지·테스트 제거는 PROD-819, Cloud 최초 구성은 PROD-820, 개인정보·runbook 통합은 PROD-795, Replay acceptance는 PROD-741, production acceptance·archive는 PROD-575가 소유한다.
-- 실제 설정값·credential·사용자 데이터는 OpenSpec, Linear, PR, 로그와 handoff에 남기지 않는다. 과거 image 삭제나 지원 정책 변경으로 정리 조건을 임의로 충족시키지 않는다.
+- PROD-819·820 결과가 같은 지원 release line에 포함되고 지원 대상의 OpenPanel 비의존을 확인하기 전에는 남은 설정을 제거하지 않는다. 이슈 Done·PR merge·순서·green CI로 gate를 대신하지 않는다.
+- GitHub repository·사용 중인 environment variables, 활성 runtime configuration source·운영 설정 저장소를 확인한다. 접근할 수 없거나 확인하지 못한 범위를 설정 부재로 처리하지 않는다.
+- 현재 채널 설정·`/channel.js`·canonical build·SHA tag digest 승격·prod 수집 중단을 보존한다. 사라진 ARG·ENV·build arg·development empty no-op은 복구하거나 중복 제거하지 않는다.
+- 가짜 설정의 PostHog 활성화·누락 no-op 검증을 실제 prod 수집과 구분한다. 기존 metadata·identity·privacy·Replay 계약과 local·development 기본 비활성화를 유지한다.
+- PostHog·기타 provider 설정 삭제, 재활성화, 실제 production 배포, image 삭제와 지원 release 정책 변경은 제외한다. Runtime 제거는 PROD-819, Cloud 최초 구성은 PROD-820, 운영 문서 통합은 PROD-795, Replay acceptance는 PROD-741, production acceptance·archive는 PROD-575가 소유한다.
+- 실제 설정값·credential·사용자 데이터를 OpenSpec·Linear·PR·로그·handoff에 남기지 않는다. PROD-891·833의 운영 검증 책임이나 새 blocker를 가져오지 않는다.
 
 **Verification**
 
-- merge·release 반영 근거와 지원 build·수동 SHA rebuild·rollback 대상별 OpenPanel 비사용 근거를 식별자·결과로 확인한다.
-- Dockerfile·development·production workflow 및 활성 설정의 OpenPanel 주입 부재와 PostHog 공개 설정 보존을 확인한다.
-- GitHub repository·environment 및 활성 배포 설정별 이름·범위·존재 여부를 제거 전후에 비교한다. 접근 불가·미확인 항목이 남으면 정리 완료로 처리하지 않는다.
-- 가짜 PostHog 공개 설정만 사용한 production-equivalent Web build·image inspection과 지원 rebuild·rollback 경로 검증으로 OpenPanel 비의존을 확인한다. 설정 누락 no-op과 기존 analytics 회귀 검증 결과를 함께 확인한다.
-- PROD-795에 전달할 목록·환경·검증 결과·남은 production 확인 사항에 실제 값이나 사용자 데이터가 없는지 검토한다.
+- 같은 지원 release line 반영과 지원 source full SHA·canonical build run·image digest별 OpenPanel 비의존 근거를 기록한다. 지원되는 canonical rebuild가 있으면 포함하고 실제 배포·미검증 상태를 구분한다.
+- Dockerfile·canonical Docker Build·dev·production workflow에서 이미 제거된 참조는 선행 SHA와 현재 상태로 증명한다. Source 조사를 실행 검증으로 대신하지 않고 workflow 문법에는 표준 validator를 사용한다.
+- `EXPO_PUBLIC_OPENPANEL_CLIENT_ID`를 포함한 설정 이름·환경·범위·존재 여부를 제거 전후 비교한다. 미확인 범위가 남으면 cleanup 완료로 처리하지 않는다.
+- 격리된 가짜 key·host 네 조합, 현재 prod 채널 무전송, production-equivalent Web export·image inspection과 지원 release·rollback 비의존을 검증한다. Production은 성공한 canonical build 확인 후 preflight 고정 digest를 재빌드·재조회 없이 승격하는 경로로 확인한다.
+- PROD-795에 전달할 목록·환경·검증 결과·문서 잔여 참조·남은 production 확인 사항에서 실제 값을 제외한다. PROD-795의 Done 상태를 인계·통합 완료 증거로 사용하지 않는다.
 
-- [ ] 9.1 선행 변경의 같은 지원 release line 병합과 지원 build·수동 SHA rebuild·rollback 대상별 OpenPanel 비사용 근거를 확인하고, 정리할 설정 범위와 미확인 항목을 목록화한다.
-- [ ] 9.2 정리 조건 충족 후 Dockerfile의 OpenPanel ARG·ENV, production build arg와 development empty no-op 주입을 제거하고 PostHog 공개 설정 경계가 유지되는지 확인한다.
-- [ ] 9.3 확인된 GitHub repository·environment의 OpenPanel 전용 variable을 제거하고 활성 배포 설정의 잔여 참조를 점검한다. 설정 이름·적용 범위·존재 여부만 전후 기록에 남긴다.
-- [ ] 9.4 PostHog-only production-equivalent build·image inspection, 지원 rebuild·rollback 경로와 관련 회귀 검증으로 OpenPanel 비의존을 입증한다.
-- [ ] 9.5 제거 전후 목록, 적용 환경, 검증 결과와 남은 production 확인 사항을 실제 값 없이 PROD-795에 인계한다.
+- [ ] 9.1 같은 지원 release line과 지원 canonical build·SHA release·rollback 및 지원되는 canonical rebuild의 source SHA·build run·digest별 OpenPanel 비의존을 확인하고 설정 범위·미확인 항목을 목록화한다.
+- [ ] 9.2 이미 제거된 주입의 선행 SHA·현재 상태를 기록하고, gate 충족 후 남은 source 참조만 정리한다. 현재 채널 설정·SHA 승격·prod 수집 중단을 보존한다.
+- [ ] 9.3 gate와 대상 범위를 재확인한 뒤 실제 남은 외부 OpenPanel 전용 설정을 제거하고 이름·환경·범위·존재 여부만 전후 기록에 남긴다.
+- [ ] 9.4 격리된 가짜 설정의 활성화·누락 no-op, 현재 prod 무전송, production-equivalent Web export·image inspection과 지원 release·rollback 검증으로 OpenPanel 비의존을 입증한다.
+- [ ] 9.5 제거 전후 목록·환경·검증 결과·문서 잔여 참조·남은 production 확인 사항을 실제 값 없이 PROD-795에 인계하고 PROD-575의 acceptance 입력을 식별한다.
 
 ## 6. PROD-795 개인정보·운영 통합
 
@@ -275,7 +279,7 @@ actual production에서 PostHog 표준 runtime·typed custom event·identity·Re
 **Guardrails**
 
 - 그룹 1~7의 완료와 required validation을 확인하기 전 archive하지 않는다.
-- 지원 release·수동 SHA rebuild·rollback 경로가 OpenPanel 설정에 의존하지 않는지 PROD-839 증거로 확인한다.
+- 지원 canonical build·수동 SHA release·rollback 경로가 OpenPanel 설정에 의존하지 않는지 PROD-839 증거로 확인한다.
 - production release 선택·승인·배포와 전체 public smoke는 PROD-545의 결과를 입력으로 사용하고 이 그룹에서 다시 소유하지 않는다.
 - old `add-web-openpanel-product-analytics`는 active spec을 되돌리지 않도록 `--skip-specs`로 먼저 archive한다.
 - 현재 `add-posthog-product-analytics`는 delta spec 동기화와 strict validation을 포함해 정상 archive한다.
