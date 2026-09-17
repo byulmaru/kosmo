@@ -53,6 +53,20 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 - **AND** `materializeRemoteProfileActorActivity`를 호출하거나 Profile을 저장하지 않는다
 - **AND** Fedify `lookupWebFinger()` 예외와 qualifying `self` link의 malformed href는 materialization failure로 유지한다
 
+#### Scenario: Treat a missing actor document during initial lookup as a no-match
+
+- **WHEN** `materializeRemoteProfileActorActivity`가 Fedify actor document `lookupObject()`에서 `null`을 받는다
+- **THEN** 시스템은 이를 정상 no-match로 처리하고 `remoteProfileLookupWorkflow`가 Profile identity 없이 완료되도록 한다
+- **AND** 시스템은 Profile을 저장하지 않는다
+- **AND** actor document lookup 예외와 non-null non-Actor 결과는 materialization failure로 유지한다
+
+#### Scenario: Treat a missing actor document during stale refresh as a no-op
+
+- **WHEN** stale remote actor refresh child의 Fedify actor document `lookupObject()`가 `null`을 반환한다
+- **THEN** 시스템은 refresh를 materialization failure로 기록하지 않고 조용히 완료한다
+- **AND** 기존 remote Profile identity와 actor metadata를 유지한다
+- **AND** public lookup Workflow는 cached Profile identity를 계속 반환한다
+
 #### Scenario: Keep a stale refresh child after coordinator closure
 
 - **WHEN** public lookup Workflow가 stale 상태를 확인하고 refresh child의 실행 시작 확인을 기록한다

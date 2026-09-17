@@ -133,6 +133,7 @@ Block 공통 predicate를 선행 조건으로 요구해서는 안 된다(MUST NO
 - **THEN** 시스템은 기존 DB connection과 staged visibility를 적용한 저장 Profile을 refresh 완료 전에 즉시 반환한다
 - **AND** 시스템은 같은 handle lookup Workflow 경로에서 refresh child를 시작한다
 - **AND** 후속 refresh의 시작 또는 실행이 실패해도 기존 Profile과 성공한 검색 결과를 제거하거나 실패로 바꾸지 않는다
+- **AND** refresh child의 actor document lookup이 `null`을 반환해도 기존 Profile identity와 actor metadata를 유지한 채 조용히 완료한다
 
 #### Scenario: Return a canonical actor found through an alias domain
 
@@ -149,7 +150,7 @@ Block 공통 predicate를 선행 조건으로 요구해서는 안 된다(MUST NO
 
 #### Scenario: Keep an empty result when remote lookup has no identity
 
-- **WHEN** 명시적인 원격 검색의 public handle lookup Workflow가 오류 없이 Profile identity 없이 (`null`) 완료된다
+- **WHEN** 명시적인 원격 검색의 public handle lookup Workflow가 WebFinger 또는 actor document lookup의 `null` 결과를 받아 오류 없이 Profile identity 없이 (`null`) 완료된다
 - **THEN** 시스템은 GraphQL 오류 없이 기존 connection shape의 빈 결과를 반환한다
 - **AND** API 오류 관측 경계에 해당 결과를 오류로 기록하지 않는다
 - **AND** materialization 이후 Profile DB 검색을 실행하지 않는다

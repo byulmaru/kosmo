@@ -380,6 +380,10 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
   });
   const actor = (await context.lookupObject(options.actorUri)) as ActivityPubObject | null;
 
+  if (actor === null) {
+    return null;
+  }
+
   if (!isActor(actor)) {
     throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
   }

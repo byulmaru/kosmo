@@ -8,6 +8,6 @@ const { refreshRemoteProfileActorActivity } =
 
 export async function remoteProfileRefreshWorkflow(
   input: RemoteProfileMaterializationInput,
-): Promise<string> {
+): Promise<string | null> {
   return refreshRemoteProfileActorActivity(input);
 }

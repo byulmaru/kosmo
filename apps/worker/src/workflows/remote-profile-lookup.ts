@@ -30,6 +30,9 @@ export async function remoteProfileLookupWorkflow(
     ...(input.profileId ? { profileId: input.profileId } : {}),
   };
   const state = await materializeRemoteProfileActorActivity(materializationInput);
+  if (state === null) {
+    return null;
+  }
 
   if (!state.needsRefresh) {
     return state.profileId;

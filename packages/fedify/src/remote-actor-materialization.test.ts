@@ -84,6 +84,7 @@ describe('remote actor materialization', () => {
       actorUri: remoteActorUri,
       now,
     });
+    assert.ok(profile);
 
     assert.equal(profile.handle, 'alice');
     assert.equal(profile.displayName, 'Alice Remote');
@@ -128,6 +129,7 @@ describe('remote actor materialization', () => {
       actorUri,
       now: firstNow,
     });
+    assert.ok(profile);
 
     const firstStored = await db
       .select({ profileUrl: ActivityPubActors.profileUrl })
@@ -201,6 +203,7 @@ describe('remote actor materialization', () => {
       actorUri,
       now: firstNow,
     });
+    assert.ok(profile);
 
     const legacyStored = await db
       .select({ profileUrl: ActivityPubActors.profileUrl })
@@ -237,6 +240,7 @@ describe('remote actor materialization', () => {
       actorUri: remoteActorUri,
       now: firstNow,
     });
+    assert.ok(first);
 
     const firstMedia = await readProfileMedia(first.id);
     assert.deepEqual(
@@ -309,6 +313,7 @@ describe('remote actor materialization', () => {
       ).context,
       actorUri: remoteActorUri,
     });
+    assert.ok(profile);
 
     const media = await readProfileMedia(profile.id);
     assert.equal(media.length, 2);
@@ -403,6 +408,7 @@ describe('remote actor materialization', () => {
       context: createLookupContext(async () => actor).context,
       actorUri: remoteActorUri,
     });
+    assert.ok(profile);
 
     assert.equal(profile.displayName, 'Alice Remote');
     assert.deepEqual(await readProfileMedia(profile.id), []);
@@ -423,6 +429,7 @@ describe('remote actor materialization', () => {
       actorUri: remoteActorUri,
       now: originalNow,
     });
+    assert.ok(original);
     const refreshedActor = createActor({
       icon: new Image({
         mediaType: 'image/webp',
@@ -599,6 +606,7 @@ describe('remote actor materialization', () => {
       context,
       actorUri: remoteActorUri,
     });
+    assert.ok(profile);
 
     assert.equal(profile.handle, 'Admin');
     assert.equal(profile.normalizedHandle, 'admin');
@@ -614,6 +622,7 @@ describe('remote actor materialization', () => {
         context,
         actorUri: remoteActorUri,
       });
+      assert.ok(profile);
 
       assert.equal(profile.handle, preferredUsername);
       assert.equal(profile.normalizedHandle, preferredUsername.toLowerCase());
@@ -634,6 +643,7 @@ describe('remote actor materialization', () => {
       context,
       actorUri: remoteActorUri,
     });
+    assert.ok(materialized);
 
     const instance = await db
       .select()
@@ -645,14 +655,13 @@ describe('remote actor materialization', () => {
     assert.equal(instance.domain, remoteDomain);
   });
 
-  test('rejects lookup errors, missing objects, and non-actors without creating profiles', async () => {
+  test('rejects lookup errors and non-actors without creating profiles', async () => {
     const lookupError = new Error('lookup failed');
     const cases: Array<{
       expected: RegExp;
-      result: ActivityPubObject | Error | null;
+      result: ActivityPubObject | Error;
     }> = [
       { expected: /lookup failed/, result: lookupError },
-      { expected: /did not return an actor/, result: null },
       {
         expected: /did not return an actor/,
         result: new Note({ id: new URL(`https://${remoteDomain}/notes/1`), content: 'note' }),
@@ -676,6 +685,18 @@ describe('remote actor materialization', () => {
     }
   });
 
+  test('returns null when lookup finds no remote actor document', async () => {
+    const { context, lookupObject } = createLookupContext(async () => null);
+
+    const result = await materializeRemoteProfileActor({ context, actorUri: remoteActorUri });
+
+    assert.equal(result, null);
+    assert.equal(lookupObject.mock.calls.length, 1);
+    assert.equal(await countRows(Profiles), 0);
+    assert.equal(await countRows(ActivityPubActors), 0);
+    assert.equal(await countRows(Instances), 1);
+  });
+
   for (const preferredUsername of ['alice with spaces', '', '   ', 'alice-with-dashes']) {
     test(`rejects unsupported preferred username ${JSON.stringify(preferredUsername)}`, async () => {
       const { context } = createLookupContext(async () => createActor({ preferredUsername }));
@@ -696,6 +717,7 @@ describe('remote actor materialization', () => {
       context,
       actorUri: remoteActorUri,
     });
+    assert.ok(profile);
 
     assert.equal(profile.handle, 'alice');
     assert.equal(profile.normalizedHandle, 'alice');
@@ -709,6 +731,7 @@ describe('remote actor materialization', () => {
       context,
       actorUri: remoteActorUri,
     });
+    assert.ok(profile);
 
     assert.equal(profile.displayName, 'Alice Remote');
   });
@@ -721,6 +744,7 @@ describe('remote actor materialization', () => {
       context,
       actorUri: remoteActorUri,
     });
+    assert.ok(profile);
 
     assert.equal(profile.bio, 'Remote bio');
   });
@@ -737,6 +761,7 @@ describe('remote actor materialization', () => {
       context,
       actorUri: remoteActorUri,
     });
+    assert.ok(profile);
 
     assert.equal(profile.bio, 'Hello world');
   });
@@ -751,6 +776,7 @@ describe('remote actor materialization', () => {
       context,
       actorUri: remoteActorUri,
     });
+    assert.ok(profile);
 
     assert.equal(profile.bio, 'Hello & world');
   });
@@ -765,6 +791,7 @@ describe('remote actor materialization', () => {
       context,
       actorUri: remoteActorUri,
     });
+    assert.ok(profile);
 
     assert.equal(profile.bio, visibleText);
   });
@@ -778,6 +805,7 @@ describe('remote actor materialization', () => {
       context,
       actorUri: remoteActorUri,
     });
+    assert.ok(profile);
 
     assert.equal(profile.bio, null);
   });
@@ -789,6 +817,7 @@ describe('remote actor materialization', () => {
       context,
       actorUri: remoteActorUri,
     });
+    assert.ok(profile);
 
     assert.equal(profile.displayName, 'alice');
   });
@@ -870,6 +899,7 @@ describe('remote actor materialization', () => {
       actorUri: remoteActorUri,
       now: Temporal.Instant.from('2026-07-10T00:00:00Z'),
     });
+    assert.ok(refreshed);
 
     assert.equal(refreshed.id, stored.profile.id);
     assert.equal(refreshed.displayName, 'Refreshed Alice');
@@ -884,6 +914,7 @@ describe('remote actor materialization', () => {
       actorUri: remoteActorUri,
       now: Temporal.Instant.from('2026-07-11T00:00:00Z'),
     });
+    assert.ok(preserved);
 
     assert.equal(preserved.createdAt.toString(), nextPublished.toString());
   });
@@ -1077,6 +1108,8 @@ describe('remote actor materialization', () => {
       materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
       materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
     ]);
+    assert.ok(firstProfile);
+    assert.ok(secondProfile);
 
     assert.equal(firstProfile.id, secondProfile.id);
     assert.equal(await countRows(Profiles), 1);

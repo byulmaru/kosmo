@@ -29,7 +29,7 @@ export type RemoteProfileMaterializationInput = {
 export const REMOTE_PROFILE_REFRESH_WORKFLOW_TYPE = 'remoteProfileRefreshWorkflow';
 
 export const remoteProfileRefreshWorkflow: WorkflowDefinition<
-  (input: RemoteProfileMaterializationInput) => Promise<string>
+  (input: RemoteProfileMaterializationInput) => Promise<string | null>
 > = {
   workflow: REMOTE_PROFILE_REFRESH_WORKFLOW_TYPE,
   workflowIdFromArgs: (input) =>

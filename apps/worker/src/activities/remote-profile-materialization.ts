@@ -77,12 +77,8 @@ export const lookupRemoteActorUriActivity = async (
   const context = federation.createContext(new URL(localInstance.canonicalOrigin), undefined);
   const descriptor = await context.lookupWebFinger(`acct:${input.handle}@${input.domain}`);
 
-  if (descriptor === null) {
-    return null;
-  }
-
   let hasInvalidQualifyingLink = false;
-  for (const link of descriptor.links ?? []) {
+  for (const link of descriptor?.links ?? []) {
     if (
       link.rel !== 'self' ||
       (link.type !== 'application/activity+json' &&
@@ -121,7 +117,7 @@ export const lookupRemoteActorUriActivity = async (
 
 export const refreshRemoteProfileActorActivity = async (
   input: RemoteProfileMaterializationInput,
-): Promise<string> => {
+): Promise<string | null> => {
   const now = Temporal.Now.instant();
 
   try {
@@ -195,7 +191,7 @@ export const refreshRemoteProfileActorActivity = async (
       now,
     });
 
-    return profile.id;
+    return profile?.id ?? null;
   } catch (error) {
     if (error instanceof RemoteActorMaterializationError) {
       throw ApplicationFailure.nonRetryable(error.message, 'RemoteActorMaterializationError');
@@ -215,7 +211,7 @@ export const refreshRemoteProfileActorActivity = async (
 
 export const materializeRemoteProfileActorActivity = async (
   input: RemoteProfileMaterializationInput,
-): Promise<RemoteProfileMaterializationState> => {
+): Promise<RemoteProfileMaterializationState | null> => {
   const stored = await findStoredRemoteProfileActorState(input);
 
   if (stored) {
@@ -223,5 +219,9 @@ export const materializeRemoteProfileActorActivity = async (
   }
 
   const profileId = await refreshRemoteProfileActorActivity(input);
+  if (profileId === null) {
+    return null;
+  }
+
   return { needsRefresh: false, profileId };
 };
