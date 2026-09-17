@@ -16,7 +16,7 @@ import { and, eq } from 'drizzle-orm';
 import type {
   RemoteProfileLookupInput,
   RemoteProfileMaterializationInput,
-} from '@kosmo/core/temporal/remote-profile';
+} from '@kosmo/core/temporal/workflows';
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
 

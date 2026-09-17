@@ -1,0 +1,26 @@
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { accountDeletionWorkflow } from '@kosmo/core/temporal/workflows';
+import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
+import { builder } from '@/graphql/builder';
+
+builder.mutationField('deleteAccount', (t) =>
+  t.withAuth({ login: true }).field({
+    type: builder.simpleObject('DeleteAccountPayload', {
+      fields: (field) => ({
+        completed: field.boolean(),
+      }),
+    }),
+    resolve: async (_, __, ctx) => {
+      const completed = await runWorkflow(accountDeletionWorkflow, {
+        args: [{ accountId: ctx.session.accountId }],
+        mode: 'execute',
+        workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+        workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+      });
+
+      return {
+        completed,
+      };
+    },
+  }),
+);

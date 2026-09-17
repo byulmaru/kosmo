@@ -134,6 +134,10 @@ type CreateProfilePayload {
 """RFC9557 formatted string"""
 scalar DateTime
 
+type DeleteAccountPayload {
+  completed: Boolean!
+}
+
 input DeleteBookmarkInput {
   id: ID!
 }
@@ -261,6 +265,7 @@ type Mutation {
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
+  deleteAccount: DeleteAccountPayload!
   deleteBookmark(input: DeleteBookmarkInput!): DeleteBookmarkPayload!
   deletePost(input: DeletePostInput!): DeletePostPayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!

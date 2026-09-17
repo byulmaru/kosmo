@@ -6,7 +6,8 @@ Session은 Account가 Kosmo에 인증된 상태를 유지하기 위해 발급받
 durable 객체다. Session은 credential을 사용하는 한 클라이언트 환경의 인증 단위이며, 같은 Account에는 서로
 독립적인 Session이 여러 개 존재할 수 있다.
 
-Session 폐기는 OIDC provider의 전역 로그인 상태나 다른 Session을 함께 종료하지 않는다.
+일반적인 Session 폐기는 OIDC provider의 전역 로그인 상태나 다른 Session을 함께 종료하지 않는다. Account 삭제는
+예외로 해당 Account에 속한 모든 Active Session을 Revoked로 만든다.
 
 ## 상태
 
@@ -42,6 +43,10 @@ Session credential의 원문은 Session의 조회 가능한 속성이 아니다.
 | Session 생성      | Account   | Session   | 검증된 로그인 결과 | `Account.Active` | 검증된 로그인 결과가 Account와 연결된다                                                                                                                                   | Account에 속한 새 Active Session이 생성된다                                                                                                                           |
 | 현재 Session 폐기 | Account   | Session   | 없음               | `Session.Self`   | 요청 credential을 검증한 서버 인증 경계가 Active Session을 식별하고, 연결된 Account State가 Active 또는 Suspended이며, 클라이언트가 다른 Session 식별자를 지정하지 않는다 | Active Session은 Revoked가 된다. 인증 뒤 경쟁 요청으로 이미 Revoked 또는 Expired가 된 Session은 terminal 상태를 유지한다. 같은 Account의 다른 Session은 바뀌지 않는다 |
 | Session 만료      | 시스템    | Session   | 없음               | 없음             | Active Session이 적용되는 유효 기간 정책을 더 이상 만족하지 않는다                                                                                                        | Session State가 Expired가 된다                                                                                                                                        |
+
+Account 삭제가 성공하면 해당 Account의 모든 Active Session을 Revoked로 전이한다. 여기에는 탈퇴 요청에 사용한
+현재 Session도 포함되며, 이 Account 수준 전이는 한 Session만 대상으로 하는 현재 Session 폐기와 다르다. 다른
+Account의 Session은 변경하지 않는다.
 
 현재 Session 폐기는 상태 수준에서 멱등이다. 폐기 완료 뒤 같은 credential로 시작한 새 요청은 인증 경계에서 거부되며,
 폐기 전에 인증을 마친 경쟁 요청은 Session을 다른 terminal 상태로 덮어쓰지 않는다.
@@ -80,7 +85,7 @@ caller-owned credential과 해당 Session에 종속된 상태를 제거하고 �
 
 - absolute expiration과 idle expiration의 채택 여부, 기간 및 사용 시각 갱신 정책
 - 동일한 로그인 결과에서 기존 Active Session을 재사용할지 새 Session을 생성할지에 관한 정책
-- Session 목록, 전체 로그아웃과 분실 기기의 원격 Session 폐기
+- Session 목록, 일반적인 전체 로그아웃과 분실 기기의 원격 Session 폐기
 - Session 폐기 시각과 감사 이력의 저장·노출
 - Revoked/Expired Session의 보존 기간과 cleanup, 기존 Session migration·rollout·rollback
 - OIDC provider logout 또는 global SSO logout

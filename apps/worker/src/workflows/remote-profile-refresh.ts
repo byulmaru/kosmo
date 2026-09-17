@@ -1,6 +1,6 @@
 import { proxyActivities } from '@temporalio/workflow';
 import { workflowActivityOptions } from './activity-options';
-import type { RemoteProfileMaterializationInput } from '@kosmo/core/temporal/remote-profile';
+import type { RemoteProfileMaterializationInput } from '@kosmo/core/temporal/workflows';
 import type * as activities from '../activities';
 
 const { refreshRemoteProfileActorActivity } =

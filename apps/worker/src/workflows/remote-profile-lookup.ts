@@ -1,4 +1,4 @@
-import { remoteProfileRefreshWorkflow } from '@kosmo/core/temporal/remote-profile';
+import { remoteProfileRefreshWorkflow } from '@kosmo/core/temporal/workflows';
 import {
   ChildWorkflowCancellationType,
   log,
@@ -11,7 +11,7 @@ import { runChildWorkflow } from './child';
 import type {
   RemoteProfileLookupInput,
   RemoteProfileMaterializationInput,
-} from '@kosmo/core/temporal/remote-profile';
+} from '@kosmo/core/temporal/workflows';
 import type * as activities from '../activities';
 
 const { lookupRemoteActorUriActivity, materializeRemoteProfileActorActivity } =

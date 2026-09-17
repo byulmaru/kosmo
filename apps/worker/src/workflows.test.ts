@@ -1428,3 +1428,51 @@ test(
     assert.equal(activityCalls, 1);
   },
 );
+
+test(
+  'Account deletion Workflow는 accountId를 transaction Activity에 전달하고 결과를 반환한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-account-deletion-test-${process.pid}`;
+    const eligibleAccountId = '00000000-0000-8000-8000-000000000901';
+    const blockedAccountId = '00000000-0000-8000-8000-000000000902';
+    const calls: Array<{ readonly accountId: string }> = [];
+    const worker = await Worker.create({
+      activities: {
+        deleteAccountActivity: async (input: { readonly accountId: string }) => {
+          calls.push(input);
+          return input.accountId === eligibleAccountId;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      assert.equal(
+        await environment.client.workflow.execute('accountDeletionWorkflow', {
+          args: [{ accountId: eligibleAccountId }],
+          taskQueue,
+          workflowId: `account-deletion:${eligibleAccountId}`,
+        }),
+        true,
+      );
+      assert.equal(
+        await environment.client.workflow.execute('accountDeletionWorkflow', {
+          args: [{ accountId: blockedAccountId }],
+          taskQueue,
+          workflowId: `account-deletion:${blockedAccountId}`,
+        }),
+        false,
+      );
+    });
+
+    assert.deepEqual(calls, [{ accountId: eligibleAccountId }, { accountId: blockedAccountId }]);
+  },
+);
