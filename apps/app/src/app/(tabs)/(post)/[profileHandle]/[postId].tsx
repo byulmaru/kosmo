@@ -3,6 +3,7 @@ import { ChevronLeftIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { markNativePushRoute } from '@/components/native-push/pushPayload';
 import { PageHeader } from '@/components/PageHeader';
 import { PostDetailFrame, PostDetailThread } from '@/components/post/PostDetailThread';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -157,9 +158,12 @@ function PostDetailContent({
     if (openedFromPush && (!post || post.state === 'DELETED' || locallyDeleted)) {
       router.replace('/notifications');
     } else if (pureRepostSourceHref) {
-      router.replace(pureRepostSourceHref);
+      router.replace(
+        openedFromPush ? markNativePushRoute(pureRepostSourceHref) : pureRepostSourceHref,
+      );
     } else if (post && post.profile.relativeHandle !== routeRelativeHandle) {
-      router.replace(`/${post.profile.relativeHandle}/${postId}`);
+      const canonicalHref = `/${post.profile.relativeHandle}/${postId}` as Href;
+      router.replace(openedFromPush ? markNativePushRoute(canonicalHref) : canonicalHref);
     }
   }, [
     locallyDeleted,

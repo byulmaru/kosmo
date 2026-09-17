@@ -102,6 +102,16 @@ describe('native push tap payloads', () => {
     );
   });
 
+  it('preserves fromPush across pure repost and canonical handle redirects', () => {
+    const pureRepostRedirect = markNativePushRoute('/@source/post:source');
+    const canonicalHandleRedirect = markNativePushRoute('/@canonical/post:source');
+
+    assert.equal(pureRepostRedirect, '/@source/post:source?fromPush=1');
+    assert.equal(canonicalHandleRedirect, '/@canonical/post:source?fromPush=1');
+    assert.equal(markNativePushRoute(pureRepostRedirect), pureRepostRedirect);
+    assert.equal(markNativePushRoute(canonicalHandleRedirect), canonicalHandleRedirect);
+  });
+
   it('reads Expo response data and provides a stable duplicate key', () => {
     const response = {
       actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',

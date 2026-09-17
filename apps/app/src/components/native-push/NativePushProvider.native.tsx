@@ -24,13 +24,13 @@ import {
   NativePushUpdateInstallationMutation,
 } from './nativePushOperations';
 import { unregisterDeniedPushInstallation } from './pushInstallationLifecycle';
+import { prepareNativePushNavigation } from './pushNavigation';
 import {
-  markNativePushRoute,
-  nativePushNotificationTargetHref,
   nativePushResponseKey,
   notificationDataFromResponse,
   parseNativePushTapTarget,
 } from './pushPayload';
+import { acceptNativePushPrompt } from './pushPrompt';
 import {
   deletePushInstallationId,
   markPushPromptComplete,
@@ -166,7 +166,7 @@ export function NativePushProvider() {
           return;
         } catch (error) {
           if (isPushMutationFailure(error) && error.retryable) {
-            return;
+            throw error;
           }
         }
       }
@@ -287,11 +287,15 @@ export function NativePushProvider() {
     setPromptPending(true);
     setPromptError(null);
     try {
-      await requestNativeNotificationPermission();
-      promptAttemptedRef.current = true;
-      await markPushPromptComplete();
-      setPromptVisible(false);
-      await syncPermissionAndToken();
+      await acceptNativePushPrompt({
+        markPromptComplete: markPushPromptComplete,
+        onCompleted: () => {
+          promptAttemptedRef.current = true;
+          setPromptVisible(false);
+        },
+        requestPermission: requestNativeNotificationPermission,
+        syncPermissionAndToken,
+      });
     } catch {
       setPromptError('알림 권한을 요청하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
@@ -390,30 +394,33 @@ export function NativePushProvider() {
         return;
       }
 
-      if (selectedProfileIdRef.current !== envelope.recipientProfileId) {
-        try {
-          const selectedProfileId = await selectProfile(envelope.recipientProfileId);
-          resetActor(selectedProfileId);
-        } catch (error) {
-          if (isPushMutationFailure(error) && error.retryable) {
-            return;
-          }
-
-          markResponseHandled(response);
-          fallbackToNotifications();
+      let targetHref: Awaited<ReturnType<typeof prepareNativePushNavigation>>;
+      try {
+        targetHref = await prepareNativePushNavigation({
+          node,
+          recipientProfileId: envelope.recipientProfileId,
+          resetActor,
+          selectProfile,
+          selectedProfileId: selectedProfileIdRef.current,
+        });
+      } catch (error) {
+        if (isPushMutationFailure(error) && error.retryable) {
           return;
         }
+
+        markResponseHandled(response);
+        fallbackToNotifications();
+        return;
       }
 
-      const derivedHref = nativePushNotificationTargetHref(node);
-      if (!derivedHref) {
+      if (!targetHref) {
         markResponseHandled(response);
         fallbackToNotifications();
         return;
       }
 
       markResponseHandled(response);
-      router.replace(markNativePushRoute(derivedHref));
+      router.replace(targetHref);
     },
     [
       fallbackToNotifications,

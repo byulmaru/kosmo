@@ -11,6 +11,8 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 const require = createRequire(import.meta.url);
 let platform: 'android' | 'ios' | 'web' = 'web';
 let openSettingsCalls = 0;
+let openSettingsFailure = false;
+const toastCalls: Array<{ message: string; tone: string }> = [];
 
 mock.module('expo-router', {
   exports: {
@@ -23,7 +25,9 @@ mock.module('react-native', {
     Linking: {
       openSettings: () => {
         openSettingsCalls += 1;
-        return Promise.resolve();
+        return openSettingsFailure
+          ? Promise.reject(new Error('settings unavailable'))
+          : Promise.resolve();
       },
     },
     Platform: {
@@ -70,6 +74,16 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/ToastProvider.tsx', import.meta.url), {
+  exports: {
+    useToast: () => ({
+      showToast: (message: string, options: { tone: string }) => {
+        toastCalls.push({ message, tone: options.tone });
+        return () => undefined;
+      },
+    }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 let SettingsNavigationList: ComponentType<{
   selected?: 'default-post-visibility';
@@ -106,6 +120,8 @@ describe('SettingsMuteAndBlockNavigation', () => {
 afterEach(async () => {
   platform = 'web';
   openSettingsCalls = 0;
+  openSettingsFailure = false;
+  toastCalls.length = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -162,6 +178,28 @@ describe('SettingsNavigationList', () => {
 
     await act(async () => notification?.props.onPress());
     assert.equal(openSettingsCalls, 1);
+    assert.deepEqual(toastCalls, []);
+  });
+
+  it('OS 설정 열기가 실패하면 사용자에게 오류를 표시한다', async () => {
+    platform = 'android';
+    openSettingsFailure = true;
+    await render();
+
+    const notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'native-notification-settings',
+    );
+    assert.ok(notification);
+
+    await act(async () => notification.props.onPress());
+
+    assert.equal(openSettingsCalls, 1);
+    assert.deepEqual(toastCalls, [
+      {
+        message: '기기의 알림 설정을 열지 못했어요. 잠시 후 다시 시도해 주세요.',
+        tone: 'danger',
+      },
+    ]);
   });
 
   it('full master가 표시한 내부 detail만 current destination으로 전달한다', async () => {
