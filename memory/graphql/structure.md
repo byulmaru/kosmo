@@ -8,7 +8,7 @@ kosmo GraphQL resolver를 구현하거나 리뷰할 때 이 메모를 참고한�
 ## 기본 방향
 
 - GraphQL 오브젝트는 `createObjectRef` 기반 loadable Node ref로 정의한다.
-- GraphQL resolver가 이미 대상 row를 가지고 있으면 [Identity And Schema의 row 반환 규칙](./identity.md)에 따라 그 row를 반환해도 된다. 다만 Node 전체를 반환하기 위해 추가 query를 만들 필요는 없고, 그 경우에는 Node `id`만 반환해 loadable Node ref가 로딩하게 한다.
+- GraphQL resolver가 이미 대상 row를 가지고 있으면 그 row를 반환해도 된다. 다만 Node 전체를 반환하기 위해 추가 query를 만들 필요는 없고, 그 경우에는 Node `id`만 반환해 loadable Node ref가 로딩하게 한다.
 - GraphQL type name과 DB table loader 연결은 `ref.ts`에서 한다.
 - resolver 파일은 작게 유지하고, 각 디렉터리의 `index.ts`는 import 조립과 public export만 담당한다.
 - GraphQL schema shape는 normalized cache와 도메인 소유 관계를 기준으로 정한다.
@@ -57,5 +57,7 @@ resolvers/<module>/
 - `Profile.viewerRole`, `Profile.viewerFollowing`, `Profile.followers` 같은 필드는 프로필 모듈 책임이므로 `profile/field/profile.ts` 또는 `profile/field/profile/*.ts`에 둔다.
 - `Account.profiles`는 `Account` 타입의 필드이지만 프로필 관리 관계를 노출하는 프로필 모듈 책임이므로 `profile/field/account.ts`에 둔다.
 - 필드 파일 위치는 GraphQL 필드를 소유한 타입이 아니라 도메인 책임 모듈을 기준으로 정한다.
-- 관계 필드와 connection edge의 `node`는 [row 반환 규칙](./identity.md)을 따른다. ID만 있으면 Node 전체를 얻기 위한 추가 query 없이 ID를 반환한다.
+- 관계 필드 resolver가 이미 대상 row를 조회했다면 row를 반환해도 된다.
+- 대상 row가 없고 foreign key ID만 있는 경우에는 Node 전체를 얻기 위한 추가 query를 하지 말고 ID를 반환한다.
+- connection edge의 `node`도 같은 기준을 적용한다. 이미 row가 있으면 row를, ID만 있으면 ID를 반환한다.
 - viewer 기준 관계는 단순 state scalar보다 관계 Node를 반환하는 쪽을 우선 검토한다. 관계 row의 `id`, timestamp, 후속 metadata가 클라이언트 cache 갱신과 UI 확장에 필요할 수 있기 때문이다.
