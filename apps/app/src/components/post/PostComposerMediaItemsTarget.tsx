@@ -212,7 +212,6 @@ export function PostComposerMediaItemsTarget({
 
               {failed ? (
                 <View
-                  accessibilityRole="alert"
                   style={[
                     styles.failureBadge,
                     {

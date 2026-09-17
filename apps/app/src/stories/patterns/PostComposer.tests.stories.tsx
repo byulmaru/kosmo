@@ -1,6 +1,7 @@
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import baseMeta, {
   ActionSemanticsContract as actionSemanticsContract,
+  Error as errorStory,
   InteractionContract as interactionContract,
   MobileCandidateContract as mobileCandidateContract,
   MobileFlexLayoutContract as mobileFlexLayoutContract,
@@ -11,6 +12,7 @@ import baseMeta, {
   MobileMediaFooterGeometryContract as mobileMediaFooterGeometryContract,
   MobilePlayground as mobilePlaygroundStory,
   MobilePlaygroundContract as mobilePlaygroundContract,
+  MobileRuntimeAltEditorContract as mobileRuntimeAltEditorContract,
   OverlayProgressRingContract as overlayProgressRingContract,
   PendingMediaContract as pendingMediaContract,
   Playground as playgroundContract,
@@ -44,6 +46,7 @@ export const MobileKeyboardMediaEditorGeometryContract: Story =
   mobileKeyboardMediaEditorGeometryContract;
 export const MobileMediaFooterGeometryContract: Story = mobileMediaFooterGeometryContract;
 export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
+export const MobileRuntimeAltEditorContract: Story = mobileRuntimeAltEditorContract;
 export const MobileFlexLayoutContract: Story = mobileFlexLayoutContract;
 export const OverlayProgressRingContract: Story = overlayProgressRingContract;
 export const PendingMediaContract: Story = pendingMediaContract;
@@ -52,6 +55,17 @@ export const RailProgressRingContract: Story = railProgressRingContract;
 export const SubmittingPickerContract: Story = submittingPickerContract;
 export const SubmittingSpinnerContract: Story = submittingSpinnerContract;
 export const SubmittingVisibilityContract: Story = submittingVisibilityContract;
+
+export const MediaFailureAnnouncementContract: Story = {
+  ...errorStory,
+  play: async ({ canvasElement }) => {
+    const alerts = within(canvasElement).getAllByRole('alert');
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toHaveTextContent(
+      '1번째 이미지를 업로드하지 못했어요. 잠시 후 다시 시도해 주세요.',
+    );
+  },
+};
 
 export const DerivedRemainingContract: Story = {
   ...playgroundContract,

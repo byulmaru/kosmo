@@ -15,7 +15,41 @@ const typecheckPostComposerRelationships = () => {
   void invalidRelationships;
 };
 
+const typecheckPostComposerPresentations = () => {
+  const profile = {} as PostComposerProps['profile'];
+  void ({
+    onExpand: () => undefined,
+    onRequestClose: () => undefined,
+    presentation: 'rail',
+    profile,
+  } satisfies PostComposerProps);
+  void ({
+    onRequestClose: () => undefined,
+    presentation: 'overlay',
+    profile,
+  } satisfies PostComposerProps);
+  void ({
+    onRequestClose: () => undefined,
+    presentation: 'mobile',
+    profile,
+  } satisfies PostComposerProps);
+  // @ts-expect-error Rail은 활성 Expand control의 callback을 필수로 제공한다.
+  const invalidRail: PostComposerProps = {
+    onRequestClose: () => undefined,
+    presentation: 'rail',
+    profile,
+  };
+  // @ts-expect-error Overlay는 활성 close control의 callback을 필수로 제공한다.
+  const invalidOverlay: PostComposerProps = { presentation: 'overlay', profile };
+  // @ts-expect-error Mobile은 활성 close control의 callback을 필수로 제공한다.
+  const invalidMobile: PostComposerProps = { presentation: 'mobile', profile };
+  void invalidRail;
+  void invalidOverlay;
+  void invalidMobile;
+};
+
 void typecheckPostComposerRelationships;
+void typecheckPostComposerPresentations;
 
 describe('PostComposer Reply context contract', () => {
   it('includes the concrete Parent only for Reply mutation input', async () => {

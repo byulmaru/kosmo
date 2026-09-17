@@ -1,6 +1,8 @@
 import { ArrowLeftIcon, FlagIcon, XIcon } from 'lucide-react-native';
+import { useEffect, useRef } from 'react';
 import {
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,13 +17,14 @@ import { Tab, TabList } from '@/components/ui/Tabs';
 import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
 
 export type ComposerMediaEditorTool = 'alt' | 'sensitive';
-export type ComposerMediaEditorMobileState = 'altKeyboard' | 'default' | 'sensitive';
+export type ComposerMediaEditorMobileState = 'alt' | 'altKeyboard' | 'default' | 'sensitive';
 
 export type ComposerMediaEditorProps = {
+  readonly fillContainer?: boolean;
   readonly media: readonly ComposerMediaItem[];
   readonly mobileState?: ComposerMediaEditorMobileState;
   readonly onAltTextChange: (key: string, altText: string) => void;
@@ -44,16 +47,24 @@ const altTextLimit = 1000;
 export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
   const theme = useTheme();
   const { height } = useWindowDimensions();
+  const backRef = useRef<View>(null);
   const selectedIndex = Math.max(
     0,
     props.media.findIndex(({ key }) => key === props.selectedKey),
   );
   const selected = props.media[selectedIndex];
   const mobile = props.presentation === 'mobile';
-  const mobileState =
-    props.mobileState ?? (props.tool === 'sensitive' ? 'sensitive' : 'altKeyboard');
+  const mobileState = props.mobileState ?? (props.tool === 'sensitive' ? 'sensitive' : 'alt');
   const mobileTool =
-    mobileState === 'default' ? null : mobileState === 'altKeyboard' ? 'alt' : 'sensitive';
+    mobileState === 'default'
+      ? null
+      : mobileState === 'alt' || mobileState === 'altKeyboard'
+        ? 'alt'
+        : 'sensitive';
+
+  useEffect(() => {
+    backRef.current?.focus();
+  }, []);
 
   return (
     <View
@@ -62,11 +73,13 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
         mobile
           ? { height, width: '100%' }
           : { height: 678, maxWidth: 920, minWidth: 720, width: '100%' },
+        props.fillContainer && styles.fillContainer,
         { backgroundColor: theme.backgroundSurface },
       ]}
       testID={mobile ? 'mobile-composer-media-editor' : 'web-composer-media-editor'}
     >
       <EditorHeader
+        backRef={backRef}
         mobile={mobile}
         onBack={props.onBack}
         onClose={props.onClose}
@@ -75,45 +88,53 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
 
       {mobile ? (
         <>
-          <MediaGallery
-            media={props.media}
-            mobile
-            onSelectMedia={props.onSelectMedia}
-            selectedKey={selected?.key}
-          />
-          <MediaPreview
-            mediaCount={props.media.length}
-            onPreviewPress={props.onPreviewPress}
-            selected={selected}
-            selectedIndex={selectedIndex}
-          />
-          <View
-            accessibilityLabel="미디어 편집 도구"
-            style={[styles.mobileActions, { borderColor: theme.borderSubtle }]}
+          <ScrollView
+            contentContainerStyle={styles.mobileScrollContent}
+            keyboardShouldPersistTaps="handled"
+            style={styles.mobileScroll}
           >
-            <MobileToolButton
-              icon={
-                <Text style={[styles.altToolLabel, { color: theme.foregroundPrimary }]}>ALT</Text>
-              }
-              label="대체 텍스트 편집"
-              onPress={() => props.onToolChange('alt')}
-              selected={mobileTool === 'alt'}
+            <MediaGallery
+              media={props.media}
+              mobile
+              onSelectMedia={props.onSelectMedia}
+              selectedKey={selected?.key}
             />
-            <MobileToolButton
-              icon={<FlagIcon color={theme.foregroundPrimary} size={iconSizes[20]} />}
-              label="민감도 편집"
-              onPress={() => props.onToolChange('sensitive')}
-              selected={mobileTool === 'sensitive'}
-            />
-          </View>
-          {mobileTool ? (
-            <MobileToolSheet
-              {...props}
-              selected={selected}
-              selectedIndex={selectedIndex}
-              tool={mobileTool}
-            />
-          ) : null}
+            <View style={styles.mobilePreview}>
+              <MediaPreview
+                mediaCount={props.media.length}
+                onPreviewPress={props.onPreviewPress}
+                selected={selected}
+                selectedIndex={selectedIndex}
+              />
+            </View>
+            <View
+              accessibilityLabel="미디어 편집 도구"
+              style={[styles.mobileActions, { borderColor: theme.borderSubtle }]}
+            >
+              <MobileToolButton
+                icon={
+                  <Text style={[styles.altToolLabel, { color: theme.foregroundPrimary }]}>ALT</Text>
+                }
+                label="대체 텍스트 편집"
+                onPress={() => props.onToolChange('alt')}
+                selected={mobileTool === 'alt'}
+              />
+              <MobileToolButton
+                icon={<FlagIcon color={theme.foregroundPrimary} size={iconSizes[20]} />}
+                label="민감도 편집"
+                onPress={() => props.onToolChange('sensitive')}
+                selected={mobileTool === 'sensitive'}
+              />
+            </View>
+            {mobileTool ? (
+              <MobileToolSheet
+                {...props}
+                selected={selected}
+                selectedIndex={selectedIndex}
+                tool={mobileTool}
+              />
+            ) : null}
+          </ScrollView>
           {mobileState === 'altKeyboard' ? <IllustrativeKeyboard /> : null}
         </>
       ) : (
@@ -156,11 +177,13 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
 }
 
 function EditorHeader({
+  backRef,
   mobile,
   onBack,
   onClose,
   onDone,
 }: {
+  readonly backRef: RefObject<View | null>;
   readonly mobile: boolean;
   readonly onBack: () => void;
   readonly onClose: () => void;
@@ -172,6 +195,7 @@ function EditorHeader({
     <View style={[styles.header, { borderColor: theme.borderSubtle }]}>
       <IconButton
         accessibilityLabel="미디어 편집에서 뒤로"
+        controlRef={backRef}
         feedback="opacity"
         onPress={onBack}
         targetSize={44}
@@ -186,6 +210,7 @@ function EditorHeader({
         <Pressable
           accessibilityLabel="완료"
           accessibilityRole="button"
+          hitSlop={Platform.OS === 'android' ? 2 : undefined}
           onPress={onDone}
           style={({ pressed }) => [styles.mobileDone, pressed && styles.pressed]}
         >
@@ -363,7 +388,11 @@ function WebToolPanel(
   const theme = useTheme();
 
   return (
-    <View style={[styles.webToolPanel, { borderColor: theme.borderSubtle }]}>
+    <ScrollView
+      contentContainerStyle={styles.webToolPanelContent}
+      keyboardShouldPersistTaps="handled"
+      style={[styles.webToolPanel, { borderColor: theme.borderSubtle }]}
+    >
       {props.tool === 'alt' ? (
         <AltToolContent
           altText={props.selected?.altText ?? ''}
@@ -381,7 +410,7 @@ function WebToolPanel(
           sensitiveMedia={props.sensitiveMedia}
         />
       )}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -597,6 +626,10 @@ function MobileToolButton({
 
 const styles = StyleSheet.create({
   root: { alignSelf: 'center', overflow: 'hidden' },
+  fillContainer: { flex: 1, height: '100%', minHeight: 0 },
+  mobileScroll: { flex: 1, minHeight: 0 },
+  mobileScrollContent: { flexGrow: 1 },
+  mobilePreview: { flex: 1, minHeight: 120 },
   header: {
     alignItems: 'center',
     borderBottomWidth: borderWidths[1],
@@ -661,9 +694,13 @@ const styles = StyleSheet.create({
   mobileThumbnail: { height: 50, width: 50 },
   webToolPanel: {
     borderLeftWidth: borderWidths[1],
+    flexGrow: 0,
+    width: 280,
+  },
+  webToolPanelContent: {
+    flexGrow: 1,
     gap: space[12],
     padding: 20,
-    width: 280,
   },
   eyebrow: textStyles.uiCopyS,
   toolTitle: { textAlign: 'center', ...textStyles.uiHeadingS },
@@ -699,8 +736,8 @@ const styles = StyleSheet.create({
     height: 66,
     justifyContent: 'center',
   },
-  mobileAltSheet: { height: 176 },
-  mobileSensitiveSheet: { height: 184 },
+  mobileAltSheet: { minHeight: 176 },
+  mobileSensitiveSheet: { minHeight: 184 },
   mobileToolSheet: {
     borderTopLeftRadius: radius[16],
     borderTopRightRadius: radius[16],
