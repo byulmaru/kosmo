@@ -1,4 +1,4 @@
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '../theme/tokens';
 import { BrandLogo } from './BrandLogo';
@@ -8,7 +8,6 @@ import type { ReactNode, Ref } from 'react';
 
 type PageHeaderProps =
   | {
-      headingRef?: Ref<View>;
       leading?: ReactNode;
       title: string;
       titleRef?: Ref<Text>;
@@ -79,34 +78,16 @@ export function PageHeader(props: PageHeaderProps) {
       ) : (
         <>
           {props.leading ? <View style={styles.leading}>{props.leading}</View> : null}
-          {props.headingRef ? (
-            <View
-              accessible
-              accessibilityRole="header"
-              ref={props.headingRef}
-              style={styles.titleFocusTarget}
-              {...(Platform.OS === 'web' ? { tabIndex: -1 as const } : { focusable: true })}
-            >
-              <Text
-                ellipsizeMode={props.titleLines === 1 ? 'tail' : undefined}
-                numberOfLines={props.titleLines}
-                style={[styles.title, { color: theme.foregroundPrimary }]}
-              >
-                {props.title}
-              </Text>
-            </View>
-          ) : (
-            <Text
-              accessible={props.titleRef ? true : undefined}
-              accessibilityRole="header"
-              ellipsizeMode={props.titleLines === 1 ? 'tail' : undefined}
-              numberOfLines={props.titleLines}
-              ref={props.titleRef}
-              style={[styles.title, { color: theme.foregroundPrimary }]}
-            >
-              {props.title}
-            </Text>
-          )}
+          <Text
+            accessible={props.titleRef ? true : undefined}
+            accessibilityRole="header"
+            ellipsizeMode={props.titleLines === 1 ? 'tail' : undefined}
+            numberOfLines={props.titleLines}
+            ref={props.titleRef}
+            style={[styles.title, { color: theme.foregroundPrimary }]}
+          >
+            {props.title}
+          </Text>
           {props.trailing ? <View style={styles.trailing}>{props.trailing}</View> : null}
         </>
       )}
@@ -159,7 +140,6 @@ const styles = StyleSheet.create({
     minWidth: 0,
     ...typography.xl,
   },
-  titleFocusTarget: { flexShrink: 1, minWidth: 0 },
   trailing: {
     alignItems: 'center',
     flexShrink: 0,

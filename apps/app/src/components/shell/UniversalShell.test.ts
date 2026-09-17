@@ -42,9 +42,6 @@ function MockSidebarNavigation(props: typeof sidebarNavigationProps) {
   }
   return null;
 }
-let timeline = true;
-let mobileShellHeader: { leading: 'back' | 'menu'; title: string } | null = null;
-let pageHeaderProps: Record<string, unknown> | null = null;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -110,10 +107,7 @@ mockModule('@/components/notification/NotificationReadAllContext', {
   NotificationReadAllProvider: PassThrough,
 });
 mockModule('@/components/PageHeader', {
-  PageHeader: (props: { leading?: ReactNode; [key: string]: unknown }) => {
-    pageHeaderProps = props;
-    return props.leading ?? null;
-  },
+  PageHeader: ({ leading }: { leading?: ReactNode }) => leading ?? null,
 });
 mockModule('@/components/post/PostMediaViewerHost', {
   PostMediaViewerScreenFallbackProvider: PassThrough,
@@ -163,14 +157,14 @@ mockModule('./SidebarNavigation', {
   SidebarNavigation: MockSidebarNavigation,
 });
 mockModule('./shellLayout', {
-  getWebMobileShellHeader: () => mobileShellHeader,
+  getWebMobileShellHeader: () => null,
   getShellRoutePresentation: () => ({
     layout,
     settingsWorkspace: false,
     showRightRail,
   }),
   isSettingsRoute: () => false,
-  isTimelineRoute: () => timeline,
+  isTimelineRoute: () => true,
   isWebMobileRouteOwnedHeader: () => false,
   webMobileShellHeaderHeight: 64,
 });
@@ -199,21 +193,10 @@ afterEach(async () => {
   router.push.mock.resetCalls();
   router.replace.mock.resetCalls();
   hardwareBackPressListener = null;
-  timeline = true;
-  mobileShellHeader = null;
-  pageHeaderProps = null;
   mock.restoreAll();
 });
 
 describe('UniversalShell screen fallback focus target', () => {
-  it('mobile detail heading은 route heading focus ref를 유지한다', async () => {
-    timeline = false;
-    mobileShellHeader = { leading: 'back', title: '차단한 프로필' };
-    await renderShell();
-
-    assert.ok(pageHeaderProps?.headingRef);
-  });
-
   it('Web에서는 shell root를 tab 순서에서 제외한다', async () => {
     platform.OS = 'web';
     const root = await renderShell();
