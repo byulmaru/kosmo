@@ -1,41 +1,26 @@
-## 1. <!-- Linear Issue ID and Task Group Name -->
+## Session Work
 
-**Authority / Provenance**
+<!-- Add only work that still contributes to the current goal. Concrete steps are
+     allowed when they help this session, but they are not durable rules. The
+     checklist is mutable: remove stale items or mark them `Not needed` when
+     evidence shows they do not belong in this session. -->
 
-<!-- Exact canonical documents and current Linear issues supporting this group -->
+- [ ] 1.1 <focused implementation or investigation task>
+- [ ] 1.2 <focused verification task>
 
-**Deliverable**
+## Verification Evidence
 
-<!-- Observable result without prescribing an internal mechanism -->
+<!-- Record the commands, tests, observations, or remaining limits that prove
+     the goal and its constraints. Do not use this section to introduce new
+     product requirements. -->
 
-**Guardrails**
+- Result: <pending>
+- Checks: <pending>
+- Limits: 없음.
 
-<!-- Binding constraints from specs, public contracts, and independently verified decisions; use 없음. when empty -->
+## Progress
 
-**Verification**
-
-<!-- Tests, checks, or evidence proving the deliverable and guardrails -->
-
-- [ ] 1.1 <!-- Task description -->
-- [ ] 1.2 <!-- Task description -->
-
-## 2. <!-- Linear Issue ID and Task Group Name -->
-
-**Authority / Provenance**
-
-<!-- Exact canonical documents and current Linear issues supporting this group -->
-
-**Deliverable**
-
-<!-- Observable result without prescribing an internal mechanism -->
-
-**Guardrails**
-
-<!-- Binding constraints from specs, public contracts, and independently verified decisions; use 없음. when empty -->
-
-**Verification**
-
-<!-- Tests, checks, or evidence proving the deliverable and guardrails -->
-
-- [ ] 2.1 <!-- Task description -->
-- [ ] 2.2 <!-- Task description -->
+- Status: Active | Complete | Paused
+- Completed: <what is done>
+- Next: <what remains, or 없음.>
+- Last updated: YYYY-MM-DD

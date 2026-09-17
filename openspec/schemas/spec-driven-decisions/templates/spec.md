@@ -1,12 +1,18 @@
+<!-- Optional session notes only. Keep the CLI-compatible delta headings below.
+     They do not create a product contract or survive as authority automatically.
+     Use business context links only when the behavior is already agreed in the
+     current user, canonical, or Linear context. -->
+
 ## ADDED Requirements
 
-### Requirement: <!-- requirement name -->
+### Requirement: <!-- behavior note name -->
 
-**Authority / Provenance:** <!-- exact canonical documents and current Linear contract -->
+**Source Context:** <!-- optional canonical, Linear, or explicit current user agreement; never OpenSpec alone -->
 
-<!-- requirement text -->
+<!-- Describe the already-approved observable behavior. Use SHALL/MUST only when
+     the upstream business requirement uses that boundary. -->
 
-#### Scenario: <!-- scenario name -->
+#### Scenario: <!-- example name -->
 
 - **WHEN** <!-- condition -->
-- **THEN** <!-- expected outcome -->
+- **THEN** <!-- expected observable outcome -->

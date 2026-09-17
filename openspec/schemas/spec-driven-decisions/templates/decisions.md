@@ -1,26 +1,21 @@
-## Context
+<!-- Optional session notes. This file records reasoning for the current session;
+     it is not an ADR, approval record, or source of durable authority. -->
 
-<!-- What proposal, specs, design notes, or discussion this decision log reflects. -->
+## Session Context
 
-## Decision Records
+<!-- Briefly link the proposal or current work. -->
 
-### <decision title>
+## Choice Notes
 
-- Decision Date: YYYY-MM-DD
-- Decision Class: Derived Contract | Implementation Choice | Upstream Change Required
-- Authority / Provenance: <exact canonical docs and current Linear issues, or 없음.>
-- Status: Active | Blocked | Superseded
-<!-- Valid combinations: Derived Contract / Implementation Choice require concrete Authority and are Active until replaced; Upstream Change Required uses 없음. + Blocked and must be reclassified after upstream approval. Use Superseded only when a record is replaced or abandoned. -->
-- Context / Problem: <what issue required a decision>
-- Decision Outcome: <chosen option and why>
-- Alternatives Considered: <other options and why they were not chosen>
-- Consequences: <constraints, follow-up work, or implementation effects>
-- Confirmation / Follow-up: <how implementation will be checked, or 없음.>
+### <choice title>
 
-## Remaining Decisions
+- Date: YYYY-MM-DD
+- Upstream context: <canonical, Linear, or explicit current user agreement, or 없음.>
+- Choice: <what was selected for this session>
+- Reason: <why it fits the current goal>
+- Alternatives: <other options considered, or 없음.>
+- Consequences: <current-session effects or follow-up>
 
-- 없음.
-
-## Superseded Decisions
+## Unresolved Questions
 
 - 없음.

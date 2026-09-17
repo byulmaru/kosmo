@@ -2,7 +2,8 @@
 
 ## Core Principles
 
-- 코드는 도메인 소유 관계, 클라이언트 캐시 모델, 실제 사용자 workflow, OpenSpec을 동시에 만족해야 한다.
+- 코드는 도메인 소유 관계, 클라이언트 캐시 모델, 실제 사용자 workflow와 canonical·Linear의 비즈니스 결과를
+  만족해야 한다. OpenSpec이 있으면 현재 세션의 계획·검증을 보조할 뿐 추가 계약을 만들지 않는다.
 - 새 API나 컴포넌트 shape는 "구현하기 쉬운 위치"보다 "데이터를 소유하고 갱신하는 위치"를 기준으로 둔다.
 - DB나 백엔드에 값이 있다는 이유만으로 프론트/API에 노출하지 않는다. 노출 필드는 실제 사용 사례와 갱신/캐시 의미가 있어야 한다.
 - 임시 leaf 처리보다 경계(boundary)를 고친다. 예를 들어 프로필 표시용 handle은 `Profile.relativeHandle` API 계약으로 전달하고, GraphQL data shape와 확정된 error 표시 정책은 컴포넌트마다 patch하지 말고 API 또는 공통 formatting/error boundary에서 정한다.

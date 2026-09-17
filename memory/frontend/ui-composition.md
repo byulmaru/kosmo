@@ -29,4 +29,6 @@ Read this entire file when changing shared React Native presentation, layout, ac
 
 - 프로필 표시 문자열은 `Profile.relativeHandle`을 사용하고 `Profile.handle`은 lookup, validation, route parameter 정규화에만 사용한다.
 - backend error `message`를 그대로 노출할지 error code로 분기할지는 공용 정책에서 결정한다. 정책이 없으면 안전한 한국어 fallback을 우선한다.
-- Figma/OpenSpec 수치와 theme token이 다르면 같은 변경에서 정렬한다. 긴 문자열, 빈 값, RTL/줄바꿈처럼 layout을 깨뜨릴 수 있는 상태는 story 또는 test에 포함한다.
+- Figma와 canonical design 수치가 theme token과 다르면 같은 변경에서 정렬한다. OpenSpec session harness의
+  임시 수치는 추가 디자인 계약이 아니며, 그것만을 이유로 UI를 확장하지 않는다. 긴 문자열, 빈 값, RTL/줄바꿈처럼
+  layout을 깨뜨릴 수 있는 상태는 story 또는 test에 포함한다.

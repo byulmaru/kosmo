@@ -14,8 +14,11 @@
 - 기존 backlog가 정확히 소유하면 새 issue를 중복 생성하지 않고 현재 failure path, 보장 범위와 완료 기준을 보강한다.
 - follow-up으로 분리한 문제는 현재 PR이 보장하는 범위, 아직 보장하지 않는 범위와 현재 실패 동작을 기록한다.
 
-## Spec Reachability
+## Session-Harness Reachability
 
-- OpenSpec scenario가 production caller에서 도달 가능한지 확인한다. caller가 없고 현재 issue 목표에도 필요하지 않다면 필요 없는 구현을 추가해 spec을 억지로 만족시키지 않는다.
-- 후속 fan-out이나 sibling 기능을 전제한 scenario와 내부 helper 세부사항은 durable public contract에서 제거한다.
-- scenario를 제거하거나 계약을 고치면 active spec과 archive artifact를 함께 동기화한다.
+- OpenSpec scenario가 production caller에서 도달 가능한지 확인한다. caller가 없고 현재 issue 목표에도 필요하지
+  않다면 필요 없는 구현을 추가해 session harness를 억지로 만족시키지 않는다.
+- 후속 fan-out이나 sibling 기능을 전제한 scenario와 내부 helper 세부사항은 비즈니스 요구사항이나 public
+  contract로 승격하지 않는다.
+- scenario가 현재 결과에 필요하지 않으면 제거하거나 `Not needed`로 남긴다. 실제 계약을 바꾼 경우에만
+  canonical·Linear를 갱신하고, 하네스의 archive 동기화는 별도 completion gate로 만들지 않는다.

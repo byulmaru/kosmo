@@ -12,7 +12,9 @@
   - 선호하는 수정 방향 또는 suggested change
   - 지금 PR에서 막아야 하는지, follow-up으로 둘 수 있는지
 - actionable blocker와 non-blocking note를 구분한다.
-- 후속 정책으로 미뤄도 되는 내용은 `TODO:` 주석, OpenSpec 남은 결정, 후속 PR/이슈로 남기도록 요구한다.
+- 후속 구현으로 미뤄도 되는 내용은 `TODO:` 주석이나 후속 PR/이슈로 남길 수 있다. 제품 정책·보안·rollout
+  결정은 OpenSpec에만 남기지 말고 canonical 문서와 Linear에 기록한다. session harness의 남은 task를 채우기
+  위한 구현은 요구하지 않는다.
 
 ## Priority Labels
 

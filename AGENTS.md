@@ -44,24 +44,32 @@
 ## Pull Request Completion
 
 - Completion means the scoped implementation, required documentation and focused validation are finished, including repairs for failures caused by the change. Continue through that work before reporting the first working patch as done; keep optional follow-ups separate from required completion.
-- Treat pull request readiness and OpenSpec change completion as separate decisions.
+- Treat pull request readiness separately from optional OpenSpec session-harness housekeeping; housekeeping is not a
+  product decision or PR completion gate.
 - When a pull request's own scoped implementation and required verification are complete, mark it Ready for review unless the user explicitly requests that it remain a Draft.
-- Do not archive an OpenSpec change merely because an individual pull request in a split or stacked implementation is complete or merged.
-- Archive an OpenSpec change only after the proposal's entire declared scope and all tasks across every implementation slice are complete, required validation passes, and delta specs are synchronized as appropriate.
-- Assign integration verification and archive ownership explicitly from the remaining work and completion evidence; do not infer either responsibility from parent/child issue status or PR order alone.
+- OpenSpec is an optional, mutable session harness. Its tasks, scenarios, design notes and archive state do not add
+  product requirements, implementation obligations or PR completion gates.
+- Keep product behavior, security, compatibility and rollout requirements in canonical documents or Linear. If a
+  session harness exposes an unresolved decision in one of those areas, pause and ask the user before implementing it.
+- Do not add implementation details to canonical documents or Linear merely because a session harness contains them.
 
 ## OpenSpec Workflow
 
-- Before planning or updating an OpenSpec change, read `memory/issue-openspec-workflow.md` and
-  follow the Issue -> OpenSpec -> Implementation order when an OpenSpec is needed. Do not require
-  an OpenSpec for every issue.
-- Treat Linear issue and OpenSpec change ownership as many-to-many. Split or share changes by
-  behavioral contract and lifecycle, not mechanically by issue hierarchy or PR count.
-- Define the Linear issue scope and dependency structure before creating the OpenSpec change. If
-  the spec reveals an independently deliverable scope, update or split the Linear issues first.
-- When creating or updating OpenSpec specs before implementation, explain the resulting spec to the user in Korean.
-- Before implementation, use the Question tool for unresolved requirements or choices that would change observable behavior, public contracts, security, production or rollout, ownership, or the completion boundary. Continue with routine implementation choices that stay within the user's request and existing contract.
-- If such a material decision appears after work has started, stop at that decision boundary, present the alternatives and impact, and continue once it is settled. Do not reopen a settled decision.
+- Before using OpenSpec, read `memory/issue-openspec-workflow.md`. Use it only when a short-lived session checklist,
+  handoff or verification plan materially helps; do not require it for every issue.
+- Canonical documents and Linear own business requirements, observable guarantees, scope and accepted security or
+  rollout constraints. An externally mandated interoperability, security or regulatory detail may be named with its
+  source and necessity; team implementation preferences remain in code and PRs. OpenSpec may summarize these for the
+  current session but cannot redefine or extend them.
+- Keep OpenSpec mutable and minimal: goal, non-goals, approved constraints, verification and progress are sufficient.
+  Remove or skip unnecessary tasks instead of implementing them to satisfy a checklist. Unfinished business requirements
+  remain pending or in handoff; they are not silently marked complete.
+- Before implementation, use the Question tool for unresolved requirements or choices that would change observable
+  behavior, public contracts, security, production or rollout, ownership, or the completion boundary. Continue with
+  routine implementation choices that stay within the user's request and existing contract.
+- If such a material decision appears after work has started, stop at that decision boundary, present the alternatives
+  and impact, and continue once it is settled. Do not promote a session-harness note into authority or reopen a settled
+  decision.
 
 ## Memory
 
@@ -69,8 +77,8 @@
 - For repository implementation or review work, read the applicable memory entrypoint and only the topic documents that shape the current task; read each selected document from beginning to end. Do not read unrelated topics or a full repository map by default. For docs-only or mechanical changes, inspect the affected guidance and validation instructions instead. If the scope changes, select and read newly applicable topics before continuing.
 - When a task changes the assumptions documented in a relevant memory file, update that memory in the same change.
 - `memory/coding-style.md`: common coding router; follow its conditions to select directly applicable coding topics.
-- `memory/issue-openspec-workflow.md`: issue-first planning, OpenSpec ownership and granularity,
-  implementation boundaries, and completion gates.
+- `memory/issue-openspec-workflow.md`: canonical/Linear business-requirement boundaries and optional OpenSpec
+  session-harness workflow.
 - `memory/frontend-react-native.md`: short entrypoint for Expo Router, React Native Web, React Relay, Storybook, and frontend UI topics.
 - `memory/review-style.md`: Korean review index for comment style, priority labels, and evidence policy; select and read the applicable `memory/review/` topics.
 - `memory/commit-pr.md`: short router for commit, branch, stacked PR, and PR writing policy. Read this first, then load the specific memory it points to.
