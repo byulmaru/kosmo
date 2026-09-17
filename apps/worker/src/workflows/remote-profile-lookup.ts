@@ -19,8 +19,12 @@ const { lookupRemoteActorUriActivity, materializeRemoteProfileActorActivity } =
 
 export async function remoteProfileLookupWorkflow(
   input: RemoteProfileLookupInput,
-): Promise<string> {
+): Promise<string | null> {
   const actorUri = await lookupRemoteActorUriActivity(input);
+  if (actorUri === null) {
+    return null;
+  }
+
   const materializationInput: RemoteProfileMaterializationInput = {
     actorUri,
     ...(input.profileId ? { profileId: input.profileId } : {}),

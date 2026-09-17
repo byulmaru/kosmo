@@ -195,6 +195,29 @@ describe('GraphQL profile migration', () => {
     assert.equal(await countProfiles(), 1);
   });
 
+  test('remote source lookup with no matching actor maps null to validation', async (t) => {
+    const auth = await createAuthenticatedSession({
+      profileId: (await createProfile({ handle: 'migration-target' })).id,
+    });
+    const execute = t.mock.method(temporalClient.workflow, 'execute', async () => null as never);
+
+    const result = await requestGraphQL(
+      registerSourceMutation,
+      {
+        input: {
+          sourceHandle: `@missing@${remoteDomain}`,
+        },
+      },
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(result, 'VALIDATION');
+    assert.equal(result.errors?.[0]?.extensions?.field, 'sourceHandle');
+    assert.equal(execute.mock.calls.length, 1);
+    assert.equal(await countMigrations(), 0);
+    assert.equal(await countProfiles(), 1);
+  });
+
   test('successful preparation returns the target and resolves migrationSource by target Profile ID', async (t) => {
     const auth = await createAuthenticatedSession({
       profileId: (

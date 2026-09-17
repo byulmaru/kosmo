@@ -53,7 +53,7 @@ const findStoredRemoteProfileActorState = async (
 
 export const lookupRemoteActorUriActivity = async (
   input: RemoteProfileLookupInput,
-): Promise<string> => {
+): Promise<string | null> => {
   const stored = await db
     .select({ actorUri: ActivityPubActors.uri })
     .from(ActivityPubActors)
@@ -77,7 +77,12 @@ export const lookupRemoteActorUriActivity = async (
   const context = federation.createContext(new URL(localInstance.canonicalOrigin), undefined);
   const descriptor = await context.lookupWebFinger(`acct:${input.handle}@${input.domain}`);
 
-  for (const link of descriptor?.links ?? []) {
+  if (descriptor === null) {
+    return null;
+  }
+
+  let hasInvalidQualifyingLink = false;
+  for (const link of descriptor.links ?? []) {
     if (
       link.rel !== 'self' ||
       (link.type !== 'application/activity+json' &&
@@ -89,23 +94,29 @@ export const lookupRemoteActorUriActivity = async (
       continue;
     }
 
+    let candidate: URL;
     try {
-      const candidate = new URL(link.href);
-      if (
-        (candidate.protocol === 'http:' || candidate.protocol === 'https:') &&
-        candidate.hostname
-      ) {
-        return candidate.href;
-      }
+      candidate = new URL(link.href);
     } catch {
-      // Try another ActivityPub self link before reporting an invalid response.
+      hasInvalidQualifyingLink = true;
+      continue;
     }
+
+    if ((candidate.protocol === 'http:' || candidate.protocol === 'https:') && candidate.hostname) {
+      return candidate.href;
+    }
+
+    hasInvalidQualifyingLink = true;
   }
 
-  throw ApplicationFailure.nonRetryable(
-    'Remote WebFinger response is missing a valid ActivityPub self link.',
-    'RemoteActorMaterializationError',
-  );
+  if (hasInvalidQualifyingLink) {
+    throw ApplicationFailure.nonRetryable(
+      'Remote WebFinger response contains an invalid ActivityPub self link.',
+      'RemoteActorMaterializationError',
+    );
+  }
+
+  return null;
 };
 
 export const refreshRemoteProfileActorActivity = async (
