@@ -529,7 +529,7 @@ test('Quote Notification Activity는 source author에게 한 건만 생성한다
   assert.equal(notifications[0]?.sourceId, quote.id);
 });
 
-test('Quote가 Reply 관계도 가진 경우 먼저 확정된 Quote 대표를 Reply가 바꾸지 않는다', async () => {
+test('Quote와 Reply 판단이 경합해도 Reply가 대표가 된다', async () => {
   const recipient = await createProfile();
   const author = await createProfile();
   const { post: source } = await createCorePost({
@@ -547,13 +547,50 @@ test('Quote가 Reply 관계도 가진 경우 먼저 확정된 Quote 대표를 Re
   });
   await db.update(Posts).set({ replyParentId: source.id }).where(eq(Posts.id, quote.id));
 
-  await createQuoteNotificationActivity(quote.id);
-  await createReplyNotificationActivity(quote.id);
+  await Promise.all([
+    createQuoteNotificationActivity(quote.id),
+    createReplyNotificationActivity(quote.id),
+  ]);
 
   const notifications = await db.select().from(Notifications);
   assert.equal(notifications.length, 1);
-  assert.equal(notifications[0]?.kind, NotificationKind.QUOTE);
+  assert.equal(notifications[0]?.kind, NotificationKind.REPLY);
   assert.equal(notifications[0]?.sourceId, quote.id);
+});
+
+test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만든다', async () => {
+  const quoteRecipient = await createProfile();
+  const replyRecipient = await createProfile();
+  const author = await createProfile();
+  const { post: quoteSource } = await createCorePost({
+    document: postContentDocumentFromText('Quote source'),
+    origin: 'LOCAL',
+    profileId: quoteRecipient.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const replyParent = await createPost(replyRecipient.id);
+  const { post: quote } = await createCorePost({
+    document: postContentDocumentFromText('Quote and reply'),
+    origin: 'LOCAL',
+    profileId: author.id,
+    repostSourceId: quoteSource.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  await db.update(Posts).set({ replyParentId: replyParent.id }).where(eq(Posts.id, quote.id));
+
+  await Promise.all([
+    createQuoteNotificationActivity(quote.id),
+    createReplyNotificationActivity(quote.id),
+  ]);
+
+  const notifications = await db.select().from(Notifications);
+  assert.deepEqual(
+    new Set(notifications.map(({ kind, recipientProfileId }) => `${kind}:${recipientProfileId}`)),
+    new Set([
+      `${NotificationKind.QUOTE}:${quoteRecipient.id}`,
+      `${NotificationKind.REPLY}:${replyRecipient.id}`,
+    ]),
+  );
 });
 
 test('Reaction Notification Activities는 create와 delete retry에 멱등이다', async () => {

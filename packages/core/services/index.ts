@@ -64,11 +64,7 @@ export { prepareProfileMigration } from './profile-migration';
 export { muteProfile, unmuteProfile } from './profile-mute';
 export { updateProfile } from './profile-update';
 export { findEligiblePushInstallations, invalidatePushInstallation } from './push-installation';
-export {
-  createQuoteNotification,
-  deleteQuoteNotification,
-  materializeCoordinatedNotification,
-} from './quote-notification';
+export { createQuoteNotification } from './quote-notification';
 export { addReaction, deleteReaction } from './reaction';
 export type { RevokeCurrentSessionResult } from './session';
 export { createOidcSession, revokeCurrentSession } from './session';
