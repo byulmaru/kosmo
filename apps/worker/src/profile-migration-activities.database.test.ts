@@ -1,75 +1,72 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, mock, test } from 'node:test';
-import { and, eq, inArray, or } from 'drizzle-orm';
-import {
-  ActivityPubActors,
-  db,
-  firstOrThrow,
-  Instances,
-  pg,
-  ProfileFollowRequests,
-  ProfileFollows,
-  ProfileMigrations,
-  Profiles,
-} from '../db';
+import { randomUUID } from 'node:crypto';
+import { after, beforeEach, mock, test } from 'node:test';
 import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
   ProfileFollowPolicy,
   ProfileState,
-} from '../enums';
-import { NotFoundError } from '../error';
-import { runWorkflow, temporalClient } from '../temporal/client';
-import {
-  executeProfileFollowPairTransition,
-  profileFollowPairWorkflowId,
-  profileFollowRemovalWorkflowId,
-} from '../temporal/follow-command';
-import { profileMigrationMoveWorkflow } from '../temporal/profile-migration';
-import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
-import {
-  executeProfileMigrationMoveFollower,
-  loadProfileMigrationMoveFollowerBatch,
-} from './profile-migration-move';
+} from '@kosmo/core/enums';
+import { NotFoundError } from '@kosmo/core/error';
+import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
+import { TestWorkflowEnvironment } from '@temporalio/testing';
+import { Worker } from '@temporalio/worker';
+import { and, eq } from 'drizzle-orm';
 
-const instanceIds: string[] = [];
-const profileIds: string[] = [];
+process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+process.env.PUBLIC_ORIGIN ??= 'http://127.0.0.1:4173';
+
+const environment = await TestWorkflowEnvironment.createLocal({
+  server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+});
+process.env.TEMPORAL_ADDRESS = environment.address;
+process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';
+
+const [
+  {
+    ActivityPubActors,
+    db,
+    firstOrThrow,
+    Instances,
+    pg,
+    ProfileFollowRequests,
+    ProfileFollows,
+    ProfileMigrations,
+    Profiles,
+  },
+  { profileMigrationMoveWorkflow },
+  { runWorkflow, temporalClient },
+  { profileFollowPairWorkflowId, profileFollowRemovalWorkflowId },
+  activities,
+  migrationActivities,
+] = await Promise.all([
+  import('@kosmo/core/db'),
+  import('@kosmo/core/temporal/profile-migration'),
+  import('@kosmo/core/temporal/client'),
+  import('@kosmo/core/temporal/follow-command'),
+  import('./activities'),
+  import('./profile-migration-activities'),
+]);
+
+const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
+
+const truncateDatabase = () =>
+  pg.unsafe(
+    'TRUNCATE TABLE profile_follow_request, profile_follow, profile_migration, profile, instance CASCADE',
+  );
+
+beforeEach(async () => {
+  await truncateDatabase();
+});
 
 after(async () => {
-  if (profileIds.length > 0) {
-    await db
-      .delete(ProfileFollowRequests)
-      .where(
-        or(
-          inArray(ProfileFollowRequests.followerProfileId, profileIds),
-          inArray(ProfileFollowRequests.followeeProfileId, profileIds),
-        ),
-      );
-    await db
-      .delete(ProfileMigrations)
-      .where(
-        or(
-          inArray(ProfileMigrations.sourceProfileId, profileIds),
-          inArray(ProfileMigrations.targetProfileId, profileIds),
-        ),
-      );
-    await db
-      .delete(ProfileFollows)
-      .where(
-        or(
-          inArray(ProfileFollows.followerProfileId, profileIds),
-          inArray(ProfileFollows.followeeProfileId, profileIds),
-        ),
-      );
-    await db.delete(Profiles).where(inArray(Profiles.id, profileIds));
-  }
-  if (instanceIds.length > 0) {
-    await db.delete(Instances).where(inArray(Instances.id, instanceIds));
-  }
+  await truncateDatabase();
+  await temporalClient.connection.close();
   await pg.end();
+  await environment.teardown();
 });
 
 const createProfile = async ({
@@ -80,14 +77,14 @@ const createProfile = async ({
   withActor = instanceKind === InstanceKind.ACTIVITYPUB,
   actorInboxUri,
 }: {
-  instanceKind?: InstanceKind;
-  instanceState?: InstanceState;
-  followPolicy?: ProfileFollowPolicy;
-  profileState?: ProfileState;
-  withActor?: boolean;
-  actorInboxUri?: string | null;
+  readonly instanceKind?: InstanceKind;
+  readonly instanceState?: InstanceState;
+  readonly followPolicy?: ProfileFollowPolicy;
+  readonly profileState?: ProfileState;
+  readonly withActor?: boolean;
+  readonly actorInboxUri?: string | null;
 } = {}) => {
-  const suffix = crypto.randomUUID();
+  const suffix = randomUUID();
   const instance = await db
     .insert(Instances)
     .values({
@@ -97,8 +94,6 @@ const createProfile = async ({
     })
     .returning()
     .then(firstOrThrow);
-  instanceIds.push(instance.id);
-
   const profile = await db
     .insert(Profiles)
     .values({
@@ -111,7 +106,6 @@ const createProfile = async ({
     })
     .returning()
     .then(firstOrThrow);
-  profileIds.push(profile.id);
 
   if (withActor) {
     await db.insert(ActivityPubActors).values({
@@ -128,14 +122,55 @@ const createProfile = async ({
   return { instance, profile };
 };
 
-const createSourceFollow = async (followerProfileId: string, sourceProfileId: string) => {
-  const follow = await db
+const createSourceFollow = async (followerProfileId: string, sourceProfileId: string) =>
+  db
     .insert(ProfileFollows)
     .values({ followerProfileId, followeeProfileId: sourceProfileId })
     .returning()
     .then(firstOrThrow);
-  return follow;
+
+const countFollow = async (followerProfileId: string, followeeProfileId: string) =>
+  db
+    .select()
+    .from(ProfileFollows)
+    .where(
+      and(
+        eq(ProfileFollows.followerProfileId, followerProfileId),
+        eq(ProfileFollows.followeeProfileId, followeeProfileId),
+      ),
+    )
+    .then((rows) => rows.length);
+
+const countFollowRequest = async (followerProfileId: string, followeeProfileId: string) =>
+  db
+    .select()
+    .from(ProfileFollowRequests)
+    .where(
+      and(
+        eq(ProfileFollowRequests.followerProfileId, followerProfileId),
+        eq(ProfileFollowRequests.followeeProfileId, followeeProfileId),
+      ),
+    )
+    .then((rows) => rows.length);
+
+const runWithWorker = async <T>(operation: () => Promise<T>): Promise<T> => {
+  const worker = await Worker.create({
+    activities,
+    connection: environment.nativeConnection,
+    namespace: environment.namespace,
+    taskQueue: KOSMO_TASK_QUEUE,
+    workflowsPath,
+  });
+  return worker.runUntil(operation);
 };
+
+const executeMoveWorkflow = (sourceProfileId: string, targetProfileId: string) =>
+  runWorkflow(profileMigrationMoveWorkflow, {
+    args: [{ sourceProfileId, targetProfileId }],
+    mode: 'execute',
+    workflowIdConflictPolicy: 'USE_EXISTING',
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+  });
 
 test('Move follower batch는 active Local established Follow만 keyset으로 읽는다', async () => {
   const source = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
@@ -154,7 +189,7 @@ test('Move follower batch는 active Local established Follow만 keyset으로 읽
   await createSourceFollow(remoteFollower.profile.id, source.profile.id);
   await createSourceFollow(disabledFollower.profile.id, source.profile.id);
 
-  const firstBatch = await loadProfileMigrationMoveFollowerBatch({
+  const firstBatch = await migrationActivities.loadProfileMigrationMoveFollowerBatchActivity({
     sourceProfileId: source.profile.id,
     targetProfileId: target.profile.id,
     limit: 1,
@@ -162,7 +197,7 @@ test('Move follower batch는 active Local established Follow만 keyset으로 읽
   assert.equal(firstBatch.length, 1);
   assert.ok(firstBatch[0]);
 
-  const secondBatch = await loadProfileMigrationMoveFollowerBatch({
+  const secondBatch = await migrationActivities.loadProfileMigrationMoveFollowerBatchActivity({
     sourceProfileId: source.profile.id,
     targetProfileId: target.profile.id,
     afterSourceFollowId: firstBatch[0].sourceFollowId,
@@ -182,7 +217,7 @@ test('Move follower batch는 Local target 준비와 Remote target origin을 다�
 
   const unpreparedLocalTarget = await createProfile();
   assert.deepEqual(
-    await loadProfileMigrationMoveFollowerBatch({
+    await migrationActivities.loadProfileMigrationMoveFollowerBatchActivity({
       sourceProfileId: source.profile.id,
       targetProfileId: unpreparedLocalTarget.profile.id,
     }),
@@ -198,10 +233,12 @@ test('Move follower batch는 Local target 준비와 Remote target origin을 다�
     type: ActivityPubActorType.PERSON,
     uri: `https://${remoteTarget.instance.domain}/users/${remoteTarget.profile.handle}`,
   });
-  const remoteTargetBatch = await loadProfileMigrationMoveFollowerBatch({
-    sourceProfileId: source.profile.id,
-    targetProfileId: remoteTarget.profile.id,
-  });
+  const remoteTargetBatch = await migrationActivities.loadProfileMigrationMoveFollowerBatchActivity(
+    {
+      sourceProfileId: source.profile.id,
+      targetProfileId: remoteTarget.profile.id,
+    },
+  );
   assert.equal(remoteTargetBatch.length, 1);
   assert.equal(remoteTargetBatch[0]?.followerProfileId, follower.profile.id);
 
@@ -212,10 +249,11 @@ test('Move follower batch는 Local target 준비와 Remote target origin을 다�
     sourceProfileId: source.profile.id,
     targetProfileId: approvalTarget.profile.id,
   });
-  const approvalTargetBatch = await loadProfileMigrationMoveFollowerBatch({
-    sourceProfileId: source.profile.id,
-    targetProfileId: approvalTarget.profile.id,
-  });
+  const approvalTargetBatch =
+    await migrationActivities.loadProfileMigrationMoveFollowerBatchActivity({
+      sourceProfileId: source.profile.id,
+      targetProfileId: approvalTarget.profile.id,
+    });
   assert.equal(approvalTargetBatch.length, 1);
   assert.equal(approvalTargetBatch[0]?.followerProfileId, follower.profile.id);
 });
@@ -230,7 +268,7 @@ test('Move follower target 저장 실패는 source Follow를 보존한다', asyn
   });
   const sourceFollow = await createSourceFollow(follower.profile.id, source.profile.id);
 
-  const batch = await loadProfileMigrationMoveFollowerBatch({
+  const batch = await migrationActivities.loadProfileMigrationMoveFollowerBatchActivity({
     sourceProfileId: source.profile.id,
     targetProfileId: target.profile.id,
   });
@@ -241,39 +279,27 @@ test('Move follower target 저장 실패는 source Follow를 보존한다', asyn
     },
   ]);
 
-  // The batch admission was committed, but target Follow admission now fails
-  // through the real pair Workflow because the follower became unavailable.
   await db
     .update(Instances)
     .set({ state: InstanceState.SUSPENDED })
     .where(eq(Instances.id, follower.instance.id));
 
   await assert.rejects(
-    executeProfileMigrationMoveFollower({
-      sourceProfileId: source.profile.id,
-      targetProfileId: target.profile.id,
-      followerProfileId: follower.profile.id,
-      sourceFollowId: sourceFollow.id,
-    }),
+    runWithWorker(() =>
+      migrationActivities.executeProfileMigrationMoveFollowerActivity({
+        sourceProfileId: source.profile.id,
+        targetProfileId: target.profile.id,
+        followerProfileId: follower.profile.id,
+        sourceFollowId: sourceFollow.id,
+      }),
+    ),
     NotFoundError,
   );
   assert.deepEqual(
     await db.select().from(ProfileFollows).where(eq(ProfileFollows.id, sourceFollow.id)),
     [sourceFollow],
   );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, follower.profile.id),
-          eq(ProfileFollows.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    0,
-  );
+  assert.equal(await countFollow(follower.profile.id, target.profile.id), 0);
 });
 
 test('Move follower는 기존 target Follow가 있으면 source Follow를 보존한다', async () => {
@@ -285,60 +311,23 @@ test('Move follower는 기존 target Follow가 있으면 source Follow를 보존
     targetProfileId: target.profile.id,
   });
   const sourceFollow = await createSourceFollow(follower.profile.id, source.profile.id);
-
-  const targetTransition = await executeProfileFollowPairTransition({
-    pair: {
-      followerProfileId: follower.profile.id,
-      followeeProfileId: target.profile.id,
-    },
-    command: { kind: 'FOLLOW', origin: 'LOCAL' },
+  await db.insert(ProfileFollows).values({
+    followerProfileId: follower.profile.id,
+    followeeProfileId: target.profile.id,
   });
-  if (targetTransition.result.commandKind !== 'FOLLOW') {
-    throw new Error('Unexpected target Profile Follow transition result');
-  }
-  assert.equal(targetTransition.result.kind, 'ESTABLISHED');
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, follower.profile.id),
-          eq(ProfileFollows.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    1,
-  );
 
-  await executeProfileMigrationMoveFollower({
+  await migrationActivities.executeProfileMigrationMoveFollowerActivity({
     sourceProfileId: source.profile.id,
     targetProfileId: target.profile.id,
     followerProfileId: follower.profile.id,
     sourceFollowId: sourceFollow.id,
   });
 
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(eq(ProfileFollows.id, sourceFollow.id))
-      .then((rows) => rows.length),
-    1,
+  assert.deepEqual(
+    await db.select().from(ProfileFollows).where(eq(ProfileFollows.id, sourceFollow.id)),
+    [sourceFollow],
   );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, follower.profile.id),
-          eq(ProfileFollows.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    1,
-  );
+  assert.equal(await countFollow(follower.profile.id, target.profile.id), 1);
 });
 
 test('Move follower는 concurrent target transition의 created false에서 source Follow를 보존한다', async () => {
@@ -366,7 +355,7 @@ test('Move follower는 concurrent target transition의 created false에서 sourc
     }),
   );
   try {
-    await executeProfileMigrationMoveFollower({
+    await migrationActivities.executeProfileMigrationMoveFollowerActivity({
       sourceProfileId: source.profile.id,
       targetProfileId: target.profile.id,
       followerProfileId: follower.profile.id,
@@ -383,13 +372,6 @@ test('Move follower는 concurrent target transition의 created false에서 sourc
   }
 });
 
-const executeMoveWorkflow = async (sourceProfileId: string, targetProfileId: string) =>
-  temporalClient.workflow.execute('profileMigrationMoveWorkflow', {
-    args: [{ sourceProfileId, targetProfileId }],
-    taskQueue: KOSMO_TASK_QUEUE,
-    workflowId: `profile-migration-move-integration:${crypto.randomUUID()}`,
-  });
-
 test('반복 실행한 Move Workflow는 Local Open target에 Follow를 먼저 저장하고 source를 제거한다', async () => {
   const source = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const target = await createProfile();
@@ -404,21 +386,23 @@ test('반복 실행한 Move Workflow는 Local Open target에 Follow를 먼저 �
     sourceProfileId: source.profile.id,
     targetProfileId: target.profile.id,
   } as const;
-  const handles = await Promise.all([
-    runWorkflow(profileMigrationMoveWorkflow, {
-      args: [input],
-      mode: 'start',
-      workflowIdConflictPolicy: 'USE_EXISTING',
-      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
-    }),
-    runWorkflow(profileMigrationMoveWorkflow, {
-      args: [input],
-      mode: 'start',
-      workflowIdConflictPolicy: 'USE_EXISTING',
-      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
-    }),
-  ]);
-  await Promise.all(handles.map((handle) => handle.result()));
+  await runWithWorker(async () => {
+    const handles = await Promise.all([
+      runWorkflow(profileMigrationMoveWorkflow, {
+        args: [input],
+        mode: 'start',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      }),
+      runWorkflow(profileMigrationMoveWorkflow, {
+        args: [input],
+        mode: 'start',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      }),
+    ]);
+    await Promise.all(handles.map((handle) => handle.result()));
+  });
 
   assert.equal(
     await db
@@ -428,32 +412,8 @@ test('반복 실행한 Move Workflow는 Local Open target에 Follow를 먼저 �
       .then((rows) => rows.length),
     0,
   );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, follower.profile.id),
-          eq(ProfileFollows.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    1,
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollowRequests)
-      .where(
-        and(
-          eq(ProfileFollowRequests.followerProfileId, follower.profile.id),
-          eq(ProfileFollowRequests.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    0,
-  );
+  assert.equal(await countFollow(follower.profile.id, target.profile.id), 1);
+  assert.equal(await countFollowRequest(follower.profile.id, target.profile.id), 0);
 });
 
 test('실제 Move Workflow는 Local target 자신의 source Follow를 이전하지 않고 보존한다', async () => {
@@ -465,38 +425,14 @@ test('실제 Move Workflow는 Local target 자신의 source Follow를 이전하�
   });
   const sourceFollow = await createSourceFollow(target.profile.id, source.profile.id);
 
-  await executeMoveWorkflow(source.profile.id, target.profile.id);
+  await runWithWorker(() => executeMoveWorkflow(source.profile.id, target.profile.id));
 
   assert.deepEqual(
     await db.select().from(ProfileFollows).where(eq(ProfileFollows.id, sourceFollow.id)),
     [sourceFollow],
   );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, target.profile.id),
-          eq(ProfileFollows.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    0,
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollowRequests)
-      .where(
-        and(
-          eq(ProfileFollowRequests.followerProfileId, target.profile.id),
-          eq(ProfileFollowRequests.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    0,
-  );
+  assert.equal(await countFollow(target.profile.id, target.profile.id), 0);
+  assert.equal(await countFollowRequest(target.profile.id, target.profile.id), 0);
 });
 
 test('실제 Move Workflow는 준비된 Local Approval target에 Follow Request를 저장하고 source를 제거한다', async () => {
@@ -509,7 +445,7 @@ test('실제 Move Workflow는 준비된 Local Approval target에 Follow Request�
   const follower = await createProfile();
   const sourceFollow = await createSourceFollow(follower.profile.id, source.profile.id);
 
-  await executeMoveWorkflow(source.profile.id, target.profile.id);
+  await runWithWorker(() => executeMoveWorkflow(source.profile.id, target.profile.id));
 
   assert.equal(
     await db
@@ -519,32 +455,8 @@ test('실제 Move Workflow는 준비된 Local Approval target에 Follow Request�
       .then((rows) => rows.length),
     0,
   );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, follower.profile.id),
-          eq(ProfileFollows.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    0,
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollowRequests)
-      .where(
-        and(
-          eq(ProfileFollowRequests.followerProfileId, follower.profile.id),
-          eq(ProfileFollowRequests.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    1,
-  );
+  assert.equal(await countFollow(follower.profile.id, target.profile.id), 0);
+  assert.equal(await countFollowRequest(follower.profile.id, target.profile.id), 1);
 });
 
 test('실제 Move Workflow는 Remote Open target에 Follow와 Undo effect를 예약한다', async () => {
@@ -553,7 +465,7 @@ test('실제 Move Workflow는 Remote Open target에 Follow와 Undo effect를 예
   const follower = await createProfile();
   const sourceFollow = await createSourceFollow(follower.profile.id, source.profile.id);
 
-  await executeMoveWorkflow(source.profile.id, target.profile.id);
+  await runWithWorker(() => executeMoveWorkflow(source.profile.id, target.profile.id));
 
   assert.equal(
     await db
@@ -563,32 +475,8 @@ test('실제 Move Workflow는 Remote Open target에 Follow와 Undo effect를 예
       .then((rows) => rows.length),
     0,
   );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, follower.profile.id),
-          eq(ProfileFollows.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    1,
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollowRequests)
-      .where(
-        and(
-          eq(ProfileFollowRequests.followerProfileId, follower.profile.id),
-          eq(ProfileFollowRequests.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    0,
-  );
+  assert.equal(await countFollow(follower.profile.id, target.profile.id), 1);
+  assert.equal(await countFollowRequest(follower.profile.id, target.profile.id), 0);
 
   const pairHistory = await temporalClient.workflow
     .getHandle(
@@ -634,7 +522,7 @@ test('실제 Move Workflow는 Remote Approval target에 Follow Request를 저장
   const follower = await createProfile();
   const sourceFollow = await createSourceFollow(follower.profile.id, source.profile.id);
 
-  await executeMoveWorkflow(source.profile.id, target.profile.id);
+  await runWithWorker(() => executeMoveWorkflow(source.profile.id, target.profile.id));
 
   assert.equal(
     await db
@@ -644,32 +532,8 @@ test('실제 Move Workflow는 Remote Approval target에 Follow Request를 저장
       .then((rows) => rows.length),
     0,
   );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, follower.profile.id),
-          eq(ProfileFollows.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    0,
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollowRequests)
-      .where(
-        and(
-          eq(ProfileFollowRequests.followerProfileId, follower.profile.id),
-          eq(ProfileFollowRequests.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    1,
-  );
+  assert.equal(await countFollow(follower.profile.id, target.profile.id), 0);
+  assert.equal(await countFollowRequest(follower.profile.id, target.profile.id), 1);
 });
 
 test('실제 Move Workflow는 기존 target Follow Request에서 source Follow를 보존한다', async () => {
@@ -690,7 +554,7 @@ test('실제 Move Workflow는 기존 target Follow Request에서 source Follow�
     .returning()
     .then(firstOrThrow);
 
-  await executeMoveWorkflow(source.profile.id, target.profile.id);
+  await runWithWorker(() => executeMoveWorkflow(source.profile.id, target.profile.id));
 
   assert.equal(
     await db
@@ -708,17 +572,5 @@ test('실제 Move Workflow는 기존 target Follow Request에서 source Follow�
       .then((rows) => rows.length),
     1,
   );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, follower.profile.id),
-          eq(ProfileFollows.followeeProfileId, target.profile.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    0,
-  );
+  assert.equal(await countFollow(follower.profile.id, target.profile.id), 0);
 });
