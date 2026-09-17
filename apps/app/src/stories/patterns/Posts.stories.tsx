@@ -6012,6 +6012,52 @@ export const ProductionComposerAdapterFailure: Story = {
   render: () => <ProductionComposerAdapterStory />,
 };
 
+export const ProductionComposerMediaEditorFocus: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostsProductionComposerAdapterStoryQuery: {
+          data: { composerProfile, homeTimeline },
+        },
+        PostComposerCompleteMediaUploadMutation: {
+          data: { completeMediaUpload: { media: { id: 'media-focus', state: 'READY' } } },
+        },
+        PostComposerIssueMediaUploadUrlMutation: {
+          data: {
+            issueMediaUploadUrl: {
+              media: { id: 'media-focus' },
+              uploadUrl: 'https://upload.example/focus',
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const { originalFetch } = installImageUploadFetch(
+      async () => new Response(null, { status: 200 }),
+    );
+    setNextImagePickerResult({
+      assets: [createComposerPickerAsset('focus.svg')],
+      canceled: false,
+    });
+
+    try {
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가' }));
+      await canvas.findByLabelText('첨부 이미지 1, 업로드 완료');
+      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 편집' }));
+      await userEvent.click(canvas.getByRole('button', { name: '미디어 편집에서 뒤로' }));
+      await waitFor(() =>
+        expect(canvas.getByRole('textbox', { name: '게시물 내용' })).toHaveFocus(),
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ProductionComposerAdapterStory />,
+};
+
 export const ContentWarningReveal: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

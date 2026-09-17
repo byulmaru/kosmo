@@ -85,7 +85,6 @@ type PostComposerBaseProps = {
   expandControlRef?: RefObject<View | null>;
   focusOnMount?: boolean;
   initialContentWarning?: string | null;
-  onMediaEditorOpenChange?: (open: boolean) => void;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
@@ -178,7 +177,6 @@ function PostComposerContents({
   environmentGenerationRef,
   focusOnMount = false,
   initialContentWarning,
-  onMediaEditorOpenChange,
   onPostCreated,
   onRequestClose,
   onSubmittingChange,
@@ -197,7 +195,6 @@ function PostComposerContents({
   const visibilityControl = useRef<View>(null);
   const visibilityMenuRef = useRef<View>(null);
   const visibilityTrigger = useRef<View>(null);
-  const mediaEditorTriggerRef = useRef<HTMLElement | null>(null);
   const remainingDescriptionId = useId();
   const [body, setBody] = useState('');
   const [contentWarning, setContentWarning] = useState(() =>
@@ -243,26 +240,9 @@ function PostComposerContents({
     visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
 
-  useLayoutEffect(() => {
-    onMediaEditorOpenChange?.(mediaEditor !== null);
-  }, [mediaEditor, onMediaEditorOpenChange]);
-
-  useEffect(() => {
-    if (!focusOnMount) {
-      setMediaEditor(null);
-    }
-  }, [focusOnMount]);
-
   const closeMediaEditor = () => {
     setMediaEditor(null);
-    if (Platform.OS === 'web') {
-      requestAnimationFrame(() => {
-        const trigger = mediaEditorTriggerRef.current;
-        if (trigger?.ownerDocument.contains(trigger)) {
-          trigger.focus();
-        }
-      });
-    }
+    requestAnimationFrame(() => editor.current?.focus());
   };
 
   const submit = () => {
@@ -535,11 +515,7 @@ function PostComposerContents({
             ) : null;
 
             const openMediaEditor = (key: string, tool: 'alt' | 'sensitive') => {
-              if (Platform.OS === 'web' && typeof document !== 'undefined') {
-                mediaEditorTriggerRef.current = document.activeElement as HTMLElement | null;
-              } else {
-                editor.current?.blur();
-              }
+              editor.current?.blur();
               setMediaEditor({ key, tool });
               if (presentation === 'rail') {
                 onExpand?.();
