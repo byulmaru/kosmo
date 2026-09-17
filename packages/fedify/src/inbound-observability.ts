@@ -8,6 +8,7 @@ export type InboundActivityType =
   | 'Follow'
   | 'Like'
   | 'EmojiReact'
+  | 'QuoteRequest'
   | 'Reject'
   | 'Undo'
   | 'Update'
@@ -20,6 +21,7 @@ export type InboundHandler =
   | 'delete'
   | 'follow'
   | 'reaction'
+  | 'quote'
   | 'reject'
   | 'undo'
   | 'update'
@@ -70,6 +72,7 @@ const activityTypes = new Set<InboundActivityType>([
   'Follow',
   'Like',
   'EmojiReact',
+  'QuoteRequest',
   'Reject',
   'Undo',
   'Update',

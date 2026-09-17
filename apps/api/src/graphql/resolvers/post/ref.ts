@@ -1,7 +1,8 @@
 import { db, Instances, PostContents, Posts, Profiles } from '@kosmo/core/db';
-import { MediaState, PostState, PostVisibility } from '@kosmo/core/enums';
+import { MediaState, PostQuotePolicy, PostState, PostVisibility } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
+import { getPostQuotePolicy } from '@kosmo/core/services';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
@@ -24,6 +25,15 @@ Post.implement({
     visibility: t.expose('visibility', { type: PostVisibility }),
     state: t.expose('state', { type: PostState }),
     createdAt: t.expose('createdAt', { type: 'DateTime' }),
+    quotePolicy: t.field({
+      type: PostQuotePolicy,
+      nullable: true,
+      resolve: (post) => getPostQuotePolicy(post.id),
+    }),
+    viewerCanUpdateQuotePolicy: t.boolean({
+      resolve: async (post, _, ctx) =>
+        ctx.session?.profile?.id === post.profileId && (await getPostQuotePolicy(post.id)) !== null,
+    }),
   }),
 });
 

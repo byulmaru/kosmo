@@ -1,3 +1,4 @@
+import { PostQuotePolicy } from '@kosmo/core/enums';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import {
   ChartNoAxesColumnIncreasingIcon,
@@ -31,6 +32,7 @@ import { TextArea, TextField } from '@/components/ui/TextField';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { PostComposerMediaItemsTarget } from './PostComposerMediaItemsTarget';
+import { postQuotePolicyOptions, postQuotePolicyPresentation } from './postQuotePolicyPresentation';
 import type { LucideIcon } from 'lucide-react-native';
 import type { ReactNode, RefObject } from 'react';
 import type { TextStyle } from 'react-native';
@@ -57,6 +59,7 @@ export type PostComposerTargetProps = Readonly<{
   onMediaRemove: (itemId: string) => void;
   onMediaRetry: (itemId: string) => void;
   onPollAction: () => void;
+  onQuotePolicyChange?: (value: PostQuotePolicy) => void;
   onSubmit: () => void;
   onVisibilityChange: (value: PostComposerTargetVisibility) => void;
   remaining: number;
@@ -68,6 +71,7 @@ export type PostComposerTargetProps = Readonly<{
   showSubmit?: boolean;
   submitting?: boolean;
   surface: 'overlay' | 'rail';
+  quotePolicy?: PostQuotePolicy;
   visibility: PostComposerTargetVisibility;
 }>;
 
@@ -198,6 +202,7 @@ export function PostComposerTarget({
   onMediaRemove,
   onMediaRetry,
   onPollAction,
+  onQuotePolicyChange,
   onSubmit,
   onVisibilityChange,
   remaining,
@@ -209,6 +214,7 @@ export function PostComposerTarget({
   showSubmit = true,
   submitting = false,
   surface,
+  quotePolicy: quotePolicyProp = PostQuotePolicy.EVERYONE,
   visibility,
 }: PostComposerTargetProps) {
   const theme = useTheme();
@@ -216,6 +222,8 @@ export function PostComposerTarget({
     submitting,
     onVisibilityChange,
   );
+  const [quotePolicy, setQuotePolicy] = useState(quotePolicyProp);
+  useEffect(() => setQuotePolicy(quotePolicyProp), [quotePolicyProp]);
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
@@ -283,9 +291,17 @@ export function PostComposerTarget({
                 onDismiss={() => setVisibilityOpen(false)}
                 onChange={(value) => {
                   onVisibilityChange(value);
+                  if (value === 'FOLLOWERS') {
+                    setVisibilityOpen(false);
+                  }
+                }}
+                onQuotePolicyChange={(value) => {
+                  setQuotePolicy(value);
+                  onQuotePolicyChange?.(value);
                   setVisibilityOpen(false);
                   triggerRef.current?.focus();
                 }}
+                quotePolicy={quotePolicy}
                 value={visibility}
               />
             ) : null}
@@ -448,6 +464,7 @@ export function MobileFullscreenComposerShellCandidate({
   onMediaRetry,
   onOverlayClose,
   onPollAction,
+  onQuotePolicyChange,
   onSubmit,
   onVisibilityChange,
   remaining,
@@ -457,6 +474,7 @@ export function MobileFullscreenComposerShellCandidate({
   showMediaAction = true,
   showPollAction = true,
   submitting = false,
+  quotePolicy: quotePolicyProp = PostQuotePolicy.EVERYONE,
   visibility,
 }: MobileFullscreenComposerShellCandidateProps) {
   const theme = useTheme();
@@ -465,6 +483,8 @@ export function MobileFullscreenComposerShellCandidate({
     submitting,
     onVisibilityChange,
   );
+  const [quotePolicy, setQuotePolicy] = useState(quotePolicyProp);
+  useEffect(() => setQuotePolicy(quotePolicyProp), [quotePolicyProp]);
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const displayedError = error ?? formatMediaFailures(items);
@@ -548,9 +568,17 @@ export function MobileFullscreenComposerShellCandidate({
             onDismiss={() => setVisibilityOpen(false)}
             onChange={(value) => {
               onVisibilityChange(value);
+              if (value === 'FOLLOWERS') {
+                setVisibilityOpen(false);
+              }
+            }}
+            onQuotePolicyChange={(value) => {
+              setQuotePolicy(value);
+              onQuotePolicyChange?.(value);
               setVisibilityOpen(false);
               triggerRef.current?.focus();
             }}
+            quotePolicy={quotePolicy}
             value={visibility}
           />
         ) : null}
@@ -775,6 +803,8 @@ function VisibilityMenu({
   onChange,
   onDismiss,
   triggerRef,
+  onQuotePolicyChange,
+  quotePolicy,
   value,
 }: {
   alignRight?: boolean;
@@ -782,6 +812,8 @@ function VisibilityMenu({
   onChange: (value: PostComposerTargetVisibility) => void;
   onDismiss: () => void;
   triggerRef: RefObject<View | null>;
+  onQuotePolicyChange: (value: PostQuotePolicy) => void;
+  quotePolicy: PostQuotePolicy;
   value: PostComposerTargetVisibility;
 }) {
   const theme = useTheme();
@@ -853,6 +885,52 @@ function VisibilityMenu({
           </Pressable>
         );
       })}
+      {value === 'PUBLIC' || value === 'UNLISTED' ? (
+        <View
+          accessibilityLabel="인용 허용 정책"
+          accessibilityRole="radiogroup"
+          style={[styles.quotePolicyGroup, { borderTopColor: theme.borderSubtle }]}
+        >
+          <Text style={[styles.quotePolicyHeading, { color: theme.foregroundPrimary }]}>
+            인용 허용
+          </Text>
+          {postQuotePolicyOptions.map((option) => {
+            const selected = option === quotePolicy;
+            const presentation = postQuotePolicyPresentation[option];
+            return (
+              <Pressable
+                accessibilityLabel={`${presentation.label}: ${presentation.description}`}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selected }}
+                key={option}
+                onPress={() => onQuotePolicyChange(option)}
+                style={({ pressed }) => [
+                  styles.visibilityOption,
+                  styles.quotePolicyOption,
+                  {
+                    backgroundColor: selected
+                      ? theme.stateSelectedSurface
+                      : pressed
+                        ? theme.statePressed
+                        : 'transparent',
+                  },
+                ]}
+              >
+                <View style={styles.visibilityOptionCopy}>
+                  <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
+                    {presentation.label}
+                  </Text>
+                  <Text
+                    style={[styles.visibilityDescription, { color: theme.foregroundSecondary }]}
+                  >
+                    {presentation.description}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
     </View>
   );
   return Platform.OS === 'web' ? (
@@ -1020,6 +1098,13 @@ const styles = StyleSheet.create({
   toolVisual: { borderRadius: radius[8] },
   visibilityControl: { position: 'relative', zIndex: 12 },
   visibilityDescription: textStyles.uiCopyS,
+  quotePolicyGroup: { borderTopWidth: 1, marginTop: space[4], paddingTop: space[8] },
+  quotePolicyHeading: {
+    paddingHorizontal: space[12],
+    paddingBottom: space[4],
+    ...textStyles.uiLabelM,
+  },
+  quotePolicyOption: { paddingLeft: space[24] },
   visibilityLabel: { width: 66, ...textStyles.uiLabelM },
   visibilityMenu: {
     borderRadius: radius[12],

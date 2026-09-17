@@ -862,7 +862,10 @@ export const MobilePlaygroundContract: Story = {
     await userEvent.click(within(menu).getByRole('radio', { name: '공개' }));
     expect(args.onVisibilityChange).toHaveBeenLastCalledWith('PUBLIC');
     expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
-    expect(canvas.queryByRole('radiogroup', { name: '공개 범위 선택' })).toBeNull();
+    const quotePolicyMenu = canvas.getByRole('radiogroup', { name: '인용 허용 정책' });
+    expect(quotePolicyMenu).toBeVisible();
+    await userEvent.click(within(quotePolicyMenu).getByRole('radio', { name: /^팔로워:/ }));
+    expect(canvas.queryByRole('radiogroup', { name: '인용 허용 정책' })).toBeNull();
 
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 편집' }));
     expect(canvas.getByRole('heading', { name: '미디어 편집' })).toBeVisible();

@@ -22,11 +22,15 @@ import {
 import {
   createPostComposerContextKey,
   createPostComposerMutationInput,
+  defaultPostComposerQuotePolicy,
+  isPostComposerQuotePolicyVisible,
   isPostComposerVisibilityAllowed,
   resolvePostComposerVisibility,
 } from './postComposerState';
 import { MobileFullscreenComposerShellCandidate, PostComposerTarget } from './PostComposerTarget';
+import { postQuotePolicyOptions, postQuotePolicyPresentation } from './postQuotePolicyPresentation';
 import { postVisibilityPresentation } from './postVisibilityPresentation';
+import type { PostQuotePolicy } from '@kosmo/core/enums';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type {
@@ -36,6 +40,7 @@ import type {
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
 import type { PostComposerTargetVisibility } from './PostComposerTarget';
+import type { PostComposerQuotePolicy } from './postComposerState';
 
 // TODO(PROD-462): Mentioned Profile recipient 입력·저장과 DIRECT 조회 권한이 구현되면
 // PostVisibility.DIRECT를 Composer 허용 목록에 복원한다.
@@ -207,6 +212,9 @@ function PostComposerContents({
   const [visibility, setVisibility] = useState<Visibility>(() =>
     resolvePostComposerVisibility(profile.private?.defaultPostVisibility),
   );
+  const [quotePolicy, setQuotePolicy] = useState<PostComposerQuotePolicy>(
+    defaultPostComposerQuotePolicy,
+  );
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [webVisibilityMenuLeft, setWebVisibilityMenuLeft] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -269,6 +277,7 @@ function PostComposerContents({
             replyParentId,
             contentWarningText,
             repostSourceId,
+            quotePolicy,
           ),
           media: media.items,
           sensitiveMedia: media.sensitiveMedia,
@@ -308,6 +317,7 @@ function PostComposerContents({
         setMedia(emptyPostComposerMediaValue);
         setMediaGeneration((generation) => generation + 1);
         setVisibility(resolvePostComposerVisibility(profile.private?.defaultPostVisibility));
+        setQuotePolicy(defaultPostComposerQuotePolicy);
         editor.current?.focus();
         submittedCallback?.(createdPost);
       },
@@ -597,8 +607,7 @@ function PostComposerContents({
   const visibilityMenu = (
     <View
       ref={visibilityMenuRef}
-      accessibilityLabel={replyMode ? '답글 공개 설정' : '게시글 공개 설정'}
-      accessibilityRole={Platform.OS === 'web' ? undefined : 'radiogroup'}
+      accessibilityLabel={replyMode ? '답글 공개 및 인용 설정' : '게시글 공개 및 인용 설정'}
       role={Platform.OS === 'web' ? 'menu' : undefined}
       style={[
         styles.visibilityMenu,
@@ -606,51 +615,119 @@ function PostComposerContents({
         { backgroundColor: theme.card, borderColor: theme.border },
       ]}
     >
-      {availableVisibilityOptions.map((option) => {
-        const selected = option.value === visibility;
-        const VisibilityIcon = option.icon;
-        return (
-          <Pressable
-            aria-checked={selected}
-            accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
-            accessibilityState={Platform.OS === 'web' ? undefined : { checked: selected }}
-            disabled={submitting}
-            key={option.value}
-            onPress={() => {
-              if (Platform.OS === 'web') {
-                editor.current?.blur();
-                setEditorFocused(false);
-              }
-              setVisibility(option.value);
-              setVisibilityOpen(false);
-              if (Platform.OS === 'web') {
-                requestAnimationFrame(() => {
-                  (visibilityTrigger.current as unknown as HTMLElement | null)?.focus();
-                });
-              }
-            }}
-            role={Platform.OS === 'web' ? ('menuitemradio' as 'radio') : undefined}
-            style={({ pressed }) => [
-              styles.visibilityOption,
-              {
-                backgroundColor: selected
-                  ? theme.selectedSurface
-                  : pressed
-                    ? theme.surface
-                    : 'transparent',
-              },
-            ]}
+      <View
+        accessibilityLabel={replyMode ? '답글 공개 범위' : '공개 범위'}
+        accessibilityRole={Platform.OS === 'web' ? undefined : 'radiogroup'}
+        role={Platform.OS === 'web' ? 'group' : undefined}
+      >
+        {availableVisibilityOptions.map((option) => {
+          const selected = option.value === visibility;
+          const VisibilityIcon = option.icon;
+          return (
+            <Pressable
+              aria-checked={selected}
+              accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
+              accessibilityState={Platform.OS === 'web' ? undefined : { checked: selected }}
+              disabled={submitting}
+              key={option.value}
+              onPress={() => {
+                if (Platform.OS === 'web') {
+                  editor.current?.blur();
+                  setEditorFocused(false);
+                }
+                setVisibility(option.value);
+                if (!isPostComposerQuotePolicyVisible(option.value)) {
+                  setVisibilityOpen(false);
+                  if (Platform.OS === 'web') {
+                    requestAnimationFrame(() => {
+                      (visibilityTrigger.current as unknown as HTMLElement | null)?.focus();
+                    });
+                  }
+                }
+              }}
+              role={Platform.OS === 'web' ? ('menuitemradio' as 'radio') : undefined}
+              style={({ pressed }) => [
+                styles.visibilityOption,
+                {
+                  backgroundColor: selected
+                    ? theme.selectedSurface
+                    : pressed
+                      ? theme.surface
+                      : 'transparent',
+                },
+              ]}
+            >
+              <VisibilityIcon color={theme.textSecondary} size={16} strokeWidth={2} />
+              <View style={styles.visibilityCopy}>
+                <Text style={[styles.visibilityLabel, { color: theme.text }]}>{option.label}</Text>
+                <Text style={[styles.visibilityDescription, { color: theme.textSecondary }]}>
+                  {option.description}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+      {isPostComposerQuotePolicyVisible(visibility) ? (
+        <>
+          <View
+            accessibilityRole="header"
+            style={[styles.policyHeading, { borderTopColor: theme.border }]}
           >
-            <VisibilityIcon color={theme.textSecondary} size={16} strokeWidth={2} />
-            <View style={styles.visibilityCopy}>
-              <Text style={[styles.visibilityLabel, { color: theme.text }]}>{option.label}</Text>
-              <Text style={[styles.visibilityDescription, { color: theme.textSecondary }]}>
-                {option.description}
-              </Text>
-            </View>
-          </Pressable>
-        );
-      })}
+            <Text style={[styles.visibilityLabel, { color: theme.text }]}>인용 허용</Text>
+          </View>
+          <View
+            accessibilityLabel="인용 허용 정책"
+            accessibilityRole={Platform.OS === 'web' ? undefined : 'radiogroup'}
+            role={Platform.OS === 'web' ? 'group' : undefined}
+          >
+            {postQuotePolicyOptions.map((option) => {
+              const selected = option === quotePolicy;
+              const presentation = postQuotePolicyPresentation[option];
+              return (
+                <Pressable
+                  accessibilityLabel={`${presentation.label}: ${presentation.description}`}
+                  aria-checked={selected}
+                  accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
+                  accessibilityState={Platform.OS === 'web' ? undefined : { checked: selected }}
+                  disabled={submitting}
+                  key={option}
+                  onPress={() => {
+                    setQuotePolicy(option as PostQuotePolicy);
+                    setVisibilityOpen(false);
+                    if (Platform.OS === 'web') {
+                      requestAnimationFrame(() => {
+                        (visibilityTrigger.current as unknown as HTMLElement | null)?.focus();
+                      });
+                    }
+                  }}
+                  role={Platform.OS === 'web' ? ('menuitemradio' as 'radio') : undefined}
+                  style={({ pressed }) => [
+                    styles.visibilityOption,
+                    styles.policyOption,
+                    {
+                      backgroundColor: selected
+                        ? theme.selectedSurface
+                        : pressed
+                          ? theme.surface
+                          : 'transparent',
+                    },
+                  ]}
+                >
+                  <View style={styles.visibilityCopy}>
+                    <Text style={[styles.visibilityLabel, { color: theme.text }]}>
+                      {presentation.label}
+                    </Text>
+                    <Text style={[styles.visibilityDescription, { color: theme.textSecondary }]}>
+                      {presentation.description}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      ) : null}
     </View>
   );
 
@@ -833,7 +910,7 @@ function PostComposerContents({
       ) : null}
       {Platform.OS !== 'web' ? (
         <Modal
-          accessibilityLabel={replyMode ? '답글 공개 범위' : '공개 범위'}
+          accessibilityLabel={replyMode ? '답글 공개 및 인용 설정' : '공개 및 인용 설정'}
           animationType="fade"
           onRequestClose={() => setVisibilityOpen(false)}
           role="dialog"
@@ -974,4 +1051,11 @@ const styles = StyleSheet.create({
   visibilityCopy: { ...layoutRecipes.labelSupportStack, flex: 1 },
   visibilityLabel: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
   visibilityDescription: { fontFamily: fontFamilies.ui, ...typography.xsm },
+  policyHeading: {
+    borderTopWidth: 1,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  policyOption: { paddingLeft: spacing.lg },
 });

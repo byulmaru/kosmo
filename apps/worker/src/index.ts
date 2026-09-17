@@ -1,6 +1,7 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { pg } from '@kosmo/core/db';
+import { replayPendingPostQuoteEffects } from '@kosmo/core/services';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { closeFedifyQueue } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
@@ -40,6 +41,15 @@ if (import.meta.main) {
         taskQueue: KOSMO_TASK_QUEUE,
         workflowsPath: new URL('./workflows/index.ts', import.meta.url).pathname,
       });
+      const replayedPostQuoteEffects = await replayPendingPostQuoteEffects();
+      if (replayedPostQuoteEffects > 0) {
+        console.log(
+          JSON.stringify({
+            event: 'post_quote_effect_receipts_replayed',
+            count: replayedPostQuoteEffects,
+          }),
+        );
+      }
       const running = worker.run();
       process.off('SIGTERM', terminateDuringStartup);
       void runSchedules(connection, namespace)
