@@ -243,41 +243,48 @@ describe('GraphQL remote profile boundary', () => {
   test('materializes a missing explicit remote profile into the existing connection', async (t) => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
-    const remote = await createProfile({ handle: 'alice', instanceId: remoteInstance.id });
+    const handles = ['ab', 'a'.repeat(31), 'test.user'] as const;
+    const remotes = await Promise.all(
+      handles.map((handle) => createProfile({ handle, instanceId: remoteInstance.id })),
+    );
+    let executionIndex = 0;
     const execute = t.mock.method(
       temporalClient.workflow,
       'execute',
-      async () => remote.id as never,
+      async () => remotes[executionIndex++]!.id as never,
     );
 
-    const result = await requestGraphQL<{
-      searchProfiles: { edges: Array<{ node: { id: string; relativeHandle: string } }> };
-    }>(
-      `query SearchRemoteProfile($query: String!) {
-        searchProfiles(query: $query, first: 20) {
-          edges { node { id relativeHandle } }
-        }
-      }`,
-      { query: `@alice@${remoteDomain}` },
-      auth.token,
-    );
+    for (const [index, handle] of handles.entries()) {
+      const result = await requestGraphQL<{
+        searchProfiles: { edges: Array<{ node: { id: string; relativeHandle: string } }> };
+      }>(
+        `query SearchRemoteProfile($query: String!) {
+          searchProfiles(query: $query, first: 20) {
+            edges { node { id relativeHandle } }
+          }
+        }`,
+        { query: `@${handle}@${remoteDomain}` },
+        auth.token,
+      );
 
-    assertNoGraphQLErrors(result);
-    assert.deepEqual(
-      result.data?.searchProfiles.edges.map(({ node }) => node.relativeHandle),
-      [`@alice@${remoteDomain}`],
-    );
-    assert.equal(execute.mock.calls.length, 1);
-    const options = execute.mock.calls[0]?.arguments[1];
-    assert.ok(options);
-    assert.deepEqual(options.args, [
-      {
-        domain: remoteDomain,
-        handle: 'alice',
-        profileId: auth.profile.id,
-      },
-    ]);
-    assert.equal(await db.$count(Profiles), 2);
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(
+        result.data?.searchProfiles.edges.map(({ node }) => node.relativeHandle),
+        [`@${handle}@${remoteDomain}`],
+      );
+      assert.equal(execute.mock.calls.length, index + 1);
+      const options = execute.mock.calls[index]?.arguments[1];
+      assert.ok(options);
+      assert.deepEqual(options.args, [
+        {
+          domain: remoteDomain,
+          handle,
+          profileId: auth.profile.id,
+        },
+      ]);
+    }
+
+    assert.equal(await db.$count(Profiles), handles.length + 1);
     assert.equal(await db.$count(ActivityPubActors), 0);
   });
 

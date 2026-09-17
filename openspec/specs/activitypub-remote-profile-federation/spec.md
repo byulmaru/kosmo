@@ -171,7 +171,7 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 
 #### Scenario: Reject actor with unsupported preferred username
 
-- **WHEN** remote actor `preferredUsername`이 기존 `Profile.handle` 스키마를 만족하지 않는다
+- **WHEN** remote actor `preferredUsername`이 비어 있거나 Local의 3–30자 길이 제한을 제외한 기존 원격 handle 형식·안전성 검증을 만족하지 않는다
 - **THEN** 시스템은 remote profile materialization을 실패 처리한다
 - **AND** 시스템은 URL이나 `profileByHandle`로 다시 조회할 수 없는 remote profile을 저장하지 않는다
 
