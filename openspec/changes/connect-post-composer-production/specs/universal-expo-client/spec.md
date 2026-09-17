@@ -1,5 +1,25 @@
 ## MODIFIED Requirements
 
+### Requirement: Platform-adaptive application shell
+
+**Authority / Provenance:** `docs/design/breakpoints.md`, PROD-797 — 클라이언트는 같은 route content를 유지하면서 viewport와 native safe area에 맞는 앱 셸을 제공해야 한다(MUST).
+
+#### Scenario: Render mobile shell
+
+- **WHEN** native 앱 또는 폭 768px 미만의 Web viewport에서 탭 화면을 표시한다
+- **THEN** 시스템은 safe area를 반영한 mobile header/content와 하단 탭 navigation을 표시한다
+
+#### Scenario: Render compact desktop shell
+
+- **WHEN** Web viewport 폭이 768px 이상 1280px 미만이다
+- **THEN** 시스템은 `80px` 아이콘 navigation rail과 최대 `600px`의 중앙 content를 표시한다
+- **AND** 우측 composer rail은 표시하지 않는다
+
+#### Scenario: Render full desktop shell
+
+- **WHEN** Web viewport 폭이 1280px 이상이다
+- **THEN** 시스템은 `320px` 좌측 sidebar, 최대 `600px` 중앙 content, 고정 `320px` 우측 composer rail을 표시한다
+
 ### Requirement: Universal route parity
 
 **Authority / Provenance:** archived `migrate-frontend-to-expo-relay`, PR #217, `PROD-541`; `docs/design/settings.md`, `docs/design/breakpoints.md`, `PROD-685`; 선행 정보 구조 `PROD-653` — 유니버설 클라이언트는 기존 공개·보호 화면과 canonical `/settings` hub 및 지원되는 내부 detail route를 Android, iOS, Web에서 동일하게 해석해야 한다(MUST). retired `/compose` direct route는 universal route parity 또는 composer entry로 제공하지 않으며(MUST NOT), 직접 접근은 404가 될 수 있다(MAY).

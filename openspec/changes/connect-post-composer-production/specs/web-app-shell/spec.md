@@ -45,6 +45,39 @@
 
 ## MODIFIED Requirements
 
+### Requirement: Desktop three-column shell layout
+
+**Authority / Provenance:** `docs/design/breakpoints.md`, PROD-797 — 웹 애플리케이션의 `(tabs)` 셸은 화면 폭에 따라 데스크톱 레이아웃을 단계적으로 압축해 표시해야 한다(MUST). 모바일 ↔ 데스크톱 경계는 `compact`(768px)이며, `compact` 이상에서는 사이드바가 항상 보이고 하단 탭 바·drawer 진입은 표시하지 않는다(MUST). `compact` 이상 `full` 미만에서는 좌측 아이콘 레일(`80px`)과 중앙 콘텐츠의 2컬럼을 표시하고 우측 레일은 표시하지 않는다(MUST). `full`(1280px) 이상에서는 좌측 풀 사이드바(`320px`) · 중앙 콘텐츠 · 우측 레일의 3컬럼을 표시해야 한다(MUST). 중앙 컬럼은 `minmax(0,600px)`로 최대 `600px`까지 라우트 콘텐츠를 렌더링하고 우측 컬럼은 고정 `320px` 폭을 사용해야 한다(MUST). 3컬럼 합계는 `1240px`이며, 컬럼 묶음은 뷰포트가 이 합계보다 넓을 때 가운데 정렬되어 남는 폭이 양옆 여백으로 배분되어야 한다(MUST). 우측 컬럼은 레일 위젯이 비어도 그리드 트랙을 유지해야 한다(MUST).
+
+#### Scenario: Mobile layout below compact
+
+- **WHEN** 사용자가 `compact` 미만 너비에서 `(tabs)` layout 아래의 페이지를 본다
+- **THEN** 시스템은 좌측 사이드바 컬럼과 우측 레일 컬럼을 표시하지 않는다
+- **AND** 상단 메뉴 헤더, drawer, 하단 탭 바, 전체 폭 콘텐츠가 그대로 유지된다
+
+#### Scenario: Icon rail and feed between compact and full
+
+- **WHEN** 사용자가 `compact` 이상 `full` 미만 너비에서 `(tabs)` layout 아래의 페이지를 본다
+- **THEN** 시스템은 좌측 아이콘 레일(`80px`)과 중앙 콘텐츠의 2컬럼을 표시한다
+- **AND** 우측 레일 컬럼과 하단 탭 바는 표시하지 않는다
+- **AND** 좌측 컬럼에서 내비게이션이 정상 동작한다
+
+#### Scenario: Full three columns at full and above
+
+- **WHEN** 사용자가 `full` 이상 너비에서 `(tabs)` layout 아래의 페이지를 본다
+- **THEN** 시스템은 좌측 풀 사이드바(`320px`), 중앙 콘텐츠, 고정 `320px` 우측 레일의 3컬럼을 한 화면에 표시한다
+- **AND** 중앙 컬럼이 `600px`를 확보한 채 기존 라우트 콘텐츠가 깨짐 없이 렌더링된다
+
+#### Scenario: Center the column group on wide viewport
+
+- **WHEN** 뷰포트 폭이 3컬럼 합계 `1240px`보다 넓다
+- **THEN** 시스템은 컬럼 묶음을 뷰포트 가운데에 정렬하고 남는 폭을 양옆 여백으로 배분한다
+
+#### Scenario: Center column does not push right rail
+
+- **WHEN** 중앙 컬럼에 긴 콘텐츠가 렌더링된다
+- **THEN** 중앙 트랙은 수축 가능해 고정 `320px` 우측 레일 트랙이 밀려나지 않는다
+
 ### Requirement: Protected app routes require a valid session
 
 **Authority / Provenance:** `PROD-148`, `PROD-161`, `PROD-541`; `docs/design/settings.md`, `PROD-685`; 선행 정보 구조 `PROD-653` — `(tabs)` 앱 셸 아래의 내부 화면(`/home`·`/search`·`/notifications`·`/settings`와 지원되는 Settings 내부 detail)은 유효한 세션(로그인)을 전제로 해야 한다(MUST). 유효한 세션이 없는 사용자가 이 route에 접근하면 루트 온보딩(`/`)으로 이동해야 한다(MUST). 세션 유효성은 클라이언트가 `currentSession` GraphQL query로 확인해야 하며(MUST), 만료·폐기된 세션은 `null`로 반환되어야 하고(MUST), 쿠키 존재만으로 판정해서는 안 된다(MUST NOT). 공개 Profile route(`/${relativeHandle}` 및 그 하위 Post 상세)는 비로그인 조회를 유지해야 하며 이 guard에서 제외되어야 한다(MUST). 세션 확인이 진행 중이거나 조회가 실패한 동안에는 redirect해서는 안 된다(MUST NOT).
