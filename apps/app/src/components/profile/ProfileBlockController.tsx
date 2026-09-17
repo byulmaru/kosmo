@@ -33,7 +33,7 @@ const unblockProfileMutation = graphql`
   }
 `;
 
-export type ProfileBlockChange = Readonly<{
+type ProfileBlockChange = Readonly<{
   ownerProfileId: string;
   profileBlockId?: string | null;
   targetProfileId: string;
