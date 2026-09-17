@@ -194,32 +194,32 @@ export const handleInboundUndoBlock = async ({
   embedded,
   remoteActorProfileId,
 }: InboundUndoBlockInput): Promise<boolean> => {
-  const embeddedBlock = embedded instanceof Block ? embedded : null;
-  if (embedded !== null && embeddedBlock === null && objectUri === null) {
+  // Only an embedded ActivityPub Block carries enough type evidence for this
+  // handler. URI-only and non-Block Undo objects remain available to the
+  // existing Follow/Like/EmojiReact handlers.
+  if (!(embedded instanceof Block)) {
     return false;
   }
+  const embeddedBlock = embedded;
 
-  const activityUri = embeddedBlock?.id ?? objectUri;
+  const activityUri = embeddedBlock.id;
   if (!isHttpUri(activityUri)) {
-    if (embeddedBlock || objectUri) {
-      observeInbound({
-        activityType: 'Undo',
-        actorOrigin: actorUri.origin,
-        handler: 'undo',
-        objectOrigin: objectUri?.origin,
-        outcome: 'rejected',
-        phase: 'protocol',
-        reasonCode: 'invalid_block_undo_original_identity',
-      });
-      return true;
-    }
-    return false;
+    observeInbound({
+      activityType: 'Undo',
+      actorOrigin: actorUri.origin,
+      handler: 'undo',
+      objectOrigin: objectUri?.origin,
+      outcome: 'rejected',
+      phase: 'protocol',
+      reasonCode: 'invalid_block_undo_original_identity',
+    });
+    return true;
   }
 
   const stored = await loadProfileBlockProtocolActivity(activityUri.href);
-  const originalActorHref = embeddedBlock ? uniqueHref(embeddedBlock.actorIds) : stored?.actorUri;
+  const originalActorHref = uniqueHref(embeddedBlock.actorIds);
   const originalActorUri = originalActorHref ? new URL(originalActorHref) : null;
-  const originalObjectUri = embeddedBlock?.objectId ?? (stored ? new URL(stored.objectUri) : null);
+  const originalObjectUri = embeddedBlock.objectId;
 
   if (
     !originalActorUri ||
@@ -228,9 +228,6 @@ export const handleInboundUndoBlock = async ({
     !isHttpUri(originalObjectUri) ||
     originalActorUri.href !== actorUri.href
   ) {
-    if (!embeddedBlock && !stored) {
-      return false;
-    }
     observeInbound({
       activityType: 'Undo',
       actorOrigin: actorUri.origin,
@@ -289,19 +286,6 @@ export const handleInboundUndoBlock = async ({
       });
       return true;
     }
-  } else if (!embeddedBlock) {
-    // URI-only unknown originals cannot prove the actor/object pair. Treat
-    // them as a no-op rather than guessing the current pair relation.
-    observeInbound({
-      activityType: 'Undo',
-      actorOrigin: actorUri.origin,
-      handler: 'undo',
-      objectOrigin: originalObjectUri.origin,
-      outcome: 'noop',
-      phase: 'projection',
-      reasonCode: 'unknown_block_undo_noop',
-    });
-    return true;
   } else {
     // Preserve a verified Undo-before-Block tombstone. The candidate is not
     // attached to any existing product relation; it only prevents the late
