@@ -118,6 +118,11 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - `DIRECT`/지정 멤버만 공개는 노출하지 않는다. Mentioned Profile recipient 결정과 작성 계약은 이 범위에
   포함하지 않는다.
 
+- PROD-924는 기존 공용 공개 범위 설정 UI를 재사용하고, 그 안에 새로운 인용 허용 정책 선택 UI를 추가한다. 현재 draft가 `PUBLIC` 또는
+  `UNLISTED`일 때만 `모두`·`팔로워`·`본인만`을 선택하며 Parent나 Source의 정책을 상속하지 않는다.
+- 이 정책은 작성할 Post가 인용되는 범위를 정하며 Reply+Quote 동시 작성을 추가하지 않는다. 초기값·draft 수명·
+  제출·오류 복구는 [Post Action Bar의 설정 계약](./post-action-bar.md#공개-범위-설정의-인용-정책-2026-09-11)을 따른다.
+
 ## Content Warning과 reveal 상태
 
 - 일반 Post와 Reply의 Content Warning은 별도 모델이 아니라 `PostContentDocument.summary`에 nullable Plain

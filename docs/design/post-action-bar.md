@@ -416,8 +416,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 [ADR 0029](../domain/decisions/0029-quote-consent-and-federation.md)의 인용 정책을 작성과 표시 흐름에 적용한다.
 
-- 이번 사이클에는 게시글별 인용 허용 설정 `모두`, `팔로워`, `본인만`을 제공한다. 새 글과 기존 글의 초기값은
-  `모두`다. Profile 기본값 설정은 PROD-925 Backlog로 분리한다.
+- 이번 사이클에는 게시글별 인용 허용 설정 `모두`, `팔로워`, `본인만`을 제공한다. 새 글에서 별도로 선택하지
+  않은 정책과 기존 글의 초기값은 `모두`다. Profile 기본값 설정은 PROD-925 Backlog로 분리한다.
 - 타인의 글은 Public·Unlisted이고 조회 가능한 경우에만 인용 대상으로 선택한다. 자기 Followers Only 글은
   기존 원문 접근 범위를 유지하며 인용할 수 있다.
 - 자기 인용은 QuoteRequest 없이 허용한다. 타인의 원격 글은 `interactionPolicy`가 automatic/manual approval을
@@ -426,14 +426,14 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   QuoteAuthorization을 받은 뒤 Source를 표시한다. 거절·철회·원문 삭제 후에는 자체 본문을 유지한 채 Source를 숨긴다.
 - `interactionPolicy`는 작성 전 UI·eligibility 힌트로만 사용한다. 현재 작성자가 automatic/manual 어느 쪽에도
   포함되지 않으면 승인이 예상되지 않는다고 안내할 수 있지만, 정책 자체를 승인 증거로 사용하지 않는다.
-- Kosmo 자체의 건별 수동 승인 UI는 제공하지 않는다. 작성자는 자기 글의 정책을 변경하거나 기존 인용 승인을
-  명시적으로 철회할 수 있다. 정책 변경과 차단만으로 기존 승인을 자동 철회하지 않는다.
+- Kosmo 자체의 건별 수동 승인 UI와 사용자용 개별 승인 철회 UI·API는 제공하지 않는다. 작성자는 자기 글의
+  인용 정책을 변경할 수 있으며 정책 변경과 차단만으로 기존 승인을 자동 철회하지 않는다.
 - 새 QuoteRequest와 새 인용 승인은 양방향 차단 관계에서 막는다. 기존 승인 Source는 기존 방향별 Post 조회
   정책을 적용하므로 Viewer가 Source Author를 차단한 방향만 존재하면 직접 조회 조건에 따라 표시할 수 있고,
-  Source Author가 Viewer를 차단했거나 상호 차단한 경우에는 숨긴다. 제3자에게도 Source를 숨기는 사용자 조작은
-  별도 승인 철회다.
-- PROD-431은 인용 작성과 Composer를, PROD-924는 게시글별 정책·철회 조작과 승인 lifecycle 연동을 소유한다.
-  후속 설계에서는 이 조작의 진입점·오류 복구·접근성을 기존 공용 UI 계약에 맞춰 구체화한다.
+  Source Author가 Viewer를 차단했거나 상호 차단한 경우에는 숨긴다. 차단만으로 제3자의 Source를 숨기지 않는다.
+  원격 승인 철회 수신과 Source 삭제에 따른 비노출은 유지한다.
+- PROD-431은 기본 인용 작성과 Composer를, PROD-924는 게시글별 정책 선택·변경과 승인 lifecycle 연동을 소유한다.
+  사용자용 개별 철회 메뉴·확인창·API는 이번 범위에서 제외한다.
 - PROD-431은 승인 경계가 없는 ActivityPub Source를 정상 인용으로 표시하지 않고 작성 오류로 안전하게
   종료한다. PROD-924가 이를 pending·승인·거절·철회 상태로 연결하며, 그 미완료는 PROD-431의 기본 작성
   UI와 담당 회귀 검증 완료를 막지 않는다.
@@ -453,3 +453,26 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 게시 전의 Source preview와 게시 후 승인에 따른 Source 표시는 구분한다. 작성 성공은 요청한 selected Profile의
   Relay Environment에 반영한다. 클라이언트는 서버 payload에 없는 Source를 낙관적으로 노출하지 않는다.
   승인 대기를 성공으로 반환하는 서버 lifecycle과 이후 Source 갱신은 PROD-924가 담당한다.
+
+## 공개 범위 설정의 인용 정책 (2026-09-11)
+
+- 기존 Composer의 공개 범위 설정 UI를 재사용하고 그 안에 새로운 `인용 허용` 정책 선택 UI를 추가한다. 별도 설정 페이지를
+  만들지 않는다. `공개`·`조용한 공개`에서만 `모두`·`팔로워`·`본인만` 단일 선택을 표시한다.
+- 새 draft는 `모두`로 시작하고 공개·조용한 공개를 오갈 때 선택값을 유지한다. 제한 공개로 바꾸면 인용 설정을
+  숨기되 기존 Source 공개 범위 제한은 그대로 적용한다. 제한 공개 글의 정책을 숨긴 UI 때문에 본인만으로 강제하지 않는다.
+- 선택한 정책은 해당 새 글의 작성과 함께 저장한다. Parent나 인용 Source의 정책, 다른 Profile의 draft 정책을
+  복사하지 않는다. Profile 기본 인용 정책은 PROD-925의 별도 범위다.
+- 게시된 본인 Public·Unlisted 글의 더보기에서 `인용 설정`을 열면 같은 설정 표현을 사용한다. 기존 공개 범위는
+  읽기 전용으로 보여 주고 인용 정책만 저장한다. Post Visibility 편집이나 본문 편집을 추가하지 않는다.
+- 작성 중에는 draft만 변경하고 게시 후에는 저장 성공 payload를 반영한다. 제출 중 중복 조작을 막고 실패 시
+  선택값을 유지해 다시 저장할 수 있게 한다. selected Profile 변경 뒤 늦은 응답은 새 draft·다른 actor Store에 반영하지 않는다.
+- Web에서는 radio group 이름·현재 값·keyboard 이동과 Escape·focus 복귀를, Native에서는 기존 Modal·touch
+  target 계약을 유지한다. 범위를 선택하자마자 닫혀 인용 정책을 조작할 수 없는 메뉴로 만들지 않는다.
+
+## 기존 Local Quote 표시 전환 (2026-09-17)
+
+- PROD-924 도입 전 확인된 Local Quote 2건은 새 승인 상태·QuoteAuthorization을 backfill하지 않고 기존
+  데이터 예외로 Source 표시를 유지한다. 승인 기록이 없다는 이유만으로 승인 대기 UI를 표시하거나 Source 카드를
+  숨기지 않는다. 새 승인으로 간주하지 않으며 신규 Quote의 승인 누락에도 적용하지 않는다.
+- 기존 Source 조회·방향별 차단·삭제 제한은 유지한다. Source를 조회할 수 없으면 Source만 숨기고 Quote 자체
+  본문은 그 Post의 기존 조회 정책에 따라 표시한다. PROD-959의 작성 진입점 임시 숨김은 별도로 유지한다.

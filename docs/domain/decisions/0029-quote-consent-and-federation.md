@@ -17,7 +17,7 @@ Accepted
 ## 결정
 
 - Content가 있는 Local Post마다 `모두`, `팔로워`, `본인만` 인용 허용 정책을 제공한다. 새 Post와 기존
-  Post의 초기값은 `모두`다. `팔로워`는 established Follower와 본인, `본인만`은 본인만 허용한다.
+  Post의 기본값은 `모두`다. Public·Unlisted 새 글에서는 공개 범위 설정 UI에서 게시글별 정책을 함께 선택할 수 있다. `팔로워`는 established Follower와 본인, `본인만`은 본인만 허용한다.
   허용된 요청도 Source 조회와 차단 조건을 통과해야 한다.
 - 정책 변경은 이후 요청에만 적용한다. 기존 QuoteAuthorization을 자동 철회하지 않는다.
 - Kosmo 원문은 정책에 따라 자동 승인·거절한다. Kosmo 자체의 건별 수동 승인 UI는 제공하지 않는다.
@@ -43,10 +43,9 @@ Accepted
 - 차단은 새로운 인용 요청·승인을 양방향으로 막는다. 기존 승인 Source의 표시는 별도 양방향 규칙을 만들지
   않고 기존 방향별 Post 조회 정책을 적용한다. Viewer가 Source Author를 차단한 방향만 존재하면 Viewer의 직접
   조회 조건에 따라 Source를 볼 수 있고, Source Author가 Viewer를 차단했거나 상호 차단이면 Source를 숨긴다.
-  차단 자체가 기존 승인을 자동 철회하거나 제3자의 Source 조회를 일괄 막지는 않는다. 제3자에게도 Source를
-  숨기려면 원문 작성자가 별도 승인 철회를 사용한다.
-- 원문 작성자의 명시적 철회는 QuoteAuthorization을 무효로 만들고 Delete(QuoteAuthorization)를 전달한다.
-  수신자는 철회 주체와 대상 승인의 대응을 검증한 뒤 Source를 숨긴다. 수신자가 Quote의 소유 서버라면
+  차단 자체가 기존 승인을 자동 철회하거나 제3자의 Source 조회를 일괄 막지는 않는다. Author의 개별 승인 철회는 현재 출시에서 제외한다.
+- Local Source 삭제는 QuoteAuthorization을 무효로 만들고 Delete(QuoteAuthorization)를 전달한다.
+  원격 철회의 수신자는 철회 주체와 대상 승인의 대응을 검증한 뒤 Source를 숨긴다. 수신자가 Quote의 소유 서버라면
   기존 Quote audience에도 같은 철회를 전달한다. 발신·전달하는 철회 Delete의 object와 target은 객체를
   embed하지 않고 URI 참조로만 제공한다.
 - FEP-044f의 quote와 QuoteAuthorization을 정식 경로로 사용한다. `interactionPolicy`상 요청자가
@@ -107,3 +106,31 @@ PROD-902 Spec 대화에서 사용자가 원격 `interactionPolicy`의 automatic/
 인용은 QuoteRequest와 유효한 QuoteAuthorization을 거치도록 결정했다. 정책이 없거나 해석할 수 없어도
 작성자의 자체 Content를 pending 상태로 게시하고 QuoteRequest를 보낸다. 자기 인용만 요청 없이 허용하며,
 `interactionPolicy`는 작성 전 UI·정책 힌트로만 사용한다.
+
+## 공개 범위 UI 통합과 개별 철회 제외 (2026-09-11)
+
+PROD-924 Spec 대화에서 인용 허용 설정을 기존 공개 범위 설정 UI에 추가하고 Public·Unlisted 선택
+시 표시하도록 결정했다. 새 글의 초기 선택은 `모두`이며 해당 글에서 선택한 정책을 함께 저장한다. 게시 후
+정책 변경도 같은 설정 표현을 재사용하되 Post Visibility 변경 기능을 추가하지 않는다. Profile 기본값은 제외한다.
+
+이어서 “개별 승인 철회는 현재 도입하지 않음”으로 범위가 정정됐다. 원문 작성자의 개별 철회 UI·API를
+이번 출시와 PROD-924 완료 조건에서 제외한다. 원격 Delete(QuoteAuthorization) 검증·수신, Local Source 삭제에
+따른 승인 무효화·원격 전달·Quote audience forwarding, 본문 보존·Source 비노출은 유지한다. 이 정정은 앞선
+Author의 명시적 철회 기능 도입 결정을 대체한다. 정책 변경·차단에 따른 자동 철회는 계속 하지 않는다.
+
+## PROD-924 기존 데이터 전환 정정 (2026-09-17)
+
+PROD-924 Spec 대화에서 production에 기존 Local Quote 2건이 존재한다고 정정됐다. 이 사실을 인지한 상태에서 두 Quote의
+새 승인 상태나 QuoteAuthorization은 의도적으로 backfill하지 않는다. 기존 Local Post의 `모두` 정책 초기화와
+이미 발급된 승인 보존은 유지한다.
+
+기존 계약은 승인 없는 도입 전 Quote의 전환 결과를 정하지 않았으므로 Human Decision으로 확인했다. 명시적 답변에 따라
+신규 승인으로 간주하지 않는 기존 데이터 예외로 두 Quote의 Source 표시를 유지한다. 이 Quote들은
+승인 lifecycle에 편입되지 않은 기존 데이터이며 승인 기록 부재만으로 대기·거절·철회·승인 완료 상태를 부여하지
+않는다. Source의 기존 조회·방향별 차단·삭제 제한과 자체 Content 보존은 유지한다. 정확히 확인한 두 Quote만
+예외 대상으로 삼고 신규 Quote의 승인 누락으로 확대하지 않는다. 이 예외는 유효한 FEP 승인이나 승인 객체 발급의
+근거가 아니다. 운영 대상 확인과 rollout 검증은 PROD-924가 맡으며 PROD-431 완료 범위는 변경하지 않는다.
+
+UI는 기존 게시글 공개 범위 설정 UI를 재사용하고, 그 안에 새로운 인용 허용 정책 선택 UI를 추가한다.
+이 문구는 기존 인용 정책 선택 UI가 있다는 의미가 아니다. 위 정정과 runtime 선택은 개별 결정의 근거이며
+수정본 전체 Spec Gate 승인으로 간주하지 않는다.
