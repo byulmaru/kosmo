@@ -605,6 +605,21 @@ describe('remote actor materialization', () => {
     assert.equal(lookupObject.mock.calls[0]?.arguments[0], remoteActorUri);
   });
 
+  for (const preferredUsername of ['ab', 'a'.repeat(31), 'test.user']) {
+    test(`materializes a remote handle with ${preferredUsername.length} characters`, async () => {
+      const actor = createActor({ preferredUsername });
+      const { context } = createLookupContext(async () => actor);
+
+      const profile = await materializeRemoteProfileActor({
+        context,
+        actorUri: remoteActorUri,
+      });
+
+      assert.equal(profile.handle, preferredUsername);
+      assert.equal(profile.normalizedHandle, preferredUsername.toLowerCase());
+    });
+  }
+
   test('moves an existing actor to the canonical actor domain', async () => {
     const aliasInstance = await createRemoteInstance({ domain: remoteAliasDomain });
     const aliasProfile = await createProfile({ handle: 'alice', instanceId: aliasInstance.id });
@@ -661,17 +676,17 @@ describe('remote actor materialization', () => {
     }
   });
 
-  test('rejects unsupported preferred usernames', async () => {
-    const { context } = createLookupContext(async () =>
-      createActor({ preferredUsername: 'alice with spaces' }),
-    );
+  for (const preferredUsername of ['alice with spaces', '', '   ', 'alice-with-dashes']) {
+    test(`rejects unsupported preferred username ${JSON.stringify(preferredUsername)}`, async () => {
+      const { context } = createLookupContext(async () => createActor({ preferredUsername }));
 
-    await assert.rejects(
-      materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
-      RemoteActorMaterializationError,
-    );
-    assert.equal(await countRows(Profiles), 0);
-  });
+      await assert.rejects(
+        materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
+        RemoteActorMaterializationError,
+      );
+      assert.equal(await countRows(Profiles), 0);
+    });
+  }
 
   test('materializes a language-tagged preferred username', async () => {
     const actor = createActor({ preferredUsername: new LanguageString('alice', 'en') });

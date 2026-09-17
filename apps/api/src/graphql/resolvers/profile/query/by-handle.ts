@@ -4,7 +4,7 @@ import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/remote-profile';
-import { profileHandleSchema } from '@kosmo/core/validation';
+import { remoteProfileHandleSchema } from '@kosmo/core/validation';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { and, asc, desc, eq, getColumns, gt, lt, sql } from 'drizzle-orm';
@@ -26,7 +26,7 @@ const isExplicitRemoteHandle = (
 ): parsed is RemoteProfileHandle =>
   query.trim().startsWith('@') &&
   parsed?.kind === 'remote' &&
-  profileHandleSchema.safeParse(parsed.handle).success &&
+  remoteProfileHandleSchema.safeParse(parsed.handle).success &&
   parsed.handle === parsed.handle.trim();
 
 builder.queryField('profileByHandle', (t) =>

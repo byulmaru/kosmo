@@ -29,7 +29,7 @@ import { normalizeHandle } from '@kosmo/core/utils';
 import {
   profileBioSchema,
   profileDisplayNameSchema,
-  profileHandleSchema,
+  remoteProfileHandleSchema,
 } from '@kosmo/core/validation';
 import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
@@ -153,7 +153,7 @@ const projectActor = async (actor: ActorWithKosmoFields) => {
 
   const normalizedHandle = normalizeHandle(preferredUsername);
 
-  const handle = profileHandleSchema.safeParse(preferredUsername);
+  const handle = remoteProfileHandleSchema.safeParse(preferredUsername);
 
   if (!handle.success) {
     throw new RemoteActorMaterializationError('Remote actor preferredUsername is unsupported.');

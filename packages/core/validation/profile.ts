@@ -100,6 +100,12 @@ export const profileHandleSchema = z
   .max(30, '핸들은 30자 이하로 입력해주세요.')
   .regex(/^[a-zA-Z0-9_]+$/, '핸들은 영문, 숫자, 밑줄(_)만 사용할 수 있어요.');
 
+export const remoteProfileHandleSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .regex(/^[a-zA-Z0-9_.]+$/, '핸들은 영문, 숫자, 밑줄(_), 마침표(.)만 사용할 수 있어요.');
+
 const localProfileHandlePolicySchema = z
   .string()
   .trim()

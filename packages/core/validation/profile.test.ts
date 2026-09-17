@@ -4,6 +4,8 @@ import {
   localProfileHandleSchema,
   profileHandlePolicyErrorMessage,
   profileHandlePolicyViolation,
+  profileHandleSchema,
+  remoteProfileHandleSchema,
   systemReservedProfileHandleValues,
 } from './profile';
 
@@ -18,6 +20,25 @@ const currentStaticAppRouteHandleValues = [
   'search',
   'settings',
 ] as const;
+
+test('Remote Profile handle schema accepts short, long, and dotted ActivityPub handles', () => {
+  for (const handle of ['ab', 'a'.repeat(31), 'test.user']) {
+    assert.equal(remoteProfileHandleSchema.safeParse(handle).success, true, handle);
+  }
+});
+
+test('Remote Profile handle schema requires non-empty handles and keeps format validation', () => {
+  for (const handle of ['', 'alice with spaces', 'alice-with-dashes', '   ']) {
+    assert.equal(remoteProfileHandleSchema.safeParse(handle).success, false, handle);
+  }
+});
+
+test('Local Profile handle schema retains its length and character limits', () => {
+  for (const handle of ['a'.repeat(2), 'a'.repeat(31), 'test.user']) {
+    assert.equal(profileHandleSchema.safeParse(handle).success, false, handle);
+    assert.equal(localProfileHandleSchema.safeParse(handle).success, false, handle);
+  }
+});
 
 test('Local Profile handle schema rejects every System Reserved value after trim and case folding', () => {
   for (const handle of systemReservedProfileHandleValues) {
