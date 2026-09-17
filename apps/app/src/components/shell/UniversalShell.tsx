@@ -42,7 +42,7 @@ import {
 } from './shellLayout';
 import { NativeNavigationDrawer, WebNavigationDrawer } from './ShellNavigationDrawer';
 import { SidebarNavigation } from './SidebarNavigation';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
 import type { HomeReselectionHandler } from './ShellChromeContext';
@@ -461,6 +461,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         >
           {profile ? (
             <RightRail
+              fallbackFocusRef={screenFallbackRef as unknown as RefObject<HTMLElement | null>}
               onPostCreated={handleComposerPostCreated}
               onRequestClose={closeComposer}
               open={composerVisible}

@@ -21,6 +21,7 @@ import type { PostComposerCreatedPost } from './PostComposer';
 export type PostComposerHostMode = 'mobile' | 'overlay' | 'rail';
 
 type PostComposerHostProps = {
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onRequestClose: () => void;
   open: boolean;
@@ -29,6 +30,7 @@ type PostComposerHostProps = {
 } & ({ mode: 'rail'; onExpand: () => void } | { mode: 'mobile' | 'overlay'; onExpand?: never });
 
 export function PostComposerHost({
+  fallbackFocusRef,
   mode,
   onExpand,
   onPostCreated,
@@ -80,15 +82,23 @@ export function PostComposerHost({
         const railTrigger = expandControlRef.current as unknown as HTMLElement | null;
         const triggerFocus =
           railTrigger && document.contains(railTrigger) ? railTrigger : triggerFocusRef?.current;
+        const restoredFocus = restoreFocusRef.current;
+        const fallbackFocus = fallbackFocusRef?.current;
         const previousFocus =
-          triggerFocus && document.contains(triggerFocus) ? triggerFocus : restoreFocusRef.current;
+          triggerFocus && document.contains(triggerFocus)
+            ? triggerFocus
+            : restoredFocus !== document.body &&
+                restoredFocus !== null &&
+                document.contains(restoredFocus)
+              ? restoredFocus
+              : fallbackFocus;
         if (previousFocus && document.contains(previousFocus)) {
           previousFocus.focus();
         }
       });
     }
     wasOverlayVisibleRef.current = overlayVisible;
-  }, [hasWebDocument, overlayVisible, triggerFocusRef]);
+  }, [fallbackFocusRef, hasWebDocument, overlayVisible, triggerFocusRef]);
 
   useEffect(() => {
     if (!hasWebDocument || !overlayVisible) {

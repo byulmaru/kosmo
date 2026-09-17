@@ -120,6 +120,61 @@ describe('PostComposerHost', () => {
     assert.equal(composerProps?.body, '유지할 draft');
   });
 
+  it('기존 trigger가 사라지면 shell fallback으로 포커스를 복원한다', async () => {
+    let fallbackFocusCount = 0;
+    const body = { style: { overflow: '' } };
+    const fallback = { focus: () => fallbackFocusCount++ };
+    const previousDocument = globalThis.document;
+    const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
+    Object.assign(globalThis, {
+      document: {
+        activeElement: body,
+        addEventListener: () => undefined,
+        body,
+        contains: (element: unknown) => element === fallback,
+        removeEventListener: () => undefined,
+      },
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        callback(0);
+        return 0;
+      },
+    });
+
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(PostComposerHost, {
+            fallbackFocusRef: { current: fallback } as never,
+            mode: 'overlay',
+            onRequestClose: () => undefined,
+            open: true,
+            profile: {} as never,
+            triggerFocusRef: { current: { focus: () => undefined } } as never,
+          }),
+        );
+      });
+      await act(async () => {
+        renderer?.update(
+          createElement(PostComposerHost, {
+            fallbackFocusRef: { current: fallback } as never,
+            mode: 'overlay',
+            onRequestClose: () => undefined,
+            open: false,
+            profile: {} as never,
+            triggerFocusRef: { current: { focus: () => undefined } } as never,
+          }),
+        );
+      });
+
+      assert.equal(fallbackFocusCount, 1);
+    } finally {
+      Object.assign(globalThis, {
+        document: previousDocument,
+        requestAnimationFrame: previousRequestAnimationFrame,
+      });
+    }
+  });
+
   it('작성 성공을 먼저 알린 뒤 열린 surface를 닫는다', async () => {
     const events: string[] = [];
     await act(async () => {

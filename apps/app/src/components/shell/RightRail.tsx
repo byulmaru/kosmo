@@ -9,6 +9,7 @@ import type { PostComposerCreatedPost } from '@/components/post/PostComposer';
 import type { RightRail_profile$key } from './__generated__/RightRail_profile.graphql';
 
 type RightRailProps = {
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onRequestClose: () => void;
   open?: boolean;
@@ -23,6 +24,7 @@ const RightRailFragment = graphql`
 `;
 
 export function RightRail({
+  fallbackFocusRef,
   mode,
   onExpand,
   onPostCreated,
@@ -34,6 +36,7 @@ export function RightRail({
   const profile = useFragment(RightRailFragment, profileKey);
   return (
     <PostComposerHost
+      fallbackFocusRef={fallbackFocusRef}
       onPostCreated={onPostCreated}
       onRequestClose={onRequestClose}
       open={open}
