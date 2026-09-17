@@ -92,14 +92,15 @@ login 오류 계약을 추가하지 않는다.
 - [재가입 임시 차단의 장기화] 후속 정책 전까지 차단 상태가 유지될 수 있다 → 임시 조치임을 기록하고,
   영구 재가입 정책이나 provider 상태 변경은 별도 승인으로 남긴다.
 - [플랫폼별 결과 차이] Web·Native가 credential 정리 시점을 다르게 해 stale viewer가 남을 수 있다 →
-  공통 성공/실패 의미와 플랫폼별 runtime evidence를 함께 검증한다.
+  공통 성공/실패 의미를 유지하고, 플랫폼별 runtime evidence는 `PROD-727`의 후속 검증으로 추적한다.
 
 ## Migration Plan
 
 - 기존 schema와 enum을 변경하지 않고 GraphQL Account 탈퇴 mutation, client Settings route, public 안내를
   함께 배포한다.
 - 배포 전 eligibility 거부, atomic cleanup, 재시도·중복 실행, 성공 후 login과 동일 subject 차단의 통합
-  검증을 수행하고 Web·Android·iOS runtime 결과를 수집한다.
+  검증을 수행한다. Web·Android·iOS runtime 및 iOS device/store evidence는 각각 `PROD-727`과 `PROD-872`의
+  후속 책임으로 추적한다.
 - 코드 rollback은 아직 실행하지 않은 요청의 동작만 되돌린다. 이미 `DISABLED`로 확정된 Account나 물리
   삭제된 관계를 다시 활성화·복원하는 rollback은 제공하지 않는다.
 

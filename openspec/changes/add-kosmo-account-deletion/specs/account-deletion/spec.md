@@ -1,8 +1,12 @@
 ## ADDED Requirements
 
+> This delta spec is a non-authoritative historical session record. Durable behavior authority remains in the
+> referenced canonical documents and `PROD-970`; the requirement keywords below restate that contract for session
+> context only and do not create an independent product completion gate.
+
 ### Requirement: Kosmo Account 탈퇴 eligibility
 
-**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/design/settings.md`, `PROD-970` — 인증된 사용자는 자기 Kosmo Account에 대해서만 탈퇴를 요청할 수 있어야 하며(MUST), Account를 Deleted로 전환하는 탈퇴는 Account State가 Active이고 연결된 Profile이 없거나 모든 연결 Profile의 storage state가 `DISABLED`(domain Profile Lifecycle State `Deactivated`)인 경우에만 허용해야 한다(MUST). Deleted(storage `DISABLED`) Account는 terminal 상태로 남아 공개 인증과 `deleteAccount` mutation을 허용해서는 안 된다(MUST NOT). 이미 인증·승인된 account-deletion Workflow 실행이 DB commit 후 결과 acknowledgement를 잃고 재시도되는 내부 경로에 한해서는 transaction Activity가 storage `DISABLED`를 멱등 성공으로 처리해 명세된 인증·기기 정리를 다시 적용할 수 있으며(MAY), Account를 Active로 되돌려서는 안 된다(MUST NOT). 완료된 `BLOCKED` 실행은 Account가 Active인 동안 `ALLOW_DUPLICATE` 정책으로 새 실행을 시작해 현재 Profile 조건을 다시 판정할 수 있으며(MAY), 이 정책은 Deleted Account의 공개 재탈퇴를 허용하지 않는다(MUST NOT). 새로운 Deleted 전환 조건을 만족하지 않으면 Account, Profile, Membership, Session, `ApplicationAuthorization`, `OAuthTokens`, `OAuthAuthorizationCodes` 또는 `PushInstallation`을 변경해서는 안 된다(MUST NOT). 탈퇴 eligibility 확인은 Profile이나 Membership을 삭제·비활성화·연결 해제해서는 안 된다(MUST NOT). 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 차단 이유를 사전 표시할 수 있지만(MAY), 이는 참고용이며 별도 eligibility API를 제공하지 않는다(MUST NOT). 실제 탈퇴 mutation은 검증된 Account ID를 account-deletion Workflow에 전달하고, Workflow의 transaction Activity가 하나의 동기 transaction에서 연결 Profile State를 다시 확인해야 한다(MUST).
+**Durable authority references (session context):** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/design/settings.md`, `PROD-970` — 인증된 사용자는 자기 Kosmo Account에 대해서만 탈퇴를 요청할 수 있어야 하며(MUST), Account를 Deleted로 전환하는 탈퇴는 Account State가 Active이고 연결된 Profile이 없거나 모든 연결 Profile의 storage state가 `DISABLED`(domain Profile Lifecycle State `Deactivated`)인 경우에만 허용해야 한다(MUST). Deleted(storage `DISABLED`) Account는 terminal 상태로 남아 공개 인증과 `deleteAccount` mutation을 허용해서는 안 된다(MUST NOT). 이미 인증·승인된 account-deletion Workflow 실행이 DB commit 후 결과 acknowledgement를 잃고 재시도되는 내부 경로에 한해서는 transaction Activity가 storage `DISABLED`를 멱등 성공으로 처리해 명세된 인증·기기 정리를 다시 적용할 수 있으며(MAY), Account를 Active로 되돌려서는 안 된다(MUST NOT). 완료된 `BLOCKED` 실행은 Account가 Active인 동안 `ALLOW_DUPLICATE` 정책으로 새 실행을 시작해 현재 Profile 조건을 다시 판정할 수 있으며(MAY), 이 정책은 Deleted Account의 공개 재탈퇴를 허용하지 않는다(MUST NOT). 새로운 Deleted 전환 조건을 만족하지 않으면 Account, Profile, Membership, Session, `ApplicationAuthorization`, `OAuthTokens`, `OAuthAuthorizationCodes` 또는 `PushInstallation`을 변경해서는 안 된다(MUST NOT). 탈퇴 eligibility 확인은 Profile이나 Membership을 삭제·비활성화·연결 해제해서는 안 된다(MUST NOT). 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 차단 이유를 사전 표시할 수 있지만(MAY), 이는 참고용이며 별도 eligibility API를 제공하지 않는다(MUST NOT). 실제 탈퇴 mutation은 검증된 Account ID를 account-deletion Workflow에 전달하고, Workflow의 transaction Activity가 하나의 동기 transaction에서 연결 Profile State를 다시 확인해야 한다(MUST).
 
 #### Scenario: 연결된 Profile이 없는 Account의 탈퇴
 
@@ -44,7 +48,7 @@
 
 ### Requirement: 원자적 Account terminal 전환과 인증·기기 정리
 
-**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/session.md`, `PROD-970` — eligibility가 확정된 탈퇴는 하나의 원자적 결과로 처리해야 한다(MUST). 확정된 결과는 기존 storage `AccountState.DISABLED`를 canonical Account State `Deleted`로 전환하고(MUST), Profile·Membership·Account 속성을 보존해야 한다(MUST). 같은 결과 안에서 해당 Account의 모든 Active Session(현재 요청 Session 포함)을 `REVOKED`로 전환하고(MUST), `ApplicationAuthorization.revokedAt`을 설정하며(MUST), `OAuthTokens`를 `REVOKED` 상태와 `revokedAt`으로 전환하고(MUST), `OAuthAuthorizationCodes`와 `PushInstallation`을 물리적으로 삭제해야 한다(MUST). 일반적인 한 Session 로그아웃처럼 현재 Session만 폐기하는 동작으로 축소해서는 안 된다(MUST NOT). 현재 이 결과는 account-deletion Workflow의 transaction Activity가 수행하며, Workflow는 향후 외부 효과를 추가할 수 있는 실행 경계를 유지하되 현재 transaction Activity 외의 효과를 실행하지 않아야 한다(MUST NOT). 서버 탈퇴 mutation payload는 `completed`만 포함해야 하며(MUST), Workflow의 원자적 재확인에서 조건이 충족되지 않은 `BLOCKED` 결과는 `completed: false`로 반환해야 한다(MUST).
+**Durable authority references (session context):** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/session.md`, `PROD-970` — eligibility가 확정된 탈퇴는 하나의 원자적 결과로 처리해야 한다(MUST). 확정된 결과는 기존 storage `AccountState.DISABLED`를 canonical Account State `Deleted`로 전환하고(MUST), Profile·Membership·Account 속성을 보존해야 한다(MUST). 같은 결과 안에서 해당 Account의 모든 Active Session(현재 요청 Session 포함)을 `REVOKED`로 전환하고(MUST), `ApplicationAuthorization.revokedAt`을 설정하며(MUST), `OAuthTokens`를 `REVOKED` 상태와 `revokedAt`으로 전환하고(MUST), `OAuthAuthorizationCodes`와 `PushInstallation`을 물리적으로 삭제해야 한다(MUST). 일반적인 한 Session 로그아웃처럼 현재 Session만 폐기하는 동작으로 축소해서는 안 된다(MUST NOT). 현재 이 결과는 account-deletion Workflow의 transaction Activity가 수행하며, Workflow는 향후 외부 효과를 추가할 수 있는 실행 경계를 유지하되 현재 transaction Activity 외의 효과를 실행하지 않아야 한다(MUST NOT). 서버 탈퇴 mutation payload는 `completed`만 포함해야 하며(MUST), Workflow의 원자적 재확인에서 조건이 충족되지 않은 `BLOCKED` 결과는 `completed: false`로 반환해야 한다(MUST).
 
 #### Scenario: 탈퇴 결과를 성공으로 확정한다
 
@@ -70,7 +74,7 @@
 
 ### Requirement: Settings의 Kosmo 탈퇴 확인 lifecycle
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/design/profile-lifecycle.md`, `docs/domain/objects/account.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/session.md`, `PROD-970` — 인증된 Web·Android·iOS Settings는 `/settings/account-deletion` 내부 detail에서 같은 Account 탈퇴 eligibility, 확인, pending, error 및 success 계약을 제공해야 한다(MUST). Settings root/master는 `코스모 탈퇴` 행을 항상 노출해야 하며(MUST), 이 행은 Byulmaru ID의 외부 `계정 설정`과 분리되어야 한다(MUST). 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 이유를 사전 표시할 수 있지만(MAY), 이 precheck는 참고용이며 서버 mutation의 원자적 재확인을 대체하지 않는다(MUST NOT). eligibility가 충족되지 않으면 활성 Profile 개수와 이유를 표시해야 하며(MUST), Profile 목록·Profile action·Profile 관리 화면으로의 보조 진입점을 추가해서는 안 된다(MUST NOT). eligibility가 충족되면 되돌릴 수 없는 탈퇴 안내와 acknowledgement checkbox를 표시하고(MUST), checkbox를 선택하기 전 확정 action을 비활성화해야 하며(MUST). 재인증, 유예기간, 탈퇴 이유 입력 또는 이유 설문을 요구해서는 안 된다(MUST NOT).
+**Durable authority references (session context):** `docs/design/settings.md`, `docs/design/profile-lifecycle.md`, `docs/domain/objects/account.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/session.md`, `PROD-970` — 인증된 Web·Android·iOS Settings는 `/settings/account-deletion` 내부 detail에서 같은 Account 탈퇴 eligibility, 확인, pending, error 및 success 계약을 제공해야 한다(MUST). Settings root/master는 `코스모 탈퇴` 행을 항상 노출해야 하며(MUST), 이 행은 Byulmaru ID의 외부 `계정 설정`과 분리되어야 한다(MUST). 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 이유를 사전 표시할 수 있지만(MAY), 이 precheck는 참고용이며 서버 mutation의 원자적 재확인을 대체하지 않는다(MUST NOT). eligibility가 충족되지 않으면 활성 Profile 개수와 이유를 표시해야 하며(MUST), Profile 목록·Profile action·Profile 관리 화면으로의 보조 진입점을 추가해서는 안 된다(MUST NOT). eligibility가 충족되면 되돌릴 수 없는 탈퇴 안내와 acknowledgement checkbox를 표시하고(MUST), checkbox를 선택하기 전 확정 action을 비활성화해야 하며(MUST). 재인증, 유예기간, 탈퇴 이유 입력 또는 이유 설문을 요구해서는 안 된다(MUST NOT).
 
 #### Scenario: 탈퇴 행을 항상 표시한다
 
@@ -106,7 +110,7 @@
 
 ### Requirement: 탈퇴 성공 후 credential 정리와 재가입 차단
 
-**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/session.md`, `docs/design/settings.md`, `PROD-970` — 클라이언트는 server가 Account Deleted와 필수 인증·기기 정리를 확정한 뒤에만(MUST) caller-owned credential과 viewer 종속 상태를 정리하고 login route로 이동해야 한다(MUST). 성공 확정 전에는 인증된 viewer 상태를 지워 성공을 추측해서는 안 된다(MUST NOT). Deleted Account에 연결된 동일 Byulmaru ID OIDC subject의 Kosmo 재로그인은 후속 정책이 정해질 때까지 일시적으로 차단해야 하며(MUST), 이 임시 차단은 Byulmaru ID 자체의 상태 전이나 영구 재가입 정책을 추가하지 않아야 한다(MUST NOT).
+**Durable authority references (session context):** `docs/domain/objects/account.md`, `docs/domain/objects/session.md`, `docs/design/settings.md`, `PROD-970` — 클라이언트는 server가 Account Deleted와 필수 인증·기기 정리를 확정한 뒤에만(MUST) caller-owned credential과 viewer 종속 상태를 정리하고 login route로 이동해야 한다(MUST). 성공 확정 전에는 인증된 viewer 상태를 지워 성공을 추측해서는 안 된다(MUST NOT). Deleted Account에 연결된 동일 Byulmaru ID OIDC subject의 Kosmo 재로그인은 후속 정책이 정해질 때까지 일시적으로 차단해야 하며(MUST), 이 임시 차단은 Byulmaru ID 자체의 상태 전이나 영구 재가입 정책을 추가하지 않아야 한다(MUST NOT).
 
 #### Scenario: 성공 확정 뒤 login으로 이동한다
 
@@ -135,7 +139,7 @@
 
 ### Requirement: 공개 Account deletion 안내는 in-app-only 경로를 설명한다
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/domain/objects/account.md`, `PROD-970` — 공개 `/account-deletion` 문서는 Kosmo Account 탈퇴가 인증된 앱의 Settings에서만 가능하다는 경로를 안내해야 하며(MUST), 공개 문서 자체에서 이메일 또는 외부 수동 삭제 요청을 탈퇴 경로로 제공해서는 안 된다(MUST NOT). 안내 문서는 실제 `/settings/account-deletion` action과 혼동되지 않도록 public guidance로 유지해야 한다(MUST).
+**Durable authority references (session context):** `docs/design/settings.md`, `docs/domain/objects/account.md`, `PROD-970` — 공개 `/account-deletion` 문서는 Kosmo Account 탈퇴가 인증된 앱의 Settings에서만 가능하다는 경로를 안내해야 하며(MUST), 공개 문서 자체에서 이메일 또는 외부 수동 삭제 요청을 탈퇴 경로로 제공해서는 안 된다(MUST NOT). 안내 문서는 실제 `/settings/account-deletion` action과 혼동되지 않도록 public guidance로 유지해야 한다(MUST).
 
 #### Scenario: 공개 안내에서 앱 내 경로를 설명한다
 

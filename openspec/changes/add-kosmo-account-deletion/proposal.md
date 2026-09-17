@@ -24,12 +24,14 @@
 
 ## Authority / Provenance
 
-- Canonical: `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`,
+- Durable canonical contract: `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`,
   `docs/domain/objects/profile.md`, `docs/domain/objects/session.md`, `docs/design/settings.md`,
   `docs/design/profile-lifecycle.md`
-- Linear Contract: `PROD-970`
-- Linear Implementations: 없음. `PROD-970`이 계약·구현·통합·OpenSpec lifecycle을 소유한다.
-- Release Evidence: `PROD-872`가 iOS device/store evidence를 소유한다.
+- Durable Linear scope and delivery results: `PROD-970`
+- Follow-up runtime and release evidence: `PROD-727`가 Web·Android·iOS runtime·접근성 검증을, `PROD-872`가
+  iOS device/store evidence를 소유한다.
+- OpenSpec role: 이 change는 구현 세션의 비권위적 historical session record다. 이 artifact의 spec·task·lifecycle·
+  archive는 제품 요구사항이나 완료 게이트를 새로 만들지 않으며, archive는 선택적인 세션 정리다.
 
 ## Capabilities
 

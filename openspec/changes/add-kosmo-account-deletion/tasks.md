@@ -1,6 +1,6 @@
 ## 1. PROD-970 서버 Account 탈퇴 Workflow와 인증·기기 정리
 
-**Authority / Provenance**
+**Durable authority references**
 
 - `docs/domain/objects/account.md`
 - `docs/domain/objects/account-profile-membership.md`
@@ -8,6 +8,9 @@
 - `docs/domain/objects/session.md`
 - `docs/design/settings.md`
 - `PROD-970`
+
+이 tasks 문서는 구현 세션의 비권위적 historical record다. canonical 문서와 `PROD-970`이 지속되는 계약과
+완료 결과의 권위이며, OpenSpec task·lifecycle·archive는 제품 요구사항이나 완료 게이트를 새로 만들지 않는다.
 
 **Deliverable**
 
@@ -39,7 +42,7 @@ GraphQL `deleteAccount` mutation과 account-deletion Workflow의 Account eligibi
   현재 외부 효과나 speculative side effect는 추가하지 않는다.
 - 별도 Core account-deletion service, Native 전용 login 오류 타입·문구는 추가하지 않는다.
 
-**Verification**
+**Verification (session notes; not a product completion gate)**
 
 - Worker integration에서 Profile이 0개인 경우, 모든 Profile이 `DISABLED`인 경우, Active Profile이 남은 경우의
   transaction Activity 결과와 no-op을 database-backed test로 검증한다.
@@ -60,7 +63,7 @@ GraphQL `deleteAccount` mutation과 account-deletion Workflow의 Account eligibi
 
 ## 2. PROD-970 Settings·public 안내·cross-platform lifecycle
 
-**Authority / Provenance**
+**Durable authority references**
 
 - `docs/design/settings.md`
 - `docs/design/profile-lifecycle.md`
@@ -72,7 +75,8 @@ GraphQL `deleteAccount` mutation과 account-deletion Workflow의 Account eligibi
 
 **Deliverable**
 
-Web·Android·iOS Settings lifecycle, 성공 후 login 전환, public in-app-only 안내와 runtime evidence다.
+Web·Android·iOS Settings lifecycle, 성공 후 login 전환과 public in-app-only 안내다. Web·Android·iOS
+runtime·접근성 및 iOS device/store evidence는 각각 `PROD-727`과 `PROD-872`의 후속 책임으로 추적한다.
 
 **Guardrails**
 
@@ -90,17 +94,20 @@ Web·Android·iOS Settings lifecycle, 성공 후 login 전환, public in-app-onl
   retention/grace/recovery 내용을 탈퇴 경로로 제공하지 않는다.
 - Byulmaru ID, Profile/Post/Media 정책, OpenPanel 분석, 새 Figma source와 별도 migration은 범위에 포함하지 않는다.
 
-**Verification**
+**Verification (session notes; not a product completion gate)**
 
 - Web E2E에서 마지막 root row, blocker count/reason, checkbox disabled/enabled, pending lock, error/retry,
   success 후 login 전환과 stale viewer 미표시를 검증한다.
-- Android/iOS 공용 route와 native runtime에서 동일 lifecycle, touch target·screen reader 상태, login 전환을
-  확인한다. iOS device/store evidence는 `PROD-872`에 연결한다.
+- Android/iOS 공용 route와 native runtime, touch target·screen reader 상태 및 iOS device/store evidence는
+  각각 `PROD-727`과 `PROD-872`의 후속 검증으로 추적하며, 이 session harness의 완료 게이트로 사용하지 않는다.
 - public `/account-deletion`에서 in-app-only 안내와 이메일 form/link 부재를 browser test로 검증한다.
 - Web·Native API 결과와 client 상태가 일치하는지 cross-slice E2E 및 targeted type/lint/test check로 검증한다.
+  runtime·device/store 증거는 이 task의 완료 조건이 아니다.
 
 - [x] 2.1 Settings root/master에 항상 보이는 마지막 `코스모 탈퇴` row와 `/settings/account-deletion` detail을 기존 shell/header/back 규칙으로 연결한다.
 - [x] 2.2 eligibility blocker와 acknowledgement checkbox, pending 중 조작 잠금, safe error/retry, server-confirmed success UI를 Web·Android·iOS에서 구현한다.
 - [x] 2.3 Web·Native client가 성공 확정 뒤 credential·viewer 상태를 정리하고 login route로 이동하며, 실패 시 확인 상태를 보존하도록 연결한다.
 - [x] 2.4 public `/account-deletion`을 Settings in-app-only 안내로 갱신하고 이메일 삭제 요청·보관/유예 경로를 제거한다.
-- [ ] 2.5 Web E2E, Android/iOS runtime·접근성 검증과 iOS device evidence를 `PROD-872`에 연결하고, OpenSpec·canonical·Linear 계약을 최종 정합화한다.
+- [x] 2.5 Not needed in this session harness: Web E2E, Android/iOS runtime·접근성 검증과 iOS device/store evidence는
+      각각 `PROD-727`과 `PROD-872`가 후속 소유한다. OpenSpec canonical·Linear 정합화와 archive는 선택적인
+      housekeeping이며 제품 완료 게이트가 아니다.
