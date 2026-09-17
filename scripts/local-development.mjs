@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 
@@ -136,22 +136,6 @@ export function buildApplicationEnvironment(environment) {
     TEMPORAL_ADDRESS: '127.0.0.1:7233',
     TEMPORAL_NAMESPACE: 'default',
   };
-}
-
-export function buildPublicApplicationEnvironment(environment) {
-  validateRuntimeEnvironment(environment);
-  return withoutKeys(environment, [
-    'DATABASE_URL',
-    'FEDIFY_QUEUE_DATABASE_PASSWORD',
-    'FEDIFY_QUEUE_DATABASE_URL',
-    'LOCAL_POSTGRES_ADMIN_PASSWORD',
-    'LOCAL_POSTGRES_OWNER_PASSWORD',
-    'PGDATABASE',
-    'PGHOST',
-    'PGPASSWORD',
-    'PGPORT',
-    'PGUSER',
-  ]);
 }
 
 export function buildBootstrapLoaderEnvironment(environment) {
@@ -442,115 +426,9 @@ function stopServices() {
   compose('kosmo-local-postgres', postgresCompose, ['down']);
 }
 
-async function runServices(services) {
-  const children = services.map(({ environment, packageName }) =>
-    spawn('pnpm', ['--filter', packageName, 'dev'], {
-      cwd: rootDirectory,
-      detached: true,
-      env: environment,
-      stdio: 'inherit',
-    }),
-  );
-
-  await new Promise((resolve, reject) => {
-    let failure;
-    let forceStopTimer;
-    let remaining = children.length;
-    let stopping = false;
-
-    const stopGroup = (child, signal) => {
-      if (!child.pid) {
-        return;
-      }
-      try {
-        process.kill(-child.pid, signal);
-      } catch (error) {
-        if (error.code !== 'ESRCH' && error.code !== 'EPERM') {
-          throw error;
-        }
-      }
-    };
-
-    const finish = () => {
-      if (forceStopTimer) {
-        clearTimeout(forceStopTimer);
-      }
-      if (failure) {
-        reject(failure);
-      } else {
-        resolve();
-      }
-    };
-
-    const stop = (error, signal = 'SIGTERM') => {
-      if (stopping) {
-        return;
-      }
-      stopping = true;
-      failure = error;
-      process.off('SIGINT', onInterrupt);
-      process.off('SIGTERM', onTerminate);
-      for (const child of children) {
-        stopGroup(child, signal);
-      }
-      forceStopTimer = setTimeout(() => {
-        for (const child of children) {
-          stopGroup(child, 'SIGKILL');
-        }
-      }, 2000);
-    };
-
-    const onInterrupt = () => stop(undefined, 'SIGINT');
-    const onTerminate = () => stop(undefined, 'SIGTERM');
-
-    process.once('SIGINT', onInterrupt);
-    process.once('SIGTERM', onTerminate);
-
-    for (const child of children) {
-      child.once('error', (error) => stop(error));
-      child.once('close', (code, signal) => {
-        remaining -= 1;
-        if (!stopping) {
-          const error =
-            code === 0 || signal === 'SIGINT' || signal === 'SIGTERM'
-              ? undefined
-              : new Error(`Development service failed with exit code ${code ?? 1}.`);
-          stop(error);
-        }
-        if (remaining === 0) {
-          for (const processGroup of children) {
-            stopGroup(processGroup, 'SIGKILL');
-          }
-          finish();
-        }
-      });
-    }
-  });
-}
-
-async function runDevelopment(environment, workspaceArgs) {
-  const applicationEnvironment = buildApplicationEnvironment(environment);
-  await preflightRuntime(environment);
-  if (workspaceArgs.length > 0) {
-    run(workspaceArgs[0], workspaceArgs.slice(1), { env: applicationEnvironment });
-    return;
-  }
-
-  await runServices([
-    { packageName: '@kosmo/api', environment: applicationEnvironment },
-    { packageName: '@kosmo/web', environment: applicationEnvironment },
-    {
-      packageName: '@kosmo/app',
-      environment: buildPublicApplicationEnvironment(environment),
-    },
-    { packageName: '@kosmo/worker', environment: applicationEnvironment },
-    { packageName: '@kosmo/fedify-consumer', environment: applicationEnvironment },
-  ]);
-}
-
 function usage() {
   console.error(
-    'Usage: local-development <services-up|prepare|run|services-down> [-- command ...]',
+    'Usage: local-development <services-up|prepare|prepare-with-bootstrap-secret|run|services-down> [-- command ...]',
   );
 }
 
@@ -567,12 +445,37 @@ async function main() {
       case 'prepare-with-bootstrap-secret':
         prepareWithBootstrapSecret(process.env);
         break;
-      case 'run':
+      case 'run': {
         if (separator !== undefined && separator !== '--') {
           throw new Error('Custom run commands must follow --.');
         }
-        await runDevelopment(process.env, command);
+        const environment = buildApplicationEnvironment(process.env);
+        await preflightRuntime(process.env);
+        run(
+          command[0] ?? 'pnpm',
+          command.length > 0
+            ? command.slice(1)
+            : [
+                '--parallel',
+                '--filter',
+                '@kosmo/api',
+                '--filter',
+                '@kosmo/web',
+                '--filter',
+                '@kosmo/app',
+                '--filter',
+                '@kosmo/worker',
+                '--filter',
+                '@kosmo/fedify-consumer',
+                'run',
+                'dev',
+              ],
+          {
+            env: environment,
+          },
+        );
         break;
+      }
       case 'services-down':
         stopServices();
         break;

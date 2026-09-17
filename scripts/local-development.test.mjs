@@ -4,7 +4,6 @@ import {
   buildApplicationEnvironment,
   buildBootstrapLoaderEnvironment,
   buildMigrationEnvironment,
-  buildPublicApplicationEnvironment,
   preflightRuntime,
   validateBootstrapEnvironment,
   validateRuntimeEnvironment,
@@ -64,7 +63,7 @@ test('bootstrap Vault loading cannot inherit privileged values from the runtime 
   assert.equal(environment.PGPASSWORD, 'runtime-secret');
 });
 
-test('application children receive runtime PG and queue credentials but no privileged fallback', () => {
+test('application children receive runtime credentials but no privileged fallback', () => {
   const environment = buildApplicationEnvironment(runtimeEnvironment);
 
   assert.equal(environment.PGUSER, 'kosmo_runtime');
@@ -72,18 +71,6 @@ test('application children receive runtime PG and queue credentials but no privi
   assert.equal(environment.TEMPORAL_ADDRESS, '127.0.0.1:7233');
   assert.equal(environment.TEMPORAL_NAMESPACE, 'default');
   assert.equal(environment.FEDIFY_QUEUE_DATABASE_PASSWORD, 'queue-secret');
-  assert.equal(environment.DATABASE_URL, undefined);
-  assert.equal(environment.LOCAL_POSTGRES_ADMIN_PASSWORD, undefined);
-  assert.equal(environment.LOCAL_POSTGRES_OWNER_PASSWORD, undefined);
-});
-
-test('public application children receive no PostgreSQL or queue credentials', () => {
-  const environment = buildPublicApplicationEnvironment(runtimeEnvironment);
-
-  assert.equal(environment.PGPASSWORD, undefined);
-  assert.equal(environment.PGUSER, undefined);
-  assert.equal(environment.FEDIFY_QUEUE_DATABASE_PASSWORD, undefined);
-  assert.equal(environment.FEDIFY_QUEUE_DATABASE_URL, undefined);
   assert.equal(environment.DATABASE_URL, undefined);
   assert.equal(environment.LOCAL_POSTGRES_ADMIN_PASSWORD, undefined);
   assert.equal(environment.LOCAL_POSTGRES_OWNER_PASSWORD, undefined);
