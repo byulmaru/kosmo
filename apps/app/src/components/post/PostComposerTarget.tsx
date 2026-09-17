@@ -242,7 +242,7 @@ export function PostComposerTarget({
     const height = input.scrollHeight;
     input.style.height = `${height}px`;
     setBodyContentHeight(height);
-  }, [body, bodyRef]);
+  }, [body, bodyRef, items.length, surface]);
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
