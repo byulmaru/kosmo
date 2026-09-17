@@ -38,7 +38,8 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
   fetch가 마지막으로 확인된 결과를 덮어서는 안 된다.
 - Decision Outcome: 지원·검증된 Featured item 전체를 원격 순서로 보존한다. Remote Profile 등록, stale refresh와 검증된
   inbound `Update(Actor/Person)`에서 광고된 `featured` URI가 있으면 production sync path에서 실행하거나 예약한다. 상위 Profile
-  결과의 성공 여부는 sync 완료·성공에 의존하지 않고 완료 시간 SLA를 정의하지 않는다. Public/Unlisted는 기존
+  결과의 성공 여부는 sync 완료·성공에 의존하지 않고 완료 시간 SLA를 정의하지 않는다. Follow Relationship 성립이나 보존된
+  follower identity의 Active/Normal 복귀만으로는 별도 sync를 시작하지 않는다. Public/Unlisted는 기존
   공개 fetch를 사용할 수 있고, Followers Only를 수신할 때는 한 sync 시도 동안 같은 Active local follower identity로 모든
   page와 각 Note 역참조를 authenticated fetch한다. 각 시도는 취소 가능하고 next page 순환 검출과 구현이 정한
   page·item·byte·시간 예산을 적용한다. page traversal과 항목 검증이 성공한 authoritative sync만 ordered set을 교체하고,

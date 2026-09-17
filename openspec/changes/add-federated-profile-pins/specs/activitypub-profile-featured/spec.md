@@ -48,6 +48,7 @@ The system MUST satisfy this contract.
 refresh와 검증된 inbound `Update(Actor/Person)`에서 actor가 광고한 `featured` URI가 있으면 이 sync를 production path에서
 실행하거나 예약해야 한다(MUST). 상위 Profile 결과의 성공 여부는 sync 완료·성공에 의존해서는 안 되며(MUST NOT), sync
 완료 시간 SLA는 정의하지 않는다. Public/Unlisted 항목은 기존 공개 fetch와 remote Note 검증을 적용해야 한다(MUST).
+Follow Relationship 성립 또는 보존된 follower identity의 Active/Normal 복귀만으로 Featured sync를 시작해서는 안 된다(MUST NOT).
 각 Featured Note의 canonical `attributedTo`는 collection을 광고하는 Remote Actor의 canonical URI와 정확히 일치해야 한다(MUST).
 Followers Only 항목은 한 sync 시도 동안 같은 Active local follower identity로 Featured collection의 모든 page와 각 Note
 역참조를 authenticated fetch한 뒤 author, audience와 established Follow 관계를 검증해야 한다(MUST). 각 시도는 취소할 수
@@ -81,6 +82,12 @@ snapshot을 원자적으로 교체해야 한다(MUST). retry timing·backoff·�
 - **THEN** 시스템은 Note의 author·audience와 established Follow 관계가 일치할 때만 해당 membership과 Note를
   materialize한다
 - **AND** guest, 비팔로워 또는 unfollow된 identity에는 Post가 없는 것처럼 처리한다
+
+#### Scenario: Do not sync solely because follower access changes
+
+- **WHEN** Follow Relationship이 새로 성립하거나 보존된 follower identity가 Active/Normal로 복귀한다
+- **THEN** 시스템은 이 전이만을 이유로 Featured sync를 실행하거나 예약하지 않는다
+- **AND** 이후 허용된 Profile sync가 실행될 때 현재 Active local follower identity가 있으면 Followers Only 검증에 사용한다
 
 #### Scenario: Preserve the last successful set after sync failure
 

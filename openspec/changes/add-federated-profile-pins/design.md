@@ -60,7 +60,8 @@ expected-current atomic replacement는 rollout 정책으로만 둔다. Followers
    공개 fetch를 사용할 수 있다. Followers Only를 수신할 때는 한 sync 시도 동안 같은 Active local follower identity로
    collection의 모든 page와 각 Note 역참조를 authenticated fetch한다. Remote Profile 등록·stale refresh·검증된 inbound
    Update에서 sync를 시작한다. Sync는 production path에서 inline으로 실행하거나 별도 effect로 예약할 수 있고 상위 Profile
-   결과의 성공 여부는 sync 완료·성공에 의존하지 않는다. 각 시도는 취소
+   결과의 성공 여부는 sync 완료·성공에 의존하지 않는다. Follow Relationship 성립이나 follower identity의 Active/Normal
+   복귀만으로는 별도 sync를 시작하지 않는다. 각 시도는 취소
    가능하며 next page 순환 검출과 구현이 정한 page·item·byte·시간 예산을 적용한다. 실패·취소·순환·예산 초과는 유효한
    상위 Profile 갱신과 이전 snapshot을 보존한다. 실패는 기존 retry-capable async effect/Workflow 경계에서 관측·재시도할 수
    있어야 하며, 이후 성공한 retry만 snapshot을 원자적으로 교체한다. 각 trigger는 Remote Profile별 current sync generation

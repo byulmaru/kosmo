@@ -197,6 +197,9 @@ local follower identity가 있으면 한 sync 시도 동안 같은 identity로 c
 fetch·검증해야 Followers Only membership을 반영할 수 있다. 각 시도는 취소할 수 있어야 하고 next page 순환을 검출하며,
 구현이 정한 page·item·byte·시간 예산 안에서 수행한다. Partial page, 검증되지 않은 membership, 취소·순환 또는 예산 초과는
 authoritative 결과로 저장하지 않는다.
+Follow Relationship 성립이나 보존된 follower identity의 Active/Normal 복귀만으로는 Featured sync를 시작하지 않는다. 이후
+Remote Profile 등록·stale refresh·검증된 inbound Profile Update sync가 실행될 때 현재 Active local follower identity가 있으면
+Followers Only membership 검증에 사용한다.
 Featured sync 실패는 관측·재시도할 수 있어야 하지만 유효한 Remote Profile 등록·refresh·Update 결과를 되돌리거나
 실패시키지 않는다. 실패·부분·취소된 시도는 마지막 성공 snapshot을
 유지하고, 이후 성공한 retry만 snapshot을 원자적으로 교체한다. 각 trigger는 Remote Profile별 current sync generation 또는

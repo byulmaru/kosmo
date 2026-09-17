@@ -119,6 +119,7 @@ Mastodon 호환 서버 기준 양방향 federation runtime으로 이 계약을 �
 - Public/Unlisted는 기존 공개 fetch를 사용할 수 있다. Followers Only는 한 sync 시도 동안 같은 Active local follower
   identity로 collection의 모든 page와 각 Note 역참조를 authenticated fetch하고 author·audience·established Follow를
   검증한다.
+- Follow Relationship 성립과 보존된 follower identity의 Active/Normal 복귀만으로는 별도 Featured sync를 시작하지 않는다.
 - Guest·비팔로워·unfollow된 identity에는 private Post나 membership 존재를 노출하지 않는다.
 - fetch·parse·authorization·Note materialization 실패는 partial/empty set으로 마지막 성공 상태를 덮지 않는다.
 - Featured sync 실패는 유효한 Remote Profile 등록·refresh·Update를 되돌리거나 실패시키지 않는다.
