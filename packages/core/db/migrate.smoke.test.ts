@@ -133,6 +133,9 @@ try {
       'public.account',
       'public.profile',
       'public.post',
+      'public.post_quote_consent',
+      'public.post_quote_effect_receipt',
+      'public.post_quote_policy',
       'public.media',
       'public.profile_media',
       'public.profile_mute',
@@ -142,7 +145,18 @@ try {
 
   assert.deepEqual(
     objects.map(({ objectName }) => objectName),
-    ['account', 'profile', 'post', 'media', 'profile_media', 'profile_mute', 'hashtag'],
+    [
+      'account',
+      'profile',
+      'post',
+      'post_quote_consent',
+      'post_quote_effect_receipt',
+      'post_quote_policy',
+      'media',
+      'profile_media',
+      'profile_mute',
+      'hashtag',
+    ],
     'Representative final schema tables must exist.',
   );
 

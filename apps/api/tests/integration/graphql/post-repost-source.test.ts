@@ -2,7 +2,13 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
-import { PostState, PostVisibility, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import {
+  PostQuoteConsentStatus,
+  PostState,
+  PostVisibility,
+  ProfileFollowPolicy,
+  ProfileState,
+} from '@kosmo/core/enums';
 import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
@@ -21,6 +27,7 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let PostQuoteConsents: typeof CoreDb.PostQuoteConsents;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
@@ -42,6 +49,7 @@ describe('GraphQL Post Repost Source', () => {
       Instances,
       pg,
       PostContents,
+      PostQuoteConsents,
       Posts,
       ProfileFollows,
       Profiles,
@@ -102,6 +110,8 @@ describe('GraphQL Post Repost Source', () => {
       replyParentId: normal.id,
       repostSourceId: source.id,
     });
+    await approveQuote(source.id, quote.id, quoteProfile.id, profile.id);
+    await approveQuote(source.id, replyQuote.id, replyQuoteProfile.id, profile.id);
     const root = await insertPost({ bodyText: 'root', profileId: profile.id });
     const intermediate = await insertPost({
       bodyText: 'intermediate',
@@ -202,6 +212,12 @@ describe('GraphQL Post Repost Source', () => {
       profileId: profile.id,
       repostSourceId: indirectSource.id,
     });
+    await approveQuote(
+      indirectSource.id,
+      indirectTombstoneOuter.id,
+      profile.id,
+      indirectProfile.id,
+    );
     const directSource = await insertPost({
       bodyText: 'direct source',
       profileId: profile.id,
@@ -307,6 +323,26 @@ const insertProfile = ({ instanceId = localInstanceId }: { instanceId?: string }
     })
     .returning()
     .then(firstOrThrow);
+};
+
+const approveQuote = async (
+  sourcePostId: string,
+  quotePostId: string,
+  quoteAuthorProfileId: string,
+  sourceAuthorProfileId: string,
+) => {
+  await db.insert(PostQuoteConsents).values({
+    approvalUri: `${publicOrigin}/ap/quote-authorization/${quotePostId}`,
+    quoteAuthorActorUri: `${publicOrigin}/ap/actor/${quoteAuthorProfileId}`,
+    quoteAuthorProfileId,
+    quotePostId,
+    quoteUri: `${publicOrigin}/ap/note/${quotePostId}`,
+    requestUri: `${publicOrigin}/ap/quote-request/${quotePostId}`,
+    sourceAuthorActorUri: `${publicOrigin}/ap/actor/${sourceAuthorProfileId}`,
+    sourcePostId,
+    sourceUri: `${publicOrigin}/ap/note/${sourcePostId}`,
+    status: PostQuoteConsentStatus.APPROVED,
+  });
 };
 
 const insertPost = async ({

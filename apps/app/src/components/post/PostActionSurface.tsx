@@ -1,4 +1,5 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
+import { useState } from 'react';
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
@@ -11,9 +12,12 @@ import { isRepostTargetEligible } from './postActionAvailability';
 import { PostActionBar } from './PostActionBar';
 import { useBookmarkFailureToast } from './PostBookmarkAction';
 import { usePostMoreMenuItem } from './PostMoreMenu';
+import { PostQuotePolicyEditor } from './PostQuotePolicyEditor';
 import { usePostReactionController } from './PostReactionController';
 import { useRepostFailureToast } from './useRepostFailureToast';
+import type { PostQuotePolicy } from '@kosmo/core/enums';
 import type { StyleProp, ViewStyle } from 'react-native';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { PostActionSurface_post$key } from './__generated__/PostActionSurface_post.graphql';
 import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
 
@@ -30,6 +34,8 @@ const postActionSurfaceFragment = graphql`
   fragment PostActionSurface_post on Post {
     id
     visibility
+    quotePolicy
+    viewerCanUpdateQuotePolicy
     profile {
       id
       relativeHandle
@@ -50,6 +56,7 @@ export function PostActionSurface({
 }: Props) {
   const target = useFragment(postActionSurfaceFragment, socialActionTarget);
   const { sessionId } = useSession();
+  const [quotePolicyEditorOpen, setQuotePolicyEditorOpen] = useState(false);
   const authentication = usePostActionAuthentication(true);
   const repostAuthentication = usePostActionAuthentication(
     isRepostTargetEligible({
@@ -73,7 +80,23 @@ export function PostActionSurface({
     kind: ContentReportTargetType.POST,
     label: `${target.profile.relativeHandle}의 게시물 · ${target.id}`,
   });
-  const moreItems = sessionId ? [copyLinkItem, reportItem] : [copyLinkItem];
+  const canEditQuotePolicy = Boolean(
+    target.viewerCanUpdateQuotePolicy &&
+    target.quotePolicy &&
+    (target.visibility === 'PUBLIC' || target.visibility === 'UNLISTED'),
+  );
+  const quotePolicyItem: ActionMenuItem | null = canEditQuotePolicy
+    ? {
+        accessibilityLabel: '인용 설정',
+        key: 'quote-policy',
+        label: '인용 설정',
+        onSelect: () => setQuotePolicyEditorOpen(true),
+      }
+    : null;
+  const moreItems = [
+    ...(sessionId ? [copyLinkItem, reportItem] : [copyLinkItem]),
+    ...(quotePolicyItem ? [quotePolicyItem] : []),
+  ];
 
   const canMute =
     authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id;
@@ -124,6 +147,15 @@ export function PostActionSurface({
       ) : (
         renderActions()
       )}
+      {canEditQuotePolicy && target.quotePolicy ? (
+        <PostQuotePolicyEditor
+          onClose={() => setQuotePolicyEditorOpen(false)}
+          policy={target.quotePolicy as PostQuotePolicy}
+          postId={target.id}
+          visible={quotePolicyEditorOpen}
+          visibility={target.visibility === 'PUBLIC' ? 'PUBLIC' : 'UNLISTED'}
+        />
+      ) : null}
     </>
   );
 }

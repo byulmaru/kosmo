@@ -59,6 +59,7 @@ export const dispatchActivityPubActivity = async ({
   directProfileIds,
   directOnly,
   orderingKey,
+  includeFollowers = true,
 }: {
   readonly activity: Activity;
   readonly actorProfileId: string;
@@ -67,6 +68,7 @@ export const dispatchActivityPubActivity = async ({
   /** Preserve the historical direct-plus-followers audience unless explicit. */
   readonly directOnly?: boolean;
   readonly orderingKey?: string;
+  readonly includeFollowers?: boolean;
 }): Promise<ActivityPubDispatchResult> => {
   const directActors =
     directProfileIds.length === 0
@@ -89,7 +91,7 @@ export const dispatchActivityPubActivity = async ({
               isNotNull(ActivityPubActors.inboxUri),
             ),
           );
-  const followerActors = directOnly
+  const followerActors = directOnly || !includeFollowers
     ? []
     : await db
         .select({

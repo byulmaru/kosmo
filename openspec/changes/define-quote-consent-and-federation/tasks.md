@@ -26,12 +26,12 @@ field·mutation·payload와 오류는 이번 `quote-consent`의 공개 API 계�
 - 기존 Local Quote 2건의 승인 상태·QuoteAuthorization 무백필, 기존 Source 표시, 조회 불가·삭제·방향별 차단 시 비노출과 본문 보존을 실행해 검증한다. 신규 Quote의 승인 누락은 예외로 처리하지 않는다.
 - 실제 schema diff와 migration/backfill, rollback 후 Source 접근 보호, 확정한 GraphQL 계약을 구현 PR에 기록한다.
 
-- [ ] 1.1 새 글과 기존 글의 정책 조회·초기화 및 정책 변경을 연결하고 optional `CreatePostInput.quotePolicy`를 작성 transaction에 저장한다.
-- [ ] 1.2 기존 공개 범위 설정 UI의 Public·Unlisted에 새 인용 허용 정책 선택 UI를 추가하고 게시 후 본인 글의 인용 설정에도 재사용한다. draft 수명·중복 제출 방지·오류 복구를 연결한다.
-- [ ] 1.3 초기값·권한·변경 비소급·기존 데이터 보존을 검증한다.
-- [ ] 1.4 정책 저장을 additive로 도입하고 기존 Local Post의 `모두` 초기화·재실행·이미 지정한 정책 보존을 검증한다. 기존 Local Quote 2건의 새 승인 상태·QuoteAuthorization은 backfill하지 않는다. 정확한 두 identity·Source 결속과 구버전 writer를 확인하고 D15의 기존 Source 표시 예외와 신규 Quote의 승인 guard를 함께 검증한다.
-- [ ] 1.5 정책 enum·mutation·payload·권한 필드를 실제 API 요청과 readback으로 검증하고 SDL·Relay를 동기화한다.
-- [ ] 1.6 세 정책의 최초 Note·동일 identity Update와 기존 승인 비소급을 실제 serialized payload·DB 상태로 검증한다.
+- [x] 1.1 새 글과 기존 글의 정책 조회·초기화 및 정책 변경을 연결하고 optional `CreatePostInput.quotePolicy`를 작성 transaction에 저장한다.
+- [x] 1.2 기존 공개 범위 설정 UI의 Public·Unlisted에 새 인용 허용 정책 선택 UI를 추가하고 게시 후 본인 글의 인용 설정에도 재사용한다. draft 수명·중복 제출 방지·오류 복구를 연결한다.
+- [x] 1.3 초기값·권한·변경 비소급·기존 데이터 보존을 검증한다.
+- [x] 1.4 정책 저장을 additive로 도입하고 기존 Local Post의 `모두` 초기화·재실행·이미 지정한 정책 보존을 검증한다. 기존 Local Quote 2건의 새 승인 상태·QuoteAuthorization은 backfill하지 않는다. 정확한 두 identity·Source 결속과 구버전 writer를 확인하고 D15의 기존 Source 표시 예외와 신규 Quote의 승인 guard를 함께 검증한다.
+- [x] 1.5 정책 enum·mutation·payload·권한 필드를 실제 API 요청과 readback으로 검증하고 SDL·Relay를 동기화한다.
+- [x] 1.6 세 정책의 최초 Note·동일 identity Update와 기존 승인 비소급을 실제 serialized payload·DB 상태로 검증한다.
 
 - [ ] 1.7 정책 선택·공개 범위 전환·create payload·게시 후 저장·오류 복구·actor 격리·Web keyboard/focus를 실행해 검증한다. Native Modal 검증 여부를 구분한다.
 
@@ -137,14 +137,14 @@ Kosmo 원문이 요청을 정책대로 자동 승인·거절하고 Source 삭제
   `interactingObject` embed 제한을 검증한다.
 - Source 삭제에 따른 승인 철회 `Delete`의 `object`·`target` URI 참조와 객체 비포함을 payload로 검증한다.
 
-- [ ] 4.1 Kosmo 원문 QuoteRequest의 검증·자동 Accept/Reject·승인 발급과 권한 기반 QuoteAuthorization dispatcher를 연결한다.
-- [ ] 4.2 기존 Local Source 삭제에 발급 승인 무효화와 객체를 embed하지 않는 원격 철회 전달을 연결한다. 삭제·전달 재시도에도 자체 Content를 보존하고 승인을 되살리지 않는다.
+- [x] 4.1 Kosmo 원문 QuoteRequest의 검증·자동 Accept/Reject·승인 발급과 권한 기반 QuoteAuthorization dispatcher를 연결한다.
+- [x] 4.2 기존 Local Source 삭제에 발급 승인 무효화와 객체를 embed하지 않는 원격 철회 전달을 연결한다. 삭제·전달 재시도에도 자체 Content를 보존하고 승인을 되살리지 않는다.
 - [ ] 4.3 팔로워 정책에서 무관계·pending Follow Request 요청은 Reject하고 established Follower·Source Author 요청은 Accept하는지,
       각 결과의 승인 발급·Source 노출 post-state와 중복 요청, 승인 객체 readback·무권한 비제공 및
       차단/Source 삭제의 다른 결과를 검증한다.
 
-- [ ] 4.4 원격 Quote가 아직 materialize되지 않은 유효한 요청의 identity 결속·승인 발급·역참조를 검증하고 PROD-792의 수신 상태와 중복 소유하지 않는다.
-- [ ] 4.5 같은 승인 URI의 valid/forged Delete, 무권한 역참조와 requester별 Source 접근을 검증한다.
+- [x] 4.4 원격 Quote가 아직 materialize되지 않은 유효한 요청의 identity 결속·승인 발급·역참조를 검증하고 PROD-792의 수신 상태와 중복 소유하지 않는다.
+- [x] 4.5 같은 승인 URI의 valid/forged Delete, 무권한 역참조와 requester별 Source 접근을 검증한다.
 
 ## 5. PROD-924 로컬 Quote 발신과 원격 승인 결과
 
@@ -178,13 +178,13 @@ QuoteRequest와 유효한 QuoteAuthorization을 통해 같은 Quote의 Source �
 - Local Source 삭제에서 일반 `Delete(Note)` audience 밖의 Quote Author/소유 서버도 승인 철회를 받고,
   Quote audience까지 Source 비노출로 수렴하는 recipient 경로를 검증한다.
 
-- [ ] 5.1 승인된 Quote projection과 pending 본문 선발신·원격 요청을 연결한다.
-- [ ] 5.2 로컬 Quote의 원격 Accept/Reject·승인 철회를 검증해 Source·필요한 Update와 객체를 embed하지 않는 기존 Quote audience 철회 전달을 연결한다.
-- [ ] 5.3 일반 Post·Reply·Repost identity/audience 회귀와 승인 전 Source 비노출을 검증한다.
-- [ ] 5.4 자기 인용의 요청 생략과 원격 타인 원문의 정책별 QuoteRequest·pending·승인 증거 경계를 검증한다.
+- [x] 5.1 승인된 Quote projection과 pending 본문 선발신·원격 요청을 연결한다.
+- [x] 5.2 로컬 Quote의 원격 Accept/Reject·승인 철회를 검증해 Source·필요한 Update와 객체를 embed하지 않는 기존 Quote audience 철회 전달을 연결한다.
+- [x] 5.3 일반 Post·Reply·Repost identity/audience 회귀와 승인 전 Source 비노출을 검증한다.
+- [x] 5.4 자기 인용의 요청 생략과 원격 타인 원문의 정책별 QuoteRequest·pending·승인 증거 경계를 검증한다.
 
-- [ ] 5.5 PROD-431의 Remote Source 거부와 승인 미구현에 따른 eligibility 제한을 실제 pending 작성 경로에 연결하고 본문·Source FK·승인 결속의 transaction rollback 및 성공 readback을 검증한다.
-- [ ] 5.6 일반 Note와 요청 전용 instrument·역참조를 분리하고 Quote 본문 audience가 Source Author를 포함하는 경우와 포함하지 않는 경우의 접근 보존을 검증한다.
+- [x] 5.5 PROD-431의 Remote Source 거부와 승인 미구현에 따른 eligibility 제한을 실제 pending 작성 경로에 연결하고 본문·Source FK·승인 결속의 transaction rollback 및 성공 readback을 검증한다.
+- [x] 5.6 일반 Note와 요청 전용 instrument·역참조를 분리하고 Quote 본문 audience가 Source Author를 포함하는 경우와 포함하지 않는 경우의 접근 보존을 검증한다.
 - [ ] 5.7 Local Source 삭제가 일반 Delete audience 밖의 Quote Author까지 승인 철회를 전달하고 Quote audience에서 본문만 남는지 검증한다.
 
 ## 6. PROD-924 레거시 발신과 재전달 수렴
