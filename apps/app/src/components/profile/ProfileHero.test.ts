@@ -65,8 +65,12 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('react-relay', {
-  graphql: () => 'ProfileHero_profile',
-  useFragment: () => fragmentData,
+  graphql: (parts: TemplateStringsArray) =>
+    parts.join('').includes('ProfileHero_profileBlockStatus')
+      ? 'ProfileHero_profileBlockStatus'
+      : 'ProfileHero_profile',
+  useFragment: (document: string, key: { status?: object } | null) =>
+    document === 'ProfileHero_profileBlockStatus' ? (key?.status ?? null) : fragmentData,
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({
@@ -346,6 +350,31 @@ describe('ProfileHero media presentation', () => {
 });
 
 describe('ProfileHero 관리 메뉴 조립', () => {
+  it('blockedBy는 status fragment에서 읽어 관계 관리 action을 숨긴다', async () => {
+    fragmentData = baseProfile;
+    await act(async () => {
+      renderer = create(
+        createElement(ProfileHero, {
+          moreItems: [{ key: 'report', label: '신고하기', onSelect: () => undefined }],
+          profile: {} as never,
+          profileBlockStatus: {
+            status: { blockedBy: true, blocking: false },
+          } as never,
+        }),
+      );
+    });
+    assert.ok(renderer);
+
+    assert.equal(
+      renderer.root.findAll((node) => (node.type as unknown) === 'ProfileBlockAction').length,
+      0,
+    );
+    assert.equal(
+      renderer.root.findAll((node) => (node.type as unknown) === 'ProfileMuteAction').length,
+      0,
+    );
+  });
+
   it('뮤트·차단·신고 action을 한 메뉴에 합성하고 포커스 연결을 유지한다', async () => {
     fragmentData = baseProfile;
     await act(async () => {
@@ -353,7 +382,9 @@ describe('ProfileHero 관리 메뉴 조립', () => {
         createElement(ProfileHero, {
           moreItems: [{ key: 'report', label: '신고하기', onSelect: () => undefined }],
           profile: {} as never,
-          profileBlockStatus: { blockedBy: false, blocking: false },
+          profileBlockStatus: {
+            status: { blockedBy: false, blocking: false },
+          } as never,
         }),
       );
     });
@@ -393,7 +424,9 @@ describe('ProfileHero 관리 메뉴 조립', () => {
         createElement(ProfileHero, {
           moreItems: [{ key: 'report', label: '신고하기', onSelect: onReport }],
           profile: {} as never,
-          profileBlockStatus: { blockedBy: true, blocking: true },
+          profileBlockStatus: {
+            status: { blockedBy: true, blocking: true },
+          } as never,
         }),
       );
     });

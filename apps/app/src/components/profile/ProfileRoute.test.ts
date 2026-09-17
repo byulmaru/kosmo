@@ -94,6 +94,7 @@ let profileViewerState: {
   membership: { role: 'MEMBER' | 'OWNER' } | null;
   profileBlock?: { id: string; targetProfile: object } | null;
 } | null = null;
+let postListProfileBlockId: string | null = null;
 const capturedReport = { value: null as ReportMenuInput | null };
 const changeBlockedCalls: Array<{ change: object; nextBlocked: boolean }> = [];
 const toastCalls: Array<{ message: string; tone: string }> = [];
@@ -250,21 +251,12 @@ mockModule('react-relay', {
             id: `profile:${variables.handle}`,
             instance: { kind: profileInstanceKind },
             relativeHandle: `@${variables.handle}`,
-            viewerState: profileViewerState
-              ? {
-                  ...profileViewerState,
-                  profileBlock: profileBlockStatus?.blocking
-                    ? {
-                        id: profileBlockStatus.profileBlockId,
-                        targetProfile: {
-                          displayName: `Display ${variables.handle}`,
-                          id: `profile:${variables.handle}`,
-                          relativeHandle: `@${variables.handle}`,
-                        },
-                      }
-                    : null,
-                }
-              : null,
+            viewerState:
+              query === 'ProfilePostListPageQuery'
+                ? {
+                    profileBlock: postListProfileBlockId ? { id: postListProfileBlockId } : null,
+                  }
+                : profileViewerState,
           }
         : null,
     };
@@ -478,6 +470,7 @@ afterEach(async () => {
   selectedProfileId = null;
   profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
   profileViewerState = null;
+  postListProfileBlockId = null;
   SlotContent = ProfilePostListPage;
   sessionId = null;
   capturedReport.value = null;
@@ -958,7 +951,19 @@ describe('profile route parameter lifecycle', () => {
 
   it('조회 가능한 blocking Profile은 ProfileHero와 확인 전 경고 뒤 Slot 콘텐츠를 유지한다', async () => {
     selectedProfileId = 'owner';
-    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileViewerState = {
+      isSelf: false,
+      membership: { role: 'MEMBER' },
+      profileBlock: {
+        id: 'block-1',
+        targetProfile: {
+          displayName: 'Display blocked',
+          id: 'profile:blocked',
+          relativeHandle: '@blocked',
+        },
+      },
+    };
+    postListProfileBlockId = 'block-1';
     profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
 
     await renderRoute('@blocked');
@@ -981,6 +986,26 @@ describe('profile route parameter lifecycle', () => {
     assert.deepEqual(identities('PostList'), ['blocked']);
   });
 
+  it('route block status와 Profile viewerState를 독립 fixture로 관찰한다', async () => {
+    selectedProfileId = 'owner';
+    profileViewerState = {
+      isSelf: false,
+      membership: { role: 'MEMBER' },
+      profileBlock: null,
+    };
+    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+    postListProfileBlockId = null;
+
+    await renderRoute('@blocked');
+
+    assert.deepEqual(requireRendered('ProfileHero').props.profileBlockStatus, profileBlockStatus);
+    assert.deepEqual(identities('PostList'), ['blocked']);
+    assert.equal(
+      requireRendered('FollowButton').findByType('Button' as never).props.children,
+      '팔로우',
+    );
+  });
+
   it('조회 가능한 blockedBy Profile은 ProfileHero와 콘텐츠 차단 상태를 유지한다', async () => {
     selectedProfileId = 'owner';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
@@ -1001,6 +1026,7 @@ describe('profile route parameter lifecycle', () => {
     selectedProfileId = 'owner';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+    postListProfileBlockId = 'block-1';
 
     await renderRoute('@blocked', '/@blocked');
     await act(async () => t.mock.timers.tick(86_400_000));
@@ -1019,6 +1045,7 @@ describe('profile route parameter lifecycle', () => {
 
     selectedProfileId = 'owner-b';
     profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-b' };
+    postListProfileBlockId = 'block-b';
     await act(async () => renderer?.unmount());
     renderer = null;
     await renderRoute('@other', '/@other');
@@ -1037,16 +1064,19 @@ describe('profile route parameter lifecycle', () => {
     selectedProfileId = 'owner';
     profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
     profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+    postListProfileBlockId = 'block-1';
 
     await renderRoute('@blocked', '/@blocked');
     await act(async () => requireRendered('StateView').props.onAction());
     assert.deepEqual(identities('PostList'), ['blocked']);
 
     profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
+    postListProfileBlockId = null;
     await renderRoute('@blocked', '/@blocked');
     assert.deepEqual(identities('PostList'), ['blocked']);
 
     profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-2' };
+    postListProfileBlockId = 'block-2';
     await renderRoute('@blocked', '/@blocked');
     assert.deepEqual(identities('PostList'), []);
     assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
@@ -1054,8 +1084,20 @@ describe('profile route parameter lifecycle', () => {
 
   it('Profile 공통 FollowButton의 해제는 확인·취소·pending·실패·재시도를 거친다', async () => {
     selectedProfileId = 'owner';
-    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileViewerState = {
+      isSelf: false,
+      membership: { role: 'MEMBER' },
+      profileBlock: {
+        id: 'block-1',
+        targetProfile: {
+          displayName: 'Display blocked',
+          id: 'profile:blocked',
+          relativeHandle: '@blocked',
+        },
+      },
+    };
     profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+    postListProfileBlockId = 'block-1';
     let rejectRequest: ((error: Error) => void) | undefined;
     changeBlockedImpl = () =>
       new Promise<void>((_resolve, reject) => {
@@ -1108,6 +1150,8 @@ describe('profile route parameter lifecycle', () => {
 
     changeBlockedImpl = async () => {
       profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
+      profileViewerState = { isSelf: false, membership: { role: 'MEMBER' }, profileBlock: null };
+      postListProfileBlockId = null;
     };
     await act(async () => button().props.onPress());
     await act(async () => confirmation().props.onConfirm());
@@ -1141,7 +1185,18 @@ describe('profile route parameter lifecycle', () => {
 
   it('서로 차단한 Profile은 공통 action을 표시하고 내 해제 뒤 상대 차단이 남으면 숨긴다', async () => {
     selectedProfileId = 'owner';
-    profileViewerState = { isSelf: false, membership: { role: 'MEMBER' } };
+    profileViewerState = {
+      isSelf: false,
+      membership: { role: 'MEMBER' },
+      profileBlock: {
+        id: 'block-1',
+        targetProfile: {
+          displayName: 'Display blocked',
+          id: 'profile:blocked',
+          relativeHandle: '@blocked',
+        },
+      },
+    };
     profileBlockStatus = { blockedBy: true, blocking: true, profileBlockId: 'block-1' };
 
     await renderRoute('@blocked');
@@ -1153,6 +1208,7 @@ describe('profile route parameter lifecycle', () => {
     );
     changeBlockedImpl = async () => {
       profileBlockStatus = { blockedBy: true, blocking: false, profileBlockId: null };
+      profileViewerState = { isSelf: false, membership: { role: 'MEMBER' }, profileBlock: null };
     };
     const action = requireRendered('FollowButton');
     await act(async () => action.findByType('Button' as never).props.onPress());
