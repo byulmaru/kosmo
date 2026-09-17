@@ -271,6 +271,20 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.equal(rightRailFooterCount, 0);
   });
 
+  it('retired /compose에서도 셸 compose control은 같은 Host를 연다', async () => {
+    layout = 'compact';
+    pathname = '/compose';
+    sessionProfile = { id: 'profile-1' };
+    await renderShell();
+
+    assert.equal(rightRailProps, undefined);
+    await act(async () => sidebarNavigationProps?.onComposeOpen?.());
+    const composeHost = rightRailProps as RightRailProps | undefined;
+    assert.equal(composeHost?.mode, 'overlay');
+    assert.equal(composeHost?.open, true);
+    assert.equal(router.push.mock.callCount(), 0);
+  });
+
   it('셸에서 연 Composer를 닫아도 route history fallback을 실행하지 않는다', async () => {
     layout = 'mobile';
     sessionProfile = { id: 'profile-1' };
