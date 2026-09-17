@@ -46,6 +46,8 @@
 - Completion means the scoped implementation, required documentation and focused validation are finished, including repairs for failures caused by the change. Continue through that work before reporting the first working patch as done; keep optional follow-ups separate from required completion.
 - Treat pull request readiness separately from optional OpenSpec session-harness housekeeping; housekeeping is not a
   product decision or PR completion gate.
+- When practical, archive a used, completed, or superseded session harness in the same implementation PR with
+  `--skip-specs`; this preference does not create an archive-only issue or PR.
 - When a pull request's own scoped implementation and required verification are complete, mark it Ready for review unless the user explicitly requests that it remain a Draft.
 - OpenSpec is an optional, mutable session harness. Its tasks, scenarios, design notes and archive state do not add
   product requirements, implementation obligations or PR completion gates.

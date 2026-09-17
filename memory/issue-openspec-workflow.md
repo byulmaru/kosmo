@@ -96,9 +96,10 @@ middleware를 사용한다”는 구현 선택이다.
   않는다. 아직 필요한 비즈니스 요구사항을 불필요하다는 이유로 버리지 말고 `Pending` 또는 handoff로 남긴다.
 - 완료된 작업은 PR의 코드·테스트·검증 결과가 source of truth다. OpenSpec task 완료나 archive는 PR readiness,
   Linear 완료 또는 배포 승인의 전제조건이 아니다.
-- 남은 하네스를 archive할 수 있지만 archive는 저장 정리와 과거 맥락을 위한 작업일 뿐, 상위 계약의 승인이나
-  신규 구현 의무를 만들지 않는다. 오래된 change, strict validation 통과, 다른 OpenSpec의 참조만으로 현재
-  요구사항·구현·리뷰 범위를 넓히지 않는다.
+- 사용·완료·superseded된 하네스는 가능하면 구현 PR 안에서 `--skip-specs`로 archive한다. 이는 저장 정리와
+  과거 맥락을 위한 기본 선호일 뿐 PR readiness·completion gate가 아니며, 이 선호만을 위한 archive-only
+  issue·PR를 만들지 않는다. 실제로 남은 요구사항·검증은 pending/handoff로 보존한다. 오래된 change, strict
+  validation 통과, 다른 OpenSpec의 참조만으로 현재 요구사항·구현·리뷰 범위를 넓히지 않는다.
 - 기존 OpenSpec을 이어받을 때는 매번 현재 사용자 요청과 canonical·Linear를 독립적으로 확인한다. 이전
   artifact의 내용은 참고 자료일 뿐 자동으로 상속되는 요구사항이 아니다.
 
