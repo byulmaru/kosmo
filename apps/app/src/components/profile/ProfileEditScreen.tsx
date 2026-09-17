@@ -158,6 +158,7 @@ export function ProfileEditScreen({
 
       <RouteScrollContainer
         nativeScrollProps={{
+          automaticallyAdjustKeyboardInsets: true,
           contentContainerStyle: styles.nativeContent,
           keyboardShouldPersistTaps: 'handled',
           style: styles.nativeScroll,
