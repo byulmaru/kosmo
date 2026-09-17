@@ -8,6 +8,7 @@ export function FeedbackPage() {
 
   return (
     <ScrollView
+      automaticallyAdjustKeyboardInsets
       contentContainerStyle={web ? styles.webRoot : styles.nativeRoot}
       keyboardShouldPersistTaps="handled"
     >
