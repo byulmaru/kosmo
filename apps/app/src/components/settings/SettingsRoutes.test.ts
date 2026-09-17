@@ -20,6 +20,14 @@ let pathname = '/settings';
 let SlotRoute: ComponentType = () => null;
 let sessionStatus: 'error' | 'guest' | 'valid' = 'guest';
 let otaUpdateId: string | null = null;
+let otaRuntimeVersion: string | null = null;
+let otaIsEmbeddedLaunch = true;
+let otaCreatedAt: Date | null = null;
+let otaIsUpdateAvailable = false;
+let otaIsUpdatePending = false;
+let otaCheckError: Error | null = null;
+let otaDownloadError: Error | null = null;
+let publicChannel: 'dev' | 'prod' = 'prod';
 
 mock.module('expo-router', {
   exports: {
@@ -33,9 +41,18 @@ mock.module('expo-router', {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('expo-updates', {
   exports: {
-    get updateId() {
-      return otaUpdateId;
-    },
+    useUpdates: () => ({
+      checkError: otaCheckError,
+      currentlyRunning: {
+        createdAt: otaCreatedAt,
+        isEmbeddedLaunch: otaIsEmbeddedLaunch,
+        runtimeVersion: otaRuntimeVersion,
+        updateId: otaUpdateId,
+      },
+      downloadError: otaDownloadError,
+      isUpdateAvailable: otaIsUpdateAvailable,
+      isUpdatePending: otaIsUpdatePending,
+    }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -76,7 +93,22 @@ mock.module(new URL('./SettingsNavigationList.tsx', import.meta.url), {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./NativeChannelSettings.tsx', import.meta.url), {
-  exports: { NativeChannelSettings: () => null },
+  exports: { NativeChannelSettings: () => createElement('NativeChannelSettings') },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('./SettingsItem.tsx', import.meta.url), {
+  exports: {
+    SettingsItem: (props: Record<string, unknown>) => createElement('SettingsItem', props),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../../config/public.ts', import.meta.url), {
+  exports: {
+    getPublicConfig: (key: string) => {
+      if (key === 'channel') {
+        return publicChannel;
+      }
+      throw new Error(`Unexpected public config key: ${key}`);
+    },
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsLinkRow.tsx', import.meta.url), {
   exports: {
@@ -117,6 +149,7 @@ let SettingsMutedProfilesRoute: ComponentType;
 let SettingsLayout: ComponentType;
 let SettingsRoute: ComponentType;
 let SettingsInfoRoute: ComponentType;
+let SettingsDeveloperRoute: ComponentType;
 let ProtectedLayout: ComponentType;
 let settingsInitialRouteName: string | undefined;
 let renderer: ReactTestRenderer | null = null;
@@ -127,6 +160,8 @@ before(async () => {
   settingsInitialRouteName = settingsLayoutModule.unstable_settings.initialRouteName;
   ({ default: SettingsRoute } = await import('../../app/(tabs)/(protected)/settings/index'));
   ({ default: SettingsInfoRoute } = await import('../../app/(tabs)/(protected)/settings/info'));
+  ({ default: SettingsDeveloperRoute } =
+    await import('../../app/(tabs)/(protected)/settings/developer'));
   ({ default: SettingsDefaultPostVisibilityRoute } =
     await import('../../app/(tabs)/(protected)/settings/default-post-visibility'));
   ({ default: SettingsMuteAndBlockRoute } =
@@ -146,6 +181,14 @@ afterEach(async () => {
   SlotRoute = () => null;
   sessionStatus = 'guest';
   otaUpdateId = null;
+  otaRuntimeVersion = null;
+  otaIsEmbeddedLaunch = true;
+  otaCreatedAt = null;
+  otaIsUpdateAvailable = false;
+  otaIsUpdatePending = false;
+  otaCheckError = null;
+  otaDownloadError = null;
+  publicChannel = 'prod';
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -373,30 +416,95 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsProfileDetail').length, 0);
   });
 
-  it('Web 정보 화면은 OTA 업데이트 행을 표시하지 않는다', async () => {
+  it('정보 화면은 정책 링크와 개발 정보 진입점만 표시하고 진단 행을 인라인하지 않는다', async () => {
     platform = 'web';
-    const updateId = '123e4567-e89b-12d3-a456-426614174000';
-    otaUpdateId = updateId;
     await renderRoute('/settings/info', SettingsInfoRoute);
 
-    assert.deepEqual(texts(), []);
+    assert.ok(
+      rendered('SettingsLinkRow').some((node) => node.props.href === '/settings/developer'),
+    );
+    assert.equal(rendered('NativeChannelSettings').length, 0);
+    assert.equal(rendered('SettingsItem').length, 0);
   });
 
-  it('Native 정보 화면은 현재 실행 중인 updateId 전체 UUID를 표시한다', async () => {
-    platform = 'ios';
-    const updateId = '123e4567-e89b-12d3-a456-426614174000';
-    otaUpdateId = updateId;
-    await renderRoute('/settings/info', SettingsInfoRoute);
+  it('Web 개발 정보는 public channel만 표시하고 Native channel·OTA 행은 표시하지 않는다', async () => {
+    platform = 'web';
+    publicChannel = 'dev';
+    await renderRoute('/settings/developer', SettingsDeveloperRoute);
 
-    assert.deepEqual(texts(), ['OTA 업데이트', updateId]);
+    assert.equal(settingsItems().length, 1);
+    assert.equal(settingsItem('채널').props.description, 'dev');
+    assert.equal(rendered('NativeChannelSettings').length, 0);
+    assert.deepEqual(rendered('SettingsLinkRow'), []);
   });
 
-  it('Native 정보 화면은 updateId가 없으면 식별 불가를 표시한다', async () => {
+  it('Native 개발 정보는 OTA 진단 행을 렌더링하고 정보 parent로 돌아간다', async () => {
     platform = 'android';
-    otaUpdateId = null;
-    await renderRoute('/settings/info', SettingsInfoRoute);
+    width = 390;
+    otaUpdateId = '123e4567-e89b-12d3-a456-426614174000';
+    otaRuntimeVersion = 'runtime-2026-09-16';
+    otaIsEmbeddedLaunch = false;
+    otaCreatedAt = new Date('2026-09-16T05:06:07.000Z');
+    otaIsUpdateAvailable = true;
+    otaIsUpdatePending = true;
+    await renderRoute('/settings/developer', SettingsDeveloperRoute);
 
-    assert.deepEqual(texts(), ['OTA 업데이트', '식별 불가']);
+    const scrollView = rendered('ScrollView')[0];
+    assert.ok(scrollView);
+    const header = scrollView.findAll((node) => (node.type as unknown) === 'PageHeader')[0];
+    assert.equal(header.props.title, '개발 정보');
+    assert.equal(header.props.leading.props.accessibilityLabel, '정보로 돌아가기');
+    assert.equal(
+      scrollView.findAll((node) => (node.type as unknown) === 'NativeChannelSettings').length,
+      1,
+    );
+    assert.equal(settingsItem('현재 업데이트 ID').props.description, otaUpdateId);
+    assert.equal(settingsItem('런타임 버전').props.description, otaRuntimeVersion);
+    assert.equal(settingsItem('실행 유형').props.description, 'OTA 업데이트');
+    assert.equal(settingsItem('생성 시각').props.description, '2026-09-16T05:06:07.000Z');
+    assert.match(
+      String(settingsItem('업데이트 상태').props.description),
+      /사용 가능: 예.*적용 대기: 예/,
+    );
+
+    await act(async () => header.props.leading.props.onPress());
+    assert.equal(backCalls, 0);
+    assert.deepEqual(replacedPaths, ['/settings/info']);
+  });
+
+  it('Native 개발 정보는 현재 값이 없을 때 식별 불가를 표시하고 오류 행은 조건부로 표시한다', async () => {
+    platform = 'ios';
+    width = 390;
+    otaUpdateId = null;
+    otaRuntimeVersion = null;
+    otaCreatedAt = null;
+    otaIsEmbeddedLaunch = true;
+    await renderRoute('/settings/developer', SettingsDeveloperRoute);
+
+    assert.equal(settingsItem('현재 업데이트 ID').props.description, '식별 불가');
+    assert.equal(settingsItem('런타임 버전').props.description, '식별 불가');
+    assert.equal(settingsItem('생성 시각').props.description, '식별 불가');
+    assert.equal(
+      settingsItems().some((node) => node.props.label === '업데이트 확인 오류'),
+      false,
+    );
+    assert.equal(
+      settingsItems().some((node) => node.props.label === '업데이트 다운로드 오류'),
+      false,
+    );
+
+    otaRuntimeVersion = 'runtime-2026-09-16';
+    otaIsEmbeddedLaunch = false;
+    otaCheckError = new Error('check failed');
+    otaDownloadError = new Error('download failed');
+    await rerenderRoute('/settings/developer', SettingsDeveloperRoute);
+
+    assert.equal(settingsItem('실행 유형').props.description, '식별 불가');
+    assert.match(String(settingsItem('업데이트 확인 오류').props.description), /check failed/);
+    assert.match(
+      String(settingsItem('업데이트 다운로드 오류').props.description),
+      /download failed/,
+    );
   });
 });
 
@@ -461,10 +569,14 @@ function byTestId(testID: string): ReactTestInstance {
   );
 }
 
-function texts(): string[] {
-  return rendered('Text').flatMap((node) =>
-    typeof node.props.children === 'string' ? [node.props.children] : [],
-  );
+function settingsItems(): ReactTestInstance[] {
+  return rendered('SettingsItem');
+}
+
+function settingsItem(label: string): ReactTestInstance {
+  const item = settingsItems().find((node) => node.props.label === label);
+  assert.ok(item, `SettingsItem with label ${label} was not rendered`);
+  return item;
 }
 
 function flattenStyle(style: unknown): Record<string, unknown> {
