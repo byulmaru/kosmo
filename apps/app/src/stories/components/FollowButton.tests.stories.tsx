@@ -83,7 +83,7 @@ export const UnblockFailureRetry: Story = {
       },
       mutationRequestObserver: unblockRequests,
       operationResponses: {
-        ProfileBlockControllerUnblockMutation: {
+        ProfileBlockActionUnblockMutation: {
           sequence: [
             { delayMs: 200, error: 'offline' },
             {

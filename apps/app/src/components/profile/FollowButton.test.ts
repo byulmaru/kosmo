@@ -11,16 +11,11 @@ import type { ProfileListItem as ProfileListItemExport } from './ProfileListItem
 
 const platform = { OS: 'web' };
 let renderer: ReactTestRenderer | null = null;
-const changeBlockedCalls: Array<{
-  change: {
-    ownerProfileId: string;
-    profileBlockId?: string | null;
-    targetProfileId?: string | null;
-  };
-  nextBlocked: boolean;
-}> = [];
+const mutationCalls: Array<{ id: string }> = [];
 const toastCalls: Array<{ message: string; tone: string }> = [];
-let changeBlockedError: Error | null = null;
+let mutationError: Error | null = null;
+const relayEnvironment = {};
+const environmentGenerationRef = { current: 0 };
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -35,12 +30,11 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('react-relay', {
-  graphql: (parts: TemplateStringsArray) => parts.join(''),
-  useFragment: (fragment: unknown, reference: Record<string, unknown> | null) =>
-    String(fragment).includes('ProfileBlockAction_profile on') ||
-    String(fragment).includes('ProfileBlockAction_profileBlock on')
-      ? reference
-      : reference && Object.keys(reference).length > 0
+  graphql: () => Symbol('graphql-document'),
+  useFragment: (_fragment: unknown, reference: Record<string, unknown> | null) =>
+    reference === null
+      ? null
+      : Object.keys(reference).length > 0
         ? reference
         : {
             avatar: null,
@@ -53,7 +47,25 @@ mockModule('react-relay', {
             relativeHandle: '@kosmo',
             viewerState: { follow: null, followRequest: null, isSelf: false },
           },
-  useMutation: () => [() => {}, false],
+  useMutation: () => [
+    (options: {
+      onCompleted: (response: Record<string, unknown>) => void;
+      onError: (error: Error) => void;
+      variables: { id: string };
+    }) => {
+      mutationCalls.push(options.variables);
+      if (mutationError) {
+        options.onError(mutationError);
+        return;
+      }
+      options.onCompleted({
+        blockProfile: { profileBlock: { id: 'profile-block-created' }, success: true },
+        unblockProfile: { profileBlockId: options.variables.id, success: true },
+      });
+    },
+    false,
+  ],
+  useRelayEnvironment: () => relayEnvironment,
 });
 mockModule('@/analytics/client', { trackAnalytics: () => {} });
 mockModule('@/components/ui/ToastProvider', {
@@ -65,6 +77,9 @@ mockModule('@/components/ui/ToastProvider', {
 mockModule('@/session/SessionProvider', {
   useSession: () => ({ selectedProfileId: 'viewer' }),
 });
+mockModule('@/relay/RelayEnvironmentBoundary', {
+  useRelayEnvironmentGeneration: () => environmentGenerationRef,
+});
 mockModule('@/theme/ThemeProvider', { useTheme: () => ({}) });
 mockModule('@/components/ui/Button', { Button: 'Button' });
 mockModule('@/components/ui/ConfirmationContent', { ConfirmationContent: 'ConfirmationContent' });
@@ -74,27 +89,6 @@ mockModule('@/components/shell/NavigationLink', { NavigationLink: 'NavigationLin
 mockModule(new URL('./ProfileNameBlock.tsx', import.meta.url), {
   ProfileNameBlock: 'ProfileNameBlock',
 });
-mockModule(new URL('./ProfileBlockController.tsx', import.meta.url), {
-  useProfileBlockMutations: () => ({
-    changeBlocked: async (
-      change: {
-        ownerProfileId: string;
-        profileBlockId?: string | null;
-        targetProfileId?: string | null;
-      },
-      nextBlocked: boolean,
-    ) => {
-      changeBlockedCalls.push({ change, nextBlocked });
-      if (changeBlockedError) {
-        throw changeBlockedError;
-      }
-    },
-  }),
-});
-mockModule(new URL('./profileBlockErrors.ts', import.meta.url), {
-  StaleProfileBlockRequestError: class StaleProfileBlockRequestError extends Error {},
-});
-
 let FollowButton: typeof FollowButtonExport;
 let ProfileBlockAction: typeof ProfileBlockActionExport;
 let ProfileListItem: typeof ProfileListItemExport;
@@ -108,8 +102,8 @@ afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = null;
   platform.OS = 'web';
-  changeBlockedCalls.length = 0;
-  changeBlockedError = null;
+  mutationCalls.length = 0;
+  mutationError = null;
   toastCalls.length = 0;
 });
 
@@ -150,7 +144,7 @@ test('내가 차단한 Profile은 FollowButton이 차단 해제 lifecycle을 사
   assert.equal(confirmation?.props.confirmLabel, '차단 해제');
 
   await act(async () => confirmation?.props.onConfirm());
-  assert.equal(changeBlockedCalls[0]?.change.profileBlockId, 'profile-block-a');
+  assert.deepEqual(mutationCalls[0], { id: 'profile-block-a' });
   await act(async () =>
     renderer?.root.find((node) => (node.type as unknown) === 'ModalSheet').props.onDismiss(),
   );
@@ -203,23 +197,14 @@ test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유
   assert.equal(confirmation?.props.tone, 'danger');
 
   await act(async () => confirmation?.props.onConfirm());
-  assert.deepEqual(changeBlockedCalls, [
-    {
-      change: {
-        ownerProfileId: 'viewer',
-        profileBlockId: 'profile-block-a',
-        targetProfileId: 'profile-kosmo',
-      },
-      nextBlocked: false,
-    },
-  ]);
+  assert.deepEqual(mutationCalls, [{ id: 'profile-block-a' }]);
   assert.deepEqual(toastCalls, []);
   await act(async () => modal?.props.onDismiss());
   assert.deepEqual(toastCalls, [{ message: '차단을 해제했어요', tone: 'success' }]);
 });
 
 test('차단 해제 실패 시 확인창을 닫고 action으로 focus를 복귀한다', async () => {
-  changeBlockedError = new Error('unblock failed');
+  mutationError = new Error('unblock failed');
   let focusCalls = 0;
   await act(async () => {
     renderer = create(
@@ -270,7 +255,7 @@ test('관리 관계 fragment도 같은 차단 해제 action을 사용한다', as
       .find((node) => (node.type as unknown) === 'ConfirmationContent')
       .props.onConfirm(),
   );
-  assert.equal(changeBlockedCalls[0]?.change.profileBlockId, 'profile-block-list');
+  assert.deepEqual(mutationCalls[0], { id: 'profile-block-list' });
 });
 
 test('FollowButton은 높이를 공용 Button에 위임하고 96px 관계 action 폭을 사용한다', async () => {

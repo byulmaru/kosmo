@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { graphql, useFragment } from 'react-relay';
-import { useProfileBlockMutations } from '@/components/profile/ProfileBlockController';
-import { StaleProfileBlockRequestError } from '@/components/profile/profileBlockErrors';
+import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
 import type { ReactNode, RefObject } from 'react';
 import type { View } from 'react-native';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfileBlockAction_profile$key } from './__generated__/ProfileBlockAction_profile.graphql';
 import type { ProfileBlockAction_profileBlock$key } from './__generated__/ProfileBlockAction_profileBlock.graphql';
+import type { ProfileBlockActionBlockMutation } from './__generated__/ProfileBlockActionBlockMutation.graphql';
+import type { ProfileBlockActionUnblockMutation } from './__generated__/ProfileBlockActionUnblockMutation.graphql';
 
 const profileFragment = graphql`
   fragment ProfileBlockAction_profile on Profile {
@@ -28,6 +29,33 @@ const profileBlockFragment = graphql`
       id
       displayName
       relativeHandle
+    }
+  }
+`;
+
+const blockProfileMutation = graphql`
+  mutation ProfileBlockActionBlockMutation($id: ID!) {
+    blockProfile(input: { id: $id }) {
+      success
+      profileBlock {
+        id
+        ...ProfileBlockAction_profileBlock
+        targetProfile {
+          ...FollowButton_profile
+        }
+      }
+    }
+  }
+`;
+
+const unblockProfileMutation = graphql`
+  mutation ProfileBlockActionUnblockMutation($id: ID!) {
+    unblockProfile(input: { id: $id }) {
+      success
+      profileBlockId
+      targetProfile {
+        ...FollowButton_profile
+      }
     }
   }
 `;
@@ -68,16 +96,24 @@ export function ProfileBlockAction({
   const profileBlockData = useFragment(profileBlockFragment, profileBlock ?? null);
   const targetProfile = profileBlockData?.targetProfile ?? profileData;
   const { selectedProfileId } = useSession();
-  const { changeBlocked } = useProfileBlockMutations();
+  const environment = useRelayEnvironment();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
+  const [commitBlock, blocking] =
+    useMutation<ProfileBlockActionBlockMutation>(blockProfileMutation);
+  const [commitUnblock, unblocking] =
+    useMutation<ProfileBlockActionUnblockMutation>(unblockProfileMutation);
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState(false);
   const mounted = useRef(false);
-  const inFlight = useRef(false);
+  const currentEnvironment = useRef(environment);
+  const currentSelectedProfileId = useRef(selectedProfileId);
   const cancelRef = useRef<View>(null);
   const actionRef = useRef<View>(null);
   const focusTrigger = useRef<() => void>(() => {});
   const completed = useRef<(() => void) | null>(null);
+  currentEnvironment.current = environment;
+  currentSelectedProfileId.current = selectedProfileId;
+  const pending = blocking || unblocking;
 
   useEffect(() => {
     mounted.current = true;
@@ -96,7 +132,7 @@ export function ProfileBlockAction({
 
   const label = nextBlocked ? '차단' : '차단 해제';
   const close = () => {
-    if (!inFlight.current) {
+    if (!pending) {
       setOpen(false);
     }
   };
@@ -112,39 +148,61 @@ export function ProfileBlockAction({
       { tone: status === 'success' ? 'success' : 'danger' },
     );
   };
-  const request = async () => {
-    if (inFlight.current) {
+  const request = () => {
+    if (pending) {
       return;
     }
-    inFlight.current = true;
-    setPending(true);
-    let status: 'success' | 'error' = 'success';
-    try {
-      await changeBlocked(
-        nextBlocked
-          ? { ownerProfileId: selectedProfileId, targetProfileId }
-          : {
-              ownerProfileId: selectedProfileId,
-              profileBlockId: profileBlockData?.id,
-              targetProfileId,
-            },
-        nextBlocked,
-      );
-    } catch (error) {
-      if (error instanceof StaleProfileBlockRequestError || !mounted.current) {
+    const requestEnvironment = environment;
+    const requestGeneration = environmentGenerationRef?.current;
+    const requestSelectedProfileId = selectedProfileId;
+    const isCurrent = () =>
+      currentEnvironment.current === requestEnvironment &&
+      environmentGenerationRef?.current === requestGeneration &&
+      currentSelectedProfileId.current === requestSelectedProfileId;
+    const finish = (status: 'success' | 'error') => {
+      if (!isCurrent()) {
         return;
       }
-      status = 'error';
-    }
-    if (!mounted.current) {
-      if (status === 'success') {
+      if (!mounted.current) {
         notify(status);
+        return;
       }
-      return;
+      completed.current = () => notify(status);
+      setOpen(false);
+    };
+    try {
+      if (nextBlocked) {
+        commitBlock({
+          onCompleted: (response) =>
+            finish(
+              response.blockProfile?.success && response.blockProfile.profileBlock
+                ? 'success'
+                : 'error',
+            ),
+          onError: () => finish('error'),
+          variables: { id: targetProfileId },
+        });
+        return;
+      }
+      const requestedProfileBlockId = profileBlockData?.id;
+      if (!requestedProfileBlockId) {
+        finish('error');
+        return;
+      }
+      commitUnblock({
+        onCompleted: (response) =>
+          finish(
+            response.unblockProfile?.success &&
+              response.unblockProfile.profileBlockId === requestedProfileBlockId
+              ? 'success'
+              : 'error',
+          ),
+        onError: () => finish('error'),
+        variables: { id: requestedProfileBlockId },
+      });
+    } catch {
+      finish('error');
     }
-    setPending(false);
-    completed.current = () => notify(status);
-    setOpen(false);
   };
   const activate = () => setOpen(true);
 
@@ -178,7 +236,6 @@ export function ProfileBlockAction({
           if (!mounted.current) {
             return;
           }
-          inFlight.current = false;
           if (surface === 'menu') {
             focusTrigger.current();
           } else {
@@ -202,7 +259,7 @@ export function ProfileBlockAction({
               : '차단을 해제해도 이전 팔로우 관계는 복구되지 않아요.'
           }
           onCancel={close}
-          onConfirm={() => void request()}
+          onConfirm={request}
           pending={pending}
           tone="danger"
         />
