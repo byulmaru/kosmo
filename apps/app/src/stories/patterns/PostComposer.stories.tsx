@@ -1072,8 +1072,10 @@ export const RailGeometryContract: Story = {
       0,
     );
     const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
-    const contentWarningTop = contentWarning.getBoundingClientRect().top;
-    expect(contentWarning.getBoundingClientRect().top).toBe(contentWarningTop);
+    expect(contentWarning.getBoundingClientRect().top).toBeCloseTo(
+      visibility.getBoundingClientRect().bottom + space[12],
+      0,
+    );
 
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
     await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 끄기' }));
