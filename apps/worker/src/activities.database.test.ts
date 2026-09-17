@@ -684,7 +684,7 @@ const createAccountDeletionFixture = async ({
     })),
   );
 
-  return { account, application, profiles, sessions };
+  return { account, application, profiles };
 };
 
 const cleanupAccountDeletionFixture = async (
