@@ -347,9 +347,9 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   established Follower의 signed fetch에서만 collection membership과 Note를 제공하며, 인증되지 않은 요청·비팔로워
   요청·Mentioned Profiles Post(ActivityPub Direct projection)는 제공하지 않는다. Post의 존재나 private membership을 URI, count 또는 빈 collection 외의 오류로
   추론할 수 있게 해서는 안 된다.
-- Local pin/unpin/replacement commit 뒤에는 기존 Profile Update(Person) delivery lifecycle을 재사용해 `featured` 표현을 갱신한다.
+- Local pin/unpin/replacement commit 뒤에는 최신 `featured` 표현을 반영하는 Profile Update(Person) delivery를 예약한다.
   연속된 commit은 최신 current representation delivery로 병합할 수 있으며 commit별 1:1 delivery나 완료 시간 SLA를
-  요구하지 않는다. delivery 실패가 이미 commit된 Local 고정 상태를 되돌리지는 않는다.
+  요구하지 않는다. delivery 수단은 이 계약에서 고정하지 않으며, 실패가 이미 commit된 Local 고정 상태를 되돌리지는 않는다.
 - Remote Featured collection은 원격 ActivityPub Profile이 광고한 collection을 page traversal로 동기화한다. 각 Note의 canonical
   `attributedTo`는 해당 collection을 광고하는 Actor의 canonical URI와 정확히 일치해야 한다. Public/Unlisted는 기존
   Note 검증을 사용하고, Followers Only는 한 sync 시도 동안 동일한 Active local follower identity로 collection의 모든

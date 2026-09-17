@@ -37,11 +37,8 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
 - Context / Problem: Remote actor의 Featured collection은 현재 Local first-visible UI 제한과 다른 cardinality·순서를 가지며, 실패한 inbound
   fetch가 마지막으로 확인된 결과를 덮어서는 안 된다.
 - Decision Outcome: 지원·검증된 Featured item 전체를 원격 순서로 보존한다. Remote Profile 등록, stale refresh와 검증된
-  inbound `Update(Actor/Person)`에서 광고된 `featured` URI가 있으면 production sync path에서 실행하거나 예약한다. Active
-  Local Profile과 Remote Profile 사이의 Follow Relationship이 새로 성립할 때도 저장된 검증 표현의 Featured sync를 해당
-  Local identity로 실행하거나 예약한다. established Follow를 보존한 follower identity가 Profile 재활성화 또는 정지 해제로
-  Active/Normal에 복귀할 때도 같은 sync를 실행하거나 예약한다. 상위 Profile·Follow·Profile 상태 전이 결과의 성공 여부는
-  sync 완료·성공에 의존하지 않고 완료 시간 SLA를 정의하지 않는다. Public/Unlisted는 기존
+  inbound `Update(Actor/Person)`에서 광고된 `featured` URI가 있으면 production sync path에서 실행하거나 예약한다. 상위 Profile
+  결과의 성공 여부는 sync 완료·성공에 의존하지 않고 완료 시간 SLA를 정의하지 않는다. Public/Unlisted는 기존
   공개 fetch를 사용할 수 있고, Followers Only를 수신할 때는 한 sync 시도 동안 같은 Active local follower identity로 모든
   page와 각 Note 역참조를 authenticated fetch한다. 각 시도는 취소 가능하고 next page 순환 검출과 구현이 정한
   page·item·byte·시간 예산을 적용한다. page traversal과 항목 검증이 성공한 authoritative sync만 ordered set을 교체하고,
@@ -61,24 +58,24 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
 - Confirmation / Follow-up: 구현 PR의 Fedify integration과 Mastodon 호환 runtime 검증에서 ordered sync, failure preservation,
   unpin/delete/unfollow를 확인한다.
 
-### Profile 목록은 서버가 pinned-first combined cursor를 소유한다
+### pinned presentation은 기존 Profile chronology와 독립적이다
 
 - Decision Date: 2026-09-16
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/policies/post-list.md`, `docs/domain/objects/profile.md`, `PROD-809`
 - Status: Active
-- Context / Problem: Profile 목록의 pinned segment와 chronology segment를 클라이언트 concat하면 중복·누락과 cursor 경계가
-  발생한다.
-- Decision Outcome: 서버가 visible pinned segment를 먼저, 일반 chronology를 뒤에 결합한다. 현재 Local UI에서는 첫 visible
-  pin만 pinned segment에 두고 추가 Local pin은 Reply·Quote를 포함해 기존 chronology 위치에 일반 Post로 유지한다. Remote는
-  visible pin 전체를 pinned segment에 둔다. 따라서 실제 pinned segment에 표시한 Post만 일반 후보에서 cursor/page limit 전에
-  제외한다. Relay/client는 단일 서버-owned pagination 결과를 소비하며 Home·Local·Hashtag 순서는 유지한다.
-- Alternatives Considered: 두 connection을 client concat하거나 pinned 결과만 별도 fetch하는 방식은 관찰 가능한 cursor
-  계약을 보장하지 못하므로 선택하지 않는다.
-- Consequences: 구현은 내부 GraphQL shape를 고정하지 않은 채 combined ordering과 cursor semantics를 API 경계에서 증명해야
-  하며, hidden/unavailable pinned Post는 count와 URI를 포함해 노출하지 않는다.
-- Confirmation / Follow-up: 구현 PR의 API/Relay 검증에서 page boundary, no duplicate/omission, visibility filtering과 다른
-  목록 순서 불변을 확인한다.
+- Context / Problem: pin 관계를 기존 Profile chronology의 후보·순서·pagination에 반영하면 고정 여부가 일반 목록 결과까지
+  바꾸고, 별도 pinned presentation과 chronology의 책임이 섞인다.
+- Decision Outcome: 현재 Local UI에서는 첫 visible pin만 별도 pinned segment에 두고 Remote는 visible pin 전체를 원격 순서의
+  pinned segment에 둔다. 일반 Profile chronology는 pin 관계와 무관하게 기존 후보·순서·cursor·page limit을 유지한다. 따라서
+  chronology 후보인 Post는 pinned segment와 원래 위치에 모두 표시될 수 있고, 추가 Local pin은 기존 chronology 자격만으로
+  표시된다. Home·Local·Hashtag 순서도 유지한다.
+- Alternatives Considered: pinned Post를 일반 chronology에서 제거하는 방식은 pin 관계가 기존 pagination 결과를 바꾸므로
+  선택하지 않는다.
+- Consequences: 구현은 pinned presentation을 별도로 제공하면서 기존 chronology query와 pagination을 변경하지 않아야 하며,
+  hidden/unavailable pinned Post는 count와 URI를 포함해 노출하지 않는다.
+- Confirmation / Follow-up: 구현 PR의 API/Relay 검증에서 pinned·chronology 중복 허용, 기존 Profile pagination 불변,
+  visibility filtering과 다른 목록 순서 불변을 확인한다.
 
 ### 기존 Note authorization과 Profile Update delivery lifecycle을 재사용한다
 

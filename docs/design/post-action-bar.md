@@ -227,8 +227,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   slot을 다른 Post로 교체할 때만 canonical `ModalSheet`의 confirmation과 expected-current 보호를 사용한다. 교체 대상에도 아래
   일반 고정 action과 같은 Profile 상태·작성자·Post lifecycle·Content·Visibility 자격을 적용한다. 같은 Post 재고정과 이미 해제된
   Post 해제는 안전한 no-op으로 처리하며, 단순 고정·해제에는 확인을 표시하지 않는다.
-- 추가 Local pin은 현재 UI에서 고정 attribution이나 관리 대상으로 렌더하지 않지만 Profile chronology의 기존 위치에 일반
-  Post로 남는다. 실제 pinned segment에 표시한 첫 visible pin만 chronology에서 제외한다.
+- 추가 Local pin은 현재 UI에서 고정 attribution이나 관리 대상으로 렌더하지 않는다. pin 관계는 기존 Profile chronology의
+  후보·순서·pagination을 바꾸지 않으므로, 첫 visible pin도 기존 chronology 후보라면 pinned segment와 원래 위치에 모두 표시된다.
 - 고정 action은 현재 Local Profile이 작성한 Active Content Post·Reply·Quote 중 Public·Unlisted·Followers Only인
   대상에만 연결한다. Mentioned Profiles, Content 없는 pure Repost와 다른 Profile 작성 Post는 제외한다. Remote Profile의
   `featured` 수신 결과는 검증된 Featured collection 전체를 순서대로 표시하며 Local first-visible UI 제한을 적용하지 않는다.
