@@ -16,7 +16,9 @@
 
 ## Response Policy
 
-- 리뷰를 반영할 때는 코드 변경만 하지 말고 필요하면 OpenSpec, Storybook, memory도 함께 맞춘다.
+- 리뷰를 반영할 때는 코드 변경만 하지 말고 필요하면 canonical 문서, Linear, Storybook과 memory도 함께 맞춘다.
+  OpenSpec session harness는 현재 작업을 설명하는 범위에서만 줄이거나 갱신하며, 그 자체를 추가 구현의
+  근거로 삼거나 durable authority로 취급하지 않는다.
 - 리뷰가 PR 범위를 벗어나면 이 PR의 책임이 아니라고 정리하고 follow-up 위치를 남긴다.
 - stacked PR에서 어느 PR이 책임지는 변경인지 분명히 한다.
 - 다른 PR 위에 쌓이거나 다른 PR이 먼저 merge되어야 하면 의존 PR 번호를 명시한다.

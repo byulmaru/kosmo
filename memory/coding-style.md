@@ -32,7 +32,8 @@
 
 ## Spec And Policy Sync
 
-- OpenSpec, canonical 문서 또는 durable policy와 구현을 함께 바꾸는 작업에 적용한다: [Spec And Policy Sync](coding/spec-policy.md)를 전체 읽기.
+- OpenSpec session harness, canonical 문서 또는 durable policy와 구현을 함께 바꾸는 작업에 적용한다:
+  [Spec And Policy Sync](coding/spec-policy.md)를 전체 읽기.
 
 ## Runtime And Tooling
 

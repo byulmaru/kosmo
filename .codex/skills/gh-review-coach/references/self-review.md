@@ -5,10 +5,15 @@
 After classifying self-review findings, distinguish a defect fix from a newly chosen important alternative. A choice is important when it changes observable behavior, public contracts, data, security, compatibility, rollout, reversibility, ownership, scope, dependencies, or the direction later implementations must follow.
 
 - Update Linear first when scope, ownership, deliverables, blockers, or issue relationships change.
-- Update OpenSpec `decisions.md` before code when a durable choice or public contract shared by implementation slices changes. Record superseded decisions instead of silently overwriting them.
+- Update canonical docs or Linear before code only when a business requirement, public guarantee, security boundary, or rollout
+  policy changes. Technical design choices stay in the PR; OpenSpec `decisions.md` is optional session context and may record
+  the reasoning after an upstream decision, but it is never the approval or authority for the change. Record superseded
+  session notes instead of silently presenting them as current.
 - Record important implementation choices within independently verified upstream contracts in the PR body with decision-maker, choice, alternatives, reason, consequences, and links.
 - Update applicable `memory/*.md` only for reusable repository conventions, and `docs/design/*.md` for documented product or UI design decisions.
-- Do not invent a decision, rationale, or decision-maker. Ask the user when a material choice remains open. Do not create ceremonial records when the implementation merely follows an independently verified OpenSpec decision.
+- Do not invent a decision, rationale, or decision-maker. Ask the user when a material choice remains open. Do not create
+  ceremonial records when the implementation merely follows an existing user, canonical, or Linear requirement and makes no
+  new material choice.
 
 Return a decision ledger with new decisions and their recorded locations, independently verified decisions applied unchanged, and unresolved decisions. After self-review fixes, apply the [snapshot-change rule in Reconcile And Classify Evidence](evidence.md#reconcile-and-classify-evidence) before declaring publication readiness.
 

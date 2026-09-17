@@ -5,9 +5,9 @@
 PostgreSQL/Drizzle schema를 변경하거나 리뷰할 때 이 문서를 사용한다. 특히 column/table/enum/constraint를
 rename, drop, rewrite하거나 기존 row의 의미를 바꾸는 변경은 구현 전에 이 절차로 전달 단위를 나눈다.
 
-이 문서는 repository 작업 순서를 정의한다. 현재 dev migration runner의 사용법은 `memory/script.md`, schema
-shape와 naming은 `memory/database-design.md`, Issue와 OpenSpec 경계는 `memory/issue-openspec-workflow.md`를
-함께 따른다.
+이 문서는 repository 작업 순서와 production migration safety gate를 정의한다. 현재 dev migration runner의
+사용법은 `memory/script.md`, schema shape와 naming은 `memory/database-design.md`를 따른다. Linear에는
+호환성·롤백·운영 결과를 기록하고, OpenSpec은 필요할 때 현재 세션의 검증 체크리스트로만 사용한다.
 
 ## Classify Before Generating SQL
 
@@ -40,8 +40,9 @@ Expand / pre-migrate
   -> Approved Contract / post-migrate
 ```
 
-각 단계는 독립 Linear 구현 이슈, PR과 release로 전달한다. 여러 단계가 하나의 행동 계약을 공유하면 하나의
-OpenSpec change를 공유할 수 있지만, 각 PR의 merge와 배포 gate는 분리한다.
+각 단계는 독립 Linear 구현 이슈, PR과 release로 전달한다. 여러 단계가 하나의 행동 계약을 공유해도 각 PR의
+merge와 배포 gate는 분리한다. OpenSpec session harness를 만들 수는 있지만, 그 수명과 archive 상태는 단계의
+운영 책임이나 merge·배포 gate를 바꾸지 않는다.
 
 ### 1. Expand / pre-migrate
 
@@ -98,8 +99,9 @@ Breaking-change contract issue
 - 계약 이슈는 전체 호환성 목표, rollback window와 contract 완료 조건을 소유한다.
 - 구현 이슈는 한 단계의 독립 결과와 검증만 소유한다.
 - PR 본문에는 선행 PR, 현재 단계, 다음 단계와 아직 merge하면 안 되는 contract dependency를 명시한다.
-- 단계가 여러 PR에 걸쳐 하나의 계약을 공유하면 OpenSpec을 마지막 contract와 검증이 끝날 때까지 active로
-  유지한다. 중간 PR 하나가 끝났다는 이유로 archive하지 않는다.
+- 단계가 여러 PR에 걸쳐 하나의 결과를 공유하면 PR 본문에 현재 단계, 남은 검증과 production gate를 명시한다.
+  독립 운영 결과나 위험이 있을 때만 Linear에 별도 이슈로 기록한다. OpenSpec session harness를 만들었다면
+  중간 PR 완료를 막는 권위나 archive gate로 사용하지 않는다.
 - contract SQL이 필요한 사실을 발견했지만 gate가 준비되지 않았다면 현재 PR에 넣지 않고 후속 Linear 이슈로
   만든다.
 
@@ -122,4 +124,4 @@ Breaking-change contract issue
 - active/preview와 rollback 대상 구버전이 모두 drain됐는가?
 - rollback window, backup/restore와 승인이 확인됐는가?
 - migration Job과 workload가 같은 immutable release를 사용하는가?
-- PR과 OpenSpec 완료 상태가 전체 계약의 실제 진행 상태를 반영하는가?
+- PR과 Linear의 단계·production gate 상태가 실제 진행 상태를 반영하는가?

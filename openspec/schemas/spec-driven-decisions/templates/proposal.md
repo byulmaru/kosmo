@@ -1,33 +1,37 @@
 ## Why
 
-<!-- Explain the motivation for this change. What problem does this solve? Why now? -->
+<!-- Why is this session useful now? Keep the motivation in business terms. -->
+
+## Goal
+
+<!-- What outcome must this session deliver? State the observable result briefly. -->
 
 ## What Changes
 
-<!-- Describe what will change. Be specific about new capabilities, modifications, or removals. -->
+<!-- State the scoped result this session is trying to verify. -->
 
-## Authority / Provenance
+## Non-Goals
 
-- Canonical: <!-- exact applicable docs/domain and docs/design paths -->
-- Linear Contract: <!-- current contract issue -->
-- Linear Implementations: <!-- current implementation issues, or 없음. -->
+<!-- What is explicitly outside this session? Keep future ideas out of the goal. -->
 
-## Capabilities
+## Constraints
 
-### New Capabilities
+<!-- Existing business, security, compatibility, or rollout constraints only. -->
 
-<!-- Capabilities being introduced. Replace <name> with kebab-case identifier (e.g., user-auth, data-export, api-rate-limiting). Each creates specs/<name>/spec.md -->
+## Verification
 
-- `<name>`: <brief description of what this capability covers>
+<!-- What focused checks or observations will show that the goal is complete? -->
 
-### Modified Capabilities
+## Business Context
 
-<!-- Existing capabilities whose REQUIREMENTS are changing (not just implementation).
-     Only list here if spec-level behavior changes. Each needs a delta spec file.
-     Use existing spec names from openspec/specs/. Leave empty if no requirement changes. -->
+<!-- Optional links to current canonical docs or Linear. Links provide context;
+     this session brief does not copy or extend their requirements. -->
 
-- `<existing-name>`: <what requirement is changing>
+- Canonical: 없음.
+- Linear: 없음.
+- User agreement: 없음.
 
-## Impact
+## Session Status
 
-<!-- Affected code, APIs, dependencies, systems -->
+- Status: Active | Complete | Paused
+- Last updated: YYYY-MM-DD

@@ -56,5 +56,9 @@ GraphQL enum은 `apps/api/src/graphql/enums.ts`에서 전역 등록한다.
   불변식이 생기면 기능 계약과 구분되는 최소 검증으로 한정한다.
 - GraphQL operation은 실제 사용하는 React Native `.tsx` 파일에 Relay `graphql` tag로 colocate한다. 프론트 fragment, connection, actor environment 세부 규칙은 `memory/frontend-react-native.md`를 따른다.
 - GraphQL mutation error UI 분기가 여러 컴포넌트에서 반복되면 공통 helper나 error handling boundary로 모을 후보로 본다.
-- API 구현과 OpenSpec은 root field, object field, payload, error type, connection 단위가 서로 맞아야 한다.
-- GraphQL field/payload shape가 바뀌면 같은 변경에서 OpenSpec도 정렬한다.
+- API schema, resolver/object/input/payload 타입과 client 사용처는 root field, object field, payload, error type,
+  connection 단위가 서로 맞아야 하며 canonical·Linear의 비즈니스 결과를 만족해야 한다. OpenSpec session
+  harness가 있으면 현재 결과를 설명하도록 정렬하되, 하네스만을 근거로 field나 payload를 추가하지 않는다.
+- GraphQL field/payload shape가 바뀌면 같은 변경에서 schema·타입·client·검증을 필요한 범위만큼 정렬한다.
+  기술 shape만 바뀐 경우 canonical·Linear의 비즈니스 요구사항을 새로 쓰지 않으며, 관찰 가능한 제품 결과가
+  바뀐 경우에만 그 upstream 기록을 갱신한다. OpenSpec은 사용 중일 때만 작업 메모로 갱신한다.

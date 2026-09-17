@@ -1,43 +1,26 @@
-## Context
+<!-- Optional, non-binding notes for this session. Do not record a durable
+     product or implementation rule here. -->
 
-<!-- Background and current state -->
+## Current Constraints
 
-## Goals / Non-Goals
+<!-- Existing code, environment, or verification constraints that affect this
+     session. Leave product policy in canonical docs or Linear. -->
 
-**Goals:**
+## Practical Approach
 
-<!-- What this design aims to achieve -->
+<!-- A short working approach. It may change as the session learns more. -->
 
-**Non-Goals:**
+## Alternatives and Traps
 
-<!-- What is explicitly out of scope -->
+<!-- Only alternatives or traps that help this session; otherwise 없음. -->
 
-## Implementation Guidance
+## Risks / Limits
 
-### Current Constraints
-
-<!-- Relevant code paths, existing architecture, and why a straightforward implementation may fail -->
-
-### Recommended Approach
-
-<!-- Non-normative default approach and why it fits the current code -->
-
-### Allowed Alternatives
-
-<!-- Other approaches allowed when specs and independently verified decisions remain satisfied, or 없음. -->
-
-### Known Traps
-
-<!-- Incorrect shortcuts, security or compatibility hazards, and likely review failures, or 없음. -->
-
-## Risks / Trade-offs
-
-<!-- Known risks and trade-offs -->
-
-## Migration Plan
-
-<!-- Deployment steps and rollback strategy, or 없음. -->
+<!-- Current risks, verification limits, or rollback notes; otherwise 없음. -->
 
 ## Open Questions
 
-<!-- Outstanding decisions or unknowns, or 없음. -->
+<!-- Unresolved product, security, rollout, or business choices stay here until
+     their owner decides them in canonical docs, Linear, or explicit user
+     agreement. Routine implementation options can remain session notes or move
+     to the PR. -->
