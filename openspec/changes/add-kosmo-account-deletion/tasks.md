@@ -55,7 +55,7 @@ GraphQL `deleteAccount` mutation과 account-deletion Workflow의 Account eligibi
 - [x] 1.2 Account를 storage `DISABLED`로 전환하면서 모든 Active Session, `ApplicationAuthorization`, `OAuthTokens`, `OAuthAuthorizationCodes` 및 `PushInstallation` 정리를 원자적 결과로 확정하고 Profile·Membership·Account 속성을 보존한다.
 - [x] 1.3 결과 불명 실패와 중복 요청을 안전하게 처리하고, 이미 인증·승인된 Workflow 실행이 commit acknowledgement를 잃고 재시도될 때만 `DISABLED` Account 정리를 멱등적으로 다시 적용하며 Account를 Active로 되돌리지 않는 Account 탈퇴 의미를 유지한다. Deleted Account의 공개 인증·재탈퇴는 허용하지 않으며, Account가 Active인 동안 완료된 `BLOCKED` 실행은 `ALLOW_DUPLICATE`로 재시도한다.
 - [x] 1.4 공통 Session 생성 경계에서 Deleted Account의 동일 OIDC subject 재가입을 임시 차단하고 새 Account·Session을 만들지 않는다.
-- [ ] 1.5 서버 eligibility·cleanup·실패 atomicity·재가입 차단 integration/API 검증을 추가해 통과시킨다.
+- [x] 1.5 서버 eligibility·cleanup·실패 atomicity·재가입 차단 integration/API 검증을 추가해 통과시킨다.
 - [x] 1.6 API mutation의 Workflow input·동기 결과 전달·인증 경계를 integration test로 검증한다.
 
 ## 2. PROD-970 Settings·public 안내·cross-platform lifecycle
