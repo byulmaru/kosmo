@@ -119,7 +119,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const menuButtonRef = useRef<NativeView>(null);
-  const pageHeadingRef = useRef<NativeView>(null);
   const screenFallbackRef = useRef<NativeView>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
   const pendingDrawerHomeReselectionRef = useRef(false);
@@ -389,7 +388,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
               />
             ) : mobileShellHeader ? (
               <PageHeader
-                headingRef={pageHeadingRef}
                 leading={mobileShellHeader.leading === 'back' ? backButton : menuButton}
                 title={mobileShellHeader.title}
                 trailing={
