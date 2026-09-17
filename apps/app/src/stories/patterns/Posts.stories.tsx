@@ -6443,9 +6443,7 @@ export const ComposerRailMediaBackFocusContract: Story = {
       await userEvent.click(await canvas.findByRole('button', { name: '미디어 편집에서 뒤로' }));
 
       await waitFor(() =>
-        expect(
-          canvas.getByRole('button', { name: '첨부 이미지 1 대체 텍스트 편집' }),
-        ).toHaveFocus(),
+        expect(canvas.getByRole('textbox', { name: '게시물 내용' })).toHaveFocus(),
       );
     } finally {
       globalThis.fetch = originalFetch;

@@ -250,10 +250,7 @@ export function PostComposerHost({
       {header}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[
-          styles.composerFrame,
-          mode === 'mobile' || editingMedia ? styles.composerFrameFill : null,
-        ]}
+        style={[styles.composerFrame, mode === 'mobile' ? styles.composerFrameFill : null]}
       >
         {composer}
       </KeyboardAvoidingView>
@@ -294,7 +291,6 @@ export function PostComposerHost({
       style={[
         mode === 'rail' ? styles.railHost : styles.webOverlayHost,
         mode === 'mobile' ? styles.webMobileHost : null,
-        editingMedia ? styles.webMediaEditorHost : null,
         mode !== 'rail' ? safeAreaStyle : null,
         !active ? styles.hiddenHost : null,
         mode !== 'rail' ? { backgroundColor: theme.overlayScrim } : null,
@@ -322,7 +318,6 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   webMobileHost: { padding: 0 },
-  webMediaEditorHost: { justifyContent: 'center' },
   webBackdrop: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
   hiddenHost: { display: 'none' },
   nativeBackdrop: { flex: 1, justifyContent: 'center' },
