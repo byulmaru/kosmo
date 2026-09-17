@@ -2,7 +2,8 @@
 
 이 기록은 `proposal.md`, `specs/activitypub-profile-block/spec.md`, `design.md`의 결정을 정리한다.
 각 결정의 권위는 canonical 문서와 최신 PROD-818 본문이며, OpenSpec 자체를 상위 계약의 근거로 삼지 않는다.
-2026-09-08에 발신 방향과 기존 차단 rollout을 확정했다. 아래 Active는 현재 적용하는 결정이라는 뜻이며,
+2026-09-08에 발신 방향을 확정했고, 2026-09-17 리뷰 결정으로 가능한 상태 모델과 Undo type 경계를 정정했다.
+아래 Active는 현재 적용하는 결정이라는 뜻이며,
 이 문서 전체의 Spec Gate 승인을 뜻하지 않는다.
 
 ## Decision Records
@@ -28,7 +29,7 @@
 - Decision Date: 2026-09-08
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile-block.md`의 연합 행동,
-  `docs/domain/decisions/0029-profile-block-federation.md`, PROD-818의 2026-09-08 발신 방향 확정.
+  `docs/domain/decisions/0031-profile-block-federation.md`, PROD-818의 2026-09-08 발신 방향 확정.
 - Status: Active
 - Context / Problem: W3C ActivityPub §6.9의 대상 비전달 권고와 Mastodon의 원격 차단 확장은 다르다.
 - Decision Outcome: Local Owner → Remote Target의 Block/Undo를 Target의 원격 서버에 발신한다. audience는 Target
@@ -43,7 +44,7 @@
 - Decision Date: 2026-09-08
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/profile-block.md`의 pair uniqueness·Owner 해제,
-  `docs/domain/decisions/0029-profile-block-federation.md`의 관계 재사용, PROD-818의 검증·멱등성·순서 역전·상태 보존 범위.
+  `docs/domain/decisions/0031-profile-block-federation.md`의 관계 재사용, PROD-818의 검증·멱등성·순서 역전·상태 보존 범위.
 - Status: Active
 - Context / Problem: pair 하나나 마지막 도착 ID만 기억하면 지연 Block·Undo가 재차단을 지우거나 종료된 원본을 부활시킨다.
 - Decision Outcome: 원본 Block IRI와 actor·Target·정확한 domain row의 대응, 원본 종료 증거와 미완료 효과를
@@ -67,8 +68,9 @@
 - Context / Problem: domain commit, Activity completion과 queue 수락 사이에서 응답이 유실될 수 있다.
 - Decision Outcome: 원본 identity와 효과 결과를 재구성할 수 있게 보존하고, 같은 directed pair의 Block·Undo·재차단을
   같은 orderingKey로 순서대로 인계한다. queue 인계 실패는 효과를 재시도하며 수락 이후 remote retry는 Fedify가 소유한다.
-  Block·Undo의 Activity ID는 retry 중 바꾸지 않는다. producer는 앞선 효과의 인계 결과를 확인·보존할 때까지
-  같은 pair의 뒤 효과를 인계하지 않는다. 응답 유실은 같은 선두 효과로 재시도하고, 이미 정산된 효과의 재호출은
+  Block·Undo의 Activity ID는 retry 중 바꾸지 않는다. 일반적으로 producer는 앞선 효과의 인계 결과를 확인·보존할 때까지
+  같은 pair의 뒤 효과를 인계하지 않는다. 다만 Local Unblock은 이전 Block handoff나 metadata 존재를 선행 조건으로
+  삼지 않고 exact generation의 Undo를 독립적으로 인계한다. 응답 유실은 같은 미정산 효과로 재시도하고, 이미 정산된 효과의 재호출은
   인계 없이 끝낸다. 이는 정산 후 새 호출의 처리이며 이미 실행 중인 이전 attempt의 종료를 보장하지 않는다.
   실제 queue 수락을 확인·보존하면 인계를 정산하고 뒤 효과를 진행한다. remote-visible ordering은 D7에 따라 별도 보장하지 않는다. 인계 retry 소진 시 선두 실패와 뒤 효과 대기를 보존하고, 복구하기 전에는 자동으로 건너뛰지 않는다.
 - Alternatives Considered: 각 Activity마다 무작위 ID 재생성, 삭제된 row 재조회, process-local 순서 제어, 별도의 remote
@@ -80,26 +82,28 @@
 - Confirmation / Follow-up: DB commit 직후, queue 수락 직후 응답 유실, effect 대기 중 Worker 중단과 Fedify consumer
   재시작을 실제 persistence 경계에서 검증한다. 이전 attempt 종료 증명이나 원격 순서 보장을 정산 조건으로 두지 않는다. 기존 dispatcher caller의 no-op 결과를 보존한다. queue 수락을 상대 정책 적용이나 exactly-once 성공으로 기록하지 않는다.
 
-### D5. 기존 차단을 소급 발신하지 않는다
+### D5. Local Unblock은 metadata와 무관하게 exact generation의 Undo만 발신한다
 
-- Decision Date: 2026-09-08
+- Decision Date: 2026-09-17
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/profile-block.md`의 rollout,
-  `docs/domain/decisions/0029-profile-block-federation.md`, PROD-818의 2026-09-08 기존 차단 rollout 확정.
+- Authority / Provenance: `docs/domain/objects/profile-block.md`의 연합 행동,
+  `docs/domain/decisions/0031-profile-block-federation.md`, PROD-818 리뷰에 대한 2026-09-17 인간 결정.
 - Status: Active
-- Context / Problem: 기능 활성화만으로 과거 차단 사실이 상대 서버에 새로 전달될 수 있다.
-- Decision Outcome: 기존 차단은 로컬에 유지하고 도입 후 새로 생성한 차단부터 발신한다. 발신 원본이 없는 차단의
-  해제에 임의 Block이나 Undo를 만들지 않는다. 이후 재차단은 새 발신 원본을 갖는다.
-- Alternatives Considered: 기존 차단 일괄 발신·소급 동기화는 2026-09-08 Spec 대화에서 제외했다.
-- Consequences: additive metadata와 명시적 새 발신 자격을 사용하고, 구버전이 생성한 row를 소급 승격하지 않는다.
-  rollback에서 기존 관계·원본 종료 증거를 삭제하지 않는다. 원격에서 과거 차단을 모르는 상태를 허용한다.
-- Confirmation / Follow-up: 구버전 row가 있는 migration, 기존 차단 해제와 재차단, old/new workload 및 rollback을 검증한다.
+- Context / Problem: Profile Block이 연합보다 먼저 사용 가능했던 기간이 없으므로 protocol original 없는 legacy
+  Profile Block을 실제 rollout 상태로 가정하면 불가능한 분기와 선행 Block 발신이 생긴다.
+- Decision Outcome: 발신 대상인 모든 Local Owner → Remote Target Unblock은 exact `profileBlockId`로 stable original
+  identity를 구성해 `Undo(Block)`만 인계한다. metadata 부재는 legacy/no-send 분기가 아니며 선행 `Block`을 생성·재발신하지 않는다.
+- Alternatives Considered: metadata가 없을 때 `Block`을 먼저 발신하거나 Undo를 생략하는 호환 분기는 가능한 제품
+  상태를 반영하지 않으므로 제외했다.
+- Consequences: 상대 서버가 original Block을 모르면 Undo가 remote no-op일 수 있다. 로컬 해제의 성공과 generation
+  보호는 유지하고, metadata는 exact ID에서 protocol identity를 복구하기 위한 durable projection으로 사용할 수 있다.
+- Confirmation / Follow-up: metadata 없는 exact generation, 삭제된 row 뒤 retry, replacement Block 보호와 선행 Block 0건을 검증한다.
 
 ### D6. PROD-818이 연합 change의 완료를 소유한다
 
 - Decision Date: 2026-09-08
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/decisions/0029-profile-block-federation.md`의 책임 경계,
+- Authority / Provenance: `docs/domain/decisions/0031-profile-block-federation.md`의 책임 경계,
   PROD-818의 위치·명세·검증 소유권, PROD-813의 local 통합 검증·archive 범위.
 - Status: Active
 - Context / Problem: 로컬 차단과 연합은 blocker·검증·출시 생명주기가 다르다.
@@ -119,7 +123,9 @@
 - Context / Problem: producer late completion과 Fedify consumer delayed retry로 Undo 뒤에 B1이 전달될 수 있다. 기존 stable Activity ID와 orderingKey는 이를 제거하지 않는다.
 - Decision Outcome: PROD-818은 remote-visible Block → Undo ordering을 새 필수 계약으로 추가하지 않는다. 조사 중 추가한 “과거 Block delivery가 후속 Undo의 결과를 뒤집지 않아야 한다”는 요구를 철회한다.
 - Alternatives Considered: 모든 이전 attempt 종료 증명, fencing, stale-delivery drop과 generation sequencing/supersession은 이번 범위의 필수 구현으로 채택하지 않는다. 기존 queue가 원격 순서를 보장한다고 간주하는 선택도 하지 않는다.
-- Consequences: 실제 queue 수락을 확인·정산하면 후속 Undo를 진행할 수 있다. 이전 attempt 생존 또는 consumer retry 가능성만으로 추가 보류하지 않는다. 기존 identity·로컬 상태 보존·inbound 순서 역전 처리와 ADR 0029의 제품·rollout 결정은 유지한다.
+- Consequences: 실제 queue 수락을 확인·정산하면 후속 효과를 진행할 수 있다. Local Unblock의 Undo는 D5에 따라
+  이전 Block handoff 여부와 무관하게 진행한다. 이전 attempt 생존 또는 consumer retry 가능성만으로 추가 보류하지 않는다.
+  기존 identity·로컬 상태 보존·inbound 순서 역전 처리와 ADR 0031의 제품 결정을 유지한다.
 - Confirmation / Follow-up: task 4는 기존 인계·복구·실패 격리를 검증한다. 원격 최종 순서 보장이나 INSERT barrier race 실험은 필수 완료 조건이 아니다. D7은 Spec Gate blocker에서 해소됐으며 Spec 전체 승인을 뜻하지 않는다.
 
 ### D8. PROD-813 선행 조건은 이번 구현 세션에서 명시적으로 면제한다
@@ -132,6 +138,22 @@
 - Decision Outcome: PROD-818은 현재 체크인된 local Profile Block action·cleanup·Worker 경계를 기반으로 연합 protocol과 delivery slice를 구현한다. 이 면제는 PROD-813의 완료·병합·통합 검증·archive를 주장하거나 그 책임을 PROD-818이 대신 소유한다는 뜻이 아니다.
 - Consequences: 구현·검증 중 PROD-813을 blocker로 재요청하지 않는다. local 구현의 branch/revision과 PROD-818 연합 변경의 검증 결과를 분리해 기록하고, PROD-818 전체 archive 여부는 여전히 모든 자체 scope와 검증 증거를 기준으로 판단한다.
 - Confirmation / Follow-up: PR/Linear handoff에 이 면제와 사용한 local baseline을 함께 기록한다.
+
+### D9. inbound Profile Block Undo는 embedded Block만 처리한다
+
+- Decision Date: 2026-09-17
+- Decision Class: Derived Contract
+- Authority / Provenance: ADR 0031의 ingress type 경계와 PROD-818 리뷰에 대한 2026-09-17 인간 결정.
+- Status: Active
+- Context / Problem: 저장된 protocol URI가 같다는 이유만으로 URI-only 또는 다른 Activity type을 Block으로
+  추론하면 `Like`·`Follow` 등의 Undo를 잘못 소비하고 Profile Block을 해제할 수 있다.
+- Decision Outcome: embedded object가 실제 `Block`일 때만 Profile Block Undo의 actor·object·original identity를
+  검증한다. URI-only와 embedded non-Block은 이 경로에서 처리하지 않고 기존 해당 Undo 처리기로 넘긴다.
+- Alternatives Considered: 저장된 verified original URI를 type oracle로 사용하거나 원격 조회로 URI-only 입력을
+  승격하는 대안은 채택하지 않았다.
+- Consequences: URI-only Block Undo는 Profile Block을 변경하지 않는다. embedded Block의 Undo-before-Block tombstone,
+  actor/object/original identity 검증과 generation 보호는 그대로 유지한다.
+- Confirmation / Follow-up: 같은 URI를 사용한 embedded non-Block, URI-only 입력, embedded Block의 정상·순서 역전을 검증한다.
 
 ## Remaining Decisions
 

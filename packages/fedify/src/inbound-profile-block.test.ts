@@ -121,6 +121,60 @@ test('인증된 inbound Block과 embedded Undo는 같은 원본으로 기존 관
   );
 });
 
+test('Block URI를 재사용한 다른 타입의 embedded Undo는 Block 해제로 소비하지 않는다', async () => {
+  const fixture = await createFixture();
+  const block = new Block({
+    actor: fixture.remoteActorUri,
+    id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/block-type-guard`),
+    object: fixture.localActorUri,
+  });
+  await handleInboundBlock(createContext(fixture.localProfile.id), block);
+
+  assert.equal(
+    await handleInboundUndoBlock({
+      context: createContext(fixture.localProfile.id),
+      actorUri: fixture.remoteActorUri,
+      embedded: { id: block.id },
+      objectUri: block.id,
+      remoteActorProfileId: fixture.remoteProfile.id,
+    }),
+    false,
+  );
+  assert.equal((await db.select().from(ProfileBlocks)).length, 1);
+  assert.deepEqual(
+    await db.select({ state: ProfileBlockActivities.state }).from(ProfileBlockActivities),
+    [{ state: 'ACTIVE' }],
+  );
+});
+
+test('저장된 Block URI만 참조하는 Undo는 Block 해제로 추론하지 않는다', async () => {
+  const fixture = await createFixture();
+  const block = new Block({
+    actor: fixture.remoteActorUri,
+    id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/block-uri-only`),
+    object: fixture.localActorUri,
+  });
+  await handleInboundBlock(createContext(fixture.localProfile.id), block);
+
+  assert.equal(
+    await handleInboundUndoBlock({
+      context: createContext(fixture.localProfile.id),
+      actorUri: fixture.remoteActorUri,
+      embedded: null,
+      objectUri: block.id,
+      remoteActorProfileId: fixture.remoteProfile.id,
+    }),
+    false,
+  );
+  assert.deepEqual(
+    await db
+      .select({ state: ProfileBlockActivities.state })
+      .from(ProfileBlockActivities)
+      .where(eq(ProfileBlockActivities.activityUri, block.id!.href)),
+    [{ state: 'ACTIVE' }],
+  );
+});
+
 test('검증된 embedded Undo가 먼저 오면 tombstone이 늦은 Block을 막는다', async () => {
   const fixture = await createFixture();
   const block = new Block({
