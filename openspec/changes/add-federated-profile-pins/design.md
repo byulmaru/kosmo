@@ -52,7 +52,7 @@ expected-current atomic replacement는 rollout 정책으로만 둔다. Followers
    검증된 visible pin 전체를 pinned segment에 둔다. 실제 pinned segment의 ID만 일반 후보에서 cursor/page limit 전에 제외하며,
    Relay는 이 서버 결과를 하나의 기존 pagination 흐름으로 소비한다.
 3. Local Actor 표현에는 기존 Profile representation 경계에서 `featured` link를 추가하고, collection item은 기존
-   Local Note projection과 authorization을 호출한다. pin transaction commit 후에는 기존 Profile Update(Person)
+   Local Note projection과 authorization을 호출한다. pin/unpin/replacement transaction commit 후에는 기존 Profile Update(Person)
    delivery scheduling/effect lifecycle을 재사용한다. 연속된 commit은 최신 current representation delivery로 병합할 수
    있으며 commit별 1:1 delivery나 완료 시간 SLA를 요구하지 않는다.
 4. Remote Actor의 Featured URI를 기존 ActivityPub fetch/validation 경계로 page traversal한다. 각 Note의 canonical `attributedTo`가

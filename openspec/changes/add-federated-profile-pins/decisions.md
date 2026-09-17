@@ -89,7 +89,7 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
 - Context / Problem: Featured collection을 새 visibility·delivery 경계로 만들면 Local Note와 Followers Only authorization이
   분기되고 pin commit과 Actor update가 서로 다른 lifecycle을 갖게 된다.
 - Decision Outcome: Featured collection membership과 Note는 기존 Local Note projection·authorization을 재사용하고, Local
-  pin/unpin commit 이후 기존 Profile Update(Person) delivery lifecycle을 호출한다. 연속된 commit은 최신 current
+  pin/unpin/replacement commit 이후 기존 Profile Update(Person) delivery lifecycle을 호출한다. 연속된 commit은 최신 current
   representation delivery로 병합할 수 있고 commit별 1:1 delivery나 완료 시간 SLA는 요구하지 않는다. 구체 file, function,
   GraphQL shape와 persistence schema는 고정하지 않는다.
 - Alternatives Considered: Featured 전용 Note serializer·권한 predicate·delivery pipeline을 새로 만드는 방식은 중복된

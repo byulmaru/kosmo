@@ -146,7 +146,7 @@ The system MUST satisfy this contract.
 **Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `PROD-809`
 
 Remote unpin, Delete/Tombstone 또는 visibility·author eligibility 상실은 다음 성공 sync나 기존 lifecycle에서 Remote
-Profile의 visible pinned set에서 제거해야 한다(MUST). Local pin/unpin commit 뒤에는 기존 Profile Update(Person)
+Profile의 visible pinned set에서 제거해야 한다(MUST). Local pin/unpin/replacement commit 뒤에는 기존 Profile Update(Person)
 delivery lifecycle을 재사용해 `featured` 표현을 갱신해야 하며(MUST), 연속된 commit은 최신 current representation
 delivery로 병합할 수 있다. commit별 1:1 delivery나 완료 시간 SLA를 요구하지 않는다. delivery 실패가 이미 commit된 Local
 pin 상태를 되돌려서는 안 된다(MUST NOT).
