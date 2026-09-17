@@ -12,10 +12,11 @@ artifacts:
       non-goals, constraints, expected verification, and optional links to the
       business context in canonical docs or Linear.
 
-      Canonical docs, Linear, and explicit current user agreement own business
-      requirements, observable guarantees, policy, and scope. This brief is
-      mutable working context; it does not add requirements, approve a design,
-      or establish durable implementation choices.
+      Use memory/issue-openspec-workflow.md for the definition of current user
+      agreement. Canonical docs, Linear, and explicit current user agreement own
+      business requirements, observable guarantees, policy, and scope. This
+      brief is mutable working context; it does not add requirements, approve a
+      design, or establish durable implementation choices.
       Do not copy implementation details into the brief merely to make the plan
       look complete. If an old change or another OpenSpec artifact disagrees with
       settled current context, correct or omit it; record an open question only
@@ -102,6 +103,9 @@ apply:
     current business requirements, observable guarantees, and policy in the
     applicable canonical docs, Linear, and explicit current user agreement before
     implementing; OpenSpec is not evidence that an upstream requirement exists.
+    Use memory/issue-openspec-workflow.md for the definition of current user
+    agreement. Old Domain/Issue/OpenSpec artifact-transition gates are not
+    implementation prerequisites.
 
     Optional specs, design.md, and decisions.md are context only. They are not
     prerequisites, do not create authority, and do not automatically carry into

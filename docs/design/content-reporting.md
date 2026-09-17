@@ -4,7 +4,7 @@
 
 2026-09-10 사용자 “Gate 승인. Spec 작성 시작”으로 Domain·Design·Issue 결과의 Spec 단계 전환을 승인했다. [PROD-915](https://linear.app/byulmaru/issue/PROD-915)가 Web·Android·iOS의
 신고 제출과 Slack 전달 확인을 소유한다. 도메인 범위와 확정한 제출자 조건은
-[ADR 0030](../domain/decisions/0030-content-report-submission.md)에 기록한다. 구현 착수에는 완성된 OpenSpec의 별도 승인이 필요하다.
+[ADR 0030](../domain/decisions/0030-content-report-submission.md)에 기록한다.
 
 ## 사용자 흐름
 

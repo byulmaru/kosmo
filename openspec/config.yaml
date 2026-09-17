@@ -1,7 +1,13 @@
 schema: spec-driven-decisions
 
 context: |
-  OpenSpec은 현재 세션의 작업을 정리하는 짧은 하네스다. Goal, non-goals, constraints, verification, progress만 필요한 만큼 기록하고, 구현 중 불필요해진 내용은 줄이거나 제거한다. canonical docs와 Linear에는 비즈니스 요구사항·관찰 가능한 보장·정책·범위만 둔다. 현재 사용자가 명시한 합의도 제품 권위가 될 수 있지만, OpenSpec은 이를 재정의하거나 장기 구현 결정을 권위 있게 보존하지 않는다. proposal, specs, design, decisions, tasks 등 사용자가 읽는 산출물은 한국어를 기본 언어로 작성한다.
+  OpenSpec은 선택적인 단기 세션 하네스다. 현재 사용자 합의와 canonical·Linear의
+  비즈니스 요구사항·관찰 가능한 보장·정책·범위를 실행하는 데 필요한 goal,
+  non-goals, constraints, verification, progress만 기록한다.
+  하네스는 요구사항·권위·영구 구현 결정을 추가하지 않으며, 불필요한 내용은
+  줄이거나 제거한다. 이전 세션의 artifact도 자동으로 상속하지 않는다.
+  자세한 경계와 수명 정책은 memory/issue-openspec-workflow.md를 따른다.
+  proposal, specs, design, decisions, tasks는 한국어를 기본 언어로 작성한다.
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.

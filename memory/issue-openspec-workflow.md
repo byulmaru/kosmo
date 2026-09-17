@@ -16,8 +16,20 @@ Canonical 비즈니스 요구사항
 실행하는 동안 작업 기억을 제공할 수 있지만 authority를 대신하지 않는다.
 
 OpenSpec CLI나 skill이 제공하는 기본 artifact·gate·lifecycle은 이 저장소의 scope·authority·optionality 정책을
-덮지 않는다. Historical archive는 필요하면 `--skip-specs`로 처리하며, 세션을 닫을 때는 실제로 남은 요구사항과
-검증 증거만 pending/handoff로 보존한다.
+덮지 않는다. 예전 Domain·Issue·OpenSpec artifact를 다음 단계로 넘기는 gate는 구현 prerequisite가 아니다.
+제품·배포의 실제 운영 승인 gate와 과거에 확정된 비즈니스 결정은 각자의 권위를 그대로 유지한다. Historical
+archive는 필요하면 `--skip-specs`로 처리하며, 세션을 닫을 때는 실제로 남은 요구사항과 검증 증거만
+pending/handoff로 보존한다.
+
+## 현재 사용자 합의
+
+현재 사용자 합의는 이 작업 범위에서 사용자가 명확하게 지시·선택·확인한 내용이다. 일반 대화도 충분하며
+특정 문구나 형식의 댓글·승인 기록은 필요 없다. 질문·예시·잠정 아이디어·AI 추론은 합의가 아니고, 이미 정해진
+선택은 OpenSpec이나 이전 메모리가 다시 열지 않는다.
+합의가 제품 행동·공개 계약·보안·롤아웃·소유권·완료 기준을 장기적으로 바꾸면 비즈니스 요구사항과 이유를
+canonical 문서에 기록하고, Linear 이슈가 있으면 문제·가치·범위·완료 결과를 함께 갱신한다. 구현 수단은
+코드·테스트·PR의 맥락으로 남긴다. 세션 지시·대화는 필요할 때 PR 근거로 요약할 수 있지만 승인 ledger·
+approval template·필수 필드를 만들거나 OpenSpec에 복제하지 않는다.
 
 ## 적용 범위와 결정 경계
 
