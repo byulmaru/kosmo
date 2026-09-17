@@ -329,6 +329,7 @@ export function FormOverlay({
               </IconButton>
             </View>
             <ScrollView
+              automaticallyAdjustKeyboardInsets
               contentContainerStyle={{ padding: bodyPadding }}
               style={styles.scroll}
               testID={`${testIDPrefix}-overlay-body`}

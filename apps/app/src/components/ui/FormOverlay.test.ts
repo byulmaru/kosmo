@@ -114,3 +114,23 @@ test('dirty form close uses the shared discard flow before closing', async () =>
   await act(async () => buttons[1]?.props.onPress());
   assert.equal(onRequestClose.mock.callCount(), 1);
 });
+
+test('native form scroll keeps the focused field above the keyboard', async () => {
+  await act(async () => {
+    renderer = create(
+      createElement(FormOverlay, {
+        discardConfirmLabel: '작성 버리기',
+        discardTitle: '작성을 버릴까요?',
+        limitNativeHeight: true,
+        onRequestClose: () => undefined,
+        renderForm: () => createElement('Form'),
+        testIDPrefix: 'form',
+        title: '폼',
+        visible: true,
+      }),
+    );
+  });
+
+  const scroll = renderer?.root.findByProps({ testID: 'form-overlay-body' });
+  assert.equal(scroll?.props.automaticallyAdjustKeyboardInsets, true);
+});

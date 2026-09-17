@@ -4,6 +4,7 @@ import type { ScrollViewProps, StyleProp, ViewStyle } from 'react-native';
 
 export type RouteScrollContainerNativeProps = Pick<
   ScrollViewProps,
+  | 'automaticallyAdjustKeyboardInsets'
   | 'contentContainerStyle'
   | 'keyboardShouldPersistTaps'
   | 'onContentSizeChange'
