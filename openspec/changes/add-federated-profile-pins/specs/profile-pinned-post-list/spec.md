@@ -6,26 +6,27 @@ The system MUST satisfy this contract.
 
 **Authority / Provenance:** `docs/domain/policies/post-list.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `PROD-809`
 
-Profile Post List 서버/API는 조회 가능한 pinned Post를 server-authoritative ordered collection 순서(Local·Remote 모두)로 일반
-chronology보다 먼저 반환해야 한다(MUST). 저장·API projection은 0..N collection이어야 하며(MUST). 현재 Local first-party UI는 이 순서의 첫 visible pinned
-Post만 렌더하고, Remote Profile UI는 성공적으로 검증·동기화된 Featured collection의 전체 지원 pinned Post를 표시해야
+Profile Post List 서버/API는 저장·API의 조회 가능한 pinned Post를 server-authoritative ordered 0..N collection으로 제공해야
+한다(MUST). 현재 Local first-party UI는 이 순서의 첫 visible pinned Post만 pinned segment와 고정 표시로 렌더해야 하며(MUST),
+나머지 조회 가능한 Local pin은 Reply·Quote를 포함해 기존 chronology 위치에 일반 Post로 한 번 표시해야 한다(MUST). Remote
+Profile UI는 성공적으로 검증·동기화된 Featured collection의 전체 지원 pinned Post를 원격 순서의 pinned segment로 표시해야
 한다(MUST). Remote inbound에는 Local의 first-visible UI 제한을 적용하지 않는다(MUST NOT).
 서버는 pin 관계가 바뀌지 않는 동안 같은 authoritative order를 유지해야 하며(MUST), visibility filtering은 남은 visible
 항목의 상대 순서를 바꿔서는 안 된다(MUST NOT).
-Pinned segment에는 Reply Parent가 있는 Reply와 Quote도 포함해야 하며(MUST), Profile의 일반 Post는 pinned segment
-뒤에 기존 chronology로 이어야 한다(MUST).
+실제 pinned segment 대상(Local first visible pin, Remote visible pin 전체)에는 Reply Parent가 있는 Reply와 Quote도 포함해야
+하며(MUST), Profile의 일반 Post는 pinned segment 뒤에 기존 chronology로 이어야 한다(MUST).
 
 #### Scenario: Show Local pinned Post before ordinary chronology
 
 - **WHEN** 조회자가 pinned Post와 일반 eligible Post가 있는 Local Profile 목록을 연다
 - **THEN** server-authoritative order에서 첫 visible pinned Post가 목록의 첫 segment에 표시된다
-- **AND** 나머지 일반 Post는 기존 chronology로 pinned segment 뒤에 표시된다
+- **AND** 추가 Local pin을 포함한 나머지 일반 Post는 기존 chronology 위치로 pinned segment 뒤에 표시된다
 
 #### Scenario: Keep additional Local pins available to the API
 
 - **WHEN** Local Profile의 ordered pin collection에 첫 항목 외에도 유효한 pinned Post가 있다
 - **THEN** 서버·API는 추가 항목을 ordered collection에 보존한다
-- **AND** 현재 Local first-party UI는 첫 visible 항목만 렌더한다
+- **AND** 현재 Local first-party UI는 첫 visible 항목만 pinned 상태로 렌더하고 추가 항목은 기존 chronology 위치에 일반 Post로 표시한다
 - **AND** 반복 조회와 visibility filtering은 visible 항목의 상대 순서를 유지한다
 
 #### Scenario: Show Remote Featured posts in remote order
@@ -78,14 +79,14 @@ The system MUST satisfy this contract.
 **Authority / Provenance:** `docs/domain/policies/post-list.md`, `PROD-809`
 
 Profile 목록의 pinned-first segment와 일반 chronology segment를 결합한 순서, cursor와 page limit은 서버가 관찰 가능한
-단일 목록 계약으로 소유해야 한다(MUST). 일반 segment는 pinned Post를 cursor와 page limit 적용 전에 제외해야 하며
+단일 목록 계약으로 소유해야 한다(MUST). 일반 segment는 실제 pinned segment에 표시한 Post를 cursor와 page limit 적용 전에 제외해야 하며
 (MUST), 클라이언트는 현재 단일 PostList/Relay pagination 결과를 임의로 concat해서는 안 된다(MUST NOT). Home, Local,
 Hashtag 목록의 순서와 후보 정책은 이 변경으로 바뀌지 않아야 한다(MUST NOT).
 
 #### Scenario: Do not duplicate pinned Posts across pages
 
 - **WHEN** Profile 목록이 pinned-first 결과를 여러 cursor page로 요청한다
-- **THEN** 서버는 pinned Post를 일반 segment에서 먼저 제외한 뒤 page limit과 cursor를 계산한다
+- **THEN** 서버는 실제 pinned segment에 표시한 Post를 일반 segment에서 먼저 제외한 뒤 page limit과 cursor를 계산한다
 - **AND** 모든 page를 합쳐도 pinned Post가 중복되거나 eligible 일반 Post가 누락되지 않는다
 
 #### Scenario: Keep other Post List types unchanged

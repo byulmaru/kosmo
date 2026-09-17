@@ -47,8 +47,10 @@ expected-current atomic replacement는 rollout 정책으로만 둔다. Followers
    expected value 검사와 원자적 replace를 적용하며, 이 rollout 정책은 API·저장 cardinality를 제한하지 않는다. 새 pin에는 기존
    pin의 상대 순서를 보존한 한 위치를 원자적으로 부여하고 관계 변경이 없으면 같은 order를 반환한다. 앞·뒤 배치와 별도 재정렬
    UX는 고정하지 않는다.
-2. Profile 목록을 계산하는 서버 경계에서 visible pinned segment와 일반 chronology segment를 결합하고, pinned ID를 일반
-   후보에서 cursor/page limit 전에 제외한다. Relay는 이 서버 결과를 하나의 기존 pagination 흐름으로 소비한다.
+2. Profile 목록을 계산하는 서버 경계에서 visible pinned segment와 일반 chronology segment를 결합한다. Local은 첫 visible
+   pin만 pinned segment에 두고 추가 Local pin은 Reply·Quote를 포함해 기존 chronology 위치의 일반 Post로 유지한다. Remote는
+   검증된 visible pin 전체를 pinned segment에 둔다. 실제 pinned segment의 ID만 일반 후보에서 cursor/page limit 전에 제외하며,
+   Relay는 이 서버 결과를 하나의 기존 pagination 흐름으로 소비한다.
 3. Local Actor 표현에는 기존 Profile representation 경계에서 `featured` link를 추가하고, collection item은 기존
    Local Note projection과 authorization을 호출한다. pin transaction commit 후에는 기존 Profile Update(Person)
    delivery scheduling/effect lifecycle을 재사용한다. 연속된 commit은 최신 current representation delivery로 병합할 수
@@ -57,8 +59,10 @@ expected-current atomic replacement는 rollout 정책으로만 둔다. Followers
    collection을 광고하는 Actor의 canonical URI와 정확히 같은지 확인하고, 모든 page와 item 검증이
    성공한 뒤에만 원격 ordered set을 교체하고, 실패 시 이전 authoritative snapshot을 보존한다. Public/Unlisted는 기존
    공개 fetch를 사용할 수 있다. Followers Only를 수신할 때는 한 sync 시도 동안 같은 Active local follower identity로
-   collection의 모든 page와 각 Note 역참조를 authenticated fetch한다. Sync는 production path에서 inline으로 실행하거나
-   별도 effect로 예약할 수 있고 상위 Profile 결과의 성공 여부는 sync 완료·성공에 의존하지 않는다. 각 시도는 취소
+   collection의 모든 page와 각 Note 역참조를 authenticated fetch한다. Remote Profile 등록·stale refresh·검증된 inbound
+   Update뿐 아니라 Active Local Profile의 established Follow가 새로 성립할 때도 해당 identity로 sync를 시작한다. Sync는
+   production path에서 inline으로 실행하거나 별도 effect로 예약할 수 있고 상위 Profile·Follow 결과의 성공 여부는 sync
+   완료·성공에 의존하지 않는다. 각 시도는 취소
    가능하며 next page 순환 검출과 구현이 정한 page·item·byte·시간 예산을 적용한다. 실패·취소·순환·예산 초과는 유효한
    상위 Profile 갱신과 이전 snapshot을 보존한다. 실패는 기존 retry-capable async effect/Workflow 경계에서 관측·재시도할 수
    있어야 하며, 이후 성공한 retry만 snapshot을 원자적으로 교체한다. retry timing·backoff·횟수·SLA는 고정하지 않는다.
@@ -85,12 +89,14 @@ expected-current atomic replacement는 rollout 정책으로만 둔다. Followers
   결과로 반환해야 한다.
 - Followers Only Featured를 unsigned fetch나 follower 여부가 오래된 캐시만으로 허용하면 private Post 존재가
   노출된다. 인증 주체·Active local identity·현재 established relation을 fetch 시점에 검증해야 한다.
+- established Follow 성립 뒤 sync trigger를 누락하면 이전 public-only snapshot이 다음 우연한 refresh까지 유지된다.
 - Remote page 하나를 성공 snapshot으로 간주하거나 parse 실패를 빈 collection으로 정규화하면 일시적 원격 장애가
   기존 pin을 모두 숨긴다.
 - Remote next page 순환과 무제한 collection을 방어하지 않으면 sync worker가 끝나지 않거나 자원을 고갈시킨다. 시도별
   순환 검출과 구현이 정한 자원 예산을 적용하고 중단된 시도는 실패로 처리해야 한다.
-- pinned Post를 일반 query에서 제외하지 않은 채 두 connection을 client concat하면 duplicate, omission과 cursor
-  경계 불일치가 생긴다.
+- 실제 pinned segment의 Post를 일반 query에서 제외하지 않은 채 두 connection을 client concat하면 duplicate, omission과 cursor
+  경계 불일치가 생긴다. 반대로 현재 UI가 pinned segment에 표시하지 않는 추가 Local pin까지 일반 query에서 제외하면 해당
+  Post가 Profile 목록에서 사라진다.
 - Profile/Post가 unavailable이 된 뒤 pinned metadata나 count를 별도 경로로 반환하면 기존 visibility 정책을 우회한다.
 
 ## Risks / Trade-offs

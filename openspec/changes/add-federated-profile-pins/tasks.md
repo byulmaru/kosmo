@@ -42,26 +42,27 @@ Local pin API가 승인된 Post를 ordered set에 추가하고 지정한 Post만
 
 **Deliverable**
 
-Profile 목록이 visible pinned Post를 server-authoritative ordered collection 순서로 먼저 표시하고, Local UI는 첫 visible 항목을 렌더하며
-Remote는 전체 collection을 유지한 채 일반 chronology와 결합한 서버 cursor/page
+Profile 목록이 Local의 첫 visible pin과 Remote의 visible pin 전체를 각 authoritative order의 pinned segment로 먼저 표시한다.
+Local UI는 추가 Local pin을 Reply·Quote를 포함해 기존 chronology 위치에 일반 Post로 유지하고, Remote는 전체 collection을
+유지한 채 일반 chronology와 결합한 서버 cursor/page
 결과에서 중복·누락을 만들지 않는다.
 
 **Guardrails**
 
-- pinned Reply·Quote는 pinned segment에 포함한다.
-- 일반 segment는 pinned Post를 cursor/page limit 전에 제외한다.
+- 실제 pinned segment 대상인 Local first-visible pin과 Remote visible pin 전체에는 Reply·Quote도 포함한다.
+- 일반 segment는 실제 pinned segment에 표시한 Post만 cursor/page limit 전에 제외한다.
 - 기존 Visibility, Eligibility, lifecycle, block/domain 정책을 pinned segment에도 적용한다.
 - Home·Local·Hashtag 순서는 변경하지 않고 client concat으로 두 connection을 조합하지 않는다.
 - 내부 GraphQL field shape·함수명·DB shape를 이 계약만으로 고정하지 않는다.
 
 **Verification**
 
-- API/Relay 테스트로 Local·Remote ordering, pinned Reply/Quote, page boundary, no duplicate/omission과 hidden/unavailable
-  filtering을 검증한다.
+- API/Relay 테스트로 Local first-visible pin, 추가 Local pin의 chronology 유지, Remote ordering, pinned Reply/Quote, page boundary,
+  no duplicate/omission과 hidden/unavailable filtering을 검증한다.
 - Home·Local·Hashtag focused regression으로 기존 순서·후보 정책 불변을 검증한다.
 
 - [ ] 2.1 Profile 목록의 pinned-first combined ordering과 Local·Remote ordered set 소비를 구현한다.
-- [ ] 2.2 pinned Post를 일반 후보에서 cursor/page limit 전에 제외하는 서버 pagination 계약을 구현한다.
+- [ ] 2.2 실제 pinned segment의 Post만 일반 후보에서 cursor/page limit 전에 제외하는 서버 pagination 계약을 구현한다.
 - [ ] 2.3 Profile visibility·block/domain·lifecycle filtering과 Relay/API focused regression을 통과시킨다.
 
 ## 3. PROD-974 Outbound ActivityPub Featured projection
@@ -108,8 +109,9 @@ collection을 제공하며 pin commit 뒤 Profile Update(Person) lifecycle을 �
 
 Remote Actor가 광고한 Featured collection을 page traversal로 동기화하고, 검증된 ordered pin set만 교체하며 실패 시
 마지막 성공 상태를 유지한다. Remote Profile 등록·stale refresh·검증된 inbound `Update(Actor/Person)`에서 advertised
-`featured` URI sync가 production path에서 실행되거나 예약된다. 상위 Profile 결과의 성공 여부는 sync 완료·성공에 의존하지
-않는다. Mastodon 호환 서버 기준 양방향 federation runtime으로 이 계약을 검증한다.
+`featured` URI sync가 production path에서 실행되거나 예약된다. Active Local Profile의 established Follow가 새로 성립할 때도
+해당 identity로 sync가 실행되거나 예약된다. 상위 Profile·Follow 결과의 성공 여부는 sync 완료·성공에 의존하지 않는다.
+Mastodon 호환 서버 기준 양방향 federation runtime으로 이 계약을 검증한다.
 
 **Guardrails**
 
@@ -134,12 +136,14 @@ Remote Actor가 광고한 Featured collection을 page traversal로 동기화하�
 - 취소·next page 순환·자원 예산 초과에서 traversal이 중단되고 last-success snapshot이 유지되는지 검증한다.
 - 같은 실패에서 유효한 상위 Remote Profile 등록·refresh·Update 결과가 유지되는지와 `featured` URI 제거 시 empty set 교체를
   검증한다.
+- public-only snapshot 뒤 established Follow가 성립하면 해당 Local identity로 sync를 시작해 Followers Only item을 반영하고,
+  실패해도 Follow Relationship과 last-success snapshot을 유지하는지 검증한다.
 - Mastodon 호환 서버 양방향 runtime으로 Public/Unlisted, Followers Only signed fetch, unsigned/non-follower denial,
   pin/unpin/update/sync/unfollow를 검증한다.
 
 - [ ] 4.1 production path에서 advertised `featured` URI sync와 authenticated traversal을 구현한다.
 - [ ] 4.2 Featured Note의 canonical `attributedTo`와 advertising Actor의 exact URI 일치를 검증한다.
-- [ ] 4.3 Followers Only authenticated fetch에서 Active local follower identity와 author·audience·Follow 관계를 검증한다.
+- [ ] 4.3 established Follow 성립 trigger와 Followers Only authenticated fetch에서 Active local follower identity·author·audience·Follow 관계를 검증한다.
 - [ ] 4.4 bounded authoritative sync·failure preservation·remote removal을 inbound 테스트로 검증한다.
 - [ ] 4.5 retry-capable async effect/Workflow에서 실패를 관측·재시도하고 성공 retry로 snapshot을 원자 교체하는지 검증한다.
 
@@ -176,7 +180,7 @@ Web·iOS·Android runtime과 접근성 결과를 증명한다.
 - 구현 PR에서 Web·iOS·Android runtime으로 Local first-visible 관리, Remote 전체 표시와 Profile/Post unavailable cleanup을
   검증한다.
 
-- [ ] 5.1 ordered 0..N API를 Relay/cache에 연결하고, Local UI는 첫 visible 항목만 렌더하며 Remote inbound는 전체 collection을 표시하도록 구현한다.
+- [ ] 5.1 ordered 0..N API를 Relay/cache에 연결하고, Local UI는 첫 visible 항목만 pinned 상태로 렌더하며 추가 Local pin은 chronology에 유지하고 Remote inbound는 전체 collection을 표시하도록 구현한다.
 - [ ] 5.2 Profile/Post lifecycle, block/domain filtering과 성공 sync 이후 visible pin cleanup을 기존 조회 경계에 연결한다.
 - [ ] 5.3 Web/iOS/Android runtime에서 Local first-visible UI와 Remote 전체 표시, 접근성·pagination 결과를 검증한다.
 

@@ -46,7 +46,9 @@ The system MUST satisfy this contract.
 
 시스템은 Remote Actor가 광고한 Featured collection을 page traversal로 동기화해야 한다(MUST). Remote Profile 등록, stale
 refresh와 검증된 inbound `Update(Actor/Person)`에서 actor가 광고한 `featured` URI가 있으면 이 sync를 production path에서
-실행하거나 예약해야 한다(MUST). 상위 Profile 결과의 성공 여부는 sync 완료·성공에 의존해서는 안 되며(MUST NOT), sync
+실행하거나 예약해야 한다(MUST). Active Local Profile과 Remote Profile 사이의 Follow Relationship이 새로 성립할 때도 저장된
+검증 표현이 광고한 `featured` URI의 sync를 해당 Local Profile identity로 실행하거나 예약해야 한다(MUST). 상위 Profile 또는
+Follow 결과의 성공 여부는 sync 완료·성공에 의존해서는 안 되며(MUST NOT), sync
 완료 시간 SLA는 정의하지 않는다. Public/Unlisted 항목은 기존 공개 fetch와 remote Note 검증을 적용해야 한다(MUST).
 각 Featured Note의 canonical `attributedTo`는 collection을 광고하는 Remote Actor의 canonical URI와 정확히 일치해야 한다(MUST).
 Followers Only 항목은 한 sync 시도 동안 같은 Active local follower identity로 Featured collection의 모든 page와 각 Note
@@ -80,6 +82,13 @@ last-success snapshot을 유지하고 이후 성공한 retry만 snapshot을 원�
   materialize한다
 - **AND** guest, 비팔로워 또는 unfollow된 identity에는 Post가 없는 것처럼 처리한다
 
+#### Scenario: Re-sync Featured after an established Follow is created
+
+- **WHEN** Active Local Profile과 `featured` URI를 광고한 Remote Profile 사이의 Follow Relationship이 새로 성립한다
+- **THEN** 시스템은 해당 Local Profile identity를 사용하는 Featured sync를 실행하거나 예약한다
+- **AND** 성공한 sync는 새로 조회 가능한 Followers Only item을 authoritative snapshot에 포함한다
+- **AND** sync 실패는 성립한 Follow Relationship과 last-success snapshot을 변경하지 않는다
+
 #### Scenario: Preserve the last successful set after sync failure
 
 - **WHEN** Featured collection page fetch, parse, authorization 또는 Note 검증이 authoritative sync를 완료하기 전에
@@ -96,8 +105,8 @@ last-success snapshot을 유지하고 이후 성공한 retry만 snapshot을 원�
 
 #### Scenario: Keep the parent Profile outcome independent from Featured sync
 
-- **WHEN** 유효한 Remote Profile 등록·stale refresh 또는 inbound Update가 Featured sync를 실행하거나 예약한다
-- **THEN** 시스템은 Featured sync의 완료 또는 성공을 상위 Profile 결과의 성공 조건으로 사용하지 않는다
+- **WHEN** 유효한 Remote Profile 등록·stale refresh·inbound Update 또는 established Follow 성립이 Featured sync를 실행하거나 예약한다
+- **THEN** 시스템은 Featured sync의 완료 또는 성공을 상위 Profile 또는 Follow 결과의 성공 조건으로 사용하지 않는다
 - **AND** sync 완료까지의 고정 시간 상한을 요구하지 않는다
 
 #### Scenario: Stop a bounded traversal without replacing the snapshot

@@ -37,8 +37,10 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
 - Context / Problem: Remote actor의 Featured collection은 현재 Local first-visible UI 제한과 다른 cardinality·순서를 가지며, 실패한 inbound
   fetch가 마지막으로 확인된 결과를 덮어서는 안 된다.
 - Decision Outcome: 지원·검증된 Featured item 전체를 원격 순서로 보존한다. Remote Profile 등록, stale refresh와 검증된
-  inbound `Update(Actor/Person)`에서 광고된 `featured` URI가 있으면 production sync path에서 실행하거나 예약한다. 상위
-  Profile 결과의 성공 여부는 sync 완료·성공에 의존하지 않고 완료 시간 SLA를 정의하지 않는다. Public/Unlisted는 기존
+  inbound `Update(Actor/Person)`에서 광고된 `featured` URI가 있으면 production sync path에서 실행하거나 예약한다. Active
+  Local Profile과 Remote Profile 사이의 Follow Relationship이 새로 성립할 때도 저장된 검증 표현의 Featured sync를 해당
+  Local identity로 실행하거나 예약한다. 상위 Profile·Follow 결과의 성공 여부는 sync 완료·성공에 의존하지 않고 완료 시간
+  SLA를 정의하지 않는다. Public/Unlisted는 기존
   공개 fetch를 사용할 수 있고, Followers Only를 수신할 때는 한 sync 시도 동안 같은 Active local follower identity로 모든
   page와 각 Note 역참조를 authenticated fetch한다. 각 시도는 취소 가능하고 next page 순환 검출과 구현이 정한
   page·item·byte·시간 예산을 적용한다. page traversal과 항목 검증이 성공한 authoritative sync만 ordered set을 교체하고,
@@ -64,9 +66,10 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
 - Status: Active
 - Context / Problem: Profile 목록의 pinned segment와 chronology segment를 클라이언트 concat하면 중복·누락과 cursor 경계가
   발생한다.
-- Decision Outcome: 서버가 visible pinned segment를 먼저, 일반 chronology를 뒤에 결합하고 pinned Post를 일반 후보에서
-  cursor/page limit 전에 제외한다. Relay/client는 단일 서버-owned pagination 결과를 소비하며 Home·Local·Hashtag 순서는
-  유지한다.
+- Decision Outcome: 서버가 visible pinned segment를 먼저, 일반 chronology를 뒤에 결합한다. 현재 Local UI에서는 첫 visible
+  pin만 pinned segment에 두고 추가 Local pin은 Reply·Quote를 포함해 기존 chronology 위치에 일반 Post로 유지한다. Remote는
+  visible pin 전체를 pinned segment에 둔다. 따라서 실제 pinned segment에 표시한 Post만 일반 후보에서 cursor/page limit 전에
+  제외한다. Relay/client는 단일 서버-owned pagination 결과를 소비하며 Home·Local·Hashtag 순서는 유지한다.
 - Alternatives Considered: 두 connection을 client concat하거나 pinned 결과만 별도 fetch하는 방식은 관찰 가능한 cursor
   계약을 보장하지 못하므로 선택하지 않는다.
 - Consequences: 구현은 내부 GraphQL shape를 고정하지 않은 채 combined ordering과 cursor semantics를 API 경계에서 증명해야
