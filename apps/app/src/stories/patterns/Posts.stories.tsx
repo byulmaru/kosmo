@@ -65,6 +65,7 @@ import type { ComposerMediaItem } from '@/components/post/PostComposerMediaContr
 import type { StoryPost } from '../fixtures';
 import type { PostDeletionListEdgeSafetyQuery as PostDeletionListEdgeSafetyQueryType } from './__generated__/PostDeletionListEdgeSafetyQuery.graphql';
 import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
+import type { PostsProductionComposerAdapterStoryQuery } from './__generated__/PostsProductionComposerAdapterStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 
 function getColorContrastRatio(foreground: string, background: string) {
@@ -997,6 +998,18 @@ const PostsStoriesQuery = graphql`
   }
 `;
 
+const ProductionComposerAdapterStoryQuery = graphql`
+  query PostsProductionComposerAdapterStoryQuery {
+    ...PostList_home @arguments(count: 1) @alias(as: "home")
+    composerProfile: node(id: "profile-composer") {
+      __typename
+      ... on Profile {
+        ...PostComposer_profile @alias(as: "composer")
+      }
+    }
+  }
+`;
+
 const PostDeletionListEdgeSafetyQuery = graphql`
   query PostDeletionListEdgeSafetyQuery {
     ...PostList_home @arguments(count: 1) @alias(as: "home")
@@ -1865,6 +1878,30 @@ function ComposerStory() {
   return (
     <Catalog>
       <PostComposer profile={usePostsStoryData().composerProfile} />
+    </Catalog>
+  );
+}
+
+function ProductionComposerAdapterStory() {
+  const [createdPostId, setCreatedPostId] = useState<string | null>(null);
+  const data = useLazyLoadQuery<PostsProductionComposerAdapterStoryQuery>(
+    ProductionComposerAdapterStoryQuery,
+    {},
+  );
+  if (data.composerProfile?.__typename !== 'Profile') {
+    throw new Error('Production Composer adapter story requires a profile.');
+  }
+
+  return (
+    <Catalog>
+      <PostComposer
+        onExpand={() => undefined}
+        onPostCreated={(post) => setCreatedPostId(post.id)}
+        onRequestClose={() => undefined}
+        presentation="rail"
+        profile={requireFragment(data.composerProfile.composer, 'production composer profile')}
+      />
+      <Text testID="production-composer-created-post">{createdPostId ?? 'none'}</Text>
     </Catalog>
   );
 }
@@ -5909,6 +5946,70 @@ export const ComposerDefault: Story = {
     expect(getComputedStyle(body).outlineStyle).not.toBe('none');
   },
   render: () => <ComposerStory />,
+};
+
+export const ProductionComposerAdapterSuccess: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostsProductionComposerAdapterStoryQuery: {
+          data: { composerProfile, homeTimeline },
+        },
+        PostComposerCreatePostMutation: {
+          data: {
+            createPost: {
+              post: {
+                ...shortPost,
+                __typename: 'Post',
+                id: 'post-created-in-story',
+                viewerReactions: [],
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+
+    await userEvent.type(body, 'Production presentation 제출 본문');
+    await userEvent.click(canvas.getByRole('button', { name: '게시' }));
+
+    await waitFor(() =>
+      expect(canvas.getByRole('textbox', { name: '게시물 내용' })).toHaveValue(''),
+    );
+    expect(canvas.getByTestId('production-composer-created-post')).toHaveTextContent(
+      'post-created-in-story',
+    );
+  },
+  render: () => <ProductionComposerAdapterStory />,
+};
+
+export const ProductionComposerAdapterFailure: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostsProductionComposerAdapterStoryQuery: {
+          data: { composerProfile, homeTimeline },
+        },
+        PostComposerCreatePostMutation: { error: 'create post failed' },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+
+    await userEvent.type(body, '실패 뒤 보존할 본문');
+    await userEvent.click(canvas.getByRole('button', { name: '게시' }));
+
+    expect(await canvas.findByRole('alert')).toHaveTextContent('게시글을 작성하지 못했습니다.');
+    expect(body).toHaveValue('실패 뒤 보존할 본문');
+    expect(canvas.getByTestId('production-composer-created-post')).toHaveTextContent('none');
+  },
+  render: () => <ProductionComposerAdapterStory />,
 };
 
 export const ContentWarningReveal: Story = {

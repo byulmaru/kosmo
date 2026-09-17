@@ -24,6 +24,7 @@ import {
   View,
 } from 'react-native';
 import { Circle, Svg } from 'react-native-svg';
+import { formatImageUploadFailureMessage } from '@/components/media/imageUploadErrors';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { TextArea, TextField } from '@/components/ui/TextField';
@@ -164,6 +165,20 @@ function useVisibilityMenu(
   return { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen };
 }
 
+function formatMediaFailures(items: readonly ComposerMediaItem[]): string | undefined {
+  const messages = items.flatMap((item, index) =>
+    item.state === 'failed'
+      ? [
+          formatImageUploadFailureMessage(
+            `${index + 1}번째 이미지`,
+            item.failure ?? { reason: 'transient', stage: 'transfer' },
+          ),
+        ]
+      : [],
+  );
+  return messages.length > 0 ? messages.join('\n') : undefined;
+}
+
 export function PostComposerTarget({
   author,
   body,
@@ -204,6 +219,7 @@ export function PostComposerTarget({
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
+  const displayedError = error ?? formatMediaFailures(items);
   const disabled =
     submitting ||
     items.some((item) => item.state !== 'ready') ||
@@ -324,12 +340,12 @@ export function PostComposerTarget({
             onRetry={(item) => onMediaRetry(item.key)}
             sensitiveMedia={sensitiveMedia}
           />
-          {error ? (
+          {displayedError ? (
             <Text
               accessibilityRole="alert"
               style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
             >
-              {error}
+              {displayedError}
             </Text>
           ) : null}
         </View>
@@ -451,6 +467,7 @@ export function MobileFullscreenComposerShellCandidate({
   );
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
+  const displayedError = error ?? formatMediaFailures(items);
   const disabled =
     submitting ||
     items.some((item) => item.state !== 'ready') ||
@@ -585,12 +602,12 @@ export function MobileFullscreenComposerShellCandidate({
             ]}
             value={body}
           />
-          {error ? (
+          {displayedError ? (
             <Text
               accessibilityRole="alert"
               style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
             >
-              {error}
+              {displayedError}
             </Text>
           ) : null}
         </View>

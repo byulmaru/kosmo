@@ -87,21 +87,37 @@ type PostComposerBaseProps = {
   initialContentWarning?: string | null;
   onMediaEditorOpenChange?: (open: boolean) => void;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
-  onRequestClose?: () => void;
   onSubmittingChange?: (submitting: boolean) => void;
-  onExpand?: () => void;
   profile: PostComposer_profile$key;
-  presentation?: 'mobile' | 'overlay' | 'rail';
   scrollable?: boolean;
   surface?: boolean;
 };
+
+type PostComposerPresentationProps =
+  | {
+      onExpand?: never;
+      onRequestClose?: () => void;
+      presentation?: undefined;
+    }
+  | {
+      onExpand: () => void;
+      onRequestClose: () => void;
+      presentation: 'rail';
+    }
+  | {
+      onExpand?: never;
+      onRequestClose: () => void;
+      presentation: 'mobile' | 'overlay';
+    };
 
 type PostComposerRelationshipProps =
   | { replyParentId: string; repostSourceId?: never }
   | { replyParentId?: never; repostSourceId: string }
   | { replyParentId?: never; repostSourceId?: never };
 
-export type PostComposerProps = PostComposerBaseProps & PostComposerRelationshipProps;
+export type PostComposerProps = PostComposerBaseProps &
+  PostComposerPresentationProps &
+  PostComposerRelationshipProps;
 
 export function PostComposer({
   profile: profileKey,
@@ -147,6 +163,9 @@ type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
   PostComposerRelationshipProps & {
     contextGenerationRef: RefObject<number>;
     environmentGenerationRef: RefObject<number> | null;
+    onExpand?: () => void;
+    onRequestClose?: () => void;
+    presentation?: 'mobile' | 'overlay' | 'rail';
     profile: PostComposer_profile$data;
   };
 
@@ -565,12 +584,12 @@ function PostComposerContents({
                 <MobileFullscreenComposerShellCandidate
                   {...sharedProductionProps}
                   fillContainer
-                  onOverlayClose={onRequestClose ?? (() => undefined)}
+                  onOverlayClose={onRequestClose!}
                 />
               ) : (
                 <PostComposerTarget
                   {...sharedProductionProps}
-                  onExpand={onExpand ?? (() => undefined)}
+                  onExpand={presentation === 'rail' ? onExpand! : () => undefined}
                   surface={presentation === 'rail' ? 'rail' : 'overlay'}
                 />
               );

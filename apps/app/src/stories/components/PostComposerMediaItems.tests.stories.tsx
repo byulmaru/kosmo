@@ -1,6 +1,6 @@
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { PostComposerMediaItemsTarget } from '@/components/post/PostComposerMediaItemsTarget';
+import { PostComposerTarget } from '@/components/post/PostComposerTarget';
 import baseMeta, {
   InteractionContract as interactionContract,
   mixedMedia,
@@ -21,18 +21,37 @@ export const InteractionContract: Story = interactionContract;
 export const HorizontalReachabilityContract: Story = {
   render: () => (
     <View style={{ width: 320 }}>
-      <PostComposerMediaItemsTarget
-        disabled={false}
-        media={mixedMedia}
-        onEdit={fn()}
-        onRemove={fn()}
-        onRetry={fn()}
+      <PostComposerTarget
+        author={<Text>테스트 작성자</Text>}
+        body=""
+        contentWarning=""
+        contentWarningExpanded={false}
+        items={mixedMedia}
+        onBodyChange={fn()}
+        onContentWarningChange={fn()}
+        onContentWarningToggle={fn()}
+        onEmojiAction={fn()}
+        onExpand={fn()}
+        onMediaAction={fn()}
+        onMediaEdit={fn()}
+        onMediaRemove={fn()}
+        onMediaRetry={fn()}
+        onPollAction={fn()}
+        onSubmit={fn()}
+        onVisibilityChange={fn()}
+        remaining={500}
         sensitiveMedia
+        surface="rail"
+        visibility="PUBLIC"
       />
     </View>
   ),
   play: async ({ canvasElement }) => {
-    const gallery = within(canvasElement).getByLabelText('첨부 이미지 갤러리, 4개');
+    const canvas = within(canvasElement);
+    const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 4개');
+    expect(
+      canvas.getByText('3번째 이미지를 업로드하지 못했어요. 잠시 후 다시 시도해 주세요.'),
+    ).toBeVisible();
     const firstAction = within(gallery).getByRole('button', { name: '첨부 이미지 1 제거' });
     const laterItemAction = within(gallery).getByRole('button', {
       name: '첨부 이미지 4 편집',
