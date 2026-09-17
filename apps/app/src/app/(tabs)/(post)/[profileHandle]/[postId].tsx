@@ -52,12 +52,17 @@ const PostQuery = graphql`
 `;
 
 export default function PostDetailScreen() {
-  const params = useLocalSearchParams<{ postId: string; profileHandle: string }>();
+  const params = useLocalSearchParams<{
+    fromPush?: string;
+    postId: string;
+    profileHandle: string;
+  }>();
   const pathname = usePathname();
   const routeSegments = useSegments();
   const { width } = useWindowDimensions();
   const postId = params.postId ?? '';
   const routeRelativeHandle = params.profileHandle ?? '';
+  const openedFromPush = params.fromPush === '1';
   const header = getWebMobileShellHeader(
     Platform.OS === 'web',
     width,
@@ -89,6 +94,7 @@ export default function PostDetailScreen() {
     >
       <PostDetailContent
         header={header}
+        openedFromPush={openedFromPush}
         postId={postId}
         routeRelativeHandle={routeRelativeHandle}
       />
@@ -120,10 +126,12 @@ function PostDetailHeader() {
 
 function PostDetailContent({
   header,
+  openedFromPush,
   postId,
   routeRelativeHandle,
 }: {
   header: ReactNode;
+  openedFromPush: boolean;
   postId: string;
   routeRelativeHandle: string;
 }) {
@@ -146,14 +154,27 @@ function PostDetailContent({
   }, [fetchKey]);
 
   useEffect(() => {
-    if (pureRepostSourceHref) {
+    if (openedFromPush && (!post || post.state === 'DELETED' || locallyDeleted)) {
+      router.replace('/notifications');
+    } else if (pureRepostSourceHref) {
       router.replace(pureRepostSourceHref);
     } else if (post && post.profile.relativeHandle !== routeRelativeHandle) {
       router.replace(`/${post.profile.relativeHandle}/${postId}`);
     }
-  }, [post, postId, pureRepostSourceHref, routeRelativeHandle, router]);
+  }, [
+    locallyDeleted,
+    openedFromPush,
+    post,
+    postId,
+    pureRepostSourceHref,
+    routeRelativeHandle,
+    router,
+  ]);
 
-  return pureRepostSourceHref ? null : locallyDeleted ? (
+  const shouldFallbackToNotifications =
+    openedFromPush && (!post || post.state === 'DELETED' || locallyDeleted);
+
+  return shouldFallbackToNotifications ? null : pureRepostSourceHref ? null : locallyDeleted ? (
     <PostDetailFrame header={header}>
       <StateView description="작성자가 이 게시글을 삭제했어요." title="삭제된 게시글이에요" />
     </PostDetailFrame>

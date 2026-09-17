@@ -1,6 +1,7 @@
 import { DefaultTheme, ThemeProvider as NavigationThemeProvider } from 'expo-router';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { ContentReportProvider } from '@/components/content-report/ContentReportContext';
+import { NativePushProvider } from '@/components/native-push/NativePushProvider';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
@@ -18,6 +19,7 @@ export function AppProviders({ children }: PropsWithChildren) {
             <RelayActorProvider>
               <SessionProvider>
                 <AnalyticsSessionBridge />
+                <NativePushProvider />
                 <ContentReportProvider>
                   <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
                 </ContentReportProvider>
