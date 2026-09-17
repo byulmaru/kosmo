@@ -60,15 +60,16 @@ expected-current atomic replacement는 rollout 정책으로만 둔다. Followers
    성공한 뒤에만 원격 ordered set을 교체하고, 실패 시 이전 authoritative snapshot을 보존한다. Public/Unlisted는 기존
    공개 fetch를 사용할 수 있다. Followers Only를 수신할 때는 한 sync 시도 동안 같은 Active local follower identity로
    collection의 모든 page와 각 Note 역참조를 authenticated fetch한다. Remote Profile 등록·stale refresh·검증된 inbound
-   Update뿐 아니라 Active Local Profile의 established Follow가 새로 성립할 때도 해당 identity로 sync를 시작한다. Sync는
-   production path에서 inline으로 실행하거나 별도 effect로 예약할 수 있고 상위 Profile·Follow 결과의 성공 여부는 sync
-   완료·성공에 의존하지 않는다. 각 시도는 취소
+   Update뿐 아니라 Active Local Profile의 established Follow가 새로 성립하거나 preserved follower identity가 재활성화·정지
+   해제로 Active/Normal에 복귀할 때도 해당 identity로 sync를 시작한다. Sync는 production path에서 inline으로 실행하거나
+   별도 effect로 예약할 수 있고 상위 Profile·Follow·Profile 상태 전이 결과의 성공 여부는 sync 완료·성공에 의존하지 않는다. 각 시도는 취소
    가능하며 next page 순환 검출과 구현이 정한 page·item·byte·시간 예산을 적용한다. 실패·취소·순환·예산 초과는 유효한
    상위 Profile 갱신과 이전 snapshot을 보존한다. 실패는 기존 retry-capable async effect/Workflow 경계에서 관측·재시도할 수
    있어야 하며, 이후 성공한 retry만 snapshot을 원자적으로 교체한다. 각 trigger는 Remote Profile별 current sync generation
    또는 동등한 최신성 token을 갱신하고 완료 시점에 current인 시도만 snapshot을 교체한다. 더 최신 trigger 뒤에 완료된 이전
    성공 결과는 폐기한다. retry timing·backoff·횟수·SLA는 고정하지 않는다.
-   검증된 원격 표현에서 `featured` URI가 사라진 경우는 authoritative empty set으로 처리한다.
+   검증된 원격 표현에서 `featured` URI가 사라진 경우는 currentness token을 먼저 갱신해 이전 URI의 시도와 retry를 무효화하고
+   authoritative empty set으로 처리한다.
 5. Profile/Post lifecycle, visibility, block/domain 정책 변경은 기존 조회·삭제·Tombstone lifecycle에서 visible set을
    재계산하거나 다음 성공 sync에서 제거한다. 관계의 물리 cleanup은 기존 보존 정책을 따르는 구현 선택으로 둔다.
 

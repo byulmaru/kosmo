@@ -39,14 +39,16 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
 - Decision Outcome: 지원·검증된 Featured item 전체를 원격 순서로 보존한다. Remote Profile 등록, stale refresh와 검증된
   inbound `Update(Actor/Person)`에서 광고된 `featured` URI가 있으면 production sync path에서 실행하거나 예약한다. Active
   Local Profile과 Remote Profile 사이의 Follow Relationship이 새로 성립할 때도 저장된 검증 표현의 Featured sync를 해당
-  Local identity로 실행하거나 예약한다. 상위 Profile·Follow 결과의 성공 여부는 sync 완료·성공에 의존하지 않고 완료 시간
-  SLA를 정의하지 않는다. Public/Unlisted는 기존
+  Local identity로 실행하거나 예약한다. established Follow를 보존한 follower identity가 Profile 재활성화 또는 정지 해제로
+  Active/Normal에 복귀할 때도 같은 sync를 실행하거나 예약한다. 상위 Profile·Follow·Profile 상태 전이 결과의 성공 여부는
+  sync 완료·성공에 의존하지 않고 완료 시간 SLA를 정의하지 않는다. Public/Unlisted는 기존
   공개 fetch를 사용할 수 있고, Followers Only를 수신할 때는 한 sync 시도 동안 같은 Active local follower identity로 모든
   page와 각 Note 역참조를 authenticated fetch한다. 각 시도는 취소 가능하고 next page 순환 검출과 구현이 정한
   page·item·byte·시간 예산을 적용한다. page traversal과 항목 검증이 성공한 authoritative sync만 ordered set을 교체하고,
   실패·취소·순환·예산 초과는 마지막 성공 상태를 유지한다. unpin, Delete/Tombstone과 eligibility 상실은 성공 sync 또는 기존
   lifecycle에서 제거한다. Sync 실패는 유효한 상위 Profile 등록·refresh·Update를 실패시키지 않으며, 검증된 원격 표현에서
-  `featured` URI가 사라지면 authoritative empty set으로 교체한다. 각 Note의 canonical `attributedTo`는 collection을
+  `featured` URI가 사라지면 currentness token을 갱신해 이전 URI의 진행 중인 시도와 retry를 무효화하고 authoritative empty
+  set으로 교체한다. 각 Note의 canonical `attributedTo`는 collection을
   광고하는 Actor의 canonical URI와 정확히 일치해야 한다. Sync 실패는 관측·재시도할 수 있어야 하며, 실패·부분·취소 시도는
   last-success snapshot을 유지하고 이후 성공한 retry만 이를 원자적으로
   교체한다. 각 trigger는 Remote Profile별 current sync generation 또는 동등한 최신성 token을 갱신하고, 완료 시점에 current인

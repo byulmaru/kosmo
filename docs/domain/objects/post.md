@@ -359,7 +359,9 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   성공한 retry만 snapshot을 원자적으로 교체한다. 각 trigger는 Remote Profile별
   current sync generation 또는 동등한 최신성 token을 갱신하고, 완료 시점에 current인 시도만 snapshot을 교체한다. 더 최신
   trigger 뒤에 완료된 이전 시도의 성공 결과는 폐기한다. retry timing·backoff·횟수·SLA는 고정하지 않는다. Remote unpin, Delete/Tombstone 또는
-  visibility·author eligibility 상실은 다음 성공 sync나 기존 lifecycle에서 노출에서 제거한다.
+  visibility·author eligibility 상실은 다음 성공 sync나 기존 lifecycle에서 노출에서 제거한다. 검증된 최신 Profile 표현에서
+  `featured` URI가 제거되면 최신성 token을 갱신해 이전 URI의 진행 중인 sync와 예약된 retry를 무효화한 뒤 empty snapshot을
+  저장한다.
 
 ### Quote federation 정책
 

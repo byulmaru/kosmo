@@ -47,8 +47,9 @@ The system MUST satisfy this contract.
 시스템은 Remote Actor가 광고한 Featured collection을 page traversal로 동기화해야 한다(MUST). Remote Profile 등록, stale
 refresh와 검증된 inbound `Update(Actor/Person)`에서 actor가 광고한 `featured` URI가 있으면 이 sync를 production path에서
 실행하거나 예약해야 한다(MUST). Active Local Profile과 Remote Profile 사이의 Follow Relationship이 새로 성립할 때도 저장된
-검증 표현이 광고한 `featured` URI의 sync를 해당 Local Profile identity로 실행하거나 예약해야 한다(MUST). 상위 Profile 또는
-Follow 결과의 성공 여부는 sync 완료·성공에 의존해서는 안 되며(MUST NOT), sync
+검증 표현이 광고한 `featured` URI의 sync를 해당 Local Profile identity로 실행하거나 예약해야 한다(MUST). established Follow를
+보존한 Local follower identity가 Profile 재활성화 또는 정지 해제로 다시 Active/Normal이 될 때도 해당 identity로 sync를
+실행하거나 예약해야 한다(MUST). 상위 Profile, Follow 또는 Profile 상태 전이 결과의 성공 여부는 sync 완료·성공에 의존해서는 안 되며(MUST NOT), sync
 완료 시간 SLA는 정의하지 않는다. Public/Unlisted 항목은 기존 공개 fetch와 remote Note 검증을 적용해야 한다(MUST).
 각 Featured Note의 canonical `attributedTo`는 collection을 광고하는 Remote Actor의 canonical URI와 정확히 일치해야 한다(MUST).
 Followers Only 항목은 한 sync 시도 동안 같은 Active local follower identity로 Featured collection의 모든 page와 각 Note
@@ -91,6 +92,13 @@ snapshot을 원자적으로 교체해야 한다(MUST). retry timing·backoff·�
 - **AND** 성공한 sync는 새로 조회 가능한 Followers Only item을 authoritative snapshot에 포함한다
 - **AND** sync 실패는 성립한 Follow Relationship과 last-success snapshot을 변경하지 않는다
 
+#### Scenario: Re-sync Featured when a preserved follower identity becomes active again
+
+- **WHEN** established Follow Relationship을 보존한 Local follower identity가 Profile 재활성화 또는 정지 해제로 다시
+  Active/Normal이 된다
+- **THEN** 시스템은 저장된 검증 표현의 `featured` URI를 해당 Local Profile identity로 sync하도록 실행하거나 예약한다
+- **AND** sync 실패는 Profile 상태 전이와 last-success snapshot을 변경하지 않는다
+
 #### Scenario: Preserve the last successful set after sync failure
 
 - **WHEN** Featured collection page fetch, parse, authorization 또는 Note 검증이 authoritative sync를 완료하기 전에
@@ -126,7 +134,9 @@ snapshot을 원자적으로 교체해야 한다(MUST). retry timing·backoff·�
 #### Scenario: Clear pins when a verified remote representation removes Featured
 
 - **WHEN** 성공적으로 검증된 Remote Profile refresh 또는 Update가 더 이상 `featured` URI를 광고하지 않는다
-- **THEN** 시스템은 Remote Profile의 ordered pinned set을 authoritative empty set으로 교체한다
+- **THEN** 시스템은 currentness token을 갱신해 이전 URI의 진행 중인 sync와 예약된 retry를 무효화한다
+- **AND** Remote Profile의 ordered pinned set을 authoritative empty set으로 교체한다
+- **AND** 무효화된 이전 시도가 나중에 성공해도 empty snapshot을 덮지 않는다
 - **AND** 원격 Profile의 다른 유효한 표현 갱신은 유지한다
 
 ### Requirement: Featured lifecycle and Profile Update delivery

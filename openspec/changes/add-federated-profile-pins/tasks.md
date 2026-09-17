@@ -113,7 +113,8 @@ collection을 제공하며 pin commit 뒤 Profile Update(Person) lifecycle을 �
 Remote Actor가 광고한 Featured collection을 page traversal로 동기화하고, 검증된 ordered pin set만 교체하며 실패 시
 마지막 성공 상태를 유지한다. Remote Profile 등록·stale refresh·검증된 inbound `Update(Actor/Person)`에서 advertised
 `featured` URI sync가 production path에서 실행되거나 예약된다. Active Local Profile의 established Follow가 새로 성립할 때도
-해당 identity로 sync가 실행되거나 예약된다. 상위 Profile·Follow 결과의 성공 여부는 sync 완료·성공에 의존하지 않는다.
+해당 identity로 sync가 실행되거나 예약된다. established Follow를 보존한 follower identity가 재활성화·정지 해제로
+Active/Normal에 복귀할 때도 같은 sync가 실행되거나 예약된다. 상위 Profile·Follow·Profile 상태 전이 결과의 성공 여부는 sync 완료·성공에 의존하지 않는다.
 Mastodon 호환 서버 기준 양방향 federation runtime으로 이 계약을 검증한다.
 
 **Guardrails**
@@ -130,7 +131,8 @@ Mastodon 호환 서버 기준 양방향 federation runtime으로 이 계약을 �
 - Remote Profile별 current sync generation 또는 동등한 최신성 token을 비교해 완료 시점에 current인 시도만 snapshot을
   교체하고 superseded 성공 결과는 폐기한다.
 - sync 완료 시간 SLA는 정의하지 않는다.
-- 검증된 원격 표현에서 `featured` URI가 사라지면 ordered pin set을 authoritative empty로 교체한다.
+- 검증된 원격 표현에서 `featured` URI가 사라지면 currentness token을 갱신해 이전 URI의 진행 중인 시도와 retry를 무효화하고
+  ordered pin set을 authoritative empty로 교체한다.
 - Remote unpin/Delete/Tombstone/visibility·author eligibility 상실은 다음 성공 sync 또는 기존 lifecycle에서 제거한다.
 
 **Verification**
@@ -143,7 +145,10 @@ Mastodon 호환 서버 기준 양방향 federation runtime으로 이 계약을 �
   검증한다.
 - public-only snapshot 뒤 established Follow가 성립하면 해당 Local identity로 sync를 시작해 Followers Only item을 반영하고,
   실패해도 Follow Relationship과 last-success snapshot을 유지하는지 검증한다.
+- established Follow를 보존한 follower identity가 Active/Normal에 복귀하면 해당 identity로 sync를 시작하고, 실패해도 Profile
+  상태 전이와 last-success snapshot을 유지하는지 검증한다.
 - 더 최신 trigger의 sync가 먼저 snapshot을 교체한 뒤 이전 sync가 성공해도 최신 snapshot이 유지되는지 검증한다.
+- `featured` URI 제거가 이전 URI의 진행 중인 sync와 retry를 무효화해 authoritative empty snapshot이 유지되는지 검증한다.
 - Mastodon 호환 서버 양방향 runtime으로 Public/Unlisted, Followers Only signed fetch, unsigned/non-follower denial,
   pin/unpin/update/sync/unfollow를 검증한다.
 
