@@ -495,9 +495,11 @@ export const notificationSourceAvailabilityWhere = (
             visiblePostWhere({
               post: NotificationQuotePosts,
               profileVisible: sql<boolean>`${relatedProfileAvailability({
+                database,
                 includeRecipientAvailability,
                 instance: NotificationQuoteAuthorInstances,
                 profile: NotificationQuoteAuthors,
+                recipientProfileId: Notifications.recipientProfileId,
               })}`,
               viewerProfileId: Notifications.recipientProfileId,
               db: database,
