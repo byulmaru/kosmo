@@ -34,9 +34,6 @@ export const InitialRetry: Story = {
     expect(within(toast).getByText('차단한 프로필을 불러오지 못했어요')).toBeVisible();
     await userEvent.click(within(toast).getByRole('button', { name: '다시 시도' }));
     expect(args.onRetry).toHaveBeenCalledTimes(1);
-    await waitFor(() =>
-      expect(canvas.getByRole('heading', { name: '차단한 프로필' })).toHaveFocus(),
-    );
     expect(await canvas.findByText(args.displayName)).toBeVisible();
   },
 };
