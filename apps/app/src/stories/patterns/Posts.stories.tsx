@@ -1936,12 +1936,20 @@ function ComposerRailMediaFocusStory() {
 
   return (
     <View style={{ width: presentation === 'rail' ? 350 : 640 }}>
-      <PostComposer
-        onExpand={() => setPresentation('overlay')}
-        onRequestClose={() => setPresentation('rail')}
-        presentation={presentation}
-        profile={profile}
-      />
+      {presentation === 'rail' ? (
+        <PostComposer
+          onExpand={() => setPresentation('overlay')}
+          onRequestClose={() => setPresentation('rail')}
+          presentation="rail"
+          profile={profile}
+        />
+      ) : (
+        <PostComposer
+          onRequestClose={() => setPresentation('rail')}
+          presentation="overlay"
+          profile={profile}
+        />
+      )}
     </View>
   );
 }
