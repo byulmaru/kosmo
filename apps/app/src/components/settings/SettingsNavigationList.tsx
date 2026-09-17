@@ -1,6 +1,7 @@
-import { StyleSheet, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { layoutRecipes } from '@/theme/tokens';
 import { ByulmaruIdAccountSettingsEntry } from './ByulmaruIdAccountSettingsEntry';
+import { SettingsItem } from './SettingsItem';
 import { SettingsLinkRow } from './SettingsLinkRow';
 
 type SettingsDestination = 'default-post-visibility' | 'mute-and-block' | 'info';
@@ -29,6 +30,19 @@ export function SettingsNavigationList({ selected }: { selected?: SettingsDestin
         primary
         selected={selected === 'mute-and-block'}
       />
+      {Platform.OS !== 'web' ? (
+        <Pressable
+          accessibilityLabel="OS 알림 설정 열기"
+          accessibilityRole="button"
+          onPress={() => void Linking.openSettings()}
+          testID="native-notification-settings"
+        >
+          <SettingsItem
+            description="기기의 알림 설정에서 Push 알림을 관리할 수 있어요."
+            label="알림 설정"
+          />
+        </Pressable>
+      ) : null}
       <SettingsLinkRow
         accessibilityLabel="정보 설정 열기"
         href="/settings/info"
