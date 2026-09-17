@@ -42,7 +42,7 @@
 - Application runtime은 canonical `PG*`와 `kosmo_runtime`만 사용하고 `DATABASE_URL` fallback을 추가하지 않는다.
 - Queue credential과 migration/bootstrap credential은 application runtime과 분리한다.
 - 일반 `pnpm dev`는 reset, seed, migration, Local Instance bootstrap 또는 data deletion을 수행하지 않는다.
-- Temporal은 기존 ephemeral `start-dev`와 무볼륨 구성을 유지한다.
+- Temporal은 기존 repository local server를 재사용하고 별도 Compose, UI, persistent storage를 추가하지 않는다.
 - Worker health는 `127.0.0.1:8081`, consumer health는 `127.0.0.1:8082`이다.
 
 **Verification**

@@ -47,7 +47,7 @@
 - Authority / Provenance: Linear `PROD-897`
 - Status: Active
 - Context / Problem: 일반 개발 실행이 schema/data를 초기화하면 반복 개발에서 data를 잃고 migration/bootstrap 실패가 service startup에 섞인다.
-- Decision Outcome: 명시적 최초 준비 명령만 role/database/ACL, migration, Local Instance 준비를 수행한다. `pnpm dev`는 prepared database를 검증하고 service만 시작한다.
+- Decision Outcome: 명시적 최초 준비 명령만 role/database/ACL, migration, Local Instance 준비를 수행하고 해당 invariant는 통합 검증에서 확인한다. `pnpm dev`는 고정된 local target과 필수 key를 검증하고 service만 시작하며 privileged catalog probe를 반복하지 않는다.
 - Alternatives Considered: 매 dev 실행 migration/bootstrap, reset/seed와 dev 결합은 destructive behavior 금지와 충돌하므로 선택하지 않았다.
 - Consequences: 새 개발자는 최초 한 번 준비 명령을 실행하며 기존 개발자는 평상시 dev만 반복한다.
 - Confirmation / Follow-up: PostgreSQL 재시작과 `pnpm dev` 재실행 전후 data 보존을 검증한다.
@@ -64,17 +64,17 @@
 - Consequences: Workspace recursive dev에 consumer `dev` script가 포함되고 두 health port가 충돌하지 않는다.
 - Confirmation / Follow-up: Consumer readiness와 queue database connection을 실제 process로 검증한다.
 
-### PostgreSQL만 영속하고 Temporal은 start-dev 임시 저장소를 유지한다
+### PostgreSQL만 독립 lifecycle로 관리하고 기존 Temporal local server를 재사용한다
 
 - Decision Date: 2026-09-16
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-897`
 - Status: Active
 - Context / Problem: Application data는 반복 개발에서 보존되어야 하지만 local Temporal history는 현재 임시 개발 server 정책을 따른다.
-- Decision Outcome: PostgreSQL은 named volume을 사용하고 Temporal은 기존 `start-dev`와 무볼륨 구성을 유지한다.
-- Alternatives Considered: Temporal SQLite volume 복원과 두 service의 lifecycle 결합은 사용자 지시와 현재 PR 의도에 반하므로 선택하지 않았다.
-- Consequences: Service down 후 PostgreSQL data는 남지만 Temporal 상태는 보존 대상으로 간주하지 않는다.
-- Confirmation / Follow-up: Compose render와 restart persistence로 검증한다.
+- Decision Outcome: PostgreSQL은 named volume을 사용한다. Temporal은 `apps/worker/src/temporal-test-server.ts`의 기존 ephemeral local server를 `127.0.0.1:7233`에서 재사용하며 별도 Compose, UI, 독립 lifecycle을 추가하지 않는다.
+- Alternatives Considered: PROD-897 전용 Temporal Compose와 `:8233` UI는 원래 Linear Issue 범위를 확장하므로 제거했다. Temporal SQLite volume 복원도 범위 밖이다.
+- Consequences: `local:down`은 PostgreSQL만 중지하고 Temporal은 `pnpm dev`와 함께 종료된다. Temporal 상태는 보존 대상으로 간주하지 않는다.
+- Confirmation / Follow-up: PostgreSQL Compose render와 restart persistence, 기존 Temporal server의 RPC readiness를 검증한다.
 
 ## Remaining Decisions
 

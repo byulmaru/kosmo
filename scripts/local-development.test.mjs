@@ -4,9 +4,9 @@ import {
   buildApplicationEnvironment,
   buildBootstrapLoaderEnvironment,
   buildMigrationEnvironment,
-  preflightRuntime,
   validateBootstrapEnvironment,
   validateRuntimeEnvironment,
+  waitForTemporal,
 } from './local-development.mjs';
 
 const runtimeEnvironment = {
@@ -90,24 +90,19 @@ test('migration children use the owner PG principal and receive no runtime or ad
   assert.equal(environment.FEDIFY_QUEUE_DATABASE_PASSWORD, undefined);
 });
 
-test('runtime preflight authenticates both principals before service startup', async () => {
-  const calls = [];
-  await preflightRuntime(runtimeEnvironment, (...args) => calls.push(args));
+test('Temporal readiness remains bounded when a health request hangs', async () => {
+  const hangingFetch = (_url, { signal }) =>
+    new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    });
 
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0][0].username, 'kosmo_runtime');
-  assert.equal(calls[0][0].password, 'runtime-secret');
-  assert.equal(calls[1][0].username, 'kosmo_fedify_queue');
-  assert.equal(calls[1][0].password, 'queue-secret');
-  assert.equal(calls[0][1].includes('runtime-secret'), false);
-  assert.equal(calls[1][1].includes('queue-secret'), false);
-});
-
-test('runtime preflight stops on an authentication or boundary failure', async () => {
   await assert.rejects(
-    preflightRuntime(runtimeEnvironment, () => {
-      throw new Error('database authentication failed');
+    waitForTemporal({
+      fetchImplementation: hangingFetch,
+      requestTimeoutMilliseconds: 10,
+      retryDelayMilliseconds: 1,
+      timeoutMilliseconds: 25,
     }),
-    /database authentication failed/,
+    /Local Temporal did not become ready/,
   );
 });

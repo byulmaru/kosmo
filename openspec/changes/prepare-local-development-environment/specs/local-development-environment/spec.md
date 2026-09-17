@@ -78,22 +78,23 @@
 
 #### Scenario: runtime 구성 오류
 
-- **WHEN** application PG source, queue URL/password 또는 Temporal local target이 누락되거나 local 계약과 다르다
-- **THEN** 해당 service를 부분적으로 잘못된 credential로 시작하지 않고 명확한 구성 오류로 실패한다
+- **WHEN** application PG target/key, queue target/key 또는 Temporal local target이 누락되거나 정해진 local 계약과 다르다
+- **THEN** service 시작 전에 명확한 정적 구성 오류로 실패한다
+- **AND** 형식은 유효하지만 인증이 실패하는 credential은 실제 연결을 소유한 service가 연결 시점에 오류로 보고한다
 - **AND** dev/prod database, owner credential, `DATABASE_URL` 또는 다른 fallback으로 전환하지 않는다
 
-### Requirement: PostgreSQL과 Temporal은 서로 다른 local storage lifecycle을 유지한다
+### Requirement: PostgreSQL만 영속 local lifecycle을 소유한다
 
-**Authority / Provenance:** Linear `PROD-897`. Local PostgreSQL은 명시적으로 제거하기 전까지 named volume의 data를 보존해야 한다(MUST). Local Temporal은 현재 `start-dev` 임시 저장소를 유지해야 하며(MUST), persistent SQLite volume 또는 PostgreSQL application volume과의 결합을 추가해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-897`. Local PostgreSQL은 명시적으로 제거하기 전까지 named volume의 data를 보존해야 한다(MUST). Temporal은 기존 repository local server를 재사용해야 하며(MUST), PROD-897 전용 Docker/Compose lifecycle, UI, persistent SQLite volume 또는 PostgreSQL application volume과의 결합을 추가해서는 안 된다(MUST NOT).
 
 #### Scenario: 일반 개발 서비스 종료
 
 - **WHEN** 개발자가 일반 종료 명령으로 local service를 중지한다
 - **THEN** PostgreSQL named volume은 보존된다
-- **AND** Temporal `start-dev` process의 임시 상태는 보존 계약을 가지지 않는다
+- **AND** 개발 process와 함께 종료되는 Temporal local server의 임시 상태는 보존 계약을 가지지 않는다
 
-#### Scenario: 저장소 구성 검증
+#### Scenario: 저장소 runtime 구성 검증
 
-- **WHEN** Docker Compose 구성을 렌더하고 inspect한다
-- **THEN** PostgreSQL service만 영속 data volume을 가진다
-- **AND** Temporal service에는 persistent SQLite volume이 없다
+- **WHEN** local service 구성과 개발 command를 inspect한다
+- **THEN** Docker Compose는 PostgreSQL service와 영속 data volume만 관리한다
+- **AND** Temporal은 기존 repository local server를 `127.0.0.1:7233`에서 UI와 persistent storage 없이 실행한다

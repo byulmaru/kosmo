@@ -45,8 +45,8 @@ For a new or empty PostgreSQL volume, run the explicit one-time preparation:
 pnpm local:prepare
 ```
 
-This starts local PostgreSQL and Temporal, prepares the roles and databases,
-applies immutable migrations as owner `kosmo`, and creates the configured Local
+This starts local PostgreSQL, prepares the roles and databases, applies
+immutable migrations as owner `kosmo`, and creates the configured Local
 Instance as `kosmo_runtime`. The command is idempotent, but it is not part of the
 normal service startup path.
 
@@ -56,20 +56,24 @@ For everyday development, run:
 pnpm dev
 ```
 
-This starts the prepared PostgreSQL and ephemeral Temporal services, then API,
-Web, App, Worker, and the Fedify queue consumer. It does not run migrations,
-bootstrap the Local Instance, reset, seed, or delete database data. Run
-`pnpm local:down` to stop PostgreSQL and Temporal while preserving the PostgreSQL
-named volume. Removing that volume is an explicit destructive operation and is
-not part of the normal local commands.
+This starts the prepared PostgreSQL, reuses the repository's existing ephemeral
+Temporal development server, then runs API, Web, App, Worker, and the Fedify
+queue consumer. It does not run migrations, bootstrap the Local Instance, reset,
+seed, or delete database data. Run `pnpm local:down` to stop PostgreSQL while
+preserving its named volume. Temporal stops with the development process.
+Removing the PostgreSQL volume is an explicit destructive operation and is not
+part of the normal local commands.
 
-Before starting any application process, the command authenticates the runtime
-and queue principals and checks the expected database, role attributes,
-membership, ownership, and application table privileges. A wrong password or a
-drifted role boundary fails before services start. Only database-using services
-receive the runtime credentials; the Expo App process receives neither
-PostgreSQL nor queue credentials. One interrupt stops every child service while
-leaving the two Compose services available for the next run.
+Before starting application processes, the command validates the fixed local
+PostgreSQL and queue targets and required credential keys. Authentication and
+connection errors are reported by the API, Worker, or Fedify consumer that owns
+the connection. Role, ownership, and ACL invariants are established by
+`pnpm local:prepare` and covered by focused integration tests; normal `pnpm dev`
+does not repeat that privileged probe.
+Only database-using services receive runtime credentials; the Expo App and
+Temporal helper processes receive neither PostgreSQL nor queue credentials.
+pnpm owns the child process lifecycle and one interrupt stops the development
+processes.
 
 The API uses `MEDIA_STORAGE_SERVICE_ORIGIN` and `MEDIA_STORAGE_SERVICE_API_KEY`
 to issue browser upload URLs and persist the completed public representation
@@ -87,12 +91,12 @@ PostgreSQL listens only on `127.0.0.1:54328` and stores data in the
 `kosmo-local-postgres_postgres-data` named volume. Worker health/readiness uses
 `127.0.0.1:8081`; Fedify consumer health/readiness uses `127.0.0.1:8082`.
 
-Temporal listens on `127.0.0.1:7233`, with its UI at `http://localhost:8233`.
-`docker-compose.temporal.local.yml` uses the official `start-dev` temporary store
-and intentionally has no persistent SQLite volume. `pnpm temporal:down` therefore
-does not promise Workflow history preservation; `pnpm temporal:up` starts it
-separately. `pnpm dev:worker` starts the prepared local services and only the
-Worker, so do not run it alongside `pnpm dev`.
+Temporal listens on `127.0.0.1:7233`; its coordinator-only health endpoint uses
+`127.0.0.1:8083`. `pnpm dev` reuses
+`apps/worker/src/temporal-test-server.ts`, which starts the existing ephemeral
+local server without a UI or persistent storage and stops with the development
+process. `pnpm dev:worker` starts that server and only the Worker, so do not run
+it alongside `pnpm dev`.
 
 ## Test Postgres
 

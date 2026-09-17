@@ -1,11 +1,11 @@
 import { spawnSync } from 'node:child_process';
+import { setTimeout } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import postgres from 'postgres';
 
 const rootDirectory = fileURLToPath(new URL('..', import.meta.url));
 const postgresCompose = 'docker-compose.postgres.local.yml';
-const temporalCompose = 'docker-compose.temporal.local.yml';
 const queueDatabaseUrl = 'postgres://kosmo_fedify_queue@127.0.0.1:54328/kosmo_fedify_queue';
+const temporalHealthUrl = 'http://127.0.0.1:8083/health';
 
 const bootstrapSql = String.raw`
 \getenv owner_password LOCAL_POSTGRES_OWNER_PASSWORD
@@ -195,183 +195,20 @@ function run(command, args, options = {}) {
   }
 }
 
-function compose(project, file, args, options) {
-  run('docker', ['compose', '-p', project, '-f', file, ...args], options);
+function compose(args, options) {
+  run('docker', ['compose', '-p', 'kosmo-local-postgres', '-f', postgresCompose, ...args], options);
 }
 
-const runtimeBoundarySql = String.raw`
-SELECT (
-    current_user = 'kosmo_runtime'
-    AND current_database() = 'kosmo'
-    AND NOT EXISTS (
-      SELECT 1
-      FROM pg_roles
-      WHERE rolname = current_user
-        AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)
-    )
-    AND NOT EXISTS (
-      SELECT 1
-      FROM pg_auth_members membership
-      JOIN pg_roles member ON member.oid = membership.member
-      WHERE member.rolname = current_user
-    )
-    AND NOT EXISTS (
-      SELECT 1
-      FROM pg_class object
-      WHERE object.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)
-    )
-    AND EXISTS (
-      SELECT 1
-      FROM pg_namespace namespace
-      WHERE namespace.nspname = 'public'
-        AND namespace.nspowner <> (SELECT oid FROM pg_roles WHERE rolname = current_user)
-        AND has_schema_privilege(current_user, namespace.oid, 'USAGE')
-        AND NOT has_schema_privilege(current_user, namespace.oid, 'CREATE')
-        AND EXISTS (
-          SELECT 1
-          FROM aclexplode(COALESCE(namespace.nspacl, acldefault('n', namespace.nspowner))) acl
-          WHERE acl.grantee = (SELECT oid FROM pg_roles WHERE rolname = current_user)
-            AND acl.privilege_type = 'USAGE'
-            AND NOT acl.is_grantable
-        )
-        AND NOT EXISTS (
-          SELECT 1
-          FROM aclexplode(COALESCE(namespace.nspacl, acldefault('n', namespace.nspowner))) acl
-          WHERE acl.grantee IN (0, (SELECT oid FROM pg_roles WHERE rolname = current_user))
-            AND acl.is_grantable
-        )
-    )
-    AND EXISTS (
-      SELECT 1
-      FROM pg_database database
-      JOIN pg_roles owner ON owner.oid = database.datdba
-      WHERE database.datname = current_database()
-        AND owner.rolname = 'kosmo'
-    )
-    AND EXISTS (
-      SELECT 1
-      FROM pg_tables
-      WHERE schemaname = 'public'
-        AND tablename <> '__drizzle_migrations'
-    )
-    AND NOT EXISTS (
-      SELECT 1
-      FROM pg_tables
-      WHERE schemaname = 'public'
-        AND tablename <> '__drizzle_migrations'
-        AND (
-          NOT has_table_privilege(current_user, format('%I.%I', schemaname, tablename), 'SELECT')
-          OR NOT has_table_privilege(current_user, format('%I.%I', schemaname, tablename), 'INSERT')
-          OR NOT has_table_privilege(current_user, format('%I.%I', schemaname, tablename), 'UPDATE')
-          OR NOT has_table_privilege(current_user, format('%I.%I', schemaname, tablename), 'DELETE')
-          OR has_table_privilege(
-            current_user,
-            format('%I.%I', schemaname, tablename),
-            'TRUNCATE,REFERENCES,TRIGGER'
-          )
-        )
-    )
-    AND NOT EXISTS (
-      SELECT 1
-      FROM pg_class object
-      JOIN pg_namespace namespace ON namespace.oid = object.relnamespace
-      CROSS JOIN LATERAL aclexplode(
-        COALESCE(object.relacl, acldefault('r', object.relowner))
-      ) acl
-      WHERE namespace.nspname = 'public'
-        AND object.relkind IN ('r', 'p')
-        AND object.relname <> '__drizzle_migrations'
-        AND acl.grantee IN (0, (SELECT oid FROM pg_roles WHERE rolname = current_user))
-        AND acl.is_grantable
-    )
-  ) AS valid;
-`;
-
-const queueBoundarySql = String.raw`
-SELECT (
-    current_user = 'kosmo_fedify_queue'
-    AND current_database() = 'kosmo_fedify_queue'
-    AND NOT EXISTS (
-      SELECT 1
-      FROM pg_roles
-      WHERE rolname = current_user
-        AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)
-    )
-    AND NOT EXISTS (
-      SELECT 1
-      FROM pg_auth_members membership
-      JOIN pg_roles member ON member.oid = membership.member
-      WHERE member.rolname = current_user
-    )
-    AND EXISTS (
-      SELECT 1
-      FROM pg_database database
-      JOIN pg_roles owner ON owner.oid = database.datdba
-      WHERE database.datname = current_database()
-        AND owner.rolname = current_user
-    )
-    AND NOT EXISTS (
-      SELECT 1
-      FROM pg_class object
-      JOIN pg_namespace namespace ON namespace.oid = object.relnamespace
-      WHERE namespace.nspname = 'public'
-        AND object.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
-        AND object.relowner <> (SELECT oid FROM pg_roles WHERE rolname = current_user)
-    )
-  ) AS valid;
-`;
-
-async function checkDatabaseBoundary(options, sqlText, errorMessage) {
-  const sql = postgres({ ...options, connect_timeout: 5, max: 1, onnotice: () => {} });
-  try {
-    const [result] = await sql.unsafe(sqlText);
-    if (result?.valid !== true) {
-      throw new Error(errorMessage);
-    }
-  } finally {
-    await sql.end({ timeout: 1 });
-  }
-}
-
-export async function preflightRuntime(environment, check = checkDatabaseBoundary) {
-  buildApplicationEnvironment(environment);
-  await check(
-    {
-      database: 'kosmo',
-      host: '127.0.0.1',
-      password: environment.PGPASSWORD,
-      port: 54328,
-      username: 'kosmo_runtime',
-    },
-    runtimeBoundarySql,
-    'Local application database boundary check failed.',
-  );
-  await check(
-    {
-      database: 'kosmo_fedify_queue',
-      host: '127.0.0.1',
-      password: environment.FEDIFY_QUEUE_DATABASE_PASSWORD,
-      port: 54328,
-      username: 'kosmo_fedify_queue',
-    },
-    queueBoundarySql,
-    'Local Fedify queue database boundary check failed.',
-  );
-}
-
-function startServices(environment) {
+function startPostgres(environment) {
   requireValue(environment, 'LOCAL_POSTGRES_ADMIN_PASSWORD');
-  compose('kosmo-local-postgres', postgresCompose, ['up', '-d', '--wait'], { env: environment });
-  compose('kosmo-local-temporal', temporalCompose, ['up', '-d', '--wait'], { env: environment });
+  compose(['up', '-d', '--wait'], { env: environment });
 }
 
 function prepare(environment) {
   validateBootstrapEnvironment(environment);
-  startServices(environment);
+  startPostgres(environment);
   const bootstrapEnvironment = buildBootstrapExecutionEnvironment(environment);
   compose(
-    'kosmo-local-postgres',
-    postgresCompose,
     [
       'exec',
       '-T',
@@ -421,14 +258,34 @@ function prepareWithBootstrapSecret(environment) {
   );
 }
 
-function stopServices() {
-  compose('kosmo-local-temporal', temporalCompose, ['down']);
-  compose('kosmo-local-postgres', postgresCompose, ['down']);
+export async function waitForTemporal({
+  fetchImplementation = fetch,
+  requestTimeoutMilliseconds = 1_000,
+  retryDelayMilliseconds = 250,
+  timeoutMilliseconds = 120_000,
+} = {}) {
+  const deadline = Date.now() + timeoutMilliseconds;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetchImplementation(temporalHealthUrl, {
+        signal: AbortSignal.timeout(
+          Math.min(requestTimeoutMilliseconds, Math.max(1, deadline - Date.now())),
+        ),
+      });
+      if (response.ok) {
+        return;
+      }
+    } catch {
+      // The local server may still be starting.
+    }
+    await setTimeout(Math.min(retryDelayMilliseconds, Math.max(0, deadline - Date.now())));
+  }
+  throw new Error(`Local Temporal did not become ready at ${temporalHealthUrl}.`);
 }
 
 function usage() {
   console.error(
-    'Usage: local-development <services-up|prepare|prepare-with-bootstrap-secret|run|services-down> [-- command ...]',
+    'Usage: local-development <services-up|prepare|prepare-with-bootstrap-secret|run|wait-temporal|services-down> [-- command ...]',
   );
 }
 
@@ -437,7 +294,7 @@ async function main() {
   try {
     switch (action) {
       case 'services-up':
-        startServices(process.env);
+        startPostgres(process.env);
         break;
       case 'prepare':
         prepare(process.env);
@@ -450,34 +307,20 @@ async function main() {
           throw new Error('Custom run commands must follow --.');
         }
         const environment = buildApplicationEnvironment(process.env);
-        await preflightRuntime(process.env);
         run(
           command[0] ?? 'pnpm',
           command.length > 0
             ? command.slice(1)
-            : [
-                '--parallel',
-                '--filter',
-                '@kosmo/api',
-                '--filter',
-                '@kosmo/web',
-                '--filter',
-                '@kosmo/app',
-                '--filter',
-                '@kosmo/worker',
-                '--filter',
-                '@kosmo/fedify-consumer',
-                'run',
-                'dev',
-              ],
-          {
-            env: environment,
-          },
+            : ['--workspace-root', 'run', '--parallel', '/^local-dev:(temporal|services)$/'],
+          { env: environment },
         );
         break;
       }
+      case 'wait-temporal':
+        await waitForTemporal();
+        break;
       case 'services-down':
-        stopServices();
+        compose(['down']);
         break;
       default:
         usage();

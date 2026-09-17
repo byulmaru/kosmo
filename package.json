@@ -12,16 +12,18 @@
     "db:test:up": "node scripts/test-db.mjs up",
     "db:bootstrap-local-instance": "pnpm --filter @kosmo/api db:bootstrap-local-instance",
     "dev": "pnpm local:services:up && node scripts/vault-run.mjs -- node scripts/local-development.mjs run",
-    "dev:worker": "pnpm local:services:up && node scripts/vault-run.mjs -- node scripts/local-development.mjs run -- pnpm --filter @kosmo/worker dev",
+    "dev:worker": "pnpm local:services:up && node scripts/vault-run.mjs -- node scripts/local-development.mjs run -- pnpm --workspace-root run --parallel \"/^local-dev:(temporal|worker)$/\"",
     "lint:eslint": "eslint --max-warnings 0 .",
     "lint:prettier": "prettier --check --ignore-unknown '**/*'",
     "lint:syncpack": "syncpack lint --dependency-types prod,dev,peer",
     "local:down": "node scripts/local-development.mjs services-down",
     "local:prepare": "node scripts/vault-run.mjs --secret-path secret/kubernetes/kosmo/local -- node scripts/local-development.mjs prepare-with-bootstrap-secret",
     "local:services:up": "node scripts/vault-run.mjs --secret-path secret/kubernetes/kosmo/local/postgres-bootstrap -- node scripts/local-development.mjs services-up",
+    "local-dev:services": "pnpm local-dev:wait-temporal && pnpm --parallel --filter @kosmo/api --filter @kosmo/web --filter @kosmo/app --filter @kosmo/worker --filter @kosmo/fedify-consumer run dev",
+    "local-dev:temporal": "env -u DATABASE_URL -u FEDIFY_QUEUE_DATABASE_PASSWORD -u FEDIFY_QUEUE_DATABASE_URL -u LOCAL_POSTGRES_ADMIN_PASSWORD -u LOCAL_POSTGRES_OWNER_PASSWORD -u PGDATABASE -u PGHOST -u PGPASSWORD -u PGPORT -u PGUSER HOST=127.0.0.1 PORT=8083 TEMPORAL_PORT=7233 TEMPORAL_NAMESPACE=default pnpm --dir apps/worker exec node --import tsx src/temporal-test-server.ts",
+    "local-dev:wait-temporal": "env -u DATABASE_URL -u FEDIFY_QUEUE_DATABASE_PASSWORD -u FEDIFY_QUEUE_DATABASE_URL -u LOCAL_POSTGRES_ADMIN_PASSWORD -u LOCAL_POSTGRES_OWNER_PASSWORD -u PGDATABASE -u PGHOST -u PGPASSWORD -u PGPORT -u PGUSER node scripts/local-development.mjs wait-temporal",
+    "local-dev:worker": "pnpm local-dev:wait-temporal && pnpm --filter @kosmo/worker dev",
     "prepare": "husky || true",
-    "temporal:down": "docker compose -p kosmo-local-temporal -f docker-compose.temporal.local.yml down",
-    "temporal:up": "docker compose -p kosmo-local-temporal -f docker-compose.temporal.local.yml up -d --wait",
     "test": "pnpm test:eslint && pnpm --recursive --workspace-concurrency=1 --if-present test",
     "test:eslint": "node --test scripts/eslint-no-class-component.test.mjs scripts/local-development.test.mjs",
     "test:e2e": "node scripts/test-db.mjs run -- pnpm test:e2e:database",
@@ -54,8 +56,5 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.2"
   },
-  "type": "module",
-  "dependencies": {
-    "postgres": "^3.4.9"
-  }
+  "type": "module"
 }

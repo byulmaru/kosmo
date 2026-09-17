@@ -9,7 +9,7 @@
 - 반복 `pnpm dev`는 PostgreSQL data를 reset/seed/delete하지 않고 API, Web, App, Worker, Fedify consumer를 로컬 PostgreSQL 및 ephemeral Temporal에 연결한다.
 - application runtime은 표준 `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`만 사용하고 `DATABASE_URL` fallback을 추가하지 않는다.
 - local runtime 및 bootstrap credential은 지정된 Vault path에서 사람이 설정하며 source, default, log, artifact에 비밀번호를 기록하지 않는다.
-- PostgreSQL 영속성과 Temporal 임시 저장소의 서로 다른 lifecycle, 최초 준비와 평상시 실행 절차, credential 경계를 문서화한다.
+- PostgreSQL 영속 lifecycle, 기존 Temporal local server 재사용, 최초 준비와 평상시 실행 절차, credential 경계를 문서화한다.
 
 ## Authority / Provenance
 
@@ -30,7 +30,7 @@
 ## Impact
 
 - root `pnpm` 개발 명령과 로컬 environment 검증/준비 script
-- local PostgreSQL 및 Temporal Docker Compose 구성
+- local PostgreSQL Docker Compose 구성과 기존 Temporal local server 실행 경로
 - API, Web, App, Worker, Fedify consumer 개발 process 환경
 - Drizzle migration과 Local Instance bootstrap 실행 경계
 - README 및 workspace script 운영 지침

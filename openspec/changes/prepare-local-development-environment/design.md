@@ -32,11 +32,11 @@ PR #773은 local Temporal `start-dev`와 Worker 개발 실행을 추가했지만
 
 ### Recommended Approach
 
-- PostgreSQL 전용 Compose 파일을 두고 named volume, loopback port, healthcheck만 선언한다. Temporal Compose는 기존 `start-dev` 구성과 무볼륨 상태를 유지한다.
-- 하나의 작은 local-development coordinator CLI가 target 검증, Compose lifecycle, idempotent role/database bootstrap, owner migration, runtime Local Instance bootstrap과 child environment 최소화를 담당하게 한다.
+- PostgreSQL 전용 Compose 파일에 named volume, loopback port, healthcheck만 선언한다. Temporal은 기존 `apps/worker/src/temporal-test-server.ts`를 재사용하고 별도 Compose, UI, 독립 lifecycle을 추가하지 않는다.
+- 하나의 작은 local-development coordinator CLI가 target 검증, PostgreSQL lifecycle, idempotent role/database bootstrap, owner migration, runtime Local Instance bootstrap과 child environment 최소화를 담당하게 한다. 서비스 병렬 실행과 signal 처리는 pnpm에 맡긴다.
 - 정상 개발은 service startup과 runtime launch만 수행한다. 별도의 `local:prepare` 명령만 bootstrap SQL, migration, Local Instance 및 queue 연결 준비를 실행한다.
 - Bootstrap SQL은 PostgreSQL identifier를 고정된 local contract로만 사용하고 비밀번호는 parameter 또는 `psql` variable로 전달한다. 출력에는 key 이름과 실패 원인만 남기고 값을 남기지 않는다.
-- Runtime launch 전에 host/port/database/user와 queue URL target을 allowlist로 검증하고 `DATABASE_URL`, admin/owner credential을 제거한 environment로 workspace dev scripts를 실행한다.
+- Runtime launch 전에 host/port/database/user와 queue URL target을 allowlist로 검증하고 `DATABASE_URL`, admin/owner credential을 제거한 environment로 정확히 다섯 workspace dev script를 실행한다. 실제 인증은 각 connection owner가 수행하며 role/ACL catalog 검증은 최초 준비와 통합 검증에서 수행한다.
 - Test는 coordinator command를 실제 실행하되 fake executable 또는 임시 PostgreSQL로 외부 경계만 대체한다. 통합 검증에서는 실제 Compose PostgreSQL, migration, bootstrap, API/Worker/consumer를 사용한다.
 
 ### Allowed Alternatives
@@ -63,7 +63,7 @@ PR #773은 local Temporal `start-dev`와 Worker 개발 실행을 추가했지만
 
 1. Local Vault의 runtime 및 bootstrap path에 사람이 local 전용 credential을 설정한다.
 2. Docker를 실행하고 명시적 최초 준비 명령으로 PostgreSQL, role/database, migration, Local Instance를 준비한다.
-3. `pnpm dev`를 실행해 PostgreSQL과 Temporal 및 전체 service를 시작한다.
+3. `pnpm dev`를 실행해 PostgreSQL, 기존 ephemeral Temporal server와 전체 service를 시작한다.
 4. 문제가 있으면 process와 container를 중지하되 PostgreSQL volume은 보존한다. 코드 rollback은 새 local Compose/script만 제거하며 production에는 영향을 주지 않는다.
 
 ## Open Questions
