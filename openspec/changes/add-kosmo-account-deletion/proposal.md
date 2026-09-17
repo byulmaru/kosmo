@@ -7,9 +7,15 @@
 ## What Changes
 
 - 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 이유를 사전 표시한다. 별도 eligibility API 없이
-  서버 mutation이 Active Account의 Profile이 없거나 모두 storage `DISABLED`(domain `Deactivated`)인지 원자적으로 재확인한다.
-  성공은 기존 Account storage `DISABLED`를 canonical `Deleted`로 사용하며 Profile·Membership·Account 속성을
-  보존하고, 명세된 인증·인가·토큰·코드·Push 관계를 정리한다. mutation payload는 `completed`만 반환한다.
+  account-deletion Workflow의 transaction Activity가 Active Account의 Profile이 없거나 모두 storage
+  `DISABLED`(domain `Deactivated`)인지 원자적으로 재확인한다. GraphQL mutation은 Workflow 결과를 동기적으로
+  기다린다. 성공은 기존 Account storage `DISABLED`를 canonical `Deleted`로 사용하며 Profile·Membership·Account
+  속성을 보존하고, 명세된 인증·인가·토큰·코드·Push 관계를 정리한다. Deleted/storage `DISABLED` Account는
+  공개 인증과 `deleteAccount` mutation을 허용하지 않는다. 다만 이미 인증·승인된 Workflow 실행이 DB commit 후
+  결과 acknowledgement를 잃고 재시도되는 내부 경로에서는 transaction Activity가 `DISABLED`를 멱등 성공으로
+  처리해 같은 정리를 다시 적용하고 `completed: true`를 반환할 수 있다. 완료된 `BLOCKED` 실행은 Account가
+  Active인 동안 `ALLOW_DUPLICATE` 정책으로 새 실행을 시작해 현재 Profile 조건을 다시 판정하며, 이 정책은
+  Deleted Account의 공개 재탈퇴를 허용하지 않는다. mutation payload는 `completed`만 반환한다.
 - Settings root/master에 항상 보이는 마지막 `코스모 탈퇴` 행과 `/settings/account-deletion` detail을
   Web·Android·iOS에 제공한다. acknowledgement checkbox만 요구하고 재인증·유예기간·이유 입력은 추가하지
   않으며, pending·error·retry·success와 login 이동을 서버 확정 결과에 맞춘다.
@@ -40,8 +46,10 @@
 ## Impact
 
 - Account/Profile/Membership/Session 도메인과 명시된 인증·인가·토큰·코드·Push 관계가 영향을 받는다. GraphQL
-  `deleteAccount` mutation resolver가 하나의 동기 DB transaction에서 검증·상태 전이·관계 정리를 수행하고,
-  `completed` payload만 제공한다. 별도 eligibility query나 count payload는 없다.
+  `deleteAccount` mutation resolver는 검증된 Account ID로 account-deletion Workflow를 동기 실행하고,
+  Workflow의 transaction Activity가 검증·상태 전이·관계 정리를 수행한다. mutation은 `completed` payload만
+  제공하며 별도 eligibility query나 count payload는 없다. Workflow는 향후 외부 효과를 추가할 수 있는 실행
+  경계를 제공하지만 현재는 명세된 transaction Activity만 실행한다.
 - Web·Android·iOS Settings가 공통 lifecycle과 login 전환을 소비하고, 공개 안내와 iOS device evidence가
   추가된다.
 - 새 `DELETED` enum·schema migration, Profile/Post/Media 정책 변경, Byulmaru ID 변경, OpenPanel 분석,

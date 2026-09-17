@@ -1,4 +1,4 @@
-## 1. PROD-970 서버 Account 탈퇴와 인증·기기 정리
+## 1. PROD-970 서버 Account 탈퇴 Workflow와 인증·기기 정리
 
 **Authority / Provenance**
 
@@ -11,13 +11,17 @@
 
 **Deliverable**
 
-GraphQL `deleteAccount` mutation resolver의 Account eligibility·원자적 관계 정리·login 차단과 API 계약이다.
+GraphQL `deleteAccount` mutation과 account-deletion Workflow의 Account eligibility·원자적 관계 정리·login
+차단과 API 계약이다.
 
 **Guardrails**
 
-- Account State가 Active이고 연결 Profile이 없거나 모두 storage `DISABLED`일 때만 허용한다. 클라이언트
-  precheck는 `me.profiles`에서 파생하고, GraphQL mutation resolver는 하나의 동기 DB transaction에서 다시
-  확인한다.
+- Account를 Deleted로 전환하는 탈퇴는 Account State가 Active이고 연결 Profile이 없거나 모두 storage `DISABLED`일
+  때만 허용한다. 클라이언트 precheck는 `me.profiles`에서 파생하고, account-deletion Workflow의 transaction
+  Activity가 하나의 동기 DB transaction에서 다시 확인한다. Deleted Account는 공개 인증과 `deleteAccount`
+  mutation을 허용하지 않는다. 이미 인증·승인된 Workflow 실행이 DB commit 후 결과 acknowledgement를 잃고
+  재시도되는 내부 경로에 한해서는 Activity가 `DISABLED`를 멱등 성공으로 처리해 정리를 다시 적용할 수 있으며,
+  Account를 Active로 되돌리지 않는다.
 - Account storage `DISABLED`를 canonical Deleted로 사용하며 새 `DELETED` enum이나 schema migration을 추가하지 않는다.
 - Profile·Membership·Account 속성을 삭제·변경하지 않는다.
 - 모든 Active Session(현재 Session 포함)을 `REVOKED`로 전환하고, `ApplicationAuthorization.revokedAt`을
@@ -28,22 +32,31 @@ GraphQL `deleteAccount` mutation resolver의 Account eligibility·원자적 관�
 - 일반 current-session logout으로 축소하지 않으며, 정리 결과가 불명확할 때 성공이나 부분 탈퇴를 반환하지 않는다.
 - Deleted Account의 동일 OIDC subject login은 새 Account·Session을 만들지 않고 임시 차단한다. Byulmaru ID 상태는
   변경하지 않는다.
-- 별도 Core account-deletion service, Temporal workflow, Native 전용 login 오류 타입·문구는 추가하지 않는다.
+- GraphQL resolver는 검증된 Account ID만 stable Workflow input으로 전달하고 `runWorkflow`의 `execute` 결과를
+  기다려 `completed`만 반환한다. 동일 실행은 `USE_EXISTING`, Account가 Active인 동안 완료된 `BLOCKED` 실행의
+  재시도는 `ALLOW_DUPLICATE`를 사용하며, 이 정책은 Deleted Account의 공개 재탈퇴를 허용하지 않는다.
+- Workflow는 현재 하나의 transaction Activity만 실행하며, 향후 외부 효과가 추가될 수 있는 경계를 유지하되
+  현재 외부 효과나 speculative side effect는 추가하지 않는다.
+- 별도 Core account-deletion service, Native 전용 login 오류 타입·문구는 추가하지 않는다.
 
 **Verification**
 
-- Profile이 0개인 경우, 모든 Profile이 `DISABLED`인 경우, Active Profile이 남은 경우의 server 결과와 no-op을
-  database-backed integration test로 검증한다.
-- 둘 이상의 Active Session과 authorization/token/code/push fixture에서 성공 후 각 상태·물리 삭제·Profile/
-  Membership/Account 속성 보존을 검증한다.
-- 상태 전이 또는 관계 정리 실패를 주입해 성공 payload가 없고 부분 탈퇴가 노출되지 않는지 검증한다.
+- Worker integration에서 Profile이 0개인 경우, 모든 Profile이 `DISABLED`인 경우, Active Profile이 남은 경우의
+  transaction Activity 결과와 no-op을 database-backed test로 검증한다.
+- Worker integration에서 둘 이상의 Active Session과 authorization/token/code/push fixture의 성공 후 각 상태·물리
+  삭제·Profile/Membership/Account 속성 보존을 검증한다.
+- Worker integration에서 상태 전이 또는 관계 정리 실패를 주입해 Workflow가 성공을 반환하지 않고 부분 탈퇴를
+  노출하지 않는지 검증한다.
 - 공통 Session 생성 경계에서 동일 OIDC subject가 새 Account·Session을 만들지 못하는지 검증한다.
+- API integration에서 인증된 Account ID가 Workflow input으로 전달되고 true/false Workflow 결과를 mutation이
+  기다려 `completed`로 반환하는지 검증하며, Worker DB 검증을 중복하지 않는다.
 
 - [x] 1.1 Profile 0개·전체 `DISABLED` eligibility를 허용하고 Active Profile이 남은 요청은 변경 없이 거부하는 서버 동작을 구현한다.
 - [x] 1.2 Account를 storage `DISABLED`로 전환하면서 모든 Active Session, `ApplicationAuthorization`, `OAuthTokens`, `OAuthAuthorizationCodes` 및 `PushInstallation` 정리를 원자적 결과로 확정하고 Profile·Membership·Account 속성을 보존한다.
-- [x] 1.3 결과 불명 실패·중복 요청·이미 Deleted 상태를 안전하게 처리하고 일반 current-session logout과 다른 Account 탈퇴 의미를 유지한다.
+- [x] 1.3 결과 불명 실패와 중복 요청을 안전하게 처리하고, 이미 인증·승인된 Workflow 실행이 commit acknowledgement를 잃고 재시도될 때만 `DISABLED` Account 정리를 멱등적으로 다시 적용하며 Account를 Active로 되돌리지 않는 Account 탈퇴 의미를 유지한다. Deleted Account의 공개 인증·재탈퇴는 허용하지 않으며, Account가 Active인 동안 완료된 `BLOCKED` 실행은 `ALLOW_DUPLICATE`로 재시도한다.
 - [x] 1.4 공통 Session 생성 경계에서 Deleted Account의 동일 OIDC subject 재가입을 임시 차단하고 새 Account·Session을 만들지 않는다.
-- [x] 1.5 서버 eligibility·cleanup·실패 atomicity·재가입 차단 integration/API 검증을 추가해 통과시킨다.
+- [ ] 1.5 서버 eligibility·cleanup·실패 atomicity·재가입 차단 integration/API 검증을 추가해 통과시킨다.
+- [x] 1.6 API mutation의 Workflow input·동기 결과 전달·인증 경계를 integration test로 검증한다.
 
 ## 2. PROD-970 Settings·public 안내·cross-platform lifecycle
 

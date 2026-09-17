@@ -12,7 +12,7 @@
 - Authority / Provenance: `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/design/settings.md`, `PROD-970`
 - Status: Active
 - Context / Problem: Byulmaru ID, Kosmo Account, Profile은 서로 다른 lifecycle을 소유하므로 Profile·Membership을 부수적으로 정리하면 안 된다.
-- Decision Outcome: 자기 Account가 Active이고 연결 Profile이 없거나 모두 storage `DISABLED`(domain `Deactivated`)일 때만 탈퇴를 허용한다. 클라이언트는 이미 조회한 `me.profiles`로 사전 표시할 수 있지만 별도 eligibility API는 제공하지 않으며, 서버 mutation이 연결 Profile State를 원자적으로 재확인한다. 성공 시 기존 storage `AccountState.DISABLED`를 canonical Account State `Deleted`로 사용하고, 연결 Profile·Membership·Account 속성을 보존한다. eligibility 확인이나 Account 탈퇴는 Profile·Membership을 삭제·비활성화·연결 해제하지 않는다.
+- Decision Outcome: Account를 Deleted로 전환하는 탈퇴는 자기 Account가 Active이고 연결 Profile이 없거나 모두 storage `DISABLED`(domain `Deactivated`)일 때만 허용한다. 클라이언트는 이미 조회한 `me.profiles`로 사전 표시할 수 있지만 별도 eligibility API는 제공하지 않으며, 서버 mutation이 연결 Profile State를 원자적으로 재확인한다. 성공 시 기존 storage `AccountState.DISABLED`를 canonical Account State `Deleted`로 사용하고, 연결 Profile·Membership·Account 속성을 보존한다. Deleted Account는 공개 인증과 `deleteAccount` mutation을 허용하지 않는다. 이미 인증·승인된 Workflow 실행이 DB commit 후 결과 acknowledgement를 잃고 재시도되는 내부 경로에 한해서는 transaction Activity가 storage `DISABLED`를 멱등 성공으로 처리해 명세된 인증·기기 정리를 다시 적용할 수 있으며, Account를 Active로 되돌리지 않는다. 완료된 `BLOCKED` 실행은 Account가 Active인 동안 `ALLOW_DUPLICATE` 정책으로 새 실행을 시작해 현재 Profile 조건을 다시 판정하며, 이 정책은 Deleted Account의 공개 재탈퇴를 허용하지 않는다. eligibility 확인이나 Account 탈퇴는 Profile·Membership을 삭제·비활성화·연결 해제하지 않는다.
 - Alternatives Considered: Active Profile 허용, Profile·Membership 삭제, 새 `DELETED` enum은 각각 계약·소유권·no-migration 원칙을 위반한다.
 - Consequences: 탈퇴 전 Profile lifecycle 완료가 필요하고 Account는 비가역 terminal 상태가 되며 새 enum·migration은 없다.
 - Confirmation / Follow-up: Profile 0개·전부 `DISABLED` 허용과 Active Profile 거부에서 DB row·Membership·Account 상태를 검증한다.
@@ -24,10 +24,22 @@
 - Authority / Provenance: `docs/domain/objects/account.md`, `docs/domain/objects/session.md`, `docs/design/settings.md`, `PROD-970`
 - Status: Active
 - Context / Problem: current-session logout은 요청한 Session만 폐기하므로 Account 탈퇴의 전체 정리 결과를 보장하지 못한다.
-- Decision Outcome: GraphQL `deleteAccount` mutation resolver가 Account storage `DISABLED` 전환과 같은 하나의 동기 DB transaction에서 모든 Active Session(현재 Session 포함)을 `REVOKED`로 전환한다. `ApplicationAuthorization.revokedAt`을 기록하고 `OAuthTokens`를 `REVOKED`와 `revokedAt`으로 전환하며, `OAuthAuthorizationCodes`와 `PushInstallation`은 물리적으로 삭제한다. 이번 탈퇴 정리 대상은 이 명시된 관계 집합으로 한정하며, 별도 Core account-deletion service나 Temporal workflow로 분리하지 않는다.
+- Decision Outcome: account-deletion Workflow의 transaction Activity가 Account storage `DISABLED` 전환과 같은 하나의 동기 DB transaction에서 모든 Active Session(현재 Session 포함)을 `REVOKED`로 전환한다. `ApplicationAuthorization.revokedAt`을 기록하고 `OAuthTokens`를 `REVOKED`와 `revokedAt`으로 전환하며, `OAuthAuthorizationCodes`와 `PushInstallation`은 물리적으로 삭제한다. GraphQL `deleteAccount` mutation resolver는 Workflow의 boolean 결과를 기다려 `completed`로 반환한다. 이번 탈퇴 정리 대상은 이 명시된 관계 집합으로 한정하며, 별도 Core account-deletion service는 추가하지 않는다.
 - Alternatives Considered: 현재 Session만 revoke하거나 Profile/Membership cascade에 맡기는 방식은 전체 정리와 보존을 보장하지 못한다.
 - Consequences: 일반 로그아웃과 Account 탈퇴는 별도 action·성공 의미를 가지며, 결과 불명 시 성공을 반환하지 않는다.
 - Confirmation / Follow-up: 둘 이상의 Session과 authorization/token/code/push fixture로 상태·물리 삭제·Profile/Membership 보존 및 부분 성공 방지를 검증한다.
+
+### Account 탈퇴는 향후 외부 효과를 수용할 Temporal Workflow 경계를 사용한다
+
+- Decision Date: 2026-09-17
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/account.md`, `PROD-970`
+- Status: Active
+- Context / Problem: 현재 탈퇴는 하나의 DB transaction으로 끝나지만, 향후 외부 효과가 추가될 수 있으므로 GraphQL resolver에 직접 실행을 결합하면 실행 경계를 바꾸기 어렵다.
+- Decision Outcome: GraphQL `deleteAccount` mutation은 검증된 Account ID를 stable input으로 `accountDeletionWorkflow`에 전달하고 `runWorkflow`의 `execute` 결과를 동기적으로 기다린다. Workflow ID는 Account ID를 포함하고, 실행 중인 동일 탈퇴는 `USE_EXISTING`으로 기다리며, 완료된 `BLOCKED` 실행의 재시도는 Account가 Active인 동안 `ALLOW_DUPLICATE` 정책으로 새 실행을 시작한다. 이 정책은 Deleted Account의 공개 재탈퇴를 허용하지 않는다. 현재 Workflow는 transaction Activity 하나만 실행하며 외부 효과나 speculative side effect를 추가하지 않는다. Account eligibility·상태 전이·관계 정리는 이 Activity의 하나의 DB transaction이 소유하고, 이미 인증·승인된 Workflow 실행이 DB commit 후 결과 acknowledgement를 잃고 재시도되는 내부 경로에서만 storage `DISABLED`를 멱등 성공으로 처리해 정리를 다시 적용하고 `true`를 반환할 수 있으며 Account를 Active로 되돌리지 않는다.
+- Alternatives Considered: resolver 직접 transaction은 향후 외부 효과의 durable 실행 경계를 제공하지 못하고, 별도 Core service는 현재 공유 caller가 없어 추가 경계만 만든다. `start`만 호출하는 비동기 mutation은 현재 동기 `completed` 계약과 결과 불명 오류 경계를 바꾼다.
+- Consequences: 현재 GraphQL payload와 성공·차단 의미는 유지하면서 향후 Workflow에 외부 효과 Activity를 추가할 수 있다. Workflow 실행이 실패하거나 결과가 불명확하면 mutation 성공으로 추측하지 않는다.
+- Confirmation / Follow-up: API integration에서 인증된 Account ID 전달과 Workflow true/false 결과 대기를 검증하고, Worker integration에서 transaction Activity의 eligibility·cleanup·atomicity를 검증한다.
 
 ### Settings 탈퇴는 항상 노출되는 in-app 확인 lifecycle을 사용한다
 

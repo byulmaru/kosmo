@@ -2,7 +2,7 @@
 
 ### Requirement: Kosmo Account 탈퇴 eligibility
 
-**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/design/settings.md`, `PROD-970` — 인증된 사용자는 자기 Kosmo Account에 대해서만 탈퇴를 요청할 수 있어야 하며(MUST), Account State가 Active이고 연결된 Profile이 없거나 모든 연결 Profile의 storage state가 `DISABLED`(domain Profile Lifecycle State `Deactivated`)인 경우에만 탈퇴를 허용해야 한다(MUST). 조건을 만족하지 않으면 Account, Profile, Membership, Session, `ApplicationAuthorization`, `OAuthTokens`, `OAuthAuthorizationCodes` 또는 `PushInstallation`을 변경해서는 안 된다(MUST NOT). 탈퇴 eligibility 확인은 Profile이나 Membership을 삭제·비활성화·연결 해제해서는 안 된다(MUST NOT). 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 차단 이유를 사전 표시할 수 있지만(MAY), 이는 참고용이며 별도 eligibility API를 제공하지 않는다(MUST NOT). 실제 탈퇴 mutation은 검증된 Account ID를 대상으로 GraphQL mutation resolver가 하나의 동기 transaction에서 연결 Profile State를 다시 확인해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/design/settings.md`, `PROD-970` — 인증된 사용자는 자기 Kosmo Account에 대해서만 탈퇴를 요청할 수 있어야 하며(MUST), Account를 Deleted로 전환하는 탈퇴는 Account State가 Active이고 연결된 Profile이 없거나 모든 연결 Profile의 storage state가 `DISABLED`(domain Profile Lifecycle State `Deactivated`)인 경우에만 허용해야 한다(MUST). Deleted(storage `DISABLED`) Account는 terminal 상태로 남아 공개 인증과 `deleteAccount` mutation을 허용해서는 안 된다(MUST NOT). 이미 인증·승인된 account-deletion Workflow 실행이 DB commit 후 결과 acknowledgement를 잃고 재시도되는 내부 경로에 한해서는 transaction Activity가 storage `DISABLED`를 멱등 성공으로 처리해 명세된 인증·기기 정리를 다시 적용할 수 있으며(MAY), Account를 Active로 되돌려서는 안 된다(MUST NOT). 완료된 `BLOCKED` 실행은 Account가 Active인 동안 `ALLOW_DUPLICATE` 정책으로 새 실행을 시작해 현재 Profile 조건을 다시 판정할 수 있으며(MAY), 이 정책은 Deleted Account의 공개 재탈퇴를 허용하지 않는다(MUST NOT). 새로운 Deleted 전환 조건을 만족하지 않으면 Account, Profile, Membership, Session, `ApplicationAuthorization`, `OAuthTokens`, `OAuthAuthorizationCodes` 또는 `PushInstallation`을 변경해서는 안 된다(MUST NOT). 탈퇴 eligibility 확인은 Profile이나 Membership을 삭제·비활성화·연결 해제해서는 안 된다(MUST NOT). 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 차단 이유를 사전 표시할 수 있지만(MAY), 이는 참고용이며 별도 eligibility API를 제공하지 않는다(MUST NOT). 실제 탈퇴 mutation은 검증된 Account ID를 account-deletion Workflow에 전달하고, Workflow의 transaction Activity가 하나의 동기 transaction에서 연결 Profile State를 다시 확인해야 한다(MUST).
 
 #### Scenario: 연결된 Profile이 없는 Account의 탈퇴
 
@@ -23,15 +23,28 @@
 - **AND** Account, Profile, Membership, Session, `ApplicationAuthorization`, `OAuthTokens`, `OAuthAuthorizationCodes` 및 `PushInstallation`을 변경하지 않는다
 - **AND** 호출 화면은 활성 Profile 개수와 탈퇴할 수 없는 이유를 표시할 수 있다
 
-#### Scenario: terminal Account의 재탈퇴 거부
+#### Scenario: Deleted Account의 공개 재탈퇴를 거부한다
 
-- **WHEN** 요청 Account가 이미 Deleted 상태이다
-- **THEN** 시스템은 새로운 탈퇴 전이를 시작하지 않는다
+- **WHEN** storage state가 `DISABLED`(domain Deleted)인 Account의 동일 OIDC subject가 login 또는 공개 `deleteAccount` mutation을 시도한다
+- **THEN** 인증 경계는 새 Session을 발급하지 않고 공개 `deleteAccount` mutation을 승인하지 않는다
 - **AND** Account를 Active로 되돌리지 않는다
+
+#### Scenario: 승인된 실행의 commit acknowledgement 유실을 재시도한다
+
+- **WHEN** 이미 인증·승인된 account-deletion Workflow가 DB commit 후 결과 acknowledgement를 잃고 storage state `DISABLED`인 Account에서 재시도된다
+- **THEN** transaction Activity는 `DISABLED`를 멱등 성공으로 처리할 수 있다
+- **AND** 명세된 인증·기기 정리를 다시 적용하고 `completed: true`를 반환한다
+- **AND** Account를 Active로 되돌리지 않는다
+
+#### Scenario: 완료된 BLOCKED 실행을 재시도한다
+
+- **WHEN** 이전 account-deletion Workflow가 `BLOCKED`(`completed: false`)로 완료되어 Account가 Active로 남아 있고 연결 Profile이 모두 `DISABLED`가 된 뒤 탈퇴를 재시도한다
+- **THEN** account-deletion Workflow는 `ALLOW_DUPLICATE` 정책으로 새 실행을 시작한다
+- **AND** 새 실행은 현재 Profile State를 다시 판정해 Account를 Deleted로 전환하고 결과를 반환한다
 
 ### Requirement: 원자적 Account terminal 전환과 인증·기기 정리
 
-**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/session.md`, `PROD-970` — eligibility가 확정된 탈퇴는 하나의 원자적 결과로 처리해야 한다(MUST). 확정된 결과는 기존 storage `AccountState.DISABLED`를 canonical Account State `Deleted`로 전환하고(MUST), Profile·Membership·Account 속성을 보존해야 한다(MUST). 같은 결과 안에서 해당 Account의 모든 Active Session(현재 요청 Session 포함)을 `REVOKED`로 전환하고(MUST), `ApplicationAuthorization.revokedAt`을 설정하며(MUST), `OAuthTokens`를 `REVOKED` 상태와 `revokedAt`으로 전환하고(MUST), `OAuthAuthorizationCodes`와 `PushInstallation`을 물리적으로 삭제해야 한다(MUST). 일반적인 한 Session 로그아웃처럼 현재 Session만 폐기하는 동작으로 축소해서는 안 된다(MUST NOT). 서버 탈퇴 mutation payload는 `completed`만 포함해야 하며(MUST), 원자적 재확인에서 조건이 충족되지 않은 `BLOCKED` 결과는 `completed: false`로 반환해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/session.md`, `PROD-970` — eligibility가 확정된 탈퇴는 하나의 원자적 결과로 처리해야 한다(MUST). 확정된 결과는 기존 storage `AccountState.DISABLED`를 canonical Account State `Deleted`로 전환하고(MUST), Profile·Membership·Account 속성을 보존해야 한다(MUST). 같은 결과 안에서 해당 Account의 모든 Active Session(현재 요청 Session 포함)을 `REVOKED`로 전환하고(MUST), `ApplicationAuthorization.revokedAt`을 설정하며(MUST), `OAuthTokens`를 `REVOKED` 상태와 `revokedAt`으로 전환하고(MUST), `OAuthAuthorizationCodes`와 `PushInstallation`을 물리적으로 삭제해야 한다(MUST). 일반적인 한 Session 로그아웃처럼 현재 Session만 폐기하는 동작으로 축소해서는 안 된다(MUST NOT). 현재 이 결과는 account-deletion Workflow의 transaction Activity가 수행하며, Workflow는 향후 외부 효과를 추가할 수 있는 실행 경계를 유지하되 현재 transaction Activity 외의 효과를 실행하지 않아야 한다(MUST NOT). 서버 탈퇴 mutation payload는 `completed`만 포함해야 하며(MUST), Workflow의 원자적 재확인에서 조건이 충족되지 않은 `BLOCKED` 결과는 `completed: false`로 반환해야 한다(MUST).
 
 #### Scenario: 탈퇴 결과를 성공으로 확정한다
 
