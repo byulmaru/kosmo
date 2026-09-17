@@ -234,8 +234,15 @@ describe('ActivityPub Local Post Note', () => {
   });
 
   test('projects an approved FEP-044f Quote and keeps the two D15 quotes display-only', async () => {
-    const sourceAuthor = await createProfile({ handle: 'quote-source', kind: InstanceKind.LOCAL });
-    const quoteAuthor = await createProfile({ handle: 'quote-author', kind: InstanceKind.LOCAL });
+    const fixtureId = crypto.randomUUID();
+    const sourceAuthor = await createProfile({
+      handle: `quote-source-${fixtureId}`,
+      kind: InstanceKind.LOCAL,
+    });
+    const quoteAuthor = await createProfile({
+      handle: `quote-author-${fixtureId}`,
+      kind: InstanceKind.LOCAL,
+    });
     const source = await createPost(sourceAuthor.id);
     const approvedQuote = await createPost(quoteAuthor.id, { repostSourceId: source.id });
     const sourceUri = `${publicOrigin}/ap/note/${source.id}`;
@@ -263,7 +270,7 @@ describe('ActivityPub Local Post Note', () => {
     assert.match(JSON.stringify(await approvedNote.toJsonLd()), /quoteAuthorization/);
 
     const displayOnlyAuthor = await createProfile({
-      handle: 'quote-display-only',
+      handle: `quote-display-only-${fixtureId}`,
       kind: InstanceKind.LOCAL,
     });
     const displayOnlyQuote = await createPost(displayOnlyAuthor.id, {
