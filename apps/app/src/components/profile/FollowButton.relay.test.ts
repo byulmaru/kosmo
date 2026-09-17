@@ -18,8 +18,8 @@ import followMutation from './__generated__/FollowButtonFollowProfileMutation.gr
 import unfollowMutation from './__generated__/FollowButtonUnfollowProfileMutation.graphql';
 import profileFragment from './__generated__/ProfileBlockAction_profile.graphql';
 import blockFragment from './__generated__/ProfileBlockAction_profileBlock.graphql';
-import blockMutation from './__generated__/ProfileBlockControllerBlockMutation.graphql';
-import unblockMutation from './__generated__/ProfileBlockControllerUnblockMutation.graphql';
+import blockMutation from './__generated__/ProfileBlockActionBlockMutation.graphql';
+import unblockMutation from './__generated__/ProfileBlockActionUnblockMutation.graphql';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
 import type { RelayEnvironmentBoundary as BoundaryExport } from '../../relay/RelayEnvironmentBoundary';
