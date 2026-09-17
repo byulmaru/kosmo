@@ -28,7 +28,7 @@ GraphQL enum은 `apps/api/src/graphql/enums.ts`에서 전역 등록한다.
 - 존재 확인과 actor 권한 조회는 가능하면 join으로 한 번에 처리한다. 예를 들어 profile mutation은 `Profiles`와 `AccountProfiles`를 join해 active profile 존재 여부와 actor role을 같이 조회한 뒤 role을 검사한다.
 - PostgreSQL unique violation 판정은 resolver 로컬 함수로 만들지 않고 `@kosmo/core/db`의 `isUniqueViolation` helper를 사용한다.
 - `createObjectRef`가 만든 loadable Node ref는 batched loading을 제공한다.
-- query, mutation, relationship resolver는 불필요한 추가 조회를 피한다. 이미 row가 있으면 row를 반환하고, ID만 있으면 ID를 반환해 Node loader를 타게 한다.
+- query, mutation, relationship resolver는 불필요한 추가 조회를 피한다. 이미 가진 row는 현재 viewer와 동일한 visibility authorization 경계에서 조회된 경우에만 직접 반환한다. 다른 recipient·actor·viewer나 access context에서 조회한 row는 row 대신 target ID를 반환해 현재 viewer의 concrete Node loader가 visibility를 다시 판정하게 한다. row가 없고 foreign key ID만 있으면 ID를 반환해 Node loader를 타게 한다.
 - PostgreSQL `uuidv7()`로 생성한 DB ID는 millisecond timestamp 뒤에 random 영역을 사용하며 같은 millisecond 안에서는
   생성 순서가 단조 증가하지 않는다. 같은 millisecond의 임의 순서와 page 배치를 허용할 때만 ID 단독
   cursor/order를 사용한다. 저장된 시각 기준 정렬이 필요하면 immutable `createdAt`과 ID tie-breaker를
