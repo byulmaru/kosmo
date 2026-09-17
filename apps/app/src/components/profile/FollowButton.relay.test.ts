@@ -260,17 +260,7 @@ test('실제 FollowButton의 늦은 A 응답은 B의 action·Store·피드백을
 
 test('Block 성공 결과로 실제 FollowButton과 차단 action을 전환한다', async () => {
   const environment = createEnvironment();
-  environment.commitUpdate((store) => {
-    store.get(stateId)?.setValue(null, 'profileBlock');
-    store
-      .get(
-        ConnectionHandler.getConnectionID(
-          selectedProfileId,
-          'SettingsBlockedProfiles_profileBlocks',
-        ),
-      )
-      ?.setLinkedRecords([], 'edges');
-  });
+  clearProfileBlock(environment);
   await render(environment, true);
   const action = () =>
     renderer!.root.findAllByType(ProfileBlockAction).find((node) => node.props.nextBlocked)!;
@@ -319,6 +309,94 @@ test('Block 성공 결과로 실제 FollowButton과 차단 action을 전환한�
   await act(async () => actionControl('ModalSheet').props.onDismiss());
   assert.deepEqual(toasts, ['프로필을 차단했어요']);
 });
+
+for (const [name, response] of [
+  ['payload 누락', { data: { blockProfile: null } }],
+  ['success false', { data: { blockProfile: { profileBlock: null, success: false } } }],
+  ['profileBlock 누락', { data: { blockProfile: { profileBlock: null, success: true } } }],
+] as const) {
+  test(`Block ${name} 응답은 기존 normalized 관계를 보존하고 실패로 끝낸다`, async () => {
+    const environment = createEnvironment();
+    clearProfileBlock(environment);
+    const before = relationshipState(environment);
+    await render(environment, true);
+    const action = renderer!.root
+      .findAllByType(ProfileBlockAction)
+      .find((node) => node.props.nextBlocked)!;
+    const control = (type: string) => action.find((node) => (node.type as unknown) === type);
+
+    await act(async () => control('Button').props.onPress());
+    await act(async () => control('ConfirmationContent').props.onConfirm());
+    await respond(0, response);
+
+    assert.deepEqual(relationshipState(environment), before);
+    assert.equal(control('ModalSheet').props.visible, false);
+    await act(async () => control('ModalSheet').props.onDismiss());
+    assert.deepEqual(toasts, ['프로필을 차단하지 못했어요. 다시 시도해 주세요.']);
+  });
+}
+
+for (const [name, response] of [
+  ['payload 누락', { data: { unblockProfile: null } }],
+  [
+    'success false',
+    { data: { unblockProfile: { profileBlockId: blockId, success: false, targetProfile: null } } },
+  ],
+  [
+    '다른 relation id',
+    {
+      data: {
+        unblockProfile: {
+          profileBlockId: 'block-b',
+          success: true,
+          targetProfile: null,
+        },
+      },
+    },
+  ],
+] as const) {
+  test(`Unblock ${name} 응답은 기존 normalized 관계를 보존하고 실패로 끝낸다`, async () => {
+    const environment = createEnvironment();
+    const before = relationshipState(environment);
+    await render(environment);
+
+    await confirm();
+    await respond(0, response);
+
+    assert.deepEqual(relationshipState(environment), before);
+    assert.equal(button().props.children, '차단 해제');
+    assert.equal(modal().props.visible, false);
+    await act(async () => modal().props.onDismiss());
+    assert.deepEqual(toasts, ['차단을 해제하지 못했어요. 다시 시도해 주세요.']);
+  });
+}
+
+function clearProfileBlock(environment: Environment) {
+  environment.commitUpdate((store) => {
+    store.get(stateId)?.setValue(null, 'profileBlock');
+    store
+      .get(
+        ConnectionHandler.getConnectionID(
+          selectedProfileId,
+          'SettingsBlockedProfiles_profileBlocks',
+        ),
+      )
+      ?.setLinkedRecords([], 'edges');
+  });
+}
+
+function relationshipState(environment: Environment) {
+  const source = environment.getStore().getSource();
+  return {
+    block: source.get(blockId),
+    connection: source.get(
+      ConnectionHandler.getConnectionID(selectedProfileId, 'SettingsBlockedProfiles_profileBlocks'),
+    ),
+    state: source.get(stateId),
+    target: source.get(targetId),
+    unrelated: source.get('unrelated'),
+  };
+}
 
 function unblockPayload(profileBlockId: string) {
   return {
