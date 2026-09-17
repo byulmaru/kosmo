@@ -1935,19 +1935,22 @@ function ProductionComposerDefaultVisibilityUpdateStory() {
   return (
     <>
       <ProductionComposerAdapterStory />
-      <Pressable
-        accessibilityRole="button"
-        onPress={() =>
-          commitLocalUpdate(environment, (store) => {
-            store
-              .get('profile-composer')
-              ?.getLinkedRecord('private')
-              ?.setValue('PUBLIC', 'defaultPostVisibility');
-          })
-        }
-      >
-        <Text>설정에서 기본 공개 범위 저장</Text>
-      </Pressable>
+      {(['PUBLIC', 'FOLLOWERS'] as const).map((visibility) => (
+        <Pressable
+          accessibilityRole="button"
+          key={visibility}
+          onPress={() =>
+            commitLocalUpdate(environment, (store) => {
+              store
+                .get('profile-composer')
+                ?.getLinkedRecord('private')
+                ?.setValue(visibility, 'defaultPostVisibility');
+            })
+          }
+        >
+          <Text>설정에서 기본 공개 범위를 {visibility}(으)로 저장</Text>
+        </Pressable>
+      ))}
     </>
   );
 }
@@ -6203,11 +6206,21 @@ export const ProductionComposerDefaultVisibilityUpdate: Story = {
     };
 
     expect(dispatchBeforeUnload().defaultPrevented).toBe(false);
-    await userEvent.click(canvas.getByRole('button', { name: '설정에서 기본 공개 범위 저장' }));
+    await userEvent.click(
+      canvas.getByRole('button', { name: '설정에서 기본 공개 범위를 PUBLIC(으)로 저장' }),
+    );
     await waitFor(() =>
       expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible(),
     );
     expect(dispatchBeforeUnload().defaultPrevented).toBe(false);
+
+    await userEvent.type(canvas.getByRole('textbox', { name: '게시물 내용' }), '보존할 draft');
+    await waitFor(() => expect(dispatchBeforeUnload().defaultPrevented).toBe(true));
+    await userEvent.click(
+      canvas.getByRole('button', { name: '설정에서 기본 공개 범위를 FOLLOWERS(으)로 저장' }),
+    );
+    expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(true);
   },
   render: () => <ProductionComposerDefaultVisibilityUpdateStory />,
 };

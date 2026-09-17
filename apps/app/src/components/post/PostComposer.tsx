@@ -230,12 +230,12 @@ function PostComposerContents({
   );
   const bodyText = normalizePostContentPlainText(body);
   const contentWarningText = normalizePostContentPlainText(contentWarning);
-  const hasUnsavedDraft =
+  const hasDraftContent =
     bodyText.length > 0 ||
     contentWarningText.length > 0 ||
     media.items.length > 0 ||
-    media.hasPendingMedia ||
-    visibility !== defaultVisibility;
+    media.hasPendingMedia;
+  const hasUnsavedDraft = hasDraftContent || visibility !== defaultVisibility;
   const remaining = postBodyMaxLength - bodyText.length - contentWarningText.length;
   const remainingDescription = `남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`;
   const disabled =
@@ -249,10 +249,13 @@ function PostComposerContents({
   const SelectedVisibilityIcon = selectedVisibility.icon;
 
   useEffect(() => {
+    if (hasDraftContent) {
+      return;
+    }
     const previousDefault = defaultVisibilityRef.current;
     defaultVisibilityRef.current = defaultVisibility;
     setVisibility((current) => (current === previousDefault ? defaultVisibility : current));
-  }, [defaultVisibility]);
+  }, [defaultVisibility, hasDraftContent]);
 
   useEffect(() => {
     if (
