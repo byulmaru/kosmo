@@ -105,6 +105,45 @@ describe('Native app Sentry configuration', () => {
     assert.deepEqual(captureCalls[0]?.context, { componentStack: '\n    at Screen' });
   });
 
+  it('skips native transport errors from React error boundaries', async () => {
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const { captureReactError } = await import(`${sentryModule}?native-transport`);
+
+    for (const message of ['The network connection was lost.', 'The request timed out.']) {
+      const nativeCause = new Error(message);
+      nativeCause.name = 'UnexpectedException';
+      captureReactError(new TypeError('fetch failed', { cause: nativeCause }), {
+        componentStack: '\n    at Screen',
+      } as ErrorInfo);
+    }
+
+    assert.equal(captureCalls.length, 0);
+  });
+
+  it('keeps unrelated React errors captured', async () => {
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const { captureReactError } = await import(`${sentryModule}?native-transport-guard`);
+    const componentStack = { componentStack: '\n    at Screen' } as ErrorInfo;
+    const nativeCause = new Error('The network connection was lost.');
+    nativeCause.name = 'UnexpectedException';
+    const nearMissCause = new Error('The request timed out unexpectedly.');
+    nearMissCause.name = 'UnexpectedException';
+
+    const errors = [
+      new TypeError('fetch failed'),
+      new TypeError('fetch failed', { cause: new Error('The network connection was lost.') }),
+      new TypeError('fetch failed', { cause: nearMissCause }),
+      new TypeError('request failed', { cause: nativeCause }),
+      new TypeError('fetch failed', { cause: nativeCause }),
+    ];
+
+    for (const error of errors) {
+      captureReactError(error, componentStack);
+    }
+
+    assert.equal(captureCalls.length, errors.length - 1);
+  });
+
   it('captures handled errors with the original error and primitive context', async () => {
     process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
     const { captureHandledError } = await import(`${sentryModule}?handled`);

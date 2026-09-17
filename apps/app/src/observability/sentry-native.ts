@@ -9,6 +9,20 @@ const enabled = Boolean(dsn && channel && release);
 
 type HandledErrorContext = Readonly<Record<string, string | number | boolean>>;
 
+function isNativeTransportError(cause: unknown): boolean {
+  if (!(cause instanceof Error) || cause.message !== 'fetch failed') {
+    return false;
+  }
+
+  const nativeCause = cause.cause;
+  return (
+    nativeCause instanceof Error &&
+    nativeCause.name === 'UnexpectedException' &&
+    (nativeCause.message === 'The network connection was lost.' ||
+      nativeCause.message === 'The request timed out.')
+  );
+}
+
 if (enabled) {
   Sentry.init({
     beforeBreadcrumb: () => null,
@@ -22,7 +36,7 @@ if (enabled) {
 }
 
 export const captureReactError = (cause: unknown, info: ErrorInfo): void => {
-  if (!enabled) {
+  if (!enabled || isNativeTransportError(cause)) {
     return;
   }
 
