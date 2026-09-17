@@ -318,6 +318,7 @@ function EditableProfileRoute({
           return;
         }
 
+        setServerErrors((current) => (current ? { ...current, [field]: undefined } : current));
         const previous = field === 'avatar' ? avatarRef.current : headerRef.current;
         if (Platform.OS === 'web') {
           releaseProfileEditImagePreview(previous);
@@ -326,6 +327,13 @@ function EditableProfileRoute({
           replaceProfileEditImage(current, result.assets[0]!),
         );
         void uploadImage(field, next);
+      } catch {
+        if (mounted.current) {
+          setServerErrors((current) => ({
+            ...current,
+            [field]: '이미지를 선택하지 못했습니다.',
+          }));
+        }
       } finally {
         selecting.current = false;
       }

@@ -25,7 +25,7 @@ type ScreenProps = Record<string, unknown> & {
   onChange: (value: Record<string, unknown>) => void;
   onHeaderEdit: () => Promise<void>;
   onSubmit: (value: Record<string, unknown>) => void;
-  serverErrors?: { tags?: string };
+  serverErrors?: { avatar?: string; header?: string; tags?: string };
   submitState: { kind: string };
   value: Record<string, unknown> & {
     avatar: { kind: string; failure?: unknown; uploadState?: string };
@@ -61,6 +61,7 @@ let discardDialogProps: DiscardDialogProps | null = null;
 let lastBackEvent: BeforeRemoveEvent | null = null;
 let lastReplaceEvent: BeforeRemoveEvent | null = null;
 let pickerResult: ImagePickerResult = { canceled: true, assets: null };
+let pickerLaunch: () => Promise<ImagePickerResult> = async () => pickerResult;
 let routerBackCalls = 0;
 let routerCanGoBack = true;
 let triggerBeforeRemoveOnReplace = false;
@@ -94,7 +95,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 const normalizedImageUri = 'file:///cache/profile-normalized.webp';
 
 mockModule('expo-image-picker', {
-  launchImageLibraryAsync: async () => pickerResult,
+  launchImageLibraryAsync: () => pickerLaunch(),
 });
 const mockImageManipulator = () =>
   mockModule('expo-image-manipulator', {
@@ -231,6 +232,7 @@ afterEach(async () => {
   mutationHandlers.clear();
   navigationDispatches.length = 0;
   pickerResult = { canceled: true, assets: null };
+  pickerLaunch = async () => pickerResult;
   queryData = editableQueryData();
   preventRemoveCallback = null;
   preventRemoveEnabled = false;
@@ -396,6 +398,103 @@ describe('ProfileEditRoute', () => {
     assert.deepEqual(props.initialValue.tags, ['Fediverse', '개발']);
     assert.equal(typeof props.onAvatarRemove, 'function');
     assert.equal(typeof props.onHeaderRetry, 'function');
+  });
+
+  it('picker reject를 field별 선택 오류로 표시하고 호출부로 전파하지 않는다', async () => {
+    pickerLaunch = async () => {
+      throw new Error('picker failed');
+    };
+    await renderRoute();
+    await act(async () =>
+      requireScreenProps().onChange({ ...requireScreenProps().value, bio: '변경한 소개' }),
+    );
+    const draftBeforeReject = requireScreenProps().value;
+
+    await act(async () => requireScreenProps().onAvatarEdit());
+
+    assert.deepEqual(requireScreenProps().value, draftBeforeReject);
+    assert.deepEqual(requireScreenProps().serverErrors, {
+      avatar: '이미지를 선택하지 못했습니다.',
+    });
+  });
+
+  it('picker cancel은 image와 text draft를 보존하고 오류를 만들지 않는다', async () => {
+    await renderRoute();
+    const draft = { ...requireScreenProps().value, bio: '변경한 소개' };
+    await act(async () => requireScreenProps().onChange(draft));
+
+    pickerResult = { canceled: true, assets: null };
+    await act(async () => requireScreenProps().onHeaderEdit());
+
+    assert.deepEqual(requireScreenProps().value, draft);
+    assert.equal(requireScreenProps().serverErrors, undefined);
+  });
+
+  it('picker reject 뒤 재선택은 해당 오류만 지우고 기존 upload flow를 사용한다', async () => {
+    let issued = 0;
+    mutationHandlers.set('ProfileEditRouteIssueMediaUploadUrlMutation', (config) => {
+      issued += 1;
+      config.onCompleted({
+        issueMediaUploadUrl: {
+          media: { id: `media-issued-${issued}` },
+          uploadUrl: `https://upload.example/${issued}`,
+        },
+      } as never);
+    });
+    mutationHandlers.set('ProfileEditRouteCompleteMediaUploadMutation', (config) =>
+      config.onCompleted({ completeMediaUpload: { media: { state: 'READY' } } } as never),
+    );
+    const fetchMock = mockSuccessfulUploadFetch();
+    await renderRoute();
+
+    pickerLaunch = async () => {
+      throw new Error('avatar picker failed');
+    };
+    await act(async () => requireScreenProps().onAvatarEdit());
+    pickerLaunch = async () => {
+      throw new Error('header picker failed');
+    };
+    await act(async () => requireScreenProps().onHeaderEdit());
+    assert.deepEqual(requireScreenProps().serverErrors, {
+      avatar: '이미지를 선택하지 못했습니다.',
+      header: '이미지를 선택하지 못했습니다.',
+    });
+
+    pickerLaunch = async () => ({
+      canceled: false,
+      assets: [asset('blob:https://kosmo.example/avatar')],
+    });
+    await act(async () => requireScreenProps().onAvatarEdit());
+    await flush();
+
+    assert.deepEqual(requireScreenProps().serverErrors, {
+      avatar: undefined,
+      header: '이미지를 선택하지 못했습니다.',
+    });
+    assert.equal(requireScreenProps().value.avatar.uploadState, 'ready');
+    assert.equal(issued, 1);
+    assert.equal(fetchMock.mock.callCount(), 2);
+  });
+
+  it('unmount 뒤 picker의 늦은 resolve와 reject는 draft 또는 오류를 갱신하지 않는다', async () => {
+    let resolvePicker: ((result: ImagePickerResult) => void) | null = null;
+    let rejectPicker: ((error: Error) => void) | null = null;
+    pickerLaunch = () =>
+      new Promise<ImagePickerResult>((resolve, reject) => {
+        resolvePicker = resolve;
+        rejectPicker = reject;
+      });
+    await renderRoute();
+    const pendingAvatar = requireScreenProps().onAvatarEdit();
+    await act(async () => renderer?.unmount());
+    resolvePicker!({ canceled: false, assets: [asset('blob:https://kosmo.example/avatar')] });
+    await pendingAvatar;
+
+    await renderRoute();
+    const pendingHeader = requireScreenProps().onHeaderEdit();
+    await act(async () => renderer?.unmount());
+    rejectPicker!(new Error('late picker failure'));
+    await pendingHeader;
   });
 
   it('부분 upload와 저장 실패를 field별로 재시도하며 Ready Media를 재업로드하지 않는다', async () => {
@@ -597,6 +696,7 @@ describe('ProfileEditRoute', () => {
       reason: 'file-too-large',
       stage: 'transfer',
     });
+    assert.equal(requireScreenProps().serverErrors?.avatar, undefined);
   });
 
   it('변경된 draft의 닫기, Web, Android 이탈을 같은 확인 dialog로 막는다', async () => {
