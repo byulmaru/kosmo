@@ -201,7 +201,7 @@ async function renderListItem(props: Parameters<typeof PostListItemExport>[0]) {
   return renderer.root;
 }
 
-async function renderThreadLayout() {
+async function renderThreadLayout(presentation: 'mobile' | 'wide') {
   await act(async () => {
     renderer?.unmount();
     renderer = create(
@@ -212,6 +212,7 @@ async function renderThreadLayout() {
         ],
         current: { connectedToPrevious: true, id: 'current', post: {} },
         descendants: [],
+        presentation,
         renderPost: ({ role }) => createElement('Post', { role }),
       }),
     );
@@ -357,38 +358,27 @@ test('Native PostActionBar wiring keeps target sizes and the zero-gap trailing g
   }
 });
 
-test('PostListItem derives its inset from the shell presentation', async () => {
-  for (const [os, width, expectedPadding, expectedBottom] of [
-    ['ios', 1_024, 16, 4],
-    ['android', 1_024, 16, 4],
-    ['web', 390, 16, 8],
-    ['web', 767, 16, 8],
-    ['web', 768, 8, 8],
-    ['web', 900, 8, 8],
-    ['web', 1_400, 8, 8],
+test('PostListItem uses the supplied list presentation', async () => {
+  for (const [presentation, expectedPadding] of [
+    ['mobile', 16],
+    ['wide', 8],
   ] as const) {
-    platform.OS = os;
-    windowWidth = width;
-    const root = await renderListItem({ post: {} as never, showDivider: false });
+    const root = await renderListItem({
+      post: {} as never,
+      presentation,
+      showDivider: false,
+    });
     const card = root.findByProps({ role: 'article' });
     assert.equal(flattenStyle(card.props.style).paddingHorizontal, expectedPadding);
-    assert.equal(flattenStyle(card.props.style).paddingBottom, expectedBottom);
   }
 });
 
-test('PostThreadLayout derives current inset and connector axis from the shell presentation', async () => {
-  for (const [os, width, expectedInset, expectedConnectorLeft] of [
-    ['ios', 1_024, 16, 40],
-    ['android', 1_024, 16, 40],
-    ['web', 390, 16, 40],
-    ['web', 767, 16, 40],
-    ['web', 768, 8, 32],
-    ['web', 900, 8, 32],
-    ['web', 1_400, 8, 32],
+test('PostThreadLayout uses the supplied list presentation', async () => {
+  for (const [presentation, expectedInset, expectedConnectorLeft] of [
+    ['mobile', 16, 40],
+    ['wide', 8, 32],
   ] as const) {
-    platform.OS = os;
-    windowWidth = width;
-    const root = await renderThreadLayout();
+    const root = await renderThreadLayout(presentation);
     const currentPost = findByType(
       root.findByProps({ testID: 'post-thread-current-current' }),
       'Post',

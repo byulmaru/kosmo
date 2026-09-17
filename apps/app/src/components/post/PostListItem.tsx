@@ -12,7 +12,7 @@ import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
 import { usePostComposerBinding } from './PostComposerCoordinator';
-import { usePostListMetrics } from './postListMetrics';
+import { postListMetrics } from './postListMetrics';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
@@ -22,6 +22,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
+import type { PostListPresentation } from './postListMetrics';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
 const PostListRowFragment = graphql`
@@ -101,16 +102,18 @@ const PostListItemFragment = graphql`
 export function PostListItem({
   pinned = false,
   post: postKey,
+  presentation = 'wide',
   showDivider = true,
   showReplyAttribution = true,
 }: {
   pinned?: boolean;
   post: PostListItem_post$key;
+  presentation?: PostListPresentation;
   showDivider?: boolean;
   showReplyAttribution?: boolean;
 }) {
   const theme = useTheme();
-  const postListMetrics = usePostListMetrics();
+  const metrics = postListMetrics[presentation];
   const restoreQuoteTriggerFocusRef = useRef<(() => void) | null>(null);
   const post = useFragment(PostListItemFragment, postKey);
   const openViewer = usePostMediaViewerHost();
@@ -178,14 +181,14 @@ export function PostListItem({
     [openViewer, post.id],
   );
   const standardCardStyle = [
-    { paddingHorizontal: postListMetrics.inset },
+    { paddingHorizontal: metrics.inset },
     styles.standardCard,
     Platform.OS === 'web' && styles.webCardBottom,
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
   ];
   const compactCardStyle = [
-    { paddingHorizontal: postListMetrics.inset },
+    { paddingHorizontal: metrics.inset },
     styles.compactCard,
     Platform.OS === 'web' && styles.webCardBottom,
     showDivider && styles.cardDivider,

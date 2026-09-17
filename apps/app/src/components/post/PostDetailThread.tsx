@@ -8,7 +8,7 @@ import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
-import { getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
+import { getShellLayout, getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
 import { PostThreadLayout } from './PostThreadLayout';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { ScrollViewProps } from 'react-native';
@@ -18,6 +18,7 @@ import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphq
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostComposerCreatedPost } from './PostComposer';
+import type { PostListPresentation } from './postListMetrics';
 
 const PostDetailThreadFragment = graphql`
   fragment PostDetailThread_post on Post
@@ -142,6 +143,9 @@ function PostDetailThreadContent({
   presentation: 'route' | 'viewer';
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
+  const { width } = useWindowDimensions();
+  const postListPresentation: PostListPresentation =
+    getShellLayout(Platform.OS === 'web', width) === 'mobile' ? 'mobile' : 'wide';
   const { data, hasNext, isLoadingNext, loadNext } = usePaginationFragment<
     PostDetailThreadNextPageQuery,
     PostDetailThread_post$key
@@ -193,6 +197,7 @@ function PostDetailThreadContent({
         ancestors={ancestors}
         current={current}
         descendants={descendants}
+        presentation={postListPresentation}
         renderPost={({ item, role }) => (
           <View>
             {role === 'current' ? (
@@ -207,6 +212,7 @@ function PostDetailThreadContent({
             ) : (
               <PostListItem
                 post={requireThreadFragment(item.post.listItem, `${role} list item`)}
+                presentation={postListPresentation}
                 showDivider={false}
                 showReplyAttribution={false}
               />

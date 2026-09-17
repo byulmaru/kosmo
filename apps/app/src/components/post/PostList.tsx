@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { InfiniteList } from '@/components/pagination/InfiniteList';
+import { getShellLayout } from '@/components/shell/shellLayout';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -17,6 +25,7 @@ import type { PostListHomeNextPageQuery } from './__generated__/PostListHomeNext
 import type { PostListLocalNextPageQuery } from './__generated__/PostListLocalNextPageQuery.graphql';
 import type { PostListProfileNextPageQuery } from './__generated__/PostListProfileNextPageQuery.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
+import type { PostListPresentation } from './postListMetrics';
 
 const PostListProfileFragment = graphql`
   fragment PostList_profile on Profile
@@ -89,6 +98,9 @@ export function PostList({
   replyProfile,
 }: Props) {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const postListPresentation: PostListPresentation =
+    getShellLayout(Platform.OS === 'web', width) === 'mobile' ? 'mobile' : 'wide';
   const homePagination = usePaginationFragment<PostListHomeNextPageQuery, PostList_home$key>(
     PostListHomeFragment,
     homeKey ?? null,
@@ -209,7 +221,9 @@ export function PostList({
                 </View>
               ) : null
             }
-            renderItem={({ item }) => <PostListItem post={item.node} />}
+            renderItem={({ item }) => (
+              <PostListItem post={item.node} presentation={postListPresentation} />
+            )}
             style={styles.root}
           />
         </PostMediaViewerHostProvider>

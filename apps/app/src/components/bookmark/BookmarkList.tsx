@@ -1,9 +1,10 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
+import { getShellLayout } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -11,6 +12,7 @@ import { spacing } from '@/theme/tokens';
 import type { ReactNode } from 'react';
 import type { PostListItem_post$key } from '@/components/post/__generated__/PostListItem_post.graphql';
 import type { ReplyComposerSurface_profile$key } from '@/components/post/__generated__/ReplyComposerSurface_profile.graphql';
+import type { PostListPresentation } from '@/components/post/postListMetrics';
 
 export type BookmarkListEntry = { id: string; post: PostListItem_post$key };
 
@@ -37,6 +39,9 @@ export function BookmarkList({
   profileRequired = false,
   replyProfile,
 }: BookmarkListProps): React.JSX.Element {
+  const { width } = useWindowDimensions();
+  const postListPresentation: PostListPresentation =
+    getShellLayout(Platform.OS === 'web', width) === 'mobile' ? 'mobile' : 'wide';
   const hasData = items.length > 0;
   let content: ReactNode;
 
@@ -69,7 +74,7 @@ export function BookmarkList({
     content = (
       <>
         {items.map((item) => (
-          <PostListItem key={item.id} post={item.post} />
+          <PostListItem key={item.id} post={item.post} presentation={postListPresentation} />
         ))}
         {error ? (
           <BookmarkListState
