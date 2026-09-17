@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   index,
   integer,
@@ -280,6 +281,7 @@ export const Notifications = pgTable(
 export const NotificationRollouts = pgTable('notification_rollout', {
   key: text('key').primaryKey(),
   activatedAt: datetime('activated_at').notNull(),
+  enabled: boolean('enabled').notNull().default(false),
 });
 
 export const OAuthAuthorizationCodes = pgTable(

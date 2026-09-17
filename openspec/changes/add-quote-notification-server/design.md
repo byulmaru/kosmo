@@ -132,6 +132,6 @@ connection·count·Node·read mutation·cleanup은 동일한 원인 판정에 �
 
 ## Open Questions
 
-제품·범위·소유권 미결정 및 OpenSpec 작성 blocker는 없다. 위 기술 선택은 Spec Gate에서 검토할 초안이며 아직 구현 승인이 아니다.
+제품·범위·소유권 미결정 및 OpenSpec 작성 blocker는 없다. Spec Gate는 2026-09-16 승인됐으며, 이후 별도 구현·리뷰 요청에 따라 구현을 진행했다. 이 승인은 아래 실제 upstream 통합이나 배포 실행의 완료 증거가 아니다.
 
 upstream adapter의 실제 이름·경로와 최종 통합 실행 가능 시점은 구현 증거로 확인할 항목이다. PROD-792의 compatibility harness 재검증, PROD-924 승인·철회, PROD-911 inbound Mention, PROD-327 공통 정책 연결은 실제 결과가 준비될 때 완료 처리한다. 이 상태를 추가 제품 선택이나 Spec 작성 blocker로 바꾸지 않는다.

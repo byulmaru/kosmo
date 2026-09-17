@@ -1462,6 +1462,19 @@
       "table": "notification_rollout"
     },
     {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "enabled",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notification_rollout"
+    },
+    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": true,

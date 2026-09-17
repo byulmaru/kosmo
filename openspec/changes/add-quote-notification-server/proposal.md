@@ -14,7 +14,7 @@ PROD-903은 Local·Remote Quote 알림의 생성·중복·조회·정리 정책�
 
 - Canonical: `docs/domain/objects/notification.md`의 관계·지정 읽음·Quote Notification·조회 정책, `docs/domain/decisions/0028-quote-notification-policy.md`의 결정.
 - Canonical: `docs/domain/objects/post.md`의 인용 승인·조회 정책, `docs/domain/objects/profile-mute.md`, `docs/domain/objects/profile-block.md`. `docs/design/notifications.md`는 읽음 동작과 클라이언트 소비 경계만 참조한다.
-- Linear Contract: [PROD-903](https://linear.app/byulmaru/issue/PROD-903) Done 및 [PROD-926](https://linear.app/byulmaru/issue/PROD-926)의 2026-09-16 수정된 Issue Gate. 사용자는 같은 날짜에 Issue Gate와 서버 OpenSpec 작성·strict validation을 명시적으로 승인했다. Spec Gate·구현 착수 승인은 아직 없다.
+- Linear Contract: [PROD-903](https://linear.app/byulmaru/issue/PROD-903) Done 및 [PROD-926](https://linear.app/byulmaru/issue/PROD-926)의 2026-09-16 수정된 Issue Gate. 사용자는 같은 날짜에 Issue Gate와 서버 OpenSpec 작성·strict validation을 승인한 뒤 Spec Gate도 별도로 명시 승인했다. 구현과 리뷰는 이후 별도 요청으로 진행했다.
 - Linear Implementations: PROD-926/정혜주가 이 change의 전체 서버 구현·검증·sync·archive를 소유한다.
 - 결과 제공 계약: [PROD-431](https://linear.app/byulmaru/issue/PROD-431), [PROD-792](https://linear.app/byulmaru/issue/PROD-792), [PROD-924](https://linear.app/byulmaru/issue/PROD-924)의 작성·승인 lifecycle, [PROD-911](https://linear.app/byulmaru/issue/PROD-911)의 inbound Mention, [PROD-327](https://linear.app/byulmaru/issue/PROD-327)의 공통 Profile Mute·Block, [PROD-328](https://linear.app/byulmaru/issue/PROD-328)의 cleanup. 이들의 기존 change 소유권은 이전하지 않는다.
 
@@ -39,4 +39,4 @@ PROD-903은 Local·Remote Quote 알림의 생성·중복·조회·정리 정책�
 - Word Mute·Hashtag Mute·Post Notification Mute의 기반 구현과 Quote 연결은 현재 delivery·검증·완료 조건에서 제외한다. 장기 canonical/PROD-903 정책은 유지하며 후속 담당자·이슈·일정 확정을 기다리지 않는다. 새 이슈를 만들지 않는다.
 - [PROD-953](https://linear.app/byulmaru/issue/PROD-953)은 표시 계약·알림함 UI·Quote 상세 이동·클라이언트 통합 및 별도 OpenSpec·완료·archive를 소유한다. PROD-926은 PROD-953 완료를 기다리지 않는다.
 - Local Mention 신규 생성, FCM·Push, Local Reply+Quote 동시 작성 UI/API, 승인 프로토콜 자체와 전체 Notification grouping 재설계는 제외한다.
-- 이번 산출물은 서버 Spec Gate 검토용이다. 구현·커밋·push·PR 생성·archive는 수행하지 않는다.
+- PR #921은 Local Quote 최초 판단·API·cleanup과 그 검증을 담당한다. 실제 Remote 승인·철회, inbound Mention 교차 Type 통합, 전체 rollout 실행 증거와 sync·archive 책임은 같은 PROD-926에 남는다. PR 자체의 리뷰 준비 여부와 change 전체 완료는 별도로 판단하며, 부분 구현을 전체 task 완료로 표시하지 않는다.

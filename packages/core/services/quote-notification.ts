@@ -75,6 +75,7 @@ export const createQuoteNotification = async (
       .select({
         activatedAt: NotificationRollouts.activatedAt,
         quoteAuthorId: Posts.profileId,
+        quoteAuthorInstanceKind: QuoteNotificationQuoteAuthorInstances.kind,
         quoteAuthorInstanceState: QuoteNotificationQuoteAuthorInstances.state,
         quoteAuthorState: QuoteNotificationQuoteAuthors.state,
         quoteCreatedAt: Posts.createdAt,
@@ -111,15 +112,25 @@ export const createQuoteNotification = async (
         QuoteNotificationSourceAuthorInstances,
         eq(QuoteNotificationSourceAuthorInstances.id, QuoteNotificationSourceAuthors.instanceId),
       )
-      .innerJoin(NotificationRollouts, eq(NotificationRollouts.key, QUOTE_NOTIFICATION_ROLLOUT_KEY))
+      .innerJoin(
+        NotificationRollouts,
+        and(
+          eq(NotificationRollouts.key, QUOTE_NOTIFICATION_ROLLOUT_KEY),
+          eq(NotificationRollouts.enabled, true),
+        ),
+      )
       .where(eq(Posts.id, quotePostId))
       .limit(1)
       .then((rows) => rows[0]);
 
-    if (!source || source.sourceAuthorInstanceKind !== InstanceKind.LOCAL) {
-      // The current mainline has no persisted remote Quote approval seam. A
-      // remote Source is therefore fail-closed until its upstream adapter is
-      // available; it must not consume the first judgment while pending.
+    if (
+      !source ||
+      source.sourceAuthorInstanceKind !== InstanceKind.LOCAL ||
+      source.quoteAuthorInstanceKind !== InstanceKind.LOCAL
+    ) {
+      // This slice consumes only the synchronous Local-to-Local approval path.
+      // Neither a Remote Quote nor a Remote Source FK proves approval. Leave
+      // its judgment untouched until the actual upstream approval adapter exists.
       return;
     }
 
