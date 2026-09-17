@@ -14,7 +14,7 @@ PROD-785의 공용 Profile/Follow 기반 위에서 기존 `PostReactionSummary �
 
 - 직접 진입은 모달을 열었던 부모의 counts를 전달받지 못하므로 route가 Post와 counts를 확보해야 한다. 유효한 선택 Type이 정해진 뒤 기존 목록 query를 연결한다.
 - 기존 pagination은 `filters: [type]`, 20개 단위이며 오류여도 기존 edge를 유지한다. actor 격리는 상위 Environment 교체가 소유한다.
-- pill TabList는 항상 가로 ScrollView다. 필요한 layout 지원만 확장하고 role·키보드 선택 동작은 재사용한다.
+- 접힌 pill TabList는 가로 ScrollView를 사용하고, 펼친 상태는 전체 Type을 wrap한다. 필요한 layout 지원만 확장하고 role·키보드 선택 동작은 재사용한다.
 - Viewer provider는 pathname을 감시하지 않으며 내부 close 또는 unmount로 정리된다. 링크 이동에서 close와 목적지 focus가 충돌하지 않도록 실제 경계를 연결한다.
 - Web은 document scroll, Native는 PaginationScrollView가 목록 scroll을 소유한다. 공용 shell의 route header 중복 억제도 연결해야 한다.
 
