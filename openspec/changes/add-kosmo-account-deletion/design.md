@@ -36,13 +36,17 @@ Settings에는 기존 route family와 confirmation 상태 패턴이 있고, publ
   `OAuthAuthorizationCodes`·`PushInstallations`는 Account를 참조한다. 기존 상태·삭제 방식을 유지한다.
 - Profile lifecycle은 Profile·Membership을 보존한다. 클라이언트는 이미 조회한 `me.profiles`로 blocker를 사전
   표시할 수 있지만 별도 eligibility query를 호출하지 않으며, 서버 mutation이 권위 있는 판단을 수행한다.
+- Account 탈퇴의 상태 전이와 관계 정리는 GraphQL `deleteAccount` mutation resolver가 하나의 동기 DB
+  transaction에서 수행한다. 별도 Core account-deletion service, Temporal workflow, Native 전용 login 오류 계약은
+  범위에 포함하지 않는다.
 - 기존 public `/account-deletion`의 이메일·보관 안내는 in-app-only 계약과 섞이지 않게 교체한다.
 
 ### Recommended Approach
 
-1. 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 blocker를 사전 표시한다. 서버 mutation은
+1. 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 blocker를 사전 표시한다. GraphQL
+   `deleteAccount` mutation resolver는
    인증 경계가 확인한 `accountId`를 받아 Active 및 Profile 0개 또는 전체 storage `DISABLED`
-   조건을 같은 transaction 경계에서 다시 판정한다. 이 precheck는 서버 판정을 대체하지 않는다.
+   조건을 하나의 동기 DB transaction에서 다시 판정한다. 이 precheck는 서버 판정을 대체하지 않는다.
 2. 허용되면 Account를 storage `DISABLED`로 전환하고 모든 Active Session, `ApplicationAuthorization`,
    `OAuthTokens`, `OAuthAuthorizationCodes`, `PushInstallation`을 명세된 방식으로 정리한다. 조건이 바뀌어
    `BLOCKED`가 되면 `completed: false`만 반환하며 Profile·Membership·Account 속성에는 쓰지 않는다.
@@ -50,13 +54,13 @@ Settings에는 기존 route family와 confirmation 상태 패턴이 있고, publ
    이동한다. 결과 불명 상태에서 성공을 반환하지 않는다.
 4. Settings root 마지막 행과 기존 route/header/back·접근성 패턴을 재사용한다. blocker에는 Active Profile 개수와
    이유만 표시하고 관리 action은 만들지 않는다. public route는 in-app-only 안내로 유지한다.
-5. 기존 OIDC의 Disabled Account 거부 경계와 지원 안내를 유지하고 Byulmaru ID provider 상태는 변경하지 않는다.
+5. 기존 OIDC의 Disabled Account 거부 경계를 유지하고 Byulmaru ID provider 상태는 변경하지 않는다.
 
 ### Allowed Alternatives
 
-서버의 기존 transport·application action 구성에 맞춰 transaction wrapper, mutation/route 이름과 상태 조회 분리를
-선택할 수 있다. 모든 경로는 동일한 atomic outcome, storage/domain 매핑, 관계별 cleanup과 cross-platform 결과를
-독립적으로 검증해야 한다.
+GraphQL resolver 내부의 조회·DML 순서는 기존 DB helper에 맞춰 선택할 수 있다. 단, 검증·상태 전이·관계 정리는
+하나의 동기 DB transaction에서 수행하고, 별도 Core account-deletion service·Temporal workflow·Native 전용
+login 오류 계약을 추가하지 않는다.
 
 ### Known Traps
 
@@ -70,17 +74,17 @@ Settings에는 기존 route family와 confirmation 상태 패턴이 있고, publ
 ## Risks / Trade-offs
 
 - [원자 경계가 너무 좁음] 명시된 정리 대상 중 일부만 정리된 상태가 남을 수 있다 → 명세된 상태 전이와 물리 삭제를
-  같은 transaction 또는 복구 가능한 동등 경계로 실행하고, 결과 불명 시 성공을 반환하지 않는다.
+  하나의 동기 DB transaction에서 실행하고, 결과 불명 시 성공을 반환하지 않는다.
 - [terminal 전환의 비가역성] 운영자가 실수한 탈퇴를 되돌릴 수 없다 → confirmation checkbox와 명시적인
   irreversibility 안내를 유지하고 grace/recovery를 추가하지 않는다.
-- [재가입 임시 차단의 장기화] 후속 정책 전까지 지원 문의가 필요하다 → 제한 문구와 `hello@byulmaru.co`
-  지원 경로를 노출하되, 영구 정책이나 provider 상태 변경은 별도 승인으로 남긴다.
+- [재가입 임시 차단의 장기화] 후속 정책 전까지 차단 상태가 유지될 수 있다 → 임시 조치임을 기록하고,
+  영구 재가입 정책이나 provider 상태 변경은 별도 승인으로 남긴다.
 - [플랫폼별 결과 차이] Web·Native가 credential 정리 시점을 다르게 해 stale viewer가 남을 수 있다 →
   공통 성공/실패 의미와 플랫폼별 runtime evidence를 함께 검증한다.
 
 ## Migration Plan
 
-- 기존 schema와 enum을 변경하지 않고 서버의 Account 탈퇴 action, client Settings route, public 안내를
+- 기존 schema와 enum을 변경하지 않고 GraphQL Account 탈퇴 mutation, client Settings route, public 안내를
   함께 배포한다.
 - 배포 전 eligibility 거부, atomic cleanup, 재시도·중복 실행, 성공 후 login과 동일 subject 차단의 통합
   검증을 수행하고 Web·Android·iOS runtime 결과를 수집한다.

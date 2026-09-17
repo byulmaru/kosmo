@@ -1,5 +1,5 @@
 import { sessionName } from '@kosmo/core';
-import { createOidcSession, DeletedAccountLoginError } from '@kosmo/core/services';
+import { createOidcSession } from '@kosmo/core/services';
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import {
@@ -76,18 +76,9 @@ loginRoutes.get('/login/callback', async (c) => {
 
   const callbackUrl = new URL('/login/callback', publicOrigin);
   callbackUrl.search = requestUrl.search;
-  let sessionToken: string;
-  try {
-    sessionToken = await createOidcSession(
-      await exchangeOidcCode({ callbackUrl, codeVerifier, expectedState: state }),
-    );
-  } catch (cause) {
-    if (cause instanceof DeletedAccountLoginError) {
-      return c.text(cause.message, 403);
-    }
-
-    throw cause;
-  }
+  const sessionToken = await createOidcSession(
+    await exchangeOidcCode({ callbackUrl, codeVerifier, expectedState: state }),
+  );
 
   deleteCookie(c, LOGIN_STATE_COOKIE, { path: '/login/callback' });
   deleteCookie(c, LOGIN_CODE_VERIFIER_COOKIE, { path: '/login/callback' });

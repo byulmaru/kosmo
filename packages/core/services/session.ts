@@ -18,18 +18,15 @@ type VerifiedOidcIdentity = {
   oidcSubject: string;
 };
 
-const DELETED_ACCOUNT_LOGIN_MESSAGE =
-  '탈퇴한 Kosmo 계정은 현재 재가입할 수 없습니다. 도움이 필요하면 hello@byulmaru.co로 문의해 주세요.';
-
-export class DeletedAccountLoginError extends PermissionDeniedError {
-  constructor() {
-    super(DELETED_ACCOUNT_LOGIN_MESSAGE);
-  }
-}
-
 export type RevokeCurrentSessionResult =
   | { readonly status: 'REVOKED' }
   | { readonly status: 'ALREADY_UNAUTHENTICATED' };
+
+type CurrentSessionState = {
+  readonly accountState: AccountState;
+  readonly id: string;
+  readonly state: SessionState;
+};
 
 const loadCurrentSession = async (token: string, tx: Transaction) =>
   tx
@@ -42,7 +39,7 @@ const loadCurrentSession = async (token: string, tx: Transaction) =>
     .innerJoin(Accounts, eq(Accounts.id, Sessions.accountId))
     .where(eq(Sessions.token, token))
     .limit(1)
-    .then(first);
+    .then((rows) => rows[0] as CurrentSessionState | undefined);
 
 /**
  * Revokes the Session identified by a caller-owned credential.
@@ -133,10 +130,6 @@ export const createOidcSession = async (
       })
       .returning({ id: Accounts.id, state: Accounts.state })
       .then(firstOrThrow);
-
-    if (account.state === AccountState.DISABLED) {
-      throw new DeletedAccountLoginError();
-    }
 
     if (account.state !== AccountState.ACTIVE) {
       throw new PermissionDeniedError();

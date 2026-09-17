@@ -11,12 +11,13 @@
 
 **Deliverable**
 
-서버 Account eligibility·원자적 관계 정리·login 차단과 API 계약이다.
+GraphQL `deleteAccount` mutation resolver의 Account eligibility·원자적 관계 정리·login 차단과 API 계약이다.
 
 **Guardrails**
 
 - Account State가 Active이고 연결 Profile이 없거나 모두 storage `DISABLED`일 때만 허용한다. 클라이언트
-  precheck는 `me.profiles`에서 파생하고, 서버 mutation은 transaction 안에서 다시 확인한다.
+  precheck는 `me.profiles`에서 파생하고, GraphQL mutation resolver는 하나의 동기 DB transaction에서 다시
+  확인한다.
 - Account storage `DISABLED`를 canonical Deleted로 사용하며 새 `DELETED` enum이나 schema migration을 추가하지 않는다.
 - Profile·Membership·Account 속성을 삭제·변경하지 않는다.
 - 모든 Active Session(현재 Session 포함)을 `REVOKED`로 전환하고, `ApplicationAuthorization.revokedAt`을
@@ -27,6 +28,7 @@
 - 일반 current-session logout으로 축소하지 않으며, 정리 결과가 불명확할 때 성공이나 부분 탈퇴를 반환하지 않는다.
 - Deleted Account의 동일 OIDC subject login은 새 Account·Session을 만들지 않고 임시 차단한다. Byulmaru ID 상태는
   변경하지 않는다.
+- 별도 Core account-deletion service, Temporal workflow, Native 전용 login 오류 타입·문구는 추가하지 않는다.
 
 **Verification**
 
@@ -35,13 +37,12 @@
 - 둘 이상의 Active Session과 authorization/token/code/push fixture에서 성공 후 각 상태·물리 삭제·Profile/
   Membership/Account 속성 보존을 검증한다.
 - 상태 전이 또는 관계 정리 실패를 주입해 성공 payload가 없고 부분 탈퇴가 노출되지 않는지 검증한다.
-- 동일 OIDC subject의 Web callback과 Native exchange에서 Account/Session이 생성되지 않고 안전한 차단 안내가
-  반환되는지 검증한다.
+- 공통 Session 생성 경계에서 동일 OIDC subject가 새 Account·Session을 만들지 못하는지 검증한다.
 
 - [x] 1.1 Profile 0개·전체 `DISABLED` eligibility를 허용하고 Active Profile이 남은 요청은 변경 없이 거부하는 서버 동작을 구현한다.
 - [x] 1.2 Account를 storage `DISABLED`로 전환하면서 모든 Active Session, `ApplicationAuthorization`, `OAuthTokens`, `OAuthAuthorizationCodes` 및 `PushInstallation` 정리를 원자적 결과로 확정하고 Profile·Membership·Account 속성을 보존한다.
 - [x] 1.3 결과 불명 실패·중복 요청·이미 Deleted 상태를 안전하게 처리하고 일반 current-session logout과 다른 Account 탈퇴 의미를 유지한다.
-- [x] 1.4 Web·Native login 경계에서 Deleted Account의 동일 OIDC subject 재가입을 임시 차단하고 지원 안내를 반환한다.
+- [x] 1.4 공통 Session 생성 경계에서 Deleted Account의 동일 OIDC subject 재가입을 임시 차단하고 새 Account·Session을 만들지 않는다.
 - [x] 1.5 서버 eligibility·cleanup·실패 atomicity·재가입 차단 integration/API 검증을 추가해 통과시킨다.
 
 ## 2. PROD-970 Settings·public 안내·cross-platform lifecycle

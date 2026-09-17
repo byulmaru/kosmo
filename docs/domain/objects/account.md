@@ -43,8 +43,8 @@ Admin Console의 Account 목록·상세는 일반 Account 조회 권한을 확�
 
 클라이언트는 이미 조회한 자기 Account의 Profile 목록(예: `me.profiles`)으로 활성 Profile 개수와 탈퇴 차단
 이유를 사전 표시할 수 있다. 이 표시는 참고용이며 탈퇴 허용 판정이 아니다. Account 삭제 요청은 검증된
-`Account.Self`를 대상으로 서버가 같은 transaction에서 연결된 모든 Profile State를 다시 확인하고, 하나라도
-Deactivated가 아니면 Account와 관계를 변경하지 않고 거부한다.
+`Account.Self`를 대상으로 GraphQL mutation resolver가 하나의 동기 transaction에서 연결된 모든 Profile State를
+다시 확인하고, 하나라도 Deactivated가 아니면 Account와 관계를 변경하지 않고 거부한다.
 
 Deleted Account에는 다른 상태 전이를 적용하지 않는다.
 Account 삭제는 Active Account에서만 요청할 수 있으며 `Account.Active`를 요구한다.

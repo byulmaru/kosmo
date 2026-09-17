@@ -2,7 +2,7 @@
 
 ### Requirement: Kosmo Account 탈퇴 eligibility
 
-**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/design/settings.md`, `PROD-970` — 인증된 사용자는 자기 Kosmo Account에 대해서만 탈퇴를 요청할 수 있어야 하며(MUST), Account State가 Active이고 연결된 Profile이 없거나 모든 연결 Profile의 storage state가 `DISABLED`(domain Profile Lifecycle State `Deactivated`)인 경우에만 탈퇴를 허용해야 한다(MUST). 조건을 만족하지 않으면 Account, Profile, Membership, Session, `ApplicationAuthorization`, `OAuthTokens`, `OAuthAuthorizationCodes` 또는 `PushInstallation`을 변경해서는 안 된다(MUST NOT). 탈퇴 eligibility 확인은 Profile이나 Membership을 삭제·비활성화·연결 해제해서는 안 된다(MUST NOT). 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 차단 이유를 사전 표시할 수 있지만(MAY), 이는 참고용이며 별도 eligibility API를 제공하지 않는다(MUST NOT). 실제 탈퇴 mutation은 검증된 Account ID를 대상으로 서버가 같은 transaction에서 연결 Profile State를 다시 확인해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/account.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/design/settings.md`, `PROD-970` — 인증된 사용자는 자기 Kosmo Account에 대해서만 탈퇴를 요청할 수 있어야 하며(MUST), Account State가 Active이고 연결된 Profile이 없거나 모든 연결 Profile의 storage state가 `DISABLED`(domain Profile Lifecycle State `Deactivated`)인 경우에만 탈퇴를 허용해야 한다(MUST). 조건을 만족하지 않으면 Account, Profile, Membership, Session, `ApplicationAuthorization`, `OAuthTokens`, `OAuthAuthorizationCodes` 또는 `PushInstallation`을 변경해서는 안 된다(MUST NOT). 탈퇴 eligibility 확인은 Profile이나 Membership을 삭제·비활성화·연결 해제해서는 안 된다(MUST NOT). 클라이언트는 이미 조회한 `me.profiles`로 활성 Profile 개수와 차단 이유를 사전 표시할 수 있지만(MAY), 이는 참고용이며 별도 eligibility API를 제공하지 않는다(MUST NOT). 실제 탈퇴 mutation은 검증된 Account ID를 대상으로 GraphQL mutation resolver가 하나의 동기 transaction에서 연결 Profile State를 다시 확인해야 한다(MUST).
 
 #### Scenario: 연결된 Profile이 없는 Account의 탈퇴
 
@@ -113,7 +113,6 @@
 
 - **WHEN** Deleted Account에 연결된 동일 Byulmaru ID OIDC subject로 Kosmo login을 시도한다
 - **THEN** Kosmo는 새 Account나 Session을 생성하지 않고 로그인을 차단한다
-- **AND** 사용자에게 현재 재가입이 임시로 제한되어 있음을 안전하게 안내하고 `hello@byulmaru.co` 지원 경로를 제공한다
 
 #### Scenario: Byulmaru ID 외부 상태를 변경하지 않는다
 

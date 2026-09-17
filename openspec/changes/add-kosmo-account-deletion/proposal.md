@@ -39,8 +39,9 @@
 
 ## Impact
 
-- Account/Profile/Membership/Session 도메인과 명시된 인증·인가·토큰·코드·Push 관계가 영향을 받는다. GraphQL은
-  인증된 `deleteAccount` mutation과 `completed` payload만 제공하며 별도 eligibility query나 count payload는 없다.
+- Account/Profile/Membership/Session 도메인과 명시된 인증·인가·토큰·코드·Push 관계가 영향을 받는다. GraphQL
+  `deleteAccount` mutation resolver가 하나의 동기 DB transaction에서 검증·상태 전이·관계 정리를 수행하고,
+  `completed` payload만 제공한다. 별도 eligibility query나 count payload는 없다.
 - Web·Android·iOS Settings가 공통 lifecycle과 login 전환을 소비하고, 공개 안내와 iOS device evidence가
   추가된다.
 - 새 `DELETED` enum·schema migration, Profile/Post/Media 정책 변경, Byulmaru ID 변경, OpenPanel 분석,

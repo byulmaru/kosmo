@@ -24,7 +24,7 @@
 - Authority / Provenance: `docs/domain/objects/account.md`, `docs/domain/objects/session.md`, `docs/design/settings.md`, `PROD-970`
 - Status: Active
 - Context / Problem: current-session logout은 요청한 Session만 폐기하므로 Account 탈퇴의 전체 정리 결과를 보장하지 못한다.
-- Decision Outcome: Account storage `DISABLED` 전환과 같은 원자적 결과에서 모든 Active Session(현재 Session 포함)을 `REVOKED`로 전환한다. `ApplicationAuthorization.revokedAt`을 기록하고 `OAuthTokens`를 `REVOKED`와 `revokedAt`으로 전환하며, `OAuthAuthorizationCodes`와 `PushInstallation`은 물리적으로 삭제한다. 이번 탈퇴 정리 대상은 이 명시된 관계 집합으로 한정한다.
+- Decision Outcome: GraphQL `deleteAccount` mutation resolver가 Account storage `DISABLED` 전환과 같은 하나의 동기 DB transaction에서 모든 Active Session(현재 Session 포함)을 `REVOKED`로 전환한다. `ApplicationAuthorization.revokedAt`을 기록하고 `OAuthTokens`를 `REVOKED`와 `revokedAt`으로 전환하며, `OAuthAuthorizationCodes`와 `PushInstallation`은 물리적으로 삭제한다. 이번 탈퇴 정리 대상은 이 명시된 관계 집합으로 한정하며, 별도 Core account-deletion service나 Temporal workflow로 분리하지 않는다.
 - Alternatives Considered: 현재 Session만 revoke하거나 Profile/Membership cascade에 맡기는 방식은 전체 정리와 보존을 보장하지 못한다.
 - Consequences: 일반 로그아웃과 Account 탈퇴는 별도 action·성공 의미를 가지며, 결과 불명 시 성공을 반환하지 않는다.
 - Confirmation / Follow-up: 둘 이상의 Session과 authorization/token/code/push fixture로 상태·물리 삭제·Profile/Membership 보존 및 부분 성공 방지를 검증한다.
@@ -48,10 +48,10 @@
 - Authority / Provenance: `docs/domain/objects/account.md`, `docs/domain/objects/session.md`, `docs/design/settings.md`, `PROD-970`
 - Status: Active
 - Context / Problem: 탈퇴 후에도 Kosmo Account의 OIDC subject·표시 이름을 보존하므로 기존 login upsert가 새 Session을 발급하지 않아야 한다.
-- Decision Outcome: Deleted Account에 연결된 동일 Byulmaru ID OIDC subject의 Kosmo login을 후속 정책이 정해질 때까지 차단하고, 새 Account·Session을 만들지 않는다. 안전한 안내와 `hello@byulmaru.co` 지원 경로를 제공하되, 이 차단은 임시 조치로 명시한다. Byulmaru ID provider 자체의 상태는 변경하지 않는다.
+- Decision Outcome: Deleted Account에 연결된 동일 Byulmaru ID OIDC subject의 Kosmo login을 후속 정책이 정해질 때까지 차단하고, 새 Account·Session을 만들지 않는다. 이 차단은 임시 조치로 명시하며, Byulmaru ID provider 자체의 상태는 변경하지 않는다. Native 전용 login 오류 타입이나 문구는 계약에 포함하지 않는다.
 - Alternatives Considered: 즉시 재가입 허용이나 OIDC provider Account 삭제·영구 정책 고정은 현재 계약과 Byulmaru ID 소유권을 벗어난다.
 - Consequences: login 경계는 Deleted Account를 인증 불가로 취급하며, 후속 정책 승인 시 별도 변경한다.
-- Confirmation / Follow-up: 동일 subject의 Web callback과 Native exchange에서 Account/Session 미생성과 안전한 안내를 확인한다.
+- Confirmation / Follow-up: 공통 Session 생성 경계에서 동일 subject가 새 Account·Session을 만들지 못하는지 확인한다.
 
 ## Remaining Decisions
 
