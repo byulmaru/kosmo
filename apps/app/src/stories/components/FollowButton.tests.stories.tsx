@@ -86,7 +86,15 @@ export const UnblockFailureRetry: Story = {
         ProfileBlockControllerUnblockMutation: {
           sequence: [
             { delayMs: 200, error: 'offline' },
-            { data: { unblockProfile: { success: true, profileBlockId: 'follow-button-block' } } },
+            {
+              data: {
+                unblockProfile: {
+                  success: true,
+                  profileBlockId: 'follow-button-block',
+                  targetProfile: blockedTarget,
+                },
+              },
+            },
           ],
         },
       },

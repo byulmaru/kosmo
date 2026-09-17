@@ -32,13 +32,13 @@ const profileBlockFragment = graphql`
   }
 `;
 
-export type ProfileBlockMenuItemRenderProps = Readonly<{
+type ProfileBlockMenuItemRenderProps = Readonly<{
   disabled: boolean;
   focusTriggerRef: RefObject<() => void>;
   item: ActionMenuItem;
 }>;
 
-export type ProfileBlockActionTarget =
+type ProfileBlockActionTarget =
   | { nextBlocked: true; profile: ProfileBlockAction_profile$key; profileBlock?: never }
   | {
       nextBlocked: false;
