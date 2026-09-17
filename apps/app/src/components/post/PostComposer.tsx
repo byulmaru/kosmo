@@ -208,6 +208,7 @@ function PostComposerContents({
   const [editorFocused, setEditorFocused] = useState(false);
   const defaultVisibility = resolvePostComposerVisibility(profile.private?.defaultPostVisibility);
   const [visibility, setVisibility] = useState<Visibility>(() => defaultVisibility);
+  const defaultVisibilityRef = useRef(defaultVisibility);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [webVisibilityMenuLeft, setWebVisibilityMenuLeft] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -246,6 +247,12 @@ function PostComposerContents({
     availableVisibilityOptions.find((option) => option.value === visibility) ??
     visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
+
+  useEffect(() => {
+    const previousDefault = defaultVisibilityRef.current;
+    defaultVisibilityRef.current = defaultVisibility;
+    setVisibility((current) => (current === previousDefault ? defaultVisibility : current));
+  }, [defaultVisibility]);
 
   useEffect(() => {
     if (

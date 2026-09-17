@@ -1930,6 +1930,28 @@ function ProductionComposerAdapterStory() {
   );
 }
 
+function ProductionComposerDefaultVisibilityUpdateStory() {
+  const environment = useRelayEnvironment();
+  return (
+    <>
+      <ProductionComposerAdapterStory />
+      <Pressable
+        accessibilityRole="button"
+        onPress={() =>
+          commitLocalUpdate(environment, (store) => {
+            store
+              .get('profile-composer')
+              ?.getLinkedRecord('private')
+              ?.setValue('PUBLIC', 'defaultPostVisibility');
+          })
+        }
+      >
+        <Text>설정에서 기본 공개 범위 저장</Text>
+      </Pressable>
+    </>
+  );
+}
+
 function ComposerRailMediaFocusStory() {
   const [presentation, setPresentation] = useState<'overlay' | 'rail'>('rail');
   const profile = usePostsStoryData().composerProfile;
@@ -6168,6 +6190,26 @@ export const ProductionComposerMediaEditorFocus: Story = {
     }
   },
   render: () => <ProductionComposerAdapterStory />,
+};
+
+export const ProductionComposerDefaultVisibilityUpdate: Story = {
+  ...ProductionComposerAdapterSuccess,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const dispatchBeforeUnload = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event;
+    };
+
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(false);
+    await userEvent.click(canvas.getByRole('button', { name: '설정에서 기본 공개 범위 저장' }));
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible(),
+    );
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(false);
+  },
+  render: () => <ProductionComposerDefaultVisibilityUpdateStory />,
 };
 
 export const ContentWarningReveal: Story = {
