@@ -4,8 +4,12 @@ Read this entire file when changing shared React Native presentation, layout, ac
 
 ## UI Composition And State Ownership
 
+- `useRef`와 `useEffect`는 기본적으로 제거 대상이다. 새 코드의 기준은 두 hook을 "올바르게 쓰는 것"이 아니라 선언형 대안으로 삭제하는 것이며, 먼저 controlled props, render-time derivation, event handler, `key` remount, 기존 framework/common primitive를 검토한다.
+- `useRef`는 선언형으로 표현할 수 없는 피할 수 없는 DOM/Native/platform imperative handle에만 허용한다. 이전 props/state 보관, derived state, callback 사이 값 전달, visibility·close reason·navigation coordination, 늦은 async response 격리에 사용하지 않는다. 늦은 응답은 request cancellation, 식별 가능한 operation ownership, data layer의 stale-result policy로 해결하고 컴포넌트 ref로 보정하지 않는다.
+- `useEffect`는 외부 시스템과 동기화할 때만 허용한다. 내부 상태 choreography, props/state 파생, callback 결과 전달, visibility·focus·navigation 순서 조정에 사용하지 않으며 cleanup이 있다는 이유만으로 정당화하지 않는다. 새 ref/effect는 선언형 대안이 왜 불가능한지 코드 근처에 설명한다.
+- Overlay는 composition point/Shell이 visibility, 명시적 close reason, navigation을 소유하고, 공용 Overlay/Dialog primitive가 Escape·Tab·scroll lock·focus restoration을 소유하며, feature component가 draft/mutation을 소유한다. 테스트는 내부 ref/effect가 아니라 observable open/close/focus/navigation behavior를 검증한다.
 - 개별 action은 자신의 실행과 그에 필요한 데이터·상태·상호작용(fragment·mutation·pending/error·Relay/cache 갱신 등)을 소유한다. 같은 관계의 중복 fragment/prop·ID를 받아 합치지 않는다. 여러 행동의 노출·순서·배치는 해당 조합의 의미와 정책을 소유하는 경계에서 결정한다. 그 경계를 메뉴·화면 같은 컴포넌트 종류나 단순한 부모·자식 위치로 고정하지 않는다.
-- 정상적인 관계 mutation으로 생긴 Environment/Store remount를 보상하려고 module 전역 focus registry/Map, actor lifecycle key, timer를 추가하지 않는다. 상위 RelayActorBoundary가 이미 remount하는 route에 opaque actor key를 중복 배선하지 않는다. focus는 현재 React tree의 trigger·heading ref와 modal `onDismiss`로 복원하고, actor A→B 전환 뒤 늦은 응답 격리에 필요한 action-local guard는 유지하되 일시적인 toast 순서만 맞추려고 generation harness를 만들지 않는다.
+- 정상적인 관계 mutation으로 생긴 Environment/Store remount를 보상하려고 module 전역 focus registry/Map, actor lifecycle key, timer를 추가하지 않는다. 상위 RelayActorBoundary가 이미 remount하는 route에 opaque actor key를 중복 배선하지 않는다. focus는 현재 React tree의 trigger·heading ref와 modal `onDismiss`로 복원하고, actor A→B 전환 뒤 늦은 응답은 request cancellation, 식별 가능한 operation ownership, data layer의 stale-result policy로 격리하며 일시적인 toast 순서만 맞추려고 generation harness를 만들지 않는다.
 - 공개 callback은 실제 production 조정이 필요하거나 명시적인 controlled/presentation 계약일 때만 둔다. UI close나 toast 같은 후속 표시 callback은 허용하지만, 테스트 계측용 lifecycle callback이나 아직 production caller가 없는 미래 mutation callback을 공개 API로 올리지 않는다. callback 때문에 action이 소유할 서버 상태 변경 책임을 조합 경계로 떠넘기지 않는다.
 - 공용 primitive, `children`, 조합 지점은 공유하되 화면·목록 전체를 재사용하려고 `mode`/`options` prop으로 자식의 세부 상태를 노출하지 않는다.
 - Storybook-first presentation은 production caller보다 먼저 제공할 수 있다. caller가 없다는 이유만으로 표시 UI를 삭제하지 않는다.
