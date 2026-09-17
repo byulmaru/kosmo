@@ -57,8 +57,8 @@ Followers Only 항목은 한 sync 시도 동안 같은 Active local follower ide
 성공한 authoritative sync만 Remote Profile의 ordered pinned set을 교체해야 하며(MUST), fetch·parse·검증·취소·순환 또는
 예산 초과 실패 시 마지막 성공 상태를 보존해야 한다(MUST). Featured sync 실패는 유효한 Remote Profile
 등록·refresh·Update 결과를 되돌리거나 실패시켜서는 안 된다(MUST NOT).
-실패는 기존 retry-capable async effect/Workflow 경계에서 관측·재시도할 수 있어야 하며(MUST), 실패·부분·취소된 시도는
-last-success snapshot을 유지하고 이후 성공한 retry만 snapshot을 원자적으로 교체해야 한다(MUST). retry timing·backoff·횟수·SLA는
+실패는 관측·재시도할 수 있어야 하며(MUST), 실패·부분·취소된 시도는 last-success snapshot을 유지하고 이후 성공한 retry만
+snapshot을 원자적으로 교체해야 한다(MUST). retry timing·backoff·횟수·SLA는
 이 계약에서 고정하지 않는다. 각 trigger는 Remote Profile별 current sync generation 또는 동등한 최신성 token을 갱신해야
 하며(MUST), 완료 시점에 current인 시도만 snapshot을 교체해야 한다(MUST). 더 최신 trigger 뒤에 완료된 이전 시도의 성공
 결과는 snapshot에 반영해서는 안 된다(MUST NOT).

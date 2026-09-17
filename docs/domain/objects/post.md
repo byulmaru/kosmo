@@ -355,8 +355,8 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   Note 검증을 사용하고, Followers Only는 한 sync 시도 동안 동일한 Active local follower identity로 collection의 모든
   page와 각 Note를 authenticated fetch해 author, audience와 Follow 관계를 검증한다. 성공한 authoritative sync만 remote
   ordered pin set을 교체한다. 각 시도는 취소 가능하고 next page 순환 검출과 구현이 정한 page·item·byte·시간 예산을 적용하며,
-  fetch·parse·검증·취소·순환·예산 초과 실패는 마지막 성공 상태를 보존한다. 실패는 기존 retry-capable async effect/Workflow
-  경계에서 관측·재시도할 수 있어야 하며, 이후 성공한 retry만 snapshot을 원자적으로 교체한다. 각 trigger는 Remote Profile별
+  fetch·parse·검증·취소·순환·예산 초과 실패는 마지막 성공 상태를 보존한다. 실패는 관측·재시도할 수 있어야 하며, 이후
+  성공한 retry만 snapshot을 원자적으로 교체한다. 각 trigger는 Remote Profile별
   current sync generation 또는 동등한 최신성 token을 갱신하고, 완료 시점에 current인 시도만 snapshot을 교체한다. 더 최신
   trigger 뒤에 완료된 이전 시도의 성공 결과는 폐기한다. retry timing·backoff·횟수·SLA는 고정하지 않는다. Remote unpin, Delete/Tombstone 또는
   visibility·author eligibility 상실은 다음 성공 sync나 기존 lifecycle에서 노출에서 제거한다.
