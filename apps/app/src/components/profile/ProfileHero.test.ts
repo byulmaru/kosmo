@@ -18,6 +18,11 @@ type ProfileData = {
   header: { id: string; url: string | null } | null;
   relativeHandle: string;
   tags: ReadonlyArray<{ id: string; name: string }>;
+  viewerState?: {
+    isSelf: boolean;
+    profileBlock: { id: string; targetProfile: ProfileData } | null;
+    profileMute: { id: string } | null;
+  } | null;
 };
 
 let fragmentData: ProfileData;
@@ -145,6 +150,7 @@ const baseProfile: ProfileData = {
   header: null,
   relativeHandle: '@kosmo',
   tags: [],
+  viewerState: { isSelf: false, profileBlock: null, profileMute: null },
 };
 
 const findCoverStyle = () => {
@@ -345,10 +351,9 @@ describe('ProfileHero 관리 메뉴 조립', () => {
     await act(async () => {
       renderer = create(
         createElement(ProfileHero, {
-          blockAction: { nextBlocked: true, profile: {} as never },
           moreItems: [{ key: 'report', label: '신고하기', onSelect: () => undefined }],
           profile: {} as never,
-          showMuteAction: true,
+          profileBlockStatus: { blockedBy: false, blocking: false },
         }),
       );
     });
@@ -373,19 +378,22 @@ describe('ProfileHero 관리 메뉴 조립', () => {
   });
 
   it('차단 해제와 신고 항목을 별도 더보기 없이 같은 메뉴에 표시한다', async () => {
-    fragmentData = baseProfile;
+    fragmentData = {
+      ...baseProfile,
+      viewerState: {
+        isSelf: false,
+        profileBlock: { id: 'block-a', targetProfile: baseProfile },
+        profileMute: null,
+      },
+    };
     const onUnblock = mock.fn();
     const onReport = mock.fn();
     await act(async () => {
       renderer = create(
         createElement(ProfileHero, {
-          blockAction: {
-            nextBlocked: false,
-            profileBlock: {} as never,
-          },
           moreItems: [{ key: 'report', label: '신고하기', onSelect: onReport }],
           profile: {} as never,
-          showMuteAction: false,
+          profileBlockStatus: { blockedBy: true, blocking: true },
         }),
       );
     });

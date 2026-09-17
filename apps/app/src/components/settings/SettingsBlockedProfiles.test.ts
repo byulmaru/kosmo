@@ -17,13 +17,13 @@ const toastCalls: Array<{ message: string; tone: string }> = [];
 const loadNext = mock.fn();
 let selectedProfile: object | null = { id: 'owner' };
 type PaginationState = {
-  data: { profileBlocks: { edges: Array<{ node: object }> } | null };
+  data: { profileBlocks: { edges: Array<{ cursor: string; node: object }> } | null };
   hasNext: boolean;
   isLoadingNext: boolean;
   loadNext: ReturnType<typeof mock.fn>;
 };
 let pagination: PaginationState = {
-  data: { profileBlocks: { edges: [] as Array<{ node: object }> } },
+  data: { profileBlocks: { edges: [] } },
   hasNext: false,
   isLoadingNext: false,
   loadNext,
@@ -96,11 +96,8 @@ mockModule('../../theme/tokens', {
   textStyles: { uiHeadingM: {} },
 });
 type BlockedProfile = {
-  displayName: string;
-  profile: never;
+  key: string;
   profileBlock: never;
-  profileBlockId: string;
-  relativeHandle: string;
 };
 let BlockedProfilesView: typeof BlockedProfilesViewExport;
 let SettingsBlockedProfiles: typeof SettingsBlockedProfilesExport;
@@ -125,11 +122,16 @@ afterEach(async () => {
 });
 
 const profile = (id: string, displayName = '별마루'): BlockedProfile => ({
-  displayName,
-  profile: { id: `profile-${id}` } as never,
-  profileBlock: { id: `block-${id}` } as never,
-  profileBlockId: `block-${id}`,
-  relativeHandle: `@${id}`,
+  key: `cursor-${id}`,
+  profileBlock: {
+    id: `block-${id}`,
+    targetProfile: {
+      displayName,
+      id: `profile-${id}`,
+      relativeHandle: `@${id}`,
+      viewerState: { profileBlock: { id: `block-${id}` } },
+    },
+  } as never,
 });
 
 describe('차단한 프로필 목록', () => {
@@ -144,6 +146,7 @@ describe('차단한 프로필 목록', () => {
         profileBlocks: {
           edges: [
             {
+              cursor: 'cursor-star',
               node: {
                 id: 'block-star',
                 targetProfile: {
@@ -257,7 +260,19 @@ describe('차단한 프로필 목록', () => {
   });
 
   it('해제 뒤 같은 행에서 차단 action으로 전환한다', async () => {
-    const unblocked = { ...profile('star'), profileBlock: null };
+    const blockedProfile = profile('star');
+    const unblocked = {
+      ...blockedProfile,
+      profileBlock: {
+        ...(blockedProfile.profileBlock as object),
+        targetProfile: {
+          displayName: '별마루',
+          id: 'profile-star',
+          relativeHandle: '@star',
+          viewerState: { profileBlock: null },
+        },
+      } as never,
+    };
     await act(async () => {
       renderer = create(
         createElement(BlockedProfilesView, {

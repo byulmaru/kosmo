@@ -37,6 +37,7 @@ const ProfileLayoutQuery = graphql`
   query ProfileLayoutQuery($handle: String!) {
     profileBlockStatus(handle: $handle) {
       blockedBy
+      blocking
     }
     profileByHandle(handle: $handle) {
       id
@@ -51,13 +52,9 @@ const ProfileLayoutQuery = graphql`
         membership {
           role
         }
-        profileBlock {
-          ...ProfileBlockAction_profileBlock
-        }
       }
       ...ProfileHero_profile
       ...FollowButton_profile
-      ...ProfileBlockAction_profile
     }
   }
 `;
@@ -182,8 +179,7 @@ function ProfileLayoutContent({
     label: profile?.relativeHandle ?? '',
   });
   const blockStatus = data.profileBlockStatus;
-  const profileBlock = profile?.viewerState?.profileBlock;
-  const blocking = Boolean(profileBlock);
+  const blocking = Boolean(blockStatus?.blocking);
   const blockedBy = Boolean(blockStatus?.blockedBy);
 
   if (!profile) {
@@ -230,7 +226,6 @@ function ProfileLayoutContent({
     profile.instance.kind === 'LOCAL' &&
     profile.viewerState?.isSelf === true &&
     profile.viewerState.membership?.role === 'OWNER';
-  const canMute = Boolean(selectedProfileId && !profile.viewerState?.isSelf);
   const relationshipAction = canEdit ? (
     <NavigationLink href={'/profile-edit' as Href}>
       <Button accessibilityLabel="프로필 편집" tone="secondary">
@@ -250,21 +245,8 @@ function ProfileLayoutContent({
         action={relationshipAction}
         heading={!showPageHeader}
         moreItems={sessionId ? [reportItem] : undefined}
-        blockAction={
-          selectedProfileId &&
-          blockStatus &&
-          profile.viewerState?.isSelf !== true &&
-          (!blockedBy || blocking)
-            ? blocking && profileBlock
-              ? {
-                  nextBlocked: false,
-                  profileBlock,
-                }
-              : { nextBlocked: true, profile }
-            : undefined
-        }
         profile={profile}
-        showMuteAction={canMute && !blocking && !blockedBy}
+        profileBlockStatus={selectedProfileId ? blockStatus : null}
       />
     </>
   );

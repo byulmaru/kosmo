@@ -1,14 +1,13 @@
 import { useCallback, useState } from 'react';
 import { StyleSheet } from 'react-native';
-import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
+import { graphql, useFragment, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { BlockedProfileList } from '@/components/profile/BlockedProfileList';
 import { ProfileBlockAction } from '@/components/profile/ProfileBlockAction';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
-import type { ProfileBlockAction_profile$key } from '@/components/profile/__generated__/ProfileBlockAction_profile.graphql';
-import type { ProfileBlockAction_profileBlock$key } from '@/components/profile/__generated__/ProfileBlockAction_profileBlock.graphql';
+import type { SettingsBlockedProfileRow_profileBlock$key } from './__generated__/SettingsBlockedProfileRow_profileBlock.graphql';
 import type { SettingsBlockedProfiles_profile$key } from './__generated__/SettingsBlockedProfiles_profile.graphql';
 import type { SettingsBlockedProfilesNextPageQuery } from './__generated__/SettingsBlockedProfilesNextPageQuery.graphql';
 import type { SettingsBlockedProfilesQuery } from './__generated__/SettingsBlockedProfilesQuery.graphql';
@@ -34,18 +33,23 @@ const SettingsBlockedProfilesFragment = graphql`
       edges {
         cursor
         node {
-          id
+          ...SettingsBlockedProfileRow_profileBlock
+        }
+      }
+    }
+  }
+`;
+
+const SettingsBlockedProfileRowFragment = graphql`
+  fragment SettingsBlockedProfileRow_profileBlock on ProfileBlock {
+    ...ProfileBlockAction_profileBlock
+    targetProfile {
+      displayName
+      relativeHandle
+      ...ProfileBlockAction_profile
+      viewerState {
+        profileBlock {
           ...ProfileBlockAction_profileBlock
-          targetProfile {
-            displayName
-            relativeHandle
-            ...ProfileBlockAction_profile
-            viewerState {
-              profileBlock {
-                ...ProfileBlockAction_profileBlock
-              }
-            }
-          }
         }
       }
     }
@@ -53,11 +57,8 @@ const SettingsBlockedProfilesFragment = graphql`
 `;
 
 type BlockedProfile = Readonly<{
-  displayName: string;
-  profile: ProfileBlockAction_profile$key;
-  profileBlock: ProfileBlockAction_profileBlock$key | null;
-  profileBlockId: string;
-  relativeHandle: string;
+  key: string;
+  profileBlock: SettingsBlockedProfileRow_profileBlock$key;
 }>;
 type Pagination =
   | { status: 'end' }
@@ -124,11 +125,8 @@ function SettingsBlockedProfilesContent() {
               ? { onLoadMore: loadMore, status: 'more' }
               : { status: 'end' },
         profiles: edges.map((edge) => ({
-          displayName: edge.node.targetProfile.displayName,
-          profile: edge.node.targetProfile,
-          profileBlock: edge.node.targetProfile.viewerState?.profileBlock ?? null,
-          profileBlockId: edge.node.id,
-          relativeHandle: edge.node.targetProfile.relativeHandle,
+          key: edge.cursor,
+          profileBlock: edge.node,
         })),
         status: 'loaded',
       }}
@@ -140,20 +138,7 @@ export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) 
   const children =
     state.status === 'loaded'
       ? state.profiles.map((profile) => (
-          <ProfileListItemContent
-            avatarLabel={profile.displayName}
-            displayName={profile.displayName}
-            key={profile.profileBlockId}
-            relativeHandle={profile.relativeHandle}
-            style={styles.row}
-          >
-            <ProfileBlockAction
-              {...(profile.profileBlock
-                ? { nextBlocked: false as const, profileBlock: profile.profileBlock }
-                : { nextBlocked: true as const, profile: profile.profile })}
-              surface="button"
-            />
-          </ProfileListItemContent>
+          <SettingsBlockedProfileRow key={profile.key} profileBlock={profile.profileBlock} />
         ))
       : null;
   const listState =
@@ -166,6 +151,32 @@ export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) 
           : ({ children, pagination: state.pagination, status: 'loaded' } as const);
 
   return <BlockedProfileList state={listState} />;
+}
+
+function SettingsBlockedProfileRow({
+  profileBlock,
+}: {
+  profileBlock: SettingsBlockedProfileRow_profileBlock$key;
+}) {
+  const data = useFragment(SettingsBlockedProfileRowFragment, profileBlock);
+  const targetProfile = data.targetProfile;
+  const currentProfileBlock = targetProfile.viewerState?.profileBlock ?? null;
+
+  return (
+    <ProfileListItemContent
+      avatarLabel={targetProfile.displayName}
+      displayName={targetProfile.displayName}
+      relativeHandle={targetProfile.relativeHandle}
+      style={styles.row}
+    >
+      <ProfileBlockAction
+        {...(currentProfileBlock
+          ? { nextBlocked: false as const, profileBlock: currentProfileBlock }
+          : { nextBlocked: true as const, profile: targetProfile })}
+        surface="button"
+      />
+    </ProfileListItemContent>
+  );
 }
 
 const styles = StyleSheet.create({

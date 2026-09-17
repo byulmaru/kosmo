@@ -27,16 +27,14 @@ import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
-import type { ProfileBlockActionTarget } from './ProfileBlockAction';
 
 type ProfileHeroProps = {
   action?: ReactNode;
-  blockAction?: ProfileBlockActionTarget;
   heading?: boolean;
   moreItems?: readonly ActionMenuItem[];
-  showMuteAction?: boolean;
   loading?: boolean;
   profile?: ProfileHero_profile$key | null;
+  profileBlockStatus?: { readonly blockedBy: boolean; readonly blocking: boolean } | null;
 };
 
 const profileHeroFragment = graphql`
@@ -62,9 +60,14 @@ const profileHeroFragment = graphql`
     followingCount
     ...ProfileNameBlock_profile
     ...ProfileMuteAction_profile
+    ...ProfileBlockAction_profile
     viewerState {
+      isSelf
       profileMute {
         id
+      }
+      profileBlock {
+        ...ProfileBlockAction_profileBlock
       }
     }
   }
@@ -77,12 +80,11 @@ const countFormatter = new Intl.NumberFormat('en', {
 
 export function ProfileHero({
   action,
-  blockAction,
   heading = true,
   moreItems = [],
-  showMuteAction = false,
   loading = false,
   profile = null,
+  profileBlockStatus,
 }: ProfileHeroProps) {
   const followingRef = useRef<View>(null);
   const [unmuteFocusRevision, setUnmuteFocusRevision] = useState(0);
@@ -149,6 +151,19 @@ export function ProfileHero({
   if (!data) {
     return null;
   }
+
+  const profileBlock = data.viewerState?.profileBlock;
+  const blocking = Boolean(profileBlock);
+  const blockedBy = Boolean(profileBlockStatus?.blockedBy);
+  const canManageRelationship = profileBlockStatus != null && data.viewerState?.isSelf !== true;
+  const blockAction = canManageRelationship
+    ? blocking && profileBlock
+      ? ({ nextBlocked: false as const, profileBlock } as const)
+      : !blockedBy
+        ? ({ nextBlocked: true as const, profile: data } as const)
+        : undefined
+    : undefined;
+  const showMuteAction = canManageRelationship && !blocking && !blockedBy;
 
   const followingHref = `/${data.relativeHandle}/following` as Href;
   const followersHref = `/${data.relativeHandle}/followers` as Href;
