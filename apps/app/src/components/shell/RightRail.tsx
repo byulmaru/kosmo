@@ -1,13 +1,11 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import {
-  PostComposerHost,
-  type PostComposerHostCloseReason,
-} from '@/components/post/PostComposerHost';
+import { PostComposerHost } from '@/components/post/PostComposerHost';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
 import type { RefObject } from 'react';
+import type { PostComposerHostCloseReason } from '@/components/post/PostComposerHost';
 import type { RightRail_profile$key } from './__generated__/RightRail_profile.graphql';
 
 type RightRailProps = {
