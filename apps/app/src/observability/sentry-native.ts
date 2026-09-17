@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react-native';
 import { getPublicConfig } from '@/config/public';
+import { RelayTransportError } from '@/relay/transportError';
 import type { ErrorInfo } from 'react';
 
 const channel = getPublicConfig('channel');
@@ -22,7 +23,7 @@ if (enabled) {
 }
 
 export const captureReactError = (cause: unknown, info: ErrorInfo): void => {
-  if (!enabled) {
+  if (!enabled || cause instanceof RelayTransportError) {
     return;
   }
 

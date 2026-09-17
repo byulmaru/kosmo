@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { after, beforeEach, describe, it, mock } from 'node:test';
+import { RelayTransportError } from '@/relay/transportError';
 
 type InitOptions = Record<string, unknown>;
 type CaptureCall = { cause: unknown; hint: unknown; extras: unknown };
@@ -118,6 +119,25 @@ describe('Web app handled Sentry errors', { concurrency: false }, () => {
     assert.deepEqual(reactCaptureCalls, [
       {
         cause,
+        info,
+        hint: { mechanism: { handled: true, type: 'auto.function.react.error_boundary' } },
+      },
+    ]);
+  });
+
+  it('skips Relay transport errors but captures ordinary React errors', async () => {
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const { captureReactError } = await import(`${sentryModule}?relay-transport`);
+    const transportCause = new TypeError('fetch failed');
+    const ordinaryCause = new Error('GraphQL field failed');
+    const info = { componentStack: '\n    at Screen' };
+
+    captureReactError(new RelayTransportError(transportCause), info);
+    captureReactError(ordinaryCause, info);
+
+    assert.deepEqual(reactCaptureCalls, [
+      {
+        cause: ordinaryCause,
         info,
         hint: { mechanism: { handled: true, type: 'auto.function.react.error_boundary' } },
       },

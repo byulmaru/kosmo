@@ -44,6 +44,15 @@ Sentry SDK가 만든 event는 `beforeSend`에서 재구성하거나 제거하지
 
 - console, network, navigation과 UI breadcrumb
 
+### Relay GraphQL 전송 실패
+
+Relay GraphQL 요청이 HTTP 응답을 받기 전에 오프라인 상태, timeout, DNS 또는 TLS 오류 등 연결 실패로 거절되는
+경우는 예상된 연결성 실패로 분류한다. Web·Native의 React 오류 경계는 기존 fallback·재시도 동작을 유지하되, 이 거절을
+React 오류 경계 Sentry reporter로 다시 수집하지 않는다. 이 제외는 HTTP 응답 이전의 Relay 전송 거절에만
+적용한다. HTTP 응답(비정상 상태 포함), GraphQL `errors` payload, 응답 JSON 파싱 실패와 그 밖의 예상하지
+못한 React render/runtime 오류는 기존 Sentry 관측 대상이며, 명시적으로 호출한 처리된 오류 수집도 이 규칙으로
+제외하지 않는다.
+
 ### 앱에서 명시적으로 수집하는 처리된 실패
 
 공통 앱 수집 진입점은 Web·Native 플랫폼별 SDK의 `captureException` 경계를 한 번 호출할 수 있게 한다. 이 진입점은 기존 DSN·environment·release metadata gate와 SDK event 전달 정책을 재사용하며, 전달받은 오류와 호출자가 구성한 안전한 context를 임의의 전역 정제 규칙으로 재작성하지 않는다. 오류를 어떤 context로 전달할지는 호출 경계가 소유하고, 인증 정보·불필요한 사용자 콘텐츠·개인정보를 추가하지 않아야 한다.

@@ -1,4 +1,5 @@
 import { getApiOrigin, getPublicWebOrigin } from '@/config/origin';
+import { RelayTransportError } from './transportError';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 
 function isNativeRuntime(): boolean {
@@ -17,7 +18,7 @@ export async function executeGraphQLRequest(
 
   const native = isNativeRuntime();
   const origin = native ? getApiOrigin() : getPublicWebOrigin();
-  const response = await fetchImplementation(`${origin}/graphql`, {
+  const responsePromise = fetchImplementation(`${origin}/graphql`, {
     method: 'POST',
     credentials: native ? 'omit' : 'include',
     headers: {
@@ -31,6 +32,10 @@ export async function executeGraphQLRequest(
       variables,
     }),
   });
+  const response = await responsePromise.catch((cause) => {
+    throw new RelayTransportError(cause);
+  });
+
   const body = (await response.json().catch(() => null)) as GraphQLResponse | null;
 
   if (!response.ok) {
