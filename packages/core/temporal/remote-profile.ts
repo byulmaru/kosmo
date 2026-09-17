@@ -10,7 +10,7 @@ export type RemoteProfileLookupInput = {
 };
 
 export const remoteProfileLookupWorkflow: WorkflowDefinition<
-  (input: RemoteProfileLookupInput) => Promise<string>
+  (input: RemoteProfileLookupInput) => Promise<string | null>
 > = {
   workflow: REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE,
   workflowIdFromArgs: (input) =>

@@ -147,6 +147,13 @@ Block 공통 predicate를 선행 조건으로 요구해서는 안 된다(MUST NO
 - **AND** 기존 connection shape의 빈 결과를 반환한다
 - **AND** partial search, `profileByHandle` 또는 프로필 route로 materialization을 확대하지 않는다
 
+#### Scenario: Keep an empty result when remote lookup has no identity
+
+- **WHEN** 명시적인 원격 검색의 public handle lookup Workflow가 오류 없이 Profile identity 없이 (`null`) 완료된다
+- **THEN** 시스템은 GraphQL 오류 없이 기존 connection shape의 빈 결과를 반환한다
+- **AND** API 오류 관측 경계에 해당 결과를 오류로 기록하지 않는다
+- **AND** materialization 이후 Profile DB 검색을 실행하지 않는다
+
 #### Scenario: Observe an unexpected materialization failure and keep search fallback
 
 - **WHEN** 명시적인 원격 검색의 materialization 경계에서 예상하지 못한 오류가 발생한다

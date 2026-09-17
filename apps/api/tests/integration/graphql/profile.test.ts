@@ -599,6 +599,41 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(await db.$count(Instances), instanceCountBefore);
   });
 
+  test('keeps a null remote lookup result as an empty connection without reporting it', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const execute = t.mock.method(temporalClient.workflow, 'execute', async () => null as never);
+    const capturedErrors: unknown[] = [];
+
+    await Sentry.withScope(async (scope) => {
+      scope.addEventProcessor((event, hint) => {
+        capturedErrors.push(hint.originalException);
+        return event;
+      });
+
+      const result = await requestGraphQL<{
+        searchProfiles: { edges: unknown[]; pageInfo: { hasNextPage: boolean } };
+      }>(
+        `query SearchRemoteProfile($query: String!) {
+          searchProfiles(query: $query, first: 20) {
+            edges { node { id } }
+            pageInfo { hasNextPage }
+          }
+        }`,
+        { query: `@alice@${remoteDomain}` },
+        auth.token,
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.searchProfiles, {
+        edges: [],
+        pageInfo: { hasNextPage: false },
+      });
+    });
+    assert.equal(await Sentry.flush(1_000), true);
+    assert.equal(capturedErrors.length, 0);
+    assert.equal(execute.mock.calls.length, 1);
+  });
+
   test('reports unexpected remote materialization failures before falling back to an empty connection', async (t) => {
     const auth = await createAuthenticatedSession();
     const lookupError = ApplicationFailure.nonRetryable(

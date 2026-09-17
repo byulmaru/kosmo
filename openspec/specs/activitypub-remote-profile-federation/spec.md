@@ -46,6 +46,13 @@ kosmo가 Fedify로 조회한 저장된 remote ActivityPub actor를 기존 `Profi
 - **AND** `mode: 'execute'` caller는 materialize Activity의 결과와 missing fetch·persist 완료를 기다리고, `needsRefresh: true`이면 refresh child start acknowledgement 뒤 cached Profile identity를 받으며, `mode: 'start'` caller는 모든 결과에서 public lookup Workflow의 native start acknowledgement만 받은 뒤 반환한다
 - **AND** 두 mode의 caller는 같은 `remoteProfileLookupWorkflow` 종류와 실행 경로를 사용한다
 
+#### Scenario: Treat missing WebFinger actor discovery as a no-match
+
+- **WHEN** `lookupRemoteActorUriActivity`가 Fedify `lookupWebFinger()`에서 `null`을 받거나 descriptor에 qualifying ActivityPub `self` link가 없다
+- **THEN** 시스템은 이를 정상 no-match로 처리하고 `remoteProfileLookupWorkflow`가 Profile identity 없이 완료되도록 한다
+- **AND** `materializeRemoteProfileActorActivity`를 호출하거나 Profile을 저장하지 않는다
+- **AND** Fedify `lookupWebFinger()` 예외와 qualifying `self` link의 malformed href는 materialization failure로 유지한다
+
 #### Scenario: Keep a stale refresh child after coordinator closure
 
 - **WHEN** public lookup Workflow가 stale 상태를 확인하고 refresh child의 실행 시작 확인을 기록한다

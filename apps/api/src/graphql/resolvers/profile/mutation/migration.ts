@@ -38,7 +38,7 @@ builder.mutationField('registerProfileMigrationSource', (t) =>
         throw new ValidationError('원본 Profile을 찾을 수 없어요.', { field: 'sourceHandle' });
       }
 
-      let sourceProfileId: string;
+      let sourceProfileId: string | null;
       try {
         sourceProfileId = await runWorkflow(remoteProfileLookupWorkflow, {
           args: [
@@ -57,6 +57,10 @@ builder.mutationField('registerProfileMigrationSource', (t) =>
           throw new ValidationError('원본 Profile을 찾을 수 없어요.', { field: 'sourceHandle' });
         }
         throw error;
+      }
+
+      if (sourceProfileId === null) {
+        throw new ValidationError('원본 Profile을 찾을 수 없어요.', { field: 'sourceHandle' });
       }
 
       await prepareProfileMigration({

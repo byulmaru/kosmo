@@ -219,7 +219,59 @@ test(
 );
 
 test(
-  'Remote Profile Workflow는 유효한 ActivityPub self link가 없으면 non-retryable 오류로 종료한다',
+  'Remote Profile Workflow는 WebFinger descriptor 또는 ActivityPub self link가 없으면 null을 반환한다',
+  { timeout: 120_000 },
+  async (t) => {
+    let webFingerCalls = 0;
+    let materializationCalls = 0;
+    const lookupWebFinger = async (resource: URL | string) => {
+      webFingerCalls += 1;
+      assert.equal(resource, 'acct:missing@missing-remote.example');
+      return webFingerCalls === 1 ? null : {};
+    };
+    t.mock.method(federation, 'createContext', () => ({ lookupWebFinger }) as never);
+
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-no-match-${process.pid}`;
+    const worker = await Worker.create({
+      activities: {
+        lookupRemoteActorUriActivity,
+        materializeRemoteProfileActorActivity: async () => {
+          materializationCalls += 1;
+          throw new Error('lookup failure must stop before materialization');
+        },
+        refreshRemoteProfileActorActivity,
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const execute = (workflowId: string) =>
+        environment.client.workflow.execute<
+          (input: RemoteProfileLookupInput) => Promise<string | null>
+        >(REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, {
+          args: [{ domain: 'missing-remote.example', handle: 'missing' }],
+          taskQueue,
+          workflowId,
+        });
+
+      assert.equal(await execute(`${taskQueue}:null-descriptor`), null);
+      assert.equal(await execute(`${taskQueue}:empty-links`), null);
+    });
+
+    assert.equal(webFingerCalls, 2);
+    assert.equal(materializationCalls, 0);
+  },
+);
+
+test(
+  'Remote Profile Workflow는 malformed ActivityPub self link를 non-retryable 오류로 종료한다',
   { timeout: 120_000 },
   async (t) => {
     let webFingerCalls = 0;
@@ -261,14 +313,13 @@ test(
 
     await assert.rejects(
       worker.runUntil(() =>
-        environment.client.workflow.execute<(input: RemoteProfileLookupInput) => Promise<string>>(
-          REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE,
-          {
-            args: [{ domain: 'invalid-remote.example', handle: 'invalid' }],
-            taskQueue,
-            workflowId: `${taskQueue}:invalid-webfinger`,
-          },
-        ),
+        environment.client.workflow.execute<
+          (input: RemoteProfileLookupInput) => Promise<string | null>
+        >(REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, {
+          args: [{ domain: 'invalid-remote.example', handle: 'invalid' }],
+          taskQueue,
+          workflowId: `${taskQueue}:invalid-webfinger`,
+        }),
       ),
       (error: unknown) => {
         const chain: unknown[] = [];
@@ -292,8 +343,7 @@ test(
         assert.ok(
           chain.some(
             (entry) =>
-              entry instanceof Error &&
-              entry.message.includes('missing a valid ActivityPub self link'),
+              entry instanceof Error && entry.message.includes('invalid ActivityPub self link'),
           ),
         );
         return true;
