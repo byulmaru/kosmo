@@ -1,4 +1,5 @@
 import { profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
+import { Slot } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
@@ -1848,7 +1849,9 @@ const universalParameters = {
 function UniversalShellStory() {
   return (
     <SessionProvider>
-      <UniversalShell />
+      <UniversalShell>
+        <Slot />
+      </UniversalShell>
     </SessionProvider>
   );
 }

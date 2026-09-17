@@ -32,6 +32,7 @@ let publicChannel: 'dev' | 'prod' = 'prod';
 mock.module('expo-router', {
   exports: {
     Slot: () => createElement(SlotRoute),
+    Stack: () => createElement('Stack', null, createElement(SlotRoute)),
     usePathname: () => pathname,
     useRouter: () => ({
       back: () => (backCalls += 1),
@@ -70,7 +71,7 @@ mock.module('react-native', {
         typeof children === 'function' ? children({ pressed: false }) : (children as ReactNode),
       ),
     ScrollView: ({ children, ...props }: Record<string, unknown>) =>
-      createElement('ScrollView', props, children as ReactNode),
+      createElement(platform === 'web' ? 'View' : 'ScrollView', props, children as ReactNode),
     StyleSheet: { create: <T>(styles: T) => styles, flatten: flattenStyle },
     Text: 'Text',
     useWindowDimensions: () => ({ width }),

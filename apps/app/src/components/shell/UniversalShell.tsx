@@ -1,4 +1,4 @@
-import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
+import { usePathname, useRouter, useSegments } from 'expo-router';
 import { ChevronLeftIcon, Menu } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -42,6 +42,7 @@ import {
 } from './shellLayout';
 import { NativeNavigationDrawer, WebNavigationDrawer } from './ShellNavigationDrawer';
 import { SidebarNavigation } from './SidebarNavigation';
+import type { ReactNode } from 'react';
 import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
 import type { HomeReselectionHandler } from './ShellChromeContext';
@@ -92,19 +93,19 @@ const webFixedBottomBar = {
 
 const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
 
-export function UniversalShell() {
+export function UniversalShell({ children }: { children?: ReactNode }) {
   return (
     <NavigationGuardProvider>
       <PrimaryNavigationScrollProvider>
         <NotificationReadAllProvider>
-          <UniversalShellContent />
+          <UniversalShellContent>{children}</UniversalShellContent>
         </NotificationReadAllProvider>
       </PrimaryNavigationScrollProvider>
     </NavigationGuardProvider>
   );
 }
 
-function UniversalShellContent() {
+function UniversalShellContent({ children }: { children?: ReactNode }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
@@ -378,9 +379,7 @@ function UniversalShellContent() {
           ]}
         >
           <PostMediaViewerScreenFallbackProvider fallbackFocus={screenFallbackRef}>
-            <RelayActorBoundary>
-              <Slot />
-            </RelayActorBoundary>
+            <RelayActorBoundary>{children}</RelayActorBoundary>
           </PostMediaViewerScreenFallbackProvider>
         </View>
         {mobile ? (

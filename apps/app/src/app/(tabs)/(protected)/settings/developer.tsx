@@ -8,6 +8,7 @@ import { SettingsItem } from '@/components/settings/SettingsItem';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
+import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { getPublicConfig } from '@/config/public';
 import { useTheme } from '@/theme/ThemeProvider';
 import { layoutRecipes } from '@/theme/tokens';
@@ -29,7 +30,13 @@ export default function SettingsDeveloperRoute() {
     ) : undefined;
 
   return (
-    <>
+    <RouteScrollContainer
+      nativeScrollProps={{
+        contentContainerStyle: styles.nativeContent,
+        style: styles.nativeRoot,
+      }}
+      webStyle={styles.webRoot}
+    >
       {detailHeaderMode !== 'hidden' ? <PageHeader leading={backButton} title="개발 정보" /> : null}
       <View style={[layoutRecipes.listStack, styles.root]}>
         {Platform.OS === 'web' ? (
@@ -41,7 +48,7 @@ export default function SettingsDeveloperRoute() {
           </>
         )}
       </View>
-    </>
+    </RouteScrollContainer>
   );
 }
 
@@ -109,5 +116,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     width: 44,
   },
+  nativeContent: { flexGrow: 1, minWidth: 0, width: '100%' },
+  nativeRoot: { flex: 1, minWidth: 0, width: '100%' },
   root: { width: '100%' },
+  webRoot: { minWidth: 0, width: '100%' },
 });

@@ -1,14 +1,17 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
-import { Slot, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
+import { Slot, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { ArrowLeft, ChevronLeftIcon } from 'lucide-react-native';
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
 import { PageHeader } from '@/components/PageHeader';
-import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileConnectionListState } from '@/components/profile/ProfileConnectionList';
 import { ProfileHero } from '@/components/profile/ProfileHero';
+import {
+  ProfileRouteContainer,
+  ProfileRouteProvider,
+} from '@/components/profile/ProfileRouteShell';
 import { getProfileConnectionKind, normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationLink } from '@/components/shell/NavigationLink';
@@ -187,15 +190,24 @@ function ProfileLayoutContent({
   }
 
   if (connectionKind) {
+    const chrome = (
+      <ProfileConnectionChrome
+        displayName={profile.displayName || profile.handle}
+        kind={connectionKind}
+        relativeHandle={profile.relativeHandle}
+      />
+    );
+
     return (
-      <ProfileRouteContainer scrollKey={scrollKey}>
-        <ProfileConnectionChrome
-          displayName={profile.displayName || profile.handle}
-          kind={connectionKind}
-          relativeHandle={profile.relativeHandle}
-        />
-        <Slot />
-      </ProfileRouteContainer>
+      <ProfileRouteProvider chrome={chrome} scrollKey={scrollKey}>
+        {Platform.OS === 'web' ? (
+          <Slot />
+        ) : (
+          <View style={styles.nativeRoute}>
+            <Stack screenOptions={{ headerShown: false }} />
+          </View>
+        )}
+      </ProfileRouteProvider>
     );
   }
 
@@ -214,8 +226,8 @@ function ProfileLayoutContent({
     <FollowButton profile={profile} />
   );
 
-  return (
-    <ProfileRouteContainer scrollKey={scrollKey}>
+  const chrome = (
+    <>
       {showPageHeader ? (
         <PageHeader leading={backButton} title={profile.displayName} titleLines={1} />
       ) : null}
@@ -227,8 +239,19 @@ function ProfileLayoutContent({
         profile={profile}
         showMuteAction={canMute}
       />
-      <Slot />
-    </ProfileRouteContainer>
+    </>
+  );
+
+  return (
+    <ProfileRouteProvider chrome={chrome} scrollKey={scrollKey}>
+      {Platform.OS === 'web' ? (
+        <Slot />
+      ) : (
+        <View style={styles.nativeRoute}>
+          <Stack screenOptions={{ headerShown: false }} />
+        </View>
+      )}
+    </ProfileRouteProvider>
   );
 }
 
@@ -278,24 +301,6 @@ function ProfileConnectionChrome({
   );
 }
 
-function ProfileRouteContainer({
-  children,
-  scrollKey,
-}: {
-  children: ReactNode;
-  scrollKey: string;
-}) {
-  return (
-    <PaginationScrollView
-      key={scrollKey}
-      nativeScrollProps={{ style: styles.nativeRoot }}
-      webStyle={styles.webRoot}
-    >
-      {children}
-    </PaginationScrollView>
-  );
-}
-
 const styles = StyleSheet.create({
   back: {
     alignItems: 'center',
@@ -304,6 +309,5 @@ const styles = StyleSheet.create({
     marginLeft: -spacing.sm,
     width: 44,
   },
-  nativeRoot: { flex: 1 },
-  webRoot: { width: '100%' },
+  nativeRoute: { flex: 1, minWidth: 0 },
 });

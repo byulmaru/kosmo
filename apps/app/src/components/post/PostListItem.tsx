@@ -264,7 +264,7 @@ export function PostListItem({
         <PostAttributionRow
           icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
         >
-          <Link asChild href={profileHref}>
+          <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
             <Pressable
               accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
               accessibilityRole="link"
@@ -289,7 +289,7 @@ export function PostListItem({
       {pinnedAttribution}
       {replyAttribution}
       <View style={styles.quoteRow}>
-        <Link asChild href={profileHref}>
+        <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
           <Pressable
             aria-hidden
             accessibilityElementsHidden
@@ -365,7 +365,7 @@ function PostListRow({
   );
   return (
     <View style={styles.standardRow} testID="post-list-standard-row">
-      <Link asChild href={profileHref}>
+      <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
         <Pressable
           aria-hidden
           accessibilityElementsHidden
@@ -385,7 +385,7 @@ function PostListRow({
       <View style={styles.content}>
         <View style={styles.header}>
           <ProfileNameBlock href={profileHref} profile={post.profile} />
-          <Link asChild href={detailHref}>
+          <Link asChild href={detailHref} push={Platform.OS !== 'web'}>
             <Pressable accessibilityRole="link" style={styles.timeLink}>
               <TimestampText style={styles.time}>
                 {formatTimelineTimestamp(post.createdAt)}

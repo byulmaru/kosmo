@@ -1,5 +1,6 @@
-import { Slot, useRouter } from 'expo-router';
+import { Slot, Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { Splash } from '@/components/Splash';
 import { useSession } from '@/session/SessionProvider';
 
@@ -17,5 +18,5 @@ export default function ProtectedLayout() {
     return <Splash label="로그인 상태를 확인하는 중입니다." />;
   }
 
-  return <Slot />;
+  return Platform.OS === 'web' ? <Slot /> : <Stack screenOptions={{ headerShown: false }} />;
 }
