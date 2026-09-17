@@ -266,7 +266,7 @@ test('Block 실패 후 재시도와 상호 차단에서 자신의 exact 관계�
   await setE2ESessionCookie(context, owner.token);
   let attempts = 0;
   await page.route('**/graphql', async (route) => {
-    if (!isGraphQLOperation(route.request().postData(), 'ProfileBlockControllerBlockMutation')) {
+    if (!isGraphQLOperation(route.request().postData(), 'ProfileBlockActionBlockMutation')) {
       await route.fallback();
       return;
     }
@@ -562,7 +562,7 @@ for (const targetKind of ['Local', 'Remote'] as const) {
 async function blockFromProfile(page: Page) {
   const dialog = await openBlockConfirmation(page);
   await expect(dialog.getByRole('button', { name: '취소', exact: true })).toBeFocused();
-  const response = waitForGraphQLOperation(page, 'ProfileBlockControllerBlockMutation');
+  const response = waitForGraphQLOperation(page, 'ProfileBlockActionBlockMutation');
   await dialog.getByRole('button', { name: '차단', exact: true }).click();
   const result = await (await response).json();
   expect(result.errors).toBeUndefined();
@@ -580,7 +580,7 @@ async function openBlockConfirmation(page: Page) {
 async function confirmUnblock(page: Page) {
   const dialog = page.getByRole('dialog', { name: '이 프로필의 차단을 해제할까요?' }).last();
   await expect(dialog.getByRole('button', { name: '취소', exact: true })).toBeFocused();
-  const response = waitForGraphQLOperation(page, 'ProfileBlockControllerUnblockMutation');
+  const response = waitForGraphQLOperation(page, 'ProfileBlockActionUnblockMutation');
   await dialog.getByRole('button', { name: '차단 해제', exact: true }).click();
   const result = await (await response).json();
   expect(result.errors).toBeUndefined();
