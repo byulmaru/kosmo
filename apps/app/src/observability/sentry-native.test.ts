@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it, mock } from 'node:test';
+import { RelayTransportError } from '@/relay/transportError';
 import type { ErrorInfo } from 'react';
 
 type InitOptions = Record<string, unknown>;
@@ -105,43 +106,30 @@ describe('Native app Sentry configuration', () => {
     assert.deepEqual(captureCalls[0]?.context, { componentStack: '\n    at Screen' });
   });
 
-  it('skips native transport errors from React error boundaries', async () => {
+  it('skips Relay transport errors from React error boundaries', async () => {
     process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
-    const { captureReactError } = await import(`${sentryModule}?native-transport`);
+    const { captureReactError } = await import(`${sentryModule}?relay-transport`);
+    const cause = new TypeError('fetch failed');
 
-    for (const message of ['The network connection was lost.', 'The request timed out.']) {
-      const nativeCause = new Error(message);
-      nativeCause.name = 'UnexpectedException';
-      captureReactError(new TypeError('fetch failed', { cause: nativeCause }), {
-        componentStack: '\n    at Screen',
-      } as ErrorInfo);
-    }
+    captureReactError(new RelayTransportError(cause), {
+      componentStack: '\n    at Screen',
+    } as ErrorInfo);
 
     assert.equal(captureCalls.length, 0);
   });
 
   it('keeps unrelated React errors captured', async () => {
     process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
-    const { captureReactError } = await import(`${sentryModule}?native-transport-guard`);
+    const { captureReactError } = await import(`${sentryModule}?relay-transport-guard`);
     const componentStack = { componentStack: '\n    at Screen' } as ErrorInfo;
-    const nativeCause = new Error('The network connection was lost.');
-    nativeCause.name = 'UnexpectedException';
-    const nearMissCause = new Error('The request timed out unexpectedly.');
-    nearMissCause.name = 'UnexpectedException';
 
-    const errors = [
-      new TypeError('fetch failed'),
-      new TypeError('fetch failed', { cause: new Error('The network connection was lost.') }),
-      new TypeError('fetch failed', { cause: nearMissCause }),
-      new TypeError('request failed', { cause: nativeCause }),
-      new TypeError('fetch failed', { cause: nativeCause }),
-    ];
+    const errors = [new TypeError('fetch failed'), new Error('GraphQL field failed')];
 
     for (const error of errors) {
       captureReactError(error, componentStack);
     }
 
-    assert.equal(captureCalls.length, errors.length - 1);
+    assert.equal(captureCalls.length, errors.length);
   });
 
   it('captures handled errors with the original error and primitive context', async () => {

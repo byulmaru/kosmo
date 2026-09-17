@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { executeGraphQLRequest, formatGraphQLError } from './network';
+import { RelayTransportError } from './transportError';
 
 const request = {
   cacheID: 'test',
@@ -73,6 +74,100 @@ describe('Relay 네트워크', () => {
         Reflect.deleteProperty(globalThis, 'window');
       }
     }
+  });
+
+  it('fetch rejection을 원인과 함께 Relay transport 오류로 표시한다', async () => {
+    const cause = new TypeError('fetch failed');
+
+    await assert.rejects(
+      executeGraphQLRequest(request, {}, null, async () => {
+        throw cause;
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof RelayTransportError);
+        assert.equal(error.message, 'fetch failed');
+        assert.equal(error.cause, cause);
+        return true;
+      },
+    );
+  });
+
+  it('동기 fetch throw는 원래 오류로 유지한다', async () => {
+    const cause = new Error('fetch setup failed');
+
+    await assert.rejects(
+      executeGraphQLRequest(request, {}, null, () => {
+        throw cause;
+      }),
+      (error: unknown) => {
+        assert.equal(error, cause);
+        assert.equal(error instanceof RelayTransportError, false);
+        return true;
+      },
+    );
+  });
+
+  it('fetch 전 request serialization 오류는 transport marker를 사용하지 않는다', async () => {
+    const variables = { invalid: BigInt(1) } as unknown as Record<string, unknown>;
+
+    await assert.rejects(
+      executeGraphQLRequest(request, variables, null, async () => {
+        assert.fail('fetch should not be called');
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof TypeError);
+        assert.equal(error instanceof RelayTransportError, false);
+        return true;
+      },
+    );
+  });
+
+  it('HTTP 오류와 GraphQL 오류는 transport marker를 사용하지 않는다', async () => {
+    await assert.rejects(
+      executeGraphQLRequest(
+        request,
+        {},
+        null,
+        async () =>
+          new Response(JSON.stringify({ errors: [{ message: 'server unavailable' }] }), {
+            status: 503,
+          }),
+      ),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.message, 'server unavailable');
+        assert.equal(error instanceof RelayTransportError, false);
+        return true;
+      },
+    );
+
+    const response = await executeGraphQLRequest(
+      request,
+      {},
+      null,
+      async () =>
+        new Response(JSON.stringify({ errors: [{ message: 'field failed' }] }), {
+          status: 200,
+        }),
+    );
+    assert.deepEqual(response, { errors: [{ message: 'field failed' }] });
+  });
+
+  it('응답 JSON parsing 오류는 transport marker를 사용하지 않는다', async () => {
+    await assert.rejects(
+      executeGraphQLRequest(
+        request,
+        {},
+        null,
+        async () => new Response('not json', { status: 200 }),
+      ),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.message, 'GraphQL response was not JSON.');
+        assert.equal(error instanceof RelayTransportError, false);
+        return true;
+      },
+    );
   });
 
   it('Error와 알 수 없는 실패를 공통 boundary 형식으로 변환한다', () => {
