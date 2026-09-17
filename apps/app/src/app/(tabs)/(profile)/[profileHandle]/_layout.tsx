@@ -38,6 +38,7 @@ const ProfileLayoutQuery = graphql`
     profileBlockStatus(handle: $handle) {
       blockedBy
       blocking
+      ...ProfileHero_profileBlockStatus
     }
     profileByHandle(handle: $handle) {
       id
