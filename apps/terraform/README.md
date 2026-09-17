@@ -6,6 +6,7 @@
 
 - 기존 Firebase 활성화와 Android/iOS 앱 등록 (`moe.kos`)
 - Google Play Developer API 활성화, Android Publisher 전용 service account와 최소 WIF 권한
+- Native Store Distribution이 Firebase Android/iOS client config를 빌드 시점에 읽을 수 있는 전용 service account와 최소 WIF 권한
 - 각 store workflow에 필요한 GitHub Actions Workload Identity Federation. Native Store Distribution의 Android job은 `main`의 정확한 workflow와 기존 `prod` Environment만 허용한다.
 - Terraform plan/apply가 공유하는 GitHub Actions WIF 서비스 계정
 - GitHub에서 직접 관리하는 Actions environment와 변수 (`terraform-apply`, 승인형 `prod` release)
@@ -55,6 +56,35 @@ Terraform 적용 후 다음 값을 확인한다.
 terraform output -raw android_play_service_account
 terraform output -raw android_play_workload_identity_provider
 ```
+
+## Firebase native config bootstrap
+
+Terraform은 Firebase native config 조회용 `firebase-native-config` service account와 `roles/firebase.viewer` 권한, 그리고
+`main`의 정확한 `.github/workflows/native-store-distribution.yml` workflow와 기존 `prod` Environment만 허용하는 전용
+Workload Identity provider를 관리한다. 이 identity는 Android Play publisher나 Terraform service account와 공유하지 않는다.
+
+적용 후 Native Store Distribution의 `prod` Environment에 사용할 값을 확인한다.
+
+```sh
+terraform output -raw firebase_native_config_service_account
+terraform output -raw firebase_native_config_workload_identity_provider
+```
+
+기존 `prod` Environment에 다음 non-secret variable을 Terraform output과 매핑해 설정한다. 새로운 Environment를 만들거나
+Firebase config 파일 원문을 GitHub 설정에 저장하지 않는다.
+
+| `prod` Environment variable                         | Terraform output                                    |
+| --------------------------------------------------- | --------------------------------------------------- |
+| `FIREBASE_NATIVE_CONFIG_PROJECT_ID`                 | `firebase_project_id`                               |
+| `FIREBASE_NATIVE_CONFIG_ANDROID_APP_ID`             | `firebase_android_app_id`                           |
+| `FIREBASE_NATIVE_CONFIG_IOS_APP_ID`                 | `firebase_ios_app_id`                               |
+| `FIREBASE_NATIVE_CONFIG_SERVICE_ACCOUNT`            | `firebase_native_config_service_account`            |
+| `FIREBASE_NATIVE_CONFIG_WORKLOAD_IDENTITY_PROVIDER` | `firebase_native_config_workload_identity_provider` |
+
+Workflow는 위 identity로 인증한 뒤 Firebase Management API에서 Android `google-services.json`과 iOS
+`GoogleService-Info.plist`를 실행 중 임시 경로에 조회해 Expo prebuild에 전달하고, job 종료 시 제거한다. Terraform은
+두 파일의 원문·data source·Secret Manager version·`local_file`·raw config output을 관리하지 않으며 해당 내용은 state나
+plan에 남기지 않는다.
 
 그 뒤 `apps/terraform/**` 또는 Terraform workflow가 바뀐 PR에서는 GCP/Firebase/IAM/WIF plan을 실행해 PR comment와 artifact로 남긴다. Plan artifact는 저장소의 Actions 보존 기간만큼 유지하며 apply는 병합된 PR head와 일치하는 미만료 artifact만 선택한다.
 
