@@ -213,7 +213,12 @@ function NavigationCatalog() {
       </Section>
       <Section title="Right rail">
         <View style={{ height: 560, padding: spacing.lg, width: 320 }}>
-          <RightRail profile={data.profile} />
+          <RightRail
+            mode="rail"
+            onExpand={() => undefined}
+            onRequestClose={() => undefined}
+            profile={data.profile}
+          />
           <RightRailFooter />
         </View>
       </Section>

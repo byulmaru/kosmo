@@ -461,13 +461,14 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         >
           {profile ? (
             <RightRail
-              mode={composerMode}
-              onExpand={openComposer}
               onPostCreated={handleComposerPostCreated}
               onRequestClose={closeComposer}
               open={composerVisible}
               profile={profile}
               triggerFocusRef={composerTriggerFocusRef}
+              {...(composerMode === 'rail'
+                ? { mode: composerMode, onExpand: openComposer }
+                : { mode: composerMode })}
             />
           ) : null}
           {showRightRail ? (

@@ -97,6 +97,7 @@ describe('PostComposerHost', () => {
   it('Rail에서 Overlay로 바꿔도 같은 Composer draft owner를 유지한다', async () => {
     const props = {
       mode: 'rail' as const,
+      onExpand: () => undefined,
       onRequestClose: () => undefined,
       open: true,
       profile: {} as never,
@@ -106,7 +107,14 @@ describe('PostComposerHost', () => {
     });
     await act(async () => composerProps?.onBodyChange('유지할 draft'));
     await act(async () => {
-      renderer?.update(createElement(PostComposerHost, { ...props, mode: 'overlay' }));
+      renderer?.update(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onRequestClose: props.onRequestClose,
+          open: props.open,
+          profile: props.profile,
+        }),
+      );
     });
 
     assert.equal(composerProps?.body, '유지할 draft');

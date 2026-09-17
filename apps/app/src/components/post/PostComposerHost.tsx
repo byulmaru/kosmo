@@ -21,14 +21,12 @@ import type { PostComposerCreatedPost } from './PostComposer';
 export type PostComposerHostMode = 'mobile' | 'overlay' | 'rail';
 
 type PostComposerHostProps = {
-  mode: PostComposerHostMode;
-  onExpand?: () => void;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onRequestClose: () => void;
   open: boolean;
   profile: PostComposer_profile$key;
   triggerFocusRef?: RefObject<HTMLElement | null>;
-};
+} & ({ mode: 'rail'; onExpand: () => void } | { mode: 'mobile' | 'overlay'; onExpand?: never });
 
 export function PostComposerHost({
   mode,
@@ -154,13 +152,13 @@ export function PostComposerHost({
     <PostComposer
       expandControlRef={expandControlRef}
       focusOnMount={overlayVisible}
-      onExpand={onExpand}
       onMediaEditorOpenChange={setEditingMedia}
       onPostCreated={handlePostCreated}
-      onRequestClose={requestClose}
       onSubmittingChange={setSubmitting}
-      presentation={mode}
       profile={profile}
+      {...(mode === 'rail'
+        ? { onExpand, onRequestClose: requestClose, presentation: mode }
+        : { onRequestClose: requestClose, presentation: mode })}
     />
   );
 
