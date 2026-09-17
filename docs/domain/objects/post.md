@@ -33,8 +33,9 @@ Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 �
 | 인용 허용 정책 | Quote Approval Policy, 필수 | 모두, 팔로워, 본인만 중 하나             | Content가 있는 Local Post | Post 조회 정책 통과 | 없음      |
 
 인용 허용 정책은 Content가 있는 Local Post에 적용하며, `모두`, `팔로워`, `본인만` 중 하나다.
-새 Post와 정책 도입 전 작성한 Local Post의 초기값은 `모두`다. 이 값은 이후 인용 요청을 판단하는 기준이며
-이미 발급한 인용 승인을 변경하지 않는다.
+새 Post에서 별도로 선택하지 않은 정책과 정책 도입 전 작성한 Local Post의 초기값은 `모두`다.
+작성자는 Public·Unlisted 글을 작성할 때 기존 공개 범위 설정 UI 안에 새로 추가하는 인용 허용 정책 선택 UI에서 해당 글의 정책을 함께 선택할 수 있다.
+이 값은 이후 인용 요청을 판단하는 기준이며 이미 발급한 인용 승인을 변경하지 않는다.
 
 Local Post의 ActivityPub Note는 이 정책을 `interactionPolicy.canQuote`에 광고한다. `모두`는
 `automaticApproval`에 ActivityStreams Public collection을, `팔로워`는 Author의 followers collection과
@@ -89,7 +90,6 @@ Author Profile/Repost Source 조합에는 Lifecycle State가 Active이고 Conten
 | Reply 작성                          | Profile               | Post        | Parent Post, 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록 | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 Parent를 볼 수 있다. Post Visibility는 Parent와 독립적으로 행동 주체가 선택하며 본문/Media 조건은 Post 작성과 같다                                                                                                                                                                 | Lifecycle=Active이고 Current Content와 입력 Reply Parent가 있으며 Repost Source가 없는 Post, 첫 Post Content, Author/Hashtag 관계가 원자적으로 생성된다                                                                 |
 | Quote 작성                          | Profile               | Post        | Source Post, 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록 | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 Source를 볼 수 있다. Source는 아래 Quote Source 조건을 통과하며, 인용 정책이 자동 승인하거나 원격 승인 요청을 허용한다. 원격 승인 대기는 작성 거부 조건이 아니다. Post Visibility는 Source와 독립적으로 선택하되 원문 접근 범위를 넓히지 않으며 본문/Media 조건은 Post 작성과 같다 | Lifecycle=Active이고 Current Content와 입력 Source의 인용 정보를 기록하며 Reply Parent가 없는 Post, 첫 Post Content, Author/Hashtag 관계가 원자적으로 생성된다. 승인이 필요한 Source 관계는 승인 전까지 표시하지 않는다 |
 | 인용 허용 정책 변경                 | Author Profile        | Post        | 모두, 팔로워 또는 본인만                                                         | `Account.Active`, `Post.Author`    | Content가 있는 Active Local Post다                                                                                                                                                                                                                                                                                                             | 이후 요청에 적용할 정책이 변경된다. 기존 QuoteAuthorization은 유지한다                                                                                                                                                  |
-| 인용 승인 철회                      | Source Author Profile | Source Post | 승인을 철회할 Quote                                                              | `Account.Active`, `Post.Author`    | 해당 Source를 대상으로 발급한 인용 승인이 존재한다                                                                                                                                                                                                                                                                                             | 해당 승인을 무효로 만들고 Quote 자체 Content를 유지한 채 Source를 비노출한다. 원격에는 승인 철회를 전달한다                                                                                                             |
 | Post Content 수정                   | Author Profile        | Post        | 본문, Content Warning, Sensitive Media, Media 목록                               | `Account.Active`, `Post.Author`    | Lifecycle State가 Active이고 Content가 있다. 새 document와 참조 Media가 [Post Content](./post-content.md)의 검증을 통과한다                                                                                                                                                                                                                    | 새 immutable Post Content revision이 생성되고 Current Content가 같은 transaction에서 새 revision을 가리킨다. Post Visibility와 구조 관계는 바뀌지 않는다                                                                |
 | Repost 작성                         | Profile               | Post        | Source Post                                                                      | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 입력 Source를 볼 수 있다. Source Visibility는 Public, Unlisted, Followers Only 중 하나이며 같은 Author Profile/Source 조합의 Active Repost가 없다. Followers Only Source는 Source Author만 Repost할 수 있다                                                                        | Lifecycle=Active이고 Content와 Reply Parent 없이 입력 Repost Source를 직접 참조하는 Post와 Author 관계가 생성된다. Visibility는 Public/Unlisted Source이면 Unlisted, Followers Only Source이면 Followers Only가 된다    |
 | Post 삭제 (Account 요청)            | Author Profile        | Post        | 없음                                                                             | `Account.Active`, `Post.Author`    | Lifecycle State가 Active다                                                                                                                                                                                                                                                                                                                     | Lifecycle State가 Tombstone이 되고 삭제 시각이 기록된다                                                                                                                                                                 |
@@ -135,11 +135,11 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   비노출로 수렴시킨다. 일반 Source Post audience에만 보내는 `Delete(Note)`로 이 경로를 대신하지 않는다.
 - 전송 실패나 응답 부재를 승인으로 간주하지 않는다. 늦게 도착한 응답이나 중복 전달이 더 최신의 거절·철회를
   무효화하지 않도록 한다. 세부 재시도와 전달 순서는 해당 lifecycle의 구현 계약에서 정한다.
-- 게시글별 인용 허용 설정의 변경은 이후 요청에만 적용한다. 기존 승인을 없애려면 별도 인용 승인 철회를
-  사용하며, 설정 변경 자체로 기존 Quote의 Source를 일괄 숨기지 않는다.
+- 게시글별 인용 허용 설정의 변경은 이후 요청에만 적용하고 기존 승인은 유지한다. 현재 출시에서는
+  작성자가 개별 승인을 철회하는 기능을 제공하지 않는다.
 - 차단은 새 인용 요청·승인을 양방향으로 막지만 기존 승인을 자동 철회하지 않는다. 기존 승인 Source 표시는
-  Viewer별 방향별 Post 조회 정책을 적용하며, 제3자에게도 Source를 숨기려면 원문 작성자가 별도 승인 철회를
-  사용한다.
+  Viewer별 방향별 Post 조회 정책을 적용하며, 차단만으로 제3자의 Source를 숨기지 않는다. 원격 승인 철회
+  수신과 Source 삭제에 따른 비노출은 별도 lifecycle로 유지한다.
 
 ## 권한
 
@@ -174,6 +174,12 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   Content, Visibility와 Eligibility를 기준으로 후보를 유지하며 `Repost Source` 관계만 표시하지 않는다.
 - 승인 대기·거절·철회된 Source도 같은 비노출 원칙을 적용한다. 유효한 인용 승인이나 자기 인용이라는 사실은
   viewer별 Source Visibility·Eligibility·Profile Block 검사를 대신하지 않는다.
+- PROD-924 도입 전 존재하는 것으로 확인된 Local Quote 2건은 새 승인 상태나 QuoteAuthorization을 backfill하지
+  않고 기존 데이터 예외로 Source 표시를 유지한다. 승인 lifecycle에 편입되지 않은 기존 Quote이며 승인 기록
+  부재만으로 대기·거절·철회 상태나 승인 완료 상태를 부여하지 않는다. 이 예외도 Source의 기존 Visibility·Eligibility·
+  Profile Block·삭제 제한을 통과해야 한다. 확인된 두 Quote에만 적용하며 신규 Quote의 승인 누락으로 확대하지 않는다.
+- 이 기존 데이터 예외는 인용 승인이나 FEP 승인 표현의 근거가 아니다. 정확한 대상 확인과 도입 검증은 PROD-924가
+  소유하며, 기존 Local Post의 정책 초기화와 이미 발급된 승인 보존은 별개로 유지한다.
 - Reply Parent가 Tombstone이거나 조회 정책을 통과하지 못해도 Reply 자체의 Post Eligibility는 바뀌지 않는다.
 - Post Eligibility는 Post Visibility가 허용하지 않은 viewer에게 접근 범위를 넓히지 않는다.
 - 본문의 canonical Mention은 [Post Content Mention renderer](../../design/post-content-mentions.md)가 현재 revision의
@@ -387,8 +393,8 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - 승인 전·거절·철회 상태에서는 일반 Note 표현이나 자동 생성한 레거시 호환 표현을 통해 정상 인용인 것처럼
   Source 관계를 노출하지 않는다. Quote 작성자가 직접 작성한 Content를 Source lifecycle 때문에 삭제하지
   않는다.
-- 명시적 인용 승인 철회는 `QuoteAuthorization`을 무효로 만들고 `Delete(QuoteAuthorization)`를 전달한다.
-  이를 수신하는 경계도 철회 주체와 승인의 대응을 검증한 뒤 Source를 비노출한다. 수신자가 Quote의 소유
+- Local Source 삭제는 발급된 `QuoteAuthorization`을 무효로 만들고 `Delete(QuoteAuthorization)`를 전달한다.
+  원격 철회를 수신하는 경계도 철회 주체와 승인의 대응을 검증한 뒤 Source를 비노출한다. 수신자가 Quote의 소유
   서버라면 기존 Quote audience에도 검증된 `Delete(QuoteAuthorization)`을 전달한다. 발신·전달하는 철회
   `Delete`의 `object`와 `target`에는 객체를 embed하지 않고 URI 참조만 제공한다.
 - 레거시 Quote 속성의 상호운용을 지원하되 FEP 형식이 존재하지만 유효하지 않은 경우 레거시 형식으로
@@ -428,6 +434,9 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - `emojiReactions` collection: Local Note가 광고하는 FEP-c0e0 Reaction collection projection
 
 ## 제외/보류
+
+- 2026-09-11 PROD-924 대화 결정으로 Author의 개별 인용 승인 철회 UI·API는 현재 도입하지 않는다.
+  원격 승인 철회 수신·Local Source 삭제에 따른 승인 무효화·철회 전달과 자체 Content 보존은 유지한다.
 
 - Repost 취소는 별도 행동이 아니라 Content와 Reply Parent 없이 Repost Source를 가진 Post에 대한 Post 삭제다.
 - Mentioned Profiles Post는 Repost할 수 없다.
