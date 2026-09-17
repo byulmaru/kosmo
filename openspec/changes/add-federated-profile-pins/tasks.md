@@ -18,8 +18,8 @@ Local pin API가 승인된 Post를 ordered set에 추가하고 지정한 Post만
 - Mentioned Profiles, Content 없는 pure Repost와 타인 작성 Post는 거부한다.
 - 기본 pin은 기존 관계를 지우지 않고 추가하며 unpin은 지정한 관계만 제거한다.
 - 새 pin은 기존 pin의 상대 순서를 보존한 한 위치에 저장하고 관계 변경·idempotent no-op이 없으면 order를 유지한다.
-- 현재 first-party UI slot 교체만 ModalSheet 확인 후 일반 pin과 같은 Profile·대상 자격과 current expected value를 같은
-  transaction에서 검증한 원자적 결과여야 한다.
+- 현재 first-party UI는 slot 교체 전에 ModalSheet 확인을 수행하고, 서버는 이 UI event를 신뢰하거나 검증하지 않은 채 일반
+  pin과 같은 Profile·대상 자격과 전달받은 current expected value를 같은 transaction에서 검증한 원자적 결과를 만든다.
 - 교체 대상이 이미 다른 위치에 pinned면 대상 관계를 current slot으로 이동하고 기존 current 관계를 제거하되 중복 없이 나머지
   관계의 상대 순서를 보존한다.
 - replacement expected-current 불일치는 저장 상태를 보존한 stale/conflict 결과여야 한다.
@@ -127,11 +127,10 @@ Mastodon 호환 서버 기준 양방향 federation runtime으로 이 계약을 �
 - Featured sync 실패는 유효한 Remote Profile 등록·refresh·Update를 되돌리거나 실패시키지 않는다.
 - 각 sync 시도는 취소 가능하고 next page 순환을 검출하며 구현이 정한 page·item·byte·시간 예산 안에서 수행한다.
 - 취소·순환·예산 초과는 실패한 sync로 처리하고 마지막 성공 상태와 상위 Profile 결과를 유지한다.
-- Remote Profile별 current sync generation 또는 동등한 최신성 token을 비교해 완료 시점에 current인 시도만 snapshot을
-  교체하고 superseded 성공 결과는 폐기한다.
+- generation/token, source revision 비교 또는 직렬화된 실행 등 구현이 선택한 최신성 경계로 superseded 성공 결과를 폐기한다.
 - sync 완료 시간 SLA는 정의하지 않는다.
-- 검증된 원격 표현에서 `featured` URI가 사라지면 currentness token을 갱신해 이전 URI의 진행 중인 시도와 retry를 무효화하고
-  ordered pin set을 authoritative empty로 교체한다.
+- 검증된 원격 표현에서 `featured` URI가 사라지면 이전 URI의 진행 중인 시도와 retry가 이후 결과를 덮지 못하게 하고 ordered
+  pin set을 authoritative empty로 교체한다.
 - Remote unpin/Delete/Tombstone/visibility·author eligibility 상실은 다음 성공 sync 또는 기존 lifecycle에서 제거한다.
 
 **Verification**

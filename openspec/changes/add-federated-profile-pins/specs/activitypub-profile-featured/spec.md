@@ -59,10 +59,8 @@ Featured collection의 모든 page와 각 Note 역참조를 authenticated fetch�
 예산 초과 실패 시 마지막 성공 상태를 보존해야 한다(MUST). Featured sync 실패는 유효한 Remote Profile
 등록·refresh·Update 결과를 되돌리거나 실패시켜서는 안 된다(MUST NOT).
 실패는 관측·재시도할 수 있어야 하며(MUST), 실패·부분·취소된 시도는 last-success snapshot을 유지하고 이후 성공한 retry만
-snapshot을 원자적으로 교체해야 한다(MUST). retry timing·backoff·횟수·SLA는
-이 계약에서 고정하지 않는다. 각 trigger는 Remote Profile별 current sync generation 또는 동등한 최신성 token을 갱신해야
-하며(MUST), 완료 시점에 current인 시도만 snapshot을 교체해야 한다(MUST). 더 최신 trigger 뒤에 완료된 이전 시도의 성공
-결과는 snapshot에 반영해서는 안 된다(MUST NOT).
+snapshot을 원자적으로 교체해야 한다(MUST). retry timing·backoff·횟수·SLA와 최신성 판별 수단은 이 계약에서 고정하지 않는다.
+더 최신 trigger 뒤에 완료된 이전 시도의 성공 결과는 snapshot에 반영해서는 안 된다(MUST NOT).
 
 #### Scenario: Sync a verified remote Featured collection in order
 
@@ -96,7 +94,8 @@ snapshot을 원자적으로 교체해야 한다(MUST). retry timing·backoff·�
 
 - **WHEN** Follow Relationship이 새로 성립하거나 보존된 follower identity가 Active/Normal로 복귀한다
 - **THEN** 시스템은 이 전이만을 이유로 Featured sync를 실행하거나 예약하지 않는다
-- **AND** 이후 허용된 Profile sync가 실행될 때 현재 Active local follower identity가 있으면 Followers Only 검증에 사용한다
+- **AND** 이후 허용된 Profile sync가 실행될 때 현재 Active/Normal이며 사용 가능한 Local Instance에 속한 local follower
+  identity가 있으면 Followers Only 검증에 사용한다
 
 #### Scenario: Preserve the last successful set after sync failure
 
@@ -133,7 +132,7 @@ snapshot을 원자적으로 교체해야 한다(MUST). retry timing·backoff·�
 #### Scenario: Clear pins when a verified remote representation removes Featured
 
 - **WHEN** 성공적으로 검증된 Remote Profile refresh 또는 Update가 더 이상 `featured` URI를 광고하지 않는다
-- **THEN** 시스템은 currentness token을 갱신해 이전 URI의 진행 중인 sync와 예약된 retry를 무효화한다
+- **THEN** 시스템은 이전 URI의 진행 중인 sync와 예약된 retry가 이후 결과를 덮지 못하게 한다
 - **AND** Remote Profile의 ordered pinned set을 authoritative empty set으로 교체한다
 - **AND** 무효화된 이전 시도가 나중에 성공해도 empty snapshot을 덮지 않는다
 - **AND** 원격 Profile의 다른 유효한 표현 갱신은 유지한다

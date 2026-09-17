@@ -42,9 +42,10 @@ The system MUST satisfy this contract.
 
 **Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/design/post-action-bar.md`, `PROD-809`
 
-현재 Local first-party UI가 관리하는 첫 visible pin을 교체할 때는 기존 canonical ModalSheet의 confirmation content 교체 후
-수행해야 하며(MUST), 서버는 해당 UI slot mutation이 적용되는 transaction 안에서 호출자가 확인한 현재 pinned Post 기대값을
-검증해야 한다(MUST). 서버는 같은 transaction에서 일반 pin과 동일한 Local Profile의 Active/Normal 상태, 대상의 동일 작성자,
+현재 Local first-party UI는 관리하는 첫 visible pin을 교체하기 전에 기존 canonical ModalSheet의 confirmation content로 확인을
+받아야 한다(MUST). 서버는 ModalSheet 실행 여부를 신뢰하거나 검증하지 않고, 해당 UI slot mutation이 적용되는 transaction
+안에서 호출자가 전달한 현재 pinned Post 기대값을 검증해야 한다(MUST). 서버는 같은 transaction에서 일반 pin과 동일한 Local
+Profile의 Active/Normal 상태, 대상의 동일 작성자,
 Active Current Content와 Public·Unlisted·Followers Only 자격을 재검증해야 하며(MUST), Mentioned Profiles, Content 없는 pure
 Repost와 다른 Profile 작성 Post로 교체해서는 안 된다(MUST NOT). 이 정책은 ordered pin collection의 다른 항목을 삭제하거나 API cardinality를 제한해서는 안 된다(MUST NOT).
 교체 대상이 collection의 다른 위치에 이미 pinned면 서버는 해당 관계를 current slot으로 이동하고 기존 current 관계를 제거해야

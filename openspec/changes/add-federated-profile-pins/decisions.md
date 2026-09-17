@@ -47,12 +47,12 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
   page·item·byte·시간 예산을 적용한다. page traversal과 항목 검증이 성공한 authoritative sync만 ordered set을 교체하고,
   실패·취소·순환·예산 초과는 마지막 성공 상태를 유지한다. unpin, Delete/Tombstone과 eligibility 상실은 성공 sync 또는 기존
   lifecycle에서 제거한다. Sync 실패는 유효한 상위 Profile 등록·refresh·Update를 실패시키지 않으며, 검증된 원격 표현에서
-  `featured` URI가 사라지면 currentness token을 갱신해 이전 URI의 진행 중인 시도와 retry를 무효화하고 authoritative empty
-  set으로 교체한다. 각 Note의 canonical `attributedTo`는 collection을
+  `featured` URI가 사라지면 이전 URI의 진행 중인 시도와 retry가 이후 결과를 덮지 못하게 하고 authoritative empty set으로
+  교체한다. 각 Note의 canonical `attributedTo`는 collection을
   광고하는 Actor의 canonical URI와 정확히 일치해야 한다. Sync 실패는 관측·재시도할 수 있어야 하며, 실패·부분·취소 시도는
   last-success snapshot을 유지하고 이후 성공한 retry만 이를 원자적으로
-  교체한다. 각 trigger는 Remote Profile별 current sync generation 또는 동등한 최신성 token을 갱신하고, 완료 시점에 current인
-  시도만 snapshot을 교체한다. 더 최신 trigger 뒤에 완료된 이전 성공 결과는 폐기한다. retry timing·backoff·횟수·SLA는 고정하지 않는다.
+  교체한다. 구현은 generation/token, source revision 비교 또는 직렬화된 실행 등 현재 경계에 맞는 최신성 판별 수단을 선택하고,
+  더 최신 trigger 뒤에 완료된 이전 성공 결과는 폐기한다. retry timing·backoff·횟수·SLA는 고정하지 않는다.
 - Alternatives Considered: Local first-visible UI 정책을 Remote에 적용하거나 실패 시 빈 set으로 초기화하는 방식은 승인된 계약과
   안전한 visibility 보존을 위반하므로 선택하지 않는다.
 - Consequences: Remote sync는 부분 page를 visible 결과로 커밋하지 않고, Note attribution은 advertising Actor와 exact match여야
