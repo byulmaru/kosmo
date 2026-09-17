@@ -202,8 +202,10 @@ URI의 sync를 해당 Local Profile identity로 실행하거나 예약한다. �
 의존시키지 않는다.
 Featured sync 실패는 기존 retry-capable async effect/Workflow 경계에서 관측·재시도할 수 있어야 하지만 유효한 Remote
 Profile 등록·refresh·Update 결과를 되돌리거나 실패시키지 않는다. 실패·부분·취소된 시도는 마지막 성공 snapshot을
-유지하고, 이후 성공한 retry만 snapshot을 원자적으로 교체한다. retry timing·backoff·횟수·SLA는 이 계약에서 고정하지
-않는다. 검증된 원격 표현에서 `featured` URI가 사라진 경우는 authoritative empty set으로 처리한다.
+유지하고, 이후 성공한 retry만 snapshot을 원자적으로 교체한다. 각 trigger는 Remote Profile별 current sync generation 또는
+동등한 최신성 token을 갱신하며, 완료 시점에 current인 시도만 snapshot을 교체한다. 더 최신 trigger 뒤에 완료된 이전 시도의
+성공 결과는 폐기한다. retry timing·backoff·횟수·SLA는 이 계약에서 고정하지 않는다. 검증된 원격 표현에서 `featured` URI가
+사라진 경우는 authoritative empty set으로 처리한다.
 
 표시 이름의 1-40자 정책은 Local Profile 편집에서 새로 입력하거나 기존 값을 변경할 때 적용한다. 이미 40자를
 초과한 legacy Local 표시 이름은 원문을 변경하지 않고 다른 Profile 속성만 편집하는 동안 존속할 수 있다. 표시

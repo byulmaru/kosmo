@@ -49,7 +49,8 @@ Local UI는 추가 Local pin을 Reply·Quote를 포함해 기존 chronology 위�
 
 **Guardrails**
 
-- 실제 pinned segment 대상인 Local first-visible pin과 Remote visible pin 전체에는 Reply·Quote도 포함한다.
+- 실제 pinned segment 대상인 Local first-visible pin과 Remote visible pin 전체에는 Reply·Quote도 포함하고, 추가 Local pin에는
+  Profile 목록의 일반 Reply 제외 제어를 적용하지 않는다.
 - 일반 segment는 실제 pinned segment에 표시한 Post만 cursor/page limit 전에 제외한다.
 - 기존 Visibility, Eligibility, lifecycle, block/domain 정책을 pinned segment에도 적용한다.
 - Home·Local·Hashtag 순서는 변경하지 않고 client concat으로 두 connection을 조합하지 않는다.
@@ -124,6 +125,8 @@ Mastodon 호환 서버 기준 양방향 federation runtime으로 이 계약을 �
 - Featured sync 실패는 유효한 Remote Profile 등록·refresh·Update를 되돌리거나 실패시키지 않는다.
 - 각 sync 시도는 취소 가능하고 next page 순환을 검출하며 구현이 정한 page·item·byte·시간 예산 안에서 수행한다.
 - 취소·순환·예산 초과는 실패한 sync로 처리하고 마지막 성공 상태와 상위 Profile 결과를 유지한다.
+- Remote Profile별 current sync generation 또는 동등한 최신성 token을 비교해 완료 시점에 current인 시도만 snapshot을
+  교체하고 superseded 성공 결과는 폐기한다.
 - sync 완료 시간 SLA는 정의하지 않는다.
 - 검증된 원격 표현에서 `featured` URI가 사라지면 ordered pin set을 authoritative empty로 교체한다.
 - Remote unpin/Delete/Tombstone/visibility·author eligibility 상실은 다음 성공 sync 또는 기존 lifecycle에서 제거한다.
@@ -138,13 +141,14 @@ Mastodon 호환 서버 기준 양방향 federation runtime으로 이 계약을 �
   검증한다.
 - public-only snapshot 뒤 established Follow가 성립하면 해당 Local identity로 sync를 시작해 Followers Only item을 반영하고,
   실패해도 Follow Relationship과 last-success snapshot을 유지하는지 검증한다.
+- 더 최신 trigger의 sync가 먼저 snapshot을 교체한 뒤 이전 sync가 성공해도 최신 snapshot이 유지되는지 검증한다.
 - Mastodon 호환 서버 양방향 runtime으로 Public/Unlisted, Followers Only signed fetch, unsigned/non-follower denial,
   pin/unpin/update/sync/unfollow를 검증한다.
 
 - [ ] 4.1 production path에서 advertised `featured` URI sync와 authenticated traversal을 구현한다.
 - [ ] 4.2 Featured Note의 canonical `attributedTo`와 advertising Actor의 exact URI 일치를 검증한다.
 - [ ] 4.3 established Follow 성립 trigger와 Followers Only authenticated fetch에서 Active local follower identity·author·audience·Follow 관계를 검증한다.
-- [ ] 4.4 bounded authoritative sync·failure preservation·remote removal을 inbound 테스트로 검증한다.
+- [ ] 4.4 bounded authoritative sync·superseded completion 폐기·failure preservation·remote removal을 inbound 테스트로 검증한다.
 - [ ] 4.5 retry-capable async effect/Workflow에서 실패를 관측·재시도하고 성공 retry로 snapshot을 원자 교체하는지 검증한다.
 
 ## 5. PROD-975 Profile UI, Relay and runtime verification

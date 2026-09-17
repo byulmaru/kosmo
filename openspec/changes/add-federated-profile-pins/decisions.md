@@ -49,7 +49,8 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
   `featured` URI가 사라지면 authoritative empty set으로 교체한다. 각 Note의 canonical `attributedTo`는 collection을
   광고하는 Actor의 canonical URI와 정확히 일치해야 한다. Sync 실패는 기존 retry-capable async effect/Workflow 경계에서
   관측·재시도할 수 있어야 하며, 실패·부분·취소 시도는 last-success snapshot을 유지하고 이후 성공한 retry만 이를 원자적으로
-  교체한다. retry timing·backoff·횟수·SLA는 고정하지 않는다.
+  교체한다. 각 trigger는 Remote Profile별 current sync generation 또는 동등한 최신성 token을 갱신하고, 완료 시점에 current인
+  시도만 snapshot을 교체한다. 더 최신 trigger 뒤에 완료된 이전 성공 결과는 폐기한다. retry timing·backoff·횟수·SLA는 고정하지 않는다.
 - Alternatives Considered: Local first-visible UI 정책을 Remote에 적용하거나 실패 시 빈 set으로 초기화하는 방식은 승인된 계약과
   안전한 visibility 보존을 위반하므로 선택하지 않는다.
 - Consequences: Remote sync는 부분 page를 visible 결과로 커밋하지 않고, Note attribution은 advertising Actor와 exact match여야

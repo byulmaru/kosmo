@@ -38,7 +38,8 @@ Profile UI는 성공적으로 검증·동기화된 Featured collection의 전체
 #### Scenario: Include a pinned Reply or Quote
 
 - **WHEN** Profile이 작성한 Reply 또는 Reply Parent가 있는 Quote가 유효한 pinned Post다
-- **THEN** 해당 Post는 일반 Profile 목록에서 제외되는 Reply 규칙과 관계없이 pinned segment에 표시된다
+- **THEN** pinned segment 대상이면 일반 Profile 목록의 Reply 제외 규칙과 관계없이 pinned segment에 표시된다
+- **AND** 현재 Local UI의 추가 pin이면 같은 Reply 제외 규칙을 적용하지 않고 기존 chronology 위치에 일반 Post로 표시된다
 
 ### Requirement: Pinned visibility and lifecycle filtering
 

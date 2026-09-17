@@ -17,7 +17,7 @@ ActivityPub `featured` 동기화가 일관되게 구현될 수 없다. PROD-809�
   Profile Update(Person) delivery lifecycle 재사용과 최신 표현 delivery 병합 허용을 정의한다.
 - Inbound Featured collection page traversal, Followers Only authenticated fetch 검증, Remote Profile 등록·stale refresh·검증된
   Update(Actor/Person)와 established Local-to-Remote Follow 성립 시 production path 실행·예약, bounded traversal, 상위
-  Profile·Follow 결과 독립성, authoritative sync 교체와 실패 시 마지막 성공 상태 보존을 정의한다.
+  Profile·Follow 결과 독립성, 최신 sync만의 authoritative 교체와 실패 시 마지막 성공 상태 보존을 정의한다.
 - Profile 목록은 visible pinned segment를 server-authoritative ordered collection 순서로 먼저 표시한다. 현재 Local UI는 첫 visible
   항목만 pinned 상태로 렌더하고 추가 Local pin은 기존 chronology 위치에 일반 Post로 유지한다. Remote inbound UI는 검증된
   Featured collection 전체를 표시하며, 실제 pinned segment에 표시한 Post를 일반 chronology에서 cursor/page limit 전에

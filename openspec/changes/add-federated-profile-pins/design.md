@@ -65,7 +65,9 @@ expected-current atomic replacement는 rollout 정책으로만 둔다. Followers
    완료·성공에 의존하지 않는다. 각 시도는 취소
    가능하며 next page 순환 검출과 구현이 정한 page·item·byte·시간 예산을 적용한다. 실패·취소·순환·예산 초과는 유효한
    상위 Profile 갱신과 이전 snapshot을 보존한다. 실패는 기존 retry-capable async effect/Workflow 경계에서 관측·재시도할 수
-   있어야 하며, 이후 성공한 retry만 snapshot을 원자적으로 교체한다. retry timing·backoff·횟수·SLA는 고정하지 않는다.
+   있어야 하며, 이후 성공한 retry만 snapshot을 원자적으로 교체한다. 각 trigger는 Remote Profile별 current sync generation
+   또는 동등한 최신성 token을 갱신하고 완료 시점에 current인 시도만 snapshot을 교체한다. 더 최신 trigger 뒤에 완료된 이전
+   성공 결과는 폐기한다. retry timing·backoff·횟수·SLA는 고정하지 않는다.
    검증된 원격 표현에서 `featured` URI가 사라진 경우는 authoritative empty set으로 처리한다.
 5. Profile/Post lifecycle, visibility, block/domain 정책 변경은 기존 조회·삭제·Tombstone lifecycle에서 visible set을
    재계산하거나 다음 성공 sync에서 제거한다. 관계의 물리 cleanup은 기존 보존 정책을 따르는 구현 선택으로 둔다.
@@ -94,6 +96,8 @@ expected-current atomic replacement는 rollout 정책으로만 둔다. Followers
   기존 pin을 모두 숨긴다.
 - Remote next page 순환과 무제한 collection을 방어하지 않으면 sync worker가 끝나지 않거나 자원을 고갈시킨다. 시도별
   순환 검출과 구현이 정한 자원 예산을 적용하고 중단된 시도는 실패로 처리해야 한다.
+- 겹친 sync의 성공 여부만 보고 snapshot을 교체하면 늦게 끝난 이전 시도가 최신 원격 표현을 덮을 수 있다. 완료 시점의
+  generation 또는 동등한 최신성 token을 비교해 current 시도만 교체해야 한다.
 - 실제 pinned segment의 Post를 일반 query에서 제외하지 않은 채 두 connection을 client concat하면 duplicate, omission과 cursor
   경계 불일치가 생긴다. 반대로 현재 UI가 pinned segment에 표시하지 않는 추가 Local pin까지 일반 query에서 제외하면 해당
   Post가 Profile 목록에서 사라진다.
