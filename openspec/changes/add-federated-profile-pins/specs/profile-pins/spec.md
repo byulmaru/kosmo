@@ -47,6 +47,8 @@ The system MUST satisfy this contract.
 검증해야 한다(MUST). 서버는 같은 transaction에서 일반 pin과 동일한 Local Profile의 Active/Normal 상태, 대상의 동일 작성자,
 Active Current Content와 Public·Unlisted·Followers Only 자격을 재검증해야 하며(MUST), Mentioned Profiles, Content 없는 pure
 Repost와 다른 Profile 작성 Post로 교체해서는 안 된다(MUST NOT). 이 정책은 ordered pin collection의 다른 항목을 삭제하거나 API cardinality를 제한해서는 안 된다(MUST NOT).
+교체 대상이 collection의 다른 위치에 이미 pinned면 서버는 해당 관계를 current slot으로 이동하고 기존 current 관계를 제거해야
+하며(MUST), 나머지 관계의 상대 순서를 보존하고 중복 관계를 만들어서는 안 된다(MUST NOT).
 기대값이
 현재 상태와 다르면 stale confirmation이 새 pinned Post를 제거하거나 교체해서는 안 된다(MUST NOT). 이 stale/conflict
 결과는 idempotent success와 구별할 수 있는 결과여야 하지만 내부 GraphQL/HTTP shape를 고정하지 않는다.
@@ -58,6 +60,12 @@ Repost와 다른 Profile 작성 Post로 교체해서는 안 된다(MUST NOT). �
 - **THEN** 시스템은 현재 UI slot에 해당하는 기존 pinned 관계를 새 Post로 원자적으로 교체한다
 - **AND** 그 외 ordered pinned 관계는 보존한다
 - **AND** 중간 상태를 성공 결과로 노출하지 않는다
+
+#### Scenario: Move an already pinned replacement target into the current slot
+
+- **WHEN** ordered pin collection이 `[A, C, B]`이고 current `A`의 expected value가 일치한 상태에서 이미 pinned인 `B`로 교체한다
+- **THEN** 시스템은 `B`를 current slot으로 이동하고 `A` 관계를 제거해 collection을 `[B, C]`로 원자적으로 저장한다
+- **AND** `B`의 중복 관계를 만들지 않고 나머지 `C`의 상대 순서를 보존한다
 
 #### Scenario: Preserve a newer pin after stale confirmation
 

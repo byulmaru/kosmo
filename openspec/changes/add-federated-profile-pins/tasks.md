@@ -20,13 +20,15 @@ Local pin API가 승인된 Post를 ordered set에 추가하고 지정한 Post만
 - 새 pin은 기존 pin의 상대 순서를 보존한 한 위치에 저장하고 관계 변경·idempotent no-op이 없으면 order를 유지한다.
 - 현재 first-party UI slot 교체만 ModalSheet 확인 후 일반 pin과 같은 Profile·대상 자격과 current expected value를 같은
   transaction에서 검증한 원자적 결과여야 한다.
+- 교체 대상이 이미 다른 위치에 pinned면 대상 관계를 current slot으로 이동하고 기존 current 관계를 제거하되 중복 없이 나머지
+  관계의 상대 순서를 보존한다.
 - replacement expected-current 불일치는 저장 상태를 보존한 stale/conflict 결과여야 한다.
 - 동일 pin과 이미 없는 target unpin은 idempotent no-op이어야 하며 다른 pin을 제거하지 않는다.
 
 **Verification**
 
 - DB/core/API 테스트로 권한·자격, additive ordered collection projection, 지정 항목 unpin, current UI slot atomic replacement,
-  ineligible replacement 거부, stale concurrent request, same-pin/unpin no-op을 입력·결과·저장 상태로 검증한다. replacement
+  이미 pinned인 replacement target 이동, ineligible replacement 거부, stale concurrent request, same-pin/unpin no-op을 입력·결과·저장 상태로 검증한다. replacement
   stale/conflict 결과가 idempotent success와 구별되고 저장 상태를 보존하는지도 검증한다.
 
 - [ ] 1.1 Local Profile pin/unpin의 eligibility, Owner 권한과 ordered add/remove semantics를 구현한다.
@@ -116,9 +118,9 @@ Mastodon 호환 서버 기준 양방향 federation runtime으로 이 계약을 �
 **Guardrails**
 
 - Public/Unlisted는 기존 remote Note 검증을 사용한다.
-- Public/Unlisted는 기존 공개 fetch를 사용할 수 있다. Followers Only는 한 sync 시도 동안 같은 Active local follower
-  identity로 collection의 모든 page와 각 Note 역참조를 authenticated fetch하고 author·audience·established Follow를
-  검증한다.
+- Public/Unlisted는 기존 공개 fetch를 사용할 수 있다. Followers Only는 한 sync 시도 동안 같은 Active/Normal이며 사용 가능한
+  Local Instance에 속한 local follower identity로 collection의 모든 page와 각 Note 역참조를 authenticated fetch하고
+  author·audience·established Follow를 검증한다. Suspended Profile 또는 사용할 수 없는 Local Instance의 identity는 사용하지 않는다.
 - Follow Relationship 성립과 보존된 follower identity의 Active/Normal 복귀만으로는 별도 Featured sync를 시작하지 않는다.
 - Guest·비팔로워·unfollow된 identity에는 private Post나 membership 존재를 노출하지 않는다.
 - fetch·parse·authorization·Note materialization 실패는 partial/empty set으로 마지막 성공 상태를 덮지 않는다.
@@ -135,7 +137,7 @@ Mastodon 호환 서버 기준 양방향 federation runtime으로 이 계약을 �
 **Verification**
 
 - Fedify integration으로 multi-page ordered sync, Public/Unlisted, Followers Only signed follower/author fetch,
-  unsigned/non-follower denial, unfollow, remote unpin/Delete/Tombstone을 검증한다.
+  unsigned/non-follower/Suspended identity denial, unfollow, remote unpin/Delete/Tombstone을 검증한다.
 - page fetch·parse·authorization 실패에서 last-success snapshot과 visible count가 유지되는지 검증한다.
 - 취소·next page 순환·자원 예산 초과에서 traversal이 중단되고 last-success snapshot이 유지되는지 검증한다.
 - 같은 실패에서 유효한 상위 Remote Profile 등록·refresh·Update 결과가 유지되는지와 `featured` URI 제거 시 empty set 교체를
@@ -147,7 +149,7 @@ Mastodon 호환 서버 기준 양방향 federation runtime으로 이 계약을 �
 
 - [ ] 4.1 production path에서 advertised `featured` URI sync와 authenticated traversal을 구현한다.
 - [ ] 4.2 Featured Note의 canonical `attributedTo`와 advertising Actor의 exact URI 일치를 검증한다.
-- [ ] 4.3 Followers Only authenticated fetch에서 Active local follower identity·author·audience·Follow 관계를 검증한다.
+- [ ] 4.3 Followers Only authenticated fetch에서 Active/Normal Profile·사용 가능한 Local Instance의 follower identity·author·audience·Follow 관계를 검증한다.
 - [ ] 4.4 bounded authoritative sync·superseded completion 폐기·failure preservation·remote removal을 inbound 테스트로 검증한다.
 - [ ] 4.5 retry-capable async effect/Workflow에서 실패를 관측·재시도하고 성공 retry로 snapshot을 원자 교체하는지 검증한다.
 

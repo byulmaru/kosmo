@@ -50,8 +50,10 @@ refresh와 검증된 inbound `Update(Actor/Person)`에서 actor가 광고한 `fe
 완료 시간 SLA는 정의하지 않는다. Public/Unlisted 항목은 기존 공개 fetch와 remote Note 검증을 적용해야 한다(MUST).
 Follow Relationship 성립 또는 보존된 follower identity의 Active/Normal 복귀만으로 Featured sync를 시작해서는 안 된다(MUST NOT).
 각 Featured Note의 canonical `attributedTo`는 collection을 광고하는 Remote Actor의 canonical URI와 정확히 일치해야 한다(MUST).
-Followers Only 항목은 한 sync 시도 동안 같은 Active local follower identity로 Featured collection의 모든 page와 각 Note
-역참조를 authenticated fetch한 뒤 author, audience와 established Follow 관계를 검증해야 한다(MUST). 각 시도는 취소할 수
+Followers Only 항목은 한 sync 시도 동안 같은 Active/Normal이며 사용 가능한 Local Instance에 속한 local follower identity로
+Featured collection의 모든 page와 각 Note 역참조를 authenticated fetch한 뒤 author, audience와 established Follow 관계를
+검증해야 한다(MUST). Suspended Profile 또는 사용할 수 없는 Local Instance의 identity를 authenticated fetch에 사용해서는 안
+된다(MUST NOT). 각 시도는 취소할 수
 있어야 하고(MUST), next page 순환을 검출하며(MUST), 구현이 정한 page·item·byte·시간 예산 안에서 수행해야 한다(MUST).
 성공한 authoritative sync만 Remote Profile의 ordered pinned set을 교체해야 하며(MUST), fetch·parse·검증·취소·순환 또는
 예산 초과 실패 시 마지막 성공 상태를 보존해야 한다(MUST). Featured sync 실패는 유효한 Remote Profile
@@ -65,7 +67,8 @@ snapshot을 원자적으로 교체해야 한다(MUST). retry timing·backoff·�
 #### Scenario: Sync a verified remote Featured collection in order
 
 - **WHEN** Remote Profile 등록·stale refresh 또는 검증된 inbound `Update(Actor/Person)`가 `featured` URI를 광고하고 public
-  fetch 또는 한 sync 시도 동안 같은 Active local follower identity를 사용한 page traversal과 Note 역참조 검증이 성공한다
+  fetch 또는 한 sync 시도 동안 같은 Active/Normal이며 사용 가능한 Local Instance에 속한 local follower identity를 사용한
+  page traversal과 Note 역참조 검증이 성공한다
 - **THEN** 시스템은 지원·검증된 pinned Post 전체를 원격 collection 순서로 Remote Profile에 저장·표시한다
 - **AND** Remote Profile에는 Local first-visible UI 제한을 적용하지 않는다
 
@@ -75,13 +78,19 @@ snapshot을 원자적으로 교체해야 한다(MUST). retry timing·backoff·�
 - **THEN** 시스템은 해당 Note를 광고 Actor의 pinned Post로 materialize하지 않는다
 - **AND** 실패한 시도는 last-success snapshot을 변경하지 않는다
 
-#### Scenario: Verify Followers Only with an active local follower identity
+#### Scenario: Verify Followers Only with an available local follower identity
 
-- **WHEN** Remote Featured collection의 어느 page가 Followers Only Note를 포함하고 현재 Active local follower identity로
-  해당 page와 Note 역참조를 authenticated fetch한다
+- **WHEN** Remote Featured collection의 어느 page가 Followers Only Note를 포함하고 현재 Active/Normal이며 사용 가능한 Local
+  Instance에 속한 local follower identity로 해당 page와 Note 역참조를 authenticated fetch한다
 - **THEN** 시스템은 Note의 author·audience와 established Follow 관계가 일치할 때만 해당 membership과 Note를
   materialize한다
 - **AND** guest, 비팔로워 또는 unfollow된 identity에는 Post가 없는 것처럼 처리한다
+
+#### Scenario: Reject a suspended follower identity
+
+- **WHEN** established Follow를 보존한 Local Profile이 Suspended이거나 연결 Local Instance를 사용할 수 없다
+- **THEN** 시스템은 해당 identity로 Featured collection 또는 Note를 authenticated fetch하지 않는다
+- **AND** 그 identity만으로 접근할 수 있는 Followers Only membership과 Post를 materialize하지 않는다
 
 #### Scenario: Do not sync solely because follower access changes
 

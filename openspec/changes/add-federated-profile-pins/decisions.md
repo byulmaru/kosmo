@@ -18,7 +18,8 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
   Post·Reply·Quote를 pin하면 ordered set에 추가하며 unpin은 지정한 Post만 제거한다. 현재 Local first-party UI는 server-authoritative
   order의 첫 visible 항목만 렌더·관리한다. UI slot 교체에는 일반 pin과 같은 Profile·대상 자격과 확인 당시 current pin 기대값을
   같은 transaction에서 검증한 원자적 replace를 적용하며, 이 rollout 정책은 API·저장 cardinality를 제한하지 않는다. 같은 pin과 이미 없는 unpin은 idempotent success no-op이고,
-  UI slot expected-current 불일치는 저장 상태를 바꾸지 않는 stale/conflict 결과다. 새 pin에는 기존 pin의 상대 순서를 보존한 한
+  UI slot expected-current 불일치는 저장 상태를 바꾸지 않는 stale/conflict 결과다. 교체 대상이 다른 위치에 이미 pinned면 그
+  관계를 current slot으로 이동하고 기존 current 관계를 제거하며, 중복 없이 나머지 관계의 상대 순서를 보존한다. 새 pin에는 기존 pin의 상대 순서를 보존한 한
   위치를 원자적으로 부여하고 관계 변경이 없으면 같은 authoritative order를 반환한다. 새 pin의 앞·뒤 배치와 별도 재정렬 UX는
   현재 범위에서 고정하지 않는다.
 - Alternatives Considered: UI confirmation만 신뢰하는 방식은 stale 요청 보호가 없으므로 선택하지 않는다. 저장·API를 Local
@@ -40,8 +41,9 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
   inbound `Update(Actor/Person)`에서 광고된 `featured` URI가 있으면 production sync path에서 실행하거나 예약한다. 상위 Profile
   결과의 성공 여부는 sync 완료·성공에 의존하지 않고 완료 시간 SLA를 정의하지 않는다. Follow Relationship 성립이나 보존된
   follower identity의 Active/Normal 복귀만으로는 별도 sync를 시작하지 않는다. Public/Unlisted는 기존
-  공개 fetch를 사용할 수 있고, Followers Only를 수신할 때는 한 sync 시도 동안 같은 Active local follower identity로 모든
-  page와 각 Note 역참조를 authenticated fetch한다. 각 시도는 취소 가능하고 next page 순환 검출과 구현이 정한
+  공개 fetch를 사용할 수 있고, Followers Only를 수신할 때는 한 sync 시도 동안 같은 Active/Normal이며 사용 가능한 Local
+  Instance에 속한 local follower identity로 모든 page와 각 Note 역참조를 authenticated fetch한다. Suspended Profile 또는
+  사용할 수 없는 Local Instance의 identity는 사용하지 않는다. 각 시도는 취소 가능하고 next page 순환 검출과 구현이 정한
   page·item·byte·시간 예산을 적용한다. page traversal과 항목 검증이 성공한 authoritative sync만 ordered set을 교체하고,
   실패·취소·순환·예산 초과는 마지막 성공 상태를 유지한다. unpin, Delete/Tombstone과 eligibility 상실은 성공 sync 또는 기존
   lifecycle에서 제거한다. Sync 실패는 유효한 상위 Profile 등록·refresh·Update를 실패시키지 않으며, 검증된 원격 표현에서
@@ -54,7 +56,7 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
 - Alternatives Considered: Local first-visible UI 정책을 Remote에 적용하거나 실패 시 빈 set으로 초기화하는 방식은 승인된 계약과
   안전한 visibility 보존을 위반하므로 선택하지 않는다.
 - Consequences: Remote sync는 부분 page를 visible 결과로 커밋하지 않고, Note attribution은 advertising Actor와 exact match여야
-  하며, Followers Only 항목에는 fetch 시점의 Active local follower identity와 established Follow 검증이 필요하다. 구체
+  하며, Followers Only 항목에는 fetch 시점의 Active/Normal Profile, 사용 가능한 Local Instance와 established Follow 검증이 필요하다. 구체
   scheduling과 자원 예산값은 구현·운영 환경이 소유한다.
 - Confirmation / Follow-up: 구현 PR의 Fedify integration과 Mastodon 호환 runtime 검증에서 ordered sync, failure preservation,
   unpin/delete/unfollow를 확인한다.

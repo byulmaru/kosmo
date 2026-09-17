@@ -46,7 +46,8 @@ expected-current atomic replacement는 rollout 정책으로만 둔다. Followers
    같은 대상과 이미 없는 해제는 현재 상태를 유지하는 idempotent 결과로 정규화한다. 현재 first-party UI slot 교체에만 current
    expected value 검사와 원자적 replace를 적용하되 같은 transaction에서 일반 pin과 동일한 Profile·대상 자격을 재검증한다.
    이 rollout 정책은 API·저장 cardinality를 제한하지 않는다. 새 pin에는 기존 pin의 상대 순서를 보존한 한 위치를 원자적으로
-   부여하고 관계 변경이 없으면 같은 order를 반환한다. 앞·뒤 배치와 별도 재정렬 UX는 고정하지 않는다.
+   부여하고 관계 변경이 없으면 같은 order를 반환한다. 교체 대상이 다른 위치에 이미 pinned면 대상 관계를 current slot으로
+   이동하고 기존 current 관계를 제거하며, 중복 없이 나머지 관계의 상대 순서를 보존한다. 앞·뒤 배치와 별도 재정렬 UX는 고정하지 않는다.
 2. Local은 첫 visible pin만 별도 pinned segment에 두고 Remote는 검증된 visible pin 전체를 원격 순서의 pinned segment에 둔다.
    기존 Profile chronology는 pin 관계와 무관하게 후보·순서·cursor·page limit을 그대로 유지한다. chronology 후보인 Post는
    pinned segment와 원래 위치에 모두 표시할 수 있고, 추가 Local pin은 기존 chronology 자격만으로 표시한다.
@@ -57,8 +58,9 @@ expected-current atomic replacement는 rollout 정책으로만 둔다. Followers
 4. Remote Actor의 Featured URI를 기존 ActivityPub fetch/validation 경계로 page traversal한다. 각 Note의 canonical `attributedTo`가
    collection을 광고하는 Actor의 canonical URI와 정확히 같은지 확인하고, 모든 page와 item 검증이
    성공한 뒤에만 원격 ordered set을 교체하고, 실패 시 이전 authoritative snapshot을 보존한다. Public/Unlisted는 기존
-   공개 fetch를 사용할 수 있다. Followers Only를 수신할 때는 한 sync 시도 동안 같은 Active local follower identity로
-   collection의 모든 page와 각 Note 역참조를 authenticated fetch한다. Remote Profile 등록·stale refresh·검증된 inbound
+   공개 fetch를 사용할 수 있다. Followers Only를 수신할 때는 한 sync 시도 동안 같은 Active/Normal이며 사용 가능한 Local
+   Instance에 속한 local follower identity로 collection의 모든 page와 각 Note 역참조를 authenticated fetch한다. Suspended
+   Profile 또는 사용할 수 없는 Local Instance의 identity는 사용하지 않는다. Remote Profile 등록·stale refresh·검증된 inbound
    Update에서 sync를 시작한다. Sync는 production path에서 inline으로 실행하거나 별도 effect로 예약할 수 있고 상위 Profile
    결과의 성공 여부는 sync 완료·성공에 의존하지 않는다. Follow Relationship 성립이나 follower identity의 Active/Normal
    복귀만으로는 별도 sync를 시작하지 않는다. 각 시도는 취소
@@ -87,8 +89,8 @@ expected-current atomic replacement는 rollout 정책으로만 둔다. Followers
 - 교체 확인을 UI에서만 신뢰하거나 mutation payload에 기대 current pin을 포함하지 않으면 stale confirmation이 다른
   pin을 제거할 수 있다. expected-current 불일치는 저장 상태를 바꾸지 않고 idempotent success와 구별되는 stale/conflict
   결과로 반환해야 한다.
-- Followers Only Featured를 unsigned fetch나 follower 여부가 오래된 캐시만으로 허용하면 private Post 존재가
-  노출된다. 인증 주체·Active local identity·현재 established relation을 fetch 시점에 검증해야 한다.
+- Followers Only Featured를 unsigned fetch, Suspended identity나 follower 여부가 오래된 캐시만으로 허용하면 private Post
+  존재가 노출된다. 인증 주체·Active/Normal Profile·사용 가능한 Local Instance·현재 established relation을 fetch 시점에 검증해야 한다.
 - Remote page 하나를 성공 snapshot으로 간주하거나 parse 실패를 빈 collection으로 정규화하면 일시적 원격 장애가
   기존 pin을 모두 숨긴다.
 - Remote next page 순환과 무제한 collection을 방어하지 않으면 sync worker가 끝나지 않거나 자원을 고갈시킨다. 시도별
