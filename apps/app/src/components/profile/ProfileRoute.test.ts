@@ -60,6 +60,7 @@ let pathname = '/profile/';
 let renderer: ReactTestRenderer | null = null;
 let SlotContent: ComponentType | null = null;
 let profileAvailable = true;
+let profileDisplayName: string | null = null;
 let profileInstanceKind: 'ACTIVITYPUB' | 'LOCAL' = 'LOCAL';
 const routerHistory: string[] = [];
 let routerBackCount = 0;
@@ -156,7 +157,7 @@ mockModule('react-relay', {
     return {
       profileByHandle: profileAvailable
         ? {
-            displayName: `Display ${variables.handle}`,
+            displayName: profileDisplayName ?? `Display ${variables.handle}`,
             handle: variables.handle,
             id: `profile:${variables.handle}`,
             instance: { kind: profileInstanceKind },
@@ -298,6 +299,7 @@ afterEach(async () => {
   queryModes.ProfilePostListPageQuery = 'success';
   queryHistory.length = 0;
   profileAvailable = true;
+  profileDisplayName = null;
   profileInstanceKind = 'LOCAL';
   profileViewerState = null;
   SlotContent = ProfilePostListPage;
@@ -509,6 +511,16 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('ProfileConnectionList').props.kind, 'following');
     assert.equal(requireRendered('PageHeader').props.title, 'Display local님의 팔로잉');
     assert.equal(requireRendered('TabList').props.value, 'following');
+  });
+
+  it('관계 route는 displayName이 비어도 handle을 제목에 사용한다', async () => {
+    profileDisplayName = '';
+
+    await renderRoute('@local', '/@local/followers');
+    assert.equal(requireRendered('PageHeader').props.title, 'local님의 팔로워');
+
+    await renderRoute('@local', '/@local/following');
+    assert.equal(requireRendered('PageHeader').props.title, 'local님의 팔로잉');
   });
 
   it('native layout은 route별 Stack과 screen-owned scroll owner를 교체한다', async () => {

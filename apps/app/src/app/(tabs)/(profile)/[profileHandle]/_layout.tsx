@@ -192,7 +192,7 @@ function ProfileLayoutContent({
   if (connectionKind) {
     const chrome = (
       <ProfileConnectionChrome
-        displayName={profile.displayName}
+        displayName={profile.displayName || profile.handle}
         kind={connectionKind}
         relativeHandle={profile.relativeHandle}
       />
