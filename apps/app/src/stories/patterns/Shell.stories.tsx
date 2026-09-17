@@ -2469,6 +2469,43 @@ export const UniversalCompactComposerLifecycle: Story = {
   },
 };
 
+export const UniversalCompactComposerBreakpointFocusFallback: Story = {
+  ...UniversalCompact,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const viewport = canvasElement.ownerDocument.defaultView?.visualViewport;
+    if (!viewport) {
+      throw new Error('Breakpoint focus Story requires VisualViewport.');
+    }
+    const widthDescriptor = Object.getOwnPropertyDescriptor(viewport, 'width');
+
+    try {
+      await userEvent.click(canvas.getByRole('button', { name: '글쓰기' }));
+      const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+
+      Object.defineProperty(viewport, 'width', { configurable: true, value: 1400 });
+      viewport.dispatchEvent(new Event('resize'));
+      await waitFor(() =>
+        expect(canvas.queryByRole('button', { name: '글쓰기' })).not.toBeInTheDocument(),
+      );
+
+      await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
+      await waitFor(() => expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull());
+      await waitFor(() =>
+        expect(canvas.getByRole('button', { name: 'Composer 확장' })).toHaveFocus(),
+      );
+    } finally {
+      if (widthDescriptor) {
+        Object.defineProperty(viewport, 'width', widthDescriptor);
+      } else {
+        Reflect.deleteProperty(viewport, 'width');
+      }
+      viewport.dispatchEvent(new Event('resize'));
+    }
+  },
+};
+
 export const UniversalMobileComposerLifecycle: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   parameters: universalParameters,
