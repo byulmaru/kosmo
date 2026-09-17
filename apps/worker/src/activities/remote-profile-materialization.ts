@@ -132,6 +132,7 @@ export const refreshRemoteProfileActorActivity = async (
     }
 
     let origin: string;
+    let signingProfileId: string | undefined;
 
     if (!input.profileId) {
       origin = (await resolveConfiguredLocalInstance()).canonicalOrigin;
@@ -159,6 +160,7 @@ export const refreshRemoteProfileActorActivity = async (
           );
         }
         origin = localOrigin;
+        signingProfileId = input.profileId;
       } else {
         if (selected.instance.kind !== InstanceKind.ACTIVITYPUB || !selected.actor) {
           throw new RemoteActorMaterializationError(
@@ -189,9 +191,13 @@ export const refreshRemoteProfileActorActivity = async (
     }
 
     const context = federation.createContext(new URL(origin), undefined);
+    const documentLoader = signingProfileId
+      ? await context.getDocumentLoader({ identifier: signingProfileId })
+      : undefined;
     const profile = await materializeRemoteProfileActor({
       context,
       actorUri: new URL(input.actorUri),
+      documentLoader,
       now,
     });
 

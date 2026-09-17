@@ -33,7 +33,7 @@ import {
 } from '@kosmo/core/validation';
 import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
-import type { Context } from '@fedify/fedify';
+import type { Context, DocumentLoader } from '@fedify/fedify';
 import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
 
 export class RemoteActorMaterializationError extends Error {
@@ -47,6 +47,7 @@ type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'>;
 export type RemoteActorMaterializationOptions = {
   context: RemoteActorLookupContext;
   actorUri: URL;
+  documentLoader?: DocumentLoader;
   now?: Temporal.Instant;
   reactivateUnresponsive?: boolean;
 };
@@ -378,7 +379,10 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
   const existingRequestedRemoteInstance = await findAvailableRemoteInstance(targetActorDomain, {
     allowUnresponsive: reactivateUnresponsive,
   });
-  const actor = (await context.lookupObject(options.actorUri)) as ActivityPubObject | null;
+  const actor = (await context.lookupObject(
+    options.actorUri,
+    options.documentLoader ? { documentLoader: options.documentLoader } : undefined,
+  )) as ActivityPubObject | null;
 
   if (!isActor(actor)) {
     throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
