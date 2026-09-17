@@ -128,7 +128,7 @@ function ProfileHeroFixture({
           action={showAction ? <FollowButton profile={target.followButton} /> : undefined}
           loading={loading}
           profile={target.hero}
-          showMuteAction={showAction}
+          profileBlockStatus={showAction ? { blockedBy: false, blocking: false } : null}
         />
       </View>
     </SessionProvider>

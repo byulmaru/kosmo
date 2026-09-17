@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createContext, createElement, useContext } from 'react';
+import { createContext, createElement, useContext, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode, Ref } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -100,6 +100,8 @@ const toastCalls: Array<{ message: string; tone: string }> = [];
 const focusHistory: string[] = [];
 const menuTriggerFocus = mock.fn(() => focusHistory.push('menu'));
 const stateActionFocus = mock.fn(() => focusHistory.push('state'));
+const relayEnvironment = {};
+const relayEnvironmentGeneration = { current: 0 };
 let changeBlockedImpl: (change: object, nextBlocked: boolean) => Promise<void> = async () =>
   undefined;
 
@@ -175,10 +177,49 @@ mockModule('react-relay', {
     return (query ?? parts.join('')) as QueryName;
   },
   useFragment: (_fragment: unknown, reference: unknown) => reference,
-  useMutation: () => [
-    () => assert.fail('Block consumer must not execute a Follow mutation'),
-    false,
-  ],
+  useMutation: (mutation: string) => {
+    const [pending, setPending] = useState(false);
+    const block = mutation.includes('ProfileBlockActionBlockMutation');
+    const unblock = mutation.includes('ProfileBlockActionUnblockMutation');
+    if (!block && !unblock) {
+      return [() => assert.fail('Block consumer must not execute a Follow mutation'), false];
+    }
+    return [
+      (config: {
+        onCompleted: (response: object) => void;
+        onError: (error: Error) => void;
+        variables: { id: string };
+      }) => {
+        const nextBlocked = block;
+        const handle = String(globalParams.profileHandle ?? '').replace(/^@/, '');
+        const change = {
+          ownerProfileId: selectedProfileId,
+          profileBlockId: nextBlocked ? null : config.variables.id,
+          targetProfileId: nextBlocked ? config.variables.id : `profile:${handle}`,
+        };
+        changeBlockedCalls.push({ change, nextBlocked });
+        setPending(true);
+        void changeBlockedImpl(change, nextBlocked).then(
+          () => {
+            setPending(false);
+            config.onCompleted(
+              nextBlocked
+                ? { blockProfile: { profileBlock: { id: 'block-1' }, success: true } }
+                : {
+                    unblockProfile: { profileBlockId: config.variables.id, success: true },
+                  },
+            );
+          },
+          (error: Error) => {
+            setPending(false);
+            config.onError(error);
+          },
+        );
+      },
+      pending,
+    ];
+  },
+  useRelayEnvironment: () => relayEnvironment,
   useLazyLoadQuery: (
     query: QueryName,
     variables: { handle: string },
@@ -232,24 +273,45 @@ mockModule('react-relay', {
 mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
   ProfileHero: ({
     action,
-    blockAction,
     heading,
     loading,
     moreItems,
     profile,
-    showMuteAction,
+    profileBlockStatus,
   }: {
     action?: ReturnType<typeof createElement>;
-    blockAction?: ProfileBlockActionTarget;
     heading?: boolean;
     loading?: boolean;
     moreItems?: readonly ReportMenuItem[];
-    profile?: { handle: string };
-    showMuteAction?: boolean;
+    profile?: {
+      handle: string;
+      viewerState?: {
+        isSelf?: boolean;
+        profileBlock?: ProfileBlockActionTarget['profileBlock'];
+      } | null;
+    };
+    profileBlockStatus?: { blockedBy: boolean; blocking: boolean } | null;
   }) => {
+    const canManageRelationship =
+      profileBlockStatus != null && profile?.viewerState?.isSelf !== true;
+    const profileBlock = profile?.viewerState?.profileBlock;
+    const blockAction = (
+      canManageRelationship
+        ? profileBlockStatus.blocking && profileBlock
+          ? ({ nextBlocked: false, profileBlock } as const)
+          : !profileBlockStatus.blockedBy && profile
+            ? ({ nextBlocked: true, profile } as const)
+            : undefined
+        : undefined
+    ) as ProfileBlockActionTarget | undefined;
     return createElement(
       'ProfileHero',
-      { heading, identity: loading ? 'loading' : profile?.handle, moreItems, showMuteAction },
+      {
+        heading,
+        identity: loading ? 'loading' : profile?.handle,
+        moreItems,
+        profileBlockStatus,
+      },
       blockAction
         ? createElement(ProfileBlockAction, {
             ...blockAction,
@@ -313,16 +375,8 @@ mockModule(new URL('../ui/ToastProvider.tsx', import.meta.url), {
       toastCalls.push({ message, tone: options.tone }),
   }),
 });
-mockModule(new URL('./ProfileBlockController.tsx', import.meta.url), {
-  useProfileBlockMutations: () => ({
-    changeBlocked: (change: object, nextBlocked: boolean) => {
-      changeBlockedCalls.push({ change, nextBlocked });
-      return changeBlockedImpl(change, nextBlocked);
-    },
-  }),
-});
-mockModule(new URL('./profileBlockErrors.ts', import.meta.url), {
-  StaleProfileBlockRequestError: class StaleProfileBlockRequestError extends Error {},
+mockModule(new URL('../../relay/RelayEnvironmentBoundary.tsx', import.meta.url), {
+  useRelayEnvironmentGeneration: () => relayEnvironmentGeneration,
 });
 mockModule(new URL('../ui/Button.tsx', import.meta.url), {
   Button: ({ children, controlRef, ...props }: { children: string; controlRef?: Ref<unknown> }) => {
@@ -579,7 +633,7 @@ describe('profile route parameter lifecycle', () => {
     await renderRoute('@target');
     assert.deepEqual(requireRendered('ActionMenu').props.items, [reportMenuItem]);
     assert.equal(rendered('FollowButton').length, 0);
-    assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
+    assert.deepEqual(requireRendered('ProfileHero').props.profileBlockStatus, profileBlockStatus);
   });
 
   it('selected Profile이 없는 공개 Profile은 nullable block status와 함께 사용할 수 있다', async () => {
@@ -604,7 +658,7 @@ describe('profile route parameter lifecycle', () => {
 
     await renderRoute('@target');
 
-    assert.equal(requireRendered('ProfileHero').props.showMuteAction, true);
+    assert.deepEqual(requireRendered('ProfileHero').props.profileBlockStatus, profileBlockStatus);
   });
   it('표시 중인 selected Local Owner Profile에만 편집 Link를 노출한다', async () => {
     profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
@@ -939,7 +993,7 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('StateView').props.title, '이 프로필을 볼 수 없습니다');
     assert.equal(rendered('Button').length, 0);
     assert.equal(rendered('FollowButton').length, 0);
-    assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
+    assert.deepEqual(requireRendered('ProfileHero').props.profileBlockStatus, profileBlockStatus);
   });
 
   it('경고는 시간 경과로 사라지지 않고 handle과 상위 actor boundary remount마다 다시 적용된다', async (t) => {
@@ -1092,7 +1146,7 @@ describe('profile route parameter lifecycle', () => {
 
     await renderRoute('@blocked');
     assert.deepEqual(identities('FollowButton'), ['blocked']);
-    assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
+    assert.deepEqual(requireRendered('ProfileHero').props.profileBlockStatus, profileBlockStatus);
     assert.deepEqual(
       requireRendered('ActionMenu').props.items.map((item: { label: string }) => item.label),
       ['차단 해제'],
@@ -1105,7 +1159,7 @@ describe('profile route parameter lifecycle', () => {
     await act(async () => action.findByType('ConfirmationContent' as never).props.onConfirm());
     await renderRoute('@blocked');
     assert.equal(rendered('FollowButton').length, 0);
-    assert.equal(requireRendered('ProfileHero').props.showMuteAction, false);
+    assert.deepEqual(requireRendered('ProfileHero').props.profileBlockStatus, profileBlockStatus);
 
     assert.equal(menuTriggerFocus.mock.callCount(), 0);
   });
