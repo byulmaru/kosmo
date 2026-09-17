@@ -20,7 +20,7 @@ import type * as CoreSeed from '@kosmo/core/db/seed';
 import type {
   RemoteProfileLookupInput,
   RemoteProfileMaterializationInput,
-} from '@kosmo/core/temporal/remote-profile';
+} from '@kosmo/core/temporal/workflows';
 import type * as Fedify from '@kosmo/fedify';
 import type * as WorkerActivities from './activities';
 
@@ -35,7 +35,7 @@ process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
 
 const { REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, remoteProfileRefreshWorkflow } =
-  await import('@kosmo/core/temporal/remote-profile');
+  await import('@kosmo/core/temporal/workflows');
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;

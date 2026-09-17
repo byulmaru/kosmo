@@ -13,7 +13,7 @@ import {
 import { AccountState, OAuthTokenState, ProfileState, SessionState } from '@kosmo/core/enums';
 import { ApplicationFailure } from '@temporalio/activity';
 import { and, eq, sql } from 'drizzle-orm';
-import type { AccountDeletionInput } from '@kosmo/core/temporal/account-deletion';
+import type { AccountDeletionInput } from '@kosmo/core/temporal/workflows';
 
 export const deleteAccountActivity = async ({
   accountId,

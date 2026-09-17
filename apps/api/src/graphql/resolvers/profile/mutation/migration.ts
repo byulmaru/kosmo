@@ -4,7 +4,7 @@ import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
 import { prepareProfileMigration } from '@kosmo/core/services';
 import { runWorkflow } from '@kosmo/core/temporal/client';
-import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/remote-profile';
+import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
 import {
   ApplicationFailure,
   WorkflowIdConflictPolicy,

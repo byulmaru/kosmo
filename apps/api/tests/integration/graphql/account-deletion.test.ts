@@ -3,7 +3,7 @@ import '@kosmo/core/polyfill';
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { AccountState, SessionState } from '@kosmo/core/enums';
-import { ACCOUNT_DELETION_WORKFLOW_TYPE } from '@kosmo/core/temporal/account-deletion';
+import { ACCOUNT_DELETION_WORKFLOW_TYPE } from '@kosmo/core/temporal/workflows';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';

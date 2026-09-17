@@ -3,7 +3,7 @@ import { InstanceKind, ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
 import { runWorkflow } from '@kosmo/core/temporal/client';
-import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/remote-profile';
+import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
 import { remoteProfileHandleSchema } from '@kosmo/core/validation';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';

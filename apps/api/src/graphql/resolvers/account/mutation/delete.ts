@@ -1,5 +1,5 @@
-import { accountDeletionWorkflow } from '@kosmo/core/temporal/account-deletion';
 import { runWorkflow } from '@kosmo/core/temporal/client';
+import { accountDeletionWorkflow } from '@kosmo/core/temporal/workflows';
 import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { builder } from '@/graphql/builder';
 
