@@ -1,3 +1,9 @@
+## 현재 세션 메모
+
+`memory/issue-openspec-workflow.md`의 최신 정책에 따라 이 파일은 별도의 ADR·승인 ledger·영구 구현 authority가 아니다. 기존 날짜·Decision Class·Status는 과거 판단을 읽기 위한 기록으로 보존한다. 적용할 요구사항은 현재 사용자 지시와 canonical·Linear에서 독립 확인하며, 새 Spec 승인 snapshot을 요구하지 않는다.
+
+2026-09-18에는 최신 main의 Web 이미지 승격과 Native OTA export를 구분했다. Web 이미지 재빌드 금지를 전체 production workflow의 source checkout·Native export 금지로 확대하지 않는다. 이는 기존 PROD-839·PROD-833 범위와 PROD-335 OTA 경계를 보존하기 위한 설명이며 새 제품 결정이나 OTA 검증 책임을 추가하지 않는다.
+
 ## Context
 
 이 기록은 기존 Linear `PROD-819`, `PROD-820`, `PROD-839`, `PROD-795`, `PROD-741`, `PROD-575` 결정과 2026-09-02 `PROD-819`·`PROD-820`의 검색·캠페인 metadata 비마스킹 결정을 반영하며, `docs/design/breakpoints.md`의 Web/Native 경계를 따른다. 2026-08-31 마스킹 승인은 Superseded 상태로 보존한다. 제품 동작의 authority는 Linear 결정이며, 리뷰 의견은 구현 보완의 계기일 뿐 제품 계약의 근거가 아니다.

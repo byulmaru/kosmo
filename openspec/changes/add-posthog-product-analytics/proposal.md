@@ -1,3 +1,9 @@
+## 현재 세션 범위
+
+2026-09-18 요청에 따라 PROD-839의 OpenPanel cleanup 작업 메모를 최신 `main`인 `c1de28da0d2ce01a36ae4b72e670d6993b9fc0c8`에 맞춘다. 이 문서와 기존 shared artifact는 `memory/issue-openspec-workflow.md`에 따른 선택적 세션 하네스다. 현재 사용자 지시와 canonical·Linear가 요구사항의 근거이며, 아래 과거 승인·소유권 기록을 별도의 Spec 승인 관문이나 구현 prerequisite로 사용하지 않는다. 실제 설정 삭제 전 지원 경로 확인과 production 운영 승인 경계는 유지한다.
+
+이번에는 기존 cleanup 범위에 맞춰 조사·검증 계획을 정리한다. Native OTA 구현·발행·실기기 acceptance, PostHog 재활성화와 실제 배포는 포함하지 않는다. PROD-795의 cleanup 통합과 PROD-741·PROD-575의 실제 acceptance 책임은 유지하며, shared artifact 전체 완료·archive를 PROD-839 자체 결과의 완료 조건으로 추가하지 않는다.
+
 ## Why
 
 Kosmo Web 분석 runtime을 OpenPanel에서 PostHog로 전환하면서 PostHog가 기본 제공하는 page lifecycle, autocapture, 표준 metadata, persistence와 remote config를 앱 코드가 차단하거나 다시 구현해서는 안 된다. Standard event metadata와 Session Replay privacy는 서로 다른 수집 경계로 관리한다. Search query `q`와 click metadata는 분석 가치가 있는 표준 URL·referrer·session metadata로 유지하고, 사용자 Post Content는 별도의 Cloud 설정과 DOM marker로 보호한다.
@@ -17,6 +23,7 @@ Kosmo Web 분석 runtime을 OpenPanel에서 PostHog로 전환하면서 PostHog�
 ## Authority / Provenance
 
 - Canonical: `docs/design/breakpoints.md`의 Web/Native platform 경계
+- Current OTA boundary: [Linear `PROD-335`](https://linear.app/byulmaru/issue/PROD-335), `docs/operations/expo-ota.md`와 현재 deploy workflow를 함께 대조한다. Native OTA export는 Web image 재빌드와 구분하며 이번 cleanup 범위를 넓히지 않는다.
 - Current configuration/release authority: [Linear `PROD-891`](https://linear.app/byulmaru/issue/PROD-891)의 채널 설정 계약, [Linear `PROD-833`](https://linear.app/byulmaru/issue/PROD-833)의 SHA tag digest 승격 계약과 `docs/operations/production-release.md`. 기존 PROD-820 build-time 주입은 전환기 이력이며 현재 주입을 복구할 근거가 아니다.
 - Issue Gate: [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 `2026-09-08 Issue Gate 정렬 승인`. 최종 Spec 승인·실제 설정 삭제·PostHog 재활성화·production 배포 승인과 구분한다.
 - Product authority: Linear `PROD-819`, `PROD-820`, `PROD-839`, `PROD-795`, `PROD-741`, `PROD-575`의 최신 결정

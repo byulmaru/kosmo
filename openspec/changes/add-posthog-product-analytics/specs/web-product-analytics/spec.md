@@ -1,3 +1,7 @@
+<!-- 이 파일은 현재 canonical·Linear 요구사항을 대조하기 위한 세션 하네스다.
+기존 MUST·scenario 표기는 새 authority나 별도 Spec 승인 gate를 만들지 않는다.
+PROD-839 범위 밖의 기존 requirement는 참조 맥락이며 자동으로 구현 범위를 넓히지 않는다. -->
+
 ## ADDED Requirements
 
 ### Requirement: 공개 설정 기반 PostHog Web 초기화
@@ -171,7 +175,7 @@
 
 ### Requirement: 채널별 공개 설정과 SHA 이미지 승격
 
-**Authority / Provenance:** [Linear `PROD-891`](https://linear.app/byulmaru/issue/PROD-891)의 공개 채널 설정, [Linear `PROD-833`](https://linear.app/byulmaru/issue/PROD-833)의 canonical build·SHA tag digest 승격, `docs/operations/production-release.md`의 Release 계약, [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 2026-09-08 Issue Gate 정렬 승인 — 공개 PostHog 설정은 코드의 채널 설정표에서 선택해야 하며(MUST), Web BFF는 `ENVIRONMENT`를 검증한 `/channel.js`를 bundle 실행 전에 제공해야 한다(MUST). 현재 경로에 analytics build-time ARG·ENV·GitHub Variables·Vault 주입을 복구하지 않아야 한다(MUST NOT). Production은 성공한 canonical build의 target full SHA를 확인하고 SHA tag digest를 preflight에서 조회·고정한 뒤 승인 후 재빌드·재조회 없이 승격해야 한다(MUST). 조회·관리 credential은 공개 설정표·Web asset·image에 포함하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** [Linear `PROD-891`](https://linear.app/byulmaru/issue/PROD-891)의 공개 채널 설정, [Linear `PROD-833`](https://linear.app/byulmaru/issue/PROD-833)의 canonical build·SHA tag digest 승격, `docs/operations/production-release.md`의 Release 계약, [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 2026-09-08 Issue Gate 정렬 승인 — 공개 PostHog 설정은 코드의 채널 설정표에서 선택해야 하며(MUST), Web BFF는 `ENVIRONMENT`를 검증한 `/channel.js`를 bundle 실행 전에 제공해야 한다(MUST). 현재 경로에 analytics build-time ARG·ENV·GitHub Variables·Vault 주입을 복구하지 않아야 한다(MUST NOT). Web image의 Production 배포는 성공한 canonical build의 target full SHA를 확인하고 SHA tag digest를 preflight에서 조회·고정한 뒤 승인 후 재빌드·재조회 없이 승격해야 한다(MUST). 조회·관리 credential은 공개 설정표·Web asset·image에 포함하지 않아야 한다(MUST NOT).
 
 #### Scenario: canonical Web image를 build한다
 
@@ -182,8 +186,9 @@
 #### Scenario: 수동 SHA release를 실행한다
 
 - **WHEN** production preflight가 target full SHA의 성공한 canonical build run과 SHA tag digest를 확인한다
-- **THEN** 승인 전에 고정한 SHA와 digest를 승인 후 재빌드·재-push·digest 재조회 없이 승격한다
+- **THEN** Web image는 승인 전에 고정한 SHA와 digest를 승인 후 재빌드·재-push·digest 재조회 없이 승격한다
 - **AND** workflow definition ref와 target SHA를 구분하고, Dev와 Production이 서로 다른 시점에 조회한 digest가 같다고 추정하지 않는다
+- **AND** 이 Web image 경계를 같은 workflow의 Native OTA source checkout·export 금지로 확대하지 않는다
 
 #### Scenario: 현재 prod 수집 중단 상태를 보존한다
 

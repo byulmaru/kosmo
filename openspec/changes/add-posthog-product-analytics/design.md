@@ -1,3 +1,7 @@
+## 이 문서의 사용 범위
+
+2026-09-18 최신 main에 맞춘 working note다. 아래 권장 접근과 과거 구현 설명은 현재 canonical·Linear의 결과를 만족하는 다른 구현을 막지 않는다. 별도 Spec 승인·모든 task 수행·archive를 구현이나 PR readiness의 전제조건으로 사용하지 않는다.
+
 ## Context
 
 Kosmo의 공용 analytics API는 platform file로 Web 구현과 Native no-op을 나눈다. `AppProviders`가 Web client를 초기화하고 `AnalyticsSessionBridge`가 Session의 Account ID를 identify하거나 guest 상태에서 reset한다. 기존 제품 caller는 공용 `trackAnalytics`를 사용한다. Standard event metadata 수집과 Session Replay privacy는 각각의 수집 경계에서 관리한다.
@@ -34,8 +38,10 @@ PROD-839는 두 선행 변경이 같은 지원 release line에 반영된 뒤에�
 ### Current Constraints
 
 - 현재 설정·배포 authority는 [PROD-839의 2026-09-08 Issue Gate 정렬 승인](https://linear.app/byulmaru/issue/PROD-839), [PROD-891](https://linear.app/byulmaru/issue/PROD-891), [PROD-833](https://linear.app/byulmaru/issue/PROD-833)과 `docs/operations/production-release.md`다. 과거 browser runtime config 제안 폐기와 현재 `/channel.js`·SHA 이미지 승격 채택을 구분한다.
-- 2026-09-15 source 확인: 채널 설정 전환 `af50250ef`와 수집 중단 `3592b53ac` 이후 `apps/app/src/config/public.ts`의 dev·prod PostHog key·host는 누락 상태다. `Dockerfile`과 canonical build는 analytics build-time 입력을 사용하지 않는다. 이는 source 관측이며 실제 배포·외부 설정 부재 증거가 아니다.
-- 구현 branch는 최신 main과 다시 대조해야 한다. 현재 local PROD-839는 2026-09-08 기준 main을 포함하며, 이후 Native 채널 선택 등의 변경은 이 spec 갱신에서 가져오지 않는다. Web analytics contract와 cleanup 범위에 영향을 주는 차이는 구현 전에 확인한다.
+- 2026-09-18 source 확인 (`main@c1de28da0d2ce01a36ae4b72e670d6993b9fc0c8`): 채널 설정 전환 `af50250ef`와 수집 중단 `3592b53ac` 이후 `apps/app/src/config/public.ts`의 dev·prod PostHog key·host는 누락 상태다. `Dockerfile`과 canonical build는 analytics build-time 입력을 사용하지 않는다. 이는 source 관측이며 실제 배포·외부 설정 부재 증거가 아니다.
+- PROD-839를 위 최신 main 위로 리베이스했고 기존 스펙 두 commit의 내용은 `git range-diff`로 보존을 확인했다. Web analytics adapter·현재 prod 수집 중단은 유지되며 Native 채널 선택은 기존 `getNativeDeploymentChannel` 경로를 따른다. Native 분석은 기존 no-op이다.
+- 최신 `.github/workflows/production-release.yml`의 Native OTA export는 `canonical_preflight` 이후 target SHA로 실행되고, publish는 production 배포와 해당 platform export 성공을 기다린다. Web image는 기존 digest를 승격한다. OTA export의 checkout·bundle 생성은 Web image 재빌드가 아니다. OTA의 발행·실기기 검증은 PROD-335 등 기존 담당 범위이며 PROD-839에 추가하지 않는다.
+- `docs/operations/production-release.md`의 source checkout·build 부재는 Web image 배포 job 경계로 읽는다. `docs/operations/expo-ota.md`의 Production export 시작 순서는 현재 workflow의 병렬 export와 아직 다르므로 운영 담당자에게 인계할 때 이 차이를 알린다. 이 문서 차이를 OpenPanel cleanup의 새 blocker나 OTA 재설계 과제로 확대하지 않는다.
 
 - 공개 key와 host 중 하나라도 없으면 SDK를 초기화하지 않아야 한다.
 - `posthog-js` value import는 `.web` platform 경계에만 있어야 한다.
@@ -64,7 +70,7 @@ PROD-839는 두 선행 변경이 같은 지원 release line에 반영된 뒤에�
 9. PROD-819·PROD-820의 같은 지원 release line 반영과 지원 canonical build·수동 SHA release·rollback을 source full SHA·build run·image digest별로 확인한다. 지원되는 canonical rebuild가 있으면 포함한다. PR 순서나 CI 통과만으로 release 전환을 대신하지 않는다.
 10. 현재 Dockerfile·canonical Docker Build·dev·production workflow의 OpenPanel 전용 참조를 확인한다. 이미 제거된 ARG·ENV·build arg·development empty no-op은 선행 SHA와 현재 상태를 기록하고, gate를 충족한 뒤 실제 남은 참조만 제거한다.
 11. GitHub repository·사용 중인 environment와 활성 runtime configuration source·운영 설정 저장소의 전용 설정을 이름·범위·환경·존재 여부로 비교한다. 조회에 실패했거나 확인하지 못한 범위가 있으면 cleanup을 완료로 기록하지 않는다.
-12. 격리된 가짜 PostHog 설정 네 조합으로 활성화·누락 no-op을 확인하고, 현재 prod 채널의 무전송 보존을 별도로 검증한다. Production-equivalent Web export·image inspection과 지원 release·rollback 근거를 함께 확인한다. Production에서 다시 build·push하지 않는다.
+12. 격리된 가짜 PostHog 설정 네 조합으로 활성화·누락 no-op을 확인하고, 현재 prod 채널의 무전송 보존을 별도로 검증한다. Production-equivalent Web export·image inspection과 지원 release·rollback 근거를 함께 확인한다. Web image를 Production에서 다시 build·push하지 않는다. Native OTA export와 publish는 별도 경로로 구분한다.
 13. 제거 전후 목록·환경·검증 결과, 운영 문서의 잔여 참조와 남은 production 확인 사항을 실제 값 없이 PROD-795에 인계하고 PROD-575가 사용할 근거를 식별한다. PROD-795의 Done 상태로 통합 증거를 생략하지 않는다.
 
 공식 대조 표면은 PostHog JS [`PostHogConfig`](https://posthog.com/docs/libraries/js/config)와 [Session Replay privacy](https://posthog.com/docs/session-replay/privacy)다.
