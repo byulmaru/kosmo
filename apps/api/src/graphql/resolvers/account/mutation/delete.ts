@@ -11,9 +11,6 @@ builder.mutationField('deleteAccount', (t) =>
       }),
     }),
     resolve: async (_, __, ctx) => {
-      ctx.c.header('Cache-Control', 'no-store');
-      ctx.c.header('Pragma', 'no-cache');
-
       const completed = await runWorkflow(accountDeletionWorkflow, {
         args: [{ accountId: ctx.session.accountId }],
         mode: 'execute',
