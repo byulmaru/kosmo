@@ -44,7 +44,7 @@ mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     const name = parts.join('').match(/(?:query|fragment|mutation) (\w+)/)?.[1];
     assert.ok(name);
-    const directory = name.startsWith('SettingsBlockedProfiles') ? '.' : '../profile';
+    const directory = name.startsWith('SettingsBlockedProfile') ? '.' : '../profile';
     return require(`${directory}/__generated__/${name}.graphql.ts`).default;
   },
 });
@@ -308,7 +308,7 @@ describe('Settings Block consumer with real Relay', () => {
       one('ModalSheet', row).props.onClose();
     });
     assert.equal(requests.length, 2);
-    const failed = latestRequest('ProfileBlockControllerUnblockMutation');
+    const failed = latestRequest('ProfileBlockActionUnblockMutation');
     assert.deepEqual(failed.variables, { id: 'block-one' });
     assert.equal(one('ModalSheet', row).props.visible, true);
     assert.equal(one('ModalSheet', row).props.dismissDisabled, true);
@@ -320,7 +320,7 @@ describe('Settings Block consumer with real Relay', () => {
 
     await act(async () => one('Button', row).props.onPress());
     await act(async () => one('ConfirmationContent', row).props.onConfirm());
-    await respond(latestRequest('ProfileBlockControllerUnblockMutation'), {
+    await respond(latestRequest('ProfileBlockActionUnblockMutation'), {
       unblockProfile: {
         success: true,
         profileBlockId: 'block-one',
@@ -370,7 +370,7 @@ describe('Settings Block consumer with real Relay', () => {
     await respond(latestRequest('SettingsBlockedProfilesQuery'), firstPage(['one']));
     await act(async () => button('차단 해제').props.onPress());
     await act(async () => one('ConfirmationContent').props.onConfirm());
-    const pendingA = latestRequest('ProfileBlockControllerUnblockMutation');
+    const pendingA = latestRequest('ProfileBlockActionUnblockMutation');
     selectedProfileId = 'owner-b';
     generation.current += 1;
     const environmentB = createEnvironment();
