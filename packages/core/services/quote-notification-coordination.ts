@@ -1,17 +1,16 @@
-import { and, eq, gt, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   Instances,
   NotificationQuoteJudgments,
   Notifications,
   Posts,
-  ProfileBlocks,
   ProfileFollows,
-  ProfileMutes,
   Profiles,
 } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, ProfileState } from '../enums';
 import { postVisibilityCondition } from '../visibility/post';
+import { isNotificationSuppressed, materializeNotification } from './notification-policy';
 import type { Transaction } from '../db';
 
 export const QuoteNotificationJudgmentOutcome = {
@@ -39,47 +38,6 @@ type MaterializeCoordinatedNotificationInput = {
 const ReplyParents = alias(Posts, 'reply_notification_parent');
 const ReplyAuthors = alias(Profiles, 'reply_notification_author');
 const ReplyAuthorInstances = alias(Instances, 'reply_notification_author_instance');
-
-const hasProfileBlock = async (
-  database: Transaction,
-  ownerProfileId: string,
-  targetProfileId: string,
-) =>
-  database
-    .select({ id: ProfileBlocks.id })
-    .from(ProfileBlocks)
-    .where(
-      or(
-        and(
-          eq(ProfileBlocks.ownerProfileId, ownerProfileId),
-          eq(ProfileBlocks.targetProfileId, targetProfileId),
-        ),
-        and(
-          eq(ProfileBlocks.ownerProfileId, targetProfileId),
-          eq(ProfileBlocks.targetProfileId, ownerProfileId),
-        ),
-      ),
-    )
-    .limit(1)
-    .then((rows) => rows.length > 0);
-
-const hasProfileMute = async (
-  database: Transaction,
-  ownerProfileId: string,
-  targetProfileId: string,
-) =>
-  database
-    .select({ id: ProfileMutes.id })
-    .from(ProfileMutes)
-    .where(
-      and(
-        eq(ProfileMutes.ownerProfileId, ownerProfileId),
-        eq(ProfileMutes.targetProfileId, targetProfileId),
-        or(isNull(ProfileMutes.expiresAt), gt(ProfileMutes.expiresAt, sql`CURRENT_TIMESTAMP`)),
-      ),
-    )
-    .limit(1)
-    .then((rows) => rows.length > 0);
 
 const quoteNotificationCandidates = async (
   database: Transaction,
@@ -163,8 +121,7 @@ export const materializeCoordinatedNotification = async (
 
   if (
     relatedProfileId === recipientProfileId ||
-    (await hasProfileBlock(database, recipientProfileId, relatedProfileId)) ||
-    (await hasProfileMute(database, recipientProfileId, relatedProfileId))
+    (await isNotificationSuppressed(database, recipientProfileId, relatedProfileId))
   ) {
     return;
   }
@@ -280,16 +237,11 @@ export const materializeReplyNotificationIfEligible = async (
     return source.recipientProfileId;
   }
 
-  await database
-    .insert(Notifications)
-    .values({
-      data: {},
-      kind: NotificationKind.REPLY,
-      recipientProfileId: source.recipientProfileId,
-      sourceId: source.id,
-    })
-    .onConflictDoNothing({
-      target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-    });
+  await materializeNotification(database, {
+    kind: NotificationKind.REPLY,
+    recipientProfileId: source.recipientProfileId,
+    relatedProfileId: source.relatedProfileId,
+    sourceId: source.id,
+  });
   return source.recipientProfileId;
 };
