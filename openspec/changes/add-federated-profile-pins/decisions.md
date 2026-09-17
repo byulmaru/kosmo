@@ -6,22 +6,27 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
 
 ## Decision Records
 
-### Local Profile은 단일 pin과 expected-current atomic replacement를 사용한다
+### Pin API는 ordered 0..N additive set이고 현재 Local UI는 첫 항목만 관리한다
 
 - Decision Date: 2026-09-16
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-809`
 - Status: Active
-- Context / Problem: Local Profile의 최대 1개 정책에서 교체 확인이 늦게 도착하면 새 pin을 잘못 제거할 수 있다.
-- Decision Outcome: eligible한 자기 작성 Active Content Post·Reply·Quote만 대상으로 하고, 교체 시 확인 당시 current pin
-  기대값을 검증한 뒤 기존 관계 제거와 새 관계 생성을 원자적으로 수행한다. 같은 pin과 이미 없는/different target unpin은
-  idempotent success no-op이다. expected-current 불일치는 저장 상태를 바꾸지 않고 idempotent success와 구별되는
-  stale/conflict 결과를 반환한다.
-- Alternatives Considered: UI confirmation만 신뢰하는 방식은 stale 요청 보호가 없으므로 선택하지 않는다. 다중 Local pin은
-  canonical cardinality와 달라 선택하지 않는다.
-- Consequences: mutation은 current expected value와 transaction 경계를 보존해야 하며, Mentioned Profiles·pure Repost·타인
-  작성 Post는 저장 경계 전에 거부해야 한다.
-- Confirmation / Follow-up: 구현 PR의 DB/core/API 검증에서 동시 replacement, stale confirmation, idempotent no-op을 증명한다.
+- Context / Problem: 현재 first-party UI는 첫 Local pin만 관리하지만 저장·API cardinality까지 단일로 고정하면 Remote inbound
+  전체 표시와 향후 Local 확장을 막는다. 기본 pin이 기존 항목을 지우거나 unpin이 다른 항목을 지우면 ordered set 계약도 깨진다.
+- Decision Outcome: pin 저장·API projection은 ordered 0..N additive collection으로 두고, eligible한 자기 작성 Active Content
+  Post·Reply·Quote를 pin하면 ordered set에 추가하며 unpin은 지정한 Post만 제거한다. 현재 Local first-party UI는 server-authoritative
+  order의 첫 visible 항목만 렌더·관리한다. UI slot 교체에만 확인 당시 current pin 기대값을 검증한 원자적 replace를 적용하며,
+  이 rollout 정책은 API·저장 cardinality를 제한하지 않는다. 같은 pin과 이미 없는 unpin은 idempotent success no-op이고,
+  UI slot expected-current 불일치는 저장 상태를 바꾸지 않는 stale/conflict 결과다. 새 pin에는 기존 pin의 상대 순서를 보존한 한
+  위치를 원자적으로 부여하고 관계 변경이 없으면 같은 authoritative order를 반환한다. 새 pin의 앞·뒤 배치와 별도 재정렬 UX는
+  현재 범위에서 고정하지 않는다.
+- Alternatives Considered: UI confirmation만 신뢰하는 방식은 stale 요청 보호가 없으므로 선택하지 않는다. 저장·API를 Local
+  단일 scalar로 고정하거나 기본 pin을 replacement로 정의하는 방식은 ordered additive collection 계약과 달라 선택하지 않는다.
+- Consequences: add/unpin mutation은 지정한 관계만 변경하고 Mentioned Profiles·pure Repost·타인 작성 Post는 저장 경계 전에
+  거부해야 한다. UI slot replace는 current expected value와 transaction 경계를 보존해야 한다.
+- Confirmation / Follow-up: 구현 PR의 DB/core/API 검증에서 additive multi-pin, 지정 항목 unpin, UI slot replacement, stale
+  confirmation과 idempotent no-op을 증명한다.
 
 ### Remote Profile은 검증된 Featured collection의 ordered set을 보존한다
 
@@ -29,7 +34,7 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `PROD-809`
 - Status: Active
-- Context / Problem: Remote actor의 Featured collection은 Local 단일 pin과 다른 cardinality·순서를 가지며, 실패한 inbound
+- Context / Problem: Remote actor의 Featured collection은 현재 Local first-visible UI 제한과 다른 cardinality·순서를 가지며, 실패한 inbound
   fetch가 마지막으로 확인된 결과를 덮어서는 안 된다.
 - Decision Outcome: 지원·검증된 Featured item 전체를 원격 순서로 보존한다. Remote Profile 등록, stale refresh와 검증된
   inbound `Update(Actor/Person)`에서 광고된 `featured` URI가 있으면 production sync path에서 실행하거나 예약한다. 상위
@@ -39,11 +44,15 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
   page·item·byte·시간 예산을 적용한다. page traversal과 항목 검증이 성공한 authoritative sync만 ordered set을 교체하고,
   실패·취소·순환·예산 초과는 마지막 성공 상태를 유지한다. unpin, Delete/Tombstone과 eligibility 상실은 성공 sync 또는 기존
   lifecycle에서 제거한다. Sync 실패는 유효한 상위 Profile 등록·refresh·Update를 실패시키지 않으며, 검증된 원격 표현에서
-  `featured` URI가 사라지면 authoritative empty set으로 교체한다.
-- Alternatives Considered: Local single-pin 정책을 Remote에 적용하거나 실패 시 빈 set으로 초기화하는 방식은 승인된 계약과
+  `featured` URI가 사라지면 authoritative empty set으로 교체한다. 각 Note의 canonical `attributedTo`는 collection을
+  광고하는 Actor의 canonical URI와 정확히 일치해야 한다. Sync 실패는 기존 retry-capable async effect/Workflow 경계에서
+  관측·재시도할 수 있어야 하며, 실패·부분·취소 시도는 last-success snapshot을 유지하고 이후 성공한 retry만 이를 원자적으로
+  교체한다. retry timing·backoff·횟수·SLA는 고정하지 않는다.
+- Alternatives Considered: Local first-visible UI 정책을 Remote에 적용하거나 실패 시 빈 set으로 초기화하는 방식은 승인된 계약과
   안전한 visibility 보존을 위반하므로 선택하지 않는다.
-- Consequences: Remote sync는 부분 page를 visible 결과로 커밋하지 않고, Followers Only 항목에는 fetch 시점의 Active local
-  follower identity와 established Follow 검증이 필요하다. 구체 scheduling과 자원 예산값은 구현·운영 환경이 소유한다.
+- Consequences: Remote sync는 부분 page를 visible 결과로 커밋하지 않고, Note attribution은 advertising Actor와 exact match여야
+  하며, Followers Only 항목에는 fetch 시점의 Active local follower identity와 established Follow 검증이 필요하다. 구체
+  scheduling과 자원 예산값은 구현·운영 환경이 소유한다.
 - Confirmation / Follow-up: 구현 PR의 Fedify integration과 Mastodon 호환 runtime 검증에서 ordered sync, failure preservation,
   unpin/delete/unfollow를 확인한다.
 

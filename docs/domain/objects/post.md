@@ -339,8 +339,10 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 ### ActivityPub Profile Featured collection
 
 - Local ActivityPub Profile은 자신의 canonical 표현에 `featured` URI를 광고한다. Featured collection은
-  기존 Local Note projection과 Note 역참조 authorization을 재사용하며, Local Profile의 단일 current pin을
-  Featured 표현의 유일한 고정 순서로 제공한다.
+  ordered 0..N projection이며 기존 Local Note projection과 Note 역참조 authorization을 재사용한다. 현재 Local
+  first-party UI는 server-authoritative order의 첫 visible pinned Post만 렌더하지만, API·저장 관계는 이 cardinality에 고정되지 않는다.
+  새 pin은 기존 pin의 상대 순서를 보존한 한 위치에 저장하고, 관계 변경이 없으면 같은 order를 반환한다. 새 pin의 앞·뒤 배치와
+  별도 재정렬 UX는 현재 계약에서 고정하지 않는다.
 - Public와 Unlisted Post는 공개 Featured collection과 Note 역참조에서 제공한다. Followers Only Post는 Author 또는
   established Follower의 signed fetch에서만 collection membership과 Note를 제공하며, 인증되지 않은 요청·비팔로워
   요청·Mentioned Profiles Post(ActivityPub Direct projection)는 제공하지 않는다. Post의 존재나 private membership을 URI, count 또는 빈 collection 외의 오류로
@@ -348,11 +350,14 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - Local pin/unpin commit 뒤에는 기존 Profile Update(Person) delivery lifecycle을 재사용해 `featured` 표현을 갱신한다.
   연속된 commit은 최신 current representation delivery로 병합할 수 있으며 commit별 1:1 delivery나 완료 시간 SLA를
   요구하지 않는다. delivery 실패가 이미 commit된 Local 고정 상태를 되돌리지는 않는다.
-- Remote Featured collection은 원격 ActivityPub Profile이 광고한 collection을 page traversal로 동기화한다. Public/Unlisted는 기존
+- Remote Featured collection은 원격 ActivityPub Profile이 광고한 collection을 page traversal로 동기화한다. 각 Note의 canonical
+  `attributedTo`는 해당 collection을 광고하는 Actor의 canonical URI와 정확히 일치해야 한다. Public/Unlisted는 기존
   Note 검증을 사용하고, Followers Only는 한 sync 시도 동안 동일한 Active local follower identity로 collection의 모든
   page와 각 Note를 authenticated fetch해 author, audience와 Follow 관계를 검증한다. 성공한 authoritative sync만 remote
   ordered pin set을 교체한다. 각 시도는 취소 가능하고 next page 순환 검출과 구현이 정한 page·item·byte·시간 예산을 적용하며,
-  fetch·parse·검증·취소·순환·예산 초과 실패는 마지막 성공 상태를 보존한다. Remote unpin, Delete/Tombstone 또는
+  fetch·parse·검증·취소·순환·예산 초과 실패는 마지막 성공 상태를 보존한다. 실패는 기존 retry-capable async effect/Workflow
+  경계에서 관측·재시도할 수 있어야 하며, 이후 성공한 retry만 snapshot을 원자적으로 교체한다. retry timing·backoff·횟수·SLA는
+  고정하지 않는다. Remote unpin, Delete/Tombstone 또는
   visibility·author eligibility 상실은 다음 성공 sync나 기존 lifecycle에서 노출에서 제거한다.
 
 ### Quote federation 정책

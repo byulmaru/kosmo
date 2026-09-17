@@ -6,23 +6,33 @@ The system MUST satisfy this contract.
 
 **Authority / Provenance:** `docs/domain/policies/post-list.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `PROD-809`
 
-Profile Post List는 조회 가능한 pinned Post를 먼저 고정 순서(Local 0..1, Remote는 원격 collection 순서)로 표시해야
-한다(MUST). Local Profile은 0..1개의 단일 current pin을, Remote Profile은 성공적으로 검증·동기화된 Featured collection의
-전체 지원 pinned Post를 표시해야 한다(MUST).
+Profile Post List 서버/API는 조회 가능한 pinned Post를 server-authoritative ordered collection 순서(Local·Remote 모두)로 일반
+chronology보다 먼저 반환해야 한다(MUST). 저장·API projection은 0..N collection이어야 하며(MUST). 현재 Local first-party UI는 이 순서의 첫 visible pinned
+Post만 렌더하고, Remote Profile UI는 성공적으로 검증·동기화된 Featured collection의 전체 지원 pinned Post를 표시해야
+한다(MUST). Remote inbound에는 Local의 first-visible UI 제한을 적용하지 않는다(MUST NOT).
+서버는 pin 관계가 바뀌지 않는 동안 같은 authoritative order를 유지해야 하며(MUST), visibility filtering은 남은 visible
+항목의 상대 순서를 바꿔서는 안 된다(MUST NOT).
 Pinned segment에는 Reply Parent가 있는 Reply와 Quote도 포함해야 하며(MUST), Profile의 일반 Post는 pinned segment
 뒤에 기존 chronology로 이어야 한다(MUST).
 
 #### Scenario: Show Local pinned Post before ordinary chronology
 
 - **WHEN** 조회자가 pinned Post와 일반 eligible Post가 있는 Local Profile 목록을 연다
-- **THEN** visible pinned Post가 목록의 첫 segment에 단 한 번 표시된다
+- **THEN** server-authoritative order에서 첫 visible pinned Post가 목록의 첫 segment에 표시된다
 - **AND** 나머지 일반 Post는 기존 chronology로 pinned segment 뒤에 표시된다
+
+#### Scenario: Keep additional Local pins available to the API
+
+- **WHEN** Local Profile의 ordered pin collection에 첫 항목 외에도 유효한 pinned Post가 있다
+- **THEN** 서버·API는 추가 항목을 ordered collection에 보존한다
+- **AND** 현재 Local first-party UI는 첫 visible 항목만 렌더한다
+- **AND** 반복 조회와 visibility filtering은 visible 항목의 상대 순서를 유지한다
 
 #### Scenario: Show Remote Featured posts in remote order
 
 - **WHEN** 조회자가 성공한 authoritative sync로 저장된 Remote Profile Featured collection을 연다
 - **THEN** 조회 가능한 지원 pinned Post 전체가 원격 collection 순서대로 첫 segment에 표시된다
-- **AND** Remote Profile에 Local의 최대 1개 정책을 적용하지 않는다
+- **AND** Remote Profile에 Local first-visible UI 제한을 적용하지 않는다
 
 #### Scenario: Include a pinned Reply or Quote
 
@@ -38,7 +48,7 @@ The system MUST satisfy this contract.
 Pinned segment와 일반 segment에는 기존 Post Visibility, Post Eligibility, Profile/Post lifecycle, Profile Block, Profile
 Domain Block, Domain Limit과 Instance availability 정책을 동일하게 적용해야 한다(MUST). Profile이 deactivated,
 suspended 또는 unavailable이거나 Post가 Tombstone·unavailable·작성자 또는 visibility eligibility 상실 상태면 해당
-Post를 목록에 표시해서는 안 된다(MUST NOT). Local current pin이 이 상태가 되면 제품상 current pin으로 간주하지 않아
+Post를 목록에 표시해서는 안 된다(MUST NOT). Local pinned Post가 이 상태가 되면 제품상 visible pin으로 간주하지 않아
 새 pin을 막지 않아야 하며(MUST), private pinned Post의 존재를 count, URI 또는 목록 오류로 노출해서는 안 된다(MUST NOT).
 
 #### Scenario: Hide a pinned Post denied by existing visibility
@@ -56,9 +66,9 @@ Post를 목록에 표시해서는 안 된다(MUST NOT). Local current pin이 이
 
 #### Scenario: Do not block a replacement after pin eligibility loss
 
-- **WHEN** Local current pin이 Tombstone·unavailable·author 또는 visibility eligibility 상실 상태가 된 뒤 Owner가 새
+- **WHEN** Local pinned Post가 Tombstone·unavailable·author 또는 visibility eligibility 상실 상태가 된 뒤 Owner가 새
   eligible Post를 고정한다
-- **THEN** 시스템은 이전 Post를 제품상 current pin으로 간주하지 않고 새 Post를 pinned segment에 표시한다
+- **THEN** 시스템은 이전 Post를 제품상 visible pin으로 간주하지 않고 새 Post를 pinned segment에 표시한다
 - **AND** 물리 cleanup 방식은 목록의 이 결과를 바꾸지 않는다
 
 ### Requirement: Server-owned combined pagination

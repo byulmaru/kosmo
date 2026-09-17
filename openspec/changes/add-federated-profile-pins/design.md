@@ -4,7 +4,9 @@
 `featured` 동기화의 공통 계약이 없다. 이 change는 [proposal](./proposal.md)의 PROD-809 결과를 위해 기존 Post
 조회/visibility/eligibility, Note projection, Profile Update(Person) delivery와 단일 서버 pagination 경계를 연결한다.
 
-구현은 Local의 단일 고정과 Remote의 원격 ordered set을 서로 다른 lifecycle로 다뤄야 한다. Followers Only는 일반
+구현은 ordered 0..N pin collection 저장·API와 현재 Local first-party의 첫 visible 항목 관리 정책, Remote의 원격 ordered
+set을 서로 다른 lifecycle로 다뤄야 한다. Local pin은 기본적으로 set에 추가하고 지정한 항목만 제거하며, 현재 UI slot 교체의
+expected-current atomic replacement는 rollout 정책으로만 둔다. Followers Only는 일반
 공개 fetch와 다른 signed/authenticated authorization이 필요하며, page traversal 중 실패한 Remote sync가 이미 성공한
 상태를 훼손해서는 안 된다.
 
@@ -12,7 +14,7 @@
 
 **Goals:**
 
-- Local pin/unpin/replacement의 자격, stale confirmation 보호, 원자성과 idempotent no-op을 제공한다.
+- Local pin/unpin의 자격·ordered add/remove와 idempotent no-op을 제공하고, 현재 UI slot 교체에는 stale confirmation 보호와 원자성을 제공한다.
 - Remote Featured collection의 outbound advertisement, visibility-aware authorization과 inbound ordered sync를 기존
   ActivityPub 경계에 연결한다.
 - Profile 목록의 pinned-first 순서, visibility filtering과 서버 소유 cursor/page semantics를 유지한다.
@@ -20,7 +22,8 @@
 
 **Non-Goals:**
 
-- Home·Local·Hashtag 목록의 순서 변경, Mentioned Profiles Post(ActivityPub Direct projection)의 Featured 공개, Local Profile의 다중 pin.
+- Home·Local·Hashtag 목록의 순서 변경, Mentioned Profiles Post(ActivityPub Direct projection)의 Featured 공개, 현재 Local
+  first-party 관리 정책을 넘어서는 다중 pin 관리 UI·mutation.
 - 새 외부 의존성, Storybook fixture·interaction, 별도 pin UI 체계, 전체 ActivityPub 구현이 Featured를 표시한다는 보장.
 - 내부 GraphQL field shape, resolver/function 이름, DB table/index shape 또는 물리 삭제·FK cleanup 방식을 고정하는 것.
 
@@ -39,30 +42,35 @@
 
 ### Recommended Approach
 
-1. 기존 core/domain action 경계에서 Local pin 후보를 검증하고, current pin 기대값 검사와 replace/unpin을 한 transaction
-   안에서 실행한다. 같은 대상과 이미 없는 해제는 현재 상태를 유지하는 idempotent 결과로 정규화한다.
+1. 기존 core/domain action 경계에서 Local pin 후보를 검증하고, pin은 ordered set에 추가하고 unpin은 지정한 항목만 제거한다.
+   같은 대상과 이미 없는 해제는 현재 상태를 유지하는 idempotent 결과로 정규화한다. 현재 first-party UI slot 교체에만 current
+   expected value 검사와 원자적 replace를 적용하며, 이 rollout 정책은 API·저장 cardinality를 제한하지 않는다. 새 pin에는 기존
+   pin의 상대 순서를 보존한 한 위치를 원자적으로 부여하고 관계 변경이 없으면 같은 order를 반환한다. 앞·뒤 배치와 별도 재정렬
+   UX는 고정하지 않는다.
 2. Profile 목록을 계산하는 서버 경계에서 visible pinned segment와 일반 chronology segment를 결합하고, pinned ID를 일반
    후보에서 cursor/page limit 전에 제외한다. Relay는 이 서버 결과를 하나의 기존 pagination 흐름으로 소비한다.
 3. Local Actor 표현에는 기존 Profile representation 경계에서 `featured` link를 추가하고, collection item은 기존
    Local Note projection과 authorization을 호출한다. pin transaction commit 후에는 기존 Profile Update(Person)
    delivery scheduling/effect lifecycle을 재사용한다. 연속된 commit은 최신 current representation delivery로 병합할 수
    있으며 commit별 1:1 delivery나 완료 시간 SLA를 요구하지 않는다.
-4. Remote Actor의 Featured URI를 기존 ActivityPub fetch/validation 경계로 page traversal한다. 모든 page와 item 검증이
+4. Remote Actor의 Featured URI를 기존 ActivityPub fetch/validation 경계로 page traversal한다. 각 Note의 canonical `attributedTo`가
+   collection을 광고하는 Actor의 canonical URI와 정확히 같은지 확인하고, 모든 page와 item 검증이
    성공한 뒤에만 원격 ordered set을 교체하고, 실패 시 이전 authoritative snapshot을 보존한다. Public/Unlisted는 기존
    공개 fetch를 사용할 수 있다. Followers Only를 수신할 때는 한 sync 시도 동안 같은 Active local follower identity로
    collection의 모든 page와 각 Note 역참조를 authenticated fetch한다. Sync는 production path에서 inline으로 실행하거나
    별도 effect로 예약할 수 있고 상위 Profile 결과의 성공 여부는 sync 완료·성공에 의존하지 않는다. 각 시도는 취소
    가능하며 next page 순환 검출과 구현이 정한 page·item·byte·시간 예산을 적용한다. 실패·취소·순환·예산 초과는 유효한
-   상위 Profile 갱신과 이전 snapshot을 보존한다. 검증된 원격 표현에서 `featured` URI가 사라진 경우는 authoritative empty
-   set으로 처리한다.
+   상위 Profile 갱신과 이전 snapshot을 보존한다. 실패는 기존 retry-capable async effect/Workflow 경계에서 관측·재시도할 수
+   있어야 하며, 이후 성공한 retry만 snapshot을 원자적으로 교체한다. retry timing·backoff·횟수·SLA는 고정하지 않는다.
+   검증된 원격 표현에서 `featured` URI가 사라진 경우는 authoritative empty set으로 처리한다.
 5. Profile/Post lifecycle, visibility, block/domain 정책 변경은 기존 조회·삭제·Tombstone lifecycle에서 visible set을
    재계산하거나 다음 성공 sync에서 제거한다. 관계의 물리 cleanup은 기존 보존 정책을 따르는 구현 선택으로 둔다.
 
 ### Allowed Alternatives
 
 - Local pin 관계의 저장은 기존 Post/Profile persistence 계층에 맞는 별도 관계 또는 Profile projection 중 하나를
-  사용할 수 있다. 어느 쪽이든 Local cardinality·원자성·stale expected-current 보호와 Remote ordered set 보존을
-  외부 동작으로 증명해야 한다.
+  사용할 수 있다. 어느 쪽이든 ordered 0..N API shape, additive add/unpin, 현재 UI slot의 원자성·stale expected-current 보호와
+  Remote ordered set 보존을 외부 동작으로 증명해야 한다.
 - Remote snapshot은 같은 transaction의 replace 또는 versioned snapshot swap으로 구현할 수 있다. 부분 fetch가 visible
   상태를 덮지 않고 마지막 성공 snapshot을 유지하면 된다.
 - Featured sync scheduling과 Profile Update delivery batching 방식은 고정하지 않는다. 상위 Profile 결과 독립성, bounded

@@ -18,6 +18,13 @@ collection membership과 Note를 제공해야 한다(MUST). Mentioned Profiles P
 - **THEN** Actor 표현은 `featured` URI를 포함한다
 - **AND** Public·Unlisted pinned Post가 기존 Local Note projection으로 collection 순서에 맞게 제공된다
 
+#### Scenario: Keep Featured Note attribution bound to the advertising Actor
+
+- **WHEN** Featured collection item이 Note로 materialize된다
+- **THEN** Note의 canonical `attributedTo`가 Featured collection을 광고하는 Actor의 canonical URI와 정확히 일치할 때만
+  membership과 Note를 제공한다
+- **AND** 다른 Actor를 가리키는 Note는 collection item이더라도 제공하지 않는다
+
 #### Scenario: Authorize Followers Only Featured membership
 
 - **WHEN** Author 또는 established Follower가 유효한 signed fetch로 Followers Only Featured collection을 요청한다
@@ -41,19 +48,29 @@ The system MUST satisfy this contract.
 refresh와 검증된 inbound `Update(Actor/Person)`에서 actor가 광고한 `featured` URI가 있으면 이 sync를 production path에서
 실행하거나 예약해야 한다(MUST). 상위 Profile 결과의 성공 여부는 sync 완료·성공에 의존해서는 안 되며(MUST NOT), sync
 완료 시간 SLA는 정의하지 않는다. Public/Unlisted 항목은 기존 공개 fetch와 remote Note 검증을 적용해야 한다(MUST).
+각 Featured Note의 canonical `attributedTo`는 collection을 광고하는 Remote Actor의 canonical URI와 정확히 일치해야 한다(MUST).
 Followers Only 항목은 한 sync 시도 동안 같은 Active local follower identity로 Featured collection의 모든 page와 각 Note
 역참조를 authenticated fetch한 뒤 author, audience와 established Follow 관계를 검증해야 한다(MUST). 각 시도는 취소할 수
 있어야 하고(MUST), next page 순환을 검출하며(MUST), 구현이 정한 page·item·byte·시간 예산 안에서 수행해야 한다(MUST).
 성공한 authoritative sync만 Remote Profile의 ordered pinned set을 교체해야 하며(MUST), fetch·parse·검증·취소·순환 또는
 예산 초과 실패 시 마지막 성공 상태를 보존해야 한다(MUST). Featured sync 실패는 유효한 Remote Profile
 등록·refresh·Update 결과를 되돌리거나 실패시켜서는 안 된다(MUST NOT).
+실패는 기존 retry-capable async effect/Workflow 경계에서 관측·재시도할 수 있어야 하며(MUST), 실패·부분·취소된 시도는
+last-success snapshot을 유지하고 이후 성공한 retry만 snapshot을 원자적으로 교체해야 한다(MUST). retry timing·backoff·횟수·SLA는
+이 계약에서 고정하지 않는다.
 
 #### Scenario: Sync a verified remote Featured collection in order
 
 - **WHEN** Remote Profile 등록·stale refresh 또는 검증된 inbound `Update(Actor/Person)`가 `featured` URI를 광고하고 public
   fetch 또는 한 sync 시도 동안 같은 Active local follower identity를 사용한 page traversal과 Note 역참조 검증이 성공한다
 - **THEN** 시스템은 지원·검증된 pinned Post 전체를 원격 collection 순서로 Remote Profile에 저장·표시한다
-- **AND** Remote Profile에는 Local single-pin limit을 적용하지 않는다
+- **AND** Remote Profile에는 Local first-visible UI 제한을 적용하지 않는다
+
+#### Scenario: Reject a Featured Note attributed to another Actor
+
+- **WHEN** Remote Actor의 Featured collection item이 다른 Actor를 canonical `attributedTo`로 가진 Note를 참조한다
+- **THEN** 시스템은 해당 Note를 광고 Actor의 pinned Post로 materialize하지 않는다
+- **AND** 실패한 시도는 last-success snapshot을 변경하지 않는다
 
 #### Scenario: Verify Followers Only with an active local follower identity
 
@@ -70,6 +87,12 @@ Followers Only 항목은 한 sync 시도 동안 같은 Active local follower ide
 - **THEN** 시스템은 마지막 성공한 ordered pinned set을 유지한다
 - **AND** 실패한 partial page나 count를 Remote Profile의 visible pin set으로 교체하지 않는다
 - **AND** 유효한 Remote Profile 등록·refresh·Update 결과는 유지한다
+
+#### Scenario: Replace the snapshot after a successful retry
+
+- **WHEN** 이전 Featured sync가 실패해 last-success snapshot을 유지한 뒤 retry가 전체 검증에 성공한다
+- **THEN** 시스템은 성공한 retry의 ordered pinned set을 원자적으로 visible snapshot으로 교체한다
+- **AND** 실패한 시도의 partial/empty 결과는 snapshot에 반영하지 않는다
 
 #### Scenario: Keep the parent Profile outcome independent from Featured sync
 
