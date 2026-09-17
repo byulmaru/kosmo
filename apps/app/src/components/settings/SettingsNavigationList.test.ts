@@ -9,6 +9,8 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const require = createRequire(import.meta.url);
+let platform: 'android' | 'ios' | 'web' = 'web';
+let openSettingsCalls = 0;
 
 mock.module('expo-router', {
   exports: {
@@ -18,7 +20,17 @@ mock.module('expo-router', {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
   exports: {
-    Platform: { OS: 'web' },
+    Linking: {
+      openSettings: () => {
+        openSettingsCalls += 1;
+        return Promise.resolve();
+      },
+    },
+    Platform: {
+      get OS() {
+        return platform;
+      },
+    },
     Pressable: 'Pressable',
     StyleSheet: {
       create: <T>(styles: T) => styles,
@@ -36,6 +48,11 @@ mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   exports: {
     NavigationLink: ({ children, href }: { children: ReactElement; href: string }) =>
       createElement('NavigationLink', { href }, cloneElement(children, { href } as never)),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('./SettingsItem.tsx', import.meta.url), {
+  exports: {
+    SettingsItem: (props: Record<string, unknown>) => createElement('SettingsItem', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
@@ -87,6 +104,8 @@ describe('SettingsMuteAndBlockNavigation', () => {
 });
 
 afterEach(async () => {
+  platform = 'web';
+  openSettingsCalls = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -107,6 +126,44 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[1].props.href, '/settings/default-post-visibility');
     assert.equal(links[2].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
     assert.equal(links[2].props.href, '/settings/mute-and-block');
+    assert.equal(
+      rendered('Pressable').some((node) => node.props.testID === 'native-notification-settings'),
+      false,
+    );
+  });
+
+  it('Native는 뮤트 및 차단 뒤에 OS 알림 설정 action을 표시하고 OS 설정을 연다', async () => {
+    platform = 'ios';
+    await render();
+
+    const rows = rendered('Pressable');
+    const muteIndex = rows.findIndex(
+      (node) => node.props.accessibilityLabel === '뮤트 및 차단 설정 열기',
+    );
+    const notificationIndex = rows.findIndex(
+      (node) => node.props.testID === 'native-notification-settings',
+    );
+    const infoIndex = rows.findIndex(
+      (node) => node.props.accessibilityLabel === '정보 설정 열기',
+    );
+    const notification = rows[notificationIndex];
+
+    assert.equal(notificationIndex, muteIndex + 1);
+    assert.equal(infoIndex, notificationIndex + 1);
+    assert.equal(notification?.props.accessibilityLabel, 'OS 알림 설정 열기');
+    assert.equal(notification?.props.accessibilityRole, 'button');
+    const notificationItem = rendered('SettingsItem').find(
+      (node) => node.props.label === '알림 설정',
+    );
+    assert.ok(notificationItem);
+    assert.equal(notificationItem.props.label, '알림 설정');
+    assert.equal(
+      notificationItem.props.description,
+      '기기의 알림 설정에서 Push 알림을 관리할 수 있어요.',
+    );
+
+    await act(async () => notification?.props.onPress());
+    assert.equal(openSettingsCalls, 1);
   });
 
   it('full master가 표시한 내부 detail만 current destination으로 전달한다', async () => {
