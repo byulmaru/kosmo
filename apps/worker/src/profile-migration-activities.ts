@@ -1,4 +1,3 @@
-import { and, asc, eq, gt } from 'drizzle-orm';
 import {
   ActivityPubActors,
   db,
@@ -8,25 +7,30 @@ import {
   ProfileFollows,
   ProfileMigrations,
   Profiles,
-} from '../db';
-import { InstanceKind, InstanceState, ProfileState } from '../enums';
-import { executeProfileFollowRemoval } from '../temporal/follow-command';
-import { followProfile } from './profile-follow';
-import { profileFollowPairCondition } from './profile-follow-transaction';
+} from '@kosmo/core/db';
+import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
+import { followProfile, profileFollowPairCondition } from '@kosmo/core/services';
+import { executeProfileFollowRemoval } from '@kosmo/core/temporal/follow-command';
+import { and, asc, eq, gt } from 'drizzle-orm';
 
 const PROFILE_MIGRATION_MOVE_BATCH_SIZE = 50;
 
-export type ProfileMigrationMoveInput = {
+type ProfileMigrationMoveInput = {
   readonly sourceProfileId: string;
   readonly targetProfileId: string;
 };
 
-export type ProfileMigrationMoveFollower = {
+type ProfileMigrationMoveFollower = {
   readonly followerProfileId: string;
   readonly sourceFollowId: string;
 };
 
-export type ProfileMigrationMoveFollowerInput = ProfileMigrationMoveInput &
+type LoadProfileMigrationMoveFollowerBatchInput = ProfileMigrationMoveInput & {
+  readonly afterSourceFollowId?: string;
+  readonly limit?: number;
+};
+
+type ExecuteProfileMigrationMoveFollowerInput = ProfileMigrationMoveInput &
   ProfileMigrationMoveFollower;
 
 const findEligibleTarget = async ({
@@ -90,11 +94,8 @@ const findEligibleTarget = async ({
  * batch item also removes its source row, so retries can safely re-read the
  * same cursor boundary without a migration ledger.
  */
-export const loadProfileMigrationMoveFollowerBatch = async (
-  input: ProfileMigrationMoveInput & {
-    readonly afterSourceFollowId?: string;
-    readonly limit?: number;
-  },
+export const loadProfileMigrationMoveFollowerBatchActivity = async (
+  input: LoadProfileMigrationMoveFollowerBatchInput,
 ): Promise<ProfileMigrationMoveFollower[]> => {
   if (!(await findEligibleTarget(input))) {
     return [];
@@ -129,8 +130,8 @@ export const loadProfileMigrationMoveFollowerBatch = async (
  * state and a transition that did not create a row preserve the source; only
  * a newly created target delegates cleanup to the exact-row removal lifecycle.
  */
-export const executeProfileMigrationMoveFollower = async (
-  input: ProfileMigrationMoveFollowerInput,
+export const executeProfileMigrationMoveFollowerActivity = async (
+  input: ExecuteProfileMigrationMoveFollowerInput,
 ): Promise<void> => {
   if (input.followerProfileId === input.targetProfileId) {
     return;
