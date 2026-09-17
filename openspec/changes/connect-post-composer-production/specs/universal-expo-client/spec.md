@@ -19,6 +19,8 @@
 
 - **WHEN** Web viewport 폭이 1280px 이상이다
 - **THEN** 시스템은 `320px` 좌측 sidebar, 최대 `600px` 중앙 content, 고정 `320px` 우측 composer rail을 표시한다
+- **AND** `1240px` 컬럼 묶음을 viewport 가운데에 정렬하고 남는 폭을 양옆 여백으로 배분한다
+- **AND** 우측 composer rail이 비어 있어도 고정 `320px` 그리드 트랙을 유지한다
 
 ### Requirement: Universal route parity
 
