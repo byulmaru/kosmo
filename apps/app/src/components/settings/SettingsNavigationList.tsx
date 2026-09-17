@@ -1,4 +1,5 @@
 import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useToast } from '@/components/ui/ToastProvider';
 import { layoutRecipes } from '@/theme/tokens';
 import { ByulmaruIdAccountSettingsEntry } from './ByulmaruIdAccountSettingsEntry';
 import { SettingsItem } from './SettingsItem';
@@ -7,6 +8,7 @@ import { SettingsLinkRow } from './SettingsLinkRow';
 type SettingsDestination = 'default-post-visibility' | 'mute-and-block' | 'info';
 
 export function SettingsNavigationList({ selected }: { selected?: SettingsDestination }) {
+  const { showToast } = useToast();
   const current = selected === 'default-post-visibility';
 
   return (
@@ -34,7 +36,13 @@ export function SettingsNavigationList({ selected }: { selected?: SettingsDestin
         <Pressable
           accessibilityLabel="OS 알림 설정 열기"
           accessibilityRole="button"
-          onPress={() => void Linking.openSettings()}
+          onPress={() => {
+            void Linking.openSettings().catch(() => {
+              showToast('기기의 알림 설정을 열지 못했어요. 잠시 후 다시 시도해 주세요.', {
+                tone: 'danger',
+              });
+            });
+          }}
           testID="native-notification-settings"
         >
           <SettingsItem
