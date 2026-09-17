@@ -16,68 +16,67 @@ import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostComposer } from './PostComposer';
 import type { RefObject } from 'react';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
-import type { PostComposerCreatedPost } from './PostComposer';
 
 export type PostComposerHostMode = 'mobile' | 'overlay' | 'rail';
+export type PostComposerHostCloseReason = 'created' | 'dismiss';
 
 type PostComposerHostProps = {
   fallbackFocusRef?: RefObject<HTMLElement | null>;
-  onPostCreated?: (post: PostComposerCreatedPost) => void;
-  onRequestClose: () => void;
+  onRequestClose: (reason: PostComposerHostCloseReason) => void;
   open: boolean;
   profile: PostComposer_profile$key;
   triggerFocusRef?: RefObject<HTMLElement | null>;
 } & ({ mode: 'rail'; onExpand: () => void } | { mode: 'mobile' | 'overlay'; onExpand?: never });
 
-export function PostComposerHost({
+function usePostComposerOverlayLifecycle({
   fallbackFocusRef,
-  mode,
-  onExpand,
-  onPostCreated,
   onRequestClose,
   open,
-  profile,
+  submitting,
   triggerFocusRef,
-}: PostComposerHostProps) {
-  const theme = useTheme();
-  const elevation = useElevation();
+}: Pick<PostComposerHostProps, 'fallbackFocusRef' | 'onRequestClose' | 'triggerFocusRef'> & {
+  open: boolean;
+  submitting: boolean;
+}) {
   const dialogRef = useRef<View>(null);
   const expandControlRef = useRef<View>(null);
+  const nativeBackHandlerRef = useRef<(() => void) | null>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
-  const wasOverlayVisibleRef = useRef(false);
-  const [editingMedia, setEditingMedia] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const web = Platform.OS === 'web';
-  const hasWebDocument = web && typeof document !== 'undefined';
-  const overlayVisible = mode !== 'rail' && open;
-  const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
+  const wasOpenRef = useRef(false);
+  const hasWebDocument = Platform.OS === 'web' && typeof document !== 'undefined';
 
-  const requestClose = useCallback(() => {
+  const requestClose = useCallback(
+    (reason: PostComposerHostCloseReason = 'dismiss') => {
+      if (reason === 'dismiss' && submitting) {
+        return;
+      }
+      onRequestClose(reason);
+    },
+    [onRequestClose, submitting],
+  );
+  const requestNativeBack = useCallback(() => {
     if (submitting) {
       return;
     }
-    onRequestClose();
+    if (nativeBackHandlerRef.current) {
+      nativeBackHandlerRef.current();
+      return;
+    }
+    onRequestClose('dismiss');
   }, [onRequestClose, submitting]);
-
-  const handlePostCreated = useCallback(
-    (post: PostComposerCreatedPost) => {
-      onPostCreated?.(post);
-      if (overlayVisible) {
-        onRequestClose();
-      }
-    },
-    [onPostCreated, onRequestClose, overlayVisible],
-  );
+  const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
+    nativeBackHandlerRef.current = handler;
+  }, []);
 
   useEffect(() => {
     if (!hasWebDocument) {
       return;
     }
 
-    if (overlayVisible && !wasOverlayVisibleRef.current) {
+    if (open && !wasOpenRef.current) {
       restoreFocusRef.current = document.activeElement as HTMLElement | null;
     }
-    if (!overlayVisible && wasOverlayVisibleRef.current) {
+    if (!open && wasOpenRef.current) {
       requestAnimationFrame(() => {
         const railTrigger = expandControlRef.current as unknown as HTMLElement | null;
         const triggerFocus =
@@ -97,11 +96,11 @@ export function PostComposerHost({
         }
       });
     }
-    wasOverlayVisibleRef.current = overlayVisible;
-  }, [fallbackFocusRef, hasWebDocument, overlayVisible, triggerFocusRef]);
+    wasOpenRef.current = open;
+  }, [fallbackFocusRef, hasWebDocument, open, triggerFocusRef]);
 
   useEffect(() => {
-    if (!hasWebDocument || !overlayVisible) {
+    if (!hasWebDocument || !open) {
       return;
     }
 
@@ -110,10 +109,10 @@ export function PostComposerHost({
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [hasWebDocument, overlayVisible]);
+  }, [hasWebDocument, open]);
 
   useEffect(() => {
-    if (!hasWebDocument || !overlayVisible) {
+    if (!hasWebDocument || !open) {
       return;
     }
 
@@ -156,16 +155,54 @@ export function PostComposerHost({
 
     document.addEventListener('keydown', onKeyDown, true);
     return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [hasWebDocument, overlayVisible, requestClose]);
+  }, [hasWebDocument, open, requestClose]);
+
+  return {
+    dialogRef,
+    expandControlRef,
+    registerNativeBackHandler,
+    requestClose,
+    requestNativeBack,
+  };
+}
+
+export function PostComposerHost({
+  fallbackFocusRef,
+  mode,
+  onExpand,
+  onRequestClose,
+  open,
+  profile,
+  triggerFocusRef,
+}: PostComposerHostProps) {
+  const theme = useTheme();
+  const elevation = useElevation();
+  const [submitting, setSubmitting] = useState(false);
+  const web = Platform.OS === 'web';
+  const overlayVisible = mode !== 'rail' && open;
+  const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
+  const {
+    dialogRef,
+    expandControlRef,
+    registerNativeBackHandler,
+    requestClose,
+    requestNativeBack,
+  } = usePostComposerOverlayLifecycle({
+    fallbackFocusRef,
+    onRequestClose,
+    open: overlayVisible,
+    submitting,
+    triggerFocusRef,
+  });
 
   const composer = (
     <PostComposer
       expandControlRef={expandControlRef}
       focusOnMount={overlayVisible}
-      onMediaEditorOpenChange={setEditingMedia}
-      onPostCreated={handlePostCreated}
+      onPostCreated={() => requestClose('created')}
       onSubmittingChange={setSubmitting}
       profile={profile}
+      registerNativeBackHandler={registerNativeBackHandler}
       {...(mode === 'rail'
         ? { onExpand, onRequestClose: requestClose, presentation: mode }
         : { onRequestClose: requestClose, presentation: mode })}
@@ -173,7 +210,7 @@ export function PostComposerHost({
   );
 
   const header =
-    mode === 'overlay' && !editingMedia ? (
+    mode === 'overlay' ? (
       <View style={[styles.header, { borderColor: theme.borderSubtle }]}>
         <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
           글쓰기
@@ -182,7 +219,7 @@ export function PostComposerHost({
           accessibilityLabel="글쓰기 닫기"
           disabled={submitting}
           feedback="opacity"
-          onPress={requestClose}
+          onPress={() => requestClose()}
           style={styles.closeButton}
           targetSize={40}
         >
@@ -205,9 +242,7 @@ export function PostComposerHost({
           ? styles.railDialog
           : mode === 'mobile'
             ? styles.mobileDialog
-            : editingMedia
-              ? styles.mediaEditorDialog
-              : styles.overlayDialog,
+            : styles.overlayDialog,
         { backgroundColor: theme.card },
       ]}
       testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
@@ -228,7 +263,7 @@ export function PostComposerHost({
         accessibilityLabel="글쓰기"
         accessibilityViewIsModal
         animationType="fade"
-        onRequestClose={requestClose}
+        onRequestClose={requestNativeBack}
         navigationBarTranslucent
         role="dialog"
         statusBarTranslucent
@@ -236,7 +271,7 @@ export function PostComposerHost({
         visible={overlayVisible}
       >
         <Pressable
-          onPress={requestClose}
+          onPress={() => requestClose()}
           style={[styles.nativeBackdrop, safeAreaStyle, { backgroundColor: theme.overlayScrim }]}
         >
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.nativeDialogWrap}>
@@ -261,7 +296,9 @@ export function PostComposerHost({
         mode !== 'rail' ? { backgroundColor: theme.overlayScrim } : null,
       ]}
     >
-      {mode !== 'rail' ? <Pressable onPress={requestClose} style={styles.webBackdrop} /> : null}
+      {mode !== 'rail' ? (
+        <Pressable onPress={() => requestClose()} style={styles.webBackdrop} />
+      ) : null}
       {dialog}
     </View>
   );
@@ -293,12 +330,6 @@ const styles = StyleSheet.create({
     width: 600,
   },
   mobileDialog: { borderRadius: 0, borderWidth: 0, height: '100%', width: '100%' },
-  mediaEditorDialog: {
-    borderRadius: radii.lg,
-    height: 678,
-    maxHeight: 'min(678px, 85dvh)' as never,
-    width: 'min(920px, calc(100vw - 48px))' as never,
-  },
   header: {
     alignItems: 'center',
     borderBottomWidth: 1,

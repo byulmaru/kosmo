@@ -88,6 +88,7 @@ type PostComposerBaseProps = {
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
+  registerNativeBackHandler?: (handler: (() => void) | null) => void;
   scrollable?: boolean;
   surface?: boolean;
 };
@@ -183,6 +184,7 @@ function PostComposerContents({
   onExpand,
   presentation,
   profile,
+  registerNativeBackHandler,
   replyParentId,
   repostSourceId,
   scrollable = false,
@@ -240,10 +242,17 @@ function PostComposerContents({
     visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
 
-  const closeMediaEditor = () => {
+  const closeMediaEditor = useCallback(() => {
     setMediaEditor(null);
     requestAnimationFrame(() => editor.current?.focus());
-  };
+  }, [editor]);
+
+  useLayoutEffect(() => {
+    registerNativeBackHandler?.(mediaEditor ? closeMediaEditor : null);
+    return () => {
+      registerNativeBackHandler?.(null);
+    };
+  }, [closeMediaEditor, mediaEditor, registerNativeBackHandler]);
 
   const submit = () => {
     if (disabled) {

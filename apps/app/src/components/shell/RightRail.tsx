@@ -1,17 +1,18 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { PostComposerHost } from '@/components/post/PostComposerHost';
+import {
+  PostComposerHost,
+  type PostComposerHostCloseReason,
+} from '@/components/post/PostComposerHost';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
 import type { RefObject } from 'react';
-import type { PostComposerCreatedPost } from '@/components/post/PostComposer';
 import type { RightRail_profile$key } from './__generated__/RightRail_profile.graphql';
 
 type RightRailProps = {
   fallbackFocusRef?: RefObject<HTMLElement | null>;
-  onPostCreated?: (post: PostComposerCreatedPost) => void;
-  onRequestClose: () => void;
+  onRequestClose: (reason: PostComposerHostCloseReason) => void;
   open?: boolean;
   profile: RightRail_profile$key;
   triggerFocusRef?: RefObject<HTMLElement | null>;
@@ -27,7 +28,6 @@ export function RightRail({
   fallbackFocusRef,
   mode,
   onExpand,
-  onPostCreated,
   onRequestClose,
   open = true,
   profile: profileKey,
@@ -37,7 +37,6 @@ export function RightRail({
   return (
     <PostComposerHost
       fallbackFocusRef={fallbackFocusRef}
-      onPostCreated={onPostCreated}
       onRequestClose={onRequestClose}
       open={open}
       profile={profile}

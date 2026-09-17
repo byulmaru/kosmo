@@ -24,8 +24,7 @@ const router = {
 type RightRailProps = {
   mode?: string;
   onExpand?: () => void;
-  onPostCreated?: (post: { id: string }) => void;
-  onRequestClose?: () => void;
+  onRequestClose?: (reason?: 'created' | 'dismiss') => void;
   open?: boolean;
 };
 let rightRailProps: RightRailProps | undefined;
@@ -254,8 +253,7 @@ describe('UniversalShell screen fallback focus target', () => {
 
     assert.equal(rightRailProps?.mode, 'mobile');
     assert.equal(rightRailProps?.open, true);
-    rightRailProps?.onPostCreated?.({ id: 'post-1' });
-    rightRailProps?.onRequestClose?.();
+    rightRailProps?.onRequestClose?.('created');
 
     assert.equal(router.back.mock.callCount(), 0);
     assert.equal(router.replace.mock.callCount(), 1);

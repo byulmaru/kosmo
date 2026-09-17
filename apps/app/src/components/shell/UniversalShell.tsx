@@ -114,7 +114,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
-  const composerPostCreatedRef = useRef(false);
   const composerTriggerFocusRef = useRef<HTMLElement | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -229,34 +228,28 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     if (web && typeof document !== 'undefined') {
       composerTriggerFocusRef.current = document.activeElement as HTMLElement | null;
     }
-    composerPostCreatedRef.current = false;
     setComposerOpen(true);
     setDrawerOpen(false);
     setSwitcherOpen(false);
   }, [profile, router, web]);
 
-  const closeComposer = useCallback(() => {
-    const postCreated = composerPostCreatedRef.current;
-    composerPostCreatedRef.current = false;
-    setComposerOpen(false);
-    if (routeComposerOpen) {
-      if (!postCreated && router.canGoBack()) {
-        router.back();
-      } else {
+  const closeComposer = useCallback(
+    (reason: 'created' | 'dismiss' = 'dismiss') => {
+      setComposerOpen(false);
+      if (routeComposerOpen) {
+        if (reason === 'dismiss' && router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/home');
+        }
+        return;
+      }
+      if (reason === 'created' && composerMode === 'mobile') {
         router.replace('/home');
       }
-      return;
-    }
-    if (postCreated && composerMode === 'mobile') {
-      router.replace('/home');
-    }
-  }, [composerMode, routeComposerOpen, router]);
-
-  const handleComposerPostCreated = useCallback(() => {
-    if (composerMode === 'mobile' || routeComposerOpen) {
-      composerPostCreatedRef.current = true;
-    }
-  }, [composerMode, routeComposerOpen]);
+    },
+    [composerMode, routeComposerOpen, router],
+  );
 
   const swipeToOpenDrawer = useMemo(
     () =>
@@ -462,7 +455,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           {profile ? (
             <RightRail
               fallbackFocusRef={screenFallbackRef as unknown as RefObject<HTMLElement | null>}
-              onPostCreated={handleComposerPostCreated}
               onRequestClose={closeComposer}
               open={composerVisible}
               profile={profile}

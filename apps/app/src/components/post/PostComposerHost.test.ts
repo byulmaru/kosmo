@@ -16,6 +16,7 @@ let composerProps:
       onBodyChange: (body: string) => void;
       onPostCreated?: (post: PostComposerCreatedPost) => void;
       onSubmittingChange?: (submitting: boolean) => void;
+      registerNativeBackHandler?: (handler: (() => void) | null) => void;
     }
   | undefined;
 let renderer: ReactTestRenderer | null = null;
@@ -175,14 +176,13 @@ describe('PostComposerHost', () => {
     }
   });
 
-  it('작성 성공을 먼저 알린 뒤 열린 surface를 닫는다', async () => {
+  it('작성 성공 reason으로 열린 surface를 닫는다', async () => {
     const events: string[] = [];
     await act(async () => {
       renderer = create(
         createElement(PostComposerHost, {
           mode: 'mobile',
-          onPostCreated: () => events.push('created'),
-          onRequestClose: () => events.push('close'),
+          onRequestClose: (reason) => events.push(reason),
           open: true,
           profile: {} as never,
         }),
@@ -190,7 +190,7 @@ describe('PostComposerHost', () => {
     });
     await act(async () => composerProps?.onPostCreated?.({ id: 'post-1' }));
 
-    assert.deepEqual(events, ['created', 'close']);
+    assert.deepEqual(events, ['created']);
   });
 
   it('Native back은 제출 중에는 닫지 않는다', async () => {
@@ -211,6 +211,29 @@ describe('PostComposerHost', () => {
     assert.ok(modal);
     await act(async () => modal.props.onRequestClose());
 
+    assert.equal(closeCount, 0);
+  });
+
+  it('미디어 편집 중 Native back은 작성 surface 대신 편집기만 닫는다', async () => {
+    platform.OS = 'android';
+    let closeCount = 0;
+    let editorBackCount = 0;
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'mobile',
+          onRequestClose: () => closeCount++,
+          open: true,
+          profile: {} as never,
+        }),
+      );
+    });
+    await act(async () => composerProps?.registerNativeBackHandler?.(() => editorBackCount++));
+    const modal = renderer?.root.findByType('Modal' as ElementType);
+    assert.ok(modal);
+    await act(async () => modal.props.onRequestClose());
+
+    assert.equal(editorBackCount, 1);
     assert.equal(closeCount, 0);
   });
 });
