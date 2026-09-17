@@ -108,7 +108,7 @@ before(async () => {
   ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
   await db
     .insert(NotificationRollouts)
-    .values({ key: 'QUOTE_NOTIFICATION', activatedAt: Temporal.Now.instant() })
+    .values({ key: 'QUOTE_NOTIFICATION', activatedAt: Temporal.Now.instant(), enabled: true })
     .onConflictDoNothing();
 });
 

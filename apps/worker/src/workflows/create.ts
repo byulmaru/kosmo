@@ -1,4 +1,4 @@
-import { proxyActivities } from '@temporalio/workflow';
+import { patched, proxyActivities } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
@@ -21,7 +21,9 @@ export async function postCreateEffectsWorkflow({
 }: PostCreateEffectsInput): Promise<void> {
   await settleEffects([
     createReplyNotificationActivity(postId),
-    createQuoteNotificationActivity(postId),
+    ...(patched('post-create-effects-quote-notification-v1')
+      ? [createQuoteNotificationActivity(postId)]
+      : []),
     ...match(origin)
       .with('LOCAL', () => [sendLocalPostCreateActivity(postId)])
       .with('ACTIVITYPUB', () => [])
