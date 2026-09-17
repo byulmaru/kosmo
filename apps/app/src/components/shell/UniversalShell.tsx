@@ -433,7 +433,9 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         ) : null}
       </View>
 
-      {composerMountedRef.current && (profile !== null || showRightRail) ? (
+      {composerMountedRef.current &&
+      (pathname !== '/compose' || composerOpen) &&
+      (profile !== null || showRightRail) ? (
         <View
           style={[
             styles.rightRail,
