@@ -210,13 +210,6 @@
 - **AND** 지원 build·release·rollback은 source full SHA·build run·image digest별 OpenPanel 비의존 근거로 확인한다
 - **AND** production SHA release를 재빌드로 처리하거나 변수 삭제를 과거 image 변경·OpenPanel 비활성화 증거로 대체하지 않는다
 
-#### Scenario: 정리 결과를 통합 검증에 인계한다
-
-- **WHEN** 설정 제거와 지원 경로의 비의존 검증을 마쳤다
-- **THEN** 제거 전후 목록, 적용 환경, 검증 결과, 문서의 잔여 참조와 남은 production 확인 사항을 실제 값 없이 PROD-795에 인계한다
-- **AND** PROD-795의 Done 상태로 인계·통합 증거를 생략하지 않고 PROD-575가 사용할 cleanup 근거를 식별한다
-- **AND** 이 결과만으로 PROD-741 Replay acceptance나 PROD-575 production acceptance·archive를 완료 처리하지 않는다
-
 ### Requirement: Native no-op 경계
 
 **Authority / Provenance:** `docs/design/breakpoints.md`, `PROD-819`, `PROD-537` — Android·iOS는 공용 analytics interface를 계속 제공하되 이번 Web slice의 PostHog 호출을 명시적 no-op으로 처리해야 한다(MUST). Native build graph와 bundle은 `posthog-js` 또는 `posthog-react-native` runtime을 포함하지 않아야 하며(MUST), 이 결과를 Native 분석 지원 완료 또는 영구 비지원 결정으로 해석하지 않아야 한다(MUST).

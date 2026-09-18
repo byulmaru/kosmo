@@ -158,7 +158,7 @@
 - Decision Outcome: 위 2026-08-31 cleanup decision을 대체한다. PROD-819·820 결과가 같은 지원 release line에 포함되고 모든 지원 canonical build·SHA release·rollback 및 지원되는 canonical rebuild의 OpenPanel 비의존을 확인한 뒤 남은 전용 설정만 제거한다. 이미 제거된 참조는 선행 SHA·현재 확인 결과로 기록한다. 현재 채널 설정·SHA digest 승격·prod 수집 중단을 보존한다.
 - Alternatives Considered: 과거 analytics build-time 주입 복구, production 재빌드, 새 runtime config 도입은 승인된 최신 계약과 맞지 않는다. 이슈 Done·green CI만으로 삭제하거나 image 삭제·지원 정책 변경으로 gate를 충족시키는 방식도 승인 범위에 없다.
 - Consequences: PROD-839는 같은 공유 change의 cleanup·검증 증거만 소유한다. PROD-891·833의 운영 검증·archive 책임을 가져오거나 새 blocker 관계를 추가하지 않는다. 과거 image는 변수 삭제로 바뀌지 않으므로 source SHA·build run·digest와 실제 배포 증거를 구분한다.
-- Confirmation / Follow-up: 격리된 가짜 key·host의 활성화·누락 no-op과 실제 prod 무전송을 구분한다. 값 없는 전후 목록·미확인 범위·문서 잔여 참조를 PROD-795에 인계하고 PROD-575의 최종 acceptance 입력으로 식별한다. PROD-741 Replay acceptance와 PROD-575 production acceptance·archive는 별도로 남긴다.
+- Confirmation / Follow-up: 격리된 가짜 key·host의 활성화·누락 no-op과 실제 prod 무전송을 구분한다.
 
 ## Remaining Decisions
 

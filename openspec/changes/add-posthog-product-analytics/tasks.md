@@ -163,7 +163,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 - [x] 5.2 GitHub production release workflow가 같은 repository variables를 Docker build에 주입하고 OpenPanel 전환 순서를 유지한다.
 - [x] 5.3 가짜 공개 설정 production-equivalent build와 image inspection으로 공개 설정·credential 경계를 검증한다.
 
-## 9. PROD-839 OpenPanel 운영 설정 정리
+## 9. PROD-839 OpenPanel 운영 설정 정리 (PR Ready·merge 비차단 follow-up)
 
 **Authority / Provenance:** [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839), PROD-891의 채널 설정, PROD-833과 `docs/operations/production-release.md`의 SHA 이미지 승격·rollback 계약.
 
@@ -171,7 +171,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 
 **Guardrail:** 지원 대상의 비의존을 확인하기 전에는 설정을 제거하지 않으며, 미확인 범위를 부재로 처리하거나 실제 값·credential·사용자 데이터를 기록하지 않는다. 현재 채널 설정·SHA 승격·prod 수집 중단과 다른 provider 설정을 보존한다.
 
-**Progress (2026-09-18):** `af50250ef`에서 source 주입이 이미 제거됐고 repository·5개 environment의 names-only inventory를 완료했다. Repository scope의 `EXPO_PUBLIC_OPENPANEL_CLIENT_ID`는 남아 있으며 지원 artifact별 비의존, 삭제 후 증거, 실행 검증과 PROD-795 인계는 Pending이다.
+**Progress (2026-09-18):** `af50250ef`에서 source 주입이 이미 제거됐고 repository·5개 environment의 names-only inventory를 완료했다. Repository scope의 `EXPO_PUBLIC_OPENPANEL_CLIENT_ID`는 남아 있으며 지원 artifact별 비의존, 삭제 후 증거, 실행 검증과 PROD-795 인계는 post-merge operational/delivery follow-up으로 Pending이다. 명시된 pre-merge acceptance가 아니므로 이 Pending 상태만으로 PR Ready·승인·merge를 막지 않는다.
 
 - [ ] 9.1 같은 지원 release line과 지원 canonical build·SHA release·rollback 및 지원되는 canonical rebuild의 source SHA·build run·digest별 OpenPanel 비의존을 확인하고 설정 범위·미확인 항목을 목록화한다.
 - [ ] 9.2 이미 제거된 주입의 선행 SHA·현재 상태를 기록하고, gate 충족 후 남은 source 참조만 정리한다. 현재 채널 설정·SHA 승격·prod 수집 중단을 보존한다.
