@@ -104,6 +104,7 @@ type Story = StoryObj<typeof meta>;
 
 export const PresentationContract: Story = {
   play: async ({ args, canvasElement }) => {
+    args.onActivate.mockClear();
     const canvas = within(canvasElement);
     await expect(canvas.getByTestId('quote-notification-post')).toBeVisible();
     await expect(canvas.getByTestId('quote-notification-kind')).toBeVisible();
@@ -122,19 +123,28 @@ export const PresentationContract: Story = {
     await expect(canvas.getByText('알림에서 확인할 인용글 본문입니다.')).toBeVisible();
     await expect(canvas.getByText('인용된 원문 미리보기입니다.')).toBeVisible();
     await expect(canvas.getByRole('toolbar', { name: '액션 바' })).toBeVisible();
-    await expect(canvas.getByTestId('notification-post-author')).toHaveAttribute(
-      'href',
-      '/@quote-author',
+    const author = canvas.getByTestId('notification-post-author');
+    await expect(author).toHaveAttribute('href', '/@quote-author');
+    const timestampLink = canvasElement.querySelector(
+      'a[href="/@quote-author/notification-quote-post"]',
     );
+    await expect(timestampLink).not.toBeNull();
+    const timestamp = within(timestampLink as HTMLElement).getByText('5분 전');
     await expect(canvas.getByRole('link', { name: '원문 게시글 보기' })).toHaveAttribute(
       'href',
       '/@source-author/notification-quote-source',
     );
     await expect(canvas.getByText('회원님의 게시글을 인용했습니다').closest('a')).toBeNull();
 
-    await userEvent.click(canvas.getByText('인용된 원문 미리보기입니다.'));
-    await expect(args.onActivate).not.toHaveBeenCalled();
-    await userEvent.click(canvas.getByText('알림에서 확인할 인용글 본문입니다.'));
+    await userEvent.click(author);
     await expect(args.onActivate).toHaveBeenCalledOnce();
+    await userEvent.click(timestamp);
+    await expect(args.onActivate).toHaveBeenCalledTimes(2);
+    await userEvent.click(canvas.getByText('인용된 원문 미리보기입니다.'));
+    await expect(args.onActivate).toHaveBeenCalledTimes(2);
+    await userEvent.click(canvas.getByRole('button', { name: /더 보기/ }));
+    await expect(args.onActivate).toHaveBeenCalledTimes(2);
+    await userEvent.click(canvas.getByText('알림에서 확인할 인용글 본문입니다.'));
+    await expect(args.onActivate).toHaveBeenCalledTimes(3);
   },
 };
