@@ -1,10 +1,20 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { PostComposer } from '@/components/post/PostComposer';
+import { PostComposerHost } from '@/components/post/PostComposerHost';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
+import type { RefObject } from 'react';
+import type { PostComposerHostCloseReason } from '@/components/post/PostComposerHost';
 import type { RightRail_profile$key } from './__generated__/RightRail_profile.graphql';
+
+type RightRailProps = {
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
+  onRequestClose: (reason: PostComposerHostCloseReason) => void;
+  open?: boolean;
+  profile: RightRail_profile$key;
+  triggerFocusRef?: RefObject<HTMLElement | null>;
+} & ({ mode: 'rail'; onExpand: () => void } | { mode: 'mobile' | 'overlay'; onExpand?: never });
 
 const RightRailFragment = graphql`
   fragment RightRail_profile on Profile {
@@ -12,9 +22,26 @@ const RightRailFragment = graphql`
   }
 `;
 
-export function RightRail({ profile: profileKey }: { profile: RightRail_profile$key }) {
+export function RightRail({
+  fallbackFocusRef,
+  mode,
+  onExpand,
+  onRequestClose,
+  open = true,
+  profile: profileKey,
+  triggerFocusRef,
+}: RightRailProps) {
   const profile = useFragment(RightRailFragment, profileKey);
-  return <PostComposer profile={profile} />;
+  return (
+    <PostComposerHost
+      fallbackFocusRef={fallbackFocusRef}
+      onRequestClose={onRequestClose}
+      open={open}
+      profile={profile}
+      triggerFocusRef={triggerFocusRef}
+      {...(mode === 'rail' ? { mode, onExpand } : { mode })}
+    />
+  );
 }
 
 export function RightRailFooter() {
