@@ -22,6 +22,16 @@ allowBuilds:
   protobufjs: false
   unrs-resolver: true
 minimumReleaseAgeExclude:
+  # User-approved PROD-792/793 stable migration exception: release age only.
+  # Remove these exact entries after 2026-10-07T18:14:17.553Z (all eight mature).
+  - '@fedify/fedify@2.4.0'
+  - '@fedify/interaction-controls@2.4.0'
+  - '@fedify/postgres@2.4.0'
+  - '@fedify/uri-template@2.4.0'
+  - '@fedify/vocab@2.4.0'
+  - '@fedify/vocab-runtime@2.4.0'
+  - '@fedify/vocab-tools@2.4.0'
+  - '@fedify/webfinger@2.4.0'
   # fast-uri 3.1.7 fixes CVE-2026-75899 and its follow-up advisories.
   - fast-uri@3.1.7
   # Temporal 1.22.0 clears GHSA-4w2j-m93h-cj5j from the bundled Rust lockfile.
@@ -55,6 +65,9 @@ overrides:
   # xcode@3.0.1 requires uuid ^7 but only uses the CommonJS v4 API; uuid 11.1.1
   # preserves that API while resolving GHSA-w5hq-g745-h8pq.
   'xcode@3.0.1>uuid': 11.1.1
+  # Fedify's dev snapshot publishes prerelease ranges that otherwise let pnpm
+  # select the older PR snapshot for this transitive package.
+  '@fedify/vocab-runtime': 2.4.0-dev.1922
   react-native-reanimated: 4.3.1
   react-native-worklets: 0.8.3
 # TODO(PROD-916): Remove this patch, its override, and patch file after a compatible upstream update.

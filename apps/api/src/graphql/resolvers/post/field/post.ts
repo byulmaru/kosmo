@@ -1,3 +1,6 @@
+import { ActivityPubPostQuotes, db } from '@kosmo/core/db';
+import { ActivityPubQuoteStatus } from '@kosmo/core/enums';
+import { eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
 import { reactionCountLoader } from '../loader/reaction-count';
@@ -29,7 +32,21 @@ builder.objectFields(Post, (t) => ({
   repostSource: t.field({
     type: Post,
     nullable: true,
-    resolve: (post) => post.repostSourceId,
+    resolve: async (post) => {
+      if (!post.repostSourceId) {
+        return null;
+      }
+      const quote = await db
+        .select({ status: ActivityPubPostQuotes.status })
+        .from(ActivityPubPostQuotes)
+        .where(eq(ActivityPubPostQuotes.postId, post.id))
+        .limit(1)
+        .then((rows) => rows[0]);
+      if (quote && quote.status !== ActivityPubQuoteStatus.APPROVED) {
+        return null;
+      }
+      return post.repostSourceId;
+    },
   }),
   repostCount: t.int({
     resolve: async (post, _, ctx) => (await repostCountLoader(ctx).load(post.id))?.count ?? 0,
