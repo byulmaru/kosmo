@@ -100,6 +100,11 @@ Source=Local, State=Ready이고 Media의 Upload Account가 행동을 요청한 A
 Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조할 수 있다. State=Uploading인 Media는
 사용할 수 없다. Tombstone Post에는 다른 상태 전이를 적용하지 않는다.
 
+새 Post Composer는 `createPost` 요청에 선택적인 Author Profile ID를 전달할 수 있다. ID를 전달하면 요청
+Account의 Account-Profile Membership과 Profile visibility, `Member` 이상 Role을 확인한 Profile이 Post Author가
+되며, Session의 active Profile은 바꾸지 않는다. ID를 생략하면 기존처럼 Session의 active Profile을 사용한다.
+현재 UI 범위에서는 Reply와 Quote 요청에 이 Composer 전용 선택을 전달하지 않으며 기존 Author Profile 계약을 유지한다.
+
 Reply·Quote·Repost 작성은 각 입력 Parent·Source Post의 Author Profile과 행동 주체 Profile 사이에 Profile Block이
 없어야 한다. 이 상호작용 조건은 Post Visibility·Post Eligibility와 별도로 양방향 적용한다.
 

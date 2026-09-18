@@ -107,6 +107,7 @@ input CreatePostInput {
   bodyText: String!
   contentWarning: String
   media: [CreatePostMediaInput!]
+  profileId: ID
   replyParentId: ID
   repostSourceId: ID
   sensitiveMedia: Boolean
@@ -272,7 +273,7 @@ type Mutation {
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
-  issueMediaUploadUrl: IssueMediaUploadUrlPayload!
+  issueMediaUploadUrl(profileId: ID): IssueMediaUploadUrlPayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   muteProfile(input: MuteProfileInput!): MuteProfilePayload!
   registerProfileMigrationSource(input: RegisterProfileMigrationSourceInput!): RegisterProfileMigrationSourcePayload!
