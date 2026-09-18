@@ -28,6 +28,8 @@ const [
   import('./activities'),
 ]);
 const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
+let worker: Worker | undefined;
+let workerRun: Promise<void> | undefined;
 
 const truncateDatabase = () =>
   pg.unsafe(
@@ -64,10 +66,19 @@ const createFixture = async () => {
 };
 
 after(async () => {
-  await truncateDatabase();
-  await temporalClient.connection.close();
-  await pg.end();
-  await environment.teardown();
+  try {
+    if (worker?.getState() === 'RUNNING') {
+      worker.shutdown();
+    }
+    if (workerRun !== undefined) {
+      await workerRun;
+    }
+  } finally {
+    await truncateDatabase();
+    await temporalClient.connection.close();
+    await pg.end();
+    await environment.teardown();
+  }
 });
 
 test(
@@ -88,7 +99,7 @@ test(
     const transitionStarted = Promise.withResolvers<void>();
     const transitionReleased = Promise.withResolvers<void>();
     let holdFirstTransition = true;
-    const worker = await Worker.create({
+    worker = await Worker.create({
       activities: {
         ...activities,
         executeProfileBlockTransitionActivity: async (
@@ -107,34 +118,33 @@ test(
       taskQueue: 'kosmo',
       workflowsPath,
     });
+    workerRun = worker.run();
 
-    await worker.runUntil(async () => {
-      try {
-        const first = runBlock(input);
-        await transitionStarted.promise;
-        const existing = runBlock(input);
-        transitionReleased.resolve();
-        const [firstResult, existingResult] = await Promise.all([first, existing]);
-        assert.equal(firstResult.created, true);
-        assert.deepEqual(existingResult, firstResult);
-        const rows = await db
-          .select()
-          .from(ProfileBlocks)
-          .where(
-            and(
-              eq(ProfileBlocks.ownerProfileId, input.ownerProfileId),
-              eq(ProfileBlocks.targetProfileId, input.targetProfileId),
-            ),
-          );
-        assert.deepEqual(
-          rows.map(({ id }) => id),
-          [firstResult.profileBlockId],
+    try {
+      const first = runBlock(input);
+      await transitionStarted.promise;
+      const existing = runBlock(input);
+      transitionReleased.resolve();
+      const [firstResult, existingResult] = await Promise.all([first, existing]);
+      assert.equal(firstResult.created, true);
+      assert.deepEqual(existingResult, firstResult);
+      const rows = await db
+        .select()
+        .from(ProfileBlocks)
+        .where(
+          and(
+            eq(ProfileBlocks.ownerProfileId, input.ownerProfileId),
+            eq(ProfileBlocks.targetProfileId, input.targetProfileId),
+          ),
         );
-        const duplicate = await runBlock(input);
-        assert.deepEqual(duplicate, { ...firstResult, created: false });
-      } finally {
-        transitionReleased.resolve();
-      }
-    });
+      assert.deepEqual(
+        rows.map(({ id }) => id),
+        [firstResult.profileBlockId],
+      );
+      const duplicate = await runBlock(input);
+      assert.deepEqual(duplicate, { ...firstResult, created: false });
+    } finally {
+      transitionReleased.resolve();
+    }
   },
 );
