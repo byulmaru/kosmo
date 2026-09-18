@@ -290,9 +290,11 @@ type Mutation {
   issueMediaUploadUrl(input: IssueMediaUploadUrlInput): IssueMediaUploadUrlPayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   muteProfile(input: MuteProfileInput!): MuteProfilePayload!
+  pinProfilePost(input: PinProfilePostInput!): PinProfilePostPayload!
   registerProfileMigrationSource(input: RegisterProfileMigrationSourceInput!): RegisterProfileMigrationSourcePayload!
   registerPushInstallation(input: RegisterPushInstallationInput!): RegisterPushInstallationPayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
+  replaceCurrentProfilePin(input: ReplaceCurrentProfilePinInput!): ReplaceCurrentProfilePinPayload!
   repostPost(input: RepostPostInput!): RepostPostPayload!
   revokeCurrentSession: RevokeCurrentSessionPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
@@ -301,6 +303,7 @@ type Mutation {
   unblockProfile(input: UnblockProfileInput!): UnblockProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   unmuteProfile(input: UnmuteProfileInput!): UnmuteProfilePayload!
+  unpinProfilePost(input: UnpinProfilePostInput!): UnpinProfilePostPayload!
   unregisterPushInstallation(input: UnregisterPushInstallationInput!): UnregisterPushInstallationPayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
   updatePushInstallation(input: UpdatePushInstallationInput!): UpdatePushInstallationPayload!
@@ -339,6 +342,16 @@ type PageInfo {
   hasNextPage: Boolean!
   hasPreviousPage: Boolean!
   startCursor: String
+}
+
+input PinProfilePostInput {
+  postId: ID!
+  profileId: ID!
+}
+
+type PinProfilePostPayload {
+  changed: Boolean!
+  profile: Profile!
 }
 
 type Post implements Node {
@@ -414,6 +427,7 @@ type Profile implements Node {
   migrationSource: Profile
   notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
+  pinnedPosts(after: String, before: String, first: Int, last: Int): PostConnection!
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   private: ProfilePrivate
   profileBlocks(after: String, before: String, first: Int, last: Int): ProfileBlockConnection
@@ -613,6 +627,17 @@ type RejectProfileFollowRequestPayload {
   profileFollowRequestId: ID!
 }
 
+input ReplaceCurrentProfilePinInput {
+  expectedCurrentPostId: ID!
+  newPostId: ID!
+  profileId: ID!
+}
+
+type ReplaceCurrentProfilePinPayload {
+  changed: Boolean!
+  profile: Profile!
+}
+
 type ReplyNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
@@ -703,6 +728,16 @@ input UnmuteProfileInput {
 type UnmuteProfilePayload {
   profileMuteId: ID
   targetProfile: Profile
+}
+
+input UnpinProfilePostInput {
+  postId: ID!
+  profileId: ID!
+}
+
+type UnpinProfilePostPayload {
+  changed: Boolean!
+  profile: Profile!
 }
 
 input UnregisterPushInstallationInput {
