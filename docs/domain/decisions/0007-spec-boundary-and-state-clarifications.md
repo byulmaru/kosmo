@@ -30,10 +30,12 @@ Follow Request 상태와 Notification 처리 표시에 관한 결정은
 - Notification은 Read State와 Notification Type을 가진다.
 - Follow Request Notification 표시는 원본 Follow Request State에서 파생하며 별도 처리 상태를 복제하지 않는다.
 - Pending Follow Request 취소는 대응하는 Follow Request Notification을 제거한다.
-- Follow Request 또는 Follow Relationship이 제거되면 이를 직접 원인으로 가진 Notification도 제거한다.
+- Follow Request 또는 Follow Relationship이 제거되면 이를 직접 원인으로 가진 Notification도 제거한다. Profile Block
+  transaction은 새 Profile Block 관계를 저장하는 경우에만 이 cleanup을 같은 transaction에서 수행하며, 이미 관계가 있으면
+  duplicate 관찰과 Active Block 표면 정책만 적용한다. commit 뒤 별도 effect의 성공·실패는 Profile Block 관계 성공을 바꾸지 않는다.
 - Post Notification Mute, Profile Mute/Block, 개인 Domain Block에 걸린 새 Notification은 만들지 않는다.
-- 기존 Notification은 이후 Mute나 Instance 상태가 바뀌어도 삭제하거나 Read State를 바꾸지 않는다.
-  Profile Block은 함께 제거되는 Follow 객체를 직접 원인으로 가진 Notification만 제거한다.
+- 기존 Notification은 이후 Mute나 Instance 상태가 바뀌어도 삭제하거나 Read State를 바꾸지 않는다. Profile Block은
+  transaction에서 함께 제거하는 Follow 객체를 직접 원인으로 가진 Notification만 제거한다.
 - 물리 색인 유지/삭제, 원격 delivery 실패, 재시도, 동기화 순서는 구현/연합 스펙으로 분리한다.
 
 ## 문서 반영

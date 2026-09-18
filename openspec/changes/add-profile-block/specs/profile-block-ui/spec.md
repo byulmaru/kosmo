@@ -40,7 +40,7 @@
 - **THEN** 시스템은 canonical 공용 확인창에 차단 해제 제목·설명과 `취소`·Danger `차단 해제` action을 표시한다
 - **AND** 확인창에서 해제를 확정하기 전에는 해제 mutation을 실행하지 않는다
 - **WHEN** Owner가 확인창의 `차단 해제`를 확정한다
-- **THEN** 시스템은 해당 Profile Block 해제 mutation을 실행한다
+- **THEN** 시스템은 해당 Target의 정확한 Profile Block ID를 사용해 해제 mutation을 실행한다
 - **AND** 성공한 Target은 현재 Block 목록에서 제거되고 다른 목록 항목의 상태는 바꾸지 않는다
 
 #### Scenario: 차단 해제 확인을 취소하거나 요청에 실패한다

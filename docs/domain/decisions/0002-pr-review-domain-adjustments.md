@@ -42,8 +42,10 @@ Accepted
 - Post thread 알림 억제는 [Post Notification Mute](../objects/post-notification-mute.md)가 소유한다.
 - Profile 대상 Mute와 Block은 각각 [Profile Mute](../objects/profile-mute.md),
   [Profile Block](../objects/profile-block.md)이 소유한다.
-- 기존 Notification은 이후 Mute가 생겨도 삭제하거나 Read State를 바꾸지 않는다. Profile Block은 함께
-  제거되는 Follow Request/Relationship을 직접 원인으로 가진 Notification만 제거한다.
+- 기존 Notification은 이후 Mute가 생겨도 삭제하거나 Read State를 바꾸지 않는다. Profile Block transaction은 새 Profile Block 관계를
+  저장하는 경우에만 함께 제거하는 Follow Request/Relationship을 직접 원인으로 가진 Notification을 같은 transaction에서 제거하며,
+  이미 관계가 있으면 duplicate 관찰과 Active Block 표면 정책만 적용하고 새 cleanup을 소유하지 않는다. commit 뒤 별도 effect의
+  성공·실패는 관계 성공을 바꾸지 않는다.
 - Domain Block과 Profile Domain Block 대상 콘텐츠는 적용 대상 viewer에게 없는 것처럼 취급한다.
 - 신고 제출, 신고 묶음, 신고 처리, Labeler, stackable policy, 커뮤니티 관리는 현재 범위에서 제외한다.
 

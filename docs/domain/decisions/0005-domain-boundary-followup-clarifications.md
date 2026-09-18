@@ -28,8 +28,9 @@ Post Content revision의 Media 소유권과 게시 후 편집에 관한 결정�
 - avatar/header의 현재 Media 참조는 Profile이 소유한다.
 - Follow Request는 Follow Relationship과 별도 객체다.
 - Profile Mute, Profile Block, Word Mute Rule, Hashtag Mute Rule, Profile Domain Block은 별도 객체다.
-- Mute/Instance 상태가 바뀌어도 기존 Notification의 존재와 Read State는 바꾸지 않는다. Profile Block은
-  함께 제거되는 Follow 객체를 직접 원인으로 가진 Notification만 제거한다.
+- Mute/Instance 상태가 바뀌어도 기존 Notification의 존재와 Read State는 바꾸지 않는다. Profile Block transaction은 새 관계를
+  저장하는 경우에만 함께 제거하는 Follow 객체를 직접 원인으로 가진 Notification을 같은 transaction에서 제거한다. 이미 관계가
+  있거나 이후 겹치는 관계는 Active Block 정책으로 처리하며 duplicate 관찰이나 Unblock의 보상 cleanup으로 확장하지 않는다.
 - Pending Follow Request 취소는 대응하는 Follow Request Notification도 제거한다.
 - Follow Approval Policy 변경은 기존 Pending Follow Request를 바꾸지 않는다. Open Policy에서 Follow
   Relationship을 만들 때 같은 조합의 Pending Request가 있으면 해당 Request와 Notification을 제거한다.
