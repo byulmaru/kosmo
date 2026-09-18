@@ -15,9 +15,10 @@ export {
   deleteRepostNotification,
 } from './notification';
 export { isNotificationSuppressed } from './notification-policy';
-export { createPost, deletePost, repostPost } from './post';
 export type { AppliedPostQuoteConsent, ApplyPostQuoteConsentInput } from './post-quote-consent';
 export { applyPostQuoteConsent } from './post-quote-consent';
+export type { CreatePostTransactionResult } from './post';
+export { createPost, createPostInTransaction, deletePost, repostPost } from './post';
 export { disableProfile } from './profile';
 export { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';
 export { followProfile, unfollowProfile } from './profile-follow';
