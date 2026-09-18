@@ -143,13 +143,19 @@
 
 ### Requirement: Quote Notification GraphQL과 지정 읽음
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`의 관계·권한·지정 읽음·Quote Notification; PROD-926의 GraphQL 포함 범위와 PROD-953 분리 책임. 구체 field 선택은 기존 Notification 공개 계약을 따르는 구현 선택이다. API는 Quote를 `Notification`과 `Node`를 구현하는 `QuoteNotification`으로 제공해야 한다(MUST). 공통 `id`, `createdAt`, nullable `readAt`, Quote 자체인 non-null `post: Post!`, Quote Author인 non-null `profile: Profile!`을 제공해야 한다(MUST). 기존 membership·pagination·unread·지정 읽음 계약을 재사용하고 raw kind·source ID·판단 기록을 노출해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/notification.md`의 관계·권한·지정 읽음·Quote Notification; PROD-926의 GraphQL 포함 범위와 PROD-953 분리 책임. 구체 field 선택은 기존 Notification 공개 계약을 따르는 구현 선택이다. API는 Quote를 `Notification`과 `Node`를 구현하는 `QuoteNotification`으로 제공해야 한다(MUST). 공통 `id`, `createdAt`, nullable `readAt`, 현재 Post 조회 권한을 재검증하는 nullable `post: Post`, Quote Author인 non-null `profile: Profile!`을 제공해야 한다(MUST). 기존 Reaction/Repost/Reply의 `post`도 concrete Notification inline fragment 간 field conflict를 피하기 위해 nullable GraphQL shape으로 정렬해야 한다(MUST). 기존 membership·pagination·unread·지정 읽음 계약을 재사용하고 raw kind·source ID·판단 기록을 노출해서는 안 된다(MUST NOT).
 
 #### Scenario: concrete object와 Node identity
 
 - **WHEN** 권한이 있는 요청이 현재 visible인 Quote 알림을 조회한다
 - **THEN** Quote의 Post와 Author Profile 및 `QuoteNotification` concrete global ID를 반환한다
 - **AND** Node loader는 typename·row kind·membership·가용성을 모두 검사하고 불일치 시 다른 Type으로 fallback하지 않고 null을 반환한다
+
+#### Scenario: Post viewer 권한 재검증
+
+- **WHEN** Recipient Profile 기준으로 알림은 조회 가능하지만 현재 요청의 selected Profile이 Quote Post를 조회할 수 없다
+- **THEN** `QuoteNotification`은 반환하되 `post`는 null을 반환한다
+- **AND** Quote Post row를 Recipient 기준으로 직접 반환해 일반 Post loader의 조회 정책을 우회하지 않는다
 
 #### Scenario: 목록과 unread
 

@@ -59,9 +59,9 @@
 - Authority / Provenance: `docs/domain/objects/notification.md`의 Quote 관계·지정 읽음·권한; PROD-926의 GraphQL 범위, PROD-953의 API 소비 책임. `memory/graphql/identity.md`는 concrete ID·SDL 정렬의 구현 제약이다.
 - Status: Active
 - Context / Problem: Source를 반환하는 Repost object를 재사용하면 Quote 자체를 가리켜야 하는 계약이 바뀐다.
-- Decision Outcome: `QuoteNotification implements Notification & Node`에 기존 공통 필드와 `post: Post!`, `profile: Profile!`을 제공한다. post는 Quote 자체, profile은 Quote Author다. 기존 root field·read input/payload·cursor 형식을 재사용한다.
+- Decision Outcome: `QuoteNotification implements Notification & Node`에 기존 공통 필드와 nullable `post: Post`, `profile: Profile!`을 제공한다. post는 Quote 자체의 ID를 기존 Post loader에 전달해 현재 요청 viewer의 조회 정책을 재검증하고, profile은 Quote Author다. Recipient 기준 Notification visibility가 통과해도 selected Profile이 Quote를 볼 수 없으면 post는 null이다. 기존 Reaction/Repost/Reply의 `post`도 concrete Notification inline fragment 간 field conflict를 피하기 위해 nullable GraphQL shape으로 정렬하되 기존 source projection semantics는 유지한다. 기존 root field·read input/payload·cursor 형식을 재사용한다.
 - Alternatives Considered: Repost Type 재사용, generic type/raw kind 노출, 별도 Quote 상세 route는 원인·타입 계약에 맞지 않는다.
-- Consequences: concrete Node ID·kind·membership·visibility를 함께 검증한다. runtime schema와 SDL을 동기화하고 UI fragment·표시는 PROD-953이 소유한다.
+- Consequences: concrete Node ID·kind·membership·visibility를 함께 검증한다. Notification source row를 직접 Post object로 반환해 Post loader를 우회하지 않는다. runtime schema와 SDL을 동기화하고 UI fragment·표시는 PROD-953이 소유한다.
 - Confirmation / Follow-up: 실제 GraphQL operation으로 Node mismatch·권한·pagination·unread·read·오류 원자성을 검증한다.
 
 ### D6. 숨김과 물리 정리를 분리하고 공통 예외 유지

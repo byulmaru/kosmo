@@ -6,7 +6,9 @@ import { getNotificationSource, QuoteNotification } from '../ref';
 builder.objectFields(QuoteNotification, (t) => ({
   post: t.field({
     type: Post,
-    resolve: async (notification, _, ctx) => (await getNotificationSource(notification, ctx)).post!,
+    nullable: true,
+    resolve: async (notification, _, ctx) =>
+      (await getNotificationSource(notification, ctx)).post?.id ?? null,
   }),
   profile: t.field({
     type: Profile,
