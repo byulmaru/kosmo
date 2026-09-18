@@ -116,26 +116,21 @@ describe('getShellLayout', () => {
     assert.equal(isTimelineRoute('/search'), false);
   });
 
-  it('enables Native drawer edge swipe only on approved main and Profile Home routes', () => {
-    const profileHomeSegments = ['(tabs)', '(profile)', '[profileHandle]'];
-    const postDetailSegments = ['(tabs)', '(post)', '[profileHandle]', '[postId]'];
-    const profileFollowersSegments = ['(tabs)', '(profile)', '[profileHandle]', 'followers'];
-    const profileFollowingSegments = ['(tabs)', '(profile)', '[profileHandle]', 'following'];
-
+  it('enables Native drawer edge swipe only on approved top-level routes', () => {
     for (const pathname of ['/home', '/local', '/search', '/notifications']) {
-      assert.equal(isNativeDrawerSwipeEnabled(pathname, []), true, pathname);
+      assert.equal(isNativeDrawerSwipeEnabled(pathname), true, pathname);
     }
-    assert.equal(isNativeDrawerSwipeEnabled('/@writer', profileHomeSegments), true);
 
-    for (const [pathname, routeSegments] of [
-      ['/@writer/post-id', postDetailSegments],
-      ['/@writer/followers', profileFollowersSegments],
-      ['/@writer/following', profileFollowingSegments],
-      ['/settings', []],
-      ['/settings/info', []],
-      ['/bookmarks', []],
-    ] as const) {
-      assert.equal(isNativeDrawerSwipeEnabled(pathname, routeSegments), false, pathname);
+    for (const pathname of [
+      '/@writer',
+      '/@writer/post-id',
+      '/@writer/followers',
+      '/@writer/following',
+      '/settings',
+      '/settings/info',
+      '/bookmarks',
+    ]) {
+      assert.equal(isNativeDrawerSwipeEnabled(pathname), false, pathname);
     }
   });
 

@@ -14,7 +14,6 @@ let renderer: ReactTestRenderer | null = null;
 let hardwareBackPressListener: (() => boolean) | null = null;
 let layout: 'compact' | 'full' | 'mobile' = 'mobile';
 let pathname = '/home';
-let routeSegments: readonly string[] = [];
 let sessionProfile: Record<string, unknown> | null = null;
 let showRightRail = false;
 const router = {
@@ -58,7 +57,7 @@ mockModule('expo-router', {
   Slot: () => null,
   usePathname: () => pathname,
   useRouter: () => router,
-  useSegments: () => routeSegments,
+  useSegments: () => [],
 });
 
 mockModule('react-native', {
@@ -186,7 +185,6 @@ afterEach(async () => {
   platform.OS = 'web';
   layout = 'mobile';
   pathname = '/home';
-  routeSegments = [];
   sessionProfile = null;
   showRightRail = false;
   bottomTabBarProps = undefined;
@@ -243,63 +241,69 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.equal(drawer.props.open, false);
   });
 
-  it('Native detail route는 edge swipe만 비활성화하고 명시적 메뉴로 drawer를 연다', async () => {
+  it('Native detail과 Profile Home route는 edge swipe만 비활성화하고 명시적 메뉴로 drawer를 연다', async () => {
     for (const nativePlatform of ['android', 'ios'] as const) {
-      platform.OS = nativePlatform;
-      pathname = '/@writer/post-id';
-      routeSegments = ['(tabs)', '(post)', '[profileHandle]', '[postId]'];
+      for (const disabledPathname of ['/@writer/post-id', '/@writer']) {
+        platform.OS = nativePlatform;
+        pathname = disabledPathname;
+        await renderShell();
+
+        const drawer = renderer?.root.findByType('Drawer' as ElementType);
+        const menu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
+        assert.ok(drawer);
+        assert.ok(menu);
+        assert.deepEqual(menu.props.accessibilityState, { expanded: false });
+        assert.equal(drawer.props.open, false);
+        assert.equal(drawer.props.swipeEnabled, false);
+
+        await act(async () => menu.props.onPress());
+        assert.equal(drawer.props.open, true);
+        assert.ok(hardwareBackPressListener);
+
+        await act(async () => renderer?.unmount());
+        renderer = null;
+        hardwareBackPressListener = null;
+      }
+    }
+  });
+
+  it('Native drawer는 route가 gesture-disabled가 되어도 열린 상태를 유지한다', async () => {
+    for (const disabledPathname of ['/@writer/post-id', '/@writer']) {
+      platform.OS = 'android';
+      pathname = '/home';
       await renderShell();
 
-      const drawer = renderer?.root.findByType('Drawer' as ElementType);
-      const menu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
-      assert.ok(drawer);
-      assert.ok(menu);
-      assert.deepEqual(menu.props.accessibilityState, { expanded: false });
-      assert.equal(drawer.props.open, false);
-      assert.equal(drawer.props.swipeEnabled, false);
+      const drawerType = 'Drawer' as ElementType;
+      const initialMenu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
+      assert.ok(initialMenu);
+      await act(async () => initialMenu.props.onPress());
+      assert.equal(renderer?.root.findByType(drawerType).props.open, true);
 
-      await act(async () => menu.props.onPress());
-      assert.equal(drawer.props.open, true);
+      pathname = disabledPathname;
+      await act(async () => {
+        renderer?.update(createElement(UniversalShell));
+      });
+
+      const backStackDrawer = renderer?.root.findByType(drawerType);
+      const backStackMenu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
+      assert.ok(backStackDrawer);
+      assert.ok(backStackMenu);
+      assert.equal(backStackDrawer.props.open, true);
+      assert.equal(backStackDrawer.props.swipeEnabled, false);
+      assert.deepEqual(backStackMenu.props.accessibilityState, { expanded: true });
       assert.ok(hardwareBackPressListener);
+
+      let handled = false;
+      await act(async () => {
+        handled = hardwareBackPressListener?.() ?? false;
+      });
+      assert.equal(handled, true);
+      assert.equal(backStackDrawer.props.open, false);
 
       await act(async () => renderer?.unmount());
       renderer = null;
       hardwareBackPressListener = null;
     }
-  });
-
-  it('Native drawer는 route가 gesture-disabled가 되어도 열린 상태를 유지한다', async () => {
-    platform.OS = 'android';
-    pathname = '/home';
-    await renderShell();
-
-    const drawerType = 'Drawer' as ElementType;
-    const initialMenu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
-    assert.ok(initialMenu);
-    await act(async () => initialMenu.props.onPress());
-    assert.equal(renderer?.root.findByType(drawerType).props.open, true);
-
-    pathname = '/@writer/post-id';
-    routeSegments = ['(tabs)', '(post)', '[profileHandle]', '[postId]'];
-    await act(async () => {
-      renderer?.update(createElement(UniversalShell));
-    });
-
-    const backStackDrawer = renderer?.root.findByType(drawerType);
-    const backStackMenu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
-    assert.ok(backStackDrawer);
-    assert.ok(backStackMenu);
-    assert.equal(backStackDrawer.props.open, true);
-    assert.equal(backStackDrawer.props.swipeEnabled, false);
-    assert.deepEqual(backStackMenu.props.accessibilityState, { expanded: true });
-    assert.ok(hardwareBackPressListener);
-
-    let handled = false;
-    await act(async () => {
-      handled = hardwareBackPressListener?.() ?? false;
-    });
-    assert.equal(handled, true);
-    assert.equal(backStackDrawer.props.open, false);
   });
 
   it('Web은 기존 Modal drawer surface를 유지한다', async () => {
