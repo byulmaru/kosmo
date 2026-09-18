@@ -74,6 +74,11 @@ Profile이 달라도 참조할 수 있다.
 
 Local 업로드 완료는 Media identity, Profile과 Upload Account를 바꾸지 않는다. 저장 참조를 알고 있다는 사실만으로
 Media 완료, 조회 또는 Post 연결 권한을 부여하지 않는다.
+
+새 Post Composer는 Local 업로드 발급 요청에 선택적인 Profile ID를 전달할 수 있다. ID를 전달하면 요청 Account의
+Account-Profile Membership과 Profile visibility, `Member` 이상 Role을 확인한 Profile을 Media Profile로 사용하며,
+Session의 active Profile은 바꾸지 않는다. ID를 생략하면 기존처럼 Session의 active Profile을 사용한다.
+
 이미 Ready인 Local Media의 반복 완료 요청은 외부 저장 확인이나 persistence write를 반복하지 않고 같은 Media
 identity와 최초 Ready At을 반환한다.
 

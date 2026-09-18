@@ -14,7 +14,7 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { ne } from 'drizzle-orm';
+import { eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { TestContext } from 'node:test';
 import type * as CoreDb from '@kosmo/core/db';
@@ -126,6 +126,42 @@ describe('Local Media upload GraphQL 경계', () => {
       state: 'UPLOADING',
     });
     assert.equal(await requestMediaNode(firstMediaId, other.token), null);
+  });
+
+  test('명시한 같은 계정 Profile로 업로드를 발급하고 active session Profile은 유지한다', async (t) => {
+    const issuedStorage = mockUploadIssuance(t);
+    const auth = await createAuthenticatedSession();
+    const composerProfile = await createProfile(`composer-${crypto.randomUUID()}`);
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: composerProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+
+    const issuedResult = await requestIssueMediaUploadUrl(
+      auth.token,
+      encodeGlobalId('Profile', composerProfile.id),
+    );
+    assertNoGraphQLErrors(issuedResult);
+    const stored = await db
+      .select()
+      .from(Media)
+      .then((rows) => rows.find((media) => media.profileId === composerProfile.id));
+    assert.ok(stored);
+    assert.equal(stored.accountId, auth.account.id);
+    assert.equal(
+      (await db.select().from(Sessions).where(eq(Sessions.token, auth.token)).then(firstOrThrow))
+        .activeProfileId,
+      auth.profile.id,
+    );
+
+    const other = await createAuthenticatedSession();
+    const denied = await requestIssueMediaUploadUrl(
+      auth.token,
+      encodeGlobalId('Profile', other.profile.id),
+    );
+    assert.equal(denied.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.equal(issuedStorage.length, 1);
   });
 
   test(
@@ -499,12 +535,12 @@ type CompleteMediaUploadData = {
   };
 };
 
-const requestIssueMediaUploadUrl = (token?: string) =>
+const requestIssueMediaUploadUrl = (token?: string, profileId?: string) =>
   requestGraphQL<IssueMediaUploadUrlData>(
-    `mutation IssueMediaUploadUrl {
-      issueMediaUploadUrl { media { id state } uploadUrl expiresAt }
+    `mutation IssueMediaUploadUrl($profileId: ID) {
+      issueMediaUploadUrl(profileId: $profileId) { media { id state } uploadUrl expiresAt }
     }`,
-    {},
+    { profileId },
     token,
   );
 

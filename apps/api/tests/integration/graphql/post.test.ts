@@ -145,6 +145,55 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(content.document.summary, '통합 검증 경고');
   });
 
+  test('명시한 같은 계정 Profile로 작성하고 active session Profile은 유지한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const composerProfile = await createProfile('composer-author');
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: composerProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+
+    const result = await requestGraphQL<{
+      createPost: { post: { id: string; profile: { id: string } } };
+    }>(
+      `mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) { post { id profile { id } } }
+      }`,
+      {
+        input: {
+          bodyText: '명시 Profile 작성',
+          profileId: encodeGlobalId('Profile', composerProfile.id),
+          visibility: PostVisibility.FOLLOWERS,
+        },
+      },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.equal(
+      result.data?.createPost.post.profile.id,
+      encodeGlobalId('Profile', composerProfile.id),
+    );
+    assert.equal(
+      (await db.select().from(Sessions).where(eq(Sessions.token, auth.token)).then(firstOrThrow))
+        .activeProfileId,
+      auth.profile.id,
+    );
+
+    const other = await createAuthenticatedSession();
+    const denied = await requestCreatePost(
+      {
+        bodyText: '교차 계정 작성',
+        profileId: encodeGlobalId('Profile', other.profile.id),
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    assert.equal(denied.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.equal((await db.select().from(Posts)).length, 1);
+  });
+
   test('repostSourceId는 기존 CreatePost mutation으로 자체 Content와 Source를 함께 저장하고 다시 조회한다', async () => {
     const auth = await createAuthenticatedSession();
     const sourceAuthor = await createProfile('quote-source-author');
@@ -1534,6 +1583,7 @@ const requestCreatePost = (
     bodyText: string;
     contentWarning?: string | null;
     media?: Array<{ altText: string | null; mediaId: string }>;
+    profileId?: string;
     replyParentId?: string;
     sensitiveMedia?: boolean;
     visibility: PostVisibility;
