@@ -1,6 +1,5 @@
 import baseMeta, {
   ComposerBeforeUnloadContract as composerBeforeUnloadContract,
-  ComposerRailMediaBackFocusContract as composerRailMediaBackFocusContract,
   LinkedSourceQuote as linkedSourceQuote,
   LinkedSourceQuoteInteraction as linkedSourceQuoteInteraction,
 } from './Posts.stories';
@@ -17,7 +16,6 @@ type Story = StoryObj<typeof meta>;
 
 export const LinkedSourceQuoteInteraction: Story = linkedSourceQuoteInteraction;
 export const ComposerBeforeUnloadContract: Story = composerBeforeUnloadContract;
-export const ComposerRailMediaBackFocusContract: Story = composerRailMediaBackFocusContract;
 
 export const LinkedSourceQuoteDark: Story = {
   ...linkedSourceQuote,
