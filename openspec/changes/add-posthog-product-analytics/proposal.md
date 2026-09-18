@@ -1,8 +1,6 @@
-## 현재 세션 범위
+## 현재 범위
 
-2026-09-18 요청에 따라 PROD-839의 OpenPanel cleanup 작업 메모를 최신 `main`인 `c1de28da0d2ce01a36ae4b72e670d6993b9fc0c8`에 맞춘다. 이 문서와 기존 shared artifact는 `memory/issue-openspec-workflow.md`에 따른 선택적 세션 하네스다. 현재 사용자 지시와 canonical·Linear가 요구사항의 근거이며, 아래 과거 승인·소유권 기록을 별도의 Spec 승인 관문이나 구현 prerequisite로 사용하지 않는다. 실제 설정 삭제 전 지원 경로 확인과 production 운영 승인 경계는 유지한다.
-
-이번에는 기존 cleanup 범위에 맞춰 조사·검증 계획을 정리한다. Native OTA 구현·발행·실기기 acceptance, PostHog 재활성화와 실제 배포는 포함하지 않는다. PROD-795의 cleanup 통합과 PROD-741·PROD-575의 실제 acceptance 책임은 유지하며, shared artifact 전체 완료·archive를 PROD-839 자체 결과의 완료 조건으로 추가하지 않는다.
+이 change는 canonical·Linear 요구사항을 실행하기 위한 선택적 세션 하네스다. PROD-839는 기존 OpenPanel cleanup과 그 검증만 소유하며 Native OTA, PostHog 재활성화·배포, PROD-795의 통합, PROD-741·575의 acceptance는 포함하지 않는다.
 
 ## Why
 

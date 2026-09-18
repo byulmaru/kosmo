@@ -1,7 +1,3 @@
-<!-- 이 파일은 현재 canonical·Linear 요구사항을 대조하기 위한 세션 하네스다.
-기존 MUST·scenario 표기는 새 authority나 별도 Spec 승인 gate를 만들지 않는다.
-PROD-839 범위 밖의 기존 requirement는 참조 맥락이며 자동으로 구현 범위를 넓히지 않는다. -->
-
 ## ADDED Requirements
 
 ### Requirement: 공개 설정 기반 PostHog Web 초기화
@@ -173,22 +169,15 @@ PROD-839 범위 밖의 기존 requirement는 참조 맥락이며 자동으로 �
 - **WHEN** capture, identify, reset 또는 endpoint 전송이 실패한다
 - **THEN** 원래 사용자 흐름은 analytics와 무관하게 그대로 완료한다
 
-### Requirement: 채널별 공개 설정과 SHA 이미지 승격
+### Requirement: 채널별 공개 설정 경계
 
-**Authority / Provenance:** [Linear `PROD-891`](https://linear.app/byulmaru/issue/PROD-891)의 공개 채널 설정, [Linear `PROD-833`](https://linear.app/byulmaru/issue/PROD-833)의 canonical build·SHA tag digest 승격, `docs/operations/production-release.md`의 Release 계약, [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 2026-09-08 Issue Gate 정렬 승인 — 공개 PostHog 설정은 코드의 채널 설정표에서 선택해야 하며(MUST), Web BFF는 `ENVIRONMENT`를 검증한 `/channel.js`를 bundle 실행 전에 제공해야 한다(MUST). 현재 경로에 analytics build-time ARG·ENV·GitHub Variables·Vault 주입을 복구하지 않아야 한다(MUST NOT). Web image의 Production 배포는 성공한 canonical build의 target full SHA를 확인하고 SHA tag digest를 preflight에서 조회·고정한 뒤 승인 후 재빌드·재조회 없이 승격해야 한다(MUST). 조회·관리 credential은 공개 설정표·Web asset·image에 포함하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** [Linear `PROD-891`](https://linear.app/byulmaru/issue/PROD-891)의 공개 채널 설정, [Linear `PROD-833`](https://linear.app/byulmaru/issue/PROD-833)과 `docs/operations/production-release.md`의 SHA 이미지 승격 계약 — 공개 PostHog 설정은 코드의 채널 설정표에서 선택해야 하며(MUST), analytics build-time 주입을 복구하지 않아야 한다(MUST NOT). Web image release는 PROD-833의 검증된 SHA digest 승격 경계를 보존해야 한다(MUST).
 
 #### Scenario: canonical Web image를 build한다
 
 - **WHEN** 현재 채널 설정표를 포함한 canonical Web image를 build한다
 - **THEN** OpenPanel·PostHog build argument 없이 build가 성공한다
 - **AND** 조회·관리 credential은 공개 설정표·Web asset·image에 포함되지 않는다
-
-#### Scenario: 수동 SHA release를 실행한다
-
-- **WHEN** production preflight가 target full SHA의 성공한 canonical build run과 SHA tag digest를 확인한다
-- **THEN** Web image는 승인 전에 고정한 SHA와 digest를 승인 후 재빌드·재-push·digest 재조회 없이 승격한다
-- **AND** workflow definition ref와 target SHA를 구분하고, Dev와 Production이 서로 다른 시점에 조회한 digest가 같다고 추정하지 않는다
-- **AND** 이 Web image 경계를 같은 workflow의 Native OTA source checkout·export 금지로 확대하지 않는다
 
 #### Scenario: 현재 prod 수집 중단 상태를 보존한다
 
@@ -206,38 +195,20 @@ PROD-839 범위 밖의 기존 requirement는 참조 맥락이며 자동으로 �
 - **THEN** 남은 OpenPanel 전용 설정을 제거하지 않고 확인이 필요한 범위를 기록한다
 - **AND** 이슈 Done, PR merge·Stack 순서, green CI와 일부 조회 결과로 gate를 대신하지 않는다
 
-#### Scenario: 저장소 주입이 이미 제거되어 있다
-
-- **WHEN** 현재 Dockerfile·canonical Docker Build·dev·production workflow에 OpenPanel ARG·ENV·build arg·development empty no-op이 없다
-- **THEN** 선행 변경 SHA와 현재 확인 결과를 기록하고 중복 제거를 구현하지 않는다
-- **AND** 저장소의 부재를 외부 설정 cleanup 완료로 해석하지 않는다
-
 #### Scenario: 정리 조건을 모두 충족했다
 
 - **WHEN** 같은 지원 release line과 모든 지원 대상의 OpenPanel 비의존 근거를 확보했다
 - **THEN** 확인된 범위에 실제로 남은 OpenPanel 전용 참조와 외부 설정을 제거한다
 - **AND** PostHog·기타 provider 설정과 수집 중단 상태를 보존한다
-
-#### Scenario: 활성 배포 설정과 외부 variable을 점검한다
-
-- **WHEN** GitHub repository·사용 중인 environment와 활성 runtime configuration source·운영 설정 저장소를 확인한다
-- **THEN** 대상 식별자, 설정 이름, 적용 환경·범위, 존재 여부와 확인 결과를 제거 전후에 기록한다
-- **AND** `EXPO_PUBLIC_OPENPANEL_CLIENT_ID`를 포함한 확인 대상에서 접근 불가·미확인을 설정 부재로 기록하지 않는다
-- **AND** 실제 설정값, credential과 사용자 데이터는 OpenSpec, Linear, PR, 로그 또는 handoff에 남지 않는다
+- **AND** repository·사용 environment·활성 설정 저장소의 이름·환경·범위·존재 여부를 제거 전후에 기록하되 실제 값·credential·사용자 데이터는 남기지 않는다
 
 #### Scenario: 격리된 공개 설정으로 Web 경로를 검증한다
 
 - **WHEN** OpenPanel 설정 없이 production-equivalent Web 경로를 검증한다
 - **THEN** 격리된 가짜 PostHog key·host 네 조합으로 모두 존재할 때의 활성화와 하나 이상 누락 시 no-op을 확인한다
 - **AND** 현재 실제 prod 채널의 무전송과 local·development 기본 비활성화를 별도로 확인한다
-- **AND** 승인된 standard metadata, `ph-mask ph-no-capture`와 공개 identity API 계약을 유지한다
-
-#### Scenario: 지원 release와 rollback 경로를 검증한다
-
-- **WHEN** 정리 시점의 지원 canonical build·수동 SHA release·rollback 및 지원되는 canonical rebuild를 검증한다
-- **THEN** source full SHA·canonical build run·image digest별로 제거한 변수와 활성 OpenPanel runtime에 의존하지 않는 근거를 확인한다
+- **AND** 지원 build·release·rollback은 source full SHA·build run·image digest별 OpenPanel 비의존 근거로 확인한다
 - **AND** production SHA release를 재빌드로 처리하거나 변수 삭제를 과거 image 변경·OpenPanel 비활성화 증거로 대체하지 않는다
-- **AND** 과거 image 삭제나 지원 release 정책 변경으로 gate를 임의로 충족시키지 않는다
 
 #### Scenario: 정리 결과를 통합 검증에 인계한다
 

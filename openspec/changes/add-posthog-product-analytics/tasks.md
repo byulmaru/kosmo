@@ -1,9 +1,3 @@
-## 현재 세션의 진행 기준
-
-이 목록은 `memory/issue-openspec-workflow.md`에 따른 수정 가능한 작업 메모다. PROD-839의 현재 결과와 검증에 필요한 그룹 9만 이어간다. 다른 그룹의 checkbox·과거 archive 순서는 참조 이력이며, 모든 checkbox나 shared change archive를 이번 작업의 readiness 조건으로 삼지 않는다. 필요 없어진 구현은 `Not needed`로 기록할 수 있지만, 아직 필요한 release·rollback 비의존과 외부 설정 검증은 Pending으로 남긴다.
-
-2026-09-18 스펙 갱신과 최신 main 반영은 완료했고, 그룹 9의 실제 설정 점검·제거·실행 검증은 아직 수행하지 않았다. 기존의 최종 Spec 승인 대기는 최신 정책에 따라 제거하며, 실제 운영 조건·남은 검증·담당자만 인계한다.
-
 **Shared spec ownership**
 
 - `PROD-820` / PR #685가 이 승인된 shared spec 전체를 소유한다. `PROD-819` / PR #653는 그 계약을 소비하는 Web runtime 구현을 소유한다.
@@ -171,33 +165,13 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 
 ## 9. PROD-839 OpenPanel 운영 설정 정리
 
-**Authority / Provenance**
+**Authority / Provenance:** [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839), PROD-891의 채널 설정, PROD-833과 `docs/operations/production-release.md`의 SHA 이미지 승격·rollback 계약.
 
-- [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 포함·제외 범위, 선행·후행 관계, 완료 조건과 2026-09-08 Issue Gate 정렬 승인
-- `PROD-819`의 runtime 전환, `PROD-820`의 Cloud·전환기 공개 설정 결과
-- [PROD-891](https://linear.app/byulmaru/issue/PROD-891)의 현재 채널 설정, [PROD-833](https://linear.app/byulmaru/issue/PROD-833)과 `docs/operations/production-release.md`의 SHA 이미지 승격·rollback 계약
-- `PROD-795`의 cleanup 인계, `PROD-741`의 Replay acceptance와 `PROD-575`의 최종 acceptance·archive 책임
+**Deliverable:** 지원 build·release·rollback 경로가 OpenPanel 없이 동작하고 불필요한 외부 설정이 남지 않는 상태와 값 없는 전후 증거를 PROD-795에 인계한다.
 
-**Deliverable**
+**Guardrail:** 지원 대상의 비의존을 확인하기 전에는 설정을 제거하지 않으며, 미확인 범위를 부재로 처리하거나 실제 값·credential·사용자 데이터를 기록하지 않는다. 현재 채널 설정·SHA 승격·prod 수집 중단과 다른 provider 설정을 보존한다.
 
-지원 canonical build·수동 SHA release·rollback 경로가 OpenPanel 없이 동작하고, 저장소와 외부 활성 설정에 불필요한 OpenPanel 전용 항목이 남지 않는다. 이미 제거된 참조의 근거와 실제 제거 전후 결과를 값 없이 PROD-795에 인계하고 PROD-575가 사용할 cleanup 근거를 식별한다.
-
-**Guardrails**
-
-- PROD-819·820 결과가 같은 지원 release line에 포함되고 지원 대상의 OpenPanel 비의존을 확인하기 전에는 남은 설정을 제거하지 않는다. 이슈 Done·PR merge·순서·green CI로 gate를 대신하지 않는다.
-- GitHub repository·사용 중인 environment variables, 활성 runtime configuration source·운영 설정 저장소를 확인한다. 접근할 수 없거나 확인하지 못한 범위를 설정 부재로 처리하지 않는다.
-- 현재 채널 설정·`/channel.js`·canonical build·SHA tag digest 승격·prod 수집 중단을 보존한다. 사라진 ARG·ENV·build arg·development empty no-op은 복구하거나 중복 제거하지 않는다.
-- 가짜 설정의 PostHog 활성화·누락 no-op 검증을 실제 prod 수집과 구분한다. 기존 metadata·identity·privacy·Replay 계약과 local·development 기본 비활성화를 유지한다.
-- PostHog·기타 provider 설정 삭제, 재활성화, 실제 production 배포, image 삭제와 지원 release 정책 변경은 제외한다. Runtime 제거는 PROD-819, Cloud 최초 구성은 PROD-820, 운영 문서 통합은 PROD-795, Replay acceptance는 PROD-741, production acceptance·archive는 PROD-575가 소유한다.
-- 실제 설정값·credential·사용자 데이터를 OpenSpec·Linear·PR·로그·handoff에 남기지 않는다. PROD-891·833의 운영 검증 책임이나 새 blocker를 가져오지 않는다.
-
-**Verification**
-
-- 같은 지원 release line 반영과 지원 source full SHA·canonical build run·image digest별 OpenPanel 비의존 근거를 기록한다. 지원되는 canonical rebuild가 있으면 포함하고 실제 배포·미검증 상태를 구분한다.
-- Dockerfile·canonical Docker Build·dev·production workflow에서 이미 제거된 참조는 선행 SHA와 현재 상태로 증명한다. Source 조사를 실행 검증으로 대신하지 않고 workflow 문법에는 표준 validator를 사용한다.
-- `EXPO_PUBLIC_OPENPANEL_CLIENT_ID`를 포함한 설정 이름·환경·범위·존재 여부를 제거 전후 비교한다. 미확인 범위가 남으면 cleanup 완료로 처리하지 않는다.
-- 격리된 가짜 key·host 네 조합, 현재 prod 채널 무전송, production-equivalent Web export·image inspection과 지원 release·rollback 비의존을 검증한다. Web image는 성공한 canonical build 확인 후 preflight 고정 digest를 재빌드·재조회 없이 승격하는 경로로 확인한다. 같은 workflow의 Native OTA export·publish는 별도 경로로 식별하고 그 검증 책임을 가져오지 않는다.
-- PROD-795에 전달할 목록·환경·검증 결과·문서 잔여 참조·남은 production 확인 사항에서 실제 값을 제외한다. PROD-795의 Done 상태를 인계·통합 완료 증거로 사용하지 않는다.
+**Progress (2026-09-18):** `af50250ef`에서 source 주입이 이미 제거됐고 repository·5개 environment의 names-only inventory를 완료했다. Repository scope의 `EXPO_PUBLIC_OPENPANEL_CLIENT_ID`는 남아 있으며 지원 artifact별 비의존, 삭제 후 증거, 실행 검증과 PROD-795 인계는 Pending이다.
 
 - [ ] 9.1 같은 지원 release line과 지원 canonical build·SHA release·rollback 및 지원되는 canonical rebuild의 source SHA·build run·digest별 OpenPanel 비의존을 확인하고 설정 범위·미확인 항목을 목록화한다.
 - [ ] 9.2 이미 제거된 주입의 선행 SHA·현재 상태를 기록하고, gate 충족 후 남은 source 참조만 정리한다. 현재 채널 설정·SHA 승격·prod 수집 중단을 보존한다.

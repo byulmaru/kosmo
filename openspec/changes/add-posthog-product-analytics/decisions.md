@@ -1,9 +1,3 @@
-## 현재 세션 메모
-
-`memory/issue-openspec-workflow.md`의 최신 정책에 따라 이 파일은 별도의 ADR·승인 ledger·영구 구현 authority가 아니다. 기존 날짜·Decision Class·Status는 과거 판단을 읽기 위한 기록으로 보존한다. 적용할 요구사항은 현재 사용자 지시와 canonical·Linear에서 독립 확인하며, 새 Spec 승인 snapshot을 요구하지 않는다.
-
-2026-09-18에는 최신 main의 Web 이미지 승격과 Native OTA export를 구분했다. Web 이미지 재빌드 금지를 전체 production workflow의 source checkout·Native export 금지로 확대하지 않는다. 이는 기존 PROD-839·PROD-833 범위와 PROD-335 OTA 경계를 보존하기 위한 설명이며 새 제품 결정이나 OTA 검증 책임을 추가하지 않는다.
-
 ## Context
 
 이 기록은 기존 Linear `PROD-819`, `PROD-820`, `PROD-839`, `PROD-795`, `PROD-741`, `PROD-575` 결정과 2026-09-02 `PROD-819`·`PROD-820`의 검색·캠페인 metadata 비마스킹 결정을 반영하며, `docs/design/breakpoints.md`의 Web/Native 경계를 따른다. 2026-08-31 마스킹 승인은 Superseded 상태로 보존한다. 제품 동작의 authority는 Linear 결정이며, 리뷰 의견은 구현 보완의 계기일 뿐 제품 계약의 근거가 아니다.
@@ -154,18 +148,6 @@
 - Consequences: Native analytics는 계속 비활성이고 PROD-537가 별도로 소유한다.
 - Confirmation / Follow-up: Native export/dependency graph에서 PostHog runtime 부재를 확인한다.
 
-### 전환 완료 후 OpenPanel 운영 설정을 정리한다
-
-- Decision Date: 2026-08-31
-- Decision Class: Derived Contract
-- Authority / Provenance: [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 정리 범위·선행 관계·완료 조건, `PROD-819`의 runtime 전환, `PROD-820`의 전환기 주입 유지, `PROD-795`의 정리 결과 인계 계약
-- Status: Superseded
-- Context / Problem: PROD-820이 먼저 배포될 수 있어 전환 기간에는 OpenPanel 주입을 유지해야 한다. PROD-819 runtime이 PostHog로 바뀌었다는 사실만으로 지원 rebuild·rollback 경로까지 전환됐다고 볼 수는 없다.
-- Decision Outcome: PROD-819와 PROD-820이 같은 지원 release line에 병합되고 OpenPanel을 사용하는 지원 build·수동 SHA rebuild·rollback 대상이 없음을 확인한 뒤에만 저장소 build/deployment 주입과 GitHub repository·environment의 OpenPanel 전용 설정을 제거한다. 활성 배포 설정의 잔여 참조도 확인하며 대상·설정 이름·환경·결과만 기록한다.
-- Alternatives Considered: PR 순서나 CI 결과만 보고 먼저 삭제하는 방식은 지원 경로의 안전성을 입증하지 못한다. 빈 placeholder 유지나 browser runtime config·별도 enabled flag 도입은 기존 설정 정리 범위와 맞지 않는다.
-- Consequences: PROD-820의 승인된 shared spec과 PROD-819의 runtime 계약은 유지하고, PROD-839가 전환 후 정리와 그 검증 증거를 담당한다. 외부 variable 삭제는 과거 image를 변경하지 않으므로 지원 대상의 source·digest·rollback 경로를 별도로 확인한다.
-- Confirmation / Follow-up: 제거 전후 대상 목록, 적용 환경, PostHog-only build·지원 rebuild·rollback 검증 결과와 남은 production 확인 사항을 PROD-795에 인계한다. PROD-741의 Replay acceptance와 PROD-575의 production acceptance·archive는 별도로 남긴다.
-
 ### 현재 채널 설정과 SHA 이미지 승격을 보존하며 OpenPanel 설정을 정리한다
 
 - Decision Date: 2026-09-15
@@ -183,8 +165,6 @@
 - 없음.
 
 ## Superseded Decisions
-
-- 2026-08-31 OpenPanel cleanup의 build-time 주입·수동 SHA rebuild 전제는 위 2026-09-15 Derived Contract가 대체한다. 삭제 전 지원 경로 gate와 downstream owner는 유지한다.
 
 - 2026-08-25의 automatic telemetry 비활성화, app-owned route `$pageview`, URL/referrer filter, `persistence: 'memory'` 결정은 최신 Linear의 표준 SDK 동작 결정으로 대체한다.
 - 2026-08-31의 `q`·기본 click ID native masking과 referrer `q`·click ID·파생 `ph_keyword` `before_send` 보완 결정은 2026-09-02 제품 결정으로 대체한다. 표준 lifecycle·metadata와 범용 sanitizer 금지는 유지하고, `mask_personal_data_properties: false`를 명시해 해당 metadata를 원문으로 보존한다.
