@@ -11,5 +11,5 @@ test('Expo resolves the approved static app configuration', () => {
   );
   assert.equal(config.android?.adaptiveIcon?.backgroundColor, '#FEFEFE');
   assert.equal(config.web?.favicon, './public/favicon-32x32.png');
-  assert.equal(config.runtimeVersion, '0.2');
+  assert.equal(config.runtimeVersion, '0.3');
 });
