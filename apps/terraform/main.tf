@@ -8,7 +8,7 @@ locals {
   github_owner_id      = "29172280"
 
   app_identifier        = "moe.kos"
-  android_play_workflow = ".github/workflows/native-store-distribution.yml"
+  native_store_workflow = ".github/workflows/native-store-distribution.yml"
 
   terraform_apply_environment = "terraform-apply"
   terraform_roles = toset([
@@ -169,7 +169,7 @@ resource "google_iam_workload_identity_pool_provider" "android_play" {
     "assertion.event_name == 'workflow_dispatch'",
     "assertion.ref == 'refs/heads/main'",
     "assertion.environment == 'prod'",
-    "assertion.workflow_ref == '${local.github_owner}/${local.github_repository}/${local.android_play_workflow}@refs/heads/main'",
+    "assertion.workflow_ref == '${local.github_owner}/${local.github_repository}/${local.native_store_workflow}@refs/heads/main'",
   ])
 
   oidc {
@@ -184,6 +184,60 @@ resource "google_service_account_iam_member" "android_play_publisher" {
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/attribute.credential/android-play"
 
   depends_on = [google_iam_workload_identity_pool_provider.android_play]
+}
+
+resource "google_service_account" "firebase_native_config" {
+  provider = google-beta
+  project  = local.firebase_project_id
+
+  account_id      = "firebase-native-config"
+  display_name    = "Firebase native config from GitHub Actions"
+  deletion_policy = "PREVENT"
+
+  depends_on = [google_project_service.required]
+}
+
+resource "google_project_iam_member" "firebase_native_config" {
+  provider = google-beta
+  project  = local.firebase_project_id
+  role     = "roles/firebase.viewer"
+  member   = "serviceAccount:${google_service_account.firebase_native_config.email}"
+}
+
+resource "google_iam_workload_identity_pool_provider" "firebase_native_config" {
+  provider = google-beta
+  project  = local.firebase_project_id
+
+  workload_identity_pool_id          = google_iam_workload_identity_pool.github_actions.workload_identity_pool_id
+  workload_identity_pool_provider_id = "kosmo-firebase-native-config"
+  display_name                       = "Kosmo Firebase native config"
+  deletion_policy                    = "PREVENT"
+
+  attribute_mapping = {
+    "attribute.credential" = "'firebase-native-config'"
+    "google.subject"       = "assertion.sub"
+  }
+  attribute_condition = join(" && ", [
+    "assertion.repository_id == '${local.github_repository_id}'",
+    "assertion.repository_owner_id == '${local.github_owner_id}'",
+    "assertion.event_name == 'workflow_dispatch'",
+    "assertion.ref == 'refs/heads/main'",
+    "assertion.environment == 'prod'",
+    "assertion.workflow_ref == '${local.github_owner}/${local.github_repository}/${local.native_store_workflow}@refs/heads/main'",
+  ])
+
+  oidc {
+    issuer_uri = "https://token.actions.githubusercontent.com"
+  }
+}
+
+resource "google_service_account_iam_member" "firebase_native_config" {
+  provider           = google-beta
+  service_account_id = google_service_account.firebase_native_config.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/attribute.credential/firebase-native-config"
+
+  depends_on = [google_iam_workload_identity_pool_provider.firebase_native_config]
 }
 
 resource "google_service_account" "terraform" {

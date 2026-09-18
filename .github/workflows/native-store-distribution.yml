@@ -31,6 +31,11 @@ jobs:
       ANDROID_RELEASE_KEY_ALIAS: ${{ vars.ANDROID_RELEASE_KEY_ALIAS }}
       ANDROID_PLAY_RELEASE_STATUS: ${{ inputs.release_status }}
       EXPO_NO_GIT_STATUS: '1'
+      FIREBASE_NATIVE_CONFIG_ANDROID_APP_ID: ${{ vars.FIREBASE_NATIVE_CONFIG_ANDROID_APP_ID }}
+      FIREBASE_NATIVE_CONFIG_ANDROID_PACKAGE_NAME: moe.kos
+      FIREBASE_NATIVE_CONFIG_PROJECT_ID: ${{ vars.FIREBASE_NATIVE_CONFIG_PROJECT_ID }}
+      FIREBASE_NATIVE_CONFIG_SERVICE_ACCOUNT: ${{ vars.FIREBASE_NATIVE_CONFIG_SERVICE_ACCOUNT }}
+      FIREBASE_NATIVE_CONFIG_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.FIREBASE_NATIVE_CONFIG_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       KOSMO_ANDROID_AAB_PATH: ${{ github.workspace }}/apps/app/android/app/build/outputs/bundle/release/app-release.aab
@@ -138,6 +143,58 @@ jobs:
             echo "::error::ANDROID_RELEASE_KEY_ALIAS must not contain line breaks."
             exit 1
           fi
+
+      - name: Prepare Android Firebase config directory
+        id: prepare_android_firebase_config
+        shell: bash
+        run: |
+          set -euo pipefail
+          config_dir="$(mktemp -d "${RUNNER_TEMP}/kosmo-firebase-native-android-XXXXXX")"
+          chmod 700 "${config_dir}"
+          echo "config_dir=${config_dir}" >> "${GITHUB_OUTPUT}"
+
+      - name: Authenticate to Google Cloud for Android Firebase config
+        id: firebase_native_config_auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          access_token_lifetime: 900s
+          access_token_scopes: https://www.googleapis.com/auth/firebase.readonly
+          create_credentials_file: false
+          export_environment_variables: false
+          service_account: ${{ vars.FIREBASE_NATIVE_CONFIG_SERVICE_ACCOUNT }}
+          token_format: access_token
+          workload_identity_provider: ${{ vars.FIREBASE_NATIVE_CONFIG_WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Load Android Firebase config
+        env:
+          FIREBASE_NATIVE_CONFIG_ACCESS_TOKEN: ${{ steps.firebase_native_config_auth.outputs.access_token }}
+          FIREBASE_NATIVE_CONFIG_OUTPUT_DIR: ${{ steps.prepare_android_firebase_config.outputs.config_dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+
+          response_file="${FIREBASE_NATIVE_CONFIG_OUTPUT_DIR}/firebase-response.json"
+          config_file="${FIREBASE_NATIVE_CONFIG_OUTPUT_DIR}/google-services.json"
+          project_path="$(jq -rn --arg value "${FIREBASE_NATIVE_CONFIG_PROJECT_ID}" '$value | @uri')"
+          app_path="$(jq -rn --arg value "${FIREBASE_NATIVE_CONFIG_ANDROID_APP_ID}" '$value | @uri')"
+
+          curl --fail --silent --show-error \
+            --header "Accept: application/json" \
+            --header "Authorization: Bearer ${FIREBASE_NATIVE_CONFIG_ACCESS_TOKEN}" \
+            --output "${response_file}" \
+            "https://firebase.googleapis.com/v1beta1/projects/${project_path}/androidApps/${app_path}/config"
+          chmod 600 "${response_file}"
+
+          jq -er '.configFileContents' "${response_file}" | base64 --decode > "${config_file}"
+          chmod 600 "${config_file}"
+
+          jq -e \
+            --arg expected_package_name "${FIREBASE_NATIVE_CONFIG_ANDROID_PACKAGE_NAME}" \
+            'any((.client // [])[]; .client_info.android_client_info.package_name == $expected_package_name)' \
+            "${config_file}" >/dev/null
+
+          printf 'KOSMO_ANDROID_GOOGLE_SERVICES_FILE=%s\n' "${config_file}" >> "${GITHUB_ENV}"
 
       - name: Load Android signing credentials from Vault
         id: android_signing
@@ -280,6 +337,8 @@ jobs:
       - name: Remove signing and generated files
         if: always()
         shell: bash
+        env:
+          KOSMO_ANDROID_FIREBASE_CONFIG_DIR: ${{ steps.prepare_android_firebase_config.outputs.config_dir }}
         run: |
           set +e
           rm -f -- \
@@ -287,6 +346,7 @@ jobs:
             "${GOOGLE_GHA_CREDS_PATH:-}"
           rm -rf -- \
             "${KOSMO_ANDROID_SIGNING_DIR:-}" \
+            "${KOSMO_ANDROID_FIREBASE_CONFIG_DIR:-}" \
             "${GITHUB_WORKSPACE}/apps/app/android"
   ios:
     concurrency:
@@ -301,6 +361,11 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       EXPO_NO_GIT_STATUS: '1'
+      FIREBASE_NATIVE_CONFIG_IOS_APP_ID: ${{ vars.FIREBASE_NATIVE_CONFIG_IOS_APP_ID }}
+      FIREBASE_NATIVE_CONFIG_IOS_BUNDLE_ID: moe.kos
+      FIREBASE_NATIVE_CONFIG_PROJECT_ID: ${{ vars.FIREBASE_NATIVE_CONFIG_PROJECT_ID }}
+      FIREBASE_NATIVE_CONFIG_SERVICE_ACCOUNT: ${{ vars.FIREBASE_NATIVE_CONFIG_SERVICE_ACCOUNT }}
+      FIREBASE_NATIVE_CONFIG_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.FIREBASE_NATIVE_CONFIG_WORKLOAD_IDENTITY_PROVIDER }}
       KOSMO_OTA_CHANNEL: prod
       KOSMO_OTA_PLATFORM: ios
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
@@ -377,6 +442,55 @@ jobs:
           echo "KOSMO_OTA_RUNTIME_VERSION=${runtime_version}" >> "${GITHUB_ENV}"
           echo "Resolved iOS OTA runtimeVersion: ${runtime_version}"
 
+      - name: Prepare iOS Firebase config directory
+        id: prepare_ios_firebase_config
+        shell: bash
+        run: |
+          set -euo pipefail
+          config_dir="$(mktemp -d "${RUNNER_TEMP}/kosmo-firebase-native-ios-XXXXXX")"
+          chmod 700 "${config_dir}"
+          echo "config_dir=${config_dir}" >> "${GITHUB_OUTPUT}"
+
+      - name: Authenticate to Google Cloud for iOS Firebase config
+        id: firebase_native_config_auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          access_token_lifetime: 900s
+          access_token_scopes: https://www.googleapis.com/auth/firebase.readonly
+          create_credentials_file: false
+          export_environment_variables: false
+          service_account: ${{ vars.FIREBASE_NATIVE_CONFIG_SERVICE_ACCOUNT }}
+          token_format: access_token
+          workload_identity_provider: ${{ vars.FIREBASE_NATIVE_CONFIG_WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Load iOS Firebase config
+        env:
+          FIREBASE_NATIVE_CONFIG_ACCESS_TOKEN: ${{ steps.firebase_native_config_auth.outputs.access_token }}
+          FIREBASE_NATIVE_CONFIG_OUTPUT_DIR: ${{ steps.prepare_ios_firebase_config.outputs.config_dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+
+          response_file="${FIREBASE_NATIVE_CONFIG_OUTPUT_DIR}/firebase-response.json"
+          config_file="${FIREBASE_NATIVE_CONFIG_OUTPUT_DIR}/GoogleService-Info.plist"
+          project_path="$(jq -rn --arg value "${FIREBASE_NATIVE_CONFIG_PROJECT_ID}" '$value | @uri')"
+          app_path="$(jq -rn --arg value "${FIREBASE_NATIVE_CONFIG_IOS_APP_ID}" '$value | @uri')"
+
+          curl --fail --silent --show-error \
+            --header "Accept: application/json" \
+            --header "Authorization: Bearer ${FIREBASE_NATIVE_CONFIG_ACCESS_TOKEN}" \
+            --output "${response_file}" \
+            "https://firebase.googleapis.com/v1beta1/projects/${project_path}/iosApps/${app_path}/config"
+          chmod 600 "${response_file}"
+
+          jq -er '.configFileContents' "${response_file}" | base64 -D > "${config_file}"
+          chmod 600 "${config_file}"
+          bundle_id="$(plutil -extract BUNDLE_ID raw -o - "${config_file}")"
+          test "${bundle_id}" = "${FIREBASE_NATIVE_CONFIG_IOS_BUNDLE_ID}"
+
+          printf 'KOSMO_IOS_GOOGLE_SERVICES_FILE=%s\n' "${config_file}" >> "${GITHUB_ENV}"
+
       - name: Connect to Tailscale for Vault
         uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
         with:
@@ -426,3 +540,12 @@ jobs:
           CCACHE_BINARY="$(command -v ccache)"
           export CCACHE_BINARY
           bundle exec fastlane ios build_and_upload_ios
+
+      - name: Remove iOS Firebase config files
+        if: always()
+        shell: bash
+        env:
+          KOSMO_IOS_FIREBASE_CONFIG_DIR: ${{ steps.prepare_ios_firebase_config.outputs.config_dir }}
+        run: |
+          set +e
+          rm -rf -- "${KOSMO_IOS_FIREBASE_CONFIG_DIR:-}"

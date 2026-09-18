@@ -108,6 +108,22 @@ GitHub Actions에서는 새 environment를 만들지 않고 기존 `prod`를 사
 
 새 certificate/profile/API key를 준비한 뒤 해당 Vault field만 교체하고 TestFlight upload와 processing을 확인한 다음 이전 asset을 revoke한다. API key는 수정할 수 없으므로 새 App Manager Team key를 만들고 세 ID/P8 field를 함께 교체한다. 노출이 의심되면 확인을 기다리지 말고 이전 API key와 certificate를 Apple에서 revoke하고, 필요하면 `kosmo-native-store-distribution` role/policy를 검토된 Terraform 변경으로 비활성화한다.
 
+## APNs credential custody and operation
+
+APNs Auth Key는 App Store Connect API key와 별도의 운영 자산이다. Vault KV v2 logical path는 `secret/kosmo/prod/apns`이고, Vault API와 policy에서 사용하는 path는 `secret/data/kosmo/prod/apns`다. 다음 field를 운영자가 수동으로 population한다.
+
+| Field                     | 값                               |
+| ------------------------- | -------------------------------- |
+| `APNS_AUTH_KEY_P8_BASE64` | Apple APNs Auth Key `.p8` base64 |
+| `APNS_KEY_ID`             | Apple Developer APNs Key ID      |
+| `APNS_TEAM_ID`            | Apple Developer Team ID          |
+
+이 field는 `secret/kosmo/prod/ios-signing`의 `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`, `APPLE_API_KEY_P8_BASE64`와 섞지 않는다. 현재 Native Store workflow, build environment, VSO와 앱 runtime은 `secret/kosmo/prod/apns`를 읽지 않는다. APNs 값은 Terraform state/output, repository, build artifact, 일반 log 또는 client bundle에 기록하지 않는다.
+
+운영자는 Apple Developer에서 APNs Auth Key를 만든 뒤 위 Vault field를 수동으로 채우고, Firebase Console의 iOS Cloud Messaging 설정에 같은 `.p8`, Key ID와 Team ID를 수동으로 업로드한다. 이 절차는 workflow 자동화나 Vault consumer 생성으로 대체하지 않는다. Apple App ID의 Push Notifications capability, `aps-environment` entitlement와 해당 provisioning profile을 설정한 뒤, signed Android·iOS 기기에서 FCM부터 APNs를 거쳐 OS 알림이 실제로 도착하는 것을 확인해야 APNs 연동을 완료한 것으로 본다.
+
+Credential을 교체할 때는 새 key를 준비하고 Vault와 Firebase Console에 반영한 뒤 signed-device delivery를 확인할 때까지 이전 credential을 유지한다. 새 credential의 도착이 확인된 후에만 이전 key를 revoke하고 이전 값을 제거한다.
+
 ## Validation
 
 ```sh

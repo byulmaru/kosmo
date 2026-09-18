@@ -22,6 +22,14 @@ output "android_play_workload_identity_provider" {
   value = google_iam_workload_identity_pool_provider.android_play.name
 }
 
+output "firebase_native_config_service_account" {
+  value = google_service_account.firebase_native_config.email
+}
+
+output "firebase_native_config_workload_identity_provider" {
+  value = google_iam_workload_identity_pool_provider.firebase_native_config.name
+}
+
 output "terraform_gcp_service_account" {
   value = google_service_account.terraform.email
 }
