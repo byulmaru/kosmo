@@ -2,11 +2,11 @@
 
 ### Requirement: 공개 설정 기반 PostHog Web 초기화
 
-**Authority / Provenance:** `PROD-819`, `PROD-820` — Kosmo Web은 공개 PostHog project key와 Cloud US ingestion host가 모두 제공된 build에서만 PostHog client를 초기화해야 한다(MUST). 둘 중 하나라도 없으면 분석 client와 network 전송은 생성되지 않아야 하며(MUST), OpenPanel client 또는 endpoint를 함께 초기화하지 않아야 한다(MUST).
+**Authority / Provenance:** `PROD-819`, `PROD-820`, `PROD-891`의 채널별 공개 설정 계약 — Kosmo Web은 선택된 채널의 공개 PostHog project key와 Cloud US ingestion host가 모두 제공될 때만 PostHog client를 초기화해야 한다(MUST). 둘 중 하나라도 없으면 분석 client와 network 전송은 생성되지 않아야 하며(MUST), OpenPanel client 또는 endpoint를 함께 초기화하지 않아야 한다(MUST).
 
 #### Scenario: 공개 설정이 모두 존재한다
 
-- **WHEN** Web build에 공개 PostHog project key와 ingestion host가 모두 존재한다
+- **WHEN** 선택된 Web 채널에 공개 PostHog project key와 ingestion host가 모두 존재한다
 - **THEN** PostHog Web client가 한 번 초기화되고 분석 호출은 그 client를 사용한다
 
 #### Scenario: 공개 설정이 불완전하다
@@ -169,20 +169,46 @@
 - **WHEN** capture, identify, reset 또는 endpoint 전송이 실패한다
 - **THEN** 원래 사용자 흐름은 analytics와 무관하게 그대로 완료한다
 
-### Requirement: 공개 build/deployment 주입
+### Requirement: 채널별 공개 설정 경계
 
-**Authority / Provenance:** `PROD-820` — production-equivalent Web build는 같은 `Kosmo Production` project의 공개 key와 ingestion host를 Docker와 GitHub Actions 경계에서 함께 주입해야 한다(MUST). 환경별 실제 값과 credential은 repository source, Dockerfile default, image config 또는 layer history에 하드코딩하지 않아야 한다(MUST).
+**Authority / Provenance:** [Linear `PROD-891`](https://linear.app/byulmaru/issue/PROD-891)의 공개 채널 설정, [Linear `PROD-833`](https://linear.app/byulmaru/issue/PROD-833)과 `docs/operations/production-release.md`의 SHA 이미지 승격 계약 — 공개 PostHog 설정은 코드의 채널 설정표에서 선택해야 하며(MUST), analytics build-time 주입을 복구하지 않아야 한다(MUST NOT). Web image release는 PROD-833의 검증된 SHA digest 승격 경계를 보존해야 한다(MUST).
 
-#### Scenario: production-equivalent Web image를 build한다
+#### Scenario: canonical Web image를 build한다
 
-- **WHEN** 공개 PostHog key와 host를 build argument로 제공한다
-- **THEN** compiled Web asset은 두 공개 설정을 사용하고 build가 성공한다
-- **AND** client secret 또는 관리 credential은 asset과 image에 포함되지 않는다
+- **WHEN** 현재 채널 설정표를 포함한 canonical Web image를 build한다
+- **THEN** OpenPanel·PostHog build argument 없이 build가 성공한다
+- **AND** 조회·관리 credential은 공개 설정표·Web asset·image에 포함되지 않는다
 
-#### Scenario: local 또는 development build를 실행한다
+#### Scenario: 현재 prod 수집 중단 상태를 보존한다
 
-- **WHEN** 공개 key와 host가 모두 제공되지 않는다
-- **THEN** PostHog client와 analytics network 전송은 생성되지 않는다
+- **WHEN** PROD-839 cleanup을 검증한다
+- **THEN** 실제 prod 채널의 PostHog 공개 설정 누락 상태와 analytics 무전송을 유지한다
+- **AND** 격리된 가짜 공개 설정의 활성화 검증을 실제 prod 수집이나 재활성화 승인으로 해석하지 않는다
+
+### Requirement: 전환 완료 후 OpenPanel 운영 설정 정리
+
+**Authority / Provenance:** [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 포함·제외 범위, 선행·후행 관계, 완료 조건과 2026-09-08 Issue Gate 정렬 승인; `PROD-819`의 runtime 전환, `PROD-820`의 전환기 주입, `PROD-891`의 현재 채널 설정, `PROD-833`과 `docs/operations/production-release.md`의 SHA 이미지 승격, `PROD-795`의 인계 계약 — PROD-819·PROD-820 결과가 같은 지원 release line에 포함되고 지원 canonical build·수동 SHA release·rollback 대상에 OpenPanel 소비가 없음을 확인한 뒤에만 남은 OpenPanel 전용 설정을 제거해야 한다(MUST). 지원되는 canonical rebuild가 있으면 그 대상도 확인해야 한다(MUST). 근거가 부족하면 남은 설정을 제거하지 않아야 하며(MUST NOT), 이미 사라진 주입을 복구하지 않아야 한다(MUST NOT). GitHub repository·사용 중인 environment variables, 활성 runtime configuration source·운영 설정 저장소의 참조와 제거 전후 이름·범위·환경·존재 여부를 기록해야 한다(MUST). 실제 값·credential·사용자 데이터를 기록하지 않아야 한다(MUST NOT). 현재 채널 설정, SHA digest 승격, prod 수집 중단과 기존 metadata·identity·privacy·Replay 계약을 보존해야 한다(MUST). 정리 결과와 남은 production 확인 사항은 PROD-795에 인계하고 PROD-575의 최종 acceptance 입력으로 식별해야 한다(MUST).
+
+#### Scenario: 정리 조건이나 근거가 부족하다
+
+- **WHEN** 선행 결과가 같은 지원 release line에 포함되지 않았거나 OpenPanel 소비 대상 또는 미확인 지원 대상·설정 범위가 남아 있다
+- **THEN** 남은 OpenPanel 전용 설정을 제거하지 않고 확인이 필요한 범위를 기록한다
+- **AND** 이슈 Done, PR merge·Stack 순서, green CI와 일부 조회 결과로 gate를 대신하지 않는다
+
+#### Scenario: 정리 조건을 모두 충족했다
+
+- **WHEN** 같은 지원 release line과 모든 지원 대상의 OpenPanel 비의존 근거를 확보했다
+- **THEN** 확인된 범위에 실제로 남은 OpenPanel 전용 참조와 외부 설정을 제거한다
+- **AND** PostHog·기타 provider 설정과 수집 중단 상태를 보존한다
+- **AND** repository·사용 environment·활성 설정 저장소의 이름·환경·범위·존재 여부를 제거 전후에 기록하되 실제 값·credential·사용자 데이터는 남기지 않는다
+
+#### Scenario: 격리된 공개 설정으로 Web 경로를 검증한다
+
+- **WHEN** OpenPanel 설정 없이 production-equivalent Web 경로를 검증한다
+- **THEN** 격리된 가짜 PostHog key·host 네 조합으로 모두 존재할 때의 활성화와 하나 이상 누락 시 no-op을 확인한다
+- **AND** 현재 실제 prod 채널의 무전송과 local·development 기본 비활성화를 별도로 확인한다
+- **AND** 지원 build·release·rollback은 source full SHA·build run·image digest별 OpenPanel 비의존 근거로 확인한다
+- **AND** production SHA release를 재빌드로 처리하거나 변수 삭제를 과거 image 변경·OpenPanel 비활성화 증거로 대체하지 않는다
 
 ### Requirement: Native no-op 경계
 

@@ -1,6 +1,7 @@
 **Shared spec ownership**
 
 - `PROD-820` / PR #685가 이 승인된 shared spec 전체를 소유한다. `PROD-819` / PR #653는 그 계약을 소비하는 Web runtime 구현을 소유한다.
+- `PROD-839`는 선행 release 반영과 지원 build·rebuild·rollback 확인 뒤 OpenPanel build/deployment·외부 설정 cleanup과 그 증거를 소유한다.
 - 현재 metadata 수집 결정은 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정` 댓글(`59d34cd1-96b2-446f-8a8d-3a48277f285a`)을 근거로 한다. 사용자 정혜주(HJSmiley)가 2026-08-31 마스킹 승인을 대체했으며, 이 결정은 GitHub reviewer signoff나 production acceptance가 아니다.
 - `PROD-795`, `PROD-741`, `PROD-575`가 각각 개인정보·운영 통합, Replay acceptance, production acceptance와 archive를 소유한다. 이 change는 해당 결과를 대신 완료하거나 archive하지 않는다.
 
@@ -133,6 +134,8 @@ PostHog의 `defaults: '2026-05-30'` 표준 pageview·pageleave·autocapture·met
 
 ## 5. PROD-820 build/deployment 공개 설정 주입
 
+이 그룹은 완료된 전환기 구현·검증 이력이다. 현재 주입 경로의 authority는 PROD-839의 2026-09-08 정렬 승인과 PROD-891·833이다. 아래 완료 checkbox는 당시 결과를 보존하며 현재 build-time 주입을 복구하는 작업이 아니다. 최신 cleanup 검증은 그룹 9가 소유한다.
+
 **Authority / Provenance**
 
 - `PROD-820`의 Cloud/build 공개 설정 계약
@@ -159,6 +162,22 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 - [x] 5.1 Docker build args와 Web build environment에 공개 PostHog key·host를 함께 전달한다.
 - [x] 5.2 GitHub production release workflow가 같은 repository variables를 Docker build에 주입하고 OpenPanel 전환 순서를 유지한다.
 - [x] 5.3 가짜 공개 설정 production-equivalent build와 image inspection으로 공개 설정·credential 경계를 검증한다.
+
+## 9. PROD-839 OpenPanel 운영 설정 정리 (PR Ready·merge 비차단 follow-up)
+
+**Authority / Provenance:** [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839), PROD-891의 채널 설정, PROD-833과 `docs/operations/production-release.md`의 SHA 이미지 승격·rollback 계약.
+
+**Deliverable:** 지원 build·release·rollback 경로가 OpenPanel 없이 동작하고 불필요한 외부 설정이 남지 않는 상태와 값 없는 전후 증거를 PROD-795에 인계한다.
+
+**Guardrail:** 지원 대상의 비의존을 확인하기 전에는 설정을 제거하지 않으며, 미확인 범위를 부재로 처리하거나 실제 값·credential·사용자 데이터를 기록하지 않는다. 현재 채널 설정·SHA 승격·prod 수집 중단과 다른 provider 설정을 보존한다.
+
+**Progress (2026-09-18):** `af50250ef`에서 source 주입이 이미 제거됐고 repository·5개 environment의 names-only inventory를 완료했다. Repository scope의 `EXPO_PUBLIC_OPENPANEL_CLIENT_ID`는 남아 있으며 지원 artifact별 비의존, 삭제 후 증거, 실행 검증과 PROD-795 인계는 post-merge operational/delivery follow-up으로 Pending이다. 명시된 pre-merge acceptance가 아니므로 이 Pending 상태만으로 PR Ready·승인·merge를 막지 않는다.
+
+- [ ] 9.1 같은 지원 release line과 지원 canonical build·SHA release·rollback 및 지원되는 canonical rebuild의 source SHA·build run·digest별 OpenPanel 비의존을 확인하고 설정 범위·미확인 항목을 목록화한다.
+- [ ] 9.2 이미 제거된 주입의 선행 SHA·현재 상태를 기록하고, gate 충족 후 남은 source 참조만 정리한다. 현재 채널 설정·SHA 승격·prod 수집 중단을 보존한다.
+- [ ] 9.3 gate와 대상 범위를 재확인한 뒤 실제 남은 외부 OpenPanel 전용 설정을 제거하고 이름·환경·범위·존재 여부만 전후 기록에 남긴다.
+- [ ] 9.4 격리된 가짜 설정의 활성화·누락 no-op, 현재 prod 무전송, production-equivalent Web export·image inspection과 지원 release·rollback 검증으로 OpenPanel 비의존을 입증한다.
+- [ ] 9.5 제거 전후 목록·환경·검증 결과·문서 잔여 참조·남은 production 확인 사항을 실제 값 없이 PROD-795에 인계하고 PROD-575의 acceptance 입력을 식별한다.
 
 ## 6. PROD-795 개인정보·운영 통합
 
@@ -240,7 +259,7 @@ actual production에서 PostHog 표준 runtime·typed custom event·identity·Re
 **Guardrails**
 
 - 그룹 1~7의 완료와 required validation을 확인하기 전 archive하지 않는다.
-- 지원 release·수동 SHA rebuild·rollback 경로가 OpenPanel 설정에 의존하지 않는지 PROD-839 증거로 확인한다.
+- 지원 canonical build·수동 SHA release·rollback 경로가 OpenPanel 설정에 의존하지 않는지 PROD-839 증거로 확인한다.
 - production release 선택·승인·배포와 전체 public smoke는 PROD-545의 결과를 입력으로 사용하고 이 그룹에서 다시 소유하지 않는다.
 - old `add-web-openpanel-product-analytics`는 active spec을 되돌리지 않도록 `--skip-specs`로 먼저 archive한다.
 - 현재 `add-posthog-product-analytics`는 delta spec 동기화와 strict validation을 포함해 정상 archive한다.

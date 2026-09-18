@@ -2,7 +2,9 @@
 
 Kosmo의 공용 analytics API는 platform file로 Web 구현과 Native no-op을 나눈다. `AppProviders`가 Web client를 초기화하고 `AnalyticsSessionBridge`가 Session의 Account ID를 identify하거나 guest 상태에서 reset한다. 기존 제품 caller는 공용 `trackAnalytics`를 사용한다. Standard event metadata 수집과 Session Replay privacy는 각각의 수집 경계에서 관리한다.
 
-PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Cloud와 build/deployment 공개 설정을 제공한다. PROD-795는 실제 수집 surface와 개인정보 처리방침·runbook을 통합하고, PROD-741은 선행 적용된 Replay의 실제 품질을, PROD-575는 production acceptance와 archive를 소유한다.
+PROD-819는 이 경계를 PostHog Web SDK로 옮겼고, PROD-820은 PostHog Cloud와 전환기 build/deployment 공개 설정을 제공했다. 현재 공개 설정은 PROD-891의 채널 설정표·`/channel.js`, release는 PROD-833의 SHA 이미지 승격 계약을 따른다. PROD-795는 실제 수집 surface와 개인정보 처리방침·runbook을 통합하고, PROD-741은 선행 적용된 Replay의 실제 품질을, PROD-575는 production acceptance와 archive를 소유한다.
+
+PROD-839는 두 선행 변경이 같은 지원 release line에 반영된 뒤에도 남아 있는 OpenPanel build·deployment 주입과 외부 설정을 정리한다. 지원 build·수동 SHA release·rollback 대상의 OpenPanel 소비 여부와 활성 설정 범위를 먼저 확인하고, 근거가 충분할 때만 저장소와 GitHub 설정을 제거한다.
 
 승인된 shared spec 전체는 `PROD-820` / PR #685가 소유하고, `PROD-819` / PR #653는 그 계약을 소비하는 Web runtime 구현을 담당한다. PROD-795·PROD-741·PROD-575가 소유한 개인정보·운영 통합, Replay acceptance, production acceptance와 archive는 이 change가 대신 완료하거나 archive하지 않는다.
 
@@ -15,7 +17,8 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Clou
 - PostHog 공식 권장 defaults와 표준 자동 이벤트·metadata·persistence·remote config를 그대로 사용한다.
 - 앱 소유 경계를 typed custom event, 공개 SDK identity property 기반 identify/reset과 fail-open adapter로 제한한다.
 - standard event payload의 Search `q`와 click metadata를 SDK 표준 URL·referrer·session metadata로 유지하고, Replay 수집량과 사용자 Post Content 보호는 별도의 Cloud 설정과 PostHog 표준 masking marker로 통제한다.
-- 공개 key·host가 완전한 Web build에서만 초기화하고 Docker·workflow 주입 경계를 일치시킨다.
+- 선택된 채널의 공개 key·host가 모두 있을 때만 초기화한다. 현재 채널 설정·canonical build·SHA digest 승격 경계를 유지한다.
+- 지원 release·수동 SHA release·rollback 경로가 OpenPanel 없이 동작하도록 전환 후 build·deployment 설정을 정리한다.
 - PostHog Web SDK가 Android·iOS graph에 유입되지 않음을 확인한다.
 
 **Non-Goals:**
@@ -23,11 +26,14 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Clou
 - PostHog 표준 pageview·autocapture·metadata·remote config를 앱 코드로 재구현하는 것
 - 기능별 새 제품 event·dashboard, opt-out UI와 Account 분석 데이터 삭제
 - Native PostHog SDK
+- PROD-839에서 Web runtime·패키지·테스트를 다시 제거하거나 PostHog Cloud 최초 구성을 담당하는 것
 - 이번 PR만으로 개인정보 처리방침·운영 통합, replay acceptance, production acceptance 또는 OpenSpec archive를 완료하는 것
 
 ## Implementation Guidance
 
 ### Current Constraints
+
+- 현재 설정·배포 authority는 [PROD-891](https://linear.app/byulmaru/issue/PROD-891), [PROD-833](https://linear.app/byulmaru/issue/PROD-833)과 `docs/operations/production-release.md`다. PROD-839는 이 경계를 재설계하거나 Native OTA 검증을 소유하지 않는다.
 
 - 공개 key와 host 중 하나라도 없으면 SDK를 초기화하지 않아야 한다.
 - `posthog-js` value import는 `.web` platform 경계에만 있어야 한다.
@@ -38,6 +44,9 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Clou
 - Cloud project는 remote config, autocapture, performance, heatmap, console과 Replay 설정을 이미 제공한다. 앱이 이를 `advanced_disable_flags`, 전면 denylist 또는 disable option으로 막으면 Cloud 계약이 작동하지 않는다.
 - Replay Cloud의 Normal privacy mode는 input을 mask한다. canonical Post Content는 PostHog recorder의 표준 `ph-mask ph-no-capture` class로 Replay masking과 autocapture 제외를 함께 지정한다.
 - `ph-mask ph-no-capture` marker와 공개 `get_property('$user_id')`·`get_distinct_id()` identity API는 이번 metadata 수집 결정으로 변경하지 않는다.
+- PROD-819와 PROD-820 결과가 같은 지원 release line에 포함되고 OpenPanel을 사용하는 지원 build·수동 SHA release·rollback 대상이 없음을 확인하기 전에는 OpenPanel 설정을 제거하지 않는다.
+- GitHub repository와 현재 배포에 사용하는 environment, 활성 runtime configuration source·운영 설정 저장소를 확인하되 조회하지 못한 범위는 설정 부재로 처리하지 않는다.
+- 실제 설정값·credential·사용자 데이터는 제거 전후 기록과 handoff에 남기지 않는다. 외부 variable 삭제는 과거 image를 바꾸지 않으므로 지원 대상의 source·digest·rollback 경로를 별도로 검증한다.
 
 ### Recommended Approach
 
@@ -54,10 +63,15 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Clou
 
 ### Allowed Alternatives
 
+- PROD-839는 실제 잔여 참조가 없다면 source를 고치지 않고 선행 SHA와 현재 확인 결과로 제거 상태를 증명할 수 있다. 설정 inventory는 CLI 또는 API로 조회하되 같은 범위와 값 없는 전후 증거를 제공한다.
+
 - Post Content는 `ph-mask ph-no-capture` class 대신 동등한 PostHog 표준 selector 조합을 사용할 수 있다. Native prop 오염이 없고 browser replay masking과 autocapture 제외가 같은 수준으로 증명되어야 한다.
 - PostHog singleton을 직접 감싸거나 작은 injected client interface를 둘 수 있다. 공용 caller가 Web SDK type에 의존하지 않고 Native graph가 분리되면 동등하다.
 
 ### Known Traps
+
+- 과거 build-time task를 현재 주입 복구 지시로 해석하지 않는다. Source 검색은 조사 근거이며 실행 검증을 대신하는 문자열 검사 테스트를 추가하지 않는다. Workflow 문법에는 표준 validator를 사용한다.
+- SHA tag는 재빌드로 바뀔 수 있다. 성공한 build run과 현재 tag digest를 확인했다는 사실만으로 두 artifact의 불변 결합이나 Dev·Production digest 일치를 주장하지 않는다. 실제 배포와 미검증 범위는 따로 기록한다.
 
 - 수동 route observer와 `capture_pageview: 'history_change'`를 함께 두면 pageview가 중복된다.
 - 표준 URL/referrer/session metadata를 `before_send`, property denylist나 runtime allowlist로 제거하거나 선택적으로 바꾸면 현재 Web analytics 수집 계약이 깨진다.
@@ -78,13 +92,14 @@ PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Clou
 
 ## Migration Plan
 
-1. PROD-820에서 Cloud 보호 설정과 공개 build/deployment 주입을 production 배포 전에 준비한다.
+1. PROD-820의 Cloud 보호와 전환기 공개 설정 준비 이력을 확인한다. 현재 전달 경로는 PROD-891의 채널 설정과 PROD-833의 canonical build·SHA 이미지 승격을 따른다.
 2. PROD-819에서 OpenPanel runtime, manual pageview·filter와 module identity cache를 제거하고 PostHog 표준 runtime으로 전환한다.
-3. PROD-795가 production-equivalent build에서 실제 수집 surface, 개인정보 처리방침과 runbook을 통합한다.
-4. PROD-741이 Post Media Viewer replay·masking·fail-open을 acceptance 한다.
-5. PROD-575가 production acceptance 후 old OpenPanel change를 `--skip-specs`로 archive하고 이 change를 정상 archive한다.
+3. PROD-839가 같은 지원 release line과 지원 canonical build·SHA release·rollback 비의존을 확인한 뒤 남은 source·외부 설정을 정리한다. 이미 제거된 참조는 이력으로 증명한다. 삭제 전 근거가 부족하면 남은 설정을 보존한다. 삭제 후 누락된 지원 의존성이 발견되면 cleanup 완료를 철회하고 정확한 범위의 복구를 운영 담당자에게 인계한다. 수집 재활성화·production 배포·과거 image 삭제·지원 정책 변경은 이 cleanup으로 승인되지 않는다.
+4. PROD-795가 production-equivalent build에서 실제 수집 surface, 개인정보 처리방침과 runbook을 통합한다.
+5. PROD-741이 Post Media Viewer replay·masking·fail-open을 acceptance 한다.
+6. PROD-575가 production acceptance 후 old OpenPanel change를 `--skip-specs`로 archive하고 이 change를 정상 archive한다.
 
-긴급 비활성화는 production build의 공개 key 또는 host를 제거해 adapter를 no-op으로 만든다. OpenPanel과 PostHog를 동시에 활성화하지 않는다.
+현재 prod 채널의 key·host 누락에 따른 수집 중단을 보존한다. 공개 설정 변경이 필요하면 채널 설정표를 수정한 canonical build와 승인된 SHA release 절차를 따른다. PROD-839는 재활성화나 production 배포를 수행하지 않으며 OpenPanel과 PostHog를 동시에 활성화하지 않는다.
 
 ## Open Questions
 

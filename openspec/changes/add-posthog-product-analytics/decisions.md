@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 기존 Linear `PROD-819`, `PROD-820`, `PROD-795`, `PROD-741`, `PROD-575` 결정과 2026-09-02 `PROD-819`·`PROD-820`의 검색·캠페인 metadata 비마스킹 결정을 반영하며, `docs/design/breakpoints.md`의 Web/Native 경계를 따른다. 2026-08-31 마스킹 승인은 Superseded 상태로 보존한다. 제품 동작의 authority는 Linear 결정이며, 리뷰 의견은 구현 보완의 계기일 뿐 제품 계약의 근거가 아니다.
+이 기록은 기존 Linear `PROD-819`, `PROD-820`, `PROD-839`, `PROD-795`, `PROD-741`, `PROD-575` 결정과 2026-09-02 `PROD-819`·`PROD-820`의 검색·캠페인 metadata 비마스킹 결정을 반영하며, `docs/design/breakpoints.md`의 Web/Native 경계를 따른다. 2026-08-31 마스킹 승인은 Superseded 상태로 보존한다. 제품 동작의 authority는 Linear 결정이며, 리뷰 의견은 구현 보완의 계기일 뿐 제품 계약의 근거가 아니다.
 
 ## Decision Records
 
@@ -147,6 +147,18 @@
 - Alternatives Considered: Native SDK 동시 도입과 공통 value import는 현재 범위를 넘는다.
 - Consequences: Native analytics는 계속 비활성이고 PROD-537가 별도로 소유한다.
 - Confirmation / Follow-up: Native export/dependency graph에서 PostHog runtime 부재를 확인한다.
+
+### 현재 채널 설정과 SHA 이미지 승격을 보존하며 OpenPanel 설정을 정리한다
+
+- Decision Date: 2026-09-15
+- Decision Class: Derived Contract
+- Authority / Provenance: [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 2026-09-08 Issue Gate 정렬 승인·포함/제외 범위·완료 조건, [PROD-891](https://linear.app/byulmaru/issue/PROD-891)의 채널 설정, [PROD-833](https://linear.app/byulmaru/issue/PROD-833)의 SHA tag digest 승격, `docs/operations/production-release.md`의 Release·Rollback 계약, `PROD-819`·`PROD-820`의 전환 결과와 `PROD-795`·`PROD-575`의 인계 책임
+- Status: Active
+- Context / Problem: 2026-08-31 cleanup 기록의 build-time 주입·수동 SHA rebuild 전제는 현재 경로와 다르다. Source에서 주입을 제거했다는 사실만으로 외부 설정이나 지원 release·rollback의 안전성을 증명할 수 없다.
+- Decision Outcome: 위 2026-08-31 cleanup decision을 대체한다. PROD-819·820 결과가 같은 지원 release line에 포함되고 모든 지원 canonical build·SHA release·rollback 및 지원되는 canonical rebuild의 OpenPanel 비의존을 확인한 뒤 남은 전용 설정만 제거한다. 이미 제거된 참조는 선행 SHA·현재 확인 결과로 기록한다. 현재 채널 설정·SHA digest 승격·prod 수집 중단을 보존한다.
+- Alternatives Considered: 과거 analytics build-time 주입 복구, production 재빌드, 새 runtime config 도입은 승인된 최신 계약과 맞지 않는다. 이슈 Done·green CI만으로 삭제하거나 image 삭제·지원 정책 변경으로 gate를 충족시키는 방식도 승인 범위에 없다.
+- Consequences: PROD-839는 같은 공유 change의 cleanup·검증 증거만 소유한다. PROD-891·833의 운영 검증·archive 책임을 가져오거나 새 blocker 관계를 추가하지 않는다. 과거 image는 변수 삭제로 바뀌지 않으므로 source SHA·build run·digest와 실제 배포 증거를 구분한다.
+- Confirmation / Follow-up: 격리된 가짜 key·host의 활성화·누락 no-op과 실제 prod 무전송을 구분한다.
 
 ## Remaining Decisions
 
