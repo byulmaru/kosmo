@@ -32,9 +32,9 @@ Local pin API가 승인된 Post를 ordered set에 추가하고 지정한 Post만
   이미 pinned인 replacement target 이동, ineligible replacement 거부, stale concurrent request, same-pin/unpin no-op을 입력·결과·저장 상태로 검증한다. replacement
   stale/conflict 결과가 idempotent success와 구별되고 저장 상태를 보존하는지도 검증한다.
 
-- [ ] 1.1 Local Profile pin/unpin의 eligibility, Owner 권한과 ordered add/remove semantics를 구현한다.
-- [ ] 1.2 current first-party UI slot 교체에서만 expected value를 검증하고 원자성·idempotent no-op을 보장한다.
-- [ ] 1.3 current UI slot replacement 확인과 실패·동시성 결과를 API 계약에 연결하고 focused DB/core 테스트를 통과시킨다.
+- [x] 1.1 Local Profile pin/unpin의 eligibility, Owner 권한과 ordered add/remove semantics를 구현한다.
+- [x] 1.2 current first-party UI slot 교체에서만 expected value를 검증하고 원자성·idempotent no-op을 보장한다.
+- [x] 1.3 current UI slot replacement 확인과 실패·동시성 결과를 API 계약에 연결하고 focused DB/core 테스트를 통과시킨다.
 
 ## 2. PROD-973 Profile pinned presentation
 
@@ -66,7 +66,7 @@ Profile 목록이 Local의 첫 visible pin과 Remote의 visible pin 전체를 �
 - Home·Local·Hashtag focused regression으로 기존 순서·후보 정책 불변을 검증한다.
 
 - [ ] 2.1 Local·Remote ordered set을 소비하는 별도 pinned presentation을 구현한다.
-- [ ] 2.2 pin 관계와 무관하게 기존 Profile chronology의 후보·순서·pagination이 유지되는지 검증한다.
+- [x] 2.2 pin 관계와 무관하게 기존 Profile chronology의 후보·순서·pagination이 유지되는지 검증한다.
 - [ ] 2.3 Profile visibility·block/domain·lifecycle filtering과 Relay/API focused regression을 통과시킨다.
 
 ## 3. PROD-974 Outbound ActivityPub Featured projection
