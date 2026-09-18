@@ -42,23 +42,23 @@ type GroupedNotificationProps = {
   | (ActorSummary & { kind: 'reaction' | 'repost'; preview: Preview | null })
 );
 
-export type NotificationListItemViewProps =
-  | GroupedNotificationProps
-  | {
-      kind: 'reply';
-      unread?: boolean;
-      /** Compose ReplyNotificationPost; this wrapper owns the divider and Read state. */
-      children: ReactElement;
-      actor?: never;
-      actors?: never;
-      totalActorCount?: never;
-      preview?: never;
-      href?: never;
-      timestamp?: never;
-      onNavigate?: never;
-      disabled?: never;
-      pending?: never;
-    };
+type PostNotificationChildProps = {
+  kind: 'reply' | 'quote';
+  unread?: boolean;
+  /** Compose a post notification surface; this wrapper owns the divider and Read state. */
+  children: ReactElement;
+  actor?: never;
+  actors?: never;
+  totalActorCount?: never;
+  preview?: never;
+  href?: never;
+  timestamp?: never;
+  onNavigate?: never;
+  disabled?: never;
+  pending?: never;
+};
+
+export type NotificationListItemViewProps = GroupedNotificationProps | PostNotificationChildProps;
 
 const actions = {
   follow: '팔로우했습니다',
@@ -94,7 +94,7 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
             testID="notification-hover-overlay"
           />
         ) : null}
-        {props.kind === 'reply' ? (
+        {isPostNotificationChild(props) ? (
           <>
             {unread ? <Text style={styles.srOnly}>읽지 않은 알림</Text> : null}
             <View style={styles.replyInset} testID="reply-notification-inset">
@@ -110,6 +110,12 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
       </View>
     </PostContentPrivacyBoundary>
   );
+}
+
+function isPostNotificationChild(
+  props: NotificationListItemViewProps,
+): props is PostNotificationChildProps {
+  return props.kind === 'reply' || props.kind === 'quote';
 }
 
 function NotificationTarget(props: GroupedNotificationProps) {

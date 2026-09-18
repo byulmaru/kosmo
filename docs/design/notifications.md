@@ -24,6 +24,33 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
 작성자 행을 사용하며, Web의 Notification·PostListItem inset을 왼쪽 12px·오른쪽 24px로 정렬했다.
 이 후속 변경은 기존 알림 이유 행을 전제로 한 PROD-950을 대체한다.
 
+## Quote 표시 계약 · PROD-953
+
+2026-09-18 사용자 결정으로 Quote는 아래 구성을 사용한다. Reply의 이유 문구 제거와 별개로,
+수신자의 게시글이 인용됐다는 이유를 명시한다.
+
+1. Quote 종류 아이콘.
+2. 24px 작성자 아바타와 작성자 이름·핸들·시각.
+3. 작성자 행 아래의 `회원님의 게시글을 인용했습니다` 이유 문구.
+4. Quote Post 본문.
+5. 기존 Source Post 미리보기.
+6. Quote에 대한 기존 Post Action Bar.
+
+Quote 작성자 정보는 한 번만 표시한다. 이유 문구에 이름을 반복하거나 별도의 Post 작성자 header를
+덧붙이지 않는다. Source 미리보기 안의 기존 작성자 정보는 유지한다. 종류 아이콘과 이유 문구는
+알림의 의미를 전달하며, 별도 이동 target을 추가하지 않는다.
+
+알림 본문·시각을 활성화하면 Source가 아닌 Quote 자체의 canonical 상세로 이동한다.
+작성자 링크는 해당 Profile로, Source 미리보기는 기존 Source 상세로 이동한다. 기존 Post Action Bar,
+CW 공개, 미디어와 composer의 독립 동작을 유지하며 내부 action이 알림 상세 이동까지 함께 실행하지 않는다.
+
+읽음/미확인 배경·rail·hover·focus와 Best Effort Read는 공용 Notification 계약을 재사용한다.
+작성자·시각·본문의 link navigation과 미디어 열기에서 기존 읽음 처리를 시작하며, CW 공개·Action Bar·
+composer control은 자체 동작만 수행한다. 모두 읽음, unread indicator, selected Profile 격리와
+조회 불가 알림의 처리도 기존 계약을 따른다.
+
+이 결정은 표시 계약의 확정이며 구현·Figma 반영·Web/iOS/Android runtime 검증 완료를 뜻하지 않는다.
+
 ## Native FCM push 권한 요청과 잠금 화면 미리보기 · PROD-875
 
 - Android·iOS native 앱은 로그인된 상태의 첫 앱 실행에서 Push 알림 권한 안내를 표시한다. 새 로그인
@@ -136,7 +163,8 @@ API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는�
   Mention)을 `foregroundSecondary`로 표시한다. 작성자 행은 24px Avatar와 `ProfileNameBlock`의
   `inline` variant를 사용한다. 이름과 핸들은 한 줄에 배치하며 이름을 우선한다. 공간이 부족하면 핸들이 먼저
   가려지고, 이름도 가용 폭을 넘으면 말줄임한다. 이 계약을 다른 Profile 표시 전체에 확대하지 않는다.
-- 별도의 알림 이유 문장은 표시하지 않는다. 알림 작성자 이름은 `foregroundPrimary`, 종류 아이콘·핸들·시각은
+- Reply/Mention에는 별도의 알림 이유 문장을 표시하지 않는다. 이 결정은 Quote의 이유 문구를 정하지 않는다.
+  알림 작성자 이름은 `foregroundPrimary`, 종류 아이콘·핸들·시각은
   `foregroundSecondary`를 사용한다. Light `#64646F`, Dark `#A3A3A3`이며 legacy `textSecondary`, Info 색상,
   단어별 강조나 별도 배경은 두지 않는다. 아이콘은 장식으로 숨기고 접근성에는 짧은 알림 종류를 별도로 전달한다.
 - Reply/Mention 알림에는 원글 미리보기나 별도 받는 사람 목록을 추가하지 않는다. 결과 게시글을
