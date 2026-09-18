@@ -74,6 +74,10 @@ jobs:
             pnpm exec expo-updates runtimeversion:resolve --platform "${PLATFORM}" \
               | jq -er '.runtimeVersion'
           )"
+          if [[ ! "${runtime_version}" =~ ^[A-Za-z0-9._-]+$ || "${runtime_version}" == "." || "${runtime_version}" == ".." ]]; then
+            echo "::error::Resolved Expo runtimeVersion must be a safe non-empty path segment."
+            exit 1
+          fi
           pnpm exec expo export \
             --clear \
             --platform "${PLATFORM}" \
