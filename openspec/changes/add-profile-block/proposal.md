@@ -1,6 +1,6 @@
 ## Why
 
-Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정책, GraphQL, client 상태와 관리 화면을 여러 구현 이슈가
+Profile Block의 저장 관계, transaction cleanup, 공통 조회·상호작용 정책, GraphQL, client 상태와 관리 화면을 여러 구현 이슈가
 같은 행동 계약으로 완성할 shared change가 필요하다. `PROD-821`이 새 저장 계약과 이 change를 열고, `PROD-822`·
 `PROD-823`·`PROD-813`이 책임이 독립적인 slice를 순서대로 완성·검증한다.
 
@@ -10,11 +10,12 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
   Local 또는 Remote일 수 있고, 도메인 capability에 특정 Account·Membership·Local 상태를 일반 조건으로 고정하지 않는다.
   현재 GraphQL ingress가 사용하는 selected Local Profile 경계는 GraphQL slice에만 적용하며 remote ingress는 `PROD-818`에
   남긴다.
-- Block policy/admission을 통과한 생성은 durable cleanup orchestration을 시작한다. 이번 실행이 포착한 양방향 Follow Request·Follow
-  Relationship과 제거된 Follow 객체의 직접 원인 Follow Notification을 정리하고, 필수 cleanup 완료 전에는 Block action을 성공으로 확정하지 않는다.
-  이미 진입한 Follow transition이 cleanup 뒤 남긴 Follow/Request 또는 그 직접 원인 Notification은 남을 수 있지만 Active Block 동안 공통 정책에서
-  inactive/invisible로 취급한다. Unblock은 현재 남아 있는 양방향 Follow/Request와 그 직접 원인 Notification을 정리한 뒤 Block을 제거하며 삭제된 관계를
-  복구하지 않는다.
+- Block policy/admission을 통과해 새 Profile Block 관계를 저장하는 경우에만 같은 transaction에서 현재 양방향 Follow Request·Follow Relationship과
+  제거된 Follow 객체의 직접 원인 Follow Notification을 정리한다. 새 Profile Block 관계가 commit된 결과가 Block action의 성공이며, commit 뒤
+  effect의 성공·실패는 그 성공을 바꾸지 않는다. 같은 조합의 Block이 이미 있으면 기존 관계를 성공 결과로 관찰하고 새 cleanup을 실행하지 않는다.
+  이미 관계가 존재한 뒤 동시성이나 후속 경로로 뒤늦게 관찰되는 Follow·Request·Notification은 Active Block 정책으로 처리하며 duplicate Block이나
+  Unblock의 보상 cleanup으로 확장하지 않는다. Unblock은 Owner가 지정한 정확한 Profile Block ID 관계만 제거하며 Follow/Request/Notification을
+  추가로 정리하거나 차단 생성 때 제거된 관계를 복구하지 않는다.
 - 기존 Reaction·Repost·Bookmark와 직접 원인이 아닌 기존 Notification 및 Read State는 이번 action에서 변경하지 않는다. 모든
   Notification source의 신규 생성 suppression은 `PROD-327`, 숨겨진 row의 async physical cleanup은 `PROD-328`의 후속 scope로 남긴다.
 - Profile Node·handle route·일반 Profile 검색에는 기존 Profile 조회 정책을 적용하고, Owner·Target 사이의 Post·Media 직접 조회와 Profile Post List에는 viewer 방향의
@@ -52,7 +53,7 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
 
 ### New Capabilities
 
-- `profile-block`: Profile Block 저장 관계, 생성·해제, durable cleanup, 공통 symmetric policy와 로컬 API 계약
+- `profile-block`: Profile Block 저장 관계, 생성·해제, transaction cleanup, 공통 symmetric policy와 로컬 API 계약
 - `profile-block-ui`: Profile action, 관리 목록, 기존 레거시 UI 기반 direct route 구현·통합과 selected Profile별 상태/cache 수렴
 
 ### Modified Capabilities
@@ -65,7 +66,7 @@ Profile Block의 저장 관계, durable cleanup, 공통 조회·상호작용 정
 
 ## Impact
 
-- API/Core: Profile Block 저장·삭제 action, durable cleanup orchestration, Profile identity·Post/Media·Follow visibility와
+- API/Core: Profile Block 저장·삭제 action, transaction cleanup과 post-commit effect 경계, Profile identity·Post/Media·Follow visibility와
   interaction/Notification 정책, GraphQL object/connection/mutation과 Node 조회 경계가 영향받는다.
 - Database: 기존 row를 backfill하지 않는 additive Profile Block 관계, Owner/Target uniqueness와 referential integrity가 영향받는다.
   migration/rollback safety는 design과 `PROD-821` 검증 guardrail로 다룬다.

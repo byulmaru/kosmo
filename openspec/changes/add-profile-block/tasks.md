@@ -1,4 +1,4 @@
-## 1. PROD-821 — Profile Block 저장과 durable cleanup
+## 1. PROD-821 — Profile Block 저장과 transaction cleanup
 
 **Authority / Provenance**
 
@@ -17,10 +17,12 @@
 **Deliverable**
 
 OpenSpec Gate 승인 뒤, Local 또는 Remote Owner가 Local 또는 Remote Target을 차단·해제할 수 있는 additive Profile Block
-관계와 durable cleanup orchestration을 구현한다. Block policy/admission을 적용하고 이번 실행이 포착한 양방향 Follow Request·Follow Relationship과
-직접 원인 Follow Notification을 required cleanup으로 정리하며, 필수 cleanup 완료 전에는 Block action을 성공으로 확정하지 않는다. 이미 진입한 Follow
-transition이 cleanup 뒤 관계를 남길 수 있으므로, Unblock은 현재 남아 있는 양방향 Follow/Request와 그 직접 원인 Notification을 정리한 뒤 Block을 제거하며
-삭제된 관계를 복구하지 않는다.
+관계와 transaction cleanup을 구현한다. 새 Profile Block 관계를 저장하는 하나의 transaction에서만 현재 양방향 Follow Request·Follow Relationship과
+직접 원인 Follow Notification을 정리하고 Profile Block 관계를 commit한다. commit된 관계가 Block action의 성공 결과이며, commit 뒤 effect의
+성공·실패는 관계 성공을 바꾸지 않는다. 같은 조합의 Block이 이미 있으면 기존 관계를 성공 결과로 관찰하고 새 cleanup을 실행하지 않는다. 이미
+관계가 존재한 뒤 동시성이나 후속 경로로 뒤늦게 관찰되는 Follow·Request·Notification은 Active Block 정책으로 처리하며 duplicate Block이나
+Unblock의 보상 cleanup으로 확장하지 않는다. Unblock은
+Owner가 지정한 정확한 Profile Block ID 관계만 제거하며 Follow/Request/Notification을 추가로 정리하거나 차단 생성 때 제거된 관계를 복구하지 않는다.
 
 **Guardrails**
 
@@ -28,10 +30,12 @@ transition이 cleanup 뒤 관계를 남길 수 있으므로, Unblock은 현재 �
   lifecycle state·expiry·복제 속성을 추가하지 않는다.
 - 도메인 capability에 특정 Account·Membership·Local 상태를 일반 Owner 조건으로 추가하지 않는다. GraphQL selected Local actor admission은
   `PROD-822`의 ingress 경계다.
-- profile-block requirement의 captured cleanup·success gate·relaxed overlap을 준수하고, 기존 Reaction은 이번 action에서 변경하지 않는다.
-- required cleanup 완료 전 성공 응답을 반환하지 않으며, 일시 오류·worker 재시작 시 이미 처리한 effect를 중복 적용하지 않는다.
-- 기존 Reaction·Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification·Read State는 보존하고, Unblock은 profile-block requirement의 cleanup/no-restore
-  순서를 준수한다.
+- profile-block requirement의 새 관계 생성 시 transaction cleanup·relation success·duplicate observation·Active Block policy·post-commit effect 분리를
+  준수하고, 기존 Reaction은 이번 action에서 변경하지 않는다.
+- transaction이 실패하면 Profile Block 관계와 현재 관계 cleanup을 성공으로 반환하지 않으며, commit 뒤 effect의 실패·재시도는 이미 성공한 관계를
+  바꾸지 않는다.
+- 기존 Reaction·Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification·Read State는 보존하고, Unblock은 profile-block requirement의
+  exact-ID 삭제 범위를 준수한다.
 - 이 그룹은 Block 후 신규 입력 거부·공통 visibility/interaction policy·GraphQL(`PROD-822`), UI/Relay(`PROD-823`), 전체 cross-slice E2E·archive(`PROD-813`)를 구현하지 않는다.
 - 현재 Notification source 신규 생성 suppression(`PROD-327`), ActivityPub Block/Undo(`PROD-818`), 비동기 물리 cleanup(`PROD-328`)을 추가하지 않는다.
 
@@ -39,16 +43,17 @@ transition이 cleanup 뒤 관계를 남길 수 있으므로, Unblock은 현재 �
 
 - 기존 Profile·Follow·Reaction·Notification·Post row를 보존하는 additive migration과 uniqueness·referential integrity·self-block 불변식 및 관계 저장 정합성 검증을 수행한다.
 - Local/Remote Owner·Target pair, duplicate/self와 Owner scope를 자동화된 관계·scope 회귀로 검증하고 ingress별 admission을 도메인 계약과 분리한다.
-- durable orchestration이 Block 실행이 포착한 양방향 Follow Request·Follow Relationship, pending request와 직접 원인 Follow Notification을 처리하고 기존
-  Reaction·Repost·Bookmark·비직접 Notification을 보존하는지 확인한다. Unblock이 현재 남은 관계와 그 직접 원인 Notification을 정리한 뒤 삭제 관계를
-  복구하지 않는지도 확인한다.
-- worker restart·일시 오류·retry 뒤 required cleanup success gate가 유지되는지, Block insert/cleanup 실패가 성공으로 확정되지 않는지와 Unblock
-  no-restore를 자동화된 lifecycle 회귀로 확인한다.
+- 새 Profile Block 관계를 저장하는 하나의 transaction이 현재 양방향 Follow Request·Follow Relationship과 직접 원인 Follow Notification을 관계와
+  함께 처리하고 기존 Reaction·Repost·Bookmark·비직접 Notification·Read State를 보존하는지 확인한다. Duplicate가 기존 관계를 성공으로
+  관찰하고 새 cleanup을 실행하지 않는지, 뒤늦게 관찰되는 관계가 Active Block policy로 처리되는지, Unblock이 정확한 Profile Block ID 관계만
+  삭제하는지와 차단 생성 때 제거된 관계를 복구하지 않는지도 확인한다.
+- transaction 실패가 관계 성공으로 확정되지 않는지, commit 뒤 effect 실패·재시도가 Profile Block 성공을 바꾸지 않는지와 Owner scope를 자동화된
+  lifecycle 회귀로 확인한다.
 
 - [x] 1.1 OpenSpec Gate 승인 후 Profile Block의 additive 저장 관계와 Owner/Target·생성 시각·uniqueness·referential integrity·self-block 불변식을 구현한다.
-- [ ] 1.2 Block policy/admission 뒤 durable cleanup orchestration을 시작하고 양방향 Follow Request·Follow Relationship과 직접 원인 Follow Notification의 required cleanup을 연결한다.
-- [ ] 1.3 profile-block requirement의 durable cleanup·success gate·Reaction 보존·Unblock no-restore를 구현한다.
-- [ ] 1.4 migration·관계 불변식·restart/retry·성공 gate·보존·Owner scope를 검증하는 자동화 회귀와 공개 계약 정합성 검증을 추가한다.
+- [x] 1.2 Block policy/admission 뒤 하나의 transaction에서 현재 양방향 Follow Request·Follow Relationship과 직접 원인 Follow Notification을 Profile Block 관계와 함께 처리한다.
+- [x] 1.3 profile-block requirement의 transaction cleanup·relation success·duplicate observation·post-commit effect 분리·Reaction 보존·Unblock exact-ID 삭제를 구현한다.
+- [x] 1.4 migration·관계 불변식·transaction 실패·보존·Owner scope를 검증하는 자동화 회귀와 공개 계약 정합성 검증을 추가한다.
 
 ## 2. PROD-822 — Profile Block 정책과 GraphQL 경계
 
@@ -78,14 +83,15 @@ transition이 cleanup 뒤 관계를 남길 수 있으므로, Unblock은 현재 �
 - 저장된 Owner → Target 관계를 양쪽 viewer 방향으로 평가한다. Profile Node·handle route·일반 Profile search는 기존 Profile 조회 정책을 사용하고,
   Post·Media direct 조회와 Profile Post List는 viewer 방향 콘텐츠 정책을 사용하며, Home·Local·Hashtag Post List·Post search·Follow 후보·interaction·
   Notification은 양방향 보호 정책을 사용한다. Repost는 Author와 Source Post Author를 모두 검사한다.
-- Active Block은 cleanup 뒤 남은 Follow Request·Follow Relationship의 물리적 존재보다 우선하며, Follow·Reply·Reaction·Repost의 새 로컬 입력은 양쪽에서
-  거부한다. page limit 뒤 client filter나 resolver별 정책 복제를 보안 경계로 사용하지 않는다.
+- Active Block은 transaction 이후 남거나 뒤늦게 관찰되는 Follow Request·Follow Relationship의 물리적 존재보다 우선하며, Follow·Reply·Reaction·Repost의
+  새 로컬 입력은 양쪽에서 거부한다. 이 policy는 duplicate Block이나 Unblock의 보상 cleanup이 아니다. page limit 뒤 client filter나 resolver별 정책
+  복제를 보안 경계로 사용하지 않는다.
 - Profile Block pair의 기존 Notification은 connection·Unread count·Node·read 처리에서 숨기되, `PROD-821`의 직접 원인 삭제 이외의 기존 Notification을
   동기 삭제하거나 Read State를 바꾸지 않는다. 이 Notification policy는 방향성 있는 Post·Media direct 조회와 독립적으로 적용한다.
 - 현재 source 신규 Notification 생성 suppression은 `PROD-327`, 비동기 물리 cleanup은 `PROD-328`에 남기며 이 그룹의 task·완료 증거로 삼지 않는다.
 - GraphQL ingress는 검증된 Session의 selected Local Profile actor 및 Owner scope를 사용하고, request-specific DB actor state나 client-only filter로
   중앙 application policy를 대체하지 않는다. remote ActivityPub ingress는 `PROD-818`에 남긴다.
-- 저장 durable cleanup(`PROD-821`), UI/Relay(`PROD-823`)와 최종 cross-slice E2E/archive(`PROD-813`)를 이 그룹에서 재구현하지 않는다.
+- 저장·transaction cleanup(`PROD-821`), UI/Relay(`PROD-823`)와 최종 cross-slice E2E/archive(`PROD-813`)를 이 그룹에서 재구현하지 않는다.
 
 **Verification**
 

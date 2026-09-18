@@ -3,19 +3,33 @@
 ## 목적과 의존 방향
 
 `packages/core/services`는 GraphQL API, Web BFF, ActivityPub handler와 worker가 공유할 수 있는
-transport-neutral state-changing application action 경계다. 현재 진입점이 하나뿐이어도 행동의 의미가
+기존 non-Temporal state-changing application action 경계다. 현재 진입점이 하나뿐이어도 행동의 의미가
 특정 transport에 한정되지 않으면 core에 둘 수 있다. 진입점이 달라도 같은 도메인 정책, transaction,
-persistence와 멱등성 결과를 보장한다.
+persistence와 멱등성 결과를 보장한다. 모든 새 mutation이 core service를 가져야 하는 것은 아니다.
 
-공유 가능한 action을 호출할 때 의존 방향은 진입점에서 core로 향한다. 특정 진입점에서만 의미가 있는
-state change는 그 진입점이 query/persistence 계층을 직접 사용할 수 있다. 상태를 바꾸지 않는 조회는
-application action이 아니므로 `packages/core/services`를 거치지 않는다.
+새 Temporal-first capability의 durable state transition은 Worker가 실행하는 Activity가 소유한다.
+Activity가 transaction, persistence와 멱등성 판정을 수행하고, Workflow는 결정론적 orchestration만 맡는다.
+GraphQL·HTTP·ActivityPub 같은 caller는 인증과 입력 정규화 뒤 generic `runWorkflow`에 exported
+`WorkflowDefinition`, serializable input과 capability별 `mode`·conflict·reuse 옵션을 한 번 전달한다. caller가
+state-changing core service를 직접 호출하거나 task queue·deadline·native Temporal 호출을 중복 조합하지 않는다.
+기존 non-Temporal/shared service는 별도 migration 범위로 유지하고, 그 migration이 끝나기 전까지
+Temporal-first contract에 억지로 맞추지 않는다.
+
+기존 shared action을 호출할 때 의존 방향은 진입점에서 core로 향한다. Temporal-first state change는
+진입점에서 `runWorkflow`와 exported `WorkflowDefinition`을 통해 Worker로 향한다. 특정 진입점에서만
+의미가 있는 기존 non-Temporal state change는 그 진입점이 query/persistence 계층을 직접 사용할 수 있다.
+상태를 바꾸지 않는 조회는 application action이 아니므로 `packages/core/services`를 거치지 않는다.
 
 ```text
-Shared state-changing entry -> packages/core/services -> packages/core/db
-Entry-local state change -------------------------------> packages/core/db
+Temporal-first entry -> runWorkflow(exported WorkflowDefinition) -> Worker Workflow -> Worker Activity -> packages/core/db
+Existing shared non-Temporal entry ---------------------> packages/core/services -> packages/core/db
+Entry-local non-Temporal state change -------------------------------> packages/core/db
 Read query / loader ------------------------------------> packages/core/db
 ```
+
+Temporal Activity가 기존 transport-neutral policy나 service를 내부 구현으로 재사용할 수는 있다. 그 경우에도
+durable commit과 retry/idempotency 경계의 owner는 Activity이며, 기존 service를 새 Temporal mutation의 필수
+public layer로 승격하지 않는다.
 
 core는 GraphQL context·payload·Global ID, HTTP session, ActivityPub object처럼 특정 진입점에서만 의미가
 있는 타입이나 표현을 알지 않는다.
@@ -25,11 +39,12 @@ protocol 전용 타입에 의존하는지를 기준으로 판단한다.
 
 ## 책임
 
-| 계층                                                            | 책임                                                                                                       |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| GraphQL resolver, HTTP route, ActivityPub handler, worker entry | transport 입력 해석, caller·actor 인증, 조회·loader, entry-local state change, 외부 ID와 응답·오류 mapping |
-| `packages/core/services`                                        | 검증된 actor와 business input에 대한 공유 가능한 domain policy, transaction, persistence와 멱등성          |
-| `packages/core/db`                                              | DB client, schema, migration 지원과 DB 전용 utility                                                        |
+| 계층                                                            | 책임                                                                                                                                                             |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GraphQL resolver, HTTP route, ActivityPub handler, worker entry | transport 입력 해석, caller·actor 인증, 조회·loader, Temporal-first Workflow dispatch, 기존 entry-local state change, 외부 ID와 응답·오류 mapping                |
+| Worker Workflow/Activity                                        | Workflow의 결정론적 orchestration, Activity의 Temporal-first state transition transaction·persistence·멱등성·effect 실행                                         |
+| `packages/core/services`                                        | 기존 non-Temporal/shared action의 검증된 actor와 business input에 대한 domain policy, transaction, persistence와 멱등성; Temporal-first에서는 선택적 재사용 경계 |
+| `packages/core/db`                                              | DB client, schema, migration 지원과 DB 전용 utility                                                                                                              |
 
 Account session이나 ActivityPub signature처럼 actor identity를 신뢰하기 위한 증거는 진입점이 검증한다.
 Post.Author, Source visibility와 lifecycle처럼 검증된 actor와 domain object 사이의 공통 권한은 core가
@@ -72,6 +87,12 @@ shared DB access 경계를 사용하고, API, Web과 Worker는 하나의 shared 
 GraphQL operation 전용 DB session, actor GUC, operation-scoped `ctx.db`와 `OPERATION_DATABASE_URL`은
 target architecture에 포함하지 않는다.
 
+Temporal-first GraphQL mutation은 위 caller 인증·membership·visibility 검증과 입력 정규화를 마친 뒤
+serializable actor/domain input, exported `WorkflowDefinition`과 capability별 `mode`·conflict·reuse 옵션을
+generic `runWorkflow`에 한 번 전달한다. resolver가 transaction을 열거나 state-changing core service를 직접
+호출하지 않으며, task queue·deadline·native Temporal 호출은 `runWorkflow`가 중앙화한다. `WorkflowDefinition`이
+Workflow type과 stable ID 규칙을 함께 제공한다.
+
 Fedify MessageQueue의 별도 database/role과 migration owner 경계는 유지한다. Fedify inbound/delivery,
 Temporal Workflow/Activity와 worker의 기능·policy는 이 GraphQL authorization 결정으로 변경하지 않는다.
 세부 결정과 전환 경계는
@@ -79,6 +100,11 @@ Temporal Workflow/Activity와 worker의 기능·policy는 이 GraphQL authorizat
 
 ## Public contract
 
+- Temporal-first mutation caller는 검증된 actor와 serializable business input, exported
+  `WorkflowDefinition`과 capability별 `mode`·conflict·reuse 옵션을 generic `runWorkflow`에 한 번 전달한다.
+  transaction, persistence, idempotency와 post-commit effect의 실행은 Worker Activity가 소유하며, task
+  queue·deadline·native Temporal 호출은 `runWorkflow`가 중앙화한다. caller에는 state-changing core service
+  호출을 요구하지 않는다.
 - input은 검증된 DB identity와 domain input으로 구성한다. caller별 인증 결과를 boolean, callback 또는
   protocol object로 전달하지 않는다.
 - 반환값은 action의 transport-neutral domain 결과다. GraphQL payload, object ref, connection이나
@@ -88,10 +114,10 @@ Temporal Workflow/Activity와 worker의 기능·policy는 이 GraphQL authorizat
   반환값에 포함한다.
 - read-only query, lookup, list와 loader는 진입점의 query 계층에서 DB와 공유 조회 policy를 사용한다.
   계층을 맞추기 위한 pass-through core service를 만들지 않는다.
-- 여러 DB 변경이 원자적이어야 하면 기본적으로 core action이 transaction 경계를 소유한다. 다만 capability가
-  Temporal command의 durable admission과 DB commit을 하나의 실행으로 연결하도록 명시하면 같은 core domain
-  policy와 transaction 구현을 Worker Activity가 호출할 수 있다. 이때 caller는 DB handle이나 callback을 넘기지
-  않고 serializable command와 검증된 actor identity만 전달한다.
+- 기존 non-Temporal/shared action에서 여러 DB 변경이 원자적이어야 하면 core action이 transaction 경계를
+  소유할 수 있다. Temporal-first capability에서는 Worker Activity가 transaction, persistence와 멱등성
+  경계를 소유하며, 기존 core domain policy나 service는 필요할 때만 내부에서 재사용한다. 이때 caller는 DB
+  handle이나 callback을 넘기지 않고 serializable command와 검증된 actor identity만 전달한다.
 - 새로운 Post origin이나 lifecycle 계약을 transaction 인자의 존재 여부에서 추론하지 않는다.
   `createPost`처럼 origin별 lifecycle을 소유하는 action이 caller transaction과 합류하면서 commit 이후 side
   effect까지 보장해야 한다면 `tx` 유무만으로 side effect를 생략하거나 commit 전에 실행하지 말고, 실제
@@ -101,11 +127,15 @@ Temporal Workflow/Activity와 worker의 기능·policy는 이 GraphQL authorizat
 - 외부 delivery나 notification처럼 DB transaction에 포함되지 않는 side effect는 domain write가 commit된
   뒤 실행한다. side effect 실패가 이미 commit된 domain 결과를 되돌려서는 안 되는 계약이면 실패를 호출
   경계에서 격리하고 commit된 상태를 유지한다.
+- Update-with-Start의 공용 실행 경계는 transaction Activity가 반환한 committed domain result를 Update caller에
+  먼저 전달한 뒤 Workflow의 post-commit effect queue를 drain한다. 이미 commit된 state는 effect failure로
+  rollback하지 않으며, 이 순서와 오류 격리는 capability별 caller가 재조합하지 않는다.
 - Follow의 durable admission은 방향성을 가진 Profile pair Workflow가 소유한다. Workflow ID는
   `profile-follow-pair:{followerProfileId}:{followeeProfileId}`로 결정하며, caller는 인증·actor/object 검증 뒤
-  `FOLLOW`를 Update-with-Start한다. Open policy면 transaction commit 결과를 Update handler가 즉시 반환하고,
-  Workflow는 FIFO effects를 drain한 뒤 종료한다. Approval Required면 Follow Request를 commit하고 Pending으로
-  남으며, `APPROVE`, remote `ACCEPT`, `REJECT`, `CANCEL`은 같은 pair Workflow의 Update로 처리한다.
+  exported `WorkflowDefinition`과 capability별 mode/conflict/reuse 옵션을 generic `runWorkflow`에 한 번 전달해
+  `FOLLOW`를 Update-with-Start admission한다. Open policy면 transaction commit 결과를 Update handler가 즉시
+  반환하고, Workflow는 FIFO effects를 drain한 뒤 종료한다. Approval Required면 Follow Request를 commit하고
+  Pending으로 남으며, `APPROVE`, remote `ACCEPT`, `REJECT`, `CANCEL`은 같은 pair Workflow의 Update로 처리한다.
 - Pair Workflow는 한 번에 하나의 lifecycle command만 admission한다. in-flight guard와 DB uniqueness/exact-row
   조건으로 동시 명령을 제한하며, 승인·거절·취소와 관련된 protocol validation은 각각의 caller 경계에 남긴다.
   inbound Follow의 직접 Accept delivery와 Follow effect의 ActivityPub no-echo 조건도 core Workflow가 가져오지
@@ -150,10 +180,13 @@ Temporal Workflow/Activity와 worker의 기능·policy는 이 GraphQL authorizat
 
 - 진입점 integration test는 session, membership, signature와 actor/object처럼 caller별 조건을
   검증한다.
-- core test는 공통 domain policy, transaction rollback, persistence, uniqueness와 idempotency를
-  검증한다.
+- Worker Activity test는 Temporal-first transition의 transaction rollback, persistence, uniqueness와
+  idempotency를 검증한다. core test는 기존 non-Temporal/shared service의 공통 domain policy와 transaction
+  contract를 검증한다.
 - 테스트만을 위해 production에 없는 우회 가능한 public contract를 추가하지 않는다.
 
-`docs/domain`은 도메인 계약, Linear는 전달 범위, OpenSpec은 구현 slice를 정의한다. 조건을 core로 옮기기
-전에 모든 production caller에 공통인 domain invariant인지, 특정 caller의 인증 조건인지, core가
-transport-specific 입력이나 반환값에 의존하게 되는지를 확인한다.
+`docs/domain`은 도메인 계약, Linear는 전달 범위를 정의한다. OpenSpec은 필요할 때 현재 구현 slice를
+보조하지만 Temporal-first mutation의 필수 authority나 completion gate가 아니다. 조건을 core로 옮기기
+전에 모든 production caller에 공통인 domain invariant인지, 특정 caller의 인증 조건인지, 새 Temporal-first
+transition이라면 Activity가 소유해야 하는 실행 경계인지, core가 transport-specific 입력이나 반환값에
+의존하게 되는지를 확인한다. 기존 non-Temporal/shared service migration은 별도 범위로 다룬다.

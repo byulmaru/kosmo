@@ -9,9 +9,10 @@ import {
   ServiceError,
   TimeoutFailure,
   WorkflowFailedError,
+  WorkflowUpdateFailedError,
 } from '@temporalio/client';
 import type { WorkflowHandleWithStartDetails } from '@temporalio/client';
-import type { WorkflowDefinition } from './client';
+import type { WorkflowDefinition, WorkflowUpdateDefinition } from './client';
 import type { RemoteProfileLookupInput } from './remote-profile';
 
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
@@ -240,6 +241,65 @@ test('start mode는 zero-args callback을 호출하고 start acknowledgement 뒤
     releaseStart();
     deadline.mock.restore();
     start.mock.restore();
+  }
+});
+
+test('update-with-start mode는 Workflow와 Update를 한 번에 admission하고 공용 정책을 적용한다', async () => {
+  type ProfileBlockWorkflow = (input: { ownerProfileId: string }) => Promise<void>;
+  type ProfileBlockUpdate = { created: boolean };
+  type ProfileBlockInput = { ownerProfileId: string };
+  const input: ProfileBlockInput = { ownerProfileId: 'profile-1' };
+  const definition: WorkflowUpdateDefinition<
+    ProfileBlockWorkflow,
+    ProfileBlockUpdate,
+    [ProfileBlockInput]
+  > = {
+    workflow: 'profileBlockWorkflow',
+    update: 'profileBlockUpdate',
+    workflowIdFromArgs: ({ ownerProfileId }) => `profile-block:${ownerProfileId}`,
+  };
+  const result = { created: true };
+  const update = mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => result);
+  const deadlines: Array<number | Date> = [];
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (value: number | Date, callback: () => Promise<unknown>) => {
+      deadlines.push(value);
+      return callback();
+    },
+  );
+
+  try {
+    assert.deepEqual(
+      await runWorkflow(definition, {
+        args: [input],
+        updateArgs: [input],
+        updateId: 'block',
+        mode: 'update-with-start',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      }),
+      result,
+    );
+
+    const call = update.mock.calls[0];
+    assert.ok(call);
+    assert.equal(call.arguments[0], 'profileBlockUpdate');
+    const options = call.arguments[1];
+    assert.ok(options);
+    assert.deepEqual(options.args, [input]);
+    assert.equal(options.updateId, 'block');
+    const operation = options.startWorkflowOperation;
+    assert.equal(operation.options.workflowId, 'profile-block:profile-1');
+    assert.equal(operation.options.taskQueue, 'kosmo');
+    assert.equal(operation.options.workflowIdConflictPolicy, 'USE_EXISTING');
+    assert.equal(operation.options.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
+    assert.deepEqual(operation.options.args, [input]);
+    assert.equal(deadlines.length, 1);
+  } finally {
+    deadline.mock.restore();
+    update.mock.restore();
   }
 });
 
@@ -507,5 +567,44 @@ test('Workflow ID callback 오류는 SDK 실행 전에 그대로 전파한다', 
   } finally {
     deadline.mock.restore();
     execute.mock.restore();
+  }
+});
+
+test('update-with-start mode는 WorkflowUpdateFailedError의 ApplicationFailure를 그대로 전파한다', async () => {
+  type Workflow = (input: string) => Promise<void>;
+  const definition: WorkflowUpdateDefinition<Workflow, string, [string]> = {
+    workflow: 'profileBlockWorkflow',
+    update: 'profileBlockUpdate',
+    workflowIdFromArgs: (input) => `profile-block:${input}`,
+  };
+  const applicationFailure = ApplicationFailure.nonRetryable(
+    'Profile Block transition rejected',
+    'ProfileBlockConflict',
+  );
+  const update = mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
+    throw new WorkflowUpdateFailedError('Update failed', applicationFailure);
+  });
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  try {
+    await assert.rejects(
+      runWorkflow(definition, {
+        args: ['profile-1'],
+        updateArgs: ['profile-1'],
+        updateId: 'block',
+        mode: 'update-with-start',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      }),
+      (error: unknown) => error === applicationFailure,
+    );
+    assert.equal(update.mock.calls.length, 1);
+  } finally {
+    deadline.mock.restore();
+    update.mock.restore();
   }
 });

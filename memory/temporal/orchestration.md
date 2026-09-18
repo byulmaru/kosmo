@@ -7,11 +7,21 @@
 
 ## Ownership And Flow
 
-- domain state transition, 권한, transaction과 멱등성 판정은 `packages/core/services`의 transport-neutral policy가
-  소유한다. capability 계약에 따라 caller가 직접 호출하거나 Temporal transaction Activity가 호출할 수 있다.
-- 기본 effects-only capability는 실제 transition commit 뒤 core service가 Workflow를 시작한다. Follow처럼
-  durable admission부터 transaction을 연결해야 하는 capability는 caller 검증 뒤 directed Profile pair Workflow를
-  Update-with-Start하고 transaction Activity가 core policy를 실행한다.
+- 새 Temporal-first capability의 state transition, transaction, persistence와 멱등성 판정은 Worker Activity가
+  소유한다. Workflow는 결정론적 orchestration만 수행하고, Activity가 필요한 기존 transport-neutral core
+  policy나 service를 내부에서 재사용할 수는 있지만 state-changing core service는 필수가 아니다.
+- Temporal-first caller는 caller 검증 뒤 generic `runWorkflow`에 exported `WorkflowDefinition`, serializable
+  input과 capability별 `mode`·conflict·reuse 옵션을 한 번 전달한다. GraphQL·HTTP·ActivityPub caller가
+  state-changing core service를 직접 호출하거나 task queue·deadline·native Temporal 호출을 반복 조합하지
+  않는다. 기존 non-Temporal/shared action과 그 core service는 별도 migration 범위로 유지한다.
+- 기존 effects-only capability가 transition commit 뒤 Workflow를 시작하는 경로는 migration 전까지 유지할 수
+  있다. Follow처럼 durable admission부터 transaction을 연결해야 하는 Temporal-first capability는 caller 검증
+  뒤 exported `WorkflowDefinition`을 generic `runWorkflow`에 전달해 directed Profile pair Workflow를
+  Update-with-Start admission하고, transaction Activity가 commit을 소유한다.
+- Update-with-Start를 사용하는 Temporal-first mutation은 transaction Activity가 반환한 committed domain result를
+  Update handler가 caller에 먼저 반환하고, Workflow는 그 뒤 post-commit effect queue를 drain한다. 이미 commit된
+  state는 effect failure로 rollback하지 않으며, 이 result/effect 순서와 오류 격리는 공용 Update-with-Start 실행
+  계약이 소유한다. capability caller가 Temporal 호출과 effect 정산을 다시 조합하지 않는다.
 - Workflow는 결정론적 orchestration만 수행한다. DB domain transition은 Activity에서 실행하고, pair Workflow의
   source identity와 effect queue는 JSON-serializable한 Workflow state로 보존한다.
 - Activity는 Notification projection이나 Fedify queue handoff처럼 retry 가능한 하나의 외부 효과 경계를 소유한다.
@@ -36,14 +46,35 @@
 
 ## Starting A Workflow
 
-- 각 Workflow는 자기 input과 그 input에서 stable Workflow ID를 만드는 규칙을 한 곳에 정의한다. commit 결과와 transition을 소유한 service는 Workflow 정의와 input을 호출 위치에서 읽을 수 있게 명시한다.
-- Workflow caller는 Workflow 종류와 무관한 공용 `runWorkflow`에 `WorkflowDefinition<T>`와 `{ args, mode, ...native Workflow options }`를 전달한다. `WorkflowDefinition<T>`는 SDK Workflow 함수 또는 이름과 `workflowIdFromArgs: (...args: Parameters<T>) => string` callback을 한 plain object로 묶고, 해당 Workflow가 정의한 input-to-ID 규칙을 함께 참조하게 한다. 이 interface는 기존 `packages/core/temporal/client.ts`에 둔다.
-- `runWorkflow`는 definition의 callback에 native args를 한 번 전달해 ID 문자열을 얻고, 그 ID와 공통 task queue·bounded deadline으로 native `start` 또는 `execute`를 호출한다. Callback 오류는 native 호출 전에 원본 그대로 전파한다. Native rejection은 `Error.cause` chain에서 첫 `ApplicationFailure`를 동일 객체로 전파하고, 없으면 최초 rejection 객체를 그대로 전파한다. Remote profile lookup caller는 `ApplicationFailure.type`을 분류하지 않고 모든 native rejection을 공용 API `reportError` callback으로 보내며, callback의 `null`을 기존 빈 connection으로 매핑한다. `reportError`는 Sentry가 활성화된 경우 오류를 보고하고, 공용 client는 domain별 fallback·reporting 정책을 소유하지 않는다. Unknown `ApplicationFailure` 관측 tradeoff는 PROD-808 archived decision에 기록한다. Remote profile lookup caller는 `packages/core/temporal/remote-profile.ts`의 `remoteProfileLookupWorkflow` 정의 객체를 공유한다. 공통 ID format·name prefix·JSON 조합, Workflow 자동 감지, trampoline, registry/decorator/framework, domain별 pass-through wrapper를 추가하지 않으며, 실제 child caller가 없는 domain에 child helper 호출이나 `ABANDON` 정책을 추가하지 않는다. 기존 domain의 ID와 UWS를 자동으로 마이그레이션하지 않는다.
+- 각 Workflow는 자기 input과 그 input에서 stable Workflow ID를 만드는 규칙을 한 곳에 정의하고, caller가
+  가져올 수 있는 exported `WorkflowDefinition`으로 공개한다. Temporal-first caller는 이 definition과
+  serializable input을 사용해 Workflow type·ID 규칙을 한 번만 참조한다.
+- Workflow caller는 Workflow 종류와 무관한 공용 `runWorkflow`에 `WorkflowDefinition<T>`와
+  `{ args, mode, workflowIdConflictPolicy, workflowIdReusePolicy }` 같은 capability 옵션을 한 번 전달한다.
+  `WorkflowDefinition<T>`는 SDK Workflow 함수 또는 이름과 `workflowIdFromArgs: (...args: Parameters<T>) => string`
+  callback을 한 plain object로 묶고, 해당 Workflow가 정의한 input-to-ID 규칙을 함께 참조하게 한다. 이 interface는
+  기존 `packages/core/temporal/client.ts`에 둔다.
+- `runWorkflow`는 definition의 callback에 native args를 한 번 전달해 ID 문자열을 얻고, 공통 task queue와
+  bounded deadline을 적용해 native `start` 또는 `execute`를 호출한다. Caller는 task queue·deadline·native client
+  호출을 조합하지 않는다. Callback 오류는 native 호출 전에 원본 그대로 전파한다. Native rejection은
+  `Error.cause` chain에서 첫 `ApplicationFailure`를 동일 객체로 전파하고, 없으면 최초 rejection 객체를 그대로
+  전파한다. Remote profile lookup caller는 `ApplicationFailure.type`을 분류하지 않고 모든 native rejection을
+  공용 API `reportError` callback으로 보내며, callback의 `null`을 기존 빈 connection으로 매핑한다. `reportError`는
+  Sentry가 활성화된 경우 오류를 보고하고, 공용 client는 domain별 fallback·reporting 정책을 소유하지 않는다.
+  Unknown `ApplicationFailure` 관측 tradeoff는 PROD-808 archived decision에 기록한다. Remote profile lookup caller는
+  `packages/core/temporal/remote-profile.ts`의 `remoteProfileLookupWorkflow` 정의 객체를 공유한다. 공통 ID
+  format·name prefix·JSON 조합, Workflow 자동 감지, trampoline, registry/decorator/framework, domain별 pass-through
+  wrapper를 추가하지 않으며, 실제 child caller가 없는 domain에 child helper 호출이나 `ABANDON` 정책을 추가하지
+  않는다. 기존 domain의 ID와 UWS를 자동으로 마이그레이션하지 않는다.
 - Workflow 안에서 다른 Workflow를 native child로 실행해야 하는 경우에는 `apps/worker/src/workflows/child.ts`의 `runChildWorkflow<T>`를 사용한다. 이 helper는 기존 `packages/core/temporal/client.ts`의 `WorkflowDefinition<T>`를 `import type`으로 재사용하고, definition의 ID callback에 실제 args를 한 번 전달해 ID를 만든다. `mode: 'start'`는 native child start handle/acknowledgement를 반환하고 `mode: 'execute'`는 native child result를 반환한다. Native child options·error·queue inheritance를 그대로 보존하며 client `runWorkflow`의 KOSMO task queue와 bounded deadline을 복사하지 않는다. `parentClosePolicy`와 `cancellationType`을 생략하면 Temporal 기본값을 사용하고, helper가 `ABANDON`을 자동으로 정하지 않는다. 실제 remote async child caller가 있는 경우에만 caller가 두 옵션을 명시한다.
 - 명시적 qualified handle 검색은 `RemoteProfileLookupInput { domain, handle, profileId? }`로 `remoteProfileLookupWorkflow`를 dispatch한다. Workflow ID는 기존 pure handle normalization으로 계산한 `normalizedHandle`, domain과 acting `profileId`에서 만들며 `normalizedHandle`을 wire input에 중복해 넣지 않는다. Workflow는 state-independent `lookupRemoteActorUriActivity`로 저장된 canonical actor URI를 먼저 재사용하고, 없을 때만 WebFinger의 ActivityPub self link에서 URI를 확인한 뒤 `materializeRemoteProfileActorActivity`에 canonical `actorUri`와 optional `profileId`를 전달한다. WebFinger 응답만으로 Instance를 추출하거나 상태를 판정하지 않는다. Caller의 bounded 5초 대기 deadline에는 URI discovery가 포함되며 이미 시작된 Workflow는 caller가 더 기다리지 않아도 계속 실행할 수 있다. Materialization 이후 connection·visibility DB 조회는 기존 검색 경계가 유지한다.
 - `needsRefresh: true`인 경우 lookup Workflow는 URI lookup Activity가 반환한 `actorUri`와 원래 받은 optional `profileId`를 별도 refresh ID prefix child에 그대로 전달해 `refreshRemoteProfileActorActivity`를 실행한다. Child는 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`으로 시작하고 start acknowledgement 뒤 cached ID를 반환한다. 이미 실행 중인 같은 child는 정상 coalescing으로 처리하고, 그 밖의 child start·execution failure는 관측한 뒤 cached ID를 유지한다. Public Workflow 자체의 start failure는 caller가 DB fallback을 만들지 않고 기존 오류 경계로 전달한다. Async caller는 모든 분기에서 public Workflow start acknowledgement만 기다린다.
 - 조건별 Workflow start가 대부분 하나이고 각 start 오류를 이미 격리한다면 Promise를 `effects` 배열에 push한 뒤 `Promise.all`로 모으지 않는다. 한 transaction 결과에서 두 Workflow가 필요한 경우에도 각 조건에서 직접 `await`해 type, input과 Workflow별 ID 규칙을 가까이 둔다. 실제 동시 start가 계약인 경우에만 배열과 병렬 대기를 사용한다.
-- Client Workflow start에는 repository의 공통 task queue와 bounded deadline을 명시한다. 일반적인 새 실행은 `USE_EXISTING` conflict
-  policy와 `REJECT_DUPLICATE` reuse policy를 사용하지만, directed Profile pair Workflow는 실행 중인 lifecycle에는
-  `USE_EXISTING`을 사용하고 완료된 lifecycle의 새 실행에는 `ALLOW_DUPLICATE` reuse policy를 사용한다.
-- post-commit start 오류는 최소 identity와 transition context로 관찰하고 committed action 결과와 분리한다. observer callback 자체의 실패도 결과를 바꾸지 않는다.
+- Capability caller는 `runWorkflow`에 `mode`와 capability별 conflict/reuse policy를 전달한다. 예를 들어 일반적인
+  새 실행은 `USE_EXISTING` conflict policy와 `REJECT_DUPLICATE` reuse policy를 사용하지만, directed Profile pair
+  Workflow는 실행 중인 lifecycle에는 `USE_EXISTING`을 사용하고 완료된 lifecycle의 새 실행에는 `ALLOW_DUPLICATE`
+  reuse policy를 사용한다. task queue·bounded deadline·native client 호출은 `runWorkflow`가 중앙화한다.
+- 기존 post-commit start 경로가 남아 있는 capability의 start 오류는 최소 identity와 transition context로
+  관찰하고 committed action 결과와 분리한다. observer callback 자체의 실패도 결과를 바꾸지 않는다. 새
+  Temporal-first mutation은 commit 전에 Workflow를 admission하고 Activity가 state transition을 소유하므로
+  이 post-commit gap을 새 contract로 도입하지 않는다.

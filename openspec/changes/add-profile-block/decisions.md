@@ -1,7 +1,7 @@
 ## Context
 
 이 기록은 이미 정해진 Profile Block 도메인 계약을 `PROD-821`·`PROD-822`·`PROD-823`·`PROD-813`의 순차 구현과
-하나의 최종 lifecycle로 연결한다. `PROD-821`이 저장·durable cleanup과 shared change를 열고, `PROD-822`가
+하나의 최종 lifecycle로 연결한다. `PROD-821`이 저장·transaction cleanup과 shared change를 열고, `PROD-822`가
 정책·GraphQL, `PROD-823`이 UI·client 상태, `PROD-813`이 cross-slice E2E·canonical sync·archive를 소유한다. OpenSpec 파일
 작성만을 결과로 하는 별도 이슈는 만들지 않는다.
 
@@ -16,7 +16,7 @@
 - Authority / Provenance: `memory/issue-openspec-workflow.md`, `docs/domain/objects/profile-block.md`, `PROD-821`, `PROD-822`, `PROD-823`, `PROD-813`
 - Status: Active
 - Context / Problem: 구현 이슈마다 OpenSpec을 복제하거나 OpenSpec 전용 이슈를 따로 만들면 같은 Profile Block invariant가 갈라지고, 개별 slice 완료를 전체 완료·archive로 오인할 수 있다.
-- Decision Outcome: `add-profile-block` 하나가 저장·정책·UI·통합 검증의 공통 행동 계약을 소유한다. 최초로 새 저장 계약을 여는 `PROD-821`이 artifact와 저장·durable cleanup task를 열고, `PROD-822`·`PROD-823`은 같은 change를 순차 갱신하며, `PROD-813`은 네 slice의 cross-slice 검증·canonical sync와 최종 archive를 소유한다. 이 change는 OpenSpec 파일 작성 자체를 독립 deliverable로 만들지 않는다.
+- Decision Outcome: `add-profile-block` 하나가 저장·정책·UI·통합 검증의 공통 행동 계약을 소유한다. 최초로 새 저장 계약을 여는 `PROD-821`이 artifact와 저장·transaction cleanup task를 열고, `PROD-822`·`PROD-823`은 같은 change를 순차 갱신하며, `PROD-813`은 네 slice의 cross-slice 검증·canonical sync와 최종 archive를 소유한다. 이 change는 OpenSpec 파일 작성 자체를 독립 deliverable로 만들지 않는다.
 - Alternatives Considered: 이슈마다 change를 하나씩 복제하면 visibility·cleanup·archive 조건이 중복되고 서로 다른 계약으로 drift한다. 모든 이슈를 하나의 구현 task로 합치면 authority와 독립 완료 조건을 잃는다. 둘 다 현재 이슈의 책임 경계와 맞지 않아 채택하지 않는다.
 - Consequences: 네 이슈는 각자의 deliverable만 수행하지만 같은 delta와 decision을 갱신해야 한다. 한 slice가 완료되어도 `PROD-813`의 통합 검증과 archive 전까지 change는 active로 남는다.
 - Confirmation / Follow-up: `tasks.md`의 이슈별 Deliverable·Guardrails·Verification을 순서대로 실행하고, `PROD-813`에서 Linear·canonical·OpenSpec 상태를 함께 확인한다.
@@ -33,17 +33,17 @@
 - Consequences: 같은 Owner/Target pair는 하나의 row로 식별되고 차단 적용의 양방향성은 저장 중복이 아니라 공통 policy에서 계산한다. Remote ingress·delivery의 구체 계약은 이 change가 결정하지 않는다.
 - Confirmation / Follow-up: `PROD-821`에서 Local·Remote pair, duplicate/self 및 Owner scope를 확인하고, `PROD-822`에서 selected Local GraphQL actor와 Owner-only connection을 검증한다.
 
-### Profile Block cleanup은 required 결과를 보장하는 durable orchestration이다
+### Profile Block transaction이 관계 정리와 성공 결과를 소유한다
 
-- Decision Date: 2026-09-02
+- Decision Date: 2026-09-17
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`
 - Status: Active
-- Context / Problem: Block row와 Follow·Notification 정리를 한 로컬 commit에만 묶으면 worker 재시작·retry에서 durable completion을 보장할 수 없다.
-- Decision Outcome: Block policy/admission 뒤 Profile Block 생성은 이번 실행이 포착한 양방향 Follow Request·Follow Relationship removal, pending request cleanup과 직접 원인 Follow Notification cleanup을 durable orchestration으로 수행한다. required cleanup 완료 전에는 Block action을 성공으로 확정하지 않는다. 이미 진입한 Follow transition이 cleanup 뒤 Follow/Request 또는 그 직접 원인 Notification을 남길 수 있지만 Active Block 동안 공통 정책에서 inactive/invisible로 취급한다. Unblock은 현재 남아 있는 양방향 Follow/Request와 그 직접 원인 Notification을 정리한 뒤 Profile Block을 제거하며, 차단 생성 때 제거된 Follow Request·Follow Relationship을 복구하지 않는다. 기존 Reaction·Repost·Bookmark와 비직접 원인 기존 Notification·Read State는 이번 action에서 변경하지 않는다.
-- Alternatives Considered: 로컬 commit만 성공으로 확정하면 cleanup이 남은 부분 성공을 관찰할 수 있다. 필요한 결과를 보장하는 다른 durable composition은 허용되며, 구체 Workflow·transaction·query·helper topology는 구현 중 선택한다. Repost·Bookmark나 기존 Reaction까지 변경하거나 Unblock 때 Follow 관계를 복구하면 현재 보존 계약을 위반한다.
-- Consequences: `PROD-821`은 required cleanup success gate, 양방향 pending/relationship, direct-cause Notification과 restart/retry idempotency를 검증한다. 기존 lifecycle과 어떻게 조합할지, 어떤 runtime 경계를 사용할지는 구현 PR의 선택으로 남긴다.
-- Confirmation / Follow-up: `PROD-821`에서 required cleanup success gate, 양방향 pending/relationship, direct-cause Notification과 restart/retry를 검증하고 Reaction을 변경하지 않는지 확인한다.
+- Context / Problem: Block relation, 현재 Follow·Request 정리와 후속 effect를 하나의 성공 상태로 추상화하면 relation의 durable 결과와 effect의 별도 실패가 섞이고, 이미 존재하는 duplicate가 새 cleanup을 소유하게 된다.
+- Decision Outcome: Block policy/admission 뒤 새 Profile Block 관계를 저장하는 하나의 transaction에서만 현재 양방향 Follow Request·Follow Relationship 및 그 직접 원인 Follow Notification 제거를 함께 commit한다. commit된 Profile Block 관계가 Block action의 유일한 성공 결과이며, commit 뒤 effect의 성공·실패는 관계 성공을 바꾸지 않는다. 같은 Owner/Target 관계가 이미 있으면 기존 관계를 성공 결과로 관찰하고 새 cleanup을 실행하지 않는다. 이미 관계가 존재한 뒤 동시성이나 후속 경로로 뒤늦게 관찰되는 Follow·Request·Notification은 Active Block 정책으로 처리하며 duplicate Block이나 Unblock의 보상 cleanup으로 확장하지 않는다. Unblock은 Owner가 지정한 정확한 Profile Block ID 관계만 제거하며 Follow/Request/Notification을 추가로 정리하거나 차단 생성 때 제거된 관계를 복구하지 않는다. 기존 Reaction·Repost·Bookmark와 비직접 원인 기존 Notification·Read State는 이번 action에서 변경하지 않는다.
+- Alternatives Considered: 관계 commit 뒤 후속 cleanup 완료를 관계 성공 조건에 결합하거나 후속 effect를 관계 성공에 묶으면 부분 실패가 공개 성공을 되돌리거나 duplicate가 새 작업을 소유하는 경계가 생긴다. Unblock의 exact ID 범위를 pair 전체로 확장하는 방식은 Owner 소유권과 현재 Block transaction 경계를 흐리므로 채택하지 않는다.
+- Consequences: `PROD-821`은 transaction rollback·새 관계 생성 시의 현재 관계 정리·duplicate no-op cleanup·Active Block 표면 정책·post-commit effect 분리·exact-ID Unblock과 보존 대상을 검증한다. 후속 effect의 retry·실패 lifecycle은 관계 성공과 독립적인 runtime 결과로 남긴다.
+- Confirmation / Follow-up: `PROD-821`에서 새 관계와 현재 cleanup의 원자적 결과, duplicate 기존 row 관찰, post-commit effect 실패에도 관계 성공 유지, 정확한 ID 이외 관계 불변을 확인한다.
 
 ### Profile Block은 surface별 정책을 저장 방향과 함께 적용한다
 
@@ -76,7 +76,7 @@
 - Authority / Provenance: `docs/domain/objects/profile-block.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0002-pr-review-domain-adjustments.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, `docs/domain/decisions/0007-spec-boundary-and-state-clarifications.md`, `PROD-821`, `PROD-822`, `PROD-813`
 - Status: Active
 - Context / Problem: Profile Block pair가 있는 기존 Notification을 직접 Post 조회 방향만으로 반환하면 Notification 보호 정책을 우회하지만, 모든 source를 이번 local capability에 연결하면 별도 책임과 lifecycle을 흡수한다.
-- Decision Outcome: Profile Block pair에 연결된 기존 Notification은 connection·Unread count·Node·read 처리에서 숨긴다. 이 Notification visibility는 Recipient가 Related Post를 직접 조회할 수 있는 방향의 Post·Media policy와 독립적으로 적용한다. Block 생성으로 제거되는 Follow Request/Relationship을 직접 원인으로 하는 Notification만 821 durable cleanup에서 삭제하며, 다른 기존 Notification과 Read State는 보존한다. 모든 source의 신규 생성 suppression과 숨겨진 row의 async physical cleanup은 이 change의 task·완료 증거가 아니다.
+- Decision Outcome: Profile Block pair에 연결된 기존 Notification은 connection·Unread count·Node·read 처리에서 숨긴다. 이 Notification visibility는 Recipient가 Related Post를 직접 조회할 수 있는 방향의 Post·Media policy와 독립적으로 적용한다. Block transaction으로 제거되는 Follow Request/Relationship을 직접 원인으로 하는 Notification만 `PROD-821`에서 함께 삭제하며, 다른 기존 Notification과 Read State는 보존한다. 모든 source의 신규 생성 suppression과 숨겨진 row의 async physical cleanup은 이 change의 task·완료 증거가 아니다.
 - Alternatives Considered: 모든 source 생성 경로를 여기서 수정하면 후속 공용 정책과 책임이 중복된다. 기존 unavailable row를 전부 삭제하면 비직접 원인 보존 계약을 위반한다. queue/worker/scan을 추가하면 별도 lifecycle이 합쳐진다.
 - Consequences: API surface는 Profile Block pair와 Recipient·Related Profile/Post 정책을 매 요청 평가하며 hidden row가 남아도 사용자에게 노출하지 않는다. source suppression은 `PROD-327`, async physical cleanup은 `PROD-328`, remote ActivityPub는 `PROD-818`의 후속 boundary로 남는다.
 - Confirmation / Follow-up: `PROD-822`에서 list/count/Node/read visibility를, `PROD-821`에서 direct-cause deletion을, `PROD-813`에서 두 후속 이슈가 완료 조건이 아님을 확인한다.
