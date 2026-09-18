@@ -17,8 +17,8 @@
 실제 컴포넌트로 width-fit·숨긴 Type 수·선택 보존·펼침/접기·Bio 숨김·행 구분선과 키보드 동작을 검증한다.
 
 - [x] 1.1 한 줄 width-fit과 Ellipsis/+N 진입점을 구현한다.
-- [ ] 1.2 선택 상태를 보존하는 pill 필터와 공용 Profile 행을 정렬한다.
-- [ ] 1.3 수동 Playground와 관련 동작 Tests story를 정렬한다.
+- [x] 1.2 선택 상태를 보존하는 pill 필터와 공용 Profile 행을 정렬한다.
+- [x] 1.3 수동 Playground와 관련 동작 Tests story를 정렬한다.
 
 ## 2. PROD-938 전용 화면과 조회 lifecycle
 
@@ -38,9 +38,9 @@
 
 직접 진입·Type 정규화·Back fallback·최초/추가 오류·재시도·캐시 재방문·actor 전환의 최소 동작 테스트와 실제 화면 스토리.
 
-- [ ] 2.1 전용 route와 중복 없는 PageHeader·shell·scroll 및 route-owned 최초 heading focus 경계를 연결한다.
-- [ ] 2.2 기존 Relay 조회·페이지네이션·inline 재시도와 cache 격리를 연결한다.
-- [ ] 2.3 URL·선택·Back·실패 경로의 최소 자동 검증을 정렬한다.
+- [x] 2.1 전용 route와 중복 없는 PageHeader·shell·scroll 및 route-owned 최초 heading focus 경계를 연결한다.
+- [x] 2.2 기존 Relay 조회·페이지네이션·inline 재시도와 cache 격리를 연결한다.
+- [x] 2.3 URL·선택·Back·실패 경로의 최소 자동 검증을 정렬한다.
 
 ## 3. PROD-938 실제 진입점과 통합 검증
 

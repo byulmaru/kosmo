@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { AccessibilityInfo, Platform, StyleSheet, Text, View } from 'react-native';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
@@ -20,6 +21,7 @@ export type ReactionProfileListProps = {
   loading?: boolean;
   onLoadMore?: () => void;
   onRetry?: () => void;
+  presentation?: 'modal' | 'route';
   reactionType: string;
 };
 
@@ -41,9 +43,24 @@ export function ReactionProfileList({
   loading,
   onLoadMore,
   onRetry,
+  presentation = 'modal',
   reactionType,
 }: ReactionProfileListProps): React.ReactElement {
   const theme = useTheme();
+  const [announcement, setAnnouncement] = useState('');
+  const status =
+    presentation === 'route' && items !== undefined
+      ? `${reactionType} 반응을 남긴 프로필 ${items.length}명을 표시합니다.`
+      : presentation === 'route' && loading
+        ? `${reactionType} ${copy.loadingTitle}`
+        : '';
+  // Update text after the live region mounts, including when a new Type resolves from cache.
+  useEffect(() => {
+    setAnnouncement(status);
+    if (Platform.OS === 'ios' && status) {
+      AccessibilityInfo.announceForAccessibilityWithOptions(status, { queue: true });
+    }
+  }, [status]);
   const showPagination = Boolean(onLoadMore && (hasNext || loadMoreError));
   const loadMore = () => {
     if (isLoadingMore) {
@@ -55,9 +72,19 @@ export function ReactionProfileList({
 
   return (
     <View style={styles.root}>
-      <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-        반응한 사람
-      </Text>
+      {presentation === 'route' ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          role={Platform.OS === 'web' ? 'status' : undefined}
+          style={styles.srOnly}
+        >
+          {announcement}
+        </Text>
+      ) : (
+        <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+          반응한 사람
+        </Text>
+      )}
       {items !== undefined ? (
         items.length ? (
           <>
@@ -73,7 +100,12 @@ export function ReactionProfileList({
                 <Text accessibilityLabel={`${reactionType} 반응`} style={styles.itemReaction}>
                   {reactionType}
                 </Text>
-                <ProfileListItem linked profile={item.profile} style={styles.profileItem} />
+                <ProfileListItem
+                  linked
+                  profile={item.profile}
+                  showBio={presentation !== 'route'}
+                  style={styles.profileItem}
+                />
               </View>
             ))}
             {showPagination ? (
@@ -127,6 +159,7 @@ export function ReactionProfileList({
 const styles = StyleSheet.create({
   root: { gap: spacing.md },
   title: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.lg },
+  srOnly: { height: 1, left: 0, overflow: 'hidden', position: 'absolute', top: 0, width: 1 },
   item: { alignItems: 'center', flexDirection: 'row' },
   itemReaction: { fontSize: 20, lineHeight: 24, marginLeft: spacing.lg },
   itemSeparator: { borderBottomWidth: 1 },

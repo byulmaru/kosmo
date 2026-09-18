@@ -28,10 +28,15 @@ const reactionProfileConnectionFragment = graphql`
 
 type ReactionProfileConnectionProps = {
   post: ReactionProfileConnection_post$key;
+  presentation?: 'modal' | 'route';
   reactionType: string;
 };
 
-export function ReactionProfileConnection({ post, reactionType }: ReactionProfileConnectionProps) {
+export function ReactionProfileConnection({
+  post,
+  presentation,
+  reactionType,
+}: ReactionProfileConnectionProps) {
   const pagination = usePaginationFragment<
     ReactionProfileConnectionNextPageQuery,
     ReactionProfileConnection_post$key
@@ -61,6 +66,7 @@ export function ReactionProfileConnection({ post, reactionType }: ReactionProfil
       items={items}
       loadMoreError={loadMoreError}
       onLoadMore={loadMore}
+      presentation={presentation}
       reactionType={reactionType}
     />
   );

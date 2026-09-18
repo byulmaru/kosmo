@@ -53,7 +53,7 @@
 - **WHEN** 화면이 열리거나 선택 Type이 바뀐다
 - **THEN** 서버의 양수 count 순서를 유지하고 유효한 `type` query를 선택한다
 - **AND** query가 없거나 유효하지 않으면 서버 순서의 첫 양수 Type을 선택하며 양수 Type이 없으면 필터 없이 빈 목록을 표시한다
-- **AND** 필터 변경은 현재 history 항목을 갱신하고 선택 tab의 focus를 유지하며 목록 위치를 초기화한다
+- **AND** 필터 변경은 현재 history 항목을 갱신하고 현재 People scroll 위치를 유지한다
 - **AND** 선택 Type의 connection만 표시하고 목록 갱신을 보조 기술에 알린다
 
 #### Scenario: 필터 펼침과 선택 보존

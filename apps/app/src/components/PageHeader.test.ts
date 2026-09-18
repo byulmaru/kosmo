@@ -33,6 +33,7 @@ type PageHeaderProps =
   | {
       leading?: ReactNode;
       title: string;
+      titleRef?: unknown;
       titleLines?: 1;
       trailing?: ReactNode;
       variant?: 'text';
@@ -52,6 +53,7 @@ type TestElementProps = {
   accessibilityLabel?: string;
   accessibilityElementsHidden?: boolean;
   accessibilityRole?: string;
+  accessible?: boolean;
   href?: string;
   children?: ReactNode;
   current?: boolean;
@@ -61,6 +63,7 @@ type TestElementProps = {
   ellipsizeMode?: string;
   variant?: string;
   width?: number;
+  ref?: unknown;
 };
 type TestElement = ReactElement<TestElementProps>;
 type PageHeaderComponent = (props: PageHeaderProps) => TestElement;
@@ -138,6 +141,18 @@ test('text title can opt into one-line tail ellipsis without changing its access
   assert.equal(heading.props.children, title);
   assert.equal(heading.props.numberOfLines, 1);
   assert.equal(heading.props.ellipsizeMode, 'tail');
+});
+
+test('text title forwards its ref to the accessible heading', () => {
+  const titleRef = {};
+  const header = renderHeader({ title: '반응한 사람', titleRef });
+  const heading = findElements(header, 'Text').find(
+    (element) => element.props.accessibilityRole === 'header',
+  );
+
+  assert.ok(heading);
+  assert.equal(heading.props.accessible, true);
+  assert.equal(heading.props.ref, titleRef);
 });
 
 test('text variant renders its optional trailing action beside the heading', () => {

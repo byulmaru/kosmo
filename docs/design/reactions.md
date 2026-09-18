@@ -97,7 +97,7 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
   source의 interaction coverage로 유지한다.
 - server가 제공한 양수 count Type과 순서를 그대로 사용한다. 처음 진입할 때 server 순서의 첫 Type을 선택하고, 사용자가 pill을 바꾸면 해당 Type의 Profile 목록을 표시한다.
 - collapsed filter는 server 순서의 앞 6개와 같은 줄의 `+N` control을 표시한다. 현재 선택 Type이 앞 6개 밖에 있으면 앞 5개와 현재 선택 Type을 표시해 선택 상태를 숨기지 않는다. `+N`을 펼치면 전체 Type을 wrap해 표시하고 다시 접을 수 있다.
-- Reaction pill 묶음은 접근성 `tablist`, 각 pill은 selected 상태를 가진 `tab`으로 노출한다. `+N`과 접기 control은 tablist 밖의 button이며 각각 `나머지 반응 N개 모두 보기`, `반응 목록 접기`로 이름을 제공한다. Type 전환 뒤 focus는 선택한 tab에 유지하고 목록 갱신을 보조 기술에 알리는 실제 동작은 runtime QA에서 검증한다.
+- Reaction pill 묶음은 접근성 `tablist`, 각 pill은 selected 상태를 가진 `tab`으로 노출한다. `+N`과 접기 control은 tablist 밖의 button이며 각각 `나머지 반응 N개 모두 보기`, `반응 목록 접기`로 이름을 제공한다. Type 전환은 현재 People scroll 위치를 유지하며 목록 갱신을 보조 기술에 알리는 실제 동작은 runtime QA에서 검증한다.
 - 각 pill은 emoji와 count, selected 상태를 표시한다. 각 Profile row 왼쪽에는 해당 Profile이 남긴 Reaction Type을 식별할 수 있는 emoji를 표시하고, Profile 정보 영역은 기존 `ProfileListItem`의 `Bio=False, Action=Follow` 계약을 재사용한다. Follow action은 관계에 따라 `팔로우`, `팔로잉`, `요청됨` 상태를 표시한다.
 - Profile row의 border는 인접한 Profile 사이에만 표시한다. 마지막 row 뒤에는 표시하지 않으므로 Profile이 한 명이면 separator가 없다. pagination 영역의 별도 상단 border는 유지한다.
 - Profile 목록의 최초 조회가 실패하면 header와 filter를 유지한 route content 안에 오류와 다시 시도 동작을 표시한다.

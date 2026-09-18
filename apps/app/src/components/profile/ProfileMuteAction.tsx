@@ -5,6 +5,7 @@ import { graphql, useFragment } from 'react-relay';
 import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
+import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -249,7 +250,7 @@ function ProfileMuteActionContent({
     setOpen(true);
   };
   const label = muted ? '뮤트 해제' : '뮤트';
-  const targetHeight = Platform.OS === 'web' ? 32 : Platform.OS === 'ios' ? 44 : 48;
+  const targetHeight = getInteractionTargetSize(Platform.OS);
   return (
     <>
       {surface === 'menu' ? (

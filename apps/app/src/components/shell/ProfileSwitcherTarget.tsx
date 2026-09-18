@@ -6,7 +6,7 @@ import {
   ProfileSwitcherUnreadIndicator,
 } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
-import { getIconButtonTargetSize } from '@/components/ui/IconButton';
+import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import type { ViewStyle } from 'react-native';
@@ -40,8 +40,8 @@ export function ProfileSwitcherTarget({
   const triggerRef = useRef<View>(null);
   const compact = surface === 'compact';
   const triggerTargetSize = compact
-    ? Math.max(44, getIconButtonTargetSize(Platform.OS))
-    : getIconButtonTargetSize(Platform.OS);
+    ? Math.max(44, getInteractionTargetSize(Platform.OS))
+    : getInteractionTargetSize(Platform.OS);
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);
   const otherHasUnread = profiles.some(
     (profile) => profile.id !== selectedProfileId && (profile.unreadNotificationCount ?? 0) > 0,
