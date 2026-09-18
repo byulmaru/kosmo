@@ -39,6 +39,7 @@ import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as PostUriModule from './activitypub-post-uri';
 import type * as LocalPostNoteModule from './local-post-note';
 import type * as LocalPostReactionCollectionModule from './local-post-reaction-collection';
+import type * as LocalQuoteAuthorizationModule from './local-quote-authorization';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -55,6 +56,7 @@ let dispatchLocalPostNote: typeof LocalPostNoteModule.dispatchLocalPostNote;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let isCanonicalPostId: typeof PostUriModule.isCanonicalPostId;
 let Instances: typeof CoreDb.Instances;
+let dispatchLocalQuoteAuthorization: typeof LocalQuoteAuthorizationModule.dispatchLocalQuoteAuthorization;
 let localInstanceId: string;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
@@ -97,6 +99,7 @@ describe('ActivityPub Local Post Note', () => {
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ isCanonicalPostId, resolveActivityPubPostUri } = await import('./activitypub-post-uri'));
+    ({ dispatchLocalQuoteAuthorization } = await import('./local-quote-authorization'));
     ({ authorizeLocalPostNote, dispatchLocalPostNote } = await import('./local-post-note'));
     ({
       countLocalPostEmojiReactions,
@@ -293,6 +296,37 @@ describe('ActivityPub Local Post Note', () => {
         process.env.KOSMO_LEGACY_LOCAL_QUOTE_POST_IDS = previousLegacyIds;
       }
     }
+  });
+
+  test('serves an approved QuoteAuthorization before the remote Quote is materialized', async () => {
+    const fixtureId = crypto.randomUUID();
+    const sourceAuthor = await createProfile({
+      handle: `authorization-source-${fixtureId}`,
+      kind: InstanceKind.LOCAL,
+    });
+    const source = await createPost(sourceAuthor.id);
+    const requestUri = `https://quote-author.example/quote-requests/${fixtureId}`;
+    const approvalUri = `${publicOrigin}/ap/quote-authorization/${encodeURIComponent(requestUri)}`;
+    const quoteUri = `https://quote-author.example/notes/${fixtureId}`;
+    const sourceUri = `${publicOrigin}/ap/note/${source.id}`;
+    await db.insert(PostQuoteConsents).values({
+      approvalUri,
+      quoteAuthorActorUri: `https://quote-author.example/users/${fixtureId}`,
+      quotePostId: null,
+      quoteUri,
+      requestUri,
+      sourceAuthorActorUri: `${publicOrigin}/ap/actor/${sourceAuthor.id}`,
+      sourcePostId: source.id,
+      sourceUri,
+      status: PostQuoteConsentStatus.APPROVED,
+    });
+
+    const authorization = await dispatchLocalQuoteAuthorization(createContext(approvalUri));
+
+    assert.ok(authorization);
+    assert.equal(authorization.id?.href, approvalUri);
+    assert.equal(authorization.interactingObjectId?.href, quoteUri);
+    assert.equal(authorization.interactionTargetId?.href, sourceUri);
   });
 
   test('projects stored ordered Ready Local Media as Image attachments without HTML duplication or network reads', async () => {
@@ -900,16 +934,15 @@ describe('ActivityPub Local Post Note', () => {
   });
 });
 
-const createContext = (): RequestContext<void> => {
+const createContext = (
+  url = `${publicOrigin}/ap/note/00000000-0000-8000-8000-000000000001`,
+): RequestContext<void> => {
   const federation = createFederation<void>({ kv: new MemoryKvStore(), origin: publicOrigin });
   federation.setActorDispatcher(
     '/ap/actor/{identifier}',
     (context, identifier) => new Person({ id: context.getActorUri(identifier) }),
   );
-  return federation.createContext(
-    new Request(`${publicOrigin}/ap/note/00000000-0000-8000-8000-000000000001`),
-    undefined,
-  );
+  return federation.createContext(new Request(url), undefined);
 };
 
 const createUnsignedCollectionFederation = () => {

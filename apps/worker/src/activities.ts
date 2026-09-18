@@ -1,6 +1,5 @@
 import '@kosmo/core/polyfill';
 
-export { deleteAccountActivity } from './activities/account-deletion';
 import { completePostQuoteEffectReceipt } from '@kosmo/core/services';
 import {
   sendLocalPostConsentUpdate,
@@ -9,6 +8,8 @@ import {
   sendLocalPostQuoteRevocation,
   sendLocalPostUpdate,
 } from '@kosmo/fedify';
+
+export { deleteAccountActivity } from './activities/account-deletion';
 export { cleanupUnavailableNotificationsActivity } from './activities/cleanup-unavailable-notifications';
 export {
   lookupRemoteActorUriActivity,

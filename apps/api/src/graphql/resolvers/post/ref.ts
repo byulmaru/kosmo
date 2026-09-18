@@ -2,7 +2,6 @@ import { db, Instances, PostContents, Posts, Profiles } from '@kosmo/core/db';
 import { MediaState, PostQuotePolicy, PostState, PostVisibility } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
-import { getPostQuotePolicy } from '@kosmo/core/services';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
@@ -10,6 +9,7 @@ import { mediaByIdLoader } from '../media/loader/by-id';
 import { Media } from '../media/ref';
 import { postAccessWhere } from './access';
 import { postVisibilityAccessWhere } from './access/visibility';
+import { postQuotePolicyLoader } from './loader/quote-policy';
 
 export const Post = createObjectRef('Post', (ids, ctx) =>
   db
@@ -28,11 +28,18 @@ Post.implement({
     quotePolicy: t.field({
       type: PostQuotePolicy,
       nullable: true,
-      resolve: (post) => getPostQuotePolicy(post.id),
+      resolve: async (post, _, ctx) => {
+        const row = await postQuotePolicyLoader(ctx).load(post.id);
+        return row ? (row.policy ?? PostQuotePolicy.EVERYONE) : null;
+      },
     }),
     viewerCanUpdateQuotePolicy: t.boolean({
-      resolve: async (post, _, ctx) =>
-        ctx.session?.profile?.id === post.profileId && (await getPostQuotePolicy(post.id)) !== null,
+      resolve: async (post, _, ctx) => {
+        if (ctx.session?.profile?.id !== post.profileId) {
+          return false;
+        }
+        return (await postQuotePolicyLoader(ctx).load(post.id)) !== null;
+      },
     }),
   }),
 });

@@ -39,8 +39,8 @@ import type {
 } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
-import type { PostComposerTargetVisibility } from './PostComposerTarget';
 import type { PostComposerQuotePolicy } from './postComposerState';
+import type { PostComposerTargetVisibility } from './PostComposerTarget';
 
 // TODO(PROD-462): Mentioned Profile recipient 입력·저장과 DIRECT 조회 권한이 구현되면
 // PostVisibility.DIRECT를 Composer 허용 목록에 복원한다.
@@ -554,8 +554,10 @@ function PostComposerContents({
                 }
               },
               onPollAction: () => undefined,
+              onQuotePolicyChange: setQuotePolicy,
               onSubmit: submit,
               onVisibilityChange: setVisibility,
+              quotePolicy,
               remaining,
               sensitiveMedia,
               showEmojiAction: false,
@@ -670,10 +672,7 @@ function PostComposerContents({
       </View>
       {isPostComposerQuotePolicyVisible(visibility) ? (
         <>
-          <View
-            accessibilityRole="header"
-            style={[styles.policyHeading, { borderTopColor: theme.border }]}
-          >
+          <View style={[styles.policyHeading, { borderTopColor: theme.border }]}>
             <Text style={[styles.visibilityLabel, { color: theme.text }]}>인용 허용</Text>
           </View>
           <View

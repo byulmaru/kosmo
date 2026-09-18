@@ -29,12 +29,7 @@ const loadProjection = async (
   context: RequestContext<void>,
 ): Promise<QuoteAuthorizationProjection | null> => {
   const consent = await loadQuoteConsentByApprovalUri(db, context.url.href);
-  if (
-    !consent ||
-    consent.status !== PostQuoteConsentStatus.APPROVED ||
-    !consent.quotePostId ||
-    !consent.approvalUri
-  ) {
+  if (!consent || consent.status !== PostQuoteConsentStatus.APPROVED || !consent.approvalUri) {
     return null;
   }
 
@@ -55,41 +50,43 @@ const loadProjection = async (
     return null;
   }
 
-  const quote = await db
-    .select({
-      authorProfileId: Profiles.id,
-      authorActorUri: ActivityPubActors.uri,
-      currentContentId: Posts.currentContentId,
-      repostSourceId: Posts.repostSourceId,
-    })
-    .from(Posts)
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-    .where(
-      and(
-        eq(Posts.id, consent.quotePostId),
-        eq(Posts.state, PostState.ACTIVE),
-        isNotNull(Posts.currentContentId),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
-        eq(Profiles.state, ProfileState.ACTIVE),
-      ),
-    )
-    .limit(1)
-    .then(first);
-  if (!quote || quote.repostSourceId !== consent.sourcePostId) {
-    return null;
-  }
+  if (consent.quotePostId !== null) {
+    const quote = await db
+      .select({
+        authorProfileId: Profiles.id,
+        authorActorUri: ActivityPubActors.uri,
+        currentContentId: Posts.currentContentId,
+        repostSourceId: Posts.repostSourceId,
+      })
+      .from(Posts)
+      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+      .where(
+        and(
+          eq(Posts.id, consent.quotePostId),
+          eq(Posts.state, PostState.ACTIVE),
+          isNotNull(Posts.currentContentId),
+          eq(Instances.kind, InstanceKind.LOCAL),
+          eq(Instances.state, InstanceState.ACTIVE),
+          eq(Profiles.state, ProfileState.ACTIVE),
+        ),
+      )
+      .limit(1)
+      .then(first);
+    if (!quote || quote.repostSourceId !== consent.sourcePostId) {
+      return null;
+    }
 
-  const quoteIdentity = await loadQuotePostIdentity(db, consent.quotePostId);
-  if (
-    !quoteIdentity ||
-    quoteIdentity.quoteUri !== consent.quoteUri ||
-    quoteIdentity.authorActorUri !== consent.quoteAuthorActorUri ||
-    (quote.authorActorUri !== null && quote.authorActorUri !== consent.quoteAuthorActorUri)
-  ) {
-    return null;
+    const quoteIdentity = await loadQuotePostIdentity(db, consent.quotePostId);
+    if (
+      !quoteIdentity ||
+      quoteIdentity.quoteUri !== consent.quoteUri ||
+      quoteIdentity.authorActorUri !== consent.quoteAuthorActorUri ||
+      (quote.authorActorUri !== null && quote.authorActorUri !== consent.quoteAuthorActorUri)
+    ) {
+      return null;
+    }
   }
 
   return {

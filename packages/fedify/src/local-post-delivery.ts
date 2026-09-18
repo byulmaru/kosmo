@@ -261,7 +261,7 @@ export const sendLocalPostQuoteRequest = async ({
     .innerJoin(Posts, eq(Posts.id, PostQuoteConsents.sourcePostId))
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .innerJoin(
+    .leftJoin(
       SourceActors,
       and(
         eq(SourceActors.profileId, Profiles.id),
@@ -291,13 +291,11 @@ export const sendLocalPostQuoteRequest = async ({
     )
     .limit(1)
     .then(first);
-  if (
-    !consent ||
-    !consent.quoteAuthorProfileId ||
-    !consent.sourceActorUri ||
-    !consent.sourceInboxUri
-  ) {
+  if (!consent) {
     return;
+  }
+  if (!consent.quoteAuthorProfileId || !consent.sourceActorUri || !consent.sourceInboxUri) {
+    throw new Error('Pending QuoteRequest delivery identity is incomplete');
   }
 
   const quotePost = await db

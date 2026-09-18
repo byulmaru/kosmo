@@ -41,8 +41,18 @@ ALTER TABLE "post_quote_consent" ADD CONSTRAINT "post_quote_consent_quote_post_i
 ALTER TABLE "post_quote_consent" ADD CONSTRAINT "post_quote_consent_quote_author_profile_id_profile_id_fkey" FOREIGN KEY ("quote_author_profile_id") REFERENCES "public"."profile"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "post_quote_consent_source_post_id_index" ON "post_quote_consent" USING btree ("source_post_id");--> statement-breakpoint
 CREATE INDEX "post_quote_consent_quote_post_id_index" ON "post_quote_consent" USING btree ("quote_post_id");--> statement-breakpoint
-CREATE INDEX "post_quote_consent_approval_uri_index" ON "post_quote_consent" USING btree ("approval_uri");
---> statement-breakpoint
+CREATE INDEX "post_quote_consent_binding_index" ON "post_quote_consent" USING btree ("status","source_author_actor_uri","source_uri","quote_uri");--> statement-breakpoint
+CREATE TABLE "post_quote_revocation" (
+	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
+	"approval_uri" text NOT NULL,
+	"source_author_actor_uri" text NOT NULL,
+	"source_uri" text NOT NULL,
+	"quote_uri" text,
+	"forwarding_at" timestamp with time zone,
+	"forwarded_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "post_quote_revocation_approval_uri_key" UNIQUE("approval_uri")
+);--> statement-breakpoint
 CREATE TYPE "post_quote_effect_kind" AS ENUM('QUOTE_REQUEST', 'CONSENT_UPDATE', 'POLICY_UPDATE', 'SOURCE_REVOCATION', 'QUOTE_DECISION');--> statement-breakpoint
 CREATE TYPE "post_quote_effect_receipt_status" AS ENUM('PENDING', 'COMPLETED');--> statement-breakpoint
 CREATE TABLE "post_quote_effect_receipt" (

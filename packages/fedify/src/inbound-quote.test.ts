@@ -14,6 +14,7 @@ import {
   PostQuoteConsents,
   PostQuoteEffectReceipts,
   PostQuotePolicies,
+  PostQuoteRevocations,
   Posts,
   Profiles,
 } from '@kosmo/core/db';
@@ -61,6 +62,7 @@ describe('ActivityPub inbound Quote lifecycle', () => {
   });
 
   beforeEach(async () => {
+    await db.delete(PostQuoteRevocations);
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
@@ -212,6 +214,73 @@ describe('ActivityPub inbound Quote lifecycle', () => {
     assert.equal(receipt?.status, PostQuoteEffectReceiptStatus.PENDING);
   });
 
+  test('QuoteAuthorization 철회가 Accept보다 먼저 와도 늦은 Accept가 승인을 되살리지 않는다', async () => {
+    const fixture = await createRemoteSourceAndPendingQuote();
+    const request = createQuoteRequest({
+      actorUri: fixture.quoteActorUri,
+      quoteUri: fixture.quoteUri,
+      requestUri: fixture.requestUri,
+      sourceUri: fixture.sourceUri,
+    });
+    const accept = new Accept({
+      actor: fixture.sourceActorUri,
+      object: request,
+      result: new QuoteAuthorization({
+        attribution: fixture.sourceActorUri,
+        id: fixture.approvalUri,
+        interactingObject: fixture.quoteUri,
+        interactionTarget: fixture.sourceUri,
+      }),
+    });
+    mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+
+    assert.equal(
+      await handleInboundQuoteRevocation(
+        createContext(),
+        new Delete({
+          actor: fixture.sourceActorUri,
+          object: fixture.approvalUri,
+          target: fixture.sourceUri,
+        }),
+      ),
+      true,
+    );
+    await handleInboundQuoteAccept({ accept, context: createContext(), request });
+
+    const consent = await db
+      .select()
+      .from(PostQuoteConsents)
+      .where(eq(PostQuoteConsents.id, fixture.consentId))
+      .then(firstOrThrow);
+    assert.equal(consent.status, PostQuoteConsentStatus.REVOKED);
+    assert.equal(consent.approvalUri, fixture.approvalUri.href);
+    assert.equal(consent.revision, 2);
+  });
+
+  test('대응하는 pending consent가 없는 선도착 Delete는 철회로 저장하지 않는다', async () => {
+    const approvalUri = new URL('https://remote-source.example/quote-authorizations/unknown');
+
+    assert.equal(
+      await handleInboundQuoteRevocation(
+        createContext(),
+        new Delete({
+          actor: new URL('https://remote-source.example/users/source-author'),
+          object: approvalUri,
+          target: new URL('https://remote-source.example/posts/unknown'),
+        }),
+      ),
+      false,
+    );
+    assert.equal(
+      await db
+        .select({ id: PostQuoteRevocations.id })
+        .from(PostQuoteRevocations)
+        .where(eq(PostQuoteRevocations.approvalUri, approvalUri.href))
+        .then((rows) => rows.length),
+      0,
+    );
+  });
+
   test('위조된 Accept와 철회 전달 실패는 Source를 부활시키지 않고 재시도 가능하게 수렴한다', async () => {
     const fixture = await createRemoteSourceAndPendingQuote({ approved: true });
     const request = createQuoteRequest({
@@ -283,6 +352,16 @@ describe('ActivityPub inbound Quote lifecycle', () => {
     ]);
 
     await handleInboundQuoteRevocation(
+      createContext({
+        forwardActivity: async (...args) => {
+          forwarded.push(args);
+        },
+      }),
+      revocation,
+    );
+    assert.equal(forwarded.length, 1);
+
+    await handleInboundQuoteRevocation(
       createContext(),
       new Delete({
         actor: new URL('https://other-source.example/users/attacker'),
@@ -300,6 +379,41 @@ describe('ActivityPub inbound Quote lifecycle', () => {
       PostQuoteConsentStatus.REVOKED,
     );
     assert.equal(forwarded.length, 1);
+  });
+
+  test('동시에 중복 수신한 철회는 팔로워에게 한 번만 전달한다', async () => {
+    const fixture = await createRemoteSourceAndPendingQuote({ approved: true });
+    mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+
+    let releaseForward!: () => void;
+    const forwardReleased = new Promise<void>((resolve) => {
+      releaseForward = resolve;
+    });
+    let observeForward!: () => void;
+    const forwardObserved = new Promise<void>((resolve) => {
+      observeForward = resolve;
+    });
+    let forwardAttempts = 0;
+    const context = createContext({
+      forwardActivity: async () => {
+        forwardAttempts += 1;
+        observeForward();
+        await forwardReleased;
+      },
+    });
+    const revocation = new Delete({
+      actor: fixture.sourceActorUri,
+      object: fixture.approvalUri,
+      target: fixture.sourceUri,
+    });
+
+    const first = handleInboundQuoteRevocation(context, revocation);
+    await forwardObserved;
+    await handleInboundQuoteRevocation(context, revocation);
+    releaseForward();
+    await first;
+
+    assert.equal(forwardAttempts, 1);
   });
 });
 
