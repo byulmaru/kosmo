@@ -25,6 +25,7 @@ type WebProps = SharedProps & {
 type NativeProps = SharedProps & {
   children: ReactNode;
   onOpen: () => void;
+  swipeEnabled: boolean;
 };
 
 export function WebNavigationDrawer({
@@ -92,6 +93,7 @@ export function NativeNavigationDrawer({
   onSwitcherOpenChange,
   query,
   switcherOpen,
+  swipeEnabled,
 }: NativeProps) {
   const { width } = useWindowDimensions();
   const drawerWidth = Math.min(MOBILE_DRAWER_WIDTH, width * MOBILE_DRAWER_MAX_WIDTH_RATIO);
@@ -113,6 +115,7 @@ export function NativeNavigationDrawer({
       open={drawerOpen}
       overlayAccessibilityLabel="사이드바 닫기"
       overlayStyle={{ backgroundColor: theme.overlayScrim }}
+      swipeEnabled={swipeEnabled}
       renderDrawerContent={() => (
         <View
           accessibilityViewIsModal

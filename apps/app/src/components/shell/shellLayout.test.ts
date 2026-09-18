@@ -7,6 +7,7 @@ import {
   getShellRoutePresentation,
   getWebMobileShellHeader,
   getWebMobileShellHeaderStickyOffset,
+  isNativeDrawerSwipeEnabled,
   isSettingsRoute,
   isTimelineRoute,
   isWebMobileRouteOwnedHeader,
@@ -113,6 +114,24 @@ describe('getShellLayout', () => {
     assert.equal(isTimelineRoute('/local'), true);
     assert.equal(isTimelineRoute('/local/post'), false);
     assert.equal(isTimelineRoute('/search'), false);
+  });
+
+  it('enables Native drawer edge swipe only on approved top-level routes', () => {
+    for (const pathname of ['/home', '/local', '/search', '/notifications']) {
+      assert.equal(isNativeDrawerSwipeEnabled(pathname), true, pathname);
+    }
+
+    for (const pathname of [
+      '/@writer',
+      '/@writer/post-id',
+      '/@writer/followers',
+      '/@writer/following',
+      '/settings',
+      '/settings/info',
+      '/bookmarks',
+    ]) {
+      assert.equal(isNativeDrawerSwipeEnabled(pathname), false, pathname);
+    }
   });
 
   it('replaces only the full Web RightRail with the Settings workspace', () => {

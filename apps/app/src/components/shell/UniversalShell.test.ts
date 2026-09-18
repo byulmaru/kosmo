@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import { isNativeDrawerSwipeEnabled } from './shellLayout';
 import type { ElementType, PropsWithChildren, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { UniversalShell as UniversalShellComponent } from './UniversalShell';
@@ -163,6 +164,7 @@ mockModule('./shellLayout', {
     settingsWorkspace: false,
     showRightRail,
   }),
+  isNativeDrawerSwipeEnabled,
   isSettingsRoute: () => false,
   isTimelineRoute: () => true,
   isWebMobileRouteOwnedHeader: () => false,
@@ -213,17 +215,22 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.equal('tabIndex' in root.props, false);
   });
 
-  it('Native drawer는 메뉴 열기와 Android back으로 controlled 상태를 닫는다', async () => {
+  it('Native main route는 edge swipe를 허용하고 명시적 메뉴 열기를 유지한다', async () => {
     platform.OS = 'android';
+    pathname = '/home';
     await renderShell();
 
     const drawerType = 'Drawer' as ElementType;
     const menu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
     assert.ok(menu);
-    assert.equal(renderer?.root.findByType(drawerType).props.open, false);
+    const drawer = renderer?.root.findByType(drawerType);
+    assert.ok(drawer);
+    assert.deepEqual(menu.props.accessibilityState, { expanded: false });
+    assert.equal(drawer.props.open, false);
+    assert.equal(drawer.props.swipeEnabled, true);
 
     await act(async () => menu.props.onPress());
-    assert.equal(renderer?.root.findByType(drawerType).props.open, true);
+    assert.equal(drawer.props.open, true);
     assert.ok(hardwareBackPressListener);
 
     let handled = false;
@@ -231,7 +238,72 @@ describe('UniversalShell screen fallback focus target', () => {
       handled = hardwareBackPressListener?.() ?? false;
     });
     assert.equal(handled, true);
-    assert.equal(renderer?.root.findByType(drawerType).props.open, false);
+    assert.equal(drawer.props.open, false);
+  });
+
+  it('Native detail과 Profile Home route는 edge swipe만 비활성화하고 명시적 메뉴로 drawer를 연다', async () => {
+    for (const nativePlatform of ['android', 'ios'] as const) {
+      for (const disabledPathname of ['/@writer/post-id', '/@writer']) {
+        platform.OS = nativePlatform;
+        pathname = disabledPathname;
+        await renderShell();
+
+        const drawer = renderer?.root.findByType('Drawer' as ElementType);
+        const menu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
+        assert.ok(drawer);
+        assert.ok(menu);
+        assert.deepEqual(menu.props.accessibilityState, { expanded: false });
+        assert.equal(drawer.props.open, false);
+        assert.equal(drawer.props.swipeEnabled, false);
+
+        await act(async () => menu.props.onPress());
+        assert.equal(drawer.props.open, true);
+        assert.ok(hardwareBackPressListener);
+
+        await act(async () => renderer?.unmount());
+        renderer = null;
+        hardwareBackPressListener = null;
+      }
+    }
+  });
+
+  it('Native drawer는 route가 gesture-disabled가 되어도 열린 상태를 유지한다', async () => {
+    for (const disabledPathname of ['/@writer/post-id', '/@writer']) {
+      platform.OS = 'android';
+      pathname = '/home';
+      await renderShell();
+
+      const drawerType = 'Drawer' as ElementType;
+      const initialMenu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
+      assert.ok(initialMenu);
+      await act(async () => initialMenu.props.onPress());
+      assert.equal(renderer?.root.findByType(drawerType).props.open, true);
+
+      pathname = disabledPathname;
+      await act(async () => {
+        renderer?.update(createElement(UniversalShell));
+      });
+
+      const backStackDrawer = renderer?.root.findByType(drawerType);
+      const backStackMenu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
+      assert.ok(backStackDrawer);
+      assert.ok(backStackMenu);
+      assert.equal(backStackDrawer.props.open, true);
+      assert.equal(backStackDrawer.props.swipeEnabled, false);
+      assert.deepEqual(backStackMenu.props.accessibilityState, { expanded: true });
+      assert.ok(hardwareBackPressListener);
+
+      let handled = false;
+      await act(async () => {
+        handled = hardwareBackPressListener?.() ?? false;
+      });
+      assert.equal(handled, true);
+      assert.equal(backStackDrawer.props.open, false);
+
+      await act(async () => renderer?.unmount());
+      renderer = null;
+      hardwareBackPressListener = null;
+    }
   });
 
   it('Web은 기존 Modal drawer surface를 유지한다', async () => {
@@ -242,6 +314,39 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.ok(modal);
     assert.equal(modal.props.visible, false);
     assert.equal(renderer?.root.findAllByType('Drawer' as ElementType).length, 0);
+
+    const menu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
+    assert.ok(menu);
+
+    const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+    const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    const scrollTo = mock.fn();
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { body: { style: {} } },
+    });
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { scrollTo, scrollX: 0, scrollY: 0 },
+    });
+
+    try {
+      await act(async () => menu.props.onPress());
+      assert.equal(modal.props.visible, true);
+    } finally {
+      await act(async () => renderer?.unmount());
+      renderer = null;
+      if (previousDocument) {
+        Object.defineProperty(globalThis, 'document', previousDocument);
+      } else {
+        Reflect.deleteProperty(globalThis, 'document');
+      }
+      if (previousWindow) {
+        Object.defineProperty(globalThis, 'window', previousWindow);
+      } else {
+        Reflect.deleteProperty(globalThis, 'window');
+      }
+    }
   });
 
   it('Full Rail의 Expand는 같은 Host를 Overlay로 전환한다', async () => {

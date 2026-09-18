@@ -54,6 +54,10 @@ export function isTimelineRoute(pathname: string) {
   return pathname === '/home' || pathname === '/local';
 }
 
+export function isNativeDrawerSwipeEnabled(pathname: string) {
+  return isTimelineRoute(pathname) || pathname === '/search' || pathname === '/notifications';
+}
+
 export function getShellRoutePresentation(web: boolean, width: number, pathname: string) {
   const layout = getShellLayout(web, width);
   const settingsWorkspace = layout === 'full' && isSettingsRoute(pathname);
