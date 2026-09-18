@@ -60,10 +60,12 @@
 
 실제 route E2E로 진입·복귀·Viewer close/focus를 검증하고 app check·관련 단위·Storybook build/test를 실행한다. Web/Native 및 Light/Dark·390/1024/1440 실행 결과와 미실행 항목을 구분한다.
 
-- [ ] 3.1 공용 진입점과 Viewer 종료를 연결하고 남은 모달 소비처를 제거한다.
-- [ ] 3.2 최소 route E2E와 필요한 app 검증을 수행한다.
-- [ ] 3.3 Web·지원 Native의 시각·접근성·scroll/focus 결과와 미실행 항목을 기록한다.
-- [ ] 3.4 독립 리뷰와 canonical·OpenSpec·구현 정합성을 확인한다.
+- [x] 3.1 공용 진입점과 Viewer 종료를 연결하고 남은 모달 소비처를 제거한다.
+- [x] 3.2 최소 route E2E와 필요한 app 검증을 수행한다.
+- [x] 3.3 Web·지원 Native의 시각·접근성·scroll/focus 결과와 미실행 항목을 기록한다.
+- [x] 3.4 독립 리뷰와 canonical·OpenSpec·구현 정합성을 확인한다.
+
+실행 결과와 Native 미실행 경계는 [verification.md](verification.md)에 기록한다. 위 체크는 Native runtime 검증 완료를 뜻하지 않는다.
 
 ## 검증 코드 범위와 완료 소유권
 

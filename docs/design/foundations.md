@@ -124,7 +124,7 @@ Fullscreen media와 제품 고유 shadow는 일괄 치환하지 않고 아래 In
 - DSN-19: `tokens.ts`에 numeric spacing·radius·border·icon, role typography와 Light/Dark elevation을 구현했다. 기존 `spacing`·`radii`·`typography`·`shadow` export는 DSN-21 consumer 이관 동안만 deprecated compatibility alias로 유지한다.
 - DSN-19: Button·TextField·TextArea·ModalSheet·ActionMenu·StateView·Skeleton·ToastProvider·Avatar가 승인 foundation과 semantic color를 직접 소비한다.
 - DSN-21 또는 연결된 Product 이슈: route, shell, domain consumer와 상태를 이관·검증한다.
-- PROD-752: Search와 ReactionProfilesModal의 raw tab을 공용 `TabList`·`Tab`으로 이관하고, consumer별 상태·lifecycle은 유지한다. 보이는 surface와 상단 위치는 유지하되, 겹치지 않는 Native 접근성 target을 실제 layout box로 확보하면서 Search Android의 다음 콘텐츠는 4dp, ReactionProfilesModal은 iOS 6pt·Android 8dp 아래로 이동하는 전환기 geometry를 허용한다. 이 geometry는 DSN-13 리디자인·최종 재바인딩에서 다시 확정한다.
+- PROD-752: Search와 당시 `ReactionProfilesModal`의 raw tab을 공용 `TabList`·`Tab`으로 이관했다. Search의 consumer별 상태·lifecycle과 Android 다음 콘텐츠 4dp geometry는 유지한다. `ReactionProfilesModal`은 이후 PROD-938에서 전용 route로 교체·삭제됐으므로 DSN-13의 활성 재바인딩 대상이 아니다.
 - PROD-753: FeedbackForm·ProfileDefaultPostVisibilityControl의 controlled value·radio role/state semantics·Web keyboard·disabled 동작을 공용 `RadioGroup`·`RadioOption`으로 수렴하고, mutation·dirty/submitting·Relay actor lifecycle과 option layout은 각 consumer에 유지했다.
 - PROD-775: PROD-753에서 consumer에 남긴 canonical option presentation·state visuals를 공용 `RadioOption`으로 이전하고, group placement·mutation·dirty/submitting·Relay actor lifecycle은 각 consumer에 유지한다.
 - DSN-13: 선행 구현 후 Components/Screens를 최종 재바인딩하고 evidence를 남긴다.

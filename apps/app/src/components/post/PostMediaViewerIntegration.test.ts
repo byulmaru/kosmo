@@ -25,6 +25,7 @@ let activeElement: unknown = null;
 let queriedSurfacePostId: string | null = null;
 let queryPosts = new Map<string, ReturnType<typeof hostPost>>();
 let replyPostIds: string[] = [];
+let navigationListeners = new Set<() => void>();
 let renderer: ReactTestRenderer | null = null;
 const platform = { OS: 'web' };
 let fontScale = 1;
@@ -41,6 +42,14 @@ Object.assign(globalThis, {
 mock.module('expo-router', {
   exports: {
     Link: ({ children }: { children?: unknown }) => children,
+    unstable_navigationEvents: {
+      addListener: (event: string, listener: () => void) => {
+        if (event === 'actionDispatched') {
+          navigationListeners.add(listener);
+        }
+        return () => navigationListeners.delete(listener);
+      },
+    },
     useRouter: () => ({ push: () => undefined }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -249,6 +258,7 @@ afterEach(async () => {
   queriedSurfacePostId = null;
   queryPosts = new Map();
   replyPostIds = [];
+  navigationListeners = new Set();
   fontScale = 1;
   platform.OS = 'web';
   viewportWidth = 767;
@@ -380,6 +390,21 @@ describe('Post Media Viewer Host production wiring', () => {
     assert.equal(findByTestId('post-media-viewer-dialog').length, 0);
     assert.equal(focusCalls.length, focusCallCountBeforeActorChange + 1);
     assert.ok(focusCalls.at(-1)?.primary);
+  });
+
+  it('route를 떠나면 Viewer를 닫고 이전 trigger로 focus를 돌리지 않는다', async () => {
+    const post = storyPost('route-transition-post', 'route-transition-content');
+    queryPosts.set(post.id, hostPost(post));
+    await renderHost(createElement(PostLayout, { post: asLayoutKey(post) }));
+    await openFromBody({ current: { focus: () => undefined } });
+    await flushAnimationFrames();
+    const focusCallCountBeforeNavigation = focusCalls.length;
+
+    await act(async () => navigationListeners.forEach((listener) => listener()));
+    await flushAnimationFrames();
+
+    assert.equal(findByTestId('post-media-viewer-dialog').length, 0);
+    assert.equal(focusCalls.length, focusCallCountBeforeNavigation);
   });
 
   it('actor-scoped route remount에서도 Viewer focus fallback을 복구한다', async () => {
