@@ -5,6 +5,11 @@ export type AnalyticsEventProperties = {
     selected_profile_id: string;
     visibility: 'PUBLIC' | 'UNLISTED' | 'FOLLOWERS' | 'DIRECT';
   };
+  repost_succeeded: { result: 'created' | 'removed' };
+  reaction_added: { reaction_type: 'default' | 'custom' };
+  reaction_removed: { reaction_type: 'default' | 'custom' };
+  bookmark_added: Record<string, never>;
+  bookmark_removed: Record<string, never>;
   follow_succeeded: {
     selected_profile_id: string;
     result: 'follow' | 'request';

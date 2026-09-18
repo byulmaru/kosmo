@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { useSession } from '@/session/SessionProvider';
 import type { ReactionToggleIntent } from '@/components/reaction/ReactionSelector';
 import type { PostReactionController_post$key } from './__generated__/PostReactionController_post.graphql';
@@ -84,6 +85,8 @@ export function usePostReactionController(
   const data = useFragment(postReactionControllerFragment, post);
   const environment = useRelayEnvironment();
   const session = useSession();
+  const currentAccountId = useRef(session.accountId);
+  currentAccountId.current = session.accountId;
   const resolvedEnabled =
     enabled ?? (session.status === 'valid' && session.selectedProfileId !== null);
   const [commitAdd] = useMutation<PostReactionControllerAddReactionMutation>(addReactionMutation);
@@ -130,6 +133,7 @@ export function usePostReactionController(
       }
 
       const requestIdentity = identity.current;
+      const requestAccountId = session.accountId;
       inFlightTypes.current.add(optionId);
       setPendingTypes((current) => new Set(current).add(optionId));
       setErrorTypes((current) => {
@@ -165,7 +169,13 @@ export function usePostReactionController(
           ? (response as PostReactionControllerAddReactionMutation['response'] | null)?.addReaction
           : (response as PostReactionControllerDeleteReactionMutation['response'] | null)
               ?.deleteReaction;
-        finish(Boolean(payload));
+        const succeeded = Boolean(payload);
+        if (succeeded && requestAccountId && currentAccountId.current === requestAccountId) {
+          trackAnalytics(nextSelected ? 'reaction_added' : 'reaction_removed', {
+            reaction_type: optionId === '❤️' ? 'default' : 'custom',
+          });
+        }
+        finish(succeeded);
       };
 
       if (nextSelected) {
@@ -182,7 +192,7 @@ export function usePostReactionController(
         });
       }
     },
-    [commitAdd, commitDelete, isCurrentIdentity, postId, resolvedEnabled],
+    [commitAdd, commitDelete, isCurrentIdentity, postId, resolvedEnabled, session.accountId],
   );
 
   return {
