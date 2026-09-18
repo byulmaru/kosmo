@@ -398,10 +398,12 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
                   ) : undefined
                 }
               />
-            ) : (
+            ) : web ? (
               <View style={[styles.mobileHeader, { borderColor: theme.borderSubtle }]}>
                 {menuButton}
               </View>
+            ) : (
+              <PageHeader leading={menuButton} title="" />
             )}
           </View>
         ) : null}

@@ -78,16 +78,18 @@ export function PageHeader(props: PageHeaderProps) {
       ) : (
         <>
           {props.leading ? <View style={styles.leading}>{props.leading}</View> : null}
-          <Text
-            accessible={props.titleRef ? true : undefined}
-            accessibilityRole="header"
-            ellipsizeMode={props.titleLines === 1 ? 'tail' : undefined}
-            numberOfLines={props.titleLines}
-            ref={props.titleRef}
-            style={[styles.title, { color: theme.foregroundPrimary }]}
-          >
-            {props.title}
-          </Text>
+          {props.title ? (
+            <Text
+              accessible={props.titleRef ? true : undefined}
+              accessibilityRole="header"
+              ellipsizeMode={props.titleLines === 1 ? 'tail' : undefined}
+              numberOfLines={props.titleLines}
+              ref={props.titleRef}
+              style={[styles.title, { color: theme.foregroundPrimary }]}
+            >
+              {props.title}
+            </Text>
+          ) : null}
           {props.trailing ? <View style={styles.trailing}>{props.trailing}</View> : null}
         </>
       )}

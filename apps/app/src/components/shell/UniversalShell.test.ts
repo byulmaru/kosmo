@@ -108,7 +108,8 @@ mockModule('@/components/notification/NotificationReadAllContext', {
   NotificationReadAllProvider: PassThrough,
 });
 mockModule('@/components/PageHeader', {
-  PageHeader: ({ leading }: { leading?: ReactNode }) => leading ?? null,
+  PageHeader: ({ leading, ...props }: { leading?: ReactNode; [key: string]: unknown }) =>
+    createElement('PageHeader', props, leading),
 });
 mockModule('@/components/post/PostMediaViewerHost', {
   PostMediaViewerScreenFallbackProvider: PassThrough,
@@ -166,7 +167,7 @@ mockModule('./shellLayout', {
   }),
   isNativeDrawerSwipeEnabled,
   isSettingsRoute: () => false,
-  isTimelineRoute: () => true,
+  isTimelineRoute: (route: string) => route === '/home' || route === '/local',
   isWebMobileRouteOwnedHeader: () => false,
   webMobileShellHeaderHeight: 64,
 });
@@ -304,6 +305,33 @@ describe('UniversalShell screen fallback focus target', () => {
       renderer = null;
       hardwareBackPressListener = null;
     }
+  });
+
+  it('Native 비타임라인 fallback은 menu-only PageHeader를 통해 메뉴 상태를 유지한다', async () => {
+    platform.OS = 'ios';
+    pathname = '/notifications';
+    await renderShell();
+
+    const pageHeader = renderer?.root.findByType('PageHeader' as ElementType);
+    const menu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
+    assert.ok(pageHeader);
+    assert.equal(pageHeader.props.title, '');
+    assert.ok(menu);
+    assert.deepEqual(menu.props.accessibilityState, { expanded: false });
+
+    await act(async () => menu.props.onPress());
+    assert.deepEqual(
+      renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' }).props.accessibilityState,
+      { expanded: true },
+    );
+    assert.equal(renderer?.root.findByType('Drawer' as ElementType).props.open, true);
+
+    await act(async () => renderer?.root.findByType('Drawer' as ElementType).props.onClose());
+    assert.deepEqual(
+      renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' }).props.accessibilityState,
+      { expanded: false },
+    );
+    assert.equal(renderer?.root.findByType('Drawer' as ElementType).props.open, false);
   });
 
   it('Web은 기존 Modal drawer surface를 유지한다', async () => {
