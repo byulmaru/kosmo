@@ -536,9 +536,11 @@ documentation·state specimen을 두 번째 행에 둔다.
   편집은 선택 attachment에, Sensitive는 Post 전체에 적용한다. Rail에서 편집을 시작해도 같은 Overlay의 editor
   view로 직접 전환한다.
 - `< compact` Web과 Android/iOS는 별도 fullscreen editor를 사용한다. 모바일의 가로로 긴 preview는 잘라내지 않고
-  가용 폭 안에 `contain`한다. scrim, focus trap·restore, Escape,
-  discard confirmation, viewport max-height·body scroll, safe area와 mobile keyboard avoidance lifecycle은
-  Product의 상위 Overlay 구현이 소유한다.
+  가용 폭 안에 `contain`한다. scrim, focus trap·restore, Escape, viewport max-height·body scroll, safe area와
+  mobile keyboard avoidance lifecycle은 Product의 상위 Overlay 구현이 소유한다. Overlay close는 같은 Profile
+  lifecycle의 draft를 보존하므로 별도 discard confirmation을 표시하지 않는다. Web의 dirty draft는 새로고침·탭 닫기
+  같은 문서 unload에서만 브라우저 기본 확인으로 보호하며, Android·iOS 강제 종료 전 확인과 종료 후 draft 영속화는
+  이 계약에 포함하지 않는다.
 - `12 Exploration`에 남긴 기존 `600×624`·`SquarePen` PC editor는 `Superseded` decision history다. 새 consumer는
   만들지 않으며 현재 PC 계약은 `__ComposerMediaItem`의 `Pen`과 `ComposerMediaEditor` `920×678` source만 따른다.
 - 현재 Typography line-height FLOAT 변수는 `115`·`130`·`150` 같은 백분율 값이지만 Plugin API binding에서는 px로

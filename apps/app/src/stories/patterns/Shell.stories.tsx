@@ -2775,3 +2775,26 @@ export const UniversalFullComposerLifecycle: Story = {
     expect(canvas.getByRole('textbox', { name: '게시물 내용' })).toHaveValue('rail draft');
   },
 };
+
+export const UniversalFullComposerHeightTransition: Story = {
+  ...UniversalFull,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const railBody = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const draft =
+      'Rail에서 Overlay로 확장할 때 본문 높이를 다시 계산하는지 확인하는 문장입니다. '.repeat(6);
+
+    await userEvent.type(railBody, draft);
+    await waitFor(() => expect(railBody.getBoundingClientRect().height).toBeGreaterThan(184));
+    const railHeight = railBody.getBoundingClientRect().height;
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Composer 확장' }));
+    const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+    const overlayBody = within(dialog).getByRole('textbox', { name: '게시물 내용' });
+    expect(overlayBody).toHaveValue(draft);
+    await waitFor(() =>
+      expect(overlayBody.getBoundingClientRect().height).toBeLessThan(railHeight),
+    );
+  },
+};

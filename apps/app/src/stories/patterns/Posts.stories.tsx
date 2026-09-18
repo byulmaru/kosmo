@@ -1930,6 +1930,55 @@ function ProductionComposerAdapterStory() {
   );
 }
 
+function ProductionComposerDefaultVisibilityUpdateStory() {
+  const environment = useRelayEnvironment();
+  return (
+    <>
+      <ProductionComposerAdapterStory />
+      {(['PUBLIC', 'FOLLOWERS'] as const).map((visibility) => (
+        <Pressable
+          accessibilityRole="button"
+          key={visibility}
+          onPress={() =>
+            commitLocalUpdate(environment, (store) => {
+              store
+                .get('profile-composer')
+                ?.getLinkedRecord('private')
+                ?.setValue(visibility, 'defaultPostVisibility');
+            })
+          }
+        >
+          <Text>설정에서 기본 공개 범위를 {visibility}(으)로 저장</Text>
+        </Pressable>
+      ))}
+    </>
+  );
+}
+
+function ComposerRailMediaFocusStory() {
+  const [presentation, setPresentation] = useState<'overlay' | 'rail'>('rail');
+  const profile = usePostsStoryData().composerProfile;
+
+  return (
+    <View style={{ width: presentation === 'rail' ? 350 : 640 }}>
+      {presentation === 'rail' ? (
+        <PostComposer
+          onExpand={() => setPresentation('overlay')}
+          onRequestClose={() => setPresentation('rail')}
+          presentation="rail"
+          profile={profile}
+        />
+      ) : (
+        <PostComposer
+          onRequestClose={() => setPresentation('rail')}
+          presentation="overlay"
+          profile={profile}
+        />
+      )}
+    </View>
+  );
+}
+
 function ContentWarningRevealStory() {
   return (
     <Catalog>
@@ -2899,7 +2948,7 @@ const meta = {
     resetImagePickerMock();
   },
   component: PostCatalog,
-  excludeStories: ['LinkedSourceQuoteInteraction'],
+  excludeStories: ['ComposerBeforeUnloadContract', 'LinkedSourceQuoteInteraction'],
   decorators: [
     (Story) => (
       <SessionProvider>
@@ -6142,6 +6191,36 @@ export const ProductionComposerMediaEditorFocus: Story = {
   render: () => <ProductionComposerAdapterStory />,
 };
 
+export const ProductionComposerDefaultVisibilityUpdate: Story = {
+  ...ProductionComposerAdapterSuccess,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const dispatchBeforeUnload = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event;
+    };
+
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(false);
+    await userEvent.click(
+      canvas.getByRole('button', { name: '설정에서 기본 공개 범위를 PUBLIC(으)로 저장' }),
+    );
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible(),
+    );
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(false);
+
+    await userEvent.type(canvas.getByRole('textbox', { name: '게시물 내용' }), '보존할 draft');
+    await waitFor(() => expect(dispatchBeforeUnload().defaultPrevented).toBe(true));
+    await userEvent.click(
+      canvas.getByRole('button', { name: '설정에서 기본 공개 범위를 FOLLOWERS(으)로 저장' }),
+    );
+    expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(true);
+  },
+  render: () => <ProductionComposerDefaultVisibilityUpdateStory />,
+};
+
 export const ContentWarningReveal: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -6319,6 +6398,94 @@ export const ComposerMediaUploadInteraction: Story = {
     }
   },
   render: () => <ComposerStory />,
+};
+
+export const ComposerBeforeUnloadContract: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerCompleteMediaUploadMutation: {
+          data: {
+            completeMediaUpload: {
+              media: { id: 'media-before-unload', state: 'READY' },
+            },
+          },
+        },
+        PostComposerIssueMediaUploadUrlMutation: {
+          data: {
+            issueMediaUploadUrl: {
+              media: { id: 'media-before-unload' },
+              uploadUrl: 'https://upload.example/before-unload',
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    let finishUpload!: (response: Response) => void;
+    let putCount = 0;
+    const { originalFetch } = installImageUploadFetch(async () => {
+      putCount += 1;
+      if (putCount === 1) {
+        return new Promise<Response>((resolve) => {
+          finishUpload = resolve;
+        });
+      }
+      return new Response(null, { status: 200 });
+    });
+    const dispatchBeforeUnload = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event;
+    };
+
+    setNextImagePickerResult({
+      assets: [createComposerPickerAsset('before-unload-uploading.svg')],
+      canceled: false,
+    });
+
+    try {
+      expect(dispatchBeforeUnload().defaultPrevented).toBe(false);
+
+      await userEvent.type(body, '새로고침 전에 보호할 draft');
+      await waitFor(() => expect(dispatchBeforeUnload().defaultPrevented).toBe(true));
+
+      await userEvent.clear(body);
+      await waitFor(() => expect(dispatchBeforeUnload().defaultPrevented).toBe(false));
+
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가' }));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 1, 업로드 중')).toBeVisible();
+      });
+      await waitFor(() => expect(putCount).toBe(1));
+      expect(dispatchBeforeUnload().defaultPrevented).toBe(true);
+
+      finishUpload(new Response(null, { status: 500 }));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 1, 업로드 실패')).toBeVisible();
+      });
+      expect(canvas.getByLabelText('1번째 이미지 업로드 다시 시도')).toBeVisible();
+      expect(dispatchBeforeUnload().defaultPrevented).toBe(true);
+
+      await userEvent.click(canvas.getByLabelText('1번째 이미지 업로드 다시 시도'));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      });
+      expect(dispatchBeforeUnload().defaultPrevented).toBe(true);
+
+      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
+      await waitFor(() => {
+        expect(canvas.queryByLabelText('첨부 이미지 1, 업로드 완료')).not.toBeInTheDocument();
+      });
+      await waitFor(() => expect(dispatchBeforeUnload().defaultPrevented).toBe(false));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ComposerRailMediaFocusStory />,
 };
 
 export const ComposerClipboardPasteInteraction: Story = {

@@ -265,6 +265,13 @@ export const layoutRecipes = {
   },
 } satisfies Record<string, ViewStyle>;
 
+export const webScrollbarStyle = (thumbColor: string, reserveGutter = false) =>
+  ({
+    scrollbarColor: `${thumbColor} transparent`,
+    ...(reserveGutter ? { scrollbarGutter: 'stable' } : null),
+    scrollbarWidth: 'thin',
+  }) as unknown as ViewStyle;
+
 /** @deprecated Use numeric `radius` tokens for new work. */
 export const radii = {
   sm: radius[8],

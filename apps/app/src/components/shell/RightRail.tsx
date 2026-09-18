@@ -78,6 +78,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     marginTop: 'auto',
     minHeight: 32,
+    paddingHorizontal: spacing.lg,
   },
   privacyLink: {
     justifyContent: 'center',
