@@ -71,24 +71,7 @@ test('dev channel Web runtime은 analytics 요청 없이 정상 렌더링된다'
   expect(analyticsRequests).toEqual([]);
 });
 
-test('prod channel Web runtime은 PostHog 설정이 비활성화되어 analytics 요청 없이 정상 렌더링된다', async ({
-  page,
-}) => {
-  const analyticsRequests: string[] = [];
-  page.on('request', (request) => {
-    if (posthogRoute.test(request.url())) {
-      analyticsRequests.push(request.url());
-    }
-  });
-
-  await page.goto('/');
-
-  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
-  await page.waitForTimeout(200);
-  expect(analyticsRequests).toEqual([]);
-});
-
-test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog 활성화 검증을 보류한다', async ({
+test('prod channel Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote config를 유지한다', async ({
   page,
 }) => {
   const viewer = await createE2ESession({
@@ -126,7 +109,8 @@ test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog 활성화
   await page.route(posthogRoute, async (route) => {
     const request = route.request();
     posthogRequests.push(request.url());
-    if (request.method() === 'POST' && new URL(request.url()).pathname === '/e/') {
+    const pathname = new URL(request.url()).pathname;
+    if (request.method() === 'POST' && pathname === '/e/') {
       eventPayloads.push(...readPostHogPayloads(request.postDataBuffer()));
     }
 
@@ -233,6 +217,7 @@ test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog 활성화
   await expect
     .poll(() => eventPayloads.some((payload) => payload.event === '$pageleave'))
     .toBe(true);
+  expect(posthogRequests.some((url) => new URL(url).pathname === '/s/')).toBe(false);
 
   const rootPageview = eventPayloads.find(
     (payload) => payload.event === '$pageview' && payload.properties?.$pathname === '/',
@@ -271,7 +256,7 @@ test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog 활성화
   expect(posthogRequests.some((url) => new URL(url).pathname.startsWith('/flags'))).toBe(true);
 });
 
-test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog identity 검증을 보류한다', async ({
+test('prod channel Web runtime은 Account identity를 A→guest→B로 분리하고 endpoint 실패에도 인증 흐름을 유지한다', async ({
   context,
   page,
 }) => {
