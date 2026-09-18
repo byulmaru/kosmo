@@ -21,6 +21,7 @@ type Props = {
   active?: boolean;
   alignToEnd?: boolean;
   alignToStart?: boolean;
+  alignVisualToEnd?: boolean;
   baseColor?: string;
   count?: number;
   countFollowsInteraction?: boolean;
@@ -47,6 +48,7 @@ export function PostActionControl({
   active,
   alignToEnd = false,
   alignToStart = false,
+  alignVisualToEnd = false,
   baseColor,
   count,
   countFollowsInteraction = false,
@@ -71,6 +73,8 @@ export function PostActionControl({
   const isPending = processing === 'pending';
   const isDisabled = processing === 'disabled';
   const blocked = isPending || isDisabled;
+  const native = Platform.OS !== 'web';
+  const nativeTargetSize = Platform.OS === 'android' ? 48 : 44;
   const accessibilityState: AccessibilityState = {
     busy: isPending,
     disabled: blocked,
@@ -83,14 +87,16 @@ export function PostActionControl({
         : { expanded }),
   };
   const formattedCount = formatPostActionCount(count);
+  const iconStyle = native && !formattedCount ? styles.nativeVisual : styles.icon;
 
   return (
     <View
       style={[
         styles.slot,
-        Platform.OS === 'web' ? undefined : styles.nativeSlot,
+        native ? [styles.nativeSlot, { height: nativeTargetSize }] : undefined,
         Platform.OS === 'web' && alignToStart ? styles.alignToStart : undefined,
         alignToEnd ? styles.alignToEnd : undefined,
+        native && alignToEnd ? { minWidth: nativeTargetSize, width: nativeTargetSize } : undefined,
       ]}
     >
       <Pressable
@@ -110,7 +116,8 @@ export function PostActionControl({
         style={({ pressed }) => [
           styles.action,
           alignToEnd ? styles.alignToEndAction : undefined,
-          Platform.OS === 'web' ? styles.webAction : styles.nativeAction,
+          native ? styles.nativeAction : styles.webAction,
+          native && (alignToEnd || alignVisualToEnd) ? styles.nativeEndAction : undefined,
           blocked ? styles.blocked : pressed ? styles.pressed : undefined,
         ]}
       >
@@ -135,14 +142,14 @@ export function PostActionControl({
                   aria-hidden
                   color={foregroundColor}
                   size={14}
-                  style={styles.icon}
+                  style={iconStyle}
                   testID={`post-action-${testID}-spinner`}
                 />
               ) : (
                 <View
                   accessible={false}
                   aria-hidden
-                  style={styles.icon}
+                  style={iconStyle}
                   testID={`post-action-${testID}-icon`}
                 >
                   {Platform.OS === 'web' && !blocked && ((hovered && !hoverDisabled) || pressed) ? (
@@ -200,7 +207,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.xs,
-    height: 28,
     justifyContent: 'flex-start',
   },
   alignToStart: {
@@ -247,10 +253,21 @@ const styles = StyleSheet.create({
   },
   nativeAction: {
     bottom: 0,
+    justifyContent: 'center',
     left: 0,
     position: 'absolute',
     right: 0,
     top: 0,
+  },
+  nativeEndAction: {
+    justifyContent: 'flex-end',
+  },
+  nativeVisual: {
+    alignItems: 'center',
+    height: 28,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 28,
   },
   nativeSlot: {
     position: 'relative',

@@ -1,8 +1,10 @@
 import { StyleSheet, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { postListMetrics } from './postListMetrics';
 import { PostThreadConnector } from './PostThreadConnector';
 import type React from 'react';
+import type { PostListPresentation } from './postListMetrics';
 
 export type PostThreadRole = 'ancestor' | 'current' | 'descendant';
 
@@ -21,6 +23,7 @@ export type PostThreadLayoutProps<TPost> = Readonly<{
   ancestors: ReadonlyArray<PostThreadItem<TPost>>;
   current: PostThreadItem<TPost>;
   descendants: ReadonlyArray<PostThreadItem<TPost>>;
+  presentation: PostListPresentation;
   renderPost: (args: PostThreadRenderArgs<TPost>) => React.ReactNode;
 }>;
 
@@ -28,9 +31,11 @@ export function PostThreadLayout<TPost>({
   ancestors,
   current,
   descendants,
+  presentation,
   renderPost,
 }: PostThreadLayoutProps<TPost>): React.ReactElement {
   const theme = useTheme();
+  const metrics = postListMetrics[presentation];
   const rows = [
     ...ancestors.map((item) => ({ item, role: 'ancestor' as const })),
     { item: current, role: 'current' as const },
@@ -59,20 +64,23 @@ export function PostThreadLayout<TPost>({
           >
             {connectsFromPrevious ? (
               <PostThreadConnector
-                style={
-                  role === 'current' ? styles.currentConnectorBefore : styles.listConnectorBefore
-                }
+                style={[
+                  role === 'current' ? styles.currentConnectorBefore : styles.listConnectorBefore,
+                  { left: metrics.connectorLeft },
+                ]}
                 testID={`post-thread-connector-${previous.item.id}-${item.id}-before`}
               />
             ) : null}
             {connectsToNext ? (
               <PostThreadConnector
-                style={styles.listConnectorAfter}
+                style={[styles.listConnectorAfter, { left: metrics.connectorLeft }]}
                 testID={`post-thread-connector-${item.id}-${next.item.id}-after`}
               />
             ) : null}
             {role === 'current' ? (
-              <View style={styles.currentContent}>{renderedPost}</View>
+              <View style={[styles.currentContent, { paddingLeft: metrics.inset }]}>
+                {renderedPost}
+              </View>
             ) : (
               renderedPost
             )}
@@ -93,7 +101,6 @@ const styles = StyleSheet.create({
   row: { position: 'relative' },
   currentContent: {
     paddingBottom: spacing.xs,
-    paddingLeft: spacing.sm,
     paddingRight: spacing.md,
     paddingTop: spacing.lg,
   },
@@ -102,15 +109,13 @@ const styles = StyleSheet.create({
     marginLeft: spacing.xxl * 2,
     marginRight: spacing.sm,
   },
-  listConnectorBefore: { height: spacing.sm - spacing.xs, left: spacing.xxl, top: 0 },
+  listConnectorBefore: { height: spacing.sm - spacing.xs, top: 0 },
   listConnectorAfter: {
     bottom: 0,
-    left: spacing.xxl,
     top: spacing.sm + spacing.xxxl + spacing.xs,
   },
   currentConnectorBefore: {
     height: spacing.lg - spacing.xs,
-    left: spacing.xxl,
     top: 0,
   },
 });

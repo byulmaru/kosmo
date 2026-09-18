@@ -30,6 +30,7 @@ const targetPosts = [
       id: 'bookmark-target-1',
       profile: author,
     }),
+    viewerBookmark: { __typename: 'Bookmark' as const, id: 'bookmark-1' },
     viewerReactions: [],
   },
   {
@@ -38,6 +39,7 @@ const targetPosts = [
       id: 'bookmark-target-2',
       profile: author,
     }),
+    viewerBookmark: { __typename: 'Bookmark' as const, id: 'bookmark-2' },
     viewerReactions: [],
   },
 ];
@@ -77,6 +79,7 @@ const bookmarkNextPage = {
                 id: 'bookmark-target-3',
                 profile: author,
               }),
+              viewerBookmark: { __typename: 'Bookmark' as const, id: 'bookmark-0' },
               viewerReactions: [],
             },
           },
@@ -101,6 +104,7 @@ const bookmarkOtherOwner = {
               id: 'bookmark-target-b',
               profile: author,
             }),
+            viewerBookmark: { __typename: 'Bookmark' as const, id: 'bookmark-b-1' },
             viewerReactions: [],
           },
         },
@@ -148,6 +152,7 @@ const bookmarkedQuoteOfQuote = {
     }),
     repostSource: bookmarkDirectQuote,
   }),
+  viewerBookmark: { __typename: 'Bookmark' as const, id: 'bookmark-presentation' },
   viewerReactions: [],
 };
 const bookmarkRepostAuthor = profile({
@@ -417,6 +422,9 @@ export const StatesAndCanonicalLinks: Story = {
       expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
     }
     expect(canvas.getAllByRole('article')).toHaveLength(targetPosts.length);
+    expect(canvas.getAllByRole('button', { name: '북마크 취소', pressed: true })).toHaveLength(
+      targetPosts.length,
+    );
     expect(canvasElement.querySelector('a[href="/@space-writer"]')).toBeInTheDocument();
     expect(
       canvasElement.querySelector('a[href="/@space-writer/bookmark-target-1"]'),
@@ -593,6 +601,9 @@ export const WebCenterColumn: Story = {
     const canvas = within(canvasElement);
     expect(canvas.getByRole('heading', { name: '북마크' })).toBeVisible();
     expect(canvas.getAllByRole('article')).toHaveLength(targetPosts.length);
+    expect(canvas.getAllByRole('button', { name: '북마크 취소', pressed: true })).toHaveLength(
+      targetPosts.length,
+    );
     expect(canvas.queryByRole('tab')).not.toBeInTheDocument();
   },
   render: () => <PopulatedList />,

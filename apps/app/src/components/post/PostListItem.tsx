@@ -12,6 +12,7 @@ import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
 import { usePostComposerBinding } from './PostComposerCoordinator';
+import { postListMetrics } from './postListMetrics';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
@@ -21,6 +22,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
+import type { PostListPresentation } from './postListMetrics';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
 const PostListRowFragment = graphql`
@@ -100,15 +102,18 @@ const PostListItemFragment = graphql`
 export function PostListItem({
   pinned = false,
   post: postKey,
+  presentation,
   showDivider = true,
   showReplyAttribution = true,
 }: {
   pinned?: boolean;
   post: PostListItem_post$key;
+  presentation: PostListPresentation;
   showDivider?: boolean;
   showReplyAttribution?: boolean;
 }) {
   const theme = useTheme();
+  const metrics = postListMetrics[presentation];
   const restoreQuoteTriggerFocusRef = useRef<(() => void) | null>(null);
   const post = useFragment(PostListItemFragment, postKey);
   const openViewer = usePostMediaViewerHost();
@@ -176,14 +181,16 @@ export function PostListItem({
     [openViewer, post.id],
   );
   const standardCardStyle = [
-    styles.card,
+    { paddingHorizontal: metrics.inset },
     styles.standardCard,
+    Platform.OS === 'web' && styles.webCardBottom,
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
   ];
   const compactCardStyle = [
-    styles.card,
+    { paddingHorizontal: metrics.inset },
     styles.compactCard,
+    Platform.OS === 'web' && styles.webCardBottom,
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
   ];
@@ -242,7 +249,7 @@ export function PostListItem({
         {pinnedAttribution}
         {replyAttribution}
         <PostListRow
-          actionBarStyle={styles.actionBarSlot}
+          actionBarStyle={Platform.OS === 'web' ? styles.webActionBarSlot : styles.actionBarSlot}
           onQuote={openQuote}
           post={post}
           reply={reply}
@@ -279,7 +286,13 @@ export function PostListItem({
             </Pressable>
           </Link>
         </PostAttributionRow>
-        <PostListRow onQuote={openQuote} post={source} reply={reply} surfacePostId={post.id} />
+        <PostListRow
+          actionBarStyle={Platform.OS === 'web' ? styles.webActionBarSlot : undefined}
+          onQuote={openQuote}
+          post={source}
+          reply={reply}
+          surfacePostId={post.id}
+        />
       </View>,
     );
   }
@@ -314,6 +327,7 @@ export function PostListItem({
             sourcePreviewStyle={styles.quoteSourcePreview}
           />
           <PostActionSurface
+            actionBarStyle={Platform.OS === 'web' ? styles.webQuoteActionBar : undefined}
             onQuote={openQuote}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
@@ -415,12 +429,9 @@ function PostListRow({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    paddingLeft: Platform.OS === 'web' ? spacing.md : spacing.sm,
-    paddingRight: Platform.OS === 'web' ? spacing.xl : spacing.sm,
-  },
   standardCard: { paddingBottom: spacing.xs, paddingTop: spacing.md },
   compactCard: { paddingBottom: 1, paddingTop: spacing.sm },
+  webCardBottom: { paddingBottom: spacing.sm },
   cardDivider: { borderBottomWidth: 1 },
   quoteRow: {
     alignItems: 'flex-start',
@@ -469,4 +480,6 @@ const styles = StyleSheet.create({
   attributionLabel: { fontFamily: fontFamilies.ui, ...typography.sm },
   repeat: { fontFamily: fontFamilies.ui, ...typography.sm },
   repostLabelTarget: { minWidth: 0 },
+  webActionBarSlot: { paddingTop: spacing.sm },
+  webQuoteActionBar: { paddingTop: spacing.md },
 });
