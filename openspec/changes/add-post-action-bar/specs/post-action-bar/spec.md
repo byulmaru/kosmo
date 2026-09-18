@@ -223,7 +223,9 @@
 
 **Surface feedback authority:** `PROD-977`, `docs/design/colors.md`, `docs/design/post-action-bar.md`, 2026-09-16 KST 사용자 PR 분리 승인.
 
-`PostListItem`의 Text·Media·PureRepost·Quote root는 resting fill 없이 feed canvas를 유지해야 하며(MUST), Web의 touch가 아닌 pointer hover에서는 semantic `stateHover`, Web pointer press와 Android·iOS touch press에서는 넓은 surface용 semantic `statePressedSubtle` overlay를 카드 전체에 표시해야 한다(MUST). 이 overlay는 `radius/md`를 사용해야 하고(MUST) row divider는 직선으로 유지해야 한다(MUST). pressed는 hover보다 우선해야 하며(MUST), release·cancel·leave 뒤에는 남은 입력 상태 또는 resting fill로 돌아가야 한다(MUST). 이 시각 feedback은 새 navigation target이나 접근성 role을 만들거나 기존 nested action의 입력을 가로채지 않아야 한다(MUST NOT).
+`PostListItem`의 Text·Media·PureRepost·Quote root는 별도 card fill 없이 semantic `backgroundCanvas`의 feed canvas를 유지해야 하며(MUST), Web의 touch가 아닌 pointer hover에서는 semantic `stateHover`, Web pointer press와 Android·iOS touch press에서는 넓은 surface용 semantic `statePressedSubtle` overlay를 카드 전체에 표시해야 한다(MUST). 이 overlay는 `radius/md`를 사용해야 하고(MUST) row divider는 직선으로 유지해야 한다(MUST). pressed는 hover보다 우선해야 하며(MUST), release·cancel·leave 뒤에는 남은 입력 상태 또는 resting canvas로 돌아가야 한다(MUST). 이 시각 feedback은 새 navigation target이나 접근성 role을 만들거나 기존 nested action의 입력을 가로채지 않아야 한다(MUST NOT).
+
+`PostListItem`의 Text·Media·PureRepost·Quote root와 `PostLayout` root는 Web·Native host와 무관하게 semantic `backgroundCanvas`를 직접 적용해야 한다(MUST). 이는 연속 feed와 같은 canvas 평면이며 `backgroundSurface` 또는 `backgroundElevated` card로 올리지 않아야 한다(MUST NOT). direct Quote Source preview와 state overlay처럼 내부에서 의도적으로 투명한 요소에는 별도 resting fill을 추가하지 않아야 한다(MUST NOT).
 
 공용 `PostSourcePresentationView`의 생성 시각 Link는 최소 44×44 target을 유지하면서 target 내부의 label을 오른쪽 정렬해야 하며(MUST), outer Post와 nested Source preview에 동일하게 적용해야 한다(MUST). 별도 `PostListItem` timestamp에는 이 정렬을 적용하지 않아야 한다(MUST NOT).
 
@@ -231,6 +233,12 @@
 
 - **WHEN** 같은 Post가 지원되는 목록과 상세 surface에 표시된다
 - **THEN** 두 surface는 같은 액션 순서, 상태 의미 및 접근성 계약의 Post Action Bar를 렌더한다
+
+#### Scenario: Post presentation 기본 표면
+
+- **WHEN** `PostListItem` 또는 `PostLayout`이 Web·iOS·Android consumer에 렌더된다
+- **THEN** presentation root는 semantic `backgroundCanvas`를 직접 적용해 host의 중립 배경이 비치지 않는다
+- **AND** direct Quote Source preview와 state overlay의 의도적인 투명 상태에는 별도 resting fill을 추가하지 않는다
 
 #### Scenario: content grid 마지막 sibling
 
@@ -254,9 +262,9 @@
 #### Scenario: 목록 Post 카드의 surface feedback
 
 - **WHEN** 사용자가 Web에서 touch가 아닌 mouse 또는 pen pointer를 `PostListItem` 위에 올린다
-- **THEN** Text·Media·PureRepost·Quote 카드 전체에 semantic `stateHover` overlay가 표시되고 leave 뒤 resting fill로 돌아간다
+- **THEN** Text·Media·PureRepost·Quote 카드 전체에 semantic `stateHover` overlay가 표시되고 leave 뒤 resting canvas로 돌아간다
 - **WHEN** 사용자가 Web·Android·iOS의 같은 카드 surface를 누른다
-- **THEN** semantic `statePressedSubtle` overlay가 hover보다 우선해 표시되고 release·cancel·leave 뒤 남은 상태 또는 resting fill로 돌아간다
+- **THEN** semantic `statePressedSubtle` overlay가 hover보다 우선해 표시되고 release·cancel·leave 뒤 남은 상태 또는 resting canvas로 돌아간다
 - **AND** 작성자·시간·본문·미디어·Action Bar의 기존 navigation·action·접근성 role은 유지된다
 
 #### Scenario: Quote Source preview surface state

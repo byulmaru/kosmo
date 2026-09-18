@@ -182,14 +182,14 @@ export function PostListItem({
     [openViewer, post.id],
   );
   const standardCardStyle = [
-    { paddingHorizontal: metrics.inset },
+    { backgroundColor: theme.backgroundCanvas, paddingHorizontal: metrics.inset },
     styles.standardCard,
     Platform.OS === 'web' && styles.webCardBottom,
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.borderSubtle },
   ];
   const compactCardStyle = [
-    { paddingHorizontal: metrics.inset },
+    { backgroundColor: theme.backgroundCanvas, paddingHorizontal: metrics.inset },
     styles.compactCard,
     Platform.OS === 'web' && styles.webCardBottom,
     showDivider && styles.cardDivider,

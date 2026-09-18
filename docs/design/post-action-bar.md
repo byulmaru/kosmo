@@ -84,16 +84,17 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 ## PostListItem surface feedback
 
 - `PROD-977`은 이 surface feedback과 Figma `State=Default|Hover|Pressed` variant를 소유한다.
-- `PostListItem`의 Text·Media·PureRepost·Quote는 resting fill 없이 연속 feed의 canvas 평면을 유지한다.
+- `PostListItem`의 Text·Media·PureRepost·Quote는 별도 card fill 없이 semantic `backgroundCanvas`의 연속 feed 평면을 유지한다.
 - Web의 touch가 아닌 mouse·pen pointer hover에서는 카드 root 전체에 `color/state/hover`, Web pointer press와 Android·iOS touch press에서는
   넓은 surface용 `color/state/pressed-subtle` overlay를 적용한다. overlay는 `radius/md`로 둥글게 처리하고 row divider는 직선으로 유지한다.
   pressed가 hover보다 우선하며 release·cancel·leave 뒤에는 남은 입력
-  상태 또는 resting fill로 돌아간다.
+  상태 또는 resting canvas로 돌아간다.
 - 이 feedback은 새 navigation target이나 접근성 role을 만들지 않는다. 작성자·시간·본문·미디어·Action Bar의
   기존 입력과 이벤트 분리, 구분선 및 Light·Dark token mapping을 그대로 유지한다.
 
 ## Surface 배치
 
+- `PostListItem`의 Text·Media·PureRepost·Quote root와 `PostLayout` root는 semantic `backgroundCanvas`를 직접 적용해 Web·Native host의 중립 배경이 비치지 않게 한다. 이는 feed와 같은 canvas 평면을 명시하는 계약이며, direct Quote Source preview와 feedback overlay 등 내부에서 의도적으로 투명한 요소에는 별도 resting fill을 추가하지 않는다.
 - `PostLayout`은 metadata 뒤 `Engagement`에 Reaction Summary와 bordered Action Bar frame을 순서대로
   렌더링한다. Web 일반 Text·Media `PostListItem`은 카드 상단 12px·하단 8px, 목록 전용
   Action Bar slot 상단 8px·하단 0을 사용한다.

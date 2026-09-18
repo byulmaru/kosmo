@@ -358,8 +358,9 @@ Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp targ
 - [x] 9.4 App·Storybook·lint·OpenSpec 검증과 Figma 최종 대조를 완료하고 실제 Native 실행 결과·미검증 항목을 기록한다.
 - [x] 9.5 승인된 Web 목록 위12·아래8과 상세 frame 상하12 여백을 기존 surface 경계에 적용하고 Native 기존 여백·target을 보존한다.
 - [x] 9.6 기존 geometry Storybook·앱 검증과 390/1024/1440 Web 시각·상호작용 QA를 통과시키고, Figma Center 목록4종·상세3종의 승인·동기화 상태를 기록한다.
-- [x] 9.7 목록·current connector를 당시 Web x=32·Native x=40 계약에 맞추는 실제 렌더 회귀를 추가한다. 이후 9.9에서 shell presentation 공용 metric으로 대체한다.
+- [x] 9.7 목록·current connector를 당시 Web x=32·Native x=40 계약에 맞추는 실제 렌더 회귀를 추가한다. 이후 9.8에서 shell presentation 공용 metric으로 대체한다.
 - [x] 9.8 Post list inset·thread connector를 shell presentation 기반 공용 metric으로 정렬한다.
+- [x] 9.9 `PostListItem`·`PostLayout` root에 semantic `backgroundCanvas`를 직접 적용하고 Web·iOS·Android renderer 회귀와 canonical 문서·OpenSpec을 동기화한다.
 
 **Web Spacing Verification Record (2026-09-12)**
 
