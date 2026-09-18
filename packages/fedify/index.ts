@@ -1,6 +1,7 @@
 export { resolveActivityPubPostUri } from './src/activitypub-post-uri';
 export { federation } from './src/federation';
 export { sendAcceptFollowActivity } from './src/follow-delivery';
+export { materializeHydratedRemoteNote } from './src/inbound-create-note';
 export type {
   InboundCaptureContext,
   InboundObservabilityReporter,
@@ -15,6 +16,11 @@ export {
   setInboundObservabilityReporter,
   withInboundObservability,
 } from './src/inbound-observability';
+export {
+  handleInboundQuote,
+  resolveStoredInboundQuote,
+  revokeInboundQuote,
+} from './src/inbound-quote';
 export { sendLocalPostCreate, sendLocalPostDelete } from './src/local-post-delivery';
 export { sendLocalProfileUpdate } from './src/local-profile-update-delivery';
 export { sendProfileFollow, sendProfileUnfollow } from './src/profile-follow-delivery';

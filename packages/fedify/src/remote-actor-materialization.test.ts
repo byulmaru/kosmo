@@ -384,15 +384,18 @@ describe('remote actor materialization', () => {
   test('materializes an inbound actor URI through Fedify actor handle discovery', async () => {
     const actor = createActor();
     const lookupObject = mock.fn(async () => actor);
-    const fetch = mockWebFinger({ subject: `acct:alice@${remoteDomain}` });
+    const resolveActorHandle = mock.fn(async (actorUri: URL) => {
+      assert.equal(actorUri, actor.id);
+      return `alice@${remoteDomain}`;
+    });
 
     const result = await findOrMaterializeRemoteProfileActorByUri({
       actorUri: actor.id!,
-      context: { lookupObject },
+      context: { lookupObject, resolveActorHandle },
     });
 
     assert.equal(result.actor.uri, actor.id?.href);
-    assert.equal(fetch.mock.calls.length, 1);
+    assert.equal(resolveActorHandle.mock.calls.length, 1);
     assert.equal(
       (lookupObject.mock.calls as unknown as Array<{ arguments: unknown[] }>)[0]?.arguments[0],
       `acct:alice@${remoteDomain}`,
@@ -403,11 +406,14 @@ describe('remote actor materialization', () => {
     const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
     const actor = createActor();
     const lookupObject = mock.fn(async () => actor);
-    mockWebFinger({ subject: `acct:alice@${remoteDomain}` });
+    const resolveActorHandle = mock.fn(async (actorUri: URL) => {
+      assert.equal(actorUri, actor.id);
+      return `alice@${remoteDomain}`;
+    });
 
     await findOrMaterializeRemoteProfileActorByUri({
       actorUri: actor.id!,
-      context: { lookupObject },
+      context: { lookupObject, resolveActorHandle },
     });
 
     const reactivated = await db

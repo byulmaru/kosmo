@@ -24,6 +24,18 @@ Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 �
 | Followers Only     | 작성자, 작성자를 팔로우한 Profile, 멘션된 Profile이 볼 수 있다       |
 | Mentioned Profiles | 작성자와 Post에서 멘션한 Profile만 볼 수 있다                        |
 
+### Remote Quote Approval
+
+원격 Note가 인용을 참조할 때 Post가 소유하는 승인 상태다. Post Lifecycle State, Post Visibility와 Source의
+조회 가능성과는 독립적이며, 별도 Post Kind나 Quote 객체를 만들지 않는다.
+
+| 값       | 의미                                                                      |
+| -------- | ------------------------------------------------------------------------- |
+| Pending  | 인용 참조를 수신했지만 승인 여부를 확정하지 못했거나 필요한 승인서가 없다 |
+| Approved | FEP 자기 인용·유효한 승인서 또는 레거시 호환 조건을 충족했다              |
+| Revoked  | 앞서 확인한 인용 승인이 철회되었다                                        |
+| Invalid  | 인용 참조 또는 승인 검증이 영구적으로 실패했다                            |
+
 ## 속성
 
 | 속성      | 타입/nullability | 검증 정책                                | 존재 조건             | 조회 조건           | 조회 권한 |
@@ -85,6 +97,34 @@ Reply·Quote·Repost 작성은 각 입력 Parent·Source Post의 Author Profile�
 Local 작성과 Remote 수신의 Quote는 direct Repost Source Author를 수신자로 하는
 [Quote Notification](./notification.md#quote-notification)의 원인이다. 알림의 생성 조건과 중복 처리는
 Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 독립적인 조회 정책은 바뀌지 않는다.
+
+### 원격 인용 정보 반영
+
+- 행동 주체는 원격 Note의 Author Profile이다. ActivityPub 수신 경계에서 발신 주체, Note identity와
+  attribution이 일치하는지 검증한 뒤 인용 정보를 반영한다.
+- FEP-044f의 `quote`를 우선한다. 이 속성이 없을 때만 `quoteUrl`, `quoteUri`, `_misskey_quote`의 레거시
+  인용 참조를 사용한다. FEP 인용이 존재하지만 잘못된 경우 레거시 인용으로 바꾸지 않는다.
+- 원격 인용 대상 참조와 형식, 승인 참조와 상태를 보존한다. 원문이 아직 저장되지 않아도 인용 작성자의
+  Content를 보존하며, 원문을 확보하면 승인 여부와 별개로 기존 Repost Source 관계에 연결한다.
+- FEP 인용은 인용 작성자와 Source Author가 같거나 유효한 `QuoteAuthorization`을 확인한 경우에만
+  Approved가 된다. 승인서는 해당 인용, 직접 Source, Source Author에 정확히 대응하고 진본임을 검증해야 한다.
+- 레거시 인용은 FEP `quote`가 없고 유효한 원문을 확인하면 별도 `QuoteAuthorization` 없이 Approved가 된다.
+  이 호환 정책은 원문 작성자의 명시적 동의를 확인했다는 뜻이 아니며 Source 조회 권한을 넓히지 않는다.
+- 인용 작성자의 검증된 embedded `Update(Note)`로 승인 정보가 추가·교체·제거되면 승인 상태를 다시 판정한다. 승인서가
+  필요한 FEP 인용은 새 승인서 검증이 끝나기 전이나 승인서가 제거된 뒤에 Source를 표시하지 않는다.
+  이 행동은 일반 Note의 Content·Media·Visibility 수정이나 인용 대상 변경을 정의하지 않는다.
+- IRI-only `Update(Note)`를 받은 뒤 원격 Note를 추가 fetch·hydrate하는 경로와 authorization-only Update
+  표현은 이 계약에 포함하지 않는다.
+- 같은 수신을 반복하거나 동시에 처리해도 하나의 현재 상태로 수렴한다. 이전 인용 정보에 대한 늦은 처리
+  결과가 현재 승인 상태나 Source 관계를 되돌리지 않는다.
+
+### 원격 인용 승인 철회 반영
+
+- 행동 주체는 Source Author다. 저장된 승인 참조에 대한 `Delete(QuoteAuthorization)`이 해당 Source Author의
+  유효한 철회임을 확인한 경우 Remote Quote Approval을 Revoked로 바꾼다.
+- 다른 인용·Source·발급자의 승인에 대한 삭제는 현재 인용의 승인을 철회하지 않는다.
+- 승인 철회는 인용 작성자의 Content와 이미 연결된 Repost Source 관계를 보존한다. 같은 승인에 대한
+  중복 철회와 늦게 끝난 검증 결과가 철회를 취소하지 않는다.
 
 ## 권한
 
@@ -245,6 +285,24 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - Local Note의 ActivityPub Tombstone, `Delete`, `Create`, `Announce`, `Like`, `EmojiReact`, `Undo` delivery와
   `emojiReactions` collection projection은 각 lifecycle과 delivery 계약이 소유한다.
 
+### 원격 Quote Source 표시
+
+- Remote Quote Approval이 Approved이고 viewer가 Source의 Post Visibility와 Post Eligibility를 모두
+  통과할 때만 목록·상세의 기존 Quote 카드에 Source를 표시한다. 승인 자체는 Source 조회 권한이 아니다.
+- Pending, Revoked, Invalid이거나 Source가 없거나 조회 불가하면 Source 카드만 숨긴다. 인용 작성자의
+  Content, Reply Parent와 자체 Post Eligibility는 독립적으로 유지한다.
+- 미저장 Public·Unlisted 원문은 기존 원격 Note 저장 경계를 통해 확보할 수 있다. Followers Only 원문은
+  이미 저장된 경우에만 연결하며, 조회 시점에는 현재 viewer의 권한을 다시 적용한다.
+- Source가 Reply여도 Source 자체의 identity·Author·Visibility로 판정한다. Parent가 없거나 조회 불가하다는
+  이유로 Source를 Parent로 바꾸거나 Source 자체의 조회 권한을 제한하지 않는다.
+- 미저장 Followers Only Source의 후속 authenticated fetch는 인증된 선행 처리에서 검증한 Source URI와
+  저장된 Source Author의 대응을 전제로 한다. Quote 작성자·delivery actor나 URI 형식으로 작성자를 추론하지
+  않는다. 이 연결과 fetch·저장 직전 권한 재검증은 PROD-793 범위이며 PROD-792에서 private 원문을 새로 저장하지 않는다.
+- Local Quote 작성의 Source 제한을 원격 수신에 확대 적용하지 않는다. Profile Block은 현재 Source 조회
+  정책의 방향을 따르고, 인용 승인 철회는 별도의 검증된 철회 행동으로 반영한다.
+- 이 수신 계약은 직접 Source를 표시하며 재귀적으로 인용을 펼치거나 `quote-inline` 본문을 다시 쓰지 않는다.
+- 이 계약의 근거와 후속 범위는 [ADR 0027](../decisions/0027-activitypub-remote-quote-approval.md)에 기록한다.
+
 ### 검색
 
 - 검색 후보는 Post Visibility가 Public이고 Post Eligibility를 통과한 Post다.
@@ -284,5 +342,7 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - 본문의 canonical 표현은 schema version이 식별된 document다. Plain Text는 작성 입력과 읽기·검색·접근성 projection이며 별도 canonical 저장값이 아니다.
 - 현재 document V1은 paragraph, text, hard break, 안전한 HTTP(S) link와 Media node를 지원한다. `pre`와
   일반 rich-text editor는 지원하지 않는다.
-- Mentioned Profiles audience와 ActivityPub Mention·custom emoji·Quote 전용 속성은 후속 계약에서 정의한다.
+- Mentioned Profiles audience와 ActivityPub Mention·custom emoji는 후속 계약에서 정의한다.
+- Local Quote 작성·발신, Kosmo Source용 QuoteRequest와 승인 발급, 미저장 Followers Only Source의
+  authenticated fetch, 주기적 승인 재검증, 역방향 인용 목록과 Quote 알림은 원격 Quote 수신과 별도 계약이다.
 - Post Content 수정 후 원격 수신자에게 `Update(Note)`를 전달하는 lifecycle은 후속 계약에서 정의한다.

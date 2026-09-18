@@ -45,7 +45,19 @@ export class RemoteActorMaterializationError extends Error {
   }
 }
 
-type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'>;
+export class RemoteActorDiscoveryUnavailableError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'RemoteActorDiscoveryUnavailableError';
+  }
+}
+
+type ActorHandleResolver = (actorUri: URL) => Promise<string> | string;
+
+type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'> & {
+  /** Test harness seam; production defaults to Fedify's WebFinger resolver. */
+  resolveActorHandle?: ActorHandleResolver;
+};
 
 type RemoteActorMaterializationOptions = {
   context: RemoteActorLookupContext;
@@ -101,6 +113,9 @@ const getNow = () => Temporal.Now.instant();
 const noNetworkDocumentLoader = async (): Promise<never> => {
   throw new TypeError('Remote actor representation lookup is disabled');
 };
+
+const resolveActorHandleWithFedify: ActorHandleResolver = (actorUri) =>
+  getActorHandle(actorUri, { trimLeadingAt: true });
 
 const toActorType = (actor: Actor): ActivityPubActorType => {
   switch (getActorTypeName(actor)) {
@@ -401,9 +416,20 @@ export const findOrMaterializeRemoteProfileActorByUri = async ({
 
   let handle: string;
   try {
-    handle = await getActorHandle(actorUri, { trimLeadingAt: true });
-  } catch {
-    throw new RemoteActorMaterializationError('WebFinger actor identity does not match.');
+    handle = await (context.resolveActorHandle ?? resolveActorHandleWithFedify)(actorUri);
+  } catch (error) {
+    if (error instanceof RemoteActorDiscoveryUnavailableError) {
+      throw error;
+    }
+    if (
+      context.resolveActorHandle !== undefined ||
+      (error instanceof Error && error.name === 'ActorHandleNotFoundError')
+    ) {
+      throw new RemoteActorMaterializationError('WebFinger actor identity does not match.');
+    }
+    throw new RemoteActorDiscoveryUnavailableError('WebFinger actor lookup failed.', {
+      cause: error,
+    });
   }
   await materializeRemoteProfileActor({ context, handle, now, reactivateUnresponsive: true });
 

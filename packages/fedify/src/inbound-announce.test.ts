@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, mock, test } from 'node:test';
+import { after, before, beforeEach, describe, test } from 'node:test';
 import { generateCryptoKeyPair, signRequest } from '@fedify/fedify';
 import { Announce, CryptographicKey, Person, Undo } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
@@ -21,7 +21,7 @@ import { temporalClient } from '@kosmo/core/temporal/client';
 import { and, eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { TestContext } from 'node:test';
-import type { InboxContext } from '@fedify/fedify';
+import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as FederationModule from './federation';
@@ -47,6 +47,7 @@ let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let federation: typeof FederationModule.federation;
+let createKosmoFederation: typeof FederationModule.createKosmoFederation;
 let handleInboundAnnounce: typeof HandleInboundAnnounce;
 let handleInboundUndo: typeof HandleInboundUndo;
 let localInstanceId: string;
@@ -70,7 +71,7 @@ describe('inbound Announce materialization', () => {
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ handleInboundAnnounce } = await import('./inbound-announce'));
     ({ handleInboundUndo } = await import('./inbound-follow'));
-    ({ federation } = await import('./federation'));
+    ({ createKosmoFederation, federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
@@ -313,16 +314,13 @@ describe('inbound Announce materialization', () => {
       [actorUri.href, await remoteActor.toJsonLd({ format: 'expand' })],
       [remoteKeyUri.href, await remoteKey.toJsonLd({ format: 'expand' })],
     ]);
-    const fetchMock = mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {
-      const url = input instanceof Request ? input.url : input.toString();
+    const documentLoader: DocumentLoader = async (url) => {
       const document = documents.get(url);
       if (!document) {
-        throw new Error(`Unexpected fetch URL: ${url}`);
+        throw new Error(`Unexpected document URL: ${url}`);
       }
-      return new Response(JSON.stringify(document), {
-        headers: { 'content-type': 'application/activity+json' },
-      });
-    });
+      return { contextUrl: null, document, documentUrl: url };
+    };
     const contextLoader = getDocumentLoader();
     const activity = announce('signed-both', sourceUri);
     const createSignedRequest = async (path: string) =>
@@ -336,20 +334,21 @@ describe('inbound Announce materialization', () => {
         remoteKeyUri,
       );
 
-    try {
-      const [personal, shared] = await Promise.all([
-        federation.fetch(await createSignedRequest(`/ap/actor/${localProfileId}/inbox`), {
-          contextData: undefined,
-        }),
-        federation.fetch(await createSignedRequest('/inbox'), { contextData: undefined }),
-      ]);
+    const testFederation = createKosmoFederation({
+      authenticatedDocumentLoaderFactory: () => documentLoader,
+      contextLoaderFactory: () => contextLoader,
+      documentLoaderFactory: () => documentLoader,
+    });
+    const [personal, shared] = await Promise.all([
+      testFederation.fetch(await createSignedRequest(`/ap/actor/${localProfileId}/inbox`), {
+        contextData: undefined,
+      }),
+      testFederation.fetch(await createSignedRequest('/inbox'), { contextData: undefined }),
+    ]);
 
-      assert.equal(personal.status, 202, await personal.text());
-      assert.equal(shared.status, 202, await shared.text());
-      assert.equal((await findReposts(actor.id, source.id)).length, 1);
-    } finally {
-      fetchMock.mock.restore();
-    }
+    assert.equal(personal.status, 202, await personal.text());
+    assert.equal(shared.status, 202, await shared.text());
+    assert.equal((await findReposts(actor.id, source.id)).length, 1);
   });
 
   test('moves current identities across generations and ignores a repeated Undo after B is superseded', async () => {

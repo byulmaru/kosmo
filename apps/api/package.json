@@ -37,6 +37,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@fedify/vocab": "2.3.0"
+    "@fedify/vocab": "2.4.0-dev.1922"
   }
 }

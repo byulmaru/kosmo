@@ -14,6 +14,14 @@ export const activityPubActorKeyKind = createPgEnum(
   'activitypub_actor_key_kind',
   Enum.ActivityPubActorKeyKind,
 );
+export const activityPubQuoteFormat = createPgEnum(
+  'activitypub_quote_format',
+  Enum.ActivityPubQuoteFormat,
+);
+export const activityPubQuoteStatus = createPgEnum(
+  'activitypub_quote_status',
+  Enum.ActivityPubQuoteStatus,
+);
 export const applicationState = createPgEnum('application_state', Enum.ApplicationState);
 export const applicationType = createPgEnum('application_type', Enum.ApplicationType);
 export const instanceKind = createPgEnum('instance_kind', Enum.InstanceKind);
