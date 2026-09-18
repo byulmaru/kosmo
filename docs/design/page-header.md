@@ -5,6 +5,7 @@
 ## Variant
 
 - `text`: `알림`, `북마크`, `글쓰기`, `게시글`처럼 현재 화면을 설명하는 텍스트 제목을 표시한다. 제목은 하나의 heading으로 노출한다.
+- `text`의 제목이 비어 있으면 같은 chrome과 최소 높이를 유지하되 의미 없는 빈 semantic heading은 렌더링하지 않는다. Native `UniversalShell`의 비타임라인 menu-only fallback이 이 형태를 사용한다.
 - `text` 제목은 leading action 다음의 가용 폭 안에서 줄어들고 여러 줄로 reflow한다. `64px`은 고정 높이가
   아니라 최소 높이이므로, 좁은 화면이나 font scaling에서 제목을 한 줄로 자르거나 header 밖으로 넘기지 않는다.
 - 동적 Profile 표시 이름처럼 화면 chrome 높이를 한 줄로 유지해야 하는 소비처는 Figma `TextEllipsis`와 같은
@@ -78,7 +79,7 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
   `< compact`에서 `UniversalShell`은 기본 메뉴 전용 헤더 대신 drawer action과 가장자리 스와이프만 제공한다.
 - `<768px` 모바일 Web `/notifications`와 `/settings` root: `UniversalShell`이 메뉴 버튼과 텍스트 제목을 하나의 app bar로 렌더링한다. `/notifications`에서는 같은 app bar가 `모두 읽음` trailing action도 소유하고, Settings 내부 category·detail destination에서는 같은 위치에 뒤로가기와 현재 destination 제목을 렌더링한다. route의 loading, error, empty와 content 상태는 셸 헤더 아래에서 전환하며 자체 PageHeader를 렌더링하지 않는다.
 - `<768px` 모바일 Web 게시글 상세: `UniversalShell`이 기존 `router.back()` 동작을 사용하는 뒤로가기 버튼과 `게시글` 제목을 하나의 app bar로 렌더링한다. route는 별도 sticky PageHeader와 그 offset을 만들지 않는다.
-- Android/iOS의 알림·글쓰기·게시글 상세와 compact/full Web: 모바일 Web 셸 헤더가 없으므로 route 또는 화면의 최상위 scroll content가 기존 텍스트·뒤로가기 헤더를 소유한다. `/notifications`는 같은 위치에 `모두 읽음` trailing action도 소유한다. Native 게시글 상세에서는 `PostDetailFrame`이 첫 번째 sticky child를 계속 소유한다.
+- Android/iOS의 알림·글쓰기·게시글 상세와 compact/full Web: 모바일 Web 셸 헤더가 없으므로 route 또는 화면의 최상위 scroll content가 기존 텍스트·뒤로가기 헤더를 소유한다. Android/iOS에서는 이 route-owned heading 위에 `UniversalShell`의 빈 제목 menu-only `PageHeader` chrome이 병존하며, 빈 제목 fallback은 semantic heading을 추가하지 않는다. `/notifications`는 route-owned header의 같은 위치에 `모두 읽음` trailing action도 소유한다. Native 게시글 상세에서는 `PostDetailFrame`이 첫 번째 sticky child를 계속 소유한다.
 - Mobile/compact/full Web과 Android/iOS의 `/[profileHandle]/followers`·`following`은 각 독립 route가
   `~님의 팔로워`·`~님의 팔로잉` PageHeader와 바로 아래 관계 TabList를 소유하며 ProfileHero를 표시하지 않는다.
   뒤로가기는 같은 Profile 홈으로, 탭 선택은 같은 Profile의 다른 관계 목록으로 이동한다. Mobile Web에서는

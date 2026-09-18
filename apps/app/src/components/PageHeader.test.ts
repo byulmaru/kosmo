@@ -107,6 +107,19 @@ test('text variant exposes one visible heading in a 64px page bar', () => {
   assert.equal((headings[0]?.props.style as Array<Record<string, unknown>>)[1]?.color, '#1a1a1a');
 });
 
+test('empty text variant keeps page bar chrome without an empty semantic heading', () => {
+  const leading = createElement('Pressable', { accessibilityLabel: '메뉴 열기' });
+  const header = renderHeader({ leading, title: '' });
+  const headings = findElements(header, 'Text').filter(
+    (element) => element.props.accessibilityRole === 'header',
+  );
+
+  assert.equal((header.props.style as Array<{ minHeight?: number }>)[0]?.minHeight, 64);
+  assert.equal(headings.length, 0);
+  assert.equal(findElements(header, 'Pressable').length, 1);
+  assert.equal(findElements(header, 'Pressable')[0]?.props.accessibilityLabel, '메뉴 열기');
+});
+
 test('page bar stays on the route canvas and uses only a subtle boundary', () => {
   const header = renderHeader({ title: '북마크' });
   const themeStyle = (header.props.style as Array<Record<string, unknown>>)[1];
