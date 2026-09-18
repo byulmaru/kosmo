@@ -87,11 +87,11 @@ test(
   async () => {
     await truncateDatabase();
     const input = await createFixture();
-    const runBlock = (value: typeof input) =>
+    const runBlock = (value: typeof input, updateId: string) =>
       runWorkflow(profileBlockWorkflow, {
         args: [value],
         updateArgs: [value],
-        updateId: PROFILE_BLOCK_UPDATE_ID,
+        updateId,
         mode: 'update-with-start',
         workflowIdConflictPolicy: 'USE_EXISTING',
         workflowIdReusePolicy: 'ALLOW_DUPLICATE',
@@ -121,9 +121,9 @@ test(
     workerRun = worker.run();
 
     try {
-      const first = runBlock(input);
+      const first = runBlock(input, `${PROFILE_BLOCK_UPDATE_ID}:first`);
       await transitionStarted.promise;
-      const existing = runBlock(input);
+      const existing = runBlock(input, `${PROFILE_BLOCK_UPDATE_ID}:existing`);
       transitionReleased.resolve();
       const [firstResult, existingResult] = await Promise.all([first, existing]);
       assert.equal(firstResult.created, true);
@@ -141,7 +141,7 @@ test(
         rows.map(({ id }) => id),
         [firstResult.profileBlockId],
       );
-      const duplicate = await runBlock(input);
+      const duplicate = await runBlock(input, `${PROFILE_BLOCK_UPDATE_ID}:duplicate`);
       assert.deepEqual(duplicate, { ...firstResult, created: false });
     } finally {
       transitionReleased.resolve();
