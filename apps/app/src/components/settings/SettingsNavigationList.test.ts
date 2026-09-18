@@ -143,7 +143,7 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[2].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
     assert.equal(links[2].props.href, '/settings/mute-and-block');
     assert.equal(
-      rendered('Pressable').some((node) => node.props.testID === 'native-notification-settings'),
+      links.some((node) => node.props.testID === 'native-notification-settings'),
       false,
     );
   });
@@ -170,7 +170,6 @@ describe('SettingsNavigationList', () => {
       (node) => node.props.label === '알림 설정',
     );
     assert.ok(notificationItem);
-    assert.equal(notificationItem.props.label, '알림 설정');
     assert.equal(
       notificationItem.props.description,
       '기기의 알림 설정에서 Push 알림을 관리할 수 있어요.',

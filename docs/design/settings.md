@@ -61,8 +61,7 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   `checkError`와 `downloadError`는 실제 값이 있을 때만 각각 optional 진단 행으로 표시하며 Web에서 Expo OTA
   값을 임의로 채우지 않는다.
 - 인증된 Android/iOS Native Settings root는 `뮤트 및 차단` 다음, `정보` 직전에 `알림 설정` action을 제공한다.
-  이 action은 OS 알림 설정으로 이동하며 Web에서는 노출하지 않는다. Push 수신 여부를 위한 앱 내부 toggle이나
-  preference API는 제공하지 않는다.
+  이 action은 OS 알림 설정으로 이동하며 Web에서는 노출하지 않는다.
 - `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 하위 목록을 연다.
   두 상태를 하나의 혼합 목록으로 표시하지 않는다. 세부 action과 Profile 상태는
   [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다.

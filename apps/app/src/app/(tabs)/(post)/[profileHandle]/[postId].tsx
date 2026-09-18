@@ -149,13 +149,15 @@ function PostDetailContent({
   const pureRepostSourceHref: Href | null = pureRepostSource
     ? `/${pureRepostSource.profile.relativeHandle}/${pureRepostSource.id}`
     : null;
+  const shouldFallbackToNotifications =
+    openedFromPush && (!post || post.state === 'DELETED' || locallyDeleted);
 
   useEffect(() => {
     setLocallyDeleted(false);
   }, [fetchKey]);
 
   useEffect(() => {
-    if (openedFromPush && (!post || post.state === 'DELETED' || locallyDeleted)) {
+    if (shouldFallbackToNotifications) {
       router.replace('/notifications');
     } else if (pureRepostSourceHref) {
       router.replace(
@@ -173,10 +175,8 @@ function PostDetailContent({
     pureRepostSourceHref,
     routeRelativeHandle,
     router,
+    shouldFallbackToNotifications,
   ]);
-
-  const shouldFallbackToNotifications =
-    openedFromPush && (!post || post.state === 'DELETED' || locallyDeleted);
 
   return shouldFallbackToNotifications ? null : pureRepostSourceHref ? null : locallyDeleted ? (
     <PostDetailFrame header={header}>
