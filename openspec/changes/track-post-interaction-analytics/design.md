@@ -1,74 +1,85 @@
 ## Context
 
-Kosmo의 분석 API는 공용 `trackAnalytics(name, properties?)` 경계와 Web 전용 OpenPanel client, Native no-op 모듈로 나뉜다. Session 경계는 opaque Account ID를 identify하고 로그아웃 뒤 identity를 clear한다. 현재 명시적 taxonomy는 Profile·Post·Follow·검색 행동만 포함하며 재게시·반응·북마크 호출부에는 분석 계측이 없다.
+2026-09-18에 최신 main `8d28a08ecf7fdba8dcdfd361e37b278a5fbaffd1`을 조사했다. `apps/app/src/analytics/events.ts`, `client.web.ts`, `client.ts`, `AnalyticsSessionBridge.tsx`가 typed event, Web capture, Native no-op과 Account identify/reset을 제공한다. 이번 다섯 이벤트는 아직 없다.
 
-세 Post action은 공용 Post surface와 Action Bar를 거치지만 성공 판정은 서로 다르다. 재게시 생성·취소는 각 Relay mutation의 payload와 GraphQL 오류를 판정하고, Reaction은 authoritative payload가 있으면 부분 GraphQL 오류가 함께 있어도 성공으로 처리하며, Bookmark 생성·삭제는 각 payload와 기존 cache helper 결과를 사용한다. 새 계측은 이 성공 의미와 selected Profile별 Relay Environment를 바꾸지 않아야 한다.
+PROD-795·819는 Done이지만 실제 수집은 중단된 상태다. `apps/app/src/config/public.ts`에서 dev·prod의 PostHog key와 host가 모두 `undefined`이고, `apps/web/e2e/analytics.e2e.ts`의 활성화·identity 검증도 보류돼 있다. PR #756은 병합됐고 개인정보 처리방침 PR #714는 Draft다. 상태 표기와 실제로 수집할 수 있는지는 구분한다.
+
+현재 `PROD-539` branch의 HEAD는 `e09ff4c1c41b153297e1794a262a8b7322d6b994`이며 최신 main보다 뒤처져 있다. 이번에는 기존 미커밋 명세를 보존해 갱신했다. 아래 코드 설명은 최신 main 기준이다. 구현 세션은 변경분을 보존한 채 저장소의 공식 Stack 절차로 기반을 맞추고 경로·payload를 다시 확인한다.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- 기존 opaque Account identity에 연결되는 재게시·반응·북마크 event taxonomy를 구현한다.
-- `reaction_type: default | custom`으로 현재와 향후 Reaction catalog를 저카디널리티로 분류한다.
-- mutation의 서버 확정 성공 뒤 정확히 한 번 계측하고 실패와 분석 장애를 제품 흐름에서 격리한다.
-- event property에서 대상과 콘텐츠 식별 정보를 제거한다.
-- 관련 payload test와 production acceptance로 Account attribution과 개인정보 경계를 검증한다.
+- Account identity에 연결되는 다섯 이벤트를 각 mutation의 서버 확정 성공 뒤 한 번 호출한다.
+- 허용 명시적 속성만 전달하고 분석 장애가 제품 결과와 오류 처리에 영향을 주지 않게 한다.
+- 실제 action을 실행하고 Account 귀속, 전송 payload와 운영 문서로 결과를 검증한다.
 
 **Non-Goals:**
 
-- Account 가입 성공 이벤트와 가입→최초 반응 funnel 계약 추가
-- WAA 기간·제외 목록·순사용·dashboard query 같은 집계 계약 구현
-- 구체 emoji별 분석, custom emoji 식별 정보 수집 또는 Reaction domain catalog 확장
-- 재게시·반응·북마크 mutation, GraphQL schema, Relay cache 의미 변경
-- Android·iOS 분석 지원 완료
+- mutation 연결, GraphQL·DB·Reaction catalog, 기존 UI·오류 정책 변경
+- SDK 교체, identity 재구현, Cloud 설정, 수집 재개, 개인정보 처리방침·OpenPanel 정리
+- 가입 이벤트, dashboard·집계식, 구체 emoji별 분석, Native SDK와 이전 이벤트 호환성
 
 ## Implementation Guidance
 
 ### Current Constraints
 
-- 공용 Post action 코드는 Web·Native가 함께 사용하므로 OpenPanel SDK를 action이나 controller에서 직접 import하면 Native bundle 경계를 깨뜨린다.
-- 분석 helper는 실패를 흡수하는 fire-and-forget API다. mutation callback은 분석 완료를 기다리거나 분석 결과로 성공·실패를 다시 판단하지 않아야 한다.
-- 재게시, Reaction, Bookmark는 서로 다른 payload 성공 의미를 가진다. 공통 GraphQL `errors.length === 0` 규칙으로 합치면 Reaction의 authoritative partial payload 계약을 깨뜨린다.
-- Reaction UI는 현재 `❤️`, `🥹`, `🎉`, `👀`, `☘️`, `🌈`의 opaque canonical Type을 사용한다. 분석 분류는 이 값을 저장·전송하는 새 registry가 아니라 event 경계의 저카디널리티 projection이어야 한다.
-- action은 요청을 시작한 Relay Environment와 pending/error 상태를 소유한다. 계측을 위해 callback 순서, actor 전환 격리, cache normalization 또는 toast/inline error를 바꾸면 안 된다.
-- PROD-469에는 Account 가입 시점을 나타내는 이벤트가 없다. `profile_created`는 한 Account의 추가 Profile 생성에도 발생하므로 가입 이벤트로 재해석할 수 없다.
+아래 표는 최신 코드의 구현 안내이며 새로운 공개 payload 계약이 아니다.
+
+| 행동           | 현재 완료 경계                                                                                | 계측 시 확인할 결과                                                                             |
+| -------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 재게시 생성    | `RepostAction`은 GraphQL 오류를 검사하고 payload는 사용하지 않는다                            | 오류가 없고 `repostPost.repost.id`가 존재하는 성공 결과                                         |
+| 재게시 취소    | 같은 완료 callback을 사용한다                                                                 | 오류가 없고 `deletePost.postId`가 요청한 재게시 ID를 확인하는 결과                              |
+| 반응 추가·삭제 | `PostReactionController`는 `addReaction` 또는 `deleteReaction` payload 존재로 성공을 판정한다 | 기존 판정을 유지한다. payload가 있는 부분 오류와 삭제 `reactionId: null`인 멱등 성공도 포함한다 |
+| 북마크 추가    | `PostBookmarkAction`은 GraphQL 오류를 검사하고 payload는 사용하지 않는다                      | 오류가 없고 `createBookmark.bookmark.id`가 존재하는 성공 결과                                   |
+| 북마크 삭제    | `deleteBookmark.requestedBookmarkId`와 요청 ID의 일치로 성공을 판정한다                       | 기존 일치 판정을 유지한다. 별개 필드의 오류만으로 성공을 실패로 바꾸지 않는다                   |
+
+계측에 필요한 식별자를 로컬에서 비교하는 것은 명시적 event property로 보내는 것과 다르다. payload 부재를 계측에서 제외하기 위해 새 Toast나 제품 오류 정책을 추가하지 않는다. 이전 초안의 `applyBookmarkDeleteResponse` 안내는 현재 코드와 맞지 않는다.
 
 ### Recommended Approach
 
-기존 공용 analytics 경계를 유지하고 각 action이 이미 서버 성공을 확정하는 callback에서만 승인된 event name과 최소 property를 전달한다. 재게시 생성·취소는 같은 event와 `created | removed` result를 사용하고, Bookmark는 property 없이 별도 add/remove event를 사용한다. Reaction은 요청한 canonical Type을 `❤️`이면 `default`, 나머지는 `custom`으로 projection한 뒤 실제 Type을 버린다. 이 비교는 현재 catalog 전체를 열거하는 매핑보다 새 비기본 Type을 자동으로 `custom` 처리하므로 향후 확장에도 식별 정보가 노출되지 않는다.
+기존 event별 TypeScript 계약에 다섯 이벤트를 추가하고 세 action의 완료 경계에서 공용 `trackAnalytics`를 호출한다. 북마크의 무속성 호출도 기존 caller 타입을 보존하는 최소 변경으로 표현한다. 런타임 전역 allowlist, 범용 wrapper, 재전송 queue와 추가 dependency는 필요하지 않다.
 
-호출부 test는 각 action의 성공, 취소, payload 부재·network 실패, 중복 입력 차단과 actor 격리를 유지하면서 event 호출 횟수와 exact payload를 검증한다. Reaction test는 authoritative payload와 부분 GraphQL 오류가 함께 있는 기존 성공 case도 계측해야 한다. 분석 client test는 새 taxonomy가 OpenPanel로 그대로 전달되고 SDK throw/reject가 제품 callback에 영향을 주지 않는지 확인한다.
+반응은 요청 Type이 `❤️`일 때만 `default`, 나머지는 `custom`으로 분류한다. 현 catalog 외 반응 UI나 저장 기능은 만들지 않는다. 멱등 성공도 해당 요청의 성공 행동으로 기록하고 관계 순증감을 추측하지 않는다.
 
-`docs/operations/openpanel.md`의 명시적 event 목록과 production acceptance에는 opaque Account profile 아래 event attribution, allowlist property, 실패 mutation 비수집과 식별 정보 부재를 추가한다. 가입 cohort는 검증 항목으로 가장하지 않고 별도 계측 gap으로 남긴다.
+“정확히 한 번”은 앱이 mutation 성공 결과 하나에 capture를 한 번 호출한다는 뜻이다. 클릭·메뉴 열기·optimistic state·재렌더링에서 호출하지 않고 분석 완료를 기다리지 않는다. PostHog 수신을 보장하는 분산 exactly-once 전송 계약을 추가하지 않는다.
+
+Account identity는 `AnalyticsSessionBridge`와 공용 adapter를 재사용한다. Profile 전환에 따른 Relay Environment 교체와 Account 전환은 구분한다. UI의 이전 actor callback 차단을 그대로 analytics 차단으로 복사하면 같은 Account의 완료 행동을 누락할 수 있다. 반대로 Account 전환 뒤 늦은 결과를 새 Account로 수집해서도 안 된다. 실제 세션 전환 테스트로 확인하고, 기존 계약 안에서 해결할 수 없다면 그 경계에서 사용자에게 결정이 필요한 내용을 제시한다. 임의 재식별이나 ID property 추가로 우회하지 않는다.
+
+기존 action 단위 테스트는 주로 Relay Store를 검증하며 실제 컴포넌트의 analytics 호출까지 증명하지 않는다. 실제 컴포넌트·hook을 실행하는 테스트를 보완하고 analytics 전송 경계만 mock한다. 기존 Repost·Reaction·Bookmark Story를 활용할 수 있다. UI 성공·실패와 Relay Store가 유지되는지도 함께 관찰한다.
+
+운영 문서는 구현 시 최신 경로를 확인한다. PostHog 문서가 계속 없다면 `docs/operations/posthog.md`에 이번 이벤트 표, 수집 중단 상태, 검증 방법과 분석 한계만 작성한다. 전체 OpenPanel runbook 이관과 shared acceptance를 이 이슈의 의무로 확대하지 않는다.
 
 ### Allowed Alternatives
 
-- Reaction 분류를 action 안에 인라인하거나 작은 pure projection으로 둘 수 있다. 어느 방식이든 `❤️`만 `default`, 나머지는 `custom`이어야 하고 실제 Type을 event property로 전달하지 않아야 한다.
-- action별 성공 callback에서 직접 계측하거나 기존 완료 callback을 좁게 감쌀 수 있다. 어느 방식이든 기존 성공 판정·Relay 갱신·사용자 오류 처리 이후 정확히 한 번 실행되고 분석 실패를 격리해야 한다.
+- 분류는 호출부에서 표현하거나 작은 순수 함수로 분리할 수 있다. 결과는 `default | custom`만 전달한다.
+- 기존 Storybook interaction 또는 컴포넌트·hook 테스트 중 실제 mutation 완료와 전송 인자를 관찰할 수 있는 가장 작은 경로를 사용한다.
 
 ### Known Traps
 
-- press, optimistic state 또는 mutation 요청 직후 계측하면 실패·취소와 중복 입력이 성공 행동으로 오염된다.
-- 모든 GraphQL 오류를 실패로 취급하면 authoritative Reaction payload가 있는 기존 성공 계약과 어긋난다.
-- Account 분석을 위해 Account ID나 selected Profile ID를 event property에 다시 넣으면 승인된 최소수집 경계를 위반한다.
-- raw emoji, custom emoji ID·이름·shortcode를 `reaction_type` 또는 별도 property로 보내면 taxonomy가 고카디널리티 식별자로 변한다.
-- `profile_created`를 가입 시점으로 사용하면 다중 Profile 생성 Account의 가입 funnel이 왜곡된다.
-- 분석 실패를 toast, inline error, retry 또는 Sentry로 연결하면 제품 실패 의미와 재귀 telemetry를 만든다.
+- 모든 action에 동일한 GraphQL 오류 조건을 적용해 Reaction·Bookmark 삭제의 성공 의미를 바꾸는 것
+- Store에 성공 payload를 직접 넣은 테스트만으로 실제 action의 이벤트 호출을 검증했다고 하는 것
+- 무속성 이벤트에 `Record<string, never>` 같은 타입만 붙이고 추가 property 차단이 증명됐다고 하는 것
+- identity 또는 SDK metadata를 없애거나, 현재 수집 중단을 해제해 테스트를 통과시키는 것
+- `profile_created`·최초 identify·pageview를 Account 가입 완료로 해석하는 것
 
 ## Risks / Trade-offs
 
-- [OpenPanel identity effect 전에 매우 이른 action이 발생하면 anonymous event가 될 수 있음] → Account ID property를 추가하지 말고 기존 Session identity 순서와 production Dashboard attribution을 검증한다. 실제 race가 확인되면 PROD-469 identity 계약 안에서 먼저 바로잡는다.
-- [같은 사용자 재시도 또는 callback 중복으로 event가 과다 집계될 수 있음] → 기존 in-flight 차단과 mutation 결과당 한 번 호출을 action test에서 검증한다.
-- [`default | custom`은 구체 emoji 선호를 분석할 수 없음] → 현재 제품 목적은 adoption 분류이며 구체 Type 분석은 별도 상위 계약이 승인될 때만 새 allowlist property로 확장한다.
-- [분석 차단기·endpoint 장애로 일부 행동이 누락될 수 있음] → 분석은 best-effort로 유지하고 제품 mutation 가용성을 우선한다.
+- [Account 전환 중 늦은 결과] → 요청 주체와 현재 SDK identity를 함께 실행 검증한다. 귀속 정책의 새 결정이 필요하면 그 경계에서 멈춘다.
+- [현재 실제 수집 불가] → 자동 테스트와 브라우저 outbound 검증, 실제 PostHog 수신을 별도 증거로 기록한다. 수신이 확인되지 않은 완료 조건은 pending으로 남긴다.
+- [운영 문서 공백] → 이번 이벤트와 검증 범위만 문서화하고 PROD-795·839·575의 책임을 인수하지 않는다.
+- [집계 기준 공백] → PROD-520은 Canceled다. WAA·제외 계정·기간·순사용과 가입 funnel을 승인된 것으로 취급하지 않는다.
 
 ## Migration Plan
 
-1. 기존 action 성공 경계에 승인된 event와 property projection을 연결하고 관련 test를 통과시킨다.
-2. OpenPanel 운영 문서와 production acceptance를 갱신한다.
-3. 기존 Web Client ID가 있는 build를 배포하고 opaque Account profile에서 각 add/remove event와 property를 확인한다.
-4. event taxonomy나 attribution에 문제가 있으면 제품 mutation을 유지한 채 계측 호출을 되돌린 image로 rollback한다. DB·GraphQL·저장 데이터 migration은 없다.
+1. 구현 세션에서 최신 Linear·main과 기존 변경분을 다시 확인하고 공식 Stack 절차로 오래된 기반을 맞춘다.
+2. 이벤트·성공 호출부·관련 테스트·운영 문서를 함께 변경한다. DB·API migration은 없다.
+3. 수집 중단 설정을 유지한 채 격리된 테스트에서 payload와 실패 격리를 검증한다. 승인된 수집 환경이 준비되면 실제 기능 이벤트와 Account 귀속을 확인한다. 수집 재개·Cloud 변경·배포는 이 명세의 승인 범위가 아니다.
+4. 문제가 생기면 이번 event 추가와 호출부를 되돌린다. 기존 mutation과 공용 PostHog 기반은 유지한다.
+5. 하네스가 더 이상 필요 없으면 구현 PR에서 `--skip-specs` archive를 고려한다. 하네스 승인·archive는 PR 완료 조건이 아니며 남은 수집 검증을 숨기지 않는다.
 
 ## Open Questions
 
-없음.
+- 이벤트 taxonomy·분류·개인정보 범위에서 새로 정할 제품 계약은 없다.
+- 수집 재개 시점과 실제 검증 환경은 미확인이다. 현재 설정과 최신 운영 근거를 다시 확인한 뒤 실제 수집 검증을 진행한다.
+- Account 전환 중 늦은 callback의 정확한 실행 결과는 구현 검증에서 확인할 항목이다. Spec 단계에서는 실행하지 않았다.

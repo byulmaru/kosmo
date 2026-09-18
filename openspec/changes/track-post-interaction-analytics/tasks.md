@@ -1,93 +1,88 @@
-## 1. PROD-539 Post 상호작용 event 연결
+이 checklist는 PROD-539의 구현·검증을 위한 세션 메모다. 최신 main의 PostHog 기반을 사용하고 수집 중단은 유지한다. OpenSpec 승인·archive를 추가 완료 조건으로 두지 않으며 실제 수집 증거가 없는 항목은 pending으로 남긴다.
+
+## 1. PROD-539 이벤트와 명시적 속성
 
 **Authority / Provenance**
 
-- `docs/domain/objects/post.md`
-- `docs/domain/objects/reaction.md`
-- `docs/domain/objects/bookmark.md`
-- `docs/design/post-action-bar.md`
-- `docs/design/reactions.md`
-- Linear `PROD-539`
+- `docs/domain/objects/account.md`, `docs/domain/objects/reaction.md`
+- [PROD-539](https://linear.app/byulmaru/issue/PROD-539)의 이벤트 정의·개인정보 경계
+- [PROD-819](https://linear.app/byulmaru/issue/PROD-819)의 typed custom event·identity·fail-open·Native no-op 계약
 
 **Deliverable**
 
-Kosmo Web에서 재게시·반응·북마크의 생성·취소 결과가 각 action의 서버 확정 성공 뒤 승인된 event와 allowlist property로 정확히 한 번 기록된다.
+다섯 이벤트가 기존 PostHog Account identity와 analytics 경계를 사용하며 명시적 속성은 허용 값만 포함한다.
 
 **Guardrails**
 
-- 재게시 생성·취소는 `repost_succeeded`의 `created | removed` result만 사용한다.
-- Reaction add/remove는 `reaction_type: default | custom`만 사용하고 `❤️`만 default로 분류한다.
-- Bookmark add/remove는 property를 보내지 않는다.
-- 기존 mutation 성공 의미, Relay normalization, selected Profile별 actor 격리, pending·error와 사용자 오류 처리를 바꾸지 않는다.
-- 요청 시작·optimistic state·실패 결과는 성공 event를 만들지 않는다.
+- 재게시 `result: created | removed`, 반응 `reaction_type: default | custom`, 북마크 무속성을 유지한다.
+- `❤️`만 default다. 나머지 다섯 Type과 향후 별도 기본 반응으로 승인되지 않은 Type은 custom이다.
+- Account·Post·Profile ID, 콘텐츠, 구체 emoji·custom emoji 식별 정보, 오류 원문·직접 식별 trait를 명시적 속성에 넣지 않는다.
+- SDK 표준 metadata, identity와 Native no-op을 보존한다. 수집 재개나 Cloud 설정을 포함하지 않는다.
 
 **Verification**
 
-- 재게시·반응·북마크의 생성·취소 성공, payload 부재, GraphQL/network 실패, 중복 입력과 actor 전환 case에서 event name·exact payload·호출 횟수와 기존 UI/cache 상태를 검증한다.
-- Reaction authoritative payload와 부분 GraphQL 오류가 함께 있는 기존 성공 case도 대응 event가 한 번 기록되는지 검증한다.
+- 이벤트별 타입 오류와 실제 capture 인자를 각각 확인한다. 북마크 호출의 추가 property도 검사한다.
+- 설정 누락·SDK 초기화 및 capture 실패에서 제품 흐름과 Native no-op이 유지되는지 실행한다.
 
-- [ ] 1.1 재게시 생성·취소의 기존 서버 확정 성공 결과에 `repost_succeeded`와 allowlist result를 연결한다.
-- [ ] 1.2 Reaction 추가·삭제의 기존 서버 확정 성공 결과에 `reaction_added | reaction_removed`와 default/custom projection을 연결한다.
-- [ ] 1.3 Bookmark 추가·삭제의 기존 서버 확정 성공 결과에 property 없는 `bookmark_added | bookmark_removed`를 연결한다.
-- [ ] 1.4 세 action의 성공·실패·취소·partial payload·정확히 한 번·actor 격리 회귀 test를 추가하거나 갱신한다.
+- [x] 1.1 기존 event 계약에 다섯 이벤트와 허용 속성을 추가한다.
+- [x] 1.2 현재 여섯 Type 분류, 타입 제한과 전송 속성을 검증한다.
+- [x] 1.3 분석 장애 격리와 Native no-op 회귀를 확인한다.
 
-## 2. PROD-539 Account identity와 개인정보 경계
+## 2. PROD-539 서버 확정 성공 연결
 
 **Authority / Provenance**
 
-- `docs/operations/openpanel.md`
-- Linear `PROD-469`
-- Linear `PROD-539`
+- `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`
+- `docs/design/post-action-bar.md`, `docs/design/reactions.md`
+- [PROD-539](https://linear.app/byulmaru/issue/PROD-539)의 성공 경계·Account 귀속·완료 조건
 
 **Deliverable**
 
-새 이벤트가 기존 opaque Account identity에 연결되어 Account 단위 adoption·빈도·cohort·retention 분석 기반을 제공하고, event payload는 승인된 최소 속성만 포함하며 분석 실패가 제품 흐름에 영향을 주지 않는다.
+task 1의 이벤트를 실제 mutation 성공 결과마다 한 번 호출한다. 실패·성공 payload 부재·network 오류는 수집하지 않는다.
 
 **Guardrails**
 
-- opaque Account ID는 existing identify에만 사용하고 event property에 중복 전송하지 않는다.
-- Post ID, 대상·선택 Profile ID, Post 콘텐츠, 구체 Reaction 값, custom emoji 식별 정보, 오류 원문, 이름·handle·이메일 trait를 보내지 않는다.
-- 공용 action 경계에서 Web SDK를 직접 의존하지 않고 현재 Native no-op과 Web failure isolation을 유지한다. 이 상태를 Native 분석 지원 완료나 영구 비적용으로 일반화하지 않는다.
-- Account 가입 event를 추가하거나 `profile_created`, 최초 identify·pageview를 가입 시점으로 재해석하지 않는다.
+- mutation 연결, Relay 정규화, actor 격리, pending·오류 처리와 성공 의미를 유지한다.
+- Reaction의 부분 오류·멱등 성공, Bookmark 삭제의 요청 대상 확인 판정을 보존한다.
+- 메뉴 열기·클릭·차단된 입력·optimistic state·재렌더링은 성공 이벤트가 아니다.
+- 같은 Account의 Profile 전환과 다른 Account의 세션 전환을 구분한다. 이벤트 property로 identity를 우회하지 않는다.
 
 **Verification**
 
-- 분석 client와 action payload test에서 Account·Post·Profile ID 및 구체 emoji 식별 값이 없고 허용 property만 존재하는지 검증한다.
-- SDK 초기화·track throw/reject에서도 mutation callback, Relay 상태와 기존 오류 처리가 유지되는지 검증한다.
-- 같은 opaque Account profile에 반복 행동 event가 귀속되는 production acceptance를 준비하고, 가입 cohort가 현재 계산 불가능하다는 gap을 구분해 기록한다.
+- 실제 action·hook을 실행해 여섯 성공 동작의 이름·속성·호출 횟수와 Relay Store·UI 결과를 관찰한다.
+- null payload, 잘못된 삭제 대상, GraphQL·network 오류, 도달 가능한 부분 응답, Reaction 멱등 삭제와 SDK 실패를 재현한다.
+- 중복 입력·재렌더링과 actor A→B 전환 후 늦은 응답, 같은 Account의 Profile 전환·다른 Account 전환을 검증한다.
 
-- [ ] 2.1 새 taxonomy가 기존 Web OpenPanel identity와 failure-isolated analytics 경계를 통해 전달되고 현재 Native no-op 경계를 유지하게 한다.
-- [ ] 2.2 Account identity attribution, exact property allowlist, raw 식별 정보 부재와 SDK 실패 격리 test를 추가하거나 갱신한다.
-- [ ] 2.3 `docs/operations/openpanel.md`의 명시적 event 목록, 개인정보 경계, Account attribution과 production acceptance를 갱신한다.
+- [x] 2.1 재게시 생성·취소 성공에 대응 result를 가진 이벤트를 연결한다.
+- [x] 2.2 반응 추가·삭제 성공에 Type 분류만 담은 이벤트를 연결한다.
+- [x] 2.3 북마크 추가·삭제 성공에 무속성 이벤트를 연결한다.
+- [x] 2.4 실제 호출부의 성공·실패·중복·부분 응답·Account 귀속과 UI·Store 회귀를 검증한다.
 
-## 3. PROD-539 통합 검증과 OpenSpec 완료 책임
+## 3. PROD-539 문서와 기능별 수집 검증
 
 **Authority / Provenance**
 
-- `docs/domain/objects/post.md`
-- `docs/domain/objects/reaction.md`
-- `docs/domain/objects/bookmark.md`
-- `docs/design/post-action-bar.md`
-- `docs/design/reactions.md`
-- `docs/operations/openpanel.md`
-- Linear `PROD-539`
+- [PROD-539](https://linear.app/byulmaru/issue/PROD-539)의 운영 문서·계측 gap·완료 조건
+- [PROD-795](https://linear.app/byulmaru/issue/PROD-795)의 공유 운영 책임
+- `memory/issue-openspec-workflow.md`의 하네스와 실제 완료 범위 구분
 
 **Deliverable**
 
-PROD-539가 소유한 구현·자동 검증·production acceptance와 change 정합성 확인이 완료되어 독립적으로 review·archive할 수 있다.
+운영 문서가 이벤트 목록·검증 방법·계측 한계를 설명하고, 자동 검증과 실제 PostHog 수집 증거를 구분해 기록한다.
 
 **Guardrails**
 
-- dashboard 집계식, WAA 정의, 내부·테스트 Account와 봇 제외, 가입 event와 Native 분석 지원을 현재 구현 범위로 확장하지 않는다.
-- production Client ID, 실제 Account ID와 사용자 콘텐츠를 repository나 검증 증거에 저장하지 않는다.
-- PR Ready 판단과 OpenSpec archive는 별도 gate로 유지하고, 모든 task·required validation·production acceptance와 최신 canonical·Linear 정합성이 확인된 뒤에만 이 change를 archive한다.
+- Account 가입 이벤트·가입 대용 이벤트·집계식을 추가하지 않는다. Canceled PROD-520을 집계 승인으로 취급하지 않는다.
+- 실제 Account ID·사용자 콘텐츠·인증정보를 증거에 복사하지 않는다.
+- 실제 수신이 미확인인 항목을 mock 성공으로 완료 처리하지 않는다. 수집 재개와 공유 production acceptance는 별도 책임이다.
+- archive는 선택적 정리이며 구현·PR 완료 gate가 아니다.
 
 **Verification**
 
-- 관련 app test, typecheck, lint와 formatting 및 OpenSpec strict validation을 통과시킨다.
-- production Dashboard에서 opaque Account attribution, add/remove event, exact property와 실패 mutation 비수집을 확인하되 실제 식별자·콘텐츠를 증거에 복사하지 않는다.
-- archive 전후 최신 canonical·Linear와 delta spec 정합성 및 validation 결과를 확인한다.
+- `pnpm --filter @kosmo/app check`, `pnpm --filter @kosmo/app test:unit`, 관련 Storybook interaction, 변경 파일 lint·format과 `pnpm --filter @kosmo/app export:web`을 실행한다. 실제 수정 범위에 따라 필요한 Web E2E를 추가 선택한다.
+- 격리된 브라우저 전송 검증과 승인된 환경의 실제 PostHog 수신에서 Account 귀속·성공/취소·실패 비수집을 확인한다. 외부 환경이 준비되지 않았다면 미확인 범위와 남은 책임을 기록한다.
+- 가입 이벤트 부재, 멱등·추가/제거 횟수와 순사용의 차이, 집계 owner 공백을 기록한다.
 
-- [ ] 3.1 관련 자동 test, app 정적 검증과 `openspec validate track-post-interaction-analytics --strict`를 통과시킨다.
-- [ ] 3.2 production Web에서 Account attribution, 성공·취소 event, allowlist property와 실패 비수집 acceptance를 완료한다.
-- [ ] 3.3 모든 task와 최신 authority 정합성을 확인한 뒤 PROD-539 소유로 change를 archive하고 archive 후 validation을 통과시킨다.
+- [x] 3.1 최신 PostHog 운영 문서에 명시적 이벤트 목록·검증 절차·계측 gap을 반영한다.
+- [x] 3.2 관련 자동 검증을 실행하고 결과를 이 세션 하네스의 문서 검증과 구분해 남긴다.
+- [ ] 3.3 승인된 검증 환경에서 기능별 실제 수집·Account 귀속·실패 비수집을 확인하고 미확인 조건은 pending으로 남긴다.

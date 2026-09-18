@@ -162,6 +162,11 @@ describe('PostHog Web client', () => {
       selected_profile_id: 'profile-id',
       visibility: 'DIRECT',
     });
+    analytics.trackAnalytics('repost_succeeded', { result: 'created' });
+    analytics.trackAnalytics('reaction_added', { reaction_type: 'default' });
+    analytics.trackAnalytics('reaction_removed', { reaction_type: 'custom' });
+    analytics.trackAnalytics('bookmark_added', {});
+    analytics.trackAnalytics('bookmark_removed', {});
     analytics.trackAnalytics('follow_succeeded', {
       selected_profile_id: 'profile-id',
       result: 'request',
@@ -177,6 +182,11 @@ describe('PostHog Web client', () => {
         event: 'post_created',
         properties: { selected_profile_id: 'profile-id', visibility: 'DIRECT' },
       },
+      { event: 'repost_succeeded', properties: { result: 'created' } },
+      { event: 'reaction_added', properties: { reaction_type: 'default' } },
+      { event: 'reaction_removed', properties: { reaction_type: 'custom' } },
+      { event: 'bookmark_added', properties: {} },
+      { event: 'bookmark_removed', properties: {} },
       {
         event: 'follow_succeeded',
         properties: { selected_profile_id: 'profile-id', result: 'request' },
