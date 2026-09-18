@@ -130,11 +130,6 @@ export function RepostAction({
           response: unknown,
           errors: ReadonlyArray<{ message: string }> | null | undefined,
         ) => {
-          if (errors?.[0]) {
-            finishWithError(new Error(errors[0].message));
-            return;
-          }
-
           const mutationConfirmed =
             action === 'create'
               ? Boolean(
@@ -151,6 +146,10 @@ export function RepostAction({
             trackAnalytics('repost_succeeded', {
               result: action === 'create' ? 'created' : 'removed',
             });
+          }
+          if (errors?.[0]) {
+            finishWithError(new Error(errors[0].message));
+            return;
           }
           finish();
         },

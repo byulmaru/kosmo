@@ -11,17 +11,17 @@ Kosmo Web의 PostHog client는 `prod` 채널에서 공개 `posthogKey`와 `posth
 
 ## 명시적 event allowlist
 
-| Event              | 허용 property                            | 발생 조건                                                                                                                   |
-| ------------------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `repost_succeeded` | `result`: `created` 또는 `removed`       | 재게시 생성 payload의 `repost.id`, 취소 payload의 요청 재게시 `postId`를 확인한 뒤 GraphQL error가 없을 때                  |
-| `reaction_added`   | `reaction_type`: `default` 또는 `custom` | `addReaction` payload가 반환된 뒤                                                                                           |
-| `reaction_removed` | `reaction_type`: `default` 또는 `custom` | `deleteReaction` payload가 반환된 뒤. `reactionId: null`인 멱등 성공도 포함                                                 |
-| `bookmark_added`   | 없음                                     | 생성 payload의 `bookmark.id`를 확인하고 GraphQL error가 없을 때                                                             |
-| `bookmark_removed` | 없음                                     | 응답의 `requestedBookmarkId`가 요청 ID와 일치할 때. 다른 projection의 GraphQL error가 함께 있어도 대상 삭제가 확인되면 포함 |
+| Event              | 허용 property                            | 발생 조건                                                                                                                           |
+| ------------------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `repost_succeeded` | `result`: `created` 또는 `removed`       | 재게시 생성 payload의 `repost.id`, 취소 payload의 요청 재게시 `postId`를 확인한 뒤. 별도 projection 오류는 기존 UI 오류 처리를 유지 |
+| `reaction_added`   | `reaction_type`: `default` 또는 `custom` | `addReaction` payload가 반환된 뒤                                                                                                   |
+| `reaction_removed` | `reaction_type`: `default` 또는 `custom` | `deleteReaction` payload가 반환된 뒤. `reactionId: null`인 멱등 성공도 포함                                                         |
+| `bookmark_added`   | 없음                                     | 생성 payload의 `bookmark.id`를 확인한 뒤. 별도 projection 오류는 기존 UI 오류 처리를 유지                                           |
+| `bookmark_removed` | 없음                                     | 응답의 `requestedBookmarkId`가 요청 ID와 일치할 때. 다른 projection의 GraphQL error가 함께 있어도 대상 삭제가 확인되면 포함         |
 
-각 성공 mutation 결과는 해당 callback에서 한 번만 capture한다. 클릭, 메뉴 open, optimistic state, render, count 변화만으로 event를 만들지 않는다. Network error, GraphQL error로 성공 경계를 확인할 수 없는 경우, 필요한 success payload가 없는 경우, 재게시·북마크 대상 ID가 일치하지 않는 경우에는 event를 만들지 않는다. Analytics 초기화·identify·capture 실패는 mutation 결과와 기존 오류 처리를 변경하지 않는다.
+각 성공 mutation 결과는 해당 callback에서 한 번만 capture한다. 클릭, 메뉴 open, optimistic state, render, count 변화만으로 event를 만들지 않는다. Network error, GraphQL error로 성공 경계를 확인할 수 없는 경우, 필요한 success payload가 없는 경우, 재게시·북마크 대상 ID가 일치하지 않는 경우에는 event를 만들지 않는다. 핵심 성공 ID와 별도 projection 오류가 함께 반환되면 성공 이벤트는 기록하되 기존 UI 오류 처리는 유지한다. Analytics 초기화·identify·capture 실패는 mutation 결과와 기존 오류 처리를 변경하지 않는다.
 
-Account가 바뀐 뒤 늦게 완료된 이전 요청은 새 Account에 귀속하지 않는다. 같은 Account에서 Profile만 바뀐 경우에는 Account identity를 유지한다.
+Account가 바뀐 뒤 늦게 완료된 이전 요청은 새 Account에 귀속하지 않는다. 같은 Account에서 Profile만 바뀐 경우에는 Account identity를 유지한다. Account 전환·로그아웃 중 SDK의 reset 또는 identify가 실패하면 제품 흐름은 계속하되, SDK의 실제 `$user_id`와 distinct ID가 현재 Account와 다시 일치할 때까지 명시적 custom event를 보내지 않는다.
 
 ## 배포 후 확인
 

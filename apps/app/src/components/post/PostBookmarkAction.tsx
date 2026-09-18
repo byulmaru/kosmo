@@ -126,10 +126,6 @@ export function usePostBookmarkAction(
         response: unknown,
         errors: ReadonlyArray<{ message: string }> | null | undefined,
       ) => {
-        if (errors?.[0]) {
-          finishWithError(new Error(errors[0].message));
-          return;
-        }
         if (
           (response as PostBookmarkActionCreateBookmarkMutation['response'] | null)?.createBookmark
             ?.bookmark?.id &&
@@ -137,6 +133,10 @@ export function usePostBookmarkAction(
           currentAccountId.current === requestAccountId
         ) {
           trackAnalytics('bookmark_added', {});
+        }
+        if (errors?.[0]) {
+          finishWithError(new Error(errors[0].message));
+          return;
         }
         finish();
       },

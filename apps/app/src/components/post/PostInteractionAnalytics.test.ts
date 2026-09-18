@@ -13,11 +13,13 @@ import type { RepostAction as RepostActionExport } from './RepostAction';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type MutationError = Readonly<{ message: string }>;
+type MutationError = Readonly<{
+  message: string;
+  path?: ReadonlyArray<string | number>;
+}>;
 type MutationRequest = {
   onCompleted?: (response: unknown, errors?: ReadonlyArray<MutationError> | null) => void;
   onError?: (error: Error) => void;
-  variables?: unknown;
 };
 
 type Session = {
@@ -120,15 +122,8 @@ let usePostReactionController: typeof usePostReactionControllerExport;
 
 function BookmarkHarness() {
   const config = usePostBookmarkAction({} as never);
-  return createElement(
-    'BookmarkHarness',
-    config ?? {
-      accessibilityLabel: '',
-      hasBookmarked: false,
-      onPress: () => undefined,
-      processing: 'default',
-    },
-  );
+  assert.ok(config);
+  return createElement('BookmarkHarness', config);
 }
 
 function ReactionHarness() {
@@ -140,6 +135,19 @@ function lastMutationRequest(): MutationRequest {
   const request = mutationRequests.at(-1);
   assert.ok(request);
   return request;
+}
+
+function reactionAddResponse(type: string, id: string) {
+  return {
+    addReaction: {
+      post: {
+        id: 'post-id',
+        reactionCounts: [{ count: 1, type }],
+        viewerReactions: [{ id, type }],
+      },
+      reaction: { id, type },
+    },
+  };
 }
 
 before(async () => {
@@ -170,9 +178,18 @@ describe('Post interaction analytics callbacks', () => {
     });
     const menu = renderer!.root.findByType(MockActionMenu);
     await act(async () => menu.props.items[0].onSelect());
+    await act(async () => menu.props.items[0].onSelect());
+    assert.equal(mutationRequests.length, 1);
 
     const request = lastMutationRequest();
-    await act(async () => request.onCompleted?.({ repostPost: { repost: { id: 'repost-id' } } }));
+    await act(async () =>
+      request.onCompleted?.({ repostPost: { repost: { id: 'repost-id', repostSource: null } } }, [
+        {
+          message: 'repost source projection failed',
+          path: ['repostPost', 'repost', 'repostSource', 'repostCount'],
+        },
+      ]),
+    );
 
     fragmentData = {
       content: null,
@@ -184,7 +201,14 @@ describe('Post interaction analytics callbacks', () => {
     const cancelMenu = renderer!.root.findByType(MockActionMenu);
     await act(async () => cancelMenu.props.items[0].onSelect());
     const cancelRequest = lastMutationRequest();
-    await act(async () => cancelRequest.onCompleted?.({ deletePost: { postId: 'repost-id' } }));
+    await act(async () =>
+      cancelRequest.onCompleted?.({ deletePost: { postId: 'repost-id', repostSource: null } }, [
+        {
+          message: 'repost source projection failed',
+          path: ['deletePost', 'repostSource', 'viewerRepost'],
+        },
+      ]),
+    );
 
     assert.deepEqual(analyticsCalls, [
       ['repost_succeeded', { result: 'created' }],
@@ -222,9 +246,19 @@ describe('Post interaction analytics callbacks', () => {
     });
     const createConfig = renderer!.root.findByType('BookmarkHarness' as never).props;
     await act(async () => createConfig.onPress());
+    await act(async () => createConfig.onPress());
+    assert.equal(mutationRequests.length, 1);
     const createRequest = lastMutationRequest();
     await act(async () =>
-      createRequest.onCompleted?.({ createBookmark: { bookmark: { id: 'bookmark-id' } } }),
+      createRequest.onCompleted?.(
+        { createBookmark: { bookmark: { id: 'bookmark-id', post: null } } },
+        [
+          {
+            message: 'bookmark post projection failed',
+            path: ['createBookmark', 'bookmark', 'post', 'viewerBookmark'],
+          },
+        ],
+      ),
     );
 
     assert.deepEqual(analyticsCalls, [['bookmark_added', {}]]);
@@ -235,9 +269,15 @@ describe('Post interaction analytics callbacks', () => {
     await act(async () => deleteConfig.onPress());
     const deleteRequest = lastMutationRequest();
     await act(async () =>
-      deleteRequest.onCompleted?.({ deleteBookmark: { requestedBookmarkId: 'bookmark-id' } }, [
-        { message: 'unrelated projection failed' },
-      ]),
+      deleteRequest.onCompleted?.(
+        { deleteBookmark: { post: null, requestedBookmarkId: 'bookmark-id' } },
+        [
+          {
+            message: 'bookmark post projection failed',
+            path: ['deleteBookmark', 'post', 'viewerBookmark'],
+          },
+        ],
+      ),
     );
 
     assert.deepEqual(analyticsCalls, [
@@ -247,30 +287,134 @@ describe('Post interaction analytics callbacks', () => {
   });
 
   it('Reaction은 성공 payload에서만 분류된 reaction_type을 기록하고 원문은 보내지 않는다', async () => {
-    fragmentData = { id: 'post-id', reactionCounts: [], viewerReactions: [] };
+    fragmentData = {
+      id: 'post-id',
+      profile: { relativeHandle: '@author@example.test' },
+      reactionCounts: [],
+      viewerReactions: [],
+    };
 
     await act(async () => {
       renderer = create(createElement(ReactionHarness));
     });
     const controller = renderer!.root.findByType('ReactionHarness' as never).props;
     await act(async () => controller.toggleReaction({ nextSelected: true, optionId: '❤️' }));
+    await act(async () => controller.toggleReaction({ nextSelected: true, optionId: '❤️' }));
+    assert.equal(mutationRequests.length, 1);
     const addRequest = lastMutationRequest();
-    await act(async () =>
-      addRequest.onCompleted?.({ addReaction: {} }, [{ message: 'partial projection failed' }]),
-    );
+    await act(async () => addRequest.onCompleted?.(reactionAddResponse('❤️', 'reaction-heart')));
 
     await act(async () => controller.toggleReaction({ nextSelected: true, optionId: '🎉' }));
     const customRequest = lastMutationRequest();
-    await act(async () => customRequest.onCompleted?.({ addReaction: {} }));
+    await act(async () => customRequest.onCompleted?.(reactionAddResponse('🎉', 'reaction-party')));
 
     await act(async () => controller.toggleReaction({ nextSelected: false, optionId: '❤️' }));
     const removeRequest = lastMutationRequest();
-    await act(async () => removeRequest.onCompleted?.({ deleteReaction: { reactionId: null } }));
+    await act(async () =>
+      removeRequest.onCompleted?.({ deleteReaction: { post: null, reactionId: null } }, [
+        {
+          message: 'reaction projection failed',
+          path: ['deleteReaction', 'post', 'viewerReactions'],
+        },
+      ]),
+    );
 
     assert.deepEqual(analyticsCalls, [
       ['reaction_added', { reaction_type: 'default' }],
       ['reaction_added', { reaction_type: 'custom' }],
       ['reaction_removed', { reaction_type: 'default' }],
     ]);
+  });
+
+  it('network 오류와 성공 payload 누락·불일치는 이벤트를 기록하지 않는다', async () => {
+    fragmentData = { content: null, id: 'post-id', repostCount: 0, viewerRepost: null };
+    await act(async () => {
+      renderer = create(createElement(RepostAction, { post: {} as never }));
+    });
+    const repostMenu = renderer!.root.findByType(MockActionMenu);
+    await act(async () => repostMenu.props.items[0].onSelect());
+    await act(async () => lastMutationRequest().onError?.(new Error('network failure')));
+
+    fragmentData = { id: 'post-id', viewerBookmark: null };
+    await act(async () => renderer?.update(createElement(BookmarkHarness)));
+    let bookmarkConfig = renderer!.root.findByType('BookmarkHarness' as never).props;
+    await act(async () => bookmarkConfig.onPress());
+    await act(async () => lastMutationRequest().onError?.(new Error('network failure')));
+    await act(async () => bookmarkConfig.onPress());
+    await act(async () => lastMutationRequest().onCompleted?.({ createBookmark: null }));
+
+    fragmentData = { id: 'post-id', viewerBookmark: { id: 'bookmark-id' } };
+    await act(async () => renderer?.update(createElement(BookmarkHarness)));
+    bookmarkConfig = renderer!.root.findByType('BookmarkHarness' as never).props;
+    await act(async () => bookmarkConfig.onPress());
+    await act(async () =>
+      lastMutationRequest().onCompleted?.({
+        deleteBookmark: { requestedBookmarkId: 'different-bookmark-id' },
+      }),
+    );
+
+    fragmentData = {
+      id: 'post-id',
+      profile: { relativeHandle: '@author@example.test' },
+      reactionCounts: [],
+      viewerReactions: [],
+    };
+    await act(async () => renderer?.update(createElement(ReactionHarness)));
+    const reactionController = renderer!.root.findByType('ReactionHarness' as never).props;
+    await act(async () =>
+      reactionController.toggleReaction({ nextSelected: true, optionId: '❤️' }),
+    );
+    await act(async () => lastMutationRequest().onError?.(new Error('network failure')));
+
+    assert.deepEqual(analyticsCalls, []);
+  });
+
+  it('같은 Account의 Profile 전환은 유지하고 다른 Account의 늦은 응답은 버린다', async () => {
+    fragmentData = { id: 'post-id', viewerBookmark: null };
+    await act(async () => {
+      renderer = create(createElement(BookmarkHarness));
+    });
+    let bookmarkConfig = renderer!.root.findByType('BookmarkHarness' as never).props;
+    await act(async () => bookmarkConfig.onPress());
+    const sameAccountRequest = lastMutationRequest();
+    session.selectedProfileId = 'profile-b';
+    await act(async () => renderer?.update(createElement(BookmarkHarness)));
+    await act(async () =>
+      sameAccountRequest.onCompleted?.({ createBookmark: { bookmark: { id: 'bookmark-a' } } }),
+    );
+    assert.deepEqual(analyticsCalls, [['bookmark_added', {}]]);
+
+    analyticsCalls.length = 0;
+    bookmarkConfig = renderer!.root.findByType('BookmarkHarness' as never).props;
+    await act(async () => bookmarkConfig.onPress());
+    const staleBookmarkRequest = lastMutationRequest();
+    session.accountId = 'account-b';
+    await act(async () => renderer?.update(createElement(BookmarkHarness)));
+    await act(async () =>
+      staleBookmarkRequest.onCompleted?.({
+        createBookmark: { bookmark: { id: 'stale-bookmark' } },
+      }),
+    );
+
+    fragmentData = {
+      id: 'post-id',
+      profile: { relativeHandle: '@author@example.test' },
+      reactionCounts: [],
+      viewerReactions: [],
+    };
+    session.accountId = 'account-a';
+    await act(async () => renderer?.update(createElement(ReactionHarness)));
+    const reactionController = renderer!.root.findByType('ReactionHarness' as never).props;
+    await act(async () =>
+      reactionController.toggleReaction({ nextSelected: true, optionId: '🎉' }),
+    );
+    const staleReactionRequest = lastMutationRequest();
+    session.accountId = 'account-b';
+    await act(async () => renderer?.update(createElement(ReactionHarness)));
+    await act(async () =>
+      staleReactionRequest.onCompleted?.(reactionAddResponse('🎉', 'reaction-party')),
+    );
+
+    assert.deepEqual(analyticsCalls, []);
   });
 });
