@@ -303,6 +303,24 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - 이 수신 계약은 직접 Source를 표시하며 재귀적으로 인용을 펼치거나 `quote-inline` 본문을 다시 쓰지 않는다.
 - 이 계약의 근거와 후속 범위는 [ADR 0027](../decisions/0027-activitypub-remote-quote-approval.md)에 기록한다.
 
+### 미저장 Followers Only Quote Source 조회
+
+- 원격 Quote가 참조하는 Followers Only Source가 아직 저장되지 않았으면, 인증된 선행 처리에서 검증한
+  Source URI와 작성자 Profile의 ActivityPub identity 사이의 대응이 있을 때만 원문을 조회한다. 작성자는
+  ActivityPub identity가 이미 저장된 Remote Profile이어야 한다. Quote 작성자, Activity 전달 주체, URI의
+  host·경로 또는 검증되지 않은 attribution을 Source 작성자의 근거로 대신 사용하지 않는다.
+- Source 작성자와 established Follow Relationship이 있는 Active Local Profile을 결정적인 규칙으로 하나
+  선택하고, 그 Profile identity로 인증된 원문 조회를 수행한다. Source URI만 있거나 작성자 대응을 신뢰할 수
+  없거나 적합한 Local Follower가 없으면 원문을 조회하거나 저장하지 않는다.
+- 조회 뒤 저장 직전에 Source identity, 예상 작성자, 작성자의 canonical followers collection을 포함하는
+  Followers Only audience, 선택한 같은 Local Profile의 Active 상태와 established Follow를 다시 확인한다.
+  검증이 실패하면 Source와 관련 상태를 생성하거나 변경하지 않는다.
+- 검증된 원문은 기존 Post 저장과 조회 정책을 따른다. 원문을 조회한 Local Follower의 권한은 다른 viewer의
+  조회 권한으로 사용하지 않는다. Source를 조회할 수 없는 viewer에게는 Quote 자체의 조회 정책을 통과한
+  본문을 유지하고 Source 관계만 숨긴다.
+- 원문 URI만으로 작성자를 탐색하는 기능, 일반 목적 signed-fetch API와 임의의 Followers Only Post
+  backfill은 이 범위에 포함하지 않는다. 원격 Quote의 승인·철회와 resolution은 별도 Quote 수신 계약을 따른다.
+
 ### 검색
 
 - 검색 후보는 Post Visibility가 Public이고 Post Eligibility를 통과한 Post다.

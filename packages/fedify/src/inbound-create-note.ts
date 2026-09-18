@@ -25,7 +25,7 @@ import type { Note } from '@fedify/vocab';
 import type { InboundObservation } from './inbound-observability';
 import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 
-type StoredRemoteProfileActor = NonNullable<
+export type StoredRemoteProfileActor = NonNullable<
   Awaited<ReturnType<typeof findStoredRemoteProfileActorByUri>>
 >;
 
@@ -137,7 +137,12 @@ type RemoteNoteMaterializationSource =
       recipient?: string | null;
       storedActor: StoredRemoteProfileActor;
     }
-  | { kind: 'hydrated' };
+  | { kind: 'hydrated' }
+  | {
+      kind: 'followers-quote';
+      followerProfileId: string;
+      storedActor: StoredRemoteProfileActor;
+    };
 
 type RemoteNoteMaterializationRejectionReason =
   | 'empty_note'
@@ -281,35 +286,67 @@ const materializeRemoteNote = async ({
   receivedAt: Temporal.Instant;
   source: RemoteNoteMaterializationSource;
 }): Promise<RemoteNoteMaterializationResult> => {
-  if ((source.kind === 'hydrated' && !isHttpUri(objectUri)) || note.id?.href !== objectUri.href) {
+  if ((source.kind !== 'create' && !isHttpUri(objectUri)) || note.id?.href !== objectUri.href) {
     return { reason: 'note_identity_mismatch', status: 'rejected' };
   }
 
   const attributionHref = uniqueHref(note.attributionIds);
-  if (!attributionHref || (source.kind === 'create' && attributionHref !== source.actorUri)) {
+  const expectedAttribution =
+    source.kind === 'create'
+      ? source.actorUri
+      : source.kind === 'followers-quote'
+        ? source.storedActor.actor.uri
+        : undefined;
+  if (!attributionHref || (expectedAttribution && attributionHref !== expectedAttribution)) {
     return { reason: 'note_attribution_mismatch', status: 'rejected' };
   }
   const attributionUri = new URL(attributionHref);
-  if (source.kind === 'hydrated' && !isHttpUri(attributionUri)) {
+  if (source.kind !== 'create' && !isHttpUri(attributionUri)) {
     return { reason: 'note_attribution_mismatch', status: 'rejected' };
   }
 
-  const visibility = resolveNoteVisibility(
-    note,
-    source.kind === 'create' ? source.storedActor.actor.followersUri : undefined,
-  );
+  const followersUri =
+    source.kind === 'create' || source.kind === 'followers-quote'
+      ? source.storedActor.actor.followersUri
+      : undefined;
+  const visibility = resolveNoteVisibility(note, followersUri);
   if (!visibility) {
     return { reason: 'unsupported_note_visibility', status: 'rejected' };
   }
+  if (source.kind === 'followers-quote' && visibility !== PostVisibility.FOLLOWERS) {
+    return { reason: 'unsupported_note_visibility', status: 'rejected' };
+  }
   if (
-    source.kind === 'create' &&
+    (source.kind === 'create' || source.kind === 'followers-quote') &&
     visibility === PostVisibility.FOLLOWERS &&
     !(await hasEstablishedFollower({
-      followerProfileId: source.recipient,
+      followerProfileId: source.kind === 'create' ? source.recipient : source.followerProfileId,
       followeeProfileId: source.storedActor.profile.id,
     }))
   ) {
     return { reason: 'followers_visibility_without_follow', status: 'rejected' };
+  }
+
+  if (source.kind === 'followers-quote') {
+    let currentStoredActor;
+    try {
+      currentStoredActor = await findUsableStoredRemoteProfileActorByUri(
+        source.storedActor.actor.uri,
+      );
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        return { reason: 'unusable_author', status: 'rejected' };
+      }
+      throw error;
+    }
+    if (
+      !currentStoredActor ||
+      currentStoredActor.profile.id !== source.storedActor.profile.id ||
+      currentStoredActor.actor.uri !== source.storedActor.actor.uri ||
+      currentStoredActor.actor.followersUri !== source.storedActor.actor.followersUri
+    ) {
+      return { reason: 'unusable_author', status: 'rejected' };
+    }
   }
 
   let projection;
@@ -326,7 +363,7 @@ const materializeRemoteNote = async ({
   }
 
   if (
-    source.kind === 'hydrated' &&
+    source.kind !== 'create' &&
     postContentDocumentToText(projection.document).length === 0 &&
     projection.media.length === 0
   ) {
@@ -334,7 +371,7 @@ const materializeRemoteNote = async ({
   }
 
   let storedActor;
-  if (source.kind === 'create') {
+  if (source.kind === 'create' || source.kind === 'followers-quote') {
     storedActor = source.storedActor;
   } else {
     try {
@@ -354,6 +391,36 @@ const materializeRemoteNote = async ({
         return { reason: 'unusable_author', status: 'rejected' };
       }
       throw error;
+    }
+  }
+
+  if (source.kind === 'followers-quote') {
+    let currentStoredActor;
+    try {
+      currentStoredActor = await findUsableStoredRemoteProfileActorByUri(
+        source.storedActor.actor.uri,
+      );
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        return { reason: 'unusable_author', status: 'rejected' };
+      }
+      throw error;
+    }
+    if (
+      !currentStoredActor ||
+      currentStoredActor.profile.id !== source.storedActor.profile.id ||
+      currentStoredActor.actor.uri !== source.storedActor.actor.uri ||
+      currentStoredActor.actor.followersUri !== source.storedActor.actor.followersUri
+    ) {
+      return { reason: 'unusable_author', status: 'rejected' };
+    }
+    if (
+      !(await hasEstablishedFollower({
+        followerProfileId: source.followerProfileId,
+        followeeProfileId: source.storedActor.profile.id,
+      }))
+    ) {
+      return { reason: 'followers_visibility_without_follow', status: 'rejected' };
     }
   }
 
@@ -418,6 +485,46 @@ export const materializeHydratedRemoteNote = async ({
   const postId = await findPostByActivityPubUri(context, objectUri);
   if (!postId) {
     throw new Error('Remote Note Post not found after duplicate materialization');
+  }
+  return { postId, status: result.status };
+};
+
+export const materializeFollowersOnlyQuoteNote = async ({
+  context,
+  expectedActor,
+  followerProfileId,
+  note,
+  objectUri,
+  receivedAt,
+}: {
+  context: RemoteNoteMaterializationContext;
+  expectedActor: StoredRemoteProfileActor;
+  followerProfileId: string;
+  note: Note;
+  objectUri: URL;
+  receivedAt: Temporal.Instant;
+}): Promise<HydratedRemoteNoteMaterializationResult> => {
+  const result = await materializeRemoteNote({
+    context,
+    note,
+    objectUri,
+    receivedAt,
+    source: {
+      followerProfileId,
+      kind: 'followers-quote',
+      storedActor: expectedActor,
+    },
+  });
+  if (result.status === 'rejected') {
+    return { reason: 'invalid_note', status: 'rejected' };
+  }
+  if (result.status === 'created') {
+    return { postId: result.postId!, status: result.status };
+  }
+
+  const postId = await findPostByActivityPubUri(context, objectUri);
+  if (!postId) {
+    throw new Error('Remote Followers Only Quote Source not found after duplicate materialization');
   }
   return { postId, status: result.status };
 };

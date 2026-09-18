@@ -16,6 +16,7 @@ export {
   setInboundObservabilityReporter,
   withInboundObservability,
 } from './src/inbound-observability';
+export type { TrustedInboundQuoteSource } from './src/inbound-quote';
 export {
   handleInboundQuote,
   resolveStoredInboundQuote,
