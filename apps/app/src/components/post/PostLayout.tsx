@@ -209,7 +209,13 @@ export function PostLayout({
     />
   );
   return (
-    <View style={[styles.root, compact ? styles.compactRoot : null]}>
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: theme.backgroundCanvas },
+        compact ? styles.compactRoot : null,
+      ]}
+    >
       <View style={[styles.header, compact ? styles.compactHeader : null]}>
         <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
           <Pressable

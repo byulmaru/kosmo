@@ -122,6 +122,7 @@ mock.module('@/theme/ThemeProvider', {
   exports: {
     useTheme: () => ({
       background: '#ffffff',
+      backgroundCanvas: '#ffffff',
       border: '#dddddd',
       card: '#fafafa',
       divider: '#dddddd',
@@ -254,6 +255,29 @@ afterEach(async () => {
 });
 
 describe('Post Media Viewer Host production wiring', () => {
+  it('Post presentation은 Web·Native에서 canvas 배경을 소유한다', async () => {
+    const post = storyPost('surface-post', 'surface-content');
+
+    for (const os of ['web', 'ios', 'android']) {
+      platform.OS = os;
+      await renderHost(
+        createElement(PostListItem, { post: asListItemKey(post), presentation: 'wide' }),
+      );
+      assert.equal(
+        flattenStyle(renderer?.root.findByProps({ role: 'article' }).props.style).backgroundColor,
+        '#ffffff',
+      );
+
+      await updateHost(createElement(PostLayout, { post: asLayoutKey(post) }));
+      const postLayoutRoot = byTestId('post-layout-engagement').parent?.parent;
+      assert.ok(postLayoutRoot);
+      assert.equal(flattenStyle(postLayoutRoot.props.style).backgroundColor, '#ffffff');
+
+      await act(async () => renderer?.unmount());
+      renderer = null;
+    }
+  });
+
   it('ordinary·Quote·pure Repost launcher가 surface와 Media owner identity를 보존한다', async () => {
     const originControl = { current: { focus: () => undefined } };
     const ordinary = storyPost('ordinary', 'ordinary-content');
@@ -665,6 +689,13 @@ function pressable(accessibilityLabel: string) {
 
 function currentImage() {
   return byTestId('post-media-viewer-image');
+}
+
+function flattenStyle(style: unknown): Record<string, unknown> {
+  if (!Array.isArray(style)) {
+    return style && typeof style === 'object' ? (style as Record<string, unknown>) : {};
+  }
+  return Object.assign({}, ...style.flat(Infinity).filter(Boolean));
 }
 
 function asListItemKey(value: unknown): PostListItem_post$key {

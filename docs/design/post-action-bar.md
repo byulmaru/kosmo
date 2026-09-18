@@ -81,8 +81,20 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Native target의 실제 layout·인접 target 비중첩·화면별 정렬, VoiceOver·TalkBack focus boundary, touch 입력과
   bottom sheet runtime 관찰은 Native release gate다. platform style 렌더 테스트나 Web 검증으로 대체하지 않는다.
 
+## PostListItem surface feedback
+
+- `PROD-977`은 이 surface feedback과 Figma `State=Default|Hover|Pressed` variant를 소유한다.
+- `PostListItem`의 Text·Media·PureRepost·Quote는 별도 card fill 없이 semantic `backgroundCanvas`의 연속 feed 평면을 유지한다.
+- Web의 touch가 아닌 mouse·pen pointer hover에서는 카드 root 전체에 `color/state/hover`, Web pointer press와 Android·iOS touch press에서는
+  넓은 surface용 `color/state/pressed-subtle` overlay를 적용한다. overlay는 `radius/md`로 둥글게 처리하고 row divider는 직선으로 유지한다.
+  pressed가 hover보다 우선하며 release·cancel·leave 뒤에는 남은 입력
+  상태 또는 resting canvas로 돌아간다.
+- 이 feedback은 새 navigation target이나 접근성 role을 만들지 않는다. 작성자·시간·본문·미디어·Action Bar의
+  기존 입력과 이벤트 분리, 구분선 및 Light·Dark token mapping을 그대로 유지한다.
+
 ## Surface 배치
 
+- `PostListItem`의 Text·Media·PureRepost·Quote root와 `PostLayout` root는 semantic `backgroundCanvas`를 직접 적용해 Web·Native host의 중립 배경이 비치지 않게 한다. 이는 feed와 같은 canvas 평면을 명시하는 계약이며, direct Quote Source preview와 feedback overlay 등 내부에서 의도적으로 투명한 요소에는 별도 resting fill을 추가하지 않는다.
 - `PostLayout`은 metadata 뒤 `Engagement`에 Reaction Summary와 bordered Action Bar frame을 순서대로
   렌더링한다. Web 일반 Text·Media `PostListItem`은 카드 상단 12px·하단 8px, 목록 전용
   Action Bar slot 상단 8px·하단 0을 사용한다.
@@ -348,6 +360,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `PROD-936`은 Home·Local·Profile·Bookmarks·상세/스레드의 공용 presentation 재사용 확인, 실제 Web 데이터·액션
   회귀 검증과 Native target·목록 inset 적용을 소유한다. Media Viewer·Notification 자체 이관과 Clipboard
   runtime 복구·공유 OpenSpec archive 소유권은 각각 기존 이슈에 유지한다.
+- `PROD-977`은 `PostListItem` 전체의 Web hover·전 플랫폼 pressed feedback, semantic token과 Figma variant를 소유한다.
 - Reaction, Bookmark, More의 실제 연결과 여러 action의 최종 통합, guest 인증 진입, valid 세션의 Profile
   선택기 진입과 session error 비활성화는 각 구현 이슈와 `PROD-432`가 소유한다.
 

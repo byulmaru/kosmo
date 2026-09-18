@@ -37,7 +37,7 @@
 
 ### Current Constraints
 
-- 게시글 렌더 경로는 route → `PostLayout`/`PostList` → `PostListItem`이다. `PostLayout`에서는 metadata 뒤 `Engagement`가 Reaction Summary와 bordered Action Bar frame을 순서대로 렌더링하고, `PostListItem`에서는 Action Bar가 목록 전용 final slot 또는 Quote·순수 Repost의 direct final sibling이다. `PostList`, route 또는 `actionBar?: ReactNode` seam을 추가하지 않는 기존 경계를 유지한다.
+- 게시글 렌더 경로는 route → `PostLayout`/`PostList` → `PostListItem`이다. `PostLayout`에서는 metadata 뒤 `Engagement`가 Reaction Summary와 bordered Action Bar frame을 순서대로 렌더링하고, `PostListItem`에서는 Action Bar가 목록 전용 final slot 또는 Quote·순수 Repost의 direct final sibling이다. 두 presentation root는 Web·Native host의 배경 상속에 의존하지 않고 semantic `backgroundCanvas`를 직접 적용하며, direct Quote Source preview와 state overlay 같은 내부 투명 요소는 그대로 유지한다. `PostList`, route 또는 `actionBar?: ReactNode` seam을 추가하지 않는 기존 경계를 유지한다.
 - `Button`의 40px 일반 버튼 metric과 loading/disabled 표현은 Action Bar의 16px glyph·count, 28px visual row·36px Web HUG target과 도메인 상태+pending 조합에 맞지 않는다.
 - React Native Web을 공유하므로 DOM element, CSS selector, Web 전용 event에 의존한 구현은 native 계약을 깨뜨린다.
 - Figma의 측정 높이 약 27px은 production 정수값 28px visual row로 정규화한다. Web interactive rectangle은 row 위아래로 4px씩 확장한 36px 높이를 사용한다. count가 있으면 숫자 `0`을 포함해 좌우 6px, 16px glyph, 4px gap과 렌더된 count를 HUG하고 count가 없으면 28px 너비다. social layout slot은 최소 50px이고 target이 더 넓을 때만 함께 확장하므로 action 사이 분배 여백이나 인접 target을 덮지 않는다. Native는 같은 28px visual을 iOS 44pt·Android 48dp target의 세로 중앙에 두고 Bar와 slot이 target 높이를 실제 layout에 포함한다.
