@@ -54,6 +54,7 @@ Quote를 구분하는 알림 UI, Quote 자체 상세 이동, 기존 읽음 처�
 
 ## Session Status
 
-- Status: Active
-- Spec handoff: 표시 결정 반영 완료. 구현과 최종 통합은 미완료다.
+- Status: Complete (available client boundary)
+- Spec handoff: 표시 결정과 독립 구현을 반영했다. 실제 API 통합과 플랫폼별 runtime 증거는 Linear·PR의
+  남은 제한으로 보존하며 이 세션 하네스의 task로 유지하지 않는다.
 - Last updated: 2026-09-18

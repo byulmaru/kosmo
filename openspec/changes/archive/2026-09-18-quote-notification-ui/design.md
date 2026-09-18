@@ -48,11 +48,10 @@ fragment 연결은 main의 서버 schema가 준비된 뒤 현재 계약에 맞�
 - Profile 전환의 기존 actor Environment를 재사용한다. 별도 stale-response 상태 기계를 추가하지 않는다.
 - Light/Dark·모바일 폭·Storybook a11y는 Web 증거다. iOS/Android runtime과 Figma 반영은 별도다.
 - 현행 CLI strict validator는 delta spec이 없는 change를 거부한다. 현재 저장소 schema는 specs를
-  선택 사항으로 두므로, 검사를 통과시키기 위한 의미 없는 delta를 만들지 않는다. 최종 sync/archive 시에는
-  그때의 정책과 CLI를 재확인하고 `--skip-specs`의 실제 처리 결과와 남은 작업 보존 여부를 확인한다.
+  선택 사항으로 두므로, 검사를 통과시키기 위한 의미 없는 delta를 만들지 않고 archive에서
+  `--skip-specs`를 사용한다. 실제 API 통합과 플랫폼별 runtime 증거는 Linear·PR의 남은 제한으로 보존한다.
 
 ## Open Questions
 
 - 표시 계약의 미결정 사항은 없다. 확정한 이유 문구·배치·이동 대상을 다시 승인 질문으로 돌리지 않는다.
-- strict validator와 선택적 specs 정책의 차이를 최종 sync/archive 시 어떻게 처리할지는 후속 확인 사항이다.
-  구현 착수 blocker나 제품 미결정으로 취급하지 않는다.
+- OpenSpec lifecycle의 미결정 사항은 없다. 선택적 specs 정책에 따라 `--skip-specs`로 archive한다.

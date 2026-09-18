@@ -45,5 +45,4 @@ PROD-953의 표시 계약과 독립 구현 범위를 구현 세션에 전달한�
 ## Unresolved Questions
 
 - 제품 표시 계약의 미결정 사항은 없다.
-- delta spec 부재로 실패하는 strict validator와 선택적 OpenSpec 정책의 차이는 구현 gate가 아니다.
-  최종 sync/archive 시 최신 정책과 CLI 처리 방법을 다시 확인하고 실제 결과를 기록한다.
+- delta spec이 없는 선택적 세션 하네스이므로 archive에서는 `--skip-specs`를 사용한다.
