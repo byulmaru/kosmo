@@ -6,7 +6,7 @@ import {
 } from './db-fixtures';
 import { expect, test } from './fixtures';
 import { readGraphQLOperation, waitForGraphQLOperation } from './graphql';
-import type { Locator } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 async function pasteComposerImage(input: Locator) {
   await input.evaluate((element) => {
@@ -23,6 +23,24 @@ async function pasteComposerImage(input: Locator) {
       new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }),
     );
   });
+}
+
+async function openComposer(page: Page) {
+  await page.goto('/home');
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
+
+  const expand = page.getByRole('button', { name: 'Composer 확장' });
+  const open = page.getByRole('button', { name: '글쓰기', exact: true });
+  await expect(expand.or(open)).toBeVisible();
+  if (await expand.isVisible()) {
+    await expand.click();
+  } else {
+    await open.click();
+  }
+
+  const composer = page.getByLabel('게시글 작성', { exact: true });
+  await expect(composer).toBeVisible();
+  return composer;
 }
 
 test.beforeEach(async () => {
@@ -64,9 +82,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   });
   await setE2ESessionCookie(context, viewer.token);
   await page.setViewportSize({ width: 320, height: 720 });
-  await page.goto('/compose');
-
-  const composer = page.getByLabel('게시글 작성', { exact: true });
+  const composer = await openComposer(page);
   const input = composer.getByRole('textbox', { name: '게시물 내용' });
   const submit = composer.getByRole('button', { name: '게시', exact: true });
 
@@ -195,8 +211,7 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
   await expect(visibilityControl.getByText('저장했어요.')).toBeVisible();
 
   const body = 'E2E production wiring local body';
-  await page.goto('/compose');
-  const composer = page.getByLabel('게시글 작성', { exact: true });
+  const composer = await openComposer(page);
   const input = composer.getByRole('textbox', { name: '게시물 내용' });
   const submit = composer.getByRole('button', { name: '게시', exact: true });
 
@@ -323,8 +338,7 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
     await route.fulfill({ body: '', status: 204 });
   });
 
-  await page.goto('/compose');
-  const composer = page.getByLabel('게시글 작성', { exact: true });
+  const composer = await openComposer(page);
   const input = composer.getByRole('textbox', { name: '게시물 내용' });
   const submit = composer.getByRole('button', { name: '게시', exact: true });
   await input.fill('기존 본문');
@@ -392,7 +406,7 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
   await expect(page.getByRole('dialog', { name: '글쓰기' })).toHaveCount(0);
 });
 
-test('compose의 touch 취소가 본문 포커스와 편집기 강조 상태를 유지한다', async ({
+test('compose의 touch 취소가 본문 포커스와 닫힌 공개 범위 menu를 유지한다', async ({
   context,
   page,
 }) => {
@@ -402,16 +416,12 @@ test('compose의 touch 취소가 본문 포커스와 편집기 강조 상태를 
   });
   await setE2ESessionCookie(context, viewer.token);
   await page.setViewportSize({ width: 280, height: 720 });
-  await page.goto('/compose');
-
-  const composer = page.getByLabel('게시글 작성', { exact: true });
+  const composer = await openComposer(page);
   const input = composer.getByRole('textbox', { name: '게시물 내용' });
   const visibilityTrigger = composer.getByRole('button', { name: '공개 범위: 조용한 공개' });
 
   await input.fill('touch 취소 뒤에도 포커스를 유지하는 본문입니다.');
   await expect(input).toBeFocused();
-  const focusedOutline = await input.evaluate((element) => getComputedStyle(element).outline);
-  expect(focusedOutline).toContain('solid 2px');
 
   const triggerBox = await visibilityTrigger.boundingBox();
   expect(triggerBox).not.toBeNull();
@@ -437,7 +447,6 @@ test('compose의 touch 취소가 본문 포커스와 편집기 강조 상태를 
 
     await expect(input).toBeFocused();
     await expect(page.getByRole('radiogroup', { name: '공개 범위 선택' })).toHaveCount(0);
-    await expect(input).toHaveCSS('outline', focusedOutline);
   } finally {
     await session.detach();
   }

@@ -520,7 +520,6 @@ export const BottomNavigation: Story = {
     const expectedLinks = [
       ['홈', '/home'],
       ['검색', '/search'],
-      ['글쓰기', '/compose'],
       ['알림', '/notifications'],
       ['프로필', '/@selected'],
     ] as const;
@@ -530,10 +529,12 @@ export const BottomNavigation: Story = {
     for (const [name, href] of expectedLinks) {
       expect(canvas.getByRole('link', { name })).toHaveAttribute('href', href);
     }
+    expect(canvas.getByRole('button', { name: '글쓰기' })).toBeInTheDocument();
     expect(canvas.getByRole('link', { name: '검색' })).toHaveAttribute('aria-current', 'page');
-    for (const name of ['홈', '글쓰기', '알림', '프로필']) {
+    for (const name of ['홈', '알림', '프로필']) {
       expect(canvas.getByRole('link', { name })).not.toHaveAttribute('aria-current');
     }
+    expect(canvas.getByRole('button', { name: '글쓰기' })).not.toHaveAttribute('aria-current');
     expect(avatar.querySelector('img')).toHaveAttribute('src', selectedAvatarUrl);
     expect(canvas.queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('link', { name: '프로필 편집' })).not.toBeInTheDocument();
@@ -616,7 +617,7 @@ export const CompactSidebar: Story = {
       Math.abs(triggerRect.x + triggerRect.width / 2 - (feedbackRect.x + feedbackRect.width / 2)),
     ).toBeLessThanOrEqual(0.5);
     expect(feedback.querySelector('svg')).toHaveAttribute('stroke-width', '2');
-    expect(canvas.getByRole('link', { name: '글쓰기' })).toHaveAttribute('href', '/compose');
+    expect(canvas.getByRole('button', { name: '글쓰기' })).toBeInTheDocument();
     expect(canvas.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('link', { name: '프로필 설정' })).not.toBeInTheDocument();
   },
@@ -2316,24 +2317,6 @@ export const UniversalMobileSettingsDetailHeaderReflow: Story = {
     expect(pageHeaderRect?.height).toBeGreaterThan(80);
     expect(shellHeaderRect?.height).toBeCloseTo(pageHeaderRect!.height, 0);
     expect(content.getBoundingClientRect().top).toBeGreaterThanOrEqual(shellHeaderRect!.bottom - 1);
-  },
-  render: () => <UniversalShellStory />,
-};
-
-export const UniversalMobileComposeHeader: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
-  parameters: {
-    ...universalParameters,
-    router: { pathname: '/compose', slotLabel: '글쓰기 화면' },
-  },
-  play: ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const dialog = canvas.getByRole('dialog', { name: '글쓰기' });
-    const heading = canvas.getByRole('heading', { name: '글쓰기' });
-
-    expect(dialog).toContainElement(heading);
-    expect(within(dialog).getByRole('button', { name: '글쓰기 닫기' })).toBeVisible();
-    expect(canvas.queryByRole('button', { name: '메뉴 열기' })).toBeNull();
   },
   render: () => <UniversalShellStory />,
 };

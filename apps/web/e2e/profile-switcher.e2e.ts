@@ -441,8 +441,18 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
 async function createPost(page: Page, body: string) {
   const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
 
-  await page.goto('/compose');
+  await page.goto('/home');
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
+  const expand = page.getByRole('button', { name: 'Composer 확장' });
+  const open = page.getByRole('button', { name: '글쓰기', exact: true });
+  await expect(expand.or(open)).toBeVisible();
+  if (await expand.isVisible()) {
+    await expand.click();
+  } else {
+    await open.click();
+  }
   const composer = page.getByLabel('게시글 작성', { exact: true });
+  await expect(composer).toBeVisible();
 
   await composer.getByRole('textbox', { name: '게시물 내용' }).fill(body);
   await composer.getByRole('button', { name: '게시', exact: true }).click();

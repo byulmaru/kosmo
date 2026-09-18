@@ -54,10 +54,6 @@ describe('getShellLayout', () => {
   });
 
   it('assigns only the approved Web mobile routes to the shell header', () => {
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/compose', []), {
-      leading: 'menu',
-      title: '글쓰기',
-    });
     assert.deepEqual(getWebMobileShellHeader(true, 390, '/notifications', []), {
       leading: 'menu',
       title: '알림',
@@ -95,6 +91,7 @@ describe('getShellLayout', () => {
       title: '개발 정보',
     });
     assert.equal(getWebMobileShellHeader(true, 390, '/bookmarks', []), null);
+    assert.equal(getWebMobileShellHeader(true, 390, '/compose', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/search', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/@writer/followers', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/@writer/following', []), null);
@@ -128,6 +125,11 @@ describe('getShellLayout', () => {
       layout: 'full',
       settingsWorkspace: false,
       showRightRail: true,
+    });
+    assert.deepEqual(getShellRoutePresentation(true, 1_280, '/compose'), {
+      layout: 'full',
+      settingsWorkspace: false,
+      showRightRail: false,
     });
     assert.deepEqual(getShellRoutePresentation(true, 768, '/settings/default-post-visibility'), {
       layout: 'compact',
