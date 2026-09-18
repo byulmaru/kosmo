@@ -284,7 +284,11 @@ test('prod channel Web runtime은 Account identity를 A→guest→B로 분리하
   await setE2ESessionCookie(context, viewer.token);
   await page.goto('/home');
 
-  await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+  const mainNavigation = page.getByRole('navigation', { name: '주요 메뉴' });
+  const utilityMenu = mainNavigation.getByRole('button', { name: '설정 및 기타' });
+  const logout = mainNavigation.getByRole('button', { name: '로그아웃' });
+  await utilityMenu.click();
+  await expect(logout).toBeVisible();
   await expect
     .poll(() => payloads.filter((payload) => payload.event === '$identify').length)
     .toBe(1);
@@ -297,7 +301,8 @@ test('prod channel Web runtime은 Account identity를 A→guest→B로 분리하
 
   payloads.length = 0;
   await page.reload();
-  await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+  await utilityMenu.click();
+  await expect(logout).toBeVisible();
   await expect
     .poll(() =>
       payloads.find(
@@ -318,7 +323,7 @@ test('prod channel Web runtime은 Account identity를 A→guest→B로 분리하
     await route.fulfill({ body: '{}', status: 503 });
   });
 
-  await page.getByRole('button', { name: '로그아웃' }).click();
+  await logout.click();
   await expect(page).toHaveURL(/\/$/u);
   await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
 
@@ -337,7 +342,8 @@ test('prod channel Web runtime은 Account identity를 A→guest→B로 분리하
 
   await setE2ESessionCookie(context, nextViewer.token);
   await page.goto('/home');
-  await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+  await utilityMenu.click();
+  await expect(logout).toBeVisible();
   await expect
     .poll(
       () =>
