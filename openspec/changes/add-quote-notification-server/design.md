@@ -86,7 +86,7 @@ core에 Quote의 현재 승인·원인 구조·direct Source Recipient 일치·R
 
 connection·count·Node·read mutation·cleanup은 동일한 원인 판정에 연결한다. API는 Recipient availability와 Account membership을 추가하고 cleanup은 Recipient 자체 비활성화만으로 삭제하지 않는다. Quote가 Source Author의 Profile로 보인다는 이유로 요청 Account에게 두 Post의 접근 권한을 새로 부여하지 않는다.
 
-`QuoteNotification`은 공통 필드와 `post: Post!`, `profile: Profile!`만 추가한다. `post`는 Quote 자체이며 기존 Post 관계가 Source를 제공한다. 알림 원인 field와 최초 visibility가 서로 다른 snapshot을 사용해 숨겨진 Source를 다시 로드하지 않도록 기존 snapshot projection 또는 동등한 재검증을 사용한다. 읽음 mutation의 입력·payload와 cursor 형식은 유지한다. UI projection·표시 구성은 PROD-953 소유다.
+`QuoteNotification`은 공통 필드와 nullable `post: Post`, `profile: Profile!`만 추가한다. `post`는 Quote 자체의 ID를 기존 Post loader에 전달해 현재 요청 viewer의 Post 조회 정책을 재검증하며, Recipient 기준 Notification visibility가 통과해도 selected Profile이 Quote를 볼 수 없으면 null이다. 기존 Reaction/Repost/Reply의 `post`도 nullable GraphQL shape으로 정렬해 concrete Notification inline fragment 간 field conflict를 막되, 이 변경에서는 기존 source projection semantics를 유지한다. 알림 원인 field와 최초 visibility가 서로 다른 snapshot을 사용해 숨겨진 Source를 다시 로드하지 않도록 기존 snapshot projection 또는 동등한 재검증을 사용한다. 읽음 mutation의 입력·payload와 cursor 형식은 유지한다. UI projection·표시 구성은 PROD-953 소유다.
 
 ### Allowed Alternatives
 

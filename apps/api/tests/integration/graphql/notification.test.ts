@@ -693,6 +693,70 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(await notificationReadAt(notification.id), null);
   });
 
+  test('rechecks Quote Post access through the Post loader', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('quote-loader-recipient');
+    const quoteAuthor = await createProfile('quote-loader-author');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
+    await createFollow(quoteAuthor.id, recipient.id);
+
+    const source = await createContentPost(recipient.id);
+    const quote = await db
+      .insert(Posts)
+      .values({
+        profileId: quoteAuthor.id,
+        repostSourceId: source.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.FOLLOWERS,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const content = await db
+      .insert(PostContents)
+      .values({ document: postContentDocumentFromText('loader quote'), postId: quote.id })
+      .returning()
+      .then(firstOrThrow);
+    await db.update(Posts).set({ currentContentId: content.id }).where(eq(Posts.id, quote.id));
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.QUOTE,
+        recipientProfileId: recipient.id,
+        sourceId: quote.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const result = await requestGraphQL<{
+      node: {
+        notifications: { edges: Array<{ node: { post: { id: string } | null } }> };
+      } | null;
+      notification: { post: { id: string } | null } | null;
+    }>(
+      `query QuoteNotificationPostAccess($notificationId: ID!, $profileId: ID!) {
+        notification: node(id: $notificationId) {
+          ... on QuoteNotification { post { id } }
+        }
+        node(id: $profileId) {
+          ... on Profile {
+            notifications(first: 10) {
+              edges { node { ... on QuoteNotification { post { id } } } }
+            }
+          }
+        }
+      }`,
+      {
+        notificationId: encodeGlobalId('QuoteNotification', notification.id),
+        profileId: encodeGlobalId('Profile', recipient.id),
+      },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.notification?.post, null);
+    assert.deepEqual(result.data?.node?.notifications.edges, [{ node: { post: null } }]);
+  });
+
   test('Reply Notification row를 GraphQL source로 읽는다', async () => {
     const author = await createAuthenticatedSession();
     const recipient = await createProfile('reply-create-recipient');
