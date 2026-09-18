@@ -6,14 +6,15 @@ import {
   projectRemoteNoteContent,
   RemoteNoteContentLengthExceededError,
 } from '@kosmo/core/activitypub-note-content/server';
-import { db, first, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { ActivityPubActors, db, first, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, PostVisibility, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
-import { createPost, ProfilePairBlockedError } from '@kosmo/core/services';
+import { createPost, createPostInTransaction, ProfilePairBlockedError } from '@kosmo/core/services';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { remoteProfileRefreshWorkflow } from '@kosmo/core/temporal/workflows';
 import { and, eq } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { findPostByActivityPubUri, findRemotePostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import {
@@ -28,12 +29,16 @@ import {
 } from './remote-actor-materialization';
 import type { Context, InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
+import type { Transaction } from '@kosmo/core/db';
 import type { InboundObservation } from './inbound-observability';
 import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 
 export type StoredRemoteProfileActor = NonNullable<
   Awaited<ReturnType<typeof findStoredRemoteProfileActorByUri>>
 >;
+
+const FollowersQuoteLocalProfiles = alias(Profiles, 'followers_quote_local_profile');
+const FollowersQuoteLocalInstances = alias(Instances, 'followers_quote_local_instance');
 
 type RemoteNoteMaterializationContext = Pick<
   Context<void>,
@@ -195,7 +200,11 @@ const resolveReplyParentId = async (
 };
 
 type HydratedRemoteNoteMaterializationResult =
-  | { postId: string; status: 'created' | 'duplicate' }
+  | {
+      postCommit?: () => Promise<void>;
+      postId: string;
+      status: 'created' | 'duplicate';
+    }
   | {
       reason:
         | 'invalid_note'
@@ -235,14 +244,25 @@ type RemoteNoteMaterializationRejectionReason =
 type RemoteNotePostMaterializationResult =
   | {
       postId: string;
+      postCommit?: () => Promise<void>;
       replyParentFallback: boolean;
       status: 'created' | 'duplicate';
     }
   | { reason: 'note_media_validation_rejected' | 'reply_profile_blocked'; status: 'rejected' };
 
 type RemoteNotePostCreationSuccess =
-  | { postId: string; replyParentFallback: boolean; status: 'created' }
-  | { replyParentFallback: boolean; status: 'duplicate' };
+  | {
+      postCommit?: () => Promise<void>;
+      postId: string;
+      replyParentFallback: boolean;
+      status: 'created';
+    }
+  | {
+      postCommit?: () => Promise<void>;
+      postId?: string;
+      replyParentFallback: boolean;
+      status: 'duplicate';
+    };
 
 type RemoteNotePostCreationResult =
   | RemoteNotePostCreationSuccess
@@ -274,6 +294,7 @@ const createRemoteNotePost = async ({
   objectUri,
   profileId,
   receivedAt,
+  transaction,
   visibility,
 }: {
   context: RemoteNoteMaterializationContext;
@@ -284,6 +305,7 @@ const createRemoteNotePost = async ({
   objectUri: string;
   profileId: string;
   receivedAt: Temporal.Instant;
+  transaction?: Transaction;
   visibility: PostVisibility;
 }): Promise<RemoteNotePostCreationResult> => {
   const replyParentId = await resolveReplyParentId(context, note);
@@ -298,17 +320,31 @@ const createRemoteNotePost = async ({
     receivedAt,
     visibility,
   } satisfies Parameters<typeof createPost>[0];
+  const save = (candidate: typeof input & { replyParentId?: string }) =>
+    transaction ? createPostInTransaction(candidate, transaction) : createPost(candidate);
   const toResult = (
-    result: Awaited<ReturnType<typeof createPost>>,
+    result:
+      | Awaited<ReturnType<typeof createPostInTransaction>>
+      | Awaited<ReturnType<typeof createPost>>,
   ): RemoteNotePostCreationSuccess => {
     if (result.created) {
-      return { postId: result.post.id, replyParentFallback: false, status: 'created' };
+      return {
+        postId: result.post.id,
+        ...('postCommit' in result ? { postCommit: result.postCommit } : {}),
+        replyParentFallback: false,
+        status: 'created',
+      };
     }
-    return { replyParentFallback: false, status: 'duplicate' };
+    return {
+      ...('postId' in result ? { postId: result.postId } : {}),
+      ...('postCommit' in result ? { postCommit: result.postCommit } : {}),
+      replyParentFallback: false,
+      status: 'duplicate',
+    };
   };
 
   try {
-    const result = await createPost(replyParentId ? { ...input, replyParentId } : input);
+    const result = await save(replyParentId ? { ...input, replyParentId } : input);
     return toResult(result);
   } catch (error) {
     if (error instanceof ProfilePairBlockedError) {
@@ -327,7 +363,7 @@ const createRemoteNotePost = async ({
       throw error;
     }
 
-    const result = await createPost(input);
+    const result = await save(input);
     const fallbackResult = toResult(result);
     return { ...fallbackResult, replyParentFallback: true };
   }
@@ -372,12 +408,14 @@ const materializeRemoteNote = async ({
   objectUri,
   receivedAt,
   source,
+  transaction,
 }: {
   context: RemoteNoteMaterializationContext;
   note: Note;
   objectUri: URL;
   receivedAt: Temporal.Instant;
   source: RemoteNoteMaterializationSource;
+  transaction?: Transaction;
 }): Promise<RemoteNoteMaterializationResult> => {
   if ((source.kind !== 'create' && !isHttpUri(objectUri)) || note.id?.href !== objectUri.href) {
     return { reason: 'note_identity_mismatch', status: 'rejected' };
@@ -399,8 +437,8 @@ const materializeRemoteNote = async ({
   }
 
   if (
-    (await findRemotePostByActivityPubUri(context, objectUri, attributionUri)).status ===
-    'author_mismatch'
+    (await findRemotePostByActivityPubUri(context, objectUri, attributionUri, transaction))
+      .status === 'author_mismatch'
   ) {
     return { reason: 'stored_author_mismatch', status: 'rejected' };
   }
@@ -417,36 +455,14 @@ const materializeRemoteNote = async ({
     return { reason: 'unsupported_note_visibility', status: 'rejected' };
   }
   if (
-    (source.kind === 'create' || source.kind === 'followers-quote') &&
+    source.kind === 'create' &&
     visibility === PostVisibility.FOLLOWERS &&
     !(await hasEstablishedFollower({
-      followerProfileId: source.kind === 'create' ? source.recipient : source.followerProfileId,
+      followerProfileId: source.recipient,
       followeeProfileId: source.storedActor.profile.id,
     }))
   ) {
     return { reason: 'followers_visibility_without_follow', status: 'rejected' };
-  }
-
-  if (source.kind === 'followers-quote') {
-    let currentStoredActor;
-    try {
-      currentStoredActor = await findUsableStoredRemoteProfileActorByUri(
-        source.storedActor.actor.uri,
-      );
-    } catch (error) {
-      if (error instanceof NotFoundError) {
-        return { reason: 'unusable_author', status: 'rejected' };
-      }
-      throw error;
-    }
-    if (
-      !currentStoredActor ||
-      currentStoredActor.profile.id !== source.storedActor.profile.id ||
-      currentStoredActor.actor.uri !== source.storedActor.actor.uri ||
-      currentStoredActor.actor.followersUri !== source.storedActor.actor.followersUri
-    ) {
-      return { reason: 'unusable_author', status: 'rejected' };
-    }
   }
 
   let projection;
@@ -499,6 +515,9 @@ const materializeRemoteNote = async ({
   }
 
   if (source.kind === 'followers-quote') {
+    if (!transaction) {
+      throw new Error('Followers-only Quote materialization requires a transaction');
+    }
     let currentStoredActor;
     try {
       currentStoredActor = await findUsableStoredRemoteProfileActorByUri(
@@ -518,12 +537,48 @@ const materializeRemoteNote = async ({
     ) {
       return { reason: 'unusable_author', status: 'rejected' };
     }
-    if (
-      !(await hasEstablishedFollower({
-        followerProfileId: source.followerProfileId,
-        followeeProfileId: source.storedActor.profile.id,
-      }))
-    ) {
+    const expectedFollowersUri = source.storedActor.actor.followersUri;
+    if (!expectedFollowersUri) {
+      return { reason: 'followers_visibility_without_follow', status: 'rejected' };
+    }
+    const current = await transaction
+      .select({ actorUri: ActivityPubActors.uri })
+      .from(ActivityPubActors)
+      .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .innerJoin(
+        ProfileFollows,
+        and(
+          eq(ProfileFollows.followeeProfileId, Profiles.id),
+          eq(ProfileFollows.followerProfileId, source.followerProfileId),
+        ),
+      )
+      .innerJoin(
+        FollowersQuoteLocalProfiles,
+        eq(FollowersQuoteLocalProfiles.id, ProfileFollows.followerProfileId),
+      )
+      .innerJoin(
+        FollowersQuoteLocalInstances,
+        eq(FollowersQuoteLocalInstances.id, FollowersQuoteLocalProfiles.instanceId),
+      )
+      .where(
+        and(
+          eq(ActivityPubActors.profileId, source.storedActor.profile.id),
+          eq(ActivityPubActors.uri, source.storedActor.actor.uri),
+          eq(ActivityPubActors.followersUri, expectedFollowersUri),
+          eq(Profiles.state, ProfileState.ACTIVE),
+          eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+          eq(Instances.state, InstanceState.ACTIVE),
+          eq(FollowersQuoteLocalProfiles.id, source.followerProfileId),
+          eq(FollowersQuoteLocalProfiles.state, ProfileState.ACTIVE),
+          eq(FollowersQuoteLocalInstances.kind, InstanceKind.LOCAL),
+          eq(FollowersQuoteLocalInstances.state, InstanceState.ACTIVE),
+        ),
+      )
+      .limit(1)
+      .for('update')
+      .then(first);
+    if (!current) {
       return { reason: 'followers_visibility_without_follow', status: 'rejected' };
     }
   }
@@ -537,13 +592,19 @@ const materializeRemoteNote = async ({
     objectUri: objectUri.href,
     profileId: storedActor.profile.id,
     receivedAt,
+    transaction,
     visibility,
   });
   if (result.status === 'rejected' || result.status === 'created') {
     return result;
   }
 
-  const winner = await findRemotePostByActivityPubUri(context, objectUri, attributionUri);
+  const winner = await findRemotePostByActivityPubUri(
+    context,
+    objectUri,
+    attributionUri,
+    transaction,
+  );
   if (winner.status === 'author_mismatch') {
     return { reason: 'stored_author_mismatch', status: 'rejected' };
   }
@@ -553,6 +614,7 @@ const materializeRemoteNote = async ({
 
   return {
     postId: winner.postId,
+    ...(result.postCommit ? { postCommit: result.postCommit } : {}),
     replyParentFallback: result.replyParentFallback,
     status: 'duplicate',
   };
@@ -597,7 +659,11 @@ export const materializeHydratedRemoteNote = async ({
     }
     return { reason: 'invalid_note', status: 'rejected' };
   }
-  return { postId: result.postId, status: result.status };
+  return {
+    ...(result.postCommit ? { postCommit: result.postCommit } : {}),
+    postId: result.postId,
+    status: result.status,
+  };
 };
 
 export const materializeFollowersOnlyQuoteNote = async ({
@@ -607,6 +673,7 @@ export const materializeFollowersOnlyQuoteNote = async ({
   note,
   objectUri,
   receivedAt,
+  transaction,
 }: {
   context: RemoteNoteMaterializationContext;
   expectedActor: StoredRemoteProfileActor;
@@ -614,6 +681,7 @@ export const materializeFollowersOnlyQuoteNote = async ({
   note: Note;
   objectUri: URL;
   receivedAt: Temporal.Instant;
+  transaction: Transaction;
 }): Promise<HydratedRemoteNoteMaterializationResult> => {
   const result = await materializeRemoteNote({
     context,
@@ -625,11 +693,16 @@ export const materializeFollowersOnlyQuoteNote = async ({
       kind: 'followers-quote',
       storedActor: expectedActor,
     },
+    transaction,
   });
   if (result.status === 'rejected') {
     return { reason: 'invalid_note', status: 'rejected' };
   }
-  return { postId: result.postId, status: result.status };
+  return {
+    ...(result.postCommit ? { postCommit: result.postCommit } : {}),
+    postId: result.postId,
+    status: result.status,
+  };
 };
 
 export const handleInboundCreateNote = async ({
