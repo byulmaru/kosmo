@@ -1,6 +1,6 @@
 import '@kosmo/core/polyfill';
 
-import { Tombstone } from '@fedify/vocab';
+import { QuoteAuthorization, Tombstone } from '@fedify/vocab';
 import {
   ActivityPubActors,
   ActivityPubPosts,
@@ -15,6 +15,7 @@ import { deletePost } from '@kosmo/core/services';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
+import { revokeInboundQuote } from './inbound-quote';
 import type { InboxContext } from '@fedify/fedify';
 import type { Delete } from '@fedify/vocab';
 
@@ -42,11 +43,27 @@ export const handleInboundDelete = async (
     return;
   }
 
+  if (await revokeInboundQuote({ actorUri: actorUri.href, authorizationUri: objectUri.href })) {
+    return;
+  }
+
   const embedded = await activity.getObject({
     crossOrigin: 'trust',
     documentLoader: noNetworkDocumentLoader,
     suppressError: true,
   });
+  if (embedded instanceof QuoteAuthorization) {
+    observeInbound({
+      outcome: 'noop',
+      activityType: 'Delete',
+      actorOrigin: actorUri.origin,
+      handler: 'delete',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'quote_revocation_target_missing',
+    });
+    return;
+  }
   if (embedded === null && !activity.objectId) {
     observeInbound({
       outcome: 'external_failure',
