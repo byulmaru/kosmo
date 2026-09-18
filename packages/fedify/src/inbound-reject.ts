@@ -1,9 +1,10 @@
 import '@kosmo/core/polyfill';
 
-import { Follow } from '@fedify/vocab';
+import { Follow, QuoteRequest } from '@fedify/vocab';
 import { NotFoundError } from '@kosmo/core/error';
 import { isHttpUri } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
+import { handleInboundQuoteReject } from './inbound-quote';
 import { handleInboundRejectFollow } from './inbound-reject-follow';
 import { findUsableStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
@@ -70,7 +71,9 @@ export const handleInboundReject = async (
     });
     return;
   }
-  if (object instanceof Follow) {
+  if (object instanceof QuoteRequest) {
+    await handleInboundQuoteReject({ reject, request: object });
+  } else if (object instanceof Follow) {
     await handleInboundRejectFollow({
       context,
       follow: object,

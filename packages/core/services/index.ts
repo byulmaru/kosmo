@@ -14,6 +14,31 @@ export {
   deleteRepostNotification,
 } from './notification';
 export { createPost, deletePost, repostPost } from './post';
+export type { PostQuoteConsentRow, PostQuoteEffectReceiptRow } from './post-quote-consent';
+export {
+  applyInboundQuoteAccept,
+  applyInboundQuoteReject,
+  applyInboundQuoteRevocation,
+  assertPostQuotePolicy,
+  canDisplayQuoteSource,
+  completePostQuoteEffectReceipt,
+  createPostQuoteConsent,
+  createPostQuoteEffectReceipt,
+  defaultPostQuotePolicy,
+  isLegacyLocalQuotePost,
+  isLocalQuoteAllowedByPolicy,
+  loadPendingQuoteConsentByBinding,
+  loadQuoteConsentByApprovalUri,
+  loadQuoteConsentByRequestUri,
+  loadQuoteConsentForPost,
+  loadQuotePostIdentity,
+  loadQuoteSourceIdentity,
+  recordInboundQuoteRequest,
+  replayPendingPostQuoteEffects,
+  revokePostQuoteConsentsForSource,
+  startPostQuoteEffect,
+  updatePostQuotePolicy,
+} from './post-quote-consent';
 export { disableProfile } from './profile';
 export { followProfile, unfollowProfile } from './profile-follow';
 export type {

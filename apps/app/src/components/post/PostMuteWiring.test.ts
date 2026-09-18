@@ -107,6 +107,9 @@ mock.module('./PostBookmarkAction', {
 mock.module('./PostMoreMenu', {
   exports: { usePostMoreMenuItem: () => ({ key: 'copy-link', label: '링크 복사' }) },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('./PostQuotePolicyEditor', {
+  exports: { PostQuotePolicyEditor: () => null },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('./PostReactionController', {
   exports: { usePostReactionController: () => ({}) },
 } as unknown as Parameters<typeof mock.module>[1]);

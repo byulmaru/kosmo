@@ -1,4 +1,4 @@
-import { AccountProfileRole, PostVisibility } from '@kosmo/core/enums';
+import { AccountProfileRole, PostQuotePolicy, PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
@@ -58,6 +58,7 @@ builder.mutationField('createPost', (t) =>
       }),
       replyParentId: t.input.globalID({ for: Post, required: false }),
       repostSourceId: t.input.globalID({ for: Post, required: false }),
+      quotePolicy: t.input.field({ type: PostQuotePolicy, required: false }),
       sensitiveMedia: t.input.boolean({ required: false }),
       visibility: t.input.field({ type: PostVisibility }),
     },
@@ -83,6 +84,7 @@ builder.mutationField('createPost', (t) =>
         profileId: ctx.session.profile.id,
         replyParentId: input.replyParentId?.id,
         repostSourceId: input.repostSourceId?.id,
+        quotePolicy: input.quotePolicy ?? undefined,
         visibility: input.visibility,
       });
 

@@ -67,7 +67,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   expect(editorBeforeOpen).not.toBeNull();
 
   await visibilityTrigger.click();
-  const visibilityMenu = page.getByRole('menu', { name: '게시글 공개 설정' });
+  const visibilityMenu = page.getByRole('menu', { name: '게시글 공개 및 인용 설정' });
   await expect(visibilityMenu).toBeVisible();
   const visibilityMenuBox = await visibilityMenu.boundingBox();
   const viewport = page.viewportSize();
@@ -95,7 +95,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
 
   await visibilityTrigger.click();
   await page.keyboard.press('End');
-  await expect(visibilityMenu.getByRole('menuitemradio', { name: /^팔로워만/ })).toBeFocused();
+  await expect(visibilityMenu.getByRole('menuitemradio', { name: /^본인만/ })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(visibilityMenu).toHaveCount(0);
 
@@ -104,6 +104,9 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   const publicOption = visibilityMenu.getByRole('menuitemradio', { name: /^공개/ });
   await expect(publicOption).toBeFocused();
   await page.keyboard.press('Space');
+  await expect(publicOption).toHaveAttribute('aria-checked', 'true');
+  const authorOnlyQuoteOption = visibilityMenu.getByRole('menuitemradio', { name: /^본인만/ });
+  await authorOnlyQuoteOption.click();
   await expect(visibilityMenu).toHaveCount(0);
   await expect(composer.getByRole('button', { name: '공개', exact: true })).toBeFocused();
 
@@ -119,6 +122,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   expect(operation?.variables).toMatchObject({
     input: {
       bodyText: `${body}\n\nsecond line`,
+      quotePolicy: 'AUTHOR',
       visibility: 'PUBLIC',
     },
   });
@@ -393,7 +397,7 @@ test('compose의 touch 취소가 본문 포커스와 편집기 강조 상태를 
     await page.waitForTimeout(100);
 
     await expect(input).toBeFocused();
-    await expect(page.getByRole('menu', { name: '게시글 공개 설정' })).toHaveCount(0);
+    await expect(page.getByRole('menu', { name: '게시글 공개 및 인용 설정' })).toHaveCount(0);
     const borderAfterCancel = await editorSurface.evaluate(
       (element) => getComputedStyle(element).borderColor,
     );

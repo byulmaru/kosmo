@@ -154,7 +154,7 @@ test('Child Reply 상세의 Parent inline Reply geometry를 320px까지 유지�
   await page.setViewportSize({ height: 844, width: 320 });
   await parentComposer.getByRole('button', { name: '조용한 공개' }).click();
 
-  const visibilityMenu = parentComposer.getByRole('menu', { name: '답글 공개 설정' });
+  const visibilityMenu = parentComposer.getByRole('menu', { name: '답글 공개 및 인용 설정' });
   await expect(visibilityMenu).toBeVisible();
   const visibilityMenuBox = await visibilityMenu.boundingBox();
   const viewport = page.viewportSize();
